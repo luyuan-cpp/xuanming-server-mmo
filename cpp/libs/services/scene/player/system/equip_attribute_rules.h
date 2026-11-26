@@ -91,17 +91,27 @@ constexpr bool SupportsEnhancement(uint32_t profile) {
     return profile == ToRaw(EquipmentProfile::kLegacy) || profile == ToRaw(EquipmentProfile::kV1Basic);
 }
 
-// V1 只强化攻击和防御；速度以及后续新增的其他基础项不会被默认纳入。
+// V1 强化放大攻击、防御与基础气血；速度以及后续新增的其他基础项永不随强化放大。
 // 加成、详情与下一级预览共用这一判据，不按物品名称、配置号区间或槽位分支。
 constexpr bool EnhancesBaseAttribute(uint32_t profile, uint32_t effect, uint32_t parameter) {
     if (profile == ToRaw(EquipmentProfile::kLegacy)) return true;
     if (profile != ToRaw(EquipmentProfile::kV1Basic)) return false;
     return effect == static_cast<uint32_t>(EffectKind::kBothAttacks) ||
         (effect == static_cast<uint32_t>(EffectKind::kDerivedFlat) &&
-         (parameter == static_cast<uint32_t>(DerivedStat::kPhysicalAttack) ||
+         (parameter == static_cast<uint32_t>(DerivedStat::kMaxHealth) ||
+          parameter == static_cast<uint32_t>(DerivedStat::kPhysicalAttack) ||
           parameter == static_cast<uint32_t>(DerivedStat::kMagicAttack) ||
           parameter == static_cast<uint32_t>(DerivedStat::kDefense)));
 }
+
+static_assert(!EnhancesBaseAttribute(ToRaw(EquipmentProfile::kV1Basic),
+                                     static_cast<uint32_t>(EffectKind::kDerivedFlat),
+                                     static_cast<uint32_t>(DerivedStat::kSpeed)),
+              "V1 speed base attribute must never scale with enhancement");
+static_assert(EnhancesBaseAttribute(ToRaw(EquipmentProfile::kV1Basic),
+                                    static_cast<uint32_t>(EffectKind::kDerivedFlat),
+                                    static_cast<uint32_t>(DerivedStat::kMaxHealth)),
+              "V1 max health base attribute must scale with enhancement");
 
 // 战斗类属性。**数值 == proto CombatAttributes 的字段号 == EquipAttribute.effect_param(effect = 5 时)**,
 // 三者不得错位:表里填错号 / proto 改号 / 这里插一项,都会让「抗冰冻」悄悄变成「抗昏睡」且零报错。
@@ -507,6 +517,59 @@ static_assert(ScaleByPermyriad(UINT64_MAX, 1) == UINT64_MAX, "ScaleByPermyriad a
 static_assert(ScaleByPermyriad(0, 0) == 0 && ScaleByPermyriad(40, 0) == 40 &&
                   ScaleByPermyriad(UINT64_MAX, 0) == UINT64_MAX,
               "ScaleByPermyriad anchor: zero bonus is the identity");
+
+// 控辅强化公平受益：V1 基础装（含武器）强化时，奶/盾（effect 5/6）按强化万分比的 50%、
+// 控场命中（effect 11）按 25% 享受克制强化收益；速度（effect 4）与攻强百分比（effect 1/2，
+// 已有基础武器伤害全额强化）份额恒为 0，避免控辅冲 +10/+11 武器吃亏且不破坏速度红线。
+inline constexpr uint32_t kV1SupportEnhanceSharePermyriad = 5000;
+inline constexpr uint32_t kV1ControlEnhanceSharePermyriad = 2500;
+
+constexpr uint32_t V1FixedAffixEnhanceSharePermyriad(uint32_t profile, uint32_t affixEffect) {
+    if (profile != ToRaw(EquipmentProfile::kV1Basic)) return 0;
+    if (affixEffect == 5 || affixEffect == 6) return kV1SupportEnhanceSharePermyriad;
+    if (affixEffect == 11) return kV1ControlEnhanceSharePermyriad;
+    return 0;
+}
+
+constexpr uint32_t V1FixedAffixEnhanceBonusPermyriad(uint32_t profile, uint32_t affixEffect,
+                                                     uint32_t enhanceBonusPermyriad) {
+    const uint32_t share = V1FixedAffixEnhanceSharePermyriad(profile, affixEffect);
+    if (share == 0 || enhanceBonusPermyriad == 0) return 0;
+    return static_cast<uint32_t>((static_cast<uint64_t>(enhanceBonusPermyriad) * share) / kPermyriadBase);
+}
+
+constexpr uint32_t ScaleV1FixedAffixByEnhance(uint32_t profile, uint32_t affixEffect,
+                                              uint32_t qualityScaledBps,
+                                              uint32_t enhanceBonusPermyriad) {
+    const uint32_t effectiveBonus =
+        V1FixedAffixEnhanceBonusPermyriad(profile, affixEffect, enhanceBonusPermyriad);
+    if (effectiveBonus == 0) return qualityScaledBps;
+    const uint64_t scaled = ScaleByPermyriad(qualityScaledBps, effectiveBonus);
+    return scaled > std::numeric_limits<uint32_t>::max()
+        ? std::numeric_limits<uint32_t>::max()
+        : static_cast<uint32_t>(scaled);
+}
+
+constexpr uint32_t MaxV1FixedAffixEffectiveCap(uint32_t affixEffect, uint32_t baseSourceCap) {
+    return ScaleV1FixedAffixByEnhance(ToRaw(EquipmentProfile::kV1Basic), affixEffect,
+                                      baseSourceCap, kV1TopEnhanceBonusPermyriad);
+}
+
+static_assert(V1FixedAffixEnhanceSharePermyriad(ToRaw(EquipmentProfile::kV1Basic), 4) == 0,
+              "V1 speed fixed affix must never scale with enhancement");
+static_assert(V1FixedAffixEnhanceSharePermyriad(ToRaw(EquipmentProfile::kV1Basic), 1) == 0 &&
+                  V1FixedAffixEnhanceSharePermyriad(ToRaw(EquipmentProfile::kV1Basic), 2) == 0,
+              "V1 attack fixed affixes already benefit from weapon base attack enhancement");
+static_assert(ScaleV1FixedAffixByEnhance(ToRaw(EquipmentProfile::kV1Basic), 5, 800, 2000) == 880 &&
+                  ScaleV1FixedAffixByEnhance(ToRaw(EquipmentProfile::kV1Basic), 5, 800, 2400) == 896,
+              "Support heal/shield affix +10/+11 restrained scaling anchors");
+static_assert(ScaleV1FixedAffixByEnhance(ToRaw(EquipmentProfile::kV1Basic), 11, 400, 2000) == 420 &&
+                  ScaleV1FixedAffixByEnhance(ToRaw(EquipmentProfile::kV1Basic), 11, 400, 2400) == 424,
+              "Control hit affix +10/+11 restrained scaling anchors");
+static_assert(MaxV1FixedAffixEffectiveCap(5, 3200) == 3584 &&
+                  MaxV1FixedAffixEffectiveCap(6, 3200) == 3584 &&
+                  MaxV1FixedAffixEffectiveCap(11, 1600) == 1696,
+              "Support/control effective cap anchors at V1 +11");
 
 // 强化判定:这一次强化成没成。ratePermyriad 是 EquipEnhance.success_rate(万分比)。
 //

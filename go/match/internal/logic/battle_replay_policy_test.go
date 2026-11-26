@@ -3,6 +3,7 @@ package logic
 import (
 	"testing"
 
+	battlepb "proto/battle"
 	matchpb "proto/match"
 )
 
@@ -47,5 +48,24 @@ func TestRecordReplayDisabledOrUnknownMode(t *testing.T) {
 	}
 	if recordReplayFor(true, matchpb.MatchMode(9999)) {
 		t.Error("表外的模式不应录制")
+	}
+}
+
+func TestRecordReplayForBattleAllowsTrialJournalPveOnly(t *testing.T) {
+	trialCtx := &battlepb.TrialBattleContext{JournalEntryId: 401, TrialRuleVersion: 1}
+	if !recordReplayForBattle(true, matchpb.MatchMode_MATCH_MODE_PVE_SOLO, trialCtx) {
+		t.Error("试炼志单人 PVE 应受控开启录制")
+	}
+	if !recordReplayForBattle(true, matchpb.MatchMode_MATCH_MODE_PVE_TEAM, trialCtx) {
+		t.Error("试炼志组队 PVE 应受控开启录制")
+	}
+	if recordReplayForBattle(true, matchpb.MatchMode_MATCH_MODE_PVE_SOLO, nil) {
+		t.Error("无试炼志上下文的普通单人 PVE 不应录制")
+	}
+	if recordReplayForBattle(true, matchpb.MatchMode_MATCH_MODE_PVE_TEAM, &battlepb.TrialBattleContext{}) {
+		t.Error("journal_entry_id=0 的组队 PVE 不应录制")
+	}
+	if recordReplayForBattle(false, matchpb.MatchMode_MATCH_MODE_PVE_SOLO, trialCtx) {
+		t.Error("全局战报总开关关闭时试炼志 PVE 也不应录制")
 	}
 }

@@ -119,6 +119,8 @@ static void SeasonRuleTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& RowOb
 	SeasonRuleTableCheckNarrowedField(RowObject, TEXT("catchup_currency_type"), TEXT("catchup_currency_type"), RowIndex, 2147483647.0, TEXT("uint32"));
 	SeasonRuleTableCheckNarrowedField(RowObject, TEXT("catchup_price_per_point"), TEXT("catchup_price_per_point"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
 	SeasonRuleTableCheckNarrowedField(RowObject, TEXT("default_seal_id"), TEXT("default_seal_id"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SeasonRuleTableCheckNarrowedField(RowObject, TEXT("cycle_order"), TEXT("cycle_order"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SeasonRuleTableCheckNarrowedField(RowObject, TEXT("cycle_duration_days"), TEXT("cycle_duration_days"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 
 bool USeasonRuleTable::LoadFromJson(const FString& JsonText, FString& OutError)

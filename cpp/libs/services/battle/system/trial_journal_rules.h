@@ -23,8 +23,44 @@ inline constexpr uint32_t kMaxCoopTeammates = 4;
 // 卷册编号（与 TrialJournalEntry.chapter_id / TrialJournalMilestone.scope_chapter_id 对齐）。
 inline constexpr uint32_t kScopeAllPermanent = 0;
 inline constexpr uint32_t kChapterBreakthrough = 1; // 卷一 · 破阵试炼
-inline constexpr uint32_t kChapterThreeRealms = 2;  // 卷二 · 三境明雷
+inline constexpr uint32_t kChapterThreeRealms = 2;  // 卷二 · 灵障玄毒
 inline constexpr uint32_t kChapterSeasonal = 3;     // 卷三 · 季游奇谈
+inline constexpr uint32_t kChapterWildRealms = 4;   // 卷四 · 三境明雷
+
+// 五行试炼志 V3 自选试炼誓约位图（bit 0..3，仅常驻 PVE 首领试炼可勾选，零额外材料产出）。
+inline constexpr uint32_t kVowNone = 0u;
+inline constexpr uint32_t kVowBanControl = 1u << 0;     // 禁控硬破
+inline constexpr uint32_t kVowSingleArtifact = 1u << 1; // 单宝轻装
+inline constexpr uint32_t kVowNoPet = 1u << 2;          // 无宠孤剑
+inline constexpr uint32_t kVowTightRounds = 1u << 3;    // 紧缩回合
+inline constexpr uint32_t kVowMaskAll =
+    kVowBanControl | kVowSingleArtifact | kVowNoPet | kVowTightRounds;
+
+inline constexpr bool IsValidVowMask(uint32_t mask) {
+    return (mask & ~kVowMaskAll) == 0u;
+}
+
+inline constexpr uint32_t CountVows(uint32_t mask) {
+    const uint32_t valid = mask & kVowMaskAll;
+    uint32_t count = 0u;
+    for (uint32_t bit = 0u; bit < 4u; ++bit) {
+        if ((valid & (1u << bit)) != 0u) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+inline constexpr uint32_t TightenRoundLimit(uint32_t baseRounds) {
+    if (baseRounds == 0u) {
+        return 0u;
+    }
+    const uint32_t scaled = (baseRounds * 7u + 9u) / 10u; // ceil(baseRounds * 0.7)
+    if (baseRounds <= 6u) {
+        return baseRounds;
+    }
+    return scaled < 6u ? 6u : scaled;
+}
 
 // 准入模式（TrialJournalEntry.unlock_mode）。
 inline constexpr uint32_t kUnlockModeOpen = 0;

@@ -3827,6 +3827,7 @@ TEST(GuidSourcePolicyTest, SnapshotIsSkippedUntilItsOwnKindHasARange)
     tlsEcs.actorRegistry.emplace<PlayerSpiritShopComp>(player); // 同上,官方灵石百宝阁限购状态
     tlsEcs.actorRegistry.emplace<PlayerTravelPassComp>(player); // 同上,游历手记持久状态
     tlsEcs.actorRegistry.emplace<PlayerEquipLoadoutComp>(player); // 同上,装备流派方案预设
+    tlsEcs.actorRegistry.emplace<PlayerJianghuComp>(player); // 同上,江湖恩怨与天墉生死状
     tlsEcs.actorRegistry.emplace<CurrencyComp>(player);
     tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player);
     tlsEcs.actorRegistry.emplace<PlayerDatabaseCarryComp>(player);

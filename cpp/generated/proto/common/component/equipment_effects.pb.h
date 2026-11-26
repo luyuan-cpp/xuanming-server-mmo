@@ -275,6 +275,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonSealEffect final : public ::g
     kBattleLimitFieldNumber = 7,
     kActiveRoundsFieldNumber = 8,
     kHealthThresholdBpsFieldNumber = 9,
+    kResonanceSkillIdFieldNumber = 11,
+    kResonanceKindFieldNumber = 12,
+    kResonanceParamFieldNumber = 13,
   };
   // string name = 10;
   void clear_name() ;
@@ -381,11 +384,41 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonSealEffect final : public ::g
   void _internal_set_health_threshold_bps(::uint32_t value);
 
   public:
+  // uint32 resonance_skill_id = 11;
+  void clear_resonance_skill_id() ;
+  [[nodiscard]] ::uint32_t resonance_skill_id() const;
+  void set_resonance_skill_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_resonance_skill_id() const;
+  void _internal_set_resonance_skill_id(::uint32_t value);
+
+  public:
+  // uint32 resonance_kind = 12;
+  void clear_resonance_kind() ;
+  [[nodiscard]] ::uint32_t resonance_kind() const;
+  void set_resonance_kind(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_resonance_kind() const;
+  void _internal_set_resonance_kind(::uint32_t value);
+
+  public:
+  // uint32 resonance_param = 13;
+  void clear_resonance_param() ;
+  [[nodiscard]] ::uint32_t resonance_param() const;
+  void set_resonance_param(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_resonance_param() const;
+  void _internal_set_resonance_param(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:SeasonSealEffect)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 10,
+      ::google::protobuf::internal::TcParseTable<4, 13,
                           0, 37,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -424,6 +457,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonSealEffect final : public ::g
     ::uint32_t battle_limit_;
     ::uint32_t active_rounds_;
     ::uint32_t health_threshold_bps_;
+    ::uint32_t resonance_skill_id_;
+    ::uint32_t resonance_kind_;
+    ::uint32_t resonance_param_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2254,6 +2290,78 @@ inline void SeasonSealEffect::set_allocated_name(::std::string* PROTOBUF_NULLABL
     _impl_.name_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:SeasonSealEffect.name)
+}
+
+// uint32 resonance_skill_id = 11;
+inline void SeasonSealEffect::clear_resonance_skill_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.resonance_skill_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t SeasonSealEffect::resonance_skill_id() const {
+  // @@protoc_insertion_point(field_get:SeasonSealEffect.resonance_skill_id)
+  return _internal_resonance_skill_id();
+}
+inline void SeasonSealEffect::set_resonance_skill_id(::uint32_t value) {
+  _internal_set_resonance_skill_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:SeasonSealEffect.resonance_skill_id)
+}
+inline ::uint32_t SeasonSealEffect::_internal_resonance_skill_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.resonance_skill_id_;
+}
+inline void SeasonSealEffect::_internal_set_resonance_skill_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.resonance_skill_id_ = value;
+}
+
+// uint32 resonance_kind = 12;
+inline void SeasonSealEffect::clear_resonance_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.resonance_kind_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t SeasonSealEffect::resonance_kind() const {
+  // @@protoc_insertion_point(field_get:SeasonSealEffect.resonance_kind)
+  return _internal_resonance_kind();
+}
+inline void SeasonSealEffect::set_resonance_kind(::uint32_t value) {
+  _internal_set_resonance_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:SeasonSealEffect.resonance_kind)
+}
+inline ::uint32_t SeasonSealEffect::_internal_resonance_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.resonance_kind_;
+}
+inline void SeasonSealEffect::_internal_set_resonance_kind(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.resonance_kind_ = value;
+}
+
+// uint32 resonance_param = 13;
+inline void SeasonSealEffect::clear_resonance_param() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.resonance_param_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::uint32_t SeasonSealEffect::resonance_param() const {
+  // @@protoc_insertion_point(field_get:SeasonSealEffect.resonance_param)
+  return _internal_resonance_param();
+}
+inline void SeasonSealEffect::set_resonance_param(::uint32_t value) {
+  _internal_set_resonance_param(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:SeasonSealEffect.resonance_param)
+}
+inline ::uint32_t SeasonSealEffect::_internal_resonance_param() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.resonance_param_;
+}
+inline void SeasonSealEffect::_internal_set_resonance_param(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.resonance_param_ = value;
 }
 
 // -------------------------------------------------------------------

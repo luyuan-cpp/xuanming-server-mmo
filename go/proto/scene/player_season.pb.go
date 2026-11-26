@@ -37,6 +37,10 @@ type SeasonSealOption struct {
 	ActiveRounds       uint32                 `protobuf:"varint,10,opt,name=active_rounds,json=activeRounds,proto3" json:"active_rounds,omitempty"`
 	HealthThresholdBps uint32                 `protobuf:"varint,11,opt,name=health_threshold_bps,json=healthThresholdBps,proto3" json:"health_threshold_bps,omitempty"`
 	Equipped           bool                   `protobuf:"varint,12,opt,name=equipped,proto3" json:"equipped,omitempty"`
+	ResonanceSkillId   uint32                 `protobuf:"varint,13,opt,name=resonance_skill_id,json=resonanceSkillId,proto3" json:"resonance_skill_id,omitempty"`
+	ResonanceKind      uint32                 `protobuf:"varint,14,opt,name=resonance_kind,json=resonanceKind,proto3" json:"resonance_kind,omitempty"`
+	ResonanceParam     uint32                 `protobuf:"varint,15,opt,name=resonance_param,json=resonanceParam,proto3" json:"resonance_param,omitempty"`
+	ResonanceDesc      string                 `protobuf:"bytes,16,opt,name=resonance_desc,json=resonanceDesc,proto3" json:"resonance_desc,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -153,6 +157,34 @@ func (x *SeasonSealOption) GetEquipped() bool {
 		return x.Equipped
 	}
 	return false
+}
+
+func (x *SeasonSealOption) GetResonanceSkillId() uint32 {
+	if x != nil {
+		return x.ResonanceSkillId
+	}
+	return 0
+}
+
+func (x *SeasonSealOption) GetResonanceKind() uint32 {
+	if x != nil {
+		return x.ResonanceKind
+	}
+	return 0
+}
+
+func (x *SeasonSealOption) GetResonanceParam() uint32 {
+	if x != nil {
+		return x.ResonanceParam
+	}
+	return 0
+}
+
+func (x *SeasonSealOption) GetResonanceDesc() string {
+	if x != nil {
+		return x.ResonanceDesc
+	}
+	return ""
 }
 
 type SeasonSkillSummary struct {
@@ -321,17 +353,19 @@ func (x *SeasonSkillSummary) GetActionTags() uint32 {
 
 // 单季永久零数值纪念印记与称谓展示视图（源自 PlayerSeasonComp.records，换季永久留存且零战斗属性）。
 type SeasonHonorView struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	SeasonId          uint32                 `protobuf:"varint,1,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
-	SeasonName        string                 `protobuf:"bytes,2,opt,name=season_name,json=seasonName,proto3" json:"season_name,omitempty"`
-	HonorTitleName    string                 `protobuf:"bytes,3,opt,name=honor_title_name,json=honorTitleName,proto3" json:"honor_title_name,omitempty"`
-	HonorBadgeIconKey string                 `protobuf:"bytes,4,opt,name=honor_badge_icon_key,json=honorBadgeIconKey,proto3" json:"honor_badge_icon_key,omitempty"`
-	ProgressPoints    uint32                 `protobuf:"varint,5,opt,name=progress_points,json=progressPoints,proto3" json:"progress_points,omitempty"`
-	MaxPoints         uint32                 `protobuf:"varint,6,opt,name=max_points,json=maxPoints,proto3" json:"max_points,omitempty"`
-	Unlocked          bool                   `protobuf:"varint,7,opt,name=unlocked,proto3" json:"unlocked,omitempty"`
-	IsCurrentSeason   bool                   `protobuf:"varint,8,opt,name=is_current_season,json=isCurrentSeason,proto3" json:"is_current_season,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	SeasonId            uint32                 `protobuf:"varint,1,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
+	SeasonName          string                 `protobuf:"bytes,2,opt,name=season_name,json=seasonName,proto3" json:"season_name,omitempty"`
+	HonorTitleName      string                 `protobuf:"bytes,3,opt,name=honor_title_name,json=honorTitleName,proto3" json:"honor_title_name,omitempty"`
+	HonorBadgeIconKey   string                 `protobuf:"bytes,4,opt,name=honor_badge_icon_key,json=honorBadgeIconKey,proto3" json:"honor_badge_icon_key,omitempty"`
+	ProgressPoints      uint32                 `protobuf:"varint,5,opt,name=progress_points,json=progressPoints,proto3" json:"progress_points,omitempty"`
+	MaxPoints           uint32                 `protobuf:"varint,6,opt,name=max_points,json=maxPoints,proto3" json:"max_points,omitempty"`
+	Unlocked            bool                   `protobuf:"varint,7,opt,name=unlocked,proto3" json:"unlocked,omitempty"`
+	IsCurrentSeason     bool                   `protobuf:"varint,8,opt,name=is_current_season,json=isCurrentSeason,proto3" json:"is_current_season,omitempty"`
+	IsRetroTarget       bool                   `protobuf:"varint,9,opt,name=is_retro_target,json=isRetroTarget,proto3" json:"is_retro_target,omitempty"`                    // true = 当前满级溢出点数正流向本季徽章追忆
+	RetroProgressPoints uint32                 `protobuf:"varint,10,opt,name=retro_progress_points,json=retroProgressPoints,proto3" json:"retro_progress_points,omitempty"` // 本往季已累积的免费追忆点数（解锁后归 0）
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *SeasonHonorView) Reset() {
@@ -418,6 +452,20 @@ func (x *SeasonHonorView) GetIsCurrentSeason() bool {
 		return x.IsCurrentSeason
 	}
 	return false
+}
+
+func (x *SeasonHonorView) GetIsRetroTarget() bool {
+	if x != nil {
+		return x.IsRetroTarget
+	}
+	return false
+}
+
+func (x *SeasonHonorView) GetRetroProgressPoints() uint32 {
+	if x != nil {
+		return x.RetroProgressPoints
+	}
+	return 0
 }
 
 // 当前活跃赛季的全员对称周环境词缀视图（不卖数值、零养成门槛，每周自动轮换）。
@@ -546,9 +594,14 @@ type SeasonStateSnapshot struct {
 	// 历季与当季零数值永久纪念印记与称谓（休赛期亦返回已达成历史荣誉）。
 	Honors []*SeasonHonorView `protobuf:"bytes,33,rep,name=honors,proto3" json:"honors,omitempty"`
 	// 本周全员对称环境词缀（无活跃赛季时为空）。
-	WeeklyAffix   *SeasonWeeklyAffixView `protobuf:"bytes,34,opt,name=weekly_affix,json=weeklyAffix,proto3" json:"weekly_affix,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	WeeklyAffix              *SeasonWeeklyAffixView `protobuf:"bytes,34,opt,name=weekly_affix,json=weeklyAffix,proto3" json:"weekly_affix,omitempty"`
+	SeasonTerm               uint32                 `protobuf:"varint,35,opt,name=season_term,json=seasonTerm,proto3" json:"season_term,omitempty"`                                                 // 全局无限递增届号（第 1 届、第 2 届 …；固定窗为 1）
+	CycleIndex               uint32                 `protobuf:"varint,36,opt,name=cycle_index,json=cycleIndex,proto3" json:"cycle_index,omitempty"`                                                 // 循环轮次（第 1 轮、第 2 轮 …；固定窗为 1）
+	CyclePoolSize            uint32                 `protobuf:"varint,37,opt,name=cycle_pool_size,json=cyclePoolSize,proto3" json:"cycle_pool_size,omitempty"`                                      // 自动循环主题池大小（0 = 固定单季模式，>0 = 循环池季数）
+	RetroHonorTargetSeasonId uint32                 `protobuf:"varint,38,opt,name=retro_honor_target_season_id,json=retroHonorTargetSeasonId,proto3" json:"retro_honor_target_season_id,omitempty"` // 当前生效的往季徽章追忆目标赛季 ID（0 = 全部已解锁或无可用往季）
+	RetroHonorTargetExplicit bool                   `protobuf:"varint,39,opt,name=retro_honor_target_explicit,json=retroHonorTargetExplicit,proto3" json:"retro_honor_target_explicit,omitempty"`   // true = 玩家手动选定；false = 自动顺延首个未解锁往季
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *SeasonStateSnapshot) Reset() {
@@ -817,6 +870,41 @@ func (x *SeasonStateSnapshot) GetWeeklyAffix() *SeasonWeeklyAffixView {
 		return x.WeeklyAffix
 	}
 	return nil
+}
+
+func (x *SeasonStateSnapshot) GetSeasonTerm() uint32 {
+	if x != nil {
+		return x.SeasonTerm
+	}
+	return 0
+}
+
+func (x *SeasonStateSnapshot) GetCycleIndex() uint32 {
+	if x != nil {
+		return x.CycleIndex
+	}
+	return 0
+}
+
+func (x *SeasonStateSnapshot) GetCyclePoolSize() uint32 {
+	if x != nil {
+		return x.CyclePoolSize
+	}
+	return 0
+}
+
+func (x *SeasonStateSnapshot) GetRetroHonorTargetSeasonId() uint32 {
+	if x != nil {
+		return x.RetroHonorTargetSeasonId
+	}
+	return 0
+}
+
+func (x *SeasonStateSnapshot) GetRetroHonorTargetExplicit() bool {
+	if x != nil {
+		return x.RetroHonorTargetExplicit
+	}
+	return false
 }
 
 type SavedBattleBuildBookmarkView struct {
@@ -2234,11 +2322,108 @@ func (x *CatchupSeasonSealResponse) GetSpentCurrency() uint64 {
 	return 0
 }
 
+// 战外免费切换「往季徽章追忆」目标赛季（0 = 恢复自动顺延首个未解锁往季；纯零数值永久荣誉，绝不涉及付费）。
+type SetRetroHonorTargetRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SeasonId      uint32                 `protobuf:"varint,1,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetRetroHonorTargetRequest) Reset() {
+	*x = SetRetroHonorTargetRequest{}
+	mi := &file_proto_scene_player_season_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetRetroHonorTargetRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetRetroHonorTargetRequest) ProtoMessage() {}
+
+func (x *SetRetroHonorTargetRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_season_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetRetroHonorTargetRequest.ProtoReflect.Descriptor instead.
+func (*SetRetroHonorTargetRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *SetRetroHonorTargetRequest) GetSeasonId() uint32 {
+	if x != nil {
+		return x.SeasonId
+	}
+	return 0
+}
+
+type SetRetroHonorTargetResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	State         *SeasonStateSnapshot   `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetRetroHonorTargetResponse) Reset() {
+	*x = SetRetroHonorTargetResponse{}
+	mi := &file_proto_scene_player_season_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetRetroHonorTargetResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetRetroHonorTargetResponse) ProtoMessage() {}
+
+func (x *SetRetroHonorTargetResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_season_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetRetroHonorTargetResponse.ProtoReflect.Descriptor instead.
+func (*SetRetroHonorTargetResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_season_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *SetRetroHonorTargetResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *SetRetroHonorTargetResponse) GetState() *SeasonStateSnapshot {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
 var File_proto_scene_player_season_proto protoreflect.FileDescriptor
 
 const file_proto_scene_player_season_proto_rawDesc = "" +
 	"\n" +
-	"\x1fproto/scene/player_season.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\"\x8d\x03\n" +
+	"\x1fproto/scene/player_season.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\"\xb2\x04\n" +
 	"\x10SeasonSealOption\x12\x17\n" +
 	"\aseal_id\x18\x01 \x01(\rR\x06sealId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -2252,7 +2437,11 @@ const file_proto_scene_player_season_proto_rawDesc = "" +
 	"\ractive_rounds\x18\n" +
 	" \x01(\rR\factiveRounds\x120\n" +
 	"\x14health_threshold_bps\x18\v \x01(\rR\x12healthThresholdBps\x12\x1a\n" +
-	"\bequipped\x18\f \x01(\bR\bequipped\"\x9b\x04\n" +
+	"\bequipped\x18\f \x01(\bR\bequipped\x12,\n" +
+	"\x12resonance_skill_id\x18\r \x01(\rR\x10resonanceSkillId\x12%\n" +
+	"\x0eresonance_kind\x18\x0e \x01(\rR\rresonanceKind\x12'\n" +
+	"\x0fresonance_param\x18\x0f \x01(\rR\x0eresonanceParam\x12%\n" +
+	"\x0eresonance_desc\x18\x10 \x01(\tR\rresonanceDesc\"\x9b\x04\n" +
 	"\x12SeasonSkillSummary\x12$\n" +
 	"\x0eskill_table_id\x18\x01 \x01(\rR\fskillTableId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -2274,7 +2463,7 @@ const file_proto_scene_player_season_proto_rawDesc = "" +
 	"\vcaster_mask\x18\x0f \x01(\rR\n" +
 	"casterMask\x12\x1f\n" +
 	"\vaction_tags\x18\x10 \x01(\rR\n" +
-	"actionTags\"\xba\x02\n" +
+	"actionTags\"\x96\x03\n" +
 	"\x0fSeasonHonorView\x12\x1b\n" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x1f\n" +
 	"\vseason_name\x18\x02 \x01(\tR\n" +
@@ -2285,7 +2474,10 @@ const file_proto_scene_player_season_proto_rawDesc = "" +
 	"\n" +
 	"max_points\x18\x06 \x01(\rR\tmaxPoints\x12\x1a\n" +
 	"\bunlocked\x18\a \x01(\bR\bunlocked\x12*\n" +
-	"\x11is_current_season\x18\b \x01(\bR\x0fisCurrentSeason\"\xdc\x01\n" +
+	"\x11is_current_season\x18\b \x01(\bR\x0fisCurrentSeason\x12&\n" +
+	"\x0fis_retro_target\x18\t \x01(\bR\risRetroTarget\x122\n" +
+	"\x15retro_progress_points\x18\n" +
+	" \x01(\rR\x13retroProgressPoints\"\xdc\x01\n" +
 	"\x15SeasonWeeklyAffixView\x12\x1d\n" +
 	"\n" +
 	"week_index\x18\x01 \x01(\rR\tweekIndex\x12\x19\n" +
@@ -2293,7 +2485,7 @@ const file_proto_scene_player_season_proto_rawDesc = "" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12 \n" +
 	"\vdescription\x18\x04 \x01(\tR\vdescription\x12!\n" +
 	"\fstrategy_tip\x18\x05 \x01(\tR\vstrategyTip\x120\n" +
-	"\x14recommended_seal_ids\x18\x06 \x03(\rR\x12recommendedSealIds\"\xcb\v\n" +
+	"\x14recommended_seal_ids\x18\x06 \x03(\rR\x12recommendedSealIds\"\xb4\r\n" +
 	"\x13SeasonStateSnapshot\x12\x1c\n" +
 	"\tavailable\x18\x01 \x01(\bR\tavailable\x12-\n" +
 	"\x12unavailable_reason\x18\x02 \x01(\tR\x11unavailableReason\x12\x1b\n" +
@@ -2335,7 +2527,14 @@ const file_proto_scene_player_season_proto_rawDesc = "" +
 	"\x15equipped_formation_id\x18\x1f \x01(\rR\x13equippedFormationId\x12@\n" +
 	"\fsaved_builds\x18  \x03(\v2\x1d.SavedBattleBuildBookmarkViewR\vsavedBuilds\x12(\n" +
 	"\x06honors\x18! \x03(\v2\x10.SeasonHonorViewR\x06honors\x129\n" +
-	"\fweekly_affix\x18\" \x01(\v2\x16.SeasonWeeklyAffixViewR\vweeklyAffix\"\x84\x04\n" +
+	"\fweekly_affix\x18\" \x01(\v2\x16.SeasonWeeklyAffixViewR\vweeklyAffix\x12\x1f\n" +
+	"\vseason_term\x18# \x01(\rR\n" +
+	"seasonTerm\x12\x1f\n" +
+	"\vcycle_index\x18$ \x01(\rR\n" +
+	"cycleIndex\x12&\n" +
+	"\x0fcycle_pool_size\x18% \x01(\rR\rcyclePoolSize\x12>\n" +
+	"\x1cretro_honor_target_season_id\x18& \x01(\rR\x18retroHonorTargetSeasonId\x12=\n" +
+	"\x1bretro_honor_target_explicit\x18' \x01(\bR\x18retroHonorTargetExplicit\"\x84\x04\n" +
 	"\x1cSavedBattleBuildBookmarkView\x12\x1f\n" +
 	"\vbookmark_id\x18\x01 \x01(\x04R\n" +
 	"bookmarkId\x12\x14\n" +
@@ -2440,7 +2639,12 @@ const file_proto_scene_player_season_proto_rawDesc = "" +
 	"\x05state\x18\x02 \x01(\v2\x14.SeasonStateSnapshotR\x05state\x12\x1a\n" +
 	"\breplayed\x18\x03 \x01(\bR\breplayed\x12!\n" +
 	"\fadded_points\x18\x04 \x01(\rR\vaddedPoints\x12%\n" +
-	"\x0espent_currency\x18\x05 \x01(\x04R\rspentCurrency2\xe2\x06\n" +
+	"\x0espent_currency\x18\x05 \x01(\x04R\rspentCurrency\"9\n" +
+	"\x1aSetRetroHonorTargetRequest\x12\x1b\n" +
+	"\tseason_id\x18\x01 \x01(\rR\bseasonId\"\x7f\n" +
+	"\x1bSetRetroHonorTargetResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12*\n" +
+	"\x05state\x18\x02 \x01(\v2\x14.SeasonStateSnapshotR\x05state2\xb4\a\n" +
 	"\x17SceneSeasonClientPlayer\x12A\n" +
 	"\x0eGetSeasonState\x12\x16.GetSeasonStateRequest\x1a\x17.GetSeasonStateResponse\x12D\n" +
 	"\x0fEquipSeasonSeal\x12\x17.EquipSeasonSealRequest\x1a\x18.EquipSeasonSealResponse\x12J\n" +
@@ -2451,7 +2655,8 @@ const file_proto_scene_player_season_proto_rawDesc = "" +
 	"\x14PickWuxingTowerSigil\x12\x1c.PickWuxingTowerSigilRequest\x1a\x1d.PickWuxingTowerSigilResponse\x12V\n" +
 	"\x15AbandonWuxingTowerRun\x12\x1d.AbandonWuxingTowerRunRequest\x1a\x1e.AbandonWuxingTowerRunResponse\x12\\\n" +
 	"\x17SaveBattleBuildBookmark\x12\x1f.SaveBattleBuildBookmarkRequest\x1a .SaveBattleBuildBookmarkResponse\x12b\n" +
-	"\x19DeleteBattleBuildBookmark\x12!.DeleteBattleBuildBookmarkRequest\x1a\".DeleteBattleBuildBookmarkResponse\x1a\n" +
+	"\x19DeleteBattleBuildBookmark\x12!.DeleteBattleBuildBookmarkRequest\x1a\".DeleteBattleBuildBookmarkResponse\x12P\n" +
+	"\x13SetRetroHonorTarget\x12\x1b.SetRetroHonorTargetRequest\x1a\x1c.SetRetroHonorTargetResponse\x1a\n" +
 	"\x80\xa8\xc3\x01\x01\x88\xa8\xc3\x01\x01B\x14\x98\xd4a\x03Z\vproto/scene\x80\x01\x01b\x06proto3"
 
 var (
@@ -2466,7 +2671,7 @@ func file_proto_scene_player_season_proto_rawDescGZIP() []byte {
 	return file_proto_scene_player_season_proto_rawDescData
 }
 
-var file_proto_scene_player_season_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
+var file_proto_scene_player_season_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_proto_scene_player_season_proto_goTypes = []any{
 	(*SeasonSealOption)(nil),                  // 0: SeasonSealOption
 	(*SeasonSkillSummary)(nil),                // 1: SeasonSkillSummary
@@ -2496,7 +2701,9 @@ var file_proto_scene_player_season_proto_goTypes = []any{
 	(*EquipSeasonSealResponse)(nil),           // 25: EquipSeasonSealResponse
 	(*CatchupSeasonSealRequest)(nil),          // 26: CatchupSeasonSealRequest
 	(*CatchupSeasonSealResponse)(nil),         // 27: CatchupSeasonSealResponse
-	(*base.TipInfoMessage)(nil),               // 28: TipInfoMessage
+	(*SetRetroHonorTargetRequest)(nil),        // 28: SetRetroHonorTargetRequest
+	(*SetRetroHonorTargetResponse)(nil),       // 29: SetRetroHonorTargetResponse
+	(*base.TipInfoMessage)(nil),               // 30: TipInfoMessage
 }
 var file_proto_scene_player_season_proto_depIdxs = []int32{
 	0,  // 0: SeasonStateSnapshot.seals:type_name -> SeasonSealOption
@@ -2504,54 +2711,58 @@ var file_proto_scene_player_season_proto_depIdxs = []int32{
 	5,  // 2: SeasonStateSnapshot.saved_builds:type_name -> SavedBattleBuildBookmarkView
 	2,  // 3: SeasonStateSnapshot.honors:type_name -> SeasonHonorView
 	3,  // 4: SeasonStateSnapshot.weekly_affix:type_name -> SeasonWeeklyAffixView
-	28, // 5: EquipWuxingFormationResponse.error_message:type_name -> TipInfoMessage
+	30, // 5: EquipWuxingFormationResponse.error_message:type_name -> TipInfoMessage
 	4,  // 6: EquipWuxingFormationResponse.state:type_name -> SeasonStateSnapshot
 	8,  // 7: WuxingTowerStateSnapshot.weekly_leaderboard:type_name -> WuxingTowerLeaderboardEntry
-	28, // 8: GetWuxingTowerStateResponse.error_message:type_name -> TipInfoMessage
+	30, // 8: GetWuxingTowerStateResponse.error_message:type_name -> TipInfoMessage
 	9,  // 9: GetWuxingTowerStateResponse.state:type_name -> WuxingTowerStateSnapshot
-	28, // 10: StartWuxingTowerRunResponse.error_message:type_name -> TipInfoMessage
+	30, // 10: StartWuxingTowerRunResponse.error_message:type_name -> TipInfoMessage
 	9,  // 11: StartWuxingTowerRunResponse.state:type_name -> WuxingTowerStateSnapshot
-	28, // 12: PickWuxingTowerSigilResponse.error_message:type_name -> TipInfoMessage
+	30, // 12: PickWuxingTowerSigilResponse.error_message:type_name -> TipInfoMessage
 	9,  // 13: PickWuxingTowerSigilResponse.state:type_name -> WuxingTowerStateSnapshot
-	28, // 14: AbandonWuxingTowerRunResponse.error_message:type_name -> TipInfoMessage
+	30, // 14: AbandonWuxingTowerRunResponse.error_message:type_name -> TipInfoMessage
 	9,  // 15: AbandonWuxingTowerRunResponse.state:type_name -> WuxingTowerStateSnapshot
 	5,  // 16: SaveBattleBuildBookmarkRequest.bookmark:type_name -> SavedBattleBuildBookmarkView
-	28, // 17: SaveBattleBuildBookmarkResponse.error_message:type_name -> TipInfoMessage
+	30, // 17: SaveBattleBuildBookmarkResponse.error_message:type_name -> TipInfoMessage
 	5,  // 18: SaveBattleBuildBookmarkResponse.saved:type_name -> SavedBattleBuildBookmarkView
 	5,  // 19: SaveBattleBuildBookmarkResponse.all_bookmarks:type_name -> SavedBattleBuildBookmarkView
-	28, // 20: DeleteBattleBuildBookmarkResponse.error_message:type_name -> TipInfoMessage
+	30, // 20: DeleteBattleBuildBookmarkResponse.error_message:type_name -> TipInfoMessage
 	5,  // 21: DeleteBattleBuildBookmarkResponse.all_bookmarks:type_name -> SavedBattleBuildBookmarkView
-	28, // 22: GetSeasonStateResponse.error_message:type_name -> TipInfoMessage
+	30, // 22: GetSeasonStateResponse.error_message:type_name -> TipInfoMessage
 	4,  // 23: GetSeasonStateResponse.state:type_name -> SeasonStateSnapshot
-	28, // 24: EquipSeasonSealResponse.error_message:type_name -> TipInfoMessage
+	30, // 24: EquipSeasonSealResponse.error_message:type_name -> TipInfoMessage
 	4,  // 25: EquipSeasonSealResponse.state:type_name -> SeasonStateSnapshot
-	28, // 26: CatchupSeasonSealResponse.error_message:type_name -> TipInfoMessage
+	30, // 26: CatchupSeasonSealResponse.error_message:type_name -> TipInfoMessage
 	4,  // 27: CatchupSeasonSealResponse.state:type_name -> SeasonStateSnapshot
-	22, // 28: SceneSeasonClientPlayer.GetSeasonState:input_type -> GetSeasonStateRequest
-	24, // 29: SceneSeasonClientPlayer.EquipSeasonSeal:input_type -> EquipSeasonSealRequest
-	26, // 30: SceneSeasonClientPlayer.CatchupSeasonSeal:input_type -> CatchupSeasonSealRequest
-	6,  // 31: SceneSeasonClientPlayer.EquipWuxingFormation:input_type -> EquipWuxingFormationRequest
-	10, // 32: SceneSeasonClientPlayer.GetWuxingTowerState:input_type -> GetWuxingTowerStateRequest
-	12, // 33: SceneSeasonClientPlayer.StartWuxingTowerRun:input_type -> StartWuxingTowerRunRequest
-	14, // 34: SceneSeasonClientPlayer.PickWuxingTowerSigil:input_type -> PickWuxingTowerSigilRequest
-	16, // 35: SceneSeasonClientPlayer.AbandonWuxingTowerRun:input_type -> AbandonWuxingTowerRunRequest
-	18, // 36: SceneSeasonClientPlayer.SaveBattleBuildBookmark:input_type -> SaveBattleBuildBookmarkRequest
-	20, // 37: SceneSeasonClientPlayer.DeleteBattleBuildBookmark:input_type -> DeleteBattleBuildBookmarkRequest
-	23, // 38: SceneSeasonClientPlayer.GetSeasonState:output_type -> GetSeasonStateResponse
-	25, // 39: SceneSeasonClientPlayer.EquipSeasonSeal:output_type -> EquipSeasonSealResponse
-	27, // 40: SceneSeasonClientPlayer.CatchupSeasonSeal:output_type -> CatchupSeasonSealResponse
-	7,  // 41: SceneSeasonClientPlayer.EquipWuxingFormation:output_type -> EquipWuxingFormationResponse
-	11, // 42: SceneSeasonClientPlayer.GetWuxingTowerState:output_type -> GetWuxingTowerStateResponse
-	13, // 43: SceneSeasonClientPlayer.StartWuxingTowerRun:output_type -> StartWuxingTowerRunResponse
-	15, // 44: SceneSeasonClientPlayer.PickWuxingTowerSigil:output_type -> PickWuxingTowerSigilResponse
-	17, // 45: SceneSeasonClientPlayer.AbandonWuxingTowerRun:output_type -> AbandonWuxingTowerRunResponse
-	19, // 46: SceneSeasonClientPlayer.SaveBattleBuildBookmark:output_type -> SaveBattleBuildBookmarkResponse
-	21, // 47: SceneSeasonClientPlayer.DeleteBattleBuildBookmark:output_type -> DeleteBattleBuildBookmarkResponse
-	38, // [38:48] is the sub-list for method output_type
-	28, // [28:38] is the sub-list for method input_type
-	28, // [28:28] is the sub-list for extension type_name
-	28, // [28:28] is the sub-list for extension extendee
-	0,  // [0:28] is the sub-list for field type_name
+	30, // 28: SetRetroHonorTargetResponse.error_message:type_name -> TipInfoMessage
+	4,  // 29: SetRetroHonorTargetResponse.state:type_name -> SeasonStateSnapshot
+	22, // 30: SceneSeasonClientPlayer.GetSeasonState:input_type -> GetSeasonStateRequest
+	24, // 31: SceneSeasonClientPlayer.EquipSeasonSeal:input_type -> EquipSeasonSealRequest
+	26, // 32: SceneSeasonClientPlayer.CatchupSeasonSeal:input_type -> CatchupSeasonSealRequest
+	6,  // 33: SceneSeasonClientPlayer.EquipWuxingFormation:input_type -> EquipWuxingFormationRequest
+	10, // 34: SceneSeasonClientPlayer.GetWuxingTowerState:input_type -> GetWuxingTowerStateRequest
+	12, // 35: SceneSeasonClientPlayer.StartWuxingTowerRun:input_type -> StartWuxingTowerRunRequest
+	14, // 36: SceneSeasonClientPlayer.PickWuxingTowerSigil:input_type -> PickWuxingTowerSigilRequest
+	16, // 37: SceneSeasonClientPlayer.AbandonWuxingTowerRun:input_type -> AbandonWuxingTowerRunRequest
+	18, // 38: SceneSeasonClientPlayer.SaveBattleBuildBookmark:input_type -> SaveBattleBuildBookmarkRequest
+	20, // 39: SceneSeasonClientPlayer.DeleteBattleBuildBookmark:input_type -> DeleteBattleBuildBookmarkRequest
+	28, // 40: SceneSeasonClientPlayer.SetRetroHonorTarget:input_type -> SetRetroHonorTargetRequest
+	23, // 41: SceneSeasonClientPlayer.GetSeasonState:output_type -> GetSeasonStateResponse
+	25, // 42: SceneSeasonClientPlayer.EquipSeasonSeal:output_type -> EquipSeasonSealResponse
+	27, // 43: SceneSeasonClientPlayer.CatchupSeasonSeal:output_type -> CatchupSeasonSealResponse
+	7,  // 44: SceneSeasonClientPlayer.EquipWuxingFormation:output_type -> EquipWuxingFormationResponse
+	11, // 45: SceneSeasonClientPlayer.GetWuxingTowerState:output_type -> GetWuxingTowerStateResponse
+	13, // 46: SceneSeasonClientPlayer.StartWuxingTowerRun:output_type -> StartWuxingTowerRunResponse
+	15, // 47: SceneSeasonClientPlayer.PickWuxingTowerSigil:output_type -> PickWuxingTowerSigilResponse
+	17, // 48: SceneSeasonClientPlayer.AbandonWuxingTowerRun:output_type -> AbandonWuxingTowerRunResponse
+	19, // 49: SceneSeasonClientPlayer.SaveBattleBuildBookmark:output_type -> SaveBattleBuildBookmarkResponse
+	21, // 50: SceneSeasonClientPlayer.DeleteBattleBuildBookmark:output_type -> DeleteBattleBuildBookmarkResponse
+	29, // 51: SceneSeasonClientPlayer.SetRetroHonorTarget:output_type -> SetRetroHonorTargetResponse
+	41, // [41:52] is the sub-list for method output_type
+	30, // [30:41] is the sub-list for method input_type
+	30, // [30:30] is the sub-list for extension type_name
+	30, // [30:30] is the sub-list for extension extendee
+	0,  // [0:30] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_player_season_proto_init() }
@@ -2565,7 +2776,7 @@ func file_proto_scene_player_season_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_scene_player_season_proto_rawDesc), len(file_proto_scene_player_season_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   28,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

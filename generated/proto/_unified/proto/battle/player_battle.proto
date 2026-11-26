@@ -85,6 +85,7 @@ message BattleStateS2C {
   repeated uint32 banned_skill_ids = 39;               // 本局最终生效的全场双边共同禁用技能（升序去重，0..6 个；观战/重连/回放全可见）
   repeated uint32 team_a_banned_skill_ids = 40;        // A 队（team_index=0）最终生效的禁用技能（0..3 个）
   repeated uint32 team_b_banned_skill_ids = 41;        // B 队（team_index=1）最终生效的禁用技能（0..3 个）
+  uint32 trial_vow_mask = 42;                          // 五行试炼志 V3：本局生效的自选限制誓约位掩码（0=无，1..15）
 }
 
 message BattleStartS2C {
@@ -143,6 +144,12 @@ message BattleEndS2C {
   uint64 total_exp_after = 18;
   uint64 next_level_total_exp = 19;
   bool battle_silver_diminished = 20;
+  // 满级溢出自动流向「往季徽章追忆」的单局增量（与 PlayerBattleResult 同源，零付费）。
+  uint32 retro_honor_season_id = 21;
+  uint32 retro_honor_points_added = 22;
+  uint32 retro_honor_progress_after = 23;
+  uint32 retro_honor_max_points = 24;
+  bool retro_honor_newly_unlocked = 25;
 }
 
 // 重连提示:scene 在换会话(RECONNECT / REPLACE)或登录重建出 FIGHTING 冻结时经大厅推送;

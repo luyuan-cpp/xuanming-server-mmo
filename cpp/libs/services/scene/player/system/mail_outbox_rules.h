@@ -10,12 +10,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
+#include <limits>
 #include <map>
 #include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "proto/common/base/currency_type.pb.h"
 #include "proto/common/component/player_mail_outbox_comp.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/mail_error_tip.pb.h"
@@ -27,11 +29,12 @@ namespace mail_outbox_rules
 	{
 		kUnspecified,    // 0:只会出现在坏数据里
 		kBattleOverflow, // 1:战斗结算两包都放不下,source_id = battle_id
+		kCraftProxyFee,  // 2:跨节点/离线名匠代打净分成,source_id = buyer_client_request_id
 
 		kCount
 	};
 
-	inline constexpr const char* kMailOutboxSourceNames[] = {"unspecified", "battle_overflow"};
+	inline constexpr const char* kMailOutboxSourceNames[] = {"unspecified", "battle_overflow", "craft_proxy_fee"};
 	static_assert(std::size(kMailOutboxSourceNames) == static_cast<std::size_t>(MailOutboxSource::kCount),
 				  "kMailOutboxSourceNames 与 MailOutboxSource 逐项对应");
 
@@ -47,9 +50,13 @@ namespace mail_outbox_rules
 	// 一封邮件的附件上限,与 go/shared/mailgrant.Bundle 同值:超了邮件服务按附件无效拒收,这一封就永远寄不出去。
 	inline constexpr std::size_t kMaxItemLinesPerMail = 16;
 	inline constexpr uint64_t kMaxItemCountPerMail = 4096;
+	inline constexpr std::size_t kMaxCurrencyLinesPerMail = 4;
+	inline constexpr uint64_t kMaxCurrencyAmountPerMail = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
 
 	// 一封邮件的物品:配置号 -> 数量。std::map 有序,写进 items 时天然按 config_id 升序。
 	using MailItems = std::map<uint32_t, uint64_t>;
+	// 一封邮件的货币:币种号 -> 数量。std::map 有序,写进 currencies 时天然按 currency_type 升序。
+	using MailCurrencies = std::map<uint32_t, uint64_t>;
 
 	// 把一批物品分成若干封,每封不超过附件上限:按 config_id 升序装填,这一封满了(种类到上限或件数到上限)就开下一封,
 	// 同一种装不下就把余量拆到下一封。配置号或数量为 0 的项跳过(调用方的缺陷,不该出现)。空批次返回空。纯函数。
@@ -99,7 +106,7 @@ namespace mail_outbox_rules
 		return nullptr;
 	}
 
-	// 追加一条。余量、号与物品形状由调用方事先核过(PlayerMailOutboxSystem::PrepareBattleOverflow),这里不再判。
+	// 追加一条物品条目(收件人为本队列所属玩家)。余量、号与物品形状由调用方事先核过,这里不再判。
 	inline void Append(PlayerMailOutboxComp& outbox, const uint64_t requestId, const MailOutboxSource source,
 					   const uint64_t sourceId, const std::string& title, const std::string& body, const MailItems& items,
 					   const uint64_t createdAtMs)
@@ -115,6 +122,27 @@ namespace mail_outbox_rules
 			auto* item = entry->add_items();
 			item->set_config_id(configId);
 			item->set_count(count);
+		}
+		entry->set_created_at_ms(createdAtMs);
+	}
+
+	// 追加一条带指定收件人与货币附件的条目(如跨节点/离线名匠代打净分成)。
+	inline void AppendCurrency(PlayerMailOutboxComp& outbox, const uint64_t requestId, const MailOutboxSource source,
+							   const uint64_t sourceId, const uint64_t recipientPlayerId, const std::string& title,
+							   const std::string& body, const MailCurrencies& currencies, const uint64_t createdAtMs)
+	{
+		auto* entry = outbox.add_entries();
+		entry->set_request_id(requestId);
+		entry->set_source(static_cast<uint32_t>(source));
+		entry->set_source_id(sourceId);
+		entry->set_recipient_player_id(recipientPlayerId);
+		entry->set_title(title);
+		entry->set_body(body);
+		for (const auto& [currencyType, amount] : currencies)
+		{
+			auto* currency = entry->add_currencies();
+			currency->set_currency_type(currencyType);
+			currency->set_amount(amount);
 		}
 		entry->set_created_at_ms(createdAtMs);
 	}
@@ -135,8 +163,10 @@ namespace mail_outbox_rules
 		return removed;
 	}
 
-	// 一条记录是不是一封邮件服务肯收的信:物品 1..16 种、按 config_id 严格升序、数量非 0、合计不超过 4096 件,标题非空。
-	// 空串 = 合法;否则是第一处问题的原因(只进日志)。
+	// 一条记录是不是一封邮件服务肯收的信:
+	//   - 物品与货币不能同时为空;物品至多 16 种、按 config_id 严格升序、数量非 0、合计不超过 4096 件;
+	//   - 货币至多 4 种、币种合法、按 currency_type 严格升序、数量在 1..INT64_MAX 内;
+	//   - 标题非空。空串 = 合法;否则是第一处问题的原因(只进日志)。
 	inline std::string ValidateEntry(const MailOutboxEntry& entry)
 	{
 		if (entry.request_id() == 0)
@@ -151,9 +181,14 @@ namespace mail_outbox_rules
 		{
 			return "empty_title";
 		}
-		if (entry.items_size() == 0 || static_cast<std::size_t>(entry.items_size()) > kMaxItemLinesPerMail)
+		if (static_cast<std::size_t>(entry.items_size()) > kMaxItemLinesPerMail ||
+			(entry.items_size() == 0 && entry.currencies_size() == 0))
 		{
 			return "bad_item_line_count";
+		}
+		if (static_cast<std::size_t>(entry.currencies_size()) > kMaxCurrencyLinesPerMail)
+		{
+			return "bad_currency_line_count";
 		}
 		uint32_t previous = 0;
 		uint64_t total = 0;
@@ -173,6 +208,25 @@ namespace mail_outbox_rules
 			}
 			previous = item.config_id();
 			total += item.count();
+		}
+		bool hasPrevCurrency = false;
+		uint32_t prevCurrency = 0;
+		for (const auto& currency : entry.currencies())
+		{
+			if (!common::base::CurrencyType_IsValid(static_cast<int>(currency.currency_type())))
+			{
+				return "unknown_currency_type";
+			}
+			if (currency.amount() == 0 || currency.amount() > kMaxCurrencyAmountPerMail)
+			{
+				return "bad_currency_amount";
+			}
+			if (hasPrevCurrency && currency.currency_type() <= prevCurrency)
+			{
+				return "currencies_not_ascending";
+			}
+			hasPrevCurrency = true;
+			prevCurrency = currency.currency_type();
 		}
 		return {};
 	}
@@ -204,16 +258,16 @@ namespace mail_outbox_rules
 	// 一次寄送的结果。底层类型按枚举项个数选;kCount 恒为最后一项。
 	enum class SendVerdict : uint8_t
 	{
-		kDelivered, // 邮件回了 mail_id(含判重回原邮件):可以删条目
-		kRejected,  // 邮件明确拒收:邮箱满(等玩家删信),或附件无效 / 请求冲突 / 参数错(要人处理)
-		kUnknown,   // 结果未知:没拿到回包、邮件回故障码或本版本不认识的码、成功却没有 mail_id。邮件可能已经写了
+		kDelivered,    // 邮件回了 mail_id(含判重回原邮件):可以删条目
+		kRejected,     // 邮件明确拒收:邮箱满(等玩家删信),或附件无效 / 请求冲突 / 参数错(要人处理)
+		kUnknown,      // 结果未知:没拿到回包、邮件回故障码或本版本不认识的码、成功却没有 mail_id。邮件可能已经写了
+		kTerminalDrop, // 终态不可投递(收件人角色已删除):审计后删条目,避免永久阻塞发件玩家出箱
 
 		kCount
 	};
 
 	// callOk:传输层拿到了回包;tipId:回包 error_message.id;mailId:回包 mail_id。
-	// 只有拒收码表里列出的业务拒绝算明确拒收;故障码与码表外的码一律按结果未知(与 go/rank 奖励工作器同一口径:
-	// 邮件提交结果未知时回的就是故障码)。两种都不删条目,区别只在重试节奏与日志级别。纯函数。
+	// 只有拒收码表里列出的业务拒绝算明确拒收;收件人已删角为终态放弃;故障码与码表外的码一律按结果未知。纯函数。
 	constexpr SendVerdict ClassifySend(const bool callOk, const uint32_t tipId, const uint64_t mailId)
 	{
 		if (!callOk)
@@ -226,6 +280,8 @@ namespace mail_outbox_rules
 		}
 		switch (tipId)
 		{
+		case static_cast<uint32_t>(kMailRecipientDeleted):
+			return SendVerdict::kTerminalDrop;
 		case static_cast<uint32_t>(kMailRecipientBoxFull):
 		case static_cast<uint32_t>(kMailAttachmentInvalid):
 		case static_cast<uint32_t>(kMailRequestConflict):

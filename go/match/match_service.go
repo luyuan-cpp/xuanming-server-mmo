@@ -194,7 +194,10 @@ func main() {
 	// 消费组 match-rating 是全局作用域,canary 副本不加入(发布轨道设计 §2.5),全部结果由 stable 归档与计分。
 	startResultConsumer := func() error {
 		return matchkafka.StartResultConsumer(ctx, resultConfig, func(_ context.Context, event *kafkapb.BattleResultEvent) error {
-			if !c.RatingEnabled && matchpb.MatchMode(event.GetMatchMode()) != matchpb.MatchMode_MATCH_MODE_SEASON_TOURNAMENT {
+			mode := matchpb.MatchMode(event.GetMatchMode())
+			if !c.RatingEnabled &&
+				mode != matchpb.MatchMode_MATCH_MODE_SEASON_TOURNAMENT &&
+				mode != matchpb.MatchMode_MATCH_MODE_JIANGHU_DUEL {
 				return nil
 			}
 			_, err := matchlogic.ApplyBattleResult(svcCtx, event)

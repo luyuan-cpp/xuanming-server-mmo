@@ -1397,11 +1397,11 @@ constexpr CancelBattlePrepareRequest::ParseTableT_ CancelBattlePrepareRequest::I
     {
       PROTOBUF_FIELD_OFFSET(CancelBattlePrepareRequest, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      3, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967288,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      3,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1411,14 +1411,19 @@ constexpr CancelBattlePrepareRequest::ParseTableT_ CancelBattlePrepareRequest::I
       ::_pbi::TcParser::GetTable<::CancelBattlePrepareRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 battle_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CancelBattlePrepareRequest, _impl_.battle_id_), 1>(),
-       {16, 1, 0,
-        PROTOBUF_FIELD_OFFSET(CancelBattlePrepareRequest, _impl_.battle_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 player_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CancelBattlePrepareRequest, _impl_.player_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(CancelBattlePrepareRequest, _impl_.player_id_)}},
+      // uint64 battle_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CancelBattlePrepareRequest, _impl_.battle_id_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(CancelBattlePrepareRequest, _impl_.battle_id_)}},
+      // bool skip_jianghu_silver_refund = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(CancelBattlePrepareRequest, _impl_.skip_jianghu_silver_refund_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(CancelBattlePrepareRequest, _impl_.skip_jianghu_silver_refund_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -1426,6 +1431,8 @@ constexpr CancelBattlePrepareRequest::ParseTableT_ CancelBattlePrepareRequest::I
       {PROTOBUF_FIELD_OFFSET(CancelBattlePrepareRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 battle_id = 2;
       {PROTOBUF_FIELD_OFFSET(CancelBattlePrepareRequest, _impl_.battle_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool skip_jianghu_silver_refund = 3;
+      {PROTOBUF_FIELD_OFFSET(CancelBattlePrepareRequest, _impl_.skip_jianghu_silver_refund_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
@@ -1439,7 +1446,8 @@ inline constexpr CancelBattlePrepareRequest::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
         player_id_{::uint64_t{0u}},
-        battle_id_{::uint64_t{0u}} {}
+        battle_id_{::uint64_t{0u}},
+        skip_jianghu_silver_refund_{false} {}
 
 template <typename>
 constexpr CancelBattlePrepareRequest::CancelBattlePrepareRequest(::_pbi::ConstantInitialized,
@@ -2749,11 +2757,11 @@ constexpr PrepareBattleResponse::ParseTableT_ PrepareBattleResponse::InternalGen
     {
       PROTOBUF_FIELD_OFFSET(PrepareBattleResponse, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      4, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967280,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      4,  // num_field_entries
       2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -2763,7 +2771,10 @@ constexpr PrepareBattleResponse::ParseTableT_ PrepareBattleResponse::InternalGen
       ::_pbi::TcParser::GetTable<::PrepareBattleResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // bool jianghu_silver_fee_charged = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PrepareBattleResponse, _impl_.jianghu_silver_fee_charged_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(PrepareBattleResponse, _impl_.jianghu_silver_fee_charged_)}},
       // .TipInfoMessage error_message = 1;
       {::_pbi::TcParser::FastMtS1,
        {10, 1, 0,
@@ -2785,6 +2796,8 @@ constexpr PrepareBattleResponse::ParseTableT_ PrepareBattleResponse::InternalGen
       {PROTOBUF_FIELD_OFFSET(PrepareBattleResponse, _impl_.snapshot_), _Internal::kHasBitsOffset + 2, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // string table_fingerprint = 3;
       {PROTOBUF_FIELD_OFFSET(PrepareBattleResponse, _impl_.table_fingerprint_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // bool jianghu_silver_fee_charged = 4;
+      {PROTOBUF_FIELD_OFFSET(PrepareBattleResponse, _impl_.jianghu_silver_fee_charged_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -2815,7 +2828,8 @@ inline constexpr PrepareBattleResponse::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         error_message_{nullptr},
-        snapshot_{nullptr} {}
+        snapshot_{nullptr},
+        jianghu_silver_fee_charged_{false} {}
 
 template <typename>
 constexpr PrepareBattleResponse::PrepareBattleResponse(::_pbi::ConstantInitialized,
@@ -3074,20 +3088,24 @@ const ::uint32_t
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PrepareBattleResponse, _impl_._has_bits_),
-        6, // hasbit index offset
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PrepareBattleResponse, _impl_.error_message_),
         PROTOBUF_FIELD_OFFSET(::PrepareBattleResponse, _impl_.snapshot_),
         PROTOBUF_FIELD_OFFSET(::PrepareBattleResponse, _impl_.table_fingerprint_),
+        PROTOBUF_FIELD_OFFSET(::PrepareBattleResponse, _impl_.jianghu_silver_fee_charged_),
         1,
         2,
         0,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::CancelBattlePrepareRequest, _impl_._has_bits_),
-        5, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::CancelBattlePrepareRequest, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::CancelBattlePrepareRequest, _impl_.battle_id_),
+        PROTOBUF_FIELD_OFFSET(::CancelBattlePrepareRequest, _impl_.skip_jianghu_silver_refund_),
         0,
         1,
+        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SealAccountRoleTradeRequest, _impl_._has_bits_),
         5, // hasbit index offset
@@ -3114,8 +3132,8 @@ static const ::_pbi::MigrationSchema
         {138, sizeof(::JianghuPlayerEligibilityEntry)},
         {147, sizeof(::CheckJianghuDuelEligibilityResponse)},
         {156, sizeof(::PrepareBattleResponse)},
-        {165, sizeof(::CancelBattlePrepareRequest)},
-        {172, sizeof(::SealAccountRoleTradeRequest)},
+        {167, sizeof(::CancelBattlePrepareRequest)},
+        {176, sizeof(::SealAccountRoleTradeRequest)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -3196,34 +3214,36 @@ const char descriptor_table_protodef_proto_2fscene_2fscene_2eproto[] ABSL_ATTRIB
     "esponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfo"
     "Message\022/\n\007players\030\002 \003(\0132\036.JianghuPlayer"
     "EligibilityEntry\022 \n\030payer_has_sufficient"
-    "_fee\030\003 \001(\010\"\203\001\n\025PrepareBattleResponse\022&\n\r"
+    "_fee\030\003 \001(\010\"\247\001\n\025PrepareBattleResponse\022&\n\r"
     "error_message\030\001 \001(\0132\017.TipInfoMessage\022\'\n\010"
     "snapshot\030\002 \001(\0132\025.BattlePlayerSnapshot\022\031\n"
-    "\021table_fingerprint\030\003 \001(\t\"B\n\032CancelBattle"
-    "PrepareRequest\022\021\n\tplayer_id\030\001 \001(\004\022\021\n\tbat"
-    "tle_id\030\002 \001(\004\"s\n\033SealAccountRoleTradeRequ"
-    "est\022(\n\004seal\030\001 \001(\0132\032.common.base.RoleTrad"
-    "eSeal\022*\n\004auth\030\002 \001(\0132\034.common.base.Servic"
-    "eCallAuth*\200\001\n\034ClientMessageDispatchVerdi"
-    "ct\022/\n+CLIENT_MESSAGE_DISPATCH_VERDICT_UN"
-    "SPECIFIED\020\000\022/\n+CLIENT_MESSAGE_DISPATCH_V"
-    "ERDICT_RETRY_LATER\020\0012\366\004\n\005Scene\022:\n\023Player"
-    "EnterGameNode\022\033.PlayerEnterGameNodeReque"
-    "st\032\006.Empty\022e\n\032ProcessClientPlayerMessage"
-    "\022\".ProcessClientPlayerMessageRequest\032#.P"
-    "rocessClientPlayerMessageResponse\022<\n\023Upd"
-    "ateSessionDetail\022\035.RegisterPlayerSession"
-    "Request\032\006.Empty\0228\n\013CreateScene\022\023.CreateS"
-    "ceneRequest\032\024.CreateSceneResponse\022,\n\014Des"
-    "troyScene\022\024.DestroySceneRequest\032\006.Empty\022"
-    ">\n\rPrepareBattle\022\025.PrepareBattleRequest\032"
-    "\026.PrepareBattleResponse\022:\n\023CancelBattleP"
-    "repare\022\033.CancelBattlePrepareRequest\032\006.Em"
-    "pty\022>\n\rNodeHandshake\022\025.NodeHandshakeRequ"
-    "est\032\026.NodeHandshakeResponse\022h\n\033CheckJian"
-    "ghuDuelEligibility\022#.CheckJianghuDuelEli"
-    "gibilityRequest\032$.CheckJianghuDuelEligib"
-    "ilityResponseB\016Z\005scene\200\001\001\230\324a\003b\006proto3"
+    "\021table_fingerprint\030\003 \001(\t\022\"\n\032jianghu_silv"
+    "er_fee_charged\030\004 \001(\010\"f\n\032CancelBattlePrep"
+    "areRequest\022\021\n\tplayer_id\030\001 \001(\004\022\021\n\tbattle_"
+    "id\030\002 \001(\004\022\"\n\032skip_jianghu_silver_refund\030\003"
+    " \001(\010\"s\n\033SealAccountRoleTradeRequest\022(\n\004s"
+    "eal\030\001 \001(\0132\032.common.base.RoleTradeSeal\022*\n"
+    "\004auth\030\002 \001(\0132\034.common.base.ServiceCallAut"
+    "h*\200\001\n\034ClientMessageDispatchVerdict\022/\n+CL"
+    "IENT_MESSAGE_DISPATCH_VERDICT_UNSPECIFIE"
+    "D\020\000\022/\n+CLIENT_MESSAGE_DISPATCH_VERDICT_R"
+    "ETRY_LATER\020\0012\366\004\n\005Scene\022:\n\023PlayerEnterGam"
+    "eNode\022\033.PlayerEnterGameNodeRequest\032\006.Emp"
+    "ty\022e\n\032ProcessClientPlayerMessage\022\".Proce"
+    "ssClientPlayerMessageRequest\032#.ProcessCl"
+    "ientPlayerMessageResponse\022<\n\023UpdateSessi"
+    "onDetail\022\035.RegisterPlayerSessionRequest\032"
+    "\006.Empty\0228\n\013CreateScene\022\023.CreateSceneRequ"
+    "est\032\024.CreateSceneResponse\022,\n\014DestroyScen"
+    "e\022\024.DestroySceneRequest\032\006.Empty\022>\n\rPrepa"
+    "reBattle\022\025.PrepareBattleRequest\032\026.Prepar"
+    "eBattleResponse\022:\n\023CancelBattlePrepare\022\033"
+    ".CancelBattlePrepareRequest\032\006.Empty\022>\n\rN"
+    "odeHandshake\022\025.NodeHandshakeRequest\032\026.No"
+    "deHandshakeResponse\022h\n\033CheckJianghuDuelE"
+    "ligibility\022#.CheckJianghuDuelEligibility"
+    "Request\032$.CheckJianghuDuelEligibilityRes"
+    "ponseB\016Z\005scene\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fscene_2eproto_deps[9] = {
@@ -3241,7 +3261,7 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fscene_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fscene_2eproto = {
     false,
     false,
-    3397,
+    3469,
     descriptor_table_protodef_proto_2fscene_2fscene_2eproto,
     "proto/scene/scene.proto",
     &descriptor_table_proto_2fscene_2fscene_2eproto_once,
@@ -7388,6 +7408,7 @@ PrepareBattleResponse::PrepareBattleResponse(
   _impl_.snapshot_ = (CheckHasBit(cached_has_bits, 0x00000004U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.snapshot_)
                 : nullptr;
+  _impl_.jianghu_silver_fee_charged_ = from._impl_.jianghu_silver_fee_charged_;
 
   // @@protoc_insertion_point(copy_constructor:PrepareBattleResponse)
 }
@@ -7402,9 +7423,9 @@ inline void PrepareBattleResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE ar
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, error_message_),
            0,
-           offsetof(Impl_, snapshot_) -
+           offsetof(Impl_, jianghu_silver_fee_charged_) -
                offsetof(Impl_, error_message_) +
-               sizeof(Impl_::snapshot_));
+               sizeof(Impl_::jianghu_silver_fee_charged_));
 }
 PrepareBattleResponse::~PrepareBattleResponse() {
   // @@protoc_insertion_point(destructor:PrepareBattleResponse)
@@ -7470,6 +7491,7 @@ PROTOBUF_NOINLINE void PrepareBattleResponse::Clear() {
       _impl_.snapshot_->Clear();
     }
   }
+  _impl_.jianghu_silver_fee_charged_ = false;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -7517,6 +7539,15 @@ PROTOBUF_NOINLINE void PrepareBattleResponse::Clear() {
     }
   }
 
+  // bool jianghu_silver_fee_charged = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_jianghu_silver_fee_charged() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          4, this_._internal_jianghu_silver_fee_charged(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -7542,7 +7573,7 @@ PROTOBUF_NOINLINE void PrepareBattleResponse::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // string table_fingerprint = 3;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_table_fingerprint().empty()) {
@@ -7559,6 +7590,12 @@ PROTOBUF_NOINLINE void PrepareBattleResponse::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.snapshot_);
+    }
+    // bool jianghu_silver_fee_charged = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_jianghu_silver_fee_charged() != 0) {
+        total_size += 2;
+      }
     }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
@@ -7579,7 +7616,7 @@ void PrepareBattleResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_table_fingerprint().empty()) {
         _this->_internal_set_table_fingerprint(from._internal_table_fingerprint());
@@ -7605,6 +7642,11 @@ void PrepareBattleResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.snapshot_->MergeFrom(*from._impl_.snapshot_);
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_jianghu_silver_fee_charged() != 0) {
+        _this->_impl_.jianghu_silver_fee_charged_ = from._impl_.jianghu_silver_fee_charged_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -7627,8 +7669,8 @@ void PrepareBattleResponse::InternalSwap(PrepareBattleResponse* PROTOBUF_RESTRIC
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.table_fingerprint_, &other->_impl_.table_fingerprint_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(PrepareBattleResponse, _impl_.snapshot_)
-      + sizeof(PrepareBattleResponse::_impl_.snapshot_)
+      PROTOBUF_FIELD_OFFSET(PrepareBattleResponse, _impl_.jianghu_silver_fee_charged_)
+      + sizeof(PrepareBattleResponse::_impl_.jianghu_silver_fee_charged_)
       - PROTOBUF_FIELD_OFFSET(PrepareBattleResponse, _impl_.error_message_)>(
           reinterpret_cast<char*>(&_impl_.error_message_),
           reinterpret_cast<char*>(&other->_impl_.error_message_));
@@ -7669,9 +7711,9 @@ inline void CancelBattlePrepareRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLAB
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, player_id_),
            0,
-           offsetof(Impl_, battle_id_) -
+           offsetof(Impl_, skip_jianghu_silver_refund_) -
                offsetof(Impl_, player_id_) +
-               sizeof(Impl_::battle_id_));
+               sizeof(Impl_::skip_jianghu_silver_refund_));
 }
 CancelBattlePrepareRequest::~CancelBattlePrepareRequest() {
   // @@protoc_insertion_point(destructor:CancelBattlePrepareRequest)
@@ -7721,10 +7763,10 @@ PROTOBUF_NOINLINE void CancelBattlePrepareRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.battle_id_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.battle_id_));
+        reinterpret_cast<char*>(&_impl_.skip_jianghu_silver_refund_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.skip_jianghu_silver_refund_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -7767,6 +7809,15 @@ PROTOBUF_NOINLINE void CancelBattlePrepareRequest::Clear() {
     }
   }
 
+  // bool skip_jianghu_silver_refund = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_skip_jianghu_silver_refund() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_skip_jianghu_silver_refund(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -7792,7 +7843,7 @@ PROTOBUF_NOINLINE void CancelBattlePrepareRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     // uint64 player_id = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_player_id() != 0) {
@@ -7805,6 +7856,12 @@ PROTOBUF_NOINLINE void CancelBattlePrepareRequest::Clear() {
       if (this_._internal_battle_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_battle_id());
+      }
+    }
+    // bool skip_jianghu_silver_refund = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_skip_jianghu_silver_refund() != 0) {
+        total_size += 2;
       }
     }
   }
@@ -7825,7 +7882,7 @@ void CancelBattlePrepareRequest::MergeImpl(::google::protobuf::MessageLite& to_m
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
@@ -7834,6 +7891,11 @@ void CancelBattlePrepareRequest::MergeImpl(::google::protobuf::MessageLite& to_m
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_battle_id() != 0) {
         _this->_impl_.battle_id_ = from._impl_.battle_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_skip_jianghu_silver_refund() != 0) {
+        _this->_impl_.skip_jianghu_silver_refund_ = from._impl_.skip_jianghu_silver_refund_;
       }
     }
   }
@@ -7855,8 +7917,8 @@ void CancelBattlePrepareRequest::InternalSwap(CancelBattlePrepareRequest* PROTOB
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(CancelBattlePrepareRequest, _impl_.battle_id_)
-      + sizeof(CancelBattlePrepareRequest::_impl_.battle_id_)
+      PROTOBUF_FIELD_OFFSET(CancelBattlePrepareRequest, _impl_.skip_jianghu_silver_refund_)
+      + sizeof(CancelBattlePrepareRequest::_impl_.skip_jianghu_silver_refund_)
       - PROTOBUF_FIELD_OFFSET(CancelBattlePrepareRequest, _impl_.player_id_)>(
           reinterpret_cast<char*>(&_impl_.player_id_),
           reinterpret_cast<char*>(&other->_impl_.player_id_));

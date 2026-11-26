@@ -59,6 +59,9 @@ func TestMatchOwnershipPrecheckRejectsRoleThatNoLongerBelongsToTheSession(t *tes
 	for _, method := range []string{
 		matchpb.MatchService_ListBattleReports_FullMethodName,
 		matchpb.MatchService_GetBattleReport_FullMethodName,
+		matchpb.MatchService_CreateTrialChallengeCard_FullMethodName,
+		matchpb.MatchService_GetTrialChallengeCard_FullMethodName,
+		matchpb.MatchService_GetSharedTrialReplay_FullMethodName,
 		matchpb.MatchService_ListBattleScripts_FullMethodName,
 		matchpb.MatchService_JoinQueue_FullMethodName,
 		teampb.ClientPlayerTeam_GetMyTeam_FullMethodName,

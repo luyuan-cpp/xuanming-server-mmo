@@ -1407,7 +1407,7 @@ Test-Case '端到端 external 警告:nodePort 段出推荐子段、部署 gatewa
 
 Test-Case '端到端 -RequireClientEndpoint:external 显式 false 只警告并写 false(逐个 zone 切换的窗口);podip 显式 true 在任何 kubectl 之前拒绝' {
     Assert-Equal -Expected 0 -Actual $RequireFalseRun.ExitCode -Because "窗口期的显式覆盖不阻断部署。输出: $($RequireFalseRun.Output)"
-    Assert-Match -Text $RequireFalseRun.Output -Pattern '-ClientEntryMode external 配 -RequireClientEndpoint false' -Because '回落下发集群内 PodIP 要警告'
+    Assert-Match -Text $RequireFalseRun.Output -Pattern '-ClientEntryMode external with -RequireClientEndpoint false' -Because '回落下发集群内 PodIP 要警告'
     foreach ($cm in @(@{ Name = 'go-svc-login-config'; File = 'login.yaml' }, @{ Name = 'go-svc-scene-manager-config'; File = 'scene_manager_service.yaml' })) {
         $flat = ConvertTo-FlatManifest -Block (Select-ManifestDoc -Output $RequireFalseRun.Output -Kind 'ConfigMap' -Name $cm.Name)
         Assert-Equal -Expected 'false' -Actual (Get-FlatValue -Flat $flat -KeyPath "data.$($cm.File).RequireClientEndpoint") -Because "$($cm.Name) 与另一个服务取同一个值"
@@ -1774,6 +1774,7 @@ function Invoke-DeployWithFakeKubectl {
     $Rules = @(
         @{ Pattern = '^get namespaces -o name$'; ExitCode = 0; Stdout = $ManagedSecretsFakeNamespaces }
         @{ Pattern = '^get secret domain-service-secrets -n \S+ --ignore-not-found -o json$'; ExitCode = 0; Stdout = $ManagedSecretFakeItemJson }
+        @{ Pattern = '^get namespace kube-system -o jsonpath=\{\.metadata\.uid\}$'; ExitCode = 0; Stdout = '11111111-2222-3333-4444-555555555555' }
     ) + @($Rules)
     # 非 dev 档必须给 -PlayerRedisMasters 与 -ControlRedisMasters,非 DryRun 还要读线上的 statefulset/redis-player 与 statefulset/redis-control
     # (Assert-RedisClusterPreflight)。本节用例测的不是这条闸:补上参数与口令,让假 kubectl 答两套集群都已在。用例自己的规则不匹配这两条调用,放在最前不影响它们。
@@ -1871,7 +1872,7 @@ $ClusterStateDriftCases = @(
 foreach ($driftCase in $ClusterStateDriftCases) {
     Test-Case "集群现状接缝:$($driftCase.Label)，逐项聚合且只有只读查询" {
         $deployAst = [Management.Automation.Language.Parser]::ParseFile((Join-Path (Get-ToolsScriptsDir) 'k8s_deploy.ps1'), [ref]$null, [ref]$null)
-        $productionNames = @('Assert-ClientEntryClusterState', 'Get-PodSpecEnvValue', 'Get-BattleEntryDrift', 'Get-GateAddressSource', 'Get-GateAddressDrift', 'Resolve-ZoneGatePlan', 'Get-ZoneNamespace')
+        $productionNames = @('Assert-ClientEntryClusterState', 'Get-PodSpecEnvValue', 'Get-BattleEntryDrift', 'Get-GateAddressSource', 'Get-GateAddressDrift', 'Get-ClientWsBaseUrl', 'Resolve-ZoneGatePlan', 'Get-ZoneNamespace')
         foreach ($definition in $deployAst.EndBlock.Statements | Where-Object { $_ -is [Management.Automation.Language.FunctionDefinitionAst] -and $_.Name -in $productionNames }) {
             . ([scriptblock]::Create($definition.Extent.Text))
         }

@@ -88,6 +88,7 @@ type TrialJournalSoloRecord struct {
 	BestRounds    uint32                       `protobuf:"varint,1,opt,name=best_rounds,json=bestRounds,proto3" json:"best_rounds,omitempty"`
 	AchievedAtMs  uint64                       `protobuf:"varint,2,opt,name=achieved_at_ms,json=achievedAtMs,proto3" json:"achieved_at_ms,omitempty"`
 	Loadout       *TrialJournalLoadoutSnapshot `protobuf:"bytes,3,opt,name=loadout,proto3" json:"loadout,omitempty"`
+	BattleId      uint64                       `protobuf:"varint,4,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"` // 刷新该单人最佳回合时的权威 battle_id（供回放与约战帖引用）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -143,6 +144,13 @@ func (x *TrialJournalSoloRecord) GetLoadout() *TrialJournalLoadoutSnapshot {
 	return nil
 }
 
+func (x *TrialJournalSoloRecord) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
 // 好友合战最快回合纪录（入场 2..5 名真人，仅保存在本人私藏手记中，不建全服野队竞速榜）。
 type TrialJournalCoopRecord struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -151,6 +159,7 @@ type TrialJournalCoopRecord struct {
 	AchievedAtMs  uint64                 `protobuf:"varint,3,opt,name=achieved_at_ms,json=achievedAtMs,proto3" json:"achieved_at_ms,omitempty"`
 	PetTableId    uint32                 `protobuf:"varint,4,opt,name=pet_table_id,json=petTableId,proto3" json:"pet_table_id,omitempty"`
 	TeammateNames []string               `protobuf:"bytes,5,rep,name=teammate_names,json=teammateNames,proto3" json:"teammate_names,omitempty"` // 开局冻结的同队其他成员展示名（至多 4 名，已脱敏）
+	BattleId      uint64                 `protobuf:"varint,6,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`               // 刷新该合战最快回合时的权威 battle_id（供回放与约战帖引用）
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -220,15 +229,26 @@ func (x *TrialJournalCoopRecord) GetTeammateNames() []string {
 	return nil
 }
 
+func (x *TrialJournalCoopRecord) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
 // 单个（关卡格, 可比规则版本）的最佳纪录；records 下标不承载顺序语义（AGENTS.md §11.6）。
 type TrialJournalEntryRecord struct {
-	state         protoimpl.MessageState  `protogen:"open.v1"`
-	EntryId       uint32                  `protobuf:"varint,1,opt,name=entry_id,json=entryId,proto3" json:"entry_id,omitempty"`
-	RuleVersion   uint32                  `protobuf:"varint,2,opt,name=rule_version,json=ruleVersion,proto3" json:"rule_version,omitempty"`
-	SoloBest      *TrialJournalSoloRecord `protobuf:"bytes,3,opt,name=solo_best,json=soloBest,proto3" json:"solo_best,omitempty"`
-	CoopBest      *TrialJournalCoopRecord `protobuf:"bytes,4,opt,name=coop_best,json=coopBest,proto3" json:"coop_best,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState  `protogen:"open.v1"`
+	EntryId         uint32                  `protobuf:"varint,1,opt,name=entry_id,json=entryId,proto3" json:"entry_id,omitempty"`
+	RuleVersion     uint32                  `protobuf:"varint,2,opt,name=rule_version,json=ruleVersion,proto3" json:"rule_version,omitempty"`
+	SoloBest        *TrialJournalSoloRecord `protobuf:"bytes,3,opt,name=solo_best,json=soloBest,proto3" json:"solo_best,omitempty"`
+	CoopBest        *TrialJournalCoopRecord `protobuf:"bytes,4,opt,name=coop_best,json=coopBest,proto3" json:"coop_best,omitempty"`
+	BestVowMask     uint32                  `protobuf:"varint,5,opt,name=best_vow_mask,json=bestVowMask,proto3" json:"best_vow_mask,omitempty"`               // V3：达成最高誓约纪录时的誓约位掩码（0=尚未带誓约通关）
+	BestVowCount    uint32                  `protobuf:"varint,6,opt,name=best_vow_count,json=bestVowCount,proto3" json:"best_vow_count,omitempty"`            // V3：最高达成誓约条数（0..4）
+	BestVowRounds   uint32                  `protobuf:"varint,7,opt,name=best_vow_rounds,json=bestVowRounds,proto3" json:"best_vow_rounds,omitempty"`         // V3：最高誓约纪录对应通关回合数
+	BestVowBattleId uint64                  `protobuf:"varint,8,opt,name=best_vow_battle_id,json=bestVowBattleId,proto3" json:"best_vow_battle_id,omitempty"` // V3：最高誓约纪录对应权威 battle_id
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *TrialJournalEntryRecord) Reset() {
@@ -287,6 +307,34 @@ func (x *TrialJournalEntryRecord) GetCoopBest() *TrialJournalCoopRecord {
 		return x.CoopBest
 	}
 	return nil
+}
+
+func (x *TrialJournalEntryRecord) GetBestVowMask() uint32 {
+	if x != nil {
+		return x.BestVowMask
+	}
+	return 0
+}
+
+func (x *TrialJournalEntryRecord) GetBestVowCount() uint32 {
+	if x != nil {
+		return x.BestVowCount
+	}
+	return 0
+}
+
+func (x *TrialJournalEntryRecord) GetBestVowRounds() uint32 {
+	if x != nil {
+		return x.BestVowRounds
+	}
+	return 0
+}
+
+func (x *TrialJournalEntryRecord) GetBestVowBattleId() uint64 {
+	if x != nil {
+		return x.BestVowBattleId
+	}
+	return 0
 }
 
 // 卷三（季游奇谈）按赛季隔离的轻档案，严禁混入永久单调全局位图。
@@ -444,12 +492,13 @@ const file_proto_common_component_player_trial_journal_comp_proto_rawDesc = "" +
 	"\fpet_table_id\x18\x01 \x01(\rR\n" +
 	"petTableId\x12.\n" +
 	"\x13artifact_effect_ids\x18\x02 \x03(\rR\x11artifactEffectIds\x12$\n" +
-	"\x0eseason_seal_id\x18\x03 \x01(\rR\fseasonSealId\"\x97\x01\n" +
+	"\x0eseason_seal_id\x18\x03 \x01(\rR\fseasonSealId\"\xb4\x01\n" +
 	"\x16TrialJournalSoloRecord\x12\x1f\n" +
 	"\vbest_rounds\x18\x01 \x01(\rR\n" +
 	"bestRounds\x12$\n" +
 	"\x0eachieved_at_ms\x18\x02 \x01(\x04R\fachievedAtMs\x126\n" +
-	"\aloadout\x18\x03 \x01(\v2\x1c.TrialJournalLoadoutSnapshotR\aloadout\"\xc7\x01\n" +
+	"\aloadout\x18\x03 \x01(\v2\x1c.TrialJournalLoadoutSnapshotR\aloadout\x12\x1b\n" +
+	"\tbattle_id\x18\x04 \x01(\x04R\bbattleId\"\xe4\x01\n" +
 	"\x16TrialJournalCoopRecord\x12\x1f\n" +
 	"\vbest_rounds\x18\x01 \x01(\rR\n" +
 	"bestRounds\x12\x1d\n" +
@@ -458,12 +507,17 @@ const file_proto_common_component_player_trial_journal_comp_proto_rawDesc = "" +
 	"\x0eachieved_at_ms\x18\x03 \x01(\x04R\fachievedAtMs\x12 \n" +
 	"\fpet_table_id\x18\x04 \x01(\rR\n" +
 	"petTableId\x12%\n" +
-	"\x0eteammate_names\x18\x05 \x03(\tR\rteammateNames\"\xc3\x01\n" +
+	"\x0eteammate_names\x18\x05 \x03(\tR\rteammateNames\x12\x1b\n" +
+	"\tbattle_id\x18\x06 \x01(\x04R\bbattleId\"\xe2\x02\n" +
 	"\x17TrialJournalEntryRecord\x12\x19\n" +
 	"\bentry_id\x18\x01 \x01(\rR\aentryId\x12!\n" +
 	"\frule_version\x18\x02 \x01(\rR\vruleVersion\x124\n" +
 	"\tsolo_best\x18\x03 \x01(\v2\x17.TrialJournalSoloRecordR\bsoloBest\x124\n" +
-	"\tcoop_best\x18\x04 \x01(\v2\x17.TrialJournalCoopRecordR\bcoopBest\"\x8e\x01\n" +
+	"\tcoop_best\x18\x04 \x01(\v2\x17.TrialJournalCoopRecordR\bcoopBest\x12\"\n" +
+	"\rbest_vow_mask\x18\x05 \x01(\rR\vbestVowMask\x12$\n" +
+	"\x0ebest_vow_count\x18\x06 \x01(\rR\fbestVowCount\x12&\n" +
+	"\x0fbest_vow_rounds\x18\a \x01(\rR\rbestVowRounds\x12+\n" +
+	"\x12best_vow_battle_id\x18\b \x01(\x04R\x0fbestVowBattleId\"\x8e\x01\n" +
 	"\x19SeasonTrialJournalArchive\x12\x1b\n" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12 \n" +
 	"\flit_seal_ids\x18\x02 \x03(\rR\n" +

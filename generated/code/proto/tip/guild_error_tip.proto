@@ -153,4 +153,12 @@ enum guild_error {
 
   kGuildWarServiceBusy = 14071;
 
+  kGuildWarFeudCooldown = 14072;
+
+  kGuildWarFeudAlreadyActive = 14073;
+
+  kGuildWarFeudNotFound = 14074;
+
+  kGuildWarFeudInvalidTarget = 14075;
+
 };

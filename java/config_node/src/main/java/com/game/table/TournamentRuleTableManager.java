@@ -33,23 +33,18 @@ public class TournamentRuleTableManager {
 
         final Map<Integer, List<TournamentRuleTable>> idxBattleConfigId;
 
-        final Map<Integer, List<TournamentRuleTable>> idxSaluteItemId;
-
 
         Snapshot(TournamentRuleTableData data,
                  Map<Integer, TournamentRuleTable> kvData,
-                 Map<Integer, List<TournamentRuleTable>> idxBattleConfigId,
-                 Map<Integer, List<TournamentRuleTable>> idxSaluteItemId) {
+                 Map<Integer, List<TournamentRuleTable>> idxBattleConfigId) {
             this.data = data;
             this.kvData = kvData;
             this.idxBattleConfigId = idxBattleConfigId;
-            this.idxSaluteItemId = idxSaluteItemId;
         }
     }
 
     private Snapshot snapshot = new Snapshot(
             TournamentRuleTableData.getDefaultInstance(),
-            Collections.emptyMap(),
             Collections.emptyMap(),
             Collections.emptyMap()
     );
@@ -71,15 +66,13 @@ public class TournamentRuleTableManager {
 
         Map<Integer, TournamentRuleTable> kvData = new HashMap<>(data.getDataCount());
         Map<Integer, List<TournamentRuleTable>> idxBattleConfigId = new HashMap<>();
-        Map<Integer, List<TournamentRuleTable>> idxSaluteItemId = new HashMap<>();
 
         for (TournamentRuleTable row : data.getDataList()) {
             kvData.put(row.getId(), row);
             idxBattleConfigId.computeIfAbsent(row.getBattleConfigId(), k -> new ArrayList<>()).add(row);
-            idxSaluteItemId.computeIfAbsent(row.getSaluteItemId(), k -> new ArrayList<>()).add(row);
         }
 
-        this.snapshot = new Snapshot(data, kvData, idxBattleConfigId, idxSaluteItemId);
+        this.snapshot = new Snapshot(data, kvData, idxBattleConfigId);
     }
 
     public TournamentRuleTableData findAll() {
@@ -105,15 +98,9 @@ public class TournamentRuleTableManager {
         return snapshot.idxBattleConfigId.getOrDefault(key, Collections.emptyList());
     }
 
-    public List<TournamentRuleTable> getBySaluteItemId(int key) {
-        return snapshot.idxSaluteItemId.getOrDefault(key, Collections.emptyList());
-    }
-
 
 
     // FK: battle_config_id → Dungeon.id
-
-    // FK: salute_item_id → Item.id
 
 
     // ---- Exists ----
@@ -135,10 +122,6 @@ public class TournamentRuleTableManager {
 
     public int countByBattleConfigIdIndex(int key) {
         return snapshot.idxBattleConfigId.getOrDefault(key, Collections.emptyList()).size();
-    }
-
-    public int countBySaluteItemIdIndex(int key) {
-        return snapshot.idxSaluteItemId.getOrDefault(key, Collections.emptyList()).size();
     }
 
 

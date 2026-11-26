@@ -48,6 +48,11 @@ message TrialJournalEntryView {
   bool can_enter = 21;
   string enter_blocked_reason = 22;
   string jump_target = 23;
+  bool vow_supported = 24;        // V3：本关卡格是否支持勾选试炼誓约（卷一/卷二/卷四 PVE 首领为 true）
+  uint32 best_vow_mask = 25;      // V3：最高誓约纪录位掩码
+  uint32 best_vow_count = 26;     // V3：最高达成誓约条数（0..4）
+  uint32 best_vow_rounds = 27;    // V3：最高誓约纪录回合数
+  uint64 best_vow_battle_id = 28; // V3：最高誓约纪录权威 battle_id
 }
 
 message TrialJournalChapterView {

@@ -60,6 +60,8 @@ const (
 	GuildService_GetGuildWarBattleResult_FullMethodName   = "/guildpb.GuildService/GetGuildWarBattleResult"
 	GuildService_NotifyGuildWarAlert_FullMethodName       = "/guildpb.GuildService/NotifyGuildWarAlert"
 	GuildService_InspectFieldWarTargets_FullMethodName    = "/guildpb.GuildService/InspectFieldWarTargets"
+	GuildService_IssueGuildWarFeud_FullMethodName         = "/guildpb.GuildService/IssueGuildWarFeud"
+	GuildService_RespondGuildWarFeud_FullMethodName       = "/guildpb.GuildService/RespondGuildWarFeud"
 	GuildService_GetGuildJianghuGrudgeWall_FullMethodName = "/guildpb.GuildService/GetGuildJianghuGrudgeWall"
 )
 
@@ -128,6 +130,9 @@ type GuildServiceClient interface {
 	GetGuildWarBattleResult(ctx context.Context, in *GetGuildWarBattleResultRequest, opts ...grpc.CallOption) (*GetGuildWarBattleResultResponse, error)
 	NotifyGuildWarAlert(ctx context.Context, in *GuildWarAlertS2C, opts ...grpc.CallOption) (*base.Empty, error)
 	InspectFieldWarTargets(ctx context.Context, in *InspectFieldWarTargetsRequest, opts ...grpc.CallOption) (*InspectFieldWarTargetsResponse, error)
+	// 帮会全天帮战 V2.5 · 宿敌约战战书(2 小时全帮约战 + 实时比分)
+	IssueGuildWarFeud(ctx context.Context, in *IssueGuildWarFeudRequest, opts ...grpc.CallOption) (*IssueGuildWarFeudResponse, error)
+	RespondGuildWarFeud(ctx context.Context, in *RespondGuildWarFeudRequest, opts ...grpc.CallOption) (*RespondGuildWarFeudResponse, error)
 	// 江湖恩怨·帮派生死状恩怨墙(docs/design/battle-jianghu-grudge-duel-bounty-v1.md §2.2):仅本帮成员可读。
 	GetGuildJianghuGrudgeWall(ctx context.Context, in *GetGuildJianghuGrudgeWallRequest, opts ...grpc.CallOption) (*GetGuildJianghuGrudgeWallResponse, error)
 }
@@ -540,6 +545,26 @@ func (c *guildServiceClient) InspectFieldWarTargets(ctx context.Context, in *Ins
 	return out, nil
 }
 
+func (c *guildServiceClient) IssueGuildWarFeud(ctx context.Context, in *IssueGuildWarFeudRequest, opts ...grpc.CallOption) (*IssueGuildWarFeudResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IssueGuildWarFeudResponse)
+	err := c.cc.Invoke(ctx, GuildService_IssueGuildWarFeud_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *guildServiceClient) RespondGuildWarFeud(ctx context.Context, in *RespondGuildWarFeudRequest, opts ...grpc.CallOption) (*RespondGuildWarFeudResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RespondGuildWarFeudResponse)
+	err := c.cc.Invoke(ctx, GuildService_RespondGuildWarFeud_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *guildServiceClient) GetGuildJianghuGrudgeWall(ctx context.Context, in *GetGuildJianghuGrudgeWallRequest, opts ...grpc.CallOption) (*GetGuildJianghuGrudgeWallResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetGuildJianghuGrudgeWallResponse)
@@ -615,6 +640,9 @@ type GuildServiceServer interface {
 	GetGuildWarBattleResult(context.Context, *GetGuildWarBattleResultRequest) (*GetGuildWarBattleResultResponse, error)
 	NotifyGuildWarAlert(context.Context, *GuildWarAlertS2C) (*base.Empty, error)
 	InspectFieldWarTargets(context.Context, *InspectFieldWarTargetsRequest) (*InspectFieldWarTargetsResponse, error)
+	// 帮会全天帮战 V2.5 · 宿敌约战战书(2 小时全帮约战 + 实时比分)
+	IssueGuildWarFeud(context.Context, *IssueGuildWarFeudRequest) (*IssueGuildWarFeudResponse, error)
+	RespondGuildWarFeud(context.Context, *RespondGuildWarFeudRequest) (*RespondGuildWarFeudResponse, error)
 	// 江湖恩怨·帮派生死状恩怨墙(docs/design/battle-jianghu-grudge-duel-bounty-v1.md §2.2):仅本帮成员可读。
 	GetGuildJianghuGrudgeWall(context.Context, *GetGuildJianghuGrudgeWallRequest) (*GetGuildJianghuGrudgeWallResponse, error)
 	mustEmbedUnimplementedGuildServiceServer()
@@ -746,6 +774,12 @@ func (UnimplementedGuildServiceServer) NotifyGuildWarAlert(context.Context, *Gui
 }
 func (UnimplementedGuildServiceServer) InspectFieldWarTargets(context.Context, *InspectFieldWarTargetsRequest) (*InspectFieldWarTargetsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method InspectFieldWarTargets not implemented")
+}
+func (UnimplementedGuildServiceServer) IssueGuildWarFeud(context.Context, *IssueGuildWarFeudRequest) (*IssueGuildWarFeudResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method IssueGuildWarFeud not implemented")
+}
+func (UnimplementedGuildServiceServer) RespondGuildWarFeud(context.Context, *RespondGuildWarFeudRequest) (*RespondGuildWarFeudResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RespondGuildWarFeud not implemented")
 }
 func (UnimplementedGuildServiceServer) GetGuildJianghuGrudgeWall(context.Context, *GetGuildJianghuGrudgeWallRequest) (*GetGuildJianghuGrudgeWallResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetGuildJianghuGrudgeWall not implemented")
@@ -1491,6 +1525,42 @@ func _GuildService_InspectFieldWarTargets_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GuildService_IssueGuildWarFeud_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IssueGuildWarFeudRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).IssueGuildWarFeud(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_IssueGuildWarFeud_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).IssueGuildWarFeud(ctx, req.(*IssueGuildWarFeudRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GuildService_RespondGuildWarFeud_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RespondGuildWarFeudRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).RespondGuildWarFeud(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_RespondGuildWarFeud_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).RespondGuildWarFeud(ctx, req.(*RespondGuildWarFeudRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _GuildService_GetGuildJianghuGrudgeWall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetGuildJianghuGrudgeWallRequest)
 	if err := dec(in); err != nil {
@@ -1675,6 +1745,14 @@ var GuildService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "InspectFieldWarTargets",
 			Handler:    _GuildService_InspectFieldWarTargets_Handler,
+		},
+		{
+			MethodName: "IssueGuildWarFeud",
+			Handler:    _GuildService_IssueGuildWarFeud_Handler,
+		},
+		{
+			MethodName: "RespondGuildWarFeud",
+			Handler:    _GuildService_RespondGuildWarFeud_Handler,
 		},
 		{
 			MethodName: "GetGuildJianghuGrudgeWall",

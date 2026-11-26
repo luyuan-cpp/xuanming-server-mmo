@@ -143,6 +143,12 @@ type Config struct {
 	// svc.NewDataServiceClient 对 NonBlock=false 记错误日志并强制改为 true。
 	// optional:没配任何目标时不建客户端,号段装配(svc.NewBattleIDSegment)随之拒绝启动。
 	DataServiceRpc zrpc.RpcClientConf `json:",optional"`
+	// FriendRpc / ChatRpc / GuildRpc / MailRpc 用于江湖恩怨与天墉生死状一期跨服务只读校验、系统播报、帮派归属查询与离线退费邮件（可选 NonBlock）。
+	FriendRpc     zrpc.RpcClientConf `json:",optional"`
+	ChatRpc       zrpc.RpcClientConf `json:",optional"`
+	GuildRpc      zrpc.RpcClientConf `json:",optional"`
+	MailRpc       zrpc.RpcClientConf `json:",optional"`
+	MailSecretEnv string             `json:",optional"`
 
 	// ---- 观战分级(docs/design/battle-spectate-tiered-fanout.md §15.6)----
 

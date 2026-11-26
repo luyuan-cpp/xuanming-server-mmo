@@ -1725,7 +1725,8 @@ function New-WsEdgeYaml {
 	}
 	$cidrs = @($PodCidrs | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { $_.Trim() })
 	$badCidrs = @($cidrs | Where-Object { $_ -cnotmatch '^\d{1,3}(\.\d{1,3}){3}/\d{1,2}$' })
-	$badCidrs += @(Get-ClientEntryInvalidCidrs -CommaSeparated ($cidrs -join ','))
+	$invalidCidrs = Get-ClientEntryInvalidCidrs -CommaSeparated ($cidrs -join ',')
+	if ($invalidCidrs.Count -gt 0) { $badCidrs += $invalidCidrs }
 	if ($cidrs.Count -eq 0 -or $badCidrs.Count -gt 0) {
 		throw "New-WsEdgeYaml: -PodCidrs 至少给一个带前缀位数的 IPv4 CIDR(如 10.244.0.0/16),不合法的项:'$(@($badCidrs | Select-Object -Unique) -join "', '")'。"
 	}
@@ -2218,7 +2219,8 @@ function Test-ClientEntryPreflight {
 		}
 		$edgeCidrs = ConvertTo-ClientEntryCidrList -CommaSeparated $WsEdgePodCidrs
 		$badEdgeCidrs = @($edgeCidrs | Where-Object { $_ -cnotmatch '^\d{1,3}(\.\d{1,3}){3}/\d{1,2}$' })
-		$badEdgeCidrs += @(Get-ClientEntryInvalidCidrs -CommaSeparated $WsEdgePodCidrs)
+		$invalidEdgeCidrs = Get-ClientEntryInvalidCidrs -CommaSeparated $WsEdgePodCidrs
+		if ($invalidEdgeCidrs.Count -gt 0) { $badEdgeCidrs += $invalidEdgeCidrs }
 		if ($edgeCidrs.Count -eq 0) {
 			$errors.Add("配置了 -WsEdgeHost 却没有 -WsEdgePodCidrs:边缘只把连接转到这些 Pod 网段里的 gate / battle,不给就没有可转的目标(填集群的 Pod CIDR,如 10.244.0.0/16)。")
 		}

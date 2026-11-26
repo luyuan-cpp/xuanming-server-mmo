@@ -3,6 +3,7 @@ package mailgrant
 import (
 	"google.golang.org/protobuf/proto"
 	assetpb "proto/common/asset"
+	basepb "proto/common/base"
 	mailpb "proto/mail"
 	"testing"
 )
@@ -24,7 +25,8 @@ func TestMailGrantRoundTripAndRejectsExistingInstances(t *testing.T) {
 	}
 }
 func TestMailGrantRejectsMalformedBeforeDelivery(t *testing.T) {
-	for _, bad := range []*mailpb.MailAttachments{{Currencies: []*mailpb.MailCurrency{{CurrencyType: 3, Amount: 1}}}, {Currencies: []*mailpb.MailCurrency{{Amount: 0}}}, {Currencies: []*mailpb.MailCurrency{{Amount: 1}, {Amount: 2}}}, {Items: []*mailpb.MailItem{{ConfigId: 42, Count: 1}}}} {
+	unknownCurrency := uint32(len(basepb.CurrencyType_name))
+	for _, bad := range []*mailpb.MailAttachments{{Currencies: []*mailpb.MailCurrency{{CurrencyType: unknownCurrency, Amount: 1}}}, {Currencies: []*mailpb.MailCurrency{{Amount: 0}}}, {Currencies: []*mailpb.MailCurrency{{Amount: 1}, {Amount: 2}}}, {Items: []*mailpb.MailItem{{ConfigId: 42, Count: 1}}}} {
 		if _, err := Bundle(bad, func(uint32) bool { return false }); err == nil {
 			t.Fatal("坏附件不能进入可靠意图")
 		}

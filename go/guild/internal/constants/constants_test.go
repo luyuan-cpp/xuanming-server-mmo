@@ -110,6 +110,11 @@ func tipCodes() map[string]uint32 {
 		"ErrWarBountyNotFound":           ErrWarBountyNotFound,
 		"ErrWarTrackCooldown":            ErrWarTrackCooldown,
 		"ErrWarServiceBusy":              ErrWarServiceBusy,
+		// 帮会全天帮战 V2.5 · 宿敌约战战书新增 4 个。
+		"ErrWarFeudCooldown":             ErrWarFeudCooldown,
+		"ErrWarFeudAlreadyActive":        ErrWarFeudAlreadyActive,
+		"ErrWarFeudNotFound":             ErrWarFeudNotFound,
+		"ErrWarFeudInvalidTarget":        ErrWarFeudInvalidTarget,
 	}
 }
 

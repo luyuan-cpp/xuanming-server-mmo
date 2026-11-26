@@ -243,6 +243,10 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
     teamDealtMagicDirectDamage = {false, false};
     shieldBreakPlayers.clear();
     antiControlOrSeasonSkillPlayers.clear();
+    trialVowMask = 0;
+    bossWindHitUnprotectedDeath = false;
+    dealtYangBellPhysicalDamage = false;
+    dealtYinDrumMagicDamage = false;
     bossTrialKind = kBossTrialKindNone;
     battleDifficulty = 0;
     bossWeeklyAffixId = bossaffix::kAffixNone;
@@ -304,8 +308,12 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
     seasonSealRuntimeByActor.clear();
     pendingMysticExtendCasterId = 0;
     pendingMysticExtendTargetId = 0;
-    activeGuardShieldResonanceCasterId = 0;
-    activeGuardShieldResonanceExtra = 0;
+    pendingMysticExtendSkillId = 0;
+    pendingMysticExtendBonusRounds = 0;
+    activeNextRoundBoostCasterId = 0;
+    activeNextRoundBoostKind = 0;
+    activeNextRoundBoostPct = 0;
+    activeNextRoundBoostExtra = 0;
     aiControlledPlayers.clear();
 
     if (IsGuildWarBattle()) {
@@ -411,6 +419,13 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
     if (IsGuildWarBattle() && !hasExplicitRoundLimit) {
         maxRounds = std::min(maxRounds, kGuildWarDefaultMaxRounds);
     }
+    if (IsJianghuDuelBattle()) {
+        uint32_t duelRounds = kJianghuDuelDefaultMaxRounds;
+        if (request.has_jianghu_duel_context() && request.jianghu_duel_context().round_limit_override() > 0u) {
+            duelRounds = std::clamp(request.jianghu_duel_context().round_limit_override(), 1u, 100u);
+        }
+        maxRounds = duelRounds;
+    }
     if (request.match_mode() == kMatchModePolarity5v5 && bossTrialKind == kBossTrialKindNone) {
         bossTrialKind = kBossTrialKindPolarity5v5;
         if (maxRounds == kDefaultMaxRounds) {
@@ -419,6 +434,30 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
     }
     if (hasCustomDuelRules && customDuelRules.round_limit_override() > 0u) {
         maxRounds = customDuelRules.round_limit_override();
+    }
+
+    // 五行试炼志 V3 自选试炼誓约校验与冻结（bit0 禁控 / bit1 单宝 / bit2 无宠 / bit3 紧缩回合）。
+    const uint32_t requestedVowMask =
+        request.has_trial_context() ? request.trial_context().challenge_vow_mask() : 0u;
+    if (!trialjournal::IsValidVowMask(requestedVowMask)) {
+        LOG_ERROR << "CreateBattle invalid trial challenge_vow_mask: battle_id=" << request.battle_id()
+                  << " mask=" << requestedVowMask;
+        return false;
+    }
+    if (requestedVowMask != 0u) {
+        const bool isPveRequest =
+            request.match_mode() == kMatchModePveSolo || request.match_mode() == kMatchModePveTeam;
+        if (!isPveRequest || !IsBossTrialKind(bossTrialKind) || hasTowerContext ||
+            hasCustomDuelRules || IsNpcIsolatedEncounterKind(bossTrialKind)) {
+            LOG_ERROR << "CreateBattle trial challenge_vow_mask rejected for unsupported battle: battle_id="
+                      << request.battle_id() << " mode=" << request.match_mode()
+                      << " boss_trial_kind=" << bossTrialKind << " mask=" << requestedVowMask;
+            return false;
+        }
+        trialVowMask = requestedVowMask;
+        if (HasTrialVow(trialjournal::kVowTightRounds)) {
+            maxRounds = trialjournal::TightenRoundLimit(maxRounds);
+        }
     }
 
     // 赛季全员对称周环境词缀：仅当未启用锦标赛五行地脉、五行幻境爬塔、自定义切磋及瑞兽迎春活动时生效，
@@ -634,7 +673,16 @@ bool TurnBattleEngine::InitPlayers(const CreateBattleRequest& request) {
         actor.set_physical_attack(snapshot.physical_attack());
         actor.set_magic_attack(snapshot.magic_attack());
         actor.set_defense(snapshot.defense());
-        if (snapshot.has_equipment_effects() && !InitializeEquipment(actor, snapshot.equipment_effects())) return false;
+        if (snapshot.has_equipment_effects()) {
+            if (snapshot.team_index() == 0u && HasTrialVow(trialjournal::kVowSingleArtifact) &&
+                snapshot.equipment_effects().artifacts_size() > 1) {
+                auto trimmed = snapshot.equipment_effects();
+                trimmed.mutable_artifacts()->DeleteSubrange(1, trimmed.artifacts_size() - 1);
+                if (!InitializeEquipment(actor, trimmed)) return false;
+            } else {
+                if (!InitializeEquipment(actor, snapshot.equipment_effects())) return false;
+            }
+        }
         // 战斗类属性的装备加成(equipment-attributes.md §4.5):只有玩家快照带;怪物 / 宝宝不填 = 全 0。
         // 快照没带就不建子消息:老 scene 发来的快照下,单位状态的序列化字节与装备系统落地前相同
         if (snapshot.has_combat()) {
@@ -789,6 +837,9 @@ bool TurnBattleEngine::InitPets(const CreateBattleRequest& request) {
     };
 
     for (const auto& snapshot : request.players()) {
+        if (snapshot.team_index() == 0u && HasTrialVow(trialjournal::kVowNoPet)) {
+            continue;
+        }
         for (const auto& pet : snapshot.pets()) {
             // 同一只永久宝宝出现在两份快照里 = 编排层错误,拒绝开局
             if (pet.pet_id() != 0 && petAlreadyJoined(pet.pet_id())) {
@@ -1150,7 +1201,7 @@ uint32_t TurnBattleEngine::CheckActionPrerequisites(const BattleActorState& acto
         if (!IsTurnBattleCastableSkill(*skillRow)) {
             return kSkillCannotBeCastInCurrentState;
         }
-        if (IsControlBannedByCustomDuel() && IsControlSkill(*skillRow)) {
+        if (IsControlBannedForActor(actor) && IsControlSkill(*skillRow)) {
             return kSkillCannotBeCastInCurrentState;
         }
         if (IsSkillBanned(skillRow->id())) {
@@ -2638,8 +2689,8 @@ uint64_t TurnBattleEngine::SkillManaCost(const BattleActorState& actor, const Sk
         IsWeeklyWaterDiscountSkill(skillRow)) {
         cost = bossaffix::DiscountWaterManaCost(cost);
     }
-    if (IsDefendBreathResonanceReady(actor, skillRow.id())) {
-        cost = seasonrules::ResonanceHalfManaCost(cost);
+    if (const uint32_t discountPct = DefendManaDiscountResonancePct(actor, skillRow.id()); discountPct > 0u) {
+        cost = seasonrules::ComputeManaDiscounted(cost, discountPct);
     }
     return cost;
 }
@@ -3742,9 +3793,10 @@ void TurnBattleEngine::UpdateOutcome() {
     } else if (sideBWiped) {
         outcome = BATTLE_OUTCOME_SIDE_A_WIN;
     } else if (roundIndex >= maxRounds) {
-        // 论剑排位、物法易势 5V5、帮会帮战与自定义规则切磋打满逻辑回合上限双方均存活判平局；其余对局按既有规则进攻方（A 方）判负。
+        // 论剑排位、物法易势 5V5、帮会帮战、自定义规则切磋与天墉生死状打满逻辑回合上限双方均存活判平局；其余对局按既有规则进攻方（A 方）判负。
         if (IsRankedBattle() || bossTrialKind == kBossTrialKindPolarity5v5 ||
-            createRequest.match_mode() == kMatchModePolarity5v5 || IsGuildWarBattle() || hasCustomDuelRules) {
+            createRequest.match_mode() == kMatchModePolarity5v5 || IsGuildWarBattle() ||
+            hasCustomDuelRules || IsJianghuDuelBattle()) {
             outcome = BATTLE_OUTCOME_DRAW;
         } else {
             outcome = BATTLE_OUTCOME_SIDE_B_WIN;
@@ -4162,12 +4214,18 @@ void TurnBattleEngine::RecordTrialDirectDamage(const BattleActorState& source, c
         if (source.team_index() == 0 && target.team_index() == 1) {
             auto& tally = roundPlayerDirectDamage[roundIndex];
             tally.first = SaturatingAdd(tally.first, dealtOrAbsorbed);
+            if (bossTrialKind == kBossTrialKindWildBell && IsWildBellYangRound(roundIndex)) {
+                dealtYangBellPhysicalDamage = true;
+            }
         }
     } else if (damageType == combatdamage::kMagicDamage) {
         teamDealtMagicDirectDamage[source.team_index()] = true;
         if (source.team_index() == 0 && target.team_index() == 1) {
             auto& tally = roundPlayerDirectDamage[roundIndex];
             tally.second = SaturatingAdd(tally.second, dealtOrAbsorbed);
+            if (bossTrialKind == kBossTrialKindWildBell && !IsWildBellYangRound(roundIndex)) {
+                dealtYinDrumMagicDamage = true;
+            }
         }
     }
 }
@@ -4688,6 +4746,23 @@ uint64_t TurnBattleEngine::ApplyEncounterDamageModifiers(const BattleActorState&
         towerSigilTotals.singleTargetDamagePct > 0u) {
         damage = (damage * (100ULL + towerSigilTotals.singleTargetDamagePct)) / 100ULL;
     }
+    // 1.8 卷四·三境明雷野外首领机制（碧渊水宫·阳钟阴鼓 / 月汐湾·涨退潮，纯整数定点数倍率）。
+    if (isDirectPrimary && bossTrialKind == kBossTrialKindWildBell &&
+        source.team_index() == 0 && target.team_index() == 1) {
+        const bool yangBell = IsWildBellYangRound(roundIndex);
+        if ((yangBell && damageType == combatdamage::kPhysicalDamage) ||
+            (!yangBell && damageType == combatdamage::kMagicDamage)) {
+            damage = (damage * 115ULL) / 100ULL;
+        } else if (damageType == combatdamage::kPhysicalDamage || damageType == combatdamage::kMagicDamage) {
+            damage = (damage * 88ULL) / 100ULL;
+        }
+    }
+    if (bossTrialKind == kBossTrialKindWildTide && source.team_index() == 0 &&
+        target.team_index() == 1 && target.is_boss()) {
+        damage = IsWildTideEbbRound(roundIndex)
+            ? (damage * 120ULL) / 100ULL
+            : (damage * 75ULL) / 100ULL;
+    }
     // 2. 首领试炼 V2 阵型「主目标聚火 100% / 多目标直伤副目标溅射 60%」（仅限试炼敌方，零侵入常规 PVE/PVP，V6）。
     if (isDirectPrimary && IsBossTrialKind(bossTrialKind) && source.team_index() == 0 && target.team_index() == 1 &&
         isMultiTargetSkill && !isPrimaryTarget) {
@@ -5021,6 +5096,17 @@ void TurnBattleEngine::RefreshEncounterTelegraphs() {
             entry.set_intent_kind(kTelegraphKindBossVenomAoe);
             entry.set_target_actor_id(0);
             entry.set_label("玄毒冲击：下回合慢速群体法术伤害，防御可减半、控场打断触发破绽");
+        } else if (bossTrialKind == kBossTrialKindWildWind) {
+            const bool dualTarget = initialAttackerHumanCount >= 3u;
+            const auto targets = pickCleaveTargets(*boss, dualTarget);
+            entry.set_intent_kind(kTelegraphKindWildWindGust);
+            if (!targets.empty()) {
+                entry.set_target_actor_id(targets.front());
+                for (const uint64_t tid : targets) {
+                    entry.add_target_actor_ids(tid);
+                }
+            }
+            entry.set_label("风眼引风：下回合慢速风袭锁定目标，防御或护盾化解可免折损并触发首领破绽");
         } else {
             const bool dualTarget = IsBossTrialKind(bossTrialKind) && initialAttackerHumanCount >= 3u;
             const auto targets = pickCleaveTargets(*boss, dualTarget);
@@ -5163,12 +5249,16 @@ void TurnBattleEngine::ExecuteBossTrialSlowAndGuardianActions(TurnResultS2C& res
             } else if (IsBossTrialKind(bossTrialKind)) {
                 if (entry.intent_kind() == kTelegraphKindSlowCleave ||
                     entry.intent_kind() == kTelegraphKindBossMagicStrike ||
-                    entry.intent_kind() == kTelegraphKindBossVenomAoe) {
+                    entry.intent_kind() == kTelegraphKindBossVenomAoe ||
+                    entry.intent_kind() == kTelegraphKindWildWindGust) {
                     ApplyBossExposed(source->actor_id(), kBossExposedFullPct, roundIndex + 1u);
                     ++cleaveParryCount;
                     EmitBossMechanicEvent(result, kBossMechanicCleaveParryExpose, source->actor_id(),
                                           source->actor_id(), kBossExposedFullPct);
-                    recordResolved(entry, kTelegraphStatusCancelledByControl, "重击受控取消，首领陷入破绽");
+                    recordResolved(entry, kTelegraphStatusCancelledByControl,
+                                   entry.intent_kind() == kTelegraphKindWildWindGust
+                                       ? "风眼强袭受控取消，首领陷入破绽"
+                                       : "重击受控取消，首领陷入破绽");
                 } else if (entry.intent_kind() == kTelegraphKindGuardHeal) {
                     if (auto* boss = findAliveBoss(); boss != nullptr) {
                         TriggerRejuvBacklash(source->actor_id(), *boss, result);
@@ -5245,7 +5335,8 @@ void TurnBattleEngine::ExecuteBossTrialSlowAndGuardianActions(TurnResultS2C& res
             break;
         }
         case kTelegraphKindSlowCleave:
-        case kTelegraphKindBossMagicStrike: {
+        case kTelegraphKindBossMagicStrike:
+        case kTelegraphKindWildWindGust: {
             std::vector<uint64_t> targetIds;
             if (entry.target_actor_ids_size() > 0) {
                 for (const uint64_t tid : entry.target_actor_ids()) {
@@ -5257,11 +5348,14 @@ void TurnBattleEngine::ExecuteBossTrialSlowAndGuardianActions(TurnResultS2C& res
             if (targetIds.empty()) {
                 break;
             }
-            const bool isMagic = entry.intent_kind() == kTelegraphKindBossMagicStrike;
+            const bool isWindGust = entry.intent_kind() == kTelegraphKindWildWindGust;
+            const bool isMagic = entry.intent_kind() == kTelegraphKindBossMagicStrike || isWindGust;
             const uint32_t dmgType = isMagic ? combatdamage::kMagicDamage : combatdamage::kPhysicalDamage;
-            double scale = isMagic
-                ? (battleDifficulty >= 2u ? 2.0 : 1.7)
-                : (battleDifficulty >= 2u ? 2.1 : 1.8);
+            double scale = isWindGust
+                ? 1.75
+                : (isMagic
+                       ? (battleDifficulty >= 2u ? 2.0 : 1.7)
+                       : (battleDifficulty >= 2u ? 2.1 : 1.8));
             if (IsBossTrialKind(bossTrialKind)) {
                 if (bossMomentumStacks > 0) {
                     scale *= (1.0 + static_cast<double>(bossMomentumStacks * kBossMomentumPerStackPct) / 100.0);
@@ -5320,6 +5414,8 @@ void TurnBattleEngine::ExecuteBossTrialSlowAndGuardianActions(TurnResultS2C& res
                     if (ownerId != 0 && IsBossTrialKind(bossTrialKind)) {
                         ++selfCleavesParriedByPlayer[ownerId];
                     }
+                } else if (isWindGust && target->attributes().health() == 0) {
+                    bossWindHitUnprotectedDeath = true;
                 }
             }
             if (IsBossTrialKind(bossTrialKind)) {
@@ -5695,8 +5791,9 @@ void TurnBattleEngine::AddBuffToActor(BattleActorState& target, uint32_t buffTab
     if (IsImmuneToBuff(target, *buffRow)) {
         return;
     }
-    if (IsControlBannedByCustomDuel() && IsHardControlBuff(buffTableId)) {
-        if (const auto* caster = FindActor(casterId); caster != nullptr && caster->team_index() != target.team_index()) {
+    if (IsHardControlBuff(buffTableId)) {
+        if (const auto* caster = FindActor(casterId);
+            caster != nullptr && caster->team_index() != target.team_index() && IsControlBannedForActor(*caster)) {
             auto* resistEvent = AppendEvent(result, BATTLE_EVENT_RESIST, casterId, target.actor_id());
             resistEvent->set_buff_table_id(buffTableId);
             return;
@@ -6136,6 +6233,9 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
         settlement.set_ranked_rule_version(createRequest.ranked_context().rule_version());
         settlement.set_participated(DidPlayerParticipate(playerId));
     }
+    if (createRequest.has_jianghu_duel_context()) {
+        *settlement.mutable_jianghu_duel() = createRequest.jianghu_duel_context();
+    }
 
     // 奖励已由 RollRewards 终局冻结；这里只带出实际击杀事实，读取结算不查配置、不掷随机。
     // 瑞兽迎春与五行幻境爬塔关闭常规任务击杀/掉落收益，不附带 defeated_monsters。
@@ -6171,7 +6271,7 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
                 }
                 if (livePetTableId != 0 && !UsesFreePreset()) {
                     facts->set_used_pet_table_id(livePetTableId);
-                } else if (!snapshot.pets().empty()) {
+                } else if (!HasTrialVow(trialjournal::kVowNoPet) && !snapshot.pets().empty()) {
                     const auto& pet = snapshot.pets(0);
                     facts->set_used_pet_table_id(pet.combat_pet_table_id() != 0 ? pet.combat_pet_table_id()
                                                                                 : pet.pet_table_id());
@@ -6227,6 +6327,13 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
         const uint32_t selfParried = parriedIt != selfCleavesParriedByPlayer.end() ? parriedIt->second : 0u;
         facts->set_self_parried_cleave_at_least_once(selfParried > 0u);
         facts->set_all_self_cleaves_parried(selfTargeted > 0u && selfParried == selfTargeted);
+        facts->set_boss_wind_hit_unprotected_death(bossWindHitUnprotectedDeath);
+        facts->set_dealt_yang_bell_physical_damage(dealtYangBellPhysicalDamage);
+        facts->set_dealt_yin_drum_magic_damage(dealtYinDrumMagicDamage);
+        facts->set_finished_in_ebb_tide(bossTrialKind == kBossTrialKindWildTide &&
+                                        outcome == BATTLE_OUTCOME_SIDE_A_WIN &&
+                                        IsWildTideEbbRound(roundIndex));
+        facts->set_challenge_vow_mask(trialVowMask);
 
         std::vector<uint32_t> artifactEffects;
         for (const auto& artifact : actor->equipment_effects().artifacts()) {
@@ -6327,6 +6434,9 @@ BattleStateS2C TurnBattleEngine::BuildStateSnapshot() const {
     }
     if (activeSeasonWeeklyAffixId != 0u) {
         state.set_season_weekly_affix_id(activeSeasonWeeklyAffixId);
+    }
+    if (trialVowMask != 0u) {
+        state.set_trial_vow_mask(trialVowMask);
     }
     for (const auto skillId : bannedSkillIds) {
         state.add_banned_skill_ids(skillId);
@@ -6720,10 +6830,12 @@ bool TurnBattleEngine::InitTacticalPrep(const CreateBattleRequest& request) {
                 }
             }
             for (const auto& seal : snapshot.available_season_seals()) {
-                if (!seasonrules::ValidSealEffect(seal.season_id(), seal.seal_id(), seal.effect_id(),
-                                                  seal.bonus_bps(), seal.cap_bps(), seal.per_round_limit(),
-                                                  seal.battle_limit(), seal.active_rounds(),
-                                                  seal.health_threshold_bps())) {
+                if (!seasonrules::ValidSealDefinition(seal.season_id(), seal.seal_id(), seal.effect_id(),
+                                                      seal.bonus_bps(), seal.cap_bps(), seal.per_round_limit(),
+                                                      seal.battle_limit(), seal.active_rounds(),
+                                                      seal.health_threshold_bps(),
+                                                      seal.resonance_skill_id(), seal.resonance_kind(),
+                                                      seal.resonance_param())) {
                     LOG_ERROR << "CreateBattle invalid available_season_seal: battle_id=" << request.battle_id()
                               << " player_id=" << snapshot.player_id() << " seal_id=" << seal.seal_id();
                     return false;

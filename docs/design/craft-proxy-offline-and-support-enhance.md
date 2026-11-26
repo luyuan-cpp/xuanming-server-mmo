@@ -126,12 +126,12 @@
 
 ## 6. 执行步骤
 
-- [ ] 写入设计文档并运行 `python tools/scripts/gen_docs_index.py`
-- [ ] 更新 `player_mail_outbox_comp.proto` 并运行 `proto-gen-run`
-- [ ] C++ 实现 `mail_outbox_rules.h` / `player_mail_outbox.{h,cpp}` 货币与指定收件人支持
-- [ ] C++ 实现 `craft_proxy_stall_directory.{h,cpp}` 并接入 `player_equipment_v1.cpp` / `player_craft.cpp` / `player_database_loader.cpp` / `scene/main.cpp`
-- [ ] C++ 实现 `equip_attribute_rules.h` 控辅强化受益与战斗/支持预览/展示一致性
-- [ ] C++ 补齐单元测试、跑 `test_cpp_no_raw_pointer_member.py`、串行编译与全量相关单测 + Go 单测
-- [ ] Java 同步实现两项功能、补齐 JUnit 测试、更新 `PARITY.md` 并通过 Maven 测试
-- [ ] Python 同步实现两项功能、补齐 pytest 用例并通过测试
-- [ ] 核查客户端与跨仓回归，输出验证报告
+- [x] 写入设计文档并运行 `python tools/scripts/gen_docs_index.py`
+- [x] 更新 `player_mail_outbox_comp.proto` 并运行 `proto-gen-run`
+- [x] C++ 实现 `mail_outbox_rules.h` / `player_mail_outbox.{h,cpp}` 货币与指定收件人支持
+- [x] C++ 实现共享目录同步并接入 `player_equipment_v1.cpp` / `player_craft.cpp` / `player_database_loader.cpp` / `scene/main.cpp`
+- [x] C++ 实现 `equip_attribute_rules.h` 控辅强化受益与战斗/支持预览/展示一致性
+- [x] C++ 补齐单元测试、跑 `test_cpp_no_raw_pointer_member.py`、串行编译与全量相关单测 + Go 单测
+- [x] Java 同步实现两项功能、补齐 JUnit 测试、更新 `PARITY.md` 并通过 Maven 测试
+- [x] Python 同步实现两项功能、补齐 pytest 用例并通过测试
+- [x] 核查客户端与跨仓回归，输出验证报告

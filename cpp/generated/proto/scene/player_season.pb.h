@@ -249,6 +249,22 @@ extern const ::google::protobuf::internal::ClassDataFull SeasonWeeklyAffixView_c
 #else
 extern const SeasonWeeklyAffixViewGlobalsTypeInternal SeasonWeeklyAffixView_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class SetRetroHonorTargetRequest;
+struct SetRetroHonorTargetRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SetRetroHonorTargetRequestGlobalsTypeInternal SetRetroHonorTargetRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SetRetroHonorTargetRequest_class_data_;
+#else
+extern const SetRetroHonorTargetRequestGlobalsTypeInternal SetRetroHonorTargetRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class SetRetroHonorTargetResponse;
+struct SetRetroHonorTargetResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SetRetroHonorTargetResponseGlobalsTypeInternal SetRetroHonorTargetResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SetRetroHonorTargetResponse_class_data_;
+#else
+extern const SetRetroHonorTargetResponseGlobalsTypeInternal SetRetroHonorTargetResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class StartWuxingTowerRunRequest;
 struct StartWuxingTowerRunRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -715,6 +731,207 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartWuxingTowerRunRequest final : 
   friend class ::google::protobuf::Arena::InternalHelper;
   using InternalArenaConstructable_ = void;
   using DestructorSkippable_ = void;
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetRetroHonorTargetRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:SetRetroHonorTargetRequest) */ {
+ public:
+  inline SetRetroHonorTargetRequest() : SetRetroHonorTargetRequest(nullptr) {}
+  ~SetRetroHonorTargetRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SetRetroHonorTargetRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SetRetroHonorTargetRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SetRetroHonorTargetRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SetRetroHonorTargetRequest(const SetRetroHonorTargetRequest& from) : SetRetroHonorTargetRequest(nullptr, from) {}
+  inline SetRetroHonorTargetRequest(SetRetroHonorTargetRequest&& from) noexcept : SetRetroHonorTargetRequest(nullptr, ::std::move(from)) {}
+  inline SetRetroHonorTargetRequest& operator=(const SetRetroHonorTargetRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SetRetroHonorTargetRequest& operator=(SetRetroHonorTargetRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SetRetroHonorTargetRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SetRetroHonorTargetRequest>(&SetRetroHonorTargetRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 28;
+  friend void swap(SetRetroHonorTargetRequest& a, SetRetroHonorTargetRequest& b) { a.Swap(&b); }
+  inline void Swap(SetRetroHonorTargetRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SetRetroHonorTargetRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SetRetroHonorTargetRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SetRetroHonorTargetRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SetRetroHonorTargetRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SetRetroHonorTargetRequest& from) { SetRetroHonorTargetRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SetRetroHonorTargetRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "SetRetroHonorTargetRequest"; }
+
+  explicit SetRetroHonorTargetRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SetRetroHonorTargetRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SetRetroHonorTargetRequest& from);
+  SetRetroHonorTargetRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SetRetroHonorTargetRequest&& from) noexcept
+      : SetRetroHonorTargetRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSeasonIdFieldNumber = 1,
+  };
+  // uint32 season_id = 1;
+  void clear_season_id() ;
+  [[nodiscard]] ::uint32_t season_id() const;
+  void set_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_id() const;
+  void _internal_set_season_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:SetRetroHonorTargetRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SetRetroHonorTargetRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t season_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
   friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
 };
 // -------------------------------------------------------------------
@@ -1558,6 +1775,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonSealOption final : public ::g
     kNameFieldNumber = 2,
     kDescriptionFieldNumber = 3,
     kIconKeyFieldNumber = 4,
+    kResonanceDescFieldNumber = 16,
     kSealIdFieldNumber = 1,
     kEffectIdFieldNumber = 5,
     kBonusBpsFieldNumber = 6,
@@ -1567,6 +1785,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonSealOption final : public ::g
     kActiveRoundsFieldNumber = 10,
     kHealthThresholdBpsFieldNumber = 11,
     kEquippedFieldNumber = 12,
+    kResonanceSkillIdFieldNumber = 13,
+    kResonanceKindFieldNumber = 14,
+    kResonanceParamFieldNumber = 15,
   };
   // string name = 2;
   void clear_name() ;
@@ -1611,6 +1832,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonSealOption final : public ::g
   const ::std::string& _internal_icon_key() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_icon_key(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_icon_key();
+
+  public:
+  // string resonance_desc = 16;
+  void clear_resonance_desc() ;
+  [[nodiscard]] const ::std::string& resonance_desc() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_resonance_desc(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_resonance_desc();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_resonance_desc();
+  void set_allocated_resonance_desc(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_resonance_desc() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_resonance_desc(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_resonance_desc();
 
   public:
   // uint32 seal_id = 1;
@@ -1703,12 +1939,42 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonSealOption final : public ::g
   void _internal_set_equipped(bool value);
 
   public:
+  // uint32 resonance_skill_id = 13;
+  void clear_resonance_skill_id() ;
+  [[nodiscard]] ::uint32_t resonance_skill_id() const;
+  void set_resonance_skill_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_resonance_skill_id() const;
+  void _internal_set_resonance_skill_id(::uint32_t value);
+
+  public:
+  // uint32 resonance_kind = 14;
+  void clear_resonance_kind() ;
+  [[nodiscard]] ::uint32_t resonance_kind() const;
+  void set_resonance_kind(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_resonance_kind() const;
+  void _internal_set_resonance_kind(::uint32_t value);
+
+  public:
+  // uint32 resonance_param = 15;
+  void clear_resonance_param() ;
+  [[nodiscard]] ::uint32_t resonance_param() const;
+  void set_resonance_param(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_resonance_param() const;
+  void _internal_set_resonance_param(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:SeasonSealOption)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 12,
-                          0, 56,
+      ::google::protobuf::internal::TcParseTable<4, 16,
+                          0, 78,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1739,6 +2005,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonSealOption final : public ::g
     ::google::protobuf::internal::ArenaStringPtr name_;
     ::google::protobuf::internal::ArenaStringPtr description_;
     ::google::protobuf::internal::ArenaStringPtr icon_key_;
+    ::google::protobuf::internal::ArenaStringPtr resonance_desc_;
     ::uint32_t seal_id_;
     ::uint32_t effect_id_;
     ::uint32_t bonus_bps_;
@@ -1748,6 +2015,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonSealOption final : public ::g
     ::uint32_t active_rounds_;
     ::uint32_t health_threshold_bps_;
     bool equipped_;
+    ::uint32_t resonance_skill_id_;
+    ::uint32_t resonance_kind_;
+    ::uint32_t resonance_param_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1911,6 +2181,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonHonorView final : public ::go
     kMaxPointsFieldNumber = 6,
     kUnlockedFieldNumber = 7,
     kIsCurrentSeasonFieldNumber = 8,
+    kIsRetroTargetFieldNumber = 9,
+    kRetroProgressPointsFieldNumber = 10,
   };
   // string season_name = 2;
   void clear_season_name() ;
@@ -2007,11 +2279,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonHonorView final : public ::go
   void _internal_set_is_current_season(bool value);
 
   public:
+  // bool is_retro_target = 9;
+  void clear_is_retro_target() ;
+  [[nodiscard]] bool is_retro_target() const;
+  void set_is_retro_target(bool value);
+
+  private:
+  bool _internal_is_retro_target() const;
+  void _internal_set_is_retro_target(bool value);
+
+  public:
+  // uint32 retro_progress_points = 10;
+  void clear_retro_progress_points() ;
+  [[nodiscard]] ::uint32_t retro_progress_points() const;
+  void set_retro_progress_points(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_retro_progress_points() const;
+  void _internal_set_retro_progress_points(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:SeasonHonorView)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 8,
+      ::google::protobuf::internal::TcParseTable<4, 10,
                           0, 79,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2048,6 +2340,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonHonorView final : public ::go
     ::uint32_t max_points_;
     bool unlocked_;
     bool is_current_season_;
+    bool is_retro_target_;
+    ::uint32_t retro_progress_points_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4547,7 +4841,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonStateSnapshot final : public 
     kSeasonNameFieldNumber = 4,
     kSeasonDescFieldNumber = 5,
     kActionUnavailableReasonFieldNumber = 27,
-    kWeeklyAffixFieldNumber = 34,
     kStartsAtMsFieldNumber = 6,
     kSeasonIdFieldNumber = 3,
     kEquippedSealIdFieldNumber = 9,
@@ -4575,6 +4868,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonStateSnapshot final : public 
     kRevisionFieldNumber = 28,
     kSavedBuildsFieldNumber = 32,
     kHonorsFieldNumber = 33,
+    kWeeklyAffixFieldNumber = 34,
+    kSeasonTermFieldNumber = 35,
+    kCycleIndexFieldNumber = 36,
+    kCyclePoolSizeFieldNumber = 37,
+    kRetroHonorTargetSeasonIdFieldNumber = 38,
+    kRetroHonorTargetExplicitFieldNumber = 39,
   };
   // repeated .SeasonSealOption seals = 29;
   [[nodiscard]] int seals_size()
@@ -4676,22 +4975,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonStateSnapshot final : public 
   const ::std::string& _internal_action_unavailable_reason() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_action_unavailable_reason(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_action_unavailable_reason();
-
-  public:
-  // .SeasonWeeklyAffixView weekly_affix = 34;
-  [[nodiscard]] bool has_weekly_affix()
-      const;
-  void clear_weekly_affix() ;
-  [[nodiscard]] const ::SeasonWeeklyAffixView& weekly_affix() const;
-  [[nodiscard]] ::SeasonWeeklyAffixView* PROTOBUF_NULLABLE release_weekly_affix();
-  ::SeasonWeeklyAffixView* PROTOBUF_NONNULL mutable_weekly_affix();
-  void set_allocated_weekly_affix(::SeasonWeeklyAffixView* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_weekly_affix(::SeasonWeeklyAffixView* PROTOBUF_NULLABLE value);
-  ::SeasonWeeklyAffixView* PROTOBUF_NULLABLE unsafe_arena_release_weekly_affix();
-
-  private:
-  const ::SeasonWeeklyAffixView& _internal_weekly_affix() const;
-  ::SeasonWeeklyAffixView* PROTOBUF_NONNULL _internal_mutable_weekly_affix();
 
   public:
   // uint64 starts_at_ms = 6;
@@ -4986,11 +5269,77 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonStateSnapshot final : public 
   ::google::protobuf::RepeatedPtrField<::SeasonHonorView>* PROTOBUF_NONNULL _internal_mutable_honors();
 
   public:
+  // .SeasonWeeklyAffixView weekly_affix = 34;
+  [[nodiscard]] bool has_weekly_affix()
+      const;
+  void clear_weekly_affix() ;
+  [[nodiscard]] const ::SeasonWeeklyAffixView& weekly_affix() const;
+  [[nodiscard]] ::SeasonWeeklyAffixView* PROTOBUF_NULLABLE release_weekly_affix();
+  ::SeasonWeeklyAffixView* PROTOBUF_NONNULL mutable_weekly_affix();
+  void set_allocated_weekly_affix(::SeasonWeeklyAffixView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_weekly_affix(::SeasonWeeklyAffixView* PROTOBUF_NULLABLE value);
+  ::SeasonWeeklyAffixView* PROTOBUF_NULLABLE unsafe_arena_release_weekly_affix();
+
+  private:
+  const ::SeasonWeeklyAffixView& _internal_weekly_affix() const;
+  ::SeasonWeeklyAffixView* PROTOBUF_NONNULL _internal_mutable_weekly_affix();
+
+  public:
+  // uint32 season_term = 35;
+  void clear_season_term() ;
+  [[nodiscard]] ::uint32_t season_term() const;
+  void set_season_term(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_term() const;
+  void _internal_set_season_term(::uint32_t value);
+
+  public:
+  // uint32 cycle_index = 36;
+  void clear_cycle_index() ;
+  [[nodiscard]] ::uint32_t cycle_index() const;
+  void set_cycle_index(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_cycle_index() const;
+  void _internal_set_cycle_index(::uint32_t value);
+
+  public:
+  // uint32 cycle_pool_size = 37;
+  void clear_cycle_pool_size() ;
+  [[nodiscard]] ::uint32_t cycle_pool_size() const;
+  void set_cycle_pool_size(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_cycle_pool_size() const;
+  void _internal_set_cycle_pool_size(::uint32_t value);
+
+  public:
+  // uint32 retro_honor_target_season_id = 38;
+  void clear_retro_honor_target_season_id() ;
+  [[nodiscard]] ::uint32_t retro_honor_target_season_id() const;
+  void set_retro_honor_target_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_retro_honor_target_season_id() const;
+  void _internal_set_retro_honor_target_season_id(::uint32_t value);
+
+  public:
+  // bool retro_honor_target_explicit = 39;
+  void clear_retro_honor_target_explicit() ;
+  [[nodiscard]] bool retro_honor_target_explicit() const;
+  void set_retro_honor_target_explicit(bool value);
+
+  private:
+  bool _internal_retro_honor_target_explicit() const;
+  void _internal_set_retro_honor_target_explicit(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:SeasonStateSnapshot)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 34,
+      ::google::protobuf::internal::TcParseTable<5, 39,
                           5, 125,
                           7>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -5025,7 +5374,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonStateSnapshot final : public 
     ::google::protobuf::internal::ArenaStringPtr season_name_;
     ::google::protobuf::internal::ArenaStringPtr season_desc_;
     ::google::protobuf::internal::ArenaStringPtr action_unavailable_reason_;
-    ::SeasonWeeklyAffixView* PROTOBUF_NULLABLE weekly_affix_;
     ::uint64_t starts_at_ms_;
     ::uint32_t season_id_;
     ::uint32_t equipped_seal_id_;
@@ -5053,6 +5401,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonStateSnapshot final : public 
     ::uint64_t revision_;
     ::google::protobuf::RepeatedPtrField< ::SavedBattleBuildBookmarkView > saved_builds_;
     ::google::protobuf::RepeatedPtrField< ::SeasonHonorView > honors_;
+    ::SeasonWeeklyAffixView* PROTOBUF_NULLABLE weekly_affix_;
+    ::uint32_t season_term_;
+    ::uint32_t cycle_index_;
+    ::uint32_t cycle_pool_size_;
+    ::uint32_t retro_honor_target_season_id_;
+    bool retro_honor_target_explicit_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5963,6 +6317,231 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartWuxingTowerRunResponse final :
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
     ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE state_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetRetroHonorTargetResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:SetRetroHonorTargetResponse) */ {
+ public:
+  inline SetRetroHonorTargetResponse() : SetRetroHonorTargetResponse(nullptr) {}
+  ~SetRetroHonorTargetResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SetRetroHonorTargetResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SetRetroHonorTargetResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SetRetroHonorTargetResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SetRetroHonorTargetResponse(const SetRetroHonorTargetResponse& from) : SetRetroHonorTargetResponse(nullptr, from) {}
+  inline SetRetroHonorTargetResponse(SetRetroHonorTargetResponse&& from) noexcept : SetRetroHonorTargetResponse(nullptr, ::std::move(from)) {}
+  inline SetRetroHonorTargetResponse& operator=(const SetRetroHonorTargetResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SetRetroHonorTargetResponse& operator=(SetRetroHonorTargetResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SetRetroHonorTargetResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SetRetroHonorTargetResponse>(&SetRetroHonorTargetResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 29;
+  friend void swap(SetRetroHonorTargetResponse& a, SetRetroHonorTargetResponse& b) { a.Swap(&b); }
+  inline void Swap(SetRetroHonorTargetResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SetRetroHonorTargetResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SetRetroHonorTargetResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SetRetroHonorTargetResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SetRetroHonorTargetResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SetRetroHonorTargetResponse& from) { SetRetroHonorTargetResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SetRetroHonorTargetResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "SetRetroHonorTargetResponse"; }
+
+  explicit SetRetroHonorTargetResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SetRetroHonorTargetResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SetRetroHonorTargetResponse& from);
+  SetRetroHonorTargetResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SetRetroHonorTargetResponse&& from) noexcept
+      : SetRetroHonorTargetResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kStateFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .SeasonStateSnapshot state = 2;
+  [[nodiscard]] bool has_state()
+      const;
+  void clear_state() ;
+  [[nodiscard]] const ::SeasonStateSnapshot& state() const;
+  [[nodiscard]] ::SeasonStateSnapshot* PROTOBUF_NULLABLE release_state();
+  ::SeasonStateSnapshot* PROTOBUF_NONNULL mutable_state();
+  void set_allocated_state(::SeasonStateSnapshot* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_state(::SeasonStateSnapshot* PROTOBUF_NULLABLE value);
+  ::SeasonStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
+
+  private:
+  const ::SeasonStateSnapshot& _internal_state() const;
+  ::SeasonStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
+
+  public:
+  // @@protoc_insertion_point(class_scope:SetRetroHonorTargetResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SetRetroHonorTargetResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::SeasonStateSnapshot* PROTOBUF_NULLABLE state_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7651,6 +8230,10 @@ class SceneSeasonClientPlayer : public ::google::protobuf::Service {
                         const ::DeleteBattleBuildBookmarkRequest* PROTOBUF_NONNULL request,
                         ::DeleteBattleBuildBookmarkResponse* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void SetRetroHonorTarget(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::SetRetroHonorTargetRequest* PROTOBUF_NONNULL request,
+                        ::SetRetroHonorTargetResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
 
   // implements Service ----------------------------------------------
   const ::google::protobuf::ServiceDescriptor* PROTOBUF_NONNULL GetDescriptor() override;
@@ -7723,6 +8306,10 @@ class SceneSeasonClientPlayer_Stub final : public SceneSeasonClientPlayer {
                         const ::DeleteBattleBuildBookmarkRequest* PROTOBUF_NONNULL request,
                         ::DeleteBattleBuildBookmarkResponse* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void SetRetroHonorTarget(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::SetRetroHonorTargetRequest* PROTOBUF_NONNULL request,
+                        ::SetRetroHonorTargetResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
 
  private:
   ::google::protobuf::RpcChannel* PROTOBUF_NULLABLE channel_;
@@ -7747,7 +8334,7 @@ class SceneSeasonClientPlayer_Stub final : public SceneSeasonClientPlayer {
 inline void SeasonSealOption::clear_seal_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.seal_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t SeasonSealOption::seal_id() const {
   // @@protoc_insertion_point(field_get:SeasonSealOption.seal_id)
@@ -7755,7 +8342,7 @@ inline ::uint32_t SeasonSealOption::seal_id() const {
 }
 inline void SeasonSealOption::set_seal_id(::uint32_t value) {
   _internal_set_seal_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:SeasonSealOption.seal_id)
 }
 inline ::uint32_t SeasonSealOption::_internal_seal_id() const {
@@ -7963,7 +8550,7 @@ inline void SeasonSealOption::set_allocated_icon_key(::std::string* PROTOBUF_NUL
 inline void SeasonSealOption::clear_effect_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.effect_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t SeasonSealOption::effect_id() const {
   // @@protoc_insertion_point(field_get:SeasonSealOption.effect_id)
@@ -7971,7 +8558,7 @@ inline ::uint32_t SeasonSealOption::effect_id() const {
 }
 inline void SeasonSealOption::set_effect_id(::uint32_t value) {
   _internal_set_effect_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:SeasonSealOption.effect_id)
 }
 inline ::uint32_t SeasonSealOption::_internal_effect_id() const {
@@ -7987,7 +8574,7 @@ inline void SeasonSealOption::_internal_set_effect_id(::uint32_t value) {
 inline void SeasonSealOption::clear_bonus_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.bonus_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t SeasonSealOption::bonus_bps() const {
   // @@protoc_insertion_point(field_get:SeasonSealOption.bonus_bps)
@@ -7995,7 +8582,7 @@ inline ::uint32_t SeasonSealOption::bonus_bps() const {
 }
 inline void SeasonSealOption::set_bonus_bps(::uint32_t value) {
   _internal_set_bonus_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:SeasonSealOption.bonus_bps)
 }
 inline ::uint32_t SeasonSealOption::_internal_bonus_bps() const {
@@ -8011,7 +8598,7 @@ inline void SeasonSealOption::_internal_set_bonus_bps(::uint32_t value) {
 inline void SeasonSealOption::clear_cap_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cap_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t SeasonSealOption::cap_bps() const {
   // @@protoc_insertion_point(field_get:SeasonSealOption.cap_bps)
@@ -8019,7 +8606,7 @@ inline ::uint32_t SeasonSealOption::cap_bps() const {
 }
 inline void SeasonSealOption::set_cap_bps(::uint32_t value) {
   _internal_set_cap_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:SeasonSealOption.cap_bps)
 }
 inline ::uint32_t SeasonSealOption::_internal_cap_bps() const {
@@ -8035,7 +8622,7 @@ inline void SeasonSealOption::_internal_set_cap_bps(::uint32_t value) {
 inline void SeasonSealOption::clear_per_round_limit() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.per_round_limit_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t SeasonSealOption::per_round_limit() const {
   // @@protoc_insertion_point(field_get:SeasonSealOption.per_round_limit)
@@ -8043,7 +8630,7 @@ inline ::uint32_t SeasonSealOption::per_round_limit() const {
 }
 inline void SeasonSealOption::set_per_round_limit(::uint32_t value) {
   _internal_set_per_round_limit(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:SeasonSealOption.per_round_limit)
 }
 inline ::uint32_t SeasonSealOption::_internal_per_round_limit() const {
@@ -8059,7 +8646,7 @@ inline void SeasonSealOption::_internal_set_per_round_limit(::uint32_t value) {
 inline void SeasonSealOption::clear_battle_limit() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_limit_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t SeasonSealOption::battle_limit() const {
   // @@protoc_insertion_point(field_get:SeasonSealOption.battle_limit)
@@ -8067,7 +8654,7 @@ inline ::uint32_t SeasonSealOption::battle_limit() const {
 }
 inline void SeasonSealOption::set_battle_limit(::uint32_t value) {
   _internal_set_battle_limit(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:SeasonSealOption.battle_limit)
 }
 inline ::uint32_t SeasonSealOption::_internal_battle_limit() const {
@@ -8083,7 +8670,7 @@ inline void SeasonSealOption::_internal_set_battle_limit(::uint32_t value) {
 inline void SeasonSealOption::clear_active_rounds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.active_rounds_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t SeasonSealOption::active_rounds() const {
   // @@protoc_insertion_point(field_get:SeasonSealOption.active_rounds)
@@ -8091,7 +8678,7 @@ inline ::uint32_t SeasonSealOption::active_rounds() const {
 }
 inline void SeasonSealOption::set_active_rounds(::uint32_t value) {
   _internal_set_active_rounds(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:SeasonSealOption.active_rounds)
 }
 inline ::uint32_t SeasonSealOption::_internal_active_rounds() const {
@@ -8107,7 +8694,7 @@ inline void SeasonSealOption::_internal_set_active_rounds(::uint32_t value) {
 inline void SeasonSealOption::clear_health_threshold_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.health_threshold_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t SeasonSealOption::health_threshold_bps() const {
   // @@protoc_insertion_point(field_get:SeasonSealOption.health_threshold_bps)
@@ -8115,7 +8702,7 @@ inline ::uint32_t SeasonSealOption::health_threshold_bps() const {
 }
 inline void SeasonSealOption::set_health_threshold_bps(::uint32_t value) {
   _internal_set_health_threshold_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:SeasonSealOption.health_threshold_bps)
 }
 inline ::uint32_t SeasonSealOption::_internal_health_threshold_bps() const {
@@ -8131,7 +8718,7 @@ inline void SeasonSealOption::_internal_set_health_threshold_bps(::uint32_t valu
 inline void SeasonSealOption::clear_equipped() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equipped_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline bool SeasonSealOption::equipped() const {
   // @@protoc_insertion_point(field_get:SeasonSealOption.equipped)
@@ -8139,7 +8726,7 @@ inline bool SeasonSealOption::equipped() const {
 }
 inline void SeasonSealOption::set_equipped(bool value) {
   _internal_set_equipped(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:SeasonSealOption.equipped)
 }
 inline bool SeasonSealOption::_internal_equipped() const {
@@ -8149,6 +8736,142 @@ inline bool SeasonSealOption::_internal_equipped() const {
 inline void SeasonSealOption::_internal_set_equipped(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equipped_ = value;
+}
+
+// uint32 resonance_skill_id = 13;
+inline void SeasonSealOption::clear_resonance_skill_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.resonance_skill_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint32_t SeasonSealOption::resonance_skill_id() const {
+  // @@protoc_insertion_point(field_get:SeasonSealOption.resonance_skill_id)
+  return _internal_resonance_skill_id();
+}
+inline void SeasonSealOption::set_resonance_skill_id(::uint32_t value) {
+  _internal_set_resonance_skill_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:SeasonSealOption.resonance_skill_id)
+}
+inline ::uint32_t SeasonSealOption::_internal_resonance_skill_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.resonance_skill_id_;
+}
+inline void SeasonSealOption::_internal_set_resonance_skill_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.resonance_skill_id_ = value;
+}
+
+// uint32 resonance_kind = 14;
+inline void SeasonSealOption::clear_resonance_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.resonance_kind_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint32_t SeasonSealOption::resonance_kind() const {
+  // @@protoc_insertion_point(field_get:SeasonSealOption.resonance_kind)
+  return _internal_resonance_kind();
+}
+inline void SeasonSealOption::set_resonance_kind(::uint32_t value) {
+  _internal_set_resonance_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:SeasonSealOption.resonance_kind)
+}
+inline ::uint32_t SeasonSealOption::_internal_resonance_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.resonance_kind_;
+}
+inline void SeasonSealOption::_internal_set_resonance_kind(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.resonance_kind_ = value;
+}
+
+// uint32 resonance_param = 15;
+inline void SeasonSealOption::clear_resonance_param() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.resonance_param_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint32_t SeasonSealOption::resonance_param() const {
+  // @@protoc_insertion_point(field_get:SeasonSealOption.resonance_param)
+  return _internal_resonance_param();
+}
+inline void SeasonSealOption::set_resonance_param(::uint32_t value) {
+  _internal_set_resonance_param(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:SeasonSealOption.resonance_param)
+}
+inline ::uint32_t SeasonSealOption::_internal_resonance_param() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.resonance_param_;
+}
+inline void SeasonSealOption::_internal_set_resonance_param(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.resonance_param_ = value;
+}
+
+// string resonance_desc = 16;
+inline void SeasonSealOption::clear_resonance_desc() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.resonance_desc_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& SeasonSealOption::resonance_desc() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SeasonSealOption.resonance_desc)
+  return _internal_resonance_desc();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SeasonSealOption::set_resonance_desc(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.resonance_desc_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:SeasonSealOption.resonance_desc)
+}
+inline ::std::string* PROTOBUF_NONNULL SeasonSealOption::mutable_resonance_desc()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_resonance_desc();
+  // @@protoc_insertion_point(field_mutable:SeasonSealOption.resonance_desc)
+  return _s;
+}
+inline const ::std::string& SeasonSealOption::_internal_resonance_desc() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.resonance_desc_.Get();
+}
+inline void SeasonSealOption::_internal_set_resonance_desc(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.resonance_desc_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SeasonSealOption::_internal_mutable_resonance_desc() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.resonance_desc_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SeasonSealOption::release_resonance_desc() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SeasonSealOption.resonance_desc)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.resonance_desc_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.resonance_desc_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SeasonSealOption::set_allocated_resonance_desc(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.resonance_desc_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.resonance_desc_.IsDefault()) {
+    _impl_.resonance_desc_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:SeasonSealOption.resonance_desc)
 }
 
 // -------------------------------------------------------------------
@@ -9015,6 +9738,54 @@ inline void SeasonHonorView::_internal_set_is_current_season(bool value) {
   _impl_.is_current_season_ = value;
 }
 
+// bool is_retro_target = 9;
+inline void SeasonHonorView::clear_is_retro_target() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_retro_target_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline bool SeasonHonorView::is_retro_target() const {
+  // @@protoc_insertion_point(field_get:SeasonHonorView.is_retro_target)
+  return _internal_is_retro_target();
+}
+inline void SeasonHonorView::set_is_retro_target(bool value) {
+  _internal_set_is_retro_target(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:SeasonHonorView.is_retro_target)
+}
+inline bool SeasonHonorView::_internal_is_retro_target() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.is_retro_target_;
+}
+inline void SeasonHonorView::_internal_set_is_retro_target(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_retro_target_ = value;
+}
+
+// uint32 retro_progress_points = 10;
+inline void SeasonHonorView::clear_retro_progress_points() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retro_progress_points_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t SeasonHonorView::retro_progress_points() const {
+  // @@protoc_insertion_point(field_get:SeasonHonorView.retro_progress_points)
+  return _internal_retro_progress_points();
+}
+inline void SeasonHonorView::set_retro_progress_points(::uint32_t value) {
+  _internal_set_retro_progress_points(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:SeasonHonorView.retro_progress_points)
+}
+inline ::uint32_t SeasonHonorView::_internal_retro_progress_points() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.retro_progress_points_;
+}
+inline void SeasonHonorView::_internal_set_retro_progress_points(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retro_progress_points_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // SeasonWeeklyAffixView
@@ -9318,7 +10089,7 @@ SeasonWeeklyAffixView::_internal_mutable_recommended_seal_ids() {
 inline void SeasonStateSnapshot::clear_available() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.available_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline bool SeasonStateSnapshot::available() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.available)
@@ -9326,7 +10097,7 @@ inline bool SeasonStateSnapshot::available() const {
 }
 inline void SeasonStateSnapshot::set_available(bool value) {
   _internal_set_available(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.available)
 }
 inline bool SeasonStateSnapshot::_internal_available() const {
@@ -9406,7 +10177,7 @@ inline void SeasonStateSnapshot::set_allocated_unavailable_reason(::std::string*
 inline void SeasonStateSnapshot::clear_season_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.season_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t SeasonStateSnapshot::season_id() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.season_id)
@@ -9414,7 +10185,7 @@ inline ::uint32_t SeasonStateSnapshot::season_id() const {
 }
 inline void SeasonStateSnapshot::set_season_id(::uint32_t value) {
   _internal_set_season_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.season_id)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_season_id() const {
@@ -9558,7 +10329,7 @@ inline void SeasonStateSnapshot::set_allocated_season_desc(::std::string* PROTOB
 inline void SeasonStateSnapshot::clear_starts_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.starts_at_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint64_t SeasonStateSnapshot::starts_at_ms() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.starts_at_ms)
@@ -9566,7 +10337,7 @@ inline ::uint64_t SeasonStateSnapshot::starts_at_ms() const {
 }
 inline void SeasonStateSnapshot::set_starts_at_ms(::uint64_t value) {
   _internal_set_starts_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.starts_at_ms)
 }
 inline ::uint64_t SeasonStateSnapshot::_internal_starts_at_ms() const {
@@ -9582,7 +10353,7 @@ inline void SeasonStateSnapshot::_internal_set_starts_at_ms(::uint64_t value) {
 inline void SeasonStateSnapshot::clear_ends_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ends_at_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint64_t SeasonStateSnapshot::ends_at_ms() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.ends_at_ms)
@@ -9590,7 +10361,7 @@ inline ::uint64_t SeasonStateSnapshot::ends_at_ms() const {
 }
 inline void SeasonStateSnapshot::set_ends_at_ms(::uint64_t value) {
   _internal_set_ends_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.ends_at_ms)
 }
 inline ::uint64_t SeasonStateSnapshot::_internal_ends_at_ms() const {
@@ -9606,7 +10377,7 @@ inline void SeasonStateSnapshot::_internal_set_ends_at_ms(::uint64_t value) {
 inline void SeasonStateSnapshot::clear_server_now_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.server_now_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint64_t SeasonStateSnapshot::server_now_ms() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.server_now_ms)
@@ -9614,7 +10385,7 @@ inline ::uint64_t SeasonStateSnapshot::server_now_ms() const {
 }
 inline void SeasonStateSnapshot::set_server_now_ms(::uint64_t value) {
   _internal_set_server_now_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.server_now_ms)
 }
 inline ::uint64_t SeasonStateSnapshot::_internal_server_now_ms() const {
@@ -9630,7 +10401,7 @@ inline void SeasonStateSnapshot::_internal_set_server_now_ms(::uint64_t value) {
 inline void SeasonStateSnapshot::clear_equipped_seal_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equipped_seal_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t SeasonStateSnapshot::equipped_seal_id() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.equipped_seal_id)
@@ -9638,7 +10409,7 @@ inline ::uint32_t SeasonStateSnapshot::equipped_seal_id() const {
 }
 inline void SeasonStateSnapshot::set_equipped_seal_id(::uint32_t value) {
   _internal_set_equipped_seal_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.equipped_seal_id)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_equipped_seal_id() const {
@@ -9654,7 +10425,7 @@ inline void SeasonStateSnapshot::_internal_set_equipped_seal_id(::uint32_t value
 inline void SeasonStateSnapshot::clear_progress_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.progress_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t SeasonStateSnapshot::progress_points() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.progress_points)
@@ -9662,7 +10433,7 @@ inline ::uint32_t SeasonStateSnapshot::progress_points() const {
 }
 inline void SeasonStateSnapshot::set_progress_points(::uint32_t value) {
   _internal_set_progress_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.progress_points)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_progress_points() const {
@@ -9678,7 +10449,7 @@ inline void SeasonStateSnapshot::_internal_set_progress_points(::uint32_t value)
 inline void SeasonStateSnapshot::clear_max_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t SeasonStateSnapshot::max_points() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.max_points)
@@ -9686,7 +10457,7 @@ inline ::uint32_t SeasonStateSnapshot::max_points() const {
 }
 inline void SeasonStateSnapshot::set_max_points(::uint32_t value) {
   _internal_set_max_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.max_points)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_max_points() const {
@@ -9702,7 +10473,7 @@ inline void SeasonStateSnapshot::_internal_set_max_points(::uint32_t value) {
 inline void SeasonStateSnapshot::clear_battle_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint32_t SeasonStateSnapshot::battle_points() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.battle_points)
@@ -9710,7 +10481,7 @@ inline ::uint32_t SeasonStateSnapshot::battle_points() const {
 }
 inline void SeasonStateSnapshot::set_battle_points(::uint32_t value) {
   _internal_set_battle_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.battle_points)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_battle_points() const {
@@ -9726,7 +10497,7 @@ inline void SeasonStateSnapshot::_internal_set_battle_points(::uint32_t value) {
 inline void SeasonStateSnapshot::clear_catchup_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.catchup_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint32_t SeasonStateSnapshot::catchup_points() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.catchup_points)
@@ -9734,7 +10505,7 @@ inline ::uint32_t SeasonStateSnapshot::catchup_points() const {
 }
 inline void SeasonStateSnapshot::set_catchup_points(::uint32_t value) {
   _internal_set_catchup_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.catchup_points)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_catchup_points() const {
@@ -9750,7 +10521,7 @@ inline void SeasonStateSnapshot::_internal_set_catchup_points(::uint32_t value) 
 inline void SeasonStateSnapshot::clear_current_max_health_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.current_max_health_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint32_t SeasonStateSnapshot::current_max_health_bps() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.current_max_health_bps)
@@ -9758,7 +10529,7 @@ inline ::uint32_t SeasonStateSnapshot::current_max_health_bps() const {
 }
 inline void SeasonStateSnapshot::set_current_max_health_bps(::uint32_t value) {
   _internal_set_current_max_health_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.current_max_health_bps)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_current_max_health_bps() const {
@@ -9774,7 +10545,7 @@ inline void SeasonStateSnapshot::_internal_set_current_max_health_bps(::uint32_t
 inline void SeasonStateSnapshot::clear_cap_max_health_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cap_max_health_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint32_t SeasonStateSnapshot::cap_max_health_bps() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.cap_max_health_bps)
@@ -9782,7 +10553,7 @@ inline ::uint32_t SeasonStateSnapshot::cap_max_health_bps() const {
 }
 inline void SeasonStateSnapshot::set_cap_max_health_bps(::uint32_t value) {
   _internal_set_cap_max_health_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.cap_max_health_bps)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_cap_max_health_bps() const {
@@ -9798,7 +10569,7 @@ inline void SeasonStateSnapshot::_internal_set_cap_max_health_bps(::uint32_t val
 inline void SeasonStateSnapshot::clear_current_defense_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.current_defense_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint32_t SeasonStateSnapshot::current_defense_bps() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.current_defense_bps)
@@ -9806,7 +10577,7 @@ inline ::uint32_t SeasonStateSnapshot::current_defense_bps() const {
 }
 inline void SeasonStateSnapshot::set_current_defense_bps(::uint32_t value) {
   _internal_set_current_defense_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.current_defense_bps)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_current_defense_bps() const {
@@ -9822,7 +10593,7 @@ inline void SeasonStateSnapshot::_internal_set_current_defense_bps(::uint32_t va
 inline void SeasonStateSnapshot::clear_cap_defense_bps() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.cap_defense_bps_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline ::uint32_t SeasonStateSnapshot::cap_defense_bps() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.cap_defense_bps)
@@ -9830,7 +10601,7 @@ inline ::uint32_t SeasonStateSnapshot::cap_defense_bps() const {
 }
 inline void SeasonStateSnapshot::set_cap_defense_bps(::uint32_t value) {
   _internal_set_cap_defense_bps(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.cap_defense_bps)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_cap_defense_bps() const {
@@ -9846,7 +10617,7 @@ inline void SeasonStateSnapshot::_internal_set_cap_defense_bps(::uint32_t value)
 inline void SeasonStateSnapshot::clear_pve_win_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pve_win_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
 }
 inline ::uint32_t SeasonStateSnapshot::pve_win_points() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.pve_win_points)
@@ -9854,7 +10625,7 @@ inline ::uint32_t SeasonStateSnapshot::pve_win_points() const {
 }
 inline void SeasonStateSnapshot::set_pve_win_points(::uint32_t value) {
   _internal_set_pve_win_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.pve_win_points)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_pve_win_points() const {
@@ -9870,7 +10641,7 @@ inline void SeasonStateSnapshot::_internal_set_pve_win_points(::uint32_t value) 
 inline void SeasonStateSnapshot::clear_pvp_win_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pvp_win_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
 }
 inline ::uint32_t SeasonStateSnapshot::pvp_win_points() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.pvp_win_points)
@@ -9878,7 +10649,7 @@ inline ::uint32_t SeasonStateSnapshot::pvp_win_points() const {
 }
 inline void SeasonStateSnapshot::set_pvp_win_points(::uint32_t value) {
   _internal_set_pvp_win_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.pvp_win_points)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_pvp_win_points() const {
@@ -9894,7 +10665,7 @@ inline void SeasonStateSnapshot::_internal_set_pvp_win_points(::uint32_t value) 
 inline void SeasonStateSnapshot::clear_pvp_other_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pvp_other_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
 }
 inline ::uint32_t SeasonStateSnapshot::pvp_other_points() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.pvp_other_points)
@@ -9902,7 +10673,7 @@ inline ::uint32_t SeasonStateSnapshot::pvp_other_points() const {
 }
 inline void SeasonStateSnapshot::set_pvp_other_points(::uint32_t value) {
   _internal_set_pvp_other_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.pvp_other_points)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_pvp_other_points() const {
@@ -9918,7 +10689,7 @@ inline void SeasonStateSnapshot::_internal_set_pvp_other_points(::uint32_t value
 inline void SeasonStateSnapshot::clear_catchup_currency_type() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.catchup_currency_type_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x20000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
 }
 inline ::uint32_t SeasonStateSnapshot::catchup_currency_type() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.catchup_currency_type)
@@ -9926,7 +10697,7 @@ inline ::uint32_t SeasonStateSnapshot::catchup_currency_type() const {
 }
 inline void SeasonStateSnapshot::set_catchup_currency_type(::uint32_t value) {
   _internal_set_catchup_currency_type(value);
-  SetHasBit(_impl_._has_bits_[0], 0x20000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.catchup_currency_type)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_catchup_currency_type() const {
@@ -9942,7 +10713,7 @@ inline void SeasonStateSnapshot::_internal_set_catchup_currency_type(::uint32_t 
 inline void SeasonStateSnapshot::clear_catchup_price_per_point() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.catchup_price_per_point_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
 }
 inline ::uint64_t SeasonStateSnapshot::catchup_price_per_point() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.catchup_price_per_point)
@@ -9950,7 +10721,7 @@ inline ::uint64_t SeasonStateSnapshot::catchup_price_per_point() const {
 }
 inline void SeasonStateSnapshot::set_catchup_price_per_point(::uint64_t value) {
   _internal_set_catchup_price_per_point(value);
-  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.catchup_price_per_point)
 }
 inline ::uint64_t SeasonStateSnapshot::_internal_catchup_price_per_point() const {
@@ -9966,7 +10737,7 @@ inline void SeasonStateSnapshot::_internal_set_catchup_price_per_point(::uint64_
 inline void SeasonStateSnapshot::clear_catchup_remaining_total_price() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.catchup_remaining_total_price_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
 }
 inline ::uint64_t SeasonStateSnapshot::catchup_remaining_total_price() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.catchup_remaining_total_price)
@@ -9974,7 +10745,7 @@ inline ::uint64_t SeasonStateSnapshot::catchup_remaining_total_price() const {
 }
 inline void SeasonStateSnapshot::set_catchup_remaining_total_price(::uint64_t value) {
   _internal_set_catchup_remaining_total_price(value);
-  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.catchup_remaining_total_price)
 }
 inline ::uint64_t SeasonStateSnapshot::_internal_catchup_remaining_total_price() const {
@@ -9990,7 +10761,7 @@ inline void SeasonStateSnapshot::_internal_set_catchup_remaining_total_price(::u
 inline void SeasonStateSnapshot::clear_currency_balance() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.currency_balance_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
 }
 inline ::uint64_t SeasonStateSnapshot::currency_balance() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.currency_balance)
@@ -9998,7 +10769,7 @@ inline ::uint64_t SeasonStateSnapshot::currency_balance() const {
 }
 inline void SeasonStateSnapshot::set_currency_balance(::uint64_t value) {
   _internal_set_currency_balance(value);
-  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.currency_balance)
 }
 inline ::uint64_t SeasonStateSnapshot::_internal_currency_balance() const {
@@ -10014,7 +10785,7 @@ inline void SeasonStateSnapshot::_internal_set_currency_balance(::uint64_t value
 inline void SeasonStateSnapshot::clear_can_switch_seal() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.can_switch_seal_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline bool SeasonStateSnapshot::can_switch_seal() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.can_switch_seal)
@@ -10022,7 +10793,7 @@ inline bool SeasonStateSnapshot::can_switch_seal() const {
 }
 inline void SeasonStateSnapshot::set_can_switch_seal(bool value) {
   _internal_set_can_switch_seal(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.can_switch_seal)
 }
 inline bool SeasonStateSnapshot::_internal_can_switch_seal() const {
@@ -10038,7 +10809,7 @@ inline void SeasonStateSnapshot::_internal_set_can_switch_seal(bool value) {
 inline void SeasonStateSnapshot::clear_can_catchup() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.can_catchup_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline bool SeasonStateSnapshot::can_catchup() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.can_catchup)
@@ -10046,7 +10817,7 @@ inline bool SeasonStateSnapshot::can_catchup() const {
 }
 inline void SeasonStateSnapshot::set_can_catchup(bool value) {
   _internal_set_can_catchup(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.can_catchup)
 }
 inline bool SeasonStateSnapshot::_internal_can_catchup() const {
@@ -10126,7 +10897,7 @@ inline void SeasonStateSnapshot::set_allocated_action_unavailable_reason(::std::
 inline void SeasonStateSnapshot::clear_revision() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.revision_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x40000000U);
 }
 inline ::uint64_t SeasonStateSnapshot::revision() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.revision)
@@ -10134,7 +10905,7 @@ inline ::uint64_t SeasonStateSnapshot::revision() const {
 }
 inline void SeasonStateSnapshot::set_revision(::uint64_t value) {
   _internal_set_revision(value);
-  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x40000000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.revision)
 }
 inline ::uint64_t SeasonStateSnapshot::_internal_revision() const {
@@ -10260,7 +11031,7 @@ SeasonStateSnapshot::_internal_mutable_season_skills() {
 inline void SeasonStateSnapshot::clear_equipped_formation_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equipped_formation_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x40000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x20000000U);
 }
 inline ::uint32_t SeasonStateSnapshot::equipped_formation_id() const {
   // @@protoc_insertion_point(field_get:SeasonStateSnapshot.equipped_formation_id)
@@ -10268,7 +11039,7 @@ inline ::uint32_t SeasonStateSnapshot::equipped_formation_id() const {
 }
 inline void SeasonStateSnapshot::set_equipped_formation_id(::uint32_t value) {
   _internal_set_equipped_formation_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x40000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x20000000U);
   // @@protoc_insertion_point(field_set:SeasonStateSnapshot.equipped_formation_id)
 }
 inline ::uint32_t SeasonStateSnapshot::_internal_equipped_formation_id() const {
@@ -10290,7 +11061,7 @@ inline int SeasonStateSnapshot::saved_builds_size() const {
 inline void SeasonStateSnapshot::clear_saved_builds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.saved_builds_.Clear();
-  ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
 }
 inline const ::SavedBattleBuildBookmarkView& SeasonStateSnapshot::saved_builds(int index) const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -10308,7 +11079,7 @@ inline ::SavedBattleBuildBookmarkView* PROTOBUF_NONNULL SeasonStateSnapshot::add
   ::SavedBattleBuildBookmarkView* _add =
       _internal_mutable_saved_builds()->InternalAddWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), GetArena());
-  SetHasBit(_impl_._has_bits_[1], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
   // @@protoc_insertion_point(field_add:SeasonStateSnapshot.saved_builds)
   return _add;
 }
@@ -10319,7 +11090,7 @@ inline const ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView
 }
 inline ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmarkView>* PROTOBUF_NONNULL
 SeasonStateSnapshot::mutable_saved_builds() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[1], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
   // @@protoc_insertion_point(field_mutable_list:SeasonStateSnapshot.saved_builds)
   ::google::protobuf::internal::TSanWrite(&_impl_);
   return _internal_mutable_saved_builds();
@@ -10345,7 +11116,7 @@ inline int SeasonStateSnapshot::honors_size() const {
 inline void SeasonStateSnapshot::clear_honors() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.honors_.Clear();
-  ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
 }
 inline const ::SeasonHonorView& SeasonStateSnapshot::honors(int index) const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -10363,7 +11134,7 @@ inline ::SeasonHonorView* PROTOBUF_NONNULL SeasonStateSnapshot::add_honors()
   ::SeasonHonorView* _add =
       _internal_mutable_honors()->InternalAddWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), GetArena());
-  SetHasBit(_impl_._has_bits_[1], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000001U);
   // @@protoc_insertion_point(field_add:SeasonStateSnapshot.honors)
   return _add;
 }
@@ -10374,7 +11145,7 @@ inline const ::google::protobuf::RepeatedPtrField<::SeasonHonorView>& SeasonStat
 }
 inline ::google::protobuf::RepeatedPtrField<::SeasonHonorView>* PROTOBUF_NONNULL
 SeasonStateSnapshot::mutable_honors() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[1], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000001U);
   // @@protoc_insertion_point(field_mutable_list:SeasonStateSnapshot.honors)
   ::google::protobuf::internal::TSanWrite(&_impl_);
   return _internal_mutable_honors();
@@ -10392,14 +11163,14 @@ SeasonStateSnapshot::_internal_mutable_honors() {
 
 // .SeasonWeeklyAffixView weekly_affix = 34;
 inline bool SeasonStateSnapshot::has_weekly_affix() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000040U);
+  bool value = CheckHasBit(_impl_._has_bits_[1], 0x00000002U);
   PROTOBUF_ASSUME(!value || _impl_.weekly_affix_ != nullptr);
   return value;
 }
 inline void SeasonStateSnapshot::clear_weekly_affix() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.weekly_affix_ != nullptr) _impl_.weekly_affix_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
 }
 inline const ::SeasonWeeklyAffixView& SeasonStateSnapshot::_internal_weekly_affix() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -10418,16 +11189,16 @@ inline void SeasonStateSnapshot::unsafe_arena_set_allocated_weekly_affix(
   }
   _impl_.weekly_affix_ = reinterpret_cast<::SeasonWeeklyAffixView*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+    SetHasBit(_impl_._has_bits_[1], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+    ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:SeasonStateSnapshot.weekly_affix)
 }
 inline ::SeasonWeeklyAffixView* PROTOBUF_NULLABLE SeasonStateSnapshot::release_weekly_affix() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
   ::SeasonWeeklyAffixView* released = _impl_.weekly_affix_;
   _impl_.weekly_affix_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -10447,7 +11218,7 @@ inline ::SeasonWeeklyAffixView* PROTOBUF_NULLABLE SeasonStateSnapshot::unsafe_ar
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:SeasonStateSnapshot.weekly_affix)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
   ::SeasonWeeklyAffixView* temp = _impl_.weekly_affix_;
   _impl_.weekly_affix_ = nullptr;
   return temp;
@@ -10462,7 +11233,7 @@ inline ::SeasonWeeklyAffixView* PROTOBUF_NONNULL SeasonStateSnapshot::_internal_
 }
 inline ::SeasonWeeklyAffixView* PROTOBUF_NONNULL SeasonStateSnapshot::mutable_weekly_affix()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000002U);
   ::SeasonWeeklyAffixView* _msg = _internal_mutable_weekly_affix();
   // @@protoc_insertion_point(field_mutable:SeasonStateSnapshot.weekly_affix)
   return _msg;
@@ -10479,13 +11250,133 @@ inline void SeasonStateSnapshot::set_allocated_weekly_affix(::SeasonWeeklyAffixV
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+    SetHasBit(_impl_._has_bits_[1], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+    ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
   }
 
   _impl_.weekly_affix_ = reinterpret_cast<::SeasonWeeklyAffixView*>(value);
   // @@protoc_insertion_point(field_set_allocated:SeasonStateSnapshot.weekly_affix)
+}
+
+// uint32 season_term = 35;
+inline void SeasonStateSnapshot::clear_season_term() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_term_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000004U);
+}
+inline ::uint32_t SeasonStateSnapshot::season_term() const {
+  // @@protoc_insertion_point(field_get:SeasonStateSnapshot.season_term)
+  return _internal_season_term();
+}
+inline void SeasonStateSnapshot::set_season_term(::uint32_t value) {
+  _internal_set_season_term(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000004U);
+  // @@protoc_insertion_point(field_set:SeasonStateSnapshot.season_term)
+}
+inline ::uint32_t SeasonStateSnapshot::_internal_season_term() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_term_;
+}
+inline void SeasonStateSnapshot::_internal_set_season_term(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_term_ = value;
+}
+
+// uint32 cycle_index = 36;
+inline void SeasonStateSnapshot::clear_cycle_index() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cycle_index_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000008U);
+}
+inline ::uint32_t SeasonStateSnapshot::cycle_index() const {
+  // @@protoc_insertion_point(field_get:SeasonStateSnapshot.cycle_index)
+  return _internal_cycle_index();
+}
+inline void SeasonStateSnapshot::set_cycle_index(::uint32_t value) {
+  _internal_set_cycle_index(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000008U);
+  // @@protoc_insertion_point(field_set:SeasonStateSnapshot.cycle_index)
+}
+inline ::uint32_t SeasonStateSnapshot::_internal_cycle_index() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cycle_index_;
+}
+inline void SeasonStateSnapshot::_internal_set_cycle_index(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cycle_index_ = value;
+}
+
+// uint32 cycle_pool_size = 37;
+inline void SeasonStateSnapshot::clear_cycle_pool_size() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cycle_pool_size_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
+}
+inline ::uint32_t SeasonStateSnapshot::cycle_pool_size() const {
+  // @@protoc_insertion_point(field_get:SeasonStateSnapshot.cycle_pool_size)
+  return _internal_cycle_pool_size();
+}
+inline void SeasonStateSnapshot::set_cycle_pool_size(::uint32_t value) {
+  _internal_set_cycle_pool_size(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000010U);
+  // @@protoc_insertion_point(field_set:SeasonStateSnapshot.cycle_pool_size)
+}
+inline ::uint32_t SeasonStateSnapshot::_internal_cycle_pool_size() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cycle_pool_size_;
+}
+inline void SeasonStateSnapshot::_internal_set_cycle_pool_size(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cycle_pool_size_ = value;
+}
+
+// uint32 retro_honor_target_season_id = 38;
+inline void SeasonStateSnapshot::clear_retro_honor_target_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retro_honor_target_season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
+}
+inline ::uint32_t SeasonStateSnapshot::retro_honor_target_season_id() const {
+  // @@protoc_insertion_point(field_get:SeasonStateSnapshot.retro_honor_target_season_id)
+  return _internal_retro_honor_target_season_id();
+}
+inline void SeasonStateSnapshot::set_retro_honor_target_season_id(::uint32_t value) {
+  _internal_set_retro_honor_target_season_id(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000020U);
+  // @@protoc_insertion_point(field_set:SeasonStateSnapshot.retro_honor_target_season_id)
+}
+inline ::uint32_t SeasonStateSnapshot::_internal_retro_honor_target_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.retro_honor_target_season_id_;
+}
+inline void SeasonStateSnapshot::_internal_set_retro_honor_target_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retro_honor_target_season_id_ = value;
+}
+
+// bool retro_honor_target_explicit = 39;
+inline void SeasonStateSnapshot::clear_retro_honor_target_explicit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retro_honor_target_explicit_ = false;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000040U);
+}
+inline bool SeasonStateSnapshot::retro_honor_target_explicit() const {
+  // @@protoc_insertion_point(field_get:SeasonStateSnapshot.retro_honor_target_explicit)
+  return _internal_retro_honor_target_explicit();
+}
+inline void SeasonStateSnapshot::set_retro_honor_target_explicit(bool value) {
+  _internal_set_retro_honor_target_explicit(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000040U);
+  // @@protoc_insertion_point(field_set:SeasonStateSnapshot.retro_honor_target_explicit)
+}
+inline bool SeasonStateSnapshot::_internal_retro_honor_target_explicit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.retro_honor_target_explicit_;
+}
+inline void SeasonStateSnapshot::_internal_set_retro_honor_target_explicit(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retro_honor_target_explicit_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -14148,6 +15039,229 @@ inline ::uint64_t CatchupSeasonSealResponse::_internal_spent_currency() const {
 inline void CatchupSeasonSealResponse::_internal_set_spent_currency(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.spent_currency_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// SetRetroHonorTargetRequest
+
+// uint32 season_id = 1;
+inline void SetRetroHonorTargetRequest::clear_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t SetRetroHonorTargetRequest::season_id() const {
+  // @@protoc_insertion_point(field_get:SetRetroHonorTargetRequest.season_id)
+  return _internal_season_id();
+}
+inline void SetRetroHonorTargetRequest::set_season_id(::uint32_t value) {
+  _internal_set_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:SetRetroHonorTargetRequest.season_id)
+}
+inline ::uint32_t SetRetroHonorTargetRequest::_internal_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.season_id_;
+}
+inline void SetRetroHonorTargetRequest::_internal_set_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.season_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// SetRetroHonorTargetResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool SetRetroHonorTargetResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& SetRetroHonorTargetResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& SetRetroHonorTargetResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SetRetroHonorTargetResponse.error_message)
+  return _internal_error_message();
+}
+inline void SetRetroHonorTargetResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:SetRetroHonorTargetResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE SetRetroHonorTargetResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE SetRetroHonorTargetResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SetRetroHonorTargetResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL SetRetroHonorTargetResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL SetRetroHonorTargetResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:SetRetroHonorTargetResponse.error_message)
+  return _msg;
+}
+inline void SetRetroHonorTargetResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:SetRetroHonorTargetResponse.error_message)
+}
+
+// .SeasonStateSnapshot state = 2;
+inline bool SetRetroHonorTargetResponse::has_state() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.state_ != nullptr);
+  return value;
+}
+inline void SetRetroHonorTargetResponse::clear_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.state_ != nullptr) _impl_.state_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::SeasonStateSnapshot& SetRetroHonorTargetResponse::_internal_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::SeasonStateSnapshot* p = _impl_.state_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::SeasonStateSnapshot>(&::SeasonStateSnapshot_globals_);
+}
+inline const ::SeasonStateSnapshot& SetRetroHonorTargetResponse::state() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SetRetroHonorTargetResponse.state)
+  return _internal_state();
+}
+inline void SetRetroHonorTargetResponse::unsafe_arena_set_allocated_state(
+    ::SeasonStateSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.state_);
+  }
+  _impl_.state_ = reinterpret_cast<::SeasonStateSnapshot*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:SetRetroHonorTargetResponse.state)
+}
+inline ::SeasonStateSnapshot* PROTOBUF_NULLABLE SetRetroHonorTargetResponse::release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::SeasonStateSnapshot* released = _impl_.state_;
+  _impl_.state_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::SeasonStateSnapshot* PROTOBUF_NULLABLE SetRetroHonorTargetResponse::unsafe_arena_release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SetRetroHonorTargetResponse.state)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::SeasonStateSnapshot* temp = _impl_.state_;
+  _impl_.state_ = nullptr;
+  return temp;
+}
+inline ::SeasonStateSnapshot* PROTOBUF_NONNULL SetRetroHonorTargetResponse::_internal_mutable_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.state_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::SeasonStateSnapshot>(GetArena());
+    _impl_.state_ = reinterpret_cast<::SeasonStateSnapshot*>(p);
+  }
+  return _impl_.state_;
+}
+inline ::SeasonStateSnapshot* PROTOBUF_NONNULL SetRetroHonorTargetResponse::mutable_state()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::SeasonStateSnapshot* _msg = _internal_mutable_state();
+  // @@protoc_insertion_point(field_mutable:SetRetroHonorTargetResponse.state)
+  return _msg;
+}
+inline void SetRetroHonorTargetResponse::set_allocated_state(::SeasonStateSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.state_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.state_ = reinterpret_cast<::SeasonStateSnapshot*>(value);
+  // @@protoc_insertion_point(field_set_allocated:SetRetroHonorTargetResponse.state)
 }
 
 #ifdef __GNUC__

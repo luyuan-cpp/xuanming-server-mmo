@@ -135,4 +135,16 @@ public interface SeasonRuleTableOrBuilder extends
    */
   com.google.protobuf.ByteString
       getHonorBadgeIconKeyBytes();
+
+  /**
+   * <code>uint32 cycle_order = 18;</code>
+   * @return The cycleOrder.
+   */
+  int getCycleOrder();
+
+  /**
+   * <code>uint32 cycle_duration_days = 19;</code>
+   * @return The cycleDurationDays.
+   */
+  int getCycleDurationDays();
 }

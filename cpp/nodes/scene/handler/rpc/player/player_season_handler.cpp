@@ -107,3 +107,12 @@ void SceneSeasonClientPlayerHandler::DeleteBattleBuildBookmark(entt::entity play
 ///<<< END WRITING YOUR CODE
 
 }
+
+void SceneSeasonClientPlayerHandler::SetRetroHonorTarget(entt::entity player,const ::SetRetroHonorTargetRequest* request,
+	::SetRetroHonorTargetResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	PlayerSeasonSystem::SetRetroHonorTarget(player, TimeSystem::NowMillisecondsUTC(), *request, *response);
+///<<< END WRITING YOUR CODE
+
+}

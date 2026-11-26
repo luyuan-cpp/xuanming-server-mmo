@@ -22,7 +22,7 @@ public static partial class TournamentruleTableReflection {
   static TournamentruleTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "Chp0b3VybmFtZW50cnVsZV90YWJsZS5wcm90byKBBwoTVG91cm5hbWVudFJ1",
+          "Chp0b3VybmFtZW50cnVsZV90YWJsZS5wcm90byKyBgoTVG91cm5hbWVudFJ1",
           "bGVUYWJsZRIKCgJpZBgBIAEoDRIUCgxydWxlX3ZlcnNpb24YAiABKA0SDwoH",
           "ZW5hYmxlZBgDIAEoCBIYChBiYXR0bGVfY29uZmlnX2lkGAQgASgNEhgKEGJh",
           "dHRsZV90ZWFtX3NpemUYBSABKA0SFwoPcm9zdGVyX21heF9zaXplGAYgASgN",
@@ -36,20 +36,19 @@ public static partial class TournamentruleTableReflection {
           "KA0SHQoVcXVhbGlmaWVyX2xvc3NfcG9pbnRzGBIgASgNEhoKEmludml0ZV90",
           "dGxfc2Vjb25kcxgTIAEoDRIMCgRkZXNjGBQgASgJEhgKEGJvM190b3A0X2Vu",
           "YWJsZWQYFSABKAgSHAoUaW50ZXJtaXNzaW9uX3NlY29uZHMYFiABKA0SHgoW",
-          "cHVibGljX2tub2Nrb3V0X3JlcGxheRgXIAEoCBIaChJzYWx1dGVfZ29sZF9h",
-          "bW91bnQYGCABKA0SFgoOc2FsdXRlX2l0ZW1faWQYGSABKA0SGQoRc2FsdXRl",
-          "X2l0ZW1fY291bnQYGiABKA0SGwoTd2FybXVwX3NwYXJfZW5hYmxlZBgbIAEo",
-          "CBIaChJwcmVkaWN0aW9uX2VuYWJsZWQYHCABKAgSIgoacHJlZGljdGlvbl9y",
-          "ZXdhcmRfbWluX2hpdHMYHSABKA0SIQoZdGhpcmRfcGxhY2VfbWF0Y2hfZW5h",
-          "YmxlZBgeIAEoCBIbChNsZXlsaW5lX2Jhbl9lbmFibGVkGB8gASgIEiAKGHNr",
-          "aWxsX2Jhbl9zbG90c19wZXJfdGVhbRggIAEoDSI9ChdUb3VybmFtZW50UnVs",
-          "ZVRhYmxlRGF0YRIiCgRkYXRhGAEgAygLMhQuVG91cm5hbWVudFJ1bGVUYWJs",
-          "ZUJFCg5jb20uZ2FtZS50YWJsZUIdVG91cm5hbWVudFJ1bGVUYWJsZU91dGVy",
-          "Q2xhc3NQAVoSZ2VuZXJhdGVkL3BiL3RhYmxlYgZwcm90bzM="));
+          "cHVibGljX2tub2Nrb3V0X3JlcGxheRgXIAEoCBIbChN3YXJtdXBfc3Bhcl9l",
+          "bmFibGVkGBsgASgIEhoKEnByZWRpY3Rpb25fZW5hYmxlZBgcIAEoCBIiChpw",
+          "cmVkaWN0aW9uX3Jld2FyZF9taW5faGl0cxgdIAEoDRIhChl0aGlyZF9wbGFj",
+          "ZV9tYXRjaF9lbmFibGVkGB4gASgIEhsKE2xleWxpbmVfYmFuX2VuYWJsZWQY",
+          "HyABKAgSIAoYc2tpbGxfYmFuX3Nsb3RzX3Blcl90ZWFtGCAgASgNIj0KF1Rv",
+          "dXJuYW1lbnRSdWxlVGFibGVEYXRhEiIKBGRhdGEYASADKAsyFC5Ub3VybmFt",
+          "ZW50UnVsZVRhYmxlQkUKDmNvbS5nYW1lLnRhYmxlQh1Ub3VybmFtZW50UnVs",
+          "ZVRhYmxlT3V0ZXJDbGFzc1ABWhJnZW5lcmF0ZWQvcGIvdGFibGViBnByb3Rv",
+          "Mw=="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::TournamentRuleTable), global::TournamentRuleTable.Parser, new[]{ "Id", "RuleVersion", "Enabled", "BattleConfigId", "BattleTeamSize", "RosterMaxSize", "MinLevel", "RegistrationDays", "QualifierDays", "KnockoutDays", "SettleDisplayDays", "QualifierMaxMatches", "ParticipationMinMatches", "KnockoutMaxTeams", "KnockoutRoundTimeoutSeconds", "QualifierWinPoints", "QualifierDrawPoints", "QualifierLossPoints", "InviteTtlSeconds", "Desc", "Bo3Top4Enabled", "IntermissionSeconds", "PublicKnockoutReplay", "SaluteGoldAmount", "SaluteItemId", "SaluteItemCount", "WarmupSparEnabled", "PredictionEnabled", "PredictionRewardMinHits", "ThirdPlaceMatchEnabled", "LeylineBanEnabled", "SkillBanSlotsPerTeam" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::TournamentRuleTable), global::TournamentRuleTable.Parser, new[]{ "Id", "RuleVersion", "Enabled", "BattleConfigId", "BattleTeamSize", "RosterMaxSize", "MinLevel", "RegistrationDays", "QualifierDays", "KnockoutDays", "SettleDisplayDays", "QualifierMaxMatches", "ParticipationMinMatches", "KnockoutMaxTeams", "KnockoutRoundTimeoutSeconds", "QualifierWinPoints", "QualifierDrawPoints", "QualifierLossPoints", "InviteTtlSeconds", "Desc", "Bo3Top4Enabled", "IntermissionSeconds", "PublicKnockoutReplay", "WarmupSparEnabled", "PredictionEnabled", "PredictionRewardMinHits", "ThirdPlaceMatchEnabled", "LeylineBanEnabled", "SkillBanSlotsPerTeam" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::TournamentRuleTableData), global::TournamentRuleTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -115,9 +114,6 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
     bo3Top4Enabled_ = other.bo3Top4Enabled_;
     intermissionSeconds_ = other.intermissionSeconds_;
     publicKnockoutReplay_ = other.publicKnockoutReplay_;
-    saluteGoldAmount_ = other.saluteGoldAmount_;
-    saluteItemId_ = other.saluteItemId_;
-    saluteItemCount_ = other.saluteItemCount_;
     warmupSparEnabled_ = other.warmupSparEnabled_;
     predictionEnabled_ = other.predictionEnabled_;
     predictionRewardMinHits_ = other.predictionRewardMinHits_;
@@ -409,42 +405,6 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
     }
   }
 
-  /// <summary>Field number for the "salute_gold_amount" field.</summary>
-  public const int SaluteGoldAmountFieldNumber = 24;
-  private uint saluteGoldAmount_;
-  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public uint SaluteGoldAmount {
-    get { return saluteGoldAmount_; }
-    set {
-      saluteGoldAmount_ = value;
-    }
-  }
-
-  /// <summary>Field number for the "salute_item_id" field.</summary>
-  public const int SaluteItemIdFieldNumber = 25;
-  private uint saluteItemId_;
-  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public uint SaluteItemId {
-    get { return saluteItemId_; }
-    set {
-      saluteItemId_ = value;
-    }
-  }
-
-  /// <summary>Field number for the "salute_item_count" field.</summary>
-  public const int SaluteItemCountFieldNumber = 26;
-  private uint saluteItemCount_;
-  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-  public uint SaluteItemCount {
-    get { return saluteItemCount_; }
-    set {
-      saluteItemCount_ = value;
-    }
-  }
-
   /// <summary>Field number for the "warmup_spar_enabled" field.</summary>
   public const int WarmupSparEnabledFieldNumber = 27;
   private bool warmupSparEnabled_;
@@ -555,9 +515,6 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
     if (Bo3Top4Enabled != other.Bo3Top4Enabled) return false;
     if (IntermissionSeconds != other.IntermissionSeconds) return false;
     if (PublicKnockoutReplay != other.PublicKnockoutReplay) return false;
-    if (SaluteGoldAmount != other.SaluteGoldAmount) return false;
-    if (SaluteItemId != other.SaluteItemId) return false;
-    if (SaluteItemCount != other.SaluteItemCount) return false;
     if (WarmupSparEnabled != other.WarmupSparEnabled) return false;
     if (PredictionEnabled != other.PredictionEnabled) return false;
     if (PredictionRewardMinHits != other.PredictionRewardMinHits) return false;
@@ -594,9 +551,6 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
     if (Bo3Top4Enabled != false) hash ^= Bo3Top4Enabled.GetHashCode();
     if (IntermissionSeconds != 0) hash ^= IntermissionSeconds.GetHashCode();
     if (PublicKnockoutReplay != false) hash ^= PublicKnockoutReplay.GetHashCode();
-    if (SaluteGoldAmount != 0) hash ^= SaluteGoldAmount.GetHashCode();
-    if (SaluteItemId != 0) hash ^= SaluteItemId.GetHashCode();
-    if (SaluteItemCount != 0) hash ^= SaluteItemCount.GetHashCode();
     if (WarmupSparEnabled != false) hash ^= WarmupSparEnabled.GetHashCode();
     if (PredictionEnabled != false) hash ^= PredictionEnabled.GetHashCode();
     if (PredictionRewardMinHits != 0) hash ^= PredictionRewardMinHits.GetHashCode();
@@ -712,18 +666,6 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
     if (PublicKnockoutReplay != false) {
       output.WriteRawTag(184, 1);
       output.WriteBool(PublicKnockoutReplay);
-    }
-    if (SaluteGoldAmount != 0) {
-      output.WriteRawTag(192, 1);
-      output.WriteUInt32(SaluteGoldAmount);
-    }
-    if (SaluteItemId != 0) {
-      output.WriteRawTag(200, 1);
-      output.WriteUInt32(SaluteItemId);
-    }
-    if (SaluteItemCount != 0) {
-      output.WriteRawTag(208, 1);
-      output.WriteUInt32(SaluteItemCount);
     }
     if (WarmupSparEnabled != false) {
       output.WriteRawTag(216, 1);
@@ -851,18 +793,6 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
       output.WriteRawTag(184, 1);
       output.WriteBool(PublicKnockoutReplay);
     }
-    if (SaluteGoldAmount != 0) {
-      output.WriteRawTag(192, 1);
-      output.WriteUInt32(SaluteGoldAmount);
-    }
-    if (SaluteItemId != 0) {
-      output.WriteRawTag(200, 1);
-      output.WriteUInt32(SaluteItemId);
-    }
-    if (SaluteItemCount != 0) {
-      output.WriteRawTag(208, 1);
-      output.WriteUInt32(SaluteItemCount);
-    }
     if (WarmupSparEnabled != false) {
       output.WriteRawTag(216, 1);
       output.WriteBool(WarmupSparEnabled);
@@ -966,15 +896,6 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
     if (PublicKnockoutReplay != false) {
       size += 2 + 1;
     }
-    if (SaluteGoldAmount != 0) {
-      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(SaluteGoldAmount);
-    }
-    if (SaluteItemId != 0) {
-      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(SaluteItemId);
-    }
-    if (SaluteItemCount != 0) {
-      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(SaluteItemCount);
-    }
     if (WarmupSparEnabled != false) {
       size += 2 + 1;
     }
@@ -1073,15 +994,6 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
     }
     if (other.PublicKnockoutReplay != false) {
       PublicKnockoutReplay = other.PublicKnockoutReplay;
-    }
-    if (other.SaluteGoldAmount != 0) {
-      SaluteGoldAmount = other.SaluteGoldAmount;
-    }
-    if (other.SaluteItemId != 0) {
-      SaluteItemId = other.SaluteItemId;
-    }
-    if (other.SaluteItemCount != 0) {
-      SaluteItemCount = other.SaluteItemCount;
     }
     if (other.WarmupSparEnabled != false) {
       WarmupSparEnabled = other.WarmupSparEnabled;
@@ -1210,18 +1122,6 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
         }
         case 184: {
           PublicKnockoutReplay = input.ReadBool();
-          break;
-        }
-        case 192: {
-          SaluteGoldAmount = input.ReadUInt32();
-          break;
-        }
-        case 200: {
-          SaluteItemId = input.ReadUInt32();
-          break;
-        }
-        case 208: {
-          SaluteItemCount = input.ReadUInt32();
           break;
         }
         case 216: {
@@ -1357,18 +1257,6 @@ public sealed partial class TournamentRuleTable : pb::IMessage<TournamentRuleTab
         }
         case 184: {
           PublicKnockoutReplay = input.ReadBool();
-          break;
-        }
-        case 192: {
-          SaluteGoldAmount = input.ReadUInt32();
-          break;
-        }
-        case 200: {
-          SaluteItemId = input.ReadUInt32();
-          break;
-        }
-        case 208: {
-          SaluteItemCount = input.ReadUInt32();
           break;
         }
         case 216: {

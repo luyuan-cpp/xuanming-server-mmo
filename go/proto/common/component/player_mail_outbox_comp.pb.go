@@ -74,23 +74,78 @@ func (x *MailOutboxItem) GetCount() uint64 {
 	return 0
 }
 
-// 一封待寄的邮件。
-type MailOutboxEntry struct {
+// 一种货币的数量（供跨节点/离线名匠代打分成等经邮件 asset_op 异步入账）。
+type MailOutboxCurrency struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	RequestId     uint64                 `protobuf:"varint,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"` // 邮件的幂等键(sender_kind = battle);发号器的流水号(txlog 段),全服唯一
-	Source        uint32                 `protobuf:"varint,2,opt,name=source,proto3" json:"source,omitempty"`                        // MailOutboxSource(mail_outbox_rules.h):1 = 战斗结算两包都放不下
-	SourceId      uint64                 `protobuf:"varint,3,opt,name=source_id,json=sourceId,proto3" json:"source_id,omitempty"`    // 来源的号:战斗结算 = battle_id(只进日志与对账)
-	Title         string                 `protobuf:"bytes,4,opt,name=title,proto3" json:"title,omitempty"`
-	Body          string                 `protobuf:"bytes,5,opt,name=body,proto3" json:"body,omitempty"`
-	Items         []*MailOutboxItem      `protobuf:"bytes,6,rep,name=items,proto3" json:"items,omitempty"`                                   // 按 config_id 升序、互不重复、count > 0;一封至多 16 种、合计至多 4096 件(邮件附件的上限)
-	CreatedAtMs   uint64                 `protobuf:"varint,7,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"` // 建立时刻(UTC 毫秒),只进日志
+	CurrencyType  uint32                 `protobuf:"varint,1,opt,name=currency_type,json=currencyType,proto3" json:"currency_type,omitempty"` // common.base.CurrencyType，0 = 流通银两(GOLD)
+	Amount        uint64                 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`                                 // > 0
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
+func (x *MailOutboxCurrency) Reset() {
+	*x = MailOutboxCurrency{}
+	mi := &file_proto_common_component_player_mail_outbox_comp_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MailOutboxCurrency) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MailOutboxCurrency) ProtoMessage() {}
+
+func (x *MailOutboxCurrency) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_component_player_mail_outbox_comp_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MailOutboxCurrency.ProtoReflect.Descriptor instead.
+func (*MailOutboxCurrency) Descriptor() ([]byte, []int) {
+	return file_proto_common_component_player_mail_outbox_comp_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *MailOutboxCurrency) GetCurrencyType() uint32 {
+	if x != nil {
+		return x.CurrencyType
+	}
+	return 0
+}
+
+func (x *MailOutboxCurrency) GetAmount() uint64 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
+// 一封待寄的邮件。
+type MailOutboxEntry struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	RequestId         uint64                 `protobuf:"varint,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"` // 邮件的幂等键(sender_kind = battle);发号器的流水号(txlog 段),全服唯一
+	Source            uint32                 `protobuf:"varint,2,opt,name=source,proto3" json:"source,omitempty"`                        // MailOutboxSource(mail_outbox_rules.h):1 = 战斗结算两包都放不下，2 = 名匠代打净分成
+	SourceId          uint64                 `protobuf:"varint,3,opt,name=source_id,json=sourceId,proto3" json:"source_id,omitempty"`    // 来源的号:战斗结算 = battle_id，代打分成 = client_request_id(只进日志与对账)
+	Title             string                 `protobuf:"bytes,4,opt,name=title,proto3" json:"title,omitempty"`
+	Body              string                 `protobuf:"bytes,5,opt,name=body,proto3" json:"body,omitempty"`
+	Items             []*MailOutboxItem      `protobuf:"bytes,6,rep,name=items,proto3" json:"items,omitempty"`                                                     // 按 config_id 升序、互不重复、count > 0;一封至多 16 种、合计至多 4096 件(邮件附件的上限)
+	CreatedAtMs       uint64                 `protobuf:"varint,7,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`                   // 建立时刻(UTC 毫秒),只进日志
+	RecipientPlayerId uint64                 `protobuf:"varint,8,opt,name=recipient_player_id,json=recipientPlayerId,proto3" json:"recipient_player_id,omitempty"` // 收件人 player_id：0 = 本队列所属玩家(兼容旧条目)；> 0 = 指定收件人(如跨节点/离线代打宗师)
+	Currencies        []*MailOutboxCurrency  `protobuf:"bytes,9,rep,name=currencies,proto3" json:"currencies,omitempty"`                                           // 按 currency_type 升序、互不重复、amount > 0;一封至多 4 种(与 mailgrant.Bundle 同限)
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
 func (x *MailOutboxEntry) Reset() {
 	*x = MailOutboxEntry{}
-	mi := &file_proto_common_component_player_mail_outbox_comp_proto_msgTypes[1]
+	mi := &file_proto_common_component_player_mail_outbox_comp_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -102,7 +157,7 @@ func (x *MailOutboxEntry) String() string {
 func (*MailOutboxEntry) ProtoMessage() {}
 
 func (x *MailOutboxEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_component_player_mail_outbox_comp_proto_msgTypes[1]
+	mi := &file_proto_common_component_player_mail_outbox_comp_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -115,7 +170,7 @@ func (x *MailOutboxEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MailOutboxEntry.ProtoReflect.Descriptor instead.
 func (*MailOutboxEntry) Descriptor() ([]byte, []int) {
-	return file_proto_common_component_player_mail_outbox_comp_proto_rawDescGZIP(), []int{1}
+	return file_proto_common_component_player_mail_outbox_comp_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *MailOutboxEntry) GetRequestId() uint64 {
@@ -167,6 +222,20 @@ func (x *MailOutboxEntry) GetCreatedAtMs() uint64 {
 	return 0
 }
 
+func (x *MailOutboxEntry) GetRecipientPlayerId() uint64 {
+	if x != nil {
+		return x.RecipientPlayerId
+	}
+	return 0
+}
+
+func (x *MailOutboxEntry) GetCurrencies() []*MailOutboxCurrency {
+	if x != nil {
+		return x.Currencies
+	}
+	return nil
+}
+
 type PlayerMailOutboxComp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Entries       []*MailOutboxEntry     `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"` // 同时至多 mail_outbox_rules::kMaxEntries 条;正常 0 条
@@ -176,7 +245,7 @@ type PlayerMailOutboxComp struct {
 
 func (x *PlayerMailOutboxComp) Reset() {
 	*x = PlayerMailOutboxComp{}
-	mi := &file_proto_common_component_player_mail_outbox_comp_proto_msgTypes[2]
+	mi := &file_proto_common_component_player_mail_outbox_comp_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -188,7 +257,7 @@ func (x *PlayerMailOutboxComp) String() string {
 func (*PlayerMailOutboxComp) ProtoMessage() {}
 
 func (x *PlayerMailOutboxComp) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_component_player_mail_outbox_comp_proto_msgTypes[2]
+	mi := &file_proto_common_component_player_mail_outbox_comp_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -201,7 +270,7 @@ func (x *PlayerMailOutboxComp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerMailOutboxComp.ProtoReflect.Descriptor instead.
 func (*PlayerMailOutboxComp) Descriptor() ([]byte, []int) {
-	return file_proto_common_component_player_mail_outbox_comp_proto_rawDescGZIP(), []int{2}
+	return file_proto_common_component_player_mail_outbox_comp_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *PlayerMailOutboxComp) GetEntries() []*MailOutboxEntry {
@@ -218,7 +287,10 @@ const file_proto_common_component_player_mail_outbox_comp_proto_rawDesc = "" +
 	"4proto/common/component/player_mail_outbox_comp.proto\"C\n" +
 	"\x0eMailOutboxItem\x12\x1b\n" +
 	"\tconfig_id\x18\x01 \x01(\rR\bconfigId\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x04R\x05count\"\xda\x01\n" +
+	"\x05count\x18\x02 \x01(\x04R\x05count\"Q\n" +
+	"\x12MailOutboxCurrency\x12#\n" +
+	"\rcurrency_type\x18\x01 \x01(\rR\fcurrencyType\x12\x16\n" +
+	"\x06amount\x18\x02 \x01(\x04R\x06amount\"\xbf\x02\n" +
 	"\x0fMailOutboxEntry\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\x04R\trequestId\x12\x16\n" +
@@ -227,7 +299,11 @@ const file_proto_common_component_player_mail_outbox_comp_proto_rawDesc = "" +
 	"\x05title\x18\x04 \x01(\tR\x05title\x12\x12\n" +
 	"\x04body\x18\x05 \x01(\tR\x04body\x12%\n" +
 	"\x05items\x18\x06 \x03(\v2\x0f.MailOutboxItemR\x05items\x12\"\n" +
-	"\rcreated_at_ms\x18\a \x01(\x04R\vcreatedAtMs\"B\n" +
+	"\rcreated_at_ms\x18\a \x01(\x04R\vcreatedAtMs\x12.\n" +
+	"\x13recipient_player_id\x18\b \x01(\x04R\x11recipientPlayerId\x123\n" +
+	"\n" +
+	"currencies\x18\t \x03(\v2\x13.MailOutboxCurrencyR\n" +
+	"currencies\"B\n" +
 	"\x14PlayerMailOutboxComp\x12*\n" +
 	"\aentries\x18\x01 \x03(\v2\x10.MailOutboxEntryR\aentriesB\x18Z\x16proto/common/componentb\x06proto3"
 
@@ -243,20 +319,22 @@ func file_proto_common_component_player_mail_outbox_comp_proto_rawDescGZIP() []b
 	return file_proto_common_component_player_mail_outbox_comp_proto_rawDescData
 }
 
-var file_proto_common_component_player_mail_outbox_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_proto_common_component_player_mail_outbox_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_proto_common_component_player_mail_outbox_comp_proto_goTypes = []any{
 	(*MailOutboxItem)(nil),       // 0: MailOutboxItem
-	(*MailOutboxEntry)(nil),      // 1: MailOutboxEntry
-	(*PlayerMailOutboxComp)(nil), // 2: PlayerMailOutboxComp
+	(*MailOutboxCurrency)(nil),   // 1: MailOutboxCurrency
+	(*MailOutboxEntry)(nil),      // 2: MailOutboxEntry
+	(*PlayerMailOutboxComp)(nil), // 3: PlayerMailOutboxComp
 }
 var file_proto_common_component_player_mail_outbox_comp_proto_depIdxs = []int32{
 	0, // 0: MailOutboxEntry.items:type_name -> MailOutboxItem
-	1, // 1: PlayerMailOutboxComp.entries:type_name -> MailOutboxEntry
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	1, // 1: MailOutboxEntry.currencies:type_name -> MailOutboxCurrency
+	2, // 2: PlayerMailOutboxComp.entries:type_name -> MailOutboxEntry
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_component_player_mail_outbox_comp_proto_init() }
@@ -270,7 +348,7 @@ func file_proto_common_component_player_mail_outbox_comp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_component_player_mail_outbox_comp_proto_rawDesc), len(file_proto_common_component_player_mail_outbox_comp_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -27,11 +27,12 @@ const (
 )
 
 type authoritySpy struct {
-	sends, pulls, retracts, reports int
-	send                            func(context.Context, *chatpb.SendChatRequest) (authority.SendResult, error)
-	pull                            func(context.Context, *chatpb.PullChatHistoryRequest, int) ([]*chatpb.ChatMessage, error)
-	retract                         func(context.Context, uint64, int64, string) (bool, uint32, error)
-	report                          func(context.Context, *chatpb.ReportChatRequest) (uint32, error)
+	sends, pulls, retracts, reports, notices int
+	send                                     func(context.Context, *chatpb.SendChatRequest) (authority.SendResult, error)
+	pull                                     func(context.Context, *chatpb.PullChatHistoryRequest, int) ([]*chatpb.ChatMessage, error)
+	retract                                  func(context.Context, uint64, int64, string) (bool, uint32, error)
+	report                                   func(context.Context, *chatpb.ReportChatRequest) (uint32, error)
+	notice                                   func(context.Context, *chatpb.PublishSystemWorldNoticeRequest) (authority.SendResult, error)
 }
 
 func (s *authoritySpy) Send(ctx context.Context, in *chatpb.SendChatRequest) (authority.SendResult, error) {
@@ -61,6 +62,18 @@ func (s *authoritySpy) ReportMessage(ctx context.Context, in *chatpb.ReportChatR
 		return s.report(ctx, in)
 	}
 	return 0, nil
+}
+func (s *authoritySpy) PublishSystemWorldNotice(ctx context.Context, in *chatpb.PublishSystemWorldNoticeRequest) (authority.SendResult, error) {
+	s.notices++
+	if s.notice != nil {
+		return s.notice(ctx, in)
+	}
+	text, _ := authority.RenderSystemWorldNotice(in)
+	return authority.SendResult{Message: &chatpb.ChatMessage{
+		Channel:    chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD,
+		Content:    text,
+		SendTimeMs: 123456,
+	}}, nil
 }
 func testConfig() config.Config {
 	return config.Config{MaxContentBytes: 512, HistoryDefaultLimit: 20, HistoryMaxLimit: 50}

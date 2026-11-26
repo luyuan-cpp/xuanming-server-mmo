@@ -16,6 +16,7 @@
 #include "player/player_gm_guard.h" // 客户端 GM 指令统一闸门(guild-phase2 §S4 4.34)
 #include "kill_switch/kill_switch.h"  // 热关停:玩家方法按内层真实方法判(docs/design/rpc-kill-switch.md §7)
 #include "battle/system/player_battle.h"
+#include "player/system/player_jianghu.h"
 #include "rpc/player_service_interface.h"
 #include "network/rpc_channel.h"          // IsDispatchableMessageId:消息号越界或注册表空槽都不可派发
 #include "network/rpc_controller.h"
@@ -677,6 +678,7 @@ void SceneHandler::CheckJianghuDuelEligibility(::google::protobuf::RpcController
 	::google::protobuf::Closure* done)
 {
 ///<<< BEGIN WRITING YOUR CODE
+	PlayerJianghuSystem::CheckDuelEligibility(*request, *response);
 ///<<< END WRITING YOUR CODE
 
 }

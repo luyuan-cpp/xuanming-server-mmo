@@ -25,6 +25,8 @@ class PlayerSeasonComp;
 class SaveBattleBuildBookmarkRequest;
 class SaveBattleBuildBookmarkResponse;
 class SeasonSealEffect;
+class SetRetroHonorTargetRequest;
+class SetRetroHonorTargetResponse;
 class StartWuxingTowerRunResponse;
 class WuxingTowerBattleContext;
 
@@ -70,6 +72,9 @@ public:
     static void Catchup(entt::entity player, uint64_t nowMs,
                         const CatchupSeasonSealRequest& request,
                         CatchupSeasonSealResponse& response);
+    static void SetRetroHonorTarget(entt::entity player, uint64_t nowMs,
+                                    const SetRetroHonorTargetRequest& request,
+                                    SetRetroHonorTargetResponse& response);
 
     static void EquipFormation(entt::entity player, uint64_t nowMs,
                                const EquipWuxingFormationRequest& request,

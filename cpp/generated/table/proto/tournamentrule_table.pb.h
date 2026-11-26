@@ -252,9 +252,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TournamentRuleTable final : public 
     kWarmupSparEnabledFieldNumber = 27,
     kInviteTtlSecondsFieldNumber = 19,
     kIntermissionSecondsFieldNumber = 22,
-    kSaluteGoldAmountFieldNumber = 24,
-    kSaluteItemIdFieldNumber = 25,
-    kSaluteItemCountFieldNumber = 26,
     kPredictionRewardMinHitsFieldNumber = 29,
     kPredictionEnabledFieldNumber = 28,
     kThirdPlaceMatchEnabledFieldNumber = 30,
@@ -506,36 +503,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TournamentRuleTable final : public 
   void _internal_set_intermission_seconds(::uint32_t value);
 
   public:
-  // uint32 salute_gold_amount = 24;
-  void clear_salute_gold_amount() ;
-  [[nodiscard]] ::uint32_t salute_gold_amount() const;
-  void set_salute_gold_amount(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_salute_gold_amount() const;
-  void _internal_set_salute_gold_amount(::uint32_t value);
-
-  public:
-  // uint32 salute_item_id = 25;
-  void clear_salute_item_id() ;
-  [[nodiscard]] ::uint32_t salute_item_id() const;
-  void set_salute_item_id(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_salute_item_id() const;
-  void _internal_set_salute_item_id(::uint32_t value);
-
-  public:
-  // uint32 salute_item_count = 26;
-  void clear_salute_item_count() ;
-  [[nodiscard]] ::uint32_t salute_item_count() const;
-  void set_salute_item_count(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_salute_item_count() const;
-  void _internal_set_salute_item_count(::uint32_t value);
-
-  public:
   // uint32 prediction_reward_min_hits = 29;
   void clear_prediction_reward_min_hits() ;
   [[nodiscard]] ::uint32_t prediction_reward_min_hits() const;
@@ -590,8 +557,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TournamentRuleTable final : public 
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 32,
-                          0, 64,
+      ::google::protobuf::internal::TcParseTable<5, 29,
+                          0, 56,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -643,9 +610,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TournamentRuleTable final : public 
     bool warmup_spar_enabled_;
     ::uint32_t invite_ttl_seconds_;
     ::uint32_t intermission_seconds_;
-    ::uint32_t salute_gold_amount_;
-    ::uint32_t salute_item_id_;
-    ::uint32_t salute_item_count_;
     ::uint32_t prediction_reward_min_hits_;
     bool prediction_enabled_;
     bool third_place_match_enabled_;
@@ -1477,78 +1441,6 @@ inline void TournamentRuleTable::_internal_set_public_knockout_replay(bool value
   _impl_.public_knockout_replay_ = value;
 }
 
-// uint32 salute_gold_amount = 24;
-inline void TournamentRuleTable::clear_salute_gold_amount() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.salute_gold_amount_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
-}
-inline ::uint32_t TournamentRuleTable::salute_gold_amount() const {
-  // @@protoc_insertion_point(field_get:TournamentRuleTable.salute_gold_amount)
-  return _internal_salute_gold_amount();
-}
-inline void TournamentRuleTable::set_salute_gold_amount(::uint32_t value) {
-  _internal_set_salute_gold_amount(value);
-  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
-  // @@protoc_insertion_point(field_set:TournamentRuleTable.salute_gold_amount)
-}
-inline ::uint32_t TournamentRuleTable::_internal_salute_gold_amount() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.salute_gold_amount_;
-}
-inline void TournamentRuleTable::_internal_set_salute_gold_amount(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.salute_gold_amount_ = value;
-}
-
-// uint32 salute_item_id = 25;
-inline void TournamentRuleTable::clear_salute_item_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.salute_item_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
-}
-inline ::uint32_t TournamentRuleTable::salute_item_id() const {
-  // @@protoc_insertion_point(field_get:TournamentRuleTable.salute_item_id)
-  return _internal_salute_item_id();
-}
-inline void TournamentRuleTable::set_salute_item_id(::uint32_t value) {
-  _internal_set_salute_item_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
-  // @@protoc_insertion_point(field_set:TournamentRuleTable.salute_item_id)
-}
-inline ::uint32_t TournamentRuleTable::_internal_salute_item_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.salute_item_id_;
-}
-inline void TournamentRuleTable::_internal_set_salute_item_id(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.salute_item_id_ = value;
-}
-
-// uint32 salute_item_count = 26;
-inline void TournamentRuleTable::clear_salute_item_count() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.salute_item_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
-}
-inline ::uint32_t TournamentRuleTable::salute_item_count() const {
-  // @@protoc_insertion_point(field_get:TournamentRuleTable.salute_item_count)
-  return _internal_salute_item_count();
-}
-inline void TournamentRuleTable::set_salute_item_count(::uint32_t value) {
-  _internal_set_salute_item_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
-  // @@protoc_insertion_point(field_set:TournamentRuleTable.salute_item_count)
-}
-inline ::uint32_t TournamentRuleTable::_internal_salute_item_count() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.salute_item_count_;
-}
-inline void TournamentRuleTable::_internal_set_salute_item_count(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.salute_item_count_ = value;
-}
-
 // bool warmup_spar_enabled = 27;
 inline void TournamentRuleTable::clear_warmup_spar_enabled() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
@@ -1577,7 +1469,7 @@ inline void TournamentRuleTable::_internal_set_warmup_spar_enabled(bool value) {
 inline void TournamentRuleTable::clear_prediction_enabled() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.prediction_enabled_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
 }
 inline bool TournamentRuleTable::prediction_enabled() const {
   // @@protoc_insertion_point(field_get:TournamentRuleTable.prediction_enabled)
@@ -1585,7 +1477,7 @@ inline bool TournamentRuleTable::prediction_enabled() const {
 }
 inline void TournamentRuleTable::set_prediction_enabled(bool value) {
   _internal_set_prediction_enabled(value);
-  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
   // @@protoc_insertion_point(field_set:TournamentRuleTable.prediction_enabled)
 }
 inline bool TournamentRuleTable::_internal_prediction_enabled() const {
@@ -1601,7 +1493,7 @@ inline void TournamentRuleTable::_internal_set_prediction_enabled(bool value) {
 inline void TournamentRuleTable::clear_prediction_reward_min_hits() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.prediction_reward_min_hits_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
 }
 inline ::uint32_t TournamentRuleTable::prediction_reward_min_hits() const {
   // @@protoc_insertion_point(field_get:TournamentRuleTable.prediction_reward_min_hits)
@@ -1609,7 +1501,7 @@ inline ::uint32_t TournamentRuleTable::prediction_reward_min_hits() const {
 }
 inline void TournamentRuleTable::set_prediction_reward_min_hits(::uint32_t value) {
   _internal_set_prediction_reward_min_hits(value);
-  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
   // @@protoc_insertion_point(field_set:TournamentRuleTable.prediction_reward_min_hits)
 }
 inline ::uint32_t TournamentRuleTable::_internal_prediction_reward_min_hits() const {
@@ -1625,7 +1517,7 @@ inline void TournamentRuleTable::_internal_set_prediction_reward_min_hits(::uint
 inline void TournamentRuleTable::clear_third_place_match_enabled() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.third_place_match_enabled_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x20000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
 }
 inline bool TournamentRuleTable::third_place_match_enabled() const {
   // @@protoc_insertion_point(field_get:TournamentRuleTable.third_place_match_enabled)
@@ -1633,7 +1525,7 @@ inline bool TournamentRuleTable::third_place_match_enabled() const {
 }
 inline void TournamentRuleTable::set_third_place_match_enabled(bool value) {
   _internal_set_third_place_match_enabled(value);
-  SetHasBit(_impl_._has_bits_[0], 0x20000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
   // @@protoc_insertion_point(field_set:TournamentRuleTable.third_place_match_enabled)
 }
 inline bool TournamentRuleTable::_internal_third_place_match_enabled() const {
@@ -1649,7 +1541,7 @@ inline void TournamentRuleTable::_internal_set_third_place_match_enabled(bool va
 inline void TournamentRuleTable::clear_leyline_ban_enabled() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.leyline_ban_enabled_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x40000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
 }
 inline bool TournamentRuleTable::leyline_ban_enabled() const {
   // @@protoc_insertion_point(field_get:TournamentRuleTable.leyline_ban_enabled)
@@ -1657,7 +1549,7 @@ inline bool TournamentRuleTable::leyline_ban_enabled() const {
 }
 inline void TournamentRuleTable::set_leyline_ban_enabled(bool value) {
   _internal_set_leyline_ban_enabled(value);
-  SetHasBit(_impl_._has_bits_[0], 0x40000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
   // @@protoc_insertion_point(field_set:TournamentRuleTable.leyline_ban_enabled)
 }
 inline bool TournamentRuleTable::_internal_leyline_ban_enabled() const {
@@ -1673,7 +1565,7 @@ inline void TournamentRuleTable::_internal_set_leyline_ban_enabled(bool value) {
 inline void TournamentRuleTable::clear_skill_ban_slots_per_team() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.skill_ban_slots_per_team_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
 }
 inline ::uint32_t TournamentRuleTable::skill_ban_slots_per_team() const {
   // @@protoc_insertion_point(field_get:TournamentRuleTable.skill_ban_slots_per_team)
@@ -1681,7 +1573,7 @@ inline ::uint32_t TournamentRuleTable::skill_ban_slots_per_team() const {
 }
 inline void TournamentRuleTable::set_skill_ban_slots_per_team(::uint32_t value) {
   _internal_set_skill_ban_slots_per_team(value);
-  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
   // @@protoc_insertion_point(field_set:TournamentRuleTable.skill_ban_slots_per_team)
 }
 inline ::uint32_t TournamentRuleTable::_internal_skill_ban_slots_per_team() const {

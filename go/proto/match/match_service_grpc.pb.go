@@ -54,7 +54,6 @@ const (
 	MatchService_StartTournamentMatch_FullMethodName         = "/match.MatchService/StartTournamentMatch"
 	MatchService_CheerTournamentSquad_FullMethodName         = "/match.MatchService/CheerTournamentSquad"
 	MatchService_ClaimTournamentReward_FullMethodName        = "/match.MatchService/ClaimTournamentReward"
-	MatchService_SaluteTournamentChampion_FullMethodName     = "/match.MatchService/SaluteTournamentChampion"
 	MatchService_SendTournamentSpectateCheer_FullMethodName  = "/match.MatchService/SendTournamentSpectateCheer"
 	MatchService_GetTournamentSpectateCheer_FullMethodName   = "/match.MatchService/GetTournamentSpectateCheer"
 	MatchService_UpdateTournamentSquadEmblem_FullMethodName  = "/match.MatchService/UpdateTournamentSquadEmblem"
@@ -70,6 +69,9 @@ const (
 	MatchService_DismissJianghuGrudge_FullMethodName         = "/match.MatchService/DismissJianghuGrudge"
 	MatchService_NotifyJianghuDuelInvite_FullMethodName      = "/match.MatchService/NotifyJianghuDuelInvite"
 	MatchService_NotifyJianghuDuelStatus_FullMethodName      = "/match.MatchService/NotifyJianghuDuelStatus"
+	MatchService_CreateTrialChallengeCard_FullMethodName     = "/match.MatchService/CreateTrialChallengeCard"
+	MatchService_GetTrialChallengeCard_FullMethodName        = "/match.MatchService/GetTrialChallengeCard"
+	MatchService_GetSharedTrialReplay_FullMethodName         = "/match.MatchService/GetSharedTrialReplay"
 )
 
 // MatchServiceClient is the client API for MatchService service.
@@ -138,8 +140,8 @@ type MatchServiceClient interface {
 	StartTournamentMatch(ctx context.Context, in *StartTournamentMatchRequest, opts ...grpc.CallOption) (*StartTournamentMatchResponse, error)
 	CheerTournamentSquad(ctx context.Context, in *CheerTournamentSquadRequest, opts ...grpc.CallOption) (*CheerTournamentSquadResponse, error)
 	ClaimTournamentReward(ctx context.Context, in *ClaimTournamentRewardRequest, opts ...grpc.CallOption) (*ClaimTournamentRewardResponse, error)
-	// ---- 全服赛季战队锦标赛《群仙问道赛》V2(docs/design/season-team-tournament-v2.md):请求只认会话本人 ----
-	SaluteTournamentChampion(ctx context.Context, in *SaluteTournamentChampionRequest, opts ...grpc.CallOption) (*SaluteTournamentChampionResponse, error)
+	// ---- 全服赛季战队锦标赛《群仙问道赛》V2(docs/planning/season-team-tournament-v2.md):请求只认会话本人 ----
+	// 原 506=SaluteTournamentChampion（每日免费观道致敬）已彻底移除，消息号 506 永久保留不复用。
 	SendTournamentSpectateCheer(ctx context.Context, in *SendTournamentSpectateCheerRequest, opts ...grpc.CallOption) (*SendTournamentSpectateCheerResponse, error)
 	GetTournamentSpectateCheer(ctx context.Context, in *GetTournamentSpectateCheerRequest, opts ...grpc.CallOption) (*GetTournamentSpectateCheerResponse, error)
 	// ---- 全服赛季战队锦标赛《群仙问道赛》V3(docs/planning/season-team-tournament-v3.md):请求只认会话本人 ----
@@ -158,6 +160,11 @@ type MatchServiceClient interface {
 	DismissJianghuGrudge(ctx context.Context, in *DismissJianghuGrudgeRequest, opts ...grpc.CallOption) (*DismissJianghuGrudgeResponse, error)
 	NotifyJianghuDuelInvite(ctx context.Context, in *JianghuDuelInviteS2C, opts ...grpc.CallOption) (*base.Empty, error)
 	NotifyJianghuDuelStatus(ctx context.Context, in *JianghuDuelStatusS2C, opts ...grpc.CallOption) (*base.Empty, error)
+	// ---- 五行试炼志 V3：好友约战帖与受控 PVE 录像播放(docs/planning/trial-journal-v3-wild-bosses-vows-replay-share.md) ----
+	// 均为只认会话本人（Create 校验参战者身份；Get 与 GetSharedReplay 凭有效未过期 card_id 放行，不破坏既有 GetBattleReport 隐私边界）。
+	CreateTrialChallengeCard(ctx context.Context, in *CreateTrialChallengeCardRequest, opts ...grpc.CallOption) (*CreateTrialChallengeCardResponse, error)
+	GetTrialChallengeCard(ctx context.Context, in *GetTrialChallengeCardRequest, opts ...grpc.CallOption) (*GetTrialChallengeCardResponse, error)
+	GetSharedTrialReplay(ctx context.Context, in *GetSharedTrialReplayRequest, opts ...grpc.CallOption) (*GetSharedTrialReplayResponse, error)
 }
 
 type matchServiceClient struct {
@@ -498,16 +505,6 @@ func (c *matchServiceClient) ClaimTournamentReward(ctx context.Context, in *Clai
 	return out, nil
 }
 
-func (c *matchServiceClient) SaluteTournamentChampion(ctx context.Context, in *SaluteTournamentChampionRequest, opts ...grpc.CallOption) (*SaluteTournamentChampionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SaluteTournamentChampionResponse)
-	err := c.cc.Invoke(ctx, MatchService_SaluteTournamentChampion_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *matchServiceClient) SendTournamentSpectateCheer(ctx context.Context, in *SendTournamentSpectateCheerRequest, opts ...grpc.CallOption) (*SendTournamentSpectateCheerResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SendTournamentSpectateCheerResponse)
@@ -658,6 +655,36 @@ func (c *matchServiceClient) NotifyJianghuDuelStatus(ctx context.Context, in *Ji
 	return out, nil
 }
 
+func (c *matchServiceClient) CreateTrialChallengeCard(ctx context.Context, in *CreateTrialChallengeCardRequest, opts ...grpc.CallOption) (*CreateTrialChallengeCardResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateTrialChallengeCardResponse)
+	err := c.cc.Invoke(ctx, MatchService_CreateTrialChallengeCard_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) GetTrialChallengeCard(ctx context.Context, in *GetTrialChallengeCardRequest, opts ...grpc.CallOption) (*GetTrialChallengeCardResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetTrialChallengeCardResponse)
+	err := c.cc.Invoke(ctx, MatchService_GetTrialChallengeCard_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) GetSharedTrialReplay(ctx context.Context, in *GetSharedTrialReplayRequest, opts ...grpc.CallOption) (*GetSharedTrialReplayResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSharedTrialReplayResponse)
+	err := c.cc.Invoke(ctx, MatchService_GetSharedTrialReplay_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MatchServiceServer is the server API for MatchService service.
 // All implementations must embed UnimplementedMatchServiceServer
 // for forward compatibility.
@@ -724,8 +751,8 @@ type MatchServiceServer interface {
 	StartTournamentMatch(context.Context, *StartTournamentMatchRequest) (*StartTournamentMatchResponse, error)
 	CheerTournamentSquad(context.Context, *CheerTournamentSquadRequest) (*CheerTournamentSquadResponse, error)
 	ClaimTournamentReward(context.Context, *ClaimTournamentRewardRequest) (*ClaimTournamentRewardResponse, error)
-	// ---- 全服赛季战队锦标赛《群仙问道赛》V2(docs/design/season-team-tournament-v2.md):请求只认会话本人 ----
-	SaluteTournamentChampion(context.Context, *SaluteTournamentChampionRequest) (*SaluteTournamentChampionResponse, error)
+	// ---- 全服赛季战队锦标赛《群仙问道赛》V2(docs/planning/season-team-tournament-v2.md):请求只认会话本人 ----
+	// 原 506=SaluteTournamentChampion（每日免费观道致敬）已彻底移除，消息号 506 永久保留不复用。
 	SendTournamentSpectateCheer(context.Context, *SendTournamentSpectateCheerRequest) (*SendTournamentSpectateCheerResponse, error)
 	GetTournamentSpectateCheer(context.Context, *GetTournamentSpectateCheerRequest) (*GetTournamentSpectateCheerResponse, error)
 	// ---- 全服赛季战队锦标赛《群仙问道赛》V3(docs/planning/season-team-tournament-v3.md):请求只认会话本人 ----
@@ -744,6 +771,11 @@ type MatchServiceServer interface {
 	DismissJianghuGrudge(context.Context, *DismissJianghuGrudgeRequest) (*DismissJianghuGrudgeResponse, error)
 	NotifyJianghuDuelInvite(context.Context, *JianghuDuelInviteS2C) (*base.Empty, error)
 	NotifyJianghuDuelStatus(context.Context, *JianghuDuelStatusS2C) (*base.Empty, error)
+	// ---- 五行试炼志 V3：好友约战帖与受控 PVE 录像播放(docs/planning/trial-journal-v3-wild-bosses-vows-replay-share.md) ----
+	// 均为只认会话本人（Create 校验参战者身份；Get 与 GetSharedReplay 凭有效未过期 card_id 放行，不破坏既有 GetBattleReport 隐私边界）。
+	CreateTrialChallengeCard(context.Context, *CreateTrialChallengeCardRequest) (*CreateTrialChallengeCardResponse, error)
+	GetTrialChallengeCard(context.Context, *GetTrialChallengeCardRequest) (*GetTrialChallengeCardResponse, error)
+	GetSharedTrialReplay(context.Context, *GetSharedTrialReplayRequest) (*GetSharedTrialReplayResponse, error)
 	mustEmbedUnimplementedMatchServiceServer()
 }
 
@@ -853,9 +885,6 @@ func (UnimplementedMatchServiceServer) CheerTournamentSquad(context.Context, *Ch
 func (UnimplementedMatchServiceServer) ClaimTournamentReward(context.Context, *ClaimTournamentRewardRequest) (*ClaimTournamentRewardResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimTournamentReward not implemented")
 }
-func (UnimplementedMatchServiceServer) SaluteTournamentChampion(context.Context, *SaluteTournamentChampionRequest) (*SaluteTournamentChampionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method SaluteTournamentChampion not implemented")
-}
 func (UnimplementedMatchServiceServer) SendTournamentSpectateCheer(context.Context, *SendTournamentSpectateCheerRequest) (*SendTournamentSpectateCheerResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SendTournamentSpectateCheer not implemented")
 }
@@ -900,6 +929,15 @@ func (UnimplementedMatchServiceServer) NotifyJianghuDuelInvite(context.Context, 
 }
 func (UnimplementedMatchServiceServer) NotifyJianghuDuelStatus(context.Context, *JianghuDuelStatusS2C) (*base.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method NotifyJianghuDuelStatus not implemented")
+}
+func (UnimplementedMatchServiceServer) CreateTrialChallengeCard(context.Context, *CreateTrialChallengeCardRequest) (*CreateTrialChallengeCardResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateTrialChallengeCard not implemented")
+}
+func (UnimplementedMatchServiceServer) GetTrialChallengeCard(context.Context, *GetTrialChallengeCardRequest) (*GetTrialChallengeCardResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetTrialChallengeCard not implemented")
+}
+func (UnimplementedMatchServiceServer) GetSharedTrialReplay(context.Context, *GetSharedTrialReplayRequest) (*GetSharedTrialReplayResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSharedTrialReplay not implemented")
 }
 func (UnimplementedMatchServiceServer) mustEmbedUnimplementedMatchServiceServer() {}
 func (UnimplementedMatchServiceServer) testEmbeddedByValue()                      {}
@@ -1516,24 +1554,6 @@ func _MatchService_ClaimTournamentReward_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
-func _MatchService_SaluteTournamentChampion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SaluteTournamentChampionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MatchServiceServer).SaluteTournamentChampion(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: MatchService_SaluteTournamentChampion_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MatchServiceServer).SaluteTournamentChampion(ctx, req.(*SaluteTournamentChampionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _MatchService_SendTournamentSpectateCheer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SendTournamentSpectateCheerRequest)
 	if err := dec(in); err != nil {
@@ -1804,6 +1824,60 @@ func _MatchService_NotifyJianghuDuelStatus_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MatchService_CreateTrialChallengeCard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateTrialChallengeCardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).CreateTrialChallengeCard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_CreateTrialChallengeCard_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).CreateTrialChallengeCard(ctx, req.(*CreateTrialChallengeCardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_GetTrialChallengeCard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTrialChallengeCardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).GetTrialChallengeCard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_GetTrialChallengeCard_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).GetTrialChallengeCard(ctx, req.(*GetTrialChallengeCardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_GetSharedTrialReplay_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSharedTrialReplayRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).GetSharedTrialReplay(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_GetSharedTrialReplay_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).GetSharedTrialReplay(ctx, req.(*GetSharedTrialReplayRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MatchService_ServiceDesc is the grpc.ServiceDesc for MatchService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1944,10 +2018,6 @@ var MatchService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _MatchService_ClaimTournamentReward_Handler,
 		},
 		{
-			MethodName: "SaluteTournamentChampion",
-			Handler:    _MatchService_SaluteTournamentChampion_Handler,
-		},
-		{
 			MethodName: "SendTournamentSpectateCheer",
 			Handler:    _MatchService_SendTournamentSpectateCheer_Handler,
 		},
@@ -2006,6 +2076,18 @@ var MatchService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "NotifyJianghuDuelStatus",
 			Handler:    _MatchService_NotifyJianghuDuelStatus_Handler,
+		},
+		{
+			MethodName: "CreateTrialChallengeCard",
+			Handler:    _MatchService_CreateTrialChallengeCard_Handler,
+		},
+		{
+			MethodName: "GetTrialChallengeCard",
+			Handler:    _MatchService_GetTrialChallengeCard_Handler,
+		},
+		{
+			MethodName: "GetSharedTrialReplay",
+			Handler:    _MatchService_GetSharedTrialReplay_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

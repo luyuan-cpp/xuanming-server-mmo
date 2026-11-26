@@ -105,18 +105,6 @@ type TournamentRulePublic_knockout_replayComp struct {
     Value bool
 }
 
-type TournamentRuleSalute_gold_amountComp struct {
-    Value uint32
-}
-
-type TournamentRuleSalute_item_idComp struct {
-    Value uint32
-}
-
-type TournamentRuleSalute_item_countComp struct {
-    Value uint32
-}
-
 type TournamentRuleWarmup_spar_enabledComp struct {
     Value bool
 }
@@ -236,18 +224,6 @@ func MakeTournamentRuleIntermission_secondsComp(row *pb.TournamentRuleTable) Tou
 
 func MakeTournamentRulePublic_knockout_replayComp(row *pb.TournamentRuleTable) TournamentRulePublic_knockout_replayComp {
     return TournamentRulePublic_knockout_replayComp{Value: row.PublicKnockoutReplay}
-}
-
-func MakeTournamentRuleSalute_gold_amountComp(row *pb.TournamentRuleTable) TournamentRuleSalute_gold_amountComp {
-    return TournamentRuleSalute_gold_amountComp{Value: row.SaluteGoldAmount}
-}
-
-func MakeTournamentRuleSalute_item_idComp(row *pb.TournamentRuleTable) TournamentRuleSalute_item_idComp {
-    return TournamentRuleSalute_item_idComp{Value: row.SaluteItemId}
-}
-
-func MakeTournamentRuleSalute_item_countComp(row *pb.TournamentRuleTable) TournamentRuleSalute_item_countComp {
-    return TournamentRuleSalute_item_countComp{Value: row.SaluteItemCount}
 }
 
 func MakeTournamentRuleWarmup_spar_enabledComp(row *pb.TournamentRuleTable) TournamentRuleWarmup_spar_enabledComp {

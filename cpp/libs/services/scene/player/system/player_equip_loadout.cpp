@@ -323,8 +323,18 @@ void FillUnlockAppliedReply(entt::entity player, const ClientRequestResult &resu
 	}
 }
 
-std::string SkillSchemeDisplayName(uint32_t schemeId)
+std::string SkillSchemeDisplayName(entt::entity player, uint32_t schemeId)
 {
+	if (const auto *skillComp = tlsEcs.actorRegistry.try_get<PlayerSkillListComp>(player); skillComp != nullptr)
+	{
+		for (const auto &scheme : skillComp->loadout_schemes())
+		{
+			if (scheme.scheme_id() == schemeId && !scheme.name().empty())
+			{
+				return scheme.name();
+			}
+		}
+	}
 	switch (schemeId)
 	{
 	case 1u: return "战法方案一";
@@ -333,6 +343,7 @@ std::string SkillSchemeDisplayName(uint32_t schemeId)
 	case 4u: return "战法方案四";
 	case 5u: return "战法方案五";
 	case 6u: return "战法方案六";
+	case 7u: return "战法方案七";
 	default: return "战法方案" + std::to_string(schemeId);
 	}
 }
@@ -448,7 +459,7 @@ uint32_t PlayerEquipLoadoutSystem::BuildSnapshot(entt::entity player, EquipLoado
 	{
 		auto *opt = snapshot.add_skill_schemes();
 		opt->set_scheme_id(sid);
-		opt->set_name(SkillSchemeDisplayName(sid));
+		opt->set_name(SkillSchemeDisplayName(player, sid));
 	}
 	if (const auto *attrComp = tlsEcs.actorRegistry.try_get<PlayerAttributeComp>(player); attrComp != nullptr)
 	{

@@ -15,6 +15,8 @@ class SaveSkillLoadoutRequest;
 class SaveSkillLoadoutResponse;
 class SwitchSkillLoadoutRequest;
 class SwitchSkillLoadoutResponse;
+class RentSkillLoadoutSlotsRequest;
+class RentSkillLoadoutSlotsResponse;
 
 // 角色技能(docs/design/class-skills.md)。PlayerSkillListComp 的唯一写入口。
 //
@@ -77,13 +79,19 @@ public:
 		bool craftUnlockRequired = false, bool unlockedByBook = false, bool equipped = true);
 	static bool IsFreeSkillFor(const SkillTable& row, uint32_t casterMask);
 
-	// 人物战法构筑装配（3 套流派方案，每套 3 被动 + 1 追击 + 1 开场，主动技全量可用，同 exclusive_group 互斥）。
+	// 人物「战法·加点」一体化流派方案（永久免费 2 套 + 轻享卡 +2 套 + 按套按月租用 0..5 套，封顶 7 套；每套含 3 被动 + 1 追击 + 1 开场 + 1:1 四维加点）。
 	static bool IsSkillEquipped(entt::entity player, uint32_t skillTableId);
 	static void SaveLoadout(entt::entity player, const SaveSkillLoadoutRequest& request,
 		SaveSkillLoadoutResponse& response);
 	static void SwitchLoadout(entt::entity player, const SwitchSkillLoadoutRequest& request,
 		SwitchSkillLoadoutResponse& response);
+	static void RentLoadoutSlots(entt::entity player, const RentSkillLoadoutSlotsRequest& request,
+		RentSkillLoadoutSlotsResponse& response);
+	static void RentLoadoutSlotsAt(entt::entity player, const RentSkillLoadoutSlotsRequest& request,
+		uint64_t nowUnixSec, RentSkillLoadoutSlotsResponse& response);
+	static uint32_t BuildSkillBookAt(entt::entity player, uint64_t nowUnixSec, ListSkillsResponse& response);
 	static uint32_t UnlockedLoadoutSchemeCount(entt::entity player);
+	static uint32_t UnlockedLoadoutSchemeCountAt(entt::entity player, uint64_t nowUnixSec);
 	// 供装备流派方案切换联动使用：仅切激活方案与乐观锁版本，不触发属性重算/推面板（由调用方统一做一次）。
 	static bool TrySwitchLinkedLoadout(entt::entity player, uint32_t schemeId, std::string& notice);
 

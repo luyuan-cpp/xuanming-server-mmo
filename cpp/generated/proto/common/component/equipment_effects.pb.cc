@@ -56,11 +56,11 @@ constexpr SeasonSealEffect::ParseTableT_ SeasonSealEffect::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_._has_bits_),
       0, // no _extensions_
-      10, 120,  // max_field_number, fast_idx_mask
+      13, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966272,  // skipmap
+      4294959104,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      10,  // num_field_entries
+      13,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -111,9 +111,18 @@ constexpr SeasonSealEffect::ParseTableT_ SeasonSealEffect::InternalGenerateParse
       {::_pbi::TcParser::FastUS1,
        {82, 0, 0,
         PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.name_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 resonance_skill_id = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealEffect, _impl_.resonance_skill_id_), 10>(),
+       {88, 10, 0,
+        PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.resonance_skill_id_)}},
+      // uint32 resonance_kind = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealEffect, _impl_.resonance_kind_), 11>(),
+       {96, 11, 0,
+        PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.resonance_kind_)}},
+      // uint32 resonance_param = 13;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealEffect, _impl_.resonance_param_), 12>(),
+       {104, 12, 0,
+        PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.resonance_param_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
@@ -139,6 +148,12 @@ constexpr SeasonSealEffect::ParseTableT_ SeasonSealEffect::InternalGenerateParse
       {PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.health_threshold_bps_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string name = 10;
       {PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 resonance_skill_id = 11;
+      {PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.resonance_skill_id_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 resonance_kind = 12;
+      {PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.resonance_kind_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 resonance_param = 13;
+      {PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.resonance_param_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -165,7 +180,10 @@ inline constexpr SeasonSealEffect::Impl_::Impl_(
         per_round_limit_{0u},
         battle_limit_{0u},
         active_rounds_{0u},
-        health_threshold_bps_{0u} {}
+        health_threshold_bps_{0u},
+        resonance_skill_id_{0u},
+        resonance_kind_{0u},
+        resonance_param_{0u} {}
 
 template <typename>
 constexpr SeasonSealEffect::SeasonSealEffect(::_pbi::ConstantInitialized,
@@ -1251,7 +1269,7 @@ const ::uint32_t
         15,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SeasonSealEffect, _impl_._has_bits_),
-        13, // hasbit index offset
+        16, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::SeasonSealEffect, _impl_.season_id_),
         PROTOBUF_FIELD_OFFSET(::SeasonSealEffect, _impl_.seal_id_),
         PROTOBUF_FIELD_OFFSET(::SeasonSealEffect, _impl_.effect_id_),
@@ -1262,6 +1280,9 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::SeasonSealEffect, _impl_.active_rounds_),
         PROTOBUF_FIELD_OFFSET(::SeasonSealEffect, _impl_.health_threshold_bps_),
         PROTOBUF_FIELD_OFFSET(::SeasonSealEffect, _impl_.name_),
+        PROTOBUF_FIELD_OFFSET(::SeasonSealEffect, _impl_.resonance_skill_id_),
+        PROTOBUF_FIELD_OFFSET(::SeasonSealEffect, _impl_.resonance_kind_),
+        PROTOBUF_FIELD_OFFSET(::SeasonSealEffect, _impl_.resonance_param_),
         1,
         2,
         3,
@@ -1272,6 +1293,9 @@ const ::uint32_t
         8,
         9,
         0,
+        10,
+        11,
+        12,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipmentArtifactSource, _impl_._has_bits_),
         12, // hasbit index offset
@@ -1302,7 +1326,7 @@ static const ::_pbi::MigrationSchema
         {14, sizeof(::EquipmentEffects_ManaReductionBpsEntry_DoNotUse)},
         {21, sizeof(::EquipmentEffects)},
         {62, sizeof(::SeasonSealEffect)},
-        {85, sizeof(::EquipmentArtifactSource)},
+        {91, sizeof(::EquipmentArtifactSource)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1339,18 +1363,20 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fequipment_5fef
     "value\030\002 \001(\r:\0028\001\0327\n\025AilmentResistBpsEntry"
     "\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\0327\n\025Mana"
     "ReductionBpsEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030"
-    "\002 \001(\r:\0028\001\"\337\001\n\020SeasonSealEffect\022\021\n\tseason"
+    "\002 \001(\r:\0028\001\"\254\002\n\020SeasonSealEffect\022\021\n\tseason"
     "_id\030\001 \001(\r\022\017\n\007seal_id\030\002 \001(\r\022\021\n\teffect_id\030"
     "\003 \001(\r\022\021\n\tbonus_bps\030\004 \001(\r\022\017\n\007cap_bps\030\005 \001("
     "\r\022\027\n\017per_round_limit\030\006 \001(\r\022\024\n\014battle_lim"
     "it\030\007 \001(\r\022\025\n\ractive_rounds\030\010 \001(\r\022\034\n\024healt"
-    "h_threshold_bps\030\t \001(\r\022\014\n\004name\030\n \001(\t\"\323\001\n\027"
-    "EquipmentArtifactSource\022\017\n\007item_id\030\001 \001(\004"
-    "\022\021\n\teffect_id\030\002 \001(\r\022\021\n\tbonus_bps\030\003 \001(\r\022\017"
-    "\n\007cap_bps\030\004 \001(\r\022\027\n\017per_round_limit\030\005 \001(\r"
-    "\022\024\n\014battle_limit\030\006 \001(\r\022\025\n\ractive_rounds\030"
-    "\007 \001(\r\022\034\n\024health_threshold_bps\030\010 \001(\r\022\014\n\004n"
-    "ame\030\t \001(\tB\022Z\020common/componentb\006proto3"
+    "h_threshold_bps\030\t \001(\r\022\014\n\004name\030\n \001(\t\022\032\n\022r"
+    "esonance_skill_id\030\013 \001(\r\022\026\n\016resonance_kin"
+    "d\030\014 \001(\r\022\027\n\017resonance_param\030\r \001(\r\"\323\001\n\027Equ"
+    "ipmentArtifactSource\022\017\n\007item_id\030\001 \001(\004\022\021\n"
+    "\teffect_id\030\002 \001(\r\022\021\n\tbonus_bps\030\003 \001(\r\022\017\n\007c"
+    "ap_bps\030\004 \001(\r\022\027\n\017per_round_limit\030\005 \001(\r\022\024\n"
+    "\014battle_limit\030\006 \001(\r\022\025\n\ractive_rounds\030\007 \001"
+    "(\r\022\034\n\024health_threshold_bps\030\010 \001(\r\022\014\n\004name"
+    "\030\t \001(\tB\022Z\020common/componentb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto_deps[1] = {
@@ -1360,7 +1386,7 @@ static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fequipment
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto = {
     false,
     false,
-    1437,
+    1514,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto,
     "proto/common/component/equipment_effects.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fequipment_5feffects_2eproto_once,
@@ -2292,9 +2318,9 @@ SeasonSealEffect::SeasonSealEffect(
                offsetof(Impl_, season_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, season_id_),
-           offsetof(Impl_, health_threshold_bps_) -
+           offsetof(Impl_, resonance_param_) -
                offsetof(Impl_, season_id_) +
-               sizeof(Impl_::health_threshold_bps_));
+               sizeof(Impl_::resonance_param_));
 
   // @@protoc_insertion_point(copy_constructor:SeasonSealEffect)
 }
@@ -2309,9 +2335,9 @@ inline void SeasonSealEffect::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) 
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, season_id_),
            0,
-           offsetof(Impl_, health_threshold_bps_) -
+           offsetof(Impl_, resonance_param_) -
                offsetof(Impl_, season_id_) +
-               sizeof(Impl_::health_threshold_bps_));
+               sizeof(Impl_::resonance_param_));
 }
 SeasonSealEffect::~SeasonSealEffect() {
   // @@protoc_insertion_point(destructor:SeasonSealEffect)
@@ -2370,10 +2396,10 @@ PROTOBUF_NOINLINE void SeasonSealEffect::Clear() {
         reinterpret_cast<char*>(&_impl_.battle_limit_) -
         reinterpret_cast<char*>(&_impl_.season_id_)) + sizeof(_impl_.battle_limit_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
     ::memset(&_impl_.active_rounds_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.health_threshold_bps_) -
-        reinterpret_cast<char*>(&_impl_.active_rounds_)) + sizeof(_impl_.health_threshold_bps_));
+        reinterpret_cast<char*>(&_impl_.resonance_param_) -
+        reinterpret_cast<char*>(&_impl_.active_rounds_)) + sizeof(_impl_.resonance_param_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -2489,6 +2515,33 @@ PROTOBUF_NOINLINE void SeasonSealEffect::Clear() {
     }
   }
 
+  // uint32 resonance_skill_id = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_resonance_skill_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          11, this_._internal_resonance_skill_id(), target);
+    }
+  }
+
+  // uint32 resonance_kind = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_resonance_kind() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          12, this_._internal_resonance_kind(), target);
+    }
+  }
+
+  // uint32 resonance_param = 13;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_resonance_param() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          13, this_._internal_resonance_param(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -2572,7 +2625,7 @@ PROTOBUF_NOINLINE void SeasonSealEffect::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
     // uint32 active_rounds = 8;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_active_rounds() != 0) {
@@ -2585,6 +2638,27 @@ PROTOBUF_NOINLINE void SeasonSealEffect::Clear() {
       if (this_._internal_health_threshold_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_health_threshold_bps());
+      }
+    }
+    // uint32 resonance_skill_id = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_resonance_skill_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_resonance_skill_id());
+      }
+    }
+    // uint32 resonance_kind = 12;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_resonance_kind() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_resonance_kind());
+      }
+    }
+    // uint32 resonance_param = 13;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_resonance_param() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_resonance_param());
       }
     }
   }
@@ -2651,7 +2725,7 @@ void SeasonSealEffect::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_active_rounds() != 0) {
         _this->_impl_.active_rounds_ = from._impl_.active_rounds_;
@@ -2660,6 +2734,21 @@ void SeasonSealEffect::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_health_threshold_bps() != 0) {
         _this->_impl_.health_threshold_bps_ = from._impl_.health_threshold_bps_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_resonance_skill_id() != 0) {
+        _this->_impl_.resonance_skill_id_ = from._impl_.resonance_skill_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_resonance_kind() != 0) {
+        _this->_impl_.resonance_kind_ = from._impl_.resonance_kind_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_resonance_param() != 0) {
+        _this->_impl_.resonance_param_ = from._impl_.resonance_param_;
       }
     }
   }
@@ -2684,8 +2773,8 @@ void SeasonSealEffect::InternalSwap(SeasonSealEffect* PROTOBUF_RESTRICT PROTOBUF
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.health_threshold_bps_)
-      + sizeof(SeasonSealEffect::_impl_.health_threshold_bps_)
+      PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.resonance_param_)
+      + sizeof(SeasonSealEffect::_impl_.resonance_param_)
       - PROTOBUF_FIELD_OFFSET(SeasonSealEffect, _impl_.season_id_)>(
           reinterpret_cast<char*>(&_impl_.season_id_),
           reinterpret_cast<char*>(&other->_impl_.season_id_));

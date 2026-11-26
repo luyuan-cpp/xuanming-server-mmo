@@ -1655,42 +1655,10 @@ TEST_F(SeasonBattleTest, BossTrialWeeklyAffixFireAndEarthEffects) {
 }
 
 TEST_F(SeasonBattleTest, SkillSealResonancesAndSettlementContributions) {
-    // 1. 破阵锐印(101) × 破阵裂锋(15001)：击碎护盾返还 30% 耗蓝；未击碎不返蓝；结算回传削盾功劳与共鸣数
+    // 1. 破阵锐印(101) × 破阵裂锋(15001)：先用厚盾测出一次未击碎（不返蓝），再按直伤+10 盾厚精确由锐印击碎（返蓝 180）
     {
         auto& skill = AddModernSkill(seasonrules::kSkillPozhenLiefeng, 1, combatdamage::kPhysicalDamage, 1000.0);
         skill.set_mana_percent(0.06); // max_mana 10000 -> cost 600, 30% refund = 180
-        Player(kHero).set_active_season_id(1);
-        Player(kHero).add_skill_table_ids(seasonrules::kSkillPozhenLiefeng);
-        (*Player(kHero).mutable_skill_ranks())[seasonrules::kSkillPozhenLiefeng] = 1;
-        auto* seal = Player(kHero).mutable_equipment_effects()->mutable_season_seal();
-        seal->set_season_id(1);
-        seal->set_seal_id(seasonrules::kSealPozhenRuiyin);
-        seal->set_effect_id(1);
-        seal->set_bonus_bps(1000);
-        seal->set_per_round_limit(1);
-
-        // 1a. 护盾剩余极薄，锐印额外破盾将其彻底击碎 -> 返蓝 180，共鸣事件 101
-        AddShieldBuff(kEnemy, 96001, 50);
-        TurnBattleEngine shatterEng(data);
-        ASSERT_TRUE(shatterEng.Initialize(request));
-        shatterEng.SubmitAction(kHero, Command(BATTLE_ACTION_SKILL, kEnemy, seasonrules::kSkillPozhenLiefeng));
-        shatterEng.SubmitAction(kEnemy, Command(BATTLE_ACTION_DEFEND));
-        const auto turn = shatterEng.ResolveCurrentRound();
-        uint64_t resonanceRefund = 0;
-        for (const auto& ev : turn.events()) {
-            if (ev.event_type() == BATTLE_EVENT_ARTIFACT &&
-                ev.season_seal_id() == seasonrules::kSealPozhenRuiyin &&
-                ev.artifact_effect_id() == seasonrules::kResonanceEventSharpManaRefund) {
-                resonanceRefund += ev.value();
-            }
-        }
-        // 注：若直伤本身已先破 50 盾，额外破盾为 0；因此用刚好比直伤多 30 点的盾精确由锐印击碎
-        // 下方先测一次厚盾拿到精准直伤再验证击碎边界
-        (void)resonanceRefund;
-    }
-
-    // 1 (精确可控盾厚)：先用厚盾测出一次未击碎（不返蓝），再按直伤+10 盾厚精确由锐印击碎（返蓝 180）
-    {
         auto reqThick = request;
         reqThick.mutable_players(0)->set_active_season_id(1);
         reqThick.mutable_players(0)->add_skill_table_ids(seasonrules::kSkillPozhenLiefeng);
@@ -1701,6 +1669,9 @@ TEST_F(SeasonBattleTest, SkillSealResonancesAndSettlementContributions) {
         seal->set_effect_id(1);
         seal->set_bonus_bps(1000);
         seal->set_per_round_limit(1);
+        seal->set_resonance_skill_id(seasonrules::kSkillPozhenLiefeng);
+        seal->set_resonance_kind(seasonrules::kResonanceSharpManaRefund);
+        seal->set_resonance_param(30);
 
         auto& shieldRow = data->AddBuff(96002);
         shieldRow.Clear();
@@ -1793,6 +1764,9 @@ TEST_F(SeasonBattleTest, SkillSealResonancesAndSettlementContributions) {
         seal->set_effect_id(2);
         seal->set_bonus_bps(1000);
         seal->set_per_round_limit(1);
+        seal->set_resonance_skill_id(seasonrules::kSkillPozhenLinglei);
+        seal->set_resonance_kind(seasonrules::kResonanceBreakExtendDebuff);
+        seal->set_resonance_param(1);
         auto* shieldEntry = reqMystic.mutable_players(1)->add_buffs();
         shieldEntry->set_buff_id(96002);
         shieldEntry->set_buff_table_id(96002);
@@ -1866,6 +1840,9 @@ TEST_F(SeasonBattleTest, SkillSealResonancesAndSettlementContributions) {
         seal->set_cap_bps(300);
         seal->set_active_rounds(2);
         seal->set_battle_limit(1);
+        seal->set_resonance_skill_id(seasonrules::kSkillGuzhenLingzhang);
+        seal->set_resonance_kind(seasonrules::kResonanceGuardShieldBoost);
+        seal->set_resonance_param(10);
 
         TurnBattleEngine eng(data);
         ASSERT_TRUE(eng.Initialize(reqGuard));
@@ -1941,6 +1918,9 @@ TEST_F(SeasonBattleTest, SkillSealResonancesAndSettlementContributions) {
         seal->set_bonus_bps(400); // +400 mana
         seal->set_per_round_limit(1);
         seal->set_battle_limit(3);
+        seal->set_resonance_skill_id(seasonrules::kSkillPozhenXushi);
+        seal->set_resonance_kind(seasonrules::kResonanceDefendManaDiscount);
+        seal->set_resonance_param(50);
 
         TurnBattleEngine eng(data);
         ASSERT_TRUE(eng.Initialize(reqBreath));
@@ -1975,6 +1955,284 @@ TEST_F(SeasonBattleTest, SkillSealResonancesAndSettlementContributions) {
         EXPECT_EQ(settle.final_season_seal_id(), seasonrules::kSealJuxiYuanyin);
         EXPECT_EQ(settle.season_seal_contribution_value(), 650u); // 400 回蓝 + 250 省蓝
         EXPECT_EQ(settle.season_seal_trigger_count(), 1u);
+        EXPECT_EQ(settle.season_seal_resonance_count(), 1u);
+    }
+}
+
+TEST_F(SeasonBattleTest, DataDrivenResonancePrimitivesR5ToR8AndEffect4And5AndRollback) {
+    // 1. 拒绝禁用的控命(3)/控抗(8)赛季印以及超硬帽共鸣参数
+    {
+        auto reqBad3 = request;
+        auto* s3 = reqBad3.mutable_players(0)->mutable_equipment_effects()->mutable_season_seal();
+        s3->set_season_id(2); s3->set_seal_id(299); s3->set_effect_id(3);
+        s3->set_bonus_bps(500); s3->set_per_round_limit(1); s3->set_battle_limit(1);
+        TurnBattleEngine badEng3(data);
+        EXPECT_FALSE(badEng3.Initialize(reqBad3)) << "SeasonSeal must forbid control-hit effect_id=3";
+
+        auto reqBad8 = request;
+        auto* s8 = reqBad8.mutable_players(0)->mutable_equipment_effects()->mutable_season_seal();
+        s8->set_season_id(2); s8->set_seal_id(298); s8->set_effect_id(8);
+        s8->set_bonus_bps(500); s8->set_per_round_limit(1); s8->set_battle_limit(1);
+        TurnBattleEngine badEng8(data);
+        EXPECT_FALSE(badEng8.Initialize(reqBad8)) << "SeasonSeal must forbid control-resist effect_id=8";
+
+        auto reqBadRes = request;
+        auto* sr = reqBadRes.mutable_players(0)->mutable_equipment_effects()->mutable_season_seal();
+        sr->set_season_id(2); sr->set_seal_id(204); sr->set_effect_id(4);
+        sr->set_bonus_bps(1200); sr->set_per_round_limit(1); sr->set_health_threshold_bps(5000);
+        sr->set_resonance_skill_id(15104); sr->set_resonance_kind(5); sr->set_resonance_param(36); // > 35 cap
+        TurnBattleEngine badResEng(data);
+        EXPECT_FALSE(badResEng.Initialize(reqBadRes)) << "Resonance param exceeding hard cap must fail-closed";
+    }
+
+    // 2. effect_id=4(急救增疗) + R5(105 急救返蓝 30%)：S2 玄脉息印(204) × 玄脉归元(15104)
+    {
+        auto& healSkill = data->AddSkill(15104);
+        healSkill.Clear();
+        healSkill.set_id(15104);
+        healSkill.set_battle_model(1);
+        healSkill.set_ability_kind(1);
+        healSkill.set_caster_mask(1);
+        healSkill.set_target_team(2);
+        healSkill.set_max_targets(1);
+        healSkill.set_pet_max_targets(1);
+        healSkill.add_skill_type(1);
+        healSkill.set_season_id(2);
+        healSkill.set_unlock_level(1);
+        healSkill.set_max_rank(10);
+        healSkill.set_mana_percent(0.06); // cost 600, 30% refund = 180
+        healSkill.add_effect(96140);
+        auto& healBuff = data->AddBuff(96140);
+        healBuff.Clear();
+        healBuff.set_id(96140);
+        healBuff.set_battle_op(static_cast<uint32_t>(BattleEffectOp::Heal));
+        healBuff.set_flat_value(1000.0);
+
+        auto reqHeal = request;
+        reqHeal.mutable_players(0)->set_active_season_id(2);
+        reqHeal.mutable_players(0)->mutable_base_attributes()->set_health(4000); // 40% <= 50% threshold
+        reqHeal.mutable_players(0)->mutable_base_attributes()->set_mana(5000);
+        reqHeal.mutable_players(0)->add_skill_table_ids(15104);
+        (*reqHeal.mutable_players(0)->mutable_skill_ranks())[15104] = 1;
+        auto* seal = reqHeal.mutable_players(0)->mutable_equipment_effects()->mutable_season_seal();
+        seal->set_season_id(2);
+        seal->set_seal_id(204);
+        seal->set_effect_id(4);
+        seal->set_bonus_bps(1200);
+        seal->set_per_round_limit(1);
+        seal->set_health_threshold_bps(5000);
+        seal->set_resonance_skill_id(15104);
+        seal->set_resonance_kind(seasonrules::kResonanceEmergencyHealRefund);
+        seal->set_resonance_param(30);
+
+        TurnBattleEngine eng(data);
+        ASSERT_TRUE(eng.Initialize(reqHeal));
+        eng.SubmitAction(kHero, Command(BATTLE_ACTION_SKILL, kHero, 15104));
+        eng.SubmitAction(kEnemy, Command(BATTLE_ACTION_DEFEND));
+        const auto turn = eng.ResolveCurrentRound();
+        EXPECT_EQ(ActorOf(turn.state(), kHero).attributes().health(), 5120u) << "1000 * 1.12 = 1120 heal";
+        EXPECT_EQ(ActorOf(turn.state(), kHero).attributes().mana(), 4580u) << "5000 - 600 + 180 = 4580 mana";
+        uint64_t r5Val = 0;
+        for (const auto& ev : turn.events()) {
+            if (ev.event_type() == BATTLE_EVENT_ARTIFACT && ev.season_seal_id() == 204u &&
+                ev.artifact_effect_id() == seasonrules::kResonanceEventEmergencyHealRefund) {
+                r5Val = ev.value();
+            }
+        }
+        EXPECT_EQ(r5Val, 180u);
+        const auto settle = eng.BuildSettlement(kHero);
+        EXPECT_EQ(settle.season_seal_contribution_value(), 120u);
+        EXPECT_EQ(settle.season_seal_trigger_count(), 1u);
+        EXPECT_EQ(settle.season_seal_resonance_count(), 1u);
+
+        // Emergency rollback: resonance_kind = 0 keeps base effect_id=4 heal boost, disables mana refund
+        reqHeal.mutable_players(0)->mutable_equipment_effects()->mutable_season_seal()->set_resonance_kind(0);
+        TurnBattleEngine rbEng(data);
+        ASSERT_TRUE(rbEng.Initialize(reqHeal));
+        rbEng.SubmitAction(kHero, Command(BATTLE_ACTION_SKILL, kHero, 15104));
+        rbEng.SubmitAction(kEnemy, Command(BATTLE_ACTION_DEFEND));
+        const auto rbTurn = rbEng.ResolveCurrentRound();
+        EXPECT_EQ(ActorOf(rbTurn.state(), kHero).attributes().health(), 5120u);
+        EXPECT_EQ(ActorOf(rbTurn.state(), kHero).attributes().mana(), 4400u);
+        EXPECT_EQ(rbEng.BuildSettlement(kHero).season_seal_resonance_count(), 0u);
+    }
+
+    // 3. effect_id=5(首盾增容) + R6(106 首盾回蓝 250 bps)：S2 玄脉护印(203) × 玄脉灵幕(15103)
+    {
+        auto& shSkill = data->AddSkill(15103);
+        shSkill.Clear();
+        shSkill.set_id(15103);
+        shSkill.set_battle_model(1);
+        shSkill.set_ability_kind(1);
+        shSkill.set_caster_mask(1);
+        shSkill.set_target_team(2);
+        shSkill.set_max_targets(1);
+        shSkill.set_pet_max_targets(1);
+        shSkill.add_skill_type(1);
+        shSkill.set_season_id(2);
+        shSkill.set_unlock_level(1);
+        shSkill.set_max_rank(10);
+        shSkill.set_mana_percent(0.06); // cost 600
+        shSkill.add_effect(96130);
+        auto& shBuff = data->AddBuff(96130);
+        shBuff.Clear();
+        shBuff.set_id(96130);
+        shBuff.set_battle_op(static_cast<uint32_t>(BattleEffectOp::Shield));
+        shBuff.set_duration_rounds(2);
+        shBuff.set_max_layer(1);
+        shBuff.set_refresh_policy(2);
+        shBuff.set_effect_priority(20);
+        shBuff.set_flat_value(1000.0);
+
+        auto reqSh = request;
+        reqSh.mutable_players(0)->set_active_season_id(2);
+        reqSh.mutable_players(0)->mutable_base_attributes()->set_mana(5000);
+        reqSh.mutable_players(0)->add_skill_table_ids(15103);
+        (*reqSh.mutable_players(0)->mutable_skill_ranks())[15103] = 1;
+        auto* seal = reqSh.mutable_players(0)->mutable_equipment_effects()->mutable_season_seal();
+        seal->set_season_id(2);
+        seal->set_seal_id(203);
+        seal->set_effect_id(5);
+        seal->set_bonus_bps(1200);
+        seal->set_per_round_limit(1);
+        seal->set_resonance_skill_id(15103);
+        seal->set_resonance_kind(seasonrules::kResonanceFirstShieldMana);
+        seal->set_resonance_param(250); // 2.5% of 10000 = 250 mana
+
+        TurnBattleEngine eng(data);
+        ASSERT_TRUE(eng.Initialize(reqSh));
+        eng.SubmitAction(kHero, Command(BATTLE_ACTION_SKILL, kHero, 15103));
+        eng.SubmitAction(kEnemy, Command(BATTLE_ACTION_DEFEND));
+        const auto turn = eng.ResolveCurrentRound();
+        EXPECT_EQ(ShieldCapacity(turn.state(), kHero, 96130u), 1120u) << "1000 * 1.12 = 1120 shield";
+        EXPECT_EQ(ActorOf(turn.state(), kHero).attributes().mana(), 4650u) << "5000 - 600 + 250 = 4650 mana";
+        uint64_t r6Val = 0;
+        for (const auto& ev : turn.events()) {
+            if (ev.event_type() == BATTLE_EVENT_ARTIFACT && ev.season_seal_id() == 203u &&
+                ev.artifact_effect_id() == seasonrules::kResonanceEventFirstShieldMana) {
+                r6Val = ev.value();
+            }
+        }
+        EXPECT_EQ(r6Val, 250u);
+        const auto settle = eng.BuildSettlement(kHero);
+        EXPECT_EQ(settle.season_seal_contribution_value(), 120u);
+        EXPECT_EQ(settle.season_seal_trigger_count(), 1u);
+        EXPECT_EQ(settle.season_seal_resonance_count(), 1u);
+    }
+
+    // 4. R7(107 守印次轮增疗 12%)：S5 静水守印(503) × 碧波净尘(15403)
+    {
+        auto& s5Heal = data->AddSkill(15403);
+        s5Heal.Clear();
+        s5Heal.set_id(15403);
+        s5Heal.set_battle_model(1);
+        s5Heal.set_ability_kind(1);
+        s5Heal.set_caster_mask(1);
+        s5Heal.set_target_team(2);
+        s5Heal.set_max_targets(1);
+        s5Heal.set_pet_max_targets(1);
+        s5Heal.add_skill_type(1);
+        s5Heal.set_season_id(5);
+        s5Heal.set_unlock_level(1);
+        s5Heal.set_max_rank(10);
+        s5Heal.add_effect(96140);
+
+        auto reqR7 = request;
+        reqR7.mutable_players(0)->set_active_season_id(5);
+        reqR7.mutable_players(0)->mutable_base_attributes()->set_health(5000);
+        reqR7.mutable_players(0)->add_skill_table_ids(15403);
+        (*reqR7.mutable_players(0)->mutable_skill_ranks())[15403] = 1;
+        auto* seal = reqR7.mutable_players(0)->mutable_equipment_effects()->mutable_season_seal();
+        seal->set_season_id(5);
+        seal->set_seal_id(503);
+        seal->set_effect_id(6);
+        seal->set_bonus_bps(1000);
+        seal->set_cap_bps(300);
+        seal->set_active_rounds(2);
+        seal->set_battle_limit(1);
+        seal->set_resonance_skill_id(15403);
+        seal->set_resonance_kind(seasonrules::kResonanceGuardHealBoost);
+        seal->set_resonance_param(12);
+
+        TurnBattleEngine eng(data);
+        ASSERT_TRUE(eng.Initialize(reqR7));
+        eng.SubmitAction(kHero, Command(BATTLE_ACTION_DEFEND));
+        eng.SubmitAction(kEnemy, Command(BATTLE_ACTION_ATTACK, kHero));
+        const auto r1 = eng.ResolveCurrentRound();
+        const uint64_t hpAfterR1 = ActorOf(r1.state(), kHero).attributes().health();
+        ASSERT_LT(hpAfterR1, 5000u);
+
+        eng.SubmitAction(kHero, Command(BATTLE_ACTION_SKILL, kHero, 15403));
+        eng.SubmitAction(kEnemy, Command(BATTLE_ACTION_DEFEND));
+        const auto r2 = eng.ResolveCurrentRound();
+        EXPECT_EQ(ActorOf(r2.state(), kHero).attributes().health(), hpAfterR1 + 1120u)
+            << "Guard next-round heal resonance should boost 1000 -> 1120";
+        uint64_t r7Val = 0;
+        for (const auto& ev : r2.events()) {
+            if (ev.event_type() == BATTLE_EVENT_ARTIFACT && ev.season_seal_id() == 503u &&
+                ev.artifact_effect_id() == seasonrules::kResonanceEventGuardHealBoost) {
+                r7Val = ev.value();
+            }
+        }
+        EXPECT_EQ(r7Val, 120u);
+        EXPECT_EQ(eng.BuildSettlement(kHero).season_seal_resonance_count(), 1u);
+    }
+
+    // 5. R8(108 聚息次轮增盾 10%)：S4 灵木息印(404) × 苍木灵盖(15304)
+    {
+        auto& s4Sh = data->AddSkill(15304);
+        s4Sh.Clear();
+        s4Sh.set_id(15304);
+        s4Sh.set_battle_model(1);
+        s4Sh.set_ability_kind(1);
+        s4Sh.set_caster_mask(1);
+        s4Sh.set_target_team(2);
+        s4Sh.set_max_targets(1);
+        s4Sh.set_pet_max_targets(1);
+        s4Sh.add_skill_type(1);
+        s4Sh.set_season_id(4);
+        s4Sh.set_unlock_level(1);
+        s4Sh.set_max_rank(10);
+        s4Sh.add_effect(96130);
+
+        auto reqR8 = request;
+        reqR8.mutable_players(0)->set_active_season_id(4);
+        reqR8.mutable_players(0)->mutable_base_attributes()->set_mana(5000);
+        reqR8.mutable_players(0)->add_skill_table_ids(15304);
+        (*reqR8.mutable_players(0)->mutable_skill_ranks())[15304] = 1;
+        auto* seal = reqR8.mutable_players(0)->mutable_equipment_effects()->mutable_season_seal();
+        seal->set_season_id(4);
+        seal->set_seal_id(404);
+        seal->set_effect_id(7);
+        seal->set_bonus_bps(400);
+        seal->set_per_round_limit(1);
+        seal->set_battle_limit(3);
+        seal->set_resonance_skill_id(15304);
+        seal->set_resonance_kind(seasonrules::kResonanceDefendShieldBoost);
+        seal->set_resonance_param(10);
+
+        TurnBattleEngine eng(data);
+        ASSERT_TRUE(eng.Initialize(reqR8));
+        eng.SubmitAction(kHero, Command(BATTLE_ACTION_DEFEND));
+        eng.SubmitAction(kEnemy, Command(BATTLE_ACTION_DEFEND));
+        const auto r1 = eng.ResolveCurrentRound();
+        EXPECT_EQ(ActorOf(r1.state(), kHero).attributes().mana(), 5400u);
+
+        eng.SubmitAction(kHero, Command(BATTLE_ACTION_SKILL, kHero, 15304));
+        eng.SubmitAction(kEnemy, Command(BATTLE_ACTION_DEFEND));
+        const auto r2 = eng.ResolveCurrentRound();
+        EXPECT_EQ(ShieldCapacity(r2.state(), kHero, 96130u), 1100u)
+            << "Defend next-round shield resonance should boost 1000 -> 1100";
+        uint64_t r8Val = 0;
+        for (const auto& ev : r2.events()) {
+            if (ev.event_type() == BATTLE_EVENT_ARTIFACT && ev.season_seal_id() == 404u &&
+                ev.artifact_effect_id() == seasonrules::kResonanceEventDefendShieldBoost) {
+                r8Val = ev.value();
+            }
+        }
+        EXPECT_EQ(r8Val, 100u);
+        const auto settle = eng.BuildSettlement(kHero);
+        EXPECT_EQ(settle.season_seal_contribution_value(), 500u); // 400 mana + 100 extra shield
         EXPECT_EQ(settle.season_seal_resonance_count(), 1u);
     }
 }

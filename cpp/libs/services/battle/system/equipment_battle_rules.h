@@ -38,7 +38,7 @@ uint32_t ManaCategory(const Skill& skill, FindBuff findBuff) {
     return restoreMana ? 0 : 12;
 }
 
-inline uint32_t MaximumSourceBps(uint32_t effect) {
+constexpr uint32_t MaximumSourceBps(uint32_t effect) {
     switch (effect) {
     case 1: case 2: case 5: case 6: return 3200;
     case 3: case 7: case 8: return 800;
@@ -47,6 +47,17 @@ inline uint32_t MaximumSourceBps(uint32_t effect) {
     case 11: case 12: return 1600;
     case 13: return 1200;
     default: return 0;
+    }
+}
+
+// 控辅强化公平受益后的战斗快照硬顶：治疗/护盾（effect 5/6）在 +11 按 50% 强化份额放大至 3584 bps，
+// 障碍命中（effect 11）按 25% 强化份额放大至 1696 bps（且受 AilmentChance 85%/95% 终值硬顶约束）；
+// 速度（effect 4）与其余通道严格保持表上限不变。
+constexpr uint32_t MaximumEffectiveSourceBps(uint32_t effect) {
+    switch (effect) {
+    case 5: case 6: return 3584;
+    case 11: return 1696;
+    default: return MaximumSourceBps(effect);
     }
 }
 

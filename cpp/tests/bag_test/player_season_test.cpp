@@ -649,10 +649,12 @@ TEST_F(PlayerSeasonSystemTest, WeeklyAffixSettlementDeltaS2TemplateAndPermanentZ
     EXPECT_EQ(initResp.state().weekly_affix().affix_id(), activeAffix);
     EXPECT_FALSE(initResp.state().weekly_affix().name().empty());
     EXPECT_GT(initResp.state().weekly_affix().recommended_seal_ids_size(), 0);
-    ASSERT_EQ(initResp.state().honors_size(), 1);
+    ASSERT_EQ(initResp.state().honors_size(), 10);
     EXPECT_EQ(initResp.state().honors(0).season_id(), 1u);
     EXPECT_EQ(initResp.state().honors(0).honor_title_name(), "破阵宗师");
     EXPECT_FALSE(initResp.state().honors(0).unlocked());
+    EXPECT_EQ(initResp.state().retro_honor_target_season_id(), 2u);
+    EXPECT_FALSE(initResp.state().retro_honor_target_explicit());
 
     // 2. 战斗结算增量精确回显 + 跨越 11->12 仅首次触发 honorNewlyUnlocked
     auto& comp = tlsEcs.actorRegistry.get<PlayerSeasonComp>(player);
@@ -679,18 +681,24 @@ TEST_F(PlayerSeasonSystemTest, WeeklyAffixSettlementDeltaS2TemplateAndPermanentZ
     EXPECT_EQ(delta1.progressAfter, 12u);
     EXPECT_EQ(delta1.maxPoints, 12u);
     EXPECT_TRUE(delta1.honorNewlyUnlocked);
+    EXPECT_EQ(delta1.retroHonorSeasonId, 0u);
     comp.Swap(&cand1);
 
-    // 满级后继续打合格局：pointsAdded == 0, honorNewlyUnlocked == false，但仍带回 12/12 供结算页展示
+    // 满级后继续打合格局：当季 pointsAdded == 0，溢出 +1 自动流向首个未解锁往季(S2)追忆
     PlayerSeasonComp cand2;
     bool inc2 = false;
     seasonrules::BattleCreditDelta delta2;
     ASSERT_EQ(PlayerSeasonSystem::PrepareBattleCredit(comp, pveWin, nowMs, cand2, inc2, nullptr, &delta2), kSuccess);
-    EXPECT_FALSE(inc2);
+    EXPECT_TRUE(inc2);
     EXPECT_EQ(delta2.pointsAdded, 0u);
     EXPECT_EQ(delta2.progressAfter, 12u);
     EXPECT_EQ(delta2.maxPoints, 12u);
     EXPECT_FALSE(delta2.honorNewlyUnlocked);
+    EXPECT_EQ(delta2.retroHonorSeasonId, 2u);
+    EXPECT_EQ(delta2.retroHonorPointsAdded, 1u);
+    EXPECT_EQ(delta2.retroHonorProgressAfter, 1u);
+    EXPECT_EQ(delta2.retroHonorMaxPoints, 12u);
+    EXPECT_FALSE(delta2.retroHonorNewlyUnlocked);
 
     // 3. 切到预埋的 S2「玄脉之季」：S2 技能 15101..15104 与印 201..204 自动生效，轻属性归 0，S1 纪念荣誉永久留存
     std::vector<SeasonRuleTable> switchedRules;
@@ -714,7 +722,7 @@ TEST_F(PlayerSeasonSystemTest, WeeklyAffixSettlementDeltaS2TemplateAndPermanentZ
     EXPECT_EQ(s2Resp.state().current_max_health_bps(), 0u);
     EXPECT_EQ(s2Resp.state().seals_size(), 4);
     EXPECT_EQ(s2Resp.state().season_skills_size(), 4);
-    ASSERT_EQ(s2Resp.state().honors_size(), 2);
+    ASSERT_EQ(s2Resp.state().honors_size(), 10);
     EXPECT_EQ(s2Resp.state().honors(0).season_id(), 1u);
     EXPECT_TRUE(s2Resp.state().honors(0).unlocked()) << "S1 满级零数值纪念荣誉跨季永久留存";
     EXPECT_FALSE(s2Resp.state().honors(0).is_current_season());
@@ -722,7 +730,7 @@ TEST_F(PlayerSeasonSystemTest, WeeklyAffixSettlementDeltaS2TemplateAndPermanentZ
     EXPECT_FALSE(s2Resp.state().honors(1).unlocked());
     EXPECT_TRUE(s2Resp.state().honors(1).is_current_season());
 
-    // 4. 休赛期（全部关闭）仍展示历史永久纪念荣誉
+    // 4. 休赛期（全部关闭）仍展示全部十季荣誉墙与已解锁历史永久纪念荣誉
     for (auto& row : switchedRules) {
         row.set_enabled(false);
     }
@@ -730,7 +738,199 @@ TEST_F(PlayerSeasonSystemTest, WeeklyAffixSettlementDeltaS2TemplateAndPermanentZ
     GetSeasonStateResponse offResp;
     ASSERT_EQ(PlayerSeasonSystem::GetState(player, nowMs, offResp), kSuccess);
     EXPECT_FALSE(offResp.state().available());
-    ASSERT_EQ(offResp.state().honors_size(), 1);
+    ASSERT_EQ(offResp.state().honors_size(), 10);
     EXPECT_EQ(offResp.state().honors(0).season_id(), 1u);
     EXPECT_TRUE(offResp.state().honors(0).unlocked());
+}
+
+TEST(SeasonRulesTest, InfiniteCycleResolutionBitmapAndResonanceBounds) {
+    constexpr uint64_t kAnchorMs = 1800000000000ULL;
+    constexpr uint64_t kPeriodMs = 28ULL * seasonrules::kMsPerDay;
+    std::vector<seasonrules::RuleParams> pool;
+    for (uint32_t s = 1; s <= 10; ++s) {
+        auto r = GoodRuleParams();
+        r.seasonId = s;
+        r.startsAtMs = (s == 1u) ? kAnchorMs : 0u;
+        r.endsAtMs = 0u;
+        r.enabled = true;
+        r.defaultSealId = s * 100u + 1u;
+        r.cycleOrder = s;
+        r.cycleDurationDays = 28u;
+        pool.push_back(r);
+    }
+    EXPECT_EQ(seasonrules::ValidateSchedule(pool), nullptr);
+
+    // 未到锚点不开启
+    const auto before = seasonrules::ResolveActiveSeason(pool, kAnchorMs - 1u);
+    EXPECT_FALSE(before.active);
+    EXPECT_FALSE(before.invalidConfig);
+
+    // 跨 22 届（超过 2 轮 10 季）精确轮换
+    for (uint32_t term = 1; term <= 22; ++term) {
+        const uint64_t t = kAnchorMs + static_cast<uint64_t>(term - 1u) * kPeriodMs + 1000ULL;
+        const auto res = seasonrules::ResolveActiveSeason(pool, t);
+        ASSERT_TRUE(res.active);
+        EXPECT_FALSE(res.invalidConfig);
+        EXPECT_EQ(res.seasonTerm, term);
+        EXPECT_EQ(res.seasonId, ((term - 1u) % 10u) + 1u);
+        EXPECT_EQ(res.cycleIndex, ((term - 1u) / 10u) + 1u);
+        EXPECT_EQ(res.cyclePoolSize, 10u);
+        EXPECT_EQ(res.termStartMs, kAnchorMs + static_cast<uint64_t>(term - 1u) * kPeriodMs);
+        EXPECT_EQ(res.termEndMs, res.termStartMs + kPeriodMs);
+    }
+
+    // fail-closed：缺号 / 天数不一致 / 锚点为 0 均拒载
+    auto gapPool = pool;
+    gapPool[9].cycleOrder = 11;
+    EXPECT_NE(seasonrules::ValidateSchedule(gapPool), nullptr);
+    EXPECT_TRUE(seasonrules::ResolveActiveSeason(gapPool, kAnchorMs).invalidConfig);
+
+    auto mismatchDays = pool;
+    mismatchDays[3].cycleDurationDays = 14;
+    EXPECT_NE(seasonrules::ValidateSchedule(mismatchDays), nullptr);
+
+    auto zeroAnchor = pool;
+    zeroAnchor[0].startsAtMs = 0;
+    EXPECT_NE(seasonrules::ValidateSchedule(zeroAnchor), nullptr);
+
+    // 动态位图支持 65+ 季扩容
+    std::vector<uint64_t> words;
+    EXPECT_TRUE(seasonrules::SetHonorBitVec(words, 1));
+    EXPECT_FALSE(seasonrules::SetHonorBitVec(words, 1));
+    EXPECT_TRUE(seasonrules::SetHonorBitVec(words, 64));
+    EXPECT_TRUE(seasonrules::SetHonorBitVec(words, 65));
+    EXPECT_TRUE(seasonrules::SetHonorBitVec(words, 130));
+    EXPECT_EQ(words.size(), 3u);
+    EXPECT_TRUE(seasonrules::IsHonorBitSet(words, 1));
+    EXPECT_TRUE(seasonrules::IsHonorBitSet(words, 64));
+    EXPECT_TRUE(seasonrules::IsHonorBitSet(words, 65));
+    EXPECT_TRUE(seasonrules::IsHonorBitSet(words, 130));
+    EXPECT_FALSE(seasonrules::IsHonorBitSet(words, 2));
+
+    // 赛季印禁控命(3)/控抗(8) 与共鸣硬上限
+    EXPECT_FALSE(seasonrules::ValidSealEffect(1, 101, 3, 500, 0, 1, 1, 0, 0));
+    EXPECT_FALSE(seasonrules::ValidSealEffect(1, 101, 8, 500, 0, 1, 1, 0, 0));
+    EXPECT_TRUE(seasonrules::ValidSealResonance(1, 15001, 1, 40));
+    EXPECT_FALSE(seasonrules::ValidSealResonance(1, 15001, 1, 41));
+    EXPECT_TRUE(seasonrules::ValidSealResonance(4, 15104, 5, 35));
+    EXPECT_FALSE(seasonrules::ValidSealResonance(4, 15104, 5, 36));
+    EXPECT_TRUE(seasonrules::ValidSealResonance(5, 15103, 6, 300));
+    EXPECT_FALSE(seasonrules::ValidSealResonance(5, 15103, 6, 301));
+    EXPECT_TRUE(seasonrules::ValidSealResonance(1, 15001, 0, 999)) << "resonance_kind=0 emergency disable";
+}
+
+TEST_F(PlayerSeasonSystemTest, InfiniteCycleTermResetRetroHonorCatchupAndRpc) {
+    constexpr uint64_t kAnchorMs = 1800000000000ULL;
+    constexpr uint64_t kPeriodMs = 28ULL * seasonrules::kMsPerDay;
+    std::vector<SeasonRuleTable> cycleRules;
+    for (auto row : SeasonRuleTableManager::Instance().FindAll().data()) {
+        row.set_enabled(true);
+        row.set_starts_at_ms(row.id() == 1u ? kAnchorMs : 0u);
+        row.set_ends_at_ms(0u);
+        row.set_cycle_order(row.id());
+        row.set_cycle_duration_days(28u);
+        cycleRules.push_back(std::move(row));
+    }
+    ASSERT_EQ(cycleRules.size(), 10u);
+    SeasonRuleTableManager::Instance().InstallSnapshot(MakeRuleSnapshot(cycleRules));
+    ASSERT_TRUE(PlayerSeasonSystem::ValidateTables());
+
+    // Term 1 (S1): 玩家满 12/12 解锁 S1 永久徽章
+    const uint64_t term1Now = kAnchorMs + 3600000ULL;
+    auto& comp = tlsEcs.actorRegistry.get<PlayerSeasonComp>(player);
+    BattleSettlementData pvpWin;
+    pvpWin.set_battle_id(91001);
+    pvpWin.set_player_id(10001);
+    pvpWin.set_player_team_index(0);
+    pvpWin.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN);
+    pvpWin.set_match_mode(match::MATCH_MODE_1V1);
+    pvpWin.set_competitive_ranked(true);
+    pvpWin.set_participated(true);
+    pvpWin.set_total_rounds(4);
+
+    for (int i = 0; i < 6; ++i) {
+        PlayerSeasonComp cand;
+        bool inc = false;
+        seasonrules::BattleCreditDelta delta;
+        ASSERT_EQ(PlayerSeasonSystem::PrepareBattleCredit(comp, pvpWin, term1Now, cand, inc, nullptr, &delta), kSuccess);
+        ASSERT_TRUE(inc);
+        EXPECT_EQ(delta.pointsAdded, 2u);
+        EXPECT_EQ(delta.honorNewlyUnlocked, i == 5);
+        comp.Swap(&cand);
+    }
+    EXPECT_TRUE(seasonrules::IsHonorBitSet(comp.unlocked_honor_words(), 1u));
+
+    // SetRetroHonorTarget RPC(569): 拒绝已解锁(S1)、拒绝当前活跃季，成功切到 S7(庚金之季)
+    {
+        SetRetroHonorTargetRequest badReq;
+        badReq.set_season_id(1u);
+        SetRetroHonorTargetResponse badResp;
+        PlayerSeasonSystem::SetRetroHonorTarget(player, term1Now, badReq, badResp);
+        EXPECT_EQ(badResp.error_message().id(), static_cast<uint32_t>(kSeasonHonorTargetInvalid));
+
+        SetRetroHonorTargetRequest s7Req;
+        s7Req.set_season_id(7u);
+        SetRetroHonorTargetResponse s7Resp;
+        PlayerSeasonSystem::SetRetroHonorTarget(player, term1Now, s7Req, s7Resp);
+        ASSERT_EQ(s7Resp.error_message().id(), 0u);
+        EXPECT_EQ(s7Resp.state().retro_honor_target_season_id(), 7u);
+        EXPECT_TRUE(s7Resp.state().retro_honor_target_explicit());
+        EXPECT_TRUE(s7Resp.state().honors(6).is_retro_target());
+    }
+
+    // 在满级状态下再打 6 场排位胜(+2*6=12) -> 溢出全部流向 S7，第 6 场永久解锁 S7 徽章并自动顺延回 S2
+    for (int i = 0; i < 6; ++i) {
+        PlayerSeasonComp cand;
+        bool inc = false;
+        seasonrules::BattleCreditDelta delta;
+        ASSERT_EQ(PlayerSeasonSystem::PrepareBattleCredit(comp, pvpWin, term1Now, cand, inc, nullptr, &delta), kSuccess);
+        ASSERT_TRUE(inc);
+        EXPECT_EQ(delta.pointsAdded, 0u);
+        EXPECT_EQ(delta.retroHonorSeasonId, 7u);
+        EXPECT_EQ(delta.retroHonorPointsAdded, 2u);
+        EXPECT_EQ(delta.retroHonorProgressAfter, static_cast<uint32_t>((i + 1) * 2));
+        EXPECT_EQ(delta.retroHonorNewlyUnlocked, i == 5);
+        comp.Swap(&cand);
+    }
+    EXPECT_TRUE(seasonrules::IsHonorBitSet(comp.unlocked_honor_words(), 7u));
+    EXPECT_EQ(comp.retro_honor_progress().count(7u), 0u);
+    EXPECT_EQ(comp.retro_honor_target_season_id(), 0u);
+
+    // 尝试再将已解锁的 S7 设为追忆目标 -> 返回 kSeasonHonorAlreadyUnlocked
+    {
+        SetRetroHonorTargetRequest dupReq;
+        dupReq.set_season_id(7u);
+        SetRetroHonorTargetResponse dupResp;
+        PlayerSeasonSystem::SetRetroHonorTarget(player, term1Now, dupReq, dupResp);
+        EXPECT_EQ(dupResp.error_message().id(), static_cast<uint32_t>(kSeasonHonorAlreadyUnlocked));
+    }
+
+    // 跳转到第 11 届（第 2 轮 S1）：轻进度重置为 0/12，S1 与 S7 永久徽章永不收回
+    const uint64_t term11Now = kAnchorMs + 10ULL * kPeriodMs + 3600000ULL;
+    GetSeasonStateResponse t11Resp;
+    ASSERT_EQ(PlayerSeasonSystem::GetState(player, term11Now, t11Resp), kSuccess);
+    EXPECT_EQ(t11Resp.state().season_id(), 1u);
+    EXPECT_EQ(t11Resp.state().season_term(), 11u);
+    EXPECT_EQ(t11Resp.state().cycle_index(), 2u);
+    EXPECT_EQ(t11Resp.state().cycle_pool_size(), 10u);
+    EXPECT_EQ(t11Resp.state().progress_points(), 0u);
+    EXPECT_EQ(t11Resp.state().current_max_health_bps(), 0u);
+    EXPECT_TRUE(t11Resp.state().honors(0).unlocked()) << "S1 永久徽章跨轮不收回";
+    EXPECT_TRUE(t11Resp.state().honors(6).unlocked()) << "S7 追忆徽章跨轮不收回";
+    EXPECT_EQ(t11Resp.state().retro_honor_target_season_id(), 2u) << "自动顺延首个未解锁往季 S2";
+
+    // 第 11 届灵石追赶补满当届 12 点：绝不溢出至往季追忆
+    ASSERT_EQ(CurrencySystem::AddCurrency(player, kCurrencyDiamond, 500), kSuccess);
+    CatchupSeasonSealRequest catchReq;
+    catchReq.set_client_request_id(880011);
+    catchReq.set_season_id(1u);
+    catchReq.set_points_to_buy(0u);
+    catchReq.set_expected_currency_type(1u);
+    catchReq.set_expected_total_price(120u);
+    CatchupSeasonSealResponse catchResp;
+    PlayerSeasonSystem::Catchup(player, term11Now, catchReq, catchResp);
+    ASSERT_EQ(catchResp.error_message().id(), 0u);
+    EXPECT_EQ(catchResp.added_points(), 12u);
+    EXPECT_EQ(catchResp.state().progress_points(), 12u);
+    EXPECT_EQ(comp.retro_honor_progress().size(), 0u) << "灵石追赶绝不允许给往季追忆加点";
 }

@@ -290,7 +290,13 @@ TEST_F(PlayerSpiritShopTest, FillInfoListsFinalizedShelfAndDualBalances)
 	EXPECT_EQ(1u, info.limit_groups(0).group_id());
 	EXPECT_EQ(300u, info.limit_groups(0).max_weight());
 	EXPECT_EQ(0u, info.limit_groups(0).used_weight());
-	ASSERT_EQ(9, info.goods_size());
+	ASSERT_GE(info.goods_size(), 9);
+	// 常态时间窗(2026-11)下,2027 春节定时礼盒 401/402 必须自动潜伏不下发
+	for (const auto &g : info.goods())
+	{
+		EXPECT_NE(401u, g.goods_id());
+		EXPECT_NE(402u, g.goods_id());
+	}
 
 	// 核对定案单价:101=60, 102=180, 103=300, 201=60, 202=180, 301=100, 302=100, 303=120, 304=180
 	auto priceOf = [&](uint32_t id) -> uint64_t {
@@ -457,9 +463,20 @@ TEST_F(PlayerSpiritShopTest, V2FestivalWindowAutoOpensAndClosesAndLevelGates)
 	::SpiritShopInfo info;
 	::BuySpiritShopGoodsResponse resp;
 
+	auto containsGoods = [](const ::SpiritShopInfo &snapshot, uint32_t id) {
+		for (const auto &g : snapshot.goods())
+		{
+			if (g.goods_id() == id) return true;
+		}
+		return false;
+	};
+
 	// 1. 开售前 1ms:货架自动隐藏 401/402,直接发包回 kSpiritShopNotInSaleWindow(37011)
 	PlayerSpiritShopSystem::FillInfo(player, kSpringStartMs - 1, info);
-	EXPECT_EQ(9, info.goods_size());
+	const int everydayCount = info.goods_size();
+	ASSERT_GE(everydayCount, 9);
+	EXPECT_FALSE(containsGoods(info, 401));
+	EXPECT_FALSE(containsGoods(info, 402));
 
 	// 预构造一份在售期报价单用于测窗口外与等级不足
 	auto req401 = BuildBuyRequestFromShelfAt(player, 401, 1, 7001, kSpringStartMs, 0);
@@ -471,21 +488,24 @@ TEST_F(PlayerSpiritShopTest, V2FestivalWindowAutoOpensAndClosesAndLevelGates)
 	// 2. 开售后但等级 < 10:货架自动过滤 401/402,直接发包回 kSpiritShopLevelNotMet(37012)
 	SetPlayerLevel(player, 9);
 	PlayerSpiritShopSystem::FillInfo(player, kSpringStartMs, info);
-	EXPECT_EQ(9, info.goods_size());
+	EXPECT_EQ(everydayCount, info.goods_size());
+	EXPECT_FALSE(containsGoods(info, 401));
+	EXPECT_FALSE(containsGoods(info, 402));
 	EXPECT_EQ(kSpiritShopLevelNotMet,
 			  PlayerSpiritShopSystem::Buy(player, req401, kSpringStartMs, resp));
 
 	// 缺 LevelComp 严格 fail-closed(隐藏 + 回 kSpiritShopUnavailable,绝不按 1 级放行)
 	tlsEcs.actorRegistry.remove<LevelComp>(player);
 	PlayerSpiritShopSystem::FillInfo(player, kSpringStartMs, info);
-	EXPECT_EQ(9, info.goods_size());
+	EXPECT_EQ(everydayCount, info.goods_size());
+	EXPECT_FALSE(containsGoods(info, 401));
 	EXPECT_EQ(kSpiritShopUnavailable,
 			  PlayerSpiritShopSystem::Buy(player, req401, kSpringStartMs, resp));
 
-	// 3. 升至 10 级且进入活动期:401/402 自动出现在分页 4(共 11 项),并携带原价划线与时间窗
+	// 3. 升至 10 级且进入活动期:401/402 自动出现在分页 4(比常态多 2 项),并携带原价划线与时间窗
 	SetPlayerLevel(player, 10);
 	PlayerSpiritShopSystem::FillInfo(player, kSpringStartMs, info);
-	ASSERT_EQ(11, info.goods_size());
+	ASSERT_EQ(everydayCount + 2, info.goods_size());
 	bool saw401 = false;
 	bool saw402 = false;
 	for (const auto &g : info.goods())
@@ -548,10 +568,12 @@ TEST_F(PlayerSpiritShopTest, V2FestivalWindowAutoOpensAndClosesAndLevelGates)
 	second401.set_client_request_id(7003);
 	EXPECT_EQ(kSpiritShopLimitReached, PlayerSpiritShopSystem::Buy(player, second401, kSpringStartMs, resp));
 
-	// 7. 活动到期(nowMs == kSpringEndMs):货架自动下架回 9 项,新单拒回 37011;
+	// 7. 活动到期(nowMs == kSpringEndMs):货架自动下架回常态数量,新单拒回 37011;
 	//    但旧已成交 client_request_id(7001) 幂等重放仍返回成功且不重复发物!
 	PlayerSpiritShopSystem::FillInfo(player, kSpringEndMs, info);
-	EXPECT_EQ(9, info.goods_size());
+	EXPECT_EQ(everydayCount, info.goods_size());
+	EXPECT_FALSE(containsGoods(info, 401));
+	EXPECT_FALSE(containsGoods(info, 402));
 	auto afterClose = req401;
 	afterClose.set_client_request_id(7004);
 	EXPECT_EQ(kSpiritShopNotInSaleWindow, PlayerSpiritShopSystem::Buy(player, afterClose, kSpringEndMs, resp));

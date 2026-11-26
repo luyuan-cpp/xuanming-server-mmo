@@ -896,6 +896,9 @@ func startTrialResultConsumerWithOwner(c config.Config, guildLogic *logic.GuildL
 	consumerConfig.RelayAdmission = relay
 	resultConf := c.Activity.TrialResult
 	consumer, err := guildkafka.NewTrialResultConsumer(consumerConfig, func(ctx context.Context, ev *kafkapb.BattleResultEvent) error {
+		if ev.GetMatchMode() == uint32(matchpb.MatchMode_MATCH_MODE_JIANGHU_DUEL) {
+			return guildLogic.RecordJianghuDuelResult(ctx, ev)
+		}
 		if ev.GetActivityContext().GetKind() == battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_GUILD_WAR {
 			return guildLogic.SettleGuildWarResult(ctx, ev)
 		}

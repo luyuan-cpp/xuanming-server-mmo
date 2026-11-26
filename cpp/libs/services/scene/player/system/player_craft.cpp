@@ -9,27 +9,35 @@
 #include <string>
 #include <vector>
 
+#include <hiredis/hiredis.h>
 #include <muduo/base/Logging.h>
+#include <muduo/net/EventLoop.h>
 
 #include "battle/system/player_battle.h"
 #include "core/type_define/player_guid_comp.h"
+#include "engine/core/time/system/time.h"
+#include "engine/infra/storage/redis_cluster/redis_slot.h"
+#include "infra/storage/redis_cluster/redis_cluster_client.h"
 #include "modules/bag/bag_service.h"
 #include "modules/bag/comp/player_bags_comp.h"
 #include "modules/currency/comp/player_currency_comp.h"
 #include "modules/currency/constants/currency.h"
 #include "modules/currency/system/currency_system.h"
 #include "modules/gain_block/gain_block_service.h"
+#include "network/node_utils.h"
 #include "player/system/client_request_ledger.h"
 #include "player/system/equip_craft_quality_rules.h"
 #include "player/system/player_attribute.h"
 #include "player/system/player_equipment_v1.h"
 #include "player/system/player_lifecycle.h"
+#include "player/system/player_mail_outbox.h"
 #include "player/system/player_pet.h"
 #include "player/system/player_skill.h"
 #include "proto/common/component/currency_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"
 #include "proto/common/component/player_craft_comp.pb.h"
 #include "proto/common/component/player_skill_comp.pb.h"
+#include "proto/common/component/team_comp.pb.h"
 #include "proto/common/rollback/transaction_log.pb.h"
 #include "proto/scene/player_skill.pb.h"
 #include "table/code/item_table.h"
@@ -42,9 +50,74 @@
 
 namespace {
 constexpr uint64_t kMaxPayableGold = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+constexpr double kProxyDirectoryRefreshIntervalSec = 5.0;
+
+struct PendingProxyReputation {
+    uint32_t orders{0};
+    uint32_t supreme{0};
+    uint32_t rare{0};
+    uint64_t netGold{0};
+    std::string lastBuyer;
+};
+
+struct HotProxyCounters {
+    uint32_t orders24h{0};
+    uint32_t supreme24h{0};
+};
 
 bool gCraftUnlockGateEnabled = false;
 PlayerCraftSystem::CraftRollFn gCraftRollFn = nullptr;
+PlayerCraftSystem::PersistFn gCraftPersistFn = &PlayerLifecycleSystem::SavePlayerForAssetCommit;
+thread_local std::map<uint64_t, CraftProxyStallInfo> tlsProxyStallDirectory;
+thread_local std::map<uint64_t, PendingProxyReputation> tlsPendingProxyReputation;
+thread_local std::map<uint64_t, HotProxyCounters> tlsHotProxyCounters;
+thread_local std::set<uint64_t> tlsDrainingProxyMasters;
+muduo::net::EventLoop* gProxyDirectoryLoop = nullptr;
+muduo::net::TimerId gProxyDirectoryTimerId{};
+bool gProxyDirectoryTimerActive = false;
+
+uint32_t SaturatingAddU32(uint32_t a, uint32_t b) {
+    const uint64_t sum = uint64_t{a} + uint64_t{b};
+    return static_cast<uint32_t>(std::min<uint64_t>(sum, std::numeric_limits<uint32_t>::max()));
+}
+
+uint64_t SaturatingAddU64(uint64_t a, uint64_t b) {
+    if (std::numeric_limits<uint64_t>::max() - a < b) return std::numeric_limits<uint64_t>::max();
+    return a + b;
+}
+
+std::string BuyerDisplayNameOf(entt::entity player, uint64_t playerId) {
+    if (const auto* profile = tlsEcs.actorRegistry.try_get<PlayerProfileComp>(player);
+        profile != nullptr && !profile->name().empty()) {
+        return profile->name();
+    }
+    return "侠士#" + std::to_string(playerId);
+}
+
+bool ShareActiveTeam(entt::entity a, entt::entity b) {
+    if (!tlsEcs.actorRegistry.valid(a) || !tlsEcs.actorRegistry.valid(b)) return false;
+    const auto* ta = tlsEcs.actorRegistry.try_get<TeamId>(a);
+    const auto* tb = tlsEcs.actorRegistry.try_get<TeamId>(b);
+    return ta != nullptr && tb != nullptr && ta->team_id() != 0 && ta->team_id() == tb->team_id();
+}
+
+uint32_t ActiveCraftTitleId(const PlayerCraftComp& craft) {
+    const uint32_t id = craft.equipped_craft_title_id();
+    if (id == 0) return 0;
+    return equipcraft::IsCraftTitleUnlocked(id, craft.forge_mastery_exp(), craft.scroll_mastery_exp(),
+                                            craft.supreme_forged_count(), craft.rare_books_crafted_count(),
+                                            craft.proxy_orders_completed())
+        ? id : 0u;
+}
+
+bool ValidSharedStall(const CraftProxyStallInfo& stall) {
+    if (stall.master_player_id() == 0) return false;
+    const bool forgeOk = stall.forge_mastery_tier() >= equipcraft::kMasteryMaster &&
+        equipcraft::ValidProxyFee(stall.proxy_forge_fee_gold());
+    const bool scrollOk = stall.scroll_mastery_tier() >= equipcraft::kMasteryMaster &&
+        equipcraft::ValidProxyFee(stall.proxy_scroll_fee_gold());
+    return forgeOk || scrollOk;
+}
 
 uint32_t RollBelow(uint32_t bound) {
     if (bound <= 1) return 0;
@@ -111,6 +184,267 @@ uint32_t CheckWritable(entt::entity player) {
     return kSuccess;
 }
 
+bool BuildLocalStallSnapshot(entt::entity entity, uint64_t pid, CraftProxyStallInfo& out) {
+    out.Clear();
+    if (pid == 0 || !tlsEcs.actorRegistry.valid(entity)) return false;
+    const auto* craft = tlsEcs.actorRegistry.try_get<PlayerCraftComp>(entity);
+    if (craft == nullptr || !craft->proxy_stall_open()) return false;
+    const uint32_t forgeTier = equipcraft::MasteryTierForExp(craft->forge_mastery_exp());
+    const uint32_t scrollTier = equipcraft::MasteryTierForExp(craft->scroll_mastery_exp());
+    const bool forgeOk = forgeTier >= equipcraft::kMasteryMaster &&
+        equipcraft::ValidProxyFee(craft->proxy_forge_fee_gold());
+    const bool scrollOk = scrollTier >= equipcraft::kMasteryMaster &&
+        equipcraft::ValidProxyFee(craft->proxy_scroll_fee_gold());
+    if (!forgeOk && !scrollOk) return false;
+    out.set_master_player_id(pid);
+    out.set_master_name(DisplayNameOf(entity, pid));
+    out.set_forge_mastery_tier(forgeTier);
+    out.set_scroll_mastery_tier(scrollTier);
+    out.set_top_quality_rate_bps(equipcraft::ForgeTopQualityRateBps(forgeTier));
+    out.set_scroll_bonus_rate_bps(equipcraft::ScrollBonusFragmentRateBps(scrollTier));
+    out.set_proxy_forge_fee_gold(forgeOk ? craft->proxy_forge_fee_gold() : 0u);
+    out.set_proxy_scroll_fee_gold(scrollOk ? craft->proxy_scroll_fee_gold() : 0u);
+    out.set_proxy_orders_completed(craft->proxy_orders_completed());
+    out.set_supreme_forged_count(craft->supreme_forged_count());
+    out.set_rare_books_crafted_count(craft->rare_books_crafted_count());
+    out.set_master_showcase_tag(
+        craft->master_showcase_tag() <= equipcraft::kMaxMasterShowcaseTag ? craft->master_showcase_tag() : 0u);
+    out.set_equipped_craft_title_id(ActiveCraftTitleId(*craft));
+    out.set_team_free_proxy(craft->team_free_proxy());
+    out.set_viewer_gets_free_proxy(false);
+    return true;
+}
+
+void PublishStallToRedis(uint64_t masterId, const CraftProxyStallInfo& stall) {
+    if (!tlsControlRedis.connected() || masterId == 0) return;
+    const std::string key = PlayerCraftSystem::ProxyStallDirectoryKey(GetZoneId());
+    const std::string field = std::to_string(masterId);
+    const std::string bytes = stall.SerializeAsString();
+    const int ret = tlsControlRedis.command(
+        [](hiredis::Hiredis*, redisReply*) {},
+        "HSET %s %s %b", key.c_str(), field.c_str(), bytes.data(), bytes.size());
+    if (ret != REDIS_OK) {
+        LOG_WARN << "[CraftProxyDir] Failed to publish proxy stall to control Redis: master_id=" << masterId
+                 << " ret=" << ret;
+    }
+}
+
+void RemoveStallFromRedis(uint64_t masterId) {
+    if (!tlsControlRedis.connected() || masterId == 0) return;
+    const std::string key = PlayerCraftSystem::ProxyStallDirectoryKey(GetZoneId());
+    const std::string field = std::to_string(masterId);
+    const int ret = tlsControlRedis.command(
+        [](hiredis::Hiredis*, redisReply*) {},
+        "HDEL %s %s", key.c_str(), field.c_str());
+    if (ret != REDIS_OK) {
+        LOG_WARN << "[CraftProxyDir] Failed to remove proxy stall from control Redis: master_id=" << masterId
+                 << " ret=" << ret;
+    }
+}
+
+void OnProxyDirectoryReply(redisReply* reply) {
+    if (reply == nullptr) return;
+    if (reply->type == REDIS_REPLY_ERROR) {
+        LOG_WARN << "[CraftProxyDir] Redis rejected directory refresh; keeping cached stalls: err="
+                 << (reply->str != nullptr ? reply->str : "");
+        return;
+    }
+    if (reply->type != REDIS_REPLY_ARRAY || (reply->elements % 2) != 0) {
+        LOG_WARN << "[CraftProxyDir] Unexpected directory reply shape; keeping cached stalls: reply_type="
+                 << reply->type;
+        return;
+    }
+    std::map<uint64_t, CraftProxyStallInfo> refreshed;
+    for (std::size_t i = 0; i + 1 < reply->elements; i += 2) {
+        const redisReply* val = reply->element[i + 1];
+        if (val == nullptr || val->type != REDIS_REPLY_STRING || val->str == nullptr ||
+            val->len > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+            continue;
+        }
+        CraftProxyStallInfo parsed;
+        if (!parsed.ParseFromArray(val->str, static_cast<int>(val->len)) || !ValidSharedStall(parsed)) {
+            continue;
+        }
+        parsed.set_viewer_gets_free_proxy(false);
+        refreshed[parsed.master_player_id()] = std::move(parsed);
+    }
+    tlsProxyStallDirectory = std::move(refreshed);
+}
+
+void RedisHIncrByReputation(uint64_t masterId, const char* suffix, int64_t delta) {
+    if (!tlsControlRedis.connected() || masterId == 0 || delta == 0) return;
+    const std::string key = PlayerCraftSystem::ProxyReputationLedgerKey(GetZoneId());
+    const std::string field = std::to_string(masterId) + suffix;
+    const int ret = tlsControlRedis.command(
+        [](hiredis::Hiredis*, redisReply*) {},
+        "HINCRBY %s %s %lld", key.c_str(), field.c_str(), static_cast<long long>(delta));
+    if (ret != REDIS_OK) {
+        LOG_WARN << "[CraftProxyRep] Failed to update control Redis counter: master_id=" << masterId
+                 << " field=" << field << " delta=" << delta << " ret=" << ret;
+    }
+}
+
+void RedisHSetReputationBuyer(uint64_t masterId, const std::string& buyerName) {
+    if (!tlsControlRedis.connected() || masterId == 0 || buyerName.empty()) return;
+    const std::string key = PlayerCraftSystem::ProxyReputationLedgerKey(GetZoneId());
+    const std::string field = std::to_string(masterId) + ":b";
+    const int ret = tlsControlRedis.command(
+        [](hiredis::Hiredis*, redisReply*) {},
+        "HSET %s %s %b", key.c_str(), field.c_str(), buyerName.data(), buyerName.size());
+    if (ret != REDIS_OK) {
+        LOG_WARN << "[CraftProxyRep] Failed to store last buyer in control Redis: master_id=" << masterId
+                 << " ret=" << ret;
+    }
+}
+
+void ApplyReputationToCraftComp(PlayerCraftComp& craft, uint32_t ordersDelta, uint32_t supremeDelta,
+                                uint32_t rareDelta, uint64_t netGoldDelta, const std::string& buyerName) {
+    const uint32_t beforeMask = equipcraft::UnlockedCraftTitleMask(
+        craft.forge_mastery_exp(), craft.scroll_mastery_exp(), craft.supreme_forged_count(),
+        craft.rare_books_crafted_count(), craft.proxy_orders_completed());
+    craft.set_proxy_orders_completed(SaturatingAddU32(craft.proxy_orders_completed(), ordersDelta));
+    craft.set_supreme_forged_count(SaturatingAddU32(craft.supreme_forged_count(), supremeDelta));
+    craft.set_rare_books_crafted_count(SaturatingAddU32(craft.rare_books_crafted_count(), rareDelta));
+    const uint32_t afterMask = equipcraft::UnlockedCraftTitleMask(
+        craft.forge_mastery_exp(), craft.scroll_mastery_exp(), craft.supreme_forged_count(),
+        craft.rare_books_crafted_count(), craft.proxy_orders_completed());
+    const uint32_t newlyUnlocked = equipcraft::NewlyUnlockedCraftTitleMask(beforeMask, afterMask);
+
+    craft.set_unread_proxy_digest_orders(SaturatingAddU32(craft.unread_proxy_digest_orders(), ordersDelta));
+    craft.set_unread_proxy_digest_supreme(SaturatingAddU32(craft.unread_proxy_digest_supreme(), supremeDelta));
+    craft.set_unread_proxy_digest_rare(SaturatingAddU32(craft.unread_proxy_digest_rare(), rareDelta));
+    craft.set_unread_proxy_digest_net_gold(SaturatingAddU64(craft.unread_proxy_digest_net_gold(), netGoldDelta));
+    craft.set_unread_proxy_digest_new_titles_mask(craft.unread_proxy_digest_new_titles_mask() | newlyUnlocked);
+    if (!buyerName.empty()) {
+        craft.set_unread_proxy_digest_last_buyer(buyerName);
+    }
+}
+
+bool ParseReputationField(std::string_view raw, uint64_t& masterId, std::string_view& suffix) {
+    const std::size_t sep = raw.find(':');
+    if (sep == std::string_view::npos || sep == 0 || sep + 1 >= raw.size()) return false;
+    uint64_t parsed = 0;
+    for (std::size_t i = 0; i < sep; ++i) {
+        const char ch = raw[i];
+        if (ch < '0' || ch > '9') return false;
+        const uint64_t digit = static_cast<uint64_t>(ch - '0');
+        if (parsed > (std::numeric_limits<uint64_t>::max() - digit) / 10u) return false;
+        parsed = parsed * 10u + digit;
+    }
+    if (parsed == 0) return false;
+    masterId = parsed;
+    suffix = raw.substr(sep + 1);
+    return true;
+}
+
+int64_t ParseNonNegativeInt64(std::string_view text) {
+    if (text.empty()) return 0;
+    bool neg = false;
+    std::size_t idx = 0;
+    if (text[0] == '-') {
+        neg = true;
+        idx = 1;
+    }
+    if (idx >= text.size()) return 0;
+    int64_t val = 0;
+    for (; idx < text.size(); ++idx) {
+        const char ch = text[idx];
+        if (ch < '0' || ch > '9') return 0;
+        const int64_t digit = ch - '0';
+        if (val > (std::numeric_limits<int64_t>::max() - digit) / 10) {
+            return neg ? 0 : std::numeric_limits<int64_t>::max();
+        }
+        val = val * 10 + digit;
+    }
+    return neg ? 0 : val;
+}
+
+void OnProxyReputationReply(redisReply* reply) {
+    if (reply == nullptr) return;
+    if (reply->type == REDIS_REPLY_ERROR) {
+        LOG_WARN << "[CraftProxyRep] Redis rejected reputation refresh; keeping cached counters: err="
+                 << (reply->str != nullptr ? reply->str : "");
+        return;
+    }
+    if (reply->type != REDIS_REPLY_ARRAY || (reply->elements % 2) != 0) {
+        LOG_WARN << "[CraftProxyRep] Unexpected reputation reply shape; keeping cached counters: reply_type="
+                 << reply->type;
+        return;
+    }
+    std::map<uint64_t, PendingProxyReputation> pending;
+    std::map<uint64_t, HotProxyCounters> hot;
+    for (std::size_t i = 0; i + 1 < reply->elements; i += 2) {
+        const redisReply* keyEl = reply->element[i];
+        const redisReply* valEl = reply->element[i + 1];
+        if (keyEl == nullptr || valEl == nullptr || keyEl->type != REDIS_REPLY_STRING ||
+            valEl->type != REDIS_REPLY_STRING || keyEl->str == nullptr || valEl->str == nullptr) {
+            continue;
+        }
+        uint64_t masterId = 0;
+        std::string_view suffix;
+        if (!ParseReputationField(std::string_view(keyEl->str, keyEl->len), masterId, suffix)) continue;
+        const std::string_view valView(valEl->str, valEl->len);
+        if (suffix == "o") {
+            const int64_t n = ParseNonNegativeInt64(valView);
+            if (n > 0) pending[masterId].orders = static_cast<uint32_t>(std::min<int64_t>(n, std::numeric_limits<uint32_t>::max()));
+        } else if (suffix == "s") {
+            const int64_t n = ParseNonNegativeInt64(valView);
+            if (n > 0) pending[masterId].supreme = static_cast<uint32_t>(std::min<int64_t>(n, std::numeric_limits<uint32_t>::max()));
+        } else if (suffix == "r") {
+            const int64_t n = ParseNonNegativeInt64(valView);
+            if (n > 0) pending[masterId].rare = static_cast<uint32_t>(std::min<int64_t>(n, std::numeric_limits<uint32_t>::max()));
+        } else if (suffix == "g") {
+            const int64_t n = ParseNonNegativeInt64(valView);
+            if (n > 0) pending[masterId].netGold = static_cast<uint64_t>(n);
+        } else if (suffix == "b") {
+            pending[masterId].lastBuyer.assign(valView.data(), valView.size());
+        } else if (suffix == "24o") {
+            const int64_t n = ParseNonNegativeInt64(valView);
+            if (n > 0) hot[masterId].orders24h = static_cast<uint32_t>(std::min<int64_t>(n, std::numeric_limits<uint32_t>::max()));
+        } else if (suffix == "24s") {
+            const int64_t n = ParseNonNegativeInt64(valView);
+            if (n > 0) hot[masterId].supreme24h = static_cast<uint32_t>(std::min<int64_t>(n, std::numeric_limits<uint32_t>::max()));
+        }
+    }
+    for (auto it = pending.begin(); it != pending.end();) {
+        if (it->second.orders == 0 && it->second.supreme == 0 && it->second.rare == 0 && it->second.netGold == 0) {
+            it = pending.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    tlsPendingProxyReputation = std::move(pending);
+    tlsHotProxyCounters = std::move(hot);
+
+    // 同步完成后立即为本节点已在线且有待回账口碑的宗师执行回账。
+    std::vector<entt::entity> toDrain;
+    for (const auto& [masterId, _] : tlsPendingProxyReputation) {
+        const entt::entity e = tlsEcs.GetPlayer(masterId);
+        if (tlsEcs.actorRegistry.valid(e)) toDrain.push_back(e);
+    }
+    for (const entt::entity e : toDrain) {
+        PlayerCraftSystem::DrainPendingProxyReputation(e);
+    }
+}
+
+void RequestProxyDirectoryRefresh() {
+    if (!tlsControlRedis.connected()) return;
+    const std::string key = PlayerCraftSystem::ProxyStallDirectoryKey(GetZoneId());
+    const int ret = tlsControlRedis.command(
+        [](hiredis::Hiredis*, redisReply* reply) { OnProxyDirectoryReply(reply); },
+        "HGETALL %s", key.c_str());
+    if (ret != REDIS_OK) {
+        LOG_WARN << "[CraftProxyDir] Directory refresh command was not sent; keeping cached stalls: ret=" << ret;
+    }
+    const std::string repKey = PlayerCraftSystem::ProxyReputationLedgerKey(GetZoneId());
+    const int repRet = tlsControlRedis.command(
+        [](hiredis::Hiredis*, redisReply* reply) { OnProxyReputationReply(reply); },
+        "HGETALL %s", repKey.c_str());
+    if (repRet != REDIS_OK) {
+        LOG_WARN << "[CraftProxyRep] Reputation refresh command was not sent; keeping cached counters: ret=" << repRet;
+    }
+}
+
 bool CanCreditProxyMaster(entt::entity master, uint64_t netFee) {
     if (netFee == 0) return true;
     if (tlsEcs.actorRegistry.try_get<CurrencyComp>(master) == nullptr ||
@@ -119,6 +453,41 @@ bool CanCreditProxyMaster(entt::entity master, uint64_t netFee) {
                                             static_cast<uint32_t>(kCurrencyGold)) ||
         CurrencySystem::IsCurrencyBlocked(master, kCurrencyGold)) return false;
     return !CurrencySystem::CreditOverflows(master, kCurrencyGold, netFee);
+}
+
+void FillWantedOrderInfo(const SkillBookWantedOrder& order, SkillBookWantedOrderInfo& out) {
+    out.Clear();
+    out.set_order_id(order.order_id());
+    out.set_poster_player_id(order.poster_player_id());
+    out.set_poster_name(order.poster_name());
+    out.set_skill_table_id(order.skill_table_id());
+    if (const auto* skill = SkillRow(order.skill_table_id()); skill != nullptr) {
+        out.set_skill_name(skill->name());
+    }
+    out.set_scroll_id(order.scroll_id());
+    if (const auto* scroll = ScrollRow(order.scroll_id()); scroll != nullptr) {
+        out.set_scroll_name(scroll->name());
+    }
+    out.set_require_master_signature(order.require_master_signature());
+    out.set_reward_gold(order.reward_gold());
+    out.set_seller_net_gold(equipcraft::ProxyNetGold(order.reward_gold()));
+    out.set_created_at_sec(order.created_at_sec());
+}
+
+int FindWantedOrderIndex(const PlayerCraftComp& craft, uint64_t orderId) {
+    for (int i = 0; i < craft.wanted_orders_size(); ++i) {
+        if (craft.wanted_orders(i).order_id() == orderId) return i;
+    }
+    return -1;
+}
+
+void RemoveWantedOrderAt(PlayerCraftComp& craft, int index) {
+    auto* orders = craft.mutable_wanted_orders();
+    if (index < 0 || index >= orders->size()) return;
+    if (index != orders->size() - 1) {
+        orders->SwapElements(index, orders->size() - 1);
+    }
+    orders->RemoveLast();
 }
 
 void FillStateSnapshot(entt::entity player, SkillCraftingStateSnapshot& out) {
@@ -173,6 +542,33 @@ void FillStateSnapshot(entt::entity player, SkillCraftingStateSnapshot& out) {
     out.set_proxy_forge_fee_gold(craft.proxy_forge_fee_gold());
     out.set_proxy_scroll_fee_gold(craft.proxy_scroll_fee_gold());
     out.set_craft_unlock_gate_enabled(PlayerCraftSystem::IsCraftUnlockGateEnabled());
+    out.set_proxy_orders_completed(craft.proxy_orders_completed());
+    out.set_supreme_forged_count(craft.supreme_forged_count());
+    out.set_rare_books_crafted_count(craft.rare_books_crafted_count());
+    out.set_master_showcase_tag(craft.master_showcase_tag());
+    out.set_equipped_craft_title_id(ActiveCraftTitleId(craft));
+    for (const auto tid : equipcraft::UnlockedCraftTitleIds(
+             craft.forge_mastery_exp(), craft.scroll_mastery_exp(), craft.supreme_forged_count(),
+             craft.rare_books_crafted_count(), craft.proxy_orders_completed())) {
+        out.add_unlocked_craft_title_ids(tid);
+    }
+    out.set_team_free_proxy(craft.team_free_proxy());
+    out.set_claimed_scroll_milestone_bits(craft.claimed_scroll_milestone_bits());
+    std::vector<SkillBookWantedOrder> orders(craft.wanted_orders().begin(), craft.wanted_orders().end());
+    std::sort(orders.begin(), orders.end(), [](const auto& a, const auto& b) { return a.order_id() < b.order_id(); });
+    for (const auto& o : orders) {
+        FillWantedOrderInfo(o, *out.add_my_wanted_orders());
+    }
+    if (craft.unread_proxy_digest_orders() > 0 || craft.unread_proxy_digest_net_gold() > 0 ||
+        craft.unread_proxy_digest_new_titles_mask() != 0) {
+        auto* digest = out.mutable_unread_proxy_digest();
+        digest->set_orders_completed(craft.unread_proxy_digest_orders());
+        digest->set_supreme_forged_count(craft.unread_proxy_digest_supreme());
+        digest->set_rare_books_crafted_count(craft.unread_proxy_digest_rare());
+        digest->set_net_gold_earned(craft.unread_proxy_digest_net_gold());
+        digest->set_last_buyer_name(craft.unread_proxy_digest_last_buyer());
+        digest->set_newly_unlocked_title_mask(craft.unread_proxy_digest_new_titles_mask());
+    }
 }
 
 int FindBookIndex(const PlayerCraftComp& craft, uint64_t bookId) {
@@ -316,6 +712,7 @@ uint32_t PlayerCraftSystem::GetState(entt::entity player, GetSkillCraftingStateR
         response.mutable_error_message()->set_id(err);
         return err;
     }
+    DrainPendingProxyReputation(player);
     FillStateSnapshot(player, *response.mutable_state());
     return kSuccess;
 }
@@ -429,34 +826,31 @@ void PlayerCraftSystem::CraftSkillBook(entt::entity player, const CraftSkillBook
         return;
     }
 
-    // 解析可选主城宗师原子代制摊位（零物品移交，只读摊主制卷宗师档位并付净银两手工费）。
+    // 解析跨节点/离线名匠共享代制摊位（零物品移交；买家本地原子制书与署名，95% 净银两走 asset_op 异步入账）。
+    const uint64_t buyerId = tlsEcs.GetPlayerId(player);
     uint64_t proxyMasterId = request.proxy_master_player_id();
     uint64_t proxyFeeGold = 0;
+    uint64_t proxyNetGold = 0;
     std::string proxyMasterName;
     uint32_t effectiveScrollTier = equipcraft::MasteryTierForExp(craft.scroll_mastery_exp());
+    PlayerMailOutboxSystem::PreparedProxyFeeMail preparedProxyMail;
     if (proxyMasterId != 0) {
-        const uint64_t buyerId = tlsEcs.GetPlayerId(player);
-        if (proxyMasterId == buyerId) {
+        CraftProxyStallInfo stall;
+        if (!PlayerCraftSystem::ResolveSharedProxyStall(buyerId, proxyMasterId, false, true, stall)) {
             fail(kEquipProxyMasterUnavailable);
             return;
         }
-        const entt::entity master = tlsEcs.GetPlayer(proxyMasterId);
-        const auto* masterCraft = tlsEcs.actorRegistry.valid(master)
-            ? tlsEcs.actorRegistry.try_get<PlayerCraftComp>(master) : nullptr;
-        if (masterCraft == nullptr || !PlayerLifecycleSystem::IsPlayerMutable(master) ||
-            !masterCraft->proxy_stall_open() ||
-            equipcraft::MasteryTierForExp(masterCraft->scroll_mastery_exp()) < equipcraft::kMasteryMaster ||
-            !equipcraft::ValidProxyFee(masterCraft->proxy_scroll_fee_gold())) {
+        const entt::entity localMaster = tlsEcs.GetPlayer(proxyMasterId);
+        const bool teamFree = stall.team_free_proxy() && ShareActiveTeam(player, localMaster);
+        proxyFeeGold = teamFree ? 0u : stall.proxy_scroll_fee_gold();
+        proxyNetGold = equipcraft::ProxyNetGold(proxyFeeGold);
+        if (proxyNetGold > 0 &&
+            GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kCurrency,
+                                                static_cast<uint32_t>(kCurrencyGold))) {
             fail(kEquipProxyMasterUnavailable);
             return;
         }
-        const uint64_t netFee = equipcraft::ProxyNetGold(masterCraft->proxy_scroll_fee_gold());
-        if (!CanCreditProxyMaster(master, netFee)) {
-            fail(kEquipProxyMasterUnavailable);
-            return;
-        }
-        proxyFeeGold = masterCraft->proxy_scroll_fee_gold();
-        proxyMasterName = DisplayNameOf(master, proxyMasterId);
+        proxyMasterName = equipcraft::FormatMasterSignature(stall.equipped_craft_title_id(), stall.master_name());
         effectiveScrollTier = equipcraft::kMasteryMaster;
     }
 
@@ -479,6 +873,15 @@ void PlayerCraftSystem::CraftSkillBook(entt::entity player, const CraftSkillBook
     if (matVerdict != BagService::RemovalVerdict::kEnough) {
         fail(kFeatureUnavailable);
         return;
+    }
+    if (proxyMasterId != 0 && proxyNetGold > 0) {
+        const auto payoutErr = PlayerMailOutboxSystem::PrepareProxyFeePayout(
+            player, proxyMasterId, proxyNetGold, request.client_request_id(),
+            DisplayNameOf(player, buyerId), preparedProxyMail);
+        if (payoutErr != kSuccess) {
+            fail(payoutErr);
+            return;
+        }
     }
 
     // 巧匠/宗师拓印常规书时按 5%/10% 概率返还 2 张绑定悟道残页（不提高稀世产出）。
@@ -521,20 +924,20 @@ void PlayerCraftSystem::CraftSkillBook(entt::entity player, const CraftSkillBook
                 !CurrencySystem::CanAffordSplitGold(player, strictGold, preferBindGold)) {
                 return kSkillGoldNotEnough;
             }
-            entt::entity proxyMaster = entt::null;
-            uint64_t proxyNetGold = 0;
             if (proxyMasterId != 0) {
-                proxyMaster = tlsEcs.GetPlayer(proxyMasterId);
-                const auto* masterCraft = tlsEcs.actorRegistry.valid(proxyMaster)
-                    ? tlsEcs.actorRegistry.try_get<PlayerCraftComp>(proxyMaster) : nullptr;
-                if (masterCraft == nullptr || !PlayerLifecycleSystem::IsPlayerMutable(proxyMaster) ||
-                    !masterCraft->proxy_stall_open() ||
-                    equipcraft::MasteryTierForExp(masterCraft->scroll_mastery_exp()) < equipcraft::kMasteryMaster ||
-                    masterCraft->proxy_scroll_fee_gold() != proxyFeeGold) {
+                CraftProxyStallInfo liveStall;
+                if (!PlayerCraftSystem::ResolveSharedProxyStall(buyerId, proxyMasterId, false, true, liveStall)) {
                     return kEquipProxyMasterUnavailable;
                 }
-                proxyNetGold = equipcraft::ProxyNetGold(proxyFeeGold);
-                if (!CanCreditProxyMaster(proxyMaster, proxyNetGold)) {
+                const entt::entity localMaster = tlsEcs.GetPlayer(proxyMasterId);
+                const bool liveTeamFree = liveStall.team_free_proxy() && ShareActiveTeam(player, localMaster);
+                const uint64_t liveFee = liveTeamFree ? 0u : liveStall.proxy_scroll_fee_gold();
+                if (liveFee != proxyFeeGold) {
+                    return kEquipProxyMasterUnavailable;
+                }
+                if (proxyNetGold > 0 &&
+                    GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kCurrency,
+                                                        static_cast<uint32_t>(kCurrencyGold))) {
                     return kEquipProxyMasterUnavailable;
                 }
             }
@@ -548,9 +951,11 @@ void PlayerCraftSystem::CraftSkillBook(entt::entity player, const CraftSkillBook
             // 防洗白硬隔离：稀世绝学消耗天工秘墨（或任何绑定材料）产物永久仅自用绑定；常规书按实扣材料绑定性决定。
             newBook.set_bound(mode == CraftSkillBookRequest::TARGETED_RARE ? true : consumedBound);
             if (effectiveScrollTier == equipcraft::kMasteryMaster) {
-                const uint64_t signerId = proxyMasterId != 0 ? proxyMasterId : tlsEcs.GetPlayerId(player);
+                const uint64_t signerId = proxyMasterId != 0 ? proxyMasterId : buyerId;
                 newBook.set_crafter_player_id(signerId);
-                newBook.set_crafter_name(proxyMasterId != 0 ? proxyMasterName : DisplayNameOf(player, signerId));
+                newBook.set_crafter_name(proxyMasterId != 0
+                    ? proxyMasterName
+                    : equipcraft::FormatMasterSignature(ActiveCraftTitleId(craft), DisplayNameOf(player, signerId)));
             }
 
             ClientRequestResult applied;
@@ -570,15 +975,22 @@ void PlayerCraftSystem::CraftSkillBook(entt::entity player, const CraftSkillBook
                     player, strictGold, preferBindGold, TX_SKILL_SCROLL_CRAFT, request.client_request_id());
                 if (deductErr != kSuccess) return kSkillGoldNotEnough;
             }
-            if (proxyMaster != entt::null && proxyNetGold > 0) {
-                (void)CurrencySystem::AddCurrency(proxyMaster, kCurrencyGold, static_cast<int64_t>(proxyNetGold),
-                                                  TX_CRAFT_PROXY_FEE, request.client_request_id());
+            if (proxyMasterId != 0 && proxyNetGold > 0) {
+                // 95% 净银两写入买家同事务 WALLET 持久组的待寄邮件出箱，经邮件服务 asset_op 异步入账。
+                PlayerMailOutboxSystem::CommitPreparedProxyFee(player, preparedProxyMail,
+                                                               TimeSystem::NowMillisecondsUTC());
             }
             *craft.add_skill_books() = newBook;
             craft.set_next_book_seq(bookId + 1);
             craft.set_scroll_craft_revision(revBefore + 1);
-            if (proxyMasterId == 0 && craft.scroll_mastery_exp() < std::numeric_limits<uint32_t>::max()) {
-                craft.set_scroll_mastery_exp(craft.scroll_mastery_exp() + 1);
+            if (proxyMasterId == 0) {
+                if (craft.scroll_mastery_exp() < std::numeric_limits<uint32_t>::max()) {
+                    craft.set_scroll_mastery_exp(craft.scroll_mastery_exp() + 1);
+                }
+                if (mode == CraftSkillBookRequest::TARGETED_RARE &&
+                    craft.rare_books_crafted_count() < std::numeric_limits<uint32_t>::max()) {
+                    craft.set_rare_books_crafted_count(craft.rare_books_crafted_count() + 1u);
+                }
             }
             ledger.Swap(&nextLedger);
             return kSuccess;
@@ -589,6 +1001,11 @@ void PlayerCraftSystem::CraftSkillBook(entt::entity player, const CraftSkillBook
         return;
     }
 
+    if (proxyMasterId != 0) {
+        PlayerCraftSystem::RecordProxyOrderReputation(
+            proxyMasterId, 0u, mode == CraftSkillBookRequest::TARGETED_RARE ? 1u : 0u,
+            proxyNetGold, BuyerDisplayNameOf(player, buyerId));
+    }
     PlayerLifecycleSystem::RequestKeyProgressSave(player, "skill_scroll_craft");
     *response.mutable_crafted_book() = newBook;
     response.set_bonus_fragments_granted(bonusFragments);
@@ -1131,15 +1548,33 @@ void PlayerCraftSystem::SetProxyStall(entt::entity player, const SetCraftProxySt
     }
 
     auto& craft = tlsEcs.actorRegistry.get<PlayerCraftComp>(player);
-    if (!request.open()) {
-        craft.set_proxy_stall_open(false);
-        PlayerLifecycleSystem::RequestKeyProgressSave(player, "craft_proxy_stall_closed");
-        FillStateSnapshot(player, *response.mutable_state());
+    if (request.master_showcase_tag() > equipcraft::kMaxMasterShowcaseTag) {
+        fail(kInvalidParameter);
+        return;
+    }
+    if (request.equipped_craft_title_id() != 0 &&
+        !equipcraft::IsCraftTitleUnlocked(request.equipped_craft_title_id(), craft.forge_mastery_exp(),
+                                          craft.scroll_mastery_exp(), craft.supreme_forged_count(),
+                                          craft.rare_books_crafted_count(), craft.proxy_orders_completed())) {
+        fail(kInvalidParameter);
         return;
     }
 
     const bool forgeMaster = equipcraft::MasteryTierForExp(craft.forge_mastery_exp()) >= equipcraft::kMasteryMaster;
     const bool scrollMaster = equipcraft::MasteryTierForExp(craft.scroll_mastery_exp()) >= equipcraft::kMasteryMaster;
+    if (!request.open()) {
+        craft.set_proxy_stall_open(false);
+        if (forgeMaster || scrollMaster) {
+            craft.set_master_showcase_tag(request.master_showcase_tag());
+            craft.set_equipped_craft_title_id(request.equipped_craft_title_id());
+            craft.set_team_free_proxy(request.team_free_proxy());
+        }
+        SyncPlayerProxyStall(player);
+        PlayerLifecycleSystem::RequestKeyProgressSave(player, "craft_proxy_stall_closed");
+        FillStateSnapshot(player, *response.mutable_state());
+        return;
+    }
+
     if (!forgeMaster && !scrollMaster) {
         fail(kSkillProxyStallRequiresMaster);
         return;
@@ -1164,6 +1599,10 @@ void PlayerCraftSystem::SetProxyStall(entt::entity player, const SetCraftProxySt
     craft.set_proxy_stall_open(true);
     craft.set_proxy_forge_fee_gold(forgeMaster ? request.proxy_forge_fee_gold() : 0u);
     craft.set_proxy_scroll_fee_gold(scrollMaster ? request.proxy_scroll_fee_gold() : 0u);
+    craft.set_master_showcase_tag(request.master_showcase_tag());
+    craft.set_equipped_craft_title_id(request.equipped_craft_title_id());
+    craft.set_team_free_proxy(request.team_free_proxy());
+    SyncPlayerProxyStall(player);
     PlayerLifecycleSystem::RequestKeyProgressSave(player, "craft_proxy_stall_opened");
     FillStateSnapshot(player, *response.mutable_state());
 }
@@ -1174,33 +1613,1030 @@ void PlayerCraftSystem::ListProxyStalls(entt::entity player, ListCraftProxyStall
         response.mutable_error_message()->set_id(kEntityIsNull);
         return;
     }
-    std::vector<uint64_t> masterIds;
+    std::map<uint64_t, CraftProxyStallInfo> merged = tlsProxyStallDirectory;
+    for (const auto& [pid, entity] : tlsEcs.playerList) {
+        if (pid == 0 || !tlsEcs.actorRegistry.valid(entity)) continue;
+        if (!PlayerLifecycleSystem::IsPlayerMutable(entity)) {
+            merged.erase(pid);
+            continue;
+        }
+        CraftProxyStallInfo live;
+        if (BuildLocalStallSnapshot(entity, pid, live)) {
+            merged[pid] = std::move(live);
+        } else {
+            merged.erase(pid);
+        }
+    }
+    std::vector<CraftProxyStallInfo> rows;
+    rows.reserve(merged.size());
+    for (auto& [pid, stall] : merged) {
+        if (!ValidSharedStall(stall)) continue;
+        if (const auto pit = tlsPendingProxyReputation.find(pid); pit != tlsPendingProxyReputation.end()) {
+            stall.set_proxy_orders_completed(SaturatingAddU32(stall.proxy_orders_completed(), pit->second.orders));
+            stall.set_supreme_forged_count(SaturatingAddU32(stall.supreme_forged_count(), pit->second.supreme));
+            stall.set_rare_books_crafted_count(SaturatingAddU32(stall.rare_books_crafted_count(), pit->second.rare));
+        }
+        if (const auto hit = tlsHotProxyCounters.find(pid); hit != tlsHotProxyCounters.end()) {
+            stall.set_recent_24h_orders(hit->second.orders24h);
+            stall.set_recent_24h_supreme(hit->second.supreme24h);
+        } else {
+            stall.set_recent_24h_orders(0u);
+            stall.set_recent_24h_supreme(0u);
+        }
+        stall.set_hot_rank(0u);
+        const entt::entity localMaster = tlsEcs.GetPlayer(pid);
+        stall.set_viewer_gets_free_proxy(stall.team_free_proxy() && ShareActiveTeam(player, localMaster));
+        rows.push_back(std::move(stall));
+    }
+
+    // 评选全区西市「极品热榜」Top 3（热榜分 = 近 24h 极品*3 + 近 24h 单数，再按累计极品与口碑稳定破平局）。
+    std::vector<std::size_t> rankIdx;
+    rankIdx.reserve(rows.size());
+    for (std::size_t i = 0; i < rows.size(); ++i) {
+        const auto& s = rows[i];
+        if (s.recent_24h_orders() > 0 || s.proxy_orders_completed() > 0 || s.supreme_forged_count() > 0) {
+            rankIdx.push_back(i);
+        }
+    }
+    std::sort(rankIdx.begin(), rankIdx.end(), [&](std::size_t a, std::size_t b) {
+        const auto& sa = rows[a];
+        const auto& sb = rows[b];
+        const uint64_t scoreA = equipcraft::HotRankScore(sa.recent_24h_orders(), sa.recent_24h_supreme());
+        const uint64_t scoreB = equipcraft::HotRankScore(sb.recent_24h_orders(), sb.recent_24h_supreme());
+        if (scoreA != scoreB) return scoreA > scoreB;
+        if (sa.recent_24h_supreme() != sb.recent_24h_supreme()) return sa.recent_24h_supreme() > sb.recent_24h_supreme();
+        if (sa.supreme_forged_count() != sb.supreme_forged_count()) return sa.supreme_forged_count() > sb.supreme_forged_count();
+        if (sa.proxy_orders_completed() != sb.proxy_orders_completed()) return sa.proxy_orders_completed() > sb.proxy_orders_completed();
+        return sa.master_player_id() < sb.master_player_id();
+    });
+    for (std::size_t r = 0; r < rankIdx.size() && r < equipcraft::kHotRankTopLimit; ++r) {
+        rows[rankIdx[r]].set_hot_rank(static_cast<uint32_t>(r + 1u));
+    }
+    for (auto& stall : rows) {
+        *response.add_stalls() = std::move(stall);
+    }
+}
+
+void PlayerCraftSystem::AckProxyDigest(entt::entity player, const AckCraftProxyDigestRequest&,
+                                       AckCraftProxyDigestResponse& response) {
+    response.Clear();
+    const auto fail = [&](uint32_t tip) {
+        response.mutable_error_message()->set_id(tip);
+        if (CheckPlayerReady(player) == kSuccess) {
+            FillStateSnapshot(player, *response.mutable_state());
+        }
+    };
+    if (const auto err = CheckPlayerReady(player); err != kSuccess) {
+        response.mutable_error_message()->set_id(err);
+        return;
+    }
+    if (const auto busy = CheckWritable(player); busy != kSuccess) {
+        fail(busy);
+        return;
+    }
+    DrainPendingProxyReputation(player);
+    auto& craft = tlsEcs.actorRegistry.get<PlayerCraftComp>(player);
+    const bool hadDigest = craft.unread_proxy_digest_orders() > 0 ||
+        craft.unread_proxy_digest_supreme() > 0 ||
+        craft.unread_proxy_digest_rare() > 0 ||
+        craft.unread_proxy_digest_net_gold() > 0 ||
+        !craft.unread_proxy_digest_last_buyer().empty() ||
+        craft.unread_proxy_digest_new_titles_mask() != 0;
+    if (hadDigest) {
+        craft.set_unread_proxy_digest_orders(0u);
+        craft.set_unread_proxy_digest_supreme(0u);
+        craft.set_unread_proxy_digest_rare(0u);
+        craft.set_unread_proxy_digest_net_gold(0u);
+        craft.clear_unread_proxy_digest_last_buyer();
+        craft.set_unread_proxy_digest_new_titles_mask(0u);
+        PlayerLifecycleSystem::RequestKeyProgressSave(player, "craft_proxy_digest_acked");
+    }
+    FillStateSnapshot(player, *response.mutable_state());
+}
+
+std::string PlayerCraftSystem::ProxyStallDirectoryKey(uint32_t zoneId) {
+    return "craft_proxy_stall:" + redis_slot::ZoneControlTag(redis_slot::ControlFamily::kSceneControl, zoneId);
+}
+
+std::string PlayerCraftSystem::ProxyReputationLedgerKey(uint32_t zoneId) {
+    return "craft_proxy_reputation:" + redis_slot::ZoneControlTag(redis_slot::ControlFamily::kSceneControl, zoneId);
+}
+
+void PlayerCraftSystem::StartProxyStallDirectory(muduo::net::EventLoop* loop) {
+    if (loop == nullptr) {
+        LOG_ERROR << "[CraftProxyDir] StartProxyStallDirectory: loop is null";
+        return;
+    }
+    if (gProxyDirectoryTimerActive && gProxyDirectoryLoop != nullptr) {
+        gProxyDirectoryLoop->cancel(gProxyDirectoryTimerId);
+        gProxyDirectoryTimerActive = false;
+    }
+    gProxyDirectoryLoop = loop;
+    gProxyDirectoryTimerId = loop->runEvery(kProxyDirectoryRefreshIntervalSec, [] { RequestProxyDirectoryRefresh(); });
+    gProxyDirectoryTimerActive = true;
+    RequestProxyDirectoryRefresh();
+    LOG_INFO << "[CraftProxyDir] Proxy stall directory refresh started, interval=" << kProxyDirectoryRefreshIntervalSec
+             << "s";
+}
+
+void PlayerCraftSystem::StopProxyStallDirectory() {
+    if (!gProxyDirectoryTimerActive || gProxyDirectoryLoop == nullptr) return;
+    gProxyDirectoryLoop->cancel(gProxyDirectoryTimerId);
+    gProxyDirectoryTimerActive = false;
+    LOG_INFO << "[CraftProxyDir] Proxy stall directory refresh stopped";
+}
+
+void PlayerCraftSystem::RecordProxyOrderReputation(uint64_t masterPlayerId, uint32_t supremeDelta, uint32_t rareDelta,
+                                                   uint64_t netGoldEarned, const std::string& buyerName) {
+    if (masterPlayerId == 0) return;
+    auto& hot = tlsHotProxyCounters[masterPlayerId];
+    hot.orders24h = SaturatingAddU32(hot.orders24h, 1u);
+    hot.supreme24h = SaturatingAddU32(hot.supreme24h, supremeDelta);
+    RedisHIncrByReputation(masterPlayerId, ":24o", 1);
+    if (supremeDelta > 0) {
+        RedisHIncrByReputation(masterPlayerId, ":24s", static_cast<int64_t>(supremeDelta));
+    }
+
+    const entt::entity localMaster = tlsEcs.GetPlayer(masterPlayerId);
+    if (tlsEcs.actorRegistry.valid(localMaster) && PlayerLifecycleSystem::IsPlayerMutable(localMaster)) {
+        if (auto* masterCraft = tlsEcs.actorRegistry.try_get<PlayerCraftComp>(localMaster);
+            masterCraft != nullptr) {
+            ApplyReputationToCraftComp(*masterCraft, 1u, supremeDelta, rareDelta, netGoldEarned, buyerName);
+            SyncPlayerProxyStall(localMaster);
+            PlayerLifecycleSystem::RequestKeyProgressSave(localMaster, "craft_proxy_reputation_updated");
+            return;
+        }
+    }
+
+    // 宗师离线或在跨节点：写入共享待回账台账（本地镜像 + Redis HINCRBY 原子累加）。
+    auto& pending = tlsPendingProxyReputation[masterPlayerId];
+    pending.orders = SaturatingAddU32(pending.orders, 1u);
+    pending.supreme = SaturatingAddU32(pending.supreme, supremeDelta);
+    pending.rare = SaturatingAddU32(pending.rare, rareDelta);
+    pending.netGold = SaturatingAddU64(pending.netGold, netGoldEarned);
+    if (!buyerName.empty()) {
+        pending.lastBuyer = buyerName;
+    }
+    RedisHIncrByReputation(masterPlayerId, ":o", 1);
+    if (supremeDelta > 0) RedisHIncrByReputation(masterPlayerId, ":s", static_cast<int64_t>(supremeDelta));
+    if (rareDelta > 0) RedisHIncrByReputation(masterPlayerId, ":r", static_cast<int64_t>(rareDelta));
+    if (netGoldEarned > 0 && netGoldEarned <= kMaxPayableGold) {
+        RedisHIncrByReputation(masterPlayerId, ":g", static_cast<int64_t>(netGoldEarned));
+    }
+    RedisHSetReputationBuyer(masterPlayerId, buyerName);
+}
+
+bool PlayerCraftSystem::DrainPendingProxyReputation(entt::entity player) {
+    if (!tlsEcs.actorRegistry.valid(player) || !PlayerLifecycleSystem::IsPlayerMutable(player)) return false;
+    const uint64_t pid = tlsEcs.GetPlayerId(player);
+    if (pid == 0 || tlsDrainingProxyMasters.count(pid) > 0) return false;
+    auto* craft = tlsEcs.actorRegistry.try_get<PlayerCraftComp>(player);
+    if (craft == nullptr) return false;
+    const auto it = tlsPendingProxyReputation.find(pid);
+    if (it == tlsPendingProxyReputation.end()) return false;
+    const PendingProxyReputation delta = it->second;
+    if (delta.orders == 0 && delta.supreme == 0 && delta.rare == 0 && delta.netGold == 0) {
+        tlsPendingProxyReputation.erase(it);
+        return false;
+    }
+
+    tlsDrainingProxyMasters.insert(pid);
+    const PlayerCraftComp backup = *craft;
+    ApplyReputationToCraftComp(*craft, delta.orders, delta.supreme, delta.rare, delta.netGold, delta.lastBuyer);
+    const bool persisted = gCraftPersistFn != nullptr && gCraftPersistFn(player);
+    tlsDrainingProxyMasters.erase(pid);
+    if (!persisted) {
+        *craft = backup;
+        LOG_WARN << "[CraftProxyRep] Failed to persist drained proxy reputation; retaining pending delta: master_id="
+                 << pid << " orders=" << delta.orders;
+        return false;
+    }
+
+    if (auto cur = tlsPendingProxyReputation.find(pid); cur != tlsPendingProxyReputation.end()) {
+        cur->second.orders = cur->second.orders > delta.orders ? cur->second.orders - delta.orders : 0u;
+        cur->second.supreme = cur->second.supreme > delta.supreme ? cur->second.supreme - delta.supreme : 0u;
+        cur->second.rare = cur->second.rare > delta.rare ? cur->second.rare - delta.rare : 0u;
+        cur->second.netGold = cur->second.netGold > delta.netGold ? cur->second.netGold - delta.netGold : 0u;
+        if (cur->second.orders == 0 && cur->second.supreme == 0 &&
+            cur->second.rare == 0 && cur->second.netGold == 0) {
+            tlsPendingProxyReputation.erase(cur);
+        }
+    }
+    if (delta.orders > 0) RedisHIncrByReputation(pid, ":o", -static_cast<int64_t>(delta.orders));
+    if (delta.supreme > 0) RedisHIncrByReputation(pid, ":s", -static_cast<int64_t>(delta.supreme));
+    if (delta.rare > 0) RedisHIncrByReputation(pid, ":r", -static_cast<int64_t>(delta.rare));
+    if (delta.netGold > 0 && delta.netGold <= kMaxPayableGold) {
+        RedisHIncrByReputation(pid, ":g", -static_cast<int64_t>(delta.netGold));
+    }
+
+    CraftProxyStallInfo updatedStall;
+    if (BuildLocalStallSnapshot(player, pid, updatedStall)) {
+        tlsProxyStallDirectory[pid] = updatedStall;
+        PublishStallToRedis(pid, updatedStall);
+    }
+    LOG_INFO << "[CraftProxyRep] Drained offline proxy reputation: master_id=" << pid
+             << " orders=" << delta.orders << " supreme=" << delta.supreme
+             << " rare=" << delta.rare << " net_gold=" << delta.netGold;
+    return true;
+}
+
+void PlayerCraftSystem::SyncPlayerProxyStall(entt::entity player) {
+    if (!tlsEcs.actorRegistry.valid(player)) return;
+    const uint64_t pid = tlsEcs.GetPlayerId(player);
+    if (pid == 0) return;
+    DrainPendingProxyReputation(player);
+    CraftProxyStallInfo snapshot;
+    if (BuildLocalStallSnapshot(player, pid, snapshot)) {
+        tlsProxyStallDirectory[pid] = snapshot;
+        PublishStallToRedis(pid, snapshot);
+        return;
+    }
+    if (tlsProxyStallDirectory.erase(pid) > 0) {
+        RemoveStallFromRedis(pid);
+    } else if (const auto* craft = tlsEcs.actorRegistry.try_get<PlayerCraftComp>(player);
+               craft != nullptr && !craft->proxy_stall_open()) {
+        RemoveStallFromRedis(pid);
+    }
+}
+
+bool PlayerCraftSystem::ResolveSharedProxyStall(uint64_t buyerPlayerId, uint64_t masterPlayerId,
+                                                bool requireForge, bool requireScroll,
+                                                CraftProxyStallInfo& out) {
+    out.Clear();
+    if (masterPlayerId == 0 || masterPlayerId == buyerPlayerId) return false;
+    const entt::entity localMaster = tlsEcs.GetPlayer(masterPlayerId);
+    if (tlsEcs.actorRegistry.valid(localMaster)) {
+        if (!PlayerLifecycleSystem::IsPlayerMutable(localMaster)) return false;
+        if (!BuildLocalStallSnapshot(localMaster, masterPlayerId, out)) {
+            tlsProxyStallDirectory.erase(masterPlayerId);
+            return false;
+        }
+        tlsProxyStallDirectory[masterPlayerId] = out;
+    } else {
+        const auto it = tlsProxyStallDirectory.find(masterPlayerId);
+        if (it == tlsProxyStallDirectory.end() || !ValidSharedStall(it->second)) return false;
+        out = it->second;
+    }
+    if (requireForge && (out.forge_mastery_tier() < equipcraft::kMasteryMaster ||
+                         !equipcraft::ValidProxyFee(out.proxy_forge_fee_gold()))) {
+        out.Clear();
+        return false;
+    }
+    if (requireScroll && (out.scroll_mastery_tier() < equipcraft::kMasteryMaster ||
+                          !equipcraft::ValidProxyFee(out.proxy_scroll_fee_gold()))) {
+        out.Clear();
+        return false;
+    }
+    return true;
+}
+
+void PlayerCraftSystem::SetPersistForTest(PersistFn fn) {
+    gCraftPersistFn = fn == nullptr ? &PlayerLifecycleSystem::SavePlayerForAssetCommit : fn;
+}
+
+void PlayerCraftSystem::UpsertProxyStallForTest(const CraftProxyStallInfo& stall) {
+    if (ValidSharedStall(stall)) {
+        CraftProxyStallInfo clean = stall;
+        clean.set_viewer_gets_free_proxy(false);
+        tlsProxyStallDirectory[clean.master_player_id()] = std::move(clean);
+    }
+}
+
+void PlayerCraftSystem::RemoveProxyStallForTest(uint64_t masterPlayerId) {
+    tlsProxyStallDirectory.erase(masterPlayerId);
+    tlsPendingProxyReputation.erase(masterPlayerId);
+    tlsHotProxyCounters.erase(masterPlayerId);
+    tlsDrainingProxyMasters.erase(masterPlayerId);
+}
+
+void PlayerCraftSystem::ClearProxyStallDirectoryForTest() {
+    tlsProxyStallDirectory.clear();
+    tlsPendingProxyReputation.clear();
+    tlsHotProxyCounters.clear();
+    tlsDrainingProxyMasters.clear();
+}
+
+void PlayerCraftSystem::ClaimScrollCollectionMilestone(entt::entity player,
+                                                       const ClaimScrollCollectionMilestoneRequest& request,
+                                                       ClaimScrollCollectionMilestoneResponse& response) {
+    response.Clear();
+    response.set_client_request_id(request.client_request_id());
+    const auto fail = [&](uint32_t tip) {
+        response.mutable_error_message()->set_id(tip);
+        if (CheckPlayerReady(player) == kSuccess) {
+            FillStateSnapshot(player, *response.mutable_state());
+        }
+    };
+    if (const auto err = CheckPlayerReady(player); err != kSuccess) {
+        response.mutable_error_message()->set_id(err);
+        return;
+    }
+    if (request.client_request_id() == 0 || request.scroll_id() == 0 ||
+        (request.milestone_tier() != equipcraft::kScrollMilestoneHalfTier &&
+         request.milestone_tier() != equipcraft::kScrollMilestoneFullTier)) {
+        fail(kInvalidParameter);
+        return;
+    }
+
+    const auto fingerprint = ClientRequestFingerprint(request);
+    ClientRequestResult first;
+    const auto verdict = client_request_dedup::Check(player, request.client_request_id(),
+                                                     ClientRequestKind::kClaimScrollMilestone, fingerprint, first);
+    if (verdict == ClientRequestVerdict::kReplay) {
+        response.set_replayed(true);
+        response.set_rewarded_fragments(first.scrollBonusFragments);
+        FillStateSnapshot(player, *response.mutable_state());
+        return;
+    }
+    if (verdict == ClientRequestVerdict::kMismatch) {
+        fail(kInvalidParameter);
+        return;
+    }
+    if (verdict != ClientRequestVerdict::kNew) {
+        fail(kServiceUnavailable);
+        return;
+    }
+    if (const auto busy = CheckWritable(player); busy != kSuccess) {
+        fail(busy);
+        return;
+    }
+
+    auto& craft = tlsEcs.actorRegistry.get<PlayerCraftComp>(player);
+    auto& ledger = tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player);
+    if (craft.scroll_craft_revision() == std::numeric_limits<uint64_t>::max() ||
+        ledger.next_seq() == std::numeric_limits<uint64_t>::max()) {
+        fail(kServiceUnavailable);
+        return;
+    }
+    if (request.expected_revision() != craft.scroll_craft_revision()) {
+        fail(kSkillCraftRevisionChanged);
+        return;
+    }
+
+    const auto* scroll = ScrollRow(request.scroll_id());
+    if (scroll == nullptr || scroll->enabled() == 0) {
+        fail(kSkillScrollInvalid);
+        return;
+    }
+    const auto scrollSkills = CollectScrollSkillIds(request.scroll_id());
+    if (scrollSkills.empty()) {
+        fail(kSkillScrollInvalid);
+        return;
+    }
+    std::set<uint32_t> unlocked(craft.book_unlocked_skill_ids().begin(), craft.book_unlocked_skill_ids().end());
+    uint32_t unlockedInScroll = 0;
+    for (const auto sid : scrollSkills) {
+        if (unlocked.count(sid) != 0) ++unlockedInScroll;
+    }
+    const uint32_t required = request.milestone_tier() == equipcraft::kScrollMilestoneHalfTier
+        ? equipcraft::ScrollHalfThreshold(static_cast<uint32_t>(scrollSkills.size()))
+        : static_cast<uint32_t>(scrollSkills.size());
+    if (unlockedInScroll < required) {
+        fail(kInvalidParameter);
+        return;
+    }
+    const uint32_t bitIdx = equipcraft::ScrollMilestoneBitIndex(request.scroll_id(), request.milestone_tier());
+    if (equipcraft::HasBit(craft.claimed_scroll_milestone_bits(), bitIdx)) {
+        fail(kInvalidParameter);
+        return;
+    }
+
+    const uint32_t rewardCount = equipcraft::ScrollMilestoneRewardFragments(request.milestone_tier());
+    const uint32_t fragItemId = scroll->fragment_item_id() != 0
+        ? scroll->fragment_item_id() : equipcraft::kScrollFragmentConfigId;
+    if (!ValidStackableMaterial(fragItemId, rewardCount)) {
+        fail(kInvalidTableData);
+        return;
+    }
+    if (const auto spaceErr = BagService::CheckInventoryExchangeSpace(player, {}, {{fragItemId, rewardCount}}, false, true);
+        spaceErr != kSuccess) {
+        fail(spaceErr);
+        return;
+    }
+
+    std::vector<InitItemParam> gained;
+    InitItemParam param;
+    param.itemPBComp.set_item_id(kInvalidGuid);
+    param.itemPBComp.set_config_id(fragItemId);
+    param.itemPBComp.set_size(rewardCount);
+    param.itemPBComp.set_bound(true);
+    gained.push_back(std::move(param));
+
+    const auto ledgerBefore = ledger.SerializeAsString();
+    const uint64_t revBefore = craft.scroll_craft_revision();
+    std::vector<GuidVector> written;
+    const auto exErr = BagService::ExchangeInventoryExact(
+        player, {}, gained, {}, request.client_request_id(), "{\"operation\":\"claim_scroll_milestone\"}", written,
+        [&](const std::vector<GuidVector>&) -> uint32_t {
+            if (ledger.SerializeAsString() != ledgerBefore || craft.scroll_craft_revision() != revBefore ||
+                CheckWritable(player) != kSuccess ||
+                equipcraft::HasBit(craft.claimed_scroll_milestone_bits(), bitIdx)) {
+                return kFeatureUnavailable;
+            }
+            ClientRequestResult applied;
+            applied.scrollCraftRevision = revBefore + 1;
+            applied.scrollBonusFragments = rewardCount;
+            ClientRequestLedgerComp nextLedger = ledger;
+            if (!client_request_ledger::Remember(nextLedger, request.client_request_id(),
+                                                 ClientRequestKind::kClaimScrollMilestone, fingerprint, applied) ||
+                !client_request_ledger::Validate(nextLedger).empty()) {
+                return kServiceUnavailable;
+            }
+            equipcraft::SetBit(*craft.mutable_claimed_scroll_milestone_bits(), bitIdx);
+            craft.set_scroll_craft_revision(revBefore + 1);
+            ledger.Swap(&nextLedger);
+            return kSuccess;
+        });
+    if (exErr != kSuccess) {
+        fail(exErr);
+        return;
+    }
+
+    PlayerLifecycleSystem::RequestKeyProgressSave(player, "scroll_milestone_claimed");
+    response.set_rewarded_fragments(rewardCount);
+    FillStateSnapshot(player, *response.mutable_state());
+}
+
+void PlayerCraftSystem::BatchDismantleSkillBooks(entt::entity player, const BatchDismantleSkillBooksRequest& request,
+                                                 BatchDismantleSkillBooksResponse& response) {
+    response.Clear();
+    response.set_client_request_id(request.client_request_id());
+    const auto fail = [&](uint32_t tip) {
+        response.mutable_error_message()->set_id(tip);
+        if (CheckPlayerReady(player) == kSuccess) {
+            FillStateSnapshot(player, *response.mutable_state());
+        }
+    };
+    if (const auto err = CheckPlayerReady(player); err != kSuccess) {
+        response.mutable_error_message()->set_id(err);
+        return;
+    }
+    if (request.client_request_id() == 0 || request.book_ids_size() <= 0 ||
+        static_cast<uint32_t>(request.book_ids_size()) > equipcraft::kMaxBatchDismantleCount) {
+        fail(kInvalidParameter);
+        return;
+    }
+
+    const auto fingerprint = ClientRequestFingerprint(request);
+    ClientRequestResult first;
+    const auto verdict = client_request_dedup::Check(player, request.client_request_id(),
+                                                     ClientRequestKind::kBatchDismantleSkillBooks, fingerprint, first);
+    if (verdict == ClientRequestVerdict::kReplay) {
+        response.set_replayed(true);
+        response.set_dismantled_count(first.craftedSkillTableId);
+        response.set_refunded_fragments(first.scrollBonusFragments);
+        FillStateSnapshot(player, *response.mutable_state());
+        return;
+    }
+    if (verdict == ClientRequestVerdict::kMismatch) {
+        fail(kInvalidParameter);
+        return;
+    }
+    if (verdict != ClientRequestVerdict::kNew) {
+        fail(kServiceUnavailable);
+        return;
+    }
+    if (const auto busy = CheckWritable(player); busy != kSuccess) {
+        fail(busy);
+        return;
+    }
+
+    auto& craft = tlsEcs.actorRegistry.get<PlayerCraftComp>(player);
+    auto& ledger = tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player);
+    if (craft.scroll_craft_revision() == std::numeric_limits<uint64_t>::max() ||
+        ledger.next_seq() == std::numeric_limits<uint64_t>::max()) {
+        fail(kServiceUnavailable);
+        return;
+    }
+    if (request.expected_revision() != craft.scroll_craft_revision()) {
+        fail(kSkillCraftRevisionChanged);
+        return;
+    }
+
+    std::set<uint64_t> uniqueBookIds;
+    std::map<uint32_t, uint32_t> refundByItem;
+    uint32_t totalRefund = 0;
+    for (const auto bookId : request.book_ids()) {
+        if (bookId == 0 || !uniqueBookIds.insert(bookId).second) {
+            fail(kInvalidParameter);
+            return;
+        }
+        const int idx = FindBookIndex(craft, bookId);
+        if (idx < 0) {
+            fail(kSkillBookNotFound);
+            return;
+        }
+        const auto& book = craft.skill_books(idx);
+        if (book.rarity_tier() != 0) {
+            fail(kSkillBookNotDismantlable);
+            return;
+        }
+        const auto* scroll = ScrollRow(book.scroll_id());
+        if (scroll == nullptr || scroll->dismantle_fragment_count() == 0 ||
+            !ValidStackableMaterial(scroll->fragment_item_id(), scroll->dismantle_fragment_count())) {
+            fail(kSkillBookNotDismantlable);
+            return;
+        }
+        refundByItem[scroll->fragment_item_id()] += scroll->dismantle_fragment_count();
+        totalRefund += scroll->dismantle_fragment_count();
+    }
+
+    ItemCountMap gainedCounts;
+    std::vector<InitItemParam> gained;
+    for (const auto& [itemId, count] : refundByItem) {
+        gainedCounts[itemId] = count;
+        InitItemParam param;
+        param.itemPBComp.set_item_id(kInvalidGuid);
+        param.itemPBComp.set_config_id(itemId);
+        param.itemPBComp.set_size(count);
+        param.itemPBComp.set_bound(true);
+        gained.push_back(std::move(param));
+    }
+    if (const auto spaceErr = BagService::CheckInventoryExchangeSpace(player, {}, gainedCounts, false, true);
+        spaceErr != kSuccess) {
+        fail(spaceErr);
+        return;
+    }
+
+    const auto ledgerBefore = ledger.SerializeAsString();
+    const uint64_t revBefore = craft.scroll_craft_revision();
+    const uint32_t dismantledCount = static_cast<uint32_t>(uniqueBookIds.size());
+    std::vector<GuidVector> written;
+    const auto exErr = BagService::ExchangeInventoryExact(
+        player, {}, gained, {}, request.client_request_id(), "{\"operation\":\"batch_dismantle_skill_books\"}", written,
+        [&](const std::vector<GuidVector>&) -> uint32_t {
+            if (ledger.SerializeAsString() != ledgerBefore || craft.scroll_craft_revision() != revBefore ||
+                CheckWritable(player) != kSuccess) {
+                return kFeatureUnavailable;
+            }
+            for (const auto bookId : uniqueBookIds) {
+                if (FindBookIndex(craft, bookId) < 0) return kSkillBookNotFound;
+            }
+            ClientRequestResult applied;
+            applied.craftedSkillTableId = dismantledCount;
+            applied.scrollCraftRevision = revBefore + 1;
+            applied.scrollBonusFragments = totalRefund;
+            ClientRequestLedgerComp nextLedger = ledger;
+            if (!client_request_ledger::Remember(nextLedger, request.client_request_id(),
+                                                 ClientRequestKind::kBatchDismantleSkillBooks, fingerprint, applied) ||
+                !client_request_ledger::Validate(nextLedger).empty()) {
+                return kServiceUnavailable;
+            }
+            for (const auto bookId : uniqueBookIds) {
+                RemoveBookAt(craft, FindBookIndex(craft, bookId));
+            }
+            craft.set_scroll_craft_revision(revBefore + 1);
+            ledger.Swap(&nextLedger);
+            return kSuccess;
+        });
+    if (exErr != kSuccess) {
+        fail(exErr);
+        return;
+    }
+
+    PlayerLifecycleSystem::RequestKeyProgressSave(player, "skill_books_batch_dismantled");
+    response.set_dismantled_count(dismantledCount);
+    response.set_refunded_fragments(totalRefund);
+    FillStateSnapshot(player, *response.mutable_state());
+}
+
+void PlayerCraftSystem::PostWantedOrder(entt::entity player, const PostSkillBookWantedOrderRequest& request,
+                                        PostSkillBookWantedOrderResponse& response) {
+    response.Clear();
+    response.set_client_request_id(request.client_request_id());
+    const auto fail = [&](uint32_t tip) {
+        response.mutable_error_message()->set_id(tip);
+        if (CheckPlayerReady(player) == kSuccess) {
+            FillStateSnapshot(player, *response.mutable_state());
+        }
+    };
+    if (const auto err = CheckPlayerReady(player); err != kSuccess) {
+        response.mutable_error_message()->set_id(err);
+        return;
+    }
+    if (request.client_request_id() == 0 || request.skill_table_id() == 0 ||
+        !equipcraft::ValidWantedOrderGold(request.reward_gold())) {
+        fail(kInvalidParameter);
+        return;
+    }
+
+    const auto fingerprint = ClientRequestFingerprint(request);
+    ClientRequestResult first;
+    const auto verdict = client_request_dedup::Check(player, request.client_request_id(),
+                                                     ClientRequestKind::kPostWantedOrder, fingerprint, first);
+    if (verdict == ClientRequestVerdict::kReplay) {
+        response.set_replayed(true);
+        const auto& craft = tlsEcs.actorRegistry.get<PlayerCraftComp>(player);
+        if (const int idx = FindWantedOrderIndex(craft, first.wantedOrderId); idx >= 0) {
+            FillWantedOrderInfo(craft.wanted_orders(idx), *response.mutable_order());
+        } else {
+            response.mutable_order()->set_order_id(first.wantedOrderId);
+            response.mutable_order()->set_reward_gold(first.wantedOrderGold);
+        }
+        FillStateSnapshot(player, *response.mutable_state());
+        return;
+    }
+    if (verdict == ClientRequestVerdict::kMismatch) {
+        fail(kInvalidParameter);
+        return;
+    }
+    if (verdict != ClientRequestVerdict::kNew) {
+        fail(kServiceUnavailable);
+        return;
+    }
+    if (const auto busy = CheckWritable(player); busy != kSuccess) {
+        fail(busy);
+        return;
+    }
+
+    auto& craft = tlsEcs.actorRegistry.get<PlayerCraftComp>(player);
+    auto& ledger = tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player);
+    if (craft.scroll_craft_revision() == std::numeric_limits<uint64_t>::max() ||
+        craft.next_wanted_order_seq() == std::numeric_limits<uint64_t>::max() ||
+        ledger.next_seq() == std::numeric_limits<uint64_t>::max()) {
+        fail(kServiceUnavailable);
+        return;
+    }
+    if (request.expected_revision() != craft.scroll_craft_revision()) {
+        fail(kSkillCraftRevisionChanged);
+        return;
+    }
+    if (static_cast<uint32_t>(craft.wanted_orders_size()) >= equipcraft::kMaxActiveWantedOrders) {
+        fail(kInvalidParameter);
+        return;
+    }
+
+    const auto* skill = SkillRow(request.skill_table_id());
+    if (skill == nullptr || skill->season_id() != 0 || skill->battle_model() != 1 || skill->rarity_tier() != 0) {
+        fail(kSkillScrollInvalid);
+        return;
+    }
+    const auto* scroll = ScrollRow(skill->scroll_id());
+    if (scroll == nullptr || scroll->enabled() == 0 || scroll->rarity_tier() != 0) {
+        fail(kSkillScrollInvalid);
+        return;
+    }
+    // 防洗白硬隔离：悬赏求书严格仅允许托管流通银两（禁止用绑定银两发榜撤单或小号揭榜套现）。
+    if (!CurrencySystem::CanAffordSplitGold(player, request.reward_gold(), 0u)) {
+        fail(kSkillGoldNotEnough);
+        return;
+    }
+
+    const uint64_t orderId = craft.next_wanted_order_seq() == 0 ? 1u : craft.next_wanted_order_seq();
+    const uint64_t revBefore = craft.scroll_craft_revision();
+    const uint64_t playerId = tlsEcs.GetPlayerId(player);
+    SkillBookWantedOrder order;
+    order.set_order_id(orderId);
+    order.set_poster_player_id(playerId);
+    order.set_poster_name(DisplayNameOf(player, playerId));
+    order.set_skill_table_id(skill->id());
+    order.set_scroll_id(scroll->id());
+    order.set_require_master_signature(request.require_master_signature());
+    order.set_reward_gold(request.reward_gold());
+    order.set_created_at_sec(TimeSystem::NowMillisecondsUTC() / 1000u);
+
+    ClientRequestResult applied;
+    applied.wantedOrderId = orderId;
+    applied.wantedOrderGold = request.reward_gold();
+    applied.scrollCraftRevision = revBefore + 1;
+    ClientRequestLedgerComp nextLedger = ledger;
+    if (!client_request_ledger::Remember(nextLedger, request.client_request_id(),
+                                         ClientRequestKind::kPostWantedOrder, fingerprint, applied) ||
+        !client_request_ledger::Validate(nextLedger).empty()) {
+        fail(kServiceUnavailable);
+        return;
+    }
+    const auto deductErr = CurrencySystem::DeductSplitGold(
+        player, request.reward_gold(), 0u, TX_SKILL_SCROLL_CRAFT, request.client_request_id());
+    if (deductErr != kSuccess) {
+        fail(kSkillGoldNotEnough);
+        return;
+    }
+
+    *craft.add_wanted_orders() = order;
+    craft.set_next_wanted_order_seq(orderId + 1);
+    craft.set_scroll_craft_revision(revBefore + 1);
+    ledger.Swap(&nextLedger);
+
+    PlayerLifecycleSystem::RequestKeyProgressSave(player, "skill_wanted_order_posted");
+    FillWantedOrderInfo(order, *response.mutable_order());
+    FillStateSnapshot(player, *response.mutable_state());
+}
+
+void PlayerCraftSystem::CancelWantedOrder(entt::entity player, const CancelSkillBookWantedOrderRequest& request,
+                                          CancelSkillBookWantedOrderResponse& response) {
+    response.Clear();
+    response.set_client_request_id(request.client_request_id());
+    const auto fail = [&](uint32_t tip) {
+        response.mutable_error_message()->set_id(tip);
+        if (CheckPlayerReady(player) == kSuccess) {
+            FillStateSnapshot(player, *response.mutable_state());
+        }
+    };
+    if (const auto err = CheckPlayerReady(player); err != kSuccess) {
+        response.mutable_error_message()->set_id(err);
+        return;
+    }
+    if (request.client_request_id() == 0 || request.order_id() == 0) {
+        fail(kInvalidParameter);
+        return;
+    }
+
+    const auto fingerprint = ClientRequestFingerprint(request);
+    ClientRequestResult first;
+    const auto verdict = client_request_dedup::Check(player, request.client_request_id(),
+                                                     ClientRequestKind::kCancelWantedOrder, fingerprint, first);
+    if (verdict == ClientRequestVerdict::kReplay) {
+        response.set_replayed(true);
+        response.set_refunded_gold(first.wantedOrderGold);
+        FillStateSnapshot(player, *response.mutable_state());
+        return;
+    }
+    if (verdict == ClientRequestVerdict::kMismatch) {
+        fail(kInvalidParameter);
+        return;
+    }
+    if (verdict != ClientRequestVerdict::kNew) {
+        fail(kServiceUnavailable);
+        return;
+    }
+    if (const auto busy = CheckWritable(player); busy != kSuccess) {
+        fail(busy);
+        return;
+    }
+
+    auto& craft = tlsEcs.actorRegistry.get<PlayerCraftComp>(player);
+    auto& ledger = tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player);
+    if (craft.scroll_craft_revision() == std::numeric_limits<uint64_t>::max() ||
+        ledger.next_seq() == std::numeric_limits<uint64_t>::max()) {
+        fail(kServiceUnavailable);
+        return;
+    }
+    if (request.expected_revision() != craft.scroll_craft_revision()) {
+        fail(kSkillCraftRevisionChanged);
+        return;
+    }
+
+    const int idx = FindWantedOrderIndex(craft, request.order_id());
+    if (idx < 0) {
+        fail(kSkillBookNotFound);
+        return;
+    }
+    const uint64_t refundGold = craft.wanted_orders(idx).reward_gold();
+    if (!CanCreditProxyMaster(player, refundGold)) {
+        fail(kServiceUnavailable);
+        return;
+    }
+
+    const uint64_t revBefore = craft.scroll_craft_revision();
+    ClientRequestResult applied;
+    applied.wantedOrderId = request.order_id();
+    applied.wantedOrderGold = refundGold;
+    applied.scrollCraftRevision = revBefore + 1;
+    ClientRequestLedgerComp nextLedger = ledger;
+    if (!client_request_ledger::Remember(nextLedger, request.client_request_id(),
+                                         ClientRequestKind::kCancelWantedOrder, fingerprint, applied) ||
+        !client_request_ledger::Validate(nextLedger).empty()) {
+        fail(kServiceUnavailable);
+        return;
+    }
+
+    RemoveWantedOrderAt(craft, idx);
+    (void)CurrencySystem::AddCurrency(player, kCurrencyGold, static_cast<int64_t>(refundGold),
+                                      TX_CRAFT_PROXY_FEE, request.client_request_id());
+    craft.set_scroll_craft_revision(revBefore + 1);
+    ledger.Swap(&nextLedger);
+
+    PlayerLifecycleSystem::RequestKeyProgressSave(player, "skill_wanted_order_canceled");
+    response.set_refunded_gold(refundGold);
+    FillStateSnapshot(player, *response.mutable_state());
+}
+
+void PlayerCraftSystem::ListWantedOrders(entt::entity player, const ListSkillBookWantedOrdersRequest& request,
+                                         ListSkillBookWantedOrdersResponse& response) {
+    response.Clear();
+    if (!tlsEcs.actorRegistry.valid(player)) {
+        response.mutable_error_message()->set_id(kEntityIsNull);
+        return;
+    }
+    const uint64_t selfId = tlsEcs.GetPlayerId(player);
+    std::vector<SkillBookWantedOrder> collected;
     for (const auto& [pid, entity] : tlsEcs.playerList) {
         if (pid == 0 || !tlsEcs.actorRegistry.valid(entity) || !PlayerLifecycleSystem::IsPlayerMutable(entity)) {
             continue;
         }
-        const auto* craft = tlsEcs.actorRegistry.try_get<PlayerCraftComp>(entity);
-        if (craft == nullptr || !craft->proxy_stall_open()) continue;
-        const uint32_t forgeTier = equipcraft::MasteryTierForExp(craft->forge_mastery_exp());
-        const uint32_t scrollTier = equipcraft::MasteryTierForExp(craft->scroll_mastery_exp());
-        if (forgeTier < equipcraft::kMasteryMaster && scrollTier < equipcraft::kMasteryMaster) continue;
-        masterIds.push_back(pid);
-    }
-    std::sort(masterIds.begin(), masterIds.end());
-    for (const auto pid : masterIds) {
-        const entt::entity entity = tlsEcs.GetPlayer(pid);
+        if (request.only_mine() && pid != selfId) continue;
         const auto* craft = tlsEcs.actorRegistry.try_get<PlayerCraftComp>(entity);
         if (craft == nullptr) continue;
-        const uint32_t forgeTier = equipcraft::MasteryTierForExp(craft->forge_mastery_exp());
-        const uint32_t scrollTier = equipcraft::MasteryTierForExp(craft->scroll_mastery_exp());
-        auto* stall = response.add_stalls();
-        stall->set_master_player_id(pid);
-        stall->set_master_name(DisplayNameOf(entity, pid));
-        stall->set_forge_mastery_tier(forgeTier);
-        stall->set_scroll_mastery_tier(scrollTier);
-        stall->set_top_quality_rate_bps(equipcraft::ForgeTopQualityRateBps(forgeTier));
-        stall->set_scroll_bonus_rate_bps(equipcraft::ScrollBonusFragmentRateBps(scrollTier));
-        stall->set_proxy_forge_fee_gold(forgeTier >= equipcraft::kMasteryMaster ? craft->proxy_forge_fee_gold() : 0u);
-        stall->set_proxy_scroll_fee_gold(scrollTier >= equipcraft::kMasteryMaster ? craft->proxy_scroll_fee_gold() : 0u);
+        for (const auto& order : craft->wanted_orders()) {
+            if (request.filter_skill_table_id() != 0 && order.skill_table_id() != request.filter_skill_table_id()) {
+                continue;
+            }
+            collected.push_back(order);
+        }
     }
+    std::sort(collected.begin(), collected.end(), [](const auto& a, const auto& b) {
+        if (a.reward_gold() != b.reward_gold()) return a.reward_gold() > b.reward_gold();
+        if (a.created_at_sec() != b.created_at_sec()) return a.created_at_sec() < b.created_at_sec();
+        return a.order_id() < b.order_id();
+    });
+    for (const auto& o : collected) {
+        FillWantedOrderInfo(o, *response.add_orders());
+    }
+}
+
+void PlayerCraftSystem::FulfillWantedOrder(entt::entity player, const FulfillSkillBookWantedOrderRequest& request,
+                                           FulfillSkillBookWantedOrderResponse& response) {
+    response.Clear();
+    response.set_client_request_id(request.client_request_id());
+    const auto fail = [&](uint32_t tip) {
+        response.mutable_error_message()->set_id(tip);
+        if (CheckPlayerReady(player) == kSuccess) {
+            FillStateSnapshot(player, *response.mutable_state());
+        }
+    };
+    if (const auto err = CheckPlayerReady(player); err != kSuccess) {
+        response.mutable_error_message()->set_id(err);
+        return;
+    }
+    const bool fromSealedBag = request.sealed_item_id() != 0;
+    const bool fromBookshelf = request.bookshelf_book_id() != 0;
+    if (request.client_request_id() == 0 || request.poster_player_id() == 0 || request.order_id() == 0 ||
+        fromSealedBag == fromBookshelf) {
+        fail(kInvalidParameter);
+        return;
+    }
+
+    const auto fingerprint = ClientRequestFingerprint(request);
+    ClientRequestResult first;
+    const auto verdict = client_request_dedup::Check(player, request.client_request_id(),
+                                                     ClientRequestKind::kFulfillWantedOrder, fingerprint, first);
+    if (verdict == ClientRequestVerdict::kReplay) {
+        response.set_replayed(true);
+        response.set_order_id(first.wantedOrderId);
+        response.set_seller_net_gold(first.wantedOrderGold);
+        FillStateSnapshot(player, *response.mutable_state());
+        return;
+    }
+    if (verdict == ClientRequestVerdict::kMismatch) {
+        fail(kInvalidParameter);
+        return;
+    }
+    if (verdict != ClientRequestVerdict::kNew) {
+        fail(kServiceUnavailable);
+        return;
+    }
+    if (const auto busy = CheckWritable(player); busy != kSuccess) {
+        fail(busy);
+        return;
+    }
+
+    const uint64_t sellerId = tlsEcs.GetPlayerId(player);
+    if (request.poster_player_id() == sellerId) {
+        fail(kInvalidParameter);
+        return;
+    }
+
+    auto& sellerCraft = tlsEcs.actorRegistry.get<PlayerCraftComp>(player);
+    auto& sellerLedger = tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player);
+    auto& sellerInventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
+    if (sellerCraft.scroll_craft_revision() == std::numeric_limits<uint64_t>::max() ||
+        sellerLedger.next_seq() == std::numeric_limits<uint64_t>::max()) {
+        fail(kServiceUnavailable);
+        return;
+    }
+    if (request.expected_revision() != sellerCraft.scroll_craft_revision()) {
+        fail(kSkillCraftRevisionChanged);
+        return;
+    }
+
+    const entt::entity poster = tlsEcs.GetPlayer(request.poster_player_id());
+    if (!tlsEcs.actorRegistry.valid(poster) || !PlayerLifecycleSystem::IsPlayerMutable(poster)) {
+        fail(kSkillBookNotFound);
+        return;
+    }
+    auto* posterCraft = tlsEcs.actorRegistry.try_get<PlayerCraftComp>(poster);
+    if (posterCraft == nullptr ||
+        posterCraft->next_book_seq() == std::numeric_limits<uint64_t>::max() ||
+        posterCraft->scroll_craft_revision() == std::numeric_limits<uint64_t>::max()) {
+        fail(kServiceUnavailable);
+        return;
+    }
+    const int orderIdx = FindWantedOrderIndex(*posterCraft, request.order_id());
+    if (orderIdx < 0) {
+        fail(kSkillBookNotFound);
+        return;
+    }
+    const SkillBookWantedOrder order = posterCraft->wanted_orders(orderIdx);
+
+    std::string deliveredCrafterName;
+    uint64_t deliveredCrafterId = 0;
+    uint32_t deliveredScrollId = order.scroll_id();
+    int sellerBookIdx = -1;
+    if (fromSealedBag) {
+        const auto* item = sellerInventory.GetItemCompByGuid(request.sealed_item_id());
+        if (item == nullptr) {
+            fail(kSkillBookNotFound);
+            return;
+        }
+        if (item->config_id() != equipcraft::kSealedSkillBookConfigId || item->size() != 1 ||
+            item->bound() || !item->has_sealed_skill_book()) {
+            fail(kInvalidParameter);
+            return;
+        }
+        const auto& sealed = item->sealed_skill_book();
+        if (sealed.rarity_tier() != 0 || sealed.skill_table_id() != order.skill_table_id()) {
+            fail(kInvalidParameter);
+            return;
+        }
+        if (order.require_master_signature() &&
+            (sealed.crafter_name().empty() || sealed.crafter_player_id() == 0)) {
+            fail(kInvalidParameter);
+            return;
+        }
+        if (BagService::CheckRemovableInstances(player, sellerInventory, {request.sealed_item_id()}) !=
+            BagService::RemovalVerdict::kEnough) {
+            fail(kFeatureUnavailable);
+            return;
+        }
+        deliveredCrafterName = sealed.crafter_name();
+        deliveredCrafterId = sealed.crafter_player_id();
+        if (sealed.scroll_id() != 0) deliveredScrollId = sealed.scroll_id();
+    } else {
+        sellerBookIdx = FindBookIndex(sellerCraft, request.bookshelf_book_id());
+        if (sellerBookIdx < 0) {
+            fail(kSkillBookNotFound);
+            return;
+        }
+        const auto& book = sellerCraft.skill_books(sellerBookIdx);
+        if (book.bound() || book.rarity_tier() != 0 || book.skill_table_id() != order.skill_table_id()) {
+            fail(kInvalidParameter);
+            return;
+        }
+        if (order.require_master_signature() &&
+            (book.crafter_name().empty() || book.crafter_player_id() == 0)) {
+            fail(kInvalidParameter);
+            return;
+        }
+        deliveredCrafterName = book.crafter_name();
+        deliveredCrafterId = book.crafter_player_id();
+        if (book.scroll_id() != 0) deliveredScrollId = book.scroll_id();
+    }
+
+    const uint64_t netGold = equipcraft::ProxyNetGold(order.reward_gold());
+    if (!CanCreditProxyMaster(player, netGold)) {
+        fail(kServiceUnavailable);
+        return;
+    }
+
+    const uint64_t sellerRevBefore = sellerCraft.scroll_craft_revision();
+    ClientRequestResult applied;
+    applied.wantedOrderId = order.order_id();
+    applied.wantedOrderGold = netGold;
+    applied.scrollCraftRevision = sellerRevBefore + 1;
+    ClientRequestLedgerComp nextLedger = sellerLedger;
+    if (!client_request_ledger::Remember(nextLedger, request.client_request_id(),
+                                         ClientRequestKind::kFulfillWantedOrder, fingerprint, applied) ||
+        !client_request_ledger::Validate(nextLedger).empty()) {
+        fail(kServiceUnavailable);
+        return;
+    }
+
+    if (fromSealedBag) {
+        const auto removeErr = BagService::RemoveItem(player, sellerInventory, request.sealed_item_id());
+        if (removeErr != kSuccess) {
+            fail(removeErr);
+            return;
+        }
+    } else {
+        RemoveBookAt(sellerCraft, sellerBookIdx);
+    }
+
+    const uint64_t posterBookId = posterCraft->next_book_seq() == 0 ? 1u : posterCraft->next_book_seq();
+    CraftedSkillBookEntry deliveredBook;
+    deliveredBook.set_book_id(posterBookId);
+    deliveredBook.set_skill_table_id(order.skill_table_id());
+    deliveredBook.set_scroll_id(deliveredScrollId);
+    deliveredBook.set_rarity_tier(0);
+    deliveredBook.set_bound(false);
+    if (!deliveredCrafterName.empty()) deliveredBook.set_crafter_name(deliveredCrafterName);
+    if (deliveredCrafterId != 0) deliveredBook.set_crafter_player_id(deliveredCrafterId);
+
+    RemoveWantedOrderAt(*posterCraft, orderIdx);
+    *posterCraft->add_skill_books() = deliveredBook;
+    posterCraft->set_next_book_seq(posterBookId + 1);
+    posterCraft->set_scroll_craft_revision(posterCraft->scroll_craft_revision() + 1);
+
+    if (netGold > 0) {
+        (void)CurrencySystem::AddCurrency(player, kCurrencyGold, static_cast<int64_t>(netGold),
+                                          TX_CRAFT_PROXY_FEE, request.client_request_id());
+    }
+    sellerCraft.set_scroll_craft_revision(sellerRevBefore + 1);
+    sellerLedger.Swap(&nextLedger);
+
+    PlayerLifecycleSystem::RequestKeyProgressSave(poster, "skill_wanted_order_fulfilled_buyer");
+    PlayerLifecycleSystem::RequestKeyProgressSave(player, "skill_wanted_order_fulfilled_seller");
+    response.set_order_id(order.order_id());
+    response.set_seller_net_gold(netGold);
+    FillStateSnapshot(player, *response.mutable_state());
 }

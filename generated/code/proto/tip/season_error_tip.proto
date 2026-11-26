@@ -33,4 +33,8 @@ enum season_error {
 
   kSeasonUnavailable = 34011;
 
+  kSeasonHonorAlreadyUnlocked = 34012;
+
+  kSeasonHonorTargetInvalid = 34013;
+
 };

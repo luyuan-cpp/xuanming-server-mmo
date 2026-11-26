@@ -805,7 +805,7 @@ const char descriptor_table_protodef_proto_2fscene_5fmanager_2fscene_5fnode_5fse
     "node_id\030\003 \001(\t\022\034\n\024expected_owner_epoch\030\004 "
     "\001(\004\022\025\n\rsession_ended\030\005 \001(\010\022\032\n\022covered_se"
     "ssion_id\030\006 \001(\r\022 \n\030covered_login_generati"
-    "on\030\007 \001(\004\022\021\n\tkeep_held\030\010 \001(\0102\302\005\n\rSceneNod"
+    "on\030\007 \001(\004\022\021\n\tkeep_held\030\010 \001(\0102\256\006\n\rSceneNod"
     "eGrpc\022:\n\013CreateScene\022\023.CreateSceneReques"
     "t\032\024.CreateSceneResponse\"\000\022.\n\014DestroyScen"
     "e\022\024.DestroySceneRequest\032\006.Empty\"\000\022;\n\rRel"
@@ -823,8 +823,11 @@ const char descriptor_table_protodef_proto_2fscene_5fmanager_2fscene_5fnode_5fse
     "t\032\020.AssetOpResponse\"\000\022q\n\026GmExecutePlayer"
     "Command\022).scene_node.GmExecutePlayerComm"
     "andRequest\032*.scene_node.GmExecutePlayerC"
-    "ommandResponse\"\000B\035Z\033scene_manager/scene_"
-    "managerb\006proto3"
+    "ommandResponse\"\000\022j\n\033CheckJianghuDuelElig"
+    "ibility\022#.CheckJianghuDuelEligibilityReq"
+    "uest\032$.CheckJianghuDuelEligibilityRespon"
+    "se\"\000B\035Z\033scene_manager/scene_managerb\006pro"
+    "to3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto_deps[8] = {
@@ -841,7 +844,7 @@ static ::absl::once_flag descriptor_table_proto_2fscene_5fmanager_2fscene_5fnode
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto = {
     false,
     false,
-    2015,
+    2123,
     descriptor_table_protodef_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto,
     "proto/scene_manager/scene_node_service.proto",
     &descriptor_table_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto_once,

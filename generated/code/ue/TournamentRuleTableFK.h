@@ -20,7 +20,6 @@
 #include "ConfigSubsystem.h"
 #include "TournamentRuleTable.h"
 #include "DungeonTable.h"
-#include "ItemTable.h"
 
 /// 解析 TournamentRule.battle_config_id -> Dungeon 行。
 inline const FCfgDungeonRow* GetTournamentRuleBattleConfigIdRow(const UConfigSubsystem* Config, const FCfgTournamentRuleRow& Row)
@@ -37,21 +36,6 @@ inline const FCfgDungeonRow* GetTournamentRuleBattleConfigIdRow(const UConfigSub
 	return Row != nullptr ? GetTournamentRuleBattleConfigIdRow(Config, *Row) : nullptr;
 }
 
-/// 解析 TournamentRule.salute_item_id -> Item 行。
-inline const FCfgItemRow* GetTournamentRuleSaluteItemIdRow(const UConfigSubsystem* Config, const FCfgTournamentRuleRow& Row)
-{
-	const UItemTable* Target = Config != nullptr ? Config->GetItemTable() : nullptr;
-	return Target != nullptr ? Target->FindByIdSilent(Row.salute_item_id) : nullptr;
-}
-
-/// 同上,按 TournamentRule 的 id 取行再解析。
-inline const FCfgItemRow* GetTournamentRuleSaluteItemIdRow(const UConfigSubsystem* Config, int32 TableId)
-{
-	const UTournamentRuleTable* Source = Config != nullptr ? Config->GetTournamentRuleTable() : nullptr;
-	const FCfgTournamentRuleRow* Row = Source != nullptr ? Source->FindByIdSilent(TableId) : nullptr;
-	return Row != nullptr ? GetTournamentRuleSaluteItemIdRow(Config, *Row) : nullptr;
-}
-
 // ---------------------------------------------------------------------------
 // 反向外键(HasMany):按外键列的值找源表的行
 // ---------------------------------------------------------------------------
@@ -61,11 +45,4 @@ inline TArray<const FCfgTournamentRuleRow*> FindTournamentRuleRowsByBattleConfig
 {
 	const UTournamentRuleTable* Source = Config != nullptr ? Config->GetTournamentRuleTable() : nullptr;
 	return Source != nullptr ? Source->GetByBattleConfigId(Key) : TArray<const FCfgTournamentRuleRow*>();
-}
-
-/// 反查:salute_item_id == Key 的全部 TournamentRule 行。
-inline TArray<const FCfgTournamentRuleRow*> FindTournamentRuleRowsBySaluteItemId(const UConfigSubsystem* Config, int32 Key)
-{
-	const UTournamentRuleTable* Source = Config != nullptr ? Config->GetTournamentRuleTable() : nullptr;
-	return Source != nullptr ? Source->GetBySaluteItemId(Key) : TArray<const FCfgTournamentRuleRow*>();
 }

@@ -731,3 +731,31 @@ message GuildJianghuGrudgeRecord {
   string rival_captain_name = 10;
   uint64 finished_ms = 11;
 }
+
+// 锁序位置 22:帮会全天帮战 V2.5 宿敌约战战书(2 小时全帮约战 + 实时比分 + 24h 冷却)。
+message GuildWarFeudRecord {
+  option(OptionTableName) = "guild_war_feud";
+  option(OptionPrimaryKey) = "feud_id";
+  option(OptionIndex) = "zone_id,status,ends_at_ms;issuer_guild_id,created_at_ms;target_guild_id,created_at_ms";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 feud_id = 1;
+  uint32 zone_id = 2;
+  uint64 issuer_guild_id = 3;
+  string issuer_guild_name = 4;
+  uint64 target_guild_id = 5;
+  string target_guild_name = 6;
+  uint32 status = 7;                // GuildWarFeudStatus
+  uint32 issuer_wins = 8;
+  uint32 target_wins = 9;
+  uint64 issuer_merit = 10;
+  uint64 target_merit = 11;
+  uint64 created_at_ms = 12;
+  uint64 accept_deadline_ms = 13;
+  uint64 started_at_ms = 14;
+  uint64 ends_at_ms = 15;
+  uint64 winner_guild_id = 16;
+  uint64 updated_ms = 17;
+}

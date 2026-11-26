@@ -17100,15 +17100,6 @@ function Apply-Zone {
 	Write-Host "Client entry mode: $ClientEntryMode -> gate $gateKind"
 
 	Ensure-Namespace -Namespace $namespace
-	# 两套 Redis Cluster 的口令:login、player-locator、scene-manager、data-service、gateway 与 scene 都在本 namespace,先于它们落地
-	# (没开的那套是空操作)。控制集群开着时它们的 SHARED_REDIS_PASSWORD / CONTROL_REDIS_PASSWORD 引用 redis-control-auth(缺口第 34 条第 6b 批)。
-	foreach ($redisCluster in Get-RedisClusters) { Sync-RedisClusterAuthSecret -Cluster $redisCluster -Namespace $namespace }
-	# 核心单实例口令的本 namespace 副本:控制集群没开时(只有 dev)scene 的 CONTROL_REDIS_PASSWORD、zone 级 Go 服务与 gateway 的
-	# SHARED_REDIS_PASSWORD 按 secretKeyRef 引用它(optional: false),先于引用它的工作负载落地;dev 无口令时删掉残留。
-	Sync-RedisAuthSecret -Namespace $namespace
-	# gate 的工作负载密钥(gate 令牌、观战凭证)在本 namespace 的 Secret,先于 gate 工作负载落地;zone 级 Go 服务与 gateway 要的在
-	# Apply-OneGoSvc / Apply-JavaSvcManifests 里各自同步(同一把只写一次)。
-	Sync-WorkloadSecrets -Namespace $namespace -Consumer 'cpp:gate'
 
 	$configMapName = "node-config"
 	$gateServiceName = "gate-entry"
@@ -17131,6 +17122,17 @@ function Apply-Zone {
 	$gateObsoleteResources = Get-GateObsoleteResources -ClientEntryMode $ClientEntryMode -GateReplicas $CurrentGateReplicas
 	Remove-ClientEntryObsoleteResources -Namespace $namespace -Resources $gateObsoleteResources `
 		-KubeContext $KubeContext -KubeConfig $KubeConfig -AllowDisruptiveSwitch:$AllowDisruptiveSwitch -DryRun:$DryRun
+	# Redis 与工作负载密钥同步排在服务端预演与旧形态删除闸通过之后、任何工作负载(gate / scene / Go 服务 / gateway)之前，
+	# 保证预演被拒时零 Secret 变更。
+	# 两套 Redis Cluster 的口令:login、player-locator、scene-manager、data-service、gateway 与 scene 都在本 namespace,先于它们落地
+	# (没开的那套是空操作)。控制集群开着时它们的 SHARED_REDIS_PASSWORD / CONTROL_REDIS_PASSWORD 引用 redis-control-auth(缺口第 34 条第 6b 批)。
+	foreach ($redisCluster in Get-RedisClusters) { Sync-RedisClusterAuthSecret -Cluster $redisCluster -Namespace $namespace }
+	# 核心单实例口令的本 namespace 副本:控制集群没开时(只有 dev)scene 的 CONTROL_REDIS_PASSWORD、zone 级 Go 服务与 gateway 的
+	# SHARED_REDIS_PASSWORD 按 secretKeyRef 引用它(optional: false),先于引用它的工作负载落地;dev 无口令时删掉残留。
+	Sync-RedisAuthSecret -Namespace $namespace
+	# gate 的工作负载密钥(gate 令牌、观战凭证)在本 namespace 的 Secret,先于 gate 工作负载落地;zone 级 Go 服务与 gateway 要的在
+	# Apply-OneGoSvc / Apply-JavaSvcManifests 里各自同步(同一把只写一次)。
+	Sync-WorkloadSecrets -Namespace $namespace -Consumer 'cpp:gate'
 	# 托管内部密钥(Initialize-ManagedDomainServiceSecrets 算好的计划):排在名册、服务端预演与旧形态删除闸全部通过之后、
 	# 任何工作负载(scene / Go 服务)之前;all-up 若已在 Apply-Infra 写过则这里是空操作。
 	Sync-ManagedDomainServiceSecrets

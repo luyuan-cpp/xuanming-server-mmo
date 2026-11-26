@@ -79,6 +79,15 @@ message PlayerBattleResult {
   uint64 battle_silver_weekly_used = 44;
   uint64 battle_silver_weekly_soft_cap = 45;
   bool battle_silver_diminished = 46;
+  uint32 trial_vow_mask = 47;    // 五行试炼志 V3：本局生效的试炼誓约位掩码（0=常规）
+  bool trial_new_vow_best = 48;  // 五行试炼志 V3：本局是否刷新该试炼格最高誓约纪录
+  uint64 trial_battle_id = 49;   // 五行试炼志 V3：可供一键发帖约战/回放的权威 battle_id（仅胜局非 0）
+  // 满级溢出流向「往季徽章追忆」的单局增量（与 BattleEndS2C 同源，断线补弹零丢失）。
+  uint32 retro_honor_season_id = 50;
+  uint32 retro_honor_points_added = 51;
+  uint32 retro_honor_progress_after = 52;
+  uint32 retro_honor_max_points = 53;
+  bool retro_honor_newly_unlocked = 54;
 }
 
 message PlayerBattleResultComp {

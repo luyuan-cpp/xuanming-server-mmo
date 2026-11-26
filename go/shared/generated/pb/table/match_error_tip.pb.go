@@ -81,8 +81,6 @@ const (
 	MatchError_kMatchBattleSurrenderTooEarly           MatchError = 16053
 	MatchError_kMatchBattleSurrenderCooldown           MatchError = 16054
 	MatchError_kMatchBattleSurrenderAlreadyVoted       MatchError = 16055
-	MatchError_kMatchTournamentAlreadySalutedToday     MatchError = 16056
-	MatchError_kMatchTournamentNoChampionToSalute      MatchError = 16057
 	MatchError_kMatchTournamentSpectateCheerCooldown   MatchError = 16058
 	MatchError_kMatchTournamentSpectateCheerInvalid    MatchError = 16059
 	MatchError_kMatchTournamentEmblemInvalid           MatchError = 16060
@@ -151,8 +149,6 @@ var (
 		16053: "kMatchBattleSurrenderTooEarly",
 		16054: "kMatchBattleSurrenderCooldown",
 		16055: "kMatchBattleSurrenderAlreadyVoted",
-		16056: "kMatchTournamentAlreadySalutedToday",
-		16057: "kMatchTournamentNoChampionToSalute",
 		16058: "kMatchTournamentSpectateCheerCooldown",
 		16059: "kMatchTournamentSpectateCheerInvalid",
 		16060: "kMatchTournamentEmblemInvalid",
@@ -218,8 +214,6 @@ var (
 		"kMatchBattleSurrenderTooEarly":           16053,
 		"kMatchBattleSurrenderCooldown":           16054,
 		"kMatchBattleSurrenderAlreadyVoted":       16055,
-		"kMatchTournamentAlreadySalutedToday":     16056,
-		"kMatchTournamentNoChampionToSalute":      16057,
 		"kMatchTournamentSpectateCheerCooldown":   16058,
 		"kMatchTournamentSpectateCheerInvalid":    16059,
 		"kMatchTournamentEmblemInvalid":           16060,
@@ -260,7 +254,7 @@ var File_match_error_tip_proto protoreflect.FileDescriptor
 
 const file_match_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15match_error_tip.proto*\x8d\x11\n" +
+	"\x15match_error_tip.proto*\xba\x10\n" +
 	"\vmatch_error\x12\x12\n" +
 	"\x0ekMatch_errorOK\x10\x00\x12\x13\n" +
 	"\x0ekMatchInBattle\x10\x80}\x12\x18\n" +
@@ -318,9 +312,7 @@ const file_match_error_tip_proto_rawDesc = "" +
 	"\x1fkMatchBattleSurrenderNotAllowed\x10\xb4}\x12\"\n" +
 	"\x1dkMatchBattleSurrenderTooEarly\x10\xb5}\x12\"\n" +
 	"\x1dkMatchBattleSurrenderCooldown\x10\xb6}\x12&\n" +
-	"!kMatchBattleSurrenderAlreadyVoted\x10\xb7}\x12(\n" +
-	"#kMatchTournamentAlreadySalutedToday\x10\xb8}\x12'\n" +
-	"\"kMatchTournamentNoChampionToSalute\x10\xb9}\x12*\n" +
+	"!kMatchBattleSurrenderAlreadyVoted\x10\xb7}\x12*\n" +
 	"%kMatchTournamentSpectateCheerCooldown\x10\xba}\x12)\n" +
 	"$kMatchTournamentSpectateCheerInvalid\x10\xbb}\x12\"\n" +
 	"\x1dkMatchTournamentEmblemInvalid\x10\xbc}\x12%\n" +

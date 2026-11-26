@@ -86,14 +86,15 @@ func (x *PlayerSkillComp) GetRank() uint32 {
 	return 0
 }
 
-// 人物战法构筑装配方案（布局层：与 skill_list 实例层解耦，不靠下标承载槽位语义）。
+// 人物战法与加点一体化流派方案（布局层：与 skill_list 实例层解耦，不靠下标承载槽位语义）。
 type SkillLoadoutScheme struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	SchemeId        uint32                 `protobuf:"varint,1,opt,name=scheme_id,json=schemeId,proto3" json:"scheme_id,omitempty"`                               // 1..3 显式流派方案号
-	RoleTag         uint32                 `protobuf:"varint,2,opt,name=role_tag,json=roleTag,proto3" json:"role_tag,omitempty"`                                  // 0默认 / 1输出 / 2控场 / 3辅助
+	SchemeId        uint32                 `protobuf:"varint,1,opt,name=scheme_id,json=schemeId,proto3" json:"scheme_id,omitempty"`                               // 1..7 显式流派方案号（1..2 永久免费；轻享卡 +2；按套按月租用 0..5，封顶 7 套）
+	RoleTag         uint32                 `protobuf:"varint,2,opt,name=role_tag,json=roleTag,proto3" json:"role_tag,omitempty"`                                  // 0默认 / 1输出 / 2控场 / 3辅助 / 4生存
 	PassiveSkillIds []uint32               `protobuf:"varint,3,rep,packed,name=passive_skill_ids,json=passiveSkillIds,proto3" json:"passive_skill_ids,omitempty"` // 最多 3 个被动战法（同 exclusive_group 互斥）
 	PursuitSkillIds []uint32               `protobuf:"varint,4,rep,packed,name=pursuit_skill_ids,json=pursuitSkillIds,proto3" json:"pursuit_skill_ids,omitempty"` // 最多 1 个追击战法
 	OpeningSkillIds []uint32               `protobuf:"varint,5,rep,packed,name=opening_skill_ids,json=openingSkillIds,proto3" json:"opening_skill_ids,omitempty"` // 最多 1 个开场战法
+	Name            string                 `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`                                                        // 自定义方案名（UTF-8 1..12 字符；空则回退「方案一..七」）
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -163,15 +164,24 @@ func (x *SkillLoadoutScheme) GetOpeningSkillIds() []uint32 {
 	return nil
 }
 
+func (x *SkillLoadoutScheme) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
 type PlayerSkillListComp struct {
 	state                  protoimpl.MessageState `protogen:"open.v1"`
 	SkillList              []*PlayerSkillComp     `protobuf:"bytes,1,rep,name=skill_list,json=skillList,proto3" json:"skill_list,omitempty"`
-	ActiveLoadoutSchemeId  uint32                 `protobuf:"varint,2,opt,name=active_loadout_scheme_id,json=activeLoadoutSchemeId,proto3" json:"active_loadout_scheme_id,omitempty"` // 0 = 未启用自定义装配（全量非互斥兼容态）；1..3 = 启用对应方案
+	ActiveLoadoutSchemeId  uint32                 `protobuf:"varint,2,opt,name=active_loadout_scheme_id,json=activeLoadoutSchemeId,proto3" json:"active_loadout_scheme_id,omitempty"` // 0 = 未启用自定义装配（全量非互斥兼容态）；1..7 = 启用对应方案
 	LoadoutSchemes         []*SkillLoadoutScheme  `protobuf:"bytes,3,rep,name=loadout_schemes,json=loadoutSchemes,proto3" json:"loadout_schemes,omitempty"`
 	LoadoutStateVersion    uint64                 `protobuf:"varint,4,opt,name=loadout_state_version,json=loadoutStateVersion,proto3" json:"loadout_state_version,omitempty"`            // 战法装配乐观锁版本号（0 按 1 计）
 	LoadoutLastRequestId   string                 `protobuf:"bytes,5,opt,name=loadout_last_request_id,json=loadoutLastRequestId,proto3" json:"loadout_last_request_id,omitempty"`        // 最近一次战法装配/切换幂等键
 	LoadoutLastBaseVersion uint64                 `protobuf:"varint,6,opt,name=loadout_last_base_version,json=loadoutLastBaseVersion,proto3" json:"loadout_last_base_version,omitempty"` // 最近一次战法装配/切换请求的期望版本
 	LoadoutLastSchemeId    uint32                 `protobuf:"varint,7,opt,name=loadout_last_scheme_id,json=loadoutLastSchemeId,proto3" json:"loadout_last_scheme_id,omitempty"`          // 最近一次战法装配/切换的目标方案号
+	RentedExtraSlots       uint32                 `protobuf:"varint,8,opt,name=rented_extra_slots,json=rentedExtraSlots,proto3" json:"rented_extra_slots,omitempty"`                     // 非永久按套租用的额外方案槽位数（0..5，共享统一到期日）
+	RentExpiresAtSec       uint64                 `protobuf:"varint,9,opt,name=rent_expires_at_sec,json=rentExpiresAtSec,proto3" json:"rent_expires_at_sec,omitempty"`                   // 付费租用方案槽位统一到期 Unix 秒（0 或 <= 当前时刻为未租/已到期，到期只锁不删）
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -255,6 +265,20 @@ func (x *PlayerSkillListComp) GetLoadoutLastSchemeId() uint32 {
 	return 0
 }
 
+func (x *PlayerSkillListComp) GetRentedExtraSlots() uint32 {
+	if x != nil {
+		return x.RentedExtraSlots
+	}
+	return 0
+}
+
+func (x *PlayerSkillListComp) GetRentExpiresAtSec() uint64 {
+	if x != nil {
+		return x.RentExpiresAtSec
+	}
+	return 0
+}
+
 var File_proto_common_component_player_skill_comp_proto protoreflect.FileDescriptor
 
 const file_proto_common_component_player_skill_comp_proto_rawDesc = "" +
@@ -263,13 +287,14 @@ const file_proto_common_component_player_skill_comp_proto_rawDesc = "" +
 	"\x0fPlayerSkillComp\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12$\n" +
 	"\x0eskill_table_id\x18\x02 \x01(\rR\fskillTableId\x12\x12\n" +
-	"\x04rank\x18\x03 \x01(\rR\x04rank\"\xd0\x01\n" +
+	"\x04rank\x18\x03 \x01(\rR\x04rank\"\xe4\x01\n" +
 	"\x12SkillLoadoutScheme\x12\x1b\n" +
 	"\tscheme_id\x18\x01 \x01(\rR\bschemeId\x12\x19\n" +
 	"\brole_tag\x18\x02 \x01(\rR\aroleTag\x12*\n" +
 	"\x11passive_skill_ids\x18\x03 \x03(\rR\x0fpassiveSkillIds\x12*\n" +
 	"\x11pursuit_skill_ids\x18\x04 \x03(\rR\x0fpursuitSkillIds\x12*\n" +
-	"\x11opening_skill_ids\x18\x05 \x03(\rR\x0fopeningSkillIds\"\x98\x03\n" +
+	"\x11opening_skill_ids\x18\x05 \x03(\rR\x0fopeningSkillIds\x12\x12\n" +
+	"\x04name\x18\x06 \x01(\tR\x04name\"\xf5\x03\n" +
 	"\x13PlayerSkillListComp\x12/\n" +
 	"\n" +
 	"skill_list\x18\x01 \x03(\v2\x10.PlayerSkillCompR\tskillList\x127\n" +
@@ -278,7 +303,9 @@ const file_proto_common_component_player_skill_comp_proto_rawDesc = "" +
 	"\x15loadout_state_version\x18\x04 \x01(\x04R\x13loadoutStateVersion\x125\n" +
 	"\x17loadout_last_request_id\x18\x05 \x01(\tR\x14loadoutLastRequestId\x129\n" +
 	"\x19loadout_last_base_version\x18\x06 \x01(\x04R\x16loadoutLastBaseVersion\x123\n" +
-	"\x16loadout_last_scheme_id\x18\a \x01(\rR\x13loadoutLastSchemeIdB\x18Z\x16proto/common/componentb\x06proto3"
+	"\x16loadout_last_scheme_id\x18\a \x01(\rR\x13loadoutLastSchemeId\x12,\n" +
+	"\x12rented_extra_slots\x18\b \x01(\rR\x10rentedExtraSlots\x12-\n" +
+	"\x13rent_expires_at_sec\x18\t \x01(\x04R\x10rentExpiresAtSecB\x18Z\x16proto/common/componentb\x06proto3"
 
 var (
 	file_proto_common_component_player_skill_comp_proto_rawDescOnce sync.Once

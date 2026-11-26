@@ -242,8 +242,15 @@ type PlayerCraftComp struct {
 	WantedOrders       []*SkillBookWantedOrder `protobuf:"bytes,16,rep,name=wanted_orders,json=wantedOrders,proto3" json:"wanted_orders,omitempty"`                        // 本人当前挂出的悬赏求书单（最多 3 条，无序按 order_id 索引）。
 	NextWantedOrderSeq uint64                  `protobuf:"varint,17,opt,name=next_wanted_order_seq,json=nextWantedOrderSeq,proto3" json:"next_wanted_order_seq,omitempty"` // 下一条悬赏求书单本地单调 ID（0 视为 1）。
 	TeamFreeProxy      bool                    `protobuf:"varint,18,opt,name=team_free_proxy,json=teamFreeProxy,proto3" json:"team_free_proxy,omitempty"`                  // true = 对同队（TeamId 相同且非 0）玩家实行情义 0 手工费原子代打/代制。
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// ── 离线/跨线名匠代打未读营业战报（异步回账落盘后累积，宗师 AckCraftProxyDigest 幂等清零） ──
+	UnreadProxyDigestOrders        uint32 `protobuf:"varint,19,opt,name=unread_proxy_digest_orders,json=unreadProxyDigestOrders,proto3" json:"unread_proxy_digest_orders,omitempty"`                          // 尚未查阅的代打累计成交单数。
+	UnreadProxyDigestSupreme       uint32 `protobuf:"varint,20,opt,name=unread_proxy_digest_supreme,json=unreadProxyDigestSupreme,proto3" json:"unread_proxy_digest_supreme,omitempty"`                       // 尚未查阅的极品产出次数。
+	UnreadProxyDigestRare          uint32 `protobuf:"varint,21,opt,name=unread_proxy_digest_rare,json=unreadProxyDigestRare,proto3" json:"unread_proxy_digest_rare,omitempty"`                                // 尚未查阅的稀世制书次数。
+	UnreadProxyDigestNetGold       uint64 `protobuf:"varint,22,opt,name=unread_proxy_digest_net_gold,json=unreadProxyDigestNetGold,proto3" json:"unread_proxy_digest_net_gold,omitempty"`                     // 尚未查阅的税后 95% 净银两总额（已寄往邮箱）。
+	UnreadProxyDigestLastBuyer     string `protobuf:"bytes,23,opt,name=unread_proxy_digest_last_buyer,json=unreadProxyDigestLastBuyer,proto3" json:"unread_proxy_digest_last_buyer,omitempty"`                // 最近一位下单侠士名（服务端已过审角色名）。
+	UnreadProxyDigestNewTitlesMask uint32 `protobuf:"varint,24,opt,name=unread_proxy_digest_new_titles_mask,json=unreadProxyDigestNewTitlesMask,proto3" json:"unread_proxy_digest_new_titles_mask,omitempty"` // 本期间新解锁的零属性名匠雅号位图（bit (title_id - 1)）。
+	unknownFields                  protoimpl.UnknownFields
+	sizeCache                      protoimpl.SizeCache
 }
 
 func (x *PlayerCraftComp) Reset() {
@@ -402,6 +409,48 @@ func (x *PlayerCraftComp) GetTeamFreeProxy() bool {
 	return false
 }
 
+func (x *PlayerCraftComp) GetUnreadProxyDigestOrders() uint32 {
+	if x != nil {
+		return x.UnreadProxyDigestOrders
+	}
+	return 0
+}
+
+func (x *PlayerCraftComp) GetUnreadProxyDigestSupreme() uint32 {
+	if x != nil {
+		return x.UnreadProxyDigestSupreme
+	}
+	return 0
+}
+
+func (x *PlayerCraftComp) GetUnreadProxyDigestRare() uint32 {
+	if x != nil {
+		return x.UnreadProxyDigestRare
+	}
+	return 0
+}
+
+func (x *PlayerCraftComp) GetUnreadProxyDigestNetGold() uint64 {
+	if x != nil {
+		return x.UnreadProxyDigestNetGold
+	}
+	return 0
+}
+
+func (x *PlayerCraftComp) GetUnreadProxyDigestLastBuyer() string {
+	if x != nil {
+		return x.UnreadProxyDigestLastBuyer
+	}
+	return ""
+}
+
+func (x *PlayerCraftComp) GetUnreadProxyDigestNewTitlesMask() uint32 {
+	if x != nil {
+		return x.UnreadProxyDigestNewTitlesMask
+	}
+	return 0
+}
+
 var File_proto_common_component_player_craft_comp_proto protoreflect.FileDescriptor
 
 const file_proto_common_component_player_craft_comp_proto_rawDesc = "" +
@@ -426,7 +475,8 @@ const file_proto_common_component_player_craft_comp_proto_rawDesc = "" +
 	"\x18require_master_signature\x18\x06 \x01(\bR\x16requireMasterSignature\x12\x1f\n" +
 	"\vreward_gold\x18\a \x01(\x04R\n" +
 	"rewardGold\x12$\n" +
-	"\x0ecreated_at_sec\x18\b \x01(\x04R\fcreatedAtSec\"\xa3\a\n" +
+	"\x0ecreated_at_sec\x18\b \x01(\x04R\fcreatedAtSec\"\xa9\n" +
+	"\n" +
 	"\x0fPlayerCraftComp\x12*\n" +
 	"\x11forge_mastery_exp\x18\x01 \x01(\rR\x0fforgeMasteryExp\x12,\n" +
 	"\x12scroll_mastery_exp\x18\x02 \x01(\rR\x10scrollMasteryExp\x122\n" +
@@ -447,7 +497,13 @@ const file_proto_common_component_player_craft_comp_proto_rawDesc = "" +
 	"\x1dclaimed_scroll_milestone_bits\x18\x0f \x01(\fR\x1aclaimedScrollMilestoneBits\x12:\n" +
 	"\rwanted_orders\x18\x10 \x03(\v2\x15.SkillBookWantedOrderR\fwantedOrders\x121\n" +
 	"\x15next_wanted_order_seq\x18\x11 \x01(\x04R\x12nextWantedOrderSeq\x12&\n" +
-	"\x0fteam_free_proxy\x18\x12 \x01(\bR\rteamFreeProxyB\x18Z\x16proto/common/componentb\x06proto3"
+	"\x0fteam_free_proxy\x18\x12 \x01(\bR\rteamFreeProxy\x12;\n" +
+	"\x1aunread_proxy_digest_orders\x18\x13 \x01(\rR\x17unreadProxyDigestOrders\x12=\n" +
+	"\x1bunread_proxy_digest_supreme\x18\x14 \x01(\rR\x18unreadProxyDigestSupreme\x127\n" +
+	"\x18unread_proxy_digest_rare\x18\x15 \x01(\rR\x15unreadProxyDigestRare\x12>\n" +
+	"\x1cunread_proxy_digest_net_gold\x18\x16 \x01(\x04R\x18unreadProxyDigestNetGold\x12B\n" +
+	"\x1eunread_proxy_digest_last_buyer\x18\x17 \x01(\tR\x1aunreadProxyDigestLastBuyer\x12K\n" +
+	"#unread_proxy_digest_new_titles_mask\x18\x18 \x01(\rR\x1eunreadProxyDigestNewTitlesMaskB\x18Z\x16proto/common/componentb\x06proto3"
 
 var (
 	file_proto_common_component_player_craft_comp_proto_rawDescOnce sync.Once

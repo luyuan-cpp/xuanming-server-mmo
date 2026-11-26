@@ -119,4 +119,16 @@ public final class SeasonRuleTableComp {
         }
     }
 
+    public record Cycle_order(int value) {
+        public static Cycle_order from(SeasonRuleTable row) {
+            return new Cycle_order(row.getCycleOrder());
+        }
+    }
+
+    public record Cycle_duration_days(int value) {
+        public static Cycle_duration_days from(SeasonRuleTable row) {
+            return new Cycle_duration_days(row.getCycleDurationDays());
+        }
+    }
+
 }

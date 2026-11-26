@@ -499,7 +499,7 @@ const file_proto_scene_manager_scene_node_service_proto_rawDesc = "" +
 	"\rsession_ended\x18\x05 \x01(\bR\fsessionEnded\x12,\n" +
 	"\x12covered_session_id\x18\x06 \x01(\rR\x10coveredSessionId\x128\n" +
 	"\x18covered_login_generation\x18\a \x01(\x04R\x16coveredLoginGeneration\x12\x1b\n" +
-	"\tkeep_held\x18\b \x01(\bR\bkeepHeld2\xc2\x05\n" +
+	"\tkeep_held\x18\b \x01(\bR\bkeepHeld2\xae\x06\n" +
 	"\rSceneNodeGrpc\x12:\n" +
 	"\vCreateScene\x12\x13.CreateSceneRequest\x1a\x14.CreateSceneResponse\"\x00\x12.\n" +
 	"\fDestroyScene\x12\x14.DestroySceneRequest\x1a\x06.Empty\"\x00\x12;\n" +
@@ -512,7 +512,8 @@ const file_proto_scene_manager_scene_node_service_proto_rawDesc = "" +
 	"\x0fAssetAbortDebit\x12\x0f.AssetOpRequest\x1a\x10.AssetOpResponse\"\x00\x122\n" +
 	"\vAssetCredit\x12\x0f.AssetOpRequest\x1a\x10.AssetOpResponse\"\x00\x126\n" +
 	"\x0fAssetAckReceipt\x12\x0f.AssetOpRequest\x1a\x10.AssetOpResponse\"\x00\x12q\n" +
-	"\x16GmExecutePlayerCommand\x12).scene_node.GmExecutePlayerCommandRequest\x1a*.scene_node.GmExecutePlayerCommandResponse\"\x00B\x15Z\x13proto/scene_managerb\x06proto3"
+	"\x16GmExecutePlayerCommand\x12).scene_node.GmExecutePlayerCommandRequest\x1a*.scene_node.GmExecutePlayerCommandResponse\"\x00\x12j\n" +
+	"\x1bCheckJianghuDuelEligibility\x12#.CheckJianghuDuelEligibilityRequest\x1a$.CheckJianghuDuelEligibilityResponse\"\x00B\x15Z\x13proto/scene_managerb\x06proto3"
 
 var (
 	file_proto_scene_manager_scene_node_service_proto_rawDescOnce sync.Once
@@ -528,27 +529,29 @@ func file_proto_scene_manager_scene_node_service_proto_rawDescGZIP() []byte {
 
 var file_proto_scene_manager_scene_node_service_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_proto_scene_manager_scene_node_service_proto_goTypes = []any{
-	(*GmExecutePlayerCommandRequest)(nil),     // 0: scene_node.GmExecutePlayerCommandRequest
-	(*GmExecutePlayerCommandResponse)(nil),    // 1: scene_node.GmExecutePlayerCommandResponse
-	(*ReleasePlayerRequest)(nil),              // 2: scene_node.ReleasePlayerRequest
-	(*scene.GmAddCurrencyRequest)(nil),        // 3: GmAddCurrencyRequest
-	(*scene.GmDeductCurrencyRequest)(nil),     // 4: GmDeductCurrencyRequest
-	(*scene.GmBlockCurrencyRequest)(nil),      // 5: GmBlockCurrencyRequest
-	(*scene.GmUnblockCurrencyRequest)(nil),    // 6: GmUnblockCurrencyRequest
-	(*scene.GmGrantItemRequest)(nil),          // 7: GmGrantItemRequest
-	(*scene.GmGrantPetRequest)(nil),           // 8: GmGrantPetRequest
-	(*scene.GmSetPlayerLevelRequest)(nil),     // 9: GmSetPlayerLevelRequest
-	(*base.TipInfoMessage)(nil),               // 10: TipInfoMessage
-	(*scene.CreateSceneRequest)(nil),          // 11: CreateSceneRequest
-	(*scene.DestroySceneRequest)(nil),         // 12: DestroySceneRequest
-	(*scene.PrepareBattleRequest)(nil),        // 13: PrepareBattleRequest
-	(*scene.CancelBattlePrepareRequest)(nil),  // 14: CancelBattlePrepareRequest
-	(*scene.SealAccountRoleTradeRequest)(nil), // 15: SealAccountRoleTradeRequest
-	(*asset.AssetOpRequest)(nil),              // 16: AssetOpRequest
-	(*scene.CreateSceneResponse)(nil),         // 17: CreateSceneResponse
-	(*base.Empty)(nil),                        // 18: Empty
-	(*scene.PrepareBattleResponse)(nil),       // 19: PrepareBattleResponse
-	(*asset.AssetOpResponse)(nil),             // 20: AssetOpResponse
+	(*GmExecutePlayerCommandRequest)(nil),             // 0: scene_node.GmExecutePlayerCommandRequest
+	(*GmExecutePlayerCommandResponse)(nil),            // 1: scene_node.GmExecutePlayerCommandResponse
+	(*ReleasePlayerRequest)(nil),                      // 2: scene_node.ReleasePlayerRequest
+	(*scene.GmAddCurrencyRequest)(nil),                // 3: GmAddCurrencyRequest
+	(*scene.GmDeductCurrencyRequest)(nil),             // 4: GmDeductCurrencyRequest
+	(*scene.GmBlockCurrencyRequest)(nil),              // 5: GmBlockCurrencyRequest
+	(*scene.GmUnblockCurrencyRequest)(nil),            // 6: GmUnblockCurrencyRequest
+	(*scene.GmGrantItemRequest)(nil),                  // 7: GmGrantItemRequest
+	(*scene.GmGrantPetRequest)(nil),                   // 8: GmGrantPetRequest
+	(*scene.GmSetPlayerLevelRequest)(nil),             // 9: GmSetPlayerLevelRequest
+	(*base.TipInfoMessage)(nil),                       // 10: TipInfoMessage
+	(*scene.CreateSceneRequest)(nil),                  // 11: CreateSceneRequest
+	(*scene.DestroySceneRequest)(nil),                 // 12: DestroySceneRequest
+	(*scene.PrepareBattleRequest)(nil),                // 13: PrepareBattleRequest
+	(*scene.CancelBattlePrepareRequest)(nil),          // 14: CancelBattlePrepareRequest
+	(*scene.SealAccountRoleTradeRequest)(nil),         // 15: SealAccountRoleTradeRequest
+	(*asset.AssetOpRequest)(nil),                      // 16: AssetOpRequest
+	(*scene.CheckJianghuDuelEligibilityRequest)(nil),  // 17: CheckJianghuDuelEligibilityRequest
+	(*scene.CreateSceneResponse)(nil),                 // 18: CreateSceneResponse
+	(*base.Empty)(nil),                                // 19: Empty
+	(*scene.PrepareBattleResponse)(nil),               // 20: PrepareBattleResponse
+	(*asset.AssetOpResponse)(nil),                     // 21: AssetOpResponse
+	(*scene.CheckJianghuDuelEligibilityResponse)(nil), // 22: CheckJianghuDuelEligibilityResponse
 }
 var file_proto_scene_manager_scene_node_service_proto_depIdxs = []int32{
 	3,  // 0: scene_node.GmExecutePlayerCommandRequest.add_currency:type_name -> GmAddCurrencyRequest
@@ -570,19 +573,21 @@ var file_proto_scene_manager_scene_node_service_proto_depIdxs = []int32{
 	16, // 16: scene_node.SceneNodeGrpc.AssetCredit:input_type -> AssetOpRequest
 	16, // 17: scene_node.SceneNodeGrpc.AssetAckReceipt:input_type -> AssetOpRequest
 	0,  // 18: scene_node.SceneNodeGrpc.GmExecutePlayerCommand:input_type -> scene_node.GmExecutePlayerCommandRequest
-	17, // 19: scene_node.SceneNodeGrpc.CreateScene:output_type -> CreateSceneResponse
-	18, // 20: scene_node.SceneNodeGrpc.DestroyScene:output_type -> Empty
-	18, // 21: scene_node.SceneNodeGrpc.ReleasePlayer:output_type -> Empty
-	19, // 22: scene_node.SceneNodeGrpc.PrepareBattle:output_type -> PrepareBattleResponse
-	18, // 23: scene_node.SceneNodeGrpc.CancelBattlePrepare:output_type -> Empty
-	18, // 24: scene_node.SceneNodeGrpc.SealAccountRoleTrade:output_type -> Empty
-	20, // 25: scene_node.SceneNodeGrpc.AssetDebit:output_type -> AssetOpResponse
-	20, // 26: scene_node.SceneNodeGrpc.AssetAbortDebit:output_type -> AssetOpResponse
-	20, // 27: scene_node.SceneNodeGrpc.AssetCredit:output_type -> AssetOpResponse
-	20, // 28: scene_node.SceneNodeGrpc.AssetAckReceipt:output_type -> AssetOpResponse
-	1,  // 29: scene_node.SceneNodeGrpc.GmExecutePlayerCommand:output_type -> scene_node.GmExecutePlayerCommandResponse
-	19, // [19:30] is the sub-list for method output_type
-	8,  // [8:19] is the sub-list for method input_type
+	17, // 19: scene_node.SceneNodeGrpc.CheckJianghuDuelEligibility:input_type -> CheckJianghuDuelEligibilityRequest
+	18, // 20: scene_node.SceneNodeGrpc.CreateScene:output_type -> CreateSceneResponse
+	19, // 21: scene_node.SceneNodeGrpc.DestroyScene:output_type -> Empty
+	19, // 22: scene_node.SceneNodeGrpc.ReleasePlayer:output_type -> Empty
+	20, // 23: scene_node.SceneNodeGrpc.PrepareBattle:output_type -> PrepareBattleResponse
+	19, // 24: scene_node.SceneNodeGrpc.CancelBattlePrepare:output_type -> Empty
+	19, // 25: scene_node.SceneNodeGrpc.SealAccountRoleTrade:output_type -> Empty
+	21, // 26: scene_node.SceneNodeGrpc.AssetDebit:output_type -> AssetOpResponse
+	21, // 27: scene_node.SceneNodeGrpc.AssetAbortDebit:output_type -> AssetOpResponse
+	21, // 28: scene_node.SceneNodeGrpc.AssetCredit:output_type -> AssetOpResponse
+	21, // 29: scene_node.SceneNodeGrpc.AssetAckReceipt:output_type -> AssetOpResponse
+	1,  // 30: scene_node.SceneNodeGrpc.GmExecutePlayerCommand:output_type -> scene_node.GmExecutePlayerCommandResponse
+	22, // 31: scene_node.SceneNodeGrpc.CheckJianghuDuelEligibility:output_type -> CheckJianghuDuelEligibilityResponse
+	20, // [20:32] is the sub-list for method output_type
+	8,  // [8:20] is the sub-list for method input_type
 	8,  // [8:8] is the sub-list for extension type_name
 	8,  // [8:8] is the sub-list for extension extendee
 	0,  // [0:8] is the sub-list for field type_name

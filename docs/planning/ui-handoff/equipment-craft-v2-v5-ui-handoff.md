@@ -51,4 +51,4 @@
   - `icons/icon_scroll_archive.png` → `mmorpg-client/Assets/Resources/UI/Ugui/CraftQualitySkill/Icons/icon_scroll_archive.png`
   - `icons/icon_wanted_board.png` → `mmorpg-client/Assets/Resources/UI/Ugui/CraftQualitySkill/Icons/icon_wanted_board.png`
   - `ui/badge_team_free_proxy.png` → `mmorpg-client/Assets/Resources/UI/Ugui/CraftQualitySkill/badge_team_free_proxy.png`
-- 客户端 `EquipmentWindow.Polish.cs` / `SkillCraftWindow.cs` 均已预接上述资源键并带安全空回退，图到位补齐 `.meta` 即可自动亮起，无需改业务代码。
+- **已验收导入（2026-11-26，来源 `image@346227407d9abe5aa5a5143b83132b2eb6926d80`）**：全部 5 张 PNG-32 均已从 `D:\work\image\designs\craft-quality-skill-v2-v5-icons-20261126\` 原样导入客户端并逐字节校验 SHA-256 一致、补齐唯一 GUID 的 Unity `.meta`（其中 `badge_team_free_proxy.png.meta` 配 `spriteBorder: {x: 20, y: 0, z: 20, w: 0}` 横向三段拉伸），客户端已补齐 `badge_team_free_proxy` 的运行时 `"同队免税"` 文字叠加与图标-文案防重叠排布，并通过 `client_compile_check.ps1`（814 文件 0 错误）与 `SeasonEconomyUiArtTests.CraftQualitySkillV2V5IncrementalAssets_All5SpritesAndMetasMatchContract`（7 套 NUnit 157/157 全绿）。

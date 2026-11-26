@@ -808,6 +808,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerCraftComp final : public ::go
     kBookUnlockedSkillIdsFieldNumber = 9,
     kWantedOrdersFieldNumber = 16,
     kClaimedScrollMilestoneBitsFieldNumber = 15,
+    kUnreadProxyDigestLastBuyerFieldNumber = 23,
     kForgeMasteryExpFieldNumber = 1,
     kScrollMasteryExpFieldNumber = 2,
     kScrollCraftRevisionFieldNumber = 3,
@@ -822,6 +823,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerCraftComp final : public ::go
     kMasterShowcaseTagFieldNumber = 13,
     kEquippedCraftTitleIdFieldNumber = 14,
     kNextWantedOrderSeqFieldNumber = 17,
+    kUnreadProxyDigestOrdersFieldNumber = 19,
+    kUnreadProxyDigestSupremeFieldNumber = 20,
+    kUnreadProxyDigestNetGoldFieldNumber = 22,
+    kUnreadProxyDigestRareFieldNumber = 21,
+    kUnreadProxyDigestNewTitlesMaskFieldNumber = 24,
   };
   // repeated .CraftedSkillBookEntry skill_books = 5;
   [[nodiscard]] int skill_books_size()
@@ -898,6 +904,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerCraftComp final : public ::go
   const ::std::string& _internal_claimed_scroll_milestone_bits() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_claimed_scroll_milestone_bits(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_claimed_scroll_milestone_bits();
+
+  public:
+  // string unread_proxy_digest_last_buyer = 23;
+  void clear_unread_proxy_digest_last_buyer() ;
+  [[nodiscard]] const ::std::string& unread_proxy_digest_last_buyer() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_unread_proxy_digest_last_buyer(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_unread_proxy_digest_last_buyer();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_unread_proxy_digest_last_buyer();
+  void set_allocated_unread_proxy_digest_last_buyer(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_unread_proxy_digest_last_buyer() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_unread_proxy_digest_last_buyer(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_unread_proxy_digest_last_buyer();
 
   public:
   // uint32 forge_mastery_exp = 1;
@@ -1040,12 +1061,62 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerCraftComp final : public ::go
   void _internal_set_next_wanted_order_seq(::uint64_t value);
 
   public:
+  // uint32 unread_proxy_digest_orders = 19;
+  void clear_unread_proxy_digest_orders() ;
+  [[nodiscard]] ::uint32_t unread_proxy_digest_orders() const;
+  void set_unread_proxy_digest_orders(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_unread_proxy_digest_orders() const;
+  void _internal_set_unread_proxy_digest_orders(::uint32_t value);
+
+  public:
+  // uint32 unread_proxy_digest_supreme = 20;
+  void clear_unread_proxy_digest_supreme() ;
+  [[nodiscard]] ::uint32_t unread_proxy_digest_supreme() const;
+  void set_unread_proxy_digest_supreme(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_unread_proxy_digest_supreme() const;
+  void _internal_set_unread_proxy_digest_supreme(::uint32_t value);
+
+  public:
+  // uint64 unread_proxy_digest_net_gold = 22;
+  void clear_unread_proxy_digest_net_gold() ;
+  [[nodiscard]] ::uint64_t unread_proxy_digest_net_gold() const;
+  void set_unread_proxy_digest_net_gold(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_unread_proxy_digest_net_gold() const;
+  void _internal_set_unread_proxy_digest_net_gold(::uint64_t value);
+
+  public:
+  // uint32 unread_proxy_digest_rare = 21;
+  void clear_unread_proxy_digest_rare() ;
+  [[nodiscard]] ::uint32_t unread_proxy_digest_rare() const;
+  void set_unread_proxy_digest_rare(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_unread_proxy_digest_rare() const;
+  void _internal_set_unread_proxy_digest_rare(::uint32_t value);
+
+  public:
+  // uint32 unread_proxy_digest_new_titles_mask = 24;
+  void clear_unread_proxy_digest_new_titles_mask() ;
+  [[nodiscard]] ::uint32_t unread_proxy_digest_new_titles_mask() const;
+  void set_unread_proxy_digest_new_titles_mask(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_unread_proxy_digest_new_titles_mask() const;
+  void _internal_set_unread_proxy_digest_new_titles_mask(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:PlayerCraftComp)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 18,
-                          2, 0,
+      ::google::protobuf::internal::TcParseTable<5, 24,
+                          2, 78,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1078,6 +1149,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerCraftComp final : public ::go
     ::google::protobuf::internal::CachedSize _book_unlocked_skill_ids_cached_byte_size_;
     ::google::protobuf::RepeatedPtrField< ::SkillBookWantedOrder > wanted_orders_;
     ::google::protobuf::internal::ArenaStringPtr claimed_scroll_milestone_bits_;
+    ::google::protobuf::internal::ArenaStringPtr unread_proxy_digest_last_buyer_;
     ::uint32_t forge_mastery_exp_;
     ::uint32_t scroll_mastery_exp_;
     ::uint64_t scroll_craft_revision_;
@@ -1092,6 +1164,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerCraftComp final : public ::go
     ::uint32_t master_showcase_tag_;
     ::uint32_t equipped_craft_title_id_;
     ::uint64_t next_wanted_order_seq_;
+    ::uint32_t unread_proxy_digest_orders_;
+    ::uint32_t unread_proxy_digest_supreme_;
+    ::uint64_t unread_proxy_digest_net_gold_;
+    ::uint32_t unread_proxy_digest_rare_;
+    ::uint32_t unread_proxy_digest_new_titles_mask_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1566,7 +1643,7 @@ inline void SkillBookWantedOrder::_internal_set_created_at_sec(::uint64_t value)
 inline void PlayerCraftComp::clear_forge_mastery_exp() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.forge_mastery_exp_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t PlayerCraftComp::forge_mastery_exp() const {
   // @@protoc_insertion_point(field_get:PlayerCraftComp.forge_mastery_exp)
@@ -1574,7 +1651,7 @@ inline ::uint32_t PlayerCraftComp::forge_mastery_exp() const {
 }
 inline void PlayerCraftComp::set_forge_mastery_exp(::uint32_t value) {
   _internal_set_forge_mastery_exp(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:PlayerCraftComp.forge_mastery_exp)
 }
 inline ::uint32_t PlayerCraftComp::_internal_forge_mastery_exp() const {
@@ -1590,7 +1667,7 @@ inline void PlayerCraftComp::_internal_set_forge_mastery_exp(::uint32_t value) {
 inline void PlayerCraftComp::clear_scroll_mastery_exp() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.scroll_mastery_exp_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t PlayerCraftComp::scroll_mastery_exp() const {
   // @@protoc_insertion_point(field_get:PlayerCraftComp.scroll_mastery_exp)
@@ -1598,7 +1675,7 @@ inline ::uint32_t PlayerCraftComp::scroll_mastery_exp() const {
 }
 inline void PlayerCraftComp::set_scroll_mastery_exp(::uint32_t value) {
   _internal_set_scroll_mastery_exp(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:PlayerCraftComp.scroll_mastery_exp)
 }
 inline ::uint32_t PlayerCraftComp::_internal_scroll_mastery_exp() const {
@@ -1614,7 +1691,7 @@ inline void PlayerCraftComp::_internal_set_scroll_mastery_exp(::uint32_t value) 
 inline void PlayerCraftComp::clear_scroll_craft_revision() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.scroll_craft_revision_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t PlayerCraftComp::scroll_craft_revision() const {
   // @@protoc_insertion_point(field_get:PlayerCraftComp.scroll_craft_revision)
@@ -1622,7 +1699,7 @@ inline ::uint64_t PlayerCraftComp::scroll_craft_revision() const {
 }
 inline void PlayerCraftComp::set_scroll_craft_revision(::uint64_t value) {
   _internal_set_scroll_craft_revision(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:PlayerCraftComp.scroll_craft_revision)
 }
 inline ::uint64_t PlayerCraftComp::_internal_scroll_craft_revision() const {
@@ -1638,7 +1715,7 @@ inline void PlayerCraftComp::_internal_set_scroll_craft_revision(::uint64_t valu
 inline void PlayerCraftComp::clear_next_book_seq() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.next_book_seq_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t PlayerCraftComp::next_book_seq() const {
   // @@protoc_insertion_point(field_get:PlayerCraftComp.next_book_seq)
@@ -1646,7 +1723,7 @@ inline ::uint64_t PlayerCraftComp::next_book_seq() const {
 }
 inline void PlayerCraftComp::set_next_book_seq(::uint64_t value) {
   _internal_set_next_book_seq(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:PlayerCraftComp.next_book_seq)
 }
 inline ::uint64_t PlayerCraftComp::_internal_next_book_seq() const {
@@ -1717,7 +1794,7 @@ PlayerCraftComp::_internal_mutable_skill_books() {
 inline void PlayerCraftComp::clear_proxy_stall_open() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.proxy_stall_open_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline bool PlayerCraftComp::proxy_stall_open() const {
   // @@protoc_insertion_point(field_get:PlayerCraftComp.proxy_stall_open)
@@ -1725,7 +1802,7 @@ inline bool PlayerCraftComp::proxy_stall_open() const {
 }
 inline void PlayerCraftComp::set_proxy_stall_open(bool value) {
   _internal_set_proxy_stall_open(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:PlayerCraftComp.proxy_stall_open)
 }
 inline bool PlayerCraftComp::_internal_proxy_stall_open() const {
@@ -1741,7 +1818,7 @@ inline void PlayerCraftComp::_internal_set_proxy_stall_open(bool value) {
 inline void PlayerCraftComp::clear_proxy_forge_fee_gold() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.proxy_forge_fee_gold_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint64_t PlayerCraftComp::proxy_forge_fee_gold() const {
   // @@protoc_insertion_point(field_get:PlayerCraftComp.proxy_forge_fee_gold)
@@ -1749,7 +1826,7 @@ inline ::uint64_t PlayerCraftComp::proxy_forge_fee_gold() const {
 }
 inline void PlayerCraftComp::set_proxy_forge_fee_gold(::uint64_t value) {
   _internal_set_proxy_forge_fee_gold(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:PlayerCraftComp.proxy_forge_fee_gold)
 }
 inline ::uint64_t PlayerCraftComp::_internal_proxy_forge_fee_gold() const {
@@ -1765,7 +1842,7 @@ inline void PlayerCraftComp::_internal_set_proxy_forge_fee_gold(::uint64_t value
 inline void PlayerCraftComp::clear_proxy_scroll_fee_gold() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.proxy_scroll_fee_gold_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint64_t PlayerCraftComp::proxy_scroll_fee_gold() const {
   // @@protoc_insertion_point(field_get:PlayerCraftComp.proxy_scroll_fee_gold)
@@ -1773,7 +1850,7 @@ inline ::uint64_t PlayerCraftComp::proxy_scroll_fee_gold() const {
 }
 inline void PlayerCraftComp::set_proxy_scroll_fee_gold(::uint64_t value) {
   _internal_set_proxy_scroll_fee_gold(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:PlayerCraftComp.proxy_scroll_fee_gold)
 }
 inline ::uint64_t PlayerCraftComp::_internal_proxy_scroll_fee_gold() const {
@@ -1840,7 +1917,7 @@ PlayerCraftComp::_internal_mutable_book_unlocked_skill_ids() {
 inline void PlayerCraftComp::clear_proxy_orders_completed() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.proxy_orders_completed_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t PlayerCraftComp::proxy_orders_completed() const {
   // @@protoc_insertion_point(field_get:PlayerCraftComp.proxy_orders_completed)
@@ -1848,7 +1925,7 @@ inline ::uint32_t PlayerCraftComp::proxy_orders_completed() const {
 }
 inline void PlayerCraftComp::set_proxy_orders_completed(::uint32_t value) {
   _internal_set_proxy_orders_completed(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:PlayerCraftComp.proxy_orders_completed)
 }
 inline ::uint32_t PlayerCraftComp::_internal_proxy_orders_completed() const {
@@ -1864,7 +1941,7 @@ inline void PlayerCraftComp::_internal_set_proxy_orders_completed(::uint32_t val
 inline void PlayerCraftComp::clear_supreme_forged_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.supreme_forged_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t PlayerCraftComp::supreme_forged_count() const {
   // @@protoc_insertion_point(field_get:PlayerCraftComp.supreme_forged_count)
@@ -1872,7 +1949,7 @@ inline ::uint32_t PlayerCraftComp::supreme_forged_count() const {
 }
 inline void PlayerCraftComp::set_supreme_forged_count(::uint32_t value) {
   _internal_set_supreme_forged_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:PlayerCraftComp.supreme_forged_count)
 }
 inline ::uint32_t PlayerCraftComp::_internal_supreme_forged_count() const {
@@ -1888,7 +1965,7 @@ inline void PlayerCraftComp::_internal_set_supreme_forged_count(::uint32_t value
 inline void PlayerCraftComp::clear_rare_books_crafted_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rare_books_crafted_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint32_t PlayerCraftComp::rare_books_crafted_count() const {
   // @@protoc_insertion_point(field_get:PlayerCraftComp.rare_books_crafted_count)
@@ -1896,7 +1973,7 @@ inline ::uint32_t PlayerCraftComp::rare_books_crafted_count() const {
 }
 inline void PlayerCraftComp::set_rare_books_crafted_count(::uint32_t value) {
   _internal_set_rare_books_crafted_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:PlayerCraftComp.rare_books_crafted_count)
 }
 inline ::uint32_t PlayerCraftComp::_internal_rare_books_crafted_count() const {
@@ -1912,7 +1989,7 @@ inline void PlayerCraftComp::_internal_set_rare_books_crafted_count(::uint32_t v
 inline void PlayerCraftComp::clear_master_showcase_tag() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.master_showcase_tag_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint32_t PlayerCraftComp::master_showcase_tag() const {
   // @@protoc_insertion_point(field_get:PlayerCraftComp.master_showcase_tag)
@@ -1920,7 +1997,7 @@ inline ::uint32_t PlayerCraftComp::master_showcase_tag() const {
 }
 inline void PlayerCraftComp::set_master_showcase_tag(::uint32_t value) {
   _internal_set_master_showcase_tag(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:PlayerCraftComp.master_showcase_tag)
 }
 inline ::uint32_t PlayerCraftComp::_internal_master_showcase_tag() const {
@@ -1936,7 +2013,7 @@ inline void PlayerCraftComp::_internal_set_master_showcase_tag(::uint32_t value)
 inline void PlayerCraftComp::clear_equipped_craft_title_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equipped_craft_title_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint32_t PlayerCraftComp::equipped_craft_title_id() const {
   // @@protoc_insertion_point(field_get:PlayerCraftComp.equipped_craft_title_id)
@@ -1944,7 +2021,7 @@ inline ::uint32_t PlayerCraftComp::equipped_craft_title_id() const {
 }
 inline void PlayerCraftComp::set_equipped_craft_title_id(::uint32_t value) {
   _internal_set_equipped_craft_title_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:PlayerCraftComp.equipped_craft_title_id)
 }
 inline ::uint32_t PlayerCraftComp::_internal_equipped_craft_title_id() const {
@@ -2079,7 +2156,7 @@ PlayerCraftComp::_internal_mutable_wanted_orders() {
 inline void PlayerCraftComp::clear_next_wanted_order_seq() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.next_wanted_order_seq_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline ::uint64_t PlayerCraftComp::next_wanted_order_seq() const {
   // @@protoc_insertion_point(field_get:PlayerCraftComp.next_wanted_order_seq)
@@ -2087,7 +2164,7 @@ inline ::uint64_t PlayerCraftComp::next_wanted_order_seq() const {
 }
 inline void PlayerCraftComp::set_next_wanted_order_seq(::uint64_t value) {
   _internal_set_next_wanted_order_seq(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:PlayerCraftComp.next_wanted_order_seq)
 }
 inline ::uint64_t PlayerCraftComp::_internal_next_wanted_order_seq() const {
@@ -2103,7 +2180,7 @@ inline void PlayerCraftComp::_internal_set_next_wanted_order_seq(::uint64_t valu
 inline void PlayerCraftComp::clear_team_free_proxy() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.team_free_proxy_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline bool PlayerCraftComp::team_free_proxy() const {
   // @@protoc_insertion_point(field_get:PlayerCraftComp.team_free_proxy)
@@ -2111,7 +2188,7 @@ inline bool PlayerCraftComp::team_free_proxy() const {
 }
 inline void PlayerCraftComp::set_team_free_proxy(bool value) {
   _internal_set_team_free_proxy(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:PlayerCraftComp.team_free_proxy)
 }
 inline bool PlayerCraftComp::_internal_team_free_proxy() const {
@@ -2121,6 +2198,190 @@ inline bool PlayerCraftComp::_internal_team_free_proxy() const {
 inline void PlayerCraftComp::_internal_set_team_free_proxy(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.team_free_proxy_ = value;
+}
+
+// uint32 unread_proxy_digest_orders = 19;
+inline void PlayerCraftComp::clear_unread_proxy_digest_orders() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unread_proxy_digest_orders_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+}
+inline ::uint32_t PlayerCraftComp::unread_proxy_digest_orders() const {
+  // @@protoc_insertion_point(field_get:PlayerCraftComp.unread_proxy_digest_orders)
+  return _internal_unread_proxy_digest_orders();
+}
+inline void PlayerCraftComp::set_unread_proxy_digest_orders(::uint32_t value) {
+  _internal_set_unread_proxy_digest_orders(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  // @@protoc_insertion_point(field_set:PlayerCraftComp.unread_proxy_digest_orders)
+}
+inline ::uint32_t PlayerCraftComp::_internal_unread_proxy_digest_orders() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.unread_proxy_digest_orders_;
+}
+inline void PlayerCraftComp::_internal_set_unread_proxy_digest_orders(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unread_proxy_digest_orders_ = value;
+}
+
+// uint32 unread_proxy_digest_supreme = 20;
+inline void PlayerCraftComp::clear_unread_proxy_digest_supreme() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unread_proxy_digest_supreme_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+}
+inline ::uint32_t PlayerCraftComp::unread_proxy_digest_supreme() const {
+  // @@protoc_insertion_point(field_get:PlayerCraftComp.unread_proxy_digest_supreme)
+  return _internal_unread_proxy_digest_supreme();
+}
+inline void PlayerCraftComp::set_unread_proxy_digest_supreme(::uint32_t value) {
+  _internal_set_unread_proxy_digest_supreme(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  // @@protoc_insertion_point(field_set:PlayerCraftComp.unread_proxy_digest_supreme)
+}
+inline ::uint32_t PlayerCraftComp::_internal_unread_proxy_digest_supreme() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.unread_proxy_digest_supreme_;
+}
+inline void PlayerCraftComp::_internal_set_unread_proxy_digest_supreme(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unread_proxy_digest_supreme_ = value;
+}
+
+// uint32 unread_proxy_digest_rare = 21;
+inline void PlayerCraftComp::clear_unread_proxy_digest_rare() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unread_proxy_digest_rare_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+}
+inline ::uint32_t PlayerCraftComp::unread_proxy_digest_rare() const {
+  // @@protoc_insertion_point(field_get:PlayerCraftComp.unread_proxy_digest_rare)
+  return _internal_unread_proxy_digest_rare();
+}
+inline void PlayerCraftComp::set_unread_proxy_digest_rare(::uint32_t value) {
+  _internal_set_unread_proxy_digest_rare(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  // @@protoc_insertion_point(field_set:PlayerCraftComp.unread_proxy_digest_rare)
+}
+inline ::uint32_t PlayerCraftComp::_internal_unread_proxy_digest_rare() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.unread_proxy_digest_rare_;
+}
+inline void PlayerCraftComp::_internal_set_unread_proxy_digest_rare(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unread_proxy_digest_rare_ = value;
+}
+
+// uint64 unread_proxy_digest_net_gold = 22;
+inline void PlayerCraftComp::clear_unread_proxy_digest_net_gold() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unread_proxy_digest_net_gold_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+}
+inline ::uint64_t PlayerCraftComp::unread_proxy_digest_net_gold() const {
+  // @@protoc_insertion_point(field_get:PlayerCraftComp.unread_proxy_digest_net_gold)
+  return _internal_unread_proxy_digest_net_gold();
+}
+inline void PlayerCraftComp::set_unread_proxy_digest_net_gold(::uint64_t value) {
+  _internal_set_unread_proxy_digest_net_gold(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  // @@protoc_insertion_point(field_set:PlayerCraftComp.unread_proxy_digest_net_gold)
+}
+inline ::uint64_t PlayerCraftComp::_internal_unread_proxy_digest_net_gold() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.unread_proxy_digest_net_gold_;
+}
+inline void PlayerCraftComp::_internal_set_unread_proxy_digest_net_gold(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unread_proxy_digest_net_gold_ = value;
+}
+
+// string unread_proxy_digest_last_buyer = 23;
+inline void PlayerCraftComp::clear_unread_proxy_digest_last_buyer() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unread_proxy_digest_last_buyer_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::std::string& PlayerCraftComp::unread_proxy_digest_last_buyer() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PlayerCraftComp.unread_proxy_digest_last_buyer)
+  return _internal_unread_proxy_digest_last_buyer();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerCraftComp::set_unread_proxy_digest_last_buyer(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  _impl_.unread_proxy_digest_last_buyer_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:PlayerCraftComp.unread_proxy_digest_last_buyer)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerCraftComp::mutable_unread_proxy_digest_last_buyer()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::std::string* _s = _internal_mutable_unread_proxy_digest_last_buyer();
+  // @@protoc_insertion_point(field_mutable:PlayerCraftComp.unread_proxy_digest_last_buyer)
+  return _s;
+}
+inline const ::std::string& PlayerCraftComp::_internal_unread_proxy_digest_last_buyer() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.unread_proxy_digest_last_buyer_.Get();
+}
+inline void PlayerCraftComp::_internal_set_unread_proxy_digest_last_buyer(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unread_proxy_digest_last_buyer_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerCraftComp::_internal_mutable_unread_proxy_digest_last_buyer() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.unread_proxy_digest_last_buyer_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerCraftComp::release_unread_proxy_digest_last_buyer() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:PlayerCraftComp.unread_proxy_digest_last_buyer)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  auto* released = _impl_.unread_proxy_digest_last_buyer_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.unread_proxy_digest_last_buyer_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerCraftComp::set_allocated_unread_proxy_digest_last_buyer(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  _impl_.unread_proxy_digest_last_buyer_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.unread_proxy_digest_last_buyer_.IsDefault()) {
+    _impl_.unread_proxy_digest_last_buyer_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:PlayerCraftComp.unread_proxy_digest_last_buyer)
+}
+
+// uint32 unread_proxy_digest_new_titles_mask = 24;
+inline void PlayerCraftComp::clear_unread_proxy_digest_new_titles_mask() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unread_proxy_digest_new_titles_mask_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+}
+inline ::uint32_t PlayerCraftComp::unread_proxy_digest_new_titles_mask() const {
+  // @@protoc_insertion_point(field_get:PlayerCraftComp.unread_proxy_digest_new_titles_mask)
+  return _internal_unread_proxy_digest_new_titles_mask();
+}
+inline void PlayerCraftComp::set_unread_proxy_digest_new_titles_mask(::uint32_t value) {
+  _internal_set_unread_proxy_digest_new_titles_mask(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  // @@protoc_insertion_point(field_set:PlayerCraftComp.unread_proxy_digest_new_titles_mask)
+}
+inline ::uint32_t PlayerCraftComp::_internal_unread_proxy_digest_new_titles_mask() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.unread_proxy_digest_new_titles_mask_;
+}
+inline void PlayerCraftComp::_internal_set_unread_proxy_digest_new_titles_mask(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unread_proxy_digest_new_titles_mask_ = value;
 }
 
 #ifdef __GNUC__

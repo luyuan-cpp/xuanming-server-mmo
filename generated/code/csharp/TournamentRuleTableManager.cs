@@ -68,7 +68,6 @@ namespace MmorpgClient.Table
             public readonly RepeatedField<TournamentRuleTable> Rows;
             public readonly Dictionary<uint, TournamentRuleTable> KvData;
             public readonly Dictionary<uint, IReadOnlyList<TournamentRuleTable>> IdxBattleConfigId;
-            public readonly Dictionary<uint, IReadOnlyList<TournamentRuleTable>> IdxSaluteItemId;
 
             public Snapshot(TournamentRuleTableData container, int capacity)
             {
@@ -76,7 +75,6 @@ namespace MmorpgClient.Table
                 Rows = container.Data;
                 KvData = new Dictionary<uint, TournamentRuleTable>(capacity);
                 IdxBattleConfigId = new Dictionary<uint, IReadOnlyList<TournamentRuleTable>>();
-                IdxSaluteItemId = new Dictionary<uint, IReadOnlyList<TournamentRuleTable>>();
             }
         }
 
@@ -124,12 +122,10 @@ namespace MmorpgClient.Table
                 TournamentRuleTable row = rows[i];
                 snap.KvData[row.Id] = row;
                 Index(snap.IdxBattleConfigId, row.BattleConfigId, row);
-                Index(snap.IdxSaluteItemId, row.SaluteItemId, row);
             }
 
             // 索引建完了,把所有桶从可变 List 冻成数组 —— 冻之前它们是可以被强转回 List 改掉的。
             Freeze(snap.IdxBattleConfigId);
-            Freeze(snap.IdxSaluteItemId);
 
             // 原子换快照：到这一行为止读线程看到的都是上一代，之后看到的都是完整的新一代。
             _snapshot = snap;
@@ -178,15 +174,7 @@ namespace MmorpgClient.Table
             Snapshot snap = _snapshot;
             return Bucket(snap.IdxBattleConfigId, key);
         }
-
-        /// <summary>Secondary index lookup on salute_item_id; 未命中返回空集合。</summary>
-        public IReadOnlyList<TournamentRuleTable> GetBySaluteItemId(uint key)
-        {
-            Snapshot snap = _snapshot;
-            return Bucket(snap.IdxSaluteItemId, key);
-        }
         // FK: battle_config_id → Dungeon.id
-        // FK: salute_item_id → Item.id
 
         // ---- Exists ----
 
@@ -209,12 +197,6 @@ namespace MmorpgClient.Table
         {
             Snapshot snap = _snapshot;
             return Bucket(snap.IdxBattleConfigId, key).Count;
-        }
-
-        public int CountBySaluteItemIdIndex(uint key)
-        {
-            Snapshot snap = _snapshot;
-            return Bucket(snap.IdxSaluteItemId, key).Count;
         }
 
         // ---- FindByIds (IN) ----

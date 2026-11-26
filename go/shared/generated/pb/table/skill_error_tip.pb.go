@@ -54,6 +54,13 @@ const (
 	SkillError_kSkillLoadoutSchemeInvalid           SkillError = 7026
 	SkillError_kSkillLoadoutVersionChanged          SkillError = 7027
 	SkillError_kSkillBannedInBattle                 SkillError = 7028
+	SkillError_kSkillLoadoutNameInvalid             SkillError = 7029
+	SkillError_kSkillLoadoutRentPriceChanged        SkillError = 7030
+	SkillError_kSkillLoadoutRentDiamondNotEnough    SkillError = 7031
+	SkillError_kSkillLoadoutRentStackLimit          SkillError = 7032
+	SkillError_kSkillLoadoutRentSlotsInvalid        SkillError = 7033
+	SkillError_kSkillLoadoutAttributeInvalid        SkillError = 7034
+	SkillError_kSkillLoadoutAttributeResetRequired  SkillError = 7035
 )
 
 // Enum value maps for SkillError.
@@ -89,6 +96,13 @@ var (
 		7026: "kSkillLoadoutSchemeInvalid",
 		7027: "kSkillLoadoutVersionChanged",
 		7028: "kSkillBannedInBattle",
+		7029: "kSkillLoadoutNameInvalid",
+		7030: "kSkillLoadoutRentPriceChanged",
+		7031: "kSkillLoadoutRentDiamondNotEnough",
+		7032: "kSkillLoadoutRentStackLimit",
+		7033: "kSkillLoadoutRentSlotsInvalid",
+		7034: "kSkillLoadoutAttributeInvalid",
+		7035: "kSkillLoadoutAttributeResetRequired",
 	}
 	SkillError_value = map[string]int32{
 		"kSkill_errorOK":                       0,
@@ -121,6 +135,13 @@ var (
 		"kSkillLoadoutSchemeInvalid":           7026,
 		"kSkillLoadoutVersionChanged":          7027,
 		"kSkillBannedInBattle":                 7028,
+		"kSkillLoadoutNameInvalid":             7029,
+		"kSkillLoadoutRentPriceChanged":        7030,
+		"kSkillLoadoutRentDiamondNotEnough":    7031,
+		"kSkillLoadoutRentStackLimit":          7032,
+		"kSkillLoadoutRentSlotsInvalid":        7033,
+		"kSkillLoadoutAttributeInvalid":        7034,
+		"kSkillLoadoutAttributeResetRequired":  7035,
 	}
 )
 
@@ -155,7 +176,7 @@ var File_skill_error_tip_proto protoreflect.FileDescriptor
 
 const file_skill_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15skill_error_tip.proto*\x93\a\n" +
+	"\x15skill_error_tip.proto*\x92\t\n" +
 	"\vskill_error\x12\x12\n" +
 	"\x0ekSkill_errorOK\x10\x00\x12\x1a\n" +
 	"\x15kSkillUnInterruptible\x10\xd86\x12\x1a\n" +
@@ -186,7 +207,14 @@ const file_skill_error_tip_proto_rawDesc = "" +
 	"\x17kSkillLoadoutNotLearned\x10\xf16\x12\x1f\n" +
 	"\x1akSkillLoadoutSchemeInvalid\x10\xf26\x12 \n" +
 	"\x1bkSkillLoadoutVersionChanged\x10\xf36\x12\x19\n" +
-	"\x14kSkillBannedInBattle\x10\xf46B$\n" +
+	"\x14kSkillBannedInBattle\x10\xf46\x12\x1d\n" +
+	"\x18kSkillLoadoutNameInvalid\x10\xf56\x12\"\n" +
+	"\x1dkSkillLoadoutRentPriceChanged\x10\xf66\x12&\n" +
+	"!kSkillLoadoutRentDiamondNotEnough\x10\xf76\x12 \n" +
+	"\x1bkSkillLoadoutRentStackLimit\x10\xf86\x12\"\n" +
+	"\x1dkSkillLoadoutRentSlotsInvalid\x10\xf96\x12\"\n" +
+	"\x1dkSkillLoadoutAttributeInvalid\x10\xfa6\x12(\n" +
+	"#kSkillLoadoutAttributeResetRequired\x10\xfb6B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

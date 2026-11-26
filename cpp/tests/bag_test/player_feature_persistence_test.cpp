@@ -168,6 +168,7 @@ void CompletePersistedComps(entt::entity player)
     EmplaceIfAbsent<PlayerSpiritShopComp>(player); // 官方灵石百宝阁限购状态
     EmplaceIfAbsent<PlayerTravelPassComp>(player); // 游历手记持久状态
     EmplaceIfAbsent<PlayerEquipLoadoutComp>(player); // 装备流派方案预设
+    EmplaceIfAbsent<PlayerJianghuComp>(player); // 江湖恩怨与天墉生死状
     EmplaceIfAbsent<CurrencyComp>(player);
     EmplaceIfAbsent<PlayerCurrencyComp>(player);
     // 顶层未知字段的载体(混版本持久字段保护 §4.2 L1),生产里由 player_database 的 Unmarshal 创建。
@@ -651,6 +652,7 @@ TEST_F(PlayerFeaturePersistenceTest, MarshalRefusesWhenAnyPersistedComponentIsMi
     ExpectMarshalRefusedWithout<PlayerSpiritShopComp>("PlayerSpiritShopComp");
     ExpectMarshalRefusedWithout<PlayerTravelPassComp>("PlayerTravelPassComp");
     ExpectMarshalRefusedWithout<PlayerEquipLoadoutComp>("PlayerEquipLoadoutComp");
+    ExpectMarshalRefusedWithout<PlayerJianghuComp>("PlayerJianghuComp");
     ExpectMarshalRefusedWithout<CurrencyComp>("CurrencyComp");
     ExpectMarshalRefusedWithout<PlayerCurrencyComp>("PlayerCurrencyComp");
     // 顶层未知字段的载体(混版本持久字段保护 §4.2 L1):缺了同样整份拒绝,补空等于抹掉新版本写进来的整列。

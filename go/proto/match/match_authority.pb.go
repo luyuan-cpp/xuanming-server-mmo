@@ -1477,8 +1477,10 @@ type MatchFormationRecord struct {
 	IsWuxingTower bool `protobuf:"varint,28,opt,name=is_wuxing_tower,json=isWuxingTower,proto3" json:"is_wuxing_tower,omitempty"`
 	// 天墉生死状在成局提交点冻结的 JianghuDuelBattleContext 字节载荷（非生死状为空）。
 	JianghuDuelContext []byte `protobuf:"bytes,29,opt,name=jianghu_duel_context,json=jianghuDuelContext,proto3" json:"jianghu_duel_context,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// 五行试炼志 V3 自选试炼誓约位图（bit0..3，非试炼誓约局为 0）。
+	TrialVowMask  uint32 `protobuf:"varint,30,opt,name=trial_vow_mask,json=trialVowMask,proto3" json:"trial_vow_mask,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MatchFormationRecord) Reset() {
@@ -1712,6 +1714,13 @@ func (x *MatchFormationRecord) GetJianghuDuelContext() []byte {
 		return x.JianghuDuelContext
 	}
 	return nil
+}
+
+func (x *MatchFormationRecord) GetTrialVowMask() uint32 {
+	if x != nil {
+		return x.TrialVowMask
+	}
+	return 0
 }
 
 type MatchPreparedEndpoint struct {
@@ -3944,7 +3953,6 @@ type MatchTournamentSeasonRecord struct {
 	SettledMs             uint64                 `protobuf:"varint,17,opt,name=settled_ms,json=settledMs,proto3" json:"settled_ms,omitempty"`
 	UpdatedMs             uint64                 `protobuf:"varint,18,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
 	ChampionMembersBlob   []byte                 `protobuf:"bytes,19,opt,name=champion_members_blob,json=championMembersBlob,proto3" json:"champion_members_blob,omitempty"`   // V2: 确定性序列化 MatchTournamentChampionMembersBlob
-	ChampionSaluteCount   uint64                 `protobuf:"varint,20,opt,name=champion_salute_count,json=championSaluteCount,proto3" json:"champion_salute_count,omitempty"`  // V2: 全服累计观道致敬次数
 	ChampionEmblemId      uint32                 `protobuf:"varint,21,opt,name=champion_emblem_id,json=championEmblemId,proto3" json:"champion_emblem_id,omitempty"`           // V3: 冠军战队队徽(1..8)
 	ThirdPlaceSquadId     uint64                 `protobuf:"varint,22,opt,name=third_place_squad_id,json=thirdPlaceSquadId,proto3" json:"third_place_squad_id,omitempty"`      // V3: 季军战队 ID
 	ThirdPlaceSquadName   string                 `protobuf:"bytes,23,opt,name=third_place_squad_name,json=thirdPlaceSquadName,proto3" json:"third_place_squad_name,omitempty"` // V3: 季军战队名
@@ -4118,13 +4126,6 @@ func (x *MatchTournamentSeasonRecord) GetChampionMembersBlob() []byte {
 		return x.ChampionMembersBlob
 	}
 	return nil
-}
-
-func (x *MatchTournamentSeasonRecord) GetChampionSaluteCount() uint64 {
-	if x != nil {
-		return x.ChampionSaluteCount
-	}
-	return 0
 }
 
 func (x *MatchTournamentSeasonRecord) GetChampionEmblemId() uint32 {
@@ -5076,91 +5077,6 @@ func (x *MatchTournamentMatchGameRecord) GetFinishedMs() uint64 {
 	return 0
 }
 
-// V2: 全服每日免费观道致敬记录(主键 (player_id, salute_day) 原子保证 UTC+8 每人每日 1 次)。
-type MatchTournamentSaluteRecord struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	SaluteDay     uint32                 `protobuf:"varint,2,opt,name=salute_day,json=saluteDay,proto3" json:"salute_day,omitempty"` // UTC+8 YYYYMMDD
-	SeasonId      uint32                 `protobuf:"varint,3,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
-	RewardId      uint64                 `protobuf:"varint,4,opt,name=reward_id,json=rewardId,proto3" json:"reward_id,omitempty"` // 发号器永久 ID, 供 MailAdmin 幂等发件
-	MailId        uint64                 `protobuf:"varint,5,opt,name=mail_id,json=mailId,proto3" json:"mail_id,omitempty"`
-	CreatedMs     uint64                 `protobuf:"varint,6,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *MatchTournamentSaluteRecord) Reset() {
-	*x = MatchTournamentSaluteRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[42]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *MatchTournamentSaluteRecord) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MatchTournamentSaluteRecord) ProtoMessage() {}
-
-func (x *MatchTournamentSaluteRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[42]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MatchTournamentSaluteRecord.ProtoReflect.Descriptor instead.
-func (*MatchTournamentSaluteRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{42}
-}
-
-func (x *MatchTournamentSaluteRecord) GetPlayerId() uint64 {
-	if x != nil {
-		return x.PlayerId
-	}
-	return 0
-}
-
-func (x *MatchTournamentSaluteRecord) GetSaluteDay() uint32 {
-	if x != nil {
-		return x.SaluteDay
-	}
-	return 0
-}
-
-func (x *MatchTournamentSaluteRecord) GetSeasonId() uint32 {
-	if x != nil {
-		return x.SeasonId
-	}
-	return 0
-}
-
-func (x *MatchTournamentSaluteRecord) GetRewardId() uint64 {
-	if x != nil {
-		return x.RewardId
-	}
-	return 0
-}
-
-func (x *MatchTournamentSaluteRecord) GetMailId() uint64 {
-	if x != nil {
-		return x.MailId
-	}
-	return 0
-}
-
-func (x *MatchTournamentSaluteRecord) GetCreatedMs() uint64 {
-	if x != nil {
-		return x.CreatedMs
-	}
-	return 0
-}
-
 // 全服免费助威(主键 (season_id, player_id) 物理防重复助威,零消费零押注)。
 type MatchTournamentCheerRecord struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -5175,7 +5091,7 @@ type MatchTournamentCheerRecord struct {
 
 func (x *MatchTournamentCheerRecord) Reset() {
 	*x = MatchTournamentCheerRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[43]
+	mi := &file_proto_match_match_authority_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5187,7 +5103,7 @@ func (x *MatchTournamentCheerRecord) String() string {
 func (*MatchTournamentCheerRecord) ProtoMessage() {}
 
 func (x *MatchTournamentCheerRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[43]
+	mi := &file_proto_match_match_authority_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5200,7 +5116,7 @@ func (x *MatchTournamentCheerRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchTournamentCheerRecord.ProtoReflect.Descriptor instead.
 func (*MatchTournamentCheerRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{43}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *MatchTournamentCheerRecord) GetSeasonId() uint32 {
@@ -5262,7 +5178,7 @@ type MatchTournamentRewardRecord struct {
 
 func (x *MatchTournamentRewardRecord) Reset() {
 	*x = MatchTournamentRewardRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[44]
+	mi := &file_proto_match_match_authority_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5274,7 +5190,7 @@ func (x *MatchTournamentRewardRecord) String() string {
 func (*MatchTournamentRewardRecord) ProtoMessage() {}
 
 func (x *MatchTournamentRewardRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[44]
+	mi := &file_proto_match_match_authority_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5287,7 +5203,7 @@ func (x *MatchTournamentRewardRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchTournamentRewardRecord.ProtoReflect.Descriptor instead.
 func (*MatchTournamentRewardRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{44}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *MatchTournamentRewardRecord) GetSeasonId() uint32 {
@@ -5415,7 +5331,7 @@ type MatchTournamentPredictionRecord struct {
 
 func (x *MatchTournamentPredictionRecord) Reset() {
 	*x = MatchTournamentPredictionRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[45]
+	mi := &file_proto_match_match_authority_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5427,7 +5343,7 @@ func (x *MatchTournamentPredictionRecord) String() string {
 func (*MatchTournamentPredictionRecord) ProtoMessage() {}
 
 func (x *MatchTournamentPredictionRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[45]
+	mi := &file_proto_match_match_authority_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5440,7 +5356,7 @@ func (x *MatchTournamentPredictionRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchTournamentPredictionRecord.ProtoReflect.Descriptor instead.
 func (*MatchTournamentPredictionRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{45}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *MatchTournamentPredictionRecord) GetSeasonId() uint32 {
@@ -5549,7 +5465,7 @@ type MatchJianghuDuelInvitationRecord struct {
 
 func (x *MatchJianghuDuelInvitationRecord) Reset() {
 	*x = MatchJianghuDuelInvitationRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[46]
+	mi := &file_proto_match_match_authority_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5561,7 +5477,7 @@ func (x *MatchJianghuDuelInvitationRecord) String() string {
 func (*MatchJianghuDuelInvitationRecord) ProtoMessage() {}
 
 func (x *MatchJianghuDuelInvitationRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[46]
+	mi := &file_proto_match_match_authority_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5574,7 +5490,7 @@ func (x *MatchJianghuDuelInvitationRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchJianghuDuelInvitationRecord.ProtoReflect.Descriptor instead.
 func (*MatchJianghuDuelInvitationRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{46}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *MatchJianghuDuelInvitationRecord) GetDuelInviteId() uint64 {
@@ -5738,7 +5654,7 @@ type MatchJianghuDuelCooldownRecord struct {
 
 func (x *MatchJianghuDuelCooldownRecord) Reset() {
 	*x = MatchJianghuDuelCooldownRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[47]
+	mi := &file_proto_match_match_authority_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5750,7 +5666,7 @@ func (x *MatchJianghuDuelCooldownRecord) String() string {
 func (*MatchJianghuDuelCooldownRecord) ProtoMessage() {}
 
 func (x *MatchJianghuDuelCooldownRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[47]
+	mi := &file_proto_match_match_authority_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5763,7 +5679,7 @@ func (x *MatchJianghuDuelCooldownRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchJianghuDuelCooldownRecord.ProtoReflect.Descriptor instead.
 func (*MatchJianghuDuelCooldownRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{47}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *MatchJianghuDuelCooldownRecord) GetChallengerPlayerId() uint64 {
@@ -5827,7 +5743,7 @@ type MatchGrudgeRelationRecord struct {
 
 func (x *MatchGrudgeRelationRecord) Reset() {
 	*x = MatchGrudgeRelationRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[48]
+	mi := &file_proto_match_match_authority_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5839,7 +5755,7 @@ func (x *MatchGrudgeRelationRecord) String() string {
 func (*MatchGrudgeRelationRecord) ProtoMessage() {}
 
 func (x *MatchGrudgeRelationRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[48]
+	mi := &file_proto_match_match_authority_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5852,7 +5768,7 @@ func (x *MatchGrudgeRelationRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchGrudgeRelationRecord.ProtoReflect.Descriptor instead.
 func (*MatchGrudgeRelationRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{48}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *MatchGrudgeRelationRecord) GetPlayerId() uint64 {
@@ -5949,7 +5865,7 @@ type MatchGrudgeLogRecord struct {
 
 func (x *MatchGrudgeLogRecord) Reset() {
 	*x = MatchGrudgeLogRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[49]
+	mi := &file_proto_match_match_authority_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5961,7 +5877,7 @@ func (x *MatchGrudgeLogRecord) String() string {
 func (*MatchGrudgeLogRecord) ProtoMessage() {}
 
 func (x *MatchGrudgeLogRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[49]
+	mi := &file_proto_match_match_authority_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5974,7 +5890,7 @@ func (x *MatchGrudgeLogRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchGrudgeLogRecord.ProtoReflect.Descriptor instead.
 func (*MatchGrudgeLogRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{49}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *MatchGrudgeLogRecord) GetPlayerId() uint64 {
@@ -6055,7 +5971,7 @@ type MatchJianghuRefundRecord struct {
 
 func (x *MatchJianghuRefundRecord) Reset() {
 	*x = MatchJianghuRefundRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[50]
+	mi := &file_proto_match_match_authority_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6067,7 +5983,7 @@ func (x *MatchJianghuRefundRecord) String() string {
 func (*MatchJianghuRefundRecord) ProtoMessage() {}
 
 func (x *MatchJianghuRefundRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[50]
+	mi := &file_proto_match_match_authority_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6080,7 +5996,7 @@ func (x *MatchJianghuRefundRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchJianghuRefundRecord.ProtoReflect.Descriptor instead.
 func (*MatchJianghuRefundRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{50}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *MatchJianghuRefundRecord) GetDuelInviteId() uint64 {
@@ -6130,6 +6046,115 @@ func (x *MatchJianghuRefundRecord) GetCreatedMs() uint64 {
 		return x.CreatedMs
 	}
 	return 0
+}
+
+// 五行试炼志 V3：好友约战帖权威存储（最多每人 10 张，14 天有效，与 match_battle_report.ref_count 联动钉住录像）。
+type MatchTrialChallengeCardRecord struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	CardId         uint64                 `protobuf:"varint,1,opt,name=card_id,json=cardId,proto3" json:"card_id,omitempty"`
+	OwnerPlayerId  uint64                 `protobuf:"varint,2,opt,name=owner_player_id,json=ownerPlayerId,proto3" json:"owner_player_id,omitempty"`
+	BattleId       uint64                 `protobuf:"varint,3,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	JournalEntryId uint32                 `protobuf:"varint,4,opt,name=journal_entry_id,json=journalEntryId,proto3" json:"journal_entry_id,omitempty"`
+	VowMask        uint32                 `protobuf:"varint,5,opt,name=vow_mask,json=vowMask,proto3" json:"vow_mask,omitempty"`
+	TotalRounds    uint32                 `protobuf:"varint,6,opt,name=total_rounds,json=totalRounds,proto3" json:"total_rounds,omitempty"`
+	CreatedMs      uint64                 `protobuf:"varint,7,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	ExpiresMs      uint64                 `protobuf:"varint,8,opt,name=expires_ms,json=expiresMs,proto3" json:"expires_ms,omitempty"`
+	CardView       []byte                 `protobuf:"bytes,9,opt,name=card_view,json=cardView,proto3" json:"card_view,omitempty"` // 确定性序列化 TrialChallengeCardView
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *MatchTrialChallengeCardRecord) Reset() {
+	*x = MatchTrialChallengeCardRecord{}
+	mi := &file_proto_match_match_authority_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MatchTrialChallengeCardRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MatchTrialChallengeCardRecord) ProtoMessage() {}
+
+func (x *MatchTrialChallengeCardRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_authority_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MatchTrialChallengeCardRecord.ProtoReflect.Descriptor instead.
+func (*MatchTrialChallengeCardRecord) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *MatchTrialChallengeCardRecord) GetCardId() uint64 {
+	if x != nil {
+		return x.CardId
+	}
+	return 0
+}
+
+func (x *MatchTrialChallengeCardRecord) GetOwnerPlayerId() uint64 {
+	if x != nil {
+		return x.OwnerPlayerId
+	}
+	return 0
+}
+
+func (x *MatchTrialChallengeCardRecord) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *MatchTrialChallengeCardRecord) GetJournalEntryId() uint32 {
+	if x != nil {
+		return x.JournalEntryId
+	}
+	return 0
+}
+
+func (x *MatchTrialChallengeCardRecord) GetVowMask() uint32 {
+	if x != nil {
+		return x.VowMask
+	}
+	return 0
+}
+
+func (x *MatchTrialChallengeCardRecord) GetTotalRounds() uint32 {
+	if x != nil {
+		return x.TotalRounds
+	}
+	return 0
+}
+
+func (x *MatchTrialChallengeCardRecord) GetCreatedMs() uint64 {
+	if x != nil {
+		return x.CreatedMs
+	}
+	return 0
+}
+
+func (x *MatchTrialChallengeCardRecord) GetExpiresMs() uint64 {
+	if x != nil {
+		return x.ExpiresMs
+	}
+	return 0
+}
+
+func (x *MatchTrialChallengeCardRecord) GetCardView() []byte {
+	if x != nil {
+		return x.CardView
+	}
+	return nil
 }
 
 var File_proto_match_match_authority_proto protoreflect.FileDescriptor
@@ -6279,7 +6304,7 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\x06ticket\x18\x02 \x01(\tR\x06ticket\x12\x1d\n" +
 	"\n" +
 	"team_index\x18\x03 \x01(\rR\tteamIndex\x12\x18\n" +
-	"\acaptain\x18\x04 \x01(\bR\acaptain\"\xcb\n" +
+	"\acaptain\x18\x04 \x01(\bR\acaptain\"\xf1\n" +
 	"\n" +
 	"\x14MatchFormationRecord\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12!\n" +
@@ -6313,7 +6338,8 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\x12tournament_context\x18\x1a \x01(\fR\x11tournamentContext\x12*\n" +
 	"\x11custom_duel_rules\x18\x1b \x01(\fR\x0fcustomDuelRules\x12&\n" +
 	"\x0fis_wuxing_tower\x18\x1c \x01(\bR\risWuxingTower\x120\n" +
-	"\x14jianghu_duel_context\x18\x1d \x01(\fR\x12jianghuDuelContext:Y\x8a\x92\xf4\x01\x0fmatch_formation\x92\x92\xf4\x01\tbattle_idڒ\xf4\x012state,retry_at_ms;ranked_season_id,state,battle_id\"P\n" +
+	"\x14jianghu_duel_context\x18\x1d \x01(\fR\x12jianghuDuelContext\x12$\n" +
+	"\x0etrial_vow_mask\x18\x1e \x01(\rR\ftrialVowMask:Y\x8a\x92\xf4\x01\x0fmatch_formation\x92\x92\xf4\x01\tbattle_idڒ\xf4\x012state,retry_at_ms;ranked_season_id,state,battle_id\"P\n" +
 	"\x15MatchPreparedEndpoint\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1a\n" +
 	"\bendpoint\x18\x02 \x01(\tR\bendpoint\"\xec\x01\n" +
@@ -6549,7 +6575,7 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\x12featured_team_size\x18\r \x01(\rR\x10featuredTeamSize\x122\n" +
 	"\x15featured_total_rounds\x18\x0e \x01(\rR\x13featuredTotalRounds\x12\x1d\n" +
 	"\n" +
-	"updated_ms\x18\x0f \x01(\x04R\tupdatedMs:\x83\x01\x8a\x92\xf4\x01\x1bmatch_ranked_featured_build\x92\x92\xf4\x01\x13season_id,build_keyڒ\xf4\x01Fseason_id,high_tier_wins,wins,featured_rating_centi;featured_battle_id\"\xfd\t\n" +
+	"updated_ms\x18\x0f \x01(\x04R\tupdatedMs:\x83\x01\x8a\x92\xf4\x01\x1bmatch_ranked_featured_build\x92\x92\xf4\x01\x13season_id,build_keyڒ\xf4\x01Fseason_id,high_tier_wins,wins,featured_rating_centi;featured_battle_id\"\xe6\t\n" +
 	"\x1bMatchTournamentSeasonRecord\x12\x1b\n" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x1d\n" +
 	"\n" +
@@ -6574,8 +6600,7 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"settled_ms\x18\x11 \x01(\x04R\tsettledMs\x12\x1d\n" +
 	"\n" +
 	"updated_ms\x18\x12 \x01(\x04R\tupdatedMs\x122\n" +
-	"\x15champion_members_blob\x18\x13 \x01(\fR\x13championMembersBlob\x122\n" +
-	"\x15champion_salute_count\x18\x14 \x01(\x04R\x13championSaluteCount\x12,\n" +
+	"\x15champion_members_blob\x18\x13 \x01(\fR\x13championMembersBlob\x12,\n" +
 	"\x12champion_emblem_id\x18\x15 \x01(\rR\x10championEmblemId\x12/\n" +
 	"\x14third_place_squad_id\x18\x16 \x01(\x04R\x11thirdPlaceSquadId\x123\n" +
 	"\x16third_place_squad_name\x18\x17 \x01(\tR\x13thirdPlaceSquadName\x121\n" +
@@ -6583,7 +6608,7 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\x13final_mvp_player_id\x18\x19 \x01(\x04R\x10finalMvpPlayerId\x121\n" +
 	"\x15final_mvp_player_name\x18\x1a \x01(\tR\x12finalMvpPlayerName\x12&\n" +
 	"\x0ffinal_mvp_score\x18\x1b \x01(\rR\rfinalMvpScore\x12.\n" +
-	"\x13champion_honor_bits\x18\x1c \x01(\rR\x11championHonorBits:>\x8a\x92\xf4\x01\x17match_tournament_season\x92\x92\xf4\x01\tseason_idڒ\xf4\x01\x0fstage,season_id\"b\n" +
+	"\x13champion_honor_bits\x18\x1c \x01(\rR\x11championHonorBits:>\x8a\x92\xf4\x01\x17match_tournament_season\x92\x92\xf4\x01\tseason_idڒ\xf4\x01\x0fstage,season_idJ\x04\b\x14\x10\x15R\x15champion_salute_count\"b\n" +
 	"\"MatchTournamentChampionMembersBlob\x12<\n" +
 	"\amembers\x18\x01 \x03(\v2\".match.MatchTournamentMemberRecordR\amembers\"\xa7\x06\n" +
 	"\x1aMatchTournamentSquadRecord\x12\x19\n" +
@@ -6696,16 +6721,7 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\x0fwinner_squad_id\x18\a \x01(\x04R\rwinnerSquadId\x12\x18\n" +
 	"\aoutcome\x18\b \x01(\rR\aoutcome\x12\x1f\n" +
 	"\vfinished_ms\x18\t \x01(\x04R\n" +
-	"finishedMs:^\x8a\x92\xf4\x01\x1bmatch_tournament_match_game\x92\x92\xf4\x01\x13match_id,game_indexڒ\xf4\x01\x13season_id,battle_id\xe2\x92\xf4\x01\tbattle_id\"\xa5\x02\n" +
-	"\x1bMatchTournamentSaluteRecord\x12\x1b\n" +
-	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1d\n" +
-	"\n" +
-	"salute_day\x18\x02 \x01(\rR\tsaluteDay\x12\x1b\n" +
-	"\tseason_id\x18\x03 \x01(\rR\bseasonId\x12\x1b\n" +
-	"\treward_id\x18\x04 \x01(\x04R\brewardId\x12\x17\n" +
-	"\amail_id\x18\x05 \x01(\x04R\x06mailId\x12\x1d\n" +
-	"\n" +
-	"created_ms\x18\x06 \x01(\x04R\tcreatedMs:X\x8a\x92\xf4\x01\x17match_tournament_salute\x92\x92\xf4\x01\x14player_id,salute_dayڒ\xf4\x01\x1eseason_id,salute_day,player_id\"\x82\x02\n" +
+	"finishedMs:^\x8a\x92\xf4\x01\x1bmatch_tournament_match_game\x92\x92\xf4\x01\x13match_id,game_indexڒ\xf4\x01\x13season_id,battle_id\xe2\x92\xf4\x01\tbattle_id\"\x82\x02\n" +
 	"\x1aMatchTournamentCheerRecord\x12\x1b\n" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x19\n" +
@@ -6821,7 +6837,19 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\x0erefund_mail_id\x18\x05 \x01(\x04R\frefundMailId\x12\x16\n" +
 	"\x06reason\x18\x06 \x01(\tR\x06reason\x12\x1d\n" +
 	"\n" +
-	"created_ms\x18\a \x01(\x04R\tcreatedMs:;\x8a\x92\xf4\x01\x14match_jianghu_refund\x92\x92\xf4\x01\x0eduel_invite_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04*\xcc\x03\n" +
+	"created_ms\x18\a \x01(\x04R\tcreatedMs:;\x8a\x92\xf4\x01\x14match_jianghu_refund\x92\x92\xf4\x01\x0eduel_invite_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xb6\x03\n" +
+	"\x1dMatchTrialChallengeCardRecord\x12\x17\n" +
+	"\acard_id\x18\x01 \x01(\x04R\x06cardId\x12&\n" +
+	"\x0fowner_player_id\x18\x02 \x01(\x04R\rownerPlayerId\x12\x1b\n" +
+	"\tbattle_id\x18\x03 \x01(\x04R\bbattleId\x12(\n" +
+	"\x10journal_entry_id\x18\x04 \x01(\rR\x0ejournalEntryId\x12\x19\n" +
+	"\bvow_mask\x18\x05 \x01(\rR\avowMask\x12!\n" +
+	"\ftotal_rounds\x18\x06 \x01(\rR\vtotalRounds\x12\x1d\n" +
+	"\n" +
+	"created_ms\x18\a \x01(\x04R\tcreatedMs\x12\x1d\n" +
+	"\n" +
+	"expires_ms\x18\b \x01(\x04R\texpiresMs\x12\x1b\n" +
+	"\tcard_view\x18\t \x01(\fR\bcardView:t\x8a\x92\xf4\x01\x1amatch_trial_challenge_card\x92\x92\xf4\x01\acard_idڒ\xf4\x015owner_player_id,created_ms,card_id;expires_ms,card_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04*\xcc\x03\n" +
 	"\x1fMatchBattleCompletionSourceKind\x12.\n" +
 	"*MATCH_BATTLE_COMPLETION_SOURCE_UNSPECIFIED\x10\x00\x12(\n" +
 	"$MATCH_BATTLE_COMPLETION_SOURCE_KAFKA\x10\x01\x12-\n" +
@@ -6890,15 +6918,15 @@ var file_proto_match_match_authority_proto_goTypes = []any{
 	(*MatchTournamentInviteRecord)(nil),        // 40: match.MatchTournamentInviteRecord
 	(*MatchTournamentMatchRecord)(nil),         // 41: match.MatchTournamentMatchRecord
 	(*MatchTournamentMatchGameRecord)(nil),     // 42: match.MatchTournamentMatchGameRecord
-	(*MatchTournamentSaluteRecord)(nil),        // 43: match.MatchTournamentSaluteRecord
-	(*MatchTournamentCheerRecord)(nil),         // 44: match.MatchTournamentCheerRecord
-	(*MatchTournamentRewardRecord)(nil),        // 45: match.MatchTournamentRewardRecord
-	(*MatchTournamentPredictionRecord)(nil),    // 46: match.MatchTournamentPredictionRecord
-	(*MatchJianghuDuelInvitationRecord)(nil),   // 47: match.MatchJianghuDuelInvitationRecord
-	(*MatchJianghuDuelCooldownRecord)(nil),     // 48: match.MatchJianghuDuelCooldownRecord
-	(*MatchGrudgeRelationRecord)(nil),          // 49: match.MatchGrudgeRelationRecord
-	(*MatchGrudgeLogRecord)(nil),               // 50: match.MatchGrudgeLogRecord
-	(*MatchJianghuRefundRecord)(nil),           // 51: match.MatchJianghuRefundRecord
+	(*MatchTournamentCheerRecord)(nil),         // 43: match.MatchTournamentCheerRecord
+	(*MatchTournamentRewardRecord)(nil),        // 44: match.MatchTournamentRewardRecord
+	(*MatchTournamentPredictionRecord)(nil),    // 45: match.MatchTournamentPredictionRecord
+	(*MatchJianghuDuelInvitationRecord)(nil),   // 46: match.MatchJianghuDuelInvitationRecord
+	(*MatchJianghuDuelCooldownRecord)(nil),     // 47: match.MatchJianghuDuelCooldownRecord
+	(*MatchGrudgeRelationRecord)(nil),          // 48: match.MatchGrudgeRelationRecord
+	(*MatchGrudgeLogRecord)(nil),               // 49: match.MatchGrudgeLogRecord
+	(*MatchJianghuRefundRecord)(nil),           // 50: match.MatchJianghuRefundRecord
+	(*MatchTrialChallengeCardRecord)(nil),      // 51: match.MatchTrialChallengeCardRecord
 	(*NetworkProbeReceipt)(nil),                // 52: match.NetworkProbeReceipt
 	(BattleOutcomeDecision)(0),                 // 53: match.BattleOutcomeDecision
 	(StrandedFormationMode)(0),                 // 54: match.StrandedFormationMode

@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
-  "schema_digest": "8a767b1f823342bd",
-  "version": 96,
-  "content_digest": "6d4b1c0a9af1ede72c30b359adff450c5bc48ed5c5b75cbc85502d70c17cc49f",
-  "generated_at": "2026-11-26T10:34:45Z",
+  "schema_digest": "88750c2d961d8710",
+  "version": 101,
+  "content_digest": "04e6e9adf0d9702c72eaeb5ce1be98764b15ca8025c920246f009db6ca7806d3",
+  "generated_at": "2026-11-26T13:40:24Z",
   "source_rev": {
-    "commit": "5a3313106deeebbd5c7b15dcdff05be6a4eaa331",
+    "commit": "60b0bd6b30feb6fd60bc0654ebff73a4b5bdf11b",
     "data_dirty": true
   },
   "table_count": 83,
@@ -414,24 +414,24 @@
       "name": "Buff",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 134,
+      "rows": 199,
       "source": {
         "file": "Buff.xlsx",
-        "size": 13991,
-        "sha256": "9b468b630562408e9fbe5298f2dc0e78899f3051cca630cbeb06447855c960e3"
+        "size": 16357,
+        "sha256": "b858e655fae22df40f071a45b93ba1bbc972138bdb1bf1107acf585370bfb45c"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "buff.json",
-          "size": 35729,
-          "sha256": "83fef2afe549a9a36ba3cac5e131b8c6ca6e96b485b2d43acea1d1fa5fd8fed6"
+          "size": 47176,
+          "sha256": "a6c6a8a1a88d5cfe758378106da3c846b499a88b7f7e8523540607e1a08d4102"
         },
         {
           "kind": "binary",
           "file": "buff.pb",
-          "size": 6538,
-          "sha256": "f8f27f0bbcc03441aa5f12ea2e89b907fd8b055bd126c004410c6c47943a6b8e"
+          "size": 8910,
+          "sha256": "6c9fe7e07b56936d12638b199313bc6beda83385b196d007caf466328f7ab0c6"
         }
       ]
     },
@@ -539,24 +539,24 @@
       "name": "Dungeon",
       "hot_reload": false,
       "ids_permanent": false,
-      "rows": 31,
+      "rows": 34,
       "source": {
         "file": "Dungeon.xlsx",
-        "size": 6543,
-        "sha256": "e848020baf5cd84290753cdd2095dd2d2e3ec958b391c16f6bab1e4cf497e068"
+        "size": 6669,
+        "sha256": "7c77e9bd340deb2140b7e736dd9ca2250cd261880d773d12ec35ac61bf886537"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "dungeon.json",
-          "size": 6724,
-          "sha256": "84c86f87704c253a8edc48022679afadb63c92e44e8b68cc978c41bd21ae6689"
+          "size": 7381,
+          "sha256": "fddb168a48460fe6feb0683b7a132f3e1a6e24386bc8ed1e0885225ca8d199c8"
         },
         {
           "kind": "binary",
           "file": "dungeon.pb",
-          "size": 652,
-          "sha256": "2b04500764945fadbf097c868173faaa31988cd9f9ea935b989033062e2d5f25"
+          "size": 715,
+          "sha256": "666c6f256b5f5ede62a778d1304fc898ae7e5fdc25334473cb4b99fc8e6b338b"
         }
       ]
     },
@@ -1139,24 +1139,24 @@
       "name": "MessageLimiter",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 126,
+      "rows": 131,
       "source": {
         "file": "MessageLimiter.xlsx",
-        "size": 7111,
-        "sha256": "3b6e209c01e3d7a2f326945f839e65a3b2151d776f710535f2d4454d6e9c1f8d"
+        "size": 7194,
+        "sha256": "aee881495b52437259f5717e63df2df7af1c2b03199cd8e0efa0bfb1ed212ba9"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "messagelimiter.json",
-          "size": 11259,
-          "sha256": "2457cdbeea723afe493566af82515c178da4701bc2b3122bf697f259c0012a9d"
+          "size": 11708,
+          "sha256": "ae5eb911e698a50bce3ec1a9c25e708fd7acd71dae253c3495492047a2257288"
         },
         {
           "kind": "binary",
           "file": "messagelimiter.pb",
-          "size": 1492,
-          "sha256": "5622bfecc5c3db7e56780ba644d57696fea67f9a32875f5179c54ba8673afd56"
+          "size": 1552,
+          "sha256": "70307ee6bfcfa1bdeee8a3f0db3c7d739643485d657efddf11da8feb1c0c2998"
         }
       ]
     },
@@ -1214,24 +1214,24 @@
       "name": "Monster",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 57,
+      "rows": 63,
       "source": {
         "file": "Monster.xlsx",
-        "size": 8575,
-        "sha256": "b93c937275ca03af5441172a4f6bf8b644b7eb6848fad617d8ae8e8080aea007"
+        "size": 8880,
+        "sha256": "a614ede32c6920dc6404f43120af9b9eac6b7ebe5843bcd8e2b0d9d2a7d692d2"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "monster.json",
-          "size": 16542,
-          "sha256": "9029e01994a9a1be21e5229f03c67e8de304f538ffe703cb8423d52f266e04a2"
+          "size": 18042,
+          "sha256": "1ef06039647778dccbf2ce481aa132975400e2e9081894f0794a9f2b68a3b2d9"
         },
         {
           "kind": "binary",
           "file": "monster.pb",
-          "size": 1573,
-          "sha256": "5ed544e83f461380ef2ffb403b96b58a782dfea1a4826361423c9836af984231"
+          "size": 1729,
+          "sha256": "b32400c9811e0339c06e3a565153befccf55712e3d8aee35dadd4ca39fd2fe46"
         }
       ]
     },
@@ -1439,24 +1439,24 @@
       "name": "PlayMode",
       "hot_reload": false,
       "ids_permanent": false,
-      "rows": 43,
+      "rows": 49,
       "source": {
         "file": "PlayMode.xlsx",
-        "size": 6481,
-        "sha256": "d9ed49854e503cfd4338fbff1a48542809fa39b9f96d7d61b8e5ada03268d8f4"
+        "size": 6585,
+        "sha256": "9f187547d39126ddc3e58f45518822ee7ee13c627fe691ff2f88dbc105178e6b"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "playmode.json",
-          "size": 4892,
-          "sha256": "86f33bcba1fae527b610369ce7a4f49e21deaf545e76c504fee9565a4976f0e8"
+          "size": 5570,
+          "sha256": "0bbb88c47dfb434e3ded68c3871aab6209b20e962dfd508e84107c313ee42f84"
         },
         {
           "kind": "binary",
           "file": "playmode.pb",
-          "size": 546,
-          "sha256": "eb0003b8e78e07ab7f2b3add65589ec40e039946cf9e0486f9240091aa2d3377"
+          "size": 621,
+          "sha256": "150b010328c11989f1a689026c5bfc70e6f7948500cd77531b1135a2b3d4d64c"
         }
       ]
     },
@@ -1614,24 +1614,24 @@
       "name": "SeasonRule",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 2,
+      "rows": 10,
       "source": {
         "file": "SeasonRule.xlsx",
-        "size": 5720,
-        "sha256": "e62d188e227989587162558e0e19937b2a9a7b4f5c497b8b0149d980434c20b6"
+        "size": 7022,
+        "sha256": "c98566ca87d1f8912dc71b8086b54a232145c186f6c75ad612c1e6546b375987"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "seasonrule.json",
-          "size": 1255,
-          "sha256": "2ab00b079292e11550d89c115d9f4d84b5577e9536569f1cce0539f9a7c59d68"
+          "size": 6574,
+          "sha256": "1a900d5eb62de28e95e0481d4bf7917a6115761e405c1a5b4c4480805ee72377"
         },
         {
           "kind": "binary",
           "file": "seasonrule.pb",
-          "size": 475,
-          "sha256": "61c7adb0c15c4b481593f91d5125109ac0a34f023c93e73039dc9538f84f1c92"
+          "size": 2257,
+          "sha256": "3044f9e841ca87ba52269173195557351ff0c18e309282e6d4162446b8de6cd7"
         }
       ]
     },
@@ -1639,24 +1639,24 @@
       "name": "SeasonSeal",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 8,
+      "rows": 40,
       "source": {
         "file": "SeasonSeal.xlsx",
-        "size": 5951,
-        "sha256": "6821bbaa0ed844853471c17367c8207b6a68703fccf0a7046ef87948b5368255"
+        "size": 9426,
+        "sha256": "9027238b4a8bbd092e71b0899bfdfb6179b9da0019b5fd3ac2741f3d3c5f117e"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "seasonseal.json",
-          "size": 3162,
-          "sha256": "d9d2c52e3d49db6a0ef5b1f9aaaf56e3f7d5ebeda50624af1aba8c806acfadb5"
+          "size": 23123,
+          "sha256": "abe559dd11c13ebc4bb8db5c85072156d5463ffbc59b08891feff29c8c1ddb1c"
         },
         {
           "kind": "binary",
           "file": "seasonseal.pb",
-          "size": 1282,
-          "sha256": "934e592e2c7640fa2eb3b702f712a5b277c8366efe00e3efd5a07dae0c4b0753"
+          "size": 9900,
+          "sha256": "d68842235574a8c3ed80fdaf85b44de21632f32067c26d313ccbad2e42a51a6d"
         }
       ]
     },
@@ -1664,24 +1664,24 @@
       "name": "Skill",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 149,
+      "rows": 181,
       "source": {
         "file": "Skill.xlsx",
-        "size": 31590,
-        "sha256": "e6c5c902edd609c9bb807c014762f4f35257f93394d06e8220a6589be80e14f8"
+        "size": 36226,
+        "sha256": "02969a28592908c113523c977ea09471a0c3a88a5e40346de2b33ac9838940f5"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "skill.json",
-          "size": 147959,
-          "sha256": "46e5e8499481667fe7cabf22ca0b0e687ee29c2f6edb36b3a08b87ecf625d360"
+          "size": 173554,
+          "sha256": "37191e4f8ca77ccec3515b17a8c9ed6ad143606e9645dc1579ad0b6139cc51e3"
         },
         {
           "kind": "binary",
           "file": "skill.pb",
-          "size": 30841,
-          "sha256": "5f3e342c0d896669a47ac9fd3ba5cf61244b227fcb0e61e065caafaf20ca2e57"
+          "size": 38197,
+          "sha256": "6263590621269503bbacd1178892b265fe5756a14a2d70a9ed4961e352571d27"
         }
       ]
     },
@@ -1892,21 +1892,21 @@
       "rows": 1,
       "source": {
         "file": "TournamentRule.xlsx",
-        "size": 6191,
-        "sha256": "dfe4024bf09a8f15e6f0db9748ca453a77147b160989aca5421a6609c912afc7"
+        "size": 6079,
+        "sha256": "3ded39889325c964c568dc29c0bdfad0a7f04676aa168711998efda23051ec72"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "tournamentrule.json",
-          "size": 1116,
-          "sha256": "bfd52dfc1963ef4f7ae3c5992c652e8ca0a1b1e12d47c1c530e3712b137f34dd"
+          "size": 1006,
+          "sha256": "3178e1622ab65220859cae2e616bfc03c707b383d8a709e667cc38a94890a3b1"
         },
         {
           "kind": "binary",
           "file": "tournamentrule.pb",
-          "size": 264,
-          "sha256": "f3f7c7fa60450e1d944d53c4dd6045d23ca238e1680669bbd41a27b8571e7bcd"
+          "size": 227,
+          "sha256": "9aa1085992f109ac7ee9630473f8f6dc48f48c3b4c6a64e5d949ec04c4a07fa2"
         }
       ]
     },
@@ -1964,24 +1964,24 @@
       "name": "TrialJournalEntry",
       "hot_reload": true,
       "ids_permanent": true,
-      "rows": 12,
+      "rows": 15,
       "source": {
         "file": "TrialJournalEntry.xlsx",
-        "size": 7190,
-        "sha256": "845b71819efce11c481146663367081bc9ce00baf358f6c7a310a4eddd1ea154"
+        "size": 7682,
+        "sha256": "46852f4579445829f58a8b86c29ccb01210a428b664a262f4f895ed1108d1daf"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "trialjournalentry.json",
-          "size": 6811,
-          "sha256": "ab1ebe022332f674cdc9b68688fc59e18889ed62766d21109413cf9c43419f35"
+          "size": 8537,
+          "sha256": "9a0cca79bddcd943141da1773d7aefd104df4cbccf50baa25228f4c067585b57"
         },
         {
           "kind": "binary",
           "file": "trialjournalentry.pb",
-          "size": 3159,
-          "sha256": "4abb35cc3e9e6fc8e4c382b28c8b98d56b3f65e9f1962a0bf92e05429b9febab"
+          "size": 3975,
+          "sha256": "38eeeeb82c6bb6a60c2bc3d246a9aebe75d4409fb417c564211b5261e2844ac2"
         }
       ]
     },
@@ -1989,24 +1989,24 @@
       "name": "TrialJournalMilestone",
       "hot_reload": true,
       "ids_permanent": true,
-      "rows": 11,
+      "rows": 13,
       "source": {
         "file": "TrialJournalMilestone.xlsx",
-        "size": 7635,
-        "sha256": "b739802a6d98d5a84a3a3d253d068add9163674cf807a7f984b11d0124ded498"
+        "size": 8023,
+        "sha256": "4a0cc5c653e407027f0bdc598616cfc4da182e35710b401d8e8fd1850bb46e13"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "trialjournalmilestone.json",
-          "size": 6761,
-          "sha256": "07811d4639fe1943dc9aa97dc0a7713635dddeca07c806cf50db2edc96232570"
+          "size": 8026,
+          "sha256": "c6e702423e0532138c9757ff98647e0fe21944a712d0f9f078072dca3888cd3c"
         },
         {
           "kind": "binary",
           "file": "trialjournalmilestone.pb",
-          "size": 3495,
-          "sha256": "b2e18b4eac445ad0c8833d9a5401e8c1d884f6814d7eb5e451f6106dd82dbc26"
+          "size": 4158,
+          "sha256": "17694d87f6780b327166cec1002dbeaf01c480f0e072d02defe6842e925ec1af"
         }
       ]
     },
@@ -2014,24 +2014,24 @@
       "name": "TrialJournalSeal",
       "hot_reload": true,
       "ids_permanent": true,
-      "rows": 33,
+      "rows": 42,
       "source": {
         "file": "TrialJournalSeal.xlsx",
-        "size": 7003,
-        "sha256": "09e3fb9a20f020007135bb95aeb52e9ae585545feb45683dfb3f022d12e5a297"
+        "size": 7472,
+        "sha256": "6586036f5c246a193cb0f9b7c4a2e8e6aaf4e44d27d79f05b27e085672b9d43d"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "trialjournalseal.json",
-          "size": 7864,
-          "sha256": "01fe8666be7eb9bd5a1dd5b2efe4954dfb8cffb6116444d6f43f00d105b285da"
+          "size": 9978,
+          "sha256": "f69e8327a734a278a858d0ac68ca850f7876987d6f2fd7f69656a8b8b74c53b2"
         },
         {
           "kind": "binary",
           "file": "trialjournalseal.pb",
-          "size": 2917,
-          "sha256": "23522de0ba95466a653dab365e930cec56a7d8af7cb5adf7e4de67fa5a90bc41"
+          "size": 3692,
+          "sha256": "c5ae831b8bb0a7c26ad682653dceebba18dbf1415a5bec2108f774ef1e24a3f7"
         }
       ]
     },

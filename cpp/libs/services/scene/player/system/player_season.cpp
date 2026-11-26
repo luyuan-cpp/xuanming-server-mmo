@@ -190,13 +190,16 @@ seasonrules::RuleParams ToParams(const SeasonRuleTable& row) {
     params.catchupCurrencyType = row.catchup_currency_type();
     params.catchupPricePerPoint = row.catchup_price_per_point();
     params.defaultSealId = row.default_seal_id();
+    params.cycleOrder = row.cycle_order();
+    params.cycleDurationDays = row.cycle_duration_days();
     return params;
 }
 
 bool IsValidSealRow(const SeasonSealTable& seal) {
-    return seasonrules::ValidSealEffect(seal.season_id(), seal.id(), seal.effect_id(),
-                                        seal.bonus_bps(), seal.cap_bps(), seal.per_round_limit(),
-                                        seal.battle_limit(), seal.active_rounds(), seal.health_threshold_bps());
+    return seasonrules::ValidSealDefinition(seal.season_id(), seal.id(), seal.effect_id(),
+                                            seal.bonus_bps(), seal.cap_bps(), seal.per_round_limit(),
+                                            seal.battle_limit(), seal.active_rounds(), seal.health_threshold_bps(),
+                                            seal.resonance_skill_id(), seal.resonance_kind(), seal.resonance_param());
 }
 
 const SeasonSealTable* FindValidSealForSeason(uint32_t seasonId, uint32_t sealId) {
@@ -210,23 +213,38 @@ const SeasonSealTable* FindValidSealForSeason(uint32_t seasonId, uint32_t sealId
     return row;
 }
 
-// 查当前时刻唯一有效的活跃赛季；若多条启用赛季窗口重叠或配置非法则 fail-closed 返回 nullptr。
-const SeasonRuleTable* FindActiveSeasonRow(uint64_t nowMs) {
-    const SeasonRuleTable* active = nullptr;
-    for (const auto& row : SeasonRuleTableManager::Instance().FindAll().data()) {
-        if (!seasonrules::IsWindowActive(row.starts_at_ms(), row.ends_at_ms(), row.enabled(), nowMs)) {
-            continue;
-        }
-        if (seasonrules::ValidateRule(ToParams(row)) != nullptr ||
-            FindValidSealForSeason(row.id(), row.default_seal_id()) == nullptr) {
-            return nullptr;
-        }
-        if (active != nullptr) {
-            return nullptr; // 多赛季重叠：fail-closed，避免不确定归属。
-        }
-        active = &row;
+struct ActiveSeasonResolution {
+    uint32_t ruleId{0};
+    seasonrules::ResolvedSeason resolved;
+
+    const SeasonRuleTable* Rule() const {
+        return ruleId == 0u ? nullptr : SeasonRuleTableManager::Instance().FindByIdSilent(ruleId).first;
     }
-    return active;
+};
+
+// 解析当前时刻唯一有效的活跃赛季（支持固定单季窗与无限期号自动循环；非法配置 fail-closed 返回空）。
+ActiveSeasonResolution ResolveCurrentSeason(uint64_t nowMs) {
+    ActiveSeasonResolution out;
+    const auto& rows = SeasonRuleTableManager::Instance().FindAll().data();
+    if (rows.empty()) {
+        return out;
+    }
+    std::vector<seasonrules::RuleParams> params;
+    params.reserve(static_cast<std::size_t>(rows.size()));
+    for (const auto& row : rows) {
+        params.push_back(ToParams(row));
+    }
+    const auto resolved = seasonrules::ResolveActiveSeason(params, nowMs);
+    if (!resolved.active || resolved.invalidConfig || resolved.ruleIndex >= static_cast<std::size_t>(rows.size())) {
+        return out;
+    }
+    const auto& activeRow = rows[static_cast<int>(resolved.ruleIndex)];
+    if (FindValidSealForSeason(activeRow.id(), activeRow.default_seal_id()) == nullptr) {
+        return out;
+    }
+    out.ruleId = activeRow.id();
+    out.resolved = resolved;
+    return out;
 }
 
 const PlayerSeasonSealRecord* FindRecord(const PlayerSeasonComp& comp, uint32_t seasonId) {
@@ -247,6 +265,108 @@ PlayerSeasonSealRecord* FindOrAddRecord(PlayerSeasonComp& comp, uint32_t seasonI
     auto* added = comp.add_records();
     added->set_season_id(seasonId);
     return added;
+}
+
+bool IsSeasonHonorUnlocked(const PlayerSeasonComp& comp, uint32_t seasonId) {
+    if (seasonId == 0u) {
+        return false;
+    }
+    if (seasonrules::IsHonorBitSet(comp.unlocked_honor_words(), seasonId)) {
+        return true;
+    }
+    const auto* rule = SeasonRuleTableManager::Instance().FindByIdSilent(seasonId).first;
+    if (rule == nullptr || rule->seal_max_points() == 0u) {
+        return false;
+    }
+    const auto* rec = FindRecord(comp, seasonId);
+    return rec != nullptr && rec->progress_points() >= rule->seal_max_points();
+}
+
+void SyncLegacyHonorsToBitmap(PlayerSeasonComp& comp) {
+    for (const auto& rec : comp.records()) {
+        if (rec.season_id() == 0u) {
+            continue;
+        }
+        const auto* rule = SeasonRuleTableManager::Instance().FindByIdSilent(rec.season_id()).first;
+        if (rule != nullptr && rule->seal_max_points() > 0u && rec.progress_points() >= rule->seal_max_points()) {
+            seasonrules::SetHonorBitRepeated(comp.mutable_unlocked_honor_words(), rec.season_id());
+            comp.mutable_retro_honor_progress()->erase(rec.season_id());
+            if (comp.retro_honor_target_season_id() == rec.season_id()) {
+                comp.set_retro_honor_target_season_id(0u);
+            }
+        }
+    }
+}
+
+struct EffectiveProgress {
+    uint32_t progress{0};
+    uint32_t battlePoints{0};
+    uint32_t catchupPoints{0};
+};
+
+EffectiveProgress ReadEffectiveTermProgress(const PlayerSeasonSealRecord* rec,
+                                            uint32_t currentTerm, uint32_t maxPoints) {
+    EffectiveProgress out;
+    if (rec == nullptr || maxPoints == 0u) {
+        return out;
+    }
+    const bool sameTerm = (rec->last_term() == currentTerm) || (rec->last_term() == 0u && currentTerm == 1u);
+    if (!sameTerm) {
+        return out;
+    }
+    out.progress = std::min(rec->progress_points(), maxPoints);
+    out.battlePoints = std::min(rec->battle_points(), out.progress);
+    out.catchupPoints = std::min(rec->catchup_points(), out.progress);
+    return out;
+}
+
+PlayerSeasonSealRecord* SyncRecordForTerm(PlayerSeasonComp& comp, const SeasonRuleTable& rule, uint32_t currentTerm) {
+    SyncLegacyHonorsToBitmap(comp);
+    auto* record = FindOrAddRecord(comp, rule.id());
+    if (record->last_term() == 0u && currentTerm == 1u) {
+        record->set_last_term(1u);
+    } else if (record->last_term() != currentTerm) {
+        record->set_progress_points(0u);
+        record->set_battle_points(0u);
+        record->set_catchup_points(0u);
+        record->set_last_term(currentTerm);
+    }
+    return record;
+}
+
+std::vector<uint32_t> AllConfiguredSeasonIdsAsc() {
+    std::vector<uint32_t> ids;
+    for (const auto& row : SeasonRuleTableManager::Instance().FindAll().data()) {
+        if (row.id() != 0u && row.seal_max_points() > 0u) {
+            ids.push_back(row.id());
+        }
+    }
+    std::sort(ids.begin(), ids.end());
+    ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
+    return ids;
+}
+
+uint32_t ResolveRetroHonorTarget(const PlayerSeasonComp& comp, uint32_t activeSeasonId,
+                                 bool* outExplicit = nullptr) {
+    if (outExplicit != nullptr) {
+        *outExplicit = false;
+    }
+    const uint32_t explicitId = comp.retro_honor_target_season_id();
+    if (explicitId != 0u && explicitId != activeSeasonId) {
+        const auto* rule = SeasonRuleTableManager::Instance().FindByIdSilent(explicitId).first;
+        if (rule != nullptr && rule->seal_max_points() > 0u && !IsSeasonHonorUnlocked(comp, explicitId)) {
+            if (outExplicit != nullptr) {
+                *outExplicit = true;
+            }
+            return explicitId;
+        }
+    }
+    for (const uint32_t sid : AllConfiguredSeasonIdsAsc()) {
+        if (sid != activeSeasonId && !IsSeasonHonorUnlocked(comp, sid)) {
+            return sid;
+        }
+    }
+    return 0u;
 }
 
 uint32_t EffectiveSealId(const SeasonRuleTable& rule, const PlayerSeasonSealRecord* record) {
@@ -284,31 +404,30 @@ uint32_t BattlePointsFor(const SeasonRuleTable& rule, const BattleSettlementData
     }
 }
 
-void FillHonors(const PlayerSeasonComp& seasonComp, uint32_t activeSeasonId, SeasonStateSnapshot& out) {
-    // 永久零数值纪念印记与称谓：来源唯一为 PlayerSeasonComp.records + SeasonRule 配置，休赛期亦保留展示。
-    std::vector<uint32_t> seasonIds;
-    seasonIds.reserve(static_cast<std::size_t>(seasonComp.records_size()) + (activeSeasonId != 0u ? 1u : 0u));
-    for (const auto& rec : seasonComp.records()) {
-        if (rec.season_id() != 0u) {
-            seasonIds.push_back(rec.season_id());
-        }
-    }
-    if (activeSeasonId != 0u) {
-        seasonIds.push_back(activeSeasonId);
-    }
-    std::sort(seasonIds.begin(), seasonIds.end());
-    seasonIds.erase(std::unique(seasonIds.begin(), seasonIds.end()), seasonIds.end());
-
-    for (const uint32_t sid : seasonIds) {
+void FillHonors(const PlayerSeasonComp& seasonComp, uint32_t activeSeasonId,
+                uint32_t activeTerm, uint32_t retroTargetSeasonId, SeasonStateSnapshot& out) {
+    // 永久零数值纪念印记与称谓：全量返回已配置赛季（按 id 升序），支持十季荣誉墙与一键切换往季追忆目标。
+    for (const uint32_t sid : AllConfiguredSeasonIdsAsc()) {
         const auto* rule = SeasonRuleTableManager::Instance().FindByIdSilent(sid).first;
         if (rule == nullptr || rule->seal_max_points() == 0u) {
-            continue; // 删表/历史未知赛季安全跳过，不崩溃
-        }
-        const auto* rec = FindRecord(seasonComp, sid);
-        const uint32_t progress = rec != nullptr ? std::min(rec->progress_points(), rule->seal_max_points()) : 0u;
-        const bool unlocked = progress >= rule->seal_max_points();
-        if (!unlocked && sid != activeSeasonId) {
             continue;
+        }
+        const bool unlocked = IsSeasonHonorUnlocked(seasonComp, sid);
+        const bool isCurrent = sid == activeSeasonId;
+        uint32_t retroPts = 0u;
+        if (!unlocked) {
+            if (const auto it = seasonComp.retro_honor_progress().find(sid);
+                it != seasonComp.retro_honor_progress().end()) {
+                retroPts = std::min(it->second, rule->seal_max_points());
+            }
+        }
+        uint32_t progress = 0u;
+        if (unlocked) {
+            progress = rule->seal_max_points();
+        } else if (isCurrent) {
+            progress = ReadEffectiveTermProgress(FindRecord(seasonComp, sid), activeTerm, rule->seal_max_points()).progress;
+        } else {
+            progress = retroPts;
         }
         auto* honor = out.add_honors();
         honor->set_season_id(sid);
@@ -318,16 +437,22 @@ void FillHonors(const PlayerSeasonComp& seasonComp, uint32_t activeSeasonId, Sea
         honor->set_progress_points(progress);
         honor->set_max_points(rule->seal_max_points());
         honor->set_unlocked(unlocked);
-        honor->set_is_current_season(sid == activeSeasonId);
+        honor->set_is_current_season(isCurrent);
+        honor->set_is_retro_target(!unlocked && sid == retroTargetSeasonId);
+        honor->set_retro_progress_points(retroPts);
     }
 }
 
-void FillWeeklyAffix(const SeasonRuleTable& rule, uint64_t nowMs,
+void FillWeeklyAffix(const ActiveSeasonResolution& active, uint64_t nowMs,
                      const std::vector<const SeasonSealTable*>& validSeals,
                      SeasonWeeklyAffixView& out) {
     out.Clear();
-    const uint32_t weekIndex = seasonrules::ComputeSeasonWeekIndex(rule.starts_at_ms(), nowMs);
-    const uint32_t affixId = seasonrules::WeeklyAffixForWeek(rule.id(), weekIndex);
+    if (active.ruleId == 0u) {
+        return;
+    }
+    const uint32_t affixSeed = active.resolved.cyclePoolSize > 0u ? active.resolved.seasonTerm : active.ruleId;
+    const uint32_t weekIndex = seasonrules::ComputeSeasonWeekIndex(active.resolved.termStartMs, nowMs);
+    const uint32_t affixId = seasonrules::WeeklyAffixForWeek(affixSeed, weekIndex);
     if (!seasonrules::IsValidWeeklyAffixId(affixId)) {
         return;
     }
@@ -383,21 +508,27 @@ uint32_t FillState(entt::entity player, uint64_t nowMs, SeasonStateSnapshot& out
     for (const auto& bm : seasonComp->saved_builds()) {
         CopyBookmarkToView(bm, *out.add_saved_builds());
     }
-    const auto* rule = FindActiveSeasonRow(nowMs);
+    const auto active = ResolveCurrentSeason(nowMs);
+    const auto* rule = active.Rule();
+    bool retroExplicit = false;
+    const uint32_t retroTargetId = ResolveRetroHonorTarget(
+        *seasonComp, rule != nullptr ? rule->id() : 0u, &retroExplicit);
+    out.set_retro_honor_target_season_id(retroTargetId);
+    out.set_retro_honor_target_explicit(retroExplicit);
     if (rule == nullptr) {
-        FillHonors(*seasonComp, 0u, out);
+        FillHonors(*seasonComp, 0u, 0u, retroTargetId, out);
         out.set_available(false);
         out.set_unavailable_reason("当前暂无进行中的赛季");
         return kSuccess;
     }
-    FillHonors(*seasonComp, rule->id(), out);
+    FillHonors(*seasonComp, rule->id(), active.resolved.seasonTerm, retroTargetId, out);
 
     const auto* record = FindRecord(*seasonComp, rule->id());
     const uint32_t equippedId = EffectiveSealId(*rule, record);
-    const uint32_t rawProgress = record != nullptr ? record->progress_points() : 0u;
-    const uint32_t progress = std::min(rawProgress, rule->seal_max_points());
-    const uint32_t battlePts = record != nullptr ? std::min(record->battle_points(), progress) : 0u;
-    const uint32_t catchupPts = record != nullptr ? std::min(record->catchup_points(), progress) : 0u;
+    const auto eff = ReadEffectiveTermProgress(record, active.resolved.seasonTerm, rule->seal_max_points());
+    const uint32_t progress = eff.progress;
+    const uint32_t battlePts = eff.battlePoints;
+    const uint32_t catchupPts = eff.catchupPoints;
     const uint32_t healthBps = seasonrules::ScaledBonusBps(progress, rule->seal_max_points(), rule->max_health_bps_cap());
     const uint32_t defenseBps = seasonrules::ScaledBonusBps(progress, rule->seal_max_points(), rule->defense_bps_cap());
 
@@ -405,8 +536,11 @@ uint32_t FillState(entt::entity player, uint64_t nowMs, SeasonStateSnapshot& out
     out.set_season_id(rule->id());
     out.set_season_name(rule->name());
     out.set_season_desc(rule->desc());
-    out.set_starts_at_ms(rule->starts_at_ms());
-    out.set_ends_at_ms(rule->ends_at_ms());
+    out.set_starts_at_ms(active.resolved.termStartMs);
+    out.set_ends_at_ms(active.resolved.termEndMs);
+    out.set_season_term(active.resolved.seasonTerm);
+    out.set_cycle_index(active.resolved.cycleIndex);
+    out.set_cycle_pool_size(active.resolved.cyclePoolSize);
 
     out.set_equipped_seal_id(equippedId);
     out.set_progress_points(progress);
@@ -464,8 +598,12 @@ uint32_t FillState(entt::entity player, uint64_t nowMs, SeasonStateSnapshot& out
         opt->set_active_rounds(seal->active_rounds());
         opt->set_health_threshold_bps(seal->health_threshold_bps());
         opt->set_equipped(seal->id() == equippedId);
+        opt->set_resonance_skill_id(seal->resonance_skill_id());
+        opt->set_resonance_kind(seal->resonance_kind());
+        opt->set_resonance_param(seal->resonance_param());
+        opt->set_resonance_desc(seal->resonance_desc());
     }
-    FillWeeklyAffix(*rule, nowMs, seals, *out.mutable_weekly_affix());
+    FillWeeklyAffix(active, nowMs, seals, *out.mutable_weekly_affix());
 
     // 本季免费限定技能列表（按 skill_table_id 升序）
     const uint32_t level = playerlevel::CappedLevel(levelComp->level());
@@ -514,33 +652,22 @@ bool PlayerSeasonSystem::ValidateTables() {
         return true;
     }
 
-    std::vector<const SeasonRuleTable*> enabledRules;
+    std::vector<seasonrules::RuleParams> ruleParams;
+    ruleParams.reserve(static_cast<std::size_t>(rules.size()));
     for (const auto& rule : rules) {
-        if (const char* err = seasonrules::ValidateRule(ToParams(rule)); err != nullptr) {
-            LOG_ERROR << "[PlayerSeason] table validation failed: season_id=" << rule.id() << " error=" << err;
-            return false;
-        }
+        ruleParams.push_back(ToParams(rule));
         if (FindValidSealForSeason(rule.id(), rule.default_seal_id()) == nullptr) {
             LOG_ERROR << "[PlayerSeason] table validation failed: default_seal_id=" << rule.default_seal_id()
                       << " missing or invalid for season_id=" << rule.id();
             return false;
         }
-        if (rule.enabled()) {
-            enabledRules.push_back(&rule);
-        }
+    }
+    if (const char* err = seasonrules::ValidateSchedule(ruleParams); err != nullptr) {
+        LOG_ERROR << "[PlayerSeason] table validation failed: schedule error=" << err;
+        return false;
     }
 
-    for (std::size_t i = 0; i < enabledRules.size(); ++i) {
-        for (std::size_t j = i + 1; j < enabledRules.size(); ++j) {
-            if (seasonrules::WindowsOverlap(enabledRules[i]->starts_at_ms(), enabledRules[i]->ends_at_ms(),
-                                            enabledRules[j]->starts_at_ms(), enabledRules[j]->ends_at_ms())) {
-                LOG_ERROR << "[PlayerSeason] table validation failed: overlapping enabled seasons "
-                          << enabledRules[i]->id() << " and " << enabledRules[j]->id();
-                return false;
-            }
-        }
-    }
-
+    const bool hasSkillsLoaded = !SkillTableManager::Instance().FindAll().data().empty();
     for (const auto& seal : seals) {
         if (!SeasonRuleTableManager::Instance().Exists(seal.season_id())) {
             LOG_ERROR << "[PlayerSeason] table validation failed: seal_id=" << seal.id()
@@ -549,24 +676,34 @@ bool PlayerSeasonSystem::ValidateTables() {
         }
         if (!IsValidSealRow(seal)) {
             LOG_ERROR << "[PlayerSeason] table validation failed: seal_id=" << seal.id()
-                      << " has invalid effect parameters";
+                      << " has invalid effect or resonance parameters";
             return false;
+        }
+        if (hasSkillsLoaded && seal.resonance_kind() != seasonrules::kResonanceNone) {
+            const auto* skill = SkillTableManager::Instance().FindByIdSilent(seal.resonance_skill_id()).first;
+            if (skill == nullptr || skill->season_id() != seal.season_id() || skill->battle_model() != 1u) {
+                LOG_ERROR << "[PlayerSeason] table validation failed: seal_id=" << seal.id()
+                          << " resonance_skill_id=" << seal.resonance_skill_id()
+                          << " missing or season mismatch for season_id=" << seal.season_id();
+                return false;
+            }
         }
     }
     return true;
 }
 
 uint32_t PlayerSeasonSystem::ActiveSeasonId(uint64_t nowMs) {
-    const auto* rule = FindActiveSeasonRow(nowMs);
-    return rule != nullptr ? rule->id() : 0u;
+    const auto active = ResolveCurrentSeason(nowMs);
+    return active.ruleId;
 }
 
 uint32_t PlayerSeasonSystem::ActiveWeeklyAffixId(uint64_t nowMs) {
-    const auto* rule = FindActiveSeasonRow(nowMs);
-    if (rule == nullptr) {
+    const auto active = ResolveCurrentSeason(nowMs);
+    if (active.ruleId == 0u) {
         return seasonrules::kWeeklyAffixNone;
     }
-    return seasonrules::WeeklyAffixAt(rule->id(), rule->starts_at_ms(), nowMs);
+    const uint32_t affixSeed = active.resolved.cyclePoolSize > 0u ? active.resolved.seasonTerm : active.ruleId;
+    return seasonrules::WeeklyAffixAt(affixSeed, active.resolved.termStartMs, nowMs);
 }
 
 uint32_t PlayerSeasonSystem::EquippedFormationId(entt::entity player) {
@@ -683,7 +820,8 @@ uint32_t PlayerSeasonSystem::PrepareBattleCredit(const PlayerSeasonComp& current
     if (!IsEligibleBattle(settlement)) {
         return kSuccess;
     }
-    const auto* rule = FindActiveSeasonRow(nowMs);
+    const auto active = ResolveCurrentSeason(nowMs);
+    const auto* rule = active.Rule();
     if (rule == nullptr) {
         return kSuccess;
     }
@@ -691,32 +829,76 @@ uint32_t PlayerSeasonSystem::PrepareBattleCredit(const PlayerSeasonComp& current
     if (gain == 0) {
         return kSuccess;
     }
-    auto* record = FindOrAddRecord(candidate, rule->id());
+    auto* record = SyncRecordForTerm(candidate, *rule, active.resolved.seasonTerm);
     if (record->equipped_seal_id() == 0) {
         record->set_equipped_seal_id(rule->default_seal_id());
     }
     const uint32_t before = std::min(record->progress_points(), rule->seal_max_points());
-    if (before >= rule->seal_max_points()) {
-        if (outDelta != nullptr) {
-            outDelta->seasonId = rule->id();
-            outDelta->pointsAdded = 0;
-            outDelta->progressAfter = before;
-            outDelta->maxPoints = rule->seal_max_points();
-            outDelta->honorNewlyUnlocked = false;
+    const bool wasAlreadyUnlocked = IsSeasonHonorUnlocked(candidate, rule->id());
+    const uint32_t usedForCurrent = before < rule->seal_max_points()
+        ? std::min(gain, rule->seal_max_points() - before)
+        : 0u;
+    const uint32_t after = before + usedForCurrent;
+    bool currentHonorNewlyUnlocked = false;
+    if (usedForCurrent > 0u) {
+        record->set_progress_points(after);
+        record->set_battle_points(record->battle_points() + usedForCurrent);
+        pointsIncreased = true;
+        if (after >= rule->seal_max_points()) {
+            const bool newlySet = seasonrules::SetHonorBitRepeated(candidate.mutable_unlocked_honor_words(), rule->id());
+            currentHonorNewlyUnlocked = newlySet && !wasAlreadyUnlocked;
+            candidate.mutable_retro_honor_progress()->erase(rule->id());
+            if (candidate.retro_honor_target_season_id() == rule->id()) {
+                candidate.set_retro_honor_target_season_id(0u);
+            }
         }
-        return kSuccess;
     }
-    const uint32_t added = std::min(gain, rule->seal_max_points() - before);
-    const uint32_t after = before + added;
-    record->set_progress_points(after);
-    record->set_battle_points(record->battle_points() + added);
-    pointsIncreased = added > 0;
     if (outDelta != nullptr) {
         outDelta->seasonId = rule->id();
-        outDelta->pointsAdded = added;
+        outDelta->pointsAdded = usedForCurrent;
         outDelta->progressAfter = after;
         outDelta->maxPoints = rule->seal_max_points();
-        outDelta->honorNewlyUnlocked = before < rule->seal_max_points() && after >= rule->seal_max_points();
+        outDelta->honorNewlyUnlocked = currentHonorNewlyUnlocked;
+    }
+
+    // 满级溢出点数自动流向「往季徽章追忆」（纯玩法免费，永不涉及灵石购买）。
+    const uint32_t overflow = gain - usedForCurrent;
+    if (overflow > 0u) {
+        const uint32_t retroTargetId = ResolveRetroHonorTarget(candidate, rule->id());
+        if (retroTargetId != 0u) {
+            const auto* targetRule = SeasonRuleTableManager::Instance().FindByIdSilent(retroTargetId).first;
+            if (targetRule != nullptr && targetRule->seal_max_points() > 0u) {
+                const uint32_t targetMax = targetRule->seal_max_points();
+                uint32_t prevRetro = 0u;
+                if (const auto it = candidate.retro_honor_progress().find(retroTargetId);
+                    it != candidate.retro_honor_progress().end()) {
+                    prevRetro = std::min(it->second, targetMax);
+                }
+                const uint32_t retroAdded = prevRetro < targetMax ? std::min(overflow, targetMax - prevRetro) : 0u;
+                const uint32_t retroAfter = prevRetro + retroAdded;
+                bool retroUnlocked = false;
+                if (retroAdded > 0u) {
+                    pointsIncreased = true;
+                    if (retroAfter >= targetMax) {
+                        retroUnlocked = seasonrules::SetHonorBitRepeated(
+                            candidate.mutable_unlocked_honor_words(), retroTargetId);
+                        candidate.mutable_retro_honor_progress()->erase(retroTargetId);
+                        if (candidate.retro_honor_target_season_id() == retroTargetId) {
+                            candidate.set_retro_honor_target_season_id(0u);
+                        }
+                    } else {
+                        (*candidate.mutable_retro_honor_progress())[retroTargetId] = retroAfter;
+                    }
+                }
+                if (outDelta != nullptr && retroAdded > 0u) {
+                    outDelta->retroHonorSeasonId = retroTargetId;
+                    outDelta->retroHonorPointsAdded = retroAdded;
+                    outDelta->retroHonorProgressAfter = retroAfter;
+                    outDelta->retroHonorMaxPoints = targetMax;
+                    outDelta->retroHonorNewlyUnlocked = retroUnlocked;
+                }
+            }
+        }
     }
     return kSuccess;
 }
@@ -732,7 +914,8 @@ void PlayerSeasonSystem::CollectEffects(entt::entity player, uint64_t nowMs, Equ
     if (seasonComp == nullptr) {
         return;
     }
-    const auto* rule = FindActiveSeasonRow(nowMs);
+    const auto active = ResolveCurrentSeason(nowMs);
+    const auto* rule = active.Rule();
     if (rule == nullptr) {
         return;
     }
@@ -742,7 +925,7 @@ void PlayerSeasonSystem::CollectEffects(entt::entity player, uint64_t nowMs, Equ
     if (seal == nullptr) {
         return;
     }
-    const uint32_t progress = record != nullptr ? std::min(record->progress_points(), rule->seal_max_points()) : 0u;
+    const uint32_t progress = ReadEffectiveTermProgress(record, active.resolved.seasonTerm, rule->seal_max_points()).progress;
     effects.set_season_max_health_bps(
         seasonrules::ScaledBonusBps(progress, rule->seal_max_points(), rule->max_health_bps_cap()));
     effects.set_season_defense_bps(
@@ -759,11 +942,15 @@ void PlayerSeasonSystem::CollectEffects(entt::entity player, uint64_t nowMs, Equ
     dst->set_active_rounds(seal->active_rounds());
     dst->set_health_threshold_bps(seal->health_threshold_bps());
     dst->set_name(seal->name());
+    dst->set_resonance_skill_id(seal->resonance_skill_id());
+    dst->set_resonance_kind(seal->resonance_kind());
+    dst->set_resonance_param(seal->resonance_param());
 }
 
 void PlayerSeasonSystem::CollectAvailableSeals(uint64_t nowMs, std::vector<SeasonSealEffect>& out) {
     out.clear();
-    const auto* rule = FindActiveSeasonRow(nowMs);
+    const auto active = ResolveCurrentSeason(nowMs);
+    const auto* rule = active.Rule();
     if (rule == nullptr) {
         return;
     }
@@ -790,6 +977,9 @@ void PlayerSeasonSystem::CollectAvailableSeals(uint64_t nowMs, std::vector<Seaso
         effect.set_active_rounds(seal->active_rounds());
         effect.set_health_threshold_bps(seal->health_threshold_bps());
         effect.set_name(seal->name());
+        effect.set_resonance_skill_id(seal->resonance_skill_id());
+        effect.set_resonance_kind(seal->resonance_kind());
+        effect.set_resonance_param(seal->resonance_param());
         out.emplace_back(std::move(effect));
     }
 }
@@ -824,7 +1014,8 @@ void PlayerSeasonSystem::EquipSeal(entt::entity player, uint64_t nowMs,
         finish(kSeasonUnavailable);
         return;
     }
-    const auto* rule = FindActiveSeasonRow(nowMs);
+    const auto active = ResolveCurrentSeason(nowMs);
+    const auto* rule = active.Rule();
     if (rule == nullptr) {
         finish(kSeasonNotOpen);
         return;
@@ -847,7 +1038,7 @@ void PlayerSeasonSystem::EquipSeal(entt::entity player, uint64_t nowMs,
         return;
     }
 
-    auto* record = FindOrAddRecord(*seasonComp, rule->id());
+    auto* record = SyncRecordForTerm(*seasonComp, *rule, active.resolved.seasonTerm);
     record->set_equipped_seal_id(request.seal_id());
     if (record->revision() < std::numeric_limits<uint64_t>::max()) {
         record->set_revision(record->revision() + 1);
@@ -914,7 +1105,8 @@ void PlayerSeasonSystem::Catchup(entt::entity player, uint64_t nowMs,
         finish(kSeasonUnavailable);
         return;
     }
-    const auto* rule = FindActiveSeasonRow(nowMs);
+    const auto active = ResolveCurrentSeason(nowMs);
+    const auto* rule = active.Rule();
     if (rule == nullptr) {
         finish(kSeasonNotOpen);
         return;
@@ -933,7 +1125,8 @@ void PlayerSeasonSystem::Catchup(entt::entity player, uint64_t nowMs,
     }
 
     const auto* existing = FindRecord(*seasonComp, rule->id());
-    const uint32_t currentPoints = existing != nullptr ? std::min(existing->progress_points(), rule->seal_max_points()) : 0u;
+    const uint32_t currentPoints = ReadEffectiveTermProgress(
+        existing, active.resolved.seasonTerm, rule->seal_max_points()).progress;
     if (currentPoints >= rule->seal_max_points()) {
         finish(kSeasonSealAlreadyMax);
         return;
@@ -961,7 +1154,7 @@ void PlayerSeasonSystem::Catchup(entt::entity player, uint64_t nowMs,
         return;
     }
 
-    // 2. 原子扣款 -> 推进进度 -> 记幂等回执 -> 重算面板 -> 触发资产存盘（同步帧无让出）。
+    // 2. 原子扣款 -> 推进进度 -> 记幂等回执 -> 重算面板 -> 触发资产存盘（同步帧无让出；绝不溢出至往季追忆）。
     if (const uint32_t err = CurrencySystem::DeductCurrency(
             player, currencyType, totalCost, TX_SEASON_SEAL_CATCHUP, clientRequestId);
         err != kSuccess) {
@@ -969,12 +1162,20 @@ void PlayerSeasonSystem::Catchup(entt::entity player, uint64_t nowMs,
         return;
     }
 
-    auto* record = FindOrAddRecord(*seasonComp, rule->id());
+    auto* record = SyncRecordForTerm(*seasonComp, *rule, active.resolved.seasonTerm);
     if (record->equipped_seal_id() == 0) {
         record->set_equipped_seal_id(rule->default_seal_id());
     }
-    record->set_progress_points(currentPoints + plan.pointsToBuy);
+    const uint32_t afterPoints = currentPoints + plan.pointsToBuy;
+    record->set_progress_points(afterPoints);
     record->set_catchup_points(record->catchup_points() + plan.pointsToBuy);
+    if (afterPoints >= rule->seal_max_points()) {
+        seasonrules::SetHonorBitRepeated(seasonComp->mutable_unlocked_honor_words(), rule->id());
+        seasonComp->mutable_retro_honor_progress()->erase(rule->id());
+        if (seasonComp->retro_honor_target_season_id() == rule->id()) {
+            seasonComp->set_retro_honor_target_season_id(0u);
+        }
+    }
     if (record->revision() < std::numeric_limits<uint64_t>::max()) {
         record->set_revision(record->revision() + 1);
     }
@@ -997,6 +1198,65 @@ void PlayerSeasonSystem::Catchup(entt::entity player, uint64_t nowMs,
 
     response.set_added_points(plan.pointsToBuy);
     response.set_spent_currency(plan.totalPrice);
+    finish(kSuccess);
+}
+
+void PlayerSeasonSystem::SetRetroHonorTarget(entt::entity player, uint64_t nowMs,
+                                             const SetRetroHonorTargetRequest& request,
+                                             SetRetroHonorTargetResponse& response) {
+    response.Clear();
+    const auto finish = [&](uint32_t err) {
+        if (err != kSuccess) {
+            response.mutable_error_message()->set_id(err);
+        }
+        if (const uint32_t stateErr = FillState(player, nowMs, *response.mutable_state()); stateErr != kSuccess) {
+            response.clear_state();
+            if (err == kSuccess) {
+                response.mutable_error_message()->set_id(stateErr);
+            }
+        }
+    };
+
+    if (!tlsEcs.actorRegistry.valid(player)) {
+        response.mutable_error_message()->set_id(kEntityIsNull);
+        return;
+    }
+    auto* seasonComp = tlsEcs.actorRegistry.try_get<PlayerSeasonComp>(player);
+    if (seasonComp == nullptr) {
+        finish(kSeasonUnavailable);
+        return;
+    }
+    if (const uint32_t writableErr = CheckWritable(player); writableErr != kSuccess) {
+        finish(writableErr);
+        return;
+    }
+
+    SyncLegacyHonorsToBitmap(*seasonComp);
+    const uint32_t targetSeasonId = request.season_id();
+    if (targetSeasonId == 0u) {
+        seasonComp->set_retro_honor_target_season_id(0u);
+        PlayerLifecycleSystem::RequestKeyProgressSave(player, "season_retro_honor_target");
+        finish(kSuccess);
+        return;
+    }
+
+    const auto* targetRule = SeasonRuleTableManager::Instance().FindByIdSilent(targetSeasonId).first;
+    const auto active = ResolveCurrentSeason(nowMs);
+    if (targetRule == nullptr || targetRule->seal_max_points() == 0u ||
+        (active.ruleId != 0u && active.ruleId == targetSeasonId)) {
+        finish(kSeasonHonorTargetInvalid);
+        return;
+    }
+    if (IsSeasonHonorUnlocked(*seasonComp, targetSeasonId)) {
+        finish(kSeasonHonorAlreadyUnlocked);
+        return;
+    }
+
+    seasonComp->set_retro_honor_target_season_id(targetSeasonId);
+    const auto* guid = tlsEcs.actorRegistry.try_get<PlayerGuidComp>(player);
+    LOG_INFO << "[PlayerSeason] Retro honor target updated: player_id=" << (guid != nullptr ? guid->value : 0)
+             << " target_season_id=" << targetSeasonId;
+    PlayerLifecycleSystem::RequestKeyProgressSave(player, "season_retro_honor_target");
     finish(kSuccess);
 }
 

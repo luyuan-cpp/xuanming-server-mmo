@@ -86,10 +86,12 @@ type fakeFriendStore struct {
 	// Block / RemoveFriend 成功时报告的实际效果(决定给被动方 bump 哪些摘要域)。
 	// 零值 = 拉黑陌生人 / 删一个本来就不是好友的人,对方的任何拉取结果都没变;
 	// 要验"给对方 bump"的用例显式置位,别让默认值替用例做决定。
-	blockEffect    data.BlockEffect
-	removed        bool
-	unchanged      bool
-	lastRequestID  uint64
+	blockEffect      data.BlockEffect
+	removed          bool
+	unchanged        bool
+	socialBlocked    bool
+	socialAllFriends bool
+	lastRequestID    uint64
 	lastAccepterID uint64
 
 	// 记录最后一次调用的入参,用来断言限幅、排除集这些"传进去的值"。
@@ -194,6 +196,13 @@ func (f *fakeFriendStore) ListBlocks(_ context.Context, _ uint64) ([]data.BlockE
 		return nil, err
 	}
 	return f.blocks, nil
+}
+
+func (f *fakeFriendStore) BatchCheckSocialRelations(_ context.Context, _, _ []uint64) (bool, bool, error) {
+	if err := f.take("BatchCheckSocialRelations"); err != nil {
+		return false, false, err
+	}
+	return f.socialBlocked, f.socialAllFriends, nil
 }
 
 func (f *fakeFriendStore) RecommendByMutual(_ context.Context, _ uint64, exclude []uint64, limit uint32) ([]data.RecommendCandidate, error) {

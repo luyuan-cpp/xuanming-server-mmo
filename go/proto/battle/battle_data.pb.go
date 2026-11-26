@@ -3428,8 +3428,11 @@ type BattleSettlementData struct {
 	SeasonSealContributionValue uint64 `protobuf:"varint,52,opt,name=season_seal_contribution_value,json=seasonSealContributionValue,proto3" json:"season_seal_contribution_value,omitempty"` // 主贡献累计值（101/102 削盾量、103 减伤+共鸣增盾量、104 回蓝+共鸣省蓝量）
 	SeasonSealTriggerCount      uint32 `protobuf:"varint,53,opt,name=season_seal_trigger_count,json=seasonSealTriggerCount,proto3" json:"season_seal_trigger_count,omitempty"`                // 本场赛季印基础效果触发次数
 	SeasonSealResonanceCount    uint32 `protobuf:"varint,54,opt,name=season_seal_resonance_count,json=seasonSealResonanceCount,proto3" json:"season_seal_resonance_count,omitempty"`          // 本场「技印共鸣」触发次数
-	unknownFields               protoimpl.UnknownFields
-	sizeCache                   protoimpl.SizeCache
+	// 论剑 V7：正式 1V1 排位终局对阵对手身份（仅双方各 1 名真人且非无效局填充，用于战后 15 秒切磋「不服再战」，零排位分）。
+	RematchOpponentId   uint64 `protobuf:"varint,55,opt,name=rematch_opponent_id,json=rematchOpponentId,proto3" json:"rematch_opponent_id,omitempty"`
+	RematchOpponentName string `protobuf:"bytes,56,opt,name=rematch_opponent_name,json=rematchOpponentName,proto3" json:"rematch_opponent_name,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *BattleSettlementData) Reset() {
@@ -3838,6 +3841,20 @@ func (x *BattleSettlementData) GetSeasonSealResonanceCount() uint32 {
 		return x.SeasonSealResonanceCount
 	}
 	return 0
+}
+
+func (x *BattleSettlementData) GetRematchOpponentId() uint64 {
+	if x != nil {
+		return x.RematchOpponentId
+	}
+	return 0
+}
+
+func (x *BattleSettlementData) GetRematchOpponentName() string {
+	if x != nil {
+		return x.RematchOpponentName
+	}
+	return ""
 }
 
 // ---- 出战宝宝的结算数据(随主人的 BattleSettlementData 一起回 scene)----
@@ -4495,8 +4512,12 @@ type RankedMatchContext struct {
 	SkillBanSlotsPerTeam uint32 `protobuf:"varint,10,opt,name=skill_ban_slots_per_team,json=skillBanSlotsPerTeam,proto3" json:"skill_ban_slots_per_team,omitempty"`
 	// 论剑 V6 成局时由 match 冻结的对阵宿敌记录（含双方本季已有交手的全部主客视角条目）。
 	RivalryEncounters []*RankedRivalryEncounter `protobuf:"bytes,11,rep,name=rivalry_encounters,json=rivalryEncounters,proto3" json:"rivalry_encounters,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// 论剑 V7：高段正式排位公开实时观战（青锋及以上段位冻结为 true，低段新手局保持 false 避免压力）。
+	AllowPublicSpectate bool `protobuf:"varint,12,opt,name=allow_public_spectate,json=allowPublicSpectate,proto3" json:"allow_public_spectate,omitempty"`
+	// 论剑 V7：成局时本场参战者最高赛季积分（centi，随建房原件冻结供实时围观列表排序展示）。
+	PeakRatingCenti int64 `protobuf:"varint,13,opt,name=peak_rating_centi,json=peakRatingCenti,proto3" json:"peak_rating_centi,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *RankedMatchContext) Reset() {
@@ -4606,6 +4627,20 @@ func (x *RankedMatchContext) GetRivalryEncounters() []*RankedRivalryEncounter {
 	return nil
 }
 
+func (x *RankedMatchContext) GetAllowPublicSpectate() bool {
+	if x != nil {
+		return x.AllowPublicSpectate
+	}
+	return false
+}
+
+func (x *RankedMatchContext) GetPeakRatingCenti() int64 {
+	if x != nil {
+		return x.PeakRatingCenti
+	}
+	return 0
+}
+
 // 玩家本局有效参与事实(battle 房间在终局前冻结进 BattleResultEvent,重放不重算)。
 type BattleParticipationFact struct {
 	state                protoimpl.MessageState `protogen:"open.v1"`
@@ -4691,6 +4726,7 @@ type TrialBattleContext struct {
 	SeasonId            uint32                 `protobuf:"varint,3,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`                                      // 赛季卷对应赛季号（永久卷为 0）
 	GuardMonsterTableId uint32                 `protobuf:"varint,4,opt,name=guard_monster_table_id,json=guardMonsterTableId,proto3" json:"guard_monster_table_id,omitempty"` // 可选：回春/护势等特殊护卫怪物表 ID（0 = 任意非首领怪物）
 	GuardStanceBuffId   uint32                 `protobuf:"varint,5,opt,name=guard_stance_buff_id,json=guardStanceBuffId,proto3" json:"guard_stance_buff_id,omitempty"`       // 可选：护势护卫状态 Buff 表 ID（0 = 任意敌方增益驱散均视为有效驱散）
+	ChallengeVowMask    uint32                 `protobuf:"varint,6,opt,name=challenge_vow_mask,json=challengeVowMask,proto3" json:"challenge_vow_mask,omitempty"`            // 五行试炼志 V3：开局冻结的自选限制誓约位掩码（bit0禁控 bit1单宝 bit2无宠 bit3紧缩回合，0=常规）
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -4760,6 +4796,13 @@ func (x *TrialBattleContext) GetGuardStanceBuffId() uint32 {
 	return 0
 }
 
+func (x *TrialBattleContext) GetChallengeVowMask() uint32 {
+	if x != nil {
+		return x.ChallengeVowMask
+	}
+	return 0
+}
+
 type BattleTrialJournalFacts struct {
 	state                                 protoimpl.MessageState `protogen:"open.v1"`
 	JournalEntryId                        uint32                 `protobuf:"varint,1,opt,name=journal_entry_id,json=journalEntryId,proto3" json:"journal_entry_id,omitempty"`
@@ -4787,6 +4830,7 @@ type BattleTrialJournalFacts struct {
 	StanceBreakCount                      uint32                 `protobuf:"varint,23,opt,name=stance_break_count,json=stanceBreakCount,proto3" json:"stance_break_count,omitempty"`                                                                        // 首领试炼 V2：触发驱散/控断护势「崩势」次数
 	AllSelfCleavesParried                 bool                   `protobuf:"varint,24,opt,name=all_self_cleaves_parried,json=allSelfCleavesParried,proto3" json:"all_self_cleaves_parried,omitempty"`                                                       // 首领试炼 V2：本人及本人宝宝被重劈点名>=1次且100%合法化解(不含倒地/退出取消)
 	SelfParriedCleaveAtLeastOnce          bool                   `protobuf:"varint,25,opt,name=self_parried_cleave_at_least_once,json=selfParriedCleaveAtLeastOnce,proto3" json:"self_parried_cleave_at_least_once,omitempty"`                              // 首领试炼 V2：本人或本人宝宝至少合法化解过 1 次重劈
+	ChallengeVowMask                      uint32                 `protobuf:"varint,26,opt,name=challenge_vow_mask,json=challengeVowMask,proto3" json:"challenge_vow_mask,omitempty"`                                                                        // 五行试炼志 V3：本局生效的自选试炼誓约位掩码（0..15）
 	unknownFields                         protoimpl.UnknownFields
 	sizeCache                             protoimpl.SizeCache
 }
@@ -4994,6 +5038,13 @@ func (x *BattleTrialJournalFacts) GetSelfParriedCleaveAtLeastOnce() bool {
 		return x.SelfParriedCleaveAtLeastOnce
 	}
 	return false
+}
+
+func (x *BattleTrialJournalFacts) GetChallengeVowMask() uint32 {
+	if x != nil {
+		return x.ChallengeVowMask
+	}
+	return 0
 }
 
 type TournamentBattleContext struct {
@@ -5316,6 +5367,7 @@ type CustomDuelRules struct {
 	ChallengerCharacterPresetId uint32                 `protobuf:"varint,6,opt,name=challenger_character_preset_id,json=challengerCharacterPresetId,proto3" json:"challenger_character_preset_id,omitempty"` // 公平模板切磋时发起者所选人物预设（0=默认 101）
 	ChallengerPetPresetId       uint32                 `protobuf:"varint,7,opt,name=challenger_pet_preset_id,json=challengerPetPresetId,proto3" json:"challenger_pet_preset_id,omitempty"`                   // 公平模板切磋时发起者所选灵宠预设（0=默认 203）
 	SkillBanSlotsPerTeam        uint32                 `protobuf:"varint,8,opt,name=skill_ban_slots_per_team,json=skillBanSlotsPerTeam,proto3" json:"skill_ban_slots_per_team,omitempty"`                    // 战前纯禁招每队槽数（白名单 0 或 3；禁止与 use_free_preset=true 同开）
+	RematchSourceBattleId       uint64                 `protobuf:"varint,9,opt,name=rematch_source_battle_id,json=rematchSourceBattleId,proto3" json:"rematch_source_battle_id,omitempty"`                   // 论剑 V7 战后不服再战来源局 ID（0=普通自定义切磋；非 0 时服务端缩短应答 TTL 至 15s）
 	unknownFields               protoimpl.UnknownFields
 	sizeCache                   protoimpl.SizeCache
 }
@@ -5402,6 +5454,13 @@ func (x *CustomDuelRules) GetChallengerPetPresetId() uint32 {
 func (x *CustomDuelRules) GetSkillBanSlotsPerTeam() uint32 {
 	if x != nil {
 		return x.SkillBanSlotsPerTeam
+	}
+	return 0
+}
+
+func (x *CustomDuelRules) GetRematchSourceBattleId() uint64 {
+	if x != nil {
+		return x.RematchSourceBattleId
 	}
 	return 0
 }
@@ -6011,7 +6070,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"item_draws\x18\x05 \x01(\rR\titemDraws\x12:\n" +
 	"\frandom_items\x18\x06 \x03(\v2\x17.BattleRandomItemRewardR\vrandomItems\"F\n" +
 	"\x12BattleRewardConfig\x120\n" +
-	"\bprofiles\x18\x01 \x03(\v2\x14.BattleRewardProfileR\bprofiles\"\xd0\x13\n" +
+	"\bprofiles\x18\x01 \x03(\v2\x14.BattleRewardProfileR\bprofiles\"\xb4\x14\n" +
 	"\x14BattleSettlementData\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12)\n" +
@@ -6069,7 +6128,9 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\fjianghu_duel\x183 \x01(\v2\x19.JianghuDuelBattleContextR\vjianghuDuel\x12C\n" +
 	"\x1eseason_seal_contribution_value\x184 \x01(\x04R\x1bseasonSealContributionValue\x129\n" +
 	"\x19season_seal_trigger_count\x185 \x01(\rR\x16seasonSealTriggerCount\x12=\n" +
-	"\x1bseason_seal_resonance_count\x186 \x01(\rR\x18seasonSealResonanceCount\"u\n" +
+	"\x1bseason_seal_resonance_count\x186 \x01(\rR\x18seasonSealResonanceCount\x12.\n" +
+	"\x13rematch_opponent_id\x187 \x01(\x04R\x11rematchOpponentId\x122\n" +
+	"\x15rematch_opponent_name\x188 \x01(\tR\x13rematchOpponentName\"u\n" +
 	"\x17BattlePetSettlementData\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12\x16\n" +
 	"\x06health\x18\x02 \x01(\x04R\x06health\x12\x12\n" +
@@ -6135,7 +6196,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\rpet_preset_id\x18\x02 \x01(\rR\vpetPresetId\"d\n" +
 	"\x13RankedMemberLoadout\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x120\n" +
-	"\apresets\x18\x02 \x01(\v2\x16.RankedPresetSelectionR\apresets\"\xde\x04\n" +
+	"\apresets\x18\x02 \x01(\v2\x16.RankedPresetSelectionR\apresets\"\xbe\x05\n" +
 	"\x12RankedMatchContext\x12\x1b\n" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x1d\n" +
 	"\n" +
@@ -6149,7 +6210,9 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x12member_win_streaks\x18\t \x03(\v2).RankedMatchContext.MemberWinStreaksEntryR\x10memberWinStreaks\x126\n" +
 	"\x18skill_ban_slots_per_team\x18\n" +
 	" \x01(\rR\x14skillBanSlotsPerTeam\x12F\n" +
-	"\x12rivalry_encounters\x18\v \x03(\v2\x17.RankedRivalryEncounterR\x11rivalryEncounters\x1aC\n" +
+	"\x12rivalry_encounters\x18\v \x03(\v2\x17.RankedRivalryEncounterR\x11rivalryEncounters\x122\n" +
+	"\x15allow_public_spectate\x18\f \x01(\bR\x13allowPublicSpectate\x12*\n" +
+	"\x11peak_rating_centi\x18\r \x01(\x03R\x0fpeakRatingCenti\x1aC\n" +
 	"\x15MemberWinStreaksEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xf7\x01\n" +
@@ -6158,14 +6221,14 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\fentered_room\x18\x02 \x01(\bR\venteredRoom\x124\n" +
 	"\x16manual_action_accepted\x18\x03 \x01(\bR\x14manualActionAccepted\x122\n" +
 	"\x15explicit_auto_enabled\x18\x04 \x01(\bR\x13explicitAutoEnabled\x122\n" +
-	"\x15no_action_opportunity\x18\x05 \x01(\bR\x13noActionOpportunity\"\xef\x01\n" +
+	"\x15no_action_opportunity\x18\x05 \x01(\bR\x13noActionOpportunity\"\x9d\x02\n" +
 	"\x12TrialBattleContext\x12(\n" +
 	"\x10journal_entry_id\x18\x01 \x01(\rR\x0ejournalEntryId\x12,\n" +
 	"\x12trial_rule_version\x18\x02 \x01(\rR\x10trialRuleVersion\x12\x1b\n" +
 	"\tseason_id\x18\x03 \x01(\rR\bseasonId\x123\n" +
 	"\x16guard_monster_table_id\x18\x04 \x01(\rR\x13guardMonsterTableId\x12/\n" +
-	"\x14guard_stance_buff_id\x18\x05 \x01(\rR\x11guardStanceBuffId\"\xff\n" +
-	"\n" +
+	"\x14guard_stance_buff_id\x18\x05 \x01(\rR\x11guardStanceBuffId\x12,\n" +
+	"\x12challenge_vow_mask\x18\x06 \x01(\rR\x10challengeVowMask\"\xad\v\n" +
 	"\x17BattleTrialJournalFacts\x12(\n" +
 	"\x10journal_entry_id\x18\x01 \x01(\rR\x0ejournalEntryId\x12,\n" +
 	"\x12trial_rule_version\x18\x02 \x01(\rR\x10trialRuleVersion\x12.\n" +
@@ -6192,7 +6255,8 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x1dheal_interrupt_backlash_count\x18\x16 \x01(\rR\x1ahealInterruptBacklashCount\x12,\n" +
 	"\x12stance_break_count\x18\x17 \x01(\rR\x10stanceBreakCount\x127\n" +
 	"\x18all_self_cleaves_parried\x18\x18 \x01(\bR\x15allSelfCleavesParried\x12G\n" +
-	"!self_parried_cleave_at_least_once\x18\x19 \x01(\bR\x1cselfParriedCleaveAtLeastOnce\"\xcc\x04\n" +
+	"!self_parried_cleave_at_least_once\x18\x19 \x01(\bR\x1cselfParriedCleaveAtLeastOnce\x12,\n" +
+	"\x12challenge_vow_mask\x18\x1a \x01(\rR\x10challengeVowMask\"\xcc\x04\n" +
 	"\x17TournamentBattleContext\x12\x1b\n" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x19\n" +
 	"\bmatch_id\x18\x02 \x01(\x04R\amatchId\x12\x17\n" +
@@ -6226,7 +6290,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\bweek_key\x18\x01 \x01(\rR\aweekKey\x12\x15\n" +
 	"\x06run_id\x18\x02 \x01(\x04R\x05runId\x12\x14\n" +
 	"\x05floor\x18\x03 \x01(\rR\x05floor\x12!\n" +
-	"\ftotal_rounds\x18\x04 \x01(\rR\vtotalRounds\"\xbd\x03\n" +
+	"\ftotal_rounds\x18\x04 \x01(\rR\vtotalRounds\"\xf6\x03\n" +
 	"\x0fCustomDuelRules\x12&\n" +
 	"\x0fuse_free_preset\x18\x01 \x01(\bR\ruseFreePreset\x128\n" +
 	"\x18enable_polarity_rotation\x18\x02 \x01(\bR\x16enablePolarityRotation\x120\n" +
@@ -6235,7 +6299,8 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x15allow_public_spectate\x18\x05 \x01(\bR\x13allowPublicSpectate\x12C\n" +
 	"\x1echallenger_character_preset_id\x18\x06 \x01(\rR\x1bchallengerCharacterPresetId\x127\n" +
 	"\x18challenger_pet_preset_id\x18\a \x01(\rR\x15challengerPetPresetId\x126\n" +
-	"\x18skill_ban_slots_per_team\x18\b \x01(\rR\x14skillBanSlotsPerTeam\"\x8b\x04\n" +
+	"\x18skill_ban_slots_per_team\x18\b \x01(\rR\x14skillBanSlotsPerTeam\x127\n" +
+	"\x18rematch_source_battle_id\x18\t \x01(\x04R\x15rematchSourceBattleId\"\x8b\x04\n" +
 	"\x17BattleActorBuildSummary\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n" +

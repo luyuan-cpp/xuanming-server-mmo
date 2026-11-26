@@ -119,8 +119,6 @@ enum match_error : int {
   kMatchBattleSurrenderTooEarly = 16053,
   kMatchBattleSurrenderCooldown = 16054,
   kMatchBattleSurrenderAlreadyVoted = 16055,
-  kMatchTournamentAlreadySalutedToday = 16056,
-  kMatchTournamentNoChampionToSalute = 16057,
   kMatchTournamentSpectateCheerCooldown = 16058,
   kMatchTournamentSpectateCheerInvalid = 16059,
   kMatchTournamentEmblemInvalid = 16060,

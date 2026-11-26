@@ -426,6 +426,13 @@ uint32_t FillSnapshot(entt::entity player, uint64_t nowMs, TrialJournalSnapshot&
             }
             entryView->set_has_legacy_record_only(
                 !hasSolo && !hasCoop && HasAnyLegacyEntryRecord(*journal, entry->id(), entry->rule_version()));
+            entryView->set_vow_supported(entry->season_id() == 0u && entry->source_kind() == 1u);
+            if (record != nullptr && record->best_vow_count() > 0u) {
+                entryView->set_best_vow_mask(record->best_vow_mask());
+                entryView->set_best_vow_count(record->best_vow_count());
+                entryView->set_best_vow_rounds(record->best_vow_rounds());
+                entryView->set_best_vow_battle_id(record->best_vow_battle_id());
+            }
 
             if (writableErr == kTrialJournalInBattle) {
                 entryView->set_can_enter(false);
@@ -673,6 +680,8 @@ uint32_t PlayerTrialJournalSystem::PrepareBattleCredit(const PlayerTrialJournalC
         }
     }
     delta.entryId = entry->id();
+    delta.battleId = settlement.battle_id();
+    delta.vowMask = facts.challenge_vow_mask();
 
     // 1. 评估当前关卡格全部有效战法印（跨 rule_version 永久保留，点亮即不可逆）。
     std::vector<const TrialJournalSealTable*> seals;
@@ -707,6 +716,7 @@ uint32_t PlayerTrialJournalSystem::PrepareBattleCredit(const PlayerTrialJournalC
                 solo->Clear();
                 solo->set_best_rounds(settlement.total_rounds());
                 solo->set_achieved_at_ms(achievedAtMs);
+                solo->set_battle_id(settlement.battle_id());
                 auto* loadout = solo->mutable_loadout();
                 loadout->set_pet_table_id(facts.used_pet_table_id());
                 for (const uint32_t effectId : trialjournal::NormalizeArtifactEffectIds(facts.used_artifact_effect_ids())) {
@@ -727,6 +737,7 @@ uint32_t PlayerTrialJournalSystem::PrepareBattleCredit(const PlayerTrialJournalC
                 coop->set_party_size(facts.initial_human_count());
                 coop->set_achieved_at_ms(achievedAtMs);
                 coop->set_pet_table_id(facts.used_pet_table_id());
+                coop->set_battle_id(settlement.battle_id());
                 const int maxNames = std::min<int>(facts.teammate_names_size(),
                                                    static_cast<int>(trialjournal::kMaxCoopTeammates));
                 for (int i = 0; i < maxNames; ++i) {
@@ -735,6 +746,25 @@ uint32_t PlayerTrialJournalSystem::PrepareBattleCredit(const PlayerTrialJournalC
                     }
                 }
                 delta.newCoopBest = true;
+                delta.changed = true;
+            }
+        }
+        // 2.5 五行试炼志 V3：常驻 PVE 首领试炼带试炼誓约胜出时刷新个人最高誓约纪录（誓约条数优先，同数比更短回合）。
+        const uint32_t vowMask = facts.challenge_vow_mask();
+        if (entry->season_id() == 0u && entry->source_kind() == 1u &&
+            vowMask != 0u && trialjournal::IsValidVowMask(vowMask)) {
+            const uint32_t vowCount = trialjournal::CountVows(vowMask);
+            const auto* existing = FindEntryRecord(candidate, entry->id(), facts.trial_rule_version());
+            const uint32_t oldVowCount = existing != nullptr ? existing->best_vow_count() : 0u;
+            const uint32_t oldVowRounds = existing != nullptr ? existing->best_vow_rounds() : 0u;
+            if (vowCount > oldVowCount ||
+                (vowCount == oldVowCount && (oldVowRounds == 0u || settlement.total_rounds() < oldVowRounds))) {
+                auto* record = FindOrAddEntryRecord(candidate, entry->id(), facts.trial_rule_version());
+                record->set_best_vow_mask(vowMask);
+                record->set_best_vow_count(vowCount);
+                record->set_best_vow_rounds(settlement.total_rounds());
+                record->set_best_vow_battle_id(settlement.battle_id());
+                delta.newVowBest = true;
                 delta.changed = true;
             }
         }

@@ -266,6 +266,14 @@ extern const ::google::protobuf::internal::ClassDataFull GuildWarBountyRecord_cl
 #else
 extern const GuildWarBountyRecordGlobalsTypeInternal GuildWarBountyRecord_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class GuildWarFeudRecord;
+struct GuildWarFeudRecordGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GuildWarFeudRecordGlobalsTypeInternal GuildWarFeudRecord_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GuildWarFeudRecord_class_data_;
+#else
+extern const GuildWarFeudRecordGlobalsTypeInternal GuildWarFeudRecord_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class GuildWarGarrisonRecord;
 struct GuildWarGarrisonRecordGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -2186,6 +2194,409 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildWarGarrisonRecord final : publ
     ::uint32_t level_;
     ::uint64_t updated_ms_;
     ::uint32_t pet_table_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fguild_2fguild_5fdb_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildWarFeudRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:guildpb.GuildWarFeudRecord) */ {
+ public:
+  inline GuildWarFeudRecord() : GuildWarFeudRecord(nullptr) {}
+  ~GuildWarFeudRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GuildWarFeudRecord* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GuildWarFeudRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GuildWarFeudRecord(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GuildWarFeudRecord(const GuildWarFeudRecord& from) : GuildWarFeudRecord(nullptr, from) {}
+  inline GuildWarFeudRecord(GuildWarFeudRecord&& from) noexcept : GuildWarFeudRecord(nullptr, ::std::move(from)) {}
+  inline GuildWarFeudRecord& operator=(const GuildWarFeudRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GuildWarFeudRecord& operator=(GuildWarFeudRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GuildWarFeudRecord& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GuildWarFeudRecord>(&GuildWarFeudRecord_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 30;
+  friend void swap(GuildWarFeudRecord& a, GuildWarFeudRecord& b) { a.Swap(&b); }
+  inline void Swap(GuildWarFeudRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GuildWarFeudRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GuildWarFeudRecord* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GuildWarFeudRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GuildWarFeudRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GuildWarFeudRecord& from) { GuildWarFeudRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GuildWarFeudRecord* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "guildpb.GuildWarFeudRecord"; }
+
+  explicit GuildWarFeudRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GuildWarFeudRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GuildWarFeudRecord& from);
+  GuildWarFeudRecord(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GuildWarFeudRecord&& from) noexcept
+      : GuildWarFeudRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kIssuerGuildNameFieldNumber = 4,
+    kTargetGuildNameFieldNumber = 6,
+    kFeudIdFieldNumber = 1,
+    kIssuerGuildIdFieldNumber = 3,
+    kZoneIdFieldNumber = 2,
+    kStatusFieldNumber = 7,
+    kTargetGuildIdFieldNumber = 5,
+    kIssuerWinsFieldNumber = 8,
+    kTargetWinsFieldNumber = 9,
+    kIssuerMeritFieldNumber = 10,
+    kTargetMeritFieldNumber = 11,
+    kCreatedAtMsFieldNumber = 12,
+    kAcceptDeadlineMsFieldNumber = 13,
+    kStartedAtMsFieldNumber = 14,
+    kEndsAtMsFieldNumber = 15,
+    kWinnerGuildIdFieldNumber = 16,
+    kUpdatedMsFieldNumber = 17,
+  };
+  // string issuer_guild_name = 4;
+  void clear_issuer_guild_name() ;
+  [[nodiscard]] const ::std::string& issuer_guild_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_issuer_guild_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_issuer_guild_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_issuer_guild_name();
+  void set_allocated_issuer_guild_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_issuer_guild_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_issuer_guild_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_issuer_guild_name();
+
+  public:
+  // string target_guild_name = 6;
+  void clear_target_guild_name() ;
+  [[nodiscard]] const ::std::string& target_guild_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_target_guild_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_target_guild_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_target_guild_name();
+  void set_allocated_target_guild_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_target_guild_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_target_guild_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_target_guild_name();
+
+  public:
+  // uint64 feud_id = 1;
+  void clear_feud_id() ;
+  [[nodiscard]] ::uint64_t feud_id() const;
+  void set_feud_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_feud_id() const;
+  void _internal_set_feud_id(::uint64_t value);
+
+  public:
+  // uint64 issuer_guild_id = 3;
+  void clear_issuer_guild_id() ;
+  [[nodiscard]] ::uint64_t issuer_guild_id() const;
+  void set_issuer_guild_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_issuer_guild_id() const;
+  void _internal_set_issuer_guild_id(::uint64_t value);
+
+  public:
+  // uint32 zone_id = 2;
+  void clear_zone_id() ;
+  [[nodiscard]] ::uint32_t zone_id() const;
+  void set_zone_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_zone_id() const;
+  void _internal_set_zone_id(::uint32_t value);
+
+  public:
+  // uint32 status = 7;
+  void clear_status() ;
+  [[nodiscard]] ::uint32_t status() const;
+  void set_status(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_status() const;
+  void _internal_set_status(::uint32_t value);
+
+  public:
+  // uint64 target_guild_id = 5;
+  void clear_target_guild_id() ;
+  [[nodiscard]] ::uint64_t target_guild_id() const;
+  void set_target_guild_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_target_guild_id() const;
+  void _internal_set_target_guild_id(::uint64_t value);
+
+  public:
+  // uint32 issuer_wins = 8;
+  void clear_issuer_wins() ;
+  [[nodiscard]] ::uint32_t issuer_wins() const;
+  void set_issuer_wins(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_issuer_wins() const;
+  void _internal_set_issuer_wins(::uint32_t value);
+
+  public:
+  // uint32 target_wins = 9;
+  void clear_target_wins() ;
+  [[nodiscard]] ::uint32_t target_wins() const;
+  void set_target_wins(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_target_wins() const;
+  void _internal_set_target_wins(::uint32_t value);
+
+  public:
+  // uint64 issuer_merit = 10;
+  void clear_issuer_merit() ;
+  [[nodiscard]] ::uint64_t issuer_merit() const;
+  void set_issuer_merit(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_issuer_merit() const;
+  void _internal_set_issuer_merit(::uint64_t value);
+
+  public:
+  // uint64 target_merit = 11;
+  void clear_target_merit() ;
+  [[nodiscard]] ::uint64_t target_merit() const;
+  void set_target_merit(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_target_merit() const;
+  void _internal_set_target_merit(::uint64_t value);
+
+  public:
+  // uint64 created_at_ms = 12;
+  void clear_created_at_ms() ;
+  [[nodiscard]] ::uint64_t created_at_ms() const;
+  void set_created_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_created_at_ms() const;
+  void _internal_set_created_at_ms(::uint64_t value);
+
+  public:
+  // uint64 accept_deadline_ms = 13;
+  void clear_accept_deadline_ms() ;
+  [[nodiscard]] ::uint64_t accept_deadline_ms() const;
+  void set_accept_deadline_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_accept_deadline_ms() const;
+  void _internal_set_accept_deadline_ms(::uint64_t value);
+
+  public:
+  // uint64 started_at_ms = 14;
+  void clear_started_at_ms() ;
+  [[nodiscard]] ::uint64_t started_at_ms() const;
+  void set_started_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_started_at_ms() const;
+  void _internal_set_started_at_ms(::uint64_t value);
+
+  public:
+  // uint64 ends_at_ms = 15;
+  void clear_ends_at_ms() ;
+  [[nodiscard]] ::uint64_t ends_at_ms() const;
+  void set_ends_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_ends_at_ms() const;
+  void _internal_set_ends_at_ms(::uint64_t value);
+
+  public:
+  // uint64 winner_guild_id = 16;
+  void clear_winner_guild_id() ;
+  [[nodiscard]] ::uint64_t winner_guild_id() const;
+  void set_winner_guild_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_winner_guild_id() const;
+  void _internal_set_winner_guild_id(::uint64_t value);
+
+  public:
+  // uint64 updated_ms = 17;
+  void clear_updated_ms() ;
+  [[nodiscard]] ::uint64_t updated_ms() const;
+  void set_updated_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_updated_ms() const;
+  void _internal_set_updated_ms(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:guildpb.GuildWarFeudRecord)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<5, 17,
+                          0, 85,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GuildWarFeudRecord& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr issuer_guild_name_;
+    ::google::protobuf::internal::ArenaStringPtr target_guild_name_;
+    ::uint64_t feud_id_;
+    ::uint64_t issuer_guild_id_;
+    ::uint32_t zone_id_;
+    ::uint32_t status_;
+    ::uint64_t target_guild_id_;
+    ::uint32_t issuer_wins_;
+    ::uint32_t target_wins_;
+    ::uint64_t issuer_merit_;
+    ::uint64_t target_merit_;
+    ::uint64_t created_at_ms_;
+    ::uint64_t accept_deadline_ms_;
+    ::uint64_t started_at_ms_;
+    ::uint64_t ends_at_ms_;
+    ::uint64_t winner_guild_id_;
+    ::uint64_t updated_ms_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -17523,6 +17934,498 @@ inline ::uint64_t GuildJianghuGrudgeRecord::_internal_finished_ms() const {
 inline void GuildJianghuGrudgeRecord::_internal_set_finished_ms(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.finished_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// GuildWarFeudRecord
+
+// uint64 feud_id = 1;
+inline void GuildWarFeudRecord::clear_feud_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.feud_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t GuildWarFeudRecord::feud_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildWarFeudRecord.feud_id)
+  return _internal_feud_id();
+}
+inline void GuildWarFeudRecord::set_feud_id(::uint64_t value) {
+  _internal_set_feud_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildWarFeudRecord.feud_id)
+}
+inline ::uint64_t GuildWarFeudRecord::_internal_feud_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.feud_id_;
+}
+inline void GuildWarFeudRecord::_internal_set_feud_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.feud_id_ = value;
+}
+
+// uint32 zone_id = 2;
+inline void GuildWarFeudRecord::clear_zone_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.zone_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t GuildWarFeudRecord::zone_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildWarFeudRecord.zone_id)
+  return _internal_zone_id();
+}
+inline void GuildWarFeudRecord::set_zone_id(::uint32_t value) {
+  _internal_set_zone_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildWarFeudRecord.zone_id)
+}
+inline ::uint32_t GuildWarFeudRecord::_internal_zone_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.zone_id_;
+}
+inline void GuildWarFeudRecord::_internal_set_zone_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.zone_id_ = value;
+}
+
+// uint64 issuer_guild_id = 3;
+inline void GuildWarFeudRecord::clear_issuer_guild_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.issuer_guild_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t GuildWarFeudRecord::issuer_guild_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildWarFeudRecord.issuer_guild_id)
+  return _internal_issuer_guild_id();
+}
+inline void GuildWarFeudRecord::set_issuer_guild_id(::uint64_t value) {
+  _internal_set_issuer_guild_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildWarFeudRecord.issuer_guild_id)
+}
+inline ::uint64_t GuildWarFeudRecord::_internal_issuer_guild_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.issuer_guild_id_;
+}
+inline void GuildWarFeudRecord::_internal_set_issuer_guild_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.issuer_guild_id_ = value;
+}
+
+// string issuer_guild_name = 4;
+inline void GuildWarFeudRecord::clear_issuer_guild_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.issuer_guild_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& GuildWarFeudRecord::issuer_guild_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.GuildWarFeudRecord.issuer_guild_name)
+  return _internal_issuer_guild_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GuildWarFeudRecord::set_issuer_guild_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.issuer_guild_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:guildpb.GuildWarFeudRecord.issuer_guild_name)
+}
+inline ::std::string* PROTOBUF_NONNULL GuildWarFeudRecord::mutable_issuer_guild_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_issuer_guild_name();
+  // @@protoc_insertion_point(field_mutable:guildpb.GuildWarFeudRecord.issuer_guild_name)
+  return _s;
+}
+inline const ::std::string& GuildWarFeudRecord::_internal_issuer_guild_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.issuer_guild_name_.Get();
+}
+inline void GuildWarFeudRecord::_internal_set_issuer_guild_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.issuer_guild_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GuildWarFeudRecord::_internal_mutable_issuer_guild_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.issuer_guild_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GuildWarFeudRecord::release_issuer_guild_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:guildpb.GuildWarFeudRecord.issuer_guild_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.issuer_guild_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.issuer_guild_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GuildWarFeudRecord::set_allocated_issuer_guild_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.issuer_guild_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.issuer_guild_name_.IsDefault()) {
+    _impl_.issuer_guild_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:guildpb.GuildWarFeudRecord.issuer_guild_name)
+}
+
+// uint64 target_guild_id = 5;
+inline void GuildWarFeudRecord::clear_target_guild_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_guild_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t GuildWarFeudRecord::target_guild_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildWarFeudRecord.target_guild_id)
+  return _internal_target_guild_id();
+}
+inline void GuildWarFeudRecord::set_target_guild_id(::uint64_t value) {
+  _internal_set_target_guild_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildWarFeudRecord.target_guild_id)
+}
+inline ::uint64_t GuildWarFeudRecord::_internal_target_guild_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_guild_id_;
+}
+inline void GuildWarFeudRecord::_internal_set_target_guild_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_guild_id_ = value;
+}
+
+// string target_guild_name = 6;
+inline void GuildWarFeudRecord::clear_target_guild_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_guild_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& GuildWarFeudRecord::target_guild_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.GuildWarFeudRecord.target_guild_name)
+  return _internal_target_guild_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GuildWarFeudRecord::set_target_guild_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.target_guild_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:guildpb.GuildWarFeudRecord.target_guild_name)
+}
+inline ::std::string* PROTOBUF_NONNULL GuildWarFeudRecord::mutable_target_guild_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_target_guild_name();
+  // @@protoc_insertion_point(field_mutable:guildpb.GuildWarFeudRecord.target_guild_name)
+  return _s;
+}
+inline const ::std::string& GuildWarFeudRecord::_internal_target_guild_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_guild_name_.Get();
+}
+inline void GuildWarFeudRecord::_internal_set_target_guild_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_guild_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GuildWarFeudRecord::_internal_mutable_target_guild_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.target_guild_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GuildWarFeudRecord::release_target_guild_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:guildpb.GuildWarFeudRecord.target_guild_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.target_guild_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.target_guild_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GuildWarFeudRecord::set_allocated_target_guild_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.target_guild_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.target_guild_name_.IsDefault()) {
+    _impl_.target_guild_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:guildpb.GuildWarFeudRecord.target_guild_name)
+}
+
+// uint32 status = 7;
+inline void GuildWarFeudRecord::clear_status() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.status_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t GuildWarFeudRecord::status() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildWarFeudRecord.status)
+  return _internal_status();
+}
+inline void GuildWarFeudRecord::set_status(::uint32_t value) {
+  _internal_set_status(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildWarFeudRecord.status)
+}
+inline ::uint32_t GuildWarFeudRecord::_internal_status() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.status_;
+}
+inline void GuildWarFeudRecord::_internal_set_status(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.status_ = value;
+}
+
+// uint32 issuer_wins = 8;
+inline void GuildWarFeudRecord::clear_issuer_wins() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.issuer_wins_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t GuildWarFeudRecord::issuer_wins() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildWarFeudRecord.issuer_wins)
+  return _internal_issuer_wins();
+}
+inline void GuildWarFeudRecord::set_issuer_wins(::uint32_t value) {
+  _internal_set_issuer_wins(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildWarFeudRecord.issuer_wins)
+}
+inline ::uint32_t GuildWarFeudRecord::_internal_issuer_wins() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.issuer_wins_;
+}
+inline void GuildWarFeudRecord::_internal_set_issuer_wins(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.issuer_wins_ = value;
+}
+
+// uint32 target_wins = 9;
+inline void GuildWarFeudRecord::clear_target_wins() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_wins_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t GuildWarFeudRecord::target_wins() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildWarFeudRecord.target_wins)
+  return _internal_target_wins();
+}
+inline void GuildWarFeudRecord::set_target_wins(::uint32_t value) {
+  _internal_set_target_wins(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildWarFeudRecord.target_wins)
+}
+inline ::uint32_t GuildWarFeudRecord::_internal_target_wins() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_wins_;
+}
+inline void GuildWarFeudRecord::_internal_set_target_wins(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_wins_ = value;
+}
+
+// uint64 issuer_merit = 10;
+inline void GuildWarFeudRecord::clear_issuer_merit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.issuer_merit_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t GuildWarFeudRecord::issuer_merit() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildWarFeudRecord.issuer_merit)
+  return _internal_issuer_merit();
+}
+inline void GuildWarFeudRecord::set_issuer_merit(::uint64_t value) {
+  _internal_set_issuer_merit(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildWarFeudRecord.issuer_merit)
+}
+inline ::uint64_t GuildWarFeudRecord::_internal_issuer_merit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.issuer_merit_;
+}
+inline void GuildWarFeudRecord::_internal_set_issuer_merit(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.issuer_merit_ = value;
+}
+
+// uint64 target_merit = 11;
+inline void GuildWarFeudRecord::clear_target_merit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_merit_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint64_t GuildWarFeudRecord::target_merit() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildWarFeudRecord.target_merit)
+  return _internal_target_merit();
+}
+inline void GuildWarFeudRecord::set_target_merit(::uint64_t value) {
+  _internal_set_target_merit(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildWarFeudRecord.target_merit)
+}
+inline ::uint64_t GuildWarFeudRecord::_internal_target_merit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_merit_;
+}
+inline void GuildWarFeudRecord::_internal_set_target_merit(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_merit_ = value;
+}
+
+// uint64 created_at_ms = 12;
+inline void GuildWarFeudRecord::clear_created_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.created_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint64_t GuildWarFeudRecord::created_at_ms() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildWarFeudRecord.created_at_ms)
+  return _internal_created_at_ms();
+}
+inline void GuildWarFeudRecord::set_created_at_ms(::uint64_t value) {
+  _internal_set_created_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildWarFeudRecord.created_at_ms)
+}
+inline ::uint64_t GuildWarFeudRecord::_internal_created_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.created_at_ms_;
+}
+inline void GuildWarFeudRecord::_internal_set_created_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.created_at_ms_ = value;
+}
+
+// uint64 accept_deadline_ms = 13;
+inline void GuildWarFeudRecord::clear_accept_deadline_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accept_deadline_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::uint64_t GuildWarFeudRecord::accept_deadline_ms() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildWarFeudRecord.accept_deadline_ms)
+  return _internal_accept_deadline_ms();
+}
+inline void GuildWarFeudRecord::set_accept_deadline_ms(::uint64_t value) {
+  _internal_set_accept_deadline_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildWarFeudRecord.accept_deadline_ms)
+}
+inline ::uint64_t GuildWarFeudRecord::_internal_accept_deadline_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.accept_deadline_ms_;
+}
+inline void GuildWarFeudRecord::_internal_set_accept_deadline_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.accept_deadline_ms_ = value;
+}
+
+// uint64 started_at_ms = 14;
+inline void GuildWarFeudRecord::clear_started_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.started_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint64_t GuildWarFeudRecord::started_at_ms() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildWarFeudRecord.started_at_ms)
+  return _internal_started_at_ms();
+}
+inline void GuildWarFeudRecord::set_started_at_ms(::uint64_t value) {
+  _internal_set_started_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildWarFeudRecord.started_at_ms)
+}
+inline ::uint64_t GuildWarFeudRecord::_internal_started_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.started_at_ms_;
+}
+inline void GuildWarFeudRecord::_internal_set_started_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.started_at_ms_ = value;
+}
+
+// uint64 ends_at_ms = 15;
+inline void GuildWarFeudRecord::clear_ends_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ends_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint64_t GuildWarFeudRecord::ends_at_ms() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildWarFeudRecord.ends_at_ms)
+  return _internal_ends_at_ms();
+}
+inline void GuildWarFeudRecord::set_ends_at_ms(::uint64_t value) {
+  _internal_set_ends_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildWarFeudRecord.ends_at_ms)
+}
+inline ::uint64_t GuildWarFeudRecord::_internal_ends_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ends_at_ms_;
+}
+inline void GuildWarFeudRecord::_internal_set_ends_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ends_at_ms_ = value;
+}
+
+// uint64 winner_guild_id = 16;
+inline void GuildWarFeudRecord::clear_winner_guild_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.winner_guild_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint64_t GuildWarFeudRecord::winner_guild_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildWarFeudRecord.winner_guild_id)
+  return _internal_winner_guild_id();
+}
+inline void GuildWarFeudRecord::set_winner_guild_id(::uint64_t value) {
+  _internal_set_winner_guild_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildWarFeudRecord.winner_guild_id)
+}
+inline ::uint64_t GuildWarFeudRecord::_internal_winner_guild_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.winner_guild_id_;
+}
+inline void GuildWarFeudRecord::_internal_set_winner_guild_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.winner_guild_id_ = value;
+}
+
+// uint64 updated_ms = 17;
+inline void GuildWarFeudRecord::clear_updated_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint64_t GuildWarFeudRecord::updated_ms() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildWarFeudRecord.updated_ms)
+  return _internal_updated_ms();
+}
+inline void GuildWarFeudRecord::set_updated_ms(::uint64_t value) {
+  _internal_set_updated_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildWarFeudRecord.updated_ms)
+}
+inline ::uint64_t GuildWarFeudRecord::_internal_updated_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.updated_ms_;
+}
+inline void GuildWarFeudRecord::_internal_set_updated_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_ms_ = value;
 }
 
 #ifdef __GNUC__

@@ -141,6 +141,11 @@ type TrialJournalEntryView struct {
 	CanEnter            bool                              `protobuf:"varint,21,opt,name=can_enter,json=canEnter,proto3" json:"can_enter,omitempty"`
 	EnterBlockedReason  string                            `protobuf:"bytes,22,opt,name=enter_blocked_reason,json=enterBlockedReason,proto3" json:"enter_blocked_reason,omitempty"`
 	JumpTarget          string                            `protobuf:"bytes,23,opt,name=jump_target,json=jumpTarget,proto3" json:"jump_target,omitempty"`
+	VowSupported        bool                              `protobuf:"varint,24,opt,name=vow_supported,json=vowSupported,proto3" json:"vow_supported,omitempty"`              // V3：本关卡格是否支持勾选试炼誓约（卷一/卷二/卷四 PVE 首领为 true）
+	BestVowMask         uint32                            `protobuf:"varint,25,opt,name=best_vow_mask,json=bestVowMask,proto3" json:"best_vow_mask,omitempty"`               // V3：最高誓约纪录位掩码
+	BestVowCount        uint32                            `protobuf:"varint,26,opt,name=best_vow_count,json=bestVowCount,proto3" json:"best_vow_count,omitempty"`            // V3：最高达成誓约条数（0..4）
+	BestVowRounds       uint32                            `protobuf:"varint,27,opt,name=best_vow_rounds,json=bestVowRounds,proto3" json:"best_vow_rounds,omitempty"`         // V3：最高誓约纪录回合数
+	BestVowBattleId     uint64                            `protobuf:"varint,28,opt,name=best_vow_battle_id,json=bestVowBattleId,proto3" json:"best_vow_battle_id,omitempty"` // V3：最高誓约纪录权威 battle_id
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -334,6 +339,41 @@ func (x *TrialJournalEntryView) GetJumpTarget() string {
 		return x.JumpTarget
 	}
 	return ""
+}
+
+func (x *TrialJournalEntryView) GetVowSupported() bool {
+	if x != nil {
+		return x.VowSupported
+	}
+	return false
+}
+
+func (x *TrialJournalEntryView) GetBestVowMask() uint32 {
+	if x != nil {
+		return x.BestVowMask
+	}
+	return 0
+}
+
+func (x *TrialJournalEntryView) GetBestVowCount() uint32 {
+	if x != nil {
+		return x.BestVowCount
+	}
+	return 0
+}
+
+func (x *TrialJournalEntryView) GetBestVowRounds() uint32 {
+	if x != nil {
+		return x.BestVowRounds
+	}
+	return 0
+}
+
+func (x *TrialJournalEntryView) GetBestVowBattleId() uint64 {
+	if x != nil {
+		return x.BestVowBattleId
+	}
+	return 0
 }
 
 type TrialJournalChapterView struct {
@@ -1255,7 +1295,7 @@ const file_proto_scene_player_trial_journal_proto_rawDesc = "" +
 	"\x0fcondition_param\x18\x04 \x01(\rR\x0econditionParam\x12\x14\n" +
 	"\x05title\x18\x05 \x01(\tR\x05title\x12\x12\n" +
 	"\x04desc\x18\x06 \x01(\tR\x04desc\x12\x10\n" +
-	"\x03lit\x18\a \x01(\bR\x03lit\"\xe8\x06\n" +
+	"\x03lit\x18\a \x01(\bR\x03lit\"\xac\b\n" +
 	"\x15TrialJournalEntryView\x12\x19\n" +
 	"\bentry_id\x18\x01 \x01(\rR\aentryId\x12\x1d\n" +
 	"\n" +
@@ -1287,7 +1327,12 @@ const file_proto_scene_player_trial_journal_proto_rawDesc = "" +
 	"\tcan_enter\x18\x15 \x01(\bR\bcanEnter\x120\n" +
 	"\x14enter_blocked_reason\x18\x16 \x01(\tR\x12enterBlockedReason\x12\x1f\n" +
 	"\vjump_target\x18\x17 \x01(\tR\n" +
-	"jumpTarget\"\xfa\x01\n" +
+	"jumpTarget\x12#\n" +
+	"\rvow_supported\x18\x18 \x01(\bR\fvowSupported\x12\"\n" +
+	"\rbest_vow_mask\x18\x19 \x01(\rR\vbestVowMask\x12$\n" +
+	"\x0ebest_vow_count\x18\x1a \x01(\rR\fbestVowCount\x12&\n" +
+	"\x0fbest_vow_rounds\x18\x1b \x01(\rR\rbestVowRounds\x12+\n" +
+	"\x12best_vow_battle_id\x18\x1c \x01(\x04R\x0fbestVowBattleId\"\xfa\x01\n" +
 	"\x17TrialJournalChapterView\x12\x1d\n" +
 	"\n" +
 	"chapter_id\x18\x01 \x01(\rR\tchapterId\x12\x1b\n" +

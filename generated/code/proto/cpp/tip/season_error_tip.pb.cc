@@ -35,7 +35,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_season_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\026season_error_tip.proto*\363\002\n\014season_erro"
+    "\n\026season_error_tip.proto*\267\003\n\014season_erro"
     "r\022\023\n\017kSeason_errorOK\020\000\022\024\n\016kSeasonNotOpen"
     "\020\320\211\002\022\025\n\017kSeasonMismatch\020\321\211\002\022\030\n\022kSeasonSe"
     "alInvalid\020\322\211\002\022 \n\032kSeasonSealAlreadyEquip"
@@ -44,15 +44,16 @@ const char descriptor_table_protodef_season_5ferror_5ftip_2eproto[] ABSL_ATTRIBU
     "chupPriceChanged\020\326\211\002\022%\n\037kSeasonCatchupCu"
     "rrencyNotEnough\020\327\211\002\022\023\n\rkSeasonFrozen\020\330\211\002"
     "\022\025\n\017kSeasonInBattle\020\331\211\002\022\033\n\025kSeasonSkillN"
-    "oUpgrade\020\332\211\002\022\030\n\022kSeasonUnavailable\020\333\211\002B$"
-    "\n\016com.game.tableZ\022generated/pb/tableb\006pr"
-    "oto3"
+    "oUpgrade\020\332\211\002\022\030\n\022kSeasonUnavailable\020\333\211\002\022!"
+    "\n\033kSeasonHonorAlreadyUnlocked\020\334\211\002\022\037\n\031kSe"
+    "asonHonorTargetInvalid\020\335\211\002B$\n\016com.game.t"
+    "ableZ\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_season_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_season_5ferror_5ftip_2eproto = {
     false,
     false,
-    444,
+    512,
     descriptor_table_protodef_season_5ferror_5ftip_2eproto,
     "season_error_tip.proto",
     &descriptor_table_season_5ferror_5ftip_2eproto_once,
@@ -71,7 +72,7 @@ season_error_descriptor() {
   return file_level_enum_descriptors_season_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t season_error_internal_data_[] = {
-    65536u, 786432u, 34007u, 34003u, 34010u, 34001u, 34005u, 34009u, 34011u, 34000u, 34002u, 34004u, 34006u, 34008u, };
+    65536u, 917504u, 34007u, 34003u, 34011u, 34001u, 34005u, 34009u, 34013u, 34000u, 34002u, 34004u, 34006u, 34008u, 34010u, 34012u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

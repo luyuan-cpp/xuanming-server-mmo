@@ -46,3 +46,7 @@ constexpr uint32_t SceneNodeGrpcAssetAckReceiptIndex = 9;
 constexpr uint32_t SceneNodeGrpcGmExecutePlayerCommandMessageId = 409;
 constexpr uint32_t SceneNodeGrpcGmExecutePlayerCommandIndex = 10;
 #define SceneNodeGrpcGmExecutePlayerCommandMethod  ::SceneNodeGrpc_Stub::descriptor()->method(10)
+
+constexpr uint32_t SceneNodeGrpcCheckJianghuDuelEligibilityMessageId = 566;
+constexpr uint32_t SceneNodeGrpcCheckJianghuDuelEligibilityIndex = 11;
+#define SceneNodeGrpcCheckJianghuDuelEligibilityMethod  ::SceneNodeGrpc_Stub::descriptor()->method(11)

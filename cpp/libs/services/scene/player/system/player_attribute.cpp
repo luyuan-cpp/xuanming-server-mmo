@@ -49,6 +49,7 @@
 #include "table/code/playerlevelexp_table.h"
 #include "table/proto/tip/attribute_error_tip.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
+#include "table/proto/tip/skill_error_tip.pb.h"
 
 #include "proto/common/component/actor_attribute_state_comp.pb.h"
 #include "proto/common/component/actor_comp.pb.h"
@@ -134,8 +135,17 @@ uint32_t MaxSchemes() {
 }
 
 uint32_t MaxSchemesFor(entt::entity player) {
-	const uint32_t base = MaxSchemes();
-	return AfkPassSystem::IsActiveNow(player) ? base + afk_pass::kLightCardBonusLoadoutSlots : base;
+	return std::max(MaxSchemes(), PlayerSkillSystem::UnlockedLoadoutSchemeCount(player));
+}
+
+const AttributePoolTable* PrimaryPlayerPool() {
+	const auto& pools = AttributePoolTableManager::Instance().FindAll().data();
+	for (const auto& pool : pools) {
+		if (IsPlayerPool(pool)) {
+			return &pool;
+		}
+	}
+	return nullptr;
 }
 
 uint32_t BonusPoints(const PlayerAttributeComp& comp, uint32_t poolId) {
@@ -155,6 +165,20 @@ AttributeScheme* FindScheme(PlayerAttributeComp& comp, uint32_t schemeId) {
 		}
 	}
 	return nullptr;
+}
+
+AttributeScheme* FindOrCreateUnifiedScheme(PlayerAttributeComp& comp, uint32_t schemeId,
+										   const std::string& fallbackName) {
+	if (auto* existing = FindScheme(comp, schemeId); existing != nullptr) {
+		return existing;
+	}
+	auto* created = comp.add_schemes();
+	created->set_scheme_id(schemeId);
+	created->set_name(fallbackName.empty() ? DefaultSchemeName(schemeId) : fallbackName);
+	if (comp.next_scheme_id() <= schemeId) {
+		comp.set_next_scheme_id(schemeId + 1);
+	}
+	return created;
 }
 
 const AttributeScheme* ActiveScheme(const PlayerAttributeComp& comp) {
@@ -1267,6 +1291,209 @@ uint32_t PlayerAttributeSystem::RenameScheme(entt::entity player, uint32_t schem
 	}
 	scheme->set_name(name);
 	return kSuccess;
+}
+
+bool PlayerAttributeSystem::FillSchemeAllocationSummary(entt::entity player, uint32_t schemeId,
+														SchemeAllocationSummary& out) {
+	out = SchemeAllocationSummary{};
+	if (CheckAttributeInputs(player) != kSuccess) {
+		return false;
+	}
+	const auto* pool = PrimaryPlayerPool();
+	if (pool == nullptr) {
+		return false;
+	}
+	const auto& comp = tlsEcs.actorRegistry.get<PlayerAttributeComp>(player);
+	const AttributeScheme* scheme = nullptr;
+	for (const auto& s : comp.schemes()) {
+		if (s.scheme_id() == schemeId) {
+			scheme = &s;
+			break;
+		}
+	}
+	const auto state = EvaluatePool(player, comp, scheme, *pool);
+	out.totalPoints = state.total;
+	out.remaining = state.remaining;
+	for (const auto* dim : AttributeDimensionTableManager::Instance().GetByPoolId(pool->id())) {
+		out.allocated[dim->id()] = scheme != nullptr ? AllocatedIn(*scheme, dim->id()) : 0u;
+	}
+	return true;
+}
+
+uint64_t PlayerAttributeSystem::PlayerPoolResetCostGold(entt::entity player) {
+	if (CheckAttributeInputs(player) != kSuccess) {
+		return 0;
+	}
+	const auto* pool = PrimaryPlayerPool();
+	if (pool == nullptr) {
+		return 0;
+	}
+	const auto& comp = tlsEcs.actorRegistry.get<PlayerAttributeComp>(player);
+	const auto* scheme = ActiveScheme(comp);
+	const auto state = EvaluatePool(player, comp, scheme, *pool);
+	return ResetCostFor(player, *pool, state);
+}
+
+uint64_t PlayerAttributeSystem::SwitchCooldownUntil(entt::entity player) {
+	if (!tlsEcs.actorRegistry.valid(player)) {
+		return 0;
+	}
+	const auto* comp = tlsEcs.actorRegistry.try_get<PlayerAttributeComp>(player);
+	const auto* rule = RuleRow();
+	if (comp == nullptr || rule == nullptr || rule->switch_cooldown_seconds() == 0) {
+		return 0;
+	}
+	return comp->last_switch_time() + rule->switch_cooldown_seconds();
+}
+
+uint32_t PlayerAttributeSystem::ActiveSchemeId(entt::entity player) {
+	if (!tlsEcs.actorRegistry.valid(player)) {
+		return 0;
+	}
+	const auto* comp = tlsEcs.actorRegistry.try_get<PlayerAttributeComp>(player);
+	return comp != nullptr ? comp->active_scheme_id() : 0u;
+}
+
+uint32_t PlayerAttributeSystem::PrepareSchemeAllocation(entt::entity player, uint32_t schemeId,
+														const std::map<uint32_t, uint32_t>& target,
+														bool resetIfNeeded, PreparedSchemeAllocation& prepared) {
+	prepared = PreparedSchemeAllocation{};
+	if (const auto err = CheckWritable(player); err != kSuccess) {
+		return err;
+	}
+	const auto* pool = PrimaryPlayerPool();
+	if (pool == nullptr) {
+		return kAttributePoolNotFound;
+	}
+	const auto* comp = FindComp(player);
+	if (comp == nullptr) {
+		return kServiceUnavailable;
+	}
+	const AttributeScheme* existing = nullptr;
+	for (const auto& s : comp->schemes()) {
+		if (s.scheme_id() == schemeId) {
+			existing = &s;
+			break;
+		}
+	}
+	std::map<uint32_t, uint32_t> current;
+	for (const auto* dim : AttributeDimensionTableManager::Instance().GetByPoolId(pool->id())) {
+		current[dim->id()] = existing != nullptr ? AllocatedIn(*existing, dim->id()) : 0u;
+	}
+	for (const auto& [dimId, want] : target) {
+		if (!current.contains(dimId)) {
+			return kSkillLoadoutAttributeInvalid;
+		}
+		if (pool->dimension_cap() > 0 && want > pool->dimension_cap()) {
+			return kSkillLoadoutAttributeInvalid;
+		}
+	}
+	const auto state = EvaluatePool(player, *comp, existing, *pool);
+	uint64_t newKnownUsed = 0;
+	bool decreased = false;
+	bool changed = false;
+	for (const auto& [dimId, curVal] : current) {
+		const auto it = target.find(dimId);
+		const uint32_t want = it != target.end() ? it->second : 0u;
+		newKnownUsed += want;
+		if (want < curVal) {
+			decreased = true;
+		}
+		if (want != curVal) {
+			changed = true;
+		}
+		prepared.target[dimId] = want;
+	}
+	if (!attributerules::IsUnlocked(ToRule(*pool), PlayerLevel(player)) && newKnownUsed > 0) {
+		return kSkillLoadoutAttributeInvalid;
+	}
+	if (newKnownUsed > state.total || state.stored.foreignUsed > state.total - newKnownUsed) {
+		return kSkillLoadoutAttributeInvalid;
+	}
+	const bool needsReset = decreased || (!state.effective && changed);
+	if (needsReset) {
+		if (!resetIfNeeded) {
+			return kSkillLoadoutAttributeResetRequired;
+		}
+		const uint64_t resetCost = state.stored.knownUsed > 0 ? ResetCostFor(player, *pool, state) : 0u;
+		if (resetCost > 0 && !CurrencySystem::CanAffordGoldWithBind(player, static_cast<int64_t>(resetCost))) {
+			return kAttributeGoldNotEnough;
+		}
+		prepared.needsReset = true;
+		prepared.resetCostGold = resetCost;
+	}
+	prepared.poolId = pool->id();
+	return kSuccess;
+}
+
+uint32_t PlayerAttributeSystem::CommitSchemeAllocationAndSwitch(entt::entity player, uint32_t schemeId,
+																const std::string& schemeName,
+																bool applyAllocation,
+																const PreparedSchemeAllocation& prepared,
+																std::string& notice) {
+	notice.clear();
+	auto* comp = tlsEcs.actorRegistry.try_get<PlayerAttributeComp>(player);
+	if (comp == nullptr) {
+		return applyAllocation ? kServiceUnavailable : kSuccess;
+	}
+	if (applyAllocation && prepared.needsReset && prepared.resetCostGold > 0) {
+		if (const auto err = CurrencySystem::DeductGoldPreferBind(player, static_cast<int64_t>(prepared.resetCostGold));
+			err != kSuccess) {
+			return err;
+		}
+	}
+	auto* scheme = FindOrCreateUnifiedScheme(*comp, schemeId, schemeName);
+	if (!schemeName.empty()) {
+		scheme->set_name(schemeName);
+	}
+	if (applyAllocation) {
+		for (const auto& [dimId, want] : prepared.target) {
+			if (want == 0) {
+				scheme->mutable_allocated()->erase(dimId);
+			} else {
+				(*scheme->mutable_allocated())[dimId] = want;
+			}
+		}
+		LOG_INFO << "[PlayerAttribute] Unified loadout allocation saved: player_id=" << tlsEcs.GetPlayerId(player)
+				 << " scheme=" << schemeId << " reset_gold=" << prepared.resetCostGold;
+	}
+	if (comp->active_scheme_id() != schemeId) {
+		const auto now = TimeSystem::NowSecondsUTC();
+		const auto* rule = RuleRow();
+		if (rule != nullptr && rule->switch_cooldown_seconds() > 0 &&
+			comp->last_switch_time() + rule->switch_cooldown_seconds() > now) {
+			notice = "战法与加点方案已保存，但加点切换处于冷却中，冷却结束后可切换生效";
+		} else {
+			comp->set_active_scheme_id(schemeId);
+			comp->set_last_switch_time(now);
+		}
+	}
+	return kSuccess;
+}
+
+void PlayerAttributeSystem::TrySyncLinkedScheme(entt::entity player, uint32_t schemeId,
+												const std::string& schemeName, std::string& notice) {
+	notice.clear();
+	auto* comp = tlsEcs.actorRegistry.try_get<PlayerAttributeComp>(player);
+	if (comp == nullptr) {
+		return;
+	}
+	auto* scheme = FindOrCreateUnifiedScheme(*comp, schemeId, schemeName);
+	if (!schemeName.empty() && scheme->name().empty()) {
+		scheme->set_name(schemeName);
+	}
+	if (comp->active_scheme_id() == schemeId) {
+		return;
+	}
+	const auto now = TimeSystem::NowSecondsUTC();
+	const auto* rule = RuleRow();
+	if (rule != nullptr && rule->switch_cooldown_seconds() > 0 &&
+		comp->last_switch_time() + rule->switch_cooldown_seconds() > now) {
+		notice = "战法已切换；加点方案处于60秒切换冷却中，冷却结束后可重新切换同步";
+		return;
+	}
+	comp->set_active_scheme_id(schemeId);
+	comp->set_last_switch_time(now);
 }
 
 uint32_t PlayerAttributeSystem::GmSetLevel(entt::entity player, uint32_t level) {

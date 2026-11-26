@@ -109,7 +109,7 @@ function Write-MatchFixture {
     foreach ($service in @('match', 'guild', 'login', 'data_service')) { New-Item -ItemType Directory -Path (Join-Path $GoRoot "$service/etc") -Force | Out-Null }
     Set-Content -LiteralPath (Join-Path $GoRoot 'match/etc/match_service.yaml') -Value $matchFixture -Encoding utf8 -NoNewline
     Set-Content -LiteralPath (Join-Path $GoRoot 'guild/etc/guild.yaml') -Value $guildFixture -Encoding utf8 -NoNewline
-    Set-Content -LiteralPath (Join-Path $GoRoot 'login/etc/login.yaml') -Value "Node:`n  RedisClient:`n    Host: 127.0.0.1:26379`n    DB: 2`n" -NoNewline
+    Set-Content -LiteralPath (Join-Path $GoRoot 'login/etc/login.yaml') -Value "Mode: dev`nNode:`n  RedisClient:`n    Host: 127.0.0.1:26379`n    DB: 2`n" -NoNewline
     Set-Content -LiteralPath (Join-Path $GoRoot 'data_service/etc/data_service.yaml') -Value "SnapshotMySQL:`n  DBName: fixture_global`n" -NoNewline
     foreach ($path in @((Join-Path $DerivedEtcDir 'match.yaml'), (Join-Path $RepoRoot 'run/secrets/match-dev.env'))) {
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }

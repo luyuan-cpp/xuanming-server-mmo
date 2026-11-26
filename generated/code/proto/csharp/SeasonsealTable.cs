@@ -22,20 +22,22 @@ public static partial class SeasonsealTableReflection {
   static SeasonsealTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "ChZzZWFzb25zZWFsX3RhYmxlLnByb3RvIoACCg9TZWFzb25TZWFsVGFibGUS",
+          "ChZzZWFzb25zZWFsX3RhYmxlLnByb3RvIuUCCg9TZWFzb25TZWFsVGFibGUS",
           "CgoCaWQYASABKA0SEQoJc2Vhc29uX2lkGAIgASgNEgwKBG5hbWUYAyABKAkS",
           "EwoLZGVzY3JpcHRpb24YBCABKAkSEAoIaWNvbl9rZXkYBSABKAkSEQoJZWZm",
           "ZWN0X2lkGAYgASgNEhEKCWJvbnVzX2JwcxgHIAEoDRIPCgdjYXBfYnBzGAgg",
           "ASgNEhcKD3Blcl9yb3VuZF9saW1pdBgJIAEoDRIUCgxiYXR0bGVfbGltaXQY",
           "CiABKA0SFQoNYWN0aXZlX3JvdW5kcxgLIAEoDRIcChRoZWFsdGhfdGhyZXNo",
-          "b2xkX2JwcxgMIAEoDSI1ChNTZWFzb25TZWFsVGFibGVEYXRhEh4KBGRhdGEY",
-          "ASADKAsyEC5TZWFzb25TZWFsVGFibGVCQQoOY29tLmdhbWUudGFibGVCGVNl",
-          "YXNvblNlYWxUYWJsZU91dGVyQ2xhc3NQAVoSZ2VuZXJhdGVkL3BiL3RhYmxl",
-          "YgZwcm90bzM="));
+          "b2xkX2JwcxgMIAEoDRIaChJyZXNvbmFuY2Vfc2tpbGxfaWQYDSABKA0SFgoO",
+          "cmVzb25hbmNlX2tpbmQYDiABKA0SFwoPcmVzb25hbmNlX3BhcmFtGA8gASgN",
+          "EhYKDnJlc29uYW5jZV9kZXNjGBAgASgJIjUKE1NlYXNvblNlYWxUYWJsZURh",
+          "dGESHgoEZGF0YRgBIAMoCzIQLlNlYXNvblNlYWxUYWJsZUJBCg5jb20uZ2Ft",
+          "ZS50YWJsZUIZU2Vhc29uU2VhbFRhYmxlT3V0ZXJDbGFzc1ABWhJnZW5lcmF0",
+          "ZWQvcGIvdGFibGViBnByb3RvMw=="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::SeasonSealTable), global::SeasonSealTable.Parser, new[]{ "Id", "SeasonId", "Name", "Description", "IconKey", "EffectId", "BonusBps", "CapBps", "PerRoundLimit", "BattleLimit", "ActiveRounds", "HealthThresholdBps" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::SeasonSealTable), global::SeasonSealTable.Parser, new[]{ "Id", "SeasonId", "Name", "Description", "IconKey", "EffectId", "BonusBps", "CapBps", "PerRoundLimit", "BattleLimit", "ActiveRounds", "HealthThresholdBps", "ResonanceSkillId", "ResonanceKind", "ResonanceParam", "ResonanceDesc" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::SeasonSealTableData), global::SeasonSealTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -90,6 +92,10 @@ public sealed partial class SeasonSealTable : pb::IMessage<SeasonSealTable>
     battleLimit_ = other.battleLimit_;
     activeRounds_ = other.activeRounds_;
     healthThresholdBps_ = other.healthThresholdBps_;
+    resonanceSkillId_ = other.resonanceSkillId_;
+    resonanceKind_ = other.resonanceKind_;
+    resonanceParam_ = other.resonanceParam_;
+    resonanceDesc_ = other.resonanceDesc_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -243,6 +249,54 @@ public sealed partial class SeasonSealTable : pb::IMessage<SeasonSealTable>
     }
   }
 
+  /// <summary>Field number for the "resonance_skill_id" field.</summary>
+  public const int ResonanceSkillIdFieldNumber = 13;
+  private uint resonanceSkillId_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint ResonanceSkillId {
+    get { return resonanceSkillId_; }
+    set {
+      resonanceSkillId_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "resonance_kind" field.</summary>
+  public const int ResonanceKindFieldNumber = 14;
+  private uint resonanceKind_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint ResonanceKind {
+    get { return resonanceKind_; }
+    set {
+      resonanceKind_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "resonance_param" field.</summary>
+  public const int ResonanceParamFieldNumber = 15;
+  private uint resonanceParam_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint ResonanceParam {
+    get { return resonanceParam_; }
+    set {
+      resonanceParam_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "resonance_desc" field.</summary>
+  public const int ResonanceDescFieldNumber = 16;
+  private string resonanceDesc_ = "";
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public string ResonanceDesc {
+    get { return resonanceDesc_; }
+    set {
+      resonanceDesc_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -270,6 +324,10 @@ public sealed partial class SeasonSealTable : pb::IMessage<SeasonSealTable>
     if (BattleLimit != other.BattleLimit) return false;
     if (ActiveRounds != other.ActiveRounds) return false;
     if (HealthThresholdBps != other.HealthThresholdBps) return false;
+    if (ResonanceSkillId != other.ResonanceSkillId) return false;
+    if (ResonanceKind != other.ResonanceKind) return false;
+    if (ResonanceParam != other.ResonanceParam) return false;
+    if (ResonanceDesc != other.ResonanceDesc) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -289,6 +347,10 @@ public sealed partial class SeasonSealTable : pb::IMessage<SeasonSealTable>
     if (BattleLimit != 0) hash ^= BattleLimit.GetHashCode();
     if (ActiveRounds != 0) hash ^= ActiveRounds.GetHashCode();
     if (HealthThresholdBps != 0) hash ^= HealthThresholdBps.GetHashCode();
+    if (ResonanceSkillId != 0) hash ^= ResonanceSkillId.GetHashCode();
+    if (ResonanceKind != 0) hash ^= ResonanceKind.GetHashCode();
+    if (ResonanceParam != 0) hash ^= ResonanceParam.GetHashCode();
+    if (ResonanceDesc.Length != 0) hash ^= ResonanceDesc.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -355,6 +417,22 @@ public sealed partial class SeasonSealTable : pb::IMessage<SeasonSealTable>
       output.WriteRawTag(96);
       output.WriteUInt32(HealthThresholdBps);
     }
+    if (ResonanceSkillId != 0) {
+      output.WriteRawTag(104);
+      output.WriteUInt32(ResonanceSkillId);
+    }
+    if (ResonanceKind != 0) {
+      output.WriteRawTag(112);
+      output.WriteUInt32(ResonanceKind);
+    }
+    if (ResonanceParam != 0) {
+      output.WriteRawTag(120);
+      output.WriteUInt32(ResonanceParam);
+    }
+    if (ResonanceDesc.Length != 0) {
+      output.WriteRawTag(130, 1);
+      output.WriteString(ResonanceDesc);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -413,6 +491,22 @@ public sealed partial class SeasonSealTable : pb::IMessage<SeasonSealTable>
       output.WriteRawTag(96);
       output.WriteUInt32(HealthThresholdBps);
     }
+    if (ResonanceSkillId != 0) {
+      output.WriteRawTag(104);
+      output.WriteUInt32(ResonanceSkillId);
+    }
+    if (ResonanceKind != 0) {
+      output.WriteRawTag(112);
+      output.WriteUInt32(ResonanceKind);
+    }
+    if (ResonanceParam != 0) {
+      output.WriteRawTag(120);
+      output.WriteUInt32(ResonanceParam);
+    }
+    if (ResonanceDesc.Length != 0) {
+      output.WriteRawTag(130, 1);
+      output.WriteString(ResonanceDesc);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -458,6 +552,18 @@ public sealed partial class SeasonSealTable : pb::IMessage<SeasonSealTable>
     }
     if (HealthThresholdBps != 0) {
       size += 1 + pb::CodedOutputStream.ComputeUInt32Size(HealthThresholdBps);
+    }
+    if (ResonanceSkillId != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(ResonanceSkillId);
+    }
+    if (ResonanceKind != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(ResonanceKind);
+    }
+    if (ResonanceParam != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(ResonanceParam);
+    }
+    if (ResonanceDesc.Length != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeStringSize(ResonanceDesc);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -506,6 +612,18 @@ public sealed partial class SeasonSealTable : pb::IMessage<SeasonSealTable>
     }
     if (other.HealthThresholdBps != 0) {
       HealthThresholdBps = other.HealthThresholdBps;
+    }
+    if (other.ResonanceSkillId != 0) {
+      ResonanceSkillId = other.ResonanceSkillId;
+    }
+    if (other.ResonanceKind != 0) {
+      ResonanceKind = other.ResonanceKind;
+    }
+    if (other.ResonanceParam != 0) {
+      ResonanceParam = other.ResonanceParam;
+    }
+    if (other.ResonanceDesc.Length != 0) {
+      ResonanceDesc = other.ResonanceDesc;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -574,6 +692,22 @@ public sealed partial class SeasonSealTable : pb::IMessage<SeasonSealTable>
           HealthThresholdBps = input.ReadUInt32();
           break;
         }
+        case 104: {
+          ResonanceSkillId = input.ReadUInt32();
+          break;
+        }
+        case 112: {
+          ResonanceKind = input.ReadUInt32();
+          break;
+        }
+        case 120: {
+          ResonanceParam = input.ReadUInt32();
+          break;
+        }
+        case 130: {
+          ResonanceDesc = input.ReadString();
+          break;
+        }
       }
     }
   #endif
@@ -639,6 +773,22 @@ public sealed partial class SeasonSealTable : pb::IMessage<SeasonSealTable>
         }
         case 96: {
           HealthThresholdBps = input.ReadUInt32();
+          break;
+        }
+        case 104: {
+          ResonanceSkillId = input.ReadUInt32();
+          break;
+        }
+        case 112: {
+          ResonanceKind = input.ReadUInt32();
+          break;
+        }
+        case 120: {
+          ResonanceParam = input.ReadUInt32();
+          break;
+        }
+        case 130: {
+          ResonanceDesc = input.ReadString();
           break;
         }
       }

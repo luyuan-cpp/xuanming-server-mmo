@@ -208,6 +208,11 @@ const (
 	ErrWarBountyNotFound           = uint32(table.GuildError_kGuildWarBountyNotFound)
 	ErrWarTrackCooldown            = uint32(table.GuildError_kGuildWarTrackCooldown)
 	ErrWarServiceBusy              = uint32(table.GuildError_kGuildWarServiceBusy)
+	// 帮会全天帮战 V2.5 · 宿敌约战战书新增 4 个业务提示码。
+	ErrWarFeudCooldown             = uint32(table.GuildError_kGuildWarFeudCooldown)
+	ErrWarFeudAlreadyActive        = uint32(table.GuildError_kGuildWarFeudAlreadyActive)
+	ErrWarFeudNotFound             = uint32(table.GuildError_kGuildWarFeudNotFound)
+	ErrWarFeudInvalidTarget        = uint32(table.GuildError_kGuildWarFeudInvalidTarget)
 )
 
 // MaxShopBuyCount:帮会商店单次兑换的份数上限(05-economy.md §5.11.2)。

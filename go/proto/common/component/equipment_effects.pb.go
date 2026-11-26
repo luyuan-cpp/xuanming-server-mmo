@@ -227,6 +227,9 @@ type SeasonSealEffect struct {
 	ActiveRounds       uint32                 `protobuf:"varint,8,opt,name=active_rounds,json=activeRounds,proto3" json:"active_rounds,omitempty"`      // 0 不限。
 	HealthThresholdBps uint32                 `protobuf:"varint,9,opt,name=health_threshold_bps,json=healthThresholdBps,proto3" json:"health_threshold_bps,omitempty"`
 	Name               string                 `protobuf:"bytes,10,opt,name=name,proto3" json:"name,omitempty"`
+	ResonanceSkillId   uint32                 `protobuf:"varint,11,opt,name=resonance_skill_id,json=resonanceSkillId,proto3" json:"resonance_skill_id,omitempty"` // 表驱动技印共鸣绑定技能 ID（0 = 无共鸣）
+	ResonanceKind      uint32                 `protobuf:"varint,12,opt,name=resonance_kind,json=resonanceKind,proto3" json:"resonance_kind,omitempty"`            // 共鸣原语种类（1..8；0 = 无共鸣）
+	ResonanceParam     uint32                 `protobuf:"varint,13,opt,name=resonance_param,json=resonanceParam,proto3" json:"resonance_param,omitempty"`         // 共鸣参数（受服务端硬上限约束）
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -329,6 +332,27 @@ func (x *SeasonSealEffect) GetName() string {
 		return x.Name
 	}
 	return ""
+}
+
+func (x *SeasonSealEffect) GetResonanceSkillId() uint32 {
+	if x != nil {
+		return x.ResonanceSkillId
+	}
+	return 0
+}
+
+func (x *SeasonSealEffect) GetResonanceKind() uint32 {
+	if x != nil {
+		return x.ResonanceKind
+	}
+	return 0
+}
+
+func (x *SeasonSealEffect) GetResonanceParam() uint32 {
+	if x != nil {
+		return x.ResonanceParam
+	}
+	return 0
 }
 
 type EquipmentArtifactSource struct {
@@ -474,7 +498,7 @@ const file_proto_common_component_equipment_effects_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1aC\n" +
 	"\x15ManaReductionBpsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xd1\x02\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xcf\x03\n" +
 	"\x10SeasonSealEffect\x12\x1b\n" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x17\n" +
 	"\aseal_id\x18\x02 \x01(\rR\x06sealId\x12\x1b\n" +
@@ -486,7 +510,10 @@ const file_proto_common_component_equipment_effects_proto_rawDesc = "" +
 	"\ractive_rounds\x18\b \x01(\rR\factiveRounds\x120\n" +
 	"\x14health_threshold_bps\x18\t \x01(\rR\x12healthThresholdBps\x12\x12\n" +
 	"\x04name\x18\n" +
-	" \x01(\tR\x04name\"\xbb\x02\n" +
+	" \x01(\tR\x04name\x12,\n" +
+	"\x12resonance_skill_id\x18\v \x01(\rR\x10resonanceSkillId\x12%\n" +
+	"\x0eresonance_kind\x18\f \x01(\rR\rresonanceKind\x12'\n" +
+	"\x0fresonance_param\x18\r \x01(\rR\x0eresonanceParam\"\xbb\x02\n" +
 	"\x17EquipmentArtifactSource\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\x04R\x06itemId\x12\x1b\n" +
 	"\teffect_id\x18\x02 \x01(\rR\beffectId\x12\x1b\n" +

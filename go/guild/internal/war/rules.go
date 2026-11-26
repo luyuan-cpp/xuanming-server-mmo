@@ -54,6 +54,12 @@ const (
 	DefaultDividendMinMerit        uint64 = 30
 	DefaultGoldLeylineBps          uint32 = 15000
 	DefaultRivalryBonusBps         uint32 = 2000
+	DefaultFeudBonusBps            uint32 = 2500 // 2 小时宿敌约战收益 +25%（替代宿敌 +20%，不叠加）
+	DefaultFeudAcceptWindowSec     uint32 = 900  // 战书应战窗 15 分钟
+	DefaultFeudDurationSec         uint32 = 7200 // 宿敌约战持续 2 小时
+	DefaultFeudCooldownSec         uint32 = 86400
+	FeudFreeDiminishFights         uint32 = 3 // 约战对手 30 分钟内前 3 场保持 100% 收益
+	StreakBroadcastMin             uint32 = 5 // 达成 5/8 连胜或终结 >=5 连胜触发全帮/战区捷报
 	DefaultDividendSilverPerShare  uint64 = 1500
 	DefaultDividendContribPerShare uint64 = 40
 )
@@ -106,6 +112,20 @@ func IsRivalryActive(clashCount uint32, bountyMarked bool) bool {
 
 // DiminishPercent 同对手 30 分钟内收益递减：第 1 次 100%、第 2 次 50%、第 3 次 20%、第 4 次起 0%。
 func DiminishPercent(recentCount uint32) uint32 {
+	return DiminishPercentWithFeud(recentCount, false)
+}
+
+// DiminishPercentWithFeud 2 小时宿敌约战期间，对阵约战敌帮前 3 场保持 100%，第 4 场 20%，第 5 场起 0%（仍守防互刷底线）。
+func DiminishPercentWithFeud(recentCount uint32, feudActive bool) uint32 {
+	if feudActive {
+		if recentCount < FeudFreeDiminishFights {
+			return 100
+		}
+		if recentCount == FeudFreeDiminishFights {
+			return 20
+		}
+		return 0
+	}
 	switch recentCount {
 	case 0:
 		return 100
@@ -116,6 +136,44 @@ func DiminishPercent(recentCount uint32) uint32 {
 	default:
 		return 0
 	}
+}
+
+// ResolveFeudWinner 约战收官胜负判定：先比胜场，同胜场比约战战功，仍平局返回 0。
+func ResolveFeudWinner(issuerGuildID, targetGuildID uint64, issuerWins, targetWins uint32, issuerMerit, targetMerit uint64) uint64 {
+	if issuerWins > targetWins {
+		return issuerGuildID
+	}
+	if targetWins > issuerWins {
+		return targetGuildID
+	}
+	if issuerMerit > targetMerit {
+		return issuerGuildID
+	}
+	if targetMerit > issuerMerit {
+		return targetGuildID
+	}
+	return 0
+}
+
+// FormatFeudSummary 生成约战收官战报碑摘要（纯服务端拼接，零玩家自由文本）。
+func FormatFeudSummary(rec *pb.GuildWarFeudRecord) string {
+	if rec == nil || rec.GetStatus() != uint32(pb.GuildWarFeudStatus_GUILD_WAR_FEUD_STATUS_FINISHED) {
+		return ""
+	}
+	in := rec.GetIssuerGuildName()
+	tn := rec.GetTargetGuildName()
+	if rec.GetWinnerGuildId() == rec.GetIssuerGuildId() && rec.GetWinnerGuildId() != 0 {
+		return fmt.Sprintf("约战大捷：%s %d:%d 胜 %s", in, rec.GetIssuerWins(), rec.GetTargetWins(), tn)
+	}
+	if rec.GetWinnerGuildId() == rec.GetTargetGuildId() && rec.GetWinnerGuildId() != 0 {
+		return fmt.Sprintf("约战大捷：%s %d:%d 胜 %s", tn, rec.GetTargetWins(), rec.GetIssuerWins(), in)
+	}
+	return fmt.Sprintf("势均力敌：%s %d:%d 平 %s", in, rec.GetIssuerWins(), rec.GetTargetWins(), tn)
+}
+
+// ShouldBroadcastStreakAlert 达成 5/8 连胜或终结 >=5 连胜时推送非阻断捷报。
+func ShouldBroadcastStreakAlert(newStreak uint32, endedLoserStreak uint32) bool {
+	return newStreak == 5 || newStreak == 8 || endedLoserStreak >= StreakBroadcastMin
 }
 
 // ScaleReward 确定性整数倍率计算（先递减，再乘金脉/宿敌加成）。
@@ -201,6 +259,7 @@ type BattleRewardInput struct {
 	DiminishPercent   uint32
 	IsGoldLeyline     bool
 	IsRivalGuild      bool
+	IsFeudActive      bool
 	GoldLeylineBps    uint32
 	RivalryBonusBps   uint32
 	Rule              *tablepb.GuildWarRuleTable
@@ -223,6 +282,10 @@ func ComputeSideReward(in BattleRewardInput) SideReward {
 	if rivalBps == 0 {
 		rivalBps = DefaultRivalryBonusBps
 	}
+	hasRivalOrFeud := in.IsRivalGuild || in.IsFeudActive
+	if in.IsFeudActive && DefaultFeudBonusBps > rivalBps {
+		rivalBps = DefaultFeudBonusBps
+	}
 	isSiege := in.BattleKind == pb.GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_GARRISON_SIEGE
 	var baseContrib, baseSilver, baseFunds, baseMerit uint64
 	switch {
@@ -238,10 +301,10 @@ func ComputeSideReward(in BattleRewardInput) SideReward {
 		baseContrib, baseSilver, baseFunds, baseMerit = 35, 1200, 150, 12
 	}
 	return SideReward{
-		Contribution: ScaleReward(baseContrib, in.DiminishPercent, in.IsGoldLeyline, goldBps, in.IsRivalGuild, rivalBps),
-		Silver:       ScaleReward(baseSilver, in.DiminishPercent, in.IsGoldLeyline, goldBps, in.IsRivalGuild, rivalBps),
-		GuildFunds:   ScaleReward(baseFunds, in.DiminishPercent, in.IsGoldLeyline, goldBps, in.IsRivalGuild, rivalBps),
-		Merit:        ScaleReward(baseMerit, in.DiminishPercent, in.IsGoldLeyline, goldBps, in.IsRivalGuild, rivalBps),
+		Contribution: ScaleReward(baseContrib, in.DiminishPercent, in.IsGoldLeyline, goldBps, hasRivalOrFeud, rivalBps),
+		Silver:       ScaleReward(baseSilver, in.DiminishPercent, in.IsGoldLeyline, goldBps, hasRivalOrFeud, rivalBps),
+		GuildFunds:   ScaleReward(baseFunds, in.DiminishPercent, in.IsGoldLeyline, goldBps, hasRivalOrFeud, rivalBps),
+		Merit:        ScaleReward(baseMerit, in.DiminishPercent, in.IsGoldLeyline, goldBps, hasRivalOrFeud, rivalBps),
 	}
 }
 

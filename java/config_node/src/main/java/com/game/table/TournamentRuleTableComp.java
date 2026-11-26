@@ -155,24 +155,6 @@ public final class TournamentRuleTableComp {
         }
     }
 
-    public record Salute_gold_amount(int value) {
-        public static Salute_gold_amount from(TournamentRuleTable row) {
-            return new Salute_gold_amount(row.getSaluteGoldAmount());
-        }
-    }
-
-    public record Salute_item_id(int value) {
-        public static Salute_item_id from(TournamentRuleTable row) {
-            return new Salute_item_id(row.getSaluteItemId());
-        }
-    }
-
-    public record Salute_item_count(int value) {
-        public static Salute_item_count from(TournamentRuleTable row) {
-            return new Salute_item_count(row.getSaluteItemCount());
-        }
-    }
-
     public record Warmup_spar_enabled(boolean value) {
         public static Warmup_spar_enabled from(TournamentRuleTable row) {
             return new Warmup_spar_enabled(row.getWarmupSparEnabled());

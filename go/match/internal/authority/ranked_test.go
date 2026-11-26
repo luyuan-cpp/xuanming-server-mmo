@@ -157,7 +157,7 @@ func TestRankedV6RivalryAndFeaturedBuildHelpers(t *testing.T) {
 	require.False(t, isRivalryRevengeTarget(r2))
 
 	// 流派归一键规范化：乱序、重复、超 4 招与零值归一化，保证同套配招聚合到同一行。
-	keyA, csvA, normA := canonicalBuildKey(101, 3, []uint32{10018, 10002, 10018, 0, 10041, 10021, 10035})
+	keyA, csvA, normA := canonicalBuildKey(101, 3, []uint32{10018, 10002, 10018, 0, 10041, 10021, 10055})
 	keyB, csvB, normB := canonicalBuildKey(101, 3, []uint32{10002, 10041, 10021, 10018})
 	require.Equal(t, "101:3:10002,10018,10021,10041", keyA)
 	require.Equal(t, keyA, keyB)

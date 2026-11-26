@@ -151,6 +151,34 @@ public final class SkillErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kSkillBannedInBattle = 7028;</code>
      */
     kSkillBannedInBattle(7028),
+    /**
+     * <code>kSkillLoadoutNameInvalid = 7029;</code>
+     */
+    kSkillLoadoutNameInvalid(7029),
+    /**
+     * <code>kSkillLoadoutRentPriceChanged = 7030;</code>
+     */
+    kSkillLoadoutRentPriceChanged(7030),
+    /**
+     * <code>kSkillLoadoutRentDiamondNotEnough = 7031;</code>
+     */
+    kSkillLoadoutRentDiamondNotEnough(7031),
+    /**
+     * <code>kSkillLoadoutRentStackLimit = 7032;</code>
+     */
+    kSkillLoadoutRentStackLimit(7032),
+    /**
+     * <code>kSkillLoadoutRentSlotsInvalid = 7033;</code>
+     */
+    kSkillLoadoutRentSlotsInvalid(7033),
+    /**
+     * <code>kSkillLoadoutAttributeInvalid = 7034;</code>
+     */
+    kSkillLoadoutAttributeInvalid(7034),
+    /**
+     * <code>kSkillLoadoutAttributeResetRequired = 7035;</code>
+     */
+    kSkillLoadoutAttributeResetRequired(7035),
     UNRECOGNIZED(-1),
     ;
 
@@ -283,6 +311,34 @@ public final class SkillErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kSkillBannedInBattle = 7028;</code>
      */
     public static final int kSkillBannedInBattle_VALUE = 7028;
+    /**
+     * <code>kSkillLoadoutNameInvalid = 7029;</code>
+     */
+    public static final int kSkillLoadoutNameInvalid_VALUE = 7029;
+    /**
+     * <code>kSkillLoadoutRentPriceChanged = 7030;</code>
+     */
+    public static final int kSkillLoadoutRentPriceChanged_VALUE = 7030;
+    /**
+     * <code>kSkillLoadoutRentDiamondNotEnough = 7031;</code>
+     */
+    public static final int kSkillLoadoutRentDiamondNotEnough_VALUE = 7031;
+    /**
+     * <code>kSkillLoadoutRentStackLimit = 7032;</code>
+     */
+    public static final int kSkillLoadoutRentStackLimit_VALUE = 7032;
+    /**
+     * <code>kSkillLoadoutRentSlotsInvalid = 7033;</code>
+     */
+    public static final int kSkillLoadoutRentSlotsInvalid_VALUE = 7033;
+    /**
+     * <code>kSkillLoadoutAttributeInvalid = 7034;</code>
+     */
+    public static final int kSkillLoadoutAttributeInvalid_VALUE = 7034;
+    /**
+     * <code>kSkillLoadoutAttributeResetRequired = 7035;</code>
+     */
+    public static final int kSkillLoadoutAttributeResetRequired_VALUE = 7035;
 
 
     public final int getNumber() {
@@ -339,6 +395,13 @@ public final class SkillErrorTip extends com.google.protobuf.GeneratedFile {
         case 7026: return kSkillLoadoutSchemeInvalid;
         case 7027: return kSkillLoadoutVersionChanged;
         case 7028: return kSkillBannedInBattle;
+        case 7029: return kSkillLoadoutNameInvalid;
+        case 7030: return kSkillLoadoutRentPriceChanged;
+        case 7031: return kSkillLoadoutRentDiamondNotEnough;
+        case 7032: return kSkillLoadoutRentStackLimit;
+        case 7033: return kSkillLoadoutRentSlotsInvalid;
+        case 7034: return kSkillLoadoutAttributeInvalid;
+        case 7035: return kSkillLoadoutAttributeResetRequired;
         default: return null;
       }
     }
@@ -404,7 +467,7 @@ public final class SkillErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025skill_error_tip.proto*\223\007\n\013skill_error\022" +
+      "\n\025skill_error_tip.proto*\222\t\n\013skill_error\022" +
       "\022\n\016kSkill_errorOK\020\000\022\032\n\025kSkillUnInterrupt" +
       "ible\020\3306\022\032\n\025kSkillInvalidTargetId\020\3316\022\030\n\023k" +
       "SkillInvalidTarget\020\3326\022\033\n\026kSkillCooldownN" +
@@ -427,8 +490,15 @@ public final class SkillErrorTip extends com.google.protobuf.GeneratedFile {
       "oadoutConflict\020\3606\022\034\n\027kSkillLoadoutNotLea" +
       "rned\020\3616\022\037\n\032kSkillLoadoutSchemeInvalid\020\3626" +
       "\022 \n\033kSkillLoadoutVersionChanged\020\3636\022\031\n\024kS" +
-      "killBannedInBattle\020\3646B$\n\016com.game.tableZ" +
-      "\022generated/pb/tableb\006proto3"
+      "killBannedInBattle\020\3646\022\035\n\030kSkillLoadoutNa" +
+      "meInvalid\020\3656\022\"\n\035kSkillLoadoutRentPriceCh" +
+      "anged\020\3666\022&\n!kSkillLoadoutRentDiamondNotE" +
+      "nough\020\3676\022 \n\033kSkillLoadoutRentStackLimit\020" +
+      "\3706\022\"\n\035kSkillLoadoutRentSlotsInvalid\020\3716\022\"" +
+      "\n\035kSkillLoadoutAttributeInvalid\020\3726\022(\n#kS" +
+      "killLoadoutAttributeResetRequired\020\3736B$\n\016" +
+      "com.game.tableZ\022generated/pb/tableb\006prot" +
+      "o3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

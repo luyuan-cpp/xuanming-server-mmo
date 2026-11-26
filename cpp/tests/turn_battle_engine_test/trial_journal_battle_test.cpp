@@ -11,6 +11,7 @@
 #include "memory_battle_data_provider.h"
 #include "system/battle_script.h"
 #include "system/combat_damage_rules.h"
+#include "system/trial_journal_rules.h"
 #include "system/turn_battle_engine.h"
 
 namespace {
@@ -711,5 +712,205 @@ TEST_F(TrialJournalBattleTest, TracksBarrierBreakGuardianRescueAndPolarityTeamBD
         EXPECT_FALSE(sA.trial_facts().team_dealt_magic_direct_damage());
         EXPECT_TRUE(sB.trial_facts().team_dealt_physical_direct_damage());
         EXPECT_TRUE(sB.trial_facts().team_dealt_magic_direct_damage());
+    }
+}
+
+TEST_F(TrialJournalBattleTest, Vol4WildBossMechanicsAndTrialVows) {
+    // 1. 试炼誓约校验：非法掩码(>0x0F) 与非首领试炼携带誓约一律拒绝开局。
+    {
+        auto& d113 = data->AddDungeon(113);
+        d113.Clear();
+        d113.set_id(113);
+        d113.set_boss_trial_kind(turnbattle::kBossTrialKindWildWind);
+        d113.set_difficulty(1);
+        d113.set_round_limit(12);
+        data->SetDungeonMonsters(113, {111, 112});
+        data->AddBattleReward(113, "");
+
+        auto& m111 = data->AddMonster(111);
+        m111.Clear();
+        m111.set_id(111);
+        m111.set_is_boss(1);
+        m111.set_health(2000);
+        m111.set_strength(200);
+        m111.set_speed(80);
+        auto& m112 = data->AddMonster(112);
+        m112.Clear();
+        m112.set_id(112);
+        m112.set_is_boss(0);
+        m112.set_health(1000);
+        m112.set_speed(90);
+
+        CreateBattleRequest badMaskReq;
+        badMaskReq.set_battle_id(93001);
+        badMaskReq.set_match_mode(turnbattle::kMatchModePveSolo);
+        badMaskReq.set_battle_config_id(113);
+        badMaskReq.set_seed(7);
+        badMaskReq.mutable_trial_context()->set_journal_entry_id(401);
+        badMaskReq.mutable_trial_context()->set_trial_rule_version(1);
+        badMaskReq.mutable_trial_context()->set_challenge_vow_mask(0x10u);
+        auto* p = badMaskReq.add_players();
+        p->set_player_id(kHeroA);
+        p->set_player_name("试炼者");
+        p->set_team_index(0);
+        p->set_level(30);
+        p->set_max_health(10000);
+        p->set_max_mana(5000);
+        p->mutable_base_attributes()->set_health(10000);
+        p->mutable_base_attributes()->set_mana(5000);
+        p->mutable_base_attributes()->set_speed(300);
+
+        TurnBattleEngine badEngine(data);
+        EXPECT_FALSE(badEngine.Initialize(badMaskReq));
+
+        // 合法四誓约组合：无宠孤剑(不生成宝宝) + 紧缩回合(12 -> 9) + 单宝轻装 + 禁控硬破
+        CreateBattleRequest vowReq = badMaskReq;
+        vowReq.set_battle_id(93002);
+        vowReq.mutable_trial_context()->set_challenge_vow_mask(trialjournal::kVowMaskAll);
+        auto* pet = vowReq.mutable_players(0)->add_pets();
+        pet->set_pet_id(77001);
+        pet->set_owner_player_id(kHeroA);
+        pet->set_pet_table_id(4);
+        pet->set_pet_name("云鹤");
+        pet->set_level(30);
+        pet->set_max_health(5000);
+        pet->mutable_base_attributes()->set_health(5000);
+        pet->mutable_base_attributes()->set_speed(250);
+
+        TurnBattleEngine vowEngine(data);
+        ASSERT_TRUE(vowEngine.Initialize(vowReq));
+        const auto snap = vowEngine.BuildStateSnapshot();
+        EXPECT_EQ(snap.round_limit(), 9u);
+        EXPECT_EQ(snap.trial_vow_mask(), trialjournal::kVowMaskAll);
+        for (const auto& a : snap.actors()) {
+            EXPECT_NE(a.actor_type(), BATTLE_ACTOR_TYPE_PET) << "无宠孤剑誓约绝不生成玩家方宝宝";
+        }
+        ASSERT_FALSE(snap.telegraphs().empty());
+        EXPECT_EQ(snap.telegraphs(0).intent_kind(), turnbattle::kTelegraphKindWildWindGust);
+
+        const auto settle = vowEngine.BuildSettlement(kHeroA);
+        ASSERT_TRUE(settle.has_trial_facts());
+        EXPECT_EQ(settle.trial_facts().challenge_vow_mask(), trialjournal::kVowMaskAll);
+        EXPECT_EQ(settle.trial_facts().used_pet_table_id(), 0u);
+    }
+
+    // 2. 卷四·碧渊水宫(13)：阳钟(R1-2)物理直伤 + 阴鼓(R3-4)法术直伤精确记入双事实。
+    {
+        AddModernDamageSkill(16311, combatdamage::kMagicDamage, 400);
+        auto& d114 = data->AddDungeon(114);
+        d114.Clear();
+        d114.set_id(114);
+        d114.set_boss_trial_kind(turnbattle::kBossTrialKindWildBell);
+        d114.set_difficulty(1);
+        d114.set_round_limit(12);
+        data->SetDungeonMonsters(114, {113});
+        data->AddBattleReward(114, "");
+        auto& m113 = data->AddMonster(113);
+        m113.Clear();
+        m113.set_id(113);
+        m113.set_is_boss(1);
+        m113.set_health(20000);
+        m113.set_speed(50);
+
+        CreateBattleRequest req;
+        req.set_battle_id(93003);
+        req.set_match_mode(turnbattle::kMatchModePveSolo);
+        req.set_battle_config_id(114);
+        req.set_seed(11);
+        req.mutable_trial_context()->set_journal_entry_id(402);
+        req.mutable_trial_context()->set_trial_rule_version(1);
+        auto* p = req.add_players();
+        p->set_player_id(kHeroA);
+        p->set_player_name("听钟人");
+        p->set_team_index(0);
+        p->set_level(30);
+        p->set_max_health(20000);
+        p->set_max_mana(10000);
+        p->mutable_base_attributes()->set_health(20000);
+        p->mutable_base_attributes()->set_mana(10000);
+        p->mutable_base_attributes()->set_speed(300);
+        p->set_physical_attack(500);
+        p->set_magic_attack(500);
+        p->add_skill_table_ids(16311);
+        (*p->mutable_skill_ranks())[16311] = 1;
+
+        TurnBattleEngine engine(data);
+        ASSERT_TRUE(engine.Initialize(req));
+        uint64_t bossId = 0;
+        for (const auto& a : engine.BuildStateSnapshot().actors()) {
+            if (a.is_boss()) bossId = a.actor_id();
+        }
+        ASSERT_NE(bossId, 0u);
+        // R1 (阳钟): 物理普攻
+        engine.SubmitAction(kHeroA, Command(BATTLE_ACTION_ATTACK, bossId));
+        engine.ResolveCurrentRound();
+        // R2 (阳钟): 防御过渡
+        engine.SubmitAction(kHeroA, Command(BATTLE_ACTION_DEFEND));
+        engine.ResolveCurrentRound();
+        // R3 (阴鼓): 法术直伤
+        engine.SubmitAction(kHeroA, Command(BATTLE_ACTION_SKILL, bossId, 16311));
+        engine.ResolveCurrentRound();
+
+        const auto settle = engine.BuildSettlement(kHeroA);
+        ASSERT_TRUE(settle.has_trial_facts());
+        EXPECT_TRUE(settle.trial_facts().dealt_yang_bell_physical_damage());
+        EXPECT_TRUE(settle.trial_facts().dealt_yin_drum_magic_damage());
+    }
+
+    // 3. 卷四·月汐湾(14)：R3 退潮窗口击杀首领置位 finished_in_ebb_tide。
+    {
+        auto& d115 = data->AddDungeon(115);
+        d115.Clear();
+        d115.set_id(115);
+        d115.set_boss_trial_kind(turnbattle::kBossTrialKindWildTide);
+        d115.set_difficulty(1);
+        d115.set_round_limit(12);
+        data->SetDungeonMonsters(115, {115});
+        data->AddBattleReward(115, "");
+        auto& m115 = data->AddMonster(115);
+        m115.Clear();
+        m115.set_id(115);
+        m115.set_is_boss(1);
+        m115.set_health(500);
+        m115.set_speed(50);
+
+        CreateBattleRequest req;
+        req.set_battle_id(93004);
+        req.set_match_mode(turnbattle::kMatchModePveSolo);
+        req.set_battle_config_id(115);
+        req.set_seed(13);
+        req.mutable_trial_context()->set_journal_entry_id(403);
+        req.mutable_trial_context()->set_trial_rule_version(1);
+        auto* p = req.add_players();
+        p->set_player_id(kHeroA);
+        p->set_player_name("赶潮人");
+        p->set_team_index(0);
+        p->set_level(30);
+        p->set_max_health(20000);
+        p->set_max_mana(10000);
+        p->mutable_base_attributes()->set_health(20000);
+        p->mutable_base_attributes()->set_mana(10000);
+        p->mutable_base_attributes()->set_speed(300);
+        p->set_physical_attack(5000);
+
+        TurnBattleEngine engine(data);
+        ASSERT_TRUE(engine.Initialize(req));
+        uint64_t bossId = 0;
+        for (const auto& a : engine.BuildStateSnapshot().actors()) {
+            if (a.is_boss()) bossId = a.actor_id();
+        }
+        ASSERT_NE(bossId, 0u);
+        // R1/R2 涨潮期防御等待，R3 退潮一击收官
+        engine.SubmitAction(kHeroA, Command(BATTLE_ACTION_DEFEND));
+        engine.ResolveCurrentRound();
+        engine.SubmitAction(kHeroA, Command(BATTLE_ACTION_DEFEND));
+        engine.ResolveCurrentRound();
+        engine.SubmitAction(kHeroA, Command(BATTLE_ACTION_ATTACK, bossId));
+        engine.ResolveCurrentRound();
+
+        const auto settle = engine.BuildSettlement(kHeroA);
+        EXPECT_EQ(settle.outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+        ASSERT_TRUE(settle.has_trial_facts());
+        EXPECT_TRUE(settle.trial_facts().finished_in_ebb_tide());
     }
 }

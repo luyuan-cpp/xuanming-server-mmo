@@ -82,10 +82,6 @@ func tournamentErrorTip(err error) uint32 {
 		return constants.ErrTournamentAlreadyCheered
 	case errors.Is(err, authority.ErrTournamentRewardUnavailable):
 		return constants.ErrTournamentRewardUnavailable
-	case errors.Is(err, authority.ErrTournamentAlreadySalutedToday):
-		return constants.ErrTournamentAlreadySalutedToday
-	case errors.Is(err, authority.ErrTournamentNoChampionToSalute):
-		return constants.ErrTournamentNoChampionToSalute
 	case errors.Is(err, authority.ErrTournamentEmblemInvalid):
 		return constants.ErrTournamentEmblemInvalid
 	case errors.Is(err, authority.ErrTournamentPredictionClosed):
@@ -465,64 +461,6 @@ func (l *TournamentLogic) ClaimTournamentReward(in *matchpb.ClaimTournamentRewar
 	return &matchpb.ClaimTournamentRewardResponse{
 		ErrorMessage:   tournamentTip(0),
 		ClaimedRewards: claimed,
-	}, nil
-}
-
-// SaluteTournamentChampion V2 每日免费观道致敬往届总冠军并经既有邮箱链路幂等投递绑定小礼。
-func (l *TournamentLogic) SaluteTournamentChampion(in *matchpb.SaluteTournamentChampionRequest) (*matchpb.SaluteTournamentChampionResponse, error) {
-	playerID := authoritativePlayerID(l.ctx, 0)
-	if playerID == 0 || l.svcCtx == nil || l.svcCtx.Authority == nil || l.svcCtx.BattleIDGen == nil {
-		return &matchpb.SaluteTournamentChampionResponse{ErrorMessage: tournamentTip(constants.ErrInternal)}, nil
-	}
-	rewardID, err := l.svcCtx.BattleIDGen.Generate()
-	if err != nil {
-		l.Errorf("[tournament] SaluteTournamentChampion id generate failed player=%d: %v", playerID, err)
-		return &matchpb.SaluteTournamentChampionResponse{ErrorMessage: tournamentTip(constants.ErrInternal)}, nil
-	}
-	res, err := l.svcCtx.Authority.SaluteTournamentChampion(l.ctx, playerID, in.GetSeasonId(), rewardID)
-	if err != nil {
-		code := tournamentErrorTip(err)
-		if code == constants.ErrInternal {
-			l.Errorf("[tournament] SaluteTournamentChampion failed player=%d: %v", playerID, err)
-		}
-		return &matchpb.SaluteTournamentChampionResponse{ErrorMessage: tournamentTip(code)}, nil
-	}
-	rule := l.svcCtx.ActiveTournament().Rule()
-	atts, goldAmount, items := tournament.BuildSaluteMailAttachments(rule)
-	var mailID uint64
-	if l.svcCtx.MailAdmin != nil && l.svcCtx.MailSecret != "" && (goldAmount > 0 || len(items) > 0) {
-		nowMs := uint64(time.Now().UnixMilli())
-		mailReq := &mailpb.SendMailRequest{
-			SenderKind:        tournamentMailSenderKind,
-			RequestId:         res.RewardID,
-			RecipientPlayerId: playerID,
-			Title:             "群仙问道赛·每日观道致敬礼",
-			Body:              fmt.Sprintf("感念道友瞻仰第%d赛季群仙问道赛总冠军，特奉上绑定修道小礼！", res.SeasonID),
-			Attachments:       atts,
-			ExpireMs:          nowMs + tournamentMailTTLMs,
-		}
-		if signErr := serviceauth.Sign(mailpb.MailAdmin_SendPersonalMail_FullMethodName, mailReq, tournamentMailCaller, l.svcCtx.MailSecret, nowMs); signErr != nil {
-			l.Errorf("[tournament] Sign salute mail failed player=%d reward=%d: %v", playerID, res.RewardID, signErr)
-		} else {
-			callCtx, cancel := context.WithTimeout(l.ctx, 2*time.Second)
-			mailResp, callErr := l.svcCtx.MailAdmin.SendPersonalMail(callCtx, mailReq)
-			cancel()
-			if callErr != nil || mailResp.GetErrorMessage().GetId() != 0 {
-				l.Errorf("[tournament] Send salute mail failed player=%d reward=%d tip=%d err=%v", playerID, res.RewardID, mailResp.GetErrorMessage().GetId(), callErr)
-			} else {
-				mailID = mailResp.GetMailId()
-				_ = l.svcCtx.Authority.UpdateTournamentSaluteMailID(l.ctx, playerID, res.SaluteDay, mailID)
-			}
-		}
-	}
-	return &matchpb.SaluteTournamentChampionResponse{
-		ErrorMessage:        tournamentTip(0),
-		SeasonId:            res.SeasonID,
-		ChampionSaluteCount: res.ChampionSaluteCount,
-		SalutedToday:        true,
-		GoldAmount:          goldAmount,
-		Items:               items,
-		MailId:              mailID,
 	}, nil
 }
 

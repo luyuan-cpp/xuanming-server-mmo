@@ -46,11 +46,11 @@ constexpr PlayerJianghuComp::ParseTableT_ PlayerJianghuComp::InternalGeneratePar
     {
       PROTOBUF_FIELD_OFFSET(PlayerJianghuComp, _impl_._has_bits_),
       0, // no _extensions_
-      10, 120,  // max_field_number, fast_idx_mask
+      12, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966272,  // skipmap
+      4294963200,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      10,  // num_field_entries
+      12,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -98,11 +98,17 @@ constexpr PlayerJianghuComp::ParseTableT_ PlayerJianghuComp::InternalGeneratePar
        {72, 8, 0,
         PROTOBUF_FIELD_OFFSET(PlayerJianghuComp, _impl_.clear_badge_expires_at_ms_)}},
       // uint32 clear_badge_style_id = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerJianghuComp, _impl_.clear_badge_style_id_), 9>(),
-       {80, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerJianghuComp, _impl_.clear_badge_style_id_), 11>(),
+       {80, 11, 0,
         PROTOBUF_FIELD_OFFSET(PlayerJianghuComp, _impl_.clear_badge_style_id_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 pending_silver_fee_battle_id = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerJianghuComp, _impl_.pending_silver_fee_battle_id_), 9>(),
+       {88, 9, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerJianghuComp, _impl_.pending_silver_fee_battle_id_)}},
+      // uint64 pending_silver_fee_amount = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerJianghuComp, _impl_.pending_silver_fee_amount_), 10>(),
+       {96, 10, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerJianghuComp, _impl_.pending_silver_fee_amount_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -128,7 +134,11 @@ constexpr PlayerJianghuComp::ParseTableT_ PlayerJianghuComp::InternalGeneratePar
       // uint64 clear_badge_expires_at_ms = 9;
       {PROTOBUF_FIELD_OFFSET(PlayerJianghuComp, _impl_.clear_badge_expires_at_ms_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 clear_badge_style_id = 10;
-      {PROTOBUF_FIELD_OFFSET(PlayerJianghuComp, _impl_.clear_badge_style_id_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PlayerJianghuComp, _impl_.clear_badge_style_id_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 pending_silver_fee_battle_id = 11;
+      {PROTOBUF_FIELD_OFFSET(PlayerJianghuComp, _impl_.pending_silver_fee_battle_id_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 pending_silver_fee_amount = 12;
+      {PROTOBUF_FIELD_OFFSET(PlayerJianghuComp, _impl_.pending_silver_fee_amount_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -155,6 +165,8 @@ inline constexpr PlayerJianghuComp::Impl_::Impl_(
         defeat_mark_style_id_{0u},
         defeat_mark_battle_id_{::uint64_t{0u}},
         clear_badge_expires_at_ms_{::uint64_t{0u}},
+        pending_silver_fee_battle_id_{::uint64_t{0u}},
+        pending_silver_fee_amount_{::uint64_t{0u}},
         clear_badge_style_id_{0u} {}
 
 template <typename>
@@ -258,7 +270,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerJianghuComp, _impl_._has_bits_),
-        13, // hasbit index offset
+        15, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PlayerJianghuComp, _impl_.duel_refuse_strangers_),
         PROTOBUF_FIELD_OFFSET(::PlayerJianghuComp, _impl_.owner_revision_),
         PROTOBUF_FIELD_OFFSET(::PlayerJianghuComp, _impl_.defeat_mark_expires_at_ms_),
@@ -269,6 +281,8 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::PlayerJianghuComp, _impl_.defeat_mark_battle_id_),
         PROTOBUF_FIELD_OFFSET(::PlayerJianghuComp, _impl_.clear_badge_expires_at_ms_),
         PROTOBUF_FIELD_OFFSET(::PlayerJianghuComp, _impl_.clear_badge_style_id_),
+        PROTOBUF_FIELD_OFFSET(::PlayerJianghuComp, _impl_.pending_silver_fee_battle_id_),
+        PROTOBUF_FIELD_OFFSET(::PlayerJianghuComp, _impl_.pending_silver_fee_amount_),
         4,
         1,
         2,
@@ -278,7 +292,9 @@ const ::uint32_t
         5,
         7,
         8,
+        11,
         9,
+        10,
 };
 
 static const ::_pbi::MigrationSchema
@@ -292,7 +308,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fjianghu_5fcomp_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n0proto/common/component/player_jianghu_"
-    "comp.proto\"\316\002\n\021PlayerJianghuComp\022\035\n\025duel"
+    "comp.proto\"\227\003\n\021PlayerJianghuComp\022\035\n\025duel"
     "_refuse_strangers\030\001 \001(\010\022\026\n\016owner_revisio"
     "n\030\002 \001(\004\022!\n\031defeat_mark_expires_at_ms\030\003 \001"
     "(\004\022\035\n\025defeat_mark_winner_id\030\004 \001(\004\022\037\n\027def"
@@ -300,14 +316,16 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fjiang
     "k_style_id\030\006 \001(\r\022!\n\031defeat_mark_is_guild"
     "_name\030\007 \001(\010\022\035\n\025defeat_mark_battle_id\030\010 \001"
     "(\004\022!\n\031clear_badge_expires_at_ms\030\t \001(\004\022\034\n"
-    "\024clear_badge_style_id\030\n \001(\rB\022Z\020common/co"
-    "mponentb\006proto3"
+    "\024clear_badge_style_id\030\n \001(\r\022$\n\034pending_s"
+    "ilver_fee_battle_id\030\013 \001(\004\022!\n\031pending_sil"
+    "ver_fee_amount\030\014 \001(\004B\022Z\020common/component"
+    "b\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fjianghu_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fjianghu_5fcomp_2eproto = {
     false,
     false,
-    415,
+    488,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fjianghu_5fcomp_2eproto,
     "proto/common/component/player_jianghu_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fjianghu_5fcomp_2eproto_once,
@@ -435,7 +453,7 @@ PROTOBUF_NOINLINE void PlayerJianghuComp::Clear() {
         reinterpret_cast<char*>(&_impl_.defeat_mark_battle_id_) -
         reinterpret_cast<char*>(&_impl_.owner_revision_)) + sizeof(_impl_.defeat_mark_battle_id_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     ::memset(&_impl_.clear_badge_expires_at_ms_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.clear_badge_style_id_) -
         reinterpret_cast<char*>(&_impl_.clear_badge_expires_at_ms_)) + sizeof(_impl_.clear_badge_style_id_));
@@ -546,11 +564,29 @@ PROTOBUF_NOINLINE void PlayerJianghuComp::Clear() {
   }
 
   // uint32 clear_badge_style_id = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_clear_badge_style_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           10, this_._internal_clear_badge_style_id(), target);
+    }
+  }
+
+  // uint64 pending_silver_fee_battle_id = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_pending_silver_fee_battle_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          11, this_._internal_pending_silver_fee_battle_id(), target);
+    }
+  }
+
+  // uint64 pending_silver_fee_amount = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_pending_silver_fee_amount() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          12, this_._internal_pending_silver_fee_amount(), target);
     }
   }
 
@@ -635,7 +671,7 @@ PROTOBUF_NOINLINE void PlayerJianghuComp::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     // uint64 clear_badge_expires_at_ms = 9;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_clear_badge_expires_at_ms() != 0) {
@@ -643,8 +679,22 @@ PROTOBUF_NOINLINE void PlayerJianghuComp::Clear() {
             this_._internal_clear_badge_expires_at_ms());
       }
     }
-    // uint32 clear_badge_style_id = 10;
+    // uint64 pending_silver_fee_battle_id = 11;
     if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_pending_silver_fee_battle_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_pending_silver_fee_battle_id());
+      }
+    }
+    // uint64 pending_silver_fee_amount = 12;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_pending_silver_fee_amount() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_pending_silver_fee_amount());
+      }
+    }
+    // uint32 clear_badge_style_id = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_clear_badge_style_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_clear_badge_style_id());
@@ -714,13 +764,23 @@ void PlayerJianghuComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_clear_badge_expires_at_ms() != 0) {
         _this->_impl_.clear_badge_expires_at_ms_ = from._impl_.clear_badge_expires_at_ms_;
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_pending_silver_fee_battle_id() != 0) {
+        _this->_impl_.pending_silver_fee_battle_id_ = from._impl_.pending_silver_fee_battle_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_pending_silver_fee_amount() != 0) {
+        _this->_impl_.pending_silver_fee_amount_ = from._impl_.pending_silver_fee_amount_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_clear_badge_style_id() != 0) {
         _this->_impl_.clear_badge_style_id_ = from._impl_.clear_badge_style_id_;
       }

@@ -746,29 +746,6 @@ func (matchServiceRpc) decodeClaimTournamentReward(reply *base.MessageContent, e
 	return resp, nil
 }
 
-// SaluteTournamentChampion 异步调用 MatchService.SaluteTournamentChampion(REQUEST),done 的契约见 MatchService。
-func (r matchServiceRpc) SaluteTournamentChampion(c *pkg.GameClient, req *match.SaluteTournamentChampionRequest, timeout time.Duration, done func(*match.SaluteTournamentChampionResponse, error)) {
-	c.Call(game.MatchServiceSaluteTournamentChampionMessageId, req, timeout, func(reply *base.MessageContent, err error) {
-		done(r.decodeSaluteTournamentChampion(reply, err))
-	})
-}
-
-// SaluteTournamentChampionSync 同步调用 MatchService.SaluteTournamentChampion(REQUEST);禁止在 RecvLoop goroutine 上调用。
-func (r matchServiceRpc) SaluteTournamentChampionSync(ctx context.Context, c *pkg.GameClient, req *match.SaluteTournamentChampionRequest, timeout time.Duration) (*match.SaluteTournamentChampionResponse, error) {
-	return r.decodeSaluteTournamentChampion(c.CallSync(ctx, game.MatchServiceSaluteTournamentChampionMessageId, req, timeout))
-}
-
-func (matchServiceRpc) decodeSaluteTournamentChampion(reply *base.MessageContent, err error) (*match.SaluteTournamentChampionResponse, error) {
-	if err != nil {
-		return nil, err
-	}
-	resp := &match.SaluteTournamentChampionResponse{}
-	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
-		return nil, fmt.Errorf("rpc: decode MatchService.SaluteTournamentChampion reply: %w", err)
-	}
-	return resp, nil
-}
-
 // SendTournamentSpectateCheer 异步调用 MatchService.SendTournamentSpectateCheer(REQUEST),done 的契约见 MatchService。
 func (r matchServiceRpc) SendTournamentSpectateCheer(c *pkg.GameClient, req *match.SendTournamentSpectateCheerRequest, timeout time.Duration, done func(*match.SendTournamentSpectateCheerResponse, error)) {
 	c.Call(game.MatchServiceSendTournamentSpectateCheerMessageId, req, timeout, func(reply *base.MessageContent, err error) {
@@ -1064,6 +1041,75 @@ func (matchServiceRpc) decodeDismissJianghuGrudge(reply *base.MessageContent, er
 	resp := &match.DismissJianghuGrudgeResponse{}
 	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
 		return nil, fmt.Errorf("rpc: decode MatchService.DismissJianghuGrudge reply: %w", err)
+	}
+	return resp, nil
+}
+
+// CreateTrialChallengeCard 异步调用 MatchService.CreateTrialChallengeCard(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) CreateTrialChallengeCard(c *pkg.GameClient, req *match.CreateTrialChallengeCardRequest, timeout time.Duration, done func(*match.CreateTrialChallengeCardResponse, error)) {
+	c.Call(game.MatchServiceCreateTrialChallengeCardMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeCreateTrialChallengeCard(reply, err))
+	})
+}
+
+// CreateTrialChallengeCardSync 同步调用 MatchService.CreateTrialChallengeCard(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) CreateTrialChallengeCardSync(ctx context.Context, c *pkg.GameClient, req *match.CreateTrialChallengeCardRequest, timeout time.Duration) (*match.CreateTrialChallengeCardResponse, error) {
+	return r.decodeCreateTrialChallengeCard(c.CallSync(ctx, game.MatchServiceCreateTrialChallengeCardMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeCreateTrialChallengeCard(reply *base.MessageContent, err error) (*match.CreateTrialChallengeCardResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.CreateTrialChallengeCardResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.CreateTrialChallengeCard reply: %w", err)
+	}
+	return resp, nil
+}
+
+// GetTrialChallengeCard 异步调用 MatchService.GetTrialChallengeCard(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) GetTrialChallengeCard(c *pkg.GameClient, req *match.GetTrialChallengeCardRequest, timeout time.Duration, done func(*match.GetTrialChallengeCardResponse, error)) {
+	c.Call(game.MatchServiceGetTrialChallengeCardMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeGetTrialChallengeCard(reply, err))
+	})
+}
+
+// GetTrialChallengeCardSync 同步调用 MatchService.GetTrialChallengeCard(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) GetTrialChallengeCardSync(ctx context.Context, c *pkg.GameClient, req *match.GetTrialChallengeCardRequest, timeout time.Duration) (*match.GetTrialChallengeCardResponse, error) {
+	return r.decodeGetTrialChallengeCard(c.CallSync(ctx, game.MatchServiceGetTrialChallengeCardMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeGetTrialChallengeCard(reply *base.MessageContent, err error) (*match.GetTrialChallengeCardResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.GetTrialChallengeCardResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.GetTrialChallengeCard reply: %w", err)
+	}
+	return resp, nil
+}
+
+// GetSharedTrialReplay 异步调用 MatchService.GetSharedTrialReplay(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) GetSharedTrialReplay(c *pkg.GameClient, req *match.GetSharedTrialReplayRequest, timeout time.Duration, done func(*match.GetSharedTrialReplayResponse, error)) {
+	c.Call(game.MatchServiceGetSharedTrialReplayMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeGetSharedTrialReplay(reply, err))
+	})
+}
+
+// GetSharedTrialReplaySync 同步调用 MatchService.GetSharedTrialReplay(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) GetSharedTrialReplaySync(ctx context.Context, c *pkg.GameClient, req *match.GetSharedTrialReplayRequest, timeout time.Duration) (*match.GetSharedTrialReplayResponse, error) {
+	return r.decodeGetSharedTrialReplay(c.CallSync(ctx, game.MatchServiceGetSharedTrialReplayMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeGetSharedTrialReplay(reply *base.MessageContent, err error) (*match.GetSharedTrialReplayResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.GetSharedTrialReplayResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.GetSharedTrialReplay reply: %w", err)
 	}
 	return resp, nil
 }

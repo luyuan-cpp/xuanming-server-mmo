@@ -33,43 +33,46 @@ type ClientRequestRecord struct {
 	// 账本内单调递增的序号(从 1 起),只用来挑最旧的那条淘汰。records 的下标不承载顺序(AGENTS §11.6)。
 	Seq uint64 `protobuf:"varint,4,opt,name=seq,proto3" json:"seq,omitempty"`
 	// ── 首次结果里,重放要回、却从当前状态推不出来的部分。只对注释里的种类有意义,其余保持默认值 ──
-	EnhanceSuccess               bool   `protobuf:"varint,5,opt,name=enhance_success,json=enhanceSuccess,proto3" json:"enhance_success,omitempty"`                                                  // 强化:那一次掷骰成没成
-	EnhanceLevel                 uint32 `protobuf:"varint,6,opt,name=enhance_level,json=enhanceLevel,proto3" json:"enhance_level,omitempty"`                                                        // 强化:那一次之后的等级
-	CreatedSchemeId              uint32 `protobuf:"varint,7,opt,name=created_scheme_id,json=createdSchemeId,proto3" json:"created_scheme_id,omitempty"`                                             // 新建加点方案:那一次建出来的方案号
-	EquipmentItemId              uint64 `protobuf:"varint,8,opt,name=equipment_item_id,json=equipmentItemId,proto3" json:"equipment_item_id,omitempty"`                                             // 装备打造/装条：首次成功对应的实例。
-	ForgeRevision                uint64 `protobuf:"varint,9,opt,name=forge_revision,json=forgeRevision,proto3" json:"forge_revision,omitempty"`                                                     // 装备打造/装条：首次成功后的业务水位。
-	MaterialRewardRevision       uint64 `protobuf:"varint,10,opt,name=material_reward_revision,json=materialRewardRevision,proto3" json:"material_reward_revision,omitempty"`                       // 材料自选：首次成功后的独立水位。
-	CraftingMaterialCount        uint32 `protobuf:"varint,11,opt,name=crafting_material_count,json=craftingMaterialCount,proto3" json:"crafting_material_count,omitempty"`                          // 材料自选首次实际领取的打造材料数。
-	EnhancementStoneCount        uint32 `protobuf:"varint,12,opt,name=enhancement_stone_count,json=enhancementStoneCount,proto3" json:"enhancement_stone_count,omitempty"`                          // 材料自选首次实际领取的强化石数。
-	SeasonCatchupPoints          uint32 `protobuf:"varint,13,opt,name=season_catchup_points,json=seasonCatchupPoints,proto3" json:"season_catchup_points,omitempty"`                                // 赛季印追赶：首次实际补齐的进度点数。
-	SeasonCatchupSpent           uint64 `protobuf:"varint,14,opt,name=season_catchup_spent,json=seasonCatchupSpent,proto3" json:"season_catchup_spent,omitempty"`                                   // 赛季印追赶：首次实际扣除的货币数。
-	TrialMilestoneId             uint32 `protobuf:"varint,15,opt,name=trial_milestone_id,json=trialMilestoneId,proto3" json:"trial_milestone_id,omitempty"`                                         // 五行试炼志里程碑领取：首次领取的里程碑 ID。
-	TrialMilestoneSandCount      uint32 `protobuf:"varint,16,opt,name=trial_milestone_sand_count,json=trialMilestoneSandCount,proto3" json:"trial_milestone_sand_count,omitempty"`                  // 五行试炼志里程碑领取：首次发放的仅自用重铸砂数量。
-	TrialMilestoneVoucherCount   uint32 `protobuf:"varint,17,opt,name=trial_milestone_voucher_count,json=trialMilestoneVoucherCount,proto3" json:"trial_milestone_voucher_count,omitempty"`         // 五行试炼志里程碑领取：首次发放的仅自用法宝拓印数量。
-	RedeemedArtifactItemId       uint64 `protobuf:"varint,18,opt,name=redeemed_artifact_item_id,json=redeemedArtifactItemId,proto3" json:"redeemed_artifact_item_id,omitempty"`                     // 五行试炼志拓印兑换：首次产出的仅自用法宝实例 ID。
-	RedeemedArtifactConfigId     uint32 `protobuf:"varint,19,opt,name=redeemed_artifact_config_id,json=redeemedArtifactConfigId,proto3" json:"redeemed_artifact_config_id,omitempty"`               // 五行试炼志拓印兑换：首次兑换的法宝模板 ID。
-	EnhancePityCount             uint32 `protobuf:"varint,20,opt,name=enhance_pity_count,json=enhancePityCount,proto3" json:"enhance_pity_count,omitempty"`                                         // 强化：那一次操作后的保底累计次数（用于 +11 顶格概率强化的幂等重放）。
-	CraftingTradableCount        uint32 `protobuf:"varint,21,opt,name=crafting_tradable_count,json=craftingTradableCount,proto3" json:"crafting_tradable_count,omitempty"`                          // 材料自选：首次实际发放的可交易打造材料数。
-	EnhancementTradableCount     uint32 `protobuf:"varint,22,opt,name=enhancement_tradable_count,json=enhancementTradableCount,proto3" json:"enhancement_tradable_count,omitempty"`                 // 材料自选：首次实际发放的可交易百炼石数。
-	EquipmentQualityTier         uint32 `protobuf:"varint,23,opt,name=equipment_quality_tier,json=equipmentQualityTier,proto3" json:"equipment_quality_tier,omitempty"`                             // 装备装条/打磨：首次操作后的品相档位（1..5）。
-	EquipmentPolishPityCount     uint32 `protobuf:"varint,24,opt,name=equipment_polish_pity_count,json=equipmentPolishPityCount,proto3" json:"equipment_polish_pity_count,omitempty"`               // 装备打磨：首次操作后的单条保底计数。
-	EquipmentGuaranteedByPity    bool   `protobuf:"varint,25,opt,name=equipment_guaranteed_by_pity,json=equipmentGuaranteedByPity,proto3" json:"equipment_guaranteed_by_pity,omitempty"`            // 装备打磨：首次是否由硬保底或定星符触发极品。
-	CraftedSkillBookId           uint64 `protobuf:"varint,26,opt,name=crafted_skill_book_id,json=craftedSkillBookId,proto3" json:"crafted_skill_book_id,omitempty"`                                 // 技能制书：首次产出的未学技能书 ID。
-	CraftedSkillTableId          uint32 `protobuf:"varint,27,opt,name=crafted_skill_table_id,json=craftedSkillTableId,proto3" json:"crafted_skill_table_id,omitempty"`                              // 技能制书：首次产出的技能表 ID。
-	ScrollCraftRevision          uint64 `protobuf:"varint,28,opt,name=scroll_craft_revision,json=scrollCraftRevision,proto3" json:"scroll_craft_revision,omitempty"`                                // 技能制书/拆页：首次成功后的水位。
-	ScrollBonusFragments         uint32 `protobuf:"varint,29,opt,name=scroll_bonus_fragments,json=scrollBonusFragments,proto3" json:"scroll_bonus_fragments,omitempty"`                             // 技能制书/拆页：首次额外返还或拆解得到的残页数。
-	TravelPassClaimedCount       uint32 `protobuf:"varint,30,opt,name=travel_pass_claimed_count,json=travelPassClaimedCount,proto3" json:"travel_pass_claimed_count,omitempty"`                     // 游历手记领奖：首次实际领取的档位轨数。
-	EquipLoadoutUnlockedCount    uint32 `protobuf:"varint,31,opt,name=equip_loadout_unlocked_count,json=equipLoadoutUnlockedCount,proto3" json:"equip_loadout_unlocked_count,omitempty"`            // 装备流派方案扩容：首次解锁后的已解锁套数（2..5）。
-	EquipLoadoutUsedItemId       uint32 `protobuf:"varint,32,opt,name=equip_loadout_used_item_id,json=equipLoadoutUsedItemId,proto3" json:"equip_loadout_used_item_id,omitempty"`                   // 装备流派方案扩容：首次消耗的扩容符道具 ID（3413；未用符为 0）。
-	EquipLoadoutSpentBindDiamond uint64 `protobuf:"varint,33,opt,name=equip_loadout_spent_bind_diamond,json=equipLoadoutSpentBindDiamond,proto3" json:"equip_loadout_spent_bind_diamond,omitempty"` // 装备流派方案扩容：首次消耗的绑定灵石数。
-	EquipLoadoutSpentDiamond     uint64 `protobuf:"varint,34,opt,name=equip_loadout_spent_diamond,json=equipLoadoutSpentDiamond,proto3" json:"equip_loadout_spent_diamond,omitempty"`               // 装备流派方案扩容：首次消耗的非绑灵石数。
-	RewardedAdCurrencyType       uint32 `protobuf:"varint,35,opt,name=rewarded_ad_currency_type,json=rewardedAdCurrencyType,proto3" json:"rewarded_ad_currency_type,omitempty"`                     // 激励视频领奖：首次实际发放币种（默认 3 = 绑定银两）。
-	RewardedAdAmount             uint64 `protobuf:"varint,36,opt,name=rewarded_ad_amount,json=rewardedAdAmount,proto3" json:"rewarded_ad_amount,omitempty"`                                         // 激励视频领奖：首次实际发放金额。
-	SealedBookItemId             uint64 `protobuf:"varint,37,opt,name=sealed_book_item_id,json=sealedBookItemId,proto3" json:"sealed_book_item_id,omitempty"`                                       // 技能书封卷入包：首次产出的 3414 封卷道籍背包实例 ID。
-	EquipmentPolishAttemptsUsed  uint32 `protobuf:"varint,38,opt,name=equipment_polish_attempts_used,json=equipmentPolishAttemptsUsed,proto3" json:"equipment_polish_attempts_used,omitempty"`      // V3 装备智能定档连磨：首次实际消耗打磨手数（1..8）。
-	EquipmentActualGoldSpent     uint64 `protobuf:"varint,39,opt,name=equipment_actual_gold_spent,json=equipmentActualGoldSpent,proto3" json:"equipment_actual_gold_spent,omitempty"`               // V3 装备智能定档连磨：首次实际扣除银两（含代打费）。
-	WantedOrderId                uint64 `protobuf:"varint,40,opt,name=wanted_order_id,json=wantedOrderId,proto3" json:"wanted_order_id,omitempty"`                                                  // V5 西市悬赏求书：首次发榜/撤单/揭榜对应的悬赏单号。
-	WantedOrderGold              uint64 `protobuf:"varint,41,opt,name=wanted_order_gold,json=wantedOrderGold,proto3" json:"wanted_order_gold,omitempty"`                                            // V5 西市悬赏求书：首次托管、全额退还或揭榜净结算银两。
+	EnhanceSuccess               bool   `protobuf:"varint,5,opt,name=enhance_success,json=enhanceSuccess,proto3" json:"enhance_success,omitempty"`                                                    // 强化:那一次掷骰成没成
+	EnhanceLevel                 uint32 `protobuf:"varint,6,opt,name=enhance_level,json=enhanceLevel,proto3" json:"enhance_level,omitempty"`                                                          // 强化:那一次之后的等级
+	CreatedSchemeId              uint32 `protobuf:"varint,7,opt,name=created_scheme_id,json=createdSchemeId,proto3" json:"created_scheme_id,omitempty"`                                               // 新建加点方案:那一次建出来的方案号
+	EquipmentItemId              uint64 `protobuf:"varint,8,opt,name=equipment_item_id,json=equipmentItemId,proto3" json:"equipment_item_id,omitempty"`                                               // 装备打造/装条：首次成功对应的实例。
+	ForgeRevision                uint64 `protobuf:"varint,9,opt,name=forge_revision,json=forgeRevision,proto3" json:"forge_revision,omitempty"`                                                       // 装备打造/装条：首次成功后的业务水位。
+	MaterialRewardRevision       uint64 `protobuf:"varint,10,opt,name=material_reward_revision,json=materialRewardRevision,proto3" json:"material_reward_revision,omitempty"`                         // 材料自选：首次成功后的独立水位。
+	CraftingMaterialCount        uint32 `protobuf:"varint,11,opt,name=crafting_material_count,json=craftingMaterialCount,proto3" json:"crafting_material_count,omitempty"`                            // 材料自选首次实际领取的打造材料数。
+	EnhancementStoneCount        uint32 `protobuf:"varint,12,opt,name=enhancement_stone_count,json=enhancementStoneCount,proto3" json:"enhancement_stone_count,omitempty"`                            // 材料自选首次实际领取的强化石数。
+	SeasonCatchupPoints          uint32 `protobuf:"varint,13,opt,name=season_catchup_points,json=seasonCatchupPoints,proto3" json:"season_catchup_points,omitempty"`                                  // 赛季印追赶：首次实际补齐的进度点数。
+	SeasonCatchupSpent           uint64 `protobuf:"varint,14,opt,name=season_catchup_spent,json=seasonCatchupSpent,proto3" json:"season_catchup_spent,omitempty"`                                     // 赛季印追赶：首次实际扣除的货币数。
+	TrialMilestoneId             uint32 `protobuf:"varint,15,opt,name=trial_milestone_id,json=trialMilestoneId,proto3" json:"trial_milestone_id,omitempty"`                                           // 五行试炼志里程碑领取：首次领取的里程碑 ID。
+	TrialMilestoneSandCount      uint32 `protobuf:"varint,16,opt,name=trial_milestone_sand_count,json=trialMilestoneSandCount,proto3" json:"trial_milestone_sand_count,omitempty"`                    // 五行试炼志里程碑领取：首次发放的仅自用重铸砂数量。
+	TrialMilestoneVoucherCount   uint32 `protobuf:"varint,17,opt,name=trial_milestone_voucher_count,json=trialMilestoneVoucherCount,proto3" json:"trial_milestone_voucher_count,omitempty"`           // 五行试炼志里程碑领取：首次发放的仅自用法宝拓印数量。
+	RedeemedArtifactItemId       uint64 `protobuf:"varint,18,opt,name=redeemed_artifact_item_id,json=redeemedArtifactItemId,proto3" json:"redeemed_artifact_item_id,omitempty"`                       // 五行试炼志拓印兑换：首次产出的仅自用法宝实例 ID。
+	RedeemedArtifactConfigId     uint32 `protobuf:"varint,19,opt,name=redeemed_artifact_config_id,json=redeemedArtifactConfigId,proto3" json:"redeemed_artifact_config_id,omitempty"`                 // 五行试炼志拓印兑换：首次兑换的法宝模板 ID。
+	EnhancePityCount             uint32 `protobuf:"varint,20,opt,name=enhance_pity_count,json=enhancePityCount,proto3" json:"enhance_pity_count,omitempty"`                                           // 强化：那一次操作后的保底累计次数（用于 +11 顶格概率强化的幂等重放）。
+	CraftingTradableCount        uint32 `protobuf:"varint,21,opt,name=crafting_tradable_count,json=craftingTradableCount,proto3" json:"crafting_tradable_count,omitempty"`                            // 材料自选：首次实际发放的可交易打造材料数。
+	EnhancementTradableCount     uint32 `protobuf:"varint,22,opt,name=enhancement_tradable_count,json=enhancementTradableCount,proto3" json:"enhancement_tradable_count,omitempty"`                   // 材料自选：首次实际发放的可交易百炼石数。
+	EquipmentQualityTier         uint32 `protobuf:"varint,23,opt,name=equipment_quality_tier,json=equipmentQualityTier,proto3" json:"equipment_quality_tier,omitempty"`                               // 装备装条/打磨：首次操作后的品相档位（1..5）。
+	EquipmentPolishPityCount     uint32 `protobuf:"varint,24,opt,name=equipment_polish_pity_count,json=equipmentPolishPityCount,proto3" json:"equipment_polish_pity_count,omitempty"`                 // 装备打磨：首次操作后的单条保底计数。
+	EquipmentGuaranteedByPity    bool   `protobuf:"varint,25,opt,name=equipment_guaranteed_by_pity,json=equipmentGuaranteedByPity,proto3" json:"equipment_guaranteed_by_pity,omitempty"`              // 装备打磨：首次是否由硬保底或定星符触发极品。
+	CraftedSkillBookId           uint64 `protobuf:"varint,26,opt,name=crafted_skill_book_id,json=craftedSkillBookId,proto3" json:"crafted_skill_book_id,omitempty"`                                   // 技能制书：首次产出的未学技能书 ID。
+	CraftedSkillTableId          uint32 `protobuf:"varint,27,opt,name=crafted_skill_table_id,json=craftedSkillTableId,proto3" json:"crafted_skill_table_id,omitempty"`                                // 技能制书：首次产出的技能表 ID。
+	ScrollCraftRevision          uint64 `protobuf:"varint,28,opt,name=scroll_craft_revision,json=scrollCraftRevision,proto3" json:"scroll_craft_revision,omitempty"`                                  // 技能制书/拆页：首次成功后的水位。
+	ScrollBonusFragments         uint32 `protobuf:"varint,29,opt,name=scroll_bonus_fragments,json=scrollBonusFragments,proto3" json:"scroll_bonus_fragments,omitempty"`                               // 技能制书/拆页：首次额外返还或拆解得到的残页数。
+	TravelPassClaimedCount       uint32 `protobuf:"varint,30,opt,name=travel_pass_claimed_count,json=travelPassClaimedCount,proto3" json:"travel_pass_claimed_count,omitempty"`                       // 游历手记领奖：首次实际领取的档位轨数。
+	EquipLoadoutUnlockedCount    uint32 `protobuf:"varint,31,opt,name=equip_loadout_unlocked_count,json=equipLoadoutUnlockedCount,proto3" json:"equip_loadout_unlocked_count,omitempty"`              // 装备流派方案扩容：首次解锁后的已解锁套数（2..5）。
+	EquipLoadoutUsedItemId       uint32 `protobuf:"varint,32,opt,name=equip_loadout_used_item_id,json=equipLoadoutUsedItemId,proto3" json:"equip_loadout_used_item_id,omitempty"`                     // 装备流派方案扩容：首次消耗的扩容符道具 ID（3413；未用符为 0）。
+	EquipLoadoutSpentBindDiamond uint64 `protobuf:"varint,33,opt,name=equip_loadout_spent_bind_diamond,json=equipLoadoutSpentBindDiamond,proto3" json:"equip_loadout_spent_bind_diamond,omitempty"`   // 装备流派方案扩容：首次消耗的绑定灵石数。
+	EquipLoadoutSpentDiamond     uint64 `protobuf:"varint,34,opt,name=equip_loadout_spent_diamond,json=equipLoadoutSpentDiamond,proto3" json:"equip_loadout_spent_diamond,omitempty"`                 // 装备流派方案扩容：首次消耗的非绑灵石数。
+	RewardedAdCurrencyType       uint32 `protobuf:"varint,35,opt,name=rewarded_ad_currency_type,json=rewardedAdCurrencyType,proto3" json:"rewarded_ad_currency_type,omitempty"`                       // 激励视频领奖：首次实际发放币种（默认 3 = 绑定银两）。
+	RewardedAdAmount             uint64 `protobuf:"varint,36,opt,name=rewarded_ad_amount,json=rewardedAdAmount,proto3" json:"rewarded_ad_amount,omitempty"`                                           // 激励视频领奖：首次实际发放金额。
+	SealedBookItemId             uint64 `protobuf:"varint,37,opt,name=sealed_book_item_id,json=sealedBookItemId,proto3" json:"sealed_book_item_id,omitempty"`                                         // 技能书封卷入包：首次产出的 3414 封卷道籍背包实例 ID。
+	EquipmentPolishAttemptsUsed  uint32 `protobuf:"varint,38,opt,name=equipment_polish_attempts_used,json=equipmentPolishAttemptsUsed,proto3" json:"equipment_polish_attempts_used,omitempty"`        // V3 装备智能定档连磨：首次实际消耗打磨手数（1..8）。
+	EquipmentActualGoldSpent     uint64 `protobuf:"varint,39,opt,name=equipment_actual_gold_spent,json=equipmentActualGoldSpent,proto3" json:"equipment_actual_gold_spent,omitempty"`                 // V3 装备智能定档连磨：首次实际扣除银两（含代打费）。
+	WantedOrderId                uint64 `protobuf:"varint,40,opt,name=wanted_order_id,json=wantedOrderId,proto3" json:"wanted_order_id,omitempty"`                                                    // V5 西市悬赏求书：首次发榜/撤单/揭榜对应的悬赏单号。
+	WantedOrderGold              uint64 `protobuf:"varint,41,opt,name=wanted_order_gold,json=wantedOrderGold,proto3" json:"wanted_order_gold,omitempty"`                                              // V5 西市悬赏求书：首次托管、全额退还或揭榜净结算银两。
+	SkillLoadoutRentedSlots      uint32 `protobuf:"varint,42,opt,name=skill_loadout_rented_slots,json=skillLoadoutRentedSlots,proto3" json:"skill_loadout_rented_slots,omitempty"`                    // 7 套流派方案槽位租用：首次操作后的租用额外套数（1..5）。
+	SkillLoadoutRentExpiresAtSec uint64 `protobuf:"varint,43,opt,name=skill_loadout_rent_expires_at_sec,json=skillLoadoutRentExpiresAtSec,proto3" json:"skill_loadout_rent_expires_at_sec,omitempty"` // 7 套流派方案槽位租用：首次操作后的统一到期 Unix 秒。
+	SkillLoadoutRentSpentDiamond uint64 `protobuf:"varint,44,opt,name=skill_loadout_rent_spent_diamond,json=skillLoadoutRentSpentDiamond,proto3" json:"skill_loadout_rent_spent_diamond,omitempty"`   // 7 套流派方案槽位租用：首次实际扣除的真实灵石数。
 	unknownFields                protoimpl.UnknownFields
 	sizeCache                    protoimpl.SizeCache
 }
@@ -387,6 +390,27 @@ func (x *ClientRequestRecord) GetWantedOrderId() uint64 {
 func (x *ClientRequestRecord) GetWantedOrderGold() uint64 {
 	if x != nil {
 		return x.WantedOrderGold
+	}
+	return 0
+}
+
+func (x *ClientRequestRecord) GetSkillLoadoutRentedSlots() uint32 {
+	if x != nil {
+		return x.SkillLoadoutRentedSlots
+	}
+	return 0
+}
+
+func (x *ClientRequestRecord) GetSkillLoadoutRentExpiresAtSec() uint64 {
+	if x != nil {
+		return x.SkillLoadoutRentExpiresAtSec
+	}
+	return 0
+}
+
+func (x *ClientRequestRecord) GetSkillLoadoutRentSpentDiamond() uint64 {
+	if x != nil {
+		return x.SkillLoadoutRentSpentDiamond
 	}
 	return 0
 }
@@ -770,7 +794,7 @@ var File_proto_common_component_client_request_ledger_comp_proto protoreflect.Fi
 
 const file_proto_common_component_client_request_ledger_comp_proto_rawDesc = "" +
 	"\n" +
-	"7proto/common/component/client_request_ledger_comp.proto\"\xcf\x10\n" +
+	"7proto/common/component/client_request_ledger_comp.proto\"\x9d\x12\n" +
 	"\x13ClientRequestRecord\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\rR\x04kind\x12 \n" +
@@ -813,7 +837,10 @@ const file_proto_common_component_client_request_ledger_comp_proto_rawDesc = "" 
 	"\x1eequipment_polish_attempts_used\x18& \x01(\rR\x1bequipmentPolishAttemptsUsed\x12=\n" +
 	"\x1bequipment_actual_gold_spent\x18' \x01(\x04R\x18equipmentActualGoldSpent\x12&\n" +
 	"\x0fwanted_order_id\x18( \x01(\x04R\rwantedOrderId\x12*\n" +
-	"\x11wanted_order_gold\x18) \x01(\x04R\x0fwantedOrderGold\"\xfe\x03\n" +
+	"\x11wanted_order_gold\x18) \x01(\x04R\x0fwantedOrderGold\x12;\n" +
+	"\x1askill_loadout_rented_slots\x18* \x01(\rR\x17skillLoadoutRentedSlots\x12G\n" +
+	"!skill_loadout_rent_expires_at_sec\x18+ \x01(\x04R\x1cskillLoadoutRentExpiresAtSec\x12F\n" +
+	" skill_loadout_rent_spent_diamond\x18, \x01(\x04R\x1cskillLoadoutRentSpentDiamond\"\xfe\x03\n" +
 	"\x1dEquipmentMaterialRewardLedger\x12'\n" +
 	"\x10day_starts_at_ms\x18\x01 \x01(\x04R\rdayStartsAtMs\x12!\n" +
 	"\fearned_today\x18\x02 \x01(\rR\vearnedToday\x12'\n" +

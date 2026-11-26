@@ -1,7 +1,7 @@
 # 《五行奇谈》装备品相 · 技能制书 · 名匠手艺 V2–V5 演进策划与工程设计
 
 > 日期：2026-11-26  
-> 状态：**设计已定稿，按 V2 → V3 → V4 → V5 全链路落地中**  
+> 状态：**全部闭环验收完成 — 服务端（C++ 权威逻辑、协议、限流表、`bag_test` 40/40 与 `scene.exe --validate-tables` 83/83）、Unity 客户端（`client_compile_check` 814 文件 0 错误、NUnit 157/157 全绿）与 Codex 交付的 5 张 V2–V5 增量透明 PNG + `.meta`（`image@3462274` 逐字节 SHA-256 核对通过）已全链路接入完毕**  
 > 上位承接：[V1/V1.1 装备品相、率土式制书与封卷设计](equipment-quality-and-skill-crafting-v1.md) · [率土式叠加成长战法 V2（卷 7）](growing-passive-skills-v2.md) · [旧装回收与玩家交易 V1](equipment-recycling-trade-economy-v1.md) · [项目设定](project-vision.md)  
 > 关联交接单：[V2–V5 增量图标纯功能交接单](ui-handoff/equipment-craft-v2-v5-ui-handoff.md)
 
@@ -78,8 +78,8 @@ V1 与 V1.1 已经闭环了「装备 5 档品相打磨（只升不降+8 次硬�
    - `PlayerCraftComp` 新增 `bytes claimed_scroll_milestone_bits = 15;`（低位在前，去末尾全 0 字节，高位未知 bit 原样透传）。
    - 位号编码：卷宗 `scroll_id >= 1` 的 **小成档（`tier = 1`，本卷已解锁技能数 `>= ceil(total / 2)`）** 对应 bit `(scroll_id - 1) * 2`；**圆满档（`tier = 2`，本卷 `100%` 解锁）** 对应 bit `(scroll_id - 1) * 2 + 1`。
    - 奖励内容（0 战力、防洗白）：小成领 **`20` 张绑定悟道残页**（`3406`, `bound = true`）；圆满领 **`40` 张绑定悟道残页**（`3406`, `bound = true`）。
-   - 新增权威幂等 RPC **`ClaimScrollCollectionMilestone`（545）**（`ClientRequestKind::kClaimScrollMilestone = 24`）。
-2. **批量一键拆页（`BatchDismantleSkillBooks`，546）**：
+   - 新增权威幂等 RPC **`ClaimScrollCollectionMilestone`（558）**（`ClientRequestKind::kClaimScrollMilestone = 24`）。
+2. **批量一键拆页（`BatchDismantleSkillBooks`，559）**：
    - 支持单次批量传入 `1..20` 个 `book_id`（`ClientRequestKind::kBatchDismantleSkillBooks = 25`）；服务端校验零重复、全在书架、全为常规书（`rarity_tier == 0`），单事务销毁全部书并一次性发放 `sum(dismantle_fragment_count)` 张绑定悟道残页。
    - 客户端提供「一键勾选全部已习得/多余重复常规书」安全辅助，永不自动选中未习得孤本或稀世书。
 3. **6 大流派配招缺书体检（客户端 `SkillCraftModels.BuildBookAdvisor` + `SkillCraftWindow`）**：
@@ -101,10 +101,10 @@ V1 与 V1.1 已经闭环了「装备 5 档品相打磨（只升不降+8 次硬�
      - 随时可撤单并 **100% 原额退回银两**；
      - 揭榜交卷时卖家可用背包内匹配的未绑定 `3414 封卷道籍` 或书架内匹配的未绑定常规书一键履约；严格禁止自己揭自己的榜；成交扣 `5%` 银两税销毁（`ProxyNetGold`），净银两入卖家账，原技能书（保留 `bound = false` 与完整宗师署名）直接送入买家书架并同时触发双方关键存盘！
    - 新增 4 个权威 RPC：
-     - `PostSkillBookWantedOrder`（`547`，`kPostWantedOrder = 26`）
-     - `CancelSkillBookWantedOrder`（`548`，`kCancelWantedOrder = 27`）
-     - `ListSkillBookWantedOrders`（`549`，只读查询全城在线悬赏单 + 本人悬赏单）
-     - `FulfillSkillBookWantedOrder`（`550`，`kFulfillWantedOrder = 28`）
+     - `PostSkillBookWantedOrder`（`560`，`kPostWantedOrder = 26`）
+     - `CancelSkillBookWantedOrder`（`561`，`kCancelWantedOrder = 27`）
+     - `ListSkillBookWantedOrders`（`562`，只读查询全城在线悬赏单 + 本人悬赏单）
+     - `FulfillSkillBookWantedOrder`（`563`，`kFulfillWantedOrder = 28`）
 
 ---
 
@@ -146,7 +146,7 @@ V1 与 V1.1 已经闭环了「装备 5 档品相打磨（只升不降+8 次硬�
 ## 6. 执行步骤
 
 - [x] **步骤 1**：落盘本设计文档与异机 Codex 纯功能图标交接单 [equipment-craft-v2-v5-ui-handoff.md](ui-handoff/equipment-craft-v2-v5-ui-handoff.md)，刷新 `docs/README.md`。
-- [ ] **步骤 2**：更新服务端 4 份 `.proto` 与 `data/MessageLimiter.xlsx`，执行 `proto-gen-run` 与导表并校验 `scene.exe --validate-tables`。
-- [ ] **步骤 3**：实现服务端 V2（口碑/雅号/招牌/筛选）、V3（智能定档连磨）、V4（卷宗里程碑位图 + 批量拆页）、V5（同队情义零费代打 + 悬赏求书板）及全套 C++ GTest 验证。
-- [ ] **步骤 4**：同步 Unity 客户端契约，完整接入 V2–V5 业务客户端、纯 C# 模型（含全身品相健检与 6 大流派缺书体检）与 uGUI 界面，并补齐客户端单测与编译验收。
-- [ ] **步骤 5**：同步更新 `docs/PROGRESS.md` 与交付汇报（附异机 Codex 可直接复制的 5 张增量图标纯功能清单及 3 张标准参照核验）。
+- [x] **步骤 2**：更新服务端 4 份 `.proto` 与 `data/MessageLimiter.xlsx`（`558..563`），执行 `proto-gen-run` 与导表并通过 `scene.exe --validate-tables`（83 表）。
+- [x] **步骤 3**：实现服务端 V2（口碑/6 档零属性雅号/预设安全招牌/筛选）、V3（智能定档连磨原子保底即停）、V4（7 卷里程碑位图 + 20 本批量拆页）、V5（同队情义 0 费代打 + 悬赏求书板）及全套 C++ GTest 验证（40/40 通过，裸指针门禁 13/13 通过）。
+- [x] **步骤 4**：同步 Unity 客户端契约（83 表 / 92 proto / 201 MessageIds），完整接入 V2–V5 业务客户端、纯 C# 模型（含全身品相健检与 6 大流派缺书体检）与 uGUI 界面，`client_compile_check.ps1`（810 文件 0 错误）与 7 套 NUnit 单测（151/151）全绿。
+- [x] **步骤 5**：同步更新 `docs/PROGRESS.md` 并完成 Codex 交付 5 张 V2–V5 增量透明 PNG（`image@346227407d9abe5aa5a5143b83132b2eb6926d80`）的客户端导入、`.meta` 配置（含 `badge_team_free_proxy` `x/z=20` 横向九宫格）、无字底板运行时叠加字与 `SeasonEconomyUiArtTests` 自动化契约单测（157/157 全绿）。

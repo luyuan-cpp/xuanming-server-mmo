@@ -47,22 +47,33 @@ func globalJoin(l *JoinQueueLogic, in *pb.JoinQueueRequest, required uint32) (*p
 	if binding == "" || in.RequestId == "" || len(in.RequestId) > 64 || in.NetworkPlanId == "" {
 		return &pb.JoinQueueResponse{ErrorCode: constants.ErrProbeRequired, ErrorMessage: tipErr(constants.ErrProbeRequired, "请完成地域延迟探测后重试")}, nil
 	}
-	if in.GetIsWuxingTower() {
+	if in.GetIsWuxingTower() || in.GetTrialVowMask() != 0 {
 		reqHigh := binary.BigEndian.Uint64(parsed[:8])
 		reqLow := binary.BigEndian.Uint64(parsed[8:])
 		key := &pb.MatchDirectIntentRecord{Kind: 1, OwnerId: d.PlayerId, RequestHigh: reqHigh, RequestLow: reqLow}
 		payload, merr := proto.MarshalOptions{Deterministic: true}.Marshal(in)
 		if merr != nil {
-			return &pb.JoinQueueResponse{ErrorCode: constants.ErrInternal, ErrorMessage: tipErr(constants.ErrInternal, "五行幻境开战编码失败")}, nil
+			return &pb.JoinQueueResponse{ErrorCode: constants.ErrInternal, ErrorMessage: tipErr(constants.ErrInternal, "试炼开战编码失败")}, nil
 		}
-		f, derr := reserveGlobalDirect(l.ctx, l.svcCtx, key, payload, pb.MatchMode_MATCH_MODE_PVE_SOLO, in.BattleConfigId, []uint64{d.PlayerId}, directOptions{isWuxingTower: true})
+		directMode := in.Mode
+		if in.GetIsWuxingTower() {
+			directMode = pb.MatchMode_MATCH_MODE_PVE_SOLO
+		}
+		f, derr := reserveGlobalDirect(l.ctx, l.svcCtx, key, payload, directMode, in.BattleConfigId, []uint64{d.PlayerId}, directOptions{
+			isWuxingTower: in.GetIsWuxingTower(),
+			trialVowMask:  in.GetTrialVowMask(),
+		})
 		if derr != nil {
-			return joinRejection(derr, "五行幻境开战暂不可用"), nil
+			return joinRejection(derr, "试炼开战暂不可用"), nil
 		}
 		if f != nil && f.State < 4 {
 			launchGlobalFormation(l.svcCtx, f)
 		}
-		metrics.ObserveGlobalFlow("join", "wuxing_tower_accepted")
+		if in.GetIsWuxingTower() {
+			metrics.ObserveGlobalFlow("join", "wuxing_tower_accepted")
+		} else {
+			metrics.ObserveGlobalFlow("join", "trial_vow_accepted")
+		}
 		return &pb.JoinQueueResponse{QueueTicket: f.GetOperationId()}, nil
 	}
 
@@ -160,6 +171,10 @@ type directOptions struct {
 	customDuelRules *battlepb.CustomDuelRules
 	// isWuxingTower 为真:五行幻境单人周常爬塔,由 Scene 权威注入层数与符印上下文。
 	isWuxingTower bool
+	// trialVowMask 非 0:五行试炼志 V3 自选试炼誓约位图（bit 0..3）。
+	trialVowMask uint32
+	// jianghuDuelContext 非空:天墉生死状一期开局冻结上下文，原样写入 CreateBattleRequest。
+	jianghuDuelContext *battlepb.JianghuDuelBattleContext
 }
 
 func reserveGlobalDirect(ctx context.Context, s *svc.ServiceContext, key *pb.MatchDirectIntentRecord, payload []byte, mode pb.MatchMode, config uint32, members []uint64, opts directOptions) (*pb.MatchFormationRecord, error) {
@@ -268,6 +283,13 @@ func buildGlobalDirect(ctx context.Context, s *svc.ServiceContext, mode pb.Match
 		}
 	}
 	f.IsWuxingTower = opts.isWuxingTower
+	f.TrialVowMask = opts.trialVowMask
+	if opts.jianghuDuelContext != nil {
+		f.JianghuDuelContext, e = proto.MarshalOptions{Deterministic: true}.Marshal(opts.jianghuDuelContext)
+		if e != nil {
+			return nil, nil, e
+		}
+	}
 	var group []*pb.MatchAuthorityTicketRecord
 	for _, pid := range members {
 		ticket := tickets[pid]
@@ -368,7 +390,7 @@ func runGlobalFormation(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
 	}
 	if len(f.CreateRequest) == 0 {
 		if globalDestroy(s.Authority, f) {
-			globalAbortPrepared(s, f)
+			globalAbortPrepared(s, f, false)
 		}
 		return
 	}
@@ -408,7 +430,7 @@ func runGlobalFormation(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
 		return
 	}
 	if result.State == battlepb.BattleCreationState_BATTLE_CREATION_ABORTED {
-		globalAbortPrepared(s, f)
+		globalAbortPrepared(s, f, false)
 		return
 	}
 	request := &battlepb.CreateBattleRequest{}
@@ -451,7 +473,7 @@ func runGlobalFormation(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
 		}
 	}
 	if globalDestroy(s.Authority, f) {
-		globalAbortPrepared(s, f)
+		globalAbortPrepared(s, f, false)
 	} else {
 		s.HoldRelay(errors.New("匹配外部结局 UNKNOWN"))
 		s.HoldRelay(s.Authority.Unknown(ctx, f))
@@ -607,7 +629,7 @@ func globalRequestBattleTicket(ctx context.Context, s *svc.ServiceContext, pid, 
 
 // globalAbortPrepared 收尾发房前失败的成局。culprits 是确定由自己导致失败的成员(0 忽略):
 // 没有 Create 原件时,单排肇事者的票终止、其余成员回队(authority.FinishFailed);有原件时等唯一 SQL 终局。
-func globalAbortPrepared(s *svc.ServiceContext, f *pb.MatchFormationRecord, culprits ...uint64) {
+func globalAbortPrepared(s *svc.ServiceContext, f *pb.MatchFormationRecord, skipSilverRefund bool, culprits ...uint64) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	latest, e := s.Authority.Formation(ctx, f.BattleId)
 	cancel()
@@ -631,7 +653,9 @@ func globalAbortPrepared(s *svc.ServiceContext, f *pb.MatchFormationRecord, culp
 		}
 		s.HoldRelay(err)
 		if err == nil && decision == pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT {
-			cancelPrepared(s, prepared, f.BattleId)
+			// CreateRequest 已落库并提交唯一 SQL ABORT：终局发件箱会向 scene 投递 BATTLE_OUTCOME_VOID，
+			// 由 scene 侧 OnBattlePrepareCancelled / OnBattleVoid 原子单次退还普通战书银两并清零标记，绝不与邮件双退。
+			cancelPreparedWithOptions(s, prepared, f.BattleId, false)
 		} else if err == nil {
 			// 这一次没能作废(准入还没关、原实例没应答等)。原实例若已经不在,不必等到截止:记成可疑,取证循环只做只读查询,
 			// 原实例应答就撤出,确认不在就提前作废(global_instance_loss.go)。备战中的成员由作废结算解冻。
@@ -645,7 +669,8 @@ func globalAbortPrepared(s *svc.ServiceContext, f *pb.MatchFormationRecord, culp
 	if e != nil {
 		return
 	}
-	cancelPrepared(s, prepared, f.BattleId)
+	// 无 CreateRequest 时仅当调用方确认已走邮件退还才跳过 scene 在线退银两；若 scene 尚未扣费，scene 侧本身为 0 不退。
+	cancelPreparedWithOptions(s, prepared, f.BattleId, skipSilverRefund)
 	finishCtx, finishCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer finishCancel()
 	// 走到这里的成局都没有 Create 原件（上面有原件的已经返回）。计数只在提交之后打（2026-10-22 评审补）：

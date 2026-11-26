@@ -2517,6 +2517,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartTeamMatchRequest final : publi
     kTargetTeamSizeFieldNumber = 4,
     kMatchModeFieldNumber = 5,
     kRankedRuleVersionFieldNumber = 6,
+    kTrialVowMaskFieldNumber = 7,
   };
   // string request_id = 3;
   void clear_request_id() ;
@@ -2583,11 +2584,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartTeamMatchRequest final : publi
   void _internal_set_ranked_rule_version(::uint32_t value);
 
   public:
+  // uint32 trial_vow_mask = 7;
+  void clear_trial_vow_mask() ;
+  [[nodiscard]] ::uint32_t trial_vow_mask() const;
+  void set_trial_vow_mask(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_trial_vow_mask() const;
+  void _internal_set_trial_vow_mask(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:teampb.StartTeamMatchRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
+      ::google::protobuf::internal::TcParseTable<3, 7,
                           0, 47,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2622,6 +2633,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartTeamMatchRequest final : publi
     ::uint32_t target_team_size_;
     int match_mode_;
     ::uint32_t ranked_rule_version_;
+    ::uint32_t trial_vow_mask_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -9306,6 +9318,30 @@ inline ::uint32_t StartTeamMatchRequest::_internal_ranked_rule_version() const {
 inline void StartTeamMatchRequest::_internal_set_ranked_rule_version(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ranked_rule_version_ = value;
+}
+
+// uint32 trial_vow_mask = 7;
+inline void StartTeamMatchRequest::clear_trial_vow_mask() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trial_vow_mask_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t StartTeamMatchRequest::trial_vow_mask() const {
+  // @@protoc_insertion_point(field_get:teampb.StartTeamMatchRequest.trial_vow_mask)
+  return _internal_trial_vow_mask();
+}
+inline void StartTeamMatchRequest::set_trial_vow_mask(::uint32_t value) {
+  _internal_set_trial_vow_mask(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:teampb.StartTeamMatchRequest.trial_vow_mask)
+}
+inline ::uint32_t StartTeamMatchRequest::_internal_trial_vow_mask() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.trial_vow_mask_;
+}
+inline void StartTeamMatchRequest::_internal_set_trial_vow_mask(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trial_vow_mask_ = value;
 }
 
 // -------------------------------------------------------------------

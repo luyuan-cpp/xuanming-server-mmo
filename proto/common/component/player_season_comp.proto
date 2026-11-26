@@ -10,6 +10,7 @@ message PlayerSeasonSealRecord {
   uint32 battle_points = 4;    // 其中通过正规排位 / PVE 战斗获得的点数
   uint32 catchup_points = 5;   // 其中通过小额快捷追赶补齐的点数
   uint64 revision = 6;         // 本季写操作修订号（切印 / 追赶递增）
+  uint32 last_term = 7;        // 最近写入本记录所属的全局赛季届号（0=历史遗留第1届，跨届自动重置当届12点轻进度）
 }
 
 // 五行幻境·轻肉鸽周常爬塔持久化状态（10 层周常，出塔清空局内符印，位图记录首通层，AGENTS.md §13）。
@@ -51,4 +52,7 @@ message PlayerSeasonComp {
   uint32 equipped_formation_id = 2;               // 五行阵法（0=无/默认，1..5 免费切换）
   WuxingTowerCompState wuxing_tower = 3;          // 五行幻境周常爬塔状态
   repeated SavedBattleBuildBookmark saved_builds = 4; // 战报配装收藏夹（上限 12 条）
+  repeated uint64 unlocked_honor_words = 5;           // 永久零数值纪念徽章动态位图（word=(season_id-1)/64, bit=(season_id-1)%64，永不收回）
+  uint32 retro_honor_target_season_id = 6;            // 玩家手动指定的往季徽章追忆目标赛季 ID（0=自动顺延首个未解锁往季）
+  map<uint32, uint32> retro_honor_progress = 7;       // 未解锁往季的免费追忆溢出点数（满 12 点解锁后删除）
 }

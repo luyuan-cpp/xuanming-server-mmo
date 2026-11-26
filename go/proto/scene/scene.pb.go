@@ -1064,12 +1064,13 @@ func (x *CheckJianghuDuelEligibilityResponse) GetPayerHasSufficientFee() bool {
 }
 
 type PrepareBattleResponse struct {
-	state            protoimpl.MessageState       `protogen:"open.v1"`
-	ErrorMessage     *base.TipInfoMessage         `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`             // 玩家不在/已在战斗等拒绝原因
-	Snapshot         *battle.BattlePlayerSnapshot `protobuf:"bytes,2,opt,name=snapshot,proto3" json:"snapshot,omitempty"`                                         // 冻结成功时返回战斗快照
-	TableFingerprint string                       `protobuf:"bytes,3,opt,name=table_fingerprint,json=tableFingerprint,proto3" json:"table_fingerprint,omitempty"` // scene 侧战斗配表指纹(六张战斗表解析后确定性序列化的 sha256 前 16 字节 hex);match 比对全员一致
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state                   protoimpl.MessageState       `protogen:"open.v1"`
+	ErrorMessage            *base.TipInfoMessage         `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`                                       // 玩家不在/已在战斗等拒绝原因
+	Snapshot                *battle.BattlePlayerSnapshot `protobuf:"bytes,2,opt,name=snapshot,proto3" json:"snapshot,omitempty"`                                                                   // 冻结成功时返回战斗快照
+	TableFingerprint        string                       `protobuf:"bytes,3,opt,name=table_fingerprint,json=tableFingerprint,proto3" json:"table_fingerprint,omitempty"`                           // scene 侧战斗配表指纹(六张战斗表解析后确定性序列化的 sha256 前 16 字节 hex);match 比对全员一致
+	JianghuSilverFeeCharged bool                         `protobuf:"varint,4,opt,name=jianghu_silver_fee_charged,json=jianghuSilverFeeCharged,proto3" json:"jianghu_silver_fee_charged,omitempty"` // true = 本次备战已为天墉生死状普通战书扣除了发起方队长银两
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *PrepareBattleResponse) Reset() {
@@ -1123,12 +1124,21 @@ func (x *PrepareBattleResponse) GetTableFingerprint() string {
 	return ""
 }
 
+func (x *PrepareBattleResponse) GetJianghuSilverFeeCharged() bool {
+	if x != nil {
+		return x.JianghuSilverFeeCharged
+	}
+	return false
+}
+
 type CancelBattlePrepareRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	BattleId      uint64                 `protobuf:"varint,2,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"` // 不匹配 InBattleComp.battle_id 时忽略(防迟到取消)
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	BattleId uint64                 `protobuf:"varint,2,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"` // 不匹配 InBattleComp.battle_id 时忽略(防迟到取消)
+	// true = 调用方（match）已接管该 battle_id 的普通战书银两邮件退还，scene 取消备战时不得重复退银两。
+	SkipJianghuSilverRefund bool `protobuf:"varint,3,opt,name=skip_jianghu_silver_refund,json=skipJianghuSilverRefund,proto3" json:"skip_jianghu_silver_refund,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *CancelBattlePrepareRequest) Reset() {
@@ -1173,6 +1183,13 @@ func (x *CancelBattlePrepareRequest) GetBattleId() uint64 {
 		return x.BattleId
 	}
 	return 0
+}
+
+func (x *CancelBattlePrepareRequest) GetSkipJianghuSilverRefund() bool {
+	if x != nil {
+		return x.SkipJianghuSilverRefund
+	}
+	return false
 }
 
 // 只封原节点实例已登记的≤through_generation；响应仅表示已采纳，不是排空或持久化证据。
@@ -1319,14 +1336,16 @@ const file_proto_scene_scene_proto_rawDesc = "" +
 	"#CheckJianghuDuelEligibilityResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x128\n" +
 	"\aplayers\x18\x02 \x03(\v2\x1e.JianghuPlayerEligibilityEntryR\aplayers\x127\n" +
-	"\x18payer_has_sufficient_fee\x18\x03 \x01(\bR\x15payerHasSufficientFee\"\xad\x01\n" +
+	"\x18payer_has_sufficient_fee\x18\x03 \x01(\bR\x15payerHasSufficientFee\"\xea\x01\n" +
 	"\x15PrepareBattleResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x121\n" +
 	"\bsnapshot\x18\x02 \x01(\v2\x15.BattlePlayerSnapshotR\bsnapshot\x12+\n" +
-	"\x11table_fingerprint\x18\x03 \x01(\tR\x10tableFingerprint\"V\n" +
+	"\x11table_fingerprint\x18\x03 \x01(\tR\x10tableFingerprint\x12;\n" +
+	"\x1ajianghu_silver_fee_charged\x18\x04 \x01(\bR\x17jianghuSilverFeeCharged\"\x93\x01\n" +
 	"\x1aCancelBattlePrepareRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1b\n" +
-	"\tbattle_id\x18\x02 \x01(\x04R\bbattleId\"\x7f\n" +
+	"\tbattle_id\x18\x02 \x01(\x04R\bbattleId\x12;\n" +
+	"\x1askip_jianghu_silver_refund\x18\x03 \x01(\bR\x17skipJianghuSilverRefund\"\x7f\n" +
 	"\x1bSealAccountRoleTradeRequest\x12.\n" +
 	"\x04seal\x18\x01 \x01(\v2\x1a.common.base.RoleTradeSealR\x04seal\x120\n" +
 	"\x04auth\x18\x02 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth*\x80\x01\n" +

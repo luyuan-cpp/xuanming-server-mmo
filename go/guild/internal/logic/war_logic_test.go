@@ -106,4 +106,12 @@ func TestGuildWarRPCsFailClosedWithoutSessionOrWarDeps(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, constants.ErrWarNotOpen, startResp.GetErrorMessage().GetId())
+
+	feudResp, err := l.IssueGuildWarFeud(ctx, &pb.IssueGuildWarFeudRequest{TargetGuildId: 20})
+	require.NoError(t, err)
+	require.Equal(t, constants.ErrWarNotOpen, feudResp.GetErrorMessage().GetId())
+
+	respondResp, err := l.RespondGuildWarFeud(ctx, &pb.RespondGuildWarFeudRequest{FeudId: 1, Accept: true})
+	require.NoError(t, err)
+	require.Equal(t, constants.ErrWarNotOpen, respondResp.GetErrorMessage().GetId())
 }

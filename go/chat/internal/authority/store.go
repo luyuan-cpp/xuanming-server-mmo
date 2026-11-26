@@ -82,6 +82,7 @@ type Service interface {
 	Pull(context.Context, *chatpb.PullChatHistoryRequest, int) ([]*chatpb.ChatMessage, error)
 	RetractWorld(context.Context, uint64, int64, string) (bool, uint32, error)
 	ReportMessage(context.Context, *chatpb.ReportChatRequest) (uint32, error)
+	PublishSystemWorldNotice(context.Context, *chatpb.PublishSystemWorldNoticeRequest) (SendResult, error)
 }
 
 type Store struct {

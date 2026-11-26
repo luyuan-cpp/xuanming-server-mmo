@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"match/internal/authority"
+	"match/internal/catalog"
 	"match/internal/constants"
 
 	matchpb "proto/match"
@@ -88,6 +89,14 @@ func (s *Service) StartTeamMatch(ctx context.Context, caller uint64, in *teampb.
 		}
 		if mode != matchpb.MatchMode_MATCH_MODE_PVP_TEAM && size > uint32(len(snap.Record.Members)) && s.svcCtx.Config.Team.FillQueueDisabled {
 			return s.matchReject(ctx, caller, ErrDungeonNotOpen, 0, &snap)
+		}
+		if vowMask := in.GetTrialVowMask(); vowMask != 0 {
+			if !catalog.ValidTrialVowMask(vowMask) ||
+				mode != matchpb.MatchMode_MATCH_MODE_PVE_TEAM ||
+				size != uint32(len(snap.Record.Members)) ||
+				!s.svcCtx.ActiveCatalog().SupportsTrialVows(in.BattleConfigId) {
+				return s.matchReject(ctx, caller, ErrDungeonNotOpen, 0, &snap)
+			}
 		}
 		roster := MatchRoster(snap.Record)
 		if mode == matchpb.MatchMode_MATCH_MODE_PVP_TEAM && in.GetRankedRuleVersion() != 0 {

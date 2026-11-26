@@ -26,6 +26,8 @@ message SeasonRuleTable {
 	string desc = 15;
 	string honor_title_name = 16;
 	string honor_badge_icon_key = 17;
+	uint32 cycle_order = 18;
+	uint32 cycle_duration_days = 19;
 }
 
 message SeasonRuleTableData {

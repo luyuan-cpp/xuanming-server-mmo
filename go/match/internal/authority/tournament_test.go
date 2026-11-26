@@ -25,7 +25,7 @@ func TestTournamentSeasonWindowsAndSchemaRegistered(t *testing.T) {
 	require.Equal(t, s1.KnockoutStartMs+2*millisPerDay, s1.SettleStartMs)
 	require.Equal(t, s1.SettleStartMs+5*millisPerDay, s1.EndMs)
 
-	// 校验 10 张锦标赛权威表(含 V2 小局表/每日观道表与 V3 神机竞猜表)全部登记在 Tables() 迁移清单中。
+	// 校验 9 张锦标赛权威表(含 V2 小局表与 V3 神机竞猜表；原 V2 每日观道表已移除)全部登记在 Tables() 迁移清单中。
 	found := map[string]bool{}
 	for _, msg := range Tables() {
 		found[string(msg.ProtoReflect().Descriptor().Name())] = true
@@ -39,7 +39,6 @@ func TestTournamentSeasonWindowsAndSchemaRegistered(t *testing.T) {
 		"MatchTournamentMatchGameRecord",
 		"MatchTournamentCheerRecord",
 		"MatchTournamentRewardRecord",
-		"MatchTournamentSaluteRecord",
 		"MatchTournamentPredictionRecord",
 	} {
 		require.True(t, found[want], "missing tournament authority table %s in Tables()", want)

@@ -10,6 +10,8 @@
 #include "proto/common/component/player_festival_beast_comp.pb.h"
 #include "player/system/player_travel_pass.h"
 #include "proto/common/component/player_travel_pass_comp.pb.h"
+#include "player/system/player_jianghu.h"
+#include "proto/common/component/player_jianghu_comp.pb.h"
 #include "proto/scene/player_activity.pb.h"
 #include "proto/match/match_service.pb.h"
 #include "player/system/player_attribute.h"
@@ -1050,6 +1052,11 @@ namespace
 				message.set_season_seal_progress_after(result->season_seal_progress_after());
 				message.set_season_seal_max_points(result->season_seal_max_points());
 				message.set_season_honor_newly_unlocked(result->season_honor_newly_unlocked());
+				message.set_retro_honor_season_id(result->retro_honor_season_id());
+				message.set_retro_honor_points_added(result->retro_honor_points_added());
+				message.set_retro_honor_progress_after(result->retro_honor_progress_after());
+				message.set_retro_honor_max_points(result->retro_honor_max_points());
+				message.set_retro_honor_newly_unlocked(result->retro_honor_newly_unlocked());
 				message.set_level_before(result->level_before());
 				message.set_level_after(result->level_after());
 				message.set_exp_gain(result->exp_gain());
@@ -1618,6 +1625,29 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 			return;
 		}
 	}
+	// 卷四·三境明雷野外首领试炼（boss_trial_kind 12..14）：玩家必须身处对应野外图（八景岛2 / 碧渊水宫5 / 月汐湾3），防原地跨图偷开。
+	if (turnbattle::IsWildBossTrialKind(bossTrialKind) && dungeonRow != nullptr && dungeonRow->scene_id() > 1u)
+	{
+		uint32_t currentSceneConfigId = 0;
+		if (const auto* sceneEntityComp = tlsEcs.actorRegistry.try_get<SceneEntityComp>(player);
+			sceneEntityComp != nullptr && sceneEntityComp->sceneEntity != entt::null)
+		{
+			if (const auto* sceneInfo = tlsEcs.sceneRegistry.try_get<SceneInfoComp>(sceneEntityComp->sceneEntity))
+			{
+				currentSceneConfigId = sceneInfo->scene_config_id();
+			}
+		}
+		if (currentSceneConfigId != dungeonRow->scene_id())
+		{
+			LOG_WARN << "[PlayerBattle] PrepareBattle rejected: wild boss trial scene mismatch, player_id=" << playerId
+					 << " battle_id=" << battleId
+					 << " battle_config_id=" << request.battle_config_id()
+					 << " required_scene=" << dungeonRow->scene_id()
+					 << " current_scene=" << currentSceneConfigId;
+			response.mutable_error_message()->set_id(kFeatureUnavailable);
+			return;
+		}
+	}
 	const bool isFestivalBeast = request.has_activity_context() &&
 								 request.activity_context().kind() == ::BATTLE_ACTIVITY_KIND_FESTIVAL_BEAST &&
 								 request.activity_context().has_festival_beast();
@@ -1625,6 +1655,8 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 							request.match_mode() == turnbattle::kMatchModeGuildWarSiege;
 	const bool isWuxingTower = request.is_wuxing_tower();
 	const bool isCustomDuel = request.has_custom_duel_rules();
+	const bool isJianghuDuel =
+		request.match_mode() == static_cast<uint32_t>(match::MATCH_MODE_JIANGHU_DUEL);
 
 	::WuxingTowerBattleContext towerCtx;
 	if (isWuxingTower)
@@ -1678,9 +1710,9 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 		return;
 	}
 
-	// 免费预设娱乐场、正式人宠会武、首领试炼、瑞兽迎春、五行幻境爬塔、道友切磋坊、帮会帮战与归元城演武/残局/奇谈均以局内满血蓝无耗材快照入场（不改局外永久血蓝）。
+	// 免费预设娱乐场、正式人宠会武、首领试炼、瑞兽迎春、五行幻境爬塔、道友切磋坊、帮会帮战、天墉生死状与归元城演武/残局/奇谈均以局内满血蓝无耗材快照入场（不改局外永久血蓝）。
 	const bool isolateBattleTempState =
-		useFreePreset || isFormalRanked || isBossTrial || isGuardRescue || isFestivalBeast || isWuxingTower || isCustomDuel || isGuildWar || isNpcIsolatedEncounter;
+		useFreePreset || isFormalRanked || isBossTrial || isGuardRescue || isFestivalBeast || isWuxingTower || isCustomDuel || isGuildWar || isJianghuDuel || isNpcIsolatedEncounter;
 	if (!isolateBattleTempState)
 	{
 		if (const auto* attrs = tlsEcs.actorRegistry.try_get<BaseAttributesComp>(player);
@@ -1758,6 +1790,20 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 	{
 		heldLines[item.item_table_id()] += item.count();
 	}
+	uint64_t jianghuSilverToDeduct = 0;
+	if (isJianghuDuel && request.has_jianghu_duel_fee())
+	{
+		const uint32_t feeErr = PlayerJianghuSystem::ValidateAndCollectPrepareFee(
+			player, battleId, request.jianghu_duel_fee(), heldLines, jianghuSilverToDeduct);
+		if (feeErr != kSuccess)
+		{
+			LOG_WARN << "[PlayerBattle] PrepareBattle rejected: jianghu duel fee check failed, player_id=" << playerId
+					 << " battle_id=" << battleId << " err=" << feeErr;
+			response.clear_snapshot();
+			response.mutable_error_message()->set_id(feeErr);
+			return;
+		}
+	}
 	if (!heldLines.empty())
 	{
 		const uint64_t nowMs = TimeSystem::NowMillisecondsUTC();
@@ -1771,6 +1817,23 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 			response.mutable_error_message()->set_id(holdError == kServiceUnavailable ? kServiceUnavailable : kFeatureUnavailable);
 			return;
 		}
+	}
+	if (jianghuSilverToDeduct > 0)
+	{
+		const uint32_t debitErr = PlayerJianghuSystem::CommitPrepareSilverFee(player, battleId, jianghuSilverToDeduct);
+		if (debitErr != kSuccess)
+		{
+			if (!heldLines.empty())
+			{
+				(void)BagService::ReleaseHold(player, battleId);
+			}
+			LOG_WARN << "[PlayerBattle] PrepareBattle rejected: jianghu silver fee debit failed, player_id=" << playerId
+					 << " battle_id=" << battleId << " amount=" << jianghuSilverToDeduct << " err=" << debitErr;
+			response.clear_snapshot();
+			response.mutable_error_message()->set_id(debitErr);
+			return;
+		}
+		response.set_jianghu_silver_fee_charged(true);
 	}
 
 	// 上面已确认没有冻结且快照完整，此处才创建本次备战状态。
@@ -1797,10 +1860,10 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 	// (重建不出来,战斗闸就看不到这场战斗)。所以没问到时有界重试,重发前确认 InBattleComp 仍是这一局。
 	const uint64_t ttlSec = WriteBattleLockOnPrepare(playerId, battleId);
 
-	// 预留是存档数据,1 秒内落盘(不等定时存盘):节点在这之后崩溃,重登时冻结由锁重建,预留也已在盘上。
-	if (!heldLines.empty())
+	// 预留与普通生死状银两预扣均属存档资产数据,1 秒内落盘(不等定时存盘):节点在这之后崩溃,重登时状态已在盘上。
+	if (!heldLines.empty() || jianghuSilverToDeduct > 0)
 	{
-		PlayerLifecycleSystem::RequestKeyProgressSave(player, "battle_item_hold_placed");
+		PlayerLifecycleSystem::RequestKeyProgressSave(player, jianghuSilverToDeduct > 0 ? "jianghu_duel_fee_debited" : "battle_item_hold_placed");
 	}
 
 	LOG_INFO << "[PlayerBattle] Battle preparation freeze completed: player_id=" << playerId
@@ -1870,6 +1933,8 @@ void PlayerBattleSystem::CancelBattlePrepare(const ::CancelBattlePrepareRequest&
 	const auto* inBattle = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
 	if (inBattle == nullptr)
 	{
+		// 即使 PREPARING 冻结已先被 ReapExpiredFreezes 回收,仍须对本 battle_id 幂等核销/退还待退的普通战书银两,防止 500 银两永久滞留。
+		PlayerJianghuSystem::OnBattlePrepareCancelled(player, battleId, request.skip_jianghu_silver_refund());
 		// 已被结算/作废收尾,幂等 OK
 		LOG_INFO << "[PlayerBattle] CancelBattlePrepare: no battle in progress;idempotently ignored, player_id="
 				 << playerId << " battle_id=" << battleId;
@@ -1895,6 +1960,7 @@ void PlayerBattleSystem::CancelBattlePrepare(const ::CancelBattlePrepareRequest&
 
 	ClearBattleFreeze(player, playerId, battleId);
 	PlayerFestivalBeastSystem::OnBattlePrepareCancelledOrVoid(player, battleId, TimeSystem::NowMillisecondsUTC());
+	PlayerJianghuSystem::OnBattlePrepareCancelled(player, battleId, request.skip_jianghu_silver_refund());
 	// match 取消备战 = 这一局不会开打、也不会有结算:道具预留一并释放(docs/design/battle-item-reservation.md)。
 	// 玩家不在本节点时(上面的离线分支)预留在他的存档里,下次加载后由 reaper 的预留复核按 SQL 终局收尾。
 	ReleaseBattleItemHold(player, playerId, battleId, "prepare_cancelled");
@@ -2580,6 +2646,14 @@ void RecordBattleResult(entt::entity player, const uint64_t playerId, const ::Ba
         entry.set_season_seal_max_points(seasonDelta->maxPoints);
         entry.set_season_honor_newly_unlocked(seasonDelta->honorNewlyUnlocked);
     }
+    if (seasonDelta != nullptr && seasonDelta->retroHonorSeasonId != 0u)
+    {
+        entry.set_retro_honor_season_id(seasonDelta->retroHonorSeasonId);
+        entry.set_retro_honor_points_added(seasonDelta->retroHonorPointsAdded);
+        entry.set_retro_honor_progress_after(seasonDelta->retroHonorProgressAfter);
+        entry.set_retro_honor_max_points(seasonDelta->retroHonorMaxPoints);
+        entry.set_retro_honor_newly_unlocked(seasonDelta->retroHonorNewlyUnlocked);
+    }
     if (materialDelta != nullptr)
     {
         entry.set_material_credit_units_added(materialDelta->totalUnitsAdded);
@@ -2608,6 +2682,9 @@ void RecordBattleResult(entt::entity player, const uint64_t playerId, const ::Ba
         }
         entry.set_trial_new_solo_best(trialDelta->newSoloBest);
         entry.set_trial_new_coop_best(trialDelta->newCoopBest);
+        entry.set_trial_vow_mask(trialDelta->vowMask);
+        entry.set_trial_new_vow_best(trialDelta->newVowBest);
+        entry.set_trial_battle_id(trialDelta->battleId);
     }
     const bool truncated = entry.lines_truncated();
     const int currencyLines = entry.currencies_size();
@@ -2719,6 +2796,7 @@ PlayerInboxExecResult ApplyVoidSettlement(entt::entity player, const ::BattleSet
     }
     ReleaseBattleItemHold(player, playerId, battleId, "void_settlement");
     PlayerFestivalBeastSystem::OnBattlePrepareCancelledOrVoid(player, battleId, TimeSystem::NowMillisecondsUTC());
+    PlayerJianghuSystem::OnBattleVoid(player, battleId);
     RecordBattleResult(player, playerId, settlement, SettlementCurrencyGains{}, ItemCountMap{}, ItemCountMap{},
                        /*itemsMailed=*/false);
     LOG_INFO << "[PlayerBattle] metric=battle_void_settlement_applied player_id=" << playerId << " battle_id=" << battleId
@@ -2915,8 +2993,9 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
         settlement.has_tower_settlement() && settlement.tower_settlement().floor() != 0;
     const bool isNpcIsolatedEncounter =
         turnbattle::IsNpcIsolatedEncounterKind(settlement.boss_trial_kind());
+    const bool isJianghuDuel = settlement.match_mode() == match::MATCH_MODE_JIANGHU_DUEL;
     const bool creditsMaterialReward =
-        !isWuxingTower && !isNpcIsolatedEncounter && PlayerEquipmentMaterialRewardSystem::IsEligibleBattle(settlement);
+        !isWuxingTower && !isNpcIsolatedEncounter && !isJianghuDuel && PlayerEquipmentMaterialRewardSystem::IsEligibleBattle(settlement);
     ClientRequestLedgerComp materialRewardCandidate;
     std::string materialRewardBefore;
     PlayerEquipmentMaterialRewardSystem::BattleCreditDelta materialCreditDelta;
@@ -2954,13 +3033,15 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     battleprogression::BattleProgressionDelta progressionDelta;
     BattleEconomyLedger economyCandidate;
     const BattleEconomyLedger emptyEconomy;
-    battleprogression::PrepareEconomyLedger(
-        ledgerValid ? materialRewardCandidate.battle_economy() : emptyEconomy,
-        currentWeekStartMs, settlement, settlement.exp_gain(), explicitGold,
-        progressionRewards, hasWeeklySilverRule ? &weeklySilverRule : nullptr,
-        economyCandidate, progressionDelta);
-    if (ledgerValid && progressionDelta.ledgerChanged) {
-        *materialRewardCandidate.mutable_battle_economy() = economyCandidate;
+    if (!isJianghuDuel) {
+        battleprogression::PrepareEconomyLedger(
+            ledgerValid ? materialRewardCandidate.battle_economy() : emptyEconomy,
+            currentWeekStartMs, settlement, settlement.exp_gain(), explicitGold,
+            progressionRewards, hasWeeklySilverRule ? &weeklySilverRule : nullptr,
+            economyCandidate, progressionDelta);
+        if (ledgerValid && progressionDelta.ledgerChanged) {
+            *materialRewardCandidate.mutable_battle_economy() = economyCandidate;
+        }
     }
     const bool creditsLedger = creditsMaterialReward || (ledgerValid && progressionDelta.ledgerChanged);
 
@@ -2979,10 +3060,10 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
             festivalBeastCandidate, festivalBeastDelta) != kSuccess) return false;
     }
 
-    // 赛季印进度与五行幻境周常爬塔同在首次收件箱应用时原子入账（瑞兽迎春与归元城演武/残局/奇谈不额外发赛季进度）。
+    // 赛季印进度与五行幻境周常爬塔同在首次收件箱应用时原子入账（瑞兽迎春、天墉生死状与归元城演武/残局/奇谈不额外发赛季进度）。
     const bool creditsSeasonProgress =
         isWuxingTower ||
-        (!isFestivalBeast && !isNpcIsolatedEncounter && PlayerSeasonSystem::ActiveSeasonId(settlementNowMs) != 0 &&
+        (!isFestivalBeast && !isNpcIsolatedEncounter && !isJianghuDuel && PlayerSeasonSystem::ActiveSeasonId(settlementNowMs) != 0 &&
          PlayerSeasonSystem::IsEligibleBattle(settlement));
     PlayerSeasonComp seasonProgressCandidate;
     std::string seasonProgressBefore;
@@ -2999,7 +3080,7 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
 
     // 五行试炼志 V2：同一收件箱原子入账，先制备候选并记录本局增量回显（不改写材料日额度）。
     const bool creditsTrialJournal =
-        !isFestivalBeast && !isWuxingTower && !isNpcIsolatedEncounter && PlayerTrialJournalSystem::HasJournalUpdate(settlement);
+        !isFestivalBeast && !isWuxingTower && !isNpcIsolatedEncounter && !isJianghuDuel && PlayerTrialJournalSystem::HasJournalUpdate(settlement);
     PlayerTrialJournalComp trialJournalCandidate;
     std::string trialJournalBefore;
     PlayerTrialJournalSystem::SettlementDelta trialJournalDelta;
@@ -3014,7 +3095,7 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     // 游历手记（不肝不逼氪双轨活动）：任意合格正式战斗同一收件箱原子积点（未挂组件的老测试夹具自动跳过）。
     const auto* travelPassComp = tlsEcs.actorRegistry.try_get<PlayerTravelPassComp>(player);
     const bool creditsTravelPass =
-        !isNpcIsolatedEncounter && travelPassComp != nullptr && PlayerTravelPassSystem::IsEligibleBattle(settlement);
+        !isNpcIsolatedEncounter && !isJianghuDuel && travelPassComp != nullptr && PlayerTravelPassSystem::IsEligibleBattle(settlement);
     PlayerTravelPassComp travelPassCandidate;
     std::string travelPassBefore;
     bool travelPassPointsIncreased = false;
@@ -3024,12 +3105,37 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
             travelPassCandidate, travelPassPointsIncreased) != kSuccess) return false;
     }
 
-    // 正式人宠会武(competitive_ranked)、免费预设娱乐场(use_free_preset)、瑞兽迎春(isFestivalBeast)、五行幻境(isWuxingTower)、帮会帮战与归元城演武/残局/奇谈严格资产隔离：
-    // 绝不回写场外血蓝/复活/宠物/道具消耗，仅原子记材料额度、赛季/活动/爬塔进度、试炼志与近期战果。
+    // 天墉生死状一期：零材料/零经验/零银两产出，严格隔离场外血蓝宠；同收件箱原子写 30 分钟败者印记/复仇清除并消耗发起方预留金帖。
+    PlayerJianghuComp jianghuCandidate;
+    std::string jianghuBefore;
+    bool jianghuChanged = false;
+    uint32_t jianghuGoldWritToConsume = 0;
+    uint64_t jianghuSilverRefund = 0;
+    if (isJianghuDuel) {
+        const auto* jianghuComp = tlsEcs.actorRegistry.try_get<PlayerJianghuComp>(player);
+        if (jianghuComp == nullptr) return false;
+        jianghuBefore = jianghuComp->SerializeAsString();
+        if (PlayerJianghuSystem::PrepareBattleSettlement(
+                player, *jianghuComp, settlement, settlementNowMs,
+                jianghuCandidate, jianghuChanged, jianghuGoldWritToConsume, &jianghuSilverRefund) != kSuccess) {
+            return false;
+        }
+        if (jianghuGoldWritToConsume != 0 && !tlsEcs.actorRegistry.all_of<PlayerBagsComp>(player)) {
+            return false;
+        }
+        if (jianghuSilverRefund > 0 &&
+            (!tlsEcs.actorRegistry.all_of<CurrencyComp, PlayerCurrencyComp>(player) ||
+             !CanCreditWholeBattleCurrency(player, kCurrencyGold, jianghuSilverRefund))) {
+            return false;
+        }
+    }
+
+    // 正式人宠会武(competitive_ranked)、免费预设娱乐场(use_free_preset)、瑞兽迎春(isFestivalBeast)、五行幻境(isWuxingTower)、帮会帮战、天墉生死状与归元城演武/残局/奇谈严格资产隔离：
+    // 绝不回写场外血蓝/复活/宠物/道具消耗，仅原子记材料额度、赛季/活动/爬塔进度、试炼志、江湖印记与近期战果。
     const bool isGuildWar =
         settlement.match_mode() == match::MATCH_MODE_GUILD_WAR_PVP ||
         settlement.match_mode() == match::MATCH_MODE_GUILD_WAR_SIEGE;
-    if (settlement.competitive_ranked() || settlement.use_free_preset() || isFestivalBeast || isWuxingTower || isGuildWar || isNpcIsolatedEncounter) {
+    if (settlement.competitive_ranked() || settlement.use_free_preset() || isFestivalBeast || isWuxingTower || isGuildWar || isNpcIsolatedEncounter || isJianghuDuel) {
         const auto rankedIdentity = RoleAdmissionSystem::ConfirmedIdentity(playerId);
         if (!rankedIdentity || !IsSettlementApplicable(player) ||
             !tlsEcs.actorRegistry.all_of<PlayerBattleResultComp>(player)) {
@@ -3040,6 +3146,7 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
         auto* currentTrialJournal = tlsEcs.actorRegistry.try_get<PlayerTrialJournalComp>(player);
         auto* currentFestival = tlsEcs.actorRegistry.try_get<PlayerFestivalBeastComp>(player);
         auto* currentTravelPass = tlsEcs.actorRegistry.try_get<PlayerTravelPassComp>(player);
+        auto* currentJianghu = tlsEcs.actorRegistry.try_get<PlayerJianghuComp>(player);
         if (creditsLedger && (currentLedger == nullptr ||
             currentLedger->SerializeAsString() != materialRewardBefore ||
             tlsEcs.actorRegistry.any_of<ClientRequestLedgerInvalidComp>(player))) {
@@ -3061,7 +3168,11 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
             currentTravelPass->SerializeAsString() != travelPassBefore)) {
             return false;
         }
-        if (!isFestivalBeast && !isNpcIsolatedEncounter && progressionDelta.expGain > 0) {
+        if (isJianghuDuel && (currentJianghu == nullptr ||
+            currentJianghu->SerializeAsString() != jianghuBefore)) {
+            return false;
+        }
+        if (!isFestivalBeast && !isNpcIsolatedEncounter && !isJianghuDuel && progressionDelta.expGain > 0) {
             const auto* levelComp = tlsEcs.actorRegistry.try_get<LevelComp>(player);
             if (levelComp == nullptr ||
                 progressionDelta.expGain > std::numeric_limits<uint64_t>::max() - levelComp->total_exp()) {
@@ -3069,7 +3180,7 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
             }
         }
         SettlementCurrencyGains isolatedCurrencies;
-        const bool grantIsolatedSilver = !isFestivalBeast && !isNpcIsolatedEncounter && progressionDelta.silverGain > 0;
+        const bool grantIsolatedSilver = !isFestivalBeast && !isNpcIsolatedEncounter && !isJianghuDuel && progressionDelta.silverGain > 0;
         if (grantIsolatedSilver) {
             if (!tlsEcs.actorRegistry.all_of<CurrencyComp, PlayerCurrencyComp>(player) ||
                 !CanCreditWholeBattleCurrency(player, kCurrencyGold, progressionDelta.silverGain)) {
@@ -3096,6 +3207,40 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
                 isolatedCurrencies[kCurrencyGold] = progressionDelta.silverGain;
             }
         }
+        const auto commitJianghuIsolated = [&]() -> uint32_t {
+            if (isJianghuDuel) {
+                auto* latestJianghu = tlsEcs.actorRegistry.try_get<PlayerJianghuComp>(player);
+                if (latestJianghu == nullptr || latestJianghu->SerializeAsString() != jianghuBefore) {
+                    return kInvalidParameter;
+                }
+                if (jianghuSilverRefund > 0 &&
+                    jianghuSilverRefund <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+                    const uint32_t refundErr = CurrencySystem::AddCurrency(
+                        player, kCurrencyGold, static_cast<int64_t>(jianghuSilverRefund), TX_JIANGHU_DUEL_REFUND, battleId);
+                    if (refundErr != kSuccess) {
+                        return refundErr;
+                    }
+                }
+                if (jianghuChanged) {
+                    latestJianghu->Swap(&jianghuCandidate);
+                }
+            }
+            return kSuccess;
+        };
+        ItemCountMap isolatedConsumed;
+        if (isJianghuDuel && jianghuGoldWritToConsume != 0) {
+            ItemCountMap writConsumed;
+            writConsumed[jianghuGoldWritToConsume] = 1;
+            const uint32_t consumeErr = BagService::ConsumeInventoryAndGrant(
+                player, writConsumed, ItemCountMap{}, battleId, "{\"source\":\"jianghu-duel-writ\"}",
+                commitJianghuIsolated, /*consumeFromHoldId=*/battleId, nullptr);
+            if (consumeErr != kSuccess) {
+                return false;
+            }
+            isolatedConsumed = std::move(writConsumed);
+        } else if (commitJianghuIsolated() != kSuccess) {
+            return false;
+        }
         if (creditsLedger) {
             currentLedger->Swap(&materialRewardCandidate);
             if (creditsMaterialReward && materialCreditDelta.tradableUnitsAdded > 0) {
@@ -3115,7 +3260,7 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
             LOG_INFO << "[PlayerBattle] metric=battle_item_hold_released player_id=" << playerId << " battle_id=" << battleId
                      << " reason=isolated_settlement_applied";
         }
-        if (!isFestivalBeast && tlsEcs.actorRegistry.any_of<LevelComp>(player)) {
+        if (!isFestivalBeast && !isJianghuDuel && tlsEcs.actorRegistry.any_of<LevelComp>(player)) {
             battleprogression::LevelProgressResult lvlResult;
             if (PlayerAttributeSystem::ApplyBattleExpAndLevelUp(player, progressionDelta.expGain, lvlResult)) {
                 progressionDelta.levelBefore = lvlResult.levelBefore;
@@ -3129,13 +3274,13 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
             PlayerAttributeSystem::Recalculate(player, PlayerAttributeSystem::RecalcReason::kEquipmentChanged);
             PlayerAttributeSystem::PushPanel(player);
         }
-        RecordBattleResult(player, playerId, settlement, isolatedCurrencies, ItemCountMap{}, ItemCountMap{},
+        RecordBattleResult(player, playerId, settlement, isolatedCurrencies, ItemCountMap{}, isolatedConsumed,
                            /*itemsMailed=*/false,
                            creditsTrialJournal ? &trialJournalDelta : nullptr,
                            &materialCreditDelta,
                            isFestivalBeast ? &festivalBeastDelta : nullptr,
                            creditsSeasonProgress ? &seasonCreditDelta : nullptr,
-                           !isFestivalBeast ? &progressionDelta : nullptr);
+                           (!isFestivalBeast && !isJianghuDuel) ? &progressionDelta : nullptr);
         return true;
     }
 

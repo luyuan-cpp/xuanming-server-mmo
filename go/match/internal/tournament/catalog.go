@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	// GoldCurrencyType 对应 scene 银两货币枚举(kCurrencyGold = 1)。
-	GoldCurrencyType uint32 = 1
+	// GoldCurrencyType 对应 scene 绑定银两货币枚举(CURRENCY_TYPE_BIND_GOLD = 3, 严禁误发真灵石 1)。
+	GoldCurrencyType uint32 = 3
 	// DefaultRuleID 固定读取 TournamentRule 表 id=1。
 	DefaultRuleID uint32 = 1
 )
@@ -118,9 +118,6 @@ func DefaultFallback() *Catalog {
 		Bo3Top4Enabled:              true,
 		IntermissionSeconds:         60,
 		PublicKnockoutReplay:        true,
-		SaluteGoldAmount:            5000,
-		SaluteItemId:                20,
-		SaluteItemCount:             3,
 		WarmupSparEnabled:           true,
 		PredictionEnabled:           true,
 		PredictionRewardMinHits:     2,
@@ -260,31 +257,4 @@ func BuildMailAttachments(r *tablepb.TournamentRewardTable) (*mailpb.MailAttachm
 	}
 	raw, err := (proto.MarshalOptions{Deterministic: true}).Marshal(att)
 	return att, raw, err
-}
-
-// BuildSaluteMailAttachments 构造每日免费观道致敬的绑定自用邮件附件(仅绑定银两 + 绑定道具)。
-func BuildSaluteMailAttachments(rule *tablepb.TournamentRuleTable) (*mailpb.MailAttachments, uint64, []*matchpb.TournamentRewardItem) {
-	att := &mailpb.MailAttachments{}
-	var gold uint64
-	var items []*matchpb.TournamentRewardItem
-	if rule != nil {
-		gold = uint64(rule.GetSaluteGoldAmount())
-		if gold > 0 {
-			att.Currencies = append(att.Currencies, &mailpb.MailCurrency{
-				CurrencyType: GoldCurrencyType,
-				Amount:       gold,
-			})
-		}
-		if rule.GetSaluteItemId() != 0 && rule.GetSaluteItemCount() != 0 {
-			att.Items = append(att.Items, &mailpb.MailItem{
-				ConfigId: rule.GetSaluteItemId(),
-				Count:    rule.GetSaluteItemCount(),
-			})
-			items = append(items, &matchpb.TournamentRewardItem{
-				ItemId: rule.GetSaluteItemId(),
-				Count:  rule.GetSaluteItemCount(),
-			})
-		}
-	}
-	return att, gold, items
 }

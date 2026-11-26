@@ -155,6 +155,12 @@ enum TransactionType
   TX_TRAVEL_PASS_REWARD = 46;
   // 装备流派方案位付费扩容（消耗 3413 装备方案扩容符或扣灵石/绑定灵石，correlation_id = client_request_id）。
   TX_EQUIP_LOADOUT_UNLOCK = 47;
+  // 7 套非永久「战法·加点」流派方案槽位按月灵石租用/扩容/续期（仅扣真实灵石，correlation_id = client_request_id）。
+  TX_SKILL_LOADOUT_RENT = 48;
+  // 天墉生死状一期（docs/planning/battle-jianghu-grudge-duel-bounty-v1.md）：普通战书预扣、备战取消退还与洗尘清除印记。
+  TX_JIANGHU_DUEL_FEE = 49;
+  TX_JIANGHU_DUEL_REFUND = 50;
+  TX_JIANGHU_CLEAR_DEFEAT_MARK = 51;
 }
 
 // A single transaction log entry.  Written to Kafka → Go DB → MySQL.

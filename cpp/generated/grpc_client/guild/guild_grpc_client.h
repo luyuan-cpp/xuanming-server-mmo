@@ -327,6 +327,22 @@ void SendGuildServiceInspectFieldWarTargets(entt::registry& registry, entt::enti
 // 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
 void SendGuildServiceInspectFieldWarTargetsErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
 #pragma endregion
+#pragma region GuildServiceIssueGuildWarFeud
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kGuildServiceIssueGuildWarFeudGrpcPath = "/guildpb.GuildService/IssueGuildWarFeud";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendGuildServiceIssueGuildWarFeud(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::IssueGuildWarFeudRequest& request, GrpcDone<::guildpb::IssueGuildWarFeudResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendGuildServiceIssueGuildWarFeudErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region GuildServiceRespondGuildWarFeud
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kGuildServiceRespondGuildWarFeudGrpcPath = "/guildpb.GuildService/RespondGuildWarFeud";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendGuildServiceRespondGuildWarFeud(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::RespondGuildWarFeudRequest& request, GrpcDone<::guildpb::RespondGuildWarFeudResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendGuildServiceRespondGuildWarFeudErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
 #pragma region GuildServiceGetGuildJianghuGrudgeWall
 // gRPC :path(线上契约,与 Go 侧一致)。
 inline constexpr std::string_view kGuildServiceGetGuildJianghuGrudgeWallGrpcPath = "/guildpb.GuildService/GetGuildJianghuGrudgeWall";

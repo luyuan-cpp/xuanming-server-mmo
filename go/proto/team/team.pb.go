@@ -896,8 +896,10 @@ type StartTeamMatchRequest struct {
 	MatchMode match.MatchMode `protobuf:"varint,5,opt,name=match_mode,json=matchMode,proto3,enum=match.MatchMode" json:"match_mode,omitempty"`
 	// 排位规则版本号(PVP_TEAM 排位必填或由服务端按当前赛季核验;版本不符拒绝开局)。
 	RankedRuleVersion uint32 `protobuf:"varint,6,opt,name=ranked_rule_version,json=rankedRuleVersion,proto3" json:"ranked_rule_version,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// 五行试炼志 V3：队长选定的自选限制誓约位掩码（仅 PVE 首领试炼有效，0=常规，1..15）。
+	TrialVowMask  uint32 `protobuf:"varint,7,opt,name=trial_vow_mask,json=trialVowMask,proto3" json:"trial_vow_mask,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *StartTeamMatchRequest) Reset() {
@@ -968,6 +970,13 @@ func (x *StartTeamMatchRequest) GetMatchMode() match.MatchMode {
 func (x *StartTeamMatchRequest) GetRankedRuleVersion() uint32 {
 	if x != nil {
 		return x.RankedRuleVersion
+	}
+	return 0
+}
+
+func (x *StartTeamMatchRequest) GetTrialVowMask() uint32 {
+	if x != nil {
+		return x.TrialVowMask
 	}
 	return 0
 }
@@ -2543,7 +2552,7 @@ const file_proto_team_team_proto_rawDesc = "" +
 	"\x12DisbandTeamRequest\x12(\n" +
 	"\x10expected_team_id\x18\x01 \x01(\x04R\x0eexpectedTeamId\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x02 \x01(\tR\trequestId\"\x95\x02\n" +
+	"request_id\x18\x02 \x01(\tR\trequestId\"\xbb\x02\n" +
 	"\x15StartTeamMatchRequest\x12(\n" +
 	"\x10battle_config_id\x18\x01 \x01(\rR\x0ebattleConfigId\x12(\n" +
 	"\x10expected_team_id\x18\x02 \x01(\x04R\x0eexpectedTeamId\x12\x1d\n" +
@@ -2552,7 +2561,8 @@ const file_proto_team_team_proto_rawDesc = "" +
 	"\x10target_team_size\x18\x04 \x01(\rR\x0etargetTeamSize\x12/\n" +
 	"\n" +
 	"match_mode\x18\x05 \x01(\x0e2\x10.match.MatchModeR\tmatchMode\x12.\n" +
-	"\x13ranked_rule_version\x18\x06 \x01(\rR\x11rankedRuleVersion\"\xdc\x01\n" +
+	"\x13ranked_rule_version\x18\x06 \x01(\rR\x11rankedRuleVersion\x12$\n" +
+	"\x0etrial_vow_mask\x18\a \x01(\rR\ftrialVowMask\"\xdc\x01\n" +
 	"\x1aConfirmRankedPresetRequest\x12(\n" +
 	"\x10expected_team_id\x18\x01 \x01(\x04R\x0eexpectedTeamId\x12.\n" +
 	"\x13character_preset_id\x18\x02 \x01(\rR\x11characterPresetId\x12\"\n" +

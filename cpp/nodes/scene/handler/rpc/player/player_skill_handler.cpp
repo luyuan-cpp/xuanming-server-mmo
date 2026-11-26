@@ -229,4 +229,35 @@ void SceneSkillClientPlayerHandler::CancelSkillBookWantedOrder(entt::entity play
 void SceneSkillClientPlayerHandler::ListSkillBookWantedOrders(entt::entity player,const ::ListSkillBookWantedOrdersRequest* request,
 	::ListSkillBookWantedOrdersResponse* response)
 {
-///<<< BEGIN WRITING YOUR 
+///<<< BEGIN WRITING YOUR CODE
+	PlayerCraftSystem::ListWantedOrders(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneSkillClientPlayerHandler::FulfillSkillBookWantedOrder(entt::entity player,const ::FulfillSkillBookWantedOrderRequest* request,
+	::FulfillSkillBookWantedOrderResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	PlayerCraftSystem::FulfillWantedOrder(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneSkillClientPlayerHandler::RentSkillLoadoutSlots(entt::entity player,const ::RentSkillLoadoutSlotsRequest* request,
+	::RentSkillLoadoutSlotsResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	PlayerSkillSystem::RentLoadoutSlots(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneSkillClientPlayerHandler::AckCraftProxyDigest(entt::entity player,const ::AckCraftProxyDigestRequest* request,
+	::AckCraftProxyDigestResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	PlayerCraftSystem::AckProxyDigest(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}

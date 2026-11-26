@@ -45,17 +45,19 @@ public final class SeasonSealTableOuterClass extends com.google.protobuf.Generat
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\026seasonseal_table.proto\"\200\002\n\017SeasonSealT" +
+      "\n\026seasonseal_table.proto\"\345\002\n\017SeasonSealT" +
       "able\022\n\n\002id\030\001 \001(\r\022\021\n\tseason_id\030\002 \001(\r\022\014\n\004n" +
       "ame\030\003 \001(\t\022\023\n\013description\030\004 \001(\t\022\020\n\010icon_k" +
       "ey\030\005 \001(\t\022\021\n\teffect_id\030\006 \001(\r\022\021\n\tbonus_bps" +
       "\030\007 \001(\r\022\017\n\007cap_bps\030\010 \001(\r\022\027\n\017per_round_lim" +
       "it\030\t \001(\r\022\024\n\014battle_limit\030\n \001(\r\022\025\n\ractive" +
       "_rounds\030\013 \001(\r\022\034\n\024health_threshold_bps\030\014 " +
-      "\001(\r\"5\n\023SeasonSealTableData\022\036\n\004data\030\001 \003(\013" +
-      "2\020.SeasonSealTableBA\n\016com.game.tableB\031Se" +
-      "asonSealTableOuterClassP\001Z\022generated/pb/" +
-      "tableb\006proto3"
+      "\001(\r\022\032\n\022resonance_skill_id\030\r \001(\r\022\026\n\016reson" +
+      "ance_kind\030\016 \001(\r\022\027\n\017resonance_param\030\017 \001(\r" +
+      "\022\026\n\016resonance_desc\030\020 \001(\t\"5\n\023SeasonSealTa" +
+      "bleData\022\036\n\004data\030\001 \003(\0132\020.SeasonSealTableB" +
+      "A\n\016com.game.tableB\031SeasonSealTableOuterC" +
+      "lassP\001Z\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -66,7 +68,7 @@ public final class SeasonSealTableOuterClass extends com.google.protobuf.Generat
     internal_static_SeasonSealTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_SeasonSealTable_descriptor,
-        new java.lang.String[] { "Id", "SeasonId", "Name", "Description", "IconKey", "EffectId", "BonusBps", "CapBps", "PerRoundLimit", "BattleLimit", "ActiveRounds", "HealthThresholdBps", });
+        new java.lang.String[] { "Id", "SeasonId", "Name", "Description", "IconKey", "EffectId", "BonusBps", "CapBps", "PerRoundLimit", "BattleLimit", "ActiveRounds", "HealthThresholdBps", "ResonanceSkillId", "ResonanceKind", "ResonanceParam", "ResonanceDesc", });
     internal_static_SeasonSealTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_SeasonSealTableData_fieldAccessorTable = new

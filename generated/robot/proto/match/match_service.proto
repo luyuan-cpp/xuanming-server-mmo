@@ -87,8 +87,8 @@ service MatchService {
   rpc CheerTournamentSquad(CheerTournamentSquadRequest) returns (CheerTournamentSquadResponse) {}
   rpc ClaimTournamentReward(ClaimTournamentRewardRequest) returns (ClaimTournamentRewardResponse) {}
 
-  // ---- 全服赛季战队锦标赛《群仙问道赛》V2(docs/design/season-team-tournament-v2.md):请求只认会话本人 ----
-  rpc SaluteTournamentChampion(SaluteTournamentChampionRequest) returns (SaluteTournamentChampionResponse) {}
+  // ---- 全服赛季战队锦标赛《群仙问道赛》V2(docs/planning/season-team-tournament-v2.md):请求只认会话本人 ----
+  // 原 506=SaluteTournamentChampion（每日免费观道致敬）已彻底移除，消息号 506 永久保留不复用。
   rpc SendTournamentSpectateCheer(SendTournamentSpectateCheerRequest) returns (SendTournamentSpectateCheerResponse) {}
   rpc GetTournamentSpectateCheer(GetTournamentSpectateCheerRequest) returns (GetTournamentSpectateCheerResponse) {}
 
@@ -110,6 +110,12 @@ service MatchService {
   rpc DismissJianghuGrudge(DismissJianghuGrudgeRequest) returns (DismissJianghuGrudgeResponse) {}
   rpc NotifyJianghuDuelInvite(JianghuDuelInviteS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
   rpc NotifyJianghuDuelStatus(JianghuDuelStatusS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
+
+  // ---- 五行试炼志 V3：好友约战帖与受控 PVE 录像播放(docs/planning/trial-journal-v3-wild-bosses-vows-replay-share.md) ----
+  // 均为只认会话本人（Create 校验参战者身份；Get 与 GetSharedReplay 凭有效未过期 card_id 放行，不破坏既有 GetBattleReport 隐私边界）。
+  rpc CreateTrialChallengeCard(CreateTrialChallengeCardRequest) returns (CreateTrialChallengeCardResponse) {}
+  rpc GetTrialChallengeCard(GetTrialChallengeCardRequest) returns (GetTrialChallengeCardResponse) {}
+  rpc GetSharedTrialReplay(GetSharedTrialReplayRequest) returns (GetSharedTrialReplayResponse) {}
 }
 
 // ----- Match mode config -----
@@ -162,6 +168,9 @@ message JoinQueueRequest {
   uint32 ranked_rule_version = 12;
   // true = 五行幻境周常爬塔单人开战（仅 PVE_SOLO 有效，真实层数与符印由 Scene 从玩家权威状态注入）。
   bool is_wuxing_tower = 13;
+  // 五行试炼志 V3 自选试炼誓约位图（bit0 禁控 / bit1 单宝 / bit2 无宠 / bit3 紧缩回合，有效值 0..0x0F）。
+  // 仅允许常驻试炼志 PVE 首领副本单人直开；其余模式非 0 一律拒绝。
+  uint32 trial_vow_mask = 14;
 }
 
 message JoinQueueResponse {
@@ -306,6 +315,9 @@ message BattleWatchSummary {
   repeated string player_names = 4;
   uint64 created_at_ms = 5;
   bool featured = 6;         // 运营标记的赛事局(列表排在最前,优先升全服广播)
+  // 论剑 V7 正式高段排位实时围观元数据（非正式排位为 0）。
+  uint32 ranked_team_size = 7;
+  int64 ranked_peak_rating_centi = 8;
 }
 
 // 内部记录(由 SQL 成局组出,含路由所需的 battle 节点 id,不下发客户端)
@@ -780,8 +792,8 @@ message TournamentSeasonView {
   uint64 champion_squad_id = 20;
   string champion_squad_name = 21;
   string champion_member_summary = 22;  // 冠军成员摘要(供冠军殿堂展示)
-  uint64 champion_salute_count = 23;    // V2: 全服累计观道致敬次数
-  bool saluted_today = 24;              // V2: 当前玩家今日(UTC+8)是否已观道致敬
+  reserved 23, 24;                      // 原 champion_salute_count / saluted_today（每日观道致敬已移除）
+  reserved "champion_salute_count", "saluted_today";
   repeated TournamentMemberView champion_members = 25; // V2: 冠军战队成员外观快照
   uint32 champion_emblem_id = 26;                     // V3: 冠军战队队徽(1..8)
   uint64 third_place_squad_id = 27;                   // V3: 季军战队 ID(0=无季军战或未决出)
@@ -1027,20 +1039,7 @@ message ClaimTournamentRewardResponse {
   repeated TournamentPlayerRewardView claimed_rewards = 2;
 }
 
-// ---- 《群仙问道赛》V2 增量协议：每日免费观道致敬 + 观战预设喝彩 ----
-
-message SaluteTournamentChampionRequest {
-  uint32 season_id = 1; // 0 = 致敬最近一届有总冠军的赛季
-}
-message SaluteTournamentChampionResponse {
-  TipInfoMessage error_message = 1;
-  uint32 season_id = 2;
-  uint64 champion_salute_count = 3;
-  bool saluted_today = 4;
-  uint64 gold_amount = 5;
-  repeated TournamentRewardItem items = 6;
-  uint64 mail_id = 7;
-}
+// ---- 《群仙问道赛》V2 增量协议：观战预设喝彩（原每日免费观道致敬已彻底移除） ----
 
 message TournamentSpectateCheerItem {
   uint64 seq = 1;         // 本场递增序号(客户端按 seq 去重飘字)
@@ -1311,4 +1310,51 @@ message JianghuDuelInviteS2C {
 message JianghuDuelStatusS2C {
   JianghuDuelInviteView invite = 1;
   string reason_code = 2; // "matched" / "declined" / "expired" / "member_declined" / "team_changed"
+}
+
+// ----- 五行试炼志 V3：好友约战帖与受控 PVE 录像播放 -----
+
+message TrialChallengeCardView {
+  uint64 card_id = 1;
+  uint64 owner_player_id = 2;
+  string owner_name = 3;
+  uint64 battle_id = 4;
+  uint32 journal_entry_id = 5;
+  uint32 trial_rule_version = 6;
+  uint32 vow_mask = 7;
+  uint32 total_rounds = 8;
+  uint32 party_size = 9;
+  uint32 pet_table_id = 10;
+  repeated uint32 artifact_effect_ids = 11;
+  uint32 season_seal_id = 12;
+  bool has_replay = 13;
+  uint64 created_ms = 14;
+  uint64 expires_ms = 15;
+}
+
+message CreateTrialChallengeCardRequest {
+  uint64 battle_id = 1;
+}
+
+message CreateTrialChallengeCardResponse {
+  TipInfoMessage error_message = 1;
+  TrialChallengeCardView card = 2;
+}
+
+message GetTrialChallengeCardRequest {
+  uint64 card_id = 1;
+}
+
+message GetTrialChallengeCardResponse {
+  TipInfoMessage error_message = 1;
+  TrialChallengeCardView card = 2;
+}
+
+message GetSharedTrialReplayRequest {
+  uint64 card_id = 1;
+}
+
+message GetSharedTrialReplayResponse {
+  TipInfoMessage error_message = 1;
+  BattleReplayEnvelope replay = 2;
 }

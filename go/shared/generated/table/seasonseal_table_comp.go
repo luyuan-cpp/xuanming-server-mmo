@@ -61,6 +61,22 @@ type SeasonSealHealth_threshold_bpsComp struct {
     Value uint32
 }
 
+type SeasonSealResonance_skill_idComp struct {
+    Value uint32
+}
+
+type SeasonSealResonance_kindComp struct {
+    Value uint32
+}
+
+type SeasonSealResonance_paramComp struct {
+    Value uint32
+}
+
+type SeasonSealResonance_descComp struct {
+    Value string
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -112,5 +128,21 @@ func MakeSeasonSealActive_roundsComp(row *pb.SeasonSealTable) SeasonSealActive_r
 
 func MakeSeasonSealHealth_threshold_bpsComp(row *pb.SeasonSealTable) SeasonSealHealth_threshold_bpsComp {
     return SeasonSealHealth_threshold_bpsComp{Value: row.HealthThresholdBps}
+}
+
+func MakeSeasonSealResonance_skill_idComp(row *pb.SeasonSealTable) SeasonSealResonance_skill_idComp {
+    return SeasonSealResonance_skill_idComp{Value: row.ResonanceSkillId}
+}
+
+func MakeSeasonSealResonance_kindComp(row *pb.SeasonSealTable) SeasonSealResonance_kindComp {
+    return SeasonSealResonance_kindComp{Value: row.ResonanceKind}
+}
+
+func MakeSeasonSealResonance_paramComp(row *pb.SeasonSealTable) SeasonSealResonance_paramComp {
+    return SeasonSealResonance_paramComp{Value: row.ResonanceParam}
+}
+
+func MakeSeasonSealResonance_descComp(row *pb.SeasonSealTable) SeasonSealResonance_descComp {
+    return SeasonSealResonance_descComp{Value: row.ResonanceDesc}
 }
 

@@ -386,6 +386,7 @@ type BattleStateS2C struct {
 	BannedSkillIds               []uint32                  `protobuf:"varint,39,rep,packed,name=banned_skill_ids,json=bannedSkillIds,proto3" json:"banned_skill_ids,omitempty"`                                        // 本局最终生效的全场双边共同禁用技能（升序去重，0..6 个；观战/重连/回放全可见）
 	TeamABannedSkillIds          []uint32                  `protobuf:"varint,40,rep,packed,name=team_a_banned_skill_ids,json=teamABannedSkillIds,proto3" json:"team_a_banned_skill_ids,omitempty"`                     // A 队（team_index=0）最终生效的禁用技能（0..3 个）
 	TeamBBannedSkillIds          []uint32                  `protobuf:"varint,41,rep,packed,name=team_b_banned_skill_ids,json=teamBBannedSkillIds,proto3" json:"team_b_banned_skill_ids,omitempty"`                     // B 队（team_index=1）最终生效的禁用技能（0..3 个）
+	TrialVowMask                 uint32                    `protobuf:"varint,42,opt,name=trial_vow_mask,json=trialVowMask,proto3" json:"trial_vow_mask,omitempty"`                                                     // 五行试炼志 V3：本局生效的自选限制誓约位掩码（0=无，1..15）
 	unknownFields                protoimpl.UnknownFields
 	sizeCache                    protoimpl.SizeCache
 }
@@ -707,6 +708,13 @@ func (x *BattleStateS2C) GetTeamBBannedSkillIds() []uint32 {
 	return nil
 }
 
+func (x *BattleStateS2C) GetTrialVowMask() uint32 {
+	if x != nil {
+		return x.TrialVowMask
+	}
+	return 0
+}
+
 type BattleStartS2C struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	BattleId      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
@@ -989,8 +997,14 @@ type BattleEndS2C struct {
 	TotalExpAfter          uint64 `protobuf:"varint,18,opt,name=total_exp_after,json=totalExpAfter,proto3" json:"total_exp_after,omitempty"`
 	NextLevelTotalExp      uint64 `protobuf:"varint,19,opt,name=next_level_total_exp,json=nextLevelTotalExp,proto3" json:"next_level_total_exp,omitempty"`
 	BattleSilverDiminished bool   `protobuf:"varint,20,opt,name=battle_silver_diminished,json=battleSilverDiminished,proto3" json:"battle_silver_diminished,omitempty"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	// 满级溢出自动流向「往季徽章追忆」的单局增量（与 PlayerBattleResult 同源，零付费）。
+	RetroHonorSeasonId      uint32 `protobuf:"varint,21,opt,name=retro_honor_season_id,json=retroHonorSeasonId,proto3" json:"retro_honor_season_id,omitempty"`
+	RetroHonorPointsAdded   uint32 `protobuf:"varint,22,opt,name=retro_honor_points_added,json=retroHonorPointsAdded,proto3" json:"retro_honor_points_added,omitempty"`
+	RetroHonorProgressAfter uint32 `protobuf:"varint,23,opt,name=retro_honor_progress_after,json=retroHonorProgressAfter,proto3" json:"retro_honor_progress_after,omitempty"`
+	RetroHonorMaxPoints     uint32 `protobuf:"varint,24,opt,name=retro_honor_max_points,json=retroHonorMaxPoints,proto3" json:"retro_honor_max_points,omitempty"`
+	RetroHonorNewlyUnlocked bool   `protobuf:"varint,25,opt,name=retro_honor_newly_unlocked,json=retroHonorNewlyUnlocked,proto3" json:"retro_honor_newly_unlocked,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *BattleEndS2C) Reset() {
@@ -1159,6 +1173,41 @@ func (x *BattleEndS2C) GetNextLevelTotalExp() uint64 {
 func (x *BattleEndS2C) GetBattleSilverDiminished() bool {
 	if x != nil {
 		return x.BattleSilverDiminished
+	}
+	return false
+}
+
+func (x *BattleEndS2C) GetRetroHonorSeasonId() uint32 {
+	if x != nil {
+		return x.RetroHonorSeasonId
+	}
+	return 0
+}
+
+func (x *BattleEndS2C) GetRetroHonorPointsAdded() uint32 {
+	if x != nil {
+		return x.RetroHonorPointsAdded
+	}
+	return 0
+}
+
+func (x *BattleEndS2C) GetRetroHonorProgressAfter() uint32 {
+	if x != nil {
+		return x.RetroHonorProgressAfter
+	}
+	return 0
+}
+
+func (x *BattleEndS2C) GetRetroHonorMaxPoints() uint32 {
+	if x != nil {
+		return x.RetroHonorMaxPoints
+	}
+	return 0
+}
+
+func (x *BattleEndS2C) GetRetroHonorNewlyUnlocked() bool {
+	if x != nil {
+		return x.RetroHonorNewlyUnlocked
 	}
 	return false
 }
@@ -2852,7 +2901,7 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\x05label\x18\x06 \x01(\tR\x05label\x12'\n" +
 	"\x0ftelegraph_round\x18\a \x01(\rR\x0etelegraphRound\x12#\n" +
 	"\rstate_version\x18\b \x01(\x04R\fstateVersion\x12(\n" +
-	"\x10target_actor_ids\x18\t \x03(\x04R\x0etargetActorIds\"\xc2\x10\n" +
+	"\x10target_actor_ids\x18\t \x03(\x04R\x0etargetActorIds\"\xe8\x10\n" +
 	"\x0eBattleStateS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1f\n" +
 	"\vround_index\x18\x02 \x01(\rR\n" +
@@ -2903,7 +2952,8 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\x17summon_pet_unlock_round\x18& \x01(\rR\x14summonPetUnlockRound\x12(\n" +
 	"\x10banned_skill_ids\x18' \x03(\rR\x0ebannedSkillIds\x124\n" +
 	"\x17team_a_banned_skill_ids\x18( \x03(\rR\x13teamABannedSkillIds\x124\n" +
-	"\x17team_b_banned_skill_ids\x18) \x03(\rR\x13teamBBannedSkillIds\"T\n" +
+	"\x17team_b_banned_skill_ids\x18) \x03(\rR\x13teamBBannedSkillIds\x12$\n" +
+	"\x0etrial_vow_mask\x18* \x01(\rR\ftrialVowMask\"T\n" +
 	"\x0eBattleStartS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12%\n" +
 	"\x05state\x18\x02 \x01(\v2\x0f.BattleStateS2CR\x05state\"\x89\x02\n" +
@@ -2928,7 +2978,8 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\x1dmaterial_tradable_units_added\x18\b \x01(\rR\x1amaterialTradableUnitsAdded\x12C\n" +
 	"\x1ematerial_available_units_after\x18\t \x01(\x04R\x1bmaterialAvailableUnitsAfter\x12I\n" +
 	"!material_earnable_remaining_after\x18\n" +
-	" \x01(\rR\x1ematerialEarnableRemainingAfter\"\xea\a\n" +
+	" \x01(\rR\x1ematerialEarnableRemainingAfter\"\x85\n" +
+	"\n" +
 	"\fBattleEndS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12)\n" +
 	"\aoutcome\x18\x02 \x01(\x0e2\x0f.eBattleOutcomeR\aoutcome\x125\n" +
@@ -2954,7 +3005,12 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"silverGain\x12&\n" +
 	"\x0ftotal_exp_after\x18\x12 \x01(\x04R\rtotalExpAfter\x12/\n" +
 	"\x14next_level_total_exp\x18\x13 \x01(\x04R\x11nextLevelTotalExp\x128\n" +
-	"\x18battle_silver_diminished\x18\x14 \x01(\bR\x16battleSilverDiminished\"1\n" +
+	"\x18battle_silver_diminished\x18\x14 \x01(\bR\x16battleSilverDiminished\x121\n" +
+	"\x15retro_honor_season_id\x18\x15 \x01(\rR\x12retroHonorSeasonId\x127\n" +
+	"\x18retro_honor_points_added\x18\x16 \x01(\rR\x15retroHonorPointsAdded\x12;\n" +
+	"\x1aretro_honor_progress_after\x18\x17 \x01(\rR\x17retroHonorProgressAfter\x123\n" +
+	"\x16retro_honor_max_points\x18\x18 \x01(\rR\x13retroHonorMaxPoints\x12;\n" +
+	"\x1aretro_honor_newly_unlocked\x18\x19 \x01(\bR\x17retroHonorNewlyUnlocked\"1\n" +
 	"\x12BattleReconnectS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\"`\n" +
 	"\x10SpectateStateS2C\x12%\n" +

@@ -97,6 +97,10 @@ const (
 	GuildError_kGuildWarBountyNotFound           GuildError = 14069
 	GuildError_kGuildWarTrackCooldown            GuildError = 14070
 	GuildError_kGuildWarServiceBusy              GuildError = 14071
+	GuildError_kGuildWarFeudCooldown             GuildError = 14072
+	GuildError_kGuildWarFeudAlreadyActive        GuildError = 14073
+	GuildError_kGuildWarFeudNotFound             GuildError = 14074
+	GuildError_kGuildWarFeudInvalidTarget        GuildError = 14075
 )
 
 // Enum value maps for GuildError.
@@ -175,6 +179,10 @@ var (
 		14069: "kGuildWarBountyNotFound",
 		14070: "kGuildWarTrackCooldown",
 		14071: "kGuildWarServiceBusy",
+		14072: "kGuildWarFeudCooldown",
+		14073: "kGuildWarFeudAlreadyActive",
+		14074: "kGuildWarFeudNotFound",
+		14075: "kGuildWarFeudInvalidTarget",
 	}
 	GuildError_value = map[string]int32{
 		"kGuild_errorOK":                    0,
@@ -250,6 +258,10 @@ var (
 		"kGuildWarBountyNotFound":           14069,
 		"kGuildWarTrackCooldown":            14070,
 		"kGuildWarServiceBusy":              14071,
+		"kGuildWarFeudCooldown":             14072,
+		"kGuildWarFeudAlreadyActive":        14073,
+		"kGuildWarFeudNotFound":             14074,
+		"kGuildWarFeudInvalidTarget":        14075,
 	}
 )
 
@@ -284,7 +296,7 @@ var File_guild_error_tip_proto protoreflect.FileDescriptor
 
 const file_guild_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15guild_error_tip.proto*\xa5\x10\n" +
+	"\x15guild_error_tip.proto*\x9f\x11\n" +
 	"\vguild_error\x12\x12\n" +
 	"\x0ekGuild_errorOK\x10\x00\x12\x19\n" +
 	"\x14kGuildAlreadyInGuild\x10\xb0m\x12\x13\n" +
@@ -359,7 +371,11 @@ const file_guild_error_tip_proto_rawDesc = "" +
 	"\x14kGuildWarBountyLimit\x10\xf4m\x12\x1c\n" +
 	"\x17kGuildWarBountyNotFound\x10\xf5m\x12\x1b\n" +
 	"\x16kGuildWarTrackCooldown\x10\xf6m\x12\x19\n" +
-	"\x14kGuildWarServiceBusy\x10\xf7mB$\n" +
+	"\x14kGuildWarServiceBusy\x10\xf7m\x12\x1a\n" +
+	"\x15kGuildWarFeudCooldown\x10\xf8m\x12\x1f\n" +
+	"\x1akGuildWarFeudAlreadyActive\x10\xf9m\x12\x1a\n" +
+	"\x15kGuildWarFeudNotFound\x10\xfam\x12\x1f\n" +
+	"\x1akGuildWarFeudInvalidTarget\x10\xfbmB$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

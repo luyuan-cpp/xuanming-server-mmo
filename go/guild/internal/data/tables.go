@@ -127,5 +127,10 @@ func Tables() []proto.Message {
 		&pb.GuildWarBountyRecord{},
 		&pb.GuildWarBattleRecord{},
 		&pb.GuildWarRivalryRecord{},
+		// 江湖恩怨·帮派生死状恩怨墙(docs/design/battle-jianghu-grudge-duel-bounty-v1.md §2.2):锁序位置 20..21(单调追加在全序末尾)。
+		&pb.GuildJianghuRivalSummaryRecord{},
+		&pb.GuildJianghuGrudgeRecord{},
+		// 帮会全天帮战 V2.5 · 宿敌约战战书:锁序位置 22(单调追加在全序末尾)。
+		&pb.GuildWarFeudRecord{},
 	}
 }

@@ -30,6 +30,10 @@
 #include "google/protobuf/message_lite.h"
 #include "google/protobuf/repeated_field.h"  // IWYU pragma: export
 #include "google/protobuf/extension_set.h"  // IWYU pragma: export
+#include "google/protobuf/map.h"  // IWYU pragma: export
+#include "google/protobuf/map_type_handler.h"  // IWYU pragma: export
+#include "google/protobuf/map_entry.h"
+#include "google/protobuf/map_field.h"
 #include "google/protobuf/generated_enum_reflection.h"
 #include "google/protobuf/service.h"
 #include "google/protobuf/unknown_field_set.h"
@@ -66,6 +70,22 @@ extern const ::google::protobuf::internal::DescriptorTable descriptor_table_prot
 }  // extern "C"
 enum CraftSkillBookRequest_CraftMode : int;
 extern const uint32_t CraftSkillBookRequest_CraftMode_internal_data_[];
+class AckCraftProxyDigestRequest;
+struct AckCraftProxyDigestRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern AckCraftProxyDigestRequestGlobalsTypeInternal AckCraftProxyDigestRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull AckCraftProxyDigestRequest_class_data_;
+#else
+extern const AckCraftProxyDigestRequestGlobalsTypeInternal AckCraftProxyDigestRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class AckCraftProxyDigestResponse;
+struct AckCraftProxyDigestResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern AckCraftProxyDigestResponseGlobalsTypeInternal AckCraftProxyDigestResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull AckCraftProxyDigestResponse_class_data_;
+#else
+extern const AckCraftProxyDigestResponseGlobalsTypeInternal AckCraftProxyDigestResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class BatchDismantleSkillBooksRequest;
 struct BatchDismantleSkillBooksRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -113,6 +133,14 @@ extern ClaimScrollCollectionMilestoneResponseGlobalsTypeInternal ClaimScrollColl
 extern const ::google::protobuf::internal::ClassDataFull ClaimScrollCollectionMilestoneResponse_class_data_;
 #else
 extern const ClaimScrollCollectionMilestoneResponseGlobalsTypeInternal ClaimScrollCollectionMilestoneResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class CraftProxyDigestSummary;
+struct CraftProxyDigestSummaryGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern CraftProxyDigestSummaryGlobalsTypeInternal CraftProxyDigestSummary_globals_;
+extern const ::google::protobuf::internal::ClassDataFull CraftProxyDigestSummary_class_data_;
+#else
+extern const CraftProxyDigestSummaryGlobalsTypeInternal CraftProxyDigestSummary_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class CraftProxyStallInfo;
 struct CraftProxyStallInfoGlobalsTypeInternal;
@@ -282,6 +310,22 @@ extern const ::google::protobuf::internal::ClassDataFull ReleaseSkillResponse_cl
 #else
 extern const ReleaseSkillResponseGlobalsTypeInternal ReleaseSkillResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class RentSkillLoadoutSlotsRequest;
+struct RentSkillLoadoutSlotsRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RentSkillLoadoutSlotsRequestGlobalsTypeInternal RentSkillLoadoutSlotsRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RentSkillLoadoutSlotsRequest_class_data_;
+#else
+extern const RentSkillLoadoutSlotsRequestGlobalsTypeInternal RentSkillLoadoutSlotsRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class RentSkillLoadoutSlotsResponse;
+struct RentSkillLoadoutSlotsResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern RentSkillLoadoutSlotsResponseGlobalsTypeInternal RentSkillLoadoutSlotsResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull RentSkillLoadoutSlotsResponse_class_data_;
+#else
+extern const RentSkillLoadoutSlotsResponseGlobalsTypeInternal RentSkillLoadoutSlotsResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class SaveSkillLoadoutRequest;
 struct SaveSkillLoadoutRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -289,6 +333,14 @@ extern SaveSkillLoadoutRequestGlobalsTypeInternal SaveSkillLoadoutRequest_global
 extern const ::google::protobuf::internal::ClassDataFull SaveSkillLoadoutRequest_class_data_;
 #else
 extern const SaveSkillLoadoutRequestGlobalsTypeInternal SaveSkillLoadoutRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class SaveSkillLoadoutRequest_AttributeAllocatedEntry_DoNotUse;
+struct SaveSkillLoadoutRequest_AttributeAllocatedEntry_DoNotUseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SaveSkillLoadoutRequest_AttributeAllocatedEntry_DoNotUseGlobalsTypeInternal SaveSkillLoadoutRequest_AttributeAllocatedEntry_DoNotUse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SaveSkillLoadoutRequest_AttributeAllocatedEntry_DoNotUse_class_data_;
+#else
+extern const SaveSkillLoadoutRequest_AttributeAllocatedEntry_DoNotUseGlobalsTypeInternal SaveSkillLoadoutRequest_AttributeAllocatedEntry_DoNotUse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class SaveSkillLoadoutResponse;
 struct SaveSkillLoadoutResponseGlobalsTypeInternal;
@@ -377,6 +429,14 @@ extern SkillLoadoutSchemeInfoGlobalsTypeInternal SkillLoadoutSchemeInfo_globals_
 extern const ::google::protobuf::internal::ClassDataFull SkillLoadoutSchemeInfo_class_data_;
 #else
 extern const SkillLoadoutSchemeInfoGlobalsTypeInternal SkillLoadoutSchemeInfo_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class SkillLoadoutSchemeInfo_AttributeAllocatedEntry_DoNotUse;
+struct SkillLoadoutSchemeInfo_AttributeAllocatedEntry_DoNotUseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SkillLoadoutSchemeInfo_AttributeAllocatedEntry_DoNotUseGlobalsTypeInternal SkillLoadoutSchemeInfo_AttributeAllocatedEntry_DoNotUse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SkillLoadoutSchemeInfo_AttributeAllocatedEntry_DoNotUse_class_data_;
+#else
+extern const SkillLoadoutSchemeInfo_AttributeAllocatedEntry_DoNotUseGlobalsTypeInternal SkillLoadoutSchemeInfo_AttributeAllocatedEntry_DoNotUse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class SkillLoadoutSnapshot;
 struct SkillLoadoutSnapshotGlobalsTypeInternal;
@@ -564,7 +624,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpgradeSkillRequest final : public 
   [[nodiscard]] static const UpgradeSkillRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UpgradeSkillRequest>(&UpgradeSkillRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 46;
+  static constexpr int kIndexInFileMessages = 53;
   friend void swap(UpgradeSkillRequest& a, UpgradeSkillRequest& b) { a.Swap(&b); }
   inline void Swap(UpgradeSkillRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -801,7 +861,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UnsealSkillBookRequest final : publ
   [[nodiscard]] static const UnsealSkillBookRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UnsealSkillBookRequest>(&UnsealSkillBookRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 26;
+  static constexpr int kIndexInFileMessages = 31;
   friend void swap(UnsealSkillBookRequest& a, UnsealSkillBookRequest& b) { a.Swap(&b); }
   inline void Swap(UnsealSkillBookRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1026,7 +1086,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SwitchSkillLoadoutRequest final : p
   [[nodiscard]] static const SwitchSkillLoadoutRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SwitchSkillLoadoutRequest>(&SwitchSkillLoadoutRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 11;
+  static constexpr int kIndexInFileMessages = 13;
   friend void swap(SwitchSkillLoadoutRequest& a, SwitchSkillLoadoutRequest& b) { a.Swap(&b); }
   inline void Swap(SwitchSkillLoadoutRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1121,6 +1181,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SwitchSkillLoadoutRequest final : p
     kRequestIdFieldNumber = 3,
     kStateVersionFieldNumber = 2,
     kSchemeIdFieldNumber = 1,
+    kSkipAttributeSyncFieldNumber = 4,
   };
   // string request_id = 3;
   void clear_request_id() ;
@@ -1157,11 +1218,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SwitchSkillLoadoutRequest final : p
   void _internal_set_scheme_id(::uint32_t value);
 
   public:
+  // bool skip_attribute_sync = 4;
+  void clear_skip_attribute_sync() ;
+  [[nodiscard]] bool skip_attribute_sync() const;
+  void set_skip_attribute_sync(bool value);
+
+  private:
+  bool _internal_skip_attribute_sync() const;
+  void _internal_set_skip_attribute_sync(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:SwitchSkillLoadoutRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<2, 4,
                           0, 44,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1193,6 +1264,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SwitchSkillLoadoutRequest final : p
     ::google::protobuf::internal::ArenaStringPtr request_id_;
     ::uint64_t state_version_;
     ::uint32_t scheme_id_;
+    bool skip_attribute_sync_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1256,7 +1328,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillScrollCatalogInfo final : publ
   [[nodiscard]] static const SkillScrollCatalogInfo& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SkillScrollCatalogInfo>(&SkillScrollCatalogInfo_globals_);
   }
-  static constexpr int kIndexInFileMessages = 14;
+  static constexpr int kIndexInFileMessages = 18;
   friend void swap(SkillScrollCatalogInfo& a, SkillScrollCatalogInfo& b) { a.Swap(&b); }
   inline void Swap(SkillScrollCatalogInfo* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1602,245 +1674,38 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillScrollCatalogInfo final : publ
 };
 // -------------------------------------------------------------------
 
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillLoadoutSchemeInfo final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:SkillLoadoutSchemeInfo) */ {
+class PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillLoadoutSchemeInfo_AttributeAllocatedEntry_DoNotUse final
+    : public ::google::protobuf::internal::MapEntry<::uint32_t, ::uint32_t,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_UINT32,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_UINT32> {
  public:
-  inline SkillLoadoutSchemeInfo() : SkillLoadoutSchemeInfo(nullptr) {}
-  ~SkillLoadoutSchemeInfo() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(SkillLoadoutSchemeInfo* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(SkillLoadoutSchemeInfo));
-  }
-#endif
-
+  using SuperType =
+      ::google::protobuf::internal::MapEntry<::uint32_t, ::uint32_t,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_UINT32,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_UINT32>;
+  SkillLoadoutSchemeInfo_AttributeAllocatedEntry_DoNotUse();
   template <typename = void>
-  explicit constexpr SkillLoadoutSchemeInfo(::google::protobuf::internal::ConstantInitialized,
+  explicit constexpr SkillLoadoutSchemeInfo_AttributeAllocatedEntry_DoNotUse(::google::protobuf::internal::ConstantInitialized,
                            const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
                                class_data);
-
-  inline SkillLoadoutSchemeInfo(const SkillLoadoutSchemeInfo& from) : SkillLoadoutSchemeInfo(nullptr, from) {}
-  inline SkillLoadoutSchemeInfo(SkillLoadoutSchemeInfo&& from) noexcept : SkillLoadoutSchemeInfo(nullptr, ::std::move(from)) {}
-  inline SkillLoadoutSchemeInfo& operator=(const SkillLoadoutSchemeInfo& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline SkillLoadoutSchemeInfo& operator=(SkillLoadoutSchemeInfo&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
+  explicit SkillLoadoutSchemeInfo_AttributeAllocatedEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr const void* PROTOBUF_NONNULL internal_message_globals() {
+    return &SkillLoadoutSchemeInfo_AttributeAllocatedEntry_DoNotUse_globals_;
   }
 
-  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
-  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
 
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
-  GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  [[nodiscard]] static const SkillLoadoutSchemeInfo& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SkillLoadoutSchemeInfo>(&SkillLoadoutSchemeInfo_globals_);
-  }
-  static constexpr int kIndexInFileMessages = 7;
-  friend void swap(SkillLoadoutSchemeInfo& a, SkillLoadoutSchemeInfo& b) { a.Swap(&b); }
-  inline void Swap(SkillLoadoutSchemeInfo* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(SkillLoadoutSchemeInfo* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  [[nodiscard]] SkillLoadoutSchemeInfo* PROTOBUF_NONNULL
-  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<SkillLoadoutSchemeInfo>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const SkillLoadoutSchemeInfo& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const SkillLoadoutSchemeInfo& from) { SkillLoadoutSchemeInfo::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  [[nodiscard]] bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(SkillLoadoutSchemeInfo* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "SkillLoadoutSchemeInfo"; }
-
-  explicit SkillLoadoutSchemeInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  SkillLoadoutSchemeInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SkillLoadoutSchemeInfo& from);
-  SkillLoadoutSchemeInfo(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SkillLoadoutSchemeInfo&& from) noexcept
-      : SkillLoadoutSchemeInfo(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
   static constexpr auto InternalGenerateClassData_(
-      const MessageLite& prototype,
+      const ::google::protobuf::MessageLite& prototype,
       const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
 
-  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kPassiveSkillIdsFieldNumber = 3,
-    kPursuitSkillIdsFieldNumber = 4,
-    kOpeningSkillIdsFieldNumber = 5,
-    kSchemeIdFieldNumber = 1,
-    kRoleTagFieldNumber = 2,
-  };
-  // repeated uint32 passive_skill_ids = 3;
-  [[nodiscard]] int passive_skill_ids_size()
-      const;
-  private:
-  int _internal_passive_skill_ids_size() const;
-
-  public:
-  void clear_passive_skill_ids() ;
-  [[nodiscard]] ::uint32_t passive_skill_ids(int index) const;
-  void set_passive_skill_ids(int index, ::uint32_t value);
-  void add_passive_skill_ids(::uint32_t value);
-  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& passive_skill_ids()
-      const;
-  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_passive_skill_ids();
-
-  private:
-  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_passive_skill_ids() const;
-  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_passive_skill_ids();
-
-  public:
-  // repeated uint32 pursuit_skill_ids = 4;
-  [[nodiscard]] int pursuit_skill_ids_size()
-      const;
-  private:
-  int _internal_pursuit_skill_ids_size() const;
-
-  public:
-  void clear_pursuit_skill_ids() ;
-  [[nodiscard]] ::uint32_t pursuit_skill_ids(int index) const;
-  void set_pursuit_skill_ids(int index, ::uint32_t value);
-  void add_pursuit_skill_ids(::uint32_t value);
-  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& pursuit_skill_ids()
-      const;
-  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_pursuit_skill_ids();
-
-  private:
-  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_pursuit_skill_ids() const;
-  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_pursuit_skill_ids();
-
-  public:
-  // repeated uint32 opening_skill_ids = 5;
-  [[nodiscard]] int opening_skill_ids_size()
-      const;
-  private:
-  int _internal_opening_skill_ids_size() const;
-
-  public:
-  void clear_opening_skill_ids() ;
-  [[nodiscard]] ::uint32_t opening_skill_ids(int index) const;
-  void set_opening_skill_ids(int index, ::uint32_t value);
-  void add_opening_skill_ids(::uint32_t value);
-  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& opening_skill_ids()
-      const;
-  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_opening_skill_ids();
-
-  private:
-  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_opening_skill_ids() const;
-  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_opening_skill_ids();
-
-  public:
-  // uint32 scheme_id = 1;
-  void clear_scheme_id() ;
-  [[nodiscard]] ::uint32_t scheme_id() const;
-  void set_scheme_id(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_scheme_id() const;
-  void _internal_set_scheme_id(::uint32_t value);
-
-  public:
-  // uint32 role_tag = 2;
-  void clear_role_tag() ;
-  [[nodiscard]] ::uint32_t role_tag() const;
-  void set_role_tag(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_role_tag() const;
-  void _internal_set_role_tag(::uint32_t value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:SkillLoadoutSchemeInfo)
  private:
-  class _Internal;
+  friend class ::google::protobuf::MessageLite;
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
+  friend ::google::protobuf::internal::PrivateAccess;
+  friend SkillLoadoutSchemeInfo_AttributeAllocatedEntry_DoNotUseGlobalsTypeInternal;
+
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
+      ::google::protobuf::internal::TcParseTable<1, 2,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1850,37 +1715,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillLoadoutSchemeInfo final : publ
   static const ParseTableT_ _table_;
   #endif
 
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  friend ::google::protobuf::internal::PrivateAccess;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const SkillLoadoutSchemeInfo& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::RepeatedField<::uint32_t> passive_skill_ids_;
-    ::google::protobuf::internal::CachedSize _passive_skill_ids_cached_byte_size_;
-    ::google::protobuf::RepeatedField<::uint32_t> pursuit_skill_ids_;
-    ::google::protobuf::internal::CachedSize _pursuit_skill_ids_cached_byte_size_;
-    ::google::protobuf::RepeatedField<::uint32_t> opening_skill_ids_;
-    ::google::protobuf::internal::CachedSize _opening_skill_ids_cached_byte_size_;
-    ::uint32_t scheme_id_;
-    ::uint32_t role_tag_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
 };
 // -------------------------------------------------------------------
 
@@ -2189,7 +2028,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillCraftMasterySnapshot final : p
   [[nodiscard]] static const SkillCraftMasterySnapshot& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SkillCraftMasterySnapshot>(&SkillCraftMasterySnapshot_globals_);
   }
-  static constexpr int kIndexInFileMessages = 13;
+  static constexpr int kIndexInFileMessages = 17;
   friend void swap(SkillCraftMasterySnapshot& a, SkillCraftMasterySnapshot& b) { a.Swap(&b); }
   inline void Swap(SkillCraftMasterySnapshot* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2443,7 +2282,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillBookWantedOrderInfo final : pu
   [[nodiscard]] static const SkillBookWantedOrderInfo& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SkillBookWantedOrderInfo>(&SkillBookWantedOrderInfo_globals_);
   }
-  static constexpr int kIndexInFileMessages = 37;
+  static constexpr int kIndexInFileMessages = 44;
   friend void swap(SkillBookWantedOrderInfo& a, SkillBookWantedOrderInfo& b) { a.Swap(&b); }
   inline void Swap(SkillBookWantedOrderInfo* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2779,7 +2618,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetCraftProxyStallRequest final : p
   [[nodiscard]] static const SetCraftProxyStallRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SetCraftProxyStallRequest>(&SetCraftProxyStallRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 28;
+  static constexpr int kIndexInFileMessages = 33;
   friend void swap(SetCraftProxyStallRequest& a, SetCraftProxyStallRequest& b) { a.Swap(&b); }
   inline void Swap(SetCraftProxyStallRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3040,7 +2879,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SealSkillBookRequest final : public
   [[nodiscard]] static const SealSkillBookRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SealSkillBookRequest>(&SealSkillBookRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 24;
+  static constexpr int kIndexInFileMessages = 29;
   friend void swap(SealSkillBookRequest& a, SealSkillBookRequest& b) { a.Swap(&b); }
   inline void Swap(SealSkillBookRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3209,31 +3048,80 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SealSkillBookRequest final : public
 };
 // -------------------------------------------------------------------
 
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveSkillLoadoutRequest final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:SaveSkillLoadoutRequest) */ {
+class PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveSkillLoadoutRequest_AttributeAllocatedEntry_DoNotUse final
+    : public ::google::protobuf::internal::MapEntry<::uint32_t, ::uint32_t,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_UINT32,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_UINT32> {
  public:
-  inline SaveSkillLoadoutRequest() : SaveSkillLoadoutRequest(nullptr) {}
-  ~SaveSkillLoadoutRequest() PROTOBUF_FINAL;
+  using SuperType =
+      ::google::protobuf::internal::MapEntry<::uint32_t, ::uint32_t,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_UINT32,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_UINT32>;
+  SaveSkillLoadoutRequest_AttributeAllocatedEntry_DoNotUse();
+  template <typename = void>
+  explicit constexpr SaveSkillLoadoutRequest_AttributeAllocatedEntry_DoNotUse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+  explicit SaveSkillLoadoutRequest_AttributeAllocatedEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr const void* PROTOBUF_NONNULL internal_message_globals() {
+    return &SaveSkillLoadoutRequest_AttributeAllocatedEntry_DoNotUse_globals_;
+  }
+
+
+  static constexpr auto InternalGenerateClassData_(
+      const ::google::protobuf::MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+ private:
+  friend class ::google::protobuf::MessageLite;
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
+  friend ::google::protobuf::internal::PrivateAccess;
+  friend SaveSkillLoadoutRequest_AttributeAllocatedEntry_DoNotUseGlobalsTypeInternal;
+
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RentSkillLoadoutSlotsRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:RentSkillLoadoutSlotsRequest) */ {
+ public:
+  inline RentSkillLoadoutSlotsRequest() : RentSkillLoadoutSlotsRequest(nullptr) {}
+  ~RentSkillLoadoutSlotsRequest() PROTOBUF_FINAL;
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(SaveSkillLoadoutRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+  void operator delete(RentSkillLoadoutSlotsRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
     SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(SaveSkillLoadoutRequest));
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RentSkillLoadoutSlotsRequest));
   }
 #endif
 
   template <typename = void>
-  explicit constexpr SaveSkillLoadoutRequest(::google::protobuf::internal::ConstantInitialized,
+  explicit constexpr RentSkillLoadoutSlotsRequest(::google::protobuf::internal::ConstantInitialized,
                            const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
                                class_data);
 
-  inline SaveSkillLoadoutRequest(const SaveSkillLoadoutRequest& from) : SaveSkillLoadoutRequest(nullptr, from) {}
-  inline SaveSkillLoadoutRequest(SaveSkillLoadoutRequest&& from) noexcept : SaveSkillLoadoutRequest(nullptr, ::std::move(from)) {}
-  inline SaveSkillLoadoutRequest& operator=(const SaveSkillLoadoutRequest& from) {
+  inline RentSkillLoadoutSlotsRequest(const RentSkillLoadoutSlotsRequest& from) : RentSkillLoadoutSlotsRequest(nullptr, from) {}
+  inline RentSkillLoadoutSlotsRequest(RentSkillLoadoutSlotsRequest&& from) noexcept : RentSkillLoadoutSlotsRequest(nullptr, ::std::move(from)) {}
+  inline RentSkillLoadoutSlotsRequest& operator=(const RentSkillLoadoutSlotsRequest& from) {
     CopyFrom(from);
     return *this;
   }
-  inline SaveSkillLoadoutRequest& operator=(SaveSkillLoadoutRequest&& from) noexcept {
+  inline RentSkillLoadoutSlotsRequest& operator=(RentSkillLoadoutSlotsRequest&& from) noexcept {
     if (this == &from) return *this;
     if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
       InternalSwap(&from);
@@ -3262,12 +3150,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveSkillLoadoutRequest final : pub
   [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
     return default_instance().GetMetadata().reflection;
   }
-  [[nodiscard]] static const SaveSkillLoadoutRequest& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SaveSkillLoadoutRequest>(&SaveSkillLoadoutRequest_globals_);
+  [[nodiscard]] static const RentSkillLoadoutSlotsRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RentSkillLoadoutSlotsRequest>(&RentSkillLoadoutSlotsRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 9;
-  friend void swap(SaveSkillLoadoutRequest& a, SaveSkillLoadoutRequest& b) { a.Swap(&b); }
-  inline void Swap(SaveSkillLoadoutRequest* PROTOBUF_NONNULL other) {
+  static constexpr int kIndexInFileMessages = 15;
+  friend void swap(RentSkillLoadoutSlotsRequest& a, RentSkillLoadoutSlotsRequest& b) { a.Swap(&b); }
+  inline void Swap(RentSkillLoadoutSlotsRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
     if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
       InternalSwap(other);
@@ -3275,7 +3163,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveSkillLoadoutRequest final : pub
       ::google::protobuf::internal::GenericSwap(this, other);
     }
   }
-  void UnsafeArenaSwap(SaveSkillLoadoutRequest* PROTOBUF_NONNULL other) {
+  void UnsafeArenaSwap(RentSkillLoadoutSlotsRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
     ABSL_DCHECK(GetArena() == other->GetArena());
     InternalSwap(other);
@@ -3283,14 +3171,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveSkillLoadoutRequest final : pub
 
   // implements Message ----------------------------------------------
 
-  [[nodiscard]] SaveSkillLoadoutRequest* PROTOBUF_NONNULL
+  [[nodiscard]] RentSkillLoadoutSlotsRequest* PROTOBUF_NONNULL
   New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<SaveSkillLoadoutRequest>(arena);
+    return ::google::protobuf::Message::DefaultConstruct<RentSkillLoadoutSlotsRequest>(arena);
   }
   using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const SaveSkillLoadoutRequest& from);
+  void CopyFrom(const RentSkillLoadoutSlotsRequest& from);
   using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const SaveSkillLoadoutRequest& from) { SaveSkillLoadoutRequest::MergeImpl(*this, from); }
+  void MergeFrom(const RentSkillLoadoutSlotsRequest& from) { RentSkillLoadoutSlotsRequest::MergeImpl(*this, from); }
 
   private:
   static void MergeImpl(::google::protobuf::MessageLite& to_msg,
@@ -3328,17 +3216,17 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveSkillLoadoutRequest final : pub
   private:
   void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
   static void SharedDtor(MessageLite& self);
-  void InternalSwap(SaveSkillLoadoutRequest* PROTOBUF_NONNULL other);
+  void InternalSwap(RentSkillLoadoutSlotsRequest* PROTOBUF_NONNULL other);
  private:
   template <typename T>
   friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "SaveSkillLoadoutRequest"; }
+  static ::absl::string_view FullMessageName() { return "RentSkillLoadoutSlotsRequest"; }
 
-  explicit SaveSkillLoadoutRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  SaveSkillLoadoutRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SaveSkillLoadoutRequest& from);
-  SaveSkillLoadoutRequest(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SaveSkillLoadoutRequest&& from) noexcept
-      : SaveSkillLoadoutRequest(arena) {
+  explicit RentSkillLoadoutSlotsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RentSkillLoadoutSlotsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RentSkillLoadoutSlotsRequest& from);
+  RentSkillLoadoutSlotsRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RentSkillLoadoutSlotsRequest&& from) noexcept
+      : RentSkillLoadoutSlotsRequest(arena) {
     *this = ::std::move(from);
   }
   const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
@@ -3357,125 +3245,57 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveSkillLoadoutRequest final : pub
 
   // accessors -------------------------------------------------------
   enum : int {
-    kPassiveSkillIdsFieldNumber = 3,
-    kPursuitSkillIdsFieldNumber = 4,
-    kOpeningSkillIdsFieldNumber = 5,
-    kRequestIdFieldNumber = 7,
-    kSchemeIdFieldNumber = 1,
-    kRoleTagFieldNumber = 2,
-    kStateVersionFieldNumber = 6,
+    kClientRequestIdFieldNumber = 1,
+    kTargetRentedSlotsFieldNumber = 2,
+    kAddPeriodsFieldNumber = 3,
+    kExpectedCostDiamondFieldNumber = 4,
   };
-  // repeated uint32 passive_skill_ids = 3;
-  [[nodiscard]] int passive_skill_ids_size()
-      const;
-  private:
-  int _internal_passive_skill_ids_size() const;
-
-  public:
-  void clear_passive_skill_ids() ;
-  [[nodiscard]] ::uint32_t passive_skill_ids(int index) const;
-  void set_passive_skill_ids(int index, ::uint32_t value);
-  void add_passive_skill_ids(::uint32_t value);
-  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& passive_skill_ids()
-      const;
-  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_passive_skill_ids();
+  // uint64 client_request_id = 1;
+  void clear_client_request_id() ;
+  [[nodiscard]] ::uint64_t client_request_id() const;
+  void set_client_request_id(::uint64_t value);
 
   private:
-  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_passive_skill_ids() const;
-  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_passive_skill_ids();
+  ::uint64_t _internal_client_request_id() const;
+  void _internal_set_client_request_id(::uint64_t value);
 
   public:
-  // repeated uint32 pursuit_skill_ids = 4;
-  [[nodiscard]] int pursuit_skill_ids_size()
-      const;
-  private:
-  int _internal_pursuit_skill_ids_size() const;
-
-  public:
-  void clear_pursuit_skill_ids() ;
-  [[nodiscard]] ::uint32_t pursuit_skill_ids(int index) const;
-  void set_pursuit_skill_ids(int index, ::uint32_t value);
-  void add_pursuit_skill_ids(::uint32_t value);
-  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& pursuit_skill_ids()
-      const;
-  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_pursuit_skill_ids();
+  // uint32 target_rented_slots = 2;
+  void clear_target_rented_slots() ;
+  [[nodiscard]] ::uint32_t target_rented_slots() const;
+  void set_target_rented_slots(::uint32_t value);
 
   private:
-  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_pursuit_skill_ids() const;
-  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_pursuit_skill_ids();
+  ::uint32_t _internal_target_rented_slots() const;
+  void _internal_set_target_rented_slots(::uint32_t value);
 
   public:
-  // repeated uint32 opening_skill_ids = 5;
-  [[nodiscard]] int opening_skill_ids_size()
-      const;
-  private:
-  int _internal_opening_skill_ids_size() const;
-
-  public:
-  void clear_opening_skill_ids() ;
-  [[nodiscard]] ::uint32_t opening_skill_ids(int index) const;
-  void set_opening_skill_ids(int index, ::uint32_t value);
-  void add_opening_skill_ids(::uint32_t value);
-  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& opening_skill_ids()
-      const;
-  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_opening_skill_ids();
+  // uint32 add_periods = 3;
+  void clear_add_periods() ;
+  [[nodiscard]] ::uint32_t add_periods() const;
+  void set_add_periods(::uint32_t value);
 
   private:
-  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_opening_skill_ids() const;
-  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_opening_skill_ids();
+  ::uint32_t _internal_add_periods() const;
+  void _internal_set_add_periods(::uint32_t value);
 
   public:
-  // string request_id = 7;
-  void clear_request_id() ;
-  [[nodiscard]] const ::std::string& request_id() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_request_id(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_request_id();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_request_id();
-  void set_allocated_request_id(::std::string* PROTOBUF_NULLABLE value);
+  // uint64 expected_cost_diamond = 4;
+  void clear_expected_cost_diamond() ;
+  [[nodiscard]] ::uint64_t expected_cost_diamond() const;
+  void set_expected_cost_diamond(::uint64_t value);
 
   private:
-  const ::std::string& _internal_request_id() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_request_id(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_request_id();
+  ::uint64_t _internal_expected_cost_diamond() const;
+  void _internal_set_expected_cost_diamond(::uint64_t value);
 
   public:
-  // uint32 scheme_id = 1;
-  void clear_scheme_id() ;
-  [[nodiscard]] ::uint32_t scheme_id() const;
-  void set_scheme_id(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_scheme_id() const;
-  void _internal_set_scheme_id(::uint32_t value);
-
-  public:
-  // uint32 role_tag = 2;
-  void clear_role_tag() ;
-  [[nodiscard]] ::uint32_t role_tag() const;
-  void set_role_tag(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_role_tag() const;
-  void _internal_set_role_tag(::uint32_t value);
-
-  public:
-  // uint64 state_version = 6;
-  void clear_state_version() ;
-  [[nodiscard]] ::uint64_t state_version() const;
-  void set_state_version(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_state_version() const;
-  void _internal_set_state_version(::uint64_t value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:SaveSkillLoadoutRequest)
+  // @@protoc_insertion_point(class_scope:RentSkillLoadoutSlotsRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
-                          0, 42,
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -3500,19 +3320,13 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveSkillLoadoutRequest final : pub
     inline explicit Impl_(
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const SaveSkillLoadoutRequest& from_msg);
+        const RentSkillLoadoutSlotsRequest& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::RepeatedField<::uint32_t> passive_skill_ids_;
-    ::google::protobuf::internal::CachedSize _passive_skill_ids_cached_byte_size_;
-    ::google::protobuf::RepeatedField<::uint32_t> pursuit_skill_ids_;
-    ::google::protobuf::internal::CachedSize _pursuit_skill_ids_cached_byte_size_;
-    ::google::protobuf::RepeatedField<::uint32_t> opening_skill_ids_;
-    ::google::protobuf::internal::CachedSize _opening_skill_ids_cached_byte_size_;
-    ::google::protobuf::internal::ArenaStringPtr request_id_;
-    ::uint32_t scheme_id_;
-    ::uint32_t role_tag_;
-    ::uint64_t state_version_;
+    ::uint64_t client_request_id_;
+    ::uint32_t target_rented_slots_;
+    ::uint32_t add_periods_;
+    ::uint64_t expected_cost_diamond_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3576,7 +3390,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PostSkillBookWantedOrderRequest fin
   [[nodiscard]] static const PostSkillBookWantedOrderRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PostSkillBookWantedOrderRequest>(&PostSkillBookWantedOrderRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 38;
+  static constexpr int kIndexInFileMessages = 45;
   friend void swap(PostSkillBookWantedOrderRequest& a, PostSkillBookWantedOrderRequest& b) { a.Swap(&b); }
   inline void Swap(PostSkillBookWantedOrderRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4026,7 +3840,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListSkillBookWantedOrdersRequest fi
   [[nodiscard]] static const ListSkillBookWantedOrdersRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListSkillBookWantedOrdersRequest>(&ListSkillBookWantedOrdersRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 42;
+  static constexpr int kIndexInFileMessages = 49;
   friend void swap(ListSkillBookWantedOrdersRequest& a, ListSkillBookWantedOrdersRequest& b) { a.Swap(&b); }
   inline void Swap(ListSkillBookWantedOrdersRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4238,7 +4052,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListCraftProxyStallsRequest final :
   [[nodiscard]] static const ListCraftProxyStallsRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListCraftProxyStallsRequest>(&ListCraftProxyStallsRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 31;
+  static constexpr int kIndexInFileMessages = 38;
   friend void swap(ListCraftProxyStallsRequest& a, ListCraftProxyStallsRequest& b) { a.Swap(&b); }
   inline void Swap(ListCraftProxyStallsRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4377,7 +4191,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LearnSkillBookRequest final : publi
   [[nodiscard]] static const LearnSkillBookRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<LearnSkillBookRequest>(&LearnSkillBookRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 20;
+  static constexpr int kIndexInFileMessages = 25;
   friend void swap(LearnSkillBookRequest& a, LearnSkillBookRequest& b) { a.Swap(&b); }
   inline void Swap(LearnSkillBookRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4613,7 +4427,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSkillCraftingStateRequest final 
   [[nodiscard]] static const GetSkillCraftingStateRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetSkillCraftingStateRequest>(&GetSkillCraftingStateRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 16;
+  static constexpr int kIndexInFileMessages = 21;
   friend void swap(GetSkillCraftingStateRequest& a, GetSkillCraftingStateRequest& b) { a.Swap(&b); }
   inline void Swap(GetSkillCraftingStateRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4752,7 +4566,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FulfillSkillBookWantedOrderRequest 
   [[nodiscard]] static const FulfillSkillBookWantedOrderRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<FulfillSkillBookWantedOrderRequest>(&FulfillSkillBookWantedOrderRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 44;
+  static constexpr int kIndexInFileMessages = 51;
   friend void swap(FulfillSkillBookWantedOrderRequest& a, FulfillSkillBookWantedOrderRequest& b) { a.Swap(&b); }
   inline void Swap(FulfillSkillBookWantedOrderRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5013,7 +4827,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DismantleSkillBookRequest final : p
   [[nodiscard]] static const DismantleSkillBookRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DismantleSkillBookRequest>(&DismantleSkillBookRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 22;
+  static constexpr int kIndexInFileMessages = 27;
   friend void swap(DismantleSkillBookRequest& a, DismantleSkillBookRequest& b) { a.Swap(&b); }
   inline void Swap(DismantleSkillBookRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5238,7 +5052,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CraftSkillBookRequest final : publi
   [[nodiscard]] static const CraftSkillBookRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CraftSkillBookRequest>(&CraftSkillBookRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 23;
   friend void swap(CraftSkillBookRequest& a, CraftSkillBookRequest& b) { a.Swap(&b); }
   inline void Swap(CraftSkillBookRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5521,7 +5335,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CraftProxyStallInfo final : public 
   [[nodiscard]] static const CraftProxyStallInfo& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CraftProxyStallInfo>(&CraftProxyStallInfo_globals_);
   }
-  static constexpr int kIndexInFileMessages = 30;
+  static constexpr int kIndexInFileMessages = 35;
   friend void swap(CraftProxyStallInfo& a, CraftProxyStallInfo& b) { a.Swap(&b); }
   inline void Swap(CraftProxyStallInfo* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5628,6 +5442,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CraftProxyStallInfo final : public 
     kEquippedCraftTitleIdFieldNumber = 13,
     kTeamFreeProxyFieldNumber = 14,
     kViewerGetsFreeProxyFieldNumber = 15,
+    kRecent24HOrdersFieldNumber = 16,
+    kRecent24HSupremeFieldNumber = 17,
+    kHotRankFieldNumber = 18,
   };
   // string master_name = 2;
   void clear_master_name() ;
@@ -5784,12 +5601,42 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CraftProxyStallInfo final : public 
   void _internal_set_viewer_gets_free_proxy(bool value);
 
   public:
+  // uint32 recent_24h_orders = 16;
+  void clear_recent_24h_orders() ;
+  [[nodiscard]] ::uint32_t recent_24h_orders() const;
+  void set_recent_24h_orders(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_recent_24h_orders() const;
+  void _internal_set_recent_24h_orders(::uint32_t value);
+
+  public:
+  // uint32 recent_24h_supreme = 17;
+  void clear_recent_24h_supreme() ;
+  [[nodiscard]] ::uint32_t recent_24h_supreme() const;
+  void set_recent_24h_supreme(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_recent_24h_supreme() const;
+  void _internal_set_recent_24h_supreme(::uint32_t value);
+
+  public:
+  // uint32 hot_rank = 18;
+  void clear_hot_rank() ;
+  [[nodiscard]] ::uint32_t hot_rank() const;
+  void set_hot_rank(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_hot_rank() const;
+  void _internal_set_hot_rank(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:CraftProxyStallInfo)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 15,
-                          0, 47,
+      ::google::protobuf::internal::TcParseTable<5, 18,
+                          0, 55,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -5832,6 +5679,275 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CraftProxyStallInfo final : public 
     ::uint32_t equipped_craft_title_id_;
     bool team_free_proxy_;
     bool viewer_gets_free_proxy_;
+    ::uint32_t recent_24h_orders_;
+    ::uint32_t recent_24h_supreme_;
+    ::uint32_t hot_rank_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CraftProxyDigestSummary final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:CraftProxyDigestSummary) */ {
+ public:
+  inline CraftProxyDigestSummary() : CraftProxyDigestSummary(nullptr) {}
+  ~CraftProxyDigestSummary() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(CraftProxyDigestSummary* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(CraftProxyDigestSummary));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr CraftProxyDigestSummary(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline CraftProxyDigestSummary(const CraftProxyDigestSummary& from) : CraftProxyDigestSummary(nullptr, from) {}
+  inline CraftProxyDigestSummary(CraftProxyDigestSummary&& from) noexcept : CraftProxyDigestSummary(nullptr, ::std::move(from)) {}
+  inline CraftProxyDigestSummary& operator=(const CraftProxyDigestSummary& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CraftProxyDigestSummary& operator=(CraftProxyDigestSummary&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const CraftProxyDigestSummary& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CraftProxyDigestSummary>(&CraftProxyDigestSummary_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 19;
+  friend void swap(CraftProxyDigestSummary& a, CraftProxyDigestSummary& b) { a.Swap(&b); }
+  inline void Swap(CraftProxyDigestSummary* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CraftProxyDigestSummary* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] CraftProxyDigestSummary* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<CraftProxyDigestSummary>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const CraftProxyDigestSummary& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const CraftProxyDigestSummary& from) { CraftProxyDigestSummary::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(CraftProxyDigestSummary* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "CraftProxyDigestSummary"; }
+
+  explicit CraftProxyDigestSummary(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  CraftProxyDigestSummary(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CraftProxyDigestSummary& from);
+  CraftProxyDigestSummary(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CraftProxyDigestSummary&& from) noexcept
+      : CraftProxyDigestSummary(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kLastBuyerNameFieldNumber = 5,
+    kOrdersCompletedFieldNumber = 1,
+    kSupremeForgedCountFieldNumber = 2,
+    kNetGoldEarnedFieldNumber = 4,
+    kRareBooksCraftedCountFieldNumber = 3,
+    kNewlyUnlockedTitleMaskFieldNumber = 6,
+  };
+  // string last_buyer_name = 5;
+  void clear_last_buyer_name() ;
+  [[nodiscard]] const ::std::string& last_buyer_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_last_buyer_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_last_buyer_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_last_buyer_name();
+  void set_allocated_last_buyer_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_last_buyer_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_last_buyer_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_last_buyer_name();
+
+  public:
+  // uint32 orders_completed = 1;
+  void clear_orders_completed() ;
+  [[nodiscard]] ::uint32_t orders_completed() const;
+  void set_orders_completed(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_orders_completed() const;
+  void _internal_set_orders_completed(::uint32_t value);
+
+  public:
+  // uint32 supreme_forged_count = 2;
+  void clear_supreme_forged_count() ;
+  [[nodiscard]] ::uint32_t supreme_forged_count() const;
+  void set_supreme_forged_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_supreme_forged_count() const;
+  void _internal_set_supreme_forged_count(::uint32_t value);
+
+  public:
+  // uint64 net_gold_earned = 4;
+  void clear_net_gold_earned() ;
+  [[nodiscard]] ::uint64_t net_gold_earned() const;
+  void set_net_gold_earned(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_net_gold_earned() const;
+  void _internal_set_net_gold_earned(::uint64_t value);
+
+  public:
+  // uint32 rare_books_crafted_count = 3;
+  void clear_rare_books_crafted_count() ;
+  [[nodiscard]] ::uint32_t rare_books_crafted_count() const;
+  void set_rare_books_crafted_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_rare_books_crafted_count() const;
+  void _internal_set_rare_books_crafted_count(::uint32_t value);
+
+  public:
+  // uint32 newly_unlocked_title_mask = 6;
+  void clear_newly_unlocked_title_mask() ;
+  [[nodiscard]] ::uint32_t newly_unlocked_title_mask() const;
+  void set_newly_unlocked_title_mask(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_newly_unlocked_title_mask() const;
+  void _internal_set_newly_unlocked_title_mask(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:CraftProxyDigestSummary)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 6,
+                          0, 47,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const CraftProxyDigestSummary& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr last_buyer_name_;
+    ::uint32_t orders_completed_;
+    ::uint32_t supreme_forged_count_;
+    ::uint64_t net_gold_earned_;
+    ::uint32_t rare_books_crafted_count_;
+    ::uint32_t newly_unlocked_title_mask_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5895,7 +6011,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimScrollCollectionMilestoneReque
   [[nodiscard]] static const ClaimScrollCollectionMilestoneRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClaimScrollCollectionMilestoneRequest>(&ClaimScrollCollectionMilestoneRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 33;
+  static constexpr int kIndexInFileMessages = 40;
   friend void swap(ClaimScrollCollectionMilestoneRequest& a, ClaimScrollCollectionMilestoneRequest& b) { a.Swap(&b); }
   inline void Swap(ClaimScrollCollectionMilestoneRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6132,7 +6248,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CancelSkillBookWantedOrderRequest f
   [[nodiscard]] static const CancelSkillBookWantedOrderRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CancelSkillBookWantedOrderRequest>(&CancelSkillBookWantedOrderRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 40;
+  static constexpr int kIndexInFileMessages = 47;
   friend void swap(CancelSkillBookWantedOrderRequest& a, CancelSkillBookWantedOrderRequest& b) { a.Swap(&b); }
   inline void Swap(CancelSkillBookWantedOrderRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6357,7 +6473,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BatchDismantleSkillBooksRequest fin
   [[nodiscard]] static const BatchDismantleSkillBooksRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BatchDismantleSkillBooksRequest>(&BatchDismantleSkillBooksRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 35;
+  static constexpr int kIndexInFileMessages = 42;
   friend void swap(BatchDismantleSkillBooksRequest& a, BatchDismantleSkillBooksRequest& b) { a.Swap(&b); }
   inline void Swap(BatchDismantleSkillBooksRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6533,6 +6649,144 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BatchDismantleSkillBooksRequest fin
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AckCraftProxyDigestRequest final : public ::google::protobuf::internal::ZeroFieldsBase
+/* @@protoc_insertion_point(class_definition:AckCraftProxyDigestRequest) */ {
+ public:
+  inline AckCraftProxyDigestRequest() : AckCraftProxyDigestRequest(nullptr) {}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(AckCraftProxyDigestRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(AckCraftProxyDigestRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr AckCraftProxyDigestRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline AckCraftProxyDigestRequest(const AckCraftProxyDigestRequest& from) : AckCraftProxyDigestRequest(nullptr, from) {}
+  inline AckCraftProxyDigestRequest(AckCraftProxyDigestRequest&& from) noexcept : AckCraftProxyDigestRequest(nullptr, ::std::move(from)) {}
+  inline AckCraftProxyDigestRequest& operator=(const AckCraftProxyDigestRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline AckCraftProxyDigestRequest& operator=(AckCraftProxyDigestRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const AckCraftProxyDigestRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AckCraftProxyDigestRequest>(&AckCraftProxyDigestRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 36;
+  friend void swap(AckCraftProxyDigestRequest& a, AckCraftProxyDigestRequest& b) { a.Swap(&b); }
+  inline void Swap(AckCraftProxyDigestRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(AckCraftProxyDigestRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] AckCraftProxyDigestRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::internal::ZeroFieldsBase::DefaultConstruct<AckCraftProxyDigestRequest>(arena);
+  }
+  using ::google::protobuf::internal::ZeroFieldsBase::CopyFrom;
+  inline void CopyFrom(const AckCraftProxyDigestRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::CopyImpl(*this, from); }
+  using ::google::protobuf::internal::ZeroFieldsBase::MergeFrom;
+  void MergeFrom(const AckCraftProxyDigestRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::MergeImpl(*this, from); }
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "AckCraftProxyDigestRequest"; }
+
+  explicit AckCraftProxyDigestRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  AckCraftProxyDigestRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AckCraftProxyDigestRequest& from);
+  AckCraftProxyDigestRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, AckCraftProxyDigestRequest&& from) noexcept
+      : AckCraftProxyDigestRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  // @@protoc_insertion_point(class_scope:AckCraftProxyDigestRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 0,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
   friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
 };
 // -------------------------------------------------------------------
@@ -6803,31 +7057,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillUsedS2C final : public ::googl
 };
 // -------------------------------------------------------------------
 
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillLoadoutSnapshot final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:SkillLoadoutSnapshot) */ {
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillLoadoutSchemeInfo final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:SkillLoadoutSchemeInfo) */ {
  public:
-  inline SkillLoadoutSnapshot() : SkillLoadoutSnapshot(nullptr) {}
-  ~SkillLoadoutSnapshot() PROTOBUF_FINAL;
+  inline SkillLoadoutSchemeInfo() : SkillLoadoutSchemeInfo(nullptr) {}
+  ~SkillLoadoutSchemeInfo() PROTOBUF_FINAL;
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(SkillLoadoutSnapshot* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+  void operator delete(SkillLoadoutSchemeInfo* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
     SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(SkillLoadoutSnapshot));
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SkillLoadoutSchemeInfo));
   }
 #endif
 
   template <typename = void>
-  explicit constexpr SkillLoadoutSnapshot(::google::protobuf::internal::ConstantInitialized,
+  explicit constexpr SkillLoadoutSchemeInfo(::google::protobuf::internal::ConstantInitialized,
                            const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
                                class_data);
 
-  inline SkillLoadoutSnapshot(const SkillLoadoutSnapshot& from) : SkillLoadoutSnapshot(nullptr, from) {}
-  inline SkillLoadoutSnapshot(SkillLoadoutSnapshot&& from) noexcept : SkillLoadoutSnapshot(nullptr, ::std::move(from)) {}
-  inline SkillLoadoutSnapshot& operator=(const SkillLoadoutSnapshot& from) {
+  inline SkillLoadoutSchemeInfo(const SkillLoadoutSchemeInfo& from) : SkillLoadoutSchemeInfo(nullptr, from) {}
+  inline SkillLoadoutSchemeInfo(SkillLoadoutSchemeInfo&& from) noexcept : SkillLoadoutSchemeInfo(nullptr, ::std::move(from)) {}
+  inline SkillLoadoutSchemeInfo& operator=(const SkillLoadoutSchemeInfo& from) {
     CopyFrom(from);
     return *this;
   }
-  inline SkillLoadoutSnapshot& operator=(SkillLoadoutSnapshot&& from) noexcept {
+  inline SkillLoadoutSchemeInfo& operator=(SkillLoadoutSchemeInfo&& from) noexcept {
     if (this == &from) return *this;
     if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
       InternalSwap(&from);
@@ -6856,12 +7110,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillLoadoutSnapshot final : public
   [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
     return default_instance().GetMetadata().reflection;
   }
-  [[nodiscard]] static const SkillLoadoutSnapshot& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SkillLoadoutSnapshot>(&SkillLoadoutSnapshot_globals_);
+  [[nodiscard]] static const SkillLoadoutSchemeInfo& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SkillLoadoutSchemeInfo>(&SkillLoadoutSchemeInfo_globals_);
   }
   static constexpr int kIndexInFileMessages = 8;
-  friend void swap(SkillLoadoutSnapshot& a, SkillLoadoutSnapshot& b) { a.Swap(&b); }
-  inline void Swap(SkillLoadoutSnapshot* PROTOBUF_NONNULL other) {
+  friend void swap(SkillLoadoutSchemeInfo& a, SkillLoadoutSchemeInfo& b) { a.Swap(&b); }
+  inline void Swap(SkillLoadoutSchemeInfo* PROTOBUF_NONNULL other) {
     if (other == this) return;
     if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
       InternalSwap(other);
@@ -6869,7 +7123,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillLoadoutSnapshot final : public
       ::google::protobuf::internal::GenericSwap(this, other);
     }
   }
-  void UnsafeArenaSwap(SkillLoadoutSnapshot* PROTOBUF_NONNULL other) {
+  void UnsafeArenaSwap(SkillLoadoutSchemeInfo* PROTOBUF_NONNULL other) {
     if (other == this) return;
     ABSL_DCHECK(GetArena() == other->GetArena());
     InternalSwap(other);
@@ -6877,14 +7131,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillLoadoutSnapshot final : public
 
   // implements Message ----------------------------------------------
 
-  [[nodiscard]] SkillLoadoutSnapshot* PROTOBUF_NONNULL
+  [[nodiscard]] SkillLoadoutSchemeInfo* PROTOBUF_NONNULL
   New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<SkillLoadoutSnapshot>(arena);
+    return ::google::protobuf::Message::DefaultConstruct<SkillLoadoutSchemeInfo>(arena);
   }
   using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const SkillLoadoutSnapshot& from);
+  void CopyFrom(const SkillLoadoutSchemeInfo& from);
   using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const SkillLoadoutSnapshot& from) { SkillLoadoutSnapshot::MergeImpl(*this, from); }
+  void MergeFrom(const SkillLoadoutSchemeInfo& from) { SkillLoadoutSchemeInfo::MergeImpl(*this, from); }
 
   private:
   static void MergeImpl(::google::protobuf::MessageLite& to_msg,
@@ -6922,17 +7176,17 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillLoadoutSnapshot final : public
   private:
   void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
   static void SharedDtor(MessageLite& self);
-  void InternalSwap(SkillLoadoutSnapshot* PROTOBUF_NONNULL other);
+  void InternalSwap(SkillLoadoutSchemeInfo* PROTOBUF_NONNULL other);
  private:
   template <typename T>
   friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "SkillLoadoutSnapshot"; }
+  static ::absl::string_view FullMessageName() { return "SkillLoadoutSchemeInfo"; }
 
-  explicit SkillLoadoutSnapshot(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  SkillLoadoutSnapshot(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SkillLoadoutSnapshot& from);
-  SkillLoadoutSnapshot(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SkillLoadoutSnapshot&& from) noexcept
-      : SkillLoadoutSnapshot(arena) {
+  explicit SkillLoadoutSchemeInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SkillLoadoutSchemeInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SkillLoadoutSchemeInfo& from);
+  SkillLoadoutSchemeInfo(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SkillLoadoutSchemeInfo&& from) noexcept
+      : SkillLoadoutSchemeInfo(arena) {
     *this = ::std::move(from);
   }
   const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
@@ -6951,139 +7205,153 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillLoadoutSnapshot final : public
 
   // accessors -------------------------------------------------------
   enum : int {
-    kSchemesFieldNumber = 7,
-    kLastRequestIdFieldNumber = 8,
-    kCustomEnabledFieldNumber = 1,
-    kActiveSchemeIdFieldNumber = 2,
-    kStateVersionFieldNumber = 3,
-    kMaxPassiveSlotsFieldNumber = 4,
-    kMaxPursuitSlotsFieldNumber = 5,
-    kMaxOpeningSlotsFieldNumber = 6,
-    kUnlockedSchemesFieldNumber = 9,
-    kMaxSchemesFieldNumber = 10,
+    kPassiveSkillIdsFieldNumber = 3,
+    kPursuitSkillIdsFieldNumber = 4,
+    kOpeningSkillIdsFieldNumber = 5,
+    kNameFieldNumber = 6,
+    kSchemeIdFieldNumber = 1,
+    kRoleTagFieldNumber = 2,
+    kAttributeRemainingFieldNumber = 8,
+    kAttributeTotalPointsFieldNumber = 9,
+    kAttributeAllocatedFieldNumber = 7,
   };
-  // repeated .SkillLoadoutSchemeInfo schemes = 7;
-  [[nodiscard]] int schemes_size()
+  // repeated uint32 passive_skill_ids = 3;
+  [[nodiscard]] int passive_skill_ids_size()
       const;
   private:
-  int _internal_schemes_size() const;
+  int _internal_passive_skill_ids_size() const;
 
   public:
-  void clear_schemes() ;
-  [[nodiscard]] const ::SkillLoadoutSchemeInfo& schemes(int index) const;
-  [[nodiscard]] ::SkillLoadoutSchemeInfo* PROTOBUF_NONNULL mutable_schemes(int index);
-  ::SkillLoadoutSchemeInfo* PROTOBUF_NONNULL add_schemes();
-  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::SkillLoadoutSchemeInfo>&
-  schemes() const;
-  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::SkillLoadoutSchemeInfo>* PROTOBUF_NONNULL
-  mutable_schemes();
+  void clear_passive_skill_ids() ;
+  [[nodiscard]] ::uint32_t passive_skill_ids(int index) const;
+  void set_passive_skill_ids(int index, ::uint32_t value);
+  void add_passive_skill_ids(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& passive_skill_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_passive_skill_ids();
 
   private:
-  const ::google::protobuf::RepeatedPtrField<::SkillLoadoutSchemeInfo>& _internal_schemes() const;
-  ::google::protobuf::RepeatedPtrField<::SkillLoadoutSchemeInfo>* PROTOBUF_NONNULL _internal_mutable_schemes();
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_passive_skill_ids() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_passive_skill_ids();
 
   public:
-  // string last_request_id = 8;
-  void clear_last_request_id() ;
-  [[nodiscard]] const ::std::string& last_request_id() const;
+  // repeated uint32 pursuit_skill_ids = 4;
+  [[nodiscard]] int pursuit_skill_ids_size()
+      const;
+  private:
+  int _internal_pursuit_skill_ids_size() const;
+
+  public:
+  void clear_pursuit_skill_ids() ;
+  [[nodiscard]] ::uint32_t pursuit_skill_ids(int index) const;
+  void set_pursuit_skill_ids(int index, ::uint32_t value);
+  void add_pursuit_skill_ids(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& pursuit_skill_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_pursuit_skill_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_pursuit_skill_ids() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_pursuit_skill_ids();
+
+  public:
+  // repeated uint32 opening_skill_ids = 5;
+  [[nodiscard]] int opening_skill_ids_size()
+      const;
+  private:
+  int _internal_opening_skill_ids_size() const;
+
+  public:
+  void clear_opening_skill_ids() ;
+  [[nodiscard]] ::uint32_t opening_skill_ids(int index) const;
+  void set_opening_skill_ids(int index, ::uint32_t value);
+  void add_opening_skill_ids(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& opening_skill_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_opening_skill_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_opening_skill_ids() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_opening_skill_ids();
+
+  public:
+  // string name = 6;
+  void clear_name() ;
+  [[nodiscard]] const ::std::string& name() const;
   template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_last_request_id(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_last_request_id();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_last_request_id();
-  void set_allocated_last_request_id(::std::string* PROTOBUF_NULLABLE value);
+  void set_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
+  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
 
   private:
-  const ::std::string& _internal_last_request_id() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_last_request_id(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_last_request_id();
+  const ::std::string& _internal_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
 
   public:
-  // bool custom_enabled = 1;
-  void clear_custom_enabled() ;
-  [[nodiscard]] bool custom_enabled() const;
-  void set_custom_enabled(bool value);
+  // uint32 scheme_id = 1;
+  void clear_scheme_id() ;
+  [[nodiscard]] ::uint32_t scheme_id() const;
+  void set_scheme_id(::uint32_t value);
 
   private:
-  bool _internal_custom_enabled() const;
-  void _internal_set_custom_enabled(bool value);
+  ::uint32_t _internal_scheme_id() const;
+  void _internal_set_scheme_id(::uint32_t value);
 
   public:
-  // uint32 active_scheme_id = 2;
-  void clear_active_scheme_id() ;
-  [[nodiscard]] ::uint32_t active_scheme_id() const;
-  void set_active_scheme_id(::uint32_t value);
+  // uint32 role_tag = 2;
+  void clear_role_tag() ;
+  [[nodiscard]] ::uint32_t role_tag() const;
+  void set_role_tag(::uint32_t value);
 
   private:
-  ::uint32_t _internal_active_scheme_id() const;
-  void _internal_set_active_scheme_id(::uint32_t value);
+  ::uint32_t _internal_role_tag() const;
+  void _internal_set_role_tag(::uint32_t value);
 
   public:
-  // uint64 state_version = 3;
-  void clear_state_version() ;
-  [[nodiscard]] ::uint64_t state_version() const;
-  void set_state_version(::uint64_t value);
+  // uint32 attribute_remaining = 8;
+  void clear_attribute_remaining() ;
+  [[nodiscard]] ::uint32_t attribute_remaining() const;
+  void set_attribute_remaining(::uint32_t value);
 
   private:
-  ::uint64_t _internal_state_version() const;
-  void _internal_set_state_version(::uint64_t value);
+  ::uint32_t _internal_attribute_remaining() const;
+  void _internal_set_attribute_remaining(::uint32_t value);
 
   public:
-  // uint32 max_passive_slots = 4;
-  void clear_max_passive_slots() ;
-  [[nodiscard]] ::uint32_t max_passive_slots() const;
-  void set_max_passive_slots(::uint32_t value);
+  // uint32 attribute_total_points = 9;
+  void clear_attribute_total_points() ;
+  [[nodiscard]] ::uint32_t attribute_total_points() const;
+  void set_attribute_total_points(::uint32_t value);
 
   private:
-  ::uint32_t _internal_max_passive_slots() const;
-  void _internal_set_max_passive_slots(::uint32_t value);
+  ::uint32_t _internal_attribute_total_points() const;
+  void _internal_set_attribute_total_points(::uint32_t value);
 
   public:
-  // uint32 max_pursuit_slots = 5;
-  void clear_max_pursuit_slots() ;
-  [[nodiscard]] ::uint32_t max_pursuit_slots() const;
-  void set_max_pursuit_slots(::uint32_t value);
+  // map<uint32, uint32> attribute_allocated = 7;
+  [[nodiscard]] int attribute_allocated_size()
+      const;
+  private:
+  int _internal_attribute_allocated_size() const;
+
+  public:
+  void clear_attribute_allocated() ;
+  [[nodiscard]] const ::google::protobuf::Map<::uint32_t, ::uint32_t>& attribute_allocated() const;
+  [[nodiscard]] ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL mutable_attribute_allocated();
 
   private:
-  ::uint32_t _internal_max_pursuit_slots() const;
-  void _internal_set_max_pursuit_slots(::uint32_t value);
+  const ::google::protobuf::Map<::uint32_t, ::uint32_t>& _internal_attribute_allocated() const;
+  ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL _internal_mutable_attribute_allocated();
 
   public:
-  // uint32 max_opening_slots = 6;
-  void clear_max_opening_slots() ;
-  [[nodiscard]] ::uint32_t max_opening_slots() const;
-  void set_max_opening_slots(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_max_opening_slots() const;
-  void _internal_set_max_opening_slots(::uint32_t value);
-
-  public:
-  // uint32 unlocked_schemes = 9;
-  void clear_unlocked_schemes() ;
-  [[nodiscard]] ::uint32_t unlocked_schemes() const;
-  void set_unlocked_schemes(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_unlocked_schemes() const;
-  void _internal_set_unlocked_schemes(::uint32_t value);
-
-  public:
-  // uint32 max_schemes = 10;
-  void clear_max_schemes() ;
-  [[nodiscard]] ::uint32_t max_schemes() const;
-  void set_max_schemes(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_max_schemes() const;
-  void _internal_set_max_schemes(::uint32_t value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:SkillLoadoutSnapshot)
+  // @@protoc_insertion_point(class_scope:SkillLoadoutSchemeInfo)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 10,
-                          1, 52,
+      ::google::protobuf::internal::TcParseTable<4, 9,
+                          1, 43,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -7108,19 +7376,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillLoadoutSnapshot final : public
     inline explicit Impl_(
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const SkillLoadoutSnapshot& from_msg);
+        const SkillLoadoutSchemeInfo& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::RepeatedPtrField< ::SkillLoadoutSchemeInfo > schemes_;
-    ::google::protobuf::internal::ArenaStringPtr last_request_id_;
-    bool custom_enabled_;
-    ::uint32_t active_scheme_id_;
-    ::uint64_t state_version_;
-    ::uint32_t max_passive_slots_;
-    ::uint32_t max_pursuit_slots_;
-    ::uint32_t max_opening_slots_;
-    ::uint32_t unlocked_schemes_;
-    ::uint32_t max_schemes_;
+    ::google::protobuf::RepeatedField<::uint32_t> passive_skill_ids_;
+    ::google::protobuf::internal::CachedSize _passive_skill_ids_cached_byte_size_;
+    ::google::protobuf::RepeatedField<::uint32_t> pursuit_skill_ids_;
+    ::google::protobuf::internal::CachedSize _pursuit_skill_ids_cached_byte_size_;
+    ::google::protobuf::RepeatedField<::uint32_t> opening_skill_ids_;
+    ::google::protobuf::internal::CachedSize _opening_skill_ids_cached_byte_size_;
+    ::google::protobuf::internal::ArenaStringPtr name_;
+    ::uint32_t scheme_id_;
+    ::uint32_t role_tag_;
+    ::uint32_t attribute_remaining_;
+    ::uint32_t attribute_total_points_;
+    ::google::protobuf::internal::MapField<SkillLoadoutSchemeInfo_AttributeAllocatedEntry_DoNotUse, ::uint32_t, ::uint32_t> attribute_allocated_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7184,7 +7454,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillCraftingStateSnapshot final : 
   [[nodiscard]] static const SkillCraftingStateSnapshot& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SkillCraftingStateSnapshot>(&SkillCraftingStateSnapshot_globals_);
   }
-  static constexpr int kIndexInFileMessages = 15;
+  static constexpr int kIndexInFileMessages = 20;
   friend void swap(SkillCraftingStateSnapshot& a, SkillCraftingStateSnapshot& b) { a.Swap(&b); }
   inline void Swap(SkillCraftingStateSnapshot* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7284,6 +7554,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillCraftingStateSnapshot final : 
     kClaimedScrollMilestoneBitsFieldNumber = 22,
     kForgeMasteryFieldNumber = 2,
     kScrollMasteryFieldNumber = 3,
+    kUnreadProxyDigestFieldNumber = 24,
     kScrollCraftRevisionFieldNumber = 1,
     kGoldBalanceFieldNumber = 7,
     kFragmentOwnedFieldNumber = 8,
@@ -7450,6 +7721,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillCraftingStateSnapshot final : 
   ::SkillCraftMasterySnapshot* PROTOBUF_NONNULL _internal_mutable_scroll_mastery();
 
   public:
+  // .CraftProxyDigestSummary unread_proxy_digest = 24;
+  [[nodiscard]] bool has_unread_proxy_digest()
+      const;
+  void clear_unread_proxy_digest() ;
+  [[nodiscard]] const ::CraftProxyDigestSummary& unread_proxy_digest() const;
+  [[nodiscard]] ::CraftProxyDigestSummary* PROTOBUF_NULLABLE release_unread_proxy_digest();
+  ::CraftProxyDigestSummary* PROTOBUF_NONNULL mutable_unread_proxy_digest();
+  void set_allocated_unread_proxy_digest(::CraftProxyDigestSummary* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_unread_proxy_digest(::CraftProxyDigestSummary* PROTOBUF_NULLABLE value);
+  ::CraftProxyDigestSummary* PROTOBUF_NULLABLE unsafe_arena_release_unread_proxy_digest();
+
+  private:
+  const ::CraftProxyDigestSummary& _internal_unread_proxy_digest() const;
+  ::CraftProxyDigestSummary* PROTOBUF_NONNULL _internal_mutable_unread_proxy_digest();
+
+  public:
   // uint64 scroll_craft_revision = 1;
   void clear_scroll_craft_revision() ;
   [[nodiscard]] ::uint64_t scroll_craft_revision() const;
@@ -7604,8 +7891,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillCraftingStateSnapshot final : 
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 23,
-                          5, 0,
+      ::google::protobuf::internal::TcParseTable<5, 24,
+                          6, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -7643,6 +7930,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillCraftingStateSnapshot final : 
     ::google::protobuf::internal::ArenaStringPtr claimed_scroll_milestone_bits_;
     ::SkillCraftMasterySnapshot* PROTOBUF_NULLABLE forge_mastery_;
     ::SkillCraftMasterySnapshot* PROTOBUF_NULLABLE scroll_mastery_;
+    ::CraftProxyDigestSummary* PROTOBUF_NULLABLE unread_proxy_digest_;
     ::uint64_t scroll_craft_revision_;
     ::uint64_t gold_balance_;
     ::uint64_t fragment_owned_;
@@ -8252,6 +8540,376 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillCatalogEntry final : public ::
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveSkillLoadoutRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:SaveSkillLoadoutRequest) */ {
+ public:
+  inline SaveSkillLoadoutRequest() : SaveSkillLoadoutRequest(nullptr) {}
+  ~SaveSkillLoadoutRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SaveSkillLoadoutRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SaveSkillLoadoutRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SaveSkillLoadoutRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SaveSkillLoadoutRequest(const SaveSkillLoadoutRequest& from) : SaveSkillLoadoutRequest(nullptr, from) {}
+  inline SaveSkillLoadoutRequest(SaveSkillLoadoutRequest&& from) noexcept : SaveSkillLoadoutRequest(nullptr, ::std::move(from)) {}
+  inline SaveSkillLoadoutRequest& operator=(const SaveSkillLoadoutRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SaveSkillLoadoutRequest& operator=(SaveSkillLoadoutRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SaveSkillLoadoutRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SaveSkillLoadoutRequest>(&SaveSkillLoadoutRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 11;
+  friend void swap(SaveSkillLoadoutRequest& a, SaveSkillLoadoutRequest& b) { a.Swap(&b); }
+  inline void Swap(SaveSkillLoadoutRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SaveSkillLoadoutRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SaveSkillLoadoutRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SaveSkillLoadoutRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SaveSkillLoadoutRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SaveSkillLoadoutRequest& from) { SaveSkillLoadoutRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SaveSkillLoadoutRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "SaveSkillLoadoutRequest"; }
+
+  explicit SaveSkillLoadoutRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SaveSkillLoadoutRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SaveSkillLoadoutRequest& from);
+  SaveSkillLoadoutRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SaveSkillLoadoutRequest&& from) noexcept
+      : SaveSkillLoadoutRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPassiveSkillIdsFieldNumber = 3,
+    kPursuitSkillIdsFieldNumber = 4,
+    kOpeningSkillIdsFieldNumber = 5,
+    kRequestIdFieldNumber = 7,
+    kNameFieldNumber = 8,
+    kSchemeIdFieldNumber = 1,
+    kRoleTagFieldNumber = 2,
+    kStateVersionFieldNumber = 6,
+    kUpdateAttributeAllocationFieldNumber = 9,
+    kResetAttributeIfNeededFieldNumber = 11,
+    kAttributeAllocatedFieldNumber = 10,
+  };
+  // repeated uint32 passive_skill_ids = 3;
+  [[nodiscard]] int passive_skill_ids_size()
+      const;
+  private:
+  int _internal_passive_skill_ids_size() const;
+
+  public:
+  void clear_passive_skill_ids() ;
+  [[nodiscard]] ::uint32_t passive_skill_ids(int index) const;
+  void set_passive_skill_ids(int index, ::uint32_t value);
+  void add_passive_skill_ids(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& passive_skill_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_passive_skill_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_passive_skill_ids() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_passive_skill_ids();
+
+  public:
+  // repeated uint32 pursuit_skill_ids = 4;
+  [[nodiscard]] int pursuit_skill_ids_size()
+      const;
+  private:
+  int _internal_pursuit_skill_ids_size() const;
+
+  public:
+  void clear_pursuit_skill_ids() ;
+  [[nodiscard]] ::uint32_t pursuit_skill_ids(int index) const;
+  void set_pursuit_skill_ids(int index, ::uint32_t value);
+  void add_pursuit_skill_ids(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& pursuit_skill_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_pursuit_skill_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_pursuit_skill_ids() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_pursuit_skill_ids();
+
+  public:
+  // repeated uint32 opening_skill_ids = 5;
+  [[nodiscard]] int opening_skill_ids_size()
+      const;
+  private:
+  int _internal_opening_skill_ids_size() const;
+
+  public:
+  void clear_opening_skill_ids() ;
+  [[nodiscard]] ::uint32_t opening_skill_ids(int index) const;
+  void set_opening_skill_ids(int index, ::uint32_t value);
+  void add_opening_skill_ids(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& opening_skill_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_opening_skill_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_opening_skill_ids() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_opening_skill_ids();
+
+  public:
+  // string request_id = 7;
+  void clear_request_id() ;
+  [[nodiscard]] const ::std::string& request_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_request_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_request_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_request_id();
+  void set_allocated_request_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_request_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_request_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_request_id();
+
+  public:
+  // string name = 8;
+  void clear_name() ;
+  [[nodiscard]] const ::std::string& name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
+  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
+
+  public:
+  // uint32 scheme_id = 1;
+  void clear_scheme_id() ;
+  [[nodiscard]] ::uint32_t scheme_id() const;
+  void set_scheme_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_scheme_id() const;
+  void _internal_set_scheme_id(::uint32_t value);
+
+  public:
+  // uint32 role_tag = 2;
+  void clear_role_tag() ;
+  [[nodiscard]] ::uint32_t role_tag() const;
+  void set_role_tag(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_role_tag() const;
+  void _internal_set_role_tag(::uint32_t value);
+
+  public:
+  // uint64 state_version = 6;
+  void clear_state_version() ;
+  [[nodiscard]] ::uint64_t state_version() const;
+  void set_state_version(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_state_version() const;
+  void _internal_set_state_version(::uint64_t value);
+
+  public:
+  // bool update_attribute_allocation = 9;
+  void clear_update_attribute_allocation() ;
+  [[nodiscard]] bool update_attribute_allocation() const;
+  void set_update_attribute_allocation(bool value);
+
+  private:
+  bool _internal_update_attribute_allocation() const;
+  void _internal_set_update_attribute_allocation(bool value);
+
+  public:
+  // bool reset_attribute_if_needed = 11;
+  void clear_reset_attribute_if_needed() ;
+  [[nodiscard]] bool reset_attribute_if_needed() const;
+  void set_reset_attribute_if_needed(bool value);
+
+  private:
+  bool _internal_reset_attribute_if_needed() const;
+  void _internal_set_reset_attribute_if_needed(bool value);
+
+  public:
+  // map<uint32, uint32> attribute_allocated = 10;
+  [[nodiscard]] int attribute_allocated_size()
+      const;
+  private:
+  int _internal_attribute_allocated_size() const;
+
+  public:
+  void clear_attribute_allocated() ;
+  [[nodiscard]] const ::google::protobuf::Map<::uint32_t, ::uint32_t>& attribute_allocated() const;
+  [[nodiscard]] ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL mutable_attribute_allocated();
+
+  private:
+  const ::google::protobuf::Map<::uint32_t, ::uint32_t>& _internal_attribute_allocated() const;
+  ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL _internal_mutable_attribute_allocated();
+
+  public:
+  // @@protoc_insertion_point(class_scope:SaveSkillLoadoutRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 11,
+                          1, 54,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SaveSkillLoadoutRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint32_t> passive_skill_ids_;
+    ::google::protobuf::internal::CachedSize _passive_skill_ids_cached_byte_size_;
+    ::google::protobuf::RepeatedField<::uint32_t> pursuit_skill_ids_;
+    ::google::protobuf::internal::CachedSize _pursuit_skill_ids_cached_byte_size_;
+    ::google::protobuf::RepeatedField<::uint32_t> opening_skill_ids_;
+    ::google::protobuf::internal::CachedSize _opening_skill_ids_cached_byte_size_;
+    ::google::protobuf::internal::ArenaStringPtr request_id_;
+    ::google::protobuf::internal::ArenaStringPtr name_;
+    ::uint32_t scheme_id_;
+    ::uint32_t role_tag_;
+    ::uint64_t state_version_;
+    bool update_attribute_allocation_;
+    bool reset_attribute_if_needed_;
+    ::google::protobuf::internal::MapField<SaveSkillLoadoutRequest_AttributeAllocatedEntry_DoNotUse, ::uint32_t, ::uint32_t> attribute_allocated_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReleaseSkillResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:ReleaseSkillResponse) */ {
  public:
@@ -8764,7 +9422,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListSkillBookWantedOrdersResponse f
   [[nodiscard]] static const ListSkillBookWantedOrdersResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListSkillBookWantedOrdersResponse>(&ListSkillBookWantedOrdersResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 43;
+  static constexpr int kIndexInFileMessages = 50;
   friend void swap(ListSkillBookWantedOrdersResponse& a, ListSkillBookWantedOrdersResponse& b) { a.Swap(&b); }
   inline void Swap(ListSkillBookWantedOrdersResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -8994,7 +9652,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListCraftProxyStallsResponse final 
   [[nodiscard]] static const ListCraftProxyStallsResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListCraftProxyStallsResponse>(&ListCraftProxyStallsResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 32;
+  static constexpr int kIndexInFileMessages = 39;
   friend void swap(ListCraftProxyStallsResponse& a, ListCraftProxyStallsResponse& b) { a.Swap(&b); }
   inline void Swap(ListCraftProxyStallsResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -9224,7 +9882,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UnsealSkillBookResponse final : pub
   [[nodiscard]] static const UnsealSkillBookResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UnsealSkillBookResponse>(&UnsealSkillBookResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 27;
+  static constexpr int kIndexInFileMessages = 32;
   friend void swap(UnsealSkillBookResponse& a, UnsealSkillBookResponse& b) { a.Swap(&b); }
   inline void Swap(UnsealSkillBookResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -9435,6 +10093,475 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UnsealSkillBookResponse final : pub
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillLoadoutSnapshot final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:SkillLoadoutSnapshot) */ {
+ public:
+  inline SkillLoadoutSnapshot() : SkillLoadoutSnapshot(nullptr) {}
+  ~SkillLoadoutSnapshot() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SkillLoadoutSnapshot* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SkillLoadoutSnapshot));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SkillLoadoutSnapshot(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SkillLoadoutSnapshot(const SkillLoadoutSnapshot& from) : SkillLoadoutSnapshot(nullptr, from) {}
+  inline SkillLoadoutSnapshot(SkillLoadoutSnapshot&& from) noexcept : SkillLoadoutSnapshot(nullptr, ::std::move(from)) {}
+  inline SkillLoadoutSnapshot& operator=(const SkillLoadoutSnapshot& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SkillLoadoutSnapshot& operator=(SkillLoadoutSnapshot&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SkillLoadoutSnapshot& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SkillLoadoutSnapshot>(&SkillLoadoutSnapshot_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 9;
+  friend void swap(SkillLoadoutSnapshot& a, SkillLoadoutSnapshot& b) { a.Swap(&b); }
+  inline void Swap(SkillLoadoutSnapshot* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SkillLoadoutSnapshot* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SkillLoadoutSnapshot* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SkillLoadoutSnapshot>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SkillLoadoutSnapshot& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SkillLoadoutSnapshot& from) { SkillLoadoutSnapshot::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SkillLoadoutSnapshot* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "SkillLoadoutSnapshot"; }
+
+  explicit SkillLoadoutSnapshot(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SkillLoadoutSnapshot(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SkillLoadoutSnapshot& from);
+  SkillLoadoutSnapshot(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SkillLoadoutSnapshot&& from) noexcept
+      : SkillLoadoutSnapshot(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSchemesFieldNumber = 7,
+    kLastRequestIdFieldNumber = 8,
+    kCustomEnabledFieldNumber = 1,
+    kActiveSchemeIdFieldNumber = 2,
+    kStateVersionFieldNumber = 3,
+    kMaxPassiveSlotsFieldNumber = 4,
+    kMaxPursuitSlotsFieldNumber = 5,
+    kMaxOpeningSlotsFieldNumber = 6,
+    kUnlockedSchemesFieldNumber = 9,
+    kMaxSchemesFieldNumber = 10,
+    kFreeSchemesFieldNumber = 11,
+    kLightCardBonusSchemesFieldNumber = 12,
+    kRentedExtraSlotsFieldNumber = 13,
+    kRentExpiresAtSecFieldNumber = 14,
+    kServerNowSecFieldNumber = 15,
+    kRentUnitPriceDiamondFieldNumber = 16,
+    kRentPeriodDaysFieldNumber = 17,
+    kRentMaxRemainingDaysFieldNumber = 18,
+    kDiamondBalanceFieldNumber = 19,
+    kAttributeResetCostGoldFieldNumber = 20,
+    kAttributeSwitchCooldownUntilFieldNumber = 21,
+    kActiveAttributeSchemeIdFieldNumber = 22,
+  };
+  // repeated .SkillLoadoutSchemeInfo schemes = 7;
+  [[nodiscard]] int schemes_size()
+      const;
+  private:
+  int _internal_schemes_size() const;
+
+  public:
+  void clear_schemes() ;
+  [[nodiscard]] const ::SkillLoadoutSchemeInfo& schemes(int index) const;
+  [[nodiscard]] ::SkillLoadoutSchemeInfo* PROTOBUF_NONNULL mutable_schemes(int index);
+  ::SkillLoadoutSchemeInfo* PROTOBUF_NONNULL add_schemes();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::SkillLoadoutSchemeInfo>&
+  schemes() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::SkillLoadoutSchemeInfo>* PROTOBUF_NONNULL
+  mutable_schemes();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::SkillLoadoutSchemeInfo>& _internal_schemes() const;
+  ::google::protobuf::RepeatedPtrField<::SkillLoadoutSchemeInfo>* PROTOBUF_NONNULL _internal_mutable_schemes();
+
+  public:
+  // string last_request_id = 8;
+  void clear_last_request_id() ;
+  [[nodiscard]] const ::std::string& last_request_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_last_request_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_last_request_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_last_request_id();
+  void set_allocated_last_request_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_last_request_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_last_request_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_last_request_id();
+
+  public:
+  // bool custom_enabled = 1;
+  void clear_custom_enabled() ;
+  [[nodiscard]] bool custom_enabled() const;
+  void set_custom_enabled(bool value);
+
+  private:
+  bool _internal_custom_enabled() const;
+  void _internal_set_custom_enabled(bool value);
+
+  public:
+  // uint32 active_scheme_id = 2;
+  void clear_active_scheme_id() ;
+  [[nodiscard]] ::uint32_t active_scheme_id() const;
+  void set_active_scheme_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_active_scheme_id() const;
+  void _internal_set_active_scheme_id(::uint32_t value);
+
+  public:
+  // uint64 state_version = 3;
+  void clear_state_version() ;
+  [[nodiscard]] ::uint64_t state_version() const;
+  void set_state_version(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_state_version() const;
+  void _internal_set_state_version(::uint64_t value);
+
+  public:
+  // uint32 max_passive_slots = 4;
+  void clear_max_passive_slots() ;
+  [[nodiscard]] ::uint32_t max_passive_slots() const;
+  void set_max_passive_slots(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_max_passive_slots() const;
+  void _internal_set_max_passive_slots(::uint32_t value);
+
+  public:
+  // uint32 max_pursuit_slots = 5;
+  void clear_max_pursuit_slots() ;
+  [[nodiscard]] ::uint32_t max_pursuit_slots() const;
+  void set_max_pursuit_slots(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_max_pursuit_slots() const;
+  void _internal_set_max_pursuit_slots(::uint32_t value);
+
+  public:
+  // uint32 max_opening_slots = 6;
+  void clear_max_opening_slots() ;
+  [[nodiscard]] ::uint32_t max_opening_slots() const;
+  void set_max_opening_slots(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_max_opening_slots() const;
+  void _internal_set_max_opening_slots(::uint32_t value);
+
+  public:
+  // uint32 unlocked_schemes = 9;
+  void clear_unlocked_schemes() ;
+  [[nodiscard]] ::uint32_t unlocked_schemes() const;
+  void set_unlocked_schemes(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_unlocked_schemes() const;
+  void _internal_set_unlocked_schemes(::uint32_t value);
+
+  public:
+  // uint32 max_schemes = 10;
+  void clear_max_schemes() ;
+  [[nodiscard]] ::uint32_t max_schemes() const;
+  void set_max_schemes(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_max_schemes() const;
+  void _internal_set_max_schemes(::uint32_t value);
+
+  public:
+  // uint32 free_schemes = 11;
+  void clear_free_schemes() ;
+  [[nodiscard]] ::uint32_t free_schemes() const;
+  void set_free_schemes(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_free_schemes() const;
+  void _internal_set_free_schemes(::uint32_t value);
+
+  public:
+  // uint32 light_card_bonus_schemes = 12;
+  void clear_light_card_bonus_schemes() ;
+  [[nodiscard]] ::uint32_t light_card_bonus_schemes() const;
+  void set_light_card_bonus_schemes(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_light_card_bonus_schemes() const;
+  void _internal_set_light_card_bonus_schemes(::uint32_t value);
+
+  public:
+  // uint32 rented_extra_slots = 13;
+  void clear_rented_extra_slots() ;
+  [[nodiscard]] ::uint32_t rented_extra_slots() const;
+  void set_rented_extra_slots(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_rented_extra_slots() const;
+  void _internal_set_rented_extra_slots(::uint32_t value);
+
+  public:
+  // uint64 rent_expires_at_sec = 14;
+  void clear_rent_expires_at_sec() ;
+  [[nodiscard]] ::uint64_t rent_expires_at_sec() const;
+  void set_rent_expires_at_sec(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_rent_expires_at_sec() const;
+  void _internal_set_rent_expires_at_sec(::uint64_t value);
+
+  public:
+  // uint64 server_now_sec = 15;
+  void clear_server_now_sec() ;
+  [[nodiscard]] ::uint64_t server_now_sec() const;
+  void set_server_now_sec(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_server_now_sec() const;
+  void _internal_set_server_now_sec(::uint64_t value);
+
+  public:
+  // uint64 rent_unit_price_diamond = 16;
+  void clear_rent_unit_price_diamond() ;
+  [[nodiscard]] ::uint64_t rent_unit_price_diamond() const;
+  void set_rent_unit_price_diamond(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_rent_unit_price_diamond() const;
+  void _internal_set_rent_unit_price_diamond(::uint64_t value);
+
+  public:
+  // uint32 rent_period_days = 17;
+  void clear_rent_period_days() ;
+  [[nodiscard]] ::uint32_t rent_period_days() const;
+  void set_rent_period_days(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_rent_period_days() const;
+  void _internal_set_rent_period_days(::uint32_t value);
+
+  public:
+  // uint32 rent_max_remaining_days = 18;
+  void clear_rent_max_remaining_days() ;
+  [[nodiscard]] ::uint32_t rent_max_remaining_days() const;
+  void set_rent_max_remaining_days(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_rent_max_remaining_days() const;
+  void _internal_set_rent_max_remaining_days(::uint32_t value);
+
+  public:
+  // uint64 diamond_balance = 19;
+  void clear_diamond_balance() ;
+  [[nodiscard]] ::uint64_t diamond_balance() const;
+  void set_diamond_balance(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_diamond_balance() const;
+  void _internal_set_diamond_balance(::uint64_t value);
+
+  public:
+  // uint64 attribute_reset_cost_gold = 20;
+  void clear_attribute_reset_cost_gold() ;
+  [[nodiscard]] ::uint64_t attribute_reset_cost_gold() const;
+  void set_attribute_reset_cost_gold(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_attribute_reset_cost_gold() const;
+  void _internal_set_attribute_reset_cost_gold(::uint64_t value);
+
+  public:
+  // uint64 attribute_switch_cooldown_until = 21;
+  void clear_attribute_switch_cooldown_until() ;
+  [[nodiscard]] ::uint64_t attribute_switch_cooldown_until() const;
+  void set_attribute_switch_cooldown_until(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_attribute_switch_cooldown_until() const;
+  void _internal_set_attribute_switch_cooldown_until(::uint64_t value);
+
+  public:
+  // uint32 active_attribute_scheme_id = 22;
+  void clear_active_attribute_scheme_id() ;
+  [[nodiscard]] ::uint32_t active_attribute_scheme_id() const;
+  void set_active_attribute_scheme_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_active_attribute_scheme_id() const;
+  void _internal_set_active_attribute_scheme_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:SkillLoadoutSnapshot)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<5, 22,
+                          1, 60,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SkillLoadoutSnapshot& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::SkillLoadoutSchemeInfo > schemes_;
+    ::google::protobuf::internal::ArenaStringPtr last_request_id_;
+    bool custom_enabled_;
+    ::uint32_t active_scheme_id_;
+    ::uint64_t state_version_;
+    ::uint32_t max_passive_slots_;
+    ::uint32_t max_pursuit_slots_;
+    ::uint32_t max_opening_slots_;
+    ::uint32_t unlocked_schemes_;
+    ::uint32_t max_schemes_;
+    ::uint32_t free_schemes_;
+    ::uint32_t light_card_bonus_schemes_;
+    ::uint32_t rented_extra_slots_;
+    ::uint64_t rent_expires_at_sec_;
+    ::uint64_t server_now_sec_;
+    ::uint64_t rent_unit_price_diamond_;
+    ::uint32_t rent_period_days_;
+    ::uint32_t rent_max_remaining_days_;
+    ::uint64_t diamond_balance_;
+    ::uint64_t attribute_reset_cost_gold_;
+    ::uint64_t attribute_switch_cooldown_until_;
+    ::uint32_t active_attribute_scheme_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetCraftProxyStallResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:SetCraftProxyStallResponse) */ {
  public:
@@ -9491,7 +10618,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetCraftProxyStallResponse final : 
   [[nodiscard]] static const SetCraftProxyStallResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SetCraftProxyStallResponse>(&SetCraftProxyStallResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 29;
+  static constexpr int kIndexInFileMessages = 34;
   friend void swap(SetCraftProxyStallResponse& a, SetCraftProxyStallResponse& b) { a.Swap(&b); }
   inline void Swap(SetCraftProxyStallResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -9716,7 +10843,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SealSkillBookResponse final : publi
   [[nodiscard]] static const SealSkillBookResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SealSkillBookResponse>(&SealSkillBookResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 25;
+  static constexpr int kIndexInFileMessages = 30;
   friend void swap(SealSkillBookResponse& a, SealSkillBookResponse& b) { a.Swap(&b); }
   inline void Swap(SealSkillBookResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -9989,7 +11116,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PostSkillBookWantedOrderResponse fi
   [[nodiscard]] static const PostSkillBookWantedOrderResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PostSkillBookWantedOrderResponse>(&PostSkillBookWantedOrderResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 39;
+  static constexpr int kIndexInFileMessages = 46;
   friend void swap(PostSkillBookWantedOrderResponse& a, PostSkillBookWantedOrderResponse& b) { a.Swap(&b); }
   inline void Swap(PostSkillBookWantedOrderResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -10193,6 +11320,2325 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PostSkillBookWantedOrderResponse fi
     ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE state_;
     ::uint64_t client_request_id_;
     bool replayed_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LearnSkillBookResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:LearnSkillBookResponse) */ {
+ public:
+  inline LearnSkillBookResponse() : LearnSkillBookResponse(nullptr) {}
+  ~LearnSkillBookResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(LearnSkillBookResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(LearnSkillBookResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr LearnSkillBookResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline LearnSkillBookResponse(const LearnSkillBookResponse& from) : LearnSkillBookResponse(nullptr, from) {}
+  inline LearnSkillBookResponse(LearnSkillBookResponse&& from) noexcept : LearnSkillBookResponse(nullptr, ::std::move(from)) {}
+  inline LearnSkillBookResponse& operator=(const LearnSkillBookResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline LearnSkillBookResponse& operator=(LearnSkillBookResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const LearnSkillBookResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<LearnSkillBookResponse>(&LearnSkillBookResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 26;
+  friend void swap(LearnSkillBookResponse& a, LearnSkillBookResponse& b) { a.Swap(&b); }
+  inline void Swap(LearnSkillBookResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(LearnSkillBookResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] LearnSkillBookResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<LearnSkillBookResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const LearnSkillBookResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const LearnSkillBookResponse& from) { LearnSkillBookResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(LearnSkillBookResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "LearnSkillBookResponse"; }
+
+  explicit LearnSkillBookResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  LearnSkillBookResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const LearnSkillBookResponse& from);
+  LearnSkillBookResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, LearnSkillBookResponse&& from) noexcept
+      : LearnSkillBookResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kStateFieldNumber = 5,
+    kClientRequestIdFieldNumber = 2,
+    kReplayedFieldNumber = 3,
+    kLearnedSkillTableIdFieldNumber = 4,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .SkillCraftingStateSnapshot state = 5;
+  [[nodiscard]] bool has_state()
+      const;
+  void clear_state() ;
+  [[nodiscard]] const ::SkillCraftingStateSnapshot& state() const;
+  [[nodiscard]] ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE release_state();
+  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL mutable_state();
+  void set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
+  ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
+
+  private:
+  const ::SkillCraftingStateSnapshot& _internal_state() const;
+  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
+
+  public:
+  // uint64 client_request_id = 2;
+  void clear_client_request_id() ;
+  [[nodiscard]] ::uint64_t client_request_id() const;
+  void set_client_request_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_client_request_id() const;
+  void _internal_set_client_request_id(::uint64_t value);
+
+  public:
+  // bool replayed = 3;
+  void clear_replayed() ;
+  [[nodiscard]] bool replayed() const;
+  void set_replayed(bool value);
+
+  private:
+  bool _internal_replayed() const;
+  void _internal_set_replayed(bool value);
+
+  public:
+  // uint32 learned_skill_table_id = 4;
+  void clear_learned_skill_table_id() ;
+  [[nodiscard]] ::uint32_t learned_skill_table_id() const;
+  void set_learned_skill_table_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_learned_skill_table_id() const;
+  void _internal_set_learned_skill_table_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:LearnSkillBookResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const LearnSkillBookResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE state_;
+    ::uint64_t client_request_id_;
+    bool replayed_;
+    ::uint32_t learned_skill_table_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSkillCraftingStateResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:GetSkillCraftingStateResponse) */ {
+ public:
+  inline GetSkillCraftingStateResponse() : GetSkillCraftingStateResponse(nullptr) {}
+  ~GetSkillCraftingStateResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetSkillCraftingStateResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetSkillCraftingStateResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetSkillCraftingStateResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetSkillCraftingStateResponse(const GetSkillCraftingStateResponse& from) : GetSkillCraftingStateResponse(nullptr, from) {}
+  inline GetSkillCraftingStateResponse(GetSkillCraftingStateResponse&& from) noexcept : GetSkillCraftingStateResponse(nullptr, ::std::move(from)) {}
+  inline GetSkillCraftingStateResponse& operator=(const GetSkillCraftingStateResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetSkillCraftingStateResponse& operator=(GetSkillCraftingStateResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetSkillCraftingStateResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetSkillCraftingStateResponse>(&GetSkillCraftingStateResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 22;
+  friend void swap(GetSkillCraftingStateResponse& a, GetSkillCraftingStateResponse& b) { a.Swap(&b); }
+  inline void Swap(GetSkillCraftingStateResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetSkillCraftingStateResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetSkillCraftingStateResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetSkillCraftingStateResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetSkillCraftingStateResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetSkillCraftingStateResponse& from) { GetSkillCraftingStateResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetSkillCraftingStateResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "GetSkillCraftingStateResponse"; }
+
+  explicit GetSkillCraftingStateResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetSkillCraftingStateResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetSkillCraftingStateResponse& from);
+  GetSkillCraftingStateResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetSkillCraftingStateResponse&& from) noexcept
+      : GetSkillCraftingStateResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kStateFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .SkillCraftingStateSnapshot state = 2;
+  [[nodiscard]] bool has_state()
+      const;
+  void clear_state() ;
+  [[nodiscard]] const ::SkillCraftingStateSnapshot& state() const;
+  [[nodiscard]] ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE release_state();
+  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL mutable_state();
+  void set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
+  ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
+
+  private:
+  const ::SkillCraftingStateSnapshot& _internal_state() const;
+  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
+
+  public:
+  // @@protoc_insertion_point(class_scope:GetSkillCraftingStateResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetSkillCraftingStateResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE state_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FulfillSkillBookWantedOrderResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:FulfillSkillBookWantedOrderResponse) */ {
+ public:
+  inline FulfillSkillBookWantedOrderResponse() : FulfillSkillBookWantedOrderResponse(nullptr) {}
+  ~FulfillSkillBookWantedOrderResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(FulfillSkillBookWantedOrderResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(FulfillSkillBookWantedOrderResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr FulfillSkillBookWantedOrderResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline FulfillSkillBookWantedOrderResponse(const FulfillSkillBookWantedOrderResponse& from) : FulfillSkillBookWantedOrderResponse(nullptr, from) {}
+  inline FulfillSkillBookWantedOrderResponse(FulfillSkillBookWantedOrderResponse&& from) noexcept : FulfillSkillBookWantedOrderResponse(nullptr, ::std::move(from)) {}
+  inline FulfillSkillBookWantedOrderResponse& operator=(const FulfillSkillBookWantedOrderResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline FulfillSkillBookWantedOrderResponse& operator=(FulfillSkillBookWantedOrderResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const FulfillSkillBookWantedOrderResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<FulfillSkillBookWantedOrderResponse>(&FulfillSkillBookWantedOrderResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 52;
+  friend void swap(FulfillSkillBookWantedOrderResponse& a, FulfillSkillBookWantedOrderResponse& b) { a.Swap(&b); }
+  inline void Swap(FulfillSkillBookWantedOrderResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(FulfillSkillBookWantedOrderResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] FulfillSkillBookWantedOrderResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<FulfillSkillBookWantedOrderResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const FulfillSkillBookWantedOrderResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const FulfillSkillBookWantedOrderResponse& from) { FulfillSkillBookWantedOrderResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(FulfillSkillBookWantedOrderResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "FulfillSkillBookWantedOrderResponse"; }
+
+  explicit FulfillSkillBookWantedOrderResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  FulfillSkillBookWantedOrderResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const FulfillSkillBookWantedOrderResponse& from);
+  FulfillSkillBookWantedOrderResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, FulfillSkillBookWantedOrderResponse&& from) noexcept
+      : FulfillSkillBookWantedOrderResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kStateFieldNumber = 6,
+    kClientRequestIdFieldNumber = 2,
+    kOrderIdFieldNumber = 4,
+    kSellerNetGoldFieldNumber = 5,
+    kReplayedFieldNumber = 3,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .SkillCraftingStateSnapshot state = 6;
+  [[nodiscard]] bool has_state()
+      const;
+  void clear_state() ;
+  [[nodiscard]] const ::SkillCraftingStateSnapshot& state() const;
+  [[nodiscard]] ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE release_state();
+  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL mutable_state();
+  void set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
+  ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
+
+  private:
+  const ::SkillCraftingStateSnapshot& _internal_state() const;
+  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
+
+  public:
+  // uint64 client_request_id = 2;
+  void clear_client_request_id() ;
+  [[nodiscard]] ::uint64_t client_request_id() const;
+  void set_client_request_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_client_request_id() const;
+  void _internal_set_client_request_id(::uint64_t value);
+
+  public:
+  // uint64 order_id = 4;
+  void clear_order_id() ;
+  [[nodiscard]] ::uint64_t order_id() const;
+  void set_order_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_order_id() const;
+  void _internal_set_order_id(::uint64_t value);
+
+  public:
+  // uint64 seller_net_gold = 5;
+  void clear_seller_net_gold() ;
+  [[nodiscard]] ::uint64_t seller_net_gold() const;
+  void set_seller_net_gold(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_seller_net_gold() const;
+  void _internal_set_seller_net_gold(::uint64_t value);
+
+  public:
+  // bool replayed = 3;
+  void clear_replayed() ;
+  [[nodiscard]] bool replayed() const;
+  void set_replayed(bool value);
+
+  private:
+  bool _internal_replayed() const;
+  void _internal_set_replayed(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:FulfillSkillBookWantedOrderResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 6,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const FulfillSkillBookWantedOrderResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE state_;
+    ::uint64_t client_request_id_;
+    ::uint64_t order_id_;
+    ::uint64_t seller_net_gold_;
+    bool replayed_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DismantleSkillBookResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:DismantleSkillBookResponse) */ {
+ public:
+  inline DismantleSkillBookResponse() : DismantleSkillBookResponse(nullptr) {}
+  ~DismantleSkillBookResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(DismantleSkillBookResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(DismantleSkillBookResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr DismantleSkillBookResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline DismantleSkillBookResponse(const DismantleSkillBookResponse& from) : DismantleSkillBookResponse(nullptr, from) {}
+  inline DismantleSkillBookResponse(DismantleSkillBookResponse&& from) noexcept : DismantleSkillBookResponse(nullptr, ::std::move(from)) {}
+  inline DismantleSkillBookResponse& operator=(const DismantleSkillBookResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline DismantleSkillBookResponse& operator=(DismantleSkillBookResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const DismantleSkillBookResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DismantleSkillBookResponse>(&DismantleSkillBookResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 28;
+  friend void swap(DismantleSkillBookResponse& a, DismantleSkillBookResponse& b) { a.Swap(&b); }
+  inline void Swap(DismantleSkillBookResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(DismantleSkillBookResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] DismantleSkillBookResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<DismantleSkillBookResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const DismantleSkillBookResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const DismantleSkillBookResponse& from) { DismantleSkillBookResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(DismantleSkillBookResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "DismantleSkillBookResponse"; }
+
+  explicit DismantleSkillBookResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  DismantleSkillBookResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const DismantleSkillBookResponse& from);
+  DismantleSkillBookResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, DismantleSkillBookResponse&& from) noexcept
+      : DismantleSkillBookResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kStateFieldNumber = 5,
+    kClientRequestIdFieldNumber = 2,
+    kReplayedFieldNumber = 3,
+    kRefundedFragmentsFieldNumber = 4,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .SkillCraftingStateSnapshot state = 5;
+  [[nodiscard]] bool has_state()
+      const;
+  void clear_state() ;
+  [[nodiscard]] const ::SkillCraftingStateSnapshot& state() const;
+  [[nodiscard]] ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE release_state();
+  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL mutable_state();
+  void set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
+  ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
+
+  private:
+  const ::SkillCraftingStateSnapshot& _internal_state() const;
+  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
+
+  public:
+  // uint64 client_request_id = 2;
+  void clear_client_request_id() ;
+  [[nodiscard]] ::uint64_t client_request_id() const;
+  void set_client_request_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_client_request_id() const;
+  void _internal_set_client_request_id(::uint64_t value);
+
+  public:
+  // bool replayed = 3;
+  void clear_replayed() ;
+  [[nodiscard]] bool replayed() const;
+  void set_replayed(bool value);
+
+  private:
+  bool _internal_replayed() const;
+  void _internal_set_replayed(bool value);
+
+  public:
+  // uint32 refunded_fragments = 4;
+  void clear_refunded_fragments() ;
+  [[nodiscard]] ::uint32_t refunded_fragments() const;
+  void set_refunded_fragments(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_refunded_fragments() const;
+  void _internal_set_refunded_fragments(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:DismantleSkillBookResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const DismantleSkillBookResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE state_;
+    ::uint64_t client_request_id_;
+    bool replayed_;
+    ::uint32_t refunded_fragments_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CraftSkillBookResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:CraftSkillBookResponse) */ {
+ public:
+  inline CraftSkillBookResponse() : CraftSkillBookResponse(nullptr) {}
+  ~CraftSkillBookResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(CraftSkillBookResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(CraftSkillBookResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr CraftSkillBookResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline CraftSkillBookResponse(const CraftSkillBookResponse& from) : CraftSkillBookResponse(nullptr, from) {}
+  inline CraftSkillBookResponse(CraftSkillBookResponse&& from) noexcept : CraftSkillBookResponse(nullptr, ::std::move(from)) {}
+  inline CraftSkillBookResponse& operator=(const CraftSkillBookResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CraftSkillBookResponse& operator=(CraftSkillBookResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const CraftSkillBookResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CraftSkillBookResponse>(&CraftSkillBookResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 24;
+  friend void swap(CraftSkillBookResponse& a, CraftSkillBookResponse& b) { a.Swap(&b); }
+  inline void Swap(CraftSkillBookResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CraftSkillBookResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] CraftSkillBookResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<CraftSkillBookResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const CraftSkillBookResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const CraftSkillBookResponse& from) { CraftSkillBookResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(CraftSkillBookResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "CraftSkillBookResponse"; }
+
+  explicit CraftSkillBookResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  CraftSkillBookResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CraftSkillBookResponse& from);
+  CraftSkillBookResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CraftSkillBookResponse&& from) noexcept
+      : CraftSkillBookResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kCraftedBookFieldNumber = 4,
+    kStateFieldNumber = 6,
+    kClientRequestIdFieldNumber = 2,
+    kReplayedFieldNumber = 3,
+    kBonusFragmentsGrantedFieldNumber = 5,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .CraftedSkillBookEntry crafted_book = 4;
+  [[nodiscard]] bool has_crafted_book()
+      const;
+  void clear_crafted_book() ;
+  [[nodiscard]] const ::CraftedSkillBookEntry& crafted_book() const;
+  [[nodiscard]] ::CraftedSkillBookEntry* PROTOBUF_NULLABLE release_crafted_book();
+  ::CraftedSkillBookEntry* PROTOBUF_NONNULL mutable_crafted_book();
+  void set_allocated_crafted_book(::CraftedSkillBookEntry* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_crafted_book(::CraftedSkillBookEntry* PROTOBUF_NULLABLE value);
+  ::CraftedSkillBookEntry* PROTOBUF_NULLABLE unsafe_arena_release_crafted_book();
+
+  private:
+  const ::CraftedSkillBookEntry& _internal_crafted_book() const;
+  ::CraftedSkillBookEntry* PROTOBUF_NONNULL _internal_mutable_crafted_book();
+
+  public:
+  // .SkillCraftingStateSnapshot state = 6;
+  [[nodiscard]] bool has_state()
+      const;
+  void clear_state() ;
+  [[nodiscard]] const ::SkillCraftingStateSnapshot& state() const;
+  [[nodiscard]] ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE release_state();
+  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL mutable_state();
+  void set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
+  ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
+
+  private:
+  const ::SkillCraftingStateSnapshot& _internal_state() const;
+  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
+
+  public:
+  // uint64 client_request_id = 2;
+  void clear_client_request_id() ;
+  [[nodiscard]] ::uint64_t client_request_id() const;
+  void set_client_request_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_client_request_id() const;
+  void _internal_set_client_request_id(::uint64_t value);
+
+  public:
+  // bool replayed = 3;
+  void clear_replayed() ;
+  [[nodiscard]] bool replayed() const;
+  void set_replayed(bool value);
+
+  private:
+  bool _internal_replayed() const;
+  void _internal_set_replayed(bool value);
+
+  public:
+  // uint32 bonus_fragments_granted = 5;
+  void clear_bonus_fragments_granted() ;
+  [[nodiscard]] ::uint32_t bonus_fragments_granted() const;
+  void set_bonus_fragments_granted(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_bonus_fragments_granted() const;
+  void _internal_set_bonus_fragments_granted(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:CraftSkillBookResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 6,
+                          3, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const CraftSkillBookResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::CraftedSkillBookEntry* PROTOBUF_NULLABLE crafted_book_;
+    ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE state_;
+    ::uint64_t client_request_id_;
+    bool replayed_;
+    ::uint32_t bonus_fragments_granted_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimScrollCollectionMilestoneResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:ClaimScrollCollectionMilestoneResponse) */ {
+ public:
+  inline ClaimScrollCollectionMilestoneResponse() : ClaimScrollCollectionMilestoneResponse(nullptr) {}
+  ~ClaimScrollCollectionMilestoneResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ClaimScrollCollectionMilestoneResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ClaimScrollCollectionMilestoneResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ClaimScrollCollectionMilestoneResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ClaimScrollCollectionMilestoneResponse(const ClaimScrollCollectionMilestoneResponse& from) : ClaimScrollCollectionMilestoneResponse(nullptr, from) {}
+  inline ClaimScrollCollectionMilestoneResponse(ClaimScrollCollectionMilestoneResponse&& from) noexcept : ClaimScrollCollectionMilestoneResponse(nullptr, ::std::move(from)) {}
+  inline ClaimScrollCollectionMilestoneResponse& operator=(const ClaimScrollCollectionMilestoneResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ClaimScrollCollectionMilestoneResponse& operator=(ClaimScrollCollectionMilestoneResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ClaimScrollCollectionMilestoneResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClaimScrollCollectionMilestoneResponse>(&ClaimScrollCollectionMilestoneResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 41;
+  friend void swap(ClaimScrollCollectionMilestoneResponse& a, ClaimScrollCollectionMilestoneResponse& b) { a.Swap(&b); }
+  inline void Swap(ClaimScrollCollectionMilestoneResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ClaimScrollCollectionMilestoneResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ClaimScrollCollectionMilestoneResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ClaimScrollCollectionMilestoneResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ClaimScrollCollectionMilestoneResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ClaimScrollCollectionMilestoneResponse& from) { ClaimScrollCollectionMilestoneResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ClaimScrollCollectionMilestoneResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "ClaimScrollCollectionMilestoneResponse"; }
+
+  explicit ClaimScrollCollectionMilestoneResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ClaimScrollCollectionMilestoneResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ClaimScrollCollectionMilestoneResponse& from);
+  ClaimScrollCollectionMilestoneResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ClaimScrollCollectionMilestoneResponse&& from) noexcept
+      : ClaimScrollCollectionMilestoneResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kStateFieldNumber = 5,
+    kClientRequestIdFieldNumber = 2,
+    kReplayedFieldNumber = 3,
+    kRewardedFragmentsFieldNumber = 4,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .SkillCraftingStateSnapshot state = 5;
+  [[nodiscard]] bool has_state()
+      const;
+  void clear_state() ;
+  [[nodiscard]] const ::SkillCraftingStateSnapshot& state() const;
+  [[nodiscard]] ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE release_state();
+  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL mutable_state();
+  void set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
+  ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
+
+  private:
+  const ::SkillCraftingStateSnapshot& _internal_state() const;
+  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
+
+  public:
+  // uint64 client_request_id = 2;
+  void clear_client_request_id() ;
+  [[nodiscard]] ::uint64_t client_request_id() const;
+  void set_client_request_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_client_request_id() const;
+  void _internal_set_client_request_id(::uint64_t value);
+
+  public:
+  // bool replayed = 3;
+  void clear_replayed() ;
+  [[nodiscard]] bool replayed() const;
+  void set_replayed(bool value);
+
+  private:
+  bool _internal_replayed() const;
+  void _internal_set_replayed(bool value);
+
+  public:
+  // uint32 rewarded_fragments = 4;
+  void clear_rewarded_fragments() ;
+  [[nodiscard]] ::uint32_t rewarded_fragments() const;
+  void set_rewarded_fragments(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_rewarded_fragments() const;
+  void _internal_set_rewarded_fragments(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:ClaimScrollCollectionMilestoneResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ClaimScrollCollectionMilestoneResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE state_;
+    ::uint64_t client_request_id_;
+    bool replayed_;
+    ::uint32_t rewarded_fragments_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CancelSkillBookWantedOrderResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:CancelSkillBookWantedOrderResponse) */ {
+ public:
+  inline CancelSkillBookWantedOrderResponse() : CancelSkillBookWantedOrderResponse(nullptr) {}
+  ~CancelSkillBookWantedOrderResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(CancelSkillBookWantedOrderResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(CancelSkillBookWantedOrderResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr CancelSkillBookWantedOrderResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline CancelSkillBookWantedOrderResponse(const CancelSkillBookWantedOrderResponse& from) : CancelSkillBookWantedOrderResponse(nullptr, from) {}
+  inline CancelSkillBookWantedOrderResponse(CancelSkillBookWantedOrderResponse&& from) noexcept : CancelSkillBookWantedOrderResponse(nullptr, ::std::move(from)) {}
+  inline CancelSkillBookWantedOrderResponse& operator=(const CancelSkillBookWantedOrderResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CancelSkillBookWantedOrderResponse& operator=(CancelSkillBookWantedOrderResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const CancelSkillBookWantedOrderResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CancelSkillBookWantedOrderResponse>(&CancelSkillBookWantedOrderResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 48;
+  friend void swap(CancelSkillBookWantedOrderResponse& a, CancelSkillBookWantedOrderResponse& b) { a.Swap(&b); }
+  inline void Swap(CancelSkillBookWantedOrderResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CancelSkillBookWantedOrderResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] CancelSkillBookWantedOrderResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<CancelSkillBookWantedOrderResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const CancelSkillBookWantedOrderResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const CancelSkillBookWantedOrderResponse& from) { CancelSkillBookWantedOrderResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(CancelSkillBookWantedOrderResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "CancelSkillBookWantedOrderResponse"; }
+
+  explicit CancelSkillBookWantedOrderResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  CancelSkillBookWantedOrderResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CancelSkillBookWantedOrderResponse& from);
+  CancelSkillBookWantedOrderResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CancelSkillBookWantedOrderResponse&& from) noexcept
+      : CancelSkillBookWantedOrderResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kStateFieldNumber = 5,
+    kClientRequestIdFieldNumber = 2,
+    kRefundedGoldFieldNumber = 4,
+    kReplayedFieldNumber = 3,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .SkillCraftingStateSnapshot state = 5;
+  [[nodiscard]] bool has_state()
+      const;
+  void clear_state() ;
+  [[nodiscard]] const ::SkillCraftingStateSnapshot& state() const;
+  [[nodiscard]] ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE release_state();
+  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL mutable_state();
+  void set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
+  ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
+
+  private:
+  const ::SkillCraftingStateSnapshot& _internal_state() const;
+  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
+
+  public:
+  // uint64 client_request_id = 2;
+  void clear_client_request_id() ;
+  [[nodiscard]] ::uint64_t client_request_id() const;
+  void set_client_request_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_client_request_id() const;
+  void _internal_set_client_request_id(::uint64_t value);
+
+  public:
+  // uint64 refunded_gold = 4;
+  void clear_refunded_gold() ;
+  [[nodiscard]] ::uint64_t refunded_gold() const;
+  void set_refunded_gold(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_refunded_gold() const;
+  void _internal_set_refunded_gold(::uint64_t value);
+
+  public:
+  // bool replayed = 3;
+  void clear_replayed() ;
+  [[nodiscard]] bool replayed() const;
+  void set_replayed(bool value);
+
+  private:
+  bool _internal_replayed() const;
+  void _internal_set_replayed(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:CancelSkillBookWantedOrderResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const CancelSkillBookWantedOrderResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE state_;
+    ::uint64_t client_request_id_;
+    ::uint64_t refunded_gold_;
+    bool replayed_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BatchDismantleSkillBooksResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:BatchDismantleSkillBooksResponse) */ {
+ public:
+  inline BatchDismantleSkillBooksResponse() : BatchDismantleSkillBooksResponse(nullptr) {}
+  ~BatchDismantleSkillBooksResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BatchDismantleSkillBooksResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BatchDismantleSkillBooksResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BatchDismantleSkillBooksResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BatchDismantleSkillBooksResponse(const BatchDismantleSkillBooksResponse& from) : BatchDismantleSkillBooksResponse(nullptr, from) {}
+  inline BatchDismantleSkillBooksResponse(BatchDismantleSkillBooksResponse&& from) noexcept : BatchDismantleSkillBooksResponse(nullptr, ::std::move(from)) {}
+  inline BatchDismantleSkillBooksResponse& operator=(const BatchDismantleSkillBooksResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BatchDismantleSkillBooksResponse& operator=(BatchDismantleSkillBooksResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BatchDismantleSkillBooksResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BatchDismantleSkillBooksResponse>(&BatchDismantleSkillBooksResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 43;
+  friend void swap(BatchDismantleSkillBooksResponse& a, BatchDismantleSkillBooksResponse& b) { a.Swap(&b); }
+  inline void Swap(BatchDismantleSkillBooksResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BatchDismantleSkillBooksResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BatchDismantleSkillBooksResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BatchDismantleSkillBooksResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BatchDismantleSkillBooksResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BatchDismantleSkillBooksResponse& from) { BatchDismantleSkillBooksResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BatchDismantleSkillBooksResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "BatchDismantleSkillBooksResponse"; }
+
+  explicit BatchDismantleSkillBooksResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BatchDismantleSkillBooksResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BatchDismantleSkillBooksResponse& from);
+  BatchDismantleSkillBooksResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BatchDismantleSkillBooksResponse&& from) noexcept
+      : BatchDismantleSkillBooksResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kStateFieldNumber = 6,
+    kClientRequestIdFieldNumber = 2,
+    kReplayedFieldNumber = 3,
+    kDismantledCountFieldNumber = 4,
+    kRefundedFragmentsFieldNumber = 5,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .SkillCraftingStateSnapshot state = 6;
+  [[nodiscard]] bool has_state()
+      const;
+  void clear_state() ;
+  [[nodiscard]] const ::SkillCraftingStateSnapshot& state() const;
+  [[nodiscard]] ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE release_state();
+  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL mutable_state();
+  void set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
+  ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
+
+  private:
+  const ::SkillCraftingStateSnapshot& _internal_state() const;
+  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
+
+  public:
+  // uint64 client_request_id = 2;
+  void clear_client_request_id() ;
+  [[nodiscard]] ::uint64_t client_request_id() const;
+  void set_client_request_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_client_request_id() const;
+  void _internal_set_client_request_id(::uint64_t value);
+
+  public:
+  // bool replayed = 3;
+  void clear_replayed() ;
+  [[nodiscard]] bool replayed() const;
+  void set_replayed(bool value);
+
+  private:
+  bool _internal_replayed() const;
+  void _internal_set_replayed(bool value);
+
+  public:
+  // uint32 dismantled_count = 4;
+  void clear_dismantled_count() ;
+  [[nodiscard]] ::uint32_t dismantled_count() const;
+  void set_dismantled_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_dismantled_count() const;
+  void _internal_set_dismantled_count(::uint32_t value);
+
+  public:
+  // uint32 refunded_fragments = 5;
+  void clear_refunded_fragments() ;
+  [[nodiscard]] ::uint32_t refunded_fragments() const;
+  void set_refunded_fragments(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_refunded_fragments() const;
+  void _internal_set_refunded_fragments(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:BatchDismantleSkillBooksResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 6,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BatchDismantleSkillBooksResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE state_;
+    ::uint64_t client_request_id_;
+    bool replayed_;
+    ::uint32_t dismantled_count_;
+    ::uint32_t refunded_fragments_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AckCraftProxyDigestResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:AckCraftProxyDigestResponse) */ {
+ public:
+  inline AckCraftProxyDigestResponse() : AckCraftProxyDigestResponse(nullptr) {}
+  ~AckCraftProxyDigestResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(AckCraftProxyDigestResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(AckCraftProxyDigestResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr AckCraftProxyDigestResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline AckCraftProxyDigestResponse(const AckCraftProxyDigestResponse& from) : AckCraftProxyDigestResponse(nullptr, from) {}
+  inline AckCraftProxyDigestResponse(AckCraftProxyDigestResponse&& from) noexcept : AckCraftProxyDigestResponse(nullptr, ::std::move(from)) {}
+  inline AckCraftProxyDigestResponse& operator=(const AckCraftProxyDigestResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline AckCraftProxyDigestResponse& operator=(AckCraftProxyDigestResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const AckCraftProxyDigestResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AckCraftProxyDigestResponse>(&AckCraftProxyDigestResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 37;
+  friend void swap(AckCraftProxyDigestResponse& a, AckCraftProxyDigestResponse& b) { a.Swap(&b); }
+  inline void Swap(AckCraftProxyDigestResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(AckCraftProxyDigestResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] AckCraftProxyDigestResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<AckCraftProxyDigestResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const AckCraftProxyDigestResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const AckCraftProxyDigestResponse& from) { AckCraftProxyDigestResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(AckCraftProxyDigestResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "AckCraftProxyDigestResponse"; }
+
+  explicit AckCraftProxyDigestResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  AckCraftProxyDigestResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AckCraftProxyDigestResponse& from);
+  AckCraftProxyDigestResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, AckCraftProxyDigestResponse&& from) noexcept
+      : AckCraftProxyDigestResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kStateFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .SkillCraftingStateSnapshot state = 2;
+  [[nodiscard]] bool has_state()
+      const;
+  void clear_state() ;
+  [[nodiscard]] const ::SkillCraftingStateSnapshot& state() const;
+  [[nodiscard]] ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE release_state();
+  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL mutable_state();
+  void set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
+  ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
+
+  private:
+  const ::SkillCraftingStateSnapshot& _internal_state() const;
+  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
+
+  public:
+  // @@protoc_insertion_point(class_scope:AckCraftProxyDigestResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const AckCraftProxyDigestResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE state_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -10514,2100 +13960,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListSkillsResponse final : public :
 };
 // -------------------------------------------------------------------
 
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LearnSkillBookResponse final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:LearnSkillBookResponse) */ {
- public:
-  inline LearnSkillBookResponse() : LearnSkillBookResponse(nullptr) {}
-  ~LearnSkillBookResponse() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(LearnSkillBookResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(LearnSkillBookResponse));
-  }
-#endif
-
-  template <typename = void>
-  explicit constexpr LearnSkillBookResponse(::google::protobuf::internal::ConstantInitialized,
-                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-                               class_data);
-
-  inline LearnSkillBookResponse(const LearnSkillBookResponse& from) : LearnSkillBookResponse(nullptr, from) {}
-  inline LearnSkillBookResponse(LearnSkillBookResponse&& from) noexcept : LearnSkillBookResponse(nullptr, ::std::move(from)) {}
-  inline LearnSkillBookResponse& operator=(const LearnSkillBookResponse& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline LearnSkillBookResponse& operator=(LearnSkillBookResponse&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
-  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
-  GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  [[nodiscard]] static const LearnSkillBookResponse& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<LearnSkillBookResponse>(&LearnSkillBookResponse_globals_);
-  }
-  static constexpr int kIndexInFileMessages = 21;
-  friend void swap(LearnSkillBookResponse& a, LearnSkillBookResponse& b) { a.Swap(&b); }
-  inline void Swap(LearnSkillBookResponse* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(LearnSkillBookResponse* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  [[nodiscard]] LearnSkillBookResponse* PROTOBUF_NONNULL
-  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<LearnSkillBookResponse>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const LearnSkillBookResponse& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const LearnSkillBookResponse& from) { LearnSkillBookResponse::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  [[nodiscard]] bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(LearnSkillBookResponse* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "LearnSkillBookResponse"; }
-
-  explicit LearnSkillBookResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  LearnSkillBookResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const LearnSkillBookResponse& from);
-  LearnSkillBookResponse(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, LearnSkillBookResponse&& from) noexcept
-      : LearnSkillBookResponse(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_(
-      const MessageLite& prototype,
-      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
-
-  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kErrorMessageFieldNumber = 1,
-    kStateFieldNumber = 5,
-    kClientRequestIdFieldNumber = 2,
-    kReplayedFieldNumber = 3,
-    kLearnedSkillTableIdFieldNumber = 4,
-  };
-  // .TipInfoMessage error_message = 1;
-  [[nodiscard]] bool has_error_message()
-      const;
-  void clear_error_message() ;
-  [[nodiscard]] const ::TipInfoMessage& error_message() const;
-  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
-  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
-  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
-  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
-
-  private:
-  const ::TipInfoMessage& _internal_error_message() const;
-  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
-
-  public:
-  // .SkillCraftingStateSnapshot state = 5;
-  [[nodiscard]] bool has_state()
-      const;
-  void clear_state() ;
-  [[nodiscard]] const ::SkillCraftingStateSnapshot& state() const;
-  [[nodiscard]] ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE release_state();
-  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL mutable_state();
-  void set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
-  ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
-
-  private:
-  const ::SkillCraftingStateSnapshot& _internal_state() const;
-  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
-
-  public:
-  // uint64 client_request_id = 2;
-  void clear_client_request_id() ;
-  [[nodiscard]] ::uint64_t client_request_id() const;
-  void set_client_request_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_client_request_id() const;
-  void _internal_set_client_request_id(::uint64_t value);
-
-  public:
-  // bool replayed = 3;
-  void clear_replayed() ;
-  [[nodiscard]] bool replayed() const;
-  void set_replayed(bool value);
-
-  private:
-  bool _internal_replayed() const;
-  void _internal_set_replayed(bool value);
-
-  public:
-  // uint32 learned_skill_table_id = 4;
-  void clear_learned_skill_table_id() ;
-  [[nodiscard]] ::uint32_t learned_skill_table_id() const;
-  void set_learned_skill_table_id(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_learned_skill_table_id() const;
-  void _internal_set_learned_skill_table_id(::uint32_t value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:LearnSkillBookResponse)
- private:
-  class _Internal;
-  using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
-                          2, 0,
-                          2>;
-  static constexpr ParseTableT_ InternalGenerateParseTable_(
-      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
-  friend class ::google::protobuf::internal::TcParser;
-  #ifndef PROTOBUF_MESSAGE_GLOBALS
-  static const ParseTableT_ _table_;
-  #endif
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  friend ::google::protobuf::internal::PrivateAccess;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const LearnSkillBookResponse& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
-    ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE state_;
-    ::uint64_t client_request_id_;
-    bool replayed_;
-    ::uint32_t learned_skill_table_id_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
-};
-// -------------------------------------------------------------------
-
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSkillCraftingStateResponse final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:GetSkillCraftingStateResponse) */ {
- public:
-  inline GetSkillCraftingStateResponse() : GetSkillCraftingStateResponse(nullptr) {}
-  ~GetSkillCraftingStateResponse() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(GetSkillCraftingStateResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetSkillCraftingStateResponse));
-  }
-#endif
-
-  template <typename = void>
-  explicit constexpr GetSkillCraftingStateResponse(::google::protobuf::internal::ConstantInitialized,
-                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-                               class_data);
-
-  inline GetSkillCraftingStateResponse(const GetSkillCraftingStateResponse& from) : GetSkillCraftingStateResponse(nullptr, from) {}
-  inline GetSkillCraftingStateResponse(GetSkillCraftingStateResponse&& from) noexcept : GetSkillCraftingStateResponse(nullptr, ::std::move(from)) {}
-  inline GetSkillCraftingStateResponse& operator=(const GetSkillCraftingStateResponse& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline GetSkillCraftingStateResponse& operator=(GetSkillCraftingStateResponse&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
-  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
-  GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  [[nodiscard]] static const GetSkillCraftingStateResponse& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetSkillCraftingStateResponse>(&GetSkillCraftingStateResponse_globals_);
-  }
-  static constexpr int kIndexInFileMessages = 17;
-  friend void swap(GetSkillCraftingStateResponse& a, GetSkillCraftingStateResponse& b) { a.Swap(&b); }
-  inline void Swap(GetSkillCraftingStateResponse* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(GetSkillCraftingStateResponse* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  [[nodiscard]] GetSkillCraftingStateResponse* PROTOBUF_NONNULL
-  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<GetSkillCraftingStateResponse>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const GetSkillCraftingStateResponse& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const GetSkillCraftingStateResponse& from) { GetSkillCraftingStateResponse::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  [[nodiscard]] bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(GetSkillCraftingStateResponse* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "GetSkillCraftingStateResponse"; }
-
-  explicit GetSkillCraftingStateResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  GetSkillCraftingStateResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetSkillCraftingStateResponse& from);
-  GetSkillCraftingStateResponse(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetSkillCraftingStateResponse&& from) noexcept
-      : GetSkillCraftingStateResponse(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_(
-      const MessageLite& prototype,
-      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
-
-  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kErrorMessageFieldNumber = 1,
-    kStateFieldNumber = 2,
-  };
-  // .TipInfoMessage error_message = 1;
-  [[nodiscard]] bool has_error_message()
-      const;
-  void clear_error_message() ;
-  [[nodiscard]] const ::TipInfoMessage& error_message() const;
-  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
-  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
-  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
-  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
-
-  private:
-  const ::TipInfoMessage& _internal_error_message() const;
-  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
-
-  public:
-  // .SkillCraftingStateSnapshot state = 2;
-  [[nodiscard]] bool has_state()
-      const;
-  void clear_state() ;
-  [[nodiscard]] const ::SkillCraftingStateSnapshot& state() const;
-  [[nodiscard]] ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE release_state();
-  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL mutable_state();
-  void set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
-  ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
-
-  private:
-  const ::SkillCraftingStateSnapshot& _internal_state() const;
-  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
-
-  public:
-  // @@protoc_insertion_point(class_scope:GetSkillCraftingStateResponse)
- private:
-  class _Internal;
-  using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
-                          2, 0,
-                          2>;
-  static constexpr ParseTableT_ InternalGenerateParseTable_(
-      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
-  friend class ::google::protobuf::internal::TcParser;
-  #ifndef PROTOBUF_MESSAGE_GLOBALS
-  static const ParseTableT_ _table_;
-  #endif
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  friend ::google::protobuf::internal::PrivateAccess;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const GetSkillCraftingStateResponse& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
-    ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE state_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
-};
-// -------------------------------------------------------------------
-
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FulfillSkillBookWantedOrderResponse final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:FulfillSkillBookWantedOrderResponse) */ {
- public:
-  inline FulfillSkillBookWantedOrderResponse() : FulfillSkillBookWantedOrderResponse(nullptr) {}
-  ~FulfillSkillBookWantedOrderResponse() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(FulfillSkillBookWantedOrderResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(FulfillSkillBookWantedOrderResponse));
-  }
-#endif
-
-  template <typename = void>
-  explicit constexpr FulfillSkillBookWantedOrderResponse(::google::protobuf::internal::ConstantInitialized,
-                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-                               class_data);
-
-  inline FulfillSkillBookWantedOrderResponse(const FulfillSkillBookWantedOrderResponse& from) : FulfillSkillBookWantedOrderResponse(nullptr, from) {}
-  inline FulfillSkillBookWantedOrderResponse(FulfillSkillBookWantedOrderResponse&& from) noexcept : FulfillSkillBookWantedOrderResponse(nullptr, ::std::move(from)) {}
-  inline FulfillSkillBookWantedOrderResponse& operator=(const FulfillSkillBookWantedOrderResponse& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline FulfillSkillBookWantedOrderResponse& operator=(FulfillSkillBookWantedOrderResponse&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
-  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
-  GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  [[nodiscard]] static const FulfillSkillBookWantedOrderResponse& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<FulfillSkillBookWantedOrderResponse>(&FulfillSkillBookWantedOrderResponse_globals_);
-  }
-  static constexpr int kIndexInFileMessages = 45;
-  friend void swap(FulfillSkillBookWantedOrderResponse& a, FulfillSkillBookWantedOrderResponse& b) { a.Swap(&b); }
-  inline void Swap(FulfillSkillBookWantedOrderResponse* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(FulfillSkillBookWantedOrderResponse* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  [[nodiscard]] FulfillSkillBookWantedOrderResponse* PROTOBUF_NONNULL
-  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<FulfillSkillBookWantedOrderResponse>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const FulfillSkillBookWantedOrderResponse& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const FulfillSkillBookWantedOrderResponse& from) { FulfillSkillBookWantedOrderResponse::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  [[nodiscard]] bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(FulfillSkillBookWantedOrderResponse* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "FulfillSkillBookWantedOrderResponse"; }
-
-  explicit FulfillSkillBookWantedOrderResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  FulfillSkillBookWantedOrderResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const FulfillSkillBookWantedOrderResponse& from);
-  FulfillSkillBookWantedOrderResponse(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, FulfillSkillBookWantedOrderResponse&& from) noexcept
-      : FulfillSkillBookWantedOrderResponse(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_(
-      const MessageLite& prototype,
-      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
-
-  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kErrorMessageFieldNumber = 1,
-    kStateFieldNumber = 6,
-    kClientRequestIdFieldNumber = 2,
-    kOrderIdFieldNumber = 4,
-    kSellerNetGoldFieldNumber = 5,
-    kReplayedFieldNumber = 3,
-  };
-  // .TipInfoMessage error_message = 1;
-  [[nodiscard]] bool has_error_message()
-      const;
-  void clear_error_message() ;
-  [[nodiscard]] const ::TipInfoMessage& error_message() const;
-  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
-  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
-  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
-  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
-
-  private:
-  const ::TipInfoMessage& _internal_error_message() const;
-  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
-
-  public:
-  // .SkillCraftingStateSnapshot state = 6;
-  [[nodiscard]] bool has_state()
-      const;
-  void clear_state() ;
-  [[nodiscard]] const ::SkillCraftingStateSnapshot& state() const;
-  [[nodiscard]] ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE release_state();
-  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL mutable_state();
-  void set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
-  ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
-
-  private:
-  const ::SkillCraftingStateSnapshot& _internal_state() const;
-  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
-
-  public:
-  // uint64 client_request_id = 2;
-  void clear_client_request_id() ;
-  [[nodiscard]] ::uint64_t client_request_id() const;
-  void set_client_request_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_client_request_id() const;
-  void _internal_set_client_request_id(::uint64_t value);
-
-  public:
-  // uint64 order_id = 4;
-  void clear_order_id() ;
-  [[nodiscard]] ::uint64_t order_id() const;
-  void set_order_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_order_id() const;
-  void _internal_set_order_id(::uint64_t value);
-
-  public:
-  // uint64 seller_net_gold = 5;
-  void clear_seller_net_gold() ;
-  [[nodiscard]] ::uint64_t seller_net_gold() const;
-  void set_seller_net_gold(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_seller_net_gold() const;
-  void _internal_set_seller_net_gold(::uint64_t value);
-
-  public:
-  // bool replayed = 3;
-  void clear_replayed() ;
-  [[nodiscard]] bool replayed() const;
-  void set_replayed(bool value);
-
-  private:
-  bool _internal_replayed() const;
-  void _internal_set_replayed(bool value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:FulfillSkillBookWantedOrderResponse)
- private:
-  class _Internal;
-  using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
-                          2, 0,
-                          2>;
-  static constexpr ParseTableT_ InternalGenerateParseTable_(
-      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
-  friend class ::google::protobuf::internal::TcParser;
-  #ifndef PROTOBUF_MESSAGE_GLOBALS
-  static const ParseTableT_ _table_;
-  #endif
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  friend ::google::protobuf::internal::PrivateAccess;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const FulfillSkillBookWantedOrderResponse& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
-    ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE state_;
-    ::uint64_t client_request_id_;
-    ::uint64_t order_id_;
-    ::uint64_t seller_net_gold_;
-    bool replayed_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
-};
-// -------------------------------------------------------------------
-
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DismantleSkillBookResponse final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:DismantleSkillBookResponse) */ {
- public:
-  inline DismantleSkillBookResponse() : DismantleSkillBookResponse(nullptr) {}
-  ~DismantleSkillBookResponse() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(DismantleSkillBookResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(DismantleSkillBookResponse));
-  }
-#endif
-
-  template <typename = void>
-  explicit constexpr DismantleSkillBookResponse(::google::protobuf::internal::ConstantInitialized,
-                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-                               class_data);
-
-  inline DismantleSkillBookResponse(const DismantleSkillBookResponse& from) : DismantleSkillBookResponse(nullptr, from) {}
-  inline DismantleSkillBookResponse(DismantleSkillBookResponse&& from) noexcept : DismantleSkillBookResponse(nullptr, ::std::move(from)) {}
-  inline DismantleSkillBookResponse& operator=(const DismantleSkillBookResponse& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline DismantleSkillBookResponse& operator=(DismantleSkillBookResponse&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
-  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
-  GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  [[nodiscard]] static const DismantleSkillBookResponse& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DismantleSkillBookResponse>(&DismantleSkillBookResponse_globals_);
-  }
-  static constexpr int kIndexInFileMessages = 23;
-  friend void swap(DismantleSkillBookResponse& a, DismantleSkillBookResponse& b) { a.Swap(&b); }
-  inline void Swap(DismantleSkillBookResponse* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(DismantleSkillBookResponse* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  [[nodiscard]] DismantleSkillBookResponse* PROTOBUF_NONNULL
-  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<DismantleSkillBookResponse>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const DismantleSkillBookResponse& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const DismantleSkillBookResponse& from) { DismantleSkillBookResponse::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  [[nodiscard]] bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(DismantleSkillBookResponse* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "DismantleSkillBookResponse"; }
-
-  explicit DismantleSkillBookResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  DismantleSkillBookResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const DismantleSkillBookResponse& from);
-  DismantleSkillBookResponse(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, DismantleSkillBookResponse&& from) noexcept
-      : DismantleSkillBookResponse(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_(
-      const MessageLite& prototype,
-      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
-
-  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kErrorMessageFieldNumber = 1,
-    kStateFieldNumber = 5,
-    kClientRequestIdFieldNumber = 2,
-    kReplayedFieldNumber = 3,
-    kRefundedFragmentsFieldNumber = 4,
-  };
-  // .TipInfoMessage error_message = 1;
-  [[nodiscard]] bool has_error_message()
-      const;
-  void clear_error_message() ;
-  [[nodiscard]] const ::TipInfoMessage& error_message() const;
-  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
-  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
-  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
-  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
-
-  private:
-  const ::TipInfoMessage& _internal_error_message() const;
-  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
-
-  public:
-  // .SkillCraftingStateSnapshot state = 5;
-  [[nodiscard]] bool has_state()
-      const;
-  void clear_state() ;
-  [[nodiscard]] const ::SkillCraftingStateSnapshot& state() const;
-  [[nodiscard]] ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE release_state();
-  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL mutable_state();
-  void set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
-  ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
-
-  private:
-  const ::SkillCraftingStateSnapshot& _internal_state() const;
-  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
-
-  public:
-  // uint64 client_request_id = 2;
-  void clear_client_request_id() ;
-  [[nodiscard]] ::uint64_t client_request_id() const;
-  void set_client_request_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_client_request_id() const;
-  void _internal_set_client_request_id(::uint64_t value);
-
-  public:
-  // bool replayed = 3;
-  void clear_replayed() ;
-  [[nodiscard]] bool replayed() const;
-  void set_replayed(bool value);
-
-  private:
-  bool _internal_replayed() const;
-  void _internal_set_replayed(bool value);
-
-  public:
-  // uint32 refunded_fragments = 4;
-  void clear_refunded_fragments() ;
-  [[nodiscard]] ::uint32_t refunded_fragments() const;
-  void set_refunded_fragments(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_refunded_fragments() const;
-  void _internal_set_refunded_fragments(::uint32_t value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:DismantleSkillBookResponse)
- private:
-  class _Internal;
-  using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
-                          2, 0,
-                          2>;
-  static constexpr ParseTableT_ InternalGenerateParseTable_(
-      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
-  friend class ::google::protobuf::internal::TcParser;
-  #ifndef PROTOBUF_MESSAGE_GLOBALS
-  static const ParseTableT_ _table_;
-  #endif
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  friend ::google::protobuf::internal::PrivateAccess;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const DismantleSkillBookResponse& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
-    ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE state_;
-    ::uint64_t client_request_id_;
-    bool replayed_;
-    ::uint32_t refunded_fragments_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
-};
-// -------------------------------------------------------------------
-
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CraftSkillBookResponse final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:CraftSkillBookResponse) */ {
- public:
-  inline CraftSkillBookResponse() : CraftSkillBookResponse(nullptr) {}
-  ~CraftSkillBookResponse() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(CraftSkillBookResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(CraftSkillBookResponse));
-  }
-#endif
-
-  template <typename = void>
-  explicit constexpr CraftSkillBookResponse(::google::protobuf::internal::ConstantInitialized,
-                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-                               class_data);
-
-  inline CraftSkillBookResponse(const CraftSkillBookResponse& from) : CraftSkillBookResponse(nullptr, from) {}
-  inline CraftSkillBookResponse(CraftSkillBookResponse&& from) noexcept : CraftSkillBookResponse(nullptr, ::std::move(from)) {}
-  inline CraftSkillBookResponse& operator=(const CraftSkillBookResponse& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline CraftSkillBookResponse& operator=(CraftSkillBookResponse&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
-  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
-  GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  [[nodiscard]] static const CraftSkillBookResponse& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CraftSkillBookResponse>(&CraftSkillBookResponse_globals_);
-  }
-  static constexpr int kIndexInFileMessages = 19;
-  friend void swap(CraftSkillBookResponse& a, CraftSkillBookResponse& b) { a.Swap(&b); }
-  inline void Swap(CraftSkillBookResponse* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(CraftSkillBookResponse* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  [[nodiscard]] CraftSkillBookResponse* PROTOBUF_NONNULL
-  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<CraftSkillBookResponse>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const CraftSkillBookResponse& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const CraftSkillBookResponse& from) { CraftSkillBookResponse::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  [[nodiscard]] bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(CraftSkillBookResponse* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "CraftSkillBookResponse"; }
-
-  explicit CraftSkillBookResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  CraftSkillBookResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CraftSkillBookResponse& from);
-  CraftSkillBookResponse(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CraftSkillBookResponse&& from) noexcept
-      : CraftSkillBookResponse(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_(
-      const MessageLite& prototype,
-      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
-
-  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kErrorMessageFieldNumber = 1,
-    kCraftedBookFieldNumber = 4,
-    kStateFieldNumber = 6,
-    kClientRequestIdFieldNumber = 2,
-    kReplayedFieldNumber = 3,
-    kBonusFragmentsGrantedFieldNumber = 5,
-  };
-  // .TipInfoMessage error_message = 1;
-  [[nodiscard]] bool has_error_message()
-      const;
-  void clear_error_message() ;
-  [[nodiscard]] const ::TipInfoMessage& error_message() const;
-  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
-  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
-  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
-  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
-
-  private:
-  const ::TipInfoMessage& _internal_error_message() const;
-  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
-
-  public:
-  // .CraftedSkillBookEntry crafted_book = 4;
-  [[nodiscard]] bool has_crafted_book()
-      const;
-  void clear_crafted_book() ;
-  [[nodiscard]] const ::CraftedSkillBookEntry& crafted_book() const;
-  [[nodiscard]] ::CraftedSkillBookEntry* PROTOBUF_NULLABLE release_crafted_book();
-  ::CraftedSkillBookEntry* PROTOBUF_NONNULL mutable_crafted_book();
-  void set_allocated_crafted_book(::CraftedSkillBookEntry* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_crafted_book(::CraftedSkillBookEntry* PROTOBUF_NULLABLE value);
-  ::CraftedSkillBookEntry* PROTOBUF_NULLABLE unsafe_arena_release_crafted_book();
-
-  private:
-  const ::CraftedSkillBookEntry& _internal_crafted_book() const;
-  ::CraftedSkillBookEntry* PROTOBUF_NONNULL _internal_mutable_crafted_book();
-
-  public:
-  // .SkillCraftingStateSnapshot state = 6;
-  [[nodiscard]] bool has_state()
-      const;
-  void clear_state() ;
-  [[nodiscard]] const ::SkillCraftingStateSnapshot& state() const;
-  [[nodiscard]] ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE release_state();
-  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL mutable_state();
-  void set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
-  ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
-
-  private:
-  const ::SkillCraftingStateSnapshot& _internal_state() const;
-  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
-
-  public:
-  // uint64 client_request_id = 2;
-  void clear_client_request_id() ;
-  [[nodiscard]] ::uint64_t client_request_id() const;
-  void set_client_request_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_client_request_id() const;
-  void _internal_set_client_request_id(::uint64_t value);
-
-  public:
-  // bool replayed = 3;
-  void clear_replayed() ;
-  [[nodiscard]] bool replayed() const;
-  void set_replayed(bool value);
-
-  private:
-  bool _internal_replayed() const;
-  void _internal_set_replayed(bool value);
-
-  public:
-  // uint32 bonus_fragments_granted = 5;
-  void clear_bonus_fragments_granted() ;
-  [[nodiscard]] ::uint32_t bonus_fragments_granted() const;
-  void set_bonus_fragments_granted(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_bonus_fragments_granted() const;
-  void _internal_set_bonus_fragments_granted(::uint32_t value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:CraftSkillBookResponse)
- private:
-  class _Internal;
-  using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
-                          3, 0,
-                          2>;
-  static constexpr ParseTableT_ InternalGenerateParseTable_(
-      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
-  friend class ::google::protobuf::internal::TcParser;
-  #ifndef PROTOBUF_MESSAGE_GLOBALS
-  static const ParseTableT_ _table_;
-  #endif
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  friend ::google::protobuf::internal::PrivateAccess;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const CraftSkillBookResponse& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
-    ::CraftedSkillBookEntry* PROTOBUF_NULLABLE crafted_book_;
-    ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE state_;
-    ::uint64_t client_request_id_;
-    bool replayed_;
-    ::uint32_t bonus_fragments_granted_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
-};
-// -------------------------------------------------------------------
-
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimScrollCollectionMilestoneResponse final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:ClaimScrollCollectionMilestoneResponse) */ {
- public:
-  inline ClaimScrollCollectionMilestoneResponse() : ClaimScrollCollectionMilestoneResponse(nullptr) {}
-  ~ClaimScrollCollectionMilestoneResponse() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(ClaimScrollCollectionMilestoneResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(ClaimScrollCollectionMilestoneResponse));
-  }
-#endif
-
-  template <typename = void>
-  explicit constexpr ClaimScrollCollectionMilestoneResponse(::google::protobuf::internal::ConstantInitialized,
-                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-                               class_data);
-
-  inline ClaimScrollCollectionMilestoneResponse(const ClaimScrollCollectionMilestoneResponse& from) : ClaimScrollCollectionMilestoneResponse(nullptr, from) {}
-  inline ClaimScrollCollectionMilestoneResponse(ClaimScrollCollectionMilestoneResponse&& from) noexcept : ClaimScrollCollectionMilestoneResponse(nullptr, ::std::move(from)) {}
-  inline ClaimScrollCollectionMilestoneResponse& operator=(const ClaimScrollCollectionMilestoneResponse& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline ClaimScrollCollectionMilestoneResponse& operator=(ClaimScrollCollectionMilestoneResponse&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
-  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
-  GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  [[nodiscard]] static const ClaimScrollCollectionMilestoneResponse& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClaimScrollCollectionMilestoneResponse>(&ClaimScrollCollectionMilestoneResponse_globals_);
-  }
-  static constexpr int kIndexInFileMessages = 34;
-  friend void swap(ClaimScrollCollectionMilestoneResponse& a, ClaimScrollCollectionMilestoneResponse& b) { a.Swap(&b); }
-  inline void Swap(ClaimScrollCollectionMilestoneResponse* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(ClaimScrollCollectionMilestoneResponse* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  [[nodiscard]] ClaimScrollCollectionMilestoneResponse* PROTOBUF_NONNULL
-  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<ClaimScrollCollectionMilestoneResponse>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const ClaimScrollCollectionMilestoneResponse& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const ClaimScrollCollectionMilestoneResponse& from) { ClaimScrollCollectionMilestoneResponse::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  [[nodiscard]] bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(ClaimScrollCollectionMilestoneResponse* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "ClaimScrollCollectionMilestoneResponse"; }
-
-  explicit ClaimScrollCollectionMilestoneResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  ClaimScrollCollectionMilestoneResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ClaimScrollCollectionMilestoneResponse& from);
-  ClaimScrollCollectionMilestoneResponse(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ClaimScrollCollectionMilestoneResponse&& from) noexcept
-      : ClaimScrollCollectionMilestoneResponse(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_(
-      const MessageLite& prototype,
-      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
-
-  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kErrorMessageFieldNumber = 1,
-    kStateFieldNumber = 5,
-    kClientRequestIdFieldNumber = 2,
-    kReplayedFieldNumber = 3,
-    kRewardedFragmentsFieldNumber = 4,
-  };
-  // .TipInfoMessage error_message = 1;
-  [[nodiscard]] bool has_error_message()
-      const;
-  void clear_error_message() ;
-  [[nodiscard]] const ::TipInfoMessage& error_message() const;
-  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
-  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
-  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
-  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
-
-  private:
-  const ::TipInfoMessage& _internal_error_message() const;
-  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
-
-  public:
-  // .SkillCraftingStateSnapshot state = 5;
-  [[nodiscard]] bool has_state()
-      const;
-  void clear_state() ;
-  [[nodiscard]] const ::SkillCraftingStateSnapshot& state() const;
-  [[nodiscard]] ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE release_state();
-  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL mutable_state();
-  void set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
-  ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
-
-  private:
-  const ::SkillCraftingStateSnapshot& _internal_state() const;
-  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
-
-  public:
-  // uint64 client_request_id = 2;
-  void clear_client_request_id() ;
-  [[nodiscard]] ::uint64_t client_request_id() const;
-  void set_client_request_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_client_request_id() const;
-  void _internal_set_client_request_id(::uint64_t value);
-
-  public:
-  // bool replayed = 3;
-  void clear_replayed() ;
-  [[nodiscard]] bool replayed() const;
-  void set_replayed(bool value);
-
-  private:
-  bool _internal_replayed() const;
-  void _internal_set_replayed(bool value);
-
-  public:
-  // uint32 rewarded_fragments = 4;
-  void clear_rewarded_fragments() ;
-  [[nodiscard]] ::uint32_t rewarded_fragments() const;
-  void set_rewarded_fragments(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_rewarded_fragments() const;
-  void _internal_set_rewarded_fragments(::uint32_t value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:ClaimScrollCollectionMilestoneResponse)
- private:
-  class _Internal;
-  using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
-                          2, 0,
-                          2>;
-  static constexpr ParseTableT_ InternalGenerateParseTable_(
-      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
-  friend class ::google::protobuf::internal::TcParser;
-  #ifndef PROTOBUF_MESSAGE_GLOBALS
-  static const ParseTableT_ _table_;
-  #endif
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  friend ::google::protobuf::internal::PrivateAccess;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const ClaimScrollCollectionMilestoneResponse& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
-    ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE state_;
-    ::uint64_t client_request_id_;
-    bool replayed_;
-    ::uint32_t rewarded_fragments_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
-};
-// -------------------------------------------------------------------
-
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CancelSkillBookWantedOrderResponse final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:CancelSkillBookWantedOrderResponse) */ {
- public:
-  inline CancelSkillBookWantedOrderResponse() : CancelSkillBookWantedOrderResponse(nullptr) {}
-  ~CancelSkillBookWantedOrderResponse() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(CancelSkillBookWantedOrderResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(CancelSkillBookWantedOrderResponse));
-  }
-#endif
-
-  template <typename = void>
-  explicit constexpr CancelSkillBookWantedOrderResponse(::google::protobuf::internal::ConstantInitialized,
-                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-                               class_data);
-
-  inline CancelSkillBookWantedOrderResponse(const CancelSkillBookWantedOrderResponse& from) : CancelSkillBookWantedOrderResponse(nullptr, from) {}
-  inline CancelSkillBookWantedOrderResponse(CancelSkillBookWantedOrderResponse&& from) noexcept : CancelSkillBookWantedOrderResponse(nullptr, ::std::move(from)) {}
-  inline CancelSkillBookWantedOrderResponse& operator=(const CancelSkillBookWantedOrderResponse& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline CancelSkillBookWantedOrderResponse& operator=(CancelSkillBookWantedOrderResponse&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
-  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
-  GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  [[nodiscard]] static const CancelSkillBookWantedOrderResponse& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CancelSkillBookWantedOrderResponse>(&CancelSkillBookWantedOrderResponse_globals_);
-  }
-  static constexpr int kIndexInFileMessages = 41;
-  friend void swap(CancelSkillBookWantedOrderResponse& a, CancelSkillBookWantedOrderResponse& b) { a.Swap(&b); }
-  inline void Swap(CancelSkillBookWantedOrderResponse* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(CancelSkillBookWantedOrderResponse* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  [[nodiscard]] CancelSkillBookWantedOrderResponse* PROTOBUF_NONNULL
-  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<CancelSkillBookWantedOrderResponse>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const CancelSkillBookWantedOrderResponse& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const CancelSkillBookWantedOrderResponse& from) { CancelSkillBookWantedOrderResponse::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  [[nodiscard]] bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(CancelSkillBookWantedOrderResponse* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "CancelSkillBookWantedOrderResponse"; }
-
-  explicit CancelSkillBookWantedOrderResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  CancelSkillBookWantedOrderResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CancelSkillBookWantedOrderResponse& from);
-  CancelSkillBookWantedOrderResponse(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CancelSkillBookWantedOrderResponse&& from) noexcept
-      : CancelSkillBookWantedOrderResponse(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_(
-      const MessageLite& prototype,
-      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
-
-  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kErrorMessageFieldNumber = 1,
-    kStateFieldNumber = 5,
-    kClientRequestIdFieldNumber = 2,
-    kRefundedGoldFieldNumber = 4,
-    kReplayedFieldNumber = 3,
-  };
-  // .TipInfoMessage error_message = 1;
-  [[nodiscard]] bool has_error_message()
-      const;
-  void clear_error_message() ;
-  [[nodiscard]] const ::TipInfoMessage& error_message() const;
-  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
-  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
-  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
-  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
-
-  private:
-  const ::TipInfoMessage& _internal_error_message() const;
-  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
-
-  public:
-  // .SkillCraftingStateSnapshot state = 5;
-  [[nodiscard]] bool has_state()
-      const;
-  void clear_state() ;
-  [[nodiscard]] const ::SkillCraftingStateSnapshot& state() const;
-  [[nodiscard]] ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE release_state();
-  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL mutable_state();
-  void set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
-  ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
-
-  private:
-  const ::SkillCraftingStateSnapshot& _internal_state() const;
-  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
-
-  public:
-  // uint64 client_request_id = 2;
-  void clear_client_request_id() ;
-  [[nodiscard]] ::uint64_t client_request_id() const;
-  void set_client_request_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_client_request_id() const;
-  void _internal_set_client_request_id(::uint64_t value);
-
-  public:
-  // uint64 refunded_gold = 4;
-  void clear_refunded_gold() ;
-  [[nodiscard]] ::uint64_t refunded_gold() const;
-  void set_refunded_gold(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_refunded_gold() const;
-  void _internal_set_refunded_gold(::uint64_t value);
-
-  public:
-  // bool replayed = 3;
-  void clear_replayed() ;
-  [[nodiscard]] bool replayed() const;
-  void set_replayed(bool value);
-
-  private:
-  bool _internal_replayed() const;
-  void _internal_set_replayed(bool value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:CancelSkillBookWantedOrderResponse)
- private:
-  class _Internal;
-  using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
-                          2, 0,
-                          2>;
-  static constexpr ParseTableT_ InternalGenerateParseTable_(
-      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
-  friend class ::google::protobuf::internal::TcParser;
-  #ifndef PROTOBUF_MESSAGE_GLOBALS
-  static const ParseTableT_ _table_;
-  #endif
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  friend ::google::protobuf::internal::PrivateAccess;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const CancelSkillBookWantedOrderResponse& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
-    ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE state_;
-    ::uint64_t client_request_id_;
-    ::uint64_t refunded_gold_;
-    bool replayed_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
-};
-// -------------------------------------------------------------------
-
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BatchDismantleSkillBooksResponse final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:BatchDismantleSkillBooksResponse) */ {
- public:
-  inline BatchDismantleSkillBooksResponse() : BatchDismantleSkillBooksResponse(nullptr) {}
-  ~BatchDismantleSkillBooksResponse() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(BatchDismantleSkillBooksResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(BatchDismantleSkillBooksResponse));
-  }
-#endif
-
-  template <typename = void>
-  explicit constexpr BatchDismantleSkillBooksResponse(::google::protobuf::internal::ConstantInitialized,
-                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-                               class_data);
-
-  inline BatchDismantleSkillBooksResponse(const BatchDismantleSkillBooksResponse& from) : BatchDismantleSkillBooksResponse(nullptr, from) {}
-  inline BatchDismantleSkillBooksResponse(BatchDismantleSkillBooksResponse&& from) noexcept : BatchDismantleSkillBooksResponse(nullptr, ::std::move(from)) {}
-  inline BatchDismantleSkillBooksResponse& operator=(const BatchDismantleSkillBooksResponse& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline BatchDismantleSkillBooksResponse& operator=(BatchDismantleSkillBooksResponse&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
-  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
-  GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  [[nodiscard]] static const BatchDismantleSkillBooksResponse& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BatchDismantleSkillBooksResponse>(&BatchDismantleSkillBooksResponse_globals_);
-  }
-  static constexpr int kIndexInFileMessages = 36;
-  friend void swap(BatchDismantleSkillBooksResponse& a, BatchDismantleSkillBooksResponse& b) { a.Swap(&b); }
-  inline void Swap(BatchDismantleSkillBooksResponse* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(BatchDismantleSkillBooksResponse* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  [[nodiscard]] BatchDismantleSkillBooksResponse* PROTOBUF_NONNULL
-  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<BatchDismantleSkillBooksResponse>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const BatchDismantleSkillBooksResponse& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const BatchDismantleSkillBooksResponse& from) { BatchDismantleSkillBooksResponse::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  [[nodiscard]] bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(BatchDismantleSkillBooksResponse* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "BatchDismantleSkillBooksResponse"; }
-
-  explicit BatchDismantleSkillBooksResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  BatchDismantleSkillBooksResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BatchDismantleSkillBooksResponse& from);
-  BatchDismantleSkillBooksResponse(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BatchDismantleSkillBooksResponse&& from) noexcept
-      : BatchDismantleSkillBooksResponse(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_(
-      const MessageLite& prototype,
-      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
-
-  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kErrorMessageFieldNumber = 1,
-    kStateFieldNumber = 6,
-    kClientRequestIdFieldNumber = 2,
-    kReplayedFieldNumber = 3,
-    kDismantledCountFieldNumber = 4,
-    kRefundedFragmentsFieldNumber = 5,
-  };
-  // .TipInfoMessage error_message = 1;
-  [[nodiscard]] bool has_error_message()
-      const;
-  void clear_error_message() ;
-  [[nodiscard]] const ::TipInfoMessage& error_message() const;
-  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
-  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
-  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
-  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
-
-  private:
-  const ::TipInfoMessage& _internal_error_message() const;
-  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
-
-  public:
-  // .SkillCraftingStateSnapshot state = 6;
-  [[nodiscard]] bool has_state()
-      const;
-  void clear_state() ;
-  [[nodiscard]] const ::SkillCraftingStateSnapshot& state() const;
-  [[nodiscard]] ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE release_state();
-  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL mutable_state();
-  void set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value);
-  ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
-
-  private:
-  const ::SkillCraftingStateSnapshot& _internal_state() const;
-  ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
-
-  public:
-  // uint64 client_request_id = 2;
-  void clear_client_request_id() ;
-  [[nodiscard]] ::uint64_t client_request_id() const;
-  void set_client_request_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_client_request_id() const;
-  void _internal_set_client_request_id(::uint64_t value);
-
-  public:
-  // bool replayed = 3;
-  void clear_replayed() ;
-  [[nodiscard]] bool replayed() const;
-  void set_replayed(bool value);
-
-  private:
-  bool _internal_replayed() const;
-  void _internal_set_replayed(bool value);
-
-  public:
-  // uint32 dismantled_count = 4;
-  void clear_dismantled_count() ;
-  [[nodiscard]] ::uint32_t dismantled_count() const;
-  void set_dismantled_count(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_dismantled_count() const;
-  void _internal_set_dismantled_count(::uint32_t value);
-
-  public:
-  // uint32 refunded_fragments = 5;
-  void clear_refunded_fragments() ;
-  [[nodiscard]] ::uint32_t refunded_fragments() const;
-  void set_refunded_fragments(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_refunded_fragments() const;
-  void _internal_set_refunded_fragments(::uint32_t value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:BatchDismantleSkillBooksResponse)
- private:
-  class _Internal;
-  using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
-                          2, 0,
-                          2>;
-  static constexpr ParseTableT_ InternalGenerateParseTable_(
-      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
-  friend class ::google::protobuf::internal::TcParser;
-  #ifndef PROTOBUF_MESSAGE_GLOBALS
-  static const ParseTableT_ _table_;
-  #endif
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  friend ::google::protobuf::internal::PrivateAccess;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const BatchDismantleSkillBooksResponse& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
-    ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE state_;
-    ::uint64_t client_request_id_;
-    bool replayed_;
-    ::uint32_t dismantled_count_;
-    ::uint32_t refunded_fragments_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
-};
-// -------------------------------------------------------------------
-
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpgradeSkillResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:UpgradeSkillResponse) */ {
  public:
@@ -12664,7 +14016,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpgradeSkillResponse final : public
   [[nodiscard]] static const UpgradeSkillResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UpgradeSkillResponse>(&UpgradeSkillResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 47;
+  static constexpr int kIndexInFileMessages = 54;
   friend void swap(UpgradeSkillResponse& a, UpgradeSkillResponse& b) { a.Swap(&b); }
   inline void Swap(UpgradeSkillResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -12913,7 +14265,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SwitchSkillLoadoutResponse final : 
   [[nodiscard]] static const SwitchSkillLoadoutResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SwitchSkillLoadoutResponse>(&SwitchSkillLoadoutResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 12;
+  static constexpr int kIndexInFileMessages = 14;
   friend void swap(SwitchSkillLoadoutResponse& a, SwitchSkillLoadoutResponse& b) { a.Swap(&b); }
   inline void Swap(SwitchSkillLoadoutResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -13006,6 +14358,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SwitchSkillLoadoutResponse final : 
   // accessors -------------------------------------------------------
   enum : int {
     kRequestIdFieldNumber = 3,
+    kAttributeSyncNoticeFieldNumber = 5,
     kErrorMessageFieldNumber = 1,
     kStateFieldNumber = 2,
     kReplayedFieldNumber = 4,
@@ -13023,6 +14376,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SwitchSkillLoadoutResponse final : 
   const ::std::string& _internal_request_id() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_request_id(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_request_id();
+
+  public:
+  // string attribute_sync_notice = 5;
+  void clear_attribute_sync_notice() ;
+  [[nodiscard]] const ::std::string& attribute_sync_notice() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_attribute_sync_notice(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_attribute_sync_notice();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_attribute_sync_notice();
+  void set_allocated_attribute_sync_notice(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_attribute_sync_notice() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_attribute_sync_notice(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_attribute_sync_notice();
 
   public:
   // .TipInfoMessage error_message = 1;
@@ -13071,8 +14439,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SwitchSkillLoadoutResponse final : 
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
-                          2, 45,
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          2, 66,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -13101,6 +14469,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SwitchSkillLoadoutResponse final : 
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr request_id_;
+    ::google::protobuf::internal::ArenaStringPtr attribute_sync_notice_;
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
     ::ListSkillsResponse* PROTOBUF_NULLABLE state_;
     bool replayed_;
@@ -13167,7 +14536,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveSkillLoadoutResponse final : pu
   [[nodiscard]] static const SaveSkillLoadoutResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SaveSkillLoadoutResponse>(&SaveSkillLoadoutResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 12;
   friend void swap(SaveSkillLoadoutResponse& a, SaveSkillLoadoutResponse& b) { a.Swap(&b); }
   inline void Swap(SaveSkillLoadoutResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -13260,6 +14629,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveSkillLoadoutResponse final : pu
   // accessors -------------------------------------------------------
   enum : int {
     kRequestIdFieldNumber = 3,
+    kAttributeSyncNoticeFieldNumber = 5,
     kErrorMessageFieldNumber = 1,
     kStateFieldNumber = 2,
     kReplayedFieldNumber = 4,
@@ -13277,6 +14647,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveSkillLoadoutResponse final : pu
   const ::std::string& _internal_request_id() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_request_id(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_request_id();
+
+  public:
+  // string attribute_sync_notice = 5;
+  void clear_attribute_sync_notice() ;
+  [[nodiscard]] const ::std::string& attribute_sync_notice() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_attribute_sync_notice(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_attribute_sync_notice();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_attribute_sync_notice();
+  void set_allocated_attribute_sync_notice(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_attribute_sync_notice() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_attribute_sync_notice(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_attribute_sync_notice();
 
   public:
   // .TipInfoMessage error_message = 1;
@@ -13325,8 +14710,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveSkillLoadoutResponse final : pu
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
-                          2, 43,
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          2, 64,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -13355,9 +14740,295 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveSkillLoadoutResponse final : pu
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr request_id_;
+    ::google::protobuf::internal::ArenaStringPtr attribute_sync_notice_;
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
     ::ListSkillsResponse* PROTOBUF_NULLABLE state_;
     bool replayed_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fskill_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RentSkillLoadoutSlotsResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:RentSkillLoadoutSlotsResponse) */ {
+ public:
+  inline RentSkillLoadoutSlotsResponse() : RentSkillLoadoutSlotsResponse(nullptr) {}
+  ~RentSkillLoadoutSlotsResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(RentSkillLoadoutSlotsResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(RentSkillLoadoutSlotsResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr RentSkillLoadoutSlotsResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline RentSkillLoadoutSlotsResponse(const RentSkillLoadoutSlotsResponse& from) : RentSkillLoadoutSlotsResponse(nullptr, from) {}
+  inline RentSkillLoadoutSlotsResponse(RentSkillLoadoutSlotsResponse&& from) noexcept : RentSkillLoadoutSlotsResponse(nullptr, ::std::move(from)) {}
+  inline RentSkillLoadoutSlotsResponse& operator=(const RentSkillLoadoutSlotsResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline RentSkillLoadoutSlotsResponse& operator=(RentSkillLoadoutSlotsResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const RentSkillLoadoutSlotsResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<RentSkillLoadoutSlotsResponse>(&RentSkillLoadoutSlotsResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 16;
+  friend void swap(RentSkillLoadoutSlotsResponse& a, RentSkillLoadoutSlotsResponse& b) { a.Swap(&b); }
+  inline void Swap(RentSkillLoadoutSlotsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(RentSkillLoadoutSlotsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] RentSkillLoadoutSlotsResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<RentSkillLoadoutSlotsResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const RentSkillLoadoutSlotsResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const RentSkillLoadoutSlotsResponse& from) { RentSkillLoadoutSlotsResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(RentSkillLoadoutSlotsResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "RentSkillLoadoutSlotsResponse"; }
+
+  explicit RentSkillLoadoutSlotsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  RentSkillLoadoutSlotsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RentSkillLoadoutSlotsResponse& from);
+  RentSkillLoadoutSlotsResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, RentSkillLoadoutSlotsResponse&& from) noexcept
+      : RentSkillLoadoutSlotsResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kStateFieldNumber = 2,
+    kClientRequestIdFieldNumber = 3,
+    kReplayedFieldNumber = 4,
+    kRentedExtraSlotsFieldNumber = 5,
+    kRentExpiresAtSecFieldNumber = 6,
+    kSpentDiamondFieldNumber = 7,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .ListSkillsResponse state = 2;
+  [[nodiscard]] bool has_state()
+      const;
+  void clear_state() ;
+  [[nodiscard]] const ::ListSkillsResponse& state() const;
+  [[nodiscard]] ::ListSkillsResponse* PROTOBUF_NULLABLE release_state();
+  ::ListSkillsResponse* PROTOBUF_NONNULL mutable_state();
+  void set_allocated_state(::ListSkillsResponse* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_state(::ListSkillsResponse* PROTOBUF_NULLABLE value);
+  ::ListSkillsResponse* PROTOBUF_NULLABLE unsafe_arena_release_state();
+
+  private:
+  const ::ListSkillsResponse& _internal_state() const;
+  ::ListSkillsResponse* PROTOBUF_NONNULL _internal_mutable_state();
+
+  public:
+  // uint64 client_request_id = 3;
+  void clear_client_request_id() ;
+  [[nodiscard]] ::uint64_t client_request_id() const;
+  void set_client_request_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_client_request_id() const;
+  void _internal_set_client_request_id(::uint64_t value);
+
+  public:
+  // bool replayed = 4;
+  void clear_replayed() ;
+  [[nodiscard]] bool replayed() const;
+  void set_replayed(bool value);
+
+  private:
+  bool _internal_replayed() const;
+  void _internal_set_replayed(bool value);
+
+  public:
+  // uint32 rented_extra_slots = 5;
+  void clear_rented_extra_slots() ;
+  [[nodiscard]] ::uint32_t rented_extra_slots() const;
+  void set_rented_extra_slots(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_rented_extra_slots() const;
+  void _internal_set_rented_extra_slots(::uint32_t value);
+
+  public:
+  // uint64 rent_expires_at_sec = 6;
+  void clear_rent_expires_at_sec() ;
+  [[nodiscard]] ::uint64_t rent_expires_at_sec() const;
+  void set_rent_expires_at_sec(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_rent_expires_at_sec() const;
+  void _internal_set_rent_expires_at_sec(::uint64_t value);
+
+  public:
+  // uint64 spent_diamond = 7;
+  void clear_spent_diamond() ;
+  [[nodiscard]] ::uint64_t spent_diamond() const;
+  void set_spent_diamond(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_spent_diamond() const;
+  void _internal_set_spent_diamond(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:RentSkillLoadoutSlotsResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const RentSkillLoadoutSlotsResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::ListSkillsResponse* PROTOBUF_NULLABLE state_;
+    ::uint64_t client_request_id_;
+    bool replayed_;
+    ::uint32_t rented_extra_slots_;
+    ::uint64_t rent_expires_at_sec_;
+    ::uint64_t spent_diamond_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -13466,6 +15137,14 @@ class SceneSkillClientPlayer : public ::google::protobuf::Service {
   virtual void FulfillSkillBookWantedOrder(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
                         const ::FulfillSkillBookWantedOrderRequest* PROTOBUF_NONNULL request,
                         ::FulfillSkillBookWantedOrderResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void RentSkillLoadoutSlots(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::RentSkillLoadoutSlotsRequest* PROTOBUF_NONNULL request,
+                        ::RentSkillLoadoutSlotsResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void AckCraftProxyDigest(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::AckCraftProxyDigestRequest* PROTOBUF_NONNULL request,
+                        ::AckCraftProxyDigestResponse* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
 
   // implements Service ----------------------------------------------
@@ -13582,6 +15261,14 @@ class SceneSkillClientPlayer_Stub final : public SceneSkillClientPlayer {
   void FulfillSkillBookWantedOrder(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
                         const ::FulfillSkillBookWantedOrderRequest* PROTOBUF_NONNULL request,
                         ::FulfillSkillBookWantedOrderResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void RentSkillLoadoutSlots(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::RentSkillLoadoutSlotsRequest* PROTOBUF_NONNULL request,
+                        ::RentSkillLoadoutSlotsResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void AckCraftProxyDigest(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::AckCraftProxyDigestRequest* PROTOBUF_NONNULL request,
+                        ::AckCraftProxyDigestResponse* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
 
  private:
@@ -15724,13 +17411,15 @@ inline void SkillCatalogEntry::_internal_set_equipped(bool value) {
 
 // -------------------------------------------------------------------
 
+// -------------------------------------------------------------------
+
 // SkillLoadoutSchemeInfo
 
 // uint32 scheme_id = 1;
 inline void SkillLoadoutSchemeInfo::clear_scheme_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.scheme_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t SkillLoadoutSchemeInfo::scheme_id() const {
   // @@protoc_insertion_point(field_get:SkillLoadoutSchemeInfo.scheme_id)
@@ -15738,7 +17427,7 @@ inline ::uint32_t SkillLoadoutSchemeInfo::scheme_id() const {
 }
 inline void SkillLoadoutSchemeInfo::set_scheme_id(::uint32_t value) {
   _internal_set_scheme_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:SkillLoadoutSchemeInfo.scheme_id)
 }
 inline ::uint32_t SkillLoadoutSchemeInfo::_internal_scheme_id() const {
@@ -15754,7 +17443,7 @@ inline void SkillLoadoutSchemeInfo::_internal_set_scheme_id(::uint32_t value) {
 inline void SkillLoadoutSchemeInfo::clear_role_tag() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.role_tag_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t SkillLoadoutSchemeInfo::role_tag() const {
   // @@protoc_insertion_point(field_get:SkillLoadoutSchemeInfo.role_tag)
@@ -15762,7 +17451,7 @@ inline ::uint32_t SkillLoadoutSchemeInfo::role_tag() const {
 }
 inline void SkillLoadoutSchemeInfo::set_role_tag(::uint32_t value) {
   _internal_set_role_tag(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:SkillLoadoutSchemeInfo.role_tag)
 }
 inline ::uint32_t SkillLoadoutSchemeInfo::_internal_role_tag() const {
@@ -15925,6 +17614,149 @@ inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
 SkillLoadoutSchemeInfo::_internal_mutable_opening_skill_ids() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.opening_skill_ids_;
+}
+
+// string name = 6;
+inline void SkillLoadoutSchemeInfo::clear_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& SkillLoadoutSchemeInfo::name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SkillLoadoutSchemeInfo.name)
+  return _internal_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SkillLoadoutSchemeInfo::set_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:SkillLoadoutSchemeInfo.name)
+}
+inline ::std::string* PROTOBUF_NONNULL SkillLoadoutSchemeInfo::mutable_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:SkillLoadoutSchemeInfo.name)
+  return _s;
+}
+inline const ::std::string& SkillLoadoutSchemeInfo::_internal_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_.Get();
+}
+inline void SkillLoadoutSchemeInfo::_internal_set_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SkillLoadoutSchemeInfo::_internal_mutable_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SkillLoadoutSchemeInfo::release_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SkillLoadoutSchemeInfo.name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SkillLoadoutSchemeInfo::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:SkillLoadoutSchemeInfo.name)
+}
+
+// map<uint32, uint32> attribute_allocated = 7;
+inline int SkillLoadoutSchemeInfo::_internal_attribute_allocated_size() const {
+  return _internal_attribute_allocated().size();
+}
+inline int SkillLoadoutSchemeInfo::attribute_allocated_size() const {
+  return _internal_attribute_allocated_size();
+}
+inline void SkillLoadoutSchemeInfo::clear_attribute_allocated() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attribute_allocated_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& SkillLoadoutSchemeInfo::_internal_attribute_allocated() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.attribute_allocated_.GetMap();
+}
+inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& SkillLoadoutSchemeInfo::attribute_allocated() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_map:SkillLoadoutSchemeInfo.attribute_allocated)
+  return _internal_attribute_allocated();
+}
+inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL SkillLoadoutSchemeInfo::_internal_mutable_attribute_allocated() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.attribute_allocated_.MutableMap();
+}
+inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL SkillLoadoutSchemeInfo::mutable_attribute_allocated()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_mutable_map:SkillLoadoutSchemeInfo.attribute_allocated)
+  return _internal_mutable_attribute_allocated();
+}
+
+// uint32 attribute_remaining = 8;
+inline void SkillLoadoutSchemeInfo::clear_attribute_remaining() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attribute_remaining_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t SkillLoadoutSchemeInfo::attribute_remaining() const {
+  // @@protoc_insertion_point(field_get:SkillLoadoutSchemeInfo.attribute_remaining)
+  return _internal_attribute_remaining();
+}
+inline void SkillLoadoutSchemeInfo::set_attribute_remaining(::uint32_t value) {
+  _internal_set_attribute_remaining(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:SkillLoadoutSchemeInfo.attribute_remaining)
+}
+inline ::uint32_t SkillLoadoutSchemeInfo::_internal_attribute_remaining() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.attribute_remaining_;
+}
+inline void SkillLoadoutSchemeInfo::_internal_set_attribute_remaining(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attribute_remaining_ = value;
+}
+
+// uint32 attribute_total_points = 9;
+inline void SkillLoadoutSchemeInfo::clear_attribute_total_points() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attribute_total_points_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t SkillLoadoutSchemeInfo::attribute_total_points() const {
+  // @@protoc_insertion_point(field_get:SkillLoadoutSchemeInfo.attribute_total_points)
+  return _internal_attribute_total_points();
+}
+inline void SkillLoadoutSchemeInfo::set_attribute_total_points(::uint32_t value) {
+  _internal_set_attribute_total_points(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:SkillLoadoutSchemeInfo.attribute_total_points)
+}
+inline ::uint32_t SkillLoadoutSchemeInfo::_internal_attribute_total_points() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.attribute_total_points_;
+}
+inline void SkillLoadoutSchemeInfo::_internal_set_attribute_total_points(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attribute_total_points_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -16242,6 +18074,296 @@ inline void SkillLoadoutSnapshot::_internal_set_max_schemes(::uint32_t value) {
   _impl_.max_schemes_ = value;
 }
 
+// uint32 free_schemes = 11;
+inline void SkillLoadoutSnapshot::clear_free_schemes() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.free_schemes_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t SkillLoadoutSnapshot::free_schemes() const {
+  // @@protoc_insertion_point(field_get:SkillLoadoutSnapshot.free_schemes)
+  return _internal_free_schemes();
+}
+inline void SkillLoadoutSnapshot::set_free_schemes(::uint32_t value) {
+  _internal_set_free_schemes(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:SkillLoadoutSnapshot.free_schemes)
+}
+inline ::uint32_t SkillLoadoutSnapshot::_internal_free_schemes() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.free_schemes_;
+}
+inline void SkillLoadoutSnapshot::_internal_set_free_schemes(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.free_schemes_ = value;
+}
+
+// uint32 light_card_bonus_schemes = 12;
+inline void SkillLoadoutSnapshot::clear_light_card_bonus_schemes() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.light_card_bonus_schemes_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t SkillLoadoutSnapshot::light_card_bonus_schemes() const {
+  // @@protoc_insertion_point(field_get:SkillLoadoutSnapshot.light_card_bonus_schemes)
+  return _internal_light_card_bonus_schemes();
+}
+inline void SkillLoadoutSnapshot::set_light_card_bonus_schemes(::uint32_t value) {
+  _internal_set_light_card_bonus_schemes(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:SkillLoadoutSnapshot.light_card_bonus_schemes)
+}
+inline ::uint32_t SkillLoadoutSnapshot::_internal_light_card_bonus_schemes() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.light_card_bonus_schemes_;
+}
+inline void SkillLoadoutSnapshot::_internal_set_light_card_bonus_schemes(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.light_card_bonus_schemes_ = value;
+}
+
+// uint32 rented_extra_slots = 13;
+inline void SkillLoadoutSnapshot::clear_rented_extra_slots() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rented_extra_slots_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::uint32_t SkillLoadoutSnapshot::rented_extra_slots() const {
+  // @@protoc_insertion_point(field_get:SkillLoadoutSnapshot.rented_extra_slots)
+  return _internal_rented_extra_slots();
+}
+inline void SkillLoadoutSnapshot::set_rented_extra_slots(::uint32_t value) {
+  _internal_set_rented_extra_slots(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:SkillLoadoutSnapshot.rented_extra_slots)
+}
+inline ::uint32_t SkillLoadoutSnapshot::_internal_rented_extra_slots() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rented_extra_slots_;
+}
+inline void SkillLoadoutSnapshot::_internal_set_rented_extra_slots(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rented_extra_slots_ = value;
+}
+
+// uint64 rent_expires_at_sec = 14;
+inline void SkillLoadoutSnapshot::clear_rent_expires_at_sec() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rent_expires_at_sec_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint64_t SkillLoadoutSnapshot::rent_expires_at_sec() const {
+  // @@protoc_insertion_point(field_get:SkillLoadoutSnapshot.rent_expires_at_sec)
+  return _internal_rent_expires_at_sec();
+}
+inline void SkillLoadoutSnapshot::set_rent_expires_at_sec(::uint64_t value) {
+  _internal_set_rent_expires_at_sec(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:SkillLoadoutSnapshot.rent_expires_at_sec)
+}
+inline ::uint64_t SkillLoadoutSnapshot::_internal_rent_expires_at_sec() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rent_expires_at_sec_;
+}
+inline void SkillLoadoutSnapshot::_internal_set_rent_expires_at_sec(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rent_expires_at_sec_ = value;
+}
+
+// uint64 server_now_sec = 15;
+inline void SkillLoadoutSnapshot::clear_server_now_sec() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.server_now_sec_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint64_t SkillLoadoutSnapshot::server_now_sec() const {
+  // @@protoc_insertion_point(field_get:SkillLoadoutSnapshot.server_now_sec)
+  return _internal_server_now_sec();
+}
+inline void SkillLoadoutSnapshot::set_server_now_sec(::uint64_t value) {
+  _internal_set_server_now_sec(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:SkillLoadoutSnapshot.server_now_sec)
+}
+inline ::uint64_t SkillLoadoutSnapshot::_internal_server_now_sec() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.server_now_sec_;
+}
+inline void SkillLoadoutSnapshot::_internal_set_server_now_sec(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.server_now_sec_ = value;
+}
+
+// uint64 rent_unit_price_diamond = 16;
+inline void SkillLoadoutSnapshot::clear_rent_unit_price_diamond() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rent_unit_price_diamond_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint64_t SkillLoadoutSnapshot::rent_unit_price_diamond() const {
+  // @@protoc_insertion_point(field_get:SkillLoadoutSnapshot.rent_unit_price_diamond)
+  return _internal_rent_unit_price_diamond();
+}
+inline void SkillLoadoutSnapshot::set_rent_unit_price_diamond(::uint64_t value) {
+  _internal_set_rent_unit_price_diamond(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:SkillLoadoutSnapshot.rent_unit_price_diamond)
+}
+inline ::uint64_t SkillLoadoutSnapshot::_internal_rent_unit_price_diamond() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rent_unit_price_diamond_;
+}
+inline void SkillLoadoutSnapshot::_internal_set_rent_unit_price_diamond(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rent_unit_price_diamond_ = value;
+}
+
+// uint32 rent_period_days = 17;
+inline void SkillLoadoutSnapshot::clear_rent_period_days() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rent_period_days_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint32_t SkillLoadoutSnapshot::rent_period_days() const {
+  // @@protoc_insertion_point(field_get:SkillLoadoutSnapshot.rent_period_days)
+  return _internal_rent_period_days();
+}
+inline void SkillLoadoutSnapshot::set_rent_period_days(::uint32_t value) {
+  _internal_set_rent_period_days(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:SkillLoadoutSnapshot.rent_period_days)
+}
+inline ::uint32_t SkillLoadoutSnapshot::_internal_rent_period_days() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rent_period_days_;
+}
+inline void SkillLoadoutSnapshot::_internal_set_rent_period_days(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rent_period_days_ = value;
+}
+
+// uint32 rent_max_remaining_days = 18;
+inline void SkillLoadoutSnapshot::clear_rent_max_remaining_days() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rent_max_remaining_days_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline ::uint32_t SkillLoadoutSnapshot::rent_max_remaining_days() const {
+  // @@protoc_insertion_point(field_get:SkillLoadoutSnapshot.rent_max_remaining_days)
+  return _internal_rent_max_remaining_days();
+}
+inline void SkillLoadoutSnapshot::set_rent_max_remaining_days(::uint32_t value) {
+  _internal_set_rent_max_remaining_days(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:SkillLoadoutSnapshot.rent_max_remaining_days)
+}
+inline ::uint32_t SkillLoadoutSnapshot::_internal_rent_max_remaining_days() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rent_max_remaining_days_;
+}
+inline void SkillLoadoutSnapshot::_internal_set_rent_max_remaining_days(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rent_max_remaining_days_ = value;
+}
+
+// uint64 diamond_balance = 19;
+inline void SkillLoadoutSnapshot::clear_diamond_balance() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.diamond_balance_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+}
+inline ::uint64_t SkillLoadoutSnapshot::diamond_balance() const {
+  // @@protoc_insertion_point(field_get:SkillLoadoutSnapshot.diamond_balance)
+  return _internal_diamond_balance();
+}
+inline void SkillLoadoutSnapshot::set_diamond_balance(::uint64_t value) {
+  _internal_set_diamond_balance(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  // @@protoc_insertion_point(field_set:SkillLoadoutSnapshot.diamond_balance)
+}
+inline ::uint64_t SkillLoadoutSnapshot::_internal_diamond_balance() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.diamond_balance_;
+}
+inline void SkillLoadoutSnapshot::_internal_set_diamond_balance(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.diamond_balance_ = value;
+}
+
+// uint64 attribute_reset_cost_gold = 20;
+inline void SkillLoadoutSnapshot::clear_attribute_reset_cost_gold() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attribute_reset_cost_gold_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+}
+inline ::uint64_t SkillLoadoutSnapshot::attribute_reset_cost_gold() const {
+  // @@protoc_insertion_point(field_get:SkillLoadoutSnapshot.attribute_reset_cost_gold)
+  return _internal_attribute_reset_cost_gold();
+}
+inline void SkillLoadoutSnapshot::set_attribute_reset_cost_gold(::uint64_t value) {
+  _internal_set_attribute_reset_cost_gold(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  // @@protoc_insertion_point(field_set:SkillLoadoutSnapshot.attribute_reset_cost_gold)
+}
+inline ::uint64_t SkillLoadoutSnapshot::_internal_attribute_reset_cost_gold() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.attribute_reset_cost_gold_;
+}
+inline void SkillLoadoutSnapshot::_internal_set_attribute_reset_cost_gold(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attribute_reset_cost_gold_ = value;
+}
+
+// uint64 attribute_switch_cooldown_until = 21;
+inline void SkillLoadoutSnapshot::clear_attribute_switch_cooldown_until() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attribute_switch_cooldown_until_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+}
+inline ::uint64_t SkillLoadoutSnapshot::attribute_switch_cooldown_until() const {
+  // @@protoc_insertion_point(field_get:SkillLoadoutSnapshot.attribute_switch_cooldown_until)
+  return _internal_attribute_switch_cooldown_until();
+}
+inline void SkillLoadoutSnapshot::set_attribute_switch_cooldown_until(::uint64_t value) {
+  _internal_set_attribute_switch_cooldown_until(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  // @@protoc_insertion_point(field_set:SkillLoadoutSnapshot.attribute_switch_cooldown_until)
+}
+inline ::uint64_t SkillLoadoutSnapshot::_internal_attribute_switch_cooldown_until() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.attribute_switch_cooldown_until_;
+}
+inline void SkillLoadoutSnapshot::_internal_set_attribute_switch_cooldown_until(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attribute_switch_cooldown_until_ = value;
+}
+
+// uint32 active_attribute_scheme_id = 22;
+inline void SkillLoadoutSnapshot::clear_active_attribute_scheme_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_attribute_scheme_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+}
+inline ::uint32_t SkillLoadoutSnapshot::active_attribute_scheme_id() const {
+  // @@protoc_insertion_point(field_get:SkillLoadoutSnapshot.active_attribute_scheme_id)
+  return _internal_active_attribute_scheme_id();
+}
+inline void SkillLoadoutSnapshot::set_active_attribute_scheme_id(::uint32_t value) {
+  _internal_set_active_attribute_scheme_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  // @@protoc_insertion_point(field_set:SkillLoadoutSnapshot.active_attribute_scheme_id)
+}
+inline ::uint32_t SkillLoadoutSnapshot::_internal_active_attribute_scheme_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.active_attribute_scheme_id_;
+}
+inline void SkillLoadoutSnapshot::_internal_set_active_attribute_scheme_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_attribute_scheme_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
 // -------------------------------------------------------------------
 
 // SaveSkillLoadoutRequest
@@ -16250,7 +18372,7 @@ inline void SkillLoadoutSnapshot::_internal_set_max_schemes(::uint32_t value) {
 inline void SaveSkillLoadoutRequest::clear_scheme_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.scheme_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t SaveSkillLoadoutRequest::scheme_id() const {
   // @@protoc_insertion_point(field_get:SaveSkillLoadoutRequest.scheme_id)
@@ -16258,7 +18380,7 @@ inline ::uint32_t SaveSkillLoadoutRequest::scheme_id() const {
 }
 inline void SaveSkillLoadoutRequest::set_scheme_id(::uint32_t value) {
   _internal_set_scheme_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:SaveSkillLoadoutRequest.scheme_id)
 }
 inline ::uint32_t SaveSkillLoadoutRequest::_internal_scheme_id() const {
@@ -16274,7 +18396,7 @@ inline void SaveSkillLoadoutRequest::_internal_set_scheme_id(::uint32_t value) {
 inline void SaveSkillLoadoutRequest::clear_role_tag() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.role_tag_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t SaveSkillLoadoutRequest::role_tag() const {
   // @@protoc_insertion_point(field_get:SaveSkillLoadoutRequest.role_tag)
@@ -16282,7 +18404,7 @@ inline ::uint32_t SaveSkillLoadoutRequest::role_tag() const {
 }
 inline void SaveSkillLoadoutRequest::set_role_tag(::uint32_t value) {
   _internal_set_role_tag(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:SaveSkillLoadoutRequest.role_tag)
 }
 inline ::uint32_t SaveSkillLoadoutRequest::_internal_role_tag() const {
@@ -16451,7 +18573,7 @@ SaveSkillLoadoutRequest::_internal_mutable_opening_skill_ids() {
 inline void SaveSkillLoadoutRequest::clear_state_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.state_version_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t SaveSkillLoadoutRequest::state_version() const {
   // @@protoc_insertion_point(field_get:SaveSkillLoadoutRequest.state_version)
@@ -16459,7 +18581,7 @@ inline ::uint64_t SaveSkillLoadoutRequest::state_version() const {
 }
 inline void SaveSkillLoadoutRequest::set_state_version(::uint64_t value) {
   _internal_set_state_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:SaveSkillLoadoutRequest.state_version)
 }
 inline ::uint64_t SaveSkillLoadoutRequest::_internal_state_version() const {
@@ -16535,13 +18657,156 @@ inline void SaveSkillLoadoutRequest::set_allocated_request_id(::std::string* PRO
   // @@protoc_insertion_point(field_set_allocated:SaveSkillLoadoutRequest.request_id)
 }
 
+// string name = 8;
+inline void SaveSkillLoadoutRequest::clear_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::std::string& SaveSkillLoadoutRequest::name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SaveSkillLoadoutRequest.name)
+  return _internal_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SaveSkillLoadoutRequest::set_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:SaveSkillLoadoutRequest.name)
+}
+inline ::std::string* PROTOBUF_NONNULL SaveSkillLoadoutRequest::mutable_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:SaveSkillLoadoutRequest.name)
+  return _s;
+}
+inline const ::std::string& SaveSkillLoadoutRequest::_internal_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_.Get();
+}
+inline void SaveSkillLoadoutRequest::_internal_set_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SaveSkillLoadoutRequest::_internal_mutable_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SaveSkillLoadoutRequest::release_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SaveSkillLoadoutRequest.name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  auto* released = _impl_.name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SaveSkillLoadoutRequest::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  _impl_.name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:SaveSkillLoadoutRequest.name)
+}
+
+// bool update_attribute_allocation = 9;
+inline void SaveSkillLoadoutRequest::clear_update_attribute_allocation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.update_attribute_allocation_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline bool SaveSkillLoadoutRequest::update_attribute_allocation() const {
+  // @@protoc_insertion_point(field_get:SaveSkillLoadoutRequest.update_attribute_allocation)
+  return _internal_update_attribute_allocation();
+}
+inline void SaveSkillLoadoutRequest::set_update_attribute_allocation(bool value) {
+  _internal_set_update_attribute_allocation(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:SaveSkillLoadoutRequest.update_attribute_allocation)
+}
+inline bool SaveSkillLoadoutRequest::_internal_update_attribute_allocation() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.update_attribute_allocation_;
+}
+inline void SaveSkillLoadoutRequest::_internal_set_update_attribute_allocation(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.update_attribute_allocation_ = value;
+}
+
+// map<uint32, uint32> attribute_allocated = 10;
+inline int SaveSkillLoadoutRequest::_internal_attribute_allocated_size() const {
+  return _internal_attribute_allocated().size();
+}
+inline int SaveSkillLoadoutRequest::attribute_allocated_size() const {
+  return _internal_attribute_allocated_size();
+}
+inline void SaveSkillLoadoutRequest::clear_attribute_allocated() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attribute_allocated_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& SaveSkillLoadoutRequest::_internal_attribute_allocated() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.attribute_allocated_.GetMap();
+}
+inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& SaveSkillLoadoutRequest::attribute_allocated() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_map:SaveSkillLoadoutRequest.attribute_allocated)
+  return _internal_attribute_allocated();
+}
+inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL SaveSkillLoadoutRequest::_internal_mutable_attribute_allocated() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.attribute_allocated_.MutableMap();
+}
+inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL SaveSkillLoadoutRequest::mutable_attribute_allocated()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_mutable_map:SaveSkillLoadoutRequest.attribute_allocated)
+  return _internal_mutable_attribute_allocated();
+}
+
+// bool reset_attribute_if_needed = 11;
+inline void SaveSkillLoadoutRequest::clear_reset_attribute_if_needed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reset_attribute_if_needed_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline bool SaveSkillLoadoutRequest::reset_attribute_if_needed() const {
+  // @@protoc_insertion_point(field_get:SaveSkillLoadoutRequest.reset_attribute_if_needed)
+  return _internal_reset_attribute_if_needed();
+}
+inline void SaveSkillLoadoutRequest::set_reset_attribute_if_needed(bool value) {
+  _internal_set_reset_attribute_if_needed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:SaveSkillLoadoutRequest.reset_attribute_if_needed)
+}
+inline bool SaveSkillLoadoutRequest::_internal_reset_attribute_if_needed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reset_attribute_if_needed_;
+}
+inline void SaveSkillLoadoutRequest::_internal_set_reset_attribute_if_needed(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reset_attribute_if_needed_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // SaveSkillLoadoutResponse
 
 // .TipInfoMessage error_message = 1;
 inline bool SaveSkillLoadoutResponse::has_error_message() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
   PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
   return value;
 }
@@ -16562,16 +18827,16 @@ inline void SaveSkillLoadoutResponse::unsafe_arena_set_allocated_error_message(
   }
   _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:SaveSkillLoadoutResponse.error_message)
 }
 inline ::TipInfoMessage* PROTOBUF_NULLABLE SaveSkillLoadoutResponse::release_error_message() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::TipInfoMessage* released = _impl_.error_message_;
   _impl_.error_message_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -16591,7 +18856,7 @@ inline ::TipInfoMessage* PROTOBUF_NULLABLE SaveSkillLoadoutResponse::unsafe_aren
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:SaveSkillLoadoutResponse.error_message)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::TipInfoMessage* temp = _impl_.error_message_;
   _impl_.error_message_ = nullptr;
   return temp;
@@ -16606,7 +18871,7 @@ inline ::TipInfoMessage* PROTOBUF_NONNULL SaveSkillLoadoutResponse::_internal_mu
 }
 inline ::TipInfoMessage* PROTOBUF_NONNULL SaveSkillLoadoutResponse::mutable_error_message()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::TipInfoMessage* _msg = _internal_mutable_error_message();
   // @@protoc_insertion_point(field_mutable:SaveSkillLoadoutResponse.error_message)
   return _msg;
@@ -16623,9 +18888,9 @@ inline void SaveSkillLoadoutResponse::set_allocated_error_message(::TipInfoMessa
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
 
   _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
@@ -16634,14 +18899,14 @@ inline void SaveSkillLoadoutResponse::set_allocated_error_message(::TipInfoMessa
 
 // .ListSkillsResponse state = 2;
 inline bool SaveSkillLoadoutResponse::has_state() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
   PROTOBUF_ASSUME(!value || _impl_.state_ != nullptr);
   return value;
 }
 inline void SaveSkillLoadoutResponse::clear_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.state_ != nullptr) _impl_.state_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline const ::ListSkillsResponse& SaveSkillLoadoutResponse::_internal_state() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -16660,16 +18925,16 @@ inline void SaveSkillLoadoutResponse::unsafe_arena_set_allocated_state(
   }
   _impl_.state_ = reinterpret_cast<::ListSkillsResponse*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:SaveSkillLoadoutResponse.state)
 }
 inline ::ListSkillsResponse* PROTOBUF_NULLABLE SaveSkillLoadoutResponse::release_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::ListSkillsResponse* released = _impl_.state_;
   _impl_.state_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -16689,7 +18954,7 @@ inline ::ListSkillsResponse* PROTOBUF_NULLABLE SaveSkillLoadoutResponse::unsafe_
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:SaveSkillLoadoutResponse.state)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::ListSkillsResponse* temp = _impl_.state_;
   _impl_.state_ = nullptr;
   return temp;
@@ -16704,7 +18969,7 @@ inline ::ListSkillsResponse* PROTOBUF_NONNULL SaveSkillLoadoutResponse::_interna
 }
 inline ::ListSkillsResponse* PROTOBUF_NONNULL SaveSkillLoadoutResponse::mutable_state()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::ListSkillsResponse* _msg = _internal_mutable_state();
   // @@protoc_insertion_point(field_mutable:SaveSkillLoadoutResponse.state)
   return _msg;
@@ -16721,9 +18986,9 @@ inline void SaveSkillLoadoutResponse::set_allocated_state(::ListSkillsResponse* 
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
 
   _impl_.state_ = reinterpret_cast<::ListSkillsResponse*>(value);
@@ -16798,7 +19063,7 @@ inline void SaveSkillLoadoutResponse::set_allocated_request_id(::std::string* PR
 inline void SaveSkillLoadoutResponse::clear_replayed() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.replayed_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline bool SaveSkillLoadoutResponse::replayed() const {
   // @@protoc_insertion_point(field_get:SaveSkillLoadoutResponse.replayed)
@@ -16806,7 +19071,7 @@ inline bool SaveSkillLoadoutResponse::replayed() const {
 }
 inline void SaveSkillLoadoutResponse::set_replayed(bool value) {
   _internal_set_replayed(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:SaveSkillLoadoutResponse.replayed)
 }
 inline bool SaveSkillLoadoutResponse::_internal_replayed() const {
@@ -16816,6 +19081,70 @@ inline bool SaveSkillLoadoutResponse::_internal_replayed() const {
 inline void SaveSkillLoadoutResponse::_internal_set_replayed(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.replayed_ = value;
+}
+
+// string attribute_sync_notice = 5;
+inline void SaveSkillLoadoutResponse::clear_attribute_sync_notice() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attribute_sync_notice_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& SaveSkillLoadoutResponse::attribute_sync_notice() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SaveSkillLoadoutResponse.attribute_sync_notice)
+  return _internal_attribute_sync_notice();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SaveSkillLoadoutResponse::set_attribute_sync_notice(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.attribute_sync_notice_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:SaveSkillLoadoutResponse.attribute_sync_notice)
+}
+inline ::std::string* PROTOBUF_NONNULL SaveSkillLoadoutResponse::mutable_attribute_sync_notice()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_attribute_sync_notice();
+  // @@protoc_insertion_point(field_mutable:SaveSkillLoadoutResponse.attribute_sync_notice)
+  return _s;
+}
+inline const ::std::string& SaveSkillLoadoutResponse::_internal_attribute_sync_notice() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.attribute_sync_notice_.Get();
+}
+inline void SaveSkillLoadoutResponse::_internal_set_attribute_sync_notice(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attribute_sync_notice_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SaveSkillLoadoutResponse::_internal_mutable_attribute_sync_notice() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.attribute_sync_notice_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SaveSkillLoadoutResponse::release_attribute_sync_notice() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SaveSkillLoadoutResponse.attribute_sync_notice)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.attribute_sync_notice_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.attribute_sync_notice_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SaveSkillLoadoutResponse::set_allocated_attribute_sync_notice(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.attribute_sync_notice_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.attribute_sync_notice_.IsDefault()) {
+    _impl_.attribute_sync_notice_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:SaveSkillLoadoutResponse.attribute_sync_notice)
 }
 
 // -------------------------------------------------------------------
@@ -16934,13 +19263,37 @@ inline void SwitchSkillLoadoutRequest::set_allocated_request_id(::std::string* P
   // @@protoc_insertion_point(field_set_allocated:SwitchSkillLoadoutRequest.request_id)
 }
 
+// bool skip_attribute_sync = 4;
+inline void SwitchSkillLoadoutRequest::clear_skip_attribute_sync() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skip_attribute_sync_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline bool SwitchSkillLoadoutRequest::skip_attribute_sync() const {
+  // @@protoc_insertion_point(field_get:SwitchSkillLoadoutRequest.skip_attribute_sync)
+  return _internal_skip_attribute_sync();
+}
+inline void SwitchSkillLoadoutRequest::set_skip_attribute_sync(bool value) {
+  _internal_set_skip_attribute_sync(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:SwitchSkillLoadoutRequest.skip_attribute_sync)
+}
+inline bool SwitchSkillLoadoutRequest::_internal_skip_attribute_sync() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.skip_attribute_sync_;
+}
+inline void SwitchSkillLoadoutRequest::_internal_set_skip_attribute_sync(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skip_attribute_sync_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // SwitchSkillLoadoutResponse
 
 // .TipInfoMessage error_message = 1;
 inline bool SwitchSkillLoadoutResponse::has_error_message() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
   PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
   return value;
 }
@@ -16961,16 +19314,16 @@ inline void SwitchSkillLoadoutResponse::unsafe_arena_set_allocated_error_message
   }
   _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:SwitchSkillLoadoutResponse.error_message)
 }
 inline ::TipInfoMessage* PROTOBUF_NULLABLE SwitchSkillLoadoutResponse::release_error_message() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::TipInfoMessage* released = _impl_.error_message_;
   _impl_.error_message_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -16990,7 +19343,7 @@ inline ::TipInfoMessage* PROTOBUF_NULLABLE SwitchSkillLoadoutResponse::unsafe_ar
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:SwitchSkillLoadoutResponse.error_message)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::TipInfoMessage* temp = _impl_.error_message_;
   _impl_.error_message_ = nullptr;
   return temp;
@@ -17005,7 +19358,7 @@ inline ::TipInfoMessage* PROTOBUF_NONNULL SwitchSkillLoadoutResponse::_internal_
 }
 inline ::TipInfoMessage* PROTOBUF_NONNULL SwitchSkillLoadoutResponse::mutable_error_message()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::TipInfoMessage* _msg = _internal_mutable_error_message();
   // @@protoc_insertion_point(field_mutable:SwitchSkillLoadoutResponse.error_message)
   return _msg;
@@ -17022,9 +19375,9 @@ inline void SwitchSkillLoadoutResponse::set_allocated_error_message(::TipInfoMes
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
 
   _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
@@ -17033,14 +19386,14 @@ inline void SwitchSkillLoadoutResponse::set_allocated_error_message(::TipInfoMes
 
 // .ListSkillsResponse state = 2;
 inline bool SwitchSkillLoadoutResponse::has_state() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
   PROTOBUF_ASSUME(!value || _impl_.state_ != nullptr);
   return value;
 }
 inline void SwitchSkillLoadoutResponse::clear_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.state_ != nullptr) _impl_.state_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline const ::ListSkillsResponse& SwitchSkillLoadoutResponse::_internal_state() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -17059,16 +19412,16 @@ inline void SwitchSkillLoadoutResponse::unsafe_arena_set_allocated_state(
   }
   _impl_.state_ = reinterpret_cast<::ListSkillsResponse*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:SwitchSkillLoadoutResponse.state)
 }
 inline ::ListSkillsResponse* PROTOBUF_NULLABLE SwitchSkillLoadoutResponse::release_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::ListSkillsResponse* released = _impl_.state_;
   _impl_.state_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -17088,7 +19441,7 @@ inline ::ListSkillsResponse* PROTOBUF_NULLABLE SwitchSkillLoadoutResponse::unsaf
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:SwitchSkillLoadoutResponse.state)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::ListSkillsResponse* temp = _impl_.state_;
   _impl_.state_ = nullptr;
   return temp;
@@ -17103,7 +19456,7 @@ inline ::ListSkillsResponse* PROTOBUF_NONNULL SwitchSkillLoadoutResponse::_inter
 }
 inline ::ListSkillsResponse* PROTOBUF_NONNULL SwitchSkillLoadoutResponse::mutable_state()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::ListSkillsResponse* _msg = _internal_mutable_state();
   // @@protoc_insertion_point(field_mutable:SwitchSkillLoadoutResponse.state)
   return _msg;
@@ -17120,9 +19473,9 @@ inline void SwitchSkillLoadoutResponse::set_allocated_state(::ListSkillsResponse
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
 
   _impl_.state_ = reinterpret_cast<::ListSkillsResponse*>(value);
@@ -17197,7 +19550,7 @@ inline void SwitchSkillLoadoutResponse::set_allocated_request_id(::std::string* 
 inline void SwitchSkillLoadoutResponse::clear_replayed() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.replayed_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline bool SwitchSkillLoadoutResponse::replayed() const {
   // @@protoc_insertion_point(field_get:SwitchSkillLoadoutResponse.replayed)
@@ -17205,7 +19558,7 @@ inline bool SwitchSkillLoadoutResponse::replayed() const {
 }
 inline void SwitchSkillLoadoutResponse::set_replayed(bool value) {
   _internal_set_replayed(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:SwitchSkillLoadoutResponse.replayed)
 }
 inline bool SwitchSkillLoadoutResponse::_internal_replayed() const {
@@ -17215,6 +19568,485 @@ inline bool SwitchSkillLoadoutResponse::_internal_replayed() const {
 inline void SwitchSkillLoadoutResponse::_internal_set_replayed(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.replayed_ = value;
+}
+
+// string attribute_sync_notice = 5;
+inline void SwitchSkillLoadoutResponse::clear_attribute_sync_notice() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attribute_sync_notice_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& SwitchSkillLoadoutResponse::attribute_sync_notice() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SwitchSkillLoadoutResponse.attribute_sync_notice)
+  return _internal_attribute_sync_notice();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SwitchSkillLoadoutResponse::set_attribute_sync_notice(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.attribute_sync_notice_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:SwitchSkillLoadoutResponse.attribute_sync_notice)
+}
+inline ::std::string* PROTOBUF_NONNULL SwitchSkillLoadoutResponse::mutable_attribute_sync_notice()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_attribute_sync_notice();
+  // @@protoc_insertion_point(field_mutable:SwitchSkillLoadoutResponse.attribute_sync_notice)
+  return _s;
+}
+inline const ::std::string& SwitchSkillLoadoutResponse::_internal_attribute_sync_notice() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.attribute_sync_notice_.Get();
+}
+inline void SwitchSkillLoadoutResponse::_internal_set_attribute_sync_notice(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attribute_sync_notice_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SwitchSkillLoadoutResponse::_internal_mutable_attribute_sync_notice() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.attribute_sync_notice_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SwitchSkillLoadoutResponse::release_attribute_sync_notice() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SwitchSkillLoadoutResponse.attribute_sync_notice)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.attribute_sync_notice_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.attribute_sync_notice_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SwitchSkillLoadoutResponse::set_allocated_attribute_sync_notice(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.attribute_sync_notice_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.attribute_sync_notice_.IsDefault()) {
+    _impl_.attribute_sync_notice_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:SwitchSkillLoadoutResponse.attribute_sync_notice)
+}
+
+// -------------------------------------------------------------------
+
+// RentSkillLoadoutSlotsRequest
+
+// uint64 client_request_id = 1;
+inline void RentSkillLoadoutSlotsRequest::clear_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t RentSkillLoadoutSlotsRequest::client_request_id() const {
+  // @@protoc_insertion_point(field_get:RentSkillLoadoutSlotsRequest.client_request_id)
+  return _internal_client_request_id();
+}
+inline void RentSkillLoadoutSlotsRequest::set_client_request_id(::uint64_t value) {
+  _internal_set_client_request_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:RentSkillLoadoutSlotsRequest.client_request_id)
+}
+inline ::uint64_t RentSkillLoadoutSlotsRequest::_internal_client_request_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.client_request_id_;
+}
+inline void RentSkillLoadoutSlotsRequest::_internal_set_client_request_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_ = value;
+}
+
+// uint32 target_rented_slots = 2;
+inline void RentSkillLoadoutSlotsRequest::clear_target_rented_slots() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_rented_slots_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t RentSkillLoadoutSlotsRequest::target_rented_slots() const {
+  // @@protoc_insertion_point(field_get:RentSkillLoadoutSlotsRequest.target_rented_slots)
+  return _internal_target_rented_slots();
+}
+inline void RentSkillLoadoutSlotsRequest::set_target_rented_slots(::uint32_t value) {
+  _internal_set_target_rented_slots(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:RentSkillLoadoutSlotsRequest.target_rented_slots)
+}
+inline ::uint32_t RentSkillLoadoutSlotsRequest::_internal_target_rented_slots() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_rented_slots_;
+}
+inline void RentSkillLoadoutSlotsRequest::_internal_set_target_rented_slots(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_rented_slots_ = value;
+}
+
+// uint32 add_periods = 3;
+inline void RentSkillLoadoutSlotsRequest::clear_add_periods() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.add_periods_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t RentSkillLoadoutSlotsRequest::add_periods() const {
+  // @@protoc_insertion_point(field_get:RentSkillLoadoutSlotsRequest.add_periods)
+  return _internal_add_periods();
+}
+inline void RentSkillLoadoutSlotsRequest::set_add_periods(::uint32_t value) {
+  _internal_set_add_periods(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:RentSkillLoadoutSlotsRequest.add_periods)
+}
+inline ::uint32_t RentSkillLoadoutSlotsRequest::_internal_add_periods() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.add_periods_;
+}
+inline void RentSkillLoadoutSlotsRequest::_internal_set_add_periods(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.add_periods_ = value;
+}
+
+// uint64 expected_cost_diamond = 4;
+inline void RentSkillLoadoutSlotsRequest::clear_expected_cost_diamond() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_cost_diamond_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t RentSkillLoadoutSlotsRequest::expected_cost_diamond() const {
+  // @@protoc_insertion_point(field_get:RentSkillLoadoutSlotsRequest.expected_cost_diamond)
+  return _internal_expected_cost_diamond();
+}
+inline void RentSkillLoadoutSlotsRequest::set_expected_cost_diamond(::uint64_t value) {
+  _internal_set_expected_cost_diamond(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:RentSkillLoadoutSlotsRequest.expected_cost_diamond)
+}
+inline ::uint64_t RentSkillLoadoutSlotsRequest::_internal_expected_cost_diamond() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expected_cost_diamond_;
+}
+inline void RentSkillLoadoutSlotsRequest::_internal_set_expected_cost_diamond(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_cost_diamond_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// RentSkillLoadoutSlotsResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool RentSkillLoadoutSlotsResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& RentSkillLoadoutSlotsResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& RentSkillLoadoutSlotsResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:RentSkillLoadoutSlotsResponse.error_message)
+  return _internal_error_message();
+}
+inline void RentSkillLoadoutSlotsResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:RentSkillLoadoutSlotsResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE RentSkillLoadoutSlotsResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE RentSkillLoadoutSlotsResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:RentSkillLoadoutSlotsResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL RentSkillLoadoutSlotsResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL RentSkillLoadoutSlotsResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:RentSkillLoadoutSlotsResponse.error_message)
+  return _msg;
+}
+inline void RentSkillLoadoutSlotsResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:RentSkillLoadoutSlotsResponse.error_message)
+}
+
+// .ListSkillsResponse state = 2;
+inline bool RentSkillLoadoutSlotsResponse::has_state() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.state_ != nullptr);
+  return value;
+}
+inline void RentSkillLoadoutSlotsResponse::clear_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.state_ != nullptr) _impl_.state_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::ListSkillsResponse& RentSkillLoadoutSlotsResponse::_internal_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::ListSkillsResponse* p = _impl_.state_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::ListSkillsResponse>(&::ListSkillsResponse_globals_);
+}
+inline const ::ListSkillsResponse& RentSkillLoadoutSlotsResponse::state() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:RentSkillLoadoutSlotsResponse.state)
+  return _internal_state();
+}
+inline void RentSkillLoadoutSlotsResponse::unsafe_arena_set_allocated_state(
+    ::ListSkillsResponse* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.state_);
+  }
+  _impl_.state_ = reinterpret_cast<::ListSkillsResponse*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:RentSkillLoadoutSlotsResponse.state)
+}
+inline ::ListSkillsResponse* PROTOBUF_NULLABLE RentSkillLoadoutSlotsResponse::release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::ListSkillsResponse* released = _impl_.state_;
+  _impl_.state_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::ListSkillsResponse* PROTOBUF_NULLABLE RentSkillLoadoutSlotsResponse::unsafe_arena_release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:RentSkillLoadoutSlotsResponse.state)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::ListSkillsResponse* temp = _impl_.state_;
+  _impl_.state_ = nullptr;
+  return temp;
+}
+inline ::ListSkillsResponse* PROTOBUF_NONNULL RentSkillLoadoutSlotsResponse::_internal_mutable_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.state_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::ListSkillsResponse>(GetArena());
+    _impl_.state_ = reinterpret_cast<::ListSkillsResponse*>(p);
+  }
+  return _impl_.state_;
+}
+inline ::ListSkillsResponse* PROTOBUF_NONNULL RentSkillLoadoutSlotsResponse::mutable_state()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::ListSkillsResponse* _msg = _internal_mutable_state();
+  // @@protoc_insertion_point(field_mutable:RentSkillLoadoutSlotsResponse.state)
+  return _msg;
+}
+inline void RentSkillLoadoutSlotsResponse::set_allocated_state(::ListSkillsResponse* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.state_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.state_ = reinterpret_cast<::ListSkillsResponse*>(value);
+  // @@protoc_insertion_point(field_set_allocated:RentSkillLoadoutSlotsResponse.state)
+}
+
+// uint64 client_request_id = 3;
+inline void RentSkillLoadoutSlotsResponse::clear_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t RentSkillLoadoutSlotsResponse::client_request_id() const {
+  // @@protoc_insertion_point(field_get:RentSkillLoadoutSlotsResponse.client_request_id)
+  return _internal_client_request_id();
+}
+inline void RentSkillLoadoutSlotsResponse::set_client_request_id(::uint64_t value) {
+  _internal_set_client_request_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:RentSkillLoadoutSlotsResponse.client_request_id)
+}
+inline ::uint64_t RentSkillLoadoutSlotsResponse::_internal_client_request_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.client_request_id_;
+}
+inline void RentSkillLoadoutSlotsResponse::_internal_set_client_request_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_ = value;
+}
+
+// bool replayed = 4;
+inline void RentSkillLoadoutSlotsResponse::clear_replayed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.replayed_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline bool RentSkillLoadoutSlotsResponse::replayed() const {
+  // @@protoc_insertion_point(field_get:RentSkillLoadoutSlotsResponse.replayed)
+  return _internal_replayed();
+}
+inline void RentSkillLoadoutSlotsResponse::set_replayed(bool value) {
+  _internal_set_replayed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:RentSkillLoadoutSlotsResponse.replayed)
+}
+inline bool RentSkillLoadoutSlotsResponse::_internal_replayed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.replayed_;
+}
+inline void RentSkillLoadoutSlotsResponse::_internal_set_replayed(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.replayed_ = value;
+}
+
+// uint32 rented_extra_slots = 5;
+inline void RentSkillLoadoutSlotsResponse::clear_rented_extra_slots() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rented_extra_slots_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t RentSkillLoadoutSlotsResponse::rented_extra_slots() const {
+  // @@protoc_insertion_point(field_get:RentSkillLoadoutSlotsResponse.rented_extra_slots)
+  return _internal_rented_extra_slots();
+}
+inline void RentSkillLoadoutSlotsResponse::set_rented_extra_slots(::uint32_t value) {
+  _internal_set_rented_extra_slots(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:RentSkillLoadoutSlotsResponse.rented_extra_slots)
+}
+inline ::uint32_t RentSkillLoadoutSlotsResponse::_internal_rented_extra_slots() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rented_extra_slots_;
+}
+inline void RentSkillLoadoutSlotsResponse::_internal_set_rented_extra_slots(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rented_extra_slots_ = value;
+}
+
+// uint64 rent_expires_at_sec = 6;
+inline void RentSkillLoadoutSlotsResponse::clear_rent_expires_at_sec() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rent_expires_at_sec_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t RentSkillLoadoutSlotsResponse::rent_expires_at_sec() const {
+  // @@protoc_insertion_point(field_get:RentSkillLoadoutSlotsResponse.rent_expires_at_sec)
+  return _internal_rent_expires_at_sec();
+}
+inline void RentSkillLoadoutSlotsResponse::set_rent_expires_at_sec(::uint64_t value) {
+  _internal_set_rent_expires_at_sec(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:RentSkillLoadoutSlotsResponse.rent_expires_at_sec)
+}
+inline ::uint64_t RentSkillLoadoutSlotsResponse::_internal_rent_expires_at_sec() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rent_expires_at_sec_;
+}
+inline void RentSkillLoadoutSlotsResponse::_internal_set_rent_expires_at_sec(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rent_expires_at_sec_ = value;
+}
+
+// uint64 spent_diamond = 7;
+inline void RentSkillLoadoutSlotsResponse::clear_spent_diamond() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spent_diamond_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t RentSkillLoadoutSlotsResponse::spent_diamond() const {
+  // @@protoc_insertion_point(field_get:RentSkillLoadoutSlotsResponse.spent_diamond)
+  return _internal_spent_diamond();
+}
+inline void RentSkillLoadoutSlotsResponse::set_spent_diamond(::uint64_t value) {
+  _internal_set_spent_diamond(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:RentSkillLoadoutSlotsResponse.spent_diamond)
+}
+inline ::uint64_t RentSkillLoadoutSlotsResponse::_internal_spent_diamond() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.spent_diamond_;
+}
+inline void RentSkillLoadoutSlotsResponse::_internal_set_spent_diamond(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spent_diamond_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -17878,13 +20710,201 @@ SkillScrollCatalogInfo::_internal_mutable_skill_table_ids() {
 
 // -------------------------------------------------------------------
 
+// CraftProxyDigestSummary
+
+// uint32 orders_completed = 1;
+inline void CraftProxyDigestSummary::clear_orders_completed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.orders_completed_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t CraftProxyDigestSummary::orders_completed() const {
+  // @@protoc_insertion_point(field_get:CraftProxyDigestSummary.orders_completed)
+  return _internal_orders_completed();
+}
+inline void CraftProxyDigestSummary::set_orders_completed(::uint32_t value) {
+  _internal_set_orders_completed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:CraftProxyDigestSummary.orders_completed)
+}
+inline ::uint32_t CraftProxyDigestSummary::_internal_orders_completed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.orders_completed_;
+}
+inline void CraftProxyDigestSummary::_internal_set_orders_completed(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.orders_completed_ = value;
+}
+
+// uint32 supreme_forged_count = 2;
+inline void CraftProxyDigestSummary::clear_supreme_forged_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.supreme_forged_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t CraftProxyDigestSummary::supreme_forged_count() const {
+  // @@protoc_insertion_point(field_get:CraftProxyDigestSummary.supreme_forged_count)
+  return _internal_supreme_forged_count();
+}
+inline void CraftProxyDigestSummary::set_supreme_forged_count(::uint32_t value) {
+  _internal_set_supreme_forged_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:CraftProxyDigestSummary.supreme_forged_count)
+}
+inline ::uint32_t CraftProxyDigestSummary::_internal_supreme_forged_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.supreme_forged_count_;
+}
+inline void CraftProxyDigestSummary::_internal_set_supreme_forged_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.supreme_forged_count_ = value;
+}
+
+// uint32 rare_books_crafted_count = 3;
+inline void CraftProxyDigestSummary::clear_rare_books_crafted_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rare_books_crafted_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t CraftProxyDigestSummary::rare_books_crafted_count() const {
+  // @@protoc_insertion_point(field_get:CraftProxyDigestSummary.rare_books_crafted_count)
+  return _internal_rare_books_crafted_count();
+}
+inline void CraftProxyDigestSummary::set_rare_books_crafted_count(::uint32_t value) {
+  _internal_set_rare_books_crafted_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:CraftProxyDigestSummary.rare_books_crafted_count)
+}
+inline ::uint32_t CraftProxyDigestSummary::_internal_rare_books_crafted_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rare_books_crafted_count_;
+}
+inline void CraftProxyDigestSummary::_internal_set_rare_books_crafted_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rare_books_crafted_count_ = value;
+}
+
+// uint64 net_gold_earned = 4;
+inline void CraftProxyDigestSummary::clear_net_gold_earned() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.net_gold_earned_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t CraftProxyDigestSummary::net_gold_earned() const {
+  // @@protoc_insertion_point(field_get:CraftProxyDigestSummary.net_gold_earned)
+  return _internal_net_gold_earned();
+}
+inline void CraftProxyDigestSummary::set_net_gold_earned(::uint64_t value) {
+  _internal_set_net_gold_earned(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:CraftProxyDigestSummary.net_gold_earned)
+}
+inline ::uint64_t CraftProxyDigestSummary::_internal_net_gold_earned() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.net_gold_earned_;
+}
+inline void CraftProxyDigestSummary::_internal_set_net_gold_earned(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.net_gold_earned_ = value;
+}
+
+// string last_buyer_name = 5;
+inline void CraftProxyDigestSummary::clear_last_buyer_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_buyer_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& CraftProxyDigestSummary::last_buyer_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:CraftProxyDigestSummary.last_buyer_name)
+  return _internal_last_buyer_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CraftProxyDigestSummary::set_last_buyer_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.last_buyer_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:CraftProxyDigestSummary.last_buyer_name)
+}
+inline ::std::string* PROTOBUF_NONNULL CraftProxyDigestSummary::mutable_last_buyer_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_last_buyer_name();
+  // @@protoc_insertion_point(field_mutable:CraftProxyDigestSummary.last_buyer_name)
+  return _s;
+}
+inline const ::std::string& CraftProxyDigestSummary::_internal_last_buyer_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.last_buyer_name_.Get();
+}
+inline void CraftProxyDigestSummary::_internal_set_last_buyer_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_buyer_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CraftProxyDigestSummary::_internal_mutable_last_buyer_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.last_buyer_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CraftProxyDigestSummary::release_last_buyer_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:CraftProxyDigestSummary.last_buyer_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.last_buyer_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.last_buyer_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CraftProxyDigestSummary::set_allocated_last_buyer_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.last_buyer_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.last_buyer_name_.IsDefault()) {
+    _impl_.last_buyer_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:CraftProxyDigestSummary.last_buyer_name)
+}
+
+// uint32 newly_unlocked_title_mask = 6;
+inline void CraftProxyDigestSummary::clear_newly_unlocked_title_mask() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.newly_unlocked_title_mask_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t CraftProxyDigestSummary::newly_unlocked_title_mask() const {
+  // @@protoc_insertion_point(field_get:CraftProxyDigestSummary.newly_unlocked_title_mask)
+  return _internal_newly_unlocked_title_mask();
+}
+inline void CraftProxyDigestSummary::set_newly_unlocked_title_mask(::uint32_t value) {
+  _internal_set_newly_unlocked_title_mask(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:CraftProxyDigestSummary.newly_unlocked_title_mask)
+}
+inline ::uint32_t CraftProxyDigestSummary::_internal_newly_unlocked_title_mask() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.newly_unlocked_title_mask_;
+}
+inline void CraftProxyDigestSummary::_internal_set_newly_unlocked_title_mask(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.newly_unlocked_title_mask_ = value;
+}
+
+// -------------------------------------------------------------------
+
 // SkillCraftingStateSnapshot
 
 // uint64 scroll_craft_revision = 1;
 inline void SkillCraftingStateSnapshot::clear_scroll_craft_revision() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.scroll_craft_revision_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint64_t SkillCraftingStateSnapshot::scroll_craft_revision() const {
   // @@protoc_insertion_point(field_get:SkillCraftingStateSnapshot.scroll_craft_revision)
@@ -17892,7 +20912,7 @@ inline ::uint64_t SkillCraftingStateSnapshot::scroll_craft_revision() const {
 }
 inline void SkillCraftingStateSnapshot::set_scroll_craft_revision(::uint64_t value) {
   _internal_set_scroll_craft_revision(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:SkillCraftingStateSnapshot.scroll_craft_revision)
 }
 inline ::uint64_t SkillCraftingStateSnapshot::_internal_scroll_craft_revision() const {
@@ -18260,7 +21280,7 @@ SkillCraftingStateSnapshot::_internal_mutable_book_unlocked_skill_ids() {
 inline void SkillCraftingStateSnapshot::clear_gold_balance() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gold_balance_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint64_t SkillCraftingStateSnapshot::gold_balance() const {
   // @@protoc_insertion_point(field_get:SkillCraftingStateSnapshot.gold_balance)
@@ -18268,7 +21288,7 @@ inline ::uint64_t SkillCraftingStateSnapshot::gold_balance() const {
 }
 inline void SkillCraftingStateSnapshot::set_gold_balance(::uint64_t value) {
   _internal_set_gold_balance(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:SkillCraftingStateSnapshot.gold_balance)
 }
 inline ::uint64_t SkillCraftingStateSnapshot::_internal_gold_balance() const {
@@ -18284,7 +21304,7 @@ inline void SkillCraftingStateSnapshot::_internal_set_gold_balance(::uint64_t va
 inline void SkillCraftingStateSnapshot::clear_fragment_owned() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.fragment_owned_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint64_t SkillCraftingStateSnapshot::fragment_owned() const {
   // @@protoc_insertion_point(field_get:SkillCraftingStateSnapshot.fragment_owned)
@@ -18292,7 +21312,7 @@ inline ::uint64_t SkillCraftingStateSnapshot::fragment_owned() const {
 }
 inline void SkillCraftingStateSnapshot::set_fragment_owned(::uint64_t value) {
   _internal_set_fragment_owned(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:SkillCraftingStateSnapshot.fragment_owned)
 }
 inline ::uint64_t SkillCraftingStateSnapshot::_internal_fragment_owned() const {
@@ -18308,7 +21328,7 @@ inline void SkillCraftingStateSnapshot::_internal_set_fragment_owned(::uint64_t 
 inline void SkillCraftingStateSnapshot::clear_rare_scroll_owned() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rare_scroll_owned_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint64_t SkillCraftingStateSnapshot::rare_scroll_owned() const {
   // @@protoc_insertion_point(field_get:SkillCraftingStateSnapshot.rare_scroll_owned)
@@ -18316,7 +21336,7 @@ inline ::uint64_t SkillCraftingStateSnapshot::rare_scroll_owned() const {
 }
 inline void SkillCraftingStateSnapshot::set_rare_scroll_owned(::uint64_t value) {
   _internal_set_rare_scroll_owned(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:SkillCraftingStateSnapshot.rare_scroll_owned)
 }
 inline ::uint64_t SkillCraftingStateSnapshot::_internal_rare_scroll_owned() const {
@@ -18332,7 +21352,7 @@ inline void SkillCraftingStateSnapshot::_internal_set_rare_scroll_owned(::uint64
 inline void SkillCraftingStateSnapshot::clear_rare_ink_owned() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rare_ink_owned_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint64_t SkillCraftingStateSnapshot::rare_ink_owned() const {
   // @@protoc_insertion_point(field_get:SkillCraftingStateSnapshot.rare_ink_owned)
@@ -18340,7 +21360,7 @@ inline ::uint64_t SkillCraftingStateSnapshot::rare_ink_owned() const {
 }
 inline void SkillCraftingStateSnapshot::set_rare_ink_owned(::uint64_t value) {
   _internal_set_rare_ink_owned(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:SkillCraftingStateSnapshot.rare_ink_owned)
 }
 inline ::uint64_t SkillCraftingStateSnapshot::_internal_rare_ink_owned() const {
@@ -18356,7 +21376,7 @@ inline void SkillCraftingStateSnapshot::_internal_set_rare_ink_owned(::uint64_t 
 inline void SkillCraftingStateSnapshot::clear_proxy_stall_open() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.proxy_stall_open_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline bool SkillCraftingStateSnapshot::proxy_stall_open() const {
   // @@protoc_insertion_point(field_get:SkillCraftingStateSnapshot.proxy_stall_open)
@@ -18364,7 +21384,7 @@ inline bool SkillCraftingStateSnapshot::proxy_stall_open() const {
 }
 inline void SkillCraftingStateSnapshot::set_proxy_stall_open(bool value) {
   _internal_set_proxy_stall_open(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:SkillCraftingStateSnapshot.proxy_stall_open)
 }
 inline bool SkillCraftingStateSnapshot::_internal_proxy_stall_open() const {
@@ -18380,7 +21400,7 @@ inline void SkillCraftingStateSnapshot::_internal_set_proxy_stall_open(bool valu
 inline void SkillCraftingStateSnapshot::clear_proxy_forge_fee_gold() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.proxy_forge_fee_gold_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint64_t SkillCraftingStateSnapshot::proxy_forge_fee_gold() const {
   // @@protoc_insertion_point(field_get:SkillCraftingStateSnapshot.proxy_forge_fee_gold)
@@ -18388,7 +21408,7 @@ inline ::uint64_t SkillCraftingStateSnapshot::proxy_forge_fee_gold() const {
 }
 inline void SkillCraftingStateSnapshot::set_proxy_forge_fee_gold(::uint64_t value) {
   _internal_set_proxy_forge_fee_gold(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:SkillCraftingStateSnapshot.proxy_forge_fee_gold)
 }
 inline ::uint64_t SkillCraftingStateSnapshot::_internal_proxy_forge_fee_gold() const {
@@ -18404,7 +21424,7 @@ inline void SkillCraftingStateSnapshot::_internal_set_proxy_forge_fee_gold(::uin
 inline void SkillCraftingStateSnapshot::clear_proxy_scroll_fee_gold() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.proxy_scroll_fee_gold_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint64_t SkillCraftingStateSnapshot::proxy_scroll_fee_gold() const {
   // @@protoc_insertion_point(field_get:SkillCraftingStateSnapshot.proxy_scroll_fee_gold)
@@ -18412,7 +21432,7 @@ inline ::uint64_t SkillCraftingStateSnapshot::proxy_scroll_fee_gold() const {
 }
 inline void SkillCraftingStateSnapshot::set_proxy_scroll_fee_gold(::uint64_t value) {
   _internal_set_proxy_scroll_fee_gold(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:SkillCraftingStateSnapshot.proxy_scroll_fee_gold)
 }
 inline ::uint64_t SkillCraftingStateSnapshot::_internal_proxy_scroll_fee_gold() const {
@@ -18428,7 +21448,7 @@ inline void SkillCraftingStateSnapshot::_internal_set_proxy_scroll_fee_gold(::ui
 inline void SkillCraftingStateSnapshot::clear_craft_unlock_gate_enabled() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.craft_unlock_gate_enabled_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline bool SkillCraftingStateSnapshot::craft_unlock_gate_enabled() const {
   // @@protoc_insertion_point(field_get:SkillCraftingStateSnapshot.craft_unlock_gate_enabled)
@@ -18436,7 +21456,7 @@ inline bool SkillCraftingStateSnapshot::craft_unlock_gate_enabled() const {
 }
 inline void SkillCraftingStateSnapshot::set_craft_unlock_gate_enabled(bool value) {
   _internal_set_craft_unlock_gate_enabled(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:SkillCraftingStateSnapshot.craft_unlock_gate_enabled)
 }
 inline bool SkillCraftingStateSnapshot::_internal_craft_unlock_gate_enabled() const {
@@ -18452,7 +21472,7 @@ inline void SkillCraftingStateSnapshot::_internal_set_craft_unlock_gate_enabled(
 inline void SkillCraftingStateSnapshot::clear_proxy_orders_completed() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.proxy_orders_completed_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint32_t SkillCraftingStateSnapshot::proxy_orders_completed() const {
   // @@protoc_insertion_point(field_get:SkillCraftingStateSnapshot.proxy_orders_completed)
@@ -18460,7 +21480,7 @@ inline ::uint32_t SkillCraftingStateSnapshot::proxy_orders_completed() const {
 }
 inline void SkillCraftingStateSnapshot::set_proxy_orders_completed(::uint32_t value) {
   _internal_set_proxy_orders_completed(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:SkillCraftingStateSnapshot.proxy_orders_completed)
 }
 inline ::uint32_t SkillCraftingStateSnapshot::_internal_proxy_orders_completed() const {
@@ -18476,7 +21496,7 @@ inline void SkillCraftingStateSnapshot::_internal_set_proxy_orders_completed(::u
 inline void SkillCraftingStateSnapshot::clear_supreme_forged_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.supreme_forged_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline ::uint32_t SkillCraftingStateSnapshot::supreme_forged_count() const {
   // @@protoc_insertion_point(field_get:SkillCraftingStateSnapshot.supreme_forged_count)
@@ -18484,7 +21504,7 @@ inline ::uint32_t SkillCraftingStateSnapshot::supreme_forged_count() const {
 }
 inline void SkillCraftingStateSnapshot::set_supreme_forged_count(::uint32_t value) {
   _internal_set_supreme_forged_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:SkillCraftingStateSnapshot.supreme_forged_count)
 }
 inline ::uint32_t SkillCraftingStateSnapshot::_internal_supreme_forged_count() const {
@@ -18500,7 +21520,7 @@ inline void SkillCraftingStateSnapshot::_internal_set_supreme_forged_count(::uin
 inline void SkillCraftingStateSnapshot::clear_rare_books_crafted_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rare_books_crafted_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline ::uint32_t SkillCraftingStateSnapshot::rare_books_crafted_count() const {
   // @@protoc_insertion_point(field_get:SkillCraftingStateSnapshot.rare_books_crafted_count)
@@ -18508,7 +21528,7 @@ inline ::uint32_t SkillCraftingStateSnapshot::rare_books_crafted_count() const {
 }
 inline void SkillCraftingStateSnapshot::set_rare_books_crafted_count(::uint32_t value) {
   _internal_set_rare_books_crafted_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_set:SkillCraftingStateSnapshot.rare_books_crafted_count)
 }
 inline ::uint32_t SkillCraftingStateSnapshot::_internal_rare_books_crafted_count() const {
@@ -18524,7 +21544,7 @@ inline void SkillCraftingStateSnapshot::_internal_set_rare_books_crafted_count(:
 inline void SkillCraftingStateSnapshot::clear_master_showcase_tag() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.master_showcase_tag_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
 }
 inline ::uint32_t SkillCraftingStateSnapshot::master_showcase_tag() const {
   // @@protoc_insertion_point(field_get:SkillCraftingStateSnapshot.master_showcase_tag)
@@ -18532,7 +21552,7 @@ inline ::uint32_t SkillCraftingStateSnapshot::master_showcase_tag() const {
 }
 inline void SkillCraftingStateSnapshot::set_master_showcase_tag(::uint32_t value) {
   _internal_set_master_showcase_tag(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
   // @@protoc_insertion_point(field_set:SkillCraftingStateSnapshot.master_showcase_tag)
 }
 inline ::uint32_t SkillCraftingStateSnapshot::_internal_master_showcase_tag() const {
@@ -18548,7 +21568,7 @@ inline void SkillCraftingStateSnapshot::_internal_set_master_showcase_tag(::uint
 inline void SkillCraftingStateSnapshot::clear_equipped_craft_title_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equipped_craft_title_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
 }
 inline ::uint32_t SkillCraftingStateSnapshot::equipped_craft_title_id() const {
   // @@protoc_insertion_point(field_get:SkillCraftingStateSnapshot.equipped_craft_title_id)
@@ -18556,7 +21576,7 @@ inline ::uint32_t SkillCraftingStateSnapshot::equipped_craft_title_id() const {
 }
 inline void SkillCraftingStateSnapshot::set_equipped_craft_title_id(::uint32_t value) {
   _internal_set_equipped_craft_title_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
   // @@protoc_insertion_point(field_set:SkillCraftingStateSnapshot.equipped_craft_title_id)
 }
 inline ::uint32_t SkillCraftingStateSnapshot::_internal_equipped_craft_title_id() const {
@@ -18623,7 +21643,7 @@ SkillCraftingStateSnapshot::_internal_mutable_unlocked_craft_title_ids() {
 inline void SkillCraftingStateSnapshot::clear_team_free_proxy() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.team_free_proxy_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline bool SkillCraftingStateSnapshot::team_free_proxy() const {
   // @@protoc_insertion_point(field_get:SkillCraftingStateSnapshot.team_free_proxy)
@@ -18631,7 +21651,7 @@ inline bool SkillCraftingStateSnapshot::team_free_proxy() const {
 }
 inline void SkillCraftingStateSnapshot::set_team_free_proxy(bool value) {
   _internal_set_team_free_proxy(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:SkillCraftingStateSnapshot.team_free_proxy)
 }
 inline bool SkillCraftingStateSnapshot::_internal_team_free_proxy() const {
@@ -18760,6 +21780,104 @@ inline ::google::protobuf::RepeatedPtrField<::SkillBookWantedOrderInfo>* PROTOBU
 SkillCraftingStateSnapshot::_internal_mutable_my_wanted_orders() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.my_wanted_orders_;
+}
+
+// .CraftProxyDigestSummary unread_proxy_digest = 24;
+inline bool SkillCraftingStateSnapshot::has_unread_proxy_digest() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000100U);
+  PROTOBUF_ASSUME(!value || _impl_.unread_proxy_digest_ != nullptr);
+  return value;
+}
+inline void SkillCraftingStateSnapshot::clear_unread_proxy_digest() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.unread_proxy_digest_ != nullptr) _impl_.unread_proxy_digest_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline const ::CraftProxyDigestSummary& SkillCraftingStateSnapshot::_internal_unread_proxy_digest() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::CraftProxyDigestSummary* p = _impl_.unread_proxy_digest_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::CraftProxyDigestSummary>(&::CraftProxyDigestSummary_globals_);
+}
+inline const ::CraftProxyDigestSummary& SkillCraftingStateSnapshot::unread_proxy_digest() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SkillCraftingStateSnapshot.unread_proxy_digest)
+  return _internal_unread_proxy_digest();
+}
+inline void SkillCraftingStateSnapshot::unsafe_arena_set_allocated_unread_proxy_digest(
+    ::CraftProxyDigestSummary* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.unread_proxy_digest_);
+  }
+  _impl_.unread_proxy_digest_ = reinterpret_cast<::CraftProxyDigestSummary*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:SkillCraftingStateSnapshot.unread_proxy_digest)
+}
+inline ::CraftProxyDigestSummary* PROTOBUF_NULLABLE SkillCraftingStateSnapshot::release_unread_proxy_digest() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ::CraftProxyDigestSummary* released = _impl_.unread_proxy_digest_;
+  _impl_.unread_proxy_digest_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::CraftProxyDigestSummary* PROTOBUF_NULLABLE SkillCraftingStateSnapshot::unsafe_arena_release_unread_proxy_digest() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SkillCraftingStateSnapshot.unread_proxy_digest)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ::CraftProxyDigestSummary* temp = _impl_.unread_proxy_digest_;
+  _impl_.unread_proxy_digest_ = nullptr;
+  return temp;
+}
+inline ::CraftProxyDigestSummary* PROTOBUF_NONNULL SkillCraftingStateSnapshot::_internal_mutable_unread_proxy_digest() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.unread_proxy_digest_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::CraftProxyDigestSummary>(GetArena());
+    _impl_.unread_proxy_digest_ = reinterpret_cast<::CraftProxyDigestSummary*>(p);
+  }
+  return _impl_.unread_proxy_digest_;
+}
+inline ::CraftProxyDigestSummary* PROTOBUF_NONNULL SkillCraftingStateSnapshot::mutable_unread_proxy_digest()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ::CraftProxyDigestSummary* _msg = _internal_mutable_unread_proxy_digest();
+  // @@protoc_insertion_point(field_mutable:SkillCraftingStateSnapshot.unread_proxy_digest)
+  return _msg;
+}
+inline void SkillCraftingStateSnapshot::set_allocated_unread_proxy_digest(::CraftProxyDigestSummary* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.unread_proxy_digest_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  }
+
+  _impl_.unread_proxy_digest_ = reinterpret_cast<::CraftProxyDigestSummary*>(value);
+  // @@protoc_insertion_point(field_set_allocated:SkillCraftingStateSnapshot.unread_proxy_digest)
 }
 
 // -------------------------------------------------------------------
@@ -21703,6 +24821,277 @@ inline bool CraftProxyStallInfo::_internal_viewer_gets_free_proxy() const {
 inline void CraftProxyStallInfo::_internal_set_viewer_gets_free_proxy(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.viewer_gets_free_proxy_ = value;
+}
+
+// uint32 recent_24h_orders = 16;
+inline void CraftProxyStallInfo::clear_recent_24h_orders() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.recent_24h_orders_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint32_t CraftProxyStallInfo::recent_24h_orders() const {
+  // @@protoc_insertion_point(field_get:CraftProxyStallInfo.recent_24h_orders)
+  return _internal_recent_24h_orders();
+}
+inline void CraftProxyStallInfo::set_recent_24h_orders(::uint32_t value) {
+  _internal_set_recent_24h_orders(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:CraftProxyStallInfo.recent_24h_orders)
+}
+inline ::uint32_t CraftProxyStallInfo::_internal_recent_24h_orders() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.recent_24h_orders_;
+}
+inline void CraftProxyStallInfo::_internal_set_recent_24h_orders(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.recent_24h_orders_ = value;
+}
+
+// uint32 recent_24h_supreme = 17;
+inline void CraftProxyStallInfo::clear_recent_24h_supreme() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.recent_24h_supreme_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint32_t CraftProxyStallInfo::recent_24h_supreme() const {
+  // @@protoc_insertion_point(field_get:CraftProxyStallInfo.recent_24h_supreme)
+  return _internal_recent_24h_supreme();
+}
+inline void CraftProxyStallInfo::set_recent_24h_supreme(::uint32_t value) {
+  _internal_set_recent_24h_supreme(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:CraftProxyStallInfo.recent_24h_supreme)
+}
+inline ::uint32_t CraftProxyStallInfo::_internal_recent_24h_supreme() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.recent_24h_supreme_;
+}
+inline void CraftProxyStallInfo::_internal_set_recent_24h_supreme(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.recent_24h_supreme_ = value;
+}
+
+// uint32 hot_rank = 18;
+inline void CraftProxyStallInfo::clear_hot_rank() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hot_rank_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline ::uint32_t CraftProxyStallInfo::hot_rank() const {
+  // @@protoc_insertion_point(field_get:CraftProxyStallInfo.hot_rank)
+  return _internal_hot_rank();
+}
+inline void CraftProxyStallInfo::set_hot_rank(::uint32_t value) {
+  _internal_set_hot_rank(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:CraftProxyStallInfo.hot_rank)
+}
+inline ::uint32_t CraftProxyStallInfo::_internal_hot_rank() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hot_rank_;
+}
+inline void CraftProxyStallInfo::_internal_set_hot_rank(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hot_rank_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// AckCraftProxyDigestRequest
+
+// -------------------------------------------------------------------
+
+// AckCraftProxyDigestResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool AckCraftProxyDigestResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& AckCraftProxyDigestResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& AckCraftProxyDigestResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:AckCraftProxyDigestResponse.error_message)
+  return _internal_error_message();
+}
+inline void AckCraftProxyDigestResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:AckCraftProxyDigestResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE AckCraftProxyDigestResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE AckCraftProxyDigestResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:AckCraftProxyDigestResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL AckCraftProxyDigestResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL AckCraftProxyDigestResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:AckCraftProxyDigestResponse.error_message)
+  return _msg;
+}
+inline void AckCraftProxyDigestResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:AckCraftProxyDigestResponse.error_message)
+}
+
+// .SkillCraftingStateSnapshot state = 2;
+inline bool AckCraftProxyDigestResponse::has_state() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.state_ != nullptr);
+  return value;
+}
+inline void AckCraftProxyDigestResponse::clear_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.state_ != nullptr) _impl_.state_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::SkillCraftingStateSnapshot& AckCraftProxyDigestResponse::_internal_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::SkillCraftingStateSnapshot* p = _impl_.state_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::SkillCraftingStateSnapshot>(&::SkillCraftingStateSnapshot_globals_);
+}
+inline const ::SkillCraftingStateSnapshot& AckCraftProxyDigestResponse::state() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:AckCraftProxyDigestResponse.state)
+  return _internal_state();
+}
+inline void AckCraftProxyDigestResponse::unsafe_arena_set_allocated_state(
+    ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.state_);
+  }
+  _impl_.state_ = reinterpret_cast<::SkillCraftingStateSnapshot*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:AckCraftProxyDigestResponse.state)
+}
+inline ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE AckCraftProxyDigestResponse::release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::SkillCraftingStateSnapshot* released = _impl_.state_;
+  _impl_.state_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE AckCraftProxyDigestResponse::unsafe_arena_release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:AckCraftProxyDigestResponse.state)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::SkillCraftingStateSnapshot* temp = _impl_.state_;
+  _impl_.state_ = nullptr;
+  return temp;
+}
+inline ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL AckCraftProxyDigestResponse::_internal_mutable_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.state_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::SkillCraftingStateSnapshot>(GetArena());
+    _impl_.state_ = reinterpret_cast<::SkillCraftingStateSnapshot*>(p);
+  }
+  return _impl_.state_;
+}
+inline ::SkillCraftingStateSnapshot* PROTOBUF_NONNULL AckCraftProxyDigestResponse::mutable_state()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::SkillCraftingStateSnapshot* _msg = _internal_mutable_state();
+  // @@protoc_insertion_point(field_mutable:AckCraftProxyDigestResponse.state)
+  return _msg;
+}
+inline void AckCraftProxyDigestResponse::set_allocated_state(::SkillCraftingStateSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.state_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.state_ = reinterpret_cast<::SkillCraftingStateSnapshot*>(value);
+  // @@protoc_insertion_point(field_set_allocated:AckCraftProxyDigestResponse.state)
 }
 
 // -------------------------------------------------------------------

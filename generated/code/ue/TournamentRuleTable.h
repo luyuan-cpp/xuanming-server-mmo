@@ -28,8 +28,6 @@ struct FCfgTournamentRuleSnapshot
 	TMap<int32, int32> IdIndex;
 	/// battle_config_id -> 全部命中行的下标(二级索引)。
 	TMap<int32, TArray<int32>> BattleConfigIdIndex;
-	/// salute_item_id -> 全部命中行的下标(二级索引)。
-	TMap<int32, TArray<int32>> SaluteItemIdIndex;
 };
 
 /**
@@ -138,16 +136,6 @@ public:
 	const TMap<int32, TArray<int32>>& GetBattleConfigIdIndex() const
 	{
 		return Snapshot->BattleConfigIdIndex;
-	}
-
-	/// salute_item_id == Key 的全部行。
-	TArray<const FCfgTournamentRuleRow*> GetBySaluteItemId(int32 Key) const;
-	/// 零分配版:下标数组,配 RowAt() 用。
-	const TArray<int32>& GetSaluteItemIdIndices(int32 Key) const;
-	int32 CountBySaluteItemIdIndex(int32 Key) const;
-	const TMap<int32, TArray<int32>>& GetSaluteItemIdIndex() const
-	{
-		return Snapshot->SaluteItemIdIndex;
 	}
 
 	// ---- repeated 标量的值索引 ----

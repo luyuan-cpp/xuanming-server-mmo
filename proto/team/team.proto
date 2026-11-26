@@ -132,6 +132,8 @@ message StartTeamMatchRequest {
   match.MatchMode match_mode = 5;
   // 排位规则版本号(PVP_TEAM 排位必填或由服务端按当前赛季核验;版本不符拒绝开局)。
   uint32 ranked_rule_version = 6;
+  // 五行试炼志 V3：队长选定的自选限制誓约位掩码（仅 PVE 首领试炼有效，0=常规，1..15）。
+  uint32 trial_vow_mask = 7;
 }
 
 message ConfirmRankedPresetRequest {

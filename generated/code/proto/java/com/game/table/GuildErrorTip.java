@@ -323,6 +323,22 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kGuildWarServiceBusy = 14071;</code>
      */
     kGuildWarServiceBusy(14071),
+    /**
+     * <code>kGuildWarFeudCooldown = 14072;</code>
+     */
+    kGuildWarFeudCooldown(14072),
+    /**
+     * <code>kGuildWarFeudAlreadyActive = 14073;</code>
+     */
+    kGuildWarFeudAlreadyActive(14073),
+    /**
+     * <code>kGuildWarFeudNotFound = 14074;</code>
+     */
+    kGuildWarFeudNotFound(14074),
+    /**
+     * <code>kGuildWarFeudInvalidTarget = 14075;</code>
+     */
+    kGuildWarFeudInvalidTarget(14075),
     UNRECOGNIZED(-1),
     ;
 
@@ -627,6 +643,22 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kGuildWarServiceBusy = 14071;</code>
      */
     public static final int kGuildWarServiceBusy_VALUE = 14071;
+    /**
+     * <code>kGuildWarFeudCooldown = 14072;</code>
+     */
+    public static final int kGuildWarFeudCooldown_VALUE = 14072;
+    /**
+     * <code>kGuildWarFeudAlreadyActive = 14073;</code>
+     */
+    public static final int kGuildWarFeudAlreadyActive_VALUE = 14073;
+    /**
+     * <code>kGuildWarFeudNotFound = 14074;</code>
+     */
+    public static final int kGuildWarFeudNotFound_VALUE = 14074;
+    /**
+     * <code>kGuildWarFeudInvalidTarget = 14075;</code>
+     */
+    public static final int kGuildWarFeudInvalidTarget_VALUE = 14075;
 
 
     public final int getNumber() {
@@ -726,6 +758,10 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
         case 14069: return kGuildWarBountyNotFound;
         case 14070: return kGuildWarTrackCooldown;
         case 14071: return kGuildWarServiceBusy;
+        case 14072: return kGuildWarFeudCooldown;
+        case 14073: return kGuildWarFeudAlreadyActive;
+        case 14074: return kGuildWarFeudNotFound;
+        case 14075: return kGuildWarFeudInvalidTarget;
         default: return null;
       }
     }
@@ -791,7 +827,7 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025guild_error_tip.proto*\245\020\n\013guild_error\022" +
+      "\n\025guild_error_tip.proto*\237\021\n\013guild_error\022" +
       "\022\n\016kGuild_errorOK\020\000\022\031\n\024kGuildAlreadyInGu" +
       "ild\020\260m\022\023\n\016kGuildNotFound\020\261m\022\025\n\020kGuildNot" +
       "InGuild\020\262m\022\017\n\nkGuildFull\020\263m\022\032\n\025kGuildLea" +
@@ -843,8 +879,11 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
       "\020\362m\022!\n\034kGuildWarBountyAlreadyActive\020\363m\022\031" +
       "\n\024kGuildWarBountyLimit\020\364m\022\034\n\027kGuildWarBo" +
       "untyNotFound\020\365m\022\033\n\026kGuildWarTrackCooldow" +
-      "n\020\366m\022\031\n\024kGuildWarServiceBusy\020\367mB$\n\016com.g" +
-      "ame.tableZ\022generated/pb/tableb\006proto3"
+      "n\020\366m\022\031\n\024kGuildWarServiceBusy\020\367m\022\032\n\025kGuil" +
+      "dWarFeudCooldown\020\370m\022\037\n\032kGuildWarFeudAlre" +
+      "adyActive\020\371m\022\032\n\025kGuildWarFeudNotFound\020\372m" +
+      "\022\037\n\032kGuildWarFeudInvalidTarget\020\373mB$\n\016com" +
+      ".game.tableZ\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

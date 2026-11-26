@@ -245,6 +245,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonRuleTable final : public ::go
     kCatchupPricePerPointFieldNumber = 13,
     kCatchupCurrencyTypeFieldNumber = 12,
     kDefaultSealIdFieldNumber = 14,
+    kCycleOrderFieldNumber = 18,
+    kCycleDurationDaysFieldNumber = 19,
   };
   // string name = 2;
   void clear_name() ;
@@ -436,11 +438,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonRuleTable final : public ::go
   void _internal_set_default_seal_id(::uint32_t value);
 
   public:
+  // uint32 cycle_order = 18;
+  void clear_cycle_order() ;
+  [[nodiscard]] ::uint32_t cycle_order() const;
+  void set_cycle_order(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_cycle_order() const;
+  void _internal_set_cycle_order(::uint32_t value);
+
+  public:
+  // uint32 cycle_duration_days = 19;
+  void clear_cycle_duration_days() ;
+  [[nodiscard]] ::uint32_t cycle_duration_days() const;
+  void set_cycle_duration_days(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_cycle_duration_days() const;
+  void _internal_set_cycle_duration_days(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:SeasonRuleTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 17,
+      ::google::protobuf::internal::TcParseTable<5, 19,
                           0, 84,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -486,6 +508,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonRuleTable final : public ::go
     ::uint64_t catchup_price_per_point_;
     ::uint32_t catchup_currency_type_;
     ::uint32_t default_seal_id_;
+    ::uint32_t cycle_order_;
+    ::uint32_t cycle_duration_days_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1286,6 +1310,54 @@ inline void SeasonRuleTable::set_allocated_honor_badge_icon_key(::std::string* P
     _impl_.honor_badge_icon_key_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:SeasonRuleTable.honor_badge_icon_key)
+}
+
+// uint32 cycle_order = 18;
+inline void SeasonRuleTable::clear_cycle_order() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cycle_order_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline ::uint32_t SeasonRuleTable::cycle_order() const {
+  // @@protoc_insertion_point(field_get:SeasonRuleTable.cycle_order)
+  return _internal_cycle_order();
+}
+inline void SeasonRuleTable::set_cycle_order(::uint32_t value) {
+  _internal_set_cycle_order(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:SeasonRuleTable.cycle_order)
+}
+inline ::uint32_t SeasonRuleTable::_internal_cycle_order() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cycle_order_;
+}
+inline void SeasonRuleTable::_internal_set_cycle_order(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cycle_order_ = value;
+}
+
+// uint32 cycle_duration_days = 19;
+inline void SeasonRuleTable::clear_cycle_duration_days() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cycle_duration_days_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+}
+inline ::uint32_t SeasonRuleTable::cycle_duration_days() const {
+  // @@protoc_insertion_point(field_get:SeasonRuleTable.cycle_duration_days)
+  return _internal_cycle_duration_days();
+}
+inline void SeasonRuleTable::set_cycle_duration_days(::uint32_t value) {
+  _internal_set_cycle_duration_days(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  // @@protoc_insertion_point(field_set:SeasonRuleTable.cycle_duration_days)
+}
+inline ::uint32_t SeasonRuleTable::_internal_cycle_duration_days() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cycle_duration_days_;
+}
+inline void SeasonRuleTable::_internal_set_cycle_duration_days(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cycle_duration_days_ = value;
 }
 
 // -------------------------------------------------------------------

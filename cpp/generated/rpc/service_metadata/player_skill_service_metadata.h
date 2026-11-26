@@ -86,3 +86,11 @@ constexpr uint32_t SceneSkillClientPlayerListSkillBookWantedOrdersIndex = 19;
 constexpr uint32_t SceneSkillClientPlayerFulfillSkillBookWantedOrderMessageId = 563;
 constexpr uint32_t SceneSkillClientPlayerFulfillSkillBookWantedOrderIndex = 20;
 #define SceneSkillClientPlayerFulfillSkillBookWantedOrderMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(20)
+
+constexpr uint32_t SceneSkillClientPlayerRentSkillLoadoutSlotsMessageId = 565;
+constexpr uint32_t SceneSkillClientPlayerRentSkillLoadoutSlotsIndex = 21;
+#define SceneSkillClientPlayerRentSkillLoadoutSlotsMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(21)
+
+constexpr uint32_t SceneSkillClientPlayerAckCraftProxyDigestMessageId = 573;
+constexpr uint32_t SceneSkillClientPlayerAckCraftProxyDigestIndex = 22;
+#define SceneSkillClientPlayerAckCraftProxyDigestMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(22)

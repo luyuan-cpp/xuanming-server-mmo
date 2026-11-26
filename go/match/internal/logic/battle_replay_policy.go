@@ -1,14 +1,17 @@
 package logic
 
-import matchpb "proto/match"
+import (
+	battlepb "proto/battle"
+	matchpb "proto/match"
+)
 
 // 战报回放的录制策略(docs/design/battle-report-replay.md BR-8、§7.1):「这局录不录回放」只在本文件决定。
-// gather 建房时调用一次 recordReplayFor,结果写进 CreateBattleRequest.record_replay,随原件冻结
+// gather 建房时调用一次 recordReplayForBattle,结果写进 CreateBattleRequest.record_replay,随原件冻结
 // (随 formation 的 create_request 落库)。之后只读冻结值:battle 按它录,match 终局事务按它写战报与列表。
-// 负责人 2026-11-06 定:只录 PVP;每名玩家保留最近 100 场(authority.BattleReportsKeptPerPlayer)。
-// 活动局(帮会历练等)不单独判断,跟着自己的模式走。
+// 负责人 2026-11-06 定:常规模式只录 PVP;五行试炼志 V3 受控开放试炼志有格 PVE（trialCtx.JournalEntryId != 0）
+// 以支撑好友约战帖回放复盘,普通刷怪/爬塔/历练 PVE 依然不录;每名玩家保留最近 100 场(authority.BattleReportsKeptPerPlayer)。
 
-// recordReplayFor 是「这局录不录回放」的唯一权威。enabled 是全局开关 BattleReport.Enabled,
+// recordReplayFor 是按对局模式的基线录制判定。enabled 是全局开关 BattleReport.Enabled,
 // 关掉后新成局一律不录;表外的模式不录。
 func recordReplayFor(enabled bool, mode matchpb.MatchMode) bool {
 	if !enabled {
@@ -16,6 +19,22 @@ func recordReplayFor(enabled bool, mode matchpb.MatchMode) bool {
 	}
 	record, decided := replayPolicyOfMode(mode)
 	return decided && record
+}
+
+// recordReplayForBattle 是建房期「这局录不录回放」的最终入口：在既有 PVP 基线之上，
+// 仅对五行试炼志有格 PVE（PVE_SOLO/PVE_TEAM 且 trialCtx.JournalEntryId != 0）受控开启录制。
+func recordReplayForBattle(enabled bool, mode matchpb.MatchMode, trialCtx *battlepb.TrialBattleContext) bool {
+	if !enabled {
+		return false
+	}
+	if recordReplayFor(enabled, mode) {
+		return true
+	}
+	if (mode == matchpb.MatchMode_MATCH_MODE_PVE_SOLO || mode == matchpb.MatchMode_MATCH_MODE_PVE_TEAM) &&
+		trialCtx != nil && trialCtx.GetJournalEntryId() != 0 {
+		return true
+	}
+	return false
 }
 
 // replayPolicyOfMode 是按对局模式的显式决策表:每个 MatchMode 枚举值各占一行、各写理由。decided=false
@@ -37,6 +56,8 @@ func replayPolicyOfMode(mode matchpb.MatchMode) (record bool, decided bool) {
 		return false, true // 帮会守旗阵踢馆(AI 托管):高频对局不录回放
 	case matchpb.MatchMode_MATCH_MODE_SEASON_TOURNAMENT:
 		return true, true // 全服赛季战队锦标赛:强制录制回放供复盘与争议核查
+	case matchpb.MatchMode_MATCH_MODE_JIANGHU_DUEL:
+		return true, true // 江湖恩怨·天墉生死状:录制战报回放供个人恩怨录与帮派恩怨墙复盘
 	case matchpb.MatchMode_MATCH_MODE_PVP_CHALLENGE:
 		return true, true // 点名切磋:也是玩家之间的对局
 	case matchpb.MatchMode_MATCH_MODE_3V3:

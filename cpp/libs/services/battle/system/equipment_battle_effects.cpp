@@ -34,21 +34,22 @@ BattleArtifactState* ArtifactState(BattleActorState& actor, uint64_t itemId) {
 }
 
 bool TurnBattleEngine::InitializeEquipment(BattleActorState& actor, const EquipmentEffects& effects) {
-    if (effects.physical_attack_bps() > equipbattle::MaximumSourceBps(1) || effects.magic_attack_bps() > equipbattle::MaximumSourceBps(2) ||
-        effects.max_health_bps() > equipbattle::MaximumSourceBps(3) || effects.speed_bps() > equipbattle::MaximumSourceBps(4) ||
-        effects.outgoing_heal_bps() > equipbattle::MaximumSourceBps(5) || effects.shield_capacity_bps() > equipbattle::MaximumSourceBps(6) ||
-        effects.physical_crit_bps() > equipbattle::MaximumSourceBps(7) || effects.magic_crit_bps() > equipbattle::MaximumSourceBps(8) ||
-        effects.physical_resist_bps() > equipbattle::MaximumSourceBps(9) || effects.magic_resist_bps() > equipbattle::MaximumSourceBps(10) ||
-        !Bounded(effects.ailment_hit_bps(), 7, equipbattle::MaximumSourceBps(11)) ||
-        !Bounded(effects.ailment_resist_bps(), 7, equipbattle::MaximumSourceBps(12)) ||
-        !Bounded(effects.mana_reduction_bps(), 12, equipbattle::MaximumSourceBps(13)) || effects.artifacts_size() > 2 ||
+    if (effects.physical_attack_bps() > equipbattle::MaximumEffectiveSourceBps(1) || effects.magic_attack_bps() > equipbattle::MaximumEffectiveSourceBps(2) ||
+        effects.max_health_bps() > equipbattle::MaximumEffectiveSourceBps(3) || effects.speed_bps() > equipbattle::MaximumEffectiveSourceBps(4) ||
+        effects.outgoing_heal_bps() > equipbattle::MaximumEffectiveSourceBps(5) || effects.shield_capacity_bps() > equipbattle::MaximumEffectiveSourceBps(6) ||
+        effects.physical_crit_bps() > equipbattle::MaximumEffectiveSourceBps(7) || effects.magic_crit_bps() > equipbattle::MaximumEffectiveSourceBps(8) ||
+        effects.physical_resist_bps() > equipbattle::MaximumEffectiveSourceBps(9) || effects.magic_resist_bps() > equipbattle::MaximumEffectiveSourceBps(10) ||
+        !Bounded(effects.ailment_hit_bps(), 7, equipbattle::MaximumEffectiveSourceBps(11)) ||
+        !Bounded(effects.ailment_resist_bps(), 7, equipbattle::MaximumEffectiveSourceBps(12)) ||
+        !Bounded(effects.mana_reduction_bps(), 12, equipbattle::MaximumEffectiveSourceBps(13)) || effects.artifacts_size() > 2 ||
         effects.season_max_health_bps() > seasonrules::kHardStatCapBps ||
         effects.season_defense_bps() > seasonrules::kHardStatCapBps) return false;
     if (effects.has_season_seal()) {
         const auto& seal = effects.season_seal();
-        if (!seasonrules::ValidSealEffect(seal.season_id(), seal.seal_id(), seal.effect_id(),
+        if (!seasonrules::ValidSealDefinition(seal.season_id(), seal.seal_id(), seal.effect_id(),
                 seal.bonus_bps(), seal.cap_bps(), seal.per_round_limit(), seal.battle_limit(),
-                seal.active_rounds(), seal.health_threshold_bps())) return false;
+                seal.active_rounds(), seal.health_threshold_bps(),
+                seal.resonance_skill_id(), seal.resonance_kind(), seal.resonance_param())) return false;
     }
     std::set<uint64_t> instances;
     for (const auto& source : effects.artifacts()) {
@@ -148,18 +149,21 @@ bool TurnBattleEngine::HasAnyRegularShield(const BattleActorState& target) const
     return false;
 }
 
-bool TurnBattleEngine::IsDefendBreathResonanceReady(const BattleActorState& actor, uint32_t skillId) const {
+uint32_t TurnBattleEngine::DefendManaDiscountResonancePct(const BattleActorState& actor, uint32_t skillId) const {
     if (actor.actor_type() != BATTLE_ACTOR_TYPE_PLAYER ||
-        skillId != seasonrules::kSkillPozhenXushi ||
         !actor.equipment_effects().has_season_seal()) {
-        return false;
+        return 0u;
     }
     const auto& seal = actor.equipment_effects().season_seal();
-    if (seal.season_id() != seasonrules::kSeason1Id || seal.seal_id() != seasonrules::kSealJuxiYuanyin) {
-        return false;
+    if (seal.resonance_kind() != seasonrules::kResonanceDefendManaDiscount ||
+        seal.resonance_skill_id() != skillId || seal.resonance_param() == 0u) {
+        return 0u;
     }
     const auto it = seasonSealRuntimeByActor.find(actor.actor_id());
-    return it != seasonSealRuntimeByActor.end() && it->second.defendResonanceReadyRound == roundIndex;
+    if (it != seasonSealRuntimeByActor.end() && it->second.defendResonanceReadyRound == roundIndex) {
+        return seal.resonance_param();
+    }
+    return 0u;
 }
 
 void TurnBattleEngine::EmitSeasonResonanceEvent(BattleActorState& actor, uint64_t targetId,
@@ -194,7 +198,8 @@ void TurnBattleEngine::EquipmentDefend(BattleActorState& actor, TurnResultS2C& r
         if (gain > 0) {
             total += gain;
             UseSeasonSeal(actor, actor.actor_id(), gain, result);
-            if (seal.season_id() == seasonrules::kSeason1Id && seal.seal_id() == seasonrules::kSealJuxiYuanyin) {
+            if (seal.resonance_kind() == seasonrules::kResonanceDefendManaDiscount ||
+                seal.resonance_kind() == seasonrules::kResonanceDefendShieldBoost) {
                 seasonSealRuntimeByActor[actor.actor_id()].defendResonanceReadyRound = roundIndex + 1u;
             }
         }
@@ -226,7 +231,8 @@ uint64_t TurnBattleEngine::EquipmentReduceDamage(BattleActorState& source, Battl
         if (part > 0) {
             reduction += part;
             UseSeasonSeal(target, target.actor_id(), part, result);
-            if (seal.season_id() == seasonrules::kSeason1Id && seal.seal_id() == seasonrules::kSealGuzhenShouyin) {
+            if (seal.resonance_kind() == seasonrules::kResonanceGuardShieldBoost ||
+                seal.resonance_kind() == seasonrules::kResonanceGuardHealBoost) {
                 auto& rt = seasonSealRuntimeByActor[target.actor_id()];
                 if (!rt.guardResonanceConsumed) {
                     rt.guardResonanceReadyRound = roundIndex + 1u;
@@ -295,13 +301,13 @@ void TurnBattleEngine::EquipmentBreakShields(BattleActorState& source, BattleAct
             if (source.actor_type() == BATTLE_ACTOR_TYPE_PLAYER) {
                 shieldBreakPlayers.insert(source.actor_id());
             }
-            if (seal.season_id() == seasonrules::kSeason1Id) {
-                if (seal.seal_id() == seasonrules::kSealPozhenRuiyin &&
-                    context.skillId == seasonrules::kSkillPozhenLiefeng &&
+            if (seal.resonance_skill_id() == context.skillId && seal.resonance_param() > 0u) {
+                if (seal.resonance_kind() == seasonrules::kResonanceSharpManaRefund &&
                     !HasAnyRegularShield(target)) {
                     const uint64_t manaBefore = source.attributes().mana();
                     const uint64_t missingMana = source.max_mana() > manaBefore ? source.max_mana() - manaBefore : 0u;
-                    const uint64_t refund = std::min(missingMana, seasonrules::ResonanceSharpManaRefund(context.paidMana));
+                    const uint64_t refund = std::min(missingMana,
+                        seasonrules::ComputeManaPctCeil(context.paidMana, seal.resonance_param()));
                     if (refund > 0u) {
                         source.mutable_attributes()->set_mana(manaBefore + refund);
                         auto* manaEv = AppendEvent(result, BATTLE_EVENT_MANA, source.actor_id(), source.actor_id());
@@ -312,10 +318,11 @@ void TurnBattleEngine::EquipmentBreakShields(BattleActorState& source, BattleAct
                         EmitSeasonResonanceEvent(source, source.actor_id(),
                                                  seasonrules::kResonanceEventSharpManaRefund, refund, result);
                     }
-                } else if (seal.seal_id() == seasonrules::kSealPozhenXuanyin &&
-                           context.skillId == seasonrules::kSkillPozhenLinglei) {
+                } else if (seal.resonance_kind() == seasonrules::kResonanceBreakExtendDebuff) {
                     pendingMysticExtendCasterId = source.actor_id();
                     pendingMysticExtendTargetId = target.actor_id();
+                    pendingMysticExtendSkillId = context.skillId;
+                    pendingMysticExtendBonusRounds = seal.resonance_param();
                 }
             }
         }
@@ -399,7 +406,9 @@ void TurnBattleEngine::BuildSupportEffects(const BattleActorState& actor, Suppor
 }
 
 double TurnBattleEngine::EquipmentShield(BattleActorState& source, BattleActorState& target, double base,
-                                         const EffectContext& context, std::vector<int>& contributions) const {
+                                         const EffectContext& context, std::vector<int>& contributions,
+                                         uint64_t* outSeasonSealGain) const {
+    if (outSeasonSealGain != nullptr) *outSeasonSealGain = 0u;
     if (source.actor_type() == BATTLE_ACTOR_TYPE_PET)
         return supportrules::ApplyBonus(base, petcultivation::ShieldBonus(source) + ConfiguredModifier(source, BattleModifier::OutgoingShield));
     if (source.actor_type() != BATTLE_ACTOR_TYPE_PLAYER) return base;
@@ -412,13 +421,46 @@ double TurnBattleEngine::EquipmentShield(BattleActorState& source, BattleActorSt
             if (std::floor(after) > std::floor(base * (1 + bonus))) contributions.push_back(index);
             bonus += bps / 10000.0;
         }
+        if (SeasonSealAvailable(source, 5)) {
+            const uint32_t bps = source.equipment_effects().season_seal().bonus_bps();
+            const double beforeVal = std::max(0.0, base * (1 + bonus));
+            const double afterVal = std::max(0.0, base * (1 + bonus + bps / 10000.0));
+            const uint64_t beforeFloor = static_cast<uint64_t>(std::floor(beforeVal));
+            const uint64_t afterFloor = static_cast<uint64_t>(std::floor(afterVal));
+            if (afterFloor > beforeFloor && outSeasonSealGain != nullptr) {
+                *outSeasonSealGain = afterFloor - beforeFloor;
+            }
+            bonus += bps / 10000.0;
+        }
     }
     return supportrules::ApplyBonus(base, bonus);
 }
 void TurnBattleEngine::CommitEquipmentShield(BattleActorState& source, uint64_t targetId,
-                                             const std::vector<int>& contributions, TurnResultS2C& result) {
+                                             const std::vector<int>& contributions, uint64_t seasonSealGain,
+                                             uint32_t castSkillId, TurnResultS2C& result) {
     for (const int index : contributions) UseArtifact(source, index, targetId,
         source.equipment_effects().artifacts(index).bonus_bps(), result);
+    if (seasonSealGain > 0u && SeasonSealAvailable(source, 5)) {
+        const auto& seal = source.equipment_effects().season_seal();
+        UseSeasonSeal(source, targetId, seasonSealGain, result);
+        if (seal.resonance_kind() == seasonrules::kResonanceFirstShieldMana &&
+            seal.resonance_skill_id() == castSkillId && seal.resonance_param() > 0u) {
+            const uint64_t manaBefore = source.attributes().mana();
+            const uint64_t missingMana = source.max_mana() > manaBefore ? source.max_mana() - manaBefore : 0u;
+            const uint64_t gain = std::min(missingMana,
+                equipbattle::FloorBps(source.entry_max_mana(), seal.resonance_param()));
+            if (gain > 0u) {
+                source.mutable_attributes()->set_mana(manaBefore + gain);
+                auto* manaEv = AppendEvent(result, BATTLE_EVENT_MANA, source.actor_id(), source.actor_id());
+                manaEv->set_skill_table_id(castSkillId);
+                manaEv->set_value(gain);
+                manaEv->set_mana_delta(static_cast<int64_t>(std::min<uint64_t>(gain, INT64_MAX)));
+                manaEv->set_target_mana_after(manaBefore + gain);
+                EmitSeasonResonanceEvent(source, source.actor_id(),
+                                         seasonrules::kResonanceEventFirstShieldMana, gain, result);
+            }
+        }
+    }
 }
 
 bool TurnBattleEngine::EquipmentControlRoll(BattleActorState& caster, BattleActorState& target,

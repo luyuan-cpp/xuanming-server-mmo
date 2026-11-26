@@ -36,6 +36,15 @@ const (
 	ID_1051 = 30
 	ID_1052 = 31
 	ID_1053 = 32
+	ID_4011 = 33
+	ID_4012 = 34
+	ID_4013 = 35
+	ID_4021 = 36
+	ID_4022 = 37
+	ID_4023 = 38
+	ID_4031 = 39
+	ID_4032 = 40
+	ID_4033 = 41
 )
 
-const BitmapCapacity = 33
+const BitmapCapacity = 42

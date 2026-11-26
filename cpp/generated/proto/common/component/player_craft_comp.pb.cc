@@ -434,11 +434,11 @@ constexpr PlayerCraftComp::ParseTableT_ PlayerCraftComp::InternalGenerateParseTa
     {
       PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_._has_bits_),
       0, // no _extensions_
-      18, 248,  // max_field_number, fast_idx_mask
+      24, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294705152,  // skipmap
+      4278190080,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      18,  // num_field_entries
+      24,  // num_field_entries
       2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -450,60 +450,60 @@ constexpr PlayerCraftComp::ParseTableT_ PlayerCraftComp::InternalGenerateParseTa
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint32 forge_mastery_exp = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerCraftComp, _impl_.forge_mastery_exp_), 4>(),
-       {8, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerCraftComp, _impl_.forge_mastery_exp_), 5>(),
+       {8, 5, 0,
         PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.forge_mastery_exp_)}},
       // uint32 scroll_mastery_exp = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerCraftComp, _impl_.scroll_mastery_exp_), 5>(),
-       {16, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerCraftComp, _impl_.scroll_mastery_exp_), 6>(),
+       {16, 6, 0,
         PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.scroll_mastery_exp_)}},
       // uint64 scroll_craft_revision = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerCraftComp, _impl_.scroll_craft_revision_), 6>(),
-       {24, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerCraftComp, _impl_.scroll_craft_revision_), 7>(),
+       {24, 7, 0,
         PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.scroll_craft_revision_)}},
       // uint64 next_book_seq = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerCraftComp, _impl_.next_book_seq_), 7>(),
-       {32, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerCraftComp, _impl_.next_book_seq_), 8>(),
+       {32, 8, 0,
         PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.next_book_seq_)}},
       // repeated .CraftedSkillBookEntry skill_books = 5;
       {::_pbi::TcParser::FastMtR1,
        {42, 0, 0,
         PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.skill_books_)}},
       // bool proxy_stall_open = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PlayerCraftComp, _impl_.proxy_stall_open_), 13>(),
-       {48, 13, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PlayerCraftComp, _impl_.proxy_stall_open_), 14>(),
+       {48, 14, 0,
         PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.proxy_stall_open_)}},
       // uint64 proxy_forge_fee_gold = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerCraftComp, _impl_.proxy_forge_fee_gold_), 8>(),
-       {56, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerCraftComp, _impl_.proxy_forge_fee_gold_), 9>(),
+       {56, 9, 0,
         PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.proxy_forge_fee_gold_)}},
       // uint64 proxy_scroll_fee_gold = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerCraftComp, _impl_.proxy_scroll_fee_gold_), 9>(),
-       {64, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerCraftComp, _impl_.proxy_scroll_fee_gold_), 10>(),
+       {64, 10, 0,
         PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.proxy_scroll_fee_gold_)}},
       // repeated uint32 book_unlocked_skill_ids = 9;
       {::_pbi::TcParser::FastV32P1,
        {74, 1, 0,
         PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.book_unlocked_skill_ids_)}},
       // uint32 proxy_orders_completed = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerCraftComp, _impl_.proxy_orders_completed_), 10>(),
-       {80, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerCraftComp, _impl_.proxy_orders_completed_), 11>(),
+       {80, 11, 0,
         PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.proxy_orders_completed_)}},
       // uint32 supreme_forged_count = 11;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerCraftComp, _impl_.supreme_forged_count_), 11>(),
-       {88, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerCraftComp, _impl_.supreme_forged_count_), 12>(),
+       {88, 12, 0,
         PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.supreme_forged_count_)}},
       // uint32 rare_books_crafted_count = 12;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerCraftComp, _impl_.rare_books_crafted_count_), 12>(),
-       {96, 12, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerCraftComp, _impl_.rare_books_crafted_count_), 13>(),
+       {96, 13, 0,
         PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.rare_books_crafted_count_)}},
       // uint32 master_showcase_tag = 13;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerCraftComp, _impl_.master_showcase_tag_), 15>(),
-       {104, 15, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerCraftComp, _impl_.master_showcase_tag_), 16>(),
+       {104, 16, 0,
         PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.master_showcase_tag_)}},
       // uint32 equipped_craft_title_id = 14;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerCraftComp, _impl_.equipped_craft_title_id_), 16>(),
-       {112, 16, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerCraftComp, _impl_.equipped_craft_title_id_), 17>(),
+       {112, 17, 0,
         PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.equipped_craft_title_id_)}},
       // bytes claimed_scroll_milestone_bits = 15;
       {::_pbi::TcParser::FastBS1,
@@ -515,18 +515,36 @@ constexpr PlayerCraftComp::ParseTableT_ PlayerCraftComp::InternalGenerateParseTa
         PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.wanted_orders_)}},
       // uint64 next_wanted_order_seq = 17;
       {::_pbi::TcParser::FastV64S2,
-       {392, 17, 0,
+       {392, 18, 0,
         PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.next_wanted_order_seq_)}},
       // bool team_free_proxy = 18;
       {::_pbi::TcParser::FastV8S2,
-       {400, 14, 0,
+       {400, 15, 0,
         PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.team_free_proxy_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 unread_proxy_digest_orders = 19;
+      {::_pbi::TcParser::FastV32S2,
+       {408, 19, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.unread_proxy_digest_orders_)}},
+      // uint32 unread_proxy_digest_supreme = 20;
+      {::_pbi::TcParser::FastV32S2,
+       {416, 20, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.unread_proxy_digest_supreme_)}},
+      // uint32 unread_proxy_digest_rare = 21;
+      {::_pbi::TcParser::FastV32S2,
+       {424, 22, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.unread_proxy_digest_rare_)}},
+      // uint64 unread_proxy_digest_net_gold = 22;
+      {::_pbi::TcParser::FastV64S2,
+       {432, 21, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.unread_proxy_digest_net_gold_)}},
+      // string unread_proxy_digest_last_buyer = 23;
+      {::_pbi::TcParser::FastUS2,
+       {442, 4, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.unread_proxy_digest_last_buyer_)}},
+      // uint32 unread_proxy_digest_new_titles_mask = 24;
+      {::_pbi::TcParser::FastV32S2,
+       {448, 23, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.unread_proxy_digest_new_titles_mask_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -538,41 +556,53 @@ constexpr PlayerCraftComp::ParseTableT_ PlayerCraftComp::InternalGenerateParseTa
       65535, 65535
     }}, {{
       // uint32 forge_mastery_exp = 1;
-      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.forge_mastery_exp_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.forge_mastery_exp_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 scroll_mastery_exp = 2;
-      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.scroll_mastery_exp_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.scroll_mastery_exp_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 scroll_craft_revision = 3;
-      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.scroll_craft_revision_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.scroll_craft_revision_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 next_book_seq = 4;
-      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.next_book_seq_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.next_book_seq_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // repeated .CraftedSkillBookEntry skill_books = 5;
       {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.skill_books_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // bool proxy_stall_open = 6;
-      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.proxy_stall_open_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.proxy_stall_open_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // uint64 proxy_forge_fee_gold = 7;
-      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.proxy_forge_fee_gold_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.proxy_forge_fee_gold_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 proxy_scroll_fee_gold = 8;
-      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.proxy_scroll_fee_gold_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.proxy_scroll_fee_gold_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // repeated uint32 book_unlocked_skill_ids = 9;
       {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.book_unlocked_skill_ids_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
       // uint32 proxy_orders_completed = 10;
-      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.proxy_orders_completed_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.proxy_orders_completed_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 supreme_forged_count = 11;
-      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.supreme_forged_count_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.supreme_forged_count_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 rare_books_crafted_count = 12;
-      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.rare_books_crafted_count_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.rare_books_crafted_count_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 master_showcase_tag = 13;
-      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.master_showcase_tag_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.master_showcase_tag_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 equipped_craft_title_id = 14;
-      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.equipped_craft_title_id_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.equipped_craft_title_id_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // bytes claimed_scroll_milestone_bits = 15;
       {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.claimed_scroll_milestone_bits_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
       // repeated .SkillBookWantedOrder wanted_orders = 16;
       {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.wanted_orders_), _Internal::kHasBitsOffset + 2, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint64 next_wanted_order_seq = 17;
-      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.next_wanted_order_seq_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.next_wanted_order_seq_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // bool team_free_proxy = 18;
-      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.team_free_proxy_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.team_free_proxy_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 unread_proxy_digest_orders = 19;
+      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.unread_proxy_digest_orders_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 unread_proxy_digest_supreme = 20;
+      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.unread_proxy_digest_supreme_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 unread_proxy_digest_rare = 21;
+      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.unread_proxy_digest_rare_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 unread_proxy_digest_net_gold = 22;
+      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.unread_proxy_digest_net_gold_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string unread_proxy_digest_last_buyer = 23;
+      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.unread_proxy_digest_last_buyer_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 unread_proxy_digest_new_titles_mask = 24;
+      {PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.unread_proxy_digest_new_titles_mask_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -587,6 +617,9 @@ constexpr PlayerCraftComp::ParseTableT_ PlayerCraftComp::InternalGenerateParseTa
         #endif
     }},
     {{
+      "\17\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\36\0\0\0\0\0\0\0\0"
+      "PlayerCraftComp"
+      "unread_proxy_digest_last_buyer"
     }},
   };
 }
@@ -615,6 +648,9 @@ inline constexpr PlayerCraftComp::Impl_::Impl_(
         claimed_scroll_milestone_bits_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
+        unread_proxy_digest_last_buyer_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         forge_mastery_exp_{0u},
         scroll_mastery_exp_{0u},
         scroll_craft_revision_{::uint64_t{0u}},
@@ -628,7 +664,12 @@ inline constexpr PlayerCraftComp::Impl_::Impl_(
         team_free_proxy_{false},
         master_showcase_tag_{0u},
         equipped_craft_title_id_{0u},
-        next_wanted_order_seq_{::uint64_t{0u}} {}
+        next_wanted_order_seq_{::uint64_t{0u}},
+        unread_proxy_digest_orders_{0u},
+        unread_proxy_digest_supreme_{0u},
+        unread_proxy_digest_net_gold_{::uint64_t{0u}},
+        unread_proxy_digest_rare_{0u},
+        unread_proxy_digest_new_titles_mask_{0u} {}
 
 template <typename>
 constexpr PlayerCraftComp::PlayerCraftComp(::_pbi::ConstantInitialized,
@@ -767,7 +808,7 @@ const ::uint32_t
         6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerCraftComp, _impl_._has_bits_),
-        21, // hasbit index offset
+        27, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PlayerCraftComp, _impl_.forge_mastery_exp_),
         PROTOBUF_FIELD_OFFSET(::PlayerCraftComp, _impl_.scroll_mastery_exp_),
         PROTOBUF_FIELD_OFFSET(::PlayerCraftComp, _impl_.scroll_craft_revision_),
@@ -786,24 +827,36 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::PlayerCraftComp, _impl_.wanted_orders_),
         PROTOBUF_FIELD_OFFSET(::PlayerCraftComp, _impl_.next_wanted_order_seq_),
         PROTOBUF_FIELD_OFFSET(::PlayerCraftComp, _impl_.team_free_proxy_),
-        4,
+        PROTOBUF_FIELD_OFFSET(::PlayerCraftComp, _impl_.unread_proxy_digest_orders_),
+        PROTOBUF_FIELD_OFFSET(::PlayerCraftComp, _impl_.unread_proxy_digest_supreme_),
+        PROTOBUF_FIELD_OFFSET(::PlayerCraftComp, _impl_.unread_proxy_digest_rare_),
+        PROTOBUF_FIELD_OFFSET(::PlayerCraftComp, _impl_.unread_proxy_digest_net_gold_),
+        PROTOBUF_FIELD_OFFSET(::PlayerCraftComp, _impl_.unread_proxy_digest_last_buyer_),
+        PROTOBUF_FIELD_OFFSET(::PlayerCraftComp, _impl_.unread_proxy_digest_new_titles_mask_),
         5,
         6,
         7,
-        0,
-        13,
         8,
+        0,
+        14,
         9,
-        1,
         10,
+        1,
         11,
         12,
-        15,
+        13,
         16,
+        17,
         3,
         2,
-        17,
-        14,
+        18,
+        15,
+        19,
+        20,
+        22,
+        21,
+        4,
+        23,
 };
 
 static const ::_pbi::MigrationSchema
@@ -830,7 +883,7 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fcraft
     "id\030\002 \001(\004\022\023\n\013poster_name\030\003 \001(\t\022\026\n\016skill_t"
     "able_id\030\004 \001(\r\022\021\n\tscroll_id\030\005 \001(\r\022 \n\030requ"
     "ire_master_signature\030\006 \001(\010\022\023\n\013reward_gol"
-    "d\030\007 \001(\004\022\026\n\016created_at_sec\030\010 \001(\004\"\316\004\n\017Play"
+    "d\030\007 \001(\004\022\026\n\016created_at_sec\030\010 \001(\004\"\264\006\n\017Play"
     "erCraftComp\022\031\n\021forge_mastery_exp\030\001 \001(\r\022\032"
     "\n\022scroll_mastery_exp\030\002 \001(\r\022\035\n\025scroll_cra"
     "ft_revision\030\003 \001(\004\022\025\n\rnext_book_seq\030\004 \001(\004"
@@ -845,14 +898,20 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fcraft
     "\001(\r\022%\n\035claimed_scroll_milestone_bits\030\017 \001"
     "(\014\022,\n\rwanted_orders\030\020 \003(\0132\025.SkillBookWan"
     "tedOrder\022\035\n\025next_wanted_order_seq\030\021 \001(\004\022"
-    "\027\n\017team_free_proxy\030\022 \001(\010B\022Z\020common/compo"
-    "nentb\006proto3"
+    "\027\n\017team_free_proxy\030\022 \001(\010\022\"\n\032unread_proxy"
+    "_digest_orders\030\023 \001(\r\022#\n\033unread_proxy_dig"
+    "est_supreme\030\024 \001(\r\022 \n\030unread_proxy_digest"
+    "_rare\030\025 \001(\r\022$\n\034unread_proxy_digest_net_g"
+    "old\030\026 \001(\004\022&\n\036unread_proxy_digest_last_bu"
+    "yer\030\027 \001(\t\022+\n#unread_proxy_digest_new_tit"
+    "les_mask\030\030 \001(\rB\022Z\020common/componentb\006prot"
+    "o3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcraft_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcraft_5fcomp_2eproto = {
     false,
     false,
-    1052,
+    1282,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fcraft_5fcomp_2eproto,
     "proto/common/component/player_craft_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcraft_5fcomp_2eproto_once,
@@ -1657,7 +1716,8 @@ PROTOBUF_NDEBUG_INLINE PlayerCraftComp::Impl_::Impl_(
           , from.wanted_orders_
         }
         ,
-        claimed_scroll_milestone_bits_(arena, from.claimed_scroll_milestone_bits_) {}
+        claimed_scroll_milestone_bits_(arena, from.claimed_scroll_milestone_bits_),
+        unread_proxy_digest_last_buyer_(arena, from.unread_proxy_digest_last_buyer_) {}
 
 PlayerCraftComp::PlayerCraftComp(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -1677,9 +1737,9 @@ PlayerCraftComp::PlayerCraftComp(
                offsetof(Impl_, forge_mastery_exp_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, forge_mastery_exp_),
-           offsetof(Impl_, next_wanted_order_seq_) -
+           offsetof(Impl_, unread_proxy_digest_new_titles_mask_) -
                offsetof(Impl_, forge_mastery_exp_) +
-               sizeof(Impl_::next_wanted_order_seq_));
+               sizeof(Impl_::unread_proxy_digest_new_titles_mask_));
 
   // @@protoc_insertion_point(copy_constructor:PlayerCraftComp)
 }
@@ -1703,16 +1763,17 @@ PROTOBUF_NDEBUG_INLINE PlayerCraftComp::Impl_::Impl_(
             PROTOBUF_FIELD_OFFSET(::PlayerCraftComp, _impl_.wanted_orders_)>()
          }
         ,
-        claimed_scroll_milestone_bits_(arena) {}
+        claimed_scroll_milestone_bits_(arena),
+        unread_proxy_digest_last_buyer_(arena) {}
 
 inline void PlayerCraftComp::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, forge_mastery_exp_),
            0,
-           offsetof(Impl_, next_wanted_order_seq_) -
+           offsetof(Impl_, unread_proxy_digest_new_titles_mask_) -
                offsetof(Impl_, forge_mastery_exp_) +
-               sizeof(Impl_::next_wanted_order_seq_));
+               sizeof(Impl_::unread_proxy_digest_new_titles_mask_));
 }
 PlayerCraftComp::~PlayerCraftComp() {
   // @@protoc_insertion_point(destructor:PlayerCraftComp)
@@ -1726,6 +1787,7 @@ inline void PlayerCraftComp::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.claimed_scroll_milestone_bits_.Destroy();
+  this_._impl_.unread_proxy_digest_last_buyer_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -1763,7 +1825,7 @@ PROTOBUF_NOINLINE void PlayerCraftComp::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.skill_books_.Clear();
     }
@@ -1776,21 +1838,24 @@ PROTOBUF_NOINLINE void PlayerCraftComp::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       _impl_.claimed_scroll_milestone_bits_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      _impl_.unread_proxy_digest_last_buyer_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000f0U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000e0U)) {
     ::memset(&_impl_.forge_mastery_exp_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.next_book_seq_) -
-        reinterpret_cast<char*>(&_impl_.forge_mastery_exp_)) + sizeof(_impl_.next_book_seq_));
+        reinterpret_cast<char*>(&_impl_.scroll_craft_revision_) -
+        reinterpret_cast<char*>(&_impl_.forge_mastery_exp_)) + sizeof(_impl_.scroll_craft_revision_));
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
-    ::memset(&_impl_.proxy_forge_fee_gold_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.master_showcase_tag_) -
-        reinterpret_cast<char*>(&_impl_.proxy_forge_fee_gold_)) + sizeof(_impl_.master_showcase_tag_));
+    ::memset(&_impl_.next_book_seq_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.team_free_proxy_) -
+        reinterpret_cast<char*>(&_impl_.next_book_seq_)) + sizeof(_impl_.team_free_proxy_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
-    ::memset(&_impl_.equipped_craft_title_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.next_wanted_order_seq_) -
-        reinterpret_cast<char*>(&_impl_.equipped_craft_title_id_)) + sizeof(_impl_.next_wanted_order_seq_));
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
+    ::memset(&_impl_.master_showcase_tag_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.unread_proxy_digest_new_titles_mask_) -
+        reinterpret_cast<char*>(&_impl_.master_showcase_tag_)) + sizeof(_impl_.unread_proxy_digest_new_titles_mask_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1816,7 +1881,7 @@ PROTOBUF_NOINLINE void PlayerCraftComp::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 forge_mastery_exp = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_forge_mastery_exp() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1825,7 +1890,7 @@ PROTOBUF_NOINLINE void PlayerCraftComp::Clear() {
   }
 
   // uint32 scroll_mastery_exp = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_scroll_mastery_exp() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1834,7 +1899,7 @@ PROTOBUF_NOINLINE void PlayerCraftComp::Clear() {
   }
 
   // uint64 scroll_craft_revision = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_scroll_craft_revision() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1843,7 +1908,7 @@ PROTOBUF_NOINLINE void PlayerCraftComp::Clear() {
   }
 
   // uint64 next_book_seq = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_next_book_seq() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1865,7 +1930,7 @@ PROTOBUF_NOINLINE void PlayerCraftComp::Clear() {
   }
 
   // bool proxy_stall_open = 6;
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_proxy_stall_open() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -1874,7 +1939,7 @@ PROTOBUF_NOINLINE void PlayerCraftComp::Clear() {
   }
 
   // uint64 proxy_forge_fee_gold = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_proxy_forge_fee_gold() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1883,7 +1948,7 @@ PROTOBUF_NOINLINE void PlayerCraftComp::Clear() {
   }
 
   // uint64 proxy_scroll_fee_gold = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_proxy_scroll_fee_gold() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1903,7 +1968,7 @@ PROTOBUF_NOINLINE void PlayerCraftComp::Clear() {
   }
 
   // uint32 proxy_orders_completed = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_proxy_orders_completed() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1912,7 +1977,7 @@ PROTOBUF_NOINLINE void PlayerCraftComp::Clear() {
   }
 
   // uint32 supreme_forged_count = 11;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_supreme_forged_count() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1921,7 +1986,7 @@ PROTOBUF_NOINLINE void PlayerCraftComp::Clear() {
   }
 
   // uint32 rare_books_crafted_count = 12;
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_rare_books_crafted_count() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1930,7 +1995,7 @@ PROTOBUF_NOINLINE void PlayerCraftComp::Clear() {
   }
 
   // uint32 master_showcase_tag = 13;
-  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
     if (this_._internal_master_showcase_tag() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1939,7 +2004,7 @@ PROTOBUF_NOINLINE void PlayerCraftComp::Clear() {
   }
 
   // uint32 equipped_craft_title_id = 14;
-  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
     if (this_._internal_equipped_craft_title_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1969,7 +2034,7 @@ PROTOBUF_NOINLINE void PlayerCraftComp::Clear() {
   }
 
   // uint64 next_wanted_order_seq = 17;
-  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
     if (this_._internal_next_wanted_order_seq() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1978,11 +2043,66 @@ PROTOBUF_NOINLINE void PlayerCraftComp::Clear() {
   }
 
   // bool team_free_proxy = 18;
-  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
     if (this_._internal_team_free_proxy() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
           18, this_._internal_team_free_proxy(), target);
+    }
+  }
+
+  // uint32 unread_proxy_digest_orders = 19;
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (this_._internal_unread_proxy_digest_orders() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          19, this_._internal_unread_proxy_digest_orders(), target);
+    }
+  }
+
+  // uint32 unread_proxy_digest_supreme = 20;
+  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (this_._internal_unread_proxy_digest_supreme() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          20, this_._internal_unread_proxy_digest_supreme(), target);
+    }
+  }
+
+  // uint32 unread_proxy_digest_rare = 21;
+  if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+    if (this_._internal_unread_proxy_digest_rare() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          21, this_._internal_unread_proxy_digest_rare(), target);
+    }
+  }
+
+  // uint64 unread_proxy_digest_net_gold = 22;
+  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (this_._internal_unread_proxy_digest_net_gold() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          22, this_._internal_unread_proxy_digest_net_gold(), target);
+    }
+  }
+
+  // string unread_proxy_digest_last_buyer = 23;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (!this_._internal_unread_proxy_digest_last_buyer().empty()) {
+      const ::std::string& _s = this_._internal_unread_proxy_digest_last_buyer();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "PlayerCraftComp.unread_proxy_digest_last_buyer");
+      target = stream->WriteStringMaybeAliased(23, _s, target);
+    }
+  }
+
+  // uint32 unread_proxy_digest_new_titles_mask = 24;
+  if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+    if (this_._internal_unread_proxy_digest_new_titles_mask() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          24, this_._internal_unread_proxy_digest_new_titles_mask(), target);
     }
   }
 
@@ -2040,104 +2160,146 @@ PROTOBUF_NOINLINE void PlayerCraftComp::Clear() {
                                         this_._internal_claimed_scroll_milestone_bits());
       }
     }
-    // uint32 forge_mastery_exp = 1;
+    // string unread_proxy_digest_last_buyer = 23;
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!this_._internal_unread_proxy_digest_last_buyer().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_unread_proxy_digest_last_buyer());
+      }
+    }
+    // uint32 forge_mastery_exp = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_forge_mastery_exp() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_forge_mastery_exp());
       }
     }
     // uint32 scroll_mastery_exp = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_scroll_mastery_exp() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_scroll_mastery_exp());
       }
     }
     // uint64 scroll_craft_revision = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_scroll_craft_revision() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_scroll_craft_revision());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint64 next_book_seq = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_next_book_seq() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_next_book_seq());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint64 proxy_forge_fee_gold = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_proxy_forge_fee_gold() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_proxy_forge_fee_gold());
       }
     }
     // uint64 proxy_scroll_fee_gold = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_proxy_scroll_fee_gold() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_proxy_scroll_fee_gold());
       }
     }
     // uint32 proxy_orders_completed = 10;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_proxy_orders_completed() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_proxy_orders_completed());
       }
     }
     // uint32 supreme_forged_count = 11;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_supreme_forged_count() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_supreme_forged_count());
       }
     }
     // uint32 rare_books_crafted_count = 12;
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_rare_books_crafted_count() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_rare_books_crafted_count());
       }
     }
     // bool proxy_stall_open = 6;
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_proxy_stall_open() != 0) {
         total_size += 2;
       }
     }
     // bool team_free_proxy = 18;
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (this_._internal_team_free_proxy() != 0) {
         total_size += 3;
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     // uint32 master_showcase_tag = 13;
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_master_showcase_tag() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_master_showcase_tag());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
     // uint32 equipped_craft_title_id = 14;
-    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (this_._internal_equipped_craft_title_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_equipped_craft_title_id());
       }
     }
     // uint64 next_wanted_order_seq = 17;
-    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
       if (this_._internal_next_wanted_order_seq() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
                                         this_._internal_next_wanted_order_seq());
+      }
+    }
+    // uint32 unread_proxy_digest_orders = 19;
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (this_._internal_unread_proxy_digest_orders() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_unread_proxy_digest_orders());
+      }
+    }
+    // uint32 unread_proxy_digest_supreme = 20;
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (this_._internal_unread_proxy_digest_supreme() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_unread_proxy_digest_supreme());
+      }
+    }
+    // uint64 unread_proxy_digest_net_gold = 22;
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (this_._internal_unread_proxy_digest_net_gold() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_unread_proxy_digest_net_gold());
+      }
+    }
+    // uint32 unread_proxy_digest_rare = 21;
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+      if (this_._internal_unread_proxy_digest_rare() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_unread_proxy_digest_rare());
+      }
+    }
+    // uint32 unread_proxy_digest_new_titles_mask = 24;
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (this_._internal_unread_proxy_digest_new_titles_mask() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_unread_proxy_digest_new_titles_mask());
       }
     }
   }
@@ -2183,77 +2345,111 @@ void PlayerCraftComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!from._internal_unread_proxy_digest_last_buyer().empty()) {
+        _this->_internal_set_unread_proxy_digest_last_buyer(from._internal_unread_proxy_digest_last_buyer());
+      } else {
+        if (_this->_impl_.unread_proxy_digest_last_buyer_.IsDefault()) {
+          _this->_internal_set_unread_proxy_digest_last_buyer("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_forge_mastery_exp() != 0) {
         _this->_impl_.forge_mastery_exp_ = from._impl_.forge_mastery_exp_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_scroll_mastery_exp() != 0) {
         _this->_impl_.scroll_mastery_exp_ = from._impl_.scroll_mastery_exp_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_scroll_craft_revision() != 0) {
         _this->_impl_.scroll_craft_revision_ = from._impl_.scroll_craft_revision_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      if (from._internal_next_book_seq() != 0) {
-        _this->_impl_.next_book_seq_ = from._impl_.next_book_seq_;
       }
     }
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_next_book_seq() != 0) {
+        _this->_impl_.next_book_seq_ = from._impl_.next_book_seq_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_proxy_forge_fee_gold() != 0) {
         _this->_impl_.proxy_forge_fee_gold_ = from._impl_.proxy_forge_fee_gold_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_proxy_scroll_fee_gold() != 0) {
         _this->_impl_.proxy_scroll_fee_gold_ = from._impl_.proxy_scroll_fee_gold_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_proxy_orders_completed() != 0) {
         _this->_impl_.proxy_orders_completed_ = from._impl_.proxy_orders_completed_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_supreme_forged_count() != 0) {
         _this->_impl_.supreme_forged_count_ = from._impl_.supreme_forged_count_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (from._internal_rare_books_crafted_count() != 0) {
         _this->_impl_.rare_books_crafted_count_ = from._impl_.rare_books_crafted_count_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_proxy_stall_open() != 0) {
         _this->_impl_.proxy_stall_open_ = from._impl_.proxy_stall_open_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (from._internal_team_free_proxy() != 0) {
         _this->_impl_.team_free_proxy_ = from._impl_.team_free_proxy_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (from._internal_master_showcase_tag() != 0) {
         _this->_impl_.master_showcase_tag_ = from._impl_.master_showcase_tag_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
-    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (from._internal_equipped_craft_title_id() != 0) {
         _this->_impl_.equipped_craft_title_id_ = from._impl_.equipped_craft_title_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
       if (from._internal_next_wanted_order_seq() != 0) {
         _this->_impl_.next_wanted_order_seq_ = from._impl_.next_wanted_order_seq_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (from._internal_unread_proxy_digest_orders() != 0) {
+        _this->_impl_.unread_proxy_digest_orders_ = from._impl_.unread_proxy_digest_orders_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (from._internal_unread_proxy_digest_supreme() != 0) {
+        _this->_impl_.unread_proxy_digest_supreme_ = from._impl_.unread_proxy_digest_supreme_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (from._internal_unread_proxy_digest_net_gold() != 0) {
+        _this->_impl_.unread_proxy_digest_net_gold_ = from._impl_.unread_proxy_digest_net_gold_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+      if (from._internal_unread_proxy_digest_rare() != 0) {
+        _this->_impl_.unread_proxy_digest_rare_ = from._impl_.unread_proxy_digest_rare_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (from._internal_unread_proxy_digest_new_titles_mask() != 0) {
+        _this->_impl_.unread_proxy_digest_new_titles_mask_ = from._impl_.unread_proxy_digest_new_titles_mask_;
       }
     }
   }
@@ -2280,9 +2476,10 @@ void PlayerCraftComp::InternalSwap(PlayerCraftComp* PROTOBUF_RESTRICT PROTOBUF_N
   _impl_.book_unlocked_skill_ids_.InternalSwap(&other->_impl_.book_unlocked_skill_ids_);
   _impl_.wanted_orders_.InternalSwap(&other->_impl_.wanted_orders_);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.claimed_scroll_milestone_bits_, &other->_impl_.claimed_scroll_milestone_bits_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.unread_proxy_digest_last_buyer_, &other->_impl_.unread_proxy_digest_last_buyer_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.next_wanted_order_seq_)
-      + sizeof(PlayerCraftComp::_impl_.next_wanted_order_seq_)
+      PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.unread_proxy_digest_new_titles_mask_)
+      + sizeof(PlayerCraftComp::_impl_.unread_proxy_digest_new_titles_mask_)
       - PROTOBUF_FIELD_OFFSET(PlayerCraftComp, _impl_.forge_mastery_exp_)>(
           reinterpret_cast<char*>(&_impl_.forge_mastery_exp_),
           reinterpret_cast<char*>(&other->_impl_.forge_mastery_exp_));

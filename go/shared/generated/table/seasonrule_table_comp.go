@@ -81,6 +81,14 @@ type SeasonRuleHonor_badge_icon_keyComp struct {
     Value string
 }
 
+type SeasonRuleCycle_orderComp struct {
+    Value uint32
+}
+
+type SeasonRuleCycle_duration_daysComp struct {
+    Value uint32
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -152,5 +160,13 @@ func MakeSeasonRuleHonor_title_nameComp(row *pb.SeasonRuleTable) SeasonRuleHonor
 
 func MakeSeasonRuleHonor_badge_icon_keyComp(row *pb.SeasonRuleTable) SeasonRuleHonor_badge_icon_keyComp {
     return SeasonRuleHonor_badge_icon_keyComp{Value: row.HonorBadgeIconKey}
+}
+
+func MakeSeasonRuleCycle_orderComp(row *pb.SeasonRuleTable) SeasonRuleCycle_orderComp {
+    return SeasonRuleCycle_orderComp{Value: row.CycleOrder}
+}
+
+func MakeSeasonRuleCycle_duration_daysComp(row *pb.SeasonRuleTable) SeasonRuleCycle_duration_daysComp {
+    return SeasonRuleCycle_duration_daysComp{Value: row.CycleDurationDays}
 }
 

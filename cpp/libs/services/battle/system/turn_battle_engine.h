@@ -93,17 +93,22 @@ public:
         return createRequest.match_mode() == kMatchModeGuildWarPvp ||
                createRequest.match_mode() == kMatchModeGuildWarSiege;
     }
+    // 天墉生死状一期（12=MATCH_MODE_JIANGHU_DUEL）：真实养成、满血蓝无耗材、30回合打满判平。
+    bool IsJianghuDuelBattle() const {
+        return createRequest.match_mode() == kMatchModeJianghuDuel;
+    }
     bool IsAiControlledPlayer(uint64_t playerId) const {
         return aiControlledPlayers.contains(playerId);
     }
-    // 竞技 PVP（正式会武 / 物法易势 5V5 / 赛季锦标赛 / 帮会帮战）：启用主目标凝锋与后期战意渐盛，绝不影响 PVE。
+    // 竞技 PVP（正式会武 / 物法易势 5V5 / 赛季锦标赛 / 帮会帮战 / 天墉生死状）：启用主目标凝锋与后期战意渐盛，绝不影响 PVE。
     bool IsCompetitivePvpBattle() const {
         return !IsPveMatch() &&
                (IsRankedBattle() ||
                 bossTrialKind == kBossTrialKindPolarity5v5 ||
                 createRequest.match_mode() == kMatchModePolarity5v5 ||
                 createRequest.match_mode() == kMatchModeSeasonTournament ||
-                IsGuildWarBattle());
+                IsGuildWarBattle() ||
+                IsJianghuDuelBattle());
     }
     // 全服赛季战队锦标赛 V2 / 五行幻境爬塔灵脉阵眼（确定性定点数倍率，零浮点漂移）。
     TournamentLeylineElement ActiveTournamentLeyline() const {
@@ -120,6 +125,12 @@ public:
     }
     bool IsControlBannedByCustomDuel() const {
         return hasCustomDuelRules && customDuelRules.ban_control_skills();
+    }
+    uint32_t TrialVowMask() const { return trialVowMask; }
+    bool HasTrialVow(uint32_t vowBit) const { return (trialVowMask & vowBit) != 0u; }
+    bool IsControlBannedForActor(const BattleActorState& actor) const {
+        return IsControlBannedByCustomDuel() ||
+               (actor.team_index() == 0u && HasTrialVow(1u << 0));
     }
     uint32_t TeamFormationId(uint32_t teamIndex) const {
         return teamIndex == 0u ? teamAFormationId : (teamIndex == 1u ? teamBFormationId : 0u);
@@ -343,7 +354,7 @@ private:
     void UseSeasonSeal(BattleActorState& actor, uint64_t targetId, uint64_t value,
                        TurnResultS2C& result);
     bool HasAnyRegularShield(const BattleActorState& target) const;
-    bool IsDefendBreathResonanceReady(const BattleActorState& actor, uint32_t skillId) const;
+    uint32_t DefendManaDiscountResonancePct(const BattleActorState& actor, uint32_t skillId) const;
     void EmitSeasonResonanceEvent(BattleActorState& actor, uint64_t targetId,
                                   uint32_t resonanceEffectId, uint64_t value, TurnResultS2C& result);
     void EquipmentDefend(BattleActorState& actor, TurnResultS2C& result);
@@ -356,9 +367,11 @@ private:
                                 const EffectContext& context, TurnResultS2C& result);
     double EquipmentOutgoingHeal(const BattleActorState& source) const;
     double EquipmentShield(BattleActorState& source, BattleActorState& target, double base,
-                             const EffectContext& context, std::vector<int>& contributions) const;
+                             const EffectContext& context, std::vector<int>& contributions,
+                             uint64_t* outSeasonSealGain = nullptr) const;
     void CommitEquipmentShield(BattleActorState& source, uint64_t targetId,
-                                const std::vector<int>& contributions, TurnResultS2C& result);
+                                const std::vector<int>& contributions, uint64_t seasonSealGain,
+                                uint32_t castSkillId, TurnResultS2C& result);
 
     friend class TurnBattleEngineDeathTestAccess; // 内存测试注入周期伤害来源，不新增业务控制接口
     friend class TurnBattleEngineEquipmentTestAccess; // 回放重排/缺失运行状态回归，不开放业务写接口。
@@ -719,6 +732,11 @@ private:
     std::array<bool, 2> teamDealtMagicDirectDamage{false, false};
     std::set<uint64_t> shieldBreakPlayers;
     std::set<uint64_t> antiControlOrSeasonSkillPlayers;
+    // 五行试炼志 V3：自选誓约与卷四三境明雷局内事实
+    uint32_t trialVowMask = 0;
+    bool bossWindHitUnprotectedDeath = false;
+    bool dealtYangBellPhysicalDamage = false;
+    bool dealtYinDrumMagicDamage = false;
 
     // 赛季首领试炼、护卫救援、物法易势 5V5 与防挂机战中事实（全部确定性）
     uint32_t bossTrialKind = 0;
@@ -862,18 +880,22 @@ private:
     std::set<uint64_t> wuxingSynergyActorIds;
     uint32_t activeSeasonWeeklyAffixId = 0; // 赛季全员对称周环境词缀（开局由全体快照一致冻结，0=无/禁用）
     struct SeasonSealRuntimeState {
-        uint32_t guardResonanceReadyRound = 0;   // 103 守印触发减伤后的下一回合号（触发设为 round+1，消费清 0）
-        bool guardResonanceConsumed = false;     // 103×15003 每场至多触发 1 次
-        uint32_t defendResonanceReadyRound = 0;  // 104 援印防御回蓝后的下一回合号（触发设为 round+1，消费清 0）
-        uint64_t contributionValue = 0;          // 本场主贡献值（101/102 削盾、103 减伤+增盾、104 回蓝+省蓝）
+        uint32_t guardResonanceReadyRound = 0;   // 开局减伤印触发后的下一回合号（触发设为 round+1，消费清 0）
+        bool guardResonanceConsumed = false;     // 守印次轮增盾/增疗每场至多触发 1 次
+        uint32_t defendResonanceReadyRound = 0;  // 防御回蓝印触发后的下一回合号（触发设为 round+1，消费清 0）
+        uint64_t contributionValue = 0;          // 本场主贡献值（削盾 / 增疗 / 增盾 / 减伤+增盾 / 回蓝+省蓝）
         uint32_t triggerCount = 0;               // 本场赛季印基础触发次数
         uint32_t resonanceCount = 0;             // 本场技印共鸣触发次数
     };
     std::unordered_map<uint64_t, SeasonSealRuntimeState> seasonSealRuntimeByActor;
     uint64_t pendingMysticExtendCasterId = 0;
     uint64_t pendingMysticExtendTargetId = 0;
-    uint64_t activeGuardShieldResonanceCasterId = 0;
-    uint64_t activeGuardShieldResonanceExtra = 0;
+    uint32_t pendingMysticExtendSkillId = 0;
+    uint32_t pendingMysticExtendBonusRounds = 0;
+    uint64_t activeNextRoundBoostCasterId = 0;
+    uint32_t activeNextRoundBoostKind = 0;
+    uint32_t activeNextRoundBoostPct = 0;
+    uint64_t activeNextRoundBoostExtra = 0;
     std::set<uint64_t> aiControlledPlayers; // 守旗阵 AI 托管守擂玩家：全程自动出手、不阻塞回合、不回写个人资产。
 
     bool HasAnyActiveShield(const BattleActorState& target) const;

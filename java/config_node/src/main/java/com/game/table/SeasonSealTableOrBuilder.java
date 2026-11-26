@@ -99,4 +99,34 @@ public interface SeasonSealTableOrBuilder extends
    * @return The healthThresholdBps.
    */
   int getHealthThresholdBps();
+
+  /**
+   * <code>uint32 resonance_skill_id = 13;</code>
+   * @return The resonanceSkillId.
+   */
+  int getResonanceSkillId();
+
+  /**
+   * <code>uint32 resonance_kind = 14;</code>
+   * @return The resonanceKind.
+   */
+  int getResonanceKind();
+
+  /**
+   * <code>uint32 resonance_param = 15;</code>
+   * @return The resonanceParam.
+   */
+  int getResonanceParam();
+
+  /**
+   * <code>string resonance_desc = 16;</code>
+   * @return The resonanceDesc.
+   */
+  java.lang.String getResonanceDesc();
+  /**
+   * <code>string resonance_desc = 16;</code>
+   * @return The bytes for resonanceDesc.
+   */
+  com.google.protobuf.ByteString
+      getResonanceDescBytes();
 }

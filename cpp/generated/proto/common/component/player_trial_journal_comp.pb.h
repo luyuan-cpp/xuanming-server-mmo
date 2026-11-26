@@ -500,6 +500,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialJournalCoopRecord final : publ
     kBestRoundsFieldNumber = 1,
     kPartySizeFieldNumber = 2,
     kAchievedAtMsFieldNumber = 3,
+    kBattleIdFieldNumber = 6,
     kPetTableIdFieldNumber = 4,
   };
   // repeated string teammate_names = 5;
@@ -559,6 +560,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialJournalCoopRecord final : publ
   void _internal_set_achieved_at_ms(::uint64_t value);
 
   public:
+  // uint64 battle_id = 6;
+  void clear_battle_id() ;
+  [[nodiscard]] ::uint64_t battle_id() const;
+  void set_battle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_battle_id() const;
+  void _internal_set_battle_id(::uint64_t value);
+
+  public:
   // uint32 pet_table_id = 4;
   void clear_pet_table_id() ;
   [[nodiscard]] ::uint32_t pet_table_id() const;
@@ -573,7 +584,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialJournalCoopRecord final : publ
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
+      ::google::protobuf::internal::TcParseTable<3, 6,
                           0, 45,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -606,6 +617,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialJournalCoopRecord final : publ
     ::uint32_t best_rounds_;
     ::uint32_t party_size_;
     ::uint64_t achieved_at_ms_;
+    ::uint64_t battle_id_;
     ::uint32_t pet_table_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -1011,6 +1023,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialJournalSoloRecord final : publ
   enum : int {
     kLoadoutFieldNumber = 3,
     kAchievedAtMsFieldNumber = 2,
+    kBattleIdFieldNumber = 4,
     kBestRoundsFieldNumber = 1,
   };
   // .TrialJournalLoadoutSnapshot loadout = 3;
@@ -1039,6 +1052,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialJournalSoloRecord final : publ
   void _internal_set_achieved_at_ms(::uint64_t value);
 
   public:
+  // uint64 battle_id = 4;
+  void clear_battle_id() ;
+  [[nodiscard]] ::uint64_t battle_id() const;
+  void set_battle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_battle_id() const;
+  void _internal_set_battle_id(::uint64_t value);
+
+  public:
   // uint32 best_rounds = 1;
   void clear_best_rounds() ;
   [[nodiscard]] ::uint32_t best_rounds() const;
@@ -1053,7 +1076,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialJournalSoloRecord final : publ
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<2, 4,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1084,6 +1107,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialJournalSoloRecord final : publ
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::TrialJournalLoadoutSnapshot* PROTOBUF_NULLABLE loadout_;
     ::uint64_t achieved_at_ms_;
+    ::uint64_t battle_id_;
     ::uint32_t best_rounds_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -1244,6 +1268,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialJournalEntryRecord final : pub
     kCoopBestFieldNumber = 4,
     kEntryIdFieldNumber = 1,
     kRuleVersionFieldNumber = 2,
+    kBestVowMaskFieldNumber = 5,
+    kBestVowCountFieldNumber = 6,
+    kBestVowBattleIdFieldNumber = 8,
+    kBestVowRoundsFieldNumber = 7,
   };
   // .TrialJournalSoloRecord solo_best = 3;
   [[nodiscard]] bool has_solo_best()
@@ -1297,11 +1325,51 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialJournalEntryRecord final : pub
   void _internal_set_rule_version(::uint32_t value);
 
   public:
+  // uint32 best_vow_mask = 5;
+  void clear_best_vow_mask() ;
+  [[nodiscard]] ::uint32_t best_vow_mask() const;
+  void set_best_vow_mask(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_best_vow_mask() const;
+  void _internal_set_best_vow_mask(::uint32_t value);
+
+  public:
+  // uint32 best_vow_count = 6;
+  void clear_best_vow_count() ;
+  [[nodiscard]] ::uint32_t best_vow_count() const;
+  void set_best_vow_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_best_vow_count() const;
+  void _internal_set_best_vow_count(::uint32_t value);
+
+  public:
+  // uint64 best_vow_battle_id = 8;
+  void clear_best_vow_battle_id() ;
+  [[nodiscard]] ::uint64_t best_vow_battle_id() const;
+  void set_best_vow_battle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_best_vow_battle_id() const;
+  void _internal_set_best_vow_battle_id(::uint64_t value);
+
+  public:
+  // uint32 best_vow_rounds = 7;
+  void clear_best_vow_rounds() ;
+  [[nodiscard]] ::uint32_t best_vow_rounds() const;
+  void set_best_vow_rounds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_best_vow_rounds() const;
+  void _internal_set_best_vow_rounds(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:TrialJournalEntryRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<3, 8,
                           2, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1334,6 +1402,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TrialJournalEntryRecord final : pub
     ::TrialJournalCoopRecord* PROTOBUF_NULLABLE coop_best_;
     ::uint32_t entry_id_;
     ::uint32_t rule_version_;
+    ::uint32_t best_vow_mask_;
+    ::uint32_t best_vow_count_;
+    ::uint64_t best_vow_battle_id_;
+    ::uint32_t best_vow_rounds_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1756,7 +1828,7 @@ inline void TrialJournalLoadoutSnapshot::_internal_set_season_seal_id(::uint32_t
 inline void TrialJournalSoloRecord::clear_best_rounds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.best_rounds_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint32_t TrialJournalSoloRecord::best_rounds() const {
   // @@protoc_insertion_point(field_get:TrialJournalSoloRecord.best_rounds)
@@ -1764,7 +1836,7 @@ inline ::uint32_t TrialJournalSoloRecord::best_rounds() const {
 }
 inline void TrialJournalSoloRecord::set_best_rounds(::uint32_t value) {
   _internal_set_best_rounds(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:TrialJournalSoloRecord.best_rounds)
 }
 inline ::uint32_t TrialJournalSoloRecord::_internal_best_rounds() const {
@@ -1898,6 +1970,30 @@ inline void TrialJournalSoloRecord::set_allocated_loadout(::TrialJournalLoadoutS
   // @@protoc_insertion_point(field_set_allocated:TrialJournalSoloRecord.loadout)
 }
 
+// uint64 battle_id = 4;
+inline void TrialJournalSoloRecord::clear_battle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t TrialJournalSoloRecord::battle_id() const {
+  // @@protoc_insertion_point(field_get:TrialJournalSoloRecord.battle_id)
+  return _internal_battle_id();
+}
+inline void TrialJournalSoloRecord::set_battle_id(::uint64_t value) {
+  _internal_set_battle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:TrialJournalSoloRecord.battle_id)
+}
+inline ::uint64_t TrialJournalSoloRecord::_internal_battle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_id_;
+}
+inline void TrialJournalSoloRecord::_internal_set_battle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // TrialJournalCoopRecord
@@ -1978,7 +2074,7 @@ inline void TrialJournalCoopRecord::_internal_set_achieved_at_ms(::uint64_t valu
 inline void TrialJournalCoopRecord::clear_pet_table_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pet_table_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t TrialJournalCoopRecord::pet_table_id() const {
   // @@protoc_insertion_point(field_get:TrialJournalCoopRecord.pet_table_id)
@@ -1986,7 +2082,7 @@ inline ::uint32_t TrialJournalCoopRecord::pet_table_id() const {
 }
 inline void TrialJournalCoopRecord::set_pet_table_id(::uint32_t value) {
   _internal_set_pet_table_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:TrialJournalCoopRecord.pet_table_id)
 }
 inline ::uint32_t TrialJournalCoopRecord::_internal_pet_table_id() const {
@@ -2068,6 +2164,30 @@ inline ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL
 TrialJournalCoopRecord::_internal_mutable_teammate_names() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.teammate_names_;
+}
+
+// uint64 battle_id = 6;
+inline void TrialJournalCoopRecord::clear_battle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t TrialJournalCoopRecord::battle_id() const {
+  // @@protoc_insertion_point(field_get:TrialJournalCoopRecord.battle_id)
+  return _internal_battle_id();
+}
+inline void TrialJournalCoopRecord::set_battle_id(::uint64_t value) {
+  _internal_set_battle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:TrialJournalCoopRecord.battle_id)
+}
+inline ::uint64_t TrialJournalCoopRecord::_internal_battle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_id_;
+}
+inline void TrialJournalCoopRecord::_internal_set_battle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -2316,6 +2436,102 @@ inline void TrialJournalEntryRecord::set_allocated_coop_best(::TrialJournalCoopR
 
   _impl_.coop_best_ = reinterpret_cast<::TrialJournalCoopRecord*>(value);
   // @@protoc_insertion_point(field_set_allocated:TrialJournalEntryRecord.coop_best)
+}
+
+// uint32 best_vow_mask = 5;
+inline void TrialJournalEntryRecord::clear_best_vow_mask() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.best_vow_mask_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t TrialJournalEntryRecord::best_vow_mask() const {
+  // @@protoc_insertion_point(field_get:TrialJournalEntryRecord.best_vow_mask)
+  return _internal_best_vow_mask();
+}
+inline void TrialJournalEntryRecord::set_best_vow_mask(::uint32_t value) {
+  _internal_set_best_vow_mask(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:TrialJournalEntryRecord.best_vow_mask)
+}
+inline ::uint32_t TrialJournalEntryRecord::_internal_best_vow_mask() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.best_vow_mask_;
+}
+inline void TrialJournalEntryRecord::_internal_set_best_vow_mask(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.best_vow_mask_ = value;
+}
+
+// uint32 best_vow_count = 6;
+inline void TrialJournalEntryRecord::clear_best_vow_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.best_vow_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t TrialJournalEntryRecord::best_vow_count() const {
+  // @@protoc_insertion_point(field_get:TrialJournalEntryRecord.best_vow_count)
+  return _internal_best_vow_count();
+}
+inline void TrialJournalEntryRecord::set_best_vow_count(::uint32_t value) {
+  _internal_set_best_vow_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:TrialJournalEntryRecord.best_vow_count)
+}
+inline ::uint32_t TrialJournalEntryRecord::_internal_best_vow_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.best_vow_count_;
+}
+inline void TrialJournalEntryRecord::_internal_set_best_vow_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.best_vow_count_ = value;
+}
+
+// uint32 best_vow_rounds = 7;
+inline void TrialJournalEntryRecord::clear_best_vow_rounds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.best_vow_rounds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t TrialJournalEntryRecord::best_vow_rounds() const {
+  // @@protoc_insertion_point(field_get:TrialJournalEntryRecord.best_vow_rounds)
+  return _internal_best_vow_rounds();
+}
+inline void TrialJournalEntryRecord::set_best_vow_rounds(::uint32_t value) {
+  _internal_set_best_vow_rounds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:TrialJournalEntryRecord.best_vow_rounds)
+}
+inline ::uint32_t TrialJournalEntryRecord::_internal_best_vow_rounds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.best_vow_rounds_;
+}
+inline void TrialJournalEntryRecord::_internal_set_best_vow_rounds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.best_vow_rounds_ = value;
+}
+
+// uint64 best_vow_battle_id = 8;
+inline void TrialJournalEntryRecord::clear_best_vow_battle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.best_vow_battle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t TrialJournalEntryRecord::best_vow_battle_id() const {
+  // @@protoc_insertion_point(field_get:TrialJournalEntryRecord.best_vow_battle_id)
+  return _internal_best_vow_battle_id();
+}
+inline void TrialJournalEntryRecord::set_best_vow_battle_id(::uint64_t value) {
+  _internal_set_best_vow_battle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:TrialJournalEntryRecord.best_vow_battle_id)
+}
+inline ::uint64_t TrialJournalEntryRecord::_internal_best_vow_battle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.best_vow_battle_id_;
+}
+inline void TrialJournalEntryRecord::_internal_set_best_vow_battle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.best_vow_battle_id_ = value;
 }
 
 // -------------------------------------------------------------------

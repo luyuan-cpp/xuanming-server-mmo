@@ -52,6 +52,8 @@ service SceneNodeGrpc {
   // 独立 GM 后台的固定命令入口，不接受服务名、方法名或任意序列化载荷。
   // 仅 dev/test 且本节点仍持有该在线会话时执行；调用方不得重发结果未知的命令。
   rpc GmExecutePlayerCommand(GmExecutePlayerCommandRequest) returns (GmExecutePlayerCommandResponse) {}
+  // 天墉生死状发起前资格与资费预检（match -> scene gRPC 控制面，检查闭关免战开关与普通/金帖资费余额，无副作用）。
+  rpc CheckJianghuDuelEligibility(CheckJianghuDuelEligibilityRequest) returns (CheckJianghuDuelEligibilityResponse) {}
 }
 
 // auth 为 operator|Unix秒|nonce|小写HMAC-SHA256。沿用 GM canonical 六行格式，

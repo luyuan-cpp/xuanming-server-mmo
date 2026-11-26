@@ -174,12 +174,15 @@ message PrepareBattleResponse
   TipInfoMessage error_message = 1;   // 玩家不在/已在战斗等拒绝原因
   BattlePlayerSnapshot snapshot = 2;  // 冻结成功时返回战斗快照
   string table_fingerprint = 3;      // scene 侧战斗配表指纹(六张战斗表解析后确定性序列化的 sha256 前 16 字节 hex);match 比对全员一致
+  bool jianghu_silver_fee_charged = 4; // true = 本次备战已为天墉生死状普通战书扣除了发起方队长银两
 }
 
 message CancelBattlePrepareRequest
 {
   uint64 player_id = 1;
   uint64 battle_id = 2;  // 不匹配 InBattleComp.battle_id 时忽略(防迟到取消)
+  // true = 调用方（match）已接管该 battle_id 的普通战书银两邮件退还，scene 取消备战时不得重复退银两。
+  bool skip_jianghu_silver_refund = 3;
 }
 
 // 只封原节点实例已登记的≤through_generation；响应仅表示已采纳，不是排空或持久化证据。

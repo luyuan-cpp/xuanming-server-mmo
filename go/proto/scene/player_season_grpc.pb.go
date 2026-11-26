@@ -29,6 +29,7 @@ const (
 	SceneSeasonClientPlayer_AbandonWuxingTowerRun_FullMethodName     = "/SceneSeasonClientPlayer/AbandonWuxingTowerRun"
 	SceneSeasonClientPlayer_SaveBattleBuildBookmark_FullMethodName   = "/SceneSeasonClientPlayer/SaveBattleBuildBookmark"
 	SceneSeasonClientPlayer_DeleteBattleBuildBookmark_FullMethodName = "/SceneSeasonClientPlayer/DeleteBattleBuildBookmark"
+	SceneSeasonClientPlayer_SetRetroHonorTarget_FullMethodName       = "/SceneSeasonClientPlayer/SetRetroHonorTarget"
 )
 
 // SceneSeasonClientPlayerClient is the client API for SceneSeasonClientPlayer service.
@@ -46,6 +47,7 @@ type SceneSeasonClientPlayerClient interface {
 	AbandonWuxingTowerRun(ctx context.Context, in *AbandonWuxingTowerRunRequest, opts ...grpc.CallOption) (*AbandonWuxingTowerRunResponse, error)
 	SaveBattleBuildBookmark(ctx context.Context, in *SaveBattleBuildBookmarkRequest, opts ...grpc.CallOption) (*SaveBattleBuildBookmarkResponse, error)
 	DeleteBattleBuildBookmark(ctx context.Context, in *DeleteBattleBuildBookmarkRequest, opts ...grpc.CallOption) (*DeleteBattleBuildBookmarkResponse, error)
+	SetRetroHonorTarget(ctx context.Context, in *SetRetroHonorTargetRequest, opts ...grpc.CallOption) (*SetRetroHonorTargetResponse, error)
 }
 
 type sceneSeasonClientPlayerClient struct {
@@ -156,6 +158,16 @@ func (c *sceneSeasonClientPlayerClient) DeleteBattleBuildBookmark(ctx context.Co
 	return out, nil
 }
 
+func (c *sceneSeasonClientPlayerClient) SetRetroHonorTarget(ctx context.Context, in *SetRetroHonorTargetRequest, opts ...grpc.CallOption) (*SetRetroHonorTargetResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetRetroHonorTargetResponse)
+	err := c.cc.Invoke(ctx, SceneSeasonClientPlayer_SetRetroHonorTarget_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneSeasonClientPlayerServer is the server API for SceneSeasonClientPlayer service.
 // All implementations must embed UnimplementedSceneSeasonClientPlayerServer
 // for forward compatibility.
@@ -171,6 +183,7 @@ type SceneSeasonClientPlayerServer interface {
 	AbandonWuxingTowerRun(context.Context, *AbandonWuxingTowerRunRequest) (*AbandonWuxingTowerRunResponse, error)
 	SaveBattleBuildBookmark(context.Context, *SaveBattleBuildBookmarkRequest) (*SaveBattleBuildBookmarkResponse, error)
 	DeleteBattleBuildBookmark(context.Context, *DeleteBattleBuildBookmarkRequest) (*DeleteBattleBuildBookmarkResponse, error)
+	SetRetroHonorTarget(context.Context, *SetRetroHonorTargetRequest) (*SetRetroHonorTargetResponse, error)
 	mustEmbedUnimplementedSceneSeasonClientPlayerServer()
 }
 
@@ -210,6 +223,9 @@ func (UnimplementedSceneSeasonClientPlayerServer) SaveBattleBuildBookmark(contex
 }
 func (UnimplementedSceneSeasonClientPlayerServer) DeleteBattleBuildBookmark(context.Context, *DeleteBattleBuildBookmarkRequest) (*DeleteBattleBuildBookmarkResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteBattleBuildBookmark not implemented")
+}
+func (UnimplementedSceneSeasonClientPlayerServer) SetRetroHonorTarget(context.Context, *SetRetroHonorTargetRequest) (*SetRetroHonorTargetResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetRetroHonorTarget not implemented")
 }
 func (UnimplementedSceneSeasonClientPlayerServer) mustEmbedUnimplementedSceneSeasonClientPlayerServer() {
 }
@@ -413,6 +429,24 @@ func _SceneSeasonClientPlayer_DeleteBattleBuildBookmark_Handler(srv interface{},
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SceneSeasonClientPlayer_SetRetroHonorTarget_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetRetroHonorTargetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSeasonClientPlayerServer).SetRetroHonorTarget(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSeasonClientPlayer_SetRetroHonorTarget_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSeasonClientPlayerServer).SetRetroHonorTarget(ctx, req.(*SetRetroHonorTargetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SceneSeasonClientPlayer_ServiceDesc is the grpc.ServiceDesc for SceneSeasonClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -459,6 +493,10 @@ var SceneSeasonClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteBattleBuildBookmark",
 			Handler:    _SceneSeasonClientPlayer_DeleteBattleBuildBookmark_Handler,
+		},
+		{
+			MethodName: "SetRetroHonorTarget",
+			Handler:    _SceneSeasonClientPlayer_SetRetroHonorTarget_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

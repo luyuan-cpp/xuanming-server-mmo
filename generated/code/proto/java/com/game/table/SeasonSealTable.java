@@ -31,6 +31,7 @@ private static final long serialVersionUID = 0L;
     name_ = "";
     description_ = "";
     iconKey_ = "";
+    resonanceDesc_ = "";
   }
 
   public static final com.google.protobuf.Descriptors.Descriptor
@@ -267,6 +268,78 @@ private static final long serialVersionUID = 0L;
     return healthThresholdBps_;
   }
 
+  public static final int RESONANCE_SKILL_ID_FIELD_NUMBER = 13;
+  private int resonanceSkillId_ = 0;
+  /**
+   * <code>uint32 resonance_skill_id = 13;</code>
+   * @return The resonanceSkillId.
+   */
+  @java.lang.Override
+  public int getResonanceSkillId() {
+    return resonanceSkillId_;
+  }
+
+  public static final int RESONANCE_KIND_FIELD_NUMBER = 14;
+  private int resonanceKind_ = 0;
+  /**
+   * <code>uint32 resonance_kind = 14;</code>
+   * @return The resonanceKind.
+   */
+  @java.lang.Override
+  public int getResonanceKind() {
+    return resonanceKind_;
+  }
+
+  public static final int RESONANCE_PARAM_FIELD_NUMBER = 15;
+  private int resonanceParam_ = 0;
+  /**
+   * <code>uint32 resonance_param = 15;</code>
+   * @return The resonanceParam.
+   */
+  @java.lang.Override
+  public int getResonanceParam() {
+    return resonanceParam_;
+  }
+
+  public static final int RESONANCE_DESC_FIELD_NUMBER = 16;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object resonanceDesc_ = "";
+  /**
+   * <code>string resonance_desc = 16;</code>
+   * @return The resonanceDesc.
+   */
+  @java.lang.Override
+  public java.lang.String getResonanceDesc() {
+    java.lang.Object ref = resonanceDesc_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      resonanceDesc_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string resonance_desc = 16;</code>
+   * @return The bytes for resonanceDesc.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getResonanceDescBytes() {
+    java.lang.Object ref = resonanceDesc_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      resonanceDesc_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -317,6 +390,18 @@ private static final long serialVersionUID = 0L;
     if (healthThresholdBps_ != 0) {
       output.writeUInt32(12, healthThresholdBps_);
     }
+    if (resonanceSkillId_ != 0) {
+      output.writeUInt32(13, resonanceSkillId_);
+    }
+    if (resonanceKind_ != 0) {
+      output.writeUInt32(14, resonanceKind_);
+    }
+    if (resonanceParam_ != 0) {
+      output.writeUInt32(15, resonanceParam_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(resonanceDesc_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 16, resonanceDesc_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -366,6 +451,21 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeUInt32Size(12, healthThresholdBps_);
     }
+    if (resonanceSkillId_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(13, resonanceSkillId_);
+    }
+    if (resonanceKind_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(14, resonanceKind_);
+    }
+    if (resonanceParam_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(15, resonanceParam_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(resonanceDesc_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(16, resonanceDesc_);
+    }
     return size;
   }
   @java.lang.Override
@@ -414,6 +514,14 @@ private static final long serialVersionUID = 0L;
         != other.getActiveRounds()) return false;
     if (getHealthThresholdBps()
         != other.getHealthThresholdBps()) return false;
+    if (getResonanceSkillId()
+        != other.getResonanceSkillId()) return false;
+    if (getResonanceKind()
+        != other.getResonanceKind()) return false;
+    if (getResonanceParam()
+        != other.getResonanceParam()) return false;
+    if (!getResonanceDesc()
+        .equals(other.getResonanceDesc())) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -449,6 +557,14 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getActiveRounds();
     hash = (37 * hash) + HEALTH_THRESHOLD_BPS_FIELD_NUMBER;
     hash = (53 * hash) + getHealthThresholdBps();
+    hash = (37 * hash) + RESONANCE_SKILL_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getResonanceSkillId();
+    hash = (37 * hash) + RESONANCE_KIND_FIELD_NUMBER;
+    hash = (53 * hash) + getResonanceKind();
+    hash = (37 * hash) + RESONANCE_PARAM_FIELD_NUMBER;
+    hash = (53 * hash) + getResonanceParam();
+    hash = (37 * hash) + RESONANCE_DESC_FIELD_NUMBER;
+    hash = (53 * hash) + getResonanceDesc().hashCode();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -592,6 +708,10 @@ private static final long serialVersionUID = 0L;
       battleLimit_ = 0;
       activeRounds_ = 0;
       healthThresholdBps_ = 0;
+      resonanceSkillId_ = 0;
+      resonanceKind_ = 0;
+      resonanceParam_ = 0;
+      resonanceDesc_ = "";
       return this;
     }
 
@@ -661,6 +781,18 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000800) != 0)) {
         result.healthThresholdBps_ = healthThresholdBps_;
       }
+      if (((from_bitField0_ & 0x00001000) != 0)) {
+        result.resonanceSkillId_ = resonanceSkillId_;
+      }
+      if (((from_bitField0_ & 0x00002000) != 0)) {
+        result.resonanceKind_ = resonanceKind_;
+      }
+      if (((from_bitField0_ & 0x00004000) != 0)) {
+        result.resonanceParam_ = resonanceParam_;
+      }
+      if (((from_bitField0_ & 0x00008000) != 0)) {
+        result.resonanceDesc_ = resonanceDesc_;
+      }
     }
 
     @java.lang.Override
@@ -716,6 +848,20 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getHealthThresholdBps() != 0) {
         setHealthThresholdBps(other.getHealthThresholdBps());
+      }
+      if (other.getResonanceSkillId() != 0) {
+        setResonanceSkillId(other.getResonanceSkillId());
+      }
+      if (other.getResonanceKind() != 0) {
+        setResonanceKind(other.getResonanceKind());
+      }
+      if (other.getResonanceParam() != 0) {
+        setResonanceParam(other.getResonanceParam());
+      }
+      if (!other.getResonanceDesc().isEmpty()) {
+        resonanceDesc_ = other.resonanceDesc_;
+        bitField0_ |= 0x00008000;
+        onChanged();
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -803,6 +949,26 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000800;
               break;
             } // case 96
+            case 104: {
+              resonanceSkillId_ = input.readUInt32();
+              bitField0_ |= 0x00001000;
+              break;
+            } // case 104
+            case 112: {
+              resonanceKind_ = input.readUInt32();
+              bitField0_ |= 0x00002000;
+              break;
+            } // case 112
+            case 120: {
+              resonanceParam_ = input.readUInt32();
+              bitField0_ |= 0x00004000;
+              break;
+            } // case 120
+            case 130: {
+              resonanceDesc_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00008000;
+              break;
+            } // case 130
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1320,6 +1486,174 @@ private static final long serialVersionUID = 0L;
     public Builder clearHealthThresholdBps() {
       bitField0_ = (bitField0_ & ~0x00000800);
       healthThresholdBps_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int resonanceSkillId_ ;
+    /**
+     * <code>uint32 resonance_skill_id = 13;</code>
+     * @return The resonanceSkillId.
+     */
+    @java.lang.Override
+    public int getResonanceSkillId() {
+      return resonanceSkillId_;
+    }
+    /**
+     * <code>uint32 resonance_skill_id = 13;</code>
+     * @param value The resonanceSkillId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setResonanceSkillId(int value) {
+
+      resonanceSkillId_ = value;
+      bitField0_ |= 0x00001000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 resonance_skill_id = 13;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearResonanceSkillId() {
+      bitField0_ = (bitField0_ & ~0x00001000);
+      resonanceSkillId_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int resonanceKind_ ;
+    /**
+     * <code>uint32 resonance_kind = 14;</code>
+     * @return The resonanceKind.
+     */
+    @java.lang.Override
+    public int getResonanceKind() {
+      return resonanceKind_;
+    }
+    /**
+     * <code>uint32 resonance_kind = 14;</code>
+     * @param value The resonanceKind to set.
+     * @return This builder for chaining.
+     */
+    public Builder setResonanceKind(int value) {
+
+      resonanceKind_ = value;
+      bitField0_ |= 0x00002000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 resonance_kind = 14;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearResonanceKind() {
+      bitField0_ = (bitField0_ & ~0x00002000);
+      resonanceKind_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int resonanceParam_ ;
+    /**
+     * <code>uint32 resonance_param = 15;</code>
+     * @return The resonanceParam.
+     */
+    @java.lang.Override
+    public int getResonanceParam() {
+      return resonanceParam_;
+    }
+    /**
+     * <code>uint32 resonance_param = 15;</code>
+     * @param value The resonanceParam to set.
+     * @return This builder for chaining.
+     */
+    public Builder setResonanceParam(int value) {
+
+      resonanceParam_ = value;
+      bitField0_ |= 0x00004000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 resonance_param = 15;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearResonanceParam() {
+      bitField0_ = (bitField0_ & ~0x00004000);
+      resonanceParam_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object resonanceDesc_ = "";
+    /**
+     * <code>string resonance_desc = 16;</code>
+     * @return The resonanceDesc.
+     */
+    public java.lang.String getResonanceDesc() {
+      java.lang.Object ref = resonanceDesc_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        resonanceDesc_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string resonance_desc = 16;</code>
+     * @return The bytes for resonanceDesc.
+     */
+    public com.google.protobuf.ByteString
+        getResonanceDescBytes() {
+      java.lang.Object ref = resonanceDesc_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        resonanceDesc_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string resonance_desc = 16;</code>
+     * @param value The resonanceDesc to set.
+     * @return This builder for chaining.
+     */
+    public Builder setResonanceDesc(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      resonanceDesc_ = value;
+      bitField0_ |= 0x00008000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string resonance_desc = 16;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearResonanceDesc() {
+      resonanceDesc_ = getDefaultInstance().getResonanceDesc();
+      bitField0_ = (bitField0_ & ~0x00008000);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string resonance_desc = 16;</code>
+     * @param value The bytes for resonanceDesc to set.
+     * @return This builder for chaining.
+     */
+    public Builder setResonanceDescBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      resonanceDesc_ = value;
+      bitField0_ |= 0x00008000;
       onChanged();
       return this;
     }

@@ -141,9 +141,7 @@ const (
 	ErrTournamentAlreadyCheered    = uint32(table.MatchError_kMatchTournamentAlreadyCheered)
 	ErrTournamentRewardUnavailable = uint32(table.MatchError_kMatchTournamentRewardUnavailable)
 
-	// ---- 全服赛季战队锦标赛《群仙问道赛》V2(docs/design/season-team-tournament-v2.md) ----
-	ErrTournamentAlreadySalutedToday   = uint32(table.MatchError_kMatchTournamentAlreadySalutedToday)
-	ErrTournamentNoChampionToSalute    = uint32(table.MatchError_kMatchTournamentNoChampionToSalute)
+	// ---- 全服赛季战队锦标赛《群仙问道赛》V2(docs/planning/season-team-tournament-v2.md) ----
 	ErrTournamentSpectateCheerCooldown = uint32(table.MatchError_kMatchTournamentSpectateCheerCooldown)
 	ErrTournamentSpectateCheerInvalid  = uint32(table.MatchError_kMatchTournamentSpectateCheerInvalid)
 

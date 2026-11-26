@@ -384,6 +384,9 @@ private:
         ::BattleActivityContext activityContext;
         // 论剑首发 V1: 建房原件冻结的排位上下文,终局原样回显进 BattleResultEvent。
         ::RankedMatchContext rankedContext;
+        // 天墉生死状一期: 建房原件冻结的生死状上下文,终局原样回显进 BattleResultEvent。
+        bool hasJianghuDuelContext = false;
+        ::JianghuDuelBattleContext jianghuDuelContext;
         // CreateBattleRequest.spectate_visibility 原样副本:建房时赋值一次,整场不变,只供观战准入
         // (AddObserver 的第二道闸与 AttachRelayGate / PromoteSpectateBroadcast)读,只放行 PUBLIC。
         // 缺省 UNSPECIFIED 与 PRIVATE 一样不可观战(默认拒绝)。

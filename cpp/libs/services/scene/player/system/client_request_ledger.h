@@ -70,6 +70,13 @@ enum class ClientRequestKind : uint8_t
 	kClaimRewardedAd = 21,            // SceneRewardedAdClientPlayer.ClaimRewardedAd:激励视频完播领绑定银两
 	kSealSkillBook = 22,              // SceneSkillClientPlayer.SealSkillBook:书架可交易常规技能书封卷入包
 	kUnsealSkillBook = 23,            // SceneSkillClientPlayer.UnsealSkillBook:背包封卷道籍开卷回书架
+	kClaimScrollMilestone = 24,       // SceneSkillClientPlayer.ClaimScrollCollectionMilestone:领取卷宗收集里程碑残页
+	kBatchDismantleSkillBooks = 25,   // SceneSkillClientPlayer.BatchDismantleSkillBooks:批量拆解未学常规书返还残页
+	kPostWantedOrder = 26,            // SceneSkillClientPlayer.PostSkillBookWantedOrder:发榜托管银两求购常规技能书
+	kCancelWantedOrder = 27,          // SceneSkillClientPlayer.CancelSkillBookWantedOrder:撤单全额退还托管悬赏银两
+	kFulfillWantedOrder = 28,         // SceneSkillClientPlayer.FulfillSkillBookWantedOrder:揭榜交卷结算悬赏净银两
+	kClearJianghuDefeatMark = 29,     // SceneJianghuClientPlayer.ClearJianghuDefeatMark:银两或清风洗尘符幂等清除30分钟战败印记
+	kRentSkillLoadoutSlots = 30,      // SceneSkillClientPlayer.RentSkillLoadoutSlots:7套非永久流派方案槽位按月灵石租用/扩容/续期
 	kCount
 };
 
@@ -94,7 +101,11 @@ inline constexpr const char *kClientRequestKindNames[] = {"unspecified", "enhanc
 														  "unlock_travel_pass_premium", "claim_travel_pass_reward",
 														  "equip_pet_cosmetic", "equip_skill_vfx",
 														  "equip_loadout_unlock", "claim_rewarded_ad",
-														  "seal_skill_book", "unseal_skill_book"};
+														  "seal_skill_book", "unseal_skill_book",
+														  "claim_scroll_milestone", "batch_dismantle_skill_books",
+														  "post_wanted_order", "cancel_wanted_order",
+														  "fulfill_wanted_order", "clear_jianghu_defeat_mark",
+														  "rent_skill_loadout_slots"};
 static_assert(std::size(kClientRequestKindNames) == static_cast<std::size_t>(ClientRequestKind::kCount),
 			  "kClientRequestKindNames is out of sync with ClientRequestKind");
 
@@ -152,6 +163,13 @@ struct ClientRequestResult
 	uint32_t rewardedAdCurrencyType{0};
 	uint64_t rewardedAdAmount{0};
 	uint64_t sealedBookItemId{0};
+	uint32_t equipmentPolishAttemptsUsed{0};
+	uint64_t equipmentActualGoldSpent{0};
+	uint64_t wantedOrderId{0};
+	uint64_t wantedOrderGold{0};
+	uint32_t skillLoadoutRentedSlots{0};
+	uint64_t skillLoadoutRentExpiresAtSec{0};
+	uint64_t skillLoadoutRentSpentDiamond{0};
 };
 
 // 参数指纹 = 请求清掉 client_request_id 之后做确定性序列化,取 SHA-256 的前 16 字节。

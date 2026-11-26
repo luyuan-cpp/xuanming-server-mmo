@@ -27,6 +27,9 @@ public:
         std::vector<uint32_t> newlyLitSealIds;
         bool newSoloBest{false};
         bool newCoopBest{false};
+        uint32_t vowMask{0};
+        bool newVowBest{false};
+        uint64_t battleId{0};
         bool changed{false};
     };
 

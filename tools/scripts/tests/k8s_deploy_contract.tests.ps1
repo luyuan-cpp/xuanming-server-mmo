@@ -5693,7 +5693,7 @@ Test-Case 'chat ConfigMap:带世界频道推送的 Kafka brokers,WorldHistoryCac
     Assert-Match -Text $chatConfig -Pattern ("(?m)^\s*WorldChannelCooldownMs: {0}\s*$" -f [regex]::Escape($cooldownMs)) -Because '世界频道发言间隔与服务 yaml 同一个值,K8s 上不能悄悄退回 Go 侧 default'
     $worldMinLevel = Get-EtcValue -RelativePath 'go/chat/etc/chat.yaml' -KeyPath 'WorldMinLevel'
     Assert-Match -Text $chatConfig -Pattern ("(?m)^\s*WorldMinLevel: {0}\s*$" -f [regex]::Escape($worldMinLevel)) -Because '世界频道等级门槛与服务 yaml 同一个值'
-    Assert-Match -Text $chatConfig -Pattern '(?m)^      - /chatpb\.ClientPlayerChat/ReportChat\s*$' -Because '举报附言同样不得进 Stat 日志'
+    Assert-Match -Text $chatConfig -Pattern '(?m)^\s+- /chatpb\.ClientPlayerChat/ReportChat\s*$' -Because '举报附言同样不得进 Stat 日志'
     # chat 不连 Redis(2026-11-11 删掉了两个从不发命令的句柄):段写回来就等于给它恢复一条没记账的连接路径。
     Assert-NotMatch -Text $chatConfig -Pattern '(?m)^\s*(?:Redis|ChatRedis):\s*$' -Because 'chat 不连 Redis,ConfigMap 不写 Redis / ChatRedis 段'
 }

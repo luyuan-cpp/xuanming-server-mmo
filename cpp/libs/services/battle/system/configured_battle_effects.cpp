@@ -346,7 +346,7 @@ void TurnBattleEngine::ExecuteConfiguredSkill(BattleActorState& actor, const Bat
     event->set_skill_table_id(row.id());
     event->set_hit_kind(origin == BattleDamageOrigin::Mirror ? BATTLE_HIT_MIRROR : BATTLE_HIT_NORMAL);
     if (normal || origin == BattleDamageOrigin::Confusion) {
-        const bool consumeBreathResonance = IsDefendBreathResonanceReady(actor, row.id());
+        const bool consumeBreathResonance = DefendManaDiscountResonancePct(actor, row.id()) > 0u;
         context.paidMana = SkillManaCost(actor, row);
         ConsumeSkillMana(actor, row, row.id(), result);
         if (consumeBreathResonance) {
@@ -375,19 +375,30 @@ void TurnBattleEngine::ExecuteConfiguredSkill(BattleActorState& actor, const Bat
     }
     const int effectsBegin = result.events_size();
     bool castSupportEffect = false;
-    bool guardResonanceActive = false;
+    bool nextRoundBoostActive = false;
     if (normal && actor.actor_type() == BATTLE_ACTOR_TYPE_PLAYER &&
-        row.id() == seasonrules::kSkillGuzhenLingzhang &&
         actor.equipment_effects().has_season_seal()) {
         const auto& seal = actor.equipment_effects().season_seal();
-        if (seal.season_id() == seasonrules::kSeason1Id && seal.seal_id() == seasonrules::kSealGuzhenShouyin) {
+        if (seal.resonance_skill_id() == row.id() && seal.resonance_param() > 0u) {
             auto& rt = seasonSealRuntimeByActor[actor.actor_id()];
-            if (!rt.guardResonanceConsumed && rt.guardResonanceReadyRound == roundIndex) {
+            if ((seal.resonance_kind() == seasonrules::kResonanceGuardShieldBoost ||
+                 seal.resonance_kind() == seasonrules::kResonanceGuardHealBoost) &&
+                !rt.guardResonanceConsumed && rt.guardResonanceReadyRound == roundIndex) {
                 rt.guardResonanceConsumed = true;
                 rt.guardResonanceReadyRound = 0u;
-                guardResonanceActive = true;
-                activeGuardShieldResonanceCasterId = actor.actor_id();
-                activeGuardShieldResonanceExtra = 0u;
+                nextRoundBoostActive = true;
+                activeNextRoundBoostCasterId = actor.actor_id();
+                activeNextRoundBoostKind = seal.resonance_kind();
+                activeNextRoundBoostPct = seal.resonance_param();
+                activeNextRoundBoostExtra = 0u;
+            } else if (seal.resonance_kind() == seasonrules::kResonanceDefendShieldBoost &&
+                       rt.defendResonanceReadyRound == roundIndex) {
+                rt.defendResonanceReadyRound = 0u;
+                nextRoundBoostActive = true;
+                activeNextRoundBoostCasterId = actor.actor_id();
+                activeNextRoundBoostKind = seal.resonance_kind();
+                activeNextRoundBoostPct = seal.resonance_param();
+                activeNextRoundBoostExtra = 0u;
             }
         }
     }
@@ -424,16 +435,21 @@ void TurnBattleEngine::ExecuteConfiguredSkill(BattleActorState& actor, const Bat
         }
         pendingMysticExtendCasterId = 0u;
         pendingMysticExtendTargetId = 0u;
+        pendingMysticExtendSkillId = 0u;
+        pendingMysticExtendBonusRounds = 0u;
     }
-    if (guardResonanceActive && activeGuardShieldResonanceCasterId == actor.actor_id()) {
-        const uint64_t extraShield = activeGuardShieldResonanceExtra;
-        activeGuardShieldResonanceCasterId = 0u;
-        activeGuardShieldResonanceExtra = 0u;
-        if (extraShield > 0u) {
+    if (nextRoundBoostActive && activeNextRoundBoostCasterId == actor.actor_id()) {
+        const uint64_t extra = activeNextRoundBoostExtra;
+        const uint32_t boostKind = activeNextRoundBoostKind;
+        activeNextRoundBoostCasterId = 0u;
+        activeNextRoundBoostKind = 0u;
+        activeNextRoundBoostPct = 0u;
+        activeNextRoundBoostExtra = 0u;
+        if (extra > 0u && boostKind > 0u) {
             auto& rt = seasonSealRuntimeByActor[actor.actor_id()];
-            rt.contributionValue = AddSafe(rt.contributionValue, extraShield);
+            rt.contributionValue = AddSafe(rt.contributionValue, extra);
             EmitSeasonResonanceEvent(actor, actor.actor_id(),
-                                     seasonrules::kResonanceEventGuardShieldBoost, extraShield, result);
+                                     seasonrules::kResonanceEventBase + boostKind, extra, result);
         }
     }
     currentHitIndex = 0;
@@ -480,9 +496,10 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
     // 持续治疗的覆盖强度与每跳快照采用同一完整施放方值，避免旧印因施法者加成不同被弱覆盖。
     if (op == BattleEffectOp::ReviveMark) value *= std::max(0.0, 1 + EquipmentOutgoingHeal(caster));
     std::vector<int> shieldArtifacts;
-    // 人物装备/法宝护盾加成仅作用于独立无次数容量盾(A40)；宝宝 504 护盾条目作用于全部有限数值护盾(含 B05/B06/O03)，不改次数与时长，法力盾(ManaShield)排除。
+    uint64_t seasonSealShieldGain = 0u;
+    // 人物装备/法宝/赛季印护盾加成仅作用于独立无次数容量盾(A40)；宝宝 504 护盾条目作用于全部有限数值护盾(含 B05/B06/O03)，不改次数与时长，法力盾(ManaShield)排除。
     if (op == BattleEffectOp::Shield && (row.hit_limit() == 0 || caster.actor_type() == BATTLE_ACTOR_TYPE_PET)) {
-        value = EquipmentShield(caster, receiver, value, context, shieldArtifacts);
+        value = EquipmentShield(caster, receiver, value, context, shieldArtifacts, &seasonSealShieldGain);
     }
     if (op == BattleEffectOp::Shield && ActiveTournamentLeyline() == TOURNAMENT_LEYLINE_WOOD) {
         value *= 110.0 / 100.0;
@@ -499,15 +516,17 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
     if (op == BattleEffectOp::Shield && EscalationStacks() > 0) {
         value *= static_cast<double>(EscalationSupportPct()) / 100.0;
     }
-    uint64_t guardResonanceGain = 0u;
+    uint64_t nextRoundShieldGain = 0u;
     if (op == BattleEffectOp::Shield && context.origin == BattleDamageOrigin::Direct &&
-        context.skillId == seasonrules::kSkillGuzhenLingzhang &&
-        activeGuardShieldResonanceCasterId == caster.actor_id()) {
+        activeNextRoundBoostCasterId == caster.actor_id() &&
+        (activeNextRoundBoostKind == seasonrules::kResonanceGuardShieldBoost ||
+         activeNextRoundBoostKind == seasonrules::kResonanceDefendShieldBoost) &&
+        activeNextRoundBoostPct > 0u) {
         const uint64_t beforeShield = Whole(value);
-        value *= (100.0 + seasonrules::kResonanceGuardShieldBonusPct) / 100.0;
+        value *= (100.0 + activeNextRoundBoostPct) / 100.0;
         const uint64_t afterShield = Whole(value);
         if (afterShield > beforeShield) {
-            guardResonanceGain = afterShield - beforeShield;
+            nextRoundShieldGain = afterShield - beforeShield;
         }
     }
     if (!Persistent(op) && row.trigger_event() == 0) {
@@ -742,16 +761,19 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
     added->set_snapshot_value(strength); added->set_remaining_capacity(Whole(value));
     added->set_remaining_hits(row.hit_limit()); added->set_remaining_ticks(row.tick_count());
     uint32_t appliedRemainRounds = row.duration_rounds();
-    bool mysticResonanceExtended = false;
+    uint32_t mysticResonanceExtendedRounds = 0u;
     if (hostile && op == BattleEffectOp::Modifier && appliedRemainRounds > 0u &&
         context.origin == BattleDamageOrigin::Direct &&
-        context.skillId == seasonrules::kSkillPozhenLinglei &&
+        pendingMysticExtendBonusRounds > 0u &&
+        context.skillId == pendingMysticExtendSkillId &&
         caster.actor_id() == pendingMysticExtendCasterId &&
         receiver.actor_id() == pendingMysticExtendTargetId) {
-        appliedRemainRounds += seasonrules::kResonanceMysticDebuffBonusRounds;
+        mysticResonanceExtendedRounds = pendingMysticExtendBonusRounds;
+        appliedRemainRounds += mysticResonanceExtendedRounds;
         pendingMysticExtendCasterId = 0u;
         pendingMysticExtendTargetId = 0u;
-        mysticResonanceExtended = true;
+        pendingMysticExtendSkillId = 0u;
+        pendingMysticExtendBonusRounds = 0u;
     }
     added->set_remain_rounds(appliedRemainRounds); added->set_applied_round(roundIndex);
     added->set_tick_round(row.tick_on_apply() ? roundIndex : roundIndex + 1);
@@ -775,15 +797,15 @@ void TurnBattleEngine::ApplyConfiguredEffect(BattleActorState& caster, BattleAct
     event->set_buff_table_id(row.id()); event->set_buff_instance_id(instance); event->set_value(1);
     if (op == BattleEffectOp::Shield) event->set_shield_after(Whole(value));
     if (op == BattleEffectOp::Shield) {
-        if (guardResonanceGain > 0u) {
-            activeGuardShieldResonanceExtra = AddSafe(activeGuardShieldResonanceExtra, guardResonanceGain);
+        if (nextRoundShieldGain > 0u) {
+            activeNextRoundBoostExtra = AddSafe(activeNextRoundBoostExtra, nextRoundShieldGain);
         }
-        CommitEquipmentShield(caster, receiver.actor_id(), shieldArtifacts, result);
+        CommitEquipmentShield(caster, receiver.actor_id(), shieldArtifacts, seasonSealShieldGain, context.skillId, result);
     }
-    if (mysticResonanceExtended) {
+    if (mysticResonanceExtendedRounds > 0u) {
         EmitSeasonResonanceEvent(caster, receiver.actor_id(),
                                  seasonrules::kResonanceEventMysticExtendDebuff,
-                                 seasonrules::kResonanceMysticDebuffBonusRounds, result);
+                                 mysticResonanceExtendedRounds, result);
     }
     if (row.trigger_event() == 0 && op != BattleEffectOp::PursuitDamage && op != BattleEffectOp::PrepareCast) {
         for (const auto child : row.sub_buff()) {
@@ -799,6 +821,7 @@ uint64_t TurnBattleEngine::ResolveConfiguredHeal(BattleActorState& source, Battl
         ConfiguredModifier(source, BattleModifier::OutgoingHeal);
     const double received = std::max(0.0, 1 + ConfiguredModifier(target, BattleModifier::IncomingHeal));
     std::vector<std::pair<int, uint64_t>> contributions;
+    uint64_t seasonSealHealGain = 0u;
     if (context.equipmentHeal && context.origin == BattleDamageOrigin::Direct &&
         context.primaryTargetId == target.actor_id() && context.healOrdinal == 0) {
         for (const int index : AvailableArtifacts(source, 4)) {
@@ -810,14 +833,58 @@ uint64_t TurnBattleEngine::ResolveConfiguredHeal(BattleActorState& source, Battl
             const uint64_t after = LandedHeal(target, amount * std::max(0.0, 1 + bonus) * received);
             if (after > before) contributions.emplace_back(index, after - before);
         }
+        if (SeasonSealAvailable(source, 4)) {
+            const auto& seal = source.equipment_effects().season_seal();
+            if (static_cast<long double>(target.attributes().health()) * 10000 <=
+                static_cast<long double>(target.max_health()) * seal.health_threshold_bps()) {
+                const uint64_t before = LandedHeal(target, amount * std::max(0.0, 1 + bonus) * received);
+                bonus += seal.bonus_bps() / 10000.0;
+                const uint64_t after = LandedHeal(target, amount * std::max(0.0, 1 + bonus) * received);
+                if (after > before) seasonSealHealGain = after - before;
+            }
+        }
     }
     if (const uint32_t wuxingHealPct = WuxingHealShieldBonusPct(source); wuxingHealPct > 0) {
         amount *= (100.0 + wuxingHealPct) / 100.0;
     }
+    uint64_t beforeNextRoundHealBoost = 0u;
+    bool applyNextRoundHealBoost = false;
+    if (context.origin == BattleDamageOrigin::Direct &&
+        activeNextRoundBoostCasterId == source.actor_id() &&
+        activeNextRoundBoostKind == seasonrules::kResonanceGuardHealBoost &&
+        activeNextRoundBoostPct > 0u) {
+        beforeNextRoundHealBoost = LandedHeal(target, supportrules::ApplyBonus(amount, bonus) * received);
+        amount *= (100.0 + activeNextRoundBoostPct) / 100.0;
+        applyNextRoundHealBoost = true;
+    }
     const uint64_t healed = ApplyHeal(target, supportrules::ApplyBonus(amount, bonus) * received);
+    if (applyNextRoundHealBoost && healed > beforeNextRoundHealBoost) {
+        activeNextRoundBoostExtra = AddSafe(activeNextRoundBoostExtra, healed - beforeNextRoundHealBoost);
+    }
     RecordTrialMonsterHeal(source, target, healed);
     if (healed > 0) RecordEffectiveContribution(source);
     for (const auto& [index, gain] : contributions) UseArtifact(source, index, target.actor_id(), gain, result);
+    if (seasonSealHealGain > 0u && SeasonSealAvailable(source, 4)) {
+        const auto& seal = source.equipment_effects().season_seal();
+        UseSeasonSeal(source, target.actor_id(), seasonSealHealGain, result);
+        if (seal.resonance_kind() == seasonrules::kResonanceEmergencyHealRefund &&
+            seal.resonance_skill_id() == context.skillId && seal.resonance_param() > 0u) {
+            const uint64_t manaBefore = source.attributes().mana();
+            const uint64_t missingMana = source.max_mana() > manaBefore ? source.max_mana() - manaBefore : 0u;
+            const uint64_t refund = std::min(missingMana,
+                seasonrules::ComputeManaPctCeil(context.paidMana, seal.resonance_param()));
+            if (refund > 0u) {
+                source.mutable_attributes()->set_mana(manaBefore + refund);
+                auto* manaEv = AppendEvent(result, BATTLE_EVENT_MANA, source.actor_id(), source.actor_id());
+                manaEv->set_skill_table_id(context.skillId);
+                manaEv->set_value(refund);
+                manaEv->set_mana_delta(static_cast<int64_t>(std::min<uint64_t>(refund, INT64_MAX)));
+                manaEv->set_target_mana_after(manaBefore + refund);
+                EmitSeasonResonanceEvent(source, source.actor_id(),
+                                         seasonrules::kResonanceEventEmergencyHealRefund, refund, result);
+            }
+        }
+    }
     auto* event = AppendEvent(result, BATTLE_EVENT_HEAL, source.actor_id(), target.actor_id());
     event->set_skill_table_id(context.skillId); event->set_value(healed);
     event->set_target_health_after(target.attributes().health()); return healed;

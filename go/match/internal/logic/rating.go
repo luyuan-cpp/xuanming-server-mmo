@@ -189,6 +189,10 @@ func ApplyBattleResult(svcCtx *svc.ServiceContext, event *kafkapb.BattleResultEv
 		}
 		return finish(ratingOutcomeApplied), nil
 	}
+	if mode == matchpb.MatchMode_MATCH_MODE_JIANGHU_DUEL {
+		outcome, err := applyJianghuDuelResult(svcCtx, event)
+		return finish(outcome), err
+	}
 	if !isRatedMode(mode) {
 		return finish(ratingOutcomeIgnored), nil
 	}

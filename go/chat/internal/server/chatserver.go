@@ -42,3 +42,8 @@ func (s *ChatServer) ReportChat(ctx context.Context, in *chatpb.ReportChatReques
 func (s *ChatServer) RetractWorldChat(ctx context.Context, in *chatpb.RetractWorldChatRequest) (*chatpb.RetractWorldChatResponse, error) {
 	return logic.NewChatLogic(ctx, s.svcCtx).RetractWorldChat(in)
 }
+
+// PublishSystemWorldNotice 发布白名单模板全服系统播报(CLIENT_RPC_SERVER_ONLY)。
+func (s *ChatServer) PublishSystemWorldNotice(ctx context.Context, in *chatpb.PublishSystemWorldNoticeRequest) (*chatpb.PublishSystemWorldNoticeResponse, error) {
+	return logic.NewChatLogic(ctx, s.svcCtx).PublishSystemWorldNotice(in)
+}

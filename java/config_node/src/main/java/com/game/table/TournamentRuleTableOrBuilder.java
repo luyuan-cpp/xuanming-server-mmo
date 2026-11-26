@@ -155,24 +155,6 @@ public interface TournamentRuleTableOrBuilder extends
   boolean getPublicKnockoutReplay();
 
   /**
-   * <code>uint32 salute_gold_amount = 24;</code>
-   * @return The saluteGoldAmount.
-   */
-  int getSaluteGoldAmount();
-
-  /**
-   * <code>uint32 salute_item_id = 25;</code>
-   * @return The saluteItemId.
-   */
-  int getSaluteItemId();
-
-  /**
-   * <code>uint32 salute_item_count = 26;</code>
-   * @return The saluteItemCount.
-   */
-  int getSaluteItemCount();
-
-  /**
    * <code>bool warmup_spar_enabled = 27;</code>
    * @return The warmupSparEnabled.
    */

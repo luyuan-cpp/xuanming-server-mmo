@@ -2326,6 +2326,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CancelBattlePrepareRequest final : 
   enum : int {
     kPlayerIdFieldNumber = 1,
     kBattleIdFieldNumber = 2,
+    kSkipJianghuSilverRefundFieldNumber = 3,
   };
   // uint64 player_id = 1;
   void clear_player_id() ;
@@ -2347,11 +2348,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CancelBattlePrepareRequest final : 
   void _internal_set_battle_id(::uint64_t value);
 
   public:
+  // bool skip_jianghu_silver_refund = 3;
+  void clear_skip_jianghu_silver_refund() ;
+  [[nodiscard]] bool skip_jianghu_silver_refund() const;
+  void set_skip_jianghu_silver_refund(bool value);
+
+  private:
+  bool _internal_skip_jianghu_silver_refund() const;
+  void _internal_set_skip_jianghu_silver_refund(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:CancelBattlePrepareRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<2, 3,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2382,6 +2393,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CancelBattlePrepareRequest final : 
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint64_t player_id_;
     ::uint64_t battle_id_;
+    bool skip_jianghu_silver_refund_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4264,6 +4276,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PrepareBattleResponse final : publi
     kTableFingerprintFieldNumber = 3,
     kErrorMessageFieldNumber = 1,
     kSnapshotFieldNumber = 2,
+    kJianghuSilverFeeChargedFieldNumber = 4,
   };
   // string table_fingerprint = 3;
   void clear_table_fingerprint() ;
@@ -4312,11 +4325,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PrepareBattleResponse final : publi
   ::BattlePlayerSnapshot* PROTOBUF_NONNULL _internal_mutable_snapshot();
 
   public:
+  // bool jianghu_silver_fee_charged = 4;
+  void clear_jianghu_silver_fee_charged() ;
+  [[nodiscard]] bool jianghu_silver_fee_charged() const;
+  void set_jianghu_silver_fee_charged(bool value);
+
+  private:
+  bool _internal_jianghu_silver_fee_charged() const;
+  void _internal_set_jianghu_silver_fee_charged(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:PrepareBattleResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<2, 4,
                           2, 47,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -4348,6 +4371,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PrepareBattleResponse final : publi
     ::google::protobuf::internal::ArenaStringPtr table_fingerprint_;
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
     ::BattlePlayerSnapshot* PROTOBUF_NULLABLE snapshot_;
+    bool jianghu_silver_fee_charged_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -6882,6 +6906,30 @@ inline void PrepareBattleResponse::set_allocated_table_fingerprint(::std::string
   // @@protoc_insertion_point(field_set_allocated:PrepareBattleResponse.table_fingerprint)
 }
 
+// bool jianghu_silver_fee_charged = 4;
+inline void PrepareBattleResponse::clear_jianghu_silver_fee_charged() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.jianghu_silver_fee_charged_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline bool PrepareBattleResponse::jianghu_silver_fee_charged() const {
+  // @@protoc_insertion_point(field_get:PrepareBattleResponse.jianghu_silver_fee_charged)
+  return _internal_jianghu_silver_fee_charged();
+}
+inline void PrepareBattleResponse::set_jianghu_silver_fee_charged(bool value) {
+  _internal_set_jianghu_silver_fee_charged(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:PrepareBattleResponse.jianghu_silver_fee_charged)
+}
+inline bool PrepareBattleResponse::_internal_jianghu_silver_fee_charged() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.jianghu_silver_fee_charged_;
+}
+inline void PrepareBattleResponse::_internal_set_jianghu_silver_fee_charged(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.jianghu_silver_fee_charged_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // CancelBattlePrepareRequest
@@ -6932,6 +6980,30 @@ inline ::uint64_t CancelBattlePrepareRequest::_internal_battle_id() const {
 inline void CancelBattlePrepareRequest::_internal_set_battle_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_id_ = value;
+}
+
+// bool skip_jianghu_silver_refund = 3;
+inline void CancelBattlePrepareRequest::clear_skip_jianghu_silver_refund() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skip_jianghu_silver_refund_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool CancelBattlePrepareRequest::skip_jianghu_silver_refund() const {
+  // @@protoc_insertion_point(field_get:CancelBattlePrepareRequest.skip_jianghu_silver_refund)
+  return _internal_skip_jianghu_silver_refund();
+}
+inline void CancelBattlePrepareRequest::set_skip_jianghu_silver_refund(bool value) {
+  _internal_set_skip_jianghu_silver_refund(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:CancelBattlePrepareRequest.skip_jianghu_silver_refund)
+}
+inline bool CancelBattlePrepareRequest::_internal_skip_jianghu_silver_refund() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.skip_jianghu_silver_refund_;
+}
+inline void CancelBattlePrepareRequest::_internal_set_skip_jianghu_silver_refund(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skip_jianghu_silver_refund_ = value;
 }
 
 // -------------------------------------------------------------------

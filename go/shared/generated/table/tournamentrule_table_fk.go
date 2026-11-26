@@ -22,20 +22,6 @@ func GetTournamentRuleBattleConfigIdRowById(tableId uint32) (*pb.DungeonTable, b
     return GetTournamentRuleBattleConfigIdRow(row)
 }
 
-// GetTournamentRuleSaluteItemIdRow resolves TournamentRule.salute_item_id -> Item row.
-func GetTournamentRuleSaluteItemIdRow(row *pb.TournamentRuleTable) (*pb.ItemTable, bool) {
-    return ItemTableManagerInstance.FindById(row.SaluteItemId)
-}
-
-// GetTournamentRuleSaluteItemIdRowById resolves TournamentRule.salute_item_id -> Item row (by TournamentRule id).
-func GetTournamentRuleSaluteItemIdRowById(tableId uint32) (*pb.ItemTable, bool) {
-    row, ok := TournamentRuleTableManagerInstance.FindById(tableId)
-    if !ok {
-        return nil, false
-    }
-    return GetTournamentRuleSaluteItemIdRow(row)
-}
-
 // ---------------------------------------------------------------------------
 // Reverse FK (HasMany): find source rows by FK column value
 // ---------------------------------------------------------------------------
@@ -43,9 +29,4 @@ func GetTournamentRuleSaluteItemIdRowById(tableId uint32) (*pb.ItemTable, bool) 
 // FindTournamentRuleRowsByBattleConfigId returns all TournamentRule rows whose battle_config_id == key.
 func FindTournamentRuleRowsByBattleConfigId(key uint32) []*pb.TournamentRuleTable {
     return TournamentRuleTableManagerInstance.GetByBattleConfigId(key)
-}
-
-// FindTournamentRuleRowsBySaluteItemId returns all TournamentRule rows whose salute_item_id == key.
-func FindTournamentRuleRowsBySaluteItemId(key uint32) []*pb.TournamentRuleTable {
-    return TournamentRuleTableManagerInstance.GetBySaluteItemId(key)
 }

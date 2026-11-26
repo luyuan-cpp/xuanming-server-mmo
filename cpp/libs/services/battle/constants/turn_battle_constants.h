@@ -38,6 +38,10 @@ inline constexpr uint32_t kMatchModePolarity5v5 = 8;
 inline constexpr uint32_t kMatchModeGuildWarPvp = 9;
 inline constexpr uint32_t kMatchModeGuildWarSiege = 10;
 inline constexpr uint32_t kMatchModeSeasonTournament = 11;
+inline constexpr uint32_t kMatchModeJianghuDuel = 12;
+
+// 天墉生死状默认 30 回合上限（打满双方均存活权威判平）。
+inline constexpr uint32_t kJianghuDuelDefaultMaxRounds = 30;
 
 // 帮会全天帮战 V2（docs/design/guild-play-v2.md）：
 // 第 12 回合起启用「决胜煞气」：每层增伤 +15%、疗盾 -15%（下限 20%），20 回合打满判平。
@@ -83,10 +87,31 @@ inline constexpr uint32_t kBossTrialKindBreakDualGuard = 8;  // 破阵·双卫�
 inline constexpr uint32_t kBossTrialKindPracticeDummy = 9;   // 归元城演武试招木桩（强制本人养成、满血蓝隔离、零战损零资源产出）
 inline constexpr uint32_t kBossTrialKindTacticalPuzzle = 10; // 归元城演武回合残局考题（支持本人养成或免费预设、零刷取隔离）
 inline constexpr uint32_t kBossTrialKindCharacterTale = 11;  // 归元城人物奇谈短案（支持本人养成或免费预设试演、零刷取隔离）
+inline constexpr uint32_t kBossTrialKindWildWind = 12;       // 卷四·八景岛风眼引风明雷首领
+inline constexpr uint32_t kBossTrialKindWildBell = 13;       // 卷四·碧渊水宫水镜钟鸣明雷首领
+inline constexpr uint32_t kBossTrialKindWildTide = 14;       // 卷四·月汐湾涨退潮明雷首领
+
+constexpr bool IsWildBossTrialKind(uint32_t kind) {
+    return kind >= kBossTrialKindWildWind && kind <= kBossTrialKindWildTide;
+}
 
 constexpr bool IsBossTrialKind(uint32_t kind) {
     return (kind >= kBossTrialKindBreakRejuv && kind <= kBossTrialKindVenom) ||
-           kind == kBossTrialKindBreakDualGuard;
+           kind == kBossTrialKindBreakDualGuard ||
+           IsWildBossTrialKind(kind);
+}
+
+// 卷四三境明雷周期窗口（整数确定性）：
+// - 碧渊水宫：每 2 回合交替阳钟（R1-2/5-6/9-10，物理 +15%/法术 -12%）与阴鼓（R3-4/7-8/11-12，法术 +15%/物理 -12%）。
+// - 月汐湾：每 2 回合交替涨潮（R1-2/5-6/9-10，首领承伤 -25%）与退潮（R3-4/7-8/11-12，首领承伤 +20%）。
+constexpr bool IsWildBellYangRound(uint32_t roundIndex) {
+    const uint32_t block = (roundIndex > 0u ? (roundIndex - 1u) : 0u) / 2u;
+    return (block % 2u) == 0u;
+}
+
+constexpr bool IsWildTideEbbRound(uint32_t roundIndex) {
+    const uint32_t block = (roundIndex > 0u ? (roundIndex - 1u) : 0u) / 2u;
+    return (block % 2u) == 1u;
 }
 
 constexpr bool IsPracticeDummyKind(uint32_t kind) {
@@ -158,6 +183,7 @@ inline constexpr uint32_t kTelegraphKindGuardBind = 6;
 inline constexpr uint32_t kTelegraphKindBossMagicStrike = 7;
 inline constexpr uint32_t kTelegraphKindBossVenomAoe = 8;
 inline constexpr uint32_t kTelegraphKindFestivalHeavyStrike = 9;
+inline constexpr uint32_t kTelegraphKindWildWindGust = 10;
 
 // 预告状态（对应 BattleTelegraphEntry.status）
 inline constexpr uint32_t kTelegraphStatusUpcoming = 1;

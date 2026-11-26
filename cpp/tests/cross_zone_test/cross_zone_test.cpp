@@ -1046,6 +1046,7 @@ void CreatePersistedPlayerComps(entt::entity player)
     registry.emplace<PlayerSpiritShopComp>(player); // 官方灵石百宝阁限购状态
     registry.emplace<PlayerTravelPassComp>(player); // 游历手记持久状态
     registry.emplace<PlayerEquipLoadoutComp>(player); // 装备流派方案预设
+    registry.emplace<PlayerJianghuComp>(player); // 江湖恩怨与天墉生死状
     registry.emplace<CurrencyComp>(player);
     registry.emplace<PlayerCurrencyComp>(player);
     // 顶层未知字段的载体(混版本持久字段保护 §4.2 L1),生产里由 player_database 的 Unmarshal 创建。

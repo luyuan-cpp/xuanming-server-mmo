@@ -1161,6 +1161,9 @@ type JoinQueueRequest struct {
 	RankedRuleVersion uint32 `protobuf:"varint,12,opt,name=ranked_rule_version,json=rankedRuleVersion,proto3" json:"ranked_rule_version,omitempty"`
 	// true = 五行幻境周常爬塔单人开战（仅 PVE_SOLO 有效，真实层数与符印由 Scene 从玩家权威状态注入）。
 	IsWuxingTower bool `protobuf:"varint,13,opt,name=is_wuxing_tower,json=isWuxingTower,proto3" json:"is_wuxing_tower,omitempty"`
+	// 五行试炼志 V3 自选试炼誓约位图（bit0 禁控 / bit1 单宝 / bit2 无宠 / bit3 紧缩回合，有效值 0..0x0F）。
+	// 仅允许常驻试炼志 PVE 首领副本单人直开；其余模式非 0 一律拒绝。
+	TrialVowMask  uint32 `protobuf:"varint,14,opt,name=trial_vow_mask,json=trialVowMask,proto3" json:"trial_vow_mask,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1285,6 +1288,13 @@ func (x *JoinQueueRequest) GetIsWuxingTower() bool {
 		return x.IsWuxingTower
 	}
 	return false
+}
+
+func (x *JoinQueueRequest) GetTrialVowMask() uint32 {
+	if x != nil {
+		return x.TrialVowMask
+	}
+	return 0
 }
 
 type JoinQueueResponse struct {
@@ -2225,8 +2235,11 @@ type BattleWatchSummary struct {
 	PlayerNames    []string               `protobuf:"bytes,4,rep,name=player_names,json=playerNames,proto3" json:"player_names,omitempty"`
 	CreatedAtMs    uint64                 `protobuf:"varint,5,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
 	Featured       bool                   `protobuf:"varint,6,opt,name=featured,proto3" json:"featured,omitempty"` // 运营标记的赛事局(列表排在最前,优先升全服广播)
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 论剑 V7 正式高段排位实时围观元数据（非正式排位为 0）。
+	RankedTeamSize        uint32 `protobuf:"varint,7,opt,name=ranked_team_size,json=rankedTeamSize,proto3" json:"ranked_team_size,omitempty"`
+	RankedPeakRatingCenti int64  `protobuf:"varint,8,opt,name=ranked_peak_rating_centi,json=rankedPeakRatingCenti,proto3" json:"ranked_peak_rating_centi,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *BattleWatchSummary) Reset() {
@@ -2299,6 +2312,20 @@ func (x *BattleWatchSummary) GetFeatured() bool {
 		return x.Featured
 	}
 	return false
+}
+
+func (x *BattleWatchSummary) GetRankedTeamSize() uint32 {
+	if x != nil {
+		return x.RankedTeamSize
+	}
+	return 0
+}
+
+func (x *BattleWatchSummary) GetRankedPeakRatingCenti() int64 {
+	if x != nil {
+		return x.RankedPeakRatingCenti
+	}
+	return 0
 }
 
 // 内部记录(由 SQL 成局组出,含路由所需的 battle 节点 id,不下发客户端)
@@ -5229,8 +5256,6 @@ type TournamentSeasonView struct {
 	ChampionSquadId         uint64                  `protobuf:"varint,20,opt,name=champion_squad_id,json=championSquadId,proto3" json:"champion_squad_id,omitempty"`
 	ChampionSquadName       string                  `protobuf:"bytes,21,opt,name=champion_squad_name,json=championSquadName,proto3" json:"champion_squad_name,omitempty"`
 	ChampionMemberSummary   string                  `protobuf:"bytes,22,opt,name=champion_member_summary,json=championMemberSummary,proto3" json:"champion_member_summary,omitempty"` // 冠军成员摘要(供冠军殿堂展示)
-	ChampionSaluteCount     uint64                  `protobuf:"varint,23,opt,name=champion_salute_count,json=championSaluteCount,proto3" json:"champion_salute_count,omitempty"`      // V2: 全服累计观道致敬次数
-	SalutedToday            bool                    `protobuf:"varint,24,opt,name=saluted_today,json=salutedToday,proto3" json:"saluted_today,omitempty"`                             // V2: 当前玩家今日(UTC+8)是否已观道致敬
 	ChampionMembers         []*TournamentMemberView `protobuf:"bytes,25,rep,name=champion_members,json=championMembers,proto3" json:"champion_members,omitempty"`                     // V2: 冠军战队成员外观快照
 	ChampionEmblemId        uint32                  `protobuf:"varint,26,opt,name=champion_emblem_id,json=championEmblemId,proto3" json:"champion_emblem_id,omitempty"`               // V3: 冠军战队队徽(1..8)
 	ThirdPlaceSquadId       uint64                  `protobuf:"varint,27,opt,name=third_place_squad_id,json=thirdPlaceSquadId,proto3" json:"third_place_squad_id,omitempty"`          // V3: 季军战队 ID(0=无季军战或未决出)
@@ -5426,20 +5451,6 @@ func (x *TournamentSeasonView) GetChampionMemberSummary() string {
 		return x.ChampionMemberSummary
 	}
 	return ""
-}
-
-func (x *TournamentSeasonView) GetChampionSaluteCount() uint64 {
-	if x != nil {
-		return x.ChampionSaluteCount
-	}
-	return 0
-}
-
-func (x *TournamentSeasonView) GetSalutedToday() bool {
-	if x != nil {
-		return x.SalutedToday
-	}
-	return false
 }
 
 func (x *TournamentSeasonView) GetChampionMembers() []*TournamentMemberView {
@@ -7821,142 +7832,6 @@ func (x *ClaimTournamentRewardResponse) GetClaimedRewards() []*TournamentPlayerR
 	return nil
 }
 
-type SaluteTournamentChampionRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SeasonId      uint32                 `protobuf:"varint,1,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"` // 0 = 致敬最近一届有总冠军的赛季
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SaluteTournamentChampionRequest) Reset() {
-	*x = SaluteTournamentChampionRequest{}
-	mi := &file_proto_match_match_service_proto_msgTypes[81]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SaluteTournamentChampionRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SaluteTournamentChampionRequest) ProtoMessage() {}
-
-func (x *SaluteTournamentChampionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[81]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SaluteTournamentChampionRequest.ProtoReflect.Descriptor instead.
-func (*SaluteTournamentChampionRequest) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{81}
-}
-
-func (x *SaluteTournamentChampionRequest) GetSeasonId() uint32 {
-	if x != nil {
-		return x.SeasonId
-	}
-	return 0
-}
-
-type SaluteTournamentChampionResponse struct {
-	state               protoimpl.MessageState  `protogen:"open.v1"`
-	ErrorMessage        *base.TipInfoMessage    `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
-	SeasonId            uint32                  `protobuf:"varint,2,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
-	ChampionSaluteCount uint64                  `protobuf:"varint,3,opt,name=champion_salute_count,json=championSaluteCount,proto3" json:"champion_salute_count,omitempty"`
-	SalutedToday        bool                    `protobuf:"varint,4,opt,name=saluted_today,json=salutedToday,proto3" json:"saluted_today,omitempty"`
-	GoldAmount          uint64                  `protobuf:"varint,5,opt,name=gold_amount,json=goldAmount,proto3" json:"gold_amount,omitempty"`
-	Items               []*TournamentRewardItem `protobuf:"bytes,6,rep,name=items,proto3" json:"items,omitempty"`
-	MailId              uint64                  `protobuf:"varint,7,opt,name=mail_id,json=mailId,proto3" json:"mail_id,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
-}
-
-func (x *SaluteTournamentChampionResponse) Reset() {
-	*x = SaluteTournamentChampionResponse{}
-	mi := &file_proto_match_match_service_proto_msgTypes[82]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SaluteTournamentChampionResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SaluteTournamentChampionResponse) ProtoMessage() {}
-
-func (x *SaluteTournamentChampionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[82]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SaluteTournamentChampionResponse.ProtoReflect.Descriptor instead.
-func (*SaluteTournamentChampionResponse) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{82}
-}
-
-func (x *SaluteTournamentChampionResponse) GetErrorMessage() *base.TipInfoMessage {
-	if x != nil {
-		return x.ErrorMessage
-	}
-	return nil
-}
-
-func (x *SaluteTournamentChampionResponse) GetSeasonId() uint32 {
-	if x != nil {
-		return x.SeasonId
-	}
-	return 0
-}
-
-func (x *SaluteTournamentChampionResponse) GetChampionSaluteCount() uint64 {
-	if x != nil {
-		return x.ChampionSaluteCount
-	}
-	return 0
-}
-
-func (x *SaluteTournamentChampionResponse) GetSalutedToday() bool {
-	if x != nil {
-		return x.SalutedToday
-	}
-	return false
-}
-
-func (x *SaluteTournamentChampionResponse) GetGoldAmount() uint64 {
-	if x != nil {
-		return x.GoldAmount
-	}
-	return 0
-}
-
-func (x *SaluteTournamentChampionResponse) GetItems() []*TournamentRewardItem {
-	if x != nil {
-		return x.Items
-	}
-	return nil
-}
-
-func (x *SaluteTournamentChampionResponse) GetMailId() uint64 {
-	if x != nil {
-		return x.MailId
-	}
-	return 0
-}
-
 type TournamentSpectateCheerItem struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Seq           uint64                 `protobuf:"varint,1,opt,name=seq,proto3" json:"seq,omitempty"`                                // 本场递增序号(客户端按 seq 去重飘字)
@@ -7970,7 +7845,7 @@ type TournamentSpectateCheerItem struct {
 
 func (x *TournamentSpectateCheerItem) Reset() {
 	*x = TournamentSpectateCheerItem{}
-	mi := &file_proto_match_match_service_proto_msgTypes[83]
+	mi := &file_proto_match_match_service_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7982,7 +7857,7 @@ func (x *TournamentSpectateCheerItem) String() string {
 func (*TournamentSpectateCheerItem) ProtoMessage() {}
 
 func (x *TournamentSpectateCheerItem) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[83]
+	mi := &file_proto_match_match_service_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7995,7 +7870,7 @@ func (x *TournamentSpectateCheerItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TournamentSpectateCheerItem.ProtoReflect.Descriptor instead.
 func (*TournamentSpectateCheerItem) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{83}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *TournamentSpectateCheerItem) GetSeq() uint64 {
@@ -8044,7 +7919,7 @@ type SendTournamentSpectateCheerRequest struct {
 
 func (x *SendTournamentSpectateCheerRequest) Reset() {
 	*x = SendTournamentSpectateCheerRequest{}
-	mi := &file_proto_match_match_service_proto_msgTypes[84]
+	mi := &file_proto_match_match_service_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8056,7 +7931,7 @@ func (x *SendTournamentSpectateCheerRequest) String() string {
 func (*SendTournamentSpectateCheerRequest) ProtoMessage() {}
 
 func (x *SendTournamentSpectateCheerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[84]
+	mi := &file_proto_match_match_service_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8069,7 +7944,7 @@ func (x *SendTournamentSpectateCheerRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use SendTournamentSpectateCheerRequest.ProtoReflect.Descriptor instead.
 func (*SendTournamentSpectateCheerRequest) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{84}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *SendTournamentSpectateCheerRequest) GetBattleId() uint64 {
@@ -8108,7 +7983,7 @@ type SendTournamentSpectateCheerResponse struct {
 
 func (x *SendTournamentSpectateCheerResponse) Reset() {
 	*x = SendTournamentSpectateCheerResponse{}
-	mi := &file_proto_match_match_service_proto_msgTypes[85]
+	mi := &file_proto_match_match_service_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8120,7 +7995,7 @@ func (x *SendTournamentSpectateCheerResponse) String() string {
 func (*SendTournamentSpectateCheerResponse) ProtoMessage() {}
 
 func (x *SendTournamentSpectateCheerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[85]
+	mi := &file_proto_match_match_service_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8133,7 +8008,7 @@ func (x *SendTournamentSpectateCheerResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use SendTournamentSpectateCheerResponse.ProtoReflect.Descriptor instead.
 func (*SendTournamentSpectateCheerResponse) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{85}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *SendTournamentSpectateCheerResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -8195,7 +8070,7 @@ type GetTournamentSpectateCheerRequest struct {
 
 func (x *GetTournamentSpectateCheerRequest) Reset() {
 	*x = GetTournamentSpectateCheerRequest{}
-	mi := &file_proto_match_match_service_proto_msgTypes[86]
+	mi := &file_proto_match_match_service_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8207,7 +8082,7 @@ func (x *GetTournamentSpectateCheerRequest) String() string {
 func (*GetTournamentSpectateCheerRequest) ProtoMessage() {}
 
 func (x *GetTournamentSpectateCheerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[86]
+	mi := &file_proto_match_match_service_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8220,7 +8095,7 @@ func (x *GetTournamentSpectateCheerRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use GetTournamentSpectateCheerRequest.ProtoReflect.Descriptor instead.
 func (*GetTournamentSpectateCheerRequest) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{86}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *GetTournamentSpectateCheerRequest) GetBattleId() uint64 {
@@ -8252,7 +8127,7 @@ type GetTournamentSpectateCheerResponse struct {
 
 func (x *GetTournamentSpectateCheerResponse) Reset() {
 	*x = GetTournamentSpectateCheerResponse{}
-	mi := &file_proto_match_match_service_proto_msgTypes[87]
+	mi := &file_proto_match_match_service_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8264,7 +8139,7 @@ func (x *GetTournamentSpectateCheerResponse) String() string {
 func (*GetTournamentSpectateCheerResponse) ProtoMessage() {}
 
 func (x *GetTournamentSpectateCheerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[87]
+	mi := &file_proto_match_match_service_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8277,7 +8152,7 @@ func (x *GetTournamentSpectateCheerResponse) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use GetTournamentSpectateCheerResponse.ProtoReflect.Descriptor instead.
 func (*GetTournamentSpectateCheerResponse) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{87}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *GetTournamentSpectateCheerResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -8338,7 +8213,7 @@ type UpdateTournamentSquadEmblemRequest struct {
 
 func (x *UpdateTournamentSquadEmblemRequest) Reset() {
 	*x = UpdateTournamentSquadEmblemRequest{}
-	mi := &file_proto_match_match_service_proto_msgTypes[88]
+	mi := &file_proto_match_match_service_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8350,7 +8225,7 @@ func (x *UpdateTournamentSquadEmblemRequest) String() string {
 func (*UpdateTournamentSquadEmblemRequest) ProtoMessage() {}
 
 func (x *UpdateTournamentSquadEmblemRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[88]
+	mi := &file_proto_match_match_service_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8363,7 +8238,7 @@ func (x *UpdateTournamentSquadEmblemRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use UpdateTournamentSquadEmblemRequest.ProtoReflect.Descriptor instead.
 func (*UpdateTournamentSquadEmblemRequest) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{88}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *UpdateTournamentSquadEmblemRequest) GetEmblemId() uint32 {
@@ -8383,7 +8258,7 @@ type UpdateTournamentSquadEmblemResponse struct {
 
 func (x *UpdateTournamentSquadEmblemResponse) Reset() {
 	*x = UpdateTournamentSquadEmblemResponse{}
-	mi := &file_proto_match_match_service_proto_msgTypes[89]
+	mi := &file_proto_match_match_service_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8395,7 +8270,7 @@ func (x *UpdateTournamentSquadEmblemResponse) String() string {
 func (*UpdateTournamentSquadEmblemResponse) ProtoMessage() {}
 
 func (x *UpdateTournamentSquadEmblemResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[89]
+	mi := &file_proto_match_match_service_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8408,7 +8283,7 @@ func (x *UpdateTournamentSquadEmblemResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use UpdateTournamentSquadEmblemResponse.ProtoReflect.Descriptor instead.
 func (*UpdateTournamentSquadEmblemResponse) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{89}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *UpdateTournamentSquadEmblemResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -8436,7 +8311,7 @@ type StartTournamentWarmupRequest struct {
 
 func (x *StartTournamentWarmupRequest) Reset() {
 	*x = StartTournamentWarmupRequest{}
-	mi := &file_proto_match_match_service_proto_msgTypes[90]
+	mi := &file_proto_match_match_service_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8448,7 +8323,7 @@ func (x *StartTournamentWarmupRequest) String() string {
 func (*StartTournamentWarmupRequest) ProtoMessage() {}
 
 func (x *StartTournamentWarmupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[90]
+	mi := &file_proto_match_match_service_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8461,7 +8336,7 @@ func (x *StartTournamentWarmupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartTournamentWarmupRequest.ProtoReflect.Descriptor instead.
 func (*StartTournamentWarmupRequest) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{90}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *StartTournamentWarmupRequest) GetTargetSquadId() uint64 {
@@ -8496,7 +8371,7 @@ type StartTournamentWarmupResponse struct {
 
 func (x *StartTournamentWarmupResponse) Reset() {
 	*x = StartTournamentWarmupResponse{}
-	mi := &file_proto_match_match_service_proto_msgTypes[91]
+	mi := &file_proto_match_match_service_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8508,7 +8383,7 @@ func (x *StartTournamentWarmupResponse) String() string {
 func (*StartTournamentWarmupResponse) ProtoMessage() {}
 
 func (x *StartTournamentWarmupResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[91]
+	mi := &file_proto_match_match_service_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8521,7 +8396,7 @@ func (x *StartTournamentWarmupResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartTournamentWarmupResponse.ProtoReflect.Descriptor instead.
 func (*StartTournamentWarmupResponse) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{91}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *StartTournamentWarmupResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -8555,7 +8430,7 @@ type PredictTournamentMatchRequest struct {
 
 func (x *PredictTournamentMatchRequest) Reset() {
 	*x = PredictTournamentMatchRequest{}
-	mi := &file_proto_match_match_service_proto_msgTypes[92]
+	mi := &file_proto_match_match_service_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8567,7 +8442,7 @@ func (x *PredictTournamentMatchRequest) String() string {
 func (*PredictTournamentMatchRequest) ProtoMessage() {}
 
 func (x *PredictTournamentMatchRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[92]
+	mi := &file_proto_match_match_service_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8580,7 +8455,7 @@ func (x *PredictTournamentMatchRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PredictTournamentMatchRequest.ProtoReflect.Descriptor instead.
 func (*PredictTournamentMatchRequest) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{92}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *PredictTournamentMatchRequest) GetMatchId() uint64 {
@@ -8610,7 +8485,7 @@ type PredictTournamentMatchResponse struct {
 
 func (x *PredictTournamentMatchResponse) Reset() {
 	*x = PredictTournamentMatchResponse{}
-	mi := &file_proto_match_match_service_proto_msgTypes[93]
+	mi := &file_proto_match_match_service_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8622,7 +8497,7 @@ func (x *PredictTournamentMatchResponse) String() string {
 func (*PredictTournamentMatchResponse) ProtoMessage() {}
 
 func (x *PredictTournamentMatchResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[93]
+	mi := &file_proto_match_match_service_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8635,7 +8510,7 @@ func (x *PredictTournamentMatchResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PredictTournamentMatchResponse.ProtoReflect.Descriptor instead.
 func (*PredictTournamentMatchResponse) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{93}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *PredictTournamentMatchResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -8694,7 +8569,7 @@ type TournamentPredictionEntryView struct {
 
 func (x *TournamentPredictionEntryView) Reset() {
 	*x = TournamentPredictionEntryView{}
-	mi := &file_proto_match_match_service_proto_msgTypes[94]
+	mi := &file_proto_match_match_service_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8706,7 +8581,7 @@ func (x *TournamentPredictionEntryView) String() string {
 func (*TournamentPredictionEntryView) ProtoMessage() {}
 
 func (x *TournamentPredictionEntryView) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[94]
+	mi := &file_proto_match_match_service_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8719,7 +8594,7 @@ func (x *TournamentPredictionEntryView) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TournamentPredictionEntryView.ProtoReflect.Descriptor instead.
 func (*TournamentPredictionEntryView) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{94}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{92}
 }
 
 func (x *TournamentPredictionEntryView) GetMatchId() uint64 {
@@ -8827,7 +8702,7 @@ type TournamentPredictionRankEntry struct {
 
 func (x *TournamentPredictionRankEntry) Reset() {
 	*x = TournamentPredictionRankEntry{}
-	mi := &file_proto_match_match_service_proto_msgTypes[95]
+	mi := &file_proto_match_match_service_proto_msgTypes[93]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8839,7 +8714,7 @@ func (x *TournamentPredictionRankEntry) String() string {
 func (*TournamentPredictionRankEntry) ProtoMessage() {}
 
 func (x *TournamentPredictionRankEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[95]
+	mi := &file_proto_match_match_service_proto_msgTypes[93]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8852,7 +8727,7 @@ func (x *TournamentPredictionRankEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TournamentPredictionRankEntry.ProtoReflect.Descriptor instead.
 func (*TournamentPredictionRankEntry) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{95}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{93}
 }
 
 func (x *TournamentPredictionRankEntry) GetRank() uint32 {
@@ -8906,7 +8781,7 @@ type GetTournamentPredictionBoardRequest struct {
 
 func (x *GetTournamentPredictionBoardRequest) Reset() {
 	*x = GetTournamentPredictionBoardRequest{}
-	mi := &file_proto_match_match_service_proto_msgTypes[96]
+	mi := &file_proto_match_match_service_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8918,7 +8793,7 @@ func (x *GetTournamentPredictionBoardRequest) String() string {
 func (*GetTournamentPredictionBoardRequest) ProtoMessage() {}
 
 func (x *GetTournamentPredictionBoardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[96]
+	mi := &file_proto_match_match_service_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8931,7 +8806,7 @@ func (x *GetTournamentPredictionBoardRequest) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use GetTournamentPredictionBoardRequest.ProtoReflect.Descriptor instead.
 func (*GetTournamentPredictionBoardRequest) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{96}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{94}
 }
 
 func (x *GetTournamentPredictionBoardRequest) GetSeasonId() uint32 {
@@ -8958,7 +8833,7 @@ type GetTournamentPredictionBoardResponse struct {
 
 func (x *GetTournamentPredictionBoardResponse) Reset() {
 	*x = GetTournamentPredictionBoardResponse{}
-	mi := &file_proto_match_match_service_proto_msgTypes[97]
+	mi := &file_proto_match_match_service_proto_msgTypes[95]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8970,7 +8845,7 @@ func (x *GetTournamentPredictionBoardResponse) String() string {
 func (*GetTournamentPredictionBoardResponse) ProtoMessage() {}
 
 func (x *GetTournamentPredictionBoardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[97]
+	mi := &file_proto_match_match_service_proto_msgTypes[95]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8983,7 +8858,7 @@ func (x *GetTournamentPredictionBoardResponse) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use GetTournamentPredictionBoardResponse.ProtoReflect.Descriptor instead.
 func (*GetTournamentPredictionBoardResponse) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{97}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{95}
 }
 
 func (x *GetTournamentPredictionBoardResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -9059,7 +8934,7 @@ type BanTournamentLeylineRequest struct {
 
 func (x *BanTournamentLeylineRequest) Reset() {
 	*x = BanTournamentLeylineRequest{}
-	mi := &file_proto_match_match_service_proto_msgTypes[98]
+	mi := &file_proto_match_match_service_proto_msgTypes[96]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9071,7 +8946,7 @@ func (x *BanTournamentLeylineRequest) String() string {
 func (*BanTournamentLeylineRequest) ProtoMessage() {}
 
 func (x *BanTournamentLeylineRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[98]
+	mi := &file_proto_match_match_service_proto_msgTypes[96]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9084,7 +8959,7 @@ func (x *BanTournamentLeylineRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BanTournamentLeylineRequest.ProtoReflect.Descriptor instead.
 func (*BanTournamentLeylineRequest) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{98}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{96}
 }
 
 func (x *BanTournamentLeylineRequest) GetMatchId() uint64 {
@@ -9111,7 +8986,7 @@ type BanTournamentLeylineResponse struct {
 
 func (x *BanTournamentLeylineResponse) Reset() {
 	*x = BanTournamentLeylineResponse{}
-	mi := &file_proto_match_match_service_proto_msgTypes[99]
+	mi := &file_proto_match_match_service_proto_msgTypes[97]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9123,7 +8998,7 @@ func (x *BanTournamentLeylineResponse) String() string {
 func (*BanTournamentLeylineResponse) ProtoMessage() {}
 
 func (x *BanTournamentLeylineResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[99]
+	mi := &file_proto_match_match_service_proto_msgTypes[97]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9136,7 +9011,7 @@ func (x *BanTournamentLeylineResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BanTournamentLeylineResponse.ProtoReflect.Descriptor instead.
 func (*BanTournamentLeylineResponse) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{99}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{97}
 }
 
 func (x *BanTournamentLeylineResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -9164,7 +9039,7 @@ type TournamentHighlightEntry struct {
 
 func (x *TournamentHighlightEntry) Reset() {
 	*x = TournamentHighlightEntry{}
-	mi := &file_proto_match_match_service_proto_msgTypes[100]
+	mi := &file_proto_match_match_service_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9176,7 +9051,7 @@ func (x *TournamentHighlightEntry) String() string {
 func (*TournamentHighlightEntry) ProtoMessage() {}
 
 func (x *TournamentHighlightEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[100]
+	mi := &file_proto_match_match_service_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9189,7 +9064,7 @@ func (x *TournamentHighlightEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TournamentHighlightEntry.ProtoReflect.Descriptor instead.
 func (*TournamentHighlightEntry) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{100}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{98}
 }
 
 func (x *TournamentHighlightEntry) GetTag() TournamentHighlightTag {
@@ -9222,7 +9097,7 @@ type GetTournamentHighlightsRequest struct {
 
 func (x *GetTournamentHighlightsRequest) Reset() {
 	*x = GetTournamentHighlightsRequest{}
-	mi := &file_proto_match_match_service_proto_msgTypes[101]
+	mi := &file_proto_match_match_service_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9234,7 +9109,7 @@ func (x *GetTournamentHighlightsRequest) String() string {
 func (*GetTournamentHighlightsRequest) ProtoMessage() {}
 
 func (x *GetTournamentHighlightsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[101]
+	mi := &file_proto_match_match_service_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9247,7 +9122,7 @@ func (x *GetTournamentHighlightsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTournamentHighlightsRequest.ProtoReflect.Descriptor instead.
 func (*GetTournamentHighlightsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{101}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{99}
 }
 
 func (x *GetTournamentHighlightsRequest) GetSeasonId() uint32 {
@@ -9269,7 +9144,7 @@ type GetTournamentHighlightsResponse struct {
 
 func (x *GetTournamentHighlightsResponse) Reset() {
 	*x = GetTournamentHighlightsResponse{}
-	mi := &file_proto_match_match_service_proto_msgTypes[102]
+	mi := &file_proto_match_match_service_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9281,7 +9156,7 @@ func (x *GetTournamentHighlightsResponse) String() string {
 func (*GetTournamentHighlightsResponse) ProtoMessage() {}
 
 func (x *GetTournamentHighlightsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[102]
+	mi := &file_proto_match_match_service_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9294,7 +9169,7 @@ func (x *GetTournamentHighlightsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTournamentHighlightsResponse.ProtoReflect.Descriptor instead.
 func (*GetTournamentHighlightsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{102}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *GetTournamentHighlightsResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -9336,7 +9211,7 @@ type JianghuDuelMemberView struct {
 
 func (x *JianghuDuelMemberView) Reset() {
 	*x = JianghuDuelMemberView{}
-	mi := &file_proto_match_match_service_proto_msgTypes[103]
+	mi := &file_proto_match_match_service_proto_msgTypes[101]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9348,7 +9223,7 @@ func (x *JianghuDuelMemberView) String() string {
 func (*JianghuDuelMemberView) ProtoMessage() {}
 
 func (x *JianghuDuelMemberView) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[103]
+	mi := &file_proto_match_match_service_proto_msgTypes[101]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9361,7 +9236,7 @@ func (x *JianghuDuelMemberView) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JianghuDuelMemberView.ProtoReflect.Descriptor instead.
 func (*JianghuDuelMemberView) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{103}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{101}
 }
 
 func (x *JianghuDuelMemberView) GetPlayerId() uint64 {
@@ -9412,7 +9287,7 @@ type JianghuDuelInviteView struct {
 
 func (x *JianghuDuelInviteView) Reset() {
 	*x = JianghuDuelInviteView{}
-	mi := &file_proto_match_match_service_proto_msgTypes[104]
+	mi := &file_proto_match_match_service_proto_msgTypes[102]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9424,7 +9299,7 @@ func (x *JianghuDuelInviteView) String() string {
 func (*JianghuDuelInviteView) ProtoMessage() {}
 
 func (x *JianghuDuelInviteView) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[104]
+	mi := &file_proto_match_match_service_proto_msgTypes[102]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9437,7 +9312,7 @@ func (x *JianghuDuelInviteView) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JianghuDuelInviteView.ProtoReflect.Descriptor instead.
 func (*JianghuDuelInviteView) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{104}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{102}
 }
 
 func (x *JianghuDuelInviteView) GetDuelInviteId() uint64 {
@@ -9585,7 +9460,7 @@ type CreateJianghuDuelInviteRequest struct {
 
 func (x *CreateJianghuDuelInviteRequest) Reset() {
 	*x = CreateJianghuDuelInviteRequest{}
-	mi := &file_proto_match_match_service_proto_msgTypes[105]
+	mi := &file_proto_match_match_service_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9597,7 +9472,7 @@ func (x *CreateJianghuDuelInviteRequest) String() string {
 func (*CreateJianghuDuelInviteRequest) ProtoMessage() {}
 
 func (x *CreateJianghuDuelInviteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[105]
+	mi := &file_proto_match_match_service_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9610,7 +9485,7 @@ func (x *CreateJianghuDuelInviteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateJianghuDuelInviteRequest.ProtoReflect.Descriptor instead.
 func (*CreateJianghuDuelInviteRequest) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{105}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{103}
 }
 
 func (x *CreateJianghuDuelInviteRequest) GetTargetPlayerId() uint64 {
@@ -9651,7 +9526,7 @@ type CreateJianghuDuelInviteResponse struct {
 
 func (x *CreateJianghuDuelInviteResponse) Reset() {
 	*x = CreateJianghuDuelInviteResponse{}
-	mi := &file_proto_match_match_service_proto_msgTypes[106]
+	mi := &file_proto_match_match_service_proto_msgTypes[104]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9663,7 +9538,7 @@ func (x *CreateJianghuDuelInviteResponse) String() string {
 func (*CreateJianghuDuelInviteResponse) ProtoMessage() {}
 
 func (x *CreateJianghuDuelInviteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[106]
+	mi := &file_proto_match_match_service_proto_msgTypes[104]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9676,7 +9551,7 @@ func (x *CreateJianghuDuelInviteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateJianghuDuelInviteResponse.ProtoReflect.Descriptor instead.
 func (*CreateJianghuDuelInviteResponse) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{106}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{104}
 }
 
 func (x *CreateJianghuDuelInviteResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -9703,7 +9578,7 @@ type ConfirmJianghuDuelMemberRequest struct {
 
 func (x *ConfirmJianghuDuelMemberRequest) Reset() {
 	*x = ConfirmJianghuDuelMemberRequest{}
-	mi := &file_proto_match_match_service_proto_msgTypes[107]
+	mi := &file_proto_match_match_service_proto_msgTypes[105]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9715,7 +9590,7 @@ func (x *ConfirmJianghuDuelMemberRequest) String() string {
 func (*ConfirmJianghuDuelMemberRequest) ProtoMessage() {}
 
 func (x *ConfirmJianghuDuelMemberRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[107]
+	mi := &file_proto_match_match_service_proto_msgTypes[105]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9728,7 +9603,7 @@ func (x *ConfirmJianghuDuelMemberRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmJianghuDuelMemberRequest.ProtoReflect.Descriptor instead.
 func (*ConfirmJianghuDuelMemberRequest) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{107}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{105}
 }
 
 func (x *ConfirmJianghuDuelMemberRequest) GetDuelInviteId() uint64 {
@@ -9755,7 +9630,7 @@ type ConfirmJianghuDuelMemberResponse struct {
 
 func (x *ConfirmJianghuDuelMemberResponse) Reset() {
 	*x = ConfirmJianghuDuelMemberResponse{}
-	mi := &file_proto_match_match_service_proto_msgTypes[108]
+	mi := &file_proto_match_match_service_proto_msgTypes[106]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9767,7 +9642,7 @@ func (x *ConfirmJianghuDuelMemberResponse) String() string {
 func (*ConfirmJianghuDuelMemberResponse) ProtoMessage() {}
 
 func (x *ConfirmJianghuDuelMemberResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[108]
+	mi := &file_proto_match_match_service_proto_msgTypes[106]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9780,7 +9655,7 @@ func (x *ConfirmJianghuDuelMemberResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmJianghuDuelMemberResponse.ProtoReflect.Descriptor instead.
 func (*ConfirmJianghuDuelMemberResponse) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{108}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{106}
 }
 
 func (x *ConfirmJianghuDuelMemberResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -9807,7 +9682,7 @@ type RespondJianghuDuelInviteRequest struct {
 
 func (x *RespondJianghuDuelInviteRequest) Reset() {
 	*x = RespondJianghuDuelInviteRequest{}
-	mi := &file_proto_match_match_service_proto_msgTypes[109]
+	mi := &file_proto_match_match_service_proto_msgTypes[107]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9819,7 +9694,7 @@ func (x *RespondJianghuDuelInviteRequest) String() string {
 func (*RespondJianghuDuelInviteRequest) ProtoMessage() {}
 
 func (x *RespondJianghuDuelInviteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[109]
+	mi := &file_proto_match_match_service_proto_msgTypes[107]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9832,7 +9707,7 @@ func (x *RespondJianghuDuelInviteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RespondJianghuDuelInviteRequest.ProtoReflect.Descriptor instead.
 func (*RespondJianghuDuelInviteRequest) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{109}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{107}
 }
 
 func (x *RespondJianghuDuelInviteRequest) GetDuelInviteId() uint64 {
@@ -9859,7 +9734,7 @@ type RespondJianghuDuelInviteResponse struct {
 
 func (x *RespondJianghuDuelInviteResponse) Reset() {
 	*x = RespondJianghuDuelInviteResponse{}
-	mi := &file_proto_match_match_service_proto_msgTypes[110]
+	mi := &file_proto_match_match_service_proto_msgTypes[108]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9871,7 +9746,7 @@ func (x *RespondJianghuDuelInviteResponse) String() string {
 func (*RespondJianghuDuelInviteResponse) ProtoMessage() {}
 
 func (x *RespondJianghuDuelInviteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[110]
+	mi := &file_proto_match_match_service_proto_msgTypes[108]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9884,7 +9759,7 @@ func (x *RespondJianghuDuelInviteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RespondJianghuDuelInviteResponse.ProtoReflect.Descriptor instead.
 func (*RespondJianghuDuelInviteResponse) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{110}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{108}
 }
 
 func (x *RespondJianghuDuelInviteResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -9915,7 +9790,7 @@ type JianghuGrudgeBattleLogEntry struct {
 
 func (x *JianghuGrudgeBattleLogEntry) Reset() {
 	*x = JianghuGrudgeBattleLogEntry{}
-	mi := &file_proto_match_match_service_proto_msgTypes[111]
+	mi := &file_proto_match_match_service_proto_msgTypes[109]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9927,7 +9802,7 @@ func (x *JianghuGrudgeBattleLogEntry) String() string {
 func (*JianghuGrudgeBattleLogEntry) ProtoMessage() {}
 
 func (x *JianghuGrudgeBattleLogEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[111]
+	mi := &file_proto_match_match_service_proto_msgTypes[109]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9940,7 +9815,7 @@ func (x *JianghuGrudgeBattleLogEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JianghuGrudgeBattleLogEntry.ProtoReflect.Descriptor instead.
 func (*JianghuGrudgeBattleLogEntry) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{111}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{109}
 }
 
 func (x *JianghuGrudgeBattleLogEntry) GetBattleId() uint64 {
@@ -10003,7 +9878,7 @@ type JianghuGrudgeEntry struct {
 
 func (x *JianghuGrudgeEntry) Reset() {
 	*x = JianghuGrudgeEntry{}
-	mi := &file_proto_match_match_service_proto_msgTypes[112]
+	mi := &file_proto_match_match_service_proto_msgTypes[110]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10015,7 +9890,7 @@ func (x *JianghuGrudgeEntry) String() string {
 func (*JianghuGrudgeEntry) ProtoMessage() {}
 
 func (x *JianghuGrudgeEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[112]
+	mi := &file_proto_match_match_service_proto_msgTypes[110]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10028,7 +9903,7 @@ func (x *JianghuGrudgeEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JianghuGrudgeEntry.ProtoReflect.Descriptor instead.
 func (*JianghuGrudgeEntry) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{112}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{110}
 }
 
 func (x *JianghuGrudgeEntry) GetPeerPlayerId() uint64 {
@@ -10109,7 +9984,7 @@ type ListJianghuGrudgesRequest struct {
 
 func (x *ListJianghuGrudgesRequest) Reset() {
 	*x = ListJianghuGrudgesRequest{}
-	mi := &file_proto_match_match_service_proto_msgTypes[113]
+	mi := &file_proto_match_match_service_proto_msgTypes[111]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10121,7 +9996,7 @@ func (x *ListJianghuGrudgesRequest) String() string {
 func (*ListJianghuGrudgesRequest) ProtoMessage() {}
 
 func (x *ListJianghuGrudgesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[113]
+	mi := &file_proto_match_match_service_proto_msgTypes[111]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10134,7 +10009,7 @@ func (x *ListJianghuGrudgesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListJianghuGrudgesRequest.ProtoReflect.Descriptor instead.
 func (*ListJianghuGrudgesRequest) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{113}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{111}
 }
 
 type ListJianghuGrudgesResponse struct {
@@ -10149,7 +10024,7 @@ type ListJianghuGrudgesResponse struct {
 
 func (x *ListJianghuGrudgesResponse) Reset() {
 	*x = ListJianghuGrudgesResponse{}
-	mi := &file_proto_match_match_service_proto_msgTypes[114]
+	mi := &file_proto_match_match_service_proto_msgTypes[112]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10161,7 +10036,7 @@ func (x *ListJianghuGrudgesResponse) String() string {
 func (*ListJianghuGrudgesResponse) ProtoMessage() {}
 
 func (x *ListJianghuGrudgesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[114]
+	mi := &file_proto_match_match_service_proto_msgTypes[112]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10174,7 +10049,7 @@ func (x *ListJianghuGrudgesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListJianghuGrudgesResponse.ProtoReflect.Descriptor instead.
 func (*ListJianghuGrudgesResponse) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{114}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{112}
 }
 
 func (x *ListJianghuGrudgesResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -10214,7 +10089,7 @@ type DismissJianghuGrudgeRequest struct {
 
 func (x *DismissJianghuGrudgeRequest) Reset() {
 	*x = DismissJianghuGrudgeRequest{}
-	mi := &file_proto_match_match_service_proto_msgTypes[115]
+	mi := &file_proto_match_match_service_proto_msgTypes[113]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10226,7 +10101,7 @@ func (x *DismissJianghuGrudgeRequest) String() string {
 func (*DismissJianghuGrudgeRequest) ProtoMessage() {}
 
 func (x *DismissJianghuGrudgeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[115]
+	mi := &file_proto_match_match_service_proto_msgTypes[113]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10239,7 +10114,7 @@ func (x *DismissJianghuGrudgeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DismissJianghuGrudgeRequest.ProtoReflect.Descriptor instead.
 func (*DismissJianghuGrudgeRequest) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{115}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{113}
 }
 
 func (x *DismissJianghuGrudgeRequest) GetPeerPlayerId() uint64 {
@@ -10258,7 +10133,7 @@ type DismissJianghuGrudgeResponse struct {
 
 func (x *DismissJianghuGrudgeResponse) Reset() {
 	*x = DismissJianghuGrudgeResponse{}
-	mi := &file_proto_match_match_service_proto_msgTypes[116]
+	mi := &file_proto_match_match_service_proto_msgTypes[114]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10270,7 +10145,7 @@ func (x *DismissJianghuGrudgeResponse) String() string {
 func (*DismissJianghuGrudgeResponse) ProtoMessage() {}
 
 func (x *DismissJianghuGrudgeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[116]
+	mi := &file_proto_match_match_service_proto_msgTypes[114]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10283,7 +10158,7 @@ func (x *DismissJianghuGrudgeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DismissJianghuGrudgeResponse.ProtoReflect.Descriptor instead.
 func (*DismissJianghuGrudgeResponse) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{116}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{114}
 }
 
 func (x *DismissJianghuGrudgeResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -10302,7 +10177,7 @@ type JianghuDuelInviteS2C struct {
 
 func (x *JianghuDuelInviteS2C) Reset() {
 	*x = JianghuDuelInviteS2C{}
-	mi := &file_proto_match_match_service_proto_msgTypes[117]
+	mi := &file_proto_match_match_service_proto_msgTypes[115]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10314,7 +10189,7 @@ func (x *JianghuDuelInviteS2C) String() string {
 func (*JianghuDuelInviteS2C) ProtoMessage() {}
 
 func (x *JianghuDuelInviteS2C) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[117]
+	mi := &file_proto_match_match_service_proto_msgTypes[115]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10327,7 +10202,7 @@ func (x *JianghuDuelInviteS2C) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JianghuDuelInviteS2C.ProtoReflect.Descriptor instead.
 func (*JianghuDuelInviteS2C) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{117}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{115}
 }
 
 func (x *JianghuDuelInviteS2C) GetInvite() *JianghuDuelInviteView {
@@ -10347,7 +10222,7 @@ type JianghuDuelStatusS2C struct {
 
 func (x *JianghuDuelStatusS2C) Reset() {
 	*x = JianghuDuelStatusS2C{}
-	mi := &file_proto_match_match_service_proto_msgTypes[118]
+	mi := &file_proto_match_match_service_proto_msgTypes[116]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10359,7 +10234,7 @@ func (x *JianghuDuelStatusS2C) String() string {
 func (*JianghuDuelStatusS2C) ProtoMessage() {}
 
 func (x *JianghuDuelStatusS2C) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_service_proto_msgTypes[118]
+	mi := &file_proto_match_match_service_proto_msgTypes[116]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10372,7 +10247,7 @@ func (x *JianghuDuelStatusS2C) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JianghuDuelStatusS2C.ProtoReflect.Descriptor instead.
 func (*JianghuDuelStatusS2C) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_service_proto_rawDescGZIP(), []int{118}
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{116}
 }
 
 func (x *JianghuDuelStatusS2C) GetInvite() *JianghuDuelInviteView {
@@ -10389,11 +10264,455 @@ func (x *JianghuDuelStatusS2C) GetReasonCode() string {
 	return ""
 }
 
+type TrialChallengeCardView struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	CardId            uint64                 `protobuf:"varint,1,opt,name=card_id,json=cardId,proto3" json:"card_id,omitempty"`
+	OwnerPlayerId     uint64                 `protobuf:"varint,2,opt,name=owner_player_id,json=ownerPlayerId,proto3" json:"owner_player_id,omitempty"`
+	OwnerName         string                 `protobuf:"bytes,3,opt,name=owner_name,json=ownerName,proto3" json:"owner_name,omitempty"`
+	BattleId          uint64                 `protobuf:"varint,4,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	JournalEntryId    uint32                 `protobuf:"varint,5,opt,name=journal_entry_id,json=journalEntryId,proto3" json:"journal_entry_id,omitempty"`
+	TrialRuleVersion  uint32                 `protobuf:"varint,6,opt,name=trial_rule_version,json=trialRuleVersion,proto3" json:"trial_rule_version,omitempty"`
+	VowMask           uint32                 `protobuf:"varint,7,opt,name=vow_mask,json=vowMask,proto3" json:"vow_mask,omitempty"`
+	TotalRounds       uint32                 `protobuf:"varint,8,opt,name=total_rounds,json=totalRounds,proto3" json:"total_rounds,omitempty"`
+	PartySize         uint32                 `protobuf:"varint,9,opt,name=party_size,json=partySize,proto3" json:"party_size,omitempty"`
+	PetTableId        uint32                 `protobuf:"varint,10,opt,name=pet_table_id,json=petTableId,proto3" json:"pet_table_id,omitempty"`
+	ArtifactEffectIds []uint32               `protobuf:"varint,11,rep,packed,name=artifact_effect_ids,json=artifactEffectIds,proto3" json:"artifact_effect_ids,omitempty"`
+	SeasonSealId      uint32                 `protobuf:"varint,12,opt,name=season_seal_id,json=seasonSealId,proto3" json:"season_seal_id,omitempty"`
+	HasReplay         bool                   `protobuf:"varint,13,opt,name=has_replay,json=hasReplay,proto3" json:"has_replay,omitempty"`
+	CreatedMs         uint64                 `protobuf:"varint,14,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	ExpiresMs         uint64                 `protobuf:"varint,15,opt,name=expires_ms,json=expiresMs,proto3" json:"expires_ms,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *TrialChallengeCardView) Reset() {
+	*x = TrialChallengeCardView{}
+	mi := &file_proto_match_match_service_proto_msgTypes[117]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrialChallengeCardView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrialChallengeCardView) ProtoMessage() {}
+
+func (x *TrialChallengeCardView) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[117]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrialChallengeCardView.ProtoReflect.Descriptor instead.
+func (*TrialChallengeCardView) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{117}
+}
+
+func (x *TrialChallengeCardView) GetCardId() uint64 {
+	if x != nil {
+		return x.CardId
+	}
+	return 0
+}
+
+func (x *TrialChallengeCardView) GetOwnerPlayerId() uint64 {
+	if x != nil {
+		return x.OwnerPlayerId
+	}
+	return 0
+}
+
+func (x *TrialChallengeCardView) GetOwnerName() string {
+	if x != nil {
+		return x.OwnerName
+	}
+	return ""
+}
+
+func (x *TrialChallengeCardView) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *TrialChallengeCardView) GetJournalEntryId() uint32 {
+	if x != nil {
+		return x.JournalEntryId
+	}
+	return 0
+}
+
+func (x *TrialChallengeCardView) GetTrialRuleVersion() uint32 {
+	if x != nil {
+		return x.TrialRuleVersion
+	}
+	return 0
+}
+
+func (x *TrialChallengeCardView) GetVowMask() uint32 {
+	if x != nil {
+		return x.VowMask
+	}
+	return 0
+}
+
+func (x *TrialChallengeCardView) GetTotalRounds() uint32 {
+	if x != nil {
+		return x.TotalRounds
+	}
+	return 0
+}
+
+func (x *TrialChallengeCardView) GetPartySize() uint32 {
+	if x != nil {
+		return x.PartySize
+	}
+	return 0
+}
+
+func (x *TrialChallengeCardView) GetPetTableId() uint32 {
+	if x != nil {
+		return x.PetTableId
+	}
+	return 0
+}
+
+func (x *TrialChallengeCardView) GetArtifactEffectIds() []uint32 {
+	if x != nil {
+		return x.ArtifactEffectIds
+	}
+	return nil
+}
+
+func (x *TrialChallengeCardView) GetSeasonSealId() uint32 {
+	if x != nil {
+		return x.SeasonSealId
+	}
+	return 0
+}
+
+func (x *TrialChallengeCardView) GetHasReplay() bool {
+	if x != nil {
+		return x.HasReplay
+	}
+	return false
+}
+
+func (x *TrialChallengeCardView) GetCreatedMs() uint64 {
+	if x != nil {
+		return x.CreatedMs
+	}
+	return 0
+}
+
+func (x *TrialChallengeCardView) GetExpiresMs() uint64 {
+	if x != nil {
+		return x.ExpiresMs
+	}
+	return 0
+}
+
+type CreateTrialChallengeCardRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BattleId      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateTrialChallengeCardRequest) Reset() {
+	*x = CreateTrialChallengeCardRequest{}
+	mi := &file_proto_match_match_service_proto_msgTypes[118]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateTrialChallengeCardRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateTrialChallengeCardRequest) ProtoMessage() {}
+
+func (x *CreateTrialChallengeCardRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[118]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateTrialChallengeCardRequest.ProtoReflect.Descriptor instead.
+func (*CreateTrialChallengeCardRequest) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{118}
+}
+
+func (x *CreateTrialChallengeCardRequest) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+type CreateTrialChallengeCardResponse struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage    `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Card          *TrialChallengeCardView `protobuf:"bytes,2,opt,name=card,proto3" json:"card,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateTrialChallengeCardResponse) Reset() {
+	*x = CreateTrialChallengeCardResponse{}
+	mi := &file_proto_match_match_service_proto_msgTypes[119]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateTrialChallengeCardResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateTrialChallengeCardResponse) ProtoMessage() {}
+
+func (x *CreateTrialChallengeCardResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[119]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateTrialChallengeCardResponse.ProtoReflect.Descriptor instead.
+func (*CreateTrialChallengeCardResponse) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{119}
+}
+
+func (x *CreateTrialChallengeCardResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *CreateTrialChallengeCardResponse) GetCard() *TrialChallengeCardView {
+	if x != nil {
+		return x.Card
+	}
+	return nil
+}
+
+type GetTrialChallengeCardRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CardId        uint64                 `protobuf:"varint,1,opt,name=card_id,json=cardId,proto3" json:"card_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetTrialChallengeCardRequest) Reset() {
+	*x = GetTrialChallengeCardRequest{}
+	mi := &file_proto_match_match_service_proto_msgTypes[120]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetTrialChallengeCardRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTrialChallengeCardRequest) ProtoMessage() {}
+
+func (x *GetTrialChallengeCardRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[120]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTrialChallengeCardRequest.ProtoReflect.Descriptor instead.
+func (*GetTrialChallengeCardRequest) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{120}
+}
+
+func (x *GetTrialChallengeCardRequest) GetCardId() uint64 {
+	if x != nil {
+		return x.CardId
+	}
+	return 0
+}
+
+type GetTrialChallengeCardResponse struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage    `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Card          *TrialChallengeCardView `protobuf:"bytes,2,opt,name=card,proto3" json:"card,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetTrialChallengeCardResponse) Reset() {
+	*x = GetTrialChallengeCardResponse{}
+	mi := &file_proto_match_match_service_proto_msgTypes[121]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetTrialChallengeCardResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTrialChallengeCardResponse) ProtoMessage() {}
+
+func (x *GetTrialChallengeCardResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[121]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTrialChallengeCardResponse.ProtoReflect.Descriptor instead.
+func (*GetTrialChallengeCardResponse) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{121}
+}
+
+func (x *GetTrialChallengeCardResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *GetTrialChallengeCardResponse) GetCard() *TrialChallengeCardView {
+	if x != nil {
+		return x.Card
+	}
+	return nil
+}
+
+type GetSharedTrialReplayRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CardId        uint64                 `protobuf:"varint,1,opt,name=card_id,json=cardId,proto3" json:"card_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSharedTrialReplayRequest) Reset() {
+	*x = GetSharedTrialReplayRequest{}
+	mi := &file_proto_match_match_service_proto_msgTypes[122]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSharedTrialReplayRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSharedTrialReplayRequest) ProtoMessage() {}
+
+func (x *GetSharedTrialReplayRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[122]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSharedTrialReplayRequest.ProtoReflect.Descriptor instead.
+func (*GetSharedTrialReplayRequest) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{122}
+}
+
+func (x *GetSharedTrialReplayRequest) GetCardId() uint64 {
+	if x != nil {
+		return x.CardId
+	}
+	return 0
+}
+
+type GetSharedTrialReplayResponse struct {
+	state         protoimpl.MessageState       `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage         `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Replay        *battle.BattleReplayEnvelope `protobuf:"bytes,2,opt,name=replay,proto3" json:"replay,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSharedTrialReplayResponse) Reset() {
+	*x = GetSharedTrialReplayResponse{}
+	mi := &file_proto_match_match_service_proto_msgTypes[123]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSharedTrialReplayResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSharedTrialReplayResponse) ProtoMessage() {}
+
+func (x *GetSharedTrialReplayResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_service_proto_msgTypes[123]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSharedTrialReplayResponse.ProtoReflect.Descriptor instead.
+func (*GetSharedTrialReplayResponse) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_service_proto_rawDescGZIP(), []int{123}
+}
+
+func (x *GetSharedTrialReplayResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *GetSharedTrialReplayResponse) GetReplay() *battle.BattleReplayEnvelope {
+	if x != nil {
+		return x.Replay
+	}
+	return nil
+}
+
 var File_proto_match_match_service_proto protoreflect.FileDescriptor
 
 const file_proto_match_match_service_proto_rawDesc = "" +
 	"\n" +
-	"\x1fproto/match/match_service.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1bproto/common/base/tip.proto\x1a proto/battle/player_battle.proto\x1a\x1eproto/battle/battle_data.proto\x1a proto/battle/battle_script.proto\x1a\x1fproto/match/match_network.proto\"\xfa\x03\n" +
+	"\x1fproto/match/match_service.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1bproto/common/base/tip.proto\x1a proto/battle/player_battle.proto\x1a\x1eproto/battle/battle_data.proto\x1a proto/battle/battle_script.proto\x1a\x1fproto/match/match_network.proto\"\xa0\x04\n" +
 	"\x10JoinQueueRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12$\n" +
 	"\x04mode\x18\x02 \x01(\x0e2\x10.match.MatchModeR\x04mode\x12\"\n" +
@@ -10409,7 +10728,8 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	" \x01(\rR\x11characterPresetId\x12\"\n" +
 	"\rpet_preset_id\x18\v \x01(\rR\vpetPresetId\x12.\n" +
 	"\x13ranked_rule_version\x18\f \x01(\rR\x11rankedRuleVersion\x12&\n" +
-	"\x0fis_wuxing_tower\x18\r \x01(\bR\risWuxingTower\"\x8b\x01\n" +
+	"\x0fis_wuxing_tower\x18\r \x01(\bR\risWuxingTower\x12$\n" +
+	"\x0etrial_vow_mask\x18\x0e \x01(\rR\ftrialVowMask\"\x8b\x01\n" +
 	"\x11JoinQueueResponse\x12\x1d\n" +
 	"\n" +
 	"error_code\x18\x01 \x01(\rR\terrorCode\x12!\n" +
@@ -10480,14 +10800,16 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\rR\x05limit\"S\n" +
 	"\x1cListWatchableBattlesResponse\x123\n" +
-	"\abattles\x18\x01 \x03(\v2\x19.match.BattleWatchSummaryR\abattles\"\xe4\x01\n" +
+	"\abattles\x18\x01 \x03(\v2\x19.match.BattleWatchSummaryR\abattles\"\xc7\x02\n" +
 	"\x12BattleWatchSummary\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12$\n" +
 	"\x04mode\x18\x02 \x01(\x0e2\x10.match.MatchModeR\x04mode\x12(\n" +
 	"\x10battle_config_id\x18\x03 \x01(\rR\x0ebattleConfigId\x12!\n" +
 	"\fplayer_names\x18\x04 \x03(\tR\vplayerNames\x12\"\n" +
 	"\rcreated_at_ms\x18\x05 \x01(\x04R\vcreatedAtMs\x12\x1a\n" +
-	"\bfeatured\x18\x06 \x01(\bR\bfeatured\"\xbf\x02\n" +
+	"\bfeatured\x18\x06 \x01(\bR\bfeatured\x12(\n" +
+	"\x10ranked_team_size\x18\a \x01(\rR\x0erankedTeamSize\x127\n" +
+	"\x18ranked_peak_rating_centi\x18\b \x01(\x03R\x15rankedPeakRatingCenti\"\xbf\x02\n" +
 	"\x14SpectateBattleRecord\x123\n" +
 	"\asummary\x18\x01 \x01(\v2\x19.match.BattleWatchSummaryR\asummary\x12$\n" +
 	"\x0ebattle_node_id\x18\x02 \x01(\rR\fbattleNodeId\x124\n" +
@@ -10753,7 +11075,7 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\"\x90\x01\n" +
 	"\x1dGetRankedBattleResultResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x129\n" +
-	"\x06result\x18\x02 \x01(\v2!.match.RankedBattleSettlementViewR\x06result\"\xd4\v\n" +
+	"\x06result\x18\x02 \x01(\v2!.match.RankedBattleSettlementViewR\x06result\"\xad\v\n" +
 	"\x14TournamentSeasonView\x12\x1b\n" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x1d\n" +
 	"\n" +
@@ -10779,9 +11101,7 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\x06end_ms\x18\x13 \x01(\x04R\x05endMs\x12*\n" +
 	"\x11champion_squad_id\x18\x14 \x01(\x04R\x0fchampionSquadId\x12.\n" +
 	"\x13champion_squad_name\x18\x15 \x01(\tR\x11championSquadName\x126\n" +
-	"\x17champion_member_summary\x18\x16 \x01(\tR\x15championMemberSummary\x122\n" +
-	"\x15champion_salute_count\x18\x17 \x01(\x04R\x13championSaluteCount\x12#\n" +
-	"\rsaluted_today\x18\x18 \x01(\bR\fsalutedToday\x12F\n" +
+	"\x17champion_member_summary\x18\x16 \x01(\tR\x15championMemberSummary\x12F\n" +
 	"\x10champion_members\x18\x19 \x03(\v2\x1b.match.TournamentMemberViewR\x0fchampionMembers\x12,\n" +
 	"\x12champion_emblem_id\x18\x1a \x01(\rR\x10championEmblemId\x12/\n" +
 	"\x14third_place_squad_id\x18\x1b \x01(\x04R\x11thirdPlaceSquadId\x123\n" +
@@ -10790,7 +11110,7 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\x13final_mvp_player_id\x18\x1e \x01(\x04R\x10finalMvpPlayerId\x121\n" +
 	"\x15final_mvp_player_name\x18\x1f \x01(\tR\x12finalMvpPlayerName\x12&\n" +
 	"\x0ffinal_mvp_score\x18  \x01(\rR\rfinalMvpScore\x12.\n" +
-	"\x13champion_honor_bits\x18! \x01(\rR\x11championHonorBits\"\xb6\x02\n" +
+	"\x13champion_honor_bits\x18! \x01(\rR\x11championHonorBitsJ\x04\b\x17\x10\x18J\x04\b\x18\x10\x19R\x15champion_salute_countR\rsaluted_today\"\xb6\x02\n" +
 	"\x14TournamentMemberView\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1f\n" +
 	"\vplayer_name\x18\x02 \x01(\tR\n" +
@@ -11013,18 +11333,7 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\"\xa1\x01\n" +
 	"\x1dClaimTournamentRewardResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12J\n" +
-	"\x0fclaimed_rewards\x18\x02 \x03(\v2!.match.TournamentPlayerRewardViewR\x0eclaimedRewards\">\n" +
-	"\x1fSaluteTournamentChampionRequest\x12\x1b\n" +
-	"\tseason_id\x18\x01 \x01(\rR\bseasonId\"\xbb\x02\n" +
-	" SaluteTournamentChampionResponse\x124\n" +
-	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x1b\n" +
-	"\tseason_id\x18\x02 \x01(\rR\bseasonId\x122\n" +
-	"\x15champion_salute_count\x18\x03 \x01(\x04R\x13championSaluteCount\x12#\n" +
-	"\rsaluted_today\x18\x04 \x01(\bR\fsalutedToday\x12\x1f\n" +
-	"\vgold_amount\x18\x05 \x01(\x04R\n" +
-	"goldAmount\x121\n" +
-	"\x05items\x18\x06 \x03(\v2\x1b.match.TournamentRewardItemR\x05items\x12\x17\n" +
-	"\amail_id\x18\a \x01(\x04R\x06mailId\"\xa0\x01\n" +
+	"\x0fclaimed_rewards\x18\x02 \x03(\v2!.match.TournamentPlayerRewardViewR\x0eclaimedRewards\"\xa0\x01\n" +
 	"\x1bTournamentSpectateCheerItem\x12\x10\n" +
 	"\x03seq\x18\x01 \x01(\x04R\x03seq\x12\x1b\n" +
 	"\tphrase_id\x18\x02 \x01(\rR\bphraseId\x12\x12\n" +
@@ -11223,7 +11532,45 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\x14JianghuDuelStatusS2C\x124\n" +
 	"\x06invite\x18\x01 \x01(\v2\x1c.match.JianghuDuelInviteViewR\x06invite\x12\x1f\n" +
 	"\vreason_code\x18\x02 \x01(\tR\n" +
-	"reasonCode*\xe6\x02\n" +
+	"reasonCode\"\x9f\x04\n" +
+	"\x16TrialChallengeCardView\x12\x17\n" +
+	"\acard_id\x18\x01 \x01(\x04R\x06cardId\x12&\n" +
+	"\x0fowner_player_id\x18\x02 \x01(\x04R\rownerPlayerId\x12\x1d\n" +
+	"\n" +
+	"owner_name\x18\x03 \x01(\tR\townerName\x12\x1b\n" +
+	"\tbattle_id\x18\x04 \x01(\x04R\bbattleId\x12(\n" +
+	"\x10journal_entry_id\x18\x05 \x01(\rR\x0ejournalEntryId\x12,\n" +
+	"\x12trial_rule_version\x18\x06 \x01(\rR\x10trialRuleVersion\x12\x19\n" +
+	"\bvow_mask\x18\a \x01(\rR\avowMask\x12!\n" +
+	"\ftotal_rounds\x18\b \x01(\rR\vtotalRounds\x12\x1d\n" +
+	"\n" +
+	"party_size\x18\t \x01(\rR\tpartySize\x12 \n" +
+	"\fpet_table_id\x18\n" +
+	" \x01(\rR\n" +
+	"petTableId\x12.\n" +
+	"\x13artifact_effect_ids\x18\v \x03(\rR\x11artifactEffectIds\x12$\n" +
+	"\x0eseason_seal_id\x18\f \x01(\rR\fseasonSealId\x12\x1d\n" +
+	"\n" +
+	"has_replay\x18\r \x01(\bR\thasReplay\x12\x1d\n" +
+	"\n" +
+	"created_ms\x18\x0e \x01(\x04R\tcreatedMs\x12\x1d\n" +
+	"\n" +
+	"expires_ms\x18\x0f \x01(\x04R\texpiresMs\">\n" +
+	"\x1fCreateTrialChallengeCardRequest\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\"\x8b\x01\n" +
+	" CreateTrialChallengeCardResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x121\n" +
+	"\x04card\x18\x02 \x01(\v2\x1d.match.TrialChallengeCardViewR\x04card\"7\n" +
+	"\x1cGetTrialChallengeCardRequest\x12\x17\n" +
+	"\acard_id\x18\x01 \x01(\x04R\x06cardId\"\x88\x01\n" +
+	"\x1dGetTrialChallengeCardResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x121\n" +
+	"\x04card\x18\x02 \x01(\v2\x1d.match.TrialChallengeCardViewR\x04card\"6\n" +
+	"\x1bGetSharedTrialReplayRequest\x12\x17\n" +
+	"\acard_id\x18\x01 \x01(\x04R\x06cardId\"\x83\x01\n" +
+	"\x1cGetSharedTrialReplayResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12-\n" +
+	"\x06replay\x18\x02 \x01(\v2\x15.BattleReplayEnvelopeR\x06replay*\xe6\x02\n" +
 	"\tMatchMode\x12\x1a\n" +
 	"\x16MATCH_MODE_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eMATCH_MODE_5V5\x10\x01\x12\x12\n" +
@@ -11359,7 +11706,7 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	".JIANGHU_DUEL_INVITE_STATE_AWAITING_TARGET_TEAM\x10\x03\x12%\n" +
 	"!JIANGHU_DUEL_INVITE_STATE_MATCHED\x10\x04\x12&\n" +
 	"\"JIANGHU_DUEL_INVITE_STATE_DECLINED\x10\x05\x12%\n" +
-	"!JIANGHU_DUEL_INVITE_STATE_ABORTED\x10\x062\xe1$\n" +
+	"!JIANGHU_DUEL_INVITE_STATE_ABORTED\x10\x062\xaa&\n" +
 	"\fMatchService\x12^\n" +
 	"\x13GetNetworkProbePlan\x12!.match.GetNetworkProbePlanRequest\x1a\".match.GetNetworkProbePlanResponse\"\x00\x12[\n" +
 	"\x12CommitNetworkProbe\x12 .match.CommitNetworkProbeRequest\x1a!.match.CommitNetworkProbeResponse\"\x00\x12@\n" +
@@ -11393,8 +11740,7 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\x17ListTournamentStandings\x12%.match.ListTournamentStandingsRequest\x1a&.match.ListTournamentStandingsResponse\"\x00\x12a\n" +
 	"\x14StartTournamentMatch\x12\".match.StartTournamentMatchRequest\x1a#.match.StartTournamentMatchResponse\"\x00\x12a\n" +
 	"\x14CheerTournamentSquad\x12\".match.CheerTournamentSquadRequest\x1a#.match.CheerTournamentSquadResponse\"\x00\x12d\n" +
-	"\x15ClaimTournamentReward\x12#.match.ClaimTournamentRewardRequest\x1a$.match.ClaimTournamentRewardResponse\"\x00\x12m\n" +
-	"\x18SaluteTournamentChampion\x12&.match.SaluteTournamentChampionRequest\x1a'.match.SaluteTournamentChampionResponse\"\x00\x12v\n" +
+	"\x15ClaimTournamentReward\x12#.match.ClaimTournamentRewardRequest\x1a$.match.ClaimTournamentRewardResponse\"\x00\x12v\n" +
 	"\x1bSendTournamentSpectateCheer\x12).match.SendTournamentSpectateCheerRequest\x1a*.match.SendTournamentSpectateCheerResponse\"\x00\x12s\n" +
 	"\x1aGetTournamentSpectateCheer\x12(.match.GetTournamentSpectateCheerRequest\x1a).match.GetTournamentSpectateCheerResponse\"\x00\x12v\n" +
 	"\x1bUpdateTournamentSquadEmblem\x12).match.UpdateTournamentSquadEmblemRequest\x1a*.match.UpdateTournamentSquadEmblemResponse\"\x00\x12d\n" +
@@ -11409,7 +11755,10 @@ const file_proto_match_match_service_proto_rawDesc = "" +
 	"\x12ListJianghuGrudges\x12 .match.ListJianghuGrudgesRequest\x1a!.match.ListJianghuGrudgesResponse\"\x00\x12a\n" +
 	"\x14DismissJianghuGrudge\x12\".match.DismissJianghuGrudgeRequest\x1a#.match.DismissJianghuGrudgeResponse\"\x00\x12E\n" +
 	"\x17NotifyJianghuDuelInvite\x12\x1b.match.JianghuDuelInviteS2C\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x12E\n" +
-	"\x17NotifyJianghuDuelStatus\x12\x1b.match.JianghuDuelStatusS2C\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x1a\x05\x88\xa8\xc3\x01\x01B\x11\x98\xd4a\x15Z\vproto/matchb\x06proto3"
+	"\x17NotifyJianghuDuelStatus\x12\x1b.match.JianghuDuelStatusS2C\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x12m\n" +
+	"\x18CreateTrialChallengeCard\x12&.match.CreateTrialChallengeCardRequest\x1a'.match.CreateTrialChallengeCardResponse\"\x00\x12d\n" +
+	"\x15GetTrialChallengeCard\x12#.match.GetTrialChallengeCardRequest\x1a$.match.GetTrialChallengeCardResponse\"\x00\x12a\n" +
+	"\x14GetSharedTrialReplay\x12\".match.GetSharedTrialReplayRequest\x1a#.match.GetSharedTrialReplayResponse\"\x00\x1a\x05\x88\xa8\xc3\x01\x01B\x11\x98\xd4a\x15Z\vproto/matchb\x06proto3"
 
 var (
 	file_proto_match_match_service_proto_rawDescOnce sync.Once
@@ -11424,7 +11773,7 @@ func file_proto_match_match_service_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_match_match_service_proto_enumTypes = make([]protoimpl.EnumInfo, 19)
-var file_proto_match_match_service_proto_msgTypes = make([]protoimpl.MessageInfo, 119)
+var file_proto_match_match_service_proto_msgTypes = make([]protoimpl.MessageInfo, 124)
 var file_proto_match_match_service_proto_goTypes = []any{
 	(MatchMode)(0),                               // 0: match.MatchMode
 	(QueueState)(0),                              // 1: match.QueueState
@@ -11526,113 +11875,118 @@ var file_proto_match_match_service_proto_goTypes = []any{
 	(*CheerTournamentSquadResponse)(nil),         // 97: match.CheerTournamentSquadResponse
 	(*ClaimTournamentRewardRequest)(nil),         // 98: match.ClaimTournamentRewardRequest
 	(*ClaimTournamentRewardResponse)(nil),        // 99: match.ClaimTournamentRewardResponse
-	(*SaluteTournamentChampionRequest)(nil),      // 100: match.SaluteTournamentChampionRequest
-	(*SaluteTournamentChampionResponse)(nil),     // 101: match.SaluteTournamentChampionResponse
-	(*TournamentSpectateCheerItem)(nil),          // 102: match.TournamentSpectateCheerItem
-	(*SendTournamentSpectateCheerRequest)(nil),   // 103: match.SendTournamentSpectateCheerRequest
-	(*SendTournamentSpectateCheerResponse)(nil),  // 104: match.SendTournamentSpectateCheerResponse
-	(*GetTournamentSpectateCheerRequest)(nil),    // 105: match.GetTournamentSpectateCheerRequest
-	(*GetTournamentSpectateCheerResponse)(nil),   // 106: match.GetTournamentSpectateCheerResponse
-	(*UpdateTournamentSquadEmblemRequest)(nil),   // 107: match.UpdateTournamentSquadEmblemRequest
-	(*UpdateTournamentSquadEmblemResponse)(nil),  // 108: match.UpdateTournamentSquadEmblemResponse
-	(*StartTournamentWarmupRequest)(nil),         // 109: match.StartTournamentWarmupRequest
-	(*StartTournamentWarmupResponse)(nil),        // 110: match.StartTournamentWarmupResponse
-	(*PredictTournamentMatchRequest)(nil),        // 111: match.PredictTournamentMatchRequest
-	(*PredictTournamentMatchResponse)(nil),       // 112: match.PredictTournamentMatchResponse
-	(*TournamentPredictionEntryView)(nil),        // 113: match.TournamentPredictionEntryView
-	(*TournamentPredictionRankEntry)(nil),        // 114: match.TournamentPredictionRankEntry
-	(*GetTournamentPredictionBoardRequest)(nil),  // 115: match.GetTournamentPredictionBoardRequest
-	(*GetTournamentPredictionBoardResponse)(nil), // 116: match.GetTournamentPredictionBoardResponse
-	(*BanTournamentLeylineRequest)(nil),          // 117: match.BanTournamentLeylineRequest
-	(*BanTournamentLeylineResponse)(nil),         // 118: match.BanTournamentLeylineResponse
-	(*TournamentHighlightEntry)(nil),             // 119: match.TournamentHighlightEntry
-	(*GetTournamentHighlightsRequest)(nil),       // 120: match.GetTournamentHighlightsRequest
-	(*GetTournamentHighlightsResponse)(nil),      // 121: match.GetTournamentHighlightsResponse
-	(*JianghuDuelMemberView)(nil),                // 122: match.JianghuDuelMemberView
-	(*JianghuDuelInviteView)(nil),                // 123: match.JianghuDuelInviteView
-	(*CreateJianghuDuelInviteRequest)(nil),       // 124: match.CreateJianghuDuelInviteRequest
-	(*CreateJianghuDuelInviteResponse)(nil),      // 125: match.CreateJianghuDuelInviteResponse
-	(*ConfirmJianghuDuelMemberRequest)(nil),      // 126: match.ConfirmJianghuDuelMemberRequest
-	(*ConfirmJianghuDuelMemberResponse)(nil),     // 127: match.ConfirmJianghuDuelMemberResponse
-	(*RespondJianghuDuelInviteRequest)(nil),      // 128: match.RespondJianghuDuelInviteRequest
-	(*RespondJianghuDuelInviteResponse)(nil),     // 129: match.RespondJianghuDuelInviteResponse
-	(*JianghuGrudgeBattleLogEntry)(nil),          // 130: match.JianghuGrudgeBattleLogEntry
-	(*JianghuGrudgeEntry)(nil),                   // 131: match.JianghuGrudgeEntry
-	(*ListJianghuGrudgesRequest)(nil),            // 132: match.ListJianghuGrudgesRequest
-	(*ListJianghuGrudgesResponse)(nil),           // 133: match.ListJianghuGrudgesResponse
-	(*DismissJianghuGrudgeRequest)(nil),          // 134: match.DismissJianghuGrudgeRequest
-	(*DismissJianghuGrudgeResponse)(nil),         // 135: match.DismissJianghuGrudgeResponse
-	(*JianghuDuelInviteS2C)(nil),                 // 136: match.JianghuDuelInviteS2C
-	(*JianghuDuelStatusS2C)(nil),                 // 137: match.JianghuDuelStatusS2C
-	(*base.TipInfoMessage)(nil),                  // 138: TipInfoMessage
-	(*battle.CustomDuelRules)(nil),               // 139: CustomDuelRules
-	(battle.ESpectateVisibility)(0),              // 140: eSpectateVisibility
-	(battle.ESpectateTier)(0),                    // 141: eSpectateTier
-	(battle.EBattleOutcome)(0),                   // 142: eBattleOutcome
-	(*battle.BattleReplayEnvelope)(nil),          // 143: BattleReplayEnvelope
-	(*battle.BattleScript)(nil),                  // 144: BattleScript
-	(battle.EBattleScriptOrigin)(0),              // 145: eBattleScriptOrigin
-	(*battle.RankedPresetSelection)(nil),         // 146: RankedPresetSelection
-	(battle.TournamentLeylineElement)(0),         // 147: TournamentLeylineElement
-	(*GetNetworkProbePlanRequest)(nil),           // 148: match.GetNetworkProbePlanRequest
-	(*CommitNetworkProbeRequest)(nil),            // 149: match.CommitNetworkProbeRequest
-	(*battle.RequestBattleTicketRequest)(nil),    // 150: RequestBattleTicketRequest
-	(*GetNetworkProbePlanResponse)(nil),          // 151: match.GetNetworkProbePlanResponse
-	(*CommitNetworkProbeResponse)(nil),           // 152: match.CommitNetworkProbeResponse
-	(*base.Empty)(nil),                           // 153: Empty
-	(*battle.RequestBattleTicketResponse)(nil),   // 154: RequestBattleTicketResponse
+	(*TournamentSpectateCheerItem)(nil),          // 100: match.TournamentSpectateCheerItem
+	(*SendTournamentSpectateCheerRequest)(nil),   // 101: match.SendTournamentSpectateCheerRequest
+	(*SendTournamentSpectateCheerResponse)(nil),  // 102: match.SendTournamentSpectateCheerResponse
+	(*GetTournamentSpectateCheerRequest)(nil),    // 103: match.GetTournamentSpectateCheerRequest
+	(*GetTournamentSpectateCheerResponse)(nil),   // 104: match.GetTournamentSpectateCheerResponse
+	(*UpdateTournamentSquadEmblemRequest)(nil),   // 105: match.UpdateTournamentSquadEmblemRequest
+	(*UpdateTournamentSquadEmblemResponse)(nil),  // 106: match.UpdateTournamentSquadEmblemResponse
+	(*StartTournamentWarmupRequest)(nil),         // 107: match.StartTournamentWarmupRequest
+	(*StartTournamentWarmupResponse)(nil),        // 108: match.StartTournamentWarmupResponse
+	(*PredictTournamentMatchRequest)(nil),        // 109: match.PredictTournamentMatchRequest
+	(*PredictTournamentMatchResponse)(nil),       // 110: match.PredictTournamentMatchResponse
+	(*TournamentPredictionEntryView)(nil),        // 111: match.TournamentPredictionEntryView
+	(*TournamentPredictionRankEntry)(nil),        // 112: match.TournamentPredictionRankEntry
+	(*GetTournamentPredictionBoardRequest)(nil),  // 113: match.GetTournamentPredictionBoardRequest
+	(*GetTournamentPredictionBoardResponse)(nil), // 114: match.GetTournamentPredictionBoardResponse
+	(*BanTournamentLeylineRequest)(nil),          // 115: match.BanTournamentLeylineRequest
+	(*BanTournamentLeylineResponse)(nil),         // 116: match.BanTournamentLeylineResponse
+	(*TournamentHighlightEntry)(nil),             // 117: match.TournamentHighlightEntry
+	(*GetTournamentHighlightsRequest)(nil),       // 118: match.GetTournamentHighlightsRequest
+	(*GetTournamentHighlightsResponse)(nil),      // 119: match.GetTournamentHighlightsResponse
+	(*JianghuDuelMemberView)(nil),                // 120: match.JianghuDuelMemberView
+	(*JianghuDuelInviteView)(nil),                // 121: match.JianghuDuelInviteView
+	(*CreateJianghuDuelInviteRequest)(nil),       // 122: match.CreateJianghuDuelInviteRequest
+	(*CreateJianghuDuelInviteResponse)(nil),      // 123: match.CreateJianghuDuelInviteResponse
+	(*ConfirmJianghuDuelMemberRequest)(nil),      // 124: match.ConfirmJianghuDuelMemberRequest
+	(*ConfirmJianghuDuelMemberResponse)(nil),     // 125: match.ConfirmJianghuDuelMemberResponse
+	(*RespondJianghuDuelInviteRequest)(nil),      // 126: match.RespondJianghuDuelInviteRequest
+	(*RespondJianghuDuelInviteResponse)(nil),     // 127: match.RespondJianghuDuelInviteResponse
+	(*JianghuGrudgeBattleLogEntry)(nil),          // 128: match.JianghuGrudgeBattleLogEntry
+	(*JianghuGrudgeEntry)(nil),                   // 129: match.JianghuGrudgeEntry
+	(*ListJianghuGrudgesRequest)(nil),            // 130: match.ListJianghuGrudgesRequest
+	(*ListJianghuGrudgesResponse)(nil),           // 131: match.ListJianghuGrudgesResponse
+	(*DismissJianghuGrudgeRequest)(nil),          // 132: match.DismissJianghuGrudgeRequest
+	(*DismissJianghuGrudgeResponse)(nil),         // 133: match.DismissJianghuGrudgeResponse
+	(*JianghuDuelInviteS2C)(nil),                 // 134: match.JianghuDuelInviteS2C
+	(*JianghuDuelStatusS2C)(nil),                 // 135: match.JianghuDuelStatusS2C
+	(*TrialChallengeCardView)(nil),               // 136: match.TrialChallengeCardView
+	(*CreateTrialChallengeCardRequest)(nil),      // 137: match.CreateTrialChallengeCardRequest
+	(*CreateTrialChallengeCardResponse)(nil),     // 138: match.CreateTrialChallengeCardResponse
+	(*GetTrialChallengeCardRequest)(nil),         // 139: match.GetTrialChallengeCardRequest
+	(*GetTrialChallengeCardResponse)(nil),        // 140: match.GetTrialChallengeCardResponse
+	(*GetSharedTrialReplayRequest)(nil),          // 141: match.GetSharedTrialReplayRequest
+	(*GetSharedTrialReplayResponse)(nil),         // 142: match.GetSharedTrialReplayResponse
+	(*base.TipInfoMessage)(nil),                  // 143: TipInfoMessage
+	(*battle.CustomDuelRules)(nil),               // 144: CustomDuelRules
+	(battle.ESpectateVisibility)(0),              // 145: eSpectateVisibility
+	(battle.ESpectateTier)(0),                    // 146: eSpectateTier
+	(battle.EBattleOutcome)(0),                   // 147: eBattleOutcome
+	(*battle.BattleReplayEnvelope)(nil),          // 148: BattleReplayEnvelope
+	(*battle.BattleScript)(nil),                  // 149: BattleScript
+	(battle.EBattleScriptOrigin)(0),              // 150: eBattleScriptOrigin
+	(*battle.RankedPresetSelection)(nil),         // 151: RankedPresetSelection
+	(battle.TournamentLeylineElement)(0),         // 152: TournamentLeylineElement
+	(*GetNetworkProbePlanRequest)(nil),           // 153: match.GetNetworkProbePlanRequest
+	(*CommitNetworkProbeRequest)(nil),            // 154: match.CommitNetworkProbeRequest
+	(*battle.RequestBattleTicketRequest)(nil),    // 155: RequestBattleTicketRequest
+	(*GetNetworkProbePlanResponse)(nil),          // 156: match.GetNetworkProbePlanResponse
+	(*CommitNetworkProbeResponse)(nil),           // 157: match.CommitNetworkProbeResponse
+	(*base.Empty)(nil),                           // 158: Empty
+	(*battle.RequestBattleTicketResponse)(nil),   // 159: RequestBattleTicketResponse
 }
 var file_proto_match_match_service_proto_depIdxs = []int32{
 	0,   // 0: match.JoinQueueRequest.mode:type_name -> match.MatchMode
-	138, // 1: match.JoinQueueResponse.error_message:type_name -> TipInfoMessage
+	143, // 1: match.JoinQueueResponse.error_message:type_name -> TipInfoMessage
 	1,   // 2: match.GetQueueStatusResponse.state:type_name -> match.QueueState
-	139, // 3: match.ChallengePlayerRequest.custom_rules:type_name -> CustomDuelRules
-	138, // 4: match.ChallengePlayerResponse.error_message:type_name -> TipInfoMessage
-	138, // 5: match.RespondChallengeResponse.error_message:type_name -> TipInfoMessage
-	139, // 6: match.ChallengeInviteS2C.custom_rules:type_name -> CustomDuelRules
-	138, // 7: match.WatchBattleResponse.error_message:type_name -> TipInfoMessage
+	144, // 3: match.ChallengePlayerRequest.custom_rules:type_name -> CustomDuelRules
+	143, // 4: match.ChallengePlayerResponse.error_message:type_name -> TipInfoMessage
+	143, // 5: match.RespondChallengeResponse.error_message:type_name -> TipInfoMessage
+	144, // 6: match.ChallengeInviteS2C.custom_rules:type_name -> CustomDuelRules
+	143, // 7: match.WatchBattleResponse.error_message:type_name -> TipInfoMessage
 	2,   // 8: match.WatchBattleResponse.delivery:type_name -> match.eSpectateDelivery
 	34,  // 9: match.ListWatchableBattlesResponse.battles:type_name -> match.BattleWatchSummary
 	0,   // 10: match.BattleWatchSummary.mode:type_name -> match.MatchMode
 	34,  // 11: match.SpectateBattleRecord.summary:type_name -> match.BattleWatchSummary
-	140, // 12: match.SpectateBattleRecord.visibility:type_name -> eSpectateVisibility
-	141, // 13: match.SpectateBattleRecord.tier:type_name -> eSpectateTier
+	145, // 12: match.SpectateBattleRecord.visibility:type_name -> eSpectateVisibility
+	146, // 13: match.SpectateBattleRecord.tier:type_name -> eSpectateTier
 	0,   // 14: match.MatchResult.mode:type_name -> match.MatchMode
 	37,  // 15: match.MatchResult.teams:type_name -> match.MatchTeam
 	0,   // 16: match.BattleReportSummary.mode:type_name -> match.MatchMode
-	142, // 17: match.BattleReportSummary.outcome:type_name -> eBattleOutcome
+	147, // 17: match.BattleReportSummary.outcome:type_name -> eBattleOutcome
 	38,  // 18: match.BattleReportSummary.members:type_name -> match.BattleReportMember
-	138, // 19: match.ListBattleReportsResponse.error_message:type_name -> TipInfoMessage
+	143, // 19: match.ListBattleReportsResponse.error_message:type_name -> TipInfoMessage
 	39,  // 20: match.ListBattleReportsResponse.reports:type_name -> match.BattleReportSummary
-	138, // 21: match.GetBattleReportResponse.error_message:type_name -> TipInfoMessage
-	143, // 22: match.GetBattleReportResponse.replay:type_name -> BattleReplayEnvelope
-	144, // 23: match.PlayerBattleScriptView.content:type_name -> BattleScript
+	143, // 21: match.GetBattleReportResponse.error_message:type_name -> TipInfoMessage
+	148, // 22: match.GetBattleReportResponse.replay:type_name -> BattleReplayEnvelope
+	149, // 23: match.PlayerBattleScriptView.content:type_name -> BattleScript
 	3,   // 24: match.PlayerBattleScriptView.review_state:type_name -> match.BattleScriptReviewState
-	145, // 25: match.BattleScriptLoadoutEntry.origin:type_name -> eBattleScriptOrigin
-	138, // 26: match.ListBattleScriptsResponse.error_message:type_name -> TipInfoMessage
-	144, // 27: match.ListBattleScriptsResponse.official_scripts:type_name -> BattleScript
+	150, // 25: match.BattleScriptLoadoutEntry.origin:type_name -> eBattleScriptOrigin
+	143, // 26: match.ListBattleScriptsResponse.error_message:type_name -> TipInfoMessage
+	149, // 27: match.ListBattleScriptsResponse.official_scripts:type_name -> BattleScript
 	44,  // 28: match.ListBattleScriptsResponse.my_scripts:type_name -> match.PlayerBattleScriptView
 	45,  // 29: match.ListBattleScriptsResponse.loadout:type_name -> match.BattleScriptLoadoutEntry
-	144, // 30: match.SubmitBattleScriptRequest.script:type_name -> BattleScript
-	138, // 31: match.SubmitBattleScriptResponse.error_message:type_name -> TipInfoMessage
+	149, // 30: match.SubmitBattleScriptRequest.script:type_name -> BattleScript
+	143, // 31: match.SubmitBattleScriptResponse.error_message:type_name -> TipInfoMessage
 	44,  // 32: match.SubmitBattleScriptResponse.script:type_name -> match.PlayerBattleScriptView
-	138, // 33: match.DeleteBattleScriptResponse.error_message:type_name -> TipInfoMessage
+	143, // 33: match.DeleteBattleScriptResponse.error_message:type_name -> TipInfoMessage
 	45,  // 34: match.SetBattleScriptLoadoutRequest.entry:type_name -> match.BattleScriptLoadoutEntry
-	138, // 35: match.SetBattleScriptLoadoutResponse.error_message:type_name -> TipInfoMessage
+	143, // 35: match.SetBattleScriptLoadoutResponse.error_message:type_name -> TipInfoMessage
 	45,  // 36: match.SetBattleScriptLoadoutResponse.loadout:type_name -> match.BattleScriptLoadoutEntry
 	6,   // 37: match.RankedRewardEntitlement.kind:type_name -> match.RankedRewardKind
 	5,   // 38: match.RankedSeasonInfo.state:type_name -> match.RankedSeasonState
 	4,   // 39: match.RankedPlayerSeasonSummary.current_tier:type_name -> match.RankedTier
 	4,   // 40: match.RankedPlayerSeasonSummary.peak_tier:type_name -> match.RankedTier
 	7,   // 41: match.RankedBattleSettlementView.status:type_name -> match.RankedMatchRatingStatus
-	142, // 42: match.RankedBattleSettlementView.outcome:type_name -> eBattleOutcome
+	147, // 42: match.RankedBattleSettlementView.outcome:type_name -> eBattleOutcome
 	4,   // 43: match.RankedBattleSettlementView.tier_before:type_name -> match.RankedTier
 	4,   // 44: match.RankedBattleSettlementView.tier_after:type_name -> match.RankedTier
 	55,  // 45: match.RankedBattleSettlementView.newly_unlocked_rewards:type_name -> match.RankedRewardEntitlement
-	138, // 46: match.GetRankedProfileResponse.error_message:type_name -> TipInfoMessage
+	143, // 46: match.GetRankedProfileResponse.error_message:type_name -> TipInfoMessage
 	57,  // 47: match.GetRankedProfileResponse.current_season:type_name -> match.RankedSeasonInfo
 	58,  // 48: match.GetRankedProfileResponse.current_progress:type_name -> match.RankedPlayerSeasonSummary
-	146, // 49: match.GetRankedProfileResponse.selected_presets:type_name -> RankedPresetSelection
+	151, // 49: match.GetRankedProfileResponse.selected_presets:type_name -> RankedPresetSelection
 	56,  // 50: match.GetRankedProfileResponse.cosmetic_loadout:type_name -> match.RankedCosmeticLoadout
 	54,  // 51: match.GetRankedProfileResponse.presets:type_name -> match.RankedPresetView
 	55,  // 52: match.GetRankedProfileResponse.entitlements:type_name -> match.RankedRewardEntitlement
@@ -11640,12 +11994,12 @@ var file_proto_match_match_service_proto_depIdxs = []int32{
 	57,  // 54: match.GetRankedProfileResponse.past_seasons:type_name -> match.RankedSeasonInfo
 	61,  // 55: match.GetRankedProfileResponse.featured_builds:type_name -> match.RankedFeaturedBuildView
 	60,  // 56: match.GetRankedProfileResponse.top_rivals:type_name -> match.RankedRivalrySummary
-	138, // 57: match.SaveRankedPresetResponse.error_message:type_name -> TipInfoMessage
-	146, // 58: match.SaveRankedPresetResponse.selected_presets:type_name -> RankedPresetSelection
+	143, // 57: match.SaveRankedPresetResponse.error_message:type_name -> TipInfoMessage
+	151, // 58: match.SaveRankedPresetResponse.selected_presets:type_name -> RankedPresetSelection
 	56,  // 59: match.UpdateRankedCosmeticRequest.loadout:type_name -> match.RankedCosmeticLoadout
-	138, // 60: match.UpdateRankedCosmeticResponse.error_message:type_name -> TipInfoMessage
+	143, // 60: match.UpdateRankedCosmeticResponse.error_message:type_name -> TipInfoMessage
 	56,  // 61: match.UpdateRankedCosmeticResponse.loadout:type_name -> match.RankedCosmeticLoadout
-	138, // 62: match.GetRankedBattleResultResponse.error_message:type_name -> TipInfoMessage
+	143, // 62: match.GetRankedBattleResultResponse.error_message:type_name -> TipInfoMessage
 	59,  // 63: match.GetRankedBattleResultResponse.result:type_name -> match.RankedBattleSettlementView
 	8,   // 64: match.TournamentSeasonView.stage:type_name -> match.TournamentStage
 	71,  // 65: match.TournamentSeasonView.champion_members:type_name -> match.TournamentMemberView
@@ -11654,17 +12008,17 @@ var file_proto_match_match_service_proto_depIdxs = []int32{
 	71,  // 68: match.TournamentSquadView.members:type_name -> match.TournamentMemberView
 	11,  // 69: match.TournamentMatchView.phase:type_name -> match.TournamentMatchPhase
 	13,  // 70: match.TournamentMatchView.state:type_name -> match.TournamentMatchState
-	142, // 71: match.TournamentMatchView.outcome:type_name -> eBattleOutcome
-	147, // 72: match.TournamentMatchView.current_leyline_element:type_name -> TournamentLeylineElement
-	147, // 73: match.TournamentMatchView.leyline_sequence:type_name -> TournamentLeylineElement
-	147, // 74: match.TournamentMatchView.banned_leyline_a:type_name -> TournamentLeylineElement
-	147, // 75: match.TournamentMatchView.banned_leyline_b:type_name -> TournamentLeylineElement
+	147, // 71: match.TournamentMatchView.outcome:type_name -> eBattleOutcome
+	152, // 72: match.TournamentMatchView.current_leyline_element:type_name -> TournamentLeylineElement
+	152, // 73: match.TournamentMatchView.leyline_sequence:type_name -> TournamentLeylineElement
+	152, // 74: match.TournamentMatchView.banned_leyline_a:type_name -> TournamentLeylineElement
+	152, // 75: match.TournamentMatchView.banned_leyline_b:type_name -> TournamentLeylineElement
 	14,  // 76: match.TournamentRewardTierView.tier_kind:type_name -> match.TournamentRewardTierKind
 	75,  // 77: match.TournamentRewardTierView.items:type_name -> match.TournamentRewardItem
 	14,  // 78: match.TournamentPlayerRewardView.tier_kind:type_name -> match.TournamentRewardTierKind
 	75,  // 79: match.TournamentPlayerRewardView.items:type_name -> match.TournamentRewardItem
 	15,  // 80: match.TournamentPlayerRewardView.delivery_state:type_name -> match.TournamentRewardDeliveryState
-	138, // 81: match.GetTournamentOverviewResponse.error_message:type_name -> TipInfoMessage
+	143, // 81: match.GetTournamentOverviewResponse.error_message:type_name -> TipInfoMessage
 	70,  // 82: match.GetTournamentOverviewResponse.current_season:type_name -> match.TournamentSeasonView
 	72,  // 83: match.GetTournamentOverviewResponse.my_squad:type_name -> match.TournamentSquadView
 	73,  // 84: match.GetTournamentOverviewResponse.pending_invites:type_name -> match.TournamentInviteView
@@ -11673,172 +12027,180 @@ var file_proto_match_match_service_proto_depIdxs = []int32{
 	76,  // 87: match.GetTournamentOverviewResponse.reward_tiers:type_name -> match.TournamentRewardTierView
 	77,  // 88: match.GetTournamentOverviewResponse.my_rewards:type_name -> match.TournamentPlayerRewardView
 	70,  // 89: match.GetTournamentOverviewResponse.hall_of_fame:type_name -> match.TournamentSeasonView
-	138, // 90: match.CreateTournamentSquadResponse.error_message:type_name -> TipInfoMessage
+	143, // 90: match.CreateTournamentSquadResponse.error_message:type_name -> TipInfoMessage
 	72,  // 91: match.CreateTournamentSquadResponse.squad:type_name -> match.TournamentSquadView
-	138, // 92: match.InviteTournamentMemberResponse.error_message:type_name -> TipInfoMessage
+	143, // 92: match.InviteTournamentMemberResponse.error_message:type_name -> TipInfoMessage
 	73,  // 93: match.InviteTournamentMemberResponse.invite:type_name -> match.TournamentInviteView
-	138, // 94: match.RespondTournamentInviteResponse.error_message:type_name -> TipInfoMessage
+	143, // 94: match.RespondTournamentInviteResponse.error_message:type_name -> TipInfoMessage
 	72,  // 95: match.RespondTournamentInviteResponse.squad:type_name -> match.TournamentSquadView
-	138, // 96: match.LeaveTournamentSquadResponse.error_message:type_name -> TipInfoMessage
+	143, // 96: match.LeaveTournamentSquadResponse.error_message:type_name -> TipInfoMessage
 	72,  // 97: match.LeaveTournamentSquadResponse.squad:type_name -> match.TournamentSquadView
-	138, // 98: match.UpdateTournamentLineupResponse.error_message:type_name -> TipInfoMessage
+	143, // 98: match.UpdateTournamentLineupResponse.error_message:type_name -> TipInfoMessage
 	72,  // 99: match.UpdateTournamentLineupResponse.squad:type_name -> match.TournamentSquadView
-	138, // 100: match.RegisterTournamentSquadResponse.error_message:type_name -> TipInfoMessage
+	143, // 100: match.RegisterTournamentSquadResponse.error_message:type_name -> TipInfoMessage
 	72,  // 101: match.RegisterTournamentSquadResponse.squad:type_name -> match.TournamentSquadView
-	138, // 102: match.ListTournamentStandingsResponse.error_message:type_name -> TipInfoMessage
+	143, // 102: match.ListTournamentStandingsResponse.error_message:type_name -> TipInfoMessage
 	70,  // 103: match.ListTournamentStandingsResponse.season:type_name -> match.TournamentSeasonView
 	72,  // 104: match.ListTournamentStandingsResponse.standings:type_name -> match.TournamentSquadView
 	72,  // 105: match.ListTournamentStandingsResponse.my_squad:type_name -> match.TournamentSquadView
 	74,  // 106: match.ListTournamentStandingsResponse.knockout_bracket:type_name -> match.TournamentMatchView
-	138, // 107: match.StartTournamentMatchResponse.error_message:type_name -> TipInfoMessage
+	143, // 107: match.StartTournamentMatchResponse.error_message:type_name -> TipInfoMessage
 	74,  // 108: match.StartTournamentMatchResponse.match:type_name -> match.TournamentMatchView
-	138, // 109: match.CheerTournamentSquadResponse.error_message:type_name -> TipInfoMessage
-	138, // 110: match.ClaimTournamentRewardResponse.error_message:type_name -> TipInfoMessage
+	143, // 109: match.CheerTournamentSquadResponse.error_message:type_name -> TipInfoMessage
+	143, // 110: match.ClaimTournamentRewardResponse.error_message:type_name -> TipInfoMessage
 	77,  // 111: match.ClaimTournamentRewardResponse.claimed_rewards:type_name -> match.TournamentPlayerRewardView
-	138, // 112: match.SaluteTournamentChampionResponse.error_message:type_name -> TipInfoMessage
-	75,  // 113: match.SaluteTournamentChampionResponse.items:type_name -> match.TournamentRewardItem
-	138, // 114: match.SendTournamentSpectateCheerResponse.error_message:type_name -> TipInfoMessage
-	102, // 115: match.SendTournamentSpectateCheerResponse.recent_cheers:type_name -> match.TournamentSpectateCheerItem
-	138, // 116: match.GetTournamentSpectateCheerResponse.error_message:type_name -> TipInfoMessage
-	102, // 117: match.GetTournamentSpectateCheerResponse.recent_cheers:type_name -> match.TournamentSpectateCheerItem
-	138, // 118: match.UpdateTournamentSquadEmblemResponse.error_message:type_name -> TipInfoMessage
-	72,  // 119: match.UpdateTournamentSquadEmblemResponse.squad:type_name -> match.TournamentSquadView
-	147, // 120: match.StartTournamentWarmupRequest.leyline_element:type_name -> TournamentLeylineElement
-	138, // 121: match.StartTournamentWarmupResponse.error_message:type_name -> TipInfoMessage
-	74,  // 122: match.StartTournamentWarmupResponse.match:type_name -> match.TournamentMatchView
-	138, // 123: match.PredictTournamentMatchResponse.error_message:type_name -> TipInfoMessage
-	138, // 124: match.GetTournamentPredictionBoardResponse.error_message:type_name -> TipInfoMessage
-	113, // 125: match.GetTournamentPredictionBoardResponse.my_predictions:type_name -> match.TournamentPredictionEntryView
-	114, // 126: match.GetTournamentPredictionBoardResponse.top_predictors:type_name -> match.TournamentPredictionRankEntry
-	147, // 127: match.BanTournamentLeylineRequest.leyline_element:type_name -> TournamentLeylineElement
-	138, // 128: match.BanTournamentLeylineResponse.error_message:type_name -> TipInfoMessage
-	74,  // 129: match.BanTournamentLeylineResponse.match:type_name -> match.TournamentMatchView
-	16,  // 130: match.TournamentHighlightEntry.tag:type_name -> match.TournamentHighlightTag
-	74,  // 131: match.TournamentHighlightEntry.match:type_name -> match.TournamentMatchView
-	138, // 132: match.GetTournamentHighlightsResponse.error_message:type_name -> TipInfoMessage
-	119, // 133: match.GetTournamentHighlightsResponse.highlights:type_name -> match.TournamentHighlightEntry
-	17,  // 134: match.JianghuDuelInviteView.writ_tier:type_name -> match.JianghuWritTier
-	18,  // 135: match.JianghuDuelInviteView.state:type_name -> match.JianghuDuelInviteState
-	122, // 136: match.JianghuDuelInviteView.challenger_members:type_name -> match.JianghuDuelMemberView
-	122, // 137: match.JianghuDuelInviteView.target_members:type_name -> match.JianghuDuelMemberView
-	17,  // 138: match.CreateJianghuDuelInviteRequest.writ_tier:type_name -> match.JianghuWritTier
-	138, // 139: match.CreateJianghuDuelInviteResponse.error_message:type_name -> TipInfoMessage
-	123, // 140: match.CreateJianghuDuelInviteResponse.invite:type_name -> match.JianghuDuelInviteView
-	138, // 141: match.ConfirmJianghuDuelMemberResponse.error_message:type_name -> TipInfoMessage
-	123, // 142: match.ConfirmJianghuDuelMemberResponse.invite:type_name -> match.JianghuDuelInviteView
-	138, // 143: match.RespondJianghuDuelInviteResponse.error_message:type_name -> TipInfoMessage
-	123, // 144: match.RespondJianghuDuelInviteResponse.invite:type_name -> match.JianghuDuelInviteView
-	17,  // 145: match.JianghuGrudgeBattleLogEntry.writ_tier:type_name -> match.JianghuWritTier
-	130, // 146: match.JianghuGrudgeEntry.recent_logs:type_name -> match.JianghuGrudgeBattleLogEntry
-	138, // 147: match.ListJianghuGrudgesResponse.error_message:type_name -> TipInfoMessage
-	131, // 148: match.ListJianghuGrudgesResponse.grudges:type_name -> match.JianghuGrudgeEntry
-	123, // 149: match.ListJianghuGrudgesResponse.active_invites:type_name -> match.JianghuDuelInviteView
-	138, // 150: match.DismissJianghuGrudgeResponse.error_message:type_name -> TipInfoMessage
-	123, // 151: match.JianghuDuelInviteS2C.invite:type_name -> match.JianghuDuelInviteView
-	123, // 152: match.JianghuDuelStatusS2C.invite:type_name -> match.JianghuDuelInviteView
-	148, // 153: match.MatchService.GetNetworkProbePlan:input_type -> match.GetNetworkProbePlanRequest
-	149, // 154: match.MatchService.CommitNetworkProbe:input_type -> match.CommitNetworkProbeRequest
-	19,  // 155: match.MatchService.JoinQueue:input_type -> match.JoinQueueRequest
-	21,  // 156: match.MatchService.CancelQueue:input_type -> match.CancelQueueRequest
-	22,  // 157: match.MatchService.GetQueueStatus:input_type -> match.GetQueueStatusRequest
-	24,  // 158: match.MatchService.ChallengePlayer:input_type -> match.ChallengePlayerRequest
-	26,  // 159: match.MatchService.RespondChallenge:input_type -> match.RespondChallengeRequest
-	28,  // 160: match.MatchService.NotifyChallengeInvite:input_type -> match.ChallengeInviteS2C
-	29,  // 161: match.MatchService.NotifyChallengeResult:input_type -> match.ChallengeResultS2C
-	30,  // 162: match.MatchService.WatchBattle:input_type -> match.WatchBattleRequest
-	150, // 163: match.MatchService.RequestBattleTicket:input_type -> RequestBattleTicketRequest
-	32,  // 164: match.MatchService.ListWatchableBattles:input_type -> match.ListWatchableBattlesRequest
-	40,  // 165: match.MatchService.ListBattleReports:input_type -> match.ListBattleReportsRequest
-	42,  // 166: match.MatchService.GetBattleReport:input_type -> match.GetBattleReportRequest
-	46,  // 167: match.MatchService.ListBattleScripts:input_type -> match.ListBattleScriptsRequest
-	48,  // 168: match.MatchService.SubmitBattleScript:input_type -> match.SubmitBattleScriptRequest
-	50,  // 169: match.MatchService.DeleteBattleScript:input_type -> match.DeleteBattleScriptRequest
-	52,  // 170: match.MatchService.SetBattleScriptLoadout:input_type -> match.SetBattleScriptLoadoutRequest
-	62,  // 171: match.MatchService.GetRankedProfile:input_type -> match.GetRankedProfileRequest
-	64,  // 172: match.MatchService.SaveRankedPreset:input_type -> match.SaveRankedPresetRequest
-	66,  // 173: match.MatchService.UpdateRankedCosmetic:input_type -> match.UpdateRankedCosmeticRequest
-	68,  // 174: match.MatchService.GetRankedBattleResult:input_type -> match.GetRankedBattleResultRequest
-	78,  // 175: match.MatchService.GetTournamentOverview:input_type -> match.GetTournamentOverviewRequest
-	80,  // 176: match.MatchService.CreateTournamentSquad:input_type -> match.CreateTournamentSquadRequest
-	82,  // 177: match.MatchService.InviteTournamentMember:input_type -> match.InviteTournamentMemberRequest
-	84,  // 178: match.MatchService.RespondTournamentInvite:input_type -> match.RespondTournamentInviteRequest
-	86,  // 179: match.MatchService.LeaveTournamentSquad:input_type -> match.LeaveTournamentSquadRequest
-	88,  // 180: match.MatchService.UpdateTournamentLineup:input_type -> match.UpdateTournamentLineupRequest
-	90,  // 181: match.MatchService.RegisterTournamentSquad:input_type -> match.RegisterTournamentSquadRequest
-	92,  // 182: match.MatchService.ListTournamentStandings:input_type -> match.ListTournamentStandingsRequest
-	94,  // 183: match.MatchService.StartTournamentMatch:input_type -> match.StartTournamentMatchRequest
-	96,  // 184: match.MatchService.CheerTournamentSquad:input_type -> match.CheerTournamentSquadRequest
-	98,  // 185: match.MatchService.ClaimTournamentReward:input_type -> match.ClaimTournamentRewardRequest
-	100, // 186: match.MatchService.SaluteTournamentChampion:input_type -> match.SaluteTournamentChampionRequest
-	103, // 187: match.MatchService.SendTournamentSpectateCheer:input_type -> match.SendTournamentSpectateCheerRequest
-	105, // 188: match.MatchService.GetTournamentSpectateCheer:input_type -> match.GetTournamentSpectateCheerRequest
-	107, // 189: match.MatchService.UpdateTournamentSquadEmblem:input_type -> match.UpdateTournamentSquadEmblemRequest
-	109, // 190: match.MatchService.StartTournamentWarmup:input_type -> match.StartTournamentWarmupRequest
-	111, // 191: match.MatchService.PredictTournamentMatch:input_type -> match.PredictTournamentMatchRequest
-	115, // 192: match.MatchService.GetTournamentPredictionBoard:input_type -> match.GetTournamentPredictionBoardRequest
-	117, // 193: match.MatchService.BanTournamentLeyline:input_type -> match.BanTournamentLeylineRequest
-	120, // 194: match.MatchService.GetTournamentHighlights:input_type -> match.GetTournamentHighlightsRequest
-	124, // 195: match.MatchService.CreateJianghuDuelInvite:input_type -> match.CreateJianghuDuelInviteRequest
-	126, // 196: match.MatchService.ConfirmJianghuDuelMember:input_type -> match.ConfirmJianghuDuelMemberRequest
-	128, // 197: match.MatchService.RespondJianghuDuelInvite:input_type -> match.RespondJianghuDuelInviteRequest
-	132, // 198: match.MatchService.ListJianghuGrudges:input_type -> match.ListJianghuGrudgesRequest
-	134, // 199: match.MatchService.DismissJianghuGrudge:input_type -> match.DismissJianghuGrudgeRequest
-	136, // 200: match.MatchService.NotifyJianghuDuelInvite:input_type -> match.JianghuDuelInviteS2C
-	137, // 201: match.MatchService.NotifyJianghuDuelStatus:input_type -> match.JianghuDuelStatusS2C
-	151, // 202: match.MatchService.GetNetworkProbePlan:output_type -> match.GetNetworkProbePlanResponse
-	152, // 203: match.MatchService.CommitNetworkProbe:output_type -> match.CommitNetworkProbeResponse
-	20,  // 204: match.MatchService.JoinQueue:output_type -> match.JoinQueueResponse
-	153, // 205: match.MatchService.CancelQueue:output_type -> Empty
-	23,  // 206: match.MatchService.GetQueueStatus:output_type -> match.GetQueueStatusResponse
-	25,  // 207: match.MatchService.ChallengePlayer:output_type -> match.ChallengePlayerResponse
-	27,  // 208: match.MatchService.RespondChallenge:output_type -> match.RespondChallengeResponse
-	153, // 209: match.MatchService.NotifyChallengeInvite:output_type -> Empty
-	153, // 210: match.MatchService.NotifyChallengeResult:output_type -> Empty
-	31,  // 211: match.MatchService.WatchBattle:output_type -> match.WatchBattleResponse
-	154, // 212: match.MatchService.RequestBattleTicket:output_type -> RequestBattleTicketResponse
-	33,  // 213: match.MatchService.ListWatchableBattles:output_type -> match.ListWatchableBattlesResponse
-	41,  // 214: match.MatchService.ListBattleReports:output_type -> match.ListBattleReportsResponse
-	43,  // 215: match.MatchService.GetBattleReport:output_type -> match.GetBattleReportResponse
-	47,  // 216: match.MatchService.ListBattleScripts:output_type -> match.ListBattleScriptsResponse
-	49,  // 217: match.MatchService.SubmitBattleScript:output_type -> match.SubmitBattleScriptResponse
-	51,  // 218: match.MatchService.DeleteBattleScript:output_type -> match.DeleteBattleScriptResponse
-	53,  // 219: match.MatchService.SetBattleScriptLoadout:output_type -> match.SetBattleScriptLoadoutResponse
-	63,  // 220: match.MatchService.GetRankedProfile:output_type -> match.GetRankedProfileResponse
-	65,  // 221: match.MatchService.SaveRankedPreset:output_type -> match.SaveRankedPresetResponse
-	67,  // 222: match.MatchService.UpdateRankedCosmetic:output_type -> match.UpdateRankedCosmeticResponse
-	69,  // 223: match.MatchService.GetRankedBattleResult:output_type -> match.GetRankedBattleResultResponse
-	79,  // 224: match.MatchService.GetTournamentOverview:output_type -> match.GetTournamentOverviewResponse
-	81,  // 225: match.MatchService.CreateTournamentSquad:output_type -> match.CreateTournamentSquadResponse
-	83,  // 226: match.MatchService.InviteTournamentMember:output_type -> match.InviteTournamentMemberResponse
-	85,  // 227: match.MatchService.RespondTournamentInvite:output_type -> match.RespondTournamentInviteResponse
-	87,  // 228: match.MatchService.LeaveTournamentSquad:output_type -> match.LeaveTournamentSquadResponse
-	89,  // 229: match.MatchService.UpdateTournamentLineup:output_type -> match.UpdateTournamentLineupResponse
-	91,  // 230: match.MatchService.RegisterTournamentSquad:output_type -> match.RegisterTournamentSquadResponse
-	93,  // 231: match.MatchService.ListTournamentStandings:output_type -> match.ListTournamentStandingsResponse
-	95,  // 232: match.MatchService.StartTournamentMatch:output_type -> match.StartTournamentMatchResponse
-	97,  // 233: match.MatchService.CheerTournamentSquad:output_type -> match.CheerTournamentSquadResponse
-	99,  // 234: match.MatchService.ClaimTournamentReward:output_type -> match.ClaimTournamentRewardResponse
-	101, // 235: match.MatchService.SaluteTournamentChampion:output_type -> match.SaluteTournamentChampionResponse
-	104, // 236: match.MatchService.SendTournamentSpectateCheer:output_type -> match.SendTournamentSpectateCheerResponse
-	106, // 237: match.MatchService.GetTournamentSpectateCheer:output_type -> match.GetTournamentSpectateCheerResponse
-	108, // 238: match.MatchService.UpdateTournamentSquadEmblem:output_type -> match.UpdateTournamentSquadEmblemResponse
-	110, // 239: match.MatchService.StartTournamentWarmup:output_type -> match.StartTournamentWarmupResponse
-	112, // 240: match.MatchService.PredictTournamentMatch:output_type -> match.PredictTournamentMatchResponse
-	116, // 241: match.MatchService.GetTournamentPredictionBoard:output_type -> match.GetTournamentPredictionBoardResponse
-	118, // 242: match.MatchService.BanTournamentLeyline:output_type -> match.BanTournamentLeylineResponse
-	121, // 243: match.MatchService.GetTournamentHighlights:output_type -> match.GetTournamentHighlightsResponse
-	125, // 244: match.MatchService.CreateJianghuDuelInvite:output_type -> match.CreateJianghuDuelInviteResponse
-	127, // 245: match.MatchService.ConfirmJianghuDuelMember:output_type -> match.ConfirmJianghuDuelMemberResponse
-	129, // 246: match.MatchService.RespondJianghuDuelInvite:output_type -> match.RespondJianghuDuelInviteResponse
-	133, // 247: match.MatchService.ListJianghuGrudges:output_type -> match.ListJianghuGrudgesResponse
-	135, // 248: match.MatchService.DismissJianghuGrudge:output_type -> match.DismissJianghuGrudgeResponse
-	153, // 249: match.MatchService.NotifyJianghuDuelInvite:output_type -> Empty
-	153, // 250: match.MatchService.NotifyJianghuDuelStatus:output_type -> Empty
-	202, // [202:251] is the sub-list for method output_type
-	153, // [153:202] is the sub-list for method input_type
-	153, // [153:153] is the sub-list for extension type_name
-	153, // [153:153] is the sub-list for extension extendee
-	0,   // [0:153] is the sub-list for field type_name
+	143, // 112: match.SendTournamentSpectateCheerResponse.error_message:type_name -> TipInfoMessage
+	100, // 113: match.SendTournamentSpectateCheerResponse.recent_cheers:type_name -> match.TournamentSpectateCheerItem
+	143, // 114: match.GetTournamentSpectateCheerResponse.error_message:type_name -> TipInfoMessage
+	100, // 115: match.GetTournamentSpectateCheerResponse.recent_cheers:type_name -> match.TournamentSpectateCheerItem
+	143, // 116: match.UpdateTournamentSquadEmblemResponse.error_message:type_name -> TipInfoMessage
+	72,  // 117: match.UpdateTournamentSquadEmblemResponse.squad:type_name -> match.TournamentSquadView
+	152, // 118: match.StartTournamentWarmupRequest.leyline_element:type_name -> TournamentLeylineElement
+	143, // 119: match.StartTournamentWarmupResponse.error_message:type_name -> TipInfoMessage
+	74,  // 120: match.StartTournamentWarmupResponse.match:type_name -> match.TournamentMatchView
+	143, // 121: match.PredictTournamentMatchResponse.error_message:type_name -> TipInfoMessage
+	143, // 122: match.GetTournamentPredictionBoardResponse.error_message:type_name -> TipInfoMessage
+	111, // 123: match.GetTournamentPredictionBoardResponse.my_predictions:type_name -> match.TournamentPredictionEntryView
+	112, // 124: match.GetTournamentPredictionBoardResponse.top_predictors:type_name -> match.TournamentPredictionRankEntry
+	152, // 125: match.BanTournamentLeylineRequest.leyline_element:type_name -> TournamentLeylineElement
+	143, // 126: match.BanTournamentLeylineResponse.error_message:type_name -> TipInfoMessage
+	74,  // 127: match.BanTournamentLeylineResponse.match:type_name -> match.TournamentMatchView
+	16,  // 128: match.TournamentHighlightEntry.tag:type_name -> match.TournamentHighlightTag
+	74,  // 129: match.TournamentHighlightEntry.match:type_name -> match.TournamentMatchView
+	143, // 130: match.GetTournamentHighlightsResponse.error_message:type_name -> TipInfoMessage
+	117, // 131: match.GetTournamentHighlightsResponse.highlights:type_name -> match.TournamentHighlightEntry
+	17,  // 132: match.JianghuDuelInviteView.writ_tier:type_name -> match.JianghuWritTier
+	18,  // 133: match.JianghuDuelInviteView.state:type_name -> match.JianghuDuelInviteState
+	120, // 134: match.JianghuDuelInviteView.challenger_members:type_name -> match.JianghuDuelMemberView
+	120, // 135: match.JianghuDuelInviteView.target_members:type_name -> match.JianghuDuelMemberView
+	17,  // 136: match.CreateJianghuDuelInviteRequest.writ_tier:type_name -> match.JianghuWritTier
+	143, // 137: match.CreateJianghuDuelInviteResponse.error_message:type_name -> TipInfoMessage
+	121, // 138: match.CreateJianghuDuelInviteResponse.invite:type_name -> match.JianghuDuelInviteView
+	143, // 139: match.ConfirmJianghuDuelMemberResponse.error_message:type_name -> TipInfoMessage
+	121, // 140: match.ConfirmJianghuDuelMemberResponse.invite:type_name -> match.JianghuDuelInviteView
+	143, // 141: match.RespondJianghuDuelInviteResponse.error_message:type_name -> TipInfoMessage
+	121, // 142: match.RespondJianghuDuelInviteResponse.invite:type_name -> match.JianghuDuelInviteView
+	17,  // 143: match.JianghuGrudgeBattleLogEntry.writ_tier:type_name -> match.JianghuWritTier
+	128, // 144: match.JianghuGrudgeEntry.recent_logs:type_name -> match.JianghuGrudgeBattleLogEntry
+	143, // 145: match.ListJianghuGrudgesResponse.error_message:type_name -> TipInfoMessage
+	129, // 146: match.ListJianghuGrudgesResponse.grudges:type_name -> match.JianghuGrudgeEntry
+	121, // 147: match.ListJianghuGrudgesResponse.active_invites:type_name -> match.JianghuDuelInviteView
+	143, // 148: match.DismissJianghuGrudgeResponse.error_message:type_name -> TipInfoMessage
+	121, // 149: match.JianghuDuelInviteS2C.invite:type_name -> match.JianghuDuelInviteView
+	121, // 150: match.JianghuDuelStatusS2C.invite:type_name -> match.JianghuDuelInviteView
+	143, // 151: match.CreateTrialChallengeCardResponse.error_message:type_name -> TipInfoMessage
+	136, // 152: match.CreateTrialChallengeCardResponse.card:type_name -> match.TrialChallengeCardView
+	143, // 153: match.GetTrialChallengeCardResponse.error_message:type_name -> TipInfoMessage
+	136, // 154: match.GetTrialChallengeCardResponse.card:type_name -> match.TrialChallengeCardView
+	143, // 155: match.GetSharedTrialReplayResponse.error_message:type_name -> TipInfoMessage
+	148, // 156: match.GetSharedTrialReplayResponse.replay:type_name -> BattleReplayEnvelope
+	153, // 157: match.MatchService.GetNetworkProbePlan:input_type -> match.GetNetworkProbePlanRequest
+	154, // 158: match.MatchService.CommitNetworkProbe:input_type -> match.CommitNetworkProbeRequest
+	19,  // 159: match.MatchService.JoinQueue:input_type -> match.JoinQueueRequest
+	21,  // 160: match.MatchService.CancelQueue:input_type -> match.CancelQueueRequest
+	22,  // 161: match.MatchService.GetQueueStatus:input_type -> match.GetQueueStatusRequest
+	24,  // 162: match.MatchService.ChallengePlayer:input_type -> match.ChallengePlayerRequest
+	26,  // 163: match.MatchService.RespondChallenge:input_type -> match.RespondChallengeRequest
+	28,  // 164: match.MatchService.NotifyChallengeInvite:input_type -> match.ChallengeInviteS2C
+	29,  // 165: match.MatchService.NotifyChallengeResult:input_type -> match.ChallengeResultS2C
+	30,  // 166: match.MatchService.WatchBattle:input_type -> match.WatchBattleRequest
+	155, // 167: match.MatchService.RequestBattleTicket:input_type -> RequestBattleTicketRequest
+	32,  // 168: match.MatchService.ListWatchableBattles:input_type -> match.ListWatchableBattlesRequest
+	40,  // 169: match.MatchService.ListBattleReports:input_type -> match.ListBattleReportsRequest
+	42,  // 170: match.MatchService.GetBattleReport:input_type -> match.GetBattleReportRequest
+	46,  // 171: match.MatchService.ListBattleScripts:input_type -> match.ListBattleScriptsRequest
+	48,  // 172: match.MatchService.SubmitBattleScript:input_type -> match.SubmitBattleScriptRequest
+	50,  // 173: match.MatchService.DeleteBattleScript:input_type -> match.DeleteBattleScriptRequest
+	52,  // 174: match.MatchService.SetBattleScriptLoadout:input_type -> match.SetBattleScriptLoadoutRequest
+	62,  // 175: match.MatchService.GetRankedProfile:input_type -> match.GetRankedProfileRequest
+	64,  // 176: match.MatchService.SaveRankedPreset:input_type -> match.SaveRankedPresetRequest
+	66,  // 177: match.MatchService.UpdateRankedCosmetic:input_type -> match.UpdateRankedCosmeticRequest
+	68,  // 178: match.MatchService.GetRankedBattleResult:input_type -> match.GetRankedBattleResultRequest
+	78,  // 179: match.MatchService.GetTournamentOverview:input_type -> match.GetTournamentOverviewRequest
+	80,  // 180: match.MatchService.CreateTournamentSquad:input_type -> match.CreateTournamentSquadRequest
+	82,  // 181: match.MatchService.InviteTournamentMember:input_type -> match.InviteTournamentMemberRequest
+	84,  // 182: match.MatchService.RespondTournamentInvite:input_type -> match.RespondTournamentInviteRequest
+	86,  // 183: match.MatchService.LeaveTournamentSquad:input_type -> match.LeaveTournamentSquadRequest
+	88,  // 184: match.MatchService.UpdateTournamentLineup:input_type -> match.UpdateTournamentLineupRequest
+	90,  // 185: match.MatchService.RegisterTournamentSquad:input_type -> match.RegisterTournamentSquadRequest
+	92,  // 186: match.MatchService.ListTournamentStandings:input_type -> match.ListTournamentStandingsRequest
+	94,  // 187: match.MatchService.StartTournamentMatch:input_type -> match.StartTournamentMatchRequest
+	96,  // 188: match.MatchService.CheerTournamentSquad:input_type -> match.CheerTournamentSquadRequest
+	98,  // 189: match.MatchService.ClaimTournamentReward:input_type -> match.ClaimTournamentRewardRequest
+	101, // 190: match.MatchService.SendTournamentSpectateCheer:input_type -> match.SendTournamentSpectateCheerRequest
+	103, // 191: match.MatchService.GetTournamentSpectateCheer:input_type -> match.GetTournamentSpectateCheerRequest
+	105, // 192: match.MatchService.UpdateTournamentSquadEmblem:input_type -> match.UpdateTournamentSquadEmblemRequest
+	107, // 193: match.MatchService.StartTournamentWarmup:input_type -> match.StartTournamentWarmupRequest
+	109, // 194: match.MatchService.PredictTournamentMatch:input_type -> match.PredictTournamentMatchRequest
+	113, // 195: match.MatchService.GetTournamentPredictionBoard:input_type -> match.GetTournamentPredictionBoardRequest
+	115, // 196: match.MatchService.BanTournamentLeyline:input_type -> match.BanTournamentLeylineRequest
+	118, // 197: match.MatchService.GetTournamentHighlights:input_type -> match.GetTournamentHighlightsRequest
+	122, // 198: match.MatchService.CreateJianghuDuelInvite:input_type -> match.CreateJianghuDuelInviteRequest
+	124, // 199: match.MatchService.ConfirmJianghuDuelMember:input_type -> match.ConfirmJianghuDuelMemberRequest
+	126, // 200: match.MatchService.RespondJianghuDuelInvite:input_type -> match.RespondJianghuDuelInviteRequest
+	130, // 201: match.MatchService.ListJianghuGrudges:input_type -> match.ListJianghuGrudgesRequest
+	132, // 202: match.MatchService.DismissJianghuGrudge:input_type -> match.DismissJianghuGrudgeRequest
+	134, // 203: match.MatchService.NotifyJianghuDuelInvite:input_type -> match.JianghuDuelInviteS2C
+	135, // 204: match.MatchService.NotifyJianghuDuelStatus:input_type -> match.JianghuDuelStatusS2C
+	137, // 205: match.MatchService.CreateTrialChallengeCard:input_type -> match.CreateTrialChallengeCardRequest
+	139, // 206: match.MatchService.GetTrialChallengeCard:input_type -> match.GetTrialChallengeCardRequest
+	141, // 207: match.MatchService.GetSharedTrialReplay:input_type -> match.GetSharedTrialReplayRequest
+	156, // 208: match.MatchService.GetNetworkProbePlan:output_type -> match.GetNetworkProbePlanResponse
+	157, // 209: match.MatchService.CommitNetworkProbe:output_type -> match.CommitNetworkProbeResponse
+	20,  // 210: match.MatchService.JoinQueue:output_type -> match.JoinQueueResponse
+	158, // 211: match.MatchService.CancelQueue:output_type -> Empty
+	23,  // 212: match.MatchService.GetQueueStatus:output_type -> match.GetQueueStatusResponse
+	25,  // 213: match.MatchService.ChallengePlayer:output_type -> match.ChallengePlayerResponse
+	27,  // 214: match.MatchService.RespondChallenge:output_type -> match.RespondChallengeResponse
+	158, // 215: match.MatchService.NotifyChallengeInvite:output_type -> Empty
+	158, // 216: match.MatchService.NotifyChallengeResult:output_type -> Empty
+	31,  // 217: match.MatchService.WatchBattle:output_type -> match.WatchBattleResponse
+	159, // 218: match.MatchService.RequestBattleTicket:output_type -> RequestBattleTicketResponse
+	33,  // 219: match.MatchService.ListWatchableBattles:output_type -> match.ListWatchableBattlesResponse
+	41,  // 220: match.MatchService.ListBattleReports:output_type -> match.ListBattleReportsResponse
+	43,  // 221: match.MatchService.GetBattleReport:output_type -> match.GetBattleReportResponse
+	47,  // 222: match.MatchService.ListBattleScripts:output_type -> match.ListBattleScriptsResponse
+	49,  // 223: match.MatchService.SubmitBattleScript:output_type -> match.SubmitBattleScriptResponse
+	51,  // 224: match.MatchService.DeleteBattleScript:output_type -> match.DeleteBattleScriptResponse
+	53,  // 225: match.MatchService.SetBattleScriptLoadout:output_type -> match.SetBattleScriptLoadoutResponse
+	63,  // 226: match.MatchService.GetRankedProfile:output_type -> match.GetRankedProfileResponse
+	65,  // 227: match.MatchService.SaveRankedPreset:output_type -> match.SaveRankedPresetResponse
+	67,  // 228: match.MatchService.UpdateRankedCosmetic:output_type -> match.UpdateRankedCosmeticResponse
+	69,  // 229: match.MatchService.GetRankedBattleResult:output_type -> match.GetRankedBattleResultResponse
+	79,  // 230: match.MatchService.GetTournamentOverview:output_type -> match.GetTournamentOverviewResponse
+	81,  // 231: match.MatchService.CreateTournamentSquad:output_type -> match.CreateTournamentSquadResponse
+	83,  // 232: match.MatchService.InviteTournamentMember:output_type -> match.InviteTournamentMemberResponse
+	85,  // 233: match.MatchService.RespondTournamentInvite:output_type -> match.RespondTournamentInviteResponse
+	87,  // 234: match.MatchService.LeaveTournamentSquad:output_type -> match.LeaveTournamentSquadResponse
+	89,  // 235: match.MatchService.UpdateTournamentLineup:output_type -> match.UpdateTournamentLineupResponse
+	91,  // 236: match.MatchService.RegisterTournamentSquad:output_type -> match.RegisterTournamentSquadResponse
+	93,  // 237: match.MatchService.ListTournamentStandings:output_type -> match.ListTournamentStandingsResponse
+	95,  // 238: match.MatchService.StartTournamentMatch:output_type -> match.StartTournamentMatchResponse
+	97,  // 239: match.MatchService.CheerTournamentSquad:output_type -> match.CheerTournamentSquadResponse
+	99,  // 240: match.MatchService.ClaimTournamentReward:output_type -> match.ClaimTournamentRewardResponse
+	102, // 241: match.MatchService.SendTournamentSpectateCheer:output_type -> match.SendTournamentSpectateCheerResponse
+	104, // 242: match.MatchService.GetTournamentSpectateCheer:output_type -> match.GetTournamentSpectateCheerResponse
+	106, // 243: match.MatchService.UpdateTournamentSquadEmblem:output_type -> match.UpdateTournamentSquadEmblemResponse
+	108, // 244: match.MatchService.StartTournamentWarmup:output_type -> match.StartTournamentWarmupResponse
+	110, // 245: match.MatchService.PredictTournamentMatch:output_type -> match.PredictTournamentMatchResponse
+	114, // 246: match.MatchService.GetTournamentPredictionBoard:output_type -> match.GetTournamentPredictionBoardResponse
+	116, // 247: match.MatchService.BanTournamentLeyline:output_type -> match.BanTournamentLeylineResponse
+	119, // 248: match.MatchService.GetTournamentHighlights:output_type -> match.GetTournamentHighlightsResponse
+	123, // 249: match.MatchService.CreateJianghuDuelInvite:output_type -> match.CreateJianghuDuelInviteResponse
+	125, // 250: match.MatchService.ConfirmJianghuDuelMember:output_type -> match.ConfirmJianghuDuelMemberResponse
+	127, // 251: match.MatchService.RespondJianghuDuelInvite:output_type -> match.RespondJianghuDuelInviteResponse
+	131, // 252: match.MatchService.ListJianghuGrudges:output_type -> match.ListJianghuGrudgesResponse
+	133, // 253: match.MatchService.DismissJianghuGrudge:output_type -> match.DismissJianghuGrudgeResponse
+	158, // 254: match.MatchService.NotifyJianghuDuelInvite:output_type -> Empty
+	158, // 255: match.MatchService.NotifyJianghuDuelStatus:output_type -> Empty
+	138, // 256: match.MatchService.CreateTrialChallengeCard:output_type -> match.CreateTrialChallengeCardResponse
+	140, // 257: match.MatchService.GetTrialChallengeCard:output_type -> match.GetTrialChallengeCardResponse
+	142, // 258: match.MatchService.GetSharedTrialReplay:output_type -> match.GetSharedTrialReplayResponse
+	208, // [208:259] is the sub-list for method output_type
+	157, // [157:208] is the sub-list for method input_type
+	157, // [157:157] is the sub-list for extension type_name
+	157, // [157:157] is the sub-list for extension extendee
+	0,   // [0:157] is the sub-list for field type_name
 }
 
 func init() { file_proto_match_match_service_proto_init() }
@@ -11853,7 +12215,7 @@ func file_proto_match_match_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_match_match_service_proto_rawDesc), len(file_proto_match_match_service_proto_rawDesc)),
 			NumEnums:      19,
-			NumMessages:   119,
+			NumMessages:   124,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

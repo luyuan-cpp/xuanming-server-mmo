@@ -222,6 +222,37 @@ func (l *ChatLogic) RetractWorldChat(in *chatpb.RetractWorldChatRequest) (*chatp
 	return &chatpb.RetractWorldChatResponse{Retracted: retracted}, nil
 }
 
+// PublishSystemWorldNotice 内部白名单模板全服系统播报（CLIENT_RPC_SERVER_ONLY）。
+// 仅在首次提交成功时推给全服在线玩家；命中幂等键时返回 deduplicated=true 且不重复广播。
+func (l *ChatLogic) PublishSystemWorldNotice(in *chatpb.PublishSystemWorldNoticeRequest) (*chatpb.PublishSystemWorldNoticeResponse, error) {
+	if _, ok := authority.RenderSystemWorldNotice(in); !ok {
+		return &chatpb.PublishSystemWorldNoticeResponse{
+			ErrorMessage: &base.TipInfoMessage{Id: constants.ErrInvalidParameter},
+		}, nil
+	}
+	if l.ctx.Err() != nil || l.svcCtx.Authority == nil {
+		return &chatpb.PublishSystemWorldNoticeResponse{
+			ErrorMessage: &base.TipInfoMessage{Id: constants.ErrStorage},
+		}, nil
+	}
+	result, err := l.svcCtx.Authority.PublishSystemWorldNotice(l.ctx, proto.Clone(in).(*chatpb.PublishSystemWorldNoticeRequest))
+	if err != nil {
+		if errors.Is(err, authority.ErrInvalid) {
+			return &chatpb.PublishSystemWorldNoticeResponse{
+				ErrorMessage: &base.TipInfoMessage{Id: constants.ErrInvalidParameter},
+			}, nil
+		}
+		l.Error("Chat system world notice SQL write failed")
+		return &chatpb.PublishSystemWorldNoticeResponse{
+			ErrorMessage: &base.TipInfoMessage{Id: constants.ErrStorage},
+		}, nil
+	}
+	if !result.Duplicate && result.Message != nil {
+		l.svcCtx.PublishWorld(l.ctx, result.Message)
+	}
+	return &chatpb.PublishSystemWorldNoticeResponse{Deduplicated: result.Duplicate}, nil
+}
+
 func (l *ChatLogic) PullChatHistory(in *chatpb.PullChatHistoryRequest) (*chatpb.PullChatHistoryResponse, error) {
 	label := svc.ChannelLabel(in.GetChannel())
 	reject := func(r rejection) (*chatpb.PullChatHistoryResponse, error) {

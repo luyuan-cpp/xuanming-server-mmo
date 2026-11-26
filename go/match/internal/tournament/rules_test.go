@@ -115,7 +115,7 @@ func TestCatalogRewardsAndLineupCodec(t *testing.T) {
 	require.Nil(t, DecodeLineup([]byte{1, 2, 3}))
 }
 
-func TestV2Bo3LeylineDrawAndUtc8DayKey(t *testing.T) {
+func TestV2Bo3LeylineDrawAndBoundGoldCurrency(t *testing.T) {
 	// 16 强: R1(16队)/R2(8队) 为 BO1; R3(半决赛4队)/R4(决赛2队) 为 BO3
 	require.Equal(t, uint32(1), BestOfForKnockout(16, 1, true))
 	require.Equal(t, uint32(1), BestOfForKnockout(16, 2, true))
@@ -141,9 +141,14 @@ func TestV2Bo3LeylineDrawAndUtc8DayKey(t *testing.T) {
 	require.Equal(t, seq1[0], LeylineForGame(seq1, 1))
 	require.Equal(t, seq1[2], LeylineForGame(seq1, 3))
 
-	// UTC+8 跨日检验: 2026-11-25 15:59:59 UTC == 2026-11-25 23:59:59 UTC+8; +2秒即 20261126
-	require.Equal(t, uint32(20261125), Utc8DayKey(1795622399000))
-	require.Equal(t, uint32(20261126), Utc8DayKey(1795622401000))
+	// 锦标赛银两邮件附件必须使用不可交易绑定银两(CURRENCY_TYPE_BIND_GOLD=3), 严禁误发灵石(1)
+	cat := DefaultFallback()
+	att, _, err := BuildMailAttachments(cat.RewardForPlacement(1, 6))
+	require.NoError(t, err)
+	require.NotEmpty(t, att.Currencies)
+	for _, c := range att.Currencies {
+		require.Equal(t, uint32(3), c.CurrencyType)
+	}
 }
 
 func TestV2SpectateCheerHubWhitelistAndCooldown(t *testing.T) {

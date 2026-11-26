@@ -22,12 +22,15 @@
 #include "player/comp/last_persisted_snapshot_comp.h"
 #include "player/comp/player_ownership_comp.h"
 #include "player/system/client_request_ledger.h"
+#include "player/system/equip_attribute_rules.h"
 #include "player/system/equip_craft_quality_rules.h"
 #include "player/system/player_attribute.h"
+#include "player/system/player_craft.h"
 #include "player/system/player_equip.h"
 #include "player/system/player_feature_snapshot.h"
 #include "player/system/player_level_rules.h"
 #include "player/system/player_lifecycle.h"
+#include "player/system/player_mail_outbox.h"
 #include "player/system/player_mutability.h"
 #include "player/system/player_season.h"
 #include "battle/system/player_battle.h"
@@ -35,8 +38,10 @@
 #include "proto/common/component/equipment_effects.pb.h"
 #include "proto/common/component/player_comp.pb.h"
 #include "proto/common/component/player_craft_comp.pb.h"
+#include "proto/common/component/team_comp.pb.h"
 #include "proto/common/rollback/transaction_log.pb.h"
 #include "proto/scene/player_bag.pb.h"
+#include "proto/scene/player_skill.pb.h"
 #include "services/battle/system/equipment_battle_rules.h"
 #include "table/code/equipaffixquality_table.h"
 #include "table/code/equipartifact_table.h"
@@ -51,6 +56,39 @@
 
 namespace {
 constexpr uint64_t kMaxPayableGold = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+
+static_assert(equiprules::MaxV1FixedAffixEffectiveCap(5, equipbattle::MaximumSourceBps(5)) ==
+                  equipbattle::MaximumEffectiveSourceBps(5),
+              "Heal effective cap must stay aligned between equip_attribute_rules.h and equipment_battle_rules.h");
+static_assert(equiprules::MaxV1FixedAffixEffectiveCap(6, equipbattle::MaximumSourceBps(6)) ==
+                  equipbattle::MaximumEffectiveSourceBps(6),
+              "Shield effective cap must stay aligned between equip_attribute_rules.h and equipment_battle_rules.h");
+static_assert(equiprules::MaxV1FixedAffixEffectiveCap(11, equipbattle::MaximumSourceBps(11)) ==
+                  equipbattle::MaximumEffectiveSourceBps(11),
+              "Control hit effective cap must stay aligned between equip_attribute_rules.h and equipment_battle_rules.h");
+static_assert(equiprules::MaxV1FixedAffixEffectiveCap(4, equipbattle::MaximumSourceBps(4)) ==
+                  equipbattle::MaximumEffectiveSourceBps(4),
+              "Speed cap must never scale with enhancement");
+
+uint32_t V1ItemEnhanceBonusPermyriad(const ItemComp& item, const ItemTable& row) {
+    if (row.equip_profile() != equiprules::ToRaw(equiprules::EquipmentProfile::kV1Basic) ||
+        !item.has_equip() || item.equip().enhance_level() == 0) {
+        return 0;
+    }
+    const uint32_t maxLevel = PlayerEquipSystem::MaxEnhanceLevel(row.equip_profile());
+    if (maxLevel == 0) return 0;
+    const uint32_t level = std::min<uint32_t>(item.equip().enhance_level(), maxLevel);
+    const EquipEnhanceTable* found = nullptr;
+    for (const auto& entry : EquipEnhanceTableManager::Instance().FindAll().data()) {
+        if (entry.profile_id() != row.equip_profile()) continue;
+        const uint32_t rowLevel = entry.level() != 0 ? entry.level() : entry.id();
+        if (rowLevel != level) continue;
+        if (found != nullptr) return 0;
+        found = &entry;
+    }
+    if (found == nullptr || found->bonus_permyriad() > equiprules::kV1TopEnhanceBonusPermyriad) return 0;
+    return found->bonus_permyriad();
+}
 
 PlayerEquipmentV1System::PersistFn persistFn = &PlayerLifecycleSystem::SavePlayerForAssetCommit;
 PlayerEquipmentV1System::QualityRollFn qualityRollFn = nullptr;
@@ -178,15 +216,23 @@ void FillAffixCatalog(const EquipV1AffixTable& row, EquipFixedAffixInfo& info) {
     info.set_reforge_gold_cost(equipcraft::kReforgeGoldCost);
 }
 
-void FillAffixInstance(const EquipV1AffixTable& row, const EquipFixedAffix& selected, EquipFixedAffixInfo& info) {
+void FillAffixInstance(const EquipV1AffixTable& row, const EquipFixedAffix& selected,
+                       uint32_t equipProfile, uint32_t enhanceBonusPermyriad, EquipFixedAffixInfo& info) {
     FillAffixCatalog(row, info);
     const bool exempt = equipcraft::IsPolishExempt(row.effect());
     const uint32_t tier = equipcraft::EffectiveQualityTier(selected.quality_tier(), exempt);
     const uint32_t ratioPct = QualityRatioPct(tier);
+    const uint32_t qualityScaled = equipcraft::ScaleValueByQuality(row.value_permyriad(), ratioPct);
+    const uint32_t effectiveValue =
+        equiprules::ScaleV1FixedAffixByEnhance(equipProfile, row.effect(), qualityScaled, enhanceBonusPermyriad);
     info.set_quality_tier(tier);
     info.set_quality_name(QualityName(tier));
     info.set_quality_ratio_pct(ratioPct);
-    info.set_value_bps(equipcraft::ScaleValueByQuality(row.value_permyriad(), ratioPct));
+    info.set_value_bps(effectiveValue);
+    if (enhanceBonusPermyriad > 0 && equiprules::V1FixedAffixEnhanceSharePermyriad(equipProfile, row.effect()) > 0) {
+        info.set_source_cap_bps(equiprules::ScaleV1FixedAffixByEnhance(
+            equipProfile, row.effect(), row.source_cap(), enhanceBonusPermyriad));
+    }
     info.set_polish_pity_count((exempt || tier >= equipcraft::kMaxQualityTier) ? 0u : selected.polish_pity_count());
 }
 
@@ -393,12 +439,15 @@ void PlayerEquipmentV1System::FillDisplay(const ItemComp& item, BagItemInfo& inf
     }
     if (row->equip_profile() == 1 || row->equip_profile() == 2) {
         const bool valid = ValidSelections(item, row->equip_profile());
+        const uint32_t enhanceBonus = V1ItemEnhanceBonusPermyriad(item, *row);
         for (uint32_t slot = 1; slot <= 2; ++slot) {
             auto* shown = info.add_fixed_affix_slots();
             shown->set_slot(slot); shown->set_pool(PoolFor(row->equip_profile(), slot));
             if (!valid) continue;
             for (const auto& selected : item.equip().fixed_affixes())
-                if (selected.slot() == slot) FillAffixInstance(*AffixRow(selected.affix_id()), selected, *shown->mutable_selected());
+                if (selected.slot() == slot)
+                    FillAffixInstance(*AffixRow(selected.affix_id()), selected, row->equip_profile(),
+                                      enhanceBonus, *shown->mutable_selected());
         }
     } else if (row->equip_profile() == 3) {
         const auto* artifact = EquipArtifactTableManager::Instance().FindByIdSilent(row->artifact_id()).first;
@@ -412,7 +461,12 @@ void PlayerEquipmentV1System::CollectEffects(entt::entity player, EquipmentEffec
     const auto* bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(player);
     if (bags == nullptr) return;
     effects.set_support_sources_complete(true);
-    std::map<std::pair<uint32_t, uint32_t>, std::pair<uint64_t, uint32_t>> values;
+    struct ChannelAccum {
+        uint64_t rawSum{0};
+        uint32_t baseCap{0};
+        uint32_t maxEnhanceBonus{0};
+    };
+    std::map<std::pair<uint32_t, uint32_t>, ChannelAccum> values;
     std::vector<std::pair<Guid, const ItemTable*>> artifacts;
     bags->bags[kEquipment].ForEachItem([&](Guid id, const ItemComp& item) {
         if (item.size() != 1) return;
@@ -423,27 +477,39 @@ void PlayerEquipmentV1System::CollectEffects(entt::entity player, EquipmentEffec
             effects.set_support_sources_complete(false);
             return;
         }
+        const uint32_t enhanceBonus = V1ItemEnhanceBonusPermyriad(item, *row);
         for (const auto& selected : item.equip().fixed_affixes()) {
             const auto& affix = *AffixRow(selected.affix_id());
             const bool exempt = equipcraft::IsPolishExempt(affix.effect());
             const uint32_t tier = equipcraft::EffectiveQualityTier(selected.quality_tier(), exempt);
-            const uint32_t scaledValue = equipcraft::ScaleValueByQuality(affix.value_permyriad(), QualityRatioPct(tier));
+            const uint32_t qualityScaled = equipcraft::ScaleValueByQuality(affix.value_permyriad(), QualityRatioPct(tier));
+            const uint32_t effectiveValue = equiprules::ScaleV1FixedAffixByEnhance(
+                row->equip_profile(), affix.effect(), qualityScaled, enhanceBonus);
             auto& total = values[{affix.effect(), affix.effect_param()}];
-            total.first += scaledValue;
-            total.second = total.second == 0 ? affix.source_cap() : std::min(total.second, affix.source_cap());
+            total.rawSum += effectiveValue;
+            total.baseCap = total.baseCap == 0 ? affix.source_cap() : std::min(total.baseCap, affix.source_cap());
+            if (row->equip_profile() == equiprules::ToRaw(equiprules::EquipmentProfile::kV1Basic)) {
+                total.maxEnhanceBonus = std::max(total.maxEnhanceBonus, enhanceBonus);
+            }
             if (affix.effect() == 5 || affix.effect() == 6) {
                 auto* source = effects.add_support_sources();
                 source->set_kind(1); source->set_item_id(id); source->set_affix_id(affix.id());
                 source->set_name(row->name() + " · " + affix.name());
                 source->set_effect_kind(affix.effect() == 6 ? 2 : 1);
-                source->set_raw_bonus_bps(scaledValue);
+                source->set_raw_bonus_bps(effectiveValue);
                 source->set_source_cap_bps(affix.source_cap());
             }
         }
         if (row->equip_profile() == 3) artifacts.emplace_back(id, row);
     });
+    std::map<std::pair<uint32_t, uint32_t>, uint32_t> channelCaps;
     for (const auto& [key, total] : values) {
-        const uint32_t value = static_cast<uint32_t>(std::min<uint64_t>(total.first, total.second));
+        const uint32_t scaledCap = equiprules::ScaleV1FixedAffixByEnhance(
+            equiprules::ToRaw(equiprules::EquipmentProfile::kV1Basic), key.first,
+            total.baseCap, total.maxEnhanceBonus);
+        const uint32_t effectiveCap = std::min(scaledCap, equipbattle::MaximumEffectiveSourceBps(key.first));
+        channelCaps[key] = effectiveCap;
+        const uint32_t value = static_cast<uint32_t>(std::min<uint64_t>(total.rawSum, effectiveCap));
         switch (key.first) {
         case 1: effects.set_physical_attack_bps(value); break;
         case 2: effects.set_magic_attack_bps(value); break;
@@ -467,6 +533,10 @@ void PlayerEquipmentV1System::CollectEffects(entt::entity player, EquipmentEffec
     });
     uint32_t healingLeft = effects.outgoing_heal_bps(), shieldLeft = effects.shield_capacity_bps();
     for (auto& source : *supportSources) {
+        const uint32_t eff = source.effect_kind() == 2 ? 6u : 5u;
+        if (const auto capIt = channelCaps.find({eff, 0u}); capIt != channelCaps.end()) {
+            source.set_source_cap_bps(capIt->second);
+        }
         auto& left = source.effect_kind() == 2 ? shieldLeft : healingLeft;
         const auto contribution = std::min(left, static_cast<uint32_t>(source.raw_bonus_bps()));
         source.set_effective_bonus_bps(contribution); left -= contribution;
@@ -510,7 +580,9 @@ struct PreparedCraft {
     uint64_t baseGoldCost{0};
     uint64_t proxyFeeGold{0};
     uint64_t proxyMasterPlayerId{0};
+    uint32_t proxyMasterTitleId{0};
     std::string proxyMasterName{};
+    bool teamFreeProxyApplied{false};
     uint32_t effectiveMasteryTier{equipcraft::kMasteryApprentice};
     int targetAffixIndex{-1};
     bool polishExempt{false};
@@ -518,7 +590,26 @@ struct PreparedCraft {
     bool tradableOnly{false};
     bool willBindItem{false};
     bool bindConfirmBlocked{false};
+    uint32_t polishTargetTier{0};
+    uint32_t maxPolishAttempts{1};
+    uint32_t maxPolishSandCost{0};
+    uint64_t maxPolishGoldCost{0};
 };
+
+bool ShareActiveTeam(entt::entity a, entt::entity b) {
+    const auto* ta = tlsEcs.actorRegistry.try_get<TeamId>(a);
+    const auto* tb = tlsEcs.actorRegistry.try_get<TeamId>(b);
+    return ta != nullptr && tb != nullptr && ta->team_id() != 0 && ta->team_id() == tb->team_id();
+}
+
+uint32_t ActiveCraftTitleId(const PlayerCraftComp& craft) {
+    const uint32_t id = craft.equipped_craft_title_id();
+    if (id == 0) return 0;
+    return equipcraft::IsCraftTitleUnlocked(id, craft.forge_mastery_exp(), craft.scroll_mastery_exp(),
+                                            craft.supreme_forged_count(), craft.rare_books_crafted_count(),
+                                            craft.proxy_orders_completed())
+        ? id : 0u;
+}
 
 bool UnknownFields(const google::protobuf::Message& message) {
     return !message.GetReflection()->GetUnknownFields(message).empty();
@@ -535,42 +626,34 @@ bool LocateEquipment(const PlayerBagsComp& bags, Guid itemId, ItemComp& out, Bag
     return false;
 }
 
-bool CanCreditProxyMaster(entt::entity master, uint64_t netFee) {
-    if (netFee == 0) return true;
-    if (tlsEcs.actorRegistry.try_get<CurrencyComp>(master) == nullptr ||
-        tlsEcs.actorRegistry.try_get<PlayerCurrencyComp>(master) == nullptr) return false;
-    if (GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kCurrency,
-                                            static_cast<uint32_t>(kCurrencyGold)) ||
-        CurrencySystem::IsCurrencyBlocked(master, kCurrencyGold)) return false;
-    return !CurrencySystem::CreditOverflows(master, kCurrencyGold, netFee);
-}
-
 uint32_t ResolveProxyMaster(entt::entity buyer, uint64_t proxyMasterId, PreparedCraft& prepared) {
     if (proxyMasterId == 0) {
         const auto* craft = tlsEcs.actorRegistry.try_get<PlayerCraftComp>(buyer);
         const uint32_t exp = craft != nullptr ? craft->forge_mastery_exp() : 0u;
         prepared.effectiveMasteryTier = equipcraft::MasteryTierForExp(exp);
+        prepared.proxyMasterTitleId = craft != nullptr ? ActiveCraftTitleId(*craft) : 0u;
         return kSuccess;
     }
     const uint64_t buyerId = tlsEcs.GetPlayerId(buyer);
-    if (proxyMasterId == buyerId) return kEquipProxyMasterUnavailable;
-    const entt::entity master = tlsEcs.GetPlayer(proxyMasterId);
-    if (!tlsEcs.actorRegistry.valid(master) || !PlayerLifecycleSystem::IsPlayerMutable(master)) {
+    CraftProxyStallInfo stall;
+    if (!PlayerCraftSystem::ResolveSharedProxyStall(buyerId, proxyMasterId, true, false, stall)) {
         return kEquipProxyMasterUnavailable;
     }
-    const auto* masterCraft = tlsEcs.actorRegistry.try_get<PlayerCraftComp>(master);
-    if (masterCraft == nullptr || !masterCraft->proxy_stall_open() ||
-        equipcraft::MasteryTierForExp(masterCraft->forge_mastery_exp()) < equipcraft::kMasteryMaster ||
-        !equipcraft::ValidProxyFee(masterCraft->proxy_forge_fee_gold())) {
-        return kEquipProxyMasterUnavailable;
-    }
-    const uint64_t netFee = equipcraft::ProxyNetGold(masterCraft->proxy_forge_fee_gold());
-    if (!CanCreditProxyMaster(master, netFee)) {
+    const entt::entity localMaster = tlsEcs.GetPlayer(proxyMasterId);
+    const bool teamFree = stall.team_free_proxy() && tlsEcs.actorRegistry.valid(localMaster) &&
+        ShareActiveTeam(buyer, localMaster);
+    const uint64_t fee = teamFree ? 0u : stall.proxy_forge_fee_gold();
+    const uint64_t netFee = equipcraft::ProxyNetGold(fee);
+    if (netFee > 0 &&
+        GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kCurrency,
+                                            static_cast<uint32_t>(kCurrencyGold))) {
         return kEquipProxyMasterUnavailable;
     }
     prepared.proxyMasterPlayerId = proxyMasterId;
-    prepared.proxyFeeGold = masterCraft->proxy_forge_fee_gold();
-    prepared.proxyMasterName = PlayerDisplayName(master, proxyMasterId);
+    prepared.proxyFeeGold = fee;
+    prepared.teamFreeProxyApplied = teamFree;
+    prepared.proxyMasterTitleId = stall.equipped_craft_title_id();
+    prepared.proxyMasterName = equipcraft::FormatMasterSignature(prepared.proxyMasterTitleId, stall.master_name());
     prepared.effectiveMasteryTier = equipcraft::kMasteryMaster;
     return kSuccess;
 }
@@ -623,6 +706,10 @@ void PlanBoundPolicy(entt::entity player, const Bag& inventory, const EquipmentC
 
 uint32_t PrepareChoice(entt::entity player, const EquipmentCraftChoice& choice, PreparedCraft& prepared) {
     if (UnknownFields(choice)) return kFeatureUnavailable;
+    if (choice.operation() != EquipmentCraftChoice::POLISH_AFFIX &&
+        (choice.target_quality_tier() != 0 || choice.max_polish_attempts() != 0)) {
+        return kInvalidParameter;
+    }
     const auto* bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(player);
     if (bags == nullptr) return kServiceUnavailable;
     const auto& inventory = bags->bags[kInventory];
@@ -758,6 +845,18 @@ uint32_t PrepareChoice(entt::entity player, const EquipmentCraftChoice& choice, 
             choice.expected_polish_pity_count() != current.polish_pity_count()) {
             return kEquipPolishPityChanged;
         }
+        if (choice.max_polish_attempts() > equipcraft::kMaxBatchPolishAttempts) {
+            return kInvalidParameter;
+        }
+        if (choice.target_quality_tier() != 0 &&
+            (choice.target_quality_tier() < 2u || choice.target_quality_tier() > equipcraft::kMaxQualityTier ||
+             choice.target_quality_tier() <= currentTier)) {
+            return kInvalidParameter;
+        }
+        if (choice.use_guarantee_charm() &&
+            (choice.target_quality_tier() != 0 || choice.max_polish_attempts() > 1u)) {
+            return kInvalidParameter;
+        }
         if (const auto proxyErr = ResolveProxyMaster(player, choice.proxy_master_player_id(), prepared);
             proxyErr != kSuccess) return proxyErr;
         prepared.result = prepared.original;
@@ -772,6 +871,41 @@ uint32_t PrepareChoice(entt::entity player, const EquipmentCraftChoice& choice, 
             prepared.consumed[prepared.extraMaterialId] += prepared.extraMaterialCount;
         }
         PlanBoundPolicy(player, inventory, choice, false, prepared);
+
+        const uint32_t pityRemaining = current.polish_pity_count() < equipcraft::kPolishPityLimit
+            ? (equipcraft::kPolishPityLimit - current.polish_pity_count()) : 1u;
+        const bool batchRequested = !choice.use_guarantee_charm() &&
+            (choice.target_quality_tier() != 0 || choice.max_polish_attempts() > 1u);
+        if (batchRequested) {
+            prepared.polishTargetTier = choice.target_quality_tier() != 0
+                ? choice.target_quality_tier() : equipcraft::kMaxQualityTier;
+            const uint32_t requestedCap = choice.max_polish_attempts() != 0
+                ? choice.max_polish_attempts() : equipcraft::kMaxBatchPolishAttempts;
+            const uint32_t maxByPity = std::min(requestedCap, pityRemaining);
+            const uint64_t sandAvail = prepared.tradableOnly
+                ? BagService::RemovableTradableCount(player, inventory, equipcraft::kPolishSandConfigId)
+                : BagService::RemovableCount(player, inventory, equipcraft::kPolishSandConfigId);
+            const uint32_t maxBySand = static_cast<uint32_t>(
+                std::min<uint64_t>(maxByPity, sandAvail / equipcraft::kPolishSandCount));
+            const bool allowBindForBase = prepared.result.bound();
+            const uint64_t unitStrict = prepared.proxyFeeGold + (allowBindForBase ? 0u : prepared.baseGoldCost);
+            const uint64_t unitPreferBind = allowBindForBase ? prepared.baseGoldCost : 0u;
+            uint32_t maxByGold = 0;
+            for (uint32_t n = 1; n <= maxBySand; ++n) {
+                if ((unitStrict == 0 && unitPreferBind == 0) ||
+                    CurrencySystem::CanAffordSplitGold(player, unitStrict * n, unitPreferBind * n)) {
+                    maxByGold = n;
+                } else {
+                    break;
+                }
+            }
+            prepared.maxPolishAttempts = std::max<uint32_t>(1u, maxByGold);
+        } else {
+            prepared.polishTargetTier = 0;
+            prepared.maxPolishAttempts = 1u;
+        }
+        prepared.maxPolishSandCost = prepared.maxPolishAttempts * equipcraft::kPolishSandCount;
+        prepared.maxPolishGoldCost = uint64_t{prepared.maxPolishAttempts} * (prepared.baseGoldCost + prepared.proxyFeeGold);
         return kSuccess;
     }
 
@@ -938,6 +1072,8 @@ void FillCraftResult(entt::entity player, const ClientRequestResult& result, boo
     response.set_result_quality_tier(result.equipmentQualityTier);
     response.set_result_polish_pity_count(result.equipmentPolishPityCount);
     response.set_guaranteed_by_pity(result.equipmentGuaranteedByPity);
+    response.set_polish_attempts_used(result.equipmentPolishAttemptsUsed);
+    response.set_actual_gold_spent(result.equipmentActualGoldSpent);
     PlayerEquipmentV1System::FillForgeMastery(player, *response.mutable_forge_mastery());
     auto error = PlayerBagSystem::BuildSnapshot(player, kInventory, *response.mutable_bag());
     if (error == kSuccess) error = PlayerBagSystem::BuildSnapshot(player, kEquipment, *response.mutable_equipment());
@@ -983,6 +1119,10 @@ uint32_t PlayerEquipmentV1System::Preview(entt::entity player, const PreviewEqui
     preview.set_proxy_fee_gold(prepared.proxyFeeGold);
     if (!prepared.proxyMasterName.empty()) preview.set_proxy_master_name(prepared.proxyMasterName);
     preview.set_will_bind_item(prepared.willBindItem);
+    preview.set_max_polish_attempts(prepared.maxPolishAttempts);
+    preview.set_max_polish_sand_cost(prepared.maxPolishSandCost);
+    preview.set_max_polish_gold_cost(prepared.maxPolishGoldCost);
+    preview.set_team_free_proxy_applied(prepared.teamFreeProxyApplied);
     const auto unavailable = Availability(player, prepared);
     preview.set_available(unavailable == kSuccess);
     if (unavailable != kSuccess) preview.set_unavailable_tip(unavailable);
@@ -1025,6 +1165,8 @@ void PlayerEquipmentV1System::Commit(entt::entity player, const CommitEquipmentC
     applied.equipmentItemId = prepared.result.item_id();
 
     const auto op = request.choice().operation();
+    uint32_t actualPolishAttempts = 1;
+    std::vector<PolishStepTrace> polishSteps;
     if ((op == EquipmentCraftChoice::INSTALL_AFFIX || prepared.rerollQualityOnReforge) &&
         prepared.targetAffixIndex >= 0) {
         auto* target = prepared.result.mutable_equip()->mutable_fixed_affixes(prepared.targetAffixIndex);
@@ -1041,25 +1183,50 @@ void PlayerEquipmentV1System::Commit(entt::entity player, const CommitEquipmentC
         applied.equipmentPolishPityCount = target.polish_pity_count();
     } else if (op == EquipmentCraftChoice::POLISH_AFFIX && prepared.targetAffixIndex >= 0) {
         auto* target = prepared.result.mutable_equip()->mutable_fixed_affixes(prepared.targetAffixIndex);
-        const uint32_t currentTier = equipcraft::EffectiveQualityTier(target->quality_tier(), false);
-        const uint32_t rolledTier = RollQualityForMastery(prepared.effectiveMasteryTier);
-        const auto polished = equipcraft::ResolvePolish(currentTier, target->polish_pity_count(),
-                                                        rolledTier, request.choice().use_guarantee_charm());
-        target->set_quality_tier(polished.newTier);
-        target->set_polish_pity_count(polished.newPityCount);
-        applied.equipmentQualityTier = polished.newTier;
-        applied.equipmentPolishPityCount = polished.newPityCount;
-        applied.equipmentGuaranteedByPity = polished.guaranteedByPity;
+        uint32_t tier = equipcraft::EffectiveQualityTier(target->quality_tier(), false);
+        uint32_t pity = target->polish_pity_count();
+        bool guaranteed = false;
+        actualPolishAttempts = 0;
+        for (uint32_t step = 1; step <= prepared.maxPolishAttempts; ++step) {
+            const uint32_t rolledTier = RollQualityForMastery(prepared.effectiveMasteryTier);
+            const auto polished = equipcraft::ResolvePolish(tier, pity, rolledTier, request.choice().use_guarantee_charm());
+            PolishStepTrace trace;
+            trace.set_attempt_index(step);
+            trace.set_rolled_tier(rolledTier);
+            trace.set_tier_before(tier);
+            trace.set_tier_after(polished.newTier);
+            trace.set_guaranteed_by_pity(polished.guaranteedByPity);
+            polishSteps.push_back(std::move(trace));
+            tier = polished.newTier;
+            pity = polished.newPityCount;
+            guaranteed = guaranteed || polished.guaranteedByPity;
+            actualPolishAttempts = step;
+            if (tier >= equipcraft::kMaxQualityTier ||
+                (prepared.polishTargetTier > 0 && tier >= prepared.polishTargetTier)) {
+                break;
+            }
+        }
+        target->set_quality_tier(tier);
+        target->set_polish_pity_count(pity);
+        applied.equipmentQualityTier = tier;
+        applied.equipmentPolishPityCount = pity;
+        applied.equipmentGuaranteedByPity = guaranteed;
+        applied.equipmentPolishAttemptsUsed = actualPolishAttempts;
+        // 仅按实际执行手数精准扣除重铸砂，绝不多扣未使用手数。
+        prepared.consumed[equipcraft::kPolishSandConfigId] = actualPolishAttempts * equipcraft::kPolishSandCount;
     }
 
-    // 宗师（本人或主城原子代打宗师）产出极品非豁免词条时永久刻上宗师署名（0 战力加成）。
-    if ((op == EquipmentCraftChoice::INSTALL_AFFIX || op == EquipmentCraftChoice::POLISH_AFFIX) &&
-        !prepared.polishExempt && applied.equipmentQualityTier == equipcraft::kMaxQualityTier &&
-        prepared.effectiveMasteryTier == equipcraft::kMasteryMaster) {
+    const bool supremeProduced =
+        (op == EquipmentCraftChoice::INSTALL_AFFIX || op == EquipmentCraftChoice::POLISH_AFFIX) &&
+        !prepared.polishExempt && applied.equipmentQualityTier == equipcraft::kMaxQualityTier;
+
+    // 宗师（本人或主城原子代打宗师）产出极品非豁免词条时永久刻上宗师雅号署名（0 战力加成）。
+    if (supremeProduced && prepared.effectiveMasteryTier == equipcraft::kMasteryMaster) {
         const uint64_t signerId = prepared.proxyMasterPlayerId != 0
             ? prepared.proxyMasterPlayerId : tlsEcs.GetPlayerId(player);
         const std::string signerName = prepared.proxyMasterPlayerId != 0
-            ? prepared.proxyMasterName : PlayerDisplayName(player, signerId);
+            ? prepared.proxyMasterName
+            : equipcraft::FormatMasterSignature(prepared.proxyMasterTitleId, PlayerDisplayName(player, signerId));
         prepared.result.mutable_equip()->set_crafter_player_id(signerId);
         prepared.result.mutable_equip()->set_crafter_name(signerName);
     }
@@ -1075,9 +1242,33 @@ void PlayerEquipmentV1System::Commit(entt::entity player, const CommitEquipmentC
                                 op == EquipmentCraftChoice::UPGRADE_TIER});
     }
 
+    const uint64_t buyerId = tlsEcs.GetPlayerId(player);
+    const uint64_t totalBaseGold = op == EquipmentCraftChoice::POLISH_AFFIX
+        ? uint64_t{actualPolishAttempts} * prepared.baseGoldCost : prepared.baseGoldCost;
+    const uint64_t totalProxyFee = op == EquipmentCraftChoice::POLISH_AFFIX
+        ? uint64_t{actualPolishAttempts} * prepared.proxyFeeGold : prepared.proxyFeeGold;
+    const uint64_t proxyNetGold = prepared.proxyMasterPlayerId != 0 ? equipcraft::ProxyNetGold(totalProxyFee) : 0u;
+    applied.equipmentActualGoldSpent = totalBaseGold + totalProxyFee;
+
+    PlayerMailOutboxSystem::PreparedProxyFeeMail preparedProxyMail;
+    if (prepared.proxyMasterPlayerId != 0 && proxyNetGold > 0) {
+        if (GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kCurrency,
+                                                static_cast<uint32_t>(kCurrencyGold))) {
+            reject(kEquipProxyMasterUnavailable);
+            return;
+        }
+        const auto payoutErr = PlayerMailOutboxSystem::PrepareProxyFeePayout(
+            player, prepared.proxyMasterPlayerId, proxyNetGold, request.client_request_id(),
+            PlayerDisplayName(player, buyerId), preparedProxyMail);
+        if (payoutErr != kSuccess) {
+            reject(payoutErr, false);
+            return;
+        }
+    }
+
     const bool allowBindForBaseFee = (op != EquipmentCraftChoice::UNSEAL_TO_TRADABLE) && prepared.result.bound();
-    const uint64_t strictGold = prepared.proxyFeeGold + (allowBindForBaseFee ? 0u : prepared.baseGoldCost);
-    const uint64_t preferBindGold = allowBindForBaseFee ? prepared.baseGoldCost : 0u;
+    const uint64_t strictGold = totalProxyFee + (allowBindForBaseFee ? 0u : totalBaseGold);
+    const uint64_t preferBindGold = allowBindForBaseFee ? totalBaseGold : 0u;
     const TransactionType goldTxType = (op == EquipmentCraftChoice::POLISH_AFFIX ||
                                         op == EquipmentCraftChoice::REFORGE_AFFIX ||
                                         op == EquipmentCraftChoice::UPGRADE_TIER)
@@ -1100,20 +1291,21 @@ void PlayerEquipmentV1System::Commit(entt::entity player, const CommitEquipmentC
                 !CurrencySystem::CanAffordSplitGold(player, strictGold, preferBindGold)) {
                 return kEquipCraftGoldNotEnough;
             }
-            entt::entity proxyMaster = entt::null;
-            uint64_t proxyNetGold = 0;
             if (prepared.proxyMasterPlayerId != 0) {
-                proxyMaster = tlsEcs.GetPlayer(prepared.proxyMasterPlayerId);
-                const auto* masterCraft = tlsEcs.actorRegistry.valid(proxyMaster)
-                    ? tlsEcs.actorRegistry.try_get<PlayerCraftComp>(proxyMaster) : nullptr;
-                if (masterCraft == nullptr || !PlayerLifecycleSystem::IsPlayerMutable(proxyMaster) ||
-                    !masterCraft->proxy_stall_open() ||
-                    equipcraft::MasteryTierForExp(masterCraft->forge_mastery_exp()) < equipcraft::kMasteryMaster ||
-                    masterCraft->proxy_forge_fee_gold() != prepared.proxyFeeGold) {
+                CraftProxyStallInfo liveStall;
+                if (!PlayerCraftSystem::ResolveSharedProxyStall(buyerId, prepared.proxyMasterPlayerId, true, false, liveStall)) {
                     return kEquipProxyMasterUnavailable;
                 }
-                proxyNetGold = equipcraft::ProxyNetGold(prepared.proxyFeeGold);
-                if (!CanCreditProxyMaster(proxyMaster, proxyNetGold)) {
+                const entt::entity localMaster = tlsEcs.GetPlayer(prepared.proxyMasterPlayerId);
+                const bool liveTeamFree = liveStall.team_free_proxy() && tlsEcs.actorRegistry.valid(localMaster) &&
+                    ShareActiveTeam(player, localMaster);
+                const uint64_t liveUnitFee = liveTeamFree ? 0u : liveStall.proxy_forge_fee_gold();
+                if (liveUnitFee != prepared.proxyFeeGold) {
+                    return kEquipProxyMasterUnavailable;
+                }
+                if (proxyNetGold > 0 &&
+                    GainBlockService::IsGloballyBlocked(GainBlockService::GainType::kCurrency,
+                                                        static_cast<uint32_t>(kCurrencyGold))) {
                     return kEquipProxyMasterUnavailable;
                 }
             }
@@ -1129,28 +1321,42 @@ void PlayerEquipmentV1System::Commit(entt::entity player, const CommitEquipmentC
                     player, strictGold, preferBindGold, goldTxType, request.client_request_id());
                 if (deductErr != kSuccess) return kEquipCraftGoldNotEnough;
             }
-            if (proxyMaster != entt::null && proxyNetGold > 0) {
-                (void)CurrencySystem::AddCurrency(proxyMaster, kCurrencyGold, static_cast<int64_t>(proxyNetGold),
-                                                  TX_CRAFT_PROXY_FEE, request.client_request_id());
+            if (prepared.proxyMasterPlayerId != 0 && proxyNetGold > 0) {
+                // 95% 净银两写入买家同事务 WALLET 持久组的待寄邮件出箱，经邮件服务 asset_op 异步入账。
+                PlayerMailOutboxSystem::CommitPreparedProxyFee(player, preparedProxyMail,
+                                                               TimeSystem::NowMillisecondsUTC());
             }
-            // 本人打造/装条/打磨自然涨 1 点铸器熟练度（无体力、无日清、只增不减；重铸/解封/继承/无损升档不涨熟练度）。
+            // 本人打造/装条/打磨自然涨铸器熟练度（按实际手数累加，无体力、无日清、只增不减；重铸/解封/继承/无损升档不涨熟练度）。
             if (prepared.proxyMasterPlayerId == 0 && op != EquipmentCraftChoice::REFORGE_AFFIX &&
                 op != EquipmentCraftChoice::UNSEAL_TO_TRADABLE && op != EquipmentCraftChoice::INHERIT_ENHANCE &&
                 op != EquipmentCraftChoice::UPGRADE_TIER) {
-                if (auto* craft = tlsEcs.actorRegistry.try_get<PlayerCraftComp>(player);
-                    craft != nullptr && craft->forge_mastery_exp() < std::numeric_limits<uint32_t>::max()) {
-                    craft->set_forge_mastery_exp(craft->forge_mastery_exp() + 1);
+                if (auto* craft = tlsEcs.actorRegistry.try_get<PlayerCraftComp>(player); craft != nullptr) {
+                    const uint32_t expGain = op == EquipmentCraftChoice::POLISH_AFFIX ? actualPolishAttempts : 1u;
+                    const uint64_t nextExp = uint64_t{craft->forge_mastery_exp()} + expGain;
+                    craft->set_forge_mastery_exp(static_cast<uint32_t>(
+                        std::min<uint64_t>(nextExp, std::numeric_limits<uint32_t>::max())));
+                    if (supremeProduced && craft->supreme_forged_count() < std::numeric_limits<uint32_t>::max()) {
+                        craft->set_supreme_forged_count(craft->supreme_forged_count() + 1u);
+                    }
                 }
             }
             ledger.Swap(&next);
             return kSuccess;
         }, prepared.tradableOnly, &consumedBound, bindOnConsumedBound);
     if (error != kSuccess) { reject(error); return; }
+    if (prepared.proxyMasterPlayerId != 0) {
+        PlayerCraftSystem::RecordProxyOrderReputation(
+            prepared.proxyMasterPlayerId, supremeProduced ? 1u : 0u, 0u, proxyNetGold,
+            PlayerDisplayName(player, buyerId));
+    }
     if (!replacements.empty() && prepared.holder == kEquipment) {
         PlayerAttributeSystem::Recalculate(player, PlayerAttributeSystem::RecalcReason::kEquipmentChanged);
         PlayerAttributeSystem::PushPanel(player);
     }
     FillCraftResult(player, applied, false, response);
+    for (const auto& step : polishSteps) {
+        *response.add_polish_steps() = step;
+    }
 }
 
 void PlayerEquipmentV1System::SetPersistForTest(PersistFn fn) {

@@ -82,6 +82,14 @@ struct SeasonRuleHonor_badge_icon_keyComp {
     std::string_view value;
 };
 
+struct SeasonRuleCycle_orderComp {
+    uint32_t value;
+};
+
+struct SeasonRuleCycle_duration_daysComp {
+    uint32_t value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -137,4 +145,10 @@ inline SeasonRuleHonor_title_nameComp MakeSeasonRuleHonor_title_nameComp(const S
 }
 inline SeasonRuleHonor_badge_icon_keyComp MakeSeasonRuleHonor_badge_icon_keyComp(const SeasonRuleTable& row) {
     return { std::string_view(row.honor_badge_icon_key()) };
+}
+inline SeasonRuleCycle_orderComp MakeSeasonRuleCycle_orderComp(const SeasonRuleTable& row) {
+    return { row.cycle_order() };
+}
+inline SeasonRuleCycle_duration_daysComp MakeSeasonRuleCycle_duration_daysComp(const SeasonRuleTable& row) {
+    return { row.cycle_duration_days() };
 }

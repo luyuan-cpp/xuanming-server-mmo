@@ -511,15 +511,15 @@ TEST_F(AfkPassSystemTest, LightCardPopulatesLoadoutSlotsAndStage2TradableFlag)
 {
 	AfkPassInfo info;
 	AfkPassSystem::FillInfo(player, kNow, info);
-	EXPECT_EQ(info.unlocked_loadout_slots(), 3u);
+	EXPECT_EQ(info.unlocked_loadout_slots(), 2u);
 	EXPECT_FALSE(info.stage2_tradable_enabled());
 
 	::BuyAfkPassResponse bought;
 	ASSERT_EQ(AfkPassSystem::Buy(player, Request(7801), kNow, bought), kSuccess);
-	EXPECT_EQ(bought.info().unlocked_loadout_slots(), 6u);
+	EXPECT_EQ(bought.info().unlocked_loadout_slots(), 4u);
 	EXPECT_TRUE(bought.info().stage2_tradable_enabled());
 
 	ASSERT_EQ(AfkPassSystem::GmSet(player, 0, kNow + 5, info), kSuccess);
-	EXPECT_EQ(info.unlocked_loadout_slots(), 3u);
+	EXPECT_EQ(info.unlocked_loadout_slots(), 2u);
 	EXPECT_FALSE(info.stage2_tradable_enabled());
 }

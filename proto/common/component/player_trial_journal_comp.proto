@@ -22,6 +22,7 @@ message TrialJournalSoloRecord {
   uint32 best_rounds = 1;
   uint64 achieved_at_ms = 2;
   TrialJournalLoadoutSnapshot loadout = 3;
+  uint64 battle_id = 4; // 刷新该单人最佳回合时的权威 battle_id（供回放与约战帖引用）
 }
 
 // 好友合战最快回合纪录（入场 2..5 名真人，仅保存在本人私藏手记中，不建全服野队竞速榜）。
@@ -31,6 +32,7 @@ message TrialJournalCoopRecord {
   uint64 achieved_at_ms = 3;
   uint32 pet_table_id = 4;
   repeated string teammate_names = 5; // 开局冻结的同队其他成员展示名（至多 4 名，已脱敏）
+  uint64 battle_id = 6; // 刷新该合战最快回合时的权威 battle_id（供回放与约战帖引用）
 }
 
 // 单个（关卡格, 可比规则版本）的最佳纪录；records 下标不承载顺序语义（AGENTS.md §11.6）。
@@ -39,6 +41,10 @@ message TrialJournalEntryRecord {
   uint32 rule_version = 2;
   TrialJournalSoloRecord solo_best = 3;
   TrialJournalCoopRecord coop_best = 4;
+  uint32 best_vow_mask = 5;      // V3：达成最高誓约纪录时的誓约位掩码（0=尚未带誓约通关）
+  uint32 best_vow_count = 6;     // V3：最高达成誓约条数（0..4）
+  uint32 best_vow_rounds = 7;    // V3：最高誓约纪录对应通关回合数
+  uint64 best_vow_battle_id = 8; // V3：最高誓约纪录对应权威 battle_id
 }
 
 // 卷三（季游奇谈）按赛季隔离的轻档案，严禁混入永久单调全局位图。

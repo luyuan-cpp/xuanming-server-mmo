@@ -351,6 +351,28 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int CYCLE_ORDER_FIELD_NUMBER = 18;
+  private int cycleOrder_ = 0;
+  /**
+   * <code>uint32 cycle_order = 18;</code>
+   * @return The cycleOrder.
+   */
+  @java.lang.Override
+  public int getCycleOrder() {
+    return cycleOrder_;
+  }
+
+  public static final int CYCLE_DURATION_DAYS_FIELD_NUMBER = 19;
+  private int cycleDurationDays_ = 0;
+  /**
+   * <code>uint32 cycle_duration_days = 19;</code>
+   * @return The cycleDurationDays.
+   */
+  @java.lang.Override
+  public int getCycleDurationDays() {
+    return cycleDurationDays_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -415,6 +437,12 @@ private static final long serialVersionUID = 0L;
     }
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(honorBadgeIconKey_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 17, honorBadgeIconKey_);
+    }
+    if (cycleOrder_ != 0) {
+      output.writeUInt32(18, cycleOrder_);
+    }
+    if (cycleDurationDays_ != 0) {
+      output.writeUInt32(19, cycleDurationDays_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -484,6 +512,14 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(honorBadgeIconKey_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(17, honorBadgeIconKey_);
     }
+    if (cycleOrder_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(18, cycleOrder_);
+    }
+    if (cycleDurationDays_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(19, cycleDurationDays_);
+    }
     return size;
   }
   @java.lang.Override
@@ -542,6 +578,10 @@ private static final long serialVersionUID = 0L;
         .equals(other.getHonorTitleName())) return false;
     if (!getHonorBadgeIconKey()
         .equals(other.getHonorBadgeIconKey())) return false;
+    if (getCycleOrder()
+        != other.getCycleOrder()) return false;
+    if (getCycleDurationDays()
+        != other.getCycleDurationDays()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -591,6 +631,10 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getHonorTitleName().hashCode();
     hash = (37 * hash) + HONOR_BADGE_ICON_KEY_FIELD_NUMBER;
     hash = (53 * hash) + getHonorBadgeIconKey().hashCode();
+    hash = (37 * hash) + CYCLE_ORDER_FIELD_NUMBER;
+    hash = (53 * hash) + getCycleOrder();
+    hash = (37 * hash) + CYCLE_DURATION_DAYS_FIELD_NUMBER;
+    hash = (53 * hash) + getCycleDurationDays();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -739,6 +783,8 @@ private static final long serialVersionUID = 0L;
       desc_ = "";
       honorTitleName_ = "";
       honorBadgeIconKey_ = "";
+      cycleOrder_ = 0;
+      cycleDurationDays_ = 0;
       return this;
     }
 
@@ -823,6 +869,12 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00010000) != 0)) {
         result.honorBadgeIconKey_ = honorBadgeIconKey_;
       }
+      if (((from_bitField0_ & 0x00020000) != 0)) {
+        result.cycleOrder_ = cycleOrder_;
+      }
+      if (((from_bitField0_ & 0x00040000) != 0)) {
+        result.cycleDurationDays_ = cycleDurationDays_;
+      }
     }
 
     @java.lang.Override
@@ -895,6 +947,12 @@ private static final long serialVersionUID = 0L;
         honorBadgeIconKey_ = other.honorBadgeIconKey_;
         bitField0_ |= 0x00010000;
         onChanged();
+      }
+      if (other.getCycleOrder() != 0) {
+        setCycleOrder(other.getCycleOrder());
+      }
+      if (other.getCycleDurationDays() != 0) {
+        setCycleDurationDays(other.getCycleDurationDays());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -1007,6 +1065,16 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00010000;
               break;
             } // case 138
+            case 144: {
+              cycleOrder_ = input.readUInt32();
+              bitField0_ |= 0x00020000;
+              break;
+            } // case 144
+            case 152: {
+              cycleDurationDays_ = input.readUInt32();
+              bitField0_ |= 0x00040000;
+              break;
+            } // case 152
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1724,6 +1792,70 @@ private static final long serialVersionUID = 0L;
       checkByteStringIsUtf8(value);
       honorBadgeIconKey_ = value;
       bitField0_ |= 0x00010000;
+      onChanged();
+      return this;
+    }
+
+    private int cycleOrder_ ;
+    /**
+     * <code>uint32 cycle_order = 18;</code>
+     * @return The cycleOrder.
+     */
+    @java.lang.Override
+    public int getCycleOrder() {
+      return cycleOrder_;
+    }
+    /**
+     * <code>uint32 cycle_order = 18;</code>
+     * @param value The cycleOrder to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCycleOrder(int value) {
+
+      cycleOrder_ = value;
+      bitField0_ |= 0x00020000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 cycle_order = 18;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCycleOrder() {
+      bitField0_ = (bitField0_ & ~0x00020000);
+      cycleOrder_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int cycleDurationDays_ ;
+    /**
+     * <code>uint32 cycle_duration_days = 19;</code>
+     * @return The cycleDurationDays.
+     */
+    @java.lang.Override
+    public int getCycleDurationDays() {
+      return cycleDurationDays_;
+    }
+    /**
+     * <code>uint32 cycle_duration_days = 19;</code>
+     * @param value The cycleDurationDays to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCycleDurationDays(int value) {
+
+      cycleDurationDays_ = value;
+      bitField0_ |= 0x00040000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 cycle_duration_days = 19;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCycleDurationDays() {
+      bitField0_ = (bitField0_ & ~0x00040000);
+      cycleDurationDays_ = 0;
       onChanged();
       return this;
     }

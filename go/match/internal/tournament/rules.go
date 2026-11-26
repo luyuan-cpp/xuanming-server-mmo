@@ -5,7 +5,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -30,8 +29,6 @@ const (
 	HonorBitSweep    uint32 = 1 << 4 // 零封强敌（BO3 以 2:0 完胜）
 	HonorBitChampion uint32 = 1 << 5 // 问鼎群仙（夺得本季全服总冠军）
 )
-
-var utc8Location = time.FixedZone("UTC+8", 8*3600)
 
 // NormalizeSquadName 校验并归一化战队名称:
 //   - 去首尾空白,长度须在 [2, 12] Unicode 字符内;
@@ -383,12 +380,6 @@ func LeylineForGame(seq []battlepb.TournamentLeylineElement, gameIndex uint32) b
 		return battlepb.TournamentLeylineElement_TOURNAMENT_LEYLINE_UNSPECIFIED
 	}
 	return seq[gameIndex-1]
-}
-
-// Utc8DayKey 将 Unix 毫秒转换为 UTC+8 自然日键 YYYYMMDD(每日免费观道致敬重置口径)。
-func Utc8DayKey(unixMs uint64) uint32 {
-	t := time.UnixMilli(int64(unixMs)).In(utc8Location)
-	return uint32(t.Year()*10000 + int(t.Month())*100 + t.Day())
 }
 
 // IsValidSpectateCheerPhrase 校验观战预设喝彩白名单 ID(严格 1..6,零自由文本)。

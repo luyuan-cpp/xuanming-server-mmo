@@ -253,6 +253,9 @@ BattleEvaluation EvaluateBattle(const BattleSettlementData& settlement) {
         eval.baseUnits = System::kBattleUnits;
         eval.bonusUnits = 0u;
         return eval;
+    case match::MATCH_MODE_JIANGHU_DUEL:
+        // 天墉生死状严格零核心材料/零数值产出（防双号互刷，守住 660 装备体系隔离红线）。
+        return eval;
     default:
         return eval;
     }

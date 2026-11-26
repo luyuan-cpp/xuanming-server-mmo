@@ -6757,10 +6757,10 @@
    "cooldown_rounds": 2,
    "damage": "4*level",
    "damage_type": 1,
-   "description": "【玄脉之季免费】物理攻击敌方最多3个目标并附加2回合破甲（防御-15%）；第二季预埋模板。",
+   "description": "【玄脉之季免费】物理攻击敌方最多3个目标并附加2回合易伤（受击伤害+10%）。",
    "effect": [
-    150010,
-    150011
+    151010,
+    151011
    ],
    "icon_key": "UI/Skills/15001",
    "id": 15101,
@@ -6774,6 +6774,7 @@
    "require_target": 1,
    "scroll_id": 0,
    "season_id": 2,
+   "secondary_target_policy": 0,
    "skill_type": [
     1
    ],
@@ -6794,10 +6795,10 @@
    "cooldown_rounds": 2,
    "damage": "4*level",
    "damage_type": 0,
-   "description": "【玄脉之季免费】法术攻击敌方最多3个目标并附加2回合破阵减防（防御-15%）；第二季预埋模板。",
+   "description": "【玄脉之季免费】法术攻击敌方最多3个目标并降低其2回合法术攻击12%。",
    "effect": [
-    150020,
-    150021
+    151020,
+    151021
    ],
    "icon_key": "UI/Skills/15002",
    "id": 15102,
@@ -6811,6 +6812,7 @@
    "require_target": 1,
    "scroll_id": 0,
    "season_id": 2,
+   "secondary_target_policy": 0,
    "skill_type": [
     1
    ],
@@ -6828,15 +6830,15 @@
    "caster_mask": 1,
    "category": "主动",
    "cooldown_rounds": 2,
-   "description": "【玄脉之季免费】为友方最多3个目标施加2回合护盾，短冷却保人；第二季预埋模板。",
+   "description": "【玄脉之季免费】为友方最多2个目标施加2回合高额护盾，稳守双核。",
    "effect": [
-    150030
+    151030
    ],
    "icon_key": "UI/Skills/15003",
    "id": 15103,
    "mana_percent": 0.06,
    "max_rank": 10,
-   "max_targets": 3,
+   "max_targets": 2,
    "name": "玄脉灵幕",
    "pet_max_targets": 1,
    "prototype_code": "SS203",
@@ -6844,6 +6846,7 @@
    "require_target": 1,
    "scroll_id": 0,
    "season_id": 2,
+   "secondary_target_policy": 0,
    "skill_type": [
     1
    ],
@@ -6855,19 +6858,21 @@
   },
   {
    "ability_kind": 1,
-   "action_tags": 8,
+   "action_tags": 4,
    "ban_pool_category": 3,
    "battle_model": 1,
    "caster_mask": 1,
    "category": "主动",
    "cooldown_rounds": 2,
-   "description": "【玄脉之季免费】为友方最多3个目标提升2回合双攻势能（+15%）；第二季预埋模板。",
+   "description": "【玄脉之季免费】治疗友方最多3个目标，目标气血低于45%时治疗量额外+25%。",
    "effect": [
-    150040
+    151040
    ],
+   "execute_heal_bonus": 0.25,
+   "execute_heal_threshold": 0.45,
    "icon_key": "UI/Skills/15004",
    "id": 15104,
-   "mana_percent": 0.05,
+   "mana_percent": 0.06,
    "max_rank": 10,
    "max_targets": 3,
    "name": "玄脉归元",
@@ -6877,6 +6882,7 @@
    "require_target": 1,
    "scroll_id": 0,
    "season_id": 2,
+   "secondary_target_policy": 0,
    "skill_type": [
     1
    ],
@@ -7049,6 +7055,1171 @@
    "scroll_id": 7,
    "season_id": 0,
    "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 2,
+   "attack_multiplier": 0.8,
+   "ban_pool_category": 2,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "3.5*level",
+   "damage_type": 0,
+   "description": "【离火之季免费】法术攻击敌方最多3个目标并有概率附加2回合灼烧。",
+   "effect": [
+    152010,
+    152011
+   ],
+   "icon_key": "UI/Skills/15002",
+   "id": 15201,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "离火焚阵",
+   "pet_max_targets": 1,
+   "prototype_code": "SS301",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 3,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 1,
+   "attack_multiplier": 1.1,
+   "ban_pool_category": 2,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "5.5*level",
+   "damage_type": 1,
+   "description": "【离火之季免费】强力物理斩击单个敌方目标，若目标带有灼烧则立即催动1跳灼烧伤害。",
+   "effect": [
+    152020,
+    152021
+   ],
+   "icon_key": "UI/Skills/15001",
+   "id": 15202,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "炎刃引爆",
+   "pet_max_targets": 1,
+   "prototype_code": "SS302",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 3,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "ban_pool_category": 3,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "【离火之季免费】为友方最多2个目标施加2回合护盾与15%直伤反弹。",
+   "effect": [
+    152030,
+    152031
+   ],
+   "icon_key": "UI/Skills/15003",
+   "id": 15203,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "炽幕护心",
+   "pet_max_targets": 1,
+   "prototype_code": "SS303",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 3,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 4,
+   "ban_pool_category": 3,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "【离火之季免费】治疗友方最多2个目标并各自驱散1个减益状态。",
+   "effect": [
+    152040,
+    152041
+   ],
+   "icon_key": "UI/Skills/15004",
+   "id": 15204,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "薪火回生",
+   "pet_max_targets": 1,
+   "prototype_code": "SS304",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 3,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 1,
+   "attack_multiplier": 0.85,
+   "ban_pool_category": 2,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "4*level",
+   "damage_type": 1,
+   "description": "【青木之季免费】物理攻击敌方最多3个目标并附加2回合破甲（防御-15%）。",
+   "effect": [
+    153010,
+    153011
+   ],
+   "icon_key": "UI/Skills/15001",
+   "id": 15301,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "青藤缠甲",
+   "pet_max_targets": 1,
+   "prototype_code": "SS401",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 4,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 2,
+   "attack_multiplier": 0.8,
+   "ban_pool_category": 2,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "3.5*level",
+   "damage_type": 0,
+   "description": "【青木之季免费】法术攻击敌方最多3个目标并有概率附加2回合中毒。",
+   "effect": [
+    153020,
+    153021
+   ],
+   "icon_key": "UI/Skills/15002",
+   "id": 15302,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "碧毒蚀脉",
+   "pet_max_targets": 1,
+   "prototype_code": "SS402",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 4,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 4,
+   "ban_pool_category": 3,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "【青木之季免费】治疗友方最多3个目标并提升其2回合受疗效果15%。",
+   "effect": [
+    153030,
+    153031
+   ],
+   "icon_key": "UI/Skills/15004",
+   "id": 15303,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "枯荣回春",
+   "pet_max_targets": 1,
+   "prototype_code": "SS403",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 4,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "ban_pool_category": 3,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "【青木之季免费】为友方最多3个目标施加2回合护盾并提升防御12%。",
+   "effect": [
+    153040,
+    153041
+   ],
+   "icon_key": "UI/Skills/15003",
+   "id": 15304,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "苍木灵盖",
+   "pet_max_targets": 1,
+   "prototype_code": "SS404",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 4,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 1,
+   "attack_multiplier": 0.95,
+   "ban_pool_category": 2,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "4.5*level",
+   "damage_type": 1,
+   "description": "【玄水之季免费】物理攻击敌方最多2个目标，副目标优先锁定气血比例最低的敌人。",
+   "effect": [
+    154010
+   ],
+   "icon_key": "UI/Skills/15001",
+   "id": 15401,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "寒潮斩浪",
+   "pet_max_targets": 1,
+   "prototype_code": "SS501",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 5,
+   "secondary_target_policy": 4,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 2,
+   "attack_multiplier": 0.85,
+   "ban_pool_category": 2,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "4*level",
+   "damage_type": 0,
+   "description": "【玄水之季免费】法术攻击敌方最多3个目标并降低其2回合攻击力12%。",
+   "effect": [
+    154020,
+    154021
+   ],
+   "icon_key": "UI/Skills/15002",
+   "id": 15402,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "冥水覆涛",
+   "pet_max_targets": 1,
+   "prototype_code": "SS502",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 5,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 4,
+   "ban_pool_category": 3,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "【玄水之季免费】为友方最多2个目标先驱散1个减益再回复气血。",
+   "effect": [
+    154030,
+    154031
+   ],
+   "icon_key": "UI/Skills/15004",
+   "id": 15403,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "碧波净尘",
+   "pet_max_targets": 1,
+   "prototype_code": "SS503",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 5,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "ban_pool_category": 3,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "【玄水之季免费】为友方最多3个目标回复18%法力并降低2回合技能耗蓝15%。",
+   "effect": [
+    154040,
+    154041
+   ],
+   "icon_key": "UI/Skills/15004",
+   "id": 15404,
+   "mana_percent": 0.05,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "潮汐聚灵",
+   "pet_max_targets": 1,
+   "prototype_code": "SS504",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 5,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 1,
+   "attack_multiplier": 0.95,
+   "ban_pool_category": 2,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "4.5*level",
+   "damage_type": 1,
+   "description": "【厚土之季免费】自身获得1回合15%无视防御并对敌方最多2个目标造成强力物理伤害。",
+   "effect": [
+    155010,
+    155011
+   ],
+   "icon_key": "UI/Skills/15001",
+   "id": 15501,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "裂地重击",
+   "pet_max_targets": 1,
+   "prototype_code": "SS601",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 6,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 2,
+   "attack_multiplier": 0.9,
+   "ban_pool_category": 2,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "4.5*level",
+   "damage_type": 0,
+   "description": "【厚土之季免费】法术攻击敌方最多2个目标并各自驱散1个增益状态。",
+   "effect": [
+    155020,
+    155021
+   ],
+   "icon_key": "UI/Skills/15002",
+   "id": 15502,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "岩震崩势",
+   "pet_max_targets": 1,
+   "prototype_code": "SS602",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 6,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "ban_pool_category": 3,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "【厚土之季免费】为友方最多2个目标施加2回合护盾并降低所受直伤12%。",
+   "effect": [
+    155030,
+    155031
+   ],
+   "icon_key": "UI/Skills/15003",
+   "id": 15503,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "山岳承伤",
+   "pet_max_targets": 1,
+   "prototype_code": "SS603",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 6,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "ban_pool_category": 3,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "【厚土之季免费】为友方最多3个目标提升2回合防御18%并回复少量气血。",
+   "effect": [
+    155040,
+    155041
+   ],
+   "icon_key": "UI/Skills/15004",
+   "id": 15504,
+   "mana_percent": 0.05,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "磐石固本",
+   "pet_max_targets": 1,
+   "prototype_code": "SS604",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 6,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 1,
+   "attack_multiplier": 1.12,
+   "ban_pool_category": 2,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "5.5*level",
+   "damage_type": 1,
+   "description": "【庚金之季免费】物理重击单个敌方目标并附加2回合重度破甲（防御-18%）。",
+   "effect": [
+    156010,
+    156011
+   ],
+   "icon_key": "UI/Skills/15001",
+   "id": 15601,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "庚金断锋",
+   "pet_max_targets": 1,
+   "prototype_code": "SS701",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 7,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 2,
+   "attack_multiplier": 0.85,
+   "ban_pool_category": 2,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "4*level",
+   "damage_type": 0,
+   "description": "【庚金之季免费】法术攻击敌方最多3个目标（副目标优先低法防）并附加2回合易伤+10%。",
+   "effect": [
+    156020,
+    156021
+   ],
+   "icon_key": "UI/Skills/15002",
+   "id": 15602,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "剑雨贯阵",
+   "pet_max_targets": 1,
+   "prototype_code": "SS702",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 7,
+   "secondary_target_policy": 6,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "ban_pool_category": 3,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "【庚金之季免费】为单个友方目标施加2回合超厚护盾，保核抗集火。",
+   "effect": [
+    156030
+   ],
+   "icon_key": "UI/Skills/15003",
+   "id": 15603,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "金钟镇岳",
+   "pet_max_targets": 1,
+   "prototype_code": "SS703",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 7,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "ban_pool_category": 3,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "【庚金之季免费】为友方最多2个目标提升2回合双攻自适应伤害20%。",
+   "effect": [
+    156040
+   ],
+   "icon_key": "UI/Skills/15004",
+   "id": 15604,
+   "mana_percent": 0.05,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "锐金砺刃",
+   "pet_max_targets": 1,
+   "prototype_code": "SS704",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 7,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 1,
+   "attack_multiplier": 0.92,
+   "ban_pool_category": 2,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "4.5*level",
+   "damage_type": 1,
+   "description": "【太阴之季免费】物理攻击敌方最多2个目标（副目标优先低物防）并附加2回合易伤+10%。",
+   "effect": [
+    157010,
+    157011
+   ],
+   "icon_key": "UI/Skills/15001",
+   "id": 15701,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "幽影袭脉",
+   "pet_max_targets": 1,
+   "prototype_code": "SS801",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 8,
+   "secondary_target_policy": 5,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 2,
+   "attack_multiplier": 0.85,
+   "ban_pool_category": 2,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "4*level",
+   "damage_type": 0,
+   "description": "【太阴之季免费】法术攻击敌方最多3个目标并延长其身上的中毒或灼烧持续1跳。",
+   "effect": [
+    157020,
+    157021
+   ],
+   "icon_key": "UI/Skills/15002",
+   "id": 15702,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "太阴蚀魂",
+   "pet_max_targets": 1,
+   "prototype_code": "SS802",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 8,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 4,
+   "ban_pool_category": 3,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "【太阴之季免费】治疗友方最多2个目标，目标气血低于45%时治疗量额外+30%。",
+   "effect": [
+    157030
+   ],
+   "execute_heal_bonus": 0.3,
+   "execute_heal_threshold": 0.45,
+   "icon_key": "UI/Skills/15004",
+   "id": 15703,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "月华抚伤",
+   "pet_max_targets": 1,
+   "prototype_code": "SS803",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 8,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "ban_pool_category": 3,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "【太阴之季免费】为友方最多2个目标施加2回合护盾并降低所受法术伤害15%。",
+   "effect": [
+    157040,
+    157041
+   ],
+   "icon_key": "UI/Skills/15003",
+   "id": 15704,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "素月避锋",
+   "pet_max_targets": 1,
+   "prototype_code": "SS804",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 8,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 1,
+   "attack_multiplier": 0.92,
+   "ban_pool_category": 2,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "4.5*level",
+   "damage_type": 1,
+   "description": "【天雷之季免费】物理突刺敌方最多2个目标并附加2回合破甲（防御-15%）。",
+   "effect": [
+    158010,
+    158011
+   ],
+   "icon_key": "UI/Skills/15001",
+   "id": 15801,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "雷枪破盾",
+   "pet_max_targets": 1,
+   "prototype_code": "SS901",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 9,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 2,
+   "attack_multiplier": 0.85,
+   "ban_pool_category": 2,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "4*level",
+   "damage_type": 0,
+   "description": "【天雷之季免费】法术雷击敌方最多3个目标（副目标优先高法攻）并降其法攻12%。",
+   "effect": [
+    158020,
+    158021
+   ],
+   "icon_key": "UI/Skills/15002",
+   "id": 15802,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "九霄神雷",
+   "pet_max_targets": 1,
+   "prototype_code": "SS902",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 9,
+   "secondary_target_policy": 2,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "ban_pool_category": 3,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "【天雷之季免费】为友方最多2个目标施加2回合护盾并降低所受法术伤害15%。",
+   "effect": [
+    158030,
+    158031
+   ],
+   "icon_key": "UI/Skills/15003",
+   "id": 15803,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "雷罡护体",
+   "pet_max_targets": 1,
+   "prototype_code": "SS903",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 9,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "ban_pool_category": 3,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "【天雷之季免费】为友方最多2个目标提升2回合双攻势能15%并回复12%法力。",
+   "effect": [
+    158040,
+    158041
+   ],
+   "icon_key": "UI/Skills/15004",
+   "id": 15804,
+   "mana_percent": 0.05,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "引雷蓄能",
+   "pet_max_targets": 1,
+   "prototype_code": "SS904",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 9,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 1,
+   "attack_multiplier": 0.92,
+   "ban_pool_category": 2,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "4.5*level",
+   "damage_type": 1,
+   "description": "【混元之季免费】物理攻击敌方最多2个目标，并将造成直伤的15%转化为自身气血。",
+   "effect": [
+    159010
+   ],
+   "icon_key": "UI/Skills/15001",
+   "id": 15901,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "混元一击",
+   "pet_max_targets": 1,
+   "prototype_code": "SS1001",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 10,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 2,
+   "attack_multiplier": 0.82,
+   "ban_pool_category": 2,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "3.8*level",
+   "damage_type": 0,
+   "description": "【混元之季免费】法术攻击敌方最多3个目标，驱散1个增益并附加2回合破甲（防御-12%）。",
+   "effect": [
+    159020,
+    159021,
+    159022
+   ],
+   "icon_key": "UI/Skills/15002",
+   "id": 15902,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "太极归虚",
+   "pet_max_targets": 1,
+   "prototype_code": "SS1002",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 10,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "ban_pool_category": 3,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "【混元之季免费】为友方最多3个目标施加2回合均衡护盾。",
+   "effect": [
+    159030
+   ],
+   "icon_key": "UI/Skills/15003",
+   "id": 15903,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "两仪灵罩",
+   "pet_max_targets": 1,
+   "prototype_code": "SS1003",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 10,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 4,
+   "ban_pool_category": 3,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "【混元之季免费】治疗友方最多3个目标并提升其2回合双攻势能10%。",
+   "effect": [
+    159040,
+    159041
+   ],
+   "icon_key": "UI/Skills/15004",
+   "id": 15904,
+   "mana_percent": 0.06,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "混元回生",
+   "pet_max_targets": 1,
+   "prototype_code": "SS1004",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 0,
+   "season_id": 10,
+   "secondary_target_policy": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
    "targeting_mode": [
     1
    ],

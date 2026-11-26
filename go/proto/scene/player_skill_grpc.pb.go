@@ -41,6 +41,8 @@ const (
 	SceneSkillClientPlayer_CancelSkillBookWantedOrder_FullMethodName     = "/SceneSkillClientPlayer/CancelSkillBookWantedOrder"
 	SceneSkillClientPlayer_ListSkillBookWantedOrders_FullMethodName      = "/SceneSkillClientPlayer/ListSkillBookWantedOrders"
 	SceneSkillClientPlayer_FulfillSkillBookWantedOrder_FullMethodName    = "/SceneSkillClientPlayer/FulfillSkillBookWantedOrder"
+	SceneSkillClientPlayer_RentSkillLoadoutSlots_FullMethodName          = "/SceneSkillClientPlayer/RentSkillLoadoutSlots"
+	SceneSkillClientPlayer_AckCraftProxyDigest_FullMethodName            = "/SceneSkillClientPlayer/AckCraftProxyDigest"
 )
 
 // SceneSkillClientPlayerClient is the client API for SceneSkillClientPlayer service.
@@ -69,6 +71,8 @@ type SceneSkillClientPlayerClient interface {
 	CancelSkillBookWantedOrder(ctx context.Context, in *CancelSkillBookWantedOrderRequest, opts ...grpc.CallOption) (*CancelSkillBookWantedOrderResponse, error)
 	ListSkillBookWantedOrders(ctx context.Context, in *ListSkillBookWantedOrdersRequest, opts ...grpc.CallOption) (*ListSkillBookWantedOrdersResponse, error)
 	FulfillSkillBookWantedOrder(ctx context.Context, in *FulfillSkillBookWantedOrderRequest, opts ...grpc.CallOption) (*FulfillSkillBookWantedOrderResponse, error)
+	RentSkillLoadoutSlots(ctx context.Context, in *RentSkillLoadoutSlotsRequest, opts ...grpc.CallOption) (*RentSkillLoadoutSlotsResponse, error)
+	AckCraftProxyDigest(ctx context.Context, in *AckCraftProxyDigestRequest, opts ...grpc.CallOption) (*AckCraftProxyDigestResponse, error)
 }
 
 type sceneSkillClientPlayerClient struct {
@@ -289,6 +293,26 @@ func (c *sceneSkillClientPlayerClient) FulfillSkillBookWantedOrder(ctx context.C
 	return out, nil
 }
 
+func (c *sceneSkillClientPlayerClient) RentSkillLoadoutSlots(ctx context.Context, in *RentSkillLoadoutSlotsRequest, opts ...grpc.CallOption) (*RentSkillLoadoutSlotsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RentSkillLoadoutSlotsResponse)
+	err := c.cc.Invoke(ctx, SceneSkillClientPlayer_RentSkillLoadoutSlots_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneSkillClientPlayerClient) AckCraftProxyDigest(ctx context.Context, in *AckCraftProxyDigestRequest, opts ...grpc.CallOption) (*AckCraftProxyDigestResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AckCraftProxyDigestResponse)
+	err := c.cc.Invoke(ctx, SceneSkillClientPlayer_AckCraftProxyDigest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneSkillClientPlayerServer is the server API for SceneSkillClientPlayer service.
 // All implementations must embed UnimplementedSceneSkillClientPlayerServer
 // for forward compatibility.
@@ -315,6 +339,8 @@ type SceneSkillClientPlayerServer interface {
 	CancelSkillBookWantedOrder(context.Context, *CancelSkillBookWantedOrderRequest) (*CancelSkillBookWantedOrderResponse, error)
 	ListSkillBookWantedOrders(context.Context, *ListSkillBookWantedOrdersRequest) (*ListSkillBookWantedOrdersResponse, error)
 	FulfillSkillBookWantedOrder(context.Context, *FulfillSkillBookWantedOrderRequest) (*FulfillSkillBookWantedOrderResponse, error)
+	RentSkillLoadoutSlots(context.Context, *RentSkillLoadoutSlotsRequest) (*RentSkillLoadoutSlotsResponse, error)
+	AckCraftProxyDigest(context.Context, *AckCraftProxyDigestRequest) (*AckCraftProxyDigestResponse, error)
 	mustEmbedUnimplementedSceneSkillClientPlayerServer()
 }
 
@@ -387,6 +413,12 @@ func (UnimplementedSceneSkillClientPlayerServer) ListSkillBookWantedOrders(conte
 }
 func (UnimplementedSceneSkillClientPlayerServer) FulfillSkillBookWantedOrder(context.Context, *FulfillSkillBookWantedOrderRequest) (*FulfillSkillBookWantedOrderResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method FulfillSkillBookWantedOrder not implemented")
+}
+func (UnimplementedSceneSkillClientPlayerServer) RentSkillLoadoutSlots(context.Context, *RentSkillLoadoutSlotsRequest) (*RentSkillLoadoutSlotsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RentSkillLoadoutSlots not implemented")
+}
+func (UnimplementedSceneSkillClientPlayerServer) AckCraftProxyDigest(context.Context, *AckCraftProxyDigestRequest) (*AckCraftProxyDigestResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AckCraftProxyDigest not implemented")
 }
 func (UnimplementedSceneSkillClientPlayerServer) mustEmbedUnimplementedSceneSkillClientPlayerServer() {
 }
@@ -788,6 +820,42 @@ func _SceneSkillClientPlayer_FulfillSkillBookWantedOrder_Handler(srv interface{}
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SceneSkillClientPlayer_RentSkillLoadoutSlots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RentSkillLoadoutSlotsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSkillClientPlayerServer).RentSkillLoadoutSlots(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSkillClientPlayer_RentSkillLoadoutSlots_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSkillClientPlayerServer).RentSkillLoadoutSlots(ctx, req.(*RentSkillLoadoutSlotsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneSkillClientPlayer_AckCraftProxyDigest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AckCraftProxyDigestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSkillClientPlayerServer).AckCraftProxyDigest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSkillClientPlayer_AckCraftProxyDigest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSkillClientPlayerServer).AckCraftProxyDigest(ctx, req.(*AckCraftProxyDigestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SceneSkillClientPlayer_ServiceDesc is the grpc.ServiceDesc for SceneSkillClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -878,6 +946,14 @@ var SceneSkillClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "FulfillSkillBookWantedOrder",
 			Handler:    _SceneSkillClientPlayer_FulfillSkillBookWantedOrder_Handler,
+		},
+		{
+			MethodName: "RentSkillLoadoutSlots",
+			Handler:    _SceneSkillClientPlayer_RentSkillLoadoutSlots_Handler,
+		},
+		{
+			MethodName: "AckCraftProxyDigest",
+			Handler:    _SceneSkillClientPlayer_AckCraftProxyDigest_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

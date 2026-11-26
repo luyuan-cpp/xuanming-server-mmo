@@ -121,6 +121,7 @@ type FriendStore interface {
 	// 交给 repo 保管,与 GetFriendList / GetPendingRequests 同源 —— 逐调用传值会让
 	// "这份列表按谁的上限截的"取决于调用点,出现第二个事实源。
 	ListBlocks(ctx context.Context, playerID uint64) ([]data.BlockEntry, error)
+	BatchCheckSocialRelations(ctx context.Context, sideA, sideB []uint64) (hasAnyBlock bool, allAreFriends bool, err error)
 
 	// 推荐两条策略(纯读、不进事务、结果允许轻微陈旧,见 data/recommend_repo.go 的约束)。
 	// 由 recommend.go 组策略链,放在同一个接口里是因为它们实现在同一个 repo 上。
@@ -698,6 +699,51 @@ func (l *FriendLogic) ListBlocks(ctx context.Context, req *pb.ListBlocksRequest)
 	}
 	// 黑名单里刻意不带在线状态:那会变成"查某人是否在线"的旁路(拉黑任意 id 即可探测)。
 	return &pb.ListBlocksResponse{Blocks: pbBlocks}, nil
+}
+
+// BatchCheckSocialRelations 内部只读批量关系检查(供 match 生死状核验拉黑与跨队好友免战穿透)。
+// 该方法在 proto 标记 CLIENT_RPC_SERVER_ONLY，客户端入口会被 gate / roleidentity 拦截，不依赖客户端会话。
+func (l *FriendLogic) BatchCheckSocialRelations(ctx context.Context, req *pb.BatchCheckSocialRelationsRequest) (*pb.BatchCheckSocialRelationsResponse, error) {
+	const method = "BatchCheckSocialRelations"
+	ctx, cancel := l.withRequestBudget(ctx)
+	defer cancel()
+
+	if req == nil || len(req.GetSideAPlayerIds()) == 0 || len(req.GetSideBPlayerIds()) == 0 ||
+		len(req.GetSideAPlayerIds()) > 5 || len(req.GetSideBPlayerIds()) > 5 {
+		return &pb.BatchCheckSocialRelationsResponse{
+			ErrorMessage: tipErr(constants.ErrInvalidParameter, "invalid side player list"),
+		}, nil
+	}
+	sideASet := make(map[uint64]struct{}, len(req.GetSideAPlayerIds()))
+	for _, id := range req.GetSideAPlayerIds() {
+		if id == 0 {
+			return &pb.BatchCheckSocialRelationsResponse{
+				ErrorMessage: tipErr(constants.ErrInvalidParameter, "zero player id"),
+			}, nil
+		}
+		sideASet[id] = struct{}{}
+	}
+	for _, id := range req.GetSideBPlayerIds() {
+		if id == 0 {
+			return &pb.BatchCheckSocialRelationsResponse{
+				ErrorMessage: tipErr(constants.ErrInvalidParameter, "zero player id"),
+			}, nil
+		}
+		if _, overlap := sideASet[id]; overlap {
+			return &pb.BatchCheckSocialRelationsResponse{
+				ErrorMessage: tipErr(constants.ErrInvalidParameter, "overlapping player id across sides"),
+			}, nil
+		}
+	}
+
+	hasAnyBlock, allAreFriends, err := l.deps.Repo.BatchCheckSocialRelations(ctx, req.GetSideAPlayerIds(), req.GetSideBPlayerIds())
+	if err != nil {
+		return &pb.BatchCheckSocialRelationsResponse{ErrorMessage: l.storageFailure(ctx, method, err)}, nil
+	}
+	return &pb.BatchCheckSocialRelationsResponse{
+		HasAnyBlock:   hasAnyBlock,
+		AllAreFriends: allAreFriends,
+	}, nil
 }
 
 // RecommendFriends 在 recommend.go(策略链与限幅),NotifyFriendEvent 方向相反、

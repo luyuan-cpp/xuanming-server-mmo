@@ -35,14 +35,17 @@
 | 槽位组成 | 套数 | 获取方式 | 周期与归属 |
 |---|---:|---|---|
 | **永久免费基础位** | **2 套**（方案 1～2） | 创角永久免费 | 永久免费（覆盖日常 PVE + PVP/高难核心两套，零氪 0 卡脖子） |
-| **仙途轻享卡附赠位** | **+2 套**（生效期） | 复用既有 `afk_pass_expires_at`（300 灵石/30 天） | 轻享卡有效期内自动生效（月卡党自带 4 套，零重复收费） |
+| **满级长期纯玩奖励位** | **+1 套**（达 85 级满级） | 角色有效等级 ≥ 85 自动永久解锁（0 打卡、0 额外任务） | 永久免费（0 氪长期纯玩最终拥有 **3 套永久免费**，方案 1～3） |
+| **仙途轻享卡附赠位** | **+2 套**（生效期） | 复用既有 `afk_pass_expires_at`（300 灵石/30 天） | 轻享卡有效期内自动生效（85 级前 4 套、满级后自带 5 套，零重复收费） |
 | **按套按月租用位** | **+1～+5 套**（总封顶 7 套） | 游戏内真实灵石手动开通/扩容/续期：**30 灵石 / 套 / 30 天**（约 ¥3/套/月） | **所有租用套共享同一个统一到期日**，剩余上限 **180 天** |
 
 - **有效解锁套数权威公式（C++ / Java / 客户端纯函数同口径）**：
-  $$\text{unlocked} = \min\big(7,\; 2 + (\text{lightCardActive} ? 2 : 0) + (\text{rentActive} ? \text{rentedExtraSlots} : 0)\big)$$
+  - `freeSchemes = 2 + (effectiveLevel >= 85 ? 1 : 0)`
+  - $\text{unlocked} = \min\big(7,\; \text{freeSchemes} + (\text{lightCardActive} ? 2 : 0) + (\text{rentActive} ? \text{rentedExtraSlots} : 0)\big)$
 - **防多花冤枉钱护栏**：
-  - 当前可租最大额外套数 `maxRentable = 7 - 2 - (lightCardActive ? 2 : 0)`（无轻享卡最多可租 5 套开满 7 套；轻享卡有效期内最多只需租 3 套即开满 7 套，服务端直接拒绝超出 7 套上限的无意义超买）。
-  - 若玩家租了 3 套后轻享卡到期，其有效套数平滑变为 `2 + 3 = 5` 套（已付灵石 100% 有效），此时若想补回 7 套再扩容 2 套即可。
+  - 当前可租最大额外套数 `maxRentable = max(0, 7 - freeSchemes - (lightCardActive ? 2 : 0))`（85 级前无轻享卡最多可租 5 套、有轻享卡最多可租 3 套；85 级满级后免费升至 3 套，无轻享卡最多只需租 4 套、有轻享卡最多只需租 2 套即开满 7 套，服务端直接拒绝超出 7 套上限的无意义超买）。
+  - 租期内若因开通轻享卡或升至 85 级导致 `maxRentable` 下降，`minAllowedInTerm = min(activeRented, maxRentable)`，允许按新上限直接续期而不被「租期禁缩减」卡住、也绝不逼多花冤枉钱。
+  - 若玩家租了 3 套后轻享卡到期，其有效套数平滑变为 `freeSchemes + 3` 套（已付灵石 100% 有效），此时若想补回 7 套再扩容即可。
 - **统一到期日计费公式（64 位无溢出 + 向上取整防白嫖）**：
   - 常量：`kRentUnitPriceDiamond = 30`（真实灵石 `kCurrencyDiamond = 1`，严禁混扣绑定灵石），`kRentPeriodDays = 30`（`2,592,000` 秒），`kRentMaxRemainingDays = 180`（`15,552,000` 秒）。
   - **未在租期（`rentExpiresAtSec <= nowSec`）**：须 `add_periods >= 1`，费用 `= target_rented_slots * 30 * add_periods`，新到期 `= nowSec + add_periods * 30 天`。
@@ -65,9 +68,9 @@
 4. **到期「只锁不删」体验底线**：
    - 租期或轻享卡到期后，`scheme_id > unlocked` 的方案**完整保留在存档与下发快照中**，前端可只读预览已配战法与四维加点，仅禁止编辑与切入；
    - 若到期时玩家正激活着已锁定的高编号方案，战斗内照常按快照结算，战外可切回 1..unlocked 方案（切走后须续期才能切回），绝不半夜把玩家强行切回空点方案；续期后 100% 原样复活。
-5. **跨系统对齐**：
+5. **跨系统对齐（2026-11-26 方案 A 三合一席位升级）**：
    - `PlayerAttributeSystem::MaxSchemesFor` 对齐至当前有效流派方案上限（2..7）；
-   - `PlayerEquipLoadoutSystem` 的联动战法选项自动读取 1..unlocked（最高 7 套）并优先展示玩家自定义流派名。
+   - `PlayerEquipLoadoutSystem` 同步升级至 **7 套方案并直接共享本系统同一份流派席位权限**（装备 + 战法 + 加点三合一共享，交一份钱同时开启，到期只锁不删；详规见 [equipment-loadout-presets-v1.md](equipment-loadout-presets-v1.md)）；其联动战法选项自动读取 1..unlocked（最高 7 套）并优先展示玩家自定义流派名。
 
 ### 2.3 持久化、协议、幂等与错误码契约
 1. **持久组件增量（零新表、零新列，复用 `GROWTH` 组与 `WALLET` 组）**：
@@ -75,7 +78,7 @@
      - `SkillLoadoutScheme` 追加：`string name = 6;`
      - `PlayerSkillListComp` 追加：`uint32 rented_extra_slots = 8;`、`uint64 rent_expires_at_sec = 9;`
    - `proto/common/component/client_request_ledger_comp.proto` 的 `ClientRequestRecord` 追加：`skill_loadout_rented_slots = 42`、`skill_loadout_rent_expires_at_sec = 43`、`skill_loadout_rent_spent_diamond = 44`。
-   - `ClientRequestKind` 追加 `kRentSkillLoadoutSlots = 24`；`TransactionType` 追加 `TX_SKILL_LOADOUT_RENT = 48`。
+   - `ClientRequestKind` 追加 `kRentSkillLoadoutSlots = 30`；`TransactionType` 追加 `TX_SKILL_LOADOUT_RENT = 48`。
 2. **客户端协议增量（`proto/scene/player_skill.proto`，严格末尾追加 RPC）**：
    - `SkillLoadoutSchemeInfo` 追加：`name(6)`、`attribute_allocated(7)`、`attribute_remaining(8)`、`attribute_total_points(9)`。
    - `SkillLoadoutSnapshot` 追加：`free_schemes(11)`、`light_card_bonus_schemes(12)`、`rented_extra_slots(13)`、`rent_expires_at_sec(14)`、`server_now_sec(15)`、`rent_unit_price_diamond(16)`、`rent_period_days(17)`、`rent_max_remaining_days(18)`、`diamond_balance(19)`、`attribute_reset_cost_gold(20)`、`attribute_switch_cooldown_until(21)`、`active_attribute_scheme_id(22)`。
@@ -112,7 +115,7 @@
 
 | 编号 | 潜在漏洞 / 风险 | 破坏后果 | 强制防线 |
 |---|---|---|---|
-| **V-1** | **连点或弱网重发 `RentSkillLoadoutSlots` 重复扣灵石** | 玩家被扣双倍灵石或超额叠加租期 | 强制 `client_request_id != 0` 接入 `ClientRequestLedgerComp`（`kRentSkillLoadoutSlots = 24`），且在一切状态预检前先查重；重放原样回首次结果并标 `replayed = true`。 |
+| **V-1** | **连点或弱网重发 `RentSkillLoadoutSlots` 重复扣灵石** | 玩家被扣双倍灵石或超额叠加租期 | 强制 `client_request_id != 0` 接入 `ClientRequestLedgerComp`（`kRentSkillLoadoutSlots = 30`），且在一切状态预检前先查重；重放原样回首次结果并标 `replayed = true`。 |
 | **V-2** | **租期最后几分钟加开 4 套白嫖 0 灵石扩容** | 整数除法向下取整算成 0 灵石免费开槽 | 扩套补差价强制向上取整 `(added * 30 * remSec + periodSec - 1) / periodSec`，`remSec > 0` 时严格 `>= 1` 灵石。 |
 | **V-3** | **月卡生效期间误买第 4、5 套无效槽位白花钱** | `2 + 2 + 5 = 9` 超出 7 套上限多扣灵石 | 服务端强制 `target_rented_slots <= MaxRentableExtraSlots(lightCardActive)`（月卡生效上限 3，无月卡上限 5），超限直接拒回 `kSkillLoadoutRentSlotsInvalid`。 |
 | **V-4** | **通过 `SaveSkillLoadout` 直接把旧方案某维点改低绕过洗点费** | 绕过洗点银两消耗免费洗点 | 服务端逐维比对已存点数，任一已知维度降低且未显式传 `reset_attribute_if_needed = true` 一律拒回 `kSkillLoadoutAttributeResetRequired`；传 `true` 则按 `AttributePool.reset_cost_gold` 透明扣银两。 |

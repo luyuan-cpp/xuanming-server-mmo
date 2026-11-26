@@ -39,7 +39,10 @@ func (s *TeamBattleStarter) ReserveSQLTeamMatch(ctx context.Context, launch *tea
 		roster = append(roster, member.Original.PlayerId)
 		tickets[member.Original.PlayerId] = member.Ticket
 	}
-	formation, group, err := buildGlobalDirect(ctx, s.svcCtx, matchpb.MatchMode_MATCH_MODE_PVE_TEAM, launch.ConfigId, roster, tickets, directOptions{teamID: launch.TeamId})
+	formation, group, err := buildGlobalDirect(ctx, s.svcCtx, matchpb.MatchMode_MATCH_MODE_PVE_TEAM, launch.ConfigId, roster, tickets, directOptions{
+		teamID:       launch.TeamId,
+		trialVowMask: data.GetOriginal().GetRequest().GetTrialVowMask(),
+	})
 	if err != nil {
 		return nil, err
 	}

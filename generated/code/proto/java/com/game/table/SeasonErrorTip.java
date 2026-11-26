@@ -83,6 +83,14 @@ public final class SeasonErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kSeasonUnavailable = 34011;</code>
      */
     kSeasonUnavailable(34011),
+    /**
+     * <code>kSeasonHonorAlreadyUnlocked = 34012;</code>
+     */
+    kSeasonHonorAlreadyUnlocked(34012),
+    /**
+     * <code>kSeasonHonorTargetInvalid = 34013;</code>
+     */
+    kSeasonHonorTargetInvalid(34013),
     UNRECOGNIZED(-1),
     ;
 
@@ -147,6 +155,14 @@ public final class SeasonErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kSeasonUnavailable = 34011;</code>
      */
     public static final int kSeasonUnavailable_VALUE = 34011;
+    /**
+     * <code>kSeasonHonorAlreadyUnlocked = 34012;</code>
+     */
+    public static final int kSeasonHonorAlreadyUnlocked_VALUE = 34012;
+    /**
+     * <code>kSeasonHonorTargetInvalid = 34013;</code>
+     */
+    public static final int kSeasonHonorTargetInvalid_VALUE = 34013;
 
 
     public final int getNumber() {
@@ -186,6 +202,8 @@ public final class SeasonErrorTip extends com.google.protobuf.GeneratedFile {
         case 34009: return kSeasonInBattle;
         case 34010: return kSeasonSkillNoUpgrade;
         case 34011: return kSeasonUnavailable;
+        case 34012: return kSeasonHonorAlreadyUnlocked;
+        case 34013: return kSeasonHonorTargetInvalid;
         default: return null;
       }
     }
@@ -251,7 +269,7 @@ public final class SeasonErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\026season_error_tip.proto*\363\002\n\014season_erro" +
+      "\n\026season_error_tip.proto*\267\003\n\014season_erro" +
       "r\022\023\n\017kSeason_errorOK\020\000\022\024\n\016kSeasonNotOpen" +
       "\020\320\211\002\022\025\n\017kSeasonMismatch\020\321\211\002\022\030\n\022kSeasonSe" +
       "alInvalid\020\322\211\002\022 \n\032kSeasonSealAlreadyEquip" +
@@ -260,9 +278,10 @@ public final class SeasonErrorTip extends com.google.protobuf.GeneratedFile {
       "chupPriceChanged\020\326\211\002\022%\n\037kSeasonCatchupCu" +
       "rrencyNotEnough\020\327\211\002\022\023\n\rkSeasonFrozen\020\330\211\002" +
       "\022\025\n\017kSeasonInBattle\020\331\211\002\022\033\n\025kSeasonSkillN" +
-      "oUpgrade\020\332\211\002\022\030\n\022kSeasonUnavailable\020\333\211\002B$" +
-      "\n\016com.game.tableZ\022generated/pb/tableb\006pr" +
-      "oto3"
+      "oUpgrade\020\332\211\002\022\030\n\022kSeasonUnavailable\020\333\211\002\022!" +
+      "\n\033kSeasonHonorAlreadyUnlocked\020\334\211\002\022\037\n\031kSe" +
+      "asonHonorTargetInvalid\020\335\211\002B$\n\016com.game.t" +
+      "ableZ\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

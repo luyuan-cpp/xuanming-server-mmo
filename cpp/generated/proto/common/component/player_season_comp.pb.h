@@ -29,6 +29,10 @@
 #include "google/protobuf/message_lite.h"
 #include "google/protobuf/repeated_field.h"  // IWYU pragma: export
 #include "google/protobuf/extension_set.h"  // IWYU pragma: export
+#include "google/protobuf/map.h"  // IWYU pragma: export
+#include "google/protobuf/map_type_handler.h"  // IWYU pragma: export
+#include "google/protobuf/map_entry.h"
+#include "google/protobuf/map_field.h"
 #include "google/protobuf/unknown_field_set.h"
 // @@protoc_insertion_point(includes)
 
@@ -60,6 +64,14 @@ extern PlayerSeasonCompGlobalsTypeInternal PlayerSeasonComp_globals_;
 extern const ::google::protobuf::internal::ClassDataFull PlayerSeasonComp_class_data_;
 #else
 extern const PlayerSeasonCompGlobalsTypeInternal PlayerSeasonComp_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class PlayerSeasonComp_RetroHonorProgressEntry_DoNotUse;
+struct PlayerSeasonComp_RetroHonorProgressEntry_DoNotUseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern PlayerSeasonComp_RetroHonorProgressEntry_DoNotUseGlobalsTypeInternal PlayerSeasonComp_RetroHonorProgressEntry_DoNotUse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull PlayerSeasonComp_RetroHonorProgressEntry_DoNotUse_class_data_;
+#else
+extern const PlayerSeasonComp_RetroHonorProgressEntry_DoNotUseGlobalsTypeInternal PlayerSeasonComp_RetroHonorProgressEntry_DoNotUse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class PlayerSeasonSealRecord;
 struct PlayerSeasonSealRecordGlobalsTypeInternal;
@@ -975,6 +987,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSeasonSealRecord final : publ
     kBattlePointsFieldNumber = 4,
     kRevisionFieldNumber = 6,
     kCatchupPointsFieldNumber = 5,
+    kLastTermFieldNumber = 7,
   };
   // uint32 season_id = 1;
   void clear_season_id() ;
@@ -1036,11 +1049,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSeasonSealRecord final : publ
   void _internal_set_catchup_points(::uint32_t value);
 
   public:
+  // uint32 last_term = 7;
+  void clear_last_term() ;
+  [[nodiscard]] ::uint32_t last_term() const;
+  void set_last_term(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_last_term() const;
+  void _internal_set_last_term(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:PlayerSeasonSealRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
+      ::google::protobuf::internal::TcParseTable<3, 7,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1075,10 +1098,60 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSeasonSealRecord final : publ
     ::uint32_t battle_points_;
     ::uint64_t revision_;
     ::uint32_t catchup_points_;
+    ::uint32_t last_term_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
   friend struct ::TableStruct_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto;
+};
+// -------------------------------------------------------------------
+
+class PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSeasonComp_RetroHonorProgressEntry_DoNotUse final
+    : public ::google::protobuf::internal::MapEntry<::uint32_t, ::uint32_t,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_UINT32,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_UINT32> {
+ public:
+  using SuperType =
+      ::google::protobuf::internal::MapEntry<::uint32_t, ::uint32_t,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_UINT32,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_UINT32>;
+  PlayerSeasonComp_RetroHonorProgressEntry_DoNotUse();
+  template <typename = void>
+  explicit constexpr PlayerSeasonComp_RetroHonorProgressEntry_DoNotUse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+  explicit PlayerSeasonComp_RetroHonorProgressEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr const void* PROTOBUF_NONNULL internal_message_globals() {
+    return &PlayerSeasonComp_RetroHonorProgressEntry_DoNotUse_globals_;
+  }
+
+
+  static constexpr auto InternalGenerateClassData_(
+      const ::google::protobuf::MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+ private:
+  friend class ::google::protobuf::MessageLite;
+  friend struct ::TableStruct_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto;
+  friend ::google::protobuf::internal::PrivateAccess;
+  friend PlayerSeasonComp_RetroHonorProgressEntry_DoNotUseGlobalsTypeInternal;
+
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
 };
 // -------------------------------------------------------------------
 
@@ -1138,7 +1211,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSeasonComp final : public ::g
   [[nodiscard]] static const PlayerSeasonComp& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PlayerSeasonComp>(&PlayerSeasonComp_globals_);
   }
-  static constexpr int kIndexInFileMessages = 3;
+  static constexpr int kIndexInFileMessages = 4;
   friend void swap(PlayerSeasonComp& a, PlayerSeasonComp& b) { a.Swap(&b); }
   inline void Swap(PlayerSeasonComp* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1232,8 +1305,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSeasonComp final : public ::g
   enum : int {
     kRecordsFieldNumber = 1,
     kSavedBuildsFieldNumber = 4,
+    kUnlockedHonorWordsFieldNumber = 5,
     kWuxingTowerFieldNumber = 3,
     kEquippedFormationIdFieldNumber = 2,
+    kRetroHonorTargetSeasonIdFieldNumber = 6,
+    kRetroHonorProgressFieldNumber = 7,
   };
   // repeated .PlayerSeasonSealRecord records = 1;
   [[nodiscard]] int records_size()
@@ -1277,6 +1353,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSeasonComp final : public ::g
   ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmark>* PROTOBUF_NONNULL _internal_mutable_saved_builds();
 
   public:
+  // repeated uint64 unlocked_honor_words = 5;
+  [[nodiscard]] int unlocked_honor_words_size()
+      const;
+  private:
+  int _internal_unlocked_honor_words_size() const;
+
+  public:
+  void clear_unlocked_honor_words() ;
+  [[nodiscard]] ::uint64_t unlocked_honor_words(int index) const;
+  void set_unlocked_honor_words(int index, ::uint64_t value);
+  void add_unlocked_honor_words(::uint64_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& unlocked_honor_words()
+      const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_unlocked_honor_words();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_unlocked_honor_words() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_unlocked_honor_words();
+
+  public:
   // .WuxingTowerCompState wuxing_tower = 3;
   [[nodiscard]] bool has_wuxing_tower()
       const;
@@ -1303,12 +1399,38 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSeasonComp final : public ::g
   void _internal_set_equipped_formation_id(::uint32_t value);
 
   public:
+  // uint32 retro_honor_target_season_id = 6;
+  void clear_retro_honor_target_season_id() ;
+  [[nodiscard]] ::uint32_t retro_honor_target_season_id() const;
+  void set_retro_honor_target_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_retro_honor_target_season_id() const;
+  void _internal_set_retro_honor_target_season_id(::uint32_t value);
+
+  public:
+  // map<uint32, uint32> retro_honor_progress = 7;
+  [[nodiscard]] int retro_honor_progress_size()
+      const;
+  private:
+  int _internal_retro_honor_progress_size() const;
+
+  public:
+  void clear_retro_honor_progress() ;
+  [[nodiscard]] const ::google::protobuf::Map<::uint32_t, ::uint32_t>& retro_honor_progress() const;
+  [[nodiscard]] ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL mutable_retro_honor_progress();
+
+  private:
+  const ::google::protobuf::Map<::uint32_t, ::uint32_t>& _internal_retro_honor_progress() const;
+  ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL _internal_mutable_retro_honor_progress();
+
+  public:
   // @@protoc_insertion_point(class_scope:PlayerSeasonComp)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
-                          3, 0,
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          4, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1338,8 +1460,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSeasonComp final : public ::g
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::PlayerSeasonSealRecord > records_;
     ::google::protobuf::RepeatedPtrField< ::SavedBattleBuildBookmark > saved_builds_;
+    ::google::protobuf::RepeatedField<::uint64_t> unlocked_honor_words_;
+    ::google::protobuf::internal::CachedSize _unlocked_honor_words_cached_byte_size_;
     ::WuxingTowerCompState* PROTOBUF_NULLABLE wuxing_tower_;
     ::uint32_t equipped_formation_id_;
+    ::uint32_t retro_honor_target_season_id_;
+    ::google::protobuf::internal::MapField<PlayerSeasonComp_RetroHonorProgressEntry_DoNotUse, ::uint32_t, ::uint32_t> retro_honor_progress_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1504,6 +1630,30 @@ inline ::uint64_t PlayerSeasonSealRecord::_internal_revision() const {
 inline void PlayerSeasonSealRecord::_internal_set_revision(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.revision_ = value;
+}
+
+// uint32 last_term = 7;
+inline void PlayerSeasonSealRecord::clear_last_term() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_term_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t PlayerSeasonSealRecord::last_term() const {
+  // @@protoc_insertion_point(field_get:PlayerSeasonSealRecord.last_term)
+  return _internal_last_term();
+}
+inline void PlayerSeasonSealRecord::set_last_term(::uint32_t value) {
+  _internal_set_last_term(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:PlayerSeasonSealRecord.last_term)
+}
+inline ::uint32_t PlayerSeasonSealRecord::_internal_last_term() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.last_term_;
+}
+inline void PlayerSeasonSealRecord::_internal_set_last_term(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.last_term_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -2320,6 +2470,8 @@ inline void SavedBattleBuildBookmark::_internal_set_saved_at_ms(::uint64_t value
 
 // -------------------------------------------------------------------
 
+// -------------------------------------------------------------------
+
 // PlayerSeasonComp
 
 // repeated .PlayerSeasonSealRecord records = 1;
@@ -2381,7 +2533,7 @@ PlayerSeasonComp::_internal_mutable_records() {
 inline void PlayerSeasonComp::clear_equipped_formation_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equipped_formation_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t PlayerSeasonComp::equipped_formation_id() const {
   // @@protoc_insertion_point(field_get:PlayerSeasonComp.equipped_formation_id)
@@ -2389,7 +2541,7 @@ inline ::uint32_t PlayerSeasonComp::equipped_formation_id() const {
 }
 inline void PlayerSeasonComp::set_equipped_formation_id(::uint32_t value) {
   _internal_set_equipped_formation_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:PlayerSeasonComp.equipped_formation_id)
 }
 inline ::uint32_t PlayerSeasonComp::_internal_equipped_formation_id() const {
@@ -2403,14 +2555,14 @@ inline void PlayerSeasonComp::_internal_set_equipped_formation_id(::uint32_t val
 
 // .WuxingTowerCompState wuxing_tower = 3;
 inline bool PlayerSeasonComp::has_wuxing_tower() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
   PROTOBUF_ASSUME(!value || _impl_.wuxing_tower_ != nullptr);
   return value;
 }
 inline void PlayerSeasonComp::clear_wuxing_tower() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.wuxing_tower_ != nullptr) _impl_.wuxing_tower_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline const ::WuxingTowerCompState& PlayerSeasonComp::_internal_wuxing_tower() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -2429,16 +2581,16 @@ inline void PlayerSeasonComp::unsafe_arena_set_allocated_wuxing_tower(
   }
   _impl_.wuxing_tower_ = reinterpret_cast<::WuxingTowerCompState*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:PlayerSeasonComp.wuxing_tower)
 }
 inline ::WuxingTowerCompState* PROTOBUF_NULLABLE PlayerSeasonComp::release_wuxing_tower() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::WuxingTowerCompState* released = _impl_.wuxing_tower_;
   _impl_.wuxing_tower_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -2458,7 +2610,7 @@ inline ::WuxingTowerCompState* PROTOBUF_NULLABLE PlayerSeasonComp::unsafe_arena_
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:PlayerSeasonComp.wuxing_tower)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::WuxingTowerCompState* temp = _impl_.wuxing_tower_;
   _impl_.wuxing_tower_ = nullptr;
   return temp;
@@ -2473,7 +2625,7 @@ inline ::WuxingTowerCompState* PROTOBUF_NONNULL PlayerSeasonComp::_internal_muta
 }
 inline ::WuxingTowerCompState* PROTOBUF_NONNULL PlayerSeasonComp::mutable_wuxing_tower()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::WuxingTowerCompState* _msg = _internal_mutable_wuxing_tower();
   // @@protoc_insertion_point(field_mutable:PlayerSeasonComp.wuxing_tower)
   return _msg;
@@ -2490,9 +2642,9 @@ inline void PlayerSeasonComp::set_allocated_wuxing_tower(::WuxingTowerCompState*
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
 
   _impl_.wuxing_tower_ = reinterpret_cast<::WuxingTowerCompState*>(value);
@@ -2552,6 +2704,112 @@ inline ::google::protobuf::RepeatedPtrField<::SavedBattleBuildBookmark>* PROTOBU
 PlayerSeasonComp::_internal_mutable_saved_builds() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.saved_builds_;
+}
+
+// repeated uint64 unlocked_honor_words = 5;
+inline int PlayerSeasonComp::_internal_unlocked_honor_words_size() const {
+  return _internal_unlocked_honor_words().size();
+}
+inline int PlayerSeasonComp::unlocked_honor_words_size() const {
+  return _internal_unlocked_honor_words_size();
+}
+inline void PlayerSeasonComp::clear_unlocked_honor_words() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unlocked_honor_words_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t PlayerSeasonComp::unlocked_honor_words(int index) const {
+  // @@protoc_insertion_point(field_get:PlayerSeasonComp.unlocked_honor_words)
+  return _internal_unlocked_honor_words().Get(index);
+}
+inline void PlayerSeasonComp::set_unlocked_honor_words(int index, ::uint64_t value) {
+  _internal_mutable_unlocked_honor_words()->Set(index, value);
+  // @@protoc_insertion_point(field_set:PlayerSeasonComp.unlocked_honor_words)
+}
+inline void PlayerSeasonComp::add_unlocked_honor_words(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_unlocked_honor_words()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_add:PlayerSeasonComp.unlocked_honor_words)
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>& PlayerSeasonComp::unlocked_honor_words() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:PlayerSeasonComp.unlocked_honor_words)
+  return _internal_unlocked_honor_words();
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL PlayerSeasonComp::mutable_unlocked_honor_words()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_mutable_list:PlayerSeasonComp.unlocked_honor_words)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_unlocked_honor_words();
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>&
+PlayerSeasonComp::_internal_unlocked_honor_words() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.unlocked_honor_words_;
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
+PlayerSeasonComp::_internal_mutable_unlocked_honor_words() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.unlocked_honor_words_;
+}
+
+// uint32 retro_honor_target_season_id = 6;
+inline void PlayerSeasonComp::clear_retro_honor_target_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retro_honor_target_season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t PlayerSeasonComp::retro_honor_target_season_id() const {
+  // @@protoc_insertion_point(field_get:PlayerSeasonComp.retro_honor_target_season_id)
+  return _internal_retro_honor_target_season_id();
+}
+inline void PlayerSeasonComp::set_retro_honor_target_season_id(::uint32_t value) {
+  _internal_set_retro_honor_target_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:PlayerSeasonComp.retro_honor_target_season_id)
+}
+inline ::uint32_t PlayerSeasonComp::_internal_retro_honor_target_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.retro_honor_target_season_id_;
+}
+inline void PlayerSeasonComp::_internal_set_retro_honor_target_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retro_honor_target_season_id_ = value;
+}
+
+// map<uint32, uint32> retro_honor_progress = 7;
+inline int PlayerSeasonComp::_internal_retro_honor_progress_size() const {
+  return _internal_retro_honor_progress().size();
+}
+inline int PlayerSeasonComp::retro_honor_progress_size() const {
+  return _internal_retro_honor_progress_size();
+}
+inline void PlayerSeasonComp::clear_retro_honor_progress() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retro_honor_progress_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& PlayerSeasonComp::_internal_retro_honor_progress() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.retro_honor_progress_.GetMap();
+}
+inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& PlayerSeasonComp::retro_honor_progress() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_map:PlayerSeasonComp.retro_honor_progress)
+  return _internal_retro_honor_progress();
+}
+inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PlayerSeasonComp::_internal_mutable_retro_honor_progress() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.retro_honor_progress_.MutableMap();
+}
+inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PlayerSeasonComp::mutable_retro_honor_progress()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_mutable_map:PlayerSeasonComp.retro_honor_progress)
+  return _internal_mutable_retro_honor_progress();
 }
 
 #ifdef __GNUC__

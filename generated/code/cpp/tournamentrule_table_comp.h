@@ -106,18 +106,6 @@ struct TournamentRulePublic_knockout_replayComp {
     bool value;
 };
 
-struct TournamentRuleSalute_gold_amountComp {
-    uint32_t value;
-};
-
-struct TournamentRuleSalute_item_idComp {
-    uint32_t value;
-};
-
-struct TournamentRuleSalute_item_countComp {
-    uint32_t value;
-};
-
 struct TournamentRuleWarmup_spar_enabledComp {
     bool value;
 };
@@ -215,15 +203,6 @@ inline TournamentRuleIntermission_secondsComp MakeTournamentRuleIntermission_sec
 }
 inline TournamentRulePublic_knockout_replayComp MakeTournamentRulePublic_knockout_replayComp(const TournamentRuleTable& row) {
     return { row.public_knockout_replay() };
-}
-inline TournamentRuleSalute_gold_amountComp MakeTournamentRuleSalute_gold_amountComp(const TournamentRuleTable& row) {
-    return { row.salute_gold_amount() };
-}
-inline TournamentRuleSalute_item_idComp MakeTournamentRuleSalute_item_idComp(const TournamentRuleTable& row) {
-    return { row.salute_item_id() };
-}
-inline TournamentRuleSalute_item_countComp MakeTournamentRuleSalute_item_countComp(const TournamentRuleTable& row) {
-    return { row.salute_item_count() };
 }
 inline TournamentRuleWarmup_spar_enabledComp MakeTournamentRuleWarmup_spar_enabledComp(const TournamentRuleTable& row) {
     return { row.warmup_spar_enabled() };

@@ -633,6 +633,11 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
     // 活动上下文原样保存(未填 = kind NONE);BuildResult 回显进终局原件,结果通道在 match(§6.20)
     room->activityContext = request.activity_context();
     room->rankedContext = request.ranked_context();
+    if (request.has_jianghu_duel_context())
+    {
+        room->hasJianghuDuelContext = true;
+        room->jianghuDuelContext = request.jianghu_duel_context();
+    }
     // 观战可见性随原件冻结,只在这里赋值一次(AddObserver 的第二道闸据此执法;未填 = 不可观战)
     room->spectateVisibility = request.spectate_visibility();
     room->outcomeProtocol = request.outcome_protocol_version();
@@ -1837,6 +1842,10 @@ contracts::kafka::BattleResultEvent BattleRoomManager::BuildResult(const BattleR
     if (room.rankedContext.season_id() != 0)
     {
         *event.mutable_ranked_context() = room.rankedContext;
+    }
+    if (room.hasJianghuDuelContext)
+    {
+        *event.mutable_jianghu_duel_context() = room.jianghuDuelContext;
     }
     for (const auto& [playerId, routing] : room.routingByPlayer)
     {

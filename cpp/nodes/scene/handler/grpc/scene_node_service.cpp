@@ -17,6 +17,7 @@
 #include "network/node_utils.h" // GetZoneId:CreateScene 的 zone 核对
 #include "muduo/base/Logging.h"
 #include "battle/system/player_battle.h"
+#include "player/system/player_jianghu.h"
 #include "player/system/asset_op_system.h"
 #include "gm_player_command_security.h"
 #include "../rpc/player/player_gm_guard.h"
@@ -355,6 +356,14 @@ void SceneNodeGrpcImpl::HandleGmExecutePlayerCommand(const ::scene_node::GmExecu
 ///<<< END WRITING YOUR CODE
 }
 
+void SceneNodeGrpcImpl::HandleCheckJianghuDuelEligibility(const ::CheckJianghuDuelEligibilityRequest* request,
+    ::CheckJianghuDuelEligibilityResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    PlayerJianghuSystem::CheckDuelEligibility(*request, *response);
+///<<< END WRITING YOUR CODE
+}
+
 void SceneNodeGrpcImpl::CreateScene(const std::shared_ptr<CreateSceneCall>& call)
 {
     [[maybe_unused]] const ::CreateSceneRequest* request = &call->Request();
@@ -492,6 +501,14 @@ void SceneNodeGrpcImpl::GmExecutePlayerCommand(const std::shared_ptr<GmExecutePl
     call->Proceed();
 }
 
+void SceneNodeGrpcImpl::CheckJianghuDuelEligibility(const std::shared_ptr<CheckJianghuDuelEligibilityCall>& call)
+{
+    [[maybe_unused]] const ::CheckJianghuDuelEligibilityRequest* request = &call->Request();
+    ///<<< BEGIN WRITING YOUR CODE: grpc.CheckJianghuDuelEligibility.guard
+    ///<<< END WRITING YOUR CODE
+    call->Proceed();
+}
+
 void SceneNodeGrpcImpl::RegisterMethods(muduo_grpc::MethodTable& table)
 {
     table.AddUnary(std::string(kCreateScenePath),
@@ -595,6 +612,15 @@ void SceneNodeGrpcImpl::RegisterMethods(muduo_grpc::MethodTable& table)
             if (call->ParseRequest(requestBytes))
             {
                 GmExecutePlayerCommand(call);
+            }
+        });
+    table.AddUnary(std::string(kCheckJianghuDuelEligibilityPath),
+        [this](muduo_grpc::ServerCall serverCall, std::string_view requestBytes)
+        {
+            const auto call = CheckJianghuDuelEligibilityCall::Create(std::move(serverCall), &HandleCheckJianghuDuelEligibility);
+            if (call->ParseRequest(requestBytes))
+            {
+                CheckJianghuDuelEligibility(call);
             }
         });
 }

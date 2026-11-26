@@ -127,6 +127,12 @@ const (
 	TransactionType_TX_TRAVEL_PASS_REWARD TransactionType = 46
 	// 装备流派方案位付费扩容（消耗 3413 装备方案扩容符或扣灵石/绑定灵石，correlation_id = client_request_id）。
 	TransactionType_TX_EQUIP_LOADOUT_UNLOCK TransactionType = 47
+	// 7 套非永久「战法·加点」流派方案槽位按月灵石租用/扩容/续期（仅扣真实灵石，correlation_id = client_request_id）。
+	TransactionType_TX_SKILL_LOADOUT_RENT TransactionType = 48
+	// 天墉生死状一期（docs/planning/battle-jianghu-grudge-duel-bounty-v1.md）：普通战书预扣、备战取消退还与洗尘清除印记。
+	TransactionType_TX_JIANGHU_DUEL_FEE          TransactionType = 49
+	TransactionType_TX_JIANGHU_DUEL_REFUND       TransactionType = 50
+	TransactionType_TX_JIANGHU_CLEAR_DEFEAT_MARK TransactionType = 51
 )
 
 // Enum value maps for TransactionType.
@@ -180,56 +186,64 @@ var (
 		45: "TX_TRAVEL_PASS_UNLOCK",
 		46: "TX_TRAVEL_PASS_REWARD",
 		47: "TX_EQUIP_LOADOUT_UNLOCK",
+		48: "TX_SKILL_LOADOUT_RENT",
+		49: "TX_JIANGHU_DUEL_FEE",
+		50: "TX_JIANGHU_DUEL_REFUND",
+		51: "TX_JIANGHU_CLEAR_DEFEAT_MARK",
 	}
 	TransactionType_value = map[string]int32{
-		"TX_UNKNOWN":                 0,
-		"TX_TRADE":                   1,
-		"TX_MAIL_ATTACHMENT":         2,
-		"TX_AUCTION_SELL":            3,
-		"TX_AUCTION_BUY":             4,
-		"TX_GUILD_BANK_DEPOSIT":      5,
-		"TX_GUILD_BANK_WITHDRAW":     6,
-		"TX_QUEST_REWARD":            7,
-		"TX_SYSTEM_GRANT":            8,
-		"TX_GM_GRANT":                9,
-		"TX_GM_DEDUCT":               10,
-		"TX_SHOP_BUY":                11,
-		"TX_SHOP_SELL":               12,
-		"TX_ITEM_DESTROY":            13,
-		"TX_CURRENCY_ADD":            14,
-		"TX_CURRENCY_DEDUCT":         15,
-		"TX_ROLLBACK_RESTORE":        16,
-		"TX_CLAWBACK":                17,
-		"TX_DEFERRED_CLAWBACK":       18,
-		"TX_BATCH_RECALL":            19,
-		"TX_ITEM_AWARD":              20,
-		"TX_QUEST_COMPLETE":          21,
-		"TX_LEVEL_UP":                22,
-		"TX_BUFF_GAIN":               23,
-		"TX_GUILD_DONATE":            24,
-		"TX_GUILD_SHOP":              25,
-		"TX_GUILD_ACTIVITY_REWARD":   26,
-		"TX_EQUIP_ENHANCE":           27,
-		"TX_EQUIP_INLAY":             28,
-		"TX_EQUIP_GEM_REMOVE":        29,
-		"TX_AUCTION_RETURN":          30,
-		"TX_PAYMENT_REVERSAL":        31,
-		"TX_AFK_PASS_BUY":            32,
-		"TX_ROLE_RENAME":             33,
-		"TX_APPEARANCE_SWITCH":       34,
-		"TX_SEASON_SEAL_CATCHUP":     35,
-		"TX_TRIAL_JOURNAL_MILESTONE": 36,
-		"TX_TRIAL_ARTIFACT_REDEEM":   37,
-		"TX_EQUIP_POLISH_REFORGE":    38,
-		"TX_SKILL_SCROLL_CRAFT":      39,
-		"TX_CRAFT_PROXY_FEE":         40,
-		"TX_GUILD_BOUNTY_ESCROW":     41,
-		"TX_GUILD_WAR_REWARD":        42,
-		"TX_GUILD_BOUNTY_PAYOUT":     43,
-		"TX_SPIRIT_SHOP_BUY":         44,
-		"TX_TRAVEL_PASS_UNLOCK":      45,
-		"TX_TRAVEL_PASS_REWARD":      46,
-		"TX_EQUIP_LOADOUT_UNLOCK":    47,
+		"TX_UNKNOWN":                   0,
+		"TX_TRADE":                     1,
+		"TX_MAIL_ATTACHMENT":           2,
+		"TX_AUCTION_SELL":              3,
+		"TX_AUCTION_BUY":               4,
+		"TX_GUILD_BANK_DEPOSIT":        5,
+		"TX_GUILD_BANK_WITHDRAW":       6,
+		"TX_QUEST_REWARD":              7,
+		"TX_SYSTEM_GRANT":              8,
+		"TX_GM_GRANT":                  9,
+		"TX_GM_DEDUCT":                 10,
+		"TX_SHOP_BUY":                  11,
+		"TX_SHOP_SELL":                 12,
+		"TX_ITEM_DESTROY":              13,
+		"TX_CURRENCY_ADD":              14,
+		"TX_CURRENCY_DEDUCT":           15,
+		"TX_ROLLBACK_RESTORE":          16,
+		"TX_CLAWBACK":                  17,
+		"TX_DEFERRED_CLAWBACK":         18,
+		"TX_BATCH_RECALL":              19,
+		"TX_ITEM_AWARD":                20,
+		"TX_QUEST_COMPLETE":            21,
+		"TX_LEVEL_UP":                  22,
+		"TX_BUFF_GAIN":                 23,
+		"TX_GUILD_DONATE":              24,
+		"TX_GUILD_SHOP":                25,
+		"TX_GUILD_ACTIVITY_REWARD":     26,
+		"TX_EQUIP_ENHANCE":             27,
+		"TX_EQUIP_INLAY":               28,
+		"TX_EQUIP_GEM_REMOVE":          29,
+		"TX_AUCTION_RETURN":            30,
+		"TX_PAYMENT_REVERSAL":          31,
+		"TX_AFK_PASS_BUY":              32,
+		"TX_ROLE_RENAME":               33,
+		"TX_APPEARANCE_SWITCH":         34,
+		"TX_SEASON_SEAL_CATCHUP":       35,
+		"TX_TRIAL_JOURNAL_MILESTONE":   36,
+		"TX_TRIAL_ARTIFACT_REDEEM":     37,
+		"TX_EQUIP_POLISH_REFORGE":      38,
+		"TX_SKILL_SCROLL_CRAFT":        39,
+		"TX_CRAFT_PROXY_FEE":           40,
+		"TX_GUILD_BOUNTY_ESCROW":       41,
+		"TX_GUILD_WAR_REWARD":          42,
+		"TX_GUILD_BOUNTY_PAYOUT":       43,
+		"TX_SPIRIT_SHOP_BUY":           44,
+		"TX_TRAVEL_PASS_UNLOCK":        45,
+		"TX_TRAVEL_PASS_REWARD":        46,
+		"TX_EQUIP_LOADOUT_UNLOCK":      47,
+		"TX_SKILL_LOADOUT_RENT":        48,
+		"TX_JIANGHU_DUEL_FEE":          49,
+		"TX_JIANGHU_DUEL_REFUND":       50,
+		"TX_JIANGHU_CLEAR_DEFEAT_MARK": 51,
 	}
 )
 
@@ -501,7 +515,7 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\x05extra\x18\x0e \x01(\tR\x05extra\x12\x17\n" +
 	"\azone_id\x18\x0f \x01(\rR\x06zoneId\"E\n" +
 	"\x13TransactionLogBatch\x12.\n" +
-	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\xe1\b\n" +
+	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\xd3\t\n" +
 	"\x0fTransactionType\x12\x0e\n" +
 	"\n" +
 	"TX_UNKNOWN\x10\x00\x12\f\n" +
@@ -552,7 +566,11 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\x12TX_SPIRIT_SHOP_BUY\x10,\x12\x19\n" +
 	"\x15TX_TRAVEL_PASS_UNLOCK\x10-\x12\x19\n" +
 	"\x15TX_TRAVEL_PASS_REWARD\x10.\x12\x1b\n" +
-	"\x17TX_EQUIP_LOADOUT_UNLOCK\x10/B\x17Z\x15proto/common/rollbackb\x06proto3"
+	"\x17TX_EQUIP_LOADOUT_UNLOCK\x10/\x12\x19\n" +
+	"\x15TX_SKILL_LOADOUT_RENT\x100\x12\x17\n" +
+	"\x13TX_JIANGHU_DUEL_FEE\x101\x12\x1a\n" +
+	"\x16TX_JIANGHU_DUEL_REFUND\x102\x12 \n" +
+	"\x1cTX_JIANGHU_CLEAR_DEFEAT_MARK\x103B\x17Z\x15proto/common/rollbackb\x06proto3"
 
 var (
 	file_proto_common_rollback_transaction_log_proto_rawDescOnce sync.Once

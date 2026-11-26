@@ -3029,97 +3029,6 @@ void SendMatchServiceClaimTournamentRewardErased(entt::registry& registry, entt:
         [done = std::move(done)](const GrpcCallOutcome& outcome, const ::match::ClaimTournamentRewardResponse* reply) { done(outcome, reply); });
 }
 #pragma endregion
-#pragma region MatchServiceSaluteTournamentChampion
-namespace {
-void QueueLocalMatchServiceSaluteTournamentChampionFailure(GrpcDone<::match::SaluteTournamentChampionResponse> done, uint32_t code, std::string message) {
-    RecordGrpcLocalFailureSpan(kMatchServiceSaluteTournamentChampionGrpcPath, code, message);
-    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
-        done(outcome, nullptr);
-    });
-}
-}
-
-// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
-// 若将来改成异步序列化,必须先恢复请求的独立副本。
-void StartMatchServiceSaluteTournamentChampionCall(entt::registry& registry, entt::entity nodeEntity, const ::match::SaluteTournamentChampionRequest& request,
-                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
-                                             GrpcDone<::match::SaluteTournamentChampionResponse> done) {
-    if (!done) {
-        LOG_FATAL << "gRPC MatchService.SaluteTournamentChampion requires a done callback";
-    }
-    muduo_grpc::UnaryCallRequest unaryRequest;
-    unaryRequest.method = std::string(kMatchServiceSaluteTournamentChampionGrpcPath);
-    if (!request.SerializeToString(&unaryRequest.message)) {
-        QueueLocalMatchServiceSaluteTournamentChampionFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
-        return;
-    }
-    const auto channel = FindGrpcChannel(registry, nodeEntity);
-    if (!channel) {
-        QueueLocalMatchServiceSaluteTournamentChampionFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
-        return;
-    }
-    unaryRequest.metadata.reserve(metadata.size());
-    for (const auto& [key, value] : metadata) {
-        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
-        // 所有 -bin 的线上编码另由传输层负责。
-        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
-    }
-    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
-    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
-        GrpcCallOutcome outcome;
-        outcome.code = result.status.code_value();
-        outcome.message = result.status.message();
-        outcome.initialMetadata = std::move(result.initialMetadata);
-        outcome.trailingMetadata = std::move(result.trailingMetadata);
-        if (!outcome.ok()) {
-            done(outcome, nullptr);
-            return;
-        }
-        ::match::SaluteTournamentChampionResponse reply;
-        if (!reply.ParseFromString(result.response)) {
-            outcome.code = kGrpcStatusInternal;
-            outcome.message = "failed to parse the MatchService.SaluteTournamentChampion response";
-            done(outcome, nullptr);
-            return;
-        }
-        done(outcome, &reply);
-    });
-}
-
-void SendMatchServiceSaluteTournamentChampion(entt::registry& registry, entt::entity nodeEntity, const ::match::SaluteTournamentChampionRequest& request,
-                                            GrpcDone<::match::SaluteTournamentChampionResponse> done, const GrpcCallOptions& options) {
-    StartMatchServiceSaluteTournamentChampionCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
-}
-
-void SendMatchServiceSaluteTournamentChampionErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
-                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
-    if (!done) {
-        LOG_FATAL << "gRPC MatchService.SaluteTournamentChampion requires a done callback";
-    }
-    if (message.GetDescriptor() != ::match::SaluteTournamentChampionRequest::descriptor()) {
-        const auto requestTypeName = message.GetDescriptor()->full_name();
-        LOG_ERROR << "gRPC MatchService.SaluteTournamentChampion: request type " << std::string(requestTypeName.data(), requestTypeName.size())
-                  << " does not match; not sent";
-        RecordGrpcLocalFailureSpan(kMatchServiceSaluteTournamentChampionGrpcPath, kGrpcStatusInternal, "request type mismatch");
-        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
-            done(outcome, nullptr);
-        });
-        return;
-    }
-    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
-    const auto* typedRequest = dynamic_cast<const ::match::SaluteTournamentChampionRequest*>(&message);
-    if (typedRequest == nullptr) {
-        LOG_ERROR << "gRPC MatchService.SaluteTournamentChampion: request C++ type does not match; not sent";
-        RecordGrpcLocalFailureSpan(kMatchServiceSaluteTournamentChampionGrpcPath, kGrpcStatusInternal, "request type mismatch");
-        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
-            done(outcome, nullptr);
-        });
-        return;
-    }
-    StartMatchServiceSaluteTournamentChampionCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
-        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::match::SaluteTournamentChampionResponse* reply) { done(outcome, reply); });
-}
-#pragma endregion
 #pragma region MatchServiceSendTournamentSpectateCheer
 namespace {
 void QueueLocalMatchServiceSendTournamentSpectateCheerFailure(GrpcDone<::match::SendTournamentSpectateCheerResponse> done, uint32_t code, std::string message) {
@@ -4483,6 +4392,279 @@ void SendMatchServiceNotifyJianghuDuelStatusErased(entt::registry& registry, ent
     }
     StartMatchServiceNotifyJianghuDuelStatusCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
         [done = std::move(done)](const GrpcCallOutcome& outcome, const ::Empty* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region MatchServiceCreateTrialChallengeCard
+namespace {
+void QueueLocalMatchServiceCreateTrialChallengeCardFailure(GrpcDone<::match::CreateTrialChallengeCardResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kMatchServiceCreateTrialChallengeCardGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartMatchServiceCreateTrialChallengeCardCall(entt::registry& registry, entt::entity nodeEntity, const ::match::CreateTrialChallengeCardRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::match::CreateTrialChallengeCardResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.CreateTrialChallengeCard requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kMatchServiceCreateTrialChallengeCardGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalMatchServiceCreateTrialChallengeCardFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalMatchServiceCreateTrialChallengeCardFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::match::CreateTrialChallengeCardResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the MatchService.CreateTrialChallengeCard response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendMatchServiceCreateTrialChallengeCard(entt::registry& registry, entt::entity nodeEntity, const ::match::CreateTrialChallengeCardRequest& request,
+                                            GrpcDone<::match::CreateTrialChallengeCardResponse> done, const GrpcCallOptions& options) {
+    StartMatchServiceCreateTrialChallengeCardCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendMatchServiceCreateTrialChallengeCardErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.CreateTrialChallengeCard requires a done callback";
+    }
+    if (message.GetDescriptor() != ::match::CreateTrialChallengeCardRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC MatchService.CreateTrialChallengeCard: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceCreateTrialChallengeCardGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::match::CreateTrialChallengeCardRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC MatchService.CreateTrialChallengeCard: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceCreateTrialChallengeCardGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartMatchServiceCreateTrialChallengeCardCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::match::CreateTrialChallengeCardResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region MatchServiceGetTrialChallengeCard
+namespace {
+void QueueLocalMatchServiceGetTrialChallengeCardFailure(GrpcDone<::match::GetTrialChallengeCardResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kMatchServiceGetTrialChallengeCardGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartMatchServiceGetTrialChallengeCardCall(entt::registry& registry, entt::entity nodeEntity, const ::match::GetTrialChallengeCardRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::match::GetTrialChallengeCardResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.GetTrialChallengeCard requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kMatchServiceGetTrialChallengeCardGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalMatchServiceGetTrialChallengeCardFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalMatchServiceGetTrialChallengeCardFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::match::GetTrialChallengeCardResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the MatchService.GetTrialChallengeCard response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendMatchServiceGetTrialChallengeCard(entt::registry& registry, entt::entity nodeEntity, const ::match::GetTrialChallengeCardRequest& request,
+                                            GrpcDone<::match::GetTrialChallengeCardResponse> done, const GrpcCallOptions& options) {
+    StartMatchServiceGetTrialChallengeCardCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendMatchServiceGetTrialChallengeCardErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.GetTrialChallengeCard requires a done callback";
+    }
+    if (message.GetDescriptor() != ::match::GetTrialChallengeCardRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC MatchService.GetTrialChallengeCard: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceGetTrialChallengeCardGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::match::GetTrialChallengeCardRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC MatchService.GetTrialChallengeCard: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceGetTrialChallengeCardGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartMatchServiceGetTrialChallengeCardCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::match::GetTrialChallengeCardResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region MatchServiceGetSharedTrialReplay
+namespace {
+void QueueLocalMatchServiceGetSharedTrialReplayFailure(GrpcDone<::match::GetSharedTrialReplayResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kMatchServiceGetSharedTrialReplayGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartMatchServiceGetSharedTrialReplayCall(entt::registry& registry, entt::entity nodeEntity, const ::match::GetSharedTrialReplayRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::match::GetSharedTrialReplayResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.GetSharedTrialReplay requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kMatchServiceGetSharedTrialReplayGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalMatchServiceGetSharedTrialReplayFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalMatchServiceGetSharedTrialReplayFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::match::GetSharedTrialReplayResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the MatchService.GetSharedTrialReplay response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendMatchServiceGetSharedTrialReplay(entt::registry& registry, entt::entity nodeEntity, const ::match::GetSharedTrialReplayRequest& request,
+                                            GrpcDone<::match::GetSharedTrialReplayResponse> done, const GrpcCallOptions& options) {
+    StartMatchServiceGetSharedTrialReplayCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendMatchServiceGetSharedTrialReplayErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.GetSharedTrialReplay requires a done callback";
+    }
+    if (message.GetDescriptor() != ::match::GetSharedTrialReplayRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC MatchService.GetSharedTrialReplay: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceGetSharedTrialReplayGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::match::GetSharedTrialReplayRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC MatchService.GetSharedTrialReplay: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceGetSharedTrialReplayGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartMatchServiceGetSharedTrialReplayCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::match::GetSharedTrialReplayResponse* reply) { done(outcome, reply); });
 }
 #pragma endregion
 

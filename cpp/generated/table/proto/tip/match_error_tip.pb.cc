@@ -35,7 +35,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_match_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\025match_error_tip.proto*\215\021\n\013match_error\022"
+    "\n\025match_error_tip.proto*\272\020\n\013match_error\022"
     "\022\n\016kMatch_errorOK\020\000\022\023\n\016kMatchInBattle\020\200}"
     "\022\030\n\023kMatchAlreadyQueued\020\201}\022\026\n\021kMatchMode"
     "NotOpen\020\202}\022 \n\033kMatchTeamSizeNotConfigure"
@@ -82,22 +82,20 @@ const char descriptor_table_protodef_match_5ferror_5ftip_2eproto[] ABSL_ATTRIBUT
     "otAllowed\020\264}\022\"\n\035kMatchBattleSurrenderToo"
     "Early\020\265}\022\"\n\035kMatchBattleSurrenderCooldow"
     "n\020\266}\022&\n!kMatchBattleSurrenderAlreadyVote"
-    "d\020\267}\022(\n#kMatchTournamentAlreadySalutedTo"
-    "day\020\270}\022\'\n\"kMatchTournamentNoChampionToSa"
-    "lute\020\271}\022*\n%kMatchTournamentSpectateCheer"
-    "Cooldown\020\272}\022)\n$kMatchTournamentSpectateC"
-    "heerInvalid\020\273}\022\"\n\035kMatchTournamentEmblem"
-    "Invalid\020\274}\022%\n kMatchTournamentPrediction"
-    "Closed\020\275}\022,\n\'kMatchTournamentPredictionT"
-    "argetInvalid\020\276}\022&\n!kMatchTournamentWarmu"
-    "pUnavailable\020\277}B$\n\016com.game.tableZ\022gener"
-    "ated/pb/tableb\006proto3"
+    "d\020\267}\022*\n%kMatchTournamentSpectateCheerCoo"
+    "ldown\020\272}\022)\n$kMatchTournamentSpectateChee"
+    "rInvalid\020\273}\022\"\n\035kMatchTournamentEmblemInv"
+    "alid\020\274}\022%\n kMatchTournamentPredictionClo"
+    "sed\020\275}\022,\n\'kMatchTournamentPredictionTarg"
+    "etInvalid\020\276}\022&\n!kMatchTournamentWarmupUn"
+    "available\020\277}B$\n\016com.game.tableZ\022generate"
+    "d/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_match_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_match_5ferror_5ftip_2eproto = {
     false,
     false,
-    2261,
+    2178,
     descriptor_table_protodef_match_5ferror_5ftip_2eproto,
     "match_error_tip.proto",
     &descriptor_table_match_5ferror_5ftip_2eproto_once,
@@ -116,7 +114,7 @@ match_error_descriptor() {
   return file_level_enum_descriptors_match_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t match_error_internal_data_[] = {
-    65536u, 4194304u, 16032u, 16016u, 16048u, 16008u, 16024u, 16040u, 16056u, 16004u, 16012u, 16020u, 16028u, 16036u, 16044u, 16052u, 16060u, 16002u, 16006u, 16010u, 16014u, 16018u, 16022u, 16026u, 16030u, 16034u, 16038u, 16042u, 16046u, 16050u, 16054u, 16058u, 16062u, 16001u, 16003u, 16005u, 16007u, 16009u, 16011u, 16013u, 16015u, 16017u, 16019u, 16021u, 16023u, 16025u, 16027u, 16029u, 16031u, 16033u, 16035u, 16037u, 16039u, 16041u, 16043u, 16045u, 16047u, 16049u, 16051u, 16053u, 16055u, 16057u, 16059u, 16061u, 16063u, 16000u, };
+    65536u, 4063232u, 16031u, 16015u, 16047u, 16007u, 16023u, 16039u, 16055u, 16003u, 16011u, 16019u, 16027u, 16035u, 16043u, 16051u, 16061u, 16001u, 16005u, 16009u, 16013u, 16017u, 16021u, 16025u, 16029u, 16033u, 16037u, 16041u, 16045u, 16049u, 16053u, 16059u, 16063u, 16000u, 16002u, 16004u, 16006u, 16008u, 16010u, 16012u, 16014u, 16016u, 16018u, 16020u, 16022u, 16024u, 16026u, 16028u, 16030u, 16032u, 16034u, 16036u, 16038u, 16040u, 16042u, 16044u, 16046u, 16048u, 16050u, 16052u, 16054u, 16058u, 16060u, 16062u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

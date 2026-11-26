@@ -215,10 +215,10 @@ TEST_F(PlayerTrialJournalSystemTest, RealExportedTablesValidateAndPopulateInitia
     EXPECT_TRUE(snap.available());
     EXPECT_TRUE(snap.can_operate());
     EXPECT_EQ(snap.total_permanent_lit_seals(), 0u);
-    EXPECT_EQ(snap.total_permanent_seals(), 27u);
+    EXPECT_EQ(snap.total_permanent_seals(), 36u);
     EXPECT_EQ(snap.voucher_balance(), 0u);
     EXPECT_EQ(snap.bound_sand_balance(), 0u);
-    ASSERT_EQ(snap.chapters_size(), 3);
+    ASSERT_EQ(snap.chapters_size(), 4);
     EXPECT_EQ(snap.chapters(0).chapter_id(), trialjournal::kChapterBreakthrough);
     EXPECT_EQ(snap.chapters(0).entries_size(), 5);
     EXPECT_EQ(snap.chapters(1).chapter_id(), trialjournal::kChapterThreeRealms);
@@ -226,7 +226,10 @@ TEST_F(PlayerTrialJournalSystemTest, RealExportedTablesValidateAndPopulateInitia
     EXPECT_EQ(snap.chapters(2).chapter_id(), trialjournal::kChapterSeasonal);
     EXPECT_EQ(snap.chapters(2).season_id(), 1u);
     EXPECT_EQ(snap.chapters(2).entries_size(), 3);
-    EXPECT_EQ(snap.milestones_size(), 11);
+    EXPECT_EQ(snap.chapters(3).chapter_id(), trialjournal::kChapterWildRealms);
+    EXPECT_EQ(snap.chapters(3).season_id(), 0u);
+    EXPECT_EQ(snap.chapters(3).entries_size(), 3);
+    EXPECT_EQ(snap.milestones_size(), 13);
     EXPECT_EQ(snap.redeemable_artifacts_size(), 8);
 
     const auto* m901 = FindMilestoneView(snap, 901);
@@ -904,4 +907,72 @@ TEST_F(PlayerTrialJournalSystemTest, NormalBossTrialClearUnlocksHardWithoutJourn
     GetTrialJournalResponse after;
     ASSERT_EQ(PlayerTrialJournalSystem::GetJournal(player, kNowMs, after), kSuccess);
     EXPECT_TRUE(after.snapshot().hard_boss_trial_unlocked());
+}
+
+TEST_F(PlayerTrialJournalSystemTest, Vol4WildRealmsSealsMilestonesAndVowBestRecords) {
+    // 1) 卷四 401/402/403 战法印与永久里程碑 401(4印)/402(8印)
+    auto s401 = MakeTrialSettlement(99101, 401, 1, 7);
+    s401.mutable_trial_facts()->set_boss_wind_hit_unprotected_death(false);
+    s401.mutable_trial_facts()->set_challenge_vow_mask(trialjournal::kVowBanControl | trialjournal::kVowTightRounds);
+    PlayerTrialJournalSystem::SettlementDelta d401;
+    ApplyBattleCredit(s401, d401);
+    EXPECT_EQ(d401.newlyLitSealIds, (std::vector<uint32_t>{4011u, 4012u, 4013u}));
+    EXPECT_TRUE(d401.newSoloBest);
+    EXPECT_TRUE(d401.newVowBest);
+    EXPECT_EQ(d401.vowMask, trialjournal::kVowBanControl | trialjournal::kVowTightRounds);
+    EXPECT_EQ(d401.battleId, 99101u);
+
+    // 同誓约条数更短回合应刷新 best_vow_rounds 与 battle_id；更少誓约条数绝不覆盖
+    auto s401FewerVow = MakeTrialSettlement(99102, 401, 1, 4);
+    s401FewerVow.mutable_trial_facts()->set_challenge_vow_mask(trialjournal::kVowBanControl);
+    PlayerTrialJournalSystem::SettlementDelta dFewer;
+    ApplyBattleCredit(s401FewerVow, dFewer);
+    EXPECT_TRUE(dFewer.newSoloBest);
+    EXPECT_FALSE(dFewer.newVowBest);
+
+    auto s401MoreVow = MakeTrialSettlement(99103, 401, 1, 9);
+    s401MoreVow.mutable_trial_facts()->set_challenge_vow_mask(
+        trialjournal::kVowBanControl | trialjournal::kVowSingleArtifact | trialjournal::kVowNoPet);
+    PlayerTrialJournalSystem::SettlementDelta dMore;
+    ApplyBattleCredit(s401MoreVow, dMore);
+    EXPECT_TRUE(dMore.newVowBest);
+
+    // 402 水镜钟鸣 + 403 涨退潮点满 9 印 -> 达标 M401(4印) 与 M402(8印)
+    auto s402 = MakeTrialSettlement(99104, 402, 1, 8);
+    s402.mutable_trial_facts()->set_dealt_yang_bell_physical_damage(true);
+    s402.mutable_trial_facts()->set_dealt_yin_drum_magic_damage(true);
+    PlayerTrialJournalSystem::SettlementDelta d402;
+    ApplyBattleCredit(s402, d402);
+    EXPECT_EQ(d402.newlyLitSealIds, (std::vector<uint32_t>{4021u, 4022u, 4023u}));
+
+    auto s403 = MakeTrialSettlement(99105, 403, 1, 8);
+    s403.mutable_trial_facts()->set_finished_in_ebb_tide(true);
+    PlayerTrialJournalSystem::SettlementDelta d403;
+    ApplyBattleCredit(s403, d403);
+    EXPECT_EQ(d403.newlyLitSealIds, (std::vector<uint32_t>{4031u, 4032u, 4033u}));
+
+    GetTrialJournalResponse resp;
+    ASSERT_EQ(PlayerTrialJournalSystem::GetJournal(player, kNowMs, resp), kSuccess);
+    EXPECT_EQ(resp.snapshot().total_permanent_lit_seals(), 9u);
+    const auto* e401 = FindEntryView(resp.snapshot(), 401);
+    ASSERT_NE(e401, nullptr);
+    EXPECT_TRUE(e401->vow_supported());
+    EXPECT_EQ(e401->solo_best().best_rounds(), 4u);
+    EXPECT_EQ(e401->solo_best().battle_id(), 99102u);
+    EXPECT_EQ(e401->best_vow_count(), 3u);
+    EXPECT_EQ(e401->best_vow_rounds(), 9u);
+    EXPECT_EQ(e401->best_vow_battle_id(), 99103u);
+
+    const auto* e302 = FindEntryView(resp.snapshot(), 302);
+    ASSERT_NE(e302, nullptr);
+    EXPECT_FALSE(e302->vow_supported());
+
+    const auto* m401 = FindMilestoneView(resp.snapshot(), 401);
+    const auto* m402 = FindMilestoneView(resp.snapshot(), 402);
+    ASSERT_NE(m401, nullptr);
+    ASSERT_NE(m402, nullptr);
+    EXPECT_TRUE(m401->claimable());
+    EXPECT_TRUE(m402->claimable());
+    EXPECT_EQ(m401->badge_key(), "badge_trial_three_realms");
+    EXPECT_EQ(m402->commentary_key(), "commentary_tingyu_realms_v3");
 }

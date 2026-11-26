@@ -32,9 +32,6 @@ message TournamentRuleTable {
 	bool bo3_top4_enabled = 21;
 	uint32 intermission_seconds = 22;
 	bool public_knockout_replay = 23;
-	uint32 salute_gold_amount = 24;
-	uint32 salute_item_id = 25;
-	uint32 salute_item_count = 26;
 	bool warmup_spar_enabled = 27;
 	bool prediction_enabled = 28;
 	uint32 prediction_reward_min_hits = 29;

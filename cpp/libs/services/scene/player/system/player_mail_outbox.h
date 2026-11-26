@@ -46,6 +46,8 @@ public:
 	// 战斗结算改投的标题与正文(玩家可见)。改它们只影响之后新建的条目:已有条目存着自己的原文。
 	static constexpr const char* kBattleOverflowTitle = "战斗奖励";
 	static constexpr const char* kBattleOverflowBody = "背包已满,本场战斗获得的物品改由邮件发放,请腾出背包空位后领取附件。";
+	// 跨节点/离线名匠代打净分成邮件的默认标题。
+	static constexpr const char* kCraftProxyFeeTitle = "名匠代打分成";
 
 	// 一封备好的待寄邮件(还没写进存档)。
 	struct PreparedMail
@@ -54,6 +56,17 @@ public:
 		mail_outbox_rules::MailItems items;
 	};
 	using PreparedMails = std::vector<PreparedMail>;
+
+	// 一封备好的名匠代打净银两分成待寄邮件(还没写进存档)。
+	struct PreparedProxyFeeMail
+	{
+		uint64_t requestId{0};
+		uint64_t recipientPlayerId{0};
+		uint64_t sourceId{0};
+		uint64_t netGold{0};
+		std::string title;
+		std::string body;
+	};
 
 	// 本进程发不发得出邮件:配了 battle 发件密钥(至少 32 字节)。只读环境,不发请求。
 	static bool IsSenderConfigured();
@@ -69,6 +82,13 @@ public:
 										  PreparedMails& out);
 	// 把备好的条目写进存档,与结算的其余效果同一帧。不会失败:组件与余量已在 PrepareBattleOverflow 里核过。
 	static void CommitPrepared(entt::entity player, uint64_t battleId, const PreparedMails& prepared, uint64_t nowMs);
+
+	// 跨节点/离线名匠代打:在扣减买家资产前备好 95% 净银两的待寄邮件条目(只取号与核容量,不改存档)。
+	static uint32_t PrepareProxyFeePayout(entt::entity buyer, uint64_t masterPlayerId, uint64_t netGold,
+										  uint64_t clientRequestId, const std::string& buyerName,
+										  PreparedProxyFeeMail& out);
+	// 与买家扣款/扣料/防重账本同帧落入买家 WALLET 持久组的 PlayerMailOutboxComp。
+	static void CommitPreparedProxyFee(entt::entity buyer, const PreparedProxyFeeMail& prepared, uint64_t nowMs);
 
 	// 定时器入口(kTickIntervalSec):对每名有可寄条目的玩家至多发一封。
 	static void Tick();

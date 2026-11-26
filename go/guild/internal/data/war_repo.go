@@ -24,6 +24,7 @@ const (
 	guildWarBountyTable          = "guild_war_bounty"
 	guildWarBattleTable          = "guild_war_battle"
 	guildWarRivalryTable         = "guild_war_rivalry"
+	guildWarFeudTable            = "guild_war_feud"
 )
 
 var (
@@ -37,6 +38,9 @@ var (
 	ErrWarBountyLimit        = errors.New("war: bounty daily limit reached")
 	ErrWarTrackCooldown      = errors.New("war: track cooldown active")
 	ErrWarBattleAlreadyDone  = errors.New("war: battle already settled")
+	ErrWarFeudCooldown       = errors.New("war: feud issue cooldown active")
+	ErrWarFeudAlreadyActive  = errors.New("war: guild already has pending or active feud")
+	ErrWarFeudNotFound       = errors.New("war: feud not found or resolved")
 )
 
 type WarRepo struct {
@@ -1508,4 +1512,233 @@ func markRivalryTx(ctx context.Context, tx *sql.Tx, g1, g2 uint64, weekKey uint3
 		"INSERT INTO `"+guildWarRivalryTable+"` (`guild_id_low`,`guild_id_high`,`week_key`,`clash_count`,`bounty_marked`,`updated_ms`) VALUES (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE `clash_count` = `clash_count` + VALUES(`clash_count`), `bounty_marked` = GREATEST(`bounty_marked`, VALUES(`bounty_marked`)), `updated_ms` = VALUES(`updated_ms`)",
 		low, high, weekKey, addClash, bm, nowMs)
 	return err
+}
+
+// ── 帮战 V2.5 · 宿敌约战战书仓储（锁序 22: guild_war_feud，独立短事务，绝不回头锁旧表）──
+
+func scanFeudRow(scan func(dest ...any) error) (*pb.GuildWarFeudRecord, error) {
+	rec := &pb.GuildWarFeudRecord{}
+	err := scan(&rec.FeudId, &rec.ZoneId, &rec.IssuerGuildId, &rec.IssuerGuildName,
+		&rec.TargetGuildId, &rec.TargetGuildName, &rec.Status, &rec.IssuerWins, &rec.TargetWins,
+		&rec.IssuerMerit, &rec.TargetMerit, &rec.CreatedAtMs, &rec.AcceptDeadlineMs,
+		&rec.StartedAtMs, &rec.EndsAtMs, &rec.WinnerGuildId, &rec.UpdatedMs)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	return rec, err
+}
+
+// GetActiveOrPendingFeud 返回本帮当前待应答或激战中的约战战书，并惰性收口已超时的战书。
+func (r *WarRepo) GetActiveOrPendingFeud(ctx context.Context, guildID uint64, nowMs uint64) (*pb.GuildWarFeudRecord, *pb.GuildWarFeudRecord, error) {
+	row := r.db.QueryRowContext(ctx,
+		"SELECT `feud_id`,`zone_id`,`issuer_guild_id`,`issuer_guild_name`,`target_guild_id`,`target_guild_name`,`status`,`issuer_wins`,`target_wins`,`issuer_merit`,`target_merit`,`created_at_ms`,`accept_deadline_ms`,`started_at_ms`,`ends_at_ms`,`winner_guild_id`,`updated_ms` FROM `"+guildWarFeudTable+"` WHERE (`issuer_guild_id`=? OR `target_guild_id`=?) AND `status` IN (1,2) ORDER BY `created_at_ms` DESC LIMIT 1",
+		guildID, guildID)
+	rec, err := scanFeudRow(row.Scan)
+	if err != nil || rec == nil {
+		return nil, nil, err
+	}
+	if rec.GetStatus() == uint32(pb.GuildWarFeudStatus_GUILD_WAR_FEUD_STATUS_PENDING) && rec.GetAcceptDeadlineMs() > 0 && nowMs >= rec.GetAcceptDeadlineMs() {
+		_, _ = r.db.ExecContext(ctx,
+			"UPDATE `"+guildWarFeudTable+"` SET `status`=?,`updated_ms`=? WHERE `feud_id`=? AND `status`=1",
+			uint32(pb.GuildWarFeudStatus_GUILD_WAR_FEUD_STATUS_EXPIRED), nowMs, rec.GetFeudId())
+		return nil, nil, nil
+	}
+	if rec.GetStatus() == uint32(pb.GuildWarFeudStatus_GUILD_WAR_FEUD_STATUS_ACTIVE) && rec.GetEndsAtMs() > 0 && nowMs >= rec.GetEndsAtMs() {
+		winner := war.ResolveFeudWinner(rec.GetIssuerGuildId(), rec.GetTargetGuildId(), rec.GetIssuerWins(), rec.GetTargetWins(), rec.GetIssuerMerit(), rec.GetTargetMerit())
+		res, uErr := r.db.ExecContext(ctx,
+			"UPDATE `"+guildWarFeudTable+"` SET `status`=?,`winner_guild_id`=?,`updated_ms`=? WHERE `feud_id`=? AND `status`=2",
+			uint32(pb.GuildWarFeudStatus_GUILD_WAR_FEUD_STATUS_FINISHED), winner, nowMs, rec.GetFeudId())
+		if uErr == nil {
+			if aff, _ := res.RowsAffected(); aff > 0 {
+				rec.Status = uint32(pb.GuildWarFeudStatus_GUILD_WAR_FEUD_STATUS_FINISHED)
+				rec.WinnerGuildId = winner
+				rec.UpdatedMs = nowMs
+				return nil, rec, nil
+			}
+		}
+		return nil, nil, nil
+	}
+	return rec, nil, nil
+}
+
+func (r *WarRepo) GetLastFinishedFeud(ctx context.Context, guildID uint64) (*pb.GuildWarFeudRecord, error) {
+	row := r.db.QueryRowContext(ctx,
+		"SELECT `feud_id`,`zone_id`,`issuer_guild_id`,`issuer_guild_name`,`target_guild_id`,`target_guild_name`,`status`,`issuer_wins`,`target_wins`,`issuer_merit`,`target_merit`,`created_at_ms`,`accept_deadline_ms`,`started_at_ms`,`ends_at_ms`,`winner_guild_id`,`updated_ms` FROM `"+guildWarFeudTable+"` WHERE (`issuer_guild_id`=? OR `target_guild_id`=?) AND `status`=3 ORDER BY `ends_at_ms` DESC LIMIT 1",
+		guildID, guildID)
+	return scanFeudRow(row.Scan)
+}
+
+func (r *WarRepo) GetLastFeudIssuedAt(ctx context.Context, issuerGuildID uint64) (uint64, error) {
+	var created uint64
+	err := r.db.QueryRowContext(ctx,
+		"SELECT COALESCE(MAX(`created_at_ms`), 0) FROM `"+guildWarFeudTable+"` WHERE `issuer_guild_id`=? AND `status` IN (1,2,3)",
+		issuerGuildID).Scan(&created)
+	return created, err
+}
+
+func (r *WarRepo) IssueFeud(ctx context.Context, rec *pb.GuildWarFeudRecord, cooldownSec uint32, nowMs uint64) (*pb.GuildWarFeudRecord, error) {
+	if _, _, err := r.GetActiveOrPendingFeud(ctx, rec.GetIssuerGuildId(), nowMs); err != nil {
+		return nil, err
+	}
+	if _, _, err := r.GetActiveOrPendingFeud(ctx, rec.GetTargetGuildId(), nowMs); err != nil {
+		return nil, err
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var busy int
+	if err := tx.QueryRowContext(ctx,
+		"SELECT COUNT(1) FROM `"+guildWarFeudTable+"` WHERE `status` IN (1,2) AND (`issuer_guild_id` IN (?,?) OR `target_guild_id` IN (?,?))",
+		rec.GetIssuerGuildId(), rec.GetTargetGuildId(), rec.GetIssuerGuildId(), rec.GetTargetGuildId()).Scan(&busy); err != nil {
+		return nil, err
+	}
+	if busy > 0 {
+		return nil, ErrWarFeudAlreadyActive
+	}
+	var lastIssued uint64
+	if err := tx.QueryRowContext(ctx,
+		"SELECT COALESCE(MAX(`created_at_ms`), 0) FROM `"+guildWarFeudTable+"` WHERE `issuer_guild_id`=? AND `status` IN (1,2,3)",
+		rec.GetIssuerGuildId()).Scan(&lastIssued); err != nil {
+		return nil, err
+	}
+	if lastIssued > 0 && nowMs < lastIssued+uint64(cooldownSec)*1000 {
+		return nil, ErrWarFeudCooldown
+	}
+	if _, err := tx.ExecContext(ctx,
+		"INSERT INTO `"+guildWarFeudTable+"` (`feud_id`,`zone_id`,`issuer_guild_id`,`issuer_guild_name`,`target_guild_id`,`target_guild_name`,`status`,`issuer_wins`,`target_wins`,`issuer_merit`,`target_merit`,`created_at_ms`,`accept_deadline_ms`,`started_at_ms`,`ends_at_ms`,`winner_guild_id`,`updated_ms`) VALUES (?,?,?,?,?,?,1,0,0,0,0,?,?,0,0,0,?)",
+		rec.GetFeudId(), rec.GetZoneId(), rec.GetIssuerGuildId(), rec.GetIssuerGuildName(),
+		rec.GetTargetGuildId(), rec.GetTargetGuildName(), rec.GetCreatedAtMs(), rec.GetAcceptDeadlineMs(), nowMs); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	rec.Status = uint32(pb.GuildWarFeudStatus_GUILD_WAR_FEUD_STATUS_PENDING)
+	rec.UpdatedMs = nowMs
+	return rec, nil
+}
+
+func (r *WarRepo) RespondFeud(ctx context.Context, feudID, responderGuildID uint64, accept bool, durationSec uint32, nowMs uint64) (*pb.GuildWarFeudRecord, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	row := tx.QueryRowContext(ctx,
+		"SELECT `feud_id`,`zone_id`,`issuer_guild_id`,`issuer_guild_name`,`target_guild_id`,`target_guild_name`,`status`,`issuer_wins`,`target_wins`,`issuer_merit`,`target_merit`,`created_at_ms`,`accept_deadline_ms`,`started_at_ms`,`ends_at_ms`,`winner_guild_id`,`updated_ms` FROM `"+guildWarFeudTable+"` WHERE `feud_id`=? FOR UPDATE",
+		feudID)
+	rec, err := scanFeudRow(row.Scan)
+	if err != nil {
+		return nil, err
+	}
+	if rec == nil || rec.GetStatus() != uint32(pb.GuildWarFeudStatus_GUILD_WAR_FEUD_STATUS_PENDING) {
+		return nil, ErrWarFeudNotFound
+	}
+	if rec.GetAcceptDeadlineMs() > 0 && nowMs >= rec.GetAcceptDeadlineMs() {
+		_, _ = tx.ExecContext(ctx, "UPDATE `"+guildWarFeudTable+"` SET `status`=?,`updated_ms`=? WHERE `feud_id`=?",
+			uint32(pb.GuildWarFeudStatus_GUILD_WAR_FEUD_STATUS_EXPIRED), nowMs, feudID)
+		_ = tx.Commit()
+		return nil, ErrWarFeudNotFound
+	}
+	if accept {
+		if responderGuildID != rec.GetTargetGuildId() {
+			return nil, ErrWarFeudNotFound
+		}
+		endsAt := nowMs + uint64(durationSec)*1000
+		if _, err := tx.ExecContext(ctx,
+			"UPDATE `"+guildWarFeudTable+"` SET `status`=?,`started_at_ms`=?,`ends_at_ms`=?,`updated_ms`=? WHERE `feud_id`=?",
+			uint32(pb.GuildWarFeudStatus_GUILD_WAR_FEUD_STATUS_ACTIVE), nowMs, endsAt, nowMs, feudID); err != nil {
+			return nil, err
+		}
+		rec.Status = uint32(pb.GuildWarFeudStatus_GUILD_WAR_FEUD_STATUS_ACTIVE)
+		rec.StartedAtMs = nowMs
+		rec.EndsAtMs = endsAt
+		rec.UpdatedMs = nowMs
+	} else {
+		if responderGuildID != rec.GetTargetGuildId() && responderGuildID != rec.GetIssuerGuildId() {
+			return nil, ErrWarFeudNotFound
+		}
+		if _, err := tx.ExecContext(ctx,
+			"UPDATE `"+guildWarFeudTable+"` SET `status`=?,`updated_ms`=? WHERE `feud_id`=?",
+			uint32(pb.GuildWarFeudStatus_GUILD_WAR_FEUD_STATUS_DECLINED), nowMs, feudID); err != nil {
+			return nil, err
+		}
+		rec.Status = uint32(pb.GuildWarFeudStatus_GUILD_WAR_FEUD_STATUS_DECLINED)
+		rec.UpdatedMs = nowMs
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return rec, nil
+}
+
+// GetActiveFeudBetween 查询两帮当前是否处于 2 小时宿敌约战激战窗口内。
+func (r *WarRepo) GetActiveFeudBetween(ctx context.Context, g1, g2 uint64, nowMs uint64) (*pb.GuildWarFeudRecord, error) {
+	if g1 == 0 || g2 == 0 || g1 == g2 {
+		return nil, nil
+	}
+	row := r.db.QueryRowContext(ctx,
+		"SELECT `feud_id`,`zone_id`,`issuer_guild_id`,`issuer_guild_name`,`target_guild_id`,`target_guild_name`,`status`,`issuer_wins`,`target_wins`,`issuer_merit`,`target_merit`,`created_at_ms`,`accept_deadline_ms`,`started_at_ms`,`ends_at_ms`,`winner_guild_id`,`updated_ms` FROM `"+guildWarFeudTable+"` WHERE `status`=2 AND ((`issuer_guild_id`=? AND `target_guild_id`=?) OR (`issuer_guild_id`=? AND `target_guild_id`=?)) LIMIT 1",
+		g1, g2, g2, g1)
+	rec, err := scanFeudRow(row.Scan)
+	if err != nil || rec == nil {
+		return nil, err
+	}
+	if rec.GetEndsAtMs() > 0 && nowMs >= rec.GetEndsAtMs() {
+		return nil, nil
+	}
+	return rec, nil
+}
+
+// RecordFeudBattle 计入一场 2 小时约战比分与双方战功；若时间到则原子收官并返回 finished=true。
+func (r *WarRepo) RecordFeudBattle(ctx context.Context, feudID, atkGuildID, defGuildID uint64, atkWon, defWon bool, atkMerit, defMerit, nowMs uint64) (*pb.GuildWarFeudRecord, bool, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	row := tx.QueryRowContext(ctx,
+		"SELECT `feud_id`,`zone_id`,`issuer_guild_id`,`issuer_guild_name`,`target_guild_id`,`target_guild_name`,`status`,`issuer_wins`,`target_wins`,`issuer_merit`,`target_merit`,`created_at_ms`,`accept_deadline_ms`,`started_at_ms`,`ends_at_ms`,`winner_guild_id`,`updated_ms` FROM `"+guildWarFeudTable+"` WHERE `feud_id`=? FOR UPDATE",
+		feudID)
+	rec, err := scanFeudRow(row.Scan)
+	if err != nil || rec == nil || rec.GetStatus() != uint32(pb.GuildWarFeudStatus_GUILD_WAR_FEUD_STATUS_ACTIVE) {
+		return nil, false, err
+	}
+	if atkGuildID == rec.GetIssuerGuildId() && defGuildID == rec.GetTargetGuildId() {
+		if atkWon {
+			rec.IssuerWins++
+		} else if defWon {
+			rec.TargetWins++
+		}
+		rec.IssuerMerit += atkMerit
+		rec.TargetMerit += defMerit
+	} else if atkGuildID == rec.GetTargetGuildId() && defGuildID == rec.GetIssuerGuildId() {
+		if atkWon {
+			rec.TargetWins++
+		} else if defWon {
+			rec.IssuerWins++
+		}
+		rec.TargetMerit += atkMerit
+		rec.IssuerMerit += defMerit
+	}
+	finished := rec.GetEndsAtMs() > 0 && nowMs >= rec.GetEndsAtMs()
+	if finished {
+		rec.Status = uint32(pb.GuildWarFeudStatus_GUILD_WAR_FEUD_STATUS_FINISHED)
+		rec.WinnerGuildId = war.ResolveFeudWinner(rec.GetIssuerGuildId(), rec.GetTargetGuildId(), rec.GetIssuerWins(), rec.GetTargetWins(), rec.GetIssuerMerit(), rec.GetTargetMerit())
+	}
+	rec.UpdatedMs = nowMs
+	if _, err := tx.ExecContext(ctx,
+		"UPDATE `"+guildWarFeudTable+"` SET `status`=?,`issuer_wins`=?,`target_wins`=?,`issuer_merit`=?,`target_merit`=?,`winner_guild_id`=?,`updated_ms`=? WHERE `feud_id`=?",
+		rec.GetStatus(), rec.GetIssuerWins(), rec.GetTargetWins(), rec.GetIssuerMerit(), rec.GetTargetMerit(), rec.GetWinnerGuildId(), nowMs, feudID); err != nil {
+		return nil, false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, false, err
+	}
+	return rec, finished, nil
 }

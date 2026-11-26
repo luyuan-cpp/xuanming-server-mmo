@@ -1198,6 +1198,29 @@ TEST(EquipEnhanceRulesTest, RollEnhanceWithPityEarlySuccessResetsPityAndFailIncr
     EXPECT_EQ(plainFail.nextPityCount, 0u);
 }
 
+TEST(EquipEnhanceRulesTest, V1SupportControlFairBenefitAndSpeedNeverScaled) {
+    constexpr uint32_t kV1 = equiprules::ToRaw(equiprules::EquipmentProfile::kV1Basic);
+    constexpr uint32_t kAcc = equiprules::ToRaw(equiprules::EquipmentProfile::kV1Accessory);
+
+    // 基础属性：V1 基础装允许气血/攻防强化，严禁放大速度。
+    EXPECT_TRUE(equiprules::EnhancesBaseAttribute(kV1, ToRaw(EffectKind::kDerivedFlat), ToRaw(DerivedStat::kMaxHealth)));
+    EXPECT_TRUE(equiprules::EnhancesBaseAttribute(kV1, ToRaw(EffectKind::kBothAttacks), 0));
+    EXPECT_TRUE(equiprules::EnhancesBaseAttribute(kV1, ToRaw(EffectKind::kDerivedFlat), ToRaw(DerivedStat::kDefense)));
+    EXPECT_FALSE(equiprules::EnhancesBaseAttribute(kV1, ToRaw(EffectKind::kDerivedFlat), ToRaw(DerivedStat::kSpeed)));
+    EXPECT_FALSE(equiprules::EnhancesBaseAttribute(kAcc, ToRaw(EffectKind::kDerivedFlat), ToRaw(DerivedStat::kMaxHealth)));
+
+    // 固定词条克制份额：奶/盾 50%、控场 25%，攻强与速度恒为 0，首饰恒为 0。
+    EXPECT_EQ(800u, equiprules::ScaleV1FixedAffixByEnhance(kV1, 5, 800, 0));
+    EXPECT_EQ(880u, equiprules::ScaleV1FixedAffixByEnhance(kV1, 5, 800, 2000));
+    EXPECT_EQ(896u, equiprules::ScaleV1FixedAffixByEnhance(kV1, 6, 800, 2400));
+    EXPECT_EQ(420u, equiprules::ScaleV1FixedAffixByEnhance(kV1, 11, 400, 2000));
+    EXPECT_EQ(424u, equiprules::ScaleV1FixedAffixByEnhance(kV1, 11, 400, 2400));
+    EXPECT_EQ(800u, equiprules::ScaleV1FixedAffixByEnhance(kV1, 1, 800, 2400));
+    EXPECT_EQ(800u, equiprules::ScaleV1FixedAffixByEnhance(kV1, 2, 800, 2400));
+    EXPECT_EQ(200u, equiprules::ScaleV1FixedAffixByEnhance(kV1, 4, 200, 2400));
+    EXPECT_EQ(800u, equiprules::ScaleV1FixedAffixByEnhance(kAcc, 5, 800, 2400));
+}
+
 // ---------------------------------------------------------------------------
 // 编译期守卫:CombatStat 的数值 == proto CombatAttributes 的字段号(设计文档 §3.3「三者不得错位」)。
 // proto 改号、或在枚举中间插项,这个文件直接编不过 —— 而不是「抗冰冻」在线上悄悄变成「抗昏睡」。

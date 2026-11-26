@@ -129,6 +129,10 @@ enum TransactionType : int {
   TX_TRAVEL_PASS_UNLOCK = 45,
   TX_TRAVEL_PASS_REWARD = 46,
   TX_EQUIP_LOADOUT_UNLOCK = 47,
+  TX_SKILL_LOADOUT_RENT = 48,
+  TX_JIANGHU_DUEL_FEE = 49,
+  TX_JIANGHU_DUEL_REFUND = 50,
+  TX_JIANGHU_CLEAR_DEFEAT_MARK = 51,
   TransactionType_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   TransactionType_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -139,11 +143,11 @@ extern const uint32_t TransactionType_internal_data_[];
 inline constexpr TransactionType TransactionType_MIN =
     static_cast<TransactionType>(0);
 inline constexpr TransactionType TransactionType_MAX =
-    static_cast<TransactionType>(47);
+    static_cast<TransactionType>(51);
 [[nodiscard]] inline bool TransactionType_IsValid(int value) {
-  return 0 <= value && value <= 47;
+  return 0 <= value && value <= 51;
 }
-inline constexpr int TransactionType_ARRAYSIZE = 47 + 1;
+inline constexpr int TransactionType_ARRAYSIZE = 51 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 TransactionType_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(TransactionType) {
@@ -158,7 +162,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& TransactionType_Name(TransactionType value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<TransactionType_descriptor, 0, 47>(
+  return ::google::protobuf::internal::NameOfDenseEnum<TransactionType_descriptor, 0, 51>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool TransactionType_Parse(

@@ -305,6 +305,26 @@ func TestLoadGeneratedTablesIncludesBossTrialsAndColdStartWhitelist(t *testing.T
 		108: {entryId: 204, guardId: 107, seasonId: 0},
 		109: {entryId: 301, guardId: 102, seasonId: 1},
 		112: {entryId: 105, guardId: 102, seasonId: 0},
+		113: {entryId: 401, guardId: 112, seasonId: 0},
+		114: {entryId: 402, guardId: 114, seasonId: 0},
+		115: {entryId: 403, guardId: 116, seasonId: 0},
+	}
+	for _, wildID := range []uint32{113, 114, 115} {
+		if !c.Open(modeSolo, wildID) || !c.Open(modeTeam, wildID) {
+			t.Fatalf("卷四三境明雷 Dungeon %d 应同时开放单人与组队入口", wildID)
+		}
+		if !c.SupportsTrialVows(wildID) {
+			t.Fatalf("卷四三境明雷 Dungeon %d 必须支持试炼誓约", wildID)
+		}
+	}
+	if !c.SupportsTrialVows(101) || !c.SupportsTrialVows(112) {
+		t.Fatalf("卷一/卷二常驻首领试炼必须支持试炼誓约")
+	}
+	if c.SupportsTrialVows(109) || c.SupportsTrialVows(110) || c.SupportsTrialVows(202) {
+		t.Fatalf("护卫救援(109)、物法易势(110)、普通野外遭遇(202)不应支持试炼誓约")
+	}
+	if !ValidTrialVowMask(0) || !ValidTrialVowMask(TrialVowMaskAll) || ValidTrialVowMask(0x10) {
+		t.Fatalf("ValidTrialVowMask 边界检查异常")
 	}
 	for dungeonId, want := range wantPveTrials {
 		solo := c.TrialContextFor(modeSolo, dungeonId, nil, nil)

@@ -621,4 +621,45 @@ TEST_F(MailOutboxPlayerTest, PlayersThatCannotBeModifiedAreNotSentAndKeepDeliver
 	sends[1].done(SendOutcome{true, 0, 41});
 	EXPECT_EQ(1, Outbox().entries_size());
 }
+
+TEST(MailOutboxRules, CurrencyAttachmentAndRecipientValidationAndDeletedDrop)
+{
+	PlayerMailOutboxComp outbox;
+	mail_outbox_rules::AppendCurrency(outbox, 501, MailOutboxSource::kCraftProxyFee, 9001, 88888,
+									  "名匠代打分成", "净分成 95 银两", {{0u, 95u}}, 100);
+	EXPECT_TRUE(mail_outbox_rules::Validate(outbox).empty()) << mail_outbox_rules::Validate(outbox);
+
+	mailpb::SendMailRequest req;
+	ASSERT_TRUE(PlayerMailOutboxSystem::BuildSendRequest(77, outbox.entries(0), req));
+	EXPECT_EQ(88888u, req.recipient_player_id());
+	ASSERT_EQ(1, req.attachments().currencies_size());
+	EXPECT_EQ(0u, req.attachments().currencies(0).currency_type());
+	EXPECT_EQ(95u, req.attachments().currencies(0).amount());
+
+	auto badZero = outbox.entries(0);
+	badZero.mutable_currencies(0)->set_amount(0);
+	EXPECT_EQ("bad_currency_amount", mail_outbox_rules::ValidateEntry(badZero));
+
+	auto badType = outbox.entries(0);
+	badType.mutable_currencies(0)->set_currency_type(999);
+	EXPECT_EQ("unknown_currency_type", mail_outbox_rules::ValidateEntry(badType));
+
+	EXPECT_EQ(SendVerdict::kTerminalDrop,
+			  mail_outbox_rules::ClassifySend(true, static_cast<uint32_t>(kMailRecipientDeleted), 0));
+}
+
+TEST_F(MailOutboxPlayerTest, RecipientDeletedDropsProxyFeeEntryCleanly)
+{
+	PlayerMailOutboxSystem::PreparedProxyFeeMail prepared;
+	ASSERT_EQ(kSuccess,
+			  PlayerMailOutboxSystem::PrepareProxyFeePayout(player, 777777, 95, 12345, "侠客甲", prepared));
+	PlayerMailOutboxSystem::CommitPreparedProxyFee(player, prepared, 500);
+	ASSERT_EQ(1, Outbox().entries_size());
+	durable.insert(prepared.requestId);
+
+	Tick(1'000);
+	ASSERT_EQ(1u, sends.size());
+	sends[0].done(SendOutcome{true, static_cast<uint32_t>(kMailRecipientDeleted), 0});
+	EXPECT_EQ(0, Outbox().entries_size()) << "收件宗师已删角时应终态摘除，避免永久卡死买家出箱";
+}
 } // namespace

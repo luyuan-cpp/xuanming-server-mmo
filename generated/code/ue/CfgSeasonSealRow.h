@@ -102,4 +102,20 @@ struct FCfgSeasonSealRow : public FTableRowBase
 	/** 触发治疗增幅时的气血比例上限（万分比；0 无此条件） */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|SeasonSeal")
 	int32 health_threshold_bps = 0;
+
+	/** 表驱动技印共鸣绑定的当季免费技能 ID（0 = 无共鸣） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|SeasonSeal")
+	int32 resonance_skill_id = 0;
+
+	/** 表驱动技印共鸣原语种类（0无，1碎盾返蓝/2破盾延减益/3守印次轮增盾/4聚息次轮省蓝/5急救返蓝/6首盾回蓝/7守印次轮增疗/8聚息次轮增盾） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|SeasonSeal")
+	int32 resonance_kind = 0;
+
+	/** 表驱动技印共鸣参数（比例百分点、回合数或最大法力万分比，受服务端硬上限校验） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|SeasonSeal")
+	int32 resonance_param = 0;
+
+	/** 技印共鸣展示文案（由服务端透传客户端，客户端零硬编码） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|SeasonSeal")
+	FString resonance_desc;
 };

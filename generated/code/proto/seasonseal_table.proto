@@ -21,6 +21,10 @@ message SeasonSealTable {
 	uint32 battle_limit = 10;
 	uint32 active_rounds = 11;
 	uint32 health_threshold_bps = 12;
+	uint32 resonance_skill_id = 13;
+	uint32 resonance_kind = 14;
+	uint32 resonance_param = 15;
+	string resonance_desc = 16;
 }
 
 message SeasonSealTableData {

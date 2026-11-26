@@ -48,11 +48,11 @@ constexpr SeasonSealTable::ParseTableT_ SeasonSealTable::InternalGenerateParseTa
     {
       PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_._has_bits_),
       0, // no _extensions_
-      12, 120,  // max_field_number, fast_idx_mask
+      16, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294963200,  // skipmap
+      4294901760,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      12,  // num_field_entries
+      16,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -62,14 +62,17 @@ constexpr SeasonSealTable::ParseTableT_ SeasonSealTable::InternalGenerateParseTa
       ::_pbi::TcParser::GetTable<::SeasonSealTable>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // string resonance_desc = 16;
+      {::_pbi::TcParser::FastUS2,
+       {386, 3, 0,
+        PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.resonance_desc_)}},
       // uint32 id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealTable, _impl_.id_), 3>(),
-       {8, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealTable, _impl_.id_), 4>(),
+       {8, 4, 0,
         PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.id_)}},
       // uint32 season_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealTable, _impl_.season_id_), 4>(),
-       {16, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealTable, _impl_.season_id_), 5>(),
+       {16, 5, 0,
         PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.season_id_)}},
       // string name = 3;
       {::_pbi::TcParser::FastUS1,
@@ -84,43 +87,52 @@ constexpr SeasonSealTable::ParseTableT_ SeasonSealTable::InternalGenerateParseTa
        {42, 2, 0,
         PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.icon_key_)}},
       // uint32 effect_id = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealTable, _impl_.effect_id_), 5>(),
-       {48, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealTable, _impl_.effect_id_), 6>(),
+       {48, 6, 0,
         PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.effect_id_)}},
       // uint32 bonus_bps = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealTable, _impl_.bonus_bps_), 6>(),
-       {56, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealTable, _impl_.bonus_bps_), 7>(),
+       {56, 7, 0,
         PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.bonus_bps_)}},
       // uint32 cap_bps = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealTable, _impl_.cap_bps_), 7>(),
-       {64, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealTable, _impl_.cap_bps_), 8>(),
+       {64, 8, 0,
         PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.cap_bps_)}},
       // uint32 per_round_limit = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealTable, _impl_.per_round_limit_), 8>(),
-       {72, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealTable, _impl_.per_round_limit_), 9>(),
+       {72, 9, 0,
         PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.per_round_limit_)}},
       // uint32 battle_limit = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealTable, _impl_.battle_limit_), 9>(),
-       {80, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealTable, _impl_.battle_limit_), 10>(),
+       {80, 10, 0,
         PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.battle_limit_)}},
       // uint32 active_rounds = 11;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealTable, _impl_.active_rounds_), 10>(),
-       {88, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealTable, _impl_.active_rounds_), 11>(),
+       {88, 11, 0,
         PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.active_rounds_)}},
       // uint32 health_threshold_bps = 12;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealTable, _impl_.health_threshold_bps_), 11>(),
-       {96, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealTable, _impl_.health_threshold_bps_), 12>(),
+       {96, 12, 0,
         PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.health_threshold_bps_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 resonance_skill_id = 13;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealTable, _impl_.resonance_skill_id_), 13>(),
+       {104, 13, 0,
+        PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.resonance_skill_id_)}},
+      // uint32 resonance_kind = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealTable, _impl_.resonance_kind_), 14>(),
+       {112, 14, 0,
+        PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.resonance_kind_)}},
+      // uint32 resonance_param = 15;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SeasonSealTable, _impl_.resonance_param_), 15>(),
+       {120, 15, 0,
+        PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.resonance_param_)}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 id = 1;
-      {PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 season_id = 2;
-      {PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.season_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.season_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string name = 3;
       {PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string description = 4;
@@ -128,27 +140,36 @@ constexpr SeasonSealTable::ParseTableT_ SeasonSealTable::InternalGenerateParseTa
       // string icon_key = 5;
       {PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.icon_key_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint32 effect_id = 6;
-      {PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.effect_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.effect_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 bonus_bps = 7;
-      {PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.bonus_bps_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.bonus_bps_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 cap_bps = 8;
-      {PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.cap_bps_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.cap_bps_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 per_round_limit = 9;
-      {PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.per_round_limit_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.per_round_limit_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 battle_limit = 10;
-      {PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.battle_limit_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.battle_limit_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 active_rounds = 11;
-      {PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.active_rounds_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.active_rounds_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 health_threshold_bps = 12;
-      {PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.health_threshold_bps_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.health_threshold_bps_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 resonance_skill_id = 13;
+      {PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.resonance_skill_id_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 resonance_kind = 14;
+      {PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.resonance_kind_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 resonance_param = 15;
+      {PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.resonance_param_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string resonance_desc = 16;
+      {PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.resonance_desc_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
-      "\17\0\0\4\13\10\0\0\0\0\0\0\0\0\0\0"
+      "\17\0\0\4\13\10\0\0\0\0\0\0\0\0\0\0\16\0\0\0\0\0\0\0"
       "SeasonSealTable"
       "name"
       "description"
       "icon_key"
+      "resonance_desc"
     }},
   };
 }
@@ -167,6 +188,9 @@ inline constexpr SeasonSealTable::Impl_::Impl_(
         icon_key_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
+        resonance_desc_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         id_{0u},
         season_id_{0u},
         effect_id_{0u},
@@ -175,7 +199,10 @@ inline constexpr SeasonSealTable::Impl_::Impl_(
         per_round_limit_{0u},
         battle_limit_{0u},
         active_rounds_{0u},
-        health_threshold_bps_{0u} {}
+        health_threshold_bps_{0u},
+        resonance_skill_id_{0u},
+        resonance_kind_{0u},
+        resonance_param_{0u} {}
 
 template <typename>
 constexpr SeasonSealTable::SeasonSealTable(::_pbi::ConstantInitialized,
@@ -429,7 +456,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SeasonSealTable, _impl_._has_bits_),
-        15, // hasbit index offset
+        19, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::SeasonSealTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::SeasonSealTable, _impl_.season_id_),
         PROTOBUF_FIELD_OFFSET(::SeasonSealTable, _impl_.name_),
@@ -442,18 +469,26 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::SeasonSealTable, _impl_.battle_limit_),
         PROTOBUF_FIELD_OFFSET(::SeasonSealTable, _impl_.active_rounds_),
         PROTOBUF_FIELD_OFFSET(::SeasonSealTable, _impl_.health_threshold_bps_),
-        3,
+        PROTOBUF_FIELD_OFFSET(::SeasonSealTable, _impl_.resonance_skill_id_),
+        PROTOBUF_FIELD_OFFSET(::SeasonSealTable, _impl_.resonance_kind_),
+        PROTOBUF_FIELD_OFFSET(::SeasonSealTable, _impl_.resonance_param_),
+        PROTOBUF_FIELD_OFFSET(::SeasonSealTable, _impl_.resonance_desc_),
         4,
+        5,
         0,
         1,
         2,
-        5,
         6,
         7,
         8,
         9,
         10,
         11,
+        12,
+        13,
+        14,
+        15,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SeasonSealTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -464,7 +499,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::SeasonSealTable)},
-        {27, sizeof(::SeasonSealTableData)},
+        {35, sizeof(::SeasonSealTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -473,23 +508,25 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_seasonseal_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\026seasonseal_table.proto\"\200\002\n\017SeasonSealT"
+    "\n\026seasonseal_table.proto\"\345\002\n\017SeasonSealT"
     "able\022\n\n\002id\030\001 \001(\r\022\021\n\tseason_id\030\002 \001(\r\022\014\n\004n"
     "ame\030\003 \001(\t\022\023\n\013description\030\004 \001(\t\022\020\n\010icon_k"
     "ey\030\005 \001(\t\022\021\n\teffect_id\030\006 \001(\r\022\021\n\tbonus_bps"
     "\030\007 \001(\r\022\017\n\007cap_bps\030\010 \001(\r\022\027\n\017per_round_lim"
     "it\030\t \001(\r\022\024\n\014battle_limit\030\n \001(\r\022\025\n\ractive"
     "_rounds\030\013 \001(\r\022\034\n\024health_threshold_bps\030\014 "
-    "\001(\r\"5\n\023SeasonSealTableData\022\036\n\004data\030\001 \003(\013"
-    "2\020.SeasonSealTableBA\n\016com.game.tableB\031Se"
-    "asonSealTableOuterClassP\001Z\022generated/pb/"
-    "tableb\006proto3"
+    "\001(\r\022\032\n\022resonance_skill_id\030\r \001(\r\022\026\n\016reson"
+    "ance_kind\030\016 \001(\r\022\027\n\017resonance_param\030\017 \001(\r"
+    "\022\026\n\016resonance_desc\030\020 \001(\t\"5\n\023SeasonSealTa"
+    "bleData\022\036\n\004data\030\001 \003(\0132\020.SeasonSealTableB"
+    "A\n\016com.game.tableB\031SeasonSealTableOuterC"
+    "lassP\001Z\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_seasonseal_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_seasonseal_5ftable_2eproto = {
     false,
     false,
-    413,
+    514,
     descriptor_table_protodef_seasonseal_5ftable_2eproto,
     "seasonseal_table.proto",
     &descriptor_table_seasonseal_5ftable_2eproto_once,
@@ -521,7 +558,8 @@ PROTOBUF_NDEBUG_INLINE SeasonSealTable::Impl_::Impl_(
         _cached_size_{0},
         name_(arena, from.name_),
         description_(arena, from.description_),
-        icon_key_(arena, from.icon_key_) {}
+        icon_key_(arena, from.icon_key_),
+        resonance_desc_(arena, from.resonance_desc_) {}
 
 SeasonSealTable::SeasonSealTable(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -541,9 +579,9 @@ SeasonSealTable::SeasonSealTable(
                offsetof(Impl_, id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, id_),
-           offsetof(Impl_, health_threshold_bps_) -
+           offsetof(Impl_, resonance_param_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::health_threshold_bps_));
+               sizeof(Impl_::resonance_param_));
 
   // @@protoc_insertion_point(copy_constructor:SeasonSealTable)
 }
@@ -553,16 +591,17 @@ PROTOBUF_NDEBUG_INLINE SeasonSealTable::Impl_::Impl_(
       : _cached_size_{0},
         name_(arena),
         description_(arena),
-        icon_key_(arena) {}
+        icon_key_(arena),
+        resonance_desc_(arena) {}
 
 inline void SeasonSealTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, health_threshold_bps_) -
+           offsetof(Impl_, resonance_param_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::health_threshold_bps_));
+               sizeof(Impl_::resonance_param_));
 }
 SeasonSealTable::~SeasonSealTable() {
   // @@protoc_insertion_point(destructor:SeasonSealTable)
@@ -578,6 +617,7 @@ inline void SeasonSealTable::SharedDtor(MessageLite& self) {
   this_._impl_.name_.Destroy();
   this_._impl_.description_.Destroy();
   this_._impl_.icon_key_.Destroy();
+  this_._impl_.resonance_desc_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -615,7 +655,7 @@ PROTOBUF_NOINLINE void SeasonSealTable::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.name_.ClearNonDefaultToEmpty();
     }
@@ -625,16 +665,19 @@ PROTOBUF_NOINLINE void SeasonSealTable::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       _impl_.icon_key_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.resonance_desc_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f0U)) {
     ::memset(&_impl_.id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.cap_bps_) -
-        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.cap_bps_));
+        reinterpret_cast<char*>(&_impl_.bonus_bps_) -
+        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.bonus_bps_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
-    ::memset(&_impl_.per_round_limit_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.health_threshold_bps_) -
-        reinterpret_cast<char*>(&_impl_.per_round_limit_)) + sizeof(_impl_.health_threshold_bps_));
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    ::memset(&_impl_.cap_bps_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.resonance_param_) -
+        reinterpret_cast<char*>(&_impl_.cap_bps_)) + sizeof(_impl_.resonance_param_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -660,7 +703,7 @@ PROTOBUF_NOINLINE void SeasonSealTable::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -669,7 +712,7 @@ PROTOBUF_NOINLINE void SeasonSealTable::Clear() {
   }
 
   // uint32 season_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_season_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -708,7 +751,7 @@ PROTOBUF_NOINLINE void SeasonSealTable::Clear() {
   }
 
   // uint32 effect_id = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_effect_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -717,7 +760,7 @@ PROTOBUF_NOINLINE void SeasonSealTable::Clear() {
   }
 
   // uint32 bonus_bps = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_bonus_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -726,7 +769,7 @@ PROTOBUF_NOINLINE void SeasonSealTable::Clear() {
   }
 
   // uint32 cap_bps = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_cap_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -735,7 +778,7 @@ PROTOBUF_NOINLINE void SeasonSealTable::Clear() {
   }
 
   // uint32 per_round_limit = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_per_round_limit() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -744,7 +787,7 @@ PROTOBUF_NOINLINE void SeasonSealTable::Clear() {
   }
 
   // uint32 battle_limit = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_battle_limit() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -753,7 +796,7 @@ PROTOBUF_NOINLINE void SeasonSealTable::Clear() {
   }
 
   // uint32 active_rounds = 11;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_active_rounds() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -762,11 +805,48 @@ PROTOBUF_NOINLINE void SeasonSealTable::Clear() {
   }
 
   // uint32 health_threshold_bps = 12;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_health_threshold_bps() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           12, this_._internal_health_threshold_bps(), target);
+    }
+  }
+
+  // uint32 resonance_skill_id = 13;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_resonance_skill_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          13, this_._internal_resonance_skill_id(), target);
+    }
+  }
+
+  // uint32 resonance_kind = 14;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_resonance_kind() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          14, this_._internal_resonance_kind(), target);
+    }
+  }
+
+  // uint32 resonance_param = 15;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_resonance_param() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          15, this_._internal_resonance_param(), target);
+    }
+  }
+
+  // string resonance_desc = 16;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_resonance_desc().empty()) {
+      const ::std::string& _s = this_._internal_resonance_desc();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "SeasonSealTable.resonance_desc");
+      target = stream->WriteStringMaybeAliased(16, _s, target);
     }
   }
 
@@ -817,69 +897,97 @@ PROTOBUF_NOINLINE void SeasonSealTable::Clear() {
                                         this_._internal_icon_key());
       }
     }
-    // uint32 id = 1;
+    // string resonance_desc = 16;
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_resonance_desc().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_resonance_desc());
+      }
+    }
+    // uint32 id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_id());
       }
     }
     // uint32 season_id = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_season_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_season_id());
       }
     }
     // uint32 effect_id = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_effect_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_effect_id());
       }
     }
     // uint32 bonus_bps = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_bonus_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_bonus_bps());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint32 cap_bps = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_cap_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_cap_bps());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     // uint32 per_round_limit = 9;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_per_round_limit() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_per_round_limit());
       }
     }
     // uint32 battle_limit = 10;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_battle_limit() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_battle_limit());
       }
     }
     // uint32 active_rounds = 11;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_active_rounds() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_active_rounds());
       }
     }
     // uint32 health_threshold_bps = 12;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_health_threshold_bps() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_health_threshold_bps());
+      }
+    }
+    // uint32 resonance_skill_id = 13;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_resonance_skill_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_resonance_skill_id());
+      }
+    }
+    // uint32 resonance_kind = 14;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_resonance_kind() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_resonance_kind());
+      }
+    }
+    // uint32 resonance_param = 15;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_resonance_param() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_resonance_param());
       }
     }
   }
@@ -929,50 +1037,74 @@ void SeasonSealTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_resonance_desc().empty()) {
+        _this->_internal_set_resonance_desc(from._internal_resonance_desc());
+      } else {
+        if (_this->_impl_.resonance_desc_.IsDefault()) {
+          _this->_internal_set_resonance_desc("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_id() != 0) {
         _this->_impl_.id_ = from._impl_.id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_season_id() != 0) {
         _this->_impl_.season_id_ = from._impl_.season_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_effect_id() != 0) {
         _this->_impl_.effect_id_ = from._impl_.effect_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_bonus_bps() != 0) {
         _this->_impl_.bonus_bps_ = from._impl_.bonus_bps_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_cap_bps() != 0) {
         _this->_impl_.cap_bps_ = from._impl_.cap_bps_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_per_round_limit() != 0) {
         _this->_impl_.per_round_limit_ = from._impl_.per_round_limit_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_battle_limit() != 0) {
         _this->_impl_.battle_limit_ = from._impl_.battle_limit_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_active_rounds() != 0) {
         _this->_impl_.active_rounds_ = from._impl_.active_rounds_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_health_threshold_bps() != 0) {
         _this->_impl_.health_threshold_bps_ = from._impl_.health_threshold_bps_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_resonance_skill_id() != 0) {
+        _this->_impl_.resonance_skill_id_ = from._impl_.resonance_skill_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_resonance_kind() != 0) {
+        _this->_impl_.resonance_kind_ = from._impl_.resonance_kind_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_resonance_param() != 0) {
+        _this->_impl_.resonance_param_ = from._impl_.resonance_param_;
       }
     }
   }
@@ -998,9 +1130,10 @@ void SeasonSealTable::InternalSwap(SeasonSealTable* PROTOBUF_RESTRICT PROTOBUF_N
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.description_, &other->_impl_.description_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.icon_key_, &other->_impl_.icon_key_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.resonance_desc_, &other->_impl_.resonance_desc_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.health_threshold_bps_)
-      + sizeof(SeasonSealTable::_impl_.health_threshold_bps_)
+      PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.resonance_param_)
+      + sizeof(SeasonSealTable::_impl_.resonance_param_)
       - PROTOBUF_FIELD_OFFSET(SeasonSealTable, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));

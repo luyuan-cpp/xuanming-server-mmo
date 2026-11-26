@@ -37,6 +37,7 @@ public:
     static constexpr std::string_view kAssetCreditPath = "/scene_node.SceneNodeGrpc/AssetCredit";
     static constexpr std::string_view kAssetAckReceiptPath = "/scene_node.SceneNodeGrpc/AssetAckReceipt";
     static constexpr std::string_view kGmExecutePlayerCommandPath = "/scene_node.SceneNodeGrpc/GmExecutePlayerCommand";
+    static constexpr std::string_view kCheckJianghuDuelEligibilityPath = "/scene_node.SceneNodeGrpc/CheckJianghuDuelEligibility";
 
 private:
     using CreateSceneCall = GrpcUnaryCall<::CreateSceneRequest, ::CreateSceneResponse>;
@@ -50,6 +51,7 @@ private:
     using AssetCreditCall = GrpcUnaryCall<::AssetOpRequest, ::AssetOpResponse>;
     using AssetAckReceiptCall = GrpcUnaryCall<::AssetOpRequest, ::AssetOpResponse>;
     using GmExecutePlayerCommandCall = GrpcUnaryCall<::scene_node::GmExecutePlayerCommandRequest, ::scene_node::GmExecutePlayerCommandResponse>;
+    using CheckJianghuDuelEligibilityCall = GrpcUnaryCall<::CheckJianghuDuelEligibilityRequest, ::CheckJianghuDuelEligibilityResponse>;
     void CreateScene(const std::shared_ptr<CreateSceneCall>& call);
     void DestroyScene(const std::shared_ptr<DestroySceneCall>& call);
     void ReleasePlayer(const std::shared_ptr<ReleasePlayerCall>& call);
@@ -61,6 +63,7 @@ private:
     void AssetCredit(const std::shared_ptr<AssetCreditCall>& call);
     void AssetAckReceipt(const std::shared_ptr<AssetAckReceiptCall>& call);
     void GmExecutePlayerCommand(const std::shared_ptr<GmExecutePlayerCommandCall>& call);
+    void CheckJianghuDuelEligibility(const std::shared_ptr<CheckJianghuDuelEligibilityCall>& call);
     static void HandleCreateScene(const ::CreateSceneRequest* request, ::CreateSceneResponse* response);
     static void HandleDestroyScene(const ::DestroySceneRequest* request);
     static void HandleReleasePlayer(const ::scene_node::ReleasePlayerRequest* request);
@@ -72,6 +75,7 @@ private:
     static void HandleAssetCredit(const ::AssetOpRequest* request, ::AssetOpResponse* response);
     static void HandleAssetAckReceipt(const ::AssetOpRequest* request, ::AssetOpResponse* response);
     static void HandleGmExecutePlayerCommand(const ::scene_node::GmExecutePlayerCommandRequest* request, ::scene_node::GmExecutePlayerCommandResponse* response);
+    static void HandleCheckJianghuDuelEligibility(const ::CheckJianghuDuelEligibilityRequest* request, ::CheckJianghuDuelEligibilityResponse* response);
     muduo::net::EventLoop& loop;
     ///<<< BEGIN WRITING YOUR CODE: grpc.header.private
     LoopTaskScope creationTasks{loop};

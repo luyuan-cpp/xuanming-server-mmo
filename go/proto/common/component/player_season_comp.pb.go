@@ -31,6 +31,7 @@ type PlayerSeasonSealRecord struct {
 	BattlePoints   uint32                 `protobuf:"varint,4,opt,name=battle_points,json=battlePoints,proto3" json:"battle_points,omitempty"`         // 其中通过正规排位 / PVE 战斗获得的点数
 	CatchupPoints  uint32                 `protobuf:"varint,5,opt,name=catchup_points,json=catchupPoints,proto3" json:"catchup_points,omitempty"`      // 其中通过小额快捷追赶补齐的点数
 	Revision       uint64                 `protobuf:"varint,6,opt,name=revision,proto3" json:"revision,omitempty"`                                     // 本季写操作修订号（切印 / 追赶递增）
+	LastTerm       uint32                 `protobuf:"varint,7,opt,name=last_term,json=lastTerm,proto3" json:"last_term,omitempty"`                     // 最近写入本记录所属的全局赛季届号（0=历史遗留第1届，跨届自动重置当届12点轻进度）
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -103,6 +104,13 @@ func (x *PlayerSeasonSealRecord) GetCatchupPoints() uint32 {
 func (x *PlayerSeasonSealRecord) GetRevision() uint64 {
 	if x != nil {
 		return x.Revision
+	}
+	return 0
+}
+
+func (x *PlayerSeasonSealRecord) GetLastTerm() uint32 {
+	if x != nil {
+		return x.LastTerm
 	}
 	return 0
 }
@@ -376,13 +384,16 @@ func (x *SavedBattleBuildBookmark) GetSavedAtMs() uint64 {
 // 玩家赛季进度持久化组件（player_database 字段 30，GROWTH 分组）。
 // records 下标不承载任何业务顺序语义（AGENTS.md §11.6），按 season_id 定位。
 type PlayerSeasonComp struct {
-	state               protoimpl.MessageState      `protogen:"open.v1"`
-	Records             []*PlayerSeasonSealRecord   `protobuf:"bytes,1,rep,name=records,proto3" json:"records,omitempty"`
-	EquippedFormationId uint32                      `protobuf:"varint,2,opt,name=equipped_formation_id,json=equippedFormationId,proto3" json:"equipped_formation_id,omitempty"` // 五行阵法（0=无/默认，1..5 免费切换）
-	WuxingTower         *WuxingTowerCompState       `protobuf:"bytes,3,opt,name=wuxing_tower,json=wuxingTower,proto3" json:"wuxing_tower,omitempty"`                            // 五行幻境周常爬塔状态
-	SavedBuilds         []*SavedBattleBuildBookmark `protobuf:"bytes,4,rep,name=saved_builds,json=savedBuilds,proto3" json:"saved_builds,omitempty"`                            // 战报配装收藏夹（上限 12 条）
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	state                    protoimpl.MessageState      `protogen:"open.v1"`
+	Records                  []*PlayerSeasonSealRecord   `protobuf:"bytes,1,rep,name=records,proto3" json:"records,omitempty"`
+	EquippedFormationId      uint32                      `protobuf:"varint,2,opt,name=equipped_formation_id,json=equippedFormationId,proto3" json:"equipped_formation_id,omitempty"`                                                                         // 五行阵法（0=无/默认，1..5 免费切换）
+	WuxingTower              *WuxingTowerCompState       `protobuf:"bytes,3,opt,name=wuxing_tower,json=wuxingTower,proto3" json:"wuxing_tower,omitempty"`                                                                                                    // 五行幻境周常爬塔状态
+	SavedBuilds              []*SavedBattleBuildBookmark `protobuf:"bytes,4,rep,name=saved_builds,json=savedBuilds,proto3" json:"saved_builds,omitempty"`                                                                                                    // 战报配装收藏夹（上限 12 条）
+	UnlockedHonorWords       []uint64                    `protobuf:"varint,5,rep,packed,name=unlocked_honor_words,json=unlockedHonorWords,proto3" json:"unlocked_honor_words,omitempty"`                                                                     // 永久零数值纪念徽章动态位图（word=(season_id-1)/64, bit=(season_id-1)%64，永不收回）
+	RetroHonorTargetSeasonId uint32                      `protobuf:"varint,6,opt,name=retro_honor_target_season_id,json=retroHonorTargetSeasonId,proto3" json:"retro_honor_target_season_id,omitempty"`                                                      // 玩家手动指定的往季徽章追忆目标赛季 ID（0=自动顺延首个未解锁往季）
+	RetroHonorProgress       map[uint32]uint32           `protobuf:"bytes,7,rep,name=retro_honor_progress,json=retroHonorProgress,proto3" json:"retro_honor_progress,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 未解锁往季的免费追忆溢出点数（满 12 点解锁后删除）
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *PlayerSeasonComp) Reset() {
@@ -443,18 +454,40 @@ func (x *PlayerSeasonComp) GetSavedBuilds() []*SavedBattleBuildBookmark {
 	return nil
 }
 
+func (x *PlayerSeasonComp) GetUnlockedHonorWords() []uint64 {
+	if x != nil {
+		return x.UnlockedHonorWords
+	}
+	return nil
+}
+
+func (x *PlayerSeasonComp) GetRetroHonorTargetSeasonId() uint32 {
+	if x != nil {
+		return x.RetroHonorTargetSeasonId
+	}
+	return 0
+}
+
+func (x *PlayerSeasonComp) GetRetroHonorProgress() map[uint32]uint32 {
+	if x != nil {
+		return x.RetroHonorProgress
+	}
+	return nil
+}
+
 var File_proto_common_component_player_season_comp_proto protoreflect.FileDescriptor
 
 const file_proto_common_component_player_season_comp_proto_rawDesc = "" +
 	"\n" +
-	"/proto/common/component/player_season_comp.proto\"\xf0\x01\n" +
+	"/proto/common/component/player_season_comp.proto\"\x8d\x02\n" +
 	"\x16PlayerSeasonSealRecord\x12\x1b\n" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12(\n" +
 	"\x10equipped_seal_id\x18\x02 \x01(\rR\x0eequippedSealId\x12'\n" +
 	"\x0fprogress_points\x18\x03 \x01(\rR\x0eprogressPoints\x12#\n" +
 	"\rbattle_points\x18\x04 \x01(\rR\fbattlePoints\x12%\n" +
 	"\x0ecatchup_points\x18\x05 \x01(\rR\rcatchupPoints\x12\x1a\n" +
-	"\brevision\x18\x06 \x01(\x04R\brevision\"\xbd\x03\n" +
+	"\brevision\x18\x06 \x01(\x04R\brevision\x12\x1b\n" +
+	"\tlast_term\x18\a \x01(\rR\blastTerm\"\xbd\x03\n" +
 	"\x14WuxingTowerCompState\x12\x19\n" +
 	"\bweek_key\x18\x01 \x01(\rR\aweekKey\x12\x1d\n" +
 	"\n" +
@@ -484,12 +517,18 @@ const file_proto_common_component_player_season_comp_proto_rawDesc = "" +
 	" \x01(\tR\ractivePetName\x12&\n" +
 	"\x0fskill_table_ids\x18\v \x03(\rR\rskillTableIds\x12(\n" +
 	"\x10wuxing_sigil_ids\x18\f \x03(\rR\x0ewuxingSigilIds\x12\x1e\n" +
-	"\vsaved_at_ms\x18\r \x01(\x04R\tsavedAtMs\"\xf1\x01\n" +
+	"\vsaved_at_ms\x18\r \x01(\x04R\tsavedAtMs\"\x87\x04\n" +
 	"\x10PlayerSeasonComp\x121\n" +
 	"\arecords\x18\x01 \x03(\v2\x17.PlayerSeasonSealRecordR\arecords\x122\n" +
 	"\x15equipped_formation_id\x18\x02 \x01(\rR\x13equippedFormationId\x128\n" +
 	"\fwuxing_tower\x18\x03 \x01(\v2\x15.WuxingTowerCompStateR\vwuxingTower\x12<\n" +
-	"\fsaved_builds\x18\x04 \x03(\v2\x19.SavedBattleBuildBookmarkR\vsavedBuildsB\x18Z\x16proto/common/componentb\x06proto3"
+	"\fsaved_builds\x18\x04 \x03(\v2\x19.SavedBattleBuildBookmarkR\vsavedBuilds\x120\n" +
+	"\x14unlocked_honor_words\x18\x05 \x03(\x04R\x12unlockedHonorWords\x12>\n" +
+	"\x1cretro_honor_target_season_id\x18\x06 \x01(\rR\x18retroHonorTargetSeasonId\x12[\n" +
+	"\x14retro_honor_progress\x18\a \x03(\v2).PlayerSeasonComp.RetroHonorProgressEntryR\x12retroHonorProgress\x1aE\n" +
+	"\x17RetroHonorProgressEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01B\x18Z\x16proto/common/componentb\x06proto3"
 
 var (
 	file_proto_common_component_player_season_comp_proto_rawDescOnce sync.Once
@@ -503,22 +542,24 @@ func file_proto_common_component_player_season_comp_proto_rawDescGZIP() []byte {
 	return file_proto_common_component_player_season_comp_proto_rawDescData
 }
 
-var file_proto_common_component_player_season_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_proto_common_component_player_season_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_proto_common_component_player_season_comp_proto_goTypes = []any{
 	(*PlayerSeasonSealRecord)(nil),   // 0: PlayerSeasonSealRecord
 	(*WuxingTowerCompState)(nil),     // 1: WuxingTowerCompState
 	(*SavedBattleBuildBookmark)(nil), // 2: SavedBattleBuildBookmark
 	(*PlayerSeasonComp)(nil),         // 3: PlayerSeasonComp
+	nil,                              // 4: PlayerSeasonComp.RetroHonorProgressEntry
 }
 var file_proto_common_component_player_season_comp_proto_depIdxs = []int32{
 	0, // 0: PlayerSeasonComp.records:type_name -> PlayerSeasonSealRecord
 	1, // 1: PlayerSeasonComp.wuxing_tower:type_name -> WuxingTowerCompState
 	2, // 2: PlayerSeasonComp.saved_builds:type_name -> SavedBattleBuildBookmark
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	4, // 3: PlayerSeasonComp.retro_honor_progress:type_name -> PlayerSeasonComp.RetroHonorProgressEntry
+	4, // [4:4] is the sub-list for method output_type
+	4, // [4:4] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_component_player_season_comp_proto_init() }
@@ -532,7 +573,7 @@ func file_proto_common_component_player_season_comp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_component_player_season_comp_proto_rawDesc), len(file_proto_common_component_player_season_comp_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

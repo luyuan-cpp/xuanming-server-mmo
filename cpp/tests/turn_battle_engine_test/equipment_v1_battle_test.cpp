@@ -636,3 +636,27 @@ TEST_F(EquipmentV1BattleTest, MixedSkillPreviewAndActualManaUseTheSameDamagePrio
     const auto result = Round(*engine, kSelf, Command(BATTLE_ACTION_SKILL, kSelf, 901));
     EXPECT_EQ(EventSum(result, BATTLE_EVENT_MANA, kSelf, kSelf), summary.previews(0).mana_cost());
 }
+
+TEST_F(EquipmentV1BattleTest, SupportAndControlEnhancedCapsAcceptedAndSpeedCapUnchanged) {
+    auto* eq = Player(kSelf).mutable_equipment_effects();
+    eq->set_outgoing_heal_bps(3584);
+    eq->set_shield_capacity_bps(3584);
+    (*eq->mutable_ailment_hit_bps())[1] = 1696;
+    eq->set_speed_bps(200);
+    TurnBattleEngine accepted(data);
+    EXPECT_TRUE(accepted.Initialize(request));
+
+    eq->set_outgoing_heal_bps(3585);
+    TurnBattleEngine tooMuchHeal(data);
+    EXPECT_FALSE(tooMuchHeal.Initialize(request));
+
+    eq->set_outgoing_heal_bps(3584);
+    (*eq->mutable_ailment_hit_bps())[1] = 1697;
+    TurnBattleEngine tooMuchHit(data);
+    EXPECT_FALSE(tooMuchHit.Initialize(request));
+
+    (*eq->mutable_ailment_hit_bps())[1] = 1696;
+    eq->set_speed_bps(201);
+    TurnBattleEngine tooMuchSpeed(data);
+    EXPECT_FALSE(tooMuchSpeed.Initialize(request));
+}

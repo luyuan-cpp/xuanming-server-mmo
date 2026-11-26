@@ -65,8 +65,6 @@ func tipCodes() map[string]uint32 {
 		"ErrTournamentMatchNotReady":           ErrTournamentMatchNotReady,
 		"ErrTournamentAlreadyCheered":          ErrTournamentAlreadyCheered,
 		"ErrTournamentRewardUnavailable":       ErrTournamentRewardUnavailable,
-		"ErrTournamentAlreadySalutedToday":     ErrTournamentAlreadySalutedToday,
-		"ErrTournamentNoChampionToSalute":      ErrTournamentNoChampionToSalute,
 		"ErrTournamentSpectateCheerCooldown":   ErrTournamentSpectateCheerCooldown,
 		"ErrTournamentSpectateCheerInvalid":    ErrTournamentSpectateCheerInvalid,
 		"ErrTournamentEmblemInvalid":           ErrTournamentEmblemInvalid,

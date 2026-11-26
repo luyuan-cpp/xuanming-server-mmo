@@ -329,6 +329,96 @@
    "id": 1053,
    "seal_slot_kind": 3,
    "title": "连环双破"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 1,
+   "desc": "有效通关八景岛·风眼引风（1～5人皆可点亮）",
+   "enabled": true,
+   "entry_id": 401,
+   "id": 4011,
+   "seal_slot_kind": 1,
+   "title": "破阵"
+  },
+  {
+   "condition_param": 8,
+   "condition_type": 2,
+   "desc": "8 回合内有效通关八景岛·风眼引风",
+   "enabled": true,
+   "entry_id": 401,
+   "id": 4012,
+   "seal_slot_kind": 4,
+   "title": "乘风"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 6,
+   "desc": "全程未在风眼强袭下未防护倒地并通关",
+   "enabled": true,
+   "entry_id": 401,
+   "id": 4013,
+   "seal_slot_kind": 3,
+   "title": "御风"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 1,
+   "desc": "有效通关碧渊水宫·水镜钟鸣（1～5人皆可点亮）",
+   "enabled": true,
+   "entry_id": 402,
+   "id": 4021,
+   "seal_slot_kind": 1,
+   "title": "破阵"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 3,
+   "desc": "碧渊水宫·水镜钟鸣中本人及本人出战宝宝全程未曾倒地并通关",
+   "enabled": true,
+   "entry_id": 402,
+   "id": 4022,
+   "seal_slot_kind": 2,
+   "title": "无损"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 7,
+   "desc": "阳钟期以物理直伤且阴鼓期以法术直伤命中并通关",
+   "enabled": true,
+   "entry_id": 402,
+   "id": 4023,
+   "seal_slot_kind": 3,
+   "title": "和鸣"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 1,
+   "desc": "有效通关月汐湾·涨退潮（1～5人皆可点亮）",
+   "enabled": true,
+   "entry_id": 403,
+   "id": 4031,
+   "seal_slot_kind": 1,
+   "title": "破阵"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 3,
+   "desc": "月汐湾·涨退潮中本人及本人出战宝宝全程未曾倒地并通关",
+   "enabled": true,
+   "entry_id": 403,
+   "id": 4032,
+   "seal_slot_kind": 2,
+   "title": "无损"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 8,
+   "desc": "在退潮回合窗口终结月汐湾首领并通关",
+   "enabled": true,
+   "entry_id": 403,
+   "id": 4033,
+   "seal_slot_kind": 3,
+   "title": "赶潮"
   }
  ]
 }

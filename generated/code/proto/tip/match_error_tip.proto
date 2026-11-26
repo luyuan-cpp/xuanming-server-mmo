@@ -121,10 +121,6 @@ enum match_error {
 
   kMatchBattleSurrenderAlreadyVoted = 16055;
 
-  kMatchTournamentAlreadySalutedToday = 16056;
-
-  kMatchTournamentNoChampionToSalute = 16057;
-
   kMatchTournamentSpectateCheerCooldown = 16058;
 
   kMatchTournamentSpectateCheerInvalid = 16059;

@@ -13,3 +13,6 @@
 ranked_pvp8B首测规则HPZ人宠会武b卷三 · 季游奇谈jUI/TrialJournal/season_rankedzranked_pvp:5��正式人宠会武：在合格 PVP 对局中施展破盾法宝、清心抗控、净化或本季免费赛季技即可点亮印记。
 �i (2
 dual_guard8B首测规则HPZ困难·双卫同阵b卷一 · 破阵试炼jUI/TrialJournal/guard_dualpzboss_trial:hard:dual_guard��困难破阵终极合阵：回春护卫与护势护卫同场联防错峰，驱散崩势、断疗反噬与化劲破绽环环相扣。
+�� (2	wild_wind8B首测规则HPZ八景岛·风眼引风b卷四 · 三境明雷jUI/TrialJournal/wild_windzboss_trial:wild:wind�l八景岛明雷首领：每 3 回合蓄风点名，次拍未借防御或护盾化解风击将折损阵脚。
+�� (2	wild_bell8B首测规则HPZ碧渊水宫·水镜钟鸣b卷四 · 三境明雷jUI/TrialJournal/wild_bellzboss_trial:wild:bell��碧渊水宫明雷首领：每 2 回合交替「阳钟（物理增伤）」与「阴鼓（法术增伤）」，双系应律破阵。
+�� (2	wild_tide8B首测规则HPZ月汐湾·涨退潮b卷四 · 三境明雷jUI/TrialJournal/wild_tidezboss_trial:wild:tide��月汐湾明雷首领：每 2 回合交替「涨潮（首领承伤 -25%）」与「退潮（首领承伤 +20%）」，蓄势抢退潮收官。

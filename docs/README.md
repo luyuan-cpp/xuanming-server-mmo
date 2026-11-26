@@ -76,7 +76,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [core-gameplay-loop.md](planning/core-gameplay-loop.md) — 《五行奇谈》核心循环 V1｜有空就玩
 - [equipment-economy-charter.md](planning/equipment-economy-charter.md) — 《五行奇谈》个人开发经济体系、稳物价、官方 7:3 与游戏内防骗设计总纲
 - [equipment-eight-slot-planning.md](planning/equipment-eight-slot-planning.md) — 八部位装备：养成规则与 UI、代码接入
-- [equipment-loadout-presets-v1.md](planning/equipment-loadout-presets-v1.md) — 装备流派方案预设（一键多套换装 + 付费扩展套位）完整设计方案 V1
+- [equipment-loadout-presets-v1.md](planning/equipment-loadout-presets-v1.md) — 装备流派方案预设（方案 A · 7 套流派席位合一：装备 + 战法 + 加点共享）完整设计方案 V2
 - [equipment-quality-and-skill-crafting-v1.md](planning/equipment-quality-and-skill-crafting-v1.md) — 《五行奇谈》V1 装备窄区间品相、率土式永久保值制书与轻量化手艺设计
 - [equipment-quality-and-skill-crafting-v2-v5.md](planning/equipment-quality-and-skill-crafting-v2-v5.md) — 《五行奇谈》装备品相 · 技能制书 · 名匠手艺 V2–V5 演进策划与工程设计
 - [equipment-recycling-trade-economy-candidate.md](planning/equipment-recycling-trade-economy-candidate.md) — 回收、玩家变现与当面交易：首发经济系统候选及 UI 交接
@@ -84,6 +84,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [equipment-v1-affixes-artifacts.md](planning/equipment-v1-affixes-artifacts.md) — 装备首发规格 V1：正式词条池、数值与八件法宝
 - [player-leveling-and-battle-economy-v1.md](planning/player-leveling-and-battle-economy-v1.md) — 《五行奇谈》G1：角色平滑升级曲线与全玩法经验/银两产出闭环设计（V1）
 - [season-pvp-pve-economy-unified-v1.md](planning/season-pvp-pve-economy-unified-v1.md) — 《五行奇谈》赛季、PVP/PVE 衔接与强化材料经济统一落地设计（V1 合入 A）
+- [skill-build-loadout-7slots-v1.md](planning/skill-build-loadout-7slots-v1.md) — 7 套非永久「战法·加点」流派方案槽位系统完整设计方案（V1）
 - [spirit-shop-and-starter-packs-v1.md](planning/spirit-shop-and-starter-packs-v1.md) — 《五行奇谈》P0 官方灵石百宝阁与绑定/终身限购首套提速包设计（V1）
 - [spirit-shop-v2-festival-and-bundles.md](planning/spirit-shop-v2-festival-and-bundles.md) — 官方灵石百宝阁 V2 策划与工程方案（定时自动上下架 + 3–4 物品大礼包/多选一自选包 + 原价划线折扣 + 角色阶段解锁）
 
@@ -119,6 +120,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [season-team-tournament-v2.md](planning/season-team-tournament-v2.md) — 《群仙问道赛》全服赛季战队锦标赛 V2 趣味扩展设计案
 - [season-team-tournament-v3.md](planning/season-team-tournament-v3.md) — 《群仙问道赛》V3 全服狂欢与策略扩展设计方案（模块 D / E / F / G）
 - [season-team-tournament-v4.md](planning/season-team-tournament-v4.md) — 《群仙问道赛》V4 策略博弈与长线荣耀扩展设计方案（模块 H / I / J）
+- [season-ten-seasons-infinite-cycle-v4.md](planning/season-ten-seasons-infinite-cycle-v4.md) — 赛季玩法 V4：十季差异化主题池、无限期号自动循环与往季永久徽章追忆设计方案
 
 #### 长期养成、外观收藏与大世界玩法
 
@@ -136,7 +138,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [growing-passive-skills-v2.md](planning/growing-passive-skills-v2.md) — 率土式叠加成长战法 V2 扩展设计（《兵法叠势卷》6 项永久成长被动）
 - [guiyuan-city-npcs-and-character-play-v1.md](planning/guiyuan-city-npcs-and-character-play-v1.md) — 《五行奇谈》归元城全仓去问道化、8 位原创场景 NPC 与人物系统联动玩法设计（V1）
 - [rewarded-ad-compliance-and-economy-v1.md](planning/rewarded-ad-compliance-and-economy-v1.md) — 《五行奇谈》零拒审激励视频广告与绑定银两（双银两）合规创收策划方案（V1）
-- [skill-build-loadout-7slots-v1.md](planning/skill-build-loadout-7slots-v1.md) — 7 套非永久「战法·加点」流派方案槽位系统完整设计方案（V1）
+- [trial-journal-v3-wild-bosses-vows-replay-share.md](planning/trial-journal-v3-wild-bosses-vows-replay-share.md) — 《五行奇谈》五行试炼志 V3 扩展设计：卷四·三境明雷、试炼誓约与好友约战录像
 
 #### 成套策划
 
@@ -157,15 +159,18 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [guild-play-ui-handoff.md](planning/ui-handoff/guild-play-ui-handoff.md) — 帮会会武 · Unity UI 异机交接
 - [guild-play-v2-ui-handoff.md](planning/ui-handoff/guild-play-v2-ui-handoff.md) — 帮会全天帮战 V2 · Unity UI 异机交接（给 ChatGPT / Codex 完整技术细节版）
 - [guiyuan-city-npcs-ui-handoff.md](planning/ui-handoff/guiyuan-city-npcs-ui-handoff.md) — 归元城 8 位原创核心 NPC 与人物联动玩法 UI / 立绘作图交接单（交付异机 Codex）
+- [jianghu-duel-v1-ui-handoff.md](planning/ui-handoff/jianghu-duel-v1-ui-handoff.md) — 江湖恩怨与天墉生死状一期（JianghuDuelV1）UI 纯功能作图交接单
 - [latest-expansions-ui-handoff.md](planning/ui-handoff/latest-expansions-ui-handoff.md) — 近期新玩法剩余增量 UI 切片需求清单（论剑 V4 / 灵石百宝阁 / 青云游历手记 / 周常词缀与赛季荣誉 / 野外栖息地）
 - [official-passport-ui-handoff.md](planning/ui-handoff/official-passport-ui-handoff.md) — 官方通行证与账号注册 · Unity UI 异机交接
 - [ranked-play-v2-ui-handoff.md](planning/ui-handoff/ranked-play-v2-ui-handoff.md) — 《论剑 / 人宠会武》V2 Unity 客户端 UGUI 补全与新交互交接单（Codex 专供）
 - [remaining-5-icons-ui-handoff.md](planning/ui-handoff/remaining-5-icons-ui-handoff.md) — 剩余 5 枚增量图标纯功能作图交接清单（典籍制书卷 1–3 + 百宝阁 V2 节庆礼盒）
+- [season-honor-badges-s3-s10-ui-handoff.md](planning/ui-handoff/season-honor-badges-s3-s10-ui-handoff.md) — 赛季十季永久纪念徽章（S3–S10）作图交接
 - [season-team-tournament-v1-ui-handoff.md](planning/ui-handoff/season-team-tournament-v1-ui-handoff.md) — 《群仙问道赛》全服赛季战队锦标赛 — UI 制作与联调交接规格（给 ChatGPT / Codex）
 - [season-team-tournament-v2-ui-handoff.md](planning/ui-handoff/season-team-tournament-v2-ui-handoff.md) — 《群仙问道赛》V2 增量 UI 美术与原型制作任务书（直接交给 Codex）
 - [season-team-tournament-v3-ui-handoff.md](planning/ui-handoff/season-team-tournament-v3-ui-handoff.md) — 《群仙问道赛》V3+V4 增量 UI 需求清单（模块 D / E / F / G / H / I / J）
 - [skill-build-loadout-7slots-ui-handoff.md](planning/ui-handoff/skill-build-loadout-7slots-ui-handoff.md) — 7 套非永久「战法·加点」流派方案槽位 UI 纯功能作图交接单
 - [trial-journal-v2-ui-handoff.md](planning/ui-handoff/trial-journal-v2-ui-handoff.md) — 《五行试炼志 V2》UI 功能需求与作图清单
+- [trial-journal-v3-ui-handoff.md](planning/ui-handoff/trial-journal-v3-ui-handoff.md) — 《五行试炼志 V3》新增控件（卷四明雷、试炼誓约、好友约战帖）UI 作图交接清单
 - [wardrobe-cosmetic-vouchers-ui-handoff.md](planning/ui-handoff/wardrobe-cosmetic-vouchers-ui-handoff.md) — 衣柜外观解锁券（灵宠幻化符 / 技能特效卷）UI 纯功能作图交接清单
 - [wardrobe-cosmetics-assets-handoff.md](planning/ui-handoff/wardrobe-cosmetics-assets-handoff.md) — 衣柜外观券、专属技能特效帧条与百宝阁切片纯功能作图交接清单
 - [world-map-habitat-ui-handoff.md](planning/ui-handoff/world-map-habitat-ui-handoff.md) — 大世界野外灵宠栖息地 HUD 浮条 UI 美术作图交接清单
@@ -446,6 +451,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 #### 未分类
 
 - [craft-proxy-offline-and-support-enhance.md](design/craft-proxy-offline-and-support-enhance.md) — 跨节点/离线名匠代打与控辅强化公平受益设计
+- [craft-proxy-reputation-digest-and-hot-ranking.md](design/craft-proxy-reputation-digest-and-hot-ranking.md) — 离线名匠口碑雅号异步回账、营业战报与西市极品热榜设计方案
 - [rewarded-ad-system.md](design/rewarded-ad-system.md) — 激励视频广告与绑定银两（`CURRENCY_TYPE_BIND_GOLD`）全端技术与零拒审工程设计
 
 #### 成套技术设计

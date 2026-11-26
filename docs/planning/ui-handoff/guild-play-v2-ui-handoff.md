@@ -413,17 +413,43 @@ namespace MmorpgClient.Game.Guild
 
 ---
 
-## 八、已验收正式切图与可选玩法扩展新增切图清单（仅给 Codex 作图，纯功能规格）
+## 八、已验收正式切图与接入清单（全部 33 张已交付并接入 Unity）
 
-### 1. 已交付并完整接入 Unity UGUI 的 31 张正式运行切图
+### 1. 已交付并完整接入 Unity UGUI 的 33 张正式运行切图
 目录：`D:/work/image/designs/guild-war-ui-v2/slices/` → 已同步导入 `mmorpg-client/Assets/Resources/UI/Ugui/GuildWarV2/` 并全部接入 `GuildWarUiArt.cs` / `GuildWarWindow.cs` / `GuildWarFieldHud.cs` / `GuildWindow.cs` / `BattleScreen.cs`：
 - 8 张无字主界面底板：`panel_01_guild_home.png` ～ `panel_08_field_hud.png`（`1932×814`）
-- 23 张独立无字透明运行切片：`banner_guild_flag.png`、`leyline_bg_{baxian,biyuan,yuexi}.png`、`leyline_shield_overlay.png`、`bar_banner_hp_{track,fill_ally,fill_enemy}.png`、`badge_streak_{3,5,8}.png`、`badge_bounty_target.png`、`badge_spectate_swords.png`、`badge_stance_{war,peace}.png`、`badge_frenzy_round12.png`、`chest_merit_{locked,ready,claimed}.png`、`alert_banner_{siege,bounty}.png`、`tag_exclusive_bg.png`、`btn_danger_crimson.png`。
+- 25 张独立无字透明运行切片：`banner_guild_flag.png`、`leyline_bg_{baxian,biyuan,yuexi}.png`、`leyline_shield_overlay.png`、`bar_banner_hp_{track,fill_ally,fill_enemy}.png`、`badge_streak_{3,5,8}.png`、`badge_bounty_target.png`、`badge_spectate_swords.png`、`badge_stance_{war,peace}.png`、`badge_frenzy_round12.png`、`badge_gold_leyline.png`、`badge_rival_guild.png`、`chest_merit_{locked,ready,claimed}.png`、`alert_banner_{siege,bounty}.png`、`tag_exclusive_bg.png`、`btn_danger_crimson.png`。
 
-### 2. 已落地玩法扩展的可选增补无字切图（当前客户端已用文案标签兜底可用；如需更直观图标可交给 Codex 补画）
+### 2. 扩展玩法 2 张角标验收记录（初版 `7b4448cd` / 返修 `130649c1`）
 
-| 文件名 | 界面与用途 | 尺寸与格式 | 缩放与文字规范 | 交付目录 |
-|---|---|---|---|---|
-| `badge_gold_leyline.png` | 帮会争锋主界面灵脉卡右上角角标：标示当前小时轮换生效的「1.5× 旺脉（金脉）」 | `128×128` 透明底 PNG-32（四角 Alpha=0） | 非拉伸等比缩放；严禁烘焙任何文字、字母或数字；视觉按项目既有的统一 UI 美术风格 | `D:/work/image/designs/guild-war-ui-v2/slices/` |
-| `badge_rival_guild.png` | 帮会争锋对手列表、灵脉卡及野外敌帮轻动作条角标：标示「本周宿敌帮会（本周交手 ≥ 3 场，收益 +20%）」 | `128×128` 透明底 PNG-32（四角 Alpha=0） | 非拉伸等比缩放；严禁烘焙任何文字、字母或数字；视觉按项目既有的统一 UI 美术风格 | `D:/work/image/designs/guild-war-ui-v2/slices/` |
+| 文件名 | 尺寸与格式 | 客户端挂载位 | 视觉验收备注 |
+|---|---|---|---|
+| `badge_gold_leyline.png` | `128×128` 32 位 RGBA（四角 Alpha=0，无烘焙字，SHA-256 `86cc1238…`） | `GuildWarWindow` 灵脉卡右上角（`LeylineGoldBadge_*`） | 提交 `130649c1` 返修已彻底消除右下角矩形裁切，外框完整闭合、边缘自然融合，视觉验收通过并已覆盖同步进 Unity |
+| `badge_rival_guild.png` | `128×128` 32 位 RGBA（四角 Alpha=0，无烘焙字，SHA-256 `b8115b9e…`） | `GuildWarWindow` 灵脉卡 / 在线目标行 / 野外现场页 + `GuildWarFieldHud` 附近异帮行 / 3D 选中动作条 | 边缘干净、无烘焙字，视觉验收通过 |
+
+---
+
+## 九、帮战 V2.5 扩展玩法新增 3 张无字透明运行切片清单（纯功能规格，给 Codex 作图）
+
+> 客户端代码已全部通过 `GuildWarUiArt.LoadOrFallback` 预留挂载点与优雅回退（未落盘前自动使用既有切图，零阻断运行；以下 3 张切片交付并导入 `mmorpg-client/Assets/Resources/UI/Ugui/GuildWarV2/` 后零改代码自动切换为专属视觉）。
+
+### 1. 交付目录与通用约束
+- 目标输出目录：`D:/work/image/designs/guild-war-ui-v2/slices/`（完成后请提交并 push 到对应远端仓库）。
+- 视觉风格：全部视觉表现严格**按项目既有的统一 UI 美术风格**执行（不另定风格或配色）。
+- 格式要求：32 位 RGBA 透明底 PNG（四角及外缘 Alpha=0，边缘干净自然闭合，无矩形硬裁切或杂边）。
+- 绝对无字：切片内严禁烘焙任何中文、英文字母、数字、标点或符号（比分、倒计时、灵脉名称、公告内容均由客户端运行时动态叠加）。
+
+### 2. 必做 3 张切图清单
+
+| # | 文件名 | 尺寸 | 缩放规则 | 所在界面与挂载位 | 功能用途 |
+|---|---|---|---|---|---|
+| 1 | `badge_feud_edict.png` | `128×128 px` | 固定比例图标，不做九宫格或拉伸，按等比缩放显示 | 帮会争锋主界面底部「宿敌 2 小时约战实况条」左侧徽标位、野外现场右上角约战实况小条左侧徽标位 | 标示两帮之间处于「待应战 / 激战中」的 2 小时宿敌约战战书状态，用于与普通宿敌对手区分 |
+| 2 | `banner_leyline_world_flag.png` | `256×384 px` | 固定比例立旗图标，不做九宫格或拉伸，按等比缩放显示 | 野外三张帮战地图（八景岛 / 碧渊水宫 / 月汐湾）3D 场景中的可点击灵脉战旗实体，以及点击战旗后底部弹出的「灵脉旗台动作条」左侧图标位 | 代表野外场景中可实地点击交互的灵脉据点战旗，玩家在地图上能一眼识别并点击该战旗发起攻打灵脉、驰援守旗或观战 |
+| 3 | `alert_banner_feud.png` | `960×120 px` | 横向三段拉伸（Sprite Border：左 `110px`、右 `110px`、上 `0`、下 `0`；中部横跨区纹理平顺连续，确保任意拉伸宽度不失真，左右 110px 内保留安全装饰端头） | 游戏主界面顶部非阻断全帮/战区预警横幅底板 | 承托「宿敌下发 2 小时约战战书」「约战正式打响 / 收官战报」「5/8 连胜封神与高连胜终结悬赏捷报」四类动态实时公告文字与右侧快捷按钮 |
+
+### 3. 验收核对
+- 输出目录与 3 个文件名逐字一致，共 3 张 PNG。
+- 尺寸分别为 `128×128`、`256×384`、`960×120`；均为 32 位 RGBA 透明底 PNG、四角 Alpha=0、边缘平滑闭合无矩形硬切块、图内无任何烘焙文字或数字。
+- `alert_banner_feud.png` 满足左右 `110px` 横向三段拉伸结构，中间区用于客户端动态叠加两行高对比度文字与按钮。
+
 

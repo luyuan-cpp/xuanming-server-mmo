@@ -32,34 +32,12 @@ namespace MmorpgClient.Table
             return GetBattleConfigIdRow(TournamentRuleTableManager.Instance.FindById(tableId));
         }
 
-        /// <summary>Resolve TournamentRule.salute_item_id → Item row, or null.</summary>
-        public static ItemTable GetSaluteItemIdRow(TournamentRuleTable row)
-        {
-            if (row == null)
-            {
-                return null;
-            }
-            return ItemTableManager.Instance.FindById(row.SaluteItemId);
-        }
-
-        /// <summary>Resolve TournamentRule.salute_item_id → Item row, by TournamentRule id.</summary>
-        public static ItemTable GetSaluteItemIdRow(uint tableId)
-        {
-            return GetSaluteItemIdRow(TournamentRuleTableManager.Instance.FindById(tableId));
-        }
-
         // ---- Reverse FK (HasMany): find source rows by FK column value ----
 
         /// <summary>Reverse FK: all TournamentRule rows whose battle_config_id == key.</summary>
         public static IReadOnlyList<TournamentRuleTable> FindRowsByBattleConfigId(uint key)
         {
             return TournamentRuleTableManager.Instance.GetByBattleConfigId(key);
-        }
-
-        /// <summary>Reverse FK: all TournamentRule rows whose salute_item_id == key.</summary>
-        public static IReadOnlyList<TournamentRuleTable> FindRowsBySaluteItemId(uint key)
-        {
-            return TournamentRuleTableManager.Instance.GetBySaluteItemId(key);
         }
     }
 }

@@ -40,6 +40,8 @@ type SeasonRuleTable struct {
 	Desc                 string                 `protobuf:"bytes,15,opt,name=desc,proto3" json:"desc,omitempty"`
 	HonorTitleName       string                 `protobuf:"bytes,16,opt,name=honor_title_name,json=honorTitleName,proto3" json:"honor_title_name,omitempty"`
 	HonorBadgeIconKey    string                 `protobuf:"bytes,17,opt,name=honor_badge_icon_key,json=honorBadgeIconKey,proto3" json:"honor_badge_icon_key,omitempty"`
+	CycleOrder           uint32                 `protobuf:"varint,18,opt,name=cycle_order,json=cycleOrder,proto3" json:"cycle_order,omitempty"`
+	CycleDurationDays    uint32                 `protobuf:"varint,19,opt,name=cycle_duration_days,json=cycleDurationDays,proto3" json:"cycle_duration_days,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -193,6 +195,20 @@ func (x *SeasonRuleTable) GetHonorBadgeIconKey() string {
 	return ""
 }
 
+func (x *SeasonRuleTable) GetCycleOrder() uint32 {
+	if x != nil {
+		return x.CycleOrder
+	}
+	return 0
+}
+
+func (x *SeasonRuleTable) GetCycleDurationDays() uint32 {
+	if x != nil {
+		return x.CycleDurationDays
+	}
+	return 0
+}
+
 type SeasonRuleTableData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Data          []*SeasonRuleTable     `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -241,7 +257,7 @@ var File_seasonrule_table_proto protoreflect.FileDescriptor
 
 const file_seasonrule_table_proto_rawDesc = "" +
 	"\n" +
-	"\x16seasonrule_table.proto\"\x84\x05\n" +
+	"\x16seasonrule_table.proto\"\xd5\x05\n" +
 	"\x0fSeasonRuleTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -262,7 +278,10 @@ const file_seasonrule_table_proto_rawDesc = "" +
 	"\x0fdefault_seal_id\x18\x0e \x01(\rR\rdefaultSealId\x12\x12\n" +
 	"\x04desc\x18\x0f \x01(\tR\x04desc\x12(\n" +
 	"\x10honor_title_name\x18\x10 \x01(\tR\x0ehonorTitleName\x12/\n" +
-	"\x14honor_badge_icon_key\x18\x11 \x01(\tR\x11honorBadgeIconKey\";\n" +
+	"\x14honor_badge_icon_key\x18\x11 \x01(\tR\x11honorBadgeIconKey\x12\x1f\n" +
+	"\vcycle_order\x18\x12 \x01(\rR\n" +
+	"cycleOrder\x12.\n" +
+	"\x13cycle_duration_days\x18\x13 \x01(\rR\x11cycleDurationDays\";\n" +
 	"\x13SeasonRuleTableData\x12$\n" +
 	"\x04data\x18\x01 \x03(\v2\x10.SeasonRuleTableR\x04dataBA\n" +
 	"\x0ecom.game.tableB\x19SeasonRuleTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

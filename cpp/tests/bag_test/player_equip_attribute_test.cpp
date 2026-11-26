@@ -983,6 +983,7 @@ protected:
 		EmplaceIfAbsent<PlayerSpiritShopComp>(entity); // 官方灵石百宝阁限购状态
 		EmplaceIfAbsent<PlayerTravelPassComp>(entity); // 游历手记持久状态
 		EmplaceIfAbsent<PlayerEquipLoadoutComp>(entity); // 装备流派方案预设
+		EmplaceIfAbsent<PlayerJianghuComp>(entity); // 江湖恩怨与天墉生死状
 		// 顶层未知字段的载体(混版本持久字段保护 §4.2 L1),生产里由 player_database 的 Unmarshal 创建。
 		EmplaceIfAbsent<PlayerDatabaseCarryComp>(entity);
 	}

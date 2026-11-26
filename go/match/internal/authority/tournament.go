@@ -19,14 +19,13 @@ import (
 )
 
 const (
-	tournamentSeasonCols     = "season_id,season_key,season_name,rule_version,stage,registration_start_ms,qualifier_start_ms,knockout_start_ms,settle_start_ms,end_ms,battle_team_size,roster_max_size,knockout_team_count,champion_squad_id,champion_squad_name,champion_member_summary,settled_ms,updated_ms,champion_members_blob,champion_salute_count,champion_emblem_id,third_place_squad_id,third_place_squad_name,third_place_emblem_id,final_mvp_player_id,final_mvp_player_name,final_mvp_score,champion_honor_bits"
+	tournamentSeasonCols     = "season_id,season_key,season_name,rule_version,stage,registration_start_ms,qualifier_start_ms,knockout_start_ms,settle_start_ms,end_ms,battle_team_size,roster_max_size,knockout_team_count,champion_squad_id,champion_squad_name,champion_member_summary,settled_ms,updated_ms,champion_members_blob,champion_emblem_id,third_place_squad_id,third_place_squad_name,third_place_emblem_id,final_mvp_player_id,final_mvp_player_name,final_mvp_score,champion_honor_bits"
 	tournamentSquadCols      = "squad_id,season_id,name,name_norm,captain_player_id,state,member_count,qualifier_points,qualifier_played,qualifier_wins,qualifier_losses,qualifier_draws,seed_rank,final_rank,cheer_count,registered_ms,updated_ms,emblem_id,honor_bits"
 	tournamentMemberCols     = "season_id,player_id,squad_id,role,starter_slot,player_name,zone_id,joined_ms,class_id,gender,appearance_id"
 	tournamentInviteCols     = "squad_id,invitee_player_id,season_id,inviter_player_id,state,created_ms,expires_ms"
 	tournamentMatchCols      = "match_id,season_id,phase,round_index,slot_index,squad_a_id,squad_b_id,lineup_a,lineup_b,ready_a,ready_b,state,battle_id,winner_squad_id,outcome,featured_spectate,scheduled_start_ms,deadline_ms,finished_ms,updated_ms,best_of,current_game_index,wins_a,wins_b,current_leyline_element,leyline_sequence,intermission_deadline_ms,is_third_place,mvp_player_id,mvp_player_name,mvp_squad_id,mvp_score,mvp_damage,mvp_healing,mvp_controls,banned_leyline_a,banned_leyline_b"
 	tournamentMatchGameCols  = "match_id,game_index,season_id,phase,battle_id,leyline_element,winner_squad_id,outcome,finished_ms"
 	tournamentRewardCols     = "season_id,player_id,tier_kind,reward_id,squad_id,final_rank,tier_id,gold_amount,attachments,title_code,badge_code,delivery_state,mail_id,claimed_ms,updated_ms"
-	tournamentSaluteCols     = "player_id,salute_day,season_id,reward_id,mail_id,created_ms"
 	tournamentPredictionCols = "season_id,player_id,match_id,predicted_squad_id,round_index,is_third_place,player_name,result_state,earned_points,created_ms,updated_ms"
 )
 
@@ -46,8 +45,6 @@ var (
 	ErrTournamentMatchNotReady           = errors.New("tournament: match not ready or already finished")
 	ErrTournamentAlreadyCheered          = errors.New("tournament: already cheered this season")
 	ErrTournamentRewardUnavailable       = errors.New("tournament: no claimable rewards")
-	ErrTournamentAlreadySalutedToday     = errors.New("tournament: already saluted champion today")
-	ErrTournamentNoChampionToSalute      = errors.New("tournament: no settled champion available to salute")
 	ErrTournamentEmblemInvalid           = errors.New("tournament: emblem id out of [1,8]")
 	ErrTournamentPredictionClosed        = errors.New("tournament: prediction window closed for match")
 	ErrTournamentPredictionTargetInvalid = errors.New("tournament: predicted squad not in match")
@@ -79,14 +76,6 @@ type TournamentLaunchSpec struct {
 	IsThirdPlace   bool
 }
 
-// TournamentSaluteResult 描述一次成功的每日免费观道致敬落账结果。
-type TournamentSaluteResult struct {
-	SeasonID            uint32
-	SaluteDay           uint32
-	ChampionSaluteCount uint64
-	RewardID            uint64
-}
-
 // SwapTournamentCatalog 在启动与表包热更时原子切换锦标赛配置目录。
 func (s *Store) SwapTournamentCatalog(cat *tournament.Catalog) {
 	if s != nil {
@@ -108,23 +97,20 @@ func (s *Store) TournamentCatalog() *tournament.Catalog {
 func scanTournamentSeason(row scanner) (*pb.MatchTournamentSeasonRecord, error) {
 	r := &pb.MatchTournamentSeasonRecord{}
 	var membersBlob []byte
-	var saluteCount, champEmblem, thirdID, thirdEmblem, finalMvpID, finalMvpScore, champHonorBits sql.NullInt64
+	var champEmblem, thirdID, thirdEmblem, finalMvpID, finalMvpScore, champHonorBits sql.NullInt64
 	var thirdName, finalMvpName sql.NullString
 	err := row.Scan(
 		&r.SeasonId, &r.SeasonKey, &r.SeasonName, &r.RuleVersion, &r.Stage,
 		&r.RegistrationStartMs, &r.QualifierStartMs, &r.KnockoutStartMs, &r.SettleStartMs, &r.EndMs,
 		&r.BattleTeamSize, &r.RosterMaxSize, &r.KnockoutTeamCount,
 		&r.ChampionSquadId, &r.ChampionSquadName, &r.ChampionMemberSummary, &r.SettledMs, &r.UpdatedMs,
-		&membersBlob, &saluteCount,
+		&membersBlob,
 		&champEmblem, &thirdID, &thirdName, &thirdEmblem, &finalMvpID, &finalMvpName, &finalMvpScore, &champHonorBits,
 	)
 	if err != nil {
 		return nil, err
 	}
 	r.ChampionMembersBlob = membersBlob
-	if saluteCount.Valid && saluteCount.Int64 > 0 {
-		r.ChampionSaluteCount = uint64(saluteCount.Int64)
-	}
 	if champEmblem.Valid && champEmblem.Int64 > 0 {
 		r.ChampionEmblemId = uint32(champEmblem.Int64)
 	}
@@ -317,12 +303,12 @@ func (s *Store) ensureTournamentSeasonTx(ctx context.Context, tx *sql.Tx, stamp 
 	}
 	s1 := buildNewTournamentSeason(1, stamp, s.TournamentCatalog())
 	_, err = tx.ExecContext(ctx,
-		"INSERT INTO match_tournament_season("+tournamentSeasonCols+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+		"INSERT INTO match_tournament_season("+tournamentSeasonCols+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
 		s1.SeasonId, s1.SeasonKey, s1.SeasonName, s1.RuleVersion, s1.Stage,
 		s1.RegistrationStartMs, s1.QualifierStartMs, s1.KnockoutStartMs, s1.SettleStartMs, s1.EndMs,
 		s1.BattleTeamSize, s1.RosterMaxSize, s1.KnockoutTeamCount,
 		s1.ChampionSquadId, s1.ChampionSquadName, s1.ChampionMemberSummary, s1.SettledMs, s1.UpdatedMs,
-		[]byte{}, uint64(0),
+		[]byte{},
 		uint32(0), uint64(0), "", uint32(0), uint64(0), "", uint32(0), uint32(0),
 	)
 	if err != nil {
@@ -367,7 +353,7 @@ func toTournamentMemberView(m *pb.MatchTournamentMemberRecord) *pb.TournamentMem
 	}
 }
 
-func (s *Store) toTournamentSeasonView(r *pb.MatchTournamentSeasonRecord, registeredCount uint32, salutedToday bool) *pb.TournamentSeasonView {
+func (s *Store) toTournamentSeasonView(r *pb.MatchTournamentSeasonRecord, registeredCount uint32) *pb.TournamentSeasonView {
 	rule := s.TournamentCatalog().Rule()
 	return &pb.TournamentSeasonView{
 		SeasonId:                r.SeasonId,
@@ -392,8 +378,6 @@ func (s *Store) toTournamentSeasonView(r *pb.MatchTournamentSeasonRecord, regist
 		ChampionSquadId:         r.ChampionSquadId,
 		ChampionSquadName:       r.ChampionSquadName,
 		ChampionMemberSummary:   r.ChampionMemberSummary,
-		ChampionSaluteCount:     r.ChampionSaluteCount,
-		SalutedToday:            salutedToday,
 		ChampionMembers:         decodeChampionMembers(r.ChampionMembersBlob),
 		ChampionEmblemId:        r.ChampionEmblemId,
 		ThirdPlaceSquadId:       r.ThirdPlaceSquadId,
@@ -582,17 +566,6 @@ func loadMatchGameBattleIDsTx(ctx context.Context, q interface {
 		}
 	}
 	return ids
-}
-
-func salutedTodayTx(ctx context.Context, q interface {
-	QueryRowContext(context.Context, string, ...any) *sql.Row
-}, playerID uint64, stamp uint64) bool {
-	if playerID == 0 {
-		return false
-	}
-	var one int
-	return q.QueryRowContext(ctx, "SELECT 1 FROM match_tournament_salute WHERE player_id=? AND salute_day=? LIMIT 1",
-		playerID, tournament.Utc8DayKey(stamp)).Scan(&one) == nil
 }
 
 func (s *Store) ensureTournamentOpen() error {
@@ -1212,10 +1185,9 @@ func (s *Store) LoadTournamentOverview(ctx context.Context, playerID uint64, inc
 	}
 	var regCount uint32
 	_ = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM match_tournament_squad WHERE season_id=? AND state IN(2,3,4)", cur.SeasonId).Scan(&regCount)
-	salutedToday := salutedTodayTx(ctx, tx, playerID, stamp)
 
 	resp := &pb.GetTournamentOverviewResponse{
-		CurrentSeason: s.toTournamentSeasonView(cur, regCount, salutedToday),
+		CurrentSeason: s.toTournamentSeasonView(cur, regCount),
 		RewardTiers:   s.TournamentCatalog().RewardTierViews(),
 		ServerTimeMs:  stamp,
 	}
@@ -1361,7 +1333,7 @@ func (s *Store) LoadTournamentOverview(ctx context.Context, playerID uint64, inc
 				hRows.Close()
 				return nil, e
 			}
-			resp.HallOfFame = append(resp.HallOfFame, s.toTournamentSeasonView(hs, 0, salutedToday))
+			resp.HallOfFame = append(resp.HallOfFame, s.toTournamentSeasonView(hs, 0))
 		}
 		hRows.Close()
 	}
@@ -1459,7 +1431,7 @@ func (s *Store) ListTournamentStandings(ctx context.Context, seasonID uint32, pl
 		end = len(all)
 	}
 	resp := &pb.ListTournamentStandingsResponse{
-		Season:       s.toTournamentSeasonView(season, uint32(len(all)), salutedTodayTx(ctx, tx, playerID, stamp)),
+		Season:       s.toTournamentSeasonView(season, uint32(len(all))),
 		TotalSquads:  uint32(len(all)),
 		ServerTimeMs: stamp,
 	}
@@ -2932,11 +2904,11 @@ func (s *Store) openNextTournamentSeason(ctx context.Context, currentSeasonID ui
 		}
 		next := buildNewTournamentSeason(currentSeasonID+1, stamp, s.TournamentCatalog())
 		_, err = tx.ExecContext(ctx,
-			"INSERT IGNORE INTO match_tournament_season("+tournamentSeasonCols+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+			"INSERT IGNORE INTO match_tournament_season("+tournamentSeasonCols+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
 			next.SeasonId, next.SeasonKey, next.SeasonName, next.RuleVersion, next.Stage,
 			next.RegistrationStartMs, next.QualifierStartMs, next.KnockoutStartMs, next.SettleStartMs, next.EndMs,
 			next.BattleTeamSize, next.RosterMaxSize, next.KnockoutTeamCount,
-			0, "", "", 0, stamp, []byte{}, uint64(0),
+			0, "", "", 0, stamp, []byte{},
 			uint32(0), uint64(0), "", uint32(0), uint64(0), "", uint32(0), uint32(0),
 		)
 		if err != nil {
@@ -3124,80 +3096,6 @@ func (s *Store) TakeDueIntermissionLaunches(ctx context.Context, nowOverrideMs u
 		return tx.Commit()
 	})
 	return specs, err
-}
-
-// SaluteTournamentChampion 原子执行每日一次免费观道致敬(主键 (player_id, salute_day) 防刷,累加全服致敬计数)。
-func (s *Store) SaluteTournamentChampion(ctx context.Context, playerID uint64, requestedSeasonID uint32, rewardID uint64) (*TournamentSaluteResult, error) {
-	if err := s.ensureTournamentOpen(); err != nil {
-		return nil, err
-	}
-	if playerID == 0 || rewardID == 0 {
-		return nil, errors.New("tournament: invalid player or reward id for salute")
-	}
-	var out *TournamentSaluteResult
-	err := s.Fenced(ctx, func() error {
-		tx, err := s.DB.BeginTx(ctx, nil)
-		if err != nil {
-			return err
-		}
-		defer tx.Rollback()
-		stamp, err := now(ctx, tx)
-		if err != nil {
-			return err
-		}
-		var season *pb.MatchTournamentSeasonRecord
-		if requestedSeasonID != 0 {
-			season, err = scanTournamentSeason(tx.QueryRowContext(ctx,
-				"SELECT "+tournamentSeasonCols+" FROM match_tournament_season WHERE season_id=? AND champion_squad_id>0 FOR UPDATE", requestedSeasonID))
-		} else {
-			season, err = scanTournamentSeason(tx.QueryRowContext(ctx,
-				"SELECT "+tournamentSeasonCols+" FROM match_tournament_season WHERE champion_squad_id>0 ORDER BY season_id DESC LIMIT 1 FOR UPDATE"))
-		}
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrTournamentNoChampionToSalute
-		}
-		if err != nil {
-			return err
-		}
-		saluteDay := tournament.Utc8DayKey(stamp)
-		if _, err = tx.ExecContext(ctx,
-			"INSERT INTO match_tournament_salute("+tournamentSaluteCols+") VALUES(?,?,?,?,0,?)",
-			playerID, saluteDay, season.SeasonId, rewardID, stamp,
-		); err != nil {
-			var dup *mysql.MySQLError
-			if errors.As(err, &dup) && dup.Number == 1062 {
-				return ErrTournamentAlreadySalutedToday
-			}
-			return err
-		}
-		newCount := season.ChampionSaluteCount + 1
-		if _, err = tx.ExecContext(ctx, "UPDATE match_tournament_season SET champion_salute_count=?,updated_ms=? WHERE season_id=?",
-			newCount, stamp, season.SeasonId); err != nil {
-			return err
-		}
-		if err = tx.Commit(); err != nil {
-			return err
-		}
-		out = &TournamentSaluteResult{
-			SeasonID:            season.SeasonId,
-			SaluteDay:           saluteDay,
-			ChampionSaluteCount: newCount,
-			RewardID:            rewardID,
-		}
-		return nil
-	})
-	return out, err
-}
-
-// UpdateTournamentSaluteMailID 在事务外邮件投递成功后回填 mail_id 供审计。
-func (s *Store) UpdateTournamentSaluteMailID(ctx context.Context, playerID uint64, saluteDay uint32, mailID uint64) error {
-	if s == nil || s.DB == nil || playerID == 0 || saluteDay == 0 || mailID == 0 {
-		return nil
-	}
-	return s.Fenced(ctx, func() error {
-		_, err := s.DB.ExecContext(ctx, "UPDATE match_tournament_salute SET mail_id=? WHERE player_id=? AND salute_day=?", mailID, playerID, saluteDay)
-		return err
-	})
 }
 
 // isPublicKnockoutReplayAllowed 校验某场 battle_id 是否属于允许全服公开回放的锦标赛淘汰赛对局(绝不放行海选/私密切磋)。

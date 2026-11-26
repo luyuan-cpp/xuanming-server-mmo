@@ -1,6 +1,6 @@
 # 官方灵石百宝阁 V2 策划与工程方案（定时自动上下架 + 3–4 物品大礼包/多选一自选包 + 原价划线折扣 + 角色阶段解锁）
 
-> 状态：2026-11-26 实施中（由负责人明确拍板，专为春节礼包、节假日礼盒与新赛季阶段礼盒设计，100% 向下兼容 V1，零数据库迁移、零新增 RPC）。  
+> 状态：2026-11-26 已完成三仓落地与全量编译测试验收（由负责人明确拍板，专为春节礼包、节假日礼盒与新赛季阶段礼盒设计，100% 向下兼容 V1，零数据库迁移、零新增 RPC）。  
 > 上位总纲：[project-vision.md](project-vision.md) · V1 基础文档：[spirit-shop-and-starter-packs-v1.md](spirit-shop-and-starter-packs-v1.md)。
 
 ---
@@ -91,9 +91,9 @@
 ## 5. 步骤分析与执行清单
 
 - [x] 1. 落盘本 V2 策划方案并自动归入 `docs/README.md` 索引。
-- [ ] 2. 扩展 `spiritshopgoods_table.proto`（22..33）、`player_spirit_shop.proto`、`Tip.xlsx`（37011..37013）、`spirit_shop_xlsx_patch.py` 与 `SpiritShopGoods.xlsx`（含 401/402 2027 春节礼盒样例）。
-- [ ] 3. Gemini 执行导表、协议生成与客户端同步。
-- [ ] 4. 实现 C++ `spirit_shop_rules.h` / `player_spirit_shop.cpp` 与全套 V2 GTest（定时窗、4 物大礼包满包回滚、多选一自选与篡改/错选拦截、原价划线、等级门槛、过期后旧幂等重放）。
-- [ ] 5. Java 独立服执行 `ContractSync` 并同构实现 `SpiritShopTables` / `SpiritShopService` 与全套 V2 JUnit 单测，更新 `PARITY.md`。
-- [ ] 6. Unity 客户端更新 `SpiritShopModels` / `SpiritShopClient` / `SpiritShopWindow`（动态第 4 分页「节庆特惠」、原价划线与折数、基于服务器时间的实时倒计时、4 件大礼包展示、确认窗多选一单选交互）与 `SpiritShopClientTests`。
-- [ ] 7. Gemini 全量编译、验表与跑通 C++ / Java / Unity 三仓单测。
+- [x] 2. 扩展 `spiritshopgoods_table.proto`（22..33）、`player_spirit_shop.proto`、`Tip.xlsx`（37011..37013）、`spirit_shop_xlsx_patch.py` 与 `SpiritShopGoods.xlsx`（含 401/402 2027 春节礼盒样例）。
+- [x] 3. Gemini 执行导表、协议生成与客户端同步。
+- [x] 4. 实现 C++ `spirit_shop_rules.h` / `player_spirit_shop.cpp` 与全套 V2 GTest（定时窗、4 物大礼包满包回滚、多选一自选与篡改/错选拦截、原价划线、等级门槛、过期后旧幂等重放）。
+- [x] 5. Java 独立服执行契约同步并同构实现 `SpiritShopTables` / `SpiritShopService` 与全套 V2 JUnit 单测，更新 `PARITY.md`。
+- [x] 6. Unity 客户端更新 `SpiritShopModels` / `SpiritShopClient` / `SpiritShopWindow`（动态第 4 分页「节庆特惠」、原价划线与折数、基于服务器时间的实时倒计时、4 件大礼包展示、确认窗多选一单选交互）与 `SpiritShopClientTests`。
+- [x] 7. Gemini 全量编译、验表与跑通 C++ / Java / Unity 三仓单测。

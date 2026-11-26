@@ -294,9 +294,9 @@ func (c *Catalog) validate(row PlayModeRow) error {
 		if row.TeamSizeMax == 0 || row.TeamSizeMax > config.TeamCapacity {
 			return fmt.Errorf("PVP_TEAM 每侧人数上限 %d 须在 1..%d", row.TeamSizeMax, config.TeamCapacity)
 		}
-	case matchpb.MatchMode_MATCH_MODE_1V1, matchpb.MatchMode_MATCH_MODE_5V5, matchpb.MatchMode_MATCH_MODE_PVP_CHALLENGE, matchpb.MatchMode_MATCH_MODE_POLARITY_5V5:
+	case matchpb.MatchMode_MATCH_MODE_1V1, matchpb.MatchMode_MATCH_MODE_5V5, matchpb.MatchMode_MATCH_MODE_PVP_CHALLENGE, matchpb.MatchMode_MATCH_MODE_POLARITY_5V5, matchpb.MatchMode_MATCH_MODE_JIANGHU_DUEL:
 		if row.TeamSizeMax != 0 {
-			return errors.New("1V1 / 5V5 / 切磋 / 物法易势的人数由模式决定，team_size_max 必须为 0")
+			return errors.New("1V1 / 5V5 / 切磋 / 物法易势 / 天墉生死状的人数由模式决定，team_size_max 必须为 0")
 		}
 		if len(row.AllowedTeamSizes) > 0 {
 			return errors.New("固定人数模式不允许配置 allowed_team_sizes")
@@ -412,12 +412,40 @@ func (c *Catalog) AllowedTeamSizes(mode matchpb.MatchMode, configId uint32) []ui
 	return out
 }
 
-// BossTrialKind 返回 Dungeon 表中该模板的 boss_trial_kind（0=常规，1..4/8=首领试炼，5=护卫救援，6=物法易势，7=瑞兽迎春）。
+// TrialVowMaskAll 是五行试炼志 V3 全部四项自选誓约合法位掩码（bit0 禁控 / bit1 单宝 / bit2 无宠 / bit3 紧缩回合）。
+const TrialVowMaskAll uint32 = 0x0F
+
+// ValidTrialVowMask 报告试炼誓约掩码是否只包含合法的 0..3 位。
+func ValidTrialVowMask(mask uint32) bool {
+	return (mask &^ TrialVowMaskAll) == 0
+}
+
+// IsPermanentBossTrialKind 报告 boss_trial_kind 是否属于支持试炼誓约的常驻首领试炼（卷一/卷二/卷四）。
+func IsPermanentBossTrialKind(bossTrialKind uint32) bool {
+	return (bossTrialKind >= 1 && bossTrialKind <= 4) ||
+		bossTrialKind == 8 ||
+		(bossTrialKind >= 12 && bossTrialKind <= 14)
+}
+
+// BossTrialKind 返回 Dungeon 表中该模板的 boss_trial_kind（0=常规，1..4/8=卷一二首领试炼，5=护卫救援，6=物法易势，7=瑞兽迎春，12..14=卷四三境明雷）。
 func (c *Catalog) BossTrialKind(configId uint32) uint32 {
 	if c == nil {
 		return 0
 	}
 	return c.dungeons[configId].BossTrialKind
+}
+
+// SupportsTrialVows 报告该模板是否支持挂载试炼誓约（仅常驻卷一/卷二/卷四首领试炼）。
+func (c *Catalog) SupportsTrialVows(configId uint32) bool {
+	if c == nil {
+		return false
+	}
+	d, ok := c.dungeons[configId]
+	if !ok || !IsPermanentBossTrialKind(d.BossTrialKind) {
+		return false
+	}
+	ctx := c.trialContexts[configId]
+	return ctx != nil && ctx.GetJournalEntryId() != 0 && ctx.GetSeasonId() == 0
 }
 
 // Pools 返回全部开放入口的匹配池（只读，调用方不得修改）。
@@ -496,6 +524,12 @@ func bossTrialVariant(bossTrialKind uint32) (uint32, string, bool) {
 		return 3, "polarity_5v5", true
 	case 8:
 		return 1, "dual_guard", true
+	case 12:
+		return 1, "wild_wind", true
+	case 13:
+		return 1, "wild_bell", true
+	case 14:
+		return 1, "wild_tide", true
 	default:
 		return 0, "", false
 	}

@@ -8,6 +8,7 @@ import (
 	"google.golang.org/grpc"
 
 	"login/internal/logic/pkg/sessionmanager"
+	basepb "proto/common/base"
 	plpb "proto/player_locator"
 )
 
@@ -29,12 +30,12 @@ func (f *fakeDeletionLocator) GetSession(_ context.Context, _ *plpb.GetSessionRe
 	return &plpb.GetSessionResponse{Found: true, Session: f.session}, nil
 }
 
-func (f *fakeDeletionLocator) MarkOffline(_ context.Context, req *plpb.MarkOfflineRequest, _ ...grpc.CallOption) (*plpb.MarkOfflineResponse, error) {
+func (f *fakeDeletionLocator) MarkOffline(_ context.Context, req *plpb.MarkOfflineRequest, _ ...grpc.CallOption) (*basepb.Empty, error) {
 	f.markOffline = append(f.markOffline, req)
 	if f.markErr != nil {
 		return nil, f.markErr
 	}
-	return &plpb.MarkOfflineResponse{Success: true}, nil
+	return &basepb.Empty{}, nil
 }
 
 func TestKickPlayerSession_SkipsWhenMissingOrOffline(t *testing.T) {

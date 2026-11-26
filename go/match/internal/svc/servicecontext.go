@@ -10,6 +10,7 @@ import (
 	"shared/drainproof"
 	"shared/etcdwatch"
 	"shared/safego"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -27,7 +28,10 @@ import (
 	"match/internal/scope"
 	"match/internal/tournament"
 
+	chatpb "proto/chat"
 	dspb "proto/data_service"
+	friendpb "proto/friend"
+	guildpb "proto/guild"
 	mailpb "proto/mail"
 	matchpb "proto/match"
 	inboxpb "proto/player_inbox"
@@ -117,9 +121,15 @@ type ServiceContext struct {
 	cheerHubOnce     sync.Once
 	// ContentGuard 用于战队名称等 UGC 文本审核(未装配时为 nil,保留本地字符集与唯一键校验)。
 	ContentGuard contentguard.Checker
-	// MailAdmin / MailSecret 用于向玩家邮箱幂等投递锦标赛赛季奖励附件(可选装配)。
+	// MailAdmin / MailSecret 用于向玩家邮箱幂等投递锦标赛赛季奖励与生死状普通战书退费附件(可选装配)。
 	MailAdmin  mailpb.MailAdminClient
 	MailSecret string
+	// FriendClient / ChatClient / GuildClient 用于江湖恩怨·天墉生死状一期跨服务只读校验与系统播报(可选装配)。
+	FriendClient friendpb.ClientPlayerFriendClient
+	ChatClient   chatpb.ClientPlayerChatClient
+	GuildClient  guildpb.GuildServiceClient
+	// JianghuStore 允许逻辑单测注入内存存储替身；生产为 nil 时默认走 Authority(*authority.Store)。
+	JianghuStore authority.JianghuStore
 	// TableBundle 负责表包启动校验与运行期两阶段热更(未设 MMORPG_TABLE_BUNDLE_ROOT 时仅执行启动校验)。
 	TableBundle *tablebundle.Manager
 	// MatchNodes 是 match 实例自身注册(MatchNodeService)的 etcd 镜像。按池撮合用它的实例 UUID 作成员表,
@@ -400,6 +410,15 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	sc.Tournament = sc.ActiveTournament()
 
 	sc.DataServiceClient = NewDataServiceClient(c.DataServiceRpc)
+	sc.FriendClient = newOptionalFriendClient(c.FriendRpc)
+	sc.ChatClient = newOptionalChatClient(c.ChatRpc)
+	sc.GuildClient = newOptionalGuildClient(c.GuildRpc)
+	sc.MailAdmin = newOptionalMailAdminClient(c.MailRpc)
+	if envName := strings.TrimSpace(c.MailSecretEnv); envName != "" {
+		sc.MailSecret = strings.TrimSpace(os.Getenv(envName))
+	} else {
+		sc.MailSecret = strings.TrimSpace(os.Getenv("MAIL_PRODUCER_SECRET_MATCH"))
+	}
 	battleIDSegment, err := NewBattleIDSegment(c.IdSegment, sc.DataServiceClient)
 	if err != nil {
 		sc.Stop()
@@ -569,6 +588,38 @@ func NewDataServiceClient(c zrpc.RpcClientConf) dspb.DataServiceClient {
 	}
 	conn := zrpc.MustNewClient(dsclient.Conf(c))
 	return dspb.NewDataServiceClient(conn.Conn())
+}
+
+func newOptionalFriendClient(c zrpc.RpcClientConf) friendpb.ClientPlayerFriendClient {
+	if c.Etcd.Key == "" && len(c.Endpoints) == 0 && c.Target == "" {
+		return nil
+	}
+	c.NonBlock = true
+	return friendpb.NewClientPlayerFriendClient(zrpc.MustNewClient(c).Conn())
+}
+
+func newOptionalChatClient(c zrpc.RpcClientConf) chatpb.ClientPlayerChatClient {
+	if c.Etcd.Key == "" && len(c.Endpoints) == 0 && c.Target == "" {
+		return nil
+	}
+	c.NonBlock = true
+	return chatpb.NewClientPlayerChatClient(zrpc.MustNewClient(c).Conn())
+}
+
+func newOptionalGuildClient(c zrpc.RpcClientConf) guildpb.GuildServiceClient {
+	if c.Etcd.Key == "" && len(c.Endpoints) == 0 && c.Target == "" {
+		return nil
+	}
+	c.NonBlock = true
+	return guildpb.NewGuildServiceClient(zrpc.MustNewClient(c).Conn())
+}
+
+func newOptionalMailAdminClient(c zrpc.RpcClientConf) mailpb.MailAdminClient {
+	if c.Etcd.Key == "" && len(c.Endpoints) == 0 && c.Target == "" {
+		return nil
+	}
+	c.NonBlock = true
+	return mailpb.NewMailAdminClient(zrpc.MustNewClient(c).Conn())
 }
 
 // NewRedisHandles 按配置建立 MatchRedis 句柄。MatchRedis.Host 为空即未配置,私有 key 回落到 Redis 段的共享库。

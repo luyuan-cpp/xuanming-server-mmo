@@ -64,6 +64,9 @@ message ClientRequestRecord {
   uint64 equipment_actual_gold_spent = 39;      // V3 装备智能定档连磨：首次实际扣除银两（含代打费）。
   uint64 wanted_order_id = 40;                  // V5 西市悬赏求书：首次发榜/撤单/揭榜对应的悬赏单号。
   uint64 wanted_order_gold = 41;                // V5 西市悬赏求书：首次托管、全额退还或揭榜净结算银两。
+  uint32 skill_loadout_rented_slots = 42;       // 7 套流派方案槽位租用：首次操作后的租用额外套数（1..5）。
+  uint64 skill_loadout_rent_expires_at_sec = 43;// 7 套流派方案槽位租用：首次操作后的统一到期 Unix 秒。
+  uint64 skill_loadout_rent_spent_diamond = 44; // 7 套流派方案槽位租用：首次实际扣除的真实灵石数。
 }
 
 // 与战斗结算、物品和请求回执同属完整玩家存档。未领取余额不随周期重置。

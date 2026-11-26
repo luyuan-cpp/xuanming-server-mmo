@@ -14,6 +14,8 @@ const (
 	ID_301 = 8
 	ID_302 = 9
 	ID_105 = 10
+	ID_401 = 11
+	ID_402 = 12
 )
 
-const BitmapCapacity = 11
+const BitmapCapacity = 13

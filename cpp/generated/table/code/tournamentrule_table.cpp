@@ -50,7 +50,6 @@ bool TournamentRuleTableManager::ParseSnapshotFromDir(
         const auto& row_data = snap->data.data(i);
         snap->idMap.emplace(row_data.id(), &row_data);
         snap->battleConfigIdIndex[row_data.battle_config_id()].push_back(&row_data);
-        snap->saluteItemIdIndex[row_data.salute_item_id()].push_back(&row_data);
     }
 
     out = std::move(snap);

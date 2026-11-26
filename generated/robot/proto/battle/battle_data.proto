@@ -528,6 +528,9 @@ message BattleSettlementData {
   uint64 season_seal_contribution_value = 52; // 主贡献累计值（101/102 削盾量、103 减伤+共鸣增盾量、104 回蓝+共鸣省蓝量）
   uint32 season_seal_trigger_count = 53;      // 本场赛季印基础效果触发次数
   uint32 season_seal_resonance_count = 54;    // 本场「技印共鸣」触发次数
+  // 论剑 V7：正式 1V1 排位终局对阵对手身份（仅双方各 1 名真人且非无效局填充，用于战后 15 秒切磋「不服再战」，零排位分）。
+  uint64 rematch_opponent_id = 55;
+  string rematch_opponent_name = 56;
 }
 
 // ---- 出战宝宝的结算数据(随主人的 BattleSettlementData 一起回 scene)----
@@ -651,6 +654,10 @@ message RankedMatchContext {
   uint32 skill_ban_slots_per_team = 10;
   // 论剑 V6 成局时由 match 冻结的对阵宿敌记录（含双方本季已有交手的全部主客视角条目）。
   repeated RankedRivalryEncounter rivalry_encounters = 11;
+  // 论剑 V7：高段正式排位公开实时观战（青锋及以上段位冻结为 true，低段新手局保持 false 避免压力）。
+  bool allow_public_spectate = 12;
+  // 论剑 V7：成局时本场参战者最高赛季积分（centi，随建房原件冻结供实时围观列表排序展示）。
+  int64 peak_rating_centi = 13;
 }
 
 // 玩家本局有效参与事实(battle 房间在终局前冻结进 BattleResultEvent,重放不重算)。
@@ -669,6 +676,7 @@ message TrialBattleContext {
   uint32 season_id = 3;              // 赛季卷对应赛季号（永久卷为 0）
   uint32 guard_monster_table_id = 4; // 可选：回春/护势等特殊护卫怪物表 ID（0 = 任意非首领怪物）
   uint32 guard_stance_buff_id = 5;   // 可选：护势护卫状态 Buff 表 ID（0 = 任意敌方增益驱散均视为有效驱散）
+  uint32 challenge_vow_mask = 6;     // 五行试炼志 V3：开局冻结的自选限制誓约位掩码（bit0禁控 bit1单宝 bit2无宠 bit3紧缩回合，0=常规）
 }
 
 message BattleTrialJournalFacts {
@@ -697,6 +705,7 @@ message BattleTrialJournalFacts {
   uint32 stance_break_count = 23;              // 首领试炼 V2：触发驱散/控断护势「崩势」次数
   bool all_self_cleaves_parried = 24;          // 首领试炼 V2：本人及本人宝宝被重劈点名>=1次且100%合法化解(不含倒地/退出取消)
   bool self_parried_cleave_at_least_once = 25; // 首领试炼 V2：本人或本人宝宝至少合法化解过 1 次重劈
+  uint32 challenge_vow_mask = 26;              // 五行试炼志 V3：本局生效的自选试炼誓约位掩码（0..15）
 }
 
 // ---- 全服赛季战队锦标赛《群仙问道赛》V2：BO3 与五行灵脉阵眼开局冻结上下文(docs/design/season-team-tournament-v2.md) ----
@@ -754,6 +763,7 @@ message CustomDuelRules {
   uint32 challenger_character_preset_id = 6;       // 公平模板切磋时发起者所选人物预设（0=默认 101）
   uint32 challenger_pet_preset_id = 7;             // 公平模板切磋时发起者所选灵宠预设（0=默认 203）
   uint32 skill_ban_slots_per_team = 8;             // 战前纯禁招每队槽数（白名单 0 或 3；禁止与 use_free_preset=true 同开）
+  uint64 rematch_source_battle_id = 9;             // 论剑 V7 战后不服再战来源局 ID（0=普通自定义切磋；非 0 时服务端缩短应答 TTL 至 15s）
 }
 
 // ---- 战报一键看配装·脱敏公开构筑摘要(严禁含私密概率/背包/冷却) ----

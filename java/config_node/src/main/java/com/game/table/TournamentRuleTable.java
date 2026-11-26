@@ -330,39 +330,6 @@ private static final long serialVersionUID = 0L;
     return publicKnockoutReplay_;
   }
 
-  public static final int SALUTE_GOLD_AMOUNT_FIELD_NUMBER = 24;
-  private int saluteGoldAmount_ = 0;
-  /**
-   * <code>uint32 salute_gold_amount = 24;</code>
-   * @return The saluteGoldAmount.
-   */
-  @java.lang.Override
-  public int getSaluteGoldAmount() {
-    return saluteGoldAmount_;
-  }
-
-  public static final int SALUTE_ITEM_ID_FIELD_NUMBER = 25;
-  private int saluteItemId_ = 0;
-  /**
-   * <code>uint32 salute_item_id = 25;</code>
-   * @return The saluteItemId.
-   */
-  @java.lang.Override
-  public int getSaluteItemId() {
-    return saluteItemId_;
-  }
-
-  public static final int SALUTE_ITEM_COUNT_FIELD_NUMBER = 26;
-  private int saluteItemCount_ = 0;
-  /**
-   * <code>uint32 salute_item_count = 26;</code>
-   * @return The saluteItemCount.
-   */
-  @java.lang.Override
-  public int getSaluteItemCount() {
-    return saluteItemCount_;
-  }
-
   public static final int WARMUP_SPAR_ENABLED_FIELD_NUMBER = 27;
   private boolean warmupSparEnabled_ = false;
   /**
@@ -512,15 +479,6 @@ private static final long serialVersionUID = 0L;
     if (publicKnockoutReplay_ != false) {
       output.writeBool(23, publicKnockoutReplay_);
     }
-    if (saluteGoldAmount_ != 0) {
-      output.writeUInt32(24, saluteGoldAmount_);
-    }
-    if (saluteItemId_ != 0) {
-      output.writeUInt32(25, saluteItemId_);
-    }
-    if (saluteItemCount_ != 0) {
-      output.writeUInt32(26, saluteItemCount_);
-    }
     if (warmupSparEnabled_ != false) {
       output.writeBool(27, warmupSparEnabled_);
     }
@@ -634,18 +592,6 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeBoolSize(23, publicKnockoutReplay_);
     }
-    if (saluteGoldAmount_ != 0) {
-      size += com.google.protobuf.CodedOutputStream
-        .computeUInt32Size(24, saluteGoldAmount_);
-    }
-    if (saluteItemId_ != 0) {
-      size += com.google.protobuf.CodedOutputStream
-        .computeUInt32Size(25, saluteItemId_);
-    }
-    if (saluteItemCount_ != 0) {
-      size += com.google.protobuf.CodedOutputStream
-        .computeUInt32Size(26, saluteItemCount_);
-    }
     if (warmupSparEnabled_ != false) {
       size += com.google.protobuf.CodedOutputStream
         .computeBoolSize(27, warmupSparEnabled_);
@@ -740,12 +686,6 @@ private static final long serialVersionUID = 0L;
         != other.getIntermissionSeconds()) return false;
     if (getPublicKnockoutReplay()
         != other.getPublicKnockoutReplay()) return false;
-    if (getSaluteGoldAmount()
-        != other.getSaluteGoldAmount()) return false;
-    if (getSaluteItemId()
-        != other.getSaluteItemId()) return false;
-    if (getSaluteItemCount()
-        != other.getSaluteItemCount()) return false;
     if (getWarmupSparEnabled()
         != other.getWarmupSparEnabled()) return false;
     if (getPredictionEnabled()
@@ -818,12 +758,6 @@ private static final long serialVersionUID = 0L;
     hash = (37 * hash) + PUBLIC_KNOCKOUT_REPLAY_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
         getPublicKnockoutReplay());
-    hash = (37 * hash) + SALUTE_GOLD_AMOUNT_FIELD_NUMBER;
-    hash = (53 * hash) + getSaluteGoldAmount();
-    hash = (37 * hash) + SALUTE_ITEM_ID_FIELD_NUMBER;
-    hash = (53 * hash) + getSaluteItemId();
-    hash = (37 * hash) + SALUTE_ITEM_COUNT_FIELD_NUMBER;
-    hash = (53 * hash) + getSaluteItemCount();
     hash = (37 * hash) + WARMUP_SPAR_ENABLED_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
         getWarmupSparEnabled());
@@ -994,9 +928,6 @@ private static final long serialVersionUID = 0L;
       bo3Top4Enabled_ = false;
       intermissionSeconds_ = 0;
       publicKnockoutReplay_ = false;
-      saluteGoldAmount_ = 0;
-      saluteItemId_ = 0;
-      saluteItemCount_ = 0;
       warmupSparEnabled_ = false;
       predictionEnabled_ = false;
       predictionRewardMinHits_ = 0;
@@ -1106,30 +1037,21 @@ private static final long serialVersionUID = 0L;
         result.publicKnockoutReplay_ = publicKnockoutReplay_;
       }
       if (((from_bitField0_ & 0x00800000) != 0)) {
-        result.saluteGoldAmount_ = saluteGoldAmount_;
-      }
-      if (((from_bitField0_ & 0x01000000) != 0)) {
-        result.saluteItemId_ = saluteItemId_;
-      }
-      if (((from_bitField0_ & 0x02000000) != 0)) {
-        result.saluteItemCount_ = saluteItemCount_;
-      }
-      if (((from_bitField0_ & 0x04000000) != 0)) {
         result.warmupSparEnabled_ = warmupSparEnabled_;
       }
-      if (((from_bitField0_ & 0x08000000) != 0)) {
+      if (((from_bitField0_ & 0x01000000) != 0)) {
         result.predictionEnabled_ = predictionEnabled_;
       }
-      if (((from_bitField0_ & 0x10000000) != 0)) {
+      if (((from_bitField0_ & 0x02000000) != 0)) {
         result.predictionRewardMinHits_ = predictionRewardMinHits_;
       }
-      if (((from_bitField0_ & 0x20000000) != 0)) {
+      if (((from_bitField0_ & 0x04000000) != 0)) {
         result.thirdPlaceMatchEnabled_ = thirdPlaceMatchEnabled_;
       }
-      if (((from_bitField0_ & 0x40000000) != 0)) {
+      if (((from_bitField0_ & 0x08000000) != 0)) {
         result.leylineBanEnabled_ = leylineBanEnabled_;
       }
-      if (((from_bitField0_ & 0x80000000) != 0)) {
+      if (((from_bitField0_ & 0x10000000) != 0)) {
         result.skillBanSlotsPerTeam_ = skillBanSlotsPerTeam_;
       }
     }
@@ -1216,15 +1138,6 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getPublicKnockoutReplay() != false) {
         setPublicKnockoutReplay(other.getPublicKnockoutReplay());
-      }
-      if (other.getSaluteGoldAmount() != 0) {
-        setSaluteGoldAmount(other.getSaluteGoldAmount());
-      }
-      if (other.getSaluteItemId() != 0) {
-        setSaluteItemId(other.getSaluteItemId());
-      }
-      if (other.getSaluteItemCount() != 0) {
-        setSaluteItemCount(other.getSaluteItemCount());
       }
       if (other.getWarmupSparEnabled() != false) {
         setWarmupSparEnabled(other.getWarmupSparEnabled());
@@ -1385,49 +1298,34 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00400000;
               break;
             } // case 184
-            case 192: {
-              saluteGoldAmount_ = input.readUInt32();
-              bitField0_ |= 0x00800000;
-              break;
-            } // case 192
-            case 200: {
-              saluteItemId_ = input.readUInt32();
-              bitField0_ |= 0x01000000;
-              break;
-            } // case 200
-            case 208: {
-              saluteItemCount_ = input.readUInt32();
-              bitField0_ |= 0x02000000;
-              break;
-            } // case 208
             case 216: {
               warmupSparEnabled_ = input.readBool();
-              bitField0_ |= 0x04000000;
+              bitField0_ |= 0x00800000;
               break;
             } // case 216
             case 224: {
               predictionEnabled_ = input.readBool();
-              bitField0_ |= 0x08000000;
+              bitField0_ |= 0x01000000;
               break;
             } // case 224
             case 232: {
               predictionRewardMinHits_ = input.readUInt32();
-              bitField0_ |= 0x10000000;
+              bitField0_ |= 0x02000000;
               break;
             } // case 232
             case 240: {
               thirdPlaceMatchEnabled_ = input.readBool();
-              bitField0_ |= 0x20000000;
+              bitField0_ |= 0x04000000;
               break;
             } // case 240
             case 248: {
               leylineBanEnabled_ = input.readBool();
-              bitField0_ |= 0x40000000;
+              bitField0_ |= 0x08000000;
               break;
             } // case 248
             case 256: {
               skillBanSlotsPerTeam_ = input.readUInt32();
-              bitField0_ |= 0x80000000;
+              bitField0_ |= 0x10000000;
               break;
             } // case 256
             default: {
@@ -2223,102 +2121,6 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
-    private int saluteGoldAmount_ ;
-    /**
-     * <code>uint32 salute_gold_amount = 24;</code>
-     * @return The saluteGoldAmount.
-     */
-    @java.lang.Override
-    public int getSaluteGoldAmount() {
-      return saluteGoldAmount_;
-    }
-    /**
-     * <code>uint32 salute_gold_amount = 24;</code>
-     * @param value The saluteGoldAmount to set.
-     * @return This builder for chaining.
-     */
-    public Builder setSaluteGoldAmount(int value) {
-
-      saluteGoldAmount_ = value;
-      bitField0_ |= 0x00800000;
-      onChanged();
-      return this;
-    }
-    /**
-     * <code>uint32 salute_gold_amount = 24;</code>
-     * @return This builder for chaining.
-     */
-    public Builder clearSaluteGoldAmount() {
-      bitField0_ = (bitField0_ & ~0x00800000);
-      saluteGoldAmount_ = 0;
-      onChanged();
-      return this;
-    }
-
-    private int saluteItemId_ ;
-    /**
-     * <code>uint32 salute_item_id = 25;</code>
-     * @return The saluteItemId.
-     */
-    @java.lang.Override
-    public int getSaluteItemId() {
-      return saluteItemId_;
-    }
-    /**
-     * <code>uint32 salute_item_id = 25;</code>
-     * @param value The saluteItemId to set.
-     * @return This builder for chaining.
-     */
-    public Builder setSaluteItemId(int value) {
-
-      saluteItemId_ = value;
-      bitField0_ |= 0x01000000;
-      onChanged();
-      return this;
-    }
-    /**
-     * <code>uint32 salute_item_id = 25;</code>
-     * @return This builder for chaining.
-     */
-    public Builder clearSaluteItemId() {
-      bitField0_ = (bitField0_ & ~0x01000000);
-      saluteItemId_ = 0;
-      onChanged();
-      return this;
-    }
-
-    private int saluteItemCount_ ;
-    /**
-     * <code>uint32 salute_item_count = 26;</code>
-     * @return The saluteItemCount.
-     */
-    @java.lang.Override
-    public int getSaluteItemCount() {
-      return saluteItemCount_;
-    }
-    /**
-     * <code>uint32 salute_item_count = 26;</code>
-     * @param value The saluteItemCount to set.
-     * @return This builder for chaining.
-     */
-    public Builder setSaluteItemCount(int value) {
-
-      saluteItemCount_ = value;
-      bitField0_ |= 0x02000000;
-      onChanged();
-      return this;
-    }
-    /**
-     * <code>uint32 salute_item_count = 26;</code>
-     * @return This builder for chaining.
-     */
-    public Builder clearSaluteItemCount() {
-      bitField0_ = (bitField0_ & ~0x02000000);
-      saluteItemCount_ = 0;
-      onChanged();
-      return this;
-    }
-
     private boolean warmupSparEnabled_ ;
     /**
      * <code>bool warmup_spar_enabled = 27;</code>
@@ -2336,7 +2138,7 @@ private static final long serialVersionUID = 0L;
     public Builder setWarmupSparEnabled(boolean value) {
 
       warmupSparEnabled_ = value;
-      bitField0_ |= 0x04000000;
+      bitField0_ |= 0x00800000;
       onChanged();
       return this;
     }
@@ -2345,7 +2147,7 @@ private static final long serialVersionUID = 0L;
      * @return This builder for chaining.
      */
     public Builder clearWarmupSparEnabled() {
-      bitField0_ = (bitField0_ & ~0x04000000);
+      bitField0_ = (bitField0_ & ~0x00800000);
       warmupSparEnabled_ = false;
       onChanged();
       return this;
@@ -2368,7 +2170,7 @@ private static final long serialVersionUID = 0L;
     public Builder setPredictionEnabled(boolean value) {
 
       predictionEnabled_ = value;
-      bitField0_ |= 0x08000000;
+      bitField0_ |= 0x01000000;
       onChanged();
       return this;
     }
@@ -2377,7 +2179,7 @@ private static final long serialVersionUID = 0L;
      * @return This builder for chaining.
      */
     public Builder clearPredictionEnabled() {
-      bitField0_ = (bitField0_ & ~0x08000000);
+      bitField0_ = (bitField0_ & ~0x01000000);
       predictionEnabled_ = false;
       onChanged();
       return this;
@@ -2400,7 +2202,7 @@ private static final long serialVersionUID = 0L;
     public Builder setPredictionRewardMinHits(int value) {
 
       predictionRewardMinHits_ = value;
-      bitField0_ |= 0x10000000;
+      bitField0_ |= 0x02000000;
       onChanged();
       return this;
     }
@@ -2409,7 +2211,7 @@ private static final long serialVersionUID = 0L;
      * @return This builder for chaining.
      */
     public Builder clearPredictionRewardMinHits() {
-      bitField0_ = (bitField0_ & ~0x10000000);
+      bitField0_ = (bitField0_ & ~0x02000000);
       predictionRewardMinHits_ = 0;
       onChanged();
       return this;
@@ -2432,7 +2234,7 @@ private static final long serialVersionUID = 0L;
     public Builder setThirdPlaceMatchEnabled(boolean value) {
 
       thirdPlaceMatchEnabled_ = value;
-      bitField0_ |= 0x20000000;
+      bitField0_ |= 0x04000000;
       onChanged();
       return this;
     }
@@ -2441,7 +2243,7 @@ private static final long serialVersionUID = 0L;
      * @return This builder for chaining.
      */
     public Builder clearThirdPlaceMatchEnabled() {
-      bitField0_ = (bitField0_ & ~0x20000000);
+      bitField0_ = (bitField0_ & ~0x04000000);
       thirdPlaceMatchEnabled_ = false;
       onChanged();
       return this;
@@ -2464,7 +2266,7 @@ private static final long serialVersionUID = 0L;
     public Builder setLeylineBanEnabled(boolean value) {
 
       leylineBanEnabled_ = value;
-      bitField0_ |= 0x40000000;
+      bitField0_ |= 0x08000000;
       onChanged();
       return this;
     }
@@ -2473,7 +2275,7 @@ private static final long serialVersionUID = 0L;
      * @return This builder for chaining.
      */
     public Builder clearLeylineBanEnabled() {
-      bitField0_ = (bitField0_ & ~0x40000000);
+      bitField0_ = (bitField0_ & ~0x08000000);
       leylineBanEnabled_ = false;
       onChanged();
       return this;
@@ -2496,7 +2298,7 @@ private static final long serialVersionUID = 0L;
     public Builder setSkillBanSlotsPerTeam(int value) {
 
       skillBanSlotsPerTeam_ = value;
-      bitField0_ |= 0x80000000;
+      bitField0_ |= 0x10000000;
       onChanged();
       return this;
     }
@@ -2505,7 +2307,7 @@ private static final long serialVersionUID = 0L;
      * @return This builder for chaining.
      */
     public Builder clearSkillBanSlotsPerTeam() {
-      bitField0_ = (bitField0_ & ~0x80000000);
+      bitField0_ = (bitField0_ & ~0x10000000);
       skillBanSlotsPerTeam_ = 0;
       onChanged();
       return this;

@@ -103,3 +103,8 @@ func (s *FriendServer) ListBlocks(ctx context.Context, in *friendpb.ListBlocksRe
 func (s *FriendServer) RecommendFriends(ctx context.Context, in *friendpb.RecommendFriendsRequest) (*friendpb.RecommendFriendsResponse, error) {
 	return s.logic.RecommendFriends(ctx, in)
 }
+
+// BatchCheckSocialRelations 内部只读批量关系检查(CLIENT_RPC_SERVER_ONLY，客户端入口在会话层已被拦截)。
+func (s *FriendServer) BatchCheckSocialRelations(ctx context.Context, in *friendpb.BatchCheckSocialRelationsRequest) (*friendpb.BatchCheckSocialRelationsResponse, error) {
+	return s.logic.BatchCheckSocialRelations(ctx, in)
+}

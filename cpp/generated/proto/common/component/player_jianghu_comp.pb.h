@@ -229,6 +229,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerJianghuComp final : public ::
     kDefeatMarkStyleIdFieldNumber = 6,
     kDefeatMarkBattleIdFieldNumber = 8,
     kClearBadgeExpiresAtMsFieldNumber = 9,
+    kPendingSilverFeeBattleIdFieldNumber = 11,
+    kPendingSilverFeeAmountFieldNumber = 12,
     kClearBadgeStyleIdFieldNumber = 10,
   };
   // string defeat_mark_winner_name = 5;
@@ -326,6 +328,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerJianghuComp final : public ::
   void _internal_set_clear_badge_expires_at_ms(::uint64_t value);
 
   public:
+  // uint64 pending_silver_fee_battle_id = 11;
+  void clear_pending_silver_fee_battle_id() ;
+  [[nodiscard]] ::uint64_t pending_silver_fee_battle_id() const;
+  void set_pending_silver_fee_battle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_pending_silver_fee_battle_id() const;
+  void _internal_set_pending_silver_fee_battle_id(::uint64_t value);
+
+  public:
+  // uint64 pending_silver_fee_amount = 12;
+  void clear_pending_silver_fee_amount() ;
+  [[nodiscard]] ::uint64_t pending_silver_fee_amount() const;
+  void set_pending_silver_fee_amount(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_pending_silver_fee_amount() const;
+  void _internal_set_pending_silver_fee_amount(::uint64_t value);
+
+  public:
   // uint32 clear_badge_style_id = 10;
   void clear_clear_badge_style_id() ;
   [[nodiscard]] ::uint32_t clear_badge_style_id() const;
@@ -340,7 +362,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerJianghuComp final : public ::
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 10,
+      ::google::protobuf::internal::TcParseTable<4, 12,
                           0, 57,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -378,6 +400,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerJianghuComp final : public ::
     ::uint32_t defeat_mark_style_id_;
     ::uint64_t defeat_mark_battle_id_;
     ::uint64_t clear_badge_expires_at_ms_;
+    ::uint64_t pending_silver_fee_battle_id_;
+    ::uint64_t pending_silver_fee_amount_;
     ::uint32_t clear_badge_style_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -661,7 +685,7 @@ inline void PlayerJianghuComp::_internal_set_clear_badge_expires_at_ms(::uint64_
 inline void PlayerJianghuComp::clear_clear_badge_style_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.clear_badge_style_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t PlayerJianghuComp::clear_badge_style_id() const {
   // @@protoc_insertion_point(field_get:PlayerJianghuComp.clear_badge_style_id)
@@ -669,7 +693,7 @@ inline ::uint32_t PlayerJianghuComp::clear_badge_style_id() const {
 }
 inline void PlayerJianghuComp::set_clear_badge_style_id(::uint32_t value) {
   _internal_set_clear_badge_style_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:PlayerJianghuComp.clear_badge_style_id)
 }
 inline ::uint32_t PlayerJianghuComp::_internal_clear_badge_style_id() const {
@@ -679,6 +703,54 @@ inline ::uint32_t PlayerJianghuComp::_internal_clear_badge_style_id() const {
 inline void PlayerJianghuComp::_internal_set_clear_badge_style_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.clear_badge_style_id_ = value;
+}
+
+// uint64 pending_silver_fee_battle_id = 11;
+inline void PlayerJianghuComp::clear_pending_silver_fee_battle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pending_silver_fee_battle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t PlayerJianghuComp::pending_silver_fee_battle_id() const {
+  // @@protoc_insertion_point(field_get:PlayerJianghuComp.pending_silver_fee_battle_id)
+  return _internal_pending_silver_fee_battle_id();
+}
+inline void PlayerJianghuComp::set_pending_silver_fee_battle_id(::uint64_t value) {
+  _internal_set_pending_silver_fee_battle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:PlayerJianghuComp.pending_silver_fee_battle_id)
+}
+inline ::uint64_t PlayerJianghuComp::_internal_pending_silver_fee_battle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pending_silver_fee_battle_id_;
+}
+inline void PlayerJianghuComp::_internal_set_pending_silver_fee_battle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pending_silver_fee_battle_id_ = value;
+}
+
+// uint64 pending_silver_fee_amount = 12;
+inline void PlayerJianghuComp::clear_pending_silver_fee_amount() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pending_silver_fee_amount_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint64_t PlayerJianghuComp::pending_silver_fee_amount() const {
+  // @@protoc_insertion_point(field_get:PlayerJianghuComp.pending_silver_fee_amount)
+  return _internal_pending_silver_fee_amount();
+}
+inline void PlayerJianghuComp::set_pending_silver_fee_amount(::uint64_t value) {
+  _internal_set_pending_silver_fee_amount(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:PlayerJianghuComp.pending_silver_fee_amount)
+}
+inline ::uint64_t PlayerJianghuComp::_internal_pending_silver_fee_amount() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pending_silver_fee_amount_;
+}
+inline void PlayerJianghuComp::_internal_set_pending_silver_fee_amount(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pending_silver_fee_amount_ = value;
 }
 
 #ifdef __GNUC__

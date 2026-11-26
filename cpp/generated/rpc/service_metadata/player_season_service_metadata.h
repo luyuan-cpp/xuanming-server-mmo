@@ -42,3 +42,7 @@ constexpr uint32_t SceneSeasonClientPlayerSaveBattleBuildBookmarkIndex = 8;
 constexpr uint32_t SceneSeasonClientPlayerDeleteBattleBuildBookmarkMessageId = 521;
 constexpr uint32_t SceneSeasonClientPlayerDeleteBattleBuildBookmarkIndex = 9;
 #define SceneSeasonClientPlayerDeleteBattleBuildBookmarkMethod  ::SceneSeasonClientPlayer_Stub::descriptor()->method(9)
+
+constexpr uint32_t SceneSeasonClientPlayerSetRetroHonorTargetMessageId = 569;
+constexpr uint32_t SceneSeasonClientPlayerSetRetroHonorTargetIndex = 10;
+#define SceneSeasonClientPlayerSetRetroHonorTargetMethod  ::SceneSeasonClientPlayer_Stub::descriptor()->method(10)

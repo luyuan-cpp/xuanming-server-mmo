@@ -261,3 +261,26 @@ func (sceneSeasonClientPlayerRpc) decodeDeleteBattleBuildBookmark(reply *base.Me
 	}
 	return resp, nil
 }
+
+// SetRetroHonorTarget 异步调用 SceneSeasonClientPlayer.SetRetroHonorTarget(REQUEST),done 的契约见 SceneSeasonClientPlayer。
+func (r sceneSeasonClientPlayerRpc) SetRetroHonorTarget(c *pkg.GameClient, req *scene.SetRetroHonorTargetRequest, timeout time.Duration, done func(*scene.SetRetroHonorTargetResponse, error)) {
+	c.Call(game.SceneSeasonClientPlayerSetRetroHonorTargetMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeSetRetroHonorTarget(reply, err))
+	})
+}
+
+// SetRetroHonorTargetSync 同步调用 SceneSeasonClientPlayer.SetRetroHonorTarget(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSeasonClientPlayerRpc) SetRetroHonorTargetSync(ctx context.Context, c *pkg.GameClient, req *scene.SetRetroHonorTargetRequest, timeout time.Duration) (*scene.SetRetroHonorTargetResponse, error) {
+	return r.decodeSetRetroHonorTarget(c.CallSync(ctx, game.SceneSeasonClientPlayerSetRetroHonorTargetMessageId, req, timeout))
+}
+
+func (sceneSeasonClientPlayerRpc) decodeSetRetroHonorTarget(reply *base.MessageContent, err error) (*scene.SetRetroHonorTargetResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.SetRetroHonorTargetResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSeasonClientPlayer.SetRetroHonorTarget reply: %w", err)
+	}
+	return resp, nil
+}

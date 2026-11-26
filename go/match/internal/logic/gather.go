@@ -106,9 +106,19 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 		members = append(members, member.PlayerId)
 	}
 
+	var jianghuCtx *battlepb.JianghuDuelBattleContext
+	jianghuSilverCharged := false
+
 	fail := func(outcome string, failedPlayer uint64) bool {
 		if globalDestroy(svcCtx.Authority, f) {
-			globalAbortPrepared(svcCtx, f, failedPlayer)
+			skipSilverRefund := false
+			if jianghuCtx != nil && jianghuSilverCharged && jianghuCtx.GetWritTier() == uint32(matchpb.JianghuWritTier_JIANGHU_WRIT_TIER_SILVER) {
+				rule := loadJianghuRule()
+				refundCtx, refundCancel := context.WithTimeout(context.Background(), 3*time.Second)
+				skipSilverRefund = refundJianghuSilverOnce(refundCtx, svcCtx, jianghuCtx.GetDuelInviteId(), battleId, jianghuCtx.GetChallengerCaptainId(), jianghuCtx.GetWritTier(), rule.silverWritCost, "gather_"+outcome)
+				refundCancel()
+			}
+			globalAbortPrepared(svcCtx, f, skipSilverRefund, failedPlayer)
 		} else {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			_ = svcCtx.Authority.Unknown(ctx, f)
@@ -155,6 +165,13 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 			return fail("internal", 0)
 		}
 	}
+	if len(f.JianghuDuelContext) > 0 {
+		jianghuCtx = &battlepb.JianghuDuelBattleContext{}
+		if err := proto.Unmarshal(f.JianghuDuelContext, jianghuCtx); err != nil {
+			logx.Errorf("[gather] Invalid frozen jianghu duel context battle=%d: %v", battleId, err)
+			return fail("internal", 0)
+		}
+	}
 
 	var tournamentCaptains map[uint64]bool
 	if tournamentCtx != nil && svcCtx.Authority != nil {
@@ -164,17 +181,47 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 		capCancel()
 	}
 
+	// 天墉生死状把发起方队长放到最后冻结收快照：其余任意成员掉线/拒绝时绝不触发发起方扣银两或道具暂扣。
+	prepareOrder := make([]int, len(members))
+	for i := range members {
+		prepareOrder[i] = i
+	}
+	if jianghuCtx != nil && jianghuCtx.GetChallengerCaptainId() != 0 {
+		captainIdx := -1
+		for idx, pid := range members {
+			if pid == jianghuCtx.GetChallengerCaptainId() {
+				captainIdx = idx
+				break
+			}
+		}
+		if captainIdx >= 0 && captainIdx < len(prepareOrder)-1 {
+			prepareOrder = append(prepareOrder[:captainIdx], prepareOrder[captainIdx+1:]...)
+			prepareOrder = append(prepareOrder, captainIdx)
+		}
+	}
+
 	// 逐参与者冻结收快照。
 	var prepared []preparedMember
-	for i, playerId := range members {
-		endpoint, resp, err := preparePlayerFencedWithExtras(svcCtx, playerId, battleId, battleNode.NodeId, deadlineMs, prepareDeadlineMs, f.ConfigId, uint32(mode), rankedCtx, activityContext, f.IsWuxingTower, customDuelRules, func(endpoint string) error {
+	for step, i := range prepareOrder {
+		playerId := members[i]
+		var jianghuFee *scenepb.JianghuDuelPrepareFee
+		if jianghuCtx != nil && playerId == jianghuCtx.GetChallengerCaptainId() {
+			rule := loadJianghuRule()
+			jianghuFee = &scenepb.JianghuDuelPrepareFee{
+				DuelInviteId: jianghuCtx.GetDuelInviteId(),
+				WritTier:     jianghuCtx.GetWritTier(),
+				ItemConfigId: rule.goldWritItemID,
+				SilverCost:   rule.silverWritCost,
+			}
+		}
+		endpoint, resp, err := preparePlayerFencedWithJianghuFee(svcCtx, playerId, battleId, battleNode.NodeId, deadlineMs, prepareDeadlineMs, f.ConfigId, uint32(mode), rankedCtx, activityContext, f.IsWuxingTower, customDuelRules, jianghuFee, func(endpoint string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
 			return svcCtx.Authority.Prepared(ctx, f, playerId, endpoint)
 		})
 		if err != nil {
 			logx.Errorf("[gather] PrepareBattle failed battle=%d player=%d (member %d/%d): %v",
-				battleId, playerId, i+1, len(members), err)
+				battleId, playerId, step+1, len(members), err)
 			outcome := "prepare_failed"
 			if endpoint == "" {
 				outcome = "no_location"
@@ -184,6 +231,9 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 				culprit = playerId
 			}
 			return fail(outcome, culprit)
+		}
+		if resp.GetJianghuSilverFeeCharged() {
+			jianghuSilverCharged = true
 		}
 		snapshot := resp.GetSnapshot()
 		snapshot.TeamIndex = teams[i]
@@ -253,6 +303,9 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 	var trialCtx *battlepb.TrialBattleContext
 	if !f.IsWuxingTower {
 		trialCtx = svcCtx.ActiveCatalog().TrialContextFor(mode, f.ConfigId, activityContext, rankedCtx)
+		if trialCtx != nil && f.TrialVowMask != 0 {
+			trialCtx.ChallengeVowMask = f.TrialVowMask
+		}
 	}
 	createReq := &battlepb.CreateBattleRequest{
 		BattleId:               battleId,
@@ -265,18 +318,19 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 		TableFingerprint:       tableFingerprint,
 		ActivityContext:        activityContext,
 		SpectateVisibility:     spectateVisibilityForBattle(mode, activityContext, customDuelRules),
-		RecordReplay:           recordReplayFor(svcCtx.Config.BattleReport.Enabled, mode),
+		RecordReplay:           recordReplayForBattle(svcCtx.Config.BattleReport.Enabled, mode, trialCtx),
 		RequiredPhysicalRegion: f.PhysicalRegion,
 		PlacementOperationId:   f.OperationId,
 		TargetInstanceId:       f.TargetInstanceId,
 		AdmitBeforeMs:          prepareDeadlineMs,
 		OutcomeProtocolVersion: 1,
 		// 每一方的战斗剧本按值冻结进原件(battle-script.md §5.2);论剑排位自动战斗只用预设内技能,不带玩家自定义剧本。
-		TeamScripts:       teamScripts,
-		RankedContext:     rankedCtx,
-		TrialContext:      trialCtx,
-		TournamentContext: tournamentCtx,
-		CustomDuelRules:   customDuelRules,
+		TeamScripts:        teamScripts,
+		RankedContext:      rankedCtx,
+		TrialContext:       trialCtx,
+		TournamentContext:  tournamentCtx,
+		CustomDuelRules:    customDuelRules,
+		JianghuDuelContext: jianghuCtx,
 	}
 	// 先证明原UUID支持SQL终局门禁；不支持的节点会忽略Create新字段，因此不能直接试发。
 	capctx, capcancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -350,6 +404,9 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 
 	// 公开这场战斗:入活跃集合(best-effort;补签与按 battle_id 观战都读成局原件,不靠这一步)。
 	addSpectateActive(svcCtx, battleId, createdAtMs, createReq.GetSpectateVisibility())
+	if jianghuCtx != nil {
+		publishJianghuDuelStartNotice(svcCtx, battleId, jianghuCtx)
+	}
 	if matchpb.MatchMode(f.Mode) == matchpb.MatchMode_MATCH_MODE_SEASON_TOURNAMENT {
 		if svcCtx.MatchRedis != nil && (tournamentCtx == nil || !tournamentCtx.GetIsWarmup()) {
 			// 全服赛季战队锦标赛正式局自动写入精选观战索引,优先置顶列表并触发 L2 广播(best-effort;排除热身局)。
@@ -390,7 +447,7 @@ func intentFailureOutcome(err error) string {
 func gatherTeamAssignment(s *svc.ServiceContext, f *matchpb.MatchFormationRecord, members []uint64) ([]uint32, error) {
 	mode := matchpb.MatchMode(f.Mode)
 	isGuildWar := mode == matchpb.MatchMode_MATCH_MODE_GUILD_WAR_PVP || mode == matchpb.MatchMode_MATCH_MODE_GUILD_WAR_SIEGE
-	if mode != matchpb.MatchMode_MATCH_MODE_PVP_TEAM && !isGuildWar {
+	if mode != matchpb.MatchMode_MATCH_MODE_PVP_TEAM && mode != matchpb.MatchMode_MATCH_MODE_JIANGHU_DUEL && !isGuildWar {
 		return teamAssignment(s, mode, f.BattleId, members), nil
 	}
 	assignments := make(map[uint64]uint32, len(f.Members))
@@ -442,6 +499,10 @@ func preparePlayerFenced(svcCtx *svc.ServiceContext, playerId, battleId uint64, 
 }
 
 func preparePlayerFencedWithExtras(svcCtx *svc.ServiceContext, playerId, battleId uint64, battleNodeId uint32, deadlineMs, prepareDeadlineMs uint64, battleConfigId, matchMode uint32, rankedCtx *battlepb.RankedMatchContext, activityCtx *battlepb.BattleActivityContext, isWuxingTower bool, customDuelRules *battlepb.CustomDuelRules, before func(string) error) (string, *scenepb.PrepareBattleResponse, error) {
+	return preparePlayerFencedWithJianghuFee(svcCtx, playerId, battleId, battleNodeId, deadlineMs, prepareDeadlineMs, battleConfigId, matchMode, rankedCtx, activityCtx, isWuxingTower, customDuelRules, nil, before)
+}
+
+func preparePlayerFencedWithJianghuFee(svcCtx *svc.ServiceContext, playerId, battleId uint64, battleNodeId uint32, deadlineMs, prepareDeadlineMs uint64, battleConfigId, matchMode uint32, rankedCtx *battlepb.RankedMatchContext, activityCtx *battlepb.BattleActivityContext, isWuxingTower bool, customDuelRules *battlepb.CustomDuelRules, jianghuFee *scenepb.JianghuDuelPrepareFee, before func(string) error) (string, *scenepb.PrepareBattleResponse, error) {
 	// player:{id}:location 由 scene_manager 写(protobuf PlayerLocation),
 	// 是玩家 scene 定位的共享契约(设计文档 §5.4 / go/scene_manager changesceneutil.go);
 	// 带 zone_id,所以任意 zone 的玩家都能定位到自己 zone 的 scene 节点。
@@ -475,6 +536,7 @@ func preparePlayerFencedWithExtras(svcCtx *svc.ServiceContext, playerId, battleI
 		ActivityContext:   activityCtx,
 		IsWuxingTower:     isWuxingTower,
 		CustomDuelRules:   customDuelRules,
+		JianghuDuelFee:    jianghuFee,
 	})
 	if err != nil {
 		return endpoint, nil, fmt.Errorf("PrepareBattle RPC 失败: %w", err)
@@ -591,10 +653,15 @@ func observeZoneMix(modeName string, battleId uint64, prepared []preparedMember)
 // cancelPrepared 对已冻结者逐个解冻(尽力而为;彻底失败由 scene 侧
 // InBattleComp.deadline_ms 的 reaper 兜底,见补偿矩阵)。
 func cancelPrepared(svcCtx *svc.ServiceContext, prepared []preparedMember, battleId uint64) {
+	cancelPreparedWithOptions(svcCtx, prepared, battleId, false)
+}
+
+func cancelPreparedWithOptions(svcCtx *svc.ServiceContext, prepared []preparedMember, battleId uint64, skipJianghuSilverRefund bool) {
 	for _, p := range prepared {
 		err := cancelBattlePrepareFn(p.sceneEndpoint, &scenepb.CancelBattlePrepareRequest{
-			PlayerId: p.playerId,
-			BattleId: battleId,
+			PlayerId:                p.playerId,
+			BattleId:                battleId,
+			SkipJianghuSilverRefund: skipJianghuSilverRefund,
 		})
 		if err != nil {
 			logx.Errorf("[gather] CancelBattlePrepare failed (scene reaper will unfreeze at deadline) battle=%d player=%d endpoint=%s: %v",

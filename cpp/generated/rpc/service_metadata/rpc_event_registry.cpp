@@ -268,6 +268,8 @@ namespace guildpb{void SendGuildServiceTrackGuildWarBountyErased(entt::registry&
 namespace guildpb{void SendGuildServiceGetGuildWarBattleResultErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace guildpb{void SendGuildServiceNotifyGuildWarAlertErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace guildpb{void SendGuildServiceInspectFieldWarTargetsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace guildpb{void SendGuildServiceIssueGuildWarFeudErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace guildpb{void SendGuildServiceRespondGuildWarFeudErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace guildpb{void SendGuildServiceGetGuildJianghuGrudgeWallErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace guildpb{void SendGuildInternalListAppliedAssetOpsSinceErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace loginpb{void SendClientPlayerLoginLoginErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -344,7 +346,6 @@ namespace match{void SendMatchServiceListTournamentStandingsErased(entt::registr
 namespace match{void SendMatchServiceStartTournamentMatchErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceCheerTournamentSquadErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceClaimTournamentRewardErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
-namespace match{void SendMatchServiceSaluteTournamentChampionErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceSendTournamentSpectateCheerErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceGetTournamentSpectateCheerErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceUpdateTournamentSquadEmblemErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -360,6 +361,9 @@ namespace match{void SendMatchServiceListJianghuGrudgesErased(entt::registry& , 
 namespace match{void SendMatchServiceDismissJianghuGrudgeErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceNotifyJianghuDuelInviteErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceNotifyJianghuDuelStatusErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceCreateTrialChallengeCardErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceGetTrialChallengeCardErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceGetSharedTrialReplayErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace paymentpb{void SendClientPlayerPaymentListPayChannelsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace paymentpb{void SendClientPlayerPaymentCreatePayIntentErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace paymentpb{void SendClientPlayerPaymentGetPayIntentErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -406,6 +410,7 @@ namespace scene_node{void SendSceneNodeGrpcAssetAbortDebitErased(entt::registry&
 namespace scene_node{void SendSceneNodeGrpcAssetCreditErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace scene_node{void SendSceneNodeGrpcAssetAckReceiptErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace scene_node{void SendSceneNodeGrpcGmExecutePlayerCommandErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace scene_node{void SendSceneNodeGrpcCheckJianghuDuelEligibilityErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace teampb{void SendClientPlayerTeamCreateTeamErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace teampb{void SendClientPlayerTeamGetMyTeamErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace teampb{void SendClientPlayerTeamApplyJoinTeamErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -473,7 +478,7 @@ namespace trade{void SendTradeAdminRecordSellerViolationErased(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 565,
+static_assert(kMaxRpcMethodCount == 574,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -1294,6 +1299,16 @@ void InitMessageInfo()
         std::make_unique<::guildpb::InspectFieldWarTargetsRequest>(),
         std::make_unique<::guildpb::InspectFieldWarTargetsResponse>(),
         1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceInspectFieldWarTargetsErased, "/guildpb.GuildService/InspectFieldWarTargets"};
+    gRpcMethodRegistry[GuildServiceIssueGuildWarFeudMessageId] = RpcMethodMeta{
+        "GuildService", "IssueGuildWarFeud",
+        std::make_unique<::guildpb::IssueGuildWarFeudRequest>(),
+        std::make_unique<::guildpb::IssueGuildWarFeudResponse>(),
+        1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceIssueGuildWarFeudErased, "/guildpb.GuildService/IssueGuildWarFeud"};
+    gRpcMethodRegistry[GuildServiceRespondGuildWarFeudMessageId] = RpcMethodMeta{
+        "GuildService", "RespondGuildWarFeud",
+        std::make_unique<::guildpb::RespondGuildWarFeudRequest>(),
+        std::make_unique<::guildpb::RespondGuildWarFeudResponse>(),
+        1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceRespondGuildWarFeudErased, "/guildpb.GuildService/RespondGuildWarFeud"};
     gRpcMethodRegistry[GuildServiceGetGuildJianghuGrudgeWallMessageId] = RpcMethodMeta{
         "GuildService", "GetGuildJianghuGrudgeWall",
         std::make_unique<::guildpb::GetGuildJianghuGrudgeWallRequest>(),
@@ -1690,11 +1705,6 @@ void InitMessageInfo()
         std::make_unique<::match::ClaimTournamentRewardRequest>(),
         std::make_unique<::match::ClaimTournamentRewardResponse>(),
         1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceClaimTournamentRewardErased, "/match.MatchService/ClaimTournamentReward"};
-    gRpcMethodRegistry[MatchServiceSaluteTournamentChampionMessageId] = RpcMethodMeta{
-        "MatchService", "SaluteTournamentChampion",
-        std::make_unique<::match::SaluteTournamentChampionRequest>(),
-        std::make_unique<::match::SaluteTournamentChampionResponse>(),
-        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceSaluteTournamentChampionErased, "/match.MatchService/SaluteTournamentChampion"};
     gRpcMethodRegistry[MatchServiceSendTournamentSpectateCheerMessageId] = RpcMethodMeta{
         "MatchService", "SendTournamentSpectateCheer",
         std::make_unique<::match::SendTournamentSpectateCheerRequest>(),
@@ -1770,6 +1780,21 @@ void InitMessageInfo()
         std::make_unique<::match::JianghuDuelStatusS2C>(),
         std::make_unique<::Empty>(),
         1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceNotifyJianghuDuelStatusErased, "/match.MatchService/NotifyJianghuDuelStatus"};
+    gRpcMethodRegistry[MatchServiceCreateTrialChallengeCardMessageId] = RpcMethodMeta{
+        "MatchService", "CreateTrialChallengeCard",
+        std::make_unique<::match::CreateTrialChallengeCardRequest>(),
+        std::make_unique<::match::CreateTrialChallengeCardResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceCreateTrialChallengeCardErased, "/match.MatchService/CreateTrialChallengeCard"};
+    gRpcMethodRegistry[MatchServiceGetTrialChallengeCardMessageId] = RpcMethodMeta{
+        "MatchService", "GetTrialChallengeCard",
+        std::make_unique<::match::GetTrialChallengeCardRequest>(),
+        std::make_unique<::match::GetTrialChallengeCardResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceGetTrialChallengeCardErased, "/match.MatchService/GetTrialChallengeCard"};
+    gRpcMethodRegistry[MatchServiceGetSharedTrialReplayMessageId] = RpcMethodMeta{
+        "MatchService", "GetSharedTrialReplay",
+        std::make_unique<::match::GetSharedTrialReplayRequest>(),
+        std::make_unique<::match::GetSharedTrialReplayResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceGetSharedTrialReplayErased, "/match.MatchService/GetSharedTrialReplay"};
 
     // --- ClientPlayerPayment ---
     gRpcMethodRegistry[ClientPlayerPaymentListPayChannelsMessageId] = RpcMethodMeta{
@@ -2588,6 +2613,11 @@ void InitMessageInfo()
         std::make_unique<::DeleteBattleBuildBookmarkRequest>(),
         std::make_unique<::DeleteBattleBuildBookmarkResponse>(),
         0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSeasonClientPlayerSetRetroHonorTargetMessageId] = RpcMethodMeta{
+        "SceneSeasonClientPlayer", "SetRetroHonorTarget",
+        std::make_unique<::SetRetroHonorTargetRequest>(),
+        std::make_unique<::SetRetroHonorTargetResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneSkillClientPlayer ---
     gRpcMethodRegistry[SceneSkillClientPlayerReleaseSkillMessageId] = RpcMethodMeta{
@@ -2694,6 +2724,16 @@ void InitMessageInfo()
         "SceneSkillClientPlayer", "FulfillSkillBookWantedOrder",
         std::make_unique<::FulfillSkillBookWantedOrderRequest>(),
         std::make_unique<::FulfillSkillBookWantedOrderResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSkillClientPlayerRentSkillLoadoutSlotsMessageId] = RpcMethodMeta{
+        "SceneSkillClientPlayer", "RentSkillLoadoutSlots",
+        std::make_unique<::RentSkillLoadoutSlotsRequest>(),
+        std::make_unique<::RentSkillLoadoutSlotsResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSkillClientPlayerAckCraftProxyDigestMessageId] = RpcMethodMeta{
+        "SceneSkillClientPlayer", "AckCraftProxyDigest",
+        std::make_unique<::AckCraftProxyDigestRequest>(),
+        std::make_unique<::AckCraftProxyDigestResponse>(),
         0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneSpiritShopClientPlayer ---
@@ -2916,6 +2956,11 @@ void InitMessageInfo()
         std::make_unique<::scene_node::GmExecutePlayerCommandRequest>(),
         std::make_unique<::scene_node::GmExecutePlayerCommandResponse>(),
         1, common::base::eNodeType::SceneManagerNodeService, scene_node::SendSceneNodeGrpcGmExecutePlayerCommandErased, "/scene_node.SceneNodeGrpc/GmExecutePlayerCommand"};
+    gRpcMethodRegistry[SceneNodeGrpcCheckJianghuDuelEligibilityMessageId] = RpcMethodMeta{
+        "SceneNodeGrpc", "CheckJianghuDuelEligibility",
+        std::make_unique<::CheckJianghuDuelEligibilityRequest>(),
+        std::make_unique<::CheckJianghuDuelEligibilityResponse>(),
+        1, common::base::eNodeType::SceneManagerNodeService, scene_node::SendSceneNodeGrpcCheckJianghuDuelEligibilityErased, "/scene_node.SceneNodeGrpc/CheckJianghuDuelEligibility"};
 
     // --- ClientPlayerTeam ---
     gRpcMethodRegistry[ClientPlayerTeamCreateTeamMessageId] = RpcMethodMeta{
@@ -3303,6 +3348,8 @@ bool IsClientMessageId(uint32_t messageId)
 	case GuildServiceTrackGuildWarBountyMessageId:
 	case GuildServiceGetGuildWarBattleResultMessageId:
 	case GuildServiceInspectFieldWarTargetsMessageId:
+	case GuildServiceIssueGuildWarFeudMessageId:
+	case GuildServiceRespondGuildWarFeudMessageId:
 	case GuildServiceGetGuildJianghuGrudgeWallMessageId:
 	case ClientPlayerLoginLoginMessageId:
 	case ClientPlayerLoginCreatePlayerMessageId:
@@ -3345,7 +3392,6 @@ bool IsClientMessageId(uint32_t messageId)
 	case MatchServiceStartTournamentMatchMessageId:
 	case MatchServiceCheerTournamentSquadMessageId:
 	case MatchServiceClaimTournamentRewardMessageId:
-	case MatchServiceSaluteTournamentChampionMessageId:
 	case MatchServiceSendTournamentSpectateCheerMessageId:
 	case MatchServiceGetTournamentSpectateCheerMessageId:
 	case MatchServiceUpdateTournamentSquadEmblemMessageId:
@@ -3359,6 +3405,9 @@ bool IsClientMessageId(uint32_t messageId)
 	case MatchServiceRespondJianghuDuelInviteMessageId:
 	case MatchServiceListJianghuGrudgesMessageId:
 	case MatchServiceDismissJianghuGrudgeMessageId:
+	case MatchServiceCreateTrialChallengeCardMessageId:
+	case MatchServiceGetTrialChallengeCardMessageId:
+	case MatchServiceGetSharedTrialReplayMessageId:
 	case ClientPlayerPaymentListPayChannelsMessageId:
 	case ClientPlayerPaymentCreatePayIntentMessageId:
 	case ClientPlayerPaymentGetPayIntentMessageId:
@@ -3464,6 +3513,7 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneSeasonClientPlayerAbandonWuxingTowerRunMessageId:
 	case SceneSeasonClientPlayerSaveBattleBuildBookmarkMessageId:
 	case SceneSeasonClientPlayerDeleteBattleBuildBookmarkMessageId:
+	case SceneSeasonClientPlayerSetRetroHonorTargetMessageId:
 	case SceneSkillClientPlayerReleaseSkillMessageId:
 	case SceneSkillClientPlayerListSkillsMessageId:
 	case SceneSkillClientPlayerUpgradeSkillMessageId:
@@ -3483,6 +3533,8 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneSkillClientPlayerCancelSkillBookWantedOrderMessageId:
 	case SceneSkillClientPlayerListSkillBookWantedOrdersMessageId:
 	case SceneSkillClientPlayerFulfillSkillBookWantedOrderMessageId:
+	case SceneSkillClientPlayerRentSkillLoadoutSlotsMessageId:
+	case SceneSkillClientPlayerAckCraftProxyDigestMessageId:
 	case SceneSpiritShopClientPlayerGetSpiritShopInfoMessageId:
 	case SceneSpiritShopClientPlayerBuySpiritShopGoodsMessageId:
 	case SceneTrialJournalClientPlayerGetTrialJournalMessageId:

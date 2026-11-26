@@ -109,3 +109,44 @@ func TestValidateWarTables(t *testing.T) {
 	require.NoError(t, validateWarTables(rule, milestones, func(uint32) bool { return true }, func(uint32) bool { return true }))
 	require.Error(t, validateWarTables(rule, milestones, func(uint32) bool { return false }, func(uint32) bool { return true }))
 }
+
+func TestFeudRulesDiminishBonusWinnerSummaryAndStreakAlerts(t *testing.T) {
+	// 2 小时宿敌约战期间前 3 场 100%，第 4 场 20%，第 5 场起 0%
+	require.Equal(t, uint32(100), DiminishPercentWithFeud(0, true))
+	require.Equal(t, uint32(100), DiminishPercentWithFeud(2, true))
+	require.Equal(t, uint32(20), DiminishPercentWithFeud(3, true))
+	require.Equal(t, uint32(0), DiminishPercentWithFeud(4, true))
+
+	// +25% 约战收益替代 +20% 宿敌加成（不叠加）
+	feudWin := ComputeSideReward(BattleRewardInput{
+		BattleKind:      pb.GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_PANEL_PVP,
+		Won:             true,
+		DiminishPercent: 100,
+		IsRivalGuild:    true,
+		IsFeudActive:    true,
+	})
+	require.Equal(t, uint64(100), feudWin.Contribution) // 80 * 1.25 = 100
+	require.Equal(t, uint64(3750), feudWin.Silver)      // 3000 * 1.25 = 3750
+
+	// 约战胜负先比胜场、再比战功、仍同为 0
+	require.Equal(t, uint64(10), ResolveFeudWinner(10, 20, 6, 4, 100, 999))
+	require.Equal(t, uint64(20), ResolveFeudWinner(10, 20, 5, 5, 200, 350))
+	require.Equal(t, uint64(0), ResolveFeudWinner(10, 20, 5, 5, 200, 200))
+
+	sum := FormatFeudSummary(&pb.GuildWarFeudRecord{
+		Status:          uint32(pb.GuildWarFeudStatus_GUILD_WAR_FEUD_STATUS_FINISHED),
+		IssuerGuildId:   10,
+		IssuerGuildName: "沧澜盟",
+		TargetGuildId:   20,
+		TargetGuildName: "青云阁",
+		IssuerWins:      12,
+		TargetWins:      8,
+		WinnerGuildId:   10,
+	})
+	require.Equal(t, "约战大捷：沧澜盟 12:8 胜 青云阁", sum)
+
+	require.True(t, ShouldBroadcastStreakAlert(5, 0))
+	require.True(t, ShouldBroadcastStreakAlert(8, 0))
+	require.True(t, ShouldBroadcastStreakAlert(1, 6))
+	require.False(t, ShouldBroadcastStreakAlert(4, 4))
+}

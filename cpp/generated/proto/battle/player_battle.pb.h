@@ -6995,6 +6995,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleEndS2C final : public ::googl
     kSilverGainFieldNumber = 17,
     kTotalExpAfterFieldNumber = 18,
     kNextLevelTotalExpFieldNumber = 19,
+    kRetroHonorSeasonIdFieldNumber = 21,
+    kRetroHonorPointsAddedFieldNumber = 22,
+    kRetroHonorProgressAfterFieldNumber = 23,
+    kRetroHonorMaxPointsFieldNumber = 24,
+    kRetroHonorNewlyUnlockedFieldNumber = 25,
   };
   // .BattleSettlementData settlement = 3;
   [[nodiscard]] bool has_settlement()
@@ -7208,11 +7213,61 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleEndS2C final : public ::googl
   void _internal_set_next_level_total_exp(::uint64_t value);
 
   public:
+  // uint32 retro_honor_season_id = 21;
+  void clear_retro_honor_season_id() ;
+  [[nodiscard]] ::uint32_t retro_honor_season_id() const;
+  void set_retro_honor_season_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_retro_honor_season_id() const;
+  void _internal_set_retro_honor_season_id(::uint32_t value);
+
+  public:
+  // uint32 retro_honor_points_added = 22;
+  void clear_retro_honor_points_added() ;
+  [[nodiscard]] ::uint32_t retro_honor_points_added() const;
+  void set_retro_honor_points_added(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_retro_honor_points_added() const;
+  void _internal_set_retro_honor_points_added(::uint32_t value);
+
+  public:
+  // uint32 retro_honor_progress_after = 23;
+  void clear_retro_honor_progress_after() ;
+  [[nodiscard]] ::uint32_t retro_honor_progress_after() const;
+  void set_retro_honor_progress_after(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_retro_honor_progress_after() const;
+  void _internal_set_retro_honor_progress_after(::uint32_t value);
+
+  public:
+  // uint32 retro_honor_max_points = 24;
+  void clear_retro_honor_max_points() ;
+  [[nodiscard]] ::uint32_t retro_honor_max_points() const;
+  void set_retro_honor_max_points(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_retro_honor_max_points() const;
+  void _internal_set_retro_honor_max_points(::uint32_t value);
+
+  public:
+  // bool retro_honor_newly_unlocked = 25;
+  void clear_retro_honor_newly_unlocked() ;
+  [[nodiscard]] bool retro_honor_newly_unlocked() const;
+  void set_retro_honor_newly_unlocked(bool value);
+
+  private:
+  bool _internal_retro_honor_newly_unlocked() const;
+  void _internal_set_retro_honor_newly_unlocked(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:BattleEndS2C)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 20,
+      ::google::protobuf::internal::TcParseTable<5, 25,
                           2, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -7261,6 +7316,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleEndS2C final : public ::googl
     ::uint64_t silver_gain_;
     ::uint64_t total_exp_after_;
     ::uint64_t next_level_total_exp_;
+    ::uint32_t retro_honor_season_id_;
+    ::uint32_t retro_honor_points_added_;
+    ::uint32_t retro_honor_progress_after_;
+    ::uint32_t retro_honor_max_points_;
+    bool retro_honor_newly_unlocked_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7457,6 +7517,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStateS2C final : public ::goo
     kBossWeeklyAffixIdFieldNumber = 34,
     kSelfSummonPetRemainingFieldNumber = 37,
     kSummonPetUnlockRoundFieldNumber = 38,
+    kTrialVowMaskFieldNumber = 42,
   };
   // repeated .BattleActorState actors = 3;
   [[nodiscard]] int actors_size()
@@ -8004,11 +8065,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStateS2C final : public ::goo
   void _internal_set_summon_pet_unlock_round(::uint32_t value);
 
   public:
+  // uint32 trial_vow_mask = 42;
+  void clear_trial_vow_mask() ;
+  [[nodiscard]] ::uint32_t trial_vow_mask() const;
+  void set_trial_vow_mask(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_trial_vow_mask() const;
+  void _internal_set_trial_vow_mask(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:BattleStateS2C)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 41,
+      ::google::protobuf::internal::TcParseTable<5, 42,
                           11, 0,
                           7>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -8082,6 +8153,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStateS2C final : public ::goo
     ::uint32_t boss_weekly_affix_id_;
     ::uint32_t self_summon_pet_remaining_;
     ::uint32_t summon_pet_unlock_round_;
+    ::uint32_t trial_vow_mask_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -11128,6 +11200,30 @@ BattleStateS2C::_internal_mutable_team_b_banned_skill_ids() {
   return &_impl_.team_b_banned_skill_ids_;
 }
 
+// uint32 trial_vow_mask = 42;
+inline void BattleStateS2C::clear_trial_vow_mask() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trial_vow_mask_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000200U);
+}
+inline ::uint32_t BattleStateS2C::trial_vow_mask() const {
+  // @@protoc_insertion_point(field_get:BattleStateS2C.trial_vow_mask)
+  return _internal_trial_vow_mask();
+}
+inline void BattleStateS2C::set_trial_vow_mask(::uint32_t value) {
+  _internal_set_trial_vow_mask(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000200U);
+  // @@protoc_insertion_point(field_set:BattleStateS2C.trial_vow_mask)
+}
+inline ::uint32_t BattleStateS2C::_internal_trial_vow_mask() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.trial_vow_mask_;
+}
+inline void BattleStateS2C::_internal_set_trial_vow_mask(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.trial_vow_mask_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // BattleStartS2C
@@ -12469,6 +12565,126 @@ inline bool BattleEndS2C::_internal_battle_silver_diminished() const {
 inline void BattleEndS2C::_internal_set_battle_silver_diminished(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_silver_diminished_ = value;
+}
+
+// uint32 retro_honor_season_id = 21;
+inline void BattleEndS2C::clear_retro_honor_season_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retro_honor_season_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+}
+inline ::uint32_t BattleEndS2C::retro_honor_season_id() const {
+  // @@protoc_insertion_point(field_get:BattleEndS2C.retro_honor_season_id)
+  return _internal_retro_honor_season_id();
+}
+inline void BattleEndS2C::set_retro_honor_season_id(::uint32_t value) {
+  _internal_set_retro_honor_season_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  // @@protoc_insertion_point(field_set:BattleEndS2C.retro_honor_season_id)
+}
+inline ::uint32_t BattleEndS2C::_internal_retro_honor_season_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.retro_honor_season_id_;
+}
+inline void BattleEndS2C::_internal_set_retro_honor_season_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retro_honor_season_id_ = value;
+}
+
+// uint32 retro_honor_points_added = 22;
+inline void BattleEndS2C::clear_retro_honor_points_added() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retro_honor_points_added_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+}
+inline ::uint32_t BattleEndS2C::retro_honor_points_added() const {
+  // @@protoc_insertion_point(field_get:BattleEndS2C.retro_honor_points_added)
+  return _internal_retro_honor_points_added();
+}
+inline void BattleEndS2C::set_retro_honor_points_added(::uint32_t value) {
+  _internal_set_retro_honor_points_added(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  // @@protoc_insertion_point(field_set:BattleEndS2C.retro_honor_points_added)
+}
+inline ::uint32_t BattleEndS2C::_internal_retro_honor_points_added() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.retro_honor_points_added_;
+}
+inline void BattleEndS2C::_internal_set_retro_honor_points_added(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retro_honor_points_added_ = value;
+}
+
+// uint32 retro_honor_progress_after = 23;
+inline void BattleEndS2C::clear_retro_honor_progress_after() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retro_honor_progress_after_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+}
+inline ::uint32_t BattleEndS2C::retro_honor_progress_after() const {
+  // @@protoc_insertion_point(field_get:BattleEndS2C.retro_honor_progress_after)
+  return _internal_retro_honor_progress_after();
+}
+inline void BattleEndS2C::set_retro_honor_progress_after(::uint32_t value) {
+  _internal_set_retro_honor_progress_after(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  // @@protoc_insertion_point(field_set:BattleEndS2C.retro_honor_progress_after)
+}
+inline ::uint32_t BattleEndS2C::_internal_retro_honor_progress_after() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.retro_honor_progress_after_;
+}
+inline void BattleEndS2C::_internal_set_retro_honor_progress_after(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retro_honor_progress_after_ = value;
+}
+
+// uint32 retro_honor_max_points = 24;
+inline void BattleEndS2C::clear_retro_honor_max_points() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retro_honor_max_points_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+}
+inline ::uint32_t BattleEndS2C::retro_honor_max_points() const {
+  // @@protoc_insertion_point(field_get:BattleEndS2C.retro_honor_max_points)
+  return _internal_retro_honor_max_points();
+}
+inline void BattleEndS2C::set_retro_honor_max_points(::uint32_t value) {
+  _internal_set_retro_honor_max_points(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  // @@protoc_insertion_point(field_set:BattleEndS2C.retro_honor_max_points)
+}
+inline ::uint32_t BattleEndS2C::_internal_retro_honor_max_points() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.retro_honor_max_points_;
+}
+inline void BattleEndS2C::_internal_set_retro_honor_max_points(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retro_honor_max_points_ = value;
+}
+
+// bool retro_honor_newly_unlocked = 25;
+inline void BattleEndS2C::clear_retro_honor_newly_unlocked() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retro_honor_newly_unlocked_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
+}
+inline bool BattleEndS2C::retro_honor_newly_unlocked() const {
+  // @@protoc_insertion_point(field_get:BattleEndS2C.retro_honor_newly_unlocked)
+  return _internal_retro_honor_newly_unlocked();
+}
+inline void BattleEndS2C::set_retro_honor_newly_unlocked(bool value) {
+  _internal_set_retro_honor_newly_unlocked(value);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
+  // @@protoc_insertion_point(field_set:BattleEndS2C.retro_honor_newly_unlocked)
+}
+inline bool BattleEndS2C::_internal_retro_honor_newly_unlocked() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.retro_honor_newly_unlocked_;
+}
+inline void BattleEndS2C::_internal_set_retro_honor_newly_unlocked(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.retro_honor_newly_unlocked_ = value;
 }
 
 // -------------------------------------------------------------------

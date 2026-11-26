@@ -3,6 +3,7 @@ package logic
 import (
 	"context"
 
+	"match/internal/catalog"
 	"match/internal/constants"
 	"match/internal/metrics"
 	"match/internal/pkg/ctxkeys"
@@ -120,6 +121,24 @@ func (l *JoinQueueLogic) JoinQueue(in *matchpb.JoinQueueRequest) (*matchpb.JoinQ
 			ErrorCode:    constants.ErrModeNotOpen,
 			ErrorMessage: tipErr(constants.ErrModeNotOpen, "五行幻境仅支持单人挑战"),
 		}, nil
+	}
+	if vowMask := in.GetTrialVowMask(); vowMask != 0 {
+		if !catalog.ValidTrialVowMask(vowMask) {
+			metrics.ObserveJoinQueue(modeName, "trial_vow_invalid")
+			return &matchpb.JoinQueueResponse{
+				ErrorCode:    constants.ErrModeNotOpen,
+				ErrorMessage: tipErr(constants.ErrModeNotOpen, "试炼誓约参数无效"),
+			}, nil
+		}
+		isSoloDirect := in.Mode == matchpb.MatchMode_MATCH_MODE_PVE_SOLO ||
+			(in.Mode == matchpb.MatchMode_MATCH_MODE_PVE_TEAM && required == 1)
+		if in.GetIsWuxingTower() || !isSoloDirect || !l.svcCtx.ActiveCatalog().SupportsTrialVows(in.BattleConfigId) {
+			metrics.ObserveJoinQueue(modeName, "trial_vow_unsupported")
+			return &matchpb.JoinQueueResponse{
+				ErrorCode:    constants.ErrModeNotOpen,
+				ErrorMessage: tipErr(constants.ErrModeNotOpen, "仅常驻首领试炼单人或整队直开支持试炼誓约"),
+			}, nil
+		}
 	}
 	// 入口白名单(PlayMode 表,docs/design/global-match-hierarchical-pools.md §7):(模式, 怪物战斗模板)
 	// 不在表里或已关闭一律拒绝,堵住客户端任填 battle_config_id 自建私有池。

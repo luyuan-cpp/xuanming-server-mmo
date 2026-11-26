@@ -1,8 +1,16 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include <entt/src/entt/entity/entity.hpp>
 
+namespace muduo {
+namespace net {
+class EventLoop;
+}
+}
+
+class CraftProxyStallInfo;
 class GetSkillCraftingStateResponse;
 class CraftSkillBookRequest;
 class CraftSkillBookResponse;
@@ -17,6 +25,20 @@ class UnsealSkillBookResponse;
 class SetCraftProxyStallRequest;
 class SetCraftProxyStallResponse;
 class ListCraftProxyStallsResponse;
+class ClaimScrollCollectionMilestoneRequest;
+class ClaimScrollCollectionMilestoneResponse;
+class BatchDismantleSkillBooksRequest;
+class BatchDismantleSkillBooksResponse;
+class PostSkillBookWantedOrderRequest;
+class PostSkillBookWantedOrderResponse;
+class CancelSkillBookWantedOrderRequest;
+class CancelSkillBookWantedOrderResponse;
+class ListSkillBookWantedOrdersRequest;
+class ListSkillBookWantedOrdersResponse;
+class FulfillSkillBookWantedOrderRequest;
+class FulfillSkillBookWantedOrderResponse;
+class AckCraftProxyDigestRequest;
+class AckCraftProxyDigestResponse;
 class SkillCraftMasterySnapshot;
 
 // 率土式分卷宗永久技能制书、轻量化手艺熟练度与主城原子代打摊位系统。
@@ -51,4 +73,37 @@ public:
     static void SetProxyStall(entt::entity player, const SetCraftProxyStallRequest& request,
                               SetCraftProxyStallResponse& response);
     static void ListProxyStalls(entt::entity player, ListCraftProxyStallsResponse& response);
+    static void ClaimScrollCollectionMilestone(entt::entity player,
+                                               const ClaimScrollCollectionMilestoneRequest& request,
+                                               ClaimScrollCollectionMilestoneResponse& response);
+    static void BatchDismantleSkillBooks(entt::entity player, const BatchDismantleSkillBooksRequest& request,
+                                         BatchDismantleSkillBooksResponse& response);
+    static void PostWantedOrder(entt::entity player, const PostSkillBookWantedOrderRequest& request,
+                                PostSkillBookWantedOrderResponse& response);
+    static void CancelWantedOrder(entt::entity player, const CancelSkillBookWantedOrderRequest& request,
+                                  CancelSkillBookWantedOrderResponse& response);
+    static void ListWantedOrders(entt::entity player, const ListSkillBookWantedOrdersRequest& request,
+                                 ListSkillBookWantedOrdersResponse& response);
+    static void FulfillWantedOrder(entt::entity player, const FulfillSkillBookWantedOrderRequest& request,
+                                   FulfillSkillBookWantedOrderResponse& response);
+    static void AckProxyDigest(entt::entity player, const AckCraftProxyDigestRequest& request,
+                               AckCraftProxyDigestResponse& response);
+
+    // 跨节点/离线名匠代打共享摊位目录与口碑/热榜异步台账（控制集群 Redis Hash + 本地写穿/定时刷新缓存）。
+    static std::string ProxyStallDirectoryKey(uint32_t zoneId);
+    static std::string ProxyReputationLedgerKey(uint32_t zoneId);
+    static void StartProxyStallDirectory(muduo::net::EventLoop* loop);
+    static void StopProxyStallDirectory();
+    static void SyncPlayerProxyStall(entt::entity player);
+    static void RecordProxyOrderReputation(uint64_t masterPlayerId, uint32_t supremeDelta, uint32_t rareDelta,
+                                           uint64_t netGoldEarned, const std::string& buyerName);
+    static bool DrainPendingProxyReputation(entt::entity player);
+    static bool ResolveSharedProxyStall(uint64_t buyerPlayerId, uint64_t masterPlayerId,
+                                        bool requireForge, bool requireScroll,
+                                        CraftProxyStallInfo& out);
+    using PersistFn = bool (*)(entt::entity);
+    static void SetPersistForTest(PersistFn fn);
+    static void UpsertProxyStallForTest(const CraftProxyStallInfo& stall);
+    static void RemoveProxyStallForTest(uint64_t masterPlayerId);
+    static void ClearProxyStallDirectoryForTest();
 };

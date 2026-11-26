@@ -35,6 +35,10 @@ type SeasonSealTable struct {
 	BattleLimit        uint32                 `protobuf:"varint,10,opt,name=battle_limit,json=battleLimit,proto3" json:"battle_limit,omitempty"`
 	ActiveRounds       uint32                 `protobuf:"varint,11,opt,name=active_rounds,json=activeRounds,proto3" json:"active_rounds,omitempty"`
 	HealthThresholdBps uint32                 `protobuf:"varint,12,opt,name=health_threshold_bps,json=healthThresholdBps,proto3" json:"health_threshold_bps,omitempty"`
+	ResonanceSkillId   uint32                 `protobuf:"varint,13,opt,name=resonance_skill_id,json=resonanceSkillId,proto3" json:"resonance_skill_id,omitempty"`
+	ResonanceKind      uint32                 `protobuf:"varint,14,opt,name=resonance_kind,json=resonanceKind,proto3" json:"resonance_kind,omitempty"`
+	ResonanceParam     uint32                 `protobuf:"varint,15,opt,name=resonance_param,json=resonanceParam,proto3" json:"resonance_param,omitempty"`
+	ResonanceDesc      string                 `protobuf:"bytes,16,opt,name=resonance_desc,json=resonanceDesc,proto3" json:"resonance_desc,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -153,6 +157,34 @@ func (x *SeasonSealTable) GetHealthThresholdBps() uint32 {
 	return 0
 }
 
+func (x *SeasonSealTable) GetResonanceSkillId() uint32 {
+	if x != nil {
+		return x.ResonanceSkillId
+	}
+	return 0
+}
+
+func (x *SeasonSealTable) GetResonanceKind() uint32 {
+	if x != nil {
+		return x.ResonanceKind
+	}
+	return 0
+}
+
+func (x *SeasonSealTable) GetResonanceParam() uint32 {
+	if x != nil {
+		return x.ResonanceParam
+	}
+	return 0
+}
+
+func (x *SeasonSealTable) GetResonanceDesc() string {
+	if x != nil {
+		return x.ResonanceDesc
+	}
+	return ""
+}
+
 type SeasonSealTableData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Data          []*SeasonSealTable     `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -201,7 +233,7 @@ var File_seasonseal_table_proto protoreflect.FileDescriptor
 
 const file_seasonseal_table_proto_rawDesc = "" +
 	"\n" +
-	"\x16seasonseal_table.proto\"\x84\x03\n" +
+	"\x16seasonseal_table.proto\"\xa9\x04\n" +
 	"\x0fSeasonSealTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x1b\n" +
 	"\tseason_id\x18\x02 \x01(\rR\bseasonId\x12\x12\n" +
@@ -215,7 +247,11 @@ const file_seasonseal_table_proto_rawDesc = "" +
 	"\fbattle_limit\x18\n" +
 	" \x01(\rR\vbattleLimit\x12#\n" +
 	"\ractive_rounds\x18\v \x01(\rR\factiveRounds\x120\n" +
-	"\x14health_threshold_bps\x18\f \x01(\rR\x12healthThresholdBps\";\n" +
+	"\x14health_threshold_bps\x18\f \x01(\rR\x12healthThresholdBps\x12,\n" +
+	"\x12resonance_skill_id\x18\r \x01(\rR\x10resonanceSkillId\x12%\n" +
+	"\x0eresonance_kind\x18\x0e \x01(\rR\rresonanceKind\x12'\n" +
+	"\x0fresonance_param\x18\x0f \x01(\rR\x0eresonanceParam\x12%\n" +
+	"\x0eresonance_desc\x18\x10 \x01(\tR\rresonanceDesc\";\n" +
 	"\x13SeasonSealTableData\x12$\n" +
 	"\x04data\x18\x01 \x03(\v2\x10.SeasonSealTableR\x04dataBA\n" +
 	"\x0ecom.game.tableB\x19SeasonSealTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

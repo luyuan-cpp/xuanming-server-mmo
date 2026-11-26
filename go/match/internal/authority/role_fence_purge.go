@@ -34,6 +34,9 @@ func RoleFencePurge(ctx context.Context, tx *sql.Tx, player uint64) error {
 	if err != nil {
 		return fmt.Errorf("purge match_player_battle_report of removed player %d: %w", player, err)
 	}
+	if err = purgeTrialChallengeCardsTx(ctx, tx, player, released); err != nil {
+		return fmt.Errorf("purge match_trial_challenge_card of removed player %d: %w", player, err)
+	}
 	if err = releaseBattleReportsTx(ctx, tx, released); err != nil {
 		return fmt.Errorf("release battle reports of removed player %d: %w", player, err)
 	}

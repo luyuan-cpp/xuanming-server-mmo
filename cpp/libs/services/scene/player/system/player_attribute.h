@@ -111,6 +111,33 @@ public:
 	static uint32_t SwitchScheme(entt::entity player, uint32_t schemeId, bool recalculate = true);
 	static uint32_t RenameScheme(entt::entity player, uint32_t schemeId, const std::string& name);
 
+	// 7 套「战法·加点」一体化流派方案联动接口（与 PlayerSkillSystem 共用 scheme_id = 1..7 单一事实源）：
+	struct SchemeAllocationSummary {
+		std::map<uint32_t, uint32_t> allocated;
+		uint32_t remaining = 0;
+		uint32_t totalPoints = 0;
+	};
+	struct PreparedSchemeAllocation {
+		uint32_t poolId = 0;
+		uint64_t resetCostGold = 0;
+		bool needsReset = false;
+		std::map<uint32_t, uint32_t> target;
+	};
+	static bool FillSchemeAllocationSummary(entt::entity player, uint32_t schemeId, SchemeAllocationSummary& out);
+	static uint64_t PlayerPoolResetCostGold(entt::entity player);
+	static uint64_t SwitchCooldownUntil(entt::entity player);
+	static uint32_t ActiveSchemeId(entt::entity player);
+	static uint32_t PrepareSchemeAllocation(entt::entity player, uint32_t schemeId,
+											const std::map<uint32_t, uint32_t>& target,
+											bool resetIfNeeded, PreparedSchemeAllocation& prepared);
+	static uint32_t CommitSchemeAllocationAndSwitch(entt::entity player, uint32_t schemeId,
+													const std::string& schemeName,
+													bool applyAllocation,
+													const PreparedSchemeAllocation& prepared,
+													std::string& notice);
+	static void TrySyncLinkedScheme(entt::entity player, uint32_t schemeId,
+									const std::string& schemeName, std::string& notice);
+
 	// GM:设等级(1..kMaxLevel,绝对设值),直接重算并推面板与宠物列表。降级不清加点:超额的池按 0 生效,
 	// 设回原等级后原样生效。存储等级原本超上限时会被覆写,打 WARN 留痕(GM 只在 dev/test 开放)。
 	static uint32_t GmSetLevel(entt::entity player, uint32_t level);

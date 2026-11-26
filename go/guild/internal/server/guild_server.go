@@ -178,6 +178,14 @@ func (s *GuildServer) InspectFieldWarTargets(ctx context.Context, req *pb.Inspec
 	return s.logic.InspectFieldWarTargets(ctx, req)
 }
 
+func (s *GuildServer) IssueGuildWarFeud(ctx context.Context, req *pb.IssueGuildWarFeudRequest) (*pb.IssueGuildWarFeudResponse, error) {
+	return s.logic.IssueGuildWarFeud(ctx, req)
+}
+
+func (s *GuildServer) RespondGuildWarFeud(ctx context.Context, req *pb.RespondGuildWarFeudRequest) (*pb.RespondGuildWarFeudResponse, error) {
+	return s.logic.RespondGuildWarFeud(ctx, req)
+}
+
 func (s *GuildServer) NotifyGuildWarAlert(context.Context, *pb.GuildWarAlertS2C) (*base.Empty, error) {
 	return &base.Empty{}, nil
 }
@@ -194,4 +202,8 @@ func (s *GuildServer) GetGuildRank(ctx context.Context, req *pb.GetGuildRankRequ
 
 func (s *GuildServer) GetGuildRankByGuild(ctx context.Context, req *pb.GetGuildRankByGuildRequest) (*pb.GetGuildRankByGuildResponse, error) {
 	return s.logic.GetGuildRankByGuild(ctx, req)
+}
+
+func (s *GuildServer) GetGuildJianghuGrudgeWall(ctx context.Context, req *pb.GetGuildJianghuGrudgeWallRequest) (*pb.GetGuildJianghuGrudgeWallResponse, error) {
+	return s.logic.GetGuildJianghuGrudgeWall(ctx, req)
 }

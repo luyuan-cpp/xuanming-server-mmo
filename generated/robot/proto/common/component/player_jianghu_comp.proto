@@ -27,4 +27,7 @@ message PlayerJianghuComp {
   uint64 clear_badge_expires_at_ms = 9;
   // 洒脱徽记白名单样式 ID（1 = 「清风拂尘 · 胜败常事」）
   uint32 clear_badge_style_id = 10;
+  // 普通银两生死状备战期已预扣但尚未结清的战斗 ID 与金额（供异常取消/幂等重入校验，开打结算或退款后清零）
+  uint64 pending_silver_fee_battle_id = 11;
+  uint64 pending_silver_fee_amount = 12;
 }

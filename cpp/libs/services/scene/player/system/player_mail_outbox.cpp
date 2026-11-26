@@ -51,7 +51,7 @@ namespace
 	constexpr const char* kSendStartNames[] = {"sent", "no_ready_node", "no_secret", "invalid_entry", "sign_failed"};
 	static_assert(std::size(kSendStartNames) == static_cast<std::size_t>(SendStart::kCount),
 				  "kSendStartNames 与 SendStart 逐项对应");
-	constexpr const char* kSendVerdictNames[] = {"delivered", "rejected", "unknown"};
+	constexpr const char* kSendVerdictNames[] = {"delivered", "rejected", "unknown", "terminal_drop"};
 	static_assert(std::size(kSendVerdictNames) == static_cast<std::size_t>(SendVerdict::kCount),
 				  "kSendVerdictNames 与 SendVerdict 逐项对应");
 
@@ -281,14 +281,15 @@ bool PlayerMailOutboxSystem::BuildSendRequest(const uint64_t playerId, const Mai
 {
 	// 判重先于一切依赖当前时间的校验(go/mail Repo.Send),所以不带过期时刻时重寄不会变成新请求;
 	// 有效期按首次落库那一刻 + 个人邮件有效期算,玩家总有完整的领取期。
-	if (playerId == 0 || !mail_outbox_rules::ValidateEntry(entry).empty())
+	const uint64_t recipientId = entry.recipient_player_id() != 0 ? entry.recipient_player_id() : playerId;
+	if (recipientId == 0 || !mail_outbox_rules::ValidateEntry(entry).empty())
 	{
 		return false;
 	}
 	mailpb::SendMailRequest built;
 	built.set_sender_kind(kBattleSenderKind);
 	built.set_request_id(entry.request_id());
-	built.set_recipient_player_id(playerId);
+	built.set_recipient_player_id(recipientId);
 	built.set_title(entry.title());
 	built.set_body(entry.body());
 	auto* attachments = built.mutable_attachments();
@@ -297,6 +298,12 @@ bool PlayerMailOutboxSystem::BuildSendRequest(const uint64_t playerId, const Mai
 		auto* line = attachments->add_items();
 		line->set_config_id(item.config_id());
 		line->set_count(static_cast<uint32_t>(item.count())); // ValidateEntry 已保证每封合计不超过 4096
+	}
+	for (const auto& currency : entry.currencies())
+	{
+		auto* line = attachments->add_currencies();
+		line->set_currency_type(currency.currency_type());
+		line->set_amount(currency.amount());
 	}
 	request = std::move(built);
 	return true;
@@ -369,6 +376,76 @@ void PlayerMailOutboxSystem::CommitPrepared(entt::entity player, const uint64_t 
 		mail_outbox_rules::Append(*outbox, mail.requestId, MailOutboxSource::kBattleOverflow, battleId,
 								  kBattleOverflowTitle, kBattleOverflowBody, mail.items, nowMs);
 	}
+}
+
+uint32_t PlayerMailOutboxSystem::PrepareProxyFeePayout(entt::entity buyer, const uint64_t masterPlayerId,
+													   const uint64_t netGold, const uint64_t clientRequestId,
+													   const std::string& buyerName, PreparedProxyFeeMail& out)
+{
+	out = PreparedProxyFeeMail{};
+	if (masterPlayerId == 0 || netGold == 0 || netGold > mail_outbox_rules::kMaxCurrencyAmountPerMail ||
+		clientRequestId == 0 || !tlsEcs.actorRegistry.valid(buyer))
+	{
+		return kInvalidParameter;
+	}
+	const uint64_t buyerId = tlsEcs.GetPlayerId(buyer);
+	if (!IsSenderConfigured())
+	{
+		LOG_DEBUG << "[MailOutbox] Proxy fee payout refused: mail sender is not configured, buyer_id=" << buyerId
+				  << " master_id=" << masterPlayerId << " req_id=" << clientRequestId;
+		return kServiceUnavailable;
+	}
+	const auto* outbox = tlsEcs.actorRegistry.try_get<PlayerMailOutboxComp>(buyer);
+	if (outbox == nullptr)
+	{
+		LOG_ERROR << "[MailOutbox] Proxy fee payout refused: persisted PlayerMailOutboxComp missing, buyer_id="
+				  << buyerId << " master_id=" << masterPlayerId << " req_id=" << clientRequestId;
+		return kServiceUnavailable;
+	}
+	if (static_cast<std::size_t>(outbox->entries_size()) + 1 > mail_outbox_rules::kMaxEntries)
+	{
+		LOG_WARN << "[MailOutbox] metric=mail_outbox_full source=craft_proxy_fee buyer_id=" << buyerId
+				 << " master_id=" << masterPlayerId << " queued=" << outbox->entries_size()
+				 << " limit=" << mail_outbox_rules::kMaxEntries;
+		return kServiceUnavailable;
+	}
+	Guid requestId = kInvalidGuid;
+	if (!tlsGuidSegmentRegistry.Get(GuidKind::kTxLog).TryNext(requestId) || requestId == kInvalidGuid || requestId == 0)
+	{
+		LOG_WARN << "[MailOutbox] metric=mail_outbox_request_id_shortage source=craft_proxy_fee buyer_id=" << buyerId
+				 << " master_id=" << masterPlayerId;
+		return kServiceUnavailable;
+	}
+	out.requestId = requestId;
+	out.recipientPlayerId = masterPlayerId;
+	out.sourceId = clientRequestId;
+	out.netGold = netGold;
+	out.title = kCraftProxyFeeTitle;
+	out.body = "玩家 " + (buyerName.empty() ? std::to_string(buyerId) : buyerName) +
+			   " 使用了您的名匠代打摊位，扣除5%税费后净分成银两已随附件发放，请查收。";
+	return kSuccess;
+}
+
+void PlayerMailOutboxSystem::CommitPreparedProxyFee(entt::entity buyer, const PreparedProxyFeeMail& prepared,
+													const uint64_t nowMs)
+{
+	if (prepared.requestId == 0 || prepared.recipientPlayerId == 0 || prepared.netGold == 0)
+	{
+		return;
+	}
+	auto* outbox = tlsEcs.actorRegistry.try_get<PlayerMailOutboxComp>(buyer);
+	if (outbox == nullptr)
+	{
+		LOG_ERROR << "[MailOutbox][PROXY_FEE_LOST] PlayerMailOutboxComp vanished between prepare and commit, buyer_id="
+				  << tlsEcs.GetPlayerId(buyer) << " master_id=" << prepared.recipientPlayerId
+				  << " request_id=" << prepared.requestId << " net_gold=" << prepared.netGold
+				  << ",manual compensation required";
+		return;
+	}
+	mail_outbox_rules::AppendCurrency(*outbox, prepared.requestId, MailOutboxSource::kCraftProxyFee, prepared.sourceId,
+									  prepared.recipientPlayerId, prepared.title, prepared.body,
+									  {{static_cast<uint32_t>(common::base::CURRENCY_TYPE_GOLD), prepared.netGold}},
+									  nowMs);
 }
 
 void PlayerMailOutboxSystem::Tick()
@@ -462,7 +539,7 @@ void PlayerMailOutboxSystem::OnSendDone(const uint64_t playerId, const uint64_t 
 	const auto verdict = outcome.signatureRejected
 		? SendVerdict::kRejected
 		: mail_outbox_rules::ClassifySend(outcome.callOk, outcome.tipId, outcome.mailId);
-	if (verdict != SendVerdict::kDelivered)
+	if (verdict != SendVerdict::kDelivered && verdict != SendVerdict::kTerminalDrop)
 	{
 		if (!current)
 		{
@@ -489,11 +566,12 @@ void PlayerMailOutboxSystem::OnSendDone(const uint64_t playerId, const uint64_t 
 				 << ",the entry stays queued and is retried";
 		return;
 	}
-	// 寄到了(含判重回原邮件)。删条目是存档改动:此刻不可改(交接、退出中)就留着,下一个持有者重寄会拿回同一封,再删。
+	// 寄到了(含判重回原邮件)或收件人已删角(终态放弃)。删条目是存档改动:此刻不可改就留着,下一个持有者再处理。
 	if (!player_mutability::IsPlayerMutable(player))
 	{
-		LOG_INFO << "[MailOutbox] Mail delivered but player is not mutable now; entry kept for the next holder, player_id="
-				 << playerId << " request_id=" << requestId << " mail_id=" << outcome.mailId;
+		LOG_INFO << "[MailOutbox] Mail settled but player is not mutable now; entry kept for the next holder, player_id="
+				 << playerId << " request_id=" << requestId << " mail_id=" << outcome.mailId
+				 << " verdict=" << kSendVerdictNames[static_cast<std::size_t>(verdict)];
 		return;
 	}
 	auto* outbox = tlsEcs.actorRegistry.try_get<PlayerMailOutboxComp>(player);
@@ -501,12 +579,25 @@ void PlayerMailOutboxSystem::OnSendDone(const uint64_t playerId, const uint64_t 
 	{
 		const uint32_t source = entry->source();
 		const uint64_t sourceId = entry->source_id();
+		const uint64_t recipientId = entry->recipient_player_id() != 0 ? entry->recipient_player_id() : playerId;
 		mail_outbox_rules::Remove(*outbox, requestId);
-		LOG_INFO << "[MailOutbox] metric=mail_outbox_delivered player_id=" << playerId << " request_id=" << requestId
-				 << " mail_id=" << outcome.mailId << " source=" << mail_outbox_rules::MailOutboxSourceName(source)
-				 << " source_id=" << sourceId;
-		// 删条目尽快落盘;没落盘就崩,下一次加载重寄,邮件回原邮件,再删一次。
-		Deps().requestSave(player, "mail_outbox_delivered");
+		if (verdict == SendVerdict::kTerminalDrop)
+		{
+			LOG_WARN << "[MailOutbox] metric=mail_outbox_recipient_deleted player_id=" << playerId
+					 << " recipient_player_id=" << recipientId << " request_id=" << requestId
+					 << " source=" << mail_outbox_rules::MailOutboxSourceName(source) << " source_id=" << sourceId
+					 << ",recipient role is deleted; entry dropped so sender outbox is not permanently blocked";
+			Deps().requestSave(player, "mail_outbox_recipient_deleted");
+		}
+		else
+		{
+			LOG_INFO << "[MailOutbox] metric=mail_outbox_delivered player_id=" << playerId
+					 << " recipient_player_id=" << recipientId << " request_id=" << requestId
+					 << " mail_id=" << outcome.mailId << " source=" << mail_outbox_rules::MailOutboxSourceName(source)
+					 << " source_id=" << sourceId;
+			// 删条目尽快落盘;没落盘就崩,下一次加载重寄,邮件回原邮件,再删一次。
+			Deps().requestSave(player, "mail_outbox_delivered");
+		}
 	}
 	if (state != nullptr)
 	{

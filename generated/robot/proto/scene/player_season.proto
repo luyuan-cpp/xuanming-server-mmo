@@ -23,6 +23,10 @@ message SeasonSealOption {
   uint32 active_rounds = 10;
   uint32 health_threshold_bps = 11;
   bool equipped = 12;
+  uint32 resonance_skill_id = 13;
+  uint32 resonance_kind = 14;
+  uint32 resonance_param = 15;
+  string resonance_desc = 16;
 }
 
 message SeasonSkillSummary {
@@ -54,6 +58,8 @@ message SeasonHonorView {
   uint32 max_points = 6;
   bool unlocked = 7;
   bool is_current_season = 8;
+  bool is_retro_target = 9;         // true = 当前满级溢出点数正流向本季徽章追忆
+  uint32 retro_progress_points = 10; // 本往季已累积的免费追忆点数（解锁后归 0）
 }
 
 // 当前活跃赛季的全员对称周环境词缀视图（不卖数值、零养成门槛，每周自动轮换）。
@@ -111,6 +117,11 @@ message SeasonStateSnapshot {
   repeated SeasonHonorView honors = 33;
   // 本周全员对称环境词缀（无活跃赛季时为空）。
   SeasonWeeklyAffixView weekly_affix = 34;
+  uint32 season_term = 35;                  // 全局无限递增届号（第 1 届、第 2 届 …；固定窗为 1）
+  uint32 cycle_index = 36;                  // 循环轮次（第 1 轮、第 2 轮 …；固定窗为 1）
+  uint32 cycle_pool_size = 37;              // 自动循环主题池大小（0 = 固定单季模式，>0 = 循环池季数）
+  uint32 retro_honor_target_season_id = 38; // 当前生效的往季徽章追忆目标赛季 ID（0 = 全部已解锁或无可用往季）
+  bool retro_honor_target_explicit = 39;    // true = 玩家手动选定；false = 自动顺延首个未解锁往季
 }
 
 message SavedBattleBuildBookmarkView {
@@ -255,6 +266,16 @@ message CatchupSeasonSealResponse {
   uint64 spent_currency = 5;
 }
 
+// 战外免费切换「往季徽章追忆」目标赛季（0 = 恢复自动顺延首个未解锁往季；纯零数值永久荣誉，绝不涉及付费）。
+message SetRetroHonorTargetRequest {
+  uint32 season_id = 1;
+}
+
+message SetRetroHonorTargetResponse {
+  TipInfoMessage error_message = 1;
+  SeasonStateSnapshot state = 2;
+}
+
 service SceneSeasonClientPlayer {
   option (OptionIsPlayerService) = true;
   option (OptionIsClientProtocolService) = true;
@@ -270,4 +291,5 @@ service SceneSeasonClientPlayer {
   rpc AbandonWuxingTowerRun (AbandonWuxingTowerRunRequest) returns (AbandonWuxingTowerRunResponse);
   rpc SaveBattleBuildBookmark (SaveBattleBuildBookmarkRequest) returns (SaveBattleBuildBookmarkResponse);
   rpc DeleteBattleBuildBookmark (DeleteBattleBuildBookmarkRequest) returns (DeleteBattleBuildBookmarkResponse);
+  rpc SetRetroHonorTarget (SetRetroHonorTargetRequest) returns (SetRetroHonorTargetResponse);
 }

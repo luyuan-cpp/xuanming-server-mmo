@@ -76,6 +76,8 @@ func spectateVisibilityOfMode(mode matchpb.MatchMode) (visibility battlepb.ESpec
 		return public, true // 帮会灵脉守旗阵踢馆:支持敌我帮会成员公开观战
 	case matchpb.MatchMode_MATCH_MODE_SEASON_TOURNAMENT:
 		return public, true // 全服赛季战队锦标赛:全服公开观战,优先升 L2 赛事广播
+	case matchpb.MatchMode_MATCH_MODE_JIANGHU_DUEL:
+		return public, true // 江湖恩怨·天墉生死状:全服公开观战,复用 L0/L1/L2 观战体系
 	case matchpb.MatchMode_MATCH_MODE_3V3:
 		return private, true // 未开放
 	case matchpb.MatchMode_MATCH_MODE_UNSPECIFIED:

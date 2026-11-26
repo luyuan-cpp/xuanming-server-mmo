@@ -45,7 +45,7 @@ public final class TournamentRuleTableOuterClass extends com.google.protobuf.Gen
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\032tournamentrule_table.proto\"\201\007\n\023Tournam" +
+      "\n\032tournamentrule_table.proto\"\262\006\n\023Tournam" +
       "entRuleTable\022\n\n\002id\030\001 \001(\r\022\024\n\014rule_version" +
       "\030\002 \001(\r\022\017\n\007enabled\030\003 \001(\010\022\030\n\020battle_config" +
       "_id\030\004 \001(\r\022\030\n\020battle_team_size\030\005 \001(\r\022\027\n\017r" +
@@ -61,17 +61,15 @@ public final class TournamentRuleTableOuterClass extends com.google.protobuf.Gen
       "ts\030\022 \001(\r\022\032\n\022invite_ttl_seconds\030\023 \001(\r\022\014\n\004" +
       "desc\030\024 \001(\t\022\030\n\020bo3_top4_enabled\030\025 \001(\010\022\034\n\024" +
       "intermission_seconds\030\026 \001(\r\022\036\n\026public_kno" +
-      "ckout_replay\030\027 \001(\010\022\032\n\022salute_gold_amount" +
-      "\030\030 \001(\r\022\026\n\016salute_item_id\030\031 \001(\r\022\031\n\021salute" +
-      "_item_count\030\032 \001(\r\022\033\n\023warmup_spar_enabled" +
-      "\030\033 \001(\010\022\032\n\022prediction_enabled\030\034 \001(\010\022\"\n\032pr" +
-      "ediction_reward_min_hits\030\035 \001(\r\022!\n\031third_" +
-      "place_match_enabled\030\036 \001(\010\022\033\n\023leyline_ban" +
-      "_enabled\030\037 \001(\010\022 \n\030skill_ban_slots_per_te" +
-      "am\030  \001(\r\"=\n\027TournamentRuleTableData\022\"\n\004d" +
-      "ata\030\001 \003(\0132\024.TournamentRuleTableBE\n\016com.g" +
-      "ame.tableB\035TournamentRuleTableOuterClass" +
-      "P\001Z\022generated/pb/tableb\006proto3"
+      "ckout_replay\030\027 \001(\010\022\033\n\023warmup_spar_enable" +
+      "d\030\033 \001(\010\022\032\n\022prediction_enabled\030\034 \001(\010\022\"\n\032p" +
+      "rediction_reward_min_hits\030\035 \001(\r\022!\n\031third" +
+      "_place_match_enabled\030\036 \001(\010\022\033\n\023leyline_ba" +
+      "n_enabled\030\037 \001(\010\022 \n\030skill_ban_slots_per_t" +
+      "eam\030  \001(\r\"=\n\027TournamentRuleTableData\022\"\n\004" +
+      "data\030\001 \003(\0132\024.TournamentRuleTableBE\n\016com." +
+      "game.tableB\035TournamentRuleTableOuterClas" +
+      "sP\001Z\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -82,7 +80,7 @@ public final class TournamentRuleTableOuterClass extends com.google.protobuf.Gen
     internal_static_TournamentRuleTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_TournamentRuleTable_descriptor,
-        new java.lang.String[] { "Id", "RuleVersion", "Enabled", "BattleConfigId", "BattleTeamSize", "RosterMaxSize", "MinLevel", "RegistrationDays", "QualifierDays", "KnockoutDays", "SettleDisplayDays", "QualifierMaxMatches", "ParticipationMinMatches", "KnockoutMaxTeams", "KnockoutRoundTimeoutSeconds", "QualifierWinPoints", "QualifierDrawPoints", "QualifierLossPoints", "InviteTtlSeconds", "Desc", "Bo3Top4Enabled", "IntermissionSeconds", "PublicKnockoutReplay", "SaluteGoldAmount", "SaluteItemId", "SaluteItemCount", "WarmupSparEnabled", "PredictionEnabled", "PredictionRewardMinHits", "ThirdPlaceMatchEnabled", "LeylineBanEnabled", "SkillBanSlotsPerTeam", });
+        new java.lang.String[] { "Id", "RuleVersion", "Enabled", "BattleConfigId", "BattleTeamSize", "RosterMaxSize", "MinLevel", "RegistrationDays", "QualifierDays", "KnockoutDays", "SettleDisplayDays", "QualifierMaxMatches", "ParticipationMinMatches", "KnockoutMaxTeams", "KnockoutRoundTimeoutSeconds", "QualifierWinPoints", "QualifierDrawPoints", "QualifierLossPoints", "InviteTtlSeconds", "Desc", "Bo3Top4Enabled", "IntermissionSeconds", "PublicKnockoutReplay", "WarmupSparEnabled", "PredictionEnabled", "PredictionRewardMinHits", "ThirdPlaceMatchEnabled", "LeylineBanEnabled", "SkillBanSlotsPerTeam", });
     internal_static_TournamentRuleTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_TournamentRuleTableData_fieldAccessorTable = new

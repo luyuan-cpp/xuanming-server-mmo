@@ -62,6 +62,22 @@ struct SeasonSealHealth_threshold_bpsComp {
     uint32_t value;
 };
 
+struct SeasonSealResonance_skill_idComp {
+    uint32_t value;
+};
+
+struct SeasonSealResonance_kindComp {
+    uint32_t value;
+};
+
+struct SeasonSealResonance_paramComp {
+    uint32_t value;
+};
+
+struct SeasonSealResonance_descComp {
+    std::string_view value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -102,4 +118,16 @@ inline SeasonSealActive_roundsComp MakeSeasonSealActive_roundsComp(const SeasonS
 }
 inline SeasonSealHealth_threshold_bpsComp MakeSeasonSealHealth_threshold_bpsComp(const SeasonSealTable& row) {
     return { row.health_threshold_bps() };
+}
+inline SeasonSealResonance_skill_idComp MakeSeasonSealResonance_skill_idComp(const SeasonSealTable& row) {
+    return { row.resonance_skill_id() };
+}
+inline SeasonSealResonance_kindComp MakeSeasonSealResonance_kindComp(const SeasonSealTable& row) {
+    return { row.resonance_kind() };
+}
+inline SeasonSealResonance_paramComp MakeSeasonSealResonance_paramComp(const SeasonSealTable& row) {
+    return { row.resonance_param() };
+}
+inline SeasonSealResonance_descComp MakeSeasonSealResonance_descComp(const SeasonSealTable& row) {
+    return { std::string_view(row.resonance_desc()) };
 }

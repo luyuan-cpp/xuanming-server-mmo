@@ -66,6 +66,8 @@ type GuildLogic struct {
 	contentGuard contentguard.Checker
 	// war 是帮会全天帮战 V2 的外部依赖(war_logic.go 的 WarDeps),经 WithWar 注入。
 	war *WarDeps
+	// jianghuStore 允许单测注入帮派生死状恩怨墙替身；生产为 nil 时默认走 repo(*data.GuildRepo)。
+	jianghuStore data.JianghuGrudgeStore
 }
 
 func (l *GuildLogic) notifyWarAlert(ctx context.Context, alert *pb.GuildWarAlertS2C, recipients []uint64) {

@@ -334,6 +334,7 @@ int main(int argc, char *argv[])
 			// P1 保留持久收件箱 relay；普通停机与 P3 才取消此计时器。
 			PlayerBattleSystem::StopReaper();
 			PlayerMysteryMerchantSystem::Stop();
+			PlayerCraftSystem::StopProxyStallDirectory();
 			// 停机期间不再按归属排空:玩家正按停机原因存盘退出。也必须早于 Node 析构里的兜底 drain 循环,
 			// 那之后探针捕获的 node 不再可用。
 			context->ownershipReconciler.Stop();
@@ -591,6 +592,8 @@ int main(int argc, char *argv[])
             // 神秘商人:每 5 秒从 zone Redis 读一次「这一轮商人在哪、卖什么」(scene_manager 写入),
             // 读到新的一轮就向本节点玩家发出现公告(docs/design/mystery-merchant.md §5.1)。不进 20FPS World::Update。
             PlayerMysteryMerchantSystem::Start(n.GetLoop());
+            // 跨节点/离线名匠代打共享摊位目录：每 5 秒从控制集群 Redis 同步同区宗师营业摊位。
+            PlayerCraftSystem::StartProxyStallDirectory(n.GetLoop());
             // 场景归属对账(缺口清单第 33 条,docs/design/scene-node-ownership-reconcile.md):每 10s 经场景控制域读本地
             // 各场景的 scene:{id}:node 与本节点号的持有者,不归本进程的实体按住户预算排空后销毁 —— 与 etcd 单边失联、被判死之后,
             // scene_manager 已把它们改派、拆掉,或交给了接走这个号的新进程。核对不看 etcd 身份(失联期间照样收敛);身份探针

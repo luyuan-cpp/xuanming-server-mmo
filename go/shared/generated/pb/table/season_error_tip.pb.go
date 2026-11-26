@@ -37,6 +37,8 @@ const (
 	SeasonError_kSeasonInBattle                 SeasonError = 34009
 	SeasonError_kSeasonSkillNoUpgrade           SeasonError = 34010
 	SeasonError_kSeasonUnavailable              SeasonError = 34011
+	SeasonError_kSeasonHonorAlreadyUnlocked     SeasonError = 34012
+	SeasonError_kSeasonHonorTargetInvalid       SeasonError = 34013
 )
 
 // Enum value maps for SeasonError.
@@ -55,6 +57,8 @@ var (
 		34009: "kSeasonInBattle",
 		34010: "kSeasonSkillNoUpgrade",
 		34011: "kSeasonUnavailable",
+		34012: "kSeasonHonorAlreadyUnlocked",
+		34013: "kSeasonHonorTargetInvalid",
 	}
 	SeasonError_value = map[string]int32{
 		"kSeason_errorOK":                 0,
@@ -70,6 +74,8 @@ var (
 		"kSeasonInBattle":                 34009,
 		"kSeasonSkillNoUpgrade":           34010,
 		"kSeasonUnavailable":              34011,
+		"kSeasonHonorAlreadyUnlocked":     34012,
+		"kSeasonHonorTargetInvalid":       34013,
 	}
 )
 
@@ -104,7 +110,7 @@ var File_season_error_tip_proto protoreflect.FileDescriptor
 
 const file_season_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x16season_error_tip.proto*\xf3\x02\n" +
+	"\x16season_error_tip.proto*\xb7\x03\n" +
 	"\fseason_error\x12\x13\n" +
 	"\x0fkSeason_errorOK\x10\x00\x12\x14\n" +
 	"\x0ekSeasonNotOpen\x10Љ\x02\x12\x15\n" +
@@ -118,7 +124,9 @@ const file_season_error_tip_proto_rawDesc = "" +
 	"\rkSeasonFrozen\x10؉\x02\x12\x15\n" +
 	"\x0fkSeasonInBattle\x10ى\x02\x12\x1b\n" +
 	"\x15kSeasonSkillNoUpgrade\x10ډ\x02\x12\x18\n" +
-	"\x12kSeasonUnavailable\x10ۉ\x02B$\n" +
+	"\x12kSeasonUnavailable\x10ۉ\x02\x12!\n" +
+	"\x1bkSeasonHonorAlreadyUnlocked\x10܉\x02\x12\x1f\n" +
+	"\x19kSeasonHonorTargetInvalid\x10݉\x02B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

@@ -181,8 +181,17 @@ type PlayerBattleResult struct {
 	BattleSilverWeeklyUsed    uint64 `protobuf:"varint,44,opt,name=battle_silver_weekly_used,json=battleSilverWeeklyUsed,proto3" json:"battle_silver_weekly_used,omitempty"`
 	BattleSilverWeeklySoftCap uint64 `protobuf:"varint,45,opt,name=battle_silver_weekly_soft_cap,json=battleSilverWeeklySoftCap,proto3" json:"battle_silver_weekly_soft_cap,omitempty"`
 	BattleSilverDiminished    bool   `protobuf:"varint,46,opt,name=battle_silver_diminished,json=battleSilverDiminished,proto3" json:"battle_silver_diminished,omitempty"`
-	unknownFields             protoimpl.UnknownFields
-	sizeCache                 protoimpl.SizeCache
+	TrialVowMask              uint32 `protobuf:"varint,47,opt,name=trial_vow_mask,json=trialVowMask,proto3" json:"trial_vow_mask,omitempty"`            // 五行试炼志 V3：本局生效的试炼誓约位掩码（0=常规）
+	TrialNewVowBest           bool   `protobuf:"varint,48,opt,name=trial_new_vow_best,json=trialNewVowBest,proto3" json:"trial_new_vow_best,omitempty"` // 五行试炼志 V3：本局是否刷新该试炼格最高誓约纪录
+	TrialBattleId             uint64 `protobuf:"varint,49,opt,name=trial_battle_id,json=trialBattleId,proto3" json:"trial_battle_id,omitempty"`         // 五行试炼志 V3：可供一键发帖约战/回放的权威 battle_id（仅胜局非 0）
+	// 满级溢出流向「往季徽章追忆」的单局增量（与 BattleEndS2C 同源，断线补弹零丢失）。
+	RetroHonorSeasonId      uint32 `protobuf:"varint,50,opt,name=retro_honor_season_id,json=retroHonorSeasonId,proto3" json:"retro_honor_season_id,omitempty"`
+	RetroHonorPointsAdded   uint32 `protobuf:"varint,51,opt,name=retro_honor_points_added,json=retroHonorPointsAdded,proto3" json:"retro_honor_points_added,omitempty"`
+	RetroHonorProgressAfter uint32 `protobuf:"varint,52,opt,name=retro_honor_progress_after,json=retroHonorProgressAfter,proto3" json:"retro_honor_progress_after,omitempty"`
+	RetroHonorMaxPoints     uint32 `protobuf:"varint,53,opt,name=retro_honor_max_points,json=retroHonorMaxPoints,proto3" json:"retro_honor_max_points,omitempty"`
+	RetroHonorNewlyUnlocked bool   `protobuf:"varint,54,opt,name=retro_honor_newly_unlocked,json=retroHonorNewlyUnlocked,proto3" json:"retro_honor_newly_unlocked,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *PlayerBattleResult) Reset() {
@@ -537,6 +546,62 @@ func (x *PlayerBattleResult) GetBattleSilverDiminished() bool {
 	return false
 }
 
+func (x *PlayerBattleResult) GetTrialVowMask() uint32 {
+	if x != nil {
+		return x.TrialVowMask
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetTrialNewVowBest() bool {
+	if x != nil {
+		return x.TrialNewVowBest
+	}
+	return false
+}
+
+func (x *PlayerBattleResult) GetTrialBattleId() uint64 {
+	if x != nil {
+		return x.TrialBattleId
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetRetroHonorSeasonId() uint32 {
+	if x != nil {
+		return x.RetroHonorSeasonId
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetRetroHonorPointsAdded() uint32 {
+	if x != nil {
+		return x.RetroHonorPointsAdded
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetRetroHonorProgressAfter() uint32 {
+	if x != nil {
+		return x.RetroHonorProgressAfter
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetRetroHonorMaxPoints() uint32 {
+	if x != nil {
+		return x.RetroHonorMaxPoints
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetRetroHonorNewlyUnlocked() bool {
+	if x != nil {
+		return x.RetroHonorNewlyUnlocked
+	}
+	return false
+}
+
 type PlayerBattleResultComp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	LastResultSeq uint64                 `protobuf:"varint,1,opt,name=last_result_seq,json=lastResultSeq,proto3" json:"last_result_seq,omitempty"` // 发过的最大 result_seq,只增不减(淘汰旧条目不回退)
@@ -599,7 +664,7 @@ const file_proto_common_component_player_battle_result_comp_proto_rawDesc = "" +
 	"\x06amount\x18\x02 \x01(\x04R\x06amount\"R\n" +
 	"\x16PlayerBattleResultItem\x12\"\n" +
 	"\ritem_table_id\x18\x01 \x01(\rR\vitemTableId\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x04R\x05count\"\x88\x11\n" +
+	"\x05count\x18\x02 \x01(\x04R\x05count\"\x9e\x14\n" +
 	"\x12PlayerBattleResult\x12\x1d\n" +
 	"\n" +
 	"result_seq\x18\x01 \x01(\x04R\tresultSeq\x12\x1b\n" +
@@ -653,7 +718,15 @@ const file_proto_common_component_player_battle_result_comp_proto_rawDesc = "" +
 	"\x14next_level_total_exp\x18+ \x01(\x04R\x11nextLevelTotalExp\x129\n" +
 	"\x19battle_silver_weekly_used\x18, \x01(\x04R\x16battleSilverWeeklyUsed\x12@\n" +
 	"\x1dbattle_silver_weekly_soft_cap\x18- \x01(\x04R\x19battleSilverWeeklySoftCap\x128\n" +
-	"\x18battle_silver_diminished\x18. \x01(\bR\x16battleSilverDiminished\"o\n" +
+	"\x18battle_silver_diminished\x18. \x01(\bR\x16battleSilverDiminished\x12$\n" +
+	"\x0etrial_vow_mask\x18/ \x01(\rR\ftrialVowMask\x12+\n" +
+	"\x12trial_new_vow_best\x180 \x01(\bR\x0ftrialNewVowBest\x12&\n" +
+	"\x0ftrial_battle_id\x181 \x01(\x04R\rtrialBattleId\x121\n" +
+	"\x15retro_honor_season_id\x182 \x01(\rR\x12retroHonorSeasonId\x127\n" +
+	"\x18retro_honor_points_added\x183 \x01(\rR\x15retroHonorPointsAdded\x12;\n" +
+	"\x1aretro_honor_progress_after\x184 \x01(\rR\x17retroHonorProgressAfter\x123\n" +
+	"\x16retro_honor_max_points\x185 \x01(\rR\x13retroHonorMaxPoints\x12;\n" +
+	"\x1aretro_honor_newly_unlocked\x186 \x01(\bR\x17retroHonorNewlyUnlocked\"o\n" +
 	"\x16PlayerBattleResultComp\x12&\n" +
 	"\x0flast_result_seq\x18\x01 \x01(\x04R\rlastResultSeq\x12-\n" +
 	"\aentries\x18\x02 \x03(\v2\x13.PlayerBattleResultR\aentriesB\x18Z\x16proto/common/componentb\x06proto3"

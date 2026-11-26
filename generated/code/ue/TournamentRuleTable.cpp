@@ -126,9 +126,6 @@ static void TournamentRuleTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& R
 	TournamentRuleTableCheckNarrowedField(RowObject, TEXT("qualifier_loss_points"), TEXT("qualifier_loss_points"), RowIndex, 2147483647.0, TEXT("uint32"));
 	TournamentRuleTableCheckNarrowedField(RowObject, TEXT("invite_ttl_seconds"), TEXT("invite_ttl_seconds"), RowIndex, 2147483647.0, TEXT("uint32"));
 	TournamentRuleTableCheckNarrowedField(RowObject, TEXT("intermission_seconds"), TEXT("intermission_seconds"), RowIndex, 2147483647.0, TEXT("uint32"));
-	TournamentRuleTableCheckNarrowedField(RowObject, TEXT("salute_gold_amount"), TEXT("salute_gold_amount"), RowIndex, 2147483647.0, TEXT("uint32"));
-	TournamentRuleTableCheckNarrowedField(RowObject, TEXT("salute_item_id"), TEXT("salute_item_id"), RowIndex, 2147483647.0, TEXT("uint32"));
-	TournamentRuleTableCheckNarrowedField(RowObject, TEXT("salute_item_count"), TEXT("salute_item_count"), RowIndex, 2147483647.0, TEXT("uint32"));
 	TournamentRuleTableCheckNarrowedField(RowObject, TEXT("prediction_reward_min_hits"), TEXT("prediction_reward_min_hits"), RowIndex, 2147483647.0, TEXT("uint32"));
 	TournamentRuleTableCheckNarrowedField(RowObject, TEXT("skill_ban_slots_per_team"), TEXT("skill_ban_slots_per_team"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
@@ -222,7 +219,6 @@ void UTournamentRuleTable::BuildIndices(FSnapshot& Snap)
 		}
 		Snap.IdIndex.Add(Row.id, RowIndex);
 		Snap.BattleConfigIdIndex.FindOrAdd(Row.battle_config_id).Add(RowIndex);
-		Snap.SaluteItemIdIndex.FindOrAdd(Row.salute_item_id).Add(RowIndex);
 	}
 }
 
@@ -298,29 +294,6 @@ const TArray<int32>& UTournamentRuleTable::GetBattleConfigIdIndices(int32 Key) c
 int32 UTournamentRuleTable::CountByBattleConfigIdIndex(int32 Key) const
 {
 	return GetBattleConfigIdIndices(Key).Num();
-}
-
-TArray<const FCfgTournamentRuleRow*> UTournamentRuleTable::GetBySaluteItemId(int32 Key) const
-{
-	TArray<const FCfgTournamentRuleRow*> Result;
-	const TArray<int32>& Indices = GetSaluteItemIdIndices(Key);
-	Result.Reserve(Indices.Num());
-	for (const int32 RowIndex : Indices)
-	{
-		Result.Add(&Snapshot->Rows[RowIndex]);
-	}
-	return Result;
-}
-
-const TArray<int32>& UTournamentRuleTable::GetSaluteItemIdIndices(int32 Key) const
-{
-	const TArray<int32>* Found = Snapshot->SaluteItemIdIndex.Find(Key);
-	return Found != nullptr ? *Found : GTournamentRuleEmptyIndices;
-}
-
-int32 UTournamentRuleTable::CountBySaluteItemIdIndex(int32 Key) const
-{
-	return GetSaluteItemIdIndices(Key).Num();
 }
 
 TArray<const FCfgTournamentRuleRow*> UTournamentRuleTable::Where(TFunctionRef<bool(const FCfgTournamentRuleRow&)> Pred) const

@@ -31,6 +31,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
     file_reflection_data[] = {
         // ::MailOutboxItem
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fmail_5foutbox_5fcomp_2eproto, /* tracker*/ nullptr,},
+        // ::MailOutboxCurrency
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fmail_5foutbox_5fcomp_2eproto, /* tracker*/ nullptr,},
         // ::MailOutboxEntry
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fmail_5foutbox_5fcomp_2eproto, /* tracker*/ nullptr,},
         // ::PlayerMailOutboxComp
@@ -186,6 +188,154 @@ const ::_pbi::ClassData* MailOutboxItem_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class MailOutboxCurrency::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<MailOutboxCurrency>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(MailOutboxCurrency, _impl_._has_bits_);
+};
+
+constexpr MailOutboxCurrency::ParseTableT_ MailOutboxCurrency::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(MailOutboxCurrency, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::MailOutboxCurrency>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint64 amount = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MailOutboxCurrency, _impl_.amount_), 0>(),
+       {16, 0, 0,
+        PROTOBUF_FIELD_OFFSET(MailOutboxCurrency, _impl_.amount_)}},
+      // uint32 currency_type = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MailOutboxCurrency, _impl_.currency_type_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(MailOutboxCurrency, _impl_.currency_type_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 currency_type = 1;
+      {PROTOBUF_FIELD_OFFSET(MailOutboxCurrency, _impl_.currency_type_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 amount = 2;
+      {PROTOBUF_FIELD_OFFSET(MailOutboxCurrency, _impl_.amount_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr MailOutboxCurrency::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        amount_{::uint64_t{0u}},
+        currency_type_{0u} {}
+
+template <typename>
+constexpr MailOutboxCurrency::MailOutboxCurrency(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL MailOutboxCurrency::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) MailOutboxCurrency(arena);
+}
+constexpr auto MailOutboxCurrency::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(MailOutboxCurrency), alignof(MailOutboxCurrency));
+}
+constexpr auto MailOutboxCurrency::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &MailOutboxCurrency::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<MailOutboxCurrency>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &MailOutboxCurrency::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<MailOutboxCurrency>(), &MailOutboxCurrency::ByteSizeLong,
+              &MailOutboxCurrency::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(MailOutboxCurrency, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[1],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fmail_5foutbox_5fcomp_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct MailOutboxCurrencyGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr MailOutboxCurrencyGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 MailOutboxCurrency_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(MailOutboxCurrency::InternalGenerateClassData_(
+            _default, &MailOutboxCurrency_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<MailOutboxCurrency>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~MailOutboxCurrencyGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) MailOutboxCurrency _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<MailOutboxCurrency>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(MailOutboxCurrencyGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST MailOutboxCurrencyGlobalsTypeInternal MailOutboxCurrency_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* MailOutboxCurrency_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return MailOutboxCurrency_globals_.GetClassData();
+#else
+  return MailOutboxCurrency_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class MailOutboxEntry::_Internal {
  public:
   using HasBits = decltype(::std::declval<MailOutboxEntry>()._impl_._has_bits_);
@@ -198,12 +348,12 @@ constexpr MailOutboxEntry::ParseTableT_ MailOutboxEntry::InternalGenerateParseTa
     {
       PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_._has_bits_),
       0, // no _extensions_
-      7, 56,  // max_field_number, fast_idx_mask
+      9, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967168,  // skipmap
+      4294966784,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      7,  // num_field_entries
-      1,  // num_aux_entries
+      9,  // num_field_entries
+      2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -214,50 +364,68 @@ constexpr MailOutboxEntry::ParseTableT_ MailOutboxEntry::InternalGenerateParseTa
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint64 request_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MailOutboxEntry, _impl_.request_id_), 3>(),
-       {8, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MailOutboxEntry, _impl_.request_id_), 4>(),
+       {8, 4, 0,
         PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_.request_id_)}},
       // uint32 source = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MailOutboxEntry, _impl_.source_), 6>(),
-       {16, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MailOutboxEntry, _impl_.source_), 8>(),
+       {16, 8, 0,
         PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_.source_)}},
       // uint64 source_id = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MailOutboxEntry, _impl_.source_id_), 4>(),
-       {24, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MailOutboxEntry, _impl_.source_id_), 5>(),
+       {24, 5, 0,
         PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_.source_id_)}},
       // string title = 4;
       {::_pbi::TcParser::FastUS1,
-       {34, 1, 0,
+       {34, 2, 0,
         PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_.title_)}},
       // string body = 5;
       {::_pbi::TcParser::FastUS1,
-       {42, 2, 0,
+       {42, 3, 0,
         PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_.body_)}},
       // repeated .MailOutboxItem items = 6;
       {::_pbi::TcParser::FastMtR1,
        {50, 0, 0,
         PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_.items_)}},
       // uint64 created_at_ms = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MailOutboxEntry, _impl_.created_at_ms_), 5>(),
-       {56, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MailOutboxEntry, _impl_.created_at_ms_), 6>(),
+       {56, 6, 0,
         PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_.created_at_ms_)}},
+      // uint64 recipient_player_id = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MailOutboxEntry, _impl_.recipient_player_id_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_.recipient_player_id_)}},
+      // repeated .MailOutboxCurrency currencies = 9;
+      {::_pbi::TcParser::FastMtR1,
+       {74, 1, 1,
+        PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_.currencies_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 request_id = 1;
-      {PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_.request_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_.request_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 source = 2;
-      {PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_.source_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_.source_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 source_id = 3;
-      {PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_.source_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_.source_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string title = 4;
-      {PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_.title_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      {PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_.title_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string body = 5;
-      {PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_.body_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      {PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_.body_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // repeated .MailOutboxItem items = 6;
       {PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_.items_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint64 created_at_ms = 7;
-      {PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_.created_at_ms_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_.created_at_ms_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 recipient_player_id = 8;
+      {PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_.recipient_player_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // repeated .MailOutboxCurrency currencies = 9;
+      {PROTOBUF_FIELD_OFFSET(MailOutboxEntry, _impl_.currencies_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -265,9 +433,14 @@ constexpr MailOutboxEntry::ParseTableT_ MailOutboxEntry::InternalGenerateParseTa
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::MailOutboxItem_globals_},
         #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::MailOutboxCurrency>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::MailOutboxCurrency_globals_},
+        #endif
     }},
     {{
-      "\17\0\0\0\5\4\0\0"
+      "\17\0\0\0\5\4\0\0\0\0\0\0\0\0\0\0"
       "MailOutboxEntry"
       "title"
       "body"
@@ -285,6 +458,11 @@ inline constexpr MailOutboxEntry::Impl_::Impl_(
             PROTOBUF_FIELD_OFFSET(::MailOutboxEntry, _impl_.items_)>()
          }
         ,
+        currencies_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::MailOutboxEntry,
+            PROTOBUF_FIELD_OFFSET(::MailOutboxEntry, _impl_.currencies_)>()
+         }
+        ,
         title_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
@@ -294,6 +472,7 @@ inline constexpr MailOutboxEntry::Impl_::Impl_(
         request_id_{::uint64_t{0u}},
         source_id_{::uint64_t{0u}},
         created_at_ms_{::uint64_t{0u}},
+        recipient_player_id_{::uint64_t{0u}},
         source_{0u} {}
 
 template <typename>
@@ -337,7 +516,7 @@ constexpr auto MailOutboxEntry::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[1],
+      &file_reflection_data[2],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fmail_5foutbox_5fcomp_2eproto,
@@ -488,7 +667,7 @@ constexpr auto PlayerMailOutboxComp::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[2],
+      &file_reflection_data[3],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fmail_5foutbox_5fcomp_2eproto,
@@ -554,8 +733,15 @@ const ::uint32_t
         1,
         0,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::MailOutboxCurrency, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::MailOutboxCurrency, _impl_.currency_type_),
+        PROTOBUF_FIELD_OFFSET(::MailOutboxCurrency, _impl_.amount_),
+        1,
+        0,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::MailOutboxEntry, _impl_._has_bits_),
-        10, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::MailOutboxEntry, _impl_.request_id_),
         PROTOBUF_FIELD_OFFSET(::MailOutboxEntry, _impl_.source_),
         PROTOBUF_FIELD_OFFSET(::MailOutboxEntry, _impl_.source_id_),
@@ -563,13 +749,17 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::MailOutboxEntry, _impl_.body_),
         PROTOBUF_FIELD_OFFSET(::MailOutboxEntry, _impl_.items_),
         PROTOBUF_FIELD_OFFSET(::MailOutboxEntry, _impl_.created_at_ms_),
-        3,
-        6,
+        PROTOBUF_FIELD_OFFSET(::MailOutboxEntry, _impl_.recipient_player_id_),
+        PROTOBUF_FIELD_OFFSET(::MailOutboxEntry, _impl_.currencies_),
         4,
-        1,
-        2,
-        0,
+        8,
         5,
+        2,
+        3,
+        0,
+        6,
+        7,
+        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerMailOutboxComp, _impl_._has_bits_),
         4, // hasbit index offset
@@ -580,12 +770,14 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::MailOutboxItem)},
-        {7, sizeof(::MailOutboxEntry)},
-        {24, sizeof(::PlayerMailOutboxComp)},
+        {7, sizeof(::MailOutboxCurrency)},
+        {14, sizeof(::MailOutboxEntry)},
+        {35, sizeof(::PlayerMailOutboxComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
         &::MailOutboxItem_globals_,
+        &::MailOutboxCurrency_globals_,
         &::MailOutboxEntry_globals_,
         &::PlayerMailOutboxComp_globals_,
 };
@@ -593,25 +785,29 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fmail_
     protodesc_cold) = {
     "\n4proto/common/component/player_mail_out"
     "box_comp.proto\"2\n\016MailOutboxItem\022\021\n\tconf"
-    "ig_id\030\001 \001(\r\022\r\n\005count\030\002 \001(\004\"\234\001\n\017MailOutbo"
-    "xEntry\022\022\n\nrequest_id\030\001 \001(\004\022\016\n\006source\030\002 \001"
-    "(\r\022\021\n\tsource_id\030\003 \001(\004\022\r\n\005title\030\004 \001(\t\022\014\n\004"
-    "body\030\005 \001(\t\022\036\n\005items\030\006 \003(\0132\017.MailOutboxIt"
-    "em\022\025\n\rcreated_at_ms\030\007 \001(\004\"9\n\024PlayerMailO"
-    "utboxComp\022!\n\007entries\030\001 \003(\0132\020.MailOutboxE"
-    "ntryB\022Z\020common/componentb\006proto3"
+    "ig_id\030\001 \001(\r\022\r\n\005count\030\002 \001(\004\";\n\022MailOutbox"
+    "Currency\022\025\n\rcurrency_type\030\001 \001(\r\022\016\n\006amoun"
+    "t\030\002 \001(\004\"\342\001\n\017MailOutboxEntry\022\022\n\nrequest_i"
+    "d\030\001 \001(\004\022\016\n\006source\030\002 \001(\r\022\021\n\tsource_id\030\003 \001"
+    "(\004\022\r\n\005title\030\004 \001(\t\022\014\n\004body\030\005 \001(\t\022\036\n\005items"
+    "\030\006 \003(\0132\017.MailOutboxItem\022\025\n\rcreated_at_ms"
+    "\030\007 \001(\004\022\033\n\023recipient_player_id\030\010 \001(\004\022\'\n\nc"
+    "urrencies\030\t \003(\0132\023.MailOutboxCurrency\"9\n\024"
+    "PlayerMailOutboxComp\022!\n\007entries\030\001 \003(\0132\020."
+    "MailOutboxEntryB\022Z\020common/componentb\006pro"
+    "to3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fmail_5foutbox_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fmail_5foutbox_5fcomp_2eproto = {
     false,
     false,
-    352,
+    483,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fmail_5foutbox_5fcomp_2eproto,
     "proto/common/component/player_mail_outbox_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fmail_5foutbox_5fcomp_2eproto_once,
     nullptr,
     0,
-    3,
+    4,
     schemas,
     file_message_globals,
     TableStruct_proto_2fcommon_2fcomponent_2fplayer_5fmail_5foutbox_5fcomp_2eproto::offsets,
@@ -848,6 +1044,234 @@ void MailOutboxItem::InternalSwap(MailOutboxItem* PROTOBUF_RESTRICT PROTOBUF_NON
 }
 // ===================================================================
 
+MailOutboxCurrency::MailOutboxCurrency(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, MailOutboxCurrency_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:MailOutboxCurrency)
+}
+MailOutboxCurrency::MailOutboxCurrency(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MailOutboxCurrency& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, MailOutboxCurrency_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE MailOutboxCurrency::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void MailOutboxCurrency::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, amount_),
+           0,
+           offsetof(Impl_, currency_type_) -
+               offsetof(Impl_, amount_) +
+               sizeof(Impl_::currency_type_));
+}
+MailOutboxCurrency::~MailOutboxCurrency() {
+  // @@protoc_insertion_point(destructor:MailOutboxCurrency)
+  SharedDtor(*this);
+}
+inline void MailOutboxCurrency::SharedDtor(MessageLite& self) {
+  MailOutboxCurrency& this_ = static_cast<MailOutboxCurrency&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull MailOutboxCurrency_class_data_ =
+        MailOutboxCurrency::InternalGenerateClassData_(MailOutboxCurrency_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+MailOutboxCurrency::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&MailOutboxCurrency_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(MailOutboxCurrency_class_data_.tc_table);
+  return MailOutboxCurrency_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+MailOutboxCurrency::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&MailOutboxCurrency_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&MailOutboxCurrency_globals_));
+  return MailOutboxCurrency_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const MailOutboxCurrency::ParseTableT_
+    MailOutboxCurrency::_table_ =
+        MailOutboxCurrency::InternalGenerateParseTable_(MailOutboxCurrency_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void MailOutboxCurrency::Clear() {
+// @@protoc_insertion_point(message_clear_start:MailOutboxCurrency)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.amount_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.currency_type_) -
+        reinterpret_cast<char*>(&_impl_.amount_)) + sizeof(_impl_.currency_type_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL MailOutboxCurrency::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const MailOutboxCurrency& this_ = static_cast<const MailOutboxCurrency&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL MailOutboxCurrency::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const MailOutboxCurrency& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:MailOutboxCurrency)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 currency_type = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_currency_type() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_currency_type(), target);
+    }
+  }
+
+  // uint64 amount = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_amount() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_amount(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:MailOutboxCurrency)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t MailOutboxCurrency::ByteSizeLong(const MessageLite& base) {
+  const MailOutboxCurrency& this_ = static_cast<const MailOutboxCurrency&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t MailOutboxCurrency::ByteSizeLong() const {
+  const MailOutboxCurrency& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:MailOutboxCurrency)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // uint64 amount = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_amount() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_amount());
+      }
+    }
+    // uint32 currency_type = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_currency_type() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_currency_type());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void MailOutboxCurrency::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<MailOutboxCurrency*>(&to_msg);
+  auto& from = static_cast<const MailOutboxCurrency&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:MailOutboxCurrency)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_amount() != 0) {
+        _this->_impl_.amount_ = from._impl_.amount_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_currency_type() != 0) {
+        _this->_impl_.currency_type_ = from._impl_.currency_type_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void MailOutboxCurrency::CopyFrom(const MailOutboxCurrency& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:MailOutboxCurrency)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void MailOutboxCurrency::InternalSwap(MailOutboxCurrency* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(MailOutboxCurrency, _impl_.currency_type_)
+      + sizeof(MailOutboxCurrency::_impl_.currency_type_)
+      - PROTOBUF_FIELD_OFFSET(MailOutboxCurrency, _impl_.amount_)>(
+          reinterpret_cast<char*>(&_impl_.amount_),
+          reinterpret_cast<char*>(&other->_impl_.amount_));
+}
+
+::google::protobuf::Metadata MailOutboxCurrency::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 MailOutboxEntry::MailOutboxEntry(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, MailOutboxEntry_get_class_data()) {
@@ -868,6 +1292,13 @@ PROTOBUF_NDEBUG_INLINE MailOutboxEntry::Impl_::Impl_(
               ::MailOutboxEntry,
               PROTOBUF_FIELD_OFFSET(::MailOutboxEntry, _impl_.items_)>()
           , from.items_
+        }
+        ,
+        currencies_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::MailOutboxEntry,
+              PROTOBUF_FIELD_OFFSET(::MailOutboxEntry, _impl_.currencies_)>()
+          , from.currencies_
         }
         ,
         title_(arena, from.title_),
@@ -904,6 +1335,11 @@ PROTOBUF_NDEBUG_INLINE MailOutboxEntry::Impl_::Impl_(
         items_ { visibility, ::_pbi::InternalMetadataOffset::Build<
             ::MailOutboxEntry,
             PROTOBUF_FIELD_OFFSET(::MailOutboxEntry, _impl_.items_)>()
+         }
+        ,
+        currencies_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::MailOutboxEntry,
+            PROTOBUF_FIELD_OFFSET(::MailOutboxEntry, _impl_.currencies_)>()
          }
         ,
         title_(arena),
@@ -968,22 +1404,26 @@ PROTOBUF_NOINLINE void MailOutboxEntry::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.items_.Clear();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      _impl_.title_.ClearNonDefaultToEmpty();
+      _impl_.currencies_.Clear();
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.title_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       _impl_.body_.ClearNonDefaultToEmpty();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000078U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f0U)) {
     ::memset(&_impl_.request_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.source_) -
-        reinterpret_cast<char*>(&_impl_.request_id_)) + sizeof(_impl_.source_));
+        reinterpret_cast<char*>(&_impl_.recipient_player_id_) -
+        reinterpret_cast<char*>(&_impl_.request_id_)) + sizeof(_impl_.recipient_player_id_));
   }
+  _impl_.source_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -1008,7 +1448,7 @@ PROTOBUF_NOINLINE void MailOutboxEntry::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 request_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_request_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1017,7 +1457,7 @@ PROTOBUF_NOINLINE void MailOutboxEntry::Clear() {
   }
 
   // uint32 source = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_source() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1026,7 +1466,7 @@ PROTOBUF_NOINLINE void MailOutboxEntry::Clear() {
   }
 
   // uint64 source_id = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_source_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1035,7 +1475,7 @@ PROTOBUF_NOINLINE void MailOutboxEntry::Clear() {
   }
 
   // string title = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (!this_._internal_title().empty()) {
       const ::std::string& _s = this_._internal_title();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
@@ -1045,7 +1485,7 @@ PROTOBUF_NOINLINE void MailOutboxEntry::Clear() {
   }
 
   // string body = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (!this_._internal_body().empty()) {
       const ::std::string& _s = this_._internal_body();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
@@ -1068,11 +1508,33 @@ PROTOBUF_NOINLINE void MailOutboxEntry::Clear() {
   }
 
   // uint64 created_at_ms = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_created_at_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           7, this_._internal_created_at_ms(), target);
+    }
+  }
+
+  // uint64 recipient_player_id = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_recipient_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          8, this_._internal_recipient_player_id(), target);
+    }
+  }
+
+  // repeated .MailOutboxCurrency currencies = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_currencies_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_currencies().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              9, repfield, repfield.GetCachedSize(),
+              target, stream);
     }
   }
 
@@ -1101,7 +1563,7 @@ PROTOBUF_NOINLINE void MailOutboxEntry::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // repeated .MailOutboxItem items = 6;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_items_size();
@@ -1109,43 +1571,59 @@ PROTOBUF_NOINLINE void MailOutboxEntry::Clear() {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // string title = 4;
+    // repeated .MailOutboxCurrency currencies = 9;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1UL * this_._internal_currencies_size();
+      for (const auto& msg : this_._internal_currencies()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // string title = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (!this_._internal_title().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_title());
       }
     }
     // string body = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (!this_._internal_body().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_body());
       }
     }
     // uint64 request_id = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_request_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_request_id());
       }
     }
     // uint64 source_id = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_source_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_source_id());
       }
     }
     // uint64 created_at_ms = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_created_at_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_created_at_ms());
       }
     }
+    // uint64 recipient_player_id = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_recipient_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_recipient_player_id());
+      }
+    }
+  }
+   {
     // uint32 source = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_source() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_source());
@@ -1170,13 +1648,18 @@ void MailOutboxEntry::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_items()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
           from._internal_items());
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_internal_mutable_currencies()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_currencies());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (!from._internal_title().empty()) {
         _this->_internal_set_title(from._internal_title());
       } else {
@@ -1185,7 +1668,7 @@ void MailOutboxEntry::MergeImpl(::google::protobuf::MessageLite& to_msg,
         }
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (!from._internal_body().empty()) {
         _this->_internal_set_body(from._internal_body());
       } else {
@@ -1194,25 +1677,30 @@ void MailOutboxEntry::MergeImpl(::google::protobuf::MessageLite& to_msg,
         }
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_request_id() != 0) {
         _this->_impl_.request_id_ = from._impl_.request_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_source_id() != 0) {
         _this->_impl_.source_id_ = from._impl_.source_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_created_at_ms() != 0) {
         _this->_impl_.created_at_ms_ = from._impl_.created_at_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      if (from._internal_source() != 0) {
-        _this->_impl_.source_ = from._impl_.source_;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_recipient_player_id() != 0) {
+        _this->_impl_.recipient_player_id_ = from._impl_.recipient_player_id_;
       }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_source() != 0) {
+      _this->_impl_.source_ = from._impl_.source_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -1235,6 +1723,7 @@ void MailOutboxEntry::InternalSwap(MailOutboxEntry* PROTOBUF_RESTRICT PROTOBUF_N
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.items_.InternalSwap(&other->_impl_.items_);
+  _impl_.currencies_.InternalSwap(&other->_impl_.currencies_);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.title_, &other->_impl_.title_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.body_, &other->_impl_.body_, arena);
   ::google::protobuf::internal::memswap<

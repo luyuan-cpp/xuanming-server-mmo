@@ -11,19 +11,26 @@
 #include "modules/currency/system/currency_system.h"
 #include "player/comp/player_frozen_comp.h"
 #include "player/comp/player_ownership_comp.h"
+#include "player/system/player_attribute.h"
 #include "player/system/player_level_rules.h"
 #include "player/system/player_skill.h"
 #include "player/system/player_support_effects.h"
+#include "player/system/skill_loadout_rules.h"
 #include "modules/bag/comp/player_bags_comp.h"
 #include "proto/common/component/actor_attribute_state_comp.pb.h"
+#include "proto/common/component/client_request_ledger_comp.pb.h"
+#include "proto/common/component/player_attribute_comp.pb.h"
 #include "player/system/player_pet.h"
 #include "player/system/attribute_allocation_rules.h"
 #include "proto/common/component/player_pet_comp.pb.h"
 #include "proto/scene/player_pet.pb.h"
 #include "table/code/pet_table.h"
 #include "table/code/petrule_table.h"
+#include "table/code/attributeallocratio_table.h"
 #include "table/code/attributepool_table.h"
 #include "table/code/attributedimension_table.h"
+#include "table/code/attributerule_table.h"
+#include "table/proto/tip/attribute_error_tip.pb.h"
 #include "table/proto/tip/pet_error_tip.pb.h"
 #include "proto/battle/battle_data.pb.h"
 #include "proto/common/component/actor_comp.pb.h"
@@ -827,7 +834,10 @@ TEST_F(PlayerSkillBookTest, SkillLoadoutEnforcesSlotLimitsExclusiveGroupAndSyncs
     ASSERT_EQ(kSuccess, PlayerSkillSystem::BuildSkillBook(player, initialBook));
     ASSERT_TRUE(initialBook.has_loadout());
     EXPECT_FALSE(initialBook.loadout().custom_enabled());
-    EXPECT_EQ(initialBook.loadout().schemes_size(), 3);
+    EXPECT_EQ(initialBook.loadout().schemes_size(), 2);
+    EXPECT_EQ(initialBook.loadout().free_schemes(), 2u);
+    EXPECT_EQ(initialBook.loadout().unlocked_schemes(), 2u);
+    EXPECT_EQ(initialBook.loadout().max_schemes(), 7u);
 
     // 1. 超过 3 个被动槽位被拒绝。
     SaveSkillLoadoutRequest tooMany;
@@ -900,7 +910,7 @@ TEST_F(PlayerSkillBookTest, SkillLoadoutEnforcesSlotLimitsExclusiveGroupAndSyncs
     EXPECT_TRUE(swReplay.replayed());
 }
 
-TEST_F(PlayerSkillBookTest, LightCardExpandsLoadoutSchemesFromThreeToSixAndPreservesSavedSchemesOnExpiry)
+TEST_F(PlayerSkillBookTest, LightCardExpandsLoadoutSchemesFromTwoToFourAndPreservesSavedSchemesOnExpiry)
 {
     const auto player = NewPlayer(1, 80, 100000);
     Own(player, 12001, 1);
@@ -908,12 +918,14 @@ TEST_F(PlayerSkillBookTest, LightCardExpandsLoadoutSchemesFromThreeToSixAndPrese
     auto& u64 = tlsEcs.actorRegistry.emplace_or_replace<PlayerUint64Comp>(player);
     u64.set_afk_pass_expires_at(0);
 
-    // 1. 未开通轻享卡：仅解锁 3 套，保存或切换方案 4 被拒绝。
+    // 1. 未开通轻享卡且未租用：仅解锁 2 套永久免费，保存方案 3/4 被拒绝。
     ListSkillsResponse book;
     ASSERT_EQ(kSuccess, PlayerSkillSystem::BuildSkillBook(player, book));
-    EXPECT_EQ(book.loadout().unlocked_schemes(), 3u);
-    EXPECT_EQ(book.loadout().max_schemes(), 6u);
-    EXPECT_EQ(book.loadout().schemes_size(), 3);
+    EXPECT_EQ(book.loadout().free_schemes(), 2u);
+    EXPECT_EQ(book.loadout().light_card_bonus_schemes(), 0u);
+    EXPECT_EQ(book.loadout().unlocked_schemes(), 2u);
+    EXPECT_EQ(book.loadout().max_schemes(), 7u);
+    EXPECT_EQ(book.loadout().schemes_size(), 2);
 
     SaveSkillLoadoutRequest save4;
     save4.set_scheme_id(4);
@@ -925,11 +937,12 @@ TEST_F(PlayerSkillBookTest, LightCardExpandsLoadoutSchemesFromThreeToSixAndPrese
     PlayerSkillSystem::SaveLoadout(player, save4, saveResp);
     EXPECT_EQ(saveResp.error_message().id(), kSkillLoadoutSchemeInvalid);
 
-    // 2. 开通轻享卡：解锁 6 套方案，可保存并激活方案 4。
+    // 2. 开通轻享卡：额外 +2 套解锁至 4 套，可保存并激活方案 4。
     u64.set_afk_pass_expires_at(TimeSystem::NowSecondsUTC() + 3600);
     ASSERT_EQ(kSuccess, PlayerSkillSystem::BuildSkillBook(player, book));
-    EXPECT_EQ(book.loadout().unlocked_schemes(), 6u);
-    EXPECT_EQ(book.loadout().schemes_size(), 6);
+    EXPECT_EQ(book.loadout().light_card_bonus_schemes(), 2u);
+    EXPECT_EQ(book.loadout().unlocked_schemes(), 4u);
+    EXPECT_EQ(book.loadout().schemes_size(), 4);
 
     save4.set_state_version(book.loadout().state_version());
     save4.set_request_id("loadout-lightcard-save4-0002");
@@ -938,11 +951,11 @@ TEST_F(PlayerSkillBookTest, LightCardExpandsLoadoutSchemesFromThreeToSixAndPrese
     EXPECT_EQ(saveResp.state().loadout().active_scheme_id(), 4u);
     EXPECT_GT(PlayerSkillSystem::CollectPassiveBonus(player).physicalAttack, 0.0);
 
-    // 3. 轻享卡到期：回退为 3 格解锁，但已存方案 4 完整保留不丢失；可切回 1..3，切回 4 与写 5 需续卡。
+    // 3. 轻享卡到期：回退为 2 套解锁，但已存方案 4 完整保留不丢失；可切回 1..2，切回 4 需续卡或租用。
     u64.set_afk_pass_expires_at(1);
     ASSERT_EQ(kSuccess, PlayerSkillSystem::BuildSkillBook(player, book));
-    EXPECT_EQ(book.loadout().unlocked_schemes(), 3u);
-    EXPECT_EQ(book.loadout().schemes_size(), 4); // 1,2,3 + 保留的已存方案 4
+    EXPECT_EQ(book.loadout().unlocked_schemes(), 2u);
+    EXPECT_EQ(book.loadout().schemes_size(), 3); // 1,2 + 保留的已存方案 4
 
     SwitchSkillLoadoutRequest sw1;
     sw1.set_scheme_id(1);
@@ -959,4 +972,322 @@ TEST_F(PlayerSkillBookTest, LightCardExpandsLoadoutSchemesFromThreeToSixAndPrese
     sw4.set_request_id("loadout-lightcard-sw4-0001");
     PlayerSkillSystem::SwitchLoadout(player, sw4, swResp);
     EXPECT_EQ(swResp.error_message().id(), kSkillLoadoutSchemeInvalid);
+}
+
+TEST_F(PlayerSkillBookTest, RentLoadoutSlotsCoversNewRentProrateExpandRenewCapAntiOverbuyAndIdempotency)
+{
+    const auto player = NewPlayer(1, 80, 100000);
+    tlsEcs.actorRegistry.emplace<ClientRequestLedgerComp>(player);
+    auto& u64 = tlsEcs.actorRegistry.emplace_or_replace<PlayerUint64Comp>(player);
+    u64.set_afk_pass_expires_at(0);
+    // 充 5000 绑定灵石与 100 真实灵石：验证严格禁止混扣绑定灵石。
+    ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyBindDiamond, 5000));
+    ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyDiamond, 100));
+
+    constexpr uint64_t kNow = 1'800'000'000ULL;
+    constexpr uint64_t kPeriod = skillloadout::kRentPeriodSeconds;
+
+    // 1. 仅真实灵石可支付：租 5 套需 150 灵石，虽有 5000 绑灵仍被拒。
+    RentSkillLoadoutSlotsRequest req;
+    req.set_client_request_id(90001);
+    req.set_target_rented_slots(5);
+    req.set_add_periods(1);
+    req.set_expected_cost_diamond(150);
+    RentSkillLoadoutSlotsResponse resp;
+    PlayerSkillSystem::RentLoadoutSlotsAt(player, req, kNow, resp);
+    EXPECT_EQ(resp.error_message().id(), kSkillLoadoutRentDiamondNotEnough);
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyDiamond), 100u);
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyBindDiamond), 5000u);
+
+    // 2. 错误报价拦截（kSkillLoadoutRentPriceChanged）。
+    req.set_client_request_id(90002);
+    req.set_target_rented_slots(1);
+    req.set_add_periods(1);
+    req.set_expected_cost_diamond(29);
+    PlayerSkillSystem::RentLoadoutSlotsAt(player, req, kNow, resp);
+    EXPECT_EQ(resp.error_message().id(), kSkillLoadoutRentPriceChanged);
+
+    // 3. 新租 1 套 × 30 天 = 30 真实灵石；同键重放幂等不二扣，同键换参拒绝。
+    req.set_client_request_id(90003);
+    req.set_target_rented_slots(1);
+    req.set_add_periods(1);
+    req.set_expected_cost_diamond(30);
+    PlayerSkillSystem::RentLoadoutSlotsAt(player, req, kNow, resp);
+    ASSERT_FALSE(resp.has_error_message());
+    EXPECT_FALSE(resp.replayed());
+    EXPECT_EQ(resp.rented_extra_slots(), 1u);
+    EXPECT_EQ(resp.rent_expires_at_sec(), kNow + kPeriod);
+    EXPECT_EQ(resp.spent_diamond(), 30u);
+    EXPECT_EQ(resp.state().loadout().unlocked_schemes(), 3u);
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyDiamond), 70u);
+
+    RentSkillLoadoutSlotsResponse replay;
+    PlayerSkillSystem::RentLoadoutSlotsAt(player, req, kNow + 10, replay);
+    ASSERT_FALSE(replay.has_error_message());
+    EXPECT_TRUE(replay.replayed());
+    EXPECT_EQ(replay.spent_diamond(), 30u);
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyDiamond), 70u);
+
+    req.set_target_rented_slots(2);
+    req.set_expected_cost_diamond(60);
+    PlayerSkillSystem::RentLoadoutSlotsAt(player, req, kNow + 10, replay);
+    EXPECT_EQ(replay.error_message().id(), kInvalidParameter);
+
+    // 4. 租期内第 15 天（剩余半个周期）补差价扩容 1 → 3 套，add_periods=0：补差价 ceil(2*30*0.5)=30，到期日不变。
+    const uint64_t halfWay = kNow + kPeriod / 2;
+    req.set_client_request_id(90004);
+    req.set_target_rented_slots(3);
+    req.set_add_periods(0);
+    req.set_expected_cost_diamond(30);
+    PlayerSkillSystem::RentLoadoutSlotsAt(player, req, halfWay, resp);
+    ASSERT_FALSE(resp.has_error_message());
+    EXPECT_EQ(resp.rented_extra_slots(), 3u);
+    EXPECT_EQ(resp.rent_expires_at_sec(), kNow + kPeriod);
+    EXPECT_EQ(resp.spent_diamond(), 30u);
+    EXPECT_EQ(resp.state().loadout().unlocked_schemes(), 5u);
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyDiamond), 40u);
+
+    // 5. 租期内禁止缩减已租套数（3 → 2 拒绝）。
+    req.set_client_request_id(90005);
+    req.set_target_rented_slots(2);
+    req.set_add_periods(1);
+    req.set_expected_cost_diamond(60);
+    PlayerSkillSystem::RentLoadoutSlotsAt(player, req, halfWay, resp);
+    EXPECT_EQ(resp.error_message().id(), kSkillLoadoutRentSlotsInvalid);
+
+    // 6. 反白嫖：仅剩 1 秒扩容 +1 套仍向上取整至少扣 1 灵石。
+    const auto tinyPlan = skillloadout::PlanRent(false, 3, kNow + kPeriod, kNow + kPeriod - 1, 4, 0);
+    EXPECT_EQ(tinyPlan.error, skillloadout::RentError::None);
+    EXPECT_EQ(tinyPlan.prorateCostDiamond, 1u);
+    EXPECT_EQ(tinyPlan.totalCostDiamond, 1u);
+
+    // 7. 180 天叠加封顶校验：剩余 15 天时续 6 期（+180 天 = 195 天）被拒；续 5 期（165 天）放行。
+    ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyDiamond, 1000));
+    req.set_client_request_id(90006);
+    req.set_target_rented_slots(3);
+    req.set_add_periods(6);
+    req.set_expected_cost_diamond(540);
+    PlayerSkillSystem::RentLoadoutSlotsAt(player, req, halfWay, resp);
+    EXPECT_EQ(resp.error_message().id(), kSkillLoadoutRentStackLimit);
+
+    req.set_client_request_id(90007);
+    req.set_target_rented_slots(3);
+    req.set_add_periods(5);
+    req.set_expected_cost_diamond(450);
+    PlayerSkillSystem::RentLoadoutSlotsAt(player, req, halfWay, resp);
+    ASSERT_FALSE(resp.has_error_message());
+    EXPECT_EQ(resp.rent_expires_at_sec(), kNow + kPeriod * 6);
+
+    // 8. 轻享卡生效期防溢买拦截：2免费 + 2轻享卡，最多仅可再租 3 套（总 7 套），租 4 套被拒。
+    u64.set_afk_pass_expires_at(kNow + kPeriod * 10);
+    req.set_client_request_id(90008);
+    req.set_target_rented_slots(4);
+    req.set_add_periods(0);
+    req.set_expected_cost_diamond(1);
+    PlayerSkillSystem::RentLoadoutSlotsAt(player, req, halfWay, resp);
+    EXPECT_EQ(resp.error_message().id(), kSkillLoadoutRentSlotsInvalid);
+
+    ListSkillsResponse bookAtCap;
+    ASSERT_EQ(kSuccess, PlayerSkillSystem::BuildSkillBookAt(player, halfWay, bookAtCap));
+    EXPECT_EQ(bookAtCap.loadout().unlocked_schemes(), 7u);
+    EXPECT_EQ(bookAtCap.loadout().rented_extra_slots(), 3u);
+    EXPECT_EQ(bookAtCap.loadout().light_card_bonus_schemes(), 2u);
+}
+
+TEST_F(PlayerSkillBookTest, UnifiedLoadoutSaveAndSwitchBindsAttributesNameValidationAndResetConfirmation)
+{
+    AttributePoolTableManager::Instance().Load();
+    AttributeDimensionTableManager::Instance().Load();
+    AttributeRuleTableManager::Instance().Load();
+    AttributeAllocRatioTableManager::Instance().Load();
+
+    const auto player = NewPlayer(1, 60, 100000);
+    tlsEcs.actorRegistry.emplace<PlayerBagsComp>(player);
+    tlsEcs.actorRegistry.emplace<BaseAttributesComp>(player);
+    tlsEcs.actorRegistry.emplace<PlayerAttributeComp>(player);
+    PlayerAttributeSystem::InitializeOnLoad(player);
+    Own(player, 12001, 1);
+    Own(player, 12003, 1);
+
+    ListSkillsResponse initial;
+    ASSERT_EQ(kSuccess, PlayerSkillSystem::BuildSkillBook(player, initial));
+    ASSERT_GE(initial.loadout().schemes_size(), 2);
+    const uint32_t totalPts = initial.loadout().schemes(0).attribute_total_points();
+    ASSERT_GT(totalPts, 40u);
+
+    // 1. 敏感词与尖括号方案名拒绝（kSkillLoadoutNameInvalid），不改状态。
+    SaveSkillLoadoutRequest badName;
+    badName.set_scheme_id(1);
+    badName.set_name("官方测试");
+    badName.set_role_tag(1);
+    badName.set_state_version(initial.loadout().state_version());
+    badName.set_request_id("loadout-badname-00001");
+    SaveSkillLoadoutResponse resp;
+    PlayerSkillSystem::SaveLoadout(player, badName, resp);
+    EXPECT_EQ(resp.error_message().id(), kSkillLoadoutNameInvalid);
+
+    badName.set_name("<color=red>A</color>");
+    badName.set_request_id("loadout-badname-00002");
+    PlayerSkillSystem::SaveLoadout(player, badName, resp);
+    EXPECT_EQ(resp.error_message().id(), kSkillLoadoutNameInvalid);
+
+    // 2. 合法一体化保存方案 1（含自定义名、生存 tag=4、被动 12001 与 4力1体 四维加点）。
+    SaveSkillLoadoutRequest save1;
+    save1.set_scheme_id(1);
+    save1.set_name("日常速刷");
+    save1.set_role_tag(4);
+    save1.add_passive_skill_ids(12001);
+    save1.set_state_version(initial.loadout().state_version());
+    save1.set_request_id("loadout-unified-s1-0001");
+    save1.set_update_attribute_allocation(true);
+    (*save1.mutable_attribute_allocated())[101] = 10;
+    (*save1.mutable_attribute_allocated())[103] = 30;
+    PlayerSkillSystem::SaveLoadout(player, save1, resp);
+    ASSERT_FALSE(resp.has_error_message());
+    EXPECT_EQ(resp.state().loadout().schemes(0).name(), "日常速刷");
+    EXPECT_EQ(resp.state().loadout().schemes(0).role_tag(), 4u);
+    EXPECT_EQ(resp.state().loadout().schemes(0).attribute_allocated().at(101), 10u);
+    EXPECT_EQ(resp.state().loadout().schemes(0).attribute_allocated().at(103), 30u);
+    EXPECT_EQ(resp.state().loadout().schemes(0).attribute_remaining(), totalPts - 40u);
+    EXPECT_EQ(resp.state().loadout().active_attribute_scheme_id(), 1u);
+
+    // 3. 降低已存属性点但不确认洗点 → 拒回 kSkillLoadoutAttributeResetRequired，余额与加点不变。
+    const uint64_t goldBefore = CurrencySystem::GetBalance(player, kCurrencyGold);
+    SaveSkillLoadoutRequest lowerNoReset;
+    lowerNoReset.set_scheme_id(1);
+    lowerNoReset.set_role_tag(1);
+    lowerNoReset.add_passive_skill_ids(12001);
+    lowerNoReset.set_state_version(resp.state().loadout().state_version());
+    lowerNoReset.set_request_id("loadout-lower-noreset-01");
+    lowerNoReset.set_update_attribute_allocation(true);
+    (*lowerNoReset.mutable_attribute_allocated())[101] = 20;
+    (*lowerNoReset.mutable_attribute_allocated())[103] = 20; // 从 30 降至 20
+    lowerNoReset.set_reset_attribute_if_needed(false);
+    PlayerSkillSystem::SaveLoadout(player, lowerNoReset, resp);
+    EXPECT_EQ(resp.error_message().id(), kSkillLoadoutAttributeResetRequired);
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), goldBefore);
+
+    // 4. 确认洗点后保存成功并按表扣洗点银两。
+    lowerNoReset.set_request_id("loadout-lower-confirm-01");
+    lowerNoReset.set_reset_attribute_if_needed(true);
+    PlayerSkillSystem::SaveLoadout(player, lowerNoReset, resp);
+    ASSERT_FALSE(resp.has_error_message());
+    EXPECT_EQ(resp.state().loadout().schemes(0).attribute_allocated().at(101), 20u);
+    EXPECT_EQ(resp.state().loadout().schemes(0).attribute_allocated().at(103), 20u);
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold),
+              goldBefore - resp.state().loadout().attribute_reset_cost_gold());
+
+    // 5. 一体化保存方案 2（免费自动补建第 2 套属性方案 + 联动切换），并验证方案 1 与方案 2 加点独立隔离。
+    SaveSkillLoadoutRequest save2;
+    save2.set_scheme_id(2);
+    save2.set_name("全敏先手");
+    save2.set_role_tag(2);
+    save2.add_passive_skill_ids(12003);
+    save2.set_state_version(resp.state().loadout().state_version());
+    save2.set_request_id("loadout-unified-s2-0001");
+    save2.set_update_attribute_allocation(true);
+    (*save2.mutable_attribute_allocated())[104] = 40;
+    PlayerSkillSystem::SaveLoadout(player, save2, resp);
+    ASSERT_FALSE(resp.has_error_message());
+    EXPECT_EQ(resp.state().loadout().active_scheme_id(), 2u);
+    EXPECT_EQ(resp.state().loadout().active_attribute_scheme_id(), 2u);
+    EXPECT_EQ(resp.state().loadout().schemes(1).name(), "全敏先手");
+    EXPECT_EQ(resp.state().loadout().schemes(1).attribute_allocated().at(104), 40u);
+    EXPECT_EQ(resp.state().loadout().schemes(0).attribute_allocated().at(101), 20u);
+
+    // 6. 刚切换完属性方案立即切回方案 1：战法切换成功，属性处于 60 秒冷却返回明确提示（不报错）。
+    SwitchSkillLoadoutRequest sw1;
+    sw1.set_scheme_id(1);
+    sw1.set_state_version(resp.state().loadout().state_version());
+    sw1.set_request_id("loadout-switch-cd-0001");
+    SwitchSkillLoadoutResponse swResp;
+    PlayerSkillSystem::SwitchLoadout(player, sw1, swResp);
+    ASSERT_FALSE(swResp.has_error_message());
+    EXPECT_EQ(swResp.state().loadout().active_scheme_id(), 1u);
+    EXPECT_FALSE(swResp.attribute_sync_notice().empty());
+    EXPECT_EQ(swResp.state().loadout().active_attribute_scheme_id(), 2u);
+}
+
+TEST_F(PlayerSkillBookTest, MaxLevel85AutomaticallyGrantsThirdFreeSchemeAndTightensRentAntiOverbuyCap)
+{
+    const auto player = NewPlayer(1, 84, 100000);
+    tlsEcs.actorRegistry.emplace<ClientRequestLedgerComp>(player);
+    auto& u64 = tlsEcs.actorRegistry.emplace_or_replace<PlayerUint64Comp>(player);
+    u64.set_afk_pass_expires_at(0);
+    Own(player, 12001, 1);
+    ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyDiamond, 500));
+
+    constexpr uint64_t kNow = 1'800'000'000ULL;
+    constexpr uint64_t kPeriod = skillloadout::kRentPeriodSeconds;
+
+    // 1. 84 级零氪：免费 2 套，保存第 3 套被拒。
+    ListSkillsResponse book;
+    ASSERT_EQ(kSuccess, PlayerSkillSystem::BuildSkillBookAt(player, kNow, book));
+    EXPECT_EQ(book.loadout().free_schemes(), 2u);
+    EXPECT_EQ(book.loadout().unlocked_schemes(), 2u);
+
+    SaveSkillLoadoutRequest save3;
+    save3.set_scheme_id(3);
+    save3.set_name("零氪三号");
+    save3.set_role_tag(2);
+    save3.add_passive_skill_ids(12001);
+    save3.set_state_version(book.loadout().state_version());
+    save3.set_request_id("loadout-lv84-save3-0001");
+    SaveSkillLoadoutResponse saveResp;
+    PlayerSkillSystem::SaveLoadout(player, save3, saveResp);
+    EXPECT_EQ(saveResp.error_message().id(), kSkillLoadoutSchemeInvalid);
+
+    // 2. 升至 85 级满级：0 氪自动永久解锁第 3 套免费槽（免费 3 套），保存方案 3 成功。
+    tlsEcs.actorRegistry.get<LevelComp>(player).set_level(85);
+    ASSERT_EQ(kSuccess, PlayerSkillSystem::BuildSkillBookAt(player, kNow, book));
+    EXPECT_EQ(book.loadout().free_schemes(), 3u);
+    EXPECT_EQ(book.loadout().unlocked_schemes(), 3u);
+    EXPECT_EQ(book.loadout().schemes_size(), 3);
+
+    save3.set_state_version(book.loadout().state_version());
+    save3.set_request_id("loadout-lv85-save3-0002");
+    PlayerSkillSystem::SaveLoadout(player, save3, saveResp);
+    ASSERT_FALSE(saveResp.has_error_message());
+    EXPECT_EQ(saveResp.state().loadout().active_scheme_id(), 3u);
+
+    // 3. 85 级无轻享卡防溢买：最多租 4 套（3+4=7），租 5 套被拒。
+    RentSkillLoadoutSlotsRequest rentReq;
+    rentReq.set_client_request_id(91001);
+    rentReq.set_target_rented_slots(5);
+    rentReq.set_add_periods(1);
+    rentReq.set_expected_cost_diamond(150);
+    RentSkillLoadoutSlotsResponse rentResp;
+    PlayerSkillSystem::RentLoadoutSlotsAt(player, rentReq, kNow, rentResp);
+    EXPECT_EQ(rentResp.error_message().id(), kSkillLoadoutRentSlotsInvalid);
+
+    // 4. 84 级轻享卡期间曾租满 3 套（2+2+3=7），中途升至 85 级后，租期内可按新上限 2 套续期（不逼多花钱也不被缩减拦住）。
+    tlsEcs.actorRegistry.get<LevelComp>(player).set_level(84);
+    u64.set_afk_pass_expires_at(kNow + kPeriod * 10);
+    rentReq.set_client_request_id(91002);
+    rentReq.set_target_rented_slots(3);
+    rentReq.set_add_periods(1);
+    rentReq.set_expected_cost_diamond(90);
+    PlayerSkillSystem::RentLoadoutSlotsAt(player, rentReq, kNow, rentResp);
+    ASSERT_FALSE(rentResp.has_error_message());
+    EXPECT_EQ(rentResp.state().loadout().unlocked_schemes(), 7u);
+
+    tlsEcs.actorRegistry.get<LevelComp>(player).set_level(85);
+    // 85 级 + 轻享卡：可租上限降至 2 套（3+2+2=7），租 3 套拒回防溢买，按 2 套续期 30 天放行（仅花 60 灵石）。
+    rentReq.set_client_request_id(91003);
+    rentReq.set_target_rented_slots(3);
+    rentReq.set_add_periods(1);
+    rentReq.set_expected_cost_diamond(90);
+    PlayerSkillSystem::RentLoadoutSlotsAt(player, rentReq, kNow + 100, rentResp);
+    EXPECT_EQ(rentResp.error_message().id(), kSkillLoadoutRentSlotsInvalid);
+
+    rentReq.set_client_request_id(91004);
+    rentReq.set_target_rented_slots(2);
+    rentReq.set_add_periods(1);
+    rentReq.set_expected_cost_diamond(60);
+    PlayerSkillSystem::RentLoadoutSlotsAt(player, rentReq, kNow + 100, rentResp);
+    ASSERT_FALSE(rentResp.has_error_message());
+    EXPECT_EQ(rentResp.rented_extra_slots(), 2u);
+    EXPECT_EQ(rentResp.spent_diamond(), 60u);
+    EXPECT_EQ(rentResp.state().loadout().free_schemes(), 3u);
+    EXPECT_EQ(rentResp.state().loadout().unlocked_schemes(), 7u);
 }

@@ -454,11 +454,11 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_._has_bits_),
       0, // no _extensions_
-      41, 248,  // max_field_number, fast_idx_mask
+      44, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
       0,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      41,  // num_field_entries
+      44,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -595,7 +595,7 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.equip_loadout_unlocked_count_)}},
     }}, {{
       33, 0, 1,
-      65024, 32,
+      61440, 32,
       65535, 65535
     }}, {{
       // uint64 key = 1;
@@ -673,13 +673,19 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
       // uint64 sealed_book_item_id = 37;
       {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.sealed_book_item_id_), _Internal::kHasBitsOffset + 36, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 equipment_polish_attempts_used = 38;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.equipment_polish_attempts_used_), _Internal::kHasBitsOffset + 40, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.equipment_polish_attempts_used_), _Internal::kHasBitsOffset + 39, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 equipment_actual_gold_spent = 39;
       {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.equipment_actual_gold_spent_), _Internal::kHasBitsOffset + 37, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 wanted_order_id = 40;
       {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.wanted_order_id_), _Internal::kHasBitsOffset + 38, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 wanted_order_gold = 41;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.wanted_order_gold_), _Internal::kHasBitsOffset + 39, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.wanted_order_gold_), _Internal::kHasBitsOffset + 41, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 skill_loadout_rented_slots = 42;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.skill_loadout_rented_slots_), _Internal::kHasBitsOffset + 40, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 skill_loadout_rent_expires_at_sec = 43;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.skill_loadout_rent_expires_at_sec_), _Internal::kHasBitsOffset + 42, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 skill_loadout_rent_spent_diamond = 44;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.skill_loadout_rent_spent_diamond_), _Internal::kHasBitsOffset + 43, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -733,8 +739,11 @@ inline constexpr ClientRequestRecord::Impl_::Impl_(
         sealed_book_item_id_{::uint64_t{0u}},
         equipment_actual_gold_spent_{::uint64_t{0u}},
         wanted_order_id_{::uint64_t{0u}},
+        equipment_polish_attempts_used_{0u},
+        skill_loadout_rented_slots_{0u},
         wanted_order_gold_{::uint64_t{0u}},
-        equipment_polish_attempts_used_{0u} {}
+        skill_loadout_rent_expires_at_sec_{::uint64_t{0u}},
+        skill_loadout_rent_spent_diamond_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr ClientRequestRecord::ClientRequestRecord(::_pbi::ConstantInitialized,
@@ -1196,7 +1205,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_._has_bits_),
-        44, // hasbit index offset
+        47, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.key_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.kind_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.fingerprint_),
@@ -1238,6 +1247,9 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.equipment_actual_gold_spent_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.wanted_order_id_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.wanted_order_gold_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.skill_loadout_rented_slots_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.skill_loadout_rent_expires_at_sec_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.skill_loadout_rent_spent_diamond_),
         1,
         3,
         0,
@@ -1275,10 +1287,13 @@ const ::uint32_t
         33,
         35,
         36,
-        40,
+        39,
         37,
         38,
-        39,
+        41,
+        40,
+        42,
+        43,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_._has_bits_),
         14, // hasbit index offset
@@ -1350,10 +1365,10 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::ClientRequestRecord)},
-        {85, sizeof(::EquipmentMaterialRewardLedger)},
-        {110, sizeof(::BattleEconomyLedger)},
-        {119, sizeof(::RewardedAdLedger)},
-        {136, sizeof(::ClientRequestLedgerComp)},
+        {91, sizeof(::EquipmentMaterialRewardLedger)},
+        {116, sizeof(::BattleEconomyLedger)},
+        {125, sizeof(::RewardedAdLedger)},
+        {142, sizeof(::ClientRequestLedgerComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1366,7 +1381,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n7proto/common/component/client_request_"
-    "ledger_comp.proto\"\203\n\n\023ClientRequestRecor"
+    "ledger_comp.proto\"\374\n\n\023ClientRequestRecor"
     "d\022\013\n\003key\030\001 \001(\004\022\014\n\004kind\030\002 \001(\r\022\023\n\013fingerpr"
     "int\030\003 \001(\014\022\013\n\003seq\030\004 \001(\004\022\027\n\017enhance_succes"
     "s\030\005 \001(\010\022\025\n\renhance_level\030\006 \001(\r\022\031\n\021create"
@@ -1398,37 +1413,40 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5freque
     "_item_id\030% \001(\004\022&\n\036equipment_polish_attem"
     "pts_used\030& \001(\r\022#\n\033equipment_actual_gold_"
     "spent\030\' \001(\004\022\027\n\017wanted_order_id\030( \001(\004\022\031\n\021"
-    "wanted_order_gold\030) \001(\004\"\304\002\n\035EquipmentMat"
-    "erialRewardLedger\022\030\n\020day_starts_at_ms\030\001 "
-    "\001(\004\022\024\n\014earned_today\030\002 \001(\r\022\027\n\017available_u"
-    "nits\030\003 \001(\004\022\020\n\010revision\030\004 \001(\004\022\027\n\017lifetime"
-    "_earned\030\005 \001(\r\022\035\n\025tradable_earned_total\030\006"
-    " \001(\r\022 \n\030available_tradable_units\030\007 \001(\004\022\031"
-    "\n\021week_starts_at_ms\030\010 \001(\004\022\030\n\020earned_this"
-    "_week\030\t \001(\r\022\026\n\016migrated_to_v2\030\n \001(\010\022!\n\031s"
-    "tage1_tradable_confirmed\030\013 \001(\r\"o\n\023Battle"
-    "EconomyLedger\022\031\n\021week_starts_at_ms\030\001 \001(\004"
-    "\022\037\n\027battle_silver_this_week\030\002 \001(\004\022\034\n\024bat"
-    "tle_exp_this_week\030\003 \001(\004\"\332\001\n\020RewardedAdLe"
-    "dger\022\030\n\020day_starts_at_ms\030\001 \001(\004\022\025\n\rclaime"
-    "d_today\030\002 \001(\r\022\030\n\020last_claim_at_ms\030\003 \001(\004\022"
-    "\036\n\026total_claimed_lifetime\030\004 \001(\004\022\031\n\021activ"
-    "e_session_id\030\005 \001(\004\022 \n\030active_session_iss"
-    "ued_ms\030\006 \001(\004\022\036\n\026active_session_slot_id\030\007"
-    " \001(\r\"\371\001\n\027ClientRequestLedgerComp\022%\n\007reco"
-    "rds\030\001 \003(\0132\024.ClientRequestRecord\022\020\n\010next_"
-    "seq\030\002 \001(\004\022\026\n\016forge_revision\030\003 \001(\004\0227\n\017mat"
-    "erial_reward\030\004 \001(\0132\036.EquipmentMaterialRe"
-    "wardLedger\022,\n\016battle_economy\030\005 \001(\0132\024.Bat"
-    "tleEconomyLedger\022&\n\013rewarded_ad\030\006 \001(\0132\021."
-    "RewardedAdLedgerB\022Z\020common/componentb\006pr"
-    "oto3"
+    "wanted_order_gold\030) \001(\004\022\"\n\032skill_loadout"
+    "_rented_slots\030* \001(\r\022)\n!skill_loadout_ren"
+    "t_expires_at_sec\030+ \001(\004\022(\n skill_loadout_"
+    "rent_spent_diamond\030, \001(\004\"\304\002\n\035EquipmentMa"
+    "terialRewardLedger\022\030\n\020day_starts_at_ms\030\001"
+    " \001(\004\022\024\n\014earned_today\030\002 \001(\r\022\027\n\017available_"
+    "units\030\003 \001(\004\022\020\n\010revision\030\004 \001(\004\022\027\n\017lifetim"
+    "e_earned\030\005 \001(\r\022\035\n\025tradable_earned_total\030"
+    "\006 \001(\r\022 \n\030available_tradable_units\030\007 \001(\004\022"
+    "\031\n\021week_starts_at_ms\030\010 \001(\004\022\030\n\020earned_thi"
+    "s_week\030\t \001(\r\022\026\n\016migrated_to_v2\030\n \001(\010\022!\n\031"
+    "stage1_tradable_confirmed\030\013 \001(\r\"o\n\023Battl"
+    "eEconomyLedger\022\031\n\021week_starts_at_ms\030\001 \001("
+    "\004\022\037\n\027battle_silver_this_week\030\002 \001(\004\022\034\n\024ba"
+    "ttle_exp_this_week\030\003 \001(\004\"\332\001\n\020RewardedAdL"
+    "edger\022\030\n\020day_starts_at_ms\030\001 \001(\004\022\025\n\rclaim"
+    "ed_today\030\002 \001(\r\022\030\n\020last_claim_at_ms\030\003 \001(\004"
+    "\022\036\n\026total_claimed_lifetime\030\004 \001(\004\022\031\n\021acti"
+    "ve_session_id\030\005 \001(\004\022 \n\030active_session_is"
+    "sued_ms\030\006 \001(\004\022\036\n\026active_session_slot_id\030"
+    "\007 \001(\r\"\371\001\n\027ClientRequestLedgerComp\022%\n\007rec"
+    "ords\030\001 \003(\0132\024.ClientRequestRecord\022\020\n\010next"
+    "_seq\030\002 \001(\004\022\026\n\016forge_revision\030\003 \001(\004\0227\n\017ma"
+    "terial_reward\030\004 \001(\0132\036.EquipmentMaterialR"
+    "ewardLedger\022,\n\016battle_economy\030\005 \001(\0132\024.Ba"
+    "ttleEconomyLedger\022&\n\013rewarded_ad\030\006 \001(\0132\021"
+    ".RewardedAdLedgerB\022Z\020common/componentb\006p"
+    "roto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto = {
     false,
     false,
-    2284,
+    2405,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto,
     "proto/common/component/client_request_ledger_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto_once,
@@ -1478,9 +1496,9 @@ ClientRequestRecord::ClientRequestRecord(
                offsetof(Impl_, key_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, key_),
-           offsetof(Impl_, equipment_polish_attempts_used_) -
+           offsetof(Impl_, skill_loadout_rent_spent_diamond_) -
                offsetof(Impl_, key_) +
-               sizeof(Impl_::equipment_polish_attempts_used_));
+               sizeof(Impl_::skill_loadout_rent_spent_diamond_));
 
   // @@protoc_insertion_point(copy_constructor:ClientRequestRecord)
 }
@@ -1495,9 +1513,9 @@ inline void ClientRequestRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE aren
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, key_),
            0,
-           offsetof(Impl_, equipment_polish_attempts_used_) -
+           offsetof(Impl_, skill_loadout_rent_spent_diamond_) -
                offsetof(Impl_, key_) +
-               sizeof(Impl_::equipment_polish_attempts_used_));
+               sizeof(Impl_::skill_loadout_rent_spent_diamond_));
 }
 ClientRequestRecord::~ClientRequestRecord() {
   // @@protoc_insertion_point(destructor:ClientRequestRecord)
@@ -1574,10 +1592,14 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
   cached_has_bits = _impl_._has_bits_[1];
   if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     ::memset(&_impl_.equip_loadout_used_item_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.wanted_order_gold_) -
-        reinterpret_cast<char*>(&_impl_.equip_loadout_used_item_id_)) + sizeof(_impl_.wanted_order_gold_));
+        reinterpret_cast<char*>(&_impl_.equipment_polish_attempts_used_) -
+        reinterpret_cast<char*>(&_impl_.equip_loadout_used_item_id_)) + sizeof(_impl_.equipment_polish_attempts_used_));
   }
-  _impl_.equipment_polish_attempts_used_ = 0u;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+    ::memset(&_impl_.skill_loadout_rented_slots_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.skill_loadout_rent_spent_diamond_) -
+        reinterpret_cast<char*>(&_impl_.skill_loadout_rented_slots_)) + sizeof(_impl_.skill_loadout_rent_spent_diamond_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -1937,7 +1959,7 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
   }
 
   // uint32 equipment_polish_attempts_used = 38;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_equipment_polish_attempts_used() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1964,11 +1986,38 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
   }
 
   // uint64 wanted_order_gold = 41;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_wanted_order_gold() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           41, this_._internal_wanted_order_gold(), target);
+    }
+  }
+
+  // uint32 skill_loadout_rented_slots = 42;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_skill_loadout_rented_slots() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          42, this_._internal_skill_loadout_rented_slots(), target);
+    }
+  }
+
+  // uint64 skill_loadout_rent_expires_at_sec = 43;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_skill_loadout_rent_expires_at_sec() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          43, this_._internal_skill_loadout_rent_expires_at_sec(), target);
+    }
+  }
+
+  // uint64 skill_loadout_rent_spent_diamond = 44;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_skill_loadout_rent_spent_diamond() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          44, this_._internal_skill_loadout_rent_spent_diamond(), target);
     }
   }
 
@@ -2278,20 +2327,41 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
                                         this_._internal_wanted_order_id());
       }
     }
-    // uint64 wanted_order_gold = 41;
+    // uint32 equipment_polish_attempts_used = 38;
     if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_equipment_polish_attempts_used() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_equipment_polish_attempts_used());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+    // uint32 skill_loadout_rented_slots = 42;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_skill_loadout_rented_slots() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_skill_loadout_rented_slots());
+      }
+    }
+    // uint64 wanted_order_gold = 41;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_wanted_order_gold() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
                                         this_._internal_wanted_order_gold());
       }
     }
-  }
-   {
-    // uint32 equipment_polish_attempts_used = 38;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-      if (this_._internal_equipment_polish_attempts_used() != 0) {
-        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
-                                        this_._internal_equipment_polish_attempts_used());
+    // uint64 skill_loadout_rent_expires_at_sec = 43;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_skill_loadout_rent_expires_at_sec() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_skill_loadout_rent_expires_at_sec());
+      }
+    }
+    // uint64 skill_loadout_rent_spent_diamond = 44;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_skill_loadout_rent_spent_diamond() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_skill_loadout_rent_spent_diamond());
       }
     }
   }
@@ -2522,14 +2592,31 @@ void ClientRequestRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_equipment_polish_attempts_used() != 0) {
+        _this->_impl_.equipment_polish_attempts_used_ = from._impl_.equipment_polish_attempts_used_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_skill_loadout_rented_slots() != 0) {
+        _this->_impl_.skill_loadout_rented_slots_ = from._impl_.skill_loadout_rented_slots_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_wanted_order_gold() != 0) {
         _this->_impl_.wanted_order_gold_ = from._impl_.wanted_order_gold_;
       }
     }
-  }
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-    if (from._internal_equipment_polish_attempts_used() != 0) {
-      _this->_impl_.equipment_polish_attempts_used_ = from._impl_.equipment_polish_attempts_used_;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_skill_loadout_rent_expires_at_sec() != 0) {
+        _this->_impl_.skill_loadout_rent_expires_at_sec_ = from._impl_.skill_loadout_rent_expires_at_sec_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_skill_loadout_rent_spent_diamond() != 0) {
+        _this->_impl_.skill_loadout_rent_spent_diamond_ = from._impl_.skill_loadout_rent_spent_diamond_;
+      }
     }
   }
   _this->_impl_._has_bits_.Or(from._impl_._has_bits_);
@@ -2554,8 +2641,8 @@ void ClientRequestRecord::InternalSwap(ClientRequestRecord* PROTOBUF_RESTRICT PR
   swap(_impl_._has_bits_[1], other->_impl_._has_bits_[1]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.fingerprint_, &other->_impl_.fingerprint_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.equipment_polish_attempts_used_)
-      + sizeof(ClientRequestRecord::_impl_.equipment_polish_attempts_used_)
+      PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.skill_loadout_rent_spent_diamond_)
+      + sizeof(ClientRequestRecord::_impl_.skill_loadout_rent_spent_diamond_)
       - PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.key_)>(
           reinterpret_cast<char*>(&_impl_.key_),
           reinterpret_cast<char*>(&other->_impl_.key_));

@@ -235,7 +235,14 @@
         "SkillLoadoutNotLearned": 7025,
         "SkillLoadoutSchemeInvalid": 7026,
         "SkillLoadoutVersionChanged": 7027,
-        "SkillBannedInBattle": 7028
+        "SkillBannedInBattle": 7028,
+        "SkillLoadoutNameInvalid": 7029,
+        "SkillLoadoutRentPriceChanged": 7030,
+        "SkillLoadoutRentDiamondNotEnough": 7031,
+        "SkillLoadoutRentStackLimit": 7032,
+        "SkillLoadoutRentSlotsInvalid": 7033,
+        "SkillLoadoutAttributeInvalid": 7034,
+        "SkillLoadoutAttributeResetRequired": 7035
       }
     },
     "buff_error": {
@@ -357,7 +364,11 @@
         "GuildWarBountyLimit": 14068,
         "GuildWarBountyNotFound": 14069,
         "GuildWarTrackCooldown": 14070,
-        "GuildWarServiceBusy": 14071
+        "GuildWarServiceBusy": 14071,
+        "GuildWarFeudCooldown": 14072,
+        "GuildWarFeudAlreadyActive": 14073,
+        "GuildWarFeudNotFound": 14074,
+        "GuildWarFeudInvalidTarget": 14075
       }
     },
     "friend_error": {
@@ -722,7 +733,9 @@
         "SeasonFrozen": 34008,
         "SeasonInBattle": 34009,
         "SeasonSkillNoUpgrade": 34010,
-        "SeasonUnavailable": 34011
+        "SeasonUnavailable": 34011,
+        "SeasonHonorAlreadyUnlocked": 34012,
+        "SeasonHonorTargetInvalid": 34013
       }
     },
     "trial_journal_error": {

@@ -53,6 +53,14 @@ struct TableStruct_proto_2fcommon_2fcomponent_2fplayer_5fmail_5foutbox_5fcomp_2e
 extern "C" {
 extern const ::google::protobuf::internal::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fmail_5foutbox_5fcomp_2eproto;
 }  // extern "C"
+class MailOutboxCurrency;
+struct MailOutboxCurrencyGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern MailOutboxCurrencyGlobalsTypeInternal MailOutboxCurrency_globals_;
+extern const ::google::protobuf::internal::ClassDataFull MailOutboxCurrency_class_data_;
+#else
+extern const MailOutboxCurrencyGlobalsTypeInternal MailOutboxCurrency_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class MailOutboxEntry;
 struct MailOutboxEntryGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -301,6 +309,219 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailOutboxItem final : public ::goo
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailOutboxCurrency final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:MailOutboxCurrency) */ {
+ public:
+  inline MailOutboxCurrency() : MailOutboxCurrency(nullptr) {}
+  ~MailOutboxCurrency() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(MailOutboxCurrency* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(MailOutboxCurrency));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr MailOutboxCurrency(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline MailOutboxCurrency(const MailOutboxCurrency& from) : MailOutboxCurrency(nullptr, from) {}
+  inline MailOutboxCurrency(MailOutboxCurrency&& from) noexcept : MailOutboxCurrency(nullptr, ::std::move(from)) {}
+  inline MailOutboxCurrency& operator=(const MailOutboxCurrency& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline MailOutboxCurrency& operator=(MailOutboxCurrency&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const MailOutboxCurrency& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MailOutboxCurrency>(&MailOutboxCurrency_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 1;
+  friend void swap(MailOutboxCurrency& a, MailOutboxCurrency& b) { a.Swap(&b); }
+  inline void Swap(MailOutboxCurrency* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(MailOutboxCurrency* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] MailOutboxCurrency* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<MailOutboxCurrency>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const MailOutboxCurrency& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const MailOutboxCurrency& from) { MailOutboxCurrency::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(MailOutboxCurrency* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "MailOutboxCurrency"; }
+
+  explicit MailOutboxCurrency(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  MailOutboxCurrency(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MailOutboxCurrency& from);
+  MailOutboxCurrency(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, MailOutboxCurrency&& from) noexcept
+      : MailOutboxCurrency(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kAmountFieldNumber = 2,
+    kCurrencyTypeFieldNumber = 1,
+  };
+  // uint64 amount = 2;
+  void clear_amount() ;
+  [[nodiscard]] ::uint64_t amount() const;
+  void set_amount(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_amount() const;
+  void _internal_set_amount(::uint64_t value);
+
+  public:
+  // uint32 currency_type = 1;
+  void clear_currency_type() ;
+  [[nodiscard]] ::uint32_t currency_type() const;
+  void set_currency_type(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_currency_type() const;
+  void _internal_set_currency_type(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:MailOutboxCurrency)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const MailOutboxCurrency& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t amount_;
+    ::uint32_t currency_type_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fcommon_2fcomponent_2fplayer_5fmail_5foutbox_5fcomp_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailOutboxEntry final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:MailOutboxEntry) */ {
  public:
@@ -357,7 +578,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailOutboxEntry final : public ::go
   [[nodiscard]] static const MailOutboxEntry& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MailOutboxEntry>(&MailOutboxEntry_globals_);
   }
-  static constexpr int kIndexInFileMessages = 1;
+  static constexpr int kIndexInFileMessages = 2;
   friend void swap(MailOutboxEntry& a, MailOutboxEntry& b) { a.Swap(&b); }
   inline void Swap(MailOutboxEntry* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -450,11 +671,13 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailOutboxEntry final : public ::go
   // accessors -------------------------------------------------------
   enum : int {
     kItemsFieldNumber = 6,
+    kCurrenciesFieldNumber = 9,
     kTitleFieldNumber = 4,
     kBodyFieldNumber = 5,
     kRequestIdFieldNumber = 1,
     kSourceIdFieldNumber = 3,
     kCreatedAtMsFieldNumber = 7,
+    kRecipientPlayerIdFieldNumber = 8,
     kSourceFieldNumber = 2,
   };
   // repeated .MailOutboxItem items = 6;
@@ -476,6 +699,27 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailOutboxEntry final : public ::go
   private:
   const ::google::protobuf::RepeatedPtrField<::MailOutboxItem>& _internal_items() const;
   ::google::protobuf::RepeatedPtrField<::MailOutboxItem>* PROTOBUF_NONNULL _internal_mutable_items();
+
+  public:
+  // repeated .MailOutboxCurrency currencies = 9;
+  [[nodiscard]] int currencies_size()
+      const;
+  private:
+  int _internal_currencies_size() const;
+
+  public:
+  void clear_currencies() ;
+  [[nodiscard]] const ::MailOutboxCurrency& currencies(int index) const;
+  [[nodiscard]] ::MailOutboxCurrency* PROTOBUF_NONNULL mutable_currencies(int index);
+  ::MailOutboxCurrency* PROTOBUF_NONNULL add_currencies();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::MailOutboxCurrency>&
+  currencies() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::MailOutboxCurrency>* PROTOBUF_NONNULL
+  mutable_currencies();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::MailOutboxCurrency>& _internal_currencies() const;
+  ::google::protobuf::RepeatedPtrField<::MailOutboxCurrency>* PROTOBUF_NONNULL _internal_mutable_currencies();
 
   public:
   // string title = 4;
@@ -538,6 +782,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailOutboxEntry final : public ::go
   void _internal_set_created_at_ms(::uint64_t value);
 
   public:
+  // uint64 recipient_player_id = 8;
+  void clear_recipient_player_id() ;
+  [[nodiscard]] ::uint64_t recipient_player_id() const;
+  void set_recipient_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_recipient_player_id() const;
+  void _internal_set_recipient_player_id(::uint64_t value);
+
+  public:
   // uint32 source = 2;
   void clear_source() ;
   [[nodiscard]] ::uint32_t source() const;
@@ -552,8 +806,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailOutboxEntry final : public ::go
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
-                          1, 33,
+      ::google::protobuf::internal::TcParseTable<4, 9,
+                          2, 41,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -582,11 +836,13 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailOutboxEntry final : public ::go
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::MailOutboxItem > items_;
+    ::google::protobuf::RepeatedPtrField< ::MailOutboxCurrency > currencies_;
     ::google::protobuf::internal::ArenaStringPtr title_;
     ::google::protobuf::internal::ArenaStringPtr body_;
     ::uint64_t request_id_;
     ::uint64_t source_id_;
     ::uint64_t created_at_ms_;
+    ::uint64_t recipient_player_id_;
     ::uint32_t source_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -651,7 +907,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerMailOutboxComp final : public
   [[nodiscard]] static const PlayerMailOutboxComp& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PlayerMailOutboxComp>(&PlayerMailOutboxComp_globals_);
   }
-  static constexpr int kIndexInFileMessages = 2;
+  static constexpr int kIndexInFileMessages = 3;
   friend void swap(PlayerMailOutboxComp& a, PlayerMailOutboxComp& b) { a.Swap(&b); }
   inline void Swap(PlayerMailOutboxComp* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -872,13 +1128,65 @@ inline void MailOutboxItem::_internal_set_count(::uint64_t value) {
 
 // -------------------------------------------------------------------
 
+// MailOutboxCurrency
+
+// uint32 currency_type = 1;
+inline void MailOutboxCurrency::clear_currency_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.currency_type_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t MailOutboxCurrency::currency_type() const {
+  // @@protoc_insertion_point(field_get:MailOutboxCurrency.currency_type)
+  return _internal_currency_type();
+}
+inline void MailOutboxCurrency::set_currency_type(::uint32_t value) {
+  _internal_set_currency_type(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:MailOutboxCurrency.currency_type)
+}
+inline ::uint32_t MailOutboxCurrency::_internal_currency_type() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.currency_type_;
+}
+inline void MailOutboxCurrency::_internal_set_currency_type(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.currency_type_ = value;
+}
+
+// uint64 amount = 2;
+inline void MailOutboxCurrency::clear_amount() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.amount_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t MailOutboxCurrency::amount() const {
+  // @@protoc_insertion_point(field_get:MailOutboxCurrency.amount)
+  return _internal_amount();
+}
+inline void MailOutboxCurrency::set_amount(::uint64_t value) {
+  _internal_set_amount(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:MailOutboxCurrency.amount)
+}
+inline ::uint64_t MailOutboxCurrency::_internal_amount() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.amount_;
+}
+inline void MailOutboxCurrency::_internal_set_amount(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.amount_ = value;
+}
+
+// -------------------------------------------------------------------
+
 // MailOutboxEntry
 
 // uint64 request_id = 1;
 inline void MailOutboxEntry::clear_request_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.request_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint64_t MailOutboxEntry::request_id() const {
   // @@protoc_insertion_point(field_get:MailOutboxEntry.request_id)
@@ -886,7 +1194,7 @@ inline ::uint64_t MailOutboxEntry::request_id() const {
 }
 inline void MailOutboxEntry::set_request_id(::uint64_t value) {
   _internal_set_request_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:MailOutboxEntry.request_id)
 }
 inline ::uint64_t MailOutboxEntry::_internal_request_id() const {
@@ -902,7 +1210,7 @@ inline void MailOutboxEntry::_internal_set_request_id(::uint64_t value) {
 inline void MailOutboxEntry::clear_source() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.source_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t MailOutboxEntry::source() const {
   // @@protoc_insertion_point(field_get:MailOutboxEntry.source)
@@ -910,7 +1218,7 @@ inline ::uint32_t MailOutboxEntry::source() const {
 }
 inline void MailOutboxEntry::set_source(::uint32_t value) {
   _internal_set_source(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:MailOutboxEntry.source)
 }
 inline ::uint32_t MailOutboxEntry::_internal_source() const {
@@ -926,7 +1234,7 @@ inline void MailOutboxEntry::_internal_set_source(::uint32_t value) {
 inline void MailOutboxEntry::clear_source_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.source_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t MailOutboxEntry::source_id() const {
   // @@protoc_insertion_point(field_get:MailOutboxEntry.source_id)
@@ -934,7 +1242,7 @@ inline ::uint64_t MailOutboxEntry::source_id() const {
 }
 inline void MailOutboxEntry::set_source_id(::uint64_t value) {
   _internal_set_source_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:MailOutboxEntry.source_id)
 }
 inline ::uint64_t MailOutboxEntry::_internal_source_id() const {
@@ -950,7 +1258,7 @@ inline void MailOutboxEntry::_internal_set_source_id(::uint64_t value) {
 inline void MailOutboxEntry::clear_title() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.title_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline const ::std::string& MailOutboxEntry::title() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -960,13 +1268,13 @@ inline const ::std::string& MailOutboxEntry::title() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void MailOutboxEntry::set_title(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   _impl_.title_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:MailOutboxEntry.title)
 }
 inline ::std::string* PROTOBUF_NONNULL MailOutboxEntry::mutable_title()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::std::string* _s = _internal_mutable_title();
   // @@protoc_insertion_point(field_mutable:MailOutboxEntry.title)
   return _s;
@@ -986,10 +1294,10 @@ inline ::std::string* PROTOBUF_NONNULL MailOutboxEntry::_internal_mutable_title(
 inline ::std::string* PROTOBUF_NULLABLE MailOutboxEntry::release_title() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:MailOutboxEntry.title)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   auto* released = _impl_.title_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.title_.Set("", GetArena());
@@ -999,9 +1307,9 @@ inline ::std::string* PROTOBUF_NULLABLE MailOutboxEntry::release_title() {
 inline void MailOutboxEntry::set_allocated_title(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
   _impl_.title_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.title_.IsDefault()) {
@@ -1014,7 +1322,7 @@ inline void MailOutboxEntry::set_allocated_title(::std::string* PROTOBUF_NULLABL
 inline void MailOutboxEntry::clear_body() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.body_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline const ::std::string& MailOutboxEntry::body() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -1024,13 +1332,13 @@ inline const ::std::string& MailOutboxEntry::body() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void MailOutboxEntry::set_body(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   _impl_.body_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:MailOutboxEntry.body)
 }
 inline ::std::string* PROTOBUF_NONNULL MailOutboxEntry::mutable_body()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::std::string* _s = _internal_mutable_body();
   // @@protoc_insertion_point(field_mutable:MailOutboxEntry.body)
   return _s;
@@ -1050,10 +1358,10 @@ inline ::std::string* PROTOBUF_NONNULL MailOutboxEntry::_internal_mutable_body()
 inline ::std::string* PROTOBUF_NULLABLE MailOutboxEntry::release_body() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:MailOutboxEntry.body)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   auto* released = _impl_.body_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.body_.Set("", GetArena());
@@ -1063,9 +1371,9 @@ inline ::std::string* PROTOBUF_NULLABLE MailOutboxEntry::release_body() {
 inline void MailOutboxEntry::set_allocated_body(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
   _impl_.body_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.body_.IsDefault()) {
@@ -1133,7 +1441,7 @@ MailOutboxEntry::_internal_mutable_items() {
 inline void MailOutboxEntry::clear_created_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_at_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint64_t MailOutboxEntry::created_at_ms() const {
   // @@protoc_insertion_point(field_get:MailOutboxEntry.created_at_ms)
@@ -1141,7 +1449,7 @@ inline ::uint64_t MailOutboxEntry::created_at_ms() const {
 }
 inline void MailOutboxEntry::set_created_at_ms(::uint64_t value) {
   _internal_set_created_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:MailOutboxEntry.created_at_ms)
 }
 inline ::uint64_t MailOutboxEntry::_internal_created_at_ms() const {
@@ -1151,6 +1459,85 @@ inline ::uint64_t MailOutboxEntry::_internal_created_at_ms() const {
 inline void MailOutboxEntry::_internal_set_created_at_ms(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_at_ms_ = value;
+}
+
+// uint64 recipient_player_id = 8;
+inline void MailOutboxEntry::clear_recipient_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.recipient_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t MailOutboxEntry::recipient_player_id() const {
+  // @@protoc_insertion_point(field_get:MailOutboxEntry.recipient_player_id)
+  return _internal_recipient_player_id();
+}
+inline void MailOutboxEntry::set_recipient_player_id(::uint64_t value) {
+  _internal_set_recipient_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:MailOutboxEntry.recipient_player_id)
+}
+inline ::uint64_t MailOutboxEntry::_internal_recipient_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.recipient_player_id_;
+}
+inline void MailOutboxEntry::_internal_set_recipient_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.recipient_player_id_ = value;
+}
+
+// repeated .MailOutboxCurrency currencies = 9;
+inline int MailOutboxEntry::_internal_currencies_size() const {
+  return _internal_currencies().size();
+}
+inline int MailOutboxEntry::currencies_size() const {
+  return _internal_currencies_size();
+}
+inline void MailOutboxEntry::clear_currencies() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.currencies_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::MailOutboxCurrency& MailOutboxEntry::currencies(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:MailOutboxEntry.currencies)
+  return _internal_currencies().Get(index);
+}
+inline ::MailOutboxCurrency* PROTOBUF_NONNULL MailOutboxEntry::mutable_currencies(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:MailOutboxEntry.currencies)
+  return _internal_mutable_currencies()->Mutable(index);
+}
+inline ::MailOutboxCurrency* PROTOBUF_NONNULL MailOutboxEntry::add_currencies()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::MailOutboxCurrency* _add =
+      _internal_mutable_currencies()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:MailOutboxEntry.currencies)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::MailOutboxCurrency>& MailOutboxEntry::currencies() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:MailOutboxEntry.currencies)
+  return _internal_currencies();
+}
+inline ::google::protobuf::RepeatedPtrField<::MailOutboxCurrency>* PROTOBUF_NONNULL
+MailOutboxEntry::mutable_currencies() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:MailOutboxEntry.currencies)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_currencies();
+}
+inline const ::google::protobuf::RepeatedPtrField<::MailOutboxCurrency>&
+MailOutboxEntry::_internal_currencies() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.currencies_;
+}
+inline ::google::protobuf::RepeatedPtrField<::MailOutboxCurrency>* PROTOBUF_NONNULL
+MailOutboxEntry::_internal_mutable_currencies() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.currencies_;
 }
 
 // -------------------------------------------------------------------

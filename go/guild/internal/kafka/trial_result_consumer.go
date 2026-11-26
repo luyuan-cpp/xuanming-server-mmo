@@ -72,6 +72,7 @@ import (
 
 	battlepb "proto/battle"
 	kafkapb "proto/contracts/kafka"
+	matchpb "proto/match"
 	"shared/kafkautil"
 	"shared/safego"
 	"shared/tracing/kafkagotrace"
@@ -531,9 +532,19 @@ func (c *TrialResultConsumer) processRecordOnce(ctx context.Context, msg kafkago
 
 // isGuildTrialResult 报告一条结果是否属于帮会同道历练或帮会全天帮战 V2。
 func isGuildTrialResult(ev *kafkapb.BattleResultEvent) bool {
+	if ev == nil {
+		return false
+	}
 	k := ev.GetActivityContext().GetKind()
-	return k == battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_GUILD_TRIAL ||
-		k == battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_GUILD_WAR
+	if k == battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_GUILD_TRIAL ||
+		k == battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_GUILD_WAR {
+		return true
+	}
+	if ev.GetMatchMode() == uint32(matchpb.MatchMode_MATCH_MODE_JIANGHU_DUEL) {
+		duel := ev.GetJianghuDuelContext()
+		return duel != nil && duel.GetSideAGuildId() != 0 && duel.GetSideBGuildId() != 0 && duel.GetSideAGuildId() != duel.GetSideBGuildId()
+	}
+	return false
 }
 
 // settle 调 handler 直到它回 nil(纪律 2)。返回 false = ctx 已结束、handler 仍未成功,调用方不得提交。

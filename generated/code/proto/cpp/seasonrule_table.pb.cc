@@ -48,11 +48,11 @@ constexpr SeasonRuleTable::ParseTableT_ SeasonRuleTable::InternalGenerateParseTa
     {
       PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_._has_bits_),
       0, // no _extensions_
-      17, 248,  // max_field_number, fast_idx_mask
+      19, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294836224,  // skipmap
+      4294443008,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      17,  // num_field_entries
+      19,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -131,8 +131,14 @@ constexpr SeasonRuleTable::ParseTableT_ SeasonRuleTable::InternalGenerateParseTa
       {::_pbi::TcParser::FastUS2,
        {394, 3, 0,
         PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.honor_badge_icon_key_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 cycle_order = 18;
+      {::_pbi::TcParser::FastV32S2,
+       {400, 17, 0,
+        PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.cycle_order_)}},
+      // uint32 cycle_duration_days = 19;
+      {::_pbi::TcParser::FastV32S2,
+       {408, 18, 0,
+        PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.cycle_duration_days_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -182,6 +188,10 @@ constexpr SeasonRuleTable::ParseTableT_ SeasonRuleTable::InternalGenerateParseTa
       {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.honor_title_name_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string honor_badge_icon_key = 17;
       {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.honor_badge_icon_key_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 cycle_order = 18;
+      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.cycle_order_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 cycle_duration_days = 19;
+      {PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.cycle_duration_days_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -224,7 +234,9 @@ inline constexpr SeasonRuleTable::Impl_::Impl_(
         defense_bps_cap_{0u},
         catchup_price_per_point_{::uint64_t{0u}},
         catchup_currency_type_{0u},
-        default_seal_id_{0u} {}
+        default_seal_id_{0u},
+        cycle_order_{0u},
+        cycle_duration_days_{0u} {}
 
 template <typename>
 constexpr SeasonRuleTable::SeasonRuleTable(::_pbi::ConstantInitialized,
@@ -478,7 +490,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SeasonRuleTable, _impl_._has_bits_),
-        20, // hasbit index offset
+        22, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::SeasonRuleTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::SeasonRuleTable, _impl_.name_),
         PROTOBUF_FIELD_OFFSET(::SeasonRuleTable, _impl_.starts_at_ms_),
@@ -496,6 +508,8 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::SeasonRuleTable, _impl_.desc_),
         PROTOBUF_FIELD_OFFSET(::SeasonRuleTable, _impl_.honor_title_name_),
         PROTOBUF_FIELD_OFFSET(::SeasonRuleTable, _impl_.honor_badge_icon_key_),
+        PROTOBUF_FIELD_OFFSET(::SeasonRuleTable, _impl_.cycle_order_),
+        PROTOBUF_FIELD_OFFSET(::SeasonRuleTable, _impl_.cycle_duration_days_),
         5,
         0,
         4,
@@ -513,6 +527,8 @@ const ::uint32_t
         1,
         2,
         3,
+        17,
+        18,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SeasonRuleTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -523,7 +539,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::SeasonRuleTable)},
-        {37, sizeof(::SeasonRuleTableData)},
+        {41, sizeof(::SeasonRuleTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -532,7 +548,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_seasonrule_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\026seasonrule_table.proto\"\235\003\n\017SeasonRuleT"
+    "\n\026seasonrule_table.proto\"\317\003\n\017SeasonRuleT"
     "able\022\n\n\002id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\024\n\014starts"
     "_at_ms\030\003 \001(\004\022\022\n\nends_at_ms\030\004 \001(\004\022\017\n\007enab"
     "led\030\005 \001(\010\022\027\n\017seal_max_points\030\006 \001(\r\022\026\n\016pv"
@@ -543,16 +559,17 @@ const char descriptor_table_protodef_seasonrule_5ftable_2eproto[] ABSL_ATTRIBUTE
     "hup_price_per_point\030\r \001(\004\022\027\n\017default_sea"
     "l_id\030\016 \001(\r\022\014\n\004desc\030\017 \001(\t\022\030\n\020honor_title_"
     "name\030\020 \001(\t\022\034\n\024honor_badge_icon_key\030\021 \001(\t"
-    "\"5\n\023SeasonRuleTableData\022\036\n\004data\030\001 \003(\0132\020."
-    "SeasonRuleTableBA\n\016com.game.tableB\031Seaso"
-    "nRuleTableOuterClassP\001Z\022generated/pb/tab"
-    "leb\006proto3"
+    "\022\023\n\013cycle_order\030\022 \001(\r\022\033\n\023cycle_duration_"
+    "days\030\023 \001(\r\"5\n\023SeasonRuleTableData\022\036\n\004dat"
+    "a\030\001 \003(\0132\020.SeasonRuleTableBA\n\016com.game.ta"
+    "bleB\031SeasonRuleTableOuterClassP\001Z\022genera"
+    "ted/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_seasonrule_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_seasonrule_5ftable_2eproto = {
     false,
     false,
-    570,
+    620,
     descriptor_table_protodef_seasonrule_5ftable_2eproto,
     "seasonrule_table.proto",
     &descriptor_table_seasonrule_5ftable_2eproto_once,
@@ -605,9 +622,9 @@ SeasonRuleTable::SeasonRuleTable(
                offsetof(Impl_, starts_at_ms_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, starts_at_ms_),
-           offsetof(Impl_, default_seal_id_) -
+           offsetof(Impl_, cycle_duration_days_) -
                offsetof(Impl_, starts_at_ms_) +
-               sizeof(Impl_::default_seal_id_));
+               sizeof(Impl_::cycle_duration_days_));
 
   // @@protoc_insertion_point(copy_constructor:SeasonRuleTable)
 }
@@ -625,9 +642,9 @@ inline void SeasonRuleTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, starts_at_ms_),
            0,
-           offsetof(Impl_, default_seal_id_) -
+           offsetof(Impl_, cycle_duration_days_) -
                offsetof(Impl_, starts_at_ms_) +
-               sizeof(Impl_::default_seal_id_));
+               sizeof(Impl_::cycle_duration_days_));
 }
 SeasonRuleTable::~SeasonRuleTable() {
   // @@protoc_insertion_point(destructor:SeasonRuleTable)
@@ -705,7 +722,11 @@ PROTOBUF_NOINLINE void SeasonRuleTable::Clear() {
         reinterpret_cast<char*>(&_impl_.catchup_currency_type_) -
         reinterpret_cast<char*>(&_impl_.seal_max_points_)) + sizeof(_impl_.catchup_currency_type_));
   }
-  _impl_.default_seal_id_ = 0u;
+  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
+    ::memset(&_impl_.default_seal_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.cycle_duration_days_) -
+        reinterpret_cast<char*>(&_impl_.default_seal_id_)) + sizeof(_impl_.cycle_duration_days_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -886,6 +907,24 @@ PROTOBUF_NOINLINE void SeasonRuleTable::Clear() {
     }
   }
 
+  // uint32 cycle_order = 18;
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (this_._internal_cycle_order() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          18, this_._internal_cycle_order(), target);
+    }
+  }
+
+  // uint32 cycle_duration_days = 19;
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (this_._internal_cycle_duration_days() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          19, this_._internal_cycle_duration_days(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1026,12 +1065,26 @@ PROTOBUF_NOINLINE void SeasonRuleTable::Clear() {
       }
     }
   }
-   {
+  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
     // uint32 default_seal_id = 14;
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_default_seal_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_default_seal_id());
+      }
+    }
+    // uint32 cycle_order = 18;
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (this_._internal_cycle_order() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_cycle_order());
+      }
+    }
+    // uint32 cycle_duration_days = 19;
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (this_._internal_cycle_duration_days() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_cycle_duration_days());
       }
     }
   }
@@ -1152,9 +1205,21 @@ void SeasonRuleTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
-    if (from._internal_default_seal_id() != 0) {
-      _this->_impl_.default_seal_id_ = from._impl_.default_seal_id_;
+  if (BatchCheckHasBit(cached_has_bits, 0x00070000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (from._internal_default_seal_id() != 0) {
+        _this->_impl_.default_seal_id_ = from._impl_.default_seal_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (from._internal_cycle_order() != 0) {
+        _this->_impl_.cycle_order_ = from._impl_.cycle_order_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (from._internal_cycle_duration_days() != 0) {
+        _this->_impl_.cycle_duration_days_ = from._impl_.cycle_duration_days_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -1181,8 +1246,8 @@ void SeasonRuleTable::InternalSwap(SeasonRuleTable* PROTOBUF_RESTRICT PROTOBUF_N
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.honor_title_name_, &other->_impl_.honor_title_name_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.honor_badge_icon_key_, &other->_impl_.honor_badge_icon_key_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.default_seal_id_)
-      + sizeof(SeasonRuleTable::_impl_.default_seal_id_)
+      PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.cycle_duration_days_)
+      + sizeof(SeasonRuleTable::_impl_.cycle_duration_days_)
       - PROTOBUF_FIELD_OFFSET(SeasonRuleTable, _impl_.starts_at_ms_)>(
           reinterpret_cast<char*>(&_impl_.starts_at_ms_),
           reinterpret_cast<char*>(&other->_impl_.starts_at_ms_));

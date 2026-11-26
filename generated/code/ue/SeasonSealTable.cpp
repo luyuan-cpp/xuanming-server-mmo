@@ -116,6 +116,9 @@ static void SeasonSealTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& RowOb
 	SeasonSealTableCheckNarrowedField(RowObject, TEXT("battle_limit"), TEXT("battle_limit"), RowIndex, 2147483647.0, TEXT("uint32"));
 	SeasonSealTableCheckNarrowedField(RowObject, TEXT("active_rounds"), TEXT("active_rounds"), RowIndex, 2147483647.0, TEXT("uint32"));
 	SeasonSealTableCheckNarrowedField(RowObject, TEXT("health_threshold_bps"), TEXT("health_threshold_bps"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SeasonSealTableCheckNarrowedField(RowObject, TEXT("resonance_skill_id"), TEXT("resonance_skill_id"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SeasonSealTableCheckNarrowedField(RowObject, TEXT("resonance_kind"), TEXT("resonance_kind"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SeasonSealTableCheckNarrowedField(RowObject, TEXT("resonance_param"), TEXT("resonance_param"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 
 bool USeasonSealTable::LoadFromJson(const FString& JsonText, FString& OutError)

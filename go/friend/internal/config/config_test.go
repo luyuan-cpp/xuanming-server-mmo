@@ -208,9 +208,13 @@ func TestEtcYamlZoneRewriteAnchors(t *testing.T) {
 		t.Error("顶层 ZoneId 必须写在所有嵌套段之前")
 	}
 
-	// 共享 Redis 段必须显式写 Key: ""(整行省略会让 conf 加载期报 Redis.Key is not set)。
-	if !regexp.MustCompile(`(?m)^Redis:\r?\n(?:[ \t]+.*\r?\n)*?[ \t]+Key:\s*""`).MatchString(text) {
-		t.Error("Redis 段必须显式写 `Key: \"\"`")
+	// 控制集群 ControlRedis 已取代旧 zrpc Redis 段(redis-cluster-all-domains-20261110.md §5.1);
+	// etc/friend.yaml 必须显式写 ControlRedis 段且不再写遗留顶层 Redis 段。
+	if !regexp.MustCompile(`(?m)^ControlRedis:\r?$`).MatchString(text) {
+		t.Error("etc/friend.yaml 必须显式写 `ControlRedis:` 段")
+	}
+	if regexp.MustCompile(`(?m)^Redis:\r?$`).MatchString(text) {
+		t.Error("friend 已改用 ControlRedis，不应再写 zrpc 自带的顶层 `Redis:` 段")
 	}
 	// Etcd 段同理(契约 D-13)。
 	if !regexp.MustCompile(`(?m)^Etcd:\r?\n(?:[ \t]+.*\r?\n)*?[ \t]+Key:\s*""`).MatchString(text) {

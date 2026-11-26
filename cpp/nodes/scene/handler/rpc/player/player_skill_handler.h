@@ -77,6 +77,12 @@ public:
     static void FulfillSkillBookWantedOrder(entt::entity player,
         const ::FulfillSkillBookWantedOrderRequest* request,
         ::FulfillSkillBookWantedOrderResponse* response);
+    static void RentSkillLoadoutSlots(entt::entity player,
+        const ::RentSkillLoadoutSlotsRequest* request,
+        ::RentSkillLoadoutSlotsResponse* response);
+    static void AckCraftProxyDigest(entt::entity player,
+        const ::AckCraftProxyDigestRequest* request,
+        ::AckCraftProxyDigestResponse* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -268,6 +274,24 @@ public:
             FulfillSkillBookWantedOrder(player,
                 static_cast<const ::FulfillSkillBookWantedOrderRequest*>(request),
                 static_cast<::FulfillSkillBookWantedOrderResponse*>(response));
+			}
+            break;
+        case 21:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::RentSkillLoadoutSlotsResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            RentSkillLoadoutSlots(player,
+                static_cast<const ::RentSkillLoadoutSlotsRequest*>(request),
+                static_cast<::RentSkillLoadoutSlotsResponse*>(response));
+			}
+            break;
+        case 22:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::AckCraftProxyDigestResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            AckCraftProxyDigest(player,
+                static_cast<const ::AckCraftProxyDigestRequest*>(request),
+                static_cast<::AckCraftProxyDigestResponse*>(response));
 			}
             break;
         default:

@@ -67,4 +67,18 @@ enum skill_error {
 
   kSkillBannedInBattle = 7028;
 
+  kSkillLoadoutNameInvalid = 7029;
+
+  kSkillLoadoutRentPriceChanged = 7030;
+
+  kSkillLoadoutRentDiamondNotEnough = 7031;
+
+  kSkillLoadoutRentStackLimit = 7032;
+
+  kSkillLoadoutRentSlotsInvalid = 7033;
+
+  kSkillLoadoutAttributeInvalid = 7034;
+
+  kSkillLoadoutAttributeResetRequired = 7035;
+
 };

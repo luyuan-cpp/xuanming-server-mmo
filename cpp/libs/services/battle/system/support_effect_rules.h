@@ -63,12 +63,16 @@ inline void Begin(const EquipmentEffects& equipment, SupportEffectSummary& outpu
         part->set_complete(equipment.support_sources_complete());
         part->set_equipment_cap_bps(equipbattle::MaximumSourceBps(shield ? 6 : 5));
         part->set_total_bonus_bps(shield ? equipment.shield_capacity_bps() : equipment.outgoing_heal_bps());
+        uint32_t effectiveCap = 0;
         for (const auto& source : equipment.support_sources()) {
             if (source.effect_kind() != (shield ? 2u : 1u)) continue;
             *part->add_sources() = source;
-            if (source.source_cap_bps() > 0)
-                part->set_equipment_cap_bps(std::min(part->equipment_cap_bps(), source.source_cap_bps()));
+            if (source.source_cap_bps() > 0) {
+                const uint32_t bounded = std::min(source.source_cap_bps(), equipbattle::MaximumEffectiveSourceBps(shield ? 6 : 5));
+                effectiveCap = effectiveCap == 0 ? bounded : std::min(effectiveCap, bounded);
+            }
         }
+        if (effectiveCap > 0) part->set_equipment_cap_bps(effectiveCap);
         for (const auto& artifact : equipment.artifacts()) {
             if (artifact.effect_id() != (shield ? 5u : 4u)) continue;
             auto* source = part->add_sources();

@@ -135,6 +135,7 @@ type warBattleSummary struct {
 	DefenderIDs       []uint64 `json:"di"`
 	GoldLeyline       bool     `json:"gl"`
 	RivalryBonus      bool     `json:"rb"`
+	FeudBonus         bool     `json:"fb,omitempty"`
 }
 
 func buildSilverItemBundle(silver uint64, items ...*assetpb.ItemGrant) ([]byte, error) {
@@ -733,6 +734,27 @@ func (l *GuildLogic) GetGuildWarOverview(ctx context.Context, _ *pb.GetGuildWarO
 		nextTrack = myState.GetLastTrackMs() + uint64(trackCD)*1000
 	}
 
+	// 宿敌约战战书实时状态（含到期自动收官播报）与最近一场战报碑。
+	var activeFeudView *pb.GuildWarFeudView
+	activeFeudRec, justFinishedFeud, _ := l.war.Repo.GetActiveOrPendingFeud(ctx, guildID, nowMs)
+	if justFinishedFeud != nil {
+		l.broadcastFeudAlert(ctx, pb.GuildWarAlertKind_GUILD_WAR_ALERT_KIND_FEUD_ENDED, justFinishedFeud)
+	}
+	if activeFeudRec != nil {
+		activeFeudView = toFeudView(activeFeudRec)
+	}
+	lastFeudSummary := ""
+	if lastFin, _ := l.war.Repo.GetLastFinishedFeud(ctx, guildID); lastFin != nil {
+		lastFeudSummary = war.FormatFeudSummary(lastFin)
+	}
+	nextFeudAt := uint64(0)
+	if lastIssuedAt, _ := l.war.Repo.GetLastFeudIssuedAt(ctx, guildID); lastIssuedAt > 0 {
+		cand := lastIssuedAt + uint64(war.DefaultFeudCooldownSec)*1000
+		if cand > nowMs {
+			nextFeudAt = cand
+		}
+	}
+
 	return &pb.GetGuildWarOverviewResponse{
 		ServerTimeMs:       nowMs,
 		WeekKey:            weekKey,
@@ -763,6 +785,9 @@ func (l *GuildLogic) GetGuildWarOverview(ctx context.Context, _ *pb.GetGuildWarO
 		ActiveBattleId:         l.readBattleLockID(ctx, playerID),
 		ContributionBalance:    myContrib,
 		PublicBountyDailyLimit: bountyPubLimit,
+		ActiveFeud:             activeFeudView,
+		LastFeudSummary:        lastFeudSummary,
+		NextFeudIssueAtMs:      nextFeudAt,
 	}, nil
 }
 
@@ -1653,6 +1678,7 @@ func (l *GuildLogic) GetGuildWarBattleResult(ctx context.Context, req *pb.GetGui
 		BountyCandidateName:       candidateName,
 		GoldLeylineBonus:          sum.GoldLeyline,
 		RivalryBonus:              sum.RivalryBonus,
+		FeudBonus:                 sum.FeudBonus,
 	}, nil
 }
 
@@ -1730,6 +1756,163 @@ func (l *GuildLogic) InspectFieldWarTargets(ctx context.Context, req *pb.Inspect
 	return &pb.InspectFieldWarTargetsResponse{Targets: out}, nil
 }
 
+// ── 11. IssueGuildWarFeud & RespondGuildWarFeud（2 小时宿敌约战战书） ──────────
+
+func toFeudView(rec *pb.GuildWarFeudRecord) *pb.GuildWarFeudView {
+	if rec == nil {
+		return nil
+	}
+	return &pb.GuildWarFeudView{
+		FeudId:           rec.GetFeudId(),
+		IssuerGuildId:    rec.GetIssuerGuildId(),
+		IssuerGuildName:  rec.GetIssuerGuildName(),
+		TargetGuildId:    rec.GetTargetGuildId(),
+		TargetGuildName:  rec.GetTargetGuildName(),
+		Status:           pb.GuildWarFeudStatus(rec.GetStatus()),
+		IssuerWins:       rec.GetIssuerWins(),
+		TargetWins:       rec.GetTargetWins(),
+		IssuerMerit:      rec.GetIssuerMerit(),
+		TargetMerit:      rec.GetTargetMerit(),
+		CreatedAtMs:      rec.GetCreatedAtMs(),
+		AcceptDeadlineMs: rec.GetAcceptDeadlineMs(),
+		StartedAtMs:      rec.GetStartedAtMs(),
+		EndsAtMs:         rec.GetEndsAtMs(),
+		WinnerGuildId:    rec.GetWinnerGuildId(),
+	}
+}
+
+func (l *GuildLogic) guildMemberIDs(ctx context.Context, guildID uint64) []uint64 {
+	if guildID == 0 || l.repo == nil {
+		return nil
+	}
+	g, err := l.repo.GetGuild(ctx, guildID)
+	if err != nil || g == nil {
+		return nil
+	}
+	ids := make([]uint64, 0, len(g.Members))
+	for _, m := range g.Members {
+		if m.PlayerID != 0 {
+			ids = append(ids, m.PlayerID)
+		}
+	}
+	return ids
+}
+
+func (l *GuildLogic) broadcastFeudAlert(ctx context.Context, kind pb.GuildWarAlertKind, rec *pb.GuildWarFeudRecord) {
+	if rec == nil {
+		return
+	}
+	recips := l.guildMemberIDs(ctx, rec.GetTargetGuildId())
+	if kind != pb.GuildWarAlertKind_GUILD_WAR_ALERT_KIND_FEUD_CHALLENGE {
+		recips = append(recips, l.guildMemberIDs(ctx, rec.GetIssuerGuildId())...)
+	}
+	if len(recips) == 0 {
+		return
+	}
+	l.notifyWarAlert(ctx, &pb.GuildWarAlertS2C{
+		Kind:              kind,
+		AttackerGuildName: rec.GetIssuerGuildName(),
+		DefenderGuildName: rec.GetTargetGuildName(),
+		FeudId:            rec.GetFeudId(),
+		IssuerWins:        rec.GetIssuerWins(),
+		TargetWins:        rec.GetTargetWins(),
+	}, recips)
+}
+
+func (l *GuildLogic) IssueGuildWarFeud(ctx context.Context, req *pb.IssueGuildWarFeudRequest) (*pb.IssueGuildWarFeudResponse, error) {
+	playerID, guildID, guild, zoneID, tipID, err := l.requireWarMember(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if tipID != 0 {
+		return &pb.IssueGuildWarFeudResponse{ErrorMessage: tipErr(tipID, "")}, nil
+	}
+	if !isGuildOfficerOrLeader(guild, playerID) {
+		return &pb.IssueGuildWarFeudResponse{ErrorMessage: tipErr(constants.ErrRankTooLow, "")}, nil
+	}
+	targetGuildID := req.GetTargetGuildId()
+	if targetGuildID == 0 || targetGuildID == guildID {
+		return &pb.IssueGuildWarFeudResponse{ErrorMessage: tipErr(constants.ErrWarFeudInvalidTarget, "")}, nil
+	}
+	targetGuild, err := l.repo.GetGuild(ctx, targetGuildID)
+	if err != nil || targetGuild == nil {
+		return &pb.IssueGuildWarFeudResponse{ErrorMessage: tipErr(constants.ErrWarFeudInvalidTarget, "")}, nil
+	}
+	nowMs := uint64(l.warNow().UnixMilli())
+	var feudID uint64
+	if l.war.BountyIDs != nil {
+		feudID, err = l.war.BountyIDs.Mint(ctx)
+	}
+	if err != nil || feudID == 0 {
+		feudID = nowMs
+	}
+	rec := &pb.GuildWarFeudRecord{
+		FeudId:           feudID,
+		ZoneId:           zoneID,
+		IssuerGuildId:    guildID,
+		IssuerGuildName:  guild.Name,
+		TargetGuildId:    targetGuildID,
+		TargetGuildName:  targetGuild.Name,
+		CreatedAtMs:      nowMs,
+		AcceptDeadlineMs: nowMs + uint64(war.DefaultFeudAcceptWindowSec)*1000,
+	}
+	created, err := l.war.Repo.IssueFeud(ctx, rec, war.DefaultFeudCooldownSec, nowMs)
+	if errors.Is(err, data.ErrWarFeudAlreadyActive) {
+		return &pb.IssueGuildWarFeudResponse{ErrorMessage: tipErr(constants.ErrWarFeudAlreadyActive, "")}, nil
+	}
+	if errors.Is(err, data.ErrWarFeudCooldown) {
+		return &pb.IssueGuildWarFeudResponse{ErrorMessage: tipErr(constants.ErrWarFeudCooldown, "")}, nil
+	}
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "issue guild war feud: %v", err)
+	}
+	l.broadcastFeudAlert(ctx, pb.GuildWarAlertKind_GUILD_WAR_ALERT_KIND_FEUD_CHALLENGE, created)
+	return &pb.IssueGuildWarFeudResponse{
+		Feud:          toFeudView(created),
+		NextIssueAtMs: nowMs + uint64(war.DefaultFeudCooldownSec)*1000,
+	}, nil
+}
+
+func (l *GuildLogic) RespondGuildWarFeud(ctx context.Context, req *pb.RespondGuildWarFeudRequest) (*pb.RespondGuildWarFeudResponse, error) {
+	playerID, guildID, guild, _, tipID, err := l.requireWarMember(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if tipID != 0 {
+		return &pb.RespondGuildWarFeudResponse{ErrorMessage: tipErr(tipID, "")}, nil
+	}
+	if !isGuildOfficerOrLeader(guild, playerID) {
+		return &pb.RespondGuildWarFeudResponse{ErrorMessage: tipErr(constants.ErrRankTooLow, "")}, nil
+	}
+	nowMs := uint64(l.warNow().UnixMilli())
+	updated, err := l.war.Repo.RespondFeud(ctx, req.GetFeudId(), guildID, req.GetAccept(), war.DefaultFeudDurationSec, nowMs)
+	if errors.Is(err, data.ErrWarFeudNotFound) {
+		return &pb.RespondGuildWarFeudResponse{ErrorMessage: tipErr(constants.ErrWarFeudNotFound, "")}, nil
+	}
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "respond guild war feud: %v", err)
+	}
+	if req.GetAccept() && updated.GetStatus() == uint32(pb.GuildWarFeudStatus_GUILD_WAR_FEUD_STATUS_ACTIVE) {
+		l.broadcastFeudAlert(ctx, pb.GuildWarAlertKind_GUILD_WAR_ALERT_KIND_FEUD_STARTED, updated)
+	}
+	return &pb.RespondGuildWarFeudResponse{Feud: toFeudView(updated)}, nil
+}
+
+func isGuildOfficerOrLeader(g *data.GuildData, playerID uint64) bool {
+	if g == nil || playerID == 0 {
+		return false
+	}
+	if g.LeaderID == playerID {
+		return true
+	}
+	for _, m := range g.Members {
+		if m.PlayerID == playerID {
+			return constants.Rank(m.Role) >= constants.RankOfficer
+		}
+	}
+	return false
+}
+
 // ── Kafka 帮战终局结算入口（SettleGuildWarResult） ────────────────────────────
 
 func (l *GuildLogic) SettleGuildWarResult(ctx context.Context, ev *kafkapb.BattleResultEvent) error {
@@ -1773,6 +1956,10 @@ func (l *GuildLogic) SettleGuildWarResult(ctx context.Context, ev *kafkapb.Battl
 	defenderWon := ev.GetOutcome() == battlepb.EBattleOutcome_BATTLE_OUTCOME_SIDE_B_WIN
 	isDraw := !attackerWon && !defenderWon
 
+	// 检查两帮是否正处于 2 小时宿敌约战窗口内（前 3 场免递减 + 收益 +25% + 计入比分）。
+	activeFeud, _ := l.war.Repo.GetActiveFeudBetween(ctx, gw.GetAttackerGuildId(), gw.GetDefenderGuildId(), nowMs)
+	feudActive := activeFeud != nil
+
 	// 30 分钟内同对手递减计数（基于最近帮战记录）。
 	diminishPct := uint32(100)
 	repeatOpp := false
@@ -1795,7 +1982,7 @@ func (l *GuildLogic) SettleGuildWarResult(ctx context.Context, ev *kafkapb.Battl
 				}
 			}
 		}
-		diminishPct = war.DiminishPercent(recentCount)
+		diminishPct = war.DiminishPercentWithFeud(recentCount, feudActive)
 		repeatOpp = recentCount > 0
 	}
 
@@ -1818,6 +2005,7 @@ func (l *GuildLogic) SettleGuildWarResult(ctx context.Context, ev *kafkapb.Battl
 		DiminishPercent: diminishPct,
 		IsGoldLeyline:   gw.GetGoldLeylineBonus(),
 		IsRivalGuild:    gw.GetRivalryBonus(),
+		IsFeudActive:    feudActive,
 		GoldLeylineBps:  goldBps,
 		RivalryBonusBps: rivalBps,
 		Rule:            rule,
@@ -1829,20 +2017,23 @@ func (l *GuildLogic) SettleGuildWarResult(ctx context.Context, ev *kafkapb.Battl
 		DiminishPercent: diminishPct,
 		IsGoldLeyline:   gw.GetGoldLeylineBonus(),
 		IsRivalGuild:    gw.GetRivalryBonus(),
+		IsFeudActive:    feudActive,
 		GoldLeylineBps:  goldBps,
 		RivalryBonusBps: rivalBps,
 		Rule:            rule,
 	})
 
-	// 连胜终结赏金检查（输方连胜 >= 3 且击败 >= 2 不同对手时发给赢方首人）。
+	// 连胜终结赏金检查（输方连胜 >= 3 且击败 >= 2 不同对手时发给赢方首人），同时记录败者连胜供捷报播报。
 	var jackpotContrib, jackpotSilver uint64
 	var outcomeTag uint32
+	var endedLoserStreak uint32
 	if !isDraw && len(attackerIDs) > 0 && len(defenderIDs) > 0 {
 		loserID := defenderIDs[0]
 		if defenderWon {
 			loserID = attackerIDs[0]
 		}
 		if loserState, sErr := l.war.Repo.GetPlayerWarState(ctx, loserID, gw.GetZoneId(), weekKey); sErr == nil && loserState != nil {
+			endedLoserStreak = loserState.GetStreakCount()
 			jc, js := war.StreakBountyJackpot(loserState.GetStreakCount(), loserState.GetStreakDistinctCount())
 			if jc > 0 || js > 0 {
 				jackpotContrib, jackpotSilver = jc, js
@@ -1945,6 +2136,7 @@ func (l *GuildLogic) SettleGuildWarResult(ctx context.Context, ev *kafkapb.Battl
 		DefenderIDs:  defenderIDs,
 		GoldLeyline:  gw.GetGoldLeylineBonus(),
 		RivalryBonus: gw.GetRivalryBonus(),
+		FeudBonus:    feudActive,
 	}
 	if g, _ := l.repo.GetGuild(ctx, gw.GetAttackerGuildId()); g != nil {
 		sum.AttackerGuildName = g.Name
@@ -2085,6 +2277,46 @@ func (l *GuildLogic) SettleGuildWarResult(ctx context.Context, ev *kafkapb.Battl
 
 	for _, op := range settleOut.CreatedOps {
 		l.syncDeliverWarOp(ctx, op)
+	}
+
+	// 计入 2 小时宿敌约战比分（到点自动收官并向两帮播报战果）。
+	if feudActive {
+		if updatedFeud, justFinished, fErr := l.war.Repo.RecordFeudBattle(ctx, activeFeud.GetFeudId(),
+			gw.GetAttackerGuildId(), gw.GetDefenderGuildId(), attackerWon, defenderWon,
+			atkReward.Merit*uint64(len(attackerIDs)), defReward.Merit*uint64(len(defenderIDs)), nowMs); fErr == nil && justFinished {
+			l.broadcastFeudAlert(ctx, pb.GuildWarAlertKind_GUILD_WAR_ALERT_KIND_FEUD_ENDED, updatedFeud)
+		}
+	}
+
+	// 达成 5/8 连胜或终结 >=5 连胜时推送非阻断战区/双帮连胜捷报（含 battle_id 供回味与悬赏追踪）。
+	if !isDraw && len(attackerIDs) > 0 && len(defenderIDs) > 0 {
+		winnerID, loserID := firstAtk, firstDef
+		winnerGuildName, loserGuildName := sum.AttackerGuildName, sum.DefenderGuildName
+		if defenderWon {
+			winnerID, loserID = firstDef, firstAtk
+			winnerGuildName, loserGuildName = sum.DefenderGuildName, sum.AttackerGuildName
+		}
+		var newStreak uint32
+		if ws, sErr := l.war.Repo.GetPlayerWarState(ctx, winnerID, gw.GetZoneId(), weekKey); sErr == nil && ws != nil {
+			newStreak = ws.GetStreakCount()
+		}
+		if war.ShouldBroadcastStreakAlert(newStreak, endedLoserStreak) {
+			streakVal := newStreak
+			if endedLoserStreak >= war.StreakBroadcastMin && jackpotSilver > 0 {
+				streakVal = endedLoserStreak
+			}
+			alertRecips := append(l.guildMemberIDs(ctx, gw.GetAttackerGuildId()), l.guildMemberIDs(ctx, gw.GetDefenderGuildId())...)
+			l.notifyWarAlert(ctx, &pb.GuildWarAlertS2C{
+				Kind:              pb.GuildWarAlertKind_GUILD_WAR_ALERT_KIND_STREAK_BOUNTY,
+				AttackerGuildName: winnerGuildName,
+				DefenderGuildName: loserGuildName,
+				ActorName:         allNames[winnerID],
+				TargetName:        allNames[loserID],
+				BattleId:          battleID,
+				RewardSilver:      jackpotSilver,
+				StreakCount:       streakVal,
+			}, alertRecips)
+		}
 	}
 
 	// 推帮会变动刷新信号给涉及参战人。

@@ -122,4 +122,12 @@ struct FCfgSeasonRuleRow : public FTableRowBase
 	/** 本季满级永久解锁的零数值纪念徽章图标键（如 UI/SeasonHonors/honor_s1_pozhen） */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|SeasonRule")
 	FString honor_badge_icon_key;
+
+	/** 自动循环池顺位（0 = 不加入自动循环池，沿用固定时间窗；1..N = 严格连续不重复循环顺序） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|SeasonRule")
+	int32 cycle_order = 0;
+
+	/** 无限期号自动循环单届持续天数（0 = 关闭自动循环，沿用固定单季模式；开启时入池行一致且在 [7, 180]） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|SeasonRule")
+	int32 cycle_duration_days = 0;
 };

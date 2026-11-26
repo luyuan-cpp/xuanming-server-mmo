@@ -50,4 +50,11 @@ message PlayerCraftComp {
   repeated SkillBookWantedOrder wanted_orders = 16; // 本人当前挂出的悬赏求书单（最多 3 条，无序按 order_id 索引）。
   uint64 next_wanted_order_seq = 17;      // 下一条悬赏求书单本地单调 ID（0 视为 1）。
   bool team_free_proxy = 18;              // true = 对同队（TeamId 相同且非 0）玩家实行情义 0 手工费原子代打/代制。
+  // ── 离线/跨线名匠代打未读营业战报（异步回账落盘后累积，宗师 AckCraftProxyDigest 幂等清零） ──
+  uint32 unread_proxy_digest_orders = 19;          // 尚未查阅的代打累计成交单数。
+  uint32 unread_proxy_digest_supreme = 20;         // 尚未查阅的极品产出次数。
+  uint32 unread_proxy_digest_rare = 21;            // 尚未查阅的稀世制书次数。
+  uint64 unread_proxy_digest_net_gold = 22;        // 尚未查阅的税后 95% 净银两总额（已寄往邮箱）。
+  string unread_proxy_digest_last_buyer = 23;      // 最近一位下单侠士名（服务端已过审角色名）。
+  uint32 unread_proxy_digest_new_titles_mask = 24; // 本期间新解锁的零属性名匠雅号位图（bit (title_id - 1)）。
 }

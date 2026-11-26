@@ -44,6 +44,9 @@ public:
     static void DeleteBattleBuildBookmark(entt::entity player,
         const ::DeleteBattleBuildBookmarkRequest* request,
         ::DeleteBattleBuildBookmarkResponse* response);
+    static void SetRetroHonorTarget(entt::entity player,
+        const ::SetRetroHonorTargetRequest* request,
+        ::SetRetroHonorTargetResponse* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -140,6 +143,15 @@ public:
             DeleteBattleBuildBookmark(player,
                 static_cast<const ::DeleteBattleBuildBookmarkRequest*>(request),
                 static_cast<::DeleteBattleBuildBookmarkResponse*>(response));
+			}
+            break;
+        case 10:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::SetRetroHonorTargetResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            SetRetroHonorTarget(player,
+                static_cast<const ::SetRetroHonorTargetRequest*>(request),
+                static_cast<::SetRetroHonorTargetResponse*>(response));
 			}
             break;
         default:

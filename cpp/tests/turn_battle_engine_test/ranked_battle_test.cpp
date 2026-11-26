@@ -1666,20 +1666,39 @@ TEST(RankedBattleTest, PrepThreeSkillBanFullFlowCopyBlockAutoFallbackAndTeamAggr
 }
 
 TEST(RankedBattleTest, RivalryPrepRedactionRevengeAndFeaturedBuildSnapshot) {
-    FakeBattleDataProvider data;
-    RegisterRankedCoreSkills(data);
+    auto data = std::make_shared<MemoryBattleDataProvider>();
+    auto& dungeon = data->AddDungeon(5);
+    dungeon.set_id(5);
+    dungeon.set_round_limit(20);
+    dungeon.set_max_team_size(5);
+    for (uint32_t sid : {10002u, 10018u}) {
+        auto& s = data->AddSkill(sid);
+        s.add_skill_type(1);
+        s.set_max_rank(5);
+        s.set_battle_model(1);
+        s.set_ability_kind(1);
+        s.set_caster_mask(1);
+        s.set_target_team(1);
+        s.set_max_targets(1);
+        s.set_attack_multiplier(1.0);
+        auto& b = data->AddBuff(sid * 10);
+        b.set_battle_op(1);
+        s.add_effect(sid * 10);
+    }
 
     auto makeSeal = [](uint32_t id, uint32_t effectId, const char* name) {
         SeasonSealEffect s;
         s.set_season_id(1);
         s.set_seal_id(id);
         s.set_effect_id(effectId);
-        s.set_effect_value(10);
+        s.set_bonus_bps(1000);
+        s.set_per_round_limit(1);
+        s.set_battle_limit(effectId == 7 ? 2 : 1);
         s.set_name(name);
         return s;
     };
-    const auto seal101 = makeSeal(101, 1, "破阵锐印");
-    const auto seal103 = makeSeal(103, 6, "固阵守印");
+    const auto seal101 = makeSeal(101, 7, "破阵锐印");
+    const auto seal103 = makeSeal(103, 8, "固阵守印");
 
     auto makePet = [](uint64_t petId, uint64_t ownerId, uint32_t tableId, const char* name) {
         BattlePetSnapshot p;
@@ -1701,7 +1720,7 @@ TEST(RankedBattleTest, RivalryPrepRedactionRevengeAndFeaturedBuildSnapshot) {
     CreateBattleRequest req;
     req.set_battle_id(99601);
     req.set_battle_config_id(5);
-    req.set_match_mode(7);
+    req.set_match_mode(6);  // MATCH_MODE_PVP_TEAM
     req.set_seed(601);
     auto* rctx = req.mutable_ranked_context();
     rctx->set_season_id(1);
@@ -1740,6 +1759,8 @@ TEST(RankedBattleTest, RivalryPrepRedactionRevengeAndFeaturedBuildSnapshot) {
     p1->set_defense(100);
     p1->add_skill_table_ids(10002);
     p1->add_skill_table_ids(10018);
+    (*p1->mutable_skill_ranks())[10002] = 1;
+    (*p1->mutable_skill_ranks())[10018] = 1;
     *p1->mutable_equipment_effects()->mutable_season_seal() = seal101;
     *p1->add_available_season_seals() = seal101;
     *p1->add_available_season_seals() = seal103;
@@ -1788,7 +1809,8 @@ TEST(RankedBattleTest, RivalryPrepRedactionRevengeAndFeaturedBuildSnapshot) {
     ASSERT_EQ(engine.UpdateBattlePrep(201, 0, 0, true), 0u);
     ASSERT_TRUE(engine.FinalizePrepPhase());
 
-    ASSERT_TRUE(engine.SubmitAction(101, Attack(201)));
+    EXPECT_EQ(engine.ValidateAction(101, Attack(201)), kSuccess);
+    engine.SubmitAction(101, Attack(201));
     engine.SubmitAction(201, Defend());
     engine.ResolveCurrentRound();
     ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);

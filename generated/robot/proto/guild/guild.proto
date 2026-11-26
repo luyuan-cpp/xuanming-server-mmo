@@ -640,6 +640,9 @@ service GuildService {
   rpc GetGuildWarBattleResult (GetGuildWarBattleResultRequest) returns (GetGuildWarBattleResultResponse);
   rpc NotifyGuildWarAlert (GuildWarAlertS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
   rpc InspectFieldWarTargets (InspectFieldWarTargetsRequest) returns (InspectFieldWarTargetsResponse);
+  // 帮会全天帮战 V2.5 · 宿敌约战战书(2 小时全帮约战 + 实时比分)
+  rpc IssueGuildWarFeud (IssueGuildWarFeudRequest) returns (IssueGuildWarFeudResponse);
+  rpc RespondGuildWarFeud (RespondGuildWarFeudRequest) returns (RespondGuildWarFeudResponse);
 
   // 江湖恩怨·帮派生死状恩怨墙(docs/design/battle-jianghu-grudge-duel-bounty-v1.md §2.2):仅本帮成员可读。
   rpc GetGuildJianghuGrudgeWall (GetGuildJianghuGrudgeWallRequest) returns (GetGuildJianghuGrudgeWallResponse);
@@ -688,6 +691,36 @@ enum GuildWarAlertKind {
   GUILD_WAR_ALERT_KIND_PURSUER_ENTERED_MAP = 3; // 追兵踏入目标所在野外图
   GUILD_WAR_ALERT_KIND_BOUNTY_RESOLVED = 4;     // 追杀雪耻或反杀撕单播报
   GUILD_WAR_ALERT_KIND_STREAK_BOUNTY = 5;       // 连胜悬赏挂牌或终结播报
+  GUILD_WAR_ALERT_KIND_FEUD_CHALLENGE = 6;      // 收到异帮宿敌约战战书
+  GUILD_WAR_ALERT_KIND_FEUD_STARTED = 7;        // 2 小时宿敌约战正式打响
+  GUILD_WAR_ALERT_KIND_FEUD_ENDED = 8;          // 宿敌约战收官捷报
+}
+
+enum GuildWarFeudStatus {
+  GUILD_WAR_FEUD_STATUS_UNSPECIFIED = 0;
+  GUILD_WAR_FEUD_STATUS_PENDING = 1;            // 已下战书，待对方管理 15 分钟内应战
+  GUILD_WAR_FEUD_STATUS_ACTIVE = 2;             // 2 小时宿敌约战激战中
+  GUILD_WAR_FEUD_STATUS_FINISHED = 3;           // 约战已收官结算
+  GUILD_WAR_FEUD_STATUS_DECLINED = 4;           // 对方婉拒或发起方撤回
+  GUILD_WAR_FEUD_STATUS_EXPIRED = 5;            // 应战窗超时流局
+}
+
+message GuildWarFeudView {
+  uint64 feud_id = 1;
+  uint64 issuer_guild_id = 2;
+  string issuer_guild_name = 3;
+  uint64 target_guild_id = 4;
+  string target_guild_name = 5;
+  GuildWarFeudStatus status = 6;
+  uint32 issuer_wins = 7;
+  uint32 target_wins = 8;
+  uint64 issuer_merit = 9;
+  uint64 target_merit = 10;
+  uint64 created_at_ms = 11;
+  uint64 accept_deadline_ms = 12;
+  uint64 started_at_ms = 13;
+  uint64 ends_at_ms = 14;
+  uint64 winner_guild_id = 15;
 }
 
 message GuildWarStanceView {
@@ -865,6 +898,9 @@ message GetGuildWarOverviewResponse {
   uint64 contribution_balance = 19;
   uint32 public_bounty_used_today = 20;
   uint32 public_bounty_daily_limit = 21;
+  GuildWarFeudView active_feud = 22;    // 当前本帮生效中或待应答的宿敌约战战书
+  string last_feud_summary = 23;        // 最近一场已收官约战捷报摘要
+  uint64 next_feud_issue_at_ms = 24;    // 本帮下次可下发约战战书时刻(0=可立即下发)
 }
 
 message SetGuildWarStanceRequest {
@@ -977,6 +1013,7 @@ message GetGuildWarBattleResultResponse {
   string bounty_candidate_name = 25;
   bool   gold_leyline_bonus = 26;
   bool   rivalry_bonus = 27;
+  bool   feud_bonus = 28;          // 2 小时宿敌约战期间享 +25% 收益与前 3 场免递减
 }
 
 message GuildWarAlertS2C {
@@ -993,6 +1030,28 @@ message GuildWarAlertS2C {
   uint64 battle_id = 11;
   uint64 reward_silver = 12;
   uint32 streak_count = 13;
+  uint64 feud_id = 14;
+  uint32 issuer_wins = 15;
+  uint32 target_wins = 16;
+}
+
+message IssueGuildWarFeudRequest {
+  uint64 target_guild_id = 1;
+  uint64 client_request_id = 2;
+}
+message IssueGuildWarFeudResponse {
+  TipInfoMessage error_message = 1;
+  GuildWarFeudView feud = 2;
+  uint64 next_issue_at_ms = 3;
+}
+
+message RespondGuildWarFeudRequest {
+  uint64 feud_id = 1;
+  bool   accept = 2;
+}
+message RespondGuildWarFeudResponse {
+  TipInfoMessage error_message = 1;
+  GuildWarFeudView feud = 2;
 }
 
 message FieldWarTargetBrief {

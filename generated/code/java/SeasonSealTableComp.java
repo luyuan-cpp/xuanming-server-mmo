@@ -89,4 +89,28 @@ public final class SeasonSealTableComp {
         }
     }
 
+    public record Resonance_skill_id(int value) {
+        public static Resonance_skill_id from(SeasonSealTable row) {
+            return new Resonance_skill_id(row.getResonanceSkillId());
+        }
+    }
+
+    public record Resonance_kind(int value) {
+        public static Resonance_kind from(SeasonSealTable row) {
+            return new Resonance_kind(row.getResonanceKind());
+        }
+    }
+
+    public record Resonance_param(int value) {
+        public static Resonance_param from(SeasonSealTable row) {
+            return new Resonance_param(row.getResonanceParam());
+        }
+    }
+
+    public record Resonance_desc(String value) {
+        public static Resonance_desc from(SeasonSealTable row) {
+            return new Resonance_desc(row.getResonanceDesc());
+        }
+    }
+
 }

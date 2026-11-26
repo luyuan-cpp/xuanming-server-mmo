@@ -224,6 +224,25 @@ DataServiceRpc:
   Middlewares:
     Breaker: false
 
+# 江湖恩怨与天墉生死状一期跨服务依赖（均 NonBlock: true，依赖未起不阻塞 match 主链路启动）
+FriendRpc:
+  Endpoints: [127.0.0.1:50400]
+  Timeout: 1500
+  NonBlock: true
+ChatRpc:
+  Endpoints: [127.0.0.1:50700]
+  Timeout: 1500
+  NonBlock: true
+GuildRpc:
+  Endpoints: [127.0.0.1:50300]
+  Timeout: 1500
+  NonBlock: true
+MailRpc:
+  Endpoints: [127.0.0.1:50900]
+  Timeout: 1800
+  NonBlock: true
+MailSecretEnv: MAIL_PRODUCER_SECRET_MATCH
+
 # 链路追踪阶段三(docs/design/distributed-tracing.md §10.3):go-zero 把 span 经 OTLP/gRPC 送本机 Alloy
 # (deploy/docker-compose.observability.yml,dev.bat obs 起),Alloy 尾部采样后存进 Tempo。Name 与 Loki 的 service 标签同值。
 # 头部全采(Sampler 1.0),取舍在采集器。Alloy 没起时导出器在后台重连、丢 span,不影响业务;不想导出就加 Disabled: true。

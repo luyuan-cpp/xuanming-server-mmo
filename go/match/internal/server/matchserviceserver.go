@@ -190,11 +190,7 @@ func (s *MatchServiceServer) ClaimTournamentReward(ctx context.Context, in *matc
 	return logic.NewTournamentLogic(ctx, s.svcCtx).ClaimTournamentReward(in)
 }
 
-// ---- 全服赛季战队锦标赛《群仙问道赛》V2(506..508) ----
-
-func (s *MatchServiceServer) SaluteTournamentChampion(ctx context.Context, in *matchpb.SaluteTournamentChampionRequest) (*matchpb.SaluteTournamentChampionResponse, error) {
-	return logic.NewTournamentLogic(ctx, s.svcCtx).SaluteTournamentChampion(in)
-}
+// ---- 全服赛季战队锦标赛《群仙问道赛》V2(507..508；原 506 每日观道致敬已移除) ----
 
 func (s *MatchServiceServer) SendTournamentSpectateCheer(ctx context.Context, in *matchpb.SendTournamentSpectateCheerRequest) (*matchpb.SendTournamentSpectateCheerResponse, error) {
 	return logic.NewTournamentLogic(ctx, s.svcCtx).SendTournamentSpectateCheer(in)
@@ -230,4 +226,48 @@ func (s *MatchServiceServer) BanTournamentLeyline(ctx context.Context, in *match
 
 func (s *MatchServiceServer) GetTournamentHighlights(ctx context.Context, in *matchpb.GetTournamentHighlightsRequest) (*matchpb.GetTournamentHighlightsResponse, error) {
 	return logic.NewTournamentLogic(ctx, s.svcCtx).GetTournamentHighlights(in)
+}
+
+// ---- 江湖恩怨与天墉生死状一期(548..554) ----
+
+func (s *MatchServiceServer) CreateJianghuDuelInvite(ctx context.Context, in *matchpb.CreateJianghuDuelInviteRequest) (*matchpb.CreateJianghuDuelInviteResponse, error) {
+	return logic.NewJianghuLogic(ctx, s.svcCtx).CreateJianghuDuelInvite(in)
+}
+
+func (s *MatchServiceServer) ConfirmJianghuDuelMember(ctx context.Context, in *matchpb.ConfirmJianghuDuelMemberRequest) (*matchpb.ConfirmJianghuDuelMemberResponse, error) {
+	return logic.NewJianghuLogic(ctx, s.svcCtx).ConfirmJianghuDuelMember(in)
+}
+
+func (s *MatchServiceServer) RespondJianghuDuelInvite(ctx context.Context, in *matchpb.RespondJianghuDuelInviteRequest) (*matchpb.RespondJianghuDuelInviteResponse, error) {
+	return logic.NewJianghuLogic(ctx, s.svcCtx).RespondJianghuDuelInvite(in)
+}
+
+func (s *MatchServiceServer) ListJianghuGrudges(ctx context.Context, in *matchpb.ListJianghuGrudgesRequest) (*matchpb.ListJianghuGrudgesResponse, error) {
+	return logic.NewJianghuLogic(ctx, s.svcCtx).ListJianghuGrudges(in)
+}
+
+func (s *MatchServiceServer) DismissJianghuGrudge(ctx context.Context, in *matchpb.DismissJianghuGrudgeRequest) (*matchpb.DismissJianghuGrudgeResponse, error) {
+	return logic.NewJianghuLogic(ctx, s.svcCtx).DismissJianghuGrudge(in)
+}
+
+func (s *MatchServiceServer) NotifyJianghuDuelInvite(ctx context.Context, in *matchpb.JianghuDuelInviteS2C) (*base.Empty, error) {
+	return logic.NewJianghuLogic(ctx, s.svcCtx).NotifyJianghuDuelInvite(in)
+}
+
+func (s *MatchServiceServer) NotifyJianghuDuelStatus(ctx context.Context, in *matchpb.JianghuDuelStatusS2C) (*base.Empty, error) {
+	return logic.NewJianghuLogic(ctx, s.svcCtx).NotifyJianghuDuelStatus(in)
+}
+
+// ---- 五行试炼志 V3：好友约战帖与受控 PVE 录像播放(570..572) ----
+
+func (s *MatchServiceServer) CreateTrialChallengeCard(ctx context.Context, in *matchpb.CreateTrialChallengeCardRequest) (*matchpb.CreateTrialChallengeCardResponse, error) {
+	return logic.NewTrialChallengeCardLogic(ctx, s.svcCtx).CreateTrialChallengeCard(in)
+}
+
+func (s *MatchServiceServer) GetTrialChallengeCard(ctx context.Context, in *matchpb.GetTrialChallengeCardRequest) (*matchpb.GetTrialChallengeCardResponse, error) {
+	return logic.NewTrialChallengeCardLogic(ctx, s.svcCtx).GetTrialChallengeCard(in)
+}
+
+func (s *MatchServiceServer) GetSharedTrialReplay(ctx context.Context, in *matchpb.GetSharedTrialReplayRequest) (*matchpb.GetSharedTrialReplayResponse, error) {
+	return logic.NewTrialChallengeCardLogic(ctx, s.svcCtx).GetSharedTrialReplay(in)
 }

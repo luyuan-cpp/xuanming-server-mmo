@@ -468,3 +468,49 @@ func (sceneSkillClientPlayerRpc) decodeFulfillSkillBookWantedOrder(reply *base.M
 	}
 	return resp, nil
 }
+
+// RentSkillLoadoutSlots 异步调用 SceneSkillClientPlayer.RentSkillLoadoutSlots(REQUEST),done 的契约见 SceneSkillClientPlayer。
+func (r sceneSkillClientPlayerRpc) RentSkillLoadoutSlots(c *pkg.GameClient, req *scene.RentSkillLoadoutSlotsRequest, timeout time.Duration, done func(*scene.RentSkillLoadoutSlotsResponse, error)) {
+	c.Call(game.SceneSkillClientPlayerRentSkillLoadoutSlotsMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeRentSkillLoadoutSlots(reply, err))
+	})
+}
+
+// RentSkillLoadoutSlotsSync 同步调用 SceneSkillClientPlayer.RentSkillLoadoutSlots(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSkillClientPlayerRpc) RentSkillLoadoutSlotsSync(ctx context.Context, c *pkg.GameClient, req *scene.RentSkillLoadoutSlotsRequest, timeout time.Duration) (*scene.RentSkillLoadoutSlotsResponse, error) {
+	return r.decodeRentSkillLoadoutSlots(c.CallSync(ctx, game.SceneSkillClientPlayerRentSkillLoadoutSlotsMessageId, req, timeout))
+}
+
+func (sceneSkillClientPlayerRpc) decodeRentSkillLoadoutSlots(reply *base.MessageContent, err error) (*scene.RentSkillLoadoutSlotsResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.RentSkillLoadoutSlotsResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSkillClientPlayer.RentSkillLoadoutSlots reply: %w", err)
+	}
+	return resp, nil
+}
+
+// AckCraftProxyDigest 异步调用 SceneSkillClientPlayer.AckCraftProxyDigest(REQUEST),done 的契约见 SceneSkillClientPlayer。
+func (r sceneSkillClientPlayerRpc) AckCraftProxyDigest(c *pkg.GameClient, req *scene.AckCraftProxyDigestRequest, timeout time.Duration, done func(*scene.AckCraftProxyDigestResponse, error)) {
+	c.Call(game.SceneSkillClientPlayerAckCraftProxyDigestMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeAckCraftProxyDigest(reply, err))
+	})
+}
+
+// AckCraftProxyDigestSync 同步调用 SceneSkillClientPlayer.AckCraftProxyDigest(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSkillClientPlayerRpc) AckCraftProxyDigestSync(ctx context.Context, c *pkg.GameClient, req *scene.AckCraftProxyDigestRequest, timeout time.Duration) (*scene.AckCraftProxyDigestResponse, error) {
+	return r.decodeAckCraftProxyDigest(c.CallSync(ctx, game.SceneSkillClientPlayerAckCraftProxyDigestMessageId, req, timeout))
+}
+
+func (sceneSkillClientPlayerRpc) decodeAckCraftProxyDigest(reply *base.MessageContent, err error) (*scene.AckCraftProxyDigestResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.AckCraftProxyDigestResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSkillClientPlayer.AckCraftProxyDigest reply: %w", err)
+	}
+	return resp, nil
+}

@@ -46,9 +46,6 @@ type TournamentRuleTable struct {
 	Bo3Top4Enabled              bool                   `protobuf:"varint,21,opt,name=bo3_top4_enabled,json=bo3Top4Enabled,proto3" json:"bo3_top4_enabled,omitempty"`
 	IntermissionSeconds         uint32                 `protobuf:"varint,22,opt,name=intermission_seconds,json=intermissionSeconds,proto3" json:"intermission_seconds,omitempty"`
 	PublicKnockoutReplay        bool                   `protobuf:"varint,23,opt,name=public_knockout_replay,json=publicKnockoutReplay,proto3" json:"public_knockout_replay,omitempty"`
-	SaluteGoldAmount            uint32                 `protobuf:"varint,24,opt,name=salute_gold_amount,json=saluteGoldAmount,proto3" json:"salute_gold_amount,omitempty"`
-	SaluteItemId                uint32                 `protobuf:"varint,25,opt,name=salute_item_id,json=saluteItemId,proto3" json:"salute_item_id,omitempty"`
-	SaluteItemCount             uint32                 `protobuf:"varint,26,opt,name=salute_item_count,json=saluteItemCount,proto3" json:"salute_item_count,omitempty"`
 	WarmupSparEnabled           bool                   `protobuf:"varint,27,opt,name=warmup_spar_enabled,json=warmupSparEnabled,proto3" json:"warmup_spar_enabled,omitempty"`
 	PredictionEnabled           bool                   `protobuf:"varint,28,opt,name=prediction_enabled,json=predictionEnabled,proto3" json:"prediction_enabled,omitempty"`
 	PredictionRewardMinHits     uint32                 `protobuf:"varint,29,opt,name=prediction_reward_min_hits,json=predictionRewardMinHits,proto3" json:"prediction_reward_min_hits,omitempty"`
@@ -250,27 +247,6 @@ func (x *TournamentRuleTable) GetPublicKnockoutReplay() bool {
 	return false
 }
 
-func (x *TournamentRuleTable) GetSaluteGoldAmount() uint32 {
-	if x != nil {
-		return x.SaluteGoldAmount
-	}
-	return 0
-}
-
-func (x *TournamentRuleTable) GetSaluteItemId() uint32 {
-	if x != nil {
-		return x.SaluteItemId
-	}
-	return 0
-}
-
-func (x *TournamentRuleTable) GetSaluteItemCount() uint32 {
-	if x != nil {
-		return x.SaluteItemCount
-	}
-	return 0
-}
-
 func (x *TournamentRuleTable) GetWarmupSparEnabled() bool {
 	if x != nil {
 		return x.WarmupSparEnabled
@@ -361,7 +337,8 @@ var File_tournamentrule_table_proto protoreflect.FileDescriptor
 
 const file_tournamentrule_table_proto_rawDesc = "" +
 	"\n" +
-	"\x1atournamentrule_table.proto\"\xb5\v\n" +
+	"\x1atournamentrule_table.proto\"\xb5\n" +
+	"\n" +
 	"\x13TournamentRuleTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12!\n" +
 	"\frule_version\x18\x02 \x01(\rR\vruleVersion\x12\x18\n" +
@@ -386,10 +363,7 @@ const file_tournamentrule_table_proto_rawDesc = "" +
 	"\x04desc\x18\x14 \x01(\tR\x04desc\x12(\n" +
 	"\x10bo3_top4_enabled\x18\x15 \x01(\bR\x0ebo3Top4Enabled\x121\n" +
 	"\x14intermission_seconds\x18\x16 \x01(\rR\x13intermissionSeconds\x124\n" +
-	"\x16public_knockout_replay\x18\x17 \x01(\bR\x14publicKnockoutReplay\x12,\n" +
-	"\x12salute_gold_amount\x18\x18 \x01(\rR\x10saluteGoldAmount\x12$\n" +
-	"\x0esalute_item_id\x18\x19 \x01(\rR\fsaluteItemId\x12*\n" +
-	"\x11salute_item_count\x18\x1a \x01(\rR\x0fsaluteItemCount\x12.\n" +
+	"\x16public_knockout_replay\x18\x17 \x01(\bR\x14publicKnockoutReplay\x12.\n" +
 	"\x13warmup_spar_enabled\x18\x1b \x01(\bR\x11warmupSparEnabled\x12-\n" +
 	"\x12prediction_enabled\x18\x1c \x01(\bR\x11predictionEnabled\x12;\n" +
 	"\x1aprediction_reward_min_hits\x18\x1d \x01(\rR\x17predictionRewardMinHits\x129\n" +

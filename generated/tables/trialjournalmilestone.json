@@ -111,7 +111,7 @@
    "commentary_body": "十八枚金印落满宣纸那夜，太极广场的灯影正好映在星图上。你既能三招破阵，也肯为队友守心解厄——这一袭星阵宗师法衣不卖银两、不增半点战力，只留给把五行战法真正打通的问道之人。",
    "commentary_key": "commentary_grandmaster_v2",
    "commentary_title": "留灯院·试炼宗师跋",
-   "desc": "永久卷一与卷二合计点亮 18/24 枚战法印（留 6 印容错），永久免费解锁零战力专属角色形象「星阵宗师」与名片印戳「五行宗师」。",
+   "desc": "常驻卷合计点亮 18 枚战法印，永久免费解锁零战力专属角色形象「星阵宗师」与名片印戳「五行宗师」。",
    "enabled": true,
    "grant_appearance_id": "20_star_formation_master_girl",
    "grant_pet_cosmetic_id": 0,
@@ -167,6 +167,37 @@
    "scope_chapter_id": 1,
    "season_id": 0,
    "title": "破阵双绝"
+  },
+  {
+   "badge_key": "badge_trial_three_realms",
+   "badge_name": "三境行者",
+   "bound_artifact_voucher_count": 0,
+   "bound_sand_count": 2,
+   "desc": "卷四累计点亮 4 枚战法印，获赠 2 份仅自用重铸砂与名片印戳「三境行者」。",
+   "enabled": true,
+   "grant_pet_cosmetic_id": 0,
+   "grant_skill_vfx_id": 0,
+   "id": 401,
+   "required_seals": 4,
+   "scope_chapter_id": 4,
+   "season_id": 0,
+   "title": "踏境问阵"
+  },
+  {
+   "bound_artifact_voucher_count": 0,
+   "bound_sand_count": 2,
+   "commentary_body": "我在八景岛抄了半页风信，在碧渊水宫拓下两道钟声，又在月汐湾守到退潮才收笔。从前以为灵气异象只宜远观，如今看你顺风守势、和鸣应律、抢潮收官，倒像替三境各自补全了最后一句注脚。这本风物册留给你压箱底，改日再同往海湾听潮。",
+   "commentary_key": "commentary_tingyu_realms_v3",
+   "commentary_title": "听雨·三境风物跋",
+   "desc": "卷四累计点亮 8 枚战法印，获赠 2 份仅自用重铸砂与留灯院评语《听雨·三境风物跋》。",
+   "enabled": true,
+   "grant_pet_cosmetic_id": 0,
+   "grant_skill_vfx_id": 0,
+   "id": 402,
+   "required_seals": 8,
+   "scope_chapter_id": 4,
+   "season_id": 0,
+   "title": "三境明雷"
   }
  ]
 }

@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <map>
 #include <unordered_set>
 #include <vector>
 
@@ -15,6 +16,7 @@
 #include "player/comp/player_frozen_comp.h"
 #include "player/comp/player_ownership_comp.h"  // PlayerTravelHandoffComp
 #include "player/system/afk_pass.h"
+#include "player/system/client_request_ledger.h"
 #include "player/system/player_attribute.h"
 #include "player/system/player_craft.h"
 #include "player/system/player_level_rules.h"
@@ -33,8 +35,10 @@
 #include "table/proto/tip/skill_error_tip.pb.h"
 #include "proto/battle/battle_data.pb.h"
 #include "proto/common/component/actor_comp.pb.h"
+#include "proto/common/component/player_attribute_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"
 #include "proto/common/component/player_skill_comp.pb.h"
+#include "proto/common/rollback/transaction_log.pb.h"
 #include "proto/scene/player_skill.pb.h"
 #include <thread_context/ecs_context.h>
 
@@ -342,15 +346,49 @@ namespace
 		return equipped;
 	}
 
-	uint32_t UnlockedSchemesFor(entt::entity player)
+	uint32_t MapRentError(skillloadout::RentError err)
 	{
-		return skillloadout::UnlockedSchemes(AfkPassSystem::IsActiveNow(player));
+		switch (err)
+		{
+		case skillloadout::RentError::None:
+			return kSuccess;
+		case skillloadout::RentError::SlotsInvalid:
+			return kSkillLoadoutRentSlotsInvalid;
+		case skillloadout::RentError::StackLimit:
+			return kSkillLoadoutRentStackLimit;
+		case skillloadout::RentError::InvalidParam:
+		default:
+			return kInvalidParameter;
+		}
 	}
 
-	void FillLoadoutSnapshot(const PlayerSkillListComp &list, uint32_t classId, bool classHasClassSkills,
-							 uint32_t level, uint32_t unlockedSchemes, SkillLoadoutSnapshot &out)
+	uint32_t FreeSchemesFor(entt::entity player)
+	{
+		const uint32_t level = tlsEcs.actorRegistry.all_of<LevelComp>(player) ? PlayerLevel(player) : 1u;
+		return skillloadout::FreeSchemesForLevel(level);
+	}
+
+	uint32_t UnlockedSchemesFor(entt::entity player, uint64_t nowUnixSec)
+	{
+		const uint32_t freeSchemes = FreeSchemesFor(player);
+		const bool lightCardActive = AfkPassSystem::IsActive(player, nowUnixSec);
+		const auto *list = tlsEcs.actorRegistry.try_get<PlayerSkillListComp>(player);
+		const uint32_t rented = list != nullptr ? list->rented_extra_slots() : 0u;
+		const uint64_t expiresAt = list != nullptr ? list->rent_expires_at_sec() : 0u;
+		return skillloadout::UnlockedSchemes(freeSchemes, lightCardActive, rented, expiresAt, nowUnixSec);
+	}
+
+	void FillLoadoutSnapshot(entt::entity player, const PlayerSkillListComp &list, uint32_t classId,
+							 bool classHasClassSkills, uint32_t level, uint64_t nowUnixSec,
+							 SkillLoadoutSnapshot &out)
 	{
 		out.Clear();
+		const uint32_t freeSchemes = skillloadout::FreeSchemesForLevel(level);
+		const bool lightCardActive = AfkPassSystem::IsActive(player, nowUnixSec);
+		const uint32_t activeRented =
+			skillloadout::ActiveRentedSlots(list.rented_extra_slots(), list.rent_expires_at_sec(), nowUnixSec);
+		const uint32_t unlockedSchemes =
+			skillloadout::UnlockedSchemes(freeSchemes, lightCardActive, list.rented_extra_slots(), list.rent_expires_at_sec(), nowUnixSec);
 		const bool customEnabled = skillloadout::ValidSchemeId(list.active_loadout_scheme_id());
 		out.set_custom_enabled(customEnabled);
 		out.set_active_scheme_id(customEnabled ? list.active_loadout_scheme_id() : 1u);
@@ -361,6 +399,18 @@ namespace
 		out.set_last_request_id(list.loadout_last_request_id());
 		out.set_unlocked_schemes(unlockedSchemes);
 		out.set_max_schemes(skillloadout::kMaxSchemes);
+		out.set_free_schemes(freeSchemes);
+		out.set_light_card_bonus_schemes(lightCardActive ? skillloadout::kLightCardBonusSchemes : 0u);
+		out.set_rented_extra_slots(activeRented);
+		out.set_rent_expires_at_sec(activeRented > 0u ? list.rent_expires_at_sec() : 0u);
+		out.set_server_now_sec(nowUnixSec);
+		out.set_rent_unit_price_diamond(skillloadout::kRentUnitPriceDiamond);
+		out.set_rent_period_days(skillloadout::kRentPeriodDays);
+		out.set_rent_max_remaining_days(skillloadout::kRentMaxRemainingDays);
+		out.set_diamond_balance(CurrencySystem::GetBalance(player, kCurrencyDiamond));
+		out.set_attribute_reset_cost_gold(PlayerAttributeSystem::PlayerPoolResetCostGold(player));
+		out.set_attribute_switch_cooldown_until(PlayerAttributeSystem::SwitchCooldownUntil(player));
+		out.set_active_attribute_scheme_id(PlayerAttributeSystem::ActiveSchemeId(player));
 
 		for (uint32_t schemeId = 1; schemeId <= skillloadout::kMaxSchemes; ++schemeId)
 		{
@@ -371,6 +421,18 @@ namespace
 			}
 			auto *info = out.add_schemes();
 			info->set_scheme_id(schemeId);
+			info->set_name(stored != nullptr && !stored->name().empty() ? stored->name()
+																		: skillloadout::DefaultSchemeName(schemeId));
+			PlayerAttributeSystem::SchemeAllocationSummary attrSummary;
+			if (PlayerAttributeSystem::FillSchemeAllocationSummary(player, schemeId, attrSummary))
+			{
+				for (const auto &[dimId, pts] : attrSummary.allocated)
+				{
+					(*info->mutable_attribute_allocated())[dimId] = pts;
+				}
+				info->set_attribute_remaining(attrSummary.remaining);
+				info->set_attribute_total_points(attrSummary.totalPoints);
+			}
 			if (stored != nullptr)
 			{
 				info->set_role_tag(stored->role_tag());
@@ -770,6 +832,8 @@ void PlayerSkillSystem::SanitizeSkillList(entt::entity player)
 		sanitizedSkillList.set_loadout_last_request_id(skillList->loadout_last_request_id());
 		sanitizedSkillList.set_loadout_last_base_version(skillList->loadout_last_base_version());
 		sanitizedSkillList.set_loadout_last_scheme_id(skillList->loadout_last_scheme_id());
+		sanitizedSkillList.set_rented_extra_slots(skillList->rented_extra_slots());
+		sanitizedSkillList.set_rent_expires_at_sec(skillList->rent_expires_at_sec());
 		// 整体替换会丢掉组件本层的未知字段(新版本给 PlayerSkillListComp 加的),先并过来再换
 		// (docs/design/mixed-version-persist-field-protection.md §4.2 L5)。逐条技能经 CopyFrom 已各自带着。
 		sanitizedSkillList.mutable_unknown_fields()->MergeFrom(skillList->unknown_fields());
@@ -778,6 +842,11 @@ void PlayerSkillSystem::SanitizeSkillList(entt::entity player)
 }
 
 uint32_t PlayerSkillSystem::BuildSkillBook(entt::entity player, ListSkillsResponse &response)
+{
+	return BuildSkillBookAt(player, TimeSystem::NowSecondsUTC(), response);
+}
+
+uint32_t PlayerSkillSystem::BuildSkillBookAt(entt::entity player, uint64_t nowUnixSec, ListSkillsResponse &response)
 {
 	response.Clear();
 	if (!tlsEcs.actorRegistry.valid(player))
@@ -864,7 +933,7 @@ uint32_t PlayerSkillSystem::BuildSkillBook(entt::entity player, ListSkillsRespon
 	PlayerSupportEffectSystem::Build(player, support);
 	const bool craftGateEnabled = PlayerCraftSystem::IsCraftUnlockGateEnabled();
 	const auto equippedNonActive = CollectEquippedNonActiveSkills(list, classId, classHasClassSkills, level);
-	FillLoadoutSnapshot(list, classId, classHasClassSkills, level, UnlockedSchemesFor(player), *response.mutable_loadout());
+	FillLoadoutSnapshot(player, list, classId, classHasClassSkills, level, nowUnixSec, *response.mutable_loadout());
 	for (const auto *row : rows)
 	{
 		auto* entry = response.add_catalog();
@@ -1301,6 +1370,13 @@ void PlayerSkillSystem::SaveLoadout(entt::entity player, const SaveSkillLoadoutR
 	const auto classId = PlayerClassId(player);
 	const auto level = PlayerLevel(player);
 	const bool classHasClassSkills = ClassHasClassSkills(classId);
+	const uint64_t nowSec = TimeSystem::NowSecondsUTC();
+
+	if (!request.name().empty() && !skillloadout::ValidateSchemeName(request.name()))
+	{
+		finish(kSkillLoadoutNameInvalid);
+		return;
+	}
 
 	std::vector<uint32_t> passiveIds(request.passive_skill_ids().begin(), request.passive_skill_ids().end());
 	std::vector<uint32_t> pursuitIds(request.pursuit_skill_ids().begin(), request.pursuit_skill_ids().end());
@@ -1322,11 +1398,47 @@ void PlayerSkillSystem::SaveLoadout(entt::entity player, const SaveSkillLoadoutR
 			meta.learned = entry != nullptr && IsUsable(*row, *entry, classId, classHasClassSkills, level);
 			return meta;
 		},
-		UnlockedSchemesFor(player));
+		UnlockedSchemesFor(player, nowSec));
 	if (validationErr != skillloadout::Error::None)
 	{
 		finish(MapLoadoutError(validationErr));
 		return;
+	}
+
+	PlayerAttributeSystem::PreparedSchemeAllocation preparedAttr;
+	if (request.update_attribute_allocation())
+	{
+		std::map<uint32_t, uint32_t> targetAlloc;
+		for (const auto &[dimId, pts] : request.attribute_allocated())
+		{
+			targetAlloc[dimId] = pts;
+		}
+		if (const auto attrErr = PlayerAttributeSystem::PrepareSchemeAllocation(
+				player, request.scheme_id(), targetAlloc, request.reset_attribute_if_needed(), preparedAttr);
+			attrErr != kSuccess)
+		{
+			finish(attrErr);
+			return;
+		}
+	}
+
+	const auto *existingScheme = FindLoadoutScheme(list, request.scheme_id());
+	const std::string finalName = !request.name().empty()
+									  ? request.name()
+									  : (existingScheme != nullptr && !existingScheme->name().empty()
+											 ? existingScheme->name()
+											 : skillloadout::DefaultSchemeName(request.scheme_id()));
+
+	std::string attrNotice;
+	if (request.update_attribute_allocation() || tlsEcs.actorRegistry.all_of<PlayerAttributeComp>(player))
+	{
+		if (const auto commitErr = PlayerAttributeSystem::CommitSchemeAllocationAndSwitch(
+				player, request.scheme_id(), finalName, request.update_attribute_allocation(), preparedAttr, attrNotice);
+			commitErr != kSuccess)
+		{
+			finish(commitErr);
+			return;
+		}
 	}
 
 	std::sort(passiveIds.begin(), passiveIds.end());
@@ -1334,6 +1446,7 @@ void PlayerSkillSystem::SaveLoadout(entt::entity player, const SaveSkillLoadoutR
 	std::sort(openingIds.begin(), openingIds.end());
 
 	auto *scheme = FindOrCreateLoadoutScheme(list, request.scheme_id());
+	scheme->set_name(finalName);
 	scheme->set_role_tag(request.role_tag());
 	scheme->clear_passive_skill_ids();
 	scheme->clear_pursuit_skill_ids();
@@ -1348,7 +1461,11 @@ void PlayerSkillSystem::SaveLoadout(entt::entity player, const SaveSkillLoadoutR
 	list.set_loadout_last_base_version(request.state_version());
 	list.set_loadout_last_scheme_id(request.scheme_id());
 
-	PlayerAttributeSystem::Recalculate(player, PlayerAttributeSystem::RecalcReason::kSkillChanged);
+	if (!attrNotice.empty())
+	{
+		response.set_attribute_sync_notice(attrNotice);
+	}
+	PlayerAttributeSystem::Recalculate(player, PlayerAttributeSystem::RecalcReason::kSchemeSwitch);
 	PlayerLifecycleSystem::RequestKeyProgressSave(player, "skill_loadout_saved");
 	PlayerAttributeSystem::PushPanel(player);
 	LOG_INFO << "[PlayerSkill] Loadout saved: player_id=" << GuidForLog(player)
@@ -1357,6 +1474,7 @@ void PlayerSkillSystem::SaveLoadout(entt::entity player, const SaveSkillLoadoutR
 			 << " passives=" << passiveIds.size()
 			 << " pursuits=" << pursuitIds.size()
 			 << " openings=" << openingIds.size()
+			 << " attr_updated=" << request.update_attribute_allocation()
 			 << " version=" << list.loadout_state_version();
 	finish(0);
 }
@@ -1397,7 +1515,7 @@ void PlayerSkillSystem::SwitchLoadout(entt::entity player, const SwitchSkillLoad
 		finish(kInvalidParameter);
 		return;
 	}
-	if (!skillloadout::ValidSchemeId(request.scheme_id(), UnlockedSchemesFor(player)))
+	if (!skillloadout::ValidSchemeId(request.scheme_id(), skillloadout::kMaxSchemes))
 	{
 		finish(kSkillLoadoutSchemeInvalid);
 		return;
@@ -1419,6 +1537,12 @@ void PlayerSkillSystem::SwitchLoadout(entt::entity player, const SwitchSkillLoad
 		return;
 	}
 
+	const uint64_t nowSec = TimeSystem::NowSecondsUTC();
+	if (!skillloadout::ValidSchemeId(request.scheme_id(), UnlockedSchemesFor(player, nowSec)))
+	{
+		finish(kSkillLoadoutSchemeInvalid);
+		return;
+	}
 	if (const auto busyTip = CheckSkillWritable(player); busyTip != 0)
 	{
 		finish(busyTip);
@@ -1431,29 +1555,193 @@ void PlayerSkillSystem::SwitchLoadout(entt::entity player, const SwitchSkillLoad
 		return;
 	}
 
-	FindOrCreateLoadoutScheme(list, request.scheme_id());
+	auto *scheme = FindOrCreateLoadoutScheme(list, request.scheme_id());
+	const std::string schemeName = scheme->name().empty() ? skillloadout::DefaultSchemeName(request.scheme_id())
+														  : scheme->name();
 	list.set_active_loadout_scheme_id(request.scheme_id());
 	list.set_loadout_state_version(skillloadout::Version(list.loadout_state_version()) + 1);
 	list.set_loadout_last_request_id(request.request_id());
 	list.set_loadout_last_base_version(request.state_version());
 	list.set_loadout_last_scheme_id(request.scheme_id());
 
-	PlayerAttributeSystem::Recalculate(player, PlayerAttributeSystem::RecalcReason::kSkillChanged);
+	std::string attrNotice;
+	if (!request.skip_attribute_sync())
+	{
+		PlayerAttributeSystem::TrySyncLinkedScheme(player, request.scheme_id(), schemeName, attrNotice);
+		if (!attrNotice.empty())
+		{
+			response.set_attribute_sync_notice(attrNotice);
+		}
+	}
+
+	PlayerAttributeSystem::Recalculate(player, PlayerAttributeSystem::RecalcReason::kSchemeSwitch);
 	PlayerLifecycleSystem::RequestKeyProgressSave(player, "skill_loadout_switched");
 	PlayerAttributeSystem::PushPanel(player);
 	LOG_INFO << "[PlayerSkill] Loadout switched: player_id=" << GuidForLog(player)
 			 << " scheme_id=" << request.scheme_id()
+			 << " skip_attr_sync=" << request.skip_attribute_sync()
 			 << " version=" << list.loadout_state_version();
 	finish(0);
 }
 
+void PlayerSkillSystem::RentLoadoutSlots(entt::entity player, const RentSkillLoadoutSlotsRequest &request,
+										 RentSkillLoadoutSlotsResponse &response)
+{
+	RentLoadoutSlotsAt(player, request, TimeSystem::NowSecondsUTC(), response);
+}
+
+void PlayerSkillSystem::RentLoadoutSlotsAt(entt::entity player, const RentSkillLoadoutSlotsRequest &request,
+										   uint64_t nowUnixSec, RentSkillLoadoutSlotsResponse &response)
+{
+	response.Clear();
+	const uint64_t clientRequestId = request.client_request_id();
+	response.set_client_request_id(clientRequestId);
+
+	const auto finish = [&](uint32_t errorTip) {
+		if (errorTip != kSuccess)
+		{
+			response.mutable_error_message()->set_id(errorTip);
+		}
+		if (const auto bookErr = BuildSkillBookAt(player, nowUnixSec, *response.mutable_state()); bookErr != kSuccess)
+		{
+			response.clear_state();
+			if (errorTip == kSuccess)
+			{
+				response.mutable_error_message()->set_id(bookErr);
+			}
+		}
+	};
+
+	if (!tlsEcs.actorRegistry.valid(player))
+	{
+		response.mutable_error_message()->set_id(kEntityIsNull);
+		return;
+	}
+	if (!tlsEcs.actorRegistry.all_of<PlayerSkillListComp, PlayerUint32Comp, LevelComp>(player))
+	{
+		finish(kServiceUnavailable);
+		return;
+	}
+	if (clientRequestId == 0)
+	{
+		finish(kInvalidParameter);
+		return;
+	}
+
+	// 1. 持久化幂等键查账排在一切状态预检之前（避免首次成交后重放因价格/租期已变而被拒）。
+	std::string fingerprint = ClientRequestFingerprint(request);
+	ClientRequestResult first;
+	switch (client_request_dedup::Check(player, clientRequestId, ClientRequestKind::kRentSkillLoadoutSlots,
+										fingerprint, first))
+	{
+	case ClientRequestVerdict::kReplay:
+		response.set_replayed(true);
+		response.set_rented_extra_slots(first.skillLoadoutRentedSlots);
+		response.set_rent_expires_at_sec(first.skillLoadoutRentExpiresAtSec);
+		response.set_spent_diamond(first.skillLoadoutRentSpentDiamond);
+		finish(kSuccess);
+		return;
+	case ClientRequestVerdict::kMismatch:
+		finish(kInvalidParameter);
+		return;
+	case ClientRequestVerdict::kUnavailable:
+		finish(kServiceUnavailable);
+		return;
+	default:
+		break;
+	}
+
+	// 2. 可写闸（战斗中/冻结/交接/退出拒绝）。
+	if (const auto busyTip = CheckSkillWritable(player); busyTip != 0)
+	{
+		finish(busyTip);
+		return;
+	}
+
+	auto &list = tlsEcs.actorRegistry.get<PlayerSkillListComp>(player);
+	const uint32_t freeSchemes = FreeSchemesFor(player);
+	const bool lightCardActive = AfkPassSystem::IsActive(player, nowUnixSec);
+	const auto plan = skillloadout::PlanRent(lightCardActive, list.rented_extra_slots(), list.rent_expires_at_sec(),
+											 nowUnixSec, request.target_rented_slots(), request.add_periods(), freeSchemes);
+	if (plan.error != skillloadout::RentError::None)
+	{
+		finish(MapRentError(plan.error));
+		return;
+	}
+	if (request.expected_cost_diamond() != plan.totalCostDiamond)
+	{
+		finish(kSkillLoadoutRentPriceChanged);
+		return;
+	}
+	// 严格仅消耗真实非绑灵石（kCurrencyDiamond = 1），禁止混扣绑定灵石。
+	if (plan.totalCostDiamond == 0 ||
+		plan.totalCostDiamond > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+	{
+		finish(kInvalidParameter);
+		return;
+	}
+	const auto cost = static_cast<int64_t>(plan.totalCostDiamond);
+	if (!CurrencySystem::CanAfford(player, kCurrencyDiamond, cost))
+	{
+		finish(kSkillLoadoutRentDiamondNotEnough);
+		return;
+	}
+	if (const auto err = CurrencySystem::DeductCurrency(player, kCurrencyDiamond, cost, TX_SKILL_LOADOUT_RENT,
+														clientRequestId);
+		err != kSuccess)
+	{
+		LOG_ERROR << "[PlayerSkill] Loadout slot rent charge failed after precheck: player_id=" << GuidForLog(player)
+				  << " cost_diamond=" << cost << " err=" << err << " client_request_id=" << clientRequestId;
+		finish(err);
+		return;
+	}
+
+	list.set_rented_extra_slots(plan.newRentedSlots);
+	list.set_rent_expires_at_sec(plan.newExpiresAtSec);
+	if (list.loadout_state_version() < std::numeric_limits<uint64_t>::max())
+	{
+		list.set_loadout_state_version(skillloadout::Version(list.loadout_state_version()) + 1);
+	}
+
+	ClientRequestResult receipt;
+	receipt.skillLoadoutRentedSlots = plan.newRentedSlots;
+	receipt.skillLoadoutRentExpiresAtSec = plan.newExpiresAtSec;
+	receipt.skillLoadoutRentSpentDiamond = plan.totalCostDiamond;
+	client_request_dedup::Remember(player, clientRequestId, ClientRequestKind::kRentSkillLoadoutSlots,
+								   std::move(fingerprint), receipt);
+
+	PlayerLifecycleSystem::RequestKeyProgressSave(player, "skill_loadout_rented");
+	if (tlsEcs.actorRegistry.all_of<PlayerAttributeComp>(player))
+	{
+		PlayerAttributeSystem::PushPanel(player);
+	}
+
+	response.set_rented_extra_slots(plan.newRentedSlots);
+	response.set_rent_expires_at_sec(plan.newExpiresAtSec);
+	response.set_spent_diamond(plan.totalCostDiamond);
+	LOG_INFO << "[PlayerSkill] metric=skill_loadout_slots_rented player_id=" << GuidForLog(player)
+			 << " rented_slots=" << plan.newRentedSlots
+			 << " add_periods=" << request.add_periods()
+			 << " spent_diamond=" << plan.totalCostDiamond
+			 << " prorate_diamond=" << plan.prorateCostDiamond
+			 << " renew_diamond=" << plan.renewCostDiamond
+			 << " expires_at=" << plan.newExpiresAtSec
+			 << " client_request_id=" << clientRequestId;
+	finish(kSuccess);
+}
+
 uint32_t PlayerSkillSystem::UnlockedLoadoutSchemeCount(entt::entity player)
+{
+	return UnlockedLoadoutSchemeCountAt(player, TimeSystem::NowSecondsUTC());
+}
+
+uint32_t PlayerSkillSystem::UnlockedLoadoutSchemeCountAt(entt::entity player, uint64_t nowUnixSec)
 {
 	if (!tlsEcs.actorRegistry.valid(player))
 	{
-		return skillloadout::kBaseMaxSchemes;
+		return skillloadout::kBaseFreeSchemes;
 	}
-	return UnlockedSchemesFor(player);
+	return UnlockedSchemesFor(player, nowUnixSec);
 }
 
 bool PlayerSkillSystem::TrySwitchLinkedLoadout(entt::entity player, uint32_t schemeId, std::string &notice)
@@ -1468,7 +1756,7 @@ bool PlayerSkillSystem::TrySwitchLinkedLoadout(entt::entity player, uint32_t sch
 		notice = "联动战法方案暂不可用，本次仅完成装备切换";
 		return false;
 	}
-	const uint32_t unlocked = UnlockedSchemesFor(player);
+	const uint32_t unlocked = UnlockedSchemesFor(player, TimeSystem::NowSecondsUTC());
 	if (!skillloadout::ValidSchemeId(schemeId, unlocked))
 	{
 		notice = "联动战法方案未解锁，本次仅完成装备切换";

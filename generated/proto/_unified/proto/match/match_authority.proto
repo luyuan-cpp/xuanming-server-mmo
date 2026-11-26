@@ -248,6 +248,8 @@ message MatchFormationRecord {
   bool is_wuxing_tower = 28;
   // 天墉生死状在成局提交点冻结的 JianghuDuelBattleContext 字节载荷（非生死状为空）。
   bytes jianghu_duel_context = 29;
+  // 五行试炼志 V3 自选试炼誓约位图（bit0..3，非试炼誓约局为 0）。
+  uint32 trial_vow_mask = 30;
 }
 message MatchPreparedEndpoint {
   uint64 player_id = 1;
@@ -626,7 +628,8 @@ message MatchTournamentSeasonRecord {
   uint64 settled_ms = 17;
   uint64 updated_ms = 18;
   bytes champion_members_blob = 19; // V2: 确定性序列化 MatchTournamentChampionMembersBlob
-  uint64 champion_salute_count = 20;// V2: 全服累计观道致敬次数
+  reserved 20;                      // 原 champion_salute_count（每日观道致敬已移除）
+  reserved "champion_salute_count";
   uint32 champion_emblem_id = 21;   // V3: 冠军战队队徽(1..8)
   uint64 third_place_squad_id = 22; // V3: 季军战队 ID
   string third_place_squad_name = 23; // V3: 季军战队名
@@ -759,19 +762,6 @@ message MatchTournamentMatchGameRecord {
   uint64 winner_squad_id = 7;
   uint32 outcome = 8;             // battle.eBattleOutcome
   uint64 finished_ms = 9;
-}
-
-// V2: 全服每日免费观道致敬记录(主键 (player_id, salute_day) 原子保证 UTC+8 每人每日 1 次)。
-message MatchTournamentSaluteRecord {
-  option (OptionTableName) = "match_tournament_salute";
-  option (OptionPrimaryKey) = "player_id,salute_day";
-  option (OptionIndex) = "season_id,salute_day,player_id";
-  uint64 player_id = 1;
-  uint32 salute_day = 2; // UTC+8 YYYYMMDD
-  uint32 season_id = 3;
-  uint64 reward_id = 4;  // 发号器永久 ID, 供 MailAdmin 幂等发件
-  uint64 mail_id = 5;
-  uint64 created_ms = 6;
 }
 
 // 全服免费助威(主键 (season_id, player_id) 物理防重复助威,零消费零押注)。
@@ -929,4 +919,24 @@ message MatchJianghuRefundRecord {
   uint64 refund_mail_id = 5;
   string reason = 6;
   uint64 created_ms = 7;
+}
+
+// 五行试炼志 V3：好友约战帖权威存储（最多每人 10 张，14 天有效，与 match_battle_report.ref_count 联动钉住录像）。
+message MatchTrialChallengeCardRecord {
+  option (OptionTableName) = "match_trial_challenge_card";
+  option (OptionPrimaryKey) = "card_id";
+  option (OptionIndex) = "owner_player_id,created_ms,card_id;expires_ms,card_id";
+  option (OptionTiDBNonclusteredPK) = true;
+  option (OptionTiDBShardRowIDBits) = 4;
+  option (OptionTiDBPreSplitRegions) = 4;
+
+  uint64 card_id = 1;
+  uint64 owner_player_id = 2;
+  uint64 battle_id = 3;
+  uint32 journal_entry_id = 4;
+  uint32 vow_mask = 5;
+  uint32 total_rounds = 6;
+  uint64 created_ms = 7;
+  uint64 expires_ms = 8;
+  bytes card_view = 9; // 确定性序列化 TrialChallengeCardView
 }

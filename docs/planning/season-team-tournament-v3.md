@@ -1,7 +1,7 @@
 # 《群仙问道赛》V3 全服狂欢与策略扩展设计方案（模块 D / E / F / G）
 
 > 状态：设计与全栈源码实现中（配表导出、Proto/表代码生成、三仓编译与单测交由 Gemini 执行；20 枚 V3 美术切片交由 Codex 制作）。  
-> 依赖前置：`docs/planning/season-team-tournament-v1.md`（四阶段闭环）、`docs/planning/season-team-tournament-v2.md`（模块 A BO3 五行地脉与 60s 局间换阵、模块 B 冠军玉座每日观道致敬、模块 C 淘汰赛公开战报与 6 条预设观战喝彩）。  
+> 依赖前置：`docs/planning/season-team-tournament-v1.md`（四阶段闭环）、`docs/planning/season-team-tournament-v2.md`（模块 A BO3 五行地脉与 60s 局间换阵、模块 B 冠军玉座纯荣誉展示〔原每日观道致敬已于 2026-11-26 彻底移除〕、模块 C 淘汰赛公开战报与 6 条预设观战喝彩）。  
 > 配套 Codex UI 交接规格书：[season-team-tournament-v3-ui-handoff.md](ui-handoff/season-team-tournament-v3-ui-handoff.md)。
 
 ---

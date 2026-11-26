@@ -48,8 +48,11 @@ type PlayerJianghuComp struct {
 	ClearBadgeExpiresAtMs uint64 `protobuf:"varint,9,opt,name=clear_badge_expires_at_ms,json=clearBadgeExpiresAtMs,proto3" json:"clear_badge_expires_at_ms,omitempty"`
 	// 洒脱徽记白名单样式 ID（1 = 「清风拂尘 · 胜败常事」）
 	ClearBadgeStyleId uint32 `protobuf:"varint,10,opt,name=clear_badge_style_id,json=clearBadgeStyleId,proto3" json:"clear_badge_style_id,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// 普通银两生死状备战期已预扣但尚未结清的战斗 ID 与金额（供异常取消/幂等重入校验，开打结算或退款后清零）
+	PendingSilverFeeBattleId uint64 `protobuf:"varint,11,opt,name=pending_silver_fee_battle_id,json=pendingSilverFeeBattleId,proto3" json:"pending_silver_fee_battle_id,omitempty"`
+	PendingSilverFeeAmount   uint64 `protobuf:"varint,12,opt,name=pending_silver_fee_amount,json=pendingSilverFeeAmount,proto3" json:"pending_silver_fee_amount,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *PlayerJianghuComp) Reset() {
@@ -152,11 +155,25 @@ func (x *PlayerJianghuComp) GetClearBadgeStyleId() uint32 {
 	return 0
 }
 
+func (x *PlayerJianghuComp) GetPendingSilverFeeBattleId() uint64 {
+	if x != nil {
+		return x.PendingSilverFeeBattleId
+	}
+	return 0
+}
+
+func (x *PlayerJianghuComp) GetPendingSilverFeeAmount() uint64 {
+	if x != nil {
+		return x.PendingSilverFeeAmount
+	}
+	return 0
+}
+
 var File_proto_common_component_player_jianghu_comp_proto protoreflect.FileDescriptor
 
 const file_proto_common_component_player_jianghu_comp_proto_rawDesc = "" +
 	"\n" +
-	"0proto/common/component/player_jianghu_comp.proto\"\x9b\x04\n" +
+	"0proto/common/component/player_jianghu_comp.proto\"\x96\x05\n" +
 	"\x11PlayerJianghuComp\x122\n" +
 	"\x15duel_refuse_strangers\x18\x01 \x01(\bR\x13duelRefuseStrangers\x12%\n" +
 	"\x0eowner_revision\x18\x02 \x01(\x04R\rownerRevision\x128\n" +
@@ -168,7 +185,9 @@ const file_proto_common_component_player_jianghu_comp_proto_rawDesc = "" +
 	"\x15defeat_mark_battle_id\x18\b \x01(\x04R\x12defeatMarkBattleId\x128\n" +
 	"\x19clear_badge_expires_at_ms\x18\t \x01(\x04R\x15clearBadgeExpiresAtMs\x12/\n" +
 	"\x14clear_badge_style_id\x18\n" +
-	" \x01(\rR\x11clearBadgeStyleIdB\x18Z\x16proto/common/componentb\x06proto3"
+	" \x01(\rR\x11clearBadgeStyleId\x12>\n" +
+	"\x1cpending_silver_fee_battle_id\x18\v \x01(\x04R\x18pendingSilverFeeBattleId\x129\n" +
+	"\x19pending_silver_fee_amount\x18\f \x01(\x04R\x16pendingSilverFeeAmountB\x18Z\x16proto/common/componentb\x06proto3"
 
 var (
 	file_proto_common_component_player_jianghu_comp_proto_rawDescOnce sync.Once

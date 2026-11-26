@@ -5548,3 +5548,97 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
   - **C++ / Go（`xuanming-server-mmo-cpp`）**：更新 `turn_battle_constants.h`、`battle_data_provider.h`、`table_battle_data_provider.{h,cpp}`、`ranked_preset_rules.h`、`turn_battle_engine.{h,cpp}`、`configured_battle_effects.cpp`、`battle_room_manager.cpp`、`memory_battle_data_provider.h`、`ranked_battle_test.cpp` 与 Go `match`（`ranked/catalog.go`、`authority/ranked.go`、`tournament/catalog.go`、`authority/tournament.go`、`logic/{tournamentlogic,gather,challengelogic,wuxing_expansions_test}.go`）。验证：串行 MSBuild `/m:1`（`table.lib`/`proto.lib`/`battle.lib`/`turn_battle_engine_test.exe`/`battle.exe`/`scene.lib`）全 0 错误、`turn_battle_engine_test.exe --gtest_filter=*RankedBattleTest*` **18/18 PASS**、`go test ./internal/ranked/... ./internal/tournament/... ./internal/logic/... ./internal/authority/...` 全绿、`go-svc-build` 全部服务编译通过、`test_cpp_no_raw_pointer_member.py` **13/13 OK**、`check_log_text_english.py` **PASS**。
   - **Java 独立服务端（`xuanming-server-mmo`）**：`ContractSync` 同步 + `mvnw clean install` 全部 37 模块 BUILD SUCCESS；更新 `game-battle-engine`（`BattleConstants`/`BattleData`/`TableBattleData`/`BattleContext`/`ActionChecks`/`ConfiguredBattle`/`TurnBattleEngine`/`PrepSkillBanBattleEngineTest`）、`game-battle`（`BattleRoomServiceImpl`）、`game-scene`（`RankedPresetRules`）、`game-match`（`RankedTables`/`RankedStore`/`TournamentTables`/`TournamentStore`/`MatchFeatureConfiguration`/`GatherPipeline`/`GlobalMatchService`）。验证：`PrepSkillBanBattleEngineTest` **1/1 PASS**（真实 55 招表池全闭环）、`game-match`（`RankedParityTest`/`TournamentParityTest`）PASS、`game-scene`（`RankedPresetRulesTest`）**3/3 PASS**、`game-battle`（`BattleTacticalPrepRoomTest` 2/2 + `BattleViewsTest` 6/6）**8/8 PASS**（注：`RankedBattleEngineTest.java` 当前受并行会话 V6 WIP 阻塞，已拆出独立测试类验证）。
   - **Unity 客户端（`mmorpg-client`）**：导入 Codex `5ffe24927ff07fd07431206ff904721649ddf4cb` 交付的全部 8 对透明 PNG-32 切片与 `.meta` 至 `Assets/Resources/UI/Ugui/BattlePrepSkillBan/`（补齐目录 `.meta`）；新增 `BattleSkillBanModels.cs`（4 页签分组、常用 3 禁持久化且按服务端候选池自动过滤过期赛季技）、`BattleSkillBanTests.cs`，更新 `SeasonEconomyUiArt.cs`、`BattleClient.cs`、`BattleScreen.cs`（战前 3 Ban 浮层、顶部 `560×56` 双方禁招浮条与点击展开详情、战斗技能栏 `skill_banned_stamp` 灰显拦截）、`CustomDuelChallengePanel.cs`、`WuxingExpansionModels.cs`、`BattleReportPanel.cs`（看配装展示双方禁招）。验证：`client_compile_check.ps1` 我方提交节点 **804/804 0 错误**（后续并行会话改动 `SeasonEconomyUiArt.cs:192` 引入无关 `RankedPlayV6Root` 报错），离线 Roslyn NUnit `BattleSkillBanTests` **5/5 PASS**。三仓均未执行 `git commit` / `git push`。
+
+
+## 2026-11-26 Antigravity：衣柜专属限定外观（#3 月弦师 / #3 寒星流华）接入五行试炼志里程碑四仓闭环
+
+- **方案落盘**：[wardrobe-pet-morph-and-skill-vfx-v1.md](planning/wardrobe-pet-morph-and-skill-vfx-v1.md) §7；零新玩法、零新 RPC、零新 UI 切片。
+  - `TrialJournalMilestone` 末尾追加 `grant_pet_cosmetic_id = 16`、`grant_skill_vfx_id = 17`：`M302 破阵奇谈`（卷三 4 赛季印）直授 `PetCosmetic #3 月弦师`，`M105 破阵双绝`（卷一 15 印）直授 `SkillVfxCosmetic #3 寒星流华`，与既有 `M901 五行宗师`（`grant_appearance_id`）构成衣柜三页签各 1 件零战力荣誉限定外观闭环；同步更新 `PetCosmetic #3` / `SkillVfxCosmetic #3` `acquire_hint` 指向试炼志具体条件。
+  - `proto/scene/player_trial_journal.proto` 末尾追加 `TrialJournalMilestoneView.{grant_pet_cosmetic_id=20, grant_pet_cosmetic_name=21, grant_skill_vfx_id=22, grant_skill_vfx_name=23}` 与 `ClaimTrialJournalMilestoneResponse.{granted_pet_cosmetic_id=7, granted_skill_vfx_id=8}`；三端服务端启动/领奖双重拦截可购买外观，原子提交直授永久位图且绝不自动穿戴，支持同键幂等重放。
+- **四仓实测证据**（未做 `git commit`/`git push`）：
+  - **C++（`xuanming-server-mmo-cpp`）**：`wardrobe_cosmetics_xlsx_patch.py trial-milestone-grants` + `dev.bat gen` exit 0；`test_cpp_no_raw_pointer_member.py` 13/13 OK；`msbuild /m:1`（`table`/`proto`/`scene`/`bag_test`）0 错误；`bag_test.exe` `PlayerTrialJournalSystemTest.*:PlayerAppearanceSystemTest.*` **22/22 PASSED**。
+  - **Java（`xuanming-server-mmo`）**：`ContractSync.java` + `mvnw -pl game-scene -am install -Dmaven.test.skip=true` BUILD SUCCESS；`TrialJournalFeatureAndServiceTest` + `AppearanceFeatureTest` + `PlayerAppearanceTest` **11/11 PASSED**（排除并行会话未完成的 `SpiritShopFeatureAndServiceTest.java:393`）。
+  - **Python（`xuanming-server-mmo-python`）**：同步 proto/3 表/`_table_descriptors.pb`/`manifest.json` + `build_protocol.py` OK；`pytest`（`test_scene_progression_craft_pets.py` + `test_cpp_wt_wardrobe_cosmetics.py` + `test_data.py` + `test_ops_tools.py`）**40/40 PASSED**。
+  - **Unity 客户端（`mmorpg-client`）**：`sync_tables.ps1` + `gen_proto.ps1` + `gen_messageids.ps1` exit 0；更新 `TrialJournalClient` / `TrialJournalWindow` / `TrialJournalUiRoot` 与 `TrialJournalClientTests`；`client_compile_check.ps1` 810 文件 0 错误；`AppearanceChronicle.proj` **111/111 PASS**；离线 NUnit（`AppearanceClientTests` 12 + `WardrobeCosmeticsTests` 5 + `TrialJournalClientTests` 6）**23/23 PASSED**。
+
+
+## 2026-11-26 Antigravity：官方灵石百宝阁 V2（定时自动上下架 + 3–4 物品大礼包 / 多选一自选包 + 原价划线折扣 + 等级阶段解锁 + 2027 春节样例礼盒 401/402）三仓全链路闭环
+
+- **范围与零破坏口径**：零数据库迁移、零新增 RPC（复用 `PlayerSpiritShopComp` / Java 第 14 代存储结构与 RPC `509/510`），仅纯追加表字段与协议字段：
+  - 配表与协议：`data/schema/spiritshopgoods_table.proto` 末尾追加 `22..33`（`start_time_ms`、`end_time_ms`、`grant_mode`、`item_{id,count,bound}_{3,4}`、`original_price`、`min_level`、`max_level`）；`proto/scene/player_spirit_shop.proto` 扩展 `SpiritShopGoodsView` `18..23` 与 `BuySpiritShopGoodsRequest.chosen_item_index = 7`；`data/tip/Tip.xlsx` `//spirit_shop_error` 末尾追加 `37011..37013`（`kSpiritShopNotInSaleWindow`、`kSpiritShopLevelNotMet`、`kSpiritShopInvalidChoice`）；`tools/scripts/spirit_shop_xlsx_patch.py` 与 `data/SpiritShopGoods.xlsx` 预置 2027 春节定时样例 `401 新春四喜大礼盒`（180 / 原价 300，4 合 1 绑定）与 `402 新春秘宝自选匣`（120 / 原价 180，4 选 1 绑定），平时自动潜伏、到点自动开售/下架。
+  - C++ 服务端：`cpp/libs/services/scene/player/system/spirit_shop_rules.h`、`player_spirit_shop.cpp` 与 `cpp/tests/bag_test/player_spirit_shop_test.cpp`（启动/热更 fail-closed 强校时间窗、原价、等级、槽位禁跳槽与防重；`FillInfo`/`Buy` 按服务端 `nowMs` 左闭右开时间窗与 `playerlevel::CappedLevel` 有效等级过滤，缺 `LevelComp` 记 ERROR 并 fail-closed；`CHOOSE_ONE` 仅对选中项验封禁与发物并将 `chosen_item_index` 纳入报价防呆、幂等指纹与审计 JSON；4 物满包整批原子回滚；活动结束后旧幂等键仍正常重放）。
+  - Java 服务端：`xuanming-server-mmo` 的 `SpiritShopTables.java`、`SpiritShopService.java`、`SpiritShopFeatureAndServiceTest.java` 同构对齐（并更新 `PARITY.md`）。
+  - Unity 客户端：`mmorpg-client` 的 `SpiritShopModels.cs`、`SpiritShopClient.cs`、`SpiritShopWindow.cs`、`SpiritShopUiRoot.cs` 与 `SpiritShopClientTests.cs`（动态第 4 分页「节庆特惠」有货才亮无货自动隐藏、原价划线与折数角标、基于 `server_time_ms + 单调时钟差值` 实时倒计时、4 件礼盒换行展示、确认窗 2–4 项单选交互，并预留可选 2 张春节图标 `pack_festival_{bundle,choice}.png` 无图无缝回退）。
+- **验证证据（由 Gemini `flash` 代理执行）**：
+  - 静态门禁：`test_cpp_no_raw_pointer_member.py` **13/13**、`test_cpp_thread_sources.py` **5/5**、`check_log_text_english.py` **exit 0**、`gen_docs_index.py --check` **exit 0**（`test_cpp_level_comp_reads.py` 对 `player_spirit_shop.cpp` 0 违规）。
+  - C++ / Go：串行 MSBuild（`proto.lib`/`table.lib`/`scene.lib`/`scene.exe`/`bag_test.exe`）全 **exit 0**；`bin/scene.exe --validate-tables generated/tables` **exit 0**（`[SpiritShop] Table check finished: valid_groups=1 sellable_goods=13 ok=true`，83 表通过）；`bag_test.exe --gtest_filter="*SpiritShop*"` **13/13 PASS**、`--gtest_filter="*TravelPass*"` **4/4 PASS**；`go/shared` `go build ./generated/table/...` **exit 0**。
+  - Java：`mvnw -pl game-proto,game-table -am install -DskipTests` 与 `mvnw -pl game-scene -am -DskipTests install` **BUILD SUCCESS**；`SpiritShopFeatureAndServiceTest` **4/4 PASS**。
+  - Unity：`tools/client_compile_check.ps1` **exit 0（810 文件 0 错误）**；Roslyn+NUnit `SpiritShopClientTests` **6/6 PASS**（全量 `810` 脚本 runtime 编译零错误）。
+  - 三仓均未执行 `git commit` / `git push`。
+
+
+## 2026-11-26 Antigravity：装备品相 · 技能制书 · 名匠手艺 V2–V5 全链路闭环落地（C++ 服务端 + Unity 客户端 + 全套单测已验证）
+
+- **范围与策划落盘**：
+  - 新增完整六项分析设计文档 `docs/planning/equipment-quality-and-skill-crafting-v2-v5.md` 与纯功能 5 图交接单 `docs/planning/ui-handoff/equipment-craft-v2-v5-ui-handoff.md`，同步刷新 `docs/README.md`。
+  - **V2（名匠江湖口碑、6 档零属性雅号印款与西市筛选排序）**：`PlayerCraftComp` 新增口碑三项计数（`proxy_orders_completed` / `supreme_forged_count` / `rare_books_crafted_count`）、预设安全招牌枚举（`0..4`，零 UGC 风险）与 6 档零属性雅号印款（`1..6`），自动写入极品装备与宗师技能书署名；西市支持口碑/极品/最低费排序与铸器/制卷/同队免税筛选。
+  - **V3（工坊智能定档连磨 + 全身品相健检）**：`EquipmentCraftChoice` 新增 `target_quality_tier` / `max_polish_attempts`，单次原子幂等 `CommitEquipmentCraft` 内连磨至达标或 8 次硬保底即停、按实际手数精准扣砂与银两并返逐手 `PolishStepTrace`；客户端打磨页新增全身品相健检与一键跳至最低品相槽位。
+  - **V4（典籍藏经阁里程碑、批量拆页与 6 大流派缺书体检）**：新增 `claimed_scroll_milestone_bits` 位图（遵循高位未知 bit 透传）、`ClaimScrollCollectionMilestone(558)`（小成 ≥50% 领 20 绑定残页、圆满 100% 领 40 绑定残页）、`BatchDismantleSkillBooks(559)`（单次 1–20 本常规书防重防稀世）与客户端 6 大核心流派缺书一键跳转导航。
+  - **V5（同队情义 0 费原子代打 + 西市封卷悬赏求书板）**：复用 `TeamId` 实现同队 `team_free_proxy` 0 银两免税原子代打；新增 `PostSkillBookWantedOrder(560)` / `CancelSkillBookWantedOrder(561)` / `ListSkillBookWantedOrders(562)` / `FulfillSkillBookWantedOrder(563)`（严禁绑定银两发榜防洗白、随时撤单全退、支持背包 `3414 封卷道籍` 与书架未绑常规书双源直交、5% 银两税销毁、验宗师署名）。
+- **验证证据**：
+  - 服务端：`test_cpp_no_raw_pointer_member.py` **13/13 OK**；`data_table_exporter/run.py` Deploy **14/14 OK**；`proto.lib` / `rpc.lib` / `scene.lib` / `bag_test.exe` / `scene.exe` 串行 MSBuild 全过；`bag_test.exe` 本线 **40/40 PASS**（`EquipCraftQualityRulesTest` 2/2 + `PlayerCraftQualityTest` 14/14 含 V2–V5 与跨线离线代打 + `PlayerEquipmentCraftTest` 24/24）；`scene.exe --validate-tables generated/tables` **83/83 表通过**。
+  - 客户端：`sync_tables.ps1` / `gen_proto.ps1` / `gen_messageids.ps1` 全过；`client_compile_check.ps1` **810 文件 0 错误**；7 套 NUnit 单测 **151/151 PASS**（UI EditMode 程序集编过）。
+- **Java 版（AGENTS §12）**：尚未同步 Java 版服务端（`xuanming-server-mmo`）与 `PARITY.md`，待后续双服对齐补录。
+- **提交状态**：两仓改动留在工作区，未执行 `git commit` / `git push`。
+
+
+## 2026-11-26 Antigravity：7 套非永久「战法·加点」流派方案槽位与按月按套租用三仓全链路闭环（C++ / Java / Unity 全验证通过）
+
+- **设计与纯功能交接落盘**：
+  - 新增设计稿 [skill-build-loadout-7slots-v1.md](planning/skill-build-loadout-7slots-v1.md) 与纯功能作图交接单 [skill-build-loadout-7slots-ui-handoff.md](planning/ui-handoff/skill-build-loadout-7slots-ui-handoff.md)（2 张 1932×814 预览 + 8 张无字透明切片，输出目录 `D:\work\image\designs\skill-build-loadout-7slots-v1\`）；同步更新 `tools/scripts/gen_docs_index.py` 与 `docs/README.md`。
+  - **玩法与商业化合规口径**：零数值/零 P2W、无自动续费订阅、无外链/切支付；永久免费 2 套（方案 1～2）+ 仙途轻享卡生效期 +2 套 + 按套非永久租用 0..5 套（单套 30 真实灵石/30 天，不混用绑定灵钻，共享统一到期日，剩余上限 180 天，总计 7 套封顶）；租期内支持向上取整补差价扩容（剩余 1 秒保底 `>= 1` 灵石防薅）、轻享卡激活防溢买、租期内不可缩减、到期只锁不删（永久保留只读预览并支持跨方案一键复制）；每套 1:1 绑定战法（1 开场 + 3 被动 + 1 追击）与四维加点（体质 101 / 灵力 102 / 力量 103 / 敏捷 104），含 6 套经典回合制加点模板、自定义方案名（UTF-8 1..12 字符 + 敏感词过滤 + `richText=false`）、5 定位标签及透明洗点二次确认（`reset_attribute_if_needed`）。
+- **协议、配表与三仓验证证据（未执行 `git commit` / `git push`）**：
+  - **协议与配表**：更新 `player_skill_comp.proto`、`transaction_log.proto`（`TX_SKILL_LOADOUT_RENT = 48`）、`client_request_ledger_comp.proto`（`42..44`）、`player_skill.proto`（新增 `565=SceneSkillClientPlayerRentSkillLoadoutSlots`）；幂等脚本 `tools/scripts/skill_build_loadout_7slots_xlsx_patch.py` 写入 `Tip.xlsx` `7029..7035` 与 `MessageLimiter.xlsx`（id=565）；`data_table_exporter/run.py` **14/14 OK**。
+  - **C++ 权威服务端（`xuanming-server-mmo-cpp`）**：更新 `afk_pass_rules.h`、`skill_loadout_rules.h`、`client_request_ledger.{h,cpp}`（`kRentSkillLoadoutSlots = 30`）、`player_attribute.{h,cpp}`、`player_skill.{h,cpp}`、`player_equip_loadout.cpp`、`player_skill_handler.cpp`、`player_handoff_gate.h`、`afk_pass_test.cpp`、`player_skill_book_test.cpp`。验证：`test_cpp_no_raw_pointer_member.py` **13/13 OK**、`test_cpp_thread_sources.py` **5/5 OK**、`check_log_text_english.py` **exit 0**；串行 MSBuild `/m:1`（`table.lib`/`scene.lib`/`skill_test.exe`/`bag_test.exe`/`scene.exe`）全 0 错误；`skill_test.exe` **105/105 PASS**、`bag_test.exe --gtest_filter="*AfkPass*:*ClientRequest*:*EquipLoadout*"` **52/52 PASS**。
+  - **Java 独立服务端（`xuanming-server-mmo`）**：`ContractSync` 同步 + `player_state.proto` 升至第 21 代持久台账 `0021.schema` + 完整实现 `game-scene` 对账并更新 `PARITY.md`。验证：`PlayerStateSchemaLedgerTest` 1/1 + `AfkPassHostingAndTeamFollowTest` 3/3 + `AttributeFeatureTest` 24/24 + `SkillLoadoutTest` 5/5 + `ClassSkillClientTest` 7/7 + `ClassSkillSceneTest` 11/11 = **51/51 PASS**，`InBattleGateMatrixTest` 新增 RPC 565 `RentSkillLoadoutSlots` 战斗在途拦截与解冻恢复均通过。
+  - **Unity 客户端（`mmorpg-client`）**：`sync_tables.ps1` / `gen_proto.ps1` / `gen_messageids.ps1` exit 0；升级 `SkillBookModels.cs`、`SkillBookMapper.cs`、`SkillBookClient.cs`、`SkillLoadoutSubPanel.cs`（7 套页签、自定义名、5 标签、跨方案一键复制、内嵌四维加点 + 6 经典流派模板、洗点确认开关、按套租用/扩容/续期弹窗、官方灵石充值与轻享卡跳转，预埋全部 8 张 `UI/Ugui/SkillBuildLoadoutV1/*` 同名切片自动换肤与既有 `guild_*` 优雅回退）及 4 套 EditMode 单测。验证：`client_compile_check.ps1` **810 文件 0 错误**；Unity 6000.6.0f1 batchmode EditMode 实测 **70/70 PASS（0 失败、0 跳过）**（`SkillPanelPresentationTests` 22 + `SkillLoadoutDraftTests`/`SkillBookMapperTests`/`SkillBookClientTests` 48）。
+
+
+## 2026-11-26 Antigravity：《五行奇谈》江湖恩怨与天墉生死状一期（M1–M3 + 宿敌连胜/终结高光播报与一键再递战书）三仓全链路闭环
+
+- **范围与红线守恒**：
+  - 严格守住「零强制 PK、免费同战力上限、不赶走轻度玩家、应用商店/小游戏零拒审」硬红线：无自由银两押注、无核心锻造材料（`660`）或排位 Elo 溢出、无自由文本输入；采用合规仙侠软措辞（`天墉生死擂`、`江湖战书`、`金帖生死状`、`闭关免战`、`惜败于 XXX`、`清风拂尘`），全链路零出现违禁词。
+  - 配表与协议：`JianghuRule.xlsx`（`id=1`）、`Item.xlsx`（`3415 金帖生死状` / `3416 清风洗尘符`，绑定仅自用）、`SpiritShopGoods.xlsx`（`305` 20 灵石 / `306` 10 灵石）、`PlayMode.xlsx`（`474`，`match_mode=12`）、`Tip.xlsx`（`//jianghu_error` `40000..40013`）；新增 `player_jianghu.proto`（RPC `555..557`）、`match_service.proto`（RPC `548..554`）、`guild.proto`（RPC `547`）、`friend.proto` 内部批量关系检查、`chat.proto` 系统白名单播报。
+  - **C++ / Go 权威服务端（`xuanming-server-mmo-cpp`）**：
+    - `scene` + `battle`：`PlayerJianghuComp` 持久化、幂等洗尘（普通消耗 1000 可流通银两 `kCurrencyGold` / 道具消耗 `3416` 并赠 30 分钟「清风拂尘」）、天墉生死擂零核心奖励隔离结算、30 回合封顶防拖局自动判平；`test_cpp_no_raw_pointer_member.py` **13/13**、`test_cpp_thread_sources.py` **5/5**、`bag_test.exe` **56/56 PASS**（含 7 条 `PlayerJianghuTest`）、`turn_battle_engine_test.exe` **2/2 PASS**。
+    - `go/friend` + `go/chat` + `go/match` + `go/guild`：1V1 及 2V2–5V5 小队两阶段 30 秒全员确认状态机、拉黑/闭关免战/冷却/日上限、恩怨录 50 宿敌 + 20 战报 + `win_streak`/`lose_streak` 宿敌连胜（≥3）与终结世界播报、单次幂等银两退款邮件（严格 `CURRENCY_TYPE_GOLD = 0` 可流通银两）、纯帮派生死状恩怨墙（按 `guild_id` 升序加锁防死锁 + 20 场裁剪）；Go 单元测试全过：`friend` 2 包、`chat` 3 包、`match` 5 包、`guild` 4 包全部 PASS。
+  - **Java 独立服务端（`xuanming-server-mmo`）**：`ContractSync --check` 0 漂移；完成 `game-battle-engine`、`game-battle`、`game-friend`、`game-chat`、`game-match`、`game-scene`、`game-guild` 完整对账并更新 `PARITY.md`；Maven 验证 5 个无外仓并行 WIP 干扰模块（`game-battle-engine`, `game-battle`, `game-friend`, `game-chat`, `game-match`）全部 **BUILD SUCCESS**。
+  - **Unity 客户端（`mmorpg-client`）**：`gen.bat client` 全量同步；新增纯 C# `JianghuModels.cs` / `JianghuClient.cs`（挂载 `GameClient.Jianghu`，WebGL2/IL2CPP 安全、幂等重试与断线围栏）、可玩 uGUI `JianghuDuelWindow.cs` / `JianghuUiRoot.cs`（已接入 `WorldHudNavigation`「历练 → 生死擂」入口、3 分页 + 洗尘确认弹窗 + 非阻塞来信/小队确认弹窗 + 百宝阁直达 `305/306` + 战报回放，预埋 `UI/Ugui/JianghuDuelV1/*` 专属切片自动换肤与无缝回退）及 `JianghuClientTests.cs`；`client_compile_check.ps1` **814 文件 0 错误**，`JianghuClientTests` **5/5 PASS**。
+  - 静态门禁：`gen_docs_index.py --check` **exit 0**，`check_log_text_english.py` **exit 0**。未执行 `git commit` / `git push`。
+
+  - **2026-11-26 增补（0 氪长期纯玩满级 85 自动永久 +1 免费槽）**：三仓同步实装 `FreeSchemesForLevel(effectiveLevel) = 2 + (effectiveLevel >= 85 ? 1 : 0)`（零协议/零存档/零切图变更，复用既有 `free_schemes = 11`），0 氪达 85 级满级自动拥有 **3 套永久免费**，防溢买上限同步收紧为无轻享卡 4 套 / 轻享卡 2 套（租期内满级升级允许按新上限直接续期不卡缩减闸）。复测通过：C++ `skill_test.exe` **106/106 PASS** + `scene.lib`/`scene.exe` 0 错误；Java 隔离编译 + JUnit（`SkillLoadoutTest` 6 + `ClassSkillClientTest` 7 + `ClassSkillSceneTest` 11 + `AttributeFeatureTest` 24）**48/48 PASS**（工作区并行会话 `JianghuService.java` 尚在 WIP）；Unity `client_compile_check.ps1` **814 文件 0 错误** + Unity 6000.6.0f1 EditMode **70/70 PASS**。
+
+
+## 2026-11-26 Antigravity：灵石百宝阁 V2 节庆礼盒 2 张 Codex 图标（Azure `cc9312e43fe`）导入与确认窗按钮皮肤收口
+
+- **美术核验与 Unity 导入（`mmorpg-client`）**：
+  - 核验并目测 Codex 提交 `cc9312e43fe82519b9c9b67e07363a311beabfc8` 交付的 2 张 `512×512` 透明 PNG-32（零内置文字、四边留白、RGBA8，与 Azure LFS SHA-256 逐字节一致：`pack_festival_bundle.png` `acbb13026c285119...`、`pack_festival_choice.png` `8e2b218b990fe0b4...`），已落盘 `Assets/Resources/UI/Ugui/SpiritShopV1/`；保留既有无冲突 Unity Sprite `.meta`（`textureType=8`, `spriteMode=1`, `alphaIsTransparency=1`, `rect=512×512`，全仓 `12,525/12,525` GUID 零重复）。至此 `SpiritShopV1/` 全部 **17/17** 正式美术切图（12 张控件/HUD 图标 + 3 张日常提速包 + 2 张春节礼盒）均已齐备并一一接线。
+  - 三仓 `spiritshopgoods.pb`（C++ / Java / Unity `StreamingAssets/Tables`）SHA-256（`1acd43a5780af063...`, 3,357B, 13 行）逐字节一致，401/402 `icon_key` 精确指向上述两图。
+- **UI 收口（[SpiritShopWindow.cs](../../mmorpg-client/Assets/Scripts/UI/Ugui/SpiritShop/SpiritShopWindow.cs)）**：
+  - 二次确认浮层的「前往充值」与「确认购买」按钮同步接入 `ui/btn_recharge_gold` 与 `ui/btn_buy_primary` 切图（缺省回退通用按钮）；`TabFestival` 无 `icon_key` 回退优先使用新导入的 `pack_festival_{bundle,choice}`。
+- **验证**：`tools/client_compile_check.ps1`（814 文件）中 `SpiritShop*` **0 错误**（全仓 9 处报错均为并行会话未生成 Tournament `SaluteTournamentChampion` 桩所致，与百宝阁无关）；三仓均未执行 `git commit` / `git push`。
+
+
+## 2026-11-26 Antigravity：《群仙问道赛》彻底移除「每日观道致敬」并修复 Go 锦标赛奖励币种（四仓闭环，保留主城冠军玉座纯荣誉展示）
+
+- **契约与配表（`xuanming-server-mmo-cpp`）**：
+  - `proto/match/match_service.proto`：删除 `rpc SaluteTournamentChampion`（`proto/message_id.txt` 永久墓碑 `506=reserved:MatchServiceSaluteTournamentChampion`）及请求/响应消息，`TournamentSeasonView` `reserved 23, 24`（`champion_salute_count`/`saluted_today`）。
+  - `proto/match/match_authority.proto`：删除 `MatchTournamentSaluteRecord`，`MatchTournamentSeasonRecord` `reserved 20`（`champion_salute_count`）。
+  - `data/schema/tournamentrule_table.proto` & `data/TournamentRule.xlsx`：删除并保留 `24..26`（`salute_gold_amount`/`salute_item_id`/`salute_item_count`），更新 `desc`；`data/tip/Tip.xlsx` 删除 `16056`/`16057`（映射表墓碑保留不复用）。
+  - `data_table_exporter/run.py`、`proto-gen-run`、`gen_schema_index.py` 全部退出 0。
+- **四仓代码清理与缺陷修复**：
+  - **Go `match`**（`xuanming-server-mmo-cpp/go/match`）：移除观道致敬表/SQL/RPC/逻辑/常量与单测；同步修复 `internal/tournament/catalog.go` 中 `GoldCurrencyType` 由 `1`（付费灵石）误配为 `3`（`CURRENCY_TYPE_BIND_GOLD` 绑定银两）的缺陷，并新增单测断言奖励附件币种为 `3`。验证：Go `match` 5 包 `go test` 与 `go/client_rpc_router` `go build` 全绿。
+  - **Unity 客户端**（`mmorpg-client`）：运行 `sync_tables.ps1` / `gen_proto.ps1` / `gen_messageids.ps1`；清理 `TournamentClient`/`TournamentModels`/`TournamentUiModel`/`RpcGuard`/`TournamentArtCatalog`/`TournamentChampionStageController`/`TournamentUiRoot`/`TournamentWindow` 与单测，删除 3 枚废弃致敬贴图（`salute-bubble`/`salute-panel`/`b-salute-title` 及 `.meta`），保留天墉城总冠军玉座/牌匾与冠军殿堂纯荣誉展示。验证：`tools/client_compile_check.ps1` **814/814 0 错误**。
+  - **Java 独立服**（`xuanming-server-mmo`）：`ContractSync` 全量同步且 `--check` 退出 0；清理 `match_feature_tables.proto`、`MatchFeatureTables`、`MatchMethods`、`MatchFeatureConfiguration`、`TournamentSeasonDriver`、`TournamentRules`、`TournamentTables`、`TournamentService`、`TournamentStore` 及 5 份单测，同步更新 `PARITY.md`。验证：`mvnw -pl game-proto,game-table,game-gate,game-match -am clean install -DskipTests` **BUILD SUCCESS**，`MatchMethodsTest` **5/5 PASS**、`TournamentParityTest` **3/3 PASS**。
+  - **Python 服务端**（`xuanming-server-mmo-python`）：对齐移除 `proto/match/{match_service,match_authority}.proto`、`proto/message_id.txt`（`506=reserved:...`）、`src/xuanming/match/{errors,match_service,tournament}.py` 与 `tests/test_cpp_wt_tournament_v3.py`，重编 `tools/build_protocol.py` 退出 0。验证：`pytest tests/test_cpp_wt_tournament_v3.py tests/test_latest_cpp_sync_systems.py` **10/10 PASS**。
+  - **设计文档**：同步更新 `docs/planning/season-team-tournament-{v2,v3,v4}.md` 与 `docs/planning/ui-handoff/season-team-tournament-v2-ui-handoff.md`。四仓改动均留在工作区，未执行 `git commit` / `git push`。
