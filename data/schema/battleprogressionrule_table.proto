@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+// BattleProgressionRule 表的权威 schema。源表 data/BattleProgressionRule.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 战斗银两每周平滑软/硬上限全局规则单行表(id = 1),UTC+8 周一 05:00 重置。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message BattleProgressionRuleTable {
+  option (cfg_sheet)       = "BattleProgressionRule";
+  option (cfg_source_file) = "BattleProgressionRule.xlsx";
+  option (cfg_primary_key) = "id";
+  option (cfg_hot_reload)  = true;
+
+  // 单行规则主键(固定为 1)
+  uint32 id = 1 [(cfg_owner) = "server"];
+  // 每周全额银两软上限(例如 30000)
+  uint64 weekly_silver_soft_cap = 2 [(cfg_owner) = "server"];
+  // 超软上限后的衰减比例(万分比 0..10000,例如 2000 = 20%)
+  uint32 diminished_rate_permyriad = 3 [(cfg_owner) = "server"];
+  // 每周银两硬封顶(必须 >= weekly_silver_soft_cap,例如 45000)
+  uint64 weekly_silver_hard_cap = 4 [(cfg_owner) = "server"];
+}

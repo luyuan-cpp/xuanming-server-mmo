@@ -74,6 +74,15 @@ message EquipmentMaterialRewardLedger {
   uint32 stage1_tradable_confirmed = 11; // 已由 data_service 账号目录确认的本角色阶段一可交易份数（<= tradable_earned_total）。
 }
 
+// 战斗成长经济周账本（docs/planning/player-leveling-and-battle-economy-v1.md §2.2）：
+// 与 CurrencyComp、EquipmentMaterialRewardLedger 同在 WALLET 存盘组，同帧原子提交。
+// 每周 UTC+8 周一 05:00 重置（抗时钟回拨），控制常规战斗银两周软/硬上限，不截断经验升级。
+message BattleEconomyLedger {
+  uint64 week_starts_at_ms = 1;       // 当前游戏周起点（UTC+8 周一 05:00）
+  uint64 battle_silver_this_week = 2; // 本周战斗结算累计实际入账银两
+  uint64 battle_exp_this_week = 3;    // 本周战斗累计入账经验（统计监控用）
+}
+
 message ClientRequestLedgerComp {
   // 条目之间无序,按 key 找;同一个 key 至多一条。
   repeated ClientRequestRecord records = 1;
@@ -83,4 +92,5 @@ message ClientRequestLedgerComp {
   // 与records的淘汰序号独立；即使旧回执被淘汰，旧水位请求也不能再次扣料或造物。
   uint64 forge_revision = 3;
   EquipmentMaterialRewardLedger material_reward = 4;
+  BattleEconomyLedger battle_economy = 5;
 }

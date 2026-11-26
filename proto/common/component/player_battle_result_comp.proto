@@ -71,6 +71,14 @@ message PlayerBattleResult {
   uint32 season_seal_max_points = 37;
   bool season_honor_newly_unlocked = 38;
   bool surrendered = 39; // true = 本方通过 PVP 延迟投降结束本局（重登补弹与现场结算同口径展示「体面认输」）
+  // 角色升级与战斗银两周上限增量（docs/planning/player-leveling-and-battle-economy-v1.md §2.3）。
+  uint32 level_before = 40;
+  uint32 level_after = 41;
+  uint64 total_exp_after = 42;
+  uint64 next_level_total_exp = 43;
+  uint64 battle_silver_weekly_used = 44;
+  uint64 battle_silver_weekly_soft_cap = 45;
+  bool battle_silver_diminished = 46;
 }
 
 message PlayerBattleResultComp {

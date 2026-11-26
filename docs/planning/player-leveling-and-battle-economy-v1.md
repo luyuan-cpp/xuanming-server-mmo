@@ -102,7 +102,7 @@
 | Proto 文件 | 目标消息 | 追加字段（只增不改） | 用途 |
 |---|---|---|---|
 | `proto/scene/player_attribute.proto` | `AttributePanelInfo`（当前最大号 `12`） | `uint64 total_exp = 13;`<br>`uint64 current_level_exp = 14;`<br>`uint64 next_level_exp = 15;`<br>`bool is_max_level = 16;` | 服务端统一算出本级内已获经验与升级所需经验，客户端零公式推算 |
-| `proto/common/component/player_battle_result_comp.proto` | `PlayerBattleResult`（当前最大号 `38`） | `uint32 level_before = 39;`<br>`uint32 level_after = 40;`<br>`uint64 total_exp_after = 41;`<br>`uint64 next_level_total_exp = 42;`<br>`uint64 battle_silver_weekly_used = 43;`<br>`uint64 battle_silver_weekly_soft_cap = 44;`<br>`bool battle_silver_diminished = 45;` | 持久战果恢复（重登/补弹）与现场结算同源展示 |
+| `proto/common/component/player_battle_result_comp.proto` | `PlayerBattleResult`（当前最大号 `39`） | `uint32 level_before = 40;`<br>`uint32 level_after = 41;`<br>`uint64 total_exp_after = 42;`<br>`uint64 next_level_total_exp = 43;`<br>`uint64 battle_silver_weekly_used = 44;`<br>`uint64 battle_silver_weekly_soft_cap = 45;`<br>`bool battle_silver_diminished = 46;` | 持久战果恢复（重登/补弹）与现场结算同源展示 |
 | `proto/battle/player_battle.proto` | `BattleEndS2C`（当前最大号 `13`） | `uint32 level_before = 14;`<br>`uint32 level_after = 15;`<br>`uint64 exp_gain = 16;`<br>`uint64 silver_gain = 17;`<br>`uint64 total_exp_after = 18;`<br>`uint64 next_level_total_exp = 19;`<br>`bool battle_silver_diminished = 20;` | 现场结算实时回显最终实得修为、银两与升级突破 |
 
 ---

@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+// PlayerLevelExp 表的权威 schema。源表 data/PlayerLevelExp.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 角色升级累计经验曲线表(docs/planning/player-leveling-and-battle-economy-v1.md §2.1):
+// id = 角色等级(1..85 连续无空洞),required_total_exp 为到达该等级所需累计总经验(1 级必须为 0,严格递增)。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message PlayerLevelExpTable {
+  option (cfg_sheet)       = "PlayerLevelExp";
+  option (cfg_source_file) = "PlayerLevelExp.xlsx";
+  option (cfg_primary_key) = "id";
+  option (cfg_hot_reload)  = true;
+
+  // 角色等级（1..85 连续无空洞）
+  uint32 id = 1;
+  // 达到该等级所需的累计总经验（1 级恒为 0，后续严格递增）
+  uint64 required_total_exp = 2;
+}

@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+// BattleProgressionReward 表的权威 schema。源表 data/BattleProgressionReward.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 核心战斗经验与银两基准表(docs/planning/player-leveling-and-battle-economy-v1.md §2.1):
+// 服务端专用表(server owner),由 scene 在收件箱首次结算时按 (match_mode, difficulty, outcome_tier) 匹配发放。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message BattleProgressionRewardTable {
+  option (cfg_sheet)       = "BattleProgressionReward";
+  option (cfg_source_file) = "BattleProgressionReward.xlsx";
+  option (cfg_primary_key) = "id";
+  option (cfg_hot_reload)  = true;
+
+  // 规则行 ID
+  uint32 id = 1 [(cfg_owner) = "server"];
+  // 匹配模式(MatchMode 数值;99 = 五行幻境周常爬塔专用档)
+  uint32 match_mode = 2 [(cfg_owner) = "server"];
+  // 难度档(0 = 通用/不区分, 1 = 普通, 2 = 困难)
+  uint32 difficulty = 3 [(cfg_owner) = "server"];
+  // 胜负档(1 = 胜局, 2 = 达标平/负局)
+  uint32 outcome_tier = 4 [(cfg_owner) = "server"];
+  // 本局基础经验(修为)
+  uint64 exp_gain = 5 [(cfg_owner) = "server"];
+  // 本局基础银两(帮战 V2 恒为 0,严禁与 go/guild 双发)
+  uint64 silver_gain = 6 [(cfg_owner) = "server"];
+}
