@@ -85,7 +85,7 @@ class GmControllerTest {
     @Test void overviewExposesCurrenciesAndAuditEndpointsCheckPermission() throws Exception {
         when(subject.isPermitted("gm:audit:read")).thenReturn(true);
         var overview = json.readTree(controller.overview()).path("result");
-        assertEquals(3, overview.path("currencies").size());
+        assertEquals(4, overview.path("currencies").size());
         when(journal.list(2, 20, "1001", "DELIVERED")).thenReturn(json.createObjectNode().put("total", 0));
         controller.commands(2, 20, "1001", "DELIVERED");
         verify(journal).list(2, 20, "1001", "DELIVERED");

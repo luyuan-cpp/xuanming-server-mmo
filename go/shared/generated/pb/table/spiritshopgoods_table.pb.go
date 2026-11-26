@@ -44,6 +44,18 @@ type SpiritShopGoodsTable struct {
 	LimitGroupId     uint32                 `protobuf:"varint,19,opt,name=limit_group_id,json=limitGroupId,proto3" json:"limit_group_id,omitempty"`
 	LimitGroupWeight uint32                 `protobuf:"varint,20,opt,name=limit_group_weight,json=limitGroupWeight,proto3" json:"limit_group_weight,omitempty"`
 	BadgeText        string                 `protobuf:"bytes,21,opt,name=badge_text,json=badgeText,proto3" json:"badge_text,omitempty"`
+	StartTimeMs      uint64                 `protobuf:"varint,22,opt,name=start_time_ms,json=startTimeMs,proto3" json:"start_time_ms,omitempty"`
+	EndTimeMs        uint64                 `protobuf:"varint,23,opt,name=end_time_ms,json=endTimeMs,proto3" json:"end_time_ms,omitempty"`
+	GrantMode        uint32                 `protobuf:"varint,24,opt,name=grant_mode,json=grantMode,proto3" json:"grant_mode,omitempty"`
+	ItemId_3         uint32                 `protobuf:"varint,25,opt,name=item_id_3,json=itemId3,proto3" json:"item_id_3,omitempty"`
+	ItemCount_3      uint32                 `protobuf:"varint,26,opt,name=item_count_3,json=itemCount3,proto3" json:"item_count_3,omitempty"`
+	ItemBound_3      uint32                 `protobuf:"varint,27,opt,name=item_bound_3,json=itemBound3,proto3" json:"item_bound_3,omitempty"`
+	ItemId_4         uint32                 `protobuf:"varint,28,opt,name=item_id_4,json=itemId4,proto3" json:"item_id_4,omitempty"`
+	ItemCount_4      uint32                 `protobuf:"varint,29,opt,name=item_count_4,json=itemCount4,proto3" json:"item_count_4,omitempty"`
+	ItemBound_4      uint32                 `protobuf:"varint,30,opt,name=item_bound_4,json=itemBound4,proto3" json:"item_bound_4,omitempty"`
+	OriginalPrice    uint64                 `protobuf:"varint,31,opt,name=original_price,json=originalPrice,proto3" json:"original_price,omitempty"`
+	MinLevel         uint32                 `protobuf:"varint,32,opt,name=min_level,json=minLevel,proto3" json:"min_level,omitempty"`
+	MaxLevel         uint32                 `protobuf:"varint,33,opt,name=max_level,json=maxLevel,proto3" json:"max_level,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -225,6 +237,90 @@ func (x *SpiritShopGoodsTable) GetBadgeText() string {
 	return ""
 }
 
+func (x *SpiritShopGoodsTable) GetStartTimeMs() uint64 {
+	if x != nil {
+		return x.StartTimeMs
+	}
+	return 0
+}
+
+func (x *SpiritShopGoodsTable) GetEndTimeMs() uint64 {
+	if x != nil {
+		return x.EndTimeMs
+	}
+	return 0
+}
+
+func (x *SpiritShopGoodsTable) GetGrantMode() uint32 {
+	if x != nil {
+		return x.GrantMode
+	}
+	return 0
+}
+
+func (x *SpiritShopGoodsTable) GetItemId_3() uint32 {
+	if x != nil {
+		return x.ItemId_3
+	}
+	return 0
+}
+
+func (x *SpiritShopGoodsTable) GetItemCount_3() uint32 {
+	if x != nil {
+		return x.ItemCount_3
+	}
+	return 0
+}
+
+func (x *SpiritShopGoodsTable) GetItemBound_3() uint32 {
+	if x != nil {
+		return x.ItemBound_3
+	}
+	return 0
+}
+
+func (x *SpiritShopGoodsTable) GetItemId_4() uint32 {
+	if x != nil {
+		return x.ItemId_4
+	}
+	return 0
+}
+
+func (x *SpiritShopGoodsTable) GetItemCount_4() uint32 {
+	if x != nil {
+		return x.ItemCount_4
+	}
+	return 0
+}
+
+func (x *SpiritShopGoodsTable) GetItemBound_4() uint32 {
+	if x != nil {
+		return x.ItemBound_4
+	}
+	return 0
+}
+
+func (x *SpiritShopGoodsTable) GetOriginalPrice() uint64 {
+	if x != nil {
+		return x.OriginalPrice
+	}
+	return 0
+}
+
+func (x *SpiritShopGoodsTable) GetMinLevel() uint32 {
+	if x != nil {
+		return x.MinLevel
+	}
+	return 0
+}
+
+func (x *SpiritShopGoodsTable) GetMaxLevel() uint32 {
+	if x != nil {
+		return x.MaxLevel
+	}
+	return 0
+}
+
 type SpiritShopGoodsTableData struct {
 	state         protoimpl.MessageState  `protogen:"open.v1"`
 	Data          []*SpiritShopGoodsTable `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -273,7 +369,7 @@ var File_spiritshopgoods_table_proto protoreflect.FileDescriptor
 
 const file_spiritshopgoods_table_proto_rawDesc = "" +
 	"\n" +
-	"\x1bspiritshopgoods_table.proto\"\xaf\x05\n" +
+	"\x1bspiritshopgoods_table.proto\"\xb3\b\n" +
 	"\x14SpiritShopGoodsTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x15\n" +
 	"\x06tab_id\x18\x02 \x01(\rR\x05tabId\x12\x1d\n" +
@@ -303,7 +399,24 @@ const file_spiritshopgoods_table_proto_rawDesc = "" +
 	"\x0elimit_group_id\x18\x13 \x01(\rR\flimitGroupId\x12,\n" +
 	"\x12limit_group_weight\x18\x14 \x01(\rR\x10limitGroupWeight\x12\x1d\n" +
 	"\n" +
-	"badge_text\x18\x15 \x01(\tR\tbadgeText\"E\n" +
+	"badge_text\x18\x15 \x01(\tR\tbadgeText\x12\"\n" +
+	"\rstart_time_ms\x18\x16 \x01(\x04R\vstartTimeMs\x12\x1e\n" +
+	"\vend_time_ms\x18\x17 \x01(\x04R\tendTimeMs\x12\x1d\n" +
+	"\n" +
+	"grant_mode\x18\x18 \x01(\rR\tgrantMode\x12\x1a\n" +
+	"\titem_id_3\x18\x19 \x01(\rR\aitemId3\x12 \n" +
+	"\fitem_count_3\x18\x1a \x01(\rR\n" +
+	"itemCount3\x12 \n" +
+	"\fitem_bound_3\x18\x1b \x01(\rR\n" +
+	"itemBound3\x12\x1a\n" +
+	"\titem_id_4\x18\x1c \x01(\rR\aitemId4\x12 \n" +
+	"\fitem_count_4\x18\x1d \x01(\rR\n" +
+	"itemCount4\x12 \n" +
+	"\fitem_bound_4\x18\x1e \x01(\rR\n" +
+	"itemBound4\x12%\n" +
+	"\x0eoriginal_price\x18\x1f \x01(\x04R\roriginalPrice\x12\x1b\n" +
+	"\tmin_level\x18  \x01(\rR\bminLevel\x12\x1b\n" +
+	"\tmax_level\x18! \x01(\rR\bmaxLevel\"E\n" +
 	"\x18SpiritShopGoodsTableData\x12)\n" +
 	"\x04data\x18\x01 \x03(\v2\x15.SpiritShopGoodsTableR\x04dataBF\n" +
 	"\x0ecom.game.tableB\x1eSpiritShopGoodsTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

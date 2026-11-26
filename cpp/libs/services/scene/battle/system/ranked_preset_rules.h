@@ -174,7 +174,9 @@ inline std::string ComputeConfigFingerprint() {
         << ",cls=" << rule->reference_class_id()
         << ",lvl=" << rule->competitive_level()
         << ",defc=" << rule->default_character_preset_id()
-        << ",defp=" << rule->default_pet_preset_id() << "\n";
+        << ",defp=" << rule->default_pet_preset_id()
+        << ",bans=" << rule->skill_ban_slots_per_team()
+        << ",banmin=" << rule->skill_ban_min_rating_centi() << "\n";
     for (const auto* p : presets) {
         oss << "preset:" << p->id()
             << ",kind=" << p->role_kind()

@@ -97,6 +97,54 @@ type SpiritShopGoodsBadge_textComp struct {
     Value string
 }
 
+type SpiritShopGoodsStart_time_msComp struct {
+    Value uint64
+}
+
+type SpiritShopGoodsEnd_time_msComp struct {
+    Value uint64
+}
+
+type SpiritShopGoodsGrant_modeComp struct {
+    Value uint32
+}
+
+type SpiritShopGoodsItem_id_3Comp struct {
+    Value uint32
+}
+
+type SpiritShopGoodsItem_count_3Comp struct {
+    Value uint32
+}
+
+type SpiritShopGoodsItem_bound_3Comp struct {
+    Value uint32
+}
+
+type SpiritShopGoodsItem_id_4Comp struct {
+    Value uint32
+}
+
+type SpiritShopGoodsItem_count_4Comp struct {
+    Value uint32
+}
+
+type SpiritShopGoodsItem_bound_4Comp struct {
+    Value uint32
+}
+
+type SpiritShopGoodsOriginal_priceComp struct {
+    Value uint64
+}
+
+type SpiritShopGoodsMin_levelComp struct {
+    Value uint32
+}
+
+type SpiritShopGoodsMax_levelComp struct {
+    Value uint32
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -184,5 +232,53 @@ func MakeSpiritShopGoodsLimit_group_weightComp(row *pb.SpiritShopGoodsTable) Spi
 
 func MakeSpiritShopGoodsBadge_textComp(row *pb.SpiritShopGoodsTable) SpiritShopGoodsBadge_textComp {
     return SpiritShopGoodsBadge_textComp{Value: row.BadgeText}
+}
+
+func MakeSpiritShopGoodsStart_time_msComp(row *pb.SpiritShopGoodsTable) SpiritShopGoodsStart_time_msComp {
+    return SpiritShopGoodsStart_time_msComp{Value: row.StartTimeMs}
+}
+
+func MakeSpiritShopGoodsEnd_time_msComp(row *pb.SpiritShopGoodsTable) SpiritShopGoodsEnd_time_msComp {
+    return SpiritShopGoodsEnd_time_msComp{Value: row.EndTimeMs}
+}
+
+func MakeSpiritShopGoodsGrant_modeComp(row *pb.SpiritShopGoodsTable) SpiritShopGoodsGrant_modeComp {
+    return SpiritShopGoodsGrant_modeComp{Value: row.GrantMode}
+}
+
+func MakeSpiritShopGoodsItem_id_3Comp(row *pb.SpiritShopGoodsTable) SpiritShopGoodsItem_id_3Comp {
+    return SpiritShopGoodsItem_id_3Comp{Value: row.ItemId_3}
+}
+
+func MakeSpiritShopGoodsItem_count_3Comp(row *pb.SpiritShopGoodsTable) SpiritShopGoodsItem_count_3Comp {
+    return SpiritShopGoodsItem_count_3Comp{Value: row.ItemCount_3}
+}
+
+func MakeSpiritShopGoodsItem_bound_3Comp(row *pb.SpiritShopGoodsTable) SpiritShopGoodsItem_bound_3Comp {
+    return SpiritShopGoodsItem_bound_3Comp{Value: row.ItemBound_3}
+}
+
+func MakeSpiritShopGoodsItem_id_4Comp(row *pb.SpiritShopGoodsTable) SpiritShopGoodsItem_id_4Comp {
+    return SpiritShopGoodsItem_id_4Comp{Value: row.ItemId_4}
+}
+
+func MakeSpiritShopGoodsItem_count_4Comp(row *pb.SpiritShopGoodsTable) SpiritShopGoodsItem_count_4Comp {
+    return SpiritShopGoodsItem_count_4Comp{Value: row.ItemCount_4}
+}
+
+func MakeSpiritShopGoodsItem_bound_4Comp(row *pb.SpiritShopGoodsTable) SpiritShopGoodsItem_bound_4Comp {
+    return SpiritShopGoodsItem_bound_4Comp{Value: row.ItemBound_4}
+}
+
+func MakeSpiritShopGoodsOriginal_priceComp(row *pb.SpiritShopGoodsTable) SpiritShopGoodsOriginal_priceComp {
+    return SpiritShopGoodsOriginal_priceComp{Value: row.OriginalPrice}
+}
+
+func MakeSpiritShopGoodsMin_levelComp(row *pb.SpiritShopGoodsTable) SpiritShopGoodsMin_levelComp {
+    return SpiritShopGoodsMin_levelComp{Value: row.MinLevel}
+}
+
+func MakeSpiritShopGoodsMax_levelComp(row *pb.SpiritShopGoodsTable) SpiritShopGoodsMax_levelComp {
+    return SpiritShopGoodsMax_levelComp{Value: row.MaxLevel}
 }
 

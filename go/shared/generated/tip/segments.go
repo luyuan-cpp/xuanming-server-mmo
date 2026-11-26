@@ -59,7 +59,7 @@ var Segments = []Segment{
 	{Domain: "season", Group: "season_error", Base: 34000, Width: 1000, Lo: 34000, Hi: 34011, Count: 12},
 	{Domain: "trial_journal", Group: "trial_journal_error", Base: 35000, Width: 1000, Lo: 35000, Hi: 35008, Count: 9},
 	{Domain: "festival_beast", Group: "festival_beast_error", Base: 36000, Width: 1000, Lo: 36000, Hi: 36013, Count: 14},
-	{Domain: "spirit_shop", Group: "spirit_shop_error", Base: 37000, Width: 1000, Lo: 37000, Hi: 37010, Count: 11},
+	{Domain: "spirit_shop", Group: "spirit_shop_error", Base: 37000, Width: 1000, Lo: 37000, Hi: 37013, Count: 14},
 	{Domain: "travel_pass", Group: "travel_pass_error", Base: 38000, Width: 1000, Lo: 38000, Hi: 38012, Count: 13},
 	{Domain: "rewarded_ad", Group: "rewarded_ad_error", Base: 39000, Width: 1000, Lo: 39000, Hi: 39012, Count: 13},
 }

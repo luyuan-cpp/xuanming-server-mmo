@@ -74,6 +74,9 @@ enum spirit_shop_error : int {
   kSpiritShopFrozen = 37008,
   kSpiritShopInBattle = 37009,
   kSpiritShopItemBlocked = 37010,
+  kSpiritShopNotInSaleWindow = 37011,
+  kSpiritShopLevelNotMet = 37012,
+  kSpiritShopInvalidChoice = 37013,
   spirit_shop_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   spirit_shop_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -84,11 +87,11 @@ extern const uint32_t spirit_shop_error_internal_data_[];
 inline constexpr spirit_shop_error spirit_shop_error_MIN =
     static_cast<spirit_shop_error>(0);
 inline constexpr spirit_shop_error spirit_shop_error_MAX =
-    static_cast<spirit_shop_error>(37010);
+    static_cast<spirit_shop_error>(37013);
 [[nodiscard]] inline bool spirit_shop_error_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, spirit_shop_error_internal_data_);
 }
-inline constexpr int spirit_shop_error_ARRAYSIZE = 37010 + 1;
+inline constexpr int spirit_shop_error_ARRAYSIZE = 37013 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 spirit_shop_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(spirit_shop_error) {

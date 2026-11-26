@@ -161,11 +161,22 @@ public:
     uint32_t SubmitSurrenderVote(uint64_t playerId, bool agree, BattleSurrenderVoteState* outVoteState = nullptr);
     // 仅向同队参战者回填本队投降投票或冷却态（对手与观众视角由节点清空，绝不泄密）。
     void FillSurrenderVoteForViewer(BattleStateS2C& state, uint64_t viewerPlayerId) const;
-    // 论剑 V3 战前 15 秒明牌变阵（换赛季印 / 换首发宠 / 锁定出战）。
+    // 论剑 V3 战前明牌变阵（换赛季印 / 换首发宠 / 3 Ban 禁选 / 锁定出战）。
     bool IsInPrepPhase() const { return prepActive; }
+    uint32_t PrepDurationSeconds() const {
+        return prepSkillBanSlotsPerTeam > 0u ? kTacticalPrepWithBanDurationSeconds : kTacticalPrepDurationSeconds;
+    }
+    uint64_t PrepTimeoutMs() const {
+        return prepSkillBanSlotsPerTeam > 0u ? kTacticalPrepWithBanTimeoutMs : kTacticalPrepTimeoutMs;
+    }
+    bool IsSkillBanned(uint32_t skillTableId) const {
+        return bannedSkillSet.contains(skillTableId);
+    }
     bool AllPrepPlayersReady() const;
     uint32_t UpdateBattlePrep(uint64_t playerId, uint32_t selectedSealId, uint64_t selectedPetId,
-                              bool ready, BattlePrepState* outPrepState = nullptr);
+                              bool ready, BattlePrepState* outPrepState = nullptr,
+                              bool updateBannedSkills = false,
+                              const std::vector<uint32_t>& bannedSkillIds = {});
     bool FinalizePrepPhase();
     void FillPrepStateForViewer(BattleStateS2C& state, uint64_t viewerPlayerId, uint64_t deadlineMs) const;
     // 论剑 V4 队内一键战术标点：每名玩家每回合（含变阵期独立计 1 轮）至多 2 次，仅同队可见。
@@ -767,20 +778,30 @@ private:
     std::map<uint64_t, uint32_t> consecutiveIdleRoundsByPlayer;
     void ExpireSurrenderVotesForRoundAdvance();
 
-    // 论剑 V3 战前 15 秒明牌变阵（确定性纯状态，无时钟依赖；定时器由 BattleRoomManager 持有）
+    // 论剑 V3 战前明牌变阵 + 3 Ban 技能禁选（确定性纯状态，无时钟依赖；定时器由 BattleRoomManager 持有）
     struct PrepPlayerOptions {
         uint32_t teamIndex = 0;
         uint32_t activeSeasonId = 0;
         bool aiControlled = false;
+        bool isTeamCaptain = false;
         uint32_t selectedSealId = 0;
         uint64_t selectedPetId = 0;
         bool ready = false;
         std::vector<SeasonSealEffect> availableSeals;
         std::vector<BattlePetSnapshot> availablePets;
+        std::vector<uint32_t> nominatedBanSkillIds;
     };
     bool prepActive = false;
+    uint32_t prepSkillBanSlotsPerTeam = 0;
+    std::vector<uint32_t> banCandidateSkillIds;
+    std::set<uint32_t> banCandidateSkillSet;
+    std::vector<uint32_t> teamABannedSkillIds;
+    std::vector<uint32_t> teamBBannedSkillIds;
+    std::vector<uint32_t> bannedSkillIds;
+    std::set<uint32_t> bannedSkillSet;
     uint64_t nextPetActorIndex = 0;
     std::map<uint64_t, PrepPlayerOptions> prepOptionsByPlayer;
+    std::vector<uint32_t> AggregateTeamBans(uint32_t teamIndex) const;
     // 论剑 V5 临阵唤灵状态：validatedPetsByPlayer 冻结开局合规全量宠，standbyPetPoolByPlayer 冻结开打后剩余可唤宠。
     std::map<uint64_t, std::vector<BattlePetSnapshot>> validatedPetsByPlayer;
     std::map<uint64_t, std::vector<BattlePetSnapshot>> standbyPetPoolByPlayer;

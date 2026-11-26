@@ -354,6 +354,16 @@ message BattlePrepPlayerState {
   repeated uint32 nominated_ban_skill_ids = 8;
 }
 
+// 论剑 V6 宿敌交手上下文（开局由 match 权威冻结，战前 15 秒仅向本人脱敏展示，纯荣誉零数值加成）。
+message RankedRivalryEncounter {
+  uint64 player_id = 1;       // 本视角玩家 ID
+  uint64 opponent_id = 2;     // 对阵宿敌玩家 ID
+  string opponent_name = 3;   // 对手展示名（match 或引擎回填）
+  uint32 wins = 4;            // 本季历史对阵胜场（不含本局）
+  uint32 losses = 5;          // 本季历史对阵负场（不含本局）
+  bool revenge_target = 6;    // true = 上次交手告负或历史净负，本局胜出即触发「雪耻复仇」
+}
+
 // 论剑 V3 战前明牌变阵状态快照（按收信视角脱敏：本人看全部可选+同队状态，观众仅看倒计时）。
 message BattlePrepState {
   bool active = 1;                                    // true = 当前处于战前明牌变阵期，尚未进入第 1 回合
@@ -365,6 +375,7 @@ message BattlePrepState {
   uint32 skill_ban_slots_per_team = 7;                // 本局每队可用技能禁用槽数（0=未启用，3=每队禁3招）
   repeated uint32 ban_candidate_skill_ids = 8;        // 本局白名单可禁技能 ID 列表（升序；仅参战者可见）
   repeated uint32 team_effective_ban_skill_ids = 9;   // 按当前同队提名确定性聚合的本队生效禁招（仅同队可见，对手与观众清空）
+  repeated RankedRivalryEncounter self_rivalries = 10;// 论剑 V6 本人本局面对的宿敌列表（仅本人可见，对手与观众清空）
 }
 
 // 论剑 V4 队内一键战术标点类型（零文字沟通，严格仅同队可见）。
@@ -502,6 +513,15 @@ message BattleSettlementData {
   uint64 damage_taken = 40;               // 本人及本人宝宝累计承受伤害与护盾吸收总量
   BattleHighlightKind highlight_kind = 41;// 本局评定的专属战术徽记（确定性规则产出）
   uint32 ended_opponent_streak = 42;      // 若本方获胜且击败了 >=3 连胜对手，记录敌方最高连胜数（否则 0）
+  // 论剑 V6 宿敌雪耻复仇与问道名局配招快照（纯只读荣誉/复盘摘要，零经济/零数值影响）。
+  bool revenged_rival = 43;               // 本局获胜并成功向历史宿敌雪耻复仇
+  string revenged_opponent_name = 44;     // 最主要复仇对手名（供现场结算盖章展示）
+  uint32 revenged_wins_after = 45;        // 含本局后的对阵胜场
+  uint32 revenged_losses_after = 46;      // 含本局后的对阵负场
+  uint32 final_season_seal_id = 47;       // 本局最终生效的赛季印 ID（含 V3 战前易印结果）
+  uint32 starter_pet_table_id = 48;       // 本局最终首发出战灵宠表 ID（含 V3 战前换宠结果，无宠为 0）
+  repeated uint32 core_skill_ids = 49;    // 主角本局携带的核心主动技能 ID（最多 4 个，用于问道名局流派汇总）
+  string player_display_name = 50;        // 主角展示名（供问道名局与宿敌账本展示）
 }
 
 // ---- 出战宝宝的结算数据(随主人的 BattleSettlementData 一起回 scene)----
@@ -623,6 +643,8 @@ message RankedMatchContext {
   map<uint64, uint32> member_win_streaks = 9;
   // 成局时按 RankedRule 冻结的每队技能禁选槽数（0=未达云章门槛或关闭，3=每队禁3招）。
   uint32 skill_ban_slots_per_team = 10;
+  // 论剑 V6 成局时由 match 冻结的对阵宿敌记录（含双方本季已有交手的全部主客视角条目）。
+  repeated RankedRivalryEncounter rivalry_encounters = 11;
 }
 
 // 玩家本局有效参与事实(battle 房间在终局前冻结进 BattleResultEvent,重放不重算)。

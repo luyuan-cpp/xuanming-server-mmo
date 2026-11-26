@@ -115,4 +115,14 @@
    - `SpiritShopUiRoot.cs` 购买成功回包后即时触发 `AppearanceClient.RequestInfo(force: true)`，切回衣柜立即可见最新券余量并点击「使用幻化符/特效卷解锁并穿戴」；无券时直达百宝阁对应分页并聚焦 `303/304`。
 3. **四仓全对齐与不硬扩展结论**：
    - `xuanming-server-mmo-python` 补齐 `530/531`、5 张配置表、`scene_appearance.py`、`scene_pets.py`、`scene_battle.py`、`battle.py` 及端到端单测。
-   - 保持纯外观零数值原则，不强行扩展战力加成、抽奖盲盒或额外养成负担；新增道具图标与可选生产级特效帧条/百宝阁切图清单见 [wardrobe-cosmetics-assets-handoff.md](ui-handoff/wardrobe-cosmetics-assets-handoff.md)。
+   - 保持纯外观零数值原则，不强行扩展战力加成、抽奖盲盒或额外养成负担；本模块全部 22 张正式资产（Azure `image/main@258e817345ad`）已导入并切换至 `SkillVfxCosmetic.xlsx`（清零 `tint_hex`），交接存档见 [wardrobe-cosmetics-assets-handoff.md](ui-handoff/wardrobe-cosmetics-assets-handoff.md)。
+4. **后续上线后新增独立「灵宠幻化皮肤」运营作图与命名规范（零代码增补，纯功能无风格模板）**：
+   - 既有动作目录已占用 `01-zhuling`～`16-luhualing`，后续原创独立灵宠幻化自 **`17-<小写拼音>`** 起顺延编号，避免与既有 `Pet.xlsx` / `PetCosmetic.xlsx` 冲突（首枚预留编号示例：正式名称 **`玉螭童`**，目录键 `art_key` = **`17-yuchitong`**）。
+   - 单只新增独立灵宠幻化交付规格（透明底 PNG-32，背景完全透明 Alpha=0，严禁文字/字母/数字/水印，动作帧脚底基线对齐、主体不裁边）：
+     - 图仓落盘目录：`D:\work\image\designs\pet-morph-<art_key>\`
+     - 客户端导入路径：`Assets/Resources/World/Pets/QdaoPets20261005/<art_key>/`
+     - `portrait.png`：`512×512`（非拉伸，衣柜预览、灵宠列表与头像展示，四周保留 8% 安全留白）
+     - `idle/E/01.png`、`idle/W/01.png`：`1024×1024`（朝右 E 与朝左 W 待机各 1 帧）
+     - `attack/E/01.png`～`12.png`、`attack/W/01.png`～`12.png`：`1024×1024`（朝右 E 与朝左 W 普攻各 12 帧）
+     - `cast/E/01.png`～`16.png`、`cast/W/01.png`～`16.png`：`1024×1024`（朝右 E 与朝左 W 施法各 16 帧）
+     - `hit/E/01.png`～`06.png`、`hit/W/01.png`～`06.png`：`1024×1024`（朝右 E 与朝左 W 受击各 6 帧）

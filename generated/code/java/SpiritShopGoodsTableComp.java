@@ -143,4 +143,76 @@ public final class SpiritShopGoodsTableComp {
         }
     }
 
+    public record Start_time_ms(long value) {
+        public static Start_time_ms from(SpiritShopGoodsTable row) {
+            return new Start_time_ms(row.getStartTimeMs());
+        }
+    }
+
+    public record End_time_ms(long value) {
+        public static End_time_ms from(SpiritShopGoodsTable row) {
+            return new End_time_ms(row.getEndTimeMs());
+        }
+    }
+
+    public record Grant_mode(int value) {
+        public static Grant_mode from(SpiritShopGoodsTable row) {
+            return new Grant_mode(row.getGrantMode());
+        }
+    }
+
+    public record Item_id_3(int value) {
+        public static Item_id_3 from(SpiritShopGoodsTable row) {
+            return new Item_id_3(row.getItemId3());
+        }
+    }
+
+    public record Item_count_3(int value) {
+        public static Item_count_3 from(SpiritShopGoodsTable row) {
+            return new Item_count_3(row.getItemCount3());
+        }
+    }
+
+    public record Item_bound_3(int value) {
+        public static Item_bound_3 from(SpiritShopGoodsTable row) {
+            return new Item_bound_3(row.getItemBound3());
+        }
+    }
+
+    public record Item_id_4(int value) {
+        public static Item_id_4 from(SpiritShopGoodsTable row) {
+            return new Item_id_4(row.getItemId4());
+        }
+    }
+
+    public record Item_count_4(int value) {
+        public static Item_count_4 from(SpiritShopGoodsTable row) {
+            return new Item_count_4(row.getItemCount4());
+        }
+    }
+
+    public record Item_bound_4(int value) {
+        public static Item_bound_4 from(SpiritShopGoodsTable row) {
+            return new Item_bound_4(row.getItemBound4());
+        }
+    }
+
+    public record Original_price(long value) {
+        public static Original_price from(SpiritShopGoodsTable row) {
+            return new Original_price(row.getOriginalPrice());
+        }
+    }
+
+    public record Min_level(int value) {
+        public static Min_level from(SpiritShopGoodsTable row) {
+            return new Min_level(row.getMinLevel());
+        }
+    }
+
+    public record Max_level(int value) {
+        public static Max_level from(SpiritShopGoodsTable row) {
+            return new Max_level(row.getMaxLevel());
+        }
+    }
+
 }

@@ -113,6 +113,21 @@ public:
         return it == skillRows.end() ? nullptr : &it->second;
     }
 
+    std::vector<uint32_t> GetBanEligibleSkillIds(uint32_t activeSeasonId) const override {
+        std::vector<uint32_t> ids;
+        for (const auto& [skillId, row] : skillRows) {
+            if (row.battle_model() != 1u || row.ability_kind() != 1u ||
+                row.ban_pool_category() < 1u || row.ban_pool_category() > 4u) {
+                continue;
+            }
+            if (row.season_id() != 0u && (activeSeasonId == 0u || row.season_id() != activeSeasonId)) {
+                continue;
+            }
+            ids.push_back(skillId);
+        }
+        return ids;
+    }
+
     const BuffTable* FindBuff(uint32_t buffTableId) const override {
         const auto it = buffRows.find(buffTableId);
         return it == buffRows.end() ? nullptr : &it->second;

@@ -19,6 +19,12 @@ func TestValidateCustomDuelRules(t *testing.T) {
 		require.False(t, validateCustomDuelRules(&battlepb.CustomDuelRules{RoundLimitOverride: bad}),
 			"round limit %d must be rejected", bad)
 	}
+	require.True(t, validateCustomDuelRules(&battlepb.CustomDuelRules{SkillBanSlotsPerTeam: 0}))
+	require.True(t, validateCustomDuelRules(&battlepb.CustomDuelRules{SkillBanSlotsPerTeam: 3}))
+	require.False(t, validateCustomDuelRules(&battlepb.CustomDuelRules{SkillBanSlotsPerTeam: 1}))
+	require.False(t, validateCustomDuelRules(&battlepb.CustomDuelRules{SkillBanSlotsPerTeam: 4}))
+	require.False(t, validateCustomDuelRules(&battlepb.CustomDuelRules{UseFreePreset: true, SkillBanSlotsPerTeam: 3}),
+		"free preset 4-skill template must reject 3-ban")
 }
 
 func TestSpectateVisibilityForBattleCustomDuelOptIn(t *testing.T) {

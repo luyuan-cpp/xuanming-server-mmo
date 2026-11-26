@@ -45,7 +45,7 @@ public final class SpiritShopGoodsTableOuterClass extends com.google.protobuf.Ge
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\033spiritshopgoods_table.proto\"\304\003\n\024Spirit" +
+      "\n\033spiritshopgoods_table.proto\"\300\005\n\024Spirit" +
       "ShopGoodsTable\022\n\n\002id\030\001 \001(\r\022\016\n\006tab_id\030\002 \001" +
       "(\r\022\022\n\nsort_order\030\003 \001(\r\022\017\n\007enabled\030\004 \001(\r\022" +
       "\014\n\004name\030\005 \001(\t\022\023\n\013description\030\006 \001(\t\022\020\n\010ic" +
@@ -57,10 +57,17 @@ public final class SpiritShopGoodsTableOuterClass extends com.google.protobuf.Ge
       "\020 \001(\r\022\030\n\020limit_reset_kind\030\021 \001(\r\022\023\n\013limit" +
       "_count\030\022 \001(\r\022\026\n\016limit_group_id\030\023 \001(\r\022\032\n\022" +
       "limit_group_weight\030\024 \001(\r\022\022\n\nbadge_text\030\025" +
-      " \001(\t\"?\n\030SpiritShopGoodsTableData\022#\n\004data" +
-      "\030\001 \003(\0132\025.SpiritShopGoodsTableBF\n\016com.gam" +
-      "e.tableB\036SpiritShopGoodsTableOuterClassP" +
-      "\001Z\022generated/pb/tableb\006proto3"
+      " \001(\t\022\025\n\rstart_time_ms\030\026 \001(\004\022\023\n\013end_time_" +
+      "ms\030\027 \001(\004\022\022\n\ngrant_mode\030\030 \001(\r\022\021\n\titem_id_" +
+      "3\030\031 \001(\r\022\024\n\014item_count_3\030\032 \001(\r\022\024\n\014item_bo" +
+      "und_3\030\033 \001(\r\022\021\n\titem_id_4\030\034 \001(\r\022\024\n\014item_c" +
+      "ount_4\030\035 \001(\r\022\024\n\014item_bound_4\030\036 \001(\r\022\026\n\016or" +
+      "iginal_price\030\037 \001(\004\022\021\n\tmin_level\030  \001(\r\022\021\n" +
+      "\tmax_level\030! \001(\r\"?\n\030SpiritShopGoodsTable" +
+      "Data\022#\n\004data\030\001 \003(\0132\025.SpiritShopGoodsTabl" +
+      "eBF\n\016com.game.tableB\036SpiritShopGoodsTabl" +
+      "eOuterClassP\001Z\022generated/pb/tableb\006proto" +
+      "3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -71,7 +78,7 @@ public final class SpiritShopGoodsTableOuterClass extends com.google.protobuf.Ge
     internal_static_SpiritShopGoodsTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_SpiritShopGoodsTable_descriptor,
-        new java.lang.String[] { "Id", "TabId", "SortOrder", "Enabled", "Name", "Description", "IconKey", "CurrencyType", "Price", "MaxBuyPerRequest", "ItemId1", "ItemCount1", "ItemBound1", "ItemId2", "ItemCount2", "ItemBound2", "LimitResetKind", "LimitCount", "LimitGroupId", "LimitGroupWeight", "BadgeText", });
+        new java.lang.String[] { "Id", "TabId", "SortOrder", "Enabled", "Name", "Description", "IconKey", "CurrencyType", "Price", "MaxBuyPerRequest", "ItemId1", "ItemCount1", "ItemBound1", "ItemId2", "ItemCount2", "ItemBound2", "LimitResetKind", "LimitCount", "LimitGroupId", "LimitGroupWeight", "BadgeText", "StartTimeMs", "EndTimeMs", "GrantMode", "ItemId3", "ItemCount3", "ItemBound3", "ItemId4", "ItemCount4", "ItemBound4", "OriginalPrice", "MinLevel", "MaxLevel", });
     internal_static_SpiritShopGoodsTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_SpiritShopGoodsTableData_fieldAccessorTable = new

@@ -338,8 +338,9 @@ func launchTournamentSpec(ctx context.Context, svcCtx *svc.ServiceContext, launc
 		SquadBName:     launch.SquadBName,
 		SquadAEmblemId: launch.SquadAEmblemID,
 		SquadBEmblemId: launch.SquadBEmblemID,
-		IsWarmup:       launch.IsWarmup,
-		IsThirdPlace:   launch.IsThirdPlace,
+		IsWarmup:             launch.IsWarmup,
+		IsThirdPlace:         launch.IsThirdPlace,
+		SkillBanSlotsPerTeam: svcCtx.Authority.TournamentCatalog().Rule().GetSkillBanSlotsPerTeam(),
 	}
 	formation, err := reserveGlobalDirect(ctx, svcCtx, key, payload, matchpb.MatchMode_MATCH_MODE_SEASON_TOURNAMENT, launch.BattleConfigID, members, directOptions{tournamentContext: tCtx})
 	if err != nil {

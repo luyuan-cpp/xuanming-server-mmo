@@ -29,6 +29,10 @@
 - 临时产物、验证包、构建日志放在所属仓库已忽略的目录或系统 `%TEMP%`；Git worktree 使用托管目录或工作区根目录之外的位置，不在工作区根目录新建 `*-wt-*`、`builds`、`tmp`、`.codex-artifacts` 等杂项目录。
 
 ### 硬禁令
+- ❌ **严禁引入可能导致游戏不过审、被迫下架或广告/支付封号的任何设计、配置与文案（一票否决，负责人 2026-11-26 强制）**：
+  - 严禁游戏内出现个人收款码、捐赠按钮、爱发电/Patreon 等外链、切支付引导，以及国内未取得版号前开启小游戏内购充值；
+  - 激励视频广告位配表 `RewardedAdSlot` 首审默认必须 `enabled = 0`，服务端启动/热更强校验仅允许发放物理不可交易的 `CURRENCY_TYPE_BIND_GOLD (3)`，严禁配置流通银两/灵石，严禁任何「支持作者/捐赠/点广告/帮忙点」诱导文案，严禁漏校完整观看时长/日限/冷却/幂等；
+  - 严禁以任何形式削弱或绕过实名认证防沉迷、7 天冷静期真注销（含 Apple 令牌撤销）、UGC 内容安全审核与渠道支付隔离（完整技术红线见 [rewarded-ad-system.md](../design/rewarded-ad-system.md)）。
 - ❌ 不要手改生成产物（见 [proto-and-tables.md](proto-and-tables.md)）。
 - ❌ 不要在 `docs/design/` 与 `docs/planning/` 之外随便建 README，不要为记录改动新建 markdown（除非用户要求）。
 - ❌ 不要把 `player_id` 当 Prometheus label（高基数会爆）。

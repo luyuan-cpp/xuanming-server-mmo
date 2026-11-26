@@ -3974,3 +3974,23 @@ func (s *Store) LoadTournamentHighlights(ctx context.Context, seasonID uint32) (
 	}
 	return resp, nil
 }
+
+// LoadTournamentSquadCaptains 只读查询两支锦标赛战队的队长玩家 ID（用于战前 3 Ban 同票队长决胜；缺失或非 DB 单测安全返回空集）。
+func (s *Store) LoadTournamentSquadCaptains(ctx context.Context, squadAID, squadBID uint64) map[uint64]bool {
+	captains := make(map[uint64]bool, 2)
+	if s == nil || s.DB == nil || (squadAID == 0 && squadBID == 0) {
+		return captains
+	}
+	rows, err := s.DB.QueryContext(ctx, "SELECT captain_player_id FROM match_tournament_squad WHERE squad_id IN (?,?)", squadAID, squadBID)
+	if err != nil {
+		return captains
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid uint64
+		if scanErr := rows.Scan(&cid); scanErr == nil && cid != 0 {
+			captains[cid] = true
+		}
+	}
+	return captains
+}

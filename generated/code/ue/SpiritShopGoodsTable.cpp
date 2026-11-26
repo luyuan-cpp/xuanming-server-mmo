@@ -124,6 +124,18 @@ static void SpiritShopGoodsTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& 
 	SpiritShopGoodsTableCheckNarrowedField(RowObject, TEXT("limit_count"), TEXT("limit_count"), RowIndex, 2147483647.0, TEXT("uint32"));
 	SpiritShopGoodsTableCheckNarrowedField(RowObject, TEXT("limit_group_id"), TEXT("limit_group_id"), RowIndex, 2147483647.0, TEXT("uint32"));
 	SpiritShopGoodsTableCheckNarrowedField(RowObject, TEXT("limit_group_weight"), TEXT("limit_group_weight"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SpiritShopGoodsTableCheckNarrowedField(RowObject, TEXT("start_time_ms"), TEXT("start_time_ms"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
+	SpiritShopGoodsTableCheckNarrowedField(RowObject, TEXT("end_time_ms"), TEXT("end_time_ms"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
+	SpiritShopGoodsTableCheckNarrowedField(RowObject, TEXT("grant_mode"), TEXT("grant_mode"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SpiritShopGoodsTableCheckNarrowedField(RowObject, TEXT("item_id_3"), TEXT("item_id_3"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SpiritShopGoodsTableCheckNarrowedField(RowObject, TEXT("item_count_3"), TEXT("item_count_3"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SpiritShopGoodsTableCheckNarrowedField(RowObject, TEXT("item_bound_3"), TEXT("item_bound_3"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SpiritShopGoodsTableCheckNarrowedField(RowObject, TEXT("item_id_4"), TEXT("item_id_4"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SpiritShopGoodsTableCheckNarrowedField(RowObject, TEXT("item_count_4"), TEXT("item_count_4"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SpiritShopGoodsTableCheckNarrowedField(RowObject, TEXT("item_bound_4"), TEXT("item_bound_4"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SpiritShopGoodsTableCheckNarrowedField(RowObject, TEXT("original_price"), TEXT("original_price"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
+	SpiritShopGoodsTableCheckNarrowedField(RowObject, TEXT("min_level"), TEXT("min_level"), RowIndex, 2147483647.0, TEXT("uint32"));
+	SpiritShopGoodsTableCheckNarrowedField(RowObject, TEXT("max_level"), TEXT("max_level"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 
 bool USpiritShopGoodsTable::LoadFromJson(const FString& JsonText, FString& OutError)

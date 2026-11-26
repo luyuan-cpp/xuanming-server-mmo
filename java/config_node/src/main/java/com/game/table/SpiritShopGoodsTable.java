@@ -395,6 +395,138 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int START_TIME_MS_FIELD_NUMBER = 22;
+  private long startTimeMs_ = 0L;
+  /**
+   * <code>uint64 start_time_ms = 22;</code>
+   * @return The startTimeMs.
+   */
+  @java.lang.Override
+  public long getStartTimeMs() {
+    return startTimeMs_;
+  }
+
+  public static final int END_TIME_MS_FIELD_NUMBER = 23;
+  private long endTimeMs_ = 0L;
+  /**
+   * <code>uint64 end_time_ms = 23;</code>
+   * @return The endTimeMs.
+   */
+  @java.lang.Override
+  public long getEndTimeMs() {
+    return endTimeMs_;
+  }
+
+  public static final int GRANT_MODE_FIELD_NUMBER = 24;
+  private int grantMode_ = 0;
+  /**
+   * <code>uint32 grant_mode = 24;</code>
+   * @return The grantMode.
+   */
+  @java.lang.Override
+  public int getGrantMode() {
+    return grantMode_;
+  }
+
+  public static final int ITEM_ID_3_FIELD_NUMBER = 25;
+  private int itemId3_ = 0;
+  /**
+   * <code>uint32 item_id_3 = 25;</code>
+   * @return The itemId3.
+   */
+  @java.lang.Override
+  public int getItemId3() {
+    return itemId3_;
+  }
+
+  public static final int ITEM_COUNT_3_FIELD_NUMBER = 26;
+  private int itemCount3_ = 0;
+  /**
+   * <code>uint32 item_count_3 = 26;</code>
+   * @return The itemCount3.
+   */
+  @java.lang.Override
+  public int getItemCount3() {
+    return itemCount3_;
+  }
+
+  public static final int ITEM_BOUND_3_FIELD_NUMBER = 27;
+  private int itemBound3_ = 0;
+  /**
+   * <code>uint32 item_bound_3 = 27;</code>
+   * @return The itemBound3.
+   */
+  @java.lang.Override
+  public int getItemBound3() {
+    return itemBound3_;
+  }
+
+  public static final int ITEM_ID_4_FIELD_NUMBER = 28;
+  private int itemId4_ = 0;
+  /**
+   * <code>uint32 item_id_4 = 28;</code>
+   * @return The itemId4.
+   */
+  @java.lang.Override
+  public int getItemId4() {
+    return itemId4_;
+  }
+
+  public static final int ITEM_COUNT_4_FIELD_NUMBER = 29;
+  private int itemCount4_ = 0;
+  /**
+   * <code>uint32 item_count_4 = 29;</code>
+   * @return The itemCount4.
+   */
+  @java.lang.Override
+  public int getItemCount4() {
+    return itemCount4_;
+  }
+
+  public static final int ITEM_BOUND_4_FIELD_NUMBER = 30;
+  private int itemBound4_ = 0;
+  /**
+   * <code>uint32 item_bound_4 = 30;</code>
+   * @return The itemBound4.
+   */
+  @java.lang.Override
+  public int getItemBound4() {
+    return itemBound4_;
+  }
+
+  public static final int ORIGINAL_PRICE_FIELD_NUMBER = 31;
+  private long originalPrice_ = 0L;
+  /**
+   * <code>uint64 original_price = 31;</code>
+   * @return The originalPrice.
+   */
+  @java.lang.Override
+  public long getOriginalPrice() {
+    return originalPrice_;
+  }
+
+  public static final int MIN_LEVEL_FIELD_NUMBER = 32;
+  private int minLevel_ = 0;
+  /**
+   * <code>uint32 min_level = 32;</code>
+   * @return The minLevel.
+   */
+  @java.lang.Override
+  public int getMinLevel() {
+    return minLevel_;
+  }
+
+  public static final int MAX_LEVEL_FIELD_NUMBER = 33;
+  private int maxLevel_ = 0;
+  /**
+   * <code>uint32 max_level = 33;</code>
+   * @return The maxLevel.
+   */
+  @java.lang.Override
+  public int getMaxLevel() {
+    return maxLevel_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -471,6 +603,42 @@ private static final long serialVersionUID = 0L;
     }
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(badgeText_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 21, badgeText_);
+    }
+    if (startTimeMs_ != 0L) {
+      output.writeUInt64(22, startTimeMs_);
+    }
+    if (endTimeMs_ != 0L) {
+      output.writeUInt64(23, endTimeMs_);
+    }
+    if (grantMode_ != 0) {
+      output.writeUInt32(24, grantMode_);
+    }
+    if (itemId3_ != 0) {
+      output.writeUInt32(25, itemId3_);
+    }
+    if (itemCount3_ != 0) {
+      output.writeUInt32(26, itemCount3_);
+    }
+    if (itemBound3_ != 0) {
+      output.writeUInt32(27, itemBound3_);
+    }
+    if (itemId4_ != 0) {
+      output.writeUInt32(28, itemId4_);
+    }
+    if (itemCount4_ != 0) {
+      output.writeUInt32(29, itemCount4_);
+    }
+    if (itemBound4_ != 0) {
+      output.writeUInt32(30, itemBound4_);
+    }
+    if (originalPrice_ != 0L) {
+      output.writeUInt64(31, originalPrice_);
+    }
+    if (minLevel_ != 0) {
+      output.writeUInt32(32, minLevel_);
+    }
+    if (maxLevel_ != 0) {
+      output.writeUInt32(33, maxLevel_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -556,6 +724,58 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(badgeText_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(21, badgeText_);
     }
+    if (startTimeMs_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt64Size(22, startTimeMs_);
+    }
+    if (endTimeMs_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt64Size(23, endTimeMs_);
+    }
+    if (grantMode_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(24, grantMode_);
+    }
+    if (itemId3_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(25, itemId3_);
+    }
+    if (itemCount3_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(26, itemCount3_);
+    }
+    if (itemBound3_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(27, itemBound3_);
+    }
+    if (itemId4_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(28, itemId4_);
+    }
+    if (itemCount4_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(29, itemCount4_);
+    }
+    if (itemBound4_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(30, itemBound4_);
+    }
+    if (originalPrice_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt64Size(31, originalPrice_);
+    }
+    if (minLevel_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(32, minLevel_);
+    }
+    return size;
+  }
+  private int computeSerializedSize_1() {
+    int size = 0;
+    if (maxLevel_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(33, maxLevel_);
+    }
     return size;
   }
   @java.lang.Override
@@ -565,6 +785,7 @@ private static final long serialVersionUID = 0L;
 
     size = 0;
     size += computeSerializedSize_0();
+    size += computeSerializedSize_1();
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
     return size;
@@ -622,6 +843,30 @@ private static final long serialVersionUID = 0L;
         != other.getLimitGroupWeight()) return false;
     if (!getBadgeText()
         .equals(other.getBadgeText())) return false;
+    if (getStartTimeMs()
+        != other.getStartTimeMs()) return false;
+    if (getEndTimeMs()
+        != other.getEndTimeMs()) return false;
+    if (getGrantMode()
+        != other.getGrantMode()) return false;
+    if (getItemId3()
+        != other.getItemId3()) return false;
+    if (getItemCount3()
+        != other.getItemCount3()) return false;
+    if (getItemBound3()
+        != other.getItemBound3()) return false;
+    if (getItemId4()
+        != other.getItemId4()) return false;
+    if (getItemCount4()
+        != other.getItemCount4()) return false;
+    if (getItemBound4()
+        != other.getItemBound4()) return false;
+    if (getOriginalPrice()
+        != other.getOriginalPrice()) return false;
+    if (getMinLevel()
+        != other.getMinLevel()) return false;
+    if (getMaxLevel()
+        != other.getMaxLevel()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -676,6 +921,33 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getLimitGroupWeight();
     hash = (37 * hash) + BADGE_TEXT_FIELD_NUMBER;
     hash = (53 * hash) + getBadgeText().hashCode();
+    hash = (37 * hash) + START_TIME_MS_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getStartTimeMs());
+    hash = (37 * hash) + END_TIME_MS_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getEndTimeMs());
+    hash = (37 * hash) + GRANT_MODE_FIELD_NUMBER;
+    hash = (53 * hash) + getGrantMode();
+    hash = (37 * hash) + ITEM_ID_3_FIELD_NUMBER;
+    hash = (53 * hash) + getItemId3();
+    hash = (37 * hash) + ITEM_COUNT_3_FIELD_NUMBER;
+    hash = (53 * hash) + getItemCount3();
+    hash = (37 * hash) + ITEM_BOUND_3_FIELD_NUMBER;
+    hash = (53 * hash) + getItemBound3();
+    hash = (37 * hash) + ITEM_ID_4_FIELD_NUMBER;
+    hash = (53 * hash) + getItemId4();
+    hash = (37 * hash) + ITEM_COUNT_4_FIELD_NUMBER;
+    hash = (53 * hash) + getItemCount4();
+    hash = (37 * hash) + ITEM_BOUND_4_FIELD_NUMBER;
+    hash = (53 * hash) + getItemBound4();
+    hash = (37 * hash) + ORIGINAL_PRICE_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getOriginalPrice());
+    hash = (37 * hash) + MIN_LEVEL_FIELD_NUMBER;
+    hash = (53 * hash) + getMinLevel();
+    hash = (37 * hash) + MAX_LEVEL_FIELD_NUMBER;
+    hash = (53 * hash) + getMaxLevel();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -807,6 +1079,7 @@ private static final long serialVersionUID = 0L;
     public Builder clear() {
       super.clear();
       bitField0_ = 0;
+      bitField1_ = 0;
       id_ = 0;
       tabId_ = 0;
       sortOrder_ = 0;
@@ -828,6 +1101,18 @@ private static final long serialVersionUID = 0L;
       limitGroupId_ = 0;
       limitGroupWeight_ = 0;
       badgeText_ = "";
+      startTimeMs_ = 0L;
+      endTimeMs_ = 0L;
+      grantMode_ = 0;
+      itemId3_ = 0;
+      itemCount3_ = 0;
+      itemBound3_ = 0;
+      itemId4_ = 0;
+      itemCount4_ = 0;
+      itemBound4_ = 0;
+      originalPrice_ = 0L;
+      minLevel_ = 0;
+      maxLevel_ = 0;
       return this;
     }
 
@@ -855,6 +1140,7 @@ private static final long serialVersionUID = 0L;
     public com.game.table.SpiritShopGoodsTable buildPartial() {
       com.game.table.SpiritShopGoodsTable result = new com.game.table.SpiritShopGoodsTable(this);
       if (bitField0_ != 0) { buildPartial0(result); }
+      if (bitField1_ != 0) { buildPartial1(result); }
       onBuilt();
       return result;
     }
@@ -923,6 +1209,46 @@ private static final long serialVersionUID = 0L;
       }
       if (((from_bitField0_ & 0x00100000) != 0)) {
         result.badgeText_ = badgeText_;
+      }
+      if (((from_bitField0_ & 0x00200000) != 0)) {
+        result.startTimeMs_ = startTimeMs_;
+      }
+      if (((from_bitField0_ & 0x00400000) != 0)) {
+        result.endTimeMs_ = endTimeMs_;
+      }
+      if (((from_bitField0_ & 0x00800000) != 0)) {
+        result.grantMode_ = grantMode_;
+      }
+      if (((from_bitField0_ & 0x01000000) != 0)) {
+        result.itemId3_ = itemId3_;
+      }
+      if (((from_bitField0_ & 0x02000000) != 0)) {
+        result.itemCount3_ = itemCount3_;
+      }
+      if (((from_bitField0_ & 0x04000000) != 0)) {
+        result.itemBound3_ = itemBound3_;
+      }
+      if (((from_bitField0_ & 0x08000000) != 0)) {
+        result.itemId4_ = itemId4_;
+      }
+      if (((from_bitField0_ & 0x10000000) != 0)) {
+        result.itemCount4_ = itemCount4_;
+      }
+      if (((from_bitField0_ & 0x20000000) != 0)) {
+        result.itemBound4_ = itemBound4_;
+      }
+      if (((from_bitField0_ & 0x40000000) != 0)) {
+        result.originalPrice_ = originalPrice_;
+      }
+      if (((from_bitField0_ & 0x80000000) != 0)) {
+        result.minLevel_ = minLevel_;
+      }
+    }
+
+    private void buildPartial1(com.game.table.SpiritShopGoodsTable result) {
+      int from_bitField1_ = bitField1_;
+      if (((from_bitField1_ & 0x00000001) != 0)) {
+        result.maxLevel_ = maxLevel_;
       }
     }
 
@@ -1008,6 +1334,42 @@ private static final long serialVersionUID = 0L;
         badgeText_ = other.badgeText_;
         bitField0_ |= 0x00100000;
         onChanged();
+      }
+      if (other.getStartTimeMs() != 0L) {
+        setStartTimeMs(other.getStartTimeMs());
+      }
+      if (other.getEndTimeMs() != 0L) {
+        setEndTimeMs(other.getEndTimeMs());
+      }
+      if (other.getGrantMode() != 0) {
+        setGrantMode(other.getGrantMode());
+      }
+      if (other.getItemId3() != 0) {
+        setItemId3(other.getItemId3());
+      }
+      if (other.getItemCount3() != 0) {
+        setItemCount3(other.getItemCount3());
+      }
+      if (other.getItemBound3() != 0) {
+        setItemBound3(other.getItemBound3());
+      }
+      if (other.getItemId4() != 0) {
+        setItemId4(other.getItemId4());
+      }
+      if (other.getItemCount4() != 0) {
+        setItemCount4(other.getItemCount4());
+      }
+      if (other.getItemBound4() != 0) {
+        setItemBound4(other.getItemBound4());
+      }
+      if (other.getOriginalPrice() != 0L) {
+        setOriginalPrice(other.getOriginalPrice());
+      }
+      if (other.getMinLevel() != 0) {
+        setMinLevel(other.getMinLevel());
+      }
+      if (other.getMaxLevel() != 0) {
+        setMaxLevel(other.getMaxLevel());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -1140,6 +1502,66 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00100000;
               break;
             } // case 170
+            case 176: {
+              startTimeMs_ = input.readUInt64();
+              bitField0_ |= 0x00200000;
+              break;
+            } // case 176
+            case 184: {
+              endTimeMs_ = input.readUInt64();
+              bitField0_ |= 0x00400000;
+              break;
+            } // case 184
+            case 192: {
+              grantMode_ = input.readUInt32();
+              bitField0_ |= 0x00800000;
+              break;
+            } // case 192
+            case 200: {
+              itemId3_ = input.readUInt32();
+              bitField0_ |= 0x01000000;
+              break;
+            } // case 200
+            case 208: {
+              itemCount3_ = input.readUInt32();
+              bitField0_ |= 0x02000000;
+              break;
+            } // case 208
+            case 216: {
+              itemBound3_ = input.readUInt32();
+              bitField0_ |= 0x04000000;
+              break;
+            } // case 216
+            case 224: {
+              itemId4_ = input.readUInt32();
+              bitField0_ |= 0x08000000;
+              break;
+            } // case 224
+            case 232: {
+              itemCount4_ = input.readUInt32();
+              bitField0_ |= 0x10000000;
+              break;
+            } // case 232
+            case 240: {
+              itemBound4_ = input.readUInt32();
+              bitField0_ |= 0x20000000;
+              break;
+            } // case 240
+            case 248: {
+              originalPrice_ = input.readUInt64();
+              bitField0_ |= 0x40000000;
+              break;
+            } // case 248
+            case 256: {
+              minLevel_ = input.readUInt32();
+              bitField0_ |= 0x80000000;
+              break;
+            } // case 256
+            case 264: {
+              maxLevel_ = input.readUInt32();
+              bitField1_ |= 0x00000001;
+              break;
+            } // case 264
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1156,6 +1578,7 @@ private static final long serialVersionUID = 0L;
       return this;
     }
     private int bitField0_;
+    private int bitField1_;
 
     private int id_ ;
     /**
@@ -1985,6 +2408,390 @@ private static final long serialVersionUID = 0L;
       checkByteStringIsUtf8(value);
       badgeText_ = value;
       bitField0_ |= 0x00100000;
+      onChanged();
+      return this;
+    }
+
+    private long startTimeMs_ ;
+    /**
+     * <code>uint64 start_time_ms = 22;</code>
+     * @return The startTimeMs.
+     */
+    @java.lang.Override
+    public long getStartTimeMs() {
+      return startTimeMs_;
+    }
+    /**
+     * <code>uint64 start_time_ms = 22;</code>
+     * @param value The startTimeMs to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStartTimeMs(long value) {
+
+      startTimeMs_ = value;
+      bitField0_ |= 0x00200000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint64 start_time_ms = 22;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearStartTimeMs() {
+      bitField0_ = (bitField0_ & ~0x00200000);
+      startTimeMs_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private long endTimeMs_ ;
+    /**
+     * <code>uint64 end_time_ms = 23;</code>
+     * @return The endTimeMs.
+     */
+    @java.lang.Override
+    public long getEndTimeMs() {
+      return endTimeMs_;
+    }
+    /**
+     * <code>uint64 end_time_ms = 23;</code>
+     * @param value The endTimeMs to set.
+     * @return This builder for chaining.
+     */
+    public Builder setEndTimeMs(long value) {
+
+      endTimeMs_ = value;
+      bitField0_ |= 0x00400000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint64 end_time_ms = 23;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearEndTimeMs() {
+      bitField0_ = (bitField0_ & ~0x00400000);
+      endTimeMs_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private int grantMode_ ;
+    /**
+     * <code>uint32 grant_mode = 24;</code>
+     * @return The grantMode.
+     */
+    @java.lang.Override
+    public int getGrantMode() {
+      return grantMode_;
+    }
+    /**
+     * <code>uint32 grant_mode = 24;</code>
+     * @param value The grantMode to set.
+     * @return This builder for chaining.
+     */
+    public Builder setGrantMode(int value) {
+
+      grantMode_ = value;
+      bitField0_ |= 0x00800000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 grant_mode = 24;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearGrantMode() {
+      bitField0_ = (bitField0_ & ~0x00800000);
+      grantMode_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int itemId3_ ;
+    /**
+     * <code>uint32 item_id_3 = 25;</code>
+     * @return The itemId3.
+     */
+    @java.lang.Override
+    public int getItemId3() {
+      return itemId3_;
+    }
+    /**
+     * <code>uint32 item_id_3 = 25;</code>
+     * @param value The itemId3 to set.
+     * @return This builder for chaining.
+     */
+    public Builder setItemId3(int value) {
+
+      itemId3_ = value;
+      bitField0_ |= 0x01000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 item_id_3 = 25;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearItemId3() {
+      bitField0_ = (bitField0_ & ~0x01000000);
+      itemId3_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int itemCount3_ ;
+    /**
+     * <code>uint32 item_count_3 = 26;</code>
+     * @return The itemCount3.
+     */
+    @java.lang.Override
+    public int getItemCount3() {
+      return itemCount3_;
+    }
+    /**
+     * <code>uint32 item_count_3 = 26;</code>
+     * @param value The itemCount3 to set.
+     * @return This builder for chaining.
+     */
+    public Builder setItemCount3(int value) {
+
+      itemCount3_ = value;
+      bitField0_ |= 0x02000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 item_count_3 = 26;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearItemCount3() {
+      bitField0_ = (bitField0_ & ~0x02000000);
+      itemCount3_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int itemBound3_ ;
+    /**
+     * <code>uint32 item_bound_3 = 27;</code>
+     * @return The itemBound3.
+     */
+    @java.lang.Override
+    public int getItemBound3() {
+      return itemBound3_;
+    }
+    /**
+     * <code>uint32 item_bound_3 = 27;</code>
+     * @param value The itemBound3 to set.
+     * @return This builder for chaining.
+     */
+    public Builder setItemBound3(int value) {
+
+      itemBound3_ = value;
+      bitField0_ |= 0x04000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 item_bound_3 = 27;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearItemBound3() {
+      bitField0_ = (bitField0_ & ~0x04000000);
+      itemBound3_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int itemId4_ ;
+    /**
+     * <code>uint32 item_id_4 = 28;</code>
+     * @return The itemId4.
+     */
+    @java.lang.Override
+    public int getItemId4() {
+      return itemId4_;
+    }
+    /**
+     * <code>uint32 item_id_4 = 28;</code>
+     * @param value The itemId4 to set.
+     * @return This builder for chaining.
+     */
+    public Builder setItemId4(int value) {
+
+      itemId4_ = value;
+      bitField0_ |= 0x08000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 item_id_4 = 28;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearItemId4() {
+      bitField0_ = (bitField0_ & ~0x08000000);
+      itemId4_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int itemCount4_ ;
+    /**
+     * <code>uint32 item_count_4 = 29;</code>
+     * @return The itemCount4.
+     */
+    @java.lang.Override
+    public int getItemCount4() {
+      return itemCount4_;
+    }
+    /**
+     * <code>uint32 item_count_4 = 29;</code>
+     * @param value The itemCount4 to set.
+     * @return This builder for chaining.
+     */
+    public Builder setItemCount4(int value) {
+
+      itemCount4_ = value;
+      bitField0_ |= 0x10000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 item_count_4 = 29;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearItemCount4() {
+      bitField0_ = (bitField0_ & ~0x10000000);
+      itemCount4_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int itemBound4_ ;
+    /**
+     * <code>uint32 item_bound_4 = 30;</code>
+     * @return The itemBound4.
+     */
+    @java.lang.Override
+    public int getItemBound4() {
+      return itemBound4_;
+    }
+    /**
+     * <code>uint32 item_bound_4 = 30;</code>
+     * @param value The itemBound4 to set.
+     * @return This builder for chaining.
+     */
+    public Builder setItemBound4(int value) {
+
+      itemBound4_ = value;
+      bitField0_ |= 0x20000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 item_bound_4 = 30;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearItemBound4() {
+      bitField0_ = (bitField0_ & ~0x20000000);
+      itemBound4_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private long originalPrice_ ;
+    /**
+     * <code>uint64 original_price = 31;</code>
+     * @return The originalPrice.
+     */
+    @java.lang.Override
+    public long getOriginalPrice() {
+      return originalPrice_;
+    }
+    /**
+     * <code>uint64 original_price = 31;</code>
+     * @param value The originalPrice to set.
+     * @return This builder for chaining.
+     */
+    public Builder setOriginalPrice(long value) {
+
+      originalPrice_ = value;
+      bitField0_ |= 0x40000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint64 original_price = 31;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearOriginalPrice() {
+      bitField0_ = (bitField0_ & ~0x40000000);
+      originalPrice_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private int minLevel_ ;
+    /**
+     * <code>uint32 min_level = 32;</code>
+     * @return The minLevel.
+     */
+    @java.lang.Override
+    public int getMinLevel() {
+      return minLevel_;
+    }
+    /**
+     * <code>uint32 min_level = 32;</code>
+     * @param value The minLevel to set.
+     * @return This builder for chaining.
+     */
+    public Builder setMinLevel(int value) {
+
+      minLevel_ = value;
+      bitField0_ |= 0x80000000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 min_level = 32;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearMinLevel() {
+      bitField0_ = (bitField0_ & ~0x80000000);
+      minLevel_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int maxLevel_ ;
+    /**
+     * <code>uint32 max_level = 33;</code>
+     * @return The maxLevel.
+     */
+    @java.lang.Override
+    public int getMaxLevel() {
+      return maxLevel_;
+    }
+    /**
+     * <code>uint32 max_level = 33;</code>
+     * @param value The maxLevel to set.
+     * @return This builder for chaining.
+     */
+    public Builder setMaxLevel(int value) {
+
+      maxLevel_ = value;
+      bitField1_ |= 0x00000001;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 max_level = 33;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearMaxLevel() {
+      bitField1_ = (bitField1_ & ~0x00000001);
+      maxLevel_ = 0;
       onChanged();
       return this;
     }

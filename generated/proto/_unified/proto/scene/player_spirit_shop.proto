@@ -46,6 +46,12 @@ message SpiritShopGoodsView {
   uint32 limit_group_id = 15;        // 0 = 无共享组
   uint32 limit_group_weight = 16;    // 每份消耗共享组权重
   uint64 next_reset_ms = 17;         // limit_count > 0 且 limit_reset_kind == 1 时有效
+  uint64 start_time_ms = 18;         // 定时开售 UTC 毫秒(0 = 立即开售)
+  uint64 end_time_ms = 19;           // 定时下架 UTC 毫秒(0 = 永不下架)
+  uint32 grant_mode = 20;            // 0 = 全部发放(1..4项), 1 = 多选一自选(2..4项任选1项)
+  uint64 original_price = 21;        // 原价划线展示(0 = 无划线; > unit_price 时客户端显示原价划线与折数)
+  uint32 min_level = 22;             // 最低可见/可购有效等级(0 = 不限)
+  uint32 max_level = 23;             // 最高可见/可购有效等级(0 = 不限)
 }
 
 message SpiritShopInfo {
@@ -69,9 +75,12 @@ message BuySpiritShopGoodsRequest {
   uint32 goods_id = 2;
   uint32 count = 3;                     // 1..max_buy_per_request
   // 报价防呆:任意一项与服务端当前配表不一致(热更改价/改内容/改绑定态)均拒绝并回 kSpiritShopPriceChanged。
+  // grant_mode == 0(全部发放)时 expected_items 为全部 1..4 项且 chosen_item_index 须为 0;
+  // grant_mode == 1(多选一)时 chosen_item_index 为所选候选项下标(0..items.size()-1), expected_items 仅含所选那 1 项。
   uint32 expected_currency_type = 4;
   uint64 expected_unit_price = 5;
   repeated SpiritShopItemEntry expected_items = 6;
+  uint32 chosen_item_index = 7;
 }
 
 message BuySpiritShopGoodsResponse {

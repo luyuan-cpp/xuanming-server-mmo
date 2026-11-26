@@ -159,4 +159,76 @@ public interface SpiritShopGoodsTableOrBuilder extends
    */
   com.google.protobuf.ByteString
       getBadgeTextBytes();
+
+  /**
+   * <code>uint64 start_time_ms = 22;</code>
+   * @return The startTimeMs.
+   */
+  long getStartTimeMs();
+
+  /**
+   * <code>uint64 end_time_ms = 23;</code>
+   * @return The endTimeMs.
+   */
+  long getEndTimeMs();
+
+  /**
+   * <code>uint32 grant_mode = 24;</code>
+   * @return The grantMode.
+   */
+  int getGrantMode();
+
+  /**
+   * <code>uint32 item_id_3 = 25;</code>
+   * @return The itemId3.
+   */
+  int getItemId3();
+
+  /**
+   * <code>uint32 item_count_3 = 26;</code>
+   * @return The itemCount3.
+   */
+  int getItemCount3();
+
+  /**
+   * <code>uint32 item_bound_3 = 27;</code>
+   * @return The itemBound3.
+   */
+  int getItemBound3();
+
+  /**
+   * <code>uint32 item_id_4 = 28;</code>
+   * @return The itemId4.
+   */
+  int getItemId4();
+
+  /**
+   * <code>uint32 item_count_4 = 29;</code>
+   * @return The itemCount4.
+   */
+  int getItemCount4();
+
+  /**
+   * <code>uint32 item_bound_4 = 30;</code>
+   * @return The itemBound4.
+   */
+  int getItemBound4();
+
+  /**
+   * <code>uint64 original_price = 31;</code>
+   * @return The originalPrice.
+   */
+  long getOriginalPrice();
+
+  /**
+   * <code>uint32 min_level = 32;</code>
+   * @return The minLevel.
+   */
+  int getMinLevel();
+
+  /**
+   * <code>uint32 max_level = 33;</code>
+   * @return The maxLevel.
+   */
+  int getMaxLevel();
 }

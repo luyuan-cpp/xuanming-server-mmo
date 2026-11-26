@@ -39,6 +39,7 @@ public:
     const MonsterTable* FindMonster(uint32_t monsterTableId) const override;
     const ItemTable* FindItem(uint32_t itemTableId) const override;
     const PetTable* FindPet(uint32_t petTableId) const override;
+    std::vector<uint32_t> GetBanEligibleSkillIds(uint32_t activeSeasonId) const override;
 
     uint64_t GetCooldownDurationMs(uint32_t cooldownTableId) const override;
     std::vector<uint32_t> GetDungeonMonsterIds(uint32_t dungeonTableId) const override;

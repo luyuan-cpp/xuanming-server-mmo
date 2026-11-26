@@ -590,6 +590,40 @@ message RankedBattleSettlementView {
   uint32 pet_preset_id = 20;
   uint32 win_streak_after = 21;      // 本局结算后的当前连胜数
   uint32 ended_opponent_streak = 22; // 若本方获胜并终结了 >=3 连胜对手，记录被终结的最高连胜数（否则 0）
+  bool revenged_rival = 23;          // 论剑 V6：本局是否触发「雪耻复仇」荣誉印章
+  string revenged_opponent_name = 24;// 论剑 V6：雪耻复仇对手名
+  uint32 revenged_wins_after = 25;   // 论剑 V6：含本局后的对阵胜场
+  uint32 revenged_losses_after = 26; // 论剑 V6：含本局后的对阵负场
+}
+
+// 论剑 V6 个人宿敌账本摘要（用于大厅/赛季记录展示常遇宿敌战绩）。
+message RankedRivalrySummary {
+  uint64 opponent_id = 1;
+  string opponent_name = 2;
+  uint32 wins = 3;
+  uint32 losses = 4;
+  uint32 draws = 5;
+  uint32 last_outcome = 6; // 1 胜 / 2 负 / 3 平
+  uint64 last_battle_id = 7;
+  uint64 updated_ms = 8;
+}
+
+// 论剑 V6 大厅「问道名局」高段热门流派卡片（支持公开战报回放观摩 + 一键套用赛季印与首发宠）。
+message RankedFeaturedBuildView {
+  string build_key = 1;
+  uint32 season_seal_id = 2;
+  uint32 starter_pet_table_id = 3;
+  repeated uint32 core_skill_ids = 4; // 最多 4 招
+  uint32 appearances = 5;
+  uint32 wins = 6;
+  uint32 high_tier_wins = 7;          // 达到青锋及以上段位的胜场数
+  uint64 featured_battle_id = 8;      // 可直接调用 GetBattleReport 观摩的高段真实名局战报 ID
+  uint64 featured_player_id = 9;
+  string featured_player_name = 10;
+  int64 featured_rating_centi = 11;
+  uint32 featured_team_size = 12;
+  uint32 featured_total_rounds = 13;
+  uint64 updated_ms = 14;
 }
 
 message GetRankedProfileRequest {
@@ -606,6 +640,8 @@ message GetRankedProfileResponse {
   repeated RankedPlayerSeasonSummary history = 8;    // 往季记录(season_id 降序)
   repeated RankedSeasonInfo past_seasons = 9;        // 往季赛季摘要(含封榜/榜首题名)
   uint64 server_time_ms = 10;
+  repeated RankedFeaturedBuildView featured_builds = 11; // 论剑 V6：本季问道名局高段热门流派（Top 5）
+  repeated RankedRivalrySummary top_rivals = 12;         // 论剑 V6：本人本季宿敌恩怨账本（Top 8）
 }
 
 message SaveRankedPresetRequest {

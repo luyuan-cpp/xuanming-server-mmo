@@ -30,6 +30,18 @@ message SpiritShopGoodsTable {
 	uint32 limit_group_id = 19;
 	uint32 limit_group_weight = 20;
 	string badge_text = 21;
+	uint64 start_time_ms = 22;
+	uint64 end_time_ms = 23;
+	uint32 grant_mode = 24;
+	uint32 item_id_3 = 25;
+	uint32 item_count_3 = 26;
+	uint32 item_bound_3 = 27;
+	uint32 item_id_4 = 28;
+	uint32 item_count_4 = 29;
+	uint32 item_bound_4 = 30;
+	uint64 original_price = 31;
+	uint32 min_level = 32;
+	uint32 max_level = 33;
 }
 
 message SpiritShopGoodsTableData {

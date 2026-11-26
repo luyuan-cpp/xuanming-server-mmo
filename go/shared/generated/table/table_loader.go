@@ -9,7 +9,7 @@ import (
 )
 
 // SchemaDigest 是整批服务端配置表的数据布局摘要(16 位小写十六进制,docs/design/config-table-hot-reload.md §5.1)。
-const SchemaDigest = "b1e2ceaf0dcdc786"
+const SchemaDigest = "27e35dca107a0fae"
 
 var hotReloadableTables = map[string]bool{
 	"ActivitySchedule": true,

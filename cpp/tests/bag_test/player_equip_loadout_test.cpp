@@ -210,13 +210,14 @@ protected:
 
 	void CommitPersistedUnlockedCount(uint32_t unlockedCount)
 	{
-		PlayerAllData saved;
-		auto *db = saved.mutable_player_database_data();
+		auto saved = std::make_shared<PlayerAllData>();
+		saved->set_last_save_seq(1);
+		auto *db = saved->mutable_player_database_data();
 		db->set_player_id(kPlayerId);
 		db->mutable_equip_loadout_component()->set_unlocked_scheme_count(unlockedCount);
 		auto &persisted = tlsEcs.actorRegistry.get_or_emplace<PlayerLastPersistedSnapshotComp>(player_);
-		persisted.Replace(saved);
-		persisted.committed_owner_epoch = kOwnerEpoch;
+		persisted.RememberCommit(saved, kOwnerEpoch, 1);
+		persisted.Replace(*saved);
 	}
 
 	uint64_t CurrentVersion()

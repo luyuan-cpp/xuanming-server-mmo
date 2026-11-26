@@ -502,6 +502,11 @@ void PlayerCraftSystem::CraftSkillBook(entt::entity player, const CraftSkillBook
 
     const auto ledgerBefore = ledger.SerializeAsString();
     const uint64_t revBefore = craft.scroll_craft_revision();
+    // 常规卷宗可交易残页充足时优先纯耗可交易残页，避免巧匠/宗师返还的少量绑定残页误染毒后续可交易技能书。
+    const bool preferTradableOnly =
+        (mode != CraftSkillBookRequest::TARGETED_RARE) &&
+        BagService::RemovableTradableCount(player, inventory, scroll->fragment_item_id()) >=
+            consumed.at(scroll->fragment_item_id());
     CraftedSkillBookEntry newBook;
     bool consumedBound = false;
     std::vector<GuidVector> written;
@@ -577,7 +582,7 @@ void PlayerCraftSystem::CraftSkillBook(entt::entity player, const CraftSkillBook
             }
             ledger.Swap(&nextLedger);
             return kSuccess;
-        }, /*tradableOnly=*/false, &consumedBound);
+        }, preferTradableOnly, &consumedBound);
 
     if (exErr != kSuccess) {
         fail(exErr);

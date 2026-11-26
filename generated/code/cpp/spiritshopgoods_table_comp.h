@@ -98,6 +98,54 @@ struct SpiritShopGoodsBadge_textComp {
     std::string_view value;
 };
 
+struct SpiritShopGoodsStart_time_msComp {
+    uint64_t value;
+};
+
+struct SpiritShopGoodsEnd_time_msComp {
+    uint64_t value;
+};
+
+struct SpiritShopGoodsGrant_modeComp {
+    uint32_t value;
+};
+
+struct SpiritShopGoodsItem_id_3Comp {
+    uint32_t value;
+};
+
+struct SpiritShopGoodsItem_count_3Comp {
+    uint32_t value;
+};
+
+struct SpiritShopGoodsItem_bound_3Comp {
+    uint32_t value;
+};
+
+struct SpiritShopGoodsItem_id_4Comp {
+    uint32_t value;
+};
+
+struct SpiritShopGoodsItem_count_4Comp {
+    uint32_t value;
+};
+
+struct SpiritShopGoodsItem_bound_4Comp {
+    uint32_t value;
+};
+
+struct SpiritShopGoodsOriginal_priceComp {
+    uint64_t value;
+};
+
+struct SpiritShopGoodsMin_levelComp {
+    uint32_t value;
+};
+
+struct SpiritShopGoodsMax_levelComp {
+    uint32_t value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -165,4 +213,40 @@ inline SpiritShopGoodsLimit_group_weightComp MakeSpiritShopGoodsLimit_group_weig
 }
 inline SpiritShopGoodsBadge_textComp MakeSpiritShopGoodsBadge_textComp(const SpiritShopGoodsTable& row) {
     return { std::string_view(row.badge_text()) };
+}
+inline SpiritShopGoodsStart_time_msComp MakeSpiritShopGoodsStart_time_msComp(const SpiritShopGoodsTable& row) {
+    return { row.start_time_ms() };
+}
+inline SpiritShopGoodsEnd_time_msComp MakeSpiritShopGoodsEnd_time_msComp(const SpiritShopGoodsTable& row) {
+    return { row.end_time_ms() };
+}
+inline SpiritShopGoodsGrant_modeComp MakeSpiritShopGoodsGrant_modeComp(const SpiritShopGoodsTable& row) {
+    return { row.grant_mode() };
+}
+inline SpiritShopGoodsItem_id_3Comp MakeSpiritShopGoodsItem_id_3Comp(const SpiritShopGoodsTable& row) {
+    return { row.item_id_3() };
+}
+inline SpiritShopGoodsItem_count_3Comp MakeSpiritShopGoodsItem_count_3Comp(const SpiritShopGoodsTable& row) {
+    return { row.item_count_3() };
+}
+inline SpiritShopGoodsItem_bound_3Comp MakeSpiritShopGoodsItem_bound_3Comp(const SpiritShopGoodsTable& row) {
+    return { row.item_bound_3() };
+}
+inline SpiritShopGoodsItem_id_4Comp MakeSpiritShopGoodsItem_id_4Comp(const SpiritShopGoodsTable& row) {
+    return { row.item_id_4() };
+}
+inline SpiritShopGoodsItem_count_4Comp MakeSpiritShopGoodsItem_count_4Comp(const SpiritShopGoodsTable& row) {
+    return { row.item_count_4() };
+}
+inline SpiritShopGoodsItem_bound_4Comp MakeSpiritShopGoodsItem_bound_4Comp(const SpiritShopGoodsTable& row) {
+    return { row.item_bound_4() };
+}
+inline SpiritShopGoodsOriginal_priceComp MakeSpiritShopGoodsOriginal_priceComp(const SpiritShopGoodsTable& row) {
+    return { row.original_price() };
+}
+inline SpiritShopGoodsMin_levelComp MakeSpiritShopGoodsMin_levelComp(const SpiritShopGoodsTable& row) {
+    return { row.min_level() };
+}
+inline SpiritShopGoodsMax_levelComp MakeSpiritShopGoodsMax_levelComp(const SpiritShopGoodsTable& row) {
+    return { row.max_level() };
 }

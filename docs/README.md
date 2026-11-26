@@ -84,6 +84,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [player-leveling-and-battle-economy-v1.md](planning/player-leveling-and-battle-economy-v1.md) — 《五行奇谈》G1：角色平滑升级曲线与全玩法经验/银两产出闭环设计（V1）
 - [season-pvp-pve-economy-unified-v1.md](planning/season-pvp-pve-economy-unified-v1.md) — 《五行奇谈》赛季、PVP/PVE 衔接与强化材料经济统一落地设计（V1 合入 A）
 - [spirit-shop-and-starter-packs-v1.md](planning/spirit-shop-and-starter-packs-v1.md) — 《五行奇谈》P0 官方灵石百宝阁与绑定/终身限购首套提速包设计（V1）
+- [spirit-shop-v2-festival-and-bundles.md](planning/spirit-shop-v2-festival-and-bundles.md) — 官方灵石百宝阁 V2 策划与工程方案（定时自动上下架 + 3–4 物品大礼包/多选一自选包 + 原价划线折扣 + 角色阶段解锁）
 
 #### 战斗、首领与限时活动玩法
 

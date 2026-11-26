@@ -31,4 +31,10 @@ enum spirit_shop_error {
 
   kSpiritShopItemBlocked = 37010;
 
+  kSpiritShopNotInSaleWindow = 37011;
+
+  kSpiritShopLevelNotMet = 37012;
+
+  kSpiritShopInvalidChoice = 37013;
+
 };

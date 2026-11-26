@@ -5508,3 +5508,18 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
 - **界面精修（`mmorpg-client`）**：
   - [TravelPassWindow.cs](../../mmorpg-client/Assets/Scripts/UI/Ugui/TravelPass/TravelPassWindow.cs)：结合修订版 `title_plate.png` 卷云端头与底部垂穗，将 `_titleText` 收束于 `(76, 14, 368, 68)`（字号 32）；按修订预览 `main-layout-2560x1080.png` 调整横幅右侧主次按钮为「一键领取」（次按钮，`1188, 41, 240×66`）与「解锁典藏」（主按钮，`1444, 41, 276×66`）。
 - **验证**：`client_compile_check.ps1` exit 0、`run_activity_tests.ps1 -IncludePlayerFeaturesRegression` 61/61 PASS、`TravelPassClientTests` 5 项纯 C# 单测 PASS、12 项 `TravelPassV1` 资源与 `spriteBorder` 断言与磁盘 `.meta` 12/12 精确匹配；未执行 `git commit` / `git push`。
+
+
+## 2026-11-26 Antigravity：衣柜外观券图标、6 条专属技能特效帧条与百宝阁 14 张无字切图（Azure `258e817345ad`）全量导入与四仓收口
+
+- **美术核验与 Unity 导入（`mmorpg-client`，22/22 PNG-32 SHA-256 逐字节一致）**：
+  - 从 Azure `image/main` 提交 `258e817345ad3ca0b4aec734b5d9919760eff804` 核验并逐图目测全部 22 张透明 PNG-32（零内置文字、零裁剪、全 RGBA8）：
+    1. **外观券道具图标（2 张 `512×512`）**：替换 `Assets/Resources/UI/Ugui/WardrobeCosmetics/{item_pet_morph_charm,item_skill_vfx_scroll}.png`（由旧 128px 占位升为 512px 无损），保留既有 `.meta` GUID 并同步 `rect=512×512` 与 `textureCompression=0`。
+    2. **首批 3 套专属技能特效（6 张 `3072×384` 8 帧横条）**：新增 `Assets/Resources/Battle/Fx/vfx_{xuanfu_alt_impact,xuanfu_alt_projectile,zixiao_alt_strike,zixiao_alt_telegraph,hanxing_alt_impact,hanxing_alt_projectile}_strip.png` 与无冲突 `.meta`（`textureType=0`, `maxTextureSize=4096`, `enableMipMap=0`, `textureCompression=0`），并在 `Assets/Resources/Battle/ART_MANIFEST.json` 完成全部 6 条注册（`16 fps`、对应锚点与循环位）。
+    3. **灵石百宝阁专属切图（14 张）**：替换 `Assets/Resources/UI/Ugui/SpiritShopV1/{ui/*,pack_starter_{60,180,300}}.png`，保留全部既有 GUID 并按 `manifest.json` 精确写入 `spriteBorder`（左/下/右/上）与新 `rect` 尺寸；全仓 `.meta` 扫描 `12,452` GUID 零冲突；复核 `SpiritShopWindow.cs` 全部 14 项 `Image.Type.Sliced`、按钮与进度条文字对比度及边界留白一致。
+- **配表切换与四仓全绿验证（Gemini subagent 执行）**：
+  - 更新 `tools/scripts/wardrobe_cosmetics_xlsx_patch.py` 与 `data/SkillVfxCosmetic.xlsx`（3 行 `fx_id`/`projectile_fx_id`/`telegraph_fx_id` 切向 6 条专属帧条并清空旧变色占位 `tint_hex=""`），重新导表（82 表 / Deploy 14 OK, 0 failed），四仓 `skillvfxcosmetic.pb` SHA-256（`d01561ef7859...`）逐字节一致、`ContractSync --check` exit 0。
+  - C++：`bag_test.exe --gtest_filter="PlayerAppearance*:PlayerSpiritShop*:SpiritShop*"` **21/21 PASS**。
+  - Java：`game-proto`/`game-table` install exit 0，`game-scene` `AppearanceFeatureTest(6) + PlayerAppearanceTest(2) + PetServiceTest(51) + SpiritShopFeatureAndServiceTest(3)` **62/62 PASS**。
+  - Unity：`client_compile_check.ps1` **exit=0（800 文件 0 错误）**、`WardrobeCosmeticsTests + AppearanceClientTests` **17/17 PASS**（1 项 UnityEngine 跳过）、`SpiritShopClientTests` **5/5 PASS**。
+  - Python：`pytest`（衣柜/百宝阁/易容/表数据）**23/23 PASS**，JSON/PB 双格式读取 6 条新特效键一致；同步更新 `wardrobe-cosmetics-assets-handoff.md`、`PARITY.md` 与 `gen_docs_index.py --check` exit 0；本会话未执行 `git commit` / `git push`。

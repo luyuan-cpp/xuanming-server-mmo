@@ -195,26 +195,41 @@ func (s *Store) freezeRankedFormationContextTx(ctx context.Context, tx *sql.Tx, 
 		}
 	}
 	var memberStreaks map[uint64]uint32
+	minRatingCenti := int64(0)
+	hasMemberRating := false
 	for _, t := range current {
 		var streak uint32
-		if sErr := tx.QueryRowContext(ctx, "SELECT current_win_streak FROM match_ranked_player_season WHERE season_id=? AND player_id=?", cur.SeasonId, t.PlayerId).Scan(&streak); sErr == nil && streak >= 3 {
-			if memberStreaks == nil {
-				memberStreaks = make(map[uint64]uint32)
+		ratingCenti := int64(ratingrule.DefaultCenti)
+		sErr := tx.QueryRowContext(ctx, "SELECT current_win_streak,rating_centi FROM match_ranked_player_season WHERE season_id=? AND player_id=?", cur.SeasonId, t.PlayerId).Scan(&streak, &ratingCenti)
+		if sErr == nil {
+			if streak >= 3 {
+				if memberStreaks == nil {
+					memberStreaks = make(map[uint64]uint32)
+				}
+				memberStreaks[t.PlayerId] = streak
 			}
-			memberStreaks[t.PlayerId] = streak
-		} else if sErr != nil && !errors.Is(sErr, sql.ErrNoRows) {
+		} else if !errors.Is(sErr, sql.ErrNoRows) {
 			return sErr
 		}
+		if !hasMemberRating || ratingCenti < minRatingCenti {
+			minRatingCenti = ratingCenti
+			hasMemberRating = true
+		}
+	}
+	skillBanSlots := uint32(0)
+	if ruleBanSlots := cat.Rule().GetSkillBanSlotsPerTeam(); ruleBanSlots > 0 && hasMemberRating && minRatingCenti >= int64(cat.Rule().GetSkillBanMinRatingCenti()) {
+		skillBanSlots = ruleBanSlots
 	}
 	frozen := &battlepb.RankedMatchContext{
-		SeasonId:          cur.SeasonId,
-		SeasonKey:         cur.SeasonKey,
-		RankGeneration:    cur.RankGeneration,
-		RuleVersion:       cat.RuleVersion(),
-		TeamSize:          uint32(len(current) / 2),
-		ConfigFingerprint: cat.Fingerprint(),
-		UseFreePreset:     false,
-		MemberWinStreaks:  memberStreaks,
+		SeasonId:             cur.SeasonId,
+		SeasonKey:            cur.SeasonKey,
+		RankGeneration:       cur.RankGeneration,
+		RuleVersion:          cat.RuleVersion(),
+		TeamSize:             uint32(len(current) / 2),
+		ConfigFingerprint:    cat.Fingerprint(),
+		UseFreePreset:        false,
+		MemberWinStreaks:     memberStreaks,
+		SkillBanSlotsPerTeam: skillBanSlots,
 	}
 	raw, err := (proto.MarshalOptions{Deterministic: true}).Marshal(frozen)
 	if err != nil {

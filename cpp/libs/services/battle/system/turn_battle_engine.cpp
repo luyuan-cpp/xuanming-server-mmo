@@ -320,6 +320,13 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
         if (!wuxing::IsValidCustomDuelRoundLimit(rules.round_limit_override())) {
             return false;
         }
+        if (rules.skill_ban_slots_per_team() != 0u &&
+            rules.skill_ban_slots_per_team() != kPrepSkillBanSlotsPerTeam) {
+            return false;
+        }
+        if (rules.use_free_preset() && rules.skill_ban_slots_per_team() > 0u) {
+            return false;
+        }
         hasCustomDuelRules = true;
         customDuelRules = rules;
     }
@@ -460,6 +467,13 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
     }
 
     prepActive = false;
+    prepSkillBanSlotsPerTeam = 0;
+    banCandidateSkillIds.clear();
+    banCandidateSkillSet.clear();
+    teamABannedSkillIds.clear();
+    teamBBannedSkillIds.clear();
+    bannedSkillIds.clear();
+    bannedSkillSet.clear();
     nextPetActorIndex = 0;
     prepOptionsByPlayer.clear();
     validatedPetsByPlayer.clear();
@@ -1133,6 +1147,9 @@ uint32_t TurnBattleEngine::CheckActionPrerequisites(const BattleActorState& acto
         }
         if (IsControlBannedByCustomDuel() && IsControlSkill(*skillRow)) {
             return kSkillCannotBeCastInCurrentState;
+        }
+        if (IsSkillBanned(skillRow->id())) {
+            return kSkillBannedInBattle;
         }
         if (skillRow->battle_model() == 1) return CheckConfiguredSkill(actor, action, *skillRow);
         if (IsClassSkill(*skillRow)) {
@@ -3101,6 +3118,9 @@ std::optional<BattleAction> TurnBattleEngine::SelectAutoClassSkill(const BattleA
     const double basicAttackDamage = AutoBasicAttackDamage(actor);
     std::optional<AutoSkillCandidate> best;
     for (const auto skillId : actor.skill_table_ids()) {
+        if (IsSkillBanned(skillId)) {
+            continue;
+        }
         const auto* skillRow = dataProvider->FindSkill(skillId);
         // 只挑职业技能:旧通用技能不进挂机候选,默认行动不变
         if (skillRow == nullptr || !IsClassSkill(*skillRow)) {
@@ -6229,6 +6249,15 @@ BattleStateS2C TurnBattleEngine::BuildStateSnapshot() const {
     if (activeSeasonWeeklyAffixId != 0u) {
         state.set_season_weekly_affix_id(activeSeasonWeeklyAffixId);
     }
+    for (const auto skillId : bannedSkillIds) {
+        state.add_banned_skill_ids(skillId);
+    }
+    for (const auto skillId : teamABannedSkillIds) {
+        state.add_team_a_banned_skill_ids(skillId);
+    }
+    for (const auto skillId : teamBBannedSkillIds) {
+        state.add_team_b_banned_skill_ids(skillId);
+    }
 
     for (const auto& resolved : lastResolvedTelegraphs) {
         *state.add_last_resolved_telegraphs() = resolved;
@@ -6240,7 +6269,8 @@ BattleStateS2C TurnBattleEngine::BuildStateSnapshot() const {
         }
         if (prepActive) {
             state.mutable_prep_state()->set_active(true);
-            state.mutable_prep_state()->set_duration_seconds(kTacticalPrepDurationSeconds);
+            state.mutable_prep_state()->set_duration_seconds(PrepDurationSeconds());
+            state.mutable_prep_state()->set_skill_ban_slots_per_team(prepSkillBanSlotsPerTeam);
         } else {
             for (const auto& actor : actors) {
                 if ((actor.actor_type() != BATTLE_ACTOR_TYPE_PLAYER && actor.actor_type() != BATTLE_ACTOR_TYPE_PET) || !IsActorActive(actor)) {
@@ -6516,17 +6546,73 @@ void TurnBattleEngine::FillSurrenderVoteForViewer(BattleStateS2C& state, uint64_
 
 bool TurnBattleEngine::InitTacticalPrep(const CreateBattleRequest& request) {
     prepActive = false;
+    prepSkillBanSlotsPerTeam = 0;
+    banCandidateSkillIds.clear();
+    banCandidateSkillSet.clear();
+    teamABannedSkillIds.clear();
+    teamBBannedSkillIds.clear();
+    bannedSkillIds.clear();
+    bannedSkillSet.clear();
     prepOptionsByPlayer.clear();
     validatedPetsByPlayer.clear();
     standbyPetPoolByPlayer.clear();
     summonPetRemainingByPlayer.clear();
 
-    // 仅正式自养论剑与赛季战队锦标赛开启战前 15 秒明牌变阵；PVE / 免费预设娱乐场 / 切磋 / 帮战零打扰。
-    const bool modeEligible =
+    // 正式自养论剑与赛季战队锦标赛开启战前明牌变阵（换印/换宠 + 可选 3 Ban）；
+    // 道友切磋坊 1V1 开启 3 Ban 时仅跑 25 秒纯禁招（零 scene 快照改动）；其余模式零打扰。
+    const bool isFormalCompetitive =
         !IsPveMatch() && !UsesFreePreset() &&
         (IsRankedBattle() || request.match_mode() == kMatchModeSeasonTournament);
-    if (!modeEligible) {
+    uint32_t requestedBanSlots = 0u;
+    if (!IsPveMatch() && !UsesFreePreset()) {
+        if (request.match_mode() == kMatchModeSeasonTournament && request.has_tournament_context()) {
+            requestedBanSlots = request.tournament_context().skill_ban_slots_per_team();
+        } else if (IsRankedBattle() && request.has_ranked_context()) {
+            requestedBanSlots = request.ranked_context().skill_ban_slots_per_team();
+        } else if (hasCustomDuelRules && !customDuelRules.use_free_preset()) {
+            requestedBanSlots = customDuelRules.skill_ban_slots_per_team();
+        }
+    }
+    if (requestedBanSlots > kPrepSkillBanSlotsPerTeam) {
+        LOG_ERROR << "CreateBattle invalid skill_ban_slots_per_team: battle_id=" << request.battle_id()
+                  << " slots=" << requestedBanSlots;
+        return false;
+    }
+    const bool isCustomDuelBan = !isFormalCompetitive && requestedBanSlots > 0u;
+    if (!isFormalCompetitive && !isCustomDuelBan) {
         return true;
+    }
+
+    if (requestedBanSlots > 0u) {
+        uint32_t battleActiveSeasonId = 0u;
+        for (const auto& snapshot : request.players()) {
+            if (snapshot.active_season_id() != 0u) {
+                battleActiveSeasonId = snapshot.active_season_id();
+                break;
+            }
+        }
+        const auto rawCandidates = dataProvider->GetBanEligibleSkillIds(battleActiveSeasonId);
+        for (const auto skillId : rawCandidates) {
+            const auto* row = dataProvider->FindSkill(skillId);
+            if (row == nullptr || row->battle_model() != 1u || row->ability_kind() != 1u ||
+                row->ban_pool_category() < 1u || row->ban_pool_category() > 4u) {
+                continue;
+            }
+            if (row->season_id() != 0u &&
+                (battleActiveSeasonId == 0u || row->season_id() != battleActiveSeasonId)) {
+                continue;
+            }
+            if (IsControlBannedByCustomDuel() && IsControlSkill(*row)) {
+                continue;
+            }
+            if (banCandidateSkillSet.insert(skillId).second) {
+                banCandidateSkillIds.push_back(skillId);
+            }
+        }
+        std::sort(banCandidateSkillIds.begin(), banCandidateSkillIds.end());
+        if (!banCandidateSkillIds.empty()) {
+            prepSkillBanSlotsPerTeam = requestedBanSlots;
+        }
     }
 
     std::set<uint64_t> allBattlePetIds;
@@ -6542,78 +6628,82 @@ bool TurnBattleEngine::InitTacticalPrep(const CreateBattleRequest& request) {
         opt.teamIndex = snapshot.team_index();
         opt.activeSeasonId = snapshot.active_season_id();
         opt.aiControlled = snapshot.ai_controlled();
+        opt.isTeamCaptain = snapshot.is_team_captain();
         opt.ready = snapshot.ai_controlled();
 
-        std::set<uint32_t> seenSealIds;
-        if (snapshot.has_equipment_effects() && snapshot.equipment_effects().has_season_seal()) {
-            const auto& equippedSeal = snapshot.equipment_effects().season_seal();
-            opt.selectedSealId = equippedSeal.seal_id();
-            if (seenSealIds.insert(equippedSeal.seal_id()).second) {
-                opt.availableSeals.push_back(equippedSeal);
+        if (isFormalCompetitive) {
+            std::set<uint32_t> seenSealIds;
+            if (snapshot.has_equipment_effects() && snapshot.equipment_effects().has_season_seal()) {
+                const auto& equippedSeal = snapshot.equipment_effects().season_seal();
+                opt.selectedSealId = equippedSeal.seal_id();
+                if (seenSealIds.insert(equippedSeal.seal_id()).second) {
+                    opt.availableSeals.push_back(equippedSeal);
+                }
             }
-        }
-        for (const auto& seal : snapshot.available_season_seals()) {
-            if (!seasonrules::ValidSealEffect(seal.season_id(), seal.seal_id(), seal.effect_id(),
-                                              seal.bonus_bps(), seal.cap_bps(), seal.per_round_limit(),
-                                              seal.battle_limit(), seal.active_rounds(),
-                                              seal.health_threshold_bps())) {
-                LOG_ERROR << "CreateBattle invalid available_season_seal: battle_id=" << request.battle_id()
-                          << " player_id=" << snapshot.player_id() << " seal_id=" << seal.seal_id();
-                return false;
+            for (const auto& seal : snapshot.available_season_seals()) {
+                if (!seasonrules::ValidSealEffect(seal.season_id(), seal.seal_id(), seal.effect_id(),
+                                                  seal.bonus_bps(), seal.cap_bps(), seal.per_round_limit(),
+                                                  seal.battle_limit(), seal.active_rounds(),
+                                                  seal.health_threshold_bps())) {
+                    LOG_ERROR << "CreateBattle invalid available_season_seal: battle_id=" << request.battle_id()
+                              << " player_id=" << snapshot.player_id() << " seal_id=" << seal.seal_id();
+                    return false;
+                }
+                if (snapshot.active_season_id() != 0 && seal.season_id() != snapshot.active_season_id()) {
+                    LOG_ERROR << "CreateBattle available_season_seal season mismatch: battle_id=" << request.battle_id()
+                              << " player_id=" << snapshot.player_id() << " seal_season=" << seal.season_id()
+                              << " active_season=" << snapshot.active_season_id();
+                    return false;
+                }
+                if (seenSealIds.insert(seal.seal_id()).second) {
+                    opt.availableSeals.push_back(seal);
+                }
             }
-            if (snapshot.active_season_id() != 0 && seal.season_id() != snapshot.active_season_id()) {
-                LOG_ERROR << "CreateBattle available_season_seal season mismatch: battle_id=" << request.battle_id()
-                          << " player_id=" << snapshot.player_id() << " seal_season=" << seal.season_id()
-                          << " active_season=" << snapshot.active_season_id();
-                return false;
-            }
-            if (seenSealIds.insert(seal.seal_id()).second) {
-                opt.availableSeals.push_back(seal);
-            }
-        }
-        std::sort(opt.availableSeals.begin(), opt.availableSeals.end(),
-                  [](const SeasonSealEffect& lhs, const SeasonSealEffect& rhs) {
-                      return lhs.seal_id() < rhs.seal_id();
-                  });
+            std::sort(opt.availableSeals.begin(), opt.availableSeals.end(),
+                      [](const SeasonSealEffect& lhs, const SeasonSealEffect& rhs) {
+                          return lhs.seal_id() < rhs.seal_id();
+                      });
 
-        if (!snapshot.pets().empty()) {
-            opt.availablePets.push_back(snapshot.pets(0));
-            opt.selectedPetId = snapshot.pets(0).pet_id();
-        }
-        for (const auto& standby : snapshot.standby_pets()) {
-            if (standby.competitive_temporary() || standby.pet_id() == 0) {
-                LOG_ERROR << "CreateBattle invalid standby pet id or temporary flag: battle_id="
-                          << request.battle_id() << " player_id=" << snapshot.player_id();
-                return false;
+            if (!snapshot.pets().empty()) {
+                opt.availablePets.push_back(snapshot.pets(0));
+                opt.selectedPetId = snapshot.pets(0).pet_id();
             }
-            if (standby.owner_player_id() != 0 && standby.owner_player_id() != snapshot.player_id()) {
-                LOG_ERROR << "CreateBattle standby pet ownership mismatch: battle_id=" << request.battle_id()
-                          << " player_id=" << snapshot.player_id() << " pet_id=" << standby.pet_id()
-                          << " owner=" << standby.owner_player_id();
-                return false;
+            for (const auto& standby : snapshot.standby_pets()) {
+                if (standby.competitive_temporary() || standby.pet_id() == 0) {
+                    LOG_ERROR << "CreateBattle invalid standby pet id or temporary flag: battle_id="
+                              << request.battle_id() << " player_id=" << snapshot.player_id();
+                    return false;
+                }
+                if (standby.owner_player_id() != 0 && standby.owner_player_id() != snapshot.player_id()) {
+                    LOG_ERROR << "CreateBattle standby pet ownership mismatch: battle_id=" << request.battle_id()
+                              << " player_id=" << snapshot.player_id() << " pet_id=" << standby.pet_id()
+                              << " owner=" << standby.owner_player_id();
+                    return false;
+                }
+                if (!petcultivation::ValidSnapshot(standby.pet_cultivation())) {
+                    LOG_ERROR << "CreateBattle invalid standby pet_cultivation: battle_id=" << request.battle_id()
+                              << " player_id=" << snapshot.player_id() << " pet_id=" << standby.pet_id();
+                    return false;
+                }
+                if (standby.pet_id() == opt.selectedPetId) {
+                    continue;
+                }
+                if (!allBattlePetIds.insert(standby.pet_id()).second) {
+                    LOG_ERROR << "CreateBattle duplicate standby pet_id across battle: battle_id=" << request.battle_id()
+                              << " player_id=" << snapshot.player_id() << " pet_id=" << standby.pet_id();
+                    return false;
+                }
+                opt.availablePets.push_back(standby);
             }
-            if (!petcultivation::ValidSnapshot(standby.pet_cultivation())) {
-                LOG_ERROR << "CreateBattle invalid standby pet_cultivation: battle_id=" << request.battle_id()
-                          << " player_id=" << snapshot.player_id() << " pet_id=" << standby.pet_id();
-                return false;
-            }
-            if (standby.pet_id() == opt.selectedPetId) {
-                continue;
-            }
-            if (!allBattlePetIds.insert(standby.pet_id()).second) {
-                LOG_ERROR << "CreateBattle duplicate standby pet_id across battle: battle_id=" << request.battle_id()
-                          << " player_id=" << snapshot.player_id() << " pet_id=" << standby.pet_id();
-                return false;
-            }
-            opt.availablePets.push_back(standby);
         }
 
         if (!opt.aiControlled &&
-            (opt.availableSeals.size() > 1 || opt.availablePets.size() > 1 ||
+            (prepSkillBanSlotsPerTeam > 0u ||
+             opt.availableSeals.size() > 1 || opt.availablePets.size() > 1 ||
              (opt.selectedPetId == 0 && !opt.availablePets.empty()))) {
             hasAnyChoice = true;
         }
-        if (!opt.aiControlled && !opt.availablePets.empty()) {
+        if (isFormalCompetitive && !opt.aiControlled && !opt.availablePets.empty()) {
             validatedPetsByPlayer[snapshot.player_id()] = opt.availablePets;
         }
         prepOptionsByPlayer.emplace(snapshot.player_id(), std::move(opt));
@@ -6622,9 +6712,70 @@ bool TurnBattleEngine::InitTacticalPrep(const CreateBattleRequest& request) {
     if (hasAnyChoice) {
         prepActive = true;
     } else {
+        prepSkillBanSlotsPerTeam = 0;
+        banCandidateSkillIds.clear();
+        banCandidateSkillSet.clear();
         prepOptionsByPlayer.clear();
     }
     return true;
+}
+
+std::vector<uint32_t> TurnBattleEngine::AggregateTeamBans(uint32_t teamIndex) const {
+    std::vector<uint32_t> result;
+    if (prepSkillBanSlotsPerTeam == 0u) {
+        return result;
+    }
+    struct BanVoteEntry {
+        uint32_t skillId = 0;
+        uint32_t votes = 0;
+        uint32_t bestSlotRank = UINT32_MAX;
+        bool nominatedByCaptain = false;
+    };
+    std::map<uint32_t, BanVoteEntry> tally;
+    for (const auto& [playerId, opt] : prepOptionsByPlayer) {
+        (void)playerId;
+        if (opt.aiControlled || opt.teamIndex != teamIndex) {
+            continue;
+        }
+        for (size_t idx = 0; idx < opt.nominatedBanSkillIds.size(); ++idx) {
+            const uint32_t sid = opt.nominatedBanSkillIds[idx];
+            auto& entry = tally[sid];
+            entry.skillId = sid;
+            ++entry.votes;
+            const auto rank = static_cast<uint32_t>(idx);
+            if (rank < entry.bestSlotRank) {
+                entry.bestSlotRank = rank;
+            }
+            if (opt.isTeamCaptain) {
+                entry.nominatedByCaptain = true;
+            }
+        }
+    }
+    if (tally.empty()) {
+        return result;
+    }
+    std::vector<BanVoteEntry> ordered;
+    ordered.reserve(tally.size());
+    for (const auto& [sid, entry] : tally) {
+        (void)sid;
+        ordered.push_back(entry);
+    }
+    const uint64_t seed = createRequest.seed();
+    std::sort(ordered.begin(), ordered.end(), [seed](const BanVoteEntry& lhs, const BanVoteEntry& rhs) {
+        if (lhs.votes != rhs.votes) return lhs.votes > rhs.votes;
+        if (lhs.bestSlotRank != rhs.bestSlotRank) return lhs.bestSlotRank < rhs.bestSlotRank;
+        if (lhs.nominatedByCaptain != rhs.nominatedByCaptain) return lhs.nominatedByCaptain;
+        const uint64_t lh = SplitMix64(seed ^ static_cast<uint64_t>(lhs.skillId));
+        const uint64_t rh = SplitMix64(seed ^ static_cast<uint64_t>(rhs.skillId));
+        if (lh != rh) return lh < rh;
+        return lhs.skillId < rhs.skillId;
+    });
+    const size_t limit = std::min(ordered.size(), static_cast<size_t>(prepSkillBanSlotsPerTeam));
+    result.reserve(limit);
+    for (size_t i = 0; i < limit; ++i) {
+        result.push_back(ordered[i].skillId);
+    }
+    return result;
 }
 
 bool TurnBattleEngine::AllPrepPlayersReady() const {
@@ -6642,7 +6793,9 @@ bool TurnBattleEngine::AllPrepPlayersReady() const {
 
 uint32_t TurnBattleEngine::UpdateBattlePrep(uint64_t playerId, uint32_t selectedSealId,
                                             uint64_t selectedPetId, bool ready,
-                                            BattlePrepState* outPrepState) {
+                                            BattlePrepState* outPrepState,
+                                            bool updateBannedSkills,
+                                            const std::vector<uint32_t>& bannedSkillIdsInput) {
     if (!initialized || outcome != BATTLE_OUTCOME_ONGOING || !prepActive) {
         return kFeatureUnavailable;
     }
@@ -6655,7 +6808,8 @@ uint32_t TurnBattleEngine::UpdateBattlePrep(uint64_t playerId, uint32_t selected
     if (opt.ready) {
         const bool sealChanged = selectedSealId != 0 && selectedSealId != opt.selectedSealId;
         const bool petChanged = selectedPetId != 0 && selectedPetId != opt.selectedPetId;
-        if (sealChanged || petChanged) {
+        const bool banChanged = updateBannedSkills && bannedSkillIdsInput != opt.nominatedBanSkillIds;
+        if (sealChanged || petChanged || banChanged) {
             return kFeatureUnavailable;
         }
         if (outPrepState != nullptr) {
@@ -6682,12 +6836,32 @@ uint32_t TurnBattleEngine::UpdateBattlePrep(uint64_t playerId, uint32_t selected
             return kInvalidParameter;
         }
     }
+    if (updateBannedSkills) {
+        if (prepSkillBanSlotsPerTeam == 0u) {
+            if (!bannedSkillIdsInput.empty()) {
+                return kFeatureUnavailable;
+            }
+        } else {
+            if (bannedSkillIdsInput.size() > prepSkillBanSlotsPerTeam) {
+                return kInvalidParameter;
+            }
+            std::set<uint32_t> seenBans;
+            for (const auto sid : bannedSkillIdsInput) {
+                if (!banCandidateSkillSet.contains(sid) || !seenBans.insert(sid).second) {
+                    return kInvalidParameter;
+                }
+            }
+        }
+    }
 
     if (selectedSealId != 0) {
         opt.selectedSealId = selectedSealId;
     }
     if (selectedPetId != 0) {
         opt.selectedPetId = selectedPetId;
+    }
+    if (updateBannedSkills) {
+        opt.nominatedBanSkillIds = bannedSkillIdsInput;
     }
     if (ready) {
         opt.ready = true;
@@ -6702,6 +6876,20 @@ uint32_t TurnBattleEngine::UpdateBattlePrep(uint64_t playerId, uint32_t selected
 bool TurnBattleEngine::FinalizePrepPhase() {
     if (!prepActive) {
         return false;
+    }
+
+    if (prepSkillBanSlotsPerTeam > 0u) {
+        teamABannedSkillIds = AggregateTeamBans(0u);
+        teamBBannedSkillIds = AggregateTeamBans(1u);
+        bannedSkillSet.clear();
+        bannedSkillIds.clear();
+        for (const auto sid : teamABannedSkillIds) {
+            bannedSkillSet.insert(sid);
+        }
+        for (const auto sid : teamBBannedSkillIds) {
+            bannedSkillSet.insert(sid);
+        }
+        bannedSkillIds.assign(bannedSkillSet.begin(), bannedSkillSet.end());
     }
 
     for (const auto& [playerId, opt] : prepOptionsByPlayer) {
@@ -6964,7 +7152,8 @@ void TurnBattleEngine::PopulatePrepStateForViewer(BattlePrepState& out, uint64_t
     }
     out.set_active(true);
     out.set_deadline_ms(deadlineMs);
-    out.set_duration_seconds(kTacticalPrepDurationSeconds);
+    out.set_duration_seconds(PrepDurationSeconds());
+    out.set_skill_ban_slots_per_team(prepSkillBanSlotsPerTeam);
     if (viewerPlayerId == 0) {
         return;
     }
@@ -6984,8 +7173,11 @@ void TurnBattleEngine::PopulatePrepStateForViewer(BattlePrepState& out, uint64_t
     for (const auto& pet : selfOpt.availablePets) {
         PopulatePetOption(pet, *out.add_self_available_pets());
     }
+    for (const auto sid : banCandidateSkillIds) {
+        out.add_ban_candidate_skill_ids(sid);
+    }
 
-    // 同队互见、对手严密盲选：仅投影与收信者同 teamIndex 的成员状态。
+    // 同队互见、对手严密盲选：仅投影与收信者同 teamIndex 的成员状态与聚合禁招。
     for (const auto& [memberId, opt] : prepOptionsByPlayer) {
         if (opt.teamIndex != selfOpt.teamIndex) {
             continue;
@@ -6996,6 +7188,9 @@ void TurnBattleEngine::PopulatePrepStateForViewer(BattlePrepState& out, uint64_t
         ps->set_selected_seal_id(opt.selectedSealId);
         ps->set_selected_pet_id(opt.selectedPetId);
         ps->set_ready(opt.ready);
+        for (const auto sid : opt.nominatedBanSkillIds) {
+            ps->add_nominated_ban_skill_ids(sid);
+        }
         if (opt.selectedPetId != 0) {
             for (const auto& pet : opt.availablePets) {
                 if (pet.pet_id() == opt.selectedPetId) {
@@ -7005,6 +7200,9 @@ void TurnBattleEngine::PopulatePrepStateForViewer(BattlePrepState& out, uint64_t
                 }
             }
         }
+    }
+    for (const auto sid : AggregateTeamBans(selfOpt.teamIndex)) {
+        out.add_team_effective_ban_skill_ids(sid);
     }
 }
 

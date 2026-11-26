@@ -36,6 +36,9 @@ const (
 	SpiritShopError_kSpiritShopFrozen            SpiritShopError = 37008
 	SpiritShopError_kSpiritShopInBattle          SpiritShopError = 37009
 	SpiritShopError_kSpiritShopItemBlocked       SpiritShopError = 37010
+	SpiritShopError_kSpiritShopNotInSaleWindow   SpiritShopError = 37011
+	SpiritShopError_kSpiritShopLevelNotMet       SpiritShopError = 37012
+	SpiritShopError_kSpiritShopInvalidChoice     SpiritShopError = 37013
 )
 
 // Enum value maps for SpiritShopError.
@@ -53,6 +56,9 @@ var (
 		37008: "kSpiritShopFrozen",
 		37009: "kSpiritShopInBattle",
 		37010: "kSpiritShopItemBlocked",
+		37011: "kSpiritShopNotInSaleWindow",
+		37012: "kSpiritShopLevelNotMet",
+		37013: "kSpiritShopInvalidChoice",
 	}
 	SpiritShopError_value = map[string]int32{
 		"kSpirit_shop_errorOK":         0,
@@ -67,6 +73,9 @@ var (
 		"kSpiritShopFrozen":            37008,
 		"kSpiritShopInBattle":          37009,
 		"kSpiritShopItemBlocked":       37010,
+		"kSpiritShopNotInSaleWindow":   37011,
+		"kSpiritShopLevelNotMet":       37012,
+		"kSpiritShopInvalidChoice":     37013,
 	}
 )
 
@@ -101,7 +110,7 @@ var File_spirit_shop_error_tip_proto protoreflect.FileDescriptor
 
 const file_spirit_shop_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x1bspirit_shop_error_tip.proto*\xfc\x02\n" +
+	"\x1bspirit_shop_error_tip.proto*\xdc\x03\n" +
 	"\x11spirit_shop_error\x12\x18\n" +
 	"\x14kSpirit_shop_errorOK\x10\x00\x12\x1c\n" +
 	"\x16kSpiritShopUnavailable\x10\x88\xa1\x02\x12\x1e\n" +
@@ -114,7 +123,10 @@ const file_spirit_shop_error_tip_proto_rawDesc = "" +
 	"\x12kSpiritShopBagFull\x10\x8f\xa1\x02\x12\x17\n" +
 	"\x11kSpiritShopFrozen\x10\x90\xa1\x02\x12\x19\n" +
 	"\x13kSpiritShopInBattle\x10\x91\xa1\x02\x12\x1c\n" +
-	"\x16kSpiritShopItemBlocked\x10\x92\xa1\x02B$\n" +
+	"\x16kSpiritShopItemBlocked\x10\x92\xa1\x02\x12 \n" +
+	"\x1akSpiritShopNotInSaleWindow\x10\x93\xa1\x02\x12\x1c\n" +
+	"\x16kSpiritShopLevelNotMet\x10\x94\xa1\x02\x12\x1e\n" +
+	"\x18kSpiritShopInvalidChoice\x10\x95\xa1\x02B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

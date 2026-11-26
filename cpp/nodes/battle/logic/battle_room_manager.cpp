@@ -1495,8 +1495,11 @@ void BattleRoomManager::HandleUpdateBattlePrep(const ::SessionDetails &sessionDe
     room->engine.MarkPlayerEntered(playerId);
 
     ::BattlePrepState selfPrep;
+    const std::vector<uint32_t> bannedSkillIds(request.banned_skill_ids().begin(),
+                                               request.banned_skill_ids().end());
     const uint32_t err = room->engine.UpdateBattlePrep(
-        playerId, request.selected_seal_id(), request.selected_pet_id(), request.ready(), &selfPrep);
+        playerId, request.selected_seal_id(), request.selected_pet_id(), request.ready(), &selfPrep,
+        request.update_banned_skills(), bannedSkillIds);
     if (err != 0)
     {
         response.mutable_error_message()->set_id(err);
@@ -1606,9 +1609,10 @@ void BattleRoomManager::HandleSendBattlePing(const ::SessionDetails &sessionDeta
 void BattleRoomManager::ArmPrepTimer(BattleRoom &room)
 {
     room.actionDeadlineMs = 0;
-    room.prepDeadlineMs = TimeSystem::NowMillisecondsUTC() + turnbattle::kTacticalPrepTimeoutMs;
+    const uint64_t timeoutMs = room.engine.PrepTimeoutMs();
+    room.prepDeadlineMs = TimeSystem::NowMillisecondsUTC() + timeoutMs;
     const auto battleId = room.battleId;
-    room.prepTimer.RunAfter(static_cast<double>(turnbattle::kTacticalPrepTimeoutMs) / 1000.0,
+    room.prepTimer.RunAfter(static_cast<double>(timeoutMs) / 1000.0,
                             [this, battleId]
                             { FinalizeBattlePrep(battleId); });
 }

@@ -35,6 +35,11 @@ public:
     // 用于 ITEM 行动的合法性与效果。查不到 = 配置缺失,ITEM 一律拒绝。
     virtual const ItemTable* FindItem(uint32_t itemTableId) const = 0;
     virtual const PetTable* FindPet(uint32_t petTableId) const { return nullptr; }
+    // 返回允许进入竞技战前技能禁选白名单的 SkillTable ID（升序，activeSeasonId 过滤赛季技；默认空保旧单测零回归）。
+    virtual std::vector<uint32_t> GetBanEligibleSkillIds(uint32_t activeSeasonId) const {
+        (void)activeSeasonId;
+        return {};
+    }
 
     // 按副本与服务端识别的战斗策略选档；返回值复制进引擎，整场不受后续配置变化影响。
     virtual const BattleRewardProfile* FindBattleReward(uint32_t battleConfigId,

@@ -151,7 +151,7 @@ message CfgRewardedAdSlotRow {
      ```
    - 在 `cpp/libs/services/scene/player/system/client_request_ledger.h` 的 `ClientRequestKind` 末尾追加（现役最大值为 `kEquipSkillVfx = 19`）：
      ```cpp
-     kClaimRewardedAd = 20, // SceneRewardedAdClientPlayer.ClaimRewardedAd: 激励视频完播领绑定银两
+     kClaimRewardedAd = 21, // SceneRewardedAdClientPlayer.ClaimRewardedAd: 激励视频完播领绑定银两
      ```
    - 在 `ClientRequestRecord` 末尾追加 2 个重放结果字段（现役最大号为 `34`）：
      ```proto
@@ -349,18 +349,18 @@ Assets/Editor/
 
 ### 6.1 编码与测试执行清单（高档模型改码 + Gemini 低档模型编译/生成/跑测）
 
-- [ ] **Batch 1（双银两底层 + 防洗白分流）**：
-  - [ ] 修改 `proto/common/base/currency_type.proto` 追加 `CURRENCY_TYPE_BIND_GOLD = 3`，同步 C++ `currency.h`、Go `go/shared/currencytype/currencytype.go` 及 `_test.go`、Java GM `GmControllerTest.java`；
-  - [ ] 在 `CurrencySystem` 实现 `GetSpendableGoldWithBind` / `CanAffordGoldWithBind` / `DeductGoldPreferBind`，并按 §3.2 A/B 矩阵精确改造 7 处 A 类消费点（重点单测验证：代工费、T 装强化/解封、神秘商人、资产通道 100% 拒绝扣绑银；跨绑银+银两边界原子扣款零半扣）；
-  - [ ] 同步 `xuanming-server-mmo`（Java 独立服）：修复 `MailGrants.java:20`、`SeasonRules.java:140` 硬编码上限，实现同构双扣原语与单测；
-  - [ ] C++ 源码先跑只读预检 `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`，再交 Gemini 执行 `dev.bat proto`、C++ MSBuild `/m:1`、`go test ./...` 与 Java `mvn test`。
-- [ ] **Batch 2（激励视频服务端）**：
-  - [ ] 新增 `data/schema/rewardedadslot_table.proto`、`data/RewardedAdSlot.xlsx`（默认 `enabled = 0, currency_type = 3, reward_amount = 300`）、`proto/scene/player_rewarded_ad.proto`，扩展 `client_request_ledger_comp.proto`（字段 6 / 35 / 36）、`client_request_ledger.h`（`kClaimRewardedAd = 20`）与 `data/tip/Tip.xlsx`；
-  - [ ] 实现 C++ `rewarded_ad_rules.h` / `rewarded_ad_system.{h,cpp}` 与 Java 同构服务，覆盖跨日抗回拨、断线补领、幂等重放、`too_fast`、封禁、`platform_mask` 隔离与非绑银配置拒绝单测；交 Gemini 跑生成、编译与测试。
-- [ ] **Batch 3（Unity 客户端）**：
-  - [ ] 执行 `.\gen.bat client` 同步客户端生成物；
-  - [ ] 落地 `CurrencyLabels.cs` 收口 8 处币种文案并补齐双银两余额展示；
-  - [ ] 落地 `MinigameAd.jslib`、`Assets/Scripts/Game/RewardedAd/*`、`Assets/Editor/RewardedAdBuildGuard.cs` 及 EditMode 单测；交 Gemini 跑 `tools/client_compile_check.ps1` 与测试集。
+- [x] **Batch 1（双银两底层 + 防洗白分流）**：
+  - [x] 修改 `proto/common/base/currency_type.proto` 追加 `CURRENCY_TYPE_BIND_GOLD = 3`，同步 C++ `currency.h`、Go `go/shared/currencytype/currencytype.go` 及 `_test.go`、Java GM `GmControllerTest.java`；
+  - [x] 在 `CurrencySystem` 实现 `GetSpendableGoldWithBind` / `CanAffordGoldWithBind` / `DeductGoldPreferBind` / `DeductSplitGold`，并按 §3.2 A/B 矩阵精确改造 7 处 A 类消费点（单测验证代工费、T 装强化/解封、神秘商人、资产通道 100% 拒绝扣绑银；跨绑银+银两边界原子扣款零半扣）；
+  - [x] 同步 `xuanming-server-mmo`（Java 独立服）：修复 `MailGrants.java`、`SeasonRules.java` 硬编码上限，实现同构双扣原语与单测；
+  - [x] C++ 源码已通过只读预检 `test_cpp_no_raw_pointer_member.py`（13/13）与 `check_log_text_english.py`，并完成 `dev.bat gen`、`currency_test.exe`（2/2 PASS）、Go `go test` 与 Java `mvn test`。
+- [x] **Batch 2（激励视频服务端）**：
+  - [x] 新增 `data/schema/rewardedadslot_table.proto`、`data/RewardedAdSlot.xlsx`（默认 `enabled = 0, currency_type = 3, reward_amount = 300`）、`proto/scene/player_rewarded_ad.proto`，扩展 `client_request_ledger_comp.proto`（字段 6 / 35 / 36）、`client_request_ledger.h`（`kClaimRewardedAd = 21`）与 `data/tip/Tip.xlsx`；
+  - [x] 实现 C++ `rewarded_ad_rules.h` / `player_rewarded_ad.{h,cpp}` 与 Java `com.game.scene.rewardedad.*` 同构服务及第 19 代持久台账 `0019.schema`，覆盖跨日抗回拨、断线补领、幂等重放、`too_fast`、封禁、`platform_mask` 隔离与非绑银配置拒绝单测（C++ 全部新文件 ClCompile 0 错误，Java 独立服 6 模块测试全绿）。
+- [x] **Batch 3（Unity 客户端）**：
+  - [x] 执行 `tools/sync_tables.ps1` 与 `tools/gen_proto.ps1` 同步客户端生成物；
+  - [x] 落地 `CurrencyLabels.cs` 收口 7 处币种文案并补齐绑定装强化双银两前置校验（`EquipBagModel.CheckEnhance`）；
+  - [x] 落地 `MinigameAd.jslib`、`Assets/Scripts/Game/RewardedAd/*`、`Assets/Editor/RewardedAdBuildGuard.cs` 及 EditMode 单测（含诱导文案静态红线扫描），`client_compile_check.ps1` 803/803 0 错误，NUnit 9/9 PASS。
 - [ ] **Batch 4（角标作图交接，仅在二版开启广告前）**：
   - [ ] 落盘 `docs/planning/ui-handoff/rewarded-ad-ui-handoff.md`，按 `project-vision.md §3.3` 在对话中给出零风格词/零色号的纯功能作图清单交 Codex 制作标准高对比度「视频/广告」角标。
 

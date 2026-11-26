@@ -70,6 +70,7 @@ bool TurnBattleEngine::HasValidConfiguredTarget(const BattleActorState& caster, 
 }
 bool TurnBattleEngine::IsSkillCopyableFor(const BattleActorState& caster, const SkillTable& row) const {
     if (row.battle_model() != 1 || row.ability_kind() != 1) return false;
+    if (IsSkillBanned(row.id())) return false;
     if (row.forbid_copy() != 0 || row.health_cost_mode() != 0 || row.max_battle_uses() != 0) return false;
     for (const auto effectId : row.effect()) {
         const auto* effect = dataProvider->FindBuff(effectId);
@@ -111,6 +112,7 @@ std::optional<uint32_t> TurnBattleEngine::SelectCopiedSkillId(const BattleActorS
 }
 uint32_t TurnBattleEngine::CheckConfiguredSkill(const BattleActorState& actor, const BattleAction& action,
                                                 const SkillTable& row) const {
+    if (IsSkillBanned(row.id())) return kSkillBannedInBattle;
     if (!ConfiguredSubjectAllowed(actor, row) || ConfiguredRank(actor, row) == 0 || row.ability_kind() != 1)
         return kSkillCannotBeCastInCurrentState;
     if (const auto blocked = CheckBuff(actor, row); blocked != kSuccess) return blocked;
@@ -965,7 +967,7 @@ void TurnBattleEngine::TriggerConfiguredBuffs(BattleActorState& owner, BattleAct
             if ((damageType == combatdamage::kPhysicalDamage && IsPhysicalForbidden(owner)) ||
                 (damageType == combatdamage::kMagicDamage && IsMagicForbidden(owner))) break;
             const auto* incoming = dataProvider->FindSkill(context.skillId);
-            if (incoming != nullptr && (other.is_boss() || incoming->forbid_copy() != 0)) break;
+            if (incoming != nullptr && (other.is_boss() || incoming->forbid_copy() != 0 || IsSkillBanned(incoming->id()))) break;
             if (incoming != nullptr && incoming->battle_model() == 1) {
                 BattleAction action; action.set_action_type(BATTLE_ACTION_SKILL); action.set_skill_table_id(incoming->id()); action.set_target_id(other.actor_id());
                 ExecuteConfiguredSkill(owner, action, *incoming, result, BattleDamageOrigin::Mirror, row.ratio() > 0 ? row.ratio() : 1);
@@ -1196,6 +1198,7 @@ bool TurnBattleEngine::ExecuteConfiguredControl(BattleActorState& actor, const B
 }
 std::optional<BattleAction> TurnBattleEngine::SelectAutoConfiguredSkill(const BattleActorState& actor) const {
     for (const auto skillId : actor.skill_table_ids()) {
+        if (IsSkillBanned(skillId)) continue;
         const auto* row = dataProvider->FindSkill(skillId);
         if (row == nullptr || row->battle_model() != 1 || row->ability_kind() != 1) continue;
         for (const auto& target : actors) {

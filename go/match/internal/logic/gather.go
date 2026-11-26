@@ -156,6 +156,14 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 		}
 	}
 
+	var tournamentCaptains map[uint64]bool
+	if tournamentCtx != nil && svcCtx.Authority != nil {
+		capCtx, capCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		tournamentCaptains = svcCtx.Authority.LoadTournamentSquadCaptains(
+			capCtx, tournamentCtx.GetSquadAId(), tournamentCtx.GetSquadBId())
+		capCancel()
+	}
+
 	// 逐参与者冻结收快照。
 	var prepared []preparedMember
 	for i, playerId := range members {
@@ -179,6 +187,9 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 		}
 		snapshot := resp.GetSnapshot()
 		snapshot.TeamIndex = teams[i]
+		if tournamentCaptains[playerId] {
+			snapshot.IsTeamCaptain = true
+		}
 		prepared = append(prepared, preparedMember{
 			playerId:         playerId,
 			sceneEndpoint:    endpoint,

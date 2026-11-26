@@ -138,4 +138,52 @@ struct FCfgSpiritShopGoodsRow : public FTableRowBase
 	/** 客户端角标标签（如「终身限额」「保底配套」，可为空） */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|SpiritShopGoods")
 	FString badge_text;
+
+	/** 定时开售时间戳（UTC 毫秒，0 = 立即开售） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|SpiritShopGoods")
+	int64 start_time_ms = 0;
+
+	/** 定时下架时间戳（UTC 毫秒，0 = 永不下架；双非 0 时须 end_time_ms > start_time_ms） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|SpiritShopGoods")
+	int64 end_time_ms = 0;
+
+	/** 发放模式：0 = 全部发放（1..4 项），1 = 多选一自选（2..4 项任选 1 项） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|SpiritShopGoods")
+	int32 grant_mode = 0;
+
+	/** 物品 3（可选，0 = 无；非 0 时 item_id_2 须非 0 禁跳槽） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|SpiritShopGoods")
+	int32 item_id_3 = 0;
+
+	/** 物品 3 每份数量（item_id_3 > 0 时必须 >= 1） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|SpiritShopGoods")
+	int32 item_count_3 = 0;
+
+	/** 物品 3 是否绑定：1 = 绑定仅自用，0 = 非绑定 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|SpiritShopGoods")
+	int32 item_bound_3 = 0;
+
+	/** 物品 4（可选，0 = 无；非 0 时 item_id_3 须非 0 禁跳槽） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|SpiritShopGoods")
+	int32 item_id_4 = 0;
+
+	/** 物品 4 每份数量（item_id_4 > 0 时必须 >= 1） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|SpiritShopGoods")
+	int32 item_count_4 = 0;
+
+	/** 物品 4 是否绑定：1 = 绑定仅自用，0 = 非绑定 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|SpiritShopGoods")
+	int32 item_bound_4 = 0;
+
+	/** 限时折扣原价划线展示（0 = 无原价划线；非 0 时须 original_price > price 且 <= 10^9） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|SpiritShopGoods")
+	int64 original_price = 0;
+
+	/** 角色最低可见/可购有效等级（0 = 不限） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|SpiritShopGoods")
+	int32 min_level = 0;
+
+	/** 角色最高可见/可购有效等级（0 = 不限；双非 0 时须 max_level >= min_level） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|SpiritShopGoods")
+	int32 max_level = 0;
 };

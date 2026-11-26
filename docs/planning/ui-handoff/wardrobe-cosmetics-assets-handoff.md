@@ -1,8 +1,9 @@
 # 衣柜外观券、专属技能特效帧条与百宝阁切片纯功能作图交接清单
 
 > 落盘日期：2026-11-26  
+> 交付与接入状态：**三批共 22 张透明 PNG-32 已于 Azure `image/main` 提交 `258e817345ad3ca0b4aec734b5d9919760eff804` 交付并全部完成 Unity 客户端导入（SHA-256 22/22 一致）、`.meta` 九宫格同步、`ART_MANIFEST.json` 6 条特效注册与四仓 `SkillVfxCosmetic` 配表切换。**  
 > 关联设计：[wardrobe-pet-morph-and-skill-vfx-v1.md](../wardrobe-pet-morph-and-skill-vfx-v1.md) · [spirit-shop-and-starter-packs-v1.md](../spirit-shop-and-starter-packs-v1.md)  
-> 现状说明：衣柜主界面「人物 / 灵宠 / 特效」三页签的 12 张无字 UI 切片（`wardrobe-cosmetics-ui-20261125`）已全部接入 Unity 客户端 `Assets/Resources/UI/Ugui/WardrobeCosmetics/`，**无需重做衣柜框架与页签**。本清单仅列出尚未交付的新增商业化道具图标与可选生产级特效/百宝阁切片。
+> 现状说明：衣柜主界面「人物 / 灵宠 / 特效」三页签的 12 张无字 UI 切片（`wardrobe-cosmetics-ui-20261125`）以及本清单全部 22 张资产（2 枚券图标 + 6 条 8 帧技能特效 + 14 张百宝阁切片与礼包图标）均已接入客户端。
 
 ---
 
@@ -58,10 +59,17 @@
 
 ## 二、后续新上「专属灵宠幻化皮肤」规格模板（按需单只追加）
 
-当前首批 3 套灵宠幻化复用既有灵宠动作集已可完整运行；后续每次新增独立售卖的专属灵宠幻化时，按每只单独建目录 `Assets/Resources/World/Pets/QdaoPets20261005/<art_key>/` 产出以下透明底 PNG-32（全部无文字，脚底基线一致）：
+当前首批 3 套灵宠幻化复用既有灵宠动作集（`01-zhuling`～`16-luhualing`）已可完整运行；后续每次新增独立售卖的原创专属灵宠幻化时，目录键 `art_key` 自 **`17-<小写拼音>`** 起顺延编号（首枚预留示例：正式名称 **`玉螭童`**，`art_key` = **`17-yuchitong`**）。按以下纯功能模板替换名称与 `<art_key>` 后直接发送给异机 Codex：
 
-- `portrait.png`：`512×512`（立绘与头像展示）
-- `idle/E/01.png`、`idle/W/01.png`：`1024×1024`（左右朝向待机）
-- `attack/E/01.png`～`12.png`、`attack/W/01.png`～`12.png`：`1024×1024`（12 帧普攻）
-- `cast/E/01.png`～`16.png`、`cast/W/01.png`～`16.png`：`1024×1024`（16 帧施法）
-- `hit/E/01.png`～`06.png`、`hit/W/01.png`～`06.png`：`1024×1024`（6 帧受击）
+```text
+请为新增的独立灵宠幻化皮肤「<填写新灵宠幻化名>」（目录键：<art_key>）制作以下透明背景 PNG-32 序列图资产（全部背景完全透明 Alpha=0，严禁包含任何文字、字母、数字或水印，所有动作帧脚底基线对齐、主体不裁边）：
+
+落盘目录：D:\work\image\designs\pet-morph-<art_key>\
+（程序接入路径：Assets/Resources/World/Pets/QdaoPets20261005/<art_key>/）
+
+1. portrait.png：512×512（非拉伸，用于衣柜预览、灵宠列表与头像展示，四周保留 8% 安全留白）
+2. idle/E/01.png、idle/W/01.png：1024×1024（朝右 E 与朝左 W 待机各 1 帧）
+3. attack/E/01.png～12.png、attack/W/01.png～12.png：1024×1024（朝右 E 与朝左 W 普攻各 12 帧）
+4. cast/E/01.png～16.png、cast/W/01.png～16.png：1024×1024（朝右 E 与朝左 W 施法各 16 帧）
+5. hit/E/01.png～06.png、hit/W/01.png～06.png：1024×1024（朝右 E 与朝左 W 受击各 6 帧）
+```

@@ -48,11 +48,11 @@ constexpr SpiritShopGoodsTable::ParseTableT_ SpiritShopGoodsTable::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_._has_bits_),
       0, // no _extensions_
-      21, 248,  // max_field_number, fast_idx_mask
+      33, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4292870144,  // skipmap
+      0,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      21,  // num_field_entries
+      33,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -147,17 +147,49 @@ constexpr SpiritShopGoodsTable::ParseTableT_ SpiritShopGoodsTable::InternalGener
       {::_pbi::TcParser::FastUS2,
        {426, 3, 0,
         PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.badge_text_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 start_time_ms = 22;
+      {::_pbi::TcParser::FastV64S2,
+       {432, 21, 0,
+        PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.start_time_ms_)}},
+      // uint64 end_time_ms = 23;
+      {::_pbi::TcParser::FastV64S2,
+       {440, 22, 0,
+        PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.end_time_ms_)}},
+      // uint32 grant_mode = 24;
+      {::_pbi::TcParser::FastV32S2,
+       {448, 23, 0,
+        PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.grant_mode_)}},
+      // uint32 item_id_3 = 25;
+      {::_pbi::TcParser::FastV32S2,
+       {456, 24, 0,
+        PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.item_id_3_)}},
+      // uint32 item_count_3 = 26;
+      {::_pbi::TcParser::FastV32S2,
+       {464, 25, 0,
+        PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.item_count_3_)}},
+      // uint32 item_bound_3 = 27;
+      {::_pbi::TcParser::FastV32S2,
+       {472, 26, 0,
+        PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.item_bound_3_)}},
+      // uint32 item_id_4 = 28;
+      {::_pbi::TcParser::FastV32S2,
+       {480, 27, 0,
+        PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.item_id_4_)}},
+      // uint32 item_count_4 = 29;
+      {::_pbi::TcParser::FastV32S2,
+       {488, 28, 0,
+        PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.item_count_4_)}},
+      // uint32 item_bound_4 = 30;
+      {::_pbi::TcParser::FastV32S2,
+       {496, 30, 0,
+        PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.item_bound_4_)}},
+      // uint64 original_price = 31;
+      {::_pbi::TcParser::FastV64S2,
+       {504, 29, 0,
+        PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.original_price_)}},
     }}, {{
+      33, 0, 1,
+      65534, 32,
       65535, 65535
     }}, {{
       // uint32 id = 1;
@@ -202,10 +234,34 @@ constexpr SpiritShopGoodsTable::ParseTableT_ SpiritShopGoodsTable::InternalGener
       {PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.limit_group_weight_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string badge_text = 21;
       {PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.badge_text_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 start_time_ms = 22;
+      {PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.start_time_ms_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 end_time_ms = 23;
+      {PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.end_time_ms_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 grant_mode = 24;
+      {PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.grant_mode_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 item_id_3 = 25;
+      {PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.item_id_3_), _Internal::kHasBitsOffset + 24, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 item_count_3 = 26;
+      {PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.item_count_3_), _Internal::kHasBitsOffset + 25, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 item_bound_3 = 27;
+      {PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.item_bound_3_), _Internal::kHasBitsOffset + 26, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 item_id_4 = 28;
+      {PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.item_id_4_), _Internal::kHasBitsOffset + 27, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 item_count_4 = 29;
+      {PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.item_count_4_), _Internal::kHasBitsOffset + 28, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 item_bound_4 = 30;
+      {PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.item_bound_4_), _Internal::kHasBitsOffset + 30, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 original_price = 31;
+      {PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.original_price_), _Internal::kHasBitsOffset + 29, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 min_level = 32;
+      {PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.min_level_), _Internal::kHasBitsOffset + 31, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 max_level = 33;
+      {PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.max_level_), _Internal::kHasBitsOffset + 32, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
-      "\24\0\0\0\0\4\13\10\0\0\0\0\0\0\0\0\0\0\0\0\0\12\0\0"
+      "\24\0\0\0\0\4\13\10\0\0\0\0\0\0\0\0\0\0\0\0\0\12\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
       "SpiritShopGoodsTable"
       "name"
       "description"
@@ -248,7 +304,19 @@ inline constexpr SpiritShopGoodsTable::Impl_::Impl_(
         limit_reset_kind_{0u},
         limit_count_{0u},
         limit_group_id_{0u},
-        limit_group_weight_{0u} {}
+        limit_group_weight_{0u},
+        start_time_ms_{::uint64_t{0u}},
+        end_time_ms_{::uint64_t{0u}},
+        grant_mode_{0u},
+        item_id_3_{0u},
+        item_count_3_{0u},
+        item_bound_3_{0u},
+        item_id_4_{0u},
+        item_count_4_{0u},
+        original_price_{::uint64_t{0u}},
+        item_bound_4_{0u},
+        min_level_{0u},
+        max_level_{0u} {}
 
 template <typename>
 constexpr SpiritShopGoodsTable::SpiritShopGoodsTable(::_pbi::ConstantInitialized,
@@ -502,7 +570,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SpiritShopGoodsTable, _impl_._has_bits_),
-        24, // hasbit index offset
+        36, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::SpiritShopGoodsTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::SpiritShopGoodsTable, _impl_.tab_id_),
         PROTOBUF_FIELD_OFFSET(::SpiritShopGoodsTable, _impl_.sort_order_),
@@ -524,6 +592,18 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::SpiritShopGoodsTable, _impl_.limit_group_id_),
         PROTOBUF_FIELD_OFFSET(::SpiritShopGoodsTable, _impl_.limit_group_weight_),
         PROTOBUF_FIELD_OFFSET(::SpiritShopGoodsTable, _impl_.badge_text_),
+        PROTOBUF_FIELD_OFFSET(::SpiritShopGoodsTable, _impl_.start_time_ms_),
+        PROTOBUF_FIELD_OFFSET(::SpiritShopGoodsTable, _impl_.end_time_ms_),
+        PROTOBUF_FIELD_OFFSET(::SpiritShopGoodsTable, _impl_.grant_mode_),
+        PROTOBUF_FIELD_OFFSET(::SpiritShopGoodsTable, _impl_.item_id_3_),
+        PROTOBUF_FIELD_OFFSET(::SpiritShopGoodsTable, _impl_.item_count_3_),
+        PROTOBUF_FIELD_OFFSET(::SpiritShopGoodsTable, _impl_.item_bound_3_),
+        PROTOBUF_FIELD_OFFSET(::SpiritShopGoodsTable, _impl_.item_id_4_),
+        PROTOBUF_FIELD_OFFSET(::SpiritShopGoodsTable, _impl_.item_count_4_),
+        PROTOBUF_FIELD_OFFSET(::SpiritShopGoodsTable, _impl_.item_bound_4_),
+        PROTOBUF_FIELD_OFFSET(::SpiritShopGoodsTable, _impl_.original_price_),
+        PROTOBUF_FIELD_OFFSET(::SpiritShopGoodsTable, _impl_.min_level_),
+        PROTOBUF_FIELD_OFFSET(::SpiritShopGoodsTable, _impl_.max_level_),
         4,
         5,
         6,
@@ -545,6 +625,18 @@ const ::uint32_t
         19,
         20,
         3,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        30,
+        29,
+        31,
+        32,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SpiritShopGoodsTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -555,7 +647,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::SpiritShopGoodsTable)},
-        {45, sizeof(::SpiritShopGoodsTableData)},
+        {69, sizeof(::SpiritShopGoodsTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -564,7 +656,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_spiritshopgoods_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\033spiritshopgoods_table.proto\"\304\003\n\024Spirit"
+    "\n\033spiritshopgoods_table.proto\"\300\005\n\024Spirit"
     "ShopGoodsTable\022\n\n\002id\030\001 \001(\r\022\016\n\006tab_id\030\002 \001"
     "(\r\022\022\n\nsort_order\030\003 \001(\r\022\017\n\007enabled\030\004 \001(\r\022"
     "\014\n\004name\030\005 \001(\t\022\023\n\013description\030\006 \001(\t\022\020\n\010ic"
@@ -576,16 +668,23 @@ const char descriptor_table_protodef_spiritshopgoods_5ftable_2eproto[] ABSL_ATTR
     "\020 \001(\r\022\030\n\020limit_reset_kind\030\021 \001(\r\022\023\n\013limit"
     "_count\030\022 \001(\r\022\026\n\016limit_group_id\030\023 \001(\r\022\032\n\022"
     "limit_group_weight\030\024 \001(\r\022\022\n\nbadge_text\030\025"
-    " \001(\t\"\?\n\030SpiritShopGoodsTableData\022#\n\004data"
-    "\030\001 \003(\0132\025.SpiritShopGoodsTableBF\n\016com.gam"
-    "e.tableB\036SpiritShopGoodsTableOuterClassP"
-    "\001Z\022generated/pb/tableb\006proto3"
+    " \001(\t\022\025\n\rstart_time_ms\030\026 \001(\004\022\023\n\013end_time_"
+    "ms\030\027 \001(\004\022\022\n\ngrant_mode\030\030 \001(\r\022\021\n\titem_id_"
+    "3\030\031 \001(\r\022\024\n\014item_count_3\030\032 \001(\r\022\024\n\014item_bo"
+    "und_3\030\033 \001(\r\022\021\n\titem_id_4\030\034 \001(\r\022\024\n\014item_c"
+    "ount_4\030\035 \001(\r\022\024\n\014item_bound_4\030\036 \001(\r\022\026\n\016or"
+    "iginal_price\030\037 \001(\004\022\021\n\tmin_level\030  \001(\r\022\021\n"
+    "\tmax_level\030! \001(\r\"\?\n\030SpiritShopGoodsTable"
+    "Data\022#\n\004data\030\001 \003(\0132\025.SpiritShopGoodsTabl"
+    "eBF\n\016com.game.tableB\036SpiritShopGoodsTabl"
+    "eOuterClassP\001Z\022generated/pb/tableb\006proto"
+    "3"
 };
 static ::absl::once_flag descriptor_table_spiritshopgoods_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_spiritshopgoods_5ftable_2eproto = {
     false,
     false,
-    629,
+    881,
     descriptor_table_protodef_spiritshopgoods_5ftable_2eproto,
     "spiritshopgoods_table.proto",
     &descriptor_table_spiritshopgoods_5ftable_2eproto_once,
@@ -638,9 +737,9 @@ SpiritShopGoodsTable::SpiritShopGoodsTable(
                offsetof(Impl_, id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, id_),
-           offsetof(Impl_, limit_group_weight_) -
+           offsetof(Impl_, max_level_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::limit_group_weight_));
+               sizeof(Impl_::max_level_));
 
   // @@protoc_insertion_point(copy_constructor:SpiritShopGoodsTable)
 }
@@ -658,9 +757,9 @@ inline void SpiritShopGoodsTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE are
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, limit_group_weight_) -
+           offsetof(Impl_, max_level_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::limit_group_weight_));
+               sizeof(Impl_::max_level_));
 }
 SpiritShopGoodsTable::~SpiritShopGoodsTable() {
   // @@protoc_insertion_point(destructor:SpiritShopGoodsTable)
@@ -738,11 +837,17 @@ PROTOBUF_NOINLINE void SpiritShopGoodsTable::Clear() {
         reinterpret_cast<char*>(&_impl_.item_count_2_) -
         reinterpret_cast<char*>(&_impl_.price_)) + sizeof(_impl_.item_count_2_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     ::memset(&_impl_.item_bound_2_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.limit_group_weight_) -
-        reinterpret_cast<char*>(&_impl_.item_bound_2_)) + sizeof(_impl_.limit_group_weight_));
+        reinterpret_cast<char*>(&_impl_.grant_mode_) -
+        reinterpret_cast<char*>(&_impl_.item_bound_2_)) + sizeof(_impl_.grant_mode_));
   }
+  if (BatchCheckHasBit(cached_has_bits, 0xff000000U)) {
+    ::memset(&_impl_.item_id_3_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.min_level_) -
+        reinterpret_cast<char*>(&_impl_.item_id_3_)) + sizeof(_impl_.min_level_));
+  }
+  _impl_.max_level_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -959,6 +1064,115 @@ PROTOBUF_NOINLINE void SpiritShopGoodsTable::Clear() {
     }
   }
 
+  // uint64 start_time_ms = 22;
+  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (this_._internal_start_time_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          22, this_._internal_start_time_ms(), target);
+    }
+  }
+
+  // uint64 end_time_ms = 23;
+  if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+    if (this_._internal_end_time_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          23, this_._internal_end_time_ms(), target);
+    }
+  }
+
+  // uint32 grant_mode = 24;
+  if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+    if (this_._internal_grant_mode() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          24, this_._internal_grant_mode(), target);
+    }
+  }
+
+  // uint32 item_id_3 = 25;
+  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+    if (this_._internal_item_id_3() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          25, this_._internal_item_id_3(), target);
+    }
+  }
+
+  // uint32 item_count_3 = 26;
+  if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+    if (this_._internal_item_count_3() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          26, this_._internal_item_count_3(), target);
+    }
+  }
+
+  // uint32 item_bound_3 = 27;
+  if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+    if (this_._internal_item_bound_3() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          27, this_._internal_item_bound_3(), target);
+    }
+  }
+
+  // uint32 item_id_4 = 28;
+  if (CheckHasBit(cached_has_bits, 0x08000000U)) {
+    if (this_._internal_item_id_4() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          28, this_._internal_item_id_4(), target);
+    }
+  }
+
+  // uint32 item_count_4 = 29;
+  if (CheckHasBit(cached_has_bits, 0x10000000U)) {
+    if (this_._internal_item_count_4() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          29, this_._internal_item_count_4(), target);
+    }
+  }
+
+  // uint32 item_bound_4 = 30;
+  if (CheckHasBit(cached_has_bits, 0x40000000U)) {
+    if (this_._internal_item_bound_4() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          30, this_._internal_item_bound_4(), target);
+    }
+  }
+
+  // uint64 original_price = 31;
+  if (CheckHasBit(cached_has_bits, 0x20000000U)) {
+    if (this_._internal_original_price() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          31, this_._internal_original_price(), target);
+    }
+  }
+
+  // uint32 min_level = 32;
+  if (CheckHasBit(cached_has_bits, 0x80000000U)) {
+    if (this_._internal_min_level() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          32, this_._internal_min_level(), target);
+    }
+  }
+
+  cached_has_bits = this_._impl_._has_bits_[1];
+  // uint32 max_level = 33;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_max_level() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          33, this_._internal_max_level(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1100,7 +1314,7 @@ PROTOBUF_NOINLINE void SpiritShopGoodsTable::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     // uint32 item_bound_2 = 16;
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_item_bound_2() != 0) {
@@ -1134,6 +1348,95 @@ PROTOBUF_NOINLINE void SpiritShopGoodsTable::Clear() {
       if (this_._internal_limit_group_weight() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_limit_group_weight());
+      }
+    }
+    // uint64 start_time_ms = 22;
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (this_._internal_start_time_ms() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_start_time_ms());
+      }
+    }
+    // uint64 end_time_ms = 23;
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+      if (this_._internal_end_time_ms() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_end_time_ms());
+      }
+    }
+    // uint32 grant_mode = 24;
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (this_._internal_grant_mode() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_grant_mode());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0xff000000U)) {
+    // uint32 item_id_3 = 25;
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+      if (this_._internal_item_id_3() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_item_id_3());
+      }
+    }
+    // uint32 item_count_3 = 26;
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+      if (this_._internal_item_count_3() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_item_count_3());
+      }
+    }
+    // uint32 item_bound_3 = 27;
+    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+      if (this_._internal_item_bound_3() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_item_bound_3());
+      }
+    }
+    // uint32 item_id_4 = 28;
+    if (CheckHasBit(cached_has_bits, 0x08000000U)) {
+      if (this_._internal_item_id_4() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_item_id_4());
+      }
+    }
+    // uint32 item_count_4 = 29;
+    if (CheckHasBit(cached_has_bits, 0x10000000U)) {
+      if (this_._internal_item_count_4() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_item_count_4());
+      }
+    }
+    // uint64 original_price = 31;
+    if (CheckHasBit(cached_has_bits, 0x20000000U)) {
+      if (this_._internal_original_price() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_original_price());
+      }
+    }
+    // uint32 item_bound_4 = 30;
+    if (CheckHasBit(cached_has_bits, 0x40000000U)) {
+      if (this_._internal_item_bound_4() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_item_bound_4());
+      }
+    }
+    // uint32 min_level = 32;
+    if (CheckHasBit(cached_has_bits, 0x80000000U)) {
+      if (this_._internal_min_level() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_min_level());
+      }
+    }
+  }
+   {
+    // uint32 max_level = 33;
+    cached_has_bits = this_._impl_._has_bits_[1];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_max_level() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_max_level());
       }
     }
   }
@@ -1254,7 +1557,7 @@ void SpiritShopGoodsTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (from._internal_item_bound_2() != 0) {
         _this->_impl_.item_bound_2_ = from._impl_.item_bound_2_;
@@ -1280,8 +1583,71 @@ void SpiritShopGoodsTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.limit_group_weight_ = from._impl_.limit_group_weight_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (from._internal_start_time_ms() != 0) {
+        _this->_impl_.start_time_ms_ = from._impl_.start_time_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+      if (from._internal_end_time_ms() != 0) {
+        _this->_impl_.end_time_ms_ = from._impl_.end_time_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (from._internal_grant_mode() != 0) {
+        _this->_impl_.grant_mode_ = from._impl_.grant_mode_;
+      }
+    }
   }
-  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  if (BatchCheckHasBit(cached_has_bits, 0xff000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+      if (from._internal_item_id_3() != 0) {
+        _this->_impl_.item_id_3_ = from._impl_.item_id_3_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+      if (from._internal_item_count_3() != 0) {
+        _this->_impl_.item_count_3_ = from._impl_.item_count_3_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+      if (from._internal_item_bound_3() != 0) {
+        _this->_impl_.item_bound_3_ = from._impl_.item_bound_3_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x08000000U)) {
+      if (from._internal_item_id_4() != 0) {
+        _this->_impl_.item_id_4_ = from._impl_.item_id_4_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x10000000U)) {
+      if (from._internal_item_count_4() != 0) {
+        _this->_impl_.item_count_4_ = from._impl_.item_count_4_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x20000000U)) {
+      if (from._internal_original_price() != 0) {
+        _this->_impl_.original_price_ = from._impl_.original_price_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x40000000U)) {
+      if (from._internal_item_bound_4() != 0) {
+        _this->_impl_.item_bound_4_ = from._impl_.item_bound_4_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x80000000U)) {
+      if (from._internal_min_level() != 0) {
+        _this->_impl_.min_level_ = from._impl_.min_level_;
+      }
+    }
+  }
+  cached_has_bits = from._impl_._has_bits_[1];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_max_level() != 0) {
+      _this->_impl_.max_level_ = from._impl_.max_level_;
+    }
+  }
+  _this->_impl_._has_bits_.Or(from._impl_._has_bits_);
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
 }
@@ -1300,13 +1666,14 @@ void SpiritShopGoodsTable::InternalSwap(SpiritShopGoodsTable* PROTOBUF_RESTRICT 
   ABSL_DCHECK_EQ(arena, other->GetArena());
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_._has_bits_[1], other->_impl_._has_bits_[1]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.description_, &other->_impl_.description_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.icon_key_, &other->_impl_.icon_key_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.badge_text_, &other->_impl_.badge_text_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.limit_group_weight_)
-      + sizeof(SpiritShopGoodsTable::_impl_.limit_group_weight_)
+      PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.max_level_)
+      + sizeof(SpiritShopGoodsTable::_impl_.max_level_)
       - PROTOBUF_FIELD_OFFSET(SpiritShopGoodsTable, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));

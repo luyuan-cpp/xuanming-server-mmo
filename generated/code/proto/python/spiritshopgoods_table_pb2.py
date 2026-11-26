@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1bspiritshopgoods_table.proto\"\xc4\x03\n\x14SpiritShopGoodsTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x0e\n\x06tab_id\x18\x02 \x01(\r\x12\x12\n\nsort_order\x18\x03 \x01(\r\x12\x0f\n\x07\x65nabled\x18\x04 \x01(\r\x12\x0c\n\x04name\x18\x05 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x06 \x01(\t\x12\x10\n\x08icon_key\x18\x07 \x01(\t\x12\x15\n\rcurrency_type\x18\x08 \x01(\r\x12\r\n\x05price\x18\t \x01(\x04\x12\x1b\n\x13max_buy_per_request\x18\n \x01(\r\x12\x11\n\titem_id_1\x18\x0b \x01(\r\x12\x14\n\x0citem_count_1\x18\x0c \x01(\r\x12\x14\n\x0citem_bound_1\x18\r \x01(\r\x12\x11\n\titem_id_2\x18\x0e \x01(\r\x12\x14\n\x0citem_count_2\x18\x0f \x01(\r\x12\x14\n\x0citem_bound_2\x18\x10 \x01(\r\x12\x18\n\x10limit_reset_kind\x18\x11 \x01(\r\x12\x13\n\x0blimit_count\x18\x12 \x01(\r\x12\x16\n\x0elimit_group_id\x18\x13 \x01(\r\x12\x1a\n\x12limit_group_weight\x18\x14 \x01(\r\x12\x12\n\nbadge_text\x18\x15 \x01(\t\"?\n\x18SpiritShopGoodsTableData\x12#\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x15.SpiritShopGoodsTableBF\n\x0e\x63om.game.tableB\x1eSpiritShopGoodsTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1bspiritshopgoods_table.proto\"\xc0\x05\n\x14SpiritShopGoodsTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x0e\n\x06tab_id\x18\x02 \x01(\r\x12\x12\n\nsort_order\x18\x03 \x01(\r\x12\x0f\n\x07\x65nabled\x18\x04 \x01(\r\x12\x0c\n\x04name\x18\x05 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x06 \x01(\t\x12\x10\n\x08icon_key\x18\x07 \x01(\t\x12\x15\n\rcurrency_type\x18\x08 \x01(\r\x12\r\n\x05price\x18\t \x01(\x04\x12\x1b\n\x13max_buy_per_request\x18\n \x01(\r\x12\x11\n\titem_id_1\x18\x0b \x01(\r\x12\x14\n\x0citem_count_1\x18\x0c \x01(\r\x12\x14\n\x0citem_bound_1\x18\r \x01(\r\x12\x11\n\titem_id_2\x18\x0e \x01(\r\x12\x14\n\x0citem_count_2\x18\x0f \x01(\r\x12\x14\n\x0citem_bound_2\x18\x10 \x01(\r\x12\x18\n\x10limit_reset_kind\x18\x11 \x01(\r\x12\x13\n\x0blimit_count\x18\x12 \x01(\r\x12\x16\n\x0elimit_group_id\x18\x13 \x01(\r\x12\x1a\n\x12limit_group_weight\x18\x14 \x01(\r\x12\x12\n\nbadge_text\x18\x15 \x01(\t\x12\x15\n\rstart_time_ms\x18\x16 \x01(\x04\x12\x13\n\x0b\x65nd_time_ms\x18\x17 \x01(\x04\x12\x12\n\ngrant_mode\x18\x18 \x01(\r\x12\x11\n\titem_id_3\x18\x19 \x01(\r\x12\x14\n\x0citem_count_3\x18\x1a \x01(\r\x12\x14\n\x0citem_bound_3\x18\x1b \x01(\r\x12\x11\n\titem_id_4\x18\x1c \x01(\r\x12\x14\n\x0citem_count_4\x18\x1d \x01(\r\x12\x14\n\x0citem_bound_4\x18\x1e \x01(\r\x12\x16\n\x0eoriginal_price\x18\x1f \x01(\x04\x12\x11\n\tmin_level\x18  \x01(\r\x12\x11\n\tmax_level\x18! \x01(\r\"?\n\x18SpiritShopGoodsTableData\x12#\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x15.SpiritShopGoodsTableBF\n\x0e\x63om.game.tableB\x1eSpiritShopGoodsTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,7 +33,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableB\036SpiritShopGoodsTableOuterClassP\001Z\022generated/pb/table'
   _globals['_SPIRITSHOPGOODSTABLE']._serialized_start=32
-  _globals['_SPIRITSHOPGOODSTABLE']._serialized_end=484
-  _globals['_SPIRITSHOPGOODSTABLEDATA']._serialized_start=486
-  _globals['_SPIRITSHOPGOODSTABLEDATA']._serialized_end=549
+  _globals['_SPIRITSHOPGOODSTABLE']._serialized_end=736
+  _globals['_SPIRITSHOPGOODSTABLEDATA']._serialized_start=738
+  _globals['_SPIRITSHOPGOODSTABLEDATA']._serialized_end=801
 # @@protoc_insertion_point(module_scope)

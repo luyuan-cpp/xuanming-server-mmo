@@ -35,7 +35,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_spirit_5fshop_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\033spirit_shop_error_tip.proto*\374\002\n\021spirit"
+    "\n\033spirit_shop_error_tip.proto*\334\003\n\021spirit"
     "_shop_error\022\030\n\024kSpirit_shop_errorOK\020\000\022\034\n"
     "\026kSpiritShopUnavailable\020\210\241\002\022\036\n\030kSpiritSh"
     "opGoodsOffShelf\020\211\241\002\022\035\n\027kSpiritShopPriceC"
@@ -45,14 +45,16 @@ const char descriptor_table_protodef_spirit_5fshop_5ferror_5ftip_2eproto[] ABSL_
     "hopCurrencyNotEnough\020\216\241\002\022\030\n\022kSpiritShopB"
     "agFull\020\217\241\002\022\027\n\021kSpiritShopFrozen\020\220\241\002\022\031\n\023k"
     "SpiritShopInBattle\020\221\241\002\022\034\n\026kSpiritShopIte"
-    "mBlocked\020\222\241\002B$\n\016com.game.tableZ\022generate"
-    "d/pb/tableb\006proto3"
+    "mBlocked\020\222\241\002\022 \n\032kSpiritShopNotInSaleWind"
+    "ow\020\223\241\002\022\034\n\026kSpiritShopLevelNotMet\020\224\241\002\022\036\n\030"
+    "kSpiritShopInvalidChoice\020\225\241\002B$\n\016com.game"
+    ".tableZ\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_spirit_5fshop_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_spirit_5fshop_5ferror_5ftip_2eproto = {
     false,
     false,
-    458,
+    554,
     descriptor_table_protodef_spirit_5fshop_5ferror_5ftip_2eproto,
     "spirit_shop_error_tip.proto",
     &descriptor_table_spirit_5fshop_5ferror_5ftip_2eproto_once,
@@ -71,7 +73,7 @@ spirit_shop_error_descriptor() {
   return file_level_enum_descriptors_spirit_5fshop_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t spirit_shop_error_internal_data_[] = {
-    65536u, 720896u, 37007u, 37003u, 37009u, 37001u, 37005u, 37008u, 37010u, 37000u, 37002u, 37004u, 37006u, };
+    65536u, 917504u, 37007u, 37003u, 37011u, 37001u, 37005u, 37009u, 37013u, 37000u, 37002u, 37004u, 37006u, 37008u, 37010u, 37012u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

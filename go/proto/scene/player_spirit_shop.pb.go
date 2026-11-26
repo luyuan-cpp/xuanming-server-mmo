@@ -186,6 +186,12 @@ type SpiritShopGoodsView struct {
 	LimitGroupId     uint32                 `protobuf:"varint,15,opt,name=limit_group_id,json=limitGroupId,proto3" json:"limit_group_id,omitempty"`               // 0 = 无共享组
 	LimitGroupWeight uint32                 `protobuf:"varint,16,opt,name=limit_group_weight,json=limitGroupWeight,proto3" json:"limit_group_weight,omitempty"`   // 每份消耗共享组权重
 	NextResetMs      uint64                 `protobuf:"varint,17,opt,name=next_reset_ms,json=nextResetMs,proto3" json:"next_reset_ms,omitempty"`                  // limit_count > 0 且 limit_reset_kind == 1 时有效
+	StartTimeMs      uint64                 `protobuf:"varint,18,opt,name=start_time_ms,json=startTimeMs,proto3" json:"start_time_ms,omitempty"`                  // 定时开售 UTC 毫秒(0 = 立即开售)
+	EndTimeMs        uint64                 `protobuf:"varint,19,opt,name=end_time_ms,json=endTimeMs,proto3" json:"end_time_ms,omitempty"`                        // 定时下架 UTC 毫秒(0 = 永不下架)
+	GrantMode        uint32                 `protobuf:"varint,20,opt,name=grant_mode,json=grantMode,proto3" json:"grant_mode,omitempty"`                          // 0 = 全部发放(1..4项), 1 = 多选一自选(2..4项任选1项)
+	OriginalPrice    uint64                 `protobuf:"varint,21,opt,name=original_price,json=originalPrice,proto3" json:"original_price,omitempty"`              // 原价划线展示(0 = 无划线; > unit_price 时客户端显示原价划线与折数)
+	MinLevel         uint32                 `protobuf:"varint,22,opt,name=min_level,json=minLevel,proto3" json:"min_level,omitempty"`                             // 最低可见/可购有效等级(0 = 不限)
+	MaxLevel         uint32                 `protobuf:"varint,23,opt,name=max_level,json=maxLevel,proto3" json:"max_level,omitempty"`                             // 最高可见/可购有效等级(0 = 不限)
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -335,6 +341,48 @@ func (x *SpiritShopGoodsView) GetLimitGroupWeight() uint32 {
 func (x *SpiritShopGoodsView) GetNextResetMs() uint64 {
 	if x != nil {
 		return x.NextResetMs
+	}
+	return 0
+}
+
+func (x *SpiritShopGoodsView) GetStartTimeMs() uint64 {
+	if x != nil {
+		return x.StartTimeMs
+	}
+	return 0
+}
+
+func (x *SpiritShopGoodsView) GetEndTimeMs() uint64 {
+	if x != nil {
+		return x.EndTimeMs
+	}
+	return 0
+}
+
+func (x *SpiritShopGoodsView) GetGrantMode() uint32 {
+	if x != nil {
+		return x.GrantMode
+	}
+	return 0
+}
+
+func (x *SpiritShopGoodsView) GetOriginalPrice() uint64 {
+	if x != nil {
+		return x.OriginalPrice
+	}
+	return 0
+}
+
+func (x *SpiritShopGoodsView) GetMinLevel() uint32 {
+	if x != nil {
+		return x.MinLevel
+	}
+	return 0
+}
+
+func (x *SpiritShopGoodsView) GetMaxLevel() uint32 {
+	if x != nil {
+		return x.MaxLevel
 	}
 	return 0
 }
@@ -517,9 +565,12 @@ type BuySpiritShopGoodsRequest struct {
 	GoodsId         uint32                 `protobuf:"varint,2,opt,name=goods_id,json=goodsId,proto3" json:"goods_id,omitempty"`
 	Count           uint32                 `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"` // 1..max_buy_per_request
 	// 报价防呆:任意一项与服务端当前配表不一致(热更改价/改内容/改绑定态)均拒绝并回 kSpiritShopPriceChanged。
+	// grant_mode == 0(全部发放)时 expected_items 为全部 1..4 项且 chosen_item_index 须为 0;
+	// grant_mode == 1(多选一)时 chosen_item_index 为所选候选项下标(0..items.size()-1), expected_items 仅含所选那 1 项。
 	ExpectedCurrencyType uint32                 `protobuf:"varint,4,opt,name=expected_currency_type,json=expectedCurrencyType,proto3" json:"expected_currency_type,omitempty"`
 	ExpectedUnitPrice    uint64                 `protobuf:"varint,5,opt,name=expected_unit_price,json=expectedUnitPrice,proto3" json:"expected_unit_price,omitempty"`
 	ExpectedItems        []*SpiritShopItemEntry `protobuf:"bytes,6,rep,name=expected_items,json=expectedItems,proto3" json:"expected_items,omitempty"`
+	ChosenItemIndex      uint32                 `protobuf:"varint,7,opt,name=chosen_item_index,json=chosenItemIndex,proto3" json:"chosen_item_index,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -594,6 +645,13 @@ func (x *BuySpiritShopGoodsRequest) GetExpectedItems() []*SpiritShopItemEntry {
 		return x.ExpectedItems
 	}
 	return nil
+}
+
+func (x *BuySpiritShopGoodsRequest) GetChosenItemIndex() uint32 {
+	if x != nil {
+		return x.ChosenItemIndex
+	}
+	return 0
 }
 
 type BuySpiritShopGoodsResponse struct {
@@ -683,7 +741,7 @@ const file_proto_scene_player_spirit_shop_proto_rawDesc = "" +
 	"max_weight\x18\x04 \x01(\rR\tmaxWeight\x12\x1f\n" +
 	"\vused_weight\x18\x05 \x01(\rR\n" +
 	"usedWeight\x12\"\n" +
-	"\rnext_reset_ms\x18\x06 \x01(\x04R\vnextResetMs\"\xdb\x04\n" +
+	"\rnext_reset_ms\x18\x06 \x01(\x04R\vnextResetMs\"\x9f\x06\n" +
 	"\x13SpiritShopGoodsView\x12\x19\n" +
 	"\bgoods_id\x18\x01 \x01(\rR\agoodsId\x12\x15\n" +
 	"\x06tab_id\x18\x02 \x01(\rR\x05tabId\x12\x1d\n" +
@@ -706,7 +764,14 @@ const file_proto_scene_player_spirit_shop_proto_rawDesc = "" +
 	"\fbought_count\x18\x0e \x01(\rR\vboughtCount\x12$\n" +
 	"\x0elimit_group_id\x18\x0f \x01(\rR\flimitGroupId\x12,\n" +
 	"\x12limit_group_weight\x18\x10 \x01(\rR\x10limitGroupWeight\x12\"\n" +
-	"\rnext_reset_ms\x18\x11 \x01(\x04R\vnextResetMs\"\xa0\x02\n" +
+	"\rnext_reset_ms\x18\x11 \x01(\x04R\vnextResetMs\x12\"\n" +
+	"\rstart_time_ms\x18\x12 \x01(\x04R\vstartTimeMs\x12\x1e\n" +
+	"\vend_time_ms\x18\x13 \x01(\x04R\tendTimeMs\x12\x1d\n" +
+	"\n" +
+	"grant_mode\x18\x14 \x01(\rR\tgrantMode\x12%\n" +
+	"\x0eoriginal_price\x18\x15 \x01(\x04R\roriginalPrice\x12\x1b\n" +
+	"\tmin_level\x18\x16 \x01(\rR\bminLevel\x12\x1b\n" +
+	"\tmax_level\x18\x17 \x01(\rR\bmaxLevel\"\xa0\x02\n" +
 	"\x0eSpiritShopInfo\x12$\n" +
 	"\x0eserver_time_ms\x18\x01 \x01(\x04R\fserverTimeMs\x12#\n" +
 	"\rshop_revision\x18\x02 \x01(\x04R\fshopRevision\x12'\n" +
@@ -717,14 +782,15 @@ const file_proto_scene_player_spirit_shop_proto_rawDesc = "" +
 	"\x18GetSpiritShopInfoRequest\"v\n" +
 	"\x19GetSpiritShopInfoResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12#\n" +
-	"\x04info\x18\x02 \x01(\v2\x0f.SpiritShopInfoR\x04info\"\x9b\x02\n" +
+	"\x04info\x18\x02 \x01(\v2\x0f.SpiritShopInfoR\x04info\"\xc7\x02\n" +
 	"\x19BuySpiritShopGoodsRequest\x12*\n" +
 	"\x11client_request_id\x18\x01 \x01(\x04R\x0fclientRequestId\x12\x19\n" +
 	"\bgoods_id\x18\x02 \x01(\rR\agoodsId\x12\x14\n" +
 	"\x05count\x18\x03 \x01(\rR\x05count\x124\n" +
 	"\x16expected_currency_type\x18\x04 \x01(\rR\x14expectedCurrencyType\x12.\n" +
 	"\x13expected_unit_price\x18\x05 \x01(\x04R\x11expectedUnitPrice\x12;\n" +
-	"\x0eexpected_items\x18\x06 \x03(\v2\x14.SpiritShopItemEntryR\rexpectedItems\"\xaf\x01\n" +
+	"\x0eexpected_items\x18\x06 \x03(\v2\x14.SpiritShopItemEntryR\rexpectedItems\x12*\n" +
+	"\x11chosen_item_index\x18\a \x01(\rR\x0fchosenItemIndex\"\xaf\x01\n" +
 	"\x1aBuySpiritShopGoodsResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12#\n" +
 	"\x04info\x18\x02 \x01(\v2\x0f.SpiritShopInfoR\x04info\x12\x1a\n" +

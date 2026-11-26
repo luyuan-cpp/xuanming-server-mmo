@@ -249,6 +249,18 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SpiritShopGoodsTable final : public
     kLimitCountFieldNumber = 18,
     kLimitGroupIdFieldNumber = 19,
     kLimitGroupWeightFieldNumber = 20,
+    kStartTimeMsFieldNumber = 22,
+    kEndTimeMsFieldNumber = 23,
+    kGrantModeFieldNumber = 24,
+    kItemId3FieldNumber = 25,
+    kItemCount3FieldNumber = 26,
+    kItemBound3FieldNumber = 27,
+    kItemId4FieldNumber = 28,
+    kItemCount4FieldNumber = 29,
+    kOriginalPriceFieldNumber = 31,
+    kItemBound4FieldNumber = 30,
+    kMinLevelFieldNumber = 32,
+    kMaxLevelFieldNumber = 33,
   };
   // string name = 5;
   void clear_name() ;
@@ -480,13 +492,133 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SpiritShopGoodsTable final : public
   void _internal_set_limit_group_weight(::uint32_t value);
 
   public:
+  // uint64 start_time_ms = 22;
+  void clear_start_time_ms() ;
+  [[nodiscard]] ::uint64_t start_time_ms() const;
+  void set_start_time_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_start_time_ms() const;
+  void _internal_set_start_time_ms(::uint64_t value);
+
+  public:
+  // uint64 end_time_ms = 23;
+  void clear_end_time_ms() ;
+  [[nodiscard]] ::uint64_t end_time_ms() const;
+  void set_end_time_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_end_time_ms() const;
+  void _internal_set_end_time_ms(::uint64_t value);
+
+  public:
+  // uint32 grant_mode = 24;
+  void clear_grant_mode() ;
+  [[nodiscard]] ::uint32_t grant_mode() const;
+  void set_grant_mode(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_grant_mode() const;
+  void _internal_set_grant_mode(::uint32_t value);
+
+  public:
+  // uint32 item_id_3 = 25;
+  void clear_item_id_3() ;
+  [[nodiscard]] ::uint32_t item_id_3() const;
+  void set_item_id_3(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_item_id_3() const;
+  void _internal_set_item_id_3(::uint32_t value);
+
+  public:
+  // uint32 item_count_3 = 26;
+  void clear_item_count_3() ;
+  [[nodiscard]] ::uint32_t item_count_3() const;
+  void set_item_count_3(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_item_count_3() const;
+  void _internal_set_item_count_3(::uint32_t value);
+
+  public:
+  // uint32 item_bound_3 = 27;
+  void clear_item_bound_3() ;
+  [[nodiscard]] ::uint32_t item_bound_3() const;
+  void set_item_bound_3(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_item_bound_3() const;
+  void _internal_set_item_bound_3(::uint32_t value);
+
+  public:
+  // uint32 item_id_4 = 28;
+  void clear_item_id_4() ;
+  [[nodiscard]] ::uint32_t item_id_4() const;
+  void set_item_id_4(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_item_id_4() const;
+  void _internal_set_item_id_4(::uint32_t value);
+
+  public:
+  // uint32 item_count_4 = 29;
+  void clear_item_count_4() ;
+  [[nodiscard]] ::uint32_t item_count_4() const;
+  void set_item_count_4(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_item_count_4() const;
+  void _internal_set_item_count_4(::uint32_t value);
+
+  public:
+  // uint64 original_price = 31;
+  void clear_original_price() ;
+  [[nodiscard]] ::uint64_t original_price() const;
+  void set_original_price(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_original_price() const;
+  void _internal_set_original_price(::uint64_t value);
+
+  public:
+  // uint32 item_bound_4 = 30;
+  void clear_item_bound_4() ;
+  [[nodiscard]] ::uint32_t item_bound_4() const;
+  void set_item_bound_4(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_item_bound_4() const;
+  void _internal_set_item_bound_4(::uint32_t value);
+
+  public:
+  // uint32 min_level = 32;
+  void clear_min_level() ;
+  [[nodiscard]] ::uint32_t min_level() const;
+  void set_min_level(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_min_level() const;
+  void _internal_set_min_level(::uint32_t value);
+
+  public:
+  // uint32 max_level = 33;
+  void clear_max_level() ;
+  [[nodiscard]] ::uint32_t max_level() const;
+  void set_max_level(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_max_level() const;
+  void _internal_set_max_level(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:SpiritShopGoodsTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 21,
-                          0, 78,
-                          2>;
+      ::google::protobuf::internal::TcParseTable<5, 33,
+                          0, 94,
+                          7>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
   friend class ::google::protobuf::internal::TcParser;
@@ -511,7 +643,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SpiritShopGoodsTable final : public
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
         const SpiritShopGoodsTable& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::HasBits<2> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr name_;
     ::google::protobuf::internal::ArenaStringPtr description_;
@@ -534,6 +666,18 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SpiritShopGoodsTable final : public
     ::uint32_t limit_count_;
     ::uint32_t limit_group_id_;
     ::uint32_t limit_group_weight_;
+    ::uint64_t start_time_ms_;
+    ::uint64_t end_time_ms_;
+    ::uint32_t grant_mode_;
+    ::uint32_t item_id_3_;
+    ::uint32_t item_count_3_;
+    ::uint32_t item_bound_3_;
+    ::uint32_t item_id_4_;
+    ::uint32_t item_count_4_;
+    ::uint64_t original_price_;
+    ::uint32_t item_bound_4_;
+    ::uint32_t min_level_;
+    ::uint32_t max_level_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1430,6 +1574,294 @@ inline void SpiritShopGoodsTable::set_allocated_badge_text(::std::string* PROTOB
     _impl_.badge_text_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:SpiritShopGoodsTable.badge_text)
+}
+
+// uint64 start_time_ms = 22;
+inline void SpiritShopGoodsTable::clear_start_time_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.start_time_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+}
+inline ::uint64_t SpiritShopGoodsTable::start_time_ms() const {
+  // @@protoc_insertion_point(field_get:SpiritShopGoodsTable.start_time_ms)
+  return _internal_start_time_ms();
+}
+inline void SpiritShopGoodsTable::set_start_time_ms(::uint64_t value) {
+  _internal_set_start_time_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  // @@protoc_insertion_point(field_set:SpiritShopGoodsTable.start_time_ms)
+}
+inline ::uint64_t SpiritShopGoodsTable::_internal_start_time_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.start_time_ms_;
+}
+inline void SpiritShopGoodsTable::_internal_set_start_time_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.start_time_ms_ = value;
+}
+
+// uint64 end_time_ms = 23;
+inline void SpiritShopGoodsTable::clear_end_time_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.end_time_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+}
+inline ::uint64_t SpiritShopGoodsTable::end_time_ms() const {
+  // @@protoc_insertion_point(field_get:SpiritShopGoodsTable.end_time_ms)
+  return _internal_end_time_ms();
+}
+inline void SpiritShopGoodsTable::set_end_time_ms(::uint64_t value) {
+  _internal_set_end_time_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  // @@protoc_insertion_point(field_set:SpiritShopGoodsTable.end_time_ms)
+}
+inline ::uint64_t SpiritShopGoodsTable::_internal_end_time_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.end_time_ms_;
+}
+inline void SpiritShopGoodsTable::_internal_set_end_time_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.end_time_ms_ = value;
+}
+
+// uint32 grant_mode = 24;
+inline void SpiritShopGoodsTable::clear_grant_mode() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.grant_mode_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+}
+inline ::uint32_t SpiritShopGoodsTable::grant_mode() const {
+  // @@protoc_insertion_point(field_get:SpiritShopGoodsTable.grant_mode)
+  return _internal_grant_mode();
+}
+inline void SpiritShopGoodsTable::set_grant_mode(::uint32_t value) {
+  _internal_set_grant_mode(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  // @@protoc_insertion_point(field_set:SpiritShopGoodsTable.grant_mode)
+}
+inline ::uint32_t SpiritShopGoodsTable::_internal_grant_mode() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.grant_mode_;
+}
+inline void SpiritShopGoodsTable::_internal_set_grant_mode(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.grant_mode_ = value;
+}
+
+// uint32 item_id_3 = 25;
+inline void SpiritShopGoodsTable::clear_item_id_3() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_id_3_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
+}
+inline ::uint32_t SpiritShopGoodsTable::item_id_3() const {
+  // @@protoc_insertion_point(field_get:SpiritShopGoodsTable.item_id_3)
+  return _internal_item_id_3();
+}
+inline void SpiritShopGoodsTable::set_item_id_3(::uint32_t value) {
+  _internal_set_item_id_3(value);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
+  // @@protoc_insertion_point(field_set:SpiritShopGoodsTable.item_id_3)
+}
+inline ::uint32_t SpiritShopGoodsTable::_internal_item_id_3() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.item_id_3_;
+}
+inline void SpiritShopGoodsTable::_internal_set_item_id_3(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_id_3_ = value;
+}
+
+// uint32 item_count_3 = 26;
+inline void SpiritShopGoodsTable::clear_item_count_3() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_count_3_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+}
+inline ::uint32_t SpiritShopGoodsTable::item_count_3() const {
+  // @@protoc_insertion_point(field_get:SpiritShopGoodsTable.item_count_3)
+  return _internal_item_count_3();
+}
+inline void SpiritShopGoodsTable::set_item_count_3(::uint32_t value) {
+  _internal_set_item_count_3(value);
+  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
+  // @@protoc_insertion_point(field_set:SpiritShopGoodsTable.item_count_3)
+}
+inline ::uint32_t SpiritShopGoodsTable::_internal_item_count_3() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.item_count_3_;
+}
+inline void SpiritShopGoodsTable::_internal_set_item_count_3(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_count_3_ = value;
+}
+
+// uint32 item_bound_3 = 27;
+inline void SpiritShopGoodsTable::clear_item_bound_3() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_bound_3_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
+}
+inline ::uint32_t SpiritShopGoodsTable::item_bound_3() const {
+  // @@protoc_insertion_point(field_get:SpiritShopGoodsTable.item_bound_3)
+  return _internal_item_bound_3();
+}
+inline void SpiritShopGoodsTable::set_item_bound_3(::uint32_t value) {
+  _internal_set_item_bound_3(value);
+  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
+  // @@protoc_insertion_point(field_set:SpiritShopGoodsTable.item_bound_3)
+}
+inline ::uint32_t SpiritShopGoodsTable::_internal_item_bound_3() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.item_bound_3_;
+}
+inline void SpiritShopGoodsTable::_internal_set_item_bound_3(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_bound_3_ = value;
+}
+
+// uint32 item_id_4 = 28;
+inline void SpiritShopGoodsTable::clear_item_id_4() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_id_4_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
+}
+inline ::uint32_t SpiritShopGoodsTable::item_id_4() const {
+  // @@protoc_insertion_point(field_get:SpiritShopGoodsTable.item_id_4)
+  return _internal_item_id_4();
+}
+inline void SpiritShopGoodsTable::set_item_id_4(::uint32_t value) {
+  _internal_set_item_id_4(value);
+  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
+  // @@protoc_insertion_point(field_set:SpiritShopGoodsTable.item_id_4)
+}
+inline ::uint32_t SpiritShopGoodsTable::_internal_item_id_4() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.item_id_4_;
+}
+inline void SpiritShopGoodsTable::_internal_set_item_id_4(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_id_4_ = value;
+}
+
+// uint32 item_count_4 = 29;
+inline void SpiritShopGoodsTable::clear_item_count_4() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_count_4_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
+}
+inline ::uint32_t SpiritShopGoodsTable::item_count_4() const {
+  // @@protoc_insertion_point(field_get:SpiritShopGoodsTable.item_count_4)
+  return _internal_item_count_4();
+}
+inline void SpiritShopGoodsTable::set_item_count_4(::uint32_t value) {
+  _internal_set_item_count_4(value);
+  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
+  // @@protoc_insertion_point(field_set:SpiritShopGoodsTable.item_count_4)
+}
+inline ::uint32_t SpiritShopGoodsTable::_internal_item_count_4() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.item_count_4_;
+}
+inline void SpiritShopGoodsTable::_internal_set_item_count_4(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_count_4_ = value;
+}
+
+// uint32 item_bound_4 = 30;
+inline void SpiritShopGoodsTable::clear_item_bound_4() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_bound_4_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x40000000U);
+}
+inline ::uint32_t SpiritShopGoodsTable::item_bound_4() const {
+  // @@protoc_insertion_point(field_get:SpiritShopGoodsTable.item_bound_4)
+  return _internal_item_bound_4();
+}
+inline void SpiritShopGoodsTable::set_item_bound_4(::uint32_t value) {
+  _internal_set_item_bound_4(value);
+  SetHasBit(_impl_._has_bits_[0], 0x40000000U);
+  // @@protoc_insertion_point(field_set:SpiritShopGoodsTable.item_bound_4)
+}
+inline ::uint32_t SpiritShopGoodsTable::_internal_item_bound_4() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.item_bound_4_;
+}
+inline void SpiritShopGoodsTable::_internal_set_item_bound_4(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_bound_4_ = value;
+}
+
+// uint64 original_price = 31;
+inline void SpiritShopGoodsTable::clear_original_price() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.original_price_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x20000000U);
+}
+inline ::uint64_t SpiritShopGoodsTable::original_price() const {
+  // @@protoc_insertion_point(field_get:SpiritShopGoodsTable.original_price)
+  return _internal_original_price();
+}
+inline void SpiritShopGoodsTable::set_original_price(::uint64_t value) {
+  _internal_set_original_price(value);
+  SetHasBit(_impl_._has_bits_[0], 0x20000000U);
+  // @@protoc_insertion_point(field_set:SpiritShopGoodsTable.original_price)
+}
+inline ::uint64_t SpiritShopGoodsTable::_internal_original_price() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.original_price_;
+}
+inline void SpiritShopGoodsTable::_internal_set_original_price(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.original_price_ = value;
+}
+
+// uint32 min_level = 32;
+inline void SpiritShopGoodsTable::clear_min_level() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.min_level_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
+}
+inline ::uint32_t SpiritShopGoodsTable::min_level() const {
+  // @@protoc_insertion_point(field_get:SpiritShopGoodsTable.min_level)
+  return _internal_min_level();
+}
+inline void SpiritShopGoodsTable::set_min_level(::uint32_t value) {
+  _internal_set_min_level(value);
+  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
+  // @@protoc_insertion_point(field_set:SpiritShopGoodsTable.min_level)
+}
+inline ::uint32_t SpiritShopGoodsTable::_internal_min_level() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.min_level_;
+}
+inline void SpiritShopGoodsTable::_internal_set_min_level(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.min_level_ = value;
+}
+
+// uint32 max_level = 33;
+inline void SpiritShopGoodsTable::clear_max_level() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_level_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
+}
+inline ::uint32_t SpiritShopGoodsTable::max_level() const {
+  // @@protoc_insertion_point(field_get:SpiritShopGoodsTable.max_level)
+  return _internal_max_level();
+}
+inline void SpiritShopGoodsTable::set_max_level(::uint32_t value) {
+  _internal_set_max_level(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000001U);
+  // @@protoc_insertion_point(field_set:SpiritShopGoodsTable.max_level)
+}
+inline ::uint32_t SpiritShopGoodsTable::_internal_max_level() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.max_level_;
+}
+inline void SpiritShopGoodsTable::_internal_set_max_level(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_level_ = value;
 }
 
 // -------------------------------------------------------------------

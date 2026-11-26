@@ -51,9 +51,37 @@ LIMIT_GROUP_ROWS = [
     ),
 ]
 
+# V2 扩展字段默认值（V1 商品均不限时、全部发放、无第 3/4 物品、无划线原价、不限等级）
+_V2_DEFAULTS = dict(
+    start_time_ms=0,
+    end_time_ms=0,
+    grant_mode=0,
+    item_id_3=0,
+    item_count_3=0,
+    item_bound_3=0,
+    item_id_4=0,
+    item_count_4=0,
+    item_bound_4=0,
+    original_price=0,
+    min_level=0,
+    max_level=0,
+)
+
+# 2027 春节自动上下架窗口（UTC+8：2027-02-05 00:00:00 ~ 2027-02-20 23:59:59）
+SPRING_2027_START_MS = 1801756800000
+SPRING_2027_END_MS = 1803139199000
+
+
+def _goods(**kw) -> dict:
+    row = dict(**kw)
+    for k, v in _V2_DEFAULTS.items():
+        row.setdefault(k, v)
+    return row
+
+
 GOODS_SHEET = "SpiritShopGoods"
 GOODS_ROWS = [
-    dict(
+    _goods(
         id=101,
         tab_id=1,
         sort_order=10,
@@ -76,7 +104,7 @@ GOODS_ROWS = [
         limit_group_weight=60,
         badge_text="6元破冰",
     ),
-    dict(
+    _goods(
         id=102,
         tab_id=1,
         sort_order=20,
@@ -99,7 +127,7 @@ GOODS_ROWS = [
         limit_group_weight=180,
         badge_text="超值省时",
     ),
-    dict(
+    _goods(
         id=103,
         tab_id=1,
         sort_order=30,
@@ -122,7 +150,7 @@ GOODS_ROWS = [
         limit_group_weight=300,
         badge_text="半套直达",
     ),
-    dict(
+    _goods(
         id=201,
         tab_id=2,
         sort_order=10,
@@ -145,7 +173,7 @@ GOODS_ROWS = [
         limit_group_weight=0,
         badge_text="保底极品",
     ),
-    dict(
+    _goods(
         id=202,
         tab_id=2,
         sort_order=20,
@@ -168,7 +196,7 @@ GOODS_ROWS = [
         limit_group_weight=0,
         badge_text="稀世制书",
     ),
-    dict(
+    _goods(
         id=301,
         tab_id=3,
         sort_order=10,
@@ -191,7 +219,7 @@ GOODS_ROWS = [
         limit_group_weight=0,
         badge_text="永久衣柜",
     ),
-    dict(
+    _goods(
         id=302,
         tab_id=3,
         sort_order=20,
@@ -214,7 +242,7 @@ GOODS_ROWS = [
         limit_group_weight=0,
         badge_text="社交便利",
     ),
-    dict(
+    _goods(
         id=303,
         tab_id=3,
         sort_order=30,
@@ -237,7 +265,7 @@ GOODS_ROWS = [
         limit_group_weight=0,
         badge_text="永久衣柜",
     ),
-    dict(
+    _goods(
         id=304,
         tab_id=3,
         sort_order=40,
@@ -260,6 +288,76 @@ GOODS_ROWS = [
         limit_group_weight=0,
         badge_text="永久衣柜",
     ),
+    _goods(
+        id=401,
+        tab_id=4,
+        sort_order=10,
+        enabled=1,
+        name="新春四喜大礼盒",
+        description="春节限时 4 合 1 绑定礼盒：含打造材料×60 + 百炼石×60 + 定星保底符×2 + 角色形象卡×1（全绑定仅自用，0 战力上限加成）。",
+        icon_key="UI/Ugui/SpiritShopV1/pack_festival_bundle",
+        currency_type=1,
+        price=180,
+        max_buy_per_request=1,
+        item_id_1=3001,
+        item_count_1=60,
+        item_bound_1=1,
+        item_id_2=3002,
+        item_count_2=60,
+        item_bound_2=1,
+        limit_reset_kind=0,
+        limit_count=1,
+        limit_group_id=0,
+        limit_group_weight=0,
+        badge_text="新春6折",
+        start_time_ms=SPRING_2027_START_MS,
+        end_time_ms=SPRING_2027_END_MS,
+        grant_mode=0,
+        item_id_3=3405,
+        item_count_3=2,
+        item_bound_3=1,
+        item_id_4=3402,
+        item_count_4=1,
+        item_bound_4=1,
+        original_price=300,
+        min_level=10,
+        max_level=0,
+    ),
+    _goods(
+        id=402,
+        tab_id=4,
+        sort_order=20,
+        enabled=1,
+        name="新春秘宝自选匣",
+        description="春节限时四选一绑定礼盒：天工秘墨×1 / 技能特效卷×1 / 灵宠幻化符×1 / 定星保底符×3 任选其一，购买即直发背包。",
+        icon_key="UI/Ugui/SpiritShopV1/pack_festival_choice",
+        currency_type=1,
+        price=120,
+        max_buy_per_request=2,
+        item_id_1=3408,
+        item_count_1=1,
+        item_bound_1=1,
+        item_id_2=3412,
+        item_count_2=1,
+        item_bound_2=1,
+        limit_reset_kind=0,
+        limit_count=2,
+        limit_group_id=0,
+        limit_group_weight=0,
+        badge_text="新春自选",
+        start_time_ms=SPRING_2027_START_MS,
+        end_time_ms=SPRING_2027_END_MS,
+        grant_mode=1,
+        item_id_3=3411,
+        item_count_3=1,
+        item_bound_3=1,
+        item_id_4=3405,
+        item_count_4=3,
+        item_bound_4=1,
+        original_price=180,
+        min_level=10,
+        max_level=0,
+    ),
 ]
 
 TIP_GROUP = "spirit_shop_error"
@@ -277,6 +375,9 @@ TIP_CODES = [
     ("SpiritShopFrozen",            "角色当前状态无法购买，请稍后再试",       False),
     ("SpiritShopInBattle",          "战斗中无法购买，请待战斗结束后再试",     False),
     ("SpiritShopItemBlocked",       "该物品当前被禁止获取",                   False),
+    ("SpiritShopNotInSaleWindow",   "该商品暂未开售或活动已结束",             False),
+    ("SpiritShopLevelNotMet",       "角色等级未满足该商品购买条件",           False),
+    ("SpiritShopInvalidChoice",     "所选礼盒物品无效，请重新选择",           False),
 ]
 
 MESSAGE_LIMITER_XLSX = DATA_DIR / "MessageLimiter.xlsx"
@@ -307,8 +408,35 @@ def self_check() -> None:
             fail(f"invalid max_buy_per_request in row {r['id']}")
         if r["item_id_1"] == 0 or r["item_count_1"] < 1:
             fail(f"invalid item_1 in row {r['id']}")
-        if r["item_id_2"] != 0 and r["item_count_2"] < 1:
-            fail(f"invalid item_2 in row {r['id']}")
+        if r["grant_mode"] not in (0, 1):
+            fail(f"invalid grant_mode in row {r['id']}")
+        slots = [
+            (r["item_id_1"], r["item_count_1"], r["item_bound_1"]),
+            (r["item_id_2"], r["item_count_2"], r["item_bound_2"]),
+            (r["item_id_3"], r["item_count_3"], r["item_bound_3"]),
+            (r["item_id_4"], r["item_count_4"], r["item_bound_4"]),
+        ]
+        saw_empty = False
+        present = []
+        for idx, (iid, cnt, bnd) in enumerate(slots, start=1):
+            if bnd not in (0, 1):
+                fail(f"invalid item_bound_{idx} in row {r['id']}")
+            if iid == 0:
+                if cnt != 0 or bnd != 0:
+                    fail(f"non-zero count/bound on empty item_{idx} in row {r['id']}")
+                saw_empty = True
+            else:
+                if saw_empty or cnt < 1:
+                    fail(f"gap or invalid count on item_{idx} in row {r['id']}")
+                present.append((iid, cnt, bnd))
+        if r["grant_mode"] == 1 and len(present) < 2:
+            fail(f"choose-one row {r['id']} needs >= 2 items")
+        if r["start_time_ms"] > 0 and r["end_time_ms"] > 0 and r["end_time_ms"] <= r["start_time_ms"]:
+            fail(f"invalid sale window in row {r['id']}")
+        if r["original_price"] > 0 and (r["original_price"] <= r["price"] or r["original_price"] > 1_000_000_000):
+            fail(f"invalid original_price in row {r['id']}")
+        if r["min_level"] > 0 and r["max_level"] > 0 and r["max_level"] < r["min_level"]:
+            fail(f"invalid level range in row {r['id']}")
         if r["limit_group_id"] != 0:
             if r["limit_group_id"] not in group_ids or r["limit_group_weight"] < 1:
                 fail(f"invalid limit_group in row {r['id']}")
@@ -339,9 +467,9 @@ def _write_table(sheet: str, rows: list[dict], dry_run: bool) -> None:
         if ws.title == sheet and first_difference(sheet_matrix(ws), wanted) is None:
             print(f"[ALREADY CURRENT] {rel(xlsx_path)} exists with identical contents; file unchanged.")
             return
-        fail(f"{rel(xlsx_path)} already exists with different contents -- refusing to overwrite.")
-
-    print(f"Will create {rel(xlsx_path)}: sheet={sheet!r}, {len(names)} columns x {len(rows)} rows")
+        print(f"Will upgrade {rel(xlsx_path)}: sheet={sheet!r}, {len(names)} columns x {len(rows)} rows")
+    else:
+        print(f"Will create {rel(xlsx_path)}: sheet={sheet!r}, {len(names)} columns x {len(rows)} rows")
     if dry_run:
         print("[dry-run] No files written.")
         return
@@ -383,8 +511,35 @@ def cmd_tip_codes(dry_run: bool) -> None:
 
     mine = next((g for g in groups if g["name"] == TIP_GROUP), None)
     if mine is not None:
-        if (mine["base"], mine["width"]) == (TIP_BASE, TIP_WIDTH) and mine["codes"][:len(wanted)] == wanted:
+        if (mine["base"], mine["width"]) != (TIP_BASE, TIP_WIDTH):
+            fail(f"{TIP_XLSX.name} already has group //{TIP_GROUP} with different base/width.")
+        existing_codes = mine["codes"]
+        if existing_codes == wanted:
             print(f"[ALREADY CURRENT] {header_text} already has these {len(wanted)} codes.")
+            return
+        if len(existing_codes) < len(wanted) and wanted[:len(existing_codes)] == existing_codes:
+            tail = wanted[len(existing_codes):]
+            header_row_idx = next(
+                r for r, row in enumerate(before, start=1)
+                if row and isinstance(row[0], str) and row[0].strip().startswith(f"//{TIP_GROUP} ")
+            )
+            insert_at = header_row_idx + len(existing_codes) + 1
+            if dry_run:
+                print(f"[dry-run] Would insert {len(tail)} tail codes into //{TIP_GROUP} at row {insert_at}.")
+                return
+            ws.insert_rows(insert_at, amount=len(tail))
+            for offset, (name, text, fault) in enumerate(tail):
+                r_idx = insert_at + offset
+                ws.cell(row=r_idx, column=1, value=name)
+                ws.cell(row=r_idx, column=2, value=text)
+                if fault is not None:
+                    ws.cell(row=r_idx, column=fault_col, value=fault)
+            wb.save(TIP_XLSX)
+            verify_groups, _ = tip_parse(sheet_matrix(only_sheet(openpyxl.load_workbook(TIP_XLSX), TIP_XLSX)), fault_col)
+            verify_mine = next((g for g in verify_groups if g["name"] == TIP_GROUP), None)
+            if verify_mine is None or verify_mine["codes"] != wanted:
+                fail(f"after inserting tail codes into //{TIP_GROUP}, readback mismatch")
+            print(f"[DONE] Inserted {len(tail)} tail codes into //{TIP_GROUP} at row {insert_at} in {rel(TIP_XLSX)}")
             return
         fail(f"{TIP_XLSX.name} already has group //{TIP_GROUP} with different contents.")
 

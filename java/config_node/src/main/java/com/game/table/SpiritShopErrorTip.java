@@ -79,6 +79,18 @@ public final class SpiritShopErrorTip extends com.google.protobuf.GeneratedFile 
      * <code>kSpiritShopItemBlocked = 37010;</code>
      */
     kSpiritShopItemBlocked(37010),
+    /**
+     * <code>kSpiritShopNotInSaleWindow = 37011;</code>
+     */
+    kSpiritShopNotInSaleWindow(37011),
+    /**
+     * <code>kSpiritShopLevelNotMet = 37012;</code>
+     */
+    kSpiritShopLevelNotMet(37012),
+    /**
+     * <code>kSpiritShopInvalidChoice = 37013;</code>
+     */
+    kSpiritShopInvalidChoice(37013),
     UNRECOGNIZED(-1),
     ;
 
@@ -139,6 +151,18 @@ public final class SpiritShopErrorTip extends com.google.protobuf.GeneratedFile 
      * <code>kSpiritShopItemBlocked = 37010;</code>
      */
     public static final int kSpiritShopItemBlocked_VALUE = 37010;
+    /**
+     * <code>kSpiritShopNotInSaleWindow = 37011;</code>
+     */
+    public static final int kSpiritShopNotInSaleWindow_VALUE = 37011;
+    /**
+     * <code>kSpiritShopLevelNotMet = 37012;</code>
+     */
+    public static final int kSpiritShopLevelNotMet_VALUE = 37012;
+    /**
+     * <code>kSpiritShopInvalidChoice = 37013;</code>
+     */
+    public static final int kSpiritShopInvalidChoice_VALUE = 37013;
 
 
     public final int getNumber() {
@@ -177,6 +201,9 @@ public final class SpiritShopErrorTip extends com.google.protobuf.GeneratedFile 
         case 37008: return kSpiritShopFrozen;
         case 37009: return kSpiritShopInBattle;
         case 37010: return kSpiritShopItemBlocked;
+        case 37011: return kSpiritShopNotInSaleWindow;
+        case 37012: return kSpiritShopLevelNotMet;
+        case 37013: return kSpiritShopInvalidChoice;
         default: return null;
       }
     }
@@ -242,7 +269,7 @@ public final class SpiritShopErrorTip extends com.google.protobuf.GeneratedFile 
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\033spirit_shop_error_tip.proto*\374\002\n\021spirit" +
+      "\n\033spirit_shop_error_tip.proto*\334\003\n\021spirit" +
       "_shop_error\022\030\n\024kSpirit_shop_errorOK\020\000\022\034\n" +
       "\026kSpiritShopUnavailable\020\210\241\002\022\036\n\030kSpiritSh" +
       "opGoodsOffShelf\020\211\241\002\022\035\n\027kSpiritShopPriceC" +
@@ -252,8 +279,10 @@ public final class SpiritShopErrorTip extends com.google.protobuf.GeneratedFile 
       "hopCurrencyNotEnough\020\216\241\002\022\030\n\022kSpiritShopB" +
       "agFull\020\217\241\002\022\027\n\021kSpiritShopFrozen\020\220\241\002\022\031\n\023k" +
       "SpiritShopInBattle\020\221\241\002\022\034\n\026kSpiritShopIte" +
-      "mBlocked\020\222\241\002B$\n\016com.game.tableZ\022generate" +
-      "d/pb/tableb\006proto3"
+      "mBlocked\020\222\241\002\022 \n\032kSpiritShopNotInSaleWind" +
+      "ow\020\223\241\002\022\034\n\026kSpiritShopLevelNotMet\020\224\241\002\022\036\n\030" +
+      "kSpiritShopInvalidChoice\020\225\241\002B$\n\016com.game" +
+      ".tableZ\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

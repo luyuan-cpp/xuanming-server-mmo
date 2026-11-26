@@ -23,10 +23,18 @@ func validateCustomDuelRules(rules *battlepb.CustomDuelRules) bool {
 	}
 	switch rules.GetRoundLimitOverride() {
 	case 0, 8, 12, 20:
-		return true
 	default:
 		return false
 	}
+	switch rules.GetSkillBanSlotsPerTeam() {
+	case 0, 3:
+	default:
+		return false
+	}
+	if rules.GetUseFreePreset() && rules.GetSkillBanSlotsPerTeam() > 0 {
+		return false
+	}
+	return true
 }
 
 type ChallengeLogic struct {

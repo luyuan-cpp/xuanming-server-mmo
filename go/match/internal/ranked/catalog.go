@@ -120,6 +120,8 @@ func DefaultFallback() *Catalog {
 		TierYunzhangCenti:        160000,
 		TierTianshuCenti:         172000,
 		TierWushuangCenti:        185000,
+		SkillBanSlotsPerTeam:     3,
+		SkillBanMinRatingCenti:   160000,
 	}
 	presets := []*tablepb.RankedPresetTable{
 		{Id: 101, RoleKind: RoleKindCharacter, Code: "pozhen", Name: "破阵", RoleTag: "爆发破疗", WeightCon: 1, WeightSpi: 0, WeightStr: 3, WeightAgi: 1, SkillIds: []uint32{10002, 10039, 10025, 10035}, Sort: 1},
@@ -159,6 +161,9 @@ func validateRule(r *tablepb.RankedRuleTable) error {
 		r.GetTierTianshuCenti() <= r.GetTierYunzhangCenti() ||
 		r.GetTierWushuangCenti() <= r.GetTierTianshuCenti() {
 		return errors.New("ranked: RankedRule tier thresholds must strictly increase")
+	}
+	if r.GetSkillBanSlotsPerTeam() > 3 {
+		return fmt.Errorf("ranked: RankedRule skill_ban_slots_per_team=%d out of [0,3]", r.GetSkillBanSlotsPerTeam())
 	}
 	return nil
 }
@@ -289,10 +294,11 @@ func ComputeConfigFingerprint(rule *tablepb.RankedRuleTable, presets []*tablepb.
 	sort.Slice(byID, func(i, j int) bool { return byID[i].GetId() < byID[j].GetId() })
 	var b strings.Builder
 	b.WriteString("ranked-v1\n")
-	fmt.Fprintf(&b, "rule:id=%d,ver=%d,cfg=%d,cls=%d,lvl=%d,defc=%d,defp=%d\n",
+	fmt.Fprintf(&b, "rule:id=%d,ver=%d,cfg=%d,cls=%d,lvl=%d,defc=%d,defp=%d,bans=%d,banmin=%d\n",
 		rule.GetId(), rule.GetRuleVersion(), rule.GetBattleConfigId(),
 		rule.GetReferenceClassId(), rule.GetCompetitiveLevel(),
-		rule.GetDefaultCharacterPresetId(), rule.GetDefaultPetPresetId())
+		rule.GetDefaultCharacterPresetId(), rule.GetDefaultPetPresetId(),
+		rule.GetSkillBanSlotsPerTeam(), rule.GetSkillBanMinRatingCenti())
 	for _, p := range byID {
 		fmt.Fprintf(&b, "preset:%d,kind=%d,pet=%d,w=%d/%d/%d/%d,sk=",
 			p.GetId(), p.GetRoleKind(), p.GetPetTableId(),

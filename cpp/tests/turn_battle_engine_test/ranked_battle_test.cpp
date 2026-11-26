@@ -9,6 +9,7 @@
 #include "system/turn_battle_engine.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/match_error_tip.pb.h"
+#include "table/proto/tip/skill_error_tip.pb.h"
 
 namespace {
 
@@ -1462,6 +1463,206 @@ TEST(GuildWarBattleTest, RejectsMissingGuildWarActivityContext) {
 
     TurnBattleEngine engine(data);
     EXPECT_FALSE(engine.Initialize(req));
+}
+
+TEST(RankedBattleTest, PrepThreeSkillBanFullFlowCopyBlockAutoFallbackAndTeamAggregation) {
+    auto data = std::make_shared<MemoryBattleDataProvider>();
+    auto& dungeon = data->AddDungeon(5);
+    dungeon.set_id(5);
+    dungeon.set_round_limit(20);
+    dungeon.set_max_team_size(5);
+
+    auto addConfiguredActive = [&](uint32_t id, uint32_t banCat, uint32_t actionTags, uint32_t seasonId = 0) {
+        auto& s = data->AddSkill(id);
+        s.add_skill_type(1);  // General active
+        s.set_max_rank(5);
+        s.set_battle_model(1);
+        s.set_ability_kind(1);
+        s.set_caster_mask(1);
+        s.set_target_team(1);
+        s.set_max_targets(5);
+        s.set_action_tags(actionTags);
+        s.set_attack_multiplier(1.0);
+        s.set_ban_pool_category(banCat);
+        s.set_season_id(seasonId);
+        auto& b = data->AddBuff(id * 10);
+        b.set_battle_op(1);  // DirectDamage
+        s.add_effect(id * 10);
+    };
+    // 豁免基础技能 + 5 个可禁技能 + 1 个 A41 玄镜映法 + 1 个过期赛季技
+    addConfiguredActive(10002, 0, 1);     // 豁免
+    addConfiguredActive(10020, 1, 16);    // 控场
+    addConfiguredActive(10023, 1, 16);    // 控场
+    addConfiguredActive(10038, 1, 16);    // 控场
+    addConfiguredActive(10040, 3, 8);     // 护盾
+    addConfiguredActive(10035, 3, 16);    // 断脉
+    addConfiguredActive(15101, 2, 2, 2);  // S2 赛季技（S1 不可入池）
+
+    auto& copySkill = data->AddSkill(10041);
+    copySkill.add_skill_type(1);
+    copySkill.set_max_rank(5);
+    copySkill.set_battle_model(1);
+    copySkill.set_ability_kind(1);
+    copySkill.set_caster_mask(1);
+    copySkill.set_target_team(1);
+    copySkill.set_max_targets(1);
+    copySkill.set_action_tags(8);
+    copySkill.set_forbid_copy(1);
+    copySkill.set_ban_pool_category(3);
+    auto& copyBuff = data->AddBuff(100410);
+    copyBuff.set_battle_op(19);  // CopyTargetSkill
+    copySkill.add_effect(100410);
+
+    // 1. 3V3 锦标赛：检验 25 秒窗、对手/观众脱敏、共识/顺位/队长决胜聚合、双边撞车去重与全链路拦截。
+    CreateBattleRequest req;
+    req.set_battle_id(99801);
+    req.set_battle_config_id(5);
+    req.set_match_mode(turnbattle::kMatchModeSeasonTournament);
+    req.set_seed(8888);
+    auto* tctx = req.mutable_tournament_context();
+    tctx->set_season_id(1);
+    tctx->set_match_id(10);
+    tctx->set_best_of(3);
+    tctx->set_game_index(1);
+    tctx->set_skill_ban_slots_per_team(3);
+
+    auto addPlayer = [&](uint64_t pid, uint32_t team, bool captain) {
+        auto* p = req.add_players();
+        p->set_player_id(pid);
+        p->set_team_index(team);
+        p->set_is_team_captain(captain);
+        p->set_active_season_id(1);
+        p->set_level(30);
+        p->set_max_health(8000);
+        p->set_max_mana(1000);
+        p->mutable_base_attributes()->set_health(8000);
+        p->mutable_base_attributes()->set_mana(1000);
+        p->mutable_base_attributes()->set_speed(200);
+        p->set_physical_attack(300);
+        p->set_magic_attack(300);
+        p->set_defense(100);
+        for (uint32_t sid : {10002u, 10020u, 10023u, 10038u, 10040u, 10035u, 10041u}) {
+            p->add_skill_table_ids(sid);
+            (*p->mutable_skill_ranks())[sid] = 1;
+        }
+    };
+    addPlayer(101, 0, true);
+    addPlayer(102, 0, false);
+    addPlayer(103, 0, false);
+    addPlayer(201, 1, true);
+    addPlayer(202, 1, false);
+    addPlayer(203, 1, false);
+
+    TurnBattleEngine engine(data);
+    ASSERT_TRUE(engine.Initialize(req));
+    ASSERT_TRUE(engine.IsInPrepPhase());
+    EXPECT_EQ(engine.PrepDurationSeconds(), turnbattle::kTacticalPrepWithBanDurationSeconds);
+    EXPECT_EQ(engine.PrepTimeoutMs(), turnbattle::kTacticalPrepWithBanTimeoutMs);
+
+    // 校验非法提名被拒：豁免基础技 10002、过期赛季技 15101、重复 ID、超 3 个。
+    EXPECT_EQ(engine.UpdateBattlePrep(101, 0, 0, false, nullptr, true, {10002}), kInvalidParameter);
+    EXPECT_EQ(engine.UpdateBattlePrep(101, 0, 0, false, nullptr, true, {15101}), kInvalidParameter);
+    EXPECT_EQ(engine.UpdateBattlePrep(101, 0, 0, false, nullptr, true, {10020, 10020}), kInvalidParameter);
+    EXPECT_EQ(engine.UpdateBattlePrep(101, 0, 0, false, nullptr, true, {10020, 10023, 10038, 10040}),
+              kInvalidParameter);
+
+    // A 队：101(队长) 提 [10038, 10040, 10035]，102 提 [10020, 10040]，103 挂机不提。
+    // 聚合预期：10040(2 票共识第一) -> 10038(1 票, rank0, 队长) -> 10020(1 票, rank0, 非队长)。
+    BattlePrepState prep101;
+    ASSERT_EQ(engine.UpdateBattlePrep(101, 0, 0, false, &prep101, true, {10038, 10040, 10035}), 0u);
+    ASSERT_EQ(engine.UpdateBattlePrep(102, 0, 0, false, &prep101, true, {10020, 10040}), 0u);
+    ASSERT_EQ(prep101.team_effective_ban_skill_ids_size(), 3);
+    EXPECT_EQ(prep101.team_effective_ban_skill_ids(0), 10040u);
+    EXPECT_EQ(prep101.team_effective_ban_skill_ids(1), 10038u);
+    EXPECT_EQ(prep101.team_effective_ban_skill_ids(2), 10020u);
+
+    // 只点锁定（updateBannedSkills=false）绝不清空既有禁招；锁定后再改禁招被拒。
+    ASSERT_EQ(engine.UpdateBattlePrep(101, 0, 0, true, nullptr, false, {}), 0u);
+    EXPECT_EQ(engine.UpdateBattlePrep(101, 0, 0, true, nullptr, true, {10023}), kFeatureUnavailable);
+
+    // 敌方 201 与观众 0 视角严密脱敏：看不到 A 队提名或聚合结果。
+    BattleStateS2C enemyView;
+    engine.FillPrepStateForViewer(enemyView, 201, 99999);
+    EXPECT_EQ(enemyView.prep_state().team_effective_ban_skill_ids_size(), 0);
+    for (const auto& ps : enemyView.prep_state().team_states()) {
+        EXPECT_EQ(ps.team_index(), 1u);
+    }
+    BattleStateS2C obsView;
+    engine.FillPrepStateForViewer(obsView, 0, 99999);
+    EXPECT_TRUE(obsView.prep_state().active());
+    EXPECT_EQ(obsView.prep_state().duration_seconds(), 25u);
+    EXPECT_EQ(obsView.prep_state().team_states_size(), 0);
+    EXPECT_EQ(obsView.prep_state().ban_candidate_skill_ids_size(), 0);
+    EXPECT_EQ(obsView.prep_state().team_effective_ban_skill_ids_size(), 0);
+
+    // B 队：201 提 [10038, 10023]（与 A 队 10038 撞车，未填满 3 槽也不随机代填）。
+    ASSERT_EQ(engine.UpdateBattlePrep(201, 0, 0, true, nullptr, true, {10038, 10023}), 0u);
+    ASSERT_TRUE(engine.FinalizePrepPhase());
+
+    const auto startSnap = engine.BuildStateSnapshot();
+    ASSERT_EQ(startSnap.team_a_banned_skill_ids_size(), 3);
+    ASSERT_EQ(startSnap.team_b_banned_skill_ids_size(), 2);
+    // 去重合并后 4 招：10020, 10023, 10038, 10040
+    ASSERT_EQ(startSnap.banned_skill_ids_size(), 4);
+    EXPECT_EQ(startSnap.banned_skill_ids(0), 10020u);
+    EXPECT_EQ(startSnap.banned_skill_ids(1), 10023u);
+    EXPECT_EQ(startSnap.banned_skill_ids(2), 10038u);
+    EXPECT_EQ(startSnap.banned_skill_ids(3), 10040u);
+
+    // 双方均不可手动施放被禁技能（回 kSkillBannedInBattle），未禁技能与基础豁免技正常放行。
+    BattleAction castBanned;
+    castBanned.set_action_type(BATTLE_ACTION_SKILL);
+    castBanned.set_skill_table_id(10038);
+    castBanned.set_target_id(201);
+    EXPECT_EQ(engine.ValidateAction(101, castBanned), kSkillBannedInBattle);
+    castBanned.set_target_id(101);
+    EXPECT_EQ(engine.ValidateAction(201, castBanned), kSkillBannedInBattle);
+
+    BattleAction castAllowed;
+    castAllowed.set_action_type(BATTLE_ACTION_SKILL);
+    castAllowed.set_skill_table_id(10002);
+    castAllowed.set_target_id(201);
+    EXPECT_EQ(engine.ValidateAction(101, castAllowed), kSuccess);
+
+    // 自动战斗不得放出任何被禁技能；且 A41 玄镜映法不得复制被禁技能。
+    ASSERT_EQ(engine.SetActorAuto(101, true), 0u);
+    BattleAction castCopy;
+    castCopy.set_action_type(BATTLE_ACTION_SKILL);
+    castCopy.set_skill_table_id(10041);
+    castCopy.set_target_id(201);
+    ASSERT_EQ(engine.ValidateAction(102, castCopy), kSuccess);
+    engine.SubmitAction(102, castCopy);
+    for (uint64_t pid : {103u, 201u, 202u, 203u}) {
+        engine.SubmitAction(pid, Defend());
+    }
+    const auto r1 = engine.ResolveCurrentRound();
+    for (const auto& ev : r1.events()) {
+        if (ev.event_type() == BATTLE_EVENT_SKILL) {
+            EXPECT_FALSE(engine.IsSkillBanned(ev.skill_table_id()));
+        }
+    }
+
+    // 2. 切磋坊 1V1：免费预设与 3 Ban 互斥拒开；自养切磋开 3 Ban 进入 25 秒纯禁招。
+    CreateBattleRequest badDuel = req;
+    badDuel.clear_tournament_context();
+    badDuel.set_match_mode(3);
+    badDuel.mutable_custom_duel_rules()->set_use_free_preset(true);
+    badDuel.mutable_custom_duel_rules()->set_skill_ban_slots_per_team(3);
+    TurnBattleEngine badDuelEngine(data);
+    EXPECT_FALSE(badDuelEngine.Initialize(badDuel));
+
+    CreateBattleRequest goodDuel = req;
+    goodDuel.clear_tournament_context();
+    goodDuel.clear_players();
+    goodDuel.set_match_mode(3);
+    goodDuel.mutable_custom_duel_rules()->set_use_free_preset(false);
+    goodDuel.mutable_custom_duel_rules()->set_skill_ban_slots_per_team(3);
+    *goodDuel.add_players() = req.players(0);
+    *goodDuel.add_players() = req.players(3);
+    TurnBattleEngine duelEngine(data);
+    ASSERT_TRUE(duelEngine.Initialize(goodDuel));
+    EXPECT_TRUE(duelEngine.IsInPrepPhase());
+    EXPECT_EQ(duelEngine.PrepDurationSeconds(), 25u);
 }
 
 }  // namespace

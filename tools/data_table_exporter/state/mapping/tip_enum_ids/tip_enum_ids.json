@@ -774,7 +774,10 @@
         "SpiritShopBagFull": 37007,
         "SpiritShopFrozen": 37008,
         "SpiritShopInBattle": 37009,
-        "SpiritShopItemBlocked": 37010
+        "SpiritShopItemBlocked": 37010,
+        "SpiritShopNotInSaleWindow": 37011,
+        "SpiritShopLevelNotMet": 37012,
+        "SpiritShopInvalidChoice": 37013
       }
     },
     "travel_pass_error": {

@@ -1,5 +1,6 @@
 #include "data/table_battle_data_provider.h"
 
+#include <algorithm>
 #include <fstream>
 #include <limits>
 #include <set>
@@ -175,6 +176,26 @@ const MonsterTable* TableBattleDataProvider::FindMonster(uint32_t monsterTableId
 
 const PetTable* TableBattleDataProvider::FindPet(uint32_t petTableId) const {
     return (tableSet && tableSet->petTable) ? tableSet->petTable->FindRowById(petTableId) : nullptr;
+}
+
+std::vector<uint32_t> TableBattleDataProvider::GetBanEligibleSkillIds(uint32_t activeSeasonId) const {
+    std::vector<uint32_t> ids;
+    if (!tableSet || !tableSet->skillTable) {
+        return ids;
+    }
+    for (const auto& row : tableSet->skillTable->data.data()) {
+        if (row.battle_model() != 1u || row.ability_kind() != 1u ||
+            row.ban_pool_category() < 1u || row.ban_pool_category() > 4u) {
+            continue;
+        }
+        if (row.season_id() != 0u && (activeSeasonId == 0u || row.season_id() != activeSeasonId)) {
+            continue;
+        }
+        ids.push_back(row.id());
+    }
+    std::sort(ids.begin(), ids.end());
+    ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
+    return ids;
 }
 
 const ItemTable* TableBattleDataProvider::FindItem(uint32_t itemTableId) const {

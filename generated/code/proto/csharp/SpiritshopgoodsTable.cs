@@ -22,7 +22,7 @@ public static partial class SpiritshopgoodsTableReflection {
   static SpiritshopgoodsTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "ChtzcGlyaXRzaG9wZ29vZHNfdGFibGUucHJvdG8ixAMKFFNwaXJpdFNob3BH",
+          "ChtzcGlyaXRzaG9wZ29vZHNfdGFibGUucHJvdG8iwAUKFFNwaXJpdFNob3BH",
           "b29kc1RhYmxlEgoKAmlkGAEgASgNEg4KBnRhYl9pZBgCIAEoDRISCgpzb3J0",
           "X29yZGVyGAMgASgNEg8KB2VuYWJsZWQYBCABKA0SDAoEbmFtZRgFIAEoCRIT",
           "CgtkZXNjcmlwdGlvbhgGIAEoCRIQCghpY29uX2tleRgHIAEoCRIVCg1jdXJy",
@@ -32,14 +32,20 @@ public static partial class SpiritshopgoodsTableReflection {
           "GA4gASgNEhQKDGl0ZW1fY291bnRfMhgPIAEoDRIUCgxpdGVtX2JvdW5kXzIY",
           "ECABKA0SGAoQbGltaXRfcmVzZXRfa2luZBgRIAEoDRITCgtsaW1pdF9jb3Vu",
           "dBgSIAEoDRIWCg5saW1pdF9ncm91cF9pZBgTIAEoDRIaChJsaW1pdF9ncm91",
-          "cF93ZWlnaHQYFCABKA0SEgoKYmFkZ2VfdGV4dBgVIAEoCSI/ChhTcGlyaXRT",
-          "aG9wR29vZHNUYWJsZURhdGESIwoEZGF0YRgBIAMoCzIVLlNwaXJpdFNob3BH",
-          "b29kc1RhYmxlQkYKDmNvbS5nYW1lLnRhYmxlQh5TcGlyaXRTaG9wR29vZHNU",
-          "YWJsZU91dGVyQ2xhc3NQAVoSZ2VuZXJhdGVkL3BiL3RhYmxlYgZwcm90bzM="));
+          "cF93ZWlnaHQYFCABKA0SEgoKYmFkZ2VfdGV4dBgVIAEoCRIVCg1zdGFydF90",
+          "aW1lX21zGBYgASgEEhMKC2VuZF90aW1lX21zGBcgASgEEhIKCmdyYW50X21v",
+          "ZGUYGCABKA0SEQoJaXRlbV9pZF8zGBkgASgNEhQKDGl0ZW1fY291bnRfMxga",
+          "IAEoDRIUCgxpdGVtX2JvdW5kXzMYGyABKA0SEQoJaXRlbV9pZF80GBwgASgN",
+          "EhQKDGl0ZW1fY291bnRfNBgdIAEoDRIUCgxpdGVtX2JvdW5kXzQYHiABKA0S",
+          "FgoOb3JpZ2luYWxfcHJpY2UYHyABKAQSEQoJbWluX2xldmVsGCAgASgNEhEK",
+          "CW1heF9sZXZlbBghIAEoDSI/ChhTcGlyaXRTaG9wR29vZHNUYWJsZURhdGES",
+          "IwoEZGF0YRgBIAMoCzIVLlNwaXJpdFNob3BHb29kc1RhYmxlQkYKDmNvbS5n",
+          "YW1lLnRhYmxlQh5TcGlyaXRTaG9wR29vZHNUYWJsZU91dGVyQ2xhc3NQAVoS",
+          "Z2VuZXJhdGVkL3BiL3RhYmxlYgZwcm90bzM="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::SpiritShopGoodsTable), global::SpiritShopGoodsTable.Parser, new[]{ "Id", "TabId", "SortOrder", "Enabled", "Name", "Description", "IconKey", "CurrencyType", "Price", "MaxBuyPerRequest", "ItemId1", "ItemCount1", "ItemBound1", "ItemId2", "ItemCount2", "ItemBound2", "LimitResetKind", "LimitCount", "LimitGroupId", "LimitGroupWeight", "BadgeText" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::SpiritShopGoodsTable), global::SpiritShopGoodsTable.Parser, new[]{ "Id", "TabId", "SortOrder", "Enabled", "Name", "Description", "IconKey", "CurrencyType", "Price", "MaxBuyPerRequest", "ItemId1", "ItemCount1", "ItemBound1", "ItemId2", "ItemCount2", "ItemBound2", "LimitResetKind", "LimitCount", "LimitGroupId", "LimitGroupWeight", "BadgeText", "StartTimeMs", "EndTimeMs", "GrantMode", "ItemId3", "ItemCount3", "ItemBound3", "ItemId4", "ItemCount4", "ItemBound4", "OriginalPrice", "MinLevel", "MaxLevel" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::SpiritShopGoodsTableData), global::SpiritShopGoodsTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -103,6 +109,18 @@ public sealed partial class SpiritShopGoodsTable : pb::IMessage<SpiritShopGoodsT
     limitGroupId_ = other.limitGroupId_;
     limitGroupWeight_ = other.limitGroupWeight_;
     badgeText_ = other.badgeText_;
+    startTimeMs_ = other.startTimeMs_;
+    endTimeMs_ = other.endTimeMs_;
+    grantMode_ = other.grantMode_;
+    itemId3_ = other.itemId3_;
+    itemCount3_ = other.itemCount3_;
+    itemBound3_ = other.itemBound3_;
+    itemId4_ = other.itemId4_;
+    itemCount4_ = other.itemCount4_;
+    itemBound4_ = other.itemBound4_;
+    originalPrice_ = other.originalPrice_;
+    minLevel_ = other.minLevel_;
+    maxLevel_ = other.maxLevel_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -364,6 +382,150 @@ public sealed partial class SpiritShopGoodsTable : pb::IMessage<SpiritShopGoodsT
     }
   }
 
+  /// <summary>Field number for the "start_time_ms" field.</summary>
+  public const int StartTimeMsFieldNumber = 22;
+  private ulong startTimeMs_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public ulong StartTimeMs {
+    get { return startTimeMs_; }
+    set {
+      startTimeMs_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "end_time_ms" field.</summary>
+  public const int EndTimeMsFieldNumber = 23;
+  private ulong endTimeMs_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public ulong EndTimeMs {
+    get { return endTimeMs_; }
+    set {
+      endTimeMs_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "grant_mode" field.</summary>
+  public const int GrantModeFieldNumber = 24;
+  private uint grantMode_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint GrantMode {
+    get { return grantMode_; }
+    set {
+      grantMode_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "item_id_3" field.</summary>
+  public const int ItemId3FieldNumber = 25;
+  private uint itemId3_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint ItemId3 {
+    get { return itemId3_; }
+    set {
+      itemId3_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "item_count_3" field.</summary>
+  public const int ItemCount3FieldNumber = 26;
+  private uint itemCount3_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint ItemCount3 {
+    get { return itemCount3_; }
+    set {
+      itemCount3_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "item_bound_3" field.</summary>
+  public const int ItemBound3FieldNumber = 27;
+  private uint itemBound3_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint ItemBound3 {
+    get { return itemBound3_; }
+    set {
+      itemBound3_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "item_id_4" field.</summary>
+  public const int ItemId4FieldNumber = 28;
+  private uint itemId4_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint ItemId4 {
+    get { return itemId4_; }
+    set {
+      itemId4_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "item_count_4" field.</summary>
+  public const int ItemCount4FieldNumber = 29;
+  private uint itemCount4_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint ItemCount4 {
+    get { return itemCount4_; }
+    set {
+      itemCount4_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "item_bound_4" field.</summary>
+  public const int ItemBound4FieldNumber = 30;
+  private uint itemBound4_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint ItemBound4 {
+    get { return itemBound4_; }
+    set {
+      itemBound4_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "original_price" field.</summary>
+  public const int OriginalPriceFieldNumber = 31;
+  private ulong originalPrice_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public ulong OriginalPrice {
+    get { return originalPrice_; }
+    set {
+      originalPrice_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "min_level" field.</summary>
+  public const int MinLevelFieldNumber = 32;
+  private uint minLevel_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint MinLevel {
+    get { return minLevel_; }
+    set {
+      minLevel_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "max_level" field.</summary>
+  public const int MaxLevelFieldNumber = 33;
+  private uint maxLevel_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint MaxLevel {
+    get { return maxLevel_; }
+    set {
+      maxLevel_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -400,6 +562,18 @@ public sealed partial class SpiritShopGoodsTable : pb::IMessage<SpiritShopGoodsT
     if (LimitGroupId != other.LimitGroupId) return false;
     if (LimitGroupWeight != other.LimitGroupWeight) return false;
     if (BadgeText != other.BadgeText) return false;
+    if (StartTimeMs != other.StartTimeMs) return false;
+    if (EndTimeMs != other.EndTimeMs) return false;
+    if (GrantMode != other.GrantMode) return false;
+    if (ItemId3 != other.ItemId3) return false;
+    if (ItemCount3 != other.ItemCount3) return false;
+    if (ItemBound3 != other.ItemBound3) return false;
+    if (ItemId4 != other.ItemId4) return false;
+    if (ItemCount4 != other.ItemCount4) return false;
+    if (ItemBound4 != other.ItemBound4) return false;
+    if (OriginalPrice != other.OriginalPrice) return false;
+    if (MinLevel != other.MinLevel) return false;
+    if (MaxLevel != other.MaxLevel) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -428,6 +602,18 @@ public sealed partial class SpiritShopGoodsTable : pb::IMessage<SpiritShopGoodsT
     if (LimitGroupId != 0) hash ^= LimitGroupId.GetHashCode();
     if (LimitGroupWeight != 0) hash ^= LimitGroupWeight.GetHashCode();
     if (BadgeText.Length != 0) hash ^= BadgeText.GetHashCode();
+    if (StartTimeMs != 0UL) hash ^= StartTimeMs.GetHashCode();
+    if (EndTimeMs != 0UL) hash ^= EndTimeMs.GetHashCode();
+    if (GrantMode != 0) hash ^= GrantMode.GetHashCode();
+    if (ItemId3 != 0) hash ^= ItemId3.GetHashCode();
+    if (ItemCount3 != 0) hash ^= ItemCount3.GetHashCode();
+    if (ItemBound3 != 0) hash ^= ItemBound3.GetHashCode();
+    if (ItemId4 != 0) hash ^= ItemId4.GetHashCode();
+    if (ItemCount4 != 0) hash ^= ItemCount4.GetHashCode();
+    if (ItemBound4 != 0) hash ^= ItemBound4.GetHashCode();
+    if (OriginalPrice != 0UL) hash ^= OriginalPrice.GetHashCode();
+    if (MinLevel != 0) hash ^= MinLevel.GetHashCode();
+    if (MaxLevel != 0) hash ^= MaxLevel.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -530,6 +716,54 @@ public sealed partial class SpiritShopGoodsTable : pb::IMessage<SpiritShopGoodsT
       output.WriteRawTag(170, 1);
       output.WriteString(BadgeText);
     }
+    if (StartTimeMs != 0UL) {
+      output.WriteRawTag(176, 1);
+      output.WriteUInt64(StartTimeMs);
+    }
+    if (EndTimeMs != 0UL) {
+      output.WriteRawTag(184, 1);
+      output.WriteUInt64(EndTimeMs);
+    }
+    if (GrantMode != 0) {
+      output.WriteRawTag(192, 1);
+      output.WriteUInt32(GrantMode);
+    }
+    if (ItemId3 != 0) {
+      output.WriteRawTag(200, 1);
+      output.WriteUInt32(ItemId3);
+    }
+    if (ItemCount3 != 0) {
+      output.WriteRawTag(208, 1);
+      output.WriteUInt32(ItemCount3);
+    }
+    if (ItemBound3 != 0) {
+      output.WriteRawTag(216, 1);
+      output.WriteUInt32(ItemBound3);
+    }
+    if (ItemId4 != 0) {
+      output.WriteRawTag(224, 1);
+      output.WriteUInt32(ItemId4);
+    }
+    if (ItemCount4 != 0) {
+      output.WriteRawTag(232, 1);
+      output.WriteUInt32(ItemCount4);
+    }
+    if (ItemBound4 != 0) {
+      output.WriteRawTag(240, 1);
+      output.WriteUInt32(ItemBound4);
+    }
+    if (OriginalPrice != 0UL) {
+      output.WriteRawTag(248, 1);
+      output.WriteUInt64(OriginalPrice);
+    }
+    if (MinLevel != 0) {
+      output.WriteRawTag(128, 2);
+      output.WriteUInt32(MinLevel);
+    }
+    if (MaxLevel != 0) {
+      output.WriteRawTag(136, 2);
+      output.WriteUInt32(MaxLevel);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -624,6 +858,54 @@ public sealed partial class SpiritShopGoodsTable : pb::IMessage<SpiritShopGoodsT
       output.WriteRawTag(170, 1);
       output.WriteString(BadgeText);
     }
+    if (StartTimeMs != 0UL) {
+      output.WriteRawTag(176, 1);
+      output.WriteUInt64(StartTimeMs);
+    }
+    if (EndTimeMs != 0UL) {
+      output.WriteRawTag(184, 1);
+      output.WriteUInt64(EndTimeMs);
+    }
+    if (GrantMode != 0) {
+      output.WriteRawTag(192, 1);
+      output.WriteUInt32(GrantMode);
+    }
+    if (ItemId3 != 0) {
+      output.WriteRawTag(200, 1);
+      output.WriteUInt32(ItemId3);
+    }
+    if (ItemCount3 != 0) {
+      output.WriteRawTag(208, 1);
+      output.WriteUInt32(ItemCount3);
+    }
+    if (ItemBound3 != 0) {
+      output.WriteRawTag(216, 1);
+      output.WriteUInt32(ItemBound3);
+    }
+    if (ItemId4 != 0) {
+      output.WriteRawTag(224, 1);
+      output.WriteUInt32(ItemId4);
+    }
+    if (ItemCount4 != 0) {
+      output.WriteRawTag(232, 1);
+      output.WriteUInt32(ItemCount4);
+    }
+    if (ItemBound4 != 0) {
+      output.WriteRawTag(240, 1);
+      output.WriteUInt32(ItemBound4);
+    }
+    if (OriginalPrice != 0UL) {
+      output.WriteRawTag(248, 1);
+      output.WriteUInt64(OriginalPrice);
+    }
+    if (MinLevel != 0) {
+      output.WriteRawTag(128, 2);
+      output.WriteUInt32(MinLevel);
+    }
+    if (MaxLevel != 0) {
+      output.WriteRawTag(136, 2);
+      output.WriteUInt32(MaxLevel);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -696,6 +978,42 @@ public sealed partial class SpiritShopGoodsTable : pb::IMessage<SpiritShopGoodsT
     }
     if (BadgeText.Length != 0) {
       size += 2 + pb::CodedOutputStream.ComputeStringSize(BadgeText);
+    }
+    if (StartTimeMs != 0UL) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt64Size(StartTimeMs);
+    }
+    if (EndTimeMs != 0UL) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt64Size(EndTimeMs);
+    }
+    if (GrantMode != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(GrantMode);
+    }
+    if (ItemId3 != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(ItemId3);
+    }
+    if (ItemCount3 != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(ItemCount3);
+    }
+    if (ItemBound3 != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(ItemBound3);
+    }
+    if (ItemId4 != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(ItemId4);
+    }
+    if (ItemCount4 != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(ItemCount4);
+    }
+    if (ItemBound4 != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(ItemBound4);
+    }
+    if (OriginalPrice != 0UL) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt64Size(OriginalPrice);
+    }
+    if (MinLevel != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(MinLevel);
+    }
+    if (MaxLevel != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(MaxLevel);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -771,6 +1089,42 @@ public sealed partial class SpiritShopGoodsTable : pb::IMessage<SpiritShopGoodsT
     }
     if (other.BadgeText.Length != 0) {
       BadgeText = other.BadgeText;
+    }
+    if (other.StartTimeMs != 0UL) {
+      StartTimeMs = other.StartTimeMs;
+    }
+    if (other.EndTimeMs != 0UL) {
+      EndTimeMs = other.EndTimeMs;
+    }
+    if (other.GrantMode != 0) {
+      GrantMode = other.GrantMode;
+    }
+    if (other.ItemId3 != 0) {
+      ItemId3 = other.ItemId3;
+    }
+    if (other.ItemCount3 != 0) {
+      ItemCount3 = other.ItemCount3;
+    }
+    if (other.ItemBound3 != 0) {
+      ItemBound3 = other.ItemBound3;
+    }
+    if (other.ItemId4 != 0) {
+      ItemId4 = other.ItemId4;
+    }
+    if (other.ItemCount4 != 0) {
+      ItemCount4 = other.ItemCount4;
+    }
+    if (other.ItemBound4 != 0) {
+      ItemBound4 = other.ItemBound4;
+    }
+    if (other.OriginalPrice != 0UL) {
+      OriginalPrice = other.OriginalPrice;
+    }
+    if (other.MinLevel != 0) {
+      MinLevel = other.MinLevel;
+    }
+    if (other.MaxLevel != 0) {
+      MaxLevel = other.MaxLevel;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -875,6 +1229,54 @@ public sealed partial class SpiritShopGoodsTable : pb::IMessage<SpiritShopGoodsT
           BadgeText = input.ReadString();
           break;
         }
+        case 176: {
+          StartTimeMs = input.ReadUInt64();
+          break;
+        }
+        case 184: {
+          EndTimeMs = input.ReadUInt64();
+          break;
+        }
+        case 192: {
+          GrantMode = input.ReadUInt32();
+          break;
+        }
+        case 200: {
+          ItemId3 = input.ReadUInt32();
+          break;
+        }
+        case 208: {
+          ItemCount3 = input.ReadUInt32();
+          break;
+        }
+        case 216: {
+          ItemBound3 = input.ReadUInt32();
+          break;
+        }
+        case 224: {
+          ItemId4 = input.ReadUInt32();
+          break;
+        }
+        case 232: {
+          ItemCount4 = input.ReadUInt32();
+          break;
+        }
+        case 240: {
+          ItemBound4 = input.ReadUInt32();
+          break;
+        }
+        case 248: {
+          OriginalPrice = input.ReadUInt64();
+          break;
+        }
+        case 256: {
+          MinLevel = input.ReadUInt32();
+          break;
+        }
+        case 264: {
+          MaxLevel = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -976,6 +1378,54 @@ public sealed partial class SpiritShopGoodsTable : pb::IMessage<SpiritShopGoodsT
         }
         case 170: {
           BadgeText = input.ReadString();
+          break;
+        }
+        case 176: {
+          StartTimeMs = input.ReadUInt64();
+          break;
+        }
+        case 184: {
+          EndTimeMs = input.ReadUInt64();
+          break;
+        }
+        case 192: {
+          GrantMode = input.ReadUInt32();
+          break;
+        }
+        case 200: {
+          ItemId3 = input.ReadUInt32();
+          break;
+        }
+        case 208: {
+          ItemCount3 = input.ReadUInt32();
+          break;
+        }
+        case 216: {
+          ItemBound3 = input.ReadUInt32();
+          break;
+        }
+        case 224: {
+          ItemId4 = input.ReadUInt32();
+          break;
+        }
+        case 232: {
+          ItemCount4 = input.ReadUInt32();
+          break;
+        }
+        case 240: {
+          ItemBound4 = input.ReadUInt32();
+          break;
+        }
+        case 248: {
+          OriginalPrice = input.ReadUInt64();
+          break;
+        }
+        case 256: {
+          MinLevel = input.ReadUInt32();
+          break;
+        }
+        case 264: {
+          MaxLevel = input.ReadUInt32();
           break;
         }
       }

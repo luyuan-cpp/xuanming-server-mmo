@@ -67,6 +67,9 @@ func Build(rule *tablepb.TournamentRuleTable, rewards []*tablepb.TournamentRewar
 	if rule.GetKnockoutRoundTimeoutSeconds() == 0 {
 		return nil, errors.New("tournament: knockout_round_timeout_seconds must be > 0")
 	}
+	if rule.GetSkillBanSlotsPerTeam() > 3 {
+		return nil, fmt.Errorf("tournament: skill_ban_slots_per_team=%d out of [0,3]", rule.GetSkillBanSlotsPerTeam())
+	}
 
 	c := &Catalog{
 		rule:           proto.Clone(rule).(*tablepb.TournamentRuleTable),
@@ -123,6 +126,7 @@ func DefaultFallback() *Catalog {
 		PredictionRewardMinHits:     2,
 		ThirdPlaceMatchEnabled:      true,
 		LeylineBanEnabled:           true,
+		SkillBanSlotsPerTeam:        3,
 	}
 	rewards := []*tablepb.TournamentRewardTable{
 		{Id: 1, TierKind: uint32(matchpb.TournamentRewardTierKind_TOURNAMENT_REWARD_TIER_CHAMPION), MinRank: 1, MaxRank: 1, GoldAmount: 120000, ItemIds: []uint32{3403, 3406, 20, 3407}, ItemCounts: []uint32{30, 30, 60, 3}, TitleCode: "tournament_champion", BadgeCode: "badge_tournament_champion", MailTitle: "群仙问道赛·全服总冠军奖励", MailBody: "恭喜你的战队夺得本赛季群仙问道赛全服总冠军！", Desc: "全服总冠军（第1名）"},

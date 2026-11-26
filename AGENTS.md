@@ -104,6 +104,7 @@
 
 - **关联主仓库**（按 GitHub 地址定位，不写死盘符）：`luyuan-cpp/xuanming-server-mmo`（本仓）、`luyuan-java/xuanming-server-mmo`、`luhailong-python/xuanming-server-mmo-python`、`luhailong-cpp/mmorpg-client`、`luyuan-cpp/proto2mysql`。
 - ❌ **不要开启新的线程**：默认异步挂主 EventLoop，除非压测证实瓶颈确需新线程（如评估新增 Kafka consumer 线程）且**先与程序/负责人确认说明原因**并登记 `test_cpp_thread_sources.py`。
+- ❌ **严禁引入任何可能导致游戏不过审或被迫下架的功能/文案/开关**（一票否决，2026-11-26 强制）：禁止在客户端内置二维码/收款码/外链捐赠/切支付及无版号内购；激励视频默认首审 `enabled = 0` 且仅允许发放不可交易绑定银两（`CURRENCY_TYPE_BIND_GOLD = 3`），严禁诱导点击/看广告支持作者文案；禁止绕过实名防沉迷、账号真注销与 UGC 内容安全（细则见 `docs/rules/naming-and-boundaries.md`、`docs/design/rewarded-ad-system.md` 与 `docs/planning/project-vision.md`）。
 - ❌ 禁止手改生成物、禁止把 `player_id` 当 Prometheus label、禁止 `--no-verify`、禁止未授权 `git commit`/`push`/`tag`、禁止写 secret 进仓库、禁止碰生产集群。
 - 完整清单见 → [docs/rules/naming-and-boundaries.md](docs/rules/naming-and-boundaries.md#2-禁止事项与权限边界9)。
 

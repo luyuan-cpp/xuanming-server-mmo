@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
-  "schema_digest": "b1e2ceaf0dcdc786",
-  "version": 92,
-  "content_digest": "fce48066580fca9ac8195aa405be179b2fca354e84d69ef8deda014a4a617bfa",
-  "generated_at": "2026-11-26T09:43:24Z",
+  "schema_digest": "27e35dca107a0fae",
+  "version": 93,
+  "content_digest": "ac77c21f5bb971d4a021a1d4cabaf2d21f7f2df580797552bc8159fa577d9bf5",
+  "generated_at": "2026-11-26T10:15:52Z",
   "source_rev": {
-    "commit": "ea4a34fdf47adcb9039c29025a655aa9b2e3e201",
+    "commit": "0dd674d20ef239d05adcd50d15ef10dc425d3ad0",
     "data_dirty": true
   },
   "table_count": 82,
@@ -1739,24 +1739,24 @@
       "name": "SpiritShopGoods",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 9,
+      "rows": 11,
       "source": {
         "file": "SpiritShopGoods.xlsx",
-        "size": 7577,
-        "sha256": "452fb60898534d5f2bc8767e19845d08612f30a42cfe363755aef0b98c9c155a"
+        "size": 8817,
+        "sha256": "158756a5d50a81b653a193382d668be477a20c2e54ccd7988275f1a339c51c7b"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "spiritshopgoods.json",
-          "size": 5948,
-          "sha256": "1b72aa936a2699cb05d4fd6a3b93f274ca42860a2b549b9a311f18c33a8bf2ed"
+          "size": 10157,
+          "sha256": "a28407900270f97ceb54ff61a59c5732b2570e94f2052b3076075be617762932"
         },
         {
           "kind": "binary",
           "file": "spiritshopgoods.pb",
-          "size": 2235,
-          "sha256": "4f2fcbbd75bc4da8d7e8faea0a5eadb518198bec2ba88bea68d914e7dc8ac899"
+          "size": 2880,
+          "sha256": "24027cd2d5ce1a3f68e734a5a0b1c0cd4e2bc96878a49b0d19a44c7d2e0f9791"
         }
       ]
     },
