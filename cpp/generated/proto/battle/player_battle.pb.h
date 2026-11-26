@@ -6947,12 +6947,19 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleEndS2C final : public ::googl
     kMaterialCreditUnitsAddedFieldNumber = 5,
     kSeasonIdFieldNumber = 6,
     kMaterialTradableUnitsAddedFieldNumber = 7,
+    kSeasonSealPointsAddedFieldNumber = 10,
+    kSeasonSealProgressAfterFieldNumber = 11,
     kItemsMailedFieldNumber = 4,
     kMaterialPvpLossIneligibleFieldNumber = 8,
     kSeasonHonorNewlyUnlockedFieldNumber = 13,
-    kSeasonSealPointsAddedFieldNumber = 10,
-    kSeasonSealProgressAfterFieldNumber = 11,
+    kBattleSilverDiminishedFieldNumber = 20,
     kSeasonSealMaxPointsFieldNumber = 12,
+    kLevelBeforeFieldNumber = 14,
+    kLevelAfterFieldNumber = 15,
+    kExpGainFieldNumber = 16,
+    kSilverGainFieldNumber = 17,
+    kTotalExpAfterFieldNumber = 18,
+    kNextLevelTotalExpFieldNumber = 19,
   };
   // .BattleSettlementData settlement = 3;
   [[nodiscard]] bool has_settlement()
@@ -7036,6 +7043,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleEndS2C final : public ::googl
   void _internal_set_material_tradable_units_added(::uint32_t value);
 
   public:
+  // uint32 season_seal_points_added = 10;
+  void clear_season_seal_points_added() ;
+  [[nodiscard]] ::uint32_t season_seal_points_added() const;
+  void set_season_seal_points_added(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_seal_points_added() const;
+  void _internal_set_season_seal_points_added(::uint32_t value);
+
+  public:
+  // uint32 season_seal_progress_after = 11;
+  void clear_season_seal_progress_after() ;
+  [[nodiscard]] ::uint32_t season_seal_progress_after() const;
+  void set_season_seal_progress_after(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_seal_progress_after() const;
+  void _internal_set_season_seal_progress_after(::uint32_t value);
+
+  public:
   // bool items_mailed = 4;
   void clear_items_mailed() ;
   [[nodiscard]] bool items_mailed() const;
@@ -7066,24 +7093,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleEndS2C final : public ::googl
   void _internal_set_season_honor_newly_unlocked(bool value);
 
   public:
-  // uint32 season_seal_points_added = 10;
-  void clear_season_seal_points_added() ;
-  [[nodiscard]] ::uint32_t season_seal_points_added() const;
-  void set_season_seal_points_added(::uint32_t value);
+  // bool battle_silver_diminished = 20;
+  void clear_battle_silver_diminished() ;
+  [[nodiscard]] bool battle_silver_diminished() const;
+  void set_battle_silver_diminished(bool value);
 
   private:
-  ::uint32_t _internal_season_seal_points_added() const;
-  void _internal_set_season_seal_points_added(::uint32_t value);
-
-  public:
-  // uint32 season_seal_progress_after = 11;
-  void clear_season_seal_progress_after() ;
-  [[nodiscard]] ::uint32_t season_seal_progress_after() const;
-  void set_season_seal_progress_after(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_season_seal_progress_after() const;
-  void _internal_set_season_seal_progress_after(::uint32_t value);
+  bool _internal_battle_silver_diminished() const;
+  void _internal_set_battle_silver_diminished(bool value);
 
   public:
   // uint32 season_seal_max_points = 12;
@@ -7096,11 +7113,71 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleEndS2C final : public ::googl
   void _internal_set_season_seal_max_points(::uint32_t value);
 
   public:
+  // uint32 level_before = 14;
+  void clear_level_before() ;
+  [[nodiscard]] ::uint32_t level_before() const;
+  void set_level_before(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_level_before() const;
+  void _internal_set_level_before(::uint32_t value);
+
+  public:
+  // uint32 level_after = 15;
+  void clear_level_after() ;
+  [[nodiscard]] ::uint32_t level_after() const;
+  void set_level_after(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_level_after() const;
+  void _internal_set_level_after(::uint32_t value);
+
+  public:
+  // uint64 exp_gain = 16;
+  void clear_exp_gain() ;
+  [[nodiscard]] ::uint64_t exp_gain() const;
+  void set_exp_gain(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_exp_gain() const;
+  void _internal_set_exp_gain(::uint64_t value);
+
+  public:
+  // uint64 silver_gain = 17;
+  void clear_silver_gain() ;
+  [[nodiscard]] ::uint64_t silver_gain() const;
+  void set_silver_gain(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_silver_gain() const;
+  void _internal_set_silver_gain(::uint64_t value);
+
+  public:
+  // uint64 total_exp_after = 18;
+  void clear_total_exp_after() ;
+  [[nodiscard]] ::uint64_t total_exp_after() const;
+  void set_total_exp_after(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_total_exp_after() const;
+  void _internal_set_total_exp_after(::uint64_t value);
+
+  public:
+  // uint64 next_level_total_exp = 19;
+  void clear_next_level_total_exp() ;
+  [[nodiscard]] ::uint64_t next_level_total_exp() const;
+  void set_next_level_total_exp(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_next_level_total_exp() const;
+  void _internal_set_next_level_total_exp(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:BattleEndS2C)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 13,
+      ::google::protobuf::internal::TcParseTable<5, 20,
                           2, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -7136,12 +7213,19 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleEndS2C final : public ::googl
     ::uint32_t material_credit_units_added_;
     ::uint32_t season_id_;
     ::uint32_t material_tradable_units_added_;
+    ::uint32_t season_seal_points_added_;
+    ::uint32_t season_seal_progress_after_;
     bool items_mailed_;
     bool material_pvp_loss_ineligible_;
     bool season_honor_newly_unlocked_;
-    ::uint32_t season_seal_points_added_;
-    ::uint32_t season_seal_progress_after_;
+    bool battle_silver_diminished_;
     ::uint32_t season_seal_max_points_;
+    ::uint32_t level_before_;
+    ::uint32_t level_after_;
+    ::uint64_t exp_gain_;
+    ::uint64_t silver_gain_;
+    ::uint64_t total_exp_after_;
+    ::uint64_t next_level_total_exp_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -11507,7 +11591,7 @@ inline void BattleEndS2C::set_allocated_settlement(::BattleSettlementData* PROTO
 inline void BattleEndS2C::clear_items_mailed() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.items_mailed_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline bool BattleEndS2C::items_mailed() const {
   // @@protoc_insertion_point(field_get:BattleEndS2C.items_mailed)
@@ -11515,7 +11599,7 @@ inline bool BattleEndS2C::items_mailed() const {
 }
 inline void BattleEndS2C::set_items_mailed(bool value) {
   _internal_set_items_mailed(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:BattleEndS2C.items_mailed)
 }
 inline bool BattleEndS2C::_internal_items_mailed() const {
@@ -11603,7 +11687,7 @@ inline void BattleEndS2C::_internal_set_material_tradable_units_added(::uint32_t
 inline void BattleEndS2C::clear_material_pvp_loss_ineligible() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.material_pvp_loss_ineligible_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline bool BattleEndS2C::material_pvp_loss_ineligible() const {
   // @@protoc_insertion_point(field_get:BattleEndS2C.material_pvp_loss_ineligible)
@@ -11611,7 +11695,7 @@ inline bool BattleEndS2C::material_pvp_loss_ineligible() const {
 }
 inline void BattleEndS2C::set_material_pvp_loss_ineligible(bool value) {
   _internal_set_material_pvp_loss_ineligible(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:BattleEndS2C.material_pvp_loss_ineligible)
 }
 inline bool BattleEndS2C::_internal_material_pvp_loss_ineligible() const {
@@ -11725,7 +11809,7 @@ inline void BattleEndS2C::set_allocated_festival_beast_settlement(::FestivalBeas
 inline void BattleEndS2C::clear_season_seal_points_added() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.season_seal_points_added_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t BattleEndS2C::season_seal_points_added() const {
   // @@protoc_insertion_point(field_get:BattleEndS2C.season_seal_points_added)
@@ -11733,7 +11817,7 @@ inline ::uint32_t BattleEndS2C::season_seal_points_added() const {
 }
 inline void BattleEndS2C::set_season_seal_points_added(::uint32_t value) {
   _internal_set_season_seal_points_added(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:BattleEndS2C.season_seal_points_added)
 }
 inline ::uint32_t BattleEndS2C::_internal_season_seal_points_added() const {
@@ -11749,7 +11833,7 @@ inline void BattleEndS2C::_internal_set_season_seal_points_added(::uint32_t valu
 inline void BattleEndS2C::clear_season_seal_progress_after() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.season_seal_progress_after_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t BattleEndS2C::season_seal_progress_after() const {
   // @@protoc_insertion_point(field_get:BattleEndS2C.season_seal_progress_after)
@@ -11757,7 +11841,7 @@ inline ::uint32_t BattleEndS2C::season_seal_progress_after() const {
 }
 inline void BattleEndS2C::set_season_seal_progress_after(::uint32_t value) {
   _internal_set_season_seal_progress_after(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:BattleEndS2C.season_seal_progress_after)
 }
 inline ::uint32_t BattleEndS2C::_internal_season_seal_progress_after() const {
@@ -11773,7 +11857,7 @@ inline void BattleEndS2C::_internal_set_season_seal_progress_after(::uint32_t va
 inline void BattleEndS2C::clear_season_seal_max_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.season_seal_max_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint32_t BattleEndS2C::season_seal_max_points() const {
   // @@protoc_insertion_point(field_get:BattleEndS2C.season_seal_max_points)
@@ -11781,7 +11865,7 @@ inline ::uint32_t BattleEndS2C::season_seal_max_points() const {
 }
 inline void BattleEndS2C::set_season_seal_max_points(::uint32_t value) {
   _internal_set_season_seal_max_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:BattleEndS2C.season_seal_max_points)
 }
 inline ::uint32_t BattleEndS2C::_internal_season_seal_max_points() const {
@@ -11797,7 +11881,7 @@ inline void BattleEndS2C::_internal_set_season_seal_max_points(::uint32_t value)
 inline void BattleEndS2C::clear_season_honor_newly_unlocked() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.season_honor_newly_unlocked_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline bool BattleEndS2C::season_honor_newly_unlocked() const {
   // @@protoc_insertion_point(field_get:BattleEndS2C.season_honor_newly_unlocked)
@@ -11805,7 +11889,7 @@ inline bool BattleEndS2C::season_honor_newly_unlocked() const {
 }
 inline void BattleEndS2C::set_season_honor_newly_unlocked(bool value) {
   _internal_set_season_honor_newly_unlocked(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:BattleEndS2C.season_honor_newly_unlocked)
 }
 inline bool BattleEndS2C::_internal_season_honor_newly_unlocked() const {
@@ -11815,6 +11899,174 @@ inline bool BattleEndS2C::_internal_season_honor_newly_unlocked() const {
 inline void BattleEndS2C::_internal_set_season_honor_newly_unlocked(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.season_honor_newly_unlocked_ = value;
+}
+
+// uint32 level_before = 14;
+inline void BattleEndS2C::clear_level_before() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.level_before_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint32_t BattleEndS2C::level_before() const {
+  // @@protoc_insertion_point(field_get:BattleEndS2C.level_before)
+  return _internal_level_before();
+}
+inline void BattleEndS2C::set_level_before(::uint32_t value) {
+  _internal_set_level_before(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:BattleEndS2C.level_before)
+}
+inline ::uint32_t BattleEndS2C::_internal_level_before() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.level_before_;
+}
+inline void BattleEndS2C::_internal_set_level_before(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.level_before_ = value;
+}
+
+// uint32 level_after = 15;
+inline void BattleEndS2C::clear_level_after() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.level_after_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint32_t BattleEndS2C::level_after() const {
+  // @@protoc_insertion_point(field_get:BattleEndS2C.level_after)
+  return _internal_level_after();
+}
+inline void BattleEndS2C::set_level_after(::uint32_t value) {
+  _internal_set_level_after(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:BattleEndS2C.level_after)
+}
+inline ::uint32_t BattleEndS2C::_internal_level_after() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.level_after_;
+}
+inline void BattleEndS2C::_internal_set_level_after(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.level_after_ = value;
+}
+
+// uint64 exp_gain = 16;
+inline void BattleEndS2C::clear_exp_gain() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.exp_gain_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint64_t BattleEndS2C::exp_gain() const {
+  // @@protoc_insertion_point(field_get:BattleEndS2C.exp_gain)
+  return _internal_exp_gain();
+}
+inline void BattleEndS2C::set_exp_gain(::uint64_t value) {
+  _internal_set_exp_gain(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:BattleEndS2C.exp_gain)
+}
+inline ::uint64_t BattleEndS2C::_internal_exp_gain() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.exp_gain_;
+}
+inline void BattleEndS2C::_internal_set_exp_gain(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.exp_gain_ = value;
+}
+
+// uint64 silver_gain = 17;
+inline void BattleEndS2C::clear_silver_gain() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.silver_gain_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline ::uint64_t BattleEndS2C::silver_gain() const {
+  // @@protoc_insertion_point(field_get:BattleEndS2C.silver_gain)
+  return _internal_silver_gain();
+}
+inline void BattleEndS2C::set_silver_gain(::uint64_t value) {
+  _internal_set_silver_gain(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:BattleEndS2C.silver_gain)
+}
+inline ::uint64_t BattleEndS2C::_internal_silver_gain() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.silver_gain_;
+}
+inline void BattleEndS2C::_internal_set_silver_gain(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.silver_gain_ = value;
+}
+
+// uint64 total_exp_after = 18;
+inline void BattleEndS2C::clear_total_exp_after() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_exp_after_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+}
+inline ::uint64_t BattleEndS2C::total_exp_after() const {
+  // @@protoc_insertion_point(field_get:BattleEndS2C.total_exp_after)
+  return _internal_total_exp_after();
+}
+inline void BattleEndS2C::set_total_exp_after(::uint64_t value) {
+  _internal_set_total_exp_after(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  // @@protoc_insertion_point(field_set:BattleEndS2C.total_exp_after)
+}
+inline ::uint64_t BattleEndS2C::_internal_total_exp_after() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.total_exp_after_;
+}
+inline void BattleEndS2C::_internal_set_total_exp_after(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_exp_after_ = value;
+}
+
+// uint64 next_level_total_exp = 19;
+inline void BattleEndS2C::clear_next_level_total_exp() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_level_total_exp_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+}
+inline ::uint64_t BattleEndS2C::next_level_total_exp() const {
+  // @@protoc_insertion_point(field_get:BattleEndS2C.next_level_total_exp)
+  return _internal_next_level_total_exp();
+}
+inline void BattleEndS2C::set_next_level_total_exp(::uint64_t value) {
+  _internal_set_next_level_total_exp(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  // @@protoc_insertion_point(field_set:BattleEndS2C.next_level_total_exp)
+}
+inline ::uint64_t BattleEndS2C::_internal_next_level_total_exp() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.next_level_total_exp_;
+}
+inline void BattleEndS2C::_internal_set_next_level_total_exp(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_level_total_exp_ = value;
+}
+
+// bool battle_silver_diminished = 20;
+inline void BattleEndS2C::clear_battle_silver_diminished() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_silver_diminished_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline bool BattleEndS2C::battle_silver_diminished() const {
+  // @@protoc_insertion_point(field_get:BattleEndS2C.battle_silver_diminished)
+  return _internal_battle_silver_diminished();
+}
+inline void BattleEndS2C::set_battle_silver_diminished(bool value) {
+  _internal_set_battle_silver_diminished(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:BattleEndS2C.battle_silver_diminished)
+}
+inline bool BattleEndS2C::_internal_battle_silver_diminished() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_silver_diminished_;
+}
+inline void BattleEndS2C::_internal_set_battle_silver_diminished(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_silver_diminished_ = value;
 }
 
 // -------------------------------------------------------------------

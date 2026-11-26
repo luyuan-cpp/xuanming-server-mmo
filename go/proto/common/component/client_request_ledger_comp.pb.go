@@ -433,6 +433,69 @@ func (x *EquipmentMaterialRewardLedger) GetStage1TradableConfirmed() uint32 {
 	return 0
 }
 
+// 战斗成长经济周账本（docs/planning/player-leveling-and-battle-economy-v1.md §2.2）：
+// 与 CurrencyComp、EquipmentMaterialRewardLedger 同在 WALLET 存盘组，同帧原子提交。
+// 每周 UTC+8 周一 05:00 重置（抗时钟回拨），控制常规战斗银两周软/硬上限，不截断经验升级。
+type BattleEconomyLedger struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	WeekStartsAtMs       uint64                 `protobuf:"varint,1,opt,name=week_starts_at_ms,json=weekStartsAtMs,proto3" json:"week_starts_at_ms,omitempty"`                   // 当前游戏周起点（UTC+8 周一 05:00）
+	BattleSilverThisWeek uint64                 `protobuf:"varint,2,opt,name=battle_silver_this_week,json=battleSilverThisWeek,proto3" json:"battle_silver_this_week,omitempty"` // 本周战斗结算累计实际入账银两
+	BattleExpThisWeek    uint64                 `protobuf:"varint,3,opt,name=battle_exp_this_week,json=battleExpThisWeek,proto3" json:"battle_exp_this_week,omitempty"`          // 本周战斗累计入账经验（统计监控用）
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *BattleEconomyLedger) Reset() {
+	*x = BattleEconomyLedger{}
+	mi := &file_proto_common_component_client_request_ledger_comp_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BattleEconomyLedger) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BattleEconomyLedger) ProtoMessage() {}
+
+func (x *BattleEconomyLedger) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_component_client_request_ledger_comp_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BattleEconomyLedger.ProtoReflect.Descriptor instead.
+func (*BattleEconomyLedger) Descriptor() ([]byte, []int) {
+	return file_proto_common_component_client_request_ledger_comp_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *BattleEconomyLedger) GetWeekStartsAtMs() uint64 {
+	if x != nil {
+		return x.WeekStartsAtMs
+	}
+	return 0
+}
+
+func (x *BattleEconomyLedger) GetBattleSilverThisWeek() uint64 {
+	if x != nil {
+		return x.BattleSilverThisWeek
+	}
+	return 0
+}
+
+func (x *BattleEconomyLedger) GetBattleExpThisWeek() uint64 {
+	if x != nil {
+		return x.BattleExpThisWeek
+	}
+	return 0
+}
+
 type ClientRequestLedgerComp struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 条目之间无序,按 key 找;同一个 key 至多一条。
@@ -443,13 +506,14 @@ type ClientRequestLedgerComp struct {
 	// 与records的淘汰序号独立；即使旧回执被淘汰，旧水位请求也不能再次扣料或造物。
 	ForgeRevision  uint64                         `protobuf:"varint,3,opt,name=forge_revision,json=forgeRevision,proto3" json:"forge_revision,omitempty"`
 	MaterialReward *EquipmentMaterialRewardLedger `protobuf:"bytes,4,opt,name=material_reward,json=materialReward,proto3" json:"material_reward,omitempty"`
+	BattleEconomy  *BattleEconomyLedger           `protobuf:"bytes,5,opt,name=battle_economy,json=battleEconomy,proto3" json:"battle_economy,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ClientRequestLedgerComp) Reset() {
 	*x = ClientRequestLedgerComp{}
-	mi := &file_proto_common_component_client_request_ledger_comp_proto_msgTypes[2]
+	mi := &file_proto_common_component_client_request_ledger_comp_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -461,7 +525,7 @@ func (x *ClientRequestLedgerComp) String() string {
 func (*ClientRequestLedgerComp) ProtoMessage() {}
 
 func (x *ClientRequestLedgerComp) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_component_client_request_ledger_comp_proto_msgTypes[2]
+	mi := &file_proto_common_component_client_request_ledger_comp_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -474,7 +538,7 @@ func (x *ClientRequestLedgerComp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClientRequestLedgerComp.ProtoReflect.Descriptor instead.
 func (*ClientRequestLedgerComp) Descriptor() ([]byte, []int) {
-	return file_proto_common_component_client_request_ledger_comp_proto_rawDescGZIP(), []int{2}
+	return file_proto_common_component_client_request_ledger_comp_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ClientRequestLedgerComp) GetRecords() []*ClientRequestRecord {
@@ -501,6 +565,13 @@ func (x *ClientRequestLedgerComp) GetForgeRevision() uint64 {
 func (x *ClientRequestLedgerComp) GetMaterialReward() *EquipmentMaterialRewardLedger {
 	if x != nil {
 		return x.MaterialReward
+	}
+	return nil
+}
+
+func (x *ClientRequestLedgerComp) GetBattleEconomy() *BattleEconomyLedger {
+	if x != nil {
+		return x.BattleEconomy
 	}
 	return nil
 }
@@ -554,12 +625,17 @@ const file_proto_common_component_client_request_ledger_comp_proto_rawDesc = "" 
 	"\x10earned_this_week\x18\t \x01(\rR\x0eearnedThisWeek\x12$\n" +
 	"\x0emigrated_to_v2\x18\n" +
 	" \x01(\bR\fmigratedToV2\x12:\n" +
-	"\x19stage1_tradable_confirmed\x18\v \x01(\rR\x17stage1TradableConfirmed\"\xd4\x01\n" +
+	"\x19stage1_tradable_confirmed\x18\v \x01(\rR\x17stage1TradableConfirmed\"\xa8\x01\n" +
+	"\x13BattleEconomyLedger\x12)\n" +
+	"\x11week_starts_at_ms\x18\x01 \x01(\x04R\x0eweekStartsAtMs\x125\n" +
+	"\x17battle_silver_this_week\x18\x02 \x01(\x04R\x14battleSilverThisWeek\x12/\n" +
+	"\x14battle_exp_this_week\x18\x03 \x01(\x04R\x11battleExpThisWeek\"\x91\x02\n" +
 	"\x17ClientRequestLedgerComp\x12.\n" +
 	"\arecords\x18\x01 \x03(\v2\x14.ClientRequestRecordR\arecords\x12\x19\n" +
 	"\bnext_seq\x18\x02 \x01(\x04R\anextSeq\x12%\n" +
 	"\x0eforge_revision\x18\x03 \x01(\x04R\rforgeRevision\x12G\n" +
-	"\x0fmaterial_reward\x18\x04 \x01(\v2\x1e.EquipmentMaterialRewardLedgerR\x0ematerialRewardB\x18Z\x16proto/common/componentb\x06proto3"
+	"\x0fmaterial_reward\x18\x04 \x01(\v2\x1e.EquipmentMaterialRewardLedgerR\x0ematerialReward\x12;\n" +
+	"\x0ebattle_economy\x18\x05 \x01(\v2\x14.BattleEconomyLedgerR\rbattleEconomyB\x18Z\x16proto/common/componentb\x06proto3"
 
 var (
 	file_proto_common_component_client_request_ledger_comp_proto_rawDescOnce sync.Once
@@ -573,20 +649,22 @@ func file_proto_common_component_client_request_ledger_comp_proto_rawDescGZIP() 
 	return file_proto_common_component_client_request_ledger_comp_proto_rawDescData
 }
 
-var file_proto_common_component_client_request_ledger_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_proto_common_component_client_request_ledger_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_proto_common_component_client_request_ledger_comp_proto_goTypes = []any{
 	(*ClientRequestRecord)(nil),           // 0: ClientRequestRecord
 	(*EquipmentMaterialRewardLedger)(nil), // 1: EquipmentMaterialRewardLedger
-	(*ClientRequestLedgerComp)(nil),       // 2: ClientRequestLedgerComp
+	(*BattleEconomyLedger)(nil),           // 2: BattleEconomyLedger
+	(*ClientRequestLedgerComp)(nil),       // 3: ClientRequestLedgerComp
 }
 var file_proto_common_component_client_request_ledger_comp_proto_depIdxs = []int32{
 	0, // 0: ClientRequestLedgerComp.records:type_name -> ClientRequestRecord
 	1, // 1: ClientRequestLedgerComp.material_reward:type_name -> EquipmentMaterialRewardLedger
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	2, // 2: ClientRequestLedgerComp.battle_economy:type_name -> BattleEconomyLedger
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_component_client_request_ledger_comp_proto_init() }
@@ -600,7 +678,7 @@ func file_proto_common_component_client_request_ledger_comp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_component_client_request_ledger_comp_proto_rawDesc), len(file_proto_common_component_client_request_ledger_comp_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

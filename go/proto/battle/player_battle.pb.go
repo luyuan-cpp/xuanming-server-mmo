@@ -933,8 +933,16 @@ type BattleEndS2C struct {
 	SeasonSealProgressAfter    uint32                          `protobuf:"varint,11,opt,name=season_seal_progress_after,json=seasonSealProgressAfter,proto3" json:"season_seal_progress_after,omitempty"`         // 本局结算后本季赛季印累计进度点
 	SeasonSealMaxPoints        uint32                          `protobuf:"varint,12,opt,name=season_seal_max_points,json=seasonSealMaxPoints,proto3" json:"season_seal_max_points,omitempty"`                     // 本季赛季印满级上限（0 = 非赛季合格局）
 	SeasonHonorNewlyUnlocked   bool                            `protobuf:"varint,13,opt,name=season_honor_newly_unlocked,json=seasonHonorNewlyUnlocked,proto3" json:"season_honor_newly_unlocked,omitempty"`      // true = 本局刚满级永久解锁本季零数值纪念称谓与徽章
-	unknownFields              protoimpl.UnknownFields
-	sizeCache                  protoimpl.SizeCache
+	// 角色升级与战斗银两结算增量（与 PlayerBattleResult 同源，docs/planning/player-leveling-and-battle-economy-v1.md §2.3）。
+	LevelBefore            uint32 `protobuf:"varint,14,opt,name=level_before,json=levelBefore,proto3" json:"level_before,omitempty"`
+	LevelAfter             uint32 `protobuf:"varint,15,opt,name=level_after,json=levelAfter,proto3" json:"level_after,omitempty"`
+	ExpGain                uint64 `protobuf:"varint,16,opt,name=exp_gain,json=expGain,proto3" json:"exp_gain,omitempty"`
+	SilverGain             uint64 `protobuf:"varint,17,opt,name=silver_gain,json=silverGain,proto3" json:"silver_gain,omitempty"`
+	TotalExpAfter          uint64 `protobuf:"varint,18,opt,name=total_exp_after,json=totalExpAfter,proto3" json:"total_exp_after,omitempty"`
+	NextLevelTotalExp      uint64 `protobuf:"varint,19,opt,name=next_level_total_exp,json=nextLevelTotalExp,proto3" json:"next_level_total_exp,omitempty"`
+	BattleSilverDiminished bool   `protobuf:"varint,20,opt,name=battle_silver_diminished,json=battleSilverDiminished,proto3" json:"battle_silver_diminished,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *BattleEndS2C) Reset() {
@@ -1054,6 +1062,55 @@ func (x *BattleEndS2C) GetSeasonSealMaxPoints() uint32 {
 func (x *BattleEndS2C) GetSeasonHonorNewlyUnlocked() bool {
 	if x != nil {
 		return x.SeasonHonorNewlyUnlocked
+	}
+	return false
+}
+
+func (x *BattleEndS2C) GetLevelBefore() uint32 {
+	if x != nil {
+		return x.LevelBefore
+	}
+	return 0
+}
+
+func (x *BattleEndS2C) GetLevelAfter() uint32 {
+	if x != nil {
+		return x.LevelAfter
+	}
+	return 0
+}
+
+func (x *BattleEndS2C) GetExpGain() uint64 {
+	if x != nil {
+		return x.ExpGain
+	}
+	return 0
+}
+
+func (x *BattleEndS2C) GetSilverGain() uint64 {
+	if x != nil {
+		return x.SilverGain
+	}
+	return 0
+}
+
+func (x *BattleEndS2C) GetTotalExpAfter() uint64 {
+	if x != nil {
+		return x.TotalExpAfter
+	}
+	return 0
+}
+
+func (x *BattleEndS2C) GetNextLevelTotalExp() uint64 {
+	if x != nil {
+		return x.NextLevelTotalExp
+	}
+	return 0
+}
+
+func (x *BattleEndS2C) GetBattleSilverDiminished() bool {
+	if x != nil {
+		return x.BattleSilverDiminished
 	}
 	return false
 }
@@ -2801,7 +2858,7 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\x1dmaterial_tradable_units_added\x18\b \x01(\rR\x1amaterialTradableUnitsAdded\x12C\n" +
 	"\x1ematerial_available_units_after\x18\t \x01(\x04R\x1bmaterialAvailableUnitsAfter\x12I\n" +
 	"!material_earnable_remaining_after\x18\n" +
-	" \x01(\rR\x1ematerialEarnableRemainingAfter\"\xd7\x05\n" +
+	" \x01(\rR\x1ematerialEarnableRemainingAfter\"\xea\a\n" +
 	"\fBattleEndS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12)\n" +
 	"\aoutcome\x18\x02 \x01(\x0e2\x0f.eBattleOutcomeR\aoutcome\x125\n" +
@@ -2818,7 +2875,16 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	" \x01(\rR\x15seasonSealPointsAdded\x12;\n" +
 	"\x1aseason_seal_progress_after\x18\v \x01(\rR\x17seasonSealProgressAfter\x123\n" +
 	"\x16season_seal_max_points\x18\f \x01(\rR\x13seasonSealMaxPoints\x12=\n" +
-	"\x1bseason_honor_newly_unlocked\x18\r \x01(\bR\x18seasonHonorNewlyUnlocked\"1\n" +
+	"\x1bseason_honor_newly_unlocked\x18\r \x01(\bR\x18seasonHonorNewlyUnlocked\x12!\n" +
+	"\flevel_before\x18\x0e \x01(\rR\vlevelBefore\x12\x1f\n" +
+	"\vlevel_after\x18\x0f \x01(\rR\n" +
+	"levelAfter\x12\x19\n" +
+	"\bexp_gain\x18\x10 \x01(\x04R\aexpGain\x12\x1f\n" +
+	"\vsilver_gain\x18\x11 \x01(\x04R\n" +
+	"silverGain\x12&\n" +
+	"\x0ftotal_exp_after\x18\x12 \x01(\x04R\rtotalExpAfter\x12/\n" +
+	"\x14next_level_total_exp\x18\x13 \x01(\x04R\x11nextLevelTotalExp\x128\n" +
+	"\x18battle_silver_diminished\x18\x14 \x01(\bR\x16battleSilverDiminished\"1\n" +
 	"\x12BattleReconnectS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\"`\n" +
 	"\x10SpectateStateS2C\x12%\n" +

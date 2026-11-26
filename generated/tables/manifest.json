@@ -1,14 +1,14 @@
 {
   "schema_version": 2,
-  "schema_digest": "55d900397a301fa1",
-  "version": 79,
-  "content_digest": "a6c57f8561a21b643762570d3f03f4aa8cec8018529fc1716b202b3b064ab81b",
-  "generated_at": "2026-11-26T04:45:44Z",
+  "schema_digest": "194fb8bba93c9b8d",
+  "version": 81,
+  "content_digest": "1d5d83b423d7386a978d39cffb3379e0adf8fdc5b73c3119da3eabd5e22be76c",
+  "generated_at": "2026-11-26T04:54:38Z",
   "source_rev": {
-    "commit": "ef8355f3d297a1d4816d49c8f9c98bfff2527d5f",
-    "data_dirty": false
+    "commit": "a0ac537aded8848a84057199009b6256e8ba32ce",
+    "data_dirty": true
   },
-  "table_count": 78,
+  "table_count": 81,
   "tables": [
     {
       "name": "ActivitySchedule",
@@ -361,6 +361,56 @@
       ]
     },
     {
+      "name": "BattleProgressionReward",
+      "hot_reload": true,
+      "ids_permanent": false,
+      "rows": 20,
+      "source": {
+        "file": "BattleProgressionReward.xlsx",
+        "size": 5659,
+        "sha256": "dd4c08703ce7a4e492d1917e2891b5b485ae5eeffad9dec794e60ba20fe6d5e8"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "battleprogressionreward.json",
+          "size": 2544,
+          "sha256": "b633bcf3d18a312ac49ad857982cba2d22e2e7f0ca648e552049e8548b48e15d"
+        },
+        {
+          "kind": "binary",
+          "file": "battleprogressionreward.pb",
+          "size": 279,
+          "sha256": "2c497d742070aae9d194e83c599e1273dd5ad3f0046214ed7036d9d03ebdb276"
+        }
+      ]
+    },
+    {
+      "name": "BattleProgressionRule",
+      "hot_reload": true,
+      "ids_permanent": false,
+      "rows": 1,
+      "source": {
+        "file": "BattleProgressionRule.xlsx",
+        "size": 5099,
+        "sha256": "dcf90a3fec7f973468f0db7ac4b876d9c8a0b8ab4ecc45c04217829a64e288ce"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "battleprogressionrule.json",
+          "size": 146,
+          "sha256": "6eb07dc5898ce3910c25d9c28fe9d126f42156bafaf045d5e8b88357dd25b1af"
+        },
+        {
+          "kind": "binary",
+          "file": "battleprogressionrule.pb",
+          "size": 15,
+          "sha256": "1e8a2a04f56aeaf7970bfe4b8e35639c3d9f431a598476b423ed8d568b18973b"
+        }
+      ]
+    },
+    {
       "name": "Buff",
       "hot_reload": true,
       "ids_permanent": false,
@@ -489,24 +539,24 @@
       "name": "Dungeon",
       "hot_reload": false,
       "ids_permanent": false,
-      "rows": 17,
+      "rows": 20,
       "source": {
         "file": "Dungeon.xlsx",
-        "size": 5986,
-        "sha256": "57e173235feb68360e3264b08f20213a21d18deb7b5c05d806ceaa7da798fa01"
+        "size": 6115,
+        "sha256": "a663091576c381e8a2c740f500c05b1188bb8886aa2624bf17f42162abf8e01c"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "dungeon.json",
-          "size": 3644,
-          "sha256": "9fa26c24b5a188247fb7c73160d23d525463d0e22e69e258435b4d8fc560e2f1"
+          "size": 4325,
+          "sha256": "73d8031ae1deb08d6ff889d31cb3a4b511c4da7d11cfd13b2afca1e057defacf"
         },
         {
           "kind": "binary",
           "file": "dungeon.pb",
-          "size": 322,
-          "sha256": "c5f48528733220ce64b965af993034d25dadb8cf021e65382e254d90e01cf599"
+          "size": 394,
+          "sha256": "46d111c30fd62ca7d3163583b2c31be990412ab08827d24c5e0a0c1a9ec5cd0d"
         }
       ]
     },
@@ -1139,24 +1189,24 @@
       "name": "Monster",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 26,
+      "rows": 35,
       "source": {
         "file": "Monster.xlsx",
-        "size": 6755,
-        "sha256": "690e95113750c2685f30bca77c7bc0d08c7f418f31d6de578202922ace19f171"
+        "size": 7368,
+        "sha256": "59dc3e947372759c5454a5e9fb6920e0ee99370f7c61af4442a6e5d7efd9eb1b"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "monster.json",
-          "size": 6746,
-          "sha256": "7ef9432ebb57dd0a88068cfd77c38a6e03eadac4197e4cd20333fa73e469c78d"
+          "size": 10021,
+          "sha256": "b67e11d9c598e28c632b85455c20ab1fcd720a0d40fa9544ffa3ee53a5d611e7"
         },
         {
           "kind": "binary",
           "file": "monster.pb",
-          "size": 653,
-          "sha256": "93ffb12640955fac0ceb94a0ae00fc2bd5f637dd13162466165a8e65c92f12c4"
+          "size": 988,
+          "sha256": "5b0a8f8189ff2e9fd872c25bd833bfabe369d95a5fcae27d6b611ba8950e0a3a"
         }
       ]
     },
@@ -1214,24 +1264,24 @@
       "name": "MysteryMerchantSpot",
       "hot_reload": false,
       "ids_permanent": false,
-      "rows": 12,
+      "rows": 15,
       "source": {
         "file": "MysteryMerchantSpot.xlsx",
-        "size": 5731,
-        "sha256": "0914a78da807d4be4b0004ddc46d7a38dae4a7f9baeac1e5cddf39541081669e"
+        "size": 5899,
+        "sha256": "ae61c1264f0b68f4bd2e8441f8620d2319847d2c777c139a306120a1be29a09e"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "mysterymerchantspot.json",
-          "size": 1918,
-          "sha256": "a41323d6e696ebc3fbdf9eab7e720404d7d917afc0f1816dfd5653ef1e3c3852"
+          "size": 2368,
+          "sha256": "a1d73684dfdc8f9f072fd53088e10b6de94dd13853824b7934b331b9c5943d02"
         },
         {
           "kind": "binary",
           "file": "mysterymerchantspot.pb",
-          "size": 923,
-          "sha256": "eb107c831339ff700cde211905227bd59cebc205863b6075bb092cdca0bd7211"
+          "size": 1124,
+          "sha256": "34330038ff69278fe27daf9b5ee2802d8ed9dd5cea14bda65eee2e8a65d2e7ee"
         }
       ]
     },
@@ -1364,24 +1414,49 @@
       "name": "PlayMode",
       "hot_reload": false,
       "ids_permanent": false,
-      "rows": 28,
+      "rows": 31,
       "source": {
         "file": "PlayMode.xlsx",
-        "size": 6124,
-        "sha256": "aee8a6c43d690adbf4586346bdfef38c22966396b8df5343dedac11d4984477a"
+        "size": 6192,
+        "sha256": "1d868a55d16b09af689cf6484f6146c567361e082cc8ec5c9cd3728e4fd395f8"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "playmode.json",
-          "size": 3198,
-          "sha256": "31cec82d060eac2b7fa70686f0cbc9ba378c74fbe405f9d775c21e0e2ee0d3f2"
+          "size": 3537,
+          "sha256": "534b0612c4ee0e930e5a5113c12cea1b8749a56e8031f49bcbb3ae8f06bc570c"
         },
         {
           "kind": "binary",
           "file": "playmode.pb",
-          "size": 341,
-          "sha256": "e5ec0f336462578e2341eff998aee87920860815c88757cb59e011108bffaae3"
+          "size": 383,
+          "sha256": "0d605f0d279aac4d3d3ed580bde2934c7cb4059f24217b4e6a0d99b09ed167f7"
+        }
+      ]
+    },
+    {
+      "name": "PlayerLevelExp",
+      "hot_reload": true,
+      "ids_permanent": false,
+      "rows": 85,
+      "source": {
+        "file": "PlayerLevelExp.xlsx",
+        "size": 6144,
+        "sha256": "3d3b6ed1490e784c01b5b192b26d25fbb79fec366d42916622b2f03743cc982a"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "playerlevelexp.json",
+          "size": 4507,
+          "sha256": "f9631ed55f707d9bd2bb6b442bcc70c77be3aedd18b5fbe1984590c5a19f1290"
+        },
+        {
+          "kind": "binary",
+          "file": "playerlevelexp.pb",
+          "size": 651,
+          "sha256": "d7bfd99db1bd098df44ae58a56f7b6fca654504a0d642b4531d999ab7179e287"
         }
       ]
     },

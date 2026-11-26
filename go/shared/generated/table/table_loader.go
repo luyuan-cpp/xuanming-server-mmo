@@ -9,12 +9,14 @@ import (
 )
 
 // SchemaDigest 是整批服务端配置表的数据布局摘要(16 位小写十六进制,docs/design/config-table-hot-reload.md §5.1)。
-const SchemaDigest = "55d900397a301fa1"
+const SchemaDigest = "194fb8bba93c9b8d"
 
 var hotReloadableTables = map[string]bool{
 	"ActivitySchedule": true,
 	"ActivityVitalityReward": true,
 	"ActivityVitalityRule": true,
+	"BattleProgressionReward": true,
+	"BattleProgressionRule": true,
 	"Buff": true,
 	"Cooldown": true,
 	"EquipAffixQuality": true,
@@ -28,6 +30,7 @@ var hotReloadableTables = map[string]bool{
 	"Monster": true,
 	"MysteryMerchantGoods": true,
 	"MysteryMerchantRule": true,
+	"PlayerLevelExp": true,
 	"SeasonRule": true,
 	"SeasonSeal": true,
 	"Skill": true,
@@ -57,6 +60,8 @@ var allTableNames = []string{
 	"AttributePool",
 	"AttributeRule",
 	"BaseScene",
+	"BattleProgressionReward",
+	"BattleProgressionRule",
 	"Buff",
 	"CharacterAppearance",
 	"Class",
@@ -98,6 +103,7 @@ var allTableNames = []string{
 	"PetRule",
 	"PetTier",
 	"PlayMode",
+	"PlayerLevelExp",
 	"RankedPreset",
 	"RankedRule",
 	"Reward",
@@ -161,6 +167,8 @@ type TableSet struct {
 	AttributePool *AttributePoolTableManager
 	AttributeRule *AttributeRuleTableManager
 	BaseScene *BaseSceneTableManager
+	BattleProgressionReward *BattleProgressionRewardTableManager
+	BattleProgressionRule *BattleProgressionRuleTableManager
 	Buff *BuffTableManager
 	CharacterAppearance *CharacterAppearanceTableManager
 	Class *ClassTableManager
@@ -202,6 +210,7 @@ type TableSet struct {
 	PetRule *PetRuleTableManager
 	PetTier *PetTierTableManager
 	PlayMode *PlayModeTableManager
+	PlayerLevelExp *PlayerLevelExpTableManager
 	RankedPreset *RankedPresetTableManager
 	RankedRule *RankedRuleTableManager
 	Reward *RewardTableManager
@@ -261,6 +270,8 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 		AttributePool: NewAttributePoolTableManager(),
 		AttributeRule: NewAttributeRuleTableManager(),
 		BaseScene: NewBaseSceneTableManager(),
+		BattleProgressionReward: NewBattleProgressionRewardTableManager(),
+		BattleProgressionRule: NewBattleProgressionRuleTableManager(),
 		Buff: NewBuffTableManager(),
 		CharacterAppearance: NewCharacterAppearanceTableManager(),
 		Class: NewClassTableManager(),
@@ -302,6 +313,7 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 		PetRule: NewPetRuleTableManager(),
 		PetTier: NewPetTierTableManager(),
 		PlayMode: NewPlayModeTableManager(),
+		PlayerLevelExp: NewPlayerLevelExpTableManager(),
 		RankedPreset: NewRankedPresetTableManager(),
 		RankedRule: NewRankedRuleTableManager(),
 		Reward: NewRewardTableManager(),
@@ -367,6 +379,12 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 	}
 	if err := ts.BaseScene.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare BaseScene table failed: %w", err)
+	}
+	if err := ts.BattleProgressionReward.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare BattleProgressionReward table failed: %w", err)
+	}
+	if err := ts.BattleProgressionRule.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare BattleProgressionRule table failed: %w", err)
 	}
 	if err := ts.Buff.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare Buff table failed: %w", err)
@@ -491,6 +509,9 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 	if err := ts.PlayMode.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare PlayMode table failed: %w", err)
 	}
+	if err := ts.PlayerLevelExp.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare PlayerLevelExp table failed: %w", err)
+	}
 	if err := ts.RankedPreset.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare RankedPreset table failed: %w", err)
 	}
@@ -611,6 +632,12 @@ func Commit(ts *TableSet) {
 	}
 	if ts.BaseScene != nil {
 		BaseSceneTableManagerInstance.swapSnapshot(ts.BaseScene.snap.Load())
+	}
+	if ts.BattleProgressionReward != nil {
+		BattleProgressionRewardTableManagerInstance.swapSnapshot(ts.BattleProgressionReward.snap.Load())
+	}
+	if ts.BattleProgressionRule != nil {
+		BattleProgressionRuleTableManagerInstance.swapSnapshot(ts.BattleProgressionRule.snap.Load())
 	}
 	if ts.Buff != nil {
 		BuffTableManagerInstance.swapSnapshot(ts.Buff.snap.Load())
@@ -734,6 +761,9 @@ func Commit(ts *TableSet) {
 	}
 	if ts.PlayMode != nil {
 		PlayModeTableManagerInstance.swapSnapshot(ts.PlayMode.snap.Load())
+	}
+	if ts.PlayerLevelExp != nil {
+		PlayerLevelExpTableManagerInstance.swapSnapshot(ts.PlayerLevelExp.snap.Load())
 	}
 	if ts.RankedPreset != nil {
 		RankedPresetTableManagerInstance.swapSnapshot(ts.RankedPreset.snap.Load())
@@ -862,6 +892,8 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		AttributePool: NewAttributePoolTableManager(),
 		AttributeRule: NewAttributeRuleTableManager(),
 		BaseScene: NewBaseSceneTableManager(),
+		BattleProgressionReward: NewBattleProgressionRewardTableManager(),
+		BattleProgressionRule: NewBattleProgressionRuleTableManager(),
 		Buff: NewBuffTableManager(),
 		CharacterAppearance: NewCharacterAppearanceTableManager(),
 		Class: NewClassTableManager(),
@@ -903,6 +935,7 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		PetRule: NewPetRuleTableManager(),
 		PetTier: NewPetTierTableManager(),
 		PlayMode: NewPlayModeTableManager(),
+		PlayerLevelExp: NewPlayerLevelExpTableManager(),
 		RankedPreset: NewRankedPresetTableManager(),
 		RankedRule: NewRankedRuleTableManager(),
 		Reward: NewRewardTableManager(),
@@ -928,7 +961,7 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		ZoneGroup: NewZoneGroupTableManager(),
 	}
 	var wg sync.WaitGroup
-	wg.Add(78)
+	wg.Add(81)
 	go func() {
 		defer wg.Done()
 		if err := ts.ActivitySchedule.Load(configDir, useBinary); err != nil {
@@ -1011,6 +1044,18 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		defer wg.Done()
 		if err := ts.BaseScene.Load(configDir, useBinary); err != nil {
 			log.Fatalf("failed to load BaseScene table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.BattleProgressionReward.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load BattleProgressionReward table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.BattleProgressionRule.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load BattleProgressionRule table: %v", err)
 		}
 	}()
 	go func() {
@@ -1257,6 +1302,12 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		defer wg.Done()
 		if err := ts.PlayMode.Load(configDir, useBinary); err != nil {
 			log.Fatalf("failed to load PlayMode table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.PlayerLevelExp.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load PlayerLevelExp table: %v", err)
 		}
 	}()
 	go func() {

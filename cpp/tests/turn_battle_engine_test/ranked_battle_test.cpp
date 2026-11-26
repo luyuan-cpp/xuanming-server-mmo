@@ -964,7 +964,7 @@ TEST(RankedBattleTest, TacticalPingsMultiPlayerIsolationRateLimitAndRoundClear) 
         p->set_max_mana(1000);
         p->mutable_base_attributes()->set_health(4000);
         p->mutable_base_attributes()->set_mana(1000);
-        p->mutable_base_attributes()->set_attack(300);
+        p->set_physical_attack(300);
         p->mutable_base_attributes()->set_speed(100);
     };
     addP(101, 0);
@@ -1042,11 +1042,11 @@ TEST(RankedBattleTest, CombatHighlightsAndStreakBreakerSettlement) {
     // 让 101 在 1 回合内压低血后反杀 201，验证绝境翻盘 + 破势终结 + 承伤统计
     req.mutable_players(0)->set_max_health(1000);
     req.mutable_players(0)->mutable_base_attributes()->set_health(1000);
-    req.mutable_players(0)->mutable_base_attributes()->set_attack(600);
+    req.mutable_players(0)->set_physical_attack(600);
     req.mutable_players(0)->mutable_base_attributes()->set_speed(50);
     req.mutable_players(1)->set_max_health(500);
     req.mutable_players(1)->mutable_base_attributes()->set_health(500);
-    req.mutable_players(1)->mutable_base_attributes()->set_attack(850);
+    req.mutable_players(1)->set_physical_attack(850);
     req.mutable_players(1)->mutable_base_attributes()->set_speed(150);
 
     TurnBattleEngine engine(data);

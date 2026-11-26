@@ -479,8 +479,13 @@ type AttributePanelInfo struct {
 	Combat               []*CombatAttributeInfo          `protobuf:"bytes,10,rep,name=combat,proto3" json:"combat,omitempty"`                                                             // 战斗类属性全量,sort 升序
 	EquipmentEffects     *component.EquipmentEffects     `protobuf:"bytes,11,opt,name=equipment_effects,json=equipmentEffects,proto3" json:"equipment_effects,omitempty"`                 // V1来源修正全量；含分类命中/抵抗/减耗与法宝，不由客户端自行累计。
 	SupportEffects       *component.SupportEffectSummary `protobuf:"bytes,12,opt,name=support_effects,json=supportEffects,proto3" json:"support_effects,omitempty"`                       // 人物治疗/护盾来源；战斗中临时来源由本人战斗快照提供。
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// 角色累计修为与本级经验进度（docs/planning/player-leveling-and-battle-economy-v1.md §2.3，服务端权威计算）。
+	TotalExp        uint64 `protobuf:"varint,13,opt,name=total_exp,json=totalExp,proto3" json:"total_exp,omitempty"`                        // 角色累计总经验（LevelComp.total_exp）
+	CurrentLevelExp uint64 `protobuf:"varint,14,opt,name=current_level_exp,json=currentLevelExp,proto3" json:"current_level_exp,omitempty"` // 当前等级内已积累经验（满级为 0）
+	NextLevelExp    uint64 `protobuf:"varint,15,opt,name=next_level_exp,json=nextLevelExp,proto3" json:"next_level_exp,omitempty"`          // 升到下一级所需经验增量（满级为 0）
+	IsMaxLevel      bool   `protobuf:"varint,16,opt,name=is_max_level,json=isMaxLevel,proto3" json:"is_max_level,omitempty"`                // true = 生效等级已达上限
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *AttributePanelInfo) Reset() {
@@ -595,6 +600,34 @@ func (x *AttributePanelInfo) GetSupportEffects() *component.SupportEffectSummary
 		return x.SupportEffects
 	}
 	return nil
+}
+
+func (x *AttributePanelInfo) GetTotalExp() uint64 {
+	if x != nil {
+		return x.TotalExp
+	}
+	return 0
+}
+
+func (x *AttributePanelInfo) GetCurrentLevelExp() uint64 {
+	if x != nil {
+		return x.CurrentLevelExp
+	}
+	return 0
+}
+
+func (x *AttributePanelInfo) GetNextLevelExp() uint64 {
+	if x != nil {
+		return x.NextLevelExp
+	}
+	return 0
+}
+
+func (x *AttributePanelInfo) GetIsMaxLevel() bool {
+	if x != nil {
+		return x.IsMaxLevel
+	}
+	return false
 }
 
 type GetAttributePanelRequest struct {
@@ -1507,7 +1540,7 @@ const file_proto_scene_player_attribute_proto_rawDesc = "" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
 	"\x05value\x18\x03 \x01(\x04R\x05value\x12\x18\n" +
 	"\apercent\x18\x04 \x01(\bR\apercent\x12\x12\n" +
-	"\x04sort\x18\x05 \x01(\rR\x04sort\"\xd2\x04\n" +
+	"\x04sort\x18\x05 \x01(\rR\x04sort\"\xe3\x05\n" +
 	"\x12AttributePanelInfo\x12(\n" +
 	"\x05pools\x18\x01 \x03(\v2\x12.AttributePoolInfoR\x05pools\x127\n" +
 	"\n" +
@@ -1524,7 +1557,12 @@ const file_proto_scene_player_attribute_proto_rawDesc = "" +
 	"\x06combat\x18\n" +
 	" \x03(\v2\x14.CombatAttributeInfoR\x06combat\x12>\n" +
 	"\x11equipment_effects\x18\v \x01(\v2\x11.EquipmentEffectsR\x10equipmentEffects\x12>\n" +
-	"\x0fsupport_effects\x18\f \x01(\v2\x15.SupportEffectSummaryR\x0esupportEffects\"\x1a\n" +
+	"\x0fsupport_effects\x18\f \x01(\v2\x15.SupportEffectSummaryR\x0esupportEffects\x12\x1b\n" +
+	"\ttotal_exp\x18\r \x01(\x04R\btotalExp\x12*\n" +
+	"\x11current_level_exp\x18\x0e \x01(\x04R\x0fcurrentLevelExp\x12$\n" +
+	"\x0enext_level_exp\x18\x0f \x01(\x04R\fnextLevelExp\x12 \n" +
+	"\fis_max_level\x18\x10 \x01(\bR\n" +
+	"isMaxLevel\"\x1a\n" +
 	"\x18GetAttributePanelRequest\"|\n" +
 	"\x19GetAttributePanelResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12)\n" +

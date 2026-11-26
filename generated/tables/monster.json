@@ -382,6 +382,205 @@
    "resistance": 15,
    "speed": 760,
    "strength": 115
+  },
+  {
+   "armor": 44,
+   "capture_pet_table_id": 4,
+   "capture_rate": 3000,
+   "critchance": 5,
+   "drop": [
+    {
+     "drop_count": 1,
+     "drop_item": 20,
+     "drop_rate": 3000
+    },
+    {
+     "drop_count": 1,
+     "drop_item": 10,
+     "drop_rate": 2500
+    }
+   ],
+   "exp_reward": 45,
+   "gold_reward": 24,
+   "health": 520,
+   "id": 201,
+   "is_boss": 0,
+   "resistance": 10,
+   "speed": 310,
+   "strength": 42
+  },
+  {
+   "armor": 34,
+   "capture_pet_table_id": 13,
+   "capture_rate": 4000,
+   "critchance": 0,
+   "drop": [
+    {
+     "drop_count": 1,
+     "drop_item": 10,
+     "drop_rate": 3000
+    }
+   ],
+   "exp_reward": 24,
+   "gold_reward": 12,
+   "health": 350,
+   "id": 202,
+   "is_boss": 0,
+   "resistance": 5,
+   "speed": 275,
+   "strength": 30
+  },
+  {
+   "armor": 38,
+   "capture_pet_table_id": 19,
+   "capture_rate": 4000,
+   "critchance": 0,
+   "drop": [
+    {
+     "drop_count": 1,
+     "drop_item": 10,
+     "drop_rate": 3000
+    }
+   ],
+   "exp_reward": 24,
+   "gold_reward": 12,
+   "health": 360,
+   "id": 203,
+   "is_boss": 0,
+   "resistance": 8,
+   "speed": 265,
+   "strength": 28
+  },
+  {
+   "armor": 46,
+   "capture_pet_table_id": 3,
+   "capture_rate": 3000,
+   "critchance": 5,
+   "drop": [
+    {
+     "drop_count": 1,
+     "drop_item": 20,
+     "drop_rate": 3000
+    },
+    {
+     "drop_count": 1,
+     "drop_item": 10,
+     "drop_rate": 2500
+    }
+   ],
+   "exp_reward": 45,
+   "gold_reward": 24,
+   "health": 560,
+   "id": 204,
+   "is_boss": 0,
+   "resistance": 5,
+   "speed": 285,
+   "strength": 46
+  },
+  {
+   "armor": 32,
+   "capture_pet_table_id": 1,
+   "capture_rate": 4000,
+   "critchance": 0,
+   "drop": [
+    {
+     "drop_count": 1,
+     "drop_item": 10,
+     "drop_rate": 3000
+    }
+   ],
+   "exp_reward": 24,
+   "gold_reward": 12,
+   "health": 340,
+   "id": 205,
+   "is_boss": 0,
+   "resistance": 5,
+   "speed": 280,
+   "strength": 32
+  },
+  {
+   "armor": 38,
+   "capture_pet_table_id": 22,
+   "capture_rate": 4000,
+   "critchance": 0,
+   "drop": [
+    {
+     "drop_count": 1,
+     "drop_item": 10,
+     "drop_rate": 3000
+    }
+   ],
+   "exp_reward": 24,
+   "gold_reward": 12,
+   "health": 380,
+   "id": 206,
+   "is_boss": 0,
+   "resistance": 0,
+   "speed": 255,
+   "strength": 34
+  },
+  {
+   "armor": 54,
+   "capture_pet_table_id": 15,
+   "capture_rate": 4000,
+   "critchance": 0,
+   "drop": [
+    {
+     "drop_count": 1,
+     "drop_item": 20,
+     "drop_rate": 3000
+    }
+   ],
+   "exp_reward": 26,
+   "gold_reward": 14,
+   "health": 430,
+   "id": 207,
+   "is_boss": 0,
+   "resistance": 10,
+   "speed": 210,
+   "strength": 26
+  },
+  {
+   "armor": 46,
+   "capture_pet_table_id": 11,
+   "capture_rate": 4000,
+   "critchance": 0,
+   "drop": [
+    {
+     "drop_count": 1,
+     "drop_item": 10,
+     "drop_rate": 3000
+    }
+   ],
+   "exp_reward": 24,
+   "gold_reward": 12,
+   "health": 390,
+   "id": 208,
+   "is_boss": 0,
+   "resistance": 10,
+   "speed": 230,
+   "strength": 28
+  },
+  {
+   "armor": 40,
+   "capture_pet_table_id": 17,
+   "capture_rate": 4000,
+   "critchance": 0,
+   "drop": [
+    {
+     "drop_count": 1,
+     "drop_item": 10,
+     "drop_rate": 3000
+    }
+   ],
+   "exp_reward": 24,
+   "gold_reward": 12,
+   "health": 370,
+   "id": 209,
+   "is_boss": 0,
+   "resistance": 12,
+   "speed": 248,
+   "strength": 29
   }
  ]
 }

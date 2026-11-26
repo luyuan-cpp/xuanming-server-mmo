@@ -129,6 +129,14 @@ message BattleEndS2C {
   uint32 season_seal_progress_after = 11;   // 本局结算后本季赛季印累计进度点
   uint32 season_seal_max_points = 12;       // 本季赛季印满级上限（0 = 非赛季合格局）
   bool season_honor_newly_unlocked = 13;    // true = 本局刚满级永久解锁本季零数值纪念称谓与徽章
+  // 角色升级与战斗银两结算增量（与 PlayerBattleResult 同源，docs/planning/player-leveling-and-battle-economy-v1.md §2.3）。
+  uint32 level_before = 14;
+  uint32 level_after = 15;
+  uint64 exp_gain = 16;
+  uint64 silver_gain = 17;
+  uint64 total_exp_after = 18;
+  uint64 next_level_total_exp = 19;
+  bool battle_silver_diminished = 20;
 }
 
 // 重连提示:scene 在换会话(RECONNECT / REPLACE)或登录重建出 FIGHTING 冻结时经大厅推送;

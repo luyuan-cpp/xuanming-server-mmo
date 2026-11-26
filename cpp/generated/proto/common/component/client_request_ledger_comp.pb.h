@@ -53,6 +53,14 @@ struct TableStruct_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp
 extern "C" {
 extern const ::google::protobuf::internal::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto;
 }  // extern "C"
+class BattleEconomyLedger;
+struct BattleEconomyLedgerGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BattleEconomyLedgerGlobalsTypeInternal BattleEconomyLedger_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BattleEconomyLedger_class_data_;
+#else
+extern const BattleEconomyLedgerGlobalsTypeInternal BattleEconomyLedger_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class ClientRequestLedgerComp;
 struct ClientRequestLedgerCompGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -963,6 +971,231 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleEconomyLedger final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:BattleEconomyLedger) */ {
+ public:
+  inline BattleEconomyLedger() : BattleEconomyLedger(nullptr) {}
+  ~BattleEconomyLedger() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BattleEconomyLedger* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BattleEconomyLedger));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BattleEconomyLedger(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BattleEconomyLedger(const BattleEconomyLedger& from) : BattleEconomyLedger(nullptr, from) {}
+  inline BattleEconomyLedger(BattleEconomyLedger&& from) noexcept : BattleEconomyLedger(nullptr, ::std::move(from)) {}
+  inline BattleEconomyLedger& operator=(const BattleEconomyLedger& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BattleEconomyLedger& operator=(BattleEconomyLedger&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BattleEconomyLedger& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattleEconomyLedger>(&BattleEconomyLedger_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 2;
+  friend void swap(BattleEconomyLedger& a, BattleEconomyLedger& b) { a.Swap(&b); }
+  inline void Swap(BattleEconomyLedger* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BattleEconomyLedger* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BattleEconomyLedger* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BattleEconomyLedger>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BattleEconomyLedger& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BattleEconomyLedger& from) { BattleEconomyLedger::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BattleEconomyLedger* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "BattleEconomyLedger"; }
+
+  explicit BattleEconomyLedger(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BattleEconomyLedger(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BattleEconomyLedger& from);
+  BattleEconomyLedger(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BattleEconomyLedger&& from) noexcept
+      : BattleEconomyLedger(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kWeekStartsAtMsFieldNumber = 1,
+    kBattleSilverThisWeekFieldNumber = 2,
+    kBattleExpThisWeekFieldNumber = 3,
+  };
+  // uint64 week_starts_at_ms = 1;
+  void clear_week_starts_at_ms() ;
+  [[nodiscard]] ::uint64_t week_starts_at_ms() const;
+  void set_week_starts_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_week_starts_at_ms() const;
+  void _internal_set_week_starts_at_ms(::uint64_t value);
+
+  public:
+  // uint64 battle_silver_this_week = 2;
+  void clear_battle_silver_this_week() ;
+  [[nodiscard]] ::uint64_t battle_silver_this_week() const;
+  void set_battle_silver_this_week(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_battle_silver_this_week() const;
+  void _internal_set_battle_silver_this_week(::uint64_t value);
+
+  public:
+  // uint64 battle_exp_this_week = 3;
+  void clear_battle_exp_this_week() ;
+  [[nodiscard]] ::uint64_t battle_exp_this_week() const;
+  void set_battle_exp_this_week(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_battle_exp_this_week() const;
+  void _internal_set_battle_exp_this_week(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:BattleEconomyLedger)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BattleEconomyLedger& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t week_starts_at_ms_;
+    ::uint64_t battle_silver_this_week_;
+    ::uint64_t battle_exp_this_week_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestLedgerComp final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:ClientRequestLedgerComp) */ {
  public:
@@ -1019,7 +1252,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestLedgerComp final : pub
   [[nodiscard]] static const ClientRequestLedgerComp& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClientRequestLedgerComp>(&ClientRequestLedgerComp_globals_);
   }
-  static constexpr int kIndexInFileMessages = 2;
+  static constexpr int kIndexInFileMessages = 3;
   friend void swap(ClientRequestLedgerComp& a, ClientRequestLedgerComp& b) { a.Swap(&b); }
   inline void Swap(ClientRequestLedgerComp* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1113,6 +1346,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestLedgerComp final : pub
   enum : int {
     kRecordsFieldNumber = 1,
     kMaterialRewardFieldNumber = 4,
+    kBattleEconomyFieldNumber = 5,
     kNextSeqFieldNumber = 2,
     kForgeRevisionFieldNumber = 3,
   };
@@ -1153,6 +1387,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestLedgerComp final : pub
   ::EquipmentMaterialRewardLedger* PROTOBUF_NONNULL _internal_mutable_material_reward();
 
   public:
+  // .BattleEconomyLedger battle_economy = 5;
+  [[nodiscard]] bool has_battle_economy()
+      const;
+  void clear_battle_economy() ;
+  [[nodiscard]] const ::BattleEconomyLedger& battle_economy() const;
+  [[nodiscard]] ::BattleEconomyLedger* PROTOBUF_NULLABLE release_battle_economy();
+  ::BattleEconomyLedger* PROTOBUF_NONNULL mutable_battle_economy();
+  void set_allocated_battle_economy(::BattleEconomyLedger* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_battle_economy(::BattleEconomyLedger* PROTOBUF_NULLABLE value);
+  ::BattleEconomyLedger* PROTOBUF_NULLABLE unsafe_arena_release_battle_economy();
+
+  private:
+  const ::BattleEconomyLedger& _internal_battle_economy() const;
+  ::BattleEconomyLedger* PROTOBUF_NONNULL _internal_mutable_battle_economy();
+
+  public:
   // uint64 next_seq = 2;
   void clear_next_seq() ;
   [[nodiscard]] ::uint64_t next_seq() const;
@@ -1177,8 +1427,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestLedgerComp final : pub
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
-                          2, 0,
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          3, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1208,6 +1458,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestLedgerComp final : pub
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::ClientRequestRecord > records_;
     ::EquipmentMaterialRewardLedger* PROTOBUF_NULLABLE material_reward_;
+    ::BattleEconomyLedger* PROTOBUF_NULLABLE battle_economy_;
     ::uint64_t next_seq_;
     ::uint64_t forge_revision_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -2262,6 +2513,82 @@ inline void EquipmentMaterialRewardLedger::_internal_set_stage1_tradable_confirm
 
 // -------------------------------------------------------------------
 
+// BattleEconomyLedger
+
+// uint64 week_starts_at_ms = 1;
+inline void BattleEconomyLedger::clear_week_starts_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.week_starts_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t BattleEconomyLedger::week_starts_at_ms() const {
+  // @@protoc_insertion_point(field_get:BattleEconomyLedger.week_starts_at_ms)
+  return _internal_week_starts_at_ms();
+}
+inline void BattleEconomyLedger::set_week_starts_at_ms(::uint64_t value) {
+  _internal_set_week_starts_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:BattleEconomyLedger.week_starts_at_ms)
+}
+inline ::uint64_t BattleEconomyLedger::_internal_week_starts_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.week_starts_at_ms_;
+}
+inline void BattleEconomyLedger::_internal_set_week_starts_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.week_starts_at_ms_ = value;
+}
+
+// uint64 battle_silver_this_week = 2;
+inline void BattleEconomyLedger::clear_battle_silver_this_week() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_silver_this_week_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t BattleEconomyLedger::battle_silver_this_week() const {
+  // @@protoc_insertion_point(field_get:BattleEconomyLedger.battle_silver_this_week)
+  return _internal_battle_silver_this_week();
+}
+inline void BattleEconomyLedger::set_battle_silver_this_week(::uint64_t value) {
+  _internal_set_battle_silver_this_week(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:BattleEconomyLedger.battle_silver_this_week)
+}
+inline ::uint64_t BattleEconomyLedger::_internal_battle_silver_this_week() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_silver_this_week_;
+}
+inline void BattleEconomyLedger::_internal_set_battle_silver_this_week(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_silver_this_week_ = value;
+}
+
+// uint64 battle_exp_this_week = 3;
+inline void BattleEconomyLedger::clear_battle_exp_this_week() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_exp_this_week_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t BattleEconomyLedger::battle_exp_this_week() const {
+  // @@protoc_insertion_point(field_get:BattleEconomyLedger.battle_exp_this_week)
+  return _internal_battle_exp_this_week();
+}
+inline void BattleEconomyLedger::set_battle_exp_this_week(::uint64_t value) {
+  _internal_set_battle_exp_this_week(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:BattleEconomyLedger.battle_exp_this_week)
+}
+inline ::uint64_t BattleEconomyLedger::_internal_battle_exp_this_week() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_exp_this_week_;
+}
+inline void BattleEconomyLedger::_internal_set_battle_exp_this_week(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_exp_this_week_ = value;
+}
+
+// -------------------------------------------------------------------
+
 // ClientRequestLedgerComp
 
 // repeated .ClientRequestRecord records = 1;
@@ -2323,7 +2650,7 @@ ClientRequestLedgerComp::_internal_mutable_records() {
 inline void ClientRequestLedgerComp::clear_next_seq() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.next_seq_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint64_t ClientRequestLedgerComp::next_seq() const {
   // @@protoc_insertion_point(field_get:ClientRequestLedgerComp.next_seq)
@@ -2331,7 +2658,7 @@ inline ::uint64_t ClientRequestLedgerComp::next_seq() const {
 }
 inline void ClientRequestLedgerComp::set_next_seq(::uint64_t value) {
   _internal_set_next_seq(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:ClientRequestLedgerComp.next_seq)
 }
 inline ::uint64_t ClientRequestLedgerComp::_internal_next_seq() const {
@@ -2347,7 +2674,7 @@ inline void ClientRequestLedgerComp::_internal_set_next_seq(::uint64_t value) {
 inline void ClientRequestLedgerComp::clear_forge_revision() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.forge_revision_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint64_t ClientRequestLedgerComp::forge_revision() const {
   // @@protoc_insertion_point(field_get:ClientRequestLedgerComp.forge_revision)
@@ -2355,7 +2682,7 @@ inline ::uint64_t ClientRequestLedgerComp::forge_revision() const {
 }
 inline void ClientRequestLedgerComp::set_forge_revision(::uint64_t value) {
   _internal_set_forge_revision(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:ClientRequestLedgerComp.forge_revision)
 }
 inline ::uint64_t ClientRequestLedgerComp::_internal_forge_revision() const {
@@ -2463,6 +2790,104 @@ inline void ClientRequestLedgerComp::set_allocated_material_reward(::EquipmentMa
 
   _impl_.material_reward_ = reinterpret_cast<::EquipmentMaterialRewardLedger*>(value);
   // @@protoc_insertion_point(field_set_allocated:ClientRequestLedgerComp.material_reward)
+}
+
+// .BattleEconomyLedger battle_economy = 5;
+inline bool ClientRequestLedgerComp::has_battle_economy() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  PROTOBUF_ASSUME(!value || _impl_.battle_economy_ != nullptr);
+  return value;
+}
+inline void ClientRequestLedgerComp::clear_battle_economy() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.battle_economy_ != nullptr) _impl_.battle_economy_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::BattleEconomyLedger& ClientRequestLedgerComp::_internal_battle_economy() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::BattleEconomyLedger* p = _impl_.battle_economy_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::BattleEconomyLedger>(&::BattleEconomyLedger_globals_);
+}
+inline const ::BattleEconomyLedger& ClientRequestLedgerComp::battle_economy() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:ClientRequestLedgerComp.battle_economy)
+  return _internal_battle_economy();
+}
+inline void ClientRequestLedgerComp::unsafe_arena_set_allocated_battle_economy(
+    ::BattleEconomyLedger* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.battle_economy_);
+  }
+  _impl_.battle_economy_ = reinterpret_cast<::BattleEconomyLedger*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:ClientRequestLedgerComp.battle_economy)
+}
+inline ::BattleEconomyLedger* PROTOBUF_NULLABLE ClientRequestLedgerComp::release_battle_economy() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::BattleEconomyLedger* released = _impl_.battle_economy_;
+  _impl_.battle_economy_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::BattleEconomyLedger* PROTOBUF_NULLABLE ClientRequestLedgerComp::unsafe_arena_release_battle_economy() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:ClientRequestLedgerComp.battle_economy)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::BattleEconomyLedger* temp = _impl_.battle_economy_;
+  _impl_.battle_economy_ = nullptr;
+  return temp;
+}
+inline ::BattleEconomyLedger* PROTOBUF_NONNULL ClientRequestLedgerComp::_internal_mutable_battle_economy() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.battle_economy_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::BattleEconomyLedger>(GetArena());
+    _impl_.battle_economy_ = reinterpret_cast<::BattleEconomyLedger*>(p);
+  }
+  return _impl_.battle_economy_;
+}
+inline ::BattleEconomyLedger* PROTOBUF_NONNULL ClientRequestLedgerComp::mutable_battle_economy()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::BattleEconomyLedger* _msg = _internal_mutable_battle_economy();
+  // @@protoc_insertion_point(field_mutable:ClientRequestLedgerComp.battle_economy)
+  return _msg;
+}
+inline void ClientRequestLedgerComp::set_allocated_battle_economy(::BattleEconomyLedger* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.battle_economy_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+
+  _impl_.battle_economy_ = reinterpret_cast<::BattleEconomyLedger*>(value);
+  // @@protoc_insertion_point(field_set_allocated:ClientRequestLedgerComp.battle_economy)
 }
 
 #ifdef __GNUC__

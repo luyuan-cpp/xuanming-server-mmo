@@ -173,8 +173,16 @@ type PlayerBattleResult struct {
 	SeasonSealMaxPoints      uint32 `protobuf:"varint,37,opt,name=season_seal_max_points,json=seasonSealMaxPoints,proto3" json:"season_seal_max_points,omitempty"`
 	SeasonHonorNewlyUnlocked bool   `protobuf:"varint,38,opt,name=season_honor_newly_unlocked,json=seasonHonorNewlyUnlocked,proto3" json:"season_honor_newly_unlocked,omitempty"`
 	Surrendered              bool   `protobuf:"varint,39,opt,name=surrendered,proto3" json:"surrendered,omitempty"` // true = 本方通过 PVP 延迟投降结束本局（重登补弹与现场结算同口径展示「体面认输」）
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	// 角色升级与战斗银两周上限增量（docs/planning/player-leveling-and-battle-economy-v1.md §2.3）。
+	LevelBefore               uint32 `protobuf:"varint,40,opt,name=level_before,json=levelBefore,proto3" json:"level_before,omitempty"`
+	LevelAfter                uint32 `protobuf:"varint,41,opt,name=level_after,json=levelAfter,proto3" json:"level_after,omitempty"`
+	TotalExpAfter             uint64 `protobuf:"varint,42,opt,name=total_exp_after,json=totalExpAfter,proto3" json:"total_exp_after,omitempty"`
+	NextLevelTotalExp         uint64 `protobuf:"varint,43,opt,name=next_level_total_exp,json=nextLevelTotalExp,proto3" json:"next_level_total_exp,omitempty"`
+	BattleSilverWeeklyUsed    uint64 `protobuf:"varint,44,opt,name=battle_silver_weekly_used,json=battleSilverWeeklyUsed,proto3" json:"battle_silver_weekly_used,omitempty"`
+	BattleSilverWeeklySoftCap uint64 `protobuf:"varint,45,opt,name=battle_silver_weekly_soft_cap,json=battleSilverWeeklySoftCap,proto3" json:"battle_silver_weekly_soft_cap,omitempty"`
+	BattleSilverDiminished    bool   `protobuf:"varint,46,opt,name=battle_silver_diminished,json=battleSilverDiminished,proto3" json:"battle_silver_diminished,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
 }
 
 func (x *PlayerBattleResult) Reset() {
@@ -480,6 +488,55 @@ func (x *PlayerBattleResult) GetSurrendered() bool {
 	return false
 }
 
+func (x *PlayerBattleResult) GetLevelBefore() uint32 {
+	if x != nil {
+		return x.LevelBefore
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetLevelAfter() uint32 {
+	if x != nil {
+		return x.LevelAfter
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetTotalExpAfter() uint64 {
+	if x != nil {
+		return x.TotalExpAfter
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetNextLevelTotalExp() uint64 {
+	if x != nil {
+		return x.NextLevelTotalExp
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetBattleSilverWeeklyUsed() uint64 {
+	if x != nil {
+		return x.BattleSilverWeeklyUsed
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetBattleSilverWeeklySoftCap() uint64 {
+	if x != nil {
+		return x.BattleSilverWeeklySoftCap
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetBattleSilverDiminished() bool {
+	if x != nil {
+		return x.BattleSilverDiminished
+	}
+	return false
+}
+
 type PlayerBattleResultComp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	LastResultSeq uint64                 `protobuf:"varint,1,opt,name=last_result_seq,json=lastResultSeq,proto3" json:"last_result_seq,omitempty"` // 发过的最大 result_seq,只增不减(淘汰旧条目不回退)
@@ -542,7 +599,7 @@ const file_proto_common_component_player_battle_result_comp_proto_rawDesc = "" +
 	"\x06amount\x18\x02 \x01(\x04R\x06amount\"R\n" +
 	"\x16PlayerBattleResultItem\x12\"\n" +
 	"\ritem_table_id\x18\x01 \x01(\rR\vitemTableId\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x04R\x05count\"\xb4\x0e\n" +
+	"\x05count\x18\x02 \x01(\x04R\x05count\"\x88\x11\n" +
 	"\x12PlayerBattleResult\x12\x1d\n" +
 	"\n" +
 	"result_seq\x18\x01 \x01(\x04R\tresultSeq\x12\x1b\n" +
@@ -588,7 +645,15 @@ const file_proto_common_component_player_battle_result_comp_proto_rawDesc = "" +
 	"\x1aseason_seal_progress_after\x18$ \x01(\rR\x17seasonSealProgressAfter\x123\n" +
 	"\x16season_seal_max_points\x18% \x01(\rR\x13seasonSealMaxPoints\x12=\n" +
 	"\x1bseason_honor_newly_unlocked\x18& \x01(\bR\x18seasonHonorNewlyUnlocked\x12 \n" +
-	"\vsurrendered\x18' \x01(\bR\vsurrendered\"o\n" +
+	"\vsurrendered\x18' \x01(\bR\vsurrendered\x12!\n" +
+	"\flevel_before\x18( \x01(\rR\vlevelBefore\x12\x1f\n" +
+	"\vlevel_after\x18) \x01(\rR\n" +
+	"levelAfter\x12&\n" +
+	"\x0ftotal_exp_after\x18* \x01(\x04R\rtotalExpAfter\x12/\n" +
+	"\x14next_level_total_exp\x18+ \x01(\x04R\x11nextLevelTotalExp\x129\n" +
+	"\x19battle_silver_weekly_used\x18, \x01(\x04R\x16battleSilverWeeklyUsed\x12@\n" +
+	"\x1dbattle_silver_weekly_soft_cap\x18- \x01(\x04R\x19battleSilverWeeklySoftCap\x128\n" +
+	"\x18battle_silver_diminished\x18. \x01(\bR\x16battleSilverDiminished\"o\n" +
 	"\x16PlayerBattleResultComp\x12&\n" +
 	"\x0flast_result_seq\x18\x01 \x01(\x04R\rlastResultSeq\x12-\n" +
 	"\aentries\x18\x02 \x03(\v2\x13.PlayerBattleResultR\aentriesB\x18Z\x16proto/common/componentb\x06proto3"

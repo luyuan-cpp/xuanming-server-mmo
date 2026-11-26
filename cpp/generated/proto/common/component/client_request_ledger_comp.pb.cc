@@ -33,6 +33,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto, /* tracker*/ nullptr,},
         // ::EquipmentMaterialRewardLedger
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto, /* tracker*/ nullptr,},
+        // ::BattleEconomyLedger
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto, /* tracker*/ nullptr,},
         // ::ClientRequestLedgerComp
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto, /* tracker*/ nullptr,},
 };
@@ -602,6 +604,162 @@ const ::_pbi::ClassData* ClientRequestRecord_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class BattleEconomyLedger::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<BattleEconomyLedger>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BattleEconomyLedger, _impl_._has_bits_);
+};
+
+constexpr BattleEconomyLedger::ParseTableT_ BattleEconomyLedger::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(BattleEconomyLedger, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::BattleEconomyLedger>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 week_starts_at_ms = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattleEconomyLedger, _impl_.week_starts_at_ms_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(BattleEconomyLedger, _impl_.week_starts_at_ms_)}},
+      // uint64 battle_silver_this_week = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattleEconomyLedger, _impl_.battle_silver_this_week_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(BattleEconomyLedger, _impl_.battle_silver_this_week_)}},
+      // uint64 battle_exp_this_week = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattleEconomyLedger, _impl_.battle_exp_this_week_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(BattleEconomyLedger, _impl_.battle_exp_this_week_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 week_starts_at_ms = 1;
+      {PROTOBUF_FIELD_OFFSET(BattleEconomyLedger, _impl_.week_starts_at_ms_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 battle_silver_this_week = 2;
+      {PROTOBUF_FIELD_OFFSET(BattleEconomyLedger, _impl_.battle_silver_this_week_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 battle_exp_this_week = 3;
+      {PROTOBUF_FIELD_OFFSET(BattleEconomyLedger, _impl_.battle_exp_this_week_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr BattleEconomyLedger::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        week_starts_at_ms_{::uint64_t{0u}},
+        battle_silver_this_week_{::uint64_t{0u}},
+        battle_exp_this_week_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr BattleEconomyLedger::BattleEconomyLedger(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL BattleEconomyLedger::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BattleEconomyLedger(arena);
+}
+constexpr auto BattleEconomyLedger::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(BattleEconomyLedger), alignof(BattleEconomyLedger));
+}
+constexpr auto BattleEconomyLedger::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &BattleEconomyLedger::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<BattleEconomyLedger>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BattleEconomyLedger::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<BattleEconomyLedger>(), &BattleEconomyLedger::ByteSizeLong,
+              &BattleEconomyLedger::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BattleEconomyLedger, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[2],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct BattleEconomyLedgerGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr BattleEconomyLedgerGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 BattleEconomyLedger_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(BattleEconomyLedger::InternalGenerateClassData_(
+            _default, &BattleEconomyLedger_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<BattleEconomyLedger>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~BattleEconomyLedgerGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) BattleEconomyLedger _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<BattleEconomyLedger>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(BattleEconomyLedgerGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST BattleEconomyLedgerGlobalsTypeInternal BattleEconomyLedger_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* BattleEconomyLedger_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return BattleEconomyLedger_globals_.GetClassData();
+#else
+  return BattleEconomyLedger_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class ClientRequestLedgerComp::_Internal {
  public:
   using HasBits = decltype(::std::declval<ClientRequestLedgerComp>()._impl_._has_bits_);
@@ -614,12 +772,12 @@ constexpr ClientRequestLedgerComp::ParseTableT_ ClientRequestLedgerComp::Interna
     {
       PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      5, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294967264,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
-      2,  // num_aux_entries
+      5,  // num_field_entries
+      3,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -628,33 +786,42 @@ constexpr ClientRequestLedgerComp::ParseTableT_ ClientRequestLedgerComp::Interna
       ::_pbi::TcParser::GetTable<::ClientRequestLedgerComp>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .EquipmentMaterialRewardLedger material_reward = 4;
-      {::_pbi::TcParser::FastMtS1,
-       {34, 1, 1,
-        PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.material_reward_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // repeated .ClientRequestRecord records = 1;
       {::_pbi::TcParser::FastMtR1,
        {10, 0, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.records_)}},
       // uint64 next_seq = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestLedgerComp, _impl_.next_seq_), 2>(),
-       {16, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestLedgerComp, _impl_.next_seq_), 3>(),
+       {16, 3, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.next_seq_)}},
       // uint64 forge_revision = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestLedgerComp, _impl_.forge_revision_), 3>(),
-       {24, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClientRequestLedgerComp, _impl_.forge_revision_), 4>(),
+       {24, 4, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.forge_revision_)}},
+      // .EquipmentMaterialRewardLedger material_reward = 4;
+      {::_pbi::TcParser::FastMtS1,
+       {34, 1, 1,
+        PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.material_reward_)}},
+      // .BattleEconomyLedger battle_economy = 5;
+      {::_pbi::TcParser::FastMtS1,
+       {42, 2, 2,
+        PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.battle_economy_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // repeated .ClientRequestRecord records = 1;
       {PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.records_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint64 next_seq = 2;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.next_seq_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.next_seq_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 forge_revision = 3;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.forge_revision_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.forge_revision_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .EquipmentMaterialRewardLedger material_reward = 4;
       {PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.material_reward_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .BattleEconomyLedger battle_economy = 5;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestLedgerComp, _impl_.battle_economy_), _Internal::kHasBitsOffset + 2, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -666,6 +833,11 @@ constexpr ClientRequestLedgerComp::ParseTableT_ ClientRequestLedgerComp::Interna
         {::_pbi::TcParser::GetTable<::EquipmentMaterialRewardLedger>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::EquipmentMaterialRewardLedger_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::BattleEconomyLedger>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::BattleEconomyLedger_globals_},
         #endif
     }},
     {{
@@ -684,6 +856,7 @@ inline constexpr ClientRequestLedgerComp::Impl_::Impl_(
          }
         ,
         material_reward_{nullptr},
+        battle_economy_{nullptr},
         next_seq_{::uint64_t{0u}},
         forge_revision_{::uint64_t{0u}} {}
 
@@ -728,7 +901,7 @@ constexpr auto ClientRequestLedgerComp::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[2],
+      &file_reflection_data[3],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto,
@@ -875,28 +1048,41 @@ const ::uint32_t
         9,
         10,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::BattleEconomyLedger, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::BattleEconomyLedger, _impl_.week_starts_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::BattleEconomyLedger, _impl_.battle_silver_this_week_),
+        PROTOBUF_FIELD_OFFSET(::BattleEconomyLedger, _impl_.battle_exp_this_week_),
+        0,
+        1,
+        2,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ClientRequestLedgerComp, _impl_._has_bits_),
-        7, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::ClientRequestLedgerComp, _impl_.records_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestLedgerComp, _impl_.next_seq_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestLedgerComp, _impl_.forge_revision_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestLedgerComp, _impl_.material_reward_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestLedgerComp, _impl_.battle_economy_),
         0,
-        2,
         3,
+        4,
         1,
+        2,
 };
 
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::ClientRequestRecord)},
         {63, sizeof(::EquipmentMaterialRewardLedger)},
-        {88, sizeof(::ClientRequestLedgerComp)},
+        {88, sizeof(::BattleEconomyLedger)},
+        {97, sizeof(::ClientRequestLedgerComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
         &::ClientRequestRecord_globals_,
         &::EquipmentMaterialRewardLedger_globals_,
+        &::BattleEconomyLedger_globals_,
         &::ClientRequestLedgerComp_globals_,
 };
 const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
@@ -933,24 +1119,28 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5freque
     "ble_tradable_units\030\007 \001(\004\022\031\n\021week_starts_"
     "at_ms\030\010 \001(\004\022\030\n\020earned_this_week\030\t \001(\r\022\026\n"
     "\016migrated_to_v2\030\n \001(\010\022!\n\031stage1_tradable"
-    "_confirmed\030\013 \001(\r\"\243\001\n\027ClientRequestLedger"
-    "Comp\022%\n\007records\030\001 \003(\0132\024.ClientRequestRec"
-    "ord\022\020\n\010next_seq\030\002 \001(\004\022\026\n\016forge_revision\030"
-    "\003 \001(\004\0227\n\017material_reward\030\004 \001(\0132\036.Equipme"
-    "ntMaterialRewardLedgerB\022Z\020common/compone"
-    "ntb\006proto3"
+    "_confirmed\030\013 \001(\r\"o\n\023BattleEconomyLedger\022"
+    "\031\n\021week_starts_at_ms\030\001 \001(\004\022\037\n\027battle_sil"
+    "ver_this_week\030\002 \001(\004\022\034\n\024battle_exp_this_w"
+    "eek\030\003 \001(\004\"\321\001\n\027ClientRequestLedgerComp\022%\n"
+    "\007records\030\001 \003(\0132\024.ClientRequestRecord\022\020\n\010"
+    "next_seq\030\002 \001(\004\022\026\n\016forge_revision\030\003 \001(\004\0227"
+    "\n\017material_reward\030\004 \001(\0132\036.EquipmentMater"
+    "ialRewardLedger\022,\n\016battle_economy\030\005 \001(\0132"
+    "\024.BattleEconomyLedgerB\022Z\020common/componen"
+    "tb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto = {
     false,
     false,
-    1490,
+    1649,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto,
     "proto/common/component/client_request_ledger_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto_once,
     nullptr,
     0,
-    3,
+    4,
     schemas,
     file_message_globals,
     TableStruct_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto::offsets,
@@ -2257,6 +2447,255 @@ void EquipmentMaterialRewardLedger::InternalSwap(EquipmentMaterialRewardLedger* 
 }
 // ===================================================================
 
+BattleEconomyLedger::BattleEconomyLedger(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BattleEconomyLedger_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:BattleEconomyLedger)
+}
+BattleEconomyLedger::BattleEconomyLedger(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BattleEconomyLedger& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BattleEconomyLedger_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE BattleEconomyLedger::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void BattleEconomyLedger::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, week_starts_at_ms_),
+           0,
+           offsetof(Impl_, battle_exp_this_week_) -
+               offsetof(Impl_, week_starts_at_ms_) +
+               sizeof(Impl_::battle_exp_this_week_));
+}
+BattleEconomyLedger::~BattleEconomyLedger() {
+  // @@protoc_insertion_point(destructor:BattleEconomyLedger)
+  SharedDtor(*this);
+}
+inline void BattleEconomyLedger::SharedDtor(MessageLite& self) {
+  BattleEconomyLedger& this_ = static_cast<BattleEconomyLedger&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull BattleEconomyLedger_class_data_ =
+        BattleEconomyLedger::InternalGenerateClassData_(BattleEconomyLedger_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BattleEconomyLedger::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BattleEconomyLedger_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(BattleEconomyLedger_class_data_.tc_table);
+  return BattleEconomyLedger_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BattleEconomyLedger::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BattleEconomyLedger_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&BattleEconomyLedger_globals_));
+  return BattleEconomyLedger_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const BattleEconomyLedger::ParseTableT_
+    BattleEconomyLedger::_table_ =
+        BattleEconomyLedger::InternalGenerateParseTable_(BattleEconomyLedger_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void BattleEconomyLedger::Clear() {
+// @@protoc_insertion_point(message_clear_start:BattleEconomyLedger)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    ::memset(&_impl_.week_starts_at_ms_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.battle_exp_this_week_) -
+        reinterpret_cast<char*>(&_impl_.week_starts_at_ms_)) + sizeof(_impl_.battle_exp_this_week_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL BattleEconomyLedger::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const BattleEconomyLedger& this_ = static_cast<const BattleEconomyLedger&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL BattleEconomyLedger::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const BattleEconomyLedger& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:BattleEconomyLedger)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 week_starts_at_ms = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_week_starts_at_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_week_starts_at_ms(), target);
+    }
+  }
+
+  // uint64 battle_silver_this_week = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_battle_silver_this_week() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_battle_silver_this_week(), target);
+    }
+  }
+
+  // uint64 battle_exp_this_week = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_battle_exp_this_week() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_battle_exp_this_week(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:BattleEconomyLedger)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t BattleEconomyLedger::ByteSizeLong(const MessageLite& base) {
+  const BattleEconomyLedger& this_ = static_cast<const BattleEconomyLedger&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t BattleEconomyLedger::ByteSizeLong() const {
+  const BattleEconomyLedger& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:BattleEconomyLedger)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // uint64 week_starts_at_ms = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_week_starts_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_week_starts_at_ms());
+      }
+    }
+    // uint64 battle_silver_this_week = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_battle_silver_this_week() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_battle_silver_this_week());
+      }
+    }
+    // uint64 battle_exp_this_week = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_battle_exp_this_week() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_battle_exp_this_week());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void BattleEconomyLedger::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<BattleEconomyLedger*>(&to_msg);
+  auto& from = static_cast<const BattleEconomyLedger&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:BattleEconomyLedger)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_week_starts_at_ms() != 0) {
+        _this->_impl_.week_starts_at_ms_ = from._impl_.week_starts_at_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_battle_silver_this_week() != 0) {
+        _this->_impl_.battle_silver_this_week_ = from._impl_.battle_silver_this_week_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_battle_exp_this_week() != 0) {
+        _this->_impl_.battle_exp_this_week_ = from._impl_.battle_exp_this_week_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void BattleEconomyLedger::CopyFrom(const BattleEconomyLedger& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:BattleEconomyLedger)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BattleEconomyLedger::InternalSwap(BattleEconomyLedger* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(BattleEconomyLedger, _impl_.battle_exp_this_week_)
+      + sizeof(BattleEconomyLedger::_impl_.battle_exp_this_week_)
+      - PROTOBUF_FIELD_OFFSET(BattleEconomyLedger, _impl_.week_starts_at_ms_)>(
+          reinterpret_cast<char*>(&_impl_.week_starts_at_ms_),
+          reinterpret_cast<char*>(&other->_impl_.week_starts_at_ms_));
+}
+
+::google::protobuf::Metadata BattleEconomyLedger::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 ClientRequestLedgerComp::ClientRequestLedgerComp(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, ClientRequestLedgerComp_get_class_data()) {
@@ -2297,6 +2736,9 @@ ClientRequestLedgerComp::ClientRequestLedgerComp(
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
   _impl_.material_reward_ = (CheckHasBit(cached_has_bits, 0x00000002U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.material_reward_)
+                : nullptr;
+  _impl_.battle_economy_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.battle_economy_)
                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, next_seq_),
@@ -2339,6 +2781,7 @@ inline void ClientRequestLedgerComp::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   delete this_._impl_.material_reward_;
+  delete this_._impl_.battle_economy_;
   this_._impl_.~Impl_();
 }
 
@@ -2376,7 +2819,7 @@ PROTOBUF_NOINLINE void ClientRequestLedgerComp::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.records_.Clear();
     }
@@ -2384,8 +2827,12 @@ PROTOBUF_NOINLINE void ClientRequestLedgerComp::Clear() {
       ABSL_DCHECK(_impl_.material_reward_ != nullptr);
       _impl_.material_reward_->Clear();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(_impl_.battle_economy_ != nullptr);
+      _impl_.battle_economy_->Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000cU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000018U)) {
     ::memset(&_impl_.next_seq_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.forge_revision_) -
         reinterpret_cast<char*>(&_impl_.next_seq_)) + sizeof(_impl_.forge_revision_));
@@ -2427,7 +2874,7 @@ PROTOBUF_NOINLINE void ClientRequestLedgerComp::Clear() {
   }
 
   // uint64 next_seq = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_next_seq() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2436,7 +2883,7 @@ PROTOBUF_NOINLINE void ClientRequestLedgerComp::Clear() {
   }
 
   // uint64 forge_revision = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_forge_revision() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2448,6 +2895,13 @@ PROTOBUF_NOINLINE void ClientRequestLedgerComp::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         4, *this_._impl_.material_reward_, this_._impl_.material_reward_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .BattleEconomyLedger battle_economy = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        5, *this_._impl_.battle_economy_, this_._impl_.battle_economy_->GetCachedSize(), target,
         stream);
   }
 
@@ -2476,7 +2930,7 @@ PROTOBUF_NOINLINE void ClientRequestLedgerComp::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // repeated .ClientRequestRecord records = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_records_size();
@@ -2489,15 +2943,20 @@ PROTOBUF_NOINLINE void ClientRequestLedgerComp::Clear() {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.material_reward_);
     }
-    // uint64 next_seq = 2;
+    // .BattleEconomyLedger battle_economy = 5;
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.battle_economy_);
+    }
+    // uint64 next_seq = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_next_seq() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_next_seq());
       }
     }
     // uint64 forge_revision = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_forge_revision() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_forge_revision());
@@ -2522,7 +2981,7 @@ void ClientRequestLedgerComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_records()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
@@ -2537,11 +2996,19 @@ void ClientRequestLedgerComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(from._impl_.battle_economy_ != nullptr);
+      if (_this->_impl_.battle_economy_ == nullptr) {
+        _this->_impl_.battle_economy_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.battle_economy_);
+      } else {
+        _this->_impl_.battle_economy_->MergeFrom(*from._impl_.battle_economy_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_next_seq() != 0) {
         _this->_impl_.next_seq_ = from._impl_.next_seq_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_forge_revision() != 0) {
         _this->_impl_.forge_revision_ = from._impl_.forge_revision_;
       }

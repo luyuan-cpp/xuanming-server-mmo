@@ -47,6 +47,8 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	AttributePoolTable = NewObject<UAttributePoolTable>(this);
 	AttributeRuleTable = NewObject<UAttributeRuleTable>(this);
 	BaseSceneTable = NewObject<UBaseSceneTable>(this);
+	BattleProgressionRewardTable = NewObject<UBattleProgressionRewardTable>(this);
+	BattleProgressionRuleTable = NewObject<UBattleProgressionRuleTable>(this);
 	BuffTable = NewObject<UBuffTable>(this);
 	CharacterAppearanceTable = NewObject<UCharacterAppearanceTable>(this);
 	ClassTable = NewObject<UClassTable>(this);
@@ -88,6 +90,7 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	PetRuleTable = NewObject<UPetRuleTable>(this);
 	PetTierTable = NewObject<UPetTierTable>(this);
 	PlayModeTable = NewObject<UPlayModeTable>(this);
+	PlayerLevelExpTable = NewObject<UPlayerLevelExpTable>(this);
 	RankedPresetTable = NewObject<URankedPresetTable>(this);
 	RankedRuleTable = NewObject<URankedRuleTable>(this);
 	RewardTable = NewObject<URewardTable>(this);
@@ -129,6 +132,8 @@ void UConfigSubsystem::Deinitialize()
 	AttributePoolTable = nullptr;
 	AttributeRuleTable = nullptr;
 	BaseSceneTable = nullptr;
+	BattleProgressionRewardTable = nullptr;
+	BattleProgressionRuleTable = nullptr;
 	BuffTable = nullptr;
 	CharacterAppearanceTable = nullptr;
 	ClassTable = nullptr;
@@ -170,6 +175,7 @@ void UConfigSubsystem::Deinitialize()
 	PetRuleTable = nullptr;
 	PetTierTable = nullptr;
 	PlayModeTable = nullptr;
+	PlayerLevelExpTable = nullptr;
 	RankedPresetTable = nullptr;
 	RankedRuleTable = nullptr;
 	RewardTable = nullptr;
@@ -216,6 +222,8 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 		UAttributePoolTable::FileName(),
 		UAttributeRuleTable::FileName(),
 		UBaseSceneTable::FileName(),
+		UBattleProgressionRewardTable::FileName(),
+		UBattleProgressionRuleTable::FileName(),
 		UBuffTable::FileName(),
 		UCharacterAppearanceTable::FileName(),
 		UClassTable::FileName(),
@@ -257,6 +265,7 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 		UPetRuleTable::FileName(),
 		UPetTierTable::FileName(),
 		UPlayModeTable::FileName(),
+		UPlayerLevelExpTable::FileName(),
 		URankedPresetTable::FileName(),
 		URankedRuleTable::FileName(),
 		URewardTable::FileName(),
@@ -479,6 +488,34 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 		bAllOk = false;
 	}
 	else if (!BaseSceneTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (BattleProgressionRewardTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[BattleProgressionReward] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!BattleProgressionRewardTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (BattleProgressionRuleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[BattleProgressionRule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!BattleProgressionRuleTable->LoadFromDir(InConfigDir, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -1053,6 +1090,20 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 		bAllOk = false;
 	}
 	else if (!PlayModeTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (PlayerLevelExpTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[PlayerLevelExp] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!PlayerLevelExpTable->LoadFromDir(InConfigDir, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -1688,6 +1739,46 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAllOk = false;
 	}
 	else if (!BaseSceneTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (BattleProgressionRewardTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[BattleProgressionReward] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UBattleProgressionRewardTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[BattleProgressionReward] 取不到 %s"), UBattleProgressionRewardTable::FileName());
+		bAllOk = false;
+	}
+	else if (!BattleProgressionRewardTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (BattleProgressionRuleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[BattleProgressionRule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UBattleProgressionRuleTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[BattleProgressionRule] 取不到 %s"), UBattleProgressionRuleTable::FileName());
+		bAllOk = false;
+	}
+	else if (!BattleProgressionRuleTable->LoadFromJson(JsonText, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -2508,6 +2599,26 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAllOk = false;
 	}
 	else if (!PlayModeTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (PlayerLevelExpTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[PlayerLevelExp] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UPlayerLevelExpTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[PlayerLevelExp] 取不到 %s"), UPlayerLevelExpTable::FileName());
+		bAllOk = false;
+	}
+	else if (!PlayerLevelExpTable->LoadFromJson(JsonText, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;

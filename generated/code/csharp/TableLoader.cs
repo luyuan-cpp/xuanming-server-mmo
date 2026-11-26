@@ -22,7 +22,7 @@ namespace MmorpgClient.Table
     public static class TableLoader
     {
         /// <summary>Number of generated tables.</summary>
-        public const int TableCount = 78;
+        public const int TableCount = 81;
 
         private static Action s_loadSuccessCallback;
 
@@ -52,6 +52,8 @@ namespace MmorpgClient.Table
                 AttributePoolTableManager.FileName(useBinary),
                 AttributeRuleTableManager.FileName(useBinary),
                 BaseSceneTableManager.FileName(useBinary),
+                BattleProgressionRewardTableManager.FileName(useBinary),
+                BattleProgressionRuleTableManager.FileName(useBinary),
                 BuffTableManager.FileName(useBinary),
                 CharacterAppearanceTableManager.FileName(useBinary),
                 ClassTableManager.FileName(useBinary),
@@ -93,6 +95,7 @@ namespace MmorpgClient.Table
                 PetRuleTableManager.FileName(useBinary),
                 PetTierTableManager.FileName(useBinary),
                 PlayModeTableManager.FileName(useBinary),
+                PlayerLevelExpTableManager.FileName(useBinary),
                 RankedPresetTableManager.FileName(useBinary),
                 RankedRuleTableManager.FileName(useBinary),
                 RewardTableManager.FileName(useBinary),
@@ -137,6 +140,8 @@ namespace MmorpgClient.Table
             AttributePoolTableManager.Instance.Load(configDir, useBinary);
             AttributeRuleTableManager.Instance.Load(configDir, useBinary);
             BaseSceneTableManager.Instance.Load(configDir, useBinary);
+            BattleProgressionRewardTableManager.Instance.Load(configDir, useBinary);
+            BattleProgressionRuleTableManager.Instance.Load(configDir, useBinary);
             BuffTableManager.Instance.Load(configDir, useBinary);
             CharacterAppearanceTableManager.Instance.Load(configDir, useBinary);
             ClassTableManager.Instance.Load(configDir, useBinary);
@@ -178,6 +183,7 @@ namespace MmorpgClient.Table
             PetRuleTableManager.Instance.Load(configDir, useBinary);
             PetTierTableManager.Instance.Load(configDir, useBinary);
             PlayModeTableManager.Instance.Load(configDir, useBinary);
+            PlayerLevelExpTableManager.Instance.Load(configDir, useBinary);
             RankedPresetTableManager.Instance.Load(configDir, useBinary);
             RankedRuleTableManager.Instance.Load(configDir, useBinary);
             RewardTableManager.Instance.Load(configDir, useBinary);
@@ -253,6 +259,10 @@ namespace MmorpgClient.Table
                 AttributeRuleTableManager.Instance.LoadFromBytes, AttributeRuleTableManager.Instance.LoadFromJson);
             LoadOne(BaseSceneTableManager.FileName(useBinary), byteProvider, useBinary,
                 BaseSceneTableManager.Instance.LoadFromBytes, BaseSceneTableManager.Instance.LoadFromJson);
+            LoadOne(BattleProgressionRewardTableManager.FileName(useBinary), byteProvider, useBinary,
+                BattleProgressionRewardTableManager.Instance.LoadFromBytes, BattleProgressionRewardTableManager.Instance.LoadFromJson);
+            LoadOne(BattleProgressionRuleTableManager.FileName(useBinary), byteProvider, useBinary,
+                BattleProgressionRuleTableManager.Instance.LoadFromBytes, BattleProgressionRuleTableManager.Instance.LoadFromJson);
             LoadOne(BuffTableManager.FileName(useBinary), byteProvider, useBinary,
                 BuffTableManager.Instance.LoadFromBytes, BuffTableManager.Instance.LoadFromJson);
             LoadOne(CharacterAppearanceTableManager.FileName(useBinary), byteProvider, useBinary,
@@ -335,6 +345,8 @@ namespace MmorpgClient.Table
                 PetTierTableManager.Instance.LoadFromBytes, PetTierTableManager.Instance.LoadFromJson);
             LoadOne(PlayModeTableManager.FileName(useBinary), byteProvider, useBinary,
                 PlayModeTableManager.Instance.LoadFromBytes, PlayModeTableManager.Instance.LoadFromJson);
+            LoadOne(PlayerLevelExpTableManager.FileName(useBinary), byteProvider, useBinary,
+                PlayerLevelExpTableManager.Instance.LoadFromBytes, PlayerLevelExpTableManager.Instance.LoadFromJson);
             LoadOne(RankedPresetTableManager.FileName(useBinary), byteProvider, useBinary,
                 RankedPresetTableManager.Instance.LoadFromBytes, RankedPresetTableManager.Instance.LoadFromJson);
             LoadOne(RankedRuleTableManager.FileName(useBinary), byteProvider, useBinary,

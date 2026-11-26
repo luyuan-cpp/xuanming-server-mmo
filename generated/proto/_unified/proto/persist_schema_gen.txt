@@ -570,6 +570,7 @@ state=bootstrap
 1=PlayerProfileComp#12 optional bytes pet_cosmetic_owned_bits
 1=PlayerProfileComp#13 optional bytes skill_vfx_owned_bits
 1=PlayerProfileComp#14 map map<uint32,uint32> equipped_skill_vfx
+1=PlayerBattleResult#39 optional bool surrendered
 
 retired=player_database#10
 retired=player_database#17

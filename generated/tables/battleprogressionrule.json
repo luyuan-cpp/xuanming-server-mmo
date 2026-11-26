@@ -1,0 +1,10 @@
+{
+ "data": [
+  {
+   "diminished_rate_permyriad": 2000,
+   "id": 1,
+   "weekly_silver_hard_cap": 45000,
+   "weekly_silver_soft_cap": 30000
+  }
+ ]
+}

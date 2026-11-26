@@ -1,0 +1,18 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "PlayerLevelExpTableOuterClass";
+option java_multiple_files = true;
+
+
+message PlayerLevelExpTable {
+	uint32 id = 1;
+	uint64 required_total_exp = 2;
+}
+
+message PlayerLevelExpTableData {
+	repeated PlayerLevelExpTable data = 1;
+}

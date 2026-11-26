@@ -701,14 +701,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerBattleResult final : public :
     kFestivalWinsBeforeFieldNumber = 29,
     kFestivalWinsAfterFieldNumber = 30,
     kFestivalRequiredWinsFieldNumber = 31,
-    kSeasonSealMaxPointsFieldNumber = 37,
+    kLevelAfterFieldNumber = 41,
     kMaterialAvailableUnitsAfterFieldNumber = 33,
     kMaterialEarnableRemainingAfterFieldNumber = 34,
     kSeasonSealPointsAddedFieldNumber = 35,
     kSeasonSealProgressAfterFieldNumber = 36,
+    kSeasonSealMaxPointsFieldNumber = 37,
     kFestivalNewlyEligibleFieldNumber = 32,
     kSeasonHonorNewlyUnlockedFieldNumber = 38,
     kSurrenderedFieldNumber = 39,
+    kBattleSilverDiminishedFieldNumber = 46,
+    kLevelBeforeFieldNumber = 40,
+    kTotalExpAfterFieldNumber = 42,
+    kNextLevelTotalExpFieldNumber = 43,
+    kBattleSilverWeeklyUsedFieldNumber = 44,
+    kBattleSilverWeeklySoftCapFieldNumber = 45,
   };
   // repeated .PlayerBattleResultCurrency currencies = 10;
   [[nodiscard]] int currencies_size()
@@ -1068,14 +1075,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerBattleResult final : public :
   void _internal_set_festival_required_wins(::uint32_t value);
 
   public:
-  // uint32 season_seal_max_points = 37;
-  void clear_season_seal_max_points() ;
-  [[nodiscard]] ::uint32_t season_seal_max_points() const;
-  void set_season_seal_max_points(::uint32_t value);
+  // uint32 level_after = 41;
+  void clear_level_after() ;
+  [[nodiscard]] ::uint32_t level_after() const;
+  void set_level_after(::uint32_t value);
 
   private:
-  ::uint32_t _internal_season_seal_max_points() const;
-  void _internal_set_season_seal_max_points(::uint32_t value);
+  ::uint32_t _internal_level_after() const;
+  void _internal_set_level_after(::uint32_t value);
 
   public:
   // uint64 material_available_units_after = 33;
@@ -1118,6 +1125,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerBattleResult final : public :
   void _internal_set_season_seal_progress_after(::uint32_t value);
 
   public:
+  // uint32 season_seal_max_points = 37;
+  void clear_season_seal_max_points() ;
+  [[nodiscard]] ::uint32_t season_seal_max_points() const;
+  void set_season_seal_max_points(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_seal_max_points() const;
+  void _internal_set_season_seal_max_points(::uint32_t value);
+
+  public:
   // bool festival_newly_eligible = 32;
   void clear_festival_newly_eligible() ;
   [[nodiscard]] bool festival_newly_eligible() const;
@@ -1148,12 +1165,72 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerBattleResult final : public :
   void _internal_set_surrendered(bool value);
 
   public:
+  // bool battle_silver_diminished = 46;
+  void clear_battle_silver_diminished() ;
+  [[nodiscard]] bool battle_silver_diminished() const;
+  void set_battle_silver_diminished(bool value);
+
+  private:
+  bool _internal_battle_silver_diminished() const;
+  void _internal_set_battle_silver_diminished(bool value);
+
+  public:
+  // uint32 level_before = 40;
+  void clear_level_before() ;
+  [[nodiscard]] ::uint32_t level_before() const;
+  void set_level_before(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_level_before() const;
+  void _internal_set_level_before(::uint32_t value);
+
+  public:
+  // uint64 total_exp_after = 42;
+  void clear_total_exp_after() ;
+  [[nodiscard]] ::uint64_t total_exp_after() const;
+  void set_total_exp_after(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_total_exp_after() const;
+  void _internal_set_total_exp_after(::uint64_t value);
+
+  public:
+  // uint64 next_level_total_exp = 43;
+  void clear_next_level_total_exp() ;
+  [[nodiscard]] ::uint64_t next_level_total_exp() const;
+  void set_next_level_total_exp(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_next_level_total_exp() const;
+  void _internal_set_next_level_total_exp(::uint64_t value);
+
+  public:
+  // uint64 battle_silver_weekly_used = 44;
+  void clear_battle_silver_weekly_used() ;
+  [[nodiscard]] ::uint64_t battle_silver_weekly_used() const;
+  void set_battle_silver_weekly_used(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_battle_silver_weekly_used() const;
+  void _internal_set_battle_silver_weekly_used(::uint64_t value);
+
+  public:
+  // uint64 battle_silver_weekly_soft_cap = 45;
+  void clear_battle_silver_weekly_soft_cap() ;
+  [[nodiscard]] ::uint64_t battle_silver_weekly_soft_cap() const;
+  void set_battle_silver_weekly_soft_cap(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_battle_silver_weekly_soft_cap() const;
+  void _internal_set_battle_silver_weekly_soft_cap(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:PlayerBattleResult)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 39,
-                          3, 83,
+      ::google::protobuf::internal::TcParseTable<5, 46,
+                          3, 91,
                           7>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1213,14 +1290,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerBattleResult final : public :
     ::uint32_t festival_wins_before_;
     ::uint32_t festival_wins_after_;
     ::uint32_t festival_required_wins_;
-    ::uint32_t season_seal_max_points_;
+    ::uint32_t level_after_;
     ::uint64_t material_available_units_after_;
     ::uint32_t material_earnable_remaining_after_;
     ::uint32_t season_seal_points_added_;
     ::uint32_t season_seal_progress_after_;
+    ::uint32_t season_seal_max_points_;
     bool festival_newly_eligible_;
     bool season_honor_newly_unlocked_;
     bool surrendered_;
+    bool battle_silver_diminished_;
+    ::uint32_t level_before_;
+    ::uint64_t total_exp_after_;
+    ::uint64_t next_level_total_exp_;
+    ::uint64_t battle_silver_weekly_used_;
+    ::uint64_t battle_silver_weekly_soft_cap_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2479,7 +2563,7 @@ inline void PlayerBattleResult::_internal_set_festival_required_wins(::uint32_t 
 inline void PlayerBattleResult::clear_festival_newly_eligible() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.festival_newly_eligible_ = false;
-  ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
 }
 inline bool PlayerBattleResult::festival_newly_eligible() const {
   // @@protoc_insertion_point(field_get:PlayerBattleResult.festival_newly_eligible)
@@ -2487,7 +2571,7 @@ inline bool PlayerBattleResult::festival_newly_eligible() const {
 }
 inline void PlayerBattleResult::set_festival_newly_eligible(bool value) {
   _internal_set_festival_newly_eligible(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000020U);
   // @@protoc_insertion_point(field_set:PlayerBattleResult.festival_newly_eligible)
 }
 inline bool PlayerBattleResult::_internal_festival_newly_eligible() const {
@@ -2599,7 +2683,7 @@ inline void PlayerBattleResult::_internal_set_season_seal_progress_after(::uint3
 inline void PlayerBattleResult::clear_season_seal_max_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.season_seal_max_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000010U);
 }
 inline ::uint32_t PlayerBattleResult::season_seal_max_points() const {
   // @@protoc_insertion_point(field_get:PlayerBattleResult.season_seal_max_points)
@@ -2607,7 +2691,7 @@ inline ::uint32_t PlayerBattleResult::season_seal_max_points() const {
 }
 inline void PlayerBattleResult::set_season_seal_max_points(::uint32_t value) {
   _internal_set_season_seal_max_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000010U);
   // @@protoc_insertion_point(field_set:PlayerBattleResult.season_seal_max_points)
 }
 inline ::uint32_t PlayerBattleResult::_internal_season_seal_max_points() const {
@@ -2623,7 +2707,7 @@ inline void PlayerBattleResult::_internal_set_season_seal_max_points(::uint32_t 
 inline void PlayerBattleResult::clear_season_honor_newly_unlocked() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.season_honor_newly_unlocked_ = false;
-  ClearHasBit(_impl_._has_bits_[1], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000040U);
 }
 inline bool PlayerBattleResult::season_honor_newly_unlocked() const {
   // @@protoc_insertion_point(field_get:PlayerBattleResult.season_honor_newly_unlocked)
@@ -2631,7 +2715,7 @@ inline bool PlayerBattleResult::season_honor_newly_unlocked() const {
 }
 inline void PlayerBattleResult::set_season_honor_newly_unlocked(bool value) {
   _internal_set_season_honor_newly_unlocked(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000040U);
   // @@protoc_insertion_point(field_set:PlayerBattleResult.season_honor_newly_unlocked)
 }
 inline bool PlayerBattleResult::_internal_season_honor_newly_unlocked() const {
@@ -2647,7 +2731,7 @@ inline void PlayerBattleResult::_internal_set_season_honor_newly_unlocked(bool v
 inline void PlayerBattleResult::clear_surrendered() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.surrendered_ = false;
-  ClearHasBit(_impl_._has_bits_[1], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000080U);
 }
 inline bool PlayerBattleResult::surrendered() const {
   // @@protoc_insertion_point(field_get:PlayerBattleResult.surrendered)
@@ -2655,7 +2739,7 @@ inline bool PlayerBattleResult::surrendered() const {
 }
 inline void PlayerBattleResult::set_surrendered(bool value) {
   _internal_set_surrendered(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000080U);
   // @@protoc_insertion_point(field_set:PlayerBattleResult.surrendered)
 }
 inline bool PlayerBattleResult::_internal_surrendered() const {
@@ -2665,6 +2749,174 @@ inline bool PlayerBattleResult::_internal_surrendered() const {
 inline void PlayerBattleResult::_internal_set_surrendered(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.surrendered_ = value;
+}
+
+// uint32 level_before = 40;
+inline void PlayerBattleResult::clear_level_before() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.level_before_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000200U);
+}
+inline ::uint32_t PlayerBattleResult::level_before() const {
+  // @@protoc_insertion_point(field_get:PlayerBattleResult.level_before)
+  return _internal_level_before();
+}
+inline void PlayerBattleResult::set_level_before(::uint32_t value) {
+  _internal_set_level_before(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000200U);
+  // @@protoc_insertion_point(field_set:PlayerBattleResult.level_before)
+}
+inline ::uint32_t PlayerBattleResult::_internal_level_before() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.level_before_;
+}
+inline void PlayerBattleResult::_internal_set_level_before(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.level_before_ = value;
+}
+
+// uint32 level_after = 41;
+inline void PlayerBattleResult::clear_level_after() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.level_after_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
+}
+inline ::uint32_t PlayerBattleResult::level_after() const {
+  // @@protoc_insertion_point(field_get:PlayerBattleResult.level_after)
+  return _internal_level_after();
+}
+inline void PlayerBattleResult::set_level_after(::uint32_t value) {
+  _internal_set_level_after(value);
+  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
+  // @@protoc_insertion_point(field_set:PlayerBattleResult.level_after)
+}
+inline ::uint32_t PlayerBattleResult::_internal_level_after() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.level_after_;
+}
+inline void PlayerBattleResult::_internal_set_level_after(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.level_after_ = value;
+}
+
+// uint64 total_exp_after = 42;
+inline void PlayerBattleResult::clear_total_exp_after() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_exp_after_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[1], 0x00000400U);
+}
+inline ::uint64_t PlayerBattleResult::total_exp_after() const {
+  // @@protoc_insertion_point(field_get:PlayerBattleResult.total_exp_after)
+  return _internal_total_exp_after();
+}
+inline void PlayerBattleResult::set_total_exp_after(::uint64_t value) {
+  _internal_set_total_exp_after(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000400U);
+  // @@protoc_insertion_point(field_set:PlayerBattleResult.total_exp_after)
+}
+inline ::uint64_t PlayerBattleResult::_internal_total_exp_after() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.total_exp_after_;
+}
+inline void PlayerBattleResult::_internal_set_total_exp_after(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_exp_after_ = value;
+}
+
+// uint64 next_level_total_exp = 43;
+inline void PlayerBattleResult::clear_next_level_total_exp() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_level_total_exp_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[1], 0x00000800U);
+}
+inline ::uint64_t PlayerBattleResult::next_level_total_exp() const {
+  // @@protoc_insertion_point(field_get:PlayerBattleResult.next_level_total_exp)
+  return _internal_next_level_total_exp();
+}
+inline void PlayerBattleResult::set_next_level_total_exp(::uint64_t value) {
+  _internal_set_next_level_total_exp(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000800U);
+  // @@protoc_insertion_point(field_set:PlayerBattleResult.next_level_total_exp)
+}
+inline ::uint64_t PlayerBattleResult::_internal_next_level_total_exp() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.next_level_total_exp_;
+}
+inline void PlayerBattleResult::_internal_set_next_level_total_exp(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_level_total_exp_ = value;
+}
+
+// uint64 battle_silver_weekly_used = 44;
+inline void PlayerBattleResult::clear_battle_silver_weekly_used() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_silver_weekly_used_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[1], 0x00001000U);
+}
+inline ::uint64_t PlayerBattleResult::battle_silver_weekly_used() const {
+  // @@protoc_insertion_point(field_get:PlayerBattleResult.battle_silver_weekly_used)
+  return _internal_battle_silver_weekly_used();
+}
+inline void PlayerBattleResult::set_battle_silver_weekly_used(::uint64_t value) {
+  _internal_set_battle_silver_weekly_used(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00001000U);
+  // @@protoc_insertion_point(field_set:PlayerBattleResult.battle_silver_weekly_used)
+}
+inline ::uint64_t PlayerBattleResult::_internal_battle_silver_weekly_used() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_silver_weekly_used_;
+}
+inline void PlayerBattleResult::_internal_set_battle_silver_weekly_used(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_silver_weekly_used_ = value;
+}
+
+// uint64 battle_silver_weekly_soft_cap = 45;
+inline void PlayerBattleResult::clear_battle_silver_weekly_soft_cap() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_silver_weekly_soft_cap_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[1], 0x00002000U);
+}
+inline ::uint64_t PlayerBattleResult::battle_silver_weekly_soft_cap() const {
+  // @@protoc_insertion_point(field_get:PlayerBattleResult.battle_silver_weekly_soft_cap)
+  return _internal_battle_silver_weekly_soft_cap();
+}
+inline void PlayerBattleResult::set_battle_silver_weekly_soft_cap(::uint64_t value) {
+  _internal_set_battle_silver_weekly_soft_cap(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00002000U);
+  // @@protoc_insertion_point(field_set:PlayerBattleResult.battle_silver_weekly_soft_cap)
+}
+inline ::uint64_t PlayerBattleResult::_internal_battle_silver_weekly_soft_cap() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_silver_weekly_soft_cap_;
+}
+inline void PlayerBattleResult::_internal_set_battle_silver_weekly_soft_cap(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_silver_weekly_soft_cap_ = value;
+}
+
+// bool battle_silver_diminished = 46;
+inline void PlayerBattleResult::clear_battle_silver_diminished() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_silver_diminished_ = false;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000100U);
+}
+inline bool PlayerBattleResult::battle_silver_diminished() const {
+  // @@protoc_insertion_point(field_get:PlayerBattleResult.battle_silver_diminished)
+  return _internal_battle_silver_diminished();
+}
+inline void PlayerBattleResult::set_battle_silver_diminished(bool value) {
+  _internal_set_battle_silver_diminished(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000100U);
+  // @@protoc_insertion_point(field_set:PlayerBattleResult.battle_silver_diminished)
+}
+inline bool PlayerBattleResult::_internal_battle_silver_diminished() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_silver_diminished_;
+}
+inline void PlayerBattleResult::_internal_set_battle_silver_diminished(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_silver_diminished_ = value;
 }
 
 // -------------------------------------------------------------------

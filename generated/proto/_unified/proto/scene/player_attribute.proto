@@ -84,6 +84,11 @@ message AttributePanelInfo {
   repeated CombatAttributeInfo combat = 10; // 战斗类属性全量,sort 升序
   EquipmentEffects equipment_effects = 11; // V1来源修正全量；含分类命中/抵抗/减耗与法宝，不由客户端自行累计。
   SupportEffectSummary support_effects = 12; // 人物治疗/护盾来源；战斗中临时来源由本人战斗快照提供。
+  // 角色累计修为与本级经验进度（docs/planning/player-leveling-and-battle-economy-v1.md §2.3，服务端权威计算）。
+  uint64 total_exp = 13;          // 角色累计总经验（LevelComp.total_exp）
+  uint64 current_level_exp = 14;  // 当前等级内已积累经验（满级为 0）
+  uint64 next_level_exp = 15;     // 升到下一级所需经验增量（满级为 0）
+  bool is_max_level = 16;         // true = 生效等级已达上限
 }
 
 message GetAttributePanelRequest {

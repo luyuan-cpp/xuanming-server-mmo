@@ -530,3 +530,7 @@
 529=SceneActivityClientPlayerEquipTravelPassCosmetic
 530=SceneAppearanceClientPlayerEquipPetCosmetic
 531=SceneAppearanceClientPlayerEquipSkillVfx
+532=BattleClientPlayerSendBattlePing
+533=BattleClientPlayerNotifyBattlePing
+534=MatchServiceBanTournamentLeyline
+535=MatchServiceGetTournamentHighlights

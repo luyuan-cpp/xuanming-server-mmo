@@ -1,0 +1,22 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "BattleProgressionRewardTableOuterClass";
+option java_multiple_files = true;
+
+
+message BattleProgressionRewardTable {
+	uint32 id = 1;
+	uint32 match_mode = 2;
+	uint32 difficulty = 3;
+	uint32 outcome_tier = 4;
+	uint64 exp_gain = 5;
+	uint64 silver_gain = 6;
+}
+
+message BattleProgressionRewardTableData {
+	repeated BattleProgressionRewardTable data = 1;
+}

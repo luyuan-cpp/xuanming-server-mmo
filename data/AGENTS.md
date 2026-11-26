@@ -170,6 +170,8 @@ cd tools/data_table_exporter && py -m pytest -q
 | **AttributePool** | `AttributePool.xlsx` | `attributepool_table.proto` | 10 | 10 | 2 | — | — | `owner_type` | — | — | — | — |
 | **AttributeRule** | `AttributeRule.xlsx` | `attributerule_table.proto` | 7 | 7 | 1 | — | — | — | — | — | — | — |
 | **BaseScene** | `BaseScene.xlsx` | `basescene_table.proto` | 5 | 5 | 21 | — | — | — | — | — | — | — |
+| **BattleProgressionReward** | `BattleProgressionReward.xlsx` | `battleprogressionreward_table.proto` | 6 | 6 | 20 | — | — | — | — | — | — | — |
+| **BattleProgressionRule** | `BattleProgressionRule.xlsx` | `battleprogressionrule_table.proto` | 4 | 4 | 1 | — | — | — | — | — | — | — |
 | **Buff** | `Buff.xlsx` | `buff_table.proto` | 64 | 54 | 128 | — | — | — | — | — | `health_regeneration:double` `bonus_damage:double` | — |
 | **CharacterAppearance** | `CharacterAppearance.xlsx` | `characterappearance_table.proto` | 14 | 14 | 9 | — | — | `series_id` | `series_id→AppearanceSeries.id` | `id` | — | — |
 | **Class** | `Class.xlsx` | `class_table.proto` | 11 | 9 | 9 | — | — | — | — | — | — | — |
@@ -194,7 +196,7 @@ cd tools/data_table_exporter && py -m pytest -q
 | **GuildDonate** | `GuildDonate.xlsx` | `guilddonate_table.proto` | 8 | 8 | 3 | — | — | — | — | — | — | — |
 | **GuildLevel** | `GuildLevel.xlsx` | `guildlevel_table.proto` | 4 | 4 | 10 | — | — | — | — | — | — | — |
 | **GuildRule** | `GuildRule.xlsx` | `guildrule_table.proto` | 13 | 13 | 1 | — | — | — | — | — | — | — |
-| **GuildShop** | `GuildShop.xlsx` | `guildshop_table.proto` | 9 | 9 | 16 | — | — | `item_id` | `item_id→Item.id` | — | — | — |
+| **GuildShop** | `GuildShop.xlsx` | `guildshop_table.proto` | 9 | 9 | 17 | — | — | `item_id` | `item_id→Item.id` | — | — | — |
 | **GuildWarMilestone** | `GuildWarMilestone.xlsx` | `guildwarmilestone_table.proto` | 9 | 9 | 4 | — | — | `reward_item1_id` `reward_item2_id` | `reward_item1_id→Item.id` `reward_item2_id→Item.id` | — | — | — |
 | **GuildWarRule** | `GuildWarRule.xlsx` | `guildwarrule_table.proto` | 31 | 31 | 1 | — | — | `battle_config_id` | `battle_config_id→Dungeon.id` | — | — | — |
 | **Item** | `Item.xlsx` | `item_table.proto` | 23 | 18 | 142 | — | — | `affix_rule` `forge_material_id` `artifact_id` | `affix_rule→EquipAffixRule.id` `forge_material_id→Item.id` `artifact_id→EquipArtifact.id` | — | — | `base_attr` |
@@ -211,6 +213,7 @@ cd tools/data_table_exporter && py -m pytest -q
 | **PetRule** | `PetRule.xlsx` | `petrule_table.proto` | 9 | 9 | 1 | — | — | — | — | — | — | — |
 | **PetTier** | `PetTier.xlsx` | `pettier_table.proto` | 9 | 9 | 5 | — | — | — | — | — | — | — |
 | **PlayMode** | `PlayMode.xlsx` | `playmode_table.proto` | 10 | 6 | 28 | — | — | `battle_config_id` | `battle_config_id→Dungeon.id` | — | — | — |
+| **PlayerLevelExp** | `PlayerLevelExp.xlsx` | `playerlevelexp_table.proto` | 2 | 2 | 85 | — | — | — | — | — | — | — |
 | **RankedPreset** | `RankedPreset.xlsx` | `rankedpreset_table.proto` | 20 | 15 | 6 | — | — | `pet_table_id` | `pet_table_id→Pet.id` `skill_ids→Skill.id` `pet_entry_ids→PetEntry.id` | — | — | — |
 | **RankedRule** | `RankedRule.xlsx` | `rankedrule_table.proto` | 23 | 23 | 1 | — | — | `battle_config_id` `reference_class_id` | `battle_config_id→Dungeon.id` `reference_class_id→Class.id` | — | — | — |
 | **Reward** | `Reward.xlsx` | `reward_table.proto` | 5 | 2 | 7 | — | — | — | — | `id` | — | `reward` |
@@ -235,6 +238,6 @@ cd tools/data_table_exporter && py -m pytest -q
 | **World** | `World.xlsx` | `world_table.proto` | 2 | 2 | 16 | — | — | `scene_id` | `scene_id→BaseScene.id` | — | — | — |
 | **ZoneGroup** | `ZoneGroup.xlsx` | `zonegroup_table.proto` | 5 | 4 | 2 | — | — | — | — | — | — | — |
 
-合计 **78** 张表、**1007** 个物理列、**854** 个进产物的字段。
+合计 **81** 张表、**1019** 个物理列、**866** 个进产物的字段。
 
 <!-- END GENERATED -->

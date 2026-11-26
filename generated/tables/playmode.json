@@ -199,6 +199,27 @@
    "id": 212,
    "match_mode": 5,
    "team_size_max": 5
+  },
+  {
+   "battle_config_id": 202,
+   "enabled": true,
+   "id": 402,
+   "match_mode": 4,
+   "team_size_max": 1
+  },
+  {
+   "battle_config_id": 203,
+   "enabled": true,
+   "id": 403,
+   "match_mode": 4,
+   "team_size_max": 1
+  },
+  {
+   "battle_config_id": 205,
+   "enabled": true,
+   "id": 405,
+   "match_mode": 4,
+   "team_size_max": 1
   }
  ]
 }

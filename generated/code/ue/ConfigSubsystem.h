@@ -43,6 +43,8 @@
 #include "AttributePoolTable.h"
 #include "AttributeRuleTable.h"
 #include "BaseSceneTable.h"
+#include "BattleProgressionRewardTable.h"
+#include "BattleProgressionRuleTable.h"
 #include "BuffTable.h"
 #include "CharacterAppearanceTable.h"
 #include "ClassTable.h"
@@ -84,6 +86,7 @@
 #include "PetRuleTable.h"
 #include "PetTierTable.h"
 #include "PlayModeTable.h"
+#include "PlayerLevelExpTable.h"
 #include "RankedPresetTable.h"
 #include "RankedRuleTable.h"
 #include "RewardTable.h"
@@ -145,7 +148,7 @@ class MMORPGCONFIG_API UConfigSubsystem : public UGameInstanceSubsystem
 
 public:
 	/// 本产物覆盖的表数量。
-	static constexpr int32 TableCount = 78;
+	static constexpr int32 TableCount = 81;
 
 	UFUNCTION(BlueprintPure, Category = "Config", meta = (WorldContext = "WorldContextObject"))
 	static UConfigSubsystem* Get(const UObject* WorldContextObject);
@@ -237,6 +240,12 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UBaseSceneTable* GetBaseSceneTable() const { return BaseSceneTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UBattleProgressionRewardTable* GetBattleProgressionRewardTable() const { return BattleProgressionRewardTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UBattleProgressionRuleTable* GetBattleProgressionRuleTable() const { return BattleProgressionRuleTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UBuffTable* GetBuffTable() const { return BuffTable; }
@@ -362,6 +371,9 @@ public:
 	UPlayModeTable* GetPlayModeTable() const { return PlayModeTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UPlayerLevelExpTable* GetPlayerLevelExpTable() const { return PlayerLevelExpTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	URankedPresetTable* GetRankedPresetTable() const { return RankedPresetTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
@@ -460,6 +472,10 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UBaseSceneTable> BaseSceneTable;
 	UPROPERTY(Transient)
+	TObjectPtr<UBattleProgressionRewardTable> BattleProgressionRewardTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UBattleProgressionRuleTable> BattleProgressionRuleTable;
+	UPROPERTY(Transient)
 	TObjectPtr<UBuffTable> BuffTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UCharacterAppearanceTable> CharacterAppearanceTable;
@@ -541,6 +557,8 @@ private:
 	TObjectPtr<UPetTierTable> PetTierTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UPlayModeTable> PlayModeTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UPlayerLevelExpTable> PlayerLevelExpTable;
 	UPROPERTY(Transient)
 	TObjectPtr<URankedPresetTable> RankedPresetTable;
 	UPROPERTY(Transient)

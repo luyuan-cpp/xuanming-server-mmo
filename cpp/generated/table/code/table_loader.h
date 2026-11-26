@@ -22,6 +22,8 @@ struct AttributeDimensionTableSnapshot;
 struct AttributePoolTableSnapshot;
 struct AttributeRuleTableSnapshot;
 struct BaseSceneTableSnapshot;
+struct BattleProgressionRewardTableSnapshot;
+struct BattleProgressionRuleTableSnapshot;
 struct BuffTableSnapshot;
 struct CharacterAppearanceTableSnapshot;
 struct ClassTableSnapshot;
@@ -63,6 +65,7 @@ struct PetEntryTableSnapshot;
 struct PetRuleTableSnapshot;
 struct PetTierTableSnapshot;
 struct PlayModeTableSnapshot;
+struct PlayerLevelExpTableSnapshot;
 struct RankedPresetTableSnapshot;
 struct RankedRuleTableSnapshot;
 struct RewardTableSnapshot;
@@ -92,7 +95,7 @@ using LoadSuccessCallback = std::function<void()>;
 
 // 整批服务端配置表结构摘要(16 位小写十六进制,docs/design/config-table-hot-reload.md §5.1)。
 // 运行期只加载 schema_digest 与本常量一致的表包。
-inline constexpr std::string_view kTableSchemaDigest = "55d900397a301fa1";
+inline constexpr std::string_view kTableSchemaDigest = "194fb8bba93c9b8d";
 
 // 一次加载或热更表包的身份元数据。
 struct TableBundleIdentity {
@@ -134,6 +137,10 @@ struct TableSet {
     std::shared_ptr<const AttributeRuleTableSnapshot> attributeRuleTable;
 
     std::shared_ptr<const BaseSceneTableSnapshot> baseSceneTable;
+
+    std::shared_ptr<const BattleProgressionRewardTableSnapshot> battleProgressionRewardTable;
+
+    std::shared_ptr<const BattleProgressionRuleTableSnapshot> battleProgressionRuleTable;
 
     std::shared_ptr<const BuffTableSnapshot> buffTable;
 
@@ -216,6 +223,8 @@ struct TableSet {
     std::shared_ptr<const PetTierTableSnapshot> petTierTable;
 
     std::shared_ptr<const PlayModeTableSnapshot> playModeTable;
+
+    std::shared_ptr<const PlayerLevelExpTableSnapshot> playerLevelExpTable;
 
     std::shared_ptr<const RankedPresetTableSnapshot> rankedPresetTable;
 

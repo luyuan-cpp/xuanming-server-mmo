@@ -4467,11 +4467,11 @@ constexpr BattleEndS2C::ParseTableT_ BattleEndS2C::InternalGenerateParseTable_(c
     {
       PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_._has_bits_),
       0, // no _extensions_
-      13, 120,  // max_field_number, fast_idx_mask
+      20, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294959104,  // skipmap
+      4293918720,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      13,  // num_field_entries
+      20,  // num_field_entries
       2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -4495,8 +4495,8 @@ constexpr BattleEndS2C::ParseTableT_ BattleEndS2C::InternalGenerateParseTable_(c
        {26, 0, 0,
         PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.settlement_)}},
       // bool items_mailed = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(BattleEndS2C, _impl_.items_mailed_), 7>(),
-       {32, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(BattleEndS2C, _impl_.items_mailed_), 9>(),
+       {32, 9, 0,
         PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.items_mailed_)}},
       // uint32 material_credit_units_added = 5;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleEndS2C, _impl_.material_credit_units_added_), 4>(),
@@ -4511,29 +4511,66 @@ constexpr BattleEndS2C::ParseTableT_ BattleEndS2C::InternalGenerateParseTable_(c
        {56, 6, 0,
         PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.material_tradable_units_added_)}},
       // bool material_pvp_loss_ineligible = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(BattleEndS2C, _impl_.material_pvp_loss_ineligible_), 8>(),
-       {64, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(BattleEndS2C, _impl_.material_pvp_loss_ineligible_), 10>(),
+       {64, 10, 0,
         PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.material_pvp_loss_ineligible_)}},
       // .FestivalBeastSettlementSummary festival_beast_settlement = 9;
       {::_pbi::TcParser::FastMtS1,
        {74, 1, 1,
         PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.festival_beast_settlement_)}},
       // uint32 season_seal_points_added = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleEndS2C, _impl_.season_seal_points_added_), 10>(),
-       {80, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleEndS2C, _impl_.season_seal_points_added_), 7>(),
+       {80, 7, 0,
         PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.season_seal_points_added_)}},
       // uint32 season_seal_progress_after = 11;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleEndS2C, _impl_.season_seal_progress_after_), 11>(),
-       {88, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleEndS2C, _impl_.season_seal_progress_after_), 8>(),
+       {88, 8, 0,
         PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.season_seal_progress_after_)}},
       // uint32 season_seal_max_points = 12;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleEndS2C, _impl_.season_seal_max_points_), 12>(),
-       {96, 12, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleEndS2C, _impl_.season_seal_max_points_), 13>(),
+       {96, 13, 0,
         PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.season_seal_max_points_)}},
       // bool season_honor_newly_unlocked = 13;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(BattleEndS2C, _impl_.season_honor_newly_unlocked_), 9>(),
-       {104, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(BattleEndS2C, _impl_.season_honor_newly_unlocked_), 11>(),
+       {104, 11, 0,
         PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.season_honor_newly_unlocked_)}},
+      // uint32 level_before = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleEndS2C, _impl_.level_before_), 14>(),
+       {112, 14, 0,
+        PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.level_before_)}},
+      // uint32 level_after = 15;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleEndS2C, _impl_.level_after_), 15>(),
+       {120, 15, 0,
+        PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.level_after_)}},
+      // uint64 exp_gain = 16;
+      {::_pbi::TcParser::FastV64S2,
+       {384, 16, 0,
+        PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.exp_gain_)}},
+      // uint64 silver_gain = 17;
+      {::_pbi::TcParser::FastV64S2,
+       {392, 17, 0,
+        PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.silver_gain_)}},
+      // uint64 total_exp_after = 18;
+      {::_pbi::TcParser::FastV64S2,
+       {400, 18, 0,
+        PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.total_exp_after_)}},
+      // uint64 next_level_total_exp = 19;
+      {::_pbi::TcParser::FastV64S2,
+       {408, 19, 0,
+        PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.next_level_total_exp_)}},
+      // bool battle_silver_diminished = 20;
+      {::_pbi::TcParser::FastV8S2,
+       {416, 12, 0,
+        PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.battle_silver_diminished_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
@@ -4546,7 +4583,7 @@ constexpr BattleEndS2C::ParseTableT_ BattleEndS2C::InternalGenerateParseTable_(c
       // .BattleSettlementData settlement = 3;
       {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.settlement_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // bool items_mailed = 4;
-      {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.items_mailed_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.items_mailed_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // uint32 material_credit_units_added = 5;
       {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.material_credit_units_added_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 season_id = 6;
@@ -4554,17 +4591,31 @@ constexpr BattleEndS2C::ParseTableT_ BattleEndS2C::InternalGenerateParseTable_(c
       // uint32 material_tradable_units_added = 7;
       {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.material_tradable_units_added_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // bool material_pvp_loss_ineligible = 8;
-      {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.material_pvp_loss_ineligible_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.material_pvp_loss_ineligible_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // .FestivalBeastSettlementSummary festival_beast_settlement = 9;
       {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.festival_beast_settlement_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint32 season_seal_points_added = 10;
-      {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.season_seal_points_added_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.season_seal_points_added_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 season_seal_progress_after = 11;
-      {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.season_seal_progress_after_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.season_seal_progress_after_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 season_seal_max_points = 12;
-      {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.season_seal_max_points_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.season_seal_max_points_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // bool season_honor_newly_unlocked = 13;
-      {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.season_honor_newly_unlocked_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.season_honor_newly_unlocked_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 level_before = 14;
+      {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.level_before_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 level_after = 15;
+      {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.level_after_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 exp_gain = 16;
+      {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.exp_gain_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 silver_gain = 17;
+      {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.silver_gain_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 total_exp_after = 18;
+      {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.total_exp_after_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 next_level_total_exp = 19;
+      {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.next_level_total_exp_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool battle_silver_diminished = 20;
+      {PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.battle_silver_diminished_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -4595,12 +4646,19 @@ inline constexpr BattleEndS2C::Impl_::Impl_(
         material_credit_units_added_{0u},
         season_id_{0u},
         material_tradable_units_added_{0u},
+        season_seal_points_added_{0u},
+        season_seal_progress_after_{0u},
         items_mailed_{false},
         material_pvp_loss_ineligible_{false},
         season_honor_newly_unlocked_{false},
-        season_seal_points_added_{0u},
-        season_seal_progress_after_{0u},
-        season_seal_max_points_{0u} {}
+        battle_silver_diminished_{false},
+        season_seal_max_points_{0u},
+        level_before_{0u},
+        level_after_{0u},
+        exp_gain_{::uint64_t{0u}},
+        silver_gain_{::uint64_t{0u}},
+        total_exp_after_{::uint64_t{0u}},
+        next_level_total_exp_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr BattleEndS2C::BattleEndS2C(::_pbi::ConstantInitialized,
@@ -6067,7 +6125,7 @@ const ::uint32_t
         9,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BattleEndS2C, _impl_._has_bits_),
-        16, // hasbit index offset
+        23, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::BattleEndS2C, _impl_.battle_id_),
         PROTOBUF_FIELD_OFFSET(::BattleEndS2C, _impl_.outcome_),
         PROTOBUF_FIELD_OFFSET(::BattleEndS2C, _impl_.settlement_),
@@ -6081,19 +6139,33 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::BattleEndS2C, _impl_.season_seal_progress_after_),
         PROTOBUF_FIELD_OFFSET(::BattleEndS2C, _impl_.season_seal_max_points_),
         PROTOBUF_FIELD_OFFSET(::BattleEndS2C, _impl_.season_honor_newly_unlocked_),
+        PROTOBUF_FIELD_OFFSET(::BattleEndS2C, _impl_.level_before_),
+        PROTOBUF_FIELD_OFFSET(::BattleEndS2C, _impl_.level_after_),
+        PROTOBUF_FIELD_OFFSET(::BattleEndS2C, _impl_.exp_gain_),
+        PROTOBUF_FIELD_OFFSET(::BattleEndS2C, _impl_.silver_gain_),
+        PROTOBUF_FIELD_OFFSET(::BattleEndS2C, _impl_.total_exp_after_),
+        PROTOBUF_FIELD_OFFSET(::BattleEndS2C, _impl_.next_level_total_exp_),
+        PROTOBUF_FIELD_OFFSET(::BattleEndS2C, _impl_.battle_silver_diminished_),
         2,
         3,
         0,
-        7,
+        9,
         4,
         5,
         6,
-        8,
-        1,
         10,
+        1,
+        7,
+        8,
+        13,
         11,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
         12,
-        9,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BattleReconnectS2C, _impl_._has_bits_),
         4, // hasbit index offset
@@ -6347,33 +6419,33 @@ static const ::_pbi::MigrationSchema
         {101, sizeof(::TurnResultS2C)},
         {116, sizeof(::FestivalBeastSettlementSummary)},
         {139, sizeof(::BattleEndS2C)},
-        {168, sizeof(::BattleReconnectS2C)},
-        {173, sizeof(::SpectateStateS2C)},
-        {180, sizeof(::SpectateEndS2C)},
-        {189, sizeof(::SubmitBattleActionRequest)},
-        {200, sizeof(::SubmitBattleActionResponse)},
-        {205, sizeof(::GetBattleStateRequest)},
-        {210, sizeof(::StopWatchBattleRequest)},
-        {215, sizeof(::StopWatchBattleResponse)},
-        {220, sizeof(::SetAutoBattleRequest)},
-        {227, sizeof(::SetAutoBattleResponse)},
-        {232, sizeof(::SurrenderBattleRequest)},
-        {239, sizeof(::SurrenderBattleResponse)},
-        {246, sizeof(::SurrenderVoteS2C)},
-        {253, sizeof(::UpdateBattlePrepRequest)},
-        {264, sizeof(::UpdateBattlePrepResponse)},
-        {271, sizeof(::BattlePrepUpdateS2C)},
-        {278, sizeof(::SendBattlePingRequest)},
-        {287, sizeof(::SendBattlePingResponse)},
-        {294, sizeof(::BattlePingS2C)},
-        {301, sizeof(::BattleTicketPayload)},
-        {318, sizeof(::BattleTokenVerifyRequest)},
-        {325, sizeof(::BattleTokenVerifyResponse)},
-        {338, sizeof(::BattleAssignedS2C)},
-        {357, sizeof(::RequestBattleTicketRequest)},
-        {362, sizeof(::RequestBattleTicketResponse)},
-        {369, sizeof(::BattleReplay)},
-        {400, sizeof(::BattleReplayEnvelope)},
+        {182, sizeof(::BattleReconnectS2C)},
+        {187, sizeof(::SpectateStateS2C)},
+        {194, sizeof(::SpectateEndS2C)},
+        {203, sizeof(::SubmitBattleActionRequest)},
+        {214, sizeof(::SubmitBattleActionResponse)},
+        {219, sizeof(::GetBattleStateRequest)},
+        {224, sizeof(::StopWatchBattleRequest)},
+        {229, sizeof(::StopWatchBattleResponse)},
+        {234, sizeof(::SetAutoBattleRequest)},
+        {241, sizeof(::SetAutoBattleResponse)},
+        {246, sizeof(::SurrenderBattleRequest)},
+        {253, sizeof(::SurrenderBattleResponse)},
+        {260, sizeof(::SurrenderVoteS2C)},
+        {267, sizeof(::UpdateBattlePrepRequest)},
+        {278, sizeof(::UpdateBattlePrepResponse)},
+        {285, sizeof(::BattlePrepUpdateS2C)},
+        {292, sizeof(::SendBattlePingRequest)},
+        {301, sizeof(::SendBattlePingResponse)},
+        {308, sizeof(::BattlePingS2C)},
+        {315, sizeof(::BattleTicketPayload)},
+        {332, sizeof(::BattleTokenVerifyRequest)},
+        {339, sizeof(::BattleTokenVerifyResponse)},
+        {352, sizeof(::BattleAssignedS2C)},
+        {371, sizeof(::RequestBattleTicketRequest)},
+        {376, sizeof(::RequestBattleTicketResponse)},
+        {383, sizeof(::BattleReplay)},
+        {414, sizeof(::BattleReplayEnvelope)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -6467,7 +6539,7 @@ const char descriptor_table_protodef_proto_2fbattle_2fplayer_5fbattle_2eproto[] 
     "\030\007 \001(\r\022%\n\035material_tradable_units_added\030"
     "\010 \001(\r\022&\n\036material_available_units_after\030"
     "\t \001(\004\022)\n!material_earnable_remaining_aft"
-    "er\030\n \001(\r\"\330\003\n\014BattleEndS2C\022\021\n\tbattle_id\030\001"
+    "er\030\n \001(\r\"\203\005\n\014BattleEndS2C\022\021\n\tbattle_id\030\001"
     " \001(\004\022 \n\007outcome\030\002 \001(\0162\017.eBattleOutcome\022)"
     "\n\nsettlement\030\003 \001(\0132\025.BattleSettlementDat"
     "a\022\024\n\014items_mailed\030\004 \001(\010\022#\n\033material_cred"
@@ -6479,119 +6551,123 @@ const char descriptor_table_protodef_proto_2fbattle_2fplayer_5fbattle_2eproto[] 
     "points_added\030\n \001(\r\022\"\n\032season_seal_progre"
     "ss_after\030\013 \001(\r\022\036\n\026season_seal_max_points"
     "\030\014 \001(\r\022#\n\033season_honor_newly_unlocked\030\r "
-    "\001(\010\"\'\n\022BattleReconnectS2C\022\021\n\tbattle_id\030\001"
-    " \001(\004\"J\n\020SpectateStateS2C\022\036\n\005state\030\001 \001(\0132"
-    "\017.BattleStateS2C\022\026\n\016observer_count\030\002 \001(\r"
-    "\"j\n\016SpectateEndS2C\022\021\n\tbattle_id\030\001 \001(\004\022 \n"
-    "\007outcome\030\002 \001(\0162\017.eBattleOutcome\022#\n\006reaso"
-    "n\030\003 \001(\0162\023.eSpectateEndReason\"t\n\031SubmitBa"
-    "ttleActionRequest\022\021\n\tbattle_id\030\001 \001(\004\022\035\n\006"
-    "action\030\002 \001(\0132\r.BattleAction\022\020\n\010actor_id\030"
-    "\003 \001(\004\022\023\n\013round_index\030\004 \001(\r\"D\n\032SubmitBatt"
-    "leActionResponse\022&\n\rerror_message\030\001 \001(\0132"
-    "\017.TipInfoMessage\"*\n\025GetBattleStateReques"
-    "t\022\021\n\tbattle_id\030\001 \001(\004\"+\n\026StopWatchBattleR"
-    "equest\022\021\n\tbattle_id\030\001 \001(\004\"A\n\027StopWatchBa"
-    "ttleResponse\022&\n\rerror_message\030\001 \001(\0132\017.Ti"
-    "pInfoMessage\":\n\024SetAutoBattleRequest\022\021\n\t"
-    "battle_id\030\001 \001(\004\022\017\n\007enabled\030\002 \001(\010\"\?\n\025SetA"
-    "utoBattleResponse\022&\n\rerror_message\030\001 \001(\013"
-    "2\017.TipInfoMessage\":\n\026SurrenderBattleRequ"
-    "est\022\021\n\tbattle_id\030\001 \001(\004\022\r\n\005agree\030\002 \001(\010\"p\n"
-    "\027SurrenderBattleResponse\022&\n\rerror_messag"
-    "e\030\001 \001(\0132\017.TipInfoMessage\022-\n\nvote_state\030\002"
-    " \001(\0132\031.BattleSurrenderVoteState\"T\n\020Surre"
-    "nderVoteS2C\022\021\n\tbattle_id\030\001 \001(\004\022-\n\nvote_s"
-    "tate\030\002 \001(\0132\031.BattleSurrenderVoteState\"n\n"
-    "\027UpdateBattlePrepRequest\022\021\n\tbattle_id\030\001 "
-    "\001(\004\022\030\n\020selected_seal_id\030\002 \001(\r\022\027\n\017selecte"
-    "d_pet_id\030\003 \001(\004\022\r\n\005ready\030\004 \001(\010\"h\n\030UpdateB"
-    "attlePrepResponse\022&\n\rerror_message\030\001 \001(\013"
-    "2\017.TipInfoMessage\022$\n\nprep_state\030\002 \001(\0132\020."
-    "BattlePrepState\"N\n\023BattlePrepUpdateS2C\022\021"
-    "\n\tbattle_id\030\001 \001(\004\022$\n\nprep_state\030\002 \001(\0132\020."
-    "BattlePrepState\"b\n\025SendBattlePingRequest"
-    "\022\021\n\tbattle_id\030\001 \001(\004\022\027\n\017target_actor_id\030\002"
-    " \001(\004\022\035\n\004kind\030\003 \001(\0162\017.BattlePingKind\"c\n\026S"
-    "endBattlePingResponse\022&\n\rerror_message\030\001"
-    " \001(\0132\017.TipInfoMessage\022!\n\004ping\030\002 \001(\0132\023.Ba"
-    "ttleTacticalPing\"E\n\rBattlePingS2C\022\021\n\tbat"
-    "tle_id\030\001 \001(\004\022!\n\004ping\030\002 \001(\0132\023.BattleTacti"
-    "calPing\"\307\001\n\023BattleTicketPayload\022\021\n\tbattl"
-    "e_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\026\n\016battle_"
-    "node_id\030\003 \001(\r\022\032\n\022battle_instance_id\030\004 \001("
-    "\t\022\024\n\014expire_at_ms\030\005 \001(\004\022 \n\004role\030\006 \001(\0162\022."
-    "eBattleTicketRole\022\036\n\026spectator_operation"
-    "_id\030\007 \001(\t\">\n\030BattleTokenVerifyRequest\022\017\n"
-    "\007payload\030\001 \001(\014\022\021\n\tsignature\030\002 \001(\014\"\213\001\n\031Ba"
-    "ttleTokenVerifyResponse\022\017\n\007success\030\001 \001(\010"
-    "\022\r\n\005error\030\002 \001(\t\022\021\n\tbattle_id\030\003 \001(\004\022\035\n\025he"
-    "artbeat_interval_ms\030\004 \001(\r\022\034\n\024heartbeat_t"
-    "imeout_ms\030\005 \001(\r\"\272\001\n\021BattleAssignedS2C\022\021\n"
-    "\tbattle_id\030\001 \001(\004\022\014\n\004host\030\002 \001(\t\022\014\n\004port\030\003"
-    " \001(\r\022\025\n\rtoken_payload\030\004 \001(\014\022\027\n\017token_sig"
-    "nature\030\005 \001(\014\022\024\n\014expire_at_ms\030\006 \001(\004\022 \n\004ro"
-    "le\030\007 \001(\0162\022.eBattleTicketRole\022\016\n\006ws_url\030\010"
-    " \001(\t\"/\n\032RequestBattleTicketRequest\022\021\n\tba"
-    "ttle_id\030\001 \001(\004\"m\n\033RequestBattleTicketResp"
-    "onse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMes"
-    "sage\022&\n\nassignment\030\002 \001(\0132\022.BattleAssigne"
-    "dS2C\"\255\003\n\014BattleReplay\022\021\n\tbattle_id\030\001 \001(\004"
-    "\022\022\n\nmatch_mode\030\002 \001(\r\022\030\n\020battle_config_id"
-    "\030\003 \001(\r\022\025\n\rstarted_at_ms\030\004 \001(\004\022\026\n\016finishe"
-    "d_at_ms\030\005 \001(\004\022 \n\007outcome\030\006 \001(\0162\017.eBattle"
-    "Outcome\022+\n\nend_reason\030\007 \001(\0162\027.eBattleRep"
-    "layEndReason\022\024\n\014total_rounds\030\010 \001(\r\022\031\n\021ta"
-    "ble_fingerprint\030\t \001(\t\022$\n\013start_state\030\n \001"
-    "(\0132\017.BattleStateS2C\022\036\n\006rounds\030\013 \003(\0132\016.Tu"
-    "rnResultS2C\022$\n\013final_state\030\014 \001(\0132\017.Battl"
-    "eStateS2C\022\021\n\ttruncated\030\r \001(\010\022.\n\014actor_bu"
-    "ilds\030\016 \003(\0132\030.BattleActorBuildSummary\"v\n\024"
-    "BattleReplayEnvelope\022\026\n\016format_version\030\001"
-    " \001(\r\022\"\n\005codec\030\002 \001(\0162\023.eBattleReplayCodec"
-    "\022\021\n\traw_bytes\030\003 \001(\r\022\017\n\007payload\030\004 \001(\014*\246\001\n"
-    "\022eSpectateEndReason\022\025\n\021SPECTATE_END_NONE"
-    "\020\000\022 \n\034SPECTATE_END_BATTLE_FINISHED\020\001\022\037\n\033"
-    "SPECTATE_END_BATTLE_ABORTED\020\002\022\030\n\024SPECTAT"
-    "E_END_REMOVED\020\003\022\034\n\030SPECTATE_END_SOURCE_L"
-    "OST\020\004*u\n\021eBattleTicketRole\022\033\n\027BATTLE_TIC"
-    "KET_ROLE_NONE\020\000\022\"\n\036BATTLE_TICKET_ROLE_PA"
-    "RTICIPANT\020\001\022\037\n\033BATTLE_TICKET_ROLE_OBSERV"
-    "ER\020\002*P\n\022eBattleReplayCodec\022\034\n\030BATTLE_REP"
-    "LAY_CODEC_NONE\020\000\022\034\n\030BATTLE_REPLAY_CODEC_"
-    "GZIP\020\001*\200\001\n\026eBattleReplayEndReason\022!\n\035BAT"
-    "TLE_REPLAY_END_UNSPECIFIED\020\000\022\036\n\032BATTLE_R"
-    "EPLAY_END_FINISHED\020\001\022#\n\037BATTLE_REPLAY_EN"
-    "D_DEADLINE_DRAW\020\0022\342\010\n\022BattleClientPlayer"
-    "\022M\n\022SubmitBattleAction\022\032.SubmitBattleAct"
-    "ionRequest\032\033.SubmitBattleActionResponse\022"
-    "9\n\016GetBattleState\022\026.GetBattleStateReques"
-    "t\032\017.BattleStateS2C\0223\n\021NotifyBattleStart\022"
-    "\017.BattleStartS2C\032\006.Empty\"\005\210\231\310\001\002\0221\n\020Notif"
-    "yTurnResult\022\016.TurnResultS2C\032\006.Empty\"\005\210\231\310"
-    "\001\002\022/\n\017NotifyBattleEnd\022\r.BattleEndS2C\032\006.E"
-    "mpty\"\005\210\231\310\001\002\022;\n\025NotifyBattleReconnect\022\023.B"
-    "attleReconnectS2C\032\006.Empty\"\005\210\231\310\001\002\022D\n\017Stop"
-    "WatchBattle\022\027.StopWatchBattleRequest\032\030.S"
-    "topWatchBattleResponse\022>\n\rSetAutoBattle\022"
-    "\025.SetAutoBattleRequest\032\026.SetAutoBattleRe"
-    "sponse\0227\n\023NotifySpectateState\022\021.Spectate"
-    "StateS2C\032\006.Empty\"\005\210\231\310\001\002\0229\n\030NotifySpectat"
-    "eTurnResult\022\016.TurnResultS2C\032\006.Empty\"\005\210\231\310"
-    "\001\002\0223\n\021NotifySpectateEnd\022\017.SpectateEndS2C"
-    "\032\006.Empty\"\005\210\231\310\001\002\0229\n\024NotifyBattleAssigned\022"
-    "\022.BattleAssignedS2C\032\006.Empty\"\005\210\231\310\001\002\022D\n\017Su"
-    "rrenderBattle\022\027.SurrenderBattleRequest\032\030"
-    ".SurrenderBattleResponse\0227\n\023NotifySurren"
-    "derVote\022\021.SurrenderVoteS2C\032\006.Empty\"\005\210\231\310\001"
-    "\002\022G\n\020UpdateBattlePrep\022\030.UpdateBattlePrep"
-    "Request\032\031.UpdateBattlePrepResponse\022=\n\026No"
-    "tifyBattlePrepUpdate\022\024.BattlePrepUpdateS"
-    "2C\032\006.Empty\"\005\210\231\310\001\002\022A\n\016SendBattlePing\022\026.Se"
-    "ndBattlePingRequest\032\027.SendBattlePingResp"
-    "onse\0221\n\020NotifyBattlePing\022\016.BattlePingS2C"
-    "\032\006.Empty\"\005\210\231\310\001\002\032\005\210\250\303\001\001B\014Z\006battle\230\324a\036b\006pr"
-    "oto3"
+    "\001(\010\022\024\n\014level_before\030\016 \001(\r\022\023\n\013level_after"
+    "\030\017 \001(\r\022\020\n\010exp_gain\030\020 \001(\004\022\023\n\013silver_gain\030"
+    "\021 \001(\004\022\027\n\017total_exp_after\030\022 \001(\004\022\034\n\024next_l"
+    "evel_total_exp\030\023 \001(\004\022 \n\030battle_silver_di"
+    "minished\030\024 \001(\010\"\'\n\022BattleReconnectS2C\022\021\n\t"
+    "battle_id\030\001 \001(\004\"J\n\020SpectateStateS2C\022\036\n\005s"
+    "tate\030\001 \001(\0132\017.BattleStateS2C\022\026\n\016observer_"
+    "count\030\002 \001(\r\"j\n\016SpectateEndS2C\022\021\n\tbattle_"
+    "id\030\001 \001(\004\022 \n\007outcome\030\002 \001(\0162\017.eBattleOutco"
+    "me\022#\n\006reason\030\003 \001(\0162\023.eSpectateEndReason\""
+    "t\n\031SubmitBattleActionRequest\022\021\n\tbattle_i"
+    "d\030\001 \001(\004\022\035\n\006action\030\002 \001(\0132\r.BattleAction\022\020"
+    "\n\010actor_id\030\003 \001(\004\022\023\n\013round_index\030\004 \001(\r\"D\n"
+    "\032SubmitBattleActionResponse\022&\n\rerror_mes"
+    "sage\030\001 \001(\0132\017.TipInfoMessage\"*\n\025GetBattle"
+    "StateRequest\022\021\n\tbattle_id\030\001 \001(\004\"+\n\026StopW"
+    "atchBattleRequest\022\021\n\tbattle_id\030\001 \001(\004\"A\n\027"
+    "StopWatchBattleResponse\022&\n\rerror_message"
+    "\030\001 \001(\0132\017.TipInfoMessage\":\n\024SetAutoBattle"
+    "Request\022\021\n\tbattle_id\030\001 \001(\004\022\017\n\007enabled\030\002 "
+    "\001(\010\"\?\n\025SetAutoBattleResponse\022&\n\rerror_me"
+    "ssage\030\001 \001(\0132\017.TipInfoMessage\":\n\026Surrende"
+    "rBattleRequest\022\021\n\tbattle_id\030\001 \001(\004\022\r\n\005agr"
+    "ee\030\002 \001(\010\"p\n\027SurrenderBattleResponse\022&\n\re"
+    "rror_message\030\001 \001(\0132\017.TipInfoMessage\022-\n\nv"
+    "ote_state\030\002 \001(\0132\031.BattleSurrenderVoteSta"
+    "te\"T\n\020SurrenderVoteS2C\022\021\n\tbattle_id\030\001 \001("
+    "\004\022-\n\nvote_state\030\002 \001(\0132\031.BattleSurrenderV"
+    "oteState\"n\n\027UpdateBattlePrepRequest\022\021\n\tb"
+    "attle_id\030\001 \001(\004\022\030\n\020selected_seal_id\030\002 \001(\r"
+    "\022\027\n\017selected_pet_id\030\003 \001(\004\022\r\n\005ready\030\004 \001(\010"
+    "\"h\n\030UpdateBattlePrepResponse\022&\n\rerror_me"
+    "ssage\030\001 \001(\0132\017.TipInfoMessage\022$\n\nprep_sta"
+    "te\030\002 \001(\0132\020.BattlePrepState\"N\n\023BattlePrep"
+    "UpdateS2C\022\021\n\tbattle_id\030\001 \001(\004\022$\n\nprep_sta"
+    "te\030\002 \001(\0132\020.BattlePrepState\"b\n\025SendBattle"
+    "PingRequest\022\021\n\tbattle_id\030\001 \001(\004\022\027\n\017target"
+    "_actor_id\030\002 \001(\004\022\035\n\004kind\030\003 \001(\0162\017.BattlePi"
+    "ngKind\"c\n\026SendBattlePingResponse\022&\n\rerro"
+    "r_message\030\001 \001(\0132\017.TipInfoMessage\022!\n\004ping"
+    "\030\002 \001(\0132\023.BattleTacticalPing\"E\n\rBattlePin"
+    "gS2C\022\021\n\tbattle_id\030\001 \001(\004\022!\n\004ping\030\002 \001(\0132\023."
+    "BattleTacticalPing\"\307\001\n\023BattleTicketPaylo"
+    "ad\022\021\n\tbattle_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004"
+    "\022\026\n\016battle_node_id\030\003 \001(\r\022\032\n\022battle_insta"
+    "nce_id\030\004 \001(\t\022\024\n\014expire_at_ms\030\005 \001(\004\022 \n\004ro"
+    "le\030\006 \001(\0162\022.eBattleTicketRole\022\036\n\026spectato"
+    "r_operation_id\030\007 \001(\t\">\n\030BattleTokenVerif"
+    "yRequest\022\017\n\007payload\030\001 \001(\014\022\021\n\tsignature\030\002"
+    " \001(\014\"\213\001\n\031BattleTokenVerifyResponse\022\017\n\007su"
+    "ccess\030\001 \001(\010\022\r\n\005error\030\002 \001(\t\022\021\n\tbattle_id\030"
+    "\003 \001(\004\022\035\n\025heartbeat_interval_ms\030\004 \001(\r\022\034\n\024"
+    "heartbeat_timeout_ms\030\005 \001(\r\"\272\001\n\021BattleAss"
+    "ignedS2C\022\021\n\tbattle_id\030\001 \001(\004\022\014\n\004host\030\002 \001("
+    "\t\022\014\n\004port\030\003 \001(\r\022\025\n\rtoken_payload\030\004 \001(\014\022\027"
+    "\n\017token_signature\030\005 \001(\014\022\024\n\014expire_at_ms\030"
+    "\006 \001(\004\022 \n\004role\030\007 \001(\0162\022.eBattleTicketRole\022"
+    "\016\n\006ws_url\030\010 \001(\t\"/\n\032RequestBattleTicketRe"
+    "quest\022\021\n\tbattle_id\030\001 \001(\004\"m\n\033RequestBattl"
+    "eTicketResponse\022&\n\rerror_message\030\001 \001(\0132\017"
+    ".TipInfoMessage\022&\n\nassignment\030\002 \001(\0132\022.Ba"
+    "ttleAssignedS2C\"\255\003\n\014BattleReplay\022\021\n\tbatt"
+    "le_id\030\001 \001(\004\022\022\n\nmatch_mode\030\002 \001(\r\022\030\n\020battl"
+    "e_config_id\030\003 \001(\r\022\025\n\rstarted_at_ms\030\004 \001(\004"
+    "\022\026\n\016finished_at_ms\030\005 \001(\004\022 \n\007outcome\030\006 \001("
+    "\0162\017.eBattleOutcome\022+\n\nend_reason\030\007 \001(\0162\027"
+    ".eBattleReplayEndReason\022\024\n\014total_rounds\030"
+    "\010 \001(\r\022\031\n\021table_fingerprint\030\t \001(\t\022$\n\013star"
+    "t_state\030\n \001(\0132\017.BattleStateS2C\022\036\n\006rounds"
+    "\030\013 \003(\0132\016.TurnResultS2C\022$\n\013final_state\030\014 "
+    "\001(\0132\017.BattleStateS2C\022\021\n\ttruncated\030\r \001(\010\022"
+    ".\n\014actor_builds\030\016 \003(\0132\030.BattleActorBuild"
+    "Summary\"v\n\024BattleReplayEnvelope\022\026\n\016forma"
+    "t_version\030\001 \001(\r\022\"\n\005codec\030\002 \001(\0162\023.eBattle"
+    "ReplayCodec\022\021\n\traw_bytes\030\003 \001(\r\022\017\n\007payloa"
+    "d\030\004 \001(\014*\246\001\n\022eSpectateEndReason\022\025\n\021SPECTA"
+    "TE_END_NONE\020\000\022 \n\034SPECTATE_END_BATTLE_FIN"
+    "ISHED\020\001\022\037\n\033SPECTATE_END_BATTLE_ABORTED\020\002"
+    "\022\030\n\024SPECTATE_END_REMOVED\020\003\022\034\n\030SPECTATE_E"
+    "ND_SOURCE_LOST\020\004*u\n\021eBattleTicketRole\022\033\n"
+    "\027BATTLE_TICKET_ROLE_NONE\020\000\022\"\n\036BATTLE_TIC"
+    "KET_ROLE_PARTICIPANT\020\001\022\037\n\033BATTLE_TICKET_"
+    "ROLE_OBSERVER\020\002*P\n\022eBattleReplayCodec\022\034\n"
+    "\030BATTLE_REPLAY_CODEC_NONE\020\000\022\034\n\030BATTLE_RE"
+    "PLAY_CODEC_GZIP\020\001*\200\001\n\026eBattleReplayEndRe"
+    "ason\022!\n\035BATTLE_REPLAY_END_UNSPECIFIED\020\000\022"
+    "\036\n\032BATTLE_REPLAY_END_FINISHED\020\001\022#\n\037BATTL"
+    "E_REPLAY_END_DEADLINE_DRAW\020\0022\342\010\n\022BattleC"
+    "lientPlayer\022M\n\022SubmitBattleAction\022\032.Subm"
+    "itBattleActionRequest\032\033.SubmitBattleActi"
+    "onResponse\0229\n\016GetBattleState\022\026.GetBattle"
+    "StateRequest\032\017.BattleStateS2C\0223\n\021NotifyB"
+    "attleStart\022\017.BattleStartS2C\032\006.Empty\"\005\210\231\310"
+    "\001\002\0221\n\020NotifyTurnResult\022\016.TurnResultS2C\032\006"
+    ".Empty\"\005\210\231\310\001\002\022/\n\017NotifyBattleEnd\022\r.Battl"
+    "eEndS2C\032\006.Empty\"\005\210\231\310\001\002\022;\n\025NotifyBattleRe"
+    "connect\022\023.BattleReconnectS2C\032\006.Empty\"\005\210\231"
+    "\310\001\002\022D\n\017StopWatchBattle\022\027.StopWatchBattle"
+    "Request\032\030.StopWatchBattleResponse\022>\n\rSet"
+    "AutoBattle\022\025.SetAutoBattleRequest\032\026.SetA"
+    "utoBattleResponse\0227\n\023NotifySpectateState"
+    "\022\021.SpectateStateS2C\032\006.Empty\"\005\210\231\310\001\002\0229\n\030No"
+    "tifySpectateTurnResult\022\016.TurnResultS2C\032\006"
+    ".Empty\"\005\210\231\310\001\002\0223\n\021NotifySpectateEnd\022\017.Spe"
+    "ctateEndS2C\032\006.Empty\"\005\210\231\310\001\002\0229\n\024NotifyBatt"
+    "leAssigned\022\022.BattleAssignedS2C\032\006.Empty\"\005"
+    "\210\231\310\001\002\022D\n\017SurrenderBattle\022\027.SurrenderBatt"
+    "leRequest\032\030.SurrenderBattleResponse\0227\n\023N"
+    "otifySurrenderVote\022\021.SurrenderVoteS2C\032\006."
+    "Empty\"\005\210\231\310\001\002\022G\n\020UpdateBattlePrep\022\030.Updat"
+    "eBattlePrepRequest\032\031.UpdateBattlePrepRes"
+    "ponse\022=\n\026NotifyBattlePrepUpdate\022\024.Battle"
+    "PrepUpdateS2C\032\006.Empty\"\005\210\231\310\001\002\022A\n\016SendBatt"
+    "lePing\022\026.SendBattlePingRequest\032\027.SendBat"
+    "tlePingResponse\0221\n\020NotifyBattlePing\022\016.Ba"
+    "ttlePingS2C\032\006.Empty\"\005\210\231\310\001\002\032\005\210\250\303\001\001B\014Z\006bat"
+    "tle\230\324a\036b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fbattle_2fplayer_5fbattle_2eproto_deps[4] = {
@@ -6604,7 +6680,7 @@ static ::absl::once_flag descriptor_table_proto_2fbattle_2fplayer_5fbattle_2epro
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fbattle_2fplayer_5fbattle_2eproto = {
     false,
     false,
-    7124,
+    7295,
     descriptor_table_protodef_proto_2fbattle_2fplayer_5fbattle_2eproto,
     "proto/battle/player_battle.proto",
     &descriptor_table_proto_2fbattle_2fplayer_5fbattle_2eproto_once,
@@ -9411,9 +9487,9 @@ BattleEndS2C::BattleEndS2C(
                offsetof(Impl_, battle_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, battle_id_),
-           offsetof(Impl_, season_seal_max_points_) -
+           offsetof(Impl_, next_level_total_exp_) -
                offsetof(Impl_, battle_id_) +
-               sizeof(Impl_::season_seal_max_points_));
+               sizeof(Impl_::next_level_total_exp_));
 
   // @@protoc_insertion_point(copy_constructor:BattleEndS2C)
 }
@@ -9427,9 +9503,9 @@ inline void BattleEndS2C::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, settlement_),
            0,
-           offsetof(Impl_, season_seal_max_points_) -
+           offsetof(Impl_, next_level_total_exp_) -
                offsetof(Impl_, settlement_) +
-               sizeof(Impl_::season_seal_max_points_));
+               sizeof(Impl_::next_level_total_exp_));
 }
 BattleEndS2C::~BattleEndS2C() {
   // @@protoc_insertion_point(destructor:BattleEndS2C)
@@ -9493,13 +9569,18 @@ PROTOBUF_NOINLINE void BattleEndS2C::Clear() {
   }
   if (BatchCheckHasBit(cached_has_bits, 0x000000fcU)) {
     ::memset(&_impl_.battle_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.items_mailed_) -
-        reinterpret_cast<char*>(&_impl_.battle_id_)) + sizeof(_impl_.items_mailed_));
+        reinterpret_cast<char*>(&_impl_.season_seal_points_added_) -
+        reinterpret_cast<char*>(&_impl_.battle_id_)) + sizeof(_impl_.season_seal_points_added_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
-    ::memset(&_impl_.material_pvp_loss_ineligible_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.season_seal_max_points_) -
-        reinterpret_cast<char*>(&_impl_.material_pvp_loss_ineligible_)) + sizeof(_impl_.season_seal_max_points_));
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    ::memset(&_impl_.season_seal_progress_after_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.level_after_) -
+        reinterpret_cast<char*>(&_impl_.season_seal_progress_after_)) + sizeof(_impl_.level_after_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000f0000U)) {
+    ::memset(&_impl_.exp_gain_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.next_level_total_exp_) -
+        reinterpret_cast<char*>(&_impl_.exp_gain_)) + sizeof(_impl_.next_level_total_exp_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -9550,7 +9631,7 @@ PROTOBUF_NOINLINE void BattleEndS2C::Clear() {
   }
 
   // bool items_mailed = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_items_mailed() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -9586,7 +9667,7 @@ PROTOBUF_NOINLINE void BattleEndS2C::Clear() {
   }
 
   // bool material_pvp_loss_ineligible = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_material_pvp_loss_ineligible() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -9602,7 +9683,7 @@ PROTOBUF_NOINLINE void BattleEndS2C::Clear() {
   }
 
   // uint32 season_seal_points_added = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_season_seal_points_added() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -9611,7 +9692,7 @@ PROTOBUF_NOINLINE void BattleEndS2C::Clear() {
   }
 
   // uint32 season_seal_progress_after = 11;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_season_seal_progress_after() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -9620,7 +9701,7 @@ PROTOBUF_NOINLINE void BattleEndS2C::Clear() {
   }
 
   // uint32 season_seal_max_points = 12;
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_season_seal_max_points() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -9629,11 +9710,74 @@ PROTOBUF_NOINLINE void BattleEndS2C::Clear() {
   }
 
   // bool season_honor_newly_unlocked = 13;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_season_honor_newly_unlocked() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
           13, this_._internal_season_honor_newly_unlocked(), target);
+    }
+  }
+
+  // uint32 level_before = 14;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_level_before() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          14, this_._internal_level_before(), target);
+    }
+  }
+
+  // uint32 level_after = 15;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_level_after() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          15, this_._internal_level_after(), target);
+    }
+  }
+
+  // uint64 exp_gain = 16;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_exp_gain() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          16, this_._internal_exp_gain(), target);
+    }
+  }
+
+  // uint64 silver_gain = 17;
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (this_._internal_silver_gain() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          17, this_._internal_silver_gain(), target);
+    }
+  }
+
+  // uint64 total_exp_after = 18;
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (this_._internal_total_exp_after() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          18, this_._internal_total_exp_after(), target);
+    }
+  }
+
+  // uint64 next_level_total_exp = 19;
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (this_._internal_next_level_total_exp() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          19, this_._internal_next_level_total_exp(), target);
+    }
+  }
+
+  // bool battle_silver_diminished = 20;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_battle_silver_diminished() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          20, this_._internal_battle_silver_diminished(), target);
     }
   }
 
@@ -9708,45 +9852,95 @@ PROTOBUF_NOINLINE void BattleEndS2C::Clear() {
             this_._internal_material_tradable_units_added());
       }
     }
-    // bool items_mailed = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      if (this_._internal_items_mailed() != 0) {
-        total_size += 2;
-      }
-    }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
-    // bool material_pvp_loss_ineligible = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-      if (this_._internal_material_pvp_loss_ineligible() != 0) {
-        total_size += 2;
-      }
-    }
-    // bool season_honor_newly_unlocked = 13;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
-      if (this_._internal_season_honor_newly_unlocked() != 0) {
-        total_size += 2;
-      }
-    }
     // uint32 season_seal_points_added = 10;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_season_seal_points_added() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_season_seal_points_added());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint32 season_seal_progress_after = 11;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_season_seal_progress_after() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_season_seal_progress_after());
       }
     }
-    // uint32 season_seal_max_points = 12;
+    // bool items_mailed = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_items_mailed() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool material_pvp_loss_ineligible = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_material_pvp_loss_ineligible() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool season_honor_newly_unlocked = 13;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_season_honor_newly_unlocked() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool battle_silver_diminished = 20;
     if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_battle_silver_diminished() != 0) {
+        total_size += 3;
+      }
+    }
+    // uint32 season_seal_max_points = 12;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_season_seal_max_points() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_season_seal_max_points());
+      }
+    }
+    // uint32 level_before = 14;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_level_before() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_level_before());
+      }
+    }
+    // uint32 level_after = 15;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_level_after() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_level_after());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000f0000U)) {
+    // uint64 exp_gain = 16;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_exp_gain() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_exp_gain());
+      }
+    }
+    // uint64 silver_gain = 17;
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (this_._internal_silver_gain() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_silver_gain());
+      }
+    }
+    // uint64 total_exp_after = 18;
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (this_._internal_total_exp_after() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_total_exp_after());
+      }
+    }
+    // uint64 next_level_total_exp = 19;
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (this_._internal_next_level_total_exp() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_next_level_total_exp());
       }
     }
   }
@@ -9811,35 +10005,72 @@ void BattleEndS2C::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      if (from._internal_items_mailed() != 0) {
-        _this->_impl_.items_mailed_ = from._impl_.items_mailed_;
-      }
-    }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-      if (from._internal_material_pvp_loss_ineligible() != 0) {
-        _this->_impl_.material_pvp_loss_ineligible_ = from._impl_.material_pvp_loss_ineligible_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
-      if (from._internal_season_honor_newly_unlocked() != 0) {
-        _this->_impl_.season_honor_newly_unlocked_ = from._impl_.season_honor_newly_unlocked_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_season_seal_points_added() != 0) {
         _this->_impl_.season_seal_points_added_ = from._impl_.season_seal_points_added_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_season_seal_progress_after() != 0) {
         _this->_impl_.season_seal_progress_after_ = from._impl_.season_seal_progress_after_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_items_mailed() != 0) {
+        _this->_impl_.items_mailed_ = from._impl_.items_mailed_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_material_pvp_loss_ineligible() != 0) {
+        _this->_impl_.material_pvp_loss_ineligible_ = from._impl_.material_pvp_loss_ineligible_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_season_honor_newly_unlocked() != 0) {
+        _this->_impl_.season_honor_newly_unlocked_ = from._impl_.season_honor_newly_unlocked_;
+      }
+    }
     if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_battle_silver_diminished() != 0) {
+        _this->_impl_.battle_silver_diminished_ = from._impl_.battle_silver_diminished_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (from._internal_season_seal_max_points() != 0) {
         _this->_impl_.season_seal_max_points_ = from._impl_.season_seal_max_points_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_level_before() != 0) {
+        _this->_impl_.level_before_ = from._impl_.level_before_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_level_after() != 0) {
+        _this->_impl_.level_after_ = from._impl_.level_after_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000f0000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (from._internal_exp_gain() != 0) {
+        _this->_impl_.exp_gain_ = from._impl_.exp_gain_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (from._internal_silver_gain() != 0) {
+        _this->_impl_.silver_gain_ = from._impl_.silver_gain_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (from._internal_total_exp_after() != 0) {
+        _this->_impl_.total_exp_after_ = from._impl_.total_exp_after_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (from._internal_next_level_total_exp() != 0) {
+        _this->_impl_.next_level_total_exp_ = from._impl_.next_level_total_exp_;
       }
     }
   }
@@ -9861,8 +10092,8 @@ void BattleEndS2C::InternalSwap(BattleEndS2C* PROTOBUF_RESTRICT PROTOBUF_NONNULL
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.season_seal_max_points_)
-      + sizeof(BattleEndS2C::_impl_.season_seal_max_points_)
+      PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.next_level_total_exp_)
+      + sizeof(BattleEndS2C::_impl_.next_level_total_exp_)
       - PROTOBUF_FIELD_OFFSET(BattleEndS2C, _impl_.settlement_)>(
           reinterpret_cast<char*>(&_impl_.settlement_),
           reinterpret_cast<char*>(&other->_impl_.settlement_));

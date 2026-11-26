@@ -3721,6 +3721,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AttributePanelInfo final : public :
     kSwitchCooldownUntilFieldNumber = 8,
     kCreateSchemeCostGoldFieldNumber = 9,
     kLevelFieldNumber = 7,
+    kIsMaxLevelFieldNumber = 16,
+    kTotalExpFieldNumber = 13,
+    kCurrentLevelExpFieldNumber = 14,
+    kNextLevelExpFieldNumber = 15,
   };
   // repeated .AttributePoolInfo pools = 1;
   [[nodiscard]] int pools_size()
@@ -3904,11 +3908,51 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AttributePanelInfo final : public :
   void _internal_set_level(::uint32_t value);
 
   public:
+  // bool is_max_level = 16;
+  void clear_is_max_level() ;
+  [[nodiscard]] bool is_max_level() const;
+  void set_is_max_level(bool value);
+
+  private:
+  bool _internal_is_max_level() const;
+  void _internal_set_is_max_level(bool value);
+
+  public:
+  // uint64 total_exp = 13;
+  void clear_total_exp() ;
+  [[nodiscard]] ::uint64_t total_exp() const;
+  void set_total_exp(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_total_exp() const;
+  void _internal_set_total_exp(::uint64_t value);
+
+  public:
+  // uint64 current_level_exp = 14;
+  void clear_current_level_exp() ;
+  [[nodiscard]] ::uint64_t current_level_exp() const;
+  void set_current_level_exp(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_current_level_exp() const;
+  void _internal_set_current_level_exp(::uint64_t value);
+
+  public:
+  // uint64 next_level_exp = 15;
+  void clear_next_level_exp() ;
+  [[nodiscard]] ::uint64_t next_level_exp() const;
+  void set_next_level_exp(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_next_level_exp() const;
+  void _internal_set_next_level_exp(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:AttributePanelInfo)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 12,
+      ::google::protobuf::internal::TcParseTable<4, 16,
                           7, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -3949,6 +3993,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AttributePanelInfo final : public :
     ::uint64_t switch_cooldown_until_;
     ::uint64_t create_scheme_cost_gold_;
     ::uint32_t level_;
+    bool is_max_level_;
+    ::uint64_t total_exp_;
+    ::uint64_t current_level_exp_;
+    ::uint64_t next_level_exp_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7514,6 +7562,102 @@ inline void AttributePanelInfo::set_allocated_support_effects(::SupportEffectSum
 
   _impl_.support_effects_ = reinterpret_cast<::SupportEffectSummary*>(value);
   // @@protoc_insertion_point(field_set_allocated:AttributePanelInfo.support_effects)
+}
+
+// uint64 total_exp = 13;
+inline void AttributePanelInfo::clear_total_exp() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_exp_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint64_t AttributePanelInfo::total_exp() const {
+  // @@protoc_insertion_point(field_get:AttributePanelInfo.total_exp)
+  return _internal_total_exp();
+}
+inline void AttributePanelInfo::set_total_exp(::uint64_t value) {
+  _internal_set_total_exp(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:AttributePanelInfo.total_exp)
+}
+inline ::uint64_t AttributePanelInfo::_internal_total_exp() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.total_exp_;
+}
+inline void AttributePanelInfo::_internal_set_total_exp(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_exp_ = value;
+}
+
+// uint64 current_level_exp = 14;
+inline void AttributePanelInfo::clear_current_level_exp() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.current_level_exp_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint64_t AttributePanelInfo::current_level_exp() const {
+  // @@protoc_insertion_point(field_get:AttributePanelInfo.current_level_exp)
+  return _internal_current_level_exp();
+}
+inline void AttributePanelInfo::set_current_level_exp(::uint64_t value) {
+  _internal_set_current_level_exp(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:AttributePanelInfo.current_level_exp)
+}
+inline ::uint64_t AttributePanelInfo::_internal_current_level_exp() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.current_level_exp_;
+}
+inline void AttributePanelInfo::_internal_set_current_level_exp(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.current_level_exp_ = value;
+}
+
+// uint64 next_level_exp = 15;
+inline void AttributePanelInfo::clear_next_level_exp() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_level_exp_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint64_t AttributePanelInfo::next_level_exp() const {
+  // @@protoc_insertion_point(field_get:AttributePanelInfo.next_level_exp)
+  return _internal_next_level_exp();
+}
+inline void AttributePanelInfo::set_next_level_exp(::uint64_t value) {
+  _internal_set_next_level_exp(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:AttributePanelInfo.next_level_exp)
+}
+inline ::uint64_t AttributePanelInfo::_internal_next_level_exp() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.next_level_exp_;
+}
+inline void AttributePanelInfo::_internal_set_next_level_exp(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_level_exp_ = value;
+}
+
+// bool is_max_level = 16;
+inline void AttributePanelInfo::clear_is_max_level() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_max_level_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline bool AttributePanelInfo::is_max_level() const {
+  // @@protoc_insertion_point(field_get:AttributePanelInfo.is_max_level)
+  return _internal_is_max_level();
+}
+inline void AttributePanelInfo::set_is_max_level(bool value) {
+  _internal_set_is_max_level(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:AttributePanelInfo.is_max_level)
+}
+inline bool AttributePanelInfo::_internal_is_max_level() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.is_max_level_;
+}
+inline void AttributePanelInfo::_internal_set_is_max_level(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_max_level_ = value;
 }
 
 // -------------------------------------------------------------------

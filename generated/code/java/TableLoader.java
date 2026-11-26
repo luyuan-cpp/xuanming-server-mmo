@@ -10,12 +10,14 @@ import java.util.concurrent.CountDownLatch;
  */
 public class TableLoader {
 
-    public static final String SCHEMA_DIGEST = "55d900397a301fa1";
+    public static final String SCHEMA_DIGEST = "194fb8bba93c9b8d";
 
     private static final Set<String> HOT_RELOADABLE_TABLES = Set.of(
             "ActivitySchedule",
             "ActivityVitalityReward",
             "ActivityVitalityRule",
+            "BattleProgressionReward",
+            "BattleProgressionRule",
             "Buff",
             "Cooldown",
             "EquipAffixQuality",
@@ -29,6 +31,7 @@ public class TableLoader {
             "Monster",
             "MysteryMerchantGoods",
             "MysteryMerchantRule",
+            "PlayerLevelExp",
             "SeasonRule",
             "SeasonSeal",
             "Skill",
@@ -82,6 +85,10 @@ public class TableLoader {
         AttributeRuleTableManager.getInstance().load(configDir, useBinary);
 
         BaseSceneTableManager.getInstance().load(configDir, useBinary);
+
+        BattleProgressionRewardTableManager.getInstance().load(configDir, useBinary);
+
+        BattleProgressionRuleTableManager.getInstance().load(configDir, useBinary);
 
         BuffTableManager.getInstance().load(configDir, useBinary);
 
@@ -165,6 +172,8 @@ public class TableLoader {
 
         PlayModeTableManager.getInstance().load(configDir, useBinary);
 
+        PlayerLevelExpTableManager.getInstance().load(configDir, useBinary);
+
         RankedPresetTableManager.getInstance().load(configDir, useBinary);
 
         RankedRuleTableManager.getInstance().load(configDir, useBinary);
@@ -226,7 +235,7 @@ public class TableLoader {
      * @param useBinary true to load .pb (proto binary), false to load .json.
      */
     public static void loadTablesAsync(String configDir, boolean useBinary) throws Exception {
-        CountDownLatch latch = new CountDownLatch(78);
+        CountDownLatch latch = new CountDownLatch(81);
 
         new Thread(() -> {
             try {
@@ -363,6 +372,26 @@ public class TableLoader {
                 BaseSceneTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load BaseScene table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                BattleProgressionRewardTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load BattleProgressionReward table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                BattleProgressionRuleTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load BattleProgressionRule table", e);
             } finally {
                 latch.countDown();
             }
@@ -780,6 +809,16 @@ public class TableLoader {
 
         new Thread(() -> {
             try {
+                PlayerLevelExpTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load PlayerLevelExp table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
                 RankedPresetTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load RankedPreset table", e);
@@ -1056,6 +1095,10 @@ public class TableLoader {
 
         BaseSceneTableManager.getInstance().load(configDir, useBinary);
 
+        BattleProgressionRewardTableManager.getInstance().load(configDir, useBinary);
+
+        BattleProgressionRuleTableManager.getInstance().load(configDir, useBinary);
+
         BuffTableManager.getInstance().load(configDir, useBinary);
 
         CharacterAppearanceTableManager.getInstance().load(configDir, useBinary);
@@ -1137,6 +1180,8 @@ public class TableLoader {
         PetTierTableManager.getInstance().load(configDir, useBinary);
 
         PlayModeTableManager.getInstance().load(configDir, useBinary);
+
+        PlayerLevelExpTableManager.getInstance().load(configDir, useBinary);
 
         RankedPresetTableManager.getInstance().load(configDir, useBinary);
 
