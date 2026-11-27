@@ -31,6 +31,7 @@ const (
 	MatchInternal_ResolveStrandedFormation_FullMethodName  = "/match.MatchInternal/ResolveStrandedFormation"
 	MatchInternal_ListPendingBattleScripts_FullMethodName  = "/match.MatchInternal/ListPendingBattleScripts"
 	MatchInternal_ReviewBattleScript_FullMethodName        = "/match.MatchInternal/ReviewBattleScript"
+	MatchInternal_StartGuildWarBattle_FullMethodName       = "/match.MatchInternal/StartGuildWarBattle"
 )
 
 // MatchInternalClient is the client API for MatchInternal service.
@@ -52,6 +53,8 @@ type MatchInternalClient interface {
 	// serviceauth 调用方 ops,与 SetSpectateFeatured 共用运营密钥)。
 	ListPendingBattleScripts(ctx context.Context, in *ListPendingBattleScriptsRequest, opts ...grpc.CallOption) (*ListPendingBattleScriptsResponse, error)
 	ReviewBattleScript(ctx context.Context, in *ReviewBattleScriptRequest, opts ...grpc.CallOption) (*ReviewBattleScriptResponse, error)
+	// 帮会全天帮战 V2 无匹配池直打入口(docs/design/guild-play-v2.md):支持真人双侧直打与攻方打守旗 AI 快照。
+	StartGuildWarBattle(ctx context.Context, in *StartGuildWarBattleRequest, opts ...grpc.CallOption) (*StartGuildWarBattleResponse, error)
 }
 
 type matchInternalClient struct {
@@ -182,6 +185,16 @@ func (c *matchInternalClient) ReviewBattleScript(ctx context.Context, in *Review
 	return out, nil
 }
 
+func (c *matchInternalClient) StartGuildWarBattle(ctx context.Context, in *StartGuildWarBattleRequest, opts ...grpc.CallOption) (*StartGuildWarBattleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StartGuildWarBattleResponse)
+	err := c.cc.Invoke(ctx, MatchInternal_StartGuildWarBattle_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MatchInternalServer is the server API for MatchInternal service.
 // All implementations must embed UnimplementedMatchInternalServer
 // for forward compatibility.
@@ -201,6 +214,8 @@ type MatchInternalServer interface {
 	// serviceauth 调用方 ops,与 SetSpectateFeatured 共用运营密钥)。
 	ListPendingBattleScripts(context.Context, *ListPendingBattleScriptsRequest) (*ListPendingBattleScriptsResponse, error)
 	ReviewBattleScript(context.Context, *ReviewBattleScriptRequest) (*ReviewBattleScriptResponse, error)
+	// 帮会全天帮战 V2 无匹配池直打入口(docs/design/guild-play-v2.md):支持真人双侧直打与攻方打守旗 AI 快照。
+	StartGuildWarBattle(context.Context, *StartGuildWarBattleRequest) (*StartGuildWarBattleResponse, error)
 	mustEmbedUnimplementedMatchInternalServer()
 }
 
@@ -246,6 +261,9 @@ func (UnimplementedMatchInternalServer) ListPendingBattleScripts(context.Context
 }
 func (UnimplementedMatchInternalServer) ReviewBattleScript(context.Context, *ReviewBattleScriptRequest) (*ReviewBattleScriptResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReviewBattleScript not implemented")
+}
+func (UnimplementedMatchInternalServer) StartGuildWarBattle(context.Context, *StartGuildWarBattleRequest) (*StartGuildWarBattleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StartGuildWarBattle not implemented")
 }
 func (UnimplementedMatchInternalServer) mustEmbedUnimplementedMatchInternalServer() {}
 func (UnimplementedMatchInternalServer) testEmbeddedByValue()                       {}
@@ -484,6 +502,24 @@ func _MatchInternal_ReviewBattleScript_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MatchInternal_StartGuildWarBattle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartGuildWarBattleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchInternalServer).StartGuildWarBattle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchInternal_StartGuildWarBattle_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchInternalServer).StartGuildWarBattle(ctx, req.(*StartGuildWarBattleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MatchInternal_ServiceDesc is the grpc.ServiceDesc for MatchInternal service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -538,6 +574,10 @@ var MatchInternal_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReviewBattleScript",
 			Handler:    _MatchInternal_ReviewBattleScript_Handler,
+		},
+		{
+			MethodName: "StartGuildWarBattle",
+			Handler:    _MatchInternal_StartGuildWarBattle_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

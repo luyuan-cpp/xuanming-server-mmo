@@ -157,14 +157,15 @@ private:
 
     // 准入回调的函数体(Install 经 TcpServer::setAdmissionCallback 装上):放行返回 true;拒绝返回 false,
     // 已按原因计数并采样打日志(被拒的量就是攻击流量的量级,不能逐条写盘)。
-    // 未验签预算要的池大小是 unauthenticated_.size();最老一条只在池承压时才找(OldestConnectedUnauthenticated)。
+    // 未验签预算要的池大小是 unauthenticated.size();最老一条只在池承压时才找(OldestConnectedUnauthenticated)。
     // 每次 accept 都是 O(1),不随直连数增长:准入回调排在速率闸之前,被拒的洪水也要走它,不能让它按直连数付代价。
     // 判定要求淘汰时,经最老那条会话里的 weak 连接 forceClose,会话由断开回调删。本端 loop 刚卡过时不淘汰。
     bool AdmitConnection(const muduo::net::InetAddress &peer, battle_connection_admission::SteadyTime now);
     // 承压时淘汰一条未认证直连给新连接让位:先移出池(这一刻起不再算在池里),再 forceClose;会话或连接已不在时什么都不做。
     void EvictUnauthenticated(uint64_t connId, battle_connection_admission::SteadyTime now);
     // 池里最老的一条可淘汰直连;没有返回空。仍在短宽限期内的半关闭连接跳过,超时未关闭的半关闭连接允许强关腾位。
-    std::optional<uint64_t> OldestConnectedUnauthenticated() const;
+    // now 是本次准入判定的时刻(AdmitConnection 传进来的那个),不在里面另取时钟。
+    std::optional<uint64_t> OldestConnectedUnauthenticated(battle_connection_admission::SteadyTime now) const;
     // 未认证的直连数(指标与判定同一个数):既没完成票据握手、也没出示有效的网络探测授权(授权由 match 签发,OnProbeStart 验过签)。
     size_t UnauthenticatedConnectionCount() const { return unauthenticated.size(); }
     // 把连接类指标的采集回调登记进进程的指标注册表(Install 时一次)。

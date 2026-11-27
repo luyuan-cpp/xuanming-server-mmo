@@ -19,6 +19,7 @@ import (
 	"match/internal/pkg/ctxkeys"
 	"match/internal/playercontract"
 	"match/internal/svc"
+	"shared/clusterredis"
 	"shared/drainproof"
 	"shared/playerredis"
 
@@ -32,7 +33,6 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -89,7 +89,9 @@ func newServiceHarness(t *testing.T) *serviceHarness {
 	t.Helper()
 	mr := miniredis.RunT(t)
 	mr.SetTime(time.UnixMilli(int64(ruleNow)).UTC())
-	rds := redis.MustNewRedis(redis.RedisConf{Host: mr.Addr(), Type: "node"})
+	rds, err := clusterredis.New(clusterredis.Config{Addrs: []string{mr.Addr()}, PoolSizePerNode: 16}, clusterredis.MatchPrivateKeys)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = rds.Close() })
 	playerRedis, err := playerredis.New(playerredis.Config{Addrs: []string{mr.Addr()}, PoolSizePerNode: 16})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = playerRedis.Close() })

@@ -235,6 +235,28 @@ func TestGateZoneID_SessionMirrorRoundTrip(t *testing.T) {
 	}
 }
 
+// 未成年人截止时刻的映射:属于这次登录,NewOnlineSession 不沿用旧记录的值(成年人顶号后旧值必须清成 0),
+// toProto 带出、fromProto 读回。
+func TestMinorPlayDeadline_SessionMirrorRoundTrip(t *testing.T) {
+	const deadlineMs = uint64(1_795_000_000_000)
+	existing := &PlayerSession{PlayerID: mintPlayerID, SessionVersion: 2, MinorPlayDeadlineMs: 111}
+
+	session := NewOnlineSession(existing, OnlineSessionInput{PlayerID: mintPlayerID, SessionID: 11, MinorPlayDeadlineMs: deadlineMs, Now: mintNow})
+	if session.MinorPlayDeadlineMs != deadlineMs {
+		t.Fatalf("NewOnlineSession MinorPlayDeadlineMs = %d, want input %d (not the existing record's)", session.MinorPlayDeadlineMs, deadlineMs)
+	}
+	pb := toProto(session)
+	if pb.GetMinorPlayDeadlineMs() != deadlineMs {
+		t.Fatalf("toProto minor_play_deadline_ms = %d, want %d", pb.GetMinorPlayDeadlineMs(), deadlineMs)
+	}
+	if back := fromProto(pb); back.MinorPlayDeadlineMs != deadlineMs {
+		t.Fatalf("fromProto MinorPlayDeadlineMs = %d, want %d", back.MinorPlayDeadlineMs, deadlineMs)
+	}
+	if adult := NewOnlineSession(existing, OnlineSessionInput{PlayerID: mintPlayerID, SessionID: 12, Now: mintNow}); adult.MinorPlayDeadlineMs != 0 {
+		t.Fatalf("a login without a deadline inherited %d from the previous session", adult.MinorPlayDeadlineMs)
+	}
+}
+
 // 脚本应答的解析:解析失败、0、不大于会话记录代次(双精度丢位等)都必须当失败,不得带着继续。
 func TestParseMintedLoginGeneration(t *testing.T) {
 	cases := []struct {

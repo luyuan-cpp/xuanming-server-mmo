@@ -141,7 +141,7 @@ bool BattleClientEdge::AdmitConnection(const muduo::net::InetAddress &peer,
     std::optional<battle_connection_admission::SteadyTime::duration> oldestAge;
     if (unauthenticated >= admission.CurrentPreAuthBudget().earlyDropStart && !loopStall.RecentlyStalled(now))
     {
-        oldestConnId = OldestConnectedUnauthenticated();
+        oldestConnId = OldestConnectedUnauthenticated(now);
         if (oldestConnId)
         {
             const auto &session = sessions.at(*oldestConnId);
@@ -184,9 +184,10 @@ bool BattleClientEdge::AdmitConnection(const muduo::net::InetAddress &peer,
     return false;
 }
 
-std::optional<uint64_t> BattleClientEdge::OldestConnectedUnauthenticated() const
+std::optional<uint64_t> BattleClientEdge::OldestConnectedUnauthenticated(
+    const battle_connection_admission::SteadyTime now) const
 {
-    const auto now = std::chrono::steady_clock::now();
+    // now 由 AdmitConnection 给,与它随后算年龄用的是同一个时刻:半关闭连接「是否已逾期」在两处不会得出不同结论。
     const auto &budget = admission.CurrentPreAuthBudget();
     // 通常第一条就是;仍在短宽限期内的半关闭连接跳过,超过宽限期仍留在池内的半关闭连接允许淘汰强关。
     for (const uint64_t connId : unauthenticated)

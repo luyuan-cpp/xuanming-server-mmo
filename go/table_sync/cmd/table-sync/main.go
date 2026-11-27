@@ -188,6 +188,18 @@ func main() {
 		s3:           s3Cli,
 		publishedDoc: pointer.Document{Track: cfg.Track, Lines: map[string]pointer.Line{}},
 	}
+	// sidecar 自己重启、业务容器还在跑时,上一次落盘的 POINTER.json 仍在共享卷里。把里面的线读回来当
+	// 「上一次的合法状态」:重启后头几拍哪怕取不到表包,也是沿用旧指针,而不是让这条线从文件里消失。
+	// Pod 第一次启动时文件不存在,什么都不带。
+	pointerPath := filepath.Join(cfg.BundleRoot, pointer.PointerFilename)
+	if prev, err := pointer.ReadDocument(pointerPath); err != nil {
+		log.Printf("[table-sync] WARN: ignoring unreadable previous %s: %v", pointerPath, err)
+	} else if prev != nil && prev.Track == cfg.Track {
+		for schemaDigest, line := range prev.Lines {
+			s.publishedDoc.Lines[schemaDigest] = line
+		}
+		log.Printf("[table-sync] restored %d pointer line(s) from previous %s", len(prev.Lines), pointerPath)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
@@ -305,6 +317,9 @@ func (s *syncer) syncFull(ctx context.Context) error {
 	s.mu.Unlock()
 
 	nextLines := make(map[string]pointer.Line, len(resp.Kvs))
+	// 这一拍没同步下来的线:记下原因写进 POINTER.json。出错的线沿用上一次的合法内容;
+	// 从没成功过的线不出现在 lines 里,业务进程启动时据此拒绝退回镜像里的旧表(pointer.Document.SyncErrors)。
+	syncErrors := map[string]string{}
 	for _, kv := range resp.Kvs {
 		key := string(kv.Key)
 		schemaDigest := strings.TrimPrefix(key, prefix)
@@ -315,6 +330,7 @@ func (s *syncer) syncFull(ctx context.Context) error {
 		var line pointer.Line
 		if err := json.Unmarshal(kv.Value, &line); err != nil {
 			log.Printf("[table-sync] ERROR: malformed pointer JSON for line %s: %v", schemaDigest, err)
+			syncErrors[schemaDigest] = pointer.TrimSyncError("malformed pointer JSON: " + err.Error())
 			if prev, ok := prevLines[schemaDigest]; ok {
 				nextLines[schemaDigest] = prev
 			}
@@ -322,6 +338,7 @@ func (s *syncer) syncFull(ctx context.Context) error {
 		}
 		if err := s.ensureLineBundles(ctx, schemaDigest, &line); err != nil {
 			log.Printf("[table-sync] ERROR: sync bundle failed for line %s (keeping previous pointer): %v", schemaDigest, err)
+			syncErrors[schemaDigest] = pointer.TrimSyncError(err.Error())
 			if prev, ok := prevLines[schemaDigest]; ok {
 				nextLines[schemaDigest] = prev
 			}
@@ -333,6 +350,9 @@ func (s *syncer) syncFull(ctx context.Context) error {
 	nextDoc := pointer.Document{
 		Track: s.cfg.Track,
 		Lines: nextLines,
+	}
+	if len(syncErrors) > 0 {
+		nextDoc.SyncErrors = syncErrors
 	}
 	raw, err := json.MarshalIndent(nextDoc, "", "  ")
 	if err != nil {

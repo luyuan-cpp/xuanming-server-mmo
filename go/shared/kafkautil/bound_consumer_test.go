@@ -670,7 +670,8 @@ func TestBoundMessageReaderCommitAfterGenerationEndSettlesOrReleases(t *testing.
 }
 
 // reader 模式:代次还在时提交失败先有界重试(共 3 次,200ms 起翻倍);仍失败就交还重投、不 HOLD,并结束本代次
-// (下一代次立即重投,第 7 条)。owner 已终止(StopFetching,排空时逐个离组)时同样的失败交给新属主(第 1 条):不 HOLD,
+// (下一代次立即重投,第 7 条)。owner 已终止(StopFetching,排空时逐个离组)而代次还在时同样先有界重试(2026-11-26:最后离组的
+// 副本没有新属主接手,瞬时失败不该直接交还),仍失败才交给新属主(第 1 条):不 HOLD,
 // 票据留到 CloseAndReport 读组内已提交位点 —— 新属主提交越过了就结清,没越过才 HOLD。
 func TestBoundMessageReaderCommitRetriesWhileAliveAndHandsOffWhenTerminating(t *testing.T) {
 	for _, tc := range []struct {
@@ -733,8 +734,8 @@ func TestBoundMessageReaderCommitRetriesWhileAliveAndHandsOffWhenTerminating(t *
 			if err := owner.CommitMessages(context.Background(), metadata(21)); !errors.Is(err, ErrUncommitted) {
 				t.Fatalf("终止时提交被拒应交给新属主(交还重投),不是未知结局: %v", err)
 			}
-			if attempts != 1 || owner.failure != nil || relay.Pending() != 1 || len(owner.handoffs) != 1 || partition.handedOff != 1 || partition.released != 2 {
-				t.Fatalf("终止时不重试、不 HOLD、票据留给收尾核对: attempts=%d failure=%v pending=%d handoffs=%d handedOff=%d released=%d",
+			if attempts != boundCommitAttempts || owner.failure != nil || relay.Pending() != 1 || len(owner.handoffs) != 1 || partition.handedOff != 1 || partition.released != 2 {
+				t.Fatalf("终止而代次还在时同样有界重试,仍失败才交还;不 HOLD、票据留给收尾核对: attempts=%d failure=%v pending=%d handoffs=%d handedOff=%d released=%d",
 					attempts, owner.failure, relay.Pending(), len(owner.handoffs), partition.handedOff, partition.released)
 			}
 			if restarts != 1 {

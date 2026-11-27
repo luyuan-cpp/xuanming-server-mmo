@@ -61,6 +61,22 @@ type PetAcquisition_tierComp struct {
     Value uint32
 }
 
+type PetCultivation_tierComp struct {
+    Value uint32
+}
+
+type PetTransfer_policyComp struct {
+    Value uint32
+}
+
+type PetExclusive_gift_slotsComp struct {
+    Value uint32
+}
+
+type PetFixed_initial_aptitudeComp struct {
+    Value bool
+}
+
 type PetAptitude_minComp struct {
     Values []uint32
 }
@@ -124,6 +140,22 @@ func MakePetShop_price_goldComp(row *pb.PetTable) PetShop_price_goldComp {
 
 func MakePetAcquisition_tierComp(row *pb.PetTable) PetAcquisition_tierComp {
     return PetAcquisition_tierComp{Value: row.AcquisitionTier}
+}
+
+func MakePetCultivation_tierComp(row *pb.PetTable) PetCultivation_tierComp {
+    return PetCultivation_tierComp{Value: row.CultivationTier}
+}
+
+func MakePetTransfer_policyComp(row *pb.PetTable) PetTransfer_policyComp {
+    return PetTransfer_policyComp{Value: row.TransferPolicy}
+}
+
+func MakePetExclusive_gift_slotsComp(row *pb.PetTable) PetExclusive_gift_slotsComp {
+    return PetExclusive_gift_slotsComp{Value: row.ExclusiveGiftSlots}
+}
+
+func MakePetFixed_initial_aptitudeComp(row *pb.PetTable) PetFixed_initial_aptitudeComp {
+    return PetFixed_initial_aptitudeComp{Value: row.FixedInitialAptitude}
 }
 
 func MakePetAptitude_minComp(row *pb.PetTable) PetAptitude_minComp {

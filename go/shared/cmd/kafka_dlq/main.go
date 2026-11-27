@@ -209,11 +209,18 @@ func printable(raw []byte, limit int) string {
 	return fmt.Sprintf("%q", raw)
 }
 
+// replayItem 是一条要写回的原件,连同它来自哪条死信:写到一半失败时报出死信 offset,重跑从它起(之前的已写回,再写一遍也幂等)。
+type replayItem struct {
+	dlqOffset int64
+	original  string // 原位置 topic[分区]@offset,只给人看
+	message   kafkago.Message
+}
+
 // selectReplays 选出要写回的原件:组必须对得上,解不出的死信与(默认)unprocessable 的拒绝,同一原位置只写一次。
 // 返回要写的原件(带原 topic 与原分区)与逐条的跳过说明。
-func selectReplays(entries []entry, group string, allowUnprocessable bool) ([]kafkago.Message, []string, error) {
+func selectReplays(entries []entry, group string, allowUnprocessable bool) ([]replayItem, []string, error) {
 	var (
-		messages []kafkago.Message
+		messages []replayItem
 		skipped  []string
 	)
 	seen := map[string]bool{}
@@ -234,7 +241,8 @@ func selectReplays(entries []entry, group string, allowUnprocessable bool) ([]ka
 		}
 		seen[key] = true
 		original := e.record.Original
-		messages = append(messages, kafkago.Message{Topic: original.Topic, Partition: original.Partition, Key: original.Key, Value: original.Value, Headers: original.Headers})
+		messages = append(messages, replayItem{dlqOffset: e.offset, original: key,
+			message: kafkago.Message{Topic: original.Topic, Partition: original.Partition, Key: original.Key, Value: original.Value, Headers: original.Headers}})
 	}
 	return messages, skipped, nil
 }
@@ -253,8 +261,8 @@ func replay(ctx context.Context, out io.Writer, o options, entries []entry, exec
 		return err
 	}
 	if !execute {
-		for _, message := range messages {
-			if _, err := fmt.Fprintf(out, "dry run: would write %s[%d] key=%s value_bytes=%d\n", message.Topic, message.Partition, printable(message.Key, 64), len(message.Value)); err != nil {
+		for _, item := range messages {
+			if _, err := fmt.Fprintf(out, "dry run: would write dlq_offset=%d original=%s key=%s value_bytes=%d\n", item.dlqOffset, item.original, printable(item.message.Key, 64), len(item.message.Value)); err != nil {
 				return err
 			}
 		}
@@ -274,14 +282,15 @@ func replay(ctx context.Context, out io.Writer, o options, entries []entry, exec
 		AllowAutoTopicCreation: false,
 	}
 	defer writer.Close()
-	for i, message := range messages {
+	for i, item := range messages {
 		writeCtx, cancel := context.WithTimeout(ctx, ioTimeout)
-		err := writer.WriteMessages(writeCtx, message)
+		err := writer.WriteMessages(writeCtx, item.message)
 		cancel()
 		if err != nil {
-			return fmt.Errorf("write %s[%d] failed after %d of %d original(s) were written; rerun from this record: %w", message.Topic, message.Partition, i, len(messages), err)
+			return fmt.Errorf("write of dlq_offset=%d original=%s failed after %d of %d original(s) were written; fix the cause and rerun with -from %d: %w",
+				item.dlqOffset, item.original, i, len(messages), item.dlqOffset, err)
 		}
-		if _, err := fmt.Fprintf(out, "written %s[%d] key=%s\n", message.Topic, message.Partition, printable(message.Key, 64)); err != nil {
+		if _, err := fmt.Fprintf(out, "written dlq_offset=%d original=%s key=%s\n", item.dlqOffset, item.original, printable(item.message.Key, 64)); err != nil {
 			return err
 		}
 	}
@@ -290,9 +299,10 @@ func replay(ctx context.Context, out io.Writer, o options, entries []entry, exec
 }
 
 // checkPartitions 核每条原件的原分区在原 topic 上还存在(topic 没被重建成更少的分区)。
-func checkPartitions(ctx context.Context, brokers []string, messages []kafkago.Message) error {
+func checkPartitions(ctx context.Context, brokers []string, messages []replayItem) error {
 	known := map[string]map[int]bool{}
-	for _, message := range messages {
+	for _, item := range messages {
+		message := item.message
 		if known[message.Topic] == nil {
 			partitions, err := readPartitions(ctx, brokers, message.Topic)
 			if err != nil {

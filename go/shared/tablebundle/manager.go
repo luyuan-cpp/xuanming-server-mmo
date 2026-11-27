@@ -151,6 +151,17 @@ func LoadAtStartup(opts Options) (*Manager, error) {
 				expectedContentDigest = target.ContentDigest
 				pointerVersion = target.Version
 			}
+		} else {
+			// 文件里没有本线:只有 etcd 里确实没有这条线时才能用镜像自带的表。
+			// sidecar 记着「有这条线但表包没取到」时拒绝启动,等它同步好再起来,不静默退回旧表。
+			reason, err := PointerLineSyncError(pointerPath, m.schemaDigest)
+			if err != nil {
+				return nil, fmt.Errorf("startup read pointer failed: %w", err)
+			}
+			if reason != "" {
+				return nil, fmt.Errorf("startup refused: table bundle for schema line %s is not available locally (sidecar sync error: %s); not falling back to image tables",
+					m.schemaDigest, reason)
+			}
 		}
 	}
 

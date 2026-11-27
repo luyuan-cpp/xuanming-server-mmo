@@ -18,7 +18,8 @@ func sharedRedisEnv(env map[string]string) func(string) (string, bool) {
 func TestResolveSharedRedisPasswordFillsRedisSection(t *testing.T) {
 	c := Config{SharedRedisPasswordEnv: "SHARED_REDIS_PASSWORD"}
 	c.Redis.Host = "redis.infra:6379"
-	c.MatchRedis.Host = "redis-match-cluster-0:6379"
+	c.MatchRedis.Addrs = []string{"redis-match-cluster-0:6379"}
+	c.MatchRedis.Cluster = true
 	if err := c.ResolveSharedRedisPassword(sharedRedisEnv(map[string]string{"SHARED_REDIS_PASSWORD": "pw-from-secret"})); err != nil {
 		t.Fatalf("ResolveSharedRedisPassword: %v", err)
 	}
@@ -28,8 +29,8 @@ func TestResolveSharedRedisPasswordFillsRedisSection(t *testing.T) {
 	if got := c.EffectivePlayerRedis().Password; got != "pw-from-secret" {
 		t.Fatalf("PlayerRedis falls back to the Redis section and must carry the same password, got %q", got)
 	}
-	if c.MatchRedis.Pass != "" {
-		t.Fatalf("MatchRedis is a separate cluster and must not get the shared password, got %q", c.MatchRedis.Pass)
+	if got := c.EffectiveMatchRedis().Password; got != "" {
+		t.Fatalf("MatchRedis is a separate cluster and must not get the shared password, got %q", got)
 	}
 }
 

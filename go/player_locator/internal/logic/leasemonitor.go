@@ -337,14 +337,19 @@ func handleLeaseExpiry(ctx context.Context, svcCtx *svc.ServiceContext, claim le
 	// claim 走 rearm,Lua 会因 `not current` 判成换代把 claim 静默丢弃,
 	// 清理就永久丢了。所以只在会话键仍然存在时才走 AFK 探测;读键失败
 	// (非 Nil)按"存在"处理 —— 宁可多探一次,不能误清月卡玩家。
-	if _, sessErr := svcCtx.PlayerRedis.Get(ctx, sessionKey(claim.playerID)).Result(); !errors.Is(sessErr, redis.Nil) {
+	//
+	// 未成年人过了当天的截止时刻就不再托管,有没有月卡都一样(hostedLeaseSeconds 回 0):不探月卡,直接按普通断线收尾。
+	hostedSeconds := hostedLeaseSeconds(session, time.Now())
+	if hostedSeconds == 0 {
+		logx.Infof("LeaseMonitor: player %d is a minor past the play deadline; cleaning up without the AFK pass probe", claim.playerID)
+	} else if _, sessErr := svcCtx.PlayerRedis.Get(ctx, sessionKey(claim.playerID)).Result(); !errors.Is(sessErr, redis.Nil) {
 		switch afkState := afkPassState(ctx, svcCtx, claim.playerID); afkState {
 		case afkPassActive:
-			if err := rearmLeaseClaim(ctx, svcCtx, claim, afkPassLeaseTTLSeconds); err != nil {
+			if err := rearmLeaseClaim(ctx, svcCtx, claim, hostedSeconds); err != nil {
 				logx.Errorf("LeaseMonitor: re-arm AFK lease player=%d failed: %v", claim.playerID, err)
 				return
 			}
-			logx.Infof("LeaseMonitor: player %d has active AFK pass, lease extended", claim.playerID)
+			logx.Infof("LeaseMonitor: player %d has active AFK pass, lease extended by %ds", claim.playerID, hostedSeconds)
 			// 续上之后对一次账:离线托管中的角色此刻有没有 scene 节点对他负责,没有就替他归位(hosted_resume.go)。
 			// 只在续租成功之后做:续不上说明会话已换代 / 被接回,这条 claim 已不代表这次断线。
 			resumeHostedIfLost(ctx, svcCtx, session, time.Now())
@@ -561,6 +566,24 @@ const (
 	// 短到不至于让真掉线玩家的清理拖太久,长到能跨过一次 Redis 抖动。
 	afkPassProbeRetrySeconds = 10
 )
+
+// hostedLeaseSeconds 是月卡有效时这一次给离线托管续多久的租约。
+//
+// 未成年人的会话记录带着当天能玩到的时刻(PlayerSession.minor_play_deadline_ms,login 进游戏时按防沉迷会话账本写入):
+// 可玩时段之外不能以任何形式提供游戏服务,离线托管也算。所以续租不超过剩余时间,下一次到期正好落在截止时刻;
+// 已经到点的返回 0,调用方不再续租,按普通断线收尾(scene 收到 LeaveScene 后存盘下线)。
+// 会话记录里是 0 的(成年人、平台管的渠道、没开防沉迷的部署)不受限。docs/design/real-name-anti-addiction.md §5.4。
+func hostedLeaseSeconds(session *pb.PlayerSession, now time.Time) int64 {
+	deadlineMs := session.GetMinorPlayDeadlineMs()
+	if deadlineMs == 0 {
+		return afkPassLeaseTTLSeconds
+	}
+	remaining := (int64(deadlineMs) - now.UnixMilli() + 999) / 1000 // 向上取整:下一次到期不早于截止时刻
+	if remaining <= 0 {
+		return 0
+	}
+	return min(remaining, afkPassLeaseTTLSeconds)
+}
 
 // afkPassProbeResult 区分「确无月卡」与「查不出来」——两者的正确动作相反:
 // 前者继续清理,后者必须推迟清理(fail-closed)。旧实现把两者都当成 false,

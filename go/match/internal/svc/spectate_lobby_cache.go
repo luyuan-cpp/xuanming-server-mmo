@@ -5,18 +5,24 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/core/syncx"
 )
 
 // SpectateLobbyCacheTTL 是观战列表读的缓存时长,也是列表最多旧多久。
 const SpectateLobbyCacheTTL = time.Second
 
+// SpectateIndexMember 是全服观战索引(ZSET)里的一个成员。Member 是 battle_id 的十进制文本;Score 的含义随索引而定
+// (活跃集合是开局毫秒,赛事局索引是标记到期毫秒)。
+type SpectateIndexMember struct {
+	Member string
+	Score  int64
+}
+
 // SpectateLobbySnapshot 是观战列表从拆桶索引合并出来的一份结果(logic/listwatchablebattleslogic.go 的 loadSpectateLobby 读)。
 // 多个请求共用同一份,只读,不要改里面的切片。
 type SpectateLobbySnapshot struct {
-	Featured []redis.Pair // 赛事局索引里未到期的成员,后标记的在前
-	Active   []redis.Pair // 活跃集合,开局晚的在前
+	Featured []SpectateIndexMember // 赛事局索引里未到期的成员,后标记的在前
+	Active   []SpectateIndexMember // 活跃集合,开局晚的在前
 }
 
 // SpectateLobbyCache 是观战列表读的进程内短缓存(docs/design/redis-cluster-all-domains-20261110.md §4.9)。列表读要跨 16 个桶,
@@ -94,13 +100,13 @@ func (c *SpectateLobbyCache) fresh() (SpectateLobbySnapshot, bool) {
 	return c.snapshot, c.filled && c.now().Sub(c.fetchedAt) < SpectateLobbyCacheTTL
 }
 
-func withoutLobbyMember(pairs []redis.Pair, member string) []redis.Pair {
-	for i, pair := range pairs {
-		if pair.Key == member {
-			kept := make([]redis.Pair, 0, len(pairs)-1)
-			kept = append(kept, pairs[:i]...)
-			return append(kept, pairs[i+1:]...)
+func withoutLobbyMember(members []SpectateIndexMember, member string) []SpectateIndexMember {
+	for i, entry := range members {
+		if entry.Member == member {
+			kept := make([]SpectateIndexMember, 0, len(members)-1)
+			kept = append(kept, members[:i]...)
+			return append(kept, members[i+1:]...)
 		}
 	}
-	return pairs
+	return members
 }

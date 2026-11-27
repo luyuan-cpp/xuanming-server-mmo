@@ -10,7 +10,7 @@
       - 计数序列在装配时预置(svc 调 metrics.PrimeAccountDirectory,取值来自 store 的封闭集合),第一次失败也能被 increase 看到;
         两个 gauge(保留 ref、注销逾期,docs/design/account-deletion.md §4.5)由后台每轮写;
       - 告警 description 让值班去日志里找的原文、给的 SQL 查法,确实是 data_service 打出的、用的;
-      - PrometheusRule 形状、severity / summary / description / for,五条告警名在 deploy/k8s 的告警文件里不重名。
+      - PrometheusRule 形状、severity / summary / description / for,六条告警名在 deploy/k8s 的告警文件里不重名。
     只读文本,不执行部署入口,不访问集群。规则语法由 promtool 另验。
 
 .EXAMPLE
@@ -36,38 +36,40 @@ $script:RoleName = Read-RepoText -RelativePath 'go/data_service/internal/store/a
 $script:RoleRef = Read-RepoText -RelativePath 'go/data_service/internal/store/account_role_ref.go'
 $script:Deletion = Read-RepoText -RelativePath 'go/data_service/internal/store/account_deletion.go'
 $script:AlertNames = @('DataServiceRoleNameBindFailed', 'DataServiceRemovedRoleNameReleaseFailed', 'DataServiceRoleRemovalResumeStuck', 'DataServiceRoleRefHeldForReview',
-    'DataServiceAccountDeletionOverdue')
+    'DataServiceAccountDeletionOverdue', 'DataServiceAccountDirectoryBacklogCountStale')
 
 Write-Host '=== data_service_account_directory_alerts_contract ==='
 
-Test-Case 'PrometheusRule 形状:kind、五条告警、都是 warning、summary / description 齐全;一次性失败 for 1m,后台持续失败 for 15m,注销逾期 for 30m' {
+Test-Case 'PrometheusRule 形状:kind、六条告警、都是 warning、summary / description 齐全;一次性失败 for 1m,后台持续失败 for 15m,注销逾期 for 30m' {
     Assert-Match -Text $script:Alerts -Pattern '(?m)^kind:[ ]*PrometheusRule[ ]*$' -Because '必须是 PrometheusRule(与 owner-epoch-alerts.yaml 同一安装方式)'
     foreach ($name in $script:AlertNames) {
         Assert-Match -Text $script:Alerts -Pattern ('(?m)^\s+- alert:[ ]*{0}[ ]*$' -f $name) -Because "规则名 $name 固定,值班手册按名字查"
     }
-    Assert-Equal -Expected 5 -Actual ([regex]::Matches($script:Alerts, '(?m)^\s+- alert:').Count) -Because '规则名单钉死:加规则要同步本用例'
-    Assert-Equal -Expected 5 -Actual ([regex]::Matches($script:Alerts, '(?m)^\s+severity:[ ]*warning[ ]*$').Count) -Because '这几步失败都不改业务结局(注销逾期也只是删得晚),都是 warning'
+    Assert-Equal -Expected 6 -Actual ([regex]::Matches($script:Alerts, '(?m)^\s+- alert:').Count) -Because '规则名单钉死:加规则要同步本用例'
+    Assert-Equal -Expected 6 -Actual ([regex]::Matches($script:Alerts, '(?m)^\s+severity:[ ]*warning[ ]*$').Count) -Because '这几步失败都不改业务结局(注销逾期也只是删得晚),都是 warning'
     Assert-Equal -Expected 2 -Actual ([regex]::Matches($script:Alerts, '(?m)^\s+for:[ ]*1m[ ]*$').Count) -Because '绑定失败、删角释放失败是一次性的事件,出现即报'
-    Assert-Equal -Expected 2 -Actual ([regex]::Matches($script:Alerts, '(?m)^\s+for:[ ]*15m[ ]*$').Count) -Because '后台每分钟重试的(收尾、保留 ref)持续 15 分钟才报'
+    Assert-Equal -Expected 3 -Actual ([regex]::Matches($script:Alerts, '(?m)^\s+for:[ ]*15m[ ]*$').Count) -Because '后台每分钟重试的(收尾、保留 ref、积压计数数不成)持续 15 分钟才报'
     Assert-Equal -Expected 1 -Actual ([regex]::Matches($script:Alerts, '(?m)^\s+for:[ ]*30m[ ]*$').Count) -Because '注销逾期的 gauge 本身已是逾期 24 小时,再持续 30 分钟才报'
     Assert-Match -Text $script:Alerts -Pattern '(?m)^\s+- alert:[ ]*DataServiceAccountDeletionOverdue[ ]*\n\s+expr:[ ]*\|[ ]*\n\s+max by \(namespace\) \(data_service_account_deletion_overdue\) > 0[ ]*\n\s+for:[ ]*30m[ ]*$' -Because '注销逾期按副本取 max(每个副本报同一个合计),持续 30 分钟才报'
-    Assert-Equal -Expected 5 -Actual ([regex]::Matches($script:Alerts, '(?m)^\s+summary:').Count) -Because '每条告警要有 summary'
-    Assert-Equal -Expected 5 -Actual ([regex]::Matches($script:Alerts, '(?m)^\s+description:').Count) -Because '每条告警要有 description'
+    Assert-Match -Text $script:Alerts -Pattern '(?m)^\s+- alert:[ ]*DataServiceAccountDirectoryBacklogCountStale[ ]*\n\s+expr:[ ]*\|[ ]*\n\s+time\(\) - min by \(namespace, count\) \(data_service_account_directory_backlog_counted_timestamp_seconds\) > 300[ ]*\n\s+for:[ ]*15m[ ]*$' -Because '积压计数数不成:取各副本里最久没数成的那个(min),超过 5 分钟并持续 15 分钟才报'
+    Assert-Equal -Expected 6 -Actual ([regex]::Matches($script:Alerts, '(?m)^\s+summary:').Count) -Because '每条告警要有 summary'
+    Assert-Equal -Expected 6 -Actual ([regex]::Matches($script:Alerts, '(?m)^\s+description:').Count) -Because '每条告警要有 description'
 }
 
 Test-Case '规则引用的指标都由 internal/metrics/account_directory.go 注册,按 label 聚合的 label 是指标声明的 label' {
     Assert-Match -Text $script:Metrics -Pattern 'Subsystem:\s*subsystem' -Because '指标名前缀来自 Subsystem(data_service)'
     $exprs = @([regex]::Matches($script:Alerts, '(?ms)expr:\s*\|\s*\n\s*(?<e>[^\n]+)') | ForEach-Object { $_.Groups['e'].Value })
-    Assert-Equal -Expected 5 -Actual $exprs.Count -Because '每条规则一行表达式'
+    Assert-Equal -Expected 6 -Actual $exprs.Count -Because '每条规则一行表达式'
     $wanted = @{
         'data_service_account_role_name_bind_failures_total'     = 'reason'
         'data_service_account_role_removal_settle_failures_total' = 'step'
         'data_service_account_role_removal_resume_total'          = 'result'
         'data_service_account_role_ref_held'                      = ''
         'data_service_account_deletion_overdue'                   = ''
+        'data_service_account_directory_backlog_counted_timestamp_seconds' = 'count'
     }
     $used = @($exprs | ForEach-Object { [regex]::Matches($_, 'data_service_[a-z_]+') } | ForEach-Object { $_.Value } | Sort-Object -Unique)
-    Assert-Equal -Expected (($wanted.Keys | Sort-Object) -join ',') -Actual ($used -join ',') -Because '规则只引用这五个指标'
+    Assert-Equal -Expected (($wanted.Keys | Sort-Object) -join ',') -Actual ($used -join ',') -Because '规则只引用这六个指标'
     foreach ($metric in $wanted.Keys) {
         $suffix = $metric.Substring('data_service_'.Length)
         Assert-Match -Text $script:Metrics -Pattern ('Name:\s*"{0}"' -f [regex]::Escape($suffix)) -Because "$metric 必须由 account_directory.go 注册,否则规则永远不响"
@@ -93,7 +95,16 @@ Test-Case 'result 的取值是 account_directory.go 的常量;计数序列在装
     Assert-Match -Text $script:StoreEvents -Pattern 'func RemovalSettleSteps\(\) \[\]string' -Because 'step 的封闭集合在 store'
     Assert-Match -Text $script:RoleFence -Pattern 'metrics\.ObserveRoleRemovalResume\(result\.Finished, result\.Abandoned, result\.Unsettled, result\.Failed\)' -Because '后台收尾每一轮都计'
     Assert-Match -Text $script:RoleFence -Pattern 'metrics\.SetRoleRefHeld\(result\.HeldTotal\)' -Because '保留 ref 的 gauge 由后台判陈旧每轮写'
-    Assert-Match -Text $script:RoleFence -Pattern 'metrics\.SetAccountDeletionOverdue\(n\)' -Because '注销逾期的 gauge 由后台每轮写(没数成就不写,不出现假的 0)'
+    Assert-Match -Text $script:RoleFence -Pattern 'metrics\.SetAccountDeletionOverdue\(n\)' -Because '注销逾期的 gauge 由后台每轮写(没数成就不写)'
+    # 两个 gauge 一注册就是 0、数不成时停在旧值:数成的时刻由两个 Set 函数写,循环起来时再各写一次,告警按它判数字还新不新。
+    foreach ($count in @('role_ref_held', 'deletion_overdue')) {
+        Assert-Match -Text $script:Metrics -Pattern ('BacklogCount\w+\s*=\s*"{0}"' -f $count) -Because "count=`"$count`" 必须是 account_directory.go 的常量"
+        Assert-True -Condition ($script:Alerts.Contains("count=$count")) -Because "告警文案说明 count=$count 对应哪条积压告警"
+    }
+    Assert-Match -Text $script:Metrics -Pattern '(?s)func SetRoleRefHeld\(n int\) \{.*?MarkBacklogCounted\(BacklogCountRoleRefHeld\)' -Because '保留 ref 数成时写时刻'
+    Assert-Match -Text $script:Metrics -Pattern '(?s)func SetAccountDeletionOverdue\(n int\) \{.*?MarkBacklogCounted\(BacklogCountDeletionOverdue\)' -Because '注销逾期数成时写时刻'
+    Assert-Match -Text $script:RoleFence -Pattern 'metrics\.MarkBacklogCounted\(metrics\.BacklogCountRoleRefHeld\)' -Because '循环起来时先写一次:从启动起一直数不成也报得出来'
+    Assert-Match -Text $script:RoleFence -Pattern 'metrics\.MarkBacklogCounted\(metrics\.BacklogCountDeletionOverdue\)' -Because '循环起来时先写一次:从启动起一直数不成也报得出来'
 }
 
 Test-Case 'description 让值班去找的日志原文,确实是 data_service 打出的;给的 SQL 查法用的是真实的表与列' {
@@ -104,6 +115,8 @@ Test-Case 'description 让值班去找的日志原文,确实是 data_service 打
         @{ Text = '[role-fence] resume removals'; Source = $script:RoleFence; File = 'svc/role_fence.go' }
         @{ Text = '[account-role-ref] stale create ref kept without a tombstone'; Source = $script:RoleRef; File = 'store/account_role_ref.go' }
         @{ Text = 'account deletions are overdue by more than'; Source = $script:RoleFence; File = 'svc/role_fence.go' }
+        @{ Text = '[account-role-ref] sweep'; Source = $script:RoleFence; File = 'svc/role_fence.go' }
+        @{ Text = '[account-deletion] count overdue deletions'; Source = $script:RoleFence; File = 'svc/role_fence.go' }
     )
     foreach ($log in $logs) {
         Assert-True -Condition ($script:Alerts.Contains($log.Text)) -Because "告警文案引用 `"$($log.Text)`""

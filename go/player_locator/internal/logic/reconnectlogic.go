@@ -98,6 +98,8 @@ func (l *ReconnectLogic) Reconnect(in *pb.ReconnectRequest) (*pb.ReconnectRespon
 	// 会话代次与 gate 所在区号都属于新连接,请求为 0(旧版 login)也如实写 0,不保留旧连接的值。
 	session.SessionIncarnation = in.SessionIncarnation
 	session.GateZoneId = in.GateZoneId
+	// 未成年人的截止时刻属于这次登录:login 每次按防沉迷会话账本现填,0 = 不限也如实写 0。
+	session.MinorPlayDeadlineMs = in.MinorPlayDeadlineMs
 	session.TokenId = in.TokenId
 	session.TokenExpiryMs = in.TokenExpiryMs
 	session.RequestId = in.RequestId

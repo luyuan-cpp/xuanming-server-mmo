@@ -175,7 +175,12 @@ type NodeInfo struct {
 	// 只用于选点偏好：scene_manager 把「本 zone 里有排空中节点的构建」当作外出构建，落点优先选别的构建。
 	// 不参与任何提交判定，也不是发布轨道（release_track）。
 	// 字段号 16 上线后不复用；废弃时写 `reserved 16;`（AGENTS.md §4.3）。
-	Build         string `protobuf:"bytes,16,opt,name=build,proto3" json:"build,omitempty"`
+	Build string `protobuf:"bytes,16,opt,name=build,proto3" json:"build,omitempty"`
+	// 小游戏客户端（微信 / 抖音）连本节点用的 WebSocket 地址（docs/design/minigame-websocket-gate.md W7），
+	// 形如 wss://<边缘域名>/ws/<endpoint.ip>/<endpoint.port>。只有 gate / battle 在部署注入 CLIENT_WS_BASE_URL 时自报，
+	// 端口定下来之后、首次发布之前填好；空串 = 本节点不接小游戏。原生客户端仍用 client_endpoint，两个地址指向同一个进程。
+	// 字段号 17 上线后不复用；废弃时写 `reserved 17;`（AGENTS.md §4.3）。
+	ClientWsUrl   string `protobuf:"bytes,17,opt,name=client_ws_url,json=clientWsUrl,proto3" json:"client_ws_url,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -322,6 +327,13 @@ func (x *NodeInfo) GetBuild() string {
 	return ""
 }
 
+func (x *NodeInfo) GetClientWsUrl() string {
+	if x != nil {
+		return x.ClientWsUrl
+	}
+	return ""
+}
+
 type NetworkAddress struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Ip            string                 `protobuf:"bytes,1,opt,name=ip,proto3" json:"ip,omitempty"`
@@ -381,7 +393,7 @@ const file_proto_common_base_common_proto_rawDesc = "" +
 	"\x1eproto/common/base/common.proto\"2\n" +
 	"\fEndpointComp\x12\x0e\n" +
 	"\x02ip\x18\x01 \x01(\tR\x02ip\x12\x12\n" +
-	"\x04port\x18\x02 \x01(\rR\x04port\"\xd9\x04\n" +
+	"\x04port\x18\x02 \x01(\rR\x04port\"\xfd\x04\n" +
 	"\bNodeInfo\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\rR\x06nodeId\x12\x1b\n" +
 	"\tnode_type\x18\x02 \x01(\rR\bnodeType\x12\x1f\n" +
@@ -400,7 +412,8 @@ const file_proto_common_base_common_proto_rawDesc = "" +
 	"\x0fmax_connections\x18\r \x01(\rR\x0emaxConnections\x12,\n" +
 	"\tadmission\x18\x0e \x01(\x0e2\x0e.NodeAdmissionR\tadmission\x12#\n" +
 	"\rrelease_track\x18\x0f \x01(\tR\freleaseTrack\x12\x14\n" +
-	"\x05build\x18\x10 \x01(\tR\x05build\"4\n" +
+	"\x05build\x18\x10 \x01(\tR\x05build\x12\"\n" +
+	"\rclient_ws_url\x18\x11 \x01(\tR\vclientWsUrl\"4\n" +
 	"\x0eNetworkAddress\x12\x0e\n" +
 	"\x02ip\x18\x01 \x01(\tR\x02ip\x12\x12\n" +
 	"\x04port\x18\x02 \x01(\rR\x04port*c\n" +

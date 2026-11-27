@@ -33,9 +33,9 @@ type directorySteps interface {
 	activateRef(ctx context.Context, account string, player, txID uint64) error
 	promoteRef(ctx context.Context, account string, ref roleRef) error
 	dropRef(ctx context.Context, account string, ref roleRef) (bool, error)
-	// holdRef 把有提交证据的建角 ref 标成保留(按 nonce 比较);scanPendingRefs 不扫标了保留的,scanHeldRefs 只扫它们,
+	// holdRef 把有提交证据的建角 ref 标成保留(按 nonce 比较),回是否标上了;scanPendingRefs 不扫标了保留的,scanHeldRefs 只扫它们,
 	// countHeldRefs 数它们。见 account_role_ref.go 的 SweepStaleRefs。
-	holdRef(ctx context.Context, account string, ref roleRef, reason string) error
+	holdRef(ctx context.Context, account string, ref roleRef, reason string) (bool, error)
 	scanPendingRefs(ctx context.Context, olderThan time.Duration, limit int) ([]roleRef, error)
 	scanHeldRefs(ctx context.Context, limit int) ([]roleRef, error)
 	countHeldRefs(ctx context.Context) (int, error)

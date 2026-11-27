@@ -173,8 +173,11 @@ type NetworkProbeTarget struct {
 	Host           string                 `protobuf:"bytes,2,opt,name=host,proto3" json:"host,omitempty"`
 	Port           uint32                 `protobuf:"varint,3,opt,name=port,proto3" json:"port,omitempty"`
 	Grant          *SignedNetworkProbe    `protobuf:"bytes,4,opt,name=grant,proto3" json:"grant,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 同一台 battle 给小游戏客户端的 WebSocket 地址(NodeInfo.client_ws_url):小游戏客户端测速连它,原生客户端仍连 host / port;
+	// 空串 = 这台 battle 不接小游戏(docs/design/minigame-websocket-gate.md W9)。
+	WsUrl         string `protobuf:"bytes,5,opt,name=ws_url,json=wsUrl,proto3" json:"ws_url,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *NetworkProbeTarget) Reset() {
@@ -233,6 +236,13 @@ func (x *NetworkProbeTarget) GetGrant() *SignedNetworkProbe {
 		return x.Grant
 	}
 	return nil
+}
+
+func (x *NetworkProbeTarget) GetWsUrl() string {
+	if x != nil {
+		return x.WsUrl
+	}
+	return ""
 }
 
 type GetNetworkProbePlanRequest struct {
@@ -736,12 +746,13 @@ const file_proto_match_match_network_proto_rawDesc = "" +
 	"\rexpires_at_ms\x18\a \x01(\x04R\vexpiresAtMs\"L\n" +
 	"\x12SignedNetworkProbe\x12\x18\n" +
 	"\apayload\x18\x01 \x01(\fR\apayload\x12\x1c\n" +
-	"\tsignature\x18\x02 \x01(\fR\tsignature\"\x96\x01\n" +
+	"\tsignature\x18\x02 \x01(\fR\tsignature\"\xad\x01\n" +
 	"\x12NetworkProbeTarget\x12'\n" +
 	"\x0fphysical_region\x18\x01 \x01(\rR\x0ephysicalRegion\x12\x12\n" +
 	"\x04host\x18\x02 \x01(\tR\x04host\x12\x12\n" +
 	"\x04port\x18\x03 \x01(\rR\x04port\x12/\n" +
-	"\x05grant\x18\x04 \x01(\v2\x19.match.SignedNetworkProbeR\x05grant\"\x1c\n" +
+	"\x05grant\x18\x04 \x01(\v2\x19.match.SignedNetworkProbeR\x05grant\x12\x15\n" +
+	"\x06ws_url\x18\x05 \x01(\tR\x05wsUrl\"\x1c\n" +
 	"\x1aGetNetworkProbePlanRequest\"\xe1\x01\n" +
 	"\x1bGetNetworkProbePlanResponse\x12\x17\n" +
 	"\aplan_id\x18\x01 \x01(\tR\x06planId\x123\n" +

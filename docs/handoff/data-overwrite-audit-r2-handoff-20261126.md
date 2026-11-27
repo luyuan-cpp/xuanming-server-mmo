@@ -1,6 +1,13 @@
 # 数据覆写审计第二轮（r2）验证交接（2026-11-26，交 Gemini）
 
-审计文档：[data-overwrite-rollback-audit-r2-20261019.md](../design/data-overwrite-rollback-audit-r2-20261019.md)。逐条最终状态以 §5.0 为准，各批收口记在 §6。本线的代码、测试和文档都已写完，都在 main 上，只剩验证。
+审计文档：[data-overwrite-rollback-audit-r2-20261019.md](../design/data-overwrite-rollback-audit-r2-20261019.md)。逐条最终状态以 §5.0 为准，各批收口记在 §6。
+
+**2026-11-26 晚更正：代码还没修完。** 以下三处由 Claude 在修：
+- 第 4 轮查找报的 3 条 high、4 条 medium；
+- 11-19 评审记下的约 30 条建议；
+- 早期各批的 4 条遗留（审计 §6「2026-11-26 清点」）。
+
+下表的条目可以先验，但这三处修完会新增 PROGRESS 条目，受影响的模块要重跑。最省事的是等审计 §1「仍开着」清空之后，再整体跑一遍。
 
 本单只排顺序、定口径。具体命令和每批新增的用例名，在各条 PROGRESS 条目的「交 Codex」段里，一律按交 Gemini 读。只在 main 上做，不建分支。项目未上线，TiDB / MySQL / Redis / Kafka / etcd 数据都可以全清。
 

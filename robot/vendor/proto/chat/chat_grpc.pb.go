@@ -20,9 +20,13 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ClientPlayerChat_SendChat_FullMethodName        = "/chatpb.ClientPlayerChat/SendChat"
-	ClientPlayerChat_PullChatHistory_FullMethodName = "/chatpb.ClientPlayerChat/PullChatHistory"
-	ClientPlayerChat_NotifyWorldChat_FullMethodName = "/chatpb.ClientPlayerChat/NotifyWorldChat"
+	ClientPlayerChat_SendChat_FullMethodName                 = "/chatpb.ClientPlayerChat/SendChat"
+	ClientPlayerChat_PullChatHistory_FullMethodName          = "/chatpb.ClientPlayerChat/PullChatHistory"
+	ClientPlayerChat_ReportChat_FullMethodName               = "/chatpb.ClientPlayerChat/ReportChat"
+	ClientPlayerChat_RetractWorldChat_FullMethodName         = "/chatpb.ClientPlayerChat/RetractWorldChat"
+	ClientPlayerChat_PublishSystemWorldNotice_FullMethodName = "/chatpb.ClientPlayerChat/PublishSystemWorldNotice"
+	ClientPlayerChat_NotifyWorldChat_FullMethodName          = "/chatpb.ClientPlayerChat/NotifyWorldChat"
+	ClientPlayerChat_NotifyWorldChatRetracted_FullMethodName = "/chatpb.ClientPlayerChat/NotifyWorldChatRetracted"
 )
 
 // ClientPlayerChatClient is the client API for ClientPlayerChat service.
@@ -31,6 +35,9 @@ const (
 type ClientPlayerChatClient interface {
 	SendChat(ctx context.Context, in *SendChatRequest, opts ...grpc.CallOption) (*SendChatResponse, error)
 	PullChatHistory(ctx context.Context, in *PullChatHistoryRequest, opts ...grpc.CallOption) (*PullChatHistoryResponse, error)
+	ReportChat(ctx context.Context, in *ReportChatRequest, opts ...grpc.CallOption) (*ReportChatResponse, error)
+	RetractWorldChat(ctx context.Context, in *RetractWorldChatRequest, opts ...grpc.CallOption) (*RetractWorldChatResponse, error)
+	PublishSystemWorldNotice(ctx context.Context, in *PublishSystemWorldNoticeRequest, opts ...grpc.CallOption) (*PublishSystemWorldNoticeResponse, error)
 	// 世界频道推送(S2C,docs/design/chat-world-channel-fanout.md §4):世界频道的一条发送首次提交成功后,
 	// chat 往 Kafka chat-world-bcast_g<N> 发一条,每台 gate 推给本机全部已绑定的会话。消息体就是历史里的同一份显示原件。
 	// 至多一次:推送失败或玩家刚好掉线时这一条会丢,真相仍是 PullChatHistory。客户端打开聊天面板与重连时拉一次历史,
@@ -38,6 +45,7 @@ type ClientPlayerChatClient interface {
 	// 推送方法必须声明在这个客户端服务里并标 CLIENT_RPC_PUSH(同 friend.proto 的 NotifyFriendEvent):
 	// 生成器据此把它排除在客户端可调方法集合之外,客户端主动调它在入口准入就被挡住;服务端不实现(内嵌 Unimplemented)。
 	NotifyWorldChat(ctx context.Context, in *ChatMessage, opts ...grpc.CallOption) (*base.Empty, error)
+	NotifyWorldChatRetracted(ctx context.Context, in *ChatRetractedNotify, opts ...grpc.CallOption) (*base.Empty, error)
 }
 
 type clientPlayerChatClient struct {
@@ -68,10 +76,50 @@ func (c *clientPlayerChatClient) PullChatHistory(ctx context.Context, in *PullCh
 	return out, nil
 }
 
+func (c *clientPlayerChatClient) ReportChat(ctx context.Context, in *ReportChatRequest, opts ...grpc.CallOption) (*ReportChatResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReportChatResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerChat_ReportChat_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientPlayerChatClient) RetractWorldChat(ctx context.Context, in *RetractWorldChatRequest, opts ...grpc.CallOption) (*RetractWorldChatResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RetractWorldChatResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerChat_RetractWorldChat_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientPlayerChatClient) PublishSystemWorldNotice(ctx context.Context, in *PublishSystemWorldNoticeRequest, opts ...grpc.CallOption) (*PublishSystemWorldNoticeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PublishSystemWorldNoticeResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerChat_PublishSystemWorldNotice_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *clientPlayerChatClient) NotifyWorldChat(ctx context.Context, in *ChatMessage, opts ...grpc.CallOption) (*base.Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(base.Empty)
 	err := c.cc.Invoke(ctx, ClientPlayerChat_NotifyWorldChat_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientPlayerChatClient) NotifyWorldChatRetracted(ctx context.Context, in *ChatRetractedNotify, opts ...grpc.CallOption) (*base.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(base.Empty)
+	err := c.cc.Invoke(ctx, ClientPlayerChat_NotifyWorldChatRetracted_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -84,6 +132,9 @@ func (c *clientPlayerChatClient) NotifyWorldChat(ctx context.Context, in *ChatMe
 type ClientPlayerChatServer interface {
 	SendChat(context.Context, *SendChatRequest) (*SendChatResponse, error)
 	PullChatHistory(context.Context, *PullChatHistoryRequest) (*PullChatHistoryResponse, error)
+	ReportChat(context.Context, *ReportChatRequest) (*ReportChatResponse, error)
+	RetractWorldChat(context.Context, *RetractWorldChatRequest) (*RetractWorldChatResponse, error)
+	PublishSystemWorldNotice(context.Context, *PublishSystemWorldNoticeRequest) (*PublishSystemWorldNoticeResponse, error)
 	// 世界频道推送(S2C,docs/design/chat-world-channel-fanout.md §4):世界频道的一条发送首次提交成功后,
 	// chat 往 Kafka chat-world-bcast_g<N> 发一条,每台 gate 推给本机全部已绑定的会话。消息体就是历史里的同一份显示原件。
 	// 至多一次:推送失败或玩家刚好掉线时这一条会丢,真相仍是 PullChatHistory。客户端打开聊天面板与重连时拉一次历史,
@@ -91,6 +142,7 @@ type ClientPlayerChatServer interface {
 	// 推送方法必须声明在这个客户端服务里并标 CLIENT_RPC_PUSH(同 friend.proto 的 NotifyFriendEvent):
 	// 生成器据此把它排除在客户端可调方法集合之外,客户端主动调它在入口准入就被挡住;服务端不实现(内嵌 Unimplemented)。
 	NotifyWorldChat(context.Context, *ChatMessage) (*base.Empty, error)
+	NotifyWorldChatRetracted(context.Context, *ChatRetractedNotify) (*base.Empty, error)
 	mustEmbedUnimplementedClientPlayerChatServer()
 }
 
@@ -107,8 +159,20 @@ func (UnimplementedClientPlayerChatServer) SendChat(context.Context, *SendChatRe
 func (UnimplementedClientPlayerChatServer) PullChatHistory(context.Context, *PullChatHistoryRequest) (*PullChatHistoryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PullChatHistory not implemented")
 }
+func (UnimplementedClientPlayerChatServer) ReportChat(context.Context, *ReportChatRequest) (*ReportChatResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportChat not implemented")
+}
+func (UnimplementedClientPlayerChatServer) RetractWorldChat(context.Context, *RetractWorldChatRequest) (*RetractWorldChatResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RetractWorldChat not implemented")
+}
+func (UnimplementedClientPlayerChatServer) PublishSystemWorldNotice(context.Context, *PublishSystemWorldNoticeRequest) (*PublishSystemWorldNoticeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PublishSystemWorldNotice not implemented")
+}
 func (UnimplementedClientPlayerChatServer) NotifyWorldChat(context.Context, *ChatMessage) (*base.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method NotifyWorldChat not implemented")
+}
+func (UnimplementedClientPlayerChatServer) NotifyWorldChatRetracted(context.Context, *ChatRetractedNotify) (*base.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method NotifyWorldChatRetracted not implemented")
 }
 func (UnimplementedClientPlayerChatServer) mustEmbedUnimplementedClientPlayerChatServer() {}
 func (UnimplementedClientPlayerChatServer) testEmbeddedByValue()                          {}
@@ -167,6 +231,60 @@ func _ClientPlayerChat_PullChatHistory_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ClientPlayerChat_ReportChat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReportChatRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerChatServer).ReportChat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerChat_ReportChat_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerChatServer).ReportChat(ctx, req.(*ReportChatRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientPlayerChat_RetractWorldChat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RetractWorldChatRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerChatServer).RetractWorldChat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerChat_RetractWorldChat_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerChatServer).RetractWorldChat(ctx, req.(*RetractWorldChatRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientPlayerChat_PublishSystemWorldNotice_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PublishSystemWorldNoticeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerChatServer).PublishSystemWorldNotice(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerChat_PublishSystemWorldNotice_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerChatServer).PublishSystemWorldNotice(ctx, req.(*PublishSystemWorldNoticeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ClientPlayerChat_NotifyWorldChat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ChatMessage)
 	if err := dec(in); err != nil {
@@ -181,6 +299,24 @@ func _ClientPlayerChat_NotifyWorldChat_Handler(srv interface{}, ctx context.Cont
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ClientPlayerChatServer).NotifyWorldChat(ctx, req.(*ChatMessage))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientPlayerChat_NotifyWorldChatRetracted_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChatRetractedNotify)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerChatServer).NotifyWorldChatRetracted(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerChat_NotifyWorldChatRetracted_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerChatServer).NotifyWorldChatRetracted(ctx, req.(*ChatRetractedNotify))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -201,8 +337,24 @@ var ClientPlayerChat_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ClientPlayerChat_PullChatHistory_Handler,
 		},
 		{
+			MethodName: "ReportChat",
+			Handler:    _ClientPlayerChat_ReportChat_Handler,
+		},
+		{
+			MethodName: "RetractWorldChat",
+			Handler:    _ClientPlayerChat_RetractWorldChat_Handler,
+		},
+		{
+			MethodName: "PublishSystemWorldNotice",
+			Handler:    _ClientPlayerChat_PublishSystemWorldNotice_Handler,
+		},
+		{
 			MethodName: "NotifyWorldChat",
 			Handler:    _ClientPlayerChat_NotifyWorldChat_Handler,
+		},
+		{
+			MethodName: "NotifyWorldChatRetracted",
+			Handler:    _ClientPlayerChat_NotifyWorldChatRetracted_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

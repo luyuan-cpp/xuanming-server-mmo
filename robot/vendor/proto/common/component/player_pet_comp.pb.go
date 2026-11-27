@@ -21,6 +21,67 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// 宝宝条目预设方案（布局层：槽位 1..3 + 枚举用途标签，避免自由文本 UGC 风险）
+type PetEntryPreset struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SlotId        uint32                 `protobuf:"varint,1,opt,name=slot_id,json=slotId,proto3" json:"slot_id,omitempty"`                                                                    // 1..3 显式方案槽位号
+	Tag           uint32                 `protobuf:"varint,2,opt,name=tag,proto3" json:"tag,omitempty"`                                                                                        // 0默认 / 1输出 / 2控场 / 3辅助
+	Allocated     map[uint32]uint32      `protobuf:"bytes,3,rep,name=allocated,proto3" json:"allocated,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // entry_id -> 已分配点
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PetEntryPreset) Reset() {
+	*x = PetEntryPreset{}
+	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PetEntryPreset) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PetEntryPreset) ProtoMessage() {}
+
+func (x *PetEntryPreset) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PetEntryPreset.ProtoReflect.Descriptor instead.
+func (*PetEntryPreset) Descriptor() ([]byte, []int) {
+	return file_proto_common_component_player_pet_comp_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *PetEntryPreset) GetSlotId() uint32 {
+	if x != nil {
+		return x.SlotId
+	}
+	return 0
+}
+
+func (x *PetEntryPreset) GetTag() uint32 {
+	if x != nil {
+		return x.Tag
+	}
+	return 0
+}
+
+func (x *PetEntryPreset) GetAllocated() map[uint32]uint32 {
+	if x != nil {
+		return x.Allocated
+	}
+	return nil
+}
+
 // 一只宝宝
 type PetInstance struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
@@ -32,18 +93,34 @@ type PetInstance struct {
 	// dimension_id -> 资质(万分比,10000 = 100%)。出生时在 PetTable 的
 	// aptitude_min/aptitude_max 之间随机,之后不变(洗资质是二期)。
 	// 缺键按 10000 处理,老存档与改表都能自愈。
-	Aptitude      map[uint32]uint32 `protobuf:"bytes,6,rep,name=aptitude,proto3" json:"aptitude,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	Health        uint64            `protobuf:"varint,7,opt,name=health,proto3" json:"health,omitempty"`                                              // 当前气血(战斗结算回写,残血跨登录保留)
-	Mana          uint64            `protobuf:"varint,8,opt,name=mana,proto3" json:"mana,omitempty"`                                                  // 当前法力
-	CreatedAt     uint64            `protobuf:"varint,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`                       // 获得时间(Unix 秒)
-	SkillTableIds []uint32          `protobuf:"varint,10,rep,packed,name=skill_table_ids,json=skillTableIds,proto3" json:"skill_table_ids,omitempty"` // 宝宝技能(SkillTable id),核心线来自 PetTable
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Aptitude               map[uint32]uint32 `protobuf:"bytes,6,rep,name=aptitude,proto3" json:"aptitude,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	Health                 uint64            `protobuf:"varint,7,opt,name=health,proto3" json:"health,omitempty"`                                                                                                                   // 当前气血(战斗结算回写,残血跨登录保留)
+	Mana                   uint64            `protobuf:"varint,8,opt,name=mana,proto3" json:"mana,omitempty"`                                                                                                                       // 当前法力
+	CreatedAt              uint64            `protobuf:"varint,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`                                                                                            // 获得时间(Unix 秒)
+	SkillTableIds          []uint32          `protobuf:"varint,10,rep,packed,name=skill_table_ids,json=skillTableIds,proto3" json:"skill_table_ids,omitempty"`                                                                      // 宝宝技能(SkillTable id),核心线来自 PetTable
+	SkillRanks             map[uint32]uint32 `protobuf:"bytes,11,rep,name=skill_ranks,json=skillRanks,proto3" json:"skill_ranks,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`             // 公共技能原型的已学等级，由 PetSystem 唯一写入。
+	EntryAllocated         map[uint32]uint32 `protobuf:"bytes,12,rep,name=entry_allocated,json=entryAllocated,proto3" json:"entry_allocated,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 独立条目池；未知键保留并占预算。
+	EntryStateVersion      uint64            `protobuf:"varint,13,opt,name=entry_state_version,json=entryStateVersion,proto3" json:"entry_state_version,omitempty"`
+	EntryLastRequestId     string            `protobuf:"bytes,14,opt,name=entry_last_request_id,json=entryLastRequestId,proto3" json:"entry_last_request_id,omitempty"`
+	EntryLastBaseVersion   uint64            `protobuf:"varint,15,opt,name=entry_last_base_version,json=entryLastBaseVersion,proto3" json:"entry_last_base_version,omitempty"`
+	EntryLastConfigVersion uint32            `protobuf:"varint,16,opt,name=entry_last_config_version,json=entryLastConfigVersion,proto3" json:"entry_last_config_version,omitempty"`
+	EntryLastTarget        map[uint32]uint32 `protobuf:"bytes,17,rep,name=entry_last_target,json=entryLastTarget,proto3" json:"entry_last_target,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	CultivationTier        uint32            `protobuf:"varint,18,opt,name=cultivation_tier,json=cultivationTier,proto3" json:"cultivation_tier,omitempty"`                       // 独立五阶身份，非 quality/acquisition_tier。
+	ActiveEntryPresetSlot  uint32            `protobuf:"varint,19,opt,name=active_entry_preset_slot,json=activeEntryPresetSlot,proto3" json:"active_entry_preset_slot,omitempty"` // 当前启用的条目方案槽位（0 兼容按 1 处理；有效范围 1..3）。
+	EntryPresets           []*PetEntryPreset `protobuf:"bytes,20,rep,name=entry_presets,json=entryPresets,proto3" json:"entry_presets,omitempty"`                                 // 3 套条目预设方案；当前生效槽位与 entry_allocated 原子同步。
+	TierLastRequestId      uint64            `protobuf:"varint,21,opt,name=tier_last_request_id,json=tierLastRequestId,proto3" json:"tier_last_request_id,omitempty"`             // 最近一次成功的灵阶突破幂等键（0 表示未突破过）。
+	TierLastExpectedTier   uint32            `protobuf:"varint,22,opt,name=tier_last_expected_tier,json=tierLastExpectedTier,proto3" json:"tier_last_expected_tier,omitempty"`    // 最近一次灵阶突破请求的期望前阶（防复用不同参数重放）。
+	TierLastResultTier     uint32            `protobuf:"varint,23,opt,name=tier_last_result_tier,json=tierLastResultTier,proto3" json:"tier_last_result_tier,omitempty"`          // 最近一次灵阶突破后的结果阶位。
+	EntryLastPresetSlot    uint32            `protobuf:"varint,24,opt,name=entry_last_preset_slot,json=entryLastPresetSlot,proto3" json:"entry_last_preset_slot,omitempty"`       // 最近一次条目方案切换的目标槽位（0 表示最近请求是 SaveEntries）。
+	EntryLastPresetTag     uint32            `protobuf:"varint,25,opt,name=entry_last_preset_tag,json=entryLastPresetTag,proto3" json:"entry_last_preset_tag,omitempty"`          // 最近一次条目方案切换的目标用途标签。
+	CosmeticId             uint32            `protobuf:"varint,26,opt,name=cosmetic_id,json=cosmeticId,proto3" json:"cosmetic_id,omitempty"`                                      // 当前穿戴的灵宠幻化外观 ID（PetCosmetic.id；0 = 原形，纯外观零数值）。
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *PetInstance) Reset() {
 	*x = PetInstance{}
-	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[0]
+	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -55,7 +132,7 @@ func (x *PetInstance) String() string {
 func (*PetInstance) ProtoMessage() {}
 
 func (x *PetInstance) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[0]
+	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68,7 +145,7 @@ func (x *PetInstance) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PetInstance.ProtoReflect.Descriptor instead.
 func (*PetInstance) Descriptor() ([]byte, []int) {
-	return file_proto_common_component_player_pet_comp_proto_rawDescGZIP(), []int{0}
+	return file_proto_common_component_player_pet_comp_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *PetInstance) GetPetId() uint64 {
@@ -141,6 +218,118 @@ func (x *PetInstance) GetSkillTableIds() []uint32 {
 	return nil
 }
 
+func (x *PetInstance) GetSkillRanks() map[uint32]uint32 {
+	if x != nil {
+		return x.SkillRanks
+	}
+	return nil
+}
+
+func (x *PetInstance) GetEntryAllocated() map[uint32]uint32 {
+	if x != nil {
+		return x.EntryAllocated
+	}
+	return nil
+}
+
+func (x *PetInstance) GetEntryStateVersion() uint64 {
+	if x != nil {
+		return x.EntryStateVersion
+	}
+	return 0
+}
+
+func (x *PetInstance) GetEntryLastRequestId() string {
+	if x != nil {
+		return x.EntryLastRequestId
+	}
+	return ""
+}
+
+func (x *PetInstance) GetEntryLastBaseVersion() uint64 {
+	if x != nil {
+		return x.EntryLastBaseVersion
+	}
+	return 0
+}
+
+func (x *PetInstance) GetEntryLastConfigVersion() uint32 {
+	if x != nil {
+		return x.EntryLastConfigVersion
+	}
+	return 0
+}
+
+func (x *PetInstance) GetEntryLastTarget() map[uint32]uint32 {
+	if x != nil {
+		return x.EntryLastTarget
+	}
+	return nil
+}
+
+func (x *PetInstance) GetCultivationTier() uint32 {
+	if x != nil {
+		return x.CultivationTier
+	}
+	return 0
+}
+
+func (x *PetInstance) GetActiveEntryPresetSlot() uint32 {
+	if x != nil {
+		return x.ActiveEntryPresetSlot
+	}
+	return 0
+}
+
+func (x *PetInstance) GetEntryPresets() []*PetEntryPreset {
+	if x != nil {
+		return x.EntryPresets
+	}
+	return nil
+}
+
+func (x *PetInstance) GetTierLastRequestId() uint64 {
+	if x != nil {
+		return x.TierLastRequestId
+	}
+	return 0
+}
+
+func (x *PetInstance) GetTierLastExpectedTier() uint32 {
+	if x != nil {
+		return x.TierLastExpectedTier
+	}
+	return 0
+}
+
+func (x *PetInstance) GetTierLastResultTier() uint32 {
+	if x != nil {
+		return x.TierLastResultTier
+	}
+	return 0
+}
+
+func (x *PetInstance) GetEntryLastPresetSlot() uint32 {
+	if x != nil {
+		return x.EntryLastPresetSlot
+	}
+	return 0
+}
+
+func (x *PetInstance) GetEntryLastPresetTag() uint32 {
+	if x != nil {
+		return x.EntryLastPresetTag
+	}
+	return 0
+}
+
+func (x *PetInstance) GetCosmeticId() uint32 {
+	if x != nil {
+		return x.CosmeticId
+	}
+	return 0
+}
+
 // 玩家宝宝数据(持久化到 player_database.pet_component)
 type PlayerPetComp struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
@@ -151,13 +340,15 @@ type PlayerPetComp struct {
 	LastPurchasePetTableId uint32 `protobuf:"varint,4,opt,name=last_purchase_pet_table_id,json=lastPurchasePetTableId,proto3" json:"last_purchase_pet_table_id,omitempty"`
 	LastPurchasePetId      uint64 `protobuf:"varint,5,opt,name=last_purchase_pet_id,json=lastPurchasePetId,proto3" json:"last_purchase_pet_id,omitempty"`
 	LastPurchasePriceGold  uint64 `protobuf:"varint,6,opt,name=last_purchase_price_gold,json=lastPurchasePriceGold,proto3" json:"last_purchase_price_gold,omitempty"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	// true = 该角色已完成一次性起步灵狐判定（已发放或老号已有宠不再补发），重登/召回/放生均不重发。
+	StarterPetGranted bool `protobuf:"varint,7,opt,name=starter_pet_granted,json=starterPetGranted,proto3" json:"starter_pet_granted,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *PlayerPetComp) Reset() {
 	*x = PlayerPetComp{}
-	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[1]
+	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -169,7 +360,7 @@ func (x *PlayerPetComp) String() string {
 func (*PlayerPetComp) ProtoMessage() {}
 
 func (x *PlayerPetComp) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[1]
+	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -182,7 +373,7 @@ func (x *PlayerPetComp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerPetComp.ProtoReflect.Descriptor instead.
 func (*PlayerPetComp) Descriptor() ([]byte, []int) {
-	return file_proto_common_component_player_pet_comp_proto_rawDescGZIP(), []int{1}
+	return file_proto_common_component_player_pet_comp_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *PlayerPetComp) GetPets() []*PetInstance {
@@ -227,11 +418,25 @@ func (x *PlayerPetComp) GetLastPurchasePriceGold() uint64 {
 	return 0
 }
 
+func (x *PlayerPetComp) GetStarterPetGranted() bool {
+	if x != nil {
+		return x.StarterPetGranted
+	}
+	return false
+}
+
 var File_proto_common_component_player_pet_comp_proto protoreflect.FileDescriptor
 
 const file_proto_common_component_player_pet_comp_proto_rawDesc = "" +
 	"\n" +
-	",proto/common/component/player_pet_comp.proto\"\xd1\x03\n" +
+	",proto/common/component/player_pet_comp.proto\"\xb7\x01\n" +
+	"\x0ePetEntryPreset\x12\x17\n" +
+	"\aslot_id\x18\x01 \x01(\rR\x06slotId\x12\x10\n" +
+	"\x03tag\x18\x02 \x01(\rR\x03tag\x12<\n" +
+	"\tallocated\x18\x03 \x03(\v2\x1e.PetEntryPreset.AllocatedEntryR\tallocated\x1a<\n" +
+	"\x0eAllocatedEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\x83\f\n" +
 	"\vPetInstance\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12 \n" +
 	"\fpet_table_id\x18\x02 \x01(\rR\n" +
@@ -245,20 +450,48 @@ const file_proto_common_component_player_pet_comp_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\t \x01(\x04R\tcreatedAt\x12&\n" +
 	"\x0fskill_table_ids\x18\n" +
-	" \x03(\rR\rskillTableIds\x1a<\n" +
+	" \x03(\rR\rskillTableIds\x12=\n" +
+	"\vskill_ranks\x18\v \x03(\v2\x1c.PetInstance.SkillRanksEntryR\n" +
+	"skillRanks\x12I\n" +
+	"\x0fentry_allocated\x18\f \x03(\v2 .PetInstance.EntryAllocatedEntryR\x0eentryAllocated\x12.\n" +
+	"\x13entry_state_version\x18\r \x01(\x04R\x11entryStateVersion\x121\n" +
+	"\x15entry_last_request_id\x18\x0e \x01(\tR\x12entryLastRequestId\x125\n" +
+	"\x17entry_last_base_version\x18\x0f \x01(\x04R\x14entryLastBaseVersion\x129\n" +
+	"\x19entry_last_config_version\x18\x10 \x01(\rR\x16entryLastConfigVersion\x12M\n" +
+	"\x11entry_last_target\x18\x11 \x03(\v2!.PetInstance.EntryLastTargetEntryR\x0fentryLastTarget\x12)\n" +
+	"\x10cultivation_tier\x18\x12 \x01(\rR\x0fcultivationTier\x127\n" +
+	"\x18active_entry_preset_slot\x18\x13 \x01(\rR\x15activeEntryPresetSlot\x124\n" +
+	"\rentry_presets\x18\x14 \x03(\v2\x0f.PetEntryPresetR\fentryPresets\x12/\n" +
+	"\x14tier_last_request_id\x18\x15 \x01(\x04R\x11tierLastRequestId\x125\n" +
+	"\x17tier_last_expected_tier\x18\x16 \x01(\rR\x14tierLastExpectedTier\x121\n" +
+	"\x15tier_last_result_tier\x18\x17 \x01(\rR\x12tierLastResultTier\x123\n" +
+	"\x16entry_last_preset_slot\x18\x18 \x01(\rR\x13entryLastPresetSlot\x121\n" +
+	"\x15entry_last_preset_tag\x18\x19 \x01(\rR\x12entryLastPresetTag\x12\x1f\n" +
+	"\vcosmetic_id\x18\x1a \x01(\rR\n" +
+	"cosmeticId\x1a<\n" +
 	"\x0eAllocatedEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a;\n" +
 	"\rAptitudeEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xb1\x02\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a=\n" +
+	"\x0fSkillRanksEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1aA\n" +
+	"\x13EntryAllocatedEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1aB\n" +
+	"\x14EntryLastTargetEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xe1\x02\n" +
 	"\rPlayerPetComp\x12 \n" +
 	"\x04pets\x18\x01 \x03(\v2\f.PetInstanceR\x04pets\x12\"\n" +
 	"\ractive_pet_id\x18\x02 \x01(\x04R\vactivePetId\x124\n" +
 	"\x16last_purchase_sequence\x18\x03 \x01(\x04R\x14lastPurchaseSequence\x12:\n" +
 	"\x1alast_purchase_pet_table_id\x18\x04 \x01(\rR\x16lastPurchasePetTableId\x12/\n" +
 	"\x14last_purchase_pet_id\x18\x05 \x01(\x04R\x11lastPurchasePetId\x127\n" +
-	"\x18last_purchase_price_gold\x18\x06 \x01(\x04R\x15lastPurchasePriceGoldB\x18Z\x16proto/common/componentb\x06proto3"
+	"\x18last_purchase_price_gold\x18\x06 \x01(\x04R\x15lastPurchasePriceGold\x12.\n" +
+	"\x13starter_pet_granted\x18\a \x01(\bR\x11starterPetGrantedB\x18Z\x16proto/common/componentb\x06proto3"
 
 var (
 	file_proto_common_component_player_pet_comp_proto_rawDescOnce sync.Once
@@ -272,22 +505,32 @@ func file_proto_common_component_player_pet_comp_proto_rawDescGZIP() []byte {
 	return file_proto_common_component_player_pet_comp_proto_rawDescData
 }
 
-var file_proto_common_component_player_pet_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_proto_common_component_player_pet_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_proto_common_component_player_pet_comp_proto_goTypes = []any{
-	(*PetInstance)(nil),   // 0: PetInstance
-	(*PlayerPetComp)(nil), // 1: PlayerPetComp
-	nil,                   // 2: PetInstance.AllocatedEntry
-	nil,                   // 3: PetInstance.AptitudeEntry
+	(*PetEntryPreset)(nil), // 0: PetEntryPreset
+	(*PetInstance)(nil),    // 1: PetInstance
+	(*PlayerPetComp)(nil),  // 2: PlayerPetComp
+	nil,                    // 3: PetEntryPreset.AllocatedEntry
+	nil,                    // 4: PetInstance.AllocatedEntry
+	nil,                    // 5: PetInstance.AptitudeEntry
+	nil,                    // 6: PetInstance.SkillRanksEntry
+	nil,                    // 7: PetInstance.EntryAllocatedEntry
+	nil,                    // 8: PetInstance.EntryLastTargetEntry
 }
 var file_proto_common_component_player_pet_comp_proto_depIdxs = []int32{
-	2, // 0: PetInstance.allocated:type_name -> PetInstance.AllocatedEntry
-	3, // 1: PetInstance.aptitude:type_name -> PetInstance.AptitudeEntry
-	0, // 2: PlayerPetComp.pets:type_name -> PetInstance
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	3, // 0: PetEntryPreset.allocated:type_name -> PetEntryPreset.AllocatedEntry
+	4, // 1: PetInstance.allocated:type_name -> PetInstance.AllocatedEntry
+	5, // 2: PetInstance.aptitude:type_name -> PetInstance.AptitudeEntry
+	6, // 3: PetInstance.skill_ranks:type_name -> PetInstance.SkillRanksEntry
+	7, // 4: PetInstance.entry_allocated:type_name -> PetInstance.EntryAllocatedEntry
+	8, // 5: PetInstance.entry_last_target:type_name -> PetInstance.EntryLastTargetEntry
+	0, // 6: PetInstance.entry_presets:type_name -> PetEntryPreset
+	1, // 7: PlayerPetComp.pets:type_name -> PetInstance
+	8, // [8:8] is the sub-list for method output_type
+	8, // [8:8] is the sub-list for method input_type
+	8, // [8:8] is the sub-list for extension type_name
+	8, // [8:8] is the sub-list for extension extendee
+	0, // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_component_player_pet_comp_proto_init() }
@@ -301,7 +544,7 @@ func file_proto_common_component_player_pet_comp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_component_player_pet_comp_proto_rawDesc), len(file_proto_common_component_player_pet_comp_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -343,8 +343,14 @@ type LoginResponse struct {
 	RefreshToken       string                        `protobuf:"bytes,4,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`                      // Opaque refresh token (30d TTL), use RefreshToken RPC to renew
 	AccessTokenExpire  int64                         `protobuf:"varint,5,opt,name=access_token_expire,json=accessTokenExpire,proto3" json:"access_token_expire,omitempty"`    // Unix seconds when access_token expires
 	RefreshTokenExpire int64                         `protobuf:"varint,6,opt,name=refresh_token_expire,json=refreshTokenExpire,proto3" json:"refresh_token_expire,omitempty"` // Unix seconds when refresh_token expires
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// 账号注销(docs/design/account-deletion.md §4.3、§4.5)。0 正常、1 冷静期(只能撤销,不能进游戏)、2 执行中。
+	AccountDeletionState        uint32 `protobuf:"varint,7,opt,name=account_deletion_state,json=accountDeletionState,proto3" json:"account_deletion_state,omitempty"`
+	AccountDeletionExecuteAfter int64  `protobuf:"varint,8,opt,name=account_deletion_execute_after,json=accountDeletionExecuteAfter,proto3" json:"account_deletion_execute_after,omitempty"` // 冷静期满的时刻,Unix 秒;状态 0 时为 0
+	PreviousAccountDeletedAt    int64  `protobuf:"varint,9,opt,name=previous_account_deleted_at,json=previousAccountDeletedAt,proto3" json:"previous_account_deleted_at,omitempty"`          // 这次登录建了新账号,而同一身份以前注销完成过:完成时刻,Unix 秒;其余 0
+	// 防沉迷(docs/design/real-name-anti-addiction.md §5.3)。部署没开防沉迷时不填。
+	AntiAddiction *AntiAddictionStatus `protobuf:"bytes,10,opt,name=anti_addiction,json=antiAddiction,proto3" json:"anti_addiction,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *LoginResponse) Reset() {
@@ -419,6 +425,449 @@ func (x *LoginResponse) GetRefreshTokenExpire() int64 {
 	return 0
 }
 
+func (x *LoginResponse) GetAccountDeletionState() uint32 {
+	if x != nil {
+		return x.AccountDeletionState
+	}
+	return 0
+}
+
+func (x *LoginResponse) GetAccountDeletionExecuteAfter() int64 {
+	if x != nil {
+		return x.AccountDeletionExecuteAfter
+	}
+	return 0
+}
+
+func (x *LoginResponse) GetPreviousAccountDeletedAt() int64 {
+	if x != nil {
+		return x.PreviousAccountDeletedAt
+	}
+	return 0
+}
+
+func (x *LoginResponse) GetAntiAddiction() *AntiAddictionStatus {
+	if x != nil {
+		return x.AntiAddiction
+	}
+	return nil
+}
+
+// 防沉迷状态。/api/login 的应答只用来让客户端决定下一步;拦截在 gate 上的 Login(绑定会话)。
+type AntiAddictionStatus struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	RealNameRequired bool                   `protobuf:"varint,1,opt,name=real_name_required,json=realNameRequired,proto3" json:"real_name_required,omitempty"` // 本次登录的渠道要游戏方实名,而账号还没实名:先调 /api/real-name
+	Minor            bool                   `protobuf:"varint,2,opt,name=minor,proto3" json:"minor,omitempty"`                                                 // 已实名且未满 18 周岁
+	PlayDeadlineMs   uint64                 `protobuf:"varint,3,opt,name=play_deadline_ms,json=playDeadlineMs,proto3" json:"play_deadline_ms,omitempty"`       // 未成年人本次能玩到的时刻(Unix 毫秒,到点服务端踢线);0 = 不限,或现在不在可玩时段
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *AntiAddictionStatus) Reset() {
+	*x = AntiAddictionStatus{}
+	mi := &file_proto_login_login_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AntiAddictionStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AntiAddictionStatus) ProtoMessage() {}
+
+func (x *AntiAddictionStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_login_login_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AntiAddictionStatus.ProtoReflect.Descriptor instead.
+func (*AntiAddictionStatus) Descriptor() ([]byte, []int) {
+	return file_proto_login_login_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *AntiAddictionStatus) GetRealNameRequired() bool {
+	if x != nil {
+		return x.RealNameRequired
+	}
+	return false
+}
+
+func (x *AntiAddictionStatus) GetMinor() bool {
+	if x != nil {
+		return x.Minor
+	}
+	return false
+}
+
+func (x *AntiAddictionStatus) GetPlayDeadlineMs() uint64 {
+	if x != nil {
+		return x.PlayDeadlineMs
+	}
+	return 0
+}
+
+// 实名提交(/api/real-name,docs/design/real-name-anti-addiction.md §5.2)。姓名和身份证号只用于这一次核验,服务端不存、不进日志。
+type SubmitRealNameRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AccessToken   string                 `protobuf:"bytes,1,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"` // /api/login 签发的 access token
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	IdNumber      string                 `protobuf:"bytes,3,opt,name=id_number,json=idNumber,proto3" json:"id_number,omitempty"` // 18 位居民身份证号
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubmitRealNameRequest) Reset() {
+	*x = SubmitRealNameRequest{}
+	mi := &file_proto_login_login_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubmitRealNameRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubmitRealNameRequest) ProtoMessage() {}
+
+func (x *SubmitRealNameRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_login_login_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubmitRealNameRequest.ProtoReflect.Descriptor instead.
+func (*SubmitRealNameRequest) Descriptor() ([]byte, []int) {
+	return file_proto_login_login_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SubmitRealNameRequest) GetAccessToken() string {
+	if x != nil {
+		return x.AccessToken
+	}
+	return ""
+}
+
+func (x *SubmitRealNameRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *SubmitRealNameRequest) GetIdNumber() string {
+	if x != nil {
+		return x.IdNumber
+	}
+	return ""
+}
+
+type SubmitRealNameResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`    // 认证中、信息有误、次数用完、服务故障时的 tip;成功为空
+	AntiAddiction *AntiAddictionStatus   `protobuf:"bytes,2,opt,name=anti_addiction,json=antiAddiction,proto3" json:"anti_addiction,omitempty"` // 提交之后的状态
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubmitRealNameResponse) Reset() {
+	*x = SubmitRealNameResponse{}
+	mi := &file_proto_login_login_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubmitRealNameResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubmitRealNameResponse) ProtoMessage() {}
+
+func (x *SubmitRealNameResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_login_login_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubmitRealNameResponse.ProtoReflect.Descriptor instead.
+func (*SubmitRealNameResponse) Descriptor() ([]byte, []int) {
+	return file_proto_login_login_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *SubmitRealNameResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *SubmitRealNameResponse) GetAntiAddiction() *AntiAddictionStatus {
+	if x != nil {
+		return x.AntiAddiction
+	}
+	return nil
+}
+
+// 申请注销(docs/design/account-deletion.md §4.2)。凭据字段与 LoginRequest 同义:注销要求重新认证,不收 access token。
+type AccountDeletionRequest struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Account           string                 `protobuf:"bytes,1,opt,name=account,proto3" json:"account,omitempty"`
+	Password          string                 `protobuf:"bytes,2,opt,name=password,proto3" json:"password,omitempty"`
+	AuthType          string                 `protobuf:"bytes,3,opt,name=auth_type,json=authType,proto3" json:"auth_type,omitempty"`
+	AuthToken         string                 `protobuf:"bytes,4,opt,name=auth_token,json=authToken,proto3" json:"auth_token,omitempty"`
+	AuthorizationCode string                 `protobuf:"bytes,5,opt,name=authorization_code,json=authorizationCode,proto3" json:"authorization_code,omitempty"` // 只有 Apple:重新授权时一并拿到的授权码,login 换票后立刻撤销(§8)
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *AccountDeletionRequest) Reset() {
+	*x = AccountDeletionRequest{}
+	mi := &file_proto_login_login_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccountDeletionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccountDeletionRequest) ProtoMessage() {}
+
+func (x *AccountDeletionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_login_login_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccountDeletionRequest.ProtoReflect.Descriptor instead.
+func (*AccountDeletionRequest) Descriptor() ([]byte, []int) {
+	return file_proto_login_login_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *AccountDeletionRequest) GetAccount() string {
+	if x != nil {
+		return x.Account
+	}
+	return ""
+}
+
+func (x *AccountDeletionRequest) GetPassword() string {
+	if x != nil {
+		return x.Password
+	}
+	return ""
+}
+
+func (x *AccountDeletionRequest) GetAuthType() string {
+	if x != nil {
+		return x.AuthType
+	}
+	return ""
+}
+
+func (x *AccountDeletionRequest) GetAuthToken() string {
+	if x != nil {
+		return x.AuthToken
+	}
+	return ""
+}
+
+func (x *AccountDeletionRequest) GetAuthorizationCode() string {
+	if x != nil {
+		return x.AuthorizationCode
+	}
+	return ""
+}
+
+type AccountDeletionBlocker struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"` // 低基数枚举串(guild_leader、team_membership、role_listed 等),客户端映射成文案
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AccountDeletionBlocker) Reset() {
+	*x = AccountDeletionBlocker{}
+	mi := &file_proto_login_login_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccountDeletionBlocker) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccountDeletionBlocker) ProtoMessage() {}
+
+func (x *AccountDeletionBlocker) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_login_login_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccountDeletionBlocker.ProtoReflect.Descriptor instead.
+func (*AccountDeletionBlocker) Descriptor() ([]byte, []int) {
+	return file_proto_login_login_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *AccountDeletionBlocker) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *AccountDeletionBlocker) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+type AccountDeletionResponse struct {
+	state         protoimpl.MessageState    `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage      `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`  // 拒绝时的 tip;成功为空
+	State         uint32                    `protobuf:"varint,2,opt,name=state,proto3" json:"state,omitempty"`                                   // 0 / 1 / 2,同 LoginResponse.account_deletion_state
+	ExecuteAfter  int64                     `protobuf:"varint,3,opt,name=execute_after,json=executeAfter,proto3" json:"execute_after,omitempty"` // 冷静期满的时刻,Unix 秒
+	Blockers      []*AccountDeletionBlocker `protobuf:"bytes,4,rep,name=blockers,proto3" json:"blockers,omitempty"`                              // 预检没过(tip = kLoginAccountDeletionBlocked)时的挂起清单
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AccountDeletionResponse) Reset() {
+	*x = AccountDeletionResponse{}
+	mi := &file_proto_login_login_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccountDeletionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccountDeletionResponse) ProtoMessage() {}
+
+func (x *AccountDeletionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_login_login_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccountDeletionResponse.ProtoReflect.Descriptor instead.
+func (*AccountDeletionResponse) Descriptor() ([]byte, []int) {
+	return file_proto_login_login_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *AccountDeletionResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *AccountDeletionResponse) GetState() uint32 {
+	if x != nil {
+		return x.State
+	}
+	return 0
+}
+
+func (x *AccountDeletionResponse) GetExecuteAfter() int64 {
+	if x != nil {
+		return x.ExecuteAfter
+	}
+	return 0
+}
+
+func (x *AccountDeletionResponse) GetBlockers() []*AccountDeletionBlocker {
+	if x != nil {
+		return x.Blockers
+	}
+	return nil
+}
+
+type CancelAccountDeletionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AccessToken   string                 `protobuf:"bytes,1,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"` // 冷静期内 /api/login 签发的 access token
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelAccountDeletionRequest) Reset() {
+	*x = CancelAccountDeletionRequest{}
+	mi := &file_proto_login_login_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelAccountDeletionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelAccountDeletionRequest) ProtoMessage() {}
+
+func (x *CancelAccountDeletionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_login_login_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelAccountDeletionRequest.ProtoReflect.Descriptor instead.
+func (*CancelAccountDeletionRequest) Descriptor() ([]byte, []int) {
+	return file_proto_login_login_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *CancelAccountDeletionRequest) GetAccessToken() string {
+	if x != nil {
+		return x.AccessToken
+	}
+	return ""
+}
+
 type TestResponse struct {
 	state         protoimpl.MessageState        `protogen:"open.v1"`
 	ErrorMessage  *base.TipInfoMessage          `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
@@ -431,7 +880,7 @@ type TestResponse struct {
 
 func (x *TestResponse) Reset() {
 	*x = TestResponse{}
-	mi := &file_proto_login_login_proto_msgTypes[4]
+	mi := &file_proto_login_login_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -443,7 +892,7 @@ func (x *TestResponse) String() string {
 func (*TestResponse) ProtoMessage() {}
 
 func (x *TestResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_login_login_proto_msgTypes[4]
+	mi := &file_proto_login_login_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -456,7 +905,7 @@ func (x *TestResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestResponse.ProtoReflect.Descriptor instead.
 func (*TestResponse) Descriptor() ([]byte, []int) {
-	return file_proto_login_login_proto_rawDescGZIP(), []int{4}
+	return file_proto_login_login_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *TestResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -505,7 +954,7 @@ type CreatePlayerRequest struct {
 
 func (x *CreatePlayerRequest) Reset() {
 	*x = CreatePlayerRequest{}
-	mi := &file_proto_login_login_proto_msgTypes[5]
+	mi := &file_proto_login_login_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -517,7 +966,7 @@ func (x *CreatePlayerRequest) String() string {
 func (*CreatePlayerRequest) ProtoMessage() {}
 
 func (x *CreatePlayerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_login_login_proto_msgTypes[5]
+	mi := &file_proto_login_login_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -530,7 +979,7 @@ func (x *CreatePlayerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreatePlayerRequest.ProtoReflect.Descriptor instead.
 func (*CreatePlayerRequest) Descriptor() ([]byte, []int) {
-	return file_proto_login_login_proto_rawDescGZIP(), []int{5}
+	return file_proto_login_login_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *CreatePlayerRequest) GetClassId() uint32 {
@@ -571,7 +1020,7 @@ type CreatePlayerResponse struct {
 
 func (x *CreatePlayerResponse) Reset() {
 	*x = CreatePlayerResponse{}
-	mi := &file_proto_login_login_proto_msgTypes[6]
+	mi := &file_proto_login_login_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -583,7 +1032,7 @@ func (x *CreatePlayerResponse) String() string {
 func (*CreatePlayerResponse) ProtoMessage() {}
 
 func (x *CreatePlayerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_login_login_proto_msgTypes[6]
+	mi := &file_proto_login_login_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -596,7 +1045,7 @@ func (x *CreatePlayerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreatePlayerResponse.ProtoReflect.Descriptor instead.
 func (*CreatePlayerResponse) Descriptor() ([]byte, []int) {
-	return file_proto_login_login_proto_rawDescGZIP(), []int{6}
+	return file_proto_login_login_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *CreatePlayerResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -624,7 +1073,7 @@ type EnterGameRequest struct {
 
 func (x *EnterGameRequest) Reset() {
 	*x = EnterGameRequest{}
-	mi := &file_proto_login_login_proto_msgTypes[7]
+	mi := &file_proto_login_login_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -636,7 +1085,7 @@ func (x *EnterGameRequest) String() string {
 func (*EnterGameRequest) ProtoMessage() {}
 
 func (x *EnterGameRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_login_login_proto_msgTypes[7]
+	mi := &file_proto_login_login_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -649,7 +1098,7 @@ func (x *EnterGameRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnterGameRequest.ProtoReflect.Descriptor instead.
 func (*EnterGameRequest) Descriptor() ([]byte, []int) {
-	return file_proto_login_login_proto_rawDescGZIP(), []int{7}
+	return file_proto_login_login_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *EnterGameRequest) GetPlayerId() uint64 {
@@ -667,16 +1116,20 @@ func (x *EnterGameRequest) GetRequestId() string {
 }
 
 type EnterGameResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
-	PlayerId      uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	PlayerId     uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	// 受理时这名角色的归属修订号(账号目录的 owner_revision,过户一次加一)。只在受理(error_message 为空)时填。
+	// 客户端把它记在本机待确认记录上:修订号变了说明角色换过主人,此前的待确认记录作废、不再恢复或重发
+	// (docs/design/cross-zone-matchmaking.md §13.2)。0 = 未知(旧服务端),客户端按没有这项信息处理。
+	OwnerRevision uint64 `protobuf:"varint,5,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *EnterGameResponse) Reset() {
 	*x = EnterGameResponse{}
-	mi := &file_proto_login_login_proto_msgTypes[8]
+	mi := &file_proto_login_login_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -688,7 +1141,7 @@ func (x *EnterGameResponse) String() string {
 func (*EnterGameResponse) ProtoMessage() {}
 
 func (x *EnterGameResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_login_login_proto_msgTypes[8]
+	mi := &file_proto_login_login_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -701,7 +1154,7 @@ func (x *EnterGameResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnterGameResponse.ProtoReflect.Descriptor instead.
 func (*EnterGameResponse) Descriptor() ([]byte, []int) {
-	return file_proto_login_login_proto_rawDescGZIP(), []int{8}
+	return file_proto_login_login_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *EnterGameResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -718,6 +1171,13 @@ func (x *EnterGameResponse) GetPlayerId() uint64 {
 	return 0
 }
 
+func (x *EnterGameResponse) GetOwnerRevision() uint64 {
+	if x != nil {
+		return x.OwnerRevision
+	}
+	return 0
+}
+
 type LeaveGameRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -726,7 +1186,7 @@ type LeaveGameRequest struct {
 
 func (x *LeaveGameRequest) Reset() {
 	*x = LeaveGameRequest{}
-	mi := &file_proto_login_login_proto_msgTypes[9]
+	mi := &file_proto_login_login_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -738,7 +1198,7 @@ func (x *LeaveGameRequest) String() string {
 func (*LeaveGameRequest) ProtoMessage() {}
 
 func (x *LeaveGameRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_login_login_proto_msgTypes[9]
+	mi := &file_proto_login_login_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -751,13 +1211,13 @@ func (x *LeaveGameRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LeaveGameRequest.ProtoReflect.Descriptor instead.
 func (*LeaveGameRequest) Descriptor() ([]byte, []int) {
-	return file_proto_login_login_proto_rawDescGZIP(), []int{9}
+	return file_proto_login_login_proto_rawDescGZIP(), []int{16}
 }
 
 type LoginNodeDisconnectRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// 只做一致性核对:login 以 gate 签名的会话头 SessionDetails.session_id 为准,这里填了且与会话头不同就整条拒绝
-	// (InvalidArgument)。gate 合成时填同一个值;0 = 没填,按会话头处理(docs/design/client-request-ordering.md §6.2)。
+	// 只做一致性核对:login 以 gate 签名的会话头 SessionDetails.session_id 为准,这里填了且与会话头不同时记 CRITICAL、
+	// 照常按会话头收尾(不拒绝:断线通知只发一次)。gate 合成时填同一个值;0 = 没填(docs/design/client-request-ordering.md §6.2)。
 	SessionId     uint32 `protobuf:"varint,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -765,7 +1225,7 @@ type LoginNodeDisconnectRequest struct {
 
 func (x *LoginNodeDisconnectRequest) Reset() {
 	*x = LoginNodeDisconnectRequest{}
-	mi := &file_proto_login_login_proto_msgTypes[10]
+	mi := &file_proto_login_login_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -777,7 +1237,7 @@ func (x *LoginNodeDisconnectRequest) String() string {
 func (*LoginNodeDisconnectRequest) ProtoMessage() {}
 
 func (x *LoginNodeDisconnectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_login_login_proto_msgTypes[10]
+	mi := &file_proto_login_login_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -790,7 +1250,7 @@ func (x *LoginNodeDisconnectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoginNodeDisconnectRequest.ProtoReflect.Descriptor instead.
 func (*LoginNodeDisconnectRequest) Descriptor() ([]byte, []int) {
-	return file_proto_login_login_proto_rawDescGZIP(), []int{10}
+	return file_proto_login_login_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *LoginNodeDisconnectRequest) GetSessionId() uint32 {
@@ -808,7 +1268,7 @@ type LoginEmptyResponse struct {
 
 func (x *LoginEmptyResponse) Reset() {
 	*x = LoginEmptyResponse{}
-	mi := &file_proto_login_login_proto_msgTypes[11]
+	mi := &file_proto_login_login_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -820,7 +1280,7 @@ func (x *LoginEmptyResponse) String() string {
 func (*LoginEmptyResponse) ProtoMessage() {}
 
 func (x *LoginEmptyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_login_login_proto_msgTypes[11]
+	mi := &file_proto_login_login_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -833,7 +1293,7 @@ func (x *LoginEmptyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoginEmptyResponse.ProtoReflect.Descriptor instead.
 func (*LoginEmptyResponse) Descriptor() ([]byte, []int) {
-	return file_proto_login_login_proto_rawDescGZIP(), []int{11}
+	return file_proto_login_login_proto_rawDescGZIP(), []int{18}
 }
 
 type RefreshTokenRequest struct {
@@ -845,7 +1305,7 @@ type RefreshTokenRequest struct {
 
 func (x *RefreshTokenRequest) Reset() {
 	*x = RefreshTokenRequest{}
-	mi := &file_proto_login_login_proto_msgTypes[12]
+	mi := &file_proto_login_login_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -857,7 +1317,7 @@ func (x *RefreshTokenRequest) String() string {
 func (*RefreshTokenRequest) ProtoMessage() {}
 
 func (x *RefreshTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_login_login_proto_msgTypes[12]
+	mi := &file_proto_login_login_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -870,7 +1330,7 @@ func (x *RefreshTokenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshTokenRequest.ProtoReflect.Descriptor instead.
 func (*RefreshTokenRequest) Descriptor() ([]byte, []int) {
-	return file_proto_login_login_proto_rawDescGZIP(), []int{12}
+	return file_proto_login_login_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *RefreshTokenRequest) GetRefreshToken() string {
@@ -893,7 +1353,7 @@ type RefreshTokenResponse struct {
 
 func (x *RefreshTokenResponse) Reset() {
 	*x = RefreshTokenResponse{}
-	mi := &file_proto_login_login_proto_msgTypes[13]
+	mi := &file_proto_login_login_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -905,7 +1365,7 @@ func (x *RefreshTokenResponse) String() string {
 func (*RefreshTokenResponse) ProtoMessage() {}
 
 func (x *RefreshTokenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_login_login_proto_msgTypes[13]
+	mi := &file_proto_login_login_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -918,7 +1378,7 @@ func (x *RefreshTokenResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshTokenResponse.ProtoReflect.Descriptor instead.
 func (*RefreshTokenResponse) Descriptor() ([]byte, []int) {
-	return file_proto_login_login_proto_rawDescGZIP(), []int{13}
+	return file_proto_login_login_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *RefreshTokenResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -967,7 +1427,7 @@ type GateMigrationRequest struct {
 
 func (x *GateMigrationRequest) Reset() {
 	*x = GateMigrationRequest{}
-	mi := &file_proto_login_login_proto_msgTypes[14]
+	mi := &file_proto_login_login_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -979,7 +1439,7 @@ func (x *GateMigrationRequest) String() string {
 func (*GateMigrationRequest) ProtoMessage() {}
 
 func (x *GateMigrationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_login_login_proto_msgTypes[14]
+	mi := &file_proto_login_login_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -992,26 +1452,27 @@ func (x *GateMigrationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GateMigrationRequest.ProtoReflect.Descriptor instead.
 func (*GateMigrationRequest) Descriptor() ([]byte, []int) {
-	return file_proto_login_login_proto_rawDescGZIP(), []int{14}
+	return file_proto_login_login_proto_rawDescGZIP(), []int{21}
 }
 
 // 字段与 RedirectToGateEvent 同名同型:gate 用同一段代码推 msg 124。
 // 票据 GateTokenPayload 的 target_zone_id 恒为 0:到达时的 EnterGame 走租约内重连,scene_manager 派回原场景。
 type GateMigrationResponse struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Result         GateMigrationResult    `protobuf:"varint,1,opt,name=result,proto3,enum=loginpb.GateMigrationResult" json:"result,omitempty"`
-	TargetGateIp   string                 `protobuf:"bytes,2,opt,name=target_gate_ip,json=targetGateIp,proto3" json:"target_gate_ip,omitempty"` // 目标 gate 的客户端可达地址(clientendpoint.Select 的结果)
-	TargetGatePort uint32                 `protobuf:"varint,3,opt,name=target_gate_port,json=targetGatePort,proto3" json:"target_gate_port,omitempty"`
-	TokenPayload   []byte                 `protobuf:"bytes,4,opt,name=token_payload,json=tokenPayload,proto3" json:"token_payload,omitempty"`       // 序列化的 GateTokenPayload
-	TokenSignature []byte                 `protobuf:"bytes,5,opt,name=token_signature,json=tokenSignature,proto3" json:"token_signature,omitempty"` // HMAC-SHA256 签名(小写 hex)
-	TokenDeadline  int64                  `protobuf:"varint,6,opt,name=token_deadline,json=tokenDeadline,proto3" json:"token_deadline,omitempty"`   // 票据到期时刻,Unix 秒
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Result          GateMigrationResult    `protobuf:"varint,1,opt,name=result,proto3,enum=loginpb.GateMigrationResult" json:"result,omitempty"`
+	TargetGateIp    string                 `protobuf:"bytes,2,opt,name=target_gate_ip,json=targetGateIp,proto3" json:"target_gate_ip,omitempty"` // 目标 gate 的客户端可达地址(clientendpoint.Select 的结果)
+	TargetGatePort  uint32                 `protobuf:"varint,3,opt,name=target_gate_port,json=targetGatePort,proto3" json:"target_gate_port,omitempty"`
+	TokenPayload    []byte                 `protobuf:"bytes,4,opt,name=token_payload,json=tokenPayload,proto3" json:"token_payload,omitempty"`              // 序列化的 GateTokenPayload
+	TokenSignature  []byte                 `protobuf:"bytes,5,opt,name=token_signature,json=tokenSignature,proto3" json:"token_signature,omitempty"`        // HMAC-SHA256 签名(小写 hex)
+	TokenDeadline   int64                  `protobuf:"varint,6,opt,name=token_deadline,json=tokenDeadline,proto3" json:"token_deadline,omitempty"`          // 票据到期时刻,Unix 秒
+	TargetGateWsUrl string                 `protobuf:"bytes,7,opt,name=target_gate_ws_url,json=targetGateWsUrl,proto3" json:"target_gate_ws_url,omitempty"` // 目标 gate 的 WebSocket 地址(NodeInfo.client_ws_url),gate 原样放进 msg 124;空串 = 不接小游戏
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *GateMigrationResponse) Reset() {
 	*x = GateMigrationResponse{}
-	mi := &file_proto_login_login_proto_msgTypes[15]
+	mi := &file_proto_login_login_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1023,7 +1484,7 @@ func (x *GateMigrationResponse) String() string {
 func (*GateMigrationResponse) ProtoMessage() {}
 
 func (x *GateMigrationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_login_login_proto_msgTypes[15]
+	mi := &file_proto_login_login_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1036,7 +1497,7 @@ func (x *GateMigrationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GateMigrationResponse.ProtoReflect.Descriptor instead.
 func (*GateMigrationResponse) Descriptor() ([]byte, []int) {
-	return file_proto_login_login_proto_rawDescGZIP(), []int{15}
+	return file_proto_login_login_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *GateMigrationResponse) GetResult() GateMigrationResult {
@@ -1081,6 +1542,13 @@ func (x *GateMigrationResponse) GetTokenDeadline() int64 {
 	return 0
 }
 
+func (x *GateMigrationResponse) GetTargetGateWsUrl() string {
+	if x != nil {
+		return x.TargetGateWsUrl
+	}
+	return ""
+}
+
 // gate 为仍然连着的连接续租它在 login 的按连接记录(docs/design/gate-online-identity.md §10.4):
 // 登录态、账号设备集里的成员、已绑定角色的会话栅栏。这些记录的寿命只是「连接断了、Disconnect 又没送到」时的回收兜底,
 // 不该比活着的连接先到期。只有 gate 合成,客户端不得发起;连接身份全在 gate 签名的 SessionDetails 里,请求体为空。
@@ -1092,7 +1560,7 @@ type RenewSessionRequest struct {
 
 func (x *RenewSessionRequest) Reset() {
 	*x = RenewSessionRequest{}
-	mi := &file_proto_login_login_proto_msgTypes[16]
+	mi := &file_proto_login_login_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1104,7 +1572,7 @@ func (x *RenewSessionRequest) String() string {
 func (*RenewSessionRequest) ProtoMessage() {}
 
 func (x *RenewSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_login_login_proto_msgTypes[16]
+	mi := &file_proto_login_login_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1117,7 +1585,7 @@ func (x *RenewSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenewSessionRequest.ProtoReflect.Descriptor instead.
 func (*RenewSessionRequest) Descriptor() ([]byte, []int) {
-	return file_proto_login_login_proto_rawDescGZIP(), []int{16}
+	return file_proto_login_login_proto_rawDescGZIP(), []int{23}
 }
 
 type RenewSessionResponse struct {
@@ -1133,7 +1601,7 @@ type RenewSessionResponse struct {
 
 func (x *RenewSessionResponse) Reset() {
 	*x = RenewSessionResponse{}
-	mi := &file_proto_login_login_proto_msgTypes[17]
+	mi := &file_proto_login_login_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1145,7 +1613,7 @@ func (x *RenewSessionResponse) String() string {
 func (*RenewSessionResponse) ProtoMessage() {}
 
 func (x *RenewSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_login_login_proto_msgTypes[17]
+	mi := &file_proto_login_login_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1158,7 +1626,7 @@ func (x *RenewSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenewSessionResponse.ProtoReflect.Descriptor instead.
 func (*RenewSessionResponse) Descriptor() ([]byte, []int) {
-	return file_proto_login_login_proto_rawDescGZIP(), []int{17}
+	return file_proto_login_login_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *RenewSessionResponse) GetRenewed() bool {
@@ -1193,7 +1661,7 @@ type AssignGateRequest struct {
 
 func (x *AssignGateRequest) Reset() {
 	*x = AssignGateRequest{}
-	mi := &file_proto_login_login_proto_msgTypes[18]
+	mi := &file_proto_login_login_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1205,7 +1673,7 @@ func (x *AssignGateRequest) String() string {
 func (*AssignGateRequest) ProtoMessage() {}
 
 func (x *AssignGateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_login_login_proto_msgTypes[18]
+	mi := &file_proto_login_login_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1218,7 +1686,7 @@ func (x *AssignGateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AssignGateRequest.ProtoReflect.Descriptor instead.
 func (*AssignGateRequest) Descriptor() ([]byte, []int) {
-	return file_proto_login_login_proto_rawDescGZIP(), []int{18}
+	return file_proto_login_login_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *AssignGateRequest) GetZoneId() uint32 {
@@ -1260,18 +1728,21 @@ type AssignGateResponse struct {
 	// Queue protocol (added 2026-05). status=0 means the legacy fields above
 	// are populated and the client connects directly. status=1 means the client
 	// is in the queue and must poll QueryQueueStatus.
-	Status        uint32 `protobuf:"varint,7,opt,name=status,proto3" json:"status,omitempty"`
-	QueueToken    string `protobuf:"bytes,8,opt,name=queue_token,json=queueToken,proto3" json:"queue_token,omitempty"`           // opaque token, present when status=1
-	QueueRank     uint32 `protobuf:"varint,9,opt,name=queue_rank,json=queueRank,proto3" json:"queue_rank,omitempty"`             // 0-based position; 0 = "you are next"
-	QueueTotal    uint32 `protobuf:"varint,10,opt,name=queue_total,json=queueTotal,proto3" json:"queue_total,omitempty"`         // total queue length for this zone (for UI)
-	RetryAfterMs  uint32 `protobuf:"varint,11,opt,name=retry_after_ms,json=retryAfterMs,proto3" json:"retry_after_ms,omitempty"` // suggested poll interval (e.g. 2000)
+	Status       uint32 `protobuf:"varint,7,opt,name=status,proto3" json:"status,omitempty"`
+	QueueToken   string `protobuf:"bytes,8,opt,name=queue_token,json=queueToken,proto3" json:"queue_token,omitempty"`           // opaque token, present when status=1
+	QueueRank    uint32 `protobuf:"varint,9,opt,name=queue_rank,json=queueRank,proto3" json:"queue_rank,omitempty"`             // 0-based position; 0 = "you are next"
+	QueueTotal   uint32 `protobuf:"varint,10,opt,name=queue_total,json=queueTotal,proto3" json:"queue_total,omitempty"`         // total queue length for this zone (for UI)
+	RetryAfterMs uint32 `protobuf:"varint,11,opt,name=retry_after_ms,json=retryAfterMs,proto3" json:"retry_after_ms,omitempty"` // suggested poll interval (e.g. 2000)
+	// 同一台 gate 给小游戏客户端的 WebSocket 地址(NodeInfo.client_ws_url);空串 = 这台 gate 不接小游戏。
+	// 小游戏客户端连它,原生客户端仍连 ip / port(docs/design/minigame-websocket-gate.md W7)。
+	WsUrl         string `protobuf:"bytes,12,opt,name=ws_url,json=wsUrl,proto3" json:"ws_url,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AssignGateResponse) Reset() {
 	*x = AssignGateResponse{}
-	mi := &file_proto_login_login_proto_msgTypes[19]
+	mi := &file_proto_login_login_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1283,7 +1754,7 @@ func (x *AssignGateResponse) String() string {
 func (*AssignGateResponse) ProtoMessage() {}
 
 func (x *AssignGateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_login_login_proto_msgTypes[19]
+	mi := &file_proto_login_login_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1296,7 +1767,7 @@ func (x *AssignGateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AssignGateResponse.ProtoReflect.Descriptor instead.
 func (*AssignGateResponse) Descriptor() ([]byte, []int) {
-	return file_proto_login_login_proto_rawDescGZIP(), []int{19}
+	return file_proto_login_login_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *AssignGateResponse) GetIp() string {
@@ -1376,6 +1847,13 @@ func (x *AssignGateResponse) GetRetryAfterMs() uint32 {
 	return 0
 }
 
+func (x *AssignGateResponse) GetWsUrl() string {
+	if x != nil {
+		return x.WsUrl
+	}
+	return ""
+}
+
 type QueryQueueStatusRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	QueueToken    string                 `protobuf:"bytes,1,opt,name=queue_token,json=queueToken,proto3" json:"queue_token,omitempty"`
@@ -1385,7 +1863,7 @@ type QueryQueueStatusRequest struct {
 
 func (x *QueryQueueStatusRequest) Reset() {
 	*x = QueryQueueStatusRequest{}
-	mi := &file_proto_login_login_proto_msgTypes[20]
+	mi := &file_proto_login_login_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1397,7 +1875,7 @@ func (x *QueryQueueStatusRequest) String() string {
 func (*QueryQueueStatusRequest) ProtoMessage() {}
 
 func (x *QueryQueueStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_login_login_proto_msgTypes[20]
+	mi := &file_proto_login_login_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1410,7 +1888,7 @@ func (x *QueryQueueStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryQueueStatusRequest.ProtoReflect.Descriptor instead.
 func (*QueryQueueStatusRequest) Descriptor() ([]byte, []int) {
-	return file_proto_login_login_proto_rawDescGZIP(), []int{20}
+	return file_proto_login_login_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *QueryQueueStatusRequest) GetQueueToken() string {
@@ -1434,14 +1912,16 @@ type QueryQueueStatusResponse struct {
 	QueueTotal   uint32 `protobuf:"varint,8,opt,name=queue_total,json=queueTotal,proto3" json:"queue_total,omitempty"`
 	RetryAfterMs uint32 `protobuf:"varint,9,opt,name=retry_after_ms,json=retryAfterMs,proto3" json:"retry_after_ms,omitempty"`
 	// status=3 or any error
-	Error         string `protobuf:"bytes,10,opt,name=error,proto3" json:"error,omitempty"`
+	Error string `protobuf:"bytes,10,opt,name=error,proto3" json:"error,omitempty"`
+	// status=0:同 AssignGateResponse.ws_url。
+	WsUrl         string `protobuf:"bytes,11,opt,name=ws_url,json=wsUrl,proto3" json:"ws_url,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *QueryQueueStatusResponse) Reset() {
 	*x = QueryQueueStatusResponse{}
-	mi := &file_proto_login_login_proto_msgTypes[21]
+	mi := &file_proto_login_login_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1453,7 +1933,7 @@ func (x *QueryQueueStatusResponse) String() string {
 func (*QueryQueueStatusResponse) ProtoMessage() {}
 
 func (x *QueryQueueStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_login_login_proto_msgTypes[21]
+	mi := &file_proto_login_login_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1466,7 +1946,7 @@ func (x *QueryQueueStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryQueueStatusResponse.ProtoReflect.Descriptor instead.
 func (*QueryQueueStatusResponse) Descriptor() ([]byte, []int) {
-	return file_proto_login_login_proto_rawDescGZIP(), []int{21}
+	return file_proto_login_login_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *QueryQueueStatusResponse) GetStatus() uint32 {
@@ -1539,6 +2019,13 @@ func (x *QueryQueueStatusResponse) GetError() string {
 	return ""
 }
 
+func (x *QueryQueueStatusResponse) GetWsUrl() string {
+	if x != nil {
+		return x.WsUrl
+	}
+	return ""
+}
+
 type ZoneRoleCountRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 必须是本 login 所在的区,否则回 InvalidArgument:网关按区选路,问到别区的 login 是选路错了,不能拿别区的数开关本区。
@@ -1549,7 +2036,7 @@ type ZoneRoleCountRequest struct {
 
 func (x *ZoneRoleCountRequest) Reset() {
 	*x = ZoneRoleCountRequest{}
-	mi := &file_proto_login_login_proto_msgTypes[22]
+	mi := &file_proto_login_login_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1561,7 +2048,7 @@ func (x *ZoneRoleCountRequest) String() string {
 func (*ZoneRoleCountRequest) ProtoMessage() {}
 
 func (x *ZoneRoleCountRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_login_login_proto_msgTypes[22]
+	mi := &file_proto_login_login_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1574,7 +2061,7 @@ func (x *ZoneRoleCountRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ZoneRoleCountRequest.ProtoReflect.Descriptor instead.
 func (*ZoneRoleCountRequest) Descriptor() ([]byte, []int) {
-	return file_proto_login_login_proto_rawDescGZIP(), []int{22}
+	return file_proto_login_login_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ZoneRoleCountRequest) GetZoneId() uint32 {
@@ -1593,7 +2080,7 @@ type ZoneRoleCountResponse struct {
 
 func (x *ZoneRoleCountResponse) Reset() {
 	*x = ZoneRoleCountResponse{}
-	mi := &file_proto_login_login_proto_msgTypes[23]
+	mi := &file_proto_login_login_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1605,7 +2092,7 @@ func (x *ZoneRoleCountResponse) String() string {
 func (*ZoneRoleCountResponse) ProtoMessage() {}
 
 func (x *ZoneRoleCountResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_login_login_proto_msgTypes[23]
+	mi := &file_proto_login_login_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1618,7 +2105,7 @@ func (x *ZoneRoleCountResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ZoneRoleCountResponse.ProtoReflect.Descriptor instead.
 func (*ZoneRoleCountResponse) Descriptor() ([]byte, []int) {
-	return file_proto_login_login_proto_rawDescGZIP(), []int{23}
+	return file_proto_login_login_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ZoneRoleCountResponse) GetRoles() uint64 {
@@ -1638,7 +2125,7 @@ type RemovePlayerResult struct {
 
 func (x *RemovePlayerResult) Reset() {
 	*x = RemovePlayerResult{}
-	mi := &file_proto_login_login_proto_msgTypes[24]
+	mi := &file_proto_login_login_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1650,7 +2137,7 @@ func (x *RemovePlayerResult) String() string {
 func (*RemovePlayerResult) ProtoMessage() {}
 
 func (x *RemovePlayerResult) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_login_login_proto_msgTypes[24]
+	mi := &file_proto_login_login_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1663,7 +2150,7 @@ func (x *RemovePlayerResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemovePlayerResult.ProtoReflect.Descriptor instead.
 func (*RemovePlayerResult) Descriptor() ([]byte, []int) {
-	return file_proto_login_login_proto_rawDescGZIP(), []int{24}
+	return file_proto_login_login_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *RemovePlayerResult) GetPlayerId() uint64 {
@@ -1692,7 +2179,7 @@ type RemovePlayersFromAccountsRequest struct {
 
 func (x *RemovePlayersFromAccountsRequest) Reset() {
 	*x = RemovePlayersFromAccountsRequest{}
-	mi := &file_proto_login_login_proto_msgTypes[25]
+	mi := &file_proto_login_login_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1704,7 +2191,7 @@ func (x *RemovePlayersFromAccountsRequest) String() string {
 func (*RemovePlayersFromAccountsRequest) ProtoMessage() {}
 
 func (x *RemovePlayersFromAccountsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_login_login_proto_msgTypes[25]
+	mi := &file_proto_login_login_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1717,7 +2204,7 @@ func (x *RemovePlayersFromAccountsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemovePlayersFromAccountsRequest.ProtoReflect.Descriptor instead.
 func (*RemovePlayersFromAccountsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_login_login_proto_rawDescGZIP(), []int{25}
+	return file_proto_login_login_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *RemovePlayersFromAccountsRequest) GetPlayerIds() []uint64 {
@@ -1761,7 +2248,7 @@ type RemovePlayersFromAccountsResponse struct {
 
 func (x *RemovePlayersFromAccountsResponse) Reset() {
 	*x = RemovePlayersFromAccountsResponse{}
-	mi := &file_proto_login_login_proto_msgTypes[26]
+	mi := &file_proto_login_login_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1773,7 +2260,7 @@ func (x *RemovePlayersFromAccountsResponse) String() string {
 func (*RemovePlayersFromAccountsResponse) ProtoMessage() {}
 
 func (x *RemovePlayersFromAccountsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_login_login_proto_msgTypes[26]
+	mi := &file_proto_login_login_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1786,7 +2273,7 @@ func (x *RemovePlayersFromAccountsResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use RemovePlayersFromAccountsResponse.ProtoReflect.Descriptor instead.
 func (*RemovePlayersFromAccountsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_login_login_proto_rawDescGZIP(), []int{26}
+	return file_proto_login_login_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *RemovePlayersFromAccountsResponse) GetRemovedCount() uint32 {
@@ -1824,6 +2311,190 @@ func (x *RemovePlayersFromAccountsResponse) GetResults() []*RemovePlayerResult {
 	return nil
 }
 
+// 客服代办注销(Google Play 要求的网页入口,docs/design/account-deletion.md §4.6):按角色找到账号,走与本人申请同一套预检与冷静期。
+// 客服先在系统外核实身份;操作人、理由、对端地址只进日志,data_service 的回执记 source=2。
+type ScheduleAccountDeletionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"` // 账号下任一角色
+	Operator      string                 `protobuf:"bytes,2,opt,name=operator,proto3" json:"operator,omitempty"`                  // 必填,≤ 64 字节
+	Reason        string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`                      // 必填,≤ 256 字节
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ScheduleAccountDeletionRequest) Reset() {
+	*x = ScheduleAccountDeletionRequest{}
+	mi := &file_proto_login_login_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ScheduleAccountDeletionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ScheduleAccountDeletionRequest) ProtoMessage() {}
+
+func (x *ScheduleAccountDeletionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_login_login_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ScheduleAccountDeletionRequest.ProtoReflect.Descriptor instead.
+func (*ScheduleAccountDeletionRequest) Descriptor() ([]byte, []int) {
+	return file_proto_login_login_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *ScheduleAccountDeletionRequest) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *ScheduleAccountDeletionRequest) GetOperator() string {
+	if x != nil {
+		return x.Operator
+	}
+	return ""
+}
+
+func (x *ScheduleAccountDeletionRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+// 客服重置实名(docs/design/real-name-anti-addiction.md §5.2 末):玩家填错了身份信息、客服在系统外核实之后,清掉账号上的实名,
+// 玩家下次登录重新提交。player_id 与 account 恰好填一个:填错身份证号的账号可能一个角色都建不了,所以也能按账号找。
+type ResetAccountRealNameRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"` // 账号下任一角色
+	Account       string                 `protobuf:"bytes,2,opt,name=account,proto3" json:"account,omitempty"`                    // 或者直接给账号
+	Operator      string                 `protobuf:"bytes,3,opt,name=operator,proto3" json:"operator,omitempty"`                  // 必填,≤ 64 字节
+	Reason        string                 `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`                      // 必填,≤ 256 字节
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResetAccountRealNameRequest) Reset() {
+	*x = ResetAccountRealNameRequest{}
+	mi := &file_proto_login_login_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResetAccountRealNameRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResetAccountRealNameRequest) ProtoMessage() {}
+
+func (x *ResetAccountRealNameRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_login_login_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResetAccountRealNameRequest.ProtoReflect.Descriptor instead.
+func (*ResetAccountRealNameRequest) Descriptor() ([]byte, []int) {
+	return file_proto_login_login_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *ResetAccountRealNameRequest) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *ResetAccountRealNameRequest) GetAccount() string {
+	if x != nil {
+		return x.Account
+	}
+	return ""
+}
+
+func (x *ResetAccountRealNameRequest) GetOperator() string {
+	if x != nil {
+		return x.Operator
+	}
+	return ""
+}
+
+func (x *ResetAccountRealNameRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+type ResetAccountRealNameResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"` // 角色或账号不存在:kLoginAccountNotFound
+	HadRealName   bool                   `protobuf:"varint,2,opt,name=had_real_name,json=hadRealName,proto3" json:"had_real_name,omitempty"` // 重置之前有没有实名;false = 本来就没有(重放也落在这里)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResetAccountRealNameResponse) Reset() {
+	*x = ResetAccountRealNameResponse{}
+	mi := &file_proto_login_login_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResetAccountRealNameResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResetAccountRealNameResponse) ProtoMessage() {}
+
+func (x *ResetAccountRealNameResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_login_login_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResetAccountRealNameResponse.ProtoReflect.Descriptor instead.
+func (*ResetAccountRealNameResponse) Descriptor() ([]byte, []int) {
+	return file_proto_login_login_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *ResetAccountRealNameResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *ResetAccountRealNameResponse) GetHadRealName() bool {
+	if x != nil {
+		return x.HadRealName
+	}
+	return false
+}
+
 var File_proto_login_login_proto protoreflect.FileDescriptor
 
 const file_proto_login_login_proto_rawDesc = "" +
@@ -1845,14 +2516,47 @@ const file_proto_login_login_proto_rawDesc = "" +
 	"\bpassword\x18\x02 \x01(\tR\bpassword\x12\x1b\n" +
 	"\tauth_type\x18\x03 \x01(\tR\bauthType\x12\x1d\n" +
 	"\n" +
-	"auth_token\x18\x04 \x01(\tR\tauthToken\"\xae\x02\n" +
+	"auth_token\x18\x04 \x01(\tR\tauthToken\"\xad\x04\n" +
 	"\rLoginResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12=\n" +
 	"\aplayers\x18\x02 \x03(\v2#.loginpb.AccountSimplePlayerWrapperR\aplayers\x12!\n" +
 	"\faccess_token\x18\x03 \x01(\tR\vaccessToken\x12#\n" +
 	"\rrefresh_token\x18\x04 \x01(\tR\frefreshToken\x12.\n" +
 	"\x13access_token_expire\x18\x05 \x01(\x03R\x11accessTokenExpire\x120\n" +
-	"\x14refresh_token_expire\x18\x06 \x01(\x03R\x12refreshTokenExpire\"\xbd\x01\n" +
+	"\x14refresh_token_expire\x18\x06 \x01(\x03R\x12refreshTokenExpire\x124\n" +
+	"\x16account_deletion_state\x18\a \x01(\rR\x14accountDeletionState\x12C\n" +
+	"\x1eaccount_deletion_execute_after\x18\b \x01(\x03R\x1baccountDeletionExecuteAfter\x12=\n" +
+	"\x1bprevious_account_deleted_at\x18\t \x01(\x03R\x18previousAccountDeletedAt\x12C\n" +
+	"\x0eanti_addiction\x18\n" +
+	" \x01(\v2\x1c.loginpb.AntiAddictionStatusR\rantiAddiction\"\x83\x01\n" +
+	"\x13AntiAddictionStatus\x12,\n" +
+	"\x12real_name_required\x18\x01 \x01(\bR\x10realNameRequired\x12\x14\n" +
+	"\x05minor\x18\x02 \x01(\bR\x05minor\x12(\n" +
+	"\x10play_deadline_ms\x18\x03 \x01(\x04R\x0eplayDeadlineMs\"k\n" +
+	"\x15SubmitRealNameRequest\x12!\n" +
+	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n" +
+	"\tid_number\x18\x03 \x01(\tR\bidNumber\"\x93\x01\n" +
+	"\x16SubmitRealNameResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12C\n" +
+	"\x0eanti_addiction\x18\x02 \x01(\v2\x1c.loginpb.AntiAddictionStatusR\rantiAddiction\"\xb9\x01\n" +
+	"\x16AccountDeletionRequest\x12\x18\n" +
+	"\aaccount\x18\x01 \x01(\tR\aaccount\x12\x1a\n" +
+	"\bpassword\x18\x02 \x01(\tR\bpassword\x12\x1b\n" +
+	"\tauth_type\x18\x03 \x01(\tR\bauthType\x12\x1d\n" +
+	"\n" +
+	"auth_token\x18\x04 \x01(\tR\tauthToken\x12-\n" +
+	"\x12authorization_code\x18\x05 \x01(\tR\x11authorizationCode\"M\n" +
+	"\x16AccountDeletionBlocker\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x16\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"\xc7\x01\n" +
+	"\x17AccountDeletionResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x14\n" +
+	"\x05state\x18\x02 \x01(\rR\x05state\x12#\n" +
+	"\rexecute_after\x18\x03 \x01(\x03R\fexecuteAfter\x12;\n" +
+	"\bblockers\x18\x04 \x03(\v2\x1f.loginpb.AccountDeletionBlockerR\bblockers\"A\n" +
+	"\x1cCancelAccountDeletionRequest\x12!\n" +
+	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\"\xbd\x01\n" +
 	"\fTestResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12=\n" +
 	"\aplayers\x18\x02 \x03(\v2#.loginpb.AccountSimplePlayerWrapperR\aplayers\x12\x1e\n" +
@@ -1871,10 +2575,11 @@ const file_proto_login_login_proto_rawDesc = "" +
 	"\x10EnterGameRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x02 \x01(\tR\trequestId\"r\n" +
+	"request_id\x18\x02 \x01(\tR\trequestId\"\x99\x01\n" +
 	"\x11EnterGameResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x1b\n" +
-	"\tplayer_id\x18\x02 \x01(\x04R\bplayerIdJ\x04\b\x03\x10\x04J\x04\b\x04\x10\x05\"\x12\n" +
+	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12%\n" +
+	"\x0eowner_revision\x18\x05 \x01(\x04R\rownerRevisionJ\x04\b\x03\x10\x04J\x04\b\x04\x10\x05\"\x12\n" +
 	"\x10LeaveGameRequest\";\n" +
 	"\x1aLoginNodeDisconnectRequest\x12\x1d\n" +
 	"\n" +
@@ -1888,14 +2593,15 @@ const file_proto_login_login_proto_rawDesc = "" +
 	"\rrefresh_token\x18\x03 \x01(\tR\frefreshToken\x12.\n" +
 	"\x13access_token_expire\x18\x04 \x01(\x03R\x11accessTokenExpire\x120\n" +
 	"\x14refresh_token_expire\x18\x05 \x01(\x03R\x12refreshTokenExpire\"\x16\n" +
-	"\x14GateMigrationRequest\"\x92\x02\n" +
+	"\x14GateMigrationRequest\"\xbf\x02\n" +
 	"\x15GateMigrationResponse\x124\n" +
 	"\x06result\x18\x01 \x01(\x0e2\x1c.loginpb.GateMigrationResultR\x06result\x12$\n" +
 	"\x0etarget_gate_ip\x18\x02 \x01(\tR\ftargetGateIp\x12(\n" +
 	"\x10target_gate_port\x18\x03 \x01(\rR\x0etargetGatePort\x12#\n" +
 	"\rtoken_payload\x18\x04 \x01(\fR\ftokenPayload\x12'\n" +
 	"\x0ftoken_signature\x18\x05 \x01(\fR\x0etokenSignature\x12%\n" +
-	"\x0etoken_deadline\x18\x06 \x01(\x03R\rtokenDeadline\"\x15\n" +
+	"\x0etoken_deadline\x18\x06 \x01(\x03R\rtokenDeadline\x12+\n" +
+	"\x12target_gate_ws_url\x18\a \x01(\tR\x0ftargetGateWsUrl\"\x15\n" +
 	"\x13RenewSessionRequest\"`\n" +
 	"\x14RenewSessionResponse\x12\x18\n" +
 	"\arenewed\x18\x01 \x01(\bR\arenewed\x12.\n" +
@@ -1905,7 +2611,7 @@ const file_proto_login_login_proto_rawDesc = "" +
 	"\vqueue_token\x18\x02 \x01(\tR\n" +
 	"queueToken\x12\x1b\n" +
 	"\tdevice_id\x18\x04 \x01(\tR\bdeviceId\x12!\n" +
-	"\faccess_token\x18\x05 \x01(\tR\vaccessTokenJ\x04\b\x03\x10\x04R\aaccount\"\xe2\x02\n" +
+	"\faccess_token\x18\x05 \x01(\tR\vaccessTokenJ\x04\b\x03\x10\x04R\aaccount\"\xf9\x02\n" +
 	"\x12AssignGateResponse\x12\x0e\n" +
 	"\x02ip\x18\x01 \x01(\tR\x02ip\x12\x12\n" +
 	"\x04port\x18\x02 \x01(\rR\x04port\x12#\n" +
@@ -1921,10 +2627,11 @@ const file_proto_login_login_proto_rawDesc = "" +
 	"\vqueue_total\x18\n" +
 	" \x01(\rR\n" +
 	"queueTotal\x12$\n" +
-	"\x0eretry_after_ms\x18\v \x01(\rR\fretryAfterMs\":\n" +
+	"\x0eretry_after_ms\x18\v \x01(\rR\fretryAfterMs\x12\x15\n" +
+	"\x06ws_url\x18\f \x01(\tR\x05wsUrl\":\n" +
 	"\x17QueryQueueStatusRequest\x12\x1f\n" +
 	"\vqueue_token\x18\x01 \x01(\tR\n" +
-	"queueToken\"\xc7\x02\n" +
+	"queueToken\"\xde\x02\n" +
 	"\x18QueryQueueStatusResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\rR\x06status\x12\x0e\n" +
 	"\x02ip\x18\x02 \x01(\tR\x02ip\x12\x12\n" +
@@ -1938,7 +2645,8 @@ const file_proto_login_login_proto_rawDesc = "" +
 	"queueTotal\x12$\n" +
 	"\x0eretry_after_ms\x18\t \x01(\rR\fretryAfterMs\x12\x14\n" +
 	"\x05error\x18\n" +
-	" \x01(\tR\x05error\"/\n" +
+	" \x01(\tR\x05error\x12\x15\n" +
+	"\x06ws_url\x18\v \x01(\tR\x05wsUrl\"/\n" +
 	"\x14ZoneRoleCountRequest\x12\x17\n" +
 	"\azone_id\x18\x01 \x01(\rR\x06zoneId\"-\n" +
 	"\x15ZoneRoleCountResponse\x12\x14\n" +
@@ -1957,7 +2665,19 @@ const file_proto_login_login_proto_rawDesc = "" +
 	"\x0fnot_found_count\x18\x02 \x01(\rR\rnotFoundCount\x12!\n" +
 	"\ffailed_count\x18\x03 \x01(\rR\vfailedCount\x12(\n" +
 	"\x10not_orphan_count\x18\x04 \x01(\rR\x0enotOrphanCount\x125\n" +
-	"\aresults\x18\x05 \x03(\v2\x1b.loginpb.RemovePlayerResultR\aresults*\xcb\x01\n" +
+	"\aresults\x18\x05 \x03(\v2\x1b.loginpb.RemovePlayerResultR\aresults\"q\n" +
+	"\x1eScheduleAccountDeletionRequest\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1a\n" +
+	"\boperator\x18\x02 \x01(\tR\boperator\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\"\x88\x01\n" +
+	"\x1bResetAccountRealNameRequest\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x18\n" +
+	"\aaccount\x18\x02 \x01(\tR\aaccount\x12\x1a\n" +
+	"\boperator\x18\x03 \x01(\tR\boperator\x12\x16\n" +
+	"\x06reason\x18\x04 \x01(\tR\x06reason\"x\n" +
+	"\x1cResetAccountRealNameResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\"\n" +
+	"\rhad_real_name\x18\x02 \x01(\bR\vhadRealName*\xcb\x01\n" +
 	"\x13GateMigrationResult\x12%\n" +
 	"!GATE_MIGRATION_RESULT_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18GATE_MIGRATION_RESULT_OK\x10\x01\x12&\n" +
@@ -1980,15 +2700,20 @@ const file_proto_login_login_proto_rawDesc = "" +
 	"Disconnect\x12#.loginpb.LoginNodeDisconnectRequest\x1a\x1b.loginpb.LoginEmptyResponse\"\x05\x88\x99\xc8\x01\x03\x12K\n" +
 	"\fRefreshToken\x12\x1c.loginpb.RefreshTokenRequest\x1a\x1d.loginpb.RefreshTokenResponse\x12\\\n" +
 	"\x14RequestGateMigration\x12\x1d.loginpb.GateMigrationRequest\x1a\x1e.loginpb.GateMigrationResponse\"\x05\x88\x99\xc8\x01\x03\x12R\n" +
-	"\fRenewSession\x12\x1c.loginpb.RenewSessionRequest\x1a\x1d.loginpb.RenewSessionResponse\"\x05\x88\x99\xc8\x01\x03\x1a\x05\x88\xa8\xc3\x01\x012\x81\x02\n" +
+	"\fRenewSession\x12\x1c.loginpb.RenewSessionRequest\x1a\x1d.loginpb.RenewSessionResponse\"\x05\x88\x99\xc8\x01\x03\x1a\x05\x88\xa8\xc3\x01\x012\x93\x04\n" +
 	"\fLoginPreGate\x12E\n" +
 	"\n" +
 	"AssignGate\x12\x1a.loginpb.AssignGateRequest\x1a\x1b.loginpb.AssignGateResponse\x12W\n" +
 	"\x10QueryQueueStatus\x12 .loginpb.QueryQueueStatusRequest\x1a!.loginpb.QueryQueueStatusResponse\x12Q\n" +
-	"\x10GetZoneRoleCount\x12\x1d.loginpb.ZoneRoleCountRequest\x1a\x1e.loginpb.ZoneRoleCountResponse2\x80\x01\n" +
+	"\x10GetZoneRoleCount\x12\x1d.loginpb.ZoneRoleCountRequest\x1a\x1e.loginpb.ZoneRoleCountResponse\x12Q\n" +
+	"\x0eSubmitRealName\x12\x1e.loginpb.SubmitRealNameRequest\x1a\x1f.loginpb.SubmitRealNameResponse\x12[\n" +
+	"\x16RequestAccountDeletion\x12\x1f.loginpb.AccountDeletionRequest\x1a .loginpb.AccountDeletionResponse\x12`\n" +
+	"\x15CancelAccountDeletion\x12%.loginpb.CancelAccountDeletionRequest\x1a .loginpb.AccountDeletionResponse2\xcb\x02\n" +
 	"\n" +
 	"LoginAdmin\x12r\n" +
-	"\x19RemovePlayersFromAccounts\x12).loginpb.RemovePlayersFromAccountsRequest\x1a*.loginpb.RemovePlayersFromAccountsResponseB\rZ\vproto/loginb\x06proto3"
+	"\x19RemovePlayersFromAccounts\x12).loginpb.RemovePlayersFromAccountsRequest\x1a*.loginpb.RemovePlayersFromAccountsResponse\x12d\n" +
+	"\x17ScheduleAccountDeletion\x12'.loginpb.ScheduleAccountDeletionRequest\x1a .loginpb.AccountDeletionResponse\x12c\n" +
+	"\x14ResetAccountRealName\x12$.loginpb.ResetAccountRealNameRequest\x1a%.loginpb.ResetAccountRealNameResponseB\rZ\vproto/loginb\x06proto3"
 
 var (
 	file_proto_login_login_proto_rawDescOnce sync.Once
@@ -2003,7 +2728,7 @@ func file_proto_login_login_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_login_login_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_proto_login_login_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
+var file_proto_login_login_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
 var file_proto_login_login_proto_goTypes = []any{
 	(GateMigrationResult)(0),                  // 0: loginpb.GateMigrationResult
 	(RemovePlayerOutcome)(0),                  // 1: loginpb.RemovePlayerOutcome
@@ -2011,74 +2736,100 @@ var file_proto_login_login_proto_goTypes = []any{
 	(*AccountSimplePlayerWrapper)(nil),        // 3: loginpb.AccountSimplePlayerWrapper
 	(*LoginRequest)(nil),                      // 4: loginpb.LoginRequest
 	(*LoginResponse)(nil),                     // 5: loginpb.LoginResponse
-	(*TestResponse)(nil),                      // 6: loginpb.TestResponse
-	(*CreatePlayerRequest)(nil),               // 7: loginpb.CreatePlayerRequest
-	(*CreatePlayerResponse)(nil),              // 8: loginpb.CreatePlayerResponse
-	(*EnterGameRequest)(nil),                  // 9: loginpb.EnterGameRequest
-	(*EnterGameResponse)(nil),                 // 10: loginpb.EnterGameResponse
-	(*LeaveGameRequest)(nil),                  // 11: loginpb.LeaveGameRequest
-	(*LoginNodeDisconnectRequest)(nil),        // 12: loginpb.LoginNodeDisconnectRequest
-	(*LoginEmptyResponse)(nil),                // 13: loginpb.LoginEmptyResponse
-	(*RefreshTokenRequest)(nil),               // 14: loginpb.RefreshTokenRequest
-	(*RefreshTokenResponse)(nil),              // 15: loginpb.RefreshTokenResponse
-	(*GateMigrationRequest)(nil),              // 16: loginpb.GateMigrationRequest
-	(*GateMigrationResponse)(nil),             // 17: loginpb.GateMigrationResponse
-	(*RenewSessionRequest)(nil),               // 18: loginpb.RenewSessionRequest
-	(*RenewSessionResponse)(nil),              // 19: loginpb.RenewSessionResponse
-	(*AssignGateRequest)(nil),                 // 20: loginpb.AssignGateRequest
-	(*AssignGateResponse)(nil),                // 21: loginpb.AssignGateResponse
-	(*QueryQueueStatusRequest)(nil),           // 22: loginpb.QueryQueueStatusRequest
-	(*QueryQueueStatusResponse)(nil),          // 23: loginpb.QueryQueueStatusResponse
-	(*ZoneRoleCountRequest)(nil),              // 24: loginpb.ZoneRoleCountRequest
-	(*ZoneRoleCountResponse)(nil),             // 25: loginpb.ZoneRoleCountResponse
-	(*RemovePlayerResult)(nil),                // 26: loginpb.RemovePlayerResult
-	(*RemovePlayersFromAccountsRequest)(nil),  // 27: loginpb.RemovePlayersFromAccountsRequest
-	(*RemovePlayersFromAccountsResponse)(nil), // 28: loginpb.RemovePlayersFromAccountsResponse
-	(*base.AccountSimplePlayer)(nil),          // 29: AccountSimplePlayer
-	(*base.TipInfoMessage)(nil),               // 30: TipInfoMessage
+	(*AntiAddictionStatus)(nil),               // 6: loginpb.AntiAddictionStatus
+	(*SubmitRealNameRequest)(nil),             // 7: loginpb.SubmitRealNameRequest
+	(*SubmitRealNameResponse)(nil),            // 8: loginpb.SubmitRealNameResponse
+	(*AccountDeletionRequest)(nil),            // 9: loginpb.AccountDeletionRequest
+	(*AccountDeletionBlocker)(nil),            // 10: loginpb.AccountDeletionBlocker
+	(*AccountDeletionResponse)(nil),           // 11: loginpb.AccountDeletionResponse
+	(*CancelAccountDeletionRequest)(nil),      // 12: loginpb.CancelAccountDeletionRequest
+	(*TestResponse)(nil),                      // 13: loginpb.TestResponse
+	(*CreatePlayerRequest)(nil),               // 14: loginpb.CreatePlayerRequest
+	(*CreatePlayerResponse)(nil),              // 15: loginpb.CreatePlayerResponse
+	(*EnterGameRequest)(nil),                  // 16: loginpb.EnterGameRequest
+	(*EnterGameResponse)(nil),                 // 17: loginpb.EnterGameResponse
+	(*LeaveGameRequest)(nil),                  // 18: loginpb.LeaveGameRequest
+	(*LoginNodeDisconnectRequest)(nil),        // 19: loginpb.LoginNodeDisconnectRequest
+	(*LoginEmptyResponse)(nil),                // 20: loginpb.LoginEmptyResponse
+	(*RefreshTokenRequest)(nil),               // 21: loginpb.RefreshTokenRequest
+	(*RefreshTokenResponse)(nil),              // 22: loginpb.RefreshTokenResponse
+	(*GateMigrationRequest)(nil),              // 23: loginpb.GateMigrationRequest
+	(*GateMigrationResponse)(nil),             // 24: loginpb.GateMigrationResponse
+	(*RenewSessionRequest)(nil),               // 25: loginpb.RenewSessionRequest
+	(*RenewSessionResponse)(nil),              // 26: loginpb.RenewSessionResponse
+	(*AssignGateRequest)(nil),                 // 27: loginpb.AssignGateRequest
+	(*AssignGateResponse)(nil),                // 28: loginpb.AssignGateResponse
+	(*QueryQueueStatusRequest)(nil),           // 29: loginpb.QueryQueueStatusRequest
+	(*QueryQueueStatusResponse)(nil),          // 30: loginpb.QueryQueueStatusResponse
+	(*ZoneRoleCountRequest)(nil),              // 31: loginpb.ZoneRoleCountRequest
+	(*ZoneRoleCountResponse)(nil),             // 32: loginpb.ZoneRoleCountResponse
+	(*RemovePlayerResult)(nil),                // 33: loginpb.RemovePlayerResult
+	(*RemovePlayersFromAccountsRequest)(nil),  // 34: loginpb.RemovePlayersFromAccountsRequest
+	(*RemovePlayersFromAccountsResponse)(nil), // 35: loginpb.RemovePlayersFromAccountsResponse
+	(*ScheduleAccountDeletionRequest)(nil),    // 36: loginpb.ScheduleAccountDeletionRequest
+	(*ResetAccountRealNameRequest)(nil),       // 37: loginpb.ResetAccountRealNameRequest
+	(*ResetAccountRealNameResponse)(nil),      // 38: loginpb.ResetAccountRealNameResponse
+	(*base.AccountSimplePlayer)(nil),          // 39: AccountSimplePlayer
+	(*base.TipInfoMessage)(nil),               // 40: TipInfoMessage
 }
 var file_proto_login_login_proto_depIdxs = []int32{
-	29, // 0: loginpb.AccountSimplePlayerWrapper.player:type_name -> AccountSimplePlayer
-	30, // 1: loginpb.LoginResponse.error_message:type_name -> TipInfoMessage
+	39, // 0: loginpb.AccountSimplePlayerWrapper.player:type_name -> AccountSimplePlayer
+	40, // 1: loginpb.LoginResponse.error_message:type_name -> TipInfoMessage
 	3,  // 2: loginpb.LoginResponse.players:type_name -> loginpb.AccountSimplePlayerWrapper
-	30, // 3: loginpb.TestResponse.error_message:type_name -> TipInfoMessage
-	3,  // 4: loginpb.TestResponse.players:type_name -> loginpb.AccountSimplePlayerWrapper
-	30, // 5: loginpb.CreatePlayerResponse.error_message:type_name -> TipInfoMessage
-	3,  // 6: loginpb.CreatePlayerResponse.players:type_name -> loginpb.AccountSimplePlayerWrapper
-	30, // 7: loginpb.EnterGameResponse.error_message:type_name -> TipInfoMessage
-	30, // 8: loginpb.RefreshTokenResponse.error_message:type_name -> TipInfoMessage
-	0,  // 9: loginpb.GateMigrationResponse.result:type_name -> loginpb.GateMigrationResult
-	1,  // 10: loginpb.RemovePlayerResult.outcome:type_name -> loginpb.RemovePlayerOutcome
-	26, // 11: loginpb.RemovePlayersFromAccountsResponse.results:type_name -> loginpb.RemovePlayerResult
-	4,  // 12: loginpb.ClientPlayerLogin.Login:input_type -> loginpb.LoginRequest
-	7,  // 13: loginpb.ClientPlayerLogin.CreatePlayer:input_type -> loginpb.CreatePlayerRequest
-	9,  // 14: loginpb.ClientPlayerLogin.EnterGame:input_type -> loginpb.EnterGameRequest
-	11, // 15: loginpb.ClientPlayerLogin.LeaveGame:input_type -> loginpb.LeaveGameRequest
-	12, // 16: loginpb.ClientPlayerLogin.Disconnect:input_type -> loginpb.LoginNodeDisconnectRequest
-	14, // 17: loginpb.ClientPlayerLogin.RefreshToken:input_type -> loginpb.RefreshTokenRequest
-	16, // 18: loginpb.ClientPlayerLogin.RequestGateMigration:input_type -> loginpb.GateMigrationRequest
-	18, // 19: loginpb.ClientPlayerLogin.RenewSession:input_type -> loginpb.RenewSessionRequest
-	20, // 20: loginpb.LoginPreGate.AssignGate:input_type -> loginpb.AssignGateRequest
-	22, // 21: loginpb.LoginPreGate.QueryQueueStatus:input_type -> loginpb.QueryQueueStatusRequest
-	24, // 22: loginpb.LoginPreGate.GetZoneRoleCount:input_type -> loginpb.ZoneRoleCountRequest
-	27, // 23: loginpb.LoginAdmin.RemovePlayersFromAccounts:input_type -> loginpb.RemovePlayersFromAccountsRequest
-	5,  // 24: loginpb.ClientPlayerLogin.Login:output_type -> loginpb.LoginResponse
-	8,  // 25: loginpb.ClientPlayerLogin.CreatePlayer:output_type -> loginpb.CreatePlayerResponse
-	10, // 26: loginpb.ClientPlayerLogin.EnterGame:output_type -> loginpb.EnterGameResponse
-	13, // 27: loginpb.ClientPlayerLogin.LeaveGame:output_type -> loginpb.LoginEmptyResponse
-	13, // 28: loginpb.ClientPlayerLogin.Disconnect:output_type -> loginpb.LoginEmptyResponse
-	15, // 29: loginpb.ClientPlayerLogin.RefreshToken:output_type -> loginpb.RefreshTokenResponse
-	17, // 30: loginpb.ClientPlayerLogin.RequestGateMigration:output_type -> loginpb.GateMigrationResponse
-	19, // 31: loginpb.ClientPlayerLogin.RenewSession:output_type -> loginpb.RenewSessionResponse
-	21, // 32: loginpb.LoginPreGate.AssignGate:output_type -> loginpb.AssignGateResponse
-	23, // 33: loginpb.LoginPreGate.QueryQueueStatus:output_type -> loginpb.QueryQueueStatusResponse
-	25, // 34: loginpb.LoginPreGate.GetZoneRoleCount:output_type -> loginpb.ZoneRoleCountResponse
-	28, // 35: loginpb.LoginAdmin.RemovePlayersFromAccounts:output_type -> loginpb.RemovePlayersFromAccountsResponse
-	24, // [24:36] is the sub-list for method output_type
-	12, // [12:24] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	6,  // 3: loginpb.LoginResponse.anti_addiction:type_name -> loginpb.AntiAddictionStatus
+	40, // 4: loginpb.SubmitRealNameResponse.error_message:type_name -> TipInfoMessage
+	6,  // 5: loginpb.SubmitRealNameResponse.anti_addiction:type_name -> loginpb.AntiAddictionStatus
+	40, // 6: loginpb.AccountDeletionResponse.error_message:type_name -> TipInfoMessage
+	10, // 7: loginpb.AccountDeletionResponse.blockers:type_name -> loginpb.AccountDeletionBlocker
+	40, // 8: loginpb.TestResponse.error_message:type_name -> TipInfoMessage
+	3,  // 9: loginpb.TestResponse.players:type_name -> loginpb.AccountSimplePlayerWrapper
+	40, // 10: loginpb.CreatePlayerResponse.error_message:type_name -> TipInfoMessage
+	3,  // 11: loginpb.CreatePlayerResponse.players:type_name -> loginpb.AccountSimplePlayerWrapper
+	40, // 12: loginpb.EnterGameResponse.error_message:type_name -> TipInfoMessage
+	40, // 13: loginpb.RefreshTokenResponse.error_message:type_name -> TipInfoMessage
+	0,  // 14: loginpb.GateMigrationResponse.result:type_name -> loginpb.GateMigrationResult
+	1,  // 15: loginpb.RemovePlayerResult.outcome:type_name -> loginpb.RemovePlayerOutcome
+	33, // 16: loginpb.RemovePlayersFromAccountsResponse.results:type_name -> loginpb.RemovePlayerResult
+	40, // 17: loginpb.ResetAccountRealNameResponse.error_message:type_name -> TipInfoMessage
+	4,  // 18: loginpb.ClientPlayerLogin.Login:input_type -> loginpb.LoginRequest
+	14, // 19: loginpb.ClientPlayerLogin.CreatePlayer:input_type -> loginpb.CreatePlayerRequest
+	16, // 20: loginpb.ClientPlayerLogin.EnterGame:input_type -> loginpb.EnterGameRequest
+	18, // 21: loginpb.ClientPlayerLogin.LeaveGame:input_type -> loginpb.LeaveGameRequest
+	19, // 22: loginpb.ClientPlayerLogin.Disconnect:input_type -> loginpb.LoginNodeDisconnectRequest
+	21, // 23: loginpb.ClientPlayerLogin.RefreshToken:input_type -> loginpb.RefreshTokenRequest
+	23, // 24: loginpb.ClientPlayerLogin.RequestGateMigration:input_type -> loginpb.GateMigrationRequest
+	25, // 25: loginpb.ClientPlayerLogin.RenewSession:input_type -> loginpb.RenewSessionRequest
+	27, // 26: loginpb.LoginPreGate.AssignGate:input_type -> loginpb.AssignGateRequest
+	29, // 27: loginpb.LoginPreGate.QueryQueueStatus:input_type -> loginpb.QueryQueueStatusRequest
+	31, // 28: loginpb.LoginPreGate.GetZoneRoleCount:input_type -> loginpb.ZoneRoleCountRequest
+	7,  // 29: loginpb.LoginPreGate.SubmitRealName:input_type -> loginpb.SubmitRealNameRequest
+	9,  // 30: loginpb.LoginPreGate.RequestAccountDeletion:input_type -> loginpb.AccountDeletionRequest
+	12, // 31: loginpb.LoginPreGate.CancelAccountDeletion:input_type -> loginpb.CancelAccountDeletionRequest
+	34, // 32: loginpb.LoginAdmin.RemovePlayersFromAccounts:input_type -> loginpb.RemovePlayersFromAccountsRequest
+	36, // 33: loginpb.LoginAdmin.ScheduleAccountDeletion:input_type -> loginpb.ScheduleAccountDeletionRequest
+	37, // 34: loginpb.LoginAdmin.ResetAccountRealName:input_type -> loginpb.ResetAccountRealNameRequest
+	5,  // 35: loginpb.ClientPlayerLogin.Login:output_type -> loginpb.LoginResponse
+	15, // 36: loginpb.ClientPlayerLogin.CreatePlayer:output_type -> loginpb.CreatePlayerResponse
+	17, // 37: loginpb.ClientPlayerLogin.EnterGame:output_type -> loginpb.EnterGameResponse
+	20, // 38: loginpb.ClientPlayerLogin.LeaveGame:output_type -> loginpb.LoginEmptyResponse
+	20, // 39: loginpb.ClientPlayerLogin.Disconnect:output_type -> loginpb.LoginEmptyResponse
+	22, // 40: loginpb.ClientPlayerLogin.RefreshToken:output_type -> loginpb.RefreshTokenResponse
+	24, // 41: loginpb.ClientPlayerLogin.RequestGateMigration:output_type -> loginpb.GateMigrationResponse
+	26, // 42: loginpb.ClientPlayerLogin.RenewSession:output_type -> loginpb.RenewSessionResponse
+	28, // 43: loginpb.LoginPreGate.AssignGate:output_type -> loginpb.AssignGateResponse
+	30, // 44: loginpb.LoginPreGate.QueryQueueStatus:output_type -> loginpb.QueryQueueStatusResponse
+	32, // 45: loginpb.LoginPreGate.GetZoneRoleCount:output_type -> loginpb.ZoneRoleCountResponse
+	8,  // 46: loginpb.LoginPreGate.SubmitRealName:output_type -> loginpb.SubmitRealNameResponse
+	11, // 47: loginpb.LoginPreGate.RequestAccountDeletion:output_type -> loginpb.AccountDeletionResponse
+	11, // 48: loginpb.LoginPreGate.CancelAccountDeletion:output_type -> loginpb.AccountDeletionResponse
+	35, // 49: loginpb.LoginAdmin.RemovePlayersFromAccounts:output_type -> loginpb.RemovePlayersFromAccountsResponse
+	11, // 50: loginpb.LoginAdmin.ScheduleAccountDeletion:output_type -> loginpb.AccountDeletionResponse
+	38, // 51: loginpb.LoginAdmin.ResetAccountRealName:output_type -> loginpb.ResetAccountRealNameResponse
+	35, // [35:52] is the sub-list for method output_type
+	18, // [18:35] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_proto_login_login_proto_init() }
@@ -2092,7 +2843,7 @@ func file_proto_login_login_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_login_login_proto_rawDesc), len(file_proto_login_login_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   27,
+			NumMessages:   37,
 			NumExtensions: 0,
 			NumServices:   3,
 		},

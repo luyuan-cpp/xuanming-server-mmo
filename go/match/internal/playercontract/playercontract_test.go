@@ -12,8 +12,8 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"google.golang.org/protobuf/proto"
+	"shared/clusterredis"
 	"shared/playerredis"
 	"shared/redisslot"
 )
@@ -32,7 +32,9 @@ func newSplitSvcCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Miniredis, *m
 	playerRedis, err := playerredis.New(playerredis.Config{Addrs: []string{shared.Addr()}})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = playerRedis.Close() })
-	privateRds := redis.MustNewRedis(redis.RedisConf{Host: private.Addr(), Type: "node"})
+	privateRds, err := clusterredis.New(clusterredis.Config{Addrs: []string{private.Addr()}}, clusterredis.MatchPrivateKeys)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = privateRds.Close() })
 	return &svc.ServiceContext{
 		MatchRedis:  privateRds,
 		PlayerRedis: playerRedis,

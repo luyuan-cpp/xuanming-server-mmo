@@ -302,3 +302,39 @@ func TestManagerNeedsRestartAndRejectedDoNotRetry(t *testing.T) {
 	require.Equal(t, imgDigest, st.LoadedDigest)
 	require.Equal(t, 2, prepareCalls)
 }
+
+// 表包没同步下来时,sidecar 把这条线记在 sync_errors 里,不写进 lines。
+// 这时启动必须失败:用镜像自带的表等于静默退回旧数据,而别的实例还在用热更后的表。
+// sync_errors 里记的是别的 schema 线时,本进程照常用镜像自带的表。
+func TestStartupRefusesImageFallbackWhenOwnLineFailedToSync(t *testing.T) {
+	root := t.TempDir()
+	imageDir := filepath.Join(root, "image")
+	bundleRoot := filepath.Join(root, "bundles_root")
+	writeFakeBundle(t, imageDir, testSchemaDigest, 1, map[string]string{
+		"Skill": `{"v":1}`,
+	}, map[string]bool{"Skill": true})
+
+	writeDoc := func(syncErrors map[string]string) {
+		raw, err := json.Marshal(PointerDocument{Track: "stable", Lines: map[string]PointerLine{}, SyncErrors: syncErrors})
+		require.NoError(t, err)
+		require.NoError(t, WriteAtomicFile(filepath.Join(bundleRoot, PointerFilename), raw))
+	}
+	opts := Options{
+		ServiceName:    "test-svc",
+		ImageTableDir:  imageDir,
+		BundleRoot:     bundleRoot,
+		SchemaDigest:   testSchemaDigest,
+		LoadTablesFn:   func(string, bool) (*table.TableSet, error) { return &table.TableSet{}, nil },
+		CommitTablesFn: func(*table.TableSet) {},
+	}
+
+	writeDoc(map[string]string{testSchemaDigest: "download tables/x.tar.gz: status 503"})
+	_, err := LoadAtStartup(opts)
+	require.ErrorContains(t, err, "not available locally")
+	require.ErrorContains(t, err, "status 503")
+
+	writeDoc(map[string]string{"fedcba9876543210": "download failed"})
+	mgr, err := LoadAtStartup(opts)
+	require.NoError(t, err)
+	require.Equal(t, "image", mgr.SnapshotStatus().Source)
+}

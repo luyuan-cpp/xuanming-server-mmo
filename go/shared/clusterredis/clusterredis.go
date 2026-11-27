@@ -1,6 +1,6 @@
 // Package clusterredis 构造服务端各 Redis 域的客户端:玩家域与登录域(docs/design/redis-player-store-cluster.md §5.7),
-// 以及控制集群(docs/design/redis-cluster-all-domains-20261110.md §5.1)。部署形态都是 Redis Cluster,开发环境可以是单实例,
-// 两种形态走同一条代码路径、同一套守卫。
+// 控制集群(docs/design/redis-cluster-all-domains-20261110.md §5.1)与 match 私有集群(同一文档 §4.9)。部署形态都是
+// Redis Cluster,开发环境可以是单实例,两种形态走同一条代码路径、同一套守卫。
 //
 // 本包负责五件事:
 //   - 按配置产出 redis.UniversalClient,并把每节点连接池上限显式化(go-redis 缺省每节点 10×GOMAXPROCS,
@@ -39,8 +39,8 @@ const (
 	DefaultMaxRedirects       = 8
 )
 
-// Config 是一个 Redis 域客户端的配置段。各服务用它声明玩家域的 `PlayerRedis`、控制集群的 `ControlRedis`
-// (go-zero conf 的 json 标签)。
+// Config 是一个 Redis 域客户端的配置段。各服务用它声明玩家域的 `PlayerRedis`、控制集群的 `ControlRedis`,
+// match 用它声明私有集群的 `MatchRedis`(go-zero conf 的 json 标签)。
 //
 // Addrs 只有一个且 Cluster=false 时是单实例;Cluster=true 时 Addrs 是集群种子(至少一个),客户端按 slot 路由并处理
 // MOVED / ASK。

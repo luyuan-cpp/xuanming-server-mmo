@@ -27,11 +27,11 @@ var boundStages = []string{boundStageJoin, boundStageOpen, boundStageFetch, boun
 var (
 	boundRetryTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "kafka_bound_consumer_retry_total",
-		Help: "Transient failures a BoundConsumerGroup retried without stopping, by consumer group and stage (join|open|fetch|handle|commit).",
+		Help: "Transient failures a BoundConsumerGroup retried without stopping, by consumer group and stage (join|open|fetch|handle|dead_letter|commit).",
 	}, []string{"group", "stage"})
 	boundReleasedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "kafka_bound_consumer_released_total",
-		Help: "Accepted records returned to Kafka uncommitted for redelivery (generation ended or commit rejected while the owner kept running), by consumer group.",
+		Help: "Accepted records returned to Kafka uncommitted for redelivery: the generation ended or a commit was rejected while the owner kept running, or the owner was stopping and handed them to the next owner. By consumer group.",
 	}, []string{"group"})
 	boundHoldTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "kafka_bound_consumer_hold_total",

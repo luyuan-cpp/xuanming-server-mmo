@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	"match/internal/authority"
@@ -410,7 +409,9 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 	if matchpb.MatchMode(f.Mode) == matchpb.MatchMode_MATCH_MODE_SEASON_TOURNAMENT {
 		if svcCtx.MatchRedis != nil && (tournamentCtx == nil || !tournamentCtx.GetIsWarmup()) {
 			// 全服赛季战队锦标赛正式局自动写入精选观战索引,优先置顶列表并触发 L2 广播(best-effort;排除热身局)。
-			_, _ = svcCtx.MatchRedis.Zadd(spectateFeaturedIndex.keyFor(battleId), int64(f.DeadlineMs), strconv.FormatUint(battleId, 10))
+			featuredCtx, featuredCancel := context.WithTimeout(context.Background(), spectateRedisOpTimeout)
+			_ = spectateFeaturedIndex.add(featuredCtx, svcCtx.MatchRedis, battleId, int64(f.DeadlineMs))
+			featuredCancel()
 		}
 		if tournamentCtx != nil && tournamentCtx.GetSeasonId() != 0 && svcCtx.Authority != nil {
 			// V3 真实外观自动回填:把场景权威快照中的角色名/门派/性别/appearance_id 最佳努力写回战队名册,供冠军殿堂与天墉城玉座永久展示获批立绘。

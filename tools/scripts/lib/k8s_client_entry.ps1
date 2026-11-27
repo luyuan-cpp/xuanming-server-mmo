@@ -63,6 +63,7 @@
 	                                    [-DouyinMiniGameAppId ''] [-DouyinMiniGameEndpoint ''] [-DouyinMiniGameAllowOpenId $false]
 	                                    [-AppleClientId ''] [-AppleEndpoint ''] [-GoogleClientId ''] [-GoogleEndpoint '']
 	                                    [-AppleTeamId ''] [-AppleKeyId '']
+	                                    [-PassportIssuer ''] [-PassportClientId ''] [-PassportEndpoint ''] [-PassportAdminClientId '']
 	                                    → { Drifts = string[]; KeepArgs }(login 第三方登录防误关闸,见第 9 节)
 	    ConvertFrom-LoginPasswordAuthYaml -LoginYaml                                      → { Present; Enabled; Errors }
 	    Get-LoginPasswordAuthDrift      -Live -Enabled                                    → { Drifts = string[]; KeepArgs }
@@ -2892,6 +2893,8 @@ function Remove-StaleGateOrdinalServices {
 # Apple / Google 两段(-LoginApple* / -LoginGoogle* 各两个参数,AuthProviders.Apple / Google,2026-11-13)也一样,只是标识键是 ClientId,
 # 没有 RequireUnionId。Apple 段另有注销时撤销令牌的 TeamId / KeyId(-LoginAppleTeamId / -LoginAppleKeyId,2026-11-19):漏传就关掉撤销、
 # 删掉它的私钥 Secret,同样要拦。
+# 官方通行证一段(-LoginPassport* 四个参数,AuthProviders.Passport,2026-11-26)同理:标识键是 ClientId,另有签发方 Issuer 与管理应用
+# AdminClientId 两项;漏传就关掉通行证登录、删掉它的管理凭据 Secret,换了任何一项也要拦。
 # 本节的判据由 k8s_deploy.ps1 Assert-LoginAuthProviderClusterState 在写操作之前调用。
 
 # 内部辅助:login.yaml 里一个块映射值的标量 → 字符串;认不出返回 $null。只认生成器会写的形状:双引号(内部不含 \ 与 ")、
@@ -2919,11 +2922,12 @@ function ConvertFrom-ClientEntryYamlScalar {
 	返回 { Present; Providers; Errors }:
 	  - Present:有没有顶格 AuthProviders 键(任何大小写 / 引号写法)。
 	  - Providers:ordered,provider 名按原样保存、按不区分大小写比较(与 go-zero 一致;只差大小写的两个名字算重复)
-	    → { AppId; ClientId; Endpoint; RequireUnionId; HasRequireUnionId; TeamId; KeyId; OtherKeys }。
-	    AppId 与 ClientId 是两种标识键(App / 小游戏写 AppId,Apple / Google 写 ClientId),哪种该出现由比对方按 provider 判定;
+	    → { AppId; ClientId; Endpoint; RequireUnionId; HasRequireUnionId; TeamId; KeyId; Issuer; AdminClientId; OtherKeys }。
+	    AppId 与 ClientId 是两种标识键(App / 小游戏写 AppId,Apple / Google / 官方通行证写 ClientId),哪种该出现由比对方按 provider 判定;
 	    同一个 provider 两个都写记进 Errors。RequireUnionId 缺省 $true(与 login 的缺省一致),HasRequireUnionId 说明它写没写;
-	    TeamId / KeyId 是 Apple 注销时撤销令牌的两项,照样按 provider 记下,哪段该有由比对方判定;
-	    AppSecretEnv、PrivateKeyEnv 是生成器常量,读到也不参与比对;其余键名进 OtherKeys(手工改过 ConfigMap 才会有,本次部署会丢掉它们)。
+	    TeamId / KeyId 是 Apple 注销时撤销令牌的两项,Issuer / AdminClientId 是官方通行证的签发方与管理应用,照样按 provider 记下,
+	    哪段该有由比对方判定;
+	    AppSecretEnv、PrivateKeyEnv、AdminClientSecretEnv 是生成器常量,读到也不参与比对;其余键名进 OtherKeys(手工改过 ConfigMap 才会有,本次部署会丢掉它们)。
 	  - Errors:认不出的形状(同一行带值 / flow 写法、制表符缩进、重复的 AuthProviders / provider / 键、不在 provider 下的键、
 	    值认不出、RequireUnionId 不是裸 true / false)。非空时调用方必须当作「判不出」(fail-closed),不能当作没开第三方登录。
 	Errors 只写行号与键名,不回显值。
@@ -2969,7 +2973,7 @@ function ConvertFrom-LoginAuthProvidersYaml {
 				$current = $null
 				continue
 			}
-			$current = [pscustomobject]@{ AppId = ''; ClientId = ''; Endpoint = ''; RequireUnionId = $true; HasRequireUnionId = $false; TeamId = ''; KeyId = ''; OtherKeys = [System.Collections.Generic.List[string]]::new() }
+			$current = [pscustomobject]@{ AppId = ''; ClientId = ''; Endpoint = ''; RequireUnionId = $true; HasRequireUnionId = $false; TeamId = ''; KeyId = ''; Issuer = ''; AdminClientId = ''; OtherKeys = [System.Collections.Generic.List[string]]::new() }
 			$providers[$currentName] = $current
 			$seenKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
 			continue
@@ -3002,8 +3006,11 @@ function ConvertFrom-LoginAuthProvidersYaml {
 				'Endpoint' { $current.Endpoint = $value }
 				'TeamId' { $current.TeamId = $value }
 				'KeyId' { $current.KeyId = $value }
+				'Issuer' { $current.Issuer = $value }
+				'AdminClientId' { $current.AdminClientId = $value }
 				'AppSecretEnv' { }
 				'PrivateKeyEnv' { }
+				'AdminClientSecretEnv' { }
 				'RequireUnionId' {
 					$current.HasRequireUnionId = $true
 					# 只认裸 true / false(YAML 1.2 core 的三种大小写写法);带引号就是字符串,login 解析 bool 时拒启,这里判不出。
@@ -3029,8 +3036,8 @@ function ConvertFrom-LoginAuthProvidersYaml {
 
 .DESCRIPTION
 	-Live 是 ConvertFrom-LoginAuthProvidersYaml 的结果,-OAuthSecretPresent 是 Secret login-oauth 在不在;其余参数是本次的
-	-Login* 取值(微信、QQ、微信小游戏、抖音小游戏各三个,Apple、Google 各两个,Apple 另有撤销令牌的两个;形状已由 k8s_deploy.ps1
-	Get-LoginAuthProviderParamErrors 校验过,这里不再校验)。每个 provider 有自己的标识键:App / 小游戏是 AppId,Apple / Google 是 ClientId
+	-Login* 取值(微信、QQ、微信小游戏、抖音小游戏各三个,Apple、Google 各两个,Apple 另有撤销令牌的两个,官方通行证四个;形状已由 k8s_deploy.ps1
+	Get-LoginAuthProviderParamErrors 校验过,这里不再校验)。每个 provider 有自己的标识键:App / 小游戏是 AppId,Apple / Google / 官方通行证是 ClientId
 	(下文的「标识」)。判据:
 	  - 线上没有、本次新开的 provider:不算差异(开启是显式的)。
 	  - 线上有、本次没给标识:关闭(WeChat 还会删掉 Secret login-oauth,小游戏两段各删自己的 AppSecret Secret,开着撤销的 Apple 删它的私钥 Secret)。
@@ -3038,14 +3045,17 @@ function ConvertFrom-LoginAuthProvidersYaml {
 	    写错了种类的标识键,Apple / Google 段里的 RequireUnionId,Apple 之外的段里的 TeamId / KeyId),本次会丢。
 	  - Apple 注销时撤销令牌的 TeamId / KeyId:线上有、本次两个都没给 = 关闭撤销(还会删掉它的私钥 Secret);本次给了而任一与线上不同 = 换了。
 	    线上没有、本次新开不算差异。
-	  - 线上有生成器不生成的 provider(WeChat / QQ / WeChatMiniGame / DouyinMiniGame / Apple / Google 之外的):本次会丢。
+	  - 官方通行证(Passport)的 Issuer / AdminClientId:线上写了而本次的值不同 = 换了;线上没写的一项本次补上不算差异。整段漏传按上面
+	    「关闭」那一条报(还会删掉它的管理凭据 Secret)。Passport 之外的段里出现这两个键,算生成器不写的键。
+	  - 线上有生成器不生成的 provider(WeChat / QQ / WeChatMiniGame / DouyinMiniGame / Apple / Google / Passport 之外的):本次会丢。
 	  - Secret 在、ConfigMap 里却没有 AuthProviders.WeChat、本次也不开微信:会删掉 Secret。像是上次部署中途失败的残留,
 	    也算一项差异,让人核对后再决定。
 	  - Live.Errors 非空:判不出,整体算一项差异(fail-closed),其余比对照常做。
 	小游戏两段的 AppSecret Secret 不探测残留(-OAuthSecretPresent 只管微信 App 那一个):线上与本次都没有这个渠道时,删掉一个没人引用的 Secret 不影响登录。
 	KeepArgs:按线上现状「要保持就照传」的参数串(只含生成器生成的四个 provider;线上一个都没有时为空串)。值只在落进安全字符集时回显
 	(AppId 为 [A-Za-z0-9_.-];Endpoint 为 http(s)://主机[:端口][/路径],与 k8s_deploy.ps1 参数门禁同一形状;Apple 段的 TeamId / KeyId
-	为 10 位 [A-Z0-9],照传串里是 -LoginAppleTeamId / -LoginAppleKeyId),否则写 <见 ConfigMap>,
+	为 10 位 [A-Z0-9],照传串里是 -LoginAppleTeamId / -LoginAppleKeyId;Passport 段的 Issuer 与参数门禁对它的形状相同、AdminClientId 同 AppId 的
+	字符集,照传串里是 -LoginPassportIssuer / -LoginPassportAdminClientId),否则写 <见 ConfigMap>,
 	不把手改进去的任意文本打进日志,也不让人照抄形状不对的值。只比字符集与形状:端口范围(1–65535)与「非 dev 档不收 http://」
 	这两项不在这里复查,照抄后由下一次部署的参数门禁(Get-LoginAuthProviderParamErrors)在写操作之前报出。
 	文本里不会有密钥:本函数拿不到 Secret 的值。「确认要改」的开关名由调用方拼在结尾。
@@ -3071,7 +3081,11 @@ function Get-LoginAuthProviderDrift {
 		[AllowEmptyString()][string]$GoogleClientId = '',
 		[AllowEmptyString()][string]$GoogleEndpoint = '',
 		[AllowEmptyString()][string]$AppleTeamId = '',
-		[AllowEmptyString()][string]$AppleKeyId = ''
+		[AllowEmptyString()][string]$AppleKeyId = '',
+		[AllowEmptyString()][string]$PassportIssuer = '',
+		[AllowEmptyString()][string]$PassportClientId = '',
+		[AllowEmptyString()][string]$PassportEndpoint = '',
+		[AllowEmptyString()][string]$PassportAdminClientId = ''
 	)
 
 	$contract = Get-ClientEntryContract
@@ -3091,7 +3105,7 @@ function Get-LoginAuthProviderDrift {
 
 	# CloseTail:关掉这个 provider 时部署还会顺带做的事,拼在「随新 Pod 关闭」后面。小游戏两段的 AppSecret 各有一个单键 Secret
 	# (k8s_deploy.ps1 的工作负载密钥目录),关掉时一并删;这里不写它们的 Secret 名,不和那张表多出一处要逐字相等的约定。
-	# IdKey / OtherIdKey:这个 provider 的标识键与另一种(写错了种类)。AllowParam 为空 = 没有 RequireUnionId 这一项(Apple / Google)。
+	# IdKey / OtherIdKey:这个 provider 的标识键与另一种(写错了种类)。AllowParam 为空 = 没有 RequireUnionId 这一项(Apple / Google / Passport)。
 	$wanted = @(
 		[pscustomobject]@{ Name = 'WeChat'; IdKey = 'AppId'; OtherIdKey = 'ClientId'; Param = '-LoginWeChatAppId'; EndpointParam = '-LoginWeChatEndpoint'; AllowParam = '-LoginWeChatAllowOpenId'; AppId = $WeChatAppId; Endpoint = $WeChatEndpoint; AllowOpenId = $WeChatAllowOpenId; CloseTail = ",并删除 Secret $secretName" }
 		[pscustomobject]@{ Name = 'QQ'; IdKey = 'AppId'; OtherIdKey = 'ClientId'; Param = '-LoginQQAppId'; EndpointParam = '-LoginQQEndpoint'; AllowParam = '-LoginQQAllowOpenId'; AppId = $QQAppId; Endpoint = $QQEndpoint; AllowOpenId = $QQAllowOpenId; CloseTail = '' }
@@ -3099,6 +3113,7 @@ function Get-LoginAuthProviderDrift {
 		[pscustomobject]@{ Name = 'DouyinMiniGame'; IdKey = 'AppId'; OtherIdKey = 'ClientId'; Param = '-LoginDouyinMiniGameAppId'; EndpointParam = '-LoginDouyinMiniGameEndpoint'; AllowParam = '-LoginDouyinMiniGameAllowOpenId'; AppId = $DouyinMiniGameAppId; Endpoint = $DouyinMiniGameEndpoint; AllowOpenId = $DouyinMiniGameAllowOpenId; CloseTail = ',并删除它的 AppSecret Secret' }
 		[pscustomobject]@{ Name = 'Apple'; IdKey = 'ClientId'; OtherIdKey = 'AppId'; Param = '-LoginAppleClientId'; EndpointParam = '-LoginAppleEndpoint'; AllowParam = ''; AppId = $AppleClientId; Endpoint = $AppleEndpoint; AllowOpenId = $false; CloseTail = '' }
 		[pscustomobject]@{ Name = 'Google'; IdKey = 'ClientId'; OtherIdKey = 'AppId'; Param = '-LoginGoogleClientId'; EndpointParam = '-LoginGoogleEndpoint'; AllowParam = ''; AppId = $GoogleClientId; Endpoint = $GoogleEndpoint; AllowOpenId = $false; CloseTail = '' }
+		[pscustomobject]@{ Name = 'Passport'; IdKey = 'ClientId'; OtherIdKey = 'AppId'; Param = '-LoginPassportClientId'; EndpointParam = '-LoginPassportEndpoint'; AllowParam = ''; AppId = $PassportClientId; Endpoint = $PassportEndpoint; AllowOpenId = $false; CloseTail = ',并删除它的管理凭据 Secret' }
 	)
 	foreach ($w in $wanted) {
 		$live = Get-ClientEntryMember -Object $liveProviders -Path $w.Name
@@ -3128,6 +3143,16 @@ function Get-LoginAuthProviderDrift {
 		if (-not $isApple) {
 			foreach ($key in @($liveRevoke.Keys)) { if ($liveRevoke[$key] -ne '') { $liveOtherKeys += $key } }
 		}
+		# 官方通行证的两项(签发方 Issuer、管理应用 AdminClientId):只有 Passport 段该有,别的段写了就是生成器不写的键。
+		# 经 JSON 往返的旧对象没有这两个成员,按没写算。
+		$livePassport = [ordered]@{
+			Issuer        = [string](Get-ClientEntryMember -Object $live -Path 'Issuer')
+			AdminClientId = [string](Get-ClientEntryMember -Object $live -Path 'AdminClientId')
+		}
+		$isPassport = $w.Name -ceq 'Passport'
+		if (-not $isPassport) {
+			foreach ($key in @($livePassport.Keys)) { if ($livePassport[$key] -ne '') { $liveOtherKeys += $key } }
+		}
 
 		$shownAppId = if ($liveAppId -cmatch '^[A-Za-z0-9_.-]+\z') { $liveAppId } else { '<见 ConfigMap>' }
 		$keepArgs.Add("$($w.Param) $shownAppId")
@@ -3143,6 +3168,16 @@ function Get-LoginAuthProviderDrift {
 				if ($liveRevoke[$key] -eq '') { continue }
 				$shownRevoke = if ($liveRevoke[$key] -cmatch '^[A-Z0-9]{10}\z') { $liveRevoke[$key] } else { '<见 ConfigMap>' }
 				$keepArgs.Add("-LoginApple$key $shownRevoke")
+			}
+		}
+		if ($isPassport) {
+			foreach ($key in @($livePassport.Keys)) {
+				if ($livePassport[$key] -eq '') { continue }
+				# 白名单与 k8s_deploy.ps1 Get-LoginAuthProviderParamErrors 对这两项的形状同一口径(只用于决定回显与否):Issuer 的路径逐段非空、
+				# 不带末尾的 /,AdminClientId 同 AppId 的字符集。
+				$shape = if ($key -ceq 'Issuer') { '^https?://[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::[0-9]{1,5})?(?:/[A-Za-z0-9._~%-]+)*\z' } else { '^[A-Za-z0-9_.-]+\z' }
+				$shownPassport = if ($livePassport[$key] -cmatch $shape) { $livePassport[$key] } else { '<见 ConfigMap>' }
+				$keepArgs.Add("-LoginPassport$key $shownPassport")
 			}
 		}
 
@@ -3178,6 +3213,15 @@ function Get-LoginAuthProviderDrift {
 						$drifts.Add("AuthProviders.Apple.$key 与线上不同(本次 -LoginApple$key 换了值;Team ID、Key ID 与私钥对不上时,注销时撤销 Apple 令牌全部失败)")
 					}
 				}
+			}
+		}
+		if ($isPassport) {
+			# 线上写了而本次不同 = 换了;线上没写的一项(手改过的段)本次补上不算差异。走到这里本次给了标识,参数门禁已保证另两项也给了。
+			$wantPassport = @{ Issuer = $PassportIssuer; AdminClientId = $PassportAdminClientId }
+			foreach ($key in @($livePassport.Keys)) {
+				if ($livePassport[$key] -eq '' -or $livePassport[$key] -ceq [string]$wantPassport[$key]) { continue }
+				$what = if ($key -ceq 'Issuer') { '换了签发方,原签发方签的令牌全部按 iss 不符被拒' } else { '换了管理应用;它与注入的 ClientSecret 对不上时,注销账号删不掉通行证里的用户' }
+				$drifts.Add("AuthProviders.Passport.$key 与线上不同(本次 -LoginPassport$key $what)")
 			}
 		}
 		if (@($liveOtherKeys).Count -gt 0) {

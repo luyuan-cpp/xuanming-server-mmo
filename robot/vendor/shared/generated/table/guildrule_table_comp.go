@@ -53,6 +53,18 @@ type GuildRuleTrial_invite_cooldown_secondsComp struct {
     Value uint32
 }
 
+type GuildRuleRename_cooldown_secondsComp struct {
+    Value uint32
+}
+
+type GuildRuleName_hold_secondsComp struct {
+    Value uint32
+}
+
+type GuildRuleRename_cost_fundsComp struct {
+    Value uint64
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -96,5 +108,17 @@ func MakeGuildRuleTrial_invite_ttl_secondsComp(row *pb.GuildRuleTable) GuildRule
 
 func MakeGuildRuleTrial_invite_cooldown_secondsComp(row *pb.GuildRuleTable) GuildRuleTrial_invite_cooldown_secondsComp {
     return GuildRuleTrial_invite_cooldown_secondsComp{Value: row.TrialInviteCooldownSeconds}
+}
+
+func MakeGuildRuleRename_cooldown_secondsComp(row *pb.GuildRuleTable) GuildRuleRename_cooldown_secondsComp {
+    return GuildRuleRename_cooldown_secondsComp{Value: row.RenameCooldownSeconds}
+}
+
+func MakeGuildRuleName_hold_secondsComp(row *pb.GuildRuleTable) GuildRuleName_hold_secondsComp {
+    return GuildRuleName_hold_secondsComp{Value: row.NameHoldSeconds}
+}
+
+func MakeGuildRuleRename_cost_fundsComp(row *pb.GuildRuleTable) GuildRuleRename_cost_fundsComp {
+    return GuildRuleRename_cost_fundsComp{Value: row.RenameCostFunds}
 }
 

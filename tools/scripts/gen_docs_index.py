@@ -135,7 +135,7 @@ DESIGN_RULES = [
         "exploit_loss_prevention*", "player-attribute-allocation.md", "player-pet.md",
         "player-features-ui.md", "equipment-*", "class-skills.md", "afk-monthly-card.md",
         "mystery-merchant.md", "stall-system.md", "payment-recharge.md",
-        "jeecg-gm-administration.md", "mall-administration.md",
+        "jeecg-gm-administration.md", "mall-administration.md", "admin-identity-*",
     ]),
     ("基础设施与中间件", [
         "kafka-*", "infra-reconnect-overview.md", "go-zero-rpc-timeout-fix.md",

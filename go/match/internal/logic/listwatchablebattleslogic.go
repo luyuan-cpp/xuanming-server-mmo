@@ -10,7 +10,6 @@ import (
 	"shared/releasetrack"
 
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 )
 
 // 观战列表条数:0 = 用默认;上限收口防一次拉爆(索引里最多也就几百场)。
@@ -100,10 +99,10 @@ func (l *ListWatchableBattlesLogic) ListWatchableBattles(in *matchpb.ListWatchab
 		if err := l.ctx.Err(); err != nil {
 			return nil, err
 		}
-		battleId, err := strconv.ParseUint(pair.Key, 10, 64)
+		battleId, err := strconv.ParseUint(pair.Member, 10, 64)
 		if err != nil {
-			l.Errorf("[spectate] Invalid member %q in spectator index; removing", pair.Key)
-			removeSpectateIndexGarbage(l.svcCtx, spectateActiveIndex, pair.Key)
+			l.Errorf("[spectate] Invalid member %q in spectator index; removing", pair.Member)
+			removeSpectateIndexGarbage(l.svcCtx, spectateActiveIndex, pair.Member)
 			continue
 		}
 		if listed[battleId] {
@@ -121,13 +120,13 @@ func (l *ListWatchableBattlesLogic) ListWatchableBattles(in *matchpb.ListWatchab
 }
 
 // featuredBattleIds 解析赛事局索引里未到期的成员(后标记的在前),坏成员现场摘掉。
-func (l *ListWatchableBattlesLogic) featuredBattleIds(pairs []redis.Pair) []uint64 {
+func (l *ListWatchableBattlesLogic) featuredBattleIds(pairs []svc.SpectateIndexMember) []uint64 {
 	ids := make([]uint64, 0, len(pairs))
 	for _, pair := range pairs {
-		battleId, err := strconv.ParseUint(pair.Key, 10, 64)
+		battleId, err := strconv.ParseUint(pair.Member, 10, 64)
 		if err != nil {
-			l.Errorf("[spectate] Invalid member %q in featured index; removing", pair.Key)
-			removeSpectateIndexGarbage(l.svcCtx, spectateFeaturedIndex, pair.Key)
+			l.Errorf("[spectate] Invalid member %q in featured index; removing", pair.Member)
+			removeSpectateIndexGarbage(l.svcCtx, spectateFeaturedIndex, pair.Member)
 			continue
 		}
 		ids = append(ids, battleId)

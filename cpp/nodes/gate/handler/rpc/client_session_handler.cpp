@@ -396,6 +396,9 @@ static void CloseMinorAtPlayDeadline(SessionInfo &session)
 	{
 		return;
 	}
+	// 到点下线要真的下线:断开回调通知 scene 时要求立即存盘退出,不走断线保留。保留会让角色在世界里再留 25 秒,
+	// 有挂机月卡的还会进离线托管。scene 只分「保留」与「立即退出」,这个标志对应后者(player-connection-lost-hold.md §3)。
+	session.exitSceneImmediatelyOnClose = true;
 	GameKickPlayerRequest kickMsg;
 	kickMsg.mutable_reason()->set_id(kLoginMinorPlayTimeOver);
 	MessageContent mc;

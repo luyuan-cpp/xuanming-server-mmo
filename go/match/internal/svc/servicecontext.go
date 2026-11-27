@@ -36,6 +36,7 @@ import (
 	matchpb "proto/match"
 	inboxpb "proto/player_inbox"
 
+	"shared/clusterredis"
 	"shared/contentguard"
 	"shared/dsclient"
 	"shared/generated/table"
@@ -53,7 +54,6 @@ import (
 	redv9 "github.com/redis/go-redis/v9"
 	"github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
@@ -141,12 +141,13 @@ type ServiceContext struct {
 	Placement *battleplace.Picker
 
 	// 双存储(设计文档 cross-zone-matchmaking.md D2)。两者都只放协调态,权威都在 SQL:
-	//   - MatchRedis:match 私有 key(spectate:* 观战索引、档位与配额),go-zero 句柄,可指向 Redis Cluster。
-	//     未配置时回落到 Redis 段的共享库(本地单库形态),见 NewRedisHandles。
+	//   - MatchRedis:match 私有集群的句柄(shared/clusterredis,生产是 Redis Cluster),只放 spectate:* 观战索引、档位与配额。
+	//     守卫只放行 spectate: 开头、带 hash tag 的键;结果未知的命令不由客户端重发,原样报给调用方。
+	//     没写 MatchRedis.Addrs 时落到 Redis 段那一个实例(本地单库形态),见 NewMatchRedis。
 	//   - PlayerRedis:玩家域句柄(shared/playerredis,生产可以是 Redis Cluster):跨运行时契约 key(player:{id}:location /
 	//     player:session:{id} / battle:lock:{id}),写者是 scene_manager / player_locator / C++ scene,match 只读;
 	//     player:{id}:sync_digest 由组队 bump。键一律带 {player_id},发送前经守卫核对。
-	MatchRedis  *redis.Redis
+	MatchRedis  redv9.UniversalClient
 	PlayerRedis redv9.UniversalClient
 
 	// SpectateLobby 是观战列表读的 1 秒进程内缓存:三把全服观战索引拆成 16 桶之后,列表读要跨桶合并(spectate_lobby_cache.go)。
@@ -303,10 +304,15 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		panic("failed to create etcd client: " + err.Error())
 	}
 
-	matchRds := NewRedisHandles(c)
+	matchRds, err := NewMatchRedis(c)
+	if err != nil {
+		_ = etcdCli.Close()
+		panic(err)
+	}
 	playerRedisConf := c.EffectivePlayerRedis()
 	playerRedis, err := playerredis.New(playerRedisConf)
 	if err != nil {
+		_ = matchRds.Close()
 		_ = etcdCli.Close()
 		panic(fmt.Errorf("invalid PlayerRedis config: %w", err))
 	}
@@ -622,14 +628,17 @@ func newOptionalMailAdminClient(c zrpc.RpcClientConf) mailpb.MailAdminClient {
 	return mailpb.NewMailAdminClient(zrpc.MustNewClient(c).Conn())
 }
 
-// NewRedisHandles 按配置建立 MatchRedis 句柄。MatchRedis.Host 为空即未配置,私有 key 回落到 Redis 段的共享库。
-// 拆成独立函数是为了不依赖 etcd 就能测试回落逻辑。
-func NewRedisHandles(c config.Config) *redis.Redis {
-	if c.MatchRedis.Host == "" {
-		return redis.MustNewRedis(c.Redis.RedisConf)
+// NewMatchRedis 按配置建立 match 私有集群的句柄。没写 MatchRedis.Addrs 时私有 key 落到 Redis 段那一个实例
+// (config.EffectiveMatchRedis)。拆成独立函数是为了不依赖 etcd 就能测试回落逻辑。
+// 构造时不探活(go-redis 用到才连):观战索引只是协调数据,它连不上不该拦住排队与成局,命令各自报错。
+func NewMatchRedis(c config.Config) (redv9.UniversalClient, error) {
+	conf := c.EffectiveMatchRedis()
+	client, err := clusterredis.New(conf, clusterredis.MatchPrivateKeys)
+	if err != nil {
+		return nil, fmt.Errorf("invalid MatchRedis config: %w", err)
 	}
-	logx.Infof("[match] Separate MatchRedis configuration active host=%s type=%s", c.MatchRedis.Host, c.MatchRedis.Type)
-	return redis.MustNewRedis(c.MatchRedis)
+	logx.Infof("[match] match redis %s", conf.Describe())
+	return client, nil
 }
 
 func (sc *ServiceContext) BindDrainRuntime(runtime *drainproof.Runtime) error {
@@ -769,6 +778,9 @@ func (sc *ServiceContext) StopAndReport(ctx context.Context) error {
 	}
 	if sc.PlayerRedis != nil {
 		result = errors.Join(result, sc.PlayerRedis.Close())
+	}
+	if sc.MatchRedis != nil {
+		result = errors.Join(result, sc.MatchRedis.Close())
 	}
 	if sc.Etcd != nil {
 		result = errors.Join(result, sc.Etcd.Close())

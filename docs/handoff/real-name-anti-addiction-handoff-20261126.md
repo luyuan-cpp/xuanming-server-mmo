@@ -1,6 +1,7 @@
 # 实名认证与防沉迷：代码已写完，全部验证交 Gemini（2026-11-26）
 
 > **2026-11-26 晚更新**：本单原来 §2 的两项代码（账本截止时刻缺陷、国家系统沙箱 mock）已由实名会话（Claude Fable 5.2）写完，**不要再写一遍**，只做 §3 的验证。同一晚有另一个执行者照本单旧版往 `ledger_test.go` 补过一段用例，已并进现在的文件（其中一条断言按 §2.1 的口径改过）。
+> **同日再补（§2.3）**：到点断开时 scene 立即存盘下线；有挂机月卡的未成年人，离线托管不越过截止时刻。这一批改了 `proto/player_locator/player_locator.proto`，**验证前要先重新生成协议**（§3 第 0 步）。
 > 生成、编译、跑测、冒烟：Carbon Medium。跑出要改代码的问题时，保留第一条错误的原文，切回 Gemini 4 Neon Extra 再改（AGENTS.md §10.3）。
 > 只在 main 上改，不开分支；负责人没说提交就不提交，不 push。工作区里有很多别的会话的未提交改动：只碰本单列出的文件和段落，不要 `git add -A`。
 > 本单是总入口 [third-party-login-and-anti-addiction-handoff-20261126.md](third-party-login-and-anti-addiction-handoff-20261126.md) §3 的细节。清场、生成以及几条线一起跑的顺序，按总入口 §4；实名这条线验什么、怎么验，以本单为准。
@@ -13,7 +14,7 @@
   - **上报改成 Redis 持久账本**：`go/login/internal/logic/pkg/nppa/ledger.go`（新增）和 `reporter.go`（重写，去掉了内存队列）；`go/shared/redisslot/login_keys.go`（账本键，删了 `LoginAntiAddictionKey`）。login 侧接线在 `clientplayerlogin/anti_addiction.go`（`beginWatchedSession` / `endWatchedSession` / `renewWatchedSession`）、`loginlogic.go`、`renewsessionlogic.go`、`session_lifecycle.go`；`svc/anti_addiction.go` 加了 `Ledger`、`Clock`、`Now()`。
   - **到点断开改由 gate 本地做**：`cpp/nodes/gate/handler/rpc/minor_play_deadline.{h,cpp}`（新增）；`cpp/libs/services/gate/session/comp/session_info_comp.h`（`minorPlayDeadlineMs`）、`login_admission.h`（`SuccessfulLoginResponse`）、`client_request_lane.cpp`、`rpc_reply_bridge.cpp`、`client_session_handler.cpp`（`CloseMinorAtPlayDeadline`）、`main.cpp`（`minorDeadlineTimer`）、`gate.vcxproj(.filters)`；用例 `cpp/nodes/gate/tests/minor_play_deadline_test.cpp`，登记在 `cpp/tests/routing_identity_test/routing_identity_test.vcxproj`。CMakeLists 由 vcxproj 生成，不要手改。
   - `go/shared/antiaddiction` 加了 `PIBirthPrefix`；新增单测 `go/login/internal/svc/anti_addiction_test.go` 和 `clientplayerlogin/anti_addiction_login_test.go`。
-- 生成物：11-26 核对过，`go/proto`、`cpp/generated` 里已有 `ResetAccountRealName` 和 `kLoginMinorPlayTimeOver`。11-26 的两项改动不碰 proto 和 Tip.xlsx。
+- 生成物：11-26 核对过，`go/proto`、`cpp/generated` 里已有 `ResetAccountRealName` 和 `kLoginMinorPlayTimeOver`。§2.1、§2.2 不碰 proto；§2.3 给 `player_locator.proto` 加了两个字段，生成物还没更新。Tip.xlsx 没动。
 - Java 版：11-24 已对齐。§2.1 的缺陷 Java 版同样有，已在 Java 仓 `PARITY.md` 登记待做（2026-11-26 那一节），本仓不写 Java 代码。
 
 ## 2. 2026-11-26 写完的两项（验证时对照）
@@ -42,13 +43,32 @@
 - [沙盒手册](../ops/wechat-qq-sandbox-runbook.md) 加了 §J：怎么打开、测试用的身份证号、端到端步骤。
 - **与本单旧版的两处出入**：没有做「让整批上报失败」的开关，重试路径改用停掉 mock 的办法走（手册 §J.3）；mock 的可执行文件现在依赖 login 的 `nppa` 包和 `shared/antiaddiction`，镜像要重新构建。
 
+### 2.3 到点立即下线、离线托管不越过截止时刻（已写）
+
+- **原来的问题**：
+  - gate 到点关连接后，scene 按普通断线处理：角色在世界里再留 25 秒。
+  - 有挂机月卡的未成年人断线后进离线托管，角色一直挂机，不受 21:00 限制；到点之前自己断线的，更是没有人去关它。
+- **到点立即下线**（C++ gate）：`client_session_handler.cpp` 的 `CloseMinorAtPlayDeadline` 和 `gate_event_handler.cpp` 的踢线处理（原因是 `kLoginMinorPlayTimeOver` 时），关连接前置 `SessionInfo::exitSceneImmediatelyOnClose`。scene 收到的退出原因不是 `DISCONNECTED`，立即存盘退出。`session_info_comp.h` 的注释同步。
+- **离线托管不越过截止时刻**：
+  - `proto/player_locator/player_locator.proto`：`PlayerSession.minor_play_deadline_ms = 17`、`ReconnectRequest.minor_play_deadline_ms = 12`。
+  - login：`clientplayerlogin/anti_addiction.go` 的 `watchedPlayDeadlineMs` 在进游戏时从会话账本取截止时刻（读不了就拒绝进游戏，`kLoginRedisError`）；`entergamelogic.go` 把它经 SetSession / Reconnect 写进会话记录；`pkg/sessionmanager/session_manager.go` 加字段与 `Reconnect` 的参数。
+  - player_locator：`reconnectlogic.go` 写入字段；`leasemonitor.go` 的 `hostedLeaseSeconds` 让月卡续租不超过离截止时刻的剩余时间，到点不再续租，按普通断线收尾。
+- **用例**：
+  - `go/player_locator/internal/logic/leasemonitor_minor_deadline_test.go`（新增 3 条）。
+  - `go/login/internal/logic/pkg/sessionmanager/login_generation_test.go` 的 `TestMinorPlayDeadline_SessionMirrorRoundTrip`。
+  - `go/login/internal/logic/clientplayerlogin/enter_wiring_test.go` 的 `TestEnterGame_MinorPlayDeadlineReachesTheSessionRecord`。
+- **没做的一项**：战斗直连由服务端到点断开（设计稿 §5.4 末条）。官方客户端在大厅断开时会自己关掉战斗直连；服务端强制断开要改 match 和 battle，另开会话做，进展看 PROGRESS。
+
 ## 3. 生成、编译、测试、冒烟（Carbon Medium，按顺序）
 
+0. **生成**：`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`（`player_locator.proto` 加了字段；整套步骤见总入口 §4 第 2 步）。没生成之前 go/login 和 go/player_locator 编不过。
 1. **静态**：本单碰过的 Go 目录跑 `gofmt -l`，输出为空；`python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`、`python tools/scripts/tests/test_cpp_thread_sources.py`、`python tools/scripts/check_log_text_english.py` 都要过。
 2. **Go**：
    ```
    cd go/login && go build ./... && go vet ./internal/logic/pkg/nppa/... ./internal/logic/clientplayerlogin/... ./internal/svc/... ./cmd/sandbox_mock/...
    cd go/login && go test -count=1 -v ./internal/logic/pkg/nppa/... ./internal/logic/pkg/realname/... ./internal/svc/... ./internal/logic/clientplayerlogin/... ./internal/logic/loginadmin/... ./internal/logic/loginpregate/... ./cmd/sandbox_mock/...
+   cd go/login && go test -count=1 -v ./internal/logic/pkg/sessionmanager/...
+   cd go/player_locator && go build ./... && go test -count=1 -v ./internal/logic/...
    cd go/shared && go test -count=1 ./antiaddiction/... ./redisslot/... ./accountdirectory/...
    cd go/data_service && go test -count=1 ./internal/store/... ./internal/server/...
    cd go/payment && go test -count=1 ./...
@@ -56,7 +76,9 @@
    通过标准：全部 PASS，下面这些用例在 `-v` 输出里都是 PASS，不是 SKIP：
    - `nppa` 包：`ledger_test.go` 14 条（含 §2.1 的三条）、`TestTick*` 7 条、`TestQuota*` 2 条、`client_test.go` 8 条（含 `TestReadRequestRejectsATamperedRequest`）；
    - `svc` 包：`TestEvaluate*` 3 条、`TestNowUsesTheInjectedClock`；
-   - `clientplayerlogin` 包：`TestGateLogin*` 7 条、`TestRenewSessionKicksAMinorTheGateFailedToClose`、`TestRenewSessionNeverKicksAnAdult`；
+   - `clientplayerlogin` 包：`TestGateLogin*` 7 条、`TestRenewSessionKicksAMinorTheGateFailedToClose`、`TestRenewSessionNeverKicksAnAdult`、`TestEnterGame_MinorPlayDeadlineReachesTheSessionRecord`（3 个子用例）；
+   - `sessionmanager` 包：`TestMinorPlayDeadline_SessionMirrorRoundTrip`；
+   - `go/player_locator` 的 `logic` 包：`TestHostedLeaseSecondsStopsAtAMinorsPlayDeadline`（6 个子用例）、`TestLeaseMonitor_MinorPastThePlayDeadlineIsNotHosted`、`TestLeaseMonitor_MinorBeforeThePlayDeadlineIsStillHosted`，并且原有的租约与托管用例不能变红；
    - `loginadmin` 包：`TestResetAccountRealName*` 3 条；
    - `redisslot` 包：`TestNppaLedgerKeysShareSlotPerShardAndSpreadAcrossSlots`；
    - `cmd/sandbox_mock`：`TestNppaCheckAgainstSandboxMock`、`TestNppaPendingResultIsFetchedByQuery`、`TestNppaSandboxRefusesAWrongSecretKey`、`TestNppaLoginoutIsRecordedAndStaleBehaviorsAreRefused`、`TestLinuxLoginStackAntiAddictionPointsAtSandboxMock`。
@@ -69,7 +91,8 @@
 5. **冒烟**：按[沙盒手册](../ops/wechat-qq-sandbox-runbook.md) §J 走一遍，要看到这几种结果：
    1. 没实名的自有渠道账号，gate 的 Login 回 `tip 2042`；实名后能进游戏。
    2. mock 的 `/mock/nppa/behaviors` 里，上线和下线成对，si 相同。
-   3. 未成年人在时段外被拒（`tip 2048`）；payment 按限额拒单。时段内的到点断开由单测覆盖，正好在周五到周日 20:00~21:00 跑时顺带看一眼。
+   3. 未成年人在时段外被拒（`tip 2048`）；payment 按限额拒单。时段内的到点断开由单测覆盖，正好在周五到周日 20:00~21:00 跑时顺带看一眼：到点后 scene 日志里这个角色应当立即存盘退出，不出现断线保留。
+   3a. 离线托管：给一个未成年人账号开挂机月卡，在可玩时段里进游戏后杀掉客户端。期望角色托管到当天 21:00 为止，之后 player_locator 日志出现 `is a minor past the play deadline`，scene 收到 LeaveScene 后存盘下线。成年人账号同样操作，托管不受影响。
    4. `kill -9` login 之后事件不丢。
    5. 真 Redis 上账本的 Lua 能跑：K8s 钉的 7.2 和本机 compose 的 8.x 各走一轮第 1、2 步，记下版本。
 6. **记录**：在 `docs/PROGRESS.md` 追加一条（只追加），标题写「Gemini：实名与防沉迷验证」，列命令、通过数和失败的首错原文。设计稿状态行按结果更新。
@@ -84,6 +107,7 @@
 - `play_deadline_ms` 是绝对 Unix 毫秒，gate 按自己的墙钟提前 5 秒关；时钟偏差由启动核对的 30 秒门槛兜住。
 - 账本 16 分片（11-21）。将来要改分片数，必须同时清掉账本键。
 - 截止时刻到了、连接却还在的未成年人：下线按截止时刻报，人由 login 在下一次续租时踢（最晚晚一个续租间隔）。这是 gate 出问题时的兜底，正常由 gate 提前 5 秒断开。
+- 未成年人到点是立即存盘下线，不走 25 秒断线保留；离线托管只到当天的截止时刻为止，截止之前断线的照常托管。scene 不需要知道年龄，由 player_locator 到点停止续租。
 
 ## 5. 没核实的（不是代码问题，留给负责人）
 

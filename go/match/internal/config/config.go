@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"shared/authoritysql"
+	"shared/clusterredis"
 	"shared/contentguard"
 	"shared/dbplacement"
 	"shared/idsegment"
@@ -17,7 +18,6 @@ import (
 	matchpb "proto/match"
 
 	"github.com/zeromicro/go-zero/core/service"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
@@ -30,10 +30,11 @@ type Config struct {
 		Brokers []string
 	}
 
-	// MatchRedis:match 私有协调 key(spectate:* 观战索引、档位与配额)的存储,
-	// 可配 Type: cluster(设计文档 cross-zone-matchmaking.md D2 双存储)。
-	// 留空则回落到 Redis 段(本地单库形态)。
-	MatchRedis redis.RedisConf `json:",optional"`
+	// MatchRedis:match 私有集群,只放观战协调 key(spectate:* 观战索引、档位与配额;设计文档 cross-zone-matchmaking.md D2 双存储)。
+	// 与 PlayerRedis 同一种配置段(shared/clusterredis):句柄带键守卫,结果未知的命令不由客户端重发
+	// (docs/design/redis-cluster-all-domains-20261110.md §4.9)。
+	// 读取走 EffectiveMatchRedis():没写 Addrs 时指向 Redis 段那一个实例(本地单库形态)。
+	MatchRedis clusterredis.Config `json:",optional"`
 
 	// PlayerRedis:玩家域 Redis(docs/design/redis-player-store-cluster.md §5.7、§5.8):契约 key(player:{id}:location /
 	// player:session:{id} / battle:lock:{id})与 player:{id}:sync_digest。
@@ -371,33 +372,43 @@ func (g GlobalMatchConf) PartyRatingGapCenti() int64 {
 	return int64(g.PartyRatingGapMax) * 100
 }
 
-// 没写 PlayerRedis.Addrs 时玩家域连接的口径:go-zero 对 Redis 段的缺省值(池 10 × GOMAXPROCS,K8s 上 GOMAXPROCS 按 2 算,读写 3s,
-// 取连接 4s,拨号 5s)。这里写成常量,不随 CPU limit 漂移。
+// 没写 PlayerRedis / MatchRedis 的 Addrs 时连接的口径:go-zero 对 Redis 段的缺省值(池 10 × GOMAXPROCS,K8s 上 GOMAXPROCS 按 2 算,
+// 读写 3s,取连接 4s,拨号 5s)。这里写成常量,不随 CPU limit 漂移。
 const (
-	playerRedisFallbackPoolSize      = 20
-	playerRedisFallbackIOTimeoutMs   = 3000
-	playerRedisFallbackPoolTimeoutMs = 4000
-	playerRedisFallbackDialTimeoutMs = 5000
+	redisSectionFallbackPoolSize      = 20
+	redisSectionFallbackIOTimeoutMs   = 3000
+	redisSectionFallbackPoolTimeoutMs = 4000
+	redisSectionFallbackDialTimeoutMs = 5000
 )
 
-// EffectivePlayerRedis 返回生效的玩家域配置:写了 PlayerRedis.Addrs 就用它,否则指向 Redis 段那一个实例。
-func (c *Config) EffectivePlayerRedis() playerredis.Config {
-	return c.PlayerRedis.OrDefault(playerredis.Config{
+// redisSectionInstance 是 PlayerRedis / MatchRedis 没写 Addrs 时的落点:Redis 段那一个实例(本地单库形态)。
+func (c *Config) redisSectionInstance() clusterredis.Config {
+	return clusterredis.Config{
 		Addrs:           []string{c.Redis.Host},
 		Username:        c.Redis.User,
 		Password:        c.Redis.Pass,
 		TLS:             c.Redis.Tls,
-		PoolSizePerNode: playerRedisFallbackPoolSize,
-		DialTimeoutMs:   playerRedisFallbackDialTimeoutMs,
-		ReadTimeoutMs:   playerRedisFallbackIOTimeoutMs,
-		WriteTimeoutMs:  playerRedisFallbackIOTimeoutMs,
-		PoolTimeoutMs:   playerRedisFallbackPoolTimeoutMs,
-	})
+		PoolSizePerNode: redisSectionFallbackPoolSize,
+		DialTimeoutMs:   redisSectionFallbackDialTimeoutMs,
+		ReadTimeoutMs:   redisSectionFallbackIOTimeoutMs,
+		WriteTimeoutMs:  redisSectionFallbackIOTimeoutMs,
+		PoolTimeoutMs:   redisSectionFallbackPoolTimeoutMs,
+	}
+}
+
+// EffectivePlayerRedis 返回生效的玩家域配置:写了 PlayerRedis.Addrs 就用它,否则指向 Redis 段那一个实例。
+func (c *Config) EffectivePlayerRedis() playerredis.Config {
+	return c.PlayerRedis.OrDefault(c.redisSectionInstance())
+}
+
+// EffectiveMatchRedis 返回生效的 match 私有集群配置:写了 MatchRedis.Addrs 就用它,否则指向 Redis 段那一个实例。
+func (c *Config) EffectiveMatchRedis() clusterredis.Config {
+	return c.MatchRedis.OrDefault(c.redisSectionInstance())
 }
 
 // ResolveSharedRedisPassword 按 SharedRedisPasswordEnv 填 Redis.Pass,规则见 redisauth.Apply。
-// 没写 MatchRedis.Host 时私有 key 回落到 Redis 段的共享库(svc.NewRedisHandles),玩家域没写 Addrs 时也回落到 Redis 段
-// (EffectivePlayerRedis),填完之后它们用的都是这个口令。-migrate 不连 Redis,只在常驻启动时调用(match_service.go)。
+// PlayerRedis、MatchRedis 没写 Addrs 时都落到 Redis 段那一个实例(EffectivePlayerRedis / EffectiveMatchRedis),
+// 填完之后它们用的都是这个口令。-migrate 不连 Redis,只在常驻启动时调用(match_service.go)。
 func (c *Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) error {
 	return redisauth.Apply(c.SharedRedisPasswordEnv, lookup,
 		redisauth.Target{Field: "Redis.Pass", Password: &c.Redis.Pass})
@@ -538,6 +549,9 @@ func (c *Config) Validate() error {
 	}
 	if err := c.PlayerRedis.ValidateSection(); err != nil {
 		return fmt.Errorf("PlayerRedis: %w", err)
+	}
+	if err := c.MatchRedis.ValidateSection(); err != nil {
+		return fmt.Errorf("MatchRedis: %w", err)
 	}
 	if c.GlobalMatch.ScopeGroupAfterSeconds > c.GlobalMatch.ScopeGlobalAfterSeconds {
 		return fmt.Errorf("GlobalMatch.ScopeGroupAfterSeconds(%d) 不能大于 ScopeGlobalAfterSeconds(%d):先放宽到大区,再放宽到全服",

@@ -1,6 +1,6 @@
 # 实名认证与未成年人防沉迷
 
-> **状态：2026-11-19 负责人定「App 形态也首发，按清单写」，§5 已落码，未生成、未编译、未测试，待 Gemini 验证（命令见 `docs/PROGRESS.md` 同日「实名认证与未成年人防沉迷」落码条目）。** 规则与平台能力的来源见 §10。§8 末尾原先没做的两项都已在 2026-11-19 补落码、未运行：K8s 部署参数，go/payment 的限额闸（§5.6）。2026-11-20 又补了三处原来标为「以后」的：国家接口的全服调用额度（§5.2，原来按副本限速、副本不能超过 10 个）、上报器停机时发完手上的事件（§5.5）、客服重置实名（§5.2 末）；单日充值上限定为单次上限（§5.6）。都未运行。2026-11-20 第二批：上下线上报改成登录域 Redis 里的会话账本（§5.5，11-21 Gemini 分成 16 片），到点断开改由 gate 本地按截止时刻做、login 兜底（§5.4）。2026-11-26 复核发现截止时刻一到清扫就删掉账本条目，login 兜底随之失效，同日已改（§5.5「未成年人的租约」）；国家系统的沙箱 mock 也在同日写完（[沙盒手册](../ops/wechat-qq-sandbox-runbook.md) §J）。代码到此没有待写项，全部未编译、未运行，验证交 Gemini（[交接单](../handoff/real-name-anti-addiction-handoff-20261126.md)）。
+> **状态：2026-11-19 负责人定「App 形态也首发，按清单写」，§5 已落码，未生成、未编译、未测试，待 Gemini 验证（命令见 `docs/PROGRESS.md` 同日「实名认证与未成年人防沉迷」落码条目）。** 规则与平台能力的来源见 §10。§8 末尾原先没做的两项都已在 2026-11-19 补落码、未运行：K8s 部署参数，go/payment 的限额闸（§5.6）。2026-11-20 又补了三处原来标为「以后」的：国家接口的全服调用额度（§5.2，原来按副本限速、副本不能超过 10 个）、上报器停机时发完手上的事件（§5.5）、客服重置实名（§5.2 末）；单日充值上限定为单次上限（§5.6）。都未运行。2026-11-20 第二批：上下线上报改成登录域 Redis 里的会话账本（§5.5，11-21 Gemini 分成 16 片），到点断开改由 gate 本地按截止时刻做、login 兜底（§5.4）。2026-11-26 复核发现截止时刻一到清扫就删掉账本条目，login 兜底随之失效，同日已改（§5.5「未成年人的租约」）；国家系统的沙箱 mock 也在同日写完（[沙盒手册](../ops/wechat-qq-sandbox-runbook.md) §J）。同日再复查，补了两处（§5.4）：到点断开时 scene 立即存盘下线；有挂机月卡的未成年人，离线托管不越过截止时刻（要重新生成协议，`player_locator.proto` 加了字段）。战斗直连由服务端强制断开一项待负责人定（§5.4 末条）。全部未编译、未运行，验证交 Gemini（[交接单](../handoff/real-name-anti-addiction-handoff-20261126.md)）。
 
 ## 0. 结论
 
@@ -122,6 +122,12 @@
 - **到点下线由 gate 自己做**（2026-11-20，`cpp/nodes/gate/handler/rpc/minor_play_deadline.{h,cpp}`）：gate 从 Login 成功的回包里读 `anti_addiction.play_deadline_ms`（路由模式在 `client_request_lane.cpp`，直连模式在 `rpc_reply_bridge.cpp`），记进会话的 `minorPlayDeadlineMs` 和一个按时刻排序的队列。主 EventLoop 每秒一拍，截止前 5 秒发 `GameKickPlayerRequest`（`reason = kLoginMinorPlayTimeOver`），然后 `shutdown`，1 秒后强关。不新开线程。同一连接再次登录成功时以最新回包为准（成年人的回包清掉截止时刻）；会话号被复用时按会话代次核对，旧条目不会误关新连接。
   - 原方案靠 gate 代发的 RenewSession 到点踢线，有两处靠不住：gate 每拍最多发 200 次续租，在线多时续租排队，踢线跟着晚；gate 也只给它认为还连着的连接续租。改成 gate 本地按时刻关连接，就不依赖续租了。
 - **login 兜底**：会话账本（§5.5）里记着未成年人的截止时刻。过了截止时刻还收到这条连接的续租，说明那台 gate 没关它（比如没读到回包里的截止时刻）。这时 login 用 `KickPlayerEvent`（`reason_tip = kLoginMinorPlayTimeOver`）补踢一次，打 ERROR，计 `login_anti_addiction_backstop_kick_total`；这个数不为 0 就要查 gate。兜底最晚在截止后一个续租间隔生效（登录态寿命的三分之一，默认 10 分钟）。为此截止时刻之后账本不能删这条会话，见 §5.5「未成年人的租约」。
+- **到点是真的下线**（2026-11-26）：gate 到点关连接之前置 `SessionInfo::exitSceneImmediatelyOnClose`，login 的兜底踢线到达 gate 时也置位。断开回调通知 scene 立即存盘退出，不走 25 秒的断线保留，也不进离线托管。
+- **离线托管不越过截止时刻**（2026-11-26）：有挂机月卡的玩家断线后，角色会留在世界里托管（[断线保留](player-connection-lost-hold.md) §4.1）。未成年人如果在到点之前自己断了线，就没有人到点去关它，角色会一直挂机下去。可玩时段之外不能以任何形式提供游戏服务，托管也算。做法：
+  - login 进游戏时从会话账本取出截止时刻，写进玩家会话记录（`PlayerSession.minor_play_deadline_ms`，SetSession 和 Reconnect 两条路都带，不沿用旧记录的值）。账本读不了就拒绝进游戏（`kLoginRedisError`）。
+  - player_locator 的租约监视器给月卡玩家续租时，续的时长不超过离截止时刻的剩余时间；到点就不再续租，按普通断线收尾，scene 收到 LeaveScene 后存盘下线（`leasemonitor.go` 的 `hostedLeaseSeconds`）。
+  - 截止时刻之前断线的未成年人照常托管到点为止。
+- **战斗直连（已知边界，待负责人定）**：战斗流量走客户端直连战斗服的第二条连接，不经过 gate。官方客户端在大厅连接断开时会自己关掉它（`GameClient` 的 `BattleLink.Close("lobby_disconnected")`）。服务端目前不强制断开：改过的客户端可以把手上这一场打完，但开不了新战斗，票据随房间作废。要堵上，得让战斗服按参战者的截止时刻给票据封顶、到点关直连，涉及 match 与 battle 的协议和存储。
 - **踢线原因**：`KickPlayerEvent` 加 `reason_tip`（0 = 原来的「账号在别处登录」），gate 的 `KickPlayerEventHandler` 用它填 `GameKickPlayerRequest.reason`。gate 只改这一行。
 - **提前提醒**：客户端按 `play_deadline_ms` 在剩 10、5、1 分钟时提示。服务端不推送：提醒漏了不违规，真正的限制是服务端的踢线。
 

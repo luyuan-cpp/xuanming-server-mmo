@@ -523,6 +523,20 @@
 	# 不粘滞、防误关(线上开着撤销而本次漏传或换了值,在写操作之前拒绝)与包装入口照传同上;本次没开时它的 Secret 在 login 部署之后删掉。
 	[string]$LoginAppleTeamId = "",
 	[string]$LoginAppleKeyId = "",
+	# 集群内 login 的官方通行证登录(自托管 Casdoor OIDC,auth_type 是 passport;docs/design/official-passport-registration.md)。
+	# -LoginPassportIssuer / -LoginPassportClientId / -LoginPassportAdminClientId 要么都给要么都不给,给了才渲染 AuthProviders.Passport:
+	# Issuer 是令牌 iss 必须逐字相等的签发方地址(https://主机[:端口][/路径],dev 档也接受 http://;不带末尾 /、用户信息、查询串与片段);
+	# ClientId 是客户端用的公开应用(令牌 aud 必须包含它);AdminClientId 是 login 调通行证管理接口用的机密应用(注销账号时删掉通行证里的
+	# 用户),不能与 ClientId 相同。K8s 上管理凭据必配:login 生产模式对没有它的 Passport 段拒绝启动。两个应用标识的字符集同上面的 ClientId。
+	# -LoginPassportEndpoint 可选,只能与它们一起给:login 取验签公钥与调管理接口的内网基址,留空 = 直接用 Issuer;规则同上面各渠道的 Endpoint。
+	# 机密应用的 ClientSecret 走工作负载密钥目录($script:WorkloadSecretCatalog 的 login-passport-admin,键 client-secret):部署侧从环境变量
+	# MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET 读入,经 secretKeyRef 注入 login 容器的同名变量,绝不进 ConfigMap(AdminClientSecretEnv 只写变量名);
+	# **任何档位**未设置、值含首尾空白都在写操作之前拒绝。不粘滞、防误关(线上开着而本次漏传或换了值,在写操作之前拒绝)与包装入口照传同上;
+	# 本次没开时它的 Secret 在 login 部署之后删掉。
+	[string]$LoginPassportIssuer = "",
+	[string]$LoginPassportClientId = "",
+	[string]$LoginPassportEndpoint = "",
+	[string]$LoginPassportAdminClientId = "",
 	# 集群内 login 的实名认证与未成年人防沉迷(国内 App 形态,docs/design/real-name-anti-addiction.md §5.8)。-LoginNppaAppId 非空才渲染 login 顶层的
 	# AntiAddiction 段:Enabled: true、PlatformManagedAuthTypes: [wechat_minigame, douyin_minigame](两个小游戏渠道由平台实名并执行限制)、
 	# Nppa.AppId / BizId(国家网络游戏防沉迷实名认证系统企业端给的应用标识与游戏备案识别码,要么都给要么都不给)与 Nppa.SecretKeyEnv(只写变量名)。
@@ -810,6 +824,9 @@ $script:LoginDouyinMiniGameAppSecret = ""
 # 注销账号时撤销 Apple 令牌用的 Sign in with Apple 私钥 PEM(-LoginAppleTeamId / -LoginAppleKeyId),同样走工作负载密钥目录(login-apple-signin)。
 # 由 Initialize-InjectedSecrets 解析(只在本次部署 login 且给了 -LoginAppleTeamId 时);空串 = 本次不注入。
 $script:LoginAppleSignInPrivateKey = ""
+# 官方通行证的管理凭据:login 注销账号时调通行证管理接口删用户,用的那个机密应用(-LoginPassportAdminClientId)的 ClientSecret,
+# 同样走工作负载密钥目录(login-passport-admin)。由 Initialize-InjectedSecrets 解析(只在本次部署 login 且给了 -LoginPassportIssuer 时);空串 = 本次不注入。
+$script:LoginPassportAdminClientSecret = ""
 # login 实名与防沉迷的国家系统 secretKey(-LoginNppaAppId),同样走工作负载密钥目录(login-nppa)。
 # 由 Initialize-InjectedSecrets 解析(只在本次部署 login 且给了 -LoginNppaAppId 时);空串 = 本次不注入。
 $script:LoginNppaSecretKey = ""
@@ -1029,6 +1046,10 @@ $script:WorkloadSecretCatalog = [ordered]@{
 	# (AuthProviders.Apple.PrivateKeyEnv,New-LoginAuthProvidersYaml 里的字面量与这里的 Env 一致由契约测试核对)。
 	'login-apple-signin' = @{ Env = 'MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY'; SecretKey = 'private-key'; Consumers = @('login')
 		Value = { [string]$script:LoginAppleSignInPrivateKey } }
+	# 官方通行证机密应用的 ClientSecret(-LoginPassportIssuer 才有值):注销账号时删通行证里的用户。login 的配置只写变量名
+	# (AuthProviders.Passport.AdminClientSecretEnv,New-LoginAuthProvidersYaml 里的字面量与这里的 Env 一致由契约测试核对)。
+	'login-passport-admin' = @{ Env = 'MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET'; SecretKey = 'client-secret'; Consumers = @('login')
+		Value = { [string]$script:LoginPassportAdminClientSecret } }
 	# login 实名与防沉迷的国家系统 secretKey(-LoginNppaAppId 才有值)。login 的配置只写变量名(AntiAddiction.Nppa.SecretKeyEnv,
 	# New-LoginAntiAddictionYaml 里的字面量与这里的 Env 一致由契约测试核对)。
 	'login-nppa' = @{ Env = 'MMORPG_LOGIN_NPPA_SECRET_KEY'; SecretKey = 'secret'; Consumers = @('login')
@@ -1337,6 +1358,35 @@ function Resolve-LoginAppleSignInPrivateKey {
 	}
 	if ($value -cnotmatch '\A\s*-----BEGIN PRIVATE KEY-----\r?\n[A-Za-z0-9+/=\r\n]+-----END PRIVATE KEY-----\s*\z') {
 		throw "环境变量 MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY 不是 .p8 私钥的 PEM 原文(BEGIN / END PRIVATE KEY 之间只能是 base64;常见错法是填了文件路径或 Key ID):login 解析不了私钥会拒绝启动。"
+	}
+	return $value
+}
+
+<#
+.SYNOPSIS
+	解析 login 官方通行证的管理凭据(环境变量 MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET,通行证里那个机密应用的 ClientSecret),
+	返回值;不可用一律 throw。由 Initialize-InjectedSecrets 在写路径入口调用(只在本次部署 login 且给了 -LoginPassportIssuer 时)。
+
+.DESCRIPTION
+	- 任何档位都没有回落值:login 对 AdminClientSecretEnv 指向的变量缺失 / 为空一律拒启(go/login/internal/config/passport_auth.go
+	  resolvePassportProvider)。staging / prod 的「未设置 / 占位 / 短于 16 位」由 Resolve-InjectedSecret 按它的原文 throw;dev 档这里补一次拒绝。
+	- 各档都拒首尾空白与 `${`:login 对这两种值同样拒启(auth_providers.go checkCredentialValue;常见于 Secret 带进的行尾换行),
+	  规则同 Resolve-LoginWeChatAppSecret。
+	- 报错只点参数名与环境变量名,不回显值。读环境变量、不读本脚本的变量,契约测试按 AST 抽出来直接调。
+#>
+function Resolve-LoginPassportAdminClientSecret {
+	param([Parameter(Mandatory = $true)][ValidateSet('dev', 'staging', 'prod')][string]$ReleaseProfile)
+
+	$value = Resolve-InjectedSecret -EnvName "MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET" -DevFallback "" -ReleaseProfile $ReleaseProfile `
+		-Purpose "login 官方通行证管理接口的 ClientSecret(AuthProviders.Passport.AdminClientSecretEnv)" -MinLength 16
+	if ([string]::IsNullOrWhiteSpace($value)) {
+		throw "-LoginPassportIssuer / -LoginPassportAdminClientId 需要环境变量 MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET(通行证里机密应用的 ClientSecret,经 Secret 注入 login),当前未设置,拒绝部署(任何档位都没有回落值)。"
+	}
+	if ($value -cne $value.Trim()) {
+		throw "环境变量 MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET 的值含首尾空白(常见于带进的行尾换行):login 拒绝这种 ClientSecret,部署出来只会拒启。"
+	}
+	if ($value.Contains('${')) {
+		throw "环境变量 MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET 的值含未展开的 `${...}:login 不展开环境变量,对这种 ClientSecret 拒绝启动。"
 	}
 	return $value
 }
@@ -1693,6 +1743,12 @@ function Initialize-InjectedSecrets {
 	$script:LoginAppleSignInPrivateKey = ""
 	if (-not [string]::IsNullOrEmpty($LoginAppleTeamId) -and (Test-ZoneLoginDeployed)) {
 		$script:LoginAppleSignInPrivateKey = Resolve-LoginAppleSignInPrivateKey -ReleaseProfile $ReleaseProfile
+	}
+	# 官方通行证的管理凭据(见 $script:LoginPassportAdminClientSecret 处的说明),条件同上:只在本次部署 login 且给了 -LoginPassportIssuer 时解析
+	# (参数门禁已保证 -LoginPassportClientId 与 -LoginPassportAdminClientId 也给了)。规则见 Resolve-LoginPassportAdminClientSecret。
+	$script:LoginPassportAdminClientSecret = ""
+	if (-not [string]::IsNullOrEmpty($LoginPassportIssuer) -and (Test-ZoneLoginDeployed)) {
+		$script:LoginPassportAdminClientSecret = Resolve-LoginPassportAdminClientSecret -ReleaseProfile $ReleaseProfile
 	}
 	# 实名与防沉迷的国家系统 secretKey(见 $script:LoginNppaSecretKey 处的说明),条件同上:只在本次部署 login 且给了 -LoginNppaAppId 时解析
 	# (参数门禁已保证 -LoginNppaBizId 也给了)。规则见 Resolve-LoginNppaSecretKey。
@@ -7311,7 +7367,7 @@ function Assert-ClientEntryDeployPreflight {
 			Assert-LoginAntiAddictionClusterState -Zones $zones
 		}
 	}
-	Write-Host "Client entry: mode=$ClientEntryMode battle_orchestrator=$BattleOrchestrator gate_service_type=$GateServiceType gate_etp=$GateExternalTrafficPolicy require_client_endpoint=$(Resolve-RequireClientEndpoint)($RequireClientEndpoint) ingress_host=$(if ($GatewayIngressHost) { $GatewayIngressHost } else { '<none>' }) login_dev_password_auth=$($LoginDevPasswordAuth.IsPresent) login_password_auth=$($LoginPasswordAuth.IsPresent) login_wechat=$(-not [string]::IsNullOrEmpty($LoginWeChatAppId)) login_qq=$(-not [string]::IsNullOrEmpty($LoginQQAppId)) login_wechat_minigame=$(-not [string]::IsNullOrEmpty($LoginWeChatMiniGameAppId)) login_douyin_minigame=$(-not [string]::IsNullOrEmpty($LoginDouyinMiniGameAppId)) login_apple=$(-not [string]::IsNullOrEmpty($LoginAppleClientId)) login_google=$(-not [string]::IsNullOrEmpty($LoginGoogleClientId)) login_apple_revoke=$(-not [string]::IsNullOrEmpty($LoginAppleTeamId)) login_anti_addiction=$(-not [string]::IsNullOrEmpty($LoginNppaAppId)) allow_disruptive_switch=$($AllowDisruptiveSwitch.IsPresent)"
+	Write-Host "Client entry: mode=$ClientEntryMode battle_orchestrator=$BattleOrchestrator gate_service_type=$GateServiceType gate_etp=$GateExternalTrafficPolicy require_client_endpoint=$(Resolve-RequireClientEndpoint)($RequireClientEndpoint) ingress_host=$(if ($GatewayIngressHost) { $GatewayIngressHost } else { '<none>' }) login_dev_password_auth=$($LoginDevPasswordAuth.IsPresent) login_password_auth=$($LoginPasswordAuth.IsPresent) login_wechat=$(-not [string]::IsNullOrEmpty($LoginWeChatAppId)) login_qq=$(-not [string]::IsNullOrEmpty($LoginQQAppId)) login_wechat_minigame=$(-not [string]::IsNullOrEmpty($LoginWeChatMiniGameAppId)) login_douyin_minigame=$(-not [string]::IsNullOrEmpty($LoginDouyinMiniGameAppId)) login_apple=$(-not [string]::IsNullOrEmpty($LoginAppleClientId)) login_google=$(-not [string]::IsNullOrEmpty($LoginGoogleClientId)) login_apple_revoke=$(-not [string]::IsNullOrEmpty($LoginAppleTeamId)) login_anti_addiction=$(-not [string]::IsNullOrEmpty($LoginNppaAppId)) login_passport=$(-not [string]::IsNullOrEmpty($LoginPassportIssuer)) allow_disruptive_switch=$($AllowDisruptiveSwitch.IsPresent)"
 }
 
 # login / scene_manager ConfigMap 的 RequireClientEndpoint 取值(见参数 -RequireClientEndpoint):auto 跟随 -ClientEntryMode
@@ -10911,6 +10967,9 @@ function Add-LoginPasswordAuthMemory {
 	    Google 的 ClientId 另须以 .apps.googleusercontent.com 结尾(与 login 的门禁一致)。
 	  - Apple 撤销令牌的 -LoginAppleTeamId / -LoginAppleKeyId:各是 10 位大写字母或数字,要么都给要么都不给,只能与 -LoginAppleClientId
 	    一起给(与 login 的 resolveAppleRevokeKey 一致:三项都写或都不写,第三项 PrivateKeyEnv 由生成器补)。
+	  - 官方通行证(-LoginPassport*,对齐 go/login/internal/config/passport_auth.go):Issuer、ClientId、AdminClientId 要么都给要么都不给
+	    (login 只在 Mode=dev / test 容许不配管理凭据,K8s 上一律要配);Issuer 的形状与档位对 http:// 的限制同 Endpoint,另外不收末尾的 /
+	    (令牌的 iss 要与它逐字相等);两个应用标识的字符集同 AppId,且不能相同;Endpoint 只能与它们一起给。
 	正则一律以 \z 收尾:.NET 的 $ 会放过结尾的一个换行,换行进 YAML 就是注入。
 	报错不回显 Endpoint 的值(可能带用户信息里的口令),AppId 是公开值但同样不回显,点参数名即可定位。
 #>
@@ -10930,6 +10989,10 @@ function Get-LoginAuthProviderParamErrors {
 		[AllowEmptyString()][string]$GoogleEndpoint = '',
 		[AllowEmptyString()][string]$AppleTeamId = '',
 		[AllowEmptyString()][string]$AppleKeyId = '',
+		[AllowEmptyString()][string]$PassportIssuer = '',
+		[AllowEmptyString()][string]$PassportClientId = '',
+		[AllowEmptyString()][string]$PassportEndpoint = '',
+		[AllowEmptyString()][string]$PassportAdminClientId = '',
 		[Parameter(Mandatory = $true)][ValidateSet('dev', 'staging', 'prod')][string]$ReleaseProfile
 	)
 
@@ -10942,6 +11005,7 @@ function Get-LoginAuthProviderParamErrors {
 		[pscustomobject]@{ Name = 'DouyinMiniGame'; IdKey = 'AppId'; AppIdParam = '-LoginDouyinMiniGameAppId'; EndpointParam = '-LoginDouyinMiniGameEndpoint'; AppId = $DouyinMiniGameAppId; Endpoint = $DouyinMiniGameEndpoint }
 		[pscustomobject]@{ Name = 'Apple'; IdKey = 'ClientId'; AppIdParam = '-LoginAppleClientId'; EndpointParam = '-LoginAppleEndpoint'; AppId = $AppleClientId; Endpoint = $AppleEndpoint }
 		[pscustomobject]@{ Name = 'Google'; IdKey = 'ClientId'; AppIdParam = '-LoginGoogleClientId'; EndpointParam = '-LoginGoogleEndpoint'; AppId = $GoogleClientId; Endpoint = $GoogleEndpoint }
+		[pscustomobject]@{ Name = 'Passport'; IdKey = 'ClientId'; AppIdParam = '-LoginPassportClientId'; EndpointParam = '-LoginPassportEndpoint'; AppId = $PassportClientId; Endpoint = $PassportEndpoint }
 	)
 	foreach ($p in $providers) {
 		if (-not [string]::IsNullOrEmpty($p.AppId) -and $p.AppId -cnotmatch '^[A-Za-z0-9_.-]+\z') {
@@ -10992,6 +11056,36 @@ function Get-LoginAuthProviderParamErrors {
 	if (($hasAppleTeamId -or $hasAppleKeyId) -and [string]::IsNullOrEmpty($AppleClientId)) {
 		$errors.Add("给了 -LoginAppleTeamId / -LoginAppleKeyId 却没给 -LoginAppleClientId:这两项只写在 AuthProviders.Apple 里,不能静默丢掉。")
 	}
+	# 官方通行证:ClientId 的字符集与 Endpoint 已在上面按表查过,这里查签发方、管理应用,以及三项齐不齐。
+	# Issuer 的形状同 Endpoint,只是路径逐段非空:不收末尾的 /(令牌的 iss 要与它逐字相等,通行证的规范写法不带)。
+	if (-not [string]::IsNullOrEmpty($PassportIssuer)) {
+		if ($PassportIssuer.Contains('${')) {
+			$errors.Add("-LoginPassportIssuer 含未展开的 `${...}:login 不展开环境变量,出现即拒绝启动。")
+		}
+		else {
+			$m = [regex]::Match($PassportIssuer, '^(?<scheme>https?)://(?<host>[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)(?::(?<port>[0-9]{1,5}))?(?:/[A-Za-z0-9._~%-]+)*\z')
+			if (-not $m.Success -or ($m.Groups['port'].Success -and ([int]$m.Groups['port'].Value -lt 1 -or [int]$m.Groups['port'].Value -gt 65535))) {
+				$errors.Add("-LoginPassportIssuer 须是 https://主机[:端口][/路径](dev 档也接受 http://),不带末尾的 /、用户信息、查询串与片段,路径只用 [A-Za-z0-9._~%/-]。")
+			}
+			elseif ($m.Groups['scheme'].Value -ceq 'http' -and $ReleaseProfile -ne 'dev') {
+				$errors.Add("-LoginPassportIssuer 在 -ReleaseProfile $ReleaseProfile 只接受 https://:http:// 只在 dev 档放行(login 生产模式拒绝 http 的签发方)。")
+			}
+		}
+	}
+	if (-not [string]::IsNullOrEmpty($PassportAdminClientId) -and $PassportAdminClientId -cnotmatch '^[A-Za-z0-9_.-]+\z') {
+		$errors.Add("-LoginPassportAdminClientId 只允许 [A-Za-z0-9_.-](AuthProviders.Passport.AdminClientId 是应用标识不是密钥,原样写进 login ConfigMap)。")
+	}
+	# 三项都要:K8s 是生产形态,login 生产模式对缺管理凭据的 Passport 段拒绝启动(只有 Mode=dev / test 容许只验登录)。
+	$hasPassportIssuer = -not [string]::IsNullOrEmpty($PassportIssuer)
+	$hasPassportClientId = -not [string]::IsNullOrEmpty($PassportClientId)
+	$hasPassportAdminClientId = -not [string]::IsNullOrEmpty($PassportAdminClientId)
+	if ($hasPassportIssuer -ne $hasPassportClientId -or $hasPassportClientId -ne $hasPassportAdminClientId) {
+		$errors.Add("-LoginPassportIssuer、-LoginPassportClientId 与 -LoginPassportAdminClientId 要么都给要么都不给:AuthProviders.Passport 三项都要,K8s 上管理凭据必配(login 生产模式对缺它的配置拒绝启动,注销账号删不掉通行证里的用户)。")
+	}
+	# 管理接口要用另一个机密应用:写成客户端那个公开应用,login 拒绝启动。按字节比,与 login 一致。
+	if ($hasPassportClientId -and $PassportAdminClientId -ceq $PassportClientId) {
+		$errors.Add("-LoginPassportAdminClientId 与 -LoginPassportClientId 相同:管理接口要用另一个机密应用,不能是客户端用的公开应用,login 对这种配置拒绝启动。")
+	}
 	# 逐条写进管道:调用方一律用 @(...) 收集,合法时得到空数组。
 	return $errors.ToArray()
 }
@@ -11011,6 +11105,10 @@ function Get-LoginAuthProviderParamErrors {
 	  - Apple / Google(身份令牌渠道,IdTokenAuthConf):只写 ClientId(给了 Endpoint 再写 Endpoint),登录没有密钥也没有 RequireUnionId。
 	    这些标识全为空时才返回空串。Apple 给了 -AppleTeamId / -AppleKeyId 再写 TeamId、KeyId 与 PrivateKeyEnv(注销时撤销令牌用;
 	    PrivateKeyEnv 是字面量 MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY,私钥由工作负载密钥目录经单键 Secret login-apple-signin 注入)。
+	  - Passport(官方通行证,go/login/internal/config/passport_auth.go PassportAuthConf):-PassportIssuer 非空才写这一段,写 Issuer、ClientId、
+	    AdminClientId 与 AdminClientSecretEnv(给了 Endpoint 再写 Endpoint)。AdminClientSecretEnv 是字面量
+	    MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET,机密应用的 ClientSecret 由工作负载密钥目录经单键 Secret login-passport-admin 注入;
+	    **从不写内联的 AdminClientSecret**(生产模式拒绝)。
 	  - RequireUnionId 只在 -Login*AllowOpenId 时写 false;不写 = login 缺省 true(拿不到 unionid 即拒绝登录,不回落 openid)。
 	  - Endpoint 只在给了时写(沙箱 mock);不写 = 生产地址。
 	AuthProviders 在整份 login.yaml 里只能出现一次(重复的顶层键各 YAML 解析器行为不一),login 模板别处不得再写这个键。
@@ -11037,6 +11135,10 @@ function New-LoginAuthProvidersYaml {
 		[AllowEmptyString()][string]$GoogleEndpoint = '',
 		[AllowEmptyString()][string]$AppleTeamId = '',
 		[AllowEmptyString()][string]$AppleKeyId = '',
+		[AllowEmptyString()][string]$PassportIssuer = '',
+		[AllowEmptyString()][string]$PassportClientId = '',
+		[AllowEmptyString()][string]$PassportEndpoint = '',
+		[AllowEmptyString()][string]$PassportAdminClientId = '',
 		[Parameter(Mandatory = $true)][ValidateSet('dev', 'staging', 'prod')][string]$ReleaseProfile,
 		# login 容器里存放微信 AppSecret 的环境变量名(调用方传 $script:LoginWeChatAppSecretEnv,与注入 env 的名字同源)。
 		[Parameter(Mandatory = $true)][string]$WeChatAppSecretEnv
@@ -11046,7 +11148,9 @@ function New-LoginAuthProvidersYaml {
 		-QQAppId $QQAppId -QQEndpoint $QQEndpoint -WeChatMiniGameAppId $WeChatMiniGameAppId -WeChatMiniGameEndpoint $WeChatMiniGameEndpoint `
 		-DouyinMiniGameAppId $DouyinMiniGameAppId -DouyinMiniGameEndpoint $DouyinMiniGameEndpoint `
 		-AppleClientId $AppleClientId -AppleEndpoint $AppleEndpoint -GoogleClientId $GoogleClientId -GoogleEndpoint $GoogleEndpoint `
-		-AppleTeamId $AppleTeamId -AppleKeyId $AppleKeyId -ReleaseProfile $ReleaseProfile)
+		-AppleTeamId $AppleTeamId -AppleKeyId $AppleKeyId `
+		-PassportIssuer $PassportIssuer -PassportClientId $PassportClientId -PassportEndpoint $PassportEndpoint `
+		-PassportAdminClientId $PassportAdminClientId -ReleaseProfile $ReleaseProfile)
 	if ($errors.Count -gt 0) {
 		throw ("生成 login ConfigMap 的 AuthProviders 段失败:" + ($errors -join ' '))
 	}
@@ -11059,7 +11163,8 @@ function New-LoginAuthProvidersYaml {
 	$hasDouyinMiniGame = -not [string]::IsNullOrEmpty($DouyinMiniGameAppId)
 	$hasApple = -not [string]::IsNullOrEmpty($AppleClientId)
 	$hasGoogle = -not [string]::IsNullOrEmpty($GoogleClientId)
-	if (-not $hasWeChat -and -not $hasQQ -and -not $hasWeChatMiniGame -and -not $hasDouyinMiniGame -and -not $hasApple -and -not $hasGoogle) { return '' }
+	$hasPassport = -not [string]::IsNullOrEmpty($PassportIssuer)
+	if (-not $hasWeChat -and -not $hasQQ -and -not $hasWeChatMiniGame -and -not $hasDouyinMiniGame -and -not $hasApple -and -not $hasGoogle -and -not $hasPassport) { return '' }
 
 	$lines = [System.Collections.Generic.List[string]]::new()
 	$lines.Add('# 第三方登录(k8s_deploy.ps1 -LoginWeChatAppId / -LoginQQAppId,New-LoginAuthProvidersYaml 生成)。只写公开值:微信 AppSecret 经 Secret')
@@ -11074,6 +11179,9 @@ function New-LoginAuthProvidersYaml {
 	$hasAppleRevoke = $hasApple -and -not [string]::IsNullOrEmpty($AppleTeamId)
 	if ($hasAppleRevoke) {
 		$lines.Add('# 注销账号时撤销 Apple 令牌(-LoginAppleTeamId / -LoginAppleKeyId):.p8 私钥经单键 Secret 注入 PrivateKeyEnv 指向的容器环境变量。')
+	}
+	if ($hasPassport) {
+		$lines.Add('# 官方通行证(-LoginPassportIssuer 等四个参数):注销账号时删通行证用户用的机密应用,它的 ClientSecret 经单键 Secret 注入 AdminClientSecretEnv 指向的容器环境变量。')
 	}
 	$lines.Add('AuthProviders:')
 	if ($hasWeChat) {
@@ -11123,6 +11231,16 @@ function New-LoginAuthProvidersYaml {
 		$lines.Add("    ClientId: `"$GoogleClientId`"")
 		if (-not [string]::IsNullOrEmpty($GoogleEndpoint)) { $lines.Add("    Endpoint: `"$GoogleEndpoint`"") }
 	}
+	# 官方通行证(键名核对自 go/login/internal/config/passport_auth.go PassportAuthConf)。AdminClientSecretEnv 写变量名字面量,与工作负载密钥目录
+	# login-passport-admin 的 Env 逐字相同(由契约测试核对,理由同上面小游戏的 AppSecretEnv)。
+	if ($hasPassport) {
+		$lines.Add('  Passport:')
+		$lines.Add("    Issuer: `"$PassportIssuer`"")
+		$lines.Add("    ClientId: `"$PassportClientId`"")
+		if (-not [string]::IsNullOrEmpty($PassportEndpoint)) { $lines.Add("    Endpoint: `"$PassportEndpoint`"") }
+		$lines.Add("    AdminClientId: `"$PassportAdminClientId`"")
+		$lines.Add('    AdminClientSecretEnv: "MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET"')
+	}
 	return ($lines -join "`n")
 }
 
@@ -11145,15 +11263,18 @@ function Assert-LoginAuthProviderParams {
 		-DouyinMiniGameAppId $LoginDouyinMiniGameAppId -DouyinMiniGameEndpoint $LoginDouyinMiniGameEndpoint `
 		-AppleClientId $LoginAppleClientId -AppleEndpoint $LoginAppleEndpoint `
 		-GoogleClientId $LoginGoogleClientId -GoogleEndpoint $LoginGoogleEndpoint `
-		-AppleTeamId $LoginAppleTeamId -AppleKeyId $LoginAppleKeyId -ReleaseProfile $ReleaseProfile)
+		-AppleTeamId $LoginAppleTeamId -AppleKeyId $LoginAppleKeyId `
+		-PassportIssuer $LoginPassportIssuer -PassportClientId $LoginPassportClientId -PassportEndpoint $LoginPassportEndpoint `
+		-PassportAdminClientId $LoginPassportAdminClientId -ReleaseProfile $ReleaseProfile)
 	if ($errors.Count -gt 0) {
 		throw ("login 第三方登录参数校验失败($($errors.Count) 项),未做任何写操作:`n  - " + ($errors -join "`n  - "))
 	}
 
-	# 身份令牌两段只有「不部署 login 时不生效」这一类告警(没有 AllowOpenId)。
+	# 身份令牌各段(Apple / Google / 官方通行证)只有「不部署 login 时不生效」这一类告警(没有 AllowOpenId)。
 	foreach ($idToken in @(
 			[pscustomobject]@{ Param = '-LoginAppleClientId'; Has = (-not [string]::IsNullOrEmpty($LoginAppleClientId)) }
-			[pscustomobject]@{ Param = '-LoginGoogleClientId'; Has = (-not [string]::IsNullOrEmpty($LoginGoogleClientId)) })) {
+			[pscustomobject]@{ Param = '-LoginGoogleClientId'; Has = (-not [string]::IsNullOrEmpty($LoginGoogleClientId)) }
+			[pscustomobject]@{ Param = '-LoginPassportIssuer'; Has = (-not [string]::IsNullOrEmpty($LoginPassportIssuer)) })) {
 		if ($idToken.Has -and -not $DeploysLogin) {
 			Write-Warning "[login-auth] $($idToken.Param) supplied, but login is not deployed in this run (only generated with Go services during zone-up / all-up; requires -GoSvcRegistry without -SkipGoSvc); flag has no effect."
 		}
@@ -11231,7 +11352,9 @@ function Assert-LoginAuthProviderClusterState {
 			-DouyinMiniGameAllowOpenId ([bool]$LoginDouyinMiniGameAllowOpenId) `
 			-AppleClientId ([string]$LoginAppleClientId) -AppleEndpoint ([string]$LoginAppleEndpoint) `
 			-GoogleClientId ([string]$LoginGoogleClientId) -GoogleEndpoint ([string]$LoginGoogleEndpoint) `
-			-AppleTeamId ([string]$LoginAppleTeamId) -AppleKeyId ([string]$LoginAppleKeyId)
+			-AppleTeamId ([string]$LoginAppleTeamId) -AppleKeyId ([string]$LoginAppleKeyId) `
+			-PassportIssuer ([string]$LoginPassportIssuer) -PassportClientId ([string]$LoginPassportClientId) `
+			-PassportEndpoint ([string]$LoginPassportEndpoint) -PassportAdminClientId ([string]$LoginPassportAdminClientId)
 		if ($drift.Drifts.Count -eq 0) { continue }
 		$keep = if ($drift.KeepArgs) { "要保持现状请照传 $($drift.KeepArgs)" } else { '线上没有可照传的 provider' }
 		$text = "zone $($zone.Name)(namespace=$namespace):" + ($drift.Drifts -join ';') + "。$keep;确认要关闭或改动请加 -ConfirmLoginAuthProviderChange。"
@@ -12577,6 +12700,8 @@ function New-GoSvcConfigMapYaml {
 			-AppleClientId $LoginAppleClientId -AppleEndpoint $LoginAppleEndpoint `
 			-GoogleClientId $LoginGoogleClientId -GoogleEndpoint $LoginGoogleEndpoint `
 			-AppleTeamId $LoginAppleTeamId -AppleKeyId $LoginAppleKeyId `
+			-PassportIssuer $LoginPassportIssuer -PassportClientId $LoginPassportClientId -PassportEndpoint $LoginPassportEndpoint `
+			-PassportAdminClientId $LoginPassportAdminClientId `
 			-ReleaseProfile $ReleaseProfile -WeChatAppSecretEnv $script:LoginWeChatAppSecretEnv
 		if (-not [string]::IsNullOrEmpty($authProvidersYaml)) {
 			$loginAuthProvidersBlock = "`n" + $authProvidersYaml
@@ -15387,6 +15512,10 @@ function Apply-OneGoSvc {
 	# Apple 撤销令牌的私钥(-LoginAppleTeamId / -LoginAppleKeyId)同理:本次没开就删目录表里的 login-apple-signin。
 	if ($SvcName -eq 'login' -and [string]::IsNullOrEmpty($script:LoginAppleSignInPrivateKey)) {
 		Invoke-Kubectl -Args @("delete", "secret", "login-apple-signin", "-n", $Namespace, "--ignore-not-found")
+	}
+	# 官方通行证的管理凭据(-LoginPassportIssuer)同理:本次没开就删目录表里的 login-passport-admin。
+	if ($SvcName -eq 'login' -and [string]::IsNullOrEmpty($script:LoginPassportAdminClientSecret)) {
+		Invoke-Kubectl -Args @("delete", "secret", "login-passport-admin", "-n", $Namespace, "--ignore-not-found")
 	}
 	# 实名与防沉迷的 secretKey(-LoginNppaAppId)同理:本次没开就删目录表里的 login-nppa。线上开着而本次没给的情形已被
 	# Assert-LoginAntiAddictionClusterState 拦下或确认过。

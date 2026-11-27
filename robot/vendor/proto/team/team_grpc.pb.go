@@ -20,21 +20,24 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ClientPlayerTeam_CreateTeam_FullMethodName         = "/teampb.ClientPlayerTeam/CreateTeam"
-	ClientPlayerTeam_GetMyTeam_FullMethodName          = "/teampb.ClientPlayerTeam/GetMyTeam"
-	ClientPlayerTeam_ApplyJoinTeam_FullMethodName      = "/teampb.ClientPlayerTeam/ApplyJoinTeam"
-	ClientPlayerTeam_HandleApplication_FullMethodName  = "/teampb.ClientPlayerTeam/HandleApplication"
-	ClientPlayerTeam_InviteToTeam_FullMethodName       = "/teampb.ClientPlayerTeam/InviteToTeam"
-	ClientPlayerTeam_RespondInvite_FullMethodName      = "/teampb.ClientPlayerTeam/RespondInvite"
-	ClientPlayerTeam_ListMyInvites_FullMethodName      = "/teampb.ClientPlayerTeam/ListMyInvites"
-	ClientPlayerTeam_LeaveTeam_FullMethodName          = "/teampb.ClientPlayerTeam/LeaveTeam"
-	ClientPlayerTeam_KickMember_FullMethodName         = "/teampb.ClientPlayerTeam/KickMember"
-	ClientPlayerTeam_TransferLeader_FullMethodName     = "/teampb.ClientPlayerTeam/TransferLeader"
-	ClientPlayerTeam_DisbandTeam_FullMethodName        = "/teampb.ClientPlayerTeam/DisbandTeam"
-	ClientPlayerTeam_StartTeamMatch_FullMethodName     = "/teampb.ClientPlayerTeam/StartTeamMatch"
-	ClientPlayerTeam_NotifyTeamSnapshot_FullMethodName = "/teampb.ClientPlayerTeam/NotifyTeamSnapshot"
-	ClientPlayerTeam_NotifyTeamInvite_FullMethodName   = "/teampb.ClientPlayerTeam/NotifyTeamInvite"
-	ClientPlayerTeam_NotifyTeamEvent_FullMethodName    = "/teampb.ClientPlayerTeam/NotifyTeamEvent"
+	ClientPlayerTeam_CreateTeam_FullMethodName          = "/teampb.ClientPlayerTeam/CreateTeam"
+	ClientPlayerTeam_GetMyTeam_FullMethodName           = "/teampb.ClientPlayerTeam/GetMyTeam"
+	ClientPlayerTeam_ApplyJoinTeam_FullMethodName       = "/teampb.ClientPlayerTeam/ApplyJoinTeam"
+	ClientPlayerTeam_HandleApplication_FullMethodName   = "/teampb.ClientPlayerTeam/HandleApplication"
+	ClientPlayerTeam_InviteToTeam_FullMethodName        = "/teampb.ClientPlayerTeam/InviteToTeam"
+	ClientPlayerTeam_RespondInvite_FullMethodName       = "/teampb.ClientPlayerTeam/RespondInvite"
+	ClientPlayerTeam_ListMyInvites_FullMethodName       = "/teampb.ClientPlayerTeam/ListMyInvites"
+	ClientPlayerTeam_LeaveTeam_FullMethodName           = "/teampb.ClientPlayerTeam/LeaveTeam"
+	ClientPlayerTeam_KickMember_FullMethodName          = "/teampb.ClientPlayerTeam/KickMember"
+	ClientPlayerTeam_TransferLeader_FullMethodName      = "/teampb.ClientPlayerTeam/TransferLeader"
+	ClientPlayerTeam_DisbandTeam_FullMethodName         = "/teampb.ClientPlayerTeam/DisbandTeam"
+	ClientPlayerTeam_StartTeamMatch_FullMethodName      = "/teampb.ClientPlayerTeam/StartTeamMatch"
+	ClientPlayerTeam_NotifyTeamSnapshot_FullMethodName  = "/teampb.ClientPlayerTeam/NotifyTeamSnapshot"
+	ClientPlayerTeam_NotifyTeamInvite_FullMethodName    = "/teampb.ClientPlayerTeam/NotifyTeamInvite"
+	ClientPlayerTeam_NotifyTeamEvent_FullMethodName     = "/teampb.ClientPlayerTeam/NotifyTeamEvent"
+	ClientPlayerTeam_ConfirmRankedPreset_FullMethodName = "/teampb.ClientPlayerTeam/ConfirmRankedPreset"
+	ClientPlayerTeam_SetTeamFormation_FullMethodName    = "/teampb.ClientPlayerTeam/SetTeamFormation"
+	ClientPlayerTeam_RecallTeamMembers_FullMethodName   = "/teampb.ClientPlayerTeam/RecallTeamMembers"
 )
 
 // ClientPlayerTeamClient is the client API for ClientPlayerTeam service.
@@ -66,6 +69,12 @@ type ClientPlayerTeamClient interface {
 	NotifyTeamSnapshot(ctx context.Context, in *TeamSnapshotS2C, opts ...grpc.CallOption) (*base.Empty, error)
 	NotifyTeamInvite(ctx context.Context, in *TeamInviteS2C, opts ...grpc.CallOption) (*base.Empty, error)
 	NotifyTeamEvent(ctx context.Context, in *TeamEventS2C, opts ...grpc.CallOption) (*base.Empty, error)
+	// 队员确认本人在本队排位中的人物与宝宝预设(仅追加在末尾,不改变既有方法号)。
+	ConfirmRankedPreset(ctx context.Context, in *ConfirmRankedPresetRequest, opts ...grpc.CallOption) (*TeamResponse, error)
+	// 队长切换跑图五行跟随队形(仅追加在末尾,不改变既有方法号)。
+	SetTeamFormation(ctx context.Context, in *SetTeamFormationRequest, opts ...grpc.CallOption) (*TeamResponse, error)
+	// 队长一键召集队员归队(仅追加在末尾,受团队级服务端冷却约束)。
+	RecallTeamMembers(ctx context.Context, in *RecallTeamMembersRequest, opts ...grpc.CallOption) (*TeamResponse, error)
 }
 
 type clientPlayerTeamClient struct {
@@ -226,6 +235,36 @@ func (c *clientPlayerTeamClient) NotifyTeamEvent(ctx context.Context, in *TeamEv
 	return out, nil
 }
 
+func (c *clientPlayerTeamClient) ConfirmRankedPreset(ctx context.Context, in *ConfirmRankedPresetRequest, opts ...grpc.CallOption) (*TeamResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TeamResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerTeam_ConfirmRankedPreset_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientPlayerTeamClient) SetTeamFormation(ctx context.Context, in *SetTeamFormationRequest, opts ...grpc.CallOption) (*TeamResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TeamResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerTeam_SetTeamFormation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientPlayerTeamClient) RecallTeamMembers(ctx context.Context, in *RecallTeamMembersRequest, opts ...grpc.CallOption) (*TeamResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TeamResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerTeam_RecallTeamMembers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ClientPlayerTeamServer is the server API for ClientPlayerTeam service.
 // All implementations must embed UnimplementedClientPlayerTeamServer
 // for forward compatibility.
@@ -255,6 +294,12 @@ type ClientPlayerTeamServer interface {
 	NotifyTeamSnapshot(context.Context, *TeamSnapshotS2C) (*base.Empty, error)
 	NotifyTeamInvite(context.Context, *TeamInviteS2C) (*base.Empty, error)
 	NotifyTeamEvent(context.Context, *TeamEventS2C) (*base.Empty, error)
+	// 队员确认本人在本队排位中的人物与宝宝预设(仅追加在末尾,不改变既有方法号)。
+	ConfirmRankedPreset(context.Context, *ConfirmRankedPresetRequest) (*TeamResponse, error)
+	// 队长切换跑图五行跟随队形(仅追加在末尾,不改变既有方法号)。
+	SetTeamFormation(context.Context, *SetTeamFormationRequest) (*TeamResponse, error)
+	// 队长一键召集队员归队(仅追加在末尾,受团队级服务端冷却约束)。
+	RecallTeamMembers(context.Context, *RecallTeamMembersRequest) (*TeamResponse, error)
 	mustEmbedUnimplementedClientPlayerTeamServer()
 }
 
@@ -309,6 +354,15 @@ func (UnimplementedClientPlayerTeamServer) NotifyTeamInvite(context.Context, *Te
 }
 func (UnimplementedClientPlayerTeamServer) NotifyTeamEvent(context.Context, *TeamEventS2C) (*base.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method NotifyTeamEvent not implemented")
+}
+func (UnimplementedClientPlayerTeamServer) ConfirmRankedPreset(context.Context, *ConfirmRankedPresetRequest) (*TeamResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfirmRankedPreset not implemented")
+}
+func (UnimplementedClientPlayerTeamServer) SetTeamFormation(context.Context, *SetTeamFormationRequest) (*TeamResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetTeamFormation not implemented")
+}
+func (UnimplementedClientPlayerTeamServer) RecallTeamMembers(context.Context, *RecallTeamMembersRequest) (*TeamResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecallTeamMembers not implemented")
 }
 func (UnimplementedClientPlayerTeamServer) mustEmbedUnimplementedClientPlayerTeamServer() {}
 func (UnimplementedClientPlayerTeamServer) testEmbeddedByValue()                          {}
@@ -601,6 +655,60 @@ func _ClientPlayerTeam_NotifyTeamEvent_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ClientPlayerTeam_ConfirmRankedPreset_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfirmRankedPresetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerTeamServer).ConfirmRankedPreset(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerTeam_ConfirmRankedPreset_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerTeamServer).ConfirmRankedPreset(ctx, req.(*ConfirmRankedPresetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientPlayerTeam_SetTeamFormation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetTeamFormationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerTeamServer).SetTeamFormation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerTeam_SetTeamFormation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerTeamServer).SetTeamFormation(ctx, req.(*SetTeamFormationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientPlayerTeam_RecallTeamMembers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecallTeamMembersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerTeamServer).RecallTeamMembers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerTeam_RecallTeamMembers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerTeamServer).RecallTeamMembers(ctx, req.(*RecallTeamMembersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ClientPlayerTeam_ServiceDesc is the grpc.ServiceDesc for ClientPlayerTeam service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -667,6 +775,18 @@ var ClientPlayerTeam_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "NotifyTeamEvent",
 			Handler:    _ClientPlayerTeam_NotifyTeamEvent_Handler,
+		},
+		{
+			MethodName: "ConfirmRankedPreset",
+			Handler:    _ClientPlayerTeam_ConfirmRankedPreset_Handler,
+		},
+		{
+			MethodName: "SetTeamFormation",
+			Handler:    _ClientPlayerTeam_SetTeamFormation_Handler,
+		},
+		{
+			MethodName: "RecallTeamMembers",
+			Handler:    _ClientPlayerTeam_RecallTeamMembers_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

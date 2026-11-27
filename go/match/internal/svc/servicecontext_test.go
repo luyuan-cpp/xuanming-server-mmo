@@ -2,39 +2,89 @@ package svc
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"match/internal/config"
+	"shared/clusterredis"
 	"shared/drainproof"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 )
 
-// MatchRedis 未配置:私有 key 回落到 Redis 段的共享库(本地单库形态)。
-func TestNewRedisHandlesFallsBackToShared(t *testing.T) {
+// MatchRedis 没写 Addrs:私有 key 落到 Redis 段那一个实例(本地单库形态)。
+func TestNewMatchRedisFallsBackToRedisSection(t *testing.T) {
 	mr := miniredis.RunT(t)
 	c := config.Config{}
-	c.Redis.RedisConf = redis.RedisConf{Host: mr.Addr(), Type: "node"}
+	c.Redis.Host = mr.Addr()
 
-	matchRds := NewRedisHandles(c)
-	require.NoError(t, matchRds.Set("spectate:battles:active:{sba:0}", "x"))
+	matchRds, err := NewMatchRedis(c)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = matchRds.Close() })
+	require.NoError(t, matchRds.Set(context.Background(), "spectate:battles:active:{sba:0}", "x", 0).Err())
 	require.True(t, mr.Exists("spectate:battles:active:{sba:0}"))
 }
 
-// MatchRedis 配置了独立实例:写入只落在它上面。
-func TestNewRedisHandlesSeparatesWhenConfigured(t *testing.T) {
+// MatchRedis 写了独立实例:写入只落在它上面。句柄带 match 私有集群的键守卫,玩家域的键发不出去。
+func TestNewMatchRedisSeparatesWhenConfigured(t *testing.T) {
 	shared := miniredis.RunT(t)
 	private := miniredis.RunT(t)
 	c := config.Config{}
-	c.Redis.RedisConf = redis.RedisConf{Host: shared.Addr(), Type: "node"}
-	c.MatchRedis = redis.RedisConf{Host: private.Addr(), Type: "node"}
+	c.Redis.Host = shared.Addr()
+	c.MatchRedis = clusterredis.Config{Addrs: []string{private.Addr()}}
 
-	matchRds := NewRedisHandles(c)
-	require.NoError(t, matchRds.Set("spectate:battles:active:{sba:0}", "x"))
+	matchRds, err := NewMatchRedis(c)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = matchRds.Close() })
+	require.NoError(t, matchRds.Set(context.Background(), "spectate:battles:active:{sba:0}", "x", 0).Err())
 	require.True(t, private.Exists("spectate:battles:active:{sba:0}"))
 	require.False(t, shared.Exists("spectate:battles:active:{sba:0}"))
+
+	err = matchRds.Set(context.Background(), "player:{42}:location", "x", 0).Err()
+	require.ErrorIs(t, err, clusterredis.ErrNotMatchPrivateKey)
+	require.False(t, private.Exists("player:{42}:location"), "被守卫拒绝的命令不到服务端")
+}
+
+// Redis 段没写地址、MatchRedis 也没写 Addrs:构造报错并点名 MatchRedis,不 panic。
+func TestNewMatchRedisRejectsInvalidConfig(t *testing.T) {
+	_, err := NewMatchRedis(config.Config{})
+	require.ErrorContains(t, err, "MatchRedis")
+}
+
+// match 模块(含测试)不许再导入 go-zero 的 Redis 句柄:它写死 MaxRetries=3,读超时或 EOF 之后会把已经写出的命令再发一遍
+// (断线重连清单 R8),也没有键守卫。私有集群与玩家域都走 shared/clusterredis 的构造器,测试用生产同一个构造器。
+func TestMatchModuleDoesNotImportGoZeroRedis(t *testing.T) {
+	// 拆成两段拼:整串写在这里会让本文件扫到自己。
+	const goZeroRedis = `"github.com/zeromicro/go-zero/core/stores/` + `redis"`
+	root := filepath.Join("..", "..")
+	scanned := 0
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			// 根目录写成 "../..",它的 Name() 是 "..":不排除它的话「点开头的目录」这条会把整棵树跳过。
+			if name := d.Name(); path != root && (name == "generated" || strings.HasPrefix(name, ".")) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		raw, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		scanned++
+		require.NotContains(t, string(raw), goZeroRedis, "%s imports the go-zero Redis handle; use shared/clusterredis", path)
+		return nil
+	})
+	require.NoError(t, err)
+	require.Greater(t, scanned, 50, "扫描范围应是整个 match 模块")
 }
 
 // 关停等结果消费组 lag 探针退出:StopAndReport 先停后台(取消探针的 ctx),再等探针 goroutine 关掉退出信号,之后才关资源。

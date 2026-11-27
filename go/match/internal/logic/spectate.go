@@ -51,8 +51,9 @@ const (
 // 模板时长上限是 catalog.MaxBattleSeconds,所以按上限算,再留 60s 吃掉 deadline 强制收尾与终局提交的时间差(与终局宽限同量)。
 const spectateTTLSeconds = catalog.MaxBattleSeconds + int(authority.WorkLeaseMs/1000) + 60
 
-// spectateRedisOpTimeout 每条观战索引 Redis 命令的 ctx 截止。go-zero 没开 go-redis 的 ContextTimeoutEnabled,这个截止只约束取连接、
-// 拨号和内部重试之间的退避,socket 读仍可能等满 go-redis 默认 ReadTimeout(3s);这些命令都在开局关键路径之外,不进备战预算。
+// spectateRedisOpTimeout 是不挂在请求上的观战索引操作(开局登记、终局清理、定期清理、列表回源)的 ctx 截止,一次操作里的
+// 几条命令共用。句柄开着 ContextTimeoutEnabled(shared/clusterredis),截止同时约束取连接与 socket 读写;
+// 这些命令都在开局关键路径之外,不进备战预算。
 const spectateRedisOpTimeout = time.Second
 
 // addSpectateActive 开局成功后把这场战斗加入活跃集合本场所在的桶(观战列表与随机选场)。best-effort,失败只记日志,
@@ -66,7 +67,7 @@ func addSpectateActive(svcCtx *svc.ServiceContext, battleId, createdAtMs uint64,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), spectateRedisOpTimeout)
 	defer cancel()
-	if _, err := svcCtx.MatchRedis.ZaddCtx(ctx, spectateActiveIndex.keyFor(battleId), int64(createdAtMs), strconv.FormatUint(battleId, 10)); err != nil {
+	if err := spectateActiveIndex.add(ctx, svcCtx.MatchRedis, battleId, int64(createdAtMs)); err != nil {
 		logx.Errorf("[spectate] Spectator index ZADD failed (replacement tickets unaffected; battle excluded from spectator list) battle=%d: %v",
 			battleId, err)
 		return
@@ -137,15 +138,16 @@ func spectateRecordFromFormation(f *matchpb.MatchFormationRecord) (*matchpb.Spec
 // 但留着会让这场结束之后到达的观众按旧档位签出收不到帧的凭证。
 func removeSpectateBattle(svcCtx *svc.ServiceContext, battleId uint64) {
 	removeSpectateActiveMember(svcCtx, battleId)
-	member := strconv.FormatUint(battleId, 10)
-	if _, err := svcCtx.MatchRedis.Zrem(spectateBroadcastIndex.keyFor(battleId), member); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), spectateRedisOpTimeout)
+	defer cancel()
+	if err := spectateBroadcastIndex.remove(ctx, svcCtx.MatchRedis, battleId); err != nil {
 		logx.Errorf("[spectate] Failed to release broadcast quota battle=%d: %v", battleId, err)
 	}
-	if _, err := svcCtx.MatchRedis.Zrem(spectateFeaturedIndex.keyFor(battleId), member); err != nil {
+	if err := spectateFeaturedIndex.remove(ctx, svcCtx.MatchRedis, battleId); err != nil {
 		logx.Errorf("[spectate] Failed to remove featured index member battle=%d: %v", battleId, err)
 	}
 	// 这三个键共用 hash tag {id},落同一 slot,可以一条 DEL。
-	if _, err := svcCtx.MatchRedis.Del(spectateTierKey(battleId), spectateRelayGatesKey(battleId), spectateFeaturedKey(battleId)); err != nil {
+	if err := svcCtx.MatchRedis.Del(ctx, spectateTierKey(battleId), spectateRelayGatesKey(battleId), spectateFeaturedKey(battleId)).Err(); err != nil {
 		logx.Errorf("[spectate] Failed to delete battle tier keys (TTL will clear them) battle=%d: %v", battleId, err)
 	}
 }
@@ -163,11 +165,12 @@ func releaseSpectateOnOutcome(svcCtx *svc.ServiceContext, battleId uint64) {
 // removeSpectateActiveMember 只从活跃集合摘掉一场、不碰其余观战键:不该出现在集合里的私密成员走这里。
 // 本副本的列表缓存同时忘掉它(removeSpectateBattle 也经这里),同一秒里后来的列表请求不再读它、再摘一次。
 func removeSpectateActiveMember(svcCtx *svc.ServiceContext, battleId uint64) {
-	member := strconv.FormatUint(battleId, 10)
-	if _, err := svcCtx.MatchRedis.Zrem(spectateActiveIndex.keyFor(battleId), member); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), spectateRedisOpTimeout)
+	defer cancel()
+	if err := spectateActiveIndex.remove(ctx, svcCtx.MatchRedis, battleId); err != nil {
 		logx.Errorf("[spectate] Spectator index ZREM failed battle=%d: %v", battleId, err)
 	}
-	svcCtx.SpectateLobby.Forget(member)
+	svcCtx.SpectateLobby.Forget(strconv.FormatUint(battleId, 10))
 }
 
 // spectateStaleBeforeMs 返回过期分界:score(created_at_ms)早于该值的战斗
@@ -201,10 +204,10 @@ func pickRandomBattle(svcCtx *svc.ServiceContext) (uint64, error) {
 			// 并发剔除导致下标越界,重试。
 			continue
 		}
-		battleId, err := strconv.ParseUint(pairs[0].Key, 10, 64)
+		battleId, err := strconv.ParseUint(pairs[0].Member, 10, 64)
 		if err != nil {
-			logx.Errorf("[spectate] Invalid member %q in spectator index; removing", pairs[0].Key)
-			removeSpectateIndexGarbage(svcCtx, spectateActiveIndex, pairs[0].Key)
+			logx.Errorf("[spectate] Invalid member %q in spectator index; removing", pairs[0].Member)
+			removeSpectateIndexGarbage(svcCtx, spectateActiveIndex, pairs[0].Member)
 			continue
 		}
 		if uint64(pairs[0].Score) < staleBefore {

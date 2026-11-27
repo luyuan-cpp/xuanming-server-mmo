@@ -27,6 +27,8 @@
 - `Run` 等下一代次失败(协调者不可达、join / sync / 读位点失败)只计数、记日志、有界退避后继续等;分区打开失败(leader 不可读)
   与拉取失败退避后重试。都不结束 owner。
 - 打开分区时核组内已提交位点在保留范围内:早于日志起点或晚于日志末端(保留期删掉了没消费的记录、topic 重建)→ HOLD(§7)。
+  早于日志起点的那种同样计 `kafka_bound_consumer_retention_loss_total`、打 `RECORDS DELETED BY RETENTION ...`(2026-11-26),
+  与代次中途发现的缺口走同一条 critical 告警;晚于日志末端不是保留期丢失,只 HOLD。
 - 退避:1s 起翻倍、封顶 30s,生产等待带抖动(`sleepWithJitter`,[d/2, d])。
 
 ## 3. 一条已接纳记录的结局
@@ -72,7 +74,7 @@ handler 模式下 `FetchMessage` 返回、且代次还在,记录就被接纳(拿
 
 `BoundConsumerGroupConfig.DeadLetter` 打开(只支持 handler 模式)。同一条在本 owner 的这次交付里:
 
-- 回调失败累计到 `MaxAttempts` 次(缺省 20,上限 1000;guild-trial 取 20,按退避约 7.5 分钟);或
+- 回调失败累计到 `MaxAttempts` 次(缺省 20,上限 1000;guild-trial 取 20,退避带抖动,约 4–7.5 分钟);或
 - 回调用 `%w` 返回 `kafkautil.ErrUnprocessable`(记录本身处理不了:解不出、违反契约),第一次就转。
 
 预算只在本 owner 的这次交付里累计:代次结束交还重投后,新属主从 0 重计(不做跨副本的持久计数)。
@@ -91,10 +93,12 @@ handler 模式下 `FetchMessage` 返回、且代次还在,记录就被接纳(拿
   各写一份迁移与写者闸门(逻辑库自治,AGENTS §7 第 6 条);
 - 与原 topic 同一套耐久契约(`DeadLetterTopicSpec`:原 topic 要求严格耐久时三副本、minISR 2;1 个分区),
   不依赖消费者自己那个多半正在出故障的库;
+- 单条上限 2MiB(topic 的 `max.message.bytes` 与写入端的单批上限,2026-11-26):死信比原件多 `dlq.*` 头(约 1.5KB),
+  原 topic 沿用 broker 缺省上限(约 1MiB)时,贴着上限的原件加头之后写不进同样上限的死信 topic,分区会停在这一条;
 - 保留 90 天,远长于原 topic 的 7 天:人工处置按周算;
 - 按消费组隔离:一个 topic 可以被几个组读(`match-results` 有 `match-rating` 与 `guild-trial`),某条可能只对其中一个组是毒丸。
 
-代价:依赖长时间不可用时,在途记录各自用完预算后也会转死信(guild-trial 约 7.5 分钟一条),恢复后要按手册重放。
+代价:依赖长时间不可用时,在途记录各自用完预算后也会转死信(guild-trial 约 4–7.5 分钟一条),恢复后要按手册重放。
 告警 `KafkaBoundConsumerDeadLettered` 对第一条就响。
 
 ### 5.4 死信消息格式
@@ -118,7 +122,7 @@ key、value 与原 headers 原样(原件里旧的 `dlq.*` 头先去掉),再追�
 
 | 消费组 | 死信 | 理由 |
 |---|---|---|
-| `guild-trial` | 打开,20 次 | 毒丸以前会卡住本副本名下的分区;已登记的历练由巡检器在 ResultOverdue(420s)后从 match 的 SQL 终局兜底结算,20 次约 7.5 分钟,晚于巡检器 |
+| `guild-trial` | 打开,20 次 | 毒丸以前会卡住本副本名下的分区;已登记的历练由巡检器在 ResultOverdue(420s)后从 match 的 SQL 终局兜底结算;20 次约 4–7.5 分钟(退避带抖动),与巡检器谁先谁后无关,重放走幂等闸门 |
 | `match-rating` | **不开** | 负责人 2026-11-06 定([cross-zone-matchmaking.md](cross-zone-matchmaking.md) §13.4):解码失败与同局原字节冲突保留位点、告警、人工处置,未处置前分区不前进,不新增丢弃或毒丸表路径 |
 | data_service 两个审计组 | 不适用(reader 模式) | 坏消息由批处理自己按既定口径跳过并提交,记 ERROR 与 `decode_error / invalid / oversize` 计数,告警 `DataServiceAuditMessagesSkipped` |
 
@@ -134,9 +138,11 @@ key、value 与原 headers 原样(原件里旧的 `dlq.*` 头先去掉),再追�
 
 维护排空时各副本相继调 `CloseAndReport`(内部 StopFetching),相继离组;每次离组都结束其余副本的代次。owner 终止之后:
 
-- 不再取新,也不再原地重试;正在进行的那次回调 / 提交照常做完;
+- 不再取新,也不再调回调;正在进行的那次回调 / 提交照常做完;
+- 回调已成功、只差提交的记录,代次还在时先短重试几次提交(同 reader 模式:3 次、200ms 起翻倍),仍失败才交还(2026-11-26)。
+  最后离组的副本没有新属主接手,瞬时提交失败直接交还会让收据 HOLD;代次已结束的提交被拒不会因重试变好,不试;
 - 没结清的记录(在途、退避中,或回调成功后旧代次提交被拒)**交给新属主**:不提交、不记 HOLD,票据留着(§3 表);
-- reader 模式同理:终止时 `CommitMessages` 失败,这批交给新属主,返回 `*UncommittedError`(调用方照旧摘掉在途集合)。
+- reader 模式同理:终止时 `CommitMessages` 照常有界重试(代次还在时),仍失败这批交给新属主,返回 `*UncommittedError`(调用方照旧摘掉在途集合)。
 
 ### 6.2 收尾核对
 
@@ -183,9 +189,11 @@ owner 每取到一条都核它是否紧接着上一条(应到位点从 initial �
 ## 8. reader 模式(data_service)
 
 - `CommitMessages` 只推进本代次实际交付、调用方确认已持久的前缀;代次的 ctx 已结束也照常用交付它们的代次提交(`waitDelivered` 让该代次等这些记录结清才关)。
-- 代次还在时提交失败先有界重试 3 次(200ms 起翻倍,持 commitMu 所以要短)。仍失败:
+- 代次还在时提交失败先有界重试 3 次(200ms 起翻倍,持 commitMu 所以要短;owner 已终止也照样重试)。仍失败:
   - owner 仍在运行 → 这批交还(`*UncommittedError`),**并结束本代次**(2026-11-12):本代次不会再投它们,不结束的话安静分区上
     已落库却没提交的几条会一直挂着积压,直到同分区来了新消息;结束本代次让下一代次立即从组内已提交位点重投(落库幂等);
+    连续几个代次都因此被自己结束时(提交一直失败而入组正常),第二次起下一代次先退避再消费(1s 翻倍、封顶 30s,批提交成功清零,
+    2026-11-26):不退避就会每轮重做同一批落库,本成员是 leader 时每轮还触发一次全组再均衡。代次已被再均衡结束时提交被拒不计;
   - owner 已终止 → 交给新属主(§6)。
 - `ProcessingNotCommitted` 的确定性恢复票据:分区回到本 owner 时组内已提交位点已越过它(且组提交过)→ `GROUP_COMMITTED_PAST`;
   分区不回来 → 收尾核对(§6.2);组从没提交过而日志起点越过它 → HOLD(没被处理就被保留期删了)。`ProcessingOutcomeUnknown` 永久 HOLD。
@@ -198,7 +206,7 @@ owner 每取到一条都核它是否紧接着上一条(应到位点从 initial �
 | `kafka_bound_consumer_retry_total{group,stage}` | counter | 原地重试;stage:join / open / fetch / handle / dead_letter / commit |
 | `kafka_bound_consumer_released_total{group}` | counter | 交还重投(含交给新属主) |
 | `kafka_bound_consumer_dead_lettered_total{group,cause}` | counter | 写进死信的记录;cause:unprocessable / exhausted;只给开了死信的组预置 |
-| `kafka_bound_consumer_retention_loss_total{group}` | counter | 发现保留期删掉了本组还没处理的记录(已 HOLD) |
+| `kafka_bound_consumer_retention_loss_total{group}` | counter | 发现保留期删掉了本组还没处理的记录(已 HOLD);代次中途发现缺口与打开分区时发现提交点落在日志起点之前都计 |
 | `kafka_bound_consumer_hold_total{group}` | counter | owner 记 HOLD |
 
 label 只有组名(配置常量)与固定的 stage / cause,不含分区、offset、玩家或对局号;构造 owner 时预置为 0。日志前缀 `[kafka-bound]`。
@@ -231,7 +239,8 @@ label 只有组名(配置常量)与固定的 stage / cause,不含分区、offset
 逐个离组时旧代次提交被拒;reader 模式交还后结束代次、下一代次重投;漂走的恢复票据收尾核对(越过 / 没越过 / 组没提交过);
 有界重试后转死信、无法处理直接转、死信写失败留在原处、panic 转死信不 HOLD、不开死信时原地重试;死信消息编解码;
 保留期删掉没处理的记录 HOLD、非保留期缺口照常接纳、新组起点被推过去照常接纳、reader 回退 HOLD;提交停滞不依赖新消息;
-从没提交过的分区接纳第一条之前先提交起点、起点提交不成功不接纳(handler 与 reader 两种模式);没有位点的票据不按组内位点结清;收尾核对有时间上限。
+从没提交过的分区接纳第一条之前先提交起点、起点提交不成功不接纳(handler 与 reader 两种模式);没有位点的票据不按组内位点结清;收尾核对有时间上限;
+reader 模式连续自己结束代次时退避;owner 终止而代次还在时只差提交的记录先短重试提交(handler 与 reader 两种模式);死信单条上限。
 另有 `go/shared/cmd/kafka_dlq/main_test.go`、guild `trial_result_bound_test.go`、match `result_consumer_test.go`,
 以及 `tools/scripts/tests/k8s_deploy_contract.tests.ps1` 的三份告警契约。
 
@@ -257,3 +266,6 @@ Java 版(`D:\luyuan\xuanming-server-mmo`)的 match、guild、data 消费者用 K
   保留期丢失检测;reader 模式交还后结束代次、提交停滞判据去掉 RequireArrivals;guild-trial 的 lag 探针与告警;match 删掉无 join 的旧循环。
 - 2026-11-19:独立评审修正,交还与恢复票据只有在组于该分区已有已提交位点时才按组内位点结清(§6.2),收尾核对加 45 秒整体上限;
   负责人定从没提交过的分区接纳第一条之前先提交起点(§3.1)。
+- 2026-11-26:收掉 11-19 评审的建议项。reader 模式连续因提交失败自己结束代次时退避(§8);owner 终止而代次还在时先短重试提交再交还(§6.1);
+  死信 topic 与写入端的单条上限放到 2MiB(§5.3);死信写不进的告警改成连续失败才响;滚出窗口的代次结局不平计入 HOLD 指标;
+  死信重放工具写到一半失败时报出死信 offset;打开分区时发现提交点落在日志起点之前也计入保留期丢失指标(§2、§9)。

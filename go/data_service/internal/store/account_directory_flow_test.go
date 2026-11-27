@@ -262,14 +262,14 @@ func (f *flowSteps) allRefs() []roleRef {
 	return out
 }
 
-// holdRef 语义抄 SQL:按 nonce 比较,只标 PENDING;再标一次刷新 held_ms。
-func (f *flowSteps) holdRef(_ context.Context, account string, ref roleRef, reason string) error {
+// holdRef 语义抄 SQL:按 nonce 比较,只标 PENDING;再标一次刷新 held_ms。回是否标上了。
+func (f *flowSteps) holdRef(_ context.Context, account string, ref roleRef, reason string) (bool, error) {
 	if err := f.step("holdRef"); err != nil {
-		return err
+		return false, err
 	}
 	current, ok := f.refs[account][ref.PlayerID]
 	if !ok || current.Nonce != ref.Nonce || current.State != refStatePending {
-		return nil
+		return false, nil
 	}
 	f.heldClock++
 	current.HeldMs = f.heldClock
@@ -278,7 +278,7 @@ func (f *flowSteps) holdRef(_ context.Context, account string, ref roleRef, reas
 		f.heldReasons = map[uint64]string{}
 	}
 	f.heldReasons[ref.PlayerID] = reason
-	return nil
+	return true, nil
 }
 
 // scanHeldRefs 语义抄 SQL:只取标了保留的 PENDING,按 held_ms 从旧到新。
@@ -1125,6 +1125,25 @@ func TestReapRefKeepsStaleCreateRefOfACommittedRole(t *testing.T) {
 		require.False(t, dropped)
 		require.Zero(t, steps.refs["owner"][11].HeldMs)
 		require.Nil(t, steps.owners[11])
+	})
+	// 评审建议(2026-11-26):判陈旧读完之后,迟到的建角提交并激活了这条 ref。标保留那条 UPDATE 改到 0 行:它不是残留,
+	// 不能回 errRefHeldForReview(调用方据此记 ERROR、计保留)。修复前不看受影响行数,照样报「留下了」。
+	t.Run("标保留之前被迟到的建角激活_没标上_不算留下", func(t *testing.T) {
+		s, steps := newFlowStore(5)
+		steps.evidence = map[uint64]string{11: committedEvidenceStoreSaved}
+		steps.putRef("owner", aged)
+		read := steps.refs["owner"][11]
+		steps.before["holdRef"] = func() {
+			current := steps.refs["owner"][11]
+			current.State = refStateActive
+			steps.refs["owner"][11] = current
+		}
+		dropped, err := s.reapRef(context.Background(), "owner", read)
+		require.NoError(t, err, "没标上不是错误,也不是留下:下一轮按新状态重判")
+		require.False(t, dropped)
+		require.Equal(t, refStateActive, steps.refs["owner"][11].State)
+		require.Zero(t, steps.refs["owner"][11].HeldMs)
+		require.Empty(t, steps.heldReasons)
 	})
 	t.Run("证据读不到_这一拍不写", func(t *testing.T) {
 		s, steps := newFlowStore(5)

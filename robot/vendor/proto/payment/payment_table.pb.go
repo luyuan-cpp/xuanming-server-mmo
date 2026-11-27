@@ -146,6 +146,7 @@ const (
 	PayFinalizeState_PAY_FINALIZE_STATE_NONE    PayFinalizeState = 0 // 这个渠道不需要
 	PayFinalizeState_PAY_FINALIZE_STATE_PENDING PayFinalizeState = 1
 	PayFinalizeState_PAY_FINALIZE_STATE_DONE    PayFinalizeState = 2
+	PayFinalizeState_PAY_FINALIZE_STATE_FAILED  PayFinalizeState = 3 // 渠道永久拒绝(400/404/410)或付款已撤销,不再重试
 )
 
 // Enum value maps for PayFinalizeState.
@@ -154,11 +155,13 @@ var (
 		0: "PAY_FINALIZE_STATE_NONE",
 		1: "PAY_FINALIZE_STATE_PENDING",
 		2: "PAY_FINALIZE_STATE_DONE",
+		3: "PAY_FINALIZE_STATE_FAILED",
 	}
 	PayFinalizeState_value = map[string]int32{
 		"PAY_FINALIZE_STATE_NONE":    0,
 		"PAY_FINALIZE_STATE_PENDING": 1,
 		"PAY_FINALIZE_STATE_DONE":    2,
+		"PAY_FINALIZE_STATE_FAILED":  3,
 	}
 )
 
@@ -190,6 +193,8 @@ func (PayFinalizeState) EnumDescriptor() ([]byte, []int) {
 }
 
 // 支付意图:一张商城订单至多一行,渠道在第一次建意图时定下,之后不变。
+// 未成年人的意图同时是他的充值额度预占(docs/design/real-name-anti-addiction.md §5.6):CREATED 的全额占着,
+// PAID 的按 paid_ms 计入当月、当日,CLOSED 的不占。
 type PaymentIntentRecord struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	OrderHi     uint64                 `protobuf:"varint,1,opt,name=order_hi,json=orderHi,proto3" json:"order_hi,omitempty"`             // 商城订单号(UUID)的高 64 位
@@ -208,10 +213,16 @@ type PaymentIntentRecord struct {
 	UpdatedMs   uint64                 `protobuf:"varint,14,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
 	// 渠道侧的引用,同一订单再次调起或查单时复用:微信 APP 是 prepay_id(两小时有效);
 	// 微信小游戏是当次会话密钥(查单签名要用,AES-GCM 加密后存放,意图结束即清空)。其余渠道为空。
-	ChannelRef    string `protobuf:"bytes,15,opt,name=channel_ref,json=channelRef,proto3" json:"channel_ref,omitempty"`
-	ChannelRefMs  uint64 `protobuf:"varint,16,opt,name=channel_ref_ms,json=channelRefMs,proto3" json:"channel_ref_ms,omitempty"` // 拿到 channel_ref 的时刻
-	SkuId         uint64 `protobuf:"varint,17,opt,name=sku_id,json=skuId,proto3" json:"sku_id,omitempty"`                        // 商城订单的 SKU;0 = 寄售订单。按商品定价的渠道按它找商店商品号
-	PayerId       string `protobuf:"bytes,18,opt,name=payer_id,json=payerId,proto3" json:"payer_id,omitempty"`                   // 渠道侧的付款人(微信小游戏 openid),查单要用
+	ChannelRef   string `protobuf:"bytes,15,opt,name=channel_ref,json=channelRef,proto3" json:"channel_ref,omitempty"`
+	ChannelRefMs uint64 `protobuf:"varint,16,opt,name=channel_ref_ms,json=channelRefMs,proto3" json:"channel_ref_ms,omitempty"` // 拿到 channel_ref 的时刻
+	SkuId        uint64 `protobuf:"varint,17,opt,name=sku_id,json=skuId,proto3" json:"sku_id,omitempty"`                        // 商城订单的 SKU;0 = 寄售订单。按商品定价的渠道按它找商店商品号
+	PayerId      string `protobuf:"bytes,18,opt,name=payer_id,json=payerId,proto3" json:"payer_id,omitempty"`                   // 渠道侧的付款人(微信小游戏 openid),查单要用
+	// 未成年人买家的实名主体:SHA-256("spender|" + pi) 的前 16 字节,同一个人的多个账号合并计额。
+	// 成年人、平台执行限额的小游戏渠道、合规闸没开时为 0,不计额。不存 pi 本身(它含出生日期)。
+	SpenderHi     uint64 `protobuf:"varint,19,opt,name=spender_hi,json=spenderHi,proto3" json:"spender_hi,omitempty"`
+	SpenderLo     uint64 `protobuf:"varint,20,opt,name=spender_lo,json=spenderLo,proto3" json:"spender_lo,omitempty"`
+	PaidMs        uint64 `protobuf:"varint,21,opt,name=paid_ms,json=paidMs,proto3" json:"paid_ms,omitempty"`       // 最近一次转成 PAID 的时刻(本服务时钟,不早于 created_ms),按它把这笔计入哪个月、哪一天
+	MinorAge      uint32 `protobuf:"varint,22,opt,name=minor_age,json=minorAge,proto3" json:"minor_age,omitempty"` // 建意图时未成年人买家的周岁;迟到的付款按它复核额度(人只会长大,按建意图时的年龄判只会更严)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -372,6 +383,95 @@ func (x *PaymentIntentRecord) GetPayerId() string {
 	return ""
 }
 
+func (x *PaymentIntentRecord) GetSpenderHi() uint64 {
+	if x != nil {
+		return x.SpenderHi
+	}
+	return 0
+}
+
+func (x *PaymentIntentRecord) GetSpenderLo() uint64 {
+	if x != nil {
+		return x.SpenderLo
+	}
+	return 0
+}
+
+func (x *PaymentIntentRecord) GetPaidMs() uint64 {
+	if x != nil {
+		return x.PaidMs
+	}
+	return 0
+}
+
+func (x *PaymentIntentRecord) GetMinorAge() uint32 {
+	if x != nil {
+		return x.MinorAge
+	}
+	return 0
+}
+
+// 一名未成年人的额度行锁:同一个人的预占与复核在这一行上排队,额度本身由他名下的意图行算出,这里不存。
+type PaymentSpendRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SpenderHi     uint64                 `protobuf:"varint,1,opt,name=spender_hi,json=spenderHi,proto3" json:"spender_hi,omitempty"` // 同 PaymentIntentRecord.spender_hi
+	SpenderLo     uint64                 `protobuf:"varint,2,opt,name=spender_lo,json=spenderLo,proto3" json:"spender_lo,omitempty"`
+	UpdatedMs     uint64                 `protobuf:"varint,3,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"` // 最近一次加锁的时刻,排查用
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PaymentSpendRecord) Reset() {
+	*x = PaymentSpendRecord{}
+	mi := &file_proto_payment_payment_table_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PaymentSpendRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PaymentSpendRecord) ProtoMessage() {}
+
+func (x *PaymentSpendRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_payment_payment_table_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PaymentSpendRecord.ProtoReflect.Descriptor instead.
+func (*PaymentSpendRecord) Descriptor() ([]byte, []int) {
+	return file_proto_payment_payment_table_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *PaymentSpendRecord) GetSpenderHi() uint64 {
+	if x != nil {
+		return x.SpenderHi
+	}
+	return 0
+}
+
+func (x *PaymentSpendRecord) GetSpenderLo() uint64 {
+	if x != nil {
+		return x.SpenderLo
+	}
+	return 0
+}
+
+func (x *PaymentSpendRecord) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
 // 渠道付款事实:渠道确认过的一笔钱。同一笔只记一行。
 // fact_revision 是这笔钱的修订号:0 = 付款;之后每次渠道翻转事实加 1,奇数 = 已被渠道撤销(用户在渠道侧退款、作废),
 // 大于 0 的偶数 = 撤销又被撤回(只有 App Store 会这样)。商城按修订号收敛发货与扣回,过时的修订号盖不住新的。
@@ -419,7 +519,7 @@ type PaymentTxnRecord struct {
 
 func (x *PaymentTxnRecord) Reset() {
 	*x = PaymentTxnRecord{}
-	mi := &file_proto_payment_payment_table_proto_msgTypes[1]
+	mi := &file_proto_payment_payment_table_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -431,7 +531,7 @@ func (x *PaymentTxnRecord) String() string {
 func (*PaymentTxnRecord) ProtoMessage() {}
 
 func (x *PaymentTxnRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_payment_payment_table_proto_msgTypes[1]
+	mi := &file_proto_payment_payment_table_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -444,7 +544,7 @@ func (x *PaymentTxnRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PaymentTxnRecord.ProtoReflect.Descriptor instead.
 func (*PaymentTxnRecord) Descriptor() ([]byte, []int) {
-	return file_proto_payment_payment_table_proto_rawDescGZIP(), []int{1}
+	return file_proto_payment_payment_table_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *PaymentTxnRecord) GetChannel() uint32 {
@@ -713,7 +813,7 @@ type PaymentChannelCursorRecord struct {
 
 func (x *PaymentChannelCursorRecord) Reset() {
 	*x = PaymentChannelCursorRecord{}
-	mi := &file_proto_payment_payment_table_proto_msgTypes[2]
+	mi := &file_proto_payment_payment_table_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -725,7 +825,7 @@ func (x *PaymentChannelCursorRecord) String() string {
 func (*PaymentChannelCursorRecord) ProtoMessage() {}
 
 func (x *PaymentChannelCursorRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_payment_payment_table_proto_msgTypes[2]
+	mi := &file_proto_payment_payment_table_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -738,7 +838,7 @@ func (x *PaymentChannelCursorRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PaymentChannelCursorRecord.ProtoReflect.Descriptor instead.
 func (*PaymentChannelCursorRecord) Descriptor() ([]byte, []int) {
-	return file_proto_payment_payment_table_proto_rawDescGZIP(), []int{2}
+	return file_proto_payment_payment_table_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *PaymentChannelCursorRecord) GetChannel() uint32 {
@@ -780,7 +880,7 @@ var File_proto_payment_payment_table_proto protoreflect.FileDescriptor
 
 const file_proto_payment_payment_table_proto_rawDesc = "" +
 	"\n" +
-	"!proto/payment/payment_table.proto\x12\tpaymentpb\x1a\x1bproto/db/proto_option.proto\"\xed\x04\n" +
+	"!proto/payment/payment_table.proto\x12\tpaymentpb\x1a\x1bproto/db/proto_option.proto\"\x85\x06\n" +
 	"\x13PaymentIntentRecord\x12\x19\n" +
 	"\border_hi\x18\x01 \x01(\x04R\aorderHi\x12\x19\n" +
 	"\border_lo\x18\x02 \x01(\x04R\aorderLo\x12\x19\n" +
@@ -805,7 +905,20 @@ const file_proto_payment_payment_table_proto_rawDesc = "" +
 	"channelRef\x12$\n" +
 	"\x0echannel_ref_ms\x18\x10 \x01(\x04R\fchannelRefMs\x12\x15\n" +
 	"\x06sku_id\x18\x11 \x01(\x04R\x05skuId\x12\x19\n" +
-	"\bpayer_id\x18\x12 \x01(\tR\apayerId:A\x8a\x92\xf4\x01\x0epayment_intent\x92\x92\xf4\x01\x11order_hi,order_loڒ\xf4\x01\x13state,next_check_ms\"\xe8\n" +
+	"\bpayer_id\x18\x12 \x01(\tR\apayerId\x12\x1d\n" +
+	"\n" +
+	"spender_hi\x18\x13 \x01(\x04R\tspenderHi\x12\x1d\n" +
+	"\n" +
+	"spender_lo\x18\x14 \x01(\x04R\tspenderLo\x12\x17\n" +
+	"\apaid_ms\x18\x15 \x01(\x04R\x06paidMs\x12\x1b\n" +
+	"\tminor_age\x18\x16 \x01(\rR\bminorAge:e\x8a\x92\xf4\x01\x0epayment_intent\x92\x92\xf4\x01\x11order_hi,order_loڒ\xf4\x017state,next_check_ms;spender_hi,spender_lo,state,paid_ms\"\x9f\x01\n" +
+	"\x12PaymentSpendRecord\x12\x1d\n" +
+	"\n" +
+	"spender_hi\x18\x01 \x01(\x04R\tspenderHi\x12\x1d\n" +
+	"\n" +
+	"spender_lo\x18\x02 \x01(\x04R\tspenderLo\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\x03 \x01(\x04R\tupdatedMs:,\x8a\x92\xf4\x01\rpayment_spend\x92\x92\xf4\x01\x15spender_hi,spender_lo\"\xe8\n" +
 	"\n" +
 	"\x10PaymentTxnRecord\x12\x18\n" +
 	"\achannel\x18\x01 \x01(\rR\achannel\x12\x15\n" +
@@ -870,11 +983,12 @@ const file_proto_payment_payment_table_proto_rawDesc = "" +
 	"\x1aPAY_REFUND_STATE_REQUESTED\x10\x01\x12\x1e\n" +
 	"\x1aPAY_REFUND_STATE_SUCCEEDED\x10\x02\x12\x1d\n" +
 	"\x19PAY_REFUND_STATE_REPORTED\x10\x03\x12\x1b\n" +
-	"\x17PAY_REFUND_STATE_FAILED\x10\x04*l\n" +
+	"\x17PAY_REFUND_STATE_FAILED\x10\x04*\x8b\x01\n" +
 	"\x10PayFinalizeState\x12\x1b\n" +
 	"\x17PAY_FINALIZE_STATE_NONE\x10\x00\x12\x1e\n" +
 	"\x1aPAY_FINALIZE_STATE_PENDING\x10\x01\x12\x1b\n" +
-	"\x17PAY_FINALIZE_STATE_DONE\x10\x02B\x0fZ\rproto/paymentb\x06proto3"
+	"\x17PAY_FINALIZE_STATE_DONE\x10\x02\x12\x1d\n" +
+	"\x19PAY_FINALIZE_STATE_FAILED\x10\x03B\x0fZ\rproto/paymentb\x06proto3"
 
 var (
 	file_proto_payment_payment_table_proto_rawDescOnce sync.Once
@@ -889,14 +1003,15 @@ func file_proto_payment_payment_table_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_payment_payment_table_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_proto_payment_payment_table_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_proto_payment_payment_table_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_proto_payment_payment_table_proto_goTypes = []any{
 	(PayMallState)(0),                  // 0: paymentpb.PayMallState
 	(PayRefundState)(0),                // 1: paymentpb.PayRefundState
 	(PayFinalizeState)(0),              // 2: paymentpb.PayFinalizeState
 	(*PaymentIntentRecord)(nil),        // 3: paymentpb.PaymentIntentRecord
-	(*PaymentTxnRecord)(nil),           // 4: paymentpb.PaymentTxnRecord
-	(*PaymentChannelCursorRecord)(nil), // 5: paymentpb.PaymentChannelCursorRecord
+	(*PaymentSpendRecord)(nil),         // 4: paymentpb.PaymentSpendRecord
+	(*PaymentTxnRecord)(nil),           // 5: paymentpb.PaymentTxnRecord
+	(*PaymentChannelCursorRecord)(nil), // 6: paymentpb.PaymentChannelCursorRecord
 }
 var file_proto_payment_payment_table_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -917,7 +1032,7 @@ func file_proto_payment_payment_table_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_payment_payment_table_proto_rawDesc), len(file_proto_payment_payment_table_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   3,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

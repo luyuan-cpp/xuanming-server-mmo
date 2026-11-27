@@ -169,6 +169,13 @@ void GateEventHandler::KickPlayerEventHandler(const contracts::kafka::KickPlayer
         return;
     }
 
+    // 防沉迷到点下线(login 的兜底踢线,docs/design/real-name-anti-addiction.md §5.4)要真的下线:断开回调通知 scene 时
+    // 要求立即存盘退出,不走断线保留,带月卡的也不进离线托管。顶号不置位:新会话随后接回同一个实体(player-connection-lost-hold.md §3)。
+    if (event.reason_tip() == kLoginMinorPlayTimeOver)
+    {
+        it->second.exitSceneImmediatelyOnClose = true;
+    }
+
     // Send kick notification to client before closing. 原因由发送方给(防沉迷到点下线等),0 = 账号在别处登录。
     GameKickPlayerRequest kickMsg;
     kickMsg.mutable_reason()->set_id(event.reason_tip() != 0 ? event.reason_tip() : kLoginBeKickByAnOtherAccount);

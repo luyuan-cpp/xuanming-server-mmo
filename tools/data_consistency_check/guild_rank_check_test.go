@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"strings"
@@ -111,10 +112,40 @@ func TestGuildRankOrphans_CleanScanReportsInfo(t *testing.T) {
 	}
 }
 
-// 一个榜都没有也是干净的(与「没扫」区分:没扫是 fail / warn「NOT CHECKED」)。
-func TestGuildRankOrphans_EmptyScanReportsInfo(t *testing.T) {
-	r := checkGuildRankZoneOrphans(t.Context(), rankConfig(fakeRankScanner(nil), 1))
-	assertRankResult(t, r, "info", 0, 0)
+// 一个榜键都没扫到时要回库分清「真的没有榜」和「扫错了 Redis」(评审建议,2026-11-26):guild 启动时把每个有区的帮会并进
+// 它的分区榜,库里有这样的帮会而榜键为 0 不能报成干净。修复前三种情况都报 info「no orphan rank ZSETs」。
+func TestGuildRankOrphans_EmptyScanIsCrossCheckedAgainstTheGuildTable(t *testing.T) {
+	const rankedSQL = "SELECT COUNT(*) FROM " + testGuildSchema + ".guild WHERE zone_id <> 0"
+	for _, tc := range []struct {
+		name     string
+		ranked   int64
+		err      error
+		severity string
+		note     string
+	}{
+		{name: "库里没有带区的帮会:干净", severity: "info", note: "no orphan rank ZSETs"},
+		{name: "库里有带区的帮会:多半扫错了 Redis", ranked: 3, severity: "warn", note: "NOT CHECKED: no rank ZSETs found but 3 guild(s) have a zone"},
+		{name: "库读不到:不下结论", err: errors.New("Error 1146: Table 'mmorpg_guild.guild' doesn't exist"), severity: "warn", note: "NOT CHECKED: no rank ZSETs found, and the guild table could not be read"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, _ := openFakeSQL(t, func(query string, _ []any) ([]string, [][]driver.Value, error) {
+				if query != rankedSQL {
+					return nil, nil, fmt.Errorf("unexpected query %q", query)
+				}
+				if tc.err != nil {
+					return nil, nil, tc.err
+				}
+				return []string{"n"}, [][]driver.Value{{tc.ranked}}, nil
+			})
+			cfg := rankConfig(fakeRankScanner(nil), 1)
+			cfg.db, cfg.guildSchema = db, testGuildSchema
+			r := checkGuildRankZoneOrphans(t.Context(), cfg)
+			assertRankResult(t, r, tc.severity, 0, 0)
+			if !strings.HasPrefix(r.SampleNotes, tc.note) {
+				t.Fatalf("说明应以 %q 开头: %q", tc.note, r.SampleNotes)
+			}
+		})
+	}
 }
 
 // SCAN 允许把同一个键返回不止一次:总数与孤儿数都按键去重。

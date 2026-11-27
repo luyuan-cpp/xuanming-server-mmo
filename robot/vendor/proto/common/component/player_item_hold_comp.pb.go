@@ -78,7 +78,7 @@ func (x *ItemHoldLine) GetCount() uint64 {
 type ItemHold struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	HoldId        uint64                 `protobuf:"varint,1,opt,name=hold_id,json=holdId,proto3" json:"hold_id,omitempty"`                        // 预留方给的号,在本玩家名下唯一;战斗预留 = battle_id
-	Kind          uint32                 `protobuf:"varint,2,opt,name=kind,proto3" json:"kind,omitempty"`                                          // ItemHoldKind(item_hold.h):1 = 战斗
+	Kind          uint32                 `protobuf:"varint,2,opt,name=kind,proto3" json:"kind,omitempty"`                                          // ItemHoldKind(item_hold.h):1 = 战斗,2 = 角色改名
 	Lines         []*ItemHoldLine        `protobuf:"bytes,3,rep,name=lines,proto3" json:"lines,omitempty"`                                         // 按 config_id 升序、互不重复、count > 0
 	CreatedAtMs   uint64                 `protobuf:"varint,4,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`       // 建立时刻(UTC 毫秒),只进日志
 	ReviewAfterMs uint64                 `protobuf:"varint,5,opt,name=review_after_ms,json=reviewAfterMs,proto3" json:"review_after_ms,omitempty"` // 预留方在这个时刻(UTC 毫秒)之后复核要不要继续留;战斗 = 冻结到期时刻

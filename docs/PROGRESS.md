@@ -6183,3 +6183,131 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
 - **提交注意**:`tools/dbmove` 现在有六个未提交文件(`mover.go`、`main.go`、`replication.go` 与三个测试文件),整个目录一起提交。
 - **Gemini 验证**:按 `docs/handoff/data-consistency-review-handoff-20261126.md` §2,本条新增的都在第 5 步。
 - **Java 版(AGENTS §12)**:不涉及,不加 PARITY 行。
+
+## 2026-11-26 Claude:登录排队:快速通道一个账号只占一个在途名额(未编译、未测试,待 Gemini 验证;Java 0.1.0-SNAPSHOT 待做)
+
+- **问题**(复查逻辑时发现):快速通道每次请求都往在途占位里记一枚新的 `fast:<uuid>`,留 20 秒。网关的账号冷却按「令牌 + 出口 IP」算,同一个账号换十几个出口 IP 反复请求,就能把快满的区剩下的在途名额全部占住,别人只能去排队。排队那一侧 11-20 已改成一个账号一个条目,快速通道这一侧漏了。
+- **改法**:`Queue.TryReserveFastPathSlot` 多一个 `account` 参数。带账号时占位成员就是这个账号的排队条目号(`queueIDForAccount`),与它排队放行时的占位是同一个成员;脚本里成员已经在时不看名额,只把到期时刻往后推。匿名分配仍是每次一枚 `fast:<uuid>`。
+- **文件**:`go/login/internal/logic/pkg/loginqueue/queue.go`、`go/login/internal/logic/loginpregate/assigngatelogic.go`。测试:`queue_test.go`(12 处调用补空串参数,新增 `TestTryReserveFastPathSlot_OneSlotPerAccount`)、`cluster_guard_test.go`(1 处)。文档:设计稿 §5 决策树、手册模式 2 的成员说明、交接单。
+- **给 Gemini**(并入 `docs/handoff/login-queue-verification-handoff-20261126.md` 的第 1、5、7 步):
+  - 单测(工作目录 `go/login`):`go test ./internal/logic/pkg/loginqueue/... -count=1 -v -run "TestTryReserveFastPathSlot_"`,三条都过(`_BudgetAndPerMemberExpiry`、`_ConcurrentNeverExceedsBudget`、`_OneSlotPerAccount`)。
+  - 变异 L(在副本上,做法同 11-20「登录排队遗留项收口」第 4 步):`TryReserveFastPathSlot` 里删掉 `if account != ""` 那三行 → `TestTryReserveFastPathSlot_OneSlotPerAccount` 红(占位有三枚)。只删脚本里的 `not redis.call('ZSCORE', KEYS[1], ARGV[3]) and` → 同一条红在「alice renewing her own seat」。
+  - 冒烟改读:验证单第二部分第 3 步「快速通道的成员以 `fast:` 开头」只对匿名成立。robot 带账号登录时成员是 `a-` 开头的条目号,约 20 秒后消失;同一个账号重复请求不会让 `admitted:zset:{q:1}` 多出成员。
+- **Java 版(AGENTS §12)**:待做,Java 仓 `PARITY.md` 11-20「登录排队与开服限流标准收口」一节第 4 条补一项。
+- **提交情况**:main 工作区,未提交。本会话没有编译,没有运行测试。
+
+## 2026-11-26 Claude:scene 按 gate 实例认会话(e 方案 C)全线收口核对,验证整线交 Gemini(只改文档与一处注释,未运行;Java 0.1.0-SNAPSHOT 待做)
+
+- **核对结论**:本线四块代码都已写完,没有待写项。11-20 的两块(scene 按 (gate 实例, session_id) 认会话与 login 跨实例同号踢线;回推与自发请求按会话所在的 gate 进程找 gate)与 11-26 的 location / 托管落点带实例都已随批量提交进 HEAD;11-26 托管改派条目记实例的代码在 HEAD,它的两条用例(`cross_zone_test.cpp`)与设计稿改动还在工作区未提交。login 里 `skip_cross_instance` 已无残留,scene 三个入口、角色登记预检与 scene_manager 落点判定都按同一口径认会话。
+- **残余清零**:设计稿 §14.6 最后一条「双方都没有登录代次时后到者胜」核实为生产上走不到:gate 转来的入场在角色登记前对代次 0 一律拒绝(`RoleAdmissionSystem::RequestEnter`),托管落点对代次 0 整条丢弃(`HostedPlacementContext`),本节点不会建出代次 0 的身份。改写该条,不再登记为残余。
+- **改动**:`docs/design/scene-enter-chain-residuals.md` §14.6 一条;`cpp/libs/engine/core/type_define/player_login_identity_comp.h` 的实例注释(托管落点 11-26 起带实例,不再一概「未知」);新交接单 `docs/handoff/scene-gate-instance-session-handoff-20261126.md`;`docs/README.md` 索引按 `gen_docs_index.py` 加一行(diff 只有这一行)。
+- **验证交 Gemini**:按交接单 §3 跑,一共 9 步(先协议生成,再 Go login / scene_manager,C++ 整解后跑 cross_zone_test、rpc_controller_test 与全量,最后 M1~M13 变异与日志英文守卫)。本线此前四条 PROGRESS 写的「待 Codex」与各自的步骤以交接单为准。
+- **未验证**:没有运行任何生成、编译或测试。
+- **Java**:Java 仓 `PARITY.md` 已有本线三条待做(11-20 两条、11-26 一条),不新增。
+
+## 2026-11-26 Claude:后台管理员身份与高风险动作双人复核——管理入口盘点与设计稿(只写文档,没有代码改动;约 56 个文件的前三批待负责人批准;Java 待做随批 3 登记)
+
+- **来由**:`docs/handoff/server-code-completion-20261120.md` §3.2「交易人工判定的审批流」是唯一一条既没人做、也没设计的。`payment-recharge.md` §5.4 对支付人工动作同样要求双人审批,也没落码。
+- **盘点结论**(逐条核对过代码):
+  - 网关 `/admin/**` 与 `/mall-admin` 页全员共用一把 `X-Admin-Key`;商城下游只认 HMAC 主体 `admin`,幂等表里的 actor 也是它。
+  - Go 管理 RPC 认的是共享口令 `x-admin-token`(login、player_inbox、data_service 回收)或 `ServiceCallAuth` 的服务名调用方(trade、mail、rank、match);`operator` 是自由文本,mail 的请求里连这个字段都没有。
+  - 后台 `java/gm_admin` 已有按人的账号,但口令在它自己的库里,而且流水写的是「仅草稿创建者可发送」,没有第二人。
+  - `mall_game` 的收入争议接口不在网关命令表里,没有页面能调到。
+- **设计**:[docs/design/admin-identity-and-dual-control.md](design/admin-identity-and-dual-control.md)。定案要点:
+  - 人只面对后台一个入口;后台用 OIDC 登录,操作人标识就是身份提供方的主体并原样当用户名,不建可改绑的绑定表;角色每次登录从身份提供方重取;会话 12 小时硬上限。
+  - 生产模式下关掉 JeecgBoot 全部原生 `/sys/**` 管理页;原生口令模式只在监听回环地址时允许启动。
+  - 双人复核做在后台现有流水上:加批准人两列,「两人不同」在 Java 与 UPDATE 条件里各判一次;批准即执行;驳回、过期、重试不改批准人。
+  - 身份下传不加新签名和新密钥:请求里加 `AdminApproval{批准号, 发起人, 批准人}`,由现有 `ServiceCallAuth` 的请求摘要覆盖;资源服务用 `go/shared/dualcontrol` 一个函数核对,开关缺省开。
+  - trade 的 EXECUTE 按批准号幂等:合同留痕里有同一个批准号就回原结果。
+  - 三种做法(后台集中 / 各服务自管 / 独立审批服务)的取舍、16 条威胁与残余、七批执行步骤和文件数都在文档里。
+- **文件**:新增 `docs/design/admin-identity-and-dual-control.md`;`tools/scripts/gen_docs_index.py` 加一条分类规则(`admin-identity-*`);`docs/README.md` 由生成器加一行(与生成前比对:只多这一行,没有删行)。
+- **没做的**:代码未动。批 1~3 约 56 个文件,超过 30,等负责人批准;另需负责人同意后台新增依赖 `com.nimbusds:nimbus-jose-jwt`,并选定生产用的身份提供方(不卡代码)。
+- **运行过的**:只跑了 `python tools/scripts/gen_docs_index.py --check` 与生成。没有编译、没有测试。
+
+## 2026-11-26 Claude:登录排队设计稿加「设计要点速览」——把方案、取舍、漏洞防线与扩展方式集中写进文档(只改文档;Java 不涉及)
+
+- **起因**:负责人要求重要的流程、设计步骤、问题分析与解决办法都写进文档,尤其是不容易想到的做法。排队这条线的做法此前散在设计稿各处带日期的更正和本文件的流水里,不好找。
+- **改动**:`docs/design/login-queue-2026-05.md` 开头新增 §0,七小节:
+  - 要满足什么;一次请求怎么走。
+  - 关键做法与取舍(11 条,每条写「要解决的问题、做法、为什么不用别的做法」):条目号由账号推出所以不需要索引键、在途占位与条目共用成员名、占位逐个到期、免排队先占位、会话带 gate 区号、「排队已满」复用限流回包形状、每拍上限、写脚本第一条写命令选 DENYOOM、TTL「剩余不足才设」、按名次拉长轮询、取走时现签。
+  - 漏洞与防线(9 条);水平扩展靠什么(login 不存状态、每区一个放行 leader、同区同槽、单区上限与扩容路径、放行按块发)。
+  - 不等压测先定的值及依据;验证与开闸的入口。
+- 代码没有改动。复查结论不变:这条线没有待写的代码,验证见交接单 `docs/handoff/login-queue-verification-handoff-20261126.md`。
+- **提交情况**:main 工作区,未提交。
+
+## 2026-11-26 Claude：更正同日「数据覆写审计 r2 核对收尾」——r2 代码还没修完，清点出 4 条没人认领的早期遗留（只改文档）
+
+- 更正：同日那条写的「代码已全部写完」不对，下面三处都还要改逻辑代码。
+  - 换视角查找第 4 轮报了 3 条 high、4 条 medium，在会话「数据覆写审计 r2 换视角查找第 4 轮」里复核和修。
+  - 11-19 六批评审记下约 30 条「建议、没做」，在会话「11-12 残余收口各批的独立评审」里修。
+  - 早期各批记了「没做」、没人认领的 4 条，写在审计 §6「2026-11-26 清点」：人工终结的见证不比 attempts；data_service 的 Kafka 坏消息跳过、原件不进死信；建角核账判陈旧可能把「建成了、从没进过场、绑定没做完」的角色写成墓碑（先复核）；同一角色挂在别的账号上的建角 ref 查不到。
+- 已核对、不用再修：建角 ref 占扫描名额、`over_role_cap` 计入退出码、删角收尾失败计数、B5 死端点连接与 formationfix 翻页、商城退款「渠道不支持退款」回执与租约（go/payment）、客户端跨连接自动重发（11-19 定案不做）、`session_ended` 的 proto 注释。
+- 文档：审计 §1「仍开着」改回列出这三处；交接单开头写明代码还在修，修完的批次要重跑。
+- 这 4 条要按 AGENTS §10.3 用最高档模型改。本会话跑在 Opus 5.5 上，没有动代码，等负责人把模型切到 Fable 5.2 Max。
+
+## 2026-11-26 Claude:改名与内容安全第二轮复核——批 5、批 6 与 Unity 客户端逐行审,改十一处(未生成、未编译、未运行,交 Gemini 验证;K8s 平台凭据接线待做;Java 仍待做)
+
+- **范围**:批 5(平台接口、渠道身份、世界频道撤回)、批 6(聊天防刷与举报)和 Unity 客户端(`../mmorpg-client` 的角色改名、帮会改名、聊天举报与撤回)是 11-20 Gemini 写的,上一条复核没有覆盖。本条逐行读完后改的都列在下面;设计上的理由写进了 `docs/design/rename-and-content-safety.md` 的 6.5、6.7、第 7 节、第 9 节和第 10 节。
+- **最要紧的两处**(接上微信凭证后才会发作,所以之前没人撞到):
+  1. **渠道身份路由**:内容安全服务从账号名 `wx_…` 里截后缀当 openid 送微信,而后缀是 unionid;App 端的微信登录也被送去小游戏接口。平台会按 openid 无效拒掉,名字类场景对平台不可用的口径是拒绝,结果是小游戏玩家建不了自定义名字的角色。改成渠道与 openid 都从账号目录查,只认 `wechat_minigame`、`douyin_minigame`;建角时没有 `player_id`,按账号查。为此 `proto/data_service/data_service.proto` 的 `GetPlayerChannelIdentityRequest` 加了 `account = 2`(内部协议)。涉及 `go/content_guard/internal/platform/reviewer.go`、`go/content_guard/content_guard.go`、`go/data_service/internal/{store/account_channel_identity.go,server/account_directory.go,svc/role_fence.go}`。
+  2. **时限链**:内容安全服务端超时 1 秒,盖不住 1.5 秒的平台调用;Go 调用方只有一个 600 毫秒的预算。现在服务端 3000、调用方名字类 2000 / 聊天 600 / 补审 3000、zrpc 连接时限 3500、scene 的截止时间 5500;配置不自洽时拒启。涉及 `go/shared/contentguard`、五个调用方的 yaml、`go/content_guard/etc/content_guard.yaml`、`go/content_guard/internal/config/config.go`、`bin/etc/base_deploy_config.yaml`。
+- **其余九处**:
+  3. 微信凭据改用 `/cgi-bin/stable_token`(多副本各取各的不再互相挤掉,服务照旧无状态);请求失败的日志去掉 URL(`platform/wechat.go`、`platform/reviewer.go` 的 `withoutURL`)。
+  4. 微信的两种答复单独处理:61010(用户近两小时没访问过小游戏)只走本地层,87014 按违规算。
+  5. 账号目录回 `Retry` 时按查失败算;接了平台却没配 `DataServiceRpc` 时拒启。
+  6. 网址与域名识别改在折叠后的文字上做(全角写法不再能绕过);白名单只比对主机名,域名的比对范围改对(`internal/contact/detector.go`;`ContainsAd` 去掉了不用的 `text` 参数)。
+  7. chat 的 `RetractWorldChat` 加运维口令 `MMORPG_CHAT_ADMIN_TOKEN` + metadata `x-admin-token`,没设时入口停用(新文件 `go/chat/internal/logic/ops_auth.go`,`chat.go` 启动时读入)。
+  8. chat 后台补审的送检和撤回分开计时(`chat_logic.go`)。
+  9. 重复内容规则只判世界频道;按人数判只对归一化后 10 个字以上的内容(`authority/retract_report.go`、`store.go`)。原实现私聊也判、4 个字起就按人数判,全服一份的聊天里「哈哈哈哈」第三个人说就会被拒。
+  10. login 记渠道身份失败从提示级改成错误级日志(`loginlogic.go`)。
+  11. Unity(`../mmorpg-client`,未提交):`SocialState` 记住撤回过的消息,之后到达的历史或乱序推送不会把它带回来;`SocialClient.Report` 发出前按 200 字节核补充说明,界面限 60 字(原来限 100 字,67 个汉字起就被服务端当参数错误拒掉);`GuildClient.Rename` 冷却时显示最早可改的时刻;`RoleNameRules` 与 `GuildClient` 换算服务端给的时刻前先核上界。
+- **用例**:`platform/reviewer_test.go`(`TestRouterTakesTheOpenIDFromTheDirectoryOnly`、微信三种错误码、稳定版接口、`TestWithoutURLDropsTheRequestURL`)、`contact/detector_test.go`(三条新用例)、`content_guard/internal/config/config_test.go`、`shared/contentguard/contentguard_test.go`、`data_service/internal/server/account_channel_identity_test.go`(按账号查)、`chat/internal/logic/chat_logic_test.go`(口令四种拒绝、`TestResolveAdminToken`)、`chat/internal/authority/retract_report_test.go`。其中真库用例 `TestAntiSpamRetractAndReportTiDB` 原来用库的真实时间,用例里 2023 年建的「新号」早就不是新号,第 2 步必然失败(说明它从没跑过);改成用例自己的步进时钟,并加了短句、同人重复、私聊不判三段。Unity:`SocialTests` 加两条,`GuildRenameClientTests` 加一条断言。
+- **提交状态**:主仓的代码改动被别的会话当天的两次提交一并带进了 `main`(`2d20f6b68`、`00f92d49f`),不是本会话提交的;本条和设计稿的文档改动、客户端仓的改动写完时都未提交。
+- **已跑的只读检查**:本次动过的 Go 文件 `gofmt -l` 只剩三个在动之前就未格式化的(`go/chat/chat.go`、`go/chat/internal/logic/system_notice_test.go`、`go/content_guard/content_guard.go`),没有整理它们;`tools/scripts/tests/test_client_text_fields_reviewed.py` 2/2 通过。编译、单测、Unity 都没有跑。
+- **交 Gemini**(仓库根;`$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`):
+  1. **先生成**:`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`。`data_service.proto` 加了字段,不生成的话 `go/content_guard`、`go/data_service` 编不过(`GetPlayerChannelIdentityRequest.Account`)。两份都是内部协议,客户端不用重新生成。
+  2. `go/content_guard`、`go/shared`、`go/chat`、`go/data_service`、`go/login`、`go/match`、`go/guild`、`go/trade`:各自 `go build ./... && go vet ./... && go test ./... -count=1`。重点看 `content_guard/internal/platform`、`internal/contact`、`internal/config`,`shared/contentguard`,`chat/internal/logic`,`data_service/internal/server` 的 `ChannelIdentity` 用例。
+  3. 隔离 TiDB:`go/chat/internal/authority` 的 `TestAntiSpamRetractAndReportTiDB`(`CHAT_IT_TIDB=<回环地址>`、`CHAT_IT_REQUIRE_TIDB=1`)。
+  4. C++ 整解与 `bag_test`(上一条的第 1 步;本条只改了 `base_deploy_config.yaml` 里的截止时间,没有改 C++ 源码)。
+  5. `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`:五个调用方的 `ContentGuard` 段是从服务 yaml 镜像的,多了 `NameTimeoutMs`;content-guard 的 `Timeout` 也是镜像的。
+  6. Unity:`tools/client_compile_check.ps1`,EditMode 跑 `SocialTests`、`GuildRenameClientTests`、`RoleRenameClientTests`。
+  7. 冒烟在上一条第 5 步之外加:世界频道三个号发同一句 10 个字以上的话,第三个被拒;三个号各发「哈哈哈哈哈」都能发;私聊同一句话发三遍不拦;不带口令调 `RetractWorldChat` 回 PermissionDenied。
+- **待做(不是验证,是还没写的代码)**:**K8s 上还开不了平台审核**。`tools/scripts/k8s_deploy.ps1` 给 content-guard 生成的 ConfigMap 没有 `Platform` 段,也没有注入 AppSecret 的 Secret 接线;模板里 `Timeout` 上面那句注释(「纯内存计算,超时只是兜底」)也过时了。本会话没有动:这份脚本当时正被另一个会话改同一片区域(login 的登录渠道接线、Secret 目录、`Apply-OneGoSvc`),两边同时改会互相覆盖。做法写在设计稿第 10 节残余第一条,照 login 小游戏登录的接线做,要等那边的改动落定后再动。
+- **残余**:见设计稿第 10 节(`GetPlayerChannelIdentity` 与 `PublishSystemWorldNotice` 没有调用方证明、后台补审是内存任务、抖音凭据各副本各取、微信两个错误码的含义没有真实凭证验证过等)。
+- **Java 版(AGENTS §12)**:本条没有改客户端契约(两份协议都是内部的,tip 码没有变)。Java 仓 `PARITY.md` 里这条线的待做行仍在,本次没有动 Java 仓;Java 做批 5、批 6 时按设计稿 6.5 与第 7 节现在的口径做(渠道身份从登录记录取、重复内容只判世界频道)。
+- **补(同日,写完上面之后查出)**:第 12 处,gate 对世界频道的推送有每台 gate 的预算(`cpp/nodes/gate/main.cpp`),撤回原来和发言共用一份:刷屏把预算打满的时候撤回也推不出去。改成撤回单独一份预算(不能不设,否则撤回成了绕过预算的路)。未编译;随 Gemini 第 4 步的 C++ 整解一起编,没有新用例(预算类本身已有用例)。只读检查 `test_cpp_no_raw_pointer_member.py` 13/13 通过。
+
+## 2026-11-26 Claude:gate / battle 连接准入全线复核——battle 契约测试的 21 处断言跟着成员改名对齐、battle 找最老一条不再另取时钟(未编译、未运行,待 Gemini 验证;Java 0.1.0-SNAPSHOT 不涉及)
+
+- **起因**:负责人要求切到最高档模型把本线代码再复核一遍(此前 P1-5 与逻辑复核是在低一档模型上做的)。逐行读了 main 上的现版本:
+  core `accept_admission.h` / `client_liveness.h`,gate `connection_admission.{h,cpp}` 与会话挂钩、`main.cpp` 的装配,
+  battle `battle_connection_admission.{h,cpp}` / `battle_client_edge.{h,cpp}` / `main.cpp`,部署脚本的 `-ConnectionAdmissionEnv` 与 P1-5、N2 表、`preauth_flood.py`。
+- **查出并修掉的两处**:
+  1. **battle 契约测试与代码脱节**。11-25 的全仓整理把 C++ 成员名的尾下划线去掉了(`admission_` → `admission`、`unauthenticated_`、`sessions_`、`loopStall_`、
+     `loopStallTimer_`、`sourceRate_`、`preAuthBudget_`、`lastAcceptRateRejectAt_`、`sourceRateActive_`),`tools/scripts/tests/battle_connection_alerts_contract.tests.ps1`
+     里 21 处断言还按旧名写:跑起来整片红,其中两条「不得出现」的断言(不遍历会话表、淘汰时不删会话)按旧名永远匹配不到,等于空转。已全部按现名改写。
+  2. **battle 找最老一条未认证直连时另取了一次时钟**。`OldestConnectedUnauthenticated()` 里自己 `steady_clock::now()`,`AdmitConnection` 随后算年龄用的是传进来的 `now`;
+     半关闭连接「是否已逾期」在两处各算一次,临界点上可能一处说可淘汰、一处算出的年龄不够,新连接被误判成到预算而拒掉。改成把 `now` 传进去,两处同一个时刻。
+     契约测试加一条:这个函数体里不得再出现 `steady_clock::now()`。
+- **核对过、没有问题的**(逐项推过,不是只看了一眼):
+  - 预算判定的边界:起点等于预算、预算为 1(起点取 0)、早拒带宽度不会为 0;随机数只在超过起点时取。
+  - `IsPublicSourcePrefix` 的位运算逐段核对(10/8、100.64/10、127/8、169.254/16、172.16/12、192.168/16、::/64、fc00::/7、fe80::/10)。
+  - gate 占位计数:`SessionInfo` 全仓没有按值拷贝;被淘汰的连接进入关闭中之后 codec 整批丢弃它的帧,不会「刚验签就被关」;淘汰索引的失效条目在队头被丢弃,长度有界。
+  - gate 的节拍定时器无条件每秒跑,`LoopRecentlyStalled` 不会因为没人打拍而一直为真。
+  - battle 未认证池五处进出(建连、握手成功、探测授权、淘汰、断开)与会话表的唯一删除点对得上;金丝雀池带上准入变量与 requests。
+  - 两份准入契约测试对源码的直接模式(battle 45 条、gate 25 条)、指标族清单、拒绝原因顺序、告警表达式引用的指标,逐条在现代码上匹配通过(只读脚本做的文本匹配,不是测试运行)。
+  - 四份 C++ 单测里调用的名字在被测头文件 / 源文件里都还在。`muduo_acceptor_copies_contract` 用的是 muduo 自己的成员名,不受改名影响。
+- **留意但没改的**(有意的取舍,写在这里免得下次再当缺陷):
+  - 同一轮 loop 里握手期限刚关掉、断开回调还没跑的连接,可能再被选中淘汰一次:名额照常让出,只是 `*_preauth_reaped_total` 与 `*_preauth_evicted_total` 各计一次。
+  - 按来源限速的前缀表只在满了才清,承压结束后 `*_source_tracked` 会停在高位直到下次清表;告警看的是 `*_source_untracked_total`,不受影响。
+  - 出示过探测授权的 battle 直连不在未认证池里,最多活到 10 秒握手期限;同一份授权反复建连受全局速率闸约束(缺省 100 条/秒)。
+- **代码**:`cpp/nodes/battle/client/battle_client_edge.{h,cpp}`(`OldestConnectedUnauthenticated` 加 `now` 参数、一处注释里的旧成员名)。
+- **测试**:`tools/scripts/tests/battle_connection_alerts_contract.tests.ps1`(21 处改名 + 新增 1 条断言)。
+  静态检查(不是测试证据):`python tools/scripts/tests/test_cpp_no_raw_pointer_member.py` 13 条全过;上面说的只读文本匹配。
+- **交 Gemini**(没有 proto 改动;前一步红就停下归因;在工作区跑):
+  1. `pwsh -NoProfile -File tools/scripts/tests/battle_connection_alerts_contract.tests.ps1` 与 `gate_connection_alerts_contract.tests.ps1`,都应全过。
+  2. Windows 整解 `msbuild game.sln /t:Build /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64`:`battle_client_edge.h` 的函数签名变了,battle 必须重编。
+  3. `pwsh -NoProfile -File tools/scripts/run_cpp_tests.ps1 -Build -Filter rpc_controller_test`(`BattleConnectionAdmission*`、`AcceptAdmission*`、`SourceRateGate.*`)与 `routing_identity_test`(`ConnectionAdmission*`、`ClientLiveness*`)。
+  4. 其余验证照本线各条目(11-19 两条、11-20 两条、11-26「验签前只收小帧」「P1-5」)。
+- **提醒别的会话**:别的文本契约测试若也钉着 C++ 成员名,11-25 改名后同样会脱节;本次只扫了引用 `cpp/` 的契约测试里「尾下划线成员名」这一种写法,除 muduo 那份外没有别的命中。
+- **未提交,未编译,未运行。**

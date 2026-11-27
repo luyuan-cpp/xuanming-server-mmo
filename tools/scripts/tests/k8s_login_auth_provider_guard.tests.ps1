@@ -19,6 +19,8 @@
     本文件的往返、差异、照传串、防误关闸与两处包装入口用例都带上了它们。
     2026-11-19 起 Apple 段另有注销时撤销令牌的 TeamId / KeyId(-LoginAppleTeamId / -LoginAppleKeyId,docs/design/account-deletion.md §8.2),
     同样有往返、差异、照传串、防误关闸与两处包装入口的用例。
+    2026-11-26 起官方通行证一段(-LoginPassport* 四个参数,AuthProviders.Passport;docs/design/official-passport-registration.md)同样有往返、
+    差异、照传串、防误关闸与两处包装入口的用例。
     2026-11-19 起 login 顶层的实名与防沉迷段(-LoginNppaAppId / -LoginNppaBizId 等六个参数,AntiAddiction;docs/design/real-name-anti-addiction.md §5.8)
     有自己的一道防误关闸(lib 第 11 节 + k8s_deploy.ps1 Assert-LoginAntiAddictionClusterState,与第三方登录共用确认开关),第 5b 节钉住它的往返、
     差异、认不出的形状、读现状、接入位置,第 6、7 节钉住两处包装入口。渲染与密钥注入的端到端用例在 k8s_deploy_contract.tests.ps1。
@@ -72,6 +74,8 @@ function New-AuthYaml {
         -AppleClientId ([string]$P.AppleClientId) -AppleEndpoint ([string]$P.AppleEndpoint) `
         -GoogleClientId ([string]$P.GoogleClientId) -GoogleEndpoint ([string]$P.GoogleEndpoint) `
         -AppleTeamId ([string]$P.AppleTeamId) -AppleKeyId ([string]$P.AppleKeyId) `
+        -PassportIssuer ([string]$P.PassportIssuer) -PassportClientId ([string]$P.PassportClientId) `
+        -PassportEndpoint ([string]$P.PassportEndpoint) -PassportAdminClientId ([string]$P.PassportAdminClientId) `
         -ReleaseProfile $ReleaseProfile -WeChatAppSecretEnv 'LOGIN_WECHAT_APP_SECRET'
 }
 
@@ -96,7 +100,9 @@ function Get-Drift {
         -DouyinMiniGameAllowOpenId ([bool]$P.DouyinMiniGameAllowOpenId) `
         -AppleClientId ([string]$P.AppleClientId) -AppleEndpoint ([string]$P.AppleEndpoint) `
         -GoogleClientId ([string]$P.GoogleClientId) -GoogleEndpoint ([string]$P.GoogleEndpoint) `
-        -AppleTeamId ([string]$P.AppleTeamId) -AppleKeyId ([string]$P.AppleKeyId)
+        -AppleTeamId ([string]$P.AppleTeamId) -AppleKeyId ([string]$P.AppleKeyId) `
+        -PassportIssuer ([string]$P.PassportIssuer) -PassportClientId ([string]$P.PassportClientId) `
+        -PassportEndpoint ([string]$P.PassportEndpoint) -PassportAdminClientId ([string]$P.PassportAdminClientId)
 }
 
 # 在 Base 上改几项 / 去掉几项,返回新表(不改 Base)。
@@ -144,6 +150,13 @@ $RoundTripCases = @(
     @{ Label = 'Apple 开着注销时的令牌撤销(TeamId / KeyId,照传串紧跟在 Apple 的 Endpoint 之后)'
         P = @{ AppleClientId = 'com.example.mmorpg'; AppleEndpoint = 'https://apple-mock.contract.test'; AppleTeamId = 'ABCDE12345'; AppleKeyId = 'KEY0123456'; GoogleClientId = '1-abc.apps.googleusercontent.com' }
         Keep = '-LoginAppleClientId com.example.mmorpg -LoginAppleEndpoint https://apple-mock.contract.test -LoginAppleTeamId ABCDE12345 -LoginAppleKeyId KEY0123456 -LoginGoogleClientId 1-abc.apps.googleusercontent.com' },
+    @{ Label = '只开官方通行证,不带 Endpoint(照传串在通行证的标识之后接 Issuer、AdminClientId)'
+        P = @{ PassportIssuer = 'https://passport.contract.test'; PassportClientId = 'contract-game-client'; PassportAdminClientId = 'contract-game-server' }
+        Keep = '-LoginPassportClientId contract-game-client -LoginPassportIssuer https://passport.contract.test -LoginPassportAdminClientId contract-game-server' },
+    @{ Label = '官方通行证带内网 Endpoint(dev 档 http,Issuer 带端口与路径),与 Google 同开(照传串排在 Google 之后)'
+        P = @{ GoogleClientId = '1-abc.apps.googleusercontent.com'; PassportIssuer = 'http://passport.contract.test:8000/auth'; PassportClientId = 'contract-game-client'
+            PassportEndpoint = 'http://casdoor.contract-infra:8000'; PassportAdminClientId = 'contract-game-server' }
+        Keep = '-LoginGoogleClientId 1-abc.apps.googleusercontent.com -LoginPassportClientId contract-game-client -LoginPassportEndpoint http://casdoor.contract-infra:8000 -LoginPassportIssuer http://passport.contract.test:8000/auth -LoginPassportAdminClientId contract-game-server' },
     @{ Label = '六个都开(照传串按微信 / QQ / 两个小游戏 / Apple / Google 的顺序)'
         P = @{ WeChatAppId = 'wx0123456789abcdef'; QQAppId = '100000001'; WeChatMiniGameAppId = 'wxfedcba9876543210'; DouyinMiniGameAppId = 'tt0123456789abcdef'
             AppleClientId = 'com.example.mmorpg'; GoogleClientId = '1-abc.apps.googleusercontent.com'; GoogleEndpoint = 'https://google-mock.contract.test' }
@@ -342,6 +355,63 @@ Test-Case '照传串(Apple 撤销令牌):线上开着撤销、本次全部漏传
     Assert-Equal -Expected ((Get-Drift -Live $LiveRevoke -P $p).Drifts -join ' | ') -Actual ((Get-Drift -Live $restored.Live -P $p).Drifts -join ' | ') -Because 'JSON 往返前后的判定必须一致'
     Assert-Equal -Expected 1 -Actual (Get-Drift -Live $restored.Live -P $p).Drifts.Count -Because '前提:往返后漏传撤销两项仍算一项差异'
     Assert-Equal -Expected $RevokeKeepText -Actual (Get-Drift -Live $restored.Live).KeepArgs -Because '照传串同样不变'
+}
+
+# 官方通行证(AuthProviders.Passport):标识键是 ClientId,另有签发方 Issuer 与管理应用 AdminClientId;关闭时删它的管理凭据 Secret,换了任何一项都要确认。
+$PassportParams = @{ PassportIssuer = 'https://passport.contract.test'; PassportClientId = 'contract-game-client'
+    PassportEndpoint = 'https://casdoor.contract.test:8000'; PassportAdminClientId = 'contract-game-server' }
+$PassportKeepText = '-LoginPassportClientId contract-game-client -LoginPassportEndpoint https://casdoor.contract.test:8000 -LoginPassportIssuer https://passport.contract.test -LoginPassportAdminClientId contract-game-server'
+$LivePassport = ConvertFrom-LoginAuthProvidersYaml -LoginYaml (New-LoginYamlWith -AuthYaml (New-AuthYaml -P $PassportParams))
+# 手改出来的两种形状:Google 段带着只有 Passport 段才有的三项;Passport 段没写 AdminClientId(只验登录的本地写法)。
+$LivePassportOnGoogle = ConvertFrom-LoginAuthProvidersYaml -LoginYaml (New-LoginYamlWith -AuthYaml (@('AuthProviders:',
+            '  Google:', '    ClientId: "1-abc.apps.googleusercontent.com"', '    Issuer: "https://passport.contract.test"', '    AdminClientId: "contract-game-server"',
+            '    AdminClientSecretEnv: "MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET"') -join "`n"))
+$LivePassportNoAdmin = ConvertFrom-LoginAuthProvidersYaml -LoginYaml (New-LoginYamlWith -AuthYaml (@('AuthProviders:',
+            '  Passport:', '    Issuer: "https://passport.contract.test"', '    ClientId: "contract-game-client"') -join "`n"))
+$PassportDriftCases = @(
+    @{ Label = '整段漏传:通行证登录随新 Pod 关闭,并删管理凭据 Secret(只报这一项)'; Live = $LivePassport; P = @{}
+        Patterns = @('^线上已开 AuthProviders\.Passport,本次没给 -LoginPassportClientId:部署后 Passport 登录随新 Pod 关闭,并删除它的管理凭据 Secret$') },
+    @{ Label = '换了 Issuer(换签发方)'; Live = $LivePassport; P = (Get-Params -Base $PassportParams -Set @{ PassportIssuer = 'https://passport-other.contract.test' })
+        Patterns = @('^AuthProviders\.Passport\.Issuer 与线上不同\(本次 -LoginPassportIssuer 换了签发方') },
+    @{ Label = '换了 ClientId'; Live = $LivePassport; P = (Get-Params -Base $PassportParams -Set @{ PassportClientId = 'contract-other-client' })
+        Patterns = @('^AuthProviders\.Passport\.ClientId 与线上不同\(本次 -LoginPassportClientId 换了客户端 ID') },
+    @{ Label = '换了 AdminClientId(换管理应用)'; Live = $LivePassport; P = (Get-Params -Base $PassportParams -Set @{ PassportAdminClientId = 'contract-other-server' })
+        Patterns = @('^AuthProviders\.Passport\.AdminClientId 与线上不同\(本次 -LoginPassportAdminClientId 换了管理应用') },
+    @{ Label = '漏传 Endpoint:内网基址被丢掉'; Live = $LivePassport; P = (Get-Params -Base $PassportParams -Remove 'PassportEndpoint')
+        Patterns = @('^AuthProviders\.Passport\.Endpoint:线上指向自定义 Endpoint\(沙箱\),本次没给 -LoginPassportEndpoint 会改连生产地址$') },
+    @{ Label = '线上只开微信 App 与 QQ、本次加开官方通行证'; Live = $LiveFull; Secret = $true; P = ($FullParams + $PassportParams); Patterns = @() },
+    @{ Label = '线上的 Passport 段没写 AdminClientId(手改)、本次补上:不算差异'; Live = $LivePassportNoAdmin
+        P = (Get-Params -Base $PassportParams -Remove 'PassportEndpoint'); Patterns = @() },
+    @{ Label = 'Google 段手改带了 Issuer / AdminClientId:算生成器不写的键(AdminClientSecretEnv 是生成器常量,不另报)'; Live = $LivePassportOnGoogle
+        P = @{ GoogleClientId = '1-abc.apps.googleusercontent.com' }
+        Patterns = @('^线上 AuthProviders\.Google 有生成器不写的键\(Issuer, AdminClientId\),本次部署会丢掉$') },
+    @{ Label = '照传全部'; Live = $LivePassport; P = $PassportParams; Patterns = @() }
+)
+foreach ($driftCase in $PassportDriftCases) {
+    Test-Case "差异判定(官方通行证):$($driftCase.Label)" {
+        Assert-Equal -Expected '' -Actual (@($driftCase.Live.Errors) -join ' | ') -Because '前提:生成器写的(与手改出来的)形状解析器都认得出'
+        $drift = Get-Drift -Live $driftCase.Live -Secret ([bool]$driftCase.Secret) -P $driftCase.P
+        Assert-Equal -Expected $driftCase.Patterns.Count -Actual $drift.Drifts.Count -Because "差异逐项计数(实际: $($drift.Drifts -join ' | '))"
+        foreach ($pattern in $driftCase.Patterns) {
+            Assert-True -Condition (@($drift.Drifts | Where-Object { $_ -match $pattern }).Count -eq 1) -Because "恰有一项匹配 /$pattern/(实际: $($drift.Drifts -join ' | '))"
+        }
+        Assert-True -Condition (@($drift.Drifts | Where-Object { $_ -match '生成器不生成的 AuthProviders\.Passport|RequireUnionId:' }).Count -eq 0) -Because 'Passport 是生成器生成的段,也没有 unionid 策略可比'
+        Assert-NotMatch -Text ($drift.Drifts -join "`n") -Pattern 'contract\.test|contract-game|contract-other' -Because '差异文本只点键名与参数名,不回显值'
+    }
+}
+
+Test-Case '照传串(官方通行证):线上开着、本次全部漏传时还原 ClientId / Endpoint / Issuer / AdminClientId;形状不对的值写 <见 ConfigMap>;经 JSON 往返后判定不变' {
+    Assert-Equal -Expected $PassportKeepText -Actual (Get-Drift -Live $LivePassport).KeepArgs -Because '照传串 = 线上现状对应的参数,Issuer 与 AdminClientId 跟在通行证的标识与 Endpoint 之后'
+    $handEdited = ConvertFrom-LoginAuthProvidersYaml -LoginYaml (New-LoginYamlWith -AuthYaml (@('AuthProviders:', '  Passport:',
+                '    Issuer: "https://ops:hunter2pw@passport.contract.test/"', '    ClientId: "contract-game-client"', '    AdminClientId: "srv;rm -rf"') -join "`n"))
+    $drift = Get-Drift -Live $handEdited
+    Assert-Equal -Expected '-LoginPassportClientId contract-game-client -LoginPassportIssuer <见 ConfigMap> -LoginPassportAdminClientId <见 ConfigMap>' -Actual $drift.KeepArgs -Because '带用户信息或末尾 / 的 Issuer、带 shell 元字符的 AdminClientId 不回显,也不让人照抄'
+    Assert-NotMatch -Text (($drift.Drifts -join "`n") + "`n" + $drift.KeepArgs) -Pattern 'hunter2pw|;rm' -Because '报错与照传串都不回显手改进去的文本'
+    $restored = [pscustomobject]@{ Live = $LivePassport } | ConvertTo-Json -Depth 6 | ConvertFrom-Json
+    $p = Get-Params -Base $PassportParams -Set @{ PassportIssuer = 'https://passport-other.contract.test' }
+    Assert-Equal -Expected ((Get-Drift -Live $LivePassport -P $p).Drifts -join ' | ') -Actual ((Get-Drift -Live $restored.Live -P $p).Drifts -join ' | ') -Because 'JSON 往返前后的判定必须一致'
+    Assert-Equal -Expected 1 -Actual (Get-Drift -Live $restored.Live -P $p).Drifts.Count -Because '前提:往返后换了 Issuer 仍算一项差异'
+    Assert-Equal -Expected $PassportKeepText -Actual (Get-Drift -Live $restored.Live).KeepArgs -Because '照传串同样不变'
 }
 
 Test-Case '照传串只按线上现状拼,与本次参数无关(全部漏传时报错里照抄它就能保持现状)' {
@@ -638,6 +708,56 @@ Test-Case 'k8s_deploy 防误关闸(Apple 撤销令牌):线上开着撤销、本�
     Assert-NotMatch -Text $errorText -Pattern 'AuthProviders\.Apple\.TeamId' -Because 'TeamId 照传了,不报'
 }
 
+Test-Case 'k8s_deploy 防误关闸(官方通行证):线上开着、本次漏传就拒绝并给出照传串;照传放行;换了 Issuer / ClientId / AdminClientId 或漏传 Endpoint 同样拒绝(四个参数都传进了判据)' {
+    $NamespacePrefix = 'mmorpg-zone'
+    $KubeContext = 'contract-ctx'
+    $KubeConfig = 'C:/contract/kubeconfig'
+    $LoginWeChatAppId = ''; $LoginWeChatEndpoint = ''; $LoginWeChatAllowOpenId = [switch]$false
+    $LoginQQAppId = ''; $LoginQQEndpoint = ''; $LoginQQAllowOpenId = [switch]$false
+    $LoginWeChatMiniGameAppId = ''; $LoginWeChatMiniGameEndpoint = ''; $LoginWeChatMiniGameAllowOpenId = [switch]$false
+    $LoginDouyinMiniGameAppId = ''; $LoginDouyinMiniGameEndpoint = ''; $LoginDouyinMiniGameAllowOpenId = [switch]$false
+    $LoginAppleClientId = ''; $LoginAppleEndpoint = ''; $LoginGoogleClientId = ''; $LoginGoogleEndpoint = ''
+    $LoginAppleTeamId = ''; $LoginAppleKeyId = ''
+    $LoginPassportIssuer = ''; $LoginPassportClientId = ''; $LoginPassportEndpoint = ''; $LoginPassportAdminClientId = ''
+    $ConfirmLoginAuthProviderChange = [switch]$false
+    $passportConfigMap = New-LoginConfigMapJson -LoginYaml (New-LoginYamlWith -AuthYaml (New-AuthYaml -P $PassportParams))
+    function Invoke-ClientEntryKubectl {
+        param([string[]]$KubectlArgs, [string]$KubeContext, [string]$KubeConfig, [switch]$CaptureOutput, [switch]$AllowFailure)
+        Assert-Equal -Expected 'get' -Actual $KubectlArgs[0] -Because '防误关闸只能查询'
+        if ($KubectlArgs[1] -ceq 'configmap') { return [pscustomobject]@{ ExitCode = 0; Stdout = $passportConfigMap; Stderr = '' } }
+        if ($KubectlArgs[1] -ceq 'secret') { return [pscustomobject]@{ ExitCode = 0; Stdout = ''; Stderr = '' } }
+        throw "假 kubectl:没有规则命中这次调用:kubectl $($KubectlArgs -join ' ')"
+    }
+    $zones = @([pscustomobject]@{ Name = 'z1' })
+
+    $errorText = ''
+    try { Assert-LoginAuthProviderClusterState -Zones $zones } catch { $errorText = $_.Exception.Message }
+    Assert-Match -Text $errorText -Pattern 'login 第三方登录现状预检失败\(1 个 zone\),未做任何写操作' -Because '漏传官方通行证的参数要拒绝(会关掉通行证登录、删掉管理凭据 Secret)'
+    Assert-Match -Text $errorText -Pattern ('线上已开 AuthProviders\.Passport[^\r\n]*要保持现状请照传 ' + [regex]::Escape($PassportKeepText) + ';确认要关闭或改动请加 -ConfirmLoginAuthProviderChange') -Because '报错给出官方通行证的照传串与确认开关'
+
+    $LoginPassportIssuer = $PassportParams.PassportIssuer; $LoginPassportClientId = $PassportParams.PassportClientId
+    $LoginPassportEndpoint = $PassportParams.PassportEndpoint; $LoginPassportAdminClientId = $PassportParams.PassportAdminClientId
+    $kept = @(Assert-LoginAuthProviderClusterState -Zones $zones 3>&1)
+    Assert-Equal -Expected 0 -Actual @($kept | Where-Object { $_ -is [System.Management.Automation.WarningRecord] }).Count -Because '照传官方通行证的四个参数即放行、不告警'
+
+    # 四个参数逐个改掉一个:每次只报被改的那一项,证明它们各自传进了判据。
+    $changes = @(
+        @{ Name = 'LoginPassportIssuer'; Value = 'https://passport-other.contract.test'; Pattern = 'AuthProviders\.Passport\.Issuer 与线上不同' }
+        @{ Name = 'LoginPassportClientId'; Value = 'contract-other-client'; Pattern = 'AuthProviders\.Passport\.ClientId 与线上不同' }
+        @{ Name = 'LoginPassportEndpoint'; Value = ''; Pattern = 'AuthProviders\.Passport\.Endpoint:线上指向自定义 Endpoint' }
+        @{ Name = 'LoginPassportAdminClientId'; Value = 'contract-other-server'; Pattern = 'AuthProviders\.Passport\.AdminClientId 与线上不同' }
+    )
+    foreach ($change in $changes) {
+        $original = Get-Variable -Name $change.Name -ValueOnly
+        Set-Variable -Name $change.Name -Value $change.Value
+        $errorText = ''
+        try { Assert-LoginAuthProviderClusterState -Zones $zones } catch { $errorText = $_.Exception.Message }
+        Set-Variable -Name $change.Name -Value $original
+        Assert-Match -Text $errorText -Pattern $change.Pattern -Because "换了 -$($change.Name) 同样拒绝(参数确实传进了判据)"
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($errorText, 'AuthProviders\.Passport\.')).Count -Because "只改了 -$($change.Name),别的三项照传了,不报"
+    }
+}
+
 Test-Case 'k8s_deploy 接入位置:防误关闸全文件只调一次,在 Assert-ClientEntryDeployPreflight 的 if ($DryRun) 的 else 分支、if ($deploysLogin) 之内,排在 Assert-ClientEntryClusterState 之后' {
     $guardCalls = @($DeployAst.FindAll({ param($node) $node -is [System.Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Assert-LoginAuthProviderClusterState' }, $true))
     Assert-Equal -Expected 1 -Actual $guardCalls.Count -Because '只有一个调用点'
@@ -902,6 +1022,7 @@ function Invoke-DevToolsK8sDeployWith {
                 '$LoginWeChatMiniGameAppId = "<unset>", $LoginWeChatMiniGameEndpoint = "<unset>", [switch]$LoginWeChatMiniGameAllowOpenId, $LoginDouyinMiniGameAppId = "<unset>", $LoginDouyinMiniGameEndpoint = "<unset>", [switch]$LoginDouyinMiniGameAllowOpenId, ' +
                 '$LoginAppleClientId = "<unset>", $LoginAppleEndpoint = "<unset>", $LoginGoogleClientId = "<unset>", $LoginGoogleEndpoint = "<unset>", ' +
                 '$LoginAppleTeamId = "<unset>", $LoginAppleKeyId = "<unset>", ' +
+                '$LoginPassportIssuer = "<unset>", $LoginPassportClientId = "<unset>", $LoginPassportEndpoint = "<unset>", $LoginPassportAdminClientId = "<unset>", ' +
                 '$LoginNppaAppId = "<unset>", $LoginNppaBizId = "<unset>", $LoginAntiAddictionExtraPlayDays = "<unset>", $LoginNppaCheckUrl = "<unset>", $LoginNppaQueryUrl = "<unset>", $LoginNppaLoginoutUrl = "<unset>")'),
             '"LoginWeChatAppId=$LoginWeChatAppId"',
             '"LoginWeChatEndpoint=$LoginWeChatEndpoint"',
@@ -922,6 +1043,10 @@ function Invoke-DevToolsK8sDeployWith {
             '"LoginGoogleEndpoint=$LoginGoogleEndpoint"',
             '"LoginAppleTeamId=$LoginAppleTeamId"',
             '"LoginAppleKeyId=$LoginAppleKeyId"',
+            '"LoginPassportIssuer=$LoginPassportIssuer"',
+            '"LoginPassportClientId=$LoginPassportClientId"',
+            '"LoginPassportEndpoint=$LoginPassportEndpoint"',
+            '"LoginPassportAdminClientId=$LoginPassportAdminClientId"',
             '"LoginNppaAppId=$LoginNppaAppId"',
             '"LoginNppaBizId=$LoginNppaBizId"',
             '"LoginAntiAddictionExtraPlayDays=$LoginAntiAddictionExtraPlayDays"',
@@ -1018,6 +1143,26 @@ Test-Case 'dev_tools Invoke-K8sDeploy:Apple 撤销令牌的两个参数非空才
     foreach ($expected in @('LoginAppleClientId=com.example.mmorpg', 'LoginAppleTeamId=ABCDE12345', 'LoginAppleKeyId=KEY0123456')) {
         Assert-Match -Text $all -Pattern ('(?m)^' + [regex]::Escape($expected) + '\r?$') -Because "给了就原样透传($expected),漏一个重部署就关掉线上的 Apple 令牌撤销"
     }
+}
+
+Test-Case 'dev_tools Invoke-K8sDeploy:官方通行证的四个参数非空才透传给 k8s_deploy.ps1,留空 / 空白不透传' {
+    $values = @{
+        LoginPassportIssuer = 'https://passport.contract.test'; LoginPassportClientId = 'contract-game-client'
+        LoginPassportEndpoint = 'https://casdoor.contract.test:8000'; LoginPassportAdminClientId = 'contract-game-server'
+    }
+    $unset = Invoke-DevToolsK8sDeployWith -Variables @{}
+    foreach ($name in $values.Keys) {
+        Assert-Match -Text $unset -Pattern ('(?m)^' + $name + '=<unset>\r?$') -Because "没给就不透传(-$name):默认值只在 k8s_deploy.ps1 一处"
+    }
+    $blank = Invoke-DevToolsK8sDeployWith -Variables @{ LoginPassportIssuer = '   '; LoginPassportEndpoint = '' }
+    Assert-Match -Text $blank -Pattern '(?m)^LoginPassportIssuer=<unset>\r?$' -Because '空白字符串不透传(透传了会被下游当成非法 Issuer)'
+    Assert-Match -Text $blank -Pattern '(?m)^LoginPassportEndpoint=<unset>\r?$' -Because '空串不透传'
+
+    $all = Invoke-DevToolsK8sDeployWith -Variables $values
+    foreach ($name in $values.Keys) {
+        Assert-Match -Text $all -Pattern ('(?m)^' + [regex]::Escape("$name=$($values[$name])") + '\r?$') -Because "给了就原样透传(-$name),漏一个重部署就关掉或改掉线上的通行证登录"
+    }
+    Assert-Match -Text $all -Pattern '(?m)^LoginAppleClientId=<unset>\r?$' -Because '只给通行证参数时,别的 login 参数照旧不透传'
 }
 
 Test-Case 'dev_tools Invoke-K8sDeploy:实名与防沉迷的六个参数非空才透传给 k8s_deploy.ps1,留空 / 空白不透传' {
@@ -1147,6 +1292,23 @@ Test-Case 'dev_tools Invoke-K8sImage:Apple / Google 的四个参数与撤销 App
         @{ LoginGoogleClientId = '1-abc.apps.googleusercontent.com' }, @{ LoginGoogleEndpoint = 'https://google-mock.contract.test' },
         # 注销时撤销 Apple 令牌的两个参数同样只落在 login 上。
         @{ LoginAppleTeamId = 'ABCDE12345' }, @{ LoginAppleKeyId = 'KEY0123456' }
+    )
+    foreach ($variables in $cases) {
+        $name = @($variables.Keys)[0]
+        $reject = Invoke-DevToolsK8sImageWith -Variables $variables
+        Assert-True -Condition ($null -ne $reject.Error) -Because "-$name 经 k8s-release-* 不生效(k8s_image.ps1 不部署 login),显式给了必须拒绝而不是静默吞掉"
+        Assert-Match -Text $reject.Error -Pattern "k8s-image-\* / k8s-release-\* 不支持 [^:]*-$name(,|:)" -Because "错误文本必须点名 -$name"
+        Assert-True -Condition (-not $reject.DownstreamCalled) -Because "-${name}:拒绝必须早于调用 k8s_image.ps1(镜像构建与推送都在那边)"
+    }
+}
+
+Test-Case 'dev_tools Invoke-K8sImage:官方通行证的四个参数在调 k8s_image.ps1 之前逐个拒绝(k8s_image.ps1 不部署 login)' {
+    $control = Invoke-DevToolsK8sImageWith -Variables @{}
+    Assert-True -Condition ($null -eq $control.Error -and $control.DownstreamCalled) -Because "对照组必须调到假 k8s_image.ps1。错误: $($control.Error)"
+    Assert-NotMatch -Text $control.DownstreamArgs -Pattern 'LoginPassport' -Because '没给就不出现在下游参数里'
+    $cases = @(
+        @{ LoginPassportIssuer = 'https://passport.contract.test' }, @{ LoginPassportClientId = 'contract-game-client' },
+        @{ LoginPassportEndpoint = 'https://casdoor.contract.test:8000' }, @{ LoginPassportAdminClientId = 'contract-game-server' }
     )
     foreach ($variables in $cases) {
         $name = @($variables.Keys)[0]

@@ -79,6 +79,20 @@ func endWatchedSession(ctx context.Context, sc *svc.ServiceContext, ref loginses
 	}
 }
 
+// watchedPlayDeadlineMs 取这条连接在账本里的截止时刻(未成年人当天能玩到的时刻,Unix 毫秒;0 = 不限)。进游戏时用:
+// 它随会话记录写进 player_locator,断线后的离线托管不越过它(§5.4)。进游戏本身说明连接还活着,所以顺带续上账本的租约。
+// 账本读不了时返回错误,调用方拒绝进游戏。部署没开防沉迷时恒为 0。
+func watchedPlayDeadlineMs(ctx context.Context, sc *svc.ServiceContext, ref loginsession.Ref) (uint64, error) {
+	if sc.AntiAddiction == nil {
+		return 0, nil
+	}
+	deadline, err := sc.AntiAddiction.Ledger.Renew(ctx, ref.DeviceMember())
+	if err != nil || deadline.IsZero() {
+		return 0, err
+	}
+	return uint64(deadline.UnixMilli()), nil
+}
+
 // backstopKickTotal 计 login 兜底踢掉的未成年人连接。到点断开由 gate 自己做,这个数不为 0 说明有 gate 没断开。
 var backstopKickTotal = promauto.NewCounter(prometheus.CounterOpts{
 	Name: "login_anti_addiction_backstop_kick_total",

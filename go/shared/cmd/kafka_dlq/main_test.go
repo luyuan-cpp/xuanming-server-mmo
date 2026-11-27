@@ -44,7 +44,10 @@ func TestSelectReplaysWritesEachOriginalPositionOnceWithoutDeadLetterHeaders(t *
 	if len(messages) != 2 || len(skipped) != 1 || !strings.Contains(skipped[0], "dlq_offset=1") {
 		t.Fatalf("同一原位置只写一次: messages=%d skipped=%v", len(messages), skipped)
 	}
-	got := messages[0]
+	if messages[0].dlqOffset != 0 || messages[0].original != "match-results[1]@40" || messages[1].dlqOffset != 2 {
+		t.Fatalf("每条原件要带上它来自哪条死信(写到一半失败时报出、重跑从它起): %+v", messages)
+	}
+	got := messages[0].message
 	if got.Topic != "match-results" || got.Partition != 1 || string(got.Key) != "9001" || string(got.Value) != "raw-result" {
 		t.Fatalf("重放的原件不对: %+v", got)
 	}

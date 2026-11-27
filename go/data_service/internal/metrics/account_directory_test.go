@@ -39,6 +39,33 @@ func TestPrimeAccountDirectoryCreatesAllSeries(t *testing.T) {
 	}
 }
 
+// TestBacklogCountedTimestampFollowsSuccessfulCounts:两个积压 gauge 一注册就是 0、数不成时停在旧值,单看它们分不清
+// 「没有积压」和「没数成」(评审建议,2026-11-26)。每次数成都把时刻写进 account_directory_backlog_counted_timestamp_seconds{count},
+// 告警按它判数字还新不新;没写过的 count 没有序列(没起后台循环的进程不会误报)。
+func TestBacklogCountedTimestampFollowsSuccessfulCounts(t *testing.T) {
+	registerAccountDirectory()
+	accountDirectoryBacklogCountedAt.Reset()
+	const family = "data_service_account_directory_backlog_counted_timestamp_seconds"
+	if seen := gatherFamily(t, family); len(seen) != 0 {
+		t.Fatalf("没数成过、循环也没起,不该有序列: %d", len(seen))
+	}
+	SetRoleRefHeld(3)
+	seen := gatherFamily(t, family)
+	if len(seen) != 1 || labelKey(seen[0], "count") != BacklogCountRoleRefHeld || seen[0].GetGauge().GetValue() <= 0 {
+		t.Fatalf("数成保留 ref 之后只该有 count=role_ref_held 一条,值是当时的 Unix 秒: %v", seen)
+	}
+	SetAccountDeletionOverdue(0)
+	seen = gatherFamily(t, family)
+	if len(seen) != 2 {
+		t.Fatalf("两个计数各一条: %v", seen)
+	}
+	for _, m := range seen {
+		if key := labelKey(m, "count"); key != BacklogCountRoleRefHeld && key != BacklogCountDeletionOverdue {
+			t.Fatalf("count=%q 不在封闭集合里", key)
+		}
+	}
+}
+
 // TestObserveRoleRemovalResumeAddsEachResult:一轮后台收尾的四种结局各按行数累加到自己的序列上,0 行的不动。
 func TestObserveRoleRemovalResumeAddsEachResult(t *testing.T) {
 	PrimeAccountDirectory(nil, nil)

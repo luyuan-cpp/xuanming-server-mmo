@@ -54,6 +54,7 @@ const (
 	ENodeType_ClientRpcRouterNodeService ENodeType = 29 // 客户端 RPC 路由服(Go-Zero,全局池):gate 唯一的 gRPC 目标,按 message_id 不透明转发到各业务 Go 服务(docs/design/client-rpc-router.md)
 	ENodeType_PlayerInboxNodeService     ENodeType = 30 // 玩家持久收件箱(Go-Zero,独占库 mmorpg_player_inbox):scene 经 etcd 前缀 PlayerInboxNodeService.rpc 发现(docs/design/player-inbox-service.md §1.4)
 	ENodeType_PlayerStoreNodeService     ENodeType = 31 // 玩家存盘(go/db 提供,scene 调用,按 zone 发现)
+	ENodeType_ContentGuardNodeService    ENodeType = 32 // 内容安全(Go-Zero,全局池,无状态):名字与聊天的文字送检;scene 经 etcd 前缀 ContentGuardNodeService.rpc 发现(docs/design/rename-and-content-safety.md §6)
 )
 
 // Enum value maps for ENodeType.
@@ -89,6 +90,7 @@ var (
 		29: "ClientRpcRouterNodeService",
 		30: "PlayerInboxNodeService",
 		31: "PlayerStoreNodeService",
+		32: "ContentGuardNodeService",
 	}
 	ENodeType_value = map[string]int32{
 		"UnknownNodeService":         0,
@@ -121,6 +123,7 @@ var (
 		"ClientRpcRouterNodeService": 29,
 		"PlayerInboxNodeService":     30,
 		"PlayerStoreNodeService":     31,
+		"ContentGuardNodeService":    32,
 	}
 )
 
@@ -257,7 +260,7 @@ var File_proto_common_base_node_proto protoreflect.FileDescriptor
 
 const file_proto_common_base_node_proto_rawDesc = "" +
 	"\n" +
-	"\x1cproto/common/base/node.proto\x12\vcommon.base*\xd1\x05\n" +
+	"\x1cproto/common/base/node.proto\x12\vcommon.base*\xee\x05\n" +
 	"\teNodeType\x12\x16\n" +
 	"\x12UnknownNodeService\x10\x00\x12\x14\n" +
 	"\x10SceneNodeService\x10\x03\x12\x13\n" +
@@ -289,7 +292,8 @@ const file_proto_common_base_node_proto_rawDesc = "" +
 	"\x11BattleNodeService\x10\x1c\x12\x1e\n" +
 	"\x1aClientRpcRouterNodeService\x10\x1d\x12\x1a\n" +
 	"\x16PlayerInboxNodeService\x10\x1e\x12\x1a\n" +
-	"\x16PlayerStoreNodeService\x10\x1f*g\n" +
+	"\x16PlayerStoreNodeService\x10\x1f\x12\x1b\n" +
+	"\x17ContentGuardNodeService\x10 *g\n" +
 	"\x0eeSceneNodeType\x12\x12\n" +
 	"\x0ekMainSceneNode\x10\x00\x12\x0e\n" +
 	"\n" +

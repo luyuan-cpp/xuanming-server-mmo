@@ -38,8 +38,9 @@ type Artifact struct {
 	SHA256 string `json:"sha256"`
 }
 
-// TableEntry 对应 manifest.json 中的表条目。
+// TableEntry 对应 manifest.json 的 tables 数组里的一项。
 type TableEntry struct {
+	Name         string     `json:"name"`
 	HotReload    bool       `json:"hot_reload"`
 	IDsPermanent bool       `json:"ids_permanent"`
 	Rows         int64      `json:"rows"`
@@ -47,12 +48,69 @@ type TableEntry struct {
 }
 
 // Manifest 对应 generated/tables/manifest.json(第 2 版)。
+// 导表器写出的 tables 是按表名排序的数组,每项带 name(tools/data_table_exporter/core/manifest.py);
+// 这里解析后按表名建索引。与 go/shared/tablebundle、C++ table_bundle_manager.cpp 读的是同一种形状,
+// 不能直接按 map 解:那样真实的清单一份都读不进来。
 type Manifest struct {
-	SchemaVersion int                   `json:"schema_version"`
-	SchemaDigest  string                `json:"schema_digest"`
-	Version       uint64                `json:"version"`
-	ContentDigest string                `json:"content_digest"`
-	Tables        map[string]TableEntry `json:"tables"`
+	SchemaVersion int
+	SchemaDigest  string
+	Version       uint64
+	ContentDigest string
+	Tables        map[string]TableEntry
+}
+
+type manifestWire struct {
+	SchemaVersion int          `json:"schema_version"`
+	SchemaDigest  string       `json:"schema_digest"`
+	Version       uint64       `json:"version"`
+	ContentDigest string       `json:"content_digest"`
+	Tables        []TableEntry `json:"tables"`
+}
+
+// UnmarshalJSON 读 tables 数组并按表名建索引;缺表名或表名重复的清单直接拒绝。
+func (m *Manifest) UnmarshalJSON(data []byte) error {
+	var wire manifestWire
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	tables := make(map[string]TableEntry, len(wire.Tables))
+	for _, entry := range wire.Tables {
+		if strings.TrimSpace(entry.Name) == "" {
+			return errors.New("manifest table entry missing name")
+		}
+		if _, dup := tables[entry.Name]; dup {
+			return fmt.Errorf("manifest duplicate table entry %q", entry.Name)
+		}
+		tables[entry.Name] = entry
+	}
+	m.SchemaVersion = wire.SchemaVersion
+	m.SchemaDigest = wire.SchemaDigest
+	m.Version = wire.Version
+	m.ContentDigest = wire.ContentDigest
+	m.Tables = tables
+	return nil
+}
+
+// MarshalJSON 按导表器的形状写回:tables 是按表名排序的数组。
+func (m Manifest) MarshalJSON() ([]byte, error) {
+	names := make([]string, 0, len(m.Tables))
+	for name := range m.Tables {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	list := make([]TableEntry, 0, len(names))
+	for _, name := range names {
+		entry := m.Tables[name]
+		entry.Name = name
+		list = append(list, entry)
+	}
+	return json.Marshal(manifestWire{
+		SchemaVersion: m.SchemaVersion,
+		SchemaDigest:  m.SchemaDigest,
+		Version:       m.Version,
+		ContentDigest: m.ContentDigest,
+		Tables:        list,
+	})
 }
 
 // PackResult 是 Pack 成功产出的归档文件与摘要信息。

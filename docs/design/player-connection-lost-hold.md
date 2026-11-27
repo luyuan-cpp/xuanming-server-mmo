@@ -63,6 +63,7 @@
 | TCP 断开:断网、gate 停机、顶号时 login 踢旧连接、输出缓冲高水位强关 | `DISCONNECTED` | 断线保留(§4) |
 | 客户端主动 LeaveGame(`gate_scene_entry::OnClientLeaveGame`) | `LOGOUT` | 立即退出 |
 | 断线租约到期后,gate 关掉残留的假死连接(`PlayerLeaseExpiredEventHandler` 先置 `SessionInfo::exitSceneImmediatelyOnClose`) | `LEASE_EXPIRED` | 立即退出 |
+| 未成年人到点下线(2026-11-26):gate 到点关连接,或 login 的兜底踢线到达 gate,关连接前同样置 `exitSceneImmediatelyOnClose`([实名与防沉迷](real-name-anti-addiction.md) §5.4) | `LEASE_EXPIRED` | 立即退出,不保留、不托管 |
 | 旧版 gate,没有这个字段 | `UNSPECIFIED`(0) | 立即退出 |
 
 scene 主动踢人(34)时,scene 自己先销毁实体,之后到达的 `DISCONNECTED` 找不到实体,什么都不发生。
@@ -137,6 +138,9 @@ scene 主动踢人(34)时,scene 自己先销毁实体,之后到达的 `DISCONNEC
   1 秒扫描每 15 秒(按玩家号错开)替他重新走一遍跟随检查(`PlayerTeamSystem::OnOfflineHostingHeartbeat`,2026-11-11),
   相当于在线客户端没被驱动时隔几秒重新声明一次跟随,补上漏掉的信号(team-follow-server-trail.md §3.7)。
 - **结束**:新会话接回(§5,与普通保留同一判据)、月卡到期或确认不了(上面)、被别的退出取代(租约到期的会话结束释放、停机、交易封存)。
+- **未成年人**(2026-11-26):托管不越过当天的截止时刻。会话记录带 `minor_play_deadline_ms`(login 进游戏时写),player_locator 给月卡玩家续租时不超过
+  离截止时刻的剩余时间,到点不再续租,走上一条的「租约到期的会话结束释放」。scene 这一侧不用知道年龄:它收到 LeaveScene 就退出。
+  见[实名与防沉迷](real-name-anti-addiction.md) §5.4。
   排空 / 疏散不算结束:他拿着托管票据存盘退出,按托管落点搬到别的节点,在那里按断线托管重建保留、接着托管(§4.3)。
 
 时序为什么成立:普通保留靠 `kHoldWindow + 1 + 4 ≤ 30` 保证保留在 login 断线租约到期前结束(§7)。托管超过 30 秒,是因为 player_locator

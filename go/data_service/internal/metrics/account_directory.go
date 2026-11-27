@@ -48,7 +48,8 @@ var (
 	}, []string{"result"})
 
 	// 后台判陈旧标了保留、等人处理的建角 ref 条数(各账号片合计,store.SweepResult.HeldTotal)。每个副本报同一个值,告警取 max。
-	// 不预置:这一轮没数成就不写,免得出现一个看着像「没有积压」的 0。
+	// 这一轮没数成就不写。注意它一注册就导出 0、数不成时停在旧值,单看它分不清「没有积压」和「没数成」:
+	// 数字还新不新看 accountDirectoryBacklogCountedAt。
 	roleRefHeld = prometheus.NewGauge(prometheus.GaugeOpts{
 		Subsystem: subsystem,
 		Name:      "account_role_ref_held",
@@ -57,7 +58,7 @@ var (
 	})
 
 	// 冷静期满超过 24 小时还没删完的注销账号数(各账号片合计,store.AccountDeletionsOverdue;docs/design/account-deletion.md §4.5)。
-	// 每个副本报同一个值,告警 DataServiceAccountDeletionOverdue 取 max。不预置,理由同 account_role_ref_held。
+	// 每个副本报同一个值,告警 DataServiceAccountDeletionOverdue 取 max。没数成就不写,口径同 account_role_ref_held。
 	accountDeletionOverdue = prometheus.NewGauge(prometheus.GaugeOpts{
 		Subsystem: subsystem,
 		Name:      "account_deletion_overdue",
@@ -65,19 +66,44 @@ var (
 			"(a role keeps being blocked, a ref is held for review, the executor is down). Every replica reports the same total; alert on max.",
 	})
 
+	// 上面两个积压 gauge 最近一次数成的时刻(Unix 秒),count 取 BacklogCount* 常量。告警 DataServiceAccountDirectoryBacklogCountStale
+	// 按 time() - 这个时刻判:从启动起就数不成(gauge 一直是注册时的 0)和数成过又一直失败(gauge 停在旧值)都报得出来。
+	// 后台循环起来时先写一次(MarkBacklogCounted);没起循环的进程没有序列,不会误报。
+	accountDirectoryBacklogCountedAt = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: subsystem,
+		Name:      "account_directory_backlog_counted_timestamp_seconds",
+		Help: "Unix time of the last successful count behind account_role_ref_held / account_deletion_overdue, by count (role_ref_held|deletion_overdue). " +
+			"Also written once when the background loop starts. When it stops advancing, the matching gauge is stale and must not be read as no backlog.",
+	}, []string{"count"})
+
 	accountDirectoryRegisterOnce sync.Once
+)
+
+// account_directory_backlog_counted_timestamp_seconds{count} 的取值。
+const (
+	BacklogCountRoleRefHeld     = "role_ref_held"
+	BacklogCountDeletionOverdue = "deletion_overdue"
 )
 
 func registerAccountDirectory() {
 	accountDirectoryRegisterOnce.Do(func() {
-		prometheus.MustRegister(roleNameBindFailuresTotal, roleRemovalSettleFailuresTotal, roleRemovalResumeTotal, roleRefHeld, accountDeletionOverdue)
+		prometheus.MustRegister(roleNameBindFailuresTotal, roleRemovalSettleFailuresTotal, roleRemovalResumeTotal, roleRefHeld, accountDeletionOverdue,
+			accountDirectoryBacklogCountedAt)
 	})
 }
 
-// SetAccountDeletionOverdue 写逾期的注销账号数。
+// SetAccountDeletionOverdue 写逾期的注销账号数,并记下这次数成的时刻。
 func SetAccountDeletionOverdue(n int) {
 	registerAccountDirectory()
 	accountDeletionOverdue.Set(float64(n))
+	MarkBacklogCounted(BacklogCountDeletionOverdue)
+}
+
+// MarkBacklogCounted 把 count(BacklogCount* 常量)最近一次数成的时刻写成现在。两个 Set 函数数成时各自调用;
+// 后台循环起来时也调一次:首轮之前就开始计时,从启动起一直数不成也会在门槛之后报出来。
+func MarkBacklogCounted(count string) {
+	registerAccountDirectory()
+	accountDirectoryBacklogCountedAt.WithLabelValues(count).SetToCurrentTime()
 }
 
 // PrimeAccountDirectory 预置全部封闭集合为 0(理由同 PrimeRoute:这几种失败一辈子可能只发生几次,序列不预先存在的话
@@ -126,8 +152,9 @@ func ObserveRoleRemovalResume(finished, abandoned, unsettled, failed int) {
 	}
 }
 
-// SetRoleRefHeld 写这一轮数出来的保留 ref 总数。
+// SetRoleRefHeld 写这一轮数出来的保留 ref 总数,并记下这次数成的时刻。
 func SetRoleRefHeld(n int) {
 	registerAccountDirectory()
 	roleRefHeld.Set(float64(n))
+	MarkBacklogCounted(BacklogCountRoleRefHeld)
 }

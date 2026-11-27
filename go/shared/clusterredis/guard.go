@@ -17,6 +17,9 @@ import (
 // 两个域靠 hash tag 的形状区分,不再靠「有没有 tag」:控制集群登记过的族 tag(redisslot.IsControlTag,形如 {ctl:7})
 // 只属于控制集群;其余 tag 形状(玩家 id、slot-tag、登录连接身份)只属于玩家域。开发环境两个域可能指向同一个单实例,
 // 守卫不拦的话,键发错句柄要到上了集群才暴露,表现是读写悄悄落在两边。
+//
+// match 私有集群是第三个域:它的 tag 形状与玩家域分不开({<battle_id>} 与 {<player_id>} 都是数字),靠键前缀区分
+// (MatchPrivateKeyPrefix)。
 type KeyPolicy uint8
 
 const (
@@ -26,11 +29,18 @@ const (
 	// ControlClusterKeys:控制集群。带 tag 的键只能用登记过的族 tag;多键命令的每个键都带 tag,且是同一个 tag;
 	// 单键命令可以不带 tag(选主锁、去重键这类单键族)。
 	ControlClusterKeys
+	// MatchPrivateKeys:match 私有集群(redis-match-cluster),只放观战协调键。键形规则同玩家域(每个键都带 hash tag、
+	// 多键命令的键同 slot、不得出现控制集群的族 tag),另外每个键都以 MatchPrivateKeyPrefix 开头。
+	MatchPrivateKeys
 
 	keyPolicyCount
 )
 
-var keyPolicyNames = [keyPolicyCount]string{"player_domain", "control_cluster"}
+var keyPolicyNames = [keyPolicyCount]string{"player_domain", "control_cluster", "match_private"}
+
+// MatchPrivateKeyPrefix 是 match 私有集群全部键的前缀(键只在 go/match/internal/logic 的 spectate_*.go 里拼)。
+// match 同时持有玩家域句柄,玩家域的键误走私有集群的句柄时,守卫靠这个前缀当场拒绝。
+const MatchPrivateKeyPrefix = "spectate:"
 
 func (p KeyPolicy) valid() bool { return p < keyPolicyCount }
 
@@ -56,9 +66,12 @@ var ErrWrongDomainTag = errors.New("clusterredis: key hash tag belongs to anothe
 // 不同的 tag 碰巧同 slot 时 Redis 会照常执行,代码就依赖了哈希巧合,换一个 zone 号或帮会号就变成 CROSSSLOT。
 var ErrMixedTags = errors.New("clusterredis: keys of a multi-key command carry different hash tags")
 
+// ErrNotMatchPrivateKey:发到 match 私有集群的键不以 MatchPrivateKeyPrefix 开头,是别的域的键走错了句柄。
+var ErrNotMatchPrivateKey = errors.New("clusterredis: key does not belong to the match private cluster")
+
 // ErrNonIdempotentInPipeline:非幂等命令出现在管道(含事务管道)里。go-redis 的 ClusterClient 在管道内部遇到
 // EOF / 超时会自动重发整批命令(v9.16 osscluster.go 的 processPipelineNodeConn 直接用 shouldRetry 判原始错误,
-// 钩子拦不到),已执行的 Lua 或计数命令会被再跑一遍。两个域的这类命令都一律单条发送。
+// 钩子拦不到),已执行的 Lua 或计数命令会被再跑一遍。各个域的这类命令都一律单条发送。
 var ErrNonIdempotentInPipeline = errors.New("clusterredis: non-idempotent command must not be pipelined")
 
 // GuardHook 在命令发出前按 Policy 检查键。不认识键位置的命令放行(由服务端与集群路由兜底),所以守卫只会拒绝
@@ -201,29 +214,42 @@ func (p KeyPolicy) CheckCommand(args []interface{}) error {
 func (p KeyPolicy) CheckKeys(keys []string) error {
 	switch p {
 	case PlayerDomainKeys:
-		return checkPlayerDomainKeys(keys)
+		return checkTaggedSameSlotKeys(keys, "the player domain")
 	case ControlClusterKeys:
 		return checkControlClusterKeys(keys)
+	case MatchPrivateKeys:
+		return checkMatchPrivateKeys(keys)
 	default:
 		return fmt.Errorf("clusterredis: unknown key policy %d", p)
 	}
 }
 
-// checkPlayerDomainKeys:每个键都带 tag、tag 不是控制集群的族 tag,全部同 slot。
-func checkPlayerDomainKeys(keys []string) error {
+// checkTaggedSameSlotKeys:每个键都带 tag、tag 不是控制集群的族 tag,全部同 slot。玩家域与 match 私有集群共用这条键形规则,
+// domain 只用在错误文本里。
+func checkTaggedSameSlotKeys(keys []string, domain string) error {
 	for i, key := range keys {
 		tag, tagged := redisslot.HashTag(key)
 		if !tagged {
 			return fmt.Errorf("%w: %q", ErrUntaggedKey, key)
 		}
 		if redisslot.IsControlTag(tag) {
-			return fmt.Errorf("%w: %q in the player domain", ErrWrongDomainTag, key)
+			return fmt.Errorf("%w: %q in %s", ErrWrongDomainTag, key, domain)
 		}
 		if i > 0 && redisslot.HashSlot(key) != redisslot.HashSlot(keys[0]) {
 			return fmt.Errorf("%w: %q and %q", ErrCrossSlot, keys[0], key)
 		}
 	}
 	return nil
+}
+
+// checkMatchPrivateKeys:每个键都以 MatchPrivateKeyPrefix 开头,其余同 checkTaggedSameSlotKeys。
+func checkMatchPrivateKeys(keys []string) error {
+	for _, key := range keys {
+		if !strings.HasPrefix(key, MatchPrivateKeyPrefix) {
+			return fmt.Errorf("%w: %q", ErrNotMatchPrivateKey, key)
+		}
+	}
+	return checkTaggedSameSlotKeys(keys, "the match private cluster")
 }
 
 // checkControlClusterKeys:带 tag 的键只能是登记过的族 tag;单键可以不带 tag;多键命令每个键都带同一个 tag。

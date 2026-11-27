@@ -41,6 +41,22 @@ type RoleNameRuleDescComp struct {
     Value string
 }
 
+type RoleNameRuleRename_cooldown_secondsComp struct {
+    Value uint32
+}
+
+type RoleNameRuleOld_name_hold_secondsComp struct {
+    Value uint32
+}
+
+type RoleNameRuleRename_item_idComp struct {
+    Value uint32
+}
+
+type RoleNameRuleRename_item_countComp struct {
+    Value uint32
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -72,5 +88,21 @@ func MakeRoleNameRuleMax_generate_attemptsComp(row *pb.RoleNameRuleTable) RoleNa
 
 func MakeRoleNameRuleDescComp(row *pb.RoleNameRuleTable) RoleNameRuleDescComp {
     return RoleNameRuleDescComp{Value: row.Desc}
+}
+
+func MakeRoleNameRuleRename_cooldown_secondsComp(row *pb.RoleNameRuleTable) RoleNameRuleRename_cooldown_secondsComp {
+    return RoleNameRuleRename_cooldown_secondsComp{Value: row.RenameCooldownSeconds}
+}
+
+func MakeRoleNameRuleOld_name_hold_secondsComp(row *pb.RoleNameRuleTable) RoleNameRuleOld_name_hold_secondsComp {
+    return RoleNameRuleOld_name_hold_secondsComp{Value: row.OldNameHoldSeconds}
+}
+
+func MakeRoleNameRuleRename_item_idComp(row *pb.RoleNameRuleTable) RoleNameRuleRename_item_idComp {
+    return RoleNameRuleRename_item_idComp{Value: row.RenameItemId}
+}
+
+func MakeRoleNameRuleRename_item_countComp(row *pb.RoleNameRuleTable) RoleNameRuleRename_item_countComp {
+    return RoleNameRuleRename_item_countComp{Value: row.RenameItemCount}
 }
 

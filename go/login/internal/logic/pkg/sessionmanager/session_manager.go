@@ -48,6 +48,9 @@ type PlayerSession struct {
 	// GateZoneID 是写下这条会话的 gate 连接所在的区号(login 的 Node.ZoneId);0 = 旧版 login 写入。
 	// AssignGate 重连免排队直接按它判「会话是否在本区」(login-queue-2026-05.md §8)。
 	GateZoneID uint32 `json:"gate_zone_id"`
+	// MinorPlayDeadlineMs 是未成年人当天能玩到的时刻(Unix 毫秒),0 = 不限。player_locator 据此不让离线托管越过它
+	// (docs/design/real-name-anti-addiction.md §5.4)。
+	MinorPlayDeadlineMs uint64 `json:"minor_play_deadline_ms"`
 }
 
 // EnterGameDecision mirrors Centre's enum.
@@ -103,6 +106,8 @@ type OnlineSessionInput struct {
 	SessionIncarnation uint64
 	// GateZoneID 是发起本次登录的 gate 连接所在的区号(login 的 Node.ZoneId),原样写进会话记录。
 	GateZoneID uint32
+	// MinorPlayDeadlineMs 是这次登录的未成年人截止时刻(防沉迷会话账本里的值),0 = 不限,原样写进会话记录。
+	MinorPlayDeadlineMs uint64
 }
 
 func idempotencyKey(playerID uint64, requestID string) string {
@@ -170,20 +175,22 @@ func SetSessionDisconnecting(ctx context.Context, plClient plpb.PlayerLocatorCli
 // 返回值是 locator 回带的会话记录:旧版 locator 不认这个字段,会原样回出上一条会话的代次,
 // 所以调用方下游一律用自己铸出的值,不用返回值里的(scene-enter-session-fence.md §3.4)。
 // sessionIncarnation 与 gateZoneID 分别是发起重连的 gate 连接的会话代次与所在区号,player_locator 原样写进会话记录。
+// minorPlayDeadlineMs 是这次登录的未成年人截止时刻(0 = 不限),同样原样写进会话记录,不沿用上一条连接的值。
 func Reconnect(ctx context.Context, plClient plpb.PlayerLocatorClient, playerID uint64,
 	newSessionID uint32, gateID string, gateInstanceID string, sessionIncarnation uint64, gateZoneID uint32,
-	account string, requestID string, loginGeneration uint64,
+	account string, requestID string, loginGeneration uint64, minorPlayDeadlineMs uint64,
 ) (*PlayerSession, error) {
 	resp, err := plClient.Reconnect(ctx, &plpb.ReconnectRequest{
-		PlayerId:           playerID,
-		NewSessionId:       newSessionID,
-		GateId:             gateID,
-		GateInstanceId:     gateInstanceID,
-		Account:            account,
-		RequestId:          requestID,
-		LoginGeneration:    loginGeneration,
-		SessionIncarnation: sessionIncarnation,
-		GateZoneId:         gateZoneID,
+		PlayerId:            playerID,
+		NewSessionId:        newSessionID,
+		GateId:              gateID,
+		GateInstanceId:      gateInstanceID,
+		Account:             account,
+		RequestId:           requestID,
+		LoginGeneration:     loginGeneration,
+		SessionIncarnation:  sessionIncarnation,
+		GateZoneId:          gateZoneID,
+		MinorPlayDeadlineMs: minorPlayDeadlineMs,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("player_locator Reconnect: %w", err)
@@ -283,6 +290,8 @@ func toProto(s *PlayerSession) *plpb.PlayerSession {
 		LoginGeneration:    s.LoginGeneration,
 		SessionIncarnation: s.SessionIncarnation,
 		GateZoneId:         s.GateZoneID,
+
+		MinorPlayDeadlineMs: s.MinorPlayDeadlineMs,
 	}
 }
 
@@ -305,6 +314,8 @@ func fromProto(pb *plpb.PlayerSession) *PlayerSession {
 		LoginGeneration:    pb.LoginGeneration,
 		SessionIncarnation: pb.SessionIncarnation,
 		GateZoneID:         pb.GateZoneId,
+
+		MinorPlayDeadlineMs: pb.MinorPlayDeadlineMs,
 	}
 }
 
@@ -319,6 +330,7 @@ func applyOnlineSession(session *PlayerSession, input OnlineSessionInput) {
 	session.GateID = input.GateID
 	session.GateInstanceID = input.GateInstanceID
 	session.GateZoneID = input.GateZoneID
+	session.MinorPlayDeadlineMs = input.MinorPlayDeadlineMs
 	session.SessionIncarnation = input.SessionIncarnation
 	session.Account = input.Account
 	session.State = StateOnline

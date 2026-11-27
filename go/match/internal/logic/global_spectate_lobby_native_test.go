@@ -983,7 +983,7 @@ func TestGlobalWatchTiDBStableViewerCannotWatchCanaryBattle(t *testing.T) {
 	require.Zero(t, f.spectatorRows(t, stableViewer), "不落 L0 原件")
 	adds, removes, attaches, promotes := f.battle.counts()
 	require.Zero(t, adds+removes+attaches+promotes, "stable 观众不会被连到 canary battle 上")
-	_, err := f.svcCtx.MatchRedis.Zscore(spectateActiveIndex.keyFor(battleId), strconv.FormatUint(battleId, 10))
+	_, err := f.svcCtx.MatchRedis.ZScore(context.Background(), spectateActiveIndex.keyFor(battleId), strconv.FormatUint(battleId, 10)).Result()
 	require.NoError(t, err, "这场对 canary 观众仍可看,不摘观战索引")
 
 	direct := f.watchOnTrack(t, canaryViewer, "canary", &pb.WatchBattleRequest{RequestId: uuid.NewString(), BattleId: battleId})

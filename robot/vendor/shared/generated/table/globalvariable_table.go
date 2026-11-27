@@ -45,25 +45,40 @@ func NewGlobalVariableTableManager() *GlobalVariableTableManager {
 }
 
 func (m *GlobalVariableTableManager) Load(configDir string, useBinary bool) error {
+    snap, err := m.loadSnapshot(configDir, useBinary)
+    if err != nil {
+        return err
+    }
+    m.snap.Store(snap)
+    return nil
+}
+
+func (m *GlobalVariableTableManager) swapSnapshot(snap *globalvariableSnapshot) {
+    if snap != nil {
+        m.snap.Store(snap)
+    }
+}
+
+func (m *GlobalVariableTableManager) loadSnapshot(configDir string, useBinary bool) (*globalvariableSnapshot, error) {
     var container pb.GlobalVariableTableData
 
     if useBinary {
         path := filepath.Join(configDir, "globalvariable.pb")
         raw, err := os.ReadFile(path)
         if err != nil {
-            return fmt.Errorf("failed to read file: %w", err)
+            return nil, fmt.Errorf("failed to read file: %w", err)
         }
         if err := proto.Unmarshal(raw, &container); err != nil {
-            return fmt.Errorf("failed to parse binary: %w", err)
+            return nil, fmt.Errorf("failed to parse binary: %w", err)
         }
     } else {
         path := filepath.Join(configDir, "globalvariable.json")
         raw, err := os.ReadFile(path)
         if err != nil {
-            return fmt.Errorf("failed to read file: %w", err)
+            return nil, fmt.Errorf("failed to read file: %w", err)
         }
         if err := protojson.Unmarshal(raw, &container); err != nil {
-            return fmt.Errorf("failed to parse json: %w", err)
+            return nil, fmt.Errorf("failed to parse json: %w", err)
         }
     }
 
@@ -76,8 +91,7 @@ func (m *GlobalVariableTableManager) Load(configDir string, useBinary bool) erro
     }
 
     snap.data = container.Data
-    m.snap.Store(snap)
-    return nil
+    return snap, nil
 }
 
 func (m *GlobalVariableTableManager) FindAll() []*pb.GlobalVariableTable {

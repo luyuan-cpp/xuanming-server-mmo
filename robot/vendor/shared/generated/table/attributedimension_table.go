@@ -47,25 +47,40 @@ func NewAttributeDimensionTableManager() *AttributeDimensionTableManager {
 }
 
 func (m *AttributeDimensionTableManager) Load(configDir string, useBinary bool) error {
+    snap, err := m.loadSnapshot(configDir, useBinary)
+    if err != nil {
+        return err
+    }
+    m.snap.Store(snap)
+    return nil
+}
+
+func (m *AttributeDimensionTableManager) swapSnapshot(snap *attributedimensionSnapshot) {
+    if snap != nil {
+        m.snap.Store(snap)
+    }
+}
+
+func (m *AttributeDimensionTableManager) loadSnapshot(configDir string, useBinary bool) (*attributedimensionSnapshot, error) {
     var container pb.AttributeDimensionTableData
 
     if useBinary {
         path := filepath.Join(configDir, "attributedimension.pb")
         raw, err := os.ReadFile(path)
         if err != nil {
-            return fmt.Errorf("failed to read file: %w", err)
+            return nil, fmt.Errorf("failed to read file: %w", err)
         }
         if err := proto.Unmarshal(raw, &container); err != nil {
-            return fmt.Errorf("failed to parse binary: %w", err)
+            return nil, fmt.Errorf("failed to parse binary: %w", err)
         }
     } else {
         path := filepath.Join(configDir, "attributedimension.json")
         raw, err := os.ReadFile(path)
         if err != nil {
-            return fmt.Errorf("failed to read file: %w", err)
+            return nil, fmt.Errorf("failed to read file: %w", err)
         }
         if err := protojson.Unmarshal(raw, &container); err != nil {
-            return fmt.Errorf("failed to parse json: %w", err)
+            return nil, fmt.Errorf("failed to parse json: %w", err)
         }
     }
 
@@ -80,8 +95,7 @@ func (m *AttributeDimensionTableManager) Load(configDir string, useBinary bool) 
     }
 
     snap.data = container.Data
-    m.snap.Store(snap)
-    return nil
+    return snap, nil
 }
 
 func (m *AttributeDimensionTableManager) FindAll() []*pb.AttributeDimensionTable {

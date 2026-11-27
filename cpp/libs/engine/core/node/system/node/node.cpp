@@ -2642,7 +2642,8 @@ void Node::LoadConfigs()
 void Node::LoadAllConfigData()
 {
 	tableBundleManager = std::make_shared<table_bundle::TableBundleManager>(eventLoop);
-	tableBundleManager->LoadAtStartup(GetConfigDir(), UseProtoBinaryTables());
+	tableBundleManager->LoadAtStartup(GetConfigDir(), UseProtoBinaryTables(),
+									  eNodeType_Name(static_cast<eNodeType>(GetNodeType())));
 }
 
 void Node::SetupTimeZone()

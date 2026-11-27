@@ -249,6 +249,68 @@ func (x *BuffComp) GetHasAddedSubBuff() bool {
 	return false
 }
 
+// 下线保留的 Buff 的存档条目(Buff 表 keep_on_logout = 1,docs/design/realtime-cooldown-buff-persistence.md)。
+// 只记「是哪个 Buff、几层、什么时候到期」,不记施法者、实例号、子 Buff 关系这些运行时句柄:恢复后按系统施加处理。
+type SavedBuffComp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BuffTableId   uint32                 `protobuf:"varint,1,opt,name=buff_table_id,json=buffTableId,proto3" json:"buff_table_id,omitempty"`
+	Layer         uint32                 `protobuf:"varint,2,opt,name=layer,proto3" json:"layer,omitempty"`
+	ExpireAtMs    uint64                 `protobuf:"varint,3,opt,name=expire_at_ms,json=expireAtMs,proto3" json:"expire_at_ms,omitempty"` // 到期的 UTC 毫秒;0 = 永久
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SavedBuffComp) Reset() {
+	*x = SavedBuffComp{}
+	mi := &file_proto_common_component_buff_comp_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SavedBuffComp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SavedBuffComp) ProtoMessage() {}
+
+func (x *SavedBuffComp) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_component_buff_comp_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SavedBuffComp.ProtoReflect.Descriptor instead.
+func (*SavedBuffComp) Descriptor() ([]byte, []int) {
+	return file_proto_common_component_buff_comp_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *SavedBuffComp) GetBuffTableId() uint32 {
+	if x != nil {
+		return x.BuffTableId
+	}
+	return 0
+}
+
+func (x *SavedBuffComp) GetLayer() uint32 {
+	if x != nil {
+		return x.Layer
+	}
+	return 0
+}
+
+func (x *SavedBuffComp) GetExpireAtMs() uint64 {
+	if x != nil {
+		return x.ExpireAtMs
+	}
+	return 0
+}
+
 type DamageEventComp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SkillId       uint64                 `protobuf:"varint,1,opt,name=skill_id,json=skillId,proto3" json:"skill_id,omitempty"`
@@ -262,7 +324,7 @@ type DamageEventComp struct {
 
 func (x *DamageEventComp) Reset() {
 	*x = DamageEventComp{}
-	mi := &file_proto_common_component_buff_comp_proto_msgTypes[3]
+	mi := &file_proto_common_component_buff_comp_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -274,7 +336,7 @@ func (x *DamageEventComp) String() string {
 func (*DamageEventComp) ProtoMessage() {}
 
 func (x *DamageEventComp) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_component_buff_comp_proto_msgTypes[3]
+	mi := &file_proto_common_component_buff_comp_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -287,7 +349,7 @@ func (x *DamageEventComp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DamageEventComp.ProtoReflect.Descriptor instead.
 func (*DamageEventComp) Descriptor() ([]byte, []int) {
-	return file_proto_common_component_buff_comp_proto_rawDescGZIP(), []int{3}
+	return file_proto_common_component_buff_comp_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *DamageEventComp) GetSkillId() uint64 {
@@ -334,7 +396,7 @@ type BuffNoDamageOrSkillHitInLastSecondsComp struct {
 
 func (x *BuffNoDamageOrSkillHitInLastSecondsComp) Reset() {
 	*x = BuffNoDamageOrSkillHitInLastSecondsComp{}
-	mi := &file_proto_common_component_buff_comp_proto_msgTypes[4]
+	mi := &file_proto_common_component_buff_comp_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -346,7 +408,7 @@ func (x *BuffNoDamageOrSkillHitInLastSecondsComp) String() string {
 func (*BuffNoDamageOrSkillHitInLastSecondsComp) ProtoMessage() {}
 
 func (x *BuffNoDamageOrSkillHitInLastSecondsComp) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_component_buff_comp_proto_msgTypes[4]
+	mi := &file_proto_common_component_buff_comp_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -359,7 +421,7 @@ func (x *BuffNoDamageOrSkillHitInLastSecondsComp) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use BuffNoDamageOrSkillHitInLastSecondsComp.ProtoReflect.Descriptor instead.
 func (*BuffNoDamageOrSkillHitInLastSecondsComp) Descriptor() ([]byte, []int) {
-	return file_proto_common_component_buff_comp_proto_rawDescGZIP(), []int{4}
+	return file_proto_common_component_buff_comp_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *BuffNoDamageOrSkillHitInLastSecondsComp) GetLastTime() uint64 {
@@ -397,7 +459,12 @@ const file_proto_common_component_buff_comp_proto_rawDesc = "" +
 	"\x12has_added_sub_buff\x18\f \x01(\bR\x0fhasAddedSubBuff\x1a@\n" +
 	"\x12SubBuffListIdEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\bR\x05value:\x028\x01\"\x9e\x01\n" +
+	"\x05value\x18\x02 \x01(\bR\x05value:\x028\x01\"k\n" +
+	"\rSavedBuffComp\x12\"\n" +
+	"\rbuff_table_id\x18\x01 \x01(\rR\vbuffTableId\x12\x14\n" +
+	"\x05layer\x18\x02 \x01(\rR\x05layer\x12 \n" +
+	"\fexpire_at_ms\x18\x03 \x01(\x04R\n" +
+	"expireAtMs\"\x9e\x01\n" +
 	"\x0fDamageEventComp\x12\x19\n" +
 	"\bskill_id\x18\x01 \x01(\x04R\askillId\x12\x1f\n" +
 	"\vattacker_id\x18\x02 \x01(\x04R\n" +
@@ -421,18 +488,19 @@ func file_proto_common_component_buff_comp_proto_rawDescGZIP() []byte {
 	return file_proto_common_component_buff_comp_proto_rawDescData
 }
 
-var file_proto_common_component_buff_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_proto_common_component_buff_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_proto_common_component_buff_comp_proto_goTypes = []any{
 	(*BuffContextComp)(nil),                         // 0: BuffContextComp
 	(*BuffPeriodicBuffComp)(nil),                    // 1: BuffPeriodicBuffComp
 	(*BuffComp)(nil),                                // 2: BuffComp
-	(*DamageEventComp)(nil),                         // 3: DamageEventComp
-	(*BuffNoDamageOrSkillHitInLastSecondsComp)(nil), // 4: BuffNoDamageOrSkillHitInLastSecondsComp
-	nil, // 5: BuffComp.SubBuffListIdEntry
+	(*SavedBuffComp)(nil),                           // 3: SavedBuffComp
+	(*DamageEventComp)(nil),                         // 4: DamageEventComp
+	(*BuffNoDamageOrSkillHitInLastSecondsComp)(nil), // 5: BuffNoDamageOrSkillHitInLastSecondsComp
+	nil, // 6: BuffComp.SubBuffListIdEntry
 }
 var file_proto_common_component_buff_comp_proto_depIdxs = []int32{
 	1, // 0: BuffComp.periodic:type_name -> BuffPeriodicBuffComp
-	5, // 1: BuffComp.sub_buff_list_id:type_name -> BuffComp.SubBuffListIdEntry
+	6, // 1: BuffComp.sub_buff_list_id:type_name -> BuffComp.SubBuffListIdEntry
 	2, // [2:2] is the sub-list for method output_type
 	2, // [2:2] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
@@ -451,7 +519,7 @@ func file_proto_common_component_buff_comp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_component_buff_comp_proto_rawDesc), len(file_proto_common_component_buff_comp_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -18,7 +18,6 @@ import (
 
 	redv9 "github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 )
 
 // 观战档位与 L1 / L2 准入(battle-spectate-tiered-fanout.md §3、§15.6;spectate:* 只有 match 读写):
@@ -85,7 +84,7 @@ return wanted
 
 // raiseSpectateTier 把本场档位升到 wanted(已不低于它就不动),返回写后的实际档位。
 func raiseSpectateTier(ctx context.Context, s *svc.ServiceContext, battleId uint64, wanted battlepb.ESpectateTier) (battlepb.ESpectateTier, error) {
-	res, err := s.MatchRedis.EvalCtx(ctx, raiseSpectateTierScript, []string{spectateTierKey(battleId)}, int(wanted), spectateTTLSeconds)
+	res, err := s.MatchRedis.Eval(ctx, raiseSpectateTierScript, []string{spectateTierKey(battleId)}, int(wanted), spectateTTLSeconds).Result()
 	if err != nil {
 		return battlepb.ESpectateTier_SPECTATE_TIER_DIRECT, fmt.Errorf("升观战档位失败: %w", err)
 	}
@@ -96,12 +95,12 @@ func raiseSpectateTier(ctx context.Context, s *svc.ServiceContext, battleId uint
 // readSpectateTier 读本场档位,键不存在 = DIRECT。读不出来或值不认识一律报错(fail-closed):猜 DIRECT 会让热门局的
 // 观众全部回去撞 L0,猜高了会跳过 battle 的准入。
 func readSpectateTier(ctx context.Context, s *svc.ServiceContext, battleId uint64) (battlepb.ESpectateTier, error) {
-	raw, err := s.MatchRedis.GetCtx(ctx, spectateTierKey(battleId))
+	raw, err := s.MatchRedis.Get(ctx, spectateTierKey(battleId)).Result()
+	if errors.Is(err, redv9.Nil) || (err == nil && raw == "") {
+		return battlepb.ESpectateTier_SPECTATE_TIER_DIRECT, nil
+	}
 	if err != nil {
 		return battlepb.ESpectateTier_SPECTATE_TIER_DIRECT, fmt.Errorf("读观战档位失败: %w", err)
-	}
-	if raw == "" {
-		return battlepb.ESpectateTier_SPECTATE_TIER_DIRECT, nil
 	}
 	value, err := strconv.ParseInt(raw, 10, 32)
 	if err != nil {
@@ -191,8 +190,8 @@ return 1
 
 // relayGateAttached 查本 gate 的这个实例是否已在 battle 挂上。node 相同而实例不同(gate 重启)要重新挂,battle 会覆盖旧实例。
 func relayGateAttached(ctx context.Context, s *svc.ServiceContext, battleId uint64, viewer spectateLobbyViewer) (bool, error) {
-	instance, err := s.MatchRedis.HgetCtx(ctx, spectateRelayGatesKey(battleId), strconv.FormatUint(uint64(viewer.gateNodeId), 10))
-	if errors.Is(err, redis.Nil) {
+	instance, err := s.MatchRedis.HGet(ctx, spectateRelayGatesKey(battleId), strconv.FormatUint(uint64(viewer.gateNodeId), 10)).Result()
+	if errors.Is(err, redv9.Nil) {
 		return false, nil
 	}
 	if err != nil {
@@ -206,8 +205,8 @@ func relayGateAttached(ctx context.Context, s *svc.ServiceContext, battleId uint
 func recordRelayGate(ctx context.Context, s *svc.ServiceContext, battleId uint64, viewer spectateLobbyViewer) {
 	writeCtx, cancel := spectateBookkeepingContext(ctx)
 	defer cancel()
-	if _, err := s.MatchRedis.EvalCtx(writeCtx, recordRelayGateScript, []string{spectateRelayGatesKey(battleId)},
-		strconv.FormatUint(uint64(viewer.gateNodeId), 10), viewer.gateInstanceId, spectateTTLSeconds); err != nil {
+	if err := s.MatchRedis.Eval(writeCtx, recordRelayGateScript, []string{spectateRelayGatesKey(battleId)},
+		strconv.FormatUint(uint64(viewer.gateNodeId), 10), viewer.gateInstanceId, spectateTTLSeconds).Err(); err != nil {
 		logx.Errorf("[spectate] Failed to record relay gate (next viewer attaches again) battle=%d gate=%d: %v", battleId, viewer.gateNodeId, err)
 	}
 }
@@ -286,8 +285,8 @@ func claimBroadcastQuota(ctx context.Context, s *svc.ServiceContext, battleId, e
 		return broadcastQuotaFull, fmt.Errorf("count the global broadcast quota: %w", err)
 	}
 	others := sumSpectateBuckets(counts) - counts[spectateIndexBucket(battleId)]
-	res, err := s.MatchRedis.EvalCtx(ctx, claimBroadcastQuotaScript, []string{spectateBroadcastIndex.keyFor(battleId)},
-		strconv.FormatUint(nowMs, 10), limit, strconv.FormatUint(battleId, 10), strconv.FormatUint(expiryMs, 10), others)
+	res, err := s.MatchRedis.Eval(ctx, claimBroadcastQuotaScript, []string{spectateBroadcastIndex.keyFor(battleId)},
+		strconv.FormatUint(nowMs, 10), limit, strconv.FormatUint(battleId, 10), strconv.FormatUint(expiryMs, 10), others).Result()
 	if err != nil {
 		return broadcastQuotaFull, fmt.Errorf("claim the global broadcast quota: %w", err)
 	}
@@ -309,7 +308,7 @@ func claimBroadcastQuota(ctx context.Context, s *svc.ServiceContext, battleId, e
 // liveBroadcastQuota 清掉各配额桶已到期的项(score ≤ nowMs),返回各桶剩下的项数。同一个桶的两条命令在同一个 pipeline 里按序执行。
 // 拆桶之后本桶 Lua 只清本桶,别的桶的过期项靠这里回收。
 func liveBroadcastQuota(ctx context.Context, s *svc.ServiceContext, nowMs uint64) ([]int64, error) {
-	cmds, err := eachSpectateBucket(ctx, s.MatchRedis, spectateBroadcastIndex, func(pipe redis.Pipeliner, key string) *redv9.IntCmd {
+	cmds, err := eachSpectateBucket(ctx, s.MatchRedis, spectateBroadcastIndex, func(pipe redv9.Pipeliner, key string) *redv9.IntCmd {
 		pipe.ZRemRangeByScore(ctx, key, "-inf", strconv.FormatUint(nowMs, 10))
 		return pipe.ZCard(ctx, key)
 	})
@@ -360,7 +359,8 @@ func promoteSpectateBroadcast(ctx context.Context, s *svc.ServiceContext, record
 	if s.Config.Spectate.BroadcastMaxConcurrent <= 0 {
 		return spectateSource{}, false, 0
 	}
-	leased, err := s.MatchRedis.SetnxExCtx(ctx, spectatePromoteTryKey(battleId), "1", spectatePromoteLeaseSeconds)
+	// 结果未知时句柄不重发、原样报错(留在原档):租约若已写入就白占 3 秒,等它到期,与失败不提前释放同一种退避。
+	leased, err := s.MatchRedis.SetNX(ctx, spectatePromoteTryKey(battleId), "1", spectatePromoteLeaseSeconds*time.Second).Result()
 	if err != nil {
 		logx.Errorf("[spectate] Broadcast promotion failed to take attempt lease; staying on current tier battle=%d: %v", battleId, err)
 		metrics.ObserveSpectatePromote(metrics.SpectatePromoteRPCFailed)
@@ -407,7 +407,7 @@ func promoteSpectateBroadcast(ctx context.Context, s *svc.ServiceContext, record
 // recordBroadcastQuota 把正在广播的一场记到全服配额上,score = 战斗期限。不看 B:battle 已经在广播了,账上必须有它,超额也记,
 // 后面的抢占才会被挡住,实际 L2 场数不再继续突破 B。
 func recordBroadcastQuota(ctx context.Context, s *svc.ServiceContext, battleId, deadlineMs uint64) {
-	if _, err := s.MatchRedis.ZaddCtx(ctx, spectateBroadcastIndex.keyFor(battleId), int64(deadlineMs), strconv.FormatUint(battleId, 10)); err != nil {
+	if err := spectateBroadcastIndex.add(ctx, s.MatchRedis, battleId, int64(deadlineMs)); err != nil {
 		logx.Errorf("[spectate] Failed to record broadcast quota battle=%d: %v", battleId, err)
 	}
 }
@@ -426,7 +426,7 @@ func releaseBroadcastQuotaUnlessPromoted(ctx context.Context, s *svc.ServiceCont
 	if tier == battlepb.ESpectateTier_SPECTATE_TIER_BROADCAST {
 		return
 	}
-	if _, err := s.MatchRedis.ZremCtx(writeCtx, spectateBroadcastIndex.keyFor(battleId), strconv.FormatUint(battleId, 10)); err != nil {
+	if err := spectateBroadcastIndex.remove(writeCtx, s.MatchRedis, battleId); err != nil {
 		logx.Errorf("[spectate] Failed to release broadcast quota (expires with the battle deadline) battle=%d: %v", battleId, err)
 	}
 }
@@ -438,19 +438,19 @@ func spectatePromoteDue(ctx context.Context, s *svc.ServiceContext, battleId uin
 		return false
 	}
 	if conf.BroadcastAutoGateThreshold > 0 {
-		gates, err := s.MatchRedis.HlenCtx(ctx, spectateRelayGatesKey(battleId))
+		gates, err := s.MatchRedis.HLen(ctx, spectateRelayGatesKey(battleId)).Result()
 		if err != nil {
 			logx.Errorf("[spectate] Failed to count relay gates battle=%d: %v", battleId, err)
-		} else if gates >= conf.BroadcastAutoGateThreshold {
+		} else if gates >= int64(conf.BroadcastAutoGateThreshold) {
 			return true
 		}
 	}
-	featured, err := s.MatchRedis.ExistsCtx(ctx, spectateFeaturedKey(battleId))
+	featured, err := s.MatchRedis.Exists(ctx, spectateFeaturedKey(battleId)).Result()
 	if err != nil {
 		logx.Errorf("[spectate] Failed to read featured flag battle=%d: %v", battleId, err)
 		return false
 	}
-	return featured
+	return featured == 1
 }
 
 // ---- 准入 ----
@@ -535,11 +535,11 @@ func admitSpectateLobby(ctx context.Context, s *svc.ServiceContext, record *matc
 // markSpectateFeatured 写赛事局标记与索引,TTL = spectateTTLSeconds。先写标记后写索引,取消时反过来:索引里有的一定有标记,
 // 列表不必逐个核对标记。
 func markSpectateFeatured(ctx context.Context, s *svc.ServiceContext, battleId uint64) error {
-	if err := s.MatchRedis.SetexCtx(ctx, spectateFeaturedKey(battleId), "1", spectateTTLSeconds); err != nil {
+	if err := s.MatchRedis.Set(ctx, spectateFeaturedKey(battleId), "1", time.Duration(spectateTTLSeconds)*time.Second).Err(); err != nil {
 		return fmt.Errorf("写赛事局标记失败: %w", err)
 	}
 	expiryMs := int64(nowMs()) + int64(spectateTTLSeconds)*1000
-	if _, err := s.MatchRedis.ZaddCtx(ctx, spectateFeaturedIndex.keyFor(battleId), expiryMs, strconv.FormatUint(battleId, 10)); err != nil {
+	if err := spectateFeaturedIndex.add(ctx, s.MatchRedis, battleId, expiryMs); err != nil {
 		return fmt.Errorf("写赛事局索引失败: %w", err)
 	}
 	return nil
@@ -547,10 +547,10 @@ func markSpectateFeatured(ctx context.Context, s *svc.ServiceContext, battleId u
 
 // unmarkSpectateFeatured 取消赛事局标记,只删标记与索引,不降档(§15.6:一场只升不降)。
 func unmarkSpectateFeatured(ctx context.Context, s *svc.ServiceContext, battleId uint64) error {
-	if _, err := s.MatchRedis.ZremCtx(ctx, spectateFeaturedIndex.keyFor(battleId), strconv.FormatUint(battleId, 10)); err != nil {
+	if err := spectateFeaturedIndex.remove(ctx, s.MatchRedis, battleId); err != nil {
 		return fmt.Errorf("删赛事局索引失败: %w", err)
 	}
-	if _, err := s.MatchRedis.DelCtx(ctx, spectateFeaturedKey(battleId)); err != nil {
+	if err := s.MatchRedis.Del(ctx, spectateFeaturedKey(battleId)).Err(); err != nil {
 		return fmt.Errorf("删赛事局标记失败: %w", err)
 	}
 	return nil

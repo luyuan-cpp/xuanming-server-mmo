@@ -20,7 +20,7 @@ spec:
     - name: kafka.bound-consumer
       interval: 30s
       rules:
-        # 有记录转了死信:回调失败到预算(guild-trial 20 次,约 7.5 分钟)或判成无法处理(解不出),原件写进 <group>-dlq 之后提交越过它。
+        # 有记录转了死信:回调失败到预算(guild-trial 20 次,退避带抖动,约 4–7.5 分钟)或判成无法处理(解不出),原件写进 <group>-dlq 之后提交越过它。
         # 数据没丢(死信保留 90 天),但这条没被处理:修好原因之后要人工重放。任何一条都响。
         - alert: KafkaBoundConsumerDeadLettered
           expr: |
@@ -38,9 +38,11 @@ spec:
               巡检器多半已从 match 的 SQL 终局结算过,重放会走幂等闸门回「已结算」。
 
         # 死信写不进去:记录留在原处、按退避重写,这个分区停在这一条上,直到死信写成功(不越过、不跳过)。
+        # 连续 5 分钟里每个 2 分钟窗口都有写失败才响:重写的退避封顶 30 秒,持续失败时每个窗口至少有几次;单次瞬时失败不响。
+        # 统计窗口必须短于 for:窗口取 10 分钟的话,一次失败会在窗口里留 10 分钟,照样撑过 for。
         - alert: KafkaBoundConsumerDeadLetterWriteFailing
           expr: |
-            sum by (group) (increase(kafka_bound_consumer_retry_total{stage="dead_letter"}[10m])) > 0
+            sum by (group) (increase(kafka_bound_consumer_retry_total{stage="dead_letter"}[2m])) > 0
           for: 5m
           labels:
             severity: warning
@@ -48,7 +50,7 @@ spec:
             summary: "消费组 {{ $labels.group }} 写死信持续失败,所在分区停在毒丸上"
             description: >-
               查服务日志 `[kafka-bound]` 里 stage=dead_letter 的错误:死信 topic 不存在(启动时 EnsureTopics 没建成)、ISR 不足(acks=all 写不进)、
-              broker 不可达。修好 Kafka 侧之后自动写入并继续消费。积压期间盯住对应消费组的保留期丢失告警。
+              broker 不可达、原件加上死信头之后超过死信 topic 的单条上限(2MiB)。修好 Kafka 侧之后自动写入并继续消费。积压期间盯住对应消费组的保留期丢失告警。
 
         # 保留期删掉了本组还没处理的记录:**数据已丢**。owner 不静默跳过,而是 HOLD 并永久停止取新(维护排空也会因此 HOLD)。
         - alert: KafkaBoundConsumerRetentionLoss
@@ -61,7 +63,8 @@ spec:
             summary: "消费组 {{ $labels.group }} 发现保留期删掉了还没处理的记录,消费者已停"
             description: >-
               服务日志 `RECORDS DELETED BY RETENTION BEFORE THIS GROUP PROCESSED THEM` 一行给出分区、应到 offset 与日志起点(丢失范围)。
-              这个组在该分区上再也越不过缺口:每次打开分区都会因「提交点越过保留范围」再次 HOLD,data_service 会反复退出。
+              这个组在该分区上再也越不过缺口:每次打开分区都会因「提交点越过保留范围」再次 HOLD 并再计一次(这条会一直响到位点被重置),
+              data_service 会反复退出。
               按 docs/ops/kafka-bound-consumer-runbook.md 记录丢失范围、上报负责人,停掉该组全部消费者后把该分区的组内位点重置到日志起点,再启动。
 
         # owner 记了 HOLD(结局未知)。维护排空之外出现,就是这个消费组的 owner 永久停止取新了,要人看。

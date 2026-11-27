@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"shared/clusterredis"
 	"shared/playerredis"
 
 	"github.com/stretchr/testify/require"
@@ -89,7 +90,7 @@ func TestEffectivePlayerRedis(t *testing.T) {
 	require.Equal(t, []string{"redis.infra:6379"}, got.Addrs)
 	require.False(t, got.Cluster)
 	require.Equal(t, "shared-secret", got.Password)
-	require.Equal(t, playerRedisFallbackPoolSize, got.PoolSizePerNode)
+	require.Equal(t, redisSectionFallbackPoolSize, got.PoolSizePerNode)
 	require.NoError(t, got.Validate())
 
 	c.PlayerRedis = playerredis.Config{Addrs: []string{"a:7000", "b:7000"}, Cluster: true}
@@ -97,6 +98,33 @@ func TestEffectivePlayerRedis(t *testing.T) {
 	require.Equal(t, []string{"a:7000", "b:7000"}, got.Addrs)
 	require.True(t, got.Cluster)
 	require.Empty(t, got.Password)
+}
+
+// 没写 MatchRedis.Addrs:私有键落到 Redis 段那一个实例(本地单库形态);写了就完全按它来,不带共享实例的口令。
+func TestEffectiveMatchRedis(t *testing.T) {
+	var c Config
+	c.Redis.Host = "redis.infra:6379"
+	c.Redis.Pass = "shared-secret"
+	got := c.EffectiveMatchRedis()
+	require.Equal(t, []string{"redis.infra:6379"}, got.Addrs)
+	require.False(t, got.Cluster)
+	require.Equal(t, "shared-secret", got.Password)
+	require.Equal(t, redisSectionFallbackPoolSize, got.PoolSizePerNode)
+	require.NoError(t, got.Validate())
+
+	c.MatchRedis = clusterredis.Config{Addrs: []string{"m0:6379", "m1:6379"}, Cluster: true, PoolSizePerNode: 8}
+	got = c.EffectiveMatchRedis()
+	require.Equal(t, []string{"m0:6379", "m1:6379"}, got.Addrs)
+	require.True(t, got.Cluster)
+	require.Equal(t, 8, got.PoolSizePerNode)
+	require.Empty(t, got.Password)
+}
+
+// Cluster=true 却没写种子是配错了,加载期拒绝,不能静默落到 Redis 段的实例上。
+func TestValidateRejectsMatchRedisClusterWithoutSeeds(t *testing.T) {
+	c := validForTest()
+	c.MatchRedis.Cluster = true
+	require.ErrorContains(t, c.Validate(), "MatchRedis")
 }
 
 // etc 下的 yaml 不写地址,只写明连接池上限。

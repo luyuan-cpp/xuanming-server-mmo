@@ -201,6 +201,10 @@ type BuffTick_on_applyComp struct {
     Value uint32
 }
 
+type BuffKeep_on_logoutComp struct {
+    Value uint32
+}
+
 type BuffInterval_effectComp struct {
     Values []float64
 }
@@ -404,6 +408,10 @@ func MakeBuffRequire_living_casterComp(row *pb.BuffTable) BuffRequire_living_cas
 
 func MakeBuffTick_on_applyComp(row *pb.BuffTable) BuffTick_on_applyComp {
     return BuffTick_on_applyComp{Value: row.TickOnApply}
+}
+
+func MakeBuffKeep_on_logoutComp(row *pb.BuffTable) BuffKeep_on_logoutComp {
+    return BuffKeep_on_logoutComp{Value: row.KeepOnLogout}
 }
 
 func MakeBuffInterval_effectComp(row *pb.BuffTable) BuffInterval_effectComp {

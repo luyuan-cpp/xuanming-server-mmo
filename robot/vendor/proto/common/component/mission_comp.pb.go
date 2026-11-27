@@ -197,11 +197,13 @@ func (x *MissionComp) GetData() []byte {
 }
 
 type MissionListComp struct {
-	state            protoimpl.MessageState  `protogen:"open.v1"`
-	Missions         map[uint32]*MissionComp `protobuf:"bytes,1,rep,name=missions,proto3" json:"missions,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	CompleteMissions []byte                  `protobuf:"bytes,2,opt,name=complete_missions,json=completeMissions,proto3" json:"complete_missions,omitempty"`
-	MissionBeginTime map[uint32]uint64       `protobuf:"bytes,3,rep,name=mission_begin_time,json=missionBeginTime,proto3" json:"mission_begin_time,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	Type             uint32                  `protobuf:"varint,4,opt,name=type,proto3" json:"type,omitempty"`
+	state    protoimpl.MessageState  `protogen:"open.v1"`
+	Missions map[uint32]*MissionComp `protobuf:"bytes,1,rep,name=missions,proto3" json:"missions,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// 已完成任务的存档位图:第 i 位 = 任务表位序 i,每字节低位在前,末尾全 0 的字节不写。
+	// 位序由导表器只增不改、永不复用地发放(tools/data_table_exporter 的位序状态文件),所以能直接落盘。
+	// 只在存档里有值,读写走 MissionsComp::CompletedBitsForSave / RestoreCompletedBits;运行时的任务列表里它是空的。
+	CompleteMissions []byte `protobuf:"bytes,2,opt,name=complete_missions,json=completeMissions,proto3" json:"complete_missions,omitempty"`
+	Type             uint32 `protobuf:"varint,4,opt,name=type,proto3" json:"type,omitempty"`
 	// 活动完成事实与任务、背包同属玩家快照；追踪偏好不进入这里。
 	ActivityLedger *PlayerActivityLedger `protobuf:"bytes,5,opt,name=activity_ledger,json=activityLedger,proto3" json:"activity_ledger,omitempty"`
 	unknownFields  protoimpl.UnknownFields
@@ -248,13 +250,6 @@ func (x *MissionListComp) GetMissions() map[uint32]*MissionComp {
 func (x *MissionListComp) GetCompleteMissions() []byte {
 	if x != nil {
 		return x.CompleteMissions
-	}
-	return nil
-}
-
-func (x *MissionListComp) GetMissionBeginTime() map[uint32]uint64 {
-	if x != nil {
-		return x.MissionBeginTime
 	}
 	return nil
 }
@@ -449,12 +444,18 @@ func (x *PlayerActivityClaimRecord) GetClaimedAtMs() uint64 {
 	return 0
 }
 
+// 保留策略见 docs/design/player-features-ui.md「领取身份、提交与重启恢复」:三部分都不随时间增长。
 type PlayerActivityLedger struct {
-	state         protoimpl.MessageState       `protogen:"open.v1"`
-	Sources       []*PlayerActivityPointSource `protobuf:"bytes,1,rep,name=sources,proto3" json:"sources,omitempty"`
-	Claims        []*PlayerActivityClaimRecord `protobuf:"bytes,2,rep,name=claims,proto3" json:"claims,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 积分来源:只留当前规则的当前周期(积分只按当前周期算),周期结束后在下一次记来源时删掉。
+	Sources []*PlayerActivityPointSource `protobuf:"bytes,1,rep,name=sources,proto3" json:"sources,omitempty"`
+	// 领取记录:当前周期全留,已结束周期只留最新的若干条供重放原请求。
+	Claims []*PlayerActivityClaimRecord `protobuf:"bytes,2,rep,name=claims,proto3" json:"claims,omitempty"`
+	// 已经记过积分的任务(一次性任务的永久去重):位图,格式同 MissionListComp.complete_missions,
+	// 第 i 位 = 任务表位序 i。来源删了也靠它挡住同一任务再记一次。
+	CreditedMissions []byte `protobuf:"bytes,3,opt,name=credited_missions,json=creditedMissions,proto3" json:"credited_missions,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *PlayerActivityLedger) Reset() {
@@ -497,6 +498,13 @@ func (x *PlayerActivityLedger) GetSources() []*PlayerActivityPointSource {
 func (x *PlayerActivityLedger) GetClaims() []*PlayerActivityClaimRecord {
 	if x != nil {
 		return x.Claims
+	}
+	return nil
+}
+
+func (x *PlayerActivityLedger) GetCreditedMissions() []byte {
+	if x != nil {
+		return x.CreditedMissions
 	}
 	return nil
 }
@@ -560,24 +568,20 @@ const file_proto_common_component_mission_comp_proto_rawDesc = "" +
 	"\x15E_MISSION_ACHIEVEMENT\x10\x01\x12\x16\n" +
 	"\x12E_MISSION_COMPLETE\x10\x02\x12\x16\n" +
 	"\x12E_MISSION_TIME_OUT\x10\x03\x12\x13\n" +
-	"\x0fE_MISSION_FAILD\x10\x04\"\xa2\x04\n" +
+	"\x0fE_MISSION_FAILD\x10\x04\"\x8d\x03\n" +
 	"\x0fMissionListComp\x12:\n" +
 	"\bmissions\x18\x01 \x03(\v2\x1e.MissionListComp.MissionsEntryR\bmissions\x12+\n" +
-	"\x11complete_missions\x18\x02 \x01(\fR\x10completeMissions\x12T\n" +
-	"\x12mission_begin_time\x18\x03 \x03(\v2&.MissionListComp.MissionBeginTimeEntryR\x10missionBeginTime\x12\x12\n" +
+	"\x11complete_missions\x18\x02 \x01(\fR\x10completeMissions\x12\x12\n" +
 	"\x04type\x18\x04 \x01(\rR\x04type\x12>\n" +
 	"\x0factivity_ledger\x18\x05 \x01(\v2\x15.PlayerActivityLedgerR\x0eactivityLedger\x1aI\n" +
 	"\rMissionsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\"\n" +
-	"\x05value\x18\x02 \x01(\v2\f.MissionCompR\x05value:\x028\x01\x1aC\n" +
-	"\x15MissionBeginTimeEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\"l\n" +
+	"\x05value\x18\x02 \x01(\v2\f.MissionCompR\x05value:\x028\x01\"l\n" +
 	"\reMissionScope\x12\x12\n" +
 	"\x0ekPlayerMission\x10\x00\x12\x15\n" +
 	"\x11kPlayerAchievment\x10\x01\x12\x18\n" +
 	"\x14kPlayerDailyActivity\x10\x02\x12\x16\n" +
-	"\x12kPlayerMissionSize\x10\x03\"\xe4\x01\n" +
+	"\x12kPlayerMissionSize\x10\x03J\x04\b\x03\x10\x04\"\xe4\x01\n" +
 	"\x19PlayerActivityPointSource\x12#\n" +
 	"\rmission_scope\x18\x01 \x01(\rR\fmissionScope\x12\x1d\n" +
 	"\n" +
@@ -594,10 +598,11 @@ const file_proto_common_component_mission_comp_proto_rawDesc = "" +
 	"\n" +
 	"request_id\x18\x05 \x01(\tR\trequestId\x12\x1b\n" +
 	"\treward_id\x18\x06 \x01(\rR\brewardId\x12\"\n" +
-	"\rclaimed_at_ms\x18\a \x01(\x04R\vclaimedAtMs\"\x80\x01\n" +
+	"\rclaimed_at_ms\x18\a \x01(\x04R\vclaimedAtMs\"\xad\x01\n" +
 	"\x14PlayerActivityLedger\x124\n" +
 	"\asources\x18\x01 \x03(\v2\x1a.PlayerActivityPointSourceR\asources\x122\n" +
-	"\x06claims\x18\x02 \x03(\v2\x1a.PlayerActivityClaimRecordR\x06claims\"\xb3\x01\n" +
+	"\x06claims\x18\x02 \x03(\v2\x1a.PlayerActivityClaimRecordR\x06claims\x12+\n" +
+	"\x11credited_missions\x18\x03 \x01(\fR\x10creditedMissions\"\xb3\x01\n" +
 	"\x0eRewardListComp\x12Z\n" +
 	"\x15can_reward_mission_id\x18\x01 \x03(\v2'.RewardListComp.CanRewardMissionIdEntryR\x12canRewardMissionId\x1aE\n" +
 	"\x17CanRewardMissionIdEntry\x12\x10\n" +
@@ -617,7 +622,7 @@ func file_proto_common_component_mission_comp_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_common_component_mission_comp_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_proto_common_component_mission_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_proto_common_component_mission_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_proto_common_component_mission_comp_proto_goTypes = []any{
 	(MissionCompEMissionStatus)(0),    // 0: MissionComp.eMissionStatus
 	(MissionListCompEMissionScope)(0), // 1: MissionListComp.eMissionScope
@@ -628,22 +633,20 @@ var file_proto_common_component_mission_comp_proto_goTypes = []any{
 	(*PlayerActivityLedger)(nil),      // 6: PlayerActivityLedger
 	(*RewardListComp)(nil),            // 7: RewardListComp
 	nil,                               // 8: MissionListComp.MissionsEntry
-	nil,                               // 9: MissionListComp.MissionBeginTimeEntry
-	nil,                               // 10: RewardListComp.CanRewardMissionIdEntry
+	nil,                               // 9: RewardListComp.CanRewardMissionIdEntry
 }
 var file_proto_common_component_mission_comp_proto_depIdxs = []int32{
-	8,  // 0: MissionListComp.missions:type_name -> MissionListComp.MissionsEntry
-	9,  // 1: MissionListComp.mission_begin_time:type_name -> MissionListComp.MissionBeginTimeEntry
-	6,  // 2: MissionListComp.activity_ledger:type_name -> PlayerActivityLedger
-	4,  // 3: PlayerActivityLedger.sources:type_name -> PlayerActivityPointSource
-	5,  // 4: PlayerActivityLedger.claims:type_name -> PlayerActivityClaimRecord
-	10, // 5: RewardListComp.can_reward_mission_id:type_name -> RewardListComp.CanRewardMissionIdEntry
-	2,  // 6: MissionListComp.MissionsEntry.value:type_name -> MissionComp
-	7,  // [7:7] is the sub-list for method output_type
-	7,  // [7:7] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	8, // 0: MissionListComp.missions:type_name -> MissionListComp.MissionsEntry
+	6, // 1: MissionListComp.activity_ledger:type_name -> PlayerActivityLedger
+	4, // 2: PlayerActivityLedger.sources:type_name -> PlayerActivityPointSource
+	5, // 3: PlayerActivityLedger.claims:type_name -> PlayerActivityClaimRecord
+	9, // 4: RewardListComp.can_reward_mission_id:type_name -> RewardListComp.CanRewardMissionIdEntry
+	2, // 5: MissionListComp.MissionsEntry.value:type_name -> MissionComp
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_component_mission_comp_proto_init() }
@@ -657,7 +660,7 @@ func file_proto_common_component_mission_comp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_component_mission_comp_proto_rawDesc), len(file_proto_common_component_mission_comp_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   9,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

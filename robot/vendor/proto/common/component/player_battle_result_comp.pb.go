@@ -148,10 +148,50 @@ type PlayerBattleResult struct {
 	BattleConfigId uint32                        `protobuf:"varint,16,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"` // 战斗配置号;0 = 结算原件没带
 	// 掉落放不进人物背包与临时背包,整批改由邮件发放(docs/design/battle-overflow-mail.md)。items_gained 照常列出这批掉落
 	// (它们已经是本人的,只是要去邮箱领);客户端据此在结算屏提示。
-	ItemsMailed   bool   `protobuf:"varint,17,opt,name=items_mailed,json=itemsMailed,proto3" json:"items_mailed,omitempty"`
-	ExpGain       uint64 `protobuf:"varint,18,opt,name=exp_gain,json=expGain,proto3" json:"exp_gain,omitempty"` // 本局实际计入 LevelComp.total_exp 的经验；旧结果缺字段为 0
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	ItemsMailed                bool     `protobuf:"varint,17,opt,name=items_mailed,json=itemsMailed,proto3" json:"items_mailed,omitempty"`
+	ExpGain                    uint64   `protobuf:"varint,18,opt,name=exp_gain,json=expGain,proto3" json:"exp_gain,omitempty"`                                                              // 本局实际计入 LevelComp.total_exp 的经验；旧结果缺字段为 0
+	MaterialCreditUnitsAdded   uint32   `protobuf:"varint,19,opt,name=material_credit_units_added,json=materialCreditUnitsAdded,proto3" json:"material_credit_units_added,omitempty"`       // 本局实际新增的装备材料可领额度(0 或 10)
+	SeasonId                   uint32   `protobuf:"varint,20,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`                                                           // 论剑排位赛季编号(非排位为 0)
+	TrialJournalEntryId        uint32   `protobuf:"varint,21,opt,name=trial_journal_entry_id,json=trialJournalEntryId,proto3" json:"trial_journal_entry_id,omitempty"`                      // 五行试炼志关联关卡格 ID(0 = 非试炼志对局，结算页据此决定是否显示「看试炼志」)
+	TrialNewlyLitSealIds       []uint32 `protobuf:"varint,22,rep,packed,name=trial_newly_lit_seal_ids,json=trialNewlyLitSealIds,proto3" json:"trial_newly_lit_seal_ids,omitempty"`          // 本局首次点亮的战法印 ID 列表
+	TrialNewSoloBest           bool     `protobuf:"varint,23,opt,name=trial_new_solo_best,json=trialNewSoloBest,proto3" json:"trial_new_solo_best,omitempty"`                               // 本局是否刷新单人最少回合纪录
+	TrialNewCoopBest           bool     `protobuf:"varint,24,opt,name=trial_new_coop_best,json=trialNewCoopBest,proto3" json:"trial_new_coop_best,omitempty"`                               // 本局是否刷新好友合战最快回合纪录
+	MaterialTradableUnitsAdded uint32   `protobuf:"varint,25,opt,name=material_tradable_units_added,json=materialTradableUnitsAdded,proto3" json:"material_tradable_units_added,omitempty"` // 本局实际新增材料中可交易份数（0 或 1；仅胜局且账号/阶段余量充足时为 1）
+	MaterialPvpLossIneligible  bool     `protobuf:"varint,26,opt,name=material_pvp_loss_ineligible,json=materialPvpLossIneligible,proto3" json:"material_pvp_loss_ineligible,omitempty"`    // true = 本局为未达防挂机有效对抗门槛的 PVP 负/平局（+0 且不扣永久 660 额度）
+	// 瑞兽迎春限时活动结算增量（非活动局全 0/空）。
+	FestivalActivityInstanceId     uint32 `protobuf:"varint,27,opt,name=festival_activity_instance_id,json=festivalActivityInstanceId,proto3" json:"festival_activity_instance_id,omitempty"`
+	FestivalRewardIdentity         string `protobuf:"bytes,28,opt,name=festival_reward_identity,json=festivalRewardIdentity,proto3" json:"festival_reward_identity,omitempty"`
+	FestivalWinsBefore             uint32 `protobuf:"varint,29,opt,name=festival_wins_before,json=festivalWinsBefore,proto3" json:"festival_wins_before,omitempty"`
+	FestivalWinsAfter              uint32 `protobuf:"varint,30,opt,name=festival_wins_after,json=festivalWinsAfter,proto3" json:"festival_wins_after,omitempty"`
+	FestivalRequiredWins           uint32 `protobuf:"varint,31,opt,name=festival_required_wins,json=festivalRequiredWins,proto3" json:"festival_required_wins,omitempty"`
+	FestivalNewlyEligible          bool   `protobuf:"varint,32,opt,name=festival_newly_eligible,json=festivalNewlyEligible,proto3" json:"festival_newly_eligible,omitempty"`
+	MaterialAvailableUnitsAfter    uint64 `protobuf:"varint,33,opt,name=material_available_units_after,json=materialAvailableUnitsAfter,proto3" json:"material_available_units_after,omitempty"`
+	MaterialEarnableRemainingAfter uint32 `protobuf:"varint,34,opt,name=material_earnable_remaining_after,json=materialEarnableRemainingAfter,proto3" json:"material_earnable_remaining_after,omitempty"`
+	// 单槽赛季印本局结算增量（非赛季合格局全 0/false）。
+	SeasonSealPointsAdded    uint32 `protobuf:"varint,35,opt,name=season_seal_points_added,json=seasonSealPointsAdded,proto3" json:"season_seal_points_added,omitempty"`
+	SeasonSealProgressAfter  uint32 `protobuf:"varint,36,opt,name=season_seal_progress_after,json=seasonSealProgressAfter,proto3" json:"season_seal_progress_after,omitempty"`
+	SeasonSealMaxPoints      uint32 `protobuf:"varint,37,opt,name=season_seal_max_points,json=seasonSealMaxPoints,proto3" json:"season_seal_max_points,omitempty"`
+	SeasonHonorNewlyUnlocked bool   `protobuf:"varint,38,opt,name=season_honor_newly_unlocked,json=seasonHonorNewlyUnlocked,proto3" json:"season_honor_newly_unlocked,omitempty"`
+	Surrendered              bool   `protobuf:"varint,39,opt,name=surrendered,proto3" json:"surrendered,omitempty"` // true = 本方通过 PVP 延迟投降结束本局（重登补弹与现场结算同口径展示「体面认输」）
+	// 角色升级与战斗银两周上限增量（docs/planning/player-leveling-and-battle-economy-v1.md §2.3）。
+	LevelBefore               uint32 `protobuf:"varint,40,opt,name=level_before,json=levelBefore,proto3" json:"level_before,omitempty"`
+	LevelAfter                uint32 `protobuf:"varint,41,opt,name=level_after,json=levelAfter,proto3" json:"level_after,omitempty"`
+	TotalExpAfter             uint64 `protobuf:"varint,42,opt,name=total_exp_after,json=totalExpAfter,proto3" json:"total_exp_after,omitempty"`
+	NextLevelTotalExp         uint64 `protobuf:"varint,43,opt,name=next_level_total_exp,json=nextLevelTotalExp,proto3" json:"next_level_total_exp,omitempty"`
+	BattleSilverWeeklyUsed    uint64 `protobuf:"varint,44,opt,name=battle_silver_weekly_used,json=battleSilverWeeklyUsed,proto3" json:"battle_silver_weekly_used,omitempty"`
+	BattleSilverWeeklySoftCap uint64 `protobuf:"varint,45,opt,name=battle_silver_weekly_soft_cap,json=battleSilverWeeklySoftCap,proto3" json:"battle_silver_weekly_soft_cap,omitempty"`
+	BattleSilverDiminished    bool   `protobuf:"varint,46,opt,name=battle_silver_diminished,json=battleSilverDiminished,proto3" json:"battle_silver_diminished,omitempty"`
+	TrialVowMask              uint32 `protobuf:"varint,47,opt,name=trial_vow_mask,json=trialVowMask,proto3" json:"trial_vow_mask,omitempty"`            // 五行试炼志 V3：本局生效的试炼誓约位掩码（0=常规）
+	TrialNewVowBest           bool   `protobuf:"varint,48,opt,name=trial_new_vow_best,json=trialNewVowBest,proto3" json:"trial_new_vow_best,omitempty"` // 五行试炼志 V3：本局是否刷新该试炼格最高誓约纪录
+	TrialBattleId             uint64 `protobuf:"varint,49,opt,name=trial_battle_id,json=trialBattleId,proto3" json:"trial_battle_id,omitempty"`         // 五行试炼志 V3：可供一键发帖约战/回放的权威 battle_id（仅胜局非 0）
+	// 满级溢出流向「往季徽章追忆」的单局增量（与 BattleEndS2C 同源，断线补弹零丢失）。
+	RetroHonorSeasonId      uint32 `protobuf:"varint,50,opt,name=retro_honor_season_id,json=retroHonorSeasonId,proto3" json:"retro_honor_season_id,omitempty"`
+	RetroHonorPointsAdded   uint32 `protobuf:"varint,51,opt,name=retro_honor_points_added,json=retroHonorPointsAdded,proto3" json:"retro_honor_points_added,omitempty"`
+	RetroHonorProgressAfter uint32 `protobuf:"varint,52,opt,name=retro_honor_progress_after,json=retroHonorProgressAfter,proto3" json:"retro_honor_progress_after,omitempty"`
+	RetroHonorMaxPoints     uint32 `protobuf:"varint,53,opt,name=retro_honor_max_points,json=retroHonorMaxPoints,proto3" json:"retro_honor_max_points,omitempty"`
+	RetroHonorNewlyUnlocked bool   `protobuf:"varint,54,opt,name=retro_honor_newly_unlocked,json=retroHonorNewlyUnlocked,proto3" json:"retro_honor_newly_unlocked,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *PlayerBattleResult) Reset() {
@@ -310,6 +350,258 @@ func (x *PlayerBattleResult) GetExpGain() uint64 {
 	return 0
 }
 
+func (x *PlayerBattleResult) GetMaterialCreditUnitsAdded() uint32 {
+	if x != nil {
+		return x.MaterialCreditUnitsAdded
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetSeasonId() uint32 {
+	if x != nil {
+		return x.SeasonId
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetTrialJournalEntryId() uint32 {
+	if x != nil {
+		return x.TrialJournalEntryId
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetTrialNewlyLitSealIds() []uint32 {
+	if x != nil {
+		return x.TrialNewlyLitSealIds
+	}
+	return nil
+}
+
+func (x *PlayerBattleResult) GetTrialNewSoloBest() bool {
+	if x != nil {
+		return x.TrialNewSoloBest
+	}
+	return false
+}
+
+func (x *PlayerBattleResult) GetTrialNewCoopBest() bool {
+	if x != nil {
+		return x.TrialNewCoopBest
+	}
+	return false
+}
+
+func (x *PlayerBattleResult) GetMaterialTradableUnitsAdded() uint32 {
+	if x != nil {
+		return x.MaterialTradableUnitsAdded
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetMaterialPvpLossIneligible() bool {
+	if x != nil {
+		return x.MaterialPvpLossIneligible
+	}
+	return false
+}
+
+func (x *PlayerBattleResult) GetFestivalActivityInstanceId() uint32 {
+	if x != nil {
+		return x.FestivalActivityInstanceId
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetFestivalRewardIdentity() string {
+	if x != nil {
+		return x.FestivalRewardIdentity
+	}
+	return ""
+}
+
+func (x *PlayerBattleResult) GetFestivalWinsBefore() uint32 {
+	if x != nil {
+		return x.FestivalWinsBefore
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetFestivalWinsAfter() uint32 {
+	if x != nil {
+		return x.FestivalWinsAfter
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetFestivalRequiredWins() uint32 {
+	if x != nil {
+		return x.FestivalRequiredWins
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetFestivalNewlyEligible() bool {
+	if x != nil {
+		return x.FestivalNewlyEligible
+	}
+	return false
+}
+
+func (x *PlayerBattleResult) GetMaterialAvailableUnitsAfter() uint64 {
+	if x != nil {
+		return x.MaterialAvailableUnitsAfter
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetMaterialEarnableRemainingAfter() uint32 {
+	if x != nil {
+		return x.MaterialEarnableRemainingAfter
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetSeasonSealPointsAdded() uint32 {
+	if x != nil {
+		return x.SeasonSealPointsAdded
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetSeasonSealProgressAfter() uint32 {
+	if x != nil {
+		return x.SeasonSealProgressAfter
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetSeasonSealMaxPoints() uint32 {
+	if x != nil {
+		return x.SeasonSealMaxPoints
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetSeasonHonorNewlyUnlocked() bool {
+	if x != nil {
+		return x.SeasonHonorNewlyUnlocked
+	}
+	return false
+}
+
+func (x *PlayerBattleResult) GetSurrendered() bool {
+	if x != nil {
+		return x.Surrendered
+	}
+	return false
+}
+
+func (x *PlayerBattleResult) GetLevelBefore() uint32 {
+	if x != nil {
+		return x.LevelBefore
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetLevelAfter() uint32 {
+	if x != nil {
+		return x.LevelAfter
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetTotalExpAfter() uint64 {
+	if x != nil {
+		return x.TotalExpAfter
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetNextLevelTotalExp() uint64 {
+	if x != nil {
+		return x.NextLevelTotalExp
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetBattleSilverWeeklyUsed() uint64 {
+	if x != nil {
+		return x.BattleSilverWeeklyUsed
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetBattleSilverWeeklySoftCap() uint64 {
+	if x != nil {
+		return x.BattleSilverWeeklySoftCap
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetBattleSilverDiminished() bool {
+	if x != nil {
+		return x.BattleSilverDiminished
+	}
+	return false
+}
+
+func (x *PlayerBattleResult) GetTrialVowMask() uint32 {
+	if x != nil {
+		return x.TrialVowMask
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetTrialNewVowBest() bool {
+	if x != nil {
+		return x.TrialNewVowBest
+	}
+	return false
+}
+
+func (x *PlayerBattleResult) GetTrialBattleId() uint64 {
+	if x != nil {
+		return x.TrialBattleId
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetRetroHonorSeasonId() uint32 {
+	if x != nil {
+		return x.RetroHonorSeasonId
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetRetroHonorPointsAdded() uint32 {
+	if x != nil {
+		return x.RetroHonorPointsAdded
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetRetroHonorProgressAfter() uint32 {
+	if x != nil {
+		return x.RetroHonorProgressAfter
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetRetroHonorMaxPoints() uint32 {
+	if x != nil {
+		return x.RetroHonorMaxPoints
+	}
+	return 0
+}
+
+func (x *PlayerBattleResult) GetRetroHonorNewlyUnlocked() bool {
+	if x != nil {
+		return x.RetroHonorNewlyUnlocked
+	}
+	return false
+}
+
 type PlayerBattleResultComp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	LastResultSeq uint64                 `protobuf:"varint,1,opt,name=last_result_seq,json=lastResultSeq,proto3" json:"last_result_seq,omitempty"` // 发过的最大 result_seq,只增不减(淘汰旧条目不回退)
@@ -372,7 +664,7 @@ const file_proto_common_component_player_battle_result_comp_proto_rawDesc = "" +
 	"\x06amount\x18\x02 \x01(\x04R\x06amount\"R\n" +
 	"\x16PlayerBattleResultItem\x12\"\n" +
 	"\ritem_table_id\x18\x01 \x01(\rR\vitemTableId\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x04R\x05count\"\xa0\x05\n" +
+	"\x05count\x18\x02 \x01(\x04R\x05count\"\x9e\x14\n" +
 	"\x12PlayerBattleResult\x12\x1d\n" +
 	"\n" +
 	"result_seq\x18\x01 \x01(\x04R\tresultSeq\x12\x1b\n" +
@@ -397,7 +689,44 @@ const file_proto_common_component_player_battle_result_comp_proto_rawDesc = "" +
 	"match_mode\x18\x0f \x01(\rR\tmatchMode\x12(\n" +
 	"\x10battle_config_id\x18\x10 \x01(\rR\x0ebattleConfigId\x12!\n" +
 	"\fitems_mailed\x18\x11 \x01(\bR\vitemsMailed\x12\x19\n" +
-	"\bexp_gain\x18\x12 \x01(\x04R\aexpGain\"o\n" +
+	"\bexp_gain\x18\x12 \x01(\x04R\aexpGain\x12=\n" +
+	"\x1bmaterial_credit_units_added\x18\x13 \x01(\rR\x18materialCreditUnitsAdded\x12\x1b\n" +
+	"\tseason_id\x18\x14 \x01(\rR\bseasonId\x123\n" +
+	"\x16trial_journal_entry_id\x18\x15 \x01(\rR\x13trialJournalEntryId\x126\n" +
+	"\x18trial_newly_lit_seal_ids\x18\x16 \x03(\rR\x14trialNewlyLitSealIds\x12-\n" +
+	"\x13trial_new_solo_best\x18\x17 \x01(\bR\x10trialNewSoloBest\x12-\n" +
+	"\x13trial_new_coop_best\x18\x18 \x01(\bR\x10trialNewCoopBest\x12A\n" +
+	"\x1dmaterial_tradable_units_added\x18\x19 \x01(\rR\x1amaterialTradableUnitsAdded\x12?\n" +
+	"\x1cmaterial_pvp_loss_ineligible\x18\x1a \x01(\bR\x19materialPvpLossIneligible\x12A\n" +
+	"\x1dfestival_activity_instance_id\x18\x1b \x01(\rR\x1afestivalActivityInstanceId\x128\n" +
+	"\x18festival_reward_identity\x18\x1c \x01(\tR\x16festivalRewardIdentity\x120\n" +
+	"\x14festival_wins_before\x18\x1d \x01(\rR\x12festivalWinsBefore\x12.\n" +
+	"\x13festival_wins_after\x18\x1e \x01(\rR\x11festivalWinsAfter\x124\n" +
+	"\x16festival_required_wins\x18\x1f \x01(\rR\x14festivalRequiredWins\x126\n" +
+	"\x17festival_newly_eligible\x18  \x01(\bR\x15festivalNewlyEligible\x12C\n" +
+	"\x1ematerial_available_units_after\x18! \x01(\x04R\x1bmaterialAvailableUnitsAfter\x12I\n" +
+	"!material_earnable_remaining_after\x18\" \x01(\rR\x1ematerialEarnableRemainingAfter\x127\n" +
+	"\x18season_seal_points_added\x18# \x01(\rR\x15seasonSealPointsAdded\x12;\n" +
+	"\x1aseason_seal_progress_after\x18$ \x01(\rR\x17seasonSealProgressAfter\x123\n" +
+	"\x16season_seal_max_points\x18% \x01(\rR\x13seasonSealMaxPoints\x12=\n" +
+	"\x1bseason_honor_newly_unlocked\x18& \x01(\bR\x18seasonHonorNewlyUnlocked\x12 \n" +
+	"\vsurrendered\x18' \x01(\bR\vsurrendered\x12!\n" +
+	"\flevel_before\x18( \x01(\rR\vlevelBefore\x12\x1f\n" +
+	"\vlevel_after\x18) \x01(\rR\n" +
+	"levelAfter\x12&\n" +
+	"\x0ftotal_exp_after\x18* \x01(\x04R\rtotalExpAfter\x12/\n" +
+	"\x14next_level_total_exp\x18+ \x01(\x04R\x11nextLevelTotalExp\x129\n" +
+	"\x19battle_silver_weekly_used\x18, \x01(\x04R\x16battleSilverWeeklyUsed\x12@\n" +
+	"\x1dbattle_silver_weekly_soft_cap\x18- \x01(\x04R\x19battleSilverWeeklySoftCap\x128\n" +
+	"\x18battle_silver_diminished\x18. \x01(\bR\x16battleSilverDiminished\x12$\n" +
+	"\x0etrial_vow_mask\x18/ \x01(\rR\ftrialVowMask\x12+\n" +
+	"\x12trial_new_vow_best\x180 \x01(\bR\x0ftrialNewVowBest\x12&\n" +
+	"\x0ftrial_battle_id\x181 \x01(\x04R\rtrialBattleId\x121\n" +
+	"\x15retro_honor_season_id\x182 \x01(\rR\x12retroHonorSeasonId\x127\n" +
+	"\x18retro_honor_points_added\x183 \x01(\rR\x15retroHonorPointsAdded\x12;\n" +
+	"\x1aretro_honor_progress_after\x184 \x01(\rR\x17retroHonorProgressAfter\x123\n" +
+	"\x16retro_honor_max_points\x185 \x01(\rR\x13retroHonorMaxPoints\x12;\n" +
+	"\x1aretro_honor_newly_unlocked\x186 \x01(\bR\x17retroHonorNewlyUnlocked\"o\n" +
 	"\x16PlayerBattleResultComp\x12&\n" +
 	"\x0flast_result_seq\x18\x01 \x01(\x04R\rlastResultSeq\x12-\n" +
 	"\aentries\x18\x02 \x03(\v2\x13.PlayerBattleResultR\aentriesB\x18Z\x16proto/common/componentb\x06proto3"

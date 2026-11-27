@@ -1236,6 +1236,12 @@ func (c *BoundConsumerGroup) openPartition(ctx context.Context, topic string, as
 			return nil
 		}
 		if errors.Is(err, errBoundAssignmentOutOfRange) {
+			if errors.Is(err, errBoundRetentionSkipped) {
+				// 提交点落在日志起点之前:与代次中途发现的缺口(judgeGap)是同一件事,同样计数、同一条 critical 告警。
+				observeBoundRetentionLoss(c.config.Group.ID)
+				logx.Errorf("[kafka-bound] group=%s topic=%s partition=%d: RECORDS DELETED BY RETENTION BEFORE THIS GROUP PROCESSED THEM: the group's committed offset is behind the log start when opening the partition; the consumer HOLDs and stops fetching instead of skipping them, see docs/ops/kafka-bound-consumer-runbook.md: %v",
+					c.config.Group.ID, topic, assigned.ID, err)
+			}
 			c.fail(err)
 			c.StopFetching()
 			return nil
@@ -1302,7 +1308,12 @@ func (c *BoundConsumerGroup) dialPartitionReader(ctx context.Context, topic stri
 		offset = earliest
 	}
 	if offset < earliest || offset > end || earliest < 0 {
-		return nil, 0, fmt.Errorf("%w: %s[%d] offset=%d earliest=%d end=%d", errBoundAssignmentOutOfRange, topic, assigned.ID, offset, earliest, end)
+		err := fmt.Errorf("%w: %s[%d] offset=%d earliest=%d end=%d", errBoundAssignmentOutOfRange, topic, assigned.ID, offset, earliest, end)
+		if earliest >= 0 && offset < earliest {
+			// [offset, earliest) 没被本组处理就被保留期删了;越过日志终点(topic 重建 / 截断)不算保留期丢失。
+			err = fmt.Errorf("%w: %w", errBoundRetentionSkipped, err)
+		}
+		return nil, 0, err
 	}
 	config := c.config.Reader
 	config.Topic = topic
@@ -2700,4 +2711,7 @@ func (c *BoundConsumerGroup) ReportProcessingFailure(ctx context.Context, outcom
 	c.signalLocked()
 	c.mu.Unlock()
 	if cancel != nil {
-		canc
+		cancel()
+	}
+	return nil
+}

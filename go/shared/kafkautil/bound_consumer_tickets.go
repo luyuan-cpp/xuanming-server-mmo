@@ -26,7 +26,7 @@ import (
 // 起点若已被保留期推过票据,它提交的位点照样 >= 0 且越过票据,却从没处理过它;这种票据核不出结局,只能 HOLD。
 
 // boundTicketConfirmPolls / boundTicketConfirmInterval:收尾核对最多读几轮、两轮之间隔多久(经 sleep 接缝,单测不等墙钟)。
-// 约 30 秒:新属主要等一次再均衡(kafka-go 默认 JoinGroupBackoff 5s)、拉取、处理、提交,正常远在这之内;调用方的 ctx 先到期就以它为准。
+// 间隔带抖动(每轮 0.5–1 秒),30 轮约 15–30 秒:新属主要等一次再均衡(kafka-go 默认 JoinGroupBackoff 5s)、拉取、处理、提交,正常远在这之内;调用方的 ctx 先到期就以它为准。
 const (
 	boundTicketConfirmPolls    = 30
 	boundTicketConfirmInterval = time.Second

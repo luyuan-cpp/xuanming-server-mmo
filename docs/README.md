@@ -283,6 +283,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 #### 业务服务与后台技术设计
 
 - [activity_maintenance_auto_shift.md](design/activity_maintenance_auto_shift.md) — 活动遇停服自动顺延设计
+- [admin-identity-and-dual-control.md](design/admin-identity-and-dual-control.md) — 后台管理员身份与高风险动作双人复核
 - [afk-monthly-card.md](design/afk-monthly-card.md) — 挂机月卡:获得、开通与权益落库
 - [bag-instance-layout-split.md](design/bag-instance-layout-split.md) — 背包:物品实例层 / 容器布局层拆分 (2026-08-27)
 - [bag-rollback-feasibility-analysis.md](design/bag-rollback-feasibility-analysis.md) — Bag 回档可行性分析(per-service rollback)
@@ -548,6 +549,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [payment-integration-handoff-20261120.md](handoff/payment-integration-handoff-20261120.md) — 真钱支付接入:剩余事项(2026-11-26 更新,交 Gemini 与负责人)
 - [real-name-anti-addiction-handoff-20261126.md](handoff/real-name-anti-addiction-handoff-20261126.md) — 实名认证与防沉迷：代码已写完，全部验证交 Gemini（2026-11-26）
 - [redis-cluster-all-domains-handoff-20261126.md](handoff/redis-cluster-all-domains-handoff-20261126.md) — 全部 Redis 上 Cluster(缺口第 34 条)验证交接(2026-11-26,交 Gemini)
+- [scene-gate-instance-session-handoff-20261126.md](handoff/scene-gate-instance-session-handoff-20261126.md) — scene 按 (gate 实例, session_id) 认会话(e 方案 C)全线:验证交接(2026-11-26,交 Gemini)
 - [server-code-completion-20261120.md](handoff/server-code-completion-20261120.md) — 服务器代码完成度核对与决定(2026-11-20)
 - [server-gap-audit-20261101.md](handoff/server-gap-audit-20261101.md) — 服务器代码缺口清单(2026-11-01)
 - [spectate-tiered-fanout-followup-20261121.md](handoff/spectate-tiered-fanout-followup-20261121.md) — 观战分级扩容（L0 / L1 / L2）：环境受限后续验证交接（2026-11-21）

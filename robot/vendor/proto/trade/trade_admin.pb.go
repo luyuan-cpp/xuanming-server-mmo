@@ -984,11 +984,318 @@ func (x *ResolveManualContractResponse) GetAuditLine() string {
 	return ""
 }
 
+// 内部调用：上报卖家登录/交易环境信号（IP + 设备标识仅用于服务端哈希比对，绝不落盘明文、绝不进客户端响应）。
+// 仅换 IP（高铁/5G）不扣分；异地新 IP + 陌生新设备同时变化时直接清 0 正面信用并永久保留原有差评与核实违约。
+type RecordSellerEnvironmentRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	SellerPlayerId uint64                 `protobuf:"varint,1,opt,name=seller_player_id,json=sellerPlayerId,proto3" json:"seller_player_id,omitempty"`
+	OwnerAccount   string                 `protobuf:"bytes,2,opt,name=owner_account,json=ownerAccount,proto3" json:"owner_account,omitempty"`
+	OwnerRevision  uint64                 `protobuf:"varint,3,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`
+	ClientIp       string                 `protobuf:"bytes,4,opt,name=client_ip,json=clientIp,proto3" json:"client_ip,omitempty"`
+	DeviceId       string                 `protobuf:"bytes,5,opt,name=device_id,json=deviceId,proto3" json:"device_id,omitempty"`
+	ObservedAtMs   uint64                 `protobuf:"varint,6,opt,name=observed_at_ms,json=observedAtMs,proto3" json:"observed_at_ms,omitempty"`
+	Auth           *base.ServiceCallAuth  `protobuf:"bytes,7,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *RecordSellerEnvironmentRequest) Reset() {
+	*x = RecordSellerEnvironmentRequest{}
+	mi := &file_proto_trade_trade_admin_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecordSellerEnvironmentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecordSellerEnvironmentRequest) ProtoMessage() {}
+
+func (x *RecordSellerEnvironmentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_trade_admin_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecordSellerEnvironmentRequest.ProtoReflect.Descriptor instead.
+func (*RecordSellerEnvironmentRequest) Descriptor() ([]byte, []int) {
+	return file_proto_trade_trade_admin_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *RecordSellerEnvironmentRequest) GetSellerPlayerId() uint64 {
+	if x != nil {
+		return x.SellerPlayerId
+	}
+	return 0
+}
+
+func (x *RecordSellerEnvironmentRequest) GetOwnerAccount() string {
+	if x != nil {
+		return x.OwnerAccount
+	}
+	return ""
+}
+
+func (x *RecordSellerEnvironmentRequest) GetOwnerRevision() uint64 {
+	if x != nil {
+		return x.OwnerRevision
+	}
+	return 0
+}
+
+func (x *RecordSellerEnvironmentRequest) GetClientIp() string {
+	if x != nil {
+		return x.ClientIp
+	}
+	return ""
+}
+
+func (x *RecordSellerEnvironmentRequest) GetDeviceId() string {
+	if x != nil {
+		return x.DeviceId
+	}
+	return ""
+}
+
+func (x *RecordSellerEnvironmentRequest) GetObservedAtMs() uint64 {
+	if x != nil {
+		return x.ObservedAtMs
+	}
+	return 0
+}
+
+func (x *RecordSellerEnvironmentRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+type RecordSellerEnvironmentResponse struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage     *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	EnvCreditCleared bool                   `protobuf:"varint,2,opt,name=env_credit_cleared,json=envCreditCleared,proto3" json:"env_credit_cleared,omitempty"`
+	Profile          *SellerCreditView      `protobuf:"bytes,3,opt,name=profile,proto3" json:"profile,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *RecordSellerEnvironmentResponse) Reset() {
+	*x = RecordSellerEnvironmentResponse{}
+	mi := &file_proto_trade_trade_admin_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecordSellerEnvironmentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecordSellerEnvironmentResponse) ProtoMessage() {}
+
+func (x *RecordSellerEnvironmentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_trade_admin_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecordSellerEnvironmentResponse.ProtoReflect.Descriptor instead.
+func (*RecordSellerEnvironmentResponse) Descriptor() ([]byte, []int) {
+	return file_proto_trade_trade_admin_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *RecordSellerEnvironmentResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *RecordSellerEnvironmentResponse) GetEnvCreditCleared() bool {
+	if x != nil {
+		return x.EnvCreditCleared
+	}
+	return false
+}
+
+func (x *RecordSellerEnvironmentResponse) GetProfile() *SellerCreditView {
+	if x != nil {
+		return x.Profile
+	}
+	return nil
+}
+
+// 内部调用：记录经人工/争议核实的卖家违约事件（幂等键 case_id；永久保留黑历史，防异地换机洗白）。
+type RecordSellerViolationRequest struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	CaseId              string                 `protobuf:"bytes,1,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
+	OrderId             string                 `protobuf:"bytes,2,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`
+	SellerPlayerId      uint64                 `protobuf:"varint,3,opt,name=seller_player_id,json=sellerPlayerId,proto3" json:"seller_player_id,omitempty"`
+	SellerAccount       string                 `protobuf:"bytes,4,opt,name=seller_account,json=sellerAccount,proto3" json:"seller_account,omitempty"`
+	SellerOwnerRevision uint64                 `protobuf:"varint,5,opt,name=seller_owner_revision,json=sellerOwnerRevision,proto3" json:"seller_owner_revision,omitempty"`
+	Reason              string                 `protobuf:"bytes,6,opt,name=reason,proto3" json:"reason,omitempty"`
+	RecordedAtMs        uint64                 `protobuf:"varint,7,opt,name=recorded_at_ms,json=recordedAtMs,proto3" json:"recorded_at_ms,omitempty"`
+	Auth                *base.ServiceCallAuth  `protobuf:"bytes,8,opt,name=auth,proto3" json:"auth,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *RecordSellerViolationRequest) Reset() {
+	*x = RecordSellerViolationRequest{}
+	mi := &file_proto_trade_trade_admin_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecordSellerViolationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecordSellerViolationRequest) ProtoMessage() {}
+
+func (x *RecordSellerViolationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_trade_admin_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecordSellerViolationRequest.ProtoReflect.Descriptor instead.
+func (*RecordSellerViolationRequest) Descriptor() ([]byte, []int) {
+	return file_proto_trade_trade_admin_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *RecordSellerViolationRequest) GetCaseId() string {
+	if x != nil {
+		return x.CaseId
+	}
+	return ""
+}
+
+func (x *RecordSellerViolationRequest) GetOrderId() string {
+	if x != nil {
+		return x.OrderId
+	}
+	return ""
+}
+
+func (x *RecordSellerViolationRequest) GetSellerPlayerId() uint64 {
+	if x != nil {
+		return x.SellerPlayerId
+	}
+	return 0
+}
+
+func (x *RecordSellerViolationRequest) GetSellerAccount() string {
+	if x != nil {
+		return x.SellerAccount
+	}
+	return ""
+}
+
+func (x *RecordSellerViolationRequest) GetSellerOwnerRevision() uint64 {
+	if x != nil {
+		return x.SellerOwnerRevision
+	}
+	return 0
+}
+
+func (x *RecordSellerViolationRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *RecordSellerViolationRequest) GetRecordedAtMs() uint64 {
+	if x != nil {
+		return x.RecordedAtMs
+	}
+	return 0
+}
+
+func (x *RecordSellerViolationRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
+}
+
+type RecordSellerViolationResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Profile       *SellerCreditView      `protobuf:"bytes,2,opt,name=profile,proto3" json:"profile,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RecordSellerViolationResponse) Reset() {
+	*x = RecordSellerViolationResponse{}
+	mi := &file_proto_trade_trade_admin_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecordSellerViolationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecordSellerViolationResponse) ProtoMessage() {}
+
+func (x *RecordSellerViolationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_trade_admin_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecordSellerViolationResponse.ProtoReflect.Descriptor instead.
+func (*RecordSellerViolationResponse) Descriptor() ([]byte, []int) {
+	return file_proto_trade_trade_admin_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *RecordSellerViolationResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *RecordSellerViolationResponse) GetProfile() *SellerCreditView {
+	if x != nil {
+		return x.Profile
+	}
+	return nil
+}
+
 var File_proto_trade_trade_admin_proto protoreflect.FileDescriptor
 
 const file_proto_trade_trade_admin_proto_rawDesc = "" +
 	"\n" +
-	"\x1dproto/trade/trade_admin.proto\x12\x05trade\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\x1a)proto/common/base/service_call_auth.proto\x1a\x1bproto/trade/jubaozhai.proto\x1a\x1dproto/trade/trade_table.proto\"\x8c\x03\n" +
+	"\x1dproto/trade/trade_admin.proto\x12\x05trade\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\x1a)proto/common/base/service_call_auth.proto\x1a\x1aproto/trade/commerce.proto\x1a\x1bproto/trade/jubaozhai.proto\x1a\x1dproto/trade/trade_table.proto\"\x8c\x03\n" +
 	"\x12SeedListingRequest\x12(\n" +
 	"\x10seller_player_id\x18\x01 \x01(\x04R\x0esellerPlayerId\x122\n" +
 	"\bcategory\x18\x02 \x01(\x0e2\x16.trade.ListingCategoryR\bcategory\x12 \n" +
@@ -1072,7 +1379,31 @@ const file_proto_trade_trade_admin_proto_rawDesc = "" +
 	"\x05stage\x18\v \x01(\tR\x05stage\x12\x16\n" +
 	"\x06status\x18\f \x01(\rR\x06status\x12\x1d\n" +
 	"\n" +
-	"audit_line\x18\r \x01(\tR\tauditLine*\x9d\x01\n" +
+	"audit_line\x18\r \x01(\tR\tauditLine\"\xa8\x02\n" +
+	"\x1eRecordSellerEnvironmentRequest\x12(\n" +
+	"\x10seller_player_id\x18\x01 \x01(\x04R\x0esellerPlayerId\x12#\n" +
+	"\rowner_account\x18\x02 \x01(\tR\fownerAccount\x12%\n" +
+	"\x0eowner_revision\x18\x03 \x01(\x04R\rownerRevision\x12\x1b\n" +
+	"\tclient_ip\x18\x04 \x01(\tR\bclientIp\x12\x1b\n" +
+	"\tdevice_id\x18\x05 \x01(\tR\bdeviceId\x12$\n" +
+	"\x0eobserved_at_ms\x18\x06 \x01(\x04R\fobservedAtMs\x120\n" +
+	"\x04auth\x18\a \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\xb8\x01\n" +
+	"\x1fRecordSellerEnvironmentResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12,\n" +
+	"\x12env_credit_cleared\x18\x02 \x01(\bR\x10envCreditCleared\x121\n" +
+	"\aprofile\x18\x03 \x01(\v2\x17.trade.SellerCreditViewR\aprofile\"\xc7\x02\n" +
+	"\x1cRecordSellerViolationRequest\x12\x17\n" +
+	"\acase_id\x18\x01 \x01(\tR\x06caseId\x12\x19\n" +
+	"\border_id\x18\x02 \x01(\tR\aorderId\x12(\n" +
+	"\x10seller_player_id\x18\x03 \x01(\x04R\x0esellerPlayerId\x12%\n" +
+	"\x0eseller_account\x18\x04 \x01(\tR\rsellerAccount\x122\n" +
+	"\x15seller_owner_revision\x18\x05 \x01(\x04R\x13sellerOwnerRevision\x12\x16\n" +
+	"\x06reason\x18\x06 \x01(\tR\x06reason\x12$\n" +
+	"\x0erecorded_at_ms\x18\a \x01(\x04R\frecordedAtMs\x120\n" +
+	"\x04auth\x18\b \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\x88\x01\n" +
+	"\x1dRecordSellerViolationResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x121\n" +
+	"\aprofile\x18\x02 \x01(\v2\x17.trade.SellerCreditViewR\aprofile*\x9d\x01\n" +
 	"\x12ManualContractMode\x12$\n" +
 	" MANUAL_CONTRACT_MODE_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19MANUAL_CONTRACT_MODE_SHOW\x10\x01\x12 \n" +
@@ -1084,12 +1415,14 @@ const file_proto_trade_trade_admin_proto_rawDesc = "" +
 	"!MANUAL_CONTRACT_VERDICT_NOT_FOUND\x10\x02\x12#\n" +
 	"\x1fMANUAL_CONTRACT_VERDICT_REFUSED\x10\x03\x12+\n" +
 	"'MANUAL_CONTRACT_VERDICT_VERSION_CHANGED\x10\x04\x12!\n" +
-	"\x1dMANUAL_CONTRACT_VERDICT_RETRY\x10\x052\x94\x02\n" +
+	"\x1dMANUAL_CONTRACT_VERDICT_RETRY\x10\x052\xe2\x03\n" +
 	"\n" +
 	"TradeAdmin\x12D\n" +
 	"\vSeedListing\x12\x19.trade.SeedListingRequest\x1a\x1a.trade.SeedListingResponse\x12\\\n" +
 	"\x13ListManualContracts\x12!.trade.ListManualContractsRequest\x1a\".trade.ListManualContractsResponse\x12b\n" +
-	"\x15ResolveManualContract\x12#.trade.ResolveManualContractRequest\x1a$.trade.ResolveManualContractResponseB\x14\x98\xd4a\x11Z\vproto/trade\x80\x01\x00b\x06proto3"
+	"\x15ResolveManualContract\x12#.trade.ResolveManualContractRequest\x1a$.trade.ResolveManualContractResponse\x12h\n" +
+	"\x17RecordSellerEnvironment\x12%.trade.RecordSellerEnvironmentRequest\x1a&.trade.RecordSellerEnvironmentResponse\x12b\n" +
+	"\x15RecordSellerViolation\x12#.trade.RecordSellerViolationRequest\x1a$.trade.RecordSellerViolationResponseB\x14\x98\xd4a\x11Z\vproto/trade\x80\x01\x00b\x06proto3"
 
 var (
 	file_proto_trade_trade_admin_proto_rawDescOnce sync.Once
@@ -1104,55 +1437,70 @@ func file_proto_trade_trade_admin_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_trade_trade_admin_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_proto_trade_trade_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_proto_trade_trade_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_proto_trade_trade_admin_proto_goTypes = []any{
-	(ManualContractMode)(0),               // 0: trade.ManualContractMode
-	(ManualContractVerdict)(0),            // 1: trade.ManualContractVerdict
-	(*SeedListingRequest)(nil),            // 2: trade.SeedListingRequest
-	(*SeedListingResponse)(nil),           // 3: trade.SeedListingResponse
-	(*ListManualContractsRequest)(nil),    // 4: trade.ListManualContractsRequest
-	(*ListManualContractsResponse)(nil),   // 5: trade.ListManualContractsResponse
-	(*ResolveManualContractRequest)(nil),  // 6: trade.ResolveManualContractRequest
-	(*ManualContractLeg)(nil),             // 7: trade.ManualContractLeg
-	(*ManualContractParty)(nil),           // 8: trade.ManualContractParty
-	(*ManualContractActionVerdict)(nil),   // 9: trade.ManualContractActionVerdict
-	(*ResolveManualContractResponse)(nil), // 10: trade.ResolveManualContractResponse
-	(ListingCategory)(0),                  // 11: trade.ListingCategory
-	(*base.TipInfoMessage)(nil),           // 12: TipInfoMessage
-	(*base.ServiceCallAuth)(nil),          // 13: common.base.ServiceCallAuth
-	(*TradeCommerceRecord)(nil),           // 14: trade.TradeCommerceRecord
-	(*TradeCommerceLeg)(nil),              // 15: trade.TradeCommerceLeg
-	(TradeAssetOpStatus)(0),               // 16: trade.TradeAssetOpStatus
-	(*TradeCommerceManualAction)(nil),     // 17: trade.TradeCommerceManualAction
+	(ManualContractMode)(0),                 // 0: trade.ManualContractMode
+	(ManualContractVerdict)(0),              // 1: trade.ManualContractVerdict
+	(*SeedListingRequest)(nil),              // 2: trade.SeedListingRequest
+	(*SeedListingResponse)(nil),             // 3: trade.SeedListingResponse
+	(*ListManualContractsRequest)(nil),      // 4: trade.ListManualContractsRequest
+	(*ListManualContractsResponse)(nil),     // 5: trade.ListManualContractsResponse
+	(*ResolveManualContractRequest)(nil),    // 6: trade.ResolveManualContractRequest
+	(*ManualContractLeg)(nil),               // 7: trade.ManualContractLeg
+	(*ManualContractParty)(nil),             // 8: trade.ManualContractParty
+	(*ManualContractActionVerdict)(nil),     // 9: trade.ManualContractActionVerdict
+	(*ResolveManualContractResponse)(nil),   // 10: trade.ResolveManualContractResponse
+	(*RecordSellerEnvironmentRequest)(nil),  // 11: trade.RecordSellerEnvironmentRequest
+	(*RecordSellerEnvironmentResponse)(nil), // 12: trade.RecordSellerEnvironmentResponse
+	(*RecordSellerViolationRequest)(nil),    // 13: trade.RecordSellerViolationRequest
+	(*RecordSellerViolationResponse)(nil),   // 14: trade.RecordSellerViolationResponse
+	(ListingCategory)(0),                    // 15: trade.ListingCategory
+	(*base.TipInfoMessage)(nil),             // 16: TipInfoMessage
+	(*base.ServiceCallAuth)(nil),            // 17: common.base.ServiceCallAuth
+	(*TradeCommerceRecord)(nil),             // 18: trade.TradeCommerceRecord
+	(*TradeCommerceLeg)(nil),                // 19: trade.TradeCommerceLeg
+	(TradeAssetOpStatus)(0),                 // 20: trade.TradeAssetOpStatus
+	(*TradeCommerceManualAction)(nil),       // 21: trade.TradeCommerceManualAction
+	(*SellerCreditView)(nil),                // 22: trade.SellerCreditView
 }
 var file_proto_trade_trade_admin_proto_depIdxs = []int32{
-	11, // 0: trade.SeedListingRequest.category:type_name -> trade.ListingCategory
-	12, // 1: trade.SeedListingResponse.error_message:type_name -> TipInfoMessage
-	13, // 2: trade.ListManualContractsRequest.auth:type_name -> common.base.ServiceCallAuth
-	14, // 3: trade.ListManualContractsResponse.contracts:type_name -> trade.TradeCommerceRecord
+	15, // 0: trade.SeedListingRequest.category:type_name -> trade.ListingCategory
+	16, // 1: trade.SeedListingResponse.error_message:type_name -> TipInfoMessage
+	17, // 2: trade.ListManualContractsRequest.auth:type_name -> common.base.ServiceCallAuth
+	18, // 3: trade.ListManualContractsResponse.contracts:type_name -> trade.TradeCommerceRecord
 	0,  // 4: trade.ResolveManualContractRequest.mode:type_name -> trade.ManualContractMode
-	13, // 5: trade.ResolveManualContractRequest.auth:type_name -> common.base.ServiceCallAuth
-	15, // 6: trade.ManualContractLeg.leg:type_name -> trade.TradeCommerceLeg
-	16, // 7: trade.ManualContractLeg.op_status:type_name -> trade.TradeAssetOpStatus
+	17, // 5: trade.ResolveManualContractRequest.auth:type_name -> common.base.ServiceCallAuth
+	19, // 6: trade.ManualContractLeg.leg:type_name -> trade.TradeCommerceLeg
+	20, // 7: trade.ManualContractLeg.op_status:type_name -> trade.TradeAssetOpStatus
 	1,  // 8: trade.ResolveManualContractResponse.verdict:type_name -> trade.ManualContractVerdict
-	14, // 9: trade.ResolveManualContractResponse.record:type_name -> trade.TradeCommerceRecord
-	14, // 10: trade.ResolveManualContractResponse.linked:type_name -> trade.TradeCommerceRecord
+	18, // 9: trade.ResolveManualContractResponse.record:type_name -> trade.TradeCommerceRecord
+	18, // 10: trade.ResolveManualContractResponse.linked:type_name -> trade.TradeCommerceRecord
 	7,  // 11: trade.ResolveManualContractResponse.legs:type_name -> trade.ManualContractLeg
 	8,  // 12: trade.ResolveManualContractResponse.parties:type_name -> trade.ManualContractParty
 	9,  // 13: trade.ResolveManualContractResponse.actions:type_name -> trade.ManualContractActionVerdict
-	17, // 14: trade.ResolveManualContractResponse.plan:type_name -> trade.TradeCommerceManualAction
-	17, // 15: trade.ResolveManualContractResponse.linked_plan:type_name -> trade.TradeCommerceManualAction
-	2,  // 16: trade.TradeAdmin.SeedListing:input_type -> trade.SeedListingRequest
-	4,  // 17: trade.TradeAdmin.ListManualContracts:input_type -> trade.ListManualContractsRequest
-	6,  // 18: trade.TradeAdmin.ResolveManualContract:input_type -> trade.ResolveManualContractRequest
-	3,  // 19: trade.TradeAdmin.SeedListing:output_type -> trade.SeedListingResponse
-	5,  // 20: trade.TradeAdmin.ListManualContracts:output_type -> trade.ListManualContractsResponse
-	10, // 21: trade.TradeAdmin.ResolveManualContract:output_type -> trade.ResolveManualContractResponse
-	19, // [19:22] is the sub-list for method output_type
-	16, // [16:19] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	21, // 14: trade.ResolveManualContractResponse.plan:type_name -> trade.TradeCommerceManualAction
+	21, // 15: trade.ResolveManualContractResponse.linked_plan:type_name -> trade.TradeCommerceManualAction
+	17, // 16: trade.RecordSellerEnvironmentRequest.auth:type_name -> common.base.ServiceCallAuth
+	16, // 17: trade.RecordSellerEnvironmentResponse.error_message:type_name -> TipInfoMessage
+	22, // 18: trade.RecordSellerEnvironmentResponse.profile:type_name -> trade.SellerCreditView
+	17, // 19: trade.RecordSellerViolationRequest.auth:type_name -> common.base.ServiceCallAuth
+	16, // 20: trade.RecordSellerViolationResponse.error_message:type_name -> TipInfoMessage
+	22, // 21: trade.RecordSellerViolationResponse.profile:type_name -> trade.SellerCreditView
+	2,  // 22: trade.TradeAdmin.SeedListing:input_type -> trade.SeedListingRequest
+	4,  // 23: trade.TradeAdmin.ListManualContracts:input_type -> trade.ListManualContractsRequest
+	6,  // 24: trade.TradeAdmin.ResolveManualContract:input_type -> trade.ResolveManualContractRequest
+	11, // 25: trade.TradeAdmin.RecordSellerEnvironment:input_type -> trade.RecordSellerEnvironmentRequest
+	13, // 26: trade.TradeAdmin.RecordSellerViolation:input_type -> trade.RecordSellerViolationRequest
+	3,  // 27: trade.TradeAdmin.SeedListing:output_type -> trade.SeedListingResponse
+	5,  // 28: trade.TradeAdmin.ListManualContracts:output_type -> trade.ListManualContractsResponse
+	10, // 29: trade.TradeAdmin.ResolveManualContract:output_type -> trade.ResolveManualContractResponse
+	12, // 30: trade.TradeAdmin.RecordSellerEnvironment:output_type -> trade.RecordSellerEnvironmentResponse
+	14, // 31: trade.TradeAdmin.RecordSellerViolation:output_type -> trade.RecordSellerViolationResponse
+	27, // [27:32] is the sub-list for method output_type
+	22, // [22:27] is the sub-list for method input_type
+	22, // [22:22] is the sub-list for extension type_name
+	22, // [22:22] is the sub-list for extension extendee
+	0,  // [0:22] is the sub-list for field type_name
 }
 
 func init() { file_proto_trade_trade_admin_proto_init() }
@@ -1160,6 +1508,7 @@ func file_proto_trade_trade_admin_proto_init() {
 	if File_proto_trade_trade_admin_proto != nil {
 		return
 	}
+	file_proto_trade_commerce_proto_init()
 	file_proto_trade_jubaozhai_proto_init()
 	file_proto_trade_trade_table_proto_init()
 	type x struct{}
@@ -1168,7 +1517,7 @@ func file_proto_trade_trade_admin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_trade_trade_admin_proto_rawDesc), len(file_proto_trade_trade_admin_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   9,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

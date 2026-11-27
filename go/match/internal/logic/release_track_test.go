@@ -2,7 +2,6 @@ package logic
 
 import (
 	"context"
-	"strconv"
 	"testing"
 
 	"match/internal/battleplace"
@@ -209,7 +208,7 @@ func TestListWatchableBattlesFiltersByViewerTrack(t *testing.T) {
 	formations := stubSpectateFormations(t).formations
 	formations[canaryFeatured].ReleaseTrack = "canary"
 	formations[canaryNew].ReleaseTrack = "canary"
-	_, err := svcCtx.MatchRedis.Zadd(spectateFeaturedIndex.keyFor(canaryFeatured), int64(testRelayDeadlineMs), strconv.FormatUint(canaryFeatured, 10))
+	err := spectateFeaturedIndex.add(context.Background(), svcCtx.MatchRedis, canaryFeatured, int64(testRelayDeadlineMs))
 	require.NoError(t, err)
 
 	ids, flags := listIdsAs(t, svcCtx, "", 2)

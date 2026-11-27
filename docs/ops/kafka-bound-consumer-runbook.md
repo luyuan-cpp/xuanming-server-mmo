@@ -68,17 +68,21 @@ go run ./cmd/kafka_dlq replay -brokers <...> -group guild-trial -from <起> -to 
 
 - 死信 topic 不存在:服务启动时 `EnsureTopics` 会建它(guild 在启动门禁与消费者启动时都确保);核对 `kafka-topics.sh --describe --topic guild-trial-dlq`;
 - ISR 不足:`acks=all` 写不进,先修 broker;
-- broker 不可达:Kafka 侧故障。
+- broker 不可达:Kafka 侧故障;
+- 原件太大:加上死信头之后超过死信 topic 的单条上限(2MiB,错误里有 `Message Size Too Large` 或 `message too large`)。
+  这一条越不过去,记下原位置上报负责人,人工处置(调大该死信 topic 的 `max.message.bytes` 需要同时改写入端上限并发版)。
 
-修好之后自动写入并继续消费,不用重启。
+这条告警要连续 5 分钟都在失败才响,单次瞬时失败不响。修好之后自动写入并继续消费,不用重启。
 
 ## 2. 保留期删掉了本组还没处理的记录(`KafkaBoundConsumerRetentionLoss`)
 
 **数据已丢**。owner 不静默跳过,而是 HOLD 并永久停止取新;之后每次打开该分区都会因「提交点越过保留范围」再次 HOLD
 (data_service 会反复退出)。2026-11-19 起新组在分区上接纳第一条之前先把它提交成起点,所以接纳过、还没结清的记录被删,
-也是在下一位属主打开分区时报「提交点越过保留范围」(日志里没有上面那行 `RECORDS DELETED ...`,丢失范围是组内位点到日志起点),同样按下面处置。处置:
+也是在下一位属主打开分区时报「提交点越过保留范围」。2026-11-26 起打开时发现提交点落在日志起点之前同样计进这条告警、
+打同一行 `RECORDS DELETED ...`(后面带 `offset=<组内位点> earliest=<日志起点>`,丢失范围是 `[offset, earliest)`),按下面处置。处置:
 
-1. 从日志 `RECORDS DELETED BY RETENTION BEFORE THIS GROUP PROCESSED THEM: expected offset A, log start B ...` 记下 topic、分区、`[A, B)`,上报负责人。
+1. 从日志 `RECORDS DELETED BY RETENTION BEFORE THIS GROUP PROCESSED THEM: expected offset A, log start B ...`(打开分区时发现的那种是
+   `... offset=A earliest=B end=...`)记下 topic、分区、`[A, B)`,上报负责人。
 2. 按业务补:data_service 审计见 [audit-topic-generation-bump-runbook.md](audit-topic-generation-bump-runbook.md) §7(条数口径与上报);
    guild-trial 已登记的对局由巡检器兜底,没有登记行的按 match 终局行人工核对;match-rating 按
    [cross-zone-matchmaking.md](../design/cross-zone-matchmaking.md) §13.4 人工核对来源与入账。

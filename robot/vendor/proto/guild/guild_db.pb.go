@@ -99,6 +99,11 @@ const (
 	GuildAssetOpKind_GUILD_ASSET_OP_KIND_DONATE          GuildAssetOpKind = 1 // 捐献:GUILD_DEBIT 流扣货币
 	GuildAssetOpKind_GUILD_ASSET_OP_KIND_SHOP            GuildAssetOpKind = 2 // 商店:GUILD_CREDIT 流发物品
 	GuildAssetOpKind_GUILD_ASSET_OP_KIND_ACTIVITY_REWARD GuildAssetOpKind = 3 // 活动发奖(B6):GUILD_CREDIT 流
+	// 没有"捐献退款":用户决策 D2(README §3)——离帮 / 被踢 / 解散后已扣款的捐献照记给帮会、不退款。
+	// 90 清单原文里的 DONATE_REFUND = 4 随之作废,4 号未占用。
+	GuildAssetOpKind_GUILD_ASSET_OP_KIND_WAR_REWARD    GuildAssetOpKind = 5 // 帮战 V2 奖励:GUILD_CREDIT 流(银两/周宝箱/灵脉分红)
+	GuildAssetOpKind_GUILD_ASSET_OP_KIND_BOUNTY_ESCROW GuildAssetOpKind = 6 // 追杀令预扣:GUILD_DEBIT 流扣发布者银两
+	GuildAssetOpKind_GUILD_ASSET_OP_KIND_BOUNTY_PAYOUT GuildAssetOpKind = 7 // 追杀令结单/反杀/过期退本:GUILD_CREDIT 流
 )
 
 // Enum value maps for GuildAssetOpKind.
@@ -108,12 +113,18 @@ var (
 		1: "GUILD_ASSET_OP_KIND_DONATE",
 		2: "GUILD_ASSET_OP_KIND_SHOP",
 		3: "GUILD_ASSET_OP_KIND_ACTIVITY_REWARD",
+		5: "GUILD_ASSET_OP_KIND_WAR_REWARD",
+		6: "GUILD_ASSET_OP_KIND_BOUNTY_ESCROW",
+		7: "GUILD_ASSET_OP_KIND_BOUNTY_PAYOUT",
 	}
 	GuildAssetOpKind_value = map[string]int32{
 		"GUILD_ASSET_OP_KIND_UNSPECIFIED":     0,
 		"GUILD_ASSET_OP_KIND_DONATE":          1,
 		"GUILD_ASSET_OP_KIND_SHOP":            2,
 		"GUILD_ASSET_OP_KIND_ACTIVITY_REWARD": 3,
+		"GUILD_ASSET_OP_KIND_WAR_REWARD":      5,
+		"GUILD_ASSET_OP_KIND_BOUNTY_ESCROW":   6,
+		"GUILD_ASSET_OP_KIND_BOUNTY_PAYOUT":   7,
 	}
 )
 
@@ -147,10 +158,12 @@ func (GuildAssetOpKind) EnumDescriptor() ([]byte, []int) {
 type GuildDailyCounterKind int32
 
 const (
-	GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_UNSPECIFIED GuildDailyCounterKind = 0
-	GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_DONATE      GuildDailyCounterKind = 1
-	GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_SHOP        GuildDailyCounterKind = 2
-	GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_ACTIVITY    GuildDailyCounterKind = 3 // B6
+	GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_UNSPECIFIED       GuildDailyCounterKind = 0
+	GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_DONATE            GuildDailyCounterKind = 1
+	GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_SHOP              GuildDailyCounterKind = 2
+	GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_ACTIVITY          GuildDailyCounterKind = 3 // B6
+	GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_WAR_BOUNTY_PAYOUT GuildDailyCounterKind = 4 // 帮战 V2:本人每日领取追杀/反杀银两赏金次数(上限 5)
+	GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_WAR_PUBLIC_BOUNTY GuildDailyCounterKind = 5 // 帮战 V2:帮会公费追杀令每日次数(按 player_id=guild_id 记)
 )
 
 // Enum value maps for GuildDailyCounterKind.
@@ -160,12 +173,16 @@ var (
 		1: "GUILD_DAILY_COUNTER_KIND_DONATE",
 		2: "GUILD_DAILY_COUNTER_KIND_SHOP",
 		3: "GUILD_DAILY_COUNTER_KIND_ACTIVITY",
+		4: "GUILD_DAILY_COUNTER_KIND_WAR_BOUNTY_PAYOUT",
+		5: "GUILD_DAILY_COUNTER_KIND_WAR_PUBLIC_BOUNTY",
 	}
 	GuildDailyCounterKind_value = map[string]int32{
-		"GUILD_DAILY_COUNTER_KIND_UNSPECIFIED": 0,
-		"GUILD_DAILY_COUNTER_KIND_DONATE":      1,
-		"GUILD_DAILY_COUNTER_KIND_SHOP":        2,
-		"GUILD_DAILY_COUNTER_KIND_ACTIVITY":    3,
+		"GUILD_DAILY_COUNTER_KIND_UNSPECIFIED":       0,
+		"GUILD_DAILY_COUNTER_KIND_DONATE":            1,
+		"GUILD_DAILY_COUNTER_KIND_SHOP":              2,
+		"GUILD_DAILY_COUNTER_KIND_ACTIVITY":          3,
+		"GUILD_DAILY_COUNTER_KIND_WAR_BOUNTY_PAYOUT": 4,
+		"GUILD_DAILY_COUNTER_KIND_WAR_PUBLIC_BOUNTY": 5,
 	}
 )
 
@@ -325,7 +342,9 @@ type GuildRecord struct {
 	NameNorm     string                 `protobuf:"bytes,11,opt,name=name_norm,json=nameNorm,proto3" json:"name_norm,omitempty"`       // data.GuildNameNorm(name):NFKC → TrimSpace → 小写;≤ 48 rune(远小于列长 VARCHAR(191),uk_guild 是整列索引)
 	// score 的版本:建帮写 0,UpdateGuildScore 在写 score 的同一事务里 +1。Redis 分区榜按它做条件写入,
 	// 只接受不比已记版本旧的分数,所以写榜不用抢全服锁(docs/design/guild_ranking_architecture_zh.md §3)。
-	ScoreVersion  uint64 `protobuf:"varint,12,opt,name=score_version,json=scoreVersion,proto3" json:"score_version,omitempty"` // 追加区:从 13 起。
+	ScoreVersion uint64 `protobuf:"varint,12,opt,name=score_version,json=scoreVersion,proto3" json:"score_version,omitempty"`
+	// 上一次帮会改名成功的时刻 Unix 毫秒(0 = 从未改过名;冷却判定以此为准)。
+	RenamedMs     uint64 `protobuf:"varint,13,opt,name=renamed_ms,json=renamedMs,proto3" json:"renamed_ms,omitempty"` // 追加区:从 14 起。
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -440,6 +459,13 @@ func (x *GuildRecord) GetNameNorm() string {
 func (x *GuildRecord) GetScoreVersion() uint64 {
 	if x != nil {
 		return x.ScoreVersion
+	}
+	return 0
+}
+
+func (x *GuildRecord) GetRenamedMs() uint64 {
+	if x != nil {
+		return x.RenamedMs
 	}
 	return 0
 }
@@ -2311,11 +2337,1524 @@ func (x *GuildClientRequestRecord) GetCreatedMs() uint64 {
 	return 0
 }
 
+// 帮会改名旧名保护表(docs/design/rename-and-content-safety.md §5):锁序位置 12(全序末尾)。
+// D-14 要求显式声明整数主键(hold_id),唯一性由 uk_guild_name_hold(name_norm,整列 VARCHAR(191)) 保证。
+// 事务顺序固定:必须先写 guild(INSERT / UPDATE 拿到 uk_guild 锁),再查/改本表,防止并发抢注刚放下的旧名。
+type GuildNameHoldRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	HoldId        uint64                 `protobuf:"varint,1,opt,name=hold_id,json=holdId,proto3" json:"hold_id,omitempty"`
+	NameNorm      string                 `protobuf:"bytes,2,opt,name=name_norm,json=nameNorm,proto3" json:"name_norm,omitempty"`
+	GuildId       uint64                 `protobuf:"varint,3,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`
+	HeldUntilMs   uint64                 `protobuf:"varint,4,opt,name=held_until_ms,json=heldUntilMs,proto3" json:"held_until_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GuildNameHoldRecord) Reset() {
+	*x = GuildNameHoldRecord{}
+	mi := &file_proto_guild_guild_db_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildNameHoldRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildNameHoldRecord) ProtoMessage() {}
+
+func (x *GuildNameHoldRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_db_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildNameHoldRecord.ProtoReflect.Descriptor instead.
+func (*GuildNameHoldRecord) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *GuildNameHoldRecord) GetHoldId() uint64 {
+	if x != nil {
+		return x.HoldId
+	}
+	return 0
+}
+
+func (x *GuildNameHoldRecord) GetNameNorm() string {
+	if x != nil {
+		return x.NameNorm
+	}
+	return ""
+}
+
+func (x *GuildNameHoldRecord) GetGuildId() uint64 {
+	if x != nil {
+		return x.GuildId
+	}
+	return 0
+}
+
+func (x *GuildNameHoldRecord) GetHeldUntilMs() uint64 {
+	if x != nil {
+		return x.HeldUntilMs
+	}
+	return 0
+}
+
+// 锁序位置 13:三座灵脉归属、旗势、整备护盾与每小时分红游标。
+type GuildWarLeylineRecord struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	ZoneId              uint32                 `protobuf:"varint,1,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`
+	LeylineId           uint32                 `protobuf:"varint,2,opt,name=leyline_id,json=leylineId,proto3" json:"leyline_id,omitempty"`               // 1=八仙岛(scene 2) / 2=碧渊水宫(scene 5) / 3=月汐湾(scene 3)
+	OwnerGuildId        uint64                 `protobuf:"varint,3,opt,name=owner_guild_id,json=ownerGuildId,proto3" json:"owner_guild_id,omitempty"`    // 0 = 无主(原生灵脉守卫镇守)
+	BannerHp            uint32                 `protobuf:"varint,4,opt,name=banner_hp,json=bannerHp,proto3" json:"banner_hp,omitempty"`                  // 0..1000
+	ShieldUntilMs       uint64                 `protobuf:"varint,5,opt,name=shield_until_ms,json=shieldUntilMs,proto3" json:"shield_until_ms,omitempty"` // 易主整备护盾截止时刻
+	CapturedAtMs        uint64                 `protobuf:"varint,6,opt,name=captured_at_ms,json=capturedAtMs,proto3" json:"captured_at_ms,omitempty"`
+	LastDividendAtMs    uint64                 `protobuf:"varint,7,opt,name=last_dividend_at_ms,json=lastDividendAtMs,proto3" json:"last_dividend_at_ms,omitempty"`        // 多副本幂等周期分红推进时间戳
+	DividendWeekKey     uint32                 `protobuf:"varint,8,opt,name=dividend_week_key,json=dividendWeekKey,proto3" json:"dividend_week_key,omitempty"`             // 本周已产分红计数对应的周键
+	WeeklyDividendCount uint32                 `protobuf:"varint,9,opt,name=weekly_dividend_count,json=weeklyDividendCount,proto3" json:"weekly_dividend_count,omitempty"` // 本周已产分红份数(上限 24)
+	LastSiegeAlertMs    uint64                 `protobuf:"varint,10,opt,name=last_siege_alert_ms,json=lastSiegeAlertMs,proto3" json:"last_siege_alert_ms,omitempty"`       // 踢馆警报 60s 节流时间戳
+	UpdatedMs           uint64                 `protobuf:"varint,11,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *GuildWarLeylineRecord) Reset() {
+	*x = GuildWarLeylineRecord{}
+	mi := &file_proto_guild_guild_db_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildWarLeylineRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildWarLeylineRecord) ProtoMessage() {}
+
+func (x *GuildWarLeylineRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_db_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildWarLeylineRecord.ProtoReflect.Descriptor instead.
+func (*GuildWarLeylineRecord) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *GuildWarLeylineRecord) GetZoneId() uint32 {
+	if x != nil {
+		return x.ZoneId
+	}
+	return 0
+}
+
+func (x *GuildWarLeylineRecord) GetLeylineId() uint32 {
+	if x != nil {
+		return x.LeylineId
+	}
+	return 0
+}
+
+func (x *GuildWarLeylineRecord) GetOwnerGuildId() uint64 {
+	if x != nil {
+		return x.OwnerGuildId
+	}
+	return 0
+}
+
+func (x *GuildWarLeylineRecord) GetBannerHp() uint32 {
+	if x != nil {
+		return x.BannerHp
+	}
+	return 0
+}
+
+func (x *GuildWarLeylineRecord) GetShieldUntilMs() uint64 {
+	if x != nil {
+		return x.ShieldUntilMs
+	}
+	return 0
+}
+
+func (x *GuildWarLeylineRecord) GetCapturedAtMs() uint64 {
+	if x != nil {
+		return x.CapturedAtMs
+	}
+	return 0
+}
+
+func (x *GuildWarLeylineRecord) GetLastDividendAtMs() uint64 {
+	if x != nil {
+		return x.LastDividendAtMs
+	}
+	return 0
+}
+
+func (x *GuildWarLeylineRecord) GetDividendWeekKey() uint32 {
+	if x != nil {
+		return x.DividendWeekKey
+	}
+	return 0
+}
+
+func (x *GuildWarLeylineRecord) GetWeeklyDividendCount() uint32 {
+	if x != nil {
+		return x.WeeklyDividendCount
+	}
+	return 0
+}
+
+func (x *GuildWarLeylineRecord) GetLastSiegeAlertMs() uint64 {
+	if x != nil {
+		return x.LastSiegeAlertMs
+	}
+	return 0
+}
+
+func (x *GuildWarLeylineRecord) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
+// 锁序位置 14:本帮 5 槽守旗阵 AI 托管快照(不占用玩家本人在线/战斗)。
+type GuildWarGarrisonRecord struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	GuildId         uint64                 `protobuf:"varint,1,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`
+	SlotIndex       uint32                 `protobuf:"varint,2,opt,name=slot_index,json=slotIndex,proto3" json:"slot_index,omitempty"` // 1..5
+	PlayerId        uint64                 `protobuf:"varint,3,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	PlayerName      string                 `protobuf:"bytes,4,opt,name=player_name,json=playerName,proto3" json:"player_name,omitempty"`
+	Level           uint32                 `protobuf:"varint,5,opt,name=level,proto3" json:"level,omitempty"`
+	AppearanceId    string                 `protobuf:"bytes,6,opt,name=appearance_id,json=appearanceId,proto3" json:"appearance_id,omitempty"`
+	PetName         string                 `protobuf:"bytes,7,opt,name=pet_name,json=petName,proto3" json:"pet_name,omitempty"`
+	PetTableId      uint32                 `protobuf:"varint,8,opt,name=pet_table_id,json=petTableId,proto3" json:"pet_table_id,omitempty"`
+	SnapshotPayload []byte                 `protobuf:"bytes,9,opt,name=snapshot_payload,json=snapshotPayload,proto3" json:"snapshot_payload,omitempty"` // 序列化 BattlePlayerSnapshot(开局强制置 ai_controlled=true)
+	UpdatedMs       uint64                 `protobuf:"varint,10,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *GuildWarGarrisonRecord) Reset() {
+	*x = GuildWarGarrisonRecord{}
+	mi := &file_proto_guild_guild_db_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildWarGarrisonRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildWarGarrisonRecord) ProtoMessage() {}
+
+func (x *GuildWarGarrisonRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_db_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildWarGarrisonRecord.ProtoReflect.Descriptor instead.
+func (*GuildWarGarrisonRecord) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *GuildWarGarrisonRecord) GetGuildId() uint64 {
+	if x != nil {
+		return x.GuildId
+	}
+	return 0
+}
+
+func (x *GuildWarGarrisonRecord) GetSlotIndex() uint32 {
+	if x != nil {
+		return x.SlotIndex
+	}
+	return 0
+}
+
+func (x *GuildWarGarrisonRecord) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *GuildWarGarrisonRecord) GetPlayerName() string {
+	if x != nil {
+		return x.PlayerName
+	}
+	return ""
+}
+
+func (x *GuildWarGarrisonRecord) GetLevel() uint32 {
+	if x != nil {
+		return x.Level
+	}
+	return 0
+}
+
+func (x *GuildWarGarrisonRecord) GetAppearanceId() string {
+	if x != nil {
+		return x.AppearanceId
+	}
+	return ""
+}
+
+func (x *GuildWarGarrisonRecord) GetPetName() string {
+	if x != nil {
+		return x.PetName
+	}
+	return ""
+}
+
+func (x *GuildWarGarrisonRecord) GetPetTableId() uint32 {
+	if x != nil {
+		return x.PetTableId
+	}
+	return 0
+}
+
+func (x *GuildWarGarrisonRecord) GetSnapshotPayload() []byte {
+	if x != nil {
+		return x.SnapshotPayload
+	}
+	return nil
+}
+
+func (x *GuildWarGarrisonRecord) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
+// 锁序位置 15:帮会每周帮战进度(全帮周战功、本帮周分红池与建帮首胜史记)。
+type GuildWarWeeklyProgressRecord struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	GuildId           uint64                 `protobuf:"varint,1,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`
+	WeekKey           uint32                 `protobuf:"varint,2,opt,name=week_key,json=weekKey,proto3" json:"week_key,omitempty"`                                 // gameday.WeekKey(ISO 周,周一 05:00 UTC+8)
+	GuildMerit        uint64                 `protobuf:"varint,3,opt,name=guild_merit,json=guildMerit,proto3" json:"guild_merit,omitempty"`                        // 本帮本周累计战功
+	DividendPoolCount uint32                 `protobuf:"varint,4,opt,name=dividend_pool_count,json=dividendPoolCount,proto3" json:"dividend_pool_count,omitempty"` // 本帮本周累计灵脉分红份数
+	Mvp1PlayerId      uint64                 `protobuf:"varint,5,opt,name=mvp1_player_id,json=mvp1PlayerId,proto3" json:"mvp1_player_id,omitempty"`                // 本周战功第 1 功臣
+	Mvp1Merit         uint64                 `protobuf:"varint,6,opt,name=mvp1_merit,json=mvp1Merit,proto3" json:"mvp1_merit,omitempty"`
+	Mvp2PlayerId      uint64                 `protobuf:"varint,7,opt,name=mvp2_player_id,json=mvp2PlayerId,proto3" json:"mvp2_player_id,omitempty"` // 本周战功第 2 功臣
+	Mvp2Merit         uint64                 `protobuf:"varint,8,opt,name=mvp2_merit,json=mvp2Merit,proto3" json:"mvp2_merit,omitempty"`
+	FirstWinPlayer1Id uint64                 `protobuf:"varint,9,opt,name=first_win_player1_id,json=firstWinPlayer1Id,proto3" json:"first_win_player1_id,omitempty"` // 建帮首胜史记(week_key=0 专用永久行保存)
+	FirstWinPlayer2Id uint64                 `protobuf:"varint,10,opt,name=first_win_player2_id,json=firstWinPlayer2Id,proto3" json:"first_win_player2_id,omitempty"`
+	FirstWinAtMs      uint64                 `protobuf:"varint,11,opt,name=first_win_at_ms,json=firstWinAtMs,proto3" json:"first_win_at_ms,omitempty"`
+	UpdatedMs         uint64                 `protobuf:"varint,12,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *GuildWarWeeklyProgressRecord) Reset() {
+	*x = GuildWarWeeklyProgressRecord{}
+	mi := &file_proto_guild_guild_db_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildWarWeeklyProgressRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildWarWeeklyProgressRecord) ProtoMessage() {}
+
+func (x *GuildWarWeeklyProgressRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_db_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildWarWeeklyProgressRecord.ProtoReflect.Descriptor instead.
+func (*GuildWarWeeklyProgressRecord) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *GuildWarWeeklyProgressRecord) GetGuildId() uint64 {
+	if x != nil {
+		return x.GuildId
+	}
+	return 0
+}
+
+func (x *GuildWarWeeklyProgressRecord) GetWeekKey() uint32 {
+	if x != nil {
+		return x.WeekKey
+	}
+	return 0
+}
+
+func (x *GuildWarWeeklyProgressRecord) GetGuildMerit() uint64 {
+	if x != nil {
+		return x.GuildMerit
+	}
+	return 0
+}
+
+func (x *GuildWarWeeklyProgressRecord) GetDividendPoolCount() uint32 {
+	if x != nil {
+		return x.DividendPoolCount
+	}
+	return 0
+}
+
+func (x *GuildWarWeeklyProgressRecord) GetMvp1PlayerId() uint64 {
+	if x != nil {
+		return x.Mvp1PlayerId
+	}
+	return 0
+}
+
+func (x *GuildWarWeeklyProgressRecord) GetMvp1Merit() uint64 {
+	if x != nil {
+		return x.Mvp1Merit
+	}
+	return 0
+}
+
+func (x *GuildWarWeeklyProgressRecord) GetMvp2PlayerId() uint64 {
+	if x != nil {
+		return x.Mvp2PlayerId
+	}
+	return 0
+}
+
+func (x *GuildWarWeeklyProgressRecord) GetMvp2Merit() uint64 {
+	if x != nil {
+		return x.Mvp2Merit
+	}
+	return 0
+}
+
+func (x *GuildWarWeeklyProgressRecord) GetFirstWinPlayer1Id() uint64 {
+	if x != nil {
+		return x.FirstWinPlayer1Id
+	}
+	return 0
+}
+
+func (x *GuildWarWeeklyProgressRecord) GetFirstWinPlayer2Id() uint64 {
+	if x != nil {
+		return x.FirstWinPlayer2Id
+	}
+	return 0
+}
+
+func (x *GuildWarWeeklyProgressRecord) GetFirstWinAtMs() uint64 {
+	if x != nil {
+		return x.FirstWinAtMs
+	}
+	return 0
+}
+
+func (x *GuildWarWeeklyProgressRecord) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
+// 锁序位置 16:玩家帮战个人态(和平免战、挂牌迎战、连胜、周领奖位图防换帮重领)。
+type GuildWarPlayerStateRecord struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId              uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	ZoneId                uint32                 `protobuf:"varint,2,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`
+	PeaceMode             uint32                 `protobuf:"varint,3,opt,name=peace_mode,json=peaceMode,proto3" json:"peace_mode,omitempty"`                                          // 0=战意(默认) / 1=和平免战
+	PeaceReadyAtMs        uint64                 `protobuf:"varint,4,opt,name=peace_ready_at_ms,json=peaceReadyAtMs,proto3" json:"peace_ready_at_ms,omitempty"`                       // 脱战 60s 冷却截止(now >= 它才可从战意切和平)
+	OpenChallenge         uint32                 `protobuf:"varint,5,opt,name=open_challenge,json=openChallenge,proto3" json:"open_challenge,omitempty"`                              // 0=未挂牌 / 1=界面挂牌迎战
+	ProtectUntilMs        uint64                 `protobuf:"varint,6,opt,name=protect_until_ms,json=protectUntilMs,proto3" json:"protect_until_ms,omitempty"`                         // 战后 10s 防堵门保护截止
+	StreakCount           uint32                 `protobuf:"varint,7,opt,name=streak_count,json=streakCount,proto3" json:"streak_count,omitempty"`                                    // 当前连胜层数
+	StreakDistinctCount   uint32                 `protobuf:"varint,8,opt,name=streak_distinct_count,json=streakDistinctCount,proto3" json:"streak_distinct_count,omitempty"`          // 连胜期内击败的不同对手数(悬赏需 >=2)
+	StreakLastOpponentId  uint64                 `protobuf:"varint,9,opt,name=streak_last_opponent_id,json=streakLastOpponentId,proto3" json:"streak_last_opponent_id,omitempty"`     // 防同一人刷连胜
+	WeeklyWeekKey         uint32                 `protobuf:"varint,10,opt,name=weekly_week_key,json=weeklyWeekKey,proto3" json:"weekly_week_key,omitempty"`                           // 下面三列对应的 ISO 周键
+	WeeklyMerit           uint64                 `protobuf:"varint,11,opt,name=weekly_merit,json=weeklyMerit,proto3" json:"weekly_merit,omitempty"`                                   // 本人本周战功(>=30 解锁周箱与分红)
+	MilestoneClaimedMask  uint32                 `protobuf:"varint,12,opt,name=milestone_claimed_mask,json=milestoneClaimedMask,proto3" json:"milestone_claimed_mask,omitempty"`      // 本周已领里程碑位图(bit 0..3 对应档位 1..4,换帮不重置)
+	DividendClaimedCount  uint32                 `protobuf:"varint,13,opt,name=dividend_claimed_count,json=dividendClaimedCount,proto3" json:"dividend_claimed_count,omitempty"`      // 本周已领灵脉分红份数(上限 12,换帮不重置)
+	BountyProtectUntilMs  uint64                 `protobuf:"varint,14,opt,name=bounty_protect_until_ms,json=bountyProtectUntilMs,proto3" json:"bounty_protect_until_ms,omitempty"`    // 被成功追杀销单后 30 分钟免再挂保护截止
+	LastGarrisonRefreshMs uint64                 `protobuf:"varint,15,opt,name=last_garrison_refresh_ms,json=lastGarrisonRefreshMs,proto3" json:"last_garrison_refresh_ms,omitempty"` // 守旗刷新 60s 冷却基准
+	LastTrackMs           uint64                 `protobuf:"varint,16,opt,name=last_track_ms,json=lastTrackMs,proto3" json:"last_track_ms,omitempty"`                                 // 追杀追踪 15s 冷却基准
+	UpdatedMs             uint64                 `protobuf:"varint,17,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *GuildWarPlayerStateRecord) Reset() {
+	*x = GuildWarPlayerStateRecord{}
+	mi := &file_proto_guild_guild_db_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildWarPlayerStateRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildWarPlayerStateRecord) ProtoMessage() {}
+
+func (x *GuildWarPlayerStateRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_db_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildWarPlayerStateRecord.ProtoReflect.Descriptor instead.
+func (*GuildWarPlayerStateRecord) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *GuildWarPlayerStateRecord) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *GuildWarPlayerStateRecord) GetZoneId() uint32 {
+	if x != nil {
+		return x.ZoneId
+	}
+	return 0
+}
+
+func (x *GuildWarPlayerStateRecord) GetPeaceMode() uint32 {
+	if x != nil {
+		return x.PeaceMode
+	}
+	return 0
+}
+
+func (x *GuildWarPlayerStateRecord) GetPeaceReadyAtMs() uint64 {
+	if x != nil {
+		return x.PeaceReadyAtMs
+	}
+	return 0
+}
+
+func (x *GuildWarPlayerStateRecord) GetOpenChallenge() uint32 {
+	if x != nil {
+		return x.OpenChallenge
+	}
+	return 0
+}
+
+func (x *GuildWarPlayerStateRecord) GetProtectUntilMs() uint64 {
+	if x != nil {
+		return x.ProtectUntilMs
+	}
+	return 0
+}
+
+func (x *GuildWarPlayerStateRecord) GetStreakCount() uint32 {
+	if x != nil {
+		return x.StreakCount
+	}
+	return 0
+}
+
+func (x *GuildWarPlayerStateRecord) GetStreakDistinctCount() uint32 {
+	if x != nil {
+		return x.StreakDistinctCount
+	}
+	return 0
+}
+
+func (x *GuildWarPlayerStateRecord) GetStreakLastOpponentId() uint64 {
+	if x != nil {
+		return x.StreakLastOpponentId
+	}
+	return 0
+}
+
+func (x *GuildWarPlayerStateRecord) GetWeeklyWeekKey() uint32 {
+	if x != nil {
+		return x.WeeklyWeekKey
+	}
+	return 0
+}
+
+func (x *GuildWarPlayerStateRecord) GetWeeklyMerit() uint64 {
+	if x != nil {
+		return x.WeeklyMerit
+	}
+	return 0
+}
+
+func (x *GuildWarPlayerStateRecord) GetMilestoneClaimedMask() uint32 {
+	if x != nil {
+		return x.MilestoneClaimedMask
+	}
+	return 0
+}
+
+func (x *GuildWarPlayerStateRecord) GetDividendClaimedCount() uint32 {
+	if x != nil {
+		return x.DividendClaimedCount
+	}
+	return 0
+}
+
+func (x *GuildWarPlayerStateRecord) GetBountyProtectUntilMs() uint64 {
+	if x != nil {
+		return x.BountyProtectUntilMs
+	}
+	return 0
+}
+
+func (x *GuildWarPlayerStateRecord) GetLastGarrisonRefreshMs() uint64 {
+	if x != nil {
+		return x.LastGarrisonRefreshMs
+	}
+	return 0
+}
+
+func (x *GuildWarPlayerStateRecord) GetLastTrackMs() uint64 {
+	if x != nil {
+		return x.LastTrackMs
+	}
+	return 0
+}
+
+func (x *GuildWarPlayerStateRecord) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
+// 锁序位置 17:江湖追杀令托管与生命周期。
+type GuildWarBountyRecord struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	BountyId              uint64                 `protobuf:"varint,1,opt,name=bounty_id,json=bountyId,proto3" json:"bounty_id,omitempty"` // 发号器永久 ID
+	ZoneId                uint32                 `protobuf:"varint,2,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`
+	IssuerPlayerId        uint64                 `protobuf:"varint,3,opt,name=issuer_player_id,json=issuerPlayerId,proto3" json:"issuer_player_id,omitempty"`
+	IssuerGuildId         uint64                 `protobuf:"varint,4,opt,name=issuer_guild_id,json=issuerGuildId,proto3" json:"issuer_guild_id,omitempty"`
+	TargetPlayerId        uint64                 `protobuf:"varint,5,opt,name=target_player_id,json=targetPlayerId,proto3" json:"target_player_id,omitempty"`
+	TargetGuildId         uint64                 `protobuf:"varint,6,opt,name=target_guild_id,json=targetGuildId,proto3" json:"target_guild_id,omitempty"`
+	Tier                  uint32                 `protobuf:"varint,7,opt,name=tier,proto3" json:"tier,omitempty"`                                                                     // 1=普通5000银两 / 2=重金15000银两 / 3=帮会公费2000资金
+	EscrowSilver          uint64                 `protobuf:"varint,8,opt,name=escrow_silver,json=escrowSilver,proto3" json:"escrow_silver,omitempty"`                                 // 扣 10% 销毁税后入池赏金银两
+	PublicBoard           uint32                 `protobuf:"varint,9,opt,name=public_board,json=publicBoard,proto3" json:"public_board,omitempty"`                                    // 0=仅本帮 / 1=全区江湖榜
+	Status                uint32                 `protobuf:"varint,10,opt,name=status,proto3" json:"status,omitempty"`                                                                // 1=ESCROW_PENDING / 2=ACTIVE / 3=COMPLETED / 4=TORN_BY_TARGET / 5=EXPIRED
+	EscrowOpId            uint64                 `protobuf:"varint,11,opt,name=escrow_op_id,json=escrowOpId,proto3" json:"escrow_op_id,omitempty"`                                    // 对应 guild_asset_op.op_id(公费档为 0)
+	CounterKills          uint32                 `protobuf:"varint,12,opt,name=counter_kills,json=counterKills,proto3" json:"counter_kills,omitempty"`                                // 目标已成功反杀不同追兵次数(达 2 撕单)
+	LastCounterAttackerId uint64                 `protobuf:"varint,13,opt,name=last_counter_attacker_id,json=lastCounterAttackerId,proto3" json:"last_counter_attacker_id,omitempty"` // 防止同一追兵刷反杀次数
+	HunterPlayerId        uint64                 `protobuf:"varint,14,opt,name=hunter_player_id,json=hunterPlayerId,proto3" json:"hunter_player_id,omitempty"`                        // 最终结单猎手 ID
+	CreatedAtMs           uint64                 `protobuf:"varint,15,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
+	ExpiresAtMs           uint64                 `protobuf:"varint,16,opt,name=expires_at_ms,json=expiresAtMs,proto3" json:"expires_at_ms,omitempty"`
+	ResolvedAtMs          uint64                 `protobuf:"varint,17,opt,name=resolved_at_ms,json=resolvedAtMs,proto3" json:"resolved_at_ms,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *GuildWarBountyRecord) Reset() {
+	*x = GuildWarBountyRecord{}
+	mi := &file_proto_guild_guild_db_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildWarBountyRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildWarBountyRecord) ProtoMessage() {}
+
+func (x *GuildWarBountyRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_db_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildWarBountyRecord.ProtoReflect.Descriptor instead.
+func (*GuildWarBountyRecord) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *GuildWarBountyRecord) GetBountyId() uint64 {
+	if x != nil {
+		return x.BountyId
+	}
+	return 0
+}
+
+func (x *GuildWarBountyRecord) GetZoneId() uint32 {
+	if x != nil {
+		return x.ZoneId
+	}
+	return 0
+}
+
+func (x *GuildWarBountyRecord) GetIssuerPlayerId() uint64 {
+	if x != nil {
+		return x.IssuerPlayerId
+	}
+	return 0
+}
+
+func (x *GuildWarBountyRecord) GetIssuerGuildId() uint64 {
+	if x != nil {
+		return x.IssuerGuildId
+	}
+	return 0
+}
+
+func (x *GuildWarBountyRecord) GetTargetPlayerId() uint64 {
+	if x != nil {
+		return x.TargetPlayerId
+	}
+	return 0
+}
+
+func (x *GuildWarBountyRecord) GetTargetGuildId() uint64 {
+	if x != nil {
+		return x.TargetGuildId
+	}
+	return 0
+}
+
+func (x *GuildWarBountyRecord) GetTier() uint32 {
+	if x != nil {
+		return x.Tier
+	}
+	return 0
+}
+
+func (x *GuildWarBountyRecord) GetEscrowSilver() uint64 {
+	if x != nil {
+		return x.EscrowSilver
+	}
+	return 0
+}
+
+func (x *GuildWarBountyRecord) GetPublicBoard() uint32 {
+	if x != nil {
+		return x.PublicBoard
+	}
+	return 0
+}
+
+func (x *GuildWarBountyRecord) GetStatus() uint32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+func (x *GuildWarBountyRecord) GetEscrowOpId() uint64 {
+	if x != nil {
+		return x.EscrowOpId
+	}
+	return 0
+}
+
+func (x *GuildWarBountyRecord) GetCounterKills() uint32 {
+	if x != nil {
+		return x.CounterKills
+	}
+	return 0
+}
+
+func (x *GuildWarBountyRecord) GetLastCounterAttackerId() uint64 {
+	if x != nil {
+		return x.LastCounterAttackerId
+	}
+	return 0
+}
+
+func (x *GuildWarBountyRecord) GetHunterPlayerId() uint64 {
+	if x != nil {
+		return x.HunterPlayerId
+	}
+	return 0
+}
+
+func (x *GuildWarBountyRecord) GetCreatedAtMs() uint64 {
+	if x != nil {
+		return x.CreatedAtMs
+	}
+	return 0
+}
+
+func (x *GuildWarBountyRecord) GetExpiresAtMs() uint64 {
+	if x != nil {
+		return x.ExpiresAtMs
+	}
+	return 0
+}
+
+func (x *GuildWarBountyRecord) GetResolvedAtMs() uint64 {
+	if x != nil {
+		return x.ResolvedAtMs
+	}
+	return 0
+}
+
+// 锁序位置 18:帮战终局幂等闸门、大事记与本人结算回查。
+type GuildWarBattleRecord struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	BattleId             uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	ZoneId               uint32                 `protobuf:"varint,2,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`
+	WarBattleKind        uint32                 `protobuf:"varint,3,opt,name=war_battle_kind,json=warBattleKind,proto3" json:"war_battle_kind,omitempty"` // 1..5
+	LeylineId            uint32                 `protobuf:"varint,4,opt,name=leyline_id,json=leylineId,proto3" json:"leyline_id,omitempty"`
+	BountyId             uint64                 `protobuf:"varint,5,opt,name=bounty_id,json=bountyId,proto3" json:"bounty_id,omitempty"`
+	AttackerGuildId      uint64                 `protobuf:"varint,6,opt,name=attacker_guild_id,json=attackerGuildId,proto3" json:"attacker_guild_id,omitempty"`
+	DefenderGuildId      uint64                 `protobuf:"varint,7,opt,name=defender_guild_id,json=defenderGuildId,proto3" json:"defender_guild_id,omitempty"`
+	Outcome              uint32                 `protobuf:"varint,8,opt,name=outcome,proto3" json:"outcome,omitempty"` // eBattleOutcome
+	TotalRounds          uint32                 `protobuf:"varint,9,opt,name=total_rounds,json=totalRounds,proto3" json:"total_rounds,omitempty"`
+	BannerHpBefore       uint32                 `protobuf:"varint,10,opt,name=banner_hp_before,json=bannerHpBefore,proto3" json:"banner_hp_before,omitempty"`
+	BannerHpAfter        uint32                 `protobuf:"varint,11,opt,name=banner_hp_after,json=bannerHpAfter,proto3" json:"banner_hp_after,omitempty"`
+	BannerShielded       uint32                 `protobuf:"varint,12,opt,name=banner_shielded,json=bannerShielded,proto3" json:"banner_shielded,omitempty"`
+	BountyOutcomeTag     uint32                 `protobuf:"varint,13,opt,name=bounty_outcome_tag,json=bountyOutcomeTag,proto3" json:"bounty_outcome_tag,omitempty"` // 0无/1终结连胜/2追杀成功/3反杀成功/4反杀撕单/5破旗首功
+	JackpotContribution  uint64                 `protobuf:"varint,14,opt,name=jackpot_contribution,json=jackpotContribution,proto3" json:"jackpot_contribution,omitempty"`
+	JackpotSilver        uint64                 `protobuf:"varint,15,opt,name=jackpot_silver,json=jackpotSilver,proto3" json:"jackpot_silver,omitempty"`
+	DiminishPercent      uint32                 `protobuf:"varint,16,opt,name=diminish_percent,json=diminishPercent,proto3" json:"diminish_percent,omitempty"` // 100/50/20/0
+	AttackerContribution uint64                 `protobuf:"varint,17,opt,name=attacker_contribution,json=attackerContribution,proto3" json:"attacker_contribution,omitempty"`
+	AttackerSilver       uint64                 `protobuf:"varint,18,opt,name=attacker_silver,json=attackerSilver,proto3" json:"attacker_silver,omitempty"`
+	AttackerFunds        uint64                 `protobuf:"varint,19,opt,name=attacker_funds,json=attackerFunds,proto3" json:"attacker_funds,omitempty"`
+	AttackerMerit        uint64                 `protobuf:"varint,20,opt,name=attacker_merit,json=attackerMerit,proto3" json:"attacker_merit,omitempty"`
+	DefenderContribution uint64                 `protobuf:"varint,21,opt,name=defender_contribution,json=defenderContribution,proto3" json:"defender_contribution,omitempty"`
+	DefenderSilver       uint64                 `protobuf:"varint,22,opt,name=defender_silver,json=defenderSilver,proto3" json:"defender_silver,omitempty"`
+	DefenderFunds        uint64                 `protobuf:"varint,23,opt,name=defender_funds,json=defenderFunds,proto3" json:"defender_funds,omitempty"`
+	DefenderMerit        uint64                 `protobuf:"varint,24,opt,name=defender_merit,json=defenderMerit,proto3" json:"defender_merit,omitempty"`
+	SummaryPayload       []byte                 `protobuf:"bytes,25,opt,name=summary_payload,json=summaryPayload,proto3" json:"summary_payload,omitempty"` // 序列化双方成员 ID/名字快照供大事记与结算页展示
+	FinishedAtMs         uint64                 `protobuf:"varint,26,opt,name=finished_at_ms,json=finishedAtMs,proto3" json:"finished_at_ms,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *GuildWarBattleRecord) Reset() {
+	*x = GuildWarBattleRecord{}
+	mi := &file_proto_guild_guild_db_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildWarBattleRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildWarBattleRecord) ProtoMessage() {}
+
+func (x *GuildWarBattleRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_db_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildWarBattleRecord.ProtoReflect.Descriptor instead.
+func (*GuildWarBattleRecord) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *GuildWarBattleRecord) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *GuildWarBattleRecord) GetZoneId() uint32 {
+	if x != nil {
+		return x.ZoneId
+	}
+	return 0
+}
+
+func (x *GuildWarBattleRecord) GetWarBattleKind() uint32 {
+	if x != nil {
+		return x.WarBattleKind
+	}
+	return 0
+}
+
+func (x *GuildWarBattleRecord) GetLeylineId() uint32 {
+	if x != nil {
+		return x.LeylineId
+	}
+	return 0
+}
+
+func (x *GuildWarBattleRecord) GetBountyId() uint64 {
+	if x != nil {
+		return x.BountyId
+	}
+	return 0
+}
+
+func (x *GuildWarBattleRecord) GetAttackerGuildId() uint64 {
+	if x != nil {
+		return x.AttackerGuildId
+	}
+	return 0
+}
+
+func (x *GuildWarBattleRecord) GetDefenderGuildId() uint64 {
+	if x != nil {
+		return x.DefenderGuildId
+	}
+	return 0
+}
+
+func (x *GuildWarBattleRecord) GetOutcome() uint32 {
+	if x != nil {
+		return x.Outcome
+	}
+	return 0
+}
+
+func (x *GuildWarBattleRecord) GetTotalRounds() uint32 {
+	if x != nil {
+		return x.TotalRounds
+	}
+	return 0
+}
+
+func (x *GuildWarBattleRecord) GetBannerHpBefore() uint32 {
+	if x != nil {
+		return x.BannerHpBefore
+	}
+	return 0
+}
+
+func (x *GuildWarBattleRecord) GetBannerHpAfter() uint32 {
+	if x != nil {
+		return x.BannerHpAfter
+	}
+	return 0
+}
+
+func (x *GuildWarBattleRecord) GetBannerShielded() uint32 {
+	if x != nil {
+		return x.BannerShielded
+	}
+	return 0
+}
+
+func (x *GuildWarBattleRecord) GetBountyOutcomeTag() uint32 {
+	if x != nil {
+		return x.BountyOutcomeTag
+	}
+	return 0
+}
+
+func (x *GuildWarBattleRecord) GetJackpotContribution() uint64 {
+	if x != nil {
+		return x.JackpotContribution
+	}
+	return 0
+}
+
+func (x *GuildWarBattleRecord) GetJackpotSilver() uint64 {
+	if x != nil {
+		return x.JackpotSilver
+	}
+	return 0
+}
+
+func (x *GuildWarBattleRecord) GetDiminishPercent() uint32 {
+	if x != nil {
+		return x.DiminishPercent
+	}
+	return 0
+}
+
+func (x *GuildWarBattleRecord) GetAttackerContribution() uint64 {
+	if x != nil {
+		return x.AttackerContribution
+	}
+	return 0
+}
+
+func (x *GuildWarBattleRecord) GetAttackerSilver() uint64 {
+	if x != nil {
+		return x.AttackerSilver
+	}
+	return 0
+}
+
+func (x *GuildWarBattleRecord) GetAttackerFunds() uint64 {
+	if x != nil {
+		return x.AttackerFunds
+	}
+	return 0
+}
+
+func (x *GuildWarBattleRecord) GetAttackerMerit() uint64 {
+	if x != nil {
+		return x.AttackerMerit
+	}
+	return 0
+}
+
+func (x *GuildWarBattleRecord) GetDefenderContribution() uint64 {
+	if x != nil {
+		return x.DefenderContribution
+	}
+	return 0
+}
+
+func (x *GuildWarBattleRecord) GetDefenderSilver() uint64 {
+	if x != nil {
+		return x.DefenderSilver
+	}
+	return 0
+}
+
+func (x *GuildWarBattleRecord) GetDefenderFunds() uint64 {
+	if x != nil {
+		return x.DefenderFunds
+	}
+	return 0
+}
+
+func (x *GuildWarBattleRecord) GetDefenderMerit() uint64 {
+	if x != nil {
+		return x.DefenderMerit
+	}
+	return 0
+}
+
+func (x *GuildWarBattleRecord) GetSummaryPayload() []byte {
+	if x != nil {
+		return x.SummaryPayload
+	}
+	return nil
+}
+
+func (x *GuildWarBattleRecord) GetFinishedAtMs() uint64 {
+	if x != nil {
+		return x.FinishedAtMs
+	}
+	return 0
+}
+
+// 锁序位置 19:两帮本周宿敌计数(每周交手 >= 5 次或互挂追杀自动结为宿敌,+20% 帮贡与战功)。
+type GuildWarRivalryRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	GuildIdLow    uint64                 `protobuf:"varint,1,opt,name=guild_id_low,json=guildIdLow,proto3" json:"guild_id_low,omitempty"`
+	GuildIdHigh   uint64                 `protobuf:"varint,2,opt,name=guild_id_high,json=guildIdHigh,proto3" json:"guild_id_high,omitempty"`
+	WeekKey       uint32                 `protobuf:"varint,3,opt,name=week_key,json=weekKey,proto3" json:"week_key,omitempty"`
+	ClashCount    uint32                 `protobuf:"varint,4,opt,name=clash_count,json=clashCount,proto3" json:"clash_count,omitempty"`
+	BountyMarked  uint32                 `protobuf:"varint,5,opt,name=bounty_marked,json=bountyMarked,proto3" json:"bounty_marked,omitempty"` // 1 = 互挂过追杀令直接成宿敌
+	UpdatedMs     uint64                 `protobuf:"varint,6,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GuildWarRivalryRecord) Reset() {
+	*x = GuildWarRivalryRecord{}
+	mi := &file_proto_guild_guild_db_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildWarRivalryRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildWarRivalryRecord) ProtoMessage() {}
+
+func (x *GuildWarRivalryRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_db_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildWarRivalryRecord.ProtoReflect.Descriptor instead.
+func (*GuildWarRivalryRecord) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *GuildWarRivalryRecord) GetGuildIdLow() uint64 {
+	if x != nil {
+		return x.GuildIdLow
+	}
+	return 0
+}
+
+func (x *GuildWarRivalryRecord) GetGuildIdHigh() uint64 {
+	if x != nil {
+		return x.GuildIdHigh
+	}
+	return 0
+}
+
+func (x *GuildWarRivalryRecord) GetWeekKey() uint32 {
+	if x != nil {
+		return x.WeekKey
+	}
+	return 0
+}
+
+func (x *GuildWarRivalryRecord) GetClashCount() uint32 {
+	if x != nil {
+		return x.ClashCount
+	}
+	return 0
+}
+
+func (x *GuildWarRivalryRecord) GetBountyMarked() uint32 {
+	if x != nil {
+		return x.BountyMarked
+	}
+	return 0
+}
+
+func (x *GuildWarRivalryRecord) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
+// 锁序位置 20:帮派生死状恩怨汇总(docs/design/battle-jianghu-grudge-duel-bounty-v1.md §2.2)。
+type GuildJianghuRivalSummaryRecord struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	GuildId        uint64                 `protobuf:"varint,1,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`
+	RivalGuildId   uint64                 `protobuf:"varint,2,opt,name=rival_guild_id,json=rivalGuildId,proto3" json:"rival_guild_id,omitempty"`
+	RivalGuildName string                 `protobuf:"bytes,3,opt,name=rival_guild_name,json=rivalGuildName,proto3" json:"rival_guild_name,omitempty"`
+	Wins           uint32                 `protobuf:"varint,4,opt,name=wins,proto3" json:"wins,omitempty"`
+	Losses         uint32                 `protobuf:"varint,5,opt,name=losses,proto3" json:"losses,omitempty"`
+	Draws          uint32                 `protobuf:"varint,6,opt,name=draws,proto3" json:"draws,omitempty"`
+	LastBattleMs   uint64                 `protobuf:"varint,7,opt,name=last_battle_ms,json=lastBattleMs,proto3" json:"last_battle_ms,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GuildJianghuRivalSummaryRecord) Reset() {
+	*x = GuildJianghuRivalSummaryRecord{}
+	mi := &file_proto_guild_guild_db_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildJianghuRivalSummaryRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildJianghuRivalSummaryRecord) ProtoMessage() {}
+
+func (x *GuildJianghuRivalSummaryRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_db_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildJianghuRivalSummaryRecord.ProtoReflect.Descriptor instead.
+func (*GuildJianghuRivalSummaryRecord) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *GuildJianghuRivalSummaryRecord) GetGuildId() uint64 {
+	if x != nil {
+		return x.GuildId
+	}
+	return 0
+}
+
+func (x *GuildJianghuRivalSummaryRecord) GetRivalGuildId() uint64 {
+	if x != nil {
+		return x.RivalGuildId
+	}
+	return 0
+}
+
+func (x *GuildJianghuRivalSummaryRecord) GetRivalGuildName() string {
+	if x != nil {
+		return x.RivalGuildName
+	}
+	return ""
+}
+
+func (x *GuildJianghuRivalSummaryRecord) GetWins() uint32 {
+	if x != nil {
+		return x.Wins
+	}
+	return 0
+}
+
+func (x *GuildJianghuRivalSummaryRecord) GetLosses() uint32 {
+	if x != nil {
+		return x.Losses
+	}
+	return 0
+}
+
+func (x *GuildJianghuRivalSummaryRecord) GetDraws() uint32 {
+	if x != nil {
+		return x.Draws
+	}
+	return 0
+}
+
+func (x *GuildJianghuRivalSummaryRecord) GetLastBattleMs() uint64 {
+	if x != nil {
+		return x.LastBattleMs
+	}
+	return 0
+}
+
+// 锁序位置 21:帮派生死状恩怨墙近期战绩(每帮保留最近 20 场,按 (guild_id, battle_id) 幂等去重)。
+type GuildJianghuGrudgeRecord struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	GuildId          uint64                 `protobuf:"varint,1,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`
+	BattleId         uint64                 `protobuf:"varint,2,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	RivalGuildId     uint64                 `protobuf:"varint,3,opt,name=rival_guild_id,json=rivalGuildId,proto3" json:"rival_guild_id,omitempty"`
+	RivalGuildName   string                 `protobuf:"bytes,4,opt,name=rival_guild_name,json=rivalGuildName,proto3" json:"rival_guild_name,omitempty"`
+	OutcomeForGuild  uint32                 `protobuf:"varint,5,opt,name=outcome_for_guild,json=outcomeForGuild,proto3" json:"outcome_for_guild,omitempty"` // 1=胜, 2=负, 3=平
+	WritTier         uint32                 `protobuf:"varint,6,opt,name=writ_tier,json=writTier,proto3" json:"writ_tier,omitempty"`                        // 1=普通战书, 2=金帖生死状
+	TeamSize         uint32                 `protobuf:"varint,7,opt,name=team_size,json=teamSize,proto3" json:"team_size,omitempty"`
+	TotalRounds      uint32                 `protobuf:"varint,8,opt,name=total_rounds,json=totalRounds,proto3" json:"total_rounds,omitempty"`
+	OurCaptainName   string                 `protobuf:"bytes,9,opt,name=our_captain_name,json=ourCaptainName,proto3" json:"our_captain_name,omitempty"`
+	RivalCaptainName string                 `protobuf:"bytes,10,opt,name=rival_captain_name,json=rivalCaptainName,proto3" json:"rival_captain_name,omitempty"`
+	FinishedMs       uint64                 `protobuf:"varint,11,opt,name=finished_ms,json=finishedMs,proto3" json:"finished_ms,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *GuildJianghuGrudgeRecord) Reset() {
+	*x = GuildJianghuGrudgeRecord{}
+	mi := &file_proto_guild_guild_db_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildJianghuGrudgeRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildJianghuGrudgeRecord) ProtoMessage() {}
+
+func (x *GuildJianghuGrudgeRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_db_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildJianghuGrudgeRecord.ProtoReflect.Descriptor instead.
+func (*GuildJianghuGrudgeRecord) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *GuildJianghuGrudgeRecord) GetGuildId() uint64 {
+	if x != nil {
+		return x.GuildId
+	}
+	return 0
+}
+
+func (x *GuildJianghuGrudgeRecord) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *GuildJianghuGrudgeRecord) GetRivalGuildId() uint64 {
+	if x != nil {
+		return x.RivalGuildId
+	}
+	return 0
+}
+
+func (x *GuildJianghuGrudgeRecord) GetRivalGuildName() string {
+	if x != nil {
+		return x.RivalGuildName
+	}
+	return ""
+}
+
+func (x *GuildJianghuGrudgeRecord) GetOutcomeForGuild() uint32 {
+	if x != nil {
+		return x.OutcomeForGuild
+	}
+	return 0
+}
+
+func (x *GuildJianghuGrudgeRecord) GetWritTier() uint32 {
+	if x != nil {
+		return x.WritTier
+	}
+	return 0
+}
+
+func (x *GuildJianghuGrudgeRecord) GetTeamSize() uint32 {
+	if x != nil {
+		return x.TeamSize
+	}
+	return 0
+}
+
+func (x *GuildJianghuGrudgeRecord) GetTotalRounds() uint32 {
+	if x != nil {
+		return x.TotalRounds
+	}
+	return 0
+}
+
+func (x *GuildJianghuGrudgeRecord) GetOurCaptainName() string {
+	if x != nil {
+		return x.OurCaptainName
+	}
+	return ""
+}
+
+func (x *GuildJianghuGrudgeRecord) GetRivalCaptainName() string {
+	if x != nil {
+		return x.RivalCaptainName
+	}
+	return ""
+}
+
+func (x *GuildJianghuGrudgeRecord) GetFinishedMs() uint64 {
+	if x != nil {
+		return x.FinishedMs
+	}
+	return 0
+}
+
+// 锁序位置 22:帮会全天帮战 V2.5 宿敌约战战书(2 小时全帮约战 + 实时比分 + 24h 冷却)。
+type GuildWarFeudRecord struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	FeudId           uint64                 `protobuf:"varint,1,opt,name=feud_id,json=feudId,proto3" json:"feud_id,omitempty"`
+	ZoneId           uint32                 `protobuf:"varint,2,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`
+	IssuerGuildId    uint64                 `protobuf:"varint,3,opt,name=issuer_guild_id,json=issuerGuildId,proto3" json:"issuer_guild_id,omitempty"`
+	IssuerGuildName  string                 `protobuf:"bytes,4,opt,name=issuer_guild_name,json=issuerGuildName,proto3" json:"issuer_guild_name,omitempty"`
+	TargetGuildId    uint64                 `protobuf:"varint,5,opt,name=target_guild_id,json=targetGuildId,proto3" json:"target_guild_id,omitempty"`
+	TargetGuildName  string                 `protobuf:"bytes,6,opt,name=target_guild_name,json=targetGuildName,proto3" json:"target_guild_name,omitempty"`
+	Status           uint32                 `protobuf:"varint,7,opt,name=status,proto3" json:"status,omitempty"` // GuildWarFeudStatus
+	IssuerWins       uint32                 `protobuf:"varint,8,opt,name=issuer_wins,json=issuerWins,proto3" json:"issuer_wins,omitempty"`
+	TargetWins       uint32                 `protobuf:"varint,9,opt,name=target_wins,json=targetWins,proto3" json:"target_wins,omitempty"`
+	IssuerMerit      uint64                 `protobuf:"varint,10,opt,name=issuer_merit,json=issuerMerit,proto3" json:"issuer_merit,omitempty"`
+	TargetMerit      uint64                 `protobuf:"varint,11,opt,name=target_merit,json=targetMerit,proto3" json:"target_merit,omitempty"`
+	CreatedAtMs      uint64                 `protobuf:"varint,12,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
+	AcceptDeadlineMs uint64                 `protobuf:"varint,13,opt,name=accept_deadline_ms,json=acceptDeadlineMs,proto3" json:"accept_deadline_ms,omitempty"`
+	StartedAtMs      uint64                 `protobuf:"varint,14,opt,name=started_at_ms,json=startedAtMs,proto3" json:"started_at_ms,omitempty"`
+	EndsAtMs         uint64                 `protobuf:"varint,15,opt,name=ends_at_ms,json=endsAtMs,proto3" json:"ends_at_ms,omitempty"`
+	WinnerGuildId    uint64                 `protobuf:"varint,16,opt,name=winner_guild_id,json=winnerGuildId,proto3" json:"winner_guild_id,omitempty"`
+	UpdatedMs        uint64                 `protobuf:"varint,17,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *GuildWarFeudRecord) Reset() {
+	*x = GuildWarFeudRecord{}
+	mi := &file_proto_guild_guild_db_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildWarFeudRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildWarFeudRecord) ProtoMessage() {}
+
+func (x *GuildWarFeudRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_db_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildWarFeudRecord.ProtoReflect.Descriptor instead.
+func (*GuildWarFeudRecord) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *GuildWarFeudRecord) GetFeudId() uint64 {
+	if x != nil {
+		return x.FeudId
+	}
+	return 0
+}
+
+func (x *GuildWarFeudRecord) GetZoneId() uint32 {
+	if x != nil {
+		return x.ZoneId
+	}
+	return 0
+}
+
+func (x *GuildWarFeudRecord) GetIssuerGuildId() uint64 {
+	if x != nil {
+		return x.IssuerGuildId
+	}
+	return 0
+}
+
+func (x *GuildWarFeudRecord) GetIssuerGuildName() string {
+	if x != nil {
+		return x.IssuerGuildName
+	}
+	return ""
+}
+
+func (x *GuildWarFeudRecord) GetTargetGuildId() uint64 {
+	if x != nil {
+		return x.TargetGuildId
+	}
+	return 0
+}
+
+func (x *GuildWarFeudRecord) GetTargetGuildName() string {
+	if x != nil {
+		return x.TargetGuildName
+	}
+	return ""
+}
+
+func (x *GuildWarFeudRecord) GetStatus() uint32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+func (x *GuildWarFeudRecord) GetIssuerWins() uint32 {
+	if x != nil {
+		return x.IssuerWins
+	}
+	return 0
+}
+
+func (x *GuildWarFeudRecord) GetTargetWins() uint32 {
+	if x != nil {
+		return x.TargetWins
+	}
+	return 0
+}
+
+func (x *GuildWarFeudRecord) GetIssuerMerit() uint64 {
+	if x != nil {
+		return x.IssuerMerit
+	}
+	return 0
+}
+
+func (x *GuildWarFeudRecord) GetTargetMerit() uint64 {
+	if x != nil {
+		return x.TargetMerit
+	}
+	return 0
+}
+
+func (x *GuildWarFeudRecord) GetCreatedAtMs() uint64 {
+	if x != nil {
+		return x.CreatedAtMs
+	}
+	return 0
+}
+
+func (x *GuildWarFeudRecord) GetAcceptDeadlineMs() uint64 {
+	if x != nil {
+		return x.AcceptDeadlineMs
+	}
+	return 0
+}
+
+func (x *GuildWarFeudRecord) GetStartedAtMs() uint64 {
+	if x != nil {
+		return x.StartedAtMs
+	}
+	return 0
+}
+
+func (x *GuildWarFeudRecord) GetEndsAtMs() uint64 {
+	if x != nil {
+		return x.EndsAtMs
+	}
+	return 0
+}
+
+func (x *GuildWarFeudRecord) GetWinnerGuildId() uint64 {
+	if x != nil {
+		return x.WinnerGuildId
+	}
+	return 0
+}
+
+func (x *GuildWarFeudRecord) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
 var File_proto_guild_guild_db_proto protoreflect.FileDescriptor
 
 const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"\n" +
-	"\x1aproto/guild/guild_db.proto\x12\aguildpb\x1a\x1bproto/db/proto_option.proto\"\xad\x03\n" +
+	"\x1aproto/guild/guild_db.proto\x12\aguildpb\x1a\x1bproto/db/proto_option.proto\"\xcc\x03\n" +
 	"\vGuildRecord\x12\x19\n" +
 	"\bguild_id\x18\x01 \x01(\x04R\aguildId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n" +
@@ -2330,7 +3869,9 @@ const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"\x05funds\x18\n" +
 	" \x01(\x04R\x05funds\x12\x1b\n" +
 	"\tname_norm\x18\v \x01(\tR\bnameNorm\x12#\n" +
-	"\rscore_version\x18\f \x01(\x04R\fscoreVersion:J\x8a\x92\xf4\x01\x05guild\x92\x92\xf4\x01\bguild_idڒ\xf4\x01\x11zone_id;leader_id\xe2\x92\xf4\x01\tname_norm\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x8a\x01\n" +
+	"\rscore_version\x18\f \x01(\x04R\fscoreVersion\x12\x1d\n" +
+	"\n" +
+	"renamed_ms\x18\r \x01(\x04R\trenamedMs:J\x8a\x92\xf4\x01\x05guild\x92\x92\xf4\x01\bguild_idڒ\xf4\x01\x11zone_id;leader_id\xe2\x92\xf4\x01\tname_norm\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x8a\x01\n" +
 	"\x16GuildPlayerStateRecord\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1d\n" +
 	"\n" +
@@ -2538,7 +4079,186 @@ const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"\x05op_id\x18\x03 \x01(\x04R\x04opId\x12\x1d\n" +
 	"\n" +
 	"created_ms\x18\x04 \x01(\x04R\tcreatedMs:W\x8a\x92\xf4\x01\x14guild_client_request\x92\x92\xf4\x01\x1bplayer_id,client_request_idڒ\xf4\x01\n" +
-	"created_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04*\x98\x02\n" +
+	"created_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xc9\x01\n" +
+	"\x13GuildNameHoldRecord\x12\x17\n" +
+	"\ahold_id\x18\x01 \x01(\x04R\x06holdId\x12\x1b\n" +
+	"\tname_norm\x18\x02 \x01(\tR\bnameNorm\x12\x19\n" +
+	"\bguild_id\x18\x03 \x01(\x04R\aguildId\x12\"\n" +
+	"\rheld_until_ms\x18\x04 \x01(\x04R\vheldUntilMs:=\x8a\x92\xf4\x01\x0fguild_name_hold\x92\x92\xf4\x01\ahold_id\xe2\x92\xf4\x01\tname_norm\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x8e\x04\n" +
+	"\x15GuildWarLeylineRecord\x12\x17\n" +
+	"\azone_id\x18\x01 \x01(\rR\x06zoneId\x12\x1d\n" +
+	"\n" +
+	"leyline_id\x18\x02 \x01(\rR\tleylineId\x12$\n" +
+	"\x0eowner_guild_id\x18\x03 \x01(\x04R\fownerGuildId\x12\x1b\n" +
+	"\tbanner_hp\x18\x04 \x01(\rR\bbannerHp\x12&\n" +
+	"\x0fshield_until_ms\x18\x05 \x01(\x04R\rshieldUntilMs\x12$\n" +
+	"\x0ecaptured_at_ms\x18\x06 \x01(\x04R\fcapturedAtMs\x12-\n" +
+	"\x13last_dividend_at_ms\x18\a \x01(\x04R\x10lastDividendAtMs\x12*\n" +
+	"\x11dividend_week_key\x18\b \x01(\rR\x0fdividendWeekKey\x122\n" +
+	"\x15weekly_dividend_count\x18\t \x01(\rR\x13weeklyDividendCount\x12-\n" +
+	"\x13last_siege_alert_ms\x18\n" +
+	" \x01(\x04R\x10lastSiegeAlertMs\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\v \x01(\x04R\tupdatedMs:O\x8a\x92\xf4\x01\x11guild_war_leyline\x92\x92\xf4\x01\x12zone_id,leyline_idڒ\xf4\x01\x0eowner_guild_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xa0\x03\n" +
+	"\x16GuildWarGarrisonRecord\x12\x19\n" +
+	"\bguild_id\x18\x01 \x01(\x04R\aguildId\x12\x1d\n" +
+	"\n" +
+	"slot_index\x18\x02 \x01(\rR\tslotIndex\x12\x1b\n" +
+	"\tplayer_id\x18\x03 \x01(\x04R\bplayerId\x12\x1f\n" +
+	"\vplayer_name\x18\x04 \x01(\tR\n" +
+	"playerName\x12\x14\n" +
+	"\x05level\x18\x05 \x01(\rR\x05level\x12#\n" +
+	"\rappearance_id\x18\x06 \x01(\tR\fappearanceId\x12\x19\n" +
+	"\bpet_name\x18\a \x01(\tR\apetName\x12 \n" +
+	"\fpet_table_id\x18\b \x01(\rR\n" +
+	"petTableId\x12)\n" +
+	"\x10snapshot_payload\x18\t \x01(\fR\x0fsnapshotPayload\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\n" +
+	" \x01(\x04R\tupdatedMs:L\x8a\x92\xf4\x01\x12guild_war_garrison\x92\x92\xf4\x01\x13guild_id,slot_index\xe2\x92\xf4\x01\tplayer_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x9c\x04\n" +
+	"\x1cGuildWarWeeklyProgressRecord\x12\x19\n" +
+	"\bguild_id\x18\x01 \x01(\x04R\aguildId\x12\x19\n" +
+	"\bweek_key\x18\x02 \x01(\rR\aweekKey\x12\x1f\n" +
+	"\vguild_merit\x18\x03 \x01(\x04R\n" +
+	"guildMerit\x12.\n" +
+	"\x13dividend_pool_count\x18\x04 \x01(\rR\x11dividendPoolCount\x12$\n" +
+	"\x0emvp1_player_id\x18\x05 \x01(\x04R\fmvp1PlayerId\x12\x1d\n" +
+	"\n" +
+	"mvp1_merit\x18\x06 \x01(\x04R\tmvp1Merit\x12$\n" +
+	"\x0emvp2_player_id\x18\a \x01(\x04R\fmvp2PlayerId\x12\x1d\n" +
+	"\n" +
+	"mvp2_merit\x18\b \x01(\x04R\tmvp2Merit\x12/\n" +
+	"\x14first_win_player1_id\x18\t \x01(\x04R\x11firstWinPlayer1Id\x12/\n" +
+	"\x14first_win_player2_id\x18\n" +
+	" \x01(\x04R\x11firstWinPlayer2Id\x12%\n" +
+	"\x0ffirst_win_at_ms\x18\v \x01(\x04R\ffirstWinAtMs\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\f \x01(\x04R\tupdatedMs:C\x8a\x92\xf4\x01\x19guild_war_weekly_progress\x92\x92\xf4\x01\x11guild_id,week_key\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xb9\x06\n" +
+	"\x19GuildWarPlayerStateRecord\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x17\n" +
+	"\azone_id\x18\x02 \x01(\rR\x06zoneId\x12\x1d\n" +
+	"\n" +
+	"peace_mode\x18\x03 \x01(\rR\tpeaceMode\x12)\n" +
+	"\x11peace_ready_at_ms\x18\x04 \x01(\x04R\x0epeaceReadyAtMs\x12%\n" +
+	"\x0eopen_challenge\x18\x05 \x01(\rR\ropenChallenge\x12(\n" +
+	"\x10protect_until_ms\x18\x06 \x01(\x04R\x0eprotectUntilMs\x12!\n" +
+	"\fstreak_count\x18\a \x01(\rR\vstreakCount\x122\n" +
+	"\x15streak_distinct_count\x18\b \x01(\rR\x13streakDistinctCount\x125\n" +
+	"\x17streak_last_opponent_id\x18\t \x01(\x04R\x14streakLastOpponentId\x12&\n" +
+	"\x0fweekly_week_key\x18\n" +
+	" \x01(\rR\rweeklyWeekKey\x12!\n" +
+	"\fweekly_merit\x18\v \x01(\x04R\vweeklyMerit\x124\n" +
+	"\x16milestone_claimed_mask\x18\f \x01(\rR\x14milestoneClaimedMask\x124\n" +
+	"\x16dividend_claimed_count\x18\r \x01(\rR\x14dividendClaimedCount\x125\n" +
+	"\x17bounty_protect_until_ms\x18\x0e \x01(\x04R\x14bountyProtectUntilMs\x127\n" +
+	"\x18last_garrison_refresh_ms\x18\x0f \x01(\x04R\x15lastGarrisonRefreshMs\x12\"\n" +
+	"\rlast_track_ms\x18\x10 \x01(\x04R\vlastTrackMs\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\x11 \x01(\x04R\tupdatedMs:S\x8a\x92\xf4\x01\x16guild_war_player_state\x92\x92\xf4\x01\tplayer_idڒ\xf4\x01\x16zone_id,open_challenge\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x81\x06\n" +
+	"\x14GuildWarBountyRecord\x12\x1b\n" +
+	"\tbounty_id\x18\x01 \x01(\x04R\bbountyId\x12\x17\n" +
+	"\azone_id\x18\x02 \x01(\rR\x06zoneId\x12(\n" +
+	"\x10issuer_player_id\x18\x03 \x01(\x04R\x0eissuerPlayerId\x12&\n" +
+	"\x0fissuer_guild_id\x18\x04 \x01(\x04R\rissuerGuildId\x12(\n" +
+	"\x10target_player_id\x18\x05 \x01(\x04R\x0etargetPlayerId\x12&\n" +
+	"\x0ftarget_guild_id\x18\x06 \x01(\x04R\rtargetGuildId\x12\x12\n" +
+	"\x04tier\x18\a \x01(\rR\x04tier\x12#\n" +
+	"\rescrow_silver\x18\b \x01(\x04R\fescrowSilver\x12!\n" +
+	"\fpublic_board\x18\t \x01(\rR\vpublicBoard\x12\x16\n" +
+	"\x06status\x18\n" +
+	" \x01(\rR\x06status\x12 \n" +
+	"\fescrow_op_id\x18\v \x01(\x04R\n" +
+	"escrowOpId\x12#\n" +
+	"\rcounter_kills\x18\f \x01(\rR\fcounterKills\x127\n" +
+	"\x18last_counter_attacker_id\x18\r \x01(\x04R\x15lastCounterAttackerId\x12(\n" +
+	"\x10hunter_player_id\x18\x0e \x01(\x04R\x0ehunterPlayerId\x12\"\n" +
+	"\rcreated_at_ms\x18\x0f \x01(\x04R\vcreatedAtMs\x12\"\n" +
+	"\rexpires_at_ms\x18\x10 \x01(\x04R\vexpiresAtMs\x12$\n" +
+	"\x0eresolved_at_ms\x18\x11 \x01(\x04R\fresolvedAtMs:\x82\x01\x8a\x92\xf4\x01\x10guild_war_bounty\x92\x92\xf4\x01\tbounty_idڒ\xf4\x01Ktarget_player_id,status;issuer_guild_id,status;zone_id,status,expires_at_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x94\t\n" +
+	"\x14GuildWarBattleRecord\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x17\n" +
+	"\azone_id\x18\x02 \x01(\rR\x06zoneId\x12&\n" +
+	"\x0fwar_battle_kind\x18\x03 \x01(\rR\rwarBattleKind\x12\x1d\n" +
+	"\n" +
+	"leyline_id\x18\x04 \x01(\rR\tleylineId\x12\x1b\n" +
+	"\tbounty_id\x18\x05 \x01(\x04R\bbountyId\x12*\n" +
+	"\x11attacker_guild_id\x18\x06 \x01(\x04R\x0fattackerGuildId\x12*\n" +
+	"\x11defender_guild_id\x18\a \x01(\x04R\x0fdefenderGuildId\x12\x18\n" +
+	"\aoutcome\x18\b \x01(\rR\aoutcome\x12!\n" +
+	"\ftotal_rounds\x18\t \x01(\rR\vtotalRounds\x12(\n" +
+	"\x10banner_hp_before\x18\n" +
+	" \x01(\rR\x0ebannerHpBefore\x12&\n" +
+	"\x0fbanner_hp_after\x18\v \x01(\rR\rbannerHpAfter\x12'\n" +
+	"\x0fbanner_shielded\x18\f \x01(\rR\x0ebannerShielded\x12,\n" +
+	"\x12bounty_outcome_tag\x18\r \x01(\rR\x10bountyOutcomeTag\x121\n" +
+	"\x14jackpot_contribution\x18\x0e \x01(\x04R\x13jackpotContribution\x12%\n" +
+	"\x0ejackpot_silver\x18\x0f \x01(\x04R\rjackpotSilver\x12)\n" +
+	"\x10diminish_percent\x18\x10 \x01(\rR\x0fdiminishPercent\x123\n" +
+	"\x15attacker_contribution\x18\x11 \x01(\x04R\x14attackerContribution\x12'\n" +
+	"\x0fattacker_silver\x18\x12 \x01(\x04R\x0eattackerSilver\x12%\n" +
+	"\x0eattacker_funds\x18\x13 \x01(\x04R\rattackerFunds\x12%\n" +
+	"\x0eattacker_merit\x18\x14 \x01(\x04R\rattackerMerit\x123\n" +
+	"\x15defender_contribution\x18\x15 \x01(\x04R\x14defenderContribution\x12'\n" +
+	"\x0fdefender_silver\x18\x16 \x01(\x04R\x0edefenderSilver\x12%\n" +
+	"\x0edefender_funds\x18\x17 \x01(\x04R\rdefenderFunds\x12%\n" +
+	"\x0edefender_merit\x18\x18 \x01(\x04R\rdefenderMerit\x12'\n" +
+	"\x0fsummary_payload\x18\x19 \x01(\fR\x0esummaryPayload\x12$\n" +
+	"\x0efinished_at_ms\x18\x1a \x01(\x04R\ffinishedAtMs:x\x8a\x92\xf4\x01\x10guild_war_battle\x92\x92\xf4\x01\tbattle_idڒ\xf4\x01Aattacker_guild_id,finished_at_ms;defender_guild_id,finished_at_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xac\x02\n" +
+	"\x15GuildWarRivalryRecord\x12 \n" +
+	"\fguild_id_low\x18\x01 \x01(\x04R\n" +
+	"guildIdLow\x12\"\n" +
+	"\rguild_id_high\x18\x02 \x01(\x04R\vguildIdHigh\x12\x19\n" +
+	"\bweek_key\x18\x03 \x01(\rR\aweekKey\x12\x1f\n" +
+	"\vclash_count\x18\x04 \x01(\rR\n" +
+	"clashCount\x12#\n" +
+	"\rbounty_marked\x18\x05 \x01(\rR\fbountyMarked\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\x06 \x01(\x04R\tupdatedMs:M\x8a\x92\xf4\x01\x11guild_war_rivalry\x92\x92\xf4\x01#guild_id_low,guild_id_high,week_key\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xdc\x02\n" +
+	"\x1eGuildJianghuRivalSummaryRecord\x12\x19\n" +
+	"\bguild_id\x18\x01 \x01(\x04R\aguildId\x12$\n" +
+	"\x0erival_guild_id\x18\x02 \x01(\x04R\frivalGuildId\x12(\n" +
+	"\x10rival_guild_name\x18\x03 \x01(\tR\x0erivalGuildName\x12\x12\n" +
+	"\x04wins\x18\x04 \x01(\rR\x04wins\x12\x16\n" +
+	"\x06losses\x18\x05 \x01(\rR\x06losses\x12\x14\n" +
+	"\x05draws\x18\x06 \x01(\rR\x05draws\x12$\n" +
+	"\x0elast_battle_ms\x18\a \x01(\x04R\flastBattleMs:g\x8a\x92\xf4\x01\x1bguild_jianghu_rival_summary\x92\x92\xf4\x01\x17guild_id,rival_guild_idڒ\xf4\x01\x17guild_id,last_battle_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x85\x04\n" +
+	"\x18GuildJianghuGrudgeRecord\x12\x19\n" +
+	"\bguild_id\x18\x01 \x01(\x04R\aguildId\x12\x1b\n" +
+	"\tbattle_id\x18\x02 \x01(\x04R\bbattleId\x12$\n" +
+	"\x0erival_guild_id\x18\x03 \x01(\x04R\frivalGuildId\x12(\n" +
+	"\x10rival_guild_name\x18\x04 \x01(\tR\x0erivalGuildName\x12*\n" +
+	"\x11outcome_for_guild\x18\x05 \x01(\rR\x0foutcomeForGuild\x12\x1b\n" +
+	"\twrit_tier\x18\x06 \x01(\rR\bwritTier\x12\x1b\n" +
+	"\tteam_size\x18\a \x01(\rR\bteamSize\x12!\n" +
+	"\ftotal_rounds\x18\b \x01(\rR\vtotalRounds\x12(\n" +
+	"\x10our_captain_name\x18\t \x01(\tR\x0eourCaptainName\x12,\n" +
+	"\x12rival_captain_name\x18\n" +
+	" \x01(\tR\x10rivalCaptainName\x12\x1f\n" +
+	"\vfinished_ms\x18\v \x01(\x04R\n" +
+	"finishedMs:_\x8a\x92\xf4\x01\x1bguild_jianghu_grudge_record\x92\x92\xf4\x01\x12guild_id,battle_idڒ\xf4\x01\x14guild_id,finished_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xf4\x05\n" +
+	"\x12GuildWarFeudRecord\x12\x17\n" +
+	"\afeud_id\x18\x01 \x01(\x04R\x06feudId\x12\x17\n" +
+	"\azone_id\x18\x02 \x01(\rR\x06zoneId\x12&\n" +
+	"\x0fissuer_guild_id\x18\x03 \x01(\x04R\rissuerGuildId\x12*\n" +
+	"\x11issuer_guild_name\x18\x04 \x01(\tR\x0fissuerGuildName\x12&\n" +
+	"\x0ftarget_guild_id\x18\x05 \x01(\x04R\rtargetGuildId\x12*\n" +
+	"\x11target_guild_name\x18\x06 \x01(\tR\x0ftargetGuildName\x12\x16\n" +
+	"\x06status\x18\a \x01(\rR\x06status\x12\x1f\n" +
+	"\vissuer_wins\x18\b \x01(\rR\n" +
+	"issuerWins\x12\x1f\n" +
+	"\vtarget_wins\x18\t \x01(\rR\n" +
+	"targetWins\x12!\n" +
+	"\fissuer_merit\x18\n" +
+	" \x01(\x04R\vissuerMerit\x12!\n" +
+	"\ftarget_merit\x18\v \x01(\x04R\vtargetMerit\x12\"\n" +
+	"\rcreated_at_ms\x18\f \x01(\x04R\vcreatedAtMs\x12,\n" +
+	"\x12accept_deadline_ms\x18\r \x01(\x04R\x10acceptDeadlineMs\x12\"\n" +
+	"\rstarted_at_ms\x18\x0e \x01(\x04R\vstartedAtMs\x12\x1c\n" +
+	"\n" +
+	"ends_at_ms\x18\x0f \x01(\x04R\bendsAtMs\x12&\n" +
+	"\x0fwinner_guild_id\x18\x10 \x01(\x04R\rwinnerGuildId\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\x11 \x01(\x04R\tupdatedMs:\x88\x01\x8a\x92\xf4\x01\x0eguild_war_feud\x92\x92\xf4\x01\afeud_idڒ\xf4\x01Uzone_id,status,ends_at_ms;issuer_guild_id,created_at_ms;target_guild_id,created_at_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04*\x98\x02\n" +
 	"\x12GuildAssetOpStatus\x12%\n" +
 	"!GUILD_ASSET_OP_STATUS_UNSPECIFIED\x10\x00\x12!\n" +
 	"\x1dGUILD_ASSET_OP_STATUS_PENDING\x10\x01\x12!\n" +
@@ -2546,17 +4266,22 @@ const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"\x1eGUILD_ASSET_OP_STATUS_REJECTED\x10\x03\x12!\n" +
 	"\x1dGUILD_ASSET_OP_STATUS_ABORTED\x10\x04\x12)\n" +
 	"%GUILD_ASSET_OP_STATUS_APPLIED_PARTIAL\x10\x05\x12#\n" +
-	"\x1fGUILD_ASSET_OP_STATUS_ABANDONED\x10\x06*\x9e\x01\n" +
+	"\x1fGUILD_ASSET_OP_STATUS_ABANDONED\x10\x06*\x90\x02\n" +
 	"\x10GuildAssetOpKind\x12#\n" +
 	"\x1fGUILD_ASSET_OP_KIND_UNSPECIFIED\x10\x00\x12\x1e\n" +
 	"\x1aGUILD_ASSET_OP_KIND_DONATE\x10\x01\x12\x1c\n" +
 	"\x18GUILD_ASSET_OP_KIND_SHOP\x10\x02\x12'\n" +
-	"#GUILD_ASSET_OP_KIND_ACTIVITY_REWARD\x10\x03*\xb0\x01\n" +
+	"#GUILD_ASSET_OP_KIND_ACTIVITY_REWARD\x10\x03\x12\"\n" +
+	"\x1eGUILD_ASSET_OP_KIND_WAR_REWARD\x10\x05\x12%\n" +
+	"!GUILD_ASSET_OP_KIND_BOUNTY_ESCROW\x10\x06\x12%\n" +
+	"!GUILD_ASSET_OP_KIND_BOUNTY_PAYOUT\x10\a*\x90\x02\n" +
 	"\x15GuildDailyCounterKind\x12(\n" +
 	"$GUILD_DAILY_COUNTER_KIND_UNSPECIFIED\x10\x00\x12#\n" +
 	"\x1fGUILD_DAILY_COUNTER_KIND_DONATE\x10\x01\x12!\n" +
 	"\x1dGUILD_DAILY_COUNTER_KIND_SHOP\x10\x02\x12%\n" +
-	"!GUILD_DAILY_COUNTER_KIND_ACTIVITY\x10\x03*\xb3\x01\n" +
+	"!GUILD_DAILY_COUNTER_KIND_ACTIVITY\x10\x03\x12.\n" +
+	"*GUILD_DAILY_COUNTER_KIND_WAR_BOUNTY_PAYOUT\x10\x04\x12.\n" +
+	"*GUILD_DAILY_COUNTER_KIND_WAR_PUBLIC_BOUNTY\x10\x05*\xb3\x01\n" +
 	"\x15GuildTrialBattleState\x12(\n" +
 	"$GUILD_TRIAL_BATTLE_STATE_UNSPECIFIED\x10\x00\x12$\n" +
 	" GUILD_TRIAL_BATTLE_STATE_STARTED\x10\x01\x12$\n" +
@@ -2583,33 +4308,44 @@ func file_proto_guild_guild_db_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_guild_guild_db_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_proto_guild_guild_db_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_proto_guild_guild_db_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_proto_guild_guild_db_proto_goTypes = []any{
-	(GuildAssetOpStatus)(0),             // 0: guildpb.GuildAssetOpStatus
-	(GuildAssetOpKind)(0),               // 1: guildpb.GuildAssetOpKind
-	(GuildDailyCounterKind)(0),          // 2: guildpb.GuildDailyCounterKind
-	(GuildTrialBattleState)(0),          // 3: guildpb.GuildTrialBattleState
-	(GuildTrialSettleResult)(0),         // 4: guildpb.GuildTrialSettleResult
-	(*GuildRecord)(nil),                 // 5: guildpb.GuildRecord
-	(*GuildPlayerStateRecord)(nil),      // 6: guildpb.GuildPlayerStateRecord
-	(*GuildMemberRecord)(nil),           // 7: guildpb.GuildMemberRecord
-	(*GuildApplicationRecord)(nil),      // 8: guildpb.GuildApplicationRecord
-	(*GuildPlayerOpSeqRecord)(nil),      // 9: guildpb.GuildPlayerOpSeqRecord
-	(*GuildAssetOpRecord)(nil),          // 10: guildpb.GuildAssetOpRecord
-	(*GuildDailyCounterRecord)(nil),     // 11: guildpb.GuildDailyCounterRecord
-	(*GuildActivityProgressRecord)(nil), // 12: guildpb.GuildActivityProgressRecord
-	(*GuildTrialBattleRecord)(nil),      // 13: guildpb.GuildTrialBattleRecord
-	(*GuildTrialRoleIdentity)(nil),      // 14: guildpb.GuildTrialRoleIdentity
-	(*GuildTrialLobbyConsent)(nil),      // 15: guildpb.GuildTrialLobbyConsent
-	(*GuildTrialLobbyOriginal)(nil),     // 16: guildpb.GuildTrialLobbyOriginal
-	(*GuildTrialLobbyConsents)(nil),     // 17: guildpb.GuildTrialLobbyConsents
-	(*GuildTrialLobbyRecord)(nil),       // 18: guildpb.GuildTrialLobbyRecord
-	(*GuildTrialLobbySlotRecord)(nil),   // 19: guildpb.GuildTrialLobbySlotRecord
-	(*GuildTrialLaunchOriginal)(nil),    // 20: guildpb.GuildTrialLaunchOriginal
-	(*GuildTrialLaunchRecord)(nil),      // 21: guildpb.GuildTrialLaunchRecord
-	(*GuildTrialLaunchRoleRecord)(nil),  // 22: guildpb.GuildTrialLaunchRoleRecord
-	(*GuildTrialRewardOwedRecord)(nil),  // 23: guildpb.GuildTrialRewardOwedRecord
-	(*GuildClientRequestRecord)(nil),    // 24: guildpb.GuildClientRequestRecord
+	(GuildAssetOpStatus)(0),                // 0: guildpb.GuildAssetOpStatus
+	(GuildAssetOpKind)(0),                  // 1: guildpb.GuildAssetOpKind
+	(GuildDailyCounterKind)(0),             // 2: guildpb.GuildDailyCounterKind
+	(GuildTrialBattleState)(0),             // 3: guildpb.GuildTrialBattleState
+	(GuildTrialSettleResult)(0),            // 4: guildpb.GuildTrialSettleResult
+	(*GuildRecord)(nil),                    // 5: guildpb.GuildRecord
+	(*GuildPlayerStateRecord)(nil),         // 6: guildpb.GuildPlayerStateRecord
+	(*GuildMemberRecord)(nil),              // 7: guildpb.GuildMemberRecord
+	(*GuildApplicationRecord)(nil),         // 8: guildpb.GuildApplicationRecord
+	(*GuildPlayerOpSeqRecord)(nil),         // 9: guildpb.GuildPlayerOpSeqRecord
+	(*GuildAssetOpRecord)(nil),             // 10: guildpb.GuildAssetOpRecord
+	(*GuildDailyCounterRecord)(nil),        // 11: guildpb.GuildDailyCounterRecord
+	(*GuildActivityProgressRecord)(nil),    // 12: guildpb.GuildActivityProgressRecord
+	(*GuildTrialBattleRecord)(nil),         // 13: guildpb.GuildTrialBattleRecord
+	(*GuildTrialRoleIdentity)(nil),         // 14: guildpb.GuildTrialRoleIdentity
+	(*GuildTrialLobbyConsent)(nil),         // 15: guildpb.GuildTrialLobbyConsent
+	(*GuildTrialLobbyOriginal)(nil),        // 16: guildpb.GuildTrialLobbyOriginal
+	(*GuildTrialLobbyConsents)(nil),        // 17: guildpb.GuildTrialLobbyConsents
+	(*GuildTrialLobbyRecord)(nil),          // 18: guildpb.GuildTrialLobbyRecord
+	(*GuildTrialLobbySlotRecord)(nil),      // 19: guildpb.GuildTrialLobbySlotRecord
+	(*GuildTrialLaunchOriginal)(nil),       // 20: guildpb.GuildTrialLaunchOriginal
+	(*GuildTrialLaunchRecord)(nil),         // 21: guildpb.GuildTrialLaunchRecord
+	(*GuildTrialLaunchRoleRecord)(nil),     // 22: guildpb.GuildTrialLaunchRoleRecord
+	(*GuildTrialRewardOwedRecord)(nil),     // 23: guildpb.GuildTrialRewardOwedRecord
+	(*GuildClientRequestRecord)(nil),       // 24: guildpb.GuildClientRequestRecord
+	(*GuildNameHoldRecord)(nil),            // 25: guildpb.GuildNameHoldRecord
+	(*GuildWarLeylineRecord)(nil),          // 26: guildpb.GuildWarLeylineRecord
+	(*GuildWarGarrisonRecord)(nil),         // 27: guildpb.GuildWarGarrisonRecord
+	(*GuildWarWeeklyProgressRecord)(nil),   // 28: guildpb.GuildWarWeeklyProgressRecord
+	(*GuildWarPlayerStateRecord)(nil),      // 29: guildpb.GuildWarPlayerStateRecord
+	(*GuildWarBountyRecord)(nil),           // 30: guildpb.GuildWarBountyRecord
+	(*GuildWarBattleRecord)(nil),           // 31: guildpb.GuildWarBattleRecord
+	(*GuildWarRivalryRecord)(nil),          // 32: guildpb.GuildWarRivalryRecord
+	(*GuildJianghuRivalSummaryRecord)(nil), // 33: guildpb.GuildJianghuRivalSummaryRecord
+	(*GuildJianghuGrudgeRecord)(nil),       // 34: guildpb.GuildJianghuGrudgeRecord
+	(*GuildWarFeudRecord)(nil),             // 35: guildpb.GuildWarFeudRecord
 }
 var file_proto_guild_guild_db_proto_depIdxs = []int32{
 	1,  // 0: guildpb.GuildAssetOpRecord.kind:type_name -> guildpb.GuildAssetOpKind
@@ -2639,7 +4375,7 @@ func file_proto_guild_guild_db_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_guild_guild_db_proto_rawDesc), len(file_proto_guild_guild_db_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   20,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -173,6 +173,70 @@ type SkillBuff_percentComp struct {
     Value float64
 }
 
+type SkillBattle_modelComp struct {
+    Value uint32
+}
+
+type SkillCaster_maskComp struct {
+    Value uint32
+}
+
+type SkillAbility_kindComp struct {
+    Value uint32
+}
+
+type SkillPet_max_targetsComp struct {
+    Value uint32
+}
+
+type SkillPrototype_codeComp struct {
+    Value string
+}
+
+type SkillMax_battle_usesComp struct {
+    Value uint32
+}
+
+type SkillHealth_cost_modeComp struct {
+    Value uint32
+}
+
+type SkillAction_tagsComp struct {
+    Value uint32
+}
+
+type SkillAllow_dead_targetComp struct {
+    Value uint32
+}
+
+type SkillForbid_copyComp struct {
+    Value uint32
+}
+
+type SkillSeason_idComp struct {
+    Value uint32
+}
+
+type SkillScroll_idComp struct {
+    Value uint32
+}
+
+type SkillRarity_tierComp struct {
+    Value uint32
+}
+
+type SkillSecondary_target_policyComp struct {
+    Value uint32
+}
+
+type SkillExclusive_groupComp struct {
+    Value uint32
+}
+
+type SkillBan_pool_categoryComp struct {
+    Value uint32
+}
+
 type SkillSkill_typeComp struct {
     Values []uint32
 }
@@ -182,6 +246,10 @@ type SkillTargeting_modeComp struct {
 }
 
 type SkillEffectComp struct {
+    Values []uint32
+}
+
+type SkillInit_effectComp struct {
     Values []uint32
 }
 
@@ -350,6 +418,70 @@ func MakeSkillBuff_percentComp(row *pb.SkillTable) SkillBuff_percentComp {
     return SkillBuff_percentComp{Value: row.BuffPercent}
 }
 
+func MakeSkillBattle_modelComp(row *pb.SkillTable) SkillBattle_modelComp {
+    return SkillBattle_modelComp{Value: row.BattleModel}
+}
+
+func MakeSkillCaster_maskComp(row *pb.SkillTable) SkillCaster_maskComp {
+    return SkillCaster_maskComp{Value: row.CasterMask}
+}
+
+func MakeSkillAbility_kindComp(row *pb.SkillTable) SkillAbility_kindComp {
+    return SkillAbility_kindComp{Value: row.AbilityKind}
+}
+
+func MakeSkillPet_max_targetsComp(row *pb.SkillTable) SkillPet_max_targetsComp {
+    return SkillPet_max_targetsComp{Value: row.PetMaxTargets}
+}
+
+func MakeSkillPrototype_codeComp(row *pb.SkillTable) SkillPrototype_codeComp {
+    return SkillPrototype_codeComp{Value: row.PrototypeCode}
+}
+
+func MakeSkillMax_battle_usesComp(row *pb.SkillTable) SkillMax_battle_usesComp {
+    return SkillMax_battle_usesComp{Value: row.MaxBattleUses}
+}
+
+func MakeSkillHealth_cost_modeComp(row *pb.SkillTable) SkillHealth_cost_modeComp {
+    return SkillHealth_cost_modeComp{Value: row.HealthCostMode}
+}
+
+func MakeSkillAction_tagsComp(row *pb.SkillTable) SkillAction_tagsComp {
+    return SkillAction_tagsComp{Value: row.ActionTags}
+}
+
+func MakeSkillAllow_dead_targetComp(row *pb.SkillTable) SkillAllow_dead_targetComp {
+    return SkillAllow_dead_targetComp{Value: row.AllowDeadTarget}
+}
+
+func MakeSkillForbid_copyComp(row *pb.SkillTable) SkillForbid_copyComp {
+    return SkillForbid_copyComp{Value: row.ForbidCopy}
+}
+
+func MakeSkillSeason_idComp(row *pb.SkillTable) SkillSeason_idComp {
+    return SkillSeason_idComp{Value: row.SeasonId}
+}
+
+func MakeSkillScroll_idComp(row *pb.SkillTable) SkillScroll_idComp {
+    return SkillScroll_idComp{Value: row.ScrollId}
+}
+
+func MakeSkillRarity_tierComp(row *pb.SkillTable) SkillRarity_tierComp {
+    return SkillRarity_tierComp{Value: row.RarityTier}
+}
+
+func MakeSkillSecondary_target_policyComp(row *pb.SkillTable) SkillSecondary_target_policyComp {
+    return SkillSecondary_target_policyComp{Value: row.SecondaryTargetPolicy}
+}
+
+func MakeSkillExclusive_groupComp(row *pb.SkillTable) SkillExclusive_groupComp {
+    return SkillExclusive_groupComp{Value: row.ExclusiveGroup}
+}
+
+func MakeSkillBan_pool_categoryComp(row *pb.SkillTable) SkillBan_pool_categoryComp {
+    return SkillBan_pool_categoryComp{Value: row.BanPoolCategory}
+}
+
 func MakeSkillSkill_typeComp(row *pb.SkillTable) SkillSkill_typeComp {
     return SkillSkill_typeComp{Values: row.SkillType}
 }
@@ -360,5 +492,9 @@ func MakeSkillTargeting_modeComp(row *pb.SkillTable) SkillTargeting_modeComp {
 
 func MakeSkillEffectComp(row *pb.SkillTable) SkillEffectComp {
     return SkillEffectComp{Values: row.Effect}
+}
+
+func MakeSkillInit_effectComp(row *pb.SkillTable) SkillInit_effectComp {
+    return SkillInit_effectComp{Values: row.InitEffect}
 }
 

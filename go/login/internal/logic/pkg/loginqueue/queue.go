@@ -17,7 +17,8 @@
 //	                                 (只记放行时选好的 gate,不含签名;gate 票在取走时由 consumeAdmitAndSign 现签。
 //	                                 R17 R1(2026-06-04)之前存的是已签好的 {ip, port, payload, signature, deadline},
 //	                                 票在 Redis 里就开始耗有效期)
-//	admitted:zset:{q:<z>}            ZSET   member=queueId | fast:<uuid>, score=占位到期 unix ms
+//	admitted:zset:{q:<z>}            ZSET   member=queueId(排队放行;带账号的快速通道占位也是它,一个账号只占一枚)
+//	                                 | fast:<uuid>(匿名快速通道)| reconnect:<player_id>(免排队重连), score=占位到期 unix ms
 //	                                 (在途占位:成员逐个到期,计数前清掉;整键 TTL 只做垃圾回收、只增不减)
 //	queue:meta:{q:<z>}:<queueId>     HASH   {account, device, zone_id, createdAt, admitted_at, taken_slot, retake_until}
 //	                                 (admitted_at:放行时刻 unix 毫秒,放行脚本写,入队时没有;后两个字段在取走放行槽时写)

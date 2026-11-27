@@ -2162,6 +2162,8 @@ $WrapperPairs = @(
             'LoginWeChatMiniGameAppId', 'LoginWeChatMiniGameEndpoint', 'LoginWeChatMiniGameAllowOpenId', 'LoginDouyinMiniGameAppId', 'LoginDouyinMiniGameEndpoint', 'LoginDouyinMiniGameAllowOpenId',
             # Apple / Google 登录的四个参数与注销时撤销 Apple 令牌的两个,口径同上。
             'LoginAppleClientId', 'LoginAppleEndpoint', 'LoginGoogleClientId', 'LoginGoogleEndpoint', 'LoginAppleTeamId', 'LoginAppleKeyId',
+            # 官方通行证的四个参数,口径同上(漏传 = 重新部署时关掉或改掉线上的通行证登录)。
+            'LoginPassportIssuer', 'LoginPassportClientId', 'LoginPassportEndpoint', 'LoginPassportAdminClientId',
             # 实名与防沉迷的六个参数,口径同上(漏传 = 重新部署时关掉或改掉线上的防沉迷)。
             'LoginNppaAppId', 'LoginNppaBizId', 'LoginAntiAddictionExtraPlayDays', 'LoginNppaCheckUrl', 'LoginNppaQueryUrl', 'LoginNppaLoginoutUrl',
             # 托管内部密钥的修复开关:漏传 = 经包装入口修复不了不一致的值。
@@ -2206,6 +2208,7 @@ Test-Case 'k8s_deploy.ps1 的集群外入口参数名与类型(包装层与文�
         LoginDouyinMiniGameAppId = 'String'; LoginDouyinMiniGameEndpoint = 'String'; LoginDouyinMiniGameAllowOpenId = 'SwitchParameter'
         LoginAppleClientId = 'String'; LoginAppleEndpoint = 'String'; LoginGoogleClientId = 'String'; LoginGoogleEndpoint = 'String'
         LoginAppleTeamId = 'String'; LoginAppleKeyId = 'String'
+        LoginPassportIssuer = 'String'; LoginPassportClientId = 'String'; LoginPassportEndpoint = 'String'; LoginPassportAdminClientId = 'String'
         LoginNppaAppId = 'String'; LoginNppaBizId = 'String'; LoginAntiAddictionExtraPlayDays = 'String'; LoginNppaCheckUrl = 'String'
         LoginNppaQueryUrl = 'String'; LoginNppaLoginoutUrl = 'String'; ResyncDomainServiceSecrets = 'SwitchParameter'
         TableSyncImage = 'String'; TableSyncS3Endpoint = 'String'; TableSyncS3Bucket = 'String'; TableSyncS3Region = 'String'

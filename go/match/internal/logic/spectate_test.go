@@ -89,8 +89,7 @@ func registerPrivateBattle(t *testing.T, svcCtx *svc.ServiceContext, battleId ui
 	registerSpectateBattle(svcCtx, battleId, matchpb.MatchMode_MATCH_MODE_1V1, nowMs())
 	require.Equal(t, activeBefore, activeIndexSize(t, svcCtx), "私密局登记后不进活跃集合")
 	if stale {
-		_, err := svcCtx.MatchRedis.Zadd(spectateActiveIndex.keyFor(battleId), int64(nowMs()), strconv.FormatUint(battleId, 10))
-		require.NoError(t, err)
+		require.NoError(t, spectateActiveIndex.add(context.Background(), svcCtx.MatchRedis, battleId, int64(nowMs())))
 	}
 }
 
@@ -128,8 +127,7 @@ func TestPickRandomBattleNeverReturnsStaleOrGarbage(t *testing.T) {
 	fresh, stale := uint64(880010), uint64(880011)
 	registerBattle(t, svcCtx, fresh, nowMs())
 	registerBattle(t, svcCtx, stale, staleCreatedAtMs())
-	_, err := svcCtx.MatchRedis.Zadd(spectateActiveIndex.bucketKey(3), int64(nowMs()), "not-a-battle-id")
-	require.NoError(t, err)
+	zaddSpectateMember(t, svcCtx, spectateActiveIndex.bucketKey(3), int64(nowMs()), "not-a-battle-id")
 
 	for i := 0; i < 10; i++ {
 		picked, err := pickRandomBattle(svcCtx)
@@ -143,8 +141,7 @@ func TestPickRandomBattleEvictsAllBadMembersAndReportsNone(t *testing.T) {
 	svcCtx, _ := newTestSvcCtx(t)
 	stale := uint64(880012)
 	registerBattle(t, svcCtx, stale, staleCreatedAtMs())
-	_, err := svcCtx.MatchRedis.Zadd(spectateActiveIndex.bucketKey(5), int64(nowMs()), "garbage")
-	require.NoError(t, err)
+	zaddSpectateMember(t, svcCtx, spectateActiveIndex.bucketKey(5), int64(nowMs()), "garbage")
 
 	picked, err := pickRandomBattle(svcCtx)
 	require.NoError(t, err)
@@ -188,8 +185,7 @@ func TestListWatchableBattlesNewestFirstAndEvictsOrphans(t *testing.T) {
 	registerBattle(t, svcCtx, 880030, base-3000, "老场")
 	registerBattle(t, svcCtx, 880031, base-2000, "中场")
 	registerBattle(t, svcCtx, 880032, base-1000, "新场")
-	_, err := svcCtx.MatchRedis.Zadd(spectateActiveIndex.keyFor(880033), int64(base), "880033") // 孤儿
-	require.NoError(t, err)
+	require.NoError(t, spectateActiveIndex.add(context.Background(), svcCtx.MatchRedis, 880033, int64(base))) // 孤儿
 
 	resp, err := NewListWatchableBattlesLogic(context.Background(), svcCtx).
 		ListWatchableBattles(&matchpb.ListWatchableBattlesRequest{})

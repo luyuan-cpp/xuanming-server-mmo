@@ -398,7 +398,15 @@
     [string]$TableSyncS3Bucket = "",
     [string]$TableSyncS3Region = "",
     [string]$TableSyncS3SecretName = "",
-    [switch]$TableSyncDevFixture
+    [switch]$TableSyncDevFixture,
+    # 集群内 login 的官方通行证登录(自托管 Casdoor OIDC,auth_type 是 passport),透传给 k8s_deploy.ps1 同名参数(k8s-zone-up / k8s-all-up)。
+    # 口径同上面 Apple / Google 那几个:语义、形状校验与管理凭据(环境变量 MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET,不经参数)都只在
+    # k8s_deploy.ps1 一处;非空才透传;不粘滞,漏传由 k8s_deploy.ps1 的防误关闸在写操作之前拦下,确要关闭或改动加 -ConfirmLoginAuthProviderChange。
+    # k8s-image-* / k8s-release-* 显式给了即拒绝。追加在末尾:本脚本没有显式 Position,改变声明顺序会改变位置参数绑定。
+    [string]$LoginPassportIssuer = "",
+    [string]$LoginPassportClientId = "",
+    [string]$LoginPassportEndpoint = "",
+    [string]$LoginPassportAdminClientId = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -923,6 +931,11 @@ function Invoke-K8sDeploy {
     if (-not [string]::IsNullOrWhiteSpace($LoginGoogleEndpoint)) { $args.LoginGoogleEndpoint = $LoginGoogleEndpoint }
     if (-not [string]::IsNullOrWhiteSpace($LoginAppleTeamId)) { $args.LoginAppleTeamId = $LoginAppleTeamId }
     if (-not [string]::IsNullOrWhiteSpace($LoginAppleKeyId)) { $args.LoginAppleKeyId = $LoginAppleKeyId }
+    # 官方通行证的四个参数同一口径。
+    if (-not [string]::IsNullOrWhiteSpace($LoginPassportIssuer)) { $args.LoginPassportIssuer = $LoginPassportIssuer }
+    if (-not [string]::IsNullOrWhiteSpace($LoginPassportClientId)) { $args.LoginPassportClientId = $LoginPassportClientId }
+    if (-not [string]::IsNullOrWhiteSpace($LoginPassportEndpoint)) { $args.LoginPassportEndpoint = $LoginPassportEndpoint }
+    if (-not [string]::IsNullOrWhiteSpace($LoginPassportAdminClientId)) { $args.LoginPassportAdminClientId = $LoginPassportAdminClientId }
     # 实名与防沉迷的六个参数同一口径。
     if (-not [string]::IsNullOrWhiteSpace($LoginNppaAppId)) { $args.LoginNppaAppId = $LoginNppaAppId }
     if (-not [string]::IsNullOrWhiteSpace($LoginNppaBizId)) { $args.LoginNppaBizId = $LoginNppaBizId }
@@ -1128,6 +1141,10 @@ function Invoke-K8sImage {
     if (-not [string]::IsNullOrWhiteSpace($LoginGoogleEndpoint)) { $notForwarded += '-LoginGoogleEndpoint' }
     if (-not [string]::IsNullOrWhiteSpace($LoginAppleTeamId)) { $notForwarded += '-LoginAppleTeamId' }
     if (-not [string]::IsNullOrWhiteSpace($LoginAppleKeyId)) { $notForwarded += '-LoginAppleKeyId' }
+    if (-not [string]::IsNullOrWhiteSpace($LoginPassportIssuer)) { $notForwarded += '-LoginPassportIssuer' }
+    if (-not [string]::IsNullOrWhiteSpace($LoginPassportClientId)) { $notForwarded += '-LoginPassportClientId' }
+    if (-not [string]::IsNullOrWhiteSpace($LoginPassportEndpoint)) { $notForwarded += '-LoginPassportEndpoint' }
+    if (-not [string]::IsNullOrWhiteSpace($LoginPassportAdminClientId)) { $notForwarded += '-LoginPassportAdminClientId' }
     if (-not [string]::IsNullOrWhiteSpace($LoginNppaAppId)) { $notForwarded += '-LoginNppaAppId' }
     if (-not [string]::IsNullOrWhiteSpace($LoginNppaBizId)) { $notForwarded += '-LoginNppaBizId' }
     if (-not [string]::IsNullOrWhiteSpace($LoginAntiAddictionExtraPlayDays)) { $notForwarded += '-LoginAntiAddictionExtraPlayDays' }

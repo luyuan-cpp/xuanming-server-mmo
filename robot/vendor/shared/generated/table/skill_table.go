@@ -23,6 +23,7 @@ type skillSnapshot struct {
     idxSkillType map[uint32][]*pb.SkillTable
     idxTargetingMode map[uint32][]*pb.SkillTable
     idxEffect map[uint32][]*pb.SkillTable
+    idxInitEffect map[uint32][]*pb.SkillTable
 }
 
 type SkillTableManager struct {
@@ -46,30 +47,46 @@ func NewSkillTableManager() *SkillTableManager {
         idxSkillType: make(map[uint32][]*pb.SkillTable),
         idxTargetingMode: make(map[uint32][]*pb.SkillTable),
         idxEffect: make(map[uint32][]*pb.SkillTable),
+        idxInitEffect: make(map[uint32][]*pb.SkillTable),
     })
     return m
 }
 
 func (m *SkillTableManager) Load(configDir string, useBinary bool) error {
+    snap, err := m.loadSnapshot(configDir, useBinary)
+    if err != nil {
+        return err
+    }
+    m.snap.Store(snap)
+    return nil
+}
+
+func (m *SkillTableManager) swapSnapshot(snap *skillSnapshot) {
+    if snap != nil {
+        m.snap.Store(snap)
+    }
+}
+
+func (m *SkillTableManager) loadSnapshot(configDir string, useBinary bool) (*skillSnapshot, error) {
     var container pb.SkillTableData
 
     if useBinary {
         path := filepath.Join(configDir, "skill.pb")
         raw, err := os.ReadFile(path)
         if err != nil {
-            return fmt.Errorf("failed to read file: %w", err)
+            return nil, fmt.Errorf("failed to read file: %w", err)
         }
         if err := proto.Unmarshal(raw, &container); err != nil {
-            return fmt.Errorf("failed to parse binary: %w", err)
+            return nil, fmt.Errorf("failed to parse binary: %w", err)
         }
     } else {
         path := filepath.Join(configDir, "skill.json")
         raw, err := os.ReadFile(path)
         if err != nil {
-            return fmt.Errorf("failed to read file: %w", err)
+            return nil, fmt.Errorf("failed to read file: %w", err)
         }
         if err := protojson.Unmarshal(raw, &container); err != nil {
-            return fmt.Errorf("failed to parse json: %w", err)
+            return nil, fmt.Errorf("failed to parse json: %w", err)
         }
     }
 
@@ -78,6 +95,7 @@ func (m *SkillTableManager) Load(configDir string, useBinary bool) error {
         idxSkillType: make(map[uint32][]*pb.SkillTable),
         idxTargetingMode: make(map[uint32][]*pb.SkillTable),
         idxEffect: make(map[uint32][]*pb.SkillTable),
+        idxInitEffect: make(map[uint32][]*pb.SkillTable),
     }
 
     for _, row := range container.Data {
@@ -91,11 +109,13 @@ func (m *SkillTableManager) Load(configDir string, useBinary bool) error {
         for _, elem := range row.Effect {
             snap.idxEffect[elem] = append(snap.idxEffect[elem], row)
         }
+        for _, elem := range row.InitEffect {
+            snap.idxInitEffect[elem] = append(snap.idxInitEffect[elem], row)
+        }
     }
 
     snap.data = container.Data
-    m.snap.Store(snap)
-    return nil
+    return snap, nil
 }
 
 func (m *SkillTableManager) FindAll() []*pb.SkillTable {
@@ -125,6 +145,12 @@ func (m *SkillTableManager) FindByTargetingModeIndex(key uint32) []*pb.SkillTabl
 func (m *SkillTableManager) FindByEffectIndex(key uint32) []*pb.SkillTable {
     snap := m.snap.Load()
     return snap.idxEffect[key]
+}
+
+
+func (m *SkillTableManager) FindByInitEffectIndex(key uint32) []*pb.SkillTable {
+    snap := m.snap.Load()
+    return snap.idxInitEffect[key]
 }
 
 
@@ -162,6 +188,12 @@ func (m *SkillTableManager) CountByTargetingModeIndex(key uint32) int {
 func (m *SkillTableManager) CountByEffectIndex(key uint32) int {
     snap := m.snap.Load()
     return len(snap.idxEffect[key])
+}
+
+
+func (m *SkillTableManager) CountByInitEffectIndex(key uint32) int {
+    snap := m.snap.Load()
+    return len(snap.idxInitEffect[key])
 }
 
 

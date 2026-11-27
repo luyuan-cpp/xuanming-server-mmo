@@ -49,6 +49,10 @@ type EquipEnhanceLevelComp struct {
     Value uint32
 }
 
+type EquipEnhancePity_limitComp struct {
+    Value uint32
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -88,5 +92,9 @@ func MakeEquipEnhanceProfile_idComp(row *pb.EquipEnhanceTable) EquipEnhanceProfi
 
 func MakeEquipEnhanceLevelComp(row *pb.EquipEnhanceTable) EquipEnhanceLevelComp {
     return EquipEnhanceLevelComp{Value: row.Level}
+}
+
+func MakeEquipEnhancePity_limitComp(row *pb.EquipEnhanceTable) EquipEnhancePity_limitComp {
+    return EquipEnhancePity_limitComp{Value: row.PityLimit}
 }
 

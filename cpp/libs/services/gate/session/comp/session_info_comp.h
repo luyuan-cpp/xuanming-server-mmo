@@ -174,8 +174,9 @@ struct SessionInfo
 	client_liveness::ClientLiveness liveness;
 
 	// 关连接之前置位:断开回调代发 ExitGame 时填 EXIT_GAME_REASON_LEASE_EXPIRED,scene 立即退出,不按断线保留角色
-	// (docs/design/player-connection-lost-hold.md §3)。目前只有断线租约到期、gate 关残留假死连接这一处置位:
-	// 后端已不认这个会话,再保留一个重连窗口没有意义。不置位的关闭(断网、gate 停机、顶号踢旧连接、高水位)按断线处理。
+	// (docs/design/player-connection-lost-hold.md §3)。置位的有两种关闭:断线租约到期、gate 关残留假死连接(后端已不认
+	// 这个会话,再保留一个重连窗口没有意义);未成年人到点下线(gate 本地到点关连接,以及 login 的兜底踢线:要真的下线,
+	// 不保留、不进离线托管,docs/design/real-name-anti-addiction.md §5.4)。不置位的关闭(断网、gate 停机、顶号踢旧连接、高水位)按断线处理。
 	bool exitSceneImmediatelyOnClose{false};
 
 	// Per-session HMAC key for message signing (todo.md #76 slice A).

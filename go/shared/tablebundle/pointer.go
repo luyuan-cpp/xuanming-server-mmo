@@ -42,6 +42,24 @@ type PointerLine struct {
 type PointerDocument struct {
 	Track string                 `json:"track,omitempty"`
 	Lines map[string]PointerLine `json:"lines"`
+	// SyncErrors 按 schema_digest 记 sidecar 这一拍没同步下来的线和原因(go/table_sync/internal/pointer.Document)。
+	SyncErrors map[string]string `json:"sync_errors,omitempty"`
+}
+
+// PointerLineSyncError 返回 sidecar 记下的「这条 schema 线没同步下来」的原因;没有这条记录返回空串。
+//
+// 只给启动路径用。线在 POINTER.json 里找不到有两种情况:etcd 里本来就没有(新版本刚发布、还没人发过热更),
+// 可以用镜像自带的表;etcd 里有,但表包没取到,这时用镜像自带的表等于静默退回旧数据,必须拒绝启动。
+func PointerLineSyncError(pointerPath, schemaDigest string) (string, error) {
+	raw, err := os.ReadFile(pointerPath)
+	if err != nil {
+		return "", fmt.Errorf("read pointer %s: %w", pointerPath, err)
+	}
+	var doc PointerDocument
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return "", fmt.Errorf("parse pointer %s: %w", pointerPath, err)
+	}
+	return strings.TrimSpace(doc.SyncErrors[schemaDigest]), nil
 }
 
 // StatusReport 是业务进程写入 $MMORPG_TABLE_STATUS_ROOT/STATUS.json 的格式,

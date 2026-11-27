@@ -10,7 +10,6 @@ import (
 
 	redv9 "github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 )
 
 // 全服观战索引拆桶(docs/design/redis-cluster-all-domains-20261110.md §4.9)。观战大厅有三把全服 ZSET:活跃集合、L2 配额、
@@ -21,8 +20,8 @@ import (
 //	spectate:bcast:active:{sbc:<k>}      全服 L2 配额:member=battle_id,score=战斗期限毫秒(spectate_tier.go)
 //	spectate:featured:active:{sft:<k>}   赛事局索引:member=battle_id,score=标记到期毫秒(spectate_tier.go)
 //
-// 写(ZADD / ZREM)只碰本场所在的那个桶,键一律经 keyFor / bucketKey 构造。跨桶的读与清理把 16 条命令放进一个 pipeline
-// (集群客户端按节点拆开),在进程里合并;列表读另有每副本 1 秒的缓存(svc.SpectateLobbyCache)。
+// 写(ZADD / ZREM,见 add / remove)只碰本场所在的那个桶,键一律经 keyFor / bucketKey 构造。跨桶的读与清理把 16 条命令
+// 放进一个 pipeline(集群客户端按节点拆开),在进程里合并;列表读另有每副本 1 秒的缓存(svc.SpectateLobbyCache)。
 
 // spectateIndexBuckets 是每把全服观战索引的桶数。上线后改桶数要停写迁移:成员是按旧桶数落的桶,换了桶数之后 ZADD / ZREM
 // 找不到它,只剩按分数的定期清理能摘掉,L2 配额也会少算。
@@ -55,12 +54,24 @@ func (ix spectateIndex) keyFor(battleId uint64) string {
 	return ix.bucketKey(spectateIndexBucket(battleId))
 }
 
+// add 把一场战斗写进它所在的桶(ZADD,member = battle_id 十进制;已在桶里就更新分数)。
+func (ix spectateIndex) add(ctx context.Context, rds redv9.UniversalClient, battleId uint64, score int64) error {
+	return rds.ZAdd(ctx, ix.keyFor(battleId), redv9.Z{Score: float64(score), Member: strconv.FormatUint(battleId, 10)}).Err()
+}
+
+// remove 把一场战斗从它所在的桶里摘掉(ZREM);不在桶里也算成功。
+func (ix spectateIndex) remove(ctx context.Context, rds redv9.UniversalClient, battleId uint64) error {
+	return rds.ZRem(ctx, ix.keyFor(battleId), strconv.FormatUint(battleId, 10)).Err()
+}
+
 // eachSpectateBucket 给一把索引的 16 个桶各发一条命令,全部放进一个 pipeline 发出,按桶号返回各自的命令。
-// 任一条失败就整体失败:go-zero 的熔断拦下 pipeline 时命令根本没发出去,不能把没执行的空结果当成读到了空桶。
-func eachSpectateBucket[C any](ctx context.Context, rds *redis.Redis, ix spectateIndex,
-	cmd func(pipe redis.Pipeliner, key string) C) ([]C, error) {
+// 任一条失败就整体失败:命令可能根本没发出去(守卫拒绝、取不到连接),不能把没执行的空结果当成读到了空桶。
+// 管道里只放幂等命令(ZCARD、ZRANGE 族、ZREM、ZREMRANGEBYSCORE):集群客户端在管道内部会自动重发整批,
+// 非幂等命令进管道会被句柄的守卫拒绝(clusterredis.ErrNonIdempotentInPipeline)。
+func eachSpectateBucket[C any](ctx context.Context, rds redv9.UniversalClient, ix spectateIndex,
+	cmd func(pipe redv9.Pipeliner, key string) C) ([]C, error) {
 	cmds := make([]C, spectateIndexBuckets)
-	err := rds.PipelinedCtx(ctx, func(pipe redis.Pipeliner) error {
+	_, err := rds.Pipelined(ctx, func(pipe redv9.Pipeliner) error {
 		for bucket := range cmds {
 			cmds[bucket] = cmd(pipe, ix.bucketKey(bucket))
 		}
@@ -73,8 +84,8 @@ func eachSpectateBucket[C any](ctx context.Context, rds *redis.Redis, ix spectat
 }
 
 // counts 返回各桶的成员数,下标是桶号。
-func (ix spectateIndex) counts(ctx context.Context, rds *redis.Redis) ([]int64, error) {
-	cmds, err := eachSpectateBucket(ctx, rds, ix, func(pipe redis.Pipeliner, key string) *redv9.IntCmd {
+func (ix spectateIndex) counts(ctx context.Context, rds redv9.UniversalClient) ([]int64, error) {
+	cmds, err := eachSpectateBucket(ctx, rds, ix, func(pipe redv9.Pipeliner, key string) *redv9.IntCmd {
 		return pipe.ZCard(ctx, key)
 	})
 	if err != nil {
@@ -84,11 +95,11 @@ func (ix spectateIndex) counts(ctx context.Context, rds *redis.Redis) ([]int64, 
 }
 
 // top 返回全服分数最高的 n 个成员:全服前 n 一定落在各桶的前 n 里,所以各桶取前 n,合并后排序再截断。
-func (ix spectateIndex) top(ctx context.Context, rds *redis.Redis, n int) ([]redis.Pair, error) {
+func (ix spectateIndex) top(ctx context.Context, rds redv9.UniversalClient, n int) ([]svc.SpectateIndexMember, error) {
 	if n <= 0 {
 		return nil, nil
 	}
-	cmds, err := eachSpectateBucket(ctx, rds, ix, func(pipe redis.Pipeliner, key string) *redv9.ZSliceCmd {
+	cmds, err := eachSpectateBucket(ctx, rds, ix, func(pipe redv9.Pipeliner, key string) *redv9.ZSliceCmd {
 		return pipe.ZRevRangeWithScores(ctx, key, 0, int64(n)-1)
 	})
 	if err != nil {
@@ -98,11 +109,11 @@ func (ix spectateIndex) top(ctx context.Context, rds *redis.Redis, n int) ([]red
 }
 
 // topFrom 同 top,只看分数不低于 minScore 的成员(ZREVRANGEBYSCORE minScore +inf)。
-func (ix spectateIndex) topFrom(ctx context.Context, rds *redis.Redis, minScore int64, n int) ([]redis.Pair, error) {
+func (ix spectateIndex) topFrom(ctx context.Context, rds redv9.UniversalClient, minScore int64, n int) ([]svc.SpectateIndexMember, error) {
 	if n <= 0 {
 		return nil, nil
 	}
-	cmds, err := eachSpectateBucket(ctx, rds, ix, func(pipe redis.Pipeliner, key string) *redv9.ZSliceCmd {
+	cmds, err := eachSpectateBucket(ctx, rds, ix, func(pipe redv9.Pipeliner, key string) *redv9.ZSliceCmd {
 		return pipe.ZRevRangeByScoreWithScores(ctx, key, &redv9.ZRangeBy{Min: strconv.FormatInt(minScore, 10), Max: "+inf", Count: int64(n)})
 	})
 	if err != nil {
@@ -113,12 +124,16 @@ func (ix spectateIndex) topFrom(ctx context.Context, rds *redis.Redis, minScore 
 
 // at 按全服下标取一个成员。counts 是同一轮读出的各桶成员数;下标落在累计和的哪一段就去那个桶按桶内下标取,
 // 全服下标均匀,取到每个成员的概率就均匀。并发增删让桶变小时可能取不到,返回空,调用方重试。
-func (ix spectateIndex) at(ctx context.Context, rds *redis.Redis, counts []int64, index int64) ([]redis.Pair, error) {
+func (ix spectateIndex) at(ctx context.Context, rds redv9.UniversalClient, counts []int64, index int64) ([]svc.SpectateIndexMember, error) {
 	bucket, local := locateSpectateIndex(counts, index)
 	if bucket < 0 {
 		return nil, nil
 	}
-	return rds.ZrangeWithScoresCtx(ctx, ix.bucketKey(bucket), local, local)
+	zs, err := rds.ZRangeWithScores(ctx, ix.bucketKey(bucket), local, local).Result()
+	if err != nil {
+		return nil, err
+	}
+	return appendSpectateIndexMembers(nil, zs), nil
 }
 
 // locateSpectateIndex 把全服下标映射成 (桶号, 桶内下标):桶按号排开,0 号桶占 [0, counts[0]),1 号桶接着排,依此类推。
@@ -137,8 +152,8 @@ func locateSpectateIndex(counts []int64, index int64) (int, int64) {
 }
 
 // removeByScore 每个桶都清掉分数不高于 maxScore 的成员,返回清掉的总数。
-func (ix spectateIndex) removeByScore(ctx context.Context, rds *redis.Redis, maxScore int64) (int64, error) {
-	cmds, err := eachSpectateBucket(ctx, rds, ix, func(pipe redis.Pipeliner, key string) *redv9.IntCmd {
+func (ix spectateIndex) removeByScore(ctx context.Context, rds redv9.UniversalClient, maxScore int64) (int64, error) {
+	cmds, err := eachSpectateBucket(ctx, rds, ix, func(pipe redv9.Pipeliner, key string) *redv9.IntCmd {
 		return pipe.ZRemRangeByScore(ctx, key, "-inf", strconv.FormatInt(maxScore, 10))
 	})
 	if err != nil {
@@ -148,8 +163,8 @@ func (ix spectateIndex) removeByScore(ctx context.Context, rds *redis.Redis, max
 }
 
 // removeGarbage 摘掉一个解析不出 battle_id 的坏成员:算不出它在哪个桶,16 个桶各发一条 ZREM。只有手工写坏的数据才会走到这里。
-func (ix spectateIndex) removeGarbage(ctx context.Context, rds *redis.Redis, member string) error {
-	_, err := eachSpectateBucket(ctx, rds, ix, func(pipe redis.Pipeliner, key string) *redv9.IntCmd {
+func (ix spectateIndex) removeGarbage(ctx context.Context, rds redv9.UniversalClient, member string) error {
+	_, err := eachSpectateBucket(ctx, rds, ix, func(pipe redv9.Pipeliner, key string) *redv9.IntCmd {
 		return pipe.ZRem(ctx, key, member)
 	})
 	return err
@@ -166,23 +181,29 @@ func removeSpectateIndexGarbage(s *svc.ServiceContext, ix spectateIndex, member 
 }
 
 // mergeSpectateBuckets 合并各桶读出的成员:分数降序,同分按成员倒序(与 ZREVRANGE 同序),截断成 n 个。
-func mergeSpectateBuckets(cmds []*redv9.ZSliceCmd, n int) []redis.Pair {
-	var merged []redis.Pair
+func mergeSpectateBuckets(cmds []*redv9.ZSliceCmd, n int) []svc.SpectateIndexMember {
+	var merged []svc.SpectateIndexMember
 	for _, cmd := range cmds {
-		for _, z := range cmd.Val() {
-			merged = append(merged, redis.Pair{Key: fmt.Sprint(z.Member), Score: int64(z.Score)})
-		}
+		merged = appendSpectateIndexMembers(merged, cmd.Val())
 	}
 	sort.Slice(merged, func(i, j int) bool {
 		if merged[i].Score != merged[j].Score {
 			return merged[i].Score > merged[j].Score
 		}
-		return merged[i].Key > merged[j].Key
+		return merged[i].Member > merged[j].Member
 	})
 	if len(merged) > n {
 		merged = merged[:n]
 	}
 	return merged
+}
+
+// appendSpectateIndexMembers 把一次 ZSET 读出的成员追加到 members 后面。分数都是毫秒时刻,取整不丢精度。
+func appendSpectateIndexMembers(members []svc.SpectateIndexMember, zs []redv9.Z) []svc.SpectateIndexMember {
+	for _, z := range zs {
+		members = append(members, svc.SpectateIndexMember{Member: fmt.Sprint(z.Member), Score: int64(z.Score)})
+	}
+	return members
 }
 
 func spectateBucketInts(cmds []*redv9.IntCmd) []int64 {

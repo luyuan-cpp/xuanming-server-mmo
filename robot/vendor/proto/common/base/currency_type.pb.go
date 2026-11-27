@@ -40,6 +40,7 @@ const (
 	CurrencyType_CURRENCY_TYPE_GOLD         CurrencyType = 0 // 银两
 	CurrencyType_CURRENCY_TYPE_DIAMOND      CurrencyType = 1 // 灵石
 	CurrencyType_CURRENCY_TYPE_BIND_DIAMOND CurrencyType = 2 // 绑定灵石
+	CurrencyType_CURRENCY_TYPE_BIND_GOLD    CurrencyType = 3 // 绑定银两（仅个人绑定养成消耗，严禁流通交易）
 )
 
 // Enum value maps for CurrencyType.
@@ -48,11 +49,13 @@ var (
 		0: "CURRENCY_TYPE_GOLD",
 		1: "CURRENCY_TYPE_DIAMOND",
 		2: "CURRENCY_TYPE_BIND_DIAMOND",
+		3: "CURRENCY_TYPE_BIND_GOLD",
 	}
 	CurrencyType_value = map[string]int32{
 		"CURRENCY_TYPE_GOLD":         0,
 		"CURRENCY_TYPE_DIAMOND":      1,
 		"CURRENCY_TYPE_BIND_DIAMOND": 2,
+		"CURRENCY_TYPE_BIND_GOLD":    3,
 	}
 )
 
@@ -87,11 +90,12 @@ var File_proto_common_base_currency_type_proto protoreflect.FileDescriptor
 
 const file_proto_common_base_currency_type_proto_rawDesc = "" +
 	"\n" +
-	"%proto/common/base/currency_type.proto\x12\vcommon.base*a\n" +
+	"%proto/common/base/currency_type.proto\x12\vcommon.base*~\n" +
 	"\fCurrencyType\x12\x16\n" +
 	"\x12CURRENCY_TYPE_GOLD\x10\x00\x12\x19\n" +
 	"\x15CURRENCY_TYPE_DIAMOND\x10\x01\x12\x1e\n" +
-	"\x1aCURRENCY_TYPE_BIND_DIAMOND\x10\x02B\x13Z\x11proto/common/baseb\x06proto3"
+	"\x1aCURRENCY_TYPE_BIND_DIAMOND\x10\x02\x12\x1b\n" +
+	"\x17CURRENCY_TYPE_BIND_GOLD\x10\x03B\x13Z\x11proto/common/baseb\x06proto3"
 
 var (
 	file_proto_common_base_currency_type_proto_rawDescOnce sync.Once

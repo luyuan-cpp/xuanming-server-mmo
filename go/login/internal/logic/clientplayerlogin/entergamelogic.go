@@ -55,6 +55,9 @@ type enterGameSessionState struct {
 	// fenceGen 是入口处读到的 LeaveGame 计数,后台链绑定 / 进场前复查据此识别「期间已离开游戏」。
 	fenceKey sessionfence.Key
 	fenceGen uint64
+	// minorPlayDeadlineMs 是这条连接在防沉迷会话账本里的截止时刻(未成年人当天能玩到的时刻,0 = 不限),随会话记录
+	// 写进 player_locator:断线后的离线托管不越过它(docs/design/real-name-anti-addiction.md §5.4)。
+	minorPlayDeadlineMs uint64
 }
 
 // enterGameChainBudget 是 EnterGame 后台链(预加载 → 写会话 → 绑 gate → 进场)的总预算。
@@ -188,6 +191,16 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 			logx.Infof("Lock was not held by us (possibly expired) for playerId=%d", in.PlayerId)
 		}
 	}()
+
+	// 未成年人当天的截止时刻要随会话记录写进 player_locator。账本读不了就不受理:不知道截止时刻的会话不能放进世界,
+	// 否则带着月卡断线之后会被一直托管下去。
+	playDeadlineMs, err := watchedPlayDeadlineMs(ctx, l.svcCtx, sessionRef)
+	if err != nil {
+		logx.Errorf("EnterGame anti-addiction ledger read failed: playerId=%d session=%d err=%v", in.PlayerId, sessionDetails.SessionId, err)
+		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginRedisError)}
+		return resp, nil
+	}
+	flowState.minorPlayDeadlineMs = playDeadlineMs
 
 	// 入场身份只认 SQL 归属；陈旧 Redis 目录和反向键不能恢复已删除角色。
 	if l.svcCtx.AccountDirectory == nil {
@@ -840,6 +853,8 @@ func (l *EnterGameLogic) persistEnterGameSession(
 			Now:                time.Now(),
 			LoginGeneration:    loginGeneration,
 			SessionIncarnation: state.fenceKey.Incarnation,
+
+			MinorPlayDeadlineMs: state.minorPlayDeadlineMs,
 		})
 		if err := sessionmanager.SetSession(ctx, l.svcCtx.PlayerLocatorClient, newSession); err != nil {
 			// 记录在本链读它之后变了:locator 明确没有写入,不用复读消歧,也没有可踢的旧会话。
@@ -870,6 +885,7 @@ func (l *EnterGameLogic) persistEnterGameSession(
 			state.account,
 			state.requestID,
 			loginGeneration,
+			state.minorPlayDeadlineMs,
 		)
 		if err != nil {
 			return 0, err

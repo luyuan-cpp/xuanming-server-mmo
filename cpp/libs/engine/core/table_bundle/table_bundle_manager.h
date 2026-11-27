@@ -100,6 +100,15 @@ bool ReadPointerLine(const std::string &pointerPath,
 					 std::optional<PointerLine> &out,
 					 std::string &err);
 
+// sidecar 在 POINTER.json 的 sync_errors 里记着「etcd 里有这条线,但表包这一拍没同步下来」。
+// 有 schemaDigest 这条记录时返回 true 并把原因写进 reason;没有记录、读不了文件或 JSON 写坏都返回 false
+// (后两种 ReadPointerLine 已经报过错)。
+// 只给启动路径用:线在文件里找不到时,靠它分清「etcd 里本来就没有」(可以用镜像自带的表)
+// 和「有,但表包没到位」(必须拒绝启动,否则重启的进程会静默退回更旧的表)。
+bool ReadPointerSyncError(const std::string &pointerPath,
+						  std::string_view schemaDigest,
+						  std::string &reason);
+
 // 计算两份清单之间发生变化的表名列表(按 useBinary 对应的 artifact sha256 比对,返回排序结果)。
 std::vector<std::string> DiffChangedTables(const BundleManifest &current,
 										   const BundleManifest &candidate,
@@ -140,7 +149,8 @@ public:
 	static const Hooks &ProcessHooks();
 
 	// 启动期加载配置表(由 Node::LoadAllConfigData 调用);开启表包模式时自动武装 2s 轮询。
-	void LoadAtStartup(const std::string &imageConfigDir, bool useBinary);
+	// serviceName 写进 STATUS.json 的 service 字段(节点类型名,如 SceneNodeService),管理接口用它标出是哪种进程。
+	void LoadAtStartup(const std::string &imageConfigDir, bool useBinary, std::string serviceName);
 
 	// 停机时取消轮询定时器并中止在途分片准备。
 	void Stop();
@@ -194,10 +204,13 @@ private:
 	std::string bundleRoot;
 	std::string statusRoot;
 	std::string imageConfigDir;
+	std::string serviceName;
 
 	bool hasActiveManifest = false;
 	BundleManifest activeManifest;
 	TableBundleIdentity activeIdentity;
+	// 现役这一套表生效的时刻(Unix 毫秒,启动加载或热更提交时记),写进 STATUS.json 的 loaded_at_ms。
+	uint64_t loadedAtMs = 0;
 
 	// 最近一次已被明确终结(rejected / needs_restart)的目标摘要,指针未变前不重复重试。
 	std::string terminalDigest;

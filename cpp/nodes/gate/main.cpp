@@ -389,8 +389,11 @@ namespace
         options.assignAllPartitions = node::kafka::kChatWorldBroadcastTopicPartitions;
         // 回调会被拷进 Kafka 回调表,预算与计数放在 shared_ptr 里让各份拷贝共用一份状态。
         auto budget = std::make_shared<WorldChatPushBudget>();
+        // 撤回单独一份预算:和发言共用一份的话,刷屏把预算打满的时候撤回也推不出去,而那正是最需要把违规消息撤下来的时候。
+        // 不能不设预算:一条发言最多带来一次撤回,不限的话撤回就成了绕过推送预算的路。
+        auto retractBudget = std::make_shared<WorldChatPushBudget>();
         auto overBudget = std::make_shared<uint64_t>(0);
-        const auto onBroadcast = [budget, overBudget](const std::string &topic, const BroadcastToAllEvent &event)
+        const auto onBroadcast = [budget, retractBudget, overBudget](const std::string &topic, const BroadcastToAllEvent &event)
         {
             const uint32_t messageId = event.message_content().message_id();
             if (messageId != ClientPlayerChatNotifyWorldChatMessageId &&
@@ -400,13 +403,16 @@ namespace
                           << " is not a world chat push, topic=" << topic;
                 return;
             }
-            if (!budget->TryTake(std::chrono::steady_clock::now()))
+            WorldChatPushBudget &pushBudget =
+                messageId == ClientPlayerChatNotifyWorldChatRetractedMessageId ? *retractBudget : *budget;
+            if (!pushBudget.TryTake(std::chrono::steady_clock::now()))
             {
                 // 刷屏时每条都会走到这里,采样:第一条必打,此后每 1024 条一行。
+                // 没推出去的发言还在聊天历史里;没推出去的撤回要等客户端下次拉历史才生效。
                 if (((*overBudget)++ & 0x3FF) == 0)
                 {
-                    LOG_WARN << "World chat push over the per-gate budget; not pushed (still in chat history), over_budget_total="
-                             << *overBudget;
+                    LOG_WARN << "World chat push over the per-gate budget; not pushed, message_id=" << messageId
+                             << " over_budget_total=" << *overBudget;
                 }
                 return;
             }

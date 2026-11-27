@@ -437,6 +437,160 @@ func TestBoundMessageReaderEndsGenerationAfterReleasedCommitSoQuietPartitionIsRe
 	}
 }
 
+// 提交一直失败而入组正常(评审建议,2026-11-26):每次交还都由本 owner 自己结束代次。第一次立即重投;连续第二次起下一代次先退避
+// (1s、2s…封顶 30s)再消费,免得每轮重做同一批落库、再结束代次(本成员是 leader 时每轮触发一次全组再均衡)。批提交成功清零。
+// 修复前:没有这段退避,退避序列里只有每批提交自己的 200ms、400ms。
+func TestBoundMessageReaderBacksOffWhenFailedCommitsKeepEndingItsOwnGeneration(t *testing.T) {
+	h := newBoundReaderHarness(t)
+	h.commitErr = func(generation int32, _ int64) error {
+		if generation <= 3 {
+			return errors.New("[16] Not Coordinator For Group")
+		}
+		return nil
+	}
+	readers := []*fakePartitionReader{h.addReader(), h.addReader(), h.addReader(), h.addReader()}
+	h.start()
+	for id := int32(1); id <= 4; id++ {
+		h.deliver(id, 10) // 组内位点没动:每一代次都从 10 重投
+		readers[id-1].push(10, "snapshot-a")
+		message := h.fetch()
+		err := h.owner.CommitMessages(context.Background(), metadata(message.Offset))
+		if id == 4 {
+			if err != nil {
+				t.Fatalf("代次 4:提交应成功: %v", err)
+			}
+			break
+		}
+		if !errors.Is(err, ErrUncommitted) {
+			t.Fatalf("代次 %d:提交重试用尽应交还重投: %v", id, err)
+		}
+		h.waitGeneration(id)
+	}
+	retry := []time.Duration{boundCommitRetryDelay, 2 * boundCommitRetryDelay}
+	want := slices.Concat(retry, retry, []time.Duration{time.Second}, retry, []time.Duration{2 * time.Second})
+	if sleeps := h.recordedSleeps(); !slices.Equal(sleeps, want) {
+		t.Fatalf("第 1 次自己结束代次后立即重投,连续第 2、3 次之后下一代次先等 1s、2s:\n got %v\nwant %v", sleeps, want)
+	}
+	h.owner.mu.Lock()
+	restarts := h.owner.commitRestarts
+	h.owner.mu.Unlock()
+	if restarts != 0 {
+		t.Fatalf("批提交成功后连续计数要清零: %d", restarts)
+	}
+	if _, err := h.stop(); err != nil {
+		t.Fatalf("排空收据不成立: %v", err)
+	}
+}
+
+func TestCommitRestartDelayStartsAtTheSecondRestartAndIsCapped(t *testing.T) {
+	for restarts, want := range map[int]time.Duration{0: 0, 1: 0, 2: time.Second, 3: 2 * time.Second, 6: 16 * time.Second, 7: boundRetryDelayMax, 1 << 30: boundRetryDelayMax} {
+		if got := commitRestartDelay(restarts); got != want {
+			t.Fatalf("commitRestartDelay(%d) = %v,应为 %v", restarts, got, want)
+		}
+	}
+}
+
+// ── owner 终止而代次还在:只差提交的记录先短重试提交(评审建议,2026-11-26)──────────
+
+// handler 模式:回调已成功、只差提交时 owner 进入维护排空,提交瞬时失败一次。短重试后提交成功,记作结清、不交还。
+// 修复前:第一次提交失败就交还;这是最后一个离组的副本时没有新属主提交越过它(组内位点读到的一直是 -1),收尾核对用完预算,收据 HOLD。
+func TestBoundConsumerGroupStoppingOwnerRetriesTheCommitBeforeHandingOff(t *testing.T) {
+	entered := make(chan struct{}, 1)
+	release := make(chan struct{})
+	h := newBoundHarness(t, func(context.Context, kafkago.Message) error {
+		entered <- struct{}{}
+		<-release
+		return nil
+	})
+	var failed atomic.Bool
+	h.commitErr = func(int32, int64) error {
+		if failed.CompareAndSwap(false, true) {
+			return errors.New("[15] Group Coordinator Not Available")
+		}
+		return nil
+	}
+	reader := h.addReader()
+	h.start()
+	h.deliver(1, 0) // 组在该分区已提交到 0:不走起点提交
+	reader.push(0, "battle-0")
+	waitSignal(t, entered, "回调开始处理 offset 0")
+
+	type closed struct {
+		raw []byte
+		err error
+	}
+	result := make(chan closed, 1)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		raw, err := h.owner.CloseAndReport(ctx)
+		result <- closed{raw: raw, err: err}
+	}()
+	waitOwnerState(t, h.owner, "本副本进入维护排空", func() bool { return h.owner.stopping })
+	close(release) // 代次还在:没有别的副本离组
+	got := waitSignal(t, result, "排空收据")
+	h.waitRun()
+	if got.err != nil {
+		t.Fatalf("终止时提交瞬时失败、重试成功,收据必须成立: %v", got.err)
+	}
+	commits := h.commitsOf(1)
+	if len(commits) != 2 || commits[0].err == nil || commits[1].err != nil || commits[1].next != 1 {
+		t.Fatalf("应为一次失败、一次成功的提交(越过 offset 0): %+v", commits)
+	}
+	if !bytes.Contains(got.raw, []byte(`"Accepted":1,"Settled":1,"Replayed":0,"Released":0,"HandedOff":0`)) {
+		t.Fatalf("收据应记作本 owner 结清、没有交还: %s", got.raw)
+	}
+	if h.committedReadCount() != 0 {
+		t.Fatalf("没有交还的记录,收尾不该去读组内位点: %d", h.committedReadCount())
+	}
+	h.relay.CloseAdmission()
+	if err := h.relay.Wait(context.Background()); err != nil {
+		t.Fatalf("relay 被记了未知结局: %v", err)
+	}
+}
+
+// reader 模式同样:owner 已终止、代次还在,批提交失败一次后重试成功,这批记作结清,不交给新属主。
+// 修复前:终止时第一次失败就返回 *UncommittedError、票据留给收尾核对。
+func TestBoundMessageReaderStoppingOwnerRetriesTheCommitAndSettles(t *testing.T) {
+	relay := drainproof.New()
+	owner, err := NewBoundMessageReader(boundTestConfig(), relay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sleeps []time.Duration
+	owner.sleep = func(ctx context.Context, d time.Duration) bool { sleeps = append(sleeps, d); return ctx.Err() == nil }
+	generation := &kafkago.Generation{ID: 4, GroupID: "results-group", MemberID: "member"}
+	partition := &boundPartition{topic: boundTestTopic, partition: 0, initial: 20, committed: 20, groupCommitted: true, pending: map[int64]*boundDelivery{}}
+	owner.generation = generation
+	owner.generationContext = context.Background()
+	owner.generationCancel = func() {}
+	owner.partitions = map[string]*boundPartition{boundPartitionKey(boundTestTopic, 0): partition}
+	owner.initialized = true
+	owner.messages <- &boundDelivery{generation: generation, partition: partition, message: kafkago.Message{Topic: boundTestTopic, Partition: 0, Offset: 20, Value: []byte("row")}}
+	if _, err := owner.FetchMessage(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	owner.StopFetching()
+	attempts := 0
+	owner.commitOffsets = func(*kafkago.Generation, map[string]map[int]int64) error {
+		attempts++
+		if attempts == 1 {
+			return errors.New("[15] Group Coordinator Not Available")
+		}
+		return nil
+	}
+	if err := owner.CommitMessages(context.Background(), metadata(20)); err != nil {
+		t.Fatalf("终止而代次还在:提交重试成功应结清: %v", err)
+	}
+	if attempts != 2 || !slices.Equal(sleeps, []time.Duration{boundCommitRetryDelay}) {
+		t.Fatalf("应失败一次、等 200ms、再提交成功: attempts=%d sleeps=%v", attempts, sleeps)
+	}
+	if partition.settled != 1 || partition.released != 0 || len(owner.handoffs) != 0 || relay.Pending() != 0 || partition.committed != 21 {
+		t.Fatalf("重试成功后应记作结清、没有交还: settled=%d released=%d handoffs=%d pending=%d committed=%d",
+			partition.settled, partition.released, len(owner.handoffs), relay.Pending(), partition.committed)
+	}
+}
+
 // ── 第 3、5 条:有界重试后转死信 ───────────────────────────────────
 
 type fakeDeadLetterSink struct {
@@ -695,6 +849,15 @@ func TestDeadLetterMessageRoundTripsTheOriginal(t *testing.T) {
 	if spec.Name != "guild-trial-dlq" || spec.Partitions != 1 || spec.RetentionMs != deadLetterRetentionMs || spec.ReplicaFactor != 3 || !spec.RequireDurability {
 		t.Fatalf("死信 topic 契约不对: %+v", spec)
 	}
+	// 死信比原件多 dlq.* 头:死信 topic 与写入端的上限都要高于原 topic 的缺省上限(约 1MiB),贴着上限的原件才写得进去。
+	sink, err := NewKafkaDeadLetterSink([]string{"localhost:9092"}, spec.Name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sink.Close()
+	if spec.MaxMessageBytes != 2<<20 || sink.writer.BatchBytes != spec.MaxMessageBytes {
+		t.Fatalf("死信的单条上限应为 2MiB,topic 与写入端一致: topic=%d writer=%d", spec.MaxMessageBytes, sink.writer.BatchBytes)
+	}
 }
 
 // ── 第 8 条:保留期删掉了本组还没处理的记录 ───────────────────────
@@ -725,6 +888,34 @@ func TestBoundConsumerGroupHoldsWhenRetentionDeletedRecordsTheGroupHadNotProcess
 	h.relay.CloseAdmission()
 	if err := h.relay.Wait(context.Background()); !errors.Is(err, drainproof.ErrHold) {
 		t.Fatalf("relay 没有保留未知结局: %v", err)
+	}
+}
+
+// 打开分区时就发现组内已提交位点落在日志起点之前(消费者停摆太久,或接纳过、没结清的记录被删,§3.1):同样是保留期丢失,
+// 计进同一个指标、走同一条 critical 告警(2026-11-26)。修复前只记 HOLD,保留期丢失的告警不响。
+// 提交点越过日志终点(topic 重建 / 截断)不是保留期丢失,只 HOLD、不计。
+func TestBoundConsumerGroupCountsRetentionLossFoundWhenOpeningThePartition(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		want float64
+	}{
+		{name: "提交点在日志起点之前", err: fmt.Errorf("%w: %w: results[0] offset=5 earliest=9 end=20", errBoundRetentionSkipped, errBoundAssignmentOutOfRange), want: 1},
+		{name: "提交点越过日志终点", err: fmt.Errorf("%w: results[0] offset=25 earliest=9 end=20", errBoundAssignmentOutOfRange), want: 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newBoundHarness(t, func(context.Context, kafkago.Message) error { return nil })
+			before := counterValue(t, boundRetentionLossTotal.WithLabelValues("results-group"))
+			h.opens <- fakeOpen{err: tc.err}
+			h.start()
+			h.deliver(1, 5)
+			if err := h.waitRun(); !errors.Is(err, errBoundAssignmentOutOfRange) {
+				t.Fatalf("提交点越过保留范围必须 HOLD 并停止: %v", err)
+			}
+			if after := counterValue(t, boundRetentionLossTotal.WithLabelValues("results-group")); after-before != tc.want {
+				t.Fatalf("保留期丢失计数应加 %v: %v -> %v", tc.want, before, after)
+			}
+		})
 	}
 }
 

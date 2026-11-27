@@ -26,8 +26,9 @@ const (
 	// 改形之前留下的旧键 guild_rank:zone:<区> 与手写的键都会扫到,报成「形状不认识」,不静默跳过。
 	zoneRankKeyPrefix  = "guild_rank:zone:"
 	zoneRankKeyPattern = zoneRankKeyPrefix + "*"
-	// rankKeyScanCount 是每条 SCAN 的 COUNT 提示,与改动前相同。
-	rankKeyScanCount = 200
+	// rankKeyScanCount 是每条 SCAN 的 COUNT 提示。控制集群键多时 200 一批往返太多,单项检查的时限内扫不完就一直 NOT CHECKED;
+	// 1000 一批单次仍只占 Redis 毫秒级,往返少五倍。还扫不完就调大 -check-timeout。
+	rankKeyScanCount = 1000
 	// rankKeySampleLimit 是报告里列出的样例键个数上限。
 	rankKeySampleLimit = 5
 )
@@ -186,6 +187,9 @@ func checkGuildRankZoneOrphans(ctx context.Context, cfg runConfig) CheckResult {
 			"or -live-zones): zones that never existed, or keys left behind by a failed fold / rebuild", sortedKeys(orphans)))
 	case len(unrecognized) > 0:
 		r.Severity = "warn"
+	case len(seen) == 0:
+		// 一个榜键都没扫到:要分清「真的没有榜」和「-redis-addr 指到了别的 Redis」(玩家域、空实例),后者不能报成干净。
+		r.Severity, notes = emptyRankScanVerdict(ctx, cfg)
 	default:
 		r.Severity = "info"
 		notes = append(notes, "no orphan rank ZSETs")
@@ -195,6 +199,22 @@ func checkGuildRankZoneOrphans(ctx context.Context, cfg runConfig) CheckResult {
 	}
 	r.SampleNotes = strings.Join(notes, "; ")
 	return r
+}
+
+// emptyRankScanVerdict 给「一个榜键都没扫到」下结论。guild 启动时的 RebuildRanks 把库里每个有区(zone_id 非 0)的帮会并进它
+// 最终区的榜,所以库里有这样的帮会而榜键为 0,多半是扫错了 Redis,或 guild 从没建过榜:报 warn「NOT CHECKED」。
+// 库读不到时分不清这两种情况,同样不下结论。库里没有这样的帮会才是干净的。
+func emptyRankScanVerdict(ctx context.Context, cfg runConfig) (string, []string) {
+	var ranked int64
+	err := cfg.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+cfg.guildSchema+".guild WHERE zone_id <> 0").Scan(&ranked)
+	switch {
+	case err != nil:
+		return "warn", []string{fmt.Sprintf("NOT CHECKED: no rank ZSETs found, and the guild table could not be read to tell an empty rank from a wrong -redis-addr: %v", err)}
+	case ranked > 0:
+		return "warn", []string{fmt.Sprintf("NOT CHECKED: no rank ZSETs found but %d guild(s) have a zone; -redis-addr probably points at "+
+			"a different Redis than the guild service uses (or the guild service has never built its ranks)", ranked)}
+	}
+	return "info", []string{"no orphan rank ZSETs"}
 }
 
 // unrecognizedRankKeysNote 写「形状不认识」的键数,以及按字典序排在最前的几个样例(加引号,键名里的怪字符原样可见)。

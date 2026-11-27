@@ -7,7 +7,7 @@
 
 | 项 | 状态 |
 |---|---|
-| 服务端代码 | 写完。`b6a08148c`(入队按账号幂等、队列上限、每拍上限、重连占位、只接本区)、`f067d01fc`(会话带 `gate_zone_id`、`/api/refresh-token` 限流)、2026-11-26 两处补齐(K8s 镜像两个上限键、告警 `LoginQueueFull`,未提交) |
+| 服务端代码 | 写完。`b6a08148c`(入队按账号幂等、队列上限、每拍上限、重连占位、只接本区)、`f067d01fc`(会话带 `gate_zone_id`、`/api/refresh-token` 限流)、2026-11-26 三处(K8s 镜像两个上限键、告警 `LoginQueueFull`,已入库;快速通道一个账号只占一个在途名额,未提交) |
 | 客户端代码 | 写完(Unity 持票轮询与收尾、robot 状态机),见 `docs/PROGRESS.md` 2026-11-19~20 四条 |
 | 协议 | 已生成(`go/proto` 里有 `GetClientWsUrl`、`GateZoneId`) |
 | 编译 | login 生产代码在 2026-11-23 的 Docker 构建里编过;`assigngatelogic.go` 11-25 之后又改过,没有新记录。**测试代码从没被编译过** |
@@ -25,7 +25,7 @@
 | 2 | 门槛 ① ②:25 条点名用例、`-count=10` 稳定性 | 2026-11-20「登录排队清合入门槛的 Codex 验证单」第一部分。要在第 1 步之后跑:其中 7 条被改过账号字面量 |
 | 3 | 本仓网关:`AssignGateServiceAuthTest`、`AssignGateRateLimiterTest`、`RefreshTokenControllerTest` 等 | 「遗留项收口」第 3 步;Gemini 条目第 3 步 |
 | 4 | 契约测试:`gate_pick_alerts_contract.tests.ps1`、`k8s_deploy_contract.tests.ps1` | 2026-11-26「登录排队复核与两处补齐」 |
-| 5 | 变异取红 11 项(A~K),在 `%TEMP%` 的副本上做 | 「遗留项收口」第 4 步 |
+| 5 | 变异取红 12 项(A~L),在 `%TEMP%` 的副本上做 | 「遗留项收口」第 4 步(A~K);2026-11-26「登录排队:快速通道一个账号只占一个在途名额」(L) |
 | 6 | Unity 编译与 EditMode | Gemini 条目第 5 步 |
 | 7 | 门槛 ③:真实 Redis 冒烟两轮(7.2 单实例、8.10.2 Cluster),各 11 个核对步骤加 4 个补充项 | 验证单第二部分;「遗留项收口」第 5 步 |
 
@@ -35,7 +35,7 @@
 
 下面这些文件里有从没被编译过的代码,第 0、1 步先看它们:
 
-- `go/login/internal/logic/pkg/loginqueue/queue_test.go` 文末 8 个用例(`TestQueueIDForAccount_*`、`TestEnqueue_*` 6 条、`TestHoldReconnectSlot_*`)。
+- `go/login/internal/logic/pkg/loginqueue/queue_test.go` 文末 9 个用例(`TestQueueIDForAccount_*`、`TestEnqueue_*` 6 条、`TestHoldReconnectSlot_*`、`TestTryReserveFastPathSlot_OneSlotPerAccount`)。
 - `go/login/internal/logic/pkg/loginqueue/dispatcher_test.go` 文末 `TestDispatchOnce_AdmitsAtMostTheTickLimit`。
 - `go/login/internal/logic/loginpregate/assigngate_reconnect_test.go`。
 - `java/gateway_node/src/test/java/com/game/gateway/service/AssignGateServiceAuthTest.java` 的两条 `queueFull*`。
@@ -45,6 +45,8 @@
 
 - 既有用例里凡是在循环里入队的,账号都已改成空串(匿名)。同一个账号现在只会得到一个条目;哪条用例的队列长度比预期少,先看它是不是用同一个账号入了多次。
 - 入队从 MULTI 改成了一段脚本(`enqueueScript`)。按命令名拦截 `evalsha` / `eval` 的测试钩子会连入队一起拦到;放行脚本靠第一个键以 `admit:` 开头来认,入队脚本的第一个键是 `queue:{q:<z>}`。
+- `TryReserveFastPathSlot` 多了第四个参数(账号,2026-11-26):带账号时占位成员是账号的条目号,一个账号只占一枚。既有用例都传空串,行为与以前相同。
+- 验证单第二部分第 3 步写的「快速通道的成员以 `fast:` 开头」只对匿名分配成立。robot 带账号登录时,快速通道的占位成员是 `a-` 开头的条目号,同样约 20 秒后消失;按这个判。
 - `gofmt -l` 列出上面这些文件时,允许 `gofmt -w` 后重跑并在结果里注明(新用例是手排的)。列出别的文件只记录。
 - 红了不要改断言迁就。保留失败用例的完整 `-v` 输出,停下报告。
 

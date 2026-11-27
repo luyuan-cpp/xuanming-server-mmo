@@ -45,6 +45,38 @@ type Line struct {
 type Document struct {
 	Track string          `json:"track"`
 	Lines map[string]Line `json:"lines"`
+	// SyncErrors 按 schema_digest 记「etcd 里有这条线,但这一拍没同步下来」的原因(表包取不到、摘要对不上、指针写坏)。
+	// 出错的线在 Lines 里沿用上一次的合法内容;从没同步成功过的线在 Lines 里没有,只在这里有。
+	// 业务进程启动时靠它分清「etcd 里本来就没有这条线」(可以用镜像自带的表)和「有,但表包没到位」
+	// (必须拒绝启动:否则重启的进程会静默退回更旧的表,而别的实例还在用热更后的表)。
+	SyncErrors map[string]string `json:"sync_errors,omitempty"`
+}
+
+// MaxSyncErrorChars 是写进 POINTER.json 的单条同步错误原因的长度上限。
+const MaxSyncErrorChars = 256
+
+// TrimSyncError 把同步错误原因截到 MaxSyncErrorChars 以内,POINTER.json 不因为一条长错误而膨胀。
+func TrimSyncError(reason string) string {
+	if len(reason) <= MaxSyncErrorChars {
+		return reason
+	}
+	return reason[:MaxSyncErrorChars]
+}
+
+// ReadDocument 读回上一次落盘的 POINTER.json;文件还不存在返回 (nil, nil)。
+func ReadDocument(path string) (*Document, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var doc Document
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return nil, fmt.Errorf("parse pointer document %s: %w", path, err)
+	}
+	return &doc, nil
 }
 
 // StatusReport 对应业务进程写入的 STATUS.json 与上报到 etcd 的状态结构。

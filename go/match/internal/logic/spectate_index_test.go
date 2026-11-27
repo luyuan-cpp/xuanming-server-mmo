@@ -20,7 +20,6 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/alicebob/miniredis/v2/server"
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 )
 
 // spectateIndexSize 是一把索引全部桶的成员数之和。
@@ -56,10 +55,10 @@ func seedSpectateIndex(t *testing.T, mr *miniredis.Miniredis, ix spectateIndex, 
 	}
 }
 
-func pairKeys(pairs []redis.Pair) []string {
+func pairKeys(pairs []svc.SpectateIndexMember) []string {
 	keys := make([]string, 0, len(pairs))
 	for _, pair := range pairs {
-		keys = append(keys, pair.Key)
+		keys = append(keys, pair.Member)
 	}
 	return keys
 }
@@ -125,7 +124,7 @@ func TestSpectateIndexAtVisitsEveryMemberOnce(t *testing.T) {
 		pairs, err := spectateActiveIndex.at(ctx, svcCtx.MatchRedis, counts, index)
 		require.NoError(t, err)
 		require.Len(t, pairs, 1, "index=%d", index)
-		seen[pairs[0].Key]++
+		seen[pairs[0].Member]++
 	}
 	require.Len(t, seen, 7)
 	for member, hits := range seen {
@@ -211,8 +210,7 @@ func TestListWatchableBattlesCacheForgetsEvictedMember(t *testing.T) {
 	svcCtx.SpectateLobby = svc.NewSpectateLobbyCache(clock.Now)
 	const live, orphan = uint64(886010), uint64(886011)
 	registerBattle(t, svcCtx, live, nowMs()-1000)
-	_, err := svcCtx.MatchRedis.Zadd(spectateActiveIndex.keyFor(orphan), int64(nowMs()), strconv.FormatUint(orphan, 10)) // 成局已不在
-	require.NoError(t, err)
+	require.NoError(t, spectateActiveIndex.add(context.Background(), svcCtx.MatchRedis, orphan, int64(nowMs()))) // 成局已不在
 	stub := loadSpectateBattleFn
 	reads := map[uint64]int{}
 	loadSpectateBattleFn = func(ctx context.Context, s *svc.ServiceContext, battleId uint64) (*matchpb.SpectateBattleRecord, error) {
@@ -242,7 +240,7 @@ func TestSpectateLobbyCacheSharesOneFetchAcrossConcurrentCallers(t *testing.T) {
 			close(started)
 		}
 		<-release
-		return svc.SpectateLobbySnapshot{Active: []redis.Pair{{Key: "886020", Score: 1}}}, nil
+		return svc.SpectateLobbySnapshot{Active: []svc.SpectateIndexMember{{Member: "886020", Score: 1}}}, nil
 	}
 	const callers = 8
 	type loaded struct {
@@ -279,7 +277,7 @@ func TestSpectateLobbyCacheRetriesAfterFetchError(t *testing.T) {
 
 	snapshot, err := cache.Load(func() (svc.SpectateLobbySnapshot, error) {
 		calls++
-		return svc.SpectateLobbySnapshot{Active: []redis.Pair{{Key: "886030"}}}, nil
+		return svc.SpectateLobbySnapshot{Active: []svc.SpectateIndexMember{{Member: "886030"}}}, nil
 	})
 	require.NoError(t, err)
 	require.Equal(t, 2, calls)
@@ -291,8 +289,8 @@ func TestSpectateLobbyCacheForgetKeepsHandedOutSnapshot(t *testing.T) {
 	cache := svc.NewSpectateLobbyCache(newFakeClock().Now)
 	first, err := cache.Load(func() (svc.SpectateLobbySnapshot, error) {
 		return svc.SpectateLobbySnapshot{
-			Featured: []redis.Pair{{Key: "886040"}},
-			Active:   []redis.Pair{{Key: "886040"}, {Key: "886041"}},
+			Featured: []svc.SpectateIndexMember{{Member: "886040"}},
+			Active:   []svc.SpectateIndexMember{{Member: "886040"}, {Member: "886041"}},
 		}, nil
 	})
 	require.NoError(t, err)

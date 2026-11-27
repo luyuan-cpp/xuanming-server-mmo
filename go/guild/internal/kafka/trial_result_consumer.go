@@ -151,8 +151,8 @@ const (
 	// 换来一条日志与一次计数,而不是一个不出声的、永远停住的消费者(纪律 2:停住的是本进程名下的全部分区)。
 	// 到点时事务回滚(或提交结果不明),重调由幂等闸门兜住。
 	trialResultHandleTimeout = 30 * time.Second
-	// trialResultDeadLetterAttempts:生产路径同一条失败多少次转死信。按 owner 的 1s 起翻倍、30s 封顶的退避约 7.5 分钟,
-	// 长于巡检器的 ResultOverdue(420s):已登记的对局多半已由巡检器从 match 的 SQL 终局结算,死信里的那条重放时走幂等闸门。
+	// trialResultDeadLetterAttempts:生产路径同一条失败多少次转死信。owner 的退避 1s 起翻倍、30s 封顶、带抖动,约 4–7.5 分钟。
+	// 已登记的对局到 ResultOverdue(420s)由巡检器从 match 的 SQL 终局结算,与转死信谁先谁后无关;死信里的那条重放时走幂等闸门。
 	trialResultDeadLetterAttempts = 20
 	// trialResultLagProbeInterval:消费组 lag 探针的周期(与 match 结果消费组的探针相同)。
 	trialResultLagProbeInterval = 30 * time.Second

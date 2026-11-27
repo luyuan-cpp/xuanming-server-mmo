@@ -66,6 +66,62 @@ func writeTestTableDir(t *testing.T, dir string, version uint64, itemJSON string
 	return contentDigest
 }
 
+// 导表器写出的清单里 tables 是数组,每项带 name。早先这里把它当对象解,真实的表目录一份都读不进来;
+// 而本包的夹具是用同一个结构体写出去的,所以单测一直是绿的。这条把形状钉死,不依赖仓里的文件。
+func TestManifestJSONUsesExporterArrayShape(t *testing.T) {
+	sha := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	raw := []byte(`{
+	  "schema_version": 2, "schema_digest": "abcdef0123456789", "version": 7,
+	  "content_digest": "` + sha + `",
+	  "generated_at": "2026-11-26T00:00:00Z", "source_rev": {"commit": "unknown", "data_dirty": true}, "table_count": 2,
+	  "tables": [
+	    {"name": "Item", "hot_reload": false, "ids_permanent": true, "rows": 3,
+	     "source": {"file": "Item.xlsx", "size": 1, "sha256": "` + sha + `"},
+	     "artifacts": [{"kind": "json", "file": "item.json", "size": 10, "sha256": "` + sha + `"},
+	                   {"kind": "binary", "file": "item.pb", "size": 4, "sha256": "` + sha + `"}]},
+	    {"name": "Skill", "hot_reload": true, "ids_permanent": false, "rows": 1,
+	     "artifacts": [{"kind": "json", "file": "skill.json", "size": 2, "sha256": "` + sha + `"}]}
+	  ]}`)
+
+	var m Manifest
+	require.NoError(t, json.Unmarshal(raw, &m))
+	require.Equal(t, 2, m.SchemaVersion)
+	require.Equal(t, uint64(7), m.Version)
+	require.Len(t, m.Tables, 2)
+	item := m.Tables["Item"]
+	require.Equal(t, "Item", item.Name)
+	require.True(t, item.IDsPermanent)
+	require.Len(t, item.Artifacts, 2)
+	require.True(t, m.Tables["Skill"].HotReload)
+
+	// 写回去仍是按表名排序的数组,别的读者(Go 服务、C++ 节点)才读得了
+	out, err := json.Marshal(m)
+	require.NoError(t, err)
+	require.Contains(t, string(out), `"tables":[{"name":"Item"`)
+	var again Manifest
+	require.NoError(t, json.Unmarshal(out, &again))
+	require.Equal(t, m, again)
+
+	require.Error(t, json.Unmarshal([]byte(`{"tables":[{"name":"A"},{"name":"A"}]}`), &m), "duplicate table name")
+	require.Error(t, json.Unmarshal([]byte(`{"tables":[{"name":" "}]}`), &m), "missing table name")
+	require.Error(t, json.Unmarshal([]byte(`{"tables":{"A":{}}}`), &m), "tables must be an array")
+}
+
+// 再拿仓里真实导出的那一套核一遍:清单读得进来,登记的每个文件大小与 sha256 都对得上。
+func TestVerifyDirManifestAcceptsRealExporterOutput(t *testing.T) {
+	repoTables := filepath.Join("..", "..", "..", "..", "generated", "tables")
+	if _, err := os.Stat(filepath.Join(repoTables, ManifestFilename)); err != nil {
+		t.Skipf("real generated/tables/manifest.json unavailable: %v", err)
+	}
+	m, err := VerifyDirManifest(repoTables, "", "")
+	require.NoError(t, err)
+	require.NotEmpty(t, m.Tables)
+	for name, entry := range m.Tables {
+		require.Equal(t, name, entry.Name)
+		require.NotEmpty(t, entry.Artifacts, name)
+	}
+}
+
 func TestPackVerifyExtractAndPermanentIDRollback(t *testing.T) {
 	root := t.TempDir()
 	srcV1 := filepath.Join(root, "v1")

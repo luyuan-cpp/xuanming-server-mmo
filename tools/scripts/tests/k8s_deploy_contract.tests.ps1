@@ -124,6 +124,7 @@ $WorkloadSecretSpecs = [ordered]@{
     'login-wechat-minigame' =@{ Env = 'MMORPG_LOGIN_WECHAT_MINIGAME_APP_SECRET'; Key = 'secret'; Consumers = @('login') }
     'login-douyin-minigame' = @{ Env = 'MMORPG_LOGIN_DOUYIN_MINIGAME_APP_SECRET'; Key = 'secret'; Consumers = @('login') }
     'login-apple-signin'    = @{ Env = 'MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY'; Key = 'private-key'; Consumers = @('login') }
+    'login-passport-admin'  = @{ Env = 'MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET'; Key = 'client-secret'; Consumers = @('login') }
     'login-nppa'            = @{ Env = 'MMORPG_LOGIN_NPPA_SECRET_KEY'; Key = 'secret'; Consumers = @('login') }
 }
 
@@ -6190,6 +6191,8 @@ Test-Case 'kafka-bound-consumer-alerts.yaml:PrometheusRule 形状;规则名单�
     }
     $loss = [regex]::Match($alerts, '(?ms)^\s+- alert: KafkaBoundConsumerRetentionLoss\s*\n(?<body>.*?)(?=^\s+- alert: |\z)')
     Assert-Match -Text $loss.Groups['body'].Value -Pattern '(?m)^\s+severity:\s*critical\s*$' -Because '保留期删掉了本组还没处理的记录 = 数据已丢,必须呼叫'
+    $writeFailing = [regex]::Match($alerts, '(?ms)^\s+- alert: KafkaBoundConsumerDeadLetterWriteFailing\s*\n(?<body>.*?)(?=^\s+- alert: |\z)')
+    Assert-Match -Text $writeFailing.Groups['body'].Value -Pattern 'increase\(kafka_bound_consumer_retry_total\{stage="dead_letter"\}\[2m\]\)\) > 0\s*\n\s+for: 5m' -Because '死信写不进要连续失败才响:统计窗口(2 分钟)必须短于 for(5 分钟),否则一次瞬时失败会在窗口里留够久而触发'
     $deadLetterGo = [IO.File]::ReadAllText((Join-Path $repo 'go/shared/kafkautil/bound_consumer_dead_letter.go'))
     foreach ($cause in @('unprocessable', 'exhausted')) {
         Assert-Match -Text $deadLetterGo -Pattern ('DeadLetterCause\w+\s*=\s*"{0}"' -f $cause) -Because "死信原因 $cause 是告警 cause label 的取值"

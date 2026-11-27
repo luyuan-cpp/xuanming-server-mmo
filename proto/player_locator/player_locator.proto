@@ -56,6 +56,10 @@ message PlayerSession {
   // AssignGate 重连免排队直接按它判「会话是否在本区」(合服角色掉 gate 仍可精确免排队,跨区访客不再误免,
   // docs/design/login-queue-2026-05.md §8)。0 = 旧版 login 写入,不从旧记录继承。
   uint32 gate_zone_id = 16;
+  // 未成年人当天能玩到的时刻(Unix 毫秒);0 = 不限(成年人、平台管的渠道、没开防沉迷的部署)。login 在 SetSession / Reconnect
+  // 时按防沉迷会话账本填。断线后的离线托管不能越过它:租约监视器给月卡玩家续租时不超过剩余时间,到点就按普通断线收尾
+  // (docs/design/real-name-anti-addiction.md §5.4)。属于写这条记录的那次登录,不从旧记录继承。
+  uint64 minor_play_deadline_ms = 17;
 }
 
 message SetSessionRequest {
@@ -128,6 +132,8 @@ message ReconnectRequest {
   uint64 session_incarnation = 10;
   // 发起重连的那条 gate 连接所在的区号(login 的 Node.ZoneId),原样写进会话记录(PlayerSession.gate_zone_id);0 = 旧版 login,如实写 0。
   uint32 gate_zone_id = 11;
+  // 这次登录的未成年人截止时刻,原样写进会话记录(PlayerSession.minor_play_deadline_ms);0 = 不限,如实写 0。
+  uint64 minor_play_deadline_ms = 12;
 }
 
 message ReconnectResponse {

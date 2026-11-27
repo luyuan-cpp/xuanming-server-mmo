@@ -163,7 +163,7 @@ func TestSetSpectateFeaturedQuotaFullThenPromotedByViewer(t *testing.T) {
 	require.True(t, mr.Exists(spectateFeaturedKey(battleId)))
 	require.Empty(t, relay.promotes)
 
-	_, err = svcCtx.MatchRedis.Zrem(spectateBroadcastIndex.keyFor(999999), "999999")
+	err = spectateBroadcastIndex.remove(context.Background(), svcCtx.MatchRedis, 999999)
 	require.NoError(t, err)
 	mr.FastForward(spectatePromoteLeaseSeconds * time.Second) // 上一次尝试的租约到期
 	requireLobbyAdmitted(t, lobbyAdmitOnGate3(t, svcCtx, watcher, battleId), battleId, watcher)

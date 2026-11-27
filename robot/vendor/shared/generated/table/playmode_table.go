@@ -20,6 +20,7 @@ import (
 type playmodeSnapshot struct {
     data   []*pb.PlayModeTable
     kvData map[uint32]*pb.PlayModeTable
+    idxAllowedTeamSizes map[uint32][]*pb.PlayModeTable
     idxBattleConfigId map[uint32][]*pb.PlayModeTable
 }
 
@@ -41,47 +42,66 @@ func NewPlayModeTableManager() *PlayModeTableManager {
     m := &PlayModeTableManager{}
     m.snap.Store(&playmodeSnapshot{
         kvData: make(map[uint32]*pb.PlayModeTable),
+        idxAllowedTeamSizes: make(map[uint32][]*pb.PlayModeTable),
         idxBattleConfigId: make(map[uint32][]*pb.PlayModeTable),
     })
     return m
 }
 
 func (m *PlayModeTableManager) Load(configDir string, useBinary bool) error {
+    snap, err := m.loadSnapshot(configDir, useBinary)
+    if err != nil {
+        return err
+    }
+    m.snap.Store(snap)
+    return nil
+}
+
+func (m *PlayModeTableManager) swapSnapshot(snap *playmodeSnapshot) {
+    if snap != nil {
+        m.snap.Store(snap)
+    }
+}
+
+func (m *PlayModeTableManager) loadSnapshot(configDir string, useBinary bool) (*playmodeSnapshot, error) {
     var container pb.PlayModeTableData
 
     if useBinary {
         path := filepath.Join(configDir, "playmode.pb")
         raw, err := os.ReadFile(path)
         if err != nil {
-            return fmt.Errorf("failed to read file: %w", err)
+            return nil, fmt.Errorf("failed to read file: %w", err)
         }
         if err := proto.Unmarshal(raw, &container); err != nil {
-            return fmt.Errorf("failed to parse binary: %w", err)
+            return nil, fmt.Errorf("failed to parse binary: %w", err)
         }
     } else {
         path := filepath.Join(configDir, "playmode.json")
         raw, err := os.ReadFile(path)
         if err != nil {
-            return fmt.Errorf("failed to read file: %w", err)
+            return nil, fmt.Errorf("failed to read file: %w", err)
         }
         if err := protojson.Unmarshal(raw, &container); err != nil {
-            return fmt.Errorf("failed to parse json: %w", err)
+            return nil, fmt.Errorf("failed to parse json: %w", err)
         }
     }
 
     snap := &playmodeSnapshot{
         kvData: make(map[uint32]*pb.PlayModeTable, len(container.Data)),
+        idxAllowedTeamSizes: make(map[uint32][]*pb.PlayModeTable),
         idxBattleConfigId: make(map[uint32][]*pb.PlayModeTable),
     }
 
     for _, row := range container.Data {
         snap.kvData[row.Id] = row
+        for _, elem := range row.AllowedTeamSizes {
+            snap.idxAllowedTeamSizes[elem] = append(snap.idxAllowedTeamSizes[elem], row)
+        }
         snap.idxBattleConfigId[row.BattleConfigId] = append(snap.idxBattleConfigId[row.BattleConfigId], row)
     }
 
     snap.data = container.Data
-    m.snap.Store(snap)
-    return nil
+    return snap, nil
 }
 
 func (m *PlayModeTableManager) FindAll() []*pb.PlayModeTable {
@@ -93,6 +113,12 @@ func (m *PlayModeTableManager) FindById(id uint32) (*pb.PlayModeTable, bool) {
     snap := m.snap.Load()
     row, ok := snap.kvData[id]
     return row, ok
+}
+
+
+func (m *PlayModeTableManager) FindByAllowedTeamSizesIndex(key uint32) []*pb.PlayModeTable {
+    snap := m.snap.Load()
+    return snap.idxAllowedTeamSizes[key]
 }
 
 
@@ -118,6 +144,12 @@ func (m *PlayModeTableManager) Exists(id uint32) bool {
 func (m *PlayModeTableManager) Count() int {
     snap := m.snap.Load()
     return len(snap.data)
+}
+
+
+func (m *PlayModeTableManager) CountByAllowedTeamSizesIndex(key uint32) int {
+    snap := m.snap.Load()
+    return len(snap.idxAllowedTeamSizes[key])
 }
 
 

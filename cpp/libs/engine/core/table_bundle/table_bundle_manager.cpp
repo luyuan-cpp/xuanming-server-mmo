@@ -471,6 +471,30 @@ bool ReadPointerLine(const std::string &pointerPath,
 	return true;
 }
 
+bool ReadPointerSyncError(const std::string &pointerPath,
+						  const std::string_view schemaDigest,
+						  std::string &reason)
+{
+	reason.clear();
+	std::string raw;
+	std::string ignoredErr;
+	if (!ReadWholeFile(pointerPath, raw, ignoredErr))
+	{
+		return false;
+	}
+	Struct doc;
+	if (!google::protobuf::util::JsonStringToMessage(raw, &doc).ok())
+	{
+		return false;
+	}
+	const Value *errorsVal = FindField(doc, "sync_errors");
+	if (errorsVal == nullptr || errorsVal->kind_case() != Value::kStructValue)
+	{
+		return false;
+	}
+	return ReadString(errorsVal->struct_value(), std::string(schemaDigest), reason) && !reason.empty();
+}
+
 std::vector<std::string> DiffChangedTables(const BundleManifest &current,
 										   const BundleManifest &candidate,
 										   const bool useBinary)
@@ -598,11 +622,12 @@ uint64_t TableBundleManager::NowUnixMs()
 			.count());
 }
 
-void TableBundleManager::LoadAtStartup(const std::string &imageConfigDir, const bool useBinary)
+void TableBundleManager::LoadAtStartup(const std::string &imageConfigDir, const bool useBinary, std::string serviceName)
 {
 	eventLoop.get().assertInLoopThread();
 	this->imageConfigDir = imageConfigDir;
 	this->useBinary = useBinary;
+	this->serviceName = std::move(serviceName);
 	bundleRoot = NonEmptyEnv(kBundleRootEnv);
 	statusRoot = NonEmptyEnv(kStatusRootEnv);
 	bundleMode = !bundleRoot.empty();
@@ -618,11 +643,13 @@ void TableBundleManager::LoadAtStartup(const std::string &imageConfigDir, const 
 
 	std::string loadDir = this->imageConfigDir;
 	std::string source = "image";
-	std::optional<PointerLine> initialLine;
+	// 表包模式下指针此刻指向的包;没有值 = 用镜像自带的表。
+	std::optional<PointerTarget> startupTarget;
 
 	if (bundleMode)
 	{
 		const std::string pointerPath = (std::filesystem::path(bundleRoot) / kPointerFilename).string();
+		std::optional<PointerLine> initialLine;
 		std::string err;
 		if (!ReadPointerLine(pointerPath, kTableSchemaDigest, initialLine, err))
 		{
@@ -632,20 +659,31 @@ void TableBundleManager::LoadAtStartup(const std::string &imageConfigDir, const 
 		if (initialLine)
 		{
 			const uint64_t nowMs = timeSource.wallUnixMs();
-			std::optional<PointerTarget> effective;
 			if (initialLine->next && (initialLine->next->immediate || nowMs >= initialLine->next->activateAtMs))
 			{
-				effective = initialLine->next;
+				startupTarget = initialLine->next;
 			}
 			else if (initialLine->current)
 			{
-				effective = initialLine->current;
+				startupTarget = initialLine->current;
 			}
-			if (effective)
+		}
+		else
+		{
+			// 文件里没有本线:只有 etcd 里确实没有这条线时才能用镜像自带的表。
+			// sidecar 记着「有这条线但表包没取到」时拒绝启动,等它同步好再起来,不静默退回旧表。
+			std::string syncError;
+			if (ReadPointerSyncError(pointerPath, kTableSchemaDigest, syncError))
 			{
-				loadDir = (std::filesystem::path(bundleRoot) / "bundles" / effective->contentDigest).string();
-				source = "bundle";
+				LOG_FATAL << "Startup refused: table bundle for schema line " << std::string(kTableSchemaDigest)
+						  << " is not available locally (sidecar sync error: " << syncError
+						  << "); not falling back to image tables";
 			}
+		}
+		if (startupTarget)
+		{
+			loadDir = (std::filesystem::path(bundleRoot) / "bundles" / startupTarget->contentDigest).string();
+			source = "bundle";
 		}
 	}
 
@@ -657,6 +695,13 @@ void TableBundleManager::LoadAtStartup(const std::string &imageConfigDir, const 
 		if (!VerifyTableDirManifest(loadDir, this->useBinary, kTableSchemaDigest, manifest, err))
 		{
 			LOG_FATAL << "Startup table manifest verification failed dir=" << loadDir << ": " << err;
+		}
+		// 目录名是指针给的摘要,清单里自报的摘要必须和它一致(热更路径同样核对),否则上报的身份与实际内容对不上。
+		if (startupTarget && manifest.contentDigest != startupTarget->contentDigest)
+		{
+			LOG_FATAL << "Startup bundle digest mismatch dir=" << loadDir
+					  << " manifest=" << manifest.contentDigest
+					  << " pointer=" << startupTarget->contentDigest;
 		}
 		hasActiveManifest = true;
 		activeManifest = std::move(manifest);
@@ -713,7 +758,8 @@ void TableBundleManager::LoadAtStartup(const std::string &imageConfigDir, const 
 		onCommitted(CurrentTableSet());
 	}
 
-	WriteStatusFile(timeSource.wallUnixMs());
+	loadedAtMs = timeSource.wallUnixMs();
+	WriteStatusFile(loadedAtMs);
 
 	if (bundleMode)
 	{
@@ -757,7 +803,8 @@ void TableBundleManager::PollOnce(const uint64_t nowMs)
 	}
 	if (!line)
 	{
-		return;
+		// etcd 里已经没有本线(整条线被删掉):等同于「指针不指向任何包」,交给下面按没有目标处理。
+		line.emplace();
 	}
 
 	std::optional<PointerTarget> desired;
@@ -773,13 +820,16 @@ void TableBundleManager::PollOnce(const uint64_t nowMs)
 
 	if (!desired)
 	{
-		// 指针撤销了尚未生效的 next:清理正在准备或等待提交的暂存表。
-		if (staging)
+		// 指针不再指向任何还没生效的包(next 被撤销,或指回了现役这一包):
+		// 正在准备 / 等待提交的暂存表,和上一次报出去的 rejected / needs_restart 都不再成立,一并清掉。
+		// 不清的话管理接口会一直看到这个进程在「拒绝」一个指针早就不指的包。
+		if (staging || !pendingState.empty())
 		{
-			LOG_INFO << "Table hot-reload staging cancelled because pointer no longer targets content_digest="
-					 << staging->target.contentDigest;
+			LOG_INFO << "Table hot-reload pending state cleared because pointer no longer targets content_digest="
+					 << pendingContentDigest << " pending_state=" << pendingState;
 			++stagingGeneration;
 			staging.reset();
+			terminalDigest.clear();
 			pendingContentDigest.clear();
 			pendingVersion = 0;
 			pendingState.clear();
@@ -1016,6 +1066,7 @@ void TableBundleManager::CommitStaged(const uint64_t nowMs)
 	hasActiveManifest = true;
 	activeManifest = std::move(nextManifest);
 	activeIdentity = CurrentTableSet()->identity;
+	loadedAtMs = nowMs;
 	terminalDigest.clear();
 	pendingContentDigest.clear();
 	pendingVersion = 0;
@@ -1097,18 +1148,22 @@ void TableBundleManager::WriteStatusFile(const uint64_t nowMs) const
 	{
 		return;
 	}
+	// 字段名与 Go 的 tablebundle.StatusReport 逐个对齐:sidecar 按这套名字读出来转报 etcd、
+	// 据 loaded_digest / pending_digest 决定哪些表包目录不能清,管理接口按它汇总各进程进度。
+	// pod 与 track 不在这里写,由 sidecar 转报时补上。
 	std::ostringstream json;
 	json << "{"
+		 << "\"service\":\"" << EscapeJson(serviceName) << "\","
 		 << "\"schema_digest\":\"" << EscapeJson(activeIdentity.schemaDigest) << "\","
-		 << "\"content_digest\":\"" << EscapeJson(activeIdentity.contentDigest) << "\","
-		 << "\"version\":" << activeIdentity.version << ","
 		 << "\"source\":\"" << EscapeJson(activeIdentity.source) << "\","
+		 << "\"loaded_digest\":\"" << EscapeJson(activeIdentity.contentDigest) << "\","
+		 << "\"loaded_version\":" << activeIdentity.version << ","
+		 << "\"loaded_at_ms\":" << loadedAtMs << ","
 		 << "\"load_seq\":" << activeIdentity.loadSeq << ","
-		 << "\"state\":\"loaded\","
-		 << "\"pending_content_digest\":\"" << EscapeJson(pendingContentDigest) << "\","
-		 << "\"pending_version\":" << pendingVersion << ","
 		 << "\"pending_state\":\"" << EscapeJson(pendingState) << "\","
-		 << "\"reason\":\"" << EscapeJson(pendingReason) << "\","
+		 << "\"pending_digest\":\"" << EscapeJson(pendingContentDigest) << "\","
+		 << "\"pending_version\":" << pendingVersion << ","
+		 << "\"pending_reason\":\"" << EscapeJson(pendingReason) << "\","
 		 << "\"updated_at_ms\":" << nowMs
 		 << "}\n";
 

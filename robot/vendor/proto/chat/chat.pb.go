@@ -78,6 +78,71 @@ func (ChatChannelType) EnumDescriptor() ([]byte, []int) {
 	return file_proto_chat_chat_proto_rawDescGZIP(), []int{0}
 }
 
+// 内部白名单模板全服系统播报（绝不接受客户端自由文本，供 match 天墉生死状开战/战果播报使用）。
+type SystemWorldNoticeTemplate int32
+
+const (
+	SystemWorldNoticeTemplate_SYSTEM_WORLD_NOTICE_TEMPLATE_UNSPECIFIED          SystemWorldNoticeTemplate = 0
+	SystemWorldNoticeTemplate_SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_START_SILVER     SystemWorldNoticeTemplate = 1 // 普通战书开战
+	SystemWorldNoticeTemplate_SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_START_GOLD       SystemWorldNoticeTemplate = 2 // 金帖生死状开战
+	SystemWorldNoticeTemplate_SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_WIN_SILVER       SystemWorldNoticeTemplate = 3 // 普通战书胜负
+	SystemWorldNoticeTemplate_SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_WIN_GOLD         SystemWorldNoticeTemplate = 4 // 金帖生死状胜负
+	SystemWorldNoticeTemplate_SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_DRAW             SystemWorldNoticeTemplate = 5 // 生死状平局
+	SystemWorldNoticeTemplate_SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_STREAK_MILESTONE SystemWorldNoticeTemplate = 6 // 达成宿敌 >=3 连胜高光
+	SystemWorldNoticeTemplate_SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_STREAK_BROKEN    SystemWorldNoticeTemplate = 7 // 雪耻终结宿敌 >=3 连胜高光
+)
+
+// Enum value maps for SystemWorldNoticeTemplate.
+var (
+	SystemWorldNoticeTemplate_name = map[int32]string{
+		0: "SYSTEM_WORLD_NOTICE_TEMPLATE_UNSPECIFIED",
+		1: "SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_START_SILVER",
+		2: "SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_START_GOLD",
+		3: "SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_WIN_SILVER",
+		4: "SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_WIN_GOLD",
+		5: "SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_DRAW",
+		6: "SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_STREAK_MILESTONE",
+		7: "SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_STREAK_BROKEN",
+	}
+	SystemWorldNoticeTemplate_value = map[string]int32{
+		"SYSTEM_WORLD_NOTICE_TEMPLATE_UNSPECIFIED":          0,
+		"SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_START_SILVER":     1,
+		"SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_START_GOLD":       2,
+		"SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_WIN_SILVER":       3,
+		"SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_WIN_GOLD":         4,
+		"SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_DRAW":             5,
+		"SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_STREAK_MILESTONE": 6,
+		"SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_STREAK_BROKEN":    7,
+	}
+)
+
+func (x SystemWorldNoticeTemplate) Enum() *SystemWorldNoticeTemplate {
+	p := new(SystemWorldNoticeTemplate)
+	*p = x
+	return p
+}
+
+func (x SystemWorldNoticeTemplate) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SystemWorldNoticeTemplate) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_chat_chat_proto_enumTypes[1].Descriptor()
+}
+
+func (SystemWorldNoticeTemplate) Type() protoreflect.EnumType {
+	return &file_proto_chat_chat_proto_enumTypes[1]
+}
+
+func (x SystemWorldNoticeTemplate) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SystemWorldNoticeTemplate.Descriptor instead.
+func (SystemWorldNoticeTemplate) EnumDescriptor() ([]byte, []int) {
+	return file_proto_chat_chat_proto_rawDescGZIP(), []int{1}
+}
+
 type ChatMessage struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	SenderPlayerId uint64                 `protobuf:"varint,1,opt,name=sender_player_id,json=senderPlayerId,proto3" json:"sender_player_id,omitempty"`
@@ -362,6 +427,462 @@ func (x *PullChatHistoryResponse) GetMessages() []*ChatMessage {
 	return nil
 }
 
+// 世界频道违规消息异步复检撤回通知(S2C,docs/design/rename-and-content-safety.md §6.5)。
+// 经同一个 chat-world-bcast topic 推送给在线客户端,客户端按 (sender_player_id, send_time_ms) 从本地移除该条。
+type ChatRetractedNotify struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Channel        ChatChannelType        `protobuf:"varint,1,opt,name=channel,proto3,enum=chatpb.ChatChannelType" json:"channel,omitempty"`
+	SenderPlayerId uint64                 `protobuf:"varint,2,opt,name=sender_player_id,json=senderPlayerId,proto3" json:"sender_player_id,omitempty"`
+	SendTimeMs     int64                  `protobuf:"varint,3,opt,name=send_time_ms,json=sendTimeMs,proto3" json:"send_time_ms,omitempty"`
+	Reason         string                 `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ChatRetractedNotify) Reset() {
+	*x = ChatRetractedNotify{}
+	mi := &file_proto_chat_chat_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ChatRetractedNotify) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChatRetractedNotify) ProtoMessage() {}
+
+func (x *ChatRetractedNotify) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_chat_chat_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChatRetractedNotify.ProtoReflect.Descriptor instead.
+func (*ChatRetractedNotify) Descriptor() ([]byte, []int) {
+	return file_proto_chat_chat_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ChatRetractedNotify) GetChannel() ChatChannelType {
+	if x != nil {
+		return x.Channel
+	}
+	return ChatChannelType_CHAT_CHANNEL_TYPE_UNSPECIFIED
+}
+
+func (x *ChatRetractedNotify) GetSenderPlayerId() uint64 {
+	if x != nil {
+		return x.SenderPlayerId
+	}
+	return 0
+}
+
+func (x *ChatRetractedNotify) GetSendTimeMs() int64 {
+	if x != nil {
+		return x.SendTimeMs
+	}
+	return 0
+}
+
+func (x *ChatRetractedNotify) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+// 玩家举报聊天消息(docs/design/rename-and-content-safety.md §7)。
+type ReportChatRequest struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	Channel              ChatChannelType        `protobuf:"varint,1,opt,name=channel,proto3,enum=chatpb.ChatChannelType" json:"channel,omitempty"`
+	TargetSenderPlayerId uint64                 `protobuf:"varint,2,opt,name=target_sender_player_id,json=targetSenderPlayerId,proto3" json:"target_sender_player_id,omitempty"`
+	SendTimeMs           int64                  `protobuf:"varint,3,opt,name=send_time_ms,json=sendTimeMs,proto3" json:"send_time_ms,omitempty"`
+	Reason               uint32                 `protobuf:"varint,4,opt,name=reason,proto3" json:"reason,omitempty"` // 1=广告引流 2=辱骂骚扰 3=涉政涉黄 4=其他
+	Detail               string                 `protobuf:"bytes,5,opt,name=detail,proto3" json:"detail,omitempty"`  // 可选补充说明,≤200字节,仅记入举报审计表不对外展示
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *ReportChatRequest) Reset() {
+	*x = ReportChatRequest{}
+	mi := &file_proto_chat_chat_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportChatRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportChatRequest) ProtoMessage() {}
+
+func (x *ReportChatRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_chat_chat_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportChatRequest.ProtoReflect.Descriptor instead.
+func (*ReportChatRequest) Descriptor() ([]byte, []int) {
+	return file_proto_chat_chat_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ReportChatRequest) GetChannel() ChatChannelType {
+	if x != nil {
+		return x.Channel
+	}
+	return ChatChannelType_CHAT_CHANNEL_TYPE_UNSPECIFIED
+}
+
+func (x *ReportChatRequest) GetTargetSenderPlayerId() uint64 {
+	if x != nil {
+		return x.TargetSenderPlayerId
+	}
+	return 0
+}
+
+func (x *ReportChatRequest) GetSendTimeMs() int64 {
+	if x != nil {
+		return x.SendTimeMs
+	}
+	return 0
+}
+
+func (x *ReportChatRequest) GetReason() uint32 {
+	if x != nil {
+		return x.Reason
+	}
+	return 0
+}
+
+func (x *ReportChatRequest) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+type ReportChatResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReportChatResponse) Reset() {
+	*x = ReportChatResponse{}
+	mi := &file_proto_chat_chat_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportChatResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportChatResponse) ProtoMessage() {}
+
+func (x *ReportChatResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_chat_chat_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportChatResponse.ProtoReflect.Descriptor instead.
+func (*ReportChatResponse) Descriptor() ([]byte, []int) {
+	return file_proto_chat_chat_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ReportChatResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+// 内部撤回请求:由异步复检或运营管理调用(CLIENT_RPC_SERVER_ONLY,客户端不可发)。
+type RetractWorldChatRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	SenderPlayerId uint64                 `protobuf:"varint,1,opt,name=sender_player_id,json=senderPlayerId,proto3" json:"sender_player_id,omitempty"`
+	SendTimeMs     int64                  `protobuf:"varint,2,opt,name=send_time_ms,json=sendTimeMs,proto3" json:"send_time_ms,omitempty"`
+	Reason         string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *RetractWorldChatRequest) Reset() {
+	*x = RetractWorldChatRequest{}
+	mi := &file_proto_chat_chat_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RetractWorldChatRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RetractWorldChatRequest) ProtoMessage() {}
+
+func (x *RetractWorldChatRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_chat_chat_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RetractWorldChatRequest.ProtoReflect.Descriptor instead.
+func (*RetractWorldChatRequest) Descriptor() ([]byte, []int) {
+	return file_proto_chat_chat_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *RetractWorldChatRequest) GetSenderPlayerId() uint64 {
+	if x != nil {
+		return x.SenderPlayerId
+	}
+	return 0
+}
+
+func (x *RetractWorldChatRequest) GetSendTimeMs() int64 {
+	if x != nil {
+		return x.SendTimeMs
+	}
+	return 0
+}
+
+func (x *RetractWorldChatRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+type RetractWorldChatResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Retracted     bool                   `protobuf:"varint,2,opt,name=retracted,proto3" json:"retracted,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RetractWorldChatResponse) Reset() {
+	*x = RetractWorldChatResponse{}
+	mi := &file_proto_chat_chat_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RetractWorldChatResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RetractWorldChatResponse) ProtoMessage() {}
+
+func (x *RetractWorldChatResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_chat_chat_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RetractWorldChatResponse.ProtoReflect.Descriptor instead.
+func (*RetractWorldChatResponse) Descriptor() ([]byte, []int) {
+	return file_proto_chat_chat_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *RetractWorldChatResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *RetractWorldChatResponse) GetRetracted() bool {
+	if x != nil {
+		return x.Retracted
+	}
+	return false
+}
+
+type PublishSystemWorldNoticeRequest struct {
+	state         protoimpl.MessageState    `protogen:"open.v1"`
+	NoticeId      string                    `protobuf:"bytes,1,opt,name=notice_id,json=noticeId,proto3" json:"notice_id,omitempty"`                                              // 幂等去重键（如 "jh_duel:<battle_id>:start"）
+	TemplateId    SystemWorldNoticeTemplate `protobuf:"varint,2,opt,name=template_id,json=templateId,proto3,enum=chatpb.SystemWorldNoticeTemplate" json:"template_id,omitempty"` // 严格白名单模板枚举
+	BattleId      uint64                    `protobuf:"varint,3,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`                                             // 关联公开观战 battle_id
+	ActorAName    string                    `protobuf:"bytes,4,opt,name=actor_a_name,json=actorAName,proto3" json:"actor_a_name,omitempty"`                                      // 服务端权威展示名（胜方/发起方）
+	ActorBName    string                    `protobuf:"bytes,5,opt,name=actor_b_name,json=actorBName,proto3" json:"actor_b_name,omitempty"`                                      // 服务端权威展示名（败方/应战方）
+	TotalRounds   uint32                    `protobuf:"varint,6,opt,name=total_rounds,json=totalRounds,proto3" json:"total_rounds,omitempty"`
+	StreakCount   uint32                    `protobuf:"varint,7,opt,name=streak_count,json=streakCount,proto3" json:"streak_count,omitempty"`
+	TeamSize      uint32                    `protobuf:"varint,8,opt,name=team_size,json=teamSize,proto3" json:"team_size,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PublishSystemWorldNoticeRequest) Reset() {
+	*x = PublishSystemWorldNoticeRequest{}
+	mi := &file_proto_chat_chat_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PublishSystemWorldNoticeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PublishSystemWorldNoticeRequest) ProtoMessage() {}
+
+func (x *PublishSystemWorldNoticeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_chat_chat_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PublishSystemWorldNoticeRequest.ProtoReflect.Descriptor instead.
+func (*PublishSystemWorldNoticeRequest) Descriptor() ([]byte, []int) {
+	return file_proto_chat_chat_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *PublishSystemWorldNoticeRequest) GetNoticeId() string {
+	if x != nil {
+		return x.NoticeId
+	}
+	return ""
+}
+
+func (x *PublishSystemWorldNoticeRequest) GetTemplateId() SystemWorldNoticeTemplate {
+	if x != nil {
+		return x.TemplateId
+	}
+	return SystemWorldNoticeTemplate_SYSTEM_WORLD_NOTICE_TEMPLATE_UNSPECIFIED
+}
+
+func (x *PublishSystemWorldNoticeRequest) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *PublishSystemWorldNoticeRequest) GetActorAName() string {
+	if x != nil {
+		return x.ActorAName
+	}
+	return ""
+}
+
+func (x *PublishSystemWorldNoticeRequest) GetActorBName() string {
+	if x != nil {
+		return x.ActorBName
+	}
+	return ""
+}
+
+func (x *PublishSystemWorldNoticeRequest) GetTotalRounds() uint32 {
+	if x != nil {
+		return x.TotalRounds
+	}
+	return 0
+}
+
+func (x *PublishSystemWorldNoticeRequest) GetStreakCount() uint32 {
+	if x != nil {
+		return x.StreakCount
+	}
+	return 0
+}
+
+func (x *PublishSystemWorldNoticeRequest) GetTeamSize() uint32 {
+	if x != nil {
+		return x.TeamSize
+	}
+	return 0
+}
+
+type PublishSystemWorldNoticeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Deduplicated  bool                   `protobuf:"varint,2,opt,name=deduplicated,proto3" json:"deduplicated,omitempty"` // true = 命中幂等键未重复广播
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PublishSystemWorldNoticeResponse) Reset() {
+	*x = PublishSystemWorldNoticeResponse{}
+	mi := &file_proto_chat_chat_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PublishSystemWorldNoticeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PublishSystemWorldNoticeResponse) ProtoMessage() {}
+
+func (x *PublishSystemWorldNoticeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_chat_chat_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PublishSystemWorldNoticeResponse.ProtoReflect.Descriptor instead.
+func (*PublishSystemWorldNoticeResponse) Descriptor() ([]byte, []int) {
+	return file_proto_chat_chat_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *PublishSystemWorldNoticeResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *PublishSystemWorldNoticeResponse) GetDeduplicated() bool {
+	if x != nil {
+		return x.Deduplicated
+	}
+	return false
+}
+
 var File_proto_chat_chat_proto protoreflect.FileDescriptor
 
 const file_proto_chat_chat_proto_rawDesc = "" +
@@ -386,17 +907,69 @@ const file_proto_chat_chat_proto_rawDesc = "" +
 	"\x05limit\x18\x03 \x01(\rR\x05limit\"\x80\x01\n" +
 	"\x17PullChatHistoryResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12/\n" +
-	"\bmessages\x18\x02 \x03(\v2\x13.chatpb.ChatMessageR\bmessages*\xaa\x01\n" +
+	"\bmessages\x18\x02 \x03(\v2\x13.chatpb.ChatMessageR\bmessages\"\xac\x01\n" +
+	"\x13ChatRetractedNotify\x121\n" +
+	"\achannel\x18\x01 \x01(\x0e2\x17.chatpb.ChatChannelTypeR\achannel\x12(\n" +
+	"\x10sender_player_id\x18\x02 \x01(\x04R\x0esenderPlayerId\x12 \n" +
+	"\fsend_time_ms\x18\x03 \x01(\x03R\n" +
+	"sendTimeMs\x12\x16\n" +
+	"\x06reason\x18\x04 \x01(\tR\x06reason\"\xcf\x01\n" +
+	"\x11ReportChatRequest\x121\n" +
+	"\achannel\x18\x01 \x01(\x0e2\x17.chatpb.ChatChannelTypeR\achannel\x125\n" +
+	"\x17target_sender_player_id\x18\x02 \x01(\x04R\x14targetSenderPlayerId\x12 \n" +
+	"\fsend_time_ms\x18\x03 \x01(\x03R\n" +
+	"sendTimeMs\x12\x16\n" +
+	"\x06reason\x18\x04 \x01(\rR\x06reason\x12\x16\n" +
+	"\x06detail\x18\x05 \x01(\tR\x06detail\"J\n" +
+	"\x12ReportChatResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\"}\n" +
+	"\x17RetractWorldChatRequest\x12(\n" +
+	"\x10sender_player_id\x18\x01 \x01(\x04R\x0esenderPlayerId\x12 \n" +
+	"\fsend_time_ms\x18\x02 \x01(\x03R\n" +
+	"sendTimeMs\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\"n\n" +
+	"\x18RetractWorldChatResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x1c\n" +
+	"\tretracted\x18\x02 \x01(\bR\tretracted\"\xc6\x02\n" +
+	"\x1fPublishSystemWorldNoticeRequest\x12\x1b\n" +
+	"\tnotice_id\x18\x01 \x01(\tR\bnoticeId\x12B\n" +
+	"\vtemplate_id\x18\x02 \x01(\x0e2!.chatpb.SystemWorldNoticeTemplateR\n" +
+	"templateId\x12\x1b\n" +
+	"\tbattle_id\x18\x03 \x01(\x04R\bbattleId\x12 \n" +
+	"\factor_a_name\x18\x04 \x01(\tR\n" +
+	"actorAName\x12 \n" +
+	"\factor_b_name\x18\x05 \x01(\tR\n" +
+	"actorBName\x12!\n" +
+	"\ftotal_rounds\x18\x06 \x01(\rR\vtotalRounds\x12!\n" +
+	"\fstreak_count\x18\a \x01(\rR\vstreakCount\x12\x1b\n" +
+	"\tteam_size\x18\b \x01(\rR\bteamSize\"|\n" +
+	" PublishSystemWorldNoticeResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\"\n" +
+	"\fdeduplicated\x18\x02 \x01(\bR\fdeduplicated*\xaa\x01\n" +
 	"\x0fChatChannelType\x12!\n" +
 	"\x1dCHAT_CHANNEL_TYPE_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17CHAT_CHANNEL_TYPE_WORLD\x10\x01\x12\x1a\n" +
 	"\x16CHAT_CHANNEL_TYPE_TEAM\x10\x02\x12\x1d\n" +
 	"\x19CHAT_CHANNEL_TYPE_PRIVATE\x10\x03\x12\x1c\n" +
-	"\x18CHAT_CHANNEL_TYPE_SYSTEM\x10\x042\xe3\x01\n" +
+	"\x18CHAT_CHANNEL_TYPE_SYSTEM\x10\x04*\xa3\x03\n" +
+	"\x19SystemWorldNoticeTemplate\x12,\n" +
+	"(SYSTEM_WORLD_NOTICE_TEMPLATE_UNSPECIFIED\x10\x00\x121\n" +
+	"-SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_START_SILVER\x10\x01\x12/\n" +
+	"+SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_START_GOLD\x10\x02\x12/\n" +
+	"+SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_WIN_SILVER\x10\x03\x12-\n" +
+	")SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_WIN_GOLD\x10\x04\x12)\n" +
+	"%SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_DRAW\x10\x05\x125\n" +
+	"1SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_STREAK_MILESTONE\x10\x06\x122\n" +
+	".SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_STREAK_BROKEN\x10\a2\xc4\x04\n" +
 	"\x10ClientPlayerChat\x12=\n" +
 	"\bSendChat\x12\x17.chatpb.SendChatRequest\x1a\x18.chatpb.SendChatResponse\x12R\n" +
-	"\x0fPullChatHistory\x12\x1e.chatpb.PullChatHistoryRequest\x1a\x1f.chatpb.PullChatHistoryResponse\x125\n" +
-	"\x0fNotifyWorldChat\x12\x13.chatpb.ChatMessage\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x1a\x05\x88\xa8\xc3\x01\x01B\x13\x98\xd4a\x0eZ\n" +
+	"\x0fPullChatHistory\x12\x1e.chatpb.PullChatHistoryRequest\x1a\x1f.chatpb.PullChatHistoryResponse\x12C\n" +
+	"\n" +
+	"ReportChat\x12\x19.chatpb.ReportChatRequest\x1a\x1a.chatpb.ReportChatResponse\x12\\\n" +
+	"\x10RetractWorldChat\x12\x1f.chatpb.RetractWorldChatRequest\x1a .chatpb.RetractWorldChatResponse\"\x05\x88\x99\xc8\x01\x03\x12t\n" +
+	"\x18PublishSystemWorldNotice\x12'.chatpb.PublishSystemWorldNoticeRequest\x1a(.chatpb.PublishSystemWorldNoticeResponse\"\x05\x88\x99\xc8\x01\x03\x125\n" +
+	"\x0fNotifyWorldChat\x12\x13.chatpb.ChatMessage\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x12F\n" +
+	"\x18NotifyWorldChatRetracted\x12\x1b.chatpb.ChatRetractedNotify\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x1a\x05\x88\xa8\xc3\x01\x01B\x13\x98\xd4a\x0eZ\n" +
 	"proto/chat\x80\x01\x00b\x06proto3"
 
 var (
@@ -411,36 +984,58 @@ func file_proto_chat_chat_proto_rawDescGZIP() []byte {
 	return file_proto_chat_chat_proto_rawDescData
 }
 
-var file_proto_chat_chat_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_chat_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_proto_chat_chat_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_proto_chat_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_proto_chat_chat_proto_goTypes = []any{
-	(ChatChannelType)(0),            // 0: chatpb.ChatChannelType
-	(*ChatMessage)(nil),             // 1: chatpb.ChatMessage
-	(*SendChatRequest)(nil),         // 2: chatpb.SendChatRequest
-	(*SendChatResponse)(nil),        // 3: chatpb.SendChatResponse
-	(*PullChatHistoryRequest)(nil),  // 4: chatpb.PullChatHistoryRequest
-	(*PullChatHistoryResponse)(nil), // 5: chatpb.PullChatHistoryResponse
-	(*base.TipInfoMessage)(nil),     // 6: TipInfoMessage
-	(*base.Empty)(nil),              // 7: Empty
+	(ChatChannelType)(0),                     // 0: chatpb.ChatChannelType
+	(SystemWorldNoticeTemplate)(0),           // 1: chatpb.SystemWorldNoticeTemplate
+	(*ChatMessage)(nil),                      // 2: chatpb.ChatMessage
+	(*SendChatRequest)(nil),                  // 3: chatpb.SendChatRequest
+	(*SendChatResponse)(nil),                 // 4: chatpb.SendChatResponse
+	(*PullChatHistoryRequest)(nil),           // 5: chatpb.PullChatHistoryRequest
+	(*PullChatHistoryResponse)(nil),          // 6: chatpb.PullChatHistoryResponse
+	(*ChatRetractedNotify)(nil),              // 7: chatpb.ChatRetractedNotify
+	(*ReportChatRequest)(nil),                // 8: chatpb.ReportChatRequest
+	(*ReportChatResponse)(nil),               // 9: chatpb.ReportChatResponse
+	(*RetractWorldChatRequest)(nil),          // 10: chatpb.RetractWorldChatRequest
+	(*RetractWorldChatResponse)(nil),         // 11: chatpb.RetractWorldChatResponse
+	(*PublishSystemWorldNoticeRequest)(nil),  // 12: chatpb.PublishSystemWorldNoticeRequest
+	(*PublishSystemWorldNoticeResponse)(nil), // 13: chatpb.PublishSystemWorldNoticeResponse
+	(*base.TipInfoMessage)(nil),              // 14: TipInfoMessage
+	(*base.Empty)(nil),                       // 15: Empty
 }
 var file_proto_chat_chat_proto_depIdxs = []int32{
-	0, // 0: chatpb.ChatMessage.channel:type_name -> chatpb.ChatChannelType
-	1, // 1: chatpb.SendChatRequest.message:type_name -> chatpb.ChatMessage
-	6, // 2: chatpb.SendChatResponse.error_message:type_name -> TipInfoMessage
-	0, // 3: chatpb.PullChatHistoryRequest.channel:type_name -> chatpb.ChatChannelType
-	6, // 4: chatpb.PullChatHistoryResponse.error_message:type_name -> TipInfoMessage
-	1, // 5: chatpb.PullChatHistoryResponse.messages:type_name -> chatpb.ChatMessage
-	2, // 6: chatpb.ClientPlayerChat.SendChat:input_type -> chatpb.SendChatRequest
-	4, // 7: chatpb.ClientPlayerChat.PullChatHistory:input_type -> chatpb.PullChatHistoryRequest
-	1, // 8: chatpb.ClientPlayerChat.NotifyWorldChat:input_type -> chatpb.ChatMessage
-	3, // 9: chatpb.ClientPlayerChat.SendChat:output_type -> chatpb.SendChatResponse
-	5, // 10: chatpb.ClientPlayerChat.PullChatHistory:output_type -> chatpb.PullChatHistoryResponse
-	7, // 11: chatpb.ClientPlayerChat.NotifyWorldChat:output_type -> Empty
-	9, // [9:12] is the sub-list for method output_type
-	6, // [6:9] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	0,  // 0: chatpb.ChatMessage.channel:type_name -> chatpb.ChatChannelType
+	2,  // 1: chatpb.SendChatRequest.message:type_name -> chatpb.ChatMessage
+	14, // 2: chatpb.SendChatResponse.error_message:type_name -> TipInfoMessage
+	0,  // 3: chatpb.PullChatHistoryRequest.channel:type_name -> chatpb.ChatChannelType
+	14, // 4: chatpb.PullChatHistoryResponse.error_message:type_name -> TipInfoMessage
+	2,  // 5: chatpb.PullChatHistoryResponse.messages:type_name -> chatpb.ChatMessage
+	0,  // 6: chatpb.ChatRetractedNotify.channel:type_name -> chatpb.ChatChannelType
+	0,  // 7: chatpb.ReportChatRequest.channel:type_name -> chatpb.ChatChannelType
+	14, // 8: chatpb.ReportChatResponse.error_message:type_name -> TipInfoMessage
+	14, // 9: chatpb.RetractWorldChatResponse.error_message:type_name -> TipInfoMessage
+	1,  // 10: chatpb.PublishSystemWorldNoticeRequest.template_id:type_name -> chatpb.SystemWorldNoticeTemplate
+	14, // 11: chatpb.PublishSystemWorldNoticeResponse.error_message:type_name -> TipInfoMessage
+	3,  // 12: chatpb.ClientPlayerChat.SendChat:input_type -> chatpb.SendChatRequest
+	5,  // 13: chatpb.ClientPlayerChat.PullChatHistory:input_type -> chatpb.PullChatHistoryRequest
+	8,  // 14: chatpb.ClientPlayerChat.ReportChat:input_type -> chatpb.ReportChatRequest
+	10, // 15: chatpb.ClientPlayerChat.RetractWorldChat:input_type -> chatpb.RetractWorldChatRequest
+	12, // 16: chatpb.ClientPlayerChat.PublishSystemWorldNotice:input_type -> chatpb.PublishSystemWorldNoticeRequest
+	2,  // 17: chatpb.ClientPlayerChat.NotifyWorldChat:input_type -> chatpb.ChatMessage
+	7,  // 18: chatpb.ClientPlayerChat.NotifyWorldChatRetracted:input_type -> chatpb.ChatRetractedNotify
+	4,  // 19: chatpb.ClientPlayerChat.SendChat:output_type -> chatpb.SendChatResponse
+	6,  // 20: chatpb.ClientPlayerChat.PullChatHistory:output_type -> chatpb.PullChatHistoryResponse
+	9,  // 21: chatpb.ClientPlayerChat.ReportChat:output_type -> chatpb.ReportChatResponse
+	11, // 22: chatpb.ClientPlayerChat.RetractWorldChat:output_type -> chatpb.RetractWorldChatResponse
+	13, // 23: chatpb.ClientPlayerChat.PublishSystemWorldNotice:output_type -> chatpb.PublishSystemWorldNoticeResponse
+	15, // 24: chatpb.ClientPlayerChat.NotifyWorldChat:output_type -> Empty
+	15, // 25: chatpb.ClientPlayerChat.NotifyWorldChatRetracted:output_type -> Empty
+	19, // [19:26] is the sub-list for method output_type
+	12, // [12:19] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_proto_chat_chat_proto_init() }
@@ -453,8 +1048,8 @@ func file_proto_chat_chat_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_chat_chat_proto_rawDesc), len(file_proto_chat_chat_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   5,
+			NumEnums:      2,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

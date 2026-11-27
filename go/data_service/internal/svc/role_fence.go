@@ -180,6 +180,13 @@ func (s *ServiceContext) StartRoleRemovalResumer() {
 			return wait.Err()
 		}
 	}
+	// 两个积压计数从循环起来时开始计「多久没数成」:首轮之前就写一次,从启动起一直数不成也报得出来。
+	if s.RoleRefs != nil {
+		metrics.MarkBacklogCounted(metrics.BacklogCountRoleRefHeld)
+	}
+	if s.AccountDeletions != nil {
+		metrics.MarkBacklogCounted(metrics.BacklogCountDeletionOverdue)
+	}
 	safego.Go(roleRemovalResumePoint, func() {
 		defer close(done)
 		ticker := time.NewTicker(roleRemovalResumeInterval)

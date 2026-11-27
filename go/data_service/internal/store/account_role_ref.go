@@ -210,9 +210,14 @@ func (s *AccountDirectoryStore) reapRef(ctx context.Context, account string, ref
 // 不再每轮重算、不再挤占扫描名额,只在复核名额里轮着重判(SweepStaleRefs)。标记写成功回 errRefHeldForReview;写失败回那个错误,
 // ref 这一拍什么都没变,下一拍照常重判。只在第一次标保留时记 ERROR(复核时还留着不再重复记)。
 // 标记不改 nonce:它不是对这条 ref 的占用,在途的过户第 1 步、建角重放照样按自己的 nonce 改写它,改写时把标记一起清掉。
+// 没标上(读完之后这条 ref 又被改写:迟到的建角提交并激活了它)回 nil:它不是残留,不记 ERROR、不计保留,下一轮按新状态重判。
 func (s *AccountDirectoryStore) holdRefForReview(ctx context.Context, account string, ref roleRef, evidence string) error {
-	if err := s.steps.holdRef(ctx, account, ref, evidence); err != nil {
+	held, err := s.steps.holdRef(ctx, account, ref, evidence)
+	if err != nil {
 		return fmt.Errorf("hold stale create ref for review: player=%d: %w", ref.PlayerID, err)
+	}
+	if !held {
+		return nil
 	}
 	if ref.HeldMs == 0 {
 		logx.Errorf("[account-role-ref] stale create ref kept without a tombstone: the role row is missing but the role shows committed evidence "+
@@ -468,10 +473,15 @@ func (st *sqlDirectorySteps) promoteRef(ctx context.Context, account string, ref
 
 // holdRef 把一条 PENDING 的建角 ref 标成保留(held_ms = 库时钟、held_reason = 证据),按 nonce 比较:读完之后又有新的写就不动。
 // 已标过的再标一次只刷新 held_ms 和原因:复核名额按 held_ms 从旧到新轮着取,刷新之后排到队尾。
-func (st *sqlDirectorySteps) holdRef(ctx context.Context, account string, ref roleRef, reason string) error {
-	_, err := st.shards.forAccount(account).ExecContext(ctx, "UPDATE account_role_ref SET held_ms="+dbNowMsSQL+",held_reason=? WHERE account=? AND player_id=? AND nonce=? AND state=?",
+// 回是否标上了:连接不带 clientFoundRows,受影响行数是实际改动的行数;held_ms 取毫秒时钟,标上了就一定改动了这一行。
+func (st *sqlDirectorySteps) holdRef(ctx context.Context, account string, ref roleRef, reason string) (bool, error) {
+	result, err := st.shards.forAccount(account).ExecContext(ctx, "UPDATE account_role_ref SET held_ms="+dbNowMsSQL+",held_reason=? WHERE account=? AND player_id=? AND nonce=? AND state=?",
 		[]byte(reason), []byte(account), ref.PlayerID, ref.Nonce, refStatePending)
-	return err
+	if err != nil {
+		return false, err
+	}
+	affected, err := result.RowsAffected()
+	return affected == 1, err
 }
 
 // dropRef 按 nonce 比较并删除,回是否删了。

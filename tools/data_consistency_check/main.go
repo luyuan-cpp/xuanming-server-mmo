@@ -145,6 +145,8 @@ func main() {
 	liveZonesCSV := flag.String("live-zones", "", "Comma-separated zone IDs that are currently up. Empty = infer from player_route (default; recommended).")
 
 	timeout := flag.Duration("timeout", 5*time.Minute, "Overall timeout for the scan")
+	checkTimeout := flag.Duration("check-timeout", 60*time.Second,
+		"Timeout for each individual check; raise it (and -timeout) when a check reports NOT CHECKED because a large scan did not finish")
 
 	flag.Parse()
 
@@ -300,7 +302,7 @@ func main() {
 	results := make([]CheckResult, 0, len(checks)+1)
 	results = append(results, shape)
 	for _, fn := range checks {
-		ctxCheck, cancelCheck := context.WithTimeout(ctx, 60*time.Second)
+		ctxCheck, cancelCheck := context.WithTimeout(ctx, *checkTimeout)
 		results = append(results, fn(ctxCheck, cfg))
 		cancelCheck()
 	}

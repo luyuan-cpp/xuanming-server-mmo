@@ -17,6 +17,7 @@ import (
 	"login/internal/constants"
 	"login/internal/logic/pkg/ctxkeys"
 	"login/internal/logic/pkg/loginsession"
+	"login/internal/logic/pkg/nppa"
 	"login/internal/logic/pkg/playernamereg"
 	"login/internal/logic/pkg/sessionfence"
 	"login/internal/logic/pkg/sessionmanager"
@@ -196,6 +197,54 @@ func TestEnterGame_GateZoneIDReachesTheSessionRecord(t *testing.T) {
 		h.runEnterGame(t)
 		if got := h.locator.lastReconnect.Load().GetGateZoneId(); got != ownZone {
 			t.Fatalf("ReconnectRequest.gate_zone_id = %d, want login zone %d", got, ownZone)
+		}
+	})
+}
+
+// 未成年人当天的截止时刻要随会话记录写进 player_locator(docs/design/real-name-anti-addiction.md §5.4):它记在防沉迷会话账本里,
+// 进游戏时取出;首登 / 顶号走 SetSession,短线重连走 Reconnect。带丢了,带着月卡断线的未成年人会被一直托管下去。
+func TestEnterGame_MinorPlayDeadlineReachesTheSessionRecord(t *testing.T) {
+	deadline := time.Now().Add(30 * time.Minute).Truncate(time.Millisecond)
+	want := uint64(deadline.UnixMilli())
+	// watch 打开防沉迷,并像 gate 上的 Login 那样把这条连接登记进账本(只带截止时刻)。
+	watch := func(t *testing.T, h *enterWiringHarness, playDeadline time.Time) {
+		t.Helper()
+		ledger := nppa.NewLedger(h.rdb, loginsession.TTL())
+		h.l.svcCtx.AntiAddiction = &svc.AntiAddiction{Ledger: ledger}
+		if playDeadline.IsZero() {
+			return
+		}
+		ref, _ := loginsession.RefOf(&pbbase.SessionDetails{
+			SessionId: enterWiringSessionID, GateInstanceId: "gate-enter-wiring", SessionIncarnation: enterWiringIncarnation,
+		})
+		if err := ledger.Begin(context.Background(), ref.DeviceMember(), "", "", playDeadline); err != nil {
+			t.Fatalf("seed ledger: %v", err)
+		}
+	}
+	t.Run("set session", func(t *testing.T) {
+		h := newEnterWiringHarness(t, wiringPlayers(), nil)
+		watch(t, h, deadline)
+		h.runEnterGame(t)
+		if got := h.locator.lastSetSession.Load().GetSession().GetMinorPlayDeadlineMs(); got != want {
+			t.Fatalf("SetSession minor_play_deadline_ms = %d, want the ledger's %d", got, want)
+		}
+	})
+	t.Run("reconnect", func(t *testing.T) {
+		h := newEnterWiringHarness(t, wiringPlayers(), nil)
+		watch(t, h, deadline)
+		h.locator.existing = wiringRecord(sessionmanager.StateDisconnecting)
+		h.runEnterGame(t)
+		if got := h.locator.lastReconnect.Load().GetMinorPlayDeadlineMs(); got != want {
+			t.Fatalf("ReconnectRequest.minor_play_deadline_ms = %d, want the ledger's %d", got, want)
+		}
+	})
+	// 账本里没有这条连接(成年人走平台渠道)或没有截止时刻:写 0,不限。
+	t.Run("no deadline", func(t *testing.T) {
+		h := newEnterWiringHarness(t, wiringPlayers(), nil)
+		watch(t, h, time.Time{})
+		h.runEnterGame(t)
+		if got := h.locator.lastSetSession.Load().GetSession().GetMinorPlayDeadlineMs(); got != 0 {
+			t.Fatalf("SetSession minor_play_deadline_ms = %d, want 0 for a connection without a deadline", got)
 		}
 	})
 }

@@ -19,9 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	TradeAdmin_SeedListing_FullMethodName           = "/trade.TradeAdmin/SeedListing"
-	TradeAdmin_ListManualContracts_FullMethodName   = "/trade.TradeAdmin/ListManualContracts"
-	TradeAdmin_ResolveManualContract_FullMethodName = "/trade.TradeAdmin/ResolveManualContract"
+	TradeAdmin_SeedListing_FullMethodName             = "/trade.TradeAdmin/SeedListing"
+	TradeAdmin_ListManualContracts_FullMethodName     = "/trade.TradeAdmin/ListManualContracts"
+	TradeAdmin_ResolveManualContract_FullMethodName   = "/trade.TradeAdmin/ResolveManualContract"
+	TradeAdmin_RecordSellerEnvironment_FullMethodName = "/trade.TradeAdmin/RecordSellerEnvironment"
+	TradeAdmin_RecordSellerViolation_FullMethodName   = "/trade.TradeAdmin/RecordSellerViolation"
 )
 
 // TradeAdminClient is the client API for TradeAdmin service.
@@ -31,6 +33,8 @@ type TradeAdminClient interface {
 	SeedListing(ctx context.Context, in *SeedListingRequest, opts ...grpc.CallOption) (*SeedListingResponse, error)
 	ListManualContracts(ctx context.Context, in *ListManualContractsRequest, opts ...grpc.CallOption) (*ListManualContractsResponse, error)
 	ResolveManualContract(ctx context.Context, in *ResolveManualContractRequest, opts ...grpc.CallOption) (*ResolveManualContractResponse, error)
+	RecordSellerEnvironment(ctx context.Context, in *RecordSellerEnvironmentRequest, opts ...grpc.CallOption) (*RecordSellerEnvironmentResponse, error)
+	RecordSellerViolation(ctx context.Context, in *RecordSellerViolationRequest, opts ...grpc.CallOption) (*RecordSellerViolationResponse, error)
 }
 
 type tradeAdminClient struct {
@@ -71,6 +75,26 @@ func (c *tradeAdminClient) ResolveManualContract(ctx context.Context, in *Resolv
 	return out, nil
 }
 
+func (c *tradeAdminClient) RecordSellerEnvironment(ctx context.Context, in *RecordSellerEnvironmentRequest, opts ...grpc.CallOption) (*RecordSellerEnvironmentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecordSellerEnvironmentResponse)
+	err := c.cc.Invoke(ctx, TradeAdmin_RecordSellerEnvironment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tradeAdminClient) RecordSellerViolation(ctx context.Context, in *RecordSellerViolationRequest, opts ...grpc.CallOption) (*RecordSellerViolationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecordSellerViolationResponse)
+	err := c.cc.Invoke(ctx, TradeAdmin_RecordSellerViolation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TradeAdminServer is the server API for TradeAdmin service.
 // All implementations must embed UnimplementedTradeAdminServer
 // for forward compatibility.
@@ -78,6 +102,8 @@ type TradeAdminServer interface {
 	SeedListing(context.Context, *SeedListingRequest) (*SeedListingResponse, error)
 	ListManualContracts(context.Context, *ListManualContractsRequest) (*ListManualContractsResponse, error)
 	ResolveManualContract(context.Context, *ResolveManualContractRequest) (*ResolveManualContractResponse, error)
+	RecordSellerEnvironment(context.Context, *RecordSellerEnvironmentRequest) (*RecordSellerEnvironmentResponse, error)
+	RecordSellerViolation(context.Context, *RecordSellerViolationRequest) (*RecordSellerViolationResponse, error)
 	mustEmbedUnimplementedTradeAdminServer()
 }
 
@@ -96,6 +122,12 @@ func (UnimplementedTradeAdminServer) ListManualContracts(context.Context, *ListM
 }
 func (UnimplementedTradeAdminServer) ResolveManualContract(context.Context, *ResolveManualContractRequest) (*ResolveManualContractResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResolveManualContract not implemented")
+}
+func (UnimplementedTradeAdminServer) RecordSellerEnvironment(context.Context, *RecordSellerEnvironmentRequest) (*RecordSellerEnvironmentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecordSellerEnvironment not implemented")
+}
+func (UnimplementedTradeAdminServer) RecordSellerViolation(context.Context, *RecordSellerViolationRequest) (*RecordSellerViolationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecordSellerViolation not implemented")
 }
 func (UnimplementedTradeAdminServer) mustEmbedUnimplementedTradeAdminServer() {}
 func (UnimplementedTradeAdminServer) testEmbeddedByValue()                    {}
@@ -172,6 +204,42 @@ func _TradeAdmin_ResolveManualContract_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TradeAdmin_RecordSellerEnvironment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecordSellerEnvironmentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradeAdminServer).RecordSellerEnvironment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradeAdmin_RecordSellerEnvironment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradeAdminServer).RecordSellerEnvironment(ctx, req.(*RecordSellerEnvironmentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TradeAdmin_RecordSellerViolation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecordSellerViolationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TradeAdminServer).RecordSellerViolation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TradeAdmin_RecordSellerViolation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TradeAdminServer).RecordSellerViolation(ctx, req.(*RecordSellerViolationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TradeAdmin_ServiceDesc is the grpc.ServiceDesc for TradeAdmin service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -190,6 +258,14 @@ var TradeAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ResolveManualContract",
 			Handler:    _TradeAdmin_ResolveManualContract_Handler,
+		},
+		{
+			MethodName: "RecordSellerEnvironment",
+			Handler:    _TradeAdmin_RecordSellerEnvironment_Handler,
+		},
+		{
+			MethodName: "RecordSellerViolation",
+			Handler:    _TradeAdmin_RecordSellerViolation_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

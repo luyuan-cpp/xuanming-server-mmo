@@ -4,12 +4,14 @@ package logic
 // 这里的用例只覆盖不经 SQL 的判定,PlayerRedis / MatchRedis 用 miniredis。
 
 import (
+	"context"
 	"strconv"
 	"testing"
 
 	"match/internal/config"
 	"match/internal/playercontract"
 	"match/internal/svc"
+	"shared/clusterredis"
 	"shared/drainproof"
 	"shared/playerredis"
 
@@ -17,26 +19,35 @@ import (
 	smpb "proto/scene_manager"
 
 	"github.com/alicebob/miniredis/v2"
+	redv9 "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"google.golang.org/protobuf/proto"
 )
 
 // newTestSvcCtx 直接构造 ServiceContext(NewServiceContext 需要 etcd 与 SQL),
-// MatchRedis / PlayerRedis 指向同一个 miniredis。没有 Authority:用例碰到 SQL 就 panic,说明它不属于这一层。
+// MatchRedis / PlayerRedis 指向同一个 miniredis,各带各自域的键守卫(与生产同一套构造器):键发错句柄,用例当场报错。
+// 没有 Authority:用例碰到 SQL 就 panic,说明它不属于这一层。
 func newTestSvcCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Miniredis) {
 	t.Helper()
 	mr := miniredis.RunT(t)
-	rds := redis.MustNewRedis(redis.RedisConf{Host: mr.Addr(), Type: "node"})
+	matchRedis, err := clusterredis.New(clusterredis.Config{Addrs: []string{mr.Addr()}, PoolSizePerNode: 16}, clusterredis.MatchPrivateKeys)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = matchRedis.Close() })
 	playerRedis, err := playerredis.New(playerredis.Config{Addrs: []string{mr.Addr()}, PoolSizePerNode: 16})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = playerRedis.Close() })
 	return &svc.ServiceContext{
 		RelayAdmission: drainproof.New(),
 		Config:         config.Config{MatchedTicketTTLSeconds: 30},
-		MatchRedis:     rds,
+		MatchRedis:     matchRedis,
 		PlayerRedis:    playerRedis,
 	}, mr
+}
+
+// zaddSpectateMember 直接往一个观战索引桶里写成员(ZADD),用来铺坏成员、孤儿这类正常写路径写不出来的数据。
+func zaddSpectateMember(t *testing.T, svcCtx *svc.ServiceContext, key string, score int64, member string) {
+	t.Helper()
+	require.NoError(t, svcCtx.MatchRedis.ZAdd(context.Background(), key, redv9.Z{Score: float64(score), Member: member}).Err())
 }
 
 // setPlayerLocation 模拟 scene_manager 写 player:{id}:location。

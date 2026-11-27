@@ -28,8 +28,8 @@ import (
 	"shared/generated/pb/table"
 
 	"github.com/alicebob/miniredis/v2"
+	redv9 "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-zero/core/stores/redis"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -488,7 +488,7 @@ func TestLobbyPromoteQuotaFullStaysRelay(t *testing.T) {
 	require.Equal(t, 1, broadcastQuotaCount(t, svcCtx))
 	require.Equal(t, fullBase+1, metrics.SpectatePromoteValue(metrics.SpectatePromoteQuotaFull))
 
-	_, err = svcCtx.MatchRedis.Zrem(spectateBroadcastIndex.keyFor(999999), "999999")
+	err = spectateBroadcastIndex.remove(context.Background(), svcCtx.MatchRedis, 999999)
 	require.NoError(t, err)
 	mr.FastForward(spectatePromoteLeaseSeconds * time.Second) // 上一次尝试的租约到期
 	requireLobbyAdmitted(t, lobbyAdmitOnGate3(t, svcCtx, watcher, battleId), battleId, watcher)
@@ -818,8 +818,8 @@ func requireBattleSpectateKeysGone(t *testing.T, svcCtx *svc.ServiceContext, mr 
 	}
 	member := strconv.FormatUint(battleId, 10)
 	for _, ix := range []spectateIndex{spectateActiveIndex, spectateBroadcastIndex, spectateFeaturedIndex} {
-		_, err := svcCtx.MatchRedis.Zscore(ix.keyFor(battleId), member)
-		require.ErrorIs(t, err, redis.Nil, ix.keyFor(battleId))
+		_, err := svcCtx.MatchRedis.ZScore(context.Background(), ix.keyFor(battleId), member).Result()
+		require.ErrorIs(t, err, redv9.Nil, ix.keyFor(battleId))
 	}
 }
 

@@ -30,7 +30,7 @@ import (
 //     多半正在出故障的库;
 //   - 保留 90 天(deadLetterRetentionMs),远长于原 topic 的 7 天:人工处置按周算。
 //
-// 代价:依赖(库、Redis)长时间不可用时,在途记录各自用完预算后也会转死信(1s 起翻倍、30s 封顶,20 次约 7.5 分钟一条),
+// 代价:依赖(库、Redis)长时间不可用时,在途记录各自用完预算后也会转死信(退避 1s 起翻倍、30s 封顶、每次取 [d/2, d],20 次约 4–7.5 分钟一条),
 // 恢复之后要按手册重放;告警 KafkaBoundConsumerDeadLettered 对第一条就响。
 
 // ErrUnprocessable 由回调用 %w 包住返回:这条记录本身就处理不了(解不出、内容违反契约),重试不会变好。
@@ -60,12 +60,16 @@ const (
 )
 
 const (
-	// defaultDeadLetterMaxAttempts:回调失败 20 次转死信。按 1s 起翻倍、30s 封顶的退避,前后约 7.5 分钟,
-	// 盖得住 TiDB 换主、Redis 重启这类分钟级抖动。
+	// defaultDeadLetterMaxAttempts:回调失败 20 次转死信。退避 1s 起翻倍、30s 封顶、每次取 [d/2, d](sleepWithJitter),
+	// 19 次退避合计约 4–7.5 分钟,盖得住 TiDB 换主、Redis 重启这类分钟级抖动。
 	defaultDeadLetterMaxAttempts = 20
 	maxDeadLetterMaxAttempts     = 1000
 	// deadLetterRetentionMs:死信 topic 保留 90 天。
 	deadLetterRetentionMs = int64(90 * 24 * time.Hour / time.Millisecond)
+	// deadLetterMaxMessageBytes:死信 topic 的 max.message.bytes 与写入端的单批上限。死信比原件多 dlq.* 头(原因文本上限
+	// 1024 字节,合计约 1.5KB);原 topic 沿用 broker 缺省上限(约 1MiB)时,贴着上限的原件加头之后写不进同样上限的死信 topic,
+	// 会一直留在原处、分区停在这一条。放到 2MiB:本组消费者单次拉取上限是 1MiB,读得到的原件都装得下。
+	deadLetterMaxMessageBytes = 2 << 20
 	// deadLetterWriteTimeout:单次写死信的上限;超时按一次写失败,退避后重写。
 	deadLetterWriteTimeout = 30 * time.Second
 	// maxDeadLetterReasonBytes:死信头里原因文本的上限(按 UTF-8 字符边界截断)。
@@ -104,10 +108,11 @@ type DeadLetterRecord struct {
 // DeadLetterTopic 是消费组 group 的死信 topic 名。
 func DeadLetterTopic(group string) string { return group + deadLetterTopicSuffix }
 
-// DeadLetterTopicSpec 是消费组 group 的死信 topic 契约:1 个分区、保留 90 天;原 topic 要求严格耐久时死信同样三副本、minISR 2。
+// DeadLetterTopicSpec 是消费组 group 的死信 topic 契约:1 个分区、保留 90 天、单条上限 2MiB(deadLetterMaxMessageBytes);
+// 原 topic 要求严格耐久时死信同样三副本、minISR 2。
 // 调用方在启动 owner 之前与原 topic 一起 EnsureTopics(写死信的 writer 不自动建 topic)。
 func DeadLetterTopicSpec(group string, requireDurability bool) TopicSpec {
-	spec := TopicSpec{Name: DeadLetterTopic(group), Partitions: 1, RetentionMs: deadLetterRetentionMs}
+	spec := TopicSpec{Name: DeadLetterTopic(group), Partitions: 1, RetentionMs: deadLetterRetentionMs, MaxMessageBytes: deadLetterMaxMessageBytes}
 	if requireDurability {
 		spec.ReplicaFactor = 3
 		spec.RequireDurability = true
@@ -283,6 +288,7 @@ func NewKafkaDeadLetterSink(brokers []string, topic string) (*KafkaDeadLetterSin
 		Async:                  false,
 		MaxAttempts:            1,
 		BatchSize:              1,
+		BatchBytes:             deadLetterMaxMessageBytes, // 缺省 1MiB 会在本地就拒掉加头之后超限的死信
 		BatchTimeout:           10 * time.Millisecond,
 		WriteTimeout:           10 * time.Second,
 		AllowAutoTopicCreation: false,

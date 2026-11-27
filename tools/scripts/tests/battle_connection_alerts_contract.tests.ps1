@@ -142,46 +142,48 @@ Test-Case '直连面:准入回调装在 TcpServer 上且只绑 weak,指标已登
     Assert-Match -Text $install -Pattern 'server\.setConnectionCallback\(' -Because '连接回调与准入回调在同一处装上'
     Assert-Match -Text $install -Pattern '(?m)^\s*RegisterMetrics\(\);$' -Because '不登记采集回调,这些序列根本不存在'
     Assert-Match -Text $script:EdgeSource -Pattern 'GlobalMetricsRegistry\(\)\.Register\(\s*"battle_connection_admission", \[weak\]' -Because '采集回调也只绑 weak 自己'
-    Assert-Match -Text $script:EdgeSource -Pattern '(?s)sessions_\.try_emplace\(connId\);.{0,400}?admission_\.NoteAccepted\(\);' -Because '会话插入之后立刻计接纳'
-    Assert-Match -Text $script:EdgeSource -Pattern 'admission_\.NoteHandshake\(session->openedAt, std::chrono::steady_clock::now\(\)\);' -Because '票据握手成功时记握手耗时'
-    Assert-Match -Text $script:EdgeSource -Pattern '(?s)self->admission_\.NoteHandshakeTimeout\(\);\s*LogRejectionSampled\("handshake_timeout", c\);\s*c->forceClose\(\);' `
+    Assert-Match -Text $script:EdgeSource -Pattern '(?s)sessions\.try_emplace\(connId\);.{0,400}?admission\.NoteAccepted\(\);' -Because '会话插入之后立刻计接纳'
+    Assert-Match -Text $script:EdgeSource -Pattern 'admission\.NoteHandshake\(session->openedAt, std::chrono::steady_clock::now\(\)\);' -Because '票据握手成功时记握手耗时'
+    Assert-Match -Text $script:EdgeSource -Pattern '(?s)self->admission\.NoteHandshakeTimeout\(\);\s*LogRejectionSampled\("handshake_timeout", c\);\s*c->forceClose\(\);' `
         -Because 'battle_preauth_reaped_total 与握手期限的关闭是同一处'
     foreach ($reason in @('kCapacity', 'kNoTokenSecret')) {
-        Assert-Match -Text $script:EdgeSource -Pattern ('admission_\.NoteRejectedAfterAccept\(battle_connection_admission::RejectReason::{0}\);' -f $reason) `
+        Assert-Match -Text $script:EdgeSource -Pattern ('admission\.NoteRejectedAfterAccept\(battle_connection_admission::RejectReason::{0}\);' -f $reason) `
             -Because "连接回调里的 $reason 分支要计进 battle_rejected_total"
     }
-    Assert-Match -Text $script:EdgeSource -Pattern '(?s)s->probeGrant=std::move\(grant\);.{0,300}?unauthenticated_\.erase\(s->connId\);' `
+    Assert-Match -Text $script:EdgeSource -Pattern '(?s)s->probeGrant=std::move\(grant\);.{0,300}?unauthenticated\.erase\(s->connId\);' `
         -Because '出示过探测授权的连接出未认证池,否则每台的 BattleUnauthenticatedConnectionsHigh 随探测量误报'
 }
 
 Test-Case '直连面的未认证池:按 connId 有序的集合,accept 时 O(1) 不扫会话表,五处进出池,loop 刚卡过不淘汰,淘汰先出池再经 weak 连接 forceClose' {
-    Assert-Match -Text $script:EdgeHeader -Pattern '(?m)^\s*std::set<uint64_t> unauthenticated_;$' -Because 'connId 单调递增,有序集合即建连先后,begin() 就是最老的'
-    Assert-Match -Text $script:EdgeHeader -Pattern 'size_t UnauthenticatedConnectionCount\(\) const \{ return unauthenticated_\.size\(\); \}' -Because '指标与判定读同一个数'
+    Assert-Match -Text $script:EdgeHeader -Pattern '(?m)^\s*std::set<uint64_t> unauthenticated;$' -Because 'connId 单调递增,有序集合即建连先后,begin() 就是最老的'
+    Assert-Match -Text $script:EdgeHeader -Pattern 'size_t UnauthenticatedConnectionCount\(\) const \{ return unauthenticated\.size\(\); \}' -Because '指标与判定读同一个数'
     $admit = Get-FunctionBody -Text $script:EdgeSource -SignaturePattern 'bool BattleClientEdge::AdmitConnection\(const muduo::net::InetAddress &peer,\n\s+const battle_connection_admission::SteadyTime now\)'
-    Assert-NotMatch -Text $admit -Pattern 'for \([^)]*:\s*sessions_\)' -Because '准入回调排在速率闸之前,被拒的洪水也要走它:不能每次 accept 扫一遍会话表'
-    Assert-Match -Text $admit -Pattern 'const uint64_t unauthenticated = unauthenticated_\.size\(\);' -Because '池大小 O(1)'
-    Assert-Match -Text $admit -Pattern '(?s)unauthenticated >= admission_\.CurrentPreAuthBudget\(\)\.earlyDropStart && !loopStall_\.RecentlyStalled\(now\).{0,200}?OldestConnectedUnauthenticated\(\)' `
-        -Because '最老一条只在承压时找;本端 loop 刚卡过时不给年龄、不淘汰(握手请求可能还在接收缓冲里没读)'
+    Assert-NotMatch -Text $admit -Pattern 'for \([^)]*:\s*sessions\)' -Because '准入回调排在速率闸之前,被拒的洪水也要走它:不能每次 accept 扫一遍会话表'
+    Assert-Match -Text $admit -Pattern 'const uint64_t unauthenticated = this->unauthenticated\.size\(\);' -Because '池大小 O(1)'
+    Assert-Match -Text $admit -Pattern '(?s)unauthenticated >= admission\.CurrentPreAuthBudget\(\)\.earlyDropStart && !loopStall\.RecentlyStalled\(now\).{0,200}?OldestConnectedUnauthenticated\(now\)' `
+        -Because '最老一条只在承压时找;本端 loop 刚卡过时不给年龄、不淘汰(握手请求可能还在接收缓冲里没读)。找的时候用本次判定的时刻,不另取时钟'
+    $oldest = Get-FunctionBody -Text $script:EdgeSource -SignaturePattern 'std::optional<uint64_t> BattleClientEdge::OldestConnectedUnauthenticated\(\n\s+const battle_connection_admission::SteadyTime now\) const'
+    Assert-NotMatch -Text $oldest -Pattern 'steady_clock::now\(\)' -Because '半关闭连接是否逾期与随后算年龄必须用同一个时刻,两处各取一次时钟会在临界点上得出相反的结论'
     Assert-Match -Text $admit -Pattern 'EvictUnauthenticated\(\*oldestConnId, now\);' -Because '判定要求淘汰时淘汰找出来的最老一条'
-    Assert-Match -Text $script:EdgeSource -Pattern '(?s)session\.openedAt = std::chrono::steady_clock::now\(\);.{0,300}?unauthenticated_\.insert\(connId\);' -Because '建连即进池'
-    Assert-Match -Text $script:EdgeSource -Pattern '(?s)session->verified = true;\s*unauthenticated_\.erase\(session->connId\);' -Because '票据握手成功出池'
-    Assert-Match -Text $script:EdgeSource -Pattern '(?s)unauthenticated_\.erase\(connId\);\s*sessions_\.erase\(it\);' -Because '断开时与会话一起出池(HandleClosed 是会话表唯一的删除点)'
+    Assert-Match -Text $script:EdgeSource -Pattern '(?s)session\.openedAt = std::chrono::steady_clock::now\(\);.{0,300}?unauthenticated\.insert\(connId\);' -Because '建连即进池'
+    Assert-Match -Text $script:EdgeSource -Pattern '(?s)session->verified = true;\s*unauthenticated\.erase\(session->connId\);' -Because '票据握手成功出池'
+    Assert-Match -Text $script:EdgeSource -Pattern '(?s)unauthenticated\.erase\(connId\);\s*sessions\.erase\(it\);' -Because '断开时与会话一起出池(HandleClosed 是会话表唯一的删除点)'
     $evict = Get-FunctionBody -Text $script:EdgeSource -SignaturePattern 'void BattleClientEdge::EvictUnauthenticated\(const uint64_t connId, const battle_connection_admission::SteadyTime now\)'
-    Assert-Match -Text $evict -Pattern '(?s)it->second\.conn\.lock\(\);.*?unauthenticated_\.erase\(connId\);.*?admission_\.NotePreAuthEvicted\(\);.*?conn->forceClose\(\);' -Because '先出池(这一刻起不再算在池里),再经会话里的 weak 连接 forceClose 并计一次淘汰'
-    Assert-NotMatch -Text $evict -Pattern 'sessions_\.erase' -Because '不在准入回调里删会话,留给 HandleClosed'
+    Assert-Match -Text $evict -Pattern '(?s)it->second\.conn\.lock\(\);.*?unauthenticated\.erase\(connId\);.*?admission\.NotePreAuthEvicted\(\);.*?conn->forceClose\(\);' -Because '先出池(这一刻起不再算在池里),再经会话里的 weak 连接 forceClose 并计一次淘汰'
+    Assert-NotMatch -Text $evict -Pattern 'sessions\.erase' -Because '不在准入回调里删会话,留给 HandleClosed'
     $install = Get-FunctionBody -Text $script:EdgeSource -SignaturePattern 'void BattleClientEdge::Install\(muduo::net::TcpServer &server\)'
-    Assert-Match -Text $install -Pattern '(?s)loopStallTimer_\.RunEvery\(tickSeconds, \[weak\].{0,200}?self->loopStall_\.Tick\(' -Because 'loop 卡顿的节拍由 1 秒定时器打,只绑 weak 自己'
+    Assert-Match -Text $install -Pattern '(?s)loopStallTimer\.RunEvery\(tickSeconds, \[weak\].{0,200}?self->loopStall\.Tick\(' -Because 'loop 卡顿的节拍由 1 秒定时器打,只绑 weak 自己'
 }
 
 Test-Case '按来源限速:缺省关闭,只在承压时、只对公网来源问前缀的桶,放行之后才记账' {
     Assert-Match -Text $script:AdmissionHeader -Pattern 'inline constexpr const char \*kSourceRateEnv = "BATTLE_SOURCE_RATE_PER_SECOND";' -Because '开关变量名是运维手册里写的那个'
     $admit = Get-FunctionBody -Text $script:AdmissionSource -SignaturePattern 'Verdict Admission::Admit\(.*?\)'
-    Assert-Match -Text $admit -Pattern 'sourceRate_\.has_value\(\) &&\s*accept_admission::SourceRateUnderPressure\(unauthenticated, preAuthBudget_, lastAcceptRateRejectAt_, now\)' `
+    Assert-Match -Text $admit -Pattern 'sourceRate\.has_value\(\) &&\s*accept_admission::SourceRateUnderPressure\(unauthenticated, preAuthBudget, lastAcceptRateRejectAt, now\)' `
         -Because '开了也只在承压时生效,承压的判据与 gate 同一份'
-    Assert-Match -Text $admit -Pattern 'sourceRateActive_ \? accept_admission::RateLimitedSourceOf\(peer\) : std::nullopt' -Because '只对公网源地址按来源限速:边缘 nginx、LB、集群内的连接在 accept 时只看得到内网地址'
-    Assert-Match -Text $admit -Pattern 'lastAcceptRateRejectAt_ = now;' -Because '全局速率闸拒过连接也算承压'
+    Assert-Match -Text $admit -Pattern 'sourceRateActive \? accept_admission::RateLimitedSourceOf\(peer\) : std::nullopt' -Because '只对公网源地址按来源限速:边缘 nginx、LB、集群内的连接在 accept 时只看得到内网地址'
+    Assert-Match -Text $admit -Pattern 'lastAcceptRateRejectAt = now;' -Because '全局速率闸拒过连接也算承压'
     $decideAt = $admit.IndexOf('Decide(state')
-    $takeAt = $admit.IndexOf('sourceRate_->Take(')
+    $takeAt = $admit.IndexOf('sourceRate->Take(')
     Assert-True -Condition ($decideAt -ge 0 -and $takeAt -gt $decideAt) -Because '前缀的桶在所有闸都放行之后才记账,被别的闸拒掉的连接不消耗它的名额'
     Assert-Match -Text $script:AdmissionHeader -Pattern '(?s)if \(state\.sourceOverRate\)\s*\{\s*return Verdict\{\.rejected = RejectReason::kSourceRate\};' -Because '来源超速排在预算之前:超速前缀不会让别人的老连接被淘汰'
 }
