@@ -554,3 +554,7 @@ const ClientPlayerJubaozhaiFulfillWantedSkillBookOrderMessageId = 583
 const ClientPlayerJubaozhaiListWantedSkillBookOrdersMessageId = 584
 const SceneSeasonClientPlayerChooseWuxingRealmBranchMessageId = 585
 const SceneSeasonClientPlayerResolveWuxingRealmEventMessageId = 586
+const MatchServiceSendBattleSpectateChatMessageId = 587
+const MatchServicePullBattleSpectateChatMessageId = 588
+const SceneSceneClientPlayerGetSpectateChatSettingMessageId = 589
+const SceneSceneClientPlayerSetSpectateChatSettingMessageId = 590

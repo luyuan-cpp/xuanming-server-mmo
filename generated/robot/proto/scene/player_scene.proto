@@ -5,6 +5,7 @@ import "proto/db/proto_option.proto";
 import "proto/common/base/tip.proto";
 import "proto/common/base/empty.proto";
 import "proto/common/component/actor_comp.proto";
+import "proto/common/component/player_comp.proto";
 import "proto/scene/scene_info.proto";
 
 option cc_generic_services = true;
@@ -222,6 +223,31 @@ message SyncDigestS2C
 	repeated SyncDigestEntry entries = 3;  // 只含出现过的域;缺席的域版本按 0 处理。顺序无业务含义
 }
 
+message GetSpectateChatSettingRequest
+{
+}
+
+message GetSpectateChatSettingResponse
+{
+	TipInfoMessage error_message = 1;
+	eSpectateChatPreference preference = 2;
+	// 解析全局默认策略后的当前生效值（true=允许局外人观战交流，false=禁止交流但仍可观战）。
+	bool effective_allow = 3;
+}
+
+message SetSpectateChatSettingRequest
+{
+	// 仅接受 SPECTATE_CHAT_PREF_ALLOW(1) 或 SPECTATE_CHAT_PREF_FORBID(2)。
+	eSpectateChatPreference preference = 1;
+}
+
+message SetSpectateChatSettingResponse
+{
+	TipInfoMessage error_message = 1;
+	eSpectateChatPreference preference = 2;
+	bool effective_allow = 3;
+}
+
 service SceneSceneClientPlayer
 {
   option (OptionIsPlayerService) = true;
@@ -241,4 +267,7 @@ service SceneSceneClientPlayer
   // 数据走 NotifySyncDigest 推送;handler 里禁止 SetTip,所有失败都推 status = UNAVAILABLE。
   rpc GetSyncDigest (GetSyncDigestRequest) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_ONE_WAY; }
   rpc NotifySyncDigest (SyncDigestS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
+  // 局外人观战交流个人开关（docs/planning/battle-spectate-chat-v1.md）：仅控观战期间能否交流，不禁止观战；下次进战斗生效。
+  rpc GetSpectateChatSetting (GetSpectateChatSettingRequest) returns (GetSpectateChatSettingResponse);
+  rpc SetSpectateChatSetting (SetSpectateChatSettingRequest) returns (SetSpectateChatSettingResponse);
 }

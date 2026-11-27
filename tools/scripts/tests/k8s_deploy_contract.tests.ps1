@@ -6480,6 +6480,8 @@ Test-Case '资产通道默认关:scene / guild / trade 不带签名密钥与指�
     $tradeCm = Select-ManifestByName -Output $guildInfraRun.Output -Name 'go-svc-trade-config'
     $tradeEmbedded = Get-ConfigMapEmbeddedText -Block $tradeCm -FileName 'trade.yaml'
     Assert-Equal -Expected "AssetOp:`n  Enabled: false`n  SecretEnv: MMORPG_ASSET_OP_SECRET_TRADE" -Actual (ConvertTo-NonBlankLines -Text (Get-TopLevelYamlBlockText -Text $tradeEmbedded -Key 'AssetOp')) -Because 'trade 关着时只写 Enabled 与 SecretEnv 两行'
+    Assert-Match -Text $tradeEmbedded -Pattern '(?m)^  WantedSkillBook:\r?\n    Enabled: false\s*$' -Because '资产通道关着时求购单也关着(求购单要求资产通道,开着会让 trade 拒启)'
+    Assert-Match -Text $tradeEmbedded -Pattern '(?m)^TableDir: /generated/tables\s*$' -Because 'trade 的 TableDir 指镜像里的表目录'
 }
 
 Test-Case 'Assert-AssetOpSecretShape:未设置 / 含空白 / 短于 32 字节一律拒绝,报错点名变量、不回显值' {
@@ -6650,6 +6652,8 @@ Test-Case 'infra-up -AssetOps on:guild / trade 各自只拿自己那把密钥、
     $expectedTrade = (Get-TopLevelYamlBlockText -Text $tradeYamlTextForAssetOp -Key 'AssetOp') -replace '(?m)^  Enabled:.*$', '  Enabled: true'
     Assert-Equal -Expected (ConvertTo-NonBlankLines -Text $expectedTrade) -Actual (ConvertTo-NonBlankLines -Text (Get-TopLevelYamlBlockText -Text $tradeEmbedded -Key 'AssetOp')) -Because 'trade 打开:落地恢复与 Cleanup* 键连同 Enabled=true 一起进 ConfigMap(go/trade/etc/trade.yaml 注释)'
     Assert-Match -Text $tradeEmbedded -Pattern '(?m)^  SecretEnv: MMORPG_ASSET_OP_SECRET_TRADE\s*$' -Because 'SecretEnv 必须是部署侧注入的变量名'
+    Assert-Match -Text $tradeEmbedded -Pattern '(?m)^  WantedSkillBook:\r?\n    Enabled: true\s*$' -Because '负责人 2026-11-27 定:资产通道打开时悬赏求书求购单一起打开(skill-book-wanted-order-trade-escrow.md §11.2 批 C)'
+    Assert-Match -Text $tradeEmbedded -Pattern '(?m)^TableDir: /generated/tables\s*$' -Because '求购单读 Skill / SkillScrollCraft,TableDir 指镜像里的表目录'
     $policies = @(
         # data-service 是协调者(PrepareRoleFreeze、ApplyRoleFence),mail 读玩家所在的帮(GuildRpc)。
         # 名单后面固定补上能起金丝雀的调用方的 <app>-canary(发布轨道设计 §5.3,Get-ReleaseTrackAppLabels)。

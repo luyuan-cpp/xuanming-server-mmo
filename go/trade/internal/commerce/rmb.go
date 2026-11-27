@@ -237,11 +237,16 @@ func (e *Engine) planRmb(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerc
 		if err := transferLeg(w, "rmb_buyer_credit", r.BuyerPlayerId, a); err != nil {
 			return err
 		}
-		if l := leg(w, "rmb_buyer_credit"); done(l) {
-			if applied(l) {
+		// 交付腿部分发放后由人工补发缺口(planPartial),沿 currentLeg 跟到最新的补发腿判结局。
+		if l := currentLeg(w, "rmb_buyer_credit"); done(l) {
+			switch {
+			case applied(l):
 				w.Stage = "rmb_delivered"
 				r.Status = Settled
-			} else {
+			case l.Role != "rmb_buyer_credit":
+				// 补发没到账:买家手里已有一部分,不能退款;转人工,可再 reissue(jubaozhai-market.md §16.1)。
+				markManual(r, w, manualReasonFinalCredit, "人民币寄售交付补发没到账", now)
+			default:
 				w.Stage = "rmb_refund"
 				r.Status = 8
 			}

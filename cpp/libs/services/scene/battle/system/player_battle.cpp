@@ -1165,6 +1165,7 @@ bool PlayerBattleSystem::BuildBattleSnapshot(entt::entity player, ::BattlePlayer
 	snapshot.set_appearance_id(PlayerAppearanceSystem::EffectiveAppearanceId(player, TimeSystem::NowSecondsUTC()));
 	PlayerAppearanceSystem::FillBattleSkillVfx(player, snapshot);
 	snapshot.set_gender(profile.gender());
+	snapshot.set_spectate_chat_pref(profile.spectate_chat_pref());
 	snapshot.set_class_id(registry.get<PlayerUint32Comp>(player).class_());
 
 	// 生效等级(超上限的存储等级按上限,0 按 1):引擎的伤害 / 回血 / 怪物参考等级都读快照等级
@@ -1412,6 +1413,7 @@ namespace
 		snapshot.set_appearance_id(PlayerAppearanceSystem::EffectiveAppearanceId(player, TimeSystem::NowSecondsUTC()));
 		PlayerAppearanceSystem::FillBattleSkillVfx(player, snapshot);
 		snapshot.set_gender(profile.gender());
+		snapshot.set_spectate_chat_pref(profile.spectate_chat_pref());
 		snapshot.set_class_id(rule->reference_class_id());
 		snapshot.set_level(playerlevel::CappedLevel(rule->competitive_level()));
 		*snapshot.mutable_base_attributes() = baseAttrs;

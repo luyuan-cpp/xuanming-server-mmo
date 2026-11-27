@@ -26,6 +26,7 @@ import (
 	"match/internal/poolowner"
 	"match/internal/ranked"
 	"match/internal/scope"
+	"match/internal/spectatechat"
 	"match/internal/tournament"
 
 	chatpb "proto/chat"
@@ -119,6 +120,8 @@ type ServiceContext struct {
 	liveTournament   atomic.Pointer[tournament.Catalog]
 	TournamentCheers *tournament.SpectateCheerHub
 	cheerHubOnce     sync.Once
+	SpectateChat     *spectatechat.Hub
+	spectateChatOnce sync.Once
 	// ContentGuard 用于战队名称等 UGC 文本审核。生产由 match_service.go 装配(没配目标拒启);nil 只出现在单测里,那时不送检。
 	ContentGuard contentguard.Checker
 	// MailAdmin / MailSecret 只用于投递锦标赛赛季奖励的附件邮件(生死状退费 2026-11-26 起只由 scene 退,match 不发信)。
@@ -887,6 +890,19 @@ func (sc *ServiceContext) ActiveTournamentCheers() *tournament.SpectateCheerHub 
 		}
 	})
 	return sc.TournamentCheers
+}
+
+// ActiveSpectateChat 返回局外人观战交流中枢(优先复用 MatchRedis 跨副本共享,单测未配 Redis 自动退化内存实现)。
+func (sc *ServiceContext) ActiveSpectateChat() *spectatechat.Hub {
+	if sc == nil {
+		return spectatechat.NewHub(nil)
+	}
+	sc.spectateChatOnce.Do(func() {
+		if sc.SpectateChat == nil {
+			sc.SpectateChat = spectatechat.NewHub(sc.MatchRedis)
+		}
+	})
+	return sc.SpectateChat
 }
 
 // ValidateTables 是 match 的 --validate-tables 预检钩子:与生产运行期热更使用完全相同的目录与剧本编译校验。

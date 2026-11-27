@@ -596,6 +596,60 @@ func TestPartialRequiresEveryPartialLeg(t *testing.T) {
 	require.Len(t, result.PartialParts, 2)
 }
 
+// rmbDeliveryPartial 是一份人民币寄售交付转人工:卖家托管已扣到,买家收货腿部分发放(按数量的物品到账、货币没到)。
+func rmbDeliveryPartial() (*tradepb.TradeCommerceRecord, *tradepb.TradeCommerceWorkflow) {
+	bundle := &assetpb.AssetBundle{Items: []*assetpb.ItemGrant{{ConfigId: 10, Count: 2}}, Currencies: []*assetpb.CurrencyAmount{{CurrencyType: 1, Amount: 10}}}
+	r := &tradepb.TradeCommerceRecord{CommerceId: 21, Kind: 6, Status: Delivering, SellerPlayerId: 1, BuyerPlayerId: 2, Version: 3}
+	w := &tradepb.TradeCommerceWorkflow{Stage: "rmb_delivery", Rmb: &tradepb.TradeRmbConsignmentWorkflow{AssetKind: "ITEMS"},
+		Legs: []*tradepb.TradeCommerceLeg{
+			manualLeg("seller_debit", 1, 3, 211, outcomeApplied, proto.Clone(bundle).(*assetpb.AssetBundle)),
+			manualLeg("rmb_buyer_credit", 2, 4, 212, partialOutcome, proto.Clone(bundle).(*assetpb.AssetBundle)),
+		}}
+	leg(w, "rmb_buyer_credit").EscrowOwnerId = 1
+	markManual(r, w, manualReasonAppliedPartial, "rmb_buyer_credit partial", 1)
+	return r, w
+}
+
+// 人民币寄售交付腿部分发放(jubaozhai-market.md §16.1 残余):只补缺口、回到交付阶段;补发到账才算交付完成。
+// 补发没到账转人工、可再 reissue,绝不走退款(买家手里已有一部分)。托管扣款腿的部分扣出仍不在这里处理。
+func TestPartialRmbDeliveryReissuesTheShortfallAndNeverRefunds(t *testing.T) {
+	r, w := rmbDeliveryPartial()
+	result, err := planManualAction(r, w, manualContext{req: partialRequest("rmb_buyer_credit=currency:1")})
+	require.NoError(t, err)
+	require.Equal(t, []string{"rmb_buyer_credit#2"}, result.NewLegs)
+	require.Equal(t, "rmb_delivery", w.Stage)
+	require.Equal(t, Delivering, r.Status)
+	shortfall := leg(w, "rmb_buyer_credit#2")
+	require.Equal(t, uint64(2), shortfall.PlayerId)
+	require.Equal(t, uint64(1), shortfall.EscrowOwnerId, "补发付出的仍是卖家托管的资产")
+	require.Empty(t, shortfall.Bundle.Items, "按数量的物品已到账")
+	require.True(t, proto.Equal(&assetpb.CurrencyAmount{CurrencyType: 1, Amount: 10}, shortfall.Bundle.Currencies[0]))
+
+	failedR, failedW := proto.Clone(r).(*tradepb.TradeCommerceRecord), proto.Clone(w).(*tradepb.TradeCommerceWorkflow)
+	leg(failedW, "rmb_buyer_credit#2").OpId, leg(failedW, "rmb_buyer_credit#2").Outcome = 213, outcomeRejected
+	require.NoError(t, (&Engine{}).plan(failedR, failedW, 2000))
+	require.Equal(t, Manual, failedR.Status, "补发没到账转人工,不退款")
+	require.Equal(t, manualReasonFinalCredit, failedW.GetQuarantine().GetReason())
+	again, err := planAction(failedR, failedW, ManualReissue)
+	require.NoError(t, err)
+	require.Equal(t, []string{"rmb_buyer_credit#3"}, again.NewLegs)
+	require.Equal(t, "rmb_delivery", failedW.Stage)
+
+	shortfall.OpId, shortfall.Outcome = 213, outcomeApplied
+	require.NoError(t, (&Engine{}).plan(r, w, 2000))
+	require.Equal(t, Settled, r.Status, "补发腿到账才算交付完成")
+	require.Equal(t, "rmb_delivered", w.Stage)
+
+	// 托管扣款腿的部分扣出:钱在商城,不在这里处理,合同不改。
+	debitR, debitW := rmbDeliveryPartial()
+	leg(debitW, "rmb_buyer_credit").Outcome = 0
+	leg(debitW, "seller_debit").Outcome = partialOutcome
+	before := proto.Clone(debitW)
+	_, err = planManualAction(debitR, debitW, manualContext{req: partialRequest("seller_debit=currency:1")})
+	requireNotAllowed(t, err)
+	require.True(t, proto.Equal(before, debitW))
+}
+
 // 部分发放的腿不在「没到账」之列:reissue 不会按全量补发它。
 func TestFailedCreditsSkipPartialLegs(t *testing.T) {
 	_, w := partialTrade()

@@ -7037,11 +7037,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStateS2C final : public ::goo
     kTeamBBannedSkillIdsFieldNumber = 41,
     kCounteredBanSkillIdsFieldNumber = 46,
     kTacticalPuzzleContextFieldNumber = 43,
-    kWuxingSynergyActiveThisRoundFieldNumber = 32,
     kSeasonWeeklyAffixIdFieldNumber = 33,
     kBossWeeklyAffixIdFieldNumber = 34,
     kSelfSummonPetRemainingFieldNumber = 37,
     kSummonPetUnlockRoundFieldNumber = 38,
+    kWuxingSynergyActiveThisRoundFieldNumber = 32,
+    kSpectateChatEnabledFieldNumber = 47,
     kTrialVowMaskFieldNumber = 42,
     kTeamAProtectedSkillIdFieldNumber = 44,
     kTeamBProtectedSkillIdFieldNumber = 45,
@@ -7578,16 +7579,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStateS2C final : public ::goo
   ::TacticalPuzzleBattleContext* PROTOBUF_NONNULL _internal_mutable_tactical_puzzle_context();
 
   public:
-  // bool wuxing_synergy_active_this_round = 32;
-  void clear_wuxing_synergy_active_this_round() ;
-  [[nodiscard]] bool wuxing_synergy_active_this_round() const;
-  void set_wuxing_synergy_active_this_round(bool value);
-
-  private:
-  bool _internal_wuxing_synergy_active_this_round() const;
-  void _internal_set_wuxing_synergy_active_this_round(bool value);
-
-  public:
   // uint32 season_weekly_affix_id = 33;
   void clear_season_weekly_affix_id() ;
   [[nodiscard]] ::uint32_t season_weekly_affix_id() const;
@@ -7628,6 +7619,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStateS2C final : public ::goo
   void _internal_set_summon_pet_unlock_round(::uint32_t value);
 
   public:
+  // bool wuxing_synergy_active_this_round = 32;
+  void clear_wuxing_synergy_active_this_round() ;
+  [[nodiscard]] bool wuxing_synergy_active_this_round() const;
+  void set_wuxing_synergy_active_this_round(bool value);
+
+  private:
+  bool _internal_wuxing_synergy_active_this_round() const;
+  void _internal_set_wuxing_synergy_active_this_round(bool value);
+
+  public:
+  // bool spectate_chat_enabled = 47;
+  void clear_spectate_chat_enabled() ;
+  [[nodiscard]] bool spectate_chat_enabled() const;
+  void set_spectate_chat_enabled(bool value);
+
+  private:
+  bool _internal_spectate_chat_enabled() const;
+  void _internal_set_spectate_chat_enabled(bool value);
+
+  public:
   // uint32 trial_vow_mask = 42;
   void clear_trial_vow_mask() ;
   [[nodiscard]] ::uint32_t trial_vow_mask() const;
@@ -7662,7 +7673,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStateS2C final : public ::goo
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 46,
+      ::google::protobuf::internal::TcParseTable<5, 47,
                           12, 0,
                           7>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -7734,11 +7745,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStateS2C final : public ::goo
     ::google::protobuf::RepeatedField<::uint32_t> countered_ban_skill_ids_;
     ::google::protobuf::internal::CachedSize _countered_ban_skill_ids_cached_byte_size_;
     ::TacticalPuzzleBattleContext* PROTOBUF_NULLABLE tactical_puzzle_context_;
-    bool wuxing_synergy_active_this_round_;
     ::uint32_t season_weekly_affix_id_;
     ::uint32_t boss_weekly_affix_id_;
     ::uint32_t self_summon_pet_remaining_;
     ::uint32_t summon_pet_unlock_round_;
+    bool wuxing_synergy_active_this_round_;
+    bool spectate_chat_enabled_;
     ::uint32_t trial_vow_mask_;
     ::uint32_t team_a_protected_skill_id_;
     ::uint32_t team_b_protected_skill_id_;
@@ -10920,7 +10932,7 @@ inline void BattleStateS2C::set_allocated_custom_duel_rules(::CustomDuelRules* P
 inline void BattleStateS2C::clear_wuxing_synergy_active_this_round() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.wuxing_synergy_active_this_round_ = false;
-  ClearHasBit(_impl_._has_bits_[1], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000400U);
 }
 inline bool BattleStateS2C::wuxing_synergy_active_this_round() const {
   // @@protoc_insertion_point(field_get:BattleStateS2C.wuxing_synergy_active_this_round)
@@ -10928,7 +10940,7 @@ inline bool BattleStateS2C::wuxing_synergy_active_this_round() const {
 }
 inline void BattleStateS2C::set_wuxing_synergy_active_this_round(bool value) {
   _internal_set_wuxing_synergy_active_this_round(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000400U);
   // @@protoc_insertion_point(field_set:BattleStateS2C.wuxing_synergy_active_this_round)
 }
 inline bool BattleStateS2C::_internal_wuxing_synergy_active_this_round() const {
@@ -10944,7 +10956,7 @@ inline void BattleStateS2C::_internal_set_wuxing_synergy_active_this_round(bool 
 inline void BattleStateS2C::clear_season_weekly_affix_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.season_weekly_affix_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[1], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000040U);
 }
 inline ::uint32_t BattleStateS2C::season_weekly_affix_id() const {
   // @@protoc_insertion_point(field_get:BattleStateS2C.season_weekly_affix_id)
@@ -10952,7 +10964,7 @@ inline ::uint32_t BattleStateS2C::season_weekly_affix_id() const {
 }
 inline void BattleStateS2C::set_season_weekly_affix_id(::uint32_t value) {
   _internal_set_season_weekly_affix_id(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000040U);
   // @@protoc_insertion_point(field_set:BattleStateS2C.season_weekly_affix_id)
 }
 inline ::uint32_t BattleStateS2C::_internal_season_weekly_affix_id() const {
@@ -10968,7 +10980,7 @@ inline void BattleStateS2C::_internal_set_season_weekly_affix_id(::uint32_t valu
 inline void BattleStateS2C::clear_boss_weekly_affix_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.boss_weekly_affix_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[1], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000080U);
 }
 inline ::uint32_t BattleStateS2C::boss_weekly_affix_id() const {
   // @@protoc_insertion_point(field_get:BattleStateS2C.boss_weekly_affix_id)
@@ -10976,7 +10988,7 @@ inline ::uint32_t BattleStateS2C::boss_weekly_affix_id() const {
 }
 inline void BattleStateS2C::set_boss_weekly_affix_id(::uint32_t value) {
   _internal_set_boss_weekly_affix_id(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000080U);
   // @@protoc_insertion_point(field_set:BattleStateS2C.boss_weekly_affix_id)
 }
 inline ::uint32_t BattleStateS2C::_internal_boss_weekly_affix_id() const {
@@ -11092,7 +11104,7 @@ BattleStateS2C::_internal_mutable_self_standby_pets() {
 inline void BattleStateS2C::clear_self_summon_pet_remaining() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.self_summon_pet_remaining_ = 0u;
-  ClearHasBit(_impl_._has_bits_[1], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000100U);
 }
 inline ::uint32_t BattleStateS2C::self_summon_pet_remaining() const {
   // @@protoc_insertion_point(field_get:BattleStateS2C.self_summon_pet_remaining)
@@ -11100,7 +11112,7 @@ inline ::uint32_t BattleStateS2C::self_summon_pet_remaining() const {
 }
 inline void BattleStateS2C::set_self_summon_pet_remaining(::uint32_t value) {
   _internal_set_self_summon_pet_remaining(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000100U);
   // @@protoc_insertion_point(field_set:BattleStateS2C.self_summon_pet_remaining)
 }
 inline ::uint32_t BattleStateS2C::_internal_self_summon_pet_remaining() const {
@@ -11116,7 +11128,7 @@ inline void BattleStateS2C::_internal_set_self_summon_pet_remaining(::uint32_t v
 inline void BattleStateS2C::clear_summon_pet_unlock_round() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.summon_pet_unlock_round_ = 0u;
-  ClearHasBit(_impl_._has_bits_[1], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000200U);
 }
 inline ::uint32_t BattleStateS2C::summon_pet_unlock_round() const {
   // @@protoc_insertion_point(field_get:BattleStateS2C.summon_pet_unlock_round)
@@ -11124,7 +11136,7 @@ inline ::uint32_t BattleStateS2C::summon_pet_unlock_round() const {
 }
 inline void BattleStateS2C::set_summon_pet_unlock_round(::uint32_t value) {
   _internal_set_summon_pet_unlock_round(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000200U);
   // @@protoc_insertion_point(field_set:BattleStateS2C.summon_pet_unlock_round)
 }
 inline ::uint32_t BattleStateS2C::_internal_summon_pet_unlock_round() const {
@@ -11293,7 +11305,7 @@ BattleStateS2C::_internal_mutable_team_b_banned_skill_ids() {
 inline void BattleStateS2C::clear_trial_vow_mask() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.trial_vow_mask_ = 0u;
-  ClearHasBit(_impl_._has_bits_[1], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00001000U);
 }
 inline ::uint32_t BattleStateS2C::trial_vow_mask() const {
   // @@protoc_insertion_point(field_get:BattleStateS2C.trial_vow_mask)
@@ -11301,7 +11313,7 @@ inline ::uint32_t BattleStateS2C::trial_vow_mask() const {
 }
 inline void BattleStateS2C::set_trial_vow_mask(::uint32_t value) {
   _internal_set_trial_vow_mask(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[1], 0x00001000U);
   // @@protoc_insertion_point(field_set:BattleStateS2C.trial_vow_mask)
 }
 inline ::uint32_t BattleStateS2C::_internal_trial_vow_mask() const {
@@ -11410,7 +11422,7 @@ inline void BattleStateS2C::set_allocated_tactical_puzzle_context(::TacticalPuzz
 inline void BattleStateS2C::clear_team_a_protected_skill_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.team_a_protected_skill_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[1], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00002000U);
 }
 inline ::uint32_t BattleStateS2C::team_a_protected_skill_id() const {
   // @@protoc_insertion_point(field_get:BattleStateS2C.team_a_protected_skill_id)
@@ -11418,7 +11430,7 @@ inline ::uint32_t BattleStateS2C::team_a_protected_skill_id() const {
 }
 inline void BattleStateS2C::set_team_a_protected_skill_id(::uint32_t value) {
   _internal_set_team_a_protected_skill_id(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[1], 0x00002000U);
   // @@protoc_insertion_point(field_set:BattleStateS2C.team_a_protected_skill_id)
 }
 inline ::uint32_t BattleStateS2C::_internal_team_a_protected_skill_id() const {
@@ -11434,7 +11446,7 @@ inline void BattleStateS2C::_internal_set_team_a_protected_skill_id(::uint32_t v
 inline void BattleStateS2C::clear_team_b_protected_skill_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.team_b_protected_skill_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[1], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00004000U);
 }
 inline ::uint32_t BattleStateS2C::team_b_protected_skill_id() const {
   // @@protoc_insertion_point(field_get:BattleStateS2C.team_b_protected_skill_id)
@@ -11442,7 +11454,7 @@ inline ::uint32_t BattleStateS2C::team_b_protected_skill_id() const {
 }
 inline void BattleStateS2C::set_team_b_protected_skill_id(::uint32_t value) {
   _internal_set_team_b_protected_skill_id(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[1], 0x00004000U);
   // @@protoc_insertion_point(field_set:BattleStateS2C.team_b_protected_skill_id)
 }
 inline ::uint32_t BattleStateS2C::_internal_team_b_protected_skill_id() const {
@@ -11503,6 +11515,30 @@ inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
 BattleStateS2C::_internal_mutable_countered_ban_skill_ids() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.countered_ban_skill_ids_;
+}
+
+// bool spectate_chat_enabled = 47;
+inline void BattleStateS2C::clear_spectate_chat_enabled() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spectate_chat_enabled_ = false;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000800U);
+}
+inline bool BattleStateS2C::spectate_chat_enabled() const {
+  // @@protoc_insertion_point(field_get:BattleStateS2C.spectate_chat_enabled)
+  return _internal_spectate_chat_enabled();
+}
+inline void BattleStateS2C::set_spectate_chat_enabled(bool value) {
+  _internal_set_spectate_chat_enabled(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000800U);
+  // @@protoc_insertion_point(field_set:BattleStateS2C.spectate_chat_enabled)
+}
+inline bool BattleStateS2C::_internal_spectate_chat_enabled() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.spectate_chat_enabled_;
+}
+inline void BattleStateS2C::_internal_set_spectate_chat_enabled(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spectate_chat_enabled_ = value;
 }
 
 // -------------------------------------------------------------------

@@ -288,8 +288,11 @@ type CreateBattleRequest struct {
 	JianghuDuelContext *JianghuDuelBattleContext `protobuf:"bytes,23,opt,name=jianghu_duel_context,json=jianghuDuelContext,proto3" json:"jianghu_duel_context,omitempty"`
 	// 万象残局坊开局冻结上下文（仅 Dungeon 314 携带，随建房原件冻结）。
 	TacticalPuzzleContext *TacticalPuzzleBattleContext `protobuf:"bytes,24,opt,name=tactical_puzzle_context,json=tacticalPuzzleContext,proto3" json:"tactical_puzzle_context,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// 本场战斗是否开启「局外人观战交流」（由 match 建房按参战者偏好与模式规则冻结；
+	// false = 禁止观战期间局外人发言交流，绝不影响 spectate_visibility 正常观战）。
+	SpectateChatEnabled bool `protobuf:"varint,25,opt,name=spectate_chat_enabled,json=spectateChatEnabled,proto3" json:"spectate_chat_enabled,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *CreateBattleRequest) Reset() {
@@ -488,6 +491,13 @@ func (x *CreateBattleRequest) GetTacticalPuzzleContext() *TacticalPuzzleBattleCo
 		return x.TacticalPuzzleContext
 	}
 	return nil
+}
+
+func (x *CreateBattleRequest) GetSpectateChatEnabled() bool {
+	if x != nil {
+		return x.SpectateChatEnabled
+	}
+	return false
 }
 
 // error_message 非零 = 未建房。签不出参战票据时回 kServiceUnavailable(turn-based §22 D70 fail-closed):
@@ -1604,7 +1614,8 @@ const file_proto_battle_battle_node_proto_rawDesc = "" +
 	"\anode_id\x18\t \x01(\rR\x06nodeId\x12\x1f\n" +
 	"\vinstance_id\x18\n" +
 	" \x01(\tR\n" +
-	"instanceId\"\xe8\t\n" +
+	"instanceId\"\x9c\n" +
+	"\n" +
 	"\x13CreateBattleRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12(\n" +
 	"\x10battle_config_id\x18\x02 \x01(\rR\x0ebattleConfigId\x12/\n" +
@@ -1632,7 +1643,8 @@ const file_proto_battle_battle_node_proto_rawDesc = "" +
 	"\x11custom_duel_rules\x18\x15 \x01(\v2\x10.CustomDuelRulesR\x0fcustomDuelRules\x12/\n" +
 	"\x14boss_weekly_affix_id\x18\x16 \x01(\rR\x11bossWeeklyAffixId\x12K\n" +
 	"\x14jianghu_duel_context\x18\x17 \x01(\v2\x19.JianghuDuelBattleContextR\x12jianghuDuelContext\x12T\n" +
-	"\x17tactical_puzzle_context\x18\x18 \x01(\v2\x1c.TacticalPuzzleBattleContextR\x15tacticalPuzzleContext\"\xff\x01\n" +
+	"\x17tactical_puzzle_context\x18\x18 \x01(\v2\x1c.TacticalPuzzleBattleContextR\x15tacticalPuzzleContext\x122\n" +
+	"\x15spectate_chat_enabled\x18\x19 \x01(\bR\x13spectateChatEnabled\"\xff\x01\n" +
 	"\x14CreateBattleResponse\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x124\n" +
 	"\rerror_message\x18\x02 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12G\n" +

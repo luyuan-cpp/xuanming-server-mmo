@@ -90,6 +90,7 @@ message BattleStateS2C {
   uint32 team_a_protected_skill_id = 44;               // 战前禁选 V2：A 队（team_index=0）最终生效的护招技能 ID（0=未选；观战/重连/回放全可见）
   uint32 team_b_protected_skill_id = 45;               // 战前禁选 V2：B 队（team_index=1）最终生效的护招技能 ID（0=未选；观战/重连/回放全可见）
   repeated uint32 countered_ban_skill_ids = 46;        // 战前禁选 V2：被对方护招「破禁化解」而恢复可用的技能 ID（升序去重，与 banned_skill_ids 互斥）
+  bool spectate_chat_enabled = 47;                     // 局外人观战交流开关（开局冻结；false 仍可正常观战，仅禁止观战期间交流）
 }
 
 message BattleStartS2C {

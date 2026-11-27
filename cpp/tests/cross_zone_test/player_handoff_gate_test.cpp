@@ -189,14 +189,15 @@ TEST(PlayerHandoffGate, FreezeWithoutHandoffIsNotHeld)
 	EXPECT_FALSE(IsHeldForOwnershipHandoff(player.entity, *equipItem));
 }
 
-// 场景服务按方法列:只有取版本摘要与查场景信息换节点含义不变;换图、跨 zone 传送与各推送都不算。
+// 场景服务按方法列:取版本摘要、查场景信息与玩家个人观战交流开关换节点含义不变;换图、跨 zone 传送与各推送都不算。
 TEST(PlayerHandoffGate, SceneServiceIsListedPerMethod)
 {
 	const google::protobuf::ServiceDescriptor *const sceneService = SceneSceneClientPlayer::descriptor();
 	for (int i = 0; i < sceneService->method_count(); ++i)
 	{
 		const google::protobuf::MethodDescriptor *const method = sceneService->method(i);
-		const bool expected = method->name() == "GetSyncDigest" || method->name() == "SceneInfoC2S";
+		const bool expected = method->name() == "GetSyncDigest" || method->name() == "SceneInfoC2S" ||
+							  method->name() == "GetSpectateChatSetting" || method->name() == "SetSpectateChatSetting";
 		EXPECT_EQ(IsReplayableOnAnotherSceneNode(*method), expected) << method->full_name();
 	}
 }
@@ -226,6 +227,8 @@ TEST(PlayerHandoffGate, MessageReceivedUnderAPreviousRouteIsStaleOnlyIfSceneBoun
 		{SceneSkillClientPlayer::descriptor(), "UpgradeSkill"},
 		{SceneSceneClientPlayer::descriptor(), "GetSyncDigest"},
 		{SceneSceneClientPlayer::descriptor(), "SceneInfoC2S"},
+		{SceneSceneClientPlayer::descriptor(), "GetSpectateChatSetting"},
+		{SceneSceneClientPlayer::descriptor(), "SetSpectateChatSetting"},
 	};
 	for (const auto &named : kStillValid)
 	{

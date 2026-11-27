@@ -69,6 +69,14 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto, /* tracker*/ nullptr,},
         // ::SyncDigestS2C
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto, /* tracker*/ nullptr,},
+        // ::GetSpectateChatSettingRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto, /* tracker*/ nullptr,},
+        // ::GetSpectateChatSettingResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto, /* tracker*/ nullptr,},
+        // ::SetSpectateChatSettingRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto, /* tracker*/ nullptr,},
+        // ::SetSpectateChatSettingResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
@@ -748,6 +756,147 @@ const ::_pbi::ClassData* SyncDigestEntry_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class SetSpectateChatSettingRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SetSpectateChatSettingRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SetSpectateChatSettingRequest, _impl_._has_bits_);
+};
+
+constexpr SetSpectateChatSettingRequest::ParseTableT_ SetSpectateChatSettingRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SetSpectateChatSettingRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::SetSpectateChatSettingRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .eSpectateChatPreference preference = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SetSpectateChatSettingRequest, _impl_.preference_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SetSpectateChatSettingRequest, _impl_.preference_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .eSpectateChatPreference preference = 1;
+      {PROTOBUF_FIELD_OFFSET(SetSpectateChatSettingRequest, _impl_.preference_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr SetSpectateChatSettingRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        preference_{static_cast< ::eSpectateChatPreference >(0)} {}
+
+template <typename>
+constexpr SetSpectateChatSettingRequest::SetSpectateChatSettingRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SetSpectateChatSettingRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SetSpectateChatSettingRequest(arena);
+}
+constexpr auto SetSpectateChatSettingRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(SetSpectateChatSettingRequest), alignof(SetSpectateChatSettingRequest));
+}
+constexpr auto SetSpectateChatSettingRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SetSpectateChatSettingRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SetSpectateChatSettingRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SetSpectateChatSettingRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SetSpectateChatSettingRequest>(), &SetSpectateChatSettingRequest::ByteSizeLong,
+              &SetSpectateChatSettingRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SetSpectateChatSettingRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[22],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SetSpectateChatSettingRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SetSpectateChatSettingRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SetSpectateChatSettingRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SetSpectateChatSettingRequest::InternalGenerateClassData_(
+            _default, &SetSpectateChatSettingRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SetSpectateChatSettingRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SetSpectateChatSettingRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SetSpectateChatSettingRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SetSpectateChatSettingRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SetSpectateChatSettingRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SetSpectateChatSettingRequestGlobalsTypeInternal SetSpectateChatSettingRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SetSpectateChatSettingRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SetSpectateChatSettingRequest_globals_.GetClassData();
+#else
+  return SetSpectateChatSettingRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class SceneInfoRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<SceneInfoRequest>()._impl_._has_bits_);
@@ -1178,6 +1327,130 @@ const ::_pbi::ClassData* GetSyncDigestRequest_get_class_data() {
   return GetSyncDigestRequest_globals_.GetClassData();
 #else
   return GetSyncDigestRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class GetSpectateChatSettingRequest::_Internal {
+ public:
+};
+
+constexpr GetSpectateChatSettingRequest::ParseTableT_ GetSpectateChatSettingRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GetSpectateChatSettingRequest,
+                            _impl_._cached_size_),  // no hasbits
+      0, // no _extensions_
+      0, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967295,  // skipmap
+      offsetof(ParseTableT_, field_names),  // no field_entries
+      0,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::GetSpectateChatSettingRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, // no field_entries, or aux_entries
+    {{
+    }},
+  };
+}
+
+template <typename>
+constexpr GetSpectateChatSettingRequest::GetSpectateChatSettingRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::internal::ZeroFieldsBase(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      ) {
+}
+inline void* PROTOBUF_NONNULL GetSpectateChatSettingRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GetSpectateChatSettingRequest(arena);
+}
+constexpr auto GetSpectateChatSettingRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(GetSpectateChatSettingRequest), alignof(GetSpectateChatSettingRequest));
+}
+constexpr auto GetSpectateChatSettingRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GetSpectateChatSettingRequest::MergeImpl,
+          ::google::protobuf::internal::ZeroFieldsBase::GetNewImpl<GetSpectateChatSettingRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GetSpectateChatSettingRequest::SharedDtor,
+          ::google::protobuf::internal::ZeroFieldsBase::GetClearImpl<GetSpectateChatSettingRequest>(), &GetSpectateChatSettingRequest::ByteSizeLong,
+              &GetSpectateChatSettingRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GetSpectateChatSettingRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[20],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GetSpectateChatSettingRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GetSpectateChatSettingRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GetSpectateChatSettingRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GetSpectateChatSettingRequest::InternalGenerateClassData_(
+            _default, &GetSpectateChatSettingRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GetSpectateChatSettingRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GetSpectateChatSettingRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GetSpectateChatSettingRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GetSpectateChatSettingRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GetSpectateChatSettingRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GetSpectateChatSettingRequestGlobalsTypeInternal GetSpectateChatSettingRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GetSpectateChatSettingRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GetSpectateChatSettingRequest_globals_.GetClassData();
+#else
+  return GetSpectateChatSettingRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -1975,6 +2248,168 @@ const ::_pbi::ClassData* SyncDigestS2C_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class SetSpectateChatSettingResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SetSpectateChatSettingResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SetSpectateChatSettingResponse, _impl_._has_bits_);
+};
+
+constexpr SetSpectateChatSettingResponse::ParseTableT_ SetSpectateChatSettingResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SetSpectateChatSettingResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::SetSpectateChatSettingResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SetSpectateChatSettingResponse, _impl_.error_message_)}},
+      // .eSpectateChatPreference preference = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SetSpectateChatSettingResponse, _impl_.preference_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(SetSpectateChatSettingResponse, _impl_.preference_)}},
+      // bool effective_allow = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SetSpectateChatSettingResponse, _impl_.effective_allow_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SetSpectateChatSettingResponse, _impl_.effective_allow_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(SetSpectateChatSettingResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .eSpectateChatPreference preference = 2;
+      {PROTOBUF_FIELD_OFFSET(SetSpectateChatSettingResponse, _impl_.preference_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // bool effective_allow = 3;
+      {PROTOBUF_FIELD_OFFSET(SetSpectateChatSettingResponse, _impl_.effective_allow_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr SetSpectateChatSettingResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        preference_{static_cast< ::eSpectateChatPreference >(0)},
+        effective_allow_{false} {}
+
+template <typename>
+constexpr SetSpectateChatSettingResponse::SetSpectateChatSettingResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SetSpectateChatSettingResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SetSpectateChatSettingResponse(arena);
+}
+constexpr auto SetSpectateChatSettingResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(SetSpectateChatSettingResponse), alignof(SetSpectateChatSettingResponse));
+}
+constexpr auto SetSpectateChatSettingResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SetSpectateChatSettingResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SetSpectateChatSettingResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SetSpectateChatSettingResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SetSpectateChatSettingResponse>(), &SetSpectateChatSettingResponse::ByteSizeLong,
+              &SetSpectateChatSettingResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SetSpectateChatSettingResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[23],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SetSpectateChatSettingResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SetSpectateChatSettingResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SetSpectateChatSettingResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SetSpectateChatSettingResponse::InternalGenerateClassData_(
+            _default, &SetSpectateChatSettingResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SetSpectateChatSettingResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SetSpectateChatSettingResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SetSpectateChatSettingResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SetSpectateChatSettingResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SetSpectateChatSettingResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SetSpectateChatSettingResponseGlobalsTypeInternal SetSpectateChatSettingResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SetSpectateChatSettingResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SetSpectateChatSettingResponse_globals_.GetClassData();
+#else
+  return SetSpectateChatSettingResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class SceneChannelDirectory::_Internal {
  public:
   using HasBits = decltype(::std::declval<SceneChannelDirectory>()._impl_._has_bits_);
@@ -2165,6 +2600,168 @@ const ::_pbi::ClassData* SceneChannelDirectory_get_class_data() {
   return SceneChannelDirectory_globals_.GetClassData();
 #else
   return SceneChannelDirectory_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class GetSpectateChatSettingResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GetSpectateChatSettingResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GetSpectateChatSettingResponse, _impl_._has_bits_);
+};
+
+constexpr GetSpectateChatSettingResponse::ParseTableT_ GetSpectateChatSettingResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GetSpectateChatSettingResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::GetSpectateChatSettingResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GetSpectateChatSettingResponse, _impl_.error_message_)}},
+      // .eSpectateChatPreference preference = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GetSpectateChatSettingResponse, _impl_.preference_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(GetSpectateChatSettingResponse, _impl_.preference_)}},
+      // bool effective_allow = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(GetSpectateChatSettingResponse, _impl_.effective_allow_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(GetSpectateChatSettingResponse, _impl_.effective_allow_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(GetSpectateChatSettingResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .eSpectateChatPreference preference = 2;
+      {PROTOBUF_FIELD_OFFSET(GetSpectateChatSettingResponse, _impl_.preference_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // bool effective_allow = 3;
+      {PROTOBUF_FIELD_OFFSET(GetSpectateChatSettingResponse, _impl_.effective_allow_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr GetSpectateChatSettingResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        preference_{static_cast< ::eSpectateChatPreference >(0)},
+        effective_allow_{false} {}
+
+template <typename>
+constexpr GetSpectateChatSettingResponse::GetSpectateChatSettingResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GetSpectateChatSettingResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GetSpectateChatSettingResponse(arena);
+}
+constexpr auto GetSpectateChatSettingResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(GetSpectateChatSettingResponse), alignof(GetSpectateChatSettingResponse));
+}
+constexpr auto GetSpectateChatSettingResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GetSpectateChatSettingResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GetSpectateChatSettingResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GetSpectateChatSettingResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GetSpectateChatSettingResponse>(), &GetSpectateChatSettingResponse::ByteSizeLong,
+              &GetSpectateChatSettingResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GetSpectateChatSettingResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[21],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GetSpectateChatSettingResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GetSpectateChatSettingResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GetSpectateChatSettingResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GetSpectateChatSettingResponse::InternalGenerateClassData_(
+            _default, &GetSpectateChatSettingResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GetSpectateChatSettingResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GetSpectateChatSettingResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GetSpectateChatSettingResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GetSpectateChatSettingResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GetSpectateChatSettingResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GetSpectateChatSettingResponseGlobalsTypeInternal GetSpectateChatSettingResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GetSpectateChatSettingResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GetSpectateChatSettingResponse_globals_.GetClassData();
+#else
+  return GetSpectateChatSettingResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -3476,6 +4073,30 @@ const ::uint32_t
         2,
         1,
         0,
+        0x000, // bitmap
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::GetSpectateChatSettingResponse, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::GetSpectateChatSettingResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::GetSpectateChatSettingResponse, _impl_.preference_),
+        PROTOBUF_FIELD_OFFSET(::GetSpectateChatSettingResponse, _impl_.effective_allow_),
+        0,
+        1,
+        2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::SetSpectateChatSettingRequest, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::SetSpectateChatSettingRequest, _impl_.preference_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::SetSpectateChatSettingResponse, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::SetSpectateChatSettingResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::SetSpectateChatSettingResponse, _impl_.preference_),
+        PROTOBUF_FIELD_OFFSET(::SetSpectateChatSettingResponse, _impl_.effective_allow_),
+        0,
+        1,
+        2,
 };
 
 static const ::_pbi::MigrationSchema
@@ -3500,6 +4121,10 @@ static const ::_pbi::MigrationSchema
         {163, sizeof(::SyncDigestEntry)},
         {170, sizeof(::GetSyncDigestRequest)},
         {171, sizeof(::SyncDigestS2C)},
+        {180, sizeof(::GetSpectateChatSettingRequest)},
+        {181, sizeof(::GetSpectateChatSettingResponse)},
+        {190, sizeof(::SetSpectateChatSettingRequest)},
+        {195, sizeof(::SetSpectateChatSettingResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -3523,6 +4148,10 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::SyncDigestEntry_globals_,
         &::GetSyncDigestRequest_globals_,
         &::SyncDigestS2C_globals_,
+        &::GetSpectateChatSettingRequest_globals_,
+        &::GetSpectateChatSettingResponse_globals_,
+        &::SetSpectateChatSettingRequest_globals_,
+        &::SetSpectateChatSettingResponse_globals_,
 };
 const char descriptor_table_protodef_proto_2fscene_2fplayer_5fscene_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -3530,104 +4159,121 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fscene_2eproto[] AB
     "db/proto_option.proto\032\033proto/common/base"
     "/tip.proto\032\035proto/common/base/empty.prot"
     "o\032\'proto/common/component/actor_comp.pro"
-    "to\032\034proto/scene/scene_info.proto\":\n\024Ente"
-    "rSceneC2SRequest\022\"\n\nscene_info\030\001 \001(\0132\016.S"
-    "ceneInfoComp\"\?\n\025EnterSceneC2SResponse\022&\n"
-    "\rerror_message\030\001 \001(\0132\017.TipInfoMessage\"3\n"
-    "\rEnterSceneS2C\022\"\n\nscene_info\030\001 \001(\0132\016.Sce"
-    "neInfoComp\"q\n\020SceneChannelInfo\022\020\n\010scene_"
-    "id\030\001 \001(\004\022\022\n\nchannel_no\030\002 \001(\r\022\024\n\014player_c"
-    "ount\030\003 \001(\r\022!\n\005state\030\004 \001(\0162\022.SceneChannel"
-    "State\"\327\001\n\025SceneChannelDirectory\022\017\n\007zone_"
-    "id\030\001 \001(\r\022\027\n\017scene_config_id\030\002 \001(\r\022#\n\010cha"
-    "nnels\030\003 \003(\0132\021.SceneChannelInfo\022\025\n\rupdate"
-    "d_at_ms\030\004 \001(\004\022\037\n\027switch_cooldown_seconds"
-    "\030\005 \001(\r\022\037\n\027max_players_per_channel\030\006 \001(\r\022"
-    "\026\n\016switch_enabled\030\007 \001(\010\"\374\001\n\025WorldMapOver"
-    "viewEntry\022\027\n\017scene_config_id\030\001 \001(\r\022\032\n\022to"
-    "tal_player_count\030\002 \001(\r\022\025\n\rchannel_count\030"
-    "\003 \001(\r\022&\n\nheat_level\030\004 \001(\0162\022.WorldMapHeat"
-    "Level\022\034\n\024recommended_scene_id\030\005 \001(\004\022\036\n\026r"
-    "ecommended_channel_no\030\006 \001(\r\022\023\n\013is_tide_m"
-    "ap\030\007 \001(\010\022\034\n\024has_mystery_merchant\030\010 \001(\010\"\321"
-    "\001\n\021WorldTideSnapshot\022\016\n\006active\030\001 \001(\010\022\020\n\010"
-    "round_id\030\002 \001(\004\022\027\n\017scene_config_id\030\003 \001(\r\022"
-    "\034\n\024recommended_scene_id\030\004 \001(\004\022\036\n\026recomme"
-    "nded_channel_no\030\005 \001(\r\022\024\n\014starts_at_ms\030\006 "
-    "\001(\004\022\022\n\nends_at_ms\030\007 \001(\004\022\031\n\021next_starts_a"
-    "t_ms\030\010 \001(\004\"\301\001\n\020WorldMapOverview\022\017\n\007zone_"
-    "id\030\001 \001(\r\022\025\n\rupdated_at_ms\030\002 \001(\004\022\026\n\016serve"
-    "r_time_ms\030\003 \001(\004\022$\n\004maps\030\004 \003(\0132\026.WorldMap"
-    "OverviewEntry\022 \n\004tide\030\005 \001(\0132\022.WorldTideS"
-    "napshot\022%\n\035daily_hotspot_scene_config_id"
-    "\030\006 \001(\r\"\224\001\n\014SceneInfoS2C\022\"\n\nscene_info\030\001 "
-    "\003(\0132\016.SceneInfoComp\0221\n\021channel_directory"
-    "\030\002 \001(\0132\026.SceneChannelDirectory\022-\n\022world_"
-    "map_overview\030\003 \001(\0132\021.WorldMapOverview\"S\n"
-    "\020SceneInfoRequest\022\036\n\026with_channel_direct"
-    "ory\030\001 \001(\010\022\037\n\027with_world_map_overview\030\002 \001"
-    "(\010\"7\n\021SceneInfoResponse\022\"\n\nscene_info\030\001 "
-    "\003(\0132\016.SceneInfoComp\"\271\001\n\016ActorCreateS2C\022\016"
-    "\n\006entity\030\001 \001(\004\022\035\n\ttransform\030\002 \001(\0132\n.Tran"
-    "sform\022\036\n\nactor_type\030\003 \001(\0162\n.ActorType\022\014\n"
-    "\004guid\030\004 \001(\004\022\021\n\tconfig_id\030\005 \001(\004\022\025\n\rappear"
-    "ance_id\030\006 \001(\t\022\020\n\010class_id\030\007 \001(\r\022\016\n\006gende"
-    "r\030\010 \001(\r\"!\n\017ActorDestroyS2C\022\016\n\006entity\030\001 \001"
-    "(\004\"9\n\022ActorListCreateS2C\022#\n\nactor_list\030\001"
-    " \003(\0132\017.ActorCreateS2C\"%\n\023ActorListDestro"
-    "yS2C\022\016\n\006entity\030\001 \003(\004\"F\n\023TravelToZoneRequ"
-    "est\022\026\n\016target_zone_id\030\001 \001(\r\022\027\n\017scene_con"
-    "fig_id\030\002 \001(\r\">\n\024TravelToZoneResponse\022&\n\r"
-    "error_message\030\001 \001(\0132\017.TipInfoMessage\"\?\n\017"
-    "SyncDigestEntry\022\033\n\006domain\030\001 \001(\0162\013.SyncDo"
-    "main\022\017\n\007version\030\002 \001(\004\"\026\n\024GetSyncDigestRe"
-    "quest\"i\n\rSyncDigestS2C\022!\n\006status\030\001 \001(\0162\021"
-    ".SyncDigestStatus\022\022\n\ngeneration\030\002 \001(\004\022!\n"
-    "\007entries\030\003 \003(\0132\020.SyncDigestEntry*\326\001\n\021Sce"
-    "neChannelState\022\037\n\033SCENE_CHANNEL_STATE_UN"
-    "KNOWN\020\000\022\036\n\032SCENE_CHANNEL_STATE_SMOOTH\020\001\022"
-    "\034\n\030SCENE_CHANNEL_STATE_BUSY\020\002\022\034\n\030SCENE_C"
-    "HANNEL_STATE_FULL\020\003\022\037\n\033SCENE_CHANNEL_STA"
-    "TE_CLOSING\020\004\022#\n\037SCENE_CHANNEL_STATE_UNAV"
-    "AILABLE\020\005*\230\001\n\021WorldMapHeatLevel\022 \n\034WORLD"
-    "_MAP_HEAT_LEVEL_UNKNOWN\020\000\022\036\n\032WORLD_MAP_H"
-    "EAT_LEVEL_QUIET\020\001\022\037\n\033WORLD_MAP_HEAT_LEVE"
-    "L_ACTIVE\020\002\022 \n\034WORLD_MAP_HEAT_LEVEL_CROWD"
-    "ED\020\003*K\n\tActorType\022\023\n\017ACTOR_TYPE_NONE\020\000\022\025"
-    "\n\021ACTOR_TYPE_PLAYER\020\001\022\022\n\016ACTOR_TYPE_NPC\020"
-    "\002*\260\002\n\nSyncDomain\022\033\n\027SYNC_DOMAIN_UNSPECIF"
-    "IED\020\000\022\033\n\027SYNC_DOMAIN_FRIEND_LIST\020\001\022\036\n\032SY"
-    "NC_DOMAIN_FRIEND_REQUEST\020\002\022\034\n\030SYNC_DOMAI"
-    "N_FRIEND_BLOCK\020\003\022\024\n\020SYNC_DOMAIN_TEAM\020\004\022\033"
-    "\n\027SYNC_DOMAIN_TEAM_INVITE\020\005\022\025\n\021SYNC_DOMA"
-    "IN_GUILD\020\006\022!\n\035SYNC_DOMAIN_GUILD_APPLICAT"
-    "ION\020\007\022\035\n\031SYNC_DOMAIN_GUILD_ECONOMY\020\010\022\036\n\032"
-    "SYNC_DOMAIN_GUILD_ACTIVITY\020\t*Q\n\020SyncDige"
-    "stStatus\022\031\n\025SYNC_DIGEST_STATUS_OK\020\000\022\"\n\036S"
-    "YNC_DIGEST_STATUS_UNAVAILABLE\020\0012\206\005\n\026Scen"
-    "eSceneClientPlayer\022;\n\nEnterScene\022\025.Enter"
-    "SceneC2SRequest\032\026.EnterSceneC2SResponse\022"
-    "1\n\020NotifyEnterScene\022\016.EnterSceneS2C\032\006.Em"
-    "pty\"\005\210\231\310\001\002\0220\n\014SceneInfoC2S\022\021.SceneInfoRe"
-    "quest\032\006.Empty\"\005\210\231\310\001\001\022/\n\017NotifySceneInfo\022"
-    "\r.SceneInfoS2C\032\006.Empty\"\005\210\231\310\001\002\0223\n\021NotifyA"
-    "ctorCreate\022\017.ActorCreateS2C\032\006.Empty\"\005\210\231\310"
-    "\001\002\0225\n\022NotifyActorDestroy\022\020.ActorDestroyS"
-    "2C\032\006.Empty\"\005\210\231\310\001\002\022;\n\025NotifyActorListCrea"
-    "te\022\023.ActorListCreateS2C\032\006.Empty\"\005\210\231\310\001\002\022="
-    "\n\026NotifyActorListDestroy\022\024.ActorListDest"
-    "royS2C\032\006.Empty\"\005\210\231\310\001\002\022;\n\014TravelToZone\022\024."
-    "TravelToZoneRequest\032\025.TravelToZoneRespon"
-    "se\0225\n\rGetSyncDigest\022\025.GetSyncDigestReque"
-    "st\032\006.Empty\"\005\210\231\310\001\001\0221\n\020NotifySyncDigest\022\016."
-    "SyncDigestS2C\032\006.Empty\"\005\210\231\310\001\002\032\n\200\250\303\001\001\210\250\303\001\001"
-    "B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
+    "to\032(proto/common/component/player_comp.p"
+    "roto\032\034proto/scene/scene_info.proto\":\n\024En"
+    "terSceneC2SRequest\022\"\n\nscene_info\030\001 \001(\0132\016"
+    ".SceneInfoComp\"\?\n\025EnterSceneC2SResponse\022"
+    "&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\""
+    "3\n\rEnterSceneS2C\022\"\n\nscene_info\030\001 \001(\0132\016.S"
+    "ceneInfoComp\"q\n\020SceneChannelInfo\022\020\n\010scen"
+    "e_id\030\001 \001(\004\022\022\n\nchannel_no\030\002 \001(\r\022\024\n\014player"
+    "_count\030\003 \001(\r\022!\n\005state\030\004 \001(\0162\022.SceneChann"
+    "elState\"\327\001\n\025SceneChannelDirectory\022\017\n\007zon"
+    "e_id\030\001 \001(\r\022\027\n\017scene_config_id\030\002 \001(\r\022#\n\010c"
+    "hannels\030\003 \003(\0132\021.SceneChannelInfo\022\025\n\rupda"
+    "ted_at_ms\030\004 \001(\004\022\037\n\027switch_cooldown_secon"
+    "ds\030\005 \001(\r\022\037\n\027max_players_per_channel\030\006 \001("
+    "\r\022\026\n\016switch_enabled\030\007 \001(\010\"\374\001\n\025WorldMapOv"
+    "erviewEntry\022\027\n\017scene_config_id\030\001 \001(\r\022\032\n\022"
+    "total_player_count\030\002 \001(\r\022\025\n\rchannel_coun"
+    "t\030\003 \001(\r\022&\n\nheat_level\030\004 \001(\0162\022.WorldMapHe"
+    "atLevel\022\034\n\024recommended_scene_id\030\005 \001(\004\022\036\n"
+    "\026recommended_channel_no\030\006 \001(\r\022\023\n\013is_tide"
+    "_map\030\007 \001(\010\022\034\n\024has_mystery_merchant\030\010 \001(\010"
+    "\"\321\001\n\021WorldTideSnapshot\022\016\n\006active\030\001 \001(\010\022\020"
+    "\n\010round_id\030\002 \001(\004\022\027\n\017scene_config_id\030\003 \001("
+    "\r\022\034\n\024recommended_scene_id\030\004 \001(\004\022\036\n\026recom"
+    "mended_channel_no\030\005 \001(\r\022\024\n\014starts_at_ms\030"
+    "\006 \001(\004\022\022\n\nends_at_ms\030\007 \001(\004\022\031\n\021next_starts"
+    "_at_ms\030\010 \001(\004\"\301\001\n\020WorldMapOverview\022\017\n\007zon"
+    "e_id\030\001 \001(\r\022\025\n\rupdated_at_ms\030\002 \001(\004\022\026\n\016ser"
+    "ver_time_ms\030\003 \001(\004\022$\n\004maps\030\004 \003(\0132\026.WorldM"
+    "apOverviewEntry\022 \n\004tide\030\005 \001(\0132\022.WorldTid"
+    "eSnapshot\022%\n\035daily_hotspot_scene_config_"
+    "id\030\006 \001(\r\"\224\001\n\014SceneInfoS2C\022\"\n\nscene_info\030"
+    "\001 \003(\0132\016.SceneInfoComp\0221\n\021channel_directo"
+    "ry\030\002 \001(\0132\026.SceneChannelDirectory\022-\n\022worl"
+    "d_map_overview\030\003 \001(\0132\021.WorldMapOverview\""
+    "S\n\020SceneInfoRequest\022\036\n\026with_channel_dire"
+    "ctory\030\001 \001(\010\022\037\n\027with_world_map_overview\030\002"
+    " \001(\010\"7\n\021SceneInfoResponse\022\"\n\nscene_info\030"
+    "\001 \003(\0132\016.SceneInfoComp\"\271\001\n\016ActorCreateS2C"
+    "\022\016\n\006entity\030\001 \001(\004\022\035\n\ttransform\030\002 \001(\0132\n.Tr"
+    "ansform\022\036\n\nactor_type\030\003 \001(\0162\n.ActorType\022"
+    "\014\n\004guid\030\004 \001(\004\022\021\n\tconfig_id\030\005 \001(\004\022\025\n\rappe"
+    "arance_id\030\006 \001(\t\022\020\n\010class_id\030\007 \001(\r\022\016\n\006gen"
+    "der\030\010 \001(\r\"!\n\017ActorDestroyS2C\022\016\n\006entity\030\001"
+    " \001(\004\"9\n\022ActorListCreateS2C\022#\n\nactor_list"
+    "\030\001 \003(\0132\017.ActorCreateS2C\"%\n\023ActorListDest"
+    "royS2C\022\016\n\006entity\030\001 \003(\004\"F\n\023TravelToZoneRe"
+    "quest\022\026\n\016target_zone_id\030\001 \001(\r\022\027\n\017scene_c"
+    "onfig_id\030\002 \001(\r\">\n\024TravelToZoneResponse\022&"
+    "\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\"\?"
+    "\n\017SyncDigestEntry\022\033\n\006domain\030\001 \001(\0162\013.Sync"
+    "Domain\022\017\n\007version\030\002 \001(\004\"\026\n\024GetSyncDigest"
+    "Request\"i\n\rSyncDigestS2C\022!\n\006status\030\001 \001(\016"
+    "2\021.SyncDigestStatus\022\022\n\ngeneration\030\002 \001(\004\022"
+    "!\n\007entries\030\003 \003(\0132\020.SyncDigestEntry\"\037\n\035Ge"
+    "tSpectateChatSettingRequest\"\217\001\n\036GetSpect"
+    "ateChatSettingResponse\022&\n\rerror_message\030"
+    "\001 \001(\0132\017.TipInfoMessage\022,\n\npreference\030\002 \001"
+    "(\0162\030.eSpectateChatPreference\022\027\n\017effectiv"
+    "e_allow\030\003 \001(\010\"M\n\035SetSpectateChatSettingR"
+    "equest\022,\n\npreference\030\001 \001(\0162\030.eSpectateCh"
+    "atPreference\"\217\001\n\036SetSpectateChatSettingR"
+    "esponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfo"
+    "Message\022,\n\npreference\030\002 \001(\0162\030.eSpectateC"
+    "hatPreference\022\027\n\017effective_allow\030\003 \001(\010*\326"
+    "\001\n\021SceneChannelState\022\037\n\033SCENE_CHANNEL_ST"
+    "ATE_UNKNOWN\020\000\022\036\n\032SCENE_CHANNEL_STATE_SMO"
+    "OTH\020\001\022\034\n\030SCENE_CHANNEL_STATE_BUSY\020\002\022\034\n\030S"
+    "CENE_CHANNEL_STATE_FULL\020\003\022\037\n\033SCENE_CHANN"
+    "EL_STATE_CLOSING\020\004\022#\n\037SCENE_CHANNEL_STAT"
+    "E_UNAVAILABLE\020\005*\230\001\n\021WorldMapHeatLevel\022 \n"
+    "\034WORLD_MAP_HEAT_LEVEL_UNKNOWN\020\000\022\036\n\032WORLD"
+    "_MAP_HEAT_LEVEL_QUIET\020\001\022\037\n\033WORLD_MAP_HEA"
+    "T_LEVEL_ACTIVE\020\002\022 \n\034WORLD_MAP_HEAT_LEVEL"
+    "_CROWDED\020\003*K\n\tActorType\022\023\n\017ACTOR_TYPE_NO"
+    "NE\020\000\022\025\n\021ACTOR_TYPE_PLAYER\020\001\022\022\n\016ACTOR_TYP"
+    "E_NPC\020\002*\260\002\n\nSyncDomain\022\033\n\027SYNC_DOMAIN_UN"
+    "SPECIFIED\020\000\022\033\n\027SYNC_DOMAIN_FRIEND_LIST\020\001"
+    "\022\036\n\032SYNC_DOMAIN_FRIEND_REQUEST\020\002\022\034\n\030SYNC"
+    "_DOMAIN_FRIEND_BLOCK\020\003\022\024\n\020SYNC_DOMAIN_TE"
+    "AM\020\004\022\033\n\027SYNC_DOMAIN_TEAM_INVITE\020\005\022\025\n\021SYN"
+    "C_DOMAIN_GUILD\020\006\022!\n\035SYNC_DOMAIN_GUILD_AP"
+    "PLICATION\020\007\022\035\n\031SYNC_DOMAIN_GUILD_ECONOMY"
+    "\020\010\022\036\n\032SYNC_DOMAIN_GUILD_ACTIVITY\020\t*Q\n\020Sy"
+    "ncDigestStatus\022\031\n\025SYNC_DIGEST_STATUS_OK\020"
+    "\000\022\"\n\036SYNC_DIGEST_STATUS_UNAVAILABLE\020\0012\274\006"
+    "\n\026SceneSceneClientPlayer\022;\n\nEnterScene\022\025"
+    ".EnterSceneC2SRequest\032\026.EnterSceneC2SRes"
+    "ponse\0221\n\020NotifyEnterScene\022\016.EnterSceneS2"
+    "C\032\006.Empty\"\005\210\231\310\001\002\0220\n\014SceneInfoC2S\022\021.Scene"
+    "InfoRequest\032\006.Empty\"\005\210\231\310\001\001\022/\n\017NotifyScen"
+    "eInfo\022\r.SceneInfoS2C\032\006.Empty\"\005\210\231\310\001\002\0223\n\021N"
+    "otifyActorCreate\022\017.ActorCreateS2C\032\006.Empt"
+    "y\"\005\210\231\310\001\002\0225\n\022NotifyActorDestroy\022\020.ActorDe"
+    "stroyS2C\032\006.Empty\"\005\210\231\310\001\002\022;\n\025NotifyActorLi"
+    "stCreate\022\023.ActorListCreateS2C\032\006.Empty\"\005\210"
+    "\231\310\001\002\022=\n\026NotifyActorListDestroy\022\024.ActorLi"
+    "stDestroyS2C\032\006.Empty\"\005\210\231\310\001\002\022;\n\014TravelToZ"
+    "one\022\024.TravelToZoneRequest\032\025.TravelToZone"
+    "Response\0225\n\rGetSyncDigest\022\025.GetSyncDiges"
+    "tRequest\032\006.Empty\"\005\210\231\310\001\001\0221\n\020NotifySyncDig"
+    "est\022\016.SyncDigestS2C\032\006.Empty\"\005\210\231\310\001\002\022Y\n\026Ge"
+    "tSpectateChatSetting\022\036.GetSpectateChatSe"
+    "ttingRequest\032\037.GetSpectateChatSettingRes"
+    "ponse\022Y\n\026SetSpectateChatSetting\022\036.SetSpe"
+    "ctateChatSettingRequest\032\037.SetSpectateCha"
+    "tSettingResponse\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005scene\200\001\001"
+    "\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
-    descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto_deps[5] = {
+    descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto_deps[6] = {
         &::descriptor_table_proto_2fcommon_2fbase_2fempty_2eproto,
         &::descriptor_table_proto_2fcommon_2fbase_2ftip_2eproto,
         &::descriptor_table_proto_2fcommon_2fcomponent_2factor_5fcomp_2eproto,
+        &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto,
         &::descriptor_table_proto_2fdb_2fproto_5foption_2eproto,
         &::descriptor_table_proto_2fscene_2fscene_5finfo_2eproto,
 };
@@ -3635,13 +4281,13 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto = {
     false,
     false,
-    3824,
+    4452,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fscene_2eproto,
     "proto/scene/player_scene.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto_once,
     descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto_deps,
-    5,
-    20,
+    6,
+    24,
     schemas,
     file_message_globals,
     TableStruct_proto_2fscene_2fplayer_5fscene_2eproto::offsets,
@@ -8853,6 +9499,822 @@ void SyncDigestS2C::InternalSwap(SyncDigestS2C* PROTOBUF_RESTRICT PROTOBUF_NONNU
 }
 // ===================================================================
 
+GetSpectateChatSettingRequest::GetSpectateChatSettingRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::internal::ZeroFieldsBase(arena, GetSpectateChatSettingRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::internal::ZeroFieldsBase(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(arena_constructor:GetSpectateChatSettingRequest)
+}
+GetSpectateChatSettingRequest::GetSpectateChatSettingRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const GetSpectateChatSettingRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::internal::ZeroFieldsBase(arena, GetSpectateChatSettingRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::internal::ZeroFieldsBase(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  GetSpectateChatSettingRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+
+  // @@protoc_insertion_point(copy_constructor:GetSpectateChatSettingRequest)
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GetSpectateChatSettingRequest_class_data_ =
+        GetSpectateChatSettingRequest::InternalGenerateClassData_(GetSpectateChatSettingRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetSpectateChatSettingRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetSpectateChatSettingRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GetSpectateChatSettingRequest_class_data_.tc_table);
+  return GetSpectateChatSettingRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetSpectateChatSettingRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetSpectateChatSettingRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GetSpectateChatSettingRequest_globals_));
+  return GetSpectateChatSettingRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetSpectateChatSettingRequest::ParseTableT_
+    GetSpectateChatSettingRequest::_table_ =
+        GetSpectateChatSettingRequest::InternalGenerateParseTable_(GetSpectateChatSettingRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+
+
+
+
+
+
+
+::google::protobuf::Metadata GetSpectateChatSettingRequest::GetMetadata() const {
+  return ::google::protobuf::internal::ZeroFieldsBase::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void GetSpectateChatSettingResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+GetSpectateChatSettingResponse::GetSpectateChatSettingResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetSpectateChatSettingResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:GetSpectateChatSettingResponse)
+}
+PROTOBUF_NDEBUG_INLINE GetSpectateChatSettingResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::GetSpectateChatSettingResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+GetSpectateChatSettingResponse::GetSpectateChatSettingResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const GetSpectateChatSettingResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GetSpectateChatSettingResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  GetSpectateChatSettingResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, preference_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, preference_),
+           offsetof(Impl_, effective_allow_) -
+               offsetof(Impl_, preference_) +
+               sizeof(Impl_::effective_allow_));
+
+  // @@protoc_insertion_point(copy_constructor:GetSpectateChatSettingResponse)
+}
+PROTOBUF_NDEBUG_INLINE GetSpectateChatSettingResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void GetSpectateChatSettingResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, effective_allow_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::effective_allow_));
+}
+GetSpectateChatSettingResponse::~GetSpectateChatSettingResponse() {
+  // @@protoc_insertion_point(destructor:GetSpectateChatSettingResponse)
+  SharedDtor(*this);
+}
+inline void GetSpectateChatSettingResponse::SharedDtor(MessageLite& self) {
+  GetSpectateChatSettingResponse& this_ = static_cast<GetSpectateChatSettingResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GetSpectateChatSettingResponse_class_data_ =
+        GetSpectateChatSettingResponse::InternalGenerateClassData_(GetSpectateChatSettingResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetSpectateChatSettingResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetSpectateChatSettingResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GetSpectateChatSettingResponse_class_data_.tc_table);
+  return GetSpectateChatSettingResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GetSpectateChatSettingResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GetSpectateChatSettingResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GetSpectateChatSettingResponse_globals_));
+  return GetSpectateChatSettingResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetSpectateChatSettingResponse::ParseTableT_
+    GetSpectateChatSettingResponse::_table_ =
+        GetSpectateChatSettingResponse::InternalGenerateParseTable_(GetSpectateChatSettingResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GetSpectateChatSettingResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:GetSpectateChatSettingResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    ABSL_DCHECK(_impl_.error_message_ != nullptr);
+    _impl_.error_message_->Clear();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000006U)) {
+    ::memset(&_impl_.preference_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.effective_allow_) -
+        reinterpret_cast<char*>(&_impl_.preference_)) + sizeof(_impl_.effective_allow_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GetSpectateChatSettingResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GetSpectateChatSettingResponse& this_ = static_cast<const GetSpectateChatSettingResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GetSpectateChatSettingResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GetSpectateChatSettingResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:GetSpectateChatSettingResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .eSpectateChatPreference preference = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_preference() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          2, this_._internal_preference(), target);
+    }
+  }
+
+  // bool effective_allow = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_effective_allow() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_effective_allow(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:GetSpectateChatSettingResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GetSpectateChatSettingResponse::ByteSizeLong(const MessageLite& base) {
+  const GetSpectateChatSettingResponse& this_ = static_cast<const GetSpectateChatSettingResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GetSpectateChatSettingResponse::ByteSizeLong() const {
+  const GetSpectateChatSettingResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:GetSpectateChatSettingResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // .eSpectateChatPreference preference = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_preference() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_preference());
+      }
+    }
+    // bool effective_allow = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_effective_allow() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GetSpectateChatSettingResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GetSpectateChatSettingResponse*>(&to_msg);
+  auto& from = static_cast<const GetSpectateChatSettingResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:GetSpectateChatSettingResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_preference() != 0) {
+        _this->_impl_.preference_ = from._impl_.preference_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_effective_allow() != 0) {
+        _this->_impl_.effective_allow_ = from._impl_.effective_allow_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GetSpectateChatSettingResponse::CopyFrom(const GetSpectateChatSettingResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:GetSpectateChatSettingResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GetSpectateChatSettingResponse::InternalSwap(GetSpectateChatSettingResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GetSpectateChatSettingResponse, _impl_.effective_allow_)
+      + sizeof(GetSpectateChatSettingResponse::_impl_.effective_allow_)
+      - PROTOBUF_FIELD_OFFSET(GetSpectateChatSettingResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata GetSpectateChatSettingResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+SetSpectateChatSettingRequest::SetSpectateChatSettingRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SetSpectateChatSettingRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:SetSpectateChatSettingRequest)
+}
+SetSpectateChatSettingRequest::SetSpectateChatSettingRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SetSpectateChatSettingRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SetSpectateChatSettingRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE SetSpectateChatSettingRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void SetSpectateChatSettingRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.preference_ = {};
+}
+SetSpectateChatSettingRequest::~SetSpectateChatSettingRequest() {
+  // @@protoc_insertion_point(destructor:SetSpectateChatSettingRequest)
+  SharedDtor(*this);
+}
+inline void SetSpectateChatSettingRequest::SharedDtor(MessageLite& self) {
+  SetSpectateChatSettingRequest& this_ = static_cast<SetSpectateChatSettingRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SetSpectateChatSettingRequest_class_data_ =
+        SetSpectateChatSettingRequest::InternalGenerateClassData_(SetSpectateChatSettingRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SetSpectateChatSettingRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SetSpectateChatSettingRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SetSpectateChatSettingRequest_class_data_.tc_table);
+  return SetSpectateChatSettingRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SetSpectateChatSettingRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SetSpectateChatSettingRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SetSpectateChatSettingRequest_globals_));
+  return SetSpectateChatSettingRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SetSpectateChatSettingRequest::ParseTableT_
+    SetSpectateChatSettingRequest::_table_ =
+        SetSpectateChatSettingRequest::InternalGenerateParseTable_(SetSpectateChatSettingRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SetSpectateChatSettingRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:SetSpectateChatSettingRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.preference_ = 0;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SetSpectateChatSettingRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SetSpectateChatSettingRequest& this_ = static_cast<const SetSpectateChatSettingRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SetSpectateChatSettingRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SetSpectateChatSettingRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:SetSpectateChatSettingRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .eSpectateChatPreference preference = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_preference() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_preference(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:SetSpectateChatSettingRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SetSpectateChatSettingRequest::ByteSizeLong(const MessageLite& base) {
+  const SetSpectateChatSettingRequest& this_ = static_cast<const SetSpectateChatSettingRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SetSpectateChatSettingRequest::ByteSizeLong() const {
+  const SetSpectateChatSettingRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:SetSpectateChatSettingRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // .eSpectateChatPreference preference = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_preference() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_preference());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SetSpectateChatSettingRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SetSpectateChatSettingRequest*>(&to_msg);
+  auto& from = static_cast<const SetSpectateChatSettingRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:SetSpectateChatSettingRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_preference() != 0) {
+      _this->_impl_.preference_ = from._impl_.preference_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SetSpectateChatSettingRequest::CopyFrom(const SetSpectateChatSettingRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:SetSpectateChatSettingRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SetSpectateChatSettingRequest::InternalSwap(SetSpectateChatSettingRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.preference_, other->_impl_.preference_);
+}
+
+::google::protobuf::Metadata SetSpectateChatSettingRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void SetSpectateChatSettingResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+SetSpectateChatSettingResponse::SetSpectateChatSettingResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SetSpectateChatSettingResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:SetSpectateChatSettingResponse)
+}
+PROTOBUF_NDEBUG_INLINE SetSpectateChatSettingResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::SetSpectateChatSettingResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+SetSpectateChatSettingResponse::SetSpectateChatSettingResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const SetSpectateChatSettingResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SetSpectateChatSettingResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SetSpectateChatSettingResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, preference_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, preference_),
+           offsetof(Impl_, effective_allow_) -
+               offsetof(Impl_, preference_) +
+               sizeof(Impl_::effective_allow_));
+
+  // @@protoc_insertion_point(copy_constructor:SetSpectateChatSettingResponse)
+}
+PROTOBUF_NDEBUG_INLINE SetSpectateChatSettingResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void SetSpectateChatSettingResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, effective_allow_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::effective_allow_));
+}
+SetSpectateChatSettingResponse::~SetSpectateChatSettingResponse() {
+  // @@protoc_insertion_point(destructor:SetSpectateChatSettingResponse)
+  SharedDtor(*this);
+}
+inline void SetSpectateChatSettingResponse::SharedDtor(MessageLite& self) {
+  SetSpectateChatSettingResponse& this_ = static_cast<SetSpectateChatSettingResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SetSpectateChatSettingResponse_class_data_ =
+        SetSpectateChatSettingResponse::InternalGenerateClassData_(SetSpectateChatSettingResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SetSpectateChatSettingResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SetSpectateChatSettingResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SetSpectateChatSettingResponse_class_data_.tc_table);
+  return SetSpectateChatSettingResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SetSpectateChatSettingResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SetSpectateChatSettingResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SetSpectateChatSettingResponse_globals_));
+  return SetSpectateChatSettingResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SetSpectateChatSettingResponse::ParseTableT_
+    SetSpectateChatSettingResponse::_table_ =
+        SetSpectateChatSettingResponse::InternalGenerateParseTable_(SetSpectateChatSettingResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SetSpectateChatSettingResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:SetSpectateChatSettingResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    ABSL_DCHECK(_impl_.error_message_ != nullptr);
+    _impl_.error_message_->Clear();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000006U)) {
+    ::memset(&_impl_.preference_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.effective_allow_) -
+        reinterpret_cast<char*>(&_impl_.preference_)) + sizeof(_impl_.effective_allow_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SetSpectateChatSettingResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SetSpectateChatSettingResponse& this_ = static_cast<const SetSpectateChatSettingResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SetSpectateChatSettingResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SetSpectateChatSettingResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:SetSpectateChatSettingResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .eSpectateChatPreference preference = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_preference() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          2, this_._internal_preference(), target);
+    }
+  }
+
+  // bool effective_allow = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_effective_allow() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_effective_allow(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:SetSpectateChatSettingResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SetSpectateChatSettingResponse::ByteSizeLong(const MessageLite& base) {
+  const SetSpectateChatSettingResponse& this_ = static_cast<const SetSpectateChatSettingResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SetSpectateChatSettingResponse::ByteSizeLong() const {
+  const SetSpectateChatSettingResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:SetSpectateChatSettingResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // .eSpectateChatPreference preference = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_preference() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_preference());
+      }
+    }
+    // bool effective_allow = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_effective_allow() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SetSpectateChatSettingResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SetSpectateChatSettingResponse*>(&to_msg);
+  auto& from = static_cast<const SetSpectateChatSettingResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:SetSpectateChatSettingResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_preference() != 0) {
+        _this->_impl_.preference_ = from._impl_.preference_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_effective_allow() != 0) {
+        _this->_impl_.effective_allow_ = from._impl_.effective_allow_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SetSpectateChatSettingResponse::CopyFrom(const SetSpectateChatSettingResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:SetSpectateChatSettingResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SetSpectateChatSettingResponse::InternalSwap(SetSpectateChatSettingResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SetSpectateChatSettingResponse, _impl_.effective_allow_)
+      + sizeof(SetSpectateChatSettingResponse::_impl_.effective_allow_)
+      - PROTOBUF_FIELD_OFFSET(SetSpectateChatSettingResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata SetSpectateChatSettingResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 const ::google::protobuf::ServiceDescriptor* PROTOBUF_NONNULL SceneSceneClientPlayer::descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fscene_2fplayer_5fscene_2eproto);
   return file_level_service_descriptors_proto_2fscene_2fplayer_5fscene_2eproto[0];
@@ -8939,6 +10401,20 @@ void SceneSceneClientPlayer::NotifySyncDigest(::google::protobuf::RpcController*
   controller->SetFailed("Method NotifySyncDigest() not implemented.");
   done->Run();
 }
+void SceneSceneClientPlayer::GetSpectateChatSetting(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::GetSpectateChatSettingRequest* PROTOBUF_NONNULL,
+                         ::GetSpectateChatSettingResponse* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method GetSpectateChatSetting() not implemented.");
+  done->Run();
+}
+void SceneSceneClientPlayer::SetSpectateChatSetting(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::SetSpectateChatSettingRequest* PROTOBUF_NONNULL,
+                         ::SetSpectateChatSettingResponse* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method SetSpectateChatSetting() not implemented.");
+  done->Run();
+}
 
 void SceneSceneClientPlayer::CallMethod(
     const ::google::protobuf::MethodDescriptor* PROTOBUF_NONNULL method,
@@ -8991,6 +10467,14 @@ void SceneSceneClientPlayer::CallMethod(
       this->NotifySyncDigest(controller, ::google::protobuf::DownCastMessage<::SyncDigestS2C>(request),
                    ::google::protobuf::DownCastMessage<::Empty>(response), done);
       break;
+    case 11:
+      this->GetSpectateChatSetting(controller, ::google::protobuf::DownCastMessage<::GetSpectateChatSettingRequest>(request),
+                   ::google::protobuf::DownCastMessage<::GetSpectateChatSettingResponse>(response), done);
+      break;
+    case 12:
+      this->SetSpectateChatSetting(controller, ::google::protobuf::DownCastMessage<::SetSpectateChatSettingRequest>(request),
+                   ::google::protobuf::DownCastMessage<::SetSpectateChatSettingResponse>(response), done);
+      break;
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -9024,6 +10508,10 @@ const ::google::protobuf::Message& SceneSceneClientPlayer::GetRequestPrototype(
       return ::GetSyncDigestRequest::default_instance();
     case 10:
       return ::SyncDigestS2C::default_instance();
+    case 11:
+      return ::GetSpectateChatSettingRequest::default_instance();
+    case 12:
+      return ::SetSpectateChatSettingRequest::default_instance();
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -9058,6 +10546,10 @@ const ::google::protobuf::Message& SceneSceneClientPlayer::GetResponsePrototype(
       return ::Empty::default_instance();
     case 10:
       return ::Empty::default_instance();
+    case 11:
+      return ::GetSpectateChatSettingResponse::default_instance();
+    case 12:
+      return ::SetSpectateChatSettingResponse::default_instance();
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -9154,6 +10646,20 @@ void SceneSceneClientPlayer_Stub::NotifySyncDigest(
     const ::SyncDigestS2C* PROTOBUF_NONNULL request, ::Empty* PROTOBUF_NONNULL response,
     ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
   channel_->CallMethod(descriptor()->method(10), controller,
+                       request, response, done);
+}
+void SceneSceneClientPlayer_Stub::GetSpectateChatSetting(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::GetSpectateChatSettingRequest* PROTOBUF_NONNULL request, ::GetSpectateChatSettingResponse* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(11), controller,
+                       request, response, done);
+}
+void SceneSceneClientPlayer_Stub::SetSpectateChatSetting(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::SetSpectateChatSettingRequest* PROTOBUF_NONNULL request, ::SetSpectateChatSettingResponse* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(12), controller,
                        request, response, done);
 }
 // @@protoc_insertion_point(namespace_scope)

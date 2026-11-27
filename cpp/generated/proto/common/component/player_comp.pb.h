@@ -34,6 +34,7 @@
 #include "google/protobuf/map_type_handler.h"  // IWYU pragma: export
 #include "google/protobuf/map_entry.h"
 #include "google/protobuf/map_field.h"
+#include "google/protobuf/generated_enum_reflection.h"
 #include "google/protobuf/unknown_field_set.h"
 // @@protoc_insertion_point(includes)
 
@@ -58,6 +59,8 @@ struct TableStruct_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto {
 extern "C" {
 extern const ::google::protobuf::internal::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto;
 }  // extern "C"
+enum eSpectateChatPreference : int;
+extern const uint32_t eSpectateChatPreference_internal_data_[];
 class Account;
 struct AccountGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -148,9 +151,55 @@ extern const UnregisterPlayerGlobalsTypeInternal UnregisterPlayer_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 namespace google {
 namespace protobuf {
+template <>
+internal::EnumTraitsT<::eSpectateChatPreference_internal_data_>
+    internal::EnumTraitsImpl::value<::eSpectateChatPreference>;
 }  // namespace protobuf
 }  // namespace google
 
+enum eSpectateChatPreference : int {
+  SPECTATE_CHAT_PREF_UNSPECIFIED = 0,
+  SPECTATE_CHAT_PREF_ALLOW = 1,
+  SPECTATE_CHAT_PREF_FORBID = 2,
+  eSpectateChatPreference_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  eSpectateChatPreference_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t eSpectateChatPreference_internal_data_[];
+inline constexpr eSpectateChatPreference eSpectateChatPreference_MIN =
+    static_cast<eSpectateChatPreference>(0);
+inline constexpr eSpectateChatPreference eSpectateChatPreference_MAX =
+    static_cast<eSpectateChatPreference>(2);
+[[nodiscard]] inline bool eSpectateChatPreference_IsValid(int value) {
+  return 0 <= value && value <= 2;
+}
+inline constexpr int eSpectateChatPreference_ARRAYSIZE = 2 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+eSpectateChatPreference_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(eSpectateChatPreference) {
+  return eSpectateChatPreference_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& eSpectateChatPreference_Name(T value) {
+  static_assert(::std::is_same<T, eSpectateChatPreference>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to eSpectateChatPreference_Name().");
+  return eSpectateChatPreference_Name(static_cast<eSpectateChatPreference>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& eSpectateChatPreference_Name(eSpectateChatPreference value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<eSpectateChatPreference_descriptor, 0, 2>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool eSpectateChatPreference_Parse(
+    ::absl::string_view name, eSpectateChatPreference* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<eSpectateChatPreference>(eSpectateChatPreference_descriptor(), name,
+                                           value);
+}
+using ::google::protobuf::internal::generated_enum::AbslParseFlag;
+using ::google::protobuf::internal::generated_enum::AbslUnparseFlag;
 
 // ===================================================================
 
@@ -2192,8 +2241,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfileComp final : public ::
     kRenameSeqFieldNumber = 4,
     kRenamedMsFieldNumber = 5,
     kTrialExpiresAtFieldNumber = 9,
-    kAppearanceSwitchSeqFieldNumber = 10,
     kGenderFieldNumber = 3,
+    kSpectateChatPrefFieldNumber = 15,
+    kAppearanceSwitchSeqFieldNumber = 10,
     kEquippedSkillVfxFieldNumber = 14,
   };
   // string name = 1;
@@ -2347,16 +2397,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfileComp final : public ::
   void _internal_set_trial_expires_at(::uint64_t value);
 
   public:
-  // uint64 appearance_switch_seq = 10;
-  void clear_appearance_switch_seq() ;
-  [[nodiscard]] ::uint64_t appearance_switch_seq() const;
-  void set_appearance_switch_seq(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_appearance_switch_seq() const;
-  void _internal_set_appearance_switch_seq(::uint64_t value);
-
-  public:
   // uint32 gender = 3;
   void clear_gender() ;
   [[nodiscard]] ::uint32_t gender() const;
@@ -2365,6 +2405,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfileComp final : public ::
   private:
   ::uint32_t _internal_gender() const;
   void _internal_set_gender(::uint32_t value);
+
+  public:
+  // .eSpectateChatPreference spectate_chat_pref = 15;
+  void clear_spectate_chat_pref() ;
+  [[nodiscard]] ::eSpectateChatPreference spectate_chat_pref() const;
+  void set_spectate_chat_pref(::eSpectateChatPreference value);
+
+  private:
+  ::eSpectateChatPreference _internal_spectate_chat_pref() const;
+  void _internal_set_spectate_chat_pref(::eSpectateChatPreference value);
+
+  public:
+  // uint64 appearance_switch_seq = 10;
+  void clear_appearance_switch_seq() ;
+  [[nodiscard]] ::uint64_t appearance_switch_seq() const;
+  void set_appearance_switch_seq(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_appearance_switch_seq() const;
+  void _internal_set_appearance_switch_seq(::uint64_t value);
 
   public:
   // map<uint32, uint32> equipped_skill_vfx = 14;
@@ -2387,7 +2447,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfileComp final : public ::
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 14,
+      ::google::protobuf::internal::TcParseTable<4, 15,
                           2, 70,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2427,8 +2487,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfileComp final : public ::
     ::uint64_t rename_seq_;
     ::uint64_t renamed_ms_;
     ::uint64_t trial_expires_at_;
-    ::uint64_t appearance_switch_seq_;
     ::uint32_t gender_;
+    int spectate_chat_pref_;
+    ::uint64_t appearance_switch_seq_;
     ::google::protobuf::internal::MapField<PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse, ::uint32_t, ::uint32_t> equipped_skill_vfx_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -2990,7 +3051,7 @@ inline void PlayerProfileComp::set_allocated_appearance_id(::std::string* PROTOB
 inline void PlayerProfileComp::clear_gender() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gender_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t PlayerProfileComp::gender() const {
   // @@protoc_insertion_point(field_get:PlayerProfileComp.gender)
@@ -2998,7 +3059,7 @@ inline ::uint32_t PlayerProfileComp::gender() const {
 }
 inline void PlayerProfileComp::set_gender(::uint32_t value) {
   _internal_set_gender(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:PlayerProfileComp.gender)
 }
 inline ::uint32_t PlayerProfileComp::_internal_gender() const {
@@ -3312,7 +3373,7 @@ inline void PlayerProfileComp::_internal_set_trial_expires_at(::uint64_t value) 
 inline void PlayerProfileComp::clear_appearance_switch_seq() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.appearance_switch_seq_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint64_t PlayerProfileComp::appearance_switch_seq() const {
   // @@protoc_insertion_point(field_get:PlayerProfileComp.appearance_switch_seq)
@@ -3320,7 +3381,7 @@ inline ::uint64_t PlayerProfileComp::appearance_switch_seq() const {
 }
 inline void PlayerProfileComp::set_appearance_switch_seq(::uint64_t value) {
   _internal_set_appearance_switch_seq(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:PlayerProfileComp.appearance_switch_seq)
 }
 inline ::uint64_t PlayerProfileComp::_internal_appearance_switch_seq() const {
@@ -3534,7 +3595,7 @@ inline int PlayerProfileComp::equipped_skill_vfx_size() const {
 inline void PlayerProfileComp::clear_equipped_skill_vfx() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equipped_skill_vfx_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& PlayerProfileComp::_internal_equipped_skill_vfx() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -3550,9 +3611,33 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PlayerP
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PlayerProfileComp::mutable_equipped_skill_vfx()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_mutable_map:PlayerProfileComp.equipped_skill_vfx)
   return _internal_mutable_equipped_skill_vfx();
+}
+
+// .eSpectateChatPreference spectate_chat_pref = 15;
+inline void PlayerProfileComp::clear_spectate_chat_pref() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spectate_chat_pref_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::eSpectateChatPreference PlayerProfileComp::spectate_chat_pref() const {
+  // @@protoc_insertion_point(field_get:PlayerProfileComp.spectate_chat_pref)
+  return _internal_spectate_chat_pref();
+}
+inline void PlayerProfileComp::set_spectate_chat_pref(::eSpectateChatPreference value) {
+  _internal_set_spectate_chat_pref(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:PlayerProfileComp.spectate_chat_pref)
+}
+inline ::eSpectateChatPreference PlayerProfileComp::_internal_spectate_chat_pref() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::eSpectateChatPreference>(_impl_.spectate_chat_pref_);
+}
+inline void PlayerProfileComp::_internal_set_spectate_chat_pref(::eSpectateChatPreference value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spectate_chat_pref_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -3841,6 +3926,19 @@ inline void PlayerStressTestProbe::set_allocated_test_sig(::std::string* PROTOBU
 
 // @@protoc_insertion_point(namespace_scope)
 
+
+namespace google {
+namespace protobuf {
+
+template <>
+struct is_proto_enum<::eSpectateChatPreference> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::eSpectateChatPreference>() {
+  return ::eSpectateChatPreference_descriptor();
+}
+
+}  // namespace protobuf
+}  // namespace google
 
 // @@protoc_insertion_point(global_scope)
 

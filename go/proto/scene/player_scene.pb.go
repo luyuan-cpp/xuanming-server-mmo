@@ -1535,11 +1535,213 @@ func (x *SyncDigestS2C) GetEntries() []*SyncDigestEntry {
 	return nil
 }
 
+type GetSpectateChatSettingRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSpectateChatSettingRequest) Reset() {
+	*x = GetSpectateChatSettingRequest{}
+	mi := &file_proto_scene_player_scene_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSpectateChatSettingRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSpectateChatSettingRequest) ProtoMessage() {}
+
+func (x *GetSpectateChatSettingRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_scene_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSpectateChatSettingRequest.ProtoReflect.Descriptor instead.
+func (*GetSpectateChatSettingRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{20}
+}
+
+type GetSpectateChatSettingResponse struct {
+	state        protoimpl.MessageState            `protogen:"open.v1"`
+	ErrorMessage *base.TipInfoMessage              `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Preference   component.ESpectateChatPreference `protobuf:"varint,2,opt,name=preference,proto3,enum=ESpectateChatPreference" json:"preference,omitempty"`
+	// 解析全局默认策略后的当前生效值（true=允许局外人观战交流，false=禁止交流但仍可观战）。
+	EffectiveAllow bool `protobuf:"varint,3,opt,name=effective_allow,json=effectiveAllow,proto3" json:"effective_allow,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetSpectateChatSettingResponse) Reset() {
+	*x = GetSpectateChatSettingResponse{}
+	mi := &file_proto_scene_player_scene_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSpectateChatSettingResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSpectateChatSettingResponse) ProtoMessage() {}
+
+func (x *GetSpectateChatSettingResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_scene_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSpectateChatSettingResponse.ProtoReflect.Descriptor instead.
+func (*GetSpectateChatSettingResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *GetSpectateChatSettingResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *GetSpectateChatSettingResponse) GetPreference() component.ESpectateChatPreference {
+	if x != nil {
+		return x.Preference
+	}
+	return component.ESpectateChatPreference(0)
+}
+
+func (x *GetSpectateChatSettingResponse) GetEffectiveAllow() bool {
+	if x != nil {
+		return x.EffectiveAllow
+	}
+	return false
+}
+
+type SetSpectateChatSettingRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 仅接受 SPECTATE_CHAT_PREF_ALLOW(1) 或 SPECTATE_CHAT_PREF_FORBID(2)。
+	Preference    component.ESpectateChatPreference `protobuf:"varint,1,opt,name=preference,proto3,enum=ESpectateChatPreference" json:"preference,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetSpectateChatSettingRequest) Reset() {
+	*x = SetSpectateChatSettingRequest{}
+	mi := &file_proto_scene_player_scene_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetSpectateChatSettingRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetSpectateChatSettingRequest) ProtoMessage() {}
+
+func (x *SetSpectateChatSettingRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_scene_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetSpectateChatSettingRequest.ProtoReflect.Descriptor instead.
+func (*SetSpectateChatSettingRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *SetSpectateChatSettingRequest) GetPreference() component.ESpectateChatPreference {
+	if x != nil {
+		return x.Preference
+	}
+	return component.ESpectateChatPreference(0)
+}
+
+type SetSpectateChatSettingResponse struct {
+	state          protoimpl.MessageState            `protogen:"open.v1"`
+	ErrorMessage   *base.TipInfoMessage              `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Preference     component.ESpectateChatPreference `protobuf:"varint,2,opt,name=preference,proto3,enum=ESpectateChatPreference" json:"preference,omitempty"`
+	EffectiveAllow bool                              `protobuf:"varint,3,opt,name=effective_allow,json=effectiveAllow,proto3" json:"effective_allow,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *SetSpectateChatSettingResponse) Reset() {
+	*x = SetSpectateChatSettingResponse{}
+	mi := &file_proto_scene_player_scene_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetSpectateChatSettingResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetSpectateChatSettingResponse) ProtoMessage() {}
+
+func (x *SetSpectateChatSettingResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_scene_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetSpectateChatSettingResponse.ProtoReflect.Descriptor instead.
+func (*SetSpectateChatSettingResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_scene_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *SetSpectateChatSettingResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *SetSpectateChatSettingResponse) GetPreference() component.ESpectateChatPreference {
+	if x != nil {
+		return x.Preference
+	}
+	return component.ESpectateChatPreference(0)
+}
+
+func (x *SetSpectateChatSettingResponse) GetEffectiveAllow() bool {
+	if x != nil {
+		return x.EffectiveAllow
+	}
+	return false
+}
+
 var File_proto_scene_player_scene_proto protoreflect.FileDescriptor
 
 const file_proto_scene_player_scene_proto_rawDesc = "" +
 	"\n" +
-	"\x1eproto/scene/player_scene.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\x1a\x1dproto/common/base/empty.proto\x1a'proto/common/component/actor_comp.proto\x1a\x1cproto/scene/scene_info.proto\"E\n" +
+	"\x1eproto/scene/player_scene.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\x1a\x1dproto/common/base/empty.proto\x1a'proto/common/component/actor_comp.proto\x1a(proto/common/component/player_comp.proto\x1a\x1cproto/scene/scene_info.proto\"E\n" +
 	"\x14EnterSceneC2SRequest\x12-\n" +
 	"\n" +
 	"scene_info\x18\x01 \x01(\v2\x0e.SceneInfoCompR\tsceneInfo\"M\n" +
@@ -1634,7 +1836,24 @@ const file_proto_scene_player_scene_proto_rawDesc = "" +
 	"\n" +
 	"generation\x18\x02 \x01(\x04R\n" +
 	"generation\x12*\n" +
-	"\aentries\x18\x03 \x03(\v2\x10.SyncDigestEntryR\aentries*\xd6\x01\n" +
+	"\aentries\x18\x03 \x03(\v2\x10.SyncDigestEntryR\aentries\"\x1f\n" +
+	"\x1dGetSpectateChatSettingRequest\"\xb9\x01\n" +
+	"\x1eGetSpectateChatSettingResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x128\n" +
+	"\n" +
+	"preference\x18\x02 \x01(\x0e2\x18.eSpectateChatPreferenceR\n" +
+	"preference\x12'\n" +
+	"\x0feffective_allow\x18\x03 \x01(\bR\x0eeffectiveAllow\"Y\n" +
+	"\x1dSetSpectateChatSettingRequest\x128\n" +
+	"\n" +
+	"preference\x18\x01 \x01(\x0e2\x18.eSpectateChatPreferenceR\n" +
+	"preference\"\xb9\x01\n" +
+	"\x1eSetSpectateChatSettingResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x128\n" +
+	"\n" +
+	"preference\x18\x02 \x01(\x0e2\x18.eSpectateChatPreferenceR\n" +
+	"preference\x12'\n" +
+	"\x0feffective_allow\x18\x03 \x01(\bR\x0eeffectiveAllow*\xd6\x01\n" +
 	"\x11SceneChannelState\x12\x1f\n" +
 	"\x1bSCENE_CHANNEL_STATE_UNKNOWN\x10\x00\x12\x1e\n" +
 	"\x1aSCENE_CHANNEL_STATE_SMOOTH\x10\x01\x12\x1c\n" +
@@ -1665,7 +1884,7 @@ const file_proto_scene_player_scene_proto_rawDesc = "" +
 	"\x1aSYNC_DOMAIN_GUILD_ACTIVITY\x10\t*Q\n" +
 	"\x10SyncDigestStatus\x12\x19\n" +
 	"\x15SYNC_DIGEST_STATUS_OK\x10\x00\x12\"\n" +
-	"\x1eSYNC_DIGEST_STATUS_UNAVAILABLE\x10\x012\x86\x05\n" +
+	"\x1eSYNC_DIGEST_STATUS_UNAVAILABLE\x10\x012\xbc\x06\n" +
 	"\x16SceneSceneClientPlayer\x12;\n" +
 	"\n" +
 	"EnterScene\x12\x15.EnterSceneC2SRequest\x1a\x16.EnterSceneC2SResponse\x121\n" +
@@ -1678,7 +1897,9 @@ const file_proto_scene_player_scene_proto_rawDesc = "" +
 	"\x16NotifyActorListDestroy\x12\x14.ActorListDestroyS2C\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x12;\n" +
 	"\fTravelToZone\x12\x14.TravelToZoneRequest\x1a\x15.TravelToZoneResponse\x125\n" +
 	"\rGetSyncDigest\x12\x15.GetSyncDigestRequest\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x01\x121\n" +
-	"\x10NotifySyncDigest\x12\x0e.SyncDigestS2C\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x1a\n" +
+	"\x10NotifySyncDigest\x12\x0e.SyncDigestS2C\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x12Y\n" +
+	"\x16GetSpectateChatSetting\x12\x1e.GetSpectateChatSettingRequest\x1a\x1f.GetSpectateChatSettingResponse\x12Y\n" +
+	"\x16SetSpectateChatSetting\x12\x1e.SetSpectateChatSettingRequest\x1a\x1f.SetSpectateChatSettingResponse\x1a\n" +
 	"\x80\xa8\xc3\x01\x01\x88\xa8\xc3\x01\x01B\x14\x98\xd4a\x03Z\vproto/scene\x80\x01\x01b\x06proto3"
 
 var (
@@ -1694,85 +1915,99 @@ func file_proto_scene_player_scene_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_scene_player_scene_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_proto_scene_player_scene_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_proto_scene_player_scene_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_proto_scene_player_scene_proto_goTypes = []any{
-	(SceneChannelState)(0),        // 0: SceneChannelState
-	(WorldMapHeatLevel)(0),        // 1: WorldMapHeatLevel
-	(ActorType)(0),                // 2: ActorType
-	(SyncDomain)(0),               // 3: SyncDomain
-	(SyncDigestStatus)(0),         // 4: SyncDigestStatus
-	(*EnterSceneC2SRequest)(nil),  // 5: EnterSceneC2SRequest
-	(*EnterSceneC2SResponse)(nil), // 6: EnterSceneC2SResponse
-	(*EnterSceneS2C)(nil),         // 7: EnterSceneS2C
-	(*SceneChannelInfo)(nil),      // 8: SceneChannelInfo
-	(*SceneChannelDirectory)(nil), // 9: SceneChannelDirectory
-	(*WorldMapOverviewEntry)(nil), // 10: WorldMapOverviewEntry
-	(*WorldTideSnapshot)(nil),     // 11: WorldTideSnapshot
-	(*WorldMapOverview)(nil),      // 12: WorldMapOverview
-	(*SceneInfoS2C)(nil),          // 13: SceneInfoS2C
-	(*SceneInfoRequest)(nil),      // 14: SceneInfoRequest
-	(*SceneInfoResponse)(nil),     // 15: SceneInfoResponse
-	(*ActorCreateS2C)(nil),        // 16: ActorCreateS2C
-	(*ActorDestroyS2C)(nil),       // 17: ActorDestroyS2C
-	(*ActorListCreateS2C)(nil),    // 18: ActorListCreateS2C
-	(*ActorListDestroyS2C)(nil),   // 19: ActorListDestroyS2C
-	(*TravelToZoneRequest)(nil),   // 20: TravelToZoneRequest
-	(*TravelToZoneResponse)(nil),  // 21: TravelToZoneResponse
-	(*SyncDigestEntry)(nil),       // 22: SyncDigestEntry
-	(*GetSyncDigestRequest)(nil),  // 23: GetSyncDigestRequest
-	(*SyncDigestS2C)(nil),         // 24: SyncDigestS2C
-	(*SceneInfoComp)(nil),         // 25: SceneInfoComp
-	(*base.TipInfoMessage)(nil),   // 26: TipInfoMessage
-	(*component.Transform)(nil),   // 27: Transform
-	(*base.Empty)(nil),            // 28: Empty
+	(SceneChannelState)(0),                 // 0: SceneChannelState
+	(WorldMapHeatLevel)(0),                 // 1: WorldMapHeatLevel
+	(ActorType)(0),                         // 2: ActorType
+	(SyncDomain)(0),                        // 3: SyncDomain
+	(SyncDigestStatus)(0),                  // 4: SyncDigestStatus
+	(*EnterSceneC2SRequest)(nil),           // 5: EnterSceneC2SRequest
+	(*EnterSceneC2SResponse)(nil),          // 6: EnterSceneC2SResponse
+	(*EnterSceneS2C)(nil),                  // 7: EnterSceneS2C
+	(*SceneChannelInfo)(nil),               // 8: SceneChannelInfo
+	(*SceneChannelDirectory)(nil),          // 9: SceneChannelDirectory
+	(*WorldMapOverviewEntry)(nil),          // 10: WorldMapOverviewEntry
+	(*WorldTideSnapshot)(nil),              // 11: WorldTideSnapshot
+	(*WorldMapOverview)(nil),               // 12: WorldMapOverview
+	(*SceneInfoS2C)(nil),                   // 13: SceneInfoS2C
+	(*SceneInfoRequest)(nil),               // 14: SceneInfoRequest
+	(*SceneInfoResponse)(nil),              // 15: SceneInfoResponse
+	(*ActorCreateS2C)(nil),                 // 16: ActorCreateS2C
+	(*ActorDestroyS2C)(nil),                // 17: ActorDestroyS2C
+	(*ActorListCreateS2C)(nil),             // 18: ActorListCreateS2C
+	(*ActorListDestroyS2C)(nil),            // 19: ActorListDestroyS2C
+	(*TravelToZoneRequest)(nil),            // 20: TravelToZoneRequest
+	(*TravelToZoneResponse)(nil),           // 21: TravelToZoneResponse
+	(*SyncDigestEntry)(nil),                // 22: SyncDigestEntry
+	(*GetSyncDigestRequest)(nil),           // 23: GetSyncDigestRequest
+	(*SyncDigestS2C)(nil),                  // 24: SyncDigestS2C
+	(*GetSpectateChatSettingRequest)(nil),  // 25: GetSpectateChatSettingRequest
+	(*GetSpectateChatSettingResponse)(nil), // 26: GetSpectateChatSettingResponse
+	(*SetSpectateChatSettingRequest)(nil),  // 27: SetSpectateChatSettingRequest
+	(*SetSpectateChatSettingResponse)(nil), // 28: SetSpectateChatSettingResponse
+	(*SceneInfoComp)(nil),                  // 29: SceneInfoComp
+	(*base.TipInfoMessage)(nil),            // 30: TipInfoMessage
+	(*component.Transform)(nil),            // 31: Transform
+	(component.ESpectateChatPreference)(0), // 32: eSpectateChatPreference
+	(*base.Empty)(nil),                     // 33: Empty
 }
 var file_proto_scene_player_scene_proto_depIdxs = []int32{
-	25, // 0: EnterSceneC2SRequest.scene_info:type_name -> SceneInfoComp
-	26, // 1: EnterSceneC2SResponse.error_message:type_name -> TipInfoMessage
-	25, // 2: EnterSceneS2C.scene_info:type_name -> SceneInfoComp
+	29, // 0: EnterSceneC2SRequest.scene_info:type_name -> SceneInfoComp
+	30, // 1: EnterSceneC2SResponse.error_message:type_name -> TipInfoMessage
+	29, // 2: EnterSceneS2C.scene_info:type_name -> SceneInfoComp
 	0,  // 3: SceneChannelInfo.state:type_name -> SceneChannelState
 	8,  // 4: SceneChannelDirectory.channels:type_name -> SceneChannelInfo
 	1,  // 5: WorldMapOverviewEntry.heat_level:type_name -> WorldMapHeatLevel
 	10, // 6: WorldMapOverview.maps:type_name -> WorldMapOverviewEntry
 	11, // 7: WorldMapOverview.tide:type_name -> WorldTideSnapshot
-	25, // 8: SceneInfoS2C.scene_info:type_name -> SceneInfoComp
+	29, // 8: SceneInfoS2C.scene_info:type_name -> SceneInfoComp
 	9,  // 9: SceneInfoS2C.channel_directory:type_name -> SceneChannelDirectory
 	12, // 10: SceneInfoS2C.world_map_overview:type_name -> WorldMapOverview
-	25, // 11: SceneInfoResponse.scene_info:type_name -> SceneInfoComp
-	27, // 12: ActorCreateS2C.transform:type_name -> Transform
+	29, // 11: SceneInfoResponse.scene_info:type_name -> SceneInfoComp
+	31, // 12: ActorCreateS2C.transform:type_name -> Transform
 	2,  // 13: ActorCreateS2C.actor_type:type_name -> ActorType
 	16, // 14: ActorListCreateS2C.actor_list:type_name -> ActorCreateS2C
-	26, // 15: TravelToZoneResponse.error_message:type_name -> TipInfoMessage
+	30, // 15: TravelToZoneResponse.error_message:type_name -> TipInfoMessage
 	3,  // 16: SyncDigestEntry.domain:type_name -> SyncDomain
 	4,  // 17: SyncDigestS2C.status:type_name -> SyncDigestStatus
 	22, // 18: SyncDigestS2C.entries:type_name -> SyncDigestEntry
-	5,  // 19: SceneSceneClientPlayer.EnterScene:input_type -> EnterSceneC2SRequest
-	7,  // 20: SceneSceneClientPlayer.NotifyEnterScene:input_type -> EnterSceneS2C
-	14, // 21: SceneSceneClientPlayer.SceneInfoC2S:input_type -> SceneInfoRequest
-	13, // 22: SceneSceneClientPlayer.NotifySceneInfo:input_type -> SceneInfoS2C
-	16, // 23: SceneSceneClientPlayer.NotifyActorCreate:input_type -> ActorCreateS2C
-	17, // 24: SceneSceneClientPlayer.NotifyActorDestroy:input_type -> ActorDestroyS2C
-	18, // 25: SceneSceneClientPlayer.NotifyActorListCreate:input_type -> ActorListCreateS2C
-	19, // 26: SceneSceneClientPlayer.NotifyActorListDestroy:input_type -> ActorListDestroyS2C
-	20, // 27: SceneSceneClientPlayer.TravelToZone:input_type -> TravelToZoneRequest
-	23, // 28: SceneSceneClientPlayer.GetSyncDigest:input_type -> GetSyncDigestRequest
-	24, // 29: SceneSceneClientPlayer.NotifySyncDigest:input_type -> SyncDigestS2C
-	6,  // 30: SceneSceneClientPlayer.EnterScene:output_type -> EnterSceneC2SResponse
-	28, // 31: SceneSceneClientPlayer.NotifyEnterScene:output_type -> Empty
-	28, // 32: SceneSceneClientPlayer.SceneInfoC2S:output_type -> Empty
-	28, // 33: SceneSceneClientPlayer.NotifySceneInfo:output_type -> Empty
-	28, // 34: SceneSceneClientPlayer.NotifyActorCreate:output_type -> Empty
-	28, // 35: SceneSceneClientPlayer.NotifyActorDestroy:output_type -> Empty
-	28, // 36: SceneSceneClientPlayer.NotifyActorListCreate:output_type -> Empty
-	28, // 37: SceneSceneClientPlayer.NotifyActorListDestroy:output_type -> Empty
-	21, // 38: SceneSceneClientPlayer.TravelToZone:output_type -> TravelToZoneResponse
-	28, // 39: SceneSceneClientPlayer.GetSyncDigest:output_type -> Empty
-	28, // 40: SceneSceneClientPlayer.NotifySyncDigest:output_type -> Empty
-	30, // [30:41] is the sub-list for method output_type
-	19, // [19:30] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	30, // 19: GetSpectateChatSettingResponse.error_message:type_name -> TipInfoMessage
+	32, // 20: GetSpectateChatSettingResponse.preference:type_name -> eSpectateChatPreference
+	32, // 21: SetSpectateChatSettingRequest.preference:type_name -> eSpectateChatPreference
+	30, // 22: SetSpectateChatSettingResponse.error_message:type_name -> TipInfoMessage
+	32, // 23: SetSpectateChatSettingResponse.preference:type_name -> eSpectateChatPreference
+	5,  // 24: SceneSceneClientPlayer.EnterScene:input_type -> EnterSceneC2SRequest
+	7,  // 25: SceneSceneClientPlayer.NotifyEnterScene:input_type -> EnterSceneS2C
+	14, // 26: SceneSceneClientPlayer.SceneInfoC2S:input_type -> SceneInfoRequest
+	13, // 27: SceneSceneClientPlayer.NotifySceneInfo:input_type -> SceneInfoS2C
+	16, // 28: SceneSceneClientPlayer.NotifyActorCreate:input_type -> ActorCreateS2C
+	17, // 29: SceneSceneClientPlayer.NotifyActorDestroy:input_type -> ActorDestroyS2C
+	18, // 30: SceneSceneClientPlayer.NotifyActorListCreate:input_type -> ActorListCreateS2C
+	19, // 31: SceneSceneClientPlayer.NotifyActorListDestroy:input_type -> ActorListDestroyS2C
+	20, // 32: SceneSceneClientPlayer.TravelToZone:input_type -> TravelToZoneRequest
+	23, // 33: SceneSceneClientPlayer.GetSyncDigest:input_type -> GetSyncDigestRequest
+	24, // 34: SceneSceneClientPlayer.NotifySyncDigest:input_type -> SyncDigestS2C
+	25, // 35: SceneSceneClientPlayer.GetSpectateChatSetting:input_type -> GetSpectateChatSettingRequest
+	27, // 36: SceneSceneClientPlayer.SetSpectateChatSetting:input_type -> SetSpectateChatSettingRequest
+	6,  // 37: SceneSceneClientPlayer.EnterScene:output_type -> EnterSceneC2SResponse
+	33, // 38: SceneSceneClientPlayer.NotifyEnterScene:output_type -> Empty
+	33, // 39: SceneSceneClientPlayer.SceneInfoC2S:output_type -> Empty
+	33, // 40: SceneSceneClientPlayer.NotifySceneInfo:output_type -> Empty
+	33, // 41: SceneSceneClientPlayer.NotifyActorCreate:output_type -> Empty
+	33, // 42: SceneSceneClientPlayer.NotifyActorDestroy:output_type -> Empty
+	33, // 43: SceneSceneClientPlayer.NotifyActorListCreate:output_type -> Empty
+	33, // 44: SceneSceneClientPlayer.NotifyActorListDestroy:output_type -> Empty
+	21, // 45: SceneSceneClientPlayer.TravelToZone:output_type -> TravelToZoneResponse
+	33, // 46: SceneSceneClientPlayer.GetSyncDigest:output_type -> Empty
+	33, // 47: SceneSceneClientPlayer.NotifySyncDigest:output_type -> Empty
+	26, // 48: SceneSceneClientPlayer.GetSpectateChatSetting:output_type -> GetSpectateChatSettingResponse
+	28, // 49: SceneSceneClientPlayer.SetSpectateChatSetting:output_type -> SetSpectateChatSettingResponse
+	37, // [37:50] is the sub-list for method output_type
+	24, // [24:37] is the sub-list for method input_type
+	24, // [24:24] is the sub-list for extension type_name
+	24, // [24:24] is the sub-list for extension extendee
+	0,  // [0:24] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_player_scene_proto_init() }
@@ -1787,7 +2022,7 @@ func file_proto_scene_player_scene_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_scene_player_scene_proto_rawDesc), len(file_proto_scene_player_scene_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   20,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -125,36 +125,32 @@
 4. **铁律四：未来扩展红线（上帝视角 / 跨项目迷雾局）**
    - 一旦未来任何玩法给观战开放“参战者看不到的额外信息”（如解说上帝视角看双方冷却/剩余大药/备宠，或跨项目用于战争迷雾 MOBA），**该模式必须在 `spectateChatEnabledForBattle` 中强制返回 `false`，且观战流整体加延迟**，严禁实时局外人交流。
 
-### 3.5 技术架构与协议增量（解耦 `battle`，复用 `go/chat` 与 `content_guard`）
+### 3.5 技术架构与协议增量（解耦 `battle`，收口至 `MatchService` + `MatchRedis` + `ContentGuard`）
 
-#### 为什么绝不把文本聊天塞进 `battle` 节点？
+#### 为什么收口在 `go/match`（`MatchService`）而不塞进 `battle` 或强拉 `go/chat` 连 Redis？
 - `battle` 节点是确定性回合计算核心，承载直连低延迟战斗帧；且 L1 / L2 观众根本不连 `battle` 节点（直连席满 20 人后全走 `gate` 中继/广播）。
-- 将观战交流归口到 **`go/chat`**，同时具备四大优势：① 与战斗计算物理隔离（刷屏打不卡回合结算）；② 天然覆盖 L0、L1、L2 观众与参战者；③ 零重复造轮子，直接走 `go/chat` 现成 `content_review.go`（`content_guard` 敏感词/风控）、`retract_report.go`（举报与撤回）、实名/禁言拦截；④ Redis 短 TTL 环形队列，战斗结束自动过期不膨 DB。
+- `go/chat` 按本仓既有架构约束刻意**不连 Redis**且不持有 `match_formation` 权威成局真相；
+- 反观 `go/match` 已同时原生拥有四项基础设施：① `match_formation` 权威库（保存冻结后的 `spectate_visibility`、`spectate_chat_enabled`、参战成员 `players`、`deadline_ms` 与终局判据）；② `MatchRedis` 私有集群（`clusterredis.MatchPrivateKeys` 守卫天然放行 `spectate:*` 带 `{<battle_id>}` hash tag 的键）；③ 生产强制装配的 `ContentGuard` 审核链路；④ 既有观战互动入口 `MatchService`（与 `SendTournamentSpectateCheer` 同源）。收口于 `MatchService` 实现**零跨服库耦合、零新 Redis 客户端、零新数据库表迁移**。
 
 #### 最小契约增量（仅末尾追加字段，严禁复用字段号）
 1. **玩家设置与建房快照**：
    - `proto/common/component/player_comp.proto`：`PlayerProfileComp` 末尾追加 `eSpectateChatPreference spectate_chat_pref = 15;`（定义 `enum eSpectateChatPreference`）。
-   - `proto/scene/player_scene.proto`（或独立轻设置 RPC）：提供 `GetPlayerSocialSettings` / `SetSpectateChatPreference`（读/写本角色 `spectate_chat_pref`，返回最新生效值与全局默认态）。
-   - `proto/battle/battle_data.proto`：`BattlePlayerSnapshot` 末尾追加 `bool allow_spectate_chat = 34;`（由 `scene` 在 `PrepareBattle` 填入解析后的布尔值）。
+   - `proto/scene/player_scene.proto`：`SceneSceneClientPlayer` 末尾追加 `GetSpectateChatSetting` / `SetSpectateChatSetting`（读/写本角色 `spectate_chat_pref`，返回最新偏好与解析后的 `effective_allow`）。
+   - `proto/battle/battle_data.proto`：`BattlePlayerSnapshot` 末尾追加 `eSpectateChatPreference spectate_chat_pref = 34;`（由 `scene` 在 `PrepareBattle` 从 `PlayerProfileComp` 注入）。
    - `proto/battle/battle_node.proto`：`CreateBattleRequest` 末尾追加 `bool spectate_chat_enabled = 25;`（由 `match` 建房冻结）。
    - `proto/battle/player_battle.proto`：`BattleStateS2C` 末尾追加 `bool spectate_chat_enabled = 47;`（随开战首帧 / 观战 161 / 重连补拉 / 回合帧透传；离线战报回放时客户端忽略交流区）。
-   - `proto/match/match_service.proto`：`BattleWatchSummary` 末尾追加 `bool spectate_chat_enabled = 9;`（观战列表可顺手展示「可交流 / 静默观战」轻量标识）。
-2. **`match` 侧权威元数据投影（供 `chat` 校验）**：
-   - `match` 建房写 `spectate:battle:{id}` / 成局活跃元数据时，同步写入短生命周期 Redis 校验键 `battle:spectate_chat_meta:{<battle_id>}`（字段：`enabled(0/1)`、`visibility`、`deadline_ms`、`participant_ids` 集合，TTL = 战斗 `deadline_ms` + 5 分钟；战斗终局提交时即刻置 `closed=1` 并缩 TTL 为 60 秒）。
-   - `go/chat` 发送/拉取战斗观战聊天前，**只读该权威元数据键**（fail-closed：查不到、已结束或 `enabled != 1` 一律拒回专用 tip，绝不信任客户端自报的 `spectate_chat_enabled`）。
-3. **`go/chat` 临时战斗观战频道（复用 `proto/chat/chat.proto`）**：
-   - `ChatChannelType` 追加 `CHAT_CHANNEL_TYPE_BATTLE_SPECTATE = 5;`。
-   - `ChatMessage` 末尾追加：`uint64 battle_id = 6;`、`uint32 sender_battle_role = 7;`（`1=参战者 / 2=观战者`，由服务端按 `participant_ids` 权威填充，客户端不可伪造）、`uint64 seq = 8;`（该战斗室内单调递增序号）、`string sender_name = 9;`（服务端权威公开名截断）。
-   - 复用 `SendChat` / `PullChatHistory`（或专用轻接口 `PullBattleSpectateChat{battle_id, after_seq, limit}`）与 `ReportChat`：
-     - **存储**：Redis 有界环形列表/Stream（`chat:battle_spectate:{<battle_id>}`，单场上限保留最近 **60 条**，TTL 同战斗期限 + 5 分钟，战斗结束自动清退）；
-     - **推/拉策略（防 L2 万级观众推送风暴）**：
-       - 常规人少场次或首期极简闭环：客户端在战斗/观战打开交流区时，按 **1.5～2.5 秒增量拉取**（携带 `after_seq`，无新消息回空包，零 Gate 扇出耦合）；
-       - 热门 L2 场次压测确需更低延迟时，二期再按每 500ms 聚合单包（每帧上限 6 条）复用观战广播通道下发，带宽恒定 O(1) 封顶。
-4. **Tip 错误码（`data/tip/Tip.xlsx`，导表器单轴发号）**：
-   - `kBattleSpectateChatDisabled`：「本场战斗已关闭观战交流（可正常观战）」
-   - `kBattleSpectateChatEnded`：「本场战斗已结束，观战交流已关闭」
-   - `kBattleSpectateChatCooldown`：「发言过于频繁，请稍后再试」
-   - `kBattleSpectateChatRoomBusy`：「当前观战讨论过于火爆，请稍候再试」
+   - `proto/match/match_service.proto`：`BattleWatchSummary` 末尾追加 `bool spectate_chat_enabled = 9;`（观战列表直接展示「可交流 / 静默观战」轻量标识）。
+2. **`MatchService` 观战交流 RPC 与 Redis 聚合（`proto/match/match_service.proto`）**：
+   - `MatchService` 末尾追加 `SendBattleSpectateChat` / `PullBattleSpectateChat`；
+   - 发言前由 `match` 依次核验：成局权威记录存在、未终局且未过 `deadline_ms`、`spectate_visibility == PUBLIC`、`spectate_chat_enabled == true`、`ContentGuard.Check(TEXT_SCENE_CHAT_WORLD)` 审核放行或打码（不可达/命中违禁或广告一律 fail-closed 拒收）、按权威参战者集合标注 `BattleSpectateChatRole`（参战者 / 观战者）、经 `MatchRedis` 单槽 Lua 原子校验单人冷却（参战 2s / 观众 4s）与单房总流速（8 条/秒）并写入 `spectate:chat:msgs:{<battle_id>}` 有界 60 条环形队列（自动随战斗 TTL 过期，终局提交时立刻置 `closed = 1` 并缩 TTL）；无 `MatchRedis` 的单测环境退化至同语义内存实现。
+   - 客户端在战斗/观战打开交流区时按 **2 秒增量拉取**（携带 `after_seq`，无新消息回空列表，零 Gate 扇出风暴风险）。
+3. **Tip 错误码（`data/tip/Tip.xlsx` `//match_error` 末尾，导表器单轴发号）**：
+   - `MatchSpectateChatDisabled`：「本场战斗已关闭观战交流（可正常观战）」
+   - `MatchSpectateChatEnded`：「本场战斗已结束，观战交流已关闭」
+   - `MatchSpectateChatCooldown`：「发言过于频繁，请稍后再试」
+   - `MatchSpectateChatRoomBusy`：「当前观战讨论过于火爆，请稍候再试」
+   - `MatchSpectateChatContentRejected`：「发言内容包含不适宜信息，请修改后重试」
+   - `MatchSpectateChatCheckUnavailable`（`fault = 1`）：「内容安全审核服务暂不可用，请稍后重试」
 
 ---
 

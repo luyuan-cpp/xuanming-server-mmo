@@ -151,4 +151,16 @@ enum match_error {
 
   kMatchPuzzleSolutionReplayNotFound = 16072;
 
+  kMatchSpectateChatDisabled = 16073;
+
+  kMatchSpectateChatEnded = 16074;
+
+  kMatchSpectateChatCooldown = 16075;
+
+  kMatchSpectateChatRoomBusy = 16076;
+
+  kMatchSpectateChatContentRejected = 16077;
+
+  kMatchSpectateChatCheckUnavailable = 16078;
+
 };

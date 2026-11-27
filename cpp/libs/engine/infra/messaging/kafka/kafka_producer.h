@@ -17,8 +17,9 @@
 
 #include "messaging/kafka/kafka_producer_policy.h"
 
-// 进程级计数器(各线程的 thread_local 生产者共用一份)。写法与 owner_epoch_stats 一致:
-// C++ 侧没有 prometheus,先用原子计数 + 日志;将来接指标时从这里读,不要另起一套。
+// 进程级计数器(各线程的 thread_local 生产者共用一份)。写法与 owner_epoch_stats 一致:原子计数 + 日志。
+// 2026-11-27 起节点的 Prometheus 出口也从这里读(node.cpp 的 WriteKafkaProducerMetrics:cpp_node_kafka_producer_*),
+// 告警在 deploy/k8s/cpp-node-dependency-alerts.yaml。加计数时两处一起补,不要另起一套。
 namespace kafka_producer_stats {
 	// 投递回执失败数；超时、fatal、purge包含UNKNOWN，不能当作确定未送达或排空证据。
 	inline std::atomic<std::uint64_t>& DeliveryFailed()

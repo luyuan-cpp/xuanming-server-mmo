@@ -65,6 +65,8 @@ extern const ::google::protobuf::internal::DescriptorTable descriptor_table_prot
 namespace match {
 enum BattleScriptReviewState : int;
 extern const uint32_t BattleScriptReviewState_internal_data_[];
+enum BattleSpectateChatRole : int;
+extern const uint32_t BattleSpectateChatRole_internal_data_[];
 enum JianghuDuelInviteState : int;
 extern const uint32_t JianghuDuelInviteState_internal_data_[];
 enum JianghuWritTier : int;
@@ -144,6 +146,14 @@ extern BattleScriptLoadoutEntryGlobalsTypeInternal BattleScriptLoadoutEntry_glob
 extern const ::google::protobuf::internal::ClassDataFull BattleScriptLoadoutEntry_class_data_;
 #else
 extern const BattleScriptLoadoutEntryGlobalsTypeInternal BattleScriptLoadoutEntry_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class BattleSpectateChatMessage;
+struct BattleSpectateChatMessageGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BattleSpectateChatMessageGlobalsTypeInternal BattleSpectateChatMessage_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BattleSpectateChatMessage_class_data_;
+#else
+extern const BattleSpectateChatMessageGlobalsTypeInternal BattleSpectateChatMessage_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class BattleWatchSummary;
 struct BattleWatchSummaryGlobalsTypeInternal;
@@ -777,6 +787,22 @@ extern const ::google::protobuf::internal::ClassDataFull PredictTournamentMatchR
 #else
 extern const PredictTournamentMatchResponseGlobalsTypeInternal PredictTournamentMatchResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class PullBattleSpectateChatRequest;
+struct PullBattleSpectateChatRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern PullBattleSpectateChatRequestGlobalsTypeInternal PullBattleSpectateChatRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull PullBattleSpectateChatRequest_class_data_;
+#else
+extern const PullBattleSpectateChatRequestGlobalsTypeInternal PullBattleSpectateChatRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class PullBattleSpectateChatResponse;
+struct PullBattleSpectateChatResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern PullBattleSpectateChatResponseGlobalsTypeInternal PullBattleSpectateChatResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull PullBattleSpectateChatResponse_class_data_;
+#else
+extern const PullBattleSpectateChatResponseGlobalsTypeInternal PullBattleSpectateChatResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class RankedBattleSettlementView;
 struct RankedBattleSettlementViewGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -936,6 +962,22 @@ extern SaveTacticalPuzzleDraftResponseGlobalsTypeInternal SaveTacticalPuzzleDraf
 extern const ::google::protobuf::internal::ClassDataFull SaveTacticalPuzzleDraftResponse_class_data_;
 #else
 extern const SaveTacticalPuzzleDraftResponseGlobalsTypeInternal SaveTacticalPuzzleDraftResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class SendBattleSpectateChatRequest;
+struct SendBattleSpectateChatRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SendBattleSpectateChatRequestGlobalsTypeInternal SendBattleSpectateChatRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SendBattleSpectateChatRequest_class_data_;
+#else
+extern const SendBattleSpectateChatRequestGlobalsTypeInternal SendBattleSpectateChatRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class SendBattleSpectateChatResponse;
+struct SendBattleSpectateChatResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SendBattleSpectateChatResponseGlobalsTypeInternal SendBattleSpectateChatResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SendBattleSpectateChatResponse_class_data_;
+#else
+extern const SendBattleSpectateChatResponseGlobalsTypeInternal SendBattleSpectateChatResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class SendTournamentSpectateCheerRequest;
 struct SendTournamentSpectateCheerRequestGlobalsTypeInternal;
@@ -1231,6 +1273,9 @@ namespace protobuf {
 template <>
 internal::EnumTraitsT<::match::BattleScriptReviewState_internal_data_>
     internal::EnumTraitsImpl::value<::match::BattleScriptReviewState>;
+template <>
+internal::EnumTraitsT<::match::BattleSpectateChatRole_internal_data_>
+    internal::EnumTraitsImpl::value<::match::BattleSpectateChatRole>;
 template <>
 internal::EnumTraitsT<::match::JianghuDuelInviteState_internal_data_>
     internal::EnumTraitsImpl::value<::match::JianghuDuelInviteState>;
@@ -2214,6 +2259,47 @@ template <>
 [[nodiscard]] inline bool TacticalPuzzleListTab_Parse(
     ::absl::string_view name, TacticalPuzzleListTab* PROTOBUF_NONNULL value) {
   return ::google::protobuf::internal::ParseNamedEnum<TacticalPuzzleListTab>(TacticalPuzzleListTab_descriptor(), name,
+                                           value);
+}
+enum BattleSpectateChatRole : int {
+  BATTLE_SPECTATE_CHAT_ROLE_UNSPECIFIED = 0,
+  BATTLE_SPECTATE_CHAT_ROLE_PARTICIPANT = 1,
+  BATTLE_SPECTATE_CHAT_ROLE_SPECTATOR = 2,
+  BattleSpectateChatRole_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  BattleSpectateChatRole_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t BattleSpectateChatRole_internal_data_[];
+inline constexpr BattleSpectateChatRole BattleSpectateChatRole_MIN =
+    static_cast<BattleSpectateChatRole>(0);
+inline constexpr BattleSpectateChatRole BattleSpectateChatRole_MAX =
+    static_cast<BattleSpectateChatRole>(2);
+[[nodiscard]] inline bool BattleSpectateChatRole_IsValid(int value) {
+  return 0 <= value && value <= 2;
+}
+inline constexpr int BattleSpectateChatRole_ARRAYSIZE = 2 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+BattleSpectateChatRole_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(BattleSpectateChatRole) {
+  return BattleSpectateChatRole_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& BattleSpectateChatRole_Name(T value) {
+  static_assert(::std::is_same<T, BattleSpectateChatRole>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to BattleSpectateChatRole_Name().");
+  return BattleSpectateChatRole_Name(static_cast<BattleSpectateChatRole>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& BattleSpectateChatRole_Name(BattleSpectateChatRole value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<BattleSpectateChatRole_descriptor, 0, 2>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool BattleSpectateChatRole_Parse(
+    ::absl::string_view name, BattleSpectateChatRole* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<BattleSpectateChatRole>(BattleSpectateChatRole_descriptor(), name,
                                            value);
 }
 using ::google::protobuf::internal::generated_enum::AbslParseFlag;
@@ -6902,6 +6988,224 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SendTournamentSpectateCheerRequest 
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SendBattleSpectateChatRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.SendBattleSpectateChatRequest) */ {
+ public:
+  inline SendBattleSpectateChatRequest() : SendBattleSpectateChatRequest(nullptr) {}
+  ~SendBattleSpectateChatRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SendBattleSpectateChatRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SendBattleSpectateChatRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SendBattleSpectateChatRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SendBattleSpectateChatRequest(const SendBattleSpectateChatRequest& from) : SendBattleSpectateChatRequest(nullptr, from) {}
+  inline SendBattleSpectateChatRequest(SendBattleSpectateChatRequest&& from) noexcept : SendBattleSpectateChatRequest(nullptr, ::std::move(from)) {}
+  inline SendBattleSpectateChatRequest& operator=(const SendBattleSpectateChatRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SendBattleSpectateChatRequest& operator=(SendBattleSpectateChatRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SendBattleSpectateChatRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SendBattleSpectateChatRequest>(&SendBattleSpectateChatRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 141;
+  friend void swap(SendBattleSpectateChatRequest& a, SendBattleSpectateChatRequest& b) { a.Swap(&b); }
+  inline void Swap(SendBattleSpectateChatRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SendBattleSpectateChatRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SendBattleSpectateChatRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SendBattleSpectateChatRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SendBattleSpectateChatRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SendBattleSpectateChatRequest& from) { SendBattleSpectateChatRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SendBattleSpectateChatRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.SendBattleSpectateChatRequest"; }
+
+  explicit SendBattleSpectateChatRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SendBattleSpectateChatRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SendBattleSpectateChatRequest& from);
+  SendBattleSpectateChatRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SendBattleSpectateChatRequest&& from) noexcept
+      : SendBattleSpectateChatRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kContentFieldNumber = 2,
+    kBattleIdFieldNumber = 1,
+  };
+  // string content = 2;
+  void clear_content() ;
+  [[nodiscard]] const ::std::string& content() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_content(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_content();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_content();
+  void set_allocated_content(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_content() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_content(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_content();
+
+  public:
+  // uint64 battle_id = 1;
+  void clear_battle_id() ;
+  [[nodiscard]] ::uint64_t battle_id() const;
+  void set_battle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_battle_id() const;
+  void _internal_set_battle_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.SendBattleSpectateChatRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 51,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SendBattleSpectateChatRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr content_;
+    ::uint64_t battle_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveRankedPresetRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:match.SaveRankedPresetRequest) */ {
  public:
@@ -10492,6 +10796,231 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedCosmeticLoadout final : publi
     ::google::protobuf::internal::ArenaStringPtr equipped_card_bg_code_;
     ::google::protobuf::internal::ArenaStringPtr equipped_title_code_;
     bool hide_talisman_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PullBattleSpectateChatRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.PullBattleSpectateChatRequest) */ {
+ public:
+  inline PullBattleSpectateChatRequest() : PullBattleSpectateChatRequest(nullptr) {}
+  ~PullBattleSpectateChatRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(PullBattleSpectateChatRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PullBattleSpectateChatRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr PullBattleSpectateChatRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline PullBattleSpectateChatRequest(const PullBattleSpectateChatRequest& from) : PullBattleSpectateChatRequest(nullptr, from) {}
+  inline PullBattleSpectateChatRequest(PullBattleSpectateChatRequest&& from) noexcept : PullBattleSpectateChatRequest(nullptr, ::std::move(from)) {}
+  inline PullBattleSpectateChatRequest& operator=(const PullBattleSpectateChatRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PullBattleSpectateChatRequest& operator=(PullBattleSpectateChatRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const PullBattleSpectateChatRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PullBattleSpectateChatRequest>(&PullBattleSpectateChatRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 143;
+  friend void swap(PullBattleSpectateChatRequest& a, PullBattleSpectateChatRequest& b) { a.Swap(&b); }
+  inline void Swap(PullBattleSpectateChatRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PullBattleSpectateChatRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] PullBattleSpectateChatRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PullBattleSpectateChatRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const PullBattleSpectateChatRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const PullBattleSpectateChatRequest& from) { PullBattleSpectateChatRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(PullBattleSpectateChatRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.PullBattleSpectateChatRequest"; }
+
+  explicit PullBattleSpectateChatRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  PullBattleSpectateChatRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PullBattleSpectateChatRequest& from);
+  PullBattleSpectateChatRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PullBattleSpectateChatRequest&& from) noexcept
+      : PullBattleSpectateChatRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kBattleIdFieldNumber = 1,
+    kAfterSeqFieldNumber = 2,
+    kLimitFieldNumber = 3,
+  };
+  // uint64 battle_id = 1;
+  void clear_battle_id() ;
+  [[nodiscard]] ::uint64_t battle_id() const;
+  void set_battle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_battle_id() const;
+  void _internal_set_battle_id(::uint64_t value);
+
+  public:
+  // uint64 after_seq = 2;
+  void clear_after_seq() ;
+  [[nodiscard]] ::uint64_t after_seq() const;
+  void set_after_seq(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_after_seq() const;
+  void _internal_set_after_seq(::uint64_t value);
+
+  public:
+  // uint32 limit = 3;
+  void clear_limit() ;
+  [[nodiscard]] ::uint32_t limit() const;
+  void set_limit(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_limit() const;
+  void _internal_set_limit(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.PullBattleSpectateChatRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const PullBattleSpectateChatRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t battle_id_;
+    ::uint64_t after_seq_;
+    ::uint32_t limit_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -18797,8 +19326,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleWatchSummary final : public :
     kModeFieldNumber = 2,
     kBattleConfigIdFieldNumber = 3,
     kCreatedAtMsFieldNumber = 5,
-    kFeaturedFieldNumber = 6,
     kRankedTeamSizeFieldNumber = 7,
+    kFeaturedFieldNumber = 6,
+    kSpectateChatEnabledFieldNumber = 9,
     kRankedPeakRatingCentiFieldNumber = 8,
   };
   // repeated string player_names = 4;
@@ -18868,6 +19398,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleWatchSummary final : public :
   void _internal_set_created_at_ms(::uint64_t value);
 
   public:
+  // uint32 ranked_team_size = 7;
+  void clear_ranked_team_size() ;
+  [[nodiscard]] ::uint32_t ranked_team_size() const;
+  void set_ranked_team_size(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_ranked_team_size() const;
+  void _internal_set_ranked_team_size(::uint32_t value);
+
+  public:
   // bool featured = 6;
   void clear_featured() ;
   [[nodiscard]] bool featured() const;
@@ -18878,14 +19418,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleWatchSummary final : public :
   void _internal_set_featured(bool value);
 
   public:
-  // uint32 ranked_team_size = 7;
-  void clear_ranked_team_size() ;
-  [[nodiscard]] ::uint32_t ranked_team_size() const;
-  void set_ranked_team_size(::uint32_t value);
+  // bool spectate_chat_enabled = 9;
+  void clear_spectate_chat_enabled() ;
+  [[nodiscard]] bool spectate_chat_enabled() const;
+  void set_spectate_chat_enabled(bool value);
 
   private:
-  ::uint32_t _internal_ranked_team_size() const;
-  void _internal_set_ranked_team_size(::uint32_t value);
+  bool _internal_spectate_chat_enabled() const;
+  void _internal_set_spectate_chat_enabled(bool value);
 
   public:
   // int64 ranked_peak_rating_centi = 8;
@@ -18902,7 +19442,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleWatchSummary final : public :
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 8,
+      ::google::protobuf::internal::TcParseTable<4, 9,
                           0, 53,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -18936,9 +19476,281 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleWatchSummary final : public :
     int mode_;
     ::uint32_t battle_config_id_;
     ::uint64_t created_at_ms_;
-    bool featured_;
     ::uint32_t ranked_team_size_;
+    bool featured_;
+    bool spectate_chat_enabled_;
     ::int64_t ranked_peak_rating_centi_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSpectateChatMessage final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.BattleSpectateChatMessage) */ {
+ public:
+  inline BattleSpectateChatMessage() : BattleSpectateChatMessage(nullptr) {}
+  ~BattleSpectateChatMessage() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BattleSpectateChatMessage* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BattleSpectateChatMessage));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BattleSpectateChatMessage(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BattleSpectateChatMessage(const BattleSpectateChatMessage& from) : BattleSpectateChatMessage(nullptr, from) {}
+  inline BattleSpectateChatMessage(BattleSpectateChatMessage&& from) noexcept : BattleSpectateChatMessage(nullptr, ::std::move(from)) {}
+  inline BattleSpectateChatMessage& operator=(const BattleSpectateChatMessage& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BattleSpectateChatMessage& operator=(BattleSpectateChatMessage&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BattleSpectateChatMessage& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattleSpectateChatMessage>(&BattleSpectateChatMessage_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 140;
+  friend void swap(BattleSpectateChatMessage& a, BattleSpectateChatMessage& b) { a.Swap(&b); }
+  inline void Swap(BattleSpectateChatMessage* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BattleSpectateChatMessage* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BattleSpectateChatMessage* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BattleSpectateChatMessage>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BattleSpectateChatMessage& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BattleSpectateChatMessage& from) { BattleSpectateChatMessage::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BattleSpectateChatMessage* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.BattleSpectateChatMessage"; }
+
+  explicit BattleSpectateChatMessage(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BattleSpectateChatMessage(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BattleSpectateChatMessage& from);
+  BattleSpectateChatMessage(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BattleSpectateChatMessage&& from) noexcept
+      : BattleSpectateChatMessage(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSenderNameFieldNumber = 3,
+    kContentFieldNumber = 5,
+    kSeqFieldNumber = 1,
+    kSenderPlayerIdFieldNumber = 2,
+    kCreatedMsFieldNumber = 6,
+    kRoleFieldNumber = 4,
+  };
+  // string sender_name = 3;
+  void clear_sender_name() ;
+  [[nodiscard]] const ::std::string& sender_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_sender_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_sender_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_sender_name();
+  void set_allocated_sender_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_sender_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_sender_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_sender_name();
+
+  public:
+  // string content = 5;
+  void clear_content() ;
+  [[nodiscard]] const ::std::string& content() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_content(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_content();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_content();
+  void set_allocated_content(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_content() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_content(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_content();
+
+  public:
+  // uint64 seq = 1;
+  void clear_seq() ;
+  [[nodiscard]] ::uint64_t seq() const;
+  void set_seq(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_seq() const;
+  void _internal_set_seq(::uint64_t value);
+
+  public:
+  // uint64 sender_player_id = 2;
+  void clear_sender_player_id() ;
+  [[nodiscard]] ::uint64_t sender_player_id() const;
+  void set_sender_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_sender_player_id() const;
+  void _internal_set_sender_player_id(::uint64_t value);
+
+  public:
+  // uint64 created_ms = 6;
+  void clear_created_ms() ;
+  [[nodiscard]] ::uint64_t created_ms() const;
+  void set_created_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_created_ms() const;
+  void _internal_set_created_ms(::uint64_t value);
+
+  public:
+  // .match.BattleSpectateChatRole role = 4;
+  void clear_role() ;
+  [[nodiscard]] ::match::BattleSpectateChatRole role() const;
+  void set_role(::match::BattleSpectateChatRole value);
+
+  private:
+  ::match::BattleSpectateChatRole _internal_role() const;
+  void _internal_set_role(::match::BattleSpectateChatRole value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.BattleSpectateChatMessage)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 6,
+                          0, 58,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BattleSpectateChatMessage& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr sender_name_;
+    ::google::protobuf::internal::ArenaStringPtr content_;
+    ::uint64_t seq_;
+    ::uint64_t sender_player_id_;
+    ::uint64_t created_ms_;
+    int role_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -24016,6 +24828,291 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SendTournamentSpectateCheerResponse
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SendBattleSpectateChatResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.SendBattleSpectateChatResponse) */ {
+ public:
+  inline SendBattleSpectateChatResponse() : SendBattleSpectateChatResponse(nullptr) {}
+  ~SendBattleSpectateChatResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SendBattleSpectateChatResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SendBattleSpectateChatResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SendBattleSpectateChatResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SendBattleSpectateChatResponse(const SendBattleSpectateChatResponse& from) : SendBattleSpectateChatResponse(nullptr, from) {}
+  inline SendBattleSpectateChatResponse(SendBattleSpectateChatResponse&& from) noexcept : SendBattleSpectateChatResponse(nullptr, ::std::move(from)) {}
+  inline SendBattleSpectateChatResponse& operator=(const SendBattleSpectateChatResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SendBattleSpectateChatResponse& operator=(SendBattleSpectateChatResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SendBattleSpectateChatResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SendBattleSpectateChatResponse>(&SendBattleSpectateChatResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 142;
+  friend void swap(SendBattleSpectateChatResponse& a, SendBattleSpectateChatResponse& b) { a.Swap(&b); }
+  inline void Swap(SendBattleSpectateChatResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SendBattleSpectateChatResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SendBattleSpectateChatResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SendBattleSpectateChatResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SendBattleSpectateChatResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SendBattleSpectateChatResponse& from) { SendBattleSpectateChatResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SendBattleSpectateChatResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.SendBattleSpectateChatResponse"; }
+
+  explicit SendBattleSpectateChatResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SendBattleSpectateChatResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SendBattleSpectateChatResponse& from);
+  SendBattleSpectateChatResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SendBattleSpectateChatResponse&& from) noexcept
+      : SendBattleSpectateChatResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kMessageFieldNumber = 6,
+    kBattleIdFieldNumber = 2,
+    kCooldownUntilMsFieldNumber = 5,
+    kServerTimeMsFieldNumber = 7,
+    kEnabledFieldNumber = 3,
+    kBattleEndedFieldNumber = 4,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .match.BattleSpectateChatMessage message = 6;
+  [[nodiscard]] bool has_message()
+      const;
+  void clear_message() ;
+  [[nodiscard]] const ::match::BattleSpectateChatMessage& message() const;
+  [[nodiscard]] ::match::BattleSpectateChatMessage* PROTOBUF_NULLABLE release_message();
+  ::match::BattleSpectateChatMessage* PROTOBUF_NONNULL mutable_message();
+  void set_allocated_message(::match::BattleSpectateChatMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_message(::match::BattleSpectateChatMessage* PROTOBUF_NULLABLE value);
+  ::match::BattleSpectateChatMessage* PROTOBUF_NULLABLE unsafe_arena_release_message();
+
+  private:
+  const ::match::BattleSpectateChatMessage& _internal_message() const;
+  ::match::BattleSpectateChatMessage* PROTOBUF_NONNULL _internal_mutable_message();
+
+  public:
+  // uint64 battle_id = 2;
+  void clear_battle_id() ;
+  [[nodiscard]] ::uint64_t battle_id() const;
+  void set_battle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_battle_id() const;
+  void _internal_set_battle_id(::uint64_t value);
+
+  public:
+  // uint64 cooldown_until_ms = 5;
+  void clear_cooldown_until_ms() ;
+  [[nodiscard]] ::uint64_t cooldown_until_ms() const;
+  void set_cooldown_until_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_cooldown_until_ms() const;
+  void _internal_set_cooldown_until_ms(::uint64_t value);
+
+  public:
+  // uint64 server_time_ms = 7;
+  void clear_server_time_ms() ;
+  [[nodiscard]] ::uint64_t server_time_ms() const;
+  void set_server_time_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_server_time_ms() const;
+  void _internal_set_server_time_ms(::uint64_t value);
+
+  public:
+  // bool enabled = 3;
+  void clear_enabled() ;
+  [[nodiscard]] bool enabled() const;
+  void set_enabled(bool value);
+
+  private:
+  bool _internal_enabled() const;
+  void _internal_set_enabled(bool value);
+
+  public:
+  // bool battle_ended = 4;
+  void clear_battle_ended() ;
+  [[nodiscard]] bool battle_ended() const;
+  void set_battle_ended(bool value);
+
+  private:
+  bool _internal_battle_ended() const;
+  void _internal_set_battle_ended(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.SendBattleSpectateChatResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SendBattleSpectateChatResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::match::BattleSpectateChatMessage* PROTOBUF_NULLABLE message_;
+    ::uint64_t battle_id_;
+    ::uint64_t cooldown_until_ms_;
+    ::uint64_t server_time_ms_;
+    bool enabled_;
+    bool battle_ended_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveRankedPresetResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:match.SaveRankedPresetResponse) */ {
  public:
@@ -24970,6 +26067,308 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RankedBattleSettlementView final : 
     ::uint32_t ended_opponent_streak_;
     ::uint32_t revenged_wins_after_;
     ::uint32_t revenged_losses_after_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PullBattleSpectateChatResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.PullBattleSpectateChatResponse) */ {
+ public:
+  inline PullBattleSpectateChatResponse() : PullBattleSpectateChatResponse(nullptr) {}
+  ~PullBattleSpectateChatResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(PullBattleSpectateChatResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(PullBattleSpectateChatResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr PullBattleSpectateChatResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline PullBattleSpectateChatResponse(const PullBattleSpectateChatResponse& from) : PullBattleSpectateChatResponse(nullptr, from) {}
+  inline PullBattleSpectateChatResponse(PullBattleSpectateChatResponse&& from) noexcept : PullBattleSpectateChatResponse(nullptr, ::std::move(from)) {}
+  inline PullBattleSpectateChatResponse& operator=(const PullBattleSpectateChatResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PullBattleSpectateChatResponse& operator=(PullBattleSpectateChatResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const PullBattleSpectateChatResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PullBattleSpectateChatResponse>(&PullBattleSpectateChatResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 144;
+  friend void swap(PullBattleSpectateChatResponse& a, PullBattleSpectateChatResponse& b) { a.Swap(&b); }
+  inline void Swap(PullBattleSpectateChatResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PullBattleSpectateChatResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] PullBattleSpectateChatResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<PullBattleSpectateChatResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const PullBattleSpectateChatResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const PullBattleSpectateChatResponse& from) { PullBattleSpectateChatResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(PullBattleSpectateChatResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.PullBattleSpectateChatResponse"; }
+
+  explicit PullBattleSpectateChatResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  PullBattleSpectateChatResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const PullBattleSpectateChatResponse& from);
+  PullBattleSpectateChatResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, PullBattleSpectateChatResponse&& from) noexcept
+      : PullBattleSpectateChatResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kMessagesFieldNumber = 7,
+    kErrorMessageFieldNumber = 1,
+    kBattleIdFieldNumber = 2,
+    kCooldownUntilMsFieldNumber = 5,
+    kLatestSeqFieldNumber = 6,
+    kServerTimeMsFieldNumber = 8,
+    kEnabledFieldNumber = 3,
+    kBattleEndedFieldNumber = 4,
+  };
+  // repeated .match.BattleSpectateChatMessage messages = 7;
+  [[nodiscard]] int messages_size()
+      const;
+  private:
+  int _internal_messages_size() const;
+
+  public:
+  void clear_messages() ;
+  [[nodiscard]] const ::match::BattleSpectateChatMessage& messages(int index) const;
+  [[nodiscard]] ::match::BattleSpectateChatMessage* PROTOBUF_NONNULL mutable_messages(int index);
+  ::match::BattleSpectateChatMessage* PROTOBUF_NONNULL add_messages();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::match::BattleSpectateChatMessage>&
+  messages() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::match::BattleSpectateChatMessage>* PROTOBUF_NONNULL
+  mutable_messages();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::match::BattleSpectateChatMessage>& _internal_messages() const;
+  ::google::protobuf::RepeatedPtrField<::match::BattleSpectateChatMessage>* PROTOBUF_NONNULL _internal_mutable_messages();
+
+  public:
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // uint64 battle_id = 2;
+  void clear_battle_id() ;
+  [[nodiscard]] ::uint64_t battle_id() const;
+  void set_battle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_battle_id() const;
+  void _internal_set_battle_id(::uint64_t value);
+
+  public:
+  // uint64 cooldown_until_ms = 5;
+  void clear_cooldown_until_ms() ;
+  [[nodiscard]] ::uint64_t cooldown_until_ms() const;
+  void set_cooldown_until_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_cooldown_until_ms() const;
+  void _internal_set_cooldown_until_ms(::uint64_t value);
+
+  public:
+  // uint64 latest_seq = 6;
+  void clear_latest_seq() ;
+  [[nodiscard]] ::uint64_t latest_seq() const;
+  void set_latest_seq(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_latest_seq() const;
+  void _internal_set_latest_seq(::uint64_t value);
+
+  public:
+  // uint64 server_time_ms = 8;
+  void clear_server_time_ms() ;
+  [[nodiscard]] ::uint64_t server_time_ms() const;
+  void set_server_time_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_server_time_ms() const;
+  void _internal_set_server_time_ms(::uint64_t value);
+
+  public:
+  // bool enabled = 3;
+  void clear_enabled() ;
+  [[nodiscard]] bool enabled() const;
+  void set_enabled(bool value);
+
+  private:
+  bool _internal_enabled() const;
+  void _internal_set_enabled(bool value);
+
+  public:
+  // bool battle_ended = 4;
+  void clear_battle_ended() ;
+  [[nodiscard]] bool battle_ended() const;
+  void set_battle_ended(bool value);
+
+  private:
+  bool _internal_battle_ended() const;
+  void _internal_set_battle_ended(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.PullBattleSpectateChatResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const PullBattleSpectateChatResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::match::BattleSpectateChatMessage > messages_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::uint64_t battle_id_;
+    ::uint64_t cooldown_until_ms_;
+    ::uint64_t latest_seq_;
+    ::uint64_t server_time_ms_;
+    bool enabled_;
+    bool battle_ended_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -41100,7 +42499,7 @@ inline void BattleWatchSummary::_internal_set_created_at_ms(::uint64_t value) {
 inline void BattleWatchSummary::clear_featured() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.featured_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline bool BattleWatchSummary::featured() const {
   // @@protoc_insertion_point(field_get:match.BattleWatchSummary.featured)
@@ -41108,7 +42507,7 @@ inline bool BattleWatchSummary::featured() const {
 }
 inline void BattleWatchSummary::set_featured(bool value) {
   _internal_set_featured(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:match.BattleWatchSummary.featured)
 }
 inline bool BattleWatchSummary::_internal_featured() const {
@@ -41124,7 +42523,7 @@ inline void BattleWatchSummary::_internal_set_featured(bool value) {
 inline void BattleWatchSummary::clear_ranked_team_size() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ranked_team_size_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t BattleWatchSummary::ranked_team_size() const {
   // @@protoc_insertion_point(field_get:match.BattleWatchSummary.ranked_team_size)
@@ -41132,7 +42531,7 @@ inline ::uint32_t BattleWatchSummary::ranked_team_size() const {
 }
 inline void BattleWatchSummary::set_ranked_team_size(::uint32_t value) {
   _internal_set_ranked_team_size(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:match.BattleWatchSummary.ranked_team_size)
 }
 inline ::uint32_t BattleWatchSummary::_internal_ranked_team_size() const {
@@ -41148,7 +42547,7 @@ inline void BattleWatchSummary::_internal_set_ranked_team_size(::uint32_t value)
 inline void BattleWatchSummary::clear_ranked_peak_rating_centi() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ranked_peak_rating_centi_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::int64_t BattleWatchSummary::ranked_peak_rating_centi() const {
   // @@protoc_insertion_point(field_get:match.BattleWatchSummary.ranked_peak_rating_centi)
@@ -41156,7 +42555,7 @@ inline ::int64_t BattleWatchSummary::ranked_peak_rating_centi() const {
 }
 inline void BattleWatchSummary::set_ranked_peak_rating_centi(::int64_t value) {
   _internal_set_ranked_peak_rating_centi(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:match.BattleWatchSummary.ranked_peak_rating_centi)
 }
 inline ::int64_t BattleWatchSummary::_internal_ranked_peak_rating_centi() const {
@@ -41166,6 +42565,30 @@ inline ::int64_t BattleWatchSummary::_internal_ranked_peak_rating_centi() const 
 inline void BattleWatchSummary::_internal_set_ranked_peak_rating_centi(::int64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ranked_peak_rating_centi_ = value;
+}
+
+// bool spectate_chat_enabled = 9;
+inline void BattleWatchSummary::clear_spectate_chat_enabled() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spectate_chat_enabled_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline bool BattleWatchSummary::spectate_chat_enabled() const {
+  // @@protoc_insertion_point(field_get:match.BattleWatchSummary.spectate_chat_enabled)
+  return _internal_spectate_chat_enabled();
+}
+inline void BattleWatchSummary::set_spectate_chat_enabled(bool value) {
+  _internal_set_spectate_chat_enabled(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:match.BattleWatchSummary.spectate_chat_enabled)
+}
+inline bool BattleWatchSummary::_internal_spectate_chat_enabled() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.spectate_chat_enabled_;
+}
+inline void BattleWatchSummary::_internal_set_spectate_chat_enabled(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spectate_chat_enabled_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -66904,6 +68327,1013 @@ inline void GetTacticalPuzzleSolutionReplayResponse::set_allocated_replay(::Batt
   // @@protoc_insertion_point(field_set_allocated:match.GetTacticalPuzzleSolutionReplayResponse.replay)
 }
 
+// -------------------------------------------------------------------
+
+// BattleSpectateChatMessage
+
+// uint64 seq = 1;
+inline void BattleSpectateChatMessage::clear_seq() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seq_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t BattleSpectateChatMessage::seq() const {
+  // @@protoc_insertion_point(field_get:match.BattleSpectateChatMessage.seq)
+  return _internal_seq();
+}
+inline void BattleSpectateChatMessage::set_seq(::uint64_t value) {
+  _internal_set_seq(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.BattleSpectateChatMessage.seq)
+}
+inline ::uint64_t BattleSpectateChatMessage::_internal_seq() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.seq_;
+}
+inline void BattleSpectateChatMessage::_internal_set_seq(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seq_ = value;
+}
+
+// uint64 sender_player_id = 2;
+inline void BattleSpectateChatMessage::clear_sender_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sender_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t BattleSpectateChatMessage::sender_player_id() const {
+  // @@protoc_insertion_point(field_get:match.BattleSpectateChatMessage.sender_player_id)
+  return _internal_sender_player_id();
+}
+inline void BattleSpectateChatMessage::set_sender_player_id(::uint64_t value) {
+  _internal_set_sender_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:match.BattleSpectateChatMessage.sender_player_id)
+}
+inline ::uint64_t BattleSpectateChatMessage::_internal_sender_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.sender_player_id_;
+}
+inline void BattleSpectateChatMessage::_internal_set_sender_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sender_player_id_ = value;
+}
+
+// string sender_name = 3;
+inline void BattleSpectateChatMessage::clear_sender_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sender_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& BattleSpectateChatMessage::sender_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.BattleSpectateChatMessage.sender_name)
+  return _internal_sender_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BattleSpectateChatMessage::set_sender_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.sender_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.BattleSpectateChatMessage.sender_name)
+}
+inline ::std::string* PROTOBUF_NONNULL BattleSpectateChatMessage::mutable_sender_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_sender_name();
+  // @@protoc_insertion_point(field_mutable:match.BattleSpectateChatMessage.sender_name)
+  return _s;
+}
+inline const ::std::string& BattleSpectateChatMessage::_internal_sender_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.sender_name_.Get();
+}
+inline void BattleSpectateChatMessage::_internal_set_sender_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sender_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BattleSpectateChatMessage::_internal_mutable_sender_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.sender_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BattleSpectateChatMessage::release_sender_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.BattleSpectateChatMessage.sender_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.sender_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.sender_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BattleSpectateChatMessage::set_allocated_sender_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.sender_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.sender_name_.IsDefault()) {
+    _impl_.sender_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.BattleSpectateChatMessage.sender_name)
+}
+
+// .match.BattleSpectateChatRole role = 4;
+inline void BattleSpectateChatMessage::clear_role() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.role_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::match::BattleSpectateChatRole BattleSpectateChatMessage::role() const {
+  // @@protoc_insertion_point(field_get:match.BattleSpectateChatMessage.role)
+  return _internal_role();
+}
+inline void BattleSpectateChatMessage::set_role(::match::BattleSpectateChatRole value) {
+  _internal_set_role(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:match.BattleSpectateChatMessage.role)
+}
+inline ::match::BattleSpectateChatRole BattleSpectateChatMessage::_internal_role() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::match::BattleSpectateChatRole>(_impl_.role_);
+}
+inline void BattleSpectateChatMessage::_internal_set_role(::match::BattleSpectateChatRole value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.role_ = value;
+}
+
+// string content = 5;
+inline void BattleSpectateChatMessage::clear_content() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.content_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& BattleSpectateChatMessage::content() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.BattleSpectateChatMessage.content)
+  return _internal_content();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void BattleSpectateChatMessage::set_content(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.content_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.BattleSpectateChatMessage.content)
+}
+inline ::std::string* PROTOBUF_NONNULL BattleSpectateChatMessage::mutable_content()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_content();
+  // @@protoc_insertion_point(field_mutable:match.BattleSpectateChatMessage.content)
+  return _s;
+}
+inline const ::std::string& BattleSpectateChatMessage::_internal_content() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.content_.Get();
+}
+inline void BattleSpectateChatMessage::_internal_set_content(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.content_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL BattleSpectateChatMessage::_internal_mutable_content() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.content_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE BattleSpectateChatMessage::release_content() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.BattleSpectateChatMessage.content)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.content_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.content_.Set("", GetArena());
+  }
+  return released;
+}
+inline void BattleSpectateChatMessage::set_allocated_content(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.content_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.content_.IsDefault()) {
+    _impl_.content_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.BattleSpectateChatMessage.content)
+}
+
+// uint64 created_ms = 6;
+inline void BattleSpectateChatMessage::clear_created_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.created_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t BattleSpectateChatMessage::created_ms() const {
+  // @@protoc_insertion_point(field_get:match.BattleSpectateChatMessage.created_ms)
+  return _internal_created_ms();
+}
+inline void BattleSpectateChatMessage::set_created_ms(::uint64_t value) {
+  _internal_set_created_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:match.BattleSpectateChatMessage.created_ms)
+}
+inline ::uint64_t BattleSpectateChatMessage::_internal_created_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.created_ms_;
+}
+inline void BattleSpectateChatMessage::_internal_set_created_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.created_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// SendBattleSpectateChatRequest
+
+// uint64 battle_id = 1;
+inline void SendBattleSpectateChatRequest::clear_battle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t SendBattleSpectateChatRequest::battle_id() const {
+  // @@protoc_insertion_point(field_get:match.SendBattleSpectateChatRequest.battle_id)
+  return _internal_battle_id();
+}
+inline void SendBattleSpectateChatRequest::set_battle_id(::uint64_t value) {
+  _internal_set_battle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:match.SendBattleSpectateChatRequest.battle_id)
+}
+inline ::uint64_t SendBattleSpectateChatRequest::_internal_battle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_id_;
+}
+inline void SendBattleSpectateChatRequest::_internal_set_battle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = value;
+}
+
+// string content = 2;
+inline void SendBattleSpectateChatRequest::clear_content() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.content_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& SendBattleSpectateChatRequest::content() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.SendBattleSpectateChatRequest.content)
+  return _internal_content();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SendBattleSpectateChatRequest::set_content(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.content_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.SendBattleSpectateChatRequest.content)
+}
+inline ::std::string* PROTOBUF_NONNULL SendBattleSpectateChatRequest::mutable_content()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_content();
+  // @@protoc_insertion_point(field_mutable:match.SendBattleSpectateChatRequest.content)
+  return _s;
+}
+inline const ::std::string& SendBattleSpectateChatRequest::_internal_content() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.content_.Get();
+}
+inline void SendBattleSpectateChatRequest::_internal_set_content(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.content_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SendBattleSpectateChatRequest::_internal_mutable_content() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.content_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SendBattleSpectateChatRequest::release_content() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.SendBattleSpectateChatRequest.content)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.content_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.content_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SendBattleSpectateChatRequest::set_allocated_content(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.content_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.content_.IsDefault()) {
+    _impl_.content_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.SendBattleSpectateChatRequest.content)
+}
+
+// -------------------------------------------------------------------
+
+// SendBattleSpectateChatResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool SendBattleSpectateChatResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& SendBattleSpectateChatResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& SendBattleSpectateChatResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.SendBattleSpectateChatResponse.error_message)
+  return _internal_error_message();
+}
+inline void SendBattleSpectateChatResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.SendBattleSpectateChatResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE SendBattleSpectateChatResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE SendBattleSpectateChatResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.SendBattleSpectateChatResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL SendBattleSpectateChatResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL SendBattleSpectateChatResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:match.SendBattleSpectateChatResponse.error_message)
+  return _msg;
+}
+inline void SendBattleSpectateChatResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.SendBattleSpectateChatResponse.error_message)
+}
+
+// uint64 battle_id = 2;
+inline void SendBattleSpectateChatResponse::clear_battle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t SendBattleSpectateChatResponse::battle_id() const {
+  // @@protoc_insertion_point(field_get:match.SendBattleSpectateChatResponse.battle_id)
+  return _internal_battle_id();
+}
+inline void SendBattleSpectateChatResponse::set_battle_id(::uint64_t value) {
+  _internal_set_battle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.SendBattleSpectateChatResponse.battle_id)
+}
+inline ::uint64_t SendBattleSpectateChatResponse::_internal_battle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_id_;
+}
+inline void SendBattleSpectateChatResponse::_internal_set_battle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = value;
+}
+
+// bool enabled = 3;
+inline void SendBattleSpectateChatResponse::clear_enabled() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.enabled_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline bool SendBattleSpectateChatResponse::enabled() const {
+  // @@protoc_insertion_point(field_get:match.SendBattleSpectateChatResponse.enabled)
+  return _internal_enabled();
+}
+inline void SendBattleSpectateChatResponse::set_enabled(bool value) {
+  _internal_set_enabled(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:match.SendBattleSpectateChatResponse.enabled)
+}
+inline bool SendBattleSpectateChatResponse::_internal_enabled() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.enabled_;
+}
+inline void SendBattleSpectateChatResponse::_internal_set_enabled(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.enabled_ = value;
+}
+
+// bool battle_ended = 4;
+inline void SendBattleSpectateChatResponse::clear_battle_ended() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_ended_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline bool SendBattleSpectateChatResponse::battle_ended() const {
+  // @@protoc_insertion_point(field_get:match.SendBattleSpectateChatResponse.battle_ended)
+  return _internal_battle_ended();
+}
+inline void SendBattleSpectateChatResponse::set_battle_ended(bool value) {
+  _internal_set_battle_ended(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:match.SendBattleSpectateChatResponse.battle_ended)
+}
+inline bool SendBattleSpectateChatResponse::_internal_battle_ended() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_ended_;
+}
+inline void SendBattleSpectateChatResponse::_internal_set_battle_ended(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_ended_ = value;
+}
+
+// uint64 cooldown_until_ms = 5;
+inline void SendBattleSpectateChatResponse::clear_cooldown_until_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cooldown_until_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t SendBattleSpectateChatResponse::cooldown_until_ms() const {
+  // @@protoc_insertion_point(field_get:match.SendBattleSpectateChatResponse.cooldown_until_ms)
+  return _internal_cooldown_until_ms();
+}
+inline void SendBattleSpectateChatResponse::set_cooldown_until_ms(::uint64_t value) {
+  _internal_set_cooldown_until_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:match.SendBattleSpectateChatResponse.cooldown_until_ms)
+}
+inline ::uint64_t SendBattleSpectateChatResponse::_internal_cooldown_until_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cooldown_until_ms_;
+}
+inline void SendBattleSpectateChatResponse::_internal_set_cooldown_until_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cooldown_until_ms_ = value;
+}
+
+// .match.BattleSpectateChatMessage message = 6;
+inline bool SendBattleSpectateChatResponse::has_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.message_ != nullptr);
+  return value;
+}
+inline void SendBattleSpectateChatResponse::clear_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.message_ != nullptr) _impl_.message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::match::BattleSpectateChatMessage& SendBattleSpectateChatResponse::_internal_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::match::BattleSpectateChatMessage* p = _impl_.message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::match::BattleSpectateChatMessage>(&::match::BattleSpectateChatMessage_globals_);
+}
+inline const ::match::BattleSpectateChatMessage& SendBattleSpectateChatResponse::message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.SendBattleSpectateChatResponse.message)
+  return _internal_message();
+}
+inline void SendBattleSpectateChatResponse::unsafe_arena_set_allocated_message(
+    ::match::BattleSpectateChatMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.message_);
+  }
+  _impl_.message_ = reinterpret_cast<::match::BattleSpectateChatMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.SendBattleSpectateChatResponse.message)
+}
+inline ::match::BattleSpectateChatMessage* PROTOBUF_NULLABLE SendBattleSpectateChatResponse::release_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::BattleSpectateChatMessage* released = _impl_.message_;
+  _impl_.message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::match::BattleSpectateChatMessage* PROTOBUF_NULLABLE SendBattleSpectateChatResponse::unsafe_arena_release_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.SendBattleSpectateChatResponse.message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::BattleSpectateChatMessage* temp = _impl_.message_;
+  _impl_.message_ = nullptr;
+  return temp;
+}
+inline ::match::BattleSpectateChatMessage* PROTOBUF_NONNULL SendBattleSpectateChatResponse::_internal_mutable_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::match::BattleSpectateChatMessage>(GetArena());
+    _impl_.message_ = reinterpret_cast<::match::BattleSpectateChatMessage*>(p);
+  }
+  return _impl_.message_;
+}
+inline ::match::BattleSpectateChatMessage* PROTOBUF_NONNULL SendBattleSpectateChatResponse::mutable_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::BattleSpectateChatMessage* _msg = _internal_mutable_message();
+  // @@protoc_insertion_point(field_mutable:match.SendBattleSpectateChatResponse.message)
+  return _msg;
+}
+inline void SendBattleSpectateChatResponse::set_allocated_message(::match::BattleSpectateChatMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.message_ = reinterpret_cast<::match::BattleSpectateChatMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.SendBattleSpectateChatResponse.message)
+}
+
+// uint64 server_time_ms = 7;
+inline void SendBattleSpectateChatResponse::clear_server_time_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.server_time_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t SendBattleSpectateChatResponse::server_time_ms() const {
+  // @@protoc_insertion_point(field_get:match.SendBattleSpectateChatResponse.server_time_ms)
+  return _internal_server_time_ms();
+}
+inline void SendBattleSpectateChatResponse::set_server_time_ms(::uint64_t value) {
+  _internal_set_server_time_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:match.SendBattleSpectateChatResponse.server_time_ms)
+}
+inline ::uint64_t SendBattleSpectateChatResponse::_internal_server_time_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.server_time_ms_;
+}
+inline void SendBattleSpectateChatResponse::_internal_set_server_time_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.server_time_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// PullBattleSpectateChatRequest
+
+// uint64 battle_id = 1;
+inline void PullBattleSpectateChatRequest::clear_battle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t PullBattleSpectateChatRequest::battle_id() const {
+  // @@protoc_insertion_point(field_get:match.PullBattleSpectateChatRequest.battle_id)
+  return _internal_battle_id();
+}
+inline void PullBattleSpectateChatRequest::set_battle_id(::uint64_t value) {
+  _internal_set_battle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:match.PullBattleSpectateChatRequest.battle_id)
+}
+inline ::uint64_t PullBattleSpectateChatRequest::_internal_battle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_id_;
+}
+inline void PullBattleSpectateChatRequest::_internal_set_battle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = value;
+}
+
+// uint64 after_seq = 2;
+inline void PullBattleSpectateChatRequest::clear_after_seq() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.after_seq_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t PullBattleSpectateChatRequest::after_seq() const {
+  // @@protoc_insertion_point(field_get:match.PullBattleSpectateChatRequest.after_seq)
+  return _internal_after_seq();
+}
+inline void PullBattleSpectateChatRequest::set_after_seq(::uint64_t value) {
+  _internal_set_after_seq(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:match.PullBattleSpectateChatRequest.after_seq)
+}
+inline ::uint64_t PullBattleSpectateChatRequest::_internal_after_seq() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.after_seq_;
+}
+inline void PullBattleSpectateChatRequest::_internal_set_after_seq(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.after_seq_ = value;
+}
+
+// uint32 limit = 3;
+inline void PullBattleSpectateChatRequest::clear_limit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.limit_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t PullBattleSpectateChatRequest::limit() const {
+  // @@protoc_insertion_point(field_get:match.PullBattleSpectateChatRequest.limit)
+  return _internal_limit();
+}
+inline void PullBattleSpectateChatRequest::set_limit(::uint32_t value) {
+  _internal_set_limit(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.PullBattleSpectateChatRequest.limit)
+}
+inline ::uint32_t PullBattleSpectateChatRequest::_internal_limit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.limit_;
+}
+inline void PullBattleSpectateChatRequest::_internal_set_limit(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.limit_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// PullBattleSpectateChatResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool PullBattleSpectateChatResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& PullBattleSpectateChatResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& PullBattleSpectateChatResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.PullBattleSpectateChatResponse.error_message)
+  return _internal_error_message();
+}
+inline void PullBattleSpectateChatResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.PullBattleSpectateChatResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE PullBattleSpectateChatResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE PullBattleSpectateChatResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.PullBattleSpectateChatResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL PullBattleSpectateChatResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL PullBattleSpectateChatResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:match.PullBattleSpectateChatResponse.error_message)
+  return _msg;
+}
+inline void PullBattleSpectateChatResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.PullBattleSpectateChatResponse.error_message)
+}
+
+// uint64 battle_id = 2;
+inline void PullBattleSpectateChatResponse::clear_battle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t PullBattleSpectateChatResponse::battle_id() const {
+  // @@protoc_insertion_point(field_get:match.PullBattleSpectateChatResponse.battle_id)
+  return _internal_battle_id();
+}
+inline void PullBattleSpectateChatResponse::set_battle_id(::uint64_t value) {
+  _internal_set_battle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.PullBattleSpectateChatResponse.battle_id)
+}
+inline ::uint64_t PullBattleSpectateChatResponse::_internal_battle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_id_;
+}
+inline void PullBattleSpectateChatResponse::_internal_set_battle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = value;
+}
+
+// bool enabled = 3;
+inline void PullBattleSpectateChatResponse::clear_enabled() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.enabled_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline bool PullBattleSpectateChatResponse::enabled() const {
+  // @@protoc_insertion_point(field_get:match.PullBattleSpectateChatResponse.enabled)
+  return _internal_enabled();
+}
+inline void PullBattleSpectateChatResponse::set_enabled(bool value) {
+  _internal_set_enabled(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:match.PullBattleSpectateChatResponse.enabled)
+}
+inline bool PullBattleSpectateChatResponse::_internal_enabled() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.enabled_;
+}
+inline void PullBattleSpectateChatResponse::_internal_set_enabled(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.enabled_ = value;
+}
+
+// bool battle_ended = 4;
+inline void PullBattleSpectateChatResponse::clear_battle_ended() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_ended_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline bool PullBattleSpectateChatResponse::battle_ended() const {
+  // @@protoc_insertion_point(field_get:match.PullBattleSpectateChatResponse.battle_ended)
+  return _internal_battle_ended();
+}
+inline void PullBattleSpectateChatResponse::set_battle_ended(bool value) {
+  _internal_set_battle_ended(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:match.PullBattleSpectateChatResponse.battle_ended)
+}
+inline bool PullBattleSpectateChatResponse::_internal_battle_ended() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_ended_;
+}
+inline void PullBattleSpectateChatResponse::_internal_set_battle_ended(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_ended_ = value;
+}
+
+// uint64 cooldown_until_ms = 5;
+inline void PullBattleSpectateChatResponse::clear_cooldown_until_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cooldown_until_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t PullBattleSpectateChatResponse::cooldown_until_ms() const {
+  // @@protoc_insertion_point(field_get:match.PullBattleSpectateChatResponse.cooldown_until_ms)
+  return _internal_cooldown_until_ms();
+}
+inline void PullBattleSpectateChatResponse::set_cooldown_until_ms(::uint64_t value) {
+  _internal_set_cooldown_until_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:match.PullBattleSpectateChatResponse.cooldown_until_ms)
+}
+inline ::uint64_t PullBattleSpectateChatResponse::_internal_cooldown_until_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cooldown_until_ms_;
+}
+inline void PullBattleSpectateChatResponse::_internal_set_cooldown_until_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cooldown_until_ms_ = value;
+}
+
+// uint64 latest_seq = 6;
+inline void PullBattleSpectateChatResponse::clear_latest_seq() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.latest_seq_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t PullBattleSpectateChatResponse::latest_seq() const {
+  // @@protoc_insertion_point(field_get:match.PullBattleSpectateChatResponse.latest_seq)
+  return _internal_latest_seq();
+}
+inline void PullBattleSpectateChatResponse::set_latest_seq(::uint64_t value) {
+  _internal_set_latest_seq(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:match.PullBattleSpectateChatResponse.latest_seq)
+}
+inline ::uint64_t PullBattleSpectateChatResponse::_internal_latest_seq() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.latest_seq_;
+}
+inline void PullBattleSpectateChatResponse::_internal_set_latest_seq(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.latest_seq_ = value;
+}
+
+// repeated .match.BattleSpectateChatMessage messages = 7;
+inline int PullBattleSpectateChatResponse::_internal_messages_size() const {
+  return _internal_messages().size();
+}
+inline int PullBattleSpectateChatResponse::messages_size() const {
+  return _internal_messages_size();
+}
+inline void PullBattleSpectateChatResponse::clear_messages() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.messages_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::match::BattleSpectateChatMessage& PullBattleSpectateChatResponse::messages(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.PullBattleSpectateChatResponse.messages)
+  return _internal_messages().Get(index);
+}
+inline ::match::BattleSpectateChatMessage* PROTOBUF_NONNULL PullBattleSpectateChatResponse::mutable_messages(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:match.PullBattleSpectateChatResponse.messages)
+  return _internal_mutable_messages()->Mutable(index);
+}
+inline ::match::BattleSpectateChatMessage* PROTOBUF_NONNULL PullBattleSpectateChatResponse::add_messages()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::match::BattleSpectateChatMessage* _add =
+      _internal_mutable_messages()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:match.PullBattleSpectateChatResponse.messages)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::BattleSpectateChatMessage>& PullBattleSpectateChatResponse::messages() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:match.PullBattleSpectateChatResponse.messages)
+  return _internal_messages();
+}
+inline ::google::protobuf::RepeatedPtrField<::match::BattleSpectateChatMessage>* PROTOBUF_NONNULL
+PullBattleSpectateChatResponse::mutable_messages() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:match.PullBattleSpectateChatResponse.messages)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_messages();
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::BattleSpectateChatMessage>&
+PullBattleSpectateChatResponse::_internal_messages() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.messages_;
+}
+inline ::google::protobuf::RepeatedPtrField<::match::BattleSpectateChatMessage>* PROTOBUF_NONNULL
+PullBattleSpectateChatResponse::_internal_mutable_messages() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.messages_;
+}
+
+// uint64 server_time_ms = 8;
+inline void PullBattleSpectateChatResponse::clear_server_time_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.server_time_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t PullBattleSpectateChatResponse::server_time_ms() const {
+  // @@protoc_insertion_point(field_get:match.PullBattleSpectateChatResponse.server_time_ms)
+  return _internal_server_time_ms();
+}
+inline void PullBattleSpectateChatResponse::set_server_time_ms(::uint64_t value) {
+  _internal_set_server_time_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:match.PullBattleSpectateChatResponse.server_time_ms)
+}
+inline ::uint64_t PullBattleSpectateChatResponse::_internal_server_time_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.server_time_ms_;
+}
+inline void PullBattleSpectateChatResponse::_internal_set_server_time_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.server_time_ms_ = value;
+}
+
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif  // __GNUC__
@@ -67040,6 +69470,12 @@ struct is_proto_enum<::match::TacticalPuzzleListTab> : std::true_type {};
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::match::TacticalPuzzleListTab>() {
   return ::match::TacticalPuzzleListTab_descriptor();
+}
+template <>
+struct is_proto_enum<::match::BattleSpectateChatRole> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::match::BattleSpectateChatRole>() {
+  return ::match::BattleSpectateChatRole_descriptor();
 }
 
 }  // namespace protobuf

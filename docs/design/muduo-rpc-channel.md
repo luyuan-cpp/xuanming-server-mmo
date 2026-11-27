@@ -536,7 +536,9 @@ gate 与 scene 按 zone 划分(`NodeUtils::IsZoneScopedNodeType`),RPC0 混跑只
 
 ## 12. 可观测性
 
-C++ 节点没有 Prometheus 出口(`dirty_save_stats.h:25-30`),沿用"relaxed 计数 + 30s 汇总行 + stress_summarize 解析"口径:
+计数沿用"relaxed 计数 + 30s 汇总行 + stress_summarize 解析"口径,汇总行是压测复盘的契约。2026-11-27 起同一份计数也经节点的
+Prometheus 出口导出(`cpp_node_rpc_*`,`rpc_channel_stats.cpp` 的 `WriteRpcChannelMetrics`;告警组 `cpp-node.calls` 在
+`deploy/k8s/cpp-node-dependency-alerts.yaml`,口径见 [断线重连](infra-reconnect-overview.md) §1.8):
 
 - `RpcChannelStats`(进程级 relaxed atomic + `Snapshot`,写法照 `exit_persist_stats`):started、ok、remote_rejected、remote_failed、reply_dropped、timeout、disconnected、
   channel_closed、invalid_response、late_reply、legacy_id0_reply、not_sent_{not_connected,closed,overload,invalid}、oneway_sent、oneway_rejected、adopted、reply_run_twice、

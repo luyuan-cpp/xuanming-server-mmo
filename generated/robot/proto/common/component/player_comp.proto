@@ -61,6 +61,15 @@ message PlayerUint32Comp
 	uint32 class  = 1;
 }
 
+// 玩家个人「局外人观战交流」偏好(docs/planning/battle-spectate-chat-v1.md §3.2)。
+// 关闭仅禁止观战期间局外人发言交流，绝不影响该场战斗的观战可见性（spectate_visibility）。
+enum eSpectateChatPreference
+{
+	SPECTATE_CHAT_PREF_UNSPECIFIED = 0; // 未手动设置：沿用服务端全局默认策略（当前默认允许）
+	SPECTATE_CHAT_PREF_ALLOW       = 1; // 显式开启：允许局外人观战交流
+	SPECTATE_CHAT_PREF_FORBID      = 2; // 显式关闭：禁止局外人观战交流（仍允许正常观战）
+}
+
 // 角色展示资料(名字)。
 // 真源是 data_service 全局库的 player_name 表(全服唯一,docs/design/guild-phase2/03-names.md §3.0);
 // 这里是随 player_database 一起走的只读副本,由 login 首次入场补齐
@@ -102,6 +111,8 @@ message PlayerProfileComp
 	bytes skill_vfx_owned_bits = 13;
 	// 玩家已启用的技能特效覆盖(skill_table_id -> SkillVfxCosmetic.id;缺键或 0 表示默认表现,纯战斗画面表现零数值)。
 	map<uint32, uint32> equipped_skill_vfx = 14;
+	// 玩家个人「允许局外人观战交流」偏好(仅控制观战期间能否交流，不禁止观战)。
+	eSpectateChatPreference spectate_chat_pref = 15;
 }
 
 // 一次进行中的改名(scene 写,随存档落库)。落库之后 scene 才向 data_service 发 RenameRole,所以任何一步断掉都能从存档接着做:

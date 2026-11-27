@@ -468,7 +468,13 @@
         "MatchPuzzleNotPublished": 16069,
         "MatchPuzzleCannotLikeOwn": 16070,
         "MatchPuzzleClearRequiredToLike": 16071,
-        "MatchPuzzleSolutionReplayNotFound": 16072
+        "MatchPuzzleSolutionReplayNotFound": 16072,
+        "MatchSpectateChatDisabled": 16073,
+        "MatchSpectateChatEnded": 16074,
+        "MatchSpectateChatCooldown": 16075,
+        "MatchSpectateChatRoomBusy": 16076,
+        "MatchSpectateChatContentRejected": 16077,
+        "MatchSpectateChatCheckUnavailable": 16078
       }
     },
     "attribute_error": {

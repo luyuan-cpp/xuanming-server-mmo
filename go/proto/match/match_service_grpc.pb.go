@@ -79,6 +79,8 @@ const (
 	MatchService_StartTacticalPuzzleBattle_FullMethodName       = "/match.MatchService/StartTacticalPuzzleBattle"
 	MatchService_LikeTacticalPuzzle_FullMethodName              = "/match.MatchService/LikeTacticalPuzzle"
 	MatchService_GetTacticalPuzzleSolutionReplay_FullMethodName = "/match.MatchService/GetTacticalPuzzleSolutionReplay"
+	MatchService_SendBattleSpectateChat_FullMethodName          = "/match.MatchService/SendBattleSpectateChat"
+	MatchService_PullBattleSpectateChat_FullMethodName          = "/match.MatchService/PullBattleSpectateChat"
 )
 
 // MatchServiceClient is the client API for MatchService service.
@@ -181,6 +183,10 @@ type MatchServiceClient interface {
 	StartTacticalPuzzleBattle(ctx context.Context, in *StartTacticalPuzzleBattleRequest, opts ...grpc.CallOption) (*StartTacticalPuzzleBattleResponse, error)
 	LikeTacticalPuzzle(ctx context.Context, in *LikeTacticalPuzzleRequest, opts ...grpc.CallOption) (*LikeTacticalPuzzleResponse, error)
 	GetTacticalPuzzleSolutionReplay(ctx context.Context, in *GetTacticalPuzzleSolutionReplayRequest, opts ...grpc.CallOption) (*GetTacticalPuzzleSolutionReplayResponse, error)
+	// ---- 局外人观战交流模式（docs/planning/battle-spectate-chat-v1.md）----
+	// 只认会话本人；关闭观战交流不禁止观战，仅禁止观战期间局外人发言；全房唯一公开室 + ContentGuard 审核。
+	SendBattleSpectateChat(ctx context.Context, in *SendBattleSpectateChatRequest, opts ...grpc.CallOption) (*SendBattleSpectateChatResponse, error)
+	PullBattleSpectateChat(ctx context.Context, in *PullBattleSpectateChatRequest, opts ...grpc.CallOption) (*PullBattleSpectateChatResponse, error)
 }
 
 type matchServiceClient struct {
@@ -771,6 +777,26 @@ func (c *matchServiceClient) GetTacticalPuzzleSolutionReplay(ctx context.Context
 	return out, nil
 }
 
+func (c *matchServiceClient) SendBattleSpectateChat(ctx context.Context, in *SendBattleSpectateChatRequest, opts ...grpc.CallOption) (*SendBattleSpectateChatResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SendBattleSpectateChatResponse)
+	err := c.cc.Invoke(ctx, MatchService_SendBattleSpectateChat_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) PullBattleSpectateChat(ctx context.Context, in *PullBattleSpectateChatRequest, opts ...grpc.CallOption) (*PullBattleSpectateChatResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PullBattleSpectateChatResponse)
+	err := c.cc.Invoke(ctx, MatchService_PullBattleSpectateChat_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MatchServiceServer is the server API for MatchService service.
 // All implementations must embed UnimplementedMatchServiceServer
 // for forward compatibility.
@@ -871,6 +897,10 @@ type MatchServiceServer interface {
 	StartTacticalPuzzleBattle(context.Context, *StartTacticalPuzzleBattleRequest) (*StartTacticalPuzzleBattleResponse, error)
 	LikeTacticalPuzzle(context.Context, *LikeTacticalPuzzleRequest) (*LikeTacticalPuzzleResponse, error)
 	GetTacticalPuzzleSolutionReplay(context.Context, *GetTacticalPuzzleSolutionReplayRequest) (*GetTacticalPuzzleSolutionReplayResponse, error)
+	// ---- 局外人观战交流模式（docs/planning/battle-spectate-chat-v1.md）----
+	// 只认会话本人；关闭观战交流不禁止观战，仅禁止观战期间局外人发言；全房唯一公开室 + ContentGuard 审核。
+	SendBattleSpectateChat(context.Context, *SendBattleSpectateChatRequest) (*SendBattleSpectateChatResponse, error)
+	PullBattleSpectateChat(context.Context, *PullBattleSpectateChatRequest) (*PullBattleSpectateChatResponse, error)
 	mustEmbedUnimplementedMatchServiceServer()
 }
 
@@ -1054,6 +1084,12 @@ func (UnimplementedMatchServiceServer) LikeTacticalPuzzle(context.Context, *Like
 }
 func (UnimplementedMatchServiceServer) GetTacticalPuzzleSolutionReplay(context.Context, *GetTacticalPuzzleSolutionReplayRequest) (*GetTacticalPuzzleSolutionReplayResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetTacticalPuzzleSolutionReplay not implemented")
+}
+func (UnimplementedMatchServiceServer) SendBattleSpectateChat(context.Context, *SendBattleSpectateChatRequest) (*SendBattleSpectateChatResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SendBattleSpectateChat not implemented")
+}
+func (UnimplementedMatchServiceServer) PullBattleSpectateChat(context.Context, *PullBattleSpectateChatRequest) (*PullBattleSpectateChatResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PullBattleSpectateChat not implemented")
 }
 func (UnimplementedMatchServiceServer) mustEmbedUnimplementedMatchServiceServer() {}
 func (UnimplementedMatchServiceServer) testEmbeddedByValue()                      {}
@@ -2120,6 +2156,42 @@ func _MatchService_GetTacticalPuzzleSolutionReplay_Handler(srv interface{}, ctx 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MatchService_SendBattleSpectateChat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendBattleSpectateChatRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).SendBattleSpectateChat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_SendBattleSpectateChat_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).SendBattleSpectateChat(ctx, req.(*SendBattleSpectateChatRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_PullBattleSpectateChat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PullBattleSpectateChatRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).PullBattleSpectateChat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_PullBattleSpectateChat_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).PullBattleSpectateChat(ctx, req.(*PullBattleSpectateChatRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MatchService_ServiceDesc is the grpc.ServiceDesc for MatchService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2358,6 +2430,14 @@ var MatchService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTacticalPuzzleSolutionReplay",
 			Handler:    _MatchService_GetTacticalPuzzleSolutionReplay_Handler,
+		},
+		{
+			MethodName: "SendBattleSpectateChat",
+			Handler:    _MatchService_SendBattleSpectateChat_Handler,
+		},
+		{
+			MethodName: "PullBattleSpectateChat",
+			Handler:    _MatchService_PullBattleSpectateChat_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

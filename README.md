@@ -7,6 +7,25 @@ everything stateless, and a **Java** HTTP gateway in front. Multi-zone, ECS-base
 turn-based battles, and a proto-first toolchain that generates code for every language from
 one set of contracts.
 
+## Game Preview & Genre (*Wuxing Qitan* / 《五行奇谈》)
+
+![Wuxing Qitan 5v5 Turn-Based Battle Formation Preview](docs/assets/battle-formation-preview.jpg)
+
+> *In-development client capture (2560×1080): 5v5 full-roster turn-based battle with 20 units in a 4-row formation (5 heroes + 5 pets per side), foot-anchored nameplates, team status bar, and round command wheel.*
+
+- **Genre**: Eastern Daoist Five-Elements **turn-based hero-and-pet MMORPG** (ECS open-world exploration + direct TCP/WebSocket connections to dedicated turn-based battle nodes).
+- **Design philosophy**: **"Play when you have time, stop anytime"** — no daily login checklists, no daily-reset activity bars, and no fixed-hour mandatory attendance; free-to-play accounts reach the same 100% power cap.
+- **Target platforms**: Dual-form Unity 6 client ([`mmorpg-client`](https://github.com/luhailong-cpp/mmorpg-client)) targeting **WeChat / Douyin Mini-Games (WebGL2)** and **iOS / Android native Apps**, backed by contract-compatible server implementations (this authoritative C++/Go/Java repo, plus parallel [Java 21](https://github.com/luyuan-java/xuanming-server-mmo) and [Python](https://github.com/luhailong-python/xuanming-server-mmo-python) ports).
+
+## Project Progress (as of 2026-11-27, Pre-Launch)
+
+| Area | Status | Summary |
+|---|---|---|
+| **Core Runtime & Microservices** | ✅ Implemented | 3 C++23 runtime nodes (`gate`, `scene`, `battle`), 20+ Go microservices, Java HTTP gateway; 150+ `.proto` files, 83 config tables, 550+ client RPC message IDs; one-click local stack & K8s manifests |
+| **Turn-Based Combat & Gameplay** | ✅ Implemented | 1v1–5v5 hero+pet deterministic battle engine (direct battle-node connection, ticket reissue, spectating & replays, pre-battle skill ban/protect), Boss Trials & Trial Journal V4 (with vows & wild overworld bosses), Ranked Arena, 10-season rotating skills/seals (S1–S10), Guild War & feuds, Wuxing Roguelike Realm V2, UGC Tactical Puzzle Workshop, Jianghu Duels, equipment crafting/quality/skill-books |
+| **Client & Multi-Language Parity** | 🟡 Active Alignment | Unity client core loop, battle stage, maps, and 70+ UI asset directories wired (ongoing art polish & newest UI slices); Java 21 and Python server ports continuously synced against this repo's contracts |
+| **Compliance & Pre-Launch Gates** | ⏳ Pre-Launch | Real-name anti-addiction, 7-day account deletion, UGC content guard, and store-compliant payment/ad isolation built in (monetization switches default off); pending Linux staging load tests, mini-game WebGL2 & mobile packaging, publishing licenses, and final security hardening |
+
 ## Architecture
 
 ```mermaid

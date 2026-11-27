@@ -933,7 +933,12 @@ J-O1至J-O4已由负责人明确采用设计默认值且允许配置：公示48�
 
 - 删掉的 MANUAL 回执不留原件，与 `RETRY_REVERSAL` 相同。留痕是管理命令日志与提交后的 WARN 日志，trade 侧另有合同与人工处置记录。
 - 收敛之后订单回到待交付，从人工清单消失；trade 仍在人工时会再回 MANUAL、回到清单。
-- 没有补 trade 侧的出口。寄售合同的交付腿部分发放之后，trade 人工入口一个动作都做不了：部分发放的腿只有 `partial` 收（别的动作在补记腿结局时就被拒），而 `partial` / `refund` / `redirect` 都不收寄售（§15.7 表）。隔离 `corrupt` 的合同原因消除后可以 `resume`。这类单现在两边都停在人工（钱在商城、托管在 trade，都在人工清单里），不再被错误终结，但还没有出口。要补的是 trade 侧寄售部分发放的补发：`planPartial` 放开寄售的发放腿；`planRmb` 交付阶段按 `currentLeg` 跟到补发腿，补发失败转人工而不是退款；交付齐了经收敛交付记 DELIVERED。这一批要和 `manual.go` 的双人复核改动错开。
+- **trade 侧的出口（2026-11-27 补，未编译）**：
+  - 问题：寄售合同的交付腿部分发放之后，trade 人工入口一个动作都做不了。部分发放的腿只有 `partial` 收（别的动作在补记腿结局时就被拒），而 `partial` 原来连人民币寄售一起拒绝，`refund` / `redirect` 也不收寄售（§15.7 表）。这类单两边都停在人工：钱在商城、托管在 trade，都在人工清单里，不会被错误终结，但没有出口。隔离 `corrupt` 的合同原因消除后本来就可以 `resume`，不在此列。
+  - 方案：`planPartial` 放开人民币寄售的交付腿 `rmb_buyer_credit`，照普通交易补发缺口（`rmb_buyer_credit#2`，付出的仍是卖家托管的资产），回到 `rmb_delivery`；托管扣款腿的部分扣出仍拒绝。`planRmb` 交付阶段改按 `currentLeg` 跟到最新的补发腿判结局：到账即 `rmb_delivered`；补发腿没到账转人工（原因 `final_credit_failed`，可再 `reissue`），不走退款；只有原交付腿整条没到账时才照旧转 `rmb_refund`。交付齐了，商城用 `RETRY_DELIVERY` 收敛交付，trade 回 DELIVERED、记卖家收入。用例：`go/trade/internal/commerce/manual_test.go` 的 `TestPartialRmbDeliveryReissuesTheShortfallAndNeverRefunds`。
+  - 为什么这样选：补发缺口沿用普通交易已有的 `partial` / `reissue` / `currentLeg` 一套写法，不另造出口；钱的结局只认 trade 回执，商城那一半已经有收敛交付。
+  - 被否决的做法：部分发放之后整单退款。买家手里已有一部分资产，退钱就是钱货两得；夺回已发的部分又违反「人工状态不猜结局，不自动夺回唯一资产」。补发失败转 `rmb_refund` 同理被否。
+  - 代价与边界：托管扣款腿的部分扣出仍要和商城订单一起处理，没有出口（交付之前，钱还没进卖家收入）；补发要人工认定缺口，与普通交易相同；收敛交付要运维在 trade 补发到账之后点一次 `RETRY_DELIVERY`，不会自动发生。
 - 付款已撤销、trade 合同之后却交付了（买家钱货两得），属于交付后拒付。商城没有「记交付并冻结收入」的人工动作：做了 `RETURN_TO_SELLER` 之后寄售停在 RETURNING，trade 每轮 `returned` 冲突。撤款拦交付时也有同类竞态：订单还在待交付，trade 已领走交付意图。这两种都归计划第 13 步的交付后退款与拒付处理。
 
 **回归测试**（都没有运行）：

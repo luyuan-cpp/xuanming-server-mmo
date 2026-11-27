@@ -311,6 +311,7 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 			trialCtx.ChallengeVowMask = f.TrialVowMask
 		}
 	}
+	spectateVisibility := spectateVisibilityForRankedBattle(mode, activityContext, customDuelRules, rankedCtx)
 	createReq := &battlepb.CreateBattleRequest{
 		BattleId:               battleId,
 		BattleConfigId:         f.ConfigId,
@@ -321,7 +322,8 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 		DeadlineMs:             deadlineMs,
 		TableFingerprint:       tableFingerprint,
 		ActivityContext:        activityContext,
-		SpectateVisibility:     spectateVisibilityForRankedBattle(mode, activityContext, customDuelRules, rankedCtx),
+		SpectateVisibility:     spectateVisibility,
+		SpectateChatEnabled:    spectateChatEnabledForBattle(svcCtx.Config.SpectateChat, mode, spectateVisibility, activityContext, snapshots),
 		RecordReplay:           recordReplayForBattle(svcCtx.Config.BattleReport.Enabled, mode, trialCtx, tacticalPuzzleCtx),
 		RequiredPhysicalRegion: f.PhysicalRegion,
 		PlacementOperationId:   f.OperationId,

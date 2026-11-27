@@ -163,6 +163,10 @@ type Config struct {
 	// 递归填各字段的 default(开关关闭,其余取默认值),标了 optional 反而不会填 default。
 	Spectate SpectateConf
 
+	// SpectateChat:局外人观战交流模式配置（docs/planning/battle-spectate-chat-v1.md）。
+	// 零值与缺省一致（Disabled=false 默认开放，首审或应急可一键置 true 关闭自由文本，不影响正常观战）。
+	SpectateChat SpectateChatConf
+
 	// ---- 战报回放(docs/design/battle-report-replay.md)----
 
 	// BattleReport:战报回放开关。与 Team 一样不标 optional,整段缺席时按 default 打开。
@@ -495,6 +499,65 @@ func (c SpectateConf) TicketTTL() time.Duration {
 		return defaultSpectateTicketTTL
 	}
 	return time.Duration(c.TicketTTLSeconds) * time.Second
+}
+
+const (
+	defaultSpectateChatMaxContentBytes      = 180
+	defaultSpectateChatParticipantCooldown  = 2000
+	defaultSpectateChatSpectatorCooldown    = 4000
+	defaultSpectateChatRoomRateLimitPerSec  = 8
+)
+
+// SpectateChatConf 控制「局外人观战交流模式」的全局策略与限流（docs/planning/battle-spectate-chat-v1.md §3.3）。
+// 布尔项均采用「零值 = 默认策略」命名，确保直接构造 Config{} 的单测与生产默认一致。
+type SpectateChatConf struct {
+	// Disabled=true 时全局关闭自由文本观战交流（首审/紧急止血），绝不影响正常观战可见性。
+	Disabled bool `json:",default=false"`
+	// DefaultForbidWhenUnset=true 时，从未手动修改过设置的玩家（UNSPECIFIED）按禁止交流处理；false=默认允许。
+	DefaultForbidWhenUnset bool `json:",default=false"`
+	// TeamPvpCaptainOnly=true 时，多人团队 PVP 仅按双方队长偏好裁决；false=全部真人参战者均允许（一票否决）。
+	TeamPvpCaptainOnly bool `json:",default=false"`
+	// TournamentDisabled=true 时，锦标赛不开放自由文本观战交流（仅保留既有 6 条预设喝彩）。
+	TournamentDisabled bool `json:",default=false"`
+	// 自由文本最大字节数（默认 180 字节 ≈ 60 个汉字）。
+	MaxContentBytes int `json:",default=180"`
+	// 单人发言冷却毫秒（默认参战者 2000ms、观战者 4000ms）。
+	ParticipantCooldownMs uint64 `json:",default=2000"`
+	SpectatorCooldownMs   uint64 `json:",default=4000"`
+	// 单场战斗每秒总发言条数上限（默认 8 条/秒，防 L2 热门局刷屏）。
+	RoomRateLimitPerSec int `json:",default=8"`
+}
+
+func (c SpectateChatConf) IsEnabled() bool               { return !c.Disabled }
+func (c SpectateChatConf) DefaultAllowsWhenUnset() bool  { return !c.DefaultForbidWhenUnset }
+func (c SpectateChatConf) IsTournamentEnabled() bool     { return !c.TournamentDisabled }
+
+func (c SpectateChatConf) EffectiveMaxContentBytes() int {
+	if c.MaxContentBytes <= 0 {
+		return defaultSpectateChatMaxContentBytes
+	}
+	return c.MaxContentBytes
+}
+
+func (c SpectateChatConf) EffectiveParticipantCooldownMs() uint64 {
+	if c.ParticipantCooldownMs == 0 {
+		return defaultSpectateChatParticipantCooldown
+	}
+	return c.ParticipantCooldownMs
+}
+
+func (c SpectateChatConf) EffectiveSpectatorCooldownMs() uint64 {
+	if c.SpectatorCooldownMs == 0 {
+		return defaultSpectateChatSpectatorCooldown
+	}
+	return c.SpectatorCooldownMs
+}
+
+func (c SpectateChatConf) EffectiveRoomRateLimitPerSec() int {
+	if c.RoomRateLimitPerSec <= 0 {
+		return defaultSpectateChatRoomRateLimitPerSec
+	}
+	return c.RoomRateLimitPerSec
 }
 
 // validateSpectate 校验观战配置:prod(非 dev / test)打开中继时

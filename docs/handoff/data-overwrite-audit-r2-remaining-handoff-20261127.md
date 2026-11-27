@@ -11,10 +11,9 @@
   - 第 4 轮批 V（帮战追杀令与灵脉）、批 W（锦标赛领奖与 match 发件）、批 X（生死状银两）；
   - 第 4 轮单 §7.4 的五条，§6.1 的九条（其中悬赏求书只写了批 A）。
   - 全部在 main。本单第一版随 `3d715db97` 推上 origin/main，之后的改动由负责人在旧电脑回收前一起提交推送。
-- **已复核**：批 X（第 4 轮单 §7.3 末条）；§6.1 除悬赏求书以外的 8 条（该节表头记着「子代理写、本会话复核」）；批 V、批 W、§7.4 五条（2026-11-27，旧电脑会话「复核第 4 轮批 V/W 并补 guild 见证 SQL」，结论在第 4 轮单 §7.1、§7.2、§7.4 末条：都通过，批 W 顺手补了邮箱满提示透传）。
-- **11-27 旧电脑又做完的**：§3.2 guild 见证 SQL；§3.3 第 5 条邮箱满提示透传。都未编译，验证命令在各自小节。
+- **已复核**：批 X（第 4 轮单 §7.3 末条）；§6.1 除悬赏求书以外的 8 条（该节表头记着「子代理写、本会话复核」）；批 V、批 W、§7.4 五条（2026-11-27，旧电脑会话「复核第 4 轮批 V/W 并补 guild 见证 SQL」，结论在第 4 轮单 §7.1、§7.2、§7.4 末条：都通过，批 W 顺手补了邮箱满提示透传）；悬赏求书批 A（同一会话，结论在求书设计稿 §11.1 末条：通过）。
+- **11-27 旧电脑又做完的**：§3.2 guild 见证 SQL；§3.3 第 1～5 条（删角清帮战三表与解散释放灵脉、EXPIRED 注释与客户端状态 6 文案、两处告警、生死状资格预检判旧局未结清、邮箱满提示透传与客户端先并入已领取）。都未编译，验证命令在各自小节。§3.3 第 6 条（寄售交付腿部分发放的 trade 出口）同日也做了。§3.3 只剩第 7 条的两处补用例（开战入口走完整请求路径的集成用例、`PrepareBattle` 把复核时刻传给 `CommitPrepareSilverFee` 的直接单测）：都只防回归、要搭完整的开战与备战夹具，旧电脑额度不够，没做。
 - **还没做**：
-  - 复核悬赏求书批 A（批 V、批 W、§7.4 已复核，见上）；
   - 写悬赏求书批 C、批 B；
   - 各批记下的顺带发现；
   - 选角页回选上限的用例；
@@ -38,7 +37,7 @@
 | 批 W | `git diff 8a6697af0 HEAD -- <§7.2 改动文件与测试>`。`tools/scripts/k8s_deploy.ps1` 里还有别的会话修的 r2-tn#3（match 的 FriendRpc / ChatRpc / GuildRpc 与准入名单），要分开看；`go/match/internal/logic/gather.go` 在 `bcea63be6` 改的一处，先核是谁的 | 第 4 轮单 §3 批 W、§7.2 |
 | §7.4 五条 | `git diff a0b3d195e HEAD -- <§7.4 改动文件>` | 第 4 轮单 §7.4 |
 
-> 批 V、批 W、§7.4 三行 2026-11-27 已复核完（第 4 轮单 §7.1、§7.2、§7.4 末条），只剩悬赏求书批 A 一行。
+> 四行 2026-11-27 都已复核完：批 V、批 W、§7.4 的结论在第 4 轮单 §7.1、§7.2、§7.4 末条，悬赏求书批 A 的结论在求书设计稿 §11.1 末条，都通过。
 | 悬赏求书批 A | 求书设计稿 §11.1 列的文件（`go/trade/internal/commerce/wanted_skill_book.go` 等），对照该稿 §3 的设计 | 求书设计稿 §3、§11.1 |
 
 diff 的终点一律用 HEAD：当时没提交的测试和设计稿，是后来的快照提交带进来的。
@@ -103,10 +102,11 @@ diff 的终点一律用 HEAD：当时没提交的测试和设计稿，是后来�
    - scene `player_jianghu.cpp` 的 `CheckDuelEligibility`：普通战书发起方的待退标记还在时回 pending、不放行；match `jianghu_duel_logic.go` 先认 pending 回新码；`constants/jianghu_errors.go` 与其测试加一行。
    - 用例：`PlayerJianghuTest.SilverWritPendingForAnotherBattleRejectsTheNewPreparationWithoutTouchingTheMarker` 补三段。五项在 `battle-jianghu-grudge-duel-phase1-implementation-plan.md`「问题 4」。
    - 验证（顺序）：`dev.bat gen`（开跑前 `git status --short data/` 核别人的表改动），`proto-gen-run`；Tip 表客户端可见，客户端仓跑 `gen_messageids.ps1` 与 `client_compile_check.ps1`；`msbuild` 串行 `/m:1` 依次 `cpp/generated/table/table.vcxproj`、`cpp/generated/proto/proto.vcxproj`、`cpp/libs/services/scene/scene.vcxproj`、`cpp/tests/bag_test/bag_test.vcxproj`，跑 `bag_test.exe --gtest_filter=PlayerJianghuTest.*`；`cd go/match; go build ./...; go test ./internal/constants/ ./internal/logic/ -count=1`。
-5. 锦标赛领奖遇到邮箱满，玩家看到的是内部错误，mail 的满箱提示没透传。响应里同时带着错误和已领取的部分，客户端怎么显示还没核（§7.2）。**2026-11-27 透传已做（未编译）**：只透传 `kMailRecipientBoxFull`，五项在 `season-team-tournament-v1.md` §7.7；客户端同时显示错误与已领取部分这一半没核，仍待做。
+5. 锦标赛领奖遇到邮箱满，玩家看到的是内部错误，mail 的满箱提示没透传。响应里同时带着错误和已领取的部分，客户端怎么显示还没核（§7.2）。**2026-11-27 透传已做（未编译）**：只透传 `kMailRecipientBoxFull`，五项在 `season-team-tournament-v1.md` §7.7；客户端那一半 11-27 也改了（`mmorpg-client` 的 `TournamentClient.ClaimReward` 先并入已领取的条目再报错误，未编译；客户端仓跑 `tools/client_compile_check.ps1` 0 错误、EditMode `TournamentClientTests` 全绿）。
 6. 寄售交付腿部分发放后，trade 侧没有出口。这是 mall#1 的残余，补法在 `docs/design/jubaozhai-market.md` §16.1。
    - 要改的是 `go/trade/internal/commerce/manual_plan.go`。当时它和双人复核会话的改动冲突，所以没做；11-27 核对，该文件已没有在途改动。
    - 双人复核的定案不改：规则只在后台流水里，批准号就是幂等键，OPS 只有一张目录。
+   - **2026-11-27 已做（未编译）**：`manual_plan.go` 的 `planPartial` 放开人民币寄售交付腿的缺口补发（托管扣款腿的部分扣出仍拒绝）；`rmb.go` 的 `planRmb` 交付阶段沿 `currentLeg` 判结局，补发没到账转人工（`final_credit_failed`，可再 `reissue`），不走退款。用例 `TestPartialRmbDeliveryReissuesTheShortfallAndNeverRefunds`，五项在 `jubaozhai-market.md` §16.1「trade 侧的出口」。验证：`cd go/trade; go build ./...; go test ./internal/commerce/ -run 'TestPartial|TestFailedCredits|TestRedirect' -count=1 -v`，再跑 `go test ./internal/commerce/ -count=1`；真库 `COMMERCE_TEST_DSN` + `COMMERCE_REQUIRE_TIDB=1` 跑 `TestTiDBRmbCancelRefusesManualContractAfterPaidDeliveryWentPartial` 不回归。
 7. 第 4 轮单 §7.1～§7.4「剩余与取舍」里别的条目也逐条过一遍。例如：开战入口没有走完整请求路径的集成用例；`PrepareBattle` 把复核时刻传给 `CommitPrepareSilverFee` 这一处没有直接单测。
 
 ### 3.4 选角页回选上限的用例（客户端仓，只加用例，不改产品代码）

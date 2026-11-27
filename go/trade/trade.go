@@ -25,6 +25,7 @@ import (
 	"shared/contentguard"
 	"shared/drainproof"
 	"shared/rolefence"
+	"shared/tablebundle"
 	"strconv"
 	"strings"
 	"syscall"
@@ -78,6 +79,9 @@ var (
 	allowModify = flag.Bool("allow-modify", false, "仅与 -migrate 一起使用:人工确认影响后允许 MODIFY COLUMN;常驻启动禁止使用")
 
 	showVersion = flag.Bool("version", false, "打印版本信息并退出")
+
+	// validateTablesDir:表包 sidecar 校验候选表包用(docs/design/config-table-hot-reload.md;悬赏求书求购单要 Skill / SkillScrollCraft)。
+	validateTablesDir = flag.String("validate-tables", "", "仅校验配置表目录(manifest + 解析)后退出")
 )
 
 // nodeType 本服务的节点类型。TradeNodeService=12 早已在 node.proto 里,proto 不改(P1-1)。
@@ -109,6 +113,7 @@ func main() {
 	if *showVersion {
 		return
 	}
+	tablebundle.MaybeRunValidateTablesCLI("trade", *validateTablesDir, false, svc.ValidateTables)
 	clockcheck.MustPass("trade")
 	if err := validateMigrationFlags(*migrateOnly, *allowModify); err != nil {
 		fmt.Fprintf(os.Stderr, "[trade] %v\n", err)

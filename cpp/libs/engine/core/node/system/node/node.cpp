@@ -1316,6 +1316,26 @@ void Node::InitKillSwitch()
 			 << " node_uuid=" << info.node_uuid();
 }
 
+namespace
+{
+// Kafka 生产者的进程级计数(kafka_producer_stats)。core 依赖 infra、infra 不依赖 core,所以由这里读出来写成指标。
+void WriteKafkaProducerMetrics(prometheus_text::Writer &writer)
+{
+	const kafka_producer_stats::Snapshot snapshot = kafka_producer_stats::Read();
+	writer.BeginFamily("cpp_node_kafka_producer_failures_total",
+					   "Messages this process failed to hand to Kafka: delivery_failed (the delivery report failed: timeout, "
+					   "fatal or purge, so the outcome may be unknown), produce_rejected (produce() refused it and it was not "
+					   "queued after retries).",
+					   prometheus_text::MetricType::kCounter);
+	writer.Sample({{"reason", "delivery_failed"}}, snapshot.deliveryFailed);
+	writer.Sample({{"reason", "produce_rejected"}}, snapshot.produceRejected);
+	writer.BeginFamily("cpp_node_kafka_producer_fatal_rebuilds_total",
+					   "Times an idempotent producer hit a fatal error and was rebuilt; should stay 0.",
+					   prometheus_text::MetricType::kCounter);
+	writer.Sample({}, snapshot.fatalRebuilds);
+}
+} // namespace
+
 void Node::StartMetricsExporter()
 {
 	eventLoop.assertInLoopThread();
@@ -1336,6 +1356,16 @@ void Node::StartMetricsExporter()
 	if (!GlobalMetricsRegistry().Register("dependency_link", &dependency_link_metrics::Write))
 	{
 		LOG_ERROR << "[Metrics] dependency_link collector already registered; dependency connection metrics may be missing";
+	}
+	// 节点间 RPC 的结局计数、Kafka 生产者的失败计数也是进程级的(2026-11-27 起导出,原来只有日志)。
+	if (!GlobalMetricsRegistry().Register("rpc_channel", [](prometheus_text::Writer &writer)
+		{ WriteRpcChannelMetrics(writer, GetRpcChannelStats()); }))
+	{
+		LOG_ERROR << "[Metrics] rpc_channel collector already registered; node RPC metrics may be missing";
+	}
+	if (!GlobalMetricsRegistry().Register("kafka_producer", &WriteKafkaProducerMetrics))
+	{
+		LOG_ERROR << "[Metrics] kafka_producer collector already registered; Kafka producer metrics may be missing";
 	}
 	// 回调捕获 this:出口是本 Node 的成员,在 FinalizeTeardownInLoop 里先于 Node 释放,
 	// 属于 AGENTS.md §11.7「与被绑对象同寿命的成员」的例外。只在 loop 线程上读 NodeInfo。

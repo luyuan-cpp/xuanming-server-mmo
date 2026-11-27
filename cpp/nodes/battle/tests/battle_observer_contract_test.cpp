@@ -2798,3 +2798,22 @@ TEST_F(BattleObserverContract, PruneSpectatorOperationsReclaimsExpiredActiveEntr
     BattleRoomManagerTestAccess::PruneSpectatorOperations(second.admit_before_ms());
     EXPECT_FALSE(BattleRoomManagerTestAccess::HasSpectatorOperation(battleId, second.observer_player_id(), kSecondOperation));
 }
+
+// 局外人观战交流开关：spectate_chat_enabled 随公开状态帧透传给观众，但所有私有字段仍严格脱敏（防双开偷底牌）。
+TEST_F(BattleObserverContract, RedactStatePreservesSpectateChatEnabledWhileStrippingPrivateFields) {
+    ::BattleStateS2C state;
+    state.set_battle_id(battleId);
+    state.set_spectate_chat_enabled(true);
+    state.add_self_items()->set_item_table_id(101);
+    state.add_team_pings()->set_sender_player_id(1001);
+    auto* actor = state.add_actors();
+    actor->set_actor_id(1001);
+    (*actor->mutable_skill_cooldown_rounds())[10002] = 2;
+
+    BattleRoomManagerTestAccess::RedactStateForViewer(state, 0);
+    EXPECT_TRUE(state.spectate_chat_enabled());
+    EXPECT_EQ(0, state.self_items_size());
+    EXPECT_EQ(0, state.team_pings_size());
+    ASSERT_EQ(1, state.actors_size());
+    EXPECT_TRUE(state.actors(0).skill_cooldown_rounds().empty());
+}

@@ -78,6 +78,9 @@ message CreateBattleRequest {
   JianghuDuelBattleContext jianghu_duel_context = 23;
   // 万象残局坊开局冻结上下文（仅 Dungeon 314 携带，随建房原件冻结）。
   TacticalPuzzleBattleContext tactical_puzzle_context = 24;
+  // 本场战斗是否开启「局外人观战交流」（由 match 建房按参战者偏好与模式规则冻结；
+  // false = 禁止观战期间局外人发言交流，绝不影响 spectate_visibility 正常观战）。
+  bool spectate_chat_enabled = 25;
 }
 
 // error_message 非零 = 未建房。签不出参战票据时回 kServiceUnavailable(turn-based §22 D70 fail-closed):

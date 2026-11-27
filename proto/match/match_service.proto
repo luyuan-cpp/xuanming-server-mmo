@@ -126,6 +126,11 @@ service MatchService {
   rpc StartTacticalPuzzleBattle(StartTacticalPuzzleBattleRequest) returns (StartTacticalPuzzleBattleResponse) {}
   rpc LikeTacticalPuzzle(LikeTacticalPuzzleRequest) returns (LikeTacticalPuzzleResponse) {}
   rpc GetTacticalPuzzleSolutionReplay(GetTacticalPuzzleSolutionReplayRequest) returns (GetTacticalPuzzleSolutionReplayResponse) {}
+
+  // ---- 局外人观战交流模式（docs/planning/battle-spectate-chat-v1.md）----
+  // 只认会话本人；关闭观战交流不禁止观战，仅禁止观战期间局外人发言；全房唯一公开室 + ContentGuard 审核。
+  rpc SendBattleSpectateChat(SendBattleSpectateChatRequest) returns (SendBattleSpectateChatResponse) {}
+  rpc PullBattleSpectateChat(PullBattleSpectateChatRequest) returns (PullBattleSpectateChatResponse) {}
 }
 
 // ----- Match mode config -----
@@ -328,6 +333,8 @@ message BattleWatchSummary {
   // 论剑 V7 正式高段排位实时围观元数据（非正式排位为 0）。
   uint32 ranked_team_size = 7;
   int64 ranked_peak_rating_centi = 8;
+  // 本场战斗是否开启「局外人观战交流」（开局冻结；false 仍可正常观战，仅禁止观战期间发言交流）。
+  bool spectate_chat_enabled = 9;
 }
 
 // 内部记录(由 SQL 成局组出,含路由所需的 battle 节点 id,不下发客户端)
@@ -1491,4 +1498,53 @@ message GetTacticalPuzzleSolutionReplayRequest {
 message GetTacticalPuzzleSolutionReplayResponse {
   TipInfoMessage error_message = 1;
   BattleReplayEnvelope replay = 2;
+}
+
+// ---- 局外人观战交流模式（docs/planning/battle-spectate-chat-v1.md）----
+// 仅认会话本人；全房唯一公开室（不分阵营），不碰队内私密频道；自由文本强制过 ContentGuard（fail-closed）。
+enum BattleSpectateChatRole {
+  BATTLE_SPECTATE_CHAT_ROLE_UNSPECIFIED = 0;
+  BATTLE_SPECTATE_CHAT_ROLE_PARTICIPANT = 1; // 本局参战者
+  BATTLE_SPECTATE_CHAT_ROLE_SPECTATOR   = 2; // 局外观战者
+}
+
+message BattleSpectateChatMessage {
+  uint64 seq = 1;                      // 本场战斗单调递增序号
+  uint64 sender_player_id = 2;         // 发言玩家 ID（供客户端黑名单过滤与举报）
+  string sender_name = 3;              // 服务端权威公开展示名（已截断）
+  BattleSpectateChatRole role = 4;     // 服务端权威身份标签（参战者 / 观战者）
+  string content = 5;                  // 经 ContentGuard 审核/打码后的正文
+  uint64 created_ms = 6;               // 服务端权威落盘时间戳（Unix 毫秒）
+}
+
+message SendBattleSpectateChatRequest {
+  uint64 battle_id = 1;
+  string content = 2;                  // 自由文本正文（trim 非空，字节上限由服务端拦截）
+}
+
+message SendBattleSpectateChatResponse {
+  TipInfoMessage error_message = 1;
+  uint64 battle_id = 2;
+  bool enabled = 3;                    // 本局冻结开关状态
+  bool battle_ended = 4;               // 本局是否已终局/关闭交流
+  uint64 cooldown_until_ms = 5;        // 本人发言冷却截止（Unix 毫秒）
+  BattleSpectateChatMessage message = 6; // 本次发送成功落定的消息（含权威 seq/role/打码正文）
+  uint64 server_time_ms = 7;
+}
+
+message PullBattleSpectateChatRequest {
+  uint64 battle_id = 1;
+  uint64 after_seq = 2;                // 仅返回 seq > after_seq 的新增消息（0=返回近期若干条）
+  uint32 limit = 3;                    // 最大返回条数（0=服务端默认，封顶 60）
+}
+
+message PullBattleSpectateChatResponse {
+  TipInfoMessage error_message = 1;
+  uint64 battle_id = 2;
+  bool enabled = 3;                    // 本局冻结开关状态
+  bool battle_ended = 4;               // 本局是否已终局/关闭交流
+  uint64 cooldown_until_ms = 5;
+  uint64 latest_seq = 6;
+  repeated BattleSpectateChatMessage messages = 7;
+  uint64 server_time_ms = 8;
 }

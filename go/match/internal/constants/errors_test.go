@@ -80,6 +80,12 @@ func tipCodes() map[string]uint32 {
 		"ErrPuzzleCannotLikeOwn":               ErrPuzzleCannotLikeOwn,
 		"ErrPuzzleClearRequiredToLike":         ErrPuzzleClearRequiredToLike,
 		"ErrPuzzleSolutionReplayNotFound":      ErrPuzzleSolutionReplayNotFound,
+		"ErrSpectateChatDisabled":              ErrSpectateChatDisabled,
+		"ErrSpectateChatEnded":                 ErrSpectateChatEnded,
+		"ErrSpectateChatCooldown":              ErrSpectateChatCooldown,
+		"ErrSpectateChatRoomBusy":              ErrSpectateChatRoomBusy,
+		"ErrSpectateChatContentRejected":       ErrSpectateChatContentRejected,
+		"ErrSpectateChatCheckUnavailable":      ErrSpectateChatCheckUnavailable,
 	}
 }
 

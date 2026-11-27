@@ -374,6 +374,8 @@ namespace match{void SendMatchServiceDeleteTacticalPuzzleErased(entt::registry& 
 namespace match{void SendMatchServiceStartTacticalPuzzleBattleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceLikeTacticalPuzzleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceGetTacticalPuzzleSolutionReplayErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceSendBattleSpectateChatErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServicePullBattleSpectateChatErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace paymentpb{void SendClientPlayerPaymentListPayChannelsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace paymentpb{void SendClientPlayerPaymentCreatePayIntentErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace paymentpb{void SendClientPlayerPaymentGetPayIntentErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -491,7 +493,7 @@ namespace trade{void SendTradeAdminRecordSellerViolationErased(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 587,
+static_assert(kMaxRpcMethodCount == 591,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -1848,6 +1850,16 @@ void InitMessageInfo()
         std::make_unique<::match::GetTacticalPuzzleSolutionReplayRequest>(),
         std::make_unique<::match::GetTacticalPuzzleSolutionReplayResponse>(),
         1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceGetTacticalPuzzleSolutionReplayErased, "/match.MatchService/GetTacticalPuzzleSolutionReplay"};
+    gRpcMethodRegistry[MatchServiceSendBattleSpectateChatMessageId] = RpcMethodMeta{
+        "MatchService", "SendBattleSpectateChat",
+        std::make_unique<::match::SendBattleSpectateChatRequest>(),
+        std::make_unique<::match::SendBattleSpectateChatResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceSendBattleSpectateChatErased, "/match.MatchService/SendBattleSpectateChat"};
+    gRpcMethodRegistry[MatchServicePullBattleSpectateChatMessageId] = RpcMethodMeta{
+        "MatchService", "PullBattleSpectateChat",
+        std::make_unique<::match::PullBattleSpectateChatRequest>(),
+        std::make_unique<::match::PullBattleSpectateChatResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServicePullBattleSpectateChatErased, "/match.MatchService/PullBattleSpectateChat"};
 
     // --- ClientPlayerPayment ---
     gRpcMethodRegistry[ClientPlayerPaymentListPayChannelsMessageId] = RpcMethodMeta{
@@ -2613,6 +2625,16 @@ void InitMessageInfo()
         "SceneSceneClientPlayer", "NotifySyncDigest",
         std::make_unique<::SyncDigestS2C>(),
         std::make_unique<::Empty>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSceneClientPlayerGetSpectateChatSettingMessageId] = RpcMethodMeta{
+        "SceneSceneClientPlayer", "GetSpectateChatSetting",
+        std::make_unique<::GetSpectateChatSettingRequest>(),
+        std::make_unique<::GetSpectateChatSettingResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSceneClientPlayerSetSpectateChatSettingMessageId] = RpcMethodMeta{
+        "SceneSceneClientPlayer", "SetSpectateChatSetting",
+        std::make_unique<::SetSpectateChatSettingRequest>(),
+        std::make_unique<::SetSpectateChatSettingResponse>(),
         0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneSeasonClientPlayer ---
@@ -3493,6 +3515,8 @@ bool IsClientMessageId(uint32_t messageId)
 	case MatchServiceStartTacticalPuzzleBattleMessageId:
 	case MatchServiceLikeTacticalPuzzleMessageId:
 	case MatchServiceGetTacticalPuzzleSolutionReplayMessageId:
+	case MatchServiceSendBattleSpectateChatMessageId:
+	case MatchServicePullBattleSpectateChatMessageId:
 	case ClientPlayerPaymentListPayChannelsMessageId:
 	case ClientPlayerPaymentCreatePayIntentMessageId:
 	case ClientPlayerPaymentGetPayIntentMessageId:
@@ -3588,6 +3612,8 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneSceneClientPlayerSceneInfoC2SMessageId:
 	case SceneSceneClientPlayerTravelToZoneMessageId:
 	case SceneSceneClientPlayerGetSyncDigestMessageId:
+	case SceneSceneClientPlayerGetSpectateChatSettingMessageId:
+	case SceneSceneClientPlayerSetSpectateChatSettingMessageId:
 	case SceneSeasonClientPlayerGetSeasonStateMessageId:
 	case SceneSeasonClientPlayerEquipSeasonSealMessageId:
 	case SceneSeasonClientPlayerCatchupSeasonSealMessageId:

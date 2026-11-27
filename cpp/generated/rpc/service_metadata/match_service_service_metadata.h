@@ -234,3 +234,11 @@ constexpr uint32_t MatchServiceLikeTacticalPuzzleIndex = 56;
 constexpr uint32_t MatchServiceGetTacticalPuzzleSolutionReplayMessageId = 581;
 constexpr uint32_t MatchServiceGetTacticalPuzzleSolutionReplayIndex = 57;
 #define MatchServiceGetTacticalPuzzleSolutionReplayMethod  ::MatchService_Stub::descriptor()->method(57)
+
+constexpr uint32_t MatchServiceSendBattleSpectateChatMessageId = 587;
+constexpr uint32_t MatchServiceSendBattleSpectateChatIndex = 58;
+#define MatchServiceSendBattleSpectateChatMethod  ::MatchService_Stub::descriptor()->method(58)
+
+constexpr uint32_t MatchServicePullBattleSpectateChatMessageId = 588;
+constexpr uint32_t MatchServicePullBattleSpectateChatIndex = 59;
+#define MatchServicePullBattleSpectateChatMethod  ::MatchService_Stub::descriptor()->method(59)

@@ -60,6 +60,7 @@
 #include "muduo/net/TcpConnection.h"
 #include "muduo/net/TcpServer.h"
 
+#include "metrics/prometheus_text.h"
 #include "network/rpc_channel.h"
 #include "network/rpc_channel_stats.h"
 #include "network/rpc_client.h"
@@ -950,4 +951,32 @@ TEST(RpcLinkHeartbeatStats, SummaryLineCarriesTheIdleCounters)
     // 字段名是与 tools/scripts/stress_summarize.ps1 的契约,改名要两边一起改。
     EXPECT_NE(line.find(" link_idle_closed=3"), std::string::npos) << line;
     EXPECT_NE(line.find(" link_idle_deferred=4"), std::string::npos) << line;
+}
+
+// Prometheus 出口(2026-11-27)读同一份计数。指标名与标签取值是告警的契约(deploy/k8s/cpp-node-dependency-alerts.yaml,
+// cpp_node_dependency_alerts_contract.tests.ps1 对照源码钉住);用本地 stats,不受同进程别的用例动全局计数影响。
+TEST(RpcLinkHeartbeatStats, PrometheusExportCarriesEveryOutcomeAndCounter)
+{
+    RpcChannelStats stats;
+    stats.timeout.store(3, std::memory_order_relaxed);
+    stats.onewayRejected.store(2, std::memory_order_relaxed);
+    stats.replyAbandoned.store(5, std::memory_order_relaxed);
+    stats.linkIdleClosed.store(7, std::memory_order_relaxed);
+    stats.maxSweepLatenessMs.store(250, std::memory_order_relaxed);
+    prometheus_text::Writer writer;
+    WriteRpcChannelMetrics(writer, stats);
+    EXPECT_EQ(writer.DroppedSamples(), 0u);
+    const std::string& text = writer.Text();
+    for (const std::string_view outcome : kRpcStatusCodeNames)
+    {
+        EXPECT_NE(text.find("cpp_node_rpc_client_calls_total{outcome=\"" + std::string(outcome) + "\"} "), std::string::npos)
+            << "没发生过的结局也以 0 导出: " << outcome;
+    }
+    EXPECT_NE(text.find("cpp_node_rpc_client_calls_total{outcome=\"timeout\"} 3\n"), std::string::npos) << text;
+    EXPECT_NE(text.find("cpp_node_rpc_client_calls_total{outcome=\"ok\"} 0\n"), std::string::npos) << text;
+    EXPECT_NE(text.find("cpp_node_rpc_client_oneway_total{result=\"not_sent\"} 2\n"), std::string::npos) << text;
+    EXPECT_NE(text.find("cpp_node_rpc_server_reply_anomalies_total{kind=\"abandoned\"} 5\n"), std::string::npos) << text;
+    EXPECT_NE(text.find("cpp_node_rpc_link_idle_closed_total 7\n"), std::string::npos) << text;
+    EXPECT_NE(text.find("# TYPE cpp_node_rpc_timeout_sweep_lateness_max_milliseconds gauge\n"), std::string::npos) << text;
+    EXPECT_NE(text.find("cpp_node_rpc_timeout_sweep_lateness_max_milliseconds 250\n"), std::string::npos) << text;
 }

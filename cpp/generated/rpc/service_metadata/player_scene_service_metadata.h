@@ -46,3 +46,11 @@ constexpr uint32_t SceneSceneClientPlayerGetSyncDigestIndex = 9;
 constexpr uint32_t SceneSceneClientPlayerNotifySyncDigestMessageId = 254;
 constexpr uint32_t SceneSceneClientPlayerNotifySyncDigestIndex = 10;
 #define SceneSceneClientPlayerNotifySyncDigestMethod  ::SceneSceneClientPlayer_Stub::descriptor()->method(10)
+
+constexpr uint32_t SceneSceneClientPlayerGetSpectateChatSettingMessageId = 589;
+constexpr uint32_t SceneSceneClientPlayerGetSpectateChatSettingIndex = 11;
+#define SceneSceneClientPlayerGetSpectateChatSettingMethod  ::SceneSceneClientPlayer_Stub::descriptor()->method(11)
+
+constexpr uint32_t SceneSceneClientPlayerSetSpectateChatSettingMessageId = 590;
+constexpr uint32_t SceneSceneClientPlayerSetSpectateChatSettingIndex = 12;
+#define SceneSceneClientPlayerSetSpectateChatSettingMethod  ::SceneSceneClientPlayer_Stub::descriptor()->method(12)

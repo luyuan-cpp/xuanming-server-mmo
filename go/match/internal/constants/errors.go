@@ -161,4 +161,12 @@ const (
 	ErrPuzzleCannotLikeOwn          = uint32(table.MatchError_kMatchPuzzleCannotLikeOwn)
 	ErrPuzzleClearRequiredToLike    = uint32(table.MatchError_kMatchPuzzleClearRequiredToLike)
 	ErrPuzzleSolutionReplayNotFound = uint32(table.MatchError_kMatchPuzzleSolutionReplayNotFound)
+
+	// ---- 局外人观战交流模式 V1（docs/planning/battle-spectate-chat-v1.md）----
+	ErrSpectateChatDisabled         = uint32(table.MatchError_kMatchSpectateChatDisabled)
+	ErrSpectateChatEnded            = uint32(table.MatchError_kMatchSpectateChatEnded)
+	ErrSpectateChatCooldown         = uint32(table.MatchError_kMatchSpectateChatCooldown)
+	ErrSpectateChatRoomBusy         = uint32(table.MatchError_kMatchSpectateChatRoomBusy)
+	ErrSpectateChatContentRejected  = uint32(table.MatchError_kMatchSpectateChatContentRejected)
+	ErrSpectateChatCheckUnavailable = uint32(table.MatchError_kMatchSpectateChatCheckUnavailable)
 )

@@ -391,6 +391,7 @@ type BattleStateS2C struct {
 	TeamAProtectedSkillId        uint32                       `protobuf:"varint,44,opt,name=team_a_protected_skill_id,json=teamAProtectedSkillId,proto3" json:"team_a_protected_skill_id,omitempty"`                      // 战前禁选 V2：A 队（team_index=0）最终生效的护招技能 ID（0=未选；观战/重连/回放全可见）
 	TeamBProtectedSkillId        uint32                       `protobuf:"varint,45,opt,name=team_b_protected_skill_id,json=teamBProtectedSkillId,proto3" json:"team_b_protected_skill_id,omitempty"`                      // 战前禁选 V2：B 队（team_index=1）最终生效的护招技能 ID（0=未选；观战/重连/回放全可见）
 	CounteredBanSkillIds         []uint32                     `protobuf:"varint,46,rep,packed,name=countered_ban_skill_ids,json=counteredBanSkillIds,proto3" json:"countered_ban_skill_ids,omitempty"`                    // 战前禁选 V2：被对方护招「破禁化解」而恢复可用的技能 ID（升序去重，与 banned_skill_ids 互斥）
+	SpectateChatEnabled          bool                         `protobuf:"varint,47,opt,name=spectate_chat_enabled,json=spectateChatEnabled,proto3" json:"spectate_chat_enabled,omitempty"`                                // 局外人观战交流开关（开局冻结；false 仍可正常观战，仅禁止观战期间交流）
 	unknownFields                protoimpl.UnknownFields
 	sizeCache                    protoimpl.SizeCache
 }
@@ -745,6 +746,13 @@ func (x *BattleStateS2C) GetCounteredBanSkillIds() []uint32 {
 		return x.CounteredBanSkillIds
 	}
 	return nil
+}
+
+func (x *BattleStateS2C) GetSpectateChatEnabled() bool {
+	if x != nil {
+		return x.SpectateChatEnabled
+	}
+	return false
 }
 
 type BattleStartS2C struct {
@@ -2950,7 +2958,7 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\x05label\x18\x06 \x01(\tR\x05label\x12'\n" +
 	"\x0ftelegraph_round\x18\a \x01(\rR\x0etelegraphRound\x12#\n" +
 	"\rstate_version\x18\b \x01(\x04R\fstateVersion\x12(\n" +
-	"\x10target_actor_ids\x18\t \x03(\x04R\x0etargetActorIds\"\xe9\x12\n" +
+	"\x10target_actor_ids\x18\t \x03(\x04R\x0etargetActorIds\"\x9d\x13\n" +
 	"\x0eBattleStateS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1f\n" +
 	"\vround_index\x18\x02 \x01(\rR\n" +
@@ -3006,7 +3014,8 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\x17tactical_puzzle_context\x18+ \x01(\v2\x1c.TacticalPuzzleBattleContextR\x15tacticalPuzzleContext\x128\n" +
 	"\x19team_a_protected_skill_id\x18, \x01(\rR\x15teamAProtectedSkillId\x128\n" +
 	"\x19team_b_protected_skill_id\x18- \x01(\rR\x15teamBProtectedSkillId\x125\n" +
-	"\x17countered_ban_skill_ids\x18. \x03(\rR\x14counteredBanSkillIds\"T\n" +
+	"\x17countered_ban_skill_ids\x18. \x03(\rR\x14counteredBanSkillIds\x122\n" +
+	"\x15spectate_chat_enabled\x18/ \x01(\bR\x13spectateChatEnabled\"T\n" +
 	"\x0eBattleStartS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12%\n" +
 	"\x05state\x18\x02 \x01(\v2\x0f.BattleStateS2CR\x05state\"\x89\x02\n" +

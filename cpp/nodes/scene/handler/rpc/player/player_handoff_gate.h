@@ -109,7 +109,10 @@ namespace scene_handoff_gate
 		}
 		if (service == SceneSceneClientPlayer::descriptor())
 		{
-			return index == SceneSceneClientPlayerGetSyncDigestIndex || index == SceneSceneClientPlayerSceneInfoC2SIndex;
+			return index == SceneSceneClientPlayerGetSyncDigestIndex ||
+				   index == SceneSceneClientPlayerSceneInfoC2SIndex ||
+				   index == SceneSceneClientPlayerGetSpectateChatSettingIndex ||
+				   index == SceneSceneClientPlayerSetSpectateChatSettingIndex;
 		}
 		return false;
 	}

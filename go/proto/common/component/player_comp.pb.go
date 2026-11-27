@@ -21,6 +21,57 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// 玩家个人「局外人观战交流」偏好(docs/planning/battle-spectate-chat-v1.md §3.2)。
+// 关闭仅禁止观战期间局外人发言交流，绝不影响该场战斗的观战可见性（spectate_visibility）。
+type ESpectateChatPreference int32
+
+const (
+	ESpectateChatPreference_SPECTATE_CHAT_PREF_UNSPECIFIED ESpectateChatPreference = 0 // 未手动设置：沿用服务端全局默认策略（当前默认允许）
+	ESpectateChatPreference_SPECTATE_CHAT_PREF_ALLOW       ESpectateChatPreference = 1 // 显式开启：允许局外人观战交流
+	ESpectateChatPreference_SPECTATE_CHAT_PREF_FORBID      ESpectateChatPreference = 2 // 显式关闭：禁止局外人观战交流（仍允许正常观战）
+)
+
+// Enum value maps for ESpectateChatPreference.
+var (
+	ESpectateChatPreference_name = map[int32]string{
+		0: "SPECTATE_CHAT_PREF_UNSPECIFIED",
+		1: "SPECTATE_CHAT_PREF_ALLOW",
+		2: "SPECTATE_CHAT_PREF_FORBID",
+	}
+	ESpectateChatPreference_value = map[string]int32{
+		"SPECTATE_CHAT_PREF_UNSPECIFIED": 0,
+		"SPECTATE_CHAT_PREF_ALLOW":       1,
+		"SPECTATE_CHAT_PREF_FORBID":      2,
+	}
+)
+
+func (x ESpectateChatPreference) Enum() *ESpectateChatPreference {
+	p := new(ESpectateChatPreference)
+	*p = x
+	return p
+}
+
+func (x ESpectateChatPreference) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ESpectateChatPreference) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_common_component_player_comp_proto_enumTypes[0].Descriptor()
+}
+
+func (ESpectateChatPreference) Type() protoreflect.EnumType {
+	return &file_proto_common_component_player_comp_proto_enumTypes[0]
+}
+
+func (x ESpectateChatPreference) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ESpectateChatPreference.Descriptor instead.
+func (ESpectateChatPreference) EnumDescriptor() ([]byte, []int) {
+	return file_proto_common_component_player_comp_proto_rawDescGZIP(), []int{0}
+}
+
 // Normal login
 type NormalLogin struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -437,6 +488,8 @@ type PlayerProfileComp struct {
 	SkillVfxOwnedBits []byte `protobuf:"bytes,13,opt,name=skill_vfx_owned_bits,json=skillVfxOwnedBits,proto3" json:"skill_vfx_owned_bits,omitempty"`
 	// 玩家已启用的技能特效覆盖(skill_table_id -> SkillVfxCosmetic.id;缺键或 0 表示默认表现,纯战斗画面表现零数值)。
 	EquippedSkillVfx map[uint32]uint32 `protobuf:"bytes,14,rep,name=equipped_skill_vfx,json=equippedSkillVfx,proto3" json:"equipped_skill_vfx,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	// 玩家个人「允许局外人观战交流」偏好(仅控制观战期间能否交流，不禁止观战)。
+	SpectateChatPref ESpectateChatPreference `protobuf:"varint,15,opt,name=spectate_chat_pref,json=spectateChatPref,proto3,enum=ESpectateChatPreference" json:"spectate_chat_pref,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -567,6 +620,13 @@ func (x *PlayerProfileComp) GetEquippedSkillVfx() map[uint32]uint32 {
 		return x.EquippedSkillVfx
 	}
 	return nil
+}
+
+func (x *PlayerProfileComp) GetSpectateChatPref() ESpectateChatPreference {
+	if x != nil {
+		return x.SpectateChatPref
+	}
+	return ESpectateChatPreference_SPECTATE_CHAT_PREF_UNSPECIFIED
 }
 
 // 一次进行中的改名(scene 写,随存档落库)。落库之后 scene 才向 data_service 发 RenameRole,所以任何一步断掉都能从存档接着做:
@@ -751,7 +811,7 @@ const file_proto_common_component_player_comp_proto_rawDesc = "" +
 	" \x01(\rR\x14hostedRecapItemCount\x127\n" +
 	"\x18hosted_recap_pending_ack\x18\v \x01(\bR\x15hostedRecapPendingAck\"(\n" +
 	"\x10PlayerUint32Comp\x12\x14\n" +
-	"\x05class\x18\x01 \x01(\rR\x05class\"\xd4\x05\n" +
+	"\x05class\x18\x01 \x01(\rR\x05class\"\x9c\x06\n" +
 	"\x11PlayerProfileComp\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12#\n" +
 	"\rappearance_id\x18\x02 \x01(\tR\fappearanceId\x12\x16\n" +
@@ -769,7 +829,8 @@ const file_proto_common_component_player_comp_proto_rawDesc = "" +
 	"\x15appearance_owned_bits\x18\v \x01(\fR\x13appearanceOwnedBits\x125\n" +
 	"\x17pet_cosmetic_owned_bits\x18\f \x01(\fR\x14petCosmeticOwnedBits\x12/\n" +
 	"\x14skill_vfx_owned_bits\x18\r \x01(\fR\x11skillVfxOwnedBits\x12V\n" +
-	"\x12equipped_skill_vfx\x18\x0e \x03(\v2(.PlayerProfileComp.EquippedSkillVfxEntryR\x10equippedSkillVfx\x1aC\n" +
+	"\x12equipped_skill_vfx\x18\x0e \x03(\v2(.PlayerProfileComp.EquippedSkillVfxEntryR\x10equippedSkillVfx\x12F\n" +
+	"\x12spectate_chat_pref\x18\x0f \x01(\x0e2\x18.eSpectateChatPreferenceR\x10spectateChatPref\x1aC\n" +
 	"\x15EquippedSkillVfxEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xaf\x01\n" +
@@ -785,7 +846,11 @@ const file_proto_common_component_player_comp_proto_rawDesc = "" +
 	"started_ms\x18\x06 \x01(\x04R\tstartedMs\"M\n" +
 	"\x15PlayerStressTestProbe\x12\x19\n" +
 	"\btest_seq\x18\x01 \x01(\x04R\atestSeq\x12\x19\n" +
-	"\btest_sig\x18\x02 \x01(\fR\atestSigB\x18Z\x16proto/common/componentb\x06proto3"
+	"\btest_sig\x18\x02 \x01(\fR\atestSig*z\n" +
+	"\x17eSpectateChatPreference\x12\"\n" +
+	"\x1eSPECTATE_CHAT_PREF_UNSPECIFIED\x10\x00\x12\x1c\n" +
+	"\x18SPECTATE_CHAT_PREF_ALLOW\x10\x01\x12\x1d\n" +
+	"\x19SPECTATE_CHAT_PREF_FORBID\x10\x02B\x18Z\x16proto/common/componentb\x06proto3"
 
 var (
 	file_proto_common_component_player_comp_proto_rawDescOnce sync.Once
@@ -799,28 +864,31 @@ func file_proto_common_component_player_comp_proto_rawDescGZIP() []byte {
 	return file_proto_common_component_player_comp_proto_rawDescData
 }
 
+var file_proto_common_component_player_comp_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_proto_common_component_player_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_proto_common_component_player_comp_proto_goTypes = []any{
-	(*NormalLogin)(nil),           // 0: NormalLogin
-	(*CoverLogin)(nil),            // 1: CoverLogin
-	(*Player)(nil),                // 2: Player
-	(*Account)(nil),               // 3: Account
-	(*UnregisterPlayer)(nil),      // 4: UnregisterPlayer
-	(*PlayerUint64Comp)(nil),      // 5: PlayerUint64Comp
-	(*PlayerUint32Comp)(nil),      // 6: PlayerUint32Comp
-	(*PlayerProfileComp)(nil),     // 7: PlayerProfileComp
-	(*PlayerRenameOp)(nil),        // 8: PlayerRenameOp
-	(*PlayerStressTestProbe)(nil), // 9: PlayerStressTestProbe
-	nil,                           // 10: PlayerProfileComp.EquippedSkillVfxEntry
+	(ESpectateChatPreference)(0),  // 0: eSpectateChatPreference
+	(*NormalLogin)(nil),           // 1: NormalLogin
+	(*CoverLogin)(nil),            // 2: CoverLogin
+	(*Player)(nil),                // 3: Player
+	(*Account)(nil),               // 4: Account
+	(*UnregisterPlayer)(nil),      // 5: UnregisterPlayer
+	(*PlayerUint64Comp)(nil),      // 6: PlayerUint64Comp
+	(*PlayerUint32Comp)(nil),      // 7: PlayerUint32Comp
+	(*PlayerProfileComp)(nil),     // 8: PlayerProfileComp
+	(*PlayerRenameOp)(nil),        // 9: PlayerRenameOp
+	(*PlayerStressTestProbe)(nil), // 10: PlayerStressTestProbe
+	nil,                           // 11: PlayerProfileComp.EquippedSkillVfxEntry
 }
 var file_proto_common_component_player_comp_proto_depIdxs = []int32{
-	8,  // 0: PlayerProfileComp.rename_op:type_name -> PlayerRenameOp
-	10, // 1: PlayerProfileComp.equipped_skill_vfx:type_name -> PlayerProfileComp.EquippedSkillVfxEntry
-	2,  // [2:2] is the sub-list for method output_type
-	2,  // [2:2] is the sub-list for method input_type
-	2,  // [2:2] is the sub-list for extension type_name
-	2,  // [2:2] is the sub-list for extension extendee
-	0,  // [0:2] is the sub-list for field type_name
+	9,  // 0: PlayerProfileComp.rename_op:type_name -> PlayerRenameOp
+	11, // 1: PlayerProfileComp.equipped_skill_vfx:type_name -> PlayerProfileComp.EquippedSkillVfxEntry
+	0,  // 2: PlayerProfileComp.spectate_chat_pref:type_name -> eSpectateChatPreference
+	3,  // [3:3] is the sub-list for method output_type
+	3,  // [3:3] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_component_player_comp_proto_init() }
@@ -833,13 +901,14 @@ func file_proto_common_component_player_comp_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_component_player_comp_proto_rawDesc), len(file_proto_common_component_player_comp_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      1,
 			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_proto_common_component_player_comp_proto_goTypes,
 		DependencyIndexes: file_proto_common_component_player_comp_proto_depIdxs,
+		EnumInfos:         file_proto_common_component_player_comp_proto_enumTypes,
 		MessageInfos:      file_proto_common_component_player_comp_proto_msgTypes,
 	}.Build()
 	File_proto_common_component_player_comp_proto = out.File

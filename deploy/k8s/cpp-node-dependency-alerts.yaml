@@ -9,7 +9,17 @@
 #   - cpp_node_dependency_connect_failures_total{dependency,reason}:建连失败,reason ∈ connect / auth / handshake。
 # 每类依赖、每个原因进程一启动就以 0 导出,increase() 抓得到第一次;节点没用到的依赖 connections 恒为 0,
 # 所以规则只看失败与意外断开的增量,不看 connections 是否为 0。
-# Kafka 不在这里:librdkafka 自管连接,C++ 生产者刻意不挂 event_cb(kafka_producer.h)。
+# Kafka 的连接状态没有指标:librdkafka 自管到各 broker 的连接,C++ 生产者刻意不挂 event_cb(kafka_producer.h)。
+# 要紧的是消息发没发出去,这一项另有计数(下面 cpp-node.calls 组)。
+#
+# 2026-11-27 起另有两组计数,原来只打日志(组 cpp-node.calls):
+#   - cpp_node_rpc_*:节点间 RPC,定义在 cpp/libs/engine/core/network/rpc_channel_stats.cpp(WriteRpcChannelMetrics),
+#     与 30s 汇总行 [RpcChannel] summary 同一份计数。cpp_node_rpc_client_calls_total{outcome} 的取值是
+#     rpc_status.h 的 kRpcStatusCodeNames;
+#   - cpp_node_kafka_producer_*:Kafka 生产者,定义在 cpp/libs/engine/core/node/system/node/node.cpp(WriteKafkaProducerMetrics),
+#     读 kafka_producer.h 的 kafka_producer_stats。
+#   - 调用失败比例只算没正常完成的那几种结局,不算 remote_rejected(含热关停的拒绝,是人为关掉的)与 channel_closed
+#     (本端关机拆通道);每秒不到 1 次调用的节点不算,免得一两次失败就是 100%。5% / 10 分钟是起步值,有压测数据后再调。
 #
 # 为什么要报:以前这些连接只有日志,依赖整个连不上、或者连接反复断开重连,只能翻日志发现(R17)。
 #   - 建连一直失败:Redis 每 3~4 秒重试一次,gRPC / etcd 按退避(etcd 封顶 5s、业务通道封顶 120s)重试,5 分钟的窗口里都至少有两次;
@@ -66,3 +76,51 @@ spec:
               15 分钟内意外断开 {{ $value | printf "%.0f" }} 次(本端停机、换连接、对端优雅退役不算)。每次断开,在途的命令或调用
               按结局未知处理,重连期间依赖它的功能不可用。Redis 多半是存活探测超时(日志 zone_redis_liveness_timeout)或对端重启;
               etcd / grpc 多半是 keepalive 没回或对端被强杀。对照同一时段别的节点是否也在断:只有这一个节点在断,先查它所在节点的网络。
+    # 节点间 RPC 调用与 Kafka 生产(2026-11-27;指标见文件头)。只看失败的比例与增量,不看调用量本身。
+    - name: cpp-node.calls
+      interval: 30s
+      rules:
+        - alert: CppNodeRpcCallFailureRatioHigh
+          expr: |
+            (
+              sum by (namespace, instance) (rate(cpp_node_rpc_client_calls_total{outcome=~"not_sent|remote_failed|reply_dropped|timeout|disconnected|invalid_response"}[10m]))
+              /
+              (sum by (namespace, instance) (rate(cpp_node_rpc_client_calls_total[10m])) > 1)
+            ) > 0.05
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 调别的节点有超过 5% 失败或结局未知"
+            description: >-
+              10 分钟里这个节点发出的节点间 RPC 有 {{ $value | humanizePercentage }} 没有正常完成(每秒不到 1 次调用的节点不算)。
+              计入的结局:not_sent(链路不可用、在途已满等,确定没发)、remote_failed(对端 handler 显式失败)、
+              reply_dropped / timeout / disconnected / invalid_response(结局未知,由调用方按自己的协议收场)。
+              不计入 remote_rejected(含热关停的拒绝,是人为关掉的)和 channel_closed(本端关机拆通道)。
+              按 outcome 看 cpp_node_rpc_client_calls_total 哪一项在涨:timeout 多半是对端 loop 卡住或过载
+              (对照对端的 cpp_node_rpc_timeout_sweep_lateness_max_milliseconds);disconnected / not_sent 多半是对端在重启或网络断开
+              (对照 cpp_node_dependency_lost_total{dependency="node_link"})。
+        - alert: CppNodeKafkaProduceFailing
+          expr: |
+            sum by (namespace, instance, reason) (increase(cpp_node_kafka_producer_failures_total[5m])) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 往 Kafka 发消息一直失败({{ $labels.reason }})"
+            description: >-
+              这个节点 5 分钟以上每个 5 分钟窗口都有发不出去的消息。reason=delivery_failed 是投递回执失败(超时、fatal、purge,
+              结局可能未知);reason=produce_rejected 是 produce() 拒收且重试后仍没入队(本地队列满、fatal 冷却期、消息过大)。
+              期间节点发出的命令与提示进不了 Kafka,由各业务的有主协议与后台对账兜底。日志里搜 [Kafka] 的错误行;
+              多个节点同时响,先查 Kafka 集群与网络。
+        - alert: CppNodeKafkaProducerFatal
+          expr: |
+            sum by (namespace, instance) (increase(cpp_node_kafka_producer_fatal_rebuilds_total[15m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 的 Kafka 幂等生产者进入 fatal 并被重建"
+            description: >-
+              正常应恒为 0。重建时队列里没送出的消息按投递失败计入 cpp_node_kafka_producer_failures_total{reason="delivery_failed"},
+              结局未知。日志里搜 "[Kafka] Producer instance entered a fatal state",按其中 librdkafka 的错误码排查。

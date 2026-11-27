@@ -6567,6 +6567,7 @@ BattleStateS2C TurnBattleEngine::BuildStateSnapshot() const {
     state.set_battle_id(createRequest.battle_id());
     state.set_round_index(roundIndex);
     state.set_outcome(outcome);
+    state.set_spectate_chat_enabled(createRequest.spectate_chat_enabled());
     // 引擎无时钟:action_deadline_ms 由 battle 节点按房间 timer 回填
     state.set_action_deadline_ms(0);
 

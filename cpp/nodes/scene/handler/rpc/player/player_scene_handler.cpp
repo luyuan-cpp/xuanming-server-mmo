@@ -5,9 +5,11 @@
 #include "engine/core/type_define/player_guid_comp.h"
 
 #include "node/system/node/node.h"
+#include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/scene_error_tip.pb.h"
 #include "modules/scene/comp/scene_comp.h"
 #include "proto/common/base/node.pb.h"
+#include "proto/common/component/player_comp.pb.h"
 #include "proto/common/component/player_network_comp.pb.h"
 #include "proto/scene_manager/scene_manager_service.pb.h"
 #include "grpc_client/scene_manager/scene_manager_service_grpc_client.h"
@@ -19,6 +21,7 @@
 #include "player/system/player_scene.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_landing.h"
+#include "player/system/player_mutability.h"
 #include "battle/system/player_battle.h"
 
 ///<<< END WRITING YOUR CODE
@@ -261,4 +264,66 @@ void SceneSceneClientPlayerHandler::NotifySyncDigest(entt::entity player,const :
 SendToPlayerClient(SceneSceneClientPlayerNotifySyncDigestMessageId, *request, player);
 ///<<< END WRITING YOUR CODE
 
+}
+
+void SceneSceneClientPlayerHandler::GetSpectateChatSetting(entt::entity player,const ::GetSpectateChatSettingRequest* request,
+	::GetSpectateChatSettingResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	(void)request;
+	if (!tlsEcs.actorRegistry.valid(player))
+	{
+		response->mutable_error_message()->set_id(kEntityIsNull);
+		return;
+	}
+	const auto* profile = tlsEcs.actorRegistry.try_get<PlayerProfileComp>(player);
+	if (profile == nullptr)
+	{
+		LOG_ERROR << "[SpectateChatSetting] GetSpectateChatSetting rejected: PlayerProfileComp missing player_id="
+				  << tlsEcs.GetPlayerId(player);
+		response->mutable_error_message()->set_id(kServiceUnavailable);
+		return;
+	}
+	const auto pref = profile->spectate_chat_pref();
+	response->set_preference(pref);
+	response->set_effective_allow(pref != SPECTATE_CHAT_PREF_FORBID);
+///<<< END WRITING YOUR CODE
+}
+
+void SceneSceneClientPlayerHandler::SetSpectateChatSetting(entt::entity player,const ::SetSpectateChatSettingRequest* request,
+	::SetSpectateChatSettingResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	if (!tlsEcs.actorRegistry.valid(player))
+	{
+		response->mutable_error_message()->set_id(kEntityIsNull);
+		return;
+	}
+	const auto pref = request->preference();
+	if (pref != SPECTATE_CHAT_PREF_ALLOW && pref != SPECTATE_CHAT_PREF_FORBID)
+	{
+		response->mutable_error_message()->set_id(kInvalidParameter);
+		return;
+	}
+	if (!player_mutability::IsPlayerMutable(player))
+	{
+		response->mutable_error_message()->set_id(kFeatureUnavailable);
+		return;
+	}
+	auto* profile = tlsEcs.actorRegistry.try_get<PlayerProfileComp>(player);
+	if (profile == nullptr)
+	{
+		LOG_ERROR << "[SpectateChatSetting] SetSpectateChatSetting rejected: PlayerProfileComp missing player_id="
+				  << tlsEcs.GetPlayerId(player);
+		response->mutable_error_message()->set_id(kServiceUnavailable);
+		return;
+	}
+	if (profile->spectate_chat_pref() != pref)
+	{
+		profile->set_spectate_chat_pref(pref);
+		PlayerLifecycleSystem::RequestKeyProgressSave(player, "spectate_chat_setting");
+	}
+	response->set_preference(profile->spectate_chat_pref());
+	response->set_effective_allow(profile->spectate_chat_pref() != SPECTATE_CHAT_PREF_FORBID);
+///<<< END WRITING YOUR CODE
 }

@@ -301,3 +301,13 @@ func (s *MatchServiceServer) LikeTacticalPuzzle(ctx context.Context, in *matchpb
 func (s *MatchServiceServer) GetTacticalPuzzleSolutionReplay(ctx context.Context, in *matchpb.GetTacticalPuzzleSolutionReplayRequest) (*matchpb.GetTacticalPuzzleSolutionReplayResponse, error) {
 	return logic.NewTacticalPuzzleLogic(ctx, s.svcCtx).GetTacticalPuzzleSolutionReplay(in)
 }
+
+// ---- 局外人观战交流模式 V1（587..588）----
+
+func (s *MatchServiceServer) SendBattleSpectateChat(ctx context.Context, in *matchpb.SendBattleSpectateChatRequest) (*matchpb.SendBattleSpectateChatResponse, error) {
+	return logic.NewSpectateChatLogic(ctx, s.svcCtx).SendBattleSpectateChat(in)
+}
+
+func (s *MatchServiceServer) PullBattleSpectateChat(ctx context.Context, in *matchpb.PullBattleSpectateChatRequest) (*matchpb.PullBattleSpectateChatResponse, error) {
+	return logic.NewSpectateChatLogic(ctx, s.svcCtx).PullBattleSpectateChat(in)
+}

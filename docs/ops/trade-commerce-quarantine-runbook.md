@@ -213,6 +213,6 @@ commercefix -endpoint <trade Pod IP>:<端口> resolve -commerce <commerce_id> -a
 
 - 管理后台的页面与审批流（两人复核）：现在入口是管理 RPC 加命令行（§4.2），请求里的操作人名字证明不了身份；有管理后台的登录身份之后在入口里接。
 - 官方商城交付的人工处理：要和商城订单一起做，不在本工具。
-- 人民币寄售交付腿部分发放（原因 `applied_partial`）：部分发放的腿只有 `partial` 收（别的动作在补记腿结局时就被拒），而 `partial` / `refund` / `redirect` 都不收寄售，trade 侧一个动作都做不了，还没有出口（设计 [jubaozhai-market.md](../design/jubaozhai-market.md) §16.1「代价与边界」）。
+- 人民币寄售交付腿部分发放（原因 `applied_partial`）：2026-11-27 起有出口（未编译）。对交付腿 `rmb_buyer_credit` 用 `partial` 按认定的缺口补发，合同回到交付阶段；补发到账后在商城对这一单做 `RETRY_DELIVERY` 收敛交付，trade 回 DELIVERED。补发没到账会再转人工（`final_credit_failed`），用 `reissue` 再补，不能退款。托管扣款腿的部分扣出仍不在本工具，要和商城订单一起处理（设计 [jubaozhai-market.md](../design/jubaozhai-market.md) §16.1「trade 侧的出口」）。
 - 部分扣出的实例、宝宝：没有托管原件，只能按 `player_snapshot` 人工补发。
 - Java 版对齐，见设计 §15.3「2026-10-22 修复」的残余项与 §15.7.1。

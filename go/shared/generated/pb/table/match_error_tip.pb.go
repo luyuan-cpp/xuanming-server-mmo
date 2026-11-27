@@ -96,6 +96,12 @@ const (
 	MatchError_kMatchPuzzleCannotLikeOwn               MatchError = 16070
 	MatchError_kMatchPuzzleClearRequiredToLike         MatchError = 16071
 	MatchError_kMatchPuzzleSolutionReplayNotFound      MatchError = 16072
+	MatchError_kMatchSpectateChatDisabled              MatchError = 16073
+	MatchError_kMatchSpectateChatEnded                 MatchError = 16074
+	MatchError_kMatchSpectateChatCooldown              MatchError = 16075
+	MatchError_kMatchSpectateChatRoomBusy              MatchError = 16076
+	MatchError_kMatchSpectateChatContentRejected       MatchError = 16077
+	MatchError_kMatchSpectateChatCheckUnavailable      MatchError = 16078
 )
 
 // Enum value maps for MatchError.
@@ -173,6 +179,12 @@ var (
 		16070: "kMatchPuzzleCannotLikeOwn",
 		16071: "kMatchPuzzleClearRequiredToLike",
 		16072: "kMatchPuzzleSolutionReplayNotFound",
+		16073: "kMatchSpectateChatDisabled",
+		16074: "kMatchSpectateChatEnded",
+		16075: "kMatchSpectateChatCooldown",
+		16076: "kMatchSpectateChatRoomBusy",
+		16077: "kMatchSpectateChatContentRejected",
+		16078: "kMatchSpectateChatCheckUnavailable",
 	}
 	MatchError_value = map[string]int32{
 		"kMatch_errorOK":                          0,
@@ -247,6 +259,12 @@ var (
 		"kMatchPuzzleCannotLikeOwn":               16070,
 		"kMatchPuzzleClearRequiredToLike":         16071,
 		"kMatchPuzzleSolutionReplayNotFound":      16072,
+		"kMatchSpectateChatDisabled":              16073,
+		"kMatchSpectateChatEnded":                 16074,
+		"kMatchSpectateChatCooldown":              16075,
+		"kMatchSpectateChatRoomBusy":              16076,
+		"kMatchSpectateChatContentRejected":       16077,
+		"kMatchSpectateChatCheckUnavailable":      16078,
 	}
 )
 
@@ -281,7 +299,7 @@ var File_match_error_tip_proto protoreflect.FileDescriptor
 
 const file_match_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15match_error_tip.proto*\xda\x12\n" +
+	"\x15match_error_tip.proto*\xac\x14\n" +
 	"\vmatch_error\x12\x12\n" +
 	"\x0ekMatch_errorOK\x10\x00\x12\x13\n" +
 	"\x0ekMatchInBattle\x10\x80}\x12\x18\n" +
@@ -354,7 +372,13 @@ const file_match_error_tip_proto_rawDesc = "" +
 	"\x18kMatchPuzzleNotPublished\x10\xc5}\x12\x1e\n" +
 	"\x19kMatchPuzzleCannotLikeOwn\x10\xc6}\x12$\n" +
 	"\x1fkMatchPuzzleClearRequiredToLike\x10\xc7}\x12'\n" +
-	"\"kMatchPuzzleSolutionReplayNotFound\x10\xc8}B$\n" +
+	"\"kMatchPuzzleSolutionReplayNotFound\x10\xc8}\x12\x1f\n" +
+	"\x1akMatchSpectateChatDisabled\x10\xc9}\x12\x1c\n" +
+	"\x17kMatchSpectateChatEnded\x10\xca}\x12\x1f\n" +
+	"\x1akMatchSpectateChatCooldown\x10\xcb}\x12\x1f\n" +
+	"\x1akMatchSpectateChatRoomBusy\x10\xcc}\x12&\n" +
+	"!kMatchSpectateChatContentRejected\x10\xcd}\x12'\n" +
+	"\"kMatchSpectateChatCheckUnavailable\x10\xce}B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

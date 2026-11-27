@@ -2,9 +2,12 @@
 
 // 节点间 RPC0 的进程级计数(docs/design/muduo-rpc-channel.md §12)。
 //
-// C++ 节点没有 Prometheus 出口,口径与 exit_persist_stats / [lane] 汇总一致:relaxed 原子计数 + 每 30s 一行汇总,
-// 只在计数变化时打印;压测复盘由 stress_summarize 解析这一行。字段名是与解析脚本之间的契约,改名要两边一起改
-// (FormatRpcChannelStats 有单测锁定)。只用低基数维度,绝不出现 player_id / session_id。
+// relaxed 原子计数,两个出口读同一份:
+//   - 每 30s 一行汇总,只在计数变化时打印;压测复盘由 stress_summarize 解析这一行。字段名是与解析脚本之间的契约,
+//     改名要两边一起改(FormatRpcChannelStats 有单测锁定);
+//   - 节点的 Prometheus 出口(2026-11-27 起,WriteRpcChannelMetrics,Node::StartMetricsExporter 登记)。指标名与标签取值
+//     是与 deploy/k8s/cpp-node-dependency-alerts.yaml 之间的契约,由 cpp_node_dependency_alerts_contract.tests.ps1 对照源码钉住。
+// 只用低基数维度,绝不出现 player_id / session_id。
 //
 // 逐条日志一律经 ShouldLogRpcEvent 采样(前 8 条逐条,之后每 1024 条一条),准确的总数以这里的计数为准。
 
@@ -15,6 +18,11 @@
 namespace muduo::net
 {
 class EventLoop;
+}
+
+namespace prometheus_text
+{
+class Writer;
 }
 
 struct RpcChannelStats
@@ -61,6 +69,10 @@ RpcChannelStats& GetRpcChannelStats();
 
 // 当前计数的一行汇总(不含前缀),字段顺序固定。
 std::string FormatRpcChannelStats(const RpcChannelStats& stats);
+
+// 把 stats 写成 Prometheus 指标(cpp_node_rpc_*),与汇总行字段一一对应。每个结局、每项计数进程一启动就以 0 导出,
+// 告警的 increase() / rate() 抓得到第一次。
+void WriteRpcChannelMetrics(prometheus_text::Writer& writer, const RpcChannelStats& stats);
 
 // 采样:第 n 次事件(n 从 1 起)是否逐条记录。前 8 条逐条,之后每 1024 条一条。
 inline bool ShouldLogRpcEvent(uint64_t occurrence)

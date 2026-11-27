@@ -36,6 +36,7 @@
 #include "google/protobuf/generated_enum_reflection.h"
 #include "google/protobuf/unknown_field_set.h"
 #include "proto/common/component/actor_comp.pb.h"
+#include "proto/common/component/player_comp.pb.h"
 #include "proto/common/component/actor_attribute_state_comp.pb.h"
 #include "proto/common/component/equipment_effects.pb.h"
 #include "proto/common/component/support_effects.pb.h"
@@ -14425,9 +14426,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
     kActiveSeasonIdFieldNumber = 24,
     kAiControlledFieldNumber = 25,
     kFormationIdFieldNumber = 28,
-    kSeasonWeeklyAffixIdFieldNumber = 30,
-    kIsTeamCaptainFieldNumber = 32,
     kMinorPlayDeadlineMsFieldNumber = 33,
+    kIsTeamCaptainFieldNumber = 32,
+    kSpectateChatPrefFieldNumber = 34,
+    kSeasonWeeklyAffixIdFieldNumber = 30,
     kSkillRanksFieldNumber = 21,
     kEquippedSkillVfxFieldNumber = 31,
   };
@@ -14821,14 +14823,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
   void _internal_set_formation_id(::uint32_t value);
 
   public:
-  // uint32 season_weekly_affix_id = 30;
-  void clear_season_weekly_affix_id() ;
-  [[nodiscard]] ::uint32_t season_weekly_affix_id() const;
-  void set_season_weekly_affix_id(::uint32_t value);
+  // uint64 minor_play_deadline_ms = 33;
+  void clear_minor_play_deadline_ms() ;
+  [[nodiscard]] ::uint64_t minor_play_deadline_ms() const;
+  void set_minor_play_deadline_ms(::uint64_t value);
 
   private:
-  ::uint32_t _internal_season_weekly_affix_id() const;
-  void _internal_set_season_weekly_affix_id(::uint32_t value);
+  ::uint64_t _internal_minor_play_deadline_ms() const;
+  void _internal_set_minor_play_deadline_ms(::uint64_t value);
 
   public:
   // bool is_team_captain = 32;
@@ -14841,14 +14843,24 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
   void _internal_set_is_team_captain(bool value);
 
   public:
-  // uint64 minor_play_deadline_ms = 33;
-  void clear_minor_play_deadline_ms() ;
-  [[nodiscard]] ::uint64_t minor_play_deadline_ms() const;
-  void set_minor_play_deadline_ms(::uint64_t value);
+  // .eSpectateChatPreference spectate_chat_pref = 34;
+  void clear_spectate_chat_pref() ;
+  [[nodiscard]] ::eSpectateChatPreference spectate_chat_pref() const;
+  void set_spectate_chat_pref(::eSpectateChatPreference value);
 
   private:
-  ::uint64_t _internal_minor_play_deadline_ms() const;
-  void _internal_set_minor_play_deadline_ms(::uint64_t value);
+  ::eSpectateChatPreference _internal_spectate_chat_pref() const;
+  void _internal_set_spectate_chat_pref(::eSpectateChatPreference value);
+
+  public:
+  // uint32 season_weekly_affix_id = 30;
+  void clear_season_weekly_affix_id() ;
+  [[nodiscard]] ::uint32_t season_weekly_affix_id() const;
+  void set_season_weekly_affix_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_season_weekly_affix_id() const;
+  void _internal_set_season_weekly_affix_id(::uint32_t value);
 
   public:
   // map<uint32, uint32> skill_ranks = 21;
@@ -14887,7 +14899,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 33,
+      ::google::protobuf::internal::TcParseTable<5, 34,
                           12, 102,
                           7>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -14945,9 +14957,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
     ::uint32_t active_season_id_;
     bool ai_controlled_;
     ::uint32_t formation_id_;
-    ::uint32_t season_weekly_affix_id_;
-    bool is_team_captain_;
     ::uint64_t minor_play_deadline_ms_;
+    bool is_team_captain_;
+    int spectate_chat_pref_;
+    ::uint32_t season_weekly_affix_id_;
     ::google::protobuf::internal::MapField<BattlePlayerSnapshot_SkillRanksEntry_DoNotUse, ::uint32_t, ::uint32_t> skill_ranks_;
     ::google::protobuf::internal::MapField<BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse, ::uint32_t, ::uint32_t> equipped_skill_vfx_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -17576,7 +17589,7 @@ inline int BattlePlayerSnapshot::skill_ranks_size() const {
 inline void BattlePlayerSnapshot::clear_skill_ranks() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.skill_ranks_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& BattlePlayerSnapshot::_internal_skill_ranks() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -17592,7 +17605,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattleP
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattlePlayerSnapshot::mutable_skill_ranks()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000001U);
   // @@protoc_insertion_point(field_mutable_map:BattlePlayerSnapshot.skill_ranks)
   return _internal_mutable_skill_ranks();
 }
@@ -17993,7 +18006,7 @@ inline void BattlePlayerSnapshot::set_allocated_tower_context(::WuxingTowerBattl
 inline void BattlePlayerSnapshot::clear_season_weekly_affix_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.season_weekly_affix_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
 }
 inline ::uint32_t BattlePlayerSnapshot::season_weekly_affix_id() const {
   // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.season_weekly_affix_id)
@@ -18001,7 +18014,7 @@ inline ::uint32_t BattlePlayerSnapshot::season_weekly_affix_id() const {
 }
 inline void BattlePlayerSnapshot::set_season_weekly_affix_id(::uint32_t value) {
   _internal_set_season_weekly_affix_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
   // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.season_weekly_affix_id)
 }
 inline ::uint32_t BattlePlayerSnapshot::_internal_season_weekly_affix_id() const {
@@ -18023,7 +18036,7 @@ inline int BattlePlayerSnapshot::equipped_skill_vfx_size() const {
 inline void BattlePlayerSnapshot::clear_equipped_skill_vfx() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equipped_skill_vfx_.Clear();
-  ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& BattlePlayerSnapshot::_internal_equipped_skill_vfx() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -18039,7 +18052,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattleP
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattlePlayerSnapshot::mutable_equipped_skill_vfx()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[1], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000002U);
   // @@protoc_insertion_point(field_mutable_map:BattlePlayerSnapshot.equipped_skill_vfx)
   return _internal_mutable_equipped_skill_vfx();
 }
@@ -18072,7 +18085,7 @@ inline void BattlePlayerSnapshot::_internal_set_is_team_captain(bool value) {
 inline void BattlePlayerSnapshot::clear_minor_play_deadline_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.minor_play_deadline_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x40000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
 }
 inline ::uint64_t BattlePlayerSnapshot::minor_play_deadline_ms() const {
   // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.minor_play_deadline_ms)
@@ -18080,7 +18093,7 @@ inline ::uint64_t BattlePlayerSnapshot::minor_play_deadline_ms() const {
 }
 inline void BattlePlayerSnapshot::set_minor_play_deadline_ms(::uint64_t value) {
   _internal_set_minor_play_deadline_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x40000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
   // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.minor_play_deadline_ms)
 }
 inline ::uint64_t BattlePlayerSnapshot::_internal_minor_play_deadline_ms() const {
@@ -18090,6 +18103,30 @@ inline ::uint64_t BattlePlayerSnapshot::_internal_minor_play_deadline_ms() const
 inline void BattlePlayerSnapshot::_internal_set_minor_play_deadline_ms(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.minor_play_deadline_ms_ = value;
+}
+
+// .eSpectateChatPreference spectate_chat_pref = 34;
+inline void BattlePlayerSnapshot::clear_spectate_chat_pref() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spectate_chat_pref_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x40000000U);
+}
+inline ::eSpectateChatPreference BattlePlayerSnapshot::spectate_chat_pref() const {
+  // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.spectate_chat_pref)
+  return _internal_spectate_chat_pref();
+}
+inline void BattlePlayerSnapshot::set_spectate_chat_pref(::eSpectateChatPreference value) {
+  _internal_set_spectate_chat_pref(value);
+  SetHasBit(_impl_._has_bits_[0], 0x40000000U);
+  // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.spectate_chat_pref)
+}
+inline ::eSpectateChatPreference BattlePlayerSnapshot::_internal_spectate_chat_pref() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::eSpectateChatPreference>(_impl_.spectate_chat_pref_);
+}
+inline void BattlePlayerSnapshot::_internal_set_spectate_chat_pref(::eSpectateChatPreference value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spectate_chat_pref_ = value;
 }
 
 // -------------------------------------------------------------------

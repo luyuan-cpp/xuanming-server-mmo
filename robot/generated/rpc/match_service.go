@@ -1274,3 +1274,49 @@ func (matchServiceRpc) decodeGetTacticalPuzzleSolutionReplay(reply *base.Message
 	}
 	return resp, nil
 }
+
+// SendBattleSpectateChat 异步调用 MatchService.SendBattleSpectateChat(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) SendBattleSpectateChat(c *pkg.GameClient, req *match.SendBattleSpectateChatRequest, timeout time.Duration, done func(*match.SendBattleSpectateChatResponse, error)) {
+	c.Call(game.MatchServiceSendBattleSpectateChatMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeSendBattleSpectateChat(reply, err))
+	})
+}
+
+// SendBattleSpectateChatSync 同步调用 MatchService.SendBattleSpectateChat(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) SendBattleSpectateChatSync(ctx context.Context, c *pkg.GameClient, req *match.SendBattleSpectateChatRequest, timeout time.Duration) (*match.SendBattleSpectateChatResponse, error) {
+	return r.decodeSendBattleSpectateChat(c.CallSync(ctx, game.MatchServiceSendBattleSpectateChatMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeSendBattleSpectateChat(reply *base.MessageContent, err error) (*match.SendBattleSpectateChatResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.SendBattleSpectateChatResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.SendBattleSpectateChat reply: %w", err)
+	}
+	return resp, nil
+}
+
+// PullBattleSpectateChat 异步调用 MatchService.PullBattleSpectateChat(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) PullBattleSpectateChat(c *pkg.GameClient, req *match.PullBattleSpectateChatRequest, timeout time.Duration, done func(*match.PullBattleSpectateChatResponse, error)) {
+	c.Call(game.MatchServicePullBattleSpectateChatMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodePullBattleSpectateChat(reply, err))
+	})
+}
+
+// PullBattleSpectateChatSync 同步调用 MatchService.PullBattleSpectateChat(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) PullBattleSpectateChatSync(ctx context.Context, c *pkg.GameClient, req *match.PullBattleSpectateChatRequest, timeout time.Duration) (*match.PullBattleSpectateChatResponse, error) {
+	return r.decodePullBattleSpectateChat(c.CallSync(ctx, game.MatchServicePullBattleSpectateChatMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodePullBattleSpectateChat(reply *base.MessageContent, err error) (*match.PullBattleSpectateChatResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.PullBattleSpectateChatResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.PullBattleSpectateChat reply: %w", err)
+	}
+	return resp, nil
+}

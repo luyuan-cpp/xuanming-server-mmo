@@ -319,6 +319,30 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kMatchPuzzleSolutionReplayNotFound = 16072;</code>
      */
     kMatchPuzzleSolutionReplayNotFound(16072),
+    /**
+     * <code>kMatchSpectateChatDisabled = 16073;</code>
+     */
+    kMatchSpectateChatDisabled(16073),
+    /**
+     * <code>kMatchSpectateChatEnded = 16074;</code>
+     */
+    kMatchSpectateChatEnded(16074),
+    /**
+     * <code>kMatchSpectateChatCooldown = 16075;</code>
+     */
+    kMatchSpectateChatCooldown(16075),
+    /**
+     * <code>kMatchSpectateChatRoomBusy = 16076;</code>
+     */
+    kMatchSpectateChatRoomBusy(16076),
+    /**
+     * <code>kMatchSpectateChatContentRejected = 16077;</code>
+     */
+    kMatchSpectateChatContentRejected(16077),
+    /**
+     * <code>kMatchSpectateChatCheckUnavailable = 16078;</code>
+     */
+    kMatchSpectateChatCheckUnavailable(16078),
     UNRECOGNIZED(-1),
     ;
 
@@ -619,6 +643,30 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kMatchPuzzleSolutionReplayNotFound = 16072;</code>
      */
     public static final int kMatchPuzzleSolutionReplayNotFound_VALUE = 16072;
+    /**
+     * <code>kMatchSpectateChatDisabled = 16073;</code>
+     */
+    public static final int kMatchSpectateChatDisabled_VALUE = 16073;
+    /**
+     * <code>kMatchSpectateChatEnded = 16074;</code>
+     */
+    public static final int kMatchSpectateChatEnded_VALUE = 16074;
+    /**
+     * <code>kMatchSpectateChatCooldown = 16075;</code>
+     */
+    public static final int kMatchSpectateChatCooldown_VALUE = 16075;
+    /**
+     * <code>kMatchSpectateChatRoomBusy = 16076;</code>
+     */
+    public static final int kMatchSpectateChatRoomBusy_VALUE = 16076;
+    /**
+     * <code>kMatchSpectateChatContentRejected = 16077;</code>
+     */
+    public static final int kMatchSpectateChatContentRejected_VALUE = 16077;
+    /**
+     * <code>kMatchSpectateChatCheckUnavailable = 16078;</code>
+     */
+    public static final int kMatchSpectateChatCheckUnavailable_VALUE = 16078;
 
 
     public final int getNumber() {
@@ -717,6 +765,12 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
         case 16070: return kMatchPuzzleCannotLikeOwn;
         case 16071: return kMatchPuzzleClearRequiredToLike;
         case 16072: return kMatchPuzzleSolutionReplayNotFound;
+        case 16073: return kMatchSpectateChatDisabled;
+        case 16074: return kMatchSpectateChatEnded;
+        case 16075: return kMatchSpectateChatCooldown;
+        case 16076: return kMatchSpectateChatRoomBusy;
+        case 16077: return kMatchSpectateChatContentRejected;
+        case 16078: return kMatchSpectateChatCheckUnavailable;
         default: return null;
       }
     }
@@ -782,7 +836,7 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025match_error_tip.proto*\332\022\n\013match_error\022" +
+      "\n\025match_error_tip.proto*\254\024\n\013match_error\022" +
       "\022\n\016kMatch_errorOK\020\000\022\023\n\016kMatchInBattle\020\200}" +
       "\022\030\n\023kMatchAlreadyQueued\020\201}\022\026\n\021kMatchMode" +
       "NotOpen\020\202}\022 \n\033kMatchTeamSizeNotConfigure" +
@@ -842,8 +896,13 @@ public final class MatchErrorTip extends com.google.protobuf.GeneratedFile {
       "\n\030kMatchPuzzleNotPublished\020\305}\022\036\n\031kMatchP" +
       "uzzleCannotLikeOwn\020\306}\022$\n\037kMatchPuzzleCle" +
       "arRequiredToLike\020\307}\022\'\n\"kMatchPuzzleSolut" +
-      "ionReplayNotFound\020\310}B$\n\016com.game.tableZ\022" +
-      "generated/pb/tableb\006proto3"
+      "ionReplayNotFound\020\310}\022\037\n\032kMatchSpectateCh" +
+      "atDisabled\020\311}\022\034\n\027kMatchSpectateChatEnded" +
+      "\020\312}\022\037\n\032kMatchSpectateChatCooldown\020\313}\022\037\n\032" +
+      "kMatchSpectateChatRoomBusy\020\314}\022&\n!kMatchS" +
+      "pectateChatContentRejected\020\315}\022\'\n\"kMatchS" +
+      "pectateChatCheckUnavailable\020\316}B$\n\016com.ga" +
+      "me.tableZ\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

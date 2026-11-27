@@ -1641,8 +1641,12 @@ payment 与 rank 同形:全局池服务(`$GoSvcCatalogue.payment`,`Global = $tru
   ```
   kubectl apply -n observability -f deploy/k8s/cpp-node-dependency-alerts.yaml
   ```
-  2 条:`CppNodeDependencyConnectFailing`(warning,建连连续 5 分钟都在失败)、`CppNodeDependencyFlapping`(warning,15 分钟内意外断开 3 次以上,
-  不含 node_link)。由 `tools/scripts/tests/cpp_node_dependency_alerts_contract.tests.ps1` 对照 C++ 源码钉住。Kafka 不在其中(librdkafka 自管连接)。
+  组 `cpp-node.dependencies` 2 条:`CppNodeDependencyConnectFailing`(warning,建连连续 5 分钟都在失败)、`CppNodeDependencyFlapping`(warning,15 分钟内意外断开 3 次以上,
+  不含 node_link)。Kafka 的连接状态不在其中(librdkafka 自管连接)。
+  组 `cpp-node.calls` 3 条(2026-11-27,原来这些计数只打日志):`CppNodeRpcCallFailureRatioHigh`(warning,节点间 RPC 10 分钟里超过 5% 没正常完成,
+  不算热关停的拒绝与本端关机;指标 `cpp_node_rpc_*`,定义在 `cpp/libs/engine/core/network/rpc_channel_stats.cpp`)、`CppNodeKafkaProduceFailing`
+  (warning,往 Kafka 发消息连续 5 分钟都有失败)、`CppNodeKafkaProducerFatal`(warning,幂等生产者 fatal 重建,正常恒为 0;指标 `cpp_node_kafka_producer_*`,
+  定义在 `cpp/libs/engine/core/node/system/node/node.cpp`)。五条都由 `tools/scripts/tests/cpp_node_dependency_alerts_contract.tests.ps1` 对照 C++ 源码钉住。
 
 ## MySQL 连接总账(2026-10-13,G2b:docs/handoff/launch-readiness-20261013/spec_G2b.md)
 

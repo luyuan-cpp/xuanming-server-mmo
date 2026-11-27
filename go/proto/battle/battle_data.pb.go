@@ -1110,8 +1110,10 @@ type BattlePlayerSnapshot struct {
 	// battle 据此给这名参战者的票据封顶、到点关闭他的战斗直连并在本场剩余时间里拒绝他握手;战斗本身照常进行
 	// (docs/design/real-name-anti-addiction.md §5.4)。只用于直连准入,引擎不读。
 	MinorPlayDeadlineMs uint64 `protobuf:"varint,33,opt,name=minor_play_deadline_ms,json=minorPlayDeadlineMs,proto3" json:"minor_play_deadline_ms,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// 玩家个人「允许局外人观战交流」偏好（由 scene 在 PrepareBattle 从 PlayerProfileComp 注入，供 match 建房冻结）。
+	SpectateChatPref component.ESpectateChatPreference `protobuf:"varint,34,opt,name=spectate_chat_pref,json=spectateChatPref,proto3,enum=ESpectateChatPreference" json:"spectate_chat_pref,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *BattlePlayerSnapshot) Reset() {
@@ -1373,6 +1375,13 @@ func (x *BattlePlayerSnapshot) GetMinorPlayDeadlineMs() uint64 {
 		return x.MinorPlayDeadlineMs
 	}
 	return 0
+}
+
+func (x *BattlePlayerSnapshot) GetSpectateChatPref() component.ESpectateChatPreference {
+	if x != nil {
+		return x.SpectateChatPref
+	}
+	return component.ESpectateChatPreference(0)
 }
 
 // ---- 宝宝战斗快照:与主人同队、独立行动的战斗单位(设计文档 player-pet.md §5)----
@@ -6180,7 +6189,7 @@ var File_proto_battle_battle_data_proto protoreflect.FileDescriptor
 
 const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\n" +
-	"\x1eproto/battle/battle_data.proto\x1a'proto/common/component/actor_comp.proto\x1a7proto/common/component/actor_attribute_state_comp.proto\x1a.proto/common/component/equipment_effects.proto\x1a,proto/common/component/support_effects.proto\x1a4proto/common/component/pet_cultivation_effects.proto\"\xe3\x01\n" +
+	"\x1eproto/battle/battle_data.proto\x1a'proto/common/component/actor_comp.proto\x1a(proto/common/component/player_comp.proto\x1a7proto/common/component/actor_attribute_state_comp.proto\x1a.proto/common/component/equipment_effects.proto\x1a,proto/common/component/support_effects.proto\x1a4proto/common/component/pet_cultivation_effects.proto\"\xe3\x01\n" +
 	"\rBattleRouting\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\rR\tsessionId\x12 \n" +
@@ -6217,7 +6226,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x17_outgoing_heal_snapshot\"K\n" +
 	"\x0fBattleItemEntry\x12\"\n" +
 	"\ritem_table_id\x18\x01 \x01(\rR\vitemTableId\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x04R\x05count\"\xb8\f\n" +
+	"\x05count\x18\x02 \x01(\x04R\x05count\"\x80\r\n" +
 	"\x14BattlePlayerSnapshot\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1f\n" +
 	"\vplayer_name\x18\x02 \x01(\tR\n" +
@@ -6256,7 +6265,8 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x16season_weekly_affix_id\x18\x1e \x01(\rR\x13seasonWeeklyAffixId\x12Y\n" +
 	"\x12equipped_skill_vfx\x18\x1f \x03(\v2+.BattlePlayerSnapshot.EquippedSkillVfxEntryR\x10equippedSkillVfx\x12&\n" +
 	"\x0fis_team_captain\x18  \x01(\bR\risTeamCaptain\x123\n" +
-	"\x16minor_play_deadline_ms\x18! \x01(\x04R\x13minorPlayDeadlineMs\x1a=\n" +
+	"\x16minor_play_deadline_ms\x18! \x01(\x04R\x13minorPlayDeadlineMs\x12F\n" +
+	"\x12spectate_chat_pref\x18\" \x01(\x0e2\x18.eSpectateChatPreferenceR\x10spectateChatPref\x1a=\n" +
 	"\x0fSkillRanksEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1aC\n" +
@@ -6974,8 +6984,9 @@ var file_proto_battle_battle_data_proto_goTypes = []any{
 	(*component.CombatAttributes)(nil),      // 62: CombatAttributes
 	(*component.EquipmentEffects)(nil),      // 63: EquipmentEffects
 	(*component.SeasonSealEffect)(nil),      // 64: SeasonSealEffect
-	(*component.PetCultivationEffects)(nil), // 65: PetCultivationEffects
-	(*component.SupportEffectSummary)(nil),  // 66: SupportEffectSummary
+	(component.ESpectateChatPreference)(0),  // 65: eSpectateChatPreference
+	(*component.PetCultivationEffects)(nil), // 66: PetCultivationEffects
+	(*component.SupportEffectSummary)(nil),  // 67: SupportEffectSummary
 }
 var file_proto_battle_battle_data_proto_depIdxs = []int32{
 	61, // 0: BattlePlayerSnapshot.base_attributes:type_name -> BaseAttributesComp
@@ -6990,63 +7001,64 @@ var file_proto_battle_battle_data_proto_depIdxs = []int32{
 	64, // 9: BattlePlayerSnapshot.available_season_seals:type_name -> SeasonSealEffect
 	44, // 10: BattlePlayerSnapshot.tower_context:type_name -> WuxingTowerBattleContext
 	53, // 11: BattlePlayerSnapshot.equipped_skill_vfx:type_name -> BattlePlayerSnapshot.EquippedSkillVfxEntry
-	61, // 12: BattlePetSnapshot.base_attributes:type_name -> BaseAttributesComp
-	54, // 13: BattlePetSnapshot.skill_ranks:type_name -> BattlePetSnapshot.SkillRanksEntry
-	65, // 14: BattlePetSnapshot.pet_cultivation:type_name -> PetCultivationEffects
-	0,  // 15: BattleActorState.actor_type:type_name -> eBattleActorType
-	61, // 16: BattleActorState.attributes:type_name -> BaseAttributesComp
-	12, // 17: BattleActorState.buffs:type_name -> BattleBuffEntry
-	55, // 18: BattleActorState.skill_cooldown_rounds:type_name -> BattleActorState.SkillCooldownRoundsEntry
-	62, // 19: BattleActorState.combat:type_name -> CombatAttributes
-	56, // 20: BattleActorState.skill_ranks:type_name -> BattleActorState.SkillRanksEntry
-	57, // 21: BattleActorState.ability_use_counts:type_name -> BattleActorState.AbilityUseCountsEntry
-	58, // 22: BattleActorState.round_effect_usage:type_name -> BattleActorState.RoundEffectUsageEntry
-	63, // 23: BattleActorState.equipment_effects:type_name -> EquipmentEffects
-	17, // 24: BattleActorState.artifact_states:type_name -> BattleArtifactState
-	65, // 25: BattleActorState.pet_cultivation:type_name -> PetCultivationEffects
-	66, // 26: BattleActorState.support_effects:type_name -> SupportEffectSummary
-	17, // 27: BattleActorState.season_seal_state:type_name -> BattleArtifactState
-	59, // 28: BattleActorState.equipped_skill_vfx:type_name -> BattleActorState.EquippedSkillVfxEntry
-	1,  // 29: BattleAction.action_type:type_name -> eBattleActionType
-	2,  // 30: BattleEventItem.event_type:type_name -> eBattleEventType
-	3,  // 31: BattleEventItem.hit_kind:type_name -> eBattleHitKind
-	21, // 32: BattlePrepState.self_available_seals:type_name -> BattlePrepSealOption
-	22, // 33: BattlePrepState.self_available_pets:type_name -> BattlePrepPetOption
-	23, // 34: BattlePrepState.team_states:type_name -> BattlePrepPlayerState
-	24, // 35: BattlePrepState.self_rivalries:type_name -> RankedRivalryEncounter
-	4,  // 36: BattleTacticalPing.kind:type_name -> BattlePingKind
-	28, // 37: BattleRewardProfile.currencies:type_name -> BattleCurrencyGain
-	29, // 38: BattleRewardProfile.random_items:type_name -> BattleRandomItemReward
-	30, // 39: BattleRewardConfig.profiles:type_name -> BattleRewardProfile
-	6,  // 40: BattleSettlementData.outcome:type_name -> eBattleOutcome
-	13, // 41: BattleSettlementData.items_consumed:type_name -> BattleItemEntry
-	13, // 42: BattleSettlementData.items_gained:type_name -> BattleItemEntry
-	33, // 43: BattleSettlementData.pets:type_name -> BattlePetSettlementData
-	27, // 44: BattleSettlementData.defeated_monsters:type_name -> BattleMonsterDefeat
-	28, // 45: BattleSettlementData.currency_gains:type_name -> BattleCurrencyGain
-	42, // 46: BattleSettlementData.trial_facts:type_name -> BattleTrialJournalFacts
-	35, // 47: BattleSettlementData.festival_beast:type_name -> FestivalBeastBattleContext
-	45, // 48: BattleSettlementData.tower_settlement:type_name -> WuxingTowerSettlementEcho
-	5,  // 49: BattleSettlementData.highlight_kind:type_name -> BattleHighlightKind
-	48, // 50: BattleSettlementData.jianghu_duel:type_name -> JianghuDuelBattleContext
-	51, // 51: BattleSettlementData.tactical_puzzle_context:type_name -> TacticalPuzzleBattleContext
-	7,  // 52: BattleActivityContext.kind:type_name -> eBattleActivityKind
-	35, // 53: BattleActivityContext.festival_beast:type_name -> FestivalBeastBattleContext
-	34, // 54: BattleActivityContext.guild_war:type_name -> GuildWarBattleContext
-	37, // 55: RankedMemberLoadout.presets:type_name -> RankedPresetSelection
-	38, // 56: RankedMatchContext.members:type_name -> RankedMemberLoadout
-	60, // 57: RankedMatchContext.member_win_streaks:type_name -> RankedMatchContext.MemberWinStreaksEntry
-	24, // 58: RankedMatchContext.rivalry_encounters:type_name -> RankedRivalryEncounter
-	10, // 59: TournamentBattleContext.leyline_element:type_name -> TournamentLeylineElement
-	10, // 60: WuxingTowerBattleContext.leyline_element:type_name -> TournamentLeylineElement
-	49, // 61: TacticalPuzzleSpec.enemies:type_name -> TacticalPuzzleEnemySpec
-	10, // 62: TacticalPuzzleSpec.leyline_element:type_name -> TournamentLeylineElement
-	50, // 63: TacticalPuzzleBattleContext.spec:type_name -> TacticalPuzzleSpec
-	64, // [64:64] is the sub-list for method output_type
-	64, // [64:64] is the sub-list for method input_type
-	64, // [64:64] is the sub-list for extension type_name
-	64, // [64:64] is the sub-list for extension extendee
-	0,  // [0:64] is the sub-list for field type_name
+	65, // 12: BattlePlayerSnapshot.spectate_chat_pref:type_name -> eSpectateChatPreference
+	61, // 13: BattlePetSnapshot.base_attributes:type_name -> BaseAttributesComp
+	54, // 14: BattlePetSnapshot.skill_ranks:type_name -> BattlePetSnapshot.SkillRanksEntry
+	66, // 15: BattlePetSnapshot.pet_cultivation:type_name -> PetCultivationEffects
+	0,  // 16: BattleActorState.actor_type:type_name -> eBattleActorType
+	61, // 17: BattleActorState.attributes:type_name -> BaseAttributesComp
+	12, // 18: BattleActorState.buffs:type_name -> BattleBuffEntry
+	55, // 19: BattleActorState.skill_cooldown_rounds:type_name -> BattleActorState.SkillCooldownRoundsEntry
+	62, // 20: BattleActorState.combat:type_name -> CombatAttributes
+	56, // 21: BattleActorState.skill_ranks:type_name -> BattleActorState.SkillRanksEntry
+	57, // 22: BattleActorState.ability_use_counts:type_name -> BattleActorState.AbilityUseCountsEntry
+	58, // 23: BattleActorState.round_effect_usage:type_name -> BattleActorState.RoundEffectUsageEntry
+	63, // 24: BattleActorState.equipment_effects:type_name -> EquipmentEffects
+	17, // 25: BattleActorState.artifact_states:type_name -> BattleArtifactState
+	66, // 26: BattleActorState.pet_cultivation:type_name -> PetCultivationEffects
+	67, // 27: BattleActorState.support_effects:type_name -> SupportEffectSummary
+	17, // 28: BattleActorState.season_seal_state:type_name -> BattleArtifactState
+	59, // 29: BattleActorState.equipped_skill_vfx:type_name -> BattleActorState.EquippedSkillVfxEntry
+	1,  // 30: BattleAction.action_type:type_name -> eBattleActionType
+	2,  // 31: BattleEventItem.event_type:type_name -> eBattleEventType
+	3,  // 32: BattleEventItem.hit_kind:type_name -> eBattleHitKind
+	21, // 33: BattlePrepState.self_available_seals:type_name -> BattlePrepSealOption
+	22, // 34: BattlePrepState.self_available_pets:type_name -> BattlePrepPetOption
+	23, // 35: BattlePrepState.team_states:type_name -> BattlePrepPlayerState
+	24, // 36: BattlePrepState.self_rivalries:type_name -> RankedRivalryEncounter
+	4,  // 37: BattleTacticalPing.kind:type_name -> BattlePingKind
+	28, // 38: BattleRewardProfile.currencies:type_name -> BattleCurrencyGain
+	29, // 39: BattleRewardProfile.random_items:type_name -> BattleRandomItemReward
+	30, // 40: BattleRewardConfig.profiles:type_name -> BattleRewardProfile
+	6,  // 41: BattleSettlementData.outcome:type_name -> eBattleOutcome
+	13, // 42: BattleSettlementData.items_consumed:type_name -> BattleItemEntry
+	13, // 43: BattleSettlementData.items_gained:type_name -> BattleItemEntry
+	33, // 44: BattleSettlementData.pets:type_name -> BattlePetSettlementData
+	27, // 45: BattleSettlementData.defeated_monsters:type_name -> BattleMonsterDefeat
+	28, // 46: BattleSettlementData.currency_gains:type_name -> BattleCurrencyGain
+	42, // 47: BattleSettlementData.trial_facts:type_name -> BattleTrialJournalFacts
+	35, // 48: BattleSettlementData.festival_beast:type_name -> FestivalBeastBattleContext
+	45, // 49: BattleSettlementData.tower_settlement:type_name -> WuxingTowerSettlementEcho
+	5,  // 50: BattleSettlementData.highlight_kind:type_name -> BattleHighlightKind
+	48, // 51: BattleSettlementData.jianghu_duel:type_name -> JianghuDuelBattleContext
+	51, // 52: BattleSettlementData.tactical_puzzle_context:type_name -> TacticalPuzzleBattleContext
+	7,  // 53: BattleActivityContext.kind:type_name -> eBattleActivityKind
+	35, // 54: BattleActivityContext.festival_beast:type_name -> FestivalBeastBattleContext
+	34, // 55: BattleActivityContext.guild_war:type_name -> GuildWarBattleContext
+	37, // 56: RankedMemberLoadout.presets:type_name -> RankedPresetSelection
+	38, // 57: RankedMatchContext.members:type_name -> RankedMemberLoadout
+	60, // 58: RankedMatchContext.member_win_streaks:type_name -> RankedMatchContext.MemberWinStreaksEntry
+	24, // 59: RankedMatchContext.rivalry_encounters:type_name -> RankedRivalryEncounter
+	10, // 60: TournamentBattleContext.leyline_element:type_name -> TournamentLeylineElement
+	10, // 61: WuxingTowerBattleContext.leyline_element:type_name -> TournamentLeylineElement
+	49, // 62: TacticalPuzzleSpec.enemies:type_name -> TacticalPuzzleEnemySpec
+	10, // 63: TacticalPuzzleSpec.leyline_element:type_name -> TournamentLeylineElement
+	50, // 64: TacticalPuzzleBattleContext.spec:type_name -> TacticalPuzzleSpec
+	65, // [65:65] is the sub-list for method output_type
+	65, // [65:65] is the sub-list for method input_type
+	65, // [65:65] is the sub-list for extension type_name
+	65, // [65:65] is the sub-list for extension extendee
+	0,  // [0:65] is the sub-list for field type_name
 }
 
 func init() { file_proto_battle_battle_data_proto_init() }

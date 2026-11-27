@@ -706,6 +706,7 @@ state=bootstrap
 1=WuxingTowerCompState#22 optional uint32 weekly_best_floor_preset
 1=WuxingTowerCompState#23 optional uint32 weekly_best_rounds_preset
 1=WuxingTowerCompState#24 optional uint32 route_choice_mask
+1=PlayerProfileComp#15 optional enum:eSpectateChatPreference spectate_chat_pref
 
 retired=player_database#10
 retired=player_database#17

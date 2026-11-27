@@ -341,8 +341,8 @@ func applyRefund(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflo
 //   - 发放腿:补发一条只含缺口的新腿给原收件人,原腿记部分发放并标被它取代,回到转人工之前的阶段;
 //   - 托管扣款腿:交易没有托管齐,按整单退回结案,这条腿只退实际扣到的部分。
 func planPartial(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow, q *tradepb.TradeCommerceQuarantine, c manualContext, result *ManualResult) error {
-	if r.Kind == 1 || r.Kind == 6 {
-		return notAllowed("官方商城与人民币寄售的部分发放要和商城订单一起处理,不在这里")
+	if r.Kind == 1 {
+		return notAllowed("官方商城的部分发放要和商城订单一起处理,不在这里")
 	}
 	type shortfall struct {
 		leg     *tradepb.TradeCommerceLeg
@@ -386,6 +386,10 @@ func planPartial(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflo
 	}
 	if len(credits) > 0 && len(taken) > 0 {
 		return notAllowed("发放腿与托管扣款腿不能在一次 partial 里混着处理")
+	}
+	if r.Kind == 6 && len(taken) > 0 {
+		// 人民币寄售只放开交付腿的缺口补发(jubaozhai-market.md §16.1):托管没扣齐要退,钱在商城,得和商城订单一起处理。
+		return notAllowed("人民币寄售的托管部分扣出要和商城订单一起处理,不在这里")
 	}
 	if len(taken) > 0 {
 		if err := planRefund(r, w, c, taken, result); err != nil {

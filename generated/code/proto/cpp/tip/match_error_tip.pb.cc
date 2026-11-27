@@ -35,7 +35,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_match_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\025match_error_tip.proto*\332\022\n\013match_error\022"
+    "\n\025match_error_tip.proto*\254\024\n\013match_error\022"
     "\022\n\016kMatch_errorOK\020\000\022\023\n\016kMatchInBattle\020\200}"
     "\022\030\n\023kMatchAlreadyQueued\020\201}\022\026\n\021kMatchMode"
     "NotOpen\020\202}\022 \n\033kMatchTeamSizeNotConfigure"
@@ -95,14 +95,19 @@ const char descriptor_table_protodef_match_5ferror_5ftip_2eproto[] ABSL_ATTRIBUT
     "\n\030kMatchPuzzleNotPublished\020\305}\022\036\n\031kMatchP"
     "uzzleCannotLikeOwn\020\306}\022$\n\037kMatchPuzzleCle"
     "arRequiredToLike\020\307}\022\'\n\"kMatchPuzzleSolut"
-    "ionReplayNotFound\020\310}B$\n\016com.game.tableZ\022"
-    "generated/pb/tableb\006proto3"
+    "ionReplayNotFound\020\310}\022\037\n\032kMatchSpectateCh"
+    "atDisabled\020\311}\022\034\n\027kMatchSpectateChatEnded"
+    "\020\312}\022\037\n\032kMatchSpectateChatCooldown\020\313}\022\037\n\032"
+    "kMatchSpectateChatRoomBusy\020\314}\022&\n!kMatchS"
+    "pectateChatContentRejected\020\315}\022\'\n\"kMatchS"
+    "pectateChatCheckUnavailable\020\316}B$\n\016com.ga"
+    "me.tableZ\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_match_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_match_5ferror_5ftip_2eproto = {
     false,
     false,
-    2466,
+    2676,
     descriptor_table_protodef_match_5ferror_5ftip_2eproto,
     "match_error_tip.proto",
     &descriptor_table_match_5ferror_5ftip_2eproto_once,
@@ -121,7 +126,7 @@ match_error_descriptor() {
   return file_level_enum_descriptors_match_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t match_error_internal_data_[] = {
-    65536u, 4653056u, 16039u, 16023u, 16055u, 16015u, 16031u, 16047u, 16065u, 16007u, 16019u, 16027u, 16035u, 16043u, 16051u, 16061u, 16069u, 16003u, 16011u, 16017u, 16021u, 16025u, 16029u, 16033u, 16037u, 16041u, 16045u, 16049u, 16053u, 16059u, 16063u, 16067u, 16071u, 16001u, 16005u, 16009u, 16013u, 16016u, 16018u, 16020u, 16022u, 16024u, 16026u, 16028u, 16030u, 16032u, 16034u, 16036u, 16038u, 16040u, 16042u, 16044u, 16046u, 16048u, 16050u, 16052u, 16054u, 16058u, 16060u, 16062u, 16064u, 16066u, 16068u, 16070u, 16072u, 16000u, 16002u, 16004u, 16006u, 16008u, 16010u, 16012u, 16014u, };
+    65536u, 5046272u, 16045u, 16029u, 16063u, 16015u, 16037u, 16053u, 16071u, 16007u, 16023u, 16033u, 16041u, 16049u, 16059u, 16067u, 16075u, 16003u, 16011u, 16019u, 16027u, 16031u, 16035u, 16039u, 16043u, 16047u, 16051u, 16055u, 16061u, 16065u, 16069u, 16073u, 16077u, 16001u, 16005u, 16009u, 16013u, 16017u, 16021u, 16025u, 16028u, 16030u, 16032u, 16034u, 16036u, 16038u, 16040u, 16042u, 16044u, 16046u, 16048u, 16050u, 16052u, 16054u, 16058u, 16060u, 16062u, 16064u, 16066u, 16068u, 16070u, 16072u, 16074u, 16076u, 16078u, 16000u, 16002u, 16004u, 16006u, 16008u, 16010u, 16012u, 16014u, 16016u, 16018u, 16020u, 16022u, 16024u, 16026u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

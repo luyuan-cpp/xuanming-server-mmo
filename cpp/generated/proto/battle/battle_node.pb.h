@@ -4749,6 +4749,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateBattleRequest final : public 
     kAdmitBeforeMsFieldNumber = 13,
     kSpectateVisibilityFieldNumber = 15,
     kRecordReplayFieldNumber = 16,
+    kSpectateChatEnabledFieldNumber = 25,
     kBossWeeklyAffixIdFieldNumber = 22,
   };
   // repeated .BattlePlayerSnapshot players = 3;
@@ -5060,6 +5061,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateBattleRequest final : public 
   void _internal_set_record_replay(bool value);
 
   public:
+  // bool spectate_chat_enabled = 25;
+  void clear_spectate_chat_enabled() ;
+  [[nodiscard]] bool spectate_chat_enabled() const;
+  void set_spectate_chat_enabled(bool value);
+
+  private:
+  bool _internal_spectate_chat_enabled() const;
+  void _internal_set_spectate_chat_enabled(bool value);
+
+  public:
   // uint32 boss_weekly_affix_id = 22;
   void clear_boss_weekly_affix_id() ;
   [[nodiscard]] ::uint32_t boss_weekly_affix_id() const;
@@ -5074,7 +5085,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateBattleRequest final : public 
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 24,
+      ::google::protobuf::internal::TcParseTable<5, 25,
                           9, 109,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -5126,6 +5137,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateBattleRequest final : public 
     ::uint64_t admit_before_ms_;
     int spectate_visibility_;
     bool record_replay_;
+    bool spectate_chat_enabled_;
     ::uint32_t boss_weekly_affix_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -6692,7 +6704,7 @@ inline void CreateBattleRequest::set_allocated_custom_duel_rules(::CustomDuelRul
 inline void CreateBattleRequest::clear_boss_weekly_affix_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.boss_weekly_affix_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
 }
 inline ::uint32_t CreateBattleRequest::boss_weekly_affix_id() const {
   // @@protoc_insertion_point(field_get:CreateBattleRequest.boss_weekly_affix_id)
@@ -6700,7 +6712,7 @@ inline ::uint32_t CreateBattleRequest::boss_weekly_affix_id() const {
 }
 inline void CreateBattleRequest::set_boss_weekly_affix_id(::uint32_t value) {
   _internal_set_boss_weekly_affix_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
   // @@protoc_insertion_point(field_set:CreateBattleRequest.boss_weekly_affix_id)
 }
 inline ::uint32_t CreateBattleRequest::_internal_boss_weekly_affix_id() const {
@@ -6896,6 +6908,30 @@ inline void CreateBattleRequest::set_allocated_tactical_puzzle_context(::Tactica
 
   _impl_.tactical_puzzle_context_ = reinterpret_cast<::TacticalPuzzleBattleContext*>(value);
   // @@protoc_insertion_point(field_set_allocated:CreateBattleRequest.tactical_puzzle_context)
+}
+
+// bool spectate_chat_enabled = 25;
+inline void CreateBattleRequest::clear_spectate_chat_enabled() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spectate_chat_enabled_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+}
+inline bool CreateBattleRequest::spectate_chat_enabled() const {
+  // @@protoc_insertion_point(field_get:CreateBattleRequest.spectate_chat_enabled)
+  return _internal_spectate_chat_enabled();
+}
+inline void CreateBattleRequest::set_spectate_chat_enabled(bool value) {
+  _internal_set_spectate_chat_enabled(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  // @@protoc_insertion_point(field_set:CreateBattleRequest.spectate_chat_enabled)
+}
+inline bool CreateBattleRequest::_internal_spectate_chat_enabled() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.spectate_chat_enabled_;
+}
+inline void CreateBattleRequest::_internal_set_spectate_chat_enabled(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spectate_chat_enabled_ = value;
 }
 
 // -------------------------------------------------------------------

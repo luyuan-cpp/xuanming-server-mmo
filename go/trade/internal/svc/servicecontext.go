@@ -310,6 +310,11 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	return sc
 }
 
+// ValidateTables 是 trade 的 --validate-tables 入口用的校验钩子(表包 sidecar 校验候选表包时调),与启动、热更同一判据。
+func ValidateTables(name string, ts *table.TableSet) (func(), error) {
+	return requireWantedSkillTables(name, ts)
+}
+
 // requireWantedSkillTables 是求购单读表的校验钩子:候选表集里必须有 Skill 与 SkillScrollCraft,启动与热更同一判据。
 // 没有要随表派生的数据,提交时不用做别的。
 func requireWantedSkillTables(_ string, ts *table.TableSet) (func(), error) {

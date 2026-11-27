@@ -87,3 +87,49 @@ func (sceneSceneClientPlayerRpc) decodeTravelToZone(reply *base.MessageContent, 
 func (sceneSceneClientPlayerRpc) GetSyncDigest(c *pkg.GameClient, req *scene.GetSyncDigestRequest) error {
 	return c.SendRequest(game.SceneSceneClientPlayerGetSyncDigestMessageId, req)
 }
+
+// GetSpectateChatSetting 异步调用 SceneSceneClientPlayer.GetSpectateChatSetting(REQUEST),done 的契约见 SceneSceneClientPlayer。
+func (r sceneSceneClientPlayerRpc) GetSpectateChatSetting(c *pkg.GameClient, req *scene.GetSpectateChatSettingRequest, timeout time.Duration, done func(*scene.GetSpectateChatSettingResponse, error)) {
+	c.Call(game.SceneSceneClientPlayerGetSpectateChatSettingMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeGetSpectateChatSetting(reply, err))
+	})
+}
+
+// GetSpectateChatSettingSync 同步调用 SceneSceneClientPlayer.GetSpectateChatSetting(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSceneClientPlayerRpc) GetSpectateChatSettingSync(ctx context.Context, c *pkg.GameClient, req *scene.GetSpectateChatSettingRequest, timeout time.Duration) (*scene.GetSpectateChatSettingResponse, error) {
+	return r.decodeGetSpectateChatSetting(c.CallSync(ctx, game.SceneSceneClientPlayerGetSpectateChatSettingMessageId, req, timeout))
+}
+
+func (sceneSceneClientPlayerRpc) decodeGetSpectateChatSetting(reply *base.MessageContent, err error) (*scene.GetSpectateChatSettingResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.GetSpectateChatSettingResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSceneClientPlayer.GetSpectateChatSetting reply: %w", err)
+	}
+	return resp, nil
+}
+
+// SetSpectateChatSetting 异步调用 SceneSceneClientPlayer.SetSpectateChatSetting(REQUEST),done 的契约见 SceneSceneClientPlayer。
+func (r sceneSceneClientPlayerRpc) SetSpectateChatSetting(c *pkg.GameClient, req *scene.SetSpectateChatSettingRequest, timeout time.Duration, done func(*scene.SetSpectateChatSettingResponse, error)) {
+	c.Call(game.SceneSceneClientPlayerSetSpectateChatSettingMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeSetSpectateChatSetting(reply, err))
+	})
+}
+
+// SetSpectateChatSettingSync 同步调用 SceneSceneClientPlayer.SetSpectateChatSetting(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSceneClientPlayerRpc) SetSpectateChatSettingSync(ctx context.Context, c *pkg.GameClient, req *scene.SetSpectateChatSettingRequest, timeout time.Duration) (*scene.SetSpectateChatSettingResponse, error) {
+	return r.decodeSetSpectateChatSetting(c.CallSync(ctx, game.SceneSceneClientPlayerSetSpectateChatSettingMessageId, req, timeout))
+}
+
+func (sceneSceneClientPlayerRpc) decodeSetSpectateChatSetting(reply *base.MessageContent, err error) (*scene.SetSpectateChatSettingResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.SetSpectateChatSettingResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSceneClientPlayer.SetSpectateChatSetting reply: %w", err)
+	}
+	return resp, nil
+}

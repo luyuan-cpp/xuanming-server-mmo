@@ -8288,3 +8288,45 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
 - **改了什么**:`docs/design/infra-reconnect-overview.md` 第 1 节只加不删 21 行,把 R3 / R4 / R6 / R17 / R19 定下的做法从 §4.1 的状态行提成通用规则:§1.3 整笔重跑判定全仓一份(`authoritysql.IsRetryableTxError` + `assetop.WithTxRetry`)、节拍发出的异步请求要有在途上限与代次;§1.4 注册实现全仓一份、撤注册按 uuid 条件删;§1.6 先监听后注册、`Etcd.Hosts` 恰好一个负载均衡地址与读配置先 `Clear()`、启动期核对给总预算;§1.8 C++ 依赖链路指标的成对计数、传输层只报事件、告警看增长不看可用数、没有指标的写明原因。
 - **核对**:本线所有改动都在 `D:\luyuan\xuanming-server-mmo-cpp` 的 main;只有 main 一个分支,登记的另外三个 worktree 是游离的构建 / 验证快照,提交都是 main 的祖先。已删会话的残留按 2026-11-26「已删 / 已归档会话留在 git 里的残留逐项核对」处理,没有要并回的。
 - **验证**:代码部分的命令不变,见本文件 2026-11-19「断线重连 R3 收尾」「R6 残余」「R19」「R17」与 2026-11-26「断线重连 R3 / R6 / R17 / R19 复核收口」五条。
+
+## 2026-11-27 Claude:数据覆写审计 r2 剩余单 §3.3 第 1～5 条——删角清帮战个人数据、追杀令状态文案、两处告警、生死状资格预检、领奖客户端显示(未导表、未生成、未编译,待 Gemini 验证)
+
+- **删角收尾**(第 1 条):`go/guild/internal/data/role_fence_purge.go` 新增 `purgeWarRowsOfPlayer`,在清理事务里按锁序删他的守旗快照(含名字与战斗快照)、个人帮战状态、帮战待入账行;`logic/role_fence_purge.go` 在删角触发解散时提交后调 `CleanupGuildWarOnDisband` 释放灵脉。`role_fence_purge_tidb_test.go` 补三张表的断言。`docs/design/account-deletion.md` §6.2 guild 行、挂起原因清单与五项已写。
+- **追杀令状态文案**(第 2 条):`proto/guild/guild.proto` 的 EXPIRED 注释改成实际含义;客户端 `GuildWarModels.cs` 的 `BountyStatusLabel` 补状态 6「扣款未成，已作废」。
+- **两处告警**(第 3 条):guild 加 gauge `guild_war_credit_owed_rows`(与历练待入队同一循环、数到 10000 封顶)与告警 `GuildWarCreditOwedBacklog`;`metric=jianghu_duel_fee_overdue` 登记进 `deploy/k8s/asset-channel-alerts.yaml` 的 LogQL 值班查询段。
+- **生死状资格预检**(第 4 条):Tip 表 `//jianghu_error` 段末加 `JianghuDuelSilverFeePending`(补丁脚本 `tools/scripts/jianghu_fee_pending_tip_xlsx_patch.py`,已写入表);`scene.proto` 的 `CheckJianghuDuelEligibilityResponse` 加 `payer_silver_fee_pending = 4`;scene `CheckDuelEligibility` 见到发起方待退标记就回 pending,match 先认它回新码。C++ 用例补三段,五项在 `battle-jianghu-grudge-duel-phase1-implementation-plan.md`「问题 4」。
+- **领奖客户端显示**(第 5 条后一半):`TournamentClient.ClaimReward` 先把已领到的并进概览,再报错误。
+- **Java**:`PARITY.md` 批 X 那条补了一句(资格预检新字段与新 tip、注销清单要同步核对);本轮不写 Java 代码。
+- **给 Gemini 的验证**:命令逐条写在 `docs/handoff/data-overwrite-audit-r2-remaining-handoff-20261127.md` §3.3 第 1～5 条。顺序:先 `dev.bat gen`(导表前核 `git status --short data/`),再 `proto-gen-run`,再同步客户端(`gen_proto.ps1`、`gen_messageids.ps1`、`client_compile_check.ps1`),然后 C++ 串行编译跑 `bag_test.exe --gtest_filter=PlayerJianghuTest.*`,最后 go/guild、go/match 的 build / vet / test 与 `k8s_deploy_contract.tests.ps1`。
+- **没做的**:§3.3 第 6 条(寄售交付腿部分发放后 trade 侧的出口,要改 trade 合同引擎的 `planPartial` / `planRmb`)与第 7 条(开战入口集成用例、`PrepareBattle` 传复核时刻的直接单测),留在剩余单里。
+- **提交情况**:main 工作区与客户端仓工作区,都未提交。
+
+## 2026-11-27 Claude:数据覆写审计 r2 剩余单 §3.3 第 6 条——人民币寄售交付腿部分发放后 trade 侧的出口(未编译、未测试,待 Gemini 验证;Java 不涉及)
+
+- **改了什么**:`go/trade/internal/commerce/manual_plan.go` 的 `planPartial` 放开人民币寄售交付腿 `rmb_buyer_credit` 的缺口补发(托管扣款腿的部分扣出仍拒绝);`rmb.go` 的 `planRmb` 交付阶段沿 `currentLeg` 跟到补发腿判结局,补发没到账转人工(`final_credit_failed`,可再 `reissue`),不走退款。用例 `manual_test.go` 的 `TestPartialRmbDeliveryReissuesTheShortfallAndNeverRefunds`。五项在 `docs/design/jubaozhai-market.md` §16.1「trade 侧的出口」,运维手册 `trade-commerce-quarantine-runbook.md` 同步改写。
+- **给 Gemini 的验证**:`cd go/trade; go build ./...; go test ./internal/commerce/ -run 'TestPartial|TestFailedCredits|TestRedirect' -count=1 -v`,再 `go test ./internal/commerce/ -count=1`;真库 `COMMERCE_TEST_DSN` + `COMMERCE_REQUIRE_TIDB=1` 跑 `TestTiDBRmbCancelRefusesManualContractAfterPaidDeliveryWentPartial` 不回归。
+- **剩下的**:§3.3 第 7 条两处补用例没做(理由在剩余单 §0)。
+- **提交情况**:main 工作区,未提交。
+
+## 2026-11-27 Claude:悬赏求书批 A(trade kind 7 求购单合同)的独立复核——通过,没有要改的(只读代码,未编译)
+
+- 复核人与写的人分开(批 A 由「悬赏求书改走 trade 托管」会话写)。读的是 `wanted_skill_book.go` 全文与 `engine.go`、`delivery_order.go`、`leg_tx_type.go`、`schedule.go`、logic、config / svc 的相关改动,对照 `docs/design/skill-book-wanted-order-trade-escrow.md` §3。
+- 结论与核过的点写在该设计稿 §11.1 末条:阶段门、揭榜同时只一次、撤单只认发榜人且交书途中撤不了、扣出后按快照核对、不符原样退回且不过获取封禁、先书后款、整单退回退全额、5% 税销毁、请求号幂等、发榜与揭榜次数上限、列表可见范围。
+- 验证仍按该稿 §11.1 末的 Gemini 命令(导表、协议、go/trade 单测与真库、客户端生成检查),本轮没有新增命令。
+- 剩下:批 C(部署开通,要先由负责人定 K8s 各档位是否打开 trade `AssetOp.Enabled`)与批 B(scene 退役旧揭榜 + 客户端切换),做法在该稿 §11.2。
+
+## 2026-11-27 Claude:断线重连 R17 续——节点间 RPC 与 Kafka 生产者的计数接进 C++ 节点的指标出口,补告警(未编译、未测试,待 Gemini 验证;Java 不涉及)
+
+- **起因**:负责人要求「以后扩展的也要做完」。本线写着「将来接指标时从这里读」的两组计数(`kafka_producer.h`、`rpc_channel_stats.h`)一直只打日志,注释的前提「C++ 节点没有 Prometheus 出口」早已不成立。
+- **改了什么**:
+  - `cpp/libs/engine/core/network/rpc_channel_stats.{h,cpp}`:新增 `WriteRpcChannelMetrics(writer, stats)`,与 30s 汇总行字段一一对应写成 `cpp_node_rpc_*`。结局按 `outcome` label,取值用 `rpc_status.h` 的 `kRpcStatusCodeNames`,`static_assert` 钉住结局个数;
+  - `cpp/libs/engine/core/node/system/node/node.cpp`:`StartMetricsExporter` 登记 `rpc_channel` 与 `kafka_producer` 两个采集回调;`WriteKafkaProducerMetrics` 读 `kafka_producer_stats` 写 `cpp_node_kafka_producer_failures_total{reason=delivery_failed|produce_rejected}` 与 `cpp_node_kafka_producer_fatal_rebuilds_total`。core 依赖 infra、反过来不行,所以写在 core;
+  - 告警 `deploy/k8s/cpp-node-dependency-alerts.yaml` 新组 `cpp-node.calls` 三条:`CppNodeRpcCallFailureRatioHigh`(10 分钟超过 5% 没正常完成,不算 remote_rejected 与 channel_closed,每秒不到 1 次调用的节点不算)、`CppNodeKafkaProduceFailing`(连续 5 分钟有失败)、`CppNodeKafkaProducerFatal`(fatal 重建,正常恒为 0);
+  - 契约测试 `tools/scripts/tests/cpp_node_dependency_alerts_contract.tests.ps1` 扩到五条规则:指标名对照三处源码,outcome 取值对照 `rpc_status.h`,并钉住失败比例的分子与分母口径;
+  - 单测 `cpp/tests/rpc_controller_test/rpc_link_heartbeat_test.cpp` 新增 `RpcLinkHeartbeatStats.PrometheusExportCarriesEveryOutcomeAndCounter`(用本地 stats,不受同进程别的用例影响);
+  - 注释与文档:`kafka_producer.h`、`rpc_channel_stats.h`、`stress_summarize.ps1` 的过时前提;`deploy/k8s/README.md`;`docs/design/muduo-rpc-channel.md` §12;`docs/design/infra-reconnect-overview.md` §1.8(含两项定案不导出的理由)、新增 §1.11「以后扩展照着做」,§4.1 的 R3 / R8 / R17 / R19 状态栏改成与正文一致。
+- **Gemini 验证**(失败保留第一条编译错误与 gtest 完整输出,不改断言,不连续重试):
+  1. `msbuild game.sln /m:1`(改了 core 库,先编库再跑测试),再 `run_cpp_tests -Build -Filter rpc_controller_test`:新用例 PASS,既有 `RpcLinkHeartbeatStats.*`、`DependencyLinkMetrics.*` 照旧全绿;
+  2. `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py` 通过;
+  3. `pwsh -NoProfile -File tools/scripts/tests/cpp_node_dependency_alerts_contract.tests.ps1`:`total=4 pass=4`;把 `spec` 抽成普通规则文件后 `promtool check rules`;
+  4. 冒烟(调试栈,设 `MMORPG_METRICS_PORT`):起 gate、scene 各一个,`curl -s http://127.0.0.1:<端口>/metrics | grep -E 'cpp_node_rpc_|cpp_node_kafka_producer_'`:九个 outcome 都有序列;玩家登录走一遍后 `cpp_node_rpc_client_calls_total{outcome="ok"}` 在涨;`cpp_node_kafka_producer_failures_total` 两个 reason 都以 0 出现。

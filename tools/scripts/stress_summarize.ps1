@@ -1247,8 +1247,9 @@ if ($saveTimingLines.Count -gt 0) {
 
 # ----- 2bc. 节点间 RPC0 调用结局(cpp gate / scene 日志的 [RpcChannel] summary) ----
 #
-# C++ 节点没有 Prometheus 出口,RpcChannelStats(cpp/libs/engine/core/network/rpc_channel_stats.h)每 30s、
-# 计数有变化时打一行 `[RpcChannel] summary k=v ...`,计数是进程级、单调累计的,所以每个日志文件取最后一行。
+# RpcChannelStats(cpp/libs/engine/core/network/rpc_channel_stats.h)每 30s、计数有变化时打一行
+# `[RpcChannel] summary k=v ...`,计数是进程级、单调累计的,所以每个日志文件取最后一行。2026-11-27 起同一份计数也经
+# 节点的 Prometheus 出口导出(cpp_node_rpc_*),压测复盘仍只读这一行,不依赖集群上的 Prometheus。
 # 字段名是与 FormatRpcChannelStats 之间的契约(docs/design/muduo-rpc-channel.md §12),改名要两边一起改。
 # 节点日志实际落在 bin\logs\cpp_nodes(start_game.ps1),旧路径 run\logs\cpp_nodes 也一并扫。
 # 一行都没有时保持沉默(老版本二进制没有这行)。

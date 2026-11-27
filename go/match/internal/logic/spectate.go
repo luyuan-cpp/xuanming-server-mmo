@@ -141,6 +141,7 @@ func spectateRecordFromFormation(f *matchpb.MatchFormationRecord) (*matchpb.Spec
 			CreatedAtMs:           f.CreatedMs,
 			RankedTeamSize:        rankedTeamSize,
 			RankedPeakRatingCenti: rankedPeakRating,
+			SpectateChatEnabled:   create.GetSpectateChatEnabled(),
 		},
 		BattleNodeId:     f.TargetNodeId,
 		Visibility:       create.GetSpectateVisibility(),
@@ -168,6 +169,7 @@ func removeSpectateBattle(svcCtx *svc.ServiceContext, battleId uint64) {
 	if err := svcCtx.MatchRedis.Del(ctx, spectateTierKey(battleId), spectateRelayGatesKey(battleId), spectateFeaturedKey(battleId)).Err(); err != nil {
 		logx.Errorf("[spectate] Failed to delete battle tier keys (TTL will clear them) battle=%d: %v", battleId, err)
 	}
+	svcCtx.ActiveSpectateChat().MarkEnded(ctx, battleId)
 }
 
 // releaseSpectateOnOutcome 在战斗终局提交之后尽力清掉这场的观战数据:结束的场立刻离开

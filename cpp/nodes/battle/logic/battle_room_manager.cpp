@@ -848,6 +848,7 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
              << " match_mode=" << request.match_mode()
              << " deadline_ms=" << deadlineMs
              << " spectate_visibility=" << ::eSpectateVisibility_Name(request.spectate_visibility())
+             << " spectate_chat_enabled=" << (request.spectate_chat_enabled() ? "true" : "false")
              << " activity_kind=" << ::eBattleActivityKind_Name(request.activity_context().kind())
              << " activity_id=" << request.activity_context().activity_id()
              << " guild_id=" << request.activity_context().guild_id();

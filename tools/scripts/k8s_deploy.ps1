@@ -708,9 +708,10 @@
 	[string]$PaymentConfigPath = "",
 	# 配置表热更分发 sidecar(docs/design/config-table-hot-reload.md §7):
 	#   - 不传 -TableSyncS3Endpoint 也不传 -TableSyncDevFixture 时不启用表包模式,所有 Pod 模板与既有完全一致;
-	#   - 启用后给 C++ gate/scene/battle(含 Agones Fleet 与金丝雀池)和 Go 读表服务(guild/login/mail/match/rank/scene-manager)
-	#     注入原生 sidecar table-sync(initContainers + restartPolicy: Always)、table-bundles/table-status 卷与环境变量;
-	#   - 非读表服务(player-locator/trade/payment/chat/friend/data-service/db 等)不挂 sidecar;
+	#   - 启用后给 C++ gate/scene/battle(含 Agones Fleet 与金丝雀池)和 Go 读表服务(guild/login/mail/match/rank/scene-manager,
+	#     -AssetOps on 时再加 trade:悬赏求书求购单要读 Skill / SkillScrollCraft)注入原生 sidecar table-sync(initContainers +
+	#     restartPolicy: Always)、table-bundles/table-status 卷与环境变量;
+	#   - 非读表服务(player-locator/payment/chat/friend/data-service/db 等,以及 -AssetOps off 时的 trade)不挂 sidecar;
 	#   - -TableSyncDevFixture 仅限 -ReleaseProfile dev,复用 infra 的 SeaweedFS 夹具并建 mmorpg-tables 桶与只读 Secret。
 	[string]$TableSyncImage = "",
 	[string]$TableSyncS3Endpoint = "",
@@ -748,7 +749,9 @@ $script:CppLogSidecarEnabled = -not $NoCppLogSidecar
 # 配置表热更分发 sidecar(docs/design/config-table-hot-reload.md §7):只有显式传 -TableSyncS3Endpoint 或 -TableSyncDevFixture 才启用,
 # 未启用时业务容器不设 MMORPG_TABLE_BUNDLE_ROOT,所有清单逐字不变。
 $script:TableSyncEnabled = ([bool]$TableSyncDevFixture) -or (-not [string]::IsNullOrWhiteSpace($TableSyncS3Endpoint))
-$script:TableSyncGoServices = @('guild', 'login', 'mail', 'match', 'rank', 'scene-manager')
+# trade 只在悬赏求书求购单打开时读表(求购单跟 -AssetOps 走,docs/design/skill-book-wanted-order-trade-escrow.md §11.2 批 C),
+# 这时与别的读表服务一样挂 sidecar、跟随热更;关着时 trade 不读表,不挂。
+$script:TableSyncGoServices = @('guild', 'login', 'mail', 'match', 'rank', 'scene-manager') + @(if ($AssetOps -eq 'on') { 'trade' })
 $script:TableSyncMountPath = '/var/lib/mmorpg/tables'
 $script:TableSyncStatusPath = '/var/lib/mmorpg/tables-status'
 $script:TableSyncDevReadAccessKey = 'mmorpg-tables-ro-dev'
@@ -12855,6 +12858,15 @@ function New-GoSvcConfigMapYaml {
 			}
 			$tradeMallBlock = [regex]::Replace($tradeMallBlock, $tradeMallPattern, ('  ' + $tradeMallLine.Key + ': ' + $tradeMallLine.Value))
 		}
+		# 悬赏求书求购单(kind 7,skill-book-wanted-order-trade-escrow.md §3.9、§11.2 批 C):负责人 2026-11-27 定 K8s 各档位都打开 trade 资产通道,
+		# 求购单跟着 -AssetOps 一起开(它要求资产通道,关着时 trade 的 config.Validate 拒启)。服务 yaml 里 WantedSkillBook 下的 Enabled 必须恰好一行,不猜。
+		if ($script:AssetOpsOn) {
+			$tradeWantedPattern = '(?m)^(  WantedSkillBook:\r?\n    Enabled:)[^\r\n]*'
+			if ([regex]::Matches($tradeCommerceBlock, $tradeWantedPattern).Count -ne 1) {
+				throw "go/trade/etc/trade.yaml must have exactly one Commerce.WantedSkillBook.Enabled line right under WantedSkillBook; cannot open the wanted skill book orders. Nothing was written."
+			}
+			$tradeCommerceBlock = [regex]::Replace($tradeCommerceBlock, $tradeWantedPattern, '$1 true')
+		}
 		$tradeName                  = Get-AuthoritativeScalar -RelativePath $tradeYaml -KeyPath 'Name'
 		$tradeTimeout               = Get-AuthoritativeScalar -RelativePath $tradeYaml -KeyPath 'Timeout'
 		$tradeLeaseTTL              = Get-AuthoritativeScalar -RelativePath $tradeYaml -KeyPath 'LeaseTTL'
@@ -14100,17 +14112,15 @@ ${controlRedisBlock}
 # 玩家域:资产通道按 player:{id}:location 定位 scene 节点(写者是 C++ scene / scene_manager)。
 ${playerRedisBlock}
 # 通用资产通道开关(guild-phase2/04-asset-channel.md §S4)。键名与 go/trade/etc/trade.yaml、
-# go/trade/internal/config/config.go 三处逐字一致。
-# **所有档位固定 false**,不镜像服务 yaml —— 与 Mode / Schema.AutoMigrate 那条"dev 档取 yaml"
-# 的纪律刻意不同,理由是上线前置还没做完(§4.43 第 29 项:两把资产密钥尚未经
-# Resolve-InjectedSecret -MinLength 32 注入;scene gRPC 端口也还没有 NetworkPolicy 只放行
-# scene_manager / match / guild / trade)。已知风险 K1(单写者只在 30s 重连租约内成立)同样
-# 建议把"任何共享环境打开资产操作"列为 B4c 的硬前置。
-# 打开之前要同时做三件事:注入密钥、补 NetworkPolicy、把这一行改成 true —— 缺一件就别改。
+# go/trade/internal/config/config.go 三处逐字一致。跟 -AssetOps 走(见参数处说明):off 只写 Enabled: false 与 SecretEnv 两行;
+# on 整块从服务 yaml 搬运、Enabled 改 true(落地恢复与 Cleanup* 键一起进来),前提是两把签名密钥已注入、-NetworkPolicies on。
+# 负责人 2026-11-27 定:K8s 各档位都以 -AssetOps on 部署 trade(悬赏求书求购单要它,skill-book-wanted-order-trade-escrow.md §11.2)。
 # 密钥值绝不写进 ConfigMap:trade 只从下面这个**环境变量名**读,值由部署侧注入;
 # Enabled=true 而密钥缺失 / 不足 32 字节时 trade 直接拒启(fail-closed),不会静默降级。
 ${tradeAssetOpBlock}
 ${tradeCommerceBlock}
+# 导表产物目录:镜像里的 /generated/tables(Dockerfile.go-svc)。只在求购单打开时读(跟 -AssetOps);表包模式下 sidecar 给的表包优先。
+TableDir: /generated/tables
 ${tradeMallBlock}
 ${tradeRmbBlock}
 ${tradeContentGuardBlock}

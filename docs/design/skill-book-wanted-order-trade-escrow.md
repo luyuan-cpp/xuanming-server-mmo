@@ -288,6 +288,15 @@ message TradeWantedSkillBookTerms {
 
 通过标准:以上全绿;`git diff` 里 `data/tip/Tip.xlsx` 只多两行、`data/MessageLimiter.xlsx` 只多 582~584 三行。
 
+**复核(2026-11-27,会话「复核第 4 轮批 V/W 并补 guild 见证 SQL」,Opus 5.5,只读代码,未编译):通过,没有要改的。**
+- 读的是 HEAD 上的 `wanted_skill_book.go` 全文,`engine.go` 的 `mutate`(揭榜与撤单分支)、`createLocked` / `priorRequest`、`Get`、`attemptAllowed`,`delivery_order.go` 的 `settleBuyerFirstDelivery`,`leg_tx_type.go`、`schedule.go` 的改动,logic 的 `wanted_skill_book_logic.go`,以及 config / svc 的开关前提。
+- 状态机:托管 → 挂榜 → 揭榜 → 核对 → 交付,每一步都在合同行锁里按 stage 判。揭榜要求挂榜、`SellerPlayerId == 0`、没在撤单,同一张单同时只有一次揭榜在途;撤单只认发榜人、只在托管与挂榜两个阶段,揭榜人在交书途中撤不了。托管中撤单而扣款已到账时,同一次 plan 里先挂榜、再按撤单退全额。
+- 核对与退回:书只在扣出之后按 scene 交回的快照核对,`item_id` 与扣出的 guid 对得上才算;不符的书原样退给本人(托管者是他自己,按退回记 `TX_AUCTION_RETURN`,不过获取封禁),退书没到账转人工后可 `reissue`,`currentLeg` 跟到补发腿。
+- 钱:悬赏只扣流通银两;先书后款的闸压住卖家所得;发榜人收书被拒时整单退回用托管原件,退全额;5% 税留在合同里即销毁,税额按向上取整与 C++ 同口径(跨语言用例比对)。
+- 幂等与上限:建单请求号在 `priorRequest` 里校验长度并按摘要判重放;揭榜按 (揭榜人, 请求号) 的键重放,同一请求号换了书回 `TradeRequestConflict`;发榜上限的计数是角色锁下的加锁读,揭榜次数每人 3 次、整单 256 次。
+- 列表:公开榜只列挂榜中的单,按现成索引倒序扫;本人的单按原身份筛,过户之后新主看不到旧主的单;开关关掉之后公开榜回「功能未开放」,本人的单照常列、照常可撤。
+- 剩余与取舍照上面「代价与边界」,不另加。
+
 ### 11.2 批 C、批 B 换电脑由 Claude Code 写(2026-11-27 负责人改定)
 
 > 剩余工作(批 A 验证、批 C、批 B、文档收尾)的执行入口是 [skill-book-wanted-order-remaining-handoff-20261127.md](../handoff/skill-book-wanted-order-remaining-handoff-20261127.md),逐文件改法、要先问负责人的事与完成判据都在那里;本节保留设计层面的要点。
