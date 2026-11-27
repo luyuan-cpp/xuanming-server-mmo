@@ -307,7 +307,8 @@ grpcurl -plaintext -import-path . -proto proto/player_inbox/player_inbox_admin.p
 | `PlayerInboxForceVoided` | info | 有已投递的行被强制终结(`VoidItem mode=FORCE_MISMATCH`) | 对照审计 `action=FORCE_VOID` 与工单(§5.2) |
 | `PlayerInboxOpenItemsTrend` | info | 最老未决条目超过 30 天(多为流失玩家) | 只看趋势 |
 
-**scene 日志信号**(scene 没有 Prometheus 端点。LogQL 写在告警文件头,Loki ruler 还没接线,目前是值班固定查询):
+**scene 日志信号**(收件箱的这些信号还没导出成指标。scene 本身有 Prometheus 出口,导出了的信号改成 PromQL 规则,例如下文战斗道具预留超期的
+`SceneBattleItemHoldOverdue`;这里的 LogQL 写在告警文件头,Loki ruler 还没接线,目前是值班固定查询):
 - 流选择器一律写 `{job="cpp_nodes", service="scene"}`,逐 zone 再加 `zone="<zone 名>"`。C++ 业务日志只落文件、由 Alloy sidecar 送 Loki,
   sidecar 不打 `app` 标签:写成 `{app=~"scene.*"}` 的查询恒为空,会被误判成「没有问题」。契约测试核对告警文件里的选择器只用 sidecar 真有的标签。
 
@@ -538,8 +539,9 @@ FIGHTING 的 `battle:lock` 从开局起就活到续冻上限之后,结算一直�
 (资产通道回 RETRY + `kAssetInBattle`,日志 `metric=asset_debit_items_held` / `asset_recall_items_held`),玩家其余照常。
 
 - **冻结已不在的预留**由 scene 的 reaper 每 30 秒复核:到了冻结到期时刻、玩家此刻可改,就向 match 查 SQL 终局,ABORT / NO_ORIGINAL 释放,
-  COMPLETE / PENDING / UNKNOWN 留着,**没有上限**。越过「冻结到期 + 15 分钟」仍没收尾,每 10 分钟一行 ERROR `metric=battle_item_hold_overdue`
-  (值班查询 `count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_item_hold_overdue" [10m]) > 0`)。
+  COMPLETE / PENDING / UNKNOWN 留着,**没有上限**。越过「冻结到期 + 15 分钟」仍没收尾,每 10 分钟一行 ERROR `metric=battle_item_hold_overdue`,
+  同一处计数 `scene_battle_freeze_events_total{event="item_hold_overdue"}`,告警 `SceneBattleItemHoldOverdue`(`deploy/k8s/battle-settlement-alerts.yaml`;
+  续冻到上限是同文件的 `SceneBattleFreezeHoldCapReached`,普通生死状待退银两超期是 `SceneJianghuDuelFeeOverdue`)。
 - **处置**:按日志里的 `battle_id` 查结算为什么没到,走本节上面的步骤 —— 发件箱积压看下面「Match 个人结算首投积压」;
   条目已在收件箱而整笔延后看上面的原因表(两包都满而没能改投邮件时,让玩家腾位、取回临时格);match 查不到看 `battle_terminal_query_unknown` 的处置。
   结算一应用,预留随之释放,不需要人工放。

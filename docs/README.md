@@ -159,6 +159,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [battle-festival-beast-ui-handoff.md](planning/ui-handoff/battle-festival-beast-ui-handoff.md) — 瑞兽迎春：另一台电脑 Codex 的 UI 交接
 - [battle-prep-skill-ban-ui-handoff.md](planning/ui-handoff/battle-prep-skill-ban-ui-handoff.md) — 战前技能禁选（每方 3 Ban · 方案 A）UI 纯功能作图交接清单
 - [battle-season-one-ui-handoff.md](planning/ui-handoff/battle-season-one-ui-handoff.md) — 破阵之季 · 给另一台电脑 Codex 的 UI 制作单
+- [battle-spectate-chat-v1-ui-handoff.md](planning/ui-handoff/battle-spectate-chat-v1-ui-handoff.md) — 「局外人观战交流与个人禁交开关 V1」纯功能 UI 精修作图交接单（可选视觉升级）
 - [craft-digest-and-ranked-v7-ui-handoff.md](planning/ui-handoff/craft-digest-and-ranked-v7-ui-handoff.md) — 西市名匠离线营业战报 + 论剑 V7 最后 12 张无字透明 UI 切图交接
 - [economy-anti-scam-ui-codex-handoff.md](planning/ui-handoff/economy-anti-scam-ui-codex-handoff.md) — 经济防骗、卖家信用与官方 7:3 商城 UI 需求清单（纯功能规格，不定义美术风格）
 - [equipment-craft-v2-v5-ui-handoff.md](planning/ui-handoff/equipment-craft-v2-v5-ui-handoff.md) — 《五行奇谈》装备品相与典籍制书 V2–V5 增量图标纯功能交接单

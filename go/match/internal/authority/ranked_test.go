@@ -1,6 +1,7 @@
 package authority
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -307,4 +308,33 @@ func TestIsEligibleRankedRematchFormation(t *testing.T) {
 	team2v2 := proto.Clone(valid).(*pb.MatchFormationRecord)
 	team2v2.Members = append(team2v2.Members, &pb.MatchFormationMember{PlayerId: 303, TeamIndex: 0}, &pb.MatchFormationMember{PlayerId: 404, TeamIndex: 1})
 	require.False(t, isEligibleRankedRematchFormation(team2v2, 101, 202), "非 1V1 不得发起 1V1 不服再战")
+}
+
+func TestRankedTiDBFeaturedBuildUpsertAndReadback(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	deltas := make(map[string]*featuredBuildMatchDelta)
+	collectFeaturedBuildDelta(deltas, 152000, 101, &battlepb.BattleSettlementData{
+		PlayerDisplayName: "问道甲",
+		FinalSeasonSealId: 101,
+		StarterPetTableId: 3,
+		CoreSkillIds:      []uint32{1002, 1001},
+	}, 160000, true)
+
+	// 连续两轮事务落库，覆盖整数复合主键 INSERT 与 ON DUPLICATE KEY UPDATE 及读回列对齐。
+	for i := 0; i < 2; i++ {
+		tx, err := s.DB.BeginTx(ctx, nil)
+		require.NoError(t, err)
+		require.NoError(t, applyFeaturedBuildDeltasTx(ctx, tx, 7, uint64(9001+i), 1, 8, uint64(1000+i), deltas))
+		require.NoError(t, tx.Commit())
+	}
+
+	got, err := loadTopFeaturedBuildsQuery(ctx, s.DB, 7, 5)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Equal(t, "101:3:1001,1002", got[0].BuildKey)
+	require.Equal(t, uint32(2), got[0].Appearances)
+	require.Equal(t, uint32(2), got[0].Wins)
+	require.Equal(t, uint32(2), got[0].HighTierWins)
+	require.Equal(t, []uint32{1001, 1002}, got[0].CoreSkillIds)
 }

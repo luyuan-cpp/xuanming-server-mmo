@@ -69,6 +69,8 @@
 
 ## 二、本机研发导入备忘（仅本机研发参考，严禁复制给 Codex）
 
+> **验收与导入状态（2026-11-27 已完成）**：Codex 已在图仓提交 `d8dcf35fcfa` 交付全部 8 张透明 PNG-32 切片与 2 张预览图（7 张标准参照实图校验通过、`records/visual-review.json` 通过），且已逐张目视复核、8/8 SHA-256 一致、按 `manifest.json` 实测边距（`realm_route_board_bg` `{80,64,80,64}`、`realm_boon_card_bg` `{72,104,72,48}`、`realm_resonance_banner` `{40,0,40,0}`，5 枚图标 `{0,0,0,0}`）以 `textureType=8` 落盘至 `mmorpg-client/Assets/Resources/UI/Ugui/WuxingRealmV2/`（`cfb6a3d3`，全仓 GUID 零冲突），与 `WuxingExpansionsUiArt.cs` 8/8 路径精确对齐。
+
 1. Codex 交付并经目视验收后，核对 `D:\work\image\designs\wuxing-roguelike-realm-v2\manifest.json` 的 SHA-256、尺寸、RGBA 透明通道与拉伸边距，将 `slices/` 下 8 张 PNG 按原基名导入客户端目录 `mmorpg-client/Assets/Resources/UI/Ugui/WuxingRealmV2/`，并补齐唯一 GUID 的 Unity Sprite `.meta`（`realm_route_board_bg.png`、`realm_boon_card_bg.png`、`realm_resonance_banner.png` 按 `manifest.json` 设置 `spriteBorder`，其余 5 张图标设 `{0,0,0,0}`）。
 2. 客户端继续直接复用既有 `Assets/Resources/UI/Ugui/WuxingExpansionsV1/icons/element_{metal,wood,water,fire,earth}.png`（5 行图标）与 `sigil_frame_{common,spirit,immortal}.png`（3 档品质边框），实现最小资产增量。
 3. 协议生成、C++/Go/Java/Python 服务端落码、Unity 编译与单测均由本机研发 / Gemini 完成，不交由 Codex。

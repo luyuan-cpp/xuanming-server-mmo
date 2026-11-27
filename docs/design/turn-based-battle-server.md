@@ -918,7 +918,8 @@ battle-transport-decision.md §6 和 D37 要删的东西全部还在,也都参�
 - 删除 `handler/grpc/battle_client_player_service.{h,cpp}`(`BattleClientPlayerGrpcImpl`,即 gate 中继客户端消息在 battle 侧的入口),构建清单同步。
   `handler/grpc` 只剩 match→battle 控制面 `battle_node.{h,cpp}`;这些文件不是生成器输出,regen 不会让被删文件回来。
   `main.cpp` / `handler/event/event_handler.cpp` / `battle_security.h` 只改注释。
-- 新日志 metric(battle 无 Prometheus 端点,由日志侧按 `metric=` 提取):
+- 新日志 metric(按 `metric=` 检索;丢帧的准确总数 2026-11-27 起另经 battle 的 Prometheus 出口导出为
+  `battle_frames_dropped_no_direct_total`,`BattleRoomManager::CollectMetrics`,日志仍按 messageId 采样):
   - `metric=battle_frame_dropped_no_direct message_id=… dropped_total=… latest_battle_id=… latest_player_id=…`(`LOG_INFO`,按 messageId 采样);
   - `metric=battle_ticket_issue_failed battle_id=… player_id=… role=participant|observer`,观众另带
     `path=new|idempotent_same_session|idempotent_session_changed`(`LOG_ERROR`,逐条;正常运行应为 0)。

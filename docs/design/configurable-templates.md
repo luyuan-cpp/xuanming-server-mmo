@@ -171,8 +171,8 @@ int32  design_note    = 9002 [(cfg_owner) = "designer"];
 
 ### 3.8 可观测性
 
-- battle 和 scene 两个 C++ 进程**没有 Prometheus 端点**（`battle_room_manager.cpp` 注释："由日志侧提取计数"）。每次决策打一行日志会随"房间数 × 怪物数 × 回合数"爆炸。
-- 做法：进程内按低基数维度聚合计数（`atom_kind`、`outcome`、`activity_event_kind`、`result`），每 60 秒打一行 `metric=battle_ai_decisions ...` 结构化日志，写法照 `battle_settlement_pending_backlog`。label 不带 `player_id`、`guild_id`、`strategy_id`、实例 id（AGENTS.md §9）。
+- battle 和 scene 两个 C++ 进程都有 Prometheus 出口（`MMORPG_METRICS_PORT`，`Node::StartMetricsExporter`；2026-11-27 订正：原文写「没有 Prometheus 端点」，那是更早的状况）。每次决策打一行日志会随"房间数 × 怪物数 × 回合数"爆炸。
+- 做法：进程内按低基数维度聚合计数（`atom_kind`、`outcome`、`activity_event_kind`、`result`），用 `GlobalMetricsRegistry().Register` 登记一个采集回调导出成指标（写法照 `BattleRoomManager::CollectMetrics`，见 `docs/design/infra-reconnect-overview.md` §1.11），需要按批核对时再每 60 秒打一行 `metric=battle_ai_decisions ...` 汇总日志，两个出口读同一份计数。label 不带 `player_id`、`guild_id`、`strategy_id`、实例 id（AGENTS.md §9）。
 - 战斗求值器返回 **DecisionTrace**（走过的阶段 / 规则 id 序列），引擎的回合结算路径不打日志；battle 节点按 debug 开关输出，用于回答"Boss 为什么放了这招"。
 - 导表时额外产出一份**可读的规则渲染报告**（如"策略 900 / 阶段 2 / 规则 10：若存活敌人 ≥ 3 则施放 横扫(5002)"），供评审和 diff。
 
@@ -416,7 +416,7 @@ v1 只用 `round_cap_outcome` 枚举。出现"击杀指定单位即胜"这类真
 | H10 | 玩法规则由 battle 按已有字段自查，不加新 wire 字段；唯一例外是玩家自定义覆盖层（字段 14，battle 在任何副作用之前按模式与参数白名单 fail-closed，§8.6.2） | 旧 battle 静默跑旧规则 | proto3 未知字段语义 |
 | H11 | 参数列用具名标量 int64，不用 repeated 槽位 / double / 表达式 | 静默丢数据、确定性破坏 | excel_reader.py、table_expression.h |
 | H12 | 不存表行指针，只存 id 或编译快照 | 热更后野指针 | data/AGENTS.md |
-| H13 | 指标进程内聚合、周期打日志，label 不带高基数 id | 日志爆炸 / Prometheus 高基数 | battle 无 Prometheus 端点；AGENTS §9 |
+| H13 | 指标进程内聚合、经节点出口导出（需要时再周期打汇总日志），label 不带高基数 id | 日志爆炸 / Prometheus 高基数 | battle 有 Prometheus 出口（2026-11-27 订正）；AGENTS §9 |
 | H14 | 处理器表与字典一一对应在启动期核对（生成常量无 kCount，不能 static_assert） | 漏注册的原子运行期才暴露 | constants_gen.py |
 | H15 | tip 码只由导表器从 `Tip.xlsx` 发号；不可参与原因不写中文串 | 客户端文案错乱 | AGENTS §4.4、§7.5 |
 | H16 | 玩家自定义模板只能在策划声明的基底范围内调整；自定义对局一律 `MATCH_MODE_CUSTOM`，无奖、无损、不计分，四层代码写死 | 刷经验 / 掉落 / 评分 / 历练计数 | §8.7 F1–F11 |

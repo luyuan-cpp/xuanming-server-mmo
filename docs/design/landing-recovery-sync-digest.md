@@ -392,7 +392,7 @@ trade 的资产通道默认关闭、P3 未开工，但为避免两份实现分�
 | `max(guild_trial_result_overdue) > 0` 持续 30m | warning |
 | `guild_trial_owed_rows > 1000` 持续 1h | warning |
 
-battle / scene 进程没有 Prometheus 端点 [C]，结算类信号只有结构化日志（`metric=battle_settlement_*`）。Loki ruler 尚未接线 [C]，所以在文件头注释里写出对应的 LogQL，作为值班固定查询，等上线批接线后转规则。
+battle / scene 进程都有 Prometheus 出口（`MMORPG_METRICS_PORT`），但结算类信号大多还只有结构化日志（`metric=battle_settlement_*`）。Loki ruler 尚未接线 [C]，所以在文件头注释里写出对应的 LogQL，作为值班固定查询，等上线批接线后转规则；哪个信号导出成指标了，就把它的查询改成 PromQL 规则。2026-11-27 改了四条：battle 的滞留房间（`battle_sql_outcome_stuck_rooms`）与 scene 的续冻到上限、道具预留超期、普通生死状待退银两超期（`scene_battle_freeze_events_total{event}`），规则在 `deploy/k8s/battle-settlement-alerts.yaml`，对应的 LogQL 从文件头删掉，免得接线之后重复告警。
 
 ---
 

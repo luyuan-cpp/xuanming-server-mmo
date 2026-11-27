@@ -2846,7 +2846,7 @@ TEST_F(BattleObserverContract, RedactStatePreservesSpectateChatEnabledWhileStrip
     actor->set_actor_id(1001);
     (*actor->mutable_skill_cooldown_rounds())[10002] = 2;
 
-    BattleRoomManagerTestAccess::RedactStateForViewer(state, 0);
+    BattleRoomManagerTestAccess::RedactSupport(state, 0);
     EXPECT_TRUE(state.spectate_chat_enabled());
     EXPECT_EQ(0, state.self_items_size());
     EXPECT_EQ(0, state.team_pings_size());

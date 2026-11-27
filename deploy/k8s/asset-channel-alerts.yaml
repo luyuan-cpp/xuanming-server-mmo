@@ -24,23 +24,15 @@
 # (cpp/libs/services/scene/player/system/player_ownership_metrics.{h,cpp})。但下面这些结算类信号目前没有导出,
 # 仍只存在于结构化日志(metric=...),而 Loki ruler 目前没有挂载规则目录、也没有 alertmanager_url。
 # 下列 LogQL 先作为值班固定查询,ruler 接线(上线批 BK8s)之后转为规则;哪个信号导出成指标了,就把它的查询改成 PromQL 规则。
+# 已改的(2026-11-27):battle 的 metric=battle_personal_settlement_staging_exhausted_rooms(滞留房间)与 scene 的
+# metric=battle_freeze_hold_cap_reached / battle_item_hold_overdue / jianghu_duel_fee_overdue 导出成了指标,告警在
+# deploy/k8s/battle-settlement-alerts.yaml(处置说明随之搬过去),这里不再列,免得 ruler 接线之后同一件事报两遍。
 # 流选择器与 player-inbox-alerts.yaml 同一写法:C++ 业务日志由每个 Pod 的 Alloy sidecar 读文件送 Loki
 # (k8s_deploy.ps1 Get-CppLogSidecarConfigAlloy),流标签只有 env / namespace / pod / zone / service / job / lang / level,
 # **没有 app**:写成 {app="battle"} 的查询匹配不到任何流,恒为空。battle 写 {job="cpp_nodes", service="battle"}
 # (三种 battle 编排都挂同一个 sidecar,全局池的 zone 是 "global"),scene 写 {job="cpp_nodes", service="scene"};
 # service 取自日志文件名前缀(NodeTypeToShortName)。本机观测台(deploy/observability/alloy/config.alloy)同一写法可用。
 # 契约测试 k8s_deploy_contract.tests.ps1「LogQL 契约」逐条核对下面用到的标签都在 sidecar 配置里。
-#   critical: count_over_time({job="cpp_nodes", service="battle"} |= "metric=battle_personal_settlement_staging_exhausted_rooms" [10m]) > 0
-#             SQL 终局迟迟没有决定的房间(原件无效、或越过了快速重放跨度)留在节点上,节点不会自然排空(metric 名沿用已登记的值班查询)。
-#             滞留定时器每 60s 报一行 sql_unconfirmed=滞留房间数 stuck_total=同值 node_rooms=本节点房间总数,正文列出 battle_id,
-#             房间清掉之前一直会响。前因是一次性的 metric=battle_sql_outcome_unconfirmed(越过快速重放跨度)与
-#             metric=battle_sql_outcome_source_invalid(终局原件生成失败)。
-#             处置:先查 match 是否可达、CommitBattleOutcome 为什么没有决定,再分三步,不要直接删 Pod
-#             (会把同节点上正在打的房间一起作废):
-#               1. kubectl -n mmorpg-infra label gs <name> mmorpg.io/drain=true(进程 5s 内读到,拒绝新房间);
-#               2. 等提醒行的 node_rooms 降到与 stuck_total 相等(其余房间打完,单局时长上限见 go/match/internal/catalog 的 MaxBattleSeconds,当前 3600s);
-#               3. kubectl -n mmorpg-infra delete gs <name>,优雅停机由 AbortAllRooms 清房。
-#             慢速重放满跨度仍无决定时房间自己会删(metric=battle_sql_outcome_abandoned),不发布任何终局,由 match 凭持久原件裁决。
 #   critical: count_over_time({job="cpp_nodes", service="battle"} |= "metric=battle_sql_outcome_key_unavailable" [10m]) > 0
 #             没有终局提交密钥(MMORPG_MATCH_OUTCOME_SECRET_BATTLE),这个节点的终局协议停用,对局结果提交不了。
 #   critical: count_over_time({job="cpp_nodes", service="battle"} |~ "metric=battle_settlement_source_(invalid|missing|member_mismatch)" [10m]) > 0
@@ -50,23 +42,6 @@
 #   warning : count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_settlement_item_guid_shortage" [10m]) > 0
 #             物品号段不够发这局的掉落,整份结算延后到号段够用(不丢);预检判出不足时已主动续段(GuidSegmentClient::RequestTopUp),
 #             持续出现查发号器与 data_service。
-#   warning : count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_freeze_hold_cap_reached" [10m]) > 0
-#             (2026-11-06,r2-v1#1 残余)FIGHTING 冻结到期查 SQL 终局后续冻,续到上限(到期 + 15 分钟)仍没应用就照常解冻并打这一行:
-#             要么 match 写了 COMPLETE 而收件箱一直没投到,要么有原件却迟迟没有终局(match 不可用或 ABORT 补写滞后)。
-#             解冻只放开人:这一局带进战斗的道具仍被预留押着(2026-11-10),结算再到照样从预留里扣,不再按持有量夹紧;
-#             正文有 battle_id,按它核对 match_battle_completion 与收件箱。设计见 docs/design/turn-battle-gap-closure.md §11
-#             与 docs/design/battle-item-reservation.md。
-#   warning : count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_item_hold_overdue" [10m]) > 0
-#             (2026-11-10)冻结已经不在,这一局带进战斗的道具还押在预留里,越过「冻结到期 + 15 分钟」仍没收尾,每局每 10 分钟一行。
-#             预留只在结算应用、或 SQL 终局是 ABORT / 没有可裁决原件时释放;COMPLETE、终局未定、查不到都留着,没有上限,
-#             这段时间玩家转不走、用不掉押着的那几样道具(人照常能玩)。前因与上一条相同:收件箱迟迟没投到,或 match 不可用。
-#             正文有 player_id 与 battle_id,按 battle_id 核对 match_battle_completion 与收件箱;处置见 docs/ops/player-inbox-runbook.md §6.1。
-#   warning : count_over_time({job="cpp_nodes", service="scene"} |= "metric=jianghu_duel_fee_overdue" [10m]) > 0
-#             (2026-11-27,r2-jh#1 的告警)生死状普通战书预扣的银两越过「复核时刻 + 15 分钟」仍没退还、也没被结算消耗,每人每 10 分钟一行。
-#             退还只在 SQL 终局是 ABORT / 没有可裁决原件时发生,COMPLETE 由结算消耗;终局未定、match 不可用时一直留着(钱不丢,只是晚退),
-#             这段时间这名玩家开不了新的普通战书(金帖档不受影响)。前因与上两条相同:match 不可用,或收件箱迟迟没投到。
-#             正文有 player_id 与 battle_id,按 battle_id 核对 match_battle_completion;设计见
-#             docs/planning/battle-jianghu-grudge-duel-phase1-implementation-plan.md「普通战书银两预扣与退还的数据一致性定案」。
 #   warning : count_over_time({job="cpp_nodes", service="scene"} |= "metric=mail_outbox_stuck" [10m]) > 0
 #             (2026-11-12)人物背包与临时格都放不下的战斗掉落改投邮件(docs/design/battle-overflow-mail.md):这批物品记在玩家存档的
 #             待寄队列里,由 scene 以 battle 身份寄出。这一行是重试不会变的失败:没配发件密钥、本地签名失败、条目形状不合法、验签被拒（两边密钥不同或时钟相差超过 5 分钟，`reason=signature_rejected`）,

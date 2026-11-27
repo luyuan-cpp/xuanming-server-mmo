@@ -152,6 +152,12 @@ Redis 里的锁和占位只能当协调提示：异步复制的主从切换会�
   - 节点间 RPC 10 分钟里超过 5% 没正常完成。分子不算 remote_rejected（含热关停的拒绝，是人为关掉的）和 channel_closed（本端关机拆通道）；每秒不到 1 次调用的节点不算，免得一两次失败就是 100%。5% 是起步值，有压测数据再调；
   - 往 Kafka 发消息连续 5 分钟都有失败（投递回执失败或 produce 拒收）；
   - 幂等生产者 fatal 重建（正常恒为 0）。
+- **业务计数同样导出**（2026-11-27）：注释里还写着「C++ 节点没有 Prometheus 出口」「不接 Prometheus」、只进日志的业务计数，全部接进同一个出口，日志行保留：
+  - scene：战斗冻结 reaper（`scene_battle_freeze_events_total{event}`）、退出收尾三行与断线保留、托管落点看护（`scene_exit_persist_events_total` 等五族）、两道归属栅栏与存盘发号异常（`scene_enter_fence_events_total` / `scene_release_fence_events_total` / `scene_save_seq_events_total`）、持久 schema 拒写（`scene_persist_schema_regression_rejected_total`）、离线托管与月卡投影（`scene_afk_hosting_events_total{event}`、`scene_afk_pass_projection_failures_total`）；
+  - battle：房间数与 SQL 终局滞留房间（`battle_rooms`、`battle_sql_outcome_stuck_rooms`，抓取时按房间表现数）、战斗帧无直连丢弃、配表指纹不一致、观众席回收、观战帧没交给 Kafka（`BattleRoomManager::CollectMetrics`）；
+  - gate：路由 lane、场景 lane、进场转发补发（`gate_router_lane_*`、`gate_scene_lane_*`、`gate_scene_entry_*`）。
+  - 写法：汇总行有固定 key 的，把 key 序列抽成一个 `Visit…(snapshot, emit)`，日志行与 `event` 标签都从它取，两个出口不各写一份名单；只在逐条日志里带累计值的（thread_local 计数），key 取日志里 `*_total` 去掉后缀。scene / gate 的 thread_local 计数可以直接读，因为采集回调跑在节点主 loop 上，与写计数的是同一个线程。
+  - **已有 LogQL 改不改 PromQL，逐条判断**：信号导出成指标、口径与原查询相同的就改（Loki ruler 没接线，LogQL 固定查询不会自己响），并从原文件头删掉那条查询，免得 ruler 接线后同一件事报两遍。本轮改了四条，规则在 `deploy/k8s/battle-settlement-alerts.yaml`，契约测试 `battle_settlement_alerts_contract.tests.ps1`；其余还没有计数的结算类信号（`battle_sql_outcome_key_unavailable`、`battle_settlement_source_*` 等）仍是 LogQL 固定查询。新导出的其余计数本轮不加告警：没有既定阈值，加了只会乱响，先看趋势。
 - **定案不导出的，写明原因**：
   - Kafka 的连接状态：librdkafka 自管到各 broker 的连接，要拿状态只能挂 event_cb 或解析统计 JSON，而挂 event_cb 会一并把日志回调接到它的内部线程上（`kafka_producer.h`）。要紧的是消息发没发出去、收没收到：前者有上面的生产者计数；后者节点命令有 `node_command_consume` 计数（`node_command_consume_stats.h`），Go 的消费组 owner 有 `kafka-bound-consumer-alerts.yaml`。
   - 节点链路的 TCP 建连失败：muduo 的 Connector 自己重试、不回调；Linux 用的 `third_party/muduo-linux` 是子模块，加回调要改上游。链路连不上时，`cpp_node_dependency_connections{dependency="node_link"}` 起不来，调它的 RPC 按 not_sent 计进上面的失败比例，症状看得到。

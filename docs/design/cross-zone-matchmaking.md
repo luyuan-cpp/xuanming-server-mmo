@@ -783,6 +783,7 @@ Go 全球启动在 matcher 和 RPC 准入之前同步核对结果 topic，独立
   - 那条修复落地之前，`OnPersonalSettlementsStaged` 在低频阶段落定（`StagingFailures() >= kFastStagingRounds`）的那一刻打一行 `metric=battle_personal_settlement_staged_late battle_id=… failed_rounds=…`，正文列出整局成员的 player_id（派发对所有成员同时发生，风险不只在最后落定的几人），供事后按 scene 账本对账补偿。值班查询登记在 `deploy/k8s/asset-channel-alerts.yaml` 文件头。
 - **本批未做**：评审 test_gaps 里「battle 编排没有端到端单测」（`StagePersonalSettlements` 改为遍历 `personalSettlementPayloads`、删掉 `RetireExhaustedStaging` 里的 `EnsureSettlementBacklogReporter` 都不会红）仍是残余：两处编排都在单例里，要先把 Redis / Kafka 接缝抽出来，超出本批范围。真 Redis 用例在没设 `MMORPG_TEST_REDIS_ADDR` 时 SKIP，Redis 7.2 与 8.x 两轮验收里 SKIPPED 算未通过。
 - **Java 版**：确认模式落库仍待做，实现时一并满足槽位守卫、三类滞留提醒与低频落定报数。
+- **滞留房间改为 PromQL 告警（2026-11-27）**：现行代码只剩 v1 轨道，提醒由 `BattleRoomManager::ReportStuckOutcomeRooms` 按 `OutcomeStuck`（`outcomePending && outcomeExhausted`）现数，行名 `metric=battle_personal_settlement_staging_exhausted_rooms` 不变。同一判据在抓取时导出为 gauge `battle_sql_outcome_stuck_rooms`，房间总数导出为 `battle_rooms`（即提醒行的 `node_rooms`）。告警改成 PromQL `BattleSqlOutcomeRoomsStuck`（`deploy/k8s/battle-settlement-alerts.yaml`，critical，`max by (namespace, instance) > 0` 持续 1 分钟），原来 `asset-channel-alerts.yaml` 头注释里的 LogQL 值班查询删掉。改的原因：Loki ruler 一直没接线，那条查询不会自己响。处置第 2 步改为看同一 instance 的 `battle_rooms` 降到与 `battle_sql_outcome_stuck_rooms` 相等。提醒行仍在，滞留的 battle_id 只在它的正文里。
 
 
 帮会历练先在全员原账号／归属修订的角色首锁与帮会锁下持久launch原件，之后才能调用全球Match。全球`StartActivityBattle`要求非零`request_id`与服务端`activity_context.launch_request_id`相等；规范完整Start正文继续作为kind=2、owner=原guild、request_low=原request的永久`match_direct_intent.payload`，不得在超时后换请求、名单或周期。

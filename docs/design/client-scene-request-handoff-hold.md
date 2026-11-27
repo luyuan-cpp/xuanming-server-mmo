@@ -223,6 +223,7 @@ Pump
 ### 4.8 观测
 
 gate 每 30 秒打一行 `[scene_lane] summary`，字段见 `client_scene_lane.h` 的 `SceneLaneCounters`。不按会话、玩家、消息号分维度（AGENTS §9）。
+2026-11-27 起同一份计数也经 gate 的 Prometheus 出口导出：`gate_scene_lane_events_total{event}`（`event` 就是汇总行的 key）与 `gate_scene_lane_in_flight` / `gate_scene_lane_expiry_heap_entries` / `gate_scene_lane_holding_sessions` / `gate_scene_lane_max_depth_seen`（`client_scene_lane.h` 的 `CollectMetrics`）。下面各项的读法对指标同样适用，比值用 `rate()` 算。
 
 - `held`：至少被放回队头一次的请求数；`retry_verdicts`：「稍后重投」的次数。两者之比是平均每条请求重投几次。
 - `expired_on_hold`：等了 2 秒仍没被受理。持续增长说明交接耗时经常超过 2 秒，先看 scene 的 `[TravelHandoff]` 汇总里的 `frozen_ms_max`。

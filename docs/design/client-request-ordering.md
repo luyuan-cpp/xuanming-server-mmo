@@ -306,7 +306,9 @@ Pump(*it)
 
 ### 4.10 观测
 
-gate 没有 Prometheus 出口。仿照 scene_entry 的汇总日志写法【码】`cpp/nodes/gate/handler/event/scene_entry_dispatch.cpp:414`,每 30s 打一行 `[lane]` 汇总:`admitted / sent / replied / failed / expired / expired_in_queue / rejected_full / rejected_redirected / late_dropped / incarnation_mismatch / dropped_on_disconnect`,外加当前在途数和最大队长。(2026-10-16:`node_removed` 已删,路由服摘除计入 `failed`,见 §4.5。)本地截止进 error_reporter。不使用 player_id、session_id 或原始 message_id 作维度(AGENTS §9)。
+(2026-11-27 订正:gate 有 Prometheus 出口,同一份计数另导出为 `gate_router_lane_events_total{event}` 与 `gate_router_lane_in_flight` /
+`gate_router_lane_expiry_heap_entries` / `gate_router_lane_max_depth_seen`,`event` 取汇总行的 key,见 `client_request_lane.h` 的 `CollectMetrics`;
+下面写的是原设计,当时以为 gate 没有出口。)仿照 scene_entry 的汇总日志写法【码】`cpp/nodes/gate/handler/event/scene_entry_dispatch.cpp:414`,每 30s 打一行 `[lane]` 汇总:`admitted / sent / replied / failed / expired / expired_in_queue / rejected_full / rejected_redirected / late_dropped / incarnation_mismatch / dropped_on_disconnect`,外加当前在途数和最大队长。(2026-10-16:`node_removed` 已删,路由服摘除计入 `failed`,见 §4.5。)本地截止进 error_reporter。不使用 player_id、session_id 或原始 message_id 作维度(AGENTS §9)。
 
 > 2026-10-15 订正(与实现对齐,以 `client_request_lane.cpp` 的 `LogSummaryIfDue` 为准):`dropped_on_disconnect` 实际叫 `dropped_on_close`,它同时覆盖断线与租约到期摘无连接会话两条路径;另有 `no_router`(没有可用路由服时回 1003)、`dropped_on_redirect`(重定向时丢弃的排队项)两个计数,以及 `in_flight`、`expiry_heap`、`max_depth_seen` 三个观测量。§4.5 伪码里的 `lane_mismatch++` 实现为 `LOG_ERROR`(防御性,正常不可达),不单独计数。`incarnation_mismatch` 自 2026-10-15 起同时包含 scene TCP(RPC0)回包路径(`FindLiveSession` 被两条路径共用)。
 

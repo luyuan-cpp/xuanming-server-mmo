@@ -619,11 +619,14 @@ scene 侧客户端在 `battle_terminal_query.{h,cpp}`:随机挑一个就绪的 m
    state 缺失的组件也算;评审修正:只认 FIGHTING 会让这种冻结每拍都查、回答被丢、永远解不了冻);回调只捕获 id 与时刻,不捕获实体句柄(AGENTS §11.7)。
 4. 查询只读,多副本并发安全:任一 match 副本读同一份 SQL;每个玩家的冻结只由持有它的 scene 节点处置(单写者)。
 
-**指标。** scene 进程内计数 `PlayerBattleSystem::FreezeHoldEventCount`(held_complete / held_pending / held_unknown / cap_reached / query_lost),
-告警走同名结构化日志。值班固定查询(Loki,写法同 `deploy/k8s/asset-channel-alerts.yaml` 的说明):
+**指标。** scene 进程内计数 `PlayerBattleSystem::FreezeHoldEventCount`(held_complete / held_pending / held_unknown / cap_reached / query_lost,
+2026-11-27 补 prepare_expired / expired_released / item_hold_overdue / duel_fee_overdue,reaper 的每种处置都有计数),
+经 scene 的 Prometheus 出口导出为 `scene_battle_freeze_events_total{event}`(`WriteBattleFreezeMetrics`,名表 `kFreezeHoldEventNames`)。
+每次计数伴随一条同名结构化日志,带 player_id / battle_id 供排查。
 
-- warning:`count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_freeze_hold_cap_reached" [10m]) > 0`
-  —— 续冻到上限结算仍没到,按 battle_id 查 match 的 `match_battle_settlement_source` 与收件箱条目;
+- warning:PromQL 规则 `SceneBattleFreezeHoldCapReached`(`deploy/k8s/battle-settlement-alerts.yaml`,`event="cap_reached"` 的 10 分钟增量 > 0)
+  —— 续冻到上限结算仍没到,按日志 `metric=battle_freeze_hold_cap_reached` 里的 battle_id 查 match 的 `match_battle_settlement_source` 与收件箱条目;
+  2026-11-27 前这是一条 LogQL 值班固定查询,信号导出成指标后改成 PromQL,查询从 `asset-channel-alerts.yaml` 头注释删掉;
 - warning:`count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_terminal_query_unknown" [10m]) > 20`
   —— scene 查不到 match 终局(密钥、发现或 match 不可用),续冻会一直拖到上限。
 
@@ -665,9 +668,9 @@ scene 侧客户端在 `battle_terminal_query.{h,cpp}`:随机挑一个就绪的 m
 - **离线超过续冻上限才重登**:锁已过期,不再重建冻结;道具预留随存档在盘上,重登后照样押着,由 reaper 的预留复核按 SQL 终局收尾
   (2026-11-10),结算晚到仍从预留里扣。
 - **开销。** 每个续冻中的玩家每 30 秒一次主键只读查询,正常运行为 0。
-- 告警只到「值班固定查询」这一层:上面两条 LogQL(`battle_freeze_hold_cap_reached`、`battle_terminal_query_unknown`)已写进
-  `deploy/k8s/asset-channel-alerts.yaml` 头注释的固定查询清单,但 scene 的这两个信号只在结构化日志里,Loki ruler 还没接线(上线批 BK8s),
-  接线之前不会自动告警。match 一侧的发件箱积压已有 PromQL 规则(`deploy/k8s/match-outcome-outbox-alerts.yaml`,见上面「指标」段)。
+- 续冻到上限已有 PromQL 告警(`SceneBattleFreezeHoldCapReached`,2026-11-27)。`battle_terminal_query_unknown` 还只在结构化日志里,
+  只有 `deploy/k8s/asset-channel-alerts.yaml` 头注释的值班固定查询,Loki ruler 还没接线(上线批 BK8s),接线之前不会自动告警。
+  match 一侧的发件箱积压已有 PromQL 规则(`deploy/k8s/match-outcome-outbox-alerts.yaml`,见上面「指标」段)。
 
 **2026-11-10 复核:上限之后这一段怎么堵(负责人当日拍板方案 A,已落码,未编译,待 Gemini;
 做法与验证见 [battle-item-reservation.md](battle-item-reservation.md))。**

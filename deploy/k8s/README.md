@@ -1607,6 +1607,21 @@ payment 与 rank 同形:全局池服务(`$GoSvcCatalogue.payment`,`Global = $tru
   处置写在规则的 description 里)。指标名由 `tools/scripts/tests/persist_version_skew_alerts_contract.tests.ps1` 对照 C++ 源码钉住。
 - 没有新开关、没有新部署参数。版本错位的其余 `where` 还只在 scene 日志里(值班查询见 `asset-channel-alerts.yaml`、`player-inbox-alerts.yaml` 文件头)。
 
+## 战斗结算收尾告警(2026-11-27,原 LogQL 值班查询改 PromQL;未编译、未在集群上验证)
+
+- battle 的 SQL 终局滞留房间与 scene 的冻结 reaper 事件原来只在结构化日志里,`asset-channel-alerts.yaml` 文件头为它们写了四条 LogQL 值班查询,
+  Loki ruler 没接线、不会自己响。现在两边都经 C++ 节点的 Prometheus 出口导出(`battle_sql_outcome_stuck_rooms` / `battle_rooms`、
+  `scene_battle_freeze_events_total{event}`,启动即以 0 导出),四条查询改成 PromQL 规则,从 `asset-channel-alerts.yaml` 文件头删掉;日志行保留,按局排查仍看它们。
+- **告警**:`deploy/k8s/battle-settlement-alerts.yaml`(PrometheusRule,同法安装;`-CppMetricsPort` 传 0 时没有出口,这组告警永远不响):
+  ```
+  kubectl apply -n observability -f deploy/k8s/battle-settlement-alerts.yaml
+  ```
+  4 条:`BattleSqlOutcomeRoomsStuck`(critical,按 instance 报,处置三步写在 description 里)、`SceneBattleFreezeHoldCapReached` /
+  `SceneBattleItemHoldOverdue` / `SceneJianghuDuelFeeOverdue`(warning,出现就报)。指标名与 event 取值由
+  `tools/scripts/tests/battle_settlement_alerts_contract.tests.ps1` 对照 C++ 源码钉住。
+- 没有新开关、没有新部署参数。同一批导出的其余业务计数(scene 退出收尾 / 栅栏 / 离线托管,battle 事件,gate 两条 lane 与进场补发)
+  本轮不加告警,清单见 `docs/design/infra-reconnect-overview.md` §1.8。
+
 ## Go 服务后台循环的活性与 panic 告警(2026-11-11~12,缺口清单第 25 条;未编译、未在集群上验证)
 
 - 按片分工的后台循环(资产指令重投、GM 回收派发、mail 过期清理、帮会 / 交易终态清理、match 终局发件箱)各报一个「最近一次跑完一轮的时刻」

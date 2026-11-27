@@ -372,7 +372,7 @@ PrepareBattle（发起方队长，普通战书）
 | `metric=jianghu_duel_fee_consumed_after_applied_settlement` | ERROR | COMPLETE 已应用而标记还在（缺陷兜底），清掉不退 |
 | `metric=jianghu_duel_fee_marker_invalid` | ERROR | 标记金额不合法（坏数据），清掉不退 |
 
-值班固定查询（写法同 `battle_item_hold_overdue`）：`count_over_time({job="cpp_nodes", service="scene"} |= "metric=jianghu_duel_fee_overdue" [10m]) > 0`。2026-11-27 已登记进告警清单 `deploy/k8s/asset-channel-alerts.yaml` 的 LogQL 值班查询段（warning，含处置说明）。与同段其他 scene 信号一样，Loki ruler 接线之前只是值班查询、不会自己响；scene 把这个信号导出成指标之后改成 PromQL 规则。
+告警：同一处计数导出为 `scene_battle_freeze_events_total{event="duel_fee_overdue"}`，PromQL 规则 `SceneJianghuDuelFeeOverdue`（`deploy/k8s/battle-settlement-alerts.yaml`，warning，含处置说明；2026-11-27 起，取代原来登记在 `asset-channel-alerts.yaml` 的 LogQL 值班查询，那条已删：Loki ruler 没接线，值班查询不会自己响，导出成指标之后由 Prometheus 直接评估）。按局排查仍看日志 `metric=jianghu_duel_fee_overdue` 里的 player_id 与 battle_id。
 
 ### 5. 改动清单
 

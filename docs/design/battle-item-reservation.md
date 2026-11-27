@@ -157,7 +157,9 @@ ERROR `metric=battle_item_hold_overdue`(`IsHoldOverdueLogDue`)。
 
 ## 6. 可观测性
 
-scene 进程没有 Prometheus 端点,信号是结构化日志(英文):
+信号是结构化日志(英文),带 player_id / battle_id,是按局排查的入口。其中预留超期与续冻到上限两项另由 scene 的
+Prometheus 出口计数导出为 `scene_battle_freeze_events_total{event="item_hold_overdue"|"cap_reached"}`(2026-11-27 起,
+`player_battle.cpp` 的 `WriteBattleFreezeMetrics`;计数与日志同一处,口径相同):
 
 | 日志 | 级别 | 含义 |
 |---|---|---|
@@ -167,11 +169,9 @@ scene 进程没有 Prometheus 端点,信号是结构化日志(英文):
 | `metric=item_hold_invalid source=loader` | ERROR | 加载校验不过 |
 | `metric=battle_freeze_hold_cap_reached` | ERROR | 续冻到上限解冻(文案已改为「道具仍押着」) |
 
-值班固定查询(Loki,写法同 `deploy/k8s/asset-channel-alerts.yaml` 头注释):
-
-```
-count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_item_hold_overdue" [10m]) > 0
-```
+告警是 PromQL 规则 `SceneBattleItemHoldOverdue`(`deploy/k8s/battle-settlement-alerts.yaml`,warning,10 分钟增量 > 0 就报,
+契约测试 `battle_settlement_alerts_contract.tests.ps1`)。原来这里是一条 LogQL 值班固定查询,Loki ruler 一直没接线、不会自己响;
+信号导出成指标之后改由 Prometheus 评估,查询从 `asset-channel-alerts.yaml` 头注释里删掉,免得 ruler 接线之后同一件事报两遍。
 
 处置见 [player-inbox-runbook.md](../ops/player-inbox-runbook.md) §6.1「战斗道具预留」。match 一侧的发件箱积压告警
 (`deploy/k8s/match-outcome-outbox-alerts.yaml`)是同一件事更早的信号。
