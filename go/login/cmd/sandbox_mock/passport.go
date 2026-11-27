@@ -24,9 +24,14 @@ import (
 // 账号注销要删通行证里的用户,mock 另有 Casdoor v4.27.1 的两个管理接口(路径、应答形状与真系统相同,成功与拒绝都回 HTTP 200;
 // 凭据走 HTTP Basic,取 sandboxPassportAdminClientID / sandboxPassportAdminClientSecret):
 //
-//	GET  /api/get-user?userId=<sub>      用户在回 {"status":"ok","data":{owner,name,id}};已删掉回 data:null(不看凭据,与真系统一致)
+//	GET  /api/get-user?userId=<sub>      用户在回 {"status":"ok","data":{owner,name,id,lastChangePasswordTime,isForbidden}};
+//	                                      已删掉回 data:null(不看凭据,与真系统一致)
 //	POST /api/delete-user {owner,name}   删掉回 data:"Affected",本来就不在回 "Unaffected"
 //	GET  /mock/passport/deleted_users    回 {"deleted":[sub...]},沙箱手册据此核对注销时确实删了通行证用户
+//	POST /mock/passport/change_password?user=<种子>  模拟玩家在通行证里改密(改密时刻记为现在);
+//	POST /mock/passport/forbid_user?user=<种子>      模拟管理员封禁。两者之后拿这名玩家此前的登录刷新令牌,login 应当拒绝
+//	                                                 并吊销整个账号(刷新前的核对,official-passport-registration.md §3.6)。
+//	                                                 种子与 /mock/passport/id_token 的 user 相同,回 {"userId":<sub>}。
 //
 // mock 里任何 sub 都算存在,直到被 delete-user 删掉,用户名固定是 "u_" + sub。删掉之后签发接口照样给这个种子签令牌
 // (真系统里用户没了就登录不了);要验「注销后重新注册是新账号」得连真 Casdoor。
@@ -75,7 +80,7 @@ func (i *idTokenIssuer) passportMintHandler() http.HandlerFunc {
 		token, err := i.sign(map[string]any{
 			"iss":       iss,
 			"aud":       aud,
-			"sub":       "passport-sandbox-" + hashTo12(user, "passport-sub"),
+			"sub":       passportSandboxSub(user),
 			"iat":       iat.Unix(),
 			"exp":       exp.Unix(),
 			"jti":       randomHex(8),
@@ -90,14 +95,22 @@ func (i *idTokenIssuer) passportMintHandler() http.HandlerFunc {
 	}
 }
 
-// passportAdminStub 模拟 Casdoor 的用户管理接口。deleted 记被 delete-user 删掉的 sub。
+// passportSandboxSub 是种子对应的通行证用户 id(令牌的 sub)。
+func passportSandboxSub(seed string) string {
+	return "passport-sandbox-" + hashTo12(seed, "passport-sub")
+}
+
+// passportAdminStub 模拟 Casdoor 的用户管理接口。deleted 记被 delete-user 删掉的 sub;passwordChangedAt(RFC 3339)与 forbidden
+// 由 change_password / forbid_user 设置,get-user 按真系统的字段名回出去。
 type passportAdminStub struct {
-	mu      sync.Mutex
-	deleted map[string]bool
+	mu                sync.Mutex
+	deleted           map[string]bool
+	passwordChangedAt map[string]string
+	forbidden         map[string]bool
 }
 
 func newPassportAdminStub() *passportAdminStub {
-	return &passportAdminStub{deleted: map[string]bool{}}
+	return &passportAdminStub{deleted: map[string]bool{}, passwordChangedAt: map[string]string{}, forbidden: map[string]bool{}}
 }
 
 // authorized 核对 Basic 凭据。Casdoor 把认不出的凭据当匿名,匿名调管理接口回 HTTP 200 + status=error,这里照做。
@@ -119,6 +132,7 @@ func (s *passportAdminStub) handleGetUser(w http.ResponseWriter, r *http.Request
 	sub := r.URL.Query().Get("userId")
 	s.mu.Lock()
 	gone := sub == "" || s.deleted[sub]
+	changedAt, forbidden := s.passwordChangedAt[sub], s.forbidden[sub]
 	s.mu.Unlock()
 	if gone {
 		writeJSON(w, map[string]any{"status": "ok", "msg": "", "data": nil})
@@ -127,9 +141,40 @@ func (s *passportAdminStub) handleGetUser(w http.ResponseWriter, r *http.Request
 	if !s.authorized(w, r) {
 		return
 	}
-	writeJSON(w, map[string]any{"status": "ok", "msg": "", "data": map[string]string{
+	writeJSON(w, map[string]any{"status": "ok", "msg": "", "data": map[string]any{
 		"owner": sandboxPassportOrganization, "name": sandboxPassportUserNamePrefix + sub, "id": sub,
+		"lastChangePasswordTime": changedAt, "isForbidden": forbidden,
 	}})
+}
+
+func (s *passportAdminStub) handleChangePassword(w http.ResponseWriter, r *http.Request) {
+	if sub, ok := sandboxSubFromSeed(w, r); ok {
+		s.mu.Lock()
+		s.passwordChangedAt[sub] = time.Now().Format(time.RFC3339)
+		s.mu.Unlock()
+		writeJSON(w, map[string]any{"userId": sub})
+	}
+}
+
+func (s *passportAdminStub) handleForbidUser(w http.ResponseWriter, r *http.Request) {
+	if sub, ok := sandboxSubFromSeed(w, r); ok {
+		s.mu.Lock()
+		s.forbidden[sub] = true
+		s.mu.Unlock()
+		writeJSON(w, map[string]any{"userId": sub})
+	}
+}
+
+// sandboxSubFromSeed 取 POST 请求的 user 种子换成 sub;请求不合格时已经回了 400。
+func sandboxSubFromSeed(w http.ResponseWriter, r *http.Request) (string, bool) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	seed := r.URL.Query().Get("user")
+	if r.Method != http.MethodPost || seed == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		writeJSON(w, map[string]any{"error": "POST with query parameter user is required"})
+		return "", false
+	}
+	return passportSandboxSub(seed), true
 }
 
 func (s *passportAdminStub) handleDeleteUser(w http.ResponseWriter, r *http.Request) {

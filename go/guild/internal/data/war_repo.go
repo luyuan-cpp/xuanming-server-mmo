@@ -41,6 +41,11 @@ var (
 	ErrWarFeudCooldown       = errors.New("war: feud issue cooldown active")
 	ErrWarFeudAlreadyActive  = errors.New("war: guild already has pending or active feud")
 	ErrWarFeudNotFound       = errors.New("war: feud not found or resolved")
+	// ErrWarSettleStale:结算事务在行锁内发现事务外读到的基准(灵脉快照、追杀令普通读、领赏计数)已被并发结算改掉,
+	// 整笔回滚、什么都没写。调用方整笔重读重算(r2-gw#3),有界次数用完再交给 Kafka 重投。
+	ErrWarSettleStale = errors.New("war: settlement basis changed by a concurrent writer")
+	// errWarBountyNotDue:到期收尾锁住追杀令后发现它已不是到期的 ACTIVE(被结单 / 撕单 / 别的副本已收尾),整笔回滚。
+	errWarBountyNotDue = errors.New("war: bounty no longer due for expiry")
 )
 
 type WarRepo struct {

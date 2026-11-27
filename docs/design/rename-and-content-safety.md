@@ -1,6 +1,6 @@
 # 改名(角色 / 帮会)与内容安全
 
-> 状态:2026-11-19 设计稿;六批源码 2026-11-20 都已落 `main`,协议与配表已生成。验证只有一部分有证据:C++ 的角色改名、宠物名送检、内容安全客户端用例在 2026-11-21 的 `bag_test` 里通过(`build/verification/team-follow-afk-hosting-20261121/cpp-tests-run2/all/bag_test.stdout.log`);Go 单测、真库用例、部署契约、端到端冒烟没有找到运行记录。2026-11-26 两轮复核共改十几处(第 9 节表下逐条列出),其中渠道身份路由那一处改了内部协议,**都未生成、未编译、未运行**,命令在 `docs/PROGRESS.md` 当天标题带「改名与内容安全」的两条。K8s 上还不能开启平台审核(部署脚本没有这一段,见第 10 节)。
+> 状态:2026-11-19 设计稿;六批源码 2026-11-20 都已落 `main`,协议与配表已生成。验证只有一部分有证据:C++ 的角色改名、宠物名送检、内容安全客户端用例在 2026-11-21 的 `bag_test` 里通过(`build/verification/team-follow-afk-hosting-20261121/cpp-tests-run2/all/bag_test.stdout.log`);Go 单测、真库用例、部署契约、端到端冒烟没有找到运行记录。2026-11-26 两轮复核共改十几处(第 9 节表下逐条列出),其中渠道身份路由那一处改了内部协议,**都未生成、未编译、未运行**,命令在 `docs/PROGRESS.md` 当天标题带「改名与内容安全」的两条。K8s 上开启平台审核的部署接线 2026-11-26 晚补上(6.9:部署参数、Secret 与指纹、防误关闸、平台调用计数与告警),**未运行**。
 >
 > 负责人 2026-11-19 定:
 > - 角色和帮会都支持改名;改名冷却 7 天;改名卡售价 30 元;旧名保护期 7 天。
@@ -420,6 +420,51 @@ Go 这边看过的两个库:
 
 两版的匹配引擎不同,所以共用一份测试向量文件,只约定两版都必须满足的那部分行为(基本命中、全半角、繁简、跳过字符、白名单)。打码结果是服务端输出,客户端只管显示,两版不要求逐字节相同。
 
+### 6.9 在 K8s 上开启平台审核(部署接线,2026-11-26)
+
+> 状态:部署脚本、清单、包装入口、告警、契约测试与 content_guard 的平台调用计数都已落码;**未运行**(命令在 `docs/PROGRESS.md` 2026-11-26「content-guard 平台审核的 K8s 部署接线」)。
+
+服务读凭据的那一半(6.5)早就有了:`Platform.WeChat` / `Platform.Douyin` 写 `AppID` 和 `AppSecretEnv`(环境变量名),AppSecret 从环境变量读。缺的是部署那一半:`tools/scripts/k8s_deploy.ps1` 生成的 ConfigMap 里没有 `Platform` 段,也没有把 AppSecret 注入容器,集群上开不了。现在照 login 小游戏登录的接线补上。
+
+**怎么开**(content-guard 是全局服务,只在 `infra-up`、或不带 `-SkipInfra` 的 `all-up` 里部署;`zone-up` 给了这些参数只告警「不生效」):
+
+```powershell
+$env:MMORPG_CONTENT_GUARD_WECHAT_APP_SECRET = '<微信小游戏的 AppSecret>'
+$env:MMORPG_CONTENT_GUARD_DOUYIN_APP_SECRET = '<抖音小游戏的 AppSecret>'
+pwsh -File tools/scripts/k8s_deploy.ps1 -Command infra-up <其余参数照常> -ContentGuardWeChatAppId <微信小游戏 AppID> -ContentGuardDouyinAppId <抖音小游戏 AppID>
+```
+
+只接一个平台就只给那一个。之后每次部署都要照传(参数不粘滞,见第 4 步);包装入口 `dev_tools.ps1 -Command k8s-infra-up / k8s-all-up` 同名参数照传,`k8s-image-*` / `k8s-release-*` 给了即拒绝。
+
+**接线一步步怎么走**:
+
+1. **参数 → ConfigMap**:给了 AppID 才在 `go-svc-content-guard-config` 里写 `Platform.<WeChat|Douyin>`,只写 `AppID` 与 `AppSecretEnv`(变量名字面量 `MMORPG_CONTENT_GUARD_<平台>_APP_SECRET`,不是 `${...}`,服务对含 `${` 的值拒启)。`BaseURL` 与四个时限都不写,用服务的缺省值(生产地址;1500 / 250 / 2500 / 150 毫秒)。两个都不给时不写 `Platform`:Deployment 与接线之前一样,ConfigMap 只有 `Timeout` 上面那句注释换了(旧注释说「纯内存计算,超时只是兜底」,接了平台就不对了),另外多出两条带 `--ignore-not-found` 的删 Secret(集群里没有就是空操作)和一行开关摘要。
+2. **AppSecret → Secret → 容器**:部署机的环境变量 → infra namespace 的单键 Secret `content-guard-wechat` / `content-guard-douyin`(键 `secret`)→ secretKeyRef 注入同名环境变量,不写 `optional`(Secret 缺失时 Pod 起不来,而不是带着空密钥起来)。走工作负载密钥目录 `$script:WorkloadSecretCatalog`(docs/design/workload-secrets-via-k8s-secret.md):建 Secret、注入、指纹都按这张表,不在 content-guard 的分支里另写一遍。Pod 模板带 `mmorpg.io/content-guard-<平台>-hash` 指纹,只换 AppSecret 也会滚动。`deploy/k8s/manifests/go-svc/content-guard.yaml` 不写这两个变量:没接平台时不能要求 Secret 存在。
+3. **在任何写操作之前拒绝**:AppID 不是 `[A-Za-z0-9_.-]`;给了 AppID 却没设环境变量(任何档位都没有回落值);AppSecret 首尾带空白或含 `${`;staging / prod 的占位串或短于 16 位。content-guard 自己不核 AppSecret 的形状,拿到错的值照样起得来,只是每一次平台调用都失败,而名字类场景对平台不可用的口径是拒绝,玩家就起不了名字。所以在部署时拦,报错只点参数名与变量名,不回显值。
+4. **不粘滞,加防误关闸**:每次部署按本次参数重写;本次没给的平台,它的 Secret 在 content-guard 部署之后删掉,平台审核随新 Pod 一起关闭。漏传的后果是平台审核被悄悄关掉:名字与聊天只剩本地词库,哪里都不报错,对内容安全是 fail-open。所以和 login 的第三方登录一样设闸(`Assert-ContentGuardPlatformClusterState`,真跑才查,DryRun 只打一行说明):先读线上 content-guard 的 ConfigMap,线上接着某个平台而本次漏传、换了 AppID、或线上那一段认不出,就在任何写操作之前拒绝,报错给出照传现状的参数串;确实要关或换时加 `-ConfirmContentGuardPlatformChange`(给了只告警放行)。线上没有、本次新开不需要确认。读集群失败一律拒绝:查不到不等于没开。
+5. **微信的 AppID 必须就是 login 的微信小游戏 AppID**。送平台的 openid 是账号目录里记的、玩家经 login 小游戏登录拿到的那个(6.5),openid 只在那个小游戏的 AppID 下有效;拿另一个应用的凭据去调,平台按 openid 无效拒掉每一次审核,名字类全部被拒。同一次运行里两个参数都给了(`all-up`)才比得上,不同就拒绝;分两次部署时比不上,靠下面的告警兜底。抖音的内容检测只带应用的调用凭据、不带玩家标识,AppID 与 login 的不同也调得通,不比(仍按同一个小游戏填,调用量按应用算)。
+6. **时限**:接了平台,服务端 `Timeout`(服务 yaml 的 3000,ConfigMap 镜像同一个值)要不小于「最长的平台调用 + 查渠道身份 + 200」= 2850,否则 content-guard 拒启。生成器不写时限,就是为了让这条不等式按缺省值成立;契约测试读 `config.go` 的缺省值核它。
+7. **依赖**:接了平台还要连 data-service 查渠道身份(`DataServiceRpc`,模板里一直有),并出集群调平台的 HTTPS 接口。本仓的 gRPC 准入策略只管入站;集群若另限出站,要放行 `api.weixin.qq.com`、`developer.toutiao.com` 的 443。
+
+**怎么看出平台出了问题**:
+
+- 指标 `content_guard_platform_reviews_total{provider, outcome}`(`go/content_guard/internal/metrics`):每一次平台调用记一次最终结局,`outcome` ∈ pass / reject / unavailable / skip / deferred。世界频道先行的 250 毫秒没等到记 `deferred`:交给后台补审,补审那一次另记结局,所以不算失败,否则平台只是慢一点告警就会响。补这个指标的原因:世界频道补审再不可用时消息照常留着、只打错误日志,之前平台挂了没有任何指标看得见。
+- 告警 `ContentGuardPlatformFailing`(warning,`deploy/k8s/content-guard-alerts.yaml`):某个平台最近 10 分钟 `unavailable` 占非 `deferred` 调用超过 5%,持续 10 分钟。5% / 10 分钟是起步值,接实网后按平时的失败率调。名字类不可用同时会触发已有的 `ContentGuardRefusingChecks`(critical),两条一起看就分得清是词库还是平台。
+- 平台整体故障一时恢复不了:不带该平台的参数、加 `-ConfirmContentGuardPlatformChange` 重新部署 `infra-up`,退回只用本地词库;恢复后再带上。
+
+**为什么这样做**:
+
+- Secret 放 infra namespace:content-guard 只在那里部署一份,Secret 不能跨 namespace 引用。
+- 一个平台一把单键 Secret,不是一个 Secret 两个键:与目录表「一把密钥一个 Secret」的口径一致;只接一个平台时另一把不存在、也不被引用;换密钥、关平台各管各的。
+- 部署侧比对微信的 AppID、不比抖音的:按平台接口的实际要求定,不拦一个调得通的配置。
+- 不加 `BaseURL` 参数:沙箱 mock 只在本机开发用,K8s 上就是生产地址;以后要在集群里对着 mock 测,再加。
+
+**没做的与残余**:
+
+- 全局服务分两步部署(先 ConfigMap、等 data-service 就绪后再起进程)。第一次开平台审核时,这两步之间如果旧 Pod 重启,它会读到带 `Platform` 段的新配置、却是没注入 AppSecret 的旧模板,起不来,直到进程那一步把新模板发下去(通常几分钟,另一个副本照常服务)。所有带工作负载密钥的全局服务都有这个窗口,不单独处理。
+- 微信 AppID 与 login 的对齐只在同一次运行里给了两个参数时查得到(第 5 步)。
+- 微信两个错误码与调用上限还没有实网凭证验证过(第 10 节)。
+
 ## 7. 聊天反广告(批 6 已做;「仅自己可见」留后)
 
 广告主要靠识别行为。规则放在 chat,因为只有它知道等级、频率和对象。chat 全服一份、多副本、无状态,所以**凡是要跨副本一致的计数和记录都落在聊天自己的库里,和消息在同一个事务里读写**,不放进程内存。
@@ -505,7 +550,7 @@ Go 这边看过的两个库:
 | 2 | 各入口接线:login、guild、chat、scene(含 C++ 调用端)、tip、契约测试;删 chat 旧过滤 | 约 35 个文件,另有生成物 | 是(新 tip) | 批 1 | 主仓与 Unity 源码已落 `main`（待 Gemini 验证） |
 | 3 | 角色改名:协议、data_service(名字行新状态、改名记录、提交、收尾循环、核账)、scene(入口、存档记录、落库后发起、入场续做)、配表、tip | 约 45 个文件,另有生成物 | 是(新 RPC、推送、tip) | 批 2 | 主仓与 Unity 源码已落 `main`（待 Gemini 验证） |
 | 4 | 帮会改名:协议、事务、保护表、配表、tip | 约 20 个文件 | 是 | 批 2 | 主仓与 Unity 源码已落 `main`（待 Gemini 验证） |
-| 5 | 平台接口(微信、抖音)与失败口径、世界频道撤回、渠道身份查询、密钥走 K8s Secret | 约 25 个文件 | 是（撤回推送） | 批 2;实网需 AppID 与密钥 | 主仓与 Unity 源码已落 `main`（待 Gemini 验证；实网待注入密钥） |
+| 5 | 平台接口(微信、抖音)与失败口径、世界频道撤回、渠道身份查询、密钥走 K8s Secret | 约 25 个文件 | 是（撤回推送） | 批 2;实网需 AppID 与密钥 | 主仓与 Unity 源码已落 `main`（待 Gemini 验证；「密钥走 K8s Secret」的部署接线 11-26 晚才补上,见 6.9,未运行；实网待注入密钥） |
 | 6 | 聊天反广告行为规则与消息举报 | 约 20 个文件 | 是（举报与错误码） | 批 2 | 主仓与 Unity 源码已落 `main`（待 Gemini 验证） |
 
 2026-11-26 复核改的四处(未编译、未运行):
@@ -542,13 +587,13 @@ Go 这边看过的两个库:
 
 1. **帮会改名收什么**：已按标准默认口径落码扣帮会资金（单库本地事务强一致，配表 `GuildRule.xlsx` 可调数值）。
 2. **改名卡**：已按标准配表落入 `Item.xlsx` 与 `RoleNameRule.xlsx`（默认绑定不可交易）。
-3. **微信、抖音的 AppID 与密钥**（实网外部依赖）：服务读环境变量的那一半已就绪；K8s 部署脚本还没有生成 `Platform` 段和注入 AppSecret 的那一半（见下面残余第一条），接真实凭证之前要补。App 渠道第三方审核供应商待上线前接入。
+3. **微信、抖音的 AppID 与密钥**（实网外部依赖）：服务读环境变量的那一半与 K8s 部署接线都已就绪（部署接线 2026-11-26 补上，未运行，见 6.9）；拿到实网的 AppID / AppSecret 后按 6.9 的「怎么开」部署。两个 AppID 都填玩家登录用的那个小游戏的。App 渠道第三方审核供应商待上线前接入。
 4. **属性方案名**：已按默认口径仅走本地词库层。
 5. **scene 玩家 RPC**：已按「受理 + 推送」闭环（`RenamePlayer` + `NotifyPlayerRenamed`）。
 
 残余:
 
-- **K8s 上还开不了平台审核。** `tools/scripts/k8s_deploy.ps1` 给 content-guard 生成的 ConfigMap 没有 `Platform` 段,也没有把 AppSecret 注入容器的那一段。login 的小游戏登录有同样的接线,可以照着做:部署参数给 AppID,AppSecret 从部署机的环境变量进 Secret,再经 secretKeyRef 进容器,ConfigMap 只写变量名;配部署契约测试。
+- **K8s 上开启平台审核的部署接线 2026-11-26 已补上**(6.9,未运行):部署参数 `-ContentGuardWeChatAppId` / `-ContentGuardDouyinAppId`、AppSecret 经 infra namespace 的单键 Secret 与指纹注入、防误关闸 `-ConfirmContentGuardPlatformChange`、平台调用计数 `content_guard_platform_reviews_total` 与告警 `ContentGuardPlatformFailing`,契约测试已加。剩下两点在 6.9「没做的与残余」:全局服务两步部署之间旧 Pod 重启会起不来;微信 AppID 与 login 的对齐只在同一次运行里查得到。
 - `GetPlayerChannelIdentity` 没有调用方证明:集群里连得到 data_service 的进程都能按角色或账号读出渠道和 openid。要补的话得给 content_guard、chat 各发一把调用密钥并在各环境注入。
 - chat 的 `PublishSystemWorldNotice`(江湖决斗的全服播报,另一条线加的)同样没有调用方证明:集群里的进程能用白名单模板发带任意名字的全服播报。归江湖决斗那条线处理。
 - 世界频道的后台补审是进程内存里的任务:chat 在消息发出后的几秒内崩溃,这条消息就不会再送平台。补审时平台仍不可用的,消息留着,只打错误日志。

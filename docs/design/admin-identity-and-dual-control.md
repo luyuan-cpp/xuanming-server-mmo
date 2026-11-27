@@ -158,7 +158,11 @@ func Require(approval *basepb.AdminApproval, operator string) error
 
 - `ResolveManualContractRequest` 加 `approval` 字段;`TradeCommerceManualAction`(合同上的人工处置留痕)加 `approval_id`、`proposer`、`approver`。
 - EXECUTE 在配置为开时必须带批准记录,且 `approval.proposer` 等于请求的 `operator`。SHOW 与 DRY_RUN 不要求。
-- **幂等**:锁到合同后先看留痕里有没有同一个 `approval_id`。有就回「已执行」和那条留痕,不再比较版本。现在重放只能得到「版本不符」,要人去 SHOW 里找自己的名字;加了批准号之后重放是确定的。
+- **幂等**:先看留痕里有没有同一个 `approval_id`,有就回「已执行」和那条留痕(回包 `already_executed=true`),不再比较版本。这一步**排在版本比较之前**,而且锁外读、锁内各做一次:执行成功后版本已经加一,结果未知的重放若先比版本,只会得到「版本已变」,看不出是不是自己做的;锁外读之后、加锁之前,同一个批准号的另一次请求也可能刚提交。留痕只追加,看到就是已提交,所以锁外看到也能直接回。带同一个批准号的 DRY_RUN 同样报「已执行」,批准人据此知道不用再批。
+- **放行的结果怎么记**:trade 回 OK(含重放)→ 流水记 `EXECUTED`;拒绝、合同不存在、版本已变 → `REJECTED`(要重新发起);读库失败(`RETRY`)、提交结果未知(gRPC `UNAVAILABLE`)、超时或断连 → `UNKNOWN`,可在原申请上「沿用原申请重试」,批准记录原样复用、请求摘要不变,trade 按批准号判重。交易人工处置因此与邮件一样属于「可重试」的命令;在线玩家的直接 GM 下游没有判重,仍然不能重试。
+- **调用方与密钥**:后台以 `ops-commerce` 调用方签名(与 `commercefix` 同一个调用方,trade 只认它),密钥 `GM_TRADE_ADMIN_SECRET` 与 trade 的 `Commerce.ManualResolutionSecretEnv` 同值,只挂给后台工作负载。本机后台到 trade 还没有经过验收的转发,`run_local.py` 不放行这两个变量,交易页只读不可用(批 7 补本机转发)。
+- **不带批准记录的应急出口**:trade 配置 `Commerce.ManualResolutionAllowUnapproved`(缺省 false)。打开时启动打一行 ERROR;之后每一次不带记录的 EXECUTE 都打 ERROR 并计入 `trade_manual_resolution_unapproved_execute_total`(批 7 据此加告警)。打开是一次走部署流程的配置变更,本身有记录。
+- **两人以外的信息不下传**:批准记录只有批准号、发起人、批准人、批准时刻;角色与权限不下传(§5.4)。trade 的留痕 `TradeCommerceManualAction` 加 `approval_id`、`approver` 两个字段;发起人就是原有的 `operator`,不重复存。
 - 后台新增「交易人工处置」页:列表(`ListManualContracts`)→ 详情(SHOW)→ 发起人选动作、填参数、原因和环境名,后台先跑一次 DRY_RUN,通过才冻结成草稿 → 批准人看到冻结的参数和当场重跑的 DRY_RUN 结果 → 批准后 EXECUTE。执行的结果由「合同在版本 V 的状态 + 动作 + 参数」决定,版本一变 EXECUTE 就拒绝,所以批准人看到的就是会执行的。
 - 环境名 `expect_target` 仍由发起人手填(沿用现在防连错环境的做法),不由后台代填。
 

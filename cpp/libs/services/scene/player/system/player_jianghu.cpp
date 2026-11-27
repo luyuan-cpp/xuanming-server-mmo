@@ -518,6 +518,16 @@ uint32_t PlayerJianghuSystem::ValidateAndCollectPrepareFee(entt::entity player, 
 		{
 			return kSuccess;
 		}
+		if (comp->pending_silver_fee_battle_id() != 0)
+		{
+			// 别的局预扣的那笔还没结清(取消没送到在线实体、终局还没落定):覆盖标记就把那笔永久弄丢。
+			// 拒绝这次备战,等那一局经取消 / 作废 / 终局复核退还或被结算消耗之后再开(match 按业务拒绝处理,肇事者出局)。
+			LOG_WARN << "[Jianghu] metric=jianghu_duel_fee_pending_other_battle player_id=" << tlsEcs.GetPlayerId(player)
+					 << " battle_id=" << battleId << " pending_battle_id=" << comp->pending_silver_fee_battle_id()
+					 << " pending_review_after_ms=" << comp->pending_silver_fee_review_after_ms()
+					 << ";silver duel fee of another battle is not settled yet, preparation rejected";
+			return kFeatureUnavailable;
+		}
 		if (!CurrencySystem::CanAfford(player, kCurrencyGold, static_cast<int64_t>(silverCost)))
 		{
 			return kJianghuInsufficientWritOrSilver;
@@ -528,7 +538,8 @@ uint32_t PlayerJianghuSystem::ValidateAndCollectPrepareFee(entt::entity player, 
 	return kInvalidParameter;
 }
 
-uint32_t PlayerJianghuSystem::CommitPrepareSilverFee(entt::entity player, uint64_t battleId, uint64_t silverToDeduct)
+uint32_t PlayerJianghuSystem::CommitPrepareSilverFee(entt::entity player, uint64_t battleId, uint64_t silverToDeduct,
+													 uint64_t reviewAfterMs)
 {
 	if (silverToDeduct == 0)
 	{
@@ -548,6 +559,14 @@ uint32_t PlayerJianghuSystem::CommitPrepareSilverFee(entt::entity player, uint64
 	{
 		return kSuccess;
 	}
+	// 提交点复核 ValidateAndCollectPrepareFee 的同一条规则:标记只容一笔,别的局的不覆盖。
+	if (comp->pending_silver_fee_battle_id() != 0)
+	{
+		LOG_WARN << "[Jianghu] metric=jianghu_duel_fee_pending_other_battle player_id=" << tlsEcs.GetPlayerId(player)
+				 << " battle_id=" << battleId << " pending_battle_id=" << comp->pending_silver_fee_battle_id()
+				 << " where=commit;silver duel fee of another battle is not settled yet, debit rejected";
+		return kFeatureUnavailable;
+	}
 	const uint32_t deductErr = CurrencySystem::DeductCurrency(
 		player, kCurrencyGold, static_cast<int64_t>(silverToDeduct), TX_JIANGHU_DUEL_FEE, battleId);
 	if (deductErr != kSuccess)
@@ -556,47 +575,80 @@ uint32_t PlayerJianghuSystem::CommitPrepareSilverFee(entt::entity player, uint64
 	}
 	comp->set_pending_silver_fee_battle_id(battleId);
 	comp->set_pending_silver_fee_amount(silverToDeduct);
+	comp->set_pending_silver_fee_review_after_ms(reviewAfterMs);
 	return kSuccess;
 }
 
-void PlayerJianghuSystem::OnBattlePrepareCancelled(entt::entity player, uint64_t battleId, bool skipSilverRefund)
+bool PlayerJianghuSystem::RefundPendingSilverFee(entt::entity player, uint64_t battleId, const char *reason)
 {
 	if (!tlsEcs.actorRegistry.valid(player) || battleId == 0)
 	{
-		return;
+		return false;
 	}
 	auto *comp = tlsEcs.actorRegistry.try_get<PlayerJianghuComp>(player);
 	if (comp == nullptr || comp->pending_silver_fee_battle_id() != battleId)
 	{
-		return;
+		return false; // 这一局没有待退:没扣过、已退过或已被结算消耗(幂等)
 	}
-	const uint64_t refundAmount = comp->pending_silver_fee_amount();
-	comp->set_pending_silver_fee_battle_id(0);
-	comp->set_pending_silver_fee_amount(0);
-	if (skipSilverRefund || refundAmount == 0 ||
-		refundAmount > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+	const uint64_t playerId = tlsEcs.GetPlayerId(player);
+	const uint64_t amount = comp->pending_silver_fee_amount();
+	// 退款是存档改动:交接 / 退出中 / 没有归属围栏时不动。标记在存档里,玩家可改之后由 reaper 的终局复核接着退。
+	if (!player_mutability::IsPlayerMutable(player))
 	{
-		return;
+		LOG_WARN << "[Jianghu] metric=jianghu_duel_fee_refund_deferred player_id=" << playerId << " battle_id=" << battleId
+				 << " amount=" << amount << " reason=" << reason
+				 << ";player is not mutable here, fee marker kept for the terminal review";
+		return false;
 	}
-	const uint32_t creditErr = CurrencySystem::AddCurrency(
-		player, kCurrencyGold, static_cast<int64_t>(refundAmount), TX_JIANGHU_DUEL_REFUND, battleId);
-	if (creditErr != kSuccess)
+	bool refunded = false;
+	if (amount > 0 && amount <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
 	{
-		LOG_ERROR << "[Jianghu] Failed to refund silver duel fee on CancelBattlePrepare: player_id="
-				  << tlsEcs.GetPlayerId(player) << " battle_id=" << battleId << " amount=" << refundAmount
-				  << " err=" << creditErr;
-		return;
+		// 先入账、成功之后才清标记:入账失败(余额溢出、缺货币组件)时标记留着,复核下一拍重试,钱不丢也不会退两次。
+		const uint32_t creditErr = CurrencySystem::AddCurrency(
+			player, kCurrencyGold, static_cast<int64_t>(amount), TX_JIANGHU_DUEL_REFUND, battleId);
+		if (creditErr != kSuccess)
+		{
+			LOG_ERROR << "[Jianghu] metric=jianghu_duel_fee_refund_failed player_id=" << playerId << " battle_id=" << battleId
+					  << " amount=" << amount << " reason=" << reason << " err=" << creditErr
+					  << ";silver duel fee refund was not credited, fee marker kept and retried by the terminal review";
+			return false;
+		}
+		refunded = true;
 	}
+	else
+	{
+		// CommitPrepareSilverFee 只写 (0, INT64_MAX] 的金额,别的值只可能是坏数据:没有可退的钱,只清标记,免得一直挡住新的战书。
+		LOG_ERROR << "[Jianghu] metric=jianghu_duel_fee_marker_invalid player_id=" << playerId << " battle_id=" << battleId
+				  << " amount=" << amount << " reason=" << reason << ";fee marker carries an invalid amount, cleared without refund";
+	}
+	ClearPendingSilverFee(*comp);
 	PlayerLifecycleSystem::RequestKeyProgressSave(player, "jianghu_duel_fee_refund");
-	LOG_INFO << "[Jianghu] Refunded silver duel fee on CancelBattlePrepare: player_id=" << tlsEcs.GetPlayerId(player)
-			 << " battle_id=" << battleId << " amount=" << refundAmount;
+	if (refunded)
+	{
+		LOG_INFO << "[Jianghu] metric=jianghu_duel_fee_refunded player_id=" << playerId << " battle_id=" << battleId
+				 << " amount=" << amount << " reason=" << reason;
+	}
+	return refunded;
 }
 
-void PlayerJianghuSystem::OnBattleVoid(entt::entity player, uint64_t battleId)
+bool PlayerJianghuSystem::ConsumePendingSilverFee(entt::entity player, uint64_t battleId)
 {
-	// 所有进入终局收件箱的作废局(battle VOID / 节点失联提前作废 / 到期作废)均由 scene 随收件箱存档原子退还普通银两并清零标记,
-	// 保证离线重登也能 100% 退回且永不双退。
-	OnBattlePrepareCancelled(player, battleId, /*skipSilverRefund=*/false);
+	if (!tlsEcs.actorRegistry.valid(player) || battleId == 0)
+	{
+		return false;
+	}
+	auto *comp = tlsEcs.actorRegistry.try_get<PlayerJianghuComp>(player);
+	if (comp == nullptr || comp->pending_silver_fee_battle_id() != battleId || !player_mutability::IsPlayerMutable(player))
+	{
+		return false;
+	}
+	LOG_ERROR << "[Jianghu] metric=jianghu_duel_fee_consumed_after_applied_settlement player_id=" << tlsEcs.GetPlayerId(player)
+			  << " battle_id=" << battleId << " amount=" << comp->pending_silver_fee_amount()
+			  << ";battle is COMPLETE and its settlement already applied here, yet the fee marker was not consumed (defect);"
+				 "marker cleared without refund";
+	ClearPendingSilverFee(*comp);
+	PlayerLifecycleSystem::RequestKeyProgressSave(player, "jianghu_duel_fee_consumed");
+	return true;
 }
 
 uint32_t PlayerJianghuSystem::PrepareBattleSettlement(entt::entity player, const ::PlayerJianghuComp &current,
@@ -631,8 +683,7 @@ uint32_t PlayerJianghuSystem::PrepareBattleSettlement(entt::entity player, const
 	if (candidateOut.pending_silver_fee_battle_id() == settlement.battle_id())
 	{
 		pendingSilverForThisBattle = candidateOut.pending_silver_fee_amount();
-		candidateOut.set_pending_silver_fee_battle_id(0);
-		candidateOut.set_pending_silver_fee_amount(0);
+		ClearPendingSilverFee(candidateOut);
 	}
 
 	// 作废或 0 回合流局：不消费金帖、不挂战败印记，预留由调用方 ReleaseHold 释放，普通战书银两随本收件箱原子退还。

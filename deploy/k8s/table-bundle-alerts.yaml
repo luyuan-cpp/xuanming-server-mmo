@@ -70,6 +70,25 @@ spec:
               当前业务进程不受影响(继续使用本地已有表包),但无法接收新表包或定时切换。检查 etcd 连通性与 sidecar 日志。
             runbook_url: docs/ops/table-hot-reload-runbook.md
 
+        # sidecar 取包失败(对象存储连不上、包不存在、摘要对不上、指针写坏):这条线没同步下来的 Pod 收不到新表,
+        # 新起的 Pod 会拒绝启动(不退回镜像里的旧表,设计 §8.1)。所有 Pod 一起失败时谁都没切,TableBundleNotConverged 不会响,
+        # TableSyncStale 只管 etcd,所以单独报。sidecar 每 20 秒全量复核一次,失败期间计数持续增长;for: 5m 滤掉一次性抖动。
+        - alert: TableSyncFetchFailing
+          expr: |
+            sum by (namespace, pod) (
+              increase(table_sync_bundle_fetch_total{result=~"error|verify_failed|invalid_pointer"}[10m])
+            ) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "table-sync sidecar {{ $labels.pod }} 持续取不到表包"
+            description: >-
+              table-sync 连续 5 分钟以上没能下载或核对指针引用的表包(设计 §7、§10)。在跑的进程继续用手上的表,
+              但收不到新包;这个 Pod 若重启,业务容器会因本线表包没到位而拒绝启动。查 sidecar 日志与 POINTER.json 的 sync_errors,
+              再查对象存储连通性、凭据与包是否存在。
+            runbook_url: docs/ops/table-hot-reload-runbook.md
+
         # 判据是状态量 table_bundle_needs_restart(此刻停在 needs_restart = 1),不是事件计数:
         # increase(table_reload_total{result="needs_restart"}[24h]) 只说明 24 小时内发生过,配上 for: 24h 会在事件后第 24 小时
         # 窗口刚好滑走时才勉强成立,重没重启都一样。

@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/zeromicro/go-zero/core/conf"
 
@@ -100,16 +101,16 @@ func deletedSandboxPassportUsers(t *testing.T, base string) []string {
 	return body.Deleted
 }
 
-// 账号注销删通行证用户:login 的 PassportUserDeleter 对着 mock 的管理接口走一遍,删掉、重做、凭据不对三种情况。
-func TestPassportUserDeleterAgainstSandboxMock(t *testing.T) {
+// 账号注销删通行证用户:login 的 PassportAdmin 对着 mock 的管理接口走一遍,删掉、重做、凭据不对三种情况。
+func TestPassportAdminDeleteUserAgainstSandboxMock(t *testing.T) {
 	base := newSandbox(t)
 	issuer := "https://passport.sandbox.local"
 	ctx := context.Background()
 	const sub = "passport-sandbox-0123456789ab"
 
-	deleter, err := auth.NewPassportUserDeleter(issuer, base, sandboxPassportAdminClientID, sandboxPassportAdminClientSecret, nil)
+	deleter, err := auth.NewPassportAdmin(issuer, base, sandboxPassportAdminClientID, sandboxPassportAdminClientSecret, nil)
 	if err != nil {
-		t.Fatalf("NewPassportUserDeleter: %v", err)
+		t.Fatalf("NewPassportAdmin: %v", err)
 	}
 	if err := deleter.DeleteUser(ctx, sub); err != nil {
 		t.Fatalf("delete passport user: %v", err)
@@ -121,15 +122,47 @@ func TestPassportUserDeleterAgainstSandboxMock(t *testing.T) {
 		t.Fatalf("deleted users = %v, want [%s]", got, sub)
 	}
 
-	wrongSecret, err := auth.NewPassportUserDeleter(issuer, base, sandboxPassportAdminClientID, "not-the-secret", nil)
+	wrongSecret, err := auth.NewPassportAdmin(issuer, base, sandboxPassportAdminClientID, "not-the-secret", nil)
 	if err != nil {
-		t.Fatalf("NewPassportUserDeleter: %v", err)
+		t.Fatalf("NewPassportAdmin: %v", err)
 	}
 	if err := wrongSecret.DeleteUser(ctx, "passport-sandbox-ba9876543210"); !errors.Is(err, auth.ErrProviderUnavailable) {
 		t.Fatalf("wrong admin credentials must fail as ErrProviderUnavailable, got %v", err)
 	}
 	if got := deletedSandboxPassportUsers(t, base); len(got) != 1 {
 		t.Fatalf("a refused request must not delete anyone: %v", got)
+	}
+}
+
+// 刷新前的核对(official-passport-registration.md §3.6):mock 的 change_password / forbid_user 之后,
+// login 的 PassportAdmin 按同一个种子的 sub 判出不再续期;之前照常续期。
+func TestPassportAdminCheckSessionAgainstSandboxMock(t *testing.T) {
+	base := newSandbox(t)
+	admin, err := auth.NewPassportAdmin("https://passport.sandbox.local", base, sandboxPassportAdminClientID, sandboxPassportAdminClientSecret, nil)
+	if err != nil {
+		t.Fatalf("NewPassportAdmin: %v", err)
+	}
+	ctx := context.Background()
+	loginAt := time.Now().Add(-time.Minute).Unix()
+	for seed, want := range map[string]struct{ event, reason string }{
+		"alice": {"change_password", auth.PassportSessionPasswordChanged},
+		"bob":   {"forbid_user", auth.PassportSessionUserForbidden},
+	} {
+		sub := passportSandboxSub(seed)
+		if reason, err := admin.CheckSession(ctx, sub, loginAt); err != nil || reason != "" {
+			t.Fatalf("%s before %s: CheckSession = (%q, %v), want valid", seed, want.event, reason, err)
+		}
+		resp, err := http.Post(base+"/mock/passport/"+want.event+"?user="+seed, "", nil)
+		if err != nil {
+			t.Fatalf("%s %s: %v", seed, want.event, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("%s %s: status %d", seed, want.event, resp.StatusCode)
+		}
+		if reason, err := admin.CheckSession(ctx, sub, loginAt); err != nil || reason != want.reason {
+			t.Fatalf("%s after %s: CheckSession = (%q, %v), want %q", seed, want.event, reason, err, want.reason)
+		}
 	}
 }
 

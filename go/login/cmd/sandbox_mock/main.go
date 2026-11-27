@@ -94,6 +94,7 @@ func main() {
 	log.Printf("  /auth/keys, /oauth2/v3/certs, /.well-known/jwks (Apple / Google / Passport signing keys)")
 	log.Printf("  /mock/apple/id_token, /mock/google/id_token, /mock/passport/id_token?user=<seed>&aud=<ClientId>[&iss=<Issuer>] — mint an identity token; user 'EXPIRED' mints an expired one")
 	log.Printf("  /api/get-user, /api/delete-user (passport user admin API, HTTP Basic) — GET /mock/passport/deleted_users lists the users removed by account deletion; /mock/passport/id_token user 'ACCESS_TOKEN' / 'REFRESH_TOKEN' mints the token types login must reject")
+	log.Printf("  POST /mock/passport/change_password?user=<seed>, /mock/passport/forbid_user?user=<seed> — the passport user changes the password / gets banned; refreshing an earlier login must then be refused")
 	log.Printf("  /idcard/authentication/check, /idcard/authentication/query, /behavior/collection/loginout (NPPA real-name system) — GET /mock/nppa/behaviors lists the accepted logins / logouts")
 
 	srv := &http.Server{
@@ -130,6 +131,8 @@ func newMux() *http.ServeMux {
 	mux.HandleFunc("/api/get-user", passportAdmin.handleGetUser)
 	mux.HandleFunc("/api/delete-user", passportAdmin.handleDeleteUser)
 	mux.HandleFunc("/mock/passport/deleted_users", passportAdmin.handleDeletedUsers)
+	mux.HandleFunc("/mock/passport/change_password", passportAdmin.handleChangePassword)
+	mux.HandleFunc("/mock/passport/forbid_user", passportAdmin.handleForbidUser)
 	// Apple 的换票与撤销(账号注销用,apple_revoke.go)。
 	apple := newAppleTokenStub()
 	mux.HandleFunc("/auth/token", apple.handleToken)

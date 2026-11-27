@@ -176,7 +176,7 @@ commercefix -endpoint <trade Pod IP>:<端口> resolve -commerce <commerce_id> -a
    - 拍品转人工、它引用的出价还在 `bid_held`：成交不了的用 `void-auction`（`show` 打印 `linked:` 一行的出价号与版本）；卖家已收款或出价人已收到拍品时不能作废，用 `reissue` 把另一半补完。出价转人工时：拍品不引用它（`show` 的拍品 `winning_bid` 不是它）可以 `refund`；拍品已结案的用 `resume`，由引擎把冻结款算作已付。
    - 已部分成交的市场单：`refund` 只退剩余部分；成交子单照常交付，不受影响。
 4. 不带 `-execute` 跑一次 `resolve`：服务端在与执行相同的锁下算计划，不写。核对计划里的新腿、被取代的腿、改投的腿，把 `[CommerceManual]` 行贴进工单。
-5. 加 `-execute` 再跑一次。退出码 3 说明合同（或联动的出价）被处理或推进过，重新 `show` 再决定；退出码 1 且提示提交结果未知时，先 `show`，看到这一条留痕（`history:` 行里有这个操作人）即已完成，不要重跑。
+5. **写库要两个人（2026-11-26 起，设计 [admin-identity-and-dual-control.md](../design/admin-identity-and-dual-control.md) §5.6、§5.7；未编译，未演练）**：生产上 trade 只接受带后台批准记录的 EXECUTE，`commercefix -execute` 会被拒（`dual_control_approval_required`）。在后台「交易人工处置」页：发起人打开合同、选动作、填参数、环境名与原因，后台先跑一次 DRY_RUN，通过才生成申请；另一名管理员打开申请，后台按当前合同重算一遍计划，核对后「批准并执行」。发起人自己批不了（后台流水与 trade 各判一次）。版本已变（合同被处理或推进过）时申请被拒，回到第 1 步重新取证、重新发起。结果未知时在申请上「沿用原申请重试」：trade 按批准号判重，已经执行过的只回当时那一条留痕（回包 `already_executed=true`），不会再加腿。只有本机开发的 trade 打开了 `Commerce.ManualResolutionAllowUnapproved` 时 `-execute` 才可用；打开期间每一次都打 ERROR 并计入 `trade_manual_resolution_unapproved_execute_total`。
 6. 下一轮引擎给新腿发号、投递。用 §3.2 的查询确认新 op 行出现并到账，合同结案。
 
 工具与入口只改合同行，不碰 op 行，不发资产；新腿由引擎发号投递，与玩家操作同一条写路径。官方商城交付与人民币寄售的人工处理要和商城订单一起做，不用这个工具。

@@ -9,7 +9,8 @@ import (
 // PassportAuthConf 是官方通行证(Casdoor OIDC,auth_type="passport")的配置。
 // 与 Apple / Google 一样,登录只验 Casdoor 公钥签名的 RS256 id_token,不需要客户端密钥;
 // 不同之处在于自托管通行证每个部署有自己的签发方域名(Issuer),因此必须显式配置;
-// 另外玩家的个人信息存在我们自己的通行证里,账号注销要去删,所以多一组管理接口凭据(AdminClient*)。
+// 另外玩家的个人信息存在我们自己的通行证里,账号注销要去删,刷新游戏令牌前也要问通行证玩家有没有改密 / 被封,
+// 所以多一组管理接口凭据(AdminClient*)。
 // 架构与安全约束见 docs/design/official-passport-registration.md。
 type PassportAuthConf struct {
 	// Issuer 是令牌 iss 声明必须精确匹配的签发方地址(与 Casdoor 的 origin 配置一致,不带末尾斜杠)。
@@ -22,9 +23,10 @@ type PassportAuthConf struct {
 	Endpoint string `json:"Endpoint,optional"`
 
 	// AdminClientId 与 AdminClientSecretEnv 是 login 调 Casdoor 管理接口用的机密应用凭据:账号注销时删掉通行证里的用户
-	// (邮箱、手机号、口令哈希都存在通行证那边,pkg/auth/passport_admin.go)。这个应用与玩家在 Casdoor 的同一个组织里,
-	// 不能是客户端用的那个公开应用(ClientId)。
-	// 生产必填:不配就删不掉通行证里的个人信息,注销不算数,login 拒绝启动。只有 Mode=dev/test 可以不配(本地只验登录)。
+	// (邮箱、手机号、口令哈希都存在通行证那边),刷新令牌前核对玩家有没有改密、被封或被删(pkg/auth/passport_admin.go)。
+	// 这个应用与玩家在 Casdoor 的同一个组织里,不能是客户端用的那个公开应用(ClientId)。
+	// 生产必填:不配就删不掉通行证里的个人信息(注销不算数),改密也踢不掉盗号者的游戏登录,login 拒绝启动。
+	// 只有 Mode=dev/test 可以不配(本地只验登录)。
 	AdminClientId string `json:"AdminClientId,optional"`
 	// AdminClientSecretEnv 是存放该应用 ClientSecret 的环境变量名(不是密钥本身)。
 	AdminClientSecretEnv string `json:"AdminClientSecretEnv,optional"`
@@ -52,10 +54,11 @@ func resolvePassportProvider(p *PassportAuthConf, relaxed bool, lookup func(stri
 		}
 		if !relaxed {
 			return "", nil, fmt.Errorf("AuthProviders.Passport requires AdminClientId and AdminClientSecretEnv outside dev/test mode: " +
-				"account deletion must also delete the passport user (email, phone, password hash)")
+				"account deletion must also delete the passport user (email, phone, password hash), " +
+				"and refreshes must check the passport for password changes and bans")
 		}
 		return "", []string{"AuthProviders.Passport has no AdminClientId/AdminClientSecretEnv: account deletion leaves the passport user " +
-			"(email, phone, password hash) in the passport; allowed in dev/test only"}, nil
+			"(email, phone, password hash) in the passport, and password changes / bans there do not revoke game sessions; allowed in dev/test only"}, nil
 	}
 	if err := checkPassportClientId("AdminClientId", p.AdminClientId); err != nil {
 		return "", nil, err

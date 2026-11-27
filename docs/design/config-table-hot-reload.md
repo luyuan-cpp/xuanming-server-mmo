@@ -1,6 +1,6 @@
 # 配置表热更：表包、轨道指针与进程内整批切换（2026-11-20）
 
-> **状态**：**全部 5 批已落码（2026-11-20，随 `f067d01fc` 入库）**。之后别的线已全量导表（manifest 第 2 版），顺带编过 scene / battle，跑过 `scene.exe --validate-tables`；热更这条线自己的单测、预检、本机冒烟与集群端到端都还没跑。C++ 侧的单测 11-26 补上了（15 条，未编译），同时把表包管理器与 battle 的旧表保留期换成了可注入的时钟。**11-26 晚逐行审查五批代码，查出并修掉 7 处逻辑问题**（sidecar 与发布工具读不了导表器写出的清单、C++ 状态文件字段名与约定不一致、表包没同步下来时重启的进程静默退回镜像旧表、过期的拒绝结论不清、管理接口把上一包的拒绝算到新包头上、scene 三项表校验没接进热更闸门、C++ 启动不核对清单摘要；明细见 `docs/PROGRESS.md` 同日条目），连同配套单测都未编译。剩下的编译、测试、冒烟与登记交 Gemini，要改代码的交回 Claude，见[交接单](../handoff/config-table-hot-reload-handoff-20261126.md)。独立 Java 仓留到 `PARITY.md` 待做。运维手册见 [docs/ops/table-hot-reload-runbook.md](../ops/table-hot-reload-runbook.md)。
+> **状态**：**全部 5 批已落码（2026-11-20，随 `f067d01fc` 入库）**。之后别的线已全量导表（manifest 第 2 版），顺带编过 scene / battle，跑过 `scene.exe --validate-tables`；热更这条线自己的单测、预检、本机冒烟与集群端到端都还没跑。C++ 侧的单测 11-26 补上了（15 条，未编译），同时把表包管理器与 battle 的旧表保留期换成了可注入的时钟。**11-26 晚逐行审查五批代码，查出并修掉 7 处逻辑问题**（sidecar 与发布工具读不了导表器写出的清单、C++ 状态文件字段名与约定不一致、表包没同步下来时重启的进程静默退回镜像旧表、过期的拒绝结论不清、管理接口把上一包的拒绝算到新包头上、scene 三项表校验没接进热更闸门、C++ 启动不核对清单摘要）；**同晚第二轮审部署脚本与可观测性，又修了 8 处**（两个 zone 的同名 Pod 互相覆盖状态键、外接对象存储时不核对凭据 Secret、sidecar 指标没人抓、收敛告警把 stable 与 canary 混着比、需要重启的告警判据写不出「还没重启」、卷的大小上限与表包上限对不上且临时文件不清、解包目录权限依赖两个镜像用户号碰巧相同、状态键每 5 秒无条件写一次），两轮的根因与改法见 §19，连同配套单测都未编译。代码没有待写项。剩下的编译、测试、冒烟与登记交 Gemini，要改代码的交回 Claude，见[交接单](../handoff/config-table-hot-reload-handoff-20261126.md)。独立 Java 仓留到 `PARITY.md` 待做。运维手册见 [docs/ops/table-hot-reload-runbook.md](../ops/table-hot-reload-runbook.md)。
 > **相关**：[RPC 热关停](rpc-kill-switch.md)（同一种「etcd 事实源 + 管理接口 + 各进程自己生效」的形态）、[发布轨道](release-track-gray-canary.md)（stable / canary 两条轨道）、[混版本持久字段保护](mixed-version-persist-field-protection.md) §13（表行只增不删）、[配置表 API](table-api-reference-zh.md)、[data/AGENTS.md](../../data/AGENTS.md)、[可配置模板](configurable-templates.md) §3.6（「v1 不做热更」和它列的三条前提，本文把这三条都落实）。
 > **核对基线**：HEAD `ccf2840b2` 加 11-20 工作区。同时有多个会话在改，行号会漂，按函数名找。
 > **上线状态**：未上线。没有存量指针，没有存量表包，不需要迁移。
@@ -15,6 +15,8 @@
 - **可以约定生效时刻**：指针带 `activate_at`，各进程提前准备好，到点一起切。全服切换的时间差缩到时钟误差以内，也顺带支持「活动表凌晨五点生效」。
 - **哪些表能热更要逐表声明**（`(cfg_hot_reload)`，缺省不能）。改到没声明的表，进程不切换，回报「需要重启」，走滚动重启。
 - **战斗每局绑定开局时的那一套表**，打到一半换表不影响这一局。
+- **加 Pod 不给任何中心组件加负担**：表包按内容寻址、写好不再改，每个 Pod 的 sidecar 各自从对象存储取、各自核对，没有中心分发服务；etcd 里每条轨道、每条 schema 线只有一个指针键，与 Pod 数无关；各实例的回报键只在状态变化时写，平时只续租。规模估算与上限见 §18。
+- **宁可不启动，也不带着旧表起来**：本线表包没同步下来时进程拒绝启动，不退回镜像自带的表。代价是对象存储故障期间新 Pod 起不来（§8.1）。
 
 ## 1. 要解决什么
 
@@ -152,9 +154,11 @@ GM 后台 / 发布工具 ──► gateway_node /admin/tables ──► etcd 指
 ### 6.1 键与值
 
 ```
-/mmorpg/tables/pointer/<轨道>/<schema_digest>     这条轨道上、这条 schema 线用哪一包
-/mmorpg/tables/status/<轨道>/<Pod 名>             各实例的回报，带租约，实例没了自动消失
+/mmorpg/tables/pointer/<轨道>/<schema_digest>          这条轨道上、这条 schema 线用哪一包
+/mmorpg/tables/status/<轨道>/<namespace>/<Pod 名>      各实例的回报，带租约，实例没了自动消失
 ```
+
+回报键里要有 namespace：各 zone 的 namespace 里，StatefulSet 是同名的（`guild-0`、`login-0`、`gate-0`……），而所有 zone 共用 infra 的同一个 etcd。只用 Pod 名的话，同一轨道上两个 zone 的同名 Pod 会写同一个键、互相覆盖：管理接口少算实例，某个实例的「被拒绝」还可能被另一个的「已加载」盖掉，发布工具就不会自动撤回。不在 K8s 里跑（本机）时没有 namespace，只用 Pod 名。管理接口把轨道之后的整段都当实例名，所以解析不用改。
 
 指针的值：
 
@@ -248,13 +252,19 @@ $MMORPG_TABLE_STATUS_ROOT/
 **sidecar 做的事：**
 
 1. 启动先全量读前缀 `/mmorpg/tables/pointer/<本轨道>/`，之后 watch，并每 20 秒全量读一次复核（和热关停一样：watch 通道开着不代表读得到）。
-2. 对读到的每条线的 `current` 和 `next`：本地没有就下载。先核对压缩包的 sha256，对上了才解包。解包时拒绝带路径的条目、链接、超过 256 MiB 的包、超过 1024 个的文件；解到临时目录，核对 manifest 里的 `schema_digest`、每个文件的大小与 sha256，全部通过才改名成正式目录。
+2. 对读到的每条线的 `current` 和 `next`：本地没有就下载。先核对压缩包的 sha256，对上了才解包。解包时拒绝带路径的条目、链接、超过 64 MiB 的包（压缩前后都算，上限的来由见下面的「磁盘预算」）、超过 1024 个的文件；解到临时目录，核对 manifest 里的 `schema_digest`、每个文件的大小与 sha256，全部通过才改名成正式目录。
 3. **引用到的包全部到位之后**才把这条线写进 `POINTER.json`。业务进程因此永远不会读到一个指向本地还没有的包的指针。某条线这一拍没同步下来（包取不到、校验不过、指针 JSON 写坏）时：沿用上一次成功写出的那条线，并在 `sync_errors` 里记原因；这个 Pod 上从没成功过的线不出现在 `lines` 里，只出现在 `sync_errors` 里。sidecar 自己重启时，先把落盘的 `POINTER.json` 里的线读回来当「上一次」，所以重启后头几拍取不到包也不会让一条线从文件里消失。
-4. 读 `STATUS.json`，带 30 秒租约写到 `/mmorpg/tables/status/<轨道>/<Pod 名>`。
-5. 清理：不被 `POINTER.json` 和 `STATUS.json` 引用、且放了超过 10 分钟的包目录删掉。
+4. 每 5 秒读一次 `STATUS.json`，挂在 30 秒租约下写到 `/mmorpg/tables/status/<轨道>/<namespace>/<Pod 名>`。**只在内容变了、或者换了租约时才写键，其余时候只续租。** 存活靠租约表达：续租不写键、不产生新的 revision，Pod 没了 30 秒内键自动消失。`STATUS.json` 只在状态变化时改写，所以稳态下写入量接近 0。每 5 秒无条件写一次的话，etcd 的写入量随 Pod 数线性涨（2000 个 Pod 每秒 400 次写键），而 infra 的 etcd 是全项目共用的，按 revision 只保留最近 100 万条历史，等于别的 watcher 只剩 40 分钟左右的历史可追（§18）。代价：有人绕过管理接口手工删了这个键，要等下一次状态变化或换租约才会补回。值里的 `pod` 一律写 sidecar 的身份（带 namespace），业务进程写进来的那份会被覆盖，键和值才对得上。
+5. 清理：不被 `POINTER.json` 和 `STATUS.json` 引用、且放了超过 10 分钟的包目录删掉；没放够 10 分钟的，只留最新的 2 个，多的从旧往新删。sidecar 自己的下载与解包临时文件（`.download-*`、`.extract-*`）放过 10 分钟还在的，是 sidecar 中途被杀留下的，也删掉（一次下载最长 60 秒，正在用的临时文件不会这么老）。保留期只为一个很窄的窗口：业务进程刚读到指针、还没把「正在准备哪一包」写进 `STATUS.json`，指针就又换走了，那一包一定是最近的一两个，所以留 2 个够用。
 6. 暴露 `/readyz`（至少成功写过一次 `POINTER.json`）和 `/metrics`。
 
 **挂法**：和 Alloy 日志 sidecar 一样是原生 sidecar（`initContainers` + `restartPolicy: Always`），`startupProbe` 看 `/readyz`。所以业务容器启动时 `POINTER.json` 一定已经在了，启动路径不用等。读表的每一种工作负载都带：C++ 的 gate、scene、battle（含 Agones Fleet 与金丝雀池），Go 的 guild、login、mail、match、rank、scene_manager。Alloy sidecar 踩过的坑同样适用：sidecar 镜像拉不到，业务容器一次都不会启动，Pod 卡在 `Init:ErrImagePull`。
+
+**磁盘预算**：`tables` 卷的 `sizeLimit` 是 1Gi，超了 kubelet 会把整个 Pod 驱逐。所有 Pod 拉的是同一包，一包过大就是整条轨道的 Pod 一起被驱逐，所以单包上限要和卷的上限算在一起。一个 Pod 同一时刻最多放：每条 schema 线的 current 与 next（sidecar 会把本轨道所有线的包都拉下来；滚动升级期间新旧两条线，旧版本下线后按运维手册 `delete-line` 删掉旧线，这里按三条线留余量，6 份）、最近 2 个没人用的包（第 5 步的上限）、正在下载的压缩包与解包临时目录（2 份），共 10 份。1Gi 除以 10 再留余量，单包上限定为 64 MiB；现在全部表约 1.1 MiB，余量 50 多倍。`pack` 打包时就按这个上限拒绝，问题在发布之前暴露，不会等各 Pod 拉包时才撞上。表真的长到需要放大时，`MaxBundleBytes`、卷的 `sizeLimit` 和这里的算式三处一起改。旧值 256 MiB 和 1Gi 是对不上的：两条线各有一个 256 MiB 的包时，再下载一包就到了 1Gi。
+
+**凭据**：sidecar 用只读凭据访问对象存储，凭据放在每个跑 sidecar 的 namespace 里的 Secret（缺省名 `table-sync-s3`，键 `access-key-id`、`secret-access-key`），按 `secretKeyRef`（`optional: false`）引用。缺了这个 Secret，本 namespace 里所有带 sidecar 的 Pod 都卡在 `CreateContainerConfigError`，整个 zone 或全局池起不来；可 `kubectl apply` 本身照样成功，要等 rollout 超时才看得出来。所以外接对象存储时，部署脚本在本 namespace 的任何工作负载之前先核对它（`Assert-TableSyncS3SecretProvisioned`：只列键名和长度，不读值；缺了就停，什么都不写）。dev 夹具的凭据由部署脚本自己写入。
+
+**目录权限**：sidecar 解包用的临时目录建出来是 0700，改名成正式目录后权限不变。现在 sidecar 和所有业务镜像恰好都是用户 10001，所以读得到；但只要哪个镜像换了用户号，业务进程就一个包都读不了。解包时显式把目录放开成 0755，「读得到」不再依赖两个镜像的用户号碰巧相同。
 
 **不开表包模式**：`MMORPG_TABLE_BUNDLE_ROOT` 没设，进程和今天完全一样，读配置里的表目录，没有热更。本机开发、单测、现有的调试栈都是这个状态。
 
@@ -271,6 +281,12 @@ $MMORPG_TABLE_STATUS_ROOT/
 **启动时**：读 `POINTER.json`（读不到就启动失败），按自己的 `schema_digest` 找到那条线，取生效的那一包，从 `bundles/<摘要>/` 加载；这条线没有指针就加载镜像自带的表。加载前按 manifest 逐文件核对大小与 sha256，清单里自报的 `content_digest` 还要等于指针给的摘要（和热更路径同一道核对）。启动阶段的失败处理不变：解析失败照旧拒启，校验问题照旧只打日志。
 
 **「没有指针」和「有指针但表包没到位」要分清。** 本线不在 `lines` 里有两种情况：etcd 里确实没有这条线（新版本刚发布、还没人发过热更），用镜像自带的表是对的；etcd 里有，但这个 Pod 的 sidecar 没把包同步下来，这时用镜像自带的表等于静默退回更旧的数据，而同一条线上别的进程跑的是指针指的那一包。所以 `sync_errors` 里有本线时**拒绝启动**（Go 返回错误，C++ `LOG_FATAL`），容器按退避重启，等 sidecar 同步好再起来。已经在跑的进程不受影响：它读到的仍是上一次成功的那条线。
+
+这是拿可用性换一致性，代价要说清楚：
+- **代价**：对象存储（或凭据、或包本身）出问题期间，新建的 Pod 起不来。扩容、节点故障后的重新调度、滚动重启、Agones 补战斗服都会卡住，直到 sidecar 取到包。
+- **不受影响的**：已经在跑的 Pod，以及同一个 Pod 里业务容器自己崩了重启。卷在 Pod 的生命周期里一直在，`POINTER.json` 和包都还在。sidecar 自己重启也不受影响，它会把落盘的 `POINTER.json` 读回来（§7 第 3 步）。
+- **为什么接受**：退回镜像自带的表，看起来服务起来了，实际上同一条线上不同实例用着不同版本的表。掉落、价格、活动开关这类数值会在玩家之间悄悄不一致，事后也查不出是哪些请求落在了旧表上。这和 `AGENTS.md` §11 「正确性 / 数据一致性优先于可用性」一致。起不来会立刻被发现，悄悄用错表不会。
+- **怎么及时发现**：`TableSyncFetchFailing` 告警（§11），以及 Pod 反复重启的现象（运维手册 §6）。对象存储本身要按高可用部署；dev 夹具是单进程，只用于 kind。
 
 **运行中**，每 2 秒看一次 `POINTER.json`：
 
@@ -372,7 +388,11 @@ $MMORPG_TABLE_STATUS_ROOT/
 | sidecar 镜像拉不到 | 业务容器起不来（原生 sidecar 的固有代价），和 Alloy 一样在部署前把镜像载入节点 |
 | 有人删了还在用的指针 | 管理接口拒绝。绕过它直接删 etcd 的话，之后重启的进程会退回镜像里的表，`TableBundleNotConverged` 会响 |
 | 本机时钟偏了 | 切换时刻跟着偏。启动核对的门槛是 30 秒 |
-| 短时间内连续热更 | 每次多留一套旧表 10 分钟。指标 `table_sets_retained` 看得到 |
+| 短时间内连续热更 | 每次多留一套旧表 10 分钟。指标 `table_sets_retained` 看得到。sidecar 的卷里没人用的包最多留 2 个（§7 第 5 步），卷不会被撑爆 |
+| 外接对象存储，却忘了建凭据 Secret | 部署脚本在本 namespace 的任何工作负载之前核对，缺了就停，什么都不写（§7「凭据」）。不核对的话，所有带 sidecar 的 Pod 卡在 `CreateContainerConfigError` |
+| 发了一个超过 64 MiB 的包 | `pack` 打包时就拒绝。真到了 sidecar（比如绕过工具手工上传），解包时按同一个上限拒绝、记进 `sync_errors`，不会把卷撑到 `sizeLimit` 让 kubelet 驱逐整条轨道的 Pod（§7「磁盘预算」） |
+| sidecar 下载或解包到一半被杀 | 留下的 `.download-*` / `.extract-*` 放过 10 分钟后被清理 |
+| 两个 zone 有同名 Pod | 回报键带 namespace，各算各的（§6.1）。改之前会在同一轨道上互相覆盖，可能盖掉某个实例的「被拒绝」 |
 
 ## 11. 可观测性
 
@@ -380,22 +400,26 @@ $MMORPG_TABLE_STATUS_ROOT/
 
 | 指标 | 类型 | 含义 |
 |---|---|---|
-| `table_bundle_info{schema_digest, content_digest, source}` | gauge，恒为 1 | 手上是哪一包。`content_digest` 取前 12 位，`source` 是 `bundle` 或 `image`。每个进程同一时刻只有一条序列 |
+| `table_bundle_info{release_track, schema_digest, content_digest, source}` | gauge，恒为 1 | 手上是哪一包。`release_track` 是本进程的发布轨道（`stable` / `canary`，与节点注册同一来源），`content_digest` 取前 12 位，`source` 是 `bundle` 或 `image`。每个进程同一时刻只有一条序列 |
+| `table_bundle_needs_restart` | gauge，0 或 1 | 此刻是否停在 `needs_restart`。这是状态量，`table_reload_total{result="needs_restart"}` 是事件计数：后者只能说明发生过，说明不了现在还停在那里 |
 | `table_reload_total{result}` | counter | `committed`、`rejected`、`needs_restart` |
 | `table_reload_prepare_seconds` | histogram | 一次准备的总耗时 |
 | `table_reload_slice_max_seconds` | gauge | C++：最近一次准备里最慢的一片，也就是主循环被占住的最长一段 |
 | `table_sets_retained` | gauge | C++：还活着的旧表套数 |
 
-sidecar：`table_sync_etcd_last_read_timestamp_seconds`、`table_sync_bundle_fetch_total{result}`。
+sidecar：`table_sync_etcd_last_read_timestamp_seconds`、`table_sync_bundle_fetch_total{result}`（`hit`、`fetched`、`error`、`verify_failed`、`invalid_pointer`）。
 
-告警（`deploy/k8s/table-bundle-alerts.yaml`，配一份契约测试）：
+**sidecar 的指标要单独抓。** 它们在 sidecar 自己的 9099 端口上（端口名 `table-sync-http`），而 Pod 上的 `prometheus.io/*` 注解只能指一个端口，指的是业务容器。只按注解抓的话永远抓不到 sidecar，`TableSyncStale` 和 `TableSyncFetchFailing` 就是哑的：表达式没数据不报错，和「一切正常」长得一样。`deploy/k8s/table-sync-podmonitor.yaml` 是一个按端口名选的 PodMonitor：选择器为空，Prometheus Operator 只留带这个端口名的容器，不用给各种工作负载另加标签。端口名两处一致由契约测试守着。
+
+告警（`deploy/k8s/table-bundle-alerts.yaml`，配一份契约测试，告警引用的指标名、标签、失败结果名都要在代码里核对得到）：
 
 | 告警 | 条件 | 级别 |
 |---|---|---|
 | `TableBundleRejected` | 10 分钟内有进程拒绝过表包 | 严重 |
-| `TableBundleNotConverged` | 同一轨道、同一条 schema 线上，不同实例手上的包不一样，持续 10 分钟 | 警告 |
+| `TableBundleNotConverged` | 同一轨道、同一条 schema 线上（按 `release_track`、`schema_digest` 分组），不同实例手上的包不一样，持续 10 分钟。两种语言的 `table_bundle_info` 都要带 `release_track`，否则 stable 和 canary 混在一起比，金丝雀期间必然误报 | 警告 |
 | `TableSyncStale` | sidecar 超过 2 分钟没读到 etcd | 警告 |
-| `TableBundleNeedsRestart` | 有实例停在 `needs_restart` 超过 24 小时 | 提示 |
+| `TableSyncFetchFailing` | sidecar 持续 5 分钟以上取包失败（`error` / `verify_failed` / `invalid_pointer`）。所有 Pod 一起失败时谁都没切，`TableBundleNotConverged` 不会响；而这时新 Pod 会拒绝启动（§8.1），所以单独报 | 警告 |
+| `TableBundleNeedsRestart` | `table_bundle_needs_restart` 为 1 持续 24 小时。用事件计数 `increase(...[24h])` 配 `for: 24h` 写不出「还没重启」：它只在事件后第 24 小时、窗口刚好滑走时才成立，重没重启都一样 | 提示 |
 
 日志（英文）：指针变化、准备开始与结束、提交、拒绝原因各打一条 INFO 或 ERROR，带两个摘要。启动日志打出手上这一包的 `version` 与 `content_digest`（`configurable-templates.md` §3.6 的第三条前提）。
 

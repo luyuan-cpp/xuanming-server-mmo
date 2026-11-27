@@ -15,7 +15,7 @@
 //   - reaper:低频扫描 InBattleComp,PREPARING 看 prepare_deadline_ms、FIGHTING 看 FreezeExpiresAtMs,
 //     过期即作废解冻(§3.2 补偿矩阵);FIGHTING 到期先向 match 查这一局的 SQL 终局,COMPLETE 而本地还没应用 /
 //     有可裁决原件而终局还没落定 / 查不到就有界续冻(FreezeHoldDeadlineMs,turn-battle-gap-closure.md §11);
-//     最后复核冻结已不在的战斗道具预留(ReviewBattleItemHolds,docs/design/battle-item-reservation.md)。
+//     最后复核冻结已不在的战斗道具预留与普通生死状待退银两(ReviewBattleHoldsAndFees,docs/design/battle-item-reservation.md)。
 //
 // 战斗道具预留(docs/design/battle-item-reservation.md):备战时把快照里带进战斗的道具按配置号与数量占住
 // (BagService::PlaceHold,持久组件 PlayerItemHoldComp),结算只从这份预留里扣,扣完连同余量一起释放。
@@ -199,7 +199,7 @@ public:
 	// (封顶 60 秒,player_inbox_rules::kBackoffMaxMs)。结算真的到不了(收件箱永久拒收、Match 长期不可达)时不能无限冻人:
 	// 越过上限按现行规则解冻,并打 metric=battle_freeze_hold_cap_reached(ERROR)。
 	// 解冻之后这一局带进战斗的道具仍被预留占着(2026-11-10,docs/design/battle-item-reservation.md):晚到的结算照样扣得出,
-	// 不再按持有量夹紧;预留由 ReviewBattleItemHolds 按 SQL 终局收尾,越过同一个上限之后每 10 分钟打 battle_item_hold_overdue。
+	// 不再按持有量夹紧;预留由 ReviewBattleHoldsAndFees 按 SQL 终局收尾,越过同一个上限之后每 10 分钟打 battle_item_hold_overdue。
 	static constexpr uint64_t kFreezeHoldCapMs = 15ULL * 60ULL * 1000ULL;
 	// FIGHTING 冻结最晚可能的到期时刻 = FreezeExpiresAtMs(FIGHTING) + kFreezeHoldCapMs,上溢饱和;deadline 为 0 返回 0
 	// (没有期限,reaper 不判到期)。续冻判上限按它;FIGHTING 锁的 TTL 从确认开局起就按它算(到期之前下线、到期之后
@@ -350,23 +350,28 @@ private:
 	// 这一局的 SQL 终局查询是否在途(只读;单测与排障用)。
 	static bool IsTerminalQueryInFlight(uint64_t playerId, uint64_t battleId);
 
-	// ── 战斗道具预留的收尾(docs/design/battle-item-reservation.md)──────────────────────────────
+	// ── 战斗道具预留与普通生死状待退银两的收尾(docs/design/battle-item-reservation.md;银两定案见
+	//    docs/planning/battle-jianghu-grudge-duel-phase1-implementation-plan.md 末节)──────────────────────────────
 	// 预留在 PrepareBattle 建立(BagService::PlaceHold),在这些时刻释放:结算应用(ApplySettlementToEntity,与扣消耗同一帧)、
 	// match 取消备战(CancelBattlePrepare)、冻结到期时 SQL 终局是 ABORT 或没有可裁决原件(OnExpiredFightingTerminalAnswer)。
 	// 续冻到上限解冻、备战到期摘冻结时**不释放**:结算仍可能晚到,到了从预留里扣。这类冻结已不在的旧局由下面的复核收尾。
+	// 普通生死状预扣的银两(PlayerJianghuComp 的待退标记)走同样的出口:结算消耗或退还(0 回合)、取消退还、作废结算退还、
+	// 冻结到期 ABORT / 没有可裁决原件时退还,其余情形留给下面的复核。复核时刻与同一局的预留相同。
 	//
-	// reaper 每拍的最后一步(ReapExpiredFreezes 末尾调用):收集「种类是战斗、复核时刻已过、这一局的冻结不在本实体上」的预留,
-	// 逐个交给 ReviewBattleItemHold。只由 reaper 调用。
-	static void ReviewBattleItemHolds(uint64_t nowMs);
-	// 一份冻结已不在的战斗预留的复核:玩家此刻不可改(交接 / 退出 / 没有归属围栏)就下一拍再看;这一局的结算已在本实体应用过
-	// 就释放;否则发一次 SQL 终局查询(与冻结到期共用在途登记与判丢失),回答交给 OnBattleItemHoldTerminalAnswer。
-	// 越过「复核时刻 + kFreezeHoldCapMs」仍没收尾时每 10 分钟打一行 ERROR metric=battle_item_hold_overdue。不设上限:
-	// 留着只占住这一局带进战斗的道具,玩家其余的东西照常能动(battle_freeze_hold::IsBattleHoldReleasable 的说明)。
-	static void ReviewBattleItemHold(entt::entity player, uint64_t playerId, uint64_t holdId, uint64_t reviewAfterMs,
-									 uint64_t nowMs);
-	// 预留复核的终局回答:按 player_id 现取实体;这一局的冻结又挂上了就交给冻结那条路;ABORT / 没有可裁决原件时释放预留,
+	// reaper 每拍的最后一步(ReapExpiredFreezes 末尾调用):收集「复核时刻已过、这一局的冻结不在本实体上」的战斗预留与待退银两,
+	// 同一 (玩家, 局) 合并成一项,逐项交给 ReviewBattleHoldAndFee。只由 reaper 调用。
+	static void ReviewBattleHoldsAndFees(uint64_t nowMs);
+	// 一局冻结已不在的预留 / 待退银两的复核:玩家此刻不可改(交接 / 退出 / 没有归属围栏)就下一拍再看;这一局的结算已在本实体
+	// 应用过就释放预留(待退银两不按它收尾:作废结算的退款可能没入成账);还有要收尾的就发一次 SQL 终局查询(与冻结到期共用
+	// 在途登记与判丢失),回答交给 OnBattleHoldAndFeeTerminalAnswer。越过「复核时刻 + kFreezeHoldCapMs」仍没收尾时每 10 分钟
+	// 打一行 ERROR(metric=battle_item_hold_overdue / jianghu_duel_fee_overdue)。不设上限:留着只占住这一局带进战斗的道具与
+	// 那笔银两,玩家其余的东西照常能动(battle_freeze_hold::IsBattleHoldReleasable 的说明)。
+	static void ReviewBattleHoldAndFee(entt::entity player, uint64_t playerId, uint64_t battleId, uint64_t reviewAfterMs,
+									   uint64_t nowMs);
+	// 复核的终局回答:按 player_id 现取实体;这一局的冻结又挂上了就交给冻结那条路;玩家此刻不可改就下一拍再看;
+	// ABORT / 没有可裁决原件时释放预留并退还待退银两;COMPLETE 而结算已在本实体应用过时把还在的待退标记按已消耗处理;
 	// 其余回答(COMPLETE、PENDING、UNKNOWN)留着,下一拍再问。
-	static void OnBattleItemHoldTerminalAnswer(uint64_t playerId, uint64_t holdId, battle_freeze_hold::TerminalAnswer answer);
+	static void OnBattleHoldAndFeeTerminalAnswer(uint64_t playerId, uint64_t battleId, battle_freeze_hold::TerminalAnswer answer);
 
 	// reaper 第二遍:Redis 可用时,对记入登录复查的玩家逐个摘标记并重新读锁;
 	// Redis 不可用时标记保留。退出中(UnregisterPlayer)的实体摘标记不重跑,留给下次进场;

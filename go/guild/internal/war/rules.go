@@ -64,6 +64,13 @@ const (
 	DefaultDividendContribPerShare uint64 = 40
 )
 
+// guild_war_battle.bounty_outcome_tag 里追杀令的三种去向(0 无 / 1 终结连胜 / 5 破旗首功由结算其余步骤写)。
+const (
+	BountyTagHunted      uint32 = 2 // 追杀成功销单
+	BountyTagCounterKill uint32 = 3 // 目标反杀一名追兵(未到撕单数)
+	BountyTagTorn        uint32 = 4 // 目标反杀够数撕单
+)
+
 // LeylineInfo 灵脉静态元数据。
 type LeylineInfo struct {
 	ID            uint32
@@ -251,6 +258,108 @@ func ResolveBountyTier(rule *tablepb.GuildWarRuleTable, tier pb.GuildWarBountyTi
 	}
 }
 
+// BountyHuntable 报告这张追杀令此刻能否由 hunterGuildID 的成员在 zoneID 接单结单(r2-gw#1):同区、ACTIVE 且未过期、
+// 挂在全区江湖榜或就是本帮发的单。开战入口(追杀榜直打、直打活人自动挂钩)、追踪与结算第 7 步(行锁内)共用这一处判定。
+func BountyHuntable(b *pb.GuildWarBountyRecord, zoneID uint32, hunterGuildID uint64, nowMs uint64) bool {
+	return b != nil && b.GetZoneId() == zoneID &&
+		b.GetStatus() == uint32(pb.GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_ACTIVE) &&
+		b.GetExpiresAtMs() > nowMs &&
+		(b.GetPublicBoard() != 0 || b.GetIssuerGuildId() == hunterGuildID)
+}
+
+// BountyFacts 是结算第 7 步判定一张追杀令去向要用的本局事实。全部取自结算消息与开战时服务端冻结的上下文,
+// 没有一项是客户端能改的值(r2-gw#1)。追杀局的防守方就是目标本人,所以 TargetID 取防守方真人首人。
+type BountyFacts struct {
+	WarBattleKind   pb.GuildWarBattleKind
+	ZoneID          uint32
+	HunterGuildID   uint64 // 本局攻方帮(开战时冻结)
+	HunterID        uint64 // 攻方真人首人
+	TargetID        uint64 // 防守方真人首人
+	HunterWon       bool
+	TargetWon       bool
+	CounterKillTear uint32
+	NowMs           uint64 // 本局结束时刻:到期与否按它判
+}
+
+// BountyResolution 是一张追杀令在本局之后的去向。Touch=false 表示不动追杀令(本局其余结算照常)。
+// 前五个状态字段是要写回 guild_war_bounty 的整行新值;其余是同一事务里要发生的转账。
+type BountyResolution struct {
+	Touch                 bool
+	Status                uint32
+	CounterKills          uint32
+	LastCounterAttackerID uint64
+	HunterPlayerID        uint64
+	ResolvedAtMs          uint64
+	OutcomeTag            uint32
+	// RewardSilver 给 RewardRecipientID(追杀成功 = 猎手,撕单 = 目标),受每日领赏上限约束。
+	RewardRecipientID uint64
+	RewardSilver      uint64
+	// 撕单时退给发布者的另一半:银两档退银两给发布者本人,公费档退帮会资金给发单帮(只会有一项非 0)。
+	IssuerRefundSilver     uint64
+	IssuerRefundGuildFunds uint64
+}
+
+// ResolveBounty 按追杀令行与本局事实给出去向(r2-gw#1 / r2-gw#2)。结算事务先按普通读调一次定计划、在锁序末尾锁住追杀令行
+// 再调一次,两次结果不同就说明中间被别的结算或到期收尾改过,整笔重算。
+//
+// 只有「追杀局 + 同区 + 有接单资格 + ACTIVE 未过期 + 防守方就是目标」才动追杀令:
+//   - 猎手胜:销单,托管全给猎手;
+//   - 目标胜且这名追兵与上一名反杀的不是同一人:反杀数 +1,到撕单数则撕单 —— 托管的一半(向下取整)给目标,
+//     其余退发布者:银两档退扣税后托管的另一半银两;公费档的赏金池是系统配给的、不是谁出的,退的是发单帮实付资金的一半
+//     (按实付比例退,与销单时「资金换赏金」的比例一致,撕单不会让发单帮倒赚)。
+func ResolveBounty(b *pb.GuildWarBountyRecord, f BountyFacts) BountyResolution {
+	if f.WarBattleKind != pb.GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_BOUNTY_HUNT || f.HunterID == 0 ||
+		!BountyHuntable(b, f.ZoneID, f.HunterGuildID, f.NowMs) || b.GetTargetPlayerId() != f.TargetID {
+		return BountyResolution{}
+	}
+	res := BountyResolution{
+		Touch:                 true,
+		Status:                b.GetStatus(),
+		CounterKills:          b.GetCounterKills(),
+		LastCounterAttackerID: b.GetLastCounterAttackerId(),
+		HunterPlayerID:        b.GetHunterPlayerId(),
+		ResolvedAtMs:          b.GetResolvedAtMs(),
+	}
+	switch {
+	case f.HunterWon:
+		res.Status = uint32(pb.GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_COMPLETED)
+		res.HunterPlayerID = f.HunterID
+		res.ResolvedAtMs = f.NowMs
+		res.OutcomeTag = BountyTagHunted
+		res.RewardRecipientID = f.HunterID
+		res.RewardSilver = b.GetEscrowSilver()
+		return res
+	case f.TargetWon && f.HunterID != b.GetLastCounterAttackerId():
+		res.CounterKills++
+		res.LastCounterAttackerID = f.HunterID
+		if res.CounterKills < f.CounterKillTear {
+			res.OutcomeTag = BountyTagCounterKill
+			return res
+		}
+		res.Status = uint32(pb.GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_TORN_BY_TARGET)
+		res.ResolvedAtMs = f.NowMs
+		res.OutcomeTag = BountyTagTorn
+		res.RewardRecipientID = b.GetTargetPlayerId()
+		res.RewardSilver = b.GetEscrowSilver() / 2
+		if b.GetTier() == uint32(pb.GuildWarBountyTier_GUILD_WAR_BOUNTY_TIER_GUILD_PUBLIC) {
+			res.IssuerRefundGuildFunds = b.GetEscrowGuildFunds() - b.GetEscrowGuildFunds()/2
+		} else {
+			res.IssuerRefundSilver = b.GetEscrowSilver() - res.RewardSilver
+		}
+		return res
+	}
+	return BountyResolution{}
+}
+
+// BountyExpiryRefund 是一张 ACTIVE 追杀令到期时原路退回的本金(r2-gw#2):银两档退扣税后的托管银两给发布者本人
+// (10% 税发单时已销毁,不退);公费档退发单时预扣的帮会资金给发单帮(系统配给的赏金池不是谁出的,不退)。
+func BountyExpiryRefund(b *pb.GuildWarBountyRecord) (silver, guildFunds uint64) {
+	if b.GetTier() == uint32(pb.GuildWarBountyTier_GUILD_WAR_BOUNTY_TIER_GUILD_PUBLIC) {
+		return 0, b.GetEscrowGuildFunds()
+	}
+	return b.GetEscrowSilver(), 0
+}
+
 // BattleRewardInput 单局帮战结算输入（每方按胜负分别求单人基础奖励）。
 type BattleRewardInput struct {
 	BattleKind        pb.GuildWarBattleKind
@@ -309,15 +418,39 @@ func ComputeSideReward(in BattleRewardInput) SideReward {
 }
 
 // BannerDelta 灵脉旗势变化与易主判定（每帮最多占领 1 座灵脉，已占 1 座破旗只发赏金不兼并）。
+// …Before 与 AttackerOwnsOther 是算它时用的那份事务外快照,结算事务在行锁内逐项比对(BasisHolds,r2-gw#3)。
 type BannerDelta struct {
-	HPBefore         uint32
-	HPAfter          uint32
-	OwnerAfter       uint64
-	ShieldUntilAfter uint64
-	BrokeBanner      bool
-	CapturedByWinner bool
-	BreakBonusFunds  uint64
-	BreakBonusSilver uint64
+	HPBefore          uint32
+	OwnerBefore       uint64
+	ShieldUntilBefore uint64
+	AttackerOwnsOther bool
+	HPAfter           uint32
+	OwnerAfter        uint64
+	ShieldUntilAfter  uint64
+	BrokeBanner       bool
+	CapturedByWinner  bool
+	BreakBonusFunds   uint64
+	BreakBonusSilver  uint64
+}
+
+// BasisHolds 报告结算事务里锁住的本区灵脉行是否仍是算出 d 的那份快照(r2-gw#3):目标灵脉的主人、旗势、护盾到期都没变,
+// 攻方「是否已占着别的灵脉」也没变。不成立说明另一场结算抢先提交了,调用方回冲突、整笔重读重算。
+func (d BannerDelta) BasisHolds(cur *pb.GuildWarLeylineRecord, attackerOwnsOther bool) bool {
+	return cur != nil && cur.GetOwnerGuildId() == d.OwnerBefore && cur.GetBannerHp() == d.HPBefore &&
+		cur.GetShieldUntilMs() == d.ShieldUntilBefore && attackerOwnsOther == d.AttackerOwnsOther
+}
+
+// FindLeylineBasis 从本区灵脉行里取出目标灵脉,并判攻方帮是否已占着别的灵脉。结算的事务外快照与事务内行锁共用这一处,
+// 两边对「每帮限占 1 座」的判定因此同源。
+func FindLeylineBasis(rows []*pb.GuildWarLeylineRecord, leylineID uint32, attackerGuildID uint64) (cur *pb.GuildWarLeylineRecord, attackerOwnsOther bool) {
+	for _, lr := range rows {
+		if lr.GetLeylineId() == leylineID {
+			cur = lr
+		} else if attackerGuildID != 0 && lr.GetOwnerGuildId() == attackerGuildID {
+			attackerOwnsOther = true
+		}
+	}
+	return cur, attackerOwnsOther
 }
 
 func ApplyBannerImpact(
@@ -364,10 +497,13 @@ func ApplyBannerImpact(
 	}
 
 	out := BannerDelta{
-		HPBefore:         currentHP,
-		HPAfter:          currentHP,
-		OwnerAfter:       currentOwner,
-		ShieldUntilAfter: currentShieldUntil,
+		HPBefore:          currentHP,
+		OwnerBefore:       currentOwner,
+		ShieldUntilBefore: currentShieldUntil,
+		AttackerOwnsOther: attackerAlreadyOwnsOther,
+		HPAfter:           currentHP,
+		OwnerAfter:        currentOwner,
+		ShieldUntilAfter:  currentShieldUntil,
 	}
 	// 护盾期内旗势免疫扣减（仍可打架赚帮贡与连胜）。
 	if nowMs < currentShieldUntil {

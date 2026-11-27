@@ -6723,3 +6723,32 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
 - **可选冒烟**:做法见设计稿 §9 末条。目录 `LogicalShards` > 1,片库分在两个 SQL 实例上。单实例的调试栈做不了,如实报未运行。
 - **Java 版(AGENTS §12)**:不涉及(Java 版没有 data_service),不加 PARITY 行。
 - **提交情况**:main 工作区,未提交。
+
+## 2026-11-26 Claude:后台管理员身份与双人复核·批 3——批准记录协议、资源服务核对、交易人工判定接入后台(未生成、未编译、未运行,待 Gemini 验证;Java 待做已登记)
+
+- **依据**:[docs/design/admin-identity-and-dual-control.md](design/admin-identity-and-dual-control.md) §5.4~§5.7(§5.6 按实际做法补了五条)。交接 `server-code-completion-20261120.md` §3.2 点名的「交易人工判定双人复核」由这一批闭环。
+- **协议**:新增 `proto/common/base/admin_approval.proto`(`AdminApproval{approval_id, proposer, approver, approved_at_ms}`,只给服务端内部协议用)。`ResolveManualContractRequest` 加 `approval = 14`,回包加 `already_executed = 14`;`TradeCommerceManualAction` 加 `approval_id = 17`、`approver = 18`(都不是客户端可见协议;客户端生成脚本按客户端协议的 import 闭包取文件,不会带上 admin_approval)。
+- **资源服务核对只有一份**:新增 `go/shared/dualcontrol.Require`:四项都在且合规、两人不同(按字节)、发起人就是请求里的 operator。它是后台规则的只读复查,不产生状态。
+- **trade**:
+  - EXECUTE 必带合格的批准记录,否则带内 REFUSED(`dual_control_approval_required` / `dual_control_approval_invalid: …`),不碰合同。
+  - 只有显式打开 `Commerce.ManualResolutionAllowUnapproved`(缺省 false,本机开发用)才接受不带记录的 EXECUTE。每次都打 ERROR 并计入新指标 `trade_manual_resolution_unapproved_execute_total`。
+  - **批准号就是幂等键**:合同留痕里已有同一个批准号就回原结果(`already_executed=true`)。这一步排在版本比较之前,锁外读、锁内各认一次:执行成功后版本加一,重放若先比版本只会看到「版本已变」。
+  - 批准号与批准人写进合同留痕;void-auction 的出价侧留痕也写。审计行 `[CommerceManual]` 加 `approval_id`、`approver`、`already_executed` 三项;重放不算 `executed`。
+  - `commercefix` 帮助与被拒提示改为「生产写库走后台」。
+- **后台**:
+  - 流水新增命令类型 `TRADE_MANUAL`:冻结合同号、动作、期望版本、环境名、动作参数,操作人与原因由服务端补。与邮件一样属于可重试的命令:结果未知可用原申请重试,批准记录原样复用、请求摘要不变。
+  - 放行时把批准记录(批准号 = 流水号)交给发送方。
+  - 新增 `GameTradeAdmin`:以 `ops-commerce` 签名调 `TradeAdmin`;verdict → 流水结局的映射见设计 §5.6。
+  - 新增 `GmTradeController`(`/gm/trade/**`):发起前先 DRY_RUN,通过才建申请;批准前可重算;另有驳回、列表、审计。另新增 `GmAccess`(身份与权限检查的一份公共实现)。
+  - 迁移版本 8 加 `gm:trade:read / prepare / approve`,分给 admin 与三个标准角色。
+  - 前端新增 `TradeManual.vue`、`api/gm/tradeManual.ts`,挂在控制台;`ApprovalPanel` 认得 `trade-manual`。
+  - 配置 `GM_TRADE_TARGET`、`GM_TRADE_ADMIN_SECRET`;本机 `run_local.py` 暂不放行这两个变量(还没有经过验收的本机转发,批 7 补)。`prepare.py` 的协议描述集加 `proto/trade/trade_admin.proto`。
+- **文档**:设计稿 §5.6;运维手册 `docs/ops/trade-commerce-quarantine-runbook.md` §4.2 第 5 步改为「后台发起 → 另一人批准」;Java 仓 `PARITY.md` 登记待做。
+- **文件**:新增 `proto/common/base/admin_approval.proto`、`go/shared/dualcontrol/{dualcontrol,dualcontrol_test}.go`、`java/gm_admin/src/main/java/org/jeecg/modules/gm/{GameTradeAdmin,GmTradeController,GmAccess}.java`、`java/gm_admin/frontend/src/api/gm/tradeManual.ts`、`java/gm_admin/frontend/src/views/gm/console/TradeManual.vue`;修改 `proto/trade/{trade_admin,trade_table}.proto`、`go/trade/internal/commerce/{manual,manual_db_test}.go`、`go/trade/internal/logic/{manual_contract_ops,manual_contract_ops_test}.go`、`go/trade/internal/config/config.go`、`go/trade/internal/svc/servicecontext.go`、`go/trade/cmd/commercefix/main.go`、`GmCommandJournal.java`、`GameServices.java`、`GmInstallation.java`、`GmInstallationTest.java`、`GmDualControlJournalTest.java`、`application-gm.yml`、`prepare.py`、`run_local.py`、`frontend/src/api/gm/approval.ts`、`frontend/src/views/gm/console/index.vue`、两份文档。
+- **交 Gemini**(仓库根,依次;任何一步要改代码就保留首错原文停下,交回 Claude):
+  1. 协议生成:`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`。核对生成了 `go/proto/common/base/admin_approval.pb.go`,`go/proto/trade/trade_admin.pb.go` 里有 `Approval`、`AlreadyExecuted`,`trade_table.pb.go` 里有 `ApprovalId`、`Approver`;`cpp/generated/proto/proto.vcxproj` 由生成器自动登记新文件。核对 `../mmorpg-client/Assets/Scripts/Proto/Generated/` 没有新增 `AdminApproval.cs`;如果有,照 AGENTS §4 跑客户端三个脚本。
+  2. Go:`go/shared` 里 `go build ./... && go vet ./dualcontrol/... && go test ./dualcontrol/... -count=1`(期望 5 个用例全过);`go/trade` 里 `go build ./... && go vet ./... && go test ./internal/logic/... ./internal/commerce/... -count=1`(期望新增 5 个 `TestManualContractOps*` 用例全过,原有用例不回退)。
+  3. 真库(隔离 TiDB,做法同 PROGRESS 2026-11-20 支付验证回执第 3 条):`COMMERCE_TEST_DSN`、`COMMERCE_REQUIRE_TIDB=1` 下 `go test ./internal/commerce -run 'TestRealDBManual' -count=1 -v`(含新增 `TestRealDBManualReplayOfTheSameApprovalReturnsTheRecordedResult`)。
+  4. Java 后台:`python java/gm_admin/prepare.py`、`mvn -f java/gm_admin/pom.xml -DskipTests=false test`(期望 `GmDualControlJournalTest` 12 条、`GmInstallationTest` 全过),再按批 1 第 3、4 步打包上游与前端。
+  5. C++:本批没有 C++ 源码改动;proto 改动只新增生成物,`cpp/generated/proto/proto.vcxproj` 生成后重编 `proto` 工程即可。
+- **没验证的**:全部。交易页面没有在浏览器里看过;本机后台到 trade 的转发要到批 7 才有,在那之前交易页只能在配好 `GM_TRADE_TARGET` 的环境里冒烟。

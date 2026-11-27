@@ -229,8 +229,10 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 		resp.ErrorMessage.Id = uint32(table.LoginError_kLoginEnterGameGuid)
 		return resp, nil
 	}
+	// 角色挂着交易冻结(上架或过户中)。专门的码(2026-11-26):kLoginInProgress 只留给「这名角色的进场链还没结束」,
+	// 客户端同一角色重发收到它会接着等进场结果;交易冻结一时半会儿解不了,等也白等,要直接告诉玩家。
 	if ownership.TradeListingId != 0 {
-		resp.ErrorMessage.Id = uint32(table.LoginError_kLoginInProgress)
+		resp.ErrorMessage.Id = uint32(table.LoginError_kLoginRoleTradeFrozen)
 		return resp, nil
 	}
 	flowState.ownerRevision = ownership.OwnerRevision
@@ -353,7 +355,8 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 		totalCounter.Inc(ResultPoolSaturated)
 		chainCancel()
 		stopHeartbeat()
-		resp.ErrorMessage.Id = uint32(table.LoginError_kLoginInProgress)
+		// 链没启动,确定没受理:回「繁忙」,不回 kLoginInProgress(那个码让同一角色的重发接着等一条根本不存在的链,白等到超时)。
+		resp.ErrorMessage.Id = uint32(table.LoginError_kLoginEnterGameBusy)
 		return resp, nil
 	}
 

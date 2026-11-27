@@ -1057,12 +1057,13 @@ func applyCounterparty(ctx context.Context, tx *sql.Tx, row assetOpImmutable, st
 		pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_BOUNTY_PAYOUT:
 		// 只 CAS（活动/帮战/追杀发奖为纯入账，无需回退对侧）。
 	case pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_BOUNTY_ESCROW:
-		// 帮战追杀令托管银两终结：APPLIED 激活追杀令(1->2)，REJECTED/ABORTED 作废(1->5)。
+		// 帮战追杀令托管银两终结：APPLIED 激活追杀令(1->2)，REJECTED/ABORTED/ABANDONED 作废(1->6 ESCROW_FAILED)。
+		// 作废不用 EXPIRED(5):5 只表示「到期且托管已原路退回」,这里银两根本没扣成,没有可退的(r2-gw#2)。
 		// guild_war_bounty 锁序位置 17 > guild_asset_op(6)，单向顺延无成环可能。
-		nextBountyStatus := uint32(5)
+		nextBountyStatus := uint32(pb.GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_ESCROW_FAILED)
 		resolvedMs := nowMs
 		if status == assetop.StatusApplied {
-			nextBountyStatus = 2
+			nextBountyStatus = uint32(pb.GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_ACTIVE)
 			resolvedMs = 0
 		}
 		if _, err := tx.ExecContext(ctx,

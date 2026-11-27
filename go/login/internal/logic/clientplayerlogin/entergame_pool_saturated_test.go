@@ -45,7 +45,8 @@ func enterGameSeries(t *testing.T, family, result string) (value float64, found 
 	return 0, false
 }
 
-// 池满:链根本没启动。EnterGame 回 kLoginInProgress,玩家锁由外层 defer 释放;
+// 池满:链根本没启动。EnterGame 回 kLoginEnterGameBusy(2026-11-26 起;之前回 kLoginInProgress,客户端同一角色重发会白等),
+// 玩家锁由外层 defer 释放;
 // entergame_total{result="pool_saturated"} +1,而且**不进** entergame_total_seconds 直方图(没有耗时可记)。
 //
 // 池用与生产相同的非阻塞模式(svc.NewServiceContext 里的 ants.WithNonblocking(true)),容量 1,
@@ -76,9 +77,9 @@ func TestEnterGame_PoolSaturatedCountsWithoutLatencySample(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnterGame: %v", err)
 	}
-	if got := resp.GetErrorMessage().GetId(); got != uint32(table.LoginError_kLoginInProgress) {
-		t.Fatalf("tip = %d, want kLoginInProgress(%d) as back-pressure when the preload pool is full",
-			got, uint32(table.LoginError_kLoginInProgress))
+	if got := resp.GetErrorMessage().GetId(); got != uint32(table.LoginError_kLoginEnterGameBusy) {
+		t.Fatalf("tip = %d, want kLoginEnterGameBusy(%d) as back-pressure when the preload pool is full",
+			got, uint32(table.LoginError_kLoginEnterGameBusy))
 	}
 	if got := resp.GetOwnerRevision(); got != 0 {
 		t.Fatalf("owner_revision = %d on a rejected EnterGame, want 0 (only an accepted reply carries it)", got)
@@ -97,6 +98,31 @@ func TestEnterGame_PoolSaturatedCountsWithoutLatencySample(t *testing.T) {
 	}
 	if got := h.locator.setSessionCalls.Load(); got != 0 {
 		t.Fatalf("SetSession calls = %d, want 0 (the chain must not run when the pool rejects the submit)", got)
+	}
+}
+
+// 角色挂着交易冻结(上架或过户中):EnterGame 回 kLoginRoleTradeFrozen,不回 kLoginInProgress(2026-11-26)。
+// kLoginInProgress 只表示「这名角色的进场链还没结束」,客户端同一角色重发收到它会接着等进场结果;交易冻结时链根本不会启动,
+// 等就是白等 60 秒再报超时。改之前回的是 kLoginInProgress。玩家锁照常释放,链不启动。
+func TestEnterGame_RoleFrozenByTradeHasItsOwnCode(t *testing.T) {
+	h := newEnterWiringHarness(t, []*pbbase.AccountSimplePlayer{{PlayerId: identityPlayerID, ClassId: 3, Name: "云中君"}}, nil)
+	directory := fixtureDirectory(t, h.rdb)
+	directory.mu.Lock()
+	directory.owners[identityPlayerID].TradeListingId = 101
+	directory.mu.Unlock()
+
+	resp, err := h.l.EnterGame(&loginpb.EnterGameRequest{PlayerId: identityPlayerID})
+	if err != nil {
+		t.Fatalf("EnterGame: %v", err)
+	}
+	if got := resp.GetErrorMessage().GetId(); got != uint32(table.LoginError_kLoginRoleTradeFrozen) {
+		t.Fatalf("tip = %d, want kLoginRoleTradeFrozen(%d) for a role frozen by a trade", got, uint32(table.LoginError_kLoginRoleTradeFrozen))
+	}
+	if n, err := h.rdb.Exists(context.Background(), identityLockKey).Result(); err != nil || n != 0 {
+		t.Fatalf("player lock present = %d / err %v after the rejection, want it released", n, err)
+	}
+	if got := h.locator.setSessionCalls.Load(); got != 0 {
+		t.Fatalf("SetSession calls = %d, want 0 (no enter chain for a role frozen by a trade)", got)
 	}
 }
 

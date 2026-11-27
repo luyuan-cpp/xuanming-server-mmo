@@ -46,7 +46,7 @@ ConfigMap 的 route-tool Job 读 `mysql-auth`。可 route-tool 的真执行要 s
 
 - **Secret 对象**:一把密钥一个单键 Opaque Secret,每个有消费者的 namespace 各一份同名副本(Secret 不能跨 namespace 引用),由部署脚本先于工作负载建好,
   经 `Apply-InjectedSecret` 写入(DryRun 只打一行隐去值的意图)。名字:`gate-token`、`spectate-token`、`battle-token`、`match-ops-caller`、`login-queue-token`,
-  以及 login 的两把小游戏 AppSecret、注销时撤销 Apple 令牌的私钥 `login-apple-signin`(键 `private-key`)与注销时删官方通行证用户的管理密钥 `login-passport-admin`(键 `client-secret`;各自的设计稿)。gate 的会话身份签名私钥用的是已有的 `gate-identity-auth`(只给 gate,见 §2 表与 §5.1),不在本表里。
+  以及 login 的两把小游戏 AppSecret、注销时撤销 Apple 令牌的私钥 `login-apple-signin`(键 `private-key`)与注销时删官方通行证用户的管理密钥 `login-passport-admin`(键 `client-secret`)、实名与防沉迷的国家系统 secretKey `login-nppa`,以及 content-guard 外部平台审核的两把 AppSecret `content-guard-wechat` / `content-guard-douyin`(只在 infra namespace;各自的设计稿)。gate 的会话身份签名私钥用的是已有的 `gate-identity-auth`(只给 gate,见 §2 表与 §5.1),不在本表里。
 - **容器环境变量名**与部署输入变量名相同:一把密钥全仓只有一个名字,运维看到 Pod 的 env 就知道它对应哪个输入。
 - **ConfigMap**:原来写明文的位置写空串;Go 服务另写一个指名变量的键(见 §4.2);gateway 写 `"${变量名}"`。数据库口令字段一律只写空串、不指名变量。
 - **指纹**:`mmorpg.io/<Secret 名>-hash`,值是 `Get-InjectedSecretFingerprint`(用途串 `<Secret 名>/workload`)。
@@ -115,7 +115,8 @@ ConfigMap 模板写 `gate.token-secret: "${MMORPG_GATE_TOKEN_SECRET}"`,由 Sprin
 - `$script:WorkloadSecretCatalog`([ordered],键 = Secret 名):`Env`(变量名)、`SecretKey`、`Value`(脚本块,写路径上 `Initialize-InjectedSecrets` 之后求值;
   返回空串 = 本次不注入,如排队关、运营入口没开)、`Consumers`(Go / Java 服务名,C++ 写 `cpp:gate` / `cpp:battle`)。
   条目:`gate-token`、`spectate-token`、`battle-token`(取值抽成 `Resolve-BattleTokenSecret`,与 node-config 生成器共用校验)、`match-ops-caller`、
-  `login-queue-token`,以及 login 的两把小游戏 AppSecret、撤销 Apple 令牌的私钥(`login-apple-signin`,docs/design/account-deletion.md §8.2)与官方通行证的管理密钥(`login-passport-admin`,docs/design/official-passport-registration.md §3.5)。
+  `login-queue-token`,以及 login 的两把小游戏 AppSecret、撤销 Apple 令牌的私钥(`login-apple-signin`,docs/design/account-deletion.md §8.2)与官方通行证的管理密钥(`login-passport-admin`,docs/design/official-passport-registration.md §3.5)、实名与防沉迷的 secretKey(`login-nppa`,docs/design/real-name-anti-addiction.md §5.8),
+  以及 content-guard 外部平台审核的两把 AppSecret(`content-guard-wechat` / `content-guard-douyin`,消费者 `content-guard`,docs/design/rename-and-content-safety.md §6.9)。
 - 数据库口令不进表(见 §1):`Initialize-InjectedSecrets` 只解析两个模板用户名 `MMORPG_MYSQL_USER`、`MMORPG_GATEWAY_DB_USER`;
   `MMORPG_MYSQL_PASSWORD`(第 8 批)与 `MMORPG_GATEWAY_DB_PASSWORD`(第 7 批)都不再解析,运维机上残留这两个变量也不会进任何产物。
 - 会话身份签名不进表(2026-11-11 起,gate-online-identity.md §10.1):

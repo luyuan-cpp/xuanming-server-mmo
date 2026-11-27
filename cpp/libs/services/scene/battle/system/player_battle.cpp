@@ -237,7 +237,7 @@ namespace
 		kCount
 	};
 
-	// 带在途登记的 SQL 终局查询,冻结到期(ResolveExpiredFightingFreeze)与道具预留复核(ReviewBattleItemHold)共用。
+	// 带在途登记的 SQL 终局查询,冻结到期(ResolveExpiredFightingFreeze)与道具预留 / 待退银两复核(ReviewBattleHoldAndFee)共用。
 	// 同一 (player_id, battle_id) 同一时刻至多一条在途:两条路不会同时处置同一局(预留复核只看冻结已不在的局),
 	// 万一交错(查询在途时冻结又按锁重建),回答只交给发出它的那一方,另一方下一拍自己再问。
 	// onAnswer 只能捕获 id 与时刻,不捕获实体句柄(回答到达时实体可能已销毁 / 句柄被复用,AGENTS §11.7 同理)。
@@ -1804,11 +1804,14 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 			return;
 		}
 	}
+	// 道具预留与普通生死状待退银两共用一个终局复核时刻(冻结到期时刻):冻结已不在而它们还在时,reaper 过了这个时刻
+	// 对这一局只发一次 SQL 终局查询、一个回答同时收尾两样(ReviewBattleHoldsAndFees)。
+	const uint64_t holdAndFeeReviewAfterMs = FreezeExpiresAtMs(/*preparing=*/false, request.deadline_ms(), 0);
 	if (!heldLines.empty())
 	{
 		const uint64_t nowMs = TimeSystem::NowMillisecondsUTC();
 		const uint32_t holdError = BagService::PlaceHold(player, battleId, item_hold::ItemHoldKind::kBattle, heldLines, nowMs,
-														 FreezeExpiresAtMs(/*preparing=*/false, request.deadline_ms(), 0));
+														 holdAndFeeReviewAfterMs);
 		if (holdError != kSuccess)
 		{
 			LOG_ERROR << "[PlayerBattle] PrepareBattle rejected: battle item hold could not be placed, player_id=" << playerId
@@ -1820,7 +1823,8 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 	}
 	if (jianghuSilverToDeduct > 0)
 	{
-		const uint32_t debitErr = PlayerJianghuSystem::CommitPrepareSilverFee(player, battleId, jianghuSilverToDeduct);
+		const uint32_t debitErr =
+			PlayerJianghuSystem::CommitPrepareSilverFee(player, battleId, jianghuSilverToDeduct, holdAndFeeReviewAfterMs);
 		if (debitErr != kSuccess)
 		{
 			if (!heldLines.empty())
@@ -1885,7 +1889,8 @@ void PlayerBattleSystem::CancelBattlePrepare(const ::CancelBattlePrepareRequest&
 	if (!tlsEcs.actorRegistry.valid(player))
 	{
 		// 实体不在(取消到达前玩家下线):没有 InBattleComp 可看状态,先按锁值条件读 ctx,
-		// ctx 已是 FIGHTING(确认早于取消到达)同样拒绝 —— 与在线路径同一条规则
+		// ctx 已是 FIGHTING(确认早于取消到达)同样拒绝 —— 与在线路径同一条规则。
+		// 这里只处理锁:道具预留与普通生死状待退银两在玩家存档里,下次加载后由 reaper 的终局复核(ReviewBattleHoldsAndFees)收尾。
 		if (!RedisReady())
 		{
 			LOG_WARN << "[PlayerBattle] CancelBattlePrepare: player offline and Redis disconnected;skipped, player_id="
@@ -1933,8 +1938,10 @@ void PlayerBattleSystem::CancelBattlePrepare(const ::CancelBattlePrepareRequest&
 	const auto* inBattle = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
 	if (inBattle == nullptr)
 	{
-		// 即使 PREPARING 冻结已先被 ReapExpiredFreezes 回收,仍须对本 battle_id 幂等核销/退还待退的普通战书银两,防止 500 银两永久滞留。
-		PlayerJianghuSystem::OnBattlePrepareCancelled(player, battleId, request.skip_jianghu_silver_refund());
+		// PREPARING 冻结已先被 ReapExpiredFreezes 回收时,取消照样把这一局待退的普通战书银两退掉(幂等:标记是这一局才动)。
+		// 取消没送到、或这里退不成(玩家此刻不可改、入账失败)时,标记留在存档里,由 reaper 的终局复核收尾。
+		// skip_jianghu_silver_refund 已废弃:match 不再发退费邮件,退还只走 scene 这一条通道,读到 true 也照退。
+		(void)PlayerJianghuSystem::RefundPendingSilverFee(player, battleId, "prepare_cancelled");
 		// 已被结算/作废收尾,幂等 OK
 		LOG_INFO << "[PlayerBattle] CancelBattlePrepare: no battle in progress;idempotently ignored, player_id="
 				 << playerId << " battle_id=" << battleId;
@@ -1960,9 +1967,9 @@ void PlayerBattleSystem::CancelBattlePrepare(const ::CancelBattlePrepareRequest&
 
 	ClearBattleFreeze(player, playerId, battleId);
 	PlayerFestivalBeastSystem::OnBattlePrepareCancelledOrVoid(player, battleId, TimeSystem::NowMillisecondsUTC());
-	PlayerJianghuSystem::OnBattlePrepareCancelled(player, battleId, request.skip_jianghu_silver_refund());
+	(void)PlayerJianghuSystem::RefundPendingSilverFee(player, battleId, "prepare_cancelled");
 	// match 取消备战 = 这一局不会开打、也不会有结算:道具预留一并释放(docs/design/battle-item-reservation.md)。
-	// 玩家不在本节点时(上面的离线分支)预留在他的存档里,下次加载后由 reaper 的预留复核按 SQL 终局收尾。
+	// 玩家不在本节点时(上面的离线分支)预留与待退银两都在他的存档里,下次加载后由 reaper 的终局复核按 SQL 终局收尾。
 	ReleaseBattleItemHold(player, playerId, battleId, "prepare_cancelled");
 	LOG_INFO << "[PlayerBattle] Battle preparation canceled and freeze released: player_id=" << playerId << " battle_id=" << battleId;
 }
@@ -2771,7 +2778,7 @@ bool IsEffectFreeVoidSettlement(const ::BattleSettlementData& settlement)
 
 // 应用一份作废结算。绝不进 ApplySettlementToEntity:那里把 health / mana 当战后终值回写,作废正文里的 0 会把血量写成 0
 // (阵亡复活还会回满,等于白送一次回复)。这里只做两件事,随收件箱账本同一次存档提交:
-//   1. 释放这一局的道具预留:不会再有结算从预留里扣(battle-item-reservation.md);
+//   1. 释放这一局的道具预留:不会再有结算从预留里扣(battle-item-reservation.md);退还普通生死状预扣的银两;
 //   2. 写一条 VOID 近期结果,存档确认之后才对客户端公开。
 // 解冻、条件删锁、推 BattleEndS2C{VOID} 仍在 CompleteInboxSettlement(同 E/q 双 SQL 确认之后),与普通结算同一个公开点。
 // 正文不合格(带效果、身份不符)按坏载荷处理:整笔 DEFER 并打 ERROR,原件留在收件箱交人工(与 kMalformed 货币同口径);
@@ -2796,7 +2803,9 @@ PlayerInboxExecResult ApplyVoidSettlement(entt::entity player, const ::BattleSet
     }
     ReleaseBattleItemHold(player, playerId, battleId, "void_settlement");
     PlayerFestivalBeastSystem::OnBattlePrepareCancelledOrVoid(player, battleId, TimeSystem::NowMillisecondsUTC());
-    PlayerJianghuSystem::OnBattleVoid(player, battleId);
+    // 普通生死状待退银两随收件箱账本同一次存档退还。入账失败时标记留着、作废结算照常记 APPLIED:
+    // 终局是 ABORT,reaper 的终局复核下一拍按同一个回答重试退还(ReviewBattleHoldsAndFees 不按「本地已应用」跳过银两)。
+    (void)PlayerJianghuSystem::RefundPendingSilverFee(player, battleId, "void_settlement");
     RecordBattleResult(player, playerId, settlement, SettlementCurrencyGains{}, ItemCountMap{}, ItemCountMap{},
                        /*itemsMailed=*/false);
     LOG_INFO << "[PlayerBattle] metric=battle_void_settlement_applied player_id=" << playerId << " battle_id=" << battleId
@@ -3796,103 +3805,158 @@ void PlayerBattleSystem::ReapExpiredFreezes(const uint64_t nowMs)
 		ResolveExpiredFightingFreeze(entry.entity, playerId, entry.battleId, nowMs);
 	}
 
-	// 冻结已经不在、道具预留还在的旧局(续冻到上限解冻、备战到期、重登时锁已过期、离线时被取消):按 SQL 终局收尾。
-	// 排在冻结处置之后:这一拍刚按上限解开的局,预留复核在同一拍就接手。
-	ReviewBattleItemHolds(nowMs);
+	// 冻结已经不在、道具预留或普通生死状待退银两还在的旧局(续冻到上限解冻、备战到期、重登时锁已过期、离线时被取消、
+	// 取消没送到在线实体):按 SQL 终局收尾。排在冻结处置之后:这一拍刚按上限解开的局,复核在同一拍就接手。
+	ReviewBattleHoldsAndFees(nowMs);
 }
 
-void PlayerBattleSystem::ReviewBattleItemHolds(const uint64_t nowMs)
+void PlayerBattleSystem::ReviewBattleHoldsAndFees(const uint64_t nowMs)
 {
-	// 先收集再处置:处置会改 PlayerItemHoldComp,不能边遍历边改。
-	struct DueHold
+	// 先收集再处置:处置会改 PlayerItemHoldComp / PlayerJianghuComp,不能边遍历边改。
+	// 同一 (玩家, 局) 的道具预留与待退银两合并成一项:一次终局查询、一个回答同时收尾两样。两样各查一次的话,
+	// SendTrackedTerminalQuery 按 (player_id, battle_id) 去重,后发的那次撞上前一次的在途登记,回答只交给先发的一方。
+	// 两样的复核时刻在 PrepareBattle 里写的是同一个值(冻结到期时刻),合并不会让任何一样提前收尾。
+	struct DueReview
 	{
 		entt::entity entity;
-		uint64_t holdId;
+		uint64_t battleId;
 		uint64_t reviewAfterMs;
 	};
-	std::vector<DueHold> due;
+	std::vector<DueReview> due;
+	// 复核时刻之前(含当刻)不问;这一局的冻结还在本实体上时归冻结那条路(到期先查终局,ABORT 时连同预留、待退银两一起收尾)。
+	const auto collect = [&due, nowMs](const entt::entity entity, const uint64_t battleId, const uint64_t reviewAfterMs) {
+		if (reviewAfterMs >= nowMs)
+		{
+			return;
+		}
+		if (const auto* inBattle = tlsEcs.actorRegistry.try_get<InBattleComp>(entity);
+			inBattle != nullptr && inBattle->battle_id() == battleId)
+		{
+			return;
+		}
+		const auto found = std::find_if(due.begin(), due.end(), [entity = entity, battleId](const DueReview& entry) {
+			return entry.entity == entity && entry.battleId == battleId;
+		});
+		if (found == due.end())
+		{
+			due.push_back({entity, battleId, reviewAfterMs});
+			return;
+		}
+		found->reviewAfterMs = std::min(found->reviewAfterMs, reviewAfterMs);
+	};
 	for (auto&& [entity, holds] : tlsEcs.actorRegistry.view<PlayerItemHoldComp>().each())
 	{
-		if (holds.holds_size() == 0)
-		{
-			continue;
-		}
-		const auto* inBattle = tlsEcs.actorRegistry.try_get<InBattleComp>(entity);
 		for (const auto& hold : holds.holds())
 		{
-			// 别的种类归别的预留方;这一局的冻结还在时归冻结那条路(到期先查终局,ABORT 时连同预留一起释放)。
-			if (hold.kind() != static_cast<uint32_t>(item_hold::ItemHoldKind::kBattle) ||
-				(inBattle != nullptr && inBattle->battle_id() == hold.hold_id()) || hold.review_after_ms() >= nowMs)
+			// 别的种类归别的预留方。
+			if (hold.kind() == static_cast<uint32_t>(item_hold::ItemHoldKind::kBattle))
 			{
-				continue;
+				collect(entity, hold.hold_id(), hold.review_after_ms());
 			}
-			due.push_back({entity, hold.hold_id(), hold.review_after_ms()});
+		}
+	}
+	for (auto&& [entity, jianghu] : tlsEcs.actorRegistry.view<PlayerJianghuComp>().each())
+	{
+		if (jianghu.pending_silver_fee_battle_id() != 0)
+		{
+			collect(entity, jianghu.pending_silver_fee_battle_id(), jianghu.pending_silver_fee_review_after_ms());
 		}
 	}
 	for (const auto& entry : due)
 	{
-		ReviewBattleItemHold(entry.entity, tlsEcs.GetPlayerId(entry.entity), entry.holdId, entry.reviewAfterMs, nowMs);
+		ReviewBattleHoldAndFee(entry.entity, tlsEcs.GetPlayerId(entry.entity), entry.battleId, entry.reviewAfterMs, nowMs);
 	}
 }
 
-void PlayerBattleSystem::ReviewBattleItemHold(entt::entity player, const uint64_t playerId, const uint64_t holdId,
-											   const uint64_t reviewAfterMs, const uint64_t nowMs)
+void PlayerBattleSystem::ReviewBattleHoldAndFee(entt::entity player, const uint64_t playerId, const uint64_t battleId,
+												 const uint64_t reviewAfterMs, const uint64_t nowMs)
 {
-	// 只复核登记在本节点的玩家实体;释放预留是存档改动:交接、退出中、没有归属围栏时不动
+	// 只复核登记在本节点的玩家实体;释放预留、退还银两都是存档改动:交接、退出中、没有归属围栏时不动
 	// (交接完成后在目的地复核,退出后下次加载再复核)。
 	if (playerId == 0 || tlsEcs.GetPlayer(playerId) != player || !player_mutability::IsPlayerMutable(player))
 	{
 		return;
 	}
+	const auto* holds = tlsEcs.actorRegistry.try_get<PlayerItemHoldComp>(player);
+	bool holdsItems = holds != nullptr &&
+		std::any_of(holds->holds().begin(), holds->holds().end(), [battleId](const ItemHold& hold) {
+			return hold.hold_id() == battleId && hold.kind() == static_cast<uint32_t>(item_hold::ItemHoldKind::kBattle);
+		});
+	const auto* jianghu = tlsEcs.actorRegistry.try_get<PlayerJianghuComp>(player);
+	const bool holdsSilverFee = jianghu != nullptr && jianghu->pending_silver_fee_battle_id() == battleId;
 	// 冻结到期 + 续冻上限之后仍没收尾:每 10 分钟一行 ERROR。结算还在路上(发件箱积压、收件箱整笔延后)或 match 不可达时会走到这里;
-	// 玩家这时能正常游戏,只是这一局带进战斗的道具转不走、用不掉。
+	// 玩家这时能正常游戏,只是这一局带进战斗的道具转不走、用不掉,预扣的银两也还没退(期间开不了新的普通生死状)。
 	const uint64_t overdueAtMs = reviewAfterMs > UINT64_MAX - kFreezeHoldCapMs ? UINT64_MAX : reviewAfterMs + kFreezeHoldCapMs;
-	if (nowMs > overdueAtMs && battle_freeze_hold::IsHoldOverdueLogDue(nowMs - overdueAtMs, kReaperIntervalMs))
+	const bool overdueLogDue = nowMs > overdueAtMs && battle_freeze_hold::IsHoldOverdueLogDue(nowMs - overdueAtMs, kReaperIntervalMs);
+	if (overdueLogDue && holdsItems)
 	{
-		LOG_ERROR << "[PlayerBattle] metric=battle_item_hold_overdue player_id=" << playerId << " battle_id=" << holdId
+		LOG_ERROR << "[PlayerBattle] metric=battle_item_hold_overdue player_id=" << playerId << " battle_id=" << battleId
 				  << " review_after_ms=" << reviewAfterMs << " now_ms=" << nowMs
 				  << ",battle items are still held for a battle whose settlement has not applied here;"
 					 "they stay unmovable until the settlement applies or the battle is aborted";
 	}
-	if (IsBattleSettlementAppliedHere(player, holdId))
+	if (overdueLogDue && holdsSilverFee)
+	{
+		LOG_ERROR << "[PlayerBattle] metric=jianghu_duel_fee_overdue player_id=" << playerId << " battle_id=" << battleId
+				  << " review_after_ms=" << reviewAfterMs << " now_ms=" << nowMs
+				  << ",silver duel fee is still pre-debited for a battle whose terminal is not settled here;"
+					 "it is refunded on ABORT / no original, consumed by a COMPLETE settlement";
+	}
+	if (holdsItems && IsBattleSettlementAppliedHere(player, battleId))
 	{
 		// 结算应用时本该同帧释放;走到这里是异常(例如旧版本应用过结算、没有释放这份预留)。已应用就没有要从预留里扣的了。
 		LOG_WARN << "[PlayerBattle] Battle item hold outlived its applied settlement, releasing: player_id=" << playerId
-				 << " battle_id=" << holdId;
-		ReleaseBattleItemHold(player, playerId, holdId, "applied_here");
+				 << " battle_id=" << battleId;
+		ReleaseBattleItemHold(player, playerId, battleId, "applied_here");
+		holdsItems = false;
+	}
+	// 待退银两不按「本地已应用」收尾:作废结算应用时退款可能没入成账(标记留着、收件箱照记 APPLIED),要等终局回答 ABORT 再退;
+	// COMPLETE 已应用而标记还在只可能是缺陷,回答到了按已消耗处理(OnBattleHoldAndFeeTerminalAnswer)。
+	if (!holdsItems && !holdsSilverFee)
+	{
 		return;
 	}
-	// 没发出去、在途太久都按「未知」:预留留着,下一拍再问(没有上限,理由见 battle_freeze_hold::IsBattleHoldReleasable)。
-	(void)SendTrackedTerminalQuery(playerId, holdId, nowMs, [playerId, holdId](const battle_freeze_hold::TerminalAnswer answer) {
-		OnBattleItemHoldTerminalAnswer(playerId, holdId, answer);
+	// 没发出去、在途太久都按「未知」:两样都留着,下一拍再问(没有上限,理由见 battle_freeze_hold::IsBattleHoldReleasable)。
+	(void)SendTrackedTerminalQuery(playerId, battleId, nowMs, [playerId, battleId](const battle_freeze_hold::TerminalAnswer answer) {
+		OnBattleHoldAndFeeTerminalAnswer(playerId, battleId, answer);
 	});
 }
 
-void PlayerBattleSystem::OnBattleItemHoldTerminalAnswer(const uint64_t playerId, const uint64_t holdId,
-														 const battle_freeze_hold::TerminalAnswer answer)
+void PlayerBattleSystem::OnBattleHoldAndFeeTerminalAnswer(const uint64_t playerId, const uint64_t battleId,
+														   const battle_freeze_hold::TerminalAnswer answer)
 {
 	const auto player = tlsEcs.GetPlayer(playerId);
 	if (!tlsEcs.actorRegistry.valid(player) || tlsEcs.GetPlayerId(player) != playerId)
 	{
-		return; // 玩家已不在本节点:预留在他的存档里,下次加载后再复核
+		return; // 玩家已不在本节点:预留与待退银两都在他的存档里,下次加载后再复核
 	}
 	// 回答在途期间这一局的冻结又挂上了(迟到的确认 / 按锁重建):归冻结那条路处置。
 	if (const auto* inBattle = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
-		inBattle != nullptr && inBattle->battle_id() == holdId)
+		inBattle != nullptr && inBattle->battle_id() == battleId)
 	{
-		return;
-	}
-	if (!battle_freeze_hold::IsBattleHoldReleasable(answer))
-	{
-		LOG_DEBUG << "[PlayerBattle] Battle item hold kept: player_id=" << playerId << " battle_id=" << holdId
-				  << " terminal=" << battle_freeze_hold::TerminalAnswerName(answer);
 		return;
 	}
 	if (!player_mutability::IsPlayerMutable(player))
 	{
 		return; // 下一拍再看
 	}
-	ReleaseBattleItemHold(player, playerId, holdId, battle_freeze_hold::TerminalAnswerName(answer));
+	const char* terminal = battle_freeze_hold::TerminalAnswerName(answer);
+	if (battle_freeze_hold::IsBattleHoldReleasable(answer))
+	{
+		// 不会再有结算:预留释放、待退银两退还。两样都只动「这一局」的那份,重复的回答、已被取消 / 作废收尾过的局什么都不动。
+		ReleaseBattleItemHold(player, playerId, battleId, terminal);
+		(void)PlayerJianghuSystem::RefundPendingSilverFee(player, battleId, terminal);
+		return;
+	}
+	if (answer == battle_freeze_hold::TerminalAnswer::kComplete && IsBattleSettlementAppliedHere(player, battleId))
+	{
+		// COMPLETE 的结算已在本实体应用过、不会再来:还在的待退标记按已消耗处理(缺陷兜底,ConsumePendingSilverFee 的说明)。
+		(void)PlayerJianghuSystem::ConsumePendingSilverFee(player, battleId);
+		return;
+	}
+	// COMPLETE(结算迟早到:从预留里扣、消耗待退标记)、PENDING、UNKNOWN:都留着,下一拍再问。
+	LOG_DEBUG << "[PlayerBattle] Battle item hold and silver fee kept: player_id=" << playerId << " battle_id=" << battleId
+			  << " terminal=" << terminal;
 }
 
 void PlayerBattleSystem::ResolveExpiredFightingFreeze(entt::entity player, const uint64_t playerId,
@@ -3935,8 +3999,8 @@ void PlayerBattleSystem::ResolveExpiredFightingFreeze(entt::entity player, const
 				  << ",freeze held up to the cap but the settlement never settled here;releasing the freeze under the expiry rule"
 					 "(battle items stay held, a settlement arriving later still consumes from the hold)";
 		CountFreezeHoldEvent(battle_freeze_hold::FreezeHoldEvent::kCapReached);
-		// 只解冻、不放道具预留(battle-item-reservation.md):结算仍可能晚到,到了从预留里扣;
-		// 预留交给 reaper 的预留复核(ReviewBattleItemHolds)按 SQL 终局收尾。
+		// 只解冻、不放道具预留、不退待退银两(battle-item-reservation.md):结算仍可能晚到,到了从预留里扣、消耗待退标记;
+		// 两样都交给 reaper 的终局复核(ReviewBattleHoldsAndFees)按 SQL 终局收尾。
 		ReleaseExpiredFightingFreeze(player, playerId, battleId);
 		return;
 	}
@@ -3988,8 +4052,10 @@ void PlayerBattleSystem::OnExpiredFightingTerminalAnswer(const uint64_t playerId
 				 << ",no settlement will arrive for this battle(SQL terminal is ABORT, or there is no adjudicable SQL original);"
 					"freeze released";
 		ReleaseExpiredFightingFreeze(player, playerId, battleId);
-		// 不会再有结算:道具预留一并释放(battle-item-reservation.md)。
+		// 不会再有结算:道具预留一并释放(battle-item-reservation.md),普通生死状预扣的银两一并退还
+		// (玩家此刻不可改或入账失败时标记留着,冻结已解开,下一拍由终局复核接着退)。
 		ReleaseBattleItemHold(player, playerId, battleId, terminal);
+		(void)PlayerJianghuSystem::RefundPendingSilverFee(player, battleId, terminal);
 		return;
 	case battle_freeze_hold::ExpiredFightingStep::kReleaseAtCap:
 		LOG_ERROR << "[PlayerBattle] metric=battle_freeze_hold_cap_reached player_id=" << playerId << " battle_id=" << battleId

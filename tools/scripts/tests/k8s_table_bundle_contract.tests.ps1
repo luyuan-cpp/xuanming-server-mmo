@@ -5,14 +5,17 @@
 
 .DESCRIPTION
     核对:
-      1. deploy/k8s/table-bundle-alerts.yaml 的 4 条告警(TableBundleRejected / TableBundleNotConverged /
-         TableSyncStale / TableBundleNeedsRestart)、指标名与 C++/Go/sidecar 代码一致、runbook 文件存在、告警名全仓唯一;
+      1. deploy/k8s/table-bundle-alerts.yaml 的 5 条告警(TableBundleRejected / TableBundleNotConverged /
+         TableSyncStale / TableSyncFetchFailing / TableBundleNeedsRestart)、指标名与标签与 C++/Go/sidecar 代码一致、
+         sidecar 指标的 PodMonitor 端口名与部署脚本一致、runbook 文件存在、告警名全仓唯一;
       2. k8s_deploy.ps1 里的 table-sync sidecar 注入:
          - 仅作用于 6 个读表 Go 服务(guild/login/mail/match/rank/scene-manager),排除 player-locator / trade / chat / db 等;
          - 给已有 initContainers 的 StatefulSet(guild)和无 initContainers 的 Deployment(scene-manager)都能干净插入;
          - 给 Agones Fleet 挂 table-sync(哪怕 -NoCppLogSidecar 关了 Alloy)时仍显式写出 container: <FleetName>;
          - 未启用 table-sync 时原样返回(不改写既有清单);
-      3. go_svc_image.ps1 登记了 table-sync 镜像条目。
+         - sidecar 带 POD_NAMESPACE(etcd 状态键带 namespace);
+      3. 外接对象存储时部署前核对凭据 Secret(Assert-TableSyncS3SecretProvisioned,kubectl 用替身);
+      4. go_svc_image.ps1 登记了 table-sync 镜像条目。
 
 .EXAMPLE
     pwsh -NoProfile -File tools/scripts/tests/k8s_table_bundle_contract.tests.ps1
@@ -48,13 +51,14 @@ Test-Case 'table-bundle-alerts.yaml 包含 4 条告警、指标与代码同源�
     $rules = @([regex]::Matches($alertsText, '(?ms)^        - alert:[ ]*(?<name>\S+)[ ]*\n(?<body>.*?)(?=^        - alert:|\z)') |
         ForEach-Object { [pscustomobject]@{ Name = $_.Groups['name'].Value; Body = $_.Groups['body'].Value } })
     $names = @($rules | ForEach-Object { $_.Name })
-    Assert-Equal -Expected 'TableBundleRejected,TableBundleNotConverged,TableSyncStale,TableBundleNeedsRestart' `
-        -Actual ($names -join ',') -Because '四条告警名与设计 §11 对齐'
+    Assert-Equal -Expected 'TableBundleRejected,TableBundleNotConverged,TableSyncStale,TableSyncFetchFailing,TableBundleNeedsRestart' `
+        -Actual ($names -join ',') -Because '五条告警名与设计 §11 对齐'
 
     $expectedSeverity = @{
         TableBundleRejected     = 'critical'
         TableBundleNotConverged = 'warning'
         TableSyncStale          = 'warning'
+        TableSyncFetchFailing   = 'warning'
         TableBundleNeedsRestart = 'info'
     }
     foreach ($r in $rules) {
@@ -72,6 +76,10 @@ Test-Case 'table-bundle-alerts.yaml 包含 4 条告警、指标与代码同源�
     Assert-Match -Text $goMetrics -Pattern '"table_bundle_info"' -Because 'Go 暴露 table_bundle_info'
     Assert-Match -Text $goMetrics -Pattern '"table_reload_total"' -Because 'Go 暴露 table_reload_total'
     Assert-Match -Text $syncMain -Pattern '"table_sync_etcd_last_read_timestamp_seconds"' -Because 'sidecar 暴露 table_sync_etcd_last_read_timestamp_seconds'
+    Assert-Match -Text $syncMain -Pattern '"table_sync_bundle_fetch_total"' -Because 'sidecar 暴露 table_sync_bundle_fetch_total'
+    foreach ($result in @('error', 'verify_failed', 'invalid_pointer')) {
+        Assert-Match -Text $syncMain -Pattern ('bundleFetchTotal\.WithLabelValues\("' + $result + '"\)') -Because "TableSyncFetchFailing 认的失败结果 $result 确实由 sidecar 记"
+    }
 
     # TableBundleNotConverged 按 (release_track, schema_digest) 分组:两边的 table_bundle_info 都要带 release_track,
     # 否则 stable 和 canary 混在一起比,金丝雀期间必然误报。

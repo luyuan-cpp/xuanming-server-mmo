@@ -163,6 +163,8 @@
       @busy-change="playerCommandBusy = $event"
     />
 
+    <TradeManual v-if="hasPermission('gm:trade:read')" @busy-change="tradeManualBusy = $event" />
+
     <SystemMail
       v-if="canViewSystemMail"
       :busy="mutationBusy"
@@ -350,6 +352,7 @@
   import PlayerCommands from './PlayerCommands.vue';
   import SystemMail from './SystemMail.vue';
   import ApprovalPanel from './ApprovalPanel.vue';
+  import TradeManual from './TradeManual.vue';
   import { APPROVAL_STATUS_COLORS, APPROVAL_STATUS_LABELS, awaitsAnotherApprover, dualControl, type ApprovalView } from '/@/api/gm/approval';
   import { PLAYER_OPERATIONS } from '/@/api/gm/playerCommands';
   import {
@@ -407,7 +410,10 @@
   const sending = ref(false);
   const playerCommandBusy = ref(false);
   const systemMailBusy = ref(false);
-  const mutationBusy = computed(() => preparing.value || sending.value || playerCommandBusy.value || systemMailBusy.value);
+  const tradeManualBusy = ref(false);
+  const mutationBusy = computed(
+    () => preparing.value || sending.value || playerCommandBusy.value || systemMailBusy.value || tradeManualBusy.value
+  );
   const mailCurrencies = ref<MailCurrencyRow[]>([{ currencyType: 0, amount: '' }]);
   const mailItems = ref<MailItemRow[]>([{ configId: '', count: '' }]);
   const playerIdInput = ref('');
