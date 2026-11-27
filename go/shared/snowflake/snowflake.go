@@ -313,6 +313,118 @@ func (n *Node) Generate() (uint64, error) {
 		n.step, nil
 }
 
+// GenerateInto 批量一次加锁预留一整段 ID 并填满 dst（移植自 xuanming-server/pkg/snowflake），
+// 完整保留失租 fence、双时钟水位自栅栏、启动 guard 与借位预算全部不变量。
+// 跨秒时分段推进，dst 内严格递增唯一但不保证相邻连续；任一步失败时清零 dst 并返回错误。
+func (n *Node) GenerateInto(dst []uint64) error {
+	if len(dst) == 0 {
+		return nil
+	}
+	if n.fenced.Load() {
+		return ErrFenced
+	}
+	if err := n.checkWatermarkAge(); err != nil {
+		return err
+	}
+
+	filled := 0
+	for filled < len(dst) {
+		if n.fenced.Load() {
+			clear(dst)
+			return ErrFenced
+		}
+		if err := n.checkWatermarkAge(); err != nil {
+			clear(dst)
+			return err
+		}
+
+		n.mu.Lock()
+		if n.fenced.Load() {
+			n.mu.Unlock()
+			clear(dst)
+			return ErrFenced
+		}
+
+		now := nowEpoch()
+		guardPending := n.bootGuardPending
+		n.bootGuardPending = false
+
+		var startStep uint64
+		switch {
+		case now > n.lastTime:
+			n.lastTime = now
+			startStep = 0
+		case n.step < stepMask:
+			startStep = n.step + 1
+		default:
+			if !guardPending {
+				behind := uint64(0)
+				if now < n.lastTime {
+					behind = n.lastTime - now
+				}
+				logx.Errorf("[snowflake] step pool exhausted: worker_id=%d logical_second=%d cap=%d clock_behind=%ds; "+
+					"waiting up to %v for the clock, then borrowing the next logical second",
+					n.nodeID, n.lastTime, stepMask+1, behind, waitBudget)
+			}
+			advanced := n.waitNextTime(n.lastTime)
+			if advanced > n.lastTime {
+				n.lastTime = advanced
+			} else {
+				if n.lastTime+1 > advanced+maxBorrowAheadSec {
+					if n.lastBorrowRejectLogSec != advanced {
+						n.lastBorrowRejectLogSec = advanced
+						logx.Errorf("[snowflake] borrow budget exhausted: worker_id=%d high_water=%d wall_clock=%d "+
+							"ahead_limit=%ds; refusing to mint until the clock catches up",
+							n.nodeID, n.lastTime, advanced, maxBorrowAheadSec)
+					}
+					n.mu.Unlock()
+					clear(dst)
+					return ErrBorrowLimitExceeded
+				}
+				logx.Errorf("[snowflake] clock did not advance within %v: worker_id=%d borrowing logical second %d "+
+					"(ID time field now runs ahead of the wall clock)", waitBudget, n.nodeID, n.lastTime+1)
+				n.lastTime++
+			}
+			startStep = 0
+		}
+
+		if n.fenced.Load() {
+			n.mu.Unlock()
+			clear(dst)
+			return ErrFenced
+		}
+		if err := n.checkWatermarkAge(); err != nil {
+			n.mu.Unlock()
+			clear(dst)
+			return err
+		}
+
+		avail := stepMask - startStep + 1
+		take := uint64(len(dst) - filled)
+		if take > avail {
+			take = avail
+		}
+		n.step = startStep + take - 1
+		base := (n.lastTime << timeShift) | (n.nodeID << nodeShift) | startStep
+		n.mu.Unlock()
+
+		for i := uint64(0); i < take; i++ {
+			dst[filled] = base + i
+			filled++
+		}
+	}
+	return nil
+}
+
+// MinIDAt 返回 unixSec 时刻（Unix 秒）可能生成的最小 ID（node/step 全零），
+// 用于将历史表的按时间范围清理转为走主键/索引的 ID 范围条件。unixSec 早于 Epoch 返回 0。
+func MinIDAt(unixSec int64) uint64 {
+	if unixSec < int64(Epoch) {
+		return 0
+	}
+	return (uint64(unixSec) - Epoch) << timeShift
+}
+
 // waitNextTime 有界等待真实时钟越过 last。返回值可能仍 <= last(时钟停摆 / 大幅回拨),
 // 调用方必须自己保证不把 lastTime 往回写。
 func (n *Node) waitNextTime(last uint64) uint64 {

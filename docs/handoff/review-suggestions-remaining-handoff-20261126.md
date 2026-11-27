@@ -5,7 +5,7 @@
 > - 会话「交接单里的代码改动清零与方案入档」：§2 修复身份三项，§3 snowflake LegacyPrefix 整删，§4 第 1 条（人工终结见证比 attempts），§5 文档。
 > - **Gemini 不要改这几节的代码**；第 6 节已修五批的验证照旧交 Gemini，只跑，要改代码时保留首错原文停下、交回 Claude。下面「交 Gemini」一段保留作对照。
 
-> **11-27 总状态**：第 1~5 节的代码除一处外都已写完（未生成、未编译）。**还要写代码的有两处**：第 8 节（选角页回选上限的用例），以及第 4 节第 1 条剩下的 guild 人工终结条件写 SQL（与 r2 第 4 轮交接单 `data-overwrite-audit-r2-round4-handoff-20261126.md` §0a 第 2.2 步是同一件事，在那边做，别做两遍）。其余只交 Gemini 按各条 PROGRESS 的命令验证。换电脑后从总入口 `docs/handoff/README.md` 开始：先做第 4 轮交接单 §0a（它的第 6 步指回本单第 8 节）；第 8 节不依赖第 4 轮的代码，在 §0a 第 5 步（第 5 轮审计）之前做完即可。
+> **11-27 总状态**：第 1~5 节的代码除一处外都已写完（未生成、未编译）。还要写代码的两处都不在本单做：第 8 节的用例已移到换电脑总入口 `new-computer-start-here-handoff-20261127.md` §3.1；第 4 节第 1 条剩下的 guild 人工终结条件写 SQL，在 r2 第 4 轮交接单 `data-overwrite-audit-r2-round4-handoff-20261126.md` §0a 第 2.2 步做，别做两遍。本单其余只交 Gemini 按各条 PROGRESS 的命令验证，全绿后删掉本单。
 
 接 `docs/PROGRESS.md` 2026-11-26「收 11-19 六条「评审修正·」下的「建议，没做」」。那一条做完了五批，下面是没做的。
 
@@ -124,22 +124,4 @@
 
 ## 8. 换电脑接续：选角页回选上限的用例（11-27，交另一台电脑上的 Claude Code）
 
-负责人 11-27 定：换电脑由 Claude Code 写这条用例，Gemini 只编译、跑测。只加用例，不改产品代码。写完在本节标状态，并在 PROGRESS 追加一条。
-
-- **要钉住的行为**（客户端仓 `Assets/Scripts/Game/GameClient.cs`）：
-  - 选角循环在 `ConnectAndEnter` 里，约 1255–1305 行。EnterGame 受理之后服务端推进场失败（3023），`EnterGameAndWaitScene`（约 1452 行起）调 `onReselect(EnterRejectedReselectHint)` 回选角页。
-  - 只有 `reselects < MaxEnterReselects` 时才给回选的回调（约 1302 行；`MaxEnterReselects = 3`，在 `GameClient.RoleSwitch.cs`）。三次用完之后再来 3023，照旧拆连接、回选服。
-  - 3023 由推送带进来：`DispatchInbound` 里 `if (_awaitingSceneEntry && IsEnterFailureTip(tip.Id)) _enterFailedTipId = tip.Id;`，约 2865 行。先读这一段，弄清推送的消息号与包体。
-- **用例**：新文件 `Assets/Tests/EditMode/Net/EnterGameReselectCapTests.cs`，配 `.meta`，GUID 新生成。
-  1. 用反射调私有协程 `ConnectAndEnter(gen, zoneId, ip, port, payload, signature, …)`（约 1151 行，其余参数照现有调用点填），直接连本机假 gate，不走 HTTP。
-  2. 假 gate：验票，令牌 Login 回一份带两个角色的列表；每次收到 EnterGame 都受理（回 `EnterGameResponse { PlayerId }`），紧接着推 3023。
-  3. `PlayerChooser` 每次都选同一个角色，并记下被调用的次数和每次看到的 `EnterRejectHint`。
-  4. 断言：
-     - 一共选了 4 次（首次 1 次 + 回选 3 次），后 3 次的提示都是 `EnterRejectedReselectHint`；
-     - 第 4 次 EnterGame 受理后再推 3023，管线收掉：onError 只调用一次，连接已拆，`InGame` 为假；
-     - 没有第 5 次 EnterGame。
-  5. 另加一条对照：重定向或短重连路径（`_redirecting` / `_reconnecting` 为真）下，第一次 3023 就拆连接，不回选角。
-- **可抄的夹具**：
-  - `Assets/Tests/EditMode/Net/GameClientReconnectTests.cs`：`SetUp` 里的客户端装配；`ServeEnteredGate`，即验票、Login、EnterGame 的假 gate；`PumpRecovery`，按生产协程语义展开嵌套协程并等 `AsyncOperation`；还有反射辅助函数。
-  - `Assets/Tests/EditMode/Net/EnterGameRoleSwitchFlowTests.cs`：按脚本逐条应答的假 gate（`Serve`），以及带 10 秒护栏的 `Pump`。
-- **跑（交 Gemini）**：EditMode 跑新文件、`EnterGameRoleSwitchFlowTests` 与 `GameClientReconnectTests`，全部通过；客户端仓根跑 `tools/client_compile_check.ps1`。
+> 11-27 已整节移到换电脑总入口 `new-computer-start-here-handoff-20261127.md` §3.1，以那边为准。

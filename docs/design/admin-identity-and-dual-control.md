@@ -292,12 +292,12 @@ func Require(approval *basepb.AdminApproval, operator string) error
   - **rank:后台经批准可以删任意榜上的单个条目**。原来只许开榜方删,而榜都是 match 开的,后台的删除永远被拒。整代隐藏仍只许开榜方(系统榜被整代隐藏后开榜方的提交会一直失败),所以目录里不放 `DeleteRankGeneration`。判重键 (榜, 代, 请求号) 不含调用方,后台批准号与 match 摘角色用的玩家号理论上可能撞号,两边都是 63 位打散值、概率可以忽略;真要杜绝就把调用方并进 `rank_mutation` 的主键(代码里记了 shortcut 注释)。
   - **mail:`admin` 恒在「要求批准记录的调用方」名单里**,配置只能往上加:能把 `admin` 拿掉,就能绕开应急开关打开时的逐条 ERROR 与计数。
   - **留痕落在哪**:商城、mail、收件箱、match 有表就加列;data_service 的批次与审计没有合适的列,批准号与批准人写进理由文本(`[approval_id=… approver=…]`),人工终结回收行只进日志行(理由落库有 191 字上限)。
-  - **残余**:login 三个方法没有请求号,批准记录只绑定了操作人,拿到 `x-admin-token` 的人可以拿同一份记录去改别的角色——与 §6 第 3 条同一个信任边界。个人邮件行到期会被清理,行上的批准记录跟着没了,长期留痕在后台流水。
+  - **残余**:login 三个方法没有请求号,批准记录只绑定了操作人,拿到 `x-admin-token` 的人可以拿同一份记录去改别的角色——与 §6 第 3 条同一个信任边界。个人邮件行到期会被清理,所以批准记录同时记在不随邮件行清理的发件判重收据 `mail_request_receipt` 上(11-27 补),长期可查。
 
 ### 11.3 批 6:网关 `/admin/**` 收口
 
 - **规则收在口令闸 `AdminApiKeyFilter` 一处,不在各控制器里各写一遍**:写操作(POST / PUT / PATCH / DELETE)必须带且只带一个合规的 `X-Admin-Operator`(与身份提供方主体同一字符集),否则 400;每次写操作在响应之后打一行 `AUDIT gateway admin write`(方法、路径、状态、操作人、口令种类、来源地址)。新加的管理控制器不会漏;热关停与配置表两个控制器原有的业务细节 AUDIT 行照旧。
-- **机器口令** `admin.machine-key`:只能访问 `/admin/tables/**`(规范化路径与原始 URI 都要落在下面,不带 `..`),操作人必须是 `table-bundle`;人用的口令不能冒用 `table-bundle`。不配就没有这条路;两把口令相同或机器口令短于 32 字节拒绝启动。`table-bundle` 命令行用机器口令时带 `-operator table-bundle`(或 `MMORPG_ADMIN_OPERATOR=table-bundle`);命令行本身这次没改,它正被配置表热更那条线改着。
+- **机器口令** `admin.machine-key`:只能访问 `/admin/tables/**`(规范化路径与原始 URI 都要落在下面,不带 `..`),操作人必须是 `table-bundle`;人用的口令不能冒用 `table-bundle`。不配就没有这条路;两把口令相同或机器口令短于 32 字节拒绝启动。`table-bundle` 命令行的缺省操作人就是 `table-bundle`(11-27 补),用机器口令不用再传 `-operator`;用人用口令要传自己的名字。
 - **人用入口在后台**:`POST /gm/gateway/admin` 只转发白名单里的方法与路径(区服、白名单、公告、热关停),网关口令留在服务端,`X-Admin-Operator` 取登录会话;权限 `gm:gateway:write`(乙级,单人可做,给发起人与批准人两个标准角色)。页面是控制台里的「网关管理」卡片。
 - 公网入口:`k8s_client_entry.ps1` 生成的 gateway Ingress 只路由 `/api`,契约测试已经钉着(`k8s_client_entry_contract.tests.ps1` 的 D91 两条),这次只核对、没改。
 

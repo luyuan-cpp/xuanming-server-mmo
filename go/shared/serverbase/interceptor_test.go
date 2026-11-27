@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/zeromicro/go-zero/core/logx/logtest"
@@ -283,5 +284,45 @@ func TestOptionsMethodName(t *testing.T) {
 	custom := Options{MethodName: func(string) string { return "x" }}
 	if got := custom.methodName("/login.LoginService/Login"); got != "x" {
 		t.Fatalf("自定义 methodName = %q, 期望 %q", got, "x")
+	}
+}
+
+func TestUnaryInterceptorSlowRPCWarning(t *testing.T) {
+	logs := logtest.NewCollector(t)
+
+	// 1. 快请求不应刷 rpc_slow。
+	itc := UnaryInterceptor(Options{SlowThreshold: 20 * time.Millisecond})
+	_, err := itc(context.Background(), nil, newUnaryInfo("/login.LoginService/FastCase"),
+		handlerReturning(&struct{}{}, nil))
+	if err != nil {
+		t.Fatalf("fast call err: %v", err)
+	}
+	if strings.Contains(logs.String(), EventSlowRPC) {
+		t.Fatalf("fast call must not emit %s: %s", EventSlowRPC, logs.String())
+	}
+
+	// 2. 慢请求必须发出 rpc_slow 且不含高基数字段。
+	_, err = itc(context.Background(), nil, newUnaryInfo("/login.LoginService/SlowCase"),
+		func(context.Context, any) (any, error) {
+			time.Sleep(30 * time.Millisecond)
+			return &struct{}{}, nil
+		})
+	if err != nil {
+		t.Fatalf("slow call err: %v", err)
+	}
+	if !strings.Contains(logs.String(), EventSlowRPC) {
+		t.Fatalf("slow call must emit %s, got: %s", EventSlowRPC, logs.String())
+	}
+
+	// 3. 负阈值显式关闭。
+	logsDisabled := logtest.NewCollector(t)
+	itcDisabled := UnaryInterceptor(Options{SlowThreshold: -1})
+	_, _ = itcDisabled(context.Background(), nil, newUnaryInfo("/login.LoginService/SlowDisabled"),
+		func(context.Context, any) (any, error) {
+			time.Sleep(15 * time.Millisecond)
+			return &struct{}{}, nil
+		})
+	if strings.Contains(logsDisabled.String(), EventSlowRPC) {
+		t.Fatalf("disabled slow threshold must not emit %s: %s", EventSlowRPC, logsDisabled.String())
 	}
 }

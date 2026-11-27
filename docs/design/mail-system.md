@@ -1416,4 +1416,5 @@ Java `DomainClientDispatch.withSession` 将完整不可变 `SessionContext` 送�
 - **应急开关** `AdminAllowUnapproved`(缺省 false,只给本机开发):打开时启动打一行 ERROR,之后每一封不带记录的管理邮件都打 ERROR 并计入 `mail_admin_unapproved_command_total{caller, method}`,告警 `MailAdminCommandUnapproved`(`deploy/k8s/dual-control-alerts.yaml`)。本机 GM 栈 `deploy/gm-admin/mail-config.yaml` 打开了它,因为那里的后台多半跑原生模式、双人复核关着。
 - **mailadmin**:写命令在生产会被拒(退出码 3,不再打印重试命令);`-file` 里带 `approval` 拒绝(命令行不该能填批准人)。补发改由后台发起。
 - **部署顺序**:`validateContent` 拒绝未知字段,mail 要先于后台升级。
-- **残余**:个人邮件行到期会被清理、注销清角色时也会删,行上的批准记录跟着没了,长期留痕只剩后台流水与审计日志;要在 mail 侧长期留痕,可以把这三列挪到发件判重收据 `mail_request_receipt` 上(没做)。`etc/mail.yaml` 整份进 ConfigMap,有人把 `AdminAllowUnapproved: true` 提交进去就会上集群,部署守卫随批 7 剩余项一起加。
+- **长期留痕**:个人邮件行到期会被清理、注销清角色时也会删,所以三列也写在发件判重收据 `mail_request_receipt`(`MailRequestReceiptRecord` 7~9)上,与收据同一事务;收据不清理,管理发件的「谁提、谁批」在 mail 侧长期可查(11-27 补)。
+- **部署守卫**:`etc/mail.yaml` 整份进 ConfigMap,有人把 `AdminAllowUnapproved: true` 提交进去就会上集群;`k8s_deploy.ps1` 的 `Assert-DualControlEmergencySwitchesOff` 在 staging / prod 的任何写操作之前拒绝(批 7)。

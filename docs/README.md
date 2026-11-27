@@ -143,6 +143,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [tactical-puzzle-workshop-v1.md](planning/tactical-puzzle-workshop-v1.md) — 《五行奇谈》万象残局坊（UGC 玩家自创回合残局工坊）V1 策划与技术设计方案
 - [trial-journal-v3-wild-bosses-vows-replay-share.md](planning/trial-journal-v3-wild-bosses-vows-replay-share.md) — 《五行奇谈》五行试炼志 V3 扩展设计：卷四·三境明雷、试炼誓约与好友约战录像
 - [trial-journal-v4-seasonal-s2-s10.md](planning/trial-journal-v4-seasonal-s2-s10.md) — 《五行奇谈》五行试炼志 V4：卷三·季游奇谈 S2–S10 全十季无缝轮换与技印共鸣解题
+- [wuxing-roguelike-realm-v2.md](planning/wuxing-roguelike-realm-v2.md) — 《五行奇谈》五行幻境 V2 · 五行奇策轻肉鸽秘境策划与工程设计方案
 
 #### 成套策划
 
@@ -181,6 +182,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [wardrobe-cosmetic-vouchers-ui-handoff.md](planning/ui-handoff/wardrobe-cosmetic-vouchers-ui-handoff.md) — 衣柜外观解锁券（灵宠幻化符 / 技能特效卷）UI 纯功能作图交接清单
 - [wardrobe-cosmetics-assets-handoff.md](planning/ui-handoff/wardrobe-cosmetics-assets-handoff.md) — 衣柜外观券、专属技能特效帧条与百宝阁切片纯功能作图交接清单
 - [world-map-habitat-ui-handoff.md](planning/ui-handoff/world-map-habitat-ui-handoff.md) — 大世界野外灵宠栖息地 HUD 浮条 UI 美术作图交接清单
+- [wuxing-roguelike-realm-v2-ui-handoff.md](planning/ui-handoff/wuxing-roguelike-realm-v2-ui-handoff.md) — 「五行幻境 V2 · 五行奇策轻肉鸽秘境」纯功能 UI 作图交接单
 
 ### 技术与架构设计文档(`design/`)
 
@@ -462,6 +464,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [craft-proxy-offline-and-support-enhance.md](design/craft-proxy-offline-and-support-enhance.md) — 跨节点/离线名匠代打与控辅强化公平受益设计
 - [craft-proxy-reputation-digest-and-hot-ranking.md](design/craft-proxy-reputation-digest-and-hot-ranking.md) — 离线名匠口碑雅号异步回账、营业战报与西市极品热榜设计方案
 - [cross-repo-port-batch4-20261127.md](design/cross-repo-port-batch4-20261127.md) — 双仓双向方案对比与移植设计 Batch 4（`xuanming-server` ↔ `xuanming-server-mmo-cpp`）
+- [cross-repo-port-batch5-20261127.md](design/cross-repo-port-batch5-20261127.md) — 双仓双向方案对比与移植设计 Batch 5（`xuanming-server` ↔ `xuanming-server-mmo-cpp`）
 - [data-service-startup-isolation.md](design/data-service-startup-isolation.md) — data_service 启动期故障隔离:一个 SQL 集群连不上时照样启动
 - [merged-zone-etcd-copy.md](design/merged-zone-etcd-copy.md) — 合服映射的 etcd 副本:目录第 0 片失联时 data_service 照样启动
 - [ranked-play-production-architecture.md](design/ranked-play-production-architecture.md) — 《论剑 / 人宠会武》生产级强一致性与水平扩展架构设计
@@ -560,6 +563,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [login-queue-verification-handoff-20261126.md](handoff/login-queue-verification-handoff-20261126.md) — 登录排队:验证与开闸交接(2026-11-26,交 Gemini)
 - [merged-zone-etcd-copy-handoff-20261127.md](handoff/merged-zone-etcd-copy-handoff-20261127.md) — 合服映射的 etcd 副本:换电脑接手交接(2026-11-27)
 - [minigame-websocket-handoff-20261120.md](handoff/minigame-websocket-handoff-20261120.md) — 小游戏 WebSocket 入口:待验证项交接(2026-11-20 起交 Gemini,2026-11-26 按当前仓库校正)
+- [new-computer-start-here-handoff-20261127.md](handoff/new-computer-start-here-handoff-20261127.md) — 换电脑接续：全部待做与旧电脑记忆要点（2026-11-27，做完删除本单）
 - [passport-hardening-handoff-20261126.md](handoff/passport-hardening-handoff-20261126.md) — 官方通行证加固：验证交接（2026-11-26，交 Gemini；代码已改完，Gemini 只验证）
 - [payment-integration-handoff-20261120.md](handoff/payment-integration-handoff-20261120.md) — 真钱支付接入:剩余事项(2026-11-26 更新,交 Gemini 与负责人)
 - [real-name-anti-addiction-handoff-20261126.md](handoff/real-name-anti-addiction-handoff-20261126.md) — 实名认证与防沉迷：代码已写完，全部验证交 Gemini（2026-11-26）

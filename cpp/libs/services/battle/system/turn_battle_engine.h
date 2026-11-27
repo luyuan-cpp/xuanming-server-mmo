@@ -111,8 +111,12 @@ public:
                 IsGuildWarBattle() ||
                 IsJianghuDuelBattle());
     }
-    // 全服赛季战队锦标赛 V2 / 五行幻境爬塔灵脉阵眼（确定性定点数倍率，零浮点漂移）。
+    // 全服赛季战队锦标赛 V2 / 五行幻境爬塔 / 万象残局坊 V1.5 灵脉阵眼（确定性定点数倍率，零浮点漂移）。
     TournamentLeylineElement ActiveTournamentLeyline() const {
+        if (hasTacticalPuzzleContext &&
+            tacticalPuzzleContext.spec().leyline_element() != TOURNAMENT_LEYLINE_UNSPECIFIED) {
+            return tacticalPuzzleContext.spec().leyline_element();
+        }
         if (hasTowerContext && towerContext.leyline_element() != TOURNAMENT_LEYLINE_UNSPECIFIED) {
             return towerContext.leyline_element();
         }

@@ -1093,6 +1093,8 @@ TEST_F(TrialJournalBattleTest, TacticalPuzzleWorkshopSetupScalingBuffsAndRoundLi
     spec->set_player_initial_mp_pct(60);
     spec->set_player_initial_shield_pct(20);
     spec->set_player_initial_debuff_kind(3);
+    spec->set_leyline_element(TOURNAMENT_LEYLINE_METAL);
+    spec->set_banned_skill_id(10039u);
 
     auto* e1 = spec->add_enemies();
     e1->set_monster_table_id(311);
@@ -1115,6 +1117,10 @@ TEST_F(TrialJournalBattleTest, TacticalPuzzleWorkshopSetupScalingBuffsAndRoundLi
     const auto state = engine.BuildStateSnapshot();
     EXPECT_EQ(state.round_limit(), 2u);
     EXPECT_EQ(state.team_a_formation_id(), 3u);
+    EXPECT_EQ(engine.ActiveTournamentLeyline(), TOURNAMENT_LEYLINE_METAL);
+    EXPECT_TRUE(engine.IsSkillBanned(10039u));
+    ASSERT_EQ(state.banned_skill_ids_size(), 1);
+    EXPECT_EQ(state.banned_skill_ids(0), 10039u);
     ASSERT_TRUE(state.has_tactical_puzzle_context());
     EXPECT_EQ(state.tactical_puzzle_context().puzzle_id(), 88001u);
     EXPECT_TRUE(state.tactical_puzzle_context().is_author_verify());
@@ -1188,4 +1194,15 @@ TEST_F(TrialJournalBattleTest, TacticalPuzzleWorkshopSetupScalingBuffsAndRoundLi
     noPreset.mutable_ranked_context()->set_use_free_preset(false);
     TurnBattleEngine badEngine3(data);
     EXPECT_FALSE(badEngine3.Initialize(noPreset));
+
+    CreateBattleRequest badBan = req;
+    badBan.mutable_tactical_puzzle_context()->mutable_spec()->set_banned_skill_id(10020u);
+    TurnBattleEngine badEngine4(data);
+    EXPECT_FALSE(badEngine4.Initialize(badBan));
+
+    CreateBattleRequest badLeyline = req;
+    badLeyline.mutable_tactical_puzzle_context()->mutable_spec()->set_leyline_element(
+        static_cast<TournamentLeylineElement>(9));
+    TurnBattleEngine badEngine5(data);
+    EXPECT_FALSE(badEngine5.Initialize(badLeyline));
 }

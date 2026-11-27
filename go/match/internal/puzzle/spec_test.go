@@ -59,6 +59,22 @@ func TestValidateSpecAndText(t *testing.T) {
 	if err := ValidateSpec(bad); err == nil {
 		t.Fatalf("expected speed delta 35 rejected")
 	}
+	v15 := validSampleSpec()
+	v15.LeylineElement = battlepb.TournamentLeylineElement_TOURNAMENT_LEYLINE_FIRE
+	v15.BannedSkillId = 10039 // 101 破阵自带
+	if err := ValidateSpec(v15); err != nil {
+		t.Fatalf("expected v1.5 leyline + preset ban valid, got %v", err)
+	}
+	badBan := validSampleSpec()
+	badBan.BannedSkillId = 10020 // 属于 102 控场
+	if err := ValidateSpec(badBan); err == nil {
+		t.Fatalf("expected non-preset banned skill rejected")
+	}
+	badLeyline := validSampleSpec()
+	badLeyline.LeylineElement = battlepb.TournamentLeylineElement(9)
+	if err := ValidateSpec(badLeyline); err == nil {
+		t.Fatalf("expected out-of-range leyline rejected")
+	}
 
 	if err := ValidateTagMask((1 << 0) | (1 << 5)); err != nil {
 		t.Fatalf("expected 2 tags valid, got %v", err)

@@ -55,6 +55,37 @@ const (
 	StatePublished uint32 = 2
 )
 
+// IsAllowedPresetSkill 校验残局禁招是否为 0 或属于当前选定人宠预设携带的技能。
+func IsAllowedPresetSkill(charPresetID, petPresetID, skillID uint32) bool {
+	if skillID == 0 {
+		return true
+	}
+	switch charPresetID {
+	case 101:
+		if skillID == 10002 || skillID == 10039 || skillID == 10025 || skillID == 10035 {
+			return true
+		}
+	case 102:
+		if skillID == 10006 || skillID == 10020 || skillID == 10034 || skillID == 10041 {
+			return true
+		}
+	case 103:
+		if skillID == 10010 || skillID == 10033 || skillID == 10040 || skillID == 10026 {
+			return true
+		}
+	}
+	switch petPresetID {
+	case 201:
+		return skillID == 10002 || skillID == 10018 || skillID == 10016 || skillID == 13005
+	case 202:
+		return skillID == 10006 || skillID == 10019 || skillID == 10034 || skillID == 13006
+	case 203:
+		return skillID == 10014 || skillID == 10010 || skillID == 11006 || skillID == 11005
+	default:
+		return false
+	}
+}
+
 var (
 	ErrSpecInvalid = errors.New("tactical puzzle spec invalid")
 	ErrTextInvalid = errors.New("tactical puzzle text invalid")
@@ -88,6 +119,13 @@ func ValidateSpec(spec *battlepb.TacticalPuzzleSpec) error {
 		return ErrSpecInvalid
 	}
 	if spec.GetPlayerInitialDebuffKind() > MaxPlayerDebuff {
+		return ErrSpecInvalid
+	}
+	leyline := int32(spec.GetLeylineElement())
+	if leyline < 0 || leyline > 5 {
+		return ErrSpecInvalid
+	}
+	if !IsAllowedPresetSkill(spec.GetCharacterPresetId(), spec.GetPetPresetId(), spec.GetBannedSkillId()) {
 		return ErrSpecInvalid
 	}
 	enemies := spec.GetEnemies()

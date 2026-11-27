@@ -298,7 +298,10 @@ func (r *Repo) Send(ctx context.Context, caller string, kind mailpb.MailKind, in
 		}
 		// 收据先于邮件行写:它的主键是同一请求并发首发的裁决点。撞键 = 别的事务已建了这一封,转读赢家已提交的行;
 		// 读不到说明撞的是别的键,按冲突回。这时本事务还什么都没写。
-		if _, e := tx.ExecContext(ctx, "INSERT INTO mail_request_receipt (sender_kind,request_id,mail_id,request_hash,kind,created_ms) VALUES (?,?,?,?,?,?)", in.SenderKind, in.RequestId, id, digest, uint32(kind), now); e != nil {
+		// 双人复核的批准记录也记在收据上:邮件行到期清理或注销清角色时会被删,收据不删,管理发件的「谁提、谁批」长期可查。
+		approval := in.GetApproval()
+		if _, e := tx.ExecContext(ctx, "INSERT INTO mail_request_receipt (sender_kind,request_id,mail_id,request_hash,kind,created_ms,"+approvalColumns+") VALUES (?,?,?,?,?,?,?,?,?)",
+			in.SenderKind, in.RequestId, id, digest, uint32(kind), now, approval.GetApprovalId(), approval.GetProposer(), approval.GetApprover()); e != nil {
 			if !isDuplicateKey(e) {
 				return e
 			}
@@ -311,7 +314,6 @@ func (r *Repo) Send(ctx context.Context, caller string, kind mailpb.MailKind, in
 			}
 			return nil
 		}
-		approval := in.GetApproval()
 		if _, e := tx.ExecContext(ctx, "INSERT INTO mail_message ("+messageColumns+","+approvalColumns+") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0,0,?,?,?)", id, in.RecipientPlayerId, in.GuildId, uint32(kind), in.SenderKind, in.RequestId, digest, in.Title, in.Body, payload, now, expire, approval.GetApprovalId(), approval.GetProposer(), approval.GetApprover()); e != nil {
 			if !isDuplicateKey(e) {
 				return e

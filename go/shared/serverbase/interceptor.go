@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"google.golang.org/protobuf/encoding/protojson"
+	"os"
 	databasepb "proto/common/database"
+	"strconv"
 	"time"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -25,6 +27,12 @@ const EventInbandFault = "rpc_inband_fault"
 
 // EventInbandUnknownCode 是"业务码超出已知码表"的稳定事件名。
 const EventInbandUnknownCode = "rpc_inband_unknown_code"
+
+// EventSlowRPC 是慢 RPC 告警的稳定事件名（移植自 xuanming-server/pkg/middleware/logging.go）。
+const EventSlowRPC = "rpc_slow"
+
+// DefaultSlowRPCThreshold 是慢 RPC 告警的默认阈值（与 xuanming-server LOG_SLOW_RPC_MS 默认值一致）。
+const DefaultSlowRPCThreshold = 500 * time.Millisecond
 
 // Options 配置 in-band 故障拦截器。零值可用(只是 error_code 分支不判故障)。
 type Options struct {
@@ -52,6 +60,27 @@ type Options struct {
 	// MethodName 把 gRPC 全方法名压成 Prometheus label 用的短名。
 	// 留 nil 用 grpcstats.ShortMethod("/pkg.Svc/M" → "Svc/M")。
 	MethodName func(fullMethod string) string
+
+	// SlowThreshold 慢 RPC WARN 阈值：0 读取环境变量 LOG_SLOW_RPC_MS（缺省 500ms）；负值关闭。
+	SlowThreshold time.Duration
+}
+
+func (o Options) slowThreshold() time.Duration {
+	if o.SlowThreshold < 0 {
+		return 0
+	}
+	if o.SlowThreshold > 0 {
+		return o.SlowThreshold
+	}
+	if raw := os.Getenv("LOG_SLOW_RPC_MS"); raw != "" {
+		if ms, err := strconv.ParseInt(raw, 10, 64); err == nil {
+			if ms <= 0 {
+				return 0
+			}
+			return time.Duration(ms) * time.Millisecond
+		}
+	}
+	return DefaultSlowRPCThreshold
 }
 
 // Classify 按业务码的**出处**选对应码表的定性函数。
@@ -92,6 +121,7 @@ func (o Options) methodName(fullMethod string) string {
 // 除了「写者闸门冻结」和「自愈读不到目录」这两种确定没写的失败(见 retryableWriterFailure),它**不改动响应内容、不吞错、不把业务码翻成 gRPC status**
 // —— 只观测。挂上它对客户端完全无感。
 func UnaryInterceptor(opts Options) grpc.UnaryServerInterceptor {
+	slowThreshold := opts.slowThreshold()
 	return func(
 		ctx context.Context,
 		req any,
@@ -133,6 +163,14 @@ func UnaryInterceptor(opts Options) grpc.UnaryServerInterceptor {
 					logx.Field("code", bc.Code),
 					logx.Field("code_source", bc.Source.String()),
 				)
+			default:
+				if slowThreshold > 0 && elapsed >= slowThreshold {
+					logx.WithContext(ctx).Sloww(EventSlowRPC,
+						logx.Field("method", info.FullMethod),
+						logx.Field("latency_ms", elapsed.Milliseconds()),
+						logx.Field("slow_threshold_ms", slowThreshold.Milliseconds()),
+					)
+				}
 			}
 		}
 

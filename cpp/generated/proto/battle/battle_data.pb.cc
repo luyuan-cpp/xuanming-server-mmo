@@ -7256,11 +7256,11 @@ constexpr TacticalPuzzleSpec::ParseTableT_ TacticalPuzzleSpec::InternalGenerateP
     {
       PROTOBUF_FIELD_OFFSET(TacticalPuzzleSpec, _impl_._has_bits_),
       0, // no _extensions_
-      9, 120,  // max_field_number, fast_idx_mask
+      11, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966784,  // skipmap
+      4294965248,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      9,  // num_field_entries
+      11,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -7307,8 +7307,14 @@ constexpr TacticalPuzzleSpec::ParseTableT_ TacticalPuzzleSpec::InternalGenerateP
       {::_pbi::TcParser::FastMtR1,
        {74, 0, 0,
         PROTOBUF_FIELD_OFFSET(TacticalPuzzleSpec, _impl_.enemies_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // .TournamentLeylineElement leyline_element = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TacticalPuzzleSpec, _impl_.leyline_element_), 9>(),
+       {80, 9, 0,
+        PROTOBUF_FIELD_OFFSET(TacticalPuzzleSpec, _impl_.leyline_element_)}},
+      // uint32 banned_skill_id = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TacticalPuzzleSpec, _impl_.banned_skill_id_), 10>(),
+       {88, 10, 0,
+        PROTOBUF_FIELD_OFFSET(TacticalPuzzleSpec, _impl_.banned_skill_id_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -7334,6 +7340,10 @@ constexpr TacticalPuzzleSpec::ParseTableT_ TacticalPuzzleSpec::InternalGenerateP
       {PROTOBUF_FIELD_OFFSET(TacticalPuzzleSpec, _impl_.player_initial_debuff_kind_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // repeated .TacticalPuzzleEnemySpec enemies = 9;
       {PROTOBUF_FIELD_OFFSET(TacticalPuzzleSpec, _impl_.enemies_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .TournamentLeylineElement leyline_element = 10;
+      {PROTOBUF_FIELD_OFFSET(TacticalPuzzleSpec, _impl_.leyline_element_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // uint32 banned_skill_id = 11;
+      {PROTOBUF_FIELD_OFFSET(TacticalPuzzleSpec, _impl_.banned_skill_id_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -7364,7 +7374,9 @@ inline constexpr TacticalPuzzleSpec::Impl_::Impl_(
         player_initial_hp_pct_{0u},
         player_initial_mp_pct_{0u},
         player_initial_shield_pct_{0u},
-        player_initial_debuff_kind_{0u} {}
+        player_initial_debuff_kind_{0u},
+        leyline_element_{static_cast< ::TournamentLeylineElement >(0)},
+        banned_skill_id_{0u} {}
 
 template <typename>
 constexpr TacticalPuzzleSpec::TacticalPuzzleSpec(::_pbi::ConstantInitialized,
@@ -11806,7 +11818,7 @@ const ::uint32_t
         4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::TacticalPuzzleSpec, _impl_._has_bits_),
-        12, // hasbit index offset
+        14, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::TacticalPuzzleSpec, _impl_.round_limit_),
         PROTOBUF_FIELD_OFFSET(::TacticalPuzzleSpec, _impl_.character_preset_id_),
         PROTOBUF_FIELD_OFFSET(::TacticalPuzzleSpec, _impl_.pet_preset_id_),
@@ -11816,6 +11828,8 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::TacticalPuzzleSpec, _impl_.player_initial_shield_pct_),
         PROTOBUF_FIELD_OFFSET(::TacticalPuzzleSpec, _impl_.player_initial_debuff_kind_),
         PROTOBUF_FIELD_OFFSET(::TacticalPuzzleSpec, _impl_.enemies_),
+        PROTOBUF_FIELD_OFFSET(::TacticalPuzzleSpec, _impl_.leyline_element_),
+        PROTOBUF_FIELD_OFFSET(::TacticalPuzzleSpec, _impl_.banned_skill_id_),
         1,
         2,
         3,
@@ -11825,6 +11839,8 @@ const ::uint32_t
         7,
         8,
         0,
+        9,
+        10,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::TacticalPuzzleBattleContext, _impl_._has_bits_),
         10, // hasbit index offset
@@ -11895,7 +11911,7 @@ static const ::_pbi::MigrationSchema
         {1060, sizeof(::JianghuDuelBattleContext)},
         {1087, sizeof(::TacticalPuzzleEnemySpec)},
         {1100, sizeof(::TacticalPuzzleSpec)},
-        {1121, sizeof(::TacticalPuzzleBattleContext)},
+        {1125, sizeof(::TacticalPuzzleBattleContext)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -12312,79 +12328,81 @@ const char descriptor_table_protodef_proto_2fbattle_2fbattle_5fdata_2eproto[] AB
     "\020monster_table_id\030\001 \001(\r\022\026\n\016initial_hp_pc"
     "t\030\002 \001(\r\022\032\n\022initial_shield_pct\030\003 \001(\r\022\027\n\017s"
     "peed_delta_pct\030\004 \001(\005\022\031\n\021initial_buff_kin"
-    "d\030\005 \001(\r\"\243\002\n\022TacticalPuzzleSpec\022\023\n\013round_"
+    "d\030\005 \001(\r\"\360\002\n\022TacticalPuzzleSpec\022\023\n\013round_"
     "limit\030\001 \001(\r\022\033\n\023character_preset_id\030\002 \001(\r"
     "\022\025\n\rpet_preset_id\030\003 \001(\r\022\024\n\014formation_id\030"
     "\004 \001(\r\022\035\n\025player_initial_hp_pct\030\005 \001(\r\022\035\n\025"
     "player_initial_mp_pct\030\006 \001(\r\022!\n\031player_in"
     "itial_shield_pct\030\007 \001(\r\022\"\n\032player_initial"
     "_debuff_kind\030\010 \001(\r\022)\n\007enemies\030\t \003(\0132\030.Ta"
-    "cticalPuzzleEnemySpec\"\311\001\n\033TacticalPuzzle"
-    "BattleContext\022\021\n\tpuzzle_id\030\001 \001(\004\022\025\n\rspec"
-    "_revision\030\002 \001(\r\022\030\n\020is_author_verify\030\003 \001("
-    "\010\022\024\n\014puzzle_title\030\004 \001(\t\022\030\n\020author_player"
-    "_id\030\005 \001(\004\022\023\n\013author_name\030\006 \001(\t\022!\n\004spec\030\007"
-    " \001(\0132\023.TacticalPuzzleSpec*\206\001\n\020eBattleAct"
-    "orType\022\032\n\026BATTLE_ACTOR_TYPE_NONE\020\000\022\034\n\030BA"
-    "TTLE_ACTOR_TYPE_PLAYER\020\001\022\035\n\031BATTLE_ACTOR"
-    "_TYPE_MONSTER\020\002\022\031\n\025BATTLE_ACTOR_TYPE_PET"
-    "\020\003*\377\001\n\021eBattleActionType\022\026\n\022BATTLE_ACTIO"
-    "N_NONE\020\000\022\030\n\024BATTLE_ACTION_ATTACK\020\001\022\027\n\023BA"
-    "TTLE_ACTION_SKILL\020\002\022\030\n\024BATTLE_ACTION_DEF"
-    "END\020\003\022\026\n\022BATTLE_ACTION_ITEM\020\004\022\026\n\022BATTLE_"
-    "ACTION_FLEE\020\005\022\031\n\025BATTLE_ACTION_CAPTURE\020\006"
-    "\022\034\n\030BATTLE_ACTION_RECALL_PET\020\007\022\034\n\030BATTLE"
-    "_ACTION_SUMMON_PET\020\010*\235\005\n\020eBattleEventTyp"
-    "e\022\025\n\021BATTLE_EVENT_NONE\020\000\022\027\n\023BATTLE_EVENT"
-    "_ATTACK\020\001\022\026\n\022BATTLE_EVENT_SKILL\020\002\022\027\n\023BAT"
-    "TLE_EVENT_DAMAGE\020\003\022\025\n\021BATTLE_EVENT_HEAL\020"
-    "\004\022\031\n\025BATTLE_EVENT_BUFF_ADD\020\005\022\034\n\030BATTLE_E"
-    "VENT_BUFF_REMOVE\020\006\022\032\n\026BATTLE_EVENT_BUFF_"
-    "TICK\020\007\022\026\n\022BATTLE_EVENT_DEATH\020\010\022\027\n\023BATTLE"
-    "_EVENT_DEFEND\020\t\022\025\n\021BATTLE_EVENT_ITEM\020\n\022\025"
-    "\n\021BATTLE_EVENT_FLEE\020\013\022\025\n\021BATTLE_EVENT_MI"
-    "SS\020\014\022\026\n\022BATTLE_EVENT_BLOCK\020\r\022\025\n\021BATTLE_E"
-    "VENT_MANA\020\016\022\027\n\023BATTLE_EVENT_RESIST\020\017\022\030\n\024"
-    "BATTLE_EVENT_CAPTURE\020\020\022\027\n\023BATTLE_EVENT_R"
-    "EVIVE\020\021\022\033\n\027BATTLE_EVENT_MAX_HEALTH\020\022\022\034\n\030"
-    "BATTLE_EVENT_PET_RETREAT\020\023\022\027\n\023BATTLE_EVE"
-    "NT_SHIELD\020\024\022\031\n\025BATTLE_EVENT_ARTIFACT\020\025\022\036"
-    "\n\032BATTLE_EVENT_BOSS_MECHANIC\020\026\022\037\n\033BATTLE"
-    "_EVENT_WUXING_SYNERGY\020\027\022\033\n\027BATTLE_EVENT_"
-    "SUMMON_PET\020\030*\234\001\n\016eBattleHitKind\022\025\n\021BATTL"
-    "E_HIT_NORMAL\020\000\022\024\n\020BATTLE_HIT_COMBO\020\001\022\026\n\022"
-    "BATTLE_HIT_COUNTER\020\002\022\026\n\022BATTLE_HIT_REFLE"
-    "CT\020\003\022\026\n\022BATTLE_HIT_PURSUIT\020\004\022\025\n\021BATTLE_H"
-    "IT_MIRROR\020\005*\216\001\n\016BattlePingKind\022\033\n\027BATTLE"
-    "_PING_UNSPECIFIED\020\000\022\025\n\021BATTLE_PING_FOCUS"
-    "\020\001\022\027\n\023BATTLE_PING_CONTROL\020\002\022\027\n\023BATTLE_PI"
-    "NG_PROTECT\020\003\022\026\n\022BATTLE_PING_DISPEL\020\004*\347\001\n"
-    "\023BattleHighlightKind\022\031\n\025BATTLE_HIGHLIGHT"
-    "_NONE\020\000\022\"\n\036BATTLE_HIGHLIGHT_PRIMARY_FOCU"
-    "S\020\001\022%\n!BATTLE_HIGHLIGHT_TACTICAL_CONTROL"
-    "\020\002\022#\n\037BATTLE_HIGHLIGHT_SAVIOR_SUPPORT\020\003\022"
-    "\037\n\033BATTLE_HIGHLIGHT_IRON_GUARD\020\004\022$\n BATT"
-    "LE_HIGHLIGHT_CLUTCH_COMEBACK\020\005*\234\001\n\016eBatt"
-    "leOutcome\022\032\n\026BATTLE_OUTCOME_ONGOING\020\000\022\035\n"
-    "\031BATTLE_OUTCOME_SIDE_A_WIN\020\001\022\035\n\031BATTLE_O"
-    "UTCOME_SIDE_B_WIN\020\002\022\027\n\023BATTLE_OUTCOME_DR"
-    "AW\020\003\022\027\n\023BATTLE_OUTCOME_VOID\020\004*\247\001\n\023eBattl"
-    "eActivityKind\022\035\n\031BATTLE_ACTIVITY_KIND_NO"
-    "NE\020\000\022$\n BATTLE_ACTIVITY_KIND_GUILD_TRIAL"
-    "\020\001\022\'\n#BATTLE_ACTIVITY_KIND_FESTIVAL_BEAS"
-    "T\020\002\022\"\n\036BATTLE_ACTIVITY_KIND_GUILD_WAR\020\003*"
-    "{\n\023eSpectateVisibility\022#\n\037SPECTATE_VISIB"
-    "ILITY_UNSPECIFIED\020\000\022\037\n\033SPECTATE_VISIBILI"
-    "TY_PRIVATE\020\001\022\036\n\032SPECTATE_VISIBILITY_PUBL"
-    "IC\020\002*_\n\reSpectateTier\022\030\n\024SPECTATE_TIER_D"
-    "IRECT\020\000\022\027\n\023SPECTATE_TIER_RELAY\020\001\022\033\n\027SPEC"
-    "TATE_TIER_BROADCAST\020\002*\322\001\n\030TournamentLeyl"
-    "ineElement\022\"\n\036TOURNAMENT_LEYLINE_UNSPECI"
-    "FIED\020\000\022\034\n\030TOURNAMENT_LEYLINE_METAL\020\001\022\033\n\027"
-    "TOURNAMENT_LEYLINE_WOOD\020\002\022\034\n\030TOURNAMENT_"
-    "LEYLINE_WATER\020\003\022\033\n\027TOURNAMENT_LEYLINE_FI"
-    "RE\020\004\022\034\n\030TOURNAMENT_LEYLINE_EARTH\020\005B\010Z\006ba"
-    "ttleb\006proto3"
+    "cticalPuzzleEnemySpec\0222\n\017leyline_element"
+    "\030\n \001(\0162\031.TournamentLeylineElement\022\027\n\017ban"
+    "ned_skill_id\030\013 \001(\r\"\311\001\n\033TacticalPuzzleBat"
+    "tleContext\022\021\n\tpuzzle_id\030\001 \001(\004\022\025\n\rspec_re"
+    "vision\030\002 \001(\r\022\030\n\020is_author_verify\030\003 \001(\010\022\024"
+    "\n\014puzzle_title\030\004 \001(\t\022\030\n\020author_player_id"
+    "\030\005 \001(\004\022\023\n\013author_name\030\006 \001(\t\022!\n\004spec\030\007 \001("
+    "\0132\023.TacticalPuzzleSpec*\206\001\n\020eBattleActorT"
+    "ype\022\032\n\026BATTLE_ACTOR_TYPE_NONE\020\000\022\034\n\030BATTL"
+    "E_ACTOR_TYPE_PLAYER\020\001\022\035\n\031BATTLE_ACTOR_TY"
+    "PE_MONSTER\020\002\022\031\n\025BATTLE_ACTOR_TYPE_PET\020\003*"
+    "\377\001\n\021eBattleActionType\022\026\n\022BATTLE_ACTION_N"
+    "ONE\020\000\022\030\n\024BATTLE_ACTION_ATTACK\020\001\022\027\n\023BATTL"
+    "E_ACTION_SKILL\020\002\022\030\n\024BATTLE_ACTION_DEFEND"
+    "\020\003\022\026\n\022BATTLE_ACTION_ITEM\020\004\022\026\n\022BATTLE_ACT"
+    "ION_FLEE\020\005\022\031\n\025BATTLE_ACTION_CAPTURE\020\006\022\034\n"
+    "\030BATTLE_ACTION_RECALL_PET\020\007\022\034\n\030BATTLE_AC"
+    "TION_SUMMON_PET\020\010*\235\005\n\020eBattleEventType\022\025"
+    "\n\021BATTLE_EVENT_NONE\020\000\022\027\n\023BATTLE_EVENT_AT"
+    "TACK\020\001\022\026\n\022BATTLE_EVENT_SKILL\020\002\022\027\n\023BATTLE"
+    "_EVENT_DAMAGE\020\003\022\025\n\021BATTLE_EVENT_HEAL\020\004\022\031"
+    "\n\025BATTLE_EVENT_BUFF_ADD\020\005\022\034\n\030BATTLE_EVEN"
+    "T_BUFF_REMOVE\020\006\022\032\n\026BATTLE_EVENT_BUFF_TIC"
+    "K\020\007\022\026\n\022BATTLE_EVENT_DEATH\020\010\022\027\n\023BATTLE_EV"
+    "ENT_DEFEND\020\t\022\025\n\021BATTLE_EVENT_ITEM\020\n\022\025\n\021B"
+    "ATTLE_EVENT_FLEE\020\013\022\025\n\021BATTLE_EVENT_MISS\020"
+    "\014\022\026\n\022BATTLE_EVENT_BLOCK\020\r\022\025\n\021BATTLE_EVEN"
+    "T_MANA\020\016\022\027\n\023BATTLE_EVENT_RESIST\020\017\022\030\n\024BAT"
+    "TLE_EVENT_CAPTURE\020\020\022\027\n\023BATTLE_EVENT_REVI"
+    "VE\020\021\022\033\n\027BATTLE_EVENT_MAX_HEALTH\020\022\022\034\n\030BAT"
+    "TLE_EVENT_PET_RETREAT\020\023\022\027\n\023BATTLE_EVENT_"
+    "SHIELD\020\024\022\031\n\025BATTLE_EVENT_ARTIFACT\020\025\022\036\n\032B"
+    "ATTLE_EVENT_BOSS_MECHANIC\020\026\022\037\n\033BATTLE_EV"
+    "ENT_WUXING_SYNERGY\020\027\022\033\n\027BATTLE_EVENT_SUM"
+    "MON_PET\020\030*\234\001\n\016eBattleHitKind\022\025\n\021BATTLE_H"
+    "IT_NORMAL\020\000\022\024\n\020BATTLE_HIT_COMBO\020\001\022\026\n\022BAT"
+    "TLE_HIT_COUNTER\020\002\022\026\n\022BATTLE_HIT_REFLECT\020"
+    "\003\022\026\n\022BATTLE_HIT_PURSUIT\020\004\022\025\n\021BATTLE_HIT_"
+    "MIRROR\020\005*\216\001\n\016BattlePingKind\022\033\n\027BATTLE_PI"
+    "NG_UNSPECIFIED\020\000\022\025\n\021BATTLE_PING_FOCUS\020\001\022"
+    "\027\n\023BATTLE_PING_CONTROL\020\002\022\027\n\023BATTLE_PING_"
+    "PROTECT\020\003\022\026\n\022BATTLE_PING_DISPEL\020\004*\347\001\n\023Ba"
+    "ttleHighlightKind\022\031\n\025BATTLE_HIGHLIGHT_NO"
+    "NE\020\000\022\"\n\036BATTLE_HIGHLIGHT_PRIMARY_FOCUS\020\001"
+    "\022%\n!BATTLE_HIGHLIGHT_TACTICAL_CONTROL\020\002\022"
+    "#\n\037BATTLE_HIGHLIGHT_SAVIOR_SUPPORT\020\003\022\037\n\033"
+    "BATTLE_HIGHLIGHT_IRON_GUARD\020\004\022$\n BATTLE_"
+    "HIGHLIGHT_CLUTCH_COMEBACK\020\005*\234\001\n\016eBattleO"
+    "utcome\022\032\n\026BATTLE_OUTCOME_ONGOING\020\000\022\035\n\031BA"
+    "TTLE_OUTCOME_SIDE_A_WIN\020\001\022\035\n\031BATTLE_OUTC"
+    "OME_SIDE_B_WIN\020\002\022\027\n\023BATTLE_OUTCOME_DRAW\020"
+    "\003\022\027\n\023BATTLE_OUTCOME_VOID\020\004*\247\001\n\023eBattleAc"
+    "tivityKind\022\035\n\031BATTLE_ACTIVITY_KIND_NONE\020"
+    "\000\022$\n BATTLE_ACTIVITY_KIND_GUILD_TRIAL\020\001\022"
+    "\'\n#BATTLE_ACTIVITY_KIND_FESTIVAL_BEAST\020\002"
+    "\022\"\n\036BATTLE_ACTIVITY_KIND_GUILD_WAR\020\003*{\n\023"
+    "eSpectateVisibility\022#\n\037SPECTATE_VISIBILI"
+    "TY_UNSPECIFIED\020\000\022\037\n\033SPECTATE_VISIBILITY_"
+    "PRIVATE\020\001\022\036\n\032SPECTATE_VISIBILITY_PUBLIC\020"
+    "\002*_\n\reSpectateTier\022\030\n\024SPECTATE_TIER_DIRE"
+    "CT\020\000\022\027\n\023SPECTATE_TIER_RELAY\020\001\022\033\n\027SPECTAT"
+    "E_TIER_BROADCAST\020\002*\322\001\n\030TournamentLeyline"
+    "Element\022\"\n\036TOURNAMENT_LEYLINE_UNSPECIFIE"
+    "D\020\000\022\034\n\030TOURNAMENT_LEYLINE_METAL\020\001\022\033\n\027TOU"
+    "RNAMENT_LEYLINE_WOOD\020\002\022\034\n\030TOURNAMENT_LEY"
+    "LINE_WATER\020\003\022\033\n\027TOURNAMENT_LEYLINE_FIRE\020"
+    "\004\022\034\n\030TOURNAMENT_LEYLINE_EARTH\020\005B\010Z\006battl"
+    "eb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto_deps[5] = {
@@ -12398,7 +12416,7 @@ static ::absl::once_flag descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto = {
     false,
     false,
-    17292,
+    17369,
     descriptor_table_protodef_proto_2fbattle_2fbattle_5fdata_2eproto,
     "proto/battle/battle_data.proto",
     &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto_once,
@@ -32188,9 +32206,9 @@ TacticalPuzzleSpec::TacticalPuzzleSpec(
                offsetof(Impl_, round_limit_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, round_limit_),
-           offsetof(Impl_, player_initial_debuff_kind_) -
+           offsetof(Impl_, banned_skill_id_) -
                offsetof(Impl_, round_limit_) +
-               sizeof(Impl_::player_initial_debuff_kind_));
+               sizeof(Impl_::banned_skill_id_));
 
   // @@protoc_insertion_point(copy_constructor:TacticalPuzzleSpec)
 }
@@ -32209,9 +32227,9 @@ inline void TacticalPuzzleSpec::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, round_limit_),
            0,
-           offsetof(Impl_, player_initial_debuff_kind_) -
+           offsetof(Impl_, banned_skill_id_) -
                offsetof(Impl_, round_limit_) +
-               sizeof(Impl_::player_initial_debuff_kind_));
+               sizeof(Impl_::banned_skill_id_));
 }
 TacticalPuzzleSpec::~TacticalPuzzleSpec() {
   // @@protoc_insertion_point(destructor:TacticalPuzzleSpec)
@@ -32269,7 +32287,11 @@ PROTOBUF_NOINLINE void TacticalPuzzleSpec::Clear() {
         reinterpret_cast<char*>(&_impl_.player_initial_shield_pct_) -
         reinterpret_cast<char*>(&_impl_.round_limit_)) + sizeof(_impl_.player_initial_shield_pct_));
   }
-  _impl_.player_initial_debuff_kind_ = 0u;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    ::memset(&_impl_.player_initial_debuff_kind_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.banned_skill_id_) -
+        reinterpret_cast<char*>(&_impl_.player_initial_debuff_kind_)) + sizeof(_impl_.banned_skill_id_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -32378,6 +32400,24 @@ PROTOBUF_NOINLINE void TacticalPuzzleSpec::Clear() {
     }
   }
 
+  // .TournamentLeylineElement leyline_element = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_leyline_element() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          10, this_._internal_leyline_element(), target);
+    }
+  }
+
+  // uint32 banned_skill_id = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_banned_skill_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          11, this_._internal_banned_skill_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -32461,12 +32501,26 @@ PROTOBUF_NOINLINE void TacticalPuzzleSpec::Clear() {
       }
     }
   }
-   {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     // uint32 player_initial_debuff_kind = 8;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_player_initial_debuff_kind() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_player_initial_debuff_kind());
+      }
+    }
+    // .TournamentLeylineElement leyline_element = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_leyline_element() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_leyline_element());
+      }
+    }
+    // uint32 banned_skill_id = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_banned_skill_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_banned_skill_id());
       }
     }
   }
@@ -32530,9 +32584,21 @@ void TacticalPuzzleSpec::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-    if (from._internal_player_initial_debuff_kind() != 0) {
-      _this->_impl_.player_initial_debuff_kind_ = from._impl_.player_initial_debuff_kind_;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_player_initial_debuff_kind() != 0) {
+        _this->_impl_.player_initial_debuff_kind_ = from._impl_.player_initial_debuff_kind_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_leyline_element() != 0) {
+        _this->_impl_.leyline_element_ = from._impl_.leyline_element_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_banned_skill_id() != 0) {
+        _this->_impl_.banned_skill_id_ = from._impl_.banned_skill_id_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -32554,8 +32620,8 @@ void TacticalPuzzleSpec::InternalSwap(TacticalPuzzleSpec* PROTOBUF_RESTRICT PROT
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.enemies_.InternalSwap(&other->_impl_.enemies_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(TacticalPuzzleSpec, _impl_.player_initial_debuff_kind_)
-      + sizeof(TacticalPuzzleSpec::_impl_.player_initial_debuff_kind_)
+      PROTOBUF_FIELD_OFFSET(TacticalPuzzleSpec, _impl_.banned_skill_id_)
+      + sizeof(TacticalPuzzleSpec::_impl_.banned_skill_id_)
       - PROTOBUF_FIELD_OFFSET(TacticalPuzzleSpec, _impl_.round_limit_)>(
           reinterpret_cast<char*>(&_impl_.round_limit_),
           reinterpret_cast<char*>(&other->_impl_.round_limit_));

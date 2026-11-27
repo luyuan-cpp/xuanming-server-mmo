@@ -8209,3 +8209,40 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
 - 契约测试 `k8s_gm_admin_deploy_contract.tests.ps1` 补了挂载与启动参数的断言;`deploy/k8s/README.md`「GM 后台 gm-admin」与 `java/gm_admin/README.md` 同步。
 - 核对过:本仓只有 `main` 一个分支、没有 stash;`build/`、`run/` 下的三个工作树是构建与验证快照(分离 HEAD),不是工作分支。本线的改动都在 `D:/luyuan/xuanming-server-mmo-cpp` 的 main 工作区,一部分已被别的会话的快照提交 `6b4ae7852` 带进 main。
 - 验证命令同「批 7 剩余」那条;第 4 步构建镜像时会多核这两条协议的时间先后。
+
+## 2026-11-27 Claude：数据覆写审计 r2 剩余工作合成一份新交接单，新电脑照它做完即删（只改文档）
+
+- 负责人要回收旧电脑，要求把 r2 线的待做写进一份新交接单，新电脑做完直接删。新单是 `docs/handoff/data-overwrite-audit-r2-remaining-handoff-20261127.md`，内容依次是：现状与额度、开工核对、复核（附 diff 基线）、写代码、文档、交 Gemini、第 5 轮查找、做事要点、待负责人定、收尾删单。写代码一节含悬赏求书批 C/B、guild 见证补比 attempts、各批顺带发现、选角页用例；做事要点含旧电脑 Claude 记忆里的经验与定案。
+- 入口都改为指向新单：`docs/handoff/README.md` 第 3 节第 1 行、第 1 节第 3 条与第 5 节，第 4 轮交接单 §0a，r2 验证交接单开头，r2 文档 §1「仍开着」。
+- 第 4 轮交接单 §0a 第 0、1 步按 11-27 的 git 核对改正：当时标「未提交」的测试与设计稿，后来都随快照提交（最晚 `bcea63be6`）进了 main，origin/main 是 `6b4ae7852`；diff 基线的终点改为 HEAD。
+- 没改代码，没跑构建测试，没提交。
+
+## 2026-11-27 Claude：换电脑总入口改成单独一份新交接单 `new-computer-start-here-handoff-20261127.md`，旧电脑记忆要点写进去（只改文档）
+
+- **起因**：负责人定不搬 Claude 记忆、新电脑上不做任何导入，改写一份新交接单把事情写清楚，新电脑做完直接删掉。
+- **改了什么**：
+  - 上一条的 `docs/handoff/README.md` 已删，内容并进新单。新单 §7 是旧电脑记忆里要带走的要点（跟负责人协作、工具与环境的坑、已定案别改回去），§8 是记忆里记着、交接单里没写的待做（11-27 快照，没逐条核对）。
+  - 选角页回选上限的用例从 review-suggestions 交接单 §8 整节移到新单 §3.1；review-suggestions 开头总状态、第 4 轮单 §0a 的两处指向同步改。
+  - 收尾规则写在新单开头：某份交接单的事全部做完就删那份，并去掉索引里那一行；本单最后删。
+- **文档索引**：`gen_docs_index.py --check` 在改之前就是红的（别的会话的改动），按约定没跑生成，手工在 `docs/README.md` 交接说明一节登记了新单一行。
+- 只跑了只读的 git 命令与 `--check`，没有编译、测试。Java 不涉及。
+
+## 2026-11-27 Claude：补上一条——删 README 时带掉了 r2 会话的三处改动，已在新总入口重做（只改文档）
+
+- 删 `docs/handoff/README.md` 时它已被快照提交 `3d715db97` 收进 HEAD，之后会话「数据覆写审计换视角查找第 2 轮」又在里面改了三处（§1 第 3 条、§3 第 1 行、§5 改指它新写的 `data-overwrite-audit-r2-remaining-handoff-20261127.md`），这三处随文件一起删了。已在 `new-computer-start-here-handoff-20261127.md` 的同样位置重做，节号不变。
+- r2 剩余单里指 README 的 7 处改指新总入口；选角页回选上限的用例，r2 剩余单 §3.4 与新总入口 §3.1 是同一件事，写明只做一次、两边都标状态。
+- 第 4 轮单 §0a 留两行指向：r2 会话的「入口改为 r2 剩余单」在上，总入口指向在下。已发消息告知 r2 会话以后改新文件、别再建 README。
+- `gen_docs_index.py --check` 现在是最新。没有编译、测试。
+
+## 2026-11-27 Claude:后台管理员身份与双人复核·收尾补两处——管理发件的批准记录记到发件判重收据上、table-bundle 缺省操作人(未生成、未编译、未运行,待 Gemini 验证;Java 不涉及)
+
+- **为什么现在补**:两处原来记成「残余」,按负责人「以后修的现在修」当场改掉。
+  1. 个人邮件行到期清理、注销清角色时会被删,行上的批准记录跟着没了。发件判重收据 `mail_request_receipt` 不清理,`MailRequestReceiptRecord` 加 `approval_id = 7`、`proposer = 8`、`approver = 9`,与收据同一条 INSERT 写入(`go/mail/internal/data/repo.go`);不带批准记录的系统发件为空串。列由 `mail -migrate` 补齐。
+  2. 网关的机器口令只能以 `table-bundle` 写,`go/table_sync/cmd/table-bundle` 四个子命令的 `-operator` 缺省值改成 `table-bundle`(常量 `tableBundleOperator`);用人用口令时要传自己的名字。
+- **没改的(有意接受)**:rank 判重键 (榜, 代, 请求号) 不含调用方。后台批准号是 SecureRandom 的 63 位随机数,和 match 摘角色用的玩家号在同一榜同一代撞上的概率与 UUID 撞号同级,按惯例接受;`remove.go` 的注释改成这句,设计稿 §11.2 同步。
+- **文档**:设计稿 §11.2、§11.3;`docs/design/mail-system.md` 11-26 一节(长期留痕、部署守卫已由批 7 做)。
+- **交 Gemini**(在批 5、批 7 剩余各条的命令之后;要改代码就保留首错原文停下,交回 Claude):
+  1. 协议生成同批 5 第 1 步(`mail_table.proto` 有改动)。
+  2. `go/mail`:`go build ./... && go vet ./... && go test ./... -count=1`;真库时 `mail -migrate` 之后 `mail_request_receipt` 有三列新列。
+  3. `go/table_sync`:`go build ./... && go vet ./cmd/table-bundle/... && go test ./cmd/table-bundle/... -count=1`。
+  4. `go/rank`:`go build ./...`(只改注释)。

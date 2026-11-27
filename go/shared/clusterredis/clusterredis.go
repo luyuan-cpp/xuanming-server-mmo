@@ -26,7 +26,13 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/redis/go-redis/v9/maintnotifications"
 )
+
+// DefaultMaintNotificationsMode disables go-redis v9's Redis Cloud maintenance handshake
+// probe by default, preventing noisy "maintnotifications disabled due to handshake error"
+// logs against self-hosted Redis 7.x instances (ported from xuanming-server/pkg/redisx).
+const DefaultMaintNotificationsMode = maintnotifications.ModeDisabled
 
 // 缺省值与上界。上界防止配置笔误把连接数或超时放大到失控。
 // 连接池上界须容纳 scene_manager 铸造通道按 Little 定律推导的 130 条,部署连接总账已按此值计入 PlayerFixed。
@@ -73,6 +79,9 @@ type Config struct {
 	// DisableContextTimeout:true = 不用调用方 ctx 的截止时间约束套接字读写(go-redis 缺省行为)。
 	// 缺省 false(即开启):player_inbox 500ms、guild 2s 这类调用预算依赖 ctx 截止约束读写。
 	DisableContextTimeout bool `json:",optional"`
+	// MaintNotifications controls go-redis v9 maintenance notifications ("disabled"/"auto"/"enabled");
+	// empty defaults to DefaultMaintNotificationsMode ("disabled").
+	MaintNotifications string `json:",optional"`
 }
 
 // Validate 在构造客户端前校验配置;错误文本不含口令。
@@ -155,7 +164,17 @@ func (c Config) OrDefault(fallback Config) Config {
 	if c.DisableContextTimeout {
 		fallback.DisableContextTimeout = true
 	}
+	if c.MaintNotifications != "" {
+		fallback.MaintNotifications = c.MaintNotifications
+	}
 	return fallback
+}
+
+func resolveMaintMode(s string) maintnotifications.Mode {
+	if m := maintnotifications.Mode(s); m.IsValid() {
+		return m
+	}
+	return DefaultMaintNotificationsMode
 }
 
 // Describe 是配置的可读描述(不含口令),供启动日志使用。
@@ -232,6 +251,9 @@ func newClusterClient(c Config) *redis.ClusterClient {
 		MinIdleConns:          0,
 		ConnMaxIdleTime:       time.Duration(orDefault(c.ConnMaxIdleSeconds, DefaultConnMaxIdleSeconds)) * time.Second,
 		DisableIdentity:       true,
+		MaintNotificationsConfig: &maintnotifications.Config{
+			Mode: resolveMaintMode(c.MaintNotifications),
+		},
 	})
 	cc.OnNewNode(func(node *redis.Client) { node.AddHook(noReplayHook{}) })
 	return cc
@@ -258,5 +280,8 @@ func nodeOptions(c Config, addr string) *redis.Options {
 		MinIdleConns:          0,
 		ConnMaxIdleTime:       time.Duration(orDefault(c.ConnMaxIdleSeconds, DefaultConnMaxIdleSeconds)) * time.Second,
 		DisableIdentity:       true,
+		MaintNotificationsConfig: &maintnotifications.Config{
+			Mode: resolveMaintMode(c.MaintNotifications),
+		},
 	}
 }

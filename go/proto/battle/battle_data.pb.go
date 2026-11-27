@@ -5915,6 +5915,8 @@ type TacticalPuzzleSpec struct {
 	PlayerInitialShieldPct  uint32                     `protobuf:"varint,7,opt,name=player_initial_shield_pct,json=playerInitialShieldPct,proto3" json:"player_initial_shield_pct,omitempty"`    // 我方开局护盾百分比（0..50，对应 Buff 100400）
 	PlayerInitialDebuffKind uint32                     `protobuf:"varint,8,opt,name=player_initial_debuff_kind,json=playerInitialDebuffKind,proto3" json:"player_initial_debuff_kind,omitempty"` // 0=无 1=卸力(100031) 2=破甲(130051) 3=玄毒(100190)
 	Enemies                 []*TacticalPuzzleEnemySpec `protobuf:"bytes,9,rep,name=enemies,proto3" json:"enemies,omitempty"`                                                                     // 1..3 名敌方单位
+	LeylineElement          TournamentLeylineElement   `protobuf:"varint,10,opt,name=leyline_element,json=leylineElement,proto3,enum=TournamentLeylineElement" json:"leyline_element,omitempty"` // V1.5: 可选场上五行灵脉阵眼（0=无，1金/2木/3水/4火/5土）
+	BannedSkillId           uint32                     `protobuf:"varint,11,opt,name=banned_skill_id,json=bannedSkillId,proto3" json:"banned_skill_id,omitempty"`                                // V1.5: 可选本局禁用 1 招所选人宠预设携带技能（0=不禁用）
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -6010,6 +6012,20 @@ func (x *TacticalPuzzleSpec) GetEnemies() []*TacticalPuzzleEnemySpec {
 		return x.Enemies
 	}
 	return nil
+}
+
+func (x *TacticalPuzzleSpec) GetLeylineElement() TournamentLeylineElement {
+	if x != nil {
+		return x.LeylineElement
+	}
+	return TournamentLeylineElement_TOURNAMENT_LEYLINE_UNSPECIFIED
+}
+
+func (x *TacticalPuzzleSpec) GetBannedSkillId() uint32 {
+	if x != nil {
+		return x.BannedSkillId
+	}
+	return 0
 }
 
 type TacticalPuzzleBattleContext struct {
@@ -6702,7 +6718,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x0einitial_hp_pct\x18\x02 \x01(\rR\finitialHpPct\x12,\n" +
 	"\x12initial_shield_pct\x18\x03 \x01(\rR\x10initialShieldPct\x12&\n" +
 	"\x0fspeed_delta_pct\x18\x04 \x01(\x05R\rspeedDeltaPct\x12*\n" +
-	"\x11initial_buff_kind\x18\x05 \x01(\rR\x0finitialBuffKind\"\xbe\x03\n" +
+	"\x11initial_buff_kind\x18\x05 \x01(\rR\x0finitialBuffKind\"\xaa\x04\n" +
 	"\x12TacticalPuzzleSpec\x12\x1f\n" +
 	"\vround_limit\x18\x01 \x01(\rR\n" +
 	"roundLimit\x12.\n" +
@@ -6713,7 +6729,10 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x15player_initial_mp_pct\x18\x06 \x01(\rR\x12playerInitialMpPct\x129\n" +
 	"\x19player_initial_shield_pct\x18\a \x01(\rR\x16playerInitialShieldPct\x12;\n" +
 	"\x1aplayer_initial_debuff_kind\x18\b \x01(\rR\x17playerInitialDebuffKind\x122\n" +
-	"\aenemies\x18\t \x03(\v2\x18.TacticalPuzzleEnemySpecR\aenemies\"\xa0\x02\n" +
+	"\aenemies\x18\t \x03(\v2\x18.TacticalPuzzleEnemySpecR\aenemies\x12B\n" +
+	"\x0fleyline_element\x18\n" +
+	" \x01(\x0e2\x19.TournamentLeylineElementR\x0eleylineElement\x12&\n" +
+	"\x0fbanned_skill_id\x18\v \x01(\rR\rbannedSkillId\"\xa0\x02\n" +
 	"\x1bTacticalPuzzleBattleContext\x12\x1b\n" +
 	"\tpuzzle_id\x18\x01 \x01(\x04R\bpuzzleId\x12#\n" +
 	"\rspec_revision\x18\x02 \x01(\rR\fspecRevision\x12(\n" +
@@ -6958,12 +6977,13 @@ var file_proto_battle_battle_data_proto_depIdxs = []int32{
 	10, // 59: TournamentBattleContext.leyline_element:type_name -> TournamentLeylineElement
 	10, // 60: WuxingTowerBattleContext.leyline_element:type_name -> TournamentLeylineElement
 	49, // 61: TacticalPuzzleSpec.enemies:type_name -> TacticalPuzzleEnemySpec
-	50, // 62: TacticalPuzzleBattleContext.spec:type_name -> TacticalPuzzleSpec
-	63, // [63:63] is the sub-list for method output_type
-	63, // [63:63] is the sub-list for method input_type
-	63, // [63:63] is the sub-list for extension type_name
-	63, // [63:63] is the sub-list for extension extendee
-	0,  // [0:63] is the sub-list for field type_name
+	10, // 62: TacticalPuzzleSpec.leyline_element:type_name -> TournamentLeylineElement
+	50, // 63: TacticalPuzzleBattleContext.spec:type_name -> TacticalPuzzleSpec
+	64, // [64:64] is the sub-list for method output_type
+	64, // [64:64] is the sub-list for method input_type
+	64, // [64:64] is the sub-list for extension type_name
+	64, // [64:64] is the sub-list for extension extendee
+	0,  // [0:64] is the sub-list for field type_name
 }
 
 func init() { file_proto_battle_battle_data_proto_init() }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
+	"github.com/redis/go-redis/v9/maintnotifications"
 	"shared/redisslot"
 )
 
@@ -559,4 +560,19 @@ func TestPinnedClientAllowsEvalInPipeline(t *testing.T) {
 	}
 	// 单实例上什么都不做,不 panic。
 	ReloadTopology(ctx, c)
+}
+
+func TestMaintNotificationsModeDefaultAndOverride(t *testing.T) {
+	opts := nodeOptions(Config{Addrs: []string{"127.0.0.1:6379"}}, "127.0.0.1:6379")
+	if opts.MaintNotificationsConfig == nil || opts.MaintNotificationsConfig.Mode != maintnotifications.ModeDisabled {
+		t.Fatalf("default MaintNotificationsConfig = %+v, want disabled", opts.MaintNotificationsConfig)
+	}
+	optsAuto := nodeOptions(Config{Addrs: []string{"127.0.0.1:6379"}, MaintNotifications: "auto"}, "127.0.0.1:6379")
+	if optsAuto.MaintNotificationsConfig.Mode != maintnotifications.ModeAuto {
+		t.Fatalf("auto MaintNotificationsConfig = %+v, want auto", optsAuto.MaintNotificationsConfig)
+	}
+	optsBad := nodeOptions(Config{Addrs: []string{"127.0.0.1:6379"}, MaintNotifications: "invalid"}, "127.0.0.1:6379")
+	if optsBad.MaintNotificationsConfig.Mode != maintnotifications.ModeDisabled {
+		t.Fatalf("invalid MaintNotificationsConfig = %+v, want fallback disabled", optsBad.MaintNotificationsConfig)
+	}
 }

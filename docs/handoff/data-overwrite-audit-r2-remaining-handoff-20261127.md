@@ -1,6 +1,6 @@
 # 数据覆写审计 r2：剩余工作总清单（2026-11-27 换电脑接手，做完即删）
 
-> 负责人在新电脑上说「开始」或「继续做完 handoff」时，Claude Code 先过 [README.md](README.md) §1，再照本单从 §1 做到 §8。**全部做完后按 §9 删掉本单。**
+> 负责人在新电脑上说「开始」或「继续做完 handoff」时，Claude Code 先过 [总入口](new-computer-start-here-handoff-20261127.md) §1，再照本单从 §1 做到 §8。**全部做完后按 §9 删掉本单。**
 > 本单把第 4 轮交接单 §0a 和各节里散落的待做合成了一张清单。细节仍在下面点名的章节：发现原文、修复设计、改动文件、Gemini 命令。本单与那些章节不一致时，以本单为准（截至 11-27）。
 > 文中「第 4 轮单」指 [data-overwrite-audit-r2-round4-handoff-20261126.md](data-overwrite-audit-r2-round4-handoff-20261126.md)，「r2 文档」指 [data-overwrite-rollback-audit-r2-20261019.md](../design/data-overwrite-rollback-audit-r2-20261019.md)，「求书设计稿」指 [skill-book-wanted-order-trade-escrow.md](../design/skill-book-wanted-order-trade-escrow.md)。
 
@@ -10,7 +10,7 @@
   - r2 前 3 轮各批，含批 S、T、U；
   - 第 4 轮批 V（帮战追杀令与灵脉）、批 W（锦标赛领奖与 match 发件）、批 X（生死状银两）；
   - 第 4 轮单 §7.4 的五条，§6.1 的九条（其中悬赏求书只写了批 A）。
-  - 全部在 main，11-27 的 origin/main 是 `6b4ae7852`。
+  - 全部在 main。本单第一版随 `3d715db97` 推上 origin/main，之后的改动由负责人在旧电脑回收前一起提交推送。
 - **已复核**：批 X（第 4 轮单 §7.3 末条）；§6.1 除悬赏求书以外的 8 条（该节表头记着「子代理写、本会话复核」）。
 - **还没做**：
   - 复核批 V、批 W、§7.4、悬赏求书批 A；
@@ -102,7 +102,7 @@ diff 的终点一律用 HEAD：当时没提交的测试和设计稿，是后来�
 
 ### 3.4 选角页回选上限的用例（客户端仓，只加用例，不改产品代码）
 
-- 全文在 `review-suggestions-remaining-handoff-20261126.md` §8：要钉的行为、用例步骤、可以抄的夹具都写了。
+- 全文在总入口 `new-computer-start-here-handoff-20261127.md` §3.1（11-27 从 review-suggestions 交接单 §8 移过去）：要钉的行为、用例步骤、可以抄的夹具都写了。做完在那边与本节都标状态。
 - 它不依赖上面各项，在第 5 轮查找之前做完即可。写完在那一节标状态。
 
 ## 4. 文档（每改一条同批写，不留到最后）
@@ -124,7 +124,7 @@ diff 的终点一律用 HEAD：当时没提交的测试和设计稿，是后来�
 ## 5. 交 Gemini 只跑（生成、编译、测试、冒烟）
 
 - **顺序**：
-  1. 先统一生成一遍，做法在 README §4 开头。
+  1. 先统一生成一遍，做法在总入口 §4 第 1 步。
   2. 再按这些命令跑：第 4 轮单 §7.1～§7.4 的「验证」、§6.1「Gemini 验证顺序」、求书设计稿 §11.1 末与 §9、本单 §3.2。
   3. r2 全线的总验证 `data-overwrite-audit-r2-handoff-20261126.md`，等本单 §2～§4 做完再整体跑。
 - **红了**：Gemini 保留首错原文交回 Claude Code，自己不改代码；Claude Code 修完再交。
@@ -145,12 +145,12 @@ diff 的终点一律用 HEAD：当时没提交的测试和设计稿，是后来�
   - `applyJianghuDuelResult` 查档案失败时按 owner_revision=0 入账，取的是处理时刻的 owner_revision。
 - **用量**：
   - 这一轮要跑多代理 Workflow，开跑前先向负责人说明大概用量，拿到同意。
-  - 旧账号上每个只读查找代理约占 7% 周额度，三路查找约 20%，对抗复核每条另算。全部模型周额度过 80% 就按 README §2 停。
+  - 旧账号上每个只读查找代理约占 7% 周额度，三路查找约 20%，对抗复核每条另算。全部模型周额度过 80% 就按总入口 §2 停。
   - 分批跑，别同时开多条 workflow。别给正在跑的代理发 SendMessage，那会把它「恢复」成认不出自己刚做的改动。
 - **结果放哪**：原文存到 `docs/handoff/data-overwrite-audit-r2-round5-<日期>/`；发现写进 r2 文档新开的 §3.13 和 §5.0。有要修的，照本单的格式在本单追加一节。
 - 别把已定案的行为当缺陷报，清单在 §7 末条。
 
-## 7. 做事要点（旧电脑 Claude 记忆里的，AGENTS 和 README 没写全）
+## 7. 做事要点（旧电脑 Claude 记忆里的，AGENTS 和总入口没写全）
 
 - **多会话共用工作区**：
   - 动手前先分清哪些改动是自己的；交接里写的提交与验证状态可能已经过时，先查后续的 PROGRESS 条目。
@@ -213,5 +213,5 @@ diff 的终点一律用 HEAD：当时没提交的测试和设计稿，是后来�
    - 第 4 轮单和它的原始结果目录 `data-overwrite-audit-r2-round4-20261126/`；
    - `data-overwrite-audit-r2-handoff-20261126.md`。
    - 删之前，在 r2 文档 §1a 记一行：「交接原件在提交 `<hash>`，用 git show 读」。
-   - `review-suggestions-remaining-handoff-20261126.md` 里还有别的线的待做，只标本线两项（§4 第 1 条、§8）的状态，不删。
-3. 在 `docs/handoff/README.md` 删掉对应的行，再跑 `python tools/scripts/gen_docs_index.py`。这次 diff 只许删掉被删文档的那几行。
+   - `review-suggestions-remaining-handoff-20261126.md` 里还有别的线的待做，只标本线那项（§4 第 1 条）的状态，不删；§8 的用例已移到总入口 §3.1。
+3. 在总入口 `new-computer-start-here-handoff-20261127.md` 里删掉对应的行，再更新文档索引（做法见总入口 §7.2「文档索引」）。这次 diff 只许删掉被删文档的那几行。

@@ -7825,6 +7825,10 @@ void TurnBattleEngine::ApplyTacticalPuzzleSetup() {
     const auto& spec = tacticalPuzzleContext.spec();
     teamAFormationId = spec.formation_id();
     teamBFormationId = 0u;
+    if (spec.banned_skill_id() != 0u) {
+        bannedSkillIds.push_back(spec.banned_skill_id());
+        bannedSkillSet.insert(spec.banned_skill_id());
+    }
 
     uint64_t firstEnemyId = 0u;
     for (const auto& actor : actors) {

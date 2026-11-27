@@ -58,19 +58,19 @@
   - `uint32 hp_pct = 2`（`10..100`）
   - `uint32 initial_shield_pct = 3`（`0..80`）
   - `int32 speed_delta_pct = 4`（`-30..+30`）
-  - `uint32 initial_buff_kind = 5`（`0=无, 1=固防[100140], 2=疾行[100160], 3=蓄势增伤[100250], 4=持续回春[110070]`）
-- `TacticalPuzzleSpec`：
+  - `uint32 initial_buff_kind = 5`（`0=无, 1=固防[100140], 2=疾行[100160], 3=蓄势增伤[100250], 4=反震[110070]`）
+- `TacticalPuzzleSpec`（含 V1.5 盘面加深字段 `10`、`11`）：
   - `uint32 round_limit = 1`（`1..6`）
   - `uint32 character_preset_id = 2`（白名单 `101..103`）
   - `uint32 pet_preset_id = 3`（白名单 `0` 或 `201..203`）
   - `uint32 formation_id = 4`（`0..5`）
-  - `uint32 player_hp_pct = 5`（`15..100`）
-  - `uint32 player_mp_pct = 6`（`10..100`）
-  - `uint32 pet_hp_pct = 7`（`15..100`）
-  - `uint32 pet_mp_pct = 8`（`10..100`）
-  - `uint32 player_initial_shield_pct = 9`（`0..60`）
-  - `uint32 player_initial_debuff_kind = 10`（`0=无, 1=减攻[100031], 2=破防[130051], 3=玄毒[100190]`）
-  - `repeated TacticalPuzzleEnemySpec enemies = 11`（`1..3` 项）
+  - `uint32 player_initial_hp_pct = 5`（`15..100`）
+  - `uint32 player_initial_mp_pct = 6`（`10..100`）
+  - `uint32 player_initial_shield_pct = 7`（`0..60`）
+  - `uint32 player_initial_debuff_kind = 8`（`0=无, 1=减攻[100031], 2=破防[130051], 3=玄毒[100190]`）
+  - `repeated TacticalPuzzleEnemySpec enemies = 9`（`1..3` 项）
+  - `TournamentLeylineElement leyline_element = 10`（**V1.5 零新图加深**：`0=无, 1=金锐, 2=木息, 3=水润, 4=火炽, 5=土厚`，直接复用现役五行灵脉与土厚开局护盾机制）
+  - `uint32 banned_skill_id = 11`（**V1.5 零新图加深**：`0=不禁招`，非 0 时必须属于所选 `character_preset_id`/`pet_preset_id` 的 4 技能白名单，开局写入 `banned_skill_ids` 强制禁招）
 - `TacticalPuzzleBattleContext`：
   - `uint64 puzzle_id = 1`
   - `uint32 spec_revision = 2`
@@ -159,9 +159,10 @@
 
 - [x] 更新 [project-vision.md](project-vision.md) 明确写入三类禁止扩展方向（家园种菜、固定钟点世界 BOSS/大乱斗、新纵向数值养成线）
 - [x] 落盘 [tactical-puzzle-workshop-v1.md](tactical-puzzle-workshop-v1.md) 与 [tactical-puzzle-workshop-v1-ui-handoff.md](ui-handoff/tactical-puzzle-workshop-v1-ui-handoff.md)
-- [ ] 更新协议（`battle_data` / `battle_node` / `player_battle` / `match_service` / `match_authority`）与配表（`Dungeon 314` / `PlayMode 475` / `Tip 16064..16072` / `MessageLimiter 574..580`），执行 `dev.bat gen`
-- [ ] 实现 C++ `battle` / `scene` 残局装配与无宠预设支持，跑通 C++ 单测
-- [ ] 实现 Go `match` 残局坊权威表、7 条 RPC、自证发布、录像引用与 `RoleFencePurge`，跑通 Go 单测
-- [ ] 同步 Java 副服 `ContractSync` + `game-battle-engine` / `game-battle` / `game-scene` / `game-match` / `game-gate`，跑通 Maven 单测并登记 `PARITY.md`
-- [ ] 实现 Unity 客户端 `TacticalPuzzle*` + 齐问锋入口 + `#PUZ:` 聊天卡片 + 战斗/结算联动 + EditMode 单测，跑通编译与测试
-- [ ] 验收并导入 Codex 交付的 10 张 `tactical-puzzle-workshop-v1` 切片
+- [x] 更新协议（`battle_data` / `battle_node` / `player_battle` / `match_service` / `match_authority`，含 V1.5 `leyline_element = 10`、`banned_skill_id = 11`）与配表（`Dungeon 314` / `PlayMode 475` / `Tip 16064..16072` / `MessageLimiter 574..580`），执行协议/配表生成
+- [x] 实现 C++ `battle` / `scene` 残局装配（含 V1.5 五行灵脉与单招禁用）与无宠预设支持，跑通 C++ 单测
+- [x] 实现 Go `match` 残局坊权威表、7 条 RPC、自证发布、录像引用与 `RoleFencePurge`，跑通 Go 单测
+- [x] 同步 Java 副服 `ContractSync` + `game-battle-engine` / `game-battle` / `game-scene` / `game-match` / `game-gate`，跑通 Maven 单测并登记 `PARITY.md`
+- [x] 同步 Python 副服（`xuanming-server-mmo-python`）V1 + V1.5 完整实现与 `pytest` 验真
+- [x] 实现 Unity 客户端 `TacticalPuzzle*`（含 V1.5 灵脉/禁招芯片）+ 齐问锋入口 + `#PUZ:` 聊天卡片 + 战斗/结算联动 + EditMode 单测，跑通编译与测试
+- [x] 验收并导入 Codex 交付的 10 张 `tactical-puzzle-workshop-v1` 切片

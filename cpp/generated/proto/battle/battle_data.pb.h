@@ -10429,6 +10429,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TacticalPuzzleSpec final : public :
     kPlayerInitialMpPctFieldNumber = 6,
     kPlayerInitialShieldPctFieldNumber = 7,
     kPlayerInitialDebuffKindFieldNumber = 8,
+    kLeylineElementFieldNumber = 10,
+    kBannedSkillIdFieldNumber = 11,
   };
   // repeated .TacticalPuzzleEnemySpec enemies = 9;
   [[nodiscard]] int enemies_size()
@@ -10531,11 +10533,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TacticalPuzzleSpec final : public :
   void _internal_set_player_initial_debuff_kind(::uint32_t value);
 
   public:
+  // .TournamentLeylineElement leyline_element = 10;
+  void clear_leyline_element() ;
+  [[nodiscard]] ::TournamentLeylineElement leyline_element() const;
+  void set_leyline_element(::TournamentLeylineElement value);
+
+  private:
+  ::TournamentLeylineElement _internal_leyline_element() const;
+  void _internal_set_leyline_element(::TournamentLeylineElement value);
+
+  public:
+  // uint32 banned_skill_id = 11;
+  void clear_banned_skill_id() ;
+  [[nodiscard]] ::uint32_t banned_skill_id() const;
+  void set_banned_skill_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_banned_skill_id() const;
+  void _internal_set_banned_skill_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:TacticalPuzzleSpec)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 9,
+      ::google::protobuf::internal::TcParseTable<4, 11,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -10573,6 +10595,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TacticalPuzzleSpec final : public :
     ::uint32_t player_initial_mp_pct_;
     ::uint32_t player_initial_shield_pct_;
     ::uint32_t player_initial_debuff_kind_;
+    int leyline_element_;
+    ::uint32_t banned_skill_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -31208,6 +31232,54 @@ inline ::google::protobuf::RepeatedPtrField<::TacticalPuzzleEnemySpec>* PROTOBUF
 TacticalPuzzleSpec::_internal_mutable_enemies() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.enemies_;
+}
+
+// .TournamentLeylineElement leyline_element = 10;
+inline void TacticalPuzzleSpec::clear_leyline_element() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.leyline_element_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::TournamentLeylineElement TacticalPuzzleSpec::leyline_element() const {
+  // @@protoc_insertion_point(field_get:TacticalPuzzleSpec.leyline_element)
+  return _internal_leyline_element();
+}
+inline void TacticalPuzzleSpec::set_leyline_element(::TournamentLeylineElement value) {
+  _internal_set_leyline_element(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:TacticalPuzzleSpec.leyline_element)
+}
+inline ::TournamentLeylineElement TacticalPuzzleSpec::_internal_leyline_element() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::TournamentLeylineElement>(_impl_.leyline_element_);
+}
+inline void TacticalPuzzleSpec::_internal_set_leyline_element(::TournamentLeylineElement value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.leyline_element_ = value;
+}
+
+// uint32 banned_skill_id = 11;
+inline void TacticalPuzzleSpec::clear_banned_skill_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.banned_skill_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t TacticalPuzzleSpec::banned_skill_id() const {
+  // @@protoc_insertion_point(field_get:TacticalPuzzleSpec.banned_skill_id)
+  return _internal_banned_skill_id();
+}
+inline void TacticalPuzzleSpec::set_banned_skill_id(::uint32_t value) {
+  _internal_set_banned_skill_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:TacticalPuzzleSpec.banned_skill_id)
+}
+inline ::uint32_t TacticalPuzzleSpec::_internal_banned_skill_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.banned_skill_id_;
+}
+inline void TacticalPuzzleSpec::_internal_set_banned_skill_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.banned_skill_id_ = value;
 }
 
 // -------------------------------------------------------------------

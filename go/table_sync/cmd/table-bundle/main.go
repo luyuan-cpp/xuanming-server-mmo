@@ -248,6 +248,10 @@ type adminClient struct {
 	httpCli  *http.Client
 }
 
+// tableBundleOperator 是网关机器口令(admin.machine-key)唯一接受的操作人:用机器口令发布 / 回滚时不用再传 -operator;
+// 用人用口令时要传自己的名字,网关不许人用口令以这个名字写(docs/design/admin-identity-and-dual-control.md §11.3)。
+const tableBundleOperator = "table-bundle"
+
 func newAdminClient(baseURL, adminKey, operator string) (*adminClient, error) {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if baseURL == "" {
@@ -361,7 +365,7 @@ func cmdPublish(args []string) error {
 	fs := flag.NewFlagSet("publish", flag.ContinueOnError)
 	adminURL := fs.String("admin-url", envOr("MMORPG_ADMIN_URL", ""), "gateway_node admin base URL")
 	adminKey := fs.String("admin-key", envOr("MMORPG_ADMIN_KEY", ""), "X-Admin-Key value")
-	operator := fs.String("operator", envOr("MMORPG_ADMIN_OPERATOR", ""), "X-Admin-Operator value")
+	operator := fs.String("operator", envOr("MMORPG_ADMIN_OPERATOR", tableBundleOperator), "X-Admin-Operator value (the gateway machine key only writes as "+tableBundleOperator+"; with the human key pass your own name)")
 	track := fs.String("track", "stable", "release track (stable|canary)")
 	schemaDigest := fs.String("schema-digest", "", "16-hex schema digest")
 	contentDigest := fs.String("content-digest", "", "64-hex content digest")
@@ -486,7 +490,7 @@ func cmdRollback(args []string) error {
 	fs := flag.NewFlagSet("rollback", flag.ContinueOnError)
 	adminURL := fs.String("admin-url", envOr("MMORPG_ADMIN_URL", ""), "gateway_node admin base URL")
 	adminKey := fs.String("admin-key", envOr("MMORPG_ADMIN_KEY", ""), "X-Admin-Key value")
-	operator := fs.String("operator", envOr("MMORPG_ADMIN_OPERATOR", ""), "X-Admin-Operator value")
+	operator := fs.String("operator", envOr("MMORPG_ADMIN_OPERATOR", tableBundleOperator), "X-Admin-Operator value (the gateway machine key only writes as "+tableBundleOperator+"; with the human key pass your own name)")
 	track := fs.String("track", "stable", "release track")
 	schemaDigest := fs.String("schema-digest", "", "16-hex schema digest")
 	targetDigest := fs.String("target-digest", "", "64-hex previous content digest")
@@ -563,7 +567,7 @@ func cmdCancel(args []string) error {
 	fs := flag.NewFlagSet("cancel", flag.ContinueOnError)
 	adminURL := fs.String("admin-url", envOr("MMORPG_ADMIN_URL", ""), "gateway_node admin base URL")
 	adminKey := fs.String("admin-key", envOr("MMORPG_ADMIN_KEY", ""), "X-Admin-Key value")
-	operator := fs.String("operator", envOr("MMORPG_ADMIN_OPERATOR", ""), "X-Admin-Operator value")
+	operator := fs.String("operator", envOr("MMORPG_ADMIN_OPERATOR", tableBundleOperator), "X-Admin-Operator value (the gateway machine key only writes as "+tableBundleOperator+"; with the human key pass your own name)")
 	track := fs.String("track", "stable", "release track")
 	schemaDigest := fs.String("schema-digest", "", "16-hex schema digest")
 	if err := fs.Parse(args); err != nil {
@@ -584,7 +588,7 @@ func cmdDeleteLine(args []string) error {
 	fs := flag.NewFlagSet("delete-line", flag.ContinueOnError)
 	adminURL := fs.String("admin-url", envOr("MMORPG_ADMIN_URL", ""), "gateway_node admin base URL")
 	adminKey := fs.String("admin-key", envOr("MMORPG_ADMIN_KEY", ""), "X-Admin-Key value")
-	operator := fs.String("operator", envOr("MMORPG_ADMIN_OPERATOR", ""), "X-Admin-Operator value")
+	operator := fs.String("operator", envOr("MMORPG_ADMIN_OPERATOR", tableBundleOperator), "X-Admin-Operator value (the gateway machine key only writes as "+tableBundleOperator+"; with the human key pass your own name)")
 	track := fs.String("track", "stable", "release track")
 	schemaDigest := fs.String("schema-digest", "", "16-hex schema digest")
 	if err := fs.Parse(args); err != nil {

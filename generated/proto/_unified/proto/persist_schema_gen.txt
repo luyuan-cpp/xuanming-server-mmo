@@ -691,6 +691,8 @@ state=bootstrap
 1=BattleEconomyLedger#5 optional uint64 silver_rollover_hard_cap
 1=EquipmentMaterialRewardLedger#12 optional uint32 stage2_pool_cap
 1=PlayerJianghuComp#13 optional uint64 pending_silver_fee_review_after_ms
+1=EquipLoadoutScheme#7 optional uint64 linked_pet_id
+1=EquipLoadoutScheme#8 optional uint32 linked_formation_id
 
 retired=player_database#10
 retired=player_database#17

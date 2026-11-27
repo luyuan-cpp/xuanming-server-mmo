@@ -315,6 +315,35 @@ func OpenStrongDB(ctx context.Context, dsn, expectedDatabase, backendRaw string,
 	return db, nil
 }
 
+// VerifySchema checks at service startup that all three owner-authority tables and their
+// critical columns exist with expected types/nullability before serving traffic.
+func VerifySchema(ctx context.Context, db *sql.DB) error {
+	const hint = "shared/ownerauthority DDLMySQL/DDLTiDB"
+	if err := authoritysql.CheckTables(ctx, db, hint,
+		"owner_record", "owner_instance_lease", "owner_transition_log",
+	); err != nil {
+		return err
+	}
+	if err := authoritysql.CheckColumnSpecs(ctx, db, hint, "owner_record",
+		authoritysql.ColumnSpec{Name: "player_id", DataType: "bigint", Nullable: "NO", Key: "PRI"},
+		authoritysql.ColumnSpec{Name: "owner_epoch", DataType: "bigint", Nullable: "NO"},
+		authoritysql.ColumnSpec{Name: "admit_not_before_ms", DataType: "bigint", Nullable: "NO"},
+		authoritysql.ColumnSpec{Name: "source_revision", DataType: "bigint", Nullable: "NO"},
+	); err != nil {
+		return err
+	}
+	if err := authoritysql.CheckColumnSpecs(ctx, db, hint, "owner_instance_lease",
+		authoritysql.ColumnSpec{Name: "pod_name", DataType: "varchar", Nullable: "NO", Key: "PRI"},
+		authoritysql.ColumnSpec{Name: "lease_deadline_ms", DataType: "bigint", Nullable: "NO"},
+	); err != nil {
+		return err
+	}
+	return authoritysql.CheckColumnSpecs(ctx, db, hint, "owner_transition_log",
+		authoritysql.ColumnSpec{Name: "id", DataType: "bigint", Nullable: "NO", Key: "PRI"},
+		authoritysql.ColumnSpec{Name: "player_id", DataType: "bigint", Nullable: "NO"},
+	)
+}
+
 // Query reads the authoritative owner_record row for playerID.
 func (s *Store) Query(ctx context.Context, playerID uint64) (OwnerRecord, bool, error) {
 	if playerID == 0 {

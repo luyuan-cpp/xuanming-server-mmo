@@ -39,6 +39,36 @@ inline constexpr uint32_t kTacticalPuzzleEnemyMaxShieldPct = 60u;
 inline constexpr int32_t kTacticalPuzzleMinSpeedDeltaPct = -30;
 inline constexpr int32_t kTacticalPuzzleMaxSpeedDeltaPct = 30;
 inline constexpr uint32_t kTacticalPuzzleMaxEnemyBuffKind = 4u;
+inline constexpr uint32_t kTacticalPuzzleMaxLeylineElement = 5u;
+
+constexpr bool IsTacticalPuzzlePresetSkill(uint32_t charPresetId, uint32_t petPresetId, uint32_t skillId) {
+    if (skillId == 0u) {
+        return true;
+    }
+    switch (charPresetId) {
+        case 101u:
+            if (skillId == 10002u || skillId == 10039u || skillId == 10025u || skillId == 10035u) return true;
+            break;
+        case 102u:
+            if (skillId == 10006u || skillId == 10020u || skillId == 10034u || skillId == 10041u) return true;
+            break;
+        case 103u:
+            if (skillId == 10010u || skillId == 10033u || skillId == 10040u || skillId == 10026u) return true;
+            break;
+        default:
+            break;
+    }
+    switch (petPresetId) {
+        case 201u:
+            return skillId == 10002u || skillId == 10018u || skillId == 10016u || skillId == 13005u;
+        case 202u:
+            return skillId == 10006u || skillId == 10019u || skillId == 10034u || skillId == 13006u;
+        case 203u:
+            return skillId == 10014u || skillId == 10010u || skillId == 11006u || skillId == 11005u;
+        default:
+            return false;
+    }
+}
 
 // 既有 Buff.json 权威条目（零新增 Buff 行，天然支持护盾吸收/破盾/驱散/结算）
 inline constexpr uint32_t kTacticalPuzzleShieldBuffId = 100400u;        // 通用护盾（battle_op=9）
@@ -109,6 +139,13 @@ inline bool IsValidTacticalPuzzleSpec(const ::TacticalPuzzleSpec& spec) {
         return false;
     }
     if (spec.player_initial_debuff_kind() > kTacticalPuzzleMaxPlayerDebuffKind) {
+        return false;
+    }
+    const int leylineVal = static_cast<int>(spec.leyline_element());
+    if (leylineVal < 0 || leylineVal > static_cast<int>(kTacticalPuzzleMaxLeylineElement)) {
+        return false;
+    }
+    if (!IsTacticalPuzzlePresetSkill(spec.character_preset_id(), spec.pet_preset_id(), spec.banned_skill_id())) {
         return false;
     }
     if (spec.enemies_size() < static_cast<int>(kTacticalPuzzleMinEnemies) ||

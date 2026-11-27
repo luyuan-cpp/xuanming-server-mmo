@@ -3,6 +3,7 @@ package snowflake
 import (
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -397,5 +398,61 @@ func TestSetGuardTime_PreventsReplayOnClockSkewedTakeover(t *testing.T) {
 					"地板没生效,持久水位失去意义", id, prevWatermark-current)
 			}
 		}
+	}
+}
+
+func TestMinIDAt(t *testing.T) {
+	if got := MinIDAt(int64(Epoch) - 1); got != 0 {
+		t.Fatalf("MinIDAt(before epoch) = %d, want 0", got)
+	}
+	restore := nowEpoch
+	defer func() { nowEpoch = restore }()
+	const sec = uint64(2500)
+	nowEpoch = func() uint64 { return sec }
+
+	n := &Node{nodeID: 5, lastTime: sec - 1, step: stepMask}
+	id, err := n.Generate()
+	if err != nil {
+		t.Fatal(err)
+	}
+	lo, hi := MinIDAt(int64(Epoch+sec)), MinIDAt(int64(Epoch+sec+1))
+	if id < lo || id >= hi {
+		t.Fatalf("id %d outside [%d, %d)", id, lo, hi)
+	}
+}
+
+func TestGenerateInto_BatchMonotonicCrossSecondAndFence(t *testing.T) {
+	restore := nowEpoch
+	defer func() { nowEpoch = restore }()
+
+	var current atomic.Uint64
+	current.Store(3000)
+	nowEpoch = func() uint64 { return current.Load() }
+
+	// 剩余 3 个 step 的节点：一次要 8 个 ID 时，前 3 个消耗完当前秒，随后推进虚拟时钟跨到下一秒继续。
+	n := &Node{nodeID: 12, lastTime: 3000, step: stepMask - 3}
+	go func() {
+		time.Sleep(15 * time.Millisecond)
+		current.Store(3001)
+	}()
+
+	buf := make([]uint64, 8)
+	if err := n.GenerateInto(buf); err != nil {
+		t.Fatalf("GenerateInto: %v", err)
+	}
+	for i := 1; i < len(buf); i++ {
+		if buf[i] <= buf[i-1] {
+			t.Fatalf("batch IDs not strictly increasing at %d: %d <= %d", i, buf[i], buf[i-1])
+		}
+	}
+	if buf[2]>>timeShift != 3000 || buf[3]>>timeShift != 3001 {
+		t.Fatalf("expected second rollover between index 2 and 3, got %d -> %d", buf[2]>>timeShift, buf[3]>>timeShift)
+	}
+
+	// 失租后 GenerateInto 必须 fail-closed 且不留脏数据。
+	n.Fence()
+	dirty := []uint64{1, 2, 3}
+	if err := n.GenerateInto(dirty); !errors.Is(err, ErrFenced) {
+		t.Fatalf("fenced GenerateInto err = %v, want ErrFenced", err)
 	}
 }

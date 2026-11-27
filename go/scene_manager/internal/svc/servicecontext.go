@@ -257,6 +257,10 @@ func initOwnerAuthority(ctx context.Context, cfg config.OwnerAuthorityConfig, lo
 	if err != nil {
 		return nil, nil, err
 	}
+	if err := ownerauthority.VerifySchema(openCtx, db); err != nil {
+		_ = db.Close()
+		return nil, nil, err
+	}
 	skew := time.Duration(cfg.SkewMarginMs) * time.Millisecond
 	store := ownerauthority.NewStore(db, skew)
 	logx.Infof("[scene_manager] owner authority sql store ready: backend=%q database=%q", cfg.Backend, cfg.Database)
