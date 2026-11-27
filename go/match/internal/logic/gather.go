@@ -820,4 +820,21 @@ func teamIndexFor(mode matchpb.MatchMode, memberIndex int, required int) uint32 
 	case matchpb.MatchMode_MATCH_MODE_1V1, matchpb.MatchMode_MATCH_MODE_PVP_CHALLENGE:
 		return uint32(memberIndex)
 	case matchpb.MatchMode_MATCH_MODE_5V5, matchpb.MatchMode_MATCH_MODE_POLARITY_5V5, matchpb.MatchMode_MATCH_MODE_SEASON_TOURNAMENT:
-		if require
+		if required > 0 && memberIndex >= required/2 {
+			return 1
+		}
+		return 0
+	default:
+		return 0
+	}
+}
+
+// randomSeed 用 crypto/rand 生成引擎种子(设计文档 §5.4;引擎内所有随机
+// 只走该种子驱动的确定性 RNG,宪法新增不变量 #5)。
+func randomSeed() (uint64, error) {
+	var buf [8]byte
+	if _, err := cryptorand.Read(buf[:]); err != nil {
+		return 0, err
+	}
+	return binary.LittleEndian.Uint64(buf[:]), nil
+}

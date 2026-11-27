@@ -3,6 +3,8 @@ package com.game.gateway.controller;
 import com.game.gateway.grpc.LoginRpcClient;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
+import jakarta.servlet.http.HttpServletRequest;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -12,7 +14,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -51,7 +52,7 @@ public class PassportEventController {
 
     @PostMapping("/internal/passport/events")
     public ResponseEntity<Void> handle(@RequestHeader(value = SECRET_HEADER, required = false) String secret,
-                                       @RequestBody(required = false) byte[] body) {
+                                       HttpServletRequest request) throws IOException {
         if (secretDigest == null) {
             return ResponseEntity.notFound().build();
         }
@@ -59,8 +60,11 @@ public class PassportEventController {
             log.warn("passport webhook rejected: missing or wrong {}", SECRET_HEADER);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
+        // 密钥核对过才读请求体,最多读上限 + 1 字节:@RequestBody 会先把整个请求体读进内存,集群内谁都能用一个大请求撑爆网关。
+        long declaredBytes = request.getContentLengthLong();
+        byte[] body = declaredBytes > MAX_BODY_BYTES ? null : request.getInputStream().readNBytes(MAX_BODY_BYTES + 1);
         if (body == null || body.length == 0 || body.length > MAX_BODY_BYTES) {
-            log.warn("passport webhook rejected: body size {}", body == null ? 0 : body.length);
+            log.warn("passport webhook rejected: body size {}", body == null ? declaredBytes : body.length);
             return ResponseEntity.badRequest().build();
         }
         try {

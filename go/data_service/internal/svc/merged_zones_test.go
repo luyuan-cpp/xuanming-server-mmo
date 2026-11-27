@@ -1,7 +1,6 @@
 package svc
 
 import (
-	"context"
 	"errors"
 	"testing"
 	"time"
@@ -12,24 +11,15 @@ import (
 	"shared/placement"
 )
 
-type stubMergedZoneLister struct {
-	rows []store.MergedIntoRow
-	err  error
-}
-
-func (s stubMergedZoneLister) ListMergedInto(context.Context) ([]store.MergedIntoRow, error) {
-	return s.rows, s.err
-}
-
-// 编译期断言:装配层把 *store.RouteStore 直接当真源。
-var _ mergedIntoLister = (*store.RouteStore)(nil)
+// 编译期断言:装配层把 *store.RouteStore 直接当真源(副本那一侧的断言在 shared/mergedzonecopy)。
+var _ mergedZoneTruth = (*store.RouteStore)(nil)
 
 // 缓存没装配:main 必须拒启,不看 Store.Required。
 func TestMergedZonesUnassembled(t *testing.T) {
 	if err := (&ServiceContext{}).MergedZonesUnassembled(); err == nil {
 		t.Fatal("a missing cache must refuse to start")
 	}
-	cache := loadMergedZoneCache(stubMergedZoneLister{}, time.Second)
+	cache := loadMergedZoneCache(newTestMergedZoneSource(&fakeMergedZoneTruth{mapping: testMergedZoneMapping("g1", 0)}, &fakeMergedZoneCopies{}), time.Second)
 	if cache == nil {
 		t.Fatal("cache not assembled")
 	}
@@ -38,26 +28,45 @@ func TestMergedZonesUnassembled(t *testing.T) {
 	}
 }
 
-func TestNewMergedZoneCacheWithoutRouteStore(t *testing.T) {
-	if cache := newMergedZoneCache(config.Config{}, nil); cache != nil {
+func TestNewMergedZoneCacheNeedsTheRouteStoreAndTheEtcdCopy(t *testing.T) {
+	if cache := newMergedZoneCache(config.Config{}, nil, nil); cache != nil {
 		t.Fatal("without a route store there is nothing to read: the cache stays nil")
+	}
+	if cache := newMergedZoneCache(config.Config{}, &store.RouteStore{}, nil); cache != nil {
+		t.Fatal("without the etcd copy a replica cannot publish before answering: the cache stays nil")
 	}
 }
 
 func TestLoadMergedZoneCache(t *testing.T) {
-	if cache := loadMergedZoneCache(stubMergedZoneLister{err: errors.New("db down")}, time.Second); cache != nil {
-		t.Fatal("a failed first read leaves the cache nil, main refuses to start")
+	if cache := loadMergedZoneCache(newTestMergedZoneSource(&fakeMergedZoneTruth{err: errShardZeroUnreachable}, &fakeMergedZoneCopies{}), time.Second); cache != nil {
+		t.Fatal("shard 0 unreadable and no etcd copy yet: the cache stays nil, main refuses to start")
 	}
-	broken := []store.MergedIntoRow{{SrcZone: 5, DstZone: 6, RunID: "run", MergedAtMs: 1}, {SrcZone: 6, DstZone: 5, RunID: "run", MergedAtMs: 1}}
-	if cache := loadMergedZoneCache(stubMergedZoneLister{rows: broken}, time.Second); cache != nil {
+	denied := errors.New("Error 1146 (42S02): Table 'zone_merge_history' doesn't exist")
+	if cache := loadMergedZoneCache(newTestMergedZoneSource(&fakeMergedZoneTruth{err: denied}, &fakeMergedZoneCopies{value: testMergedZoneMapping("g1", 1, 5, 6), revision: 1}), time.Second); cache != nil {
+		t.Fatal("shard 0 reachable but failing deterministically: the cache stays nil even with an etcd copy, main refuses to start")
+	}
+	copies := &fakeMergedZoneCopies{}
+	broken := testMergedZoneMapping("g1", 2, 5, 6, 6, 5)
+	if cache := loadMergedZoneCache(newTestMergedZoneSource(&fakeMergedZoneTruth{mapping: broken}, copies), time.Second); cache != nil {
 		t.Fatal("a cycle at startup leaves the cache nil, main refuses to start")
 	}
-	cache := loadMergedZoneCache(stubMergedZoneLister{rows: []store.MergedIntoRow{{SrcZone: 5, DstZone: 6, RunID: "run", MergedAtMs: 1}}}, time.Second)
+	if copies.puts != 0 {
+		t.Fatal("a broken mapping must not be published")
+	}
+	cache := loadMergedZoneCache(newTestMergedZoneSource(&fakeMergedZoneTruth{mapping: testMergedZoneMapping("g1", 1, 5, 6)}, copies), time.Second)
 	if cache == nil {
 		t.Fatal("cache not assembled")
 	}
 	var snapshot *placement.MergedZones = cache.Snapshot()
 	if got := snapshot.Final(5); got != 6 {
 		t.Fatalf("Final(5) = %d, want 6", got)
+	}
+	if copies.puts != 1 || copies.value.Version != 1 {
+		t.Fatalf("the version answered at startup must be in the etcd copy first: %+v after %d put(s)", copies.value, copies.puts)
+	}
+	// 第 0 片读不到的新副本从副本起,拿到的就是别的副本已经回答过的那一版。
+	started := loadMergedZoneCache(newTestMergedZoneSource(&fakeMergedZoneTruth{err: errShardZeroUnreachable}, copies), time.Second)
+	if started == nil || started.Snapshot().Final(5) != 6 {
+		t.Fatal("with shard 0 unreadable the cache starts from the etcd copy")
 	}
 }

@@ -56,6 +56,16 @@ namespace gate_spectate
 		{
 			return (total & 0x3FF) == 1;
 		}
+
+		// STATE 帧是否处于战前明牌变阵期(STATE 仅在挂接/升档/10s心跳/变阵亮牌时下发,低频):
+		// 变阵结束(true→false)须向已在看的订阅者扇出亮牌 161,否则画面卡在旧阵容直至第 1 回合结算。
+		bool IsPrepActiveState(const MessageContent &content)
+		{
+			SpectateStateS2C state;
+			return state.ParseFromString(content.serialized_message()) &&
+				   state.has_state() && state.state().has_prep_state() &&
+				   state.state().prep_state().active();
+		}
 	} // namespace
 
 	SpectateHub::SpectateHub(HubPorts ports, HubLimits limits)
@@ -174,6 +184,7 @@ namespace gate_spectate
 		entry.phase = Phase::kLive;
 		entry.lastTurnRound = -1;
 		entry.cachedStateRound = -1;
+		entry.cachedPrepActive = false;
 		entry.lastFrameSteady = ports.steadyNow();
 		entry.deadlineMs = 0;
 		entry.latestState.reset();
@@ -252,9 +263,23 @@ namespace gate_spectate
 		{
 			return;
 		}
+		const bool nextPrepActive = IsPrepActiveState(*content);
+		const bool prepFinished = entry.cachedPrepActive && !nextPrepActive;
 		entry.cachedStateRound = round;
+		entry.cachedPrepActive = nextPrepActive;
 		entry.latestState = std::move(content);
 		entry.firstFrame.reset();
+
+		// 战前明牌变阵亮牌(prepActive true→false):已在看的订阅者也必须收到亮牌后的 161(含最终首发宠/禁招与首回合倒计时),
+		// 即使上一帧变阵期 STATE 还在分批扇出也由亮牌 161 接管。常规心跳/挂接/升档 STATE 仍不打扰已在看会话。
+		if (prepFinished)
+		{
+			if (!entry.subscribers.empty())
+			{
+				StartFanout(battleId, entry, FirstFrameOf(entry), AllSubscribers(entry));
+			}
+			return;
+		}
 
 		// 已在看的会话不下发。正在进行的一轮扇出会给名单里还没收到过状态的会话补 161,不打断它;名单外的这类会话等下一回合。
 		if (!entry.fanoutTargets.empty())
@@ -288,6 +313,7 @@ namespace gate_spectate
 		if (round + 1 >= entry.cachedStateRound)
 		{
 			entry.cachedStateRound = round + 1;
+			entry.cachedPrepActive = false;
 			entry.latestState = content;
 			entry.firstFrame.reset();
 		}

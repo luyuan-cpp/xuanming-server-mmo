@@ -450,7 +450,7 @@ func DirectoryDBName(base string, slot, k int) string // K=1 是 base,否则 <ba
 
 **`directory_shard`**:每片一行 `(id=1, logical_shards, slot)`,`-migrate` 种下,每个 store 开池时核对。配错 K 会把玩家路由到别的片,读到「角色不存在」而且没有报错,所以对不上拒绝启动。常驻进程里启动时连不上的片,这道核对挪到它第一条连接之前做,对不上永远不放行;启动时连得上而对不上照旧拒启(2026-11-27,[启动期故障隔离](./data-service-startup-isolation.md) §3)。
 
-**连接池**:每片一个池、一份写资格。`AccountDirectory.MaxOpenConn`、`PlayerName.MaxOpenConn`、`RouteStore.MaxOpenConn` 都是每片的上限,连接总账按片算。写者启动目录给的写资格必须恰好是片库 + 流水库 + 全部存档库(`Config.WriterSchemas`),多一份少一份都拒绝启动。常驻进程里某一片启动时连不上不算失败:句柄照常在,那一片的池关着,用到时核对通过才给连接;合服映射所在的第 0 片除外,它连不上照旧拒启(同上 §4)。
+**连接池**:每片一个池、一份写资格。`AccountDirectory.MaxOpenConn`、`PlayerName.MaxOpenConn`、`RouteStore.MaxOpenConn` 都是每片的上限,连接总账按片算。写者启动目录给的写资格必须恰好是片库 + 流水库 + 全部存档库(`Config.WriterSchemas`),多一份少一份都拒绝启动。常驻进程里某一片启动时连不上不算失败:句柄照常在,那一片的池关着,用到时核对通过才给连接。合服映射所在的第 0 片也一样:它连不上时按 etcd 里的映射副本起([合服映射的 etcd 副本](./merged-zone-etcd-copy.md))。
 
 **`-migrate`**:逐库开池、拿迁移锁,先核完全部库都是空的再动手,只要有一个库已有表就一张都不建。中途失败时已经建好的库不回退,人工清掉那批库再跑(未上线,没有存量)。库要提前建好,`-migrate` 不建库。
 
@@ -767,7 +767,7 @@ data_service 按 `storage_id` 持有存档库连接池(`Directory.StoragePools`,
 | FX3 | 一轮独立评审的修复:复制流身份、目标账号锁定、REGISTER 不绑 epoch、`IsWriterFrozen` 和后台循环不打 HOLD、账号授权和目标集群预检、`admission_recover` 守闸门、启动路径扛冻结、`writer_frozen_seconds`、audit 复用目标位置、翻转标记、默认集群持久化、admin 连接串核对 | 已写完,未编译,待 Gemini 验证。serverbase 的排空判定不在这批 |
 | R1 | 评审,文档,验证清单 | 已完成。三路评审 26 条全部修复,排空判定的最后一处(闸门冻结确定没写不 Hold、`ResourceExhausted`)在主会话改完。修复本身没有再评审 |
 | B1 | `data_service` 按逻辑库建连熔断(`shared/authoritysql.WithConnectGate`)、关服务端与 14 个调用方 zrpc 按方法熔断(`shared/dsclient.Conf`),防止单分片失联连坐健康库([设计稿](./data-service-breaker-per-logical-db.md)) | 已写完,未编译,待 Gemini 验证 |
-| S1 | `data_service` 启动期故障隔离:目录各片与流水库按需核对,一个集群连不上时照样启动、服务健康库;批 2 写者注册跳过连不上的库,data_service、go/db 接受写资格子集,缺的库关着、Pod 不就绪;第二轮:关着的池后台每 15 秒重核并计入就绪,缺目录片写资格时以 78 退出、由 reaper 重建([设计稿](./data-service-startup-isolation.md)) | 三部分都已写完,未编译,待 Gemini 验证;目录第 0 片仍是启动硬依赖,另开会话做 |
+| S1 | `data_service` 启动期故障隔离:目录各片与流水库按需核对,一个集群连不上时照样启动、服务健康库;批 2 写者注册跳过连不上的库,data_service、go/db 接受写资格子集,缺的库关着、Pod 不就绪;第二轮:关着的池后台每 15 秒重核并计入就绪,缺目录片写资格时以 78 退出、由 reaper 重建([设计稿](./data-service-startup-isolation.md)) | 三部分都已写完,未编译,待 Gemini 验证;目录第 0 片的启动硬依赖由 [合服映射的 etcd 副本](./merged-zone-etcd-copy.md) 去掉(2026-11-27,未编译) |
 
 G1 落地后、F1~D1 落地前的过渡状态(D1 已写完,这段结束):闸门已按库拆开,但跨库 SQL 还在。data_service 的建角初始行和判死还在目录事务里写存档库,这些写只受目录库闸门保护,不受落点库闸门保护;go/db 选库还跨库读 `player_route`,库名来自配置 `Placement.RouteSchema`。这些都要求全部库还在一个集群,所以 F1~D1 落地之前不能真的搬库。
 

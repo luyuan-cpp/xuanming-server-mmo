@@ -152,6 +152,20 @@ public:
     static bool HoldsProvider(const std::string& fingerprint) {
         return BattleRoomManager::Instance().providersByFingerprint.contains(fingerprint);
     }
+    // 观战操作表回归辅助:驱动一次清理并观察操作表与截止索引规模。
+    static void PruneSpectatorOperations(const uint64_t nowMs) {
+        BattleRoomManager::Instance().PruneSpectatorOperations(nowMs);
+    }
+    static void EraseRoom(const uint64_t battleId) { BattleRoomManager::Instance().EraseRoom(battleId); }
+    static bool HasSpectatorOperation(const uint64_t battleId, const uint64_t observerId, const std::string& opId) {
+        return BattleRoomManager::Instance().spectatorOperations.contains(std::make_tuple(battleId, observerId, opId));
+    }
+    static void ClearSpectatorOperations() {
+        auto& manager = BattleRoomManager::Instance();
+        manager.spectatorOperations.clear();
+        manager.spectatorDeadlines.clear();
+    }
+
     // 把登记过的 provider 全部放掉(现役与保留的)。管理器是进程级单例,夹具 TearDown 调它,不把本用例的 provider 带给后面的用例;
     // 已建好的房间各自拿着自己的那一套,不受影响。
     static void ResetTableProviders() {
@@ -2725,4 +2739,62 @@ TEST_F(BattleObserverContract, MinorPlayDeadlineOfARefusedObserverDoesNotStickTo
                                                  direct.ServerSide(), nullptr, kSecondOperation));
     manager().EnforceMinorPlayDeadlines(battleId, UINT64_MAX);
     EXPECT_FALSE(DirectClosed(direct));
+}
+
+// 回归(2026-11-26):停机 BeginRoomShutdown 紧接着 main.cpp 的 DisconnectAll();
+// BeginRoomShutdown 必须同步对直连观众调 shutdown()(使 connected()==false),避免 DisconnectAll 误调 forceClose()
+// 吞掉尚未排空的 166 SOURCE_LOST。
+TEST_F(BattleObserverContract, ShutdownSynchronouslyDrainsDirectObserverBeforeDisconnectAll) {
+    LoopbackDirectConnection direct(*loop);
+    ASSERT_TRUE(direct.Open("shutdown_direct_observer"));
+    const auto edge = std::make_shared<BattleClientEdge>();
+    const ClientEdgeBinding binding(*edge);
+    ASSERT_NO_FATAL_FAILURE(Create());
+    const auto observer = Original(kFirstOperation);
+    ASSERT_EQ(0u, AddError(observer));
+    ASSERT_TRUE(manager().AttachDirectConnection(battleId, observer.observer_player_id(), ::BATTLE_TICKET_ROLE_OBSERVER,
+                                                 direct.ServerSide(), nullptr, observer.spectator_operation_id()));
+    ASSERT_TRUE(direct.ServerSide()->connected());
+
+    manager().BeginRoomShutdown("unit_shutdown");
+    // 紧接 DisconnectAll 之前,连接必须已同步切到 kDisconnecting(connected()==false),确保不会被 forceClose 抢断
+    EXPECT_FALSE(direct.ServerSide()->connected());
+    edge->DisconnectAll("unit_shutdown");
+
+    ::SpectateEndS2C expectedEnd;
+    expectedEnd.set_battle_id(battleId);
+    expectedEnd.set_outcome(::BATTLE_OUTCOME_ONGOING);
+    expectedEnd.set_reason(::SPECTATE_END_SOURCE_LOST);
+    ::MessageContent expectedEnvelope;
+    expectedEnvelope.set_message_id(BattleClientPlayerNotifySpectateEndMessageId);
+    expectedEnvelope.set_serialized_message(expectedEnd.SerializeAsString());
+    muduo::net::Buffer framed;
+    ProtobufCodec::fillEmptyBuffer(&framed, expectedEnvelope);
+    const std::string expected = framed.retrieveAllAsString();
+
+    ASSERT_TRUE(DriveLoopUntil(*loop, [&] { return direct.ClientReceived().size() >= expected.size(); }));
+    EXPECT_EQ(expected, direct.ClientReceived());
+}
+
+// 回归(2026-11-26):PruneSpectatorOperations 必须同步擦除已过期的 !cancelled 操作表项,避免仅删 deadline 索引导致永久泄漏;
+// 不经 RetireObserver 的 EraseRoom(如 SQL 终局放弃)也兜底关闭遗留观战操作。
+TEST_F(BattleObserverContract, PruneSpectatorOperationsReclaimsExpiredActiveEntriesAndEraseRoomClosesUnexpired) {
+    BattleRoomManagerTestAccess::ClearSpectatorOperations();
+    ASSERT_NO_FATAL_FAILURE(Create());
+    const auto first = Original(kFirstOperation);
+    ASSERT_EQ(0u, AddError(first));
+    ASSERT_TRUE(BattleRoomManagerTestAccess::HasSpectatorOperation(battleId, first.observer_player_id(), kFirstOperation));
+
+    // 到 admit_before_ms 触发清理:即使观众仍在房内(!cancelled),过期操作也应被回收,同时 Query 仍以 room->observerOperations 为准
+    BattleRoomManagerTestAccess::PruneSpectatorOperations(first.admit_before_ms());
+    EXPECT_FALSE(BattleRoomManagerTestAccess::HasSpectatorOperation(battleId, first.observer_player_id(), kFirstOperation));
+    EXPECT_EQ(OBSERVER_ADMISSION_ACTIVE, Query(first));
+
+    // 未过期但在 EraseRoom(不经 RetireObserver)删房后,表项应被兜底关闭并在到期后可回收
+    const auto second = OriginalFor(kFillerObserverBase, kSecondOperation);
+    ASSERT_EQ(0u, AddError(second));
+    ASSERT_TRUE(BattleRoomManagerTestAccess::HasSpectatorOperation(battleId, second.observer_player_id(), kSecondOperation));
+    BattleRoomManagerTestAccess::EraseRoom(battleId);
+    BattleRoomManagerTestAccess::PruneSpectatorOperations(second.admit_before_ms());
+    EXPECT_FALSE(BattleRoomManagerTestAccess::HasSpectatorOperation(battleId, second.observer_player_id(), kSecondOperation));
 }

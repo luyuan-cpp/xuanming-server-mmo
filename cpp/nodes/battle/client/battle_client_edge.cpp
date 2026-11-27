@@ -229,8 +229,9 @@ void BattleClientEdge::CloseExpiredHandshakes(const client_liveness::SteadyTime 
     {
         const auto conn = it->second.conn.lock();
         // 先摘记录:这一刻起它不再占未认证池,也不会再被承压淘汰选中;HandleClosed 随后找不到记录,什么都不做。
+        // 已经因为别的原因在关的(握手被拒后的延迟强关等)只摘记录,不算握手超时:关它的不是这道期限。
         it = unauthenticated.erase(it);
-        if (conn)
+        if (conn && conn->connected())
         {
             admission.NoteHandshakeTimeout();
             LogRejectionSampled("handshake_timeout", conn);

@@ -942,4 +942,31 @@ TEST_F(PreAuthConnectionLifecycle, EvictionClosesTheOldestUnverifiedConnection)
 	EXPECT_TRUE(Connection(1).ServerSideConnected()) << "只关最老的那一条";
 }
 
+// 已经在关的未验签连接(验签失败后回了失败包、等 100ms 延迟强关;验签前发包被关)不占用淘汰:它自己马上就走,
+// 淘汰它既不多腾位置、还会截掉失败包。跳过它,淘汰下一条还连着的(与 battle 直连同一口径)。
+TEST_F(PreAuthConnectionLifecycle, EvictionPassesOverAConnectionThatIsAlreadyClosing)
+{
+	Configure(10000, RateLimit{1'000'000, 1'000'000});
+	auto closing = Connect("preauth_closing");
+	auto holder = Connect("preauth_holder");
+	ASSERT_TRUE(closing && holder);
+	OpenPreAuthConnection(closing, kT0);
+	OpenPreAuthConnection(holder, kT0 + seconds(1));
+	OpenUnverifiedMany(CurrentPreAuthBudget().earlyDropStart - 2, kT0 + seconds(1));
+	const uint64_t closingKey = *PreAuthIncarnationOf(closing);
+	const uint64_t holderKey = *PreAuthIncarnationOf(holder);
+	closing->shutdown(); // 同 DispatchTokenVerify 的 rejectAndClose:回失败包之后半关闭,连接进 kDisconnecting
+	ASSERT_FALSE(closing->connected());
+	closing.reset(); // 不长期持有服务端连接的强引用
+	holder.reset();
+
+	// holder 建连满 3 秒、是最老的一条还连着的;closing 更老,但已经在关。
+	MarkLoopHealthy(kT0 + seconds(1) + kMinEvictableAge);
+	EXPECT_TRUE(AdmitConnection(peer, kT0 + seconds(1) + kMinEvictableAge));
+	EXPECT_EQ(GetCounters().preAuthEvicted, 1u);
+	EXPECT_TRUE(StillUnverified(closingKey)) << "已经在关的跳过,记录留给它自己的断开回调摘";
+	EXPECT_FALSE(StillUnverified(holderKey)) << "淘汰的是下一条还连着的";
+	EXPECT_FALSE(Connection(1).ServerSideConnected()) << "被淘汰的那条已置成关闭中";
+}
+
 } // namespace

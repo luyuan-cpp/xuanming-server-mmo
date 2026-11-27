@@ -179,6 +179,29 @@ function Clear-GlobalRouteTables {
         Invoke-GlobalDbSql -MysqlPwd $MysqlPwd -HasDocker $HasDocker -What 'route table wipe' -Sql $sql | Out-Null
         Write-Host "[reset] global DB ${database}: $($stmts -join ' ')" -ForegroundColor Yellow
     }
+    Remove-MergedZoneEtcdCopy -HasDocker $HasDocker
+}
+
+# 合服映射的 etcd 副本(docs/design/merged-zone-etcd-copy.md):上面清掉了 zone_merge_history,第 0 片的映射版本回到 0。
+# 副本还记着清表之前的版本的话,data_service 会认成「第 0 片回档了」而拒绝,所以和表一起删掉,下一个读得到第 0 片的副本重新发布。
+# 本机 etcd 在名为 etcd 的容器里(与 stress_round19.ps1 的 wipe 同口径)。删不到只告警:没合过服的环境,副本的版本本来就是 0。
+# 合过服的环境清表之后还要重启 data_service:在跑的进程回答过大于 0 的版本,不会跟着退回 0,只会一直报 restart this replica。
+function Remove-MergedZoneEtcdCopy {
+    param([bool]$HasDocker)
+    $copyKey = "/mmorpg/merged_zone_copy/$GlobalDbName"
+    if (-not $HasDocker) {
+        Write-Warning "[reset] docker unavailable - the etcd copy $copyKey of the merged zone mapping was not deleted"
+        return
+    }
+    # 局部改回 Continue,理由同 Invoke-GlobalDbSql:stderr 不能在旧版 PowerShell 里被当成脚本错误抛出,只认退出码。
+    $ErrorActionPreference = 'Continue'
+    $raw = @(& docker exec etcd etcdctl del $copyKey 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning ("[reset] could not delete the etcd copy $copyKey of the merged zone mapping (exit $LASTEXITCODE): $(($raw | ForEach-Object { "$_" }) -join ' | '); " +
+            "if this environment ever merged zones, data_service refuses the cleared directory until that key is deleted")
+        return
+    }
+    Write-Host "[reset] etcd: deleted $copyKey" -ForegroundColor Yellow
 }
 
 function Invoke-DataReset {

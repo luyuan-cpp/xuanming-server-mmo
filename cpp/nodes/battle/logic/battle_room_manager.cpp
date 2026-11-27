@@ -503,6 +503,26 @@ BattleRoomManager::BattleRoom *BattleRoomManager::EmplaceRoom(std::unique_ptr<Ba
 
 void BattleRoomManager::EraseRoom(const uint64_t battleId)
 {
+    if (const auto *room = rooms.Find(battleId); room != nullptr && !room->observerOperations.empty())
+    {
+        const uint64_t now = TimeSystem::NowMillisecondsUTC();
+        for (const auto &[observerId, operationId] : room->observerOperations)
+        {
+            const auto op = spectatorOperations.find(std::make_tuple(battleId, observerId, operationId));
+            if (op == spectatorOperations.end())
+            {
+                continue;
+            }
+            if (op->second.admitBeforeMs <= now)
+            {
+                spectatorOperations.erase(op);
+            }
+            else
+            {
+                op->second.cancelled = true;
+            }
+        }
+    }
     // 房间没了就不再替它出心跳(删房不经 END 的路径,如 SQL 终局长期拿不到决定的本地放弃,由 gate 按空闲超时收尾)
     spectateChannelFrameAt.erase(battleId);
     // 先移除后回调(房间表保证):最后一个房间移除后 Agones 才能回 Ready,顺序反了会在房间还在时放出容量
@@ -1000,11 +1020,13 @@ void BattleRoomManager::HandleGetBattleState(const ::SessionDetails &sessionDeta
 void BattleRoomManager::PruneSpectatorOperations(uint64_t now)
 {
     // 每次准入/取消最多处理128个过期项，不能每次遍历全部活动观战。
+    // 过了 admit_before_ms 后 HandleAddObserver 入口直接拒收、HandleQueryObserver 读 room->observerOperations，
+    // 无需继续占表；若只删 spectatorDeadlines 而保留 !cancelled 表项，房间走放弃删房或时钟回拨会永久泄漏。
     for (size_t count = 0; count < 128 && !spectatorDeadlines.empty(); ++count) {
         const auto deadline = spectatorDeadlines.begin();
         if (deadline->first > now) break;
         const auto operation = spectatorOperations.find(deadline->second);
-        if (operation != spectatorOperations.end() && operation->second.cancelled)
+        if (operation != spectatorOperations.end())
             spectatorOperations.erase(operation);
         spectatorDeadlines.erase(deadline);
     }
@@ -2279,7 +2301,8 @@ size_t BattleRoomManager::RegisteredObserverSeats() const
 
 void BattleRoomManager::NotifySpectateEndAndClose(BattleRoom &room,
                                                   const ::eSpectateEndReason reason,
-                                                  const ::eBattleOutcome outcome)
+                                                  const ::eBattleOutcome outcome,
+                                                  const bool immediateClose)
 {
     // 房间收尾 / 作废:观众席不再回收(房间对象析构时定时器也会取消,这里显式收口)
     room.observerSeatTimer.Cancel();
@@ -2312,7 +2335,7 @@ void BattleRoomManager::NotifySpectateEndAndClose(BattleRoom &room,
     PushSpectatorFrame(room, envelope);
     for (const auto observerId : observers)
     {
-        RetireObserver(room, observerId, "spectate_end");
+        RetireObserver(room, observerId, "spectate_end", immediateClose);
     }
 
     LOG_INFO << "Spectators removed: battle_id=" << room.battleId
@@ -2326,7 +2349,8 @@ void BattleRoomManager::NotifySpectateEndAndClose(BattleRoom &room,
     room.observerSeatDeadlines.clear();
 }
 
-void BattleRoomManager::RetireObserver(BattleRoom &room, const uint64_t observerId, const char *reason)
+void BattleRoomManager::RetireObserver(BattleRoom &room, const uint64_t observerId, const char *reason,
+                                       const bool immediateClose)
 {
     if (const auto active = room.observerOperations.find(observerId); active != room.observerOperations.end())
     {
@@ -2351,7 +2375,7 @@ void BattleRoomManager::RetireObserver(BattleRoom &room, const uint64_t observer
     room.observerSeatDeadlines.erase(observerId);
     // 未成年观众的直连限制随名单一起删;到点定时器不重挂(早到一次由 EnforceMinorPlayDeadlines 重挂)
     room.minorPlayLimits.erase(observerId);
-    CloseDirectConnectionOf(room, observerId, reason);
+    CloseDirectConnectionOf(room, observerId, reason, immediateClose);
 }
 
 void BattleRoomManager::StartObserverSeatGrace(BattleRoom &room, const uint64_t observerId, const bool reconnect)
@@ -2580,9 +2604,10 @@ void BattleRoomManager::BeginRoomShutdown(const std::string &reason)
         // 有待提交终局的房间不发:排空窗口内拿到决定照常发真 END(2026-11-05 第二轮评审定,两版同口径)。
         if (!room->outcomePending)
         {
-            NotifySpectateEndAndClose(*room, ::SPECTATE_END_SOURCE_LOST, ::BATTLE_OUTCOME_ONGOING);
+            NotifySpectateEndAndClose(*room, ::SPECTATE_END_SOURCE_LOST, ::BATTLE_OUTCOME_ONGOING,
+                                      /*immediateClose=*/true);
         }
-        CloseDirectConnections(*room, reason.c_str());
+        CloseDirectConnections(*room, reason.c_str(), /*immediate=*/true);
     }
 }
 
@@ -2970,10 +2995,19 @@ namespace
     // 调用本函数的 Handle*(StopWatchBattle / 打出最后一击的 SubmitBattleAction / SetAutoBattle)
     // 的应答要等 Handle* 返回后由直连面写出。queueInLoop 保证:应答先入输出缓冲 → shutdown
     // 等排空再 FIN → 1s 后强关兜底不配合的对端。终局包(PushBattleFrame)早已在缓冲里,顺序不变。
-    void ShutdownDirectConnAfterThisLoop(const muduo::net::TcpConnectionPtr &conn)
+    void ShutdownDirectConn(const muduo::net::TcpConnectionPtr &conn, const bool immediate)
     {
         if (!conn)
         {
+            return;
+        }
+        if (immediate)
+        {
+            if (conn->connected())
+            {
+                conn->shutdown();
+                conn->forceCloseWithDelay(1.0);
+            }
             return;
         }
         std::weak_ptr<muduo::net::TcpConnection> weak = conn;
@@ -2987,7 +3021,8 @@ namespace
     }
 } // namespace
 
-void BattleRoomManager::CloseDirectConnectionOf(BattleRoom &room, const uint64_t playerId, const char *reason)
+void BattleRoomManager::CloseDirectConnectionOf(BattleRoom &room, const uint64_t playerId, const char *reason,
+                                                const bool immediate)
 {
     const auto it = room.directConnByPlayer.find(playerId);
     if (it == room.directConnByPlayer.end())
@@ -2998,14 +3033,14 @@ void BattleRoomManager::CloseDirectConnectionOf(BattleRoom &room, const uint64_t
     {
         LOG_INFO << "battle closing player direct connection: battle_id=" << room.battleId << " player_id=" << playerId
                  << " reason=" << reason;
-        ShutdownDirectConnAfterThisLoop(conn);
+        ShutdownDirectConn(conn, immediate);
     }
     // 表里立刻摘除:从此该玩家视为无活直连(战斗帧丢弃、大厅公告回落 Kafka→gate),
     // 不再往一条正在关闭的连接上写
     room.directConnByPlayer.erase(it);
 }
 
-void BattleRoomManager::CloseDirectConnections(BattleRoom &room, const char *reason)
+void BattleRoomManager::CloseDirectConnections(BattleRoom &room, const char *reason, const bool immediate)
 {
     if (room.directConnByPlayer.empty())
     {
@@ -3017,7 +3052,7 @@ void BattleRoomManager::CloseDirectConnections(BattleRoom &room, const char *rea
     {
         if (const auto conn = weakConn.lock(); conn && conn->connected())
         {
-            ShutdownDirectConnAfterThisLoop(conn);
+            ShutdownDirectConn(conn, immediate);
         }
     }
     room.directConnByPlayer.clear();

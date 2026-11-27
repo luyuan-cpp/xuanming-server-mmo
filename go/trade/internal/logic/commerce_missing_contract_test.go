@@ -152,6 +152,7 @@ func newMissingContractLogic(t *testing.T, store *missingContractStore) *Jubaozh
 		Repo: &data.CommerceRepo{DB: store.open(t), Ops: &data.AssetOpRepo{}},
 		Now:  f.deps.Now,
 	}
+	engine.WantedSkills = fakeWantedSkills{} // 求购单入口先判开关,开着才读合同
 	f.deps.Commerce = engine
 	f.deps.Rmb = &commerce.RmbConsignments{Engine: engine}
 	f.deps.Mall = &commerce.Mall{Engine: engine} // 只用来过「人民币寄售依赖已装配」的检查,撤单不调商城
@@ -194,6 +195,10 @@ var missingContractEntries = []struct {
 	}},
 	{"CancelRmbConsignment", func(l *JubaozhaiLogic) (*base.TipInfoMessage, error) {
 		out, err := l.CancelRmbConsignment(&tradepb.CancelRmbConsignmentRequest{ListingId: missingContractID})
+		return out.GetErrorMessage(), err
+	}},
+	{"FulfillWantedSkillBookOrder", func(l *JubaozhaiLogic) (*base.TipInfoMessage, error) {
+		out, err := l.FulfillWantedSkillBookOrder(&tradepb.FulfillWantedSkillBookOrderRequest{OrderId: missingContractText, ClientRequestId: missingContractRequest, SealedItemId: 9001})
 		return out.GetErrorMessage(), err
 	}},
 	// 对照:Engine.Get 修复前就映射了查不到。

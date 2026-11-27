@@ -27,11 +27,13 @@ import (
 	"shared/drainproof"
 	"shared/dsclient"
 	"shared/etcdwatch"
+	"shared/generated/table"
 	"shared/idsegment"
 	"shared/mergedzone"
 	"shared/noderegistry"
 	"shared/placement"
 	"shared/rolefence"
+	"shared/tablebundle"
 	"shared/workshard"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -101,6 +103,8 @@ type ServiceContext struct {
 	Mall        *commerce.Mall
 	Rmb         *commerce.RmbConsignments
 	RmbIdentity *RmbIdentity
+	// Tables 是悬赏求书求购单要读的配表(Skill / SkillScrollCraft)的加载器;Commerce.WantedSkillBook.Enabled=false 时为 nil,trade 不读表。
+	Tables *tablebundle.Manager
 
 	// 同一 boot 的 SQL 身份与两个独立角色；P1 不关闭 RELAY 或 SQL 池。
 	WriterConfig     authoritysql.WriterConfig
@@ -210,6 +214,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 
 	var commerceEngine *commerce.Engine
 	var mall *commerce.Mall
+	var tables *tablebundle.Manager
 	if assets != nil {
 		titles := map[uint32]string{}
 		for key, value := range c.Commerce.ItemTitles {
@@ -250,6 +255,23 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 			panic(fmt.Errorf("trade: bind asset redelivery work owner: %w", err))
 		}
 		assets.Commerce = commerceEngine
+		// 悬赏求书求购单(kind 7)发榜要按 Skill / SkillScrollCraft 校验可求的技能(docs/design/skill-book-wanted-order-trade-escrow.md §3.9)。
+		// 只在开关打开时读表:关着时 trade 不碰任何配表,部署不用给它准备表目录。读不到即拒启(fail-closed);
+		// 经 tablebundle 两阶段加载,表包模式下跟随热更,查表读全局表管理器的当前快照(commerce.TableWantedSkills)。
+		if c.Commerce.WantedSkillBook.Enabled {
+			tables, err = tablebundle.LoadAtStartup(tablebundle.Options{
+				ServiceName:           "trade",
+				ImageTableDir:         c.TableDir,
+				UseBinary:             false,
+				StrictStartupValidate: true,
+				PrepareHook:           requireWantedSkillTables,
+			})
+			if err != nil {
+				panic(fmt.Errorf("trade: load wanted skill book tables (TableDir=%s): %w", c.TableDir, err))
+			}
+			tables.Start()
+			commerceEngine.WantedSkills = commerce.TableWantedSkills{}
+		}
 		if c.Mall.URL != "" {
 			mall, err = commerce.NewMall(c.Mall.URL, os.Getenv(c.Mall.GatewaySecretEnv), os.Getenv(c.Mall.DeliverySecretEnv), commerceEngine)
 			if err != nil {
@@ -273,6 +295,7 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		Roles:             roles,
 		Commerce:          commerceEngine,
 		Mall:              mall,
+		Tables:            tables,
 	}
 	if sc.Assets != nil {
 		sc.Assets.RelayAdmission = relay
@@ -285,6 +308,15 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		panic(err)
 	}
 	return sc
+}
+
+// requireWantedSkillTables 是求购单读表的校验钩子:候选表集里必须有 Skill 与 SkillScrollCraft,启动与热更同一判据。
+// 没有要随表派生的数据,提交时不用做别的。
+func requireWantedSkillTables(_ string, ts *table.TableSet) (func(), error) {
+	if ts == nil || ts.Skill == nil || ts.SkillScrollCraft == nil {
+		return nil, errors.New("candidate table set is missing Skill or SkillScrollCraft, which wanted skill book orders require")
+	}
+	return func() {}, nil
 }
 
 // LoadMergedZones 从 data_service 取合服映射建缓存,并开始定时重读;StopAndReport 里停。
@@ -536,6 +568,9 @@ func (sc *ServiceContext) StopAndReport(ctx context.Context) error {
 	sc.WriterConfig.Seal()
 	// 先停合服映射的定时重读:它走 directoryConn,连接关了之后的那一拍只会报假故障。
 	sc.MergedZones.Stop()
+	if sc.Tables != nil {
+		sc.Tables.Stop()
+	}
 	var result error
 	if sc.directoryConn != nil {
 		result = errors.Join(result, sc.directoryConn.Close())

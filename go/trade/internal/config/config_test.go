@@ -97,6 +97,36 @@ func TestEtcYamlContractValues(t *testing.T) {
 	if c.AssetOp.Secret != "" {
 		t.Error("AssetOp.Secret 必须留空:密钥只从环境变量读,绝不进仓库")
 	}
+	// 悬赏求书求购单随资产通道一起缺省关闭;表目录键写错会被 go-zero 当未知键忽略、落回缺省值,这里点名。
+	if c.Commerce.WantedSkillBook.Enabled {
+		t.Error("Commerce.WantedSkillBook.Enabled 必须是 false:它依赖默认关闭的资产通道")
+	}
+	if c.TableDir != "../../generated/tables" {
+		t.Errorf("TableDir = %q, want ../../generated/tables(与 match / mail 同一个导表产物目录)", c.TableDir)
+	}
+}
+
+// 悬赏求书求购单(kind 7)开关的两个前提:资产通道开着、有表目录;关着时两样都不查。
+func TestWantedSkillBookRequiresAssetChannelAndTables(t *testing.T) {
+	c := validConfig()
+	c.Commerce.WantedSkillBook.Enabled = true
+	c.TableDir = "../../generated/tables"
+	if c.Validate() == nil {
+		t.Fatal("资产通道关着时不得打开求购单:悬赏银两和书都托管不了")
+	}
+	c.AssetOp = AssetOpConf{Enabled: true, SecretEnv: AssetOpSecretEnvPrefix + "TRADE"}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("资产通道开着、有表目录应通过校验: %v", err)
+	}
+	c.TableDir = " "
+	if c.Validate() == nil {
+		t.Fatal("没有表目录不得打开求购单:发榜校验不了技能")
+	}
+	c.Commerce.WantedSkillBook.Enabled = false
+	c.AssetOp = AssetOpConf{}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("求购单关着时不查资产通道与表目录: %v", err)
+	}
 }
 
 // TestEtcYamlHasNoAssetOpSecretValue 机械守住"密钥不进仓库":yaml 里只许出现**变量名**,

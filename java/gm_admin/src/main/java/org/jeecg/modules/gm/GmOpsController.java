@@ -298,4 +298,11 @@ public class GmOpsController {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<String> badParameter() { return error(400, "请求参数格式无效"); }
     @ExceptionHandler(ResponseStatusException.class)
-    public Resp
+    public ResponseEntity<String> rejected(ResponseStatusException e) { return error(e.getStatusCode().value(), e.getReason()); }
+    @ExceptionHandler(GameServices.CallFailure.class)
+    public ResponseEntity<String> upstream(GameServices.CallFailure e) { return error(502, e.getMessage()); }
+
+    private ResponseEntity<String> error(int code, String message) {
+        return ResponseEntity.status(code).body(json.createObjectNode().put("success", false).put("code", code).put("message", message).toString());
+    }
+}

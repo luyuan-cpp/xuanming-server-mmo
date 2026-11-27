@@ -120,10 +120,14 @@
 
 本节适用于每一次新做、修改、返工、重新切图，以及换电脑后的接续；不能因为同一专题先前展示过参照就跳过本次开工展示。
 
-- **先展示真实参照**：交接方先在图仓核实并实际查看下列三张 PNG，再在本次聊天中逐张嵌入图片，标明名称和各自准确的图仓相对路径；只列文件名或链接不算展示。帮会图是当前 UI 风格、控件和字体的首要标准。同功能另有用户已确认的 `designs` 成图时，也核实、查看并展示；目录存在、版本号较新或仅有预览不等于已确认。图仓在新电脑上缺图时如实报告缺失，取得真实文件后再展示，不用文字描述或其他图代替。
+- **先展示真实参照（2026-11-26 扩充至 7 张长期标准参照）**：交接方先在图仓核实并实际查看下列七张 PNG，再在本次聊天中逐张嵌入图片，标明名称和各自准确的图仓相对路径；只列文件名或链接不算展示。帮会图仍是当前 UI 风格、控件和字体的首要标准。同功能另有用户已确认的 `designs` 成图时，也核实、查看并展示；目录存在、版本号较新或仅有预览不等于已确认。图仓在新电脑上缺图时如实报告缺失，取得真实文件后再展示，不用文字描述或其他图代替。
   - 邮件界面：`designs/mail-ui-v1/01-mail-event.png`
   - 组队界面：`designs/team-ui-v2/team-ui-v2.png`
   - 帮会界面（首要）：`designs/ranked-play-v2-ui-20261125/assets/approved-guild-reference.png`
+  - 天墉生死擂 · 下达战书：`designs/ui-standard-references/jianghu-duel/01-challenge-approved.png`
+  - 江湖恩怨录：`designs/ui-standard-references/jianghu-duel/02-grudges-approved.png`
+  - 帮派恩怨墙：`designs/ui-standard-references/jianghu-duel/03-guild-wall-approved.png`
+  - 江湖战书 · 三种弹窗：`designs/ui-standard-references/jianghu-duel/04-popups-approved.png`
 - **排除误用的赛事预览**：《群仙问道赛 · V2 增量组件》`designs/season-team-tournament-v2/previews/07-components.png` 只是该批组件拼装预览，不用于后续 UI 的开工展示、同功能参照或生图／AI 编辑附图，也不推荐为固定标准或画风依据。保留其历史交付与来源记录，不因本条改写旧图。
 - **只交本次美术需求**：新专题的成图、预览、正式切片和逐图来源放在图仓 `D:\work\image\designs\<新专题目录>\`；修改既有专题时沿用其已核实的任务目录和版本合同。可复制的作图正文只列本次要做的 UI、用途、内容与布局、状态展示、像素尺寸、文件名、透明底 PNG-32、文字留白和必要的拉伸端头留白。不得自行扩展未要求的玩法、页面、状态或切片；没有实质需求不硬扩展。
 - **正文与研发彻底分开**：上文 §5 和 §10.4 关于不写程序内容的禁令，适用于交给异机 Codex 的 `.md` 作图正文及聊天可复制正文。正文不得出现引擎术语（包括 `Unity`、`uGUI`、`Prefab`、`Canvas`、`Sprite`、`spriteBorder`、`.meta`）、客户端工程路径、C# 类名或脚本名、协议文件名或 RPC 名；也不得给 GPT / Codex 画风、配色、色号、材质、字体或装饰画法指令。若确需记录本机资源导入映射、脚本或协议依赖，只能在交接 `.md` **文末**另设「本机研发导入备忘」，明确不属于作图正文，回复时不复制给 Codex。

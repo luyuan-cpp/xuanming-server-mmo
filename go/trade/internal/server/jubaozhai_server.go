@@ -115,3 +115,14 @@ func (s *JubaozhaiServer) GetMarketReferencePrice(ctx context.Context, in *trade
 func (s *JubaozhaiServer) GetPlayerTradeQuota(ctx context.Context, in *tradepb.GetPlayerTradeQuotaRequest) (*tradepb.GetPlayerTradeQuotaResponse, error) {
 	return logic.NewJubaozhaiLogic(ctx, s.deps).GetPlayerTradeQuota(in)
 }
+
+// CreateWantedSkillBookOrder / FulfillWantedSkillBookOrder / ListWantedSkillBookOrders:悬赏求书求购单(kind 7)的发榜、揭榜与悬赏榜。
+func (s *JubaozhaiServer) CreateWantedSkillBookOrder(ctx context.Context, in *tradepb.CreateWantedSkillBookOrderRequest) (*tradepb.WantedSkillBookOrderResponse, error) {
+	return logic.NewJubaozhaiLogic(ctx, s.deps).CreateWantedSkillBookOrder(in)
+}
+func (s *JubaozhaiServer) FulfillWantedSkillBookOrder(ctx context.Context, in *tradepb.FulfillWantedSkillBookOrderRequest) (*tradepb.WantedSkillBookOrderResponse, error) {
+	return logic.NewJubaozhaiLogic(ctx, s.deps).FulfillWantedSkillBookOrder(in)
+}
+func (s *JubaozhaiServer) ListWantedSkillBookOrders(ctx context.Context, in *tradepb.ListWantedSkillBookOrdersRequest) (*tradepb.ListWantedSkillBookOrdersResponse, error) {
+	return logic.NewJubaozhaiLogic(ctx, s.deps).ListWantedSkillBookOrders(in)
+}

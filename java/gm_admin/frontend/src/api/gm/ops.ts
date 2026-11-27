@@ -287,4 +287,18 @@ export function prepareOps(draft: OpsDraft): Promise<OpsCommand> {
 }
 
 export function sendOps(commandId: string): Promise<OpsCommand> {
-  return defHttp.post<OpsCommand>({ url: `/gm/ops/commands/${encodeURIComponent(commandId)}/se
+  return defHttp.post<OpsCommand>({ url: `/gm/ops/commands/${encodeURIComponent(commandId)}/send` }, requestOptions);
+}
+
+export function listOpsCommands(page: number, pageSize: number, status?: string): Promise<{ records: OpsCommand[]; total: number }> {
+  return defHttp.get<{ records: OpsCommand[]; total: number }>({ url: '/gm/ops/commands', params: { page, pageSize, status } }, requestOptions);
+}
+
+export function getOpsCommand(commandId: string): Promise<OpsCommand> {
+  return defHttp.get<OpsCommand>({ url: `/gm/ops/commands/${encodeURIComponent(commandId)}` }, requestOptions);
+}
+
+export async function getOpsAudit(commandId: string): Promise<GmAuditEntry[]> {
+  const result = await defHttp.get<{ records: GmAuditEntry[] }>({ url: `/gm/ops/commands/${encodeURIComponent(commandId)}/audit` }, requestOptions);
+  return Array.isArray(result?.records) ? result.records : [];
+}

@@ -14,8 +14,8 @@
 # Install as a PrometheusRule CR (kube-prometheus stack),与 etcd-alerts.yaml 同法:
 #   kubectl apply -n observability -f deploy/k8s/dual-control-alerts.yaml
 #
-# Scrape prerequisites:各服务的 /metrics 被抓取(与它们各自的告警文件相同)。多数服务启动时就预建值为 0 的序列
-# (第一次接受就能被 increase() 看到);商城与 match 的计数在第一次接受时才出现,那一次 increase() 可能看不到,之后照常。
+# Scrape prerequisites:各服务的 /metrics 被抓取(与它们各自的告警文件相同)。各服务启动时就有值为 0 的序列
+# (不带标签的计数一注册就有;带 method / caller 标签的在启动时按取值预建),所以第一次接受就能被 increase() 看到。
 #
 # Severity conventions(与 scene-manager-alerts.yaml 相同):
 #   critical = pager, someone wakes up
@@ -129,4 +129,6 @@ spec:
           annotations:
             summary: "滞留阵容有 {{ $value | printf \"%.0f\" }} 次终结没带双人复核批准记录就被执行了"
             description: >-
-              match 打开了 GlobalMatch.ManualResolutionAllowUnapproved。按 match 日志与 match_manual_resolution 
+              match 打开了 GlobalMatch.ManualResolutionAllowUnapproved。按 match 日志与 match_manual_resolution 核对这些对局,
+              确认后关掉开关。
+            runbook_url: docs/design/admin-identity-and-dual-control.md

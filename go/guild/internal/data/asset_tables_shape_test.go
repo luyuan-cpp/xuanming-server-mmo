@@ -48,6 +48,21 @@ func TestAssetTablesShape(t *testing.T) {
 			"PRIMARY":                    {[]string{"player_id", "client_request_id"}, true},
 			"idx_guild_client_request_0": {[]string{"created_ms"}, false},
 		},
+		// 帮战待入账行(r2-gw#5 / #6):主键 (player_id, op_id) 既是挂起全集按玩家查的前缀,也是同一局同一人两笔的区分;
+		// 循环按 created_ms 翻页。后加的表,第一次建就必须对。
+		"guild_war_credit_owed": {
+			"PRIMARY":                     {[]string{"player_id", "op_id"}, true},
+			"idx_guild_war_credit_owed_0": {[]string{"created_ms"}, false},
+		},
+		// 追杀令(r2-gw#7):_4 给预扣指令终结按 escrow_op_id 定位,_3 给到期收尾与终态清理按到期时刻取候选。
+		"guild_war_bounty": {
+			"PRIMARY":                {[]string{"bounty_id"}, true},
+			"idx_guild_war_bounty_0": {[]string{"target_player_id", "status"}, false},
+			"idx_guild_war_bounty_1": {[]string{"issuer_guild_id", "status"}, false},
+			"idx_guild_war_bounty_2": {[]string{"zone_id", "status", "expires_at_ms"}, false},
+			"idx_guild_war_bounty_3": {[]string{"status", "expires_at_ms"}, false},
+			"idx_guild_war_bounty_4": {[]string{"escrow_op_id"}, false},
+		},
 	}
 
 	for table, wantIndexes := range want {

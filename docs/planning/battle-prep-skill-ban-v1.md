@@ -237,3 +237,25 @@
    - `BattleReportPanel.cs`（`RenderInspectedBuilds`）与观战 HUD：读取 `BattleReplay.start_state` 展示双方 3 Ban 详情。
 3. **美术切片交接**：交付 [battle-prep-skill-ban-ui-handoff.md](ui-handoff/battle-prep-skill-ban-ui-handoff.md) 的 8 枚无字透明 PNG-32 切片给异机 Codex 制作并导入 `Assets/Resources/UI/Ugui/BattlePrepSkillBan/`。
 4. **验证门禁（Gemini 执行）**：C++ 静态守卫 + MSBuild `/m:1` + GTest、Go `go test ./...`、Java `mvnw clean install` + 定向单测、Unity `client_compile_check.ps1` + EditMode NUnit 单测，并追加实跑证据至 `docs/PROGRESS.md`。
+
+---
+
+## 8. V2 增量扩展：每方「3 禁 + 1 保（护招破禁）」、队友已带标记与开局亮牌揭示
+
+> 落盘日期：2026-11-26｜零新 RPC、零新消息号、零配表新列、零 `rule_version` 变更，沿用同一 25 秒战前窗。
+
+1. **核心博弈规则（「3 禁 + 1 保」）**：
+   - 任意开启战前技能禁选的对局（`skill_ban_slots_per_team > 0`）自动激活每队 `skill_protect_slots_per_team = 1`；
+   - 每名真人玩家可在候选白名单内独立提名 `0..1` 个护招（`UpdateBattlePrepRequest.update_protected_skill = 7` / `protected_skill_id = 8`），严禁与本人最终禁招列表同招（客户端切换点选时单次原子请求自动移出冲突项）；
+   - 队内护招确定性聚合 `AggregateTeamProtect(teamIndex)`：`votes DESC -> nominatedByCaptain DESC -> SplitMix64(seed ^ 0x50524F54454354ULL ^ skill_id) ASC -> skill_id ASC`；
+   - `FinalizePrepPhase()` 破禁结算：B 队护招反制 A 队禁招，A 队护招反制 B 队禁招；若某技能被双边同时封禁而仅有一边护招，另一方自己的未受反制禁招仍生效（`countered_ban_skill_ids` 与 `banned_skill_ids` 严格互斥），被破禁化解的技能从 `banned_skill_ids` 移除并恢复全员可施放。
+2. **「队友已带」防误禁标记（零泄密）**：
+   - `BattlePrepState.teammate_equipped_skill_ids = 13` 仅向同队参战者下发“本队其他队友人物及当前所选首发宠已携带、且属于候选池”的升序去重技能 ID（队友临场换宠即实时刷新；1V1 / 对手 / 观众恒为空）。
+3. **协议增量（仅末尾追加字段）**：
+   - `BattlePrepPlayerState.nominated_protect_skill_id = 9`
+   - `BattlePrepState.{skill_protect_slots_per_team = 11, team_effective_protected_skill_id = 12, teammate_equipped_skill_ids = 13}`
+   - `BattleStateS2C.{team_a_protected_skill_id = 44, team_b_protected_skill_id = 45, countered_ban_skill_ids = 46}`（天然覆盖重连 / L2 观战 / 战报回放 / 看配装）
+   - `UpdateBattlePrepRequest.{update_protected_skill = 7, protected_skill_id = 8}`
+4. **Unity 客户端与 V2 5 枚切片（Codex `72ca11aa44177de8d3a9997a92ef02c0a7a842b3`）**：
+   - 导入 `prep_protect_slot_empty.png`、`prep_protect_slot_filled.png`、`skill_protected_badge.png`、`battle_ban_reveal_banner_bg.png`（960×220 九宫格 `180/52/180/55`）、`prep_teammate_equipped_tag.png`（48×48，卡片局部 `[68,2,90,24]`）至 `Assets/Resources/UI/Ugui/BattlePrepSkillBan/`；
+   - 战前浮层新增 1 护招槽与禁/保切换按钮、候选卡右上角「队友已带」标记、顶部禁招条破禁角标与详情展开、以及第 1 回合开局 2.65 秒居中亮牌揭示横幅（避让右上 140px 小游戏胶囊区）。

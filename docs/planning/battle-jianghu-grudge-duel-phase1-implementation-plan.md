@@ -400,3 +400,11 @@ match 调 friend(下战书前查拉黑与好友关系,`BatchCheckSocialRelations
 - friend、chat、guild 的 gRPC 准入名单里也没有 match,开了 `-NetworkPolicies` 时即使配上也拨不进去。
 
 已补(未运行):三个客户端直连同 namespace 的 Service(三个服务都不写 `Etcd.Key`,D-13),超时镜像服务 yaml;三份准入名单加 match(金丝雀副本自动补上);契约测试「match 的江湖生死状接线」与准入名单用例的期望;`deploy/k8s/README.md` 的准入名单表。chat 的系统播报是服务端方法,在集群上靠这张准入名单只让 match 拨进来,不另加签名(理由见 `docs/design/rename-and-content-safety.md` §7.3)。验证命令在 `docs/PROGRESS.md` 2026-11-26「改名与内容安全第三轮」。
+
+### r2-tn#3 的五项（数据覆写审计 r2 第 4 轮编号；修法就是上一节，这里补齐另三项）
+
+- **问题（含触发时序）**：同上一节。集群部署之后玩家下战书 → match 先经 friend 查拉黑与好友关系 → K8s 的 match ConfigMap 没有 `FriendRpc`，客户端为空 → 按 fail-closed 一律回「社交关系校验服务未就绪」，生死状在集群上整条不可用；战书与战果的系统播报（chat）、纯帮会对阵的帮派归属（guild）静默跳过。只补 ConfigMap 也不够：friend、chat、guild 的 gRPC 准入名单没有 match，开了 `-NetworkPolicies` 照样拨不进去。
+- **方案**：同上一节（ConfigMap 三段直连 infra namespace 的 Service、超时镜像 `go/match/etc/match_service.yaml`、`NonBlock: true`；三份准入名单加 match；契约测试与 README 同步）。
+- **为什么这样选**：三个服务都不写 `Etcd.Key`（D-13），直连同 namespace 的 Service 与批 W 给 match 补 `MailRpc`、mail 读 `GuildRpc` 是同一写法；超时从服务 yaml 镜像，本机与集群一个口径，契约测试逐项核对，漏一个就红。`NonBlock` 让依赖没起时不挡 match 启动，安全性不靠启动检查：friend 不可用时下战书在请求处就拒绝，不会放过拉黑。
+- **被否决的做法**：**经 etcd 发现**：这三个服务不注册 `Etcd.Key`，D-13 已定。**缺客户端时 match 拒启**：friend 偶发不可用就会连带 match 起不来，挡住全部匹配；拒绝放在下战书请求上就够。**只补 ConfigMap、不补准入名单**：开了 `-NetworkPolicies` 的环境照样拨不进去，问题只是换了个样子。
+- **代价与边界**：friend / chat / guild 的 Service 名或端口要改时同步这三段模板（契约测试「match 的江湖生死状接线」会红）；本机 `go_services` 的地址不受影响；本条只是部署接线，与生死状的银两、恩怨录数据无关。修改由「改名与内容安全第三轮」会话完成（未运行），本审计会话复核了 HEAD 确实缺这三段与三条准入、工作区的补丁补全了它们（端口 50400 / 50700 / 50300 与 `$GoSvcCatalogue` 一致，K8s 侧只有入站准入、没有出站策略）。

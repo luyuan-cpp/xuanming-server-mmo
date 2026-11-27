@@ -201,7 +201,7 @@ cd tools/data_table_exporter && py -m pytest -q
 | **GuildWarRule** | `GuildWarRule.xlsx` | `guildwarrule_table.proto` | 31 | 31 | 1 | — | — | `battle_config_id` | `battle_config_id→Dungeon.id` | — | — | — |
 | **Item** | `Item.xlsx` | `item_table.proto` | 23 | 18 | 148 | — | — | `affix_rule` `forge_material_id` `artifact_id` | `affix_rule→EquipAffixRule.id` `forge_material_id→Item.id` `artifact_id→EquipArtifact.id` | — | — | `base_attr` |
 | **JianghuRule** | `JianghuRule.xlsx` | `jianghurule_table.proto` | 18 | 18 | 1 | — | — | `gold_writ_item_id` `clear_item_id` | `gold_writ_item_id→Item.id` `clear_item_id→Item.id` | — | — | — |
-| **MessageLimiter** | `MessageLimiter.xlsx` | `messagelimiter_table.proto` | 4 | 4 | 138 | — | — | — | — | — | — | — |
+| **MessageLimiter** | `MessageLimiter.xlsx` | `messagelimiter_table.proto` | 4 | 4 | 141 | — | — | — | — | — | — | — |
 | **Mirror** | `Mirror.xlsx` | `mirror_table.proto` | 3 | 3 | 2 | — | — | `scene_id` `main_scene_id` | `scene_id→BaseScene.id` `main_scene_id→World.id` | — | — | — |
 | **Mission** | `Mission.xlsx` | `mission_table.proto` | 15 | 9 | 17 | — | — | `reward_id` | `reward_id→Reward.id` `condition_id→Condition.id(组)` | `id` | — | — |
 | **Monster** | `Monster.xlsx` | `monster_table.proto` | 19 | 13 | 63 | — | — | `capture_pet_table_id` | `capture_pet_table_id→Pet.id` | — | — | `drop` |

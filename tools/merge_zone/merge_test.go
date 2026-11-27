@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"shared/mergedzonecopy"
 	"shared/placement"
 )
 
@@ -24,10 +25,14 @@ type memStore struct {
 	insertErr      error
 	historyErr     error      // 追加历史失败(表不在、没有 INSERT 权限):映射与历史一起回滚
 	historyReadErr error      // 审计读历史失败
+	committedErr   error      // Committed 读不回来(提交之后第 0 片断开)
 	locked         [][]uint32 // 每次 Locked 收到的 zones
 	inserts        []mappingRow
 	deletes        int
 }
+
+// memGeneration 是内存替身的库世代(第 0 片 route_meta.generation)。
+const memGeneration = "0123456789abcdef0123456789abcdef"
 
 // newMemStore 种的映射行都当成本工具写的:每行带一条对得上的 merge 历史(run_id "seed")。
 func newMemStore(merges map[uint32]uint32) *memStore {
@@ -96,6 +101,64 @@ func (s *memStore) Locked(_ context.Context, zones []uint32, body func(mappingTx
 	return nil
 }
 
+// Committed 与 SQL 实现同一口径:版本是历史的条数,映射是现在的映射行。
+func (s *memStore) Committed(context.Context) (mergedzonecopy.Mapping, error) {
+	if s.lockErr != nil {
+		return mergedzonecopy.Mapping{}, s.lockErr
+	}
+	if s.committedErr != nil {
+		return mergedzonecopy.Mapping{}, s.committedErr
+	}
+	merges := make(map[uint32]uint32, len(s.rows))
+	for src, row := range s.rows {
+		merges[src] = row.Dst
+	}
+	return mergedzonecopy.Mapping{Generation: memGeneration, Version: uint64(len(s.history)), Merges: merges}, nil
+}
+
+// memCopies 是 etcd 副本的内存替身:revision 0 = 没有键,每写一次加 1;Put 按 revision 比较,和 etcd 的 ModRevision 同一语义。
+type memCopies struct {
+	value    mergedzonecopy.Mapping
+	revision int64
+	getErr   error
+	putErr   error
+	// racer 在每次 Put 比较 revision 之前调用,模拟别的写者(data_service)抢先写了一次。
+	racer func(*memCopies)
+	puts  int
+}
+
+func newMemCopies() *memCopies { return &memCopies{} }
+
+func (c *memCopies) Key() string { return mergedzonecopy.Key("mem_global_00") }
+
+func (c *memCopies) Get(context.Context) (mergedzonecopy.Mapping, int64, bool, error) {
+	if c.getErr != nil {
+		return mergedzonecopy.Mapping{}, 0, false, c.getErr
+	}
+	if c.revision == 0 {
+		return mergedzonecopy.Mapping{}, 0, false, nil
+	}
+	value := c.value
+	value.Merges = maps.Clone(value.Merges)
+	return value, c.revision, true, nil
+}
+
+func (c *memCopies) Put(_ context.Context, revision int64, mapping mergedzonecopy.Mapping) (bool, error) {
+	c.puts++
+	if c.racer != nil {
+		c.racer(c)
+	}
+	if c.putErr != nil {
+		return false, c.putErr
+	}
+	if revision != c.revision {
+		return false, nil
+	}
+	mapping.Merges = maps.Clone(mapping.Merges)
+	c.value, c.revision = mapping, c.revision+1
+	return true, nil
+}
+
 type memTx struct{ s *memStore }
 
 func (t memTx) Rows(context.Context) ([]mappingRow, error) { return t.s.sorted(), nil }
@@ -128,9 +191,14 @@ func (t memTx) Delete(_ context.Context, src, dst uint32) (bool, error) {
 
 var testNow = time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
 
+// runModeWith 每次给一份新的空副本:不关心副本的用例用它。
 func runModeWith(store mappingStore, mode string, src, dst uint32, dryRun bool) (string, error) {
+	return runModeWithCopies(store, newMemCopies(), mode, src, dst, dryRun)
+}
+
+func runModeWithCopies(store mappingStore, copies mergedzonecopy.Copies, mode string, src, dst uint32, dryRun bool) (string, error) {
 	var out bytes.Buffer
-	err := execute(context.Background(), store, options{mode: mode, sourceZone: src, targetZone: dst, dryRun: dryRun}, testNow, &out)
+	err := execute(context.Background(), store, copies, options{mode: mode, sourceZone: src, targetZone: dst, dryRun: dryRun}, testNow, &out)
 	return out.String(), err
 }
 
@@ -564,18 +632,22 @@ func TestExitCodes(t *testing.T) {
 
 const fixtureDSN = "op:s3cret-word@tcp(127.0.0.1:4000)/mmorpg_global"
 
+const fixtureEtcd = "127.0.0.1:2379"
+
 func TestParseOptions(t *testing.T) {
 	dsn := []string{"-route-db-dsn", fixtureDSN}
+	etcd := []string{"-etcd-hosts", fixtureEtcd}
 	ok := []struct {
 		name string
 		args []string
 		want options
 	}{
-		{"merge", []string{"-mode", "merge", "-source-zone", "5", "-target-zone", "6"}, options{mode: modeMerge, sourceZone: 5, targetZone: 6}},
-		{"merge dry-run", []string{"-mode", "merge", "-source-zone", "5", "-target-zone", "6", "-dry-run"}, options{mode: modeMerge, sourceZone: 5, targetZone: 6, dryRun: true}},
-		{"unmerge", []string{"-mode", "unmerge", "-source-zone", "5", "-target-zone", "6"}, options{mode: modeUnmerge, sourceZone: 5, targetZone: 6}},
+		{"merge", append([]string{"-mode", "merge", "-source-zone", "5", "-target-zone", "6"}, etcd...), options{mode: modeMerge, sourceZone: 5, targetZone: 6, etcdHosts: fixtureEtcd}},
+		{"merge dry-run 不要 etcd", []string{"-mode", "merge", "-source-zone", "5", "-target-zone", "6", "-dry-run"}, options{mode: modeMerge, sourceZone: 5, targetZone: 6, dryRun: true}},
+		{"unmerge", append([]string{"-mode", "unmerge", "-source-zone", "5", "-target-zone", "6"}, etcd...), options{mode: modeUnmerge, sourceZone: 5, targetZone: 6, etcdHosts: fixtureEtcd}},
 		{"audit", []string{"-mode", "audit"}, options{mode: modeAudit}},
-		{"zone 上限", []string{"-mode", "merge", "-source-zone", "999998", "-target-zone", "999999"}, options{mode: modeMerge, sourceZone: 999998, targetZone: 999999}},
+		{"audit 比对副本", []string{"-mode", "audit", "-etcd-hosts", "10.0.0.1:2379, 10.0.0.2:2379"}, options{mode: modeAudit, etcdHosts: "10.0.0.1:2379, 10.0.0.2:2379"}},
+		{"zone 上限", append([]string{"-mode", "merge", "-source-zone", "999998", "-target-zone", "999999"}, etcd...), options{mode: modeMerge, sourceZone: 999998, targetZone: 999999, etcdHosts: fixtureEtcd}},
 	}
 	for _, tc := range ok {
 		t.Run(tc.name, func(t *testing.T) {
@@ -604,6 +676,10 @@ func TestParseOptions(t *testing.T) {
 		"已删旗标 -redis":    {"-mode", "merge", "-source-zone", "5", "-target-zone", "6", "-redis-addr", "h:1", "-route-db-dsn", fixtureDSN},
 		"已删旗标 -manifest": {"-mode", "merge", "-source-zone", "5", "-target-zone", "6", "-manifest-path", "x", "-route-db-dsn", fixtureDSN},
 		"多余的位置参数":        {"-mode", "audit", "-route-db-dsn", fixtureDSN, "extra"},
+		"真合服没有 etcd":     {"-mode", "merge", "-source-zone", "5", "-target-zone", "6", "-route-db-dsn", fixtureDSN},
+		"真撤销没有 etcd":     {"-mode", "unmerge", "-source-zone", "5", "-target-zone", "6", "-route-db-dsn", fixtureDSN},
+		"etcd 地址没有端口":    {"-mode", "audit", "-etcd-hosts", "etcd.infra", "-route-db-dsn", fixtureDSN},
+		"etcd 地址有空项":     {"-mode", "audit", "-etcd-hosts", "127.0.0.1:2379,", "-route-db-dsn", fixtureDSN},
 	}
 	for name, args := range bad {
 		t.Run(name, func(t *testing.T) {
@@ -622,7 +698,8 @@ func TestRun_NeverEchoesTheDSN(t *testing.T) {
 		"DSN 写成位置参数": {"-mode", "audit", "-route-db-dsn", "x", fixtureDSN},
 		"DSN 解析不了":   {"-mode", "audit", "-route-db-dsn", "op:" + secret + "@tcp(127.0.0.1:1)"},
 		"DSN 没有库名":   {"-mode", "audit", "-route-db-dsn", "op:" + secret + "@tcp(127.0.0.1:1)/"},
-		"写操作没有操作员身份": {"-mode", "merge", "-source-zone", "5", "-target-zone", "6", "-route-db-dsn", fixtureDSN},
+		"写操作没有操作员身份": {"-mode", "merge", "-source-zone", "5", "-target-zone", "6", "-route-db-dsn", fixtureDSN, "-etcd-hosts", fixtureEtcd},
+		"写操作没有 etcd": {"-mode", "merge", "-source-zone", "5", "-target-zone", "6", "-route-db-dsn", fixtureDSN},
 	}
 	for name, args := range cases {
 		t.Run(name, func(t *testing.T) {

@@ -19,6 +19,9 @@ package main
 //
 // 连接规范与其它运维工具相同:全局库走 authoritysql(MMORPG_SQL_BACKEND 选档位),真写要操作员身份
 // (MMORPG_SQL_OPERATOR_PRINCIPAL),dry-run 和审计只用只读权限。DSN 含口令,任何输出都不回显。
+//
+// 真写提交之后把映射发布进 etcd 副本 /mmorpg/merged_zone_copy/<第 0 片库名>(docs/design/merged-zone-etcd-copy.md),
+// 所以真写还要 -etcd-hosts(data_service 节点注册那一套 etcd);审计给了它就比对副本,dry-run 不用它。
 
 import (
 	"context"
@@ -26,10 +29,16 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"os"
+	"strings"
 	"time"
 
+	clientv3 "go.etcd.io/etcd/client/v3"
+
 	"shared/authoritysql"
+	"shared/etcdwatch"
+	"shared/mergedzonecopy"
 )
 
 const (
@@ -41,8 +50,11 @@ const (
 	exitRefused = 1
 	exitFailed  = 2
 
-	// runTimeout 是一次运行的总时限。工具只跑一个事务,锁等待封顶 1 秒(authoritysql 的会话设置),30 秒足够连库和重连。
+	// runTimeout 是一次运行的总时限。工具只跑一个事务,锁等待封顶 1 秒(authoritysql 的会话设置),30 秒足够连库、重连和发布副本。
 	runTimeout = 30 * time.Second
+
+	// etcdDialTimeout 与 data_service 连同一套 etcd 的客户端同值。
+	etcdDialTimeout = 5 * time.Second
 )
 
 type options struct {
@@ -51,6 +63,8 @@ type options struct {
 	targetZone uint32
 	routeDSN   string // 含口令:只交给 authoritysql.Open,不进日志、不进错误信息
 	dryRun     bool
+	// etcdHosts 是 -etcd-hosts 的原文(逗号分隔的 host:port),parseOptions 已校验形状。存原文不存切片,options 才能直接比较。
+	etcdHosts string
 }
 
 // writes 报告这次运行会不会写库。dry-run 和审计只要只读权限,不要求操作员身份。
@@ -83,7 +97,13 @@ func run(args []string, getenv func(string) string, out, errOut io.Writer) int {
 			fmt.Fprintf(errOut, "WARN: close the global database: %v\n", err)
 		}
 	}()
-	err = execute(ctx, store, o, time.Now(), out)
+	copies, closeCopies, err := openCopiesFor(o, store.database)
+	if err != nil {
+		fmt.Fprintf(errOut, "ERROR: %v\n", err)
+		return exitFailed
+	}
+	defer closeCopies()
+	err = execute(ctx, store, copies, o, time.Now(), out)
 	if err != nil {
 		fmt.Fprintf(errOut, "ERROR: %v\n", err)
 	}
@@ -113,6 +133,9 @@ func parseOptions(args []string, errOut io.Writer) (options, error) {
 	fs.StringVar(&o.routeDSN, "route-db-dsn", "",
 		"DSN of directory shard 0, the only one that holds zone_merged_into (the base name when Directory.LogicalShards=1, otherwise <base>_00; dev: testdb, K8s: mmorpg_global_00). Required, never logged")
 	fs.BoolVar(&o.dryRun, "dry-run", false, "merge / unmerge: validate and print what would happen, write nothing")
+	fs.StringVar(&o.etcdHosts, "etcd-hosts", "",
+		"comma-separated host:port of the etcd that data_service registers in (dev: 127.0.0.1:2379; K8s: a port-forward to etcd in the infra namespace). "+
+			"Required for a real merge or unmerge, which publishes the mapping to the etcd copy after committing it; optional for audit, which then compares the copy; unused by -dry-run")
 	if err := fs.Parse(args); err != nil {
 		return options{}, err
 	}
@@ -140,7 +163,46 @@ func parseOptions(args []string, errOut io.Writer) (options, error) {
 	default:
 		return options{}, fmt.Errorf("unknown -mode %q (expected merge, unmerge or audit)", o.mode)
 	}
+	if o.etcdHosts != "" {
+		if _, err := splitEtcdHosts(o.etcdHosts); err != nil {
+			return options{}, err
+		}
+	} else if o.writes() {
+		return options{}, fmt.Errorf("a real %s needs -etcd-hosts: after committing, it publishes the mapping to the etcd copy that data_service replicas "+
+			"which cannot read directory shard 0 answer from (docs/design/merged-zone-etcd-copy.md)", o.mode)
+	}
 	return o, nil
+}
+
+// splitEtcdHosts 拆 -etcd-hosts:逗号分隔,每一项都是 host:port。
+func splitEtcdHosts(raw string) ([]string, error) {
+	var hosts []string
+	for _, part := range strings.Split(raw, ",") {
+		host := strings.TrimSpace(part)
+		if _, _, err := net.SplitHostPort(host); err != nil || host == "" {
+			return nil, fmt.Errorf("-etcd-hosts must be comma-separated host:port entries (got %q)", raw)
+		}
+		hosts = append(hosts, host)
+	}
+	return hosts, nil
+}
+
+// openCopiesFor 按需要连 etcd 副本:没给 -etcd-hosts 或 dry-run 时回 nil(审计不比对,dry-run 不用)。shardZeroDB 是 DSN 里的库名。
+// clientv3.New 不带 WithBlock,这里不拨号,连不通要到第一次读副本才报。回接口类型的 nil,不回包着 nil 指针的接口。
+func openCopiesFor(o options, shardZeroDB string) (mergedzonecopy.Copies, func(), error) {
+	if o.etcdHosts == "" || o.dryRun {
+		return nil, func() {}, nil
+	}
+	hosts, err := splitEtcdHosts(o.etcdHosts)
+	if err != nil {
+		return nil, nil, err
+	}
+	// keepalive 与 data_service、dbplacement 的 etcd 客户端同一套(etcdwatch 包注释)。
+	client, err := clientv3.New(etcdwatch.WithKeepAlive(clientv3.Config{Endpoints: hosts, DialTimeout: etcdDialTimeout}))
+	if err != nil {
+		return nil, nil, fmt.Errorf("connect etcd for the merged zone copy: %w", err)
+	}
+	return mergedzonecopy.NewEtcdCopies(client, shardZeroDB), func() { _ = client.Close() }, nil
 }
 
 // zonePair 校验一对 flag 值:都在 zone 编号范围内,且不是同一个区。先比范围再收窄,不让 uint32() 把人指到另一个区。

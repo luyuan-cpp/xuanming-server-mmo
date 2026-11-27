@@ -185,13 +185,15 @@ func TestRegisterRecallReviewHandled_RefusesWhatIsNotListed(t *testing.T) {
 // 入参校验在碰任何存储之前。
 func TestRegisterRecallReviewHandled_RejectsInvalidRequests(t *testing.T) {
 	cases := map[string]func(*RecallReviewHandledReq){
-		"没有玩家":     func(r *RecallReviewHandledReq) { r.PlayerID = 0 },
-		"没有指令号":    func(r *RecallReviewHandledReq) { r.CorrelationID = 0 },
-		"没有流水":     func(r *RecallReviewHandledReq) { r.TxIDs = nil },
-		"流水重复":     func(r *RecallReviewHandledReq) { r.TxIDs = []uint64{11, 11} },
-		"流水号为 0":   func(r *RecallReviewHandledReq) { r.TxIDs = []uint64{0, 11} },
-		"流水超过上限":   func(r *RecallReviewHandledReq) { r.TxIDs = make([]uint64, maxRecallSourceRows+1) },
-		"没填原因码":    func(r *RecallReviewHandledReq) { r.ReviewReason = dspb.RecallReviewReason_RECALL_REVIEW_REASON_UNSPECIFIED },
+		"没有玩家":   func(r *RecallReviewHandledReq) { r.PlayerID = 0 },
+		"没有指令号":  func(r *RecallReviewHandledReq) { r.CorrelationID = 0 },
+		"没有流水":   func(r *RecallReviewHandledReq) { r.TxIDs = nil },
+		"流水重复":   func(r *RecallReviewHandledReq) { r.TxIDs = []uint64{11, 11} },
+		"流水号为 0": func(r *RecallReviewHandledReq) { r.TxIDs = []uint64{0, 11} },
+		"流水超过上限": func(r *RecallReviewHandledReq) { r.TxIDs = make([]uint64, maxRecallSourceRows+1) },
+		"没填原因码": func(r *RecallReviewHandledReq) {
+			r.ReviewReason = dspb.RecallReviewReason_RECALL_REVIEW_REASON_UNSPECIFIED
+		},
 		"没有指令号的原因": func(r *RecallReviewHandledReq) { r.ReviewReason = dspb.RecallReviewReason_RECALL_REVIEW_NO_CORRELATION },
 		"不认识的原因码":  func(r *RecallReviewHandledReq) { r.ReviewReason = 99 },
 		"道具没填配置号":  func(r *RecallReviewHandledReq) { r.Kind = dspb.RecallKind_RECALL_KIND_ITEM },

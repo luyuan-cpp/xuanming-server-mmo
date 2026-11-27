@@ -162,6 +162,7 @@ namespace gate_spectate
 			// -1 = 还没收过,round_index 是 uint32,存得下。
 			int64_t lastTurnRound{-1}; // 已扇出过的最大 TURN 回合:只有 TURN 推进,决定「这帧发不发」
 			int64_t cachedStateRound{-1}; // 缓存里状态所处的回合:STATE(r) 记 r,TURN(r) 记 r + 1,决定「缓存换不换」
+			bool cachedPrepActive{false}; // 缓存快照是否处于战前变阵期:true→false(亮牌开打)须向全体已在看订阅者扇出新 161
 			SteadyTime lastFrameSteady{};
 			SteadyTime endedAt{};
 			uint64_t deadlineMs{0};

@@ -34,6 +34,7 @@
 ## 2. 待做二：独立 Java 仓全栈进程 LOBBY 观战端到端冒烟
 
 **为什么延期**：独立 Java 仓（`D:\luyuan\xuanming-server-mmo`）已完成全部单测、真 Redis 7.2 / 8.10.2 分片 pub/sub 集成测试与真 TiDB v8.5.8 62/62 集成测试，但本机未单独拉起完整 Java 多进程栈（`game-gateway` / `game-login` / `game-gate` / `game-scene` / `game-battle` / `game-match`）跑真人进程间 LOBBY 观战冒烟。
+- **2026-11-26 复核受阻说明**：按 `tools/local/start-slice.sh` 核对，独立 Java 切片需同时拉起 13 个 Java 进程 + 3-broker Kafka + TiDB + 每实例一次性 `MMORPG_SQL_BOOT_CATALOG_DIR` 授权目录；当前开发宿主机仅剩约 `5.2 GB` 可用内存且与其他并行会话共用容器/工作区（且 `game-match` / `game-battle-engine` 存在并行会话未闭合的 `puzzle/` WIP），无法安全拉起 13 进程全栈切片，仍保留待独立测试环境执行。
 
 **前置条件**：独立 Java 仓按其 `docs/porting/` 与 `deploy/` 文档拉起完整本地或测试环境切片（Redis 7.2+、TiDB v8.5.8 / MySQL、`GAME_MATCH_SPECTATE_RELAY_ENABLED=true`、`GAME_SPECTATE_TOKEN_SECRET` 合法配置）。
 

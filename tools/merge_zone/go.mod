@@ -4,6 +4,7 @@ go 1.27.2
 
 require (
 	github.com/go-sql-driver/mysql v1.9.2
+	go.etcd.io/etcd/client/v3 v3.5.15
 	shared v0.0.0
 )
 

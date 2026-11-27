@@ -169,15 +169,32 @@
   - `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py` 13/13 OK（本会话跑的）。
   - 剩余与取舍照上一条，不另加。match 侧删邮件退费那一半在批 W 的文件里，随批 W 一起复核。
 
-### 7.4 修复代理顺带发现、本批没改的（交「交接单里的代码改动清零与方案入档」会话，先复核成立再修）
+### 7.4 修复代理顺带发现的 5 条（2026-11-27，第 4 轮会话的 Opus 5.5 Max 子代理落码；未生成、未编译、未测试）
 
-| 编号 | 问题 | 位置 |
+5 条都成立。复核原定由会话「复核第 4 轮批 V/W 并补 guild 见证 SQL」做（与批 V、W 一起）；那个会话开工时 Claude 全部模型周额度 81%，按 §6 口径改交 Gemini 4 Neon Extra，做法见 §6.1「还没做的」。
+
+**提交状态**：代码改动被别的会话的快照提交 `24c13a311`（23:48）一并带进 main，不是本会话提交的；那次提交已顺带生成了 `go/proto/guild/guild_db.pb.go`。复核看 `git diff a0b3d195e 24c13a311 -- <文件>` 加工作区 `git diff HEAD`。**本批没有改 `go/guild/internal/data/asset_store.go`**。
+
+| 编号 | 结论与证据（行号按改动前的 `a0b3d195e`） | 改法 |
 |---|---|---|
-| r2-gw#5 | 领赏人的 GUILD_CREDIT 未决指令满 16 条时，整局帮战结算失败、不断重投，最后进死信（追杀赏金现在随结算进同一事务，同样卡住） | `go/guild/internal/data/war_repo.go` SettleWarBattle 的 AllocateSeq；`go/shared/assetop` 的 DefaultLimits |
-| r2-gw#6 | 帮战结算与到期退款事务没接角色护栏 `withRoleTargets`，与历练结算不一致（换主或注销中的角色可能照样入账） | `war_repo.go` SettleWarBattle、ExpireBounty；对照历练结算的写法 |
-| r2-gw#7 | 扣款终结 `UPDATE … WHERE escrow_op_id = ?` 没有索引，会全表扫；追杀令旧行没有清理机制 | `go/guild/internal/data/asset_store.go`；`proto/guild/guild_db.proto` 索引 |
-| r2-gw#8 | `InspectFieldWarTargets` 把「仅本帮可见」追杀令的号和金额显示给任何帮（信息面） | `go/guild/internal/logic/war_logic.go` |
-| r2-tn#3 | K8s 的 match 配置没有 FriendRpc / ChatRpc / GuildRpc（生死状要用），本机配置有 | `tools/scripts/k8s_deploy.ps1` 的 match ConfigMap 模板 |
+| r2-gw#5 | 成立：结算第 3 步拿到 `AllocateSeq` 的错误原样返回（`war_repo.go:1163-1166`），到期收尾同样（:1427-1430）；上限是 16 条或跨度 512（`go/shared/assetop/seq.go:216-221`）；帮战结果走 `guild-trial` 消费组，重投 20 次约 4～7.5 分钟后整局进死信，没有巡检兜底 | 照历练的「先记待入账、由循环补插」做：新表 `guild_war_credit_owed`（主键 `(player_id, op_id)`，锁序位置 24），`creditOrOweTx`「能插指令就插，否则记待入账」；`ConvertWarCreditOwed` 用预发的同一个 op_id，先判行还在不在再插，同一笔至多一条指令 |
+| r2-gw#6 | 成立：结算与到期收尾事务都没带 `withRoleTargets`（`war_repo.go:1038`、:1403），历练带了（`activity_repo.go:1318`）；帮战没有 launch 原件行，挂起全集拦不住「终局提交」与「结算消费」之间冻结的角色；删角收尾删 seq 行后，迟到的结算会用 `ensureSeqRowTx` 重建并给墓碑角色插指令 | 按人分流、不整笔拒绝（整笔拒绝会重现 #5 的「一人挡全局」）：`classifyCreditFence` / `lockCreditFences` 锁全部入账目标的护栏副本；冻结中的人记待入账（冻结解除后补给这个角色），已删除的人什么都不写；领赏人已删除时追杀令不转移，等到期退回发布者；发布者已删除时银两退款放弃。挂起全集 `role_fence_pending.go` 加 `guild_war_credit_owed` |
+| r2-gw#7 | 成立：扣款终结 `UPDATE … WHERE escrow_op_id = ? AND status = 1`（`asset_store.go:1070`），而 `guild_db.proto` 的四个索引都不以 `escrow_op_id` 开头；全仓没有删 `guild_war_bounty` 的语句。逐个核过引用，终态行不再被任何路径需要（扣款终结只认状态 1，结算读到终态行与读不到行都是「不动追杀令」，战报只读对局行自己的列，`bounty_id` 是永久 ID 不复用） | `guild_war_bounty` 加第 5 个索引 `escrow_op_id`；`PurgeTerminalBounties`：终态行保留 30 天后删（常量），每轮至多 200 行，一行一个短事务，先主键点锁再点删，挂在到期收尾的节拍上 |
+| r2-gw#8 | 成立：`InspectFieldWarTargets` 对任何 ACTIVE 单都回单号、赏金与档位（`war_logic.go:1759-1763`），追杀榜（`war_repo.go:786`）是有过滤的 | 新增 `fieldTargetBounty`，按 `BountyHuntable` 过滤 |
+| r2-tn#3 | 成立，**但不是本批改的**：另一个会话（改名与内容安全第三轮）已修完并在 main（`k8s_deploy.ps1` 的准入名单与 match ConfigMap，契约测试在 `k8s_deploy_contract.tests.ps1`）；子代理核过端口 50400 / 50700 / 50300 与 `$GoSvcCatalogue` 一致，集群只有入站准入、没有出站策略，没有重复改 | — |
+
+- **改动文件**（已随 `24c13a311` 进 main）：`proto/guild/guild_db.proto`、`go/guild/internal/data/{war_credit_owed.go(新),war_repo.go,role_fence_pending.go,tables.go}`、`go/guild/internal/logic/{war_logic.go,trial_background.go}`、测试 `war_credit_owed_test.go`（新）、`war_credit_owed_tidb_test.go`（新，3 个 TiDB 护栏用例）、`war_repo_test.go`（加 4 个真库用例）、`role_fence_tidb_test.go`、`war_logic_test.go`、`guild_repo_test.go` 与 `economy_flow_integration_test.go` 的删表清单、`docs/design/horizontal-scale-logical-db.md` 的 guild 挂起全集一行。**未提交**：`docs/planning/guild-play-v2-implementation-plan.md` 的 §7～§10（r2-gw#5～#8 各五项、转换流程表）与 §11（验证命令）、`docs/planning/battle-jianghu-grudge-duel-phase1-implementation-plan.md` 的 r2-tn#3 五项、`go/guild/internal/data/asset_tables_shape_test.go`（钉住新表与索引形状）、`war_logic.go` 一行注释。
+- **验证（Gemini，仓库根，串行，保留首错）**：
+  1. `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`（`guild_db.proto` 不进客户端；批 V 的 `guild.proto` 若还没同步客户端，按 §7.1 用缺省配置生成并同步）。通过：`go/proto/guild/guild_db.pb.go` 不再有差异。
+  2. `cd go/guild; gofmt -l internal/` 无输出；`go build ./...`、`go vet ./...`；仓库根 `python tools/scripts/check_log_text_english.py`。
+  3. 纯单测：`go test ./internal/data -run 'TestWarCreditOwedColumnsCoverEveryProtoField|TestClassifyCreditFence|TestLockCreditFencesWithoutGuardAndVerdictLists|TestWarCreditRecordCarriesTheOwedCreditVerbatim|TestDropListCoversTables|TestGuildWarBountyColumnsCoverEveryProtoField' -count=1 -v`；`go test ./internal/logic -run 'TestFieldTargetBountyHidesGuildOnlyBountiesFromOtherGuilds|TestWarBountyExpiryEveryRounds' -count=1 -v`；`go test ./internal/war/... ./internal/logic/... -count=1`。
+  4. MySQL 真库：设 `GUILD_TEST_MYSQL_DSN`（库名 `guild_test`），`go test ./internal/data -run 'SettleWarBattle_|ExpireBounty_|PurgeTerminalBounties_|TestAssetTablesShape' -count=1 -v` 全 PASS、不得 SKIP，批 V 原有用例不回归。
+  5. TiDB 真库：设 `GUILD_ROLE_TEST_DSN`，`go test ./internal/data -run 'TestTiDBWarSettle|TestTiDBExpireBountyOwes|TestTiDBPendingGuildBlocksFreezeAndRemoval' -count=1 -v` 全 PASS、不得 SKIP。
+  6. 全包 `go test ./... -count=1` 与 `go test -tags integration ./internal/logic -count=1`。
+  7. r2-tn#3 部署契约（PowerShell 7，先清 `MMORPG_*`）：`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1` 与 `chat_authority_deploy.tests.ps1` 全部 `[PASS]`，含「match 的江湖生死状接线」与准入名单那条。
+  8. 本地已有的 `guild_war_bounty` 要重建（schemamigrate 不给已存在的表补索引）；新表会自动建。
+- **剩余与取舍**：待入账积压没有 gauge 与告警（只有每轮汇总日志与每笔 Info 日志）；冻结中的玩家每轮多一次 `GetRoleFenceState`（寄售可能持续几天）；过户完成后冻结期间记下的这一笔照常补给这名角色（与历练按「目标」的口径一致）；保留期是常量 30 天，不跟 `AssetOp.TerminalRetentionDays`；客户端可见的 EXPIRED 状态注释仍写「已原路退回」，实际还含「退款排在待入账里」与「发布者已删除、退款放弃」，只在设计稿写明。
+- **顺带发现、没改**：删角收尾不删 `guild_war_player_state` 与 `guild_war_garrison`（后者含玩家名与快照），是账号注销清单原有的缺口；`docs/design/account-deletion.md` 正被别的会话改，新增挂起项 `guild_war_credit_owed` 没登记进去（客户端按通用文案显示）。
 
 ### 7.5 Java 版
 
@@ -204,7 +221,7 @@
 | 编号 | 结论 | 改了什么 | 设计记录 |
 |---|---|---|---|
 | r2-mall#1 | 成立（门控，缺省不可达） | `java/mall_game` `ManualAdminStore`：RETURN_TO_SELLER 只认付款已撤销；新增 RETRY_DELIVERY（订单 7→1、交付待办回 PENDING，由 trade 重新回执）；网关 `mall-admin.html` 下拉；`rmb_cancel_test.go` 补断言（trade 代码不动） | `jubaozhai-market.md` §16.1；隔离手册 §4.2 / §6 |
-| r2-craft#1 | 成立 | **只交了设计，代码未动**：kind 7 求购单托管，约 45 个文件分 A（trade）→ C（部署）→ B（scene 退役 + 客户端）三批，超 30 个文件，**等负责人批准**；C 批还卡在 trade `AssetOp.Enabled` 全档关闭与 `k8s_deploy.ps1` 正被批 W / §7.4 占用 | `skill-book-wanted-order-trade-escrow.md`（新建）§0～§9 |
+| r2-craft#1 | 成立 | 负责人 11-26 晚批准分三批。**批 A（trade 侧 kind 7 求购单合同）2026-11-27 已落码，未编译，待 Gemini 验证**：`go/trade/internal/commerce/wanted_skill_book.go`（新）与 `engine.go` / `delivery_order.go` / `leg_tx_type.go` / `schedule.go`，logic / server / config / svc / `trade.yaml`，三份 trade proto（RPC 582~584），Tip 两条与限流三行（`tools/scripts/trade_wanted_skill_book_xlsx_patch.py`，已跑）；一部分已随快照提交 `24c13a311` 进 HEAD，**导表之前 go/trade 编不过**。**批 C（部署）、批 B（scene 退役旧揭榜 + 客户端）因 Claude 全部模型周额度 81% 交 Gemini 4 Neon Extra 写**，要点与前提在设计稿 §11.2；批 C 先问 §7.4 会话 `k8s_deploy.ps1` 改完没有、再等负责人拍板 K8s 是否开 trade `AssetOp.Enabled`。scene 旧揭榜（两笔存盘）在批 B 之前照旧运行 | `skill-book-wanted-order-trade-escrow.md` §0～§9 设计、§11.1 批 A 实施记录与 Gemini 命令、§11.2 批 C / B 交接 |
 | r2-craft#2 | 成立 | 书架上限 100 本，制书 / 开卷 / 揭榜送书三处副作用前判；Tip.xlsx `//skill_error` 段末加 `SkillBookshelfFull`、`SkillWantedPosterBookshelfFull`（本会话用 `tools/scripts/craft_bookshelf_cap_xlsx_patch.py` 加，幂等，**导表未跑**） | 同上 §10；策划 v2-v5 §2.4 |
 | r2-craft#3 | 成立（只在 `Sweep.Mode=delete` 时可达） | mail 新表 `mail_request_receipt`（判重收据，清理不删），发件先查收据、收据先于邮件行写 | `mail-system.md` §2.4.1 |
 | r2-craft#4 | 成立（只影响口碑展示） | 口碑回账改 Lua 原子取走（HMGET + HDEL）再入账，宗师离开或存盘排不上原样还回 | `craft-proxy-reputation-digest-and-hot-ranking.md` §2.5 |
@@ -219,10 +236,30 @@
 3. C++：`msbuild` 串行 `/m:1` 依次 `cpp/generated/table/table.vcxproj`、`cpp/generated/proto/proto.vcxproj`、`cpp/libs/services/scene/scene.vcxproj`、`cpp/tests/bag_test/bag_test.vcxproj`，再整解；`bag_test.exe --gtest_filter=PlayerCraftQualityTest.*:EquipCraftQualityRulesTest.*`。
 4. Go（各模块 build / vet / test）：`go/table_sync`（`TestRollbackRequiresBothDirsUnlessForce`、`TestRollbackChecksTheLiveBundleAndTheTarget`、`TestCheckPermanentIDRollbackRejectsDirsThatAreNotTheTwoBundles`）；`go/db`（`TestPlayerStoreKillSwitchKeepsSaveOpenUnderWildcards`）；`go/scene_manager`（`TestInitOwnerAuthority_ConfigValidation`）；`go/match` 真 TiDB（`MATCH_IT_TIDB` + `MATCH_IT_REQUIRE_TIDB=1`，`TestGrudgeLedger_RedeliveryAfterTrimOrTransferStaysDuplicate`）；`go/guild` 真 MySQL（`GUILD_TEST_MYSQL_DSN`，`TestRecordJianghuDuelResultStaysIdempotentAfterRecordTrimmed`、`TestDropListCoversTables`）；`go/mail` 真 TiDB（`MAIL_RANK_TEST_TIDB` + `MAIL_RANK_REQUIRE_TESTS=1`，`TestTiDBResendAfterSweepReturnsOriginalMail`）；`go/trade` 真 TiDB（`COMMERCE_TEST_DSN` + `COMMERCE_REQUIRE_TIDB=1`，`TestTiDBRmbCancelRefusesManualContractAfterPaidDeliveryWentPartial`）。
 5. Java：在 `java/` 下 `mvn -B -pl mall_game -am test "-Dtest=ManualAdminStoreTest" -Dsurefire.failIfNoSpecifiedTests=false`，再全量 `mall_game`、`gateway_node`。
+6. r2-craft#1 批 A（go/trade 求购单）：第 1 步导表要出 `TradeError_kTradeWantedOrderLimitReached`、`TradeError_kTradeWantedBookMismatch`；之后 `go/trade` 的 build / vet / 单测与真 TiDB 用例（`TestTiDBWantedSkillBook*`）、客户端三步，命令与通过标准见 `skill-book-wanted-order-trade-escrow.md` §11.1 末。
 
 **还没做的**（写回这里，按负责人口径额度过 80% 交 Gemini）：
-- r2-craft#1 落码：等负责人批准约 45 个文件的三批计划。
-- guild 人工终结的条件写补比 `attempts`（r2 早期遗留第 1 条的最后一处）：`go/guild/internal/data/asset_store.go` 约 :259 的 `sqlResolveAssetOpQuiet` 末尾加 `` AND `attempts` = ? ``，约 :739 的 `ResolveManuallyIfQuiet` 实参在 `witness.LastSendMs` 之后加 `witness.Attempts`，同步那两处注释；`go/guild/internal/data/economy_repo_test.go` :1901 的见证字面量必须补 attempts（那条先 Reschedule 过，attempts=1），:1863、:1877 补上保持口径一致，再照 recall 的 `TestRecallStore_ResolveManuallyIfQuiet_MissesWhenOnlyAttemptsMoved` 加一条真库用例。`asset_store.go` 现在被批 V 与 §7.4 占着，交还之后补；补之前第二次读到条件写之间（毫秒级）少一道兜底。
-- 批 V、W 的独立复核：等 §7.4 五条落完、本会话收到通知再做；本会话届时若额度已过 80%，由 Gemini 4 Neon Extra 按 §7.1 / §7.2 与 §7.4 复核（只改错，不扩范围）。批 X 已复核通过（§7.3 末条）。
+- r2-craft#1 落码：批 A 已写（未编译，验证命令见设计稿 §11.1 末）；**批 C、批 B 负责人 11-27 改定换电脑由 Claude Code（Fable 5.2 Max）写，Gemini 不写，只做写完后的生成、编译、测试**（设计稿 §11.2，写完同节补五项记录，再按设计稿 §9 跑）。Gemini 跑批 A 时把导表放在最前：两条新 tip 不导出来 go/trade 编不过。
+- guild 人工终结的条件写补比 `attempts`（r2 早期遗留第 1 条的最后一处）：**2026-11-27 交 Gemini 4 Neon Extra 写**。会话「复核第 4 轮批 V/W 并补 guild 见证 SQL」开工时 Claude 全部模型周额度 81%，按 §6 口径没动手；§0 的「Gemini 不要改本单的代码」不适用于本条。
+  - 文件已空出：§7.4 没改过 `asset_store.go`，现在没有会话占着。行号按 HEAD `24c13a311` 核过。
+  - `go/guild/internal/data/asset_store.go:259`：`sqlResolveAssetOpQuiet` 末尾加 `` AND `attempts` = ? ``。
+  - 同文件 :739：`ResolveManuallyIfQuiet` 的实参在 `witness.LastSendMs` 之后加 `witness.Attempts`。
+  - 同步 :257-258 与 :727-732 两处注释：只领没发也落空；钟慢副本发过请求、`last_send_ms` 推不动时，靠 attempts 落空。
+  - `go/guild/internal/data/economy_repo_test.go` :1901：见证字面量必须补 `Attempts: read.Attempts`。那条先 Reschedule 过，attempts=1，SQL 一改不补就红。
+  - 同文件 :1863、:1877：分别补 `read.Attempts`、`fresh.Attempts`，保持口径一致。
+  - 加一条真库用例，照 `go/data_service/internal/store/recall_store_integration_test.go:538` 的 `TestRecallStore_ResolveManuallyIfQuiet_MissesWhenOnlyAttemptsMoved`：领取 → 本地 NOT_HERE 重排 → 取见证 → 再领取 → 再本地重排 → 旧见证落空、新见证终结。
+  - 口径以 `data-consistency-guarantee-map-20261020.md` §6.2 第 2 条补记为准；补完核对 `docs/design/guild-phase2/05-economy.md` §5.23 的说法与代码一致。
+  - 验证：`cd go/guild`，设 `GUILD_TEST_MYSQL_DSN`（库名 `guild_test`），跑 `go test ./internal/data -run 'TestResolveManuallyIfQuiet_' -count=1 -v`，全 PASS、不得 SKIP；再跑 `go test ./cmd/assetopfix/... -count=1`。
+  - 补之前，第二次读到条件写之间（毫秒级）少一道兜底。
+- 批 V、W 与 §7.4 五条的独立复核：**2026-11-27 交 Gemini 4 Neon Extra**。§7.4 已落完（第 4 轮会话 11-27 通知），复核条件已具备。接手的会话「复核第 4 轮批 V/W 并补 guild 见证 SQL」开工时全部模型周额度 81%，按口径停在第一批之前：没读代码、没下结论、没改代码。
+  - 范围：按 §7.1 / §7.2 / §7.4 复核，只改错，不扩范围。
+  - 口径：§2（每条按 `data-overwrite-audit-r2-round4-20261126/*.json` 查找原文的触发步骤走一遍）与 §3。
+  - 重点：行锁、CAS、事务内外的读写；幂等与重投；发号失败不用墙钟；指令号在事务前发好；tip / 日志规范；协议字段号不复用。
+  - 发现问题：明确的缺陷做最小改动，同批在设计稿写五项；拿不准的写进本节问负责人。
+  - 结论：照 §7.3 末条的写法，在 §7.1、§7.2、§7.4 末尾各写一条。
+  - 批 V 的 diff：`git diff 8a6697af0 a0b3d195e -- <§7.1 改动文件>`，由 `d77a458ee`、`76e2b59bb`、`a0b3d195e` 三次快照带进来；照 §7.1 第 7 条排除别人的两份文件。
+  - §7.4 的 diff：`git diff a0b3d195e 24c13a311 -- <§7.4 改动文件>` 加 `git diff HEAD`（未提交的有 `war_logic.go` 一行注释与 `asset_tables_shape_test.go`）。
+  - 批 W 的 diff：`git diff 8a6697af0 HEAD -- <§7.2 改动文件与测试>`。`k8s_deploy.ps1` 在 `24c13a311` 里还带着别的会话修的 r2-tn#3（match 的 FriendRpc / ChatRpc / GuildRpc 与准入名单），要分开看。`go/match/internal/logic/gather.go` 工作区还有一处未提交改动，先核归属再算进批 W。
+  - 批 X 已复核通过（§7.3 末条）。
 - 寄售交付腿部分发放在 trade 侧没有出口（mall#1 残余，补法在 `jubaozhai-market.md` §16.1），要改的 `manual_plan.go` 与双人复核会话的改动冲突，没做。
 - 第 5 轮查找可以顺带看：官方订单的 `CREATE_REFUND` 同样不等 trade kind-1 合同的结局；`applyJianghuDuelResult` 查档案失败按 owner_revision=0 入账、取的是处理时刻的 owner_revision（四条 low 的子代理在禁区文件里看到的，没改）。

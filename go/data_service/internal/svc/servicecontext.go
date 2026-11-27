@@ -28,6 +28,7 @@ import (
 	"shared/dirshard"
 	"shared/drainproof"
 	"shared/idsegment"
+	"shared/mergedzonecopy"
 	"shared/placement"
 	"shared/safego"
 	"shared/serviceauth"
@@ -217,9 +218,10 @@ type ServiceContext struct {
 	// nil = 没装配起来,此时 Router 的读写一律 fail-closed。
 	PlayerRouteStore PlayerRouteStore
 
-	// MergedZones 是 zone_merged_into 的缓存,GetPlayerHomeZone / BatchGetPlayerHomeZone / GetMergedZones 用它回答合服映射。
+	// MergedZones 是合服映射的缓存,GetPlayerHomeZone / BatchGetPlayerHomeZone / GetMergedZones 用它回答合服映射。
+	// 真源是目录第 0 片的 zone_merged_into;每个新版本先发布进 etcd 副本再用,第 0 片读不到时按副本回答(merged_zone_copy.go)。
 	// 构造时读一次,定时重读由 main 调 Start 开始,CloseAndReport 里停。
-	// nil = 没有读到映射(main 据 MergedZonesUnassembled 拒启)。
+	// nil = 没有读到能用的映射(main 据 MergedZonesUnassembled 拒启)。
 	MergedZones *placement.MergedZoneCache
 
 	// MissingWriterGrants 是这一代缺写资格的逻辑库(写者注册时连不上的,docs/design/data-service-startup-isolation.md §7),升序。
@@ -263,8 +265,9 @@ func (s *ServiceContext) StartLazyPoolRetry() {
 	})
 }
 
-// MissingDirectoryShardGrants 报告这一代缺不缺目录片的写资格。目录片是启动时必须读的(合服映射在第 0 片,空环境判据读全部片),
-// 缺了启动自检就过不了;写资格在 init 里定了,原地重启拿到的还是这一份,所以要重建 Pod(data_service.go 的 errRebuildPod)。
+// MissingDirectoryShardGrants 报告这一代缺不缺目录片的写资格。缺了时启动自检还可能过不了的只剩两种:全新空环境的空环境判据读不全,
+// 以及 etcd 里还没有合服映射副本时读不到第 0 片(有副本就从副本起,docs/design/merged-zone-etcd-copy.md §4.4)。
+// 写资格在 init 里定了,原地重启拿到的还是这一份,所以那两种要重建 Pod(data_service.go 的 errRebuildPod)。
 func (s *ServiceContext) MissingDirectoryShardGrants() bool {
 	for _, schema := range dirshard.DirectoryDBNames(s.Config.SnapshotMySQL.DBName, s.Config.Directory.Shards()) {
 		if slices.Contains(s.MissingWriterGrants, schema) {
@@ -279,7 +282,7 @@ func (s *ServiceContext) MissingDirectoryShardGrants() bool {
 // 部署阶段跑 `data_service -migrate`,那条路不设时限)。
 const autoMigrateTimeout = 5 * time.Minute
 
-// mergedZoneInitialReadTimeout 是启动时读一次 zone_merged_into 的时限。
+// mergedZoneInitialReadTimeout 是启动时读一次合服映射的时限:读 etcd 副本、读第 0 片、需要时发布,三步共用。
 const mergedZoneInitialReadTimeout = 3 * time.Second
 
 // MySQLConfigOf 把 yaml 的 SnapshotMySQL 段转成 store 的连接参数;main 的 -migrate 入口也用它。
@@ -359,14 +362,14 @@ func (s *ServiceContext) MissingStores() []string {
 	return missing
 }
 
-// MergedZonesUnassembled 返回非 nil = 合服映射缓存没有装配起来(route store 没起来,或启动时读不到 zone_merged_into,
-// 原因见此前的 ERROR)。main 据此**无条件**拒启,不看 Store.Required:没有映射就没法区分「没有合服」和「读不到」,
-// 带着它跑,每一次归属读都只能回 Unavailable。
+// MergedZonesUnassembled 返回非 nil = 合服映射缓存没有装配起来(route store 或 etcd 副本的客户端没起来;或者启动时第 0 片和
+// etcd 副本都给不出能用的映射,比如第 0 片读不到而副本还没有、第 0 片比副本旧,原因见此前的 ERROR)。
+// main 据此**无条件**拒启,不看 Store.Required:没有映射就没法区分「没有合服」和「读不到」,带着它跑,每一次归属读都只能回 Unavailable。
 func (s *ServiceContext) MergedZonesUnassembled() error {
 	if s.MergedZones != nil {
 		return nil
 	}
-	return errors.New("the merged zone cache is not assembled: zone_merged_into could not be read at startup")
+	return errors.New("the merged zone cache is not assembled: neither directory shard 0 nor its etcd copy gave a usable mapping at startup")
 }
 
 // MarkServing 在节点注册完成(RPC 端口已经能接受连接)之后调,之后 Ready 才可能为真。
@@ -598,6 +601,14 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 	}
 	upstreamClosers = append(upstreamClosers, nameCacheRedis)
 
+	// 合服映射的 etcd 副本(docs/design/merged-zone-etcd-copy.md):建不出来只记 ERROR,缓存随之装配不起来,main 拒启。
+	mergedZoneEtcd, mergedZoneCopies, err := openMergedZoneCopies(c)
+	if err != nil {
+		logx.Errorf("[ServiceContext] etcd copy of the merged zone mapping unavailable: %v", err)
+	} else {
+		upstreamClosers = append(upstreamClosers, mergedZoneEtcd)
+	}
+
 	s := &ServiceContext{
 		upstreamClosers:      upstreamClosers,
 		Writer:               writerConfig,
@@ -615,7 +626,7 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 		rowIDSegments:        rowIDSegments,
 		PlayerNameStore:      playerNameStore,
 		PlayerRouteStore:     playerRouteStore,
-		MergedZones:          newMergedZoneCache(c, routeStore),
+		MergedZones:          newMergedZoneCache(c, routeStore, mergedZoneCopies),
 		MissingWriterGrants:  missingGrants,
 		lazyPools:            lazyPools,
 	}
@@ -716,38 +727,27 @@ func newRowIDSegment(issuer IdSegmentStore, bizTag string) (*idsegment.Client, e
 	})
 }
 
-// mergedIntoLister 是合服映射缓存对真源的依赖:全表读 zone_merged_into。*store.RouteStore 逐字满足,单测注入假实现。
-type mergedIntoLister interface {
-	ListMergedInto(ctx context.Context) ([]store.MergedIntoRow, error)
-}
-
-// newMergedZoneCache 装配合服映射缓存:读一次 zone_merged_into,读不到(含 rs 为 nil)只记 ERROR、回 nil,
-// 由 main 据 MergedZonesUnassembled 拒启。
-// rs 是具体类型:*store.RouteStore 为 nil 时不能转成 mergedIntoLister 接口(「非 nil 接口包着 nil 指针」)。
-func newMergedZoneCache(c config.Config, rs *store.RouteStore) *placement.MergedZoneCache {
+// newMergedZoneCache 装配合服映射缓存:真源是 route store 的第 0 片,第 0 片读不到时按 etcd 副本(merged_zone_copy.go)。
+// 启动读一次,两边都给不出能用的映射(含 rs、copies 为 nil)只记 ERROR、回 nil,由 main 据 MergedZonesUnassembled 拒启。
+// 两个入参都是具体类型:nil 指针转成接口就是「非 nil 接口包着 nil 指针」,判空拦不住。
+func newMergedZoneCache(c config.Config, rs *store.RouteStore, copies *mergedzonecopy.EtcdCopies) *placement.MergedZoneCache {
 	if rs == nil {
 		logx.Errorf("[ServiceContext] merged zone cache not assembled: the route store is not assembled, see the route store error above")
 		return nil
 	}
-	return loadMergedZoneCache(rs, time.Duration(c.RouteStore.MergedZoneRefreshSec)*time.Second)
+	if copies == nil {
+		logx.Errorf("[ServiceContext] merged zone cache not assembled: the etcd copy is unavailable, see the error above")
+		return nil
+	}
+	return loadMergedZoneCache(&mergedZoneSource{truth: rs, copies: copies}, time.Duration(c.RouteStore.MergedZoneRefreshSec)*time.Second)
 }
 
-// loadMergedZoneCache 是 newMergedZoneCache 读库的那一半(单测注入假的 lister)。指标名 merged_zone_refresh_total{result}。
-func loadMergedZoneCache(lister mergedIntoLister, interval time.Duration) *placement.MergedZoneCache {
+// loadMergedZoneCache 是 newMergedZoneCache 读数的那一半(单测注入假的真源与副本)。指标名 merged_zone_refresh_total{result}。
+func loadMergedZoneCache(source *mergedZoneSource, interval time.Duration) *placement.MergedZoneCache {
 	metrics.PrimeMergedZoneRefresh()
 	ctx, cancel := context.WithTimeout(context.Background(), mergedZoneInitialReadTimeout)
 	defer cancel()
-	cache, err := placement.NewMergedZoneCache(ctx, func(ctx context.Context) (map[uint32]uint32, error) {
-		rows, err := lister.ListMergedInto(ctx)
-		if err != nil {
-			return nil, err
-		}
-		merges := make(map[uint32]uint32, len(rows))
-		for _, row := range rows {
-			merges[row.SrcZone] = row.DstZone
-		}
-		return merges, nil
-	}, placement.MergedZoneCacheOptions{
+	cache, err := placement.NewMergedZoneCache(ctx, source.read, placement.MergedZoneCacheOptions{
 		Interval:  interval,
 		OnRefresh: observeMergedZoneRefresh,
 		OnChange: func(zones *placement.MergedZones) {
@@ -1009,7 +1009,7 @@ func (s *ServiceContext) CloseAndReport() error {
 		}
 	}
 	s.closeOnce.Do(func() {
-		// 先停合服映射的定时重读:它读 route store 的池,池关了之后的那一拍只会报假故障。
+		// 先停合服映射的定时重读:它读 route store 的池和 etcd 副本(副本的客户端在 upstreamClosers 里),关了之后的那一拍只会报假故障。
 		s.MergedZones.Stop()
 		// 同理先停关着的池的后台重核:它用写资格建连核对,要在封写资格、关池之前停下。
 		if s.stopLazyRetry != nil {

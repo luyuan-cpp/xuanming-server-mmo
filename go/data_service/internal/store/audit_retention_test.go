@@ -105,7 +105,9 @@ func TestAuditRetention_ReportsOldestRowAgeAfterEachRound(t *testing.T) {
 		return table
 	}
 	r := newTestRetention(now, 10, 1,
-		withOldest("old", func(context.Context) (uint64, bool, error) { return uint64(now.Add(-90 * time.Minute).Unix()), true, nil }),
+		withOldest("old", func(context.Context) (uint64, bool, error) {
+			return uint64(now.Add(-90 * time.Minute).Unix()), true, nil
+		}),
 		withOldest("empty", func(context.Context) (uint64, bool, error) { return 0, false, nil }),
 		withOldest("broken", func(context.Context) (uint64, bool, error) { return 0, false, errors.New("injected oldest error") }),
 		withOldest("future", func(context.Context) (uint64, bool, error) { return uint64(now.Add(time.Minute).Unix()), true, nil }),

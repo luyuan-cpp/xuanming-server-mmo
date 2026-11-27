@@ -1983,7 +1983,7 @@ TEST(RankedBattleTest, PrepSkillBanV2ProtectCounterAndTeammateEquippedSkills) {
     ASSERT_EQ(engine.UpdateBattlePrep(201, 0, 0, true, nullptr, true, {10038, 10040, 10035}, true, 10020), 0u);
     ASSERT_TRUE(engine.FinalizePrepPhase());
 
-    const auto state = engine.BuildState();
+    const auto state = engine.BuildStateSnapshot();
     EXPECT_EQ(state.team_a_protected_skill_id(), 10040u);
     EXPECT_EQ(state.team_b_protected_skill_id(), 10020u);
     std::vector<uint32_t> countered(state.countered_ban_skill_ids().begin(), state.countered_ban_skill_ids().end());
@@ -1995,19 +1995,19 @@ TEST(RankedBattleTest, PrepSkillBanV2ProtectCounterAndTeammateEquippedSkills) {
     BattleAction cast10020;
     cast10020.set_action_type(BATTLE_ACTION_SKILL);
     cast10020.set_skill_table_id(10020);
-    cast10020.set_target_actor_id(201);
+    cast10020.set_target_id(201);
     EXPECT_EQ(engine.ValidateAction(101, cast10020), kSuccess);
 
     BattleAction cast10040;
     cast10040.set_action_type(BATTLE_ACTION_SKILL);
     cast10040.set_skill_table_id(10040);
-    cast10040.set_target_actor_id(201);
+    cast10040.set_target_id(201);
     EXPECT_EQ(engine.ValidateAction(101, cast10040), kSuccess);
 
     BattleAction cast10038;
     cast10038.set_action_type(BATTLE_ACTION_SKILL);
     cast10038.set_skill_table_id(10038);
-    cast10038.set_target_actor_id(101);
+    cast10038.set_target_id(101);
     EXPECT_EQ(engine.ValidateAction(201, cast10038), kSkillBannedInBattle);
 
     // 场景 2：双边同禁 10038 + 仅单边护招 10038（不可化解自己同队禁招，确保 countered 与 banned 严格互斥）
@@ -2028,7 +2028,7 @@ TEST(RankedBattleTest, PrepSkillBanV2ProtectCounterAndTeammateEquippedSkills) {
     ASSERT_EQ(engine2.UpdateBattlePrep(202, 0, 0, true, nullptr, false, {}, true, 10038), 0u);
     ASSERT_TRUE(engine2.FinalizePrepPhase());
 
-    const auto state2 = engine2.BuildState();
+    const auto state2 = engine2.BuildStateSnapshot();
     EXPECT_TRUE(engine2.IsSkillBanned(10038));
     EXPECT_EQ(state2.countered_ban_skill_ids_size(), 0);
 }

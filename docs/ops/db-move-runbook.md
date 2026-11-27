@@ -26,7 +26,7 @@
 - 一次只搬一个逻辑库。工具看到别的库在搬会拒绝。
 - 不和发布同时做。`state=MOVING` 期间 `-migrate` 拒绝。窗口内写者注册回可重试错误,不用掉名册 entry,init 重启后接着注册;已经渲染好的名册不受 cutover、回滚影响(REGISTER 不绑 epoch,设计 §2)。
 - **搬出去之后,新集群失联不挡 data-service、db 起 Pod**([启动期故障隔离](../design/data-service-startup-isolation.md)):落在失联集群上的库这一代关着、Pod 不就绪。集群恢复之后,缺写资格的 Pod 要重建,只是池关着的会自己就绪(开服手册 §9「某个 SQL 集群失联」)。
-- **data-service 目录的第 0 片(`<base>_00`,K=1 时是 `<base>`)最好留在主集群**:合服映射只在这一片,它连不上时 data-service 拒启。扩容先搬别的片、流水库、存档库。
+- **data-service 目录的第 0 片(`<base>_00`,K=1 时是 `<base>`)也可以搬**:合服映射只在这一片,但它连不上时 data-service 按 etcd 里的映射副本起([合服映射的 etcd 副本](../design/merged-zone-etcd-copy.md)),和别的片一样只是关着、不就绪。它的集群失联期间合服不生效(合服要写这一片),所以把它放在最稳的集群上仍然划算。
 
 ## 2. 前置条件
 

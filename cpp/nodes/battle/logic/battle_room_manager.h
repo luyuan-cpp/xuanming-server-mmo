@@ -629,7 +629,7 @@ private:
     // 全部观众(PushSpectatorFrame)并逐个 RetireObserver(封墓碑、出名单、关直连),最后取消观众席定时器(此后任何广播都
     // 不会再打到观众)。调用方不调本函数的路径(停机时还有待提交终局的房间)三个通道一起不发,心跳停掉之后由 gate 的空闲超时收尾。
     void NotifySpectateEndAndClose(BattleRoom &room, ::eSpectateEndReason reason,
-                                   ::eBattleOutcome outcome);
+                                   ::eBattleOutcome outcome, bool immediateClose = false);
 
     // ---- 观战中继(L1)/ 全服广播(L2)的出站(寻址与失败语义在 battle_spectate_relay.h) ----
 
@@ -676,7 +676,7 @@ private:
     // 移出名单、名字、操作与席位期限,关其直连(CloseDirectConnectionOf,推迟到本轮 loop 之后)。
     // 不推 SpectateEnd:要推的调用方先推再调本函数,同一条直连上终局包先于 FIN。
     // 不重挂观众席定时器(期限只会变晚,早到一次由 ReclaimExpiredObserverSeats 重挂)。观众不在房间里时幂等。
-    void RetireObserver(BattleRoom &room, uint64_t observerId, const char *reason);
+    void RetireObserver(BattleRoom &room, uint64_t observerId, const char *reason, bool immediateClose = false);
 
     // 为名单上的观众(重新)开始席位宽限:期限 = 当前单调时刻 + 对应宽限,并重挂房间定时器。
     // 只在新登记、换会话关旧直连、直连断开三处调用;补签与幂等重放不调,宽限不因它们延长。
@@ -739,12 +739,13 @@ private:
     // 直连面要在 Handle* 返回后才写应答;shutdown / forceCloseWithDelay 都会同步把连接切到
     // kDisconnecting,那时再写就被丢。推迟一轮后,应答已在输出缓冲里,shutdown 仍等排空再 FIN,
     // 顺序仍是:终局包 → 应答 → FIN。
-    void CloseDirectConnectionOf(BattleRoom &room, uint64_t playerId, const char *reason);
+    void CloseDirectConnectionOf(BattleRoom &room, uint64_t playerId, const char *reason, bool immediate = false);
 
     // 关闭并清空房间全部直连(结束 / 作废 / 销毁;必须在终局包推完之后调用)。
     // 同样推迟到本轮 loop 之后:打完最后一击的 SubmitBattleAction / SetAutoBattle 会同步走到
-    // FinishBattle,它的应答此刻还没写。
-    void CloseDirectConnections(BattleRoom &room, const char *reason);
+    // FinishBattle,它的应答此刻还没写。停机路径(BeginRoomShutdown)无待写直连应答且紧接着 DisconnectAll,
+    // 须传 immediate=true 同步 shutdown() 让 connected()==false,避免 DisconnectAll 误强关吞掉 166。
+    void CloseDirectConnections(BattleRoom &room, const char *reason, bool immediate = false);
 
     // 保证滞留房间提醒的定时器已装填(幂等)。房间第一次滞留时装填(原件无效 / SQL 终局越过快速跨度),之后常驻:
     // 房间被清掉后 ReportStuckOutcomeRooms 自然不再打行。

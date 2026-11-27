@@ -1,7 +1,7 @@
 # 悬赏求书迁 go/trade 托管合同与未学书架上限(数据覆写审计 r2 第 4 轮 craft#1、#2)
 
 > 日期:2026-11-26
-> 状态:**§10 书架上限已落码(未编译,待 Gemini 验证);§1~§9 悬赏求书迁 trade 是定稿设计,代码未动**。按 AGENTS §10.2,预计改动约 45 个文件(§8),先停下等负责人对分批的明确同意再落码。
+> 状态:**§10 书架上限已落码(未编译,待 Gemini 验证);§1~§9 悬赏求书迁 trade:负责人 2026-11-26 晚批准分三批(A→C→B)做。批 A(trade 侧合同)2026-11-27 已落码,未编译,待 Gemini 验证(§11.1);批 C、批 B 因 Claude 全部模型周额度过 80%,按负责人 11-26 口径交 Gemini 4 Neon Extra(§11.2)**。落地时与本文 §3 不同的几处以 §11.1 为准。
 > 上位:[装备品相与技能制书 V2–V5 策划](../planning/equipment-quality-and-skill-crafting-v2-v5.md) §2.4 / §4;[聚宝斋与托管合同](jubaozhai-market.md) §6、§15;[通用资产通道](guild-phase2/04-asset-channel.md) §S4;审计 [data-overwrite-rollback-audit-r2-20261019.md](data-overwrite-rollback-audit-r2-20261019.md) §3.12。
 > 负责人 2026-11-26 定:悬赏求书改走 go/trade 托管合同,发榜时托管悬赏银两,揭榜时托管技能书,两条发放腿由 trade 交付;沿用现有托管合同的写法,不另造一套;顺带解决悬赏榜只看得到同场景节点的玩家。
 
@@ -240,3 +240,68 @@ message TradeWantedSkillBookTerms {
 **被否决的做法**:①加载时把超出部分裁掉或转邮件——删玩家资产或多出一条跨系统流程,上线前清档后也不会有超限存档;②按字节数而不是条数限——玩家看不懂「还能放几本」;③复用 `kInvalidParameter`——「参数错误」不是玩家能理解的原因,命名第一原则要求语义准确;④揭榜时发榜人满了把书改投邮件——给一条要退役的路径(§3.10)加新流程不值得。
 
 **代价与边界**:书架满了必须先处理才能继续制书、开卷;两条 tip 要在 `data/tip/Tip.xlsx` 的 `//skill_error base=7000` 段末尾(`SkillLoadoutAttributeResetRequired` 之后、`//buff_error` 组头之前)加两行——`SkillBookshelfFull`「书架已满(最多 100 本),请先研习、拆页或封卷后再试」、`SkillWantedPosterBookshelfFull`「发榜人的书架已满,暂时无法交付这张悬赏单」,`fault` 列留空——再导表(Gemini),导表之前 C++ 不能编译。已超限的旧存档(只可能来自本机开发库)照常加载,只是不能再加书。悬赏求书迁 trade 之后(批 B),揭榜不再往书架加书(发榜人收到的是背包里的封卷道籍),第三处判定随旧路径一起删掉。
+
+## 11. 实施记录
+
+### 11.1 批 A:trade 侧求购单合同(2026-11-27,Opus 5.5;未编译,待 Gemini 验证)
+
+**问题**:同 §0 第 1 条(r2-craft#1)。批 A 只加 trade 侧的合同与客户端入口,scene 旧揭榜照旧运行,客户端还没切(批 B)。
+
+**方案(落地的形状)**:
+- 合同在 `go/trade/internal/commerce/wanted_skill_book.go`:三个自有阶段 `wanted_escrow`(状态 3)→ `wanted_open`(状态 1,只有这一个阶段是 1,悬赏榜按它查)→ `wanted_fill`(状态 3);交付 `deliver`(4)与退回 `return`(6)走 `plan` 的通用收尾,结案 `done`(11 成交 / 7 撤单)。`engine.go` 只加了分派(`plan` 里 kind 7 先进 `planWantedSkillBook`)、撤单分支(只有发榜人、只在托管与挂榜阶段)、`Get` 把 kind 7 列为公开、`Create` 拆出带「角色锁内钩子」的 `createLocked`、`Mutate` 拆出带封卷道籍号的 `mutate`。
+- 揭榜:`FulfillWantedSkillBookOrder` → `mutate(..., "fulfill", sealedItemID, requestID)` → `fulfillWantedLocked`,建 `seller_debit_<揭榜序号>_<请求键>`;`planWantedFill` 等扣出、按快照核对(`wantedBookMatches`,§3.4 判据逐条,另核实例 `item_id` 与扣出的 guid 一致、实例解不开按不符)。相符建 `buyer_receive`(书,托管者 = 揭榜人)与 `seller_receive`(税后银两,托管者 = 发榜人);不符建 `seller_return_<揭榜序号>`(`leg_tx_type.go` 登记为退回腿,`TX_AUCTION_RETURN`),退书到账才清零揭榜人、回挂榜;退书终局没到账转人工(`final_credit_failed`),不回挂榜。书没扣到直接回挂榜。
+- 揭榜的结果按**同一请求号重发揭榜**查:当前这一次在途或已成交回合同;已作废的,书没扣到回 `TradeAssetNotTradable`,书不符已退回回新 tip `TradeWantedBookMismatch`;同一请求号换了书回 `TradeRequestConflict`。
+- 整单退回退全额:`delivery_order.go` 的 `settleBuyerFirstDelivery` 对 kind 7 用 `buyer_debit` 托管原件,先算好再标被取代(§3.6)。
+- 发榜上限:`countActiveWantedOrders` 在建单事务里、发榜人角色锁之下用 `FOR UPDATE` 数未结案的 kind 7(含转人工)。
+- 悬赏榜:`ListOpenWantedSkillBookOrders` 走现成索引 `(kind,market_id,item_config_id,side,status,on_book,unit_price,commerce_id)`,按悬赏额降序、同额按 `commerce_id` 降序,游标是「悬赏额:commerce_id」;`ListMyWantedSkillBookOrders` 按 `(created_ms, commerce_id)` 翻页、`OwnsRecord` 筛。技能筛选页内过滤。
+- 调度:`schedule.go` 把 `wanted_open` 算作只等玩家操作,排 `idleRecheck`(1 小时)兜底,不每秒空转。
+- 开关:`Commerce.WantedSkillBook.Enabled`(缺省 false)+ 顶层 `TableDir`(缺省 `../../generated/tables`)。开着时 `svc` 用 `tablebundle.LoadAtStartup` 读表(校验钩子要求 `Skill` 与 `SkillScrollCraft` 都在,`StrictStartupValidate`),`Engine.WantedSkills = commerce.TableWantedSkills{}` 查全局表管理器的当前快照;关着时 trade 不碰配表。Validate:开关开着而 `AssetOp.Enabled=false` 或 `TableDir` 为空拒启。关掉开关后发榜、揭榜、公开榜回 `TradeFeatureDisabled`,本人的单照常列、照常可撤。
+- 协议:`proto/trade/commerce.proto`(kind 7、`WantedSkillBookOrderPhase`、`WantedSkillBookOrderView` 与三对请求 / 响应)、`jubaozhai.proto`(三条 RPC,message_id 582~584)、`trade_table.proto`(`TradeCommerceWorkflow.wanted_skill_book = 28` 与 `TradeWantedSkillBookTerms`)。这三份与生成物已随负责人快照提交 `24c13a311` 进 HEAD。
+- 配表:`tools/scripts/trade_wanted_skill_book_xlsx_patch.py`(幂等,已跑):`Tip.xlsx` `//trade_error` 段末加 `TradeWantedOrderLimitReached`、`TradeWantedBookMismatch`;`MessageLimiter.xlsx` 加 582~584 三行(5 次/秒,同 scene 旧的四条),号按名字从 `message_id.txt` 查。**导表之前 go/trade 编不过**(两条新 tip 常量)。
+- 用例:`wanted_skill_book_test.go`(纯函数:托管、相符先书后款、九种不符退书、书没扣到、退书没到账转人工、入口约束与重放、撤单退全额、托管中撤单、阶段映射、调度、游标)、`wanted_skill_book_crosslang_test.go`(5% 税与 3414 对 C++ 头文件逐字比对;悬赏额区间与 3 单在 C++ 删掉之前也比)、`delivery_order_test.go` 的 `TestWantedBuyerRejectedRefundsTheFullReward`、`leg_tx_type_test.go` 三个角色名、`wanted_skill_book_tidb_test.go`(真库:不符退书回挂榜再相符成交、撤单退悬赏与交书途中撤不了、真角色锁下并发发榜不超 3 张)、logic 的 `wanted_skill_book_logic_test.go`(开关、入参在碰存储之前校验、视图),并把揭榜并进 `commerce_missing_contract_test.go` 的「点名合同不存在」表、`config_test.go` 加开关前提。
+
+**为什么这样选(与 §3 不同的几处)**:
+1. RPC 与消息名用 `WantedSkillBook*` 打头(设计稿写的是 `SkillBookWanted*`):批 A 到批 B 之间 scene 旧消息 `SkillBookWantedOrder*` 还在,客户端两套同时编译,同名会在 C# 侧撞名或歧义。
+2. 揭榜结果靠同一请求号重放查,不另加查询 RPC:与寄售购买的重放同口径,而且只有重放分得清「书没扣到」与「书不符已退回」;单子本身的阶段用 `GetCommerceOrder`。
+3. 悬赏榜同额按 `commerce_id`(§3.8 写的是建单时刻升序):现成索引最后一列是 `commerce_id`,按建单时刻排要把全部挂榜单回表排序;`commerce_id` 是打散的,只给稳定翻页,不代表先后。
+4. 功能关闭复用 `TradeFeatureDisabled`,不新增 §8 列的 `kTradeWantedOrderFeatureDisabled`:同一个语义,玩家看到的文案也一样。
+5. 上限计数用加锁读:TiDB 悲观事务里普通读取的是事务开始时的快照,两笔并发发榜在角色锁上串行之后,后一笔的普通读看不到前一笔刚提交的单。
+6. 读表经 tablebundle、只在开关打开时读:与 match / mail 同一套两阶段加载,表包模式下跟随热更,scene 与 trade 对「哪门技能能求」不会因热更时差长期不一致;关着时部署不用给 trade 准备表目录。
+7. 每单累计揭榜 32 次封顶(与寄售每单 32 次购买尝试同口径):每次揭榜在 workflow 留一两条腿,不封顶会无界增长。
+8. 揭榜人的一次揭榜作废之后已不是参与方,所以 `Get` 把 kind 7 列为公开(与寄售、拍品同),揭榜人仍查得到单子回到了挂榜。
+
+**被否决的做法(本批落码时)**:①在 `Mutate` 的 `requestID ...string` 变参里塞封卷道籍号——名字与内容不符(命名第一原则);改成内部 `mutate` 多一个 `sealedItemID` 参数、`Mutate` 包一层,调用点零改动。②把作废揭榜的腿从 workflow 删掉省空间——腿是 outbox 行与合同的唯一挂钩,也是人工处置的证据。③为悬赏榜加 `created_ms` 索引——要改表结构,收益只是同额单的先后。④揭榜时 trade 先问 scene「这本书合不合格」——trade 看不到玩家身上的实例,扣出时交回的快照才是权威(§3.3 第 4 条)。
+
+**代价与边界**:
+- 32 次揭榜上限可被恶意耗尽:书没扣到的揭榜对揭榜人零成本,限流 5 次/秒,几个小号几秒就能把一张单用满;后果是这张单揭不了,发榜人撤单(全额退回)重发,不丢东西。寄售的 32 次购买尝试是同一个弱点。要防就加「同一揭榜人同一单冷却」或只对扣到了的揭榜计数,本批不做。
+- 人工整单退回(`manual_plan.go` 的 `refundCommon` / `refundReturns`,后台双人复核会话在改,本批不动)对 kind 7 是 fail-closed 的:有过「不符退书」的单,`refundCommon` 见到已到账的退书腿就拒绝整单退回,不会把已退过的书再退一遍;处置改用 reissue / resume。隔离手册的 kind 7 口径随批 C 写。
+- 滚动升级:旧 trade 二进制不认识 kind 7,交付阶段遇到发榜人收书被拒会按旧代码只退 95%。项目未上线,上线前清档,不阻塞;上线之后升级 trade 要整批换,或先确认没有 kind 7 合同停在 `deliver`。
+- 同账号不同角色互揭不拦(§7)。揭榜人的书在扣出到核对之间(秒级)单子显示「交易中」。
+- HEAD 状态:协议、生成物与 `wanted_skill_book.go` 等已随 `24c13a311` 进 HEAD,其余文件在工作区未提交;导表之前 go/trade 编不过。
+
+**Gemini 验证命令**(仓库根;只跑,红了保留首错原文交回):
+1. 导表:先 `git status --short data/` 核对别的会话的表改动,再 `dev.bat gen`;`go/shared/generated/pb/table` 里要有 `TradeError_kTradeWantedOrderLimitReached`、`TradeError_kTradeWantedBookMismatch`。
+2. 协议:`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`(已有人跑过一次,再跑 trade 部分应无 diff);`proto/message_id.txt` 里 582~584 不变。
+3. go/trade:`go build ./...`、`go vet ./...`;`go test ./internal/commerce/... ./internal/logic/... ./internal/config/... ./internal/constants/...`,点名 `TestWanted`、`TestLegTxType`、`TestCommerceEntriesAnswerMissingContractWithOrderNotFound`、`TestCommerceEntriesKeepContractReadFaultsAsFaults`、`TestEtcYamlContractValues`、`TestNoHandWrittenTipCodes`。
+4. 真库:配隔离 TiDB `COMMERCE_TEST_DSN` + `COMMERCE_REQUIRE_TIDB=1`,`go test ./internal/commerce/ -run 'TestTiDBWantedSkillBook|TestTiDBConsignmentConcurrentBuyAndWorkerRestart|TestTiDBPlayerTradeRequiresBothEscrowSummariesAndReturnsOnCancel' -count=1`。
+5. 客户端:`mmorpg-client` 跑 `tools/gen_proto.ps1`、`tools/gen_messageids.ps1`、`tools/client_compile_check.ps1`(批 A 只新增消息,客户端还不调用)。
+
+通过标准:以上全绿;`git diff` 里 `data/tip/Tip.xlsx` 只多两行、`data/MessageLimiter.xlsx` 只多 582~584 三行。
+
+### 11.2 批 C、批 B 换电脑由 Claude Code 写(2026-11-27 负责人改定)
+
+Claude 全部模型周额度过 80%(81%),按负责人 11-26 口径停在批 A 边界。原定批 C、B 交 Gemini 4 Neon Extra 写;**负责人 11-27 改定:换一台电脑,由那边的 Claude Code 写**(按 AGENTS §10.3 用最高档模型 Fable 5.2 Max),**Gemini 不写这两批的代码**,只做写完之后 §9 的生成、编译、测试、冒烟。写的人在本节补五项记录;写完再按 §9 跑。顺序照旧 C → B(或上线前清档时三批一起上)。那台电脑要先拿到本机 main 的最新内容(含批 A 与还在工作区的文档改动),由负责人同步。
+
+**批 C(部署开通)**,前提②不满足就停下问负责人:①已满足——第 4 轮会话 §7.4 的子代理没有改 `tools/scripts/k8s_deploy.ps1`(r2-tn#3 的 match 接线已由「改名与内容安全第三轮」会话修完,见第 4 轮交接单 §7.4),改这个文件前照常先 `git diff` 看别的会话的未提交改动;②负责人拍板 K8s 各档位是否打开 trade `AssetOp.Enabled`(本文没有定这个取值,不自己定)。
+- `k8s_deploy.ps1` 的 trade ConfigMap:`AssetOp.Enabled` 按拍板写,打开时把 trade.yaml 里落地恢复与 `Cleanup*` 键一并补进去(trade.yaml 第 156~158 行注释);`Commerce.WantedSkillBook.Enabled`;`TableDir`。
+- 表:核对 trade 镜像里有没有 `generated/tables`;没有就要么镜像带上、要么像 match / mail 一样挂表包 sidecar,照 `docs/design/config-table-hot-reload.md` 的服务接入口径(STATUS.json、POINTER.json 等多方约定照它对齐);trade 的 main 现在没有 `--validate-tables` 入口(`tablebundle.MaybeRunValidateTablesCLI`),接入表包时按 `go/mail/mail.go` 的写法补。
+- 契约测试:`tools/scripts/tests/k8s_*_contract.tests.ps1` 里钉 trade ConfigMap 的几份同批改。
+- `docs/ops/trade-commerce-quarantine-runbook.md` 加 kind 7 口径:退书腿没到账用 reissue 补 `seller_return_<n>`;有过退书的单不能整单退回(§11.1 代价第 2 条);发榜人收书被拒由引擎自动整单退回、退全额,不用人工。`deploy/k8s/README.md` 一行。
+
+**批 B(scene 退役旧揭榜 + 客户端切换,必须同批)**,文件按 §8 批 B 表,另补:
+- scene 四条 RPC(560~563)删掉之后生成器自动把号转墓碑(一次 4 条,正好卡在 `maxNewMessageTombstonesPerRun = 4` 上,同一轮生成里不能再删别的 RPC);`MessageLimiter.xlsx` 里 560~563 四行同批删(先核对导表器允不允许限流行指向墓碑号)。
+- 玩家存档字段退役(`PlayerCraftComp.wanted_orders = 16`、`next_wanted_order_seq = 17`、`SkillCraftingStateSnapshot.my_wanted_orders = 23`)走混版本字段保护台账:生成器写 `retired=` 行,`proto/persist_schema_gen.txt` 的 diff 只许多退役行;`ClientRequestKind` 26~28 只退役不复用。
+- `equip_craft_quality_rules.h` 删悬赏常量之后,trade 的跨语言用例对这三项自动不比;`kProxyTaxBps` 与 `kSealedSkillBookConfigId` 不能删(代打分成与封卷还在用,用例照比)。`kSkillWantedPosterBookshelfFull` 随旧揭榜不再使用,tip 行保留、不复用。
+- 客户端:`CommerceClient` 加三条调用;揭榜书架书 = 先 `SealSkillBook` 拿到道具号再 `FulfillWantedSkillBookOrder`;发榜后按 `GetCommerceOrder` 轮询到挂榜或撤单结案,揭榜后按同一请求号重发揭榜轮询结果(§11.1 方案第 3 条);「我的悬赏」读 `only_mine`;撤单走 `CancelCommerceOrder`;阶段文案按 `WantedSkillBookOrderPhase`。客户端用服务端给的 `seller_net_gold`,不自己算税。
+- 策划稿 `docs/planning/equipment-quality-and-skill-crafting-v2-v5.md` §2.4 / §4 同步体验变化(§7 第 2 条:成交后发榜人收到背包里一枚封卷道籍;有托管中 / 交易中过渡态;悬赏榜全服可见)。
+- Java 仓 `PARITY.md` 已登记待做(2026-11-27 一节),批 B 落地时补一句「客户端已切」。

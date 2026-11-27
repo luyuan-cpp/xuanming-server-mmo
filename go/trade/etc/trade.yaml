@@ -210,6 +210,11 @@ Commerce:
   # 开启:密钥(≥32 字节)放进 Secret 注入这个变量名,再写本部署的环境名;手册 docs/ops/trade-commerce-quarantine-runbook.md §4.2。
   ManualResolutionSecretEnv: ""
   ManualResolutionEnvironment: ""
+  # 悬赏求书求购单(kind 7,docs/design/skill-book-wanted-order-trade-escrow.md §3.9),缺省关闭。
+  # 打开要求 AssetOp.Enabled=true,并按下面的 TableDir 读 Skill / SkillScrollCraft 两张表(读不到拒启);只放开 kind 7,
+  # 不需要把封卷道籍加进 ItemConfigs。关掉之后新的发榜、揭榜回「功能未开放」,已有的单照常推进、照常可撤。
+  WantedSkillBook:
+    Enabled: false
 Mall:
   URL: ""
   GatewaySecretEnv: COMMERCE_GATEWAY_SECRET
@@ -219,6 +224,9 @@ Rmb:
   Enabled: false
   # 默认仅金币0；钻石1需显式开启；绑定币2永远禁售。
   CurrencyTypes: [0]
+
+# 导表产物目录:只有 Commerce.WantedSkillBook.Enabled=true 时才读(经 tablebundle,表包模式下跟随热更),关着时不碰配表。
+TableDir: ../../generated/tables
 
 # 内容安全(go/content_guard):人民币寄售标题全服可见,落库前先送检。
 # 缺省严格;Optional: true 只在本机使用,k8s_deploy.ps1 的 New-ContentGuardClientYaml 渲染进集群时删掉它。

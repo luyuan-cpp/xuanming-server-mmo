@@ -502,9 +502,11 @@ func TestTiDBShardedRouteStore(t *testing.T) {
 	require.Len(t, rows, 4)
 	require.EqualValues(t, f.Storage, rows[13].StorageID)
 
-	merged, err := routes.ListMergedInto(ctx)
+	mapping, err := routes.ReadMergedZoneMapping(ctx)
 	require.NoError(t, err)
-	require.Empty(t, merged)
+	require.Empty(t, mapping.Merges)
+	require.Zero(t, mapping.Version, "没有合服历史时版本是 0")
+	require.NotEmpty(t, mapping.Generation, "世代是第 0 片 route_meta.generation")
 	require.True(t, tableExistsForTest(t, f.Raw[0], ZoneMergedIntoTableName))
 	require.True(t, tableExistsForTest(t, f.Raw[0], ZoneMergeHistoryTableName))
 	for _, db := range f.Raw[1:] {

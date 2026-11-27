@@ -7740,3 +7740,223 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
 - **分支与提交**:三个仓都只在 main 工作区改,没有分支。服务端一部分已被别的会话的批量提交收进 HEAD,其余未提交,清单在交接单 §0。
 - **生成**:工作区里的产物已含本轮协议与提示码(有人跑过导表与 proto-gen,未核对),交接单让 Gemini 重跑。
 - **Java 独立仓**:`PARITY.md` 通行证条目改写第 5 条(登录与刷新核对、踢线),新增第 6 条(回调入口)。客户端两版共用。
+
+## 2026-11-26 Claude:后台管理员身份与双人复核·批 4——商城人工单与 SKU 迁进后台、收入争议接上、删网关的商城代理(未编译、未运行,待 Gemini 验证;Java 待做已登记)
+
+- **依据**:[docs/design/admin-identity-and-dual-control.md](design/admin-identity-and-dual-control.md) §8 批 4、§11.1;交接单 `docs/handoff/admin-identity-dual-control-batches4-7-handoff-20261126.md` §2。负责人在原会话说「7 批全做」,父会话转来的话只批了 1~3,两处不一致,按负责人原话做全部。
+- **商城(`java/mall_game`)**:
+  - 七条写命令(`skus/create|update|stock`、`manual/{orders,refunds,consignments}/resolve`、`manual/incomes/dispute`)的请求带 `approval{approvalId, proposer, approver, approvedAtMs}`。`CatalogAdminController` 在任何读写之前核对(新增 `AdminApproval.refusal`:与 `go/shared/dualcontrol.Require` 同一口径,另核「请求号就是批准号」),不合格回 403。
+  - 缺省必须带。`commerce.admin-allow-unapproved`(`COMMERCE_ADMIN_ALLOW_UNAPPROVED`,缺省 false)只给本机开发:启动与每次放行都打 ERROR,计入 `mall_admin_unapproved_command_total`;带了记录就必须合格。
+  - `commerce_admin_command` 加 `proposer` / `approver` 两列(VARBINARY,与处置同一事务);合同戳换成 `mall-game-official-sku-v5-admin-approval`,`SchemaVerifier` 同步。项目未上线,清库重装。
+  - 七个请求记录各留一个不带批准记录的构造,给系统补齐(`DiamondRechargeCatalog`)与原有单测用,原有用例一行不改。
+- **后台(`java/gm_admin`)**:
+  - 流水新增类别 `OPS`(运营处置):冻结 `{target, command, body, retryable}`,流水补顶层 `requestId`(就是流水号,也就是批准号)。下游与命令的白名单只在 `GmOpsController.COMMANDS` 一处。
+  - 新增 `GameMallAdmin`(商城 HMAC v1 客户端;确定的拒绝记 REJECTED,其余记结果未知、可用原申请重试)与 `GmOpsController`(`/gm/ops/**`:商城只读查询、发起、批准、驳回、列表、审计)。
+  - 迁移 9:`gm:mall:read / prepare / approve`,写法同迁移 8。
+  - 配置 `GM_MALL_URL`、`GM_MALL_ADMIN_SECRET`、`GM_MALL_ADMIN_SUBJECT`;`run_local.py` 不放行(本机还没有验收过的转发)。
+  - 前端新增「运营处置」页 `OpsCommands.vue` 与 `api/gm/ops.ts`,挂在控制台;`ApprovalPanel` 认得 `ops`。
+- **网关**:删掉 `MallAdminController`、`MallAdminClient`、`MallAdminProperties`、`mall-admin.{html,js,css}`、两份测试与 `mall-admin.*` 配置键。本机 SQL 启动目录 `tools/scripts/lib/sql_boot_catalog_local.ps1` 的网关计划去掉 `mallAdminUrl`,`sql_boot_catalog_java.tests.ps1` 与 `tools/scripts/README.md` 同步。
+- **顺带处理**:同晚「数据覆写审计 r2 第 4 轮」给寄售人工单新增的 `RETRY_DELIVERY` 原本加在要删的网关页上,已搬进运营处置页。`docs/design/mall-administration.md`「运维入口与页面」、`jubaozhai-market.md` §16.1、`distributed-tracing.md` 两处改成现状(后台到商城这一跳不带 `traceparent`)。
+- **文件**:
+  - 商城:新增 `java/mall_game/src/main/java/com/game/mall/AdminApproval.java`;改 `ManualAdminApi.java`、`CatalogAdminApi.java`、`ManualAdminStore.java`、`CatalogAdminStore.java`、`CatalogAdminController.java`、`CommerceProperties.java`、`SchemaVerifier.java`、`resources/application.yaml`、`resources/db/schema.sql`;测试 `CatalogAdminHttpTest.java`、`RmbGateG1G2HttpTest.java`。`ManualAdminStore.java` / `ManualAdminApi.java` / `ManualAdminStoreTest.java` 里另有 r2 第 4 轮的 `RETRY_DELIVERY` 改动,不是本条的。
+  - 后台:新增 `GameMallAdmin.java`、`GmOpsController.java`、`frontend/src/api/gm/ops.ts`、`frontend/src/views/gm/console/OpsCommands.vue`、测试 `GameMallAdminTest.java`;改 `GmCommandJournal.java`、`GmInstallation.java`、`application-gm.yml`、`run_local.py`、`frontend/src/api/gm/approval.ts`、`frontend/src/views/gm/console/index.vue`、测试 `GmDualControlJournalTest.java`、`GmInstallationTest.java`。
+  - 网关:删 8 个文件(上面);改 `java/gateway_node/src/main/resources/application.yaml`。
+  - 脚本与文档:`tools/scripts/lib/sql_boot_catalog_local.ps1`、`tools/scripts/tests/sql_boot_catalog_java.tests.ps1`、`tools/scripts/README.md`、三份设计稿。
+- **交 Gemini**(仓库根,依次;任何一步要改代码就保留首错原文停下,交回 Claude。后台的单测与批 5、批 6 是同一批文件,第 3 步在批 6 条目的命令之后跑一次即可):
+  1. `mvn -f java/mall_game/pom.xml test`:全过。重点 `CatalogAdminHttpTest`(新用例「写命令缺省必须带合格的批准记录_拒绝发生在任何写入之前」与改带批准记录的原用例)、`RmbGateG1G2HttpTest`、`ManualAdminStoreTest`、`CatalogAdminStoreTest`、`DiamondRechargeCatalogTest`。
+  2. `cd java`,`mvn -B -pl gateway_node -am test`:全过(商城代理的两份测试已删)。
+  3. `python java/gm_admin/prepare.py`,再 `mvn -f java/gm_admin/pom.xml -DskipTests=false test`:`GameMallAdminTest` 3 条、`GmDualControlJournalTest` 新增的 `opsCommandsFreezeTheRequestIdAndReuseTheApprovalRecordOnRetry`、`opsDraftsRejectServerFrozenFieldsAndOtherShapes` 通过,`GmInstallationTest` 全过;前端 `pnpm --dir build/gm-admin-upstream/jeecgboot-vue3 build` 通过。
+  4. `pwsh -NoProfile -File tools/scripts/tests/sql_boot_catalog_java.tests.ps1`:`fail=0`。
+  5. 可选冒烟:本机起商城与后台(`GM_DUAL_CONTROL_ENFORCE=true`、两个本地账号、`GM_MALL_URL` 指商城回环地址),A 在运营处置页发起「处置人工订单」,B 批准;商城 `commerce_admin_command` 那一行 proposer=A、approver=B。不带批准记录直接调商城写命令回 403。
+- **没验证的**:全部。页面没在浏览器里看过。本会话只做了只读检查:改过的 ps1 用 `Parser::ParseFile` 解析 0 错误。
+
+## 2026-11-26 Claude:后台管理员身份与双人复核·批 5——邮件、回收、收件箱、账号类、榜单删除、滞留阵容接入后台(未生成、未编译、未运行,待 Gemini 验证;Java 待做已登记)
+
+- **依据**:设计稿 §8 批 5、§11.2;交接单 §3。各服务的 Go 部分由本会话派出的三个子任务按同一份规则写,回报后我逐条核过并修了三处(见文末「当场修的」)。
+- **共用规则**:各资源服务缺省要求批准记录,用 `go/shared/dualcontrol` 复查;带请求号的命令用新增的 `RequireForRequest`(另核「请求号就是批准号」),没有请求号的核「发起人就是操作人」。不带记录只在各自的应急开关打开时受理(启动与每次都打 ERROR、计数);带了记录就必须合格,开关开着也一样。核对都在调用方准入之后、任何读写库与判重之前;拒绝回 `PermissionDenied`(match 照 trade 回带内 `REFUSED`)。
+- **各服务**:
+  - **mail**:`SendMailRequest.approval = 15`;要求名单 `ApprovalRequiredCallers` 缺省 `[admin]`(`admin` 拿不掉),系统调用方不要求;批准记录落进 `mail_message`(15~17)与 `mail_campaign`(20~22);开关 `AdminAllowUnapproved`;计数 `mail_admin_unapproved_command_total{caller, method}`。`mailadmin` 写命令在生产被拒(退出码 3),`-file` 带 `approval` 拒绝;robot 的 mail 冒烟带合成的批准记录。本机 GM 栈 `deploy/gm-admin/mail-config.yaml` 打开了开关(那里的后台多半跑原生模式)。
+  - **data_service 回收**:`BatchRecallItemsRequest.approval = 13`(执行用 `RequireForRequest`,演练不要求)、`CancelRecallBatchRequest.approval = 4`、`ResolveRecallOpRequest.approval = 5`、`RegisterRecallReviewHandledRequest.approval = 10`(本条新纳入的甲级);开关顶层 `AdminAllowUnapproved`;计数 `data_service_admin_unapproved_command_total{method}`(四个取值启动预建)。批准号与批准人写进回收理由文本与日志行。
+  - **player_inbox**:`GmSanctionPlayerRequest.approval = 11`(`RequireForRequest`)、`VoidPlayerInboxItemRequest.approval = 8`;审计表 `player_inbox_audit` 加 `approval_id = 16`、`approver = 17`;开关 `PlayerInbox.AdminAllowUnapproved`;计数 `player_inbox_admin_unapproved_command_total{method}`。`NewAdminServer` 多一个开关参数。
+  - **login**:`LoginAdmin` 与只给它用的消息搬到新文件 `proto/login/login_admin.proto`(同包、字段号与消息号 111/426/427 不变;`login.proto` 是客户端可见协议,不能引入批准记录);三个请求各加 `approval`(5 / 4 / 5);新拦截器 `AdminApprovalInterceptor` 排在口令闸之后(摘角色的演练不要求;没归类的 LoginAdmin 方法一律拒绝);开关顶层 `AdminAllowUnapproved`;计数 `login_admin_unapproved_command_total{method}`。
+  - **rank**:`RemoveRankEntryRequest.approval = 6`,只对调用方 `admin` 要求;开关 `AdminAllowUnapproved`;计数 `rank_admin_unapproved_command_total{method}`;新增 `[RankAdmin]` 审计日志行。**`remove.go` 放开**:后台经批准可以删任意榜上的单个条目,整代隐藏仍只许开榜方。
+  - **match**:`ResolveStrandedFormationRequest.approval = 8`,ABORT 要 `Require(approval, operator_name)`;`match_manual_resolution` 加 `approval_id = 13`、`approver = 14`;开关 `GlobalMatch.ManualResolutionAllowUnapproved`;计数 `match_admin_unapproved_command_total`。`formationfix` 帮助与被拒提示改成「生产写库走后台」。
+- **后台(`java/gm_admin`)**:
+  - 邮件三类不改方法签名:流水放行时把批准记录放进交给发送方的冻结请求(`SendMailRequest.approval`;活动邮件放在建活动的那份),`GameServices` 原样转成协议,批准记录在签名覆盖范围内;草稿里不许自带 `approval`(冻结字段名单加了它)。
+  - 运营处置目录加五个下游、十一条命令:账号类 3(`loginpb.LoginAdmin/*`)、回收 4(`data_service.DataService/{BatchRecallItems,CancelRecallBatch,ResolveRecallOp,RegisterRecallReviewHandled}`)、收件箱 2(`player_inbox.PlayerInboxAdmin/{GmSanctionPlayer,VoidItem}`)、榜单 1(`rankpb.RankAdmin/RemoveRankEntry`)、滞留阵容 1(`match.MatchInternal/ResolveStrandedFormation` 的 ABORT)。
+  - 新增 `GameOpsRpc`:login / data_service / player_inbox 带 metadata `x-admin-token`,rank(调用方 admin)与 match(调用方 `ops-formation`)签 ServiceCallAuth;带请求号的命令放行时把请求号填成批准号。带内拒绝(`error_code`、`error_message` 的 tip、match 的非 ELIGIBLE 结论)记 REJECTED;非确定的 gRPC 失败记结果未知。
+  - 能否重试随申请冻结(`retryable`):收件箱作废与滞留阵容终结不能沿用原申请重试(重放会被下游当成「已是终态」);流水按申请上冻结的值决定。
+  - 预览 `POST /gm/ops/preview`(只要查看权限、不进流水):回收批次与摘角色的演练、滞留阵容的 DRY_RUN;发起前拿计划摘要,批准人核对现状。
+  - 原因在发起时按 UTF-8 191 字节挡住(下游最严的上限)。收件箱作废的 `reason` 是作废原因枚举,申请原因写进 `note`。
+  - 迁移 10:`gm:account|recall|inbox|rank|match:read / prepare / approve` 与 `gm:gateway:write`(批 6)。
+  - 配置 `GM_LOGIN_TARGET`、`GM_LOGIN_ADMIN_TOKEN`、`GM_DATA_ADMIN_TOKEN`(地址沿用 `GM_DATA_TARGET`)、`GM_INBOX_TARGET`、`GM_INBOX_ADMIN_TOKEN`、`GM_RANK_TARGET`、`GM_RANK_ADMIN_SECRET`、`GM_MATCH_TARGET`、`GM_MATCH_FORMATION_SECRET`;`run_local.py` 不放行;`prepare.py` 的协议描述集加 `login_admin`、`player_inbox_admin`、`rank_admin`、`match_internal`。
+  - 前端:运营处置页加五个下游的表单与「演练(不进流水)」按钮。
+  - 文件:新增 `GameOpsRpc.java`、测试 `GameOpsRpcTest.java`、`GmOpsControllerTest.java`;改 `GmCommandJournal.java`、`GmOpsController.java`、`GmInstallation.java`、`application-gm.yml`、`prepare.py`、`run_local.py`、`frontend/src/api/gm/ops.ts`、`frontend/src/views/gm/console/OpsCommands.vue`、测试 `GmDualControlJournalTest.java`、`GmInstallationTest.java`、`GameServicesTest.java`。
+  - 后台的新单测:`GameOpsRpcTest` 4 条、`GmOpsControllerTest` 5 条、`GmDualControlJournalTest` 新增 `anOpsCommandFrozenAsNotRetryableStaysUnknownAfterAnUnknownResult`、`mailCommandsCarryTheApprovalRecordInTheFrozenRequest`、`GameServicesTest.theApprovalRecordInTheFrozenRequestReachesMailUnderTheSignature`。
+- **当场修的**(子任务回报后):
+  1. `RequireForRequest` 改成严格比对操作人:原先空操作人会被当成「没有操作人字段」,收件箱会先打「已核过」再被业务校验拒;mail、rank 改为显式传发起人。
+  2. 回收的 `RegisterRecallReviewHandled` 做完撤不回,§3 漏列,按甲级纳入(协议、准入、计数、测试表、后台目录)。
+  3. rank 的开榜方检查让后台对 match 开的榜一律被拒,按上面放开;后台目录拿掉用不上的 `DeleteRankGeneration`。新增真库用例 `TestTiDBAdminRemovesAnEntryFromABoardItDidNotOpenButCannotHideIt`。
+- **文档**:设计稿 §11.2 / §11.5;`docs/design/mail-system.md`、`player-inbox-service.md`(审计表两列);手册 `docs/ops/player-inbox-runbook.md` §6、`match-formation-manual-abort-runbook.md` §10;`deploy/k8s/README.md` 的 mail 发件入口与 `deploy/k8s/rank-alerts.yaml` 的处置说明改成「补发走后台」。
+- **部署顺序**:mail、login、player_inbox、data_service、rank、match 先升级(它们对未知字段会拒绝或忽略不一,mail 的 `validateContent` 明确拒绝),后台最后升级;match 与 player_inbox、mail 要先跑 `-migrate` 补列,不补列常驻进程拒启。项目未上线,也可以清库。
+- **交 Gemini**(仓库根,依次;任何一步要改代码就保留首错原文停下,交回 Claude):
+  1. 协议生成:`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`(默认配置,`login.proto` 是客户端可见协议)。核对:`proto/message_id.txt` 的 111 / 426 / 427 没变;出现 `go/proto/login/login_admin.pb.go`、`login_admin_grpc.pb.go` 与 C++ 的 `login_admin.pb.*`、`grpc_client/login/login_admin_grpc_client.*`、`login_admin_service_metadata.h`;`python tools/scripts/mail_postgen.py verify` 通过。
+  2. 客户端三步(`login.proto` 少了只给服务端的消息):在 `../mmorpg-client` 依次跑 `tools/gen_proto.ps1`、`tools/gen_messageids.ps1`、`tools/client_compile_check.ps1`;核对没有新增 `AdminApproval.cs`。
+  3. robot:`cd robot`,`go mod vendor`(vendor 缺 `proto/common/base/admin_approval.pb.go` 与 `login_admin*.pb.go`),再 `go build ./... && go vet ./...`;核对 vendor 的改动只有新增生成文件与 `mail/*.pb.go`、`login/*.pb.go` 的更新。
+  4. Go(各目录 `$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`):
+     - `go/shared`:`go test ./dualcontrol/... -count=1`(6 条)。
+     - `go/mail`:`go build ./... && go vet ./... && go test ./... -count=1`;新增 `internal/server/approval_test.go` 6 条、`cmd/mailadmin` 的 `TestDualControlRefusalIsDefiniteAndFileCannotCarryApproval`。
+     - `go/data_service`:`go build ./...`;`go test ./internal/server/ ./internal/logic/ ./internal/metrics/ ./internal/config/ -count=1`;重点 `TestRecallAdminCommands*`(四个方法)、`TestBatchRecallDryRunNeedsNoApproval`、`TestRecallRPCsRequireAdminToken`、`TestBatchRecallItems_FrozenBatchRecordsTheApproval`。
+     - `go/player_inbox`:`go build ./... && go vet ./... && go test . ./internal/server/ ./internal/metrics/ ./internal/logic/ ./internal/inbox/ ./internal/config/ -count=1`;一次性库上 `PLAYER_INBOX_TEST_MYSQL_DSN=<一次性库> go test -tags integration ./internal/inbox/ -run TestIntegrationAuditRecordsWhatWasDone -count=1 -v`。
+     - `go/login`、`go/rank`、`go/match`:各 `go build ./... && go vet ./... && go test ./... -count=1`;新增 login `admin_approval_test.go` 7 条、rank `internal/server/server_test.go` 5 条与 `TestAdminUnapprovedIsPreRegisteredPerMethod`、match 的 `TestStrandedFormationOpsAbortRequiresDualControlApproval` 等 4 条与 `TestFormationfixAbortRefusedByDualControlPointsToTheConsole`。可选真库:`MATCH_IT_TIDB` 下 `go test ./internal/authority -run TestManualAbortTiDB`;rank 的 `TestTiDBAdminRemovesAnEntryFromABoardItDidNotOpenButCannotHideIt`(与 `TestTiDBRemovedEntryStaysRemovedAgainstLateBatch` 同一套真库夹具)。
+     - `go/trade`:`go build ./...`(共用的 `dualcontrol` 改过)。
+  5. C++:先 msbuild `proto`、`grpc_client`、`rpc` 三个库,再编节点(至少 gate、scene);Linux 侧同样编。本批没有手写 C++ 改动。
+  6. Java 后台:与批 4、批 6 同一轮 `python java/gm_admin/prepare.py`、`mvn -f java/gm_admin/pom.xml -DskipTests=false test`;本批的后台单测见上面「后台」一段。
+  7. 告警契约:`pwsh -NoProfile -File tools/scripts/tests/dual_control_alerts_contract.tests.ps1`(批 7 条目)。
+  8. 可选冒烟(本机调试栈):后台开 `GM_DUAL_CONTROL_ENFORCE=true`、两个本地账号,在运营处置页对一个测试角色做一次「玩家处罚 / 封获取」,A 发起、B 批准;`player_inbox_audit` 那一行 `approval_id` 等于申请号、`approver` 是 B。不带批准记录直接调 `GmSanctionPlayer` 回 `PermissionDenied`。
+- **没验证的**:全部;本会话只跑过 `gofmt -l`(改过的 Go 文件无输出)与 PowerShell 解析。
+
+## 2026-11-26 Claude:后台管理员身份与双人复核·批 6——网关 /admin/** 收口:写操作要合规操作人、口令闸统一打 AUDIT、配置表发布用机器口令、人用入口在后台(未编译、未运行,待 Gemini 验证;Java 待做已登记)
+
+- **依据**:设计稿 §8 批 6、§11.3;交接单 §4。乙级动作按设计 §3 不要求双人,只要求个人身份与留痕。
+- **网关 `AdminApiKeyFilter`(规则收在这一处,各控制器不各写一遍)**:
+  - 写操作(POST / PUT / PATCH / DELETE)必须带且只带一个 `X-Admin-Operator`,匹配 `^[A-Za-z0-9._@-]{1,64}$`(与身份提供方主体同一字符集),否则 400;读操作不要求。
+  - 每次写操作在响应之后打一行 `AUDIT gateway admin write method=… path=… status=… operator=… key=admin|machine remote=…`,区服、白名单、公告控制器从此也有留痕;热关停与配置表原有的业务 AUDIT 行照旧。
+  - 机器口令 `admin.machine-key`(缺省空 = 不开):只能访问 `/admin/tables/**`(规范化路径与原始 URI 都要落在下面、不带 `..`,否则 403),操作人必须是 `table-bundle`;人用的口令不能以 `table-bundle` 写。两把相同或机器口令短于 32 字节拒绝启动。
+- **后台人用入口**:`GmController` 新增 `POST /gm/gateway/admin`,只转发白名单里的方法与路径(区服增删改、维护 / 开放、创角开关、角色容量、白名单、公告、热关停 PUT / DELETE),网关口令留在服务端,`X-Admin-Operator` 取登录会话;权限 `gm:gateway:write`(迁移 10,给 admin、发起人、批准人三个角色,审计不给)。前端新增「网关管理」卡片 `GatewayAdmin.vue`。
+- **公网入口**:`k8s_client_entry.ps1` 生成的 gateway Ingress 只路由 `/api`,契约测试 `k8s_client_entry_contract.tests.ps1` 已有两条(D91)守着,这次只核对、没改。
+- **没改的与待做**:
+  - `go/table_sync/cmd/table-bundle` 用机器口令时要带 `-operator table-bundle`(或 `MMORPG_ADMIN_OPERATOR=table-bundle`);命令行本身这次没改,它正被配置表热更那条线改着(工作区有未提交改动),缺省操作人改成 `table-bundle` 留给那条线顺手做。
+  - 机器口令在 K8s 的 Secret 注入随批 7 剩余项一起做(交接单 §5)。没接之前集群里 `table-bundle` 只能用人用口令并带自己的操作人名。
+- **文件**:`java/gateway_node/src/main/java/com/game/gateway/config/AdminApiKeyFilter.java`、`java/gateway_node/src/main/resources/application.yaml`、`java/gateway_node/src/test/java/com/game/gateway/config/AdminApiKeyFilterTest.java`;`java/gm_admin/src/main/java/org/jeecg/modules/gm/{GmController,GmInstallation}.java`、新增 `java/gm_admin/src/test/java/org/jeecg/modules/gm/GmGatewayAdminTest.java`、`java/gm_admin/frontend/src/views/gm/console/GatewayAdmin.vue`、`index.vue`。
+- **交 Gemini**(仓库根;要改代码就保留首错原文停下,交回 Claude):
+  1. `cd java`,`mvn -B -pl gateway_node -am test`:全过;`AdminApiKeyFilterTest` 7 条(新增 `writesNeedExactlyOneValidOperatorButReadsDoNot`、`theMachineKeyOnlyReachesTableBundlesAsTableBundle`、`theMachineKeyMustBeLongAndDifferentFromTheHumanKey`)通过;`AdminKillSwitchControllerTest`、`AdminTableBundleControllerTest`、`AdminZoneHttpContractTest` 不回退(它们不经过口令闸)。
+  2. 后台:与批 4、批 5 同一轮 `python java/gm_admin/prepare.py` 后 `mvn -f java/gm_admin/pom.xml -DskipTests=false test`,`GmGatewayAdminTest` 2 条、`GmInstallationTest.standardRolesSeparateProposingFromReleasingAndAuditing` 通过。
+  3. 可选冒烟:网关配 `admin.machine-key`,`table-bundle publish -operator table-bundle` 用机器口令能发布;同一把机器口令访问 `/admin/zones` 回 403;人用口令不带 `X-Admin-Operator` 写区服回 400;后台「网关管理」卡片做一次「区服进入维护」,网关日志有 `AUDIT gateway admin write … operator=<登录名>`。
+- **没验证的**:全部。
+
+## 2026-11-26 Claude:后台管理员身份与双人复核·批 7(部分)——「不带批准记录被接受」告警与契约测试;后台上 K8s 与本机转发交新会话(未运行,待 Gemini 验证;Java 待做已登记)
+
+- **依据**:设计稿 §8 批 7、§11.4;交接单 §5。
+- **做了的**:
+  - 新增 `deploy/k8s/dual-control-alerts.yaml`(PrometheusRule `dual-control-alerts`,组 `admin.dual-control`):每个资源服务一条,5 分钟内计数有增长就响,全部 critical。trade 的叫 `TradeManualResolutionUnapprovedExecute`(与 trade 配置注释一致),其余七条是 `MallAdminCommandUnapproved`、`MailAdminCommandUnapproved`、`LoginAdminCommandUnapproved`、`DataServiceAdminCommandUnapproved`、`PlayerInboxAdminCommandUnapproved`、`RankAdminCommandUnapproved`、`MatchAdminCommandUnapproved`。集群里这些计数应当恒为 0。
+  - 新增契约测试 `tools/scripts/tests/dual_control_alerts_contract.tests.ps1`:规则名单与字段、每条数的指标在对应服务源码里注册过、trade 告警名与配置注释一致、告警名全仓不重名。
+- **没做的(交新会话,任务卡「双人复核批 7 剩余:后台上 K8s 与本机转发」)**:后台的镜像与 Deployment / Service、九把管理口令与密钥的 Secret 注入(顺带接上 data_service 的 `AdminToken`、match 的人工处置密钥、网关机器口令)、只许后台访问管理端口的 NetworkPolicy、部署契约测试;本机 `rpc-bridge` 到 trade 的第三路与 `run_local.py` 放行。逐条写在交接单 §5「批 7 剩余」。
+- **交 Gemini**:
+  1. `pwsh -NoProfile -File tools/scripts/tests/dual_control_alerts_contract.tests.ps1`:`fail=0`。它核对批 5 的 Go 计数名在 `go/mail`、`go/login`、`go/data_service`、`go/player_inbox`、`go/rank`、`go/match` 里注册过,批 5 的代码红了它也会红,先看批 5 条目。
+  2. 有 promtool 时:`promtool check rules` 对 `deploy/k8s/dual-control-alerts.yaml` 里 `spec.groups` 抽出的规则(做法同其它告警文件的 PROGRESS 条目);没有就如实报「未运行」。
+- **没验证的**:全部;本会话只用 `Parser::ParseFile` 解析过契约测试(0 错误)。
+
+## 2026-11-27 Claude:补上一条「gate 准入 P2-4 票据先行」——承压淘汰跳过已经在关的连接、握手期限不把在关的算超时,核对 main 之外没有要合并的工作(未编译、未测试,待 Gemini 验证;Java 0.1.0-SNAPSHOT 待做)
+
+- **起因**:负责人问代码是否全部写完、所有工作是否都在 main。复查 P2-4 时又找出两处,当场改掉;同时核对了 main 之外的残留。
+- **补修**:
+  1. gate 承压淘汰改为「表头起第一条还连着的」(`connection_admission.cpp` `OldestEvictableUnauthenticated` + `EvictUnauthenticated`),已经在关的
+     (验签失败后等 100ms 延迟强关、验签前发包被关、高水位)跳过,与 battle 直连 `OldestConnectedUnauthenticated` 同一口径。原来会淘汰掉它们:
+     白用一次淘汰、不多腾位置,还截掉验签失败的应答。连接对象已不在的记录不跳过(摘掉就是清理)。上一条「剩余风险」第一条随之不成立。
+  2. 握手期限扫到已经因为别的原因在关的连接只摘记录,不计 `handshake_timeouts` / `battle_preauth_reaped_total`(`client_heartbeat.cpp`、
+     `battle_client_edge.cpp` 的 `CloseExpiredHandshakes`):关它的不是这道期限,计进去会让「收割」指标虚高。
+- **核对 main 之外的残留**(只核对,没有要合并的):
+  - 只有 `main` 一个分支,与 `origin/main` 同一提交;没有 stash。
+  - 三个分离头的验证 worktree(`build/aps-1106-014851`、`build/verification/team-peer-preflight-src-20261108`、`run/verification/muduo-progress-publish-…`)
+    指向的提交都在 main 里。
+  - 两个验证副本的未提交改动:队伍邀请 / 申请的跨玩家预检(11-08 Codex,`readPeerTeamID`)已被 main 的 `c9ca12cff`(11-17,`peerTeamID`,
+    另加了索引与名册一致性检查)取代;另一份只有 11-25 目录迁移的路径改名,main 早已改过。与 11-26「已删 / 已归档会话留在 git 里的残留逐项核对」结论一致。
+- **文档**:设计稿 P0-2「淘汰」一段与已知局限、P2-4 新增「一条连接的生命周期」流程图、水平扩展的分析(占票表只在本进程却对全区成立:票据绑定
+  `gate_node_id` 与 zone,只可能落到签它的那一台,不用放 Redis 做全区去重)、「执行步骤」与测试清单;`gate-client-heartbeat.md` §5.4。
+- **单测**:`connection_admission_test.cpp` 新增 `PreAuthConnectionLifecycle.EvictionPassesOverAConnectionThatIsAlreadyClosing`(这一组现在 9 条)。
+  契约:`gate_connection_alerts_contract.tests.ps1` 淘汰那条断言按新函数改写并新增「跳过已经在关的」一条;`battle_connection_alerts_contract.tests.ps1`
+  握手期限那条断言跟着 `conn && conn->connected()` 改。
+- **我做过的检查**(只读):`test_cpp_no_raw_pointer_member.py` 13 条全过;两份契约脚本 `Parser::ParseFile` 0 错误;两份契约测试受影响的 56 个模式在现源码上逐条匹配全过。
+- **交 Gemini**:同上一条的五步,第 3 步 `PreAuthConnectionLifecycle.*` 改为 9 条。没有 proto 改动。
+- **Java**:Java 仓 `PARITY.md` 同一节第 3 条补上「淘汰跳过已经在关的、握手期限不把在关的算超时」。
+- **未提交,未编译,未测试。**
+
+## 2026-11-27 Claude：数据覆写审计 r2 第 4 轮 §7.4 五条（帮战入账与追杀令表、match 生死状接线）落码，第 4 轮会话收尾（Opus 5.5 Max 子代理，未生成、未编译、未测试；Java 已登记待做）
+
+- **五条都成立**（批 V 的修复代理顺带发现，详见交接单 `docs/handoff/data-overwrite-audit-r2-round4-handoff-20261126.md` §7.4）：
+  - r2-gw#5、#6：帮战结算一人的资产指令未决满了就整局失败进死信；结算与到期退款没接角色护栏。改为按人分流：未决已满或冻结中的人记进新表 `guild_war_credit_owed`，由循环用预发的同一个 op_id 补插、同一笔至多一条指令；已删除的角色不写；护栏副本锁与历练结算同一口径。
+  - r2-gw#7：`guild_war_bounty` 加 `escrow_op_id` 索引；终态追杀令保留 30 天后分批删（核过终态行不再被任何路径引用）。
+  - r2-gw#8：点选野外目标时「仅本帮可见」的追杀令不再显示给别帮。
+  - r2-tn#3：K8s 的 match 配置缺 FriendRpc / ChatRpc / GuildRpc，成立，但另一会话（改名与内容安全第三轮）已修，本批没重复改。
+- **提交状态**：代码被别的会话的快照提交 `24c13a311` 带进 main，不是本会话提交的；设计稿续写（`guild-play-v2-implementation-plan.md` §7～§11、`battle-jianghu-grudge-duel-phase1-implementation-plan.md` 的 r2-tn#3 一节）与一个形状测试还在工作区。
+- **交 Gemini（复核通过之后）**：命令在交接单 §7.4（生成 → gofmt / build / vet → 纯单测 → MySQL 与 TiDB 真库用例 → 全包 → 部署契约；本地已有的 `guild_war_bounty` 要重建）。
+- **复核**：批 V、W 与这五条改由会话「复核第 4 轮批 V/W 并补 guild 见证 SQL」做；`go/guild/internal/data/asset_store.go` 本批没改，已交还给它补见证 SQL。批 X 由原复核会话先复核。
+- **Java**：在 Java 仓 `PARITY.md` 加了「2026-11-27 数据覆写审计 r2 第 4 轮批 V、W、X 与 §7.4 五条」待做一节（Java 有帮战 V2、群仙问道赛、生死状，生死状同样是邮件退费）。
+- **第 4 轮会话到此收尾**：其余 9 条由「交接单里的代码改动清零与方案入档」会话做（r2-mall#1 已完成，悬赏求书改走 trade 托管在单独的会话里分三批落码）；第 5 轮由负责人定为等第 4 轮修复落完、用最高档模型再跑（去重清单 133 条，见交接单 §6）。
+
+## 2026-11-27 Claude:合服映射的 etcd 副本——目录第 0 片失联时 data_service 照样启动(未编译、未运行、未提交,待 Gemini;Java 不涉及)
+
+- **为什么**:[启动期故障隔离](design/data-service-startup-isolation.md) 剩下的唯一硬依赖。合服映射 `zone_merged_into` 只在目录第 0 片,它的集群失联时新起的 data_service 读不到映射就拒启。
+- **做法**([设计稿](design/merged-zone-etcd-copy.md);比较过每片一份带版本、整张搬进 etcd、从同伴取快照,选了第四种):
+  - 第 0 片仍是唯一真源,合服工具、映射表、历史表、授权、PITR 语义一行没改。
+  - data_service 每一拍先读 etcd 副本 `/mmorpg/merged_zone_copy/<SnapshotMySQL.DBName>`,再一条语句读第 0 片的映射、`zone_merge_history` 的行数(版本)和 `route_meta.generation`(R14,`RouteStore.ReadMergedZoneMapping`)。
+  - 读到新版本先按 ModRevision CAS 发布进副本,再交给缓存;第 0 片读不到时按副本回答。启动时第 0 片**连不上**(池关着 `ErrUnreachable`、缺写资格 `ErrNoWriterGrant`)而副本在就能起;连得上却读不对(1142、1146 等)照旧拒启。
+  - 第 0 片比副本旧、同版本内容不同、副本世代不同、映射解析不通或含区号 0、etcd 读不到,一律失败(启动时拒启,运行中保留旧映射、计 `result="error"`)。进程还记着自己回答过的整份映射,版本变小、同版本换内容、换了库也都拒绝(要重启)。判定表在设计稿 §4.3。
+  - 写完之后做过一轮只读子代理的独立复核,查出 5 条,4 条改了代码、1 条(etcd 回档后回写)不采用并记了取舍:设计稿 §12、§10。
+- **文件**(24 个,设计稿 §8):
+  - `go/data_service/internal/store/route_store.go`、`route_store_contract_test.go`、`route_store_test.go`、`account_directory_shard_tidb_test.go`;
+  - `go/data_service/internal/svc/merged_zone_copy.go`(新)、`merged_zone_copy_test.go`(新)、`merged_zones_test.go`、`servicecontext.go`;
+  - `go/data_service/internal/config/config.go`、`etc/data_service.yaml`(只改注释);`deploy/k8s/data-service-route-alerts.yaml`(告警说明);
+  - `tools/scripts/currency_crash_window.ps1`(清路由表时一起删副本键);
+  - 文档:设计稿(新)、`data-service-startup-isolation.md`、`horizontal-scale-logical-db.md`、`data-service-breaker-per-logical-db.md`、`player-data-tidb-scaling-plan.md`,开服、合服、PITR、etcd、搬库五份手册,本条;`docs/README.md` 的索引行已由别的会话跑 `gen_docs_index.py` 时带上。
+- **给 Gemini 的验证**:
+  - 低档模型即可。环境 `$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`。
+  - 失败时保留编译错误全文、失败用例名与断言原文,不改断言,不连续重试;需要改代码就停下,交回 Claude。
+  - 先跑同日「data_service 启动期故障隔离」批 1、批 2、第二轮三条的命令(`servicecontext.go` 重叠),再在仓库根目录跑:
+  ```
+  cd go/data_service
+  gofmt -l internal/svc/merged_zone_copy.go internal/svc/merged_zone_copy_test.go internal/svc/merged_zones_test.go internal/svc/servicecontext.go internal/store/route_store.go internal/store/route_store_contract_test.go internal/store/route_store_test.go internal/store/account_directory_shard_tidb_test.go internal/config/config.go
+  go build ./...
+  go vet ./internal/store/... ./internal/svc/...
+  go test -count=1 ./internal/store/... ./internal/svc/... ./internal/server/...
+  go test -count=1 -v -run 'TestMergedZone|TestLoadMergedZoneCache|TestNewMergedZoneCacheNeedsTheRouteStoreAndTheEtcdCopy' ./internal/svc/
+  go test -count=1 -v -run 'TestRouteReadQueriesShapes' ./internal/store/
+  go test -count=3 -race -run 'TestMergedZone|TestLoadMergedZoneCache' ./internal/svc/
+  $env:DATA_SERVICE_IT_ETCD='127.0.0.1:2379'; go test -count=1 -v -run 'TestEtcdMergedZoneCopiesAgainstRealEtcd' ./internal/svc/
+  $env:ACCOUNT_DIRECTORY_TEST_DSN='<TiDB 测试账号 DSN>'; $env:ACCOUNT_DIRECTORY_REQUIRE_TIDB='1'; go test -count=1 -v -run 'TestTiDBShardedRouteStore' ./internal/store/
+  cd ../..
+  python -c "import yaml; list(yaml.safe_load_all(open('deploy/k8s/data-service-route-alerts.yaml', encoding='utf-8'))); yaml.safe_load(open('go/data_service/etc/data_service.yaml', encoding='utf-8'))"
+  pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
+  pwsh -NoProfile -Command "`$e=`$null; [void][System.Management.Automation.Language.Parser]::ParseFile('tools/scripts/currency_crash_window.ps1', [ref]`$null, [ref]`$e); if (`$e.Count) { `$e; exit 1 }"
+  ```
+- **通过标准**:
+  - `gofmt -l` 没有输出(`internal/svc/directory_events.go` 在 HEAD 里本来就不齐,不在上面的清单里,不算本条);build、vet 没有错误;测试全部通过;`-race` 不报竞争;YAML 解析不报错;部署契约全绿;脚本解析没有错误。
+  - 新用例 PASS:svc 的 `TestMergedZoneSourcePublishesBeforeAnswering`、`TestMergedZoneSourceHealsAPublishWhoseAnswerWasLost`、`TestMergedZoneSourceRefusesWhenShardZeroDisagreesWithTheCopy`、`TestMergedZoneSourceNeverGoesBackWithinAProcess`、`TestMergedZoneSourceStartsFromTheCopyWhenShardZeroIsUnreadable`、`TestMergedZoneSourceDoesNotStartFromTheCopyOnADeterministicError`、`TestMergedZoneSourceRetriesAPublishRace`、`TestMergedZoneSourceNeverPublishesABrokenMapping`、`TestMergedZoneSourceFailsWithoutTheCopy`、`TestMergedZoneCopyCodec`、`TestNewMergedZoneCacheNeedsTheRouteStoreAndTheEtcdCopy`;改过的 `TestMergedZonesUnassembled`、`TestLoadMergedZoneCache`、store 的 `TestRouteReadQueriesShapes` 照旧 PASS。
+  - 真 etcd 用例 `TestEtcdMergedZoneCopiesAgainstRealEtcd` PASS(用完自己删键)。没有 etcd 时如实报 SKIP,不算通过。TiDB 用例 `TestTiDBShardedRouteStore` 同理,在 `ACCOUNT_DIRECTORY_REQUIRE_TIDB=1` 下 SKIP 算失败。
+- **可选的反向确认**(各改一处,跑完改回,改回后都恢复通过):
+  - 把 `read` 里「先读副本、后读第 0 片」两行对调,`TestMergedZoneSourceFailsWithoutTheCopy` 应当变红;
+  - 把 `checkTruth` 里 `published.Version > truth.Version` 那一支删掉,`TestMergedZoneSourceRefusesWhenShardZeroDisagreesWithTheCopy` 应当变红;
+  - 把 `answerFromCopy` 开头的 `!shardZeroUnreachable(truthErr)` 判断去掉,`TestMergedZoneSourceDoesNotStartFromTheCopyOnADeterministicError` 应当变红;
+  - 让 `checkAgainstAnswered` 恒回 nil,`TestMergedZoneSourceNeverGoesBackWithinAProcess` 应当变红。
+- **没有单测覆盖的**:多实例下第 0 片失联时新 Pod 从副本起、恢复后合服生效。场景写在合服手册 §11「第 0 片失联与 etcd 副本」,要两个 SQL 实例、目录 K > 1,单实例的调试栈做不了,没跑就如实报未运行。
+- **运维变化**(都已写进手册):K8s 上第 0 片的计划要给 data_service 运行账号列 `zone_merge_history` 的 `SELECT`(开服手册 §1,少了它新版本在全新环境拒启);第 0 片回档、清表、库重建之后**先停掉全部 data_service 再删副本键**,etcd 从快照恢复之后删副本键(不用停);合服前置条件加 data_service 全部就绪、etcd 健康。
+- **Java 版(AGENTS §12)**:不涉及(Java 版没有 data_service 与映射副本),不加 PARITY 行。
+- **提交情况**(本会话没有提交):
+  - 别的会话的快照提交 `24c13a311` 把写到一半的两个文件带进了 main:`internal/store/route_store.go`(已是 `ReadMergedZoneMapping`,只差 R14 的列别名)和本设计稿的初稿。
+  - **所以 HEAD 上 `go/data_service` 编不过**:svc 层的 `servicecontext.go`、`merged_zones_test.go` 和 store 的 `account_directory_shard_tidb_test.go` 还在调已经删掉的 `ListMergedInto`。工作区是完整的。
+  - 下一次提交要把本条「文件」里其余各项一起带上,包括两个新文件 `internal/svc/merged_zone_copy.go`、`merged_zone_copy_test.go`(未跟踪),否则 HEAD 一直编不过。
+
+## 2026-11-27 Claude:悬赏求书迁 trade 托管合同(数据覆写审计 r2-craft#1)批 A——trade 侧 kind 7 求购单落码;批 C、批 B 因额度过 80% 交 Gemini 4 Neon Extra(未编译、未测试,待 Gemini 验证;Java 待做已登记)
+
+- 负责人 11-26 晚批准分三批(A trade → C 部署 → B scene 退役 + 客户端)。本会话写完批 A,开工时全部模型周额度 78%,批 A 写完 81%,按负责人 11-26 口径停在批边界,批 C、B 写回交接单 §6.1 与设计稿 §11.2 交 Gemini 4 Neon Extra。
+- 批 A 做了什么:go/trade 加第 7 种合同「求购单」。发榜托管悬赏银两(只扣流通银两)→ 挂榜(全服可见)→ 揭榜托管一枚封卷道籍 3414 → 按 scene 扣出时交回的完整实例核对条款 → 相符先把书交给发榜人、到账后再发税后 95% 给揭榜人(5% 销毁),不符原样退书、单子回挂榜;发榜人收书被拒整单退回且退全额;每人至多 3 张(角色锁内加锁计数);撤单只在托管与挂榜阶段。新 RPC `CreateWantedSkillBookOrder` / `FulfillWantedSkillBookOrder` / `ListWantedSkillBookOrders`(582~584),揭榜结果按同一请求号重发查。开关 `Commerce.WantedSkillBook.Enabled` 缺省关,开着要资产通道,并经 tablebundle 读 Skill / SkillScrollCraft。
+- 改动文件:`proto/trade/{commerce,jubaozhai,trade_table}.proto`;`go/trade/internal/commerce/{wanted_skill_book.go(新),engine.go,delivery_order.go,leg_tx_type.go,schedule.go}` 与测试 `{wanted_skill_book_test.go,wanted_skill_book_crosslang_test.go,wanted_skill_book_tidb_test.go(均新),delivery_order_test.go,leg_tx_type_test.go}`;`go/trade/internal/logic/{wanted_skill_book_logic.go,wanted_skill_book_logic_test.go(均新),commerce_missing_contract_test.go}`;`go/trade/internal/server/jubaozhai_server.go`;`go/trade/internal/config/{config.go,config_test.go}`;`go/trade/internal/svc/servicecontext.go`;`go/trade/etc/trade.yaml`;`data/tip/Tip.xlsx`(两条)、`data/MessageLimiter.xlsx`(三行),由新脚本 `tools/scripts/trade_wanted_skill_book_xlsx_patch.py` 写入(幂等,已跑);文档 `docs/design/skill-book-wanted-order-trade-escrow.md`(状态与 §11)、`docs/handoff/data-overwrite-audit-r2-round4-handoff-20261126.md` §6.1。协议、生成物、`wanted_skill_book.go` 与 engine 等几份已随负责人快照提交 `24c13a311` 进 HEAD,其余在工作区未提交。
+- 已跑的只读检查:`gofmt -l`(本批文件无输出)、`python tools/scripts/check_log_text_english.py`(通过)。没改 C++,没跑 `test_cpp_no_raw_pointer_member.py`。
+- 验证(Gemini,未跑):先导表(两条新 tip 不导出来 go/trade 编不过),再 proto-gen、go/trade build / vet / 单测、真 TiDB `TestTiDBWantedSkillBook*`、客户端三步;命令与通过标准在设计稿 §11.1 末。
+- 剩余:批 C(k8s_deploy.ps1 等,前提是 §7.4 会话改完该脚本、负责人拍板 K8s 开 trade 资产通道)与批 B(scene 560~563 与存档字段退役、客户端切 trade、策划稿同步),要点在设计稿 §11.2。scene 旧揭榜(两笔存盘)在批 B 之前照旧运行。
+
+## 2026-11-27 Claude:更正「gate 准入 P2-4 票据先行」两条的提交情况(只改文档)
+
+- 负责人 23:48 的 `24c13a311` 已把 P2-4 第一版的全部文件带进 main,HEAD 自洽:11-26 那条说的「`a0b3d195e` 只带进一半、HEAD 单独编不过」已不成立。
+- 还在工作区、要一起提交的只有 11-27 补充条目的改动:`cpp/nodes/gate/handler/rpc/connection_admission.cpp`、`client_heartbeat.cpp`、
+  `cpp/nodes/battle/client/battle_client_edge.cpp`、`cpp/nodes/gate/tests/connection_admission_test.cpp`、`tools/scripts/tests/gate_connection_alerts_contract.tests.ps1`、
+  `battle_connection_alerts_contract.tests.ps1`、`docs/design/gate-connection-admission-control.md`、`docs/design/gate-client-heartbeat.md` 与本文件。
+  这几份互相依赖(契约测试钉的是新函数名,新单测测的是新淘汰规则),要么一起提交,要么一起不提交。
+- Gemini 的命令与通过标准不变,见两条原条目;在工作区跑。
+
+## 2026-11-27 Claude：负责人改定悬赏求书迁 trade 托管（r2-craft#1）的批 B、C 换电脑由 Claude Code 写（只改文档）
+
+- 原定批 C（部署开通）、批 B（scene 与客户端接入）交 Gemini 4 Neon Extra 写；负责人改定为换一台电脑，由那边的 Claude Code（Fable 5.2 Max）写，Gemini 不写这两批的代码，只做写完之后的生成、编译、测试、冒烟。
+- 已改 `docs/design/skill-book-wanted-order-trade-escrow.md` §11.2 与第 4 轮交接单 §6；批 C 前提①（第 4 轮 §7.4 子代理改完 `k8s_deploy.ps1`）已满足：§7.4 没改这个文件，r2-tn#3 由「改名与内容安全第三轮」会话修完。前提②（K8s 各档位是否打开 trade `AssetOp.Enabled`）仍等负责人拍板。
+- 那台电脑要先拿到本机 main 的最新内容（含批 A 与还在工作区的文档改动），由负责人同步。

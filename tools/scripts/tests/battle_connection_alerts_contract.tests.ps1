@@ -147,7 +147,7 @@ Test-Case '直连面:准入回调装在 TcpServer 上且只绑 weak,指标已登
     Assert-Match -Text $script:EdgeSource -Pattern '(?s)unauthenticated\.emplace\(connId, UnauthenticatedConnection\{\.conn = conn, \.openedAt = std::chrono::steady_clock::now\(\)\}\);\s*admission\.NoteAccepted\(\);' `
         -Because '建连只登记一条未认证记录,随即计接纳'
     Assert-Match -Text $script:EdgeSource -Pattern 'admission\.NoteHandshake\(record->second\.openedAt, std::chrono::steady_clock::now\(\)\);' -Because '票据握手成功时记握手耗时'
-    Assert-Match -Text $script:EdgeSource -Pattern '(?s)it = unauthenticated\.erase\(it\);\s*if \(conn\)\s*\{\s*admission\.NoteHandshakeTimeout\(\);\s*LogRejectionSampled\("handshake_timeout", conn\);\s*conn->forceClose\(\);' `
+    Assert-Match -Text $script:EdgeSource -Pattern '(?s)it = unauthenticated\.erase\(it\);\s*if \(conn && conn->connected\(\)\)\s*\{\s*admission\.NoteHandshakeTimeout\(\);\s*LogRejectionSampled\("handshake_timeout", conn\);\s*conn->forceClose\(\);' `
         -Because 'battle_preauth_reaped_total 与握手期限的关闭是同一处:先摘记录再关'
     Assert-Match -Text $script:EdgeSource -Pattern '(?s)self->admission\.NoteHandshakeTimeout\(\);\s*LogRejectionSampled\("handshake_timeout",c\);\s*c->forceClose\(\);' `
         -Because '探测连接从不握手,满握手期限还没探完同样计进 battle_preauth_reaped_total'

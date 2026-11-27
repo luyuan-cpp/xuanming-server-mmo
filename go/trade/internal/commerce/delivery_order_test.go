@@ -337,3 +337,39 @@ func TestManualRefundRefusedAfterPartialDelivery(t *testing.T) {
 	third.OpId, third.Outcome = 109, outcomeApplied
 	require.True(t, legReadyToSend(w, leg(w, "seller_receive")), "缺口补齐,放行卖家所得")
 }
+
+// 求购单(kind 7)发榜人那条收书腿被拒(发榜人被封禁获取封卷道籍):整单退回。书原样回揭榜人;退给发榜人的是
+// 托管原件即全额悬赏,不是 seller_receive 里的税后 95%,否则发榜人白丢 5%(skill-book-wanted-order-trade-escrow.md §3.6)。
+func TestWantedBuyerRejectedRefundsTheFullReward(t *testing.T) {
+	book := &assetpb.AssetBundle{ItemInstances: []*assetpb.AssetItemInstance{{ItemUuid: 9001, ConfigId: SealedSkillBookConfigID, StackSize: 1}}}
+	reward := &assetpb.AssetBundle{Currencies: []*assetpb.CurrencyAmount{{CurrencyType: 0, Amount: 1000}}}
+	net := &assetpb.AssetBundle{Currencies: []*assetpb.CurrencyAmount{{CurrencyType: 0, Amount: 950}}}
+	r := &tradepb.TradeCommerceRecord{CommerceId: 51, Kind: KindWantedSkillBook, Status: Delivering, SellerPlayerId: 1, BuyerPlayerId: 2, Version: 6}
+	w := &tradepb.TradeCommerceWorkflow{Stage: "deliver", SellerIdentity: identity("a1", 1), BuyerIdentity: identity("a2", 1),
+		WantedSkillBook:  &tradepb.TradeWantedSkillBookTerms{SkillTableId: 501, RewardGold: 1000, SellerNetGold: 950},
+		QuantityReserved: 1,
+		Legs: []*tradepb.TradeCommerceLeg{
+			manualLeg("buyer_debit", 2, 3, 101, outcomeApplied, reward),
+			manualLeg("seller_debit_1_k", 1, 3, 102, outcomeApplied, &assetpb.AssetBundle{ItemUuids: []uint64{9001}}),
+			manualLeg("buyer_receive", 2, 4, 103, outcomeRejected, book),
+			manualLeg("seller_receive", 1, 4, 0, 0, net),
+		}}
+	leg(w, "buyer_receive").EscrowOwnerId = 1
+	leg(w, "seller_receive").EscrowOwnerId = 2
+	require.NoError(t, (&Engine{}).plan(r, w, 1000))
+
+	require.Equal(t, "return", w.Stage)
+	require.Equal(t, CancelPending, r.Status)
+	bookBack := leg(w, "seller_return")
+	require.NotNil(t, bookBack)
+	require.Equal(t, uint64(1), bookBack.PlayerId)
+	require.True(t, proto.Equal(book, bookBack.Bundle), "书原样回揭榜人")
+	rewardBack := leg(w, "buyer_return")
+	require.NotNil(t, rewardBack)
+	require.Equal(t, uint64(2), rewardBack.PlayerId)
+	require.True(t, proto.Equal(reward, rewardBack.Bundle), "退回的是全额悬赏,不是税后所得")
+	for _, l := range []*tradepb.TradeCommerceLeg{bookBack, rewardBack} {
+		require.Equal(t, uint32(rollbackpb.TransactionType_TX_AUCTION_RETURN), legTxType(l))
+	}
+	require.Equal(t, unwoundBy, leg(w, "seller_receive").SupersededBy, "税后所得永远不发")
+}

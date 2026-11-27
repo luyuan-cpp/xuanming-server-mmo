@@ -2525,7 +2525,7 @@ const (
 )
 
 // purgeTerminalGuildWarBounties 删一批到期已超保留期的终态追杀令。只是清理:失败只记日志,不 Hold 排空(没删的行原样留着,
-// 下一轮再删;删一行是自动提交的单行语句,重做无害)。
+// 下一轮再删;删一行是一个只碰这一行的短事务,重做无害)。
 func (l *GuildLogic) purgeTerminalGuildWarBounties(ctx context.Context) {
 	if l.war == nil || l.war.Repo == nil {
 		return

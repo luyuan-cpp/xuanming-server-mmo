@@ -1018,14 +1018,14 @@ TEST_F(TrialJournalBattleTest, TacticalPuzzleWorkshopSetupScalingBuffsAndRoundLi
     m311.set_id(311);
     m311.set_health(1000);
     m311.set_speed(100);
-    m311.set_physical_attack(10);
+    m311.set_strength(10);
 
     auto& m312 = data->AddMonster(312);
     m312.Clear();
     m312.set_id(312);
     m312.set_health(1000);
     m312.set_speed(100);
-    m312.set_physical_attack(10);
+    m312.set_strength(10);
 
     auto& bShield = data->AddBuff(turnbattle::kTacticalPuzzleShieldBuffId);
     bShield.Clear();
@@ -1045,7 +1045,7 @@ TEST_F(TrialJournalBattleTest, TacticalPuzzleWorkshopSetupScalingBuffsAndRoundLi
     bDefUp.Clear();
     bDefUp.set_id(turnbattle::kTacticalPuzzleBuffDefUpBuffId);
     bDefUp.set_battle_op(static_cast<uint32_t>(BattleEffectOp::Modifier));
-    bDefUp.set_modifier_stat(static_cast<uint32_t>(BattleModifier::Defense));
+    bDefUp.set_modifier_stat(3);
     bDefUp.set_ratio(0.25);
     bDefUp.set_duration_rounds(5);
 

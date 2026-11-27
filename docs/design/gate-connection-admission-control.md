@@ -355,13 +355,18 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 
 上限调得很小(本机、§9.6 把上限调到 50)时 S = 500 高于上限,这一道不起作用,由总量闸管,与速率闸设下限同一个用意。
 
-**淘汰**(`connection_admission.cpp` 的 `EvictOldestUnauthenticated`):
+**淘汰**(`connection_admission.cpp` 的 `OldestEvictableUnauthenticated` 与 `EvictUnauthenticated`):
 
-- 选谁:未验签表的表头,O(1)。表的键是代次(建连时 `gate_lane::NextIncarnation()` 单调分配),建连时刻也在同一个 loop 线程上按同一顺序取,
-  所以 `begin()` 就是最老的一条;年龄是记录里的建连时刻到判定时刻。表里只有还没验签的连接:验签成功、断开、被淘汰、握手超时都当场摘记录,
-  不用再核对「是否已验签」「session_id 是否被新连接复用」。
+- 选谁:从未验签表的表头起第一条连接还连着的。表的键是代次(建连时 `gate_lane::NextIncarnation()` 单调分配),建连时刻也在同一个 loop 线程上
+  按同一顺序取,所以 `begin()` 就是最老的一条,通常它就是答案;年龄是记录里的建连时刻到判定时刻。表里只有还没验签的连接:验签成功、断开、
+  被淘汰、握手超时都当场摘记录,不用再核对「是否已验签」「session_id 是否被新连接复用」。
   (2026-11-26 P2-4 之前,未验签的连接也有会话,池是会话上的 RAII 占位,另有一个按 `(session_id, 会话代次)` 惰性丢弃的队列给淘汰找最老一条;
   票据先行之后这两样都删了。)
+- 跳过已经在关的(2026-11-26 补,与 battle 直连同一口径):验签失败后回了失败包、等 100ms 延迟强关的,验签前发业务包 / 心跳被关的,
+  高水位被关的,这一轮或 100ms 内自己就会离开池子。淘汰它们白用掉一次淘汰、不多腾出一个位置,还会把验签失败的应答截掉;跳过它们,
+  淘汰真正占着位置不走的那条,这样一次淘汰加上它们自己的关闭,池子实打实少两条。被跳过的条数有界:只有本轮与最近 100ms 里决定关的连接,
+  卡住没关掉的还有 10 秒握手期限兜底(握手期限的扫描不跳过它们,到点照样摘记录,只是不算作握手超时)。连接对象已经不在的记录不跳过:
+  摘掉就是清理(正常不会出现,断开回调同步摘记录)。
 - 执行:先摘记录(这一刻起它不再算在池里),再经记录里的 weak 连接 `forceClose`。forceClose 只把连接置成 kDisconnecting,
   真正的关闭排到之后的 loop 轮次,随后的断开回调找不到记录,什么都不做。准入回调(muduo 的回调栈)上只摘这一条记录,不动别的状态。
   连接一进 kDisconnecting,`ProtobufCodec::onMessage` 就不再分发它的帧,所以被选中之后它不会再验签成功,不会「刚验签就被关」。
@@ -429,9 +434,10 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 - 预算本身是全局的:CGNAT 后面的合法玩家与同出口的攻击者同池。按来源前缀限速见 P2-2(缺省关闭)。
 - 反复的短突发能反复制造「池里全是刚建的连接」的几秒(§8.1 第 3 阶段):每次至多 3 秒,两次之间要等速率桶攒回一两千个名额。
   赶上的新玩家被 RST,退避后重连进得来;要压住它靠按来源限速或上游处置,预算这一道做不到。
-- 因别的原因正在关(验签失败的延迟强关、验签前发业务包、高水位)、断开回调还没跑的连接仍在未验签表里,可能被选中淘汰:
-  名额照常让出,只多计一次 `*_preauth_evicted_total`。握手超时与淘汰本身在关连接之前就当场摘记录,不会被计第二次(gate 与 battle 一样)。
-  2026-11-26 P2-4 之前,握手期限关掉的连接要等断开回调才删会话、交回占位,同一轮里可能再被淘汰一次,两个计数各计一次;票据先行之后这一条没有了。
+- 因别的原因正在关(验签失败的延迟强关、验签前发业务包、高水位)、断开回调还没跑的连接,在关完之前(至多 100ms)仍占着一个未验签名额;
+  承压淘汰跳过它们(见上),握手期限扫到它们只摘记录、不计握手超时。握手超时与淘汰本身在关连接之前就当场摘记录,同一条连接只会被计一次
+  (gate 与 battle 一样)。2026-11-26 P2-4 之前,握手期限关掉的连接要等断开回调才删会话、交回占位,同一轮里可能再被淘汰一次,
+  `*_preauth_reaped_total` 与 `*_preauth_evicted_total` 各计一次;票据先行之后这一条没有了。
 - battle 出示过探测授权的直连不在池里(否则探测量会让每台的未认证数一直偏高),它最多活到 10 秒握手期限。同一份有效授权反复建连
   不受预算约束,只受全局速率闸约束(缺省 100 条/秒,即最多约 1000 条同时在);授权带玩家号,滥用可以追到账号。
 
@@ -984,12 +990,31 @@ gate 的票据零件**全都有**（HMAC-SHA256 + expire + gate_node_id 绑定 +
 5. **断开**（`HandleConnectionDisconnection` 第一步 `ForgetPreAuthConnection`）：上下文是未验签记录的键就摘记录并返回：
    不开 trace 根，不通知 login / scene，不碰会话表。被淘汰、握手超时的连接记录在关之前已经摘过，这里找不到也一样返回。
 6. **握手期限**（`gate_client_heartbeat::SweepLiveness` → `CloseExpiredHandshakes`）：每秒从表头起关掉建连满 10 秒的，先摘记录再 `forceClose`，
-   碰到第一条没满的就停，每轮只碰到期的几条。本轮扫描迟到（loop 卡过）只计推迟、不关。`LivenessSweeper` 删掉了握手检查点这一种，
-   只剩空闲、登录两种，未验签连接在堆里不占条目。
-7. **未验签预算与淘汰**：池大小就是表大小；最老一条是表头，O(1)；淘汰是摘记录加经记录里的 weak 连接 `forceClose`（P0-2 的淘汰一段已按此改写）。
+   碰到第一条没满的就停，每轮只碰到期的几条。本轮扫描迟到（loop 卡过）只计推迟、不关。已经因为别的原因在关的只摘记录，不计握手超时。
+   `LivenessSweeper` 删掉了握手检查点这一种，只剩空闲、登录两种，未验签连接在堆里不占条目。
+7. **未验签预算与淘汰**：池大小就是表大小；最老一条是表头起第一条还连着的（已经在关的跳过，通常就是表头）；淘汰是摘记录加经记录里的 weak 连接
+   `forceClose`（P0-2 的淘汰一段已按此改写）。
 8. **总量与指标**：准入回调与连接回调里的第二道都按 `会话数 + 未验签连接数`（`ClientConnectionCount()`）判；`gate_connections_current` 导出同一个和，
    `gate_unauthenticated_connections` 是表大小。etcd 上报的 `player_count` 仍是会话数，只数验签过的连接。
 9. **关源与关机**：`disconnectAllClients` 同时 `forceClose` 未验签表里的连接。它们没向 login 发过登录，不进关机时 `closingSessions` 的等待。
+
+**一条连接的生命周期**（gate；battle 直连把「验签」换成「票据握手或探测授权」，其余相同）
+
+```
+accept ──准入回调(关源 → 总量:会话 + 未验签 → 按来源 → 未验签预算 / 承压淘汰 → 速率)──拒:RST,不建任何对象
+  │
+  ▼ 连接回调(第二道总量、node 段、prod 空密钥)
+未验签记录 {weak 连接, 建连时刻} 键 = 代次;上下文 = PreAuthConnectionKey      ← dev 免验签:这一步直接建会话
+  │   只收验签请求;别的包 → 关
+  │   满 10 秒还在表里 → 扫描摘记录、关(handshake_timeouts)
+  │   承压时最老、满 3 秒、还连着 → 被淘汰:摘记录、关(preauth_evicted)
+  │   断开 → 断开回调第一步摘记录就返回(不碰 login / scene)
+  ▼ 验签:签名、载荷、节点、区、期限全部通过
+发号 → 占票(被占:回 token_in_use,关,记录留给断开回调)→ 摘记录、握手耗时 → 建 SessionInfo(代次沿用);上下文 = session_id
+  │
+  ▼ 回成功包:通告心跳参数,开始空闲超时(30 秒)与登录期限(60 秒)
+会话(验签过的连接):player_count 只数这里;断开走既有的 login / scene 收尾
+```
 
 **battle 直连**（同一个问题，同一做法）
 
@@ -1016,6 +1041,13 @@ gate 的票据零件**全都有**（HMAC-SHA256 + expire + gate_node_id 绑定 +
 - **占票失败时号已经发出、只是不用**：发号器跳过一个序号，不留任何状态。为了不发这一个号把占票挪到发号之前，要改 `ClaimTicket` 的持有者表示，不值得。
 - **验签之前不做每账号并发**：验签之前不知道账号。验签之后由「一张票只开一条连接」与「验签后 60 秒内必须登录成功」管（§5 第 6 条），
   一个账号占着的连接受 login 的设备数上限约束。
+- **承压淘汰跳过已经在关的连接**：它们自己马上就走，淘汰它们不多腾位置，还会截掉验签失败的应答（P0-2 淘汰一段）。与 battle 直连同一口径。
+- **水平扩展：两张表都只在本进程，不跨实例协调**（与 §8.2 同一个结论，这里补上票据先行带来的两点）：
+  - 未验签表与会话表一样是每台 gate 自己的内存，加台数就是加容量，进程重启表是空的，没有要恢复或对账的东西。
+  - 「一张票同一时刻只开一条连接」的占位表也只在本进程，却对全区成立：票据里绑定了 `gate_node_id` 与 zone，验签时不是这一台、不是这个区的票直接拒，
+    同一张票只可能落到签它的那一台，所以本台的占位表就是这张票全部可能的使用者，不需要放进 Redis 做全区去重
+    （node_id 在区内唯一,两个进程抢同一个 node_id 会触发冲突关停）。
+  - 代价同 §8.2：没有票据的连接可以直连任意一台 gate，全区能被占住的未验签名额是「每台预算 × 台数」，每台自己的上限不变。
 
 **原来「定为不做」的三条理由，为什么不再成立**
 
@@ -1033,8 +1065,18 @@ gate 的票据零件**全都有**（HMAC-SHA256 + expire + gate_node_id 绑定 +
 **已知局限**
 
 - TCP 连接对象、两个 1KB 缓冲与内核 socket 仍在验签之前分配，由准入层封在预算与速率之内。
-- 验签失败的连接回失败包之后有 100ms 的延迟强关，这期间记录还在表里、占着名额，可能被承压淘汰提前关掉（失败包可能丢，客户端按断线处理）。
+- 验签失败的连接回失败包之后有 100ms 的延迟强关，这期间记录还在表里、占着一个名额。承压淘汰跳过它（不截掉失败包），握手期限扫到它只摘记录。
 - battle 的探测连接在授权验过之后就有 `DirectSession`，不在未认证池里，最多活 10 秒（探测期限）；同一份授权反复建连受全局速率闸约束（P0-2 已知局限）。
+
+**执行步骤**（落码顺序，各步都在 main 上；命令与通过标准在 `docs/PROGRESS.md` 2026-11-26「gate 准入 P2-4 票据先行」及其后的补充条目）
+
+1. 数据结构：`pre_auth_connection.h`（记录、上下文键、`PreAuthIncarnationOf`），`SessionManager` 加未验签表与 `ClientConnectionCount()`，
+   `SessionInfo` 删 RAII 占位；core `client_liveness.h` 删握手检查点。
+2. 准入模块：`OpenPreAuthConnection` / `OpenVerifiedSession` / `ForgetPreAuthConnection`，预算、淘汰、指标改读未验签表，发号挪进 `OpenVerifiedSession`。
+3. 接线：建连、验签、断开、两个收包入口（`client_session_handler.cpp`、`client_heartbeat.cpp`），握手期限扫表，`main.cpp` 关源时一起关。
+4. battle 直连面同样的四处：建连、握手 / 探测授权、断开、1 秒节拍扫握手期限；总量与停机排空按会话 + 未认证。
+5. 单测与契约测试按新口径改写、补新用例（见下）；只读预检 `test_cpp_no_raw_pointer_member.py`。
+6. 交 Gemini：契约测试 → 整解编译 → `routing_identity_test` / `rpc_controller_test` → Linux 容器里 §9.6 末尾三行 → robot 冒烟。
 
 **测试**（未运行）
 
@@ -1043,7 +1085,8 @@ gate 的票据零件**全都有**（HMAC-SHA256 + expire + gate_node_id 绑定 +
   - `VerifyingIssuesTheSessionIdAndOpensTheSession`：验签成功才发号，会话沿用代次，记录摘掉，握手耗时进直方图；
   - `DisconnectingBeforeVerifyLeavesNoSession`：未验签断开只摘记录，不留会话；
   - `TicketInUseOpensNoSessionAndKeepsTheRecord`、`DevBypassOpensTheSessionAtConnect`、`IssuedIdsSkipIdsInUseAndTheReservedSentinel`
-    （碰撞跳号与 `kInvalidSessionId` 回绕）、`CountersAreExportedAsPrometheusMetrics`、`EvictionClosesTheOldestUnverifiedConnection`；
+    （碰撞跳号与 `kInvalidSessionId` 回绕）、`CountersAreExportedAsPrometheusMetrics`、`EvictionClosesTheOldestUnverifiedConnection`、
+    `EvictionPassesOverAConnectionThatIsAlreadyClosing`（已经在关的不占用淘汰）；
   - 同文件的 `ConnectionAdmission.*` 改按未验签表：总量按会话 + 未验签判，淘汰表头。
 - `client_heartbeat_test.cpp`：握手期限按未验签表重写四条（到点关且摘记录、只关到期的表头、期限内验签才建会话、loop 卡过只推迟），
   `HeartbeatBeforeTokenVerifyClosesTheConnection` 改用未验签连接。

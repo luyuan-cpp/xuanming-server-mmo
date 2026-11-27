@@ -11,7 +11,9 @@ type directoryEvents struct{}
 
 func (directoryEvents) NameBindFailed(reason string) { metrics.ObserveRoleNameBindFailure(reason) }
 
-func (directoryEvents) RemovalSettleFailed(step string) { metrics.ObserveRoleRemovalSettleFailure(step) }
+func (directoryEvents) RemovalSettleFailed(step string) {
+	metrics.ObserveRoleRemovalSettleFailure(step)
+}
 
 // configureDirectoryObservers 给账号目录接上失败计数与名字缓存失效,并预置计数序列(告警要序列先存在)。
 // 名字缓存只是展示用的读缓存:目录补回或删掉名字行之后删它,补回的名字马上查得到(03-names.md §3.4a)。

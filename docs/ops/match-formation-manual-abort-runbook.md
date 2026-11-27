@@ -194,3 +194,11 @@ FROM match_manual_resolution ORDER BY resolved_ms DESC LIMIT 50;
 
 - 不要手写 `GlobalMatch.BattlePodNamespace`。它由 `k8s_deploy.ps1` 按部署战斗服的命名空间生成；写成别的命名空间，「这个 IP 上已没有存活的 Pod」会恒成立，战斗服一时连不上就会被当成进程已死。
 - 不要给 ServiceAccount `match` 加别的权限，也不要把它换成命名空间的 default。
+
+## 10. 终结要双人复核(2026-11-26)
+
+- `ResolveStrandedFormation` 的 ABORT 现在要带后台的双人复核批准记录(`docs/design/admin-identity-and-dual-control.md` §11.2),`operator_name` 必须是发起人。生产上 `formationfix abort -execute` 不带记录,会被带内 `REFUSED`(`dual_control_approval_required`)拒绝;SHOW 与 DRY_RUN 照旧可用。
+- 处置改在后台(`java/gm_admin`)「运营处置」页:先「演练」(DRY_RUN)拿到成局摘要,填摘要与环境名发起;另一名管理员核对后批准,后台以调用方 `ops-formation` 发 ABORT。
+- 审计行在 `reason=` 前多了 `approval_id`、`approver`,`refusal=` 加了引号;`match_manual_resolution` 多了 `approval_id`、`approver` 两列(match `-migrate` 补列)。§7 的核对 SQL 可以把这两列一起查出来。
+- 结果未知时不能沿用原申请重试(重放回「已有终局」):先 SHOW 核对这一局,再决定是否重新发起。
+- 应急开关 `GlobalMatch.ManualResolutionAllowUnapproved` 只给本机开发;打开时每次不带记录的 ABORT 打 ERROR 并计入 `match_admin_unapproved_command_total`(告警 `MatchAdminCommandUnapproved`)。

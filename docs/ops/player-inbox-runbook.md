@@ -914,3 +914,10 @@ C++ 侧(MSBuild 串行 `/m:1`):`currency_test.exe --gtest_filter=PlayerInboxRule
 与 `bin/etc/game_config.yaml` 核对 §1 列出的键、`Middlewares` 段与消费开关。`k8s_deploy_contract.tests.ps1` 里与本手册直接相关的几条:
 写前门禁的三层(两份 yaml、线上交叉核对用假 kubectl、来源用注入的 git 状态)、DryRun 不读集群、告警文件 LogQL 选择器只用 sidecar 的流标签。
 线上交叉核对在真集群上的行为(跨 namespace 列 ConfigMap 的权限、kubectl 输出形状)没有自动化验证,首次在 staging 跑 `infra-up` / `zone-up` 时看门禁行的 `live=`。各批的完整验证步骤见交接 §4 与 §6.4。
+
+## 6. 处罚与作废要双人复核(2026-11-26)
+
+- `GmSanctionPlayer` 与 `VoidItem`(含 `FORCE_MISMATCH`)现在要带后台的双人复核批准记录(`docs/design/admin-identity-and-dual-control.md` §11.2):人在后台(`java/gm_admin`)的「运营处置」页发起,另一名管理员核对冻结的参数后批准才发出。处罚的 `request_id` 就是批准号,`issued_at_ms` 随申请冻结。
+- 直接带口令调这两个方法(批量脚本、grpcurl)在缺省配置下回 `PermissionDenied`。§4.2 的批量处置脚本改为逐条在后台发起;只有本机开发打开 `PlayerInbox.AdminAllowUnapproved` 才收不带记录的请求,每次打 ERROR 并计入 `player_inbox_admin_unapproved_command_total`(告警 `PlayerInboxAdminCommandUnapproved`)。
+- 审计表 `player_inbox_audit` 多了 `approval_id`、`approver` 两列(player_inbox `-migrate` 补列;不补列常驻进程拒启)。核对一次处置是谁提、谁批的:按 `(player_id, domain, seq, action)` 查这两列,再到后台流水按批准号看全程。
+- 作废的结果未知时不能沿用原申请重试(重放会被当成已是终态):先在这里核对条目状态,再决定是否在后台重新发起。

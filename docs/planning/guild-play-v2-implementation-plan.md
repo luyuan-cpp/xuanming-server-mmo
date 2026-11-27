@@ -403,3 +403,131 @@
 3. 纯单测：`cd go/guild; go test ./internal/war/... ./internal/logic/... -count=1`（重点 `TestBountyHuntable*`、`TestResolveBounty*`、`TestBountyExpiryRefund*`、`TestBannerDeltaBasisHolds*`、`TestClientWarTargetHints*`、`TestWarBountyExpiryEveryRounds*`）。
 4. 真库：设 `GUILD_TEST_MYSQL_DSN`（库名 `guild_test`），`cd go/guild; go test ./internal/data -run "GuildWarBounty|SettleWarBattle_|ExpireBounty_" -count=1 -v`，全部 PASS、不得 SKIP；再跑 `go test ./internal/data -count=1` 全包。
 5. 已有本地库：schemamigrate 不给已存在的 `guild_war_bounty` 补新索引，重建这张表（未上线，可清）。
+
+### 7. r2-gw#5 一名玩家的未决指令满上限挡住整局结算（medium，成立）
+
+> §7～§10 是批 V 之后的续修（2026-11-26，r2-gw#5～#8 由批 V 的修复代理顺带发现，逐条复核后都成立）。涉及：`go/guild/internal/data/{war_credit_owed.go（新）, war_repo.go, role_fence_pending.go, tables.go}`、`go/guild/internal/logic/{war_logic.go, trial_background.go}`、`proto/guild/guild_db.proto`（新表 `GuildWarCreditOwedRecord`、`guild_war_bounty` 加索引 `escrow_op_id`）。未生成、未编译、未运行，验证命令见 §11。
+
+**问题（含触发时序）**
+1. 帮会给玩家入账一律走 GUILD_CREDIT 流，每人每流的未决指令至多 16 条、跨度 512（`assetop.DefaultLimits`，是 scene 窗口证明的前提，不能放宽）。物品指令永不中止，背包一直满、人久不上线，这条流就会积满。
+2. 积满的人参加了一局帮战（或者他是追杀令的领赏人、撕单要退款的发布者）。结算第 3 步给他 `AllocateSeq` 回 `ErrTooManyPending`，旧代码原样上抛，整笔事务回滚：同局所有人的帮贡、银两、帮会资金、战功、灵脉旗势、追杀令结单一样都没写。
+3. 消费者（消费组 `guild-trial`）把它当暂时性失败退避重投，他的积压不会自己消失；20 次（约 4～7.5 分钟）之后整局写进死信 `guild-trial-dlq`。帮战没有历练那样的巡检器从 match 的 SQL 终局兜底，只能人工重放。一个人的积压挡住了同局所有人。
+4. 到期收尾同理：发布者流满时 `ExpireBounty` 整笔失败，追杀令停在 ACTIVE、每轮重扫都失败一次，失败还把待入队物品循环的排空证明打成 Hold。
+
+**方案**
+- 沿用历练「待入队物品」那一套（`guild_trial_reward_owed` 加待入队物品循环，「绝不跳过」，06 §6.32）：结算第 3 步某人 `AllocateSeq` 回 `ErrTooManyPending` 时不插指令、seq 不前进，把这一笔原样记进新表 `guild_war_credit_owed`，**同一事务**在全序末尾插入（第 10 步，锁序位置 24）；到期收尾同样（追杀令照样置 EXPIRED）。
+- 待入账行存的是结算事务前预发的指令号 `op_id`，转换时原样用作 `guild_asset_op.op_id`，不另发号 —— 同一笔至多变成一条指令（幂等键）。行里还存种类（WAR_REWARD / BOUNTY_PAYOUT）、交易类型、ref_id、period_key、奖励包与来源（battle_id 或 bounty_id）。主键 `(player_id, op_id)`：同一局同一人可以有两笔（猎手的战后奖励与追杀赏金）。
+- 转换挂在待入队物品循环上，与历练待入队物品同一节拍（`logic.convertWarCreditOwed`，每轮都跑；每页 50 行、每轮至多 500 行；游标翻页，读到表尾回表头；某人本轮已判仍满或仍冻结，他名下其余行本轮不再试）。事务 `WarRepo.ConvertWarCreditOwed`：
+
+| 步 | 做什么 | 关键点 |
+|---|---|---|
+| 1 | 锁他的角色护栏副本，按 §8 的判据判 | 已删除：点删本行放弃；冻结中：回滚留着（不算失败，不 Hold 排空）；要自愈时整笔重来一次 |
+| 2 | 建 seq 行（已有则不写）→ `AllocateSeq` | 仍满：回滚留着 |
+| 3 | 持着护栏副本与 seq 行，普通读本行还在不在 | 不在 = 别的副本刚转走：回滚；指令号是预发的，直接插会撞主键，所以先判再插 |
+| 4 | 插指令（PENDING、不持租约、`next_attempt_ms = now`，重投循环立刻可领）→ 完整主键点删本行 | 同一事务 |
+
+- 领赏人这一笔记进待入账也照占当日领赏次数（钱只是晚到，不是没领）；满上限与冻结两种情况 seq 行锁都照持，满足领赏计数行写者的守卫前提（C6）。
+- 新表进角色护栏的挂起全集（`RoleFencePending` 的 blocker `guild_war_credit_owed`）：有待入账行就挡过户与删角冻结，与历练待入队物品同一口径。
+
+**为什么这样选**
+- 「一个人收不了，只延后他自己那一笔」是唯一同时满足三条的做法：不挡别人（整局照常提交）、不丢（同事务落进待入账行，后台补插）、不重复（预发的 op_id 就是幂等键；对局幂等闸门保证这一局只落一次；转换先判本行在不在再插，两个副本并发转同一行时先在护栏副本行锁上串行，后到者读到本行已不在就回滚；即使绕过这一层，op_id 主键也让后到者失败）。
+- 现成机制：历练结算在同一种情况下早就这么做（I21），循环、游标、「本轮已判仍满就跳过」照抄；挂在同一个循环上，不新起 goroutine，不新增循环活性点位。
+
+**被否决的做法**
+- **满上限照样整笔失败、交给 Kafka 重投**：现状，一个人的积压挡住全局所有人，最后进死信。
+- **复用 `guild_trial_reward_owed`**：主键 `(player_id, battle_id)` 装不下同一局同一人的两笔；转换写死了 ACTIVITY_REWARD / TX_GUILD_ACTIVITY_REWARD；表名是「历练」，装帮战行会误导。改主键与转换要动历练的锁序论证与一串静态测试，比新开一张同形的表风险大。
+- **把这一笔记在对局行 `guild_war_battle` 的一列里**：挂起全集要按玩家查「他还有没有没到账的」，对局行按 battle_id 存，查不了；同局多人转换还会在对局行上互相排队。
+- **满上限时多分一个 seq 先插再说**：16 / 512 是 scene 窗口证明的前提，越过就可能让未决 seq 滑出窗口、结局查不回来。
+- **满上限时放弃这一笔**：丢玩家的钱。
+- **转换时另发新号（历练的做法）**：要处理发号失败；行里已经有一个从没用过的号，直接用它还白得一个幂等键。
+
+**代价与边界**
+- 新增一张表（锁序位置 24）与一个索引（`created_ms`）。
+- 收不了的那一笔晚到：窗口腾出来之后最多等循环一轮（缺省 10 秒）。积压没有专门的 gauge 与告警，只有每轮的汇总日志（`owed war credit round`）与每笔的 Info 日志；要量化时照 `guild_trial_owed_rows` 补一个。
+- 结算提交后的同步投递（`syncDeliverWarOp`）只对当场插了的指令；补插的走重投循环。
+- 待入账行转换之前，客户端看不到这一笔（不进 `my_pending_reward_count`）。
+
+### 8. r2-gw#6 帮战结算与到期退款不过角色护栏（medium，成立）
+
+**问题（含触发时序）**
+1. 角色过户（人民币寄售）与删角之前，协调者先让全部参与者冻结这名角色：guild 的 `PrepareRoleFreeze` 在一个事务里冻结本库副本、读本库的挂起全集（未终态的资产指令、历练待入队物品等），有挂起就不准冻结。冻结之后，guild 每一笔给这名角色写资产的事务都必须先锁他的护栏副本、见冻结就拒（[水平扩展](../design/horizontal-scale-logical-db.md) §3.1、§3.4：「冻结之后的业务事务在 Lock 上被拒」）。
+2. 历练结算经 `withRoleTargets` 锁全部候选人的副本，`SettleWarBattle` 与 `ExpireBounty` 不锁。时序：帮战一局在 match 提交终局（占用随之释放）→ 玩家马上挂出寄售（或注销执行）→ guild 的挂起全集里没有这一局（帮战没有历练那样的 launch 原件行挡着）→ 冻结成功 → 结算消息这时才被消费（正常几十毫秒，消费者积压或重投时可以是几分钟）→ 结算给已冻结的角色插了 GUILD_CREDIT 指令。协调者以为他在 guild 已无挂起，过户照常完成，这条指令在过户之后才落到角色身上。
+3. 删角更糟：墓碑之后删角收尾删了他的 seq 行；迟到的结算 `ensureSeqRowTx` 用新纪元把 seq 行建回来，再插一条永远投不出去的指令 —— 违反「墓碑之后本库不许再有他的业务写入」（删角收尾不用两阶段的前提，[账号注销](../design/account-deletion.md) §6.1）。到期收尾给已冻结、已删除的发布者退款同理。
+
+**方案**
+- 结算事务第 F 步（第一把锁，先于 guild 行）按 player_id 升序锁本局全部入账目标的护栏副本：参战者、追杀令领赏人、撕单退款的发布者；到期收尾锁发布者（只锁银两档，公费档退的是帮会资金）。判据收在纯函数 `classifyCreditFence`，结算、到期收尾、待入账转换三处共用：
+  - **在役**（未冻结、未删除）：照常入账（流满时按 §7 记待入账）。
+  - **冻结中**（过户投票、寄售中、删角投票）：先让 `Guard.RunTx` 自愈一次（冻结的副本可能只是解冻推送丢了），还冻结才是真冻结 —— 这名玩家的**资产入账**（战后银两、领赏、退款）不插指令、不分 seq，记进待入账行（与 §7 同一张表）；帮贡与个人帮战态照写（它们不是挂起项，不经 scene 落到角色身上；过户本来就要求先离帮）。
+  - **已删除**（墓碑）：他的行一律不写 —— 资产入账放弃，帮贡、个人态、seq 行都不碰。领赏人已删除则追杀令整笔不转移（`BountyHeldRecipientRemoved`：托管不销毁，没人结单就到期原路退回发布者，与批 V「领赏人当日满上限」同一处理）；撕单时发布者已删除，目标那一半照发、发布者那一半放弃；到期时发布者已删除，追杀令照样到期、银两退款放弃。
+- 判的是「目标」口径（只有角色号，没有原身份）：只看冻结与删除，不看归属，与历练结算的候选人、待入队物品转换同一判据（`withRoleTargets` 的 Expect 只带 PlayerID）。所以**已换主**的角色（过户完成、副本解冻）照常入给这名角色；冻结期间记下的待入账行在解冻之后照常补插。
+- 结算输出 `FencedPlayers` / `RemovedPlayers`，logic 打英文日志（player_id 只进日志，不进指标 label）。
+
+**为什么这样选**
+- 口径与历练一致：判据就是 `withRoleTargets` 那一套（冻结拒、删除拒、换主不拒），只是**拒的粒度**从整笔改成这名玩家。历练能整笔拒，是因为参与者在 launch 原件行（`guild_trial_launch_role`）里挂着，挂起全集挡住冻结直到结算 —— 结算时候选人实际上不可能冻结，整笔拒只是第二道防线；帮战没有这样的原件行，冻结能插进「终局提交」与「结算消费」之间，整笔拒就是 §7 同样的「一个人挡住全局」，寄售中的角色能冻好几天，必进死信。它还能被利用：输的一方马上挂寄售，就能让对面这一局的奖励、破旗、追杀结单全部卡住。
+- 冻结中记待入账而不是直接插指令：冻结期间不出现会经 scene 落到角色身上的资产指令（护栏要防的正是这个），过户期间没有在途的指令；冻结撤销（投票被否、寄售撤回）后照常补发，不丢。
+- 已删除直接放弃：rank「收件人已注销的奖励直接放弃」、mail「收件人已删除拒收」是既定口径；墓碑不会再变回在役，留着也永远发不出去。领赏人已删除时不结单而不是结单后放弃：托管是发布者的钱，结单后发不出去就等于销毁。
+- 锁序：护栏副本是全部服务共同的第一把锁、按 player_id 升序（与 `rolefence.LockAll` 同序），结算同时锁多名玩家只会排队、不成环；要自愈的一次收齐。
+
+**被否决的做法**
+- **照历练整笔 `withRoleTargets`**：一名参战者冻结或删除就让整局回滚重投直到死信，见上。
+- **冻结中照常插指令**：破坏冻结的前提（挂起全集读完之后又新增），过户之后指令才落到新主身上。
+- **冻结中直接放弃**：投票被否、寄售撤回是常态（试探通过、正式投票被别的参与者否掉），玩家白打一局。
+- **待入账行存原身份（账号、修订号），换主就放弃**：帮战结果里没有参战者的原身份（不像历练原件），只能取结算那一刻副本上的；也与历练的目标口径不一致。
+- **事务外按副本预读分流、事务内再整笔 `withRoleTargets`**：两次判定之间副本可能变，变了又是整笔回滚；在事务里锁着判一次更简单。
+
+**代价与边界**
+- 每局结算多锁几行护栏副本（每名参战者一行）；副本缺行（这名玩家从没在 guild 走过带护栏的写）时第一次结算要经 data_service 自愈一次，之后不再。data_service 不可达时自愈失败，这一局回可重试错误交 Kafka 重投（与 guild 其它带护栏的写同一口径）。
+- 冻结中的待入账行每轮转换都自愈一次（每名冻结玩家每轮一次 `GetRoleFenceState`），寄售可能持续几天；只多 RPC，不写库。
+- 已删除者的帮贡、个人态不写，但帮会周战功仍按参战人数算，不扣他那一份。
+- 过户完成之后补入账给这名角色：卖家打的最后一局，奖励随角色走（目标口径）。
+
+### 9. r2-gw#7 扣款终结按指令号全表扫、追杀令终态旧行不清理（low，成立）
+
+**问题（含触发时序）**
+- 银两档追杀令的预扣指令终结时（scene 回执到达或重投循环判定），`asset_store.go` 的 BOUNTY_ESCROW 分支执行 `UPDATE guild_war_bounty … WHERE escrow_op_id = ? AND status = 1`。表上四个索引都不以 `escrow_op_id` 开头，每次终结都全表扫（MySQL 下还会在扫过的行上短暂加锁）；表只增不删，越扫越慢。
+- 追杀令终态行（已完成 3、撕单 4、到期退回 5、扣款作废 6）永远留在表里，没有任何清理。
+
+**方案**
+- `GuildWarBountyRecord` 的 `OptionIndex` 末尾追加 `escrow_op_id`（第 5 个索引 `idx_guild_war_bounty_4`，与批 V 加 `status,expires_at_ms` 同一写法）。终结语句不改，走新索引定位。
+- 终态旧行按保留期删：`WarRepo.PurgeTerminalBounties` 普通读一批「终态且 `expires_at_ms` 早于 now − 保留期」的候选（走已有索引 `status,expires_at_ms`），逐行一个短事务：主键点锁 → 锁内复核仍是终态、仍过期 → 完整主键点删（与资产指令终态清理 `execCleanupDelete` 同一纪律，TiDB 下不与同一行的悲观写者各持一半）。挂在批 V 到期收尾的同一个节拍上（约每分钟一轮），每轮至多 200 行，没删完的下一轮接着删；只是清理，失败只记日志、不 Hold 排空。
+- 保留期是常量 `warBountyTerminalRetention = 30 天`。
+
+**为什么这样选**
+- 删之前逐个核过引用，终态行谁都不再需要：
+  - 扣款终结按 `escrow_op_id` 找行，但只改 `status = 1` 的行（重复投递的终结对终态行本来就是空操作，删了也一样）；状态 1、2 永远不删。
+  - 结算按 `bounty_id` 读追杀令：读到终态行与读不到行，`ResolveBounty` 都是「不动追杀令」，结论相同；即使是保留期之外的死信重放，删掉也不改变结算结果。
+  - 战报只读对局行自己的列（`bounty_outcome_tag`、`jackpot_silver`），不回查追杀令表；追杀榜、点选、开战挂钩、追踪只看状态 2（追杀榜含 1）；发单前判「目标已有未结单」只数 1、2。
+  - `bounty_id` 是发号器永久 ID，不会被新单复用，删了不会撞键；终态不会再变（扣款终结只认 1，结算与到期收尾锁内只认 2），清理不必与谁协调。
+- 30 天：远长于结果消息可能被重投的窗口（`match-results` 保留 7 天，死信修好后重放），并与资产指令终态行的缺省保留期（`AssetOp.TerminalRetentionDays = 30`）对齐 —— 预扣、领赏、退款指令还查得到的时候追杀令行也在，客服与对账两头都有据。
+- 按到期时刻判龄：终态时刻不晚于到期后约 16 分钟（到期收尾 15 分钟宽限加一轮），复用已有的 `status,expires_at_ms` 索引，不为清理再加按 `resolved_at_ms` 的索引。
+
+**被否决的做法**
+- **终结改成「按指令号普通读出 bounty_id → 主键点锁 → 点改」**：要动资产指令终结的通用分支与它的锁序论证；加索引之后同一条语句已按索引定位，收益不值。
+- **保留期跟 `AssetOp.TerminalRetentionDays` 配置走**：要把配置接进帮战依赖；调大指令保留期时追杀令行先删只少对账材料、不影响正确性，先用常量。
+- **到期收尾时顺手删**：终态行要留一段给客服与对账查。
+
+**代价与边界**
+- schemamigrate 不给已存在的表补建索引：本地已有的 `guild_war_bounty` 要重建（未上线，可清）。
+- 调大 `AssetOp.TerminalRetentionDays` 之后，超过 30 天的追杀令行会比它的指令行先删（只少对账材料）。
+
+### 10. r2-gw#8 野外点选面板露出别帮「仅本帮可见」的追杀令（low，成立）
+
+**问题（含触发时序）**：发单帮发一张仅本帮可见（`public_board = 0`）的追杀令。任意别帮成员在野外点选目标（`InspectFieldWarTargets`），旧代码对每名目标调 `ActiveBountyByTarget`，只要有 ACTIVE 的单就把单号、赏金、档位原样回给客户端，不看接单资格。追杀榜 `ListActiveBounties` 按 `public_board = 1 OR issuer_guild_id = 本帮` 过滤，点选面板没过滤，私单被别帮看到（信息面：没资格的帮拿到单号也开不了这张单，批 V 的 `BountyHuntable` 已在开战、追踪、结算挡住）。
+
+**方案**：点选面板改用纯函数 `fieldTargetBounty`，判据就是批 V 的 `war.BountyHuntable`（同区、ACTIVE 未过期、全区江湖榜或本帮发的单）；不满足时单号、赏金、档位一律为空。
+
+**为什么这样选**：「这张单此刻能不能由这个帮接」只收在 `BountyHuntable` 一处，追杀榜（SQL 条件同义）、开战挂钩、追踪、结算第 7 步与点选面板同一口径；不满足就当没有，客户端不必改。
+
+**被否决的做法**：**只藏单号、照显赏金**：赏金与档位同样是发单帮不想公开的信息。**在 `ActiveBountyByTarget` 的 SQL 里加 `public_board` 条件**：开战入口的自动挂钩也用它，它要先拿到行、再按攻方帮判资格，把条件塞进 SQL 会让两处口径分叉。
+
+**代价与边界**：别帮看不到私单，也就不知道这名目标正被追杀（与追杀榜一致）；合服后别区的单同样不显示。
+
+### 11. 给 Gemini 的验证（§7～§10）
+
+1. 生成（仓库根目录）：本批只改 `guild_db.proto`（库表，不进客户端）。批 V 的 `guild.proto` 若还没生成，按 §6 第 1 步用缺省配置一起生成并同步客户端；否则 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`。通过：`go/proto/guild/guild_db.pb.go` 有 `GuildWarCreditOwedRecord`，`guild_war_bounty` 的索引串末尾是 `escrow_op_id`。
+2. 编译与静态检查：`cd go/guild; gofmt -l internal/; go build ./...; go vet ./...`（gofmt 无输出）；仓库根目录 `python tools/scripts/check_log_text_english.py`。
+3. 纯单测：`cd go/guild; go test ./internal/data -run 'TestWarCreditOwedColumnsCoverEveryProtoField|TestClassifyCreditFence|TestLockCreditFencesWithoutGuardAndVerdictLists|TestWarCreditRecordCarriesTheOwedCreditVerbatim|TestDropListCoversTables|TestGuildWarBountyColumnsCoverEveryProtoField' -count=1 -v`；`go test ./internal/logic -run 'TestFieldTargetBountyHidesGuildOnlyBountiesFromOtherGuilds|TestWarBountyExpiryEveryRounds' -count=1 -v`；再 `go test ./internal/war/... ./internal/logic/... -count=1`。
+4. 真库 MySQL：设 `GUILD_TEST_MYSQL_DSN`（库名 `guild_test`），`go test ./internal/data -run 'SettleWarBattle_|ExpireBounty_|PurgeTerminalBounties_' -count=1 -v`，全部 PASS、不得 SKIP（新增 `TestSettleWarBattle_FullCreditWindowDefersOnlyThatPlayer`、`TestSettleWarBattle_BountyPayoutOwedWhenHunterWindowIsFull`、`TestExpireBounty_FullIssuerWindowExpiresAndOwesTheRefund`、`TestPurgeTerminalBounties_DeletesOnlyOldTerminalRows`，批 V 的原用例不得回归）。
+5. 真库 TiDB（护栏）：设 `GUILD_ROLE_TEST_DSN`（本地独占 TiDB，见 `role_identity_tidb_test.go`），`go test ./internal/data -run 'TestTiDBWarSettle|TestTiDBExpireBountyOwes|TestTiDBPendingGuildBlocksFreezeAndRemoval' -count=1 -v` 全部 PASS、不得 SKIP。
+6. 全包：`go test ./internal/data -count=1`、`go test ./... -count=1`；带 integration 标签的经济端到端：`go test -tags integration ./internal/logic -count=1`（删表清单新增 `guild_war_credit_owed`，`resetEconomyFlowSchema` 按表数守着）。
+7. 已有本地库：重建 `guild_war_bounty`（补索引）；新表由 schemamigrate 补建。

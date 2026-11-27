@@ -22,6 +22,7 @@
 
 #include "entt/src/entt/entity/registry.hpp"
 #include "gate_codec.h"
+#include "handler/event/scene_route_helper.h"
 #include "handler/gate_push_delivery.h"
 #include "muduo/net/Buffer.h"
 #include "muduo/net/EventLoop.h"
@@ -553,4 +554,40 @@ TEST_F(GatePushDelivery, BroadcastToAllSkipsSessionsNotBoundToAPlayer)
 	ExpectReceived(bound, Bytes(content));
 	ExpectReceived(unbound, "");
 	ExpectCounted(Path::kKafka, {.delivered = 1});
+}
+
+// 回归(2026-11-26):LeaveGame(ResetSceneRoute) 清空 authenticatedAccount 并置 sceneRouteResetPending,
+// 但保留旧 playerId 供下次 Bind 比对代次;选角态会话不收全服广播、也拦截旧角色迟到定向推送,仅 targetPlayerId=0 放行。
+TEST_F(GatePushDelivery, LeaveGameResetSessionIsTreatedAsUnboundUntilNextBind)
+{
+	const auto &leftGame = AddSession(kSession, kPlayerA, kScene);
+	auto &session = tlsSessionManager.sessions()[kSession];
+	session.authenticatedAccount = "acct-a";
+	gate_scene_route::ResetSceneRoute(session);
+	ASSERT_EQ(session.playerId, kPlayerA);
+	ASSERT_TRUE(session.sceneRouteResetPending);
+	ASSERT_TRUE(session.authenticatedAccount.empty());
+
+	// 另建一条同角色重登已完成 Bind(恢复 authenticatedAccount)、但尚未进场(sceneRouteResetPending 仍为 true)的会话
+	const auto &rebound = AddSession(kOtherSession, kPlayerB, kScene);
+	auto &reboundSession = tlsSessionManager.sessions()[kOtherSession];
+	reboundSession.authenticatedAccount = "acct-b";
+	gate_scene_route::ResetSceneRoute(reboundSession);
+	reboundSession.authenticatedAccount = "acct-b";
+	ASSERT_TRUE(reboundSession.sceneRouteResetPending);
+
+	const MessageContent allMsg = Content("world-broadcast");
+	const MessageContent oldRoleMsg = Content("stale-role-unicast");
+	const MessageContent loginTipMsg = Content("login-failure-tip");
+	const MessageContent reboundMsg = Content("rebound-unicast");
+
+	gate_push::DeliverToAll(Path::kKafka, &allMsg);
+	gate_push::DeliverToPlayer(Path::kKafka, kSession, kPlayerA, &oldRoleMsg);
+	gate_push::DeliverToPlayer(Path::kKafka, kSession, 0, &loginTipMsg);
+	gate_push::DeliverToPlayer(Path::kRpc, kOtherSession, kPlayerB, &reboundMsg);
+
+	ExpectReceived(leftGame, Bytes(loginTipMsg));
+	ExpectReceived(rebound, Bytes(allMsg) + Bytes(reboundMsg));
+	ExpectCounted(Path::kKafka, {.delivered = 1, .deliveredUnfenced = 1, .droppedFence = 1});
+	ExpectCounted(Path::kRpc, {.delivered = 1});
 }

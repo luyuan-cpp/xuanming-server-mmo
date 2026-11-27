@@ -1,6 +1,9 @@
 package main
 
 // 合服的判定与三个模式的流程。判定是纯函数,流程只依赖 mappingStore 接口,单测用内存替身;SQL 在 route_store.go。
+//
+// 真写(合服、撤销)提交之后,把第 0 片现在已提交的映射发布进 etcd 副本(publishCommitted,docs/design/merged-zone-etcd-copy.md):
+// 读不到第 0 片的 data_service 副本因此也在一个刷新周期内看到这次变化。发布判定、编码与 data_service 共用 shared/mergedzonecopy。
 
 import (
 	"context"
@@ -11,6 +14,7 @@ import (
 	"slices"
 	"time"
 
+	"shared/mergedzonecopy"
 	"shared/placement"
 )
 
@@ -66,6 +70,9 @@ type mappingStore interface {
 	// Locked 在一个事务里锁 route_meta 那一行和 zones 对应的映射行,复核 writable 后跑 body,body 成功才提交。
 	// writable=0 回 errRefused;body 的错误原样返回,事务回滚。
 	Locked(ctx context.Context, zones []uint32, body func(mappingTx) error) error
+	// Committed 不加锁读第 0 片现在已提交的映射、版本(合服历史的行数)与库世代,一条语句一个快照(mergedzonecopy.ReadSQL)。
+	// 发布 etcd 副本、审计比对副本用它。
+	Committed(ctx context.Context) (mergedzonecopy.Mapping, error)
 }
 
 // mergesOf 把映射行转成 src → dst。
@@ -127,22 +134,26 @@ func newRunID(src, dst uint32, now time.Time) string {
 	return fmt.Sprintf("%d-%d-%s", src, dst, now.UTC().Format("20060102T150405Z"))
 }
 
-// execute 分发到三个模式。
-func execute(ctx context.Context, store mappingStore, o options, now time.Time, out io.Writer) error {
+// execute 分发到三个模式。copies 是 etcd 副本(-etcd-hosts);真写必须有,审计可以没有(不比对),dry-run 不用。
+func execute(ctx context.Context, store mappingStore, copies mergedzonecopy.Copies, o options, now time.Time, out io.Writer) error {
+	if o.writes() && copies == nil {
+		// 在写任何东西之前拦下:提交之后才发现发布不了,合服就只能等 data_service 下一拍去发布。
+		return refusedf("a real %s needs the etcd copy of the merged zone mapping: pass -etcd-hosts", o.mode)
+	}
 	switch o.mode {
 	case modeMerge:
-		return runMerge(ctx, store, o, now, out)
+		return runMerge(ctx, store, copies, o, now, out)
 	case modeUnmerge:
-		return runUnmerge(ctx, store, o, out)
+		return runUnmerge(ctx, store, copies, o, out)
 	case modeAudit:
-		return runAudit(ctx, store, out)
+		return runAudit(ctx, store, copies, out)
 	default:
 		return refusedf("unknown mode %q", o.mode)
 	}
 }
 
-// runMerge 写映射。真写时判定在锁内完成,事务外的任何读都不算数;映射提交即合服完成,没有后续步骤。
-func runMerge(ctx context.Context, store mappingStore, o options, now time.Time, out io.Writer) error {
+// runMerge 写映射。真写时判定在锁内完成,事务外的任何读都不算数;映射提交即合服完成,之后只把它发布进 etcd 副本。
+func runMerge(ctx context.Context, store mappingStore, copies mergedzonecopy.Copies, o options, now time.Time, out io.Writer) error {
 	src, dst := o.sourceZone, o.targetZone
 	if o.dryRun {
 		writable, rows, err := store.Snapshot(ctx)
@@ -181,15 +192,16 @@ func runMerge(ctx context.Context, store mappingStore, o options, now time.Time,
 	}
 	if already {
 		fmt.Fprintf(out, "already merged: zone %d -> zone %d; nothing written\n", src, dst)
-		return nil
+	} else {
+		fmt.Fprintf(out, "merged: zone %d -> zone %d. Services pick it up within two refresh periods; check the final zones with -mode audit\n", src, dst)
 	}
-	fmt.Fprintf(out, "merged: zone %d -> zone %d. Services pick it up within two refresh periods; check the final zones with -mode audit\n", src, dst)
-	return nil
+	// 幂等重跑也发布:上一次提交之后没发布成(进程被杀、etcd 抖了)的,重跑同一条命令就补上。
+	return publishCommitted(ctx, store, copies, out)
 }
 
 // runUnmerge 按 (src, dst) 删一行。不要求逆序撤销:没有搬过数据,删掉哪一行,这一行之后的解析就回到哪里。
-// 没有这一行是幂等成功;源区如果映射到了别的区,照样什么都不删,多打一句提示。
-func runUnmerge(ctx context.Context, store mappingStore, o options, out io.Writer) error {
+// 没有这一行是幂等成功;源区如果映射到了别的区,照样什么都不删,多打一句提示。提交之后同样发布 etcd 副本。
+func runUnmerge(ctx context.Context, store mappingStore, copies mergedzonecopy.Copies, o options, out io.Writer) error {
 	src, dst := o.sourceZone, o.targetZone
 	if o.dryRun {
 		writable, rows, err := store.Snapshot(ctx)
@@ -226,11 +238,51 @@ func runUnmerge(ctx context.Context, store mappingStore, o options, out io.Write
 	}
 	if note != "" {
 		fmt.Fprintln(out, note)
-		return nil
+	} else {
+		fmt.Fprintf(out, "unmerged: zone %d -> zone %d deleted. Guilds and listings created in the target zone meanwhile stay there; "+
+			"restart guild once so its ranks are rebuilt from the current mapping. The merge and this unmerge stay in zone_merge_history (-mode audit)\n", src, dst)
 	}
-	fmt.Fprintf(out, "unmerged: zone %d -> zone %d deleted. Guilds and listings created in the target zone meanwhile stay there; "+
-		"restart guild once so its ranks are rebuilt from the current mapping. The merge and this unmerge stay in zone_merge_history (-mode audit)\n", src, dst)
-	return nil
+	return publishCommitted(ctx, store, copies, out)
+}
+
+// publishCommitted 把第 0 片现在已提交的映射发布进 etcd 副本。调用时映射已经提交,所以这里的任何失败都按「没做成或结局未知」
+// 报(退出码 2),文案写明映射已提交:data_service 读得到第 0 片的副本会在一个刷新周期内自己发布,重跑同一条命令也能补上。
+//
+// 先读副本、后读第 0 片,判定与 data_service 共用(mergedzonecopy.Decide):副本里只有第 0 片已经提交过的版本,
+// 所以「第 0 片落后于副本」只可能是第 0 片回档了。撞上别的写者(CAS 不成立)就重读,最多 PublishAttempts 轮。
+func publishCommitted(ctx context.Context, store mappingStore, copies mergedzonecopy.Copies, out io.Writer) error {
+	key := copies.Key()
+	for attempt := 1; ; attempt++ {
+		published, revision, found, err := copies.Get(ctx)
+		if err != nil {
+			return fmt.Errorf("the mapping is committed, but the etcd copy %s could not be read; data_service publishes it within one refresh period, "+
+				"or re-run the same command: %w", key, err)
+		}
+		committed, err := store.Committed(ctx)
+		if err != nil {
+			return fmt.Errorf("the mapping is committed, but directory shard 0 could not be read back to publish it; re-run the same command: %w", err)
+		}
+		publish, err := mergedzonecopy.Decide(key, published, found, committed)
+		if err != nil {
+			return fmt.Errorf("the mapping is committed, but it is not published to the etcd copy: %w", err)
+		}
+		if !publish {
+			fmt.Fprintf(out, "etcd copy %s: already holds version %d\n", key, published.Version)
+			return nil
+		}
+		written, err := copies.Put(ctx, revision, committed)
+		if err != nil {
+			return fmt.Errorf("the mapping is committed, but publishing version %d to the etcd copy %s has an unknown outcome; "+
+				"data_service publishes it within one refresh period, or re-run the same command: %w", committed.Version, key, err)
+		}
+		if written {
+			fmt.Fprintf(out, "etcd copy %s: published version %d\n", key, committed.Version)
+			return nil
+		}
+		if attempt == mergedzonecopy.PublishAttempts {
+			return fmt.Errorf("the mapping is committed, but the etcd copy %s changed under each of %d publish attempts; re-run the same command", key, attempt)
+		}
+	}
 }
 
 func nothingToUnmerge(merges map[uint32]uint32, src, dst uint32) string {
@@ -246,7 +298,9 @@ func nothingToUnmerge(merges map[uint32]uint32, src, dst uint32) string {
 //
 // 先读映射、后读历史:映射行和它的 merge 历史在同一个事务里提交,所以先读到的映射行,后读的历史里一定有。
 // 反过来读,两次读之间的一次合服会被误报成来历不明。
-func runAudit(ctx context.Context, store mappingStore, out io.Writer) error {
+//
+// 给了 -etcd-hosts 时再比对 etcd 副本(auditCopy):两边对不上时 data_service 会拒启或刷新失败,按拒绝退出。
+func runAudit(ctx context.Context, store mappingStore, copies mergedzonecopy.Copies, out io.Writer) error {
 	writable, rows, err := store.Snapshot(ctx)
 	if err != nil {
 		return err
@@ -275,6 +329,7 @@ func runAudit(ctx context.Context, store mappingStore, out io.Writer) error {
 	for _, row := range untracked {
 		fmt.Fprintf(out, "untracked mapping: zone %d -> zone %d (run_id %s) has no merge event in zone_merge_history\n", row.Src, row.Dst, row.RunID)
 	}
+	copyErr := auditCopy(ctx, store, copies, out)
 	if resolveErr != nil {
 		return refusedf("zone_merged_into does not resolve, services cannot refresh their caches until it is repaired: %v", resolveErr)
 	}
@@ -284,6 +339,40 @@ func runAudit(ctx context.Context, store mappingStore, out io.Writer) error {
 	if len(untracked) > 0 {
 		return refusedf("%d mapping row(s) have no merge event in zone_merge_history: they were written by hand or before the history table existed, "+
 			"so who wrote them and when cannot be told; check them, then unmerge and merge again with this tool to give them a history", len(untracked))
+	}
+	return copyErr
+}
+
+// auditCopy 比对 etcd 副本与第 0 片,先读副本、后读第 0 片,判定同 publishCommitted(mergedzonecopy.Decide)。
+//   - 没给 -etcd-hosts:只打一行「没比对」;
+//   - 副本缺席或落后:只是还没发布(data_service 一个刷新周期内发布,下一次真写也会发布),照常退出;
+//   - 对不上(第 0 片落后于副本、同版本内容不同、世代不同):data_service 会拒启或刷新失败,按拒绝退出,处置见合服手册 §5。
+func auditCopy(ctx context.Context, store mappingStore, copies mergedzonecopy.Copies, out io.Writer) error {
+	if copies == nil {
+		fmt.Fprintln(out, "etcd copy: not checked (no -etcd-hosts)")
+		return nil
+	}
+	key := copies.Key()
+	published, _, found, err := copies.Get(ctx)
+	if err != nil {
+		return fmt.Errorf("read the etcd copy %s: %w", key, err)
+	}
+	committed, err := store.Committed(ctx)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "directory shard 0: generation %s, mapping version %d (the number of merge history events)\n", committed.Generation, committed.Version)
+	if !found {
+		fmt.Fprintf(out, "etcd copy %s: absent; data_service publishes it within one refresh period\n", key)
+		return nil
+	}
+	fmt.Fprintf(out, "etcd copy %s: generation %s, version %d, %d merged zone(s)\n", key, published.Generation, published.Version, len(published.Merges))
+	publish, err := mergedzonecopy.Decide(key, published, true, committed)
+	if err != nil {
+		return refusedf("the etcd copy disagrees with directory shard 0: %v", err)
+	}
+	if publish {
+		fmt.Fprintf(out, "etcd copy %s: behind directory shard 0; data_service publishes version %d within one refresh period\n", key, committed.Version)
 	}
 	return nil
 }

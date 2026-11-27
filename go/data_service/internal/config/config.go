@@ -451,7 +451,8 @@ type StoreConfig struct {
 	//
 	// 某个逻辑库启动时**连不上**不算没装配(2026-11-27,docs/design/data-service-startup-isolation.md §5):
 	// store 照常装配,那个库的池先关着,第一次用到时再核对,通过才给连接,落在健康集群上的库照常服务。
-	// 连上了而核对不过仍算没装配。合服映射所在的目录第 0 片连不上时照旧拒启(MergedZonesUnassembled)。
+	// 连上了而核对不过仍算没装配。合服映射所在的目录第 0 片连不上时按 etcd 里的映射副本起;副本还没有时照旧拒启
+	// (MergedZonesUnassembled,docs/design/merged-zone-etcd-copy.md)。
 	//
 	// 为什么多副本必须开:store 为 nil 的实例 gRPC 健康检查照样是 SERVING、两条 etcd 注册照常进行。
 	// 单实例时这是"全挂",很显眼;多实例时是**按比例失败**(p2c / 随机挑到它的请求才失败),隐蔽得多;
@@ -486,7 +487,8 @@ type RouteStoreConfig struct {
 	MaxOpenConn int `json:",optional"`
 	MaxIdleConn int `json:",optional"`
 	// MergedZoneRefreshSec:定时重读 zone_merged_into 的周期(秒),[1, 60];0 = 缺省 5。它是归属解析的滞后上限
-	// (placement.MergedZoneCache,docs/design/player-data-tidb-scaling-plan.md §7.1)。启动时读不到拒启,之后读失败保留旧值。
+	// (placement.MergedZoneCache,docs/design/player-data-tidb-scaling-plan.md §7.1)。每个新版本先发布进 etcd 副本再用;
+	// 第 0 片读不到时按副本回答(docs/design/merged-zone-etcd-copy.md)。启动时两边都给不出能用的映射才拒启,之后读失败保留旧值。
 	MergedZoneRefreshSec int `json:",optional"`
 }
 

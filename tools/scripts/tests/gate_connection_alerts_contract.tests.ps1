@@ -179,8 +179,10 @@ Test-Case '票据先行:建连只登记未验签记录,票据校验全部通过�
 
 Test-Case '未验签预算:淘汰未验签表的表头,先摘记录再经 weak 连接 forceClose、不删会话,预算排在速率闸之前' {
     Assert-NotMatch -Text $script:AdmissionSource -Pattern 'sessions\(\)\.erase|sessions\.erase' -Because '淘汰不在 muduo 的回调栈上同步摘会话;未验签连接本来就没有会话'
-    Assert-Match -Text $script:AdmissionSource -Pattern '(?s)void EvictOldestUnauthenticated\(.*?preAuthConnections\.begin\(\);.*?oldest->second\.conn\.lock\(\);.*?preAuthConnections\.erase\(oldest\);.*?conn->forceClose\(\);' `
+    Assert-Match -Text $script:AdmissionSource -Pattern '(?s)void EvictUnauthenticated\(const PreAuthConnectionMap::iterator victim, .*?victim->second\.conn\.lock\(\);.*?preAuthConnections\.erase\(victim\);.*?conn->forceClose\(\);' `
         -Because '先摘记录(这一刻起不再占未验签池),再经记录里的 weak 连接 forceClose(AGENTS.md §11.7)'
+    Assert-Match -Text $script:AdmissionSource -Pattern '(?s)PreAuthConnectionMap::iterator OldestEvictableUnauthenticated\(\).*?auto it = preAuthConnections\.begin\(\);.*?if \(!conn \|\| conn->connected\(\)\)' `
+        -Because '从表头找第一条还连着的:已经在关的跳过,不白用一次淘汰(与 battle 直连同一口径)'
     Assert-Match -Text $script:SessionManagerHeader -Pattern 'using PreAuthConnectionMap = std::map<uint64_t, PreAuthConnection>;' `
         -Because '未验签表按代次有序:代次建连时单调分配,begin() 就是最老的一条;表里只有还没验签的连接'
     Assert-Match -Text $script:AdmissionSource -Pattern '\.currentConnections = tlsSessionManager\.ClientConnectionCount\(\),' -Because '准入回调的总量按 会话数 + 未验签连接数 判'

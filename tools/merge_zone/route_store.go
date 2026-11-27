@@ -25,6 +25,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"shared/authoritysql"
+	"shared/mergedzonecopy"
 )
 
 const (
@@ -59,6 +60,8 @@ const (
 // routeStore 是 mappingStore 的 SQL 实现。
 type routeStore struct {
 	db *sql.DB
+	// database 是 DSN 里的库名,也就是目录第 0 片;etcd 副本的键按它取(mergedzonecopy.Key),和 data_service 算出来的是同一个。
+	database string
 }
 
 var _ mappingStore = (*routeStore)(nil)
@@ -76,7 +79,17 @@ func openRouteStore(ctx context.Context, rawDSN string, backend authoritysql.Bac
 	if err != nil {
 		return nil, fmt.Errorf("open global database %s: %w", cfg.DBName, err)
 	}
-	return &routeStore{db: db}, nil
+	return &routeStore{db: db, database: cfg.DBName}, nil
+}
+
+// Committed 见 mappingStore。语句与扫描和 data_service 读第 0 片的那一条是同一份(mergedzonecopy.ReadSQL),
+// 两边对「版本」的算法只有一处。只读,事务外。
+func (s *routeStore) Committed(ctx context.Context) (mergedzonecopy.Mapping, error) {
+	mapping, err := mergedzonecopy.Read(ctx, s.db)
+	if errors.Is(err, mergedzonecopy.ErrNoRouteMeta) {
+		return mergedzonecopy.Mapping{}, refusedf("route_meta has no row id=1: this is not a migrated global database (run `data_service -f <yaml> -migrate`, or check the DSN)")
+	}
+	return mapping, err
 }
 
 // Close 关连接池。

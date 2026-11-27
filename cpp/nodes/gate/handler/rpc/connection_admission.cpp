@@ -122,18 +122,39 @@ void LogRejectionSampled(const RejectReason reason, const uint64_t total, const 
 	}
 }
 
-// 承压时给新连接腾位置,淘汰的是未验签表的表头(表按建连先后有序,begin() 最老;表里只有还没验签的连接)。
+// 承压时可以让位的最老一条未验签连接:从表头(表按建连先后有序,begin() 最老)起第一条连接还连着的。
+// 已经在关的跳过:验签失败后回了失败包、等 100ms 延迟强关的,验签前发业务包 / 心跳被关的,高水位被关的,
+// 它们这一轮或 100ms 内自己就离开池子,淘汰它们白用掉一次淘汰、不多腾出一个位置,还会把失败包截掉;跳过它们,
+// 淘汰真正占着位置不走的那条(与 battle 直连 OldestConnectedUnauthenticated 同一口径)。被跳过的条数有界:
+// 只有本轮与最近 100ms 里决定关的连接。连接对象已经不在的记录不跳过,摘掉就是清理(正常不会出现:断开回调同步摘记录)。
+// 找不到返回 end()。
+PreAuthConnectionMap::iterator OldestEvictableUnauthenticated()
+{
+	auto &preAuthConnections = tlsSessionManager.preAuthConnections();
+	auto it = preAuthConnections.begin();
+	while (it != preAuthConnections.end())
+	{
+		const auto conn = it->second.conn.lock();
+		if (!conn || conn->connected())
+		{
+			break;
+		}
+		++it;
+	}
+	return it;
+}
+
+// 承压时给新连接腾位置,淘汰 OldestEvictableUnauthenticated 找出来的那一条。
 // 先摘记录:这一刻起它不再算在未验签池里。再经记录里的 weak 连接 forceClose:forceClose 只把连接置成 kDisconnecting、
 // 真正的关闭排到之后的 loop 轮次,随后的断开回调找不到记录,什么都不做(没有会话、没向 login 发过登录)。
 // 连接一进 kDisconnecting,codec 就不再分发它的任何帧(network/codec/codec.cpp ProtobufCodec::onMessage),
-// 所以被选中之后它不会再验签成功,不会「刚验签就被关」。调用方保证表不空。
-void EvictOldestUnauthenticated(const SteadyTime now)
+// 所以被选中之后它不会再验签成功,不会「刚验签就被关」。调用方保证 victim 有效(不是 end())。
+void EvictUnauthenticated(const PreAuthConnectionMap::iterator victim, const SteadyTime now)
 {
 	auto &preAuthConnections = tlsSessionManager.preAuthConnections();
-	const auto oldest = preAuthConnections.begin();
-	const auto ageMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - oldest->second.connectedAt).count();
-	const auto conn = oldest->second.conn.lock();
-	preAuthConnections.erase(oldest);
+	const auto ageMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - victim->second.connectedAt).count();
+	const auto conn = victim->second.conn.lock();
+	preAuthConnections.erase(victim);
 	const uint64_t total = ++tlsState.counters.preAuthEvicted;
 	// 淘汰的量与只建连不验签的流量同一量级:第一条必打,此后每 1024 条一行。对端地址只进日志。
 	if ((total & 0x3FF) == 1)
@@ -202,13 +223,14 @@ void CloseSource()
 
 bool AdmitConnection(const muduo::net::InetAddress &peer, const SteadyTime now)
 {
-	const PreAuthConnectionMap &preAuthConnections = tlsSessionManager.preAuthConnections();
+	PreAuthConnectionMap &preAuthConnections = tlsSessionManager.preAuthConnections();
 	const uint64_t unauthenticated = preAuthConnections.size();
-	// 最老的一条未验签连接只在池承压时用得上:表按建连先后有序,就是表头,O(1)。
-	// 本端 loop 刚卡过就不给它的年龄:那时「建连多久还没验签」不可信,验签请求可能还在接收缓冲里没读,不该据此淘汰。
-	const bool evictionAllowed = !preAuthConnections.empty() &&
-								 unauthenticated >= tlsState.preAuthBudget.earlyDropStart &&
-								 !gate_client_heartbeat::LoopRecentlyStalled(now);
+	// 最老的一条可以让位的未验签连接只在池承压时用得上,也只在那时才找:表按建连先后有序,通常就是表头。
+	// 本端 loop 刚卡过就不找:那时「建连多久还没验签」不可信,验签请求可能还在接收缓冲里没读,不该据此淘汰。
+	const auto oldest = unauthenticated >= tlsState.preAuthBudget.earlyDropStart &&
+								!gate_client_heartbeat::LoopRecentlyStalled(now)
+							? OldestEvictableUnauthenticated()
+							: preAuthConnections.end();
 	// 按来源限速:开启且承压时才问这条连接所在前缀的桶;非公网来源(代理、LB、集群内)认不出真实玩家,不按来源限。
 	tlsState.sourceRateActive = tlsState.sourceRate.has_value() && UnderPressure(unauthenticated, now);
 	const std::optional<SourcePrefix> prefix = tlsState.sourceRateActive ? RateLimitedSourceOf(peer) : std::nullopt;
@@ -217,10 +239,9 @@ bool AdmitConnection(const muduo::net::InetAddress &peer, const SteadyTime now)
 		.currentConnections = tlsSessionManager.ClientConnectionCount(),
 		.maxConnections = tlsState.maxConnections,
 		.unauthenticated = unauthenticated,
-		.oldestUnauthenticatedAge =
-			evictionAllowed
-				? std::optional<SteadyTime::duration>(now - preAuthConnections.begin()->second.connectedAt)
-				: std::nullopt,
+		.oldestUnauthenticatedAge = oldest != preAuthConnections.end()
+										? std::optional<SteadyTime::duration>(now - oldest->second.connectedAt)
+										: std::nullopt,
 		.preAuthBudget = tlsState.preAuthBudget,
 		.sourceOverRate = prefix && !tlsState.sourceRate->WouldAdmit(*prefix, now),
 	};
@@ -240,10 +261,11 @@ bool AdmitConnection(const muduo::net::InetAddress &peer, const SteadyTime now)
 	{
 		NoteSourceUntracked(peer);
 	}
-	// 判定只在给了最老一条的年龄(表不空)时才会要求淘汰;这里再判一次空,不让空表走进淘汰。
-	if (admission.evictOldestUnauthenticated && !preAuthConnections.empty())
+	// 判定只在给了最老一条的年龄(找到了可以让位的)时才会要求淘汰;这里再判一次,不让 end() 走进淘汰。
+	// 从找出 oldest 到这里没有改过表(判定是纯函数,来源前缀的桶不在表里),迭代器仍然有效。
+	if (admission.evictOldestUnauthenticated && oldest != preAuthConnections.end())
 	{
-		EvictOldestUnauthenticated(now);
+		EvictUnauthenticated(oldest, now);
 	}
 	return true;
 }

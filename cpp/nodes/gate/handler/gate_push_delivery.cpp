@@ -162,6 +162,19 @@ namespace gate_push
 					 << " " << counters;
 		}
 
+		// 已绑定玩家:BindSession 之前 playerId 是 kInvalidGuid;0 同样按未绑定处理(与 client_session_handler.cpp 同一判据)。
+		// LeaveGame(ResetSceneRoute) 清空 authenticatedAccount 并置 sceneRouteResetPending,但保留旧 playerId 供下次 Bind 比对代次;
+		// 在下一次 Bind 写入 authenticatedAccount 之前会话处于选角态,视为未绑定(不收全服广播,也拦截旧角色的迟到定向推送)。
+		Guid BoundPlayerIdOf(const SessionInfo &session)
+		{
+			if ((session.sceneRouteResetPending && session.authenticatedAccount.empty()) ||
+				session.playerId == kInvalidGuid || session.playerId == 0)
+			{
+				return kInvalidGuid;
+			}
+			return session.playerId;
+		}
+
 		// 一个指名目标:查会话 → lock 连接 → 身份栅栏。可写时返回锁住的连接,否则计数并返回空。
 		// 强引用只活在本次投递内,不留存(AGENTS.md §11.7)。顺序沿用原 RPC 实现:先确认会话与连接都在,再比对玩家。
 		muduo::net::TcpConnectionPtr AcquireFencedConnection(Path path, uint32_t sessionId, uint64_t targetPlayerId,
@@ -187,11 +200,12 @@ namespace gate_push
 				LogNoConnection(path, sessionId, messageId);
 				return nullptr;
 			}
-			switch (gate_session_fence::ClassifyPush(session.playerId, targetPlayerId))
+			const Guid boundPlayerId = BoundPlayerIdOf(session);
+			switch (gate_session_fence::ClassifyPush(boundPlayerId, targetPlayerId))
 			{
 			case gate_session_fence::PushVerdict::kDrop:
 				++counters.droppedFence;
-				LogFenceMismatch(path, sessionId, session.playerId, targetPlayerId, messageId);
+				LogFenceMismatch(path, sessionId, boundPlayerId, targetPlayerId, messageId);
 				return nullptr;
 			case gate_session_fence::PushVerdict::kDeliverUnfenced:
 				++counters.deliveredUnfenced;
@@ -249,10 +263,9 @@ namespace gate_push
 									   });
 		}
 
-		// 已绑定玩家:BindSession 之前 playerId 是 kInvalidGuid;0 同样按未绑定处理(与 client_session_handler.cpp 同一判据)。
 		bool IsBoundToPlayer(const SessionInfo &session)
 		{
-			return session.playerId != kInvalidGuid && session.playerId != 0;
+			return BoundPlayerIdOf(session) != kInvalidGuid;
 		}
 
 		// 场景 / 全服广播:没有目标玩家可比对,不过身份栅栏;只推已绑定玩家的会话(未登录的连接不收游戏广播)。

@@ -114,7 +114,7 @@ func routeStmtLabel(query string) string {
 		return "R6a"
 	case routeFillHomePlacementSQL:
 		return "R6b"
-	case routeListMergedIntoSQL:
+	case routeReadMergedZonesSQL:
 		return "R14"
 	case routeMetaSeedSQL:
 		return "R15"
@@ -920,16 +920,26 @@ func TestRegisterHomeRetryStopsOnCanceledContext(t *testing.T) {
 
 // ── 只读接口 ─────────────────────────────────────────────────────────────────────
 
-// TestRouteReadQueriesShapes:GetRoutes / ListMergedInto 的语句、实参与 NULL / 大数扫描。
+// TestRouteReadQueriesShapes:GetRoutes / ReadMergedZoneMapping 的语句、实参与 NULL / 大数扫描。
 // placement_version 放一个超过 2^63 的值:NullInt64 装不下,这里钉住扫描用的是 sql.Null[uint64]。
 func TestRouteReadQueriesShapes(t *testing.T) {
 	const bigVersion uint64 = 1<<63 + 5
+	const generation = "0123456789abcdef0123456789abcdef"
 	st, fake := newFakeRouteStore(t, fakeRouteScript{replies: map[string][]fakeRouteReply{
 		"R13": {
 			{rows: [][]driver.Value{routeRowValues(9, 7, 0, 0, 1)}},
 			{rows: [][]driver.Value{{int64(6), int64(6), nil, int64(7), bigVersion, int64(3), "w", int64(1), int64(2)}}},
 		},
-		"R14": {{rows: [][]driver.Value{{int64(101), int64(102), "101-102-a", int64(5)}}}},
+		"R14": {
+			// 两行映射:世代与版本每行都一样(派生表只有一行,CROSS JOIN 到每一行映射上)。
+			{rows: [][]driver.Value{{generation, int64(3), int64(101), int64(102)}, {generation, int64(3), int64(103), int64(102)}}},
+			// 没有映射:LEFT JOIN 回一行,两列都是 NULL。
+			{rows: [][]driver.Value{{generation, int64(0), nil, nil}}},
+			// route_meta 缺行:派生表是空的,一行都没有。
+			{},
+			// 半边 NULL:形状不对,不能当成没有映射。
+			{rows: [][]driver.Value{{generation, int64(1), int64(101), nil}}},
+		},
 	}})
 	ctx := context.Background()
 
@@ -956,9 +966,23 @@ func TestRouteReadQueriesShapes(t *testing.T) {
 		t.Fatalf("GetRoutes(6) = (%+v, %v), want %+v", got, err, want)
 	}
 
-	merged, err := st.ListMergedInto(ctx)
-	if err != nil || len(merged) != 1 || merged[0] != (MergedIntoRow{SrcZone: 101, DstZone: 102, RunID: "101-102-a", MergedAtMs: 5}) {
-		t.Fatalf("ListMergedInto = (%+v, %v)", merged, err)
+	mapping, err := st.ReadMergedZoneMapping(ctx)
+	if err != nil || mapping.Generation != generation || mapping.Version != 3 ||
+		!reflect.DeepEqual(mapping.Merges, map[uint32]uint32{101: 102, 103: 102}) {
+		t.Fatalf("ReadMergedZoneMapping = (%+v, %v)", mapping, err)
+	}
+	if r14 := fake.callsWithLabel("R14"); len(r14) != 1 || len(r14[0].args) != 0 {
+		t.Fatalf("R14 是一条不带实参的语句: %#v", r14)
+	}
+	mapping, err = st.ReadMergedZoneMapping(ctx)
+	if err != nil || mapping.Version != 0 || mapping.Merges == nil || len(mapping.Merges) != 0 {
+		t.Fatalf("没有映射时回空表(不是 nil): (%+v, %v)", mapping, err)
+	}
+	if _, err := st.ReadMergedZoneMapping(ctx); !errors.Is(err, ErrRouteMetaMissing) {
+		t.Fatalf("route_meta 缺行: err = %v, want ErrRouteMetaMissing", err)
+	}
+	if _, err := st.ReadMergedZoneMapping(ctx); err == nil {
+		t.Fatal("只有一边是 NULL 的行必须报错")
 	}
 }
 

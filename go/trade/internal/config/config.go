@@ -139,6 +139,10 @@ type Config struct {
 
 	// ContentGuard 是内容安全服务(go/content_guard)的调用端:人民币寄售标题在落库前先送检。
 	ContentGuard contentguard.Conf `json:"ContentGuard,optional"`
+
+	// TableDir:导表产物目录。只有 Commerce.WantedSkillBook.Enabled=true 时才读(Skill / SkillScrollCraft,经 tablebundle
+	// 两阶段加载,表包模式下跟随热更),关着时 trade 不碰任何配表。缺省值与 match / mail 相同。
+	TableDir string `json:",default=../../generated/tables"`
 }
 
 type RmbConf struct {
@@ -174,6 +178,16 @@ type CommerceConf struct {
 	// 只给本机开发与应急:缺省 false,EXECUTE 必须带后台签发的批准记录(发起人与批准人不同)。打开期间每一次不带记录的 EXECUTE
 	// 都打 ERROR 并计入 trade_manual_resolution_unapproved_execute_total,告警 TradeManualResolutionUnapprovedExecute 据此触发。
 	ManualResolutionAllowUnapproved bool `json:",optional"`
+	// WantedSkillBook:悬赏求书求购单(kind 7,docs/design/skill-book-wanted-order-trade-escrow.md §3.9),缺省关闭。
+	WantedSkillBook WantedSkillBookConf `json:",optional"`
+}
+
+// WantedSkillBookConf 是悬赏求书求购单的开关。打开它只放开 kind 7:求购单只收封卷道籍、只用流通银两,判据在
+// commerce/wanted_skill_book.go,不走 ItemConfigs / CurrencyTypes / AllowInstances 的通用白名单,所以打开它不会放开别的合同种类,
+// 也不需要把封卷道籍加进 ItemConfigs。前提:AssetOp.Enabled=true;trade 启动时按 TableDir 读 Skill 与 SkillScrollCraft
+// 两张表校验可求的技能,读不到拒绝启动(fail-closed)。关掉之后新的发榜、揭榜回「功能未开放」,已有的求购单照常推进、照常可撤。
+type WantedSkillBookConf struct {
+	Enabled bool `json:",optional"`
 }
 
 // PlayerTradeConf 是游戏内当面交易防骗配置项。
@@ -686,6 +700,14 @@ func (c *Config) Validate() error {
 		}
 		if err := c.AssetOp.validateRecovery(); err != nil {
 			return err
+		}
+	}
+	if c.Commerce.WantedSkillBook.Enabled {
+		if !c.AssetOp.Enabled {
+			return errors.New("Commerce.WantedSkillBook.Enabled=true 要求 AssetOp.Enabled=true:悬赏银两与技能书都经资产通道托管")
+		}
+		if strings.TrimSpace(c.TableDir) == "" {
+			return errors.New("Commerce.WantedSkillBook.Enabled=true 要求 TableDir:发榜要按 Skill / SkillScrollCraft 两张表校验技能")
 		}
 	}
 	if c.Rmb.Enabled {

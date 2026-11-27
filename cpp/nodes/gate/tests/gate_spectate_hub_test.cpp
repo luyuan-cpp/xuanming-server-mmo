@@ -174,6 +174,21 @@ namespace
 						 instance);
 	}
 
+	SpectateFrameEvent PrepStateFrame(uint32_t round, uint64_t deadlineMs, uint64_t battleId = kBattle,
+									  const std::string &instance = kInstance)
+	{
+		SpectateStateS2C state;
+		state.mutable_state()->set_battle_id(battleId);
+		state.mutable_state()->set_round_index(round);
+		auto *prep = state.mutable_state()->mutable_prep_state();
+		prep->set_active(true);
+		prep->set_deadline_ms(deadlineMs);
+		prep->set_duration_seconds(15);
+		state.set_observer_count(0);
+		return MakeFrame(contracts::kafka::SPECTATE_FRAME_STATE, round, kStateId, state.SerializeAsString(), battleId,
+						 instance);
+	}
+
 	SpectateFrameEvent TurnFrame(uint32_t round, uint64_t battleId = kBattle, const std::string &instance = kInstance)
 	{
 		TurnResultS2C turn;
@@ -617,6 +632,39 @@ TEST(SpectateHub, EntryOutlivesItsLastSubscriberAndKeepsCaching)
 	h.hub->Subscribe(2, HubHarness::MakeTicket());
 	ASSERT_EQ(h.sent.size(), 1u);
 	EXPECT_EQ(RoundOf(h.sent[0].content), 2u);
+}
+
+// 回归(2026-11-26):战前明牌变阵期(prep_state.active=true)已收到首帧的在看观众,变阵心跳不重复推送,
+// 变阵结束亮牌(prep_state.active true→false)时必须向全体订阅者扇出亮牌 161,之后常规心跳照常静默。
+TEST(SpectateHub, PrepFinalizeStateFansOutToLiveSubscribersWhileKeepalivesStayQuiet)
+{
+	HubHarness h;
+	h.hub->OnFrame(PrepStateFrame(1, kWallNowMs + 15'000));
+	h.hub->Subscribe(1, HubHarness::MakeTicket());
+	ASSERT_EQ(h.sent.size(), 1u);
+	EXPECT_EQ(h.sent[0].content.message_id(), kStateId);
+	SpectateStateS2C initial;
+	ASSERT_TRUE(initial.ParseFromString(h.sent[0].content.serialized_message()));
+	EXPECT_TRUE(initial.state().prep_state().active());
+	h.sent.clear();
+
+	// 变阵期内 10s 心跳:prepActive true→true,不向已在看观众重复下发
+	h.hub->OnFrame(PrepStateFrame(1, kWallNowMs + 15'000));
+	EXPECT_TRUE(h.sent.empty());
+
+	// 变阵结束亮牌(FinalizeBattlePrep):prepActive true→false,已在看会话必须收到亮牌 161
+	h.hub->OnFrame(StateFrame(1));
+	ASSERT_EQ(h.sent.size(), 1u);
+	EXPECT_EQ(h.sent[0].session, 1u);
+	EXPECT_EQ(h.sent[0].content.message_id(), kStateId);
+	SpectateStateS2C revealed;
+	ASSERT_TRUE(revealed.ParseFromString(h.sent[0].content.serialized_message()));
+	EXPECT_FALSE(revealed.state().has_prep_state());
+	h.sent.clear();
+
+	// 亮牌后的常规 10s 心跳:prepActive false→false,照常只刷新缓存、不向已在看观众推送
+	h.hub->OnFrame(StateFrame(1));
+	EXPECT_TRUE(h.sent.empty());
 }
 
 // ---- 源站失联 ----

@@ -487,6 +487,10 @@ message player_inbox_audit {
   bytes  content_sha256 = 13;  // 可由 10、12、14 复算核对
   bytes  payload        = 14;  // 条目载荷原样;v1 GM 类型 ≤ 1KiB,由单测钉住
   uint32 void_reason    = 15;  // VOID / FORCE_VOID 行为本次请求的原因;SANCTION 行为 0
+  // 16–17 是后台双人复核的批准记录(docs/design/admin-identity-and-dual-control.md §11.2),取自调用方;发起人就是 operator。
+  // 不带批准记录(只在 PlayerInbox.AdminAllowUnapproved 打开时受理)为空串。同一条目同一动作重复调用只记第一次的批准号。
+  string approval_id    = 16;
+  string approver       = 17;
 }
 ```
 

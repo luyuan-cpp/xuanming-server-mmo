@@ -948,3 +948,13 @@ J-O1至J-O4已由负责人明确采用设计默认值且允许配置：公示48�
 - `go/trade` 的 `TestTiDBRmbCancelRefusesManualContractAfterPaidDeliveryWentPartial` 追加一段：交付腿部分发放转人工之后，商城发来的退回请求回 `ErrConflict`，合同行逐字段不变。
 
 **Java 版**：独立仓的 `game-mall` 没有人工单处置入口（没有 `ManualAdmin*`，也没有 `RETURN_TO_SELLER`），这个缺陷不适用；以后补人工单处置时按本节口径做。
+
+## 17. 悬赏求书求购单(kind 7,2026-11-27 批 A 落码,未编译)
+
+完整设计、实施记录与验证命令在 [skill-book-wanted-order-trade-escrow.md](skill-book-wanted-order-trade-escrow.md)(§3 设计、§11 实施记录)。这里只记它在合同引擎里的位置,改引擎通用部分时要一起看:
+
+- 求购单是反过来的寄售:发榜人是合同的**买家**(`buyer_player_id`),揭榜人是合同的**卖家**(`seller_player_id`,只在一次揭榜进行中非 0)。角色名沿用 `buyer_debit` / `buyer_receive` / `seller_receive` / `buyer_return`,所以先买家后卖家闸(`delivery_order.go`)、退回腿判定(`leg_tx_type.go`)、人工处置的按腿通用分支都直接适用。
+- 自有阶段 `wanted_escrow` → `wanted_open` → `wanted_fill`,在 `plan` 里先进 `planWantedSkillBook`,交付与退回落到通用收尾。两处 kind 7 专有:整单退回退托管原件(全额悬赏,不是税后所得);不符的书走 `seller_return_<揭榜序号>` 退回腿。
+- 不走 `Policy.Selection / Snapshot` 的白名单:只收封卷道籍 3414、只用流通银两,判据在 `wanted_skill_book.go`;开关是 `Commerce.WantedSkillBook.Enabled`,打开它不放开别的合同种类。
+- 状态投影:挂榜中是 `status=1`(只有这一个阶段),悬赏榜按 `(kind,market_id,item_config_id,side,status,on_book,unit_price,commerce_id)` 索引查,`unit_price` 是悬赏额。
+- 人工整单退回对有过退书的 kind 7 合同 fail-closed(`refundCommon` 拒绝),处置用 reissue / resume(设计稿 §11.1 代价第 2 条);隔离手册的 kind 7 口径随部署批(批 C)写。

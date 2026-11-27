@@ -94,7 +94,8 @@ uint64_t CloseExpiredHandshakes(const SteadyTime now, const bool late)
 		}
 		const auto conn = it->second.conn.lock();
 		it = preAuthConnections.erase(it);
-		if (conn)
+		// 已经因为别的原因在关的(验签失败的延迟强关等)只摘记录,不算握手超时:关它的不是这道期限。
+		if (conn && conn->connected())
 		{
 			++tlsCounters.handshakeTimeouts;
 			LogUnauthenticatedSampled("handshake_timeout", tlsCounters.handshakeTimeouts);

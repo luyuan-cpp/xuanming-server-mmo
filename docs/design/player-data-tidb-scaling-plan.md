@@ -552,7 +552,7 @@ v1.3 的「etcd 计数器 + 时间下限」经正确性评审被否决:时钟跑
 | 玩家存档、资产、在途结算、邮件、收件箱 | 都按 `player_id` 存,与区无关,不受影响 |
 | 场景节点、gate(物理资源) | 合服不碰。在线玩家留在原节点继续玩,新登录按最终区分配 gate。源区节点的下线是运维之后单独做的排空,和合服解耦 |
 
-**接口**:`placement.MergedZones` 是一份不可变快照,`Final(z)` 沿链解析,`Members(z)` 返回最终解析到 z 的所有原始区(含 z 自己)。`placement.MergedZoneCache` 定时重读(默认 5 秒),启动读不到拒绝启动,刷新失败继续用旧值并计指标(告警 `DataServiceMergedZoneRefreshFailing`)。data_service 从 `zone_merged_into` 读,新增 RPC `GetMergedZones` 给 guild、trade;match 已有全局库连接,直接读表(2026-10-30 已落码,未编译)。
+**接口**:`placement.MergedZones` 是一份不可变快照,`Final(z)` 沿链解析,`Members(z)` 返回最终解析到 z 的所有原始区(含 z 自己)。`placement.MergedZoneCache` 定时重读(默认 5 秒),启动读不到拒绝启动,刷新失败继续用旧值并计指标(告警 `DataServiceMergedZoneRefreshFailing`)。data_service 从 `zone_merged_into` 读,新增 RPC `GetMergedZones` 给 guild、trade、match(match 原先直接读表,后来同样改走这个 RPC,`go/match/internal/svc/merged_zones.go`)。2026-11-27 起 data_service 每读到一个新版本先发布进 etcd 副本再用,第 0 片读不到时按副本回答([合服映射的 etcd 副本](merged-zone-etcd-copy.md),未编译)。
 
 **match 的口径(2026-10-30)**:票、队伍、申请、邀请、开战原件都记路由行上的原始区(所以队伍的归属改读 `player_route`,不再问 data_service,它回的是最终区)。同区判定、范围树、按区候选都按最终区算;票和投影之间的相等比较核的是抄写有没有过期,不解析。同区只在 launch 诞生时判一次:合服提交、撤销都不重判在途的票和队伍,它们走完这一局,记录和路由行始终对得上,恢复循环不会因为映射变化报错。撤销的边界见 [手册 §7](../ops/merge-zone-runbook.md)。
 
@@ -574,7 +574,7 @@ v1.3 的「etcd 计数器 + 时间下限」经正确性评审被否决:时钟跑
 
 - **解析收口**:解析规则只有一份,对外只通过 `placement.MergedZones`(`Final`、`Members`),沿链解析(5→6→7),跳数上限 16,成环报错。按区分组的调用方几乎都经 `data_service.GetPlayerHomeZone` / `BatchGetPlayerHomeZone` 取归属,所以在这两个 RPC 的出口解析:它们返回的 `home_zone_id` 就是最终区。`go/match/internal/authority` 直接读 `player_route.home_zone` 和 `zone_merged_into`,记录写原始区,比较时两边解析。
 - **原始归属这几处用,不解析**:`RegisterPlayerZone` 写入、路由工具、match 写进票和队伍记录的区(比较时才解析)。(这里原来还写着「go/db 按 `home_zone` 选库」,不对:go/db 选库只认目录里的 `storage_id`,不看 `home_zone`,见 §7.2「核对结论」。)
-- **缓存**:data_service 启动时读一次 `zone_merged_into`,读不到拒绝启动;之后定时重读(默认 5 秒)。方案里说的「变更通知加版本号」先不做:合服频率极低,只靠定时重读,滞后上限是一个周期,`merge_zone` 写完映射后等 2 个周期再跑业务合并任务。
+- **缓存**:data_service 启动时读一次 `zone_merged_into`,读不到时按 etcd 副本起,副本也没有才拒绝启动(2026-11-27,[合服映射的 etcd 副本](merged-zone-etcd-copy.md));之后定时重读(默认 5 秒)。方案里说的「变更通知加版本号」先不做:合服频率极低,只靠定时重读,滞后上限是一个周期,`merge_zone` 写完映射后等 2 个周期再跑业务合并任务。
 - **合服顺序**:前置检查 → 映射冲突检查 → 公会重名检查 → 清单落盘 → **写映射** → 等缓存 → 公会合并 → 交易合并 → 公会榜。映射先写,新建的号、新建的公会从这一刻起都归到目标区,不会有漏网的行,所以不需要任何闸门。清单仍在第一次写之前落盘,撤销靠它。
 - **删除**:`zone_merge_fence` 表、`merge:in_progress:{zone}` 键及其镜像、`GetPlayerHomeZoneResponse.home_zone_merging`、scene_manager 的可重试码 21、guild 的 `MergeFence`、`RemapHomeZoneForMerge`、`merge_zone` 的玩家映射改写、玩家行拷贝、落点钉住、回填、搬库。`LockRoleRoutes` 只锁每个玩家自己的路由行并复核 home / rev / frozen,`route_meta` 一并移出这条路径。
 - **跨集群搬迁**:按逻辑库整库搬(`tools/dbmove`,[全层水平扩展规格](./horizontal-scale-logical-db.md) §8);存档库 `player_store_<id>_db` 也是逻辑库,走同一套工具。按玩家搬(旧 relocate)不做(负责人 10-31 定),随旧表删除。
