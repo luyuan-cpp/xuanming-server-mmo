@@ -599,14 +599,14 @@ func TestManualAbortTiDBActivityConcurrentWithRecoveryAndCancel(t *testing.T) {
 	results := make(chan result, 4)
 	var wg sync.WaitGroup
 	for i := 0; i < 2; i++ {
-		replica := *s
+		replica := cloneTestStore(s)
 		wg.Add(1)
 		go func(store *Store) {
 			defer wg.Done()
 			<-start
 			_, _, err := store.ManualAbortFormation(ctx, manualRequest(battleID, view.Digest, true))
 			results <- result{true, err}
-		}(&replica)
+		}(replica)
 	}
 	wg.Add(2)
 	go func() {

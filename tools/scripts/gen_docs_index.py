@@ -32,6 +32,7 @@ PLANNING_RULES = [
         "core-gameplay-loop.md", "player-leveling-and-battle-economy-*",
         "equipment-*", "spirit-shop-*", "season-pvp-pve-economy-*",
         "activity-travel-pass-*", "skill-build-loadout-*",
+        "fair-monetization-*",
     ]),
     ("战斗、首领与限时活动玩法", [
         "battle-*", "boss-trial-*", "turn-battle-presentation.md",

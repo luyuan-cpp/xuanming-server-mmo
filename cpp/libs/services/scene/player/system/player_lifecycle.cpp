@@ -7,6 +7,7 @@
 #include "core/async/coroutine_callback.h"
 #include <boost/cobalt/task.hpp>
 #include "core/system/scene_task_scope.h"
+#include "engine/core/metrics/prometheus_text.h" // WritePlayerExitMetrics
 #include "engine/core/utils/registry/actor_log.h"
 #include "engine/core/type_define/player_guid_comp.h"
 #include "actor/actor_net_id.h"
@@ -501,8 +502,9 @@ namespace
 	}
 
 	// 断线保留的事件累计(本线程)。随每条 [ConnectionLostHold] 日志打出,联调与压测复盘按日志核对:
-	// held = resumed + expired + 被别的退出取代 + 随排空 / 疏散搬走的托管 + 仍在保留中。C++ 节点没有 Prometheus 出口
-	// (owner_epoch_stats 的注释),不另起汇总行;逐条日志的量级与原来每次断线一条退出日志相同。
+	// held = resumed + expired + 被别的退出取代 + 随排空 / 疏散搬走的托管 + 仍在保留中。
+	// 同一份计数由 WritePlayerExitMetrics 导出为 scene_connection_lost_hold_events_total{event},不另起汇总行;
+	// 逐条日志的量级与原来每次断线一条退出日志相同。
 	struct ConnectionLostHoldCounters
 	{
 		uint64_t held{0};
@@ -634,87 +636,113 @@ namespace
 	// EventLoop 上挂 30s 定时器,回调不捕获任何对象、只读进程级原子计数(AGENTS §11.7 管的是绑了对象的回调,
 	// 这里没有对象),各自有变化才打。挂在本文件而不是 RedisSystem 的快照定时器里:计数只属于本文件的退出链,
 	// 改动也只落在退出链自己的文件里。
+	// 三行的 key 与顺序各由下面一个 Visit… 给出,/metrics(WritePlayerExitMetrics)用同一个函数把 key 写成 event 标签,
+	// 两个出口不会各写一份名单。
 	constexpr double kExitPersistStatsIntervalSec = 30.0;
 
-	// [ExitRelease] 行:key=value 平铺,key 取自 exit_release_mark 的两张名表与固定项。
-	std::string FormatExitReleaseStats(const exit_release_stats::Snapshot &stats)
+	// 汇总行的追加器:每项追加 " key=value"。
+	auto AppendStatsTo(std::string &line)
 	{
-		std::string line = "[ExitRelease]";
-		const auto append = [&line](const char *key, uint64_t value)
+		return [&line](std::string_view key, uint64_t value)
 		{
 			line += ' ';
 			line += key;
 			line += '=';
 			line += std::to_string(value);
 		};
+	}
+
+	// [ExitPersist] 行的 key(计数含义见 player_lifecycle.h 的 exit_persist_stats)。
+	template <typename Emit>
+	void VisitExitPersistStats(const exit_persist_stats::Snapshot &stats, Emit &&emit)
+	{
+		emit("exit_superseded", stats.superseded);
+		emit("exit_intent_missing", stats.intentMissing);
+		emit("exit_resave", stats.resave);
+		emit("exit_resave_capped", stats.resaveExhausted);
+		emit("exit_exhausted_rekick", stats.exhaustedRekick);
+		emit("exit_fastpath_deferred", stats.fastpathDeferred);
+		emit("exit_client_msg_rejected", stats.clientMsgRejected);
+		emit("exit_deposed_on_reentry", stats.deposedOnReentry);
+	}
+
+	// [ExitRelease] 行:key=value 平铺,key 取自 exit_release_mark 的两张名表与固定项。
+	template <typename Emit>
+	void VisitExitReleaseStats(const exit_release_stats::Snapshot &stats, Emit &&emit)
+	{
 		for (std::size_t i = 0; i < stats.decisions.size(); ++i)
 		{
-			append(exit_release_mark::kExitReleaseDecisionNames[i], stats.decisions[i]);
+			emit(exit_release_mark::kExitReleaseDecisionNames[i], stats.decisions[i]);
 		}
-		append("written", stats.written);
-		append("epoch_moved", stats.epochMoved);
-		append("failed", stats.failed);
+		emit("written", stats.written);
+		emit("epoch_moved", stats.epochMoved);
+		emit("failed", stats.failed);
 		for (std::size_t i = 0; i < stats.inheritResults.size(); ++i)
 		{
-			append(exit_release_mark::kInheritClearResultNames[i], stats.inheritResults[i]);
+			emit(exit_release_mark::kInheritClearResultNames[i], stats.inheritResults[i]);
 		}
-		append("inherit_failed", stats.inheritFailed);
-		append("inherit_refused", stats.inheritRefused);
-		append("inherit_rewritten", stats.inheritRewritten);
-		append("inherit_rewrite_skipped", stats.inheritRewriteSkipped);
-		append("inherit_rewrite_failed", stats.inheritRewriteFailed);
-		append("inherit_rewrite_dropped_node_holds", stats.inheritRewriteDroppedNodeHolds);
-		append("inherit_rewrite_handed_over", stats.inheritRewriteHandedOver);
+		emit("inherit_failed", stats.inheritFailed);
+		emit("inherit_refused", stats.inheritRefused);
+		emit("inherit_rewritten", stats.inheritRewritten);
+		emit("inherit_rewrite_skipped", stats.inheritRewriteSkipped);
+		emit("inherit_rewrite_failed", stats.inheritRewriteFailed);
+		emit("inherit_rewrite_dropped_node_holds", stats.inheritRewriteDroppedNodeHolds);
+		emit("inherit_rewrite_handed_over", stats.inheritRewriteHandedOver);
 		// 2026-10-23 追加在行尾(原有 key 的位置不变):条件写返回 -2,原 H 已被轮换。
-		append("superseded", stats.superseded);
-		append("inherit_rewrite_superseded", stats.inheritRewriteSuperseded);
+		emit("superseded", stats.superseded);
+		emit("inherit_rewrite_superseded", stats.inheritRewriteSuperseded);
+	}
+
+	std::string FormatExitReleaseStats(const exit_release_stats::Snapshot &stats)
+	{
+		std::string line = "[ExitRelease]";
+		VisitExitReleaseStats(stats, AppendStatsTo(line));
 		return line;
 	}
 
 	// [RelocateConfirm] 行:key=value 平铺。数组项的 key 取自 relocate_confirm 的名表(push / credential 两组加前缀,
 	// 免得与 outcomes 里的同名项混淆),其余是固定项。顺序与原文是给 runbook 按原文 grep 的,改了要同步 runbook。
-	std::string FormatRelocateConfirmStats(const relocate_confirm_stats::Snapshot &stats)
+	template <typename Emit>
+	void VisitRelocateConfirmStats(const relocate_confirm_stats::Snapshot &stats, Emit &&emit)
 	{
-		std::string line = "[RelocateConfirm]";
-		const auto append = [&line](const std::string &key, uint64_t value)
-		{
-			line += ' ';
-			line += key;
-			line += '=';
-			line += std::to_string(value);
-		};
 		for (std::size_t i = 0; i < stats.ticketDecisions.size(); ++i)
 		{
-			append(relocate_confirm::kTicketDecisionNames[i], stats.ticketDecisions[i]);
+			emit(relocate_confirm::kTicketDecisionNames[i], stats.ticketDecisions[i]);
 		}
-		append("untracked_overflow", stats.untrackedOverflow);
-		append("cancelled_on_reentry", stats.cancelledOnReentry);
-		append("ticket_dropped_deposed", stats.ticketsDroppedDeposed);
-		append("reply_verified", stats.replyVerified);
-		append("reply_ignored", stats.replyIgnored);
-		append("transport_failed", stats.transportFailed);
-		append("not_sent", stats.notSent);
-		append("mark_write_timeout", stats.markWriteTimeout);
-		append("reply_timeout", stats.replyTimeout);
-		append("verify_deferred", stats.verifyDeferred);
-		append("settle_waits", stats.settleWaits);
+		emit("untracked_overflow", stats.untrackedOverflow);
+		emit("cancelled_on_reentry", stats.cancelledOnReentry);
+		emit("ticket_dropped_deposed", stats.ticketsDroppedDeposed);
+		emit("reply_verified", stats.replyVerified);
+		emit("reply_ignored", stats.replyIgnored);
+		emit("transport_failed", stats.transportFailed);
+		emit("not_sent", stats.notSent);
+		emit("mark_write_timeout", stats.markWriteTimeout);
+		emit("reply_timeout", stats.replyTimeout);
+		emit("verify_deferred", stats.verifyDeferred);
+		emit("settle_waits", stats.settleWaits);
 		for (std::size_t i = 0; i < stats.outcomes.size(); ++i)
 		{
-			append(relocate_confirm::kOutcomeNames[i], stats.outcomes[i]);
+			emit(relocate_confirm::kOutcomeNames[i], stats.outcomes[i]);
 		}
 		for (std::size_t i = 0; i < stats.push.size(); ++i)
 		{
-			append(std::string("push_") + relocate_confirm::kGatePushResultNames[i], stats.push[i]);
+			emit(std::string("push_") + relocate_confirm::kGatePushResultNames[i], stats.push[i]);
 		}
 		for (std::size_t i = 0; i < stats.credentialActions.size(); ++i)
 		{
-			append(std::string("credential_") + relocate_confirm::kCredentialActionNames[i], stats.credentialActions[i]);
+			emit(std::string("credential_") + relocate_confirm::kCredentialActionNames[i], stats.credentialActions[i]);
 		}
-		append("credential_written", stats.credentialWritten);
-		append("credential_epoch_moved", stats.credentialEpochMoved);
-		append("credential_failed", stats.credentialFailed);
-		append("credential_superseded", stats.credentialSuperseded); // 2026-10-23 追加在行尾
-		append("hosted_resent", stats.hostedResent);				  // 2026-11-12 追加在行尾
+		emit("credential_written", stats.credentialWritten);
+		emit("credential_epoch_moved", stats.credentialEpochMoved);
+		emit("credential_failed", stats.credentialFailed);
+		emit("credential_superseded", stats.credentialSuperseded); // 2026-10-23 追加在行尾
+		emit("hosted_resent", stats.hostedResent);				  // 2026-11-12 追加在行尾
+	}
+
+	std::string FormatRelocateConfirmStats(const relocate_confirm_stats::Snapshot &stats)
+	{
+		std::string line = "[RelocateConfirm]";
+		VisitRelocateConfirmStats(stats, AppendStatsTo(line));
 		return line;
 	}
 
@@ -754,14 +782,9 @@ namespace
 				return;
 			}
 			lastLogged = stats;
-			LOG_INFO << "[ExitPersist] exit_superseded=" << stats.superseded
-					 << " exit_intent_missing=" << stats.intentMissing
-					 << " exit_resave=" << stats.resave
-					 << " exit_resave_capped=" << stats.resaveExhausted
-					 << " exit_exhausted_rekick=" << stats.exhaustedRekick
-					 << " exit_fastpath_deferred=" << stats.fastpathDeferred
-					 << " exit_client_msg_rejected=" << stats.clientMsgRejected
-					 << " exit_deposed_on_reentry=" << stats.deposedOnReentry;
+			std::string line = "[ExitPersist]";
+			VisitExitPersistStats(stats, AppendStatsTo(line));
+			LOG_INFO << line;
 		});
 	}
 
@@ -3978,6 +4001,55 @@ namespace
 		EndHostedPlacementWatch(playerId, HostedWatchEnd::kGaveUp, hosted_placement_retry::ReadVerdictName(verdict));
 	}
 } // namespace
+
+void WritePlayerExitMetrics(prometheus_text::Writer &writer)
+{
+	using prometheus_text::MetricType;
+	const auto sampleEvent = [&writer](std::string_view key, uint64_t value) { writer.Sample({{"event", key}}, value); };
+
+	writer.BeginFamily("scene_exit_persist_events_total",
+					   "Exit save finishing events on this scene node since process start, by event "
+					   "(same keys as the [ExitPersist] summary log line).",
+					   MetricType::kCounter);
+	VisitExitPersistStats(exit_persist_stats::Read(), sampleEvent);
+	writer.BeginFamily("scene_exit_release_events_total",
+					   "Disconnect release mark (A1') and inherit clear (A2') events on this scene node since process start, by event "
+					   "(same keys as the [ExitRelease] summary log line).",
+					   MetricType::kCounter);
+	VisitExitReleaseStats(exit_release_stats::Read(), sampleEvent);
+	writer.BeginFamily("scene_relocate_confirm_events_total",
+					   "Evacuation and drain relocation confirm events on this scene node since process start, by event "
+					   "(same keys as the [RelocateConfirm] summary log line).",
+					   MetricType::kCounter);
+	VisitRelocateConfirmStats(relocate_confirm_stats::Read(), sampleEvent);
+
+	// 下面两组是本线程(scene 逻辑线程)的计数:采集回调在同一个 loop 上执行。key 与逐条日志里的 *_total 同名。
+	const auto &hold = tlsConnectionLostHoldCounters;
+	writer.BeginFamily("scene_connection_lost_hold_events_total",
+					   "Connection lost hold events on this scene node since process start, by event (same counters as the "
+					   "*_total fields of the [ConnectionLostHold] log lines).",
+					   MetricType::kCounter);
+	sampleEvent("held", hold.held);
+	sampleEvent("resumed", hold.resumed);
+	sampleEvent("expired", hold.expired);
+	sampleEvent("superseded_by_exit", hold.supersededByExit);
+	sampleEvent("exit_now", hold.exitNow);
+	sampleEvent("hosted_arrived", hold.hostedArrived);
+	sampleEvent("hosted_relocating", hold.hostedRelocating);
+
+	const auto &watch = tlsHostedPlacementRetryCounters;
+	writer.BeginFamily("scene_hosted_placement_watch_events_total",
+					   "Hosted placement watch events on this scene node since process start, by event (same counters as the "
+					   "*_total fields of the [HostedPlacementRetry] log lines).",
+					   MetricType::kCounter);
+	sampleEvent("watched", watch.watched);
+	sampleEvent("replaced", watch.replaced);
+	sampleEvent("retried", watch.retried);
+	sampleEvent("landed", watch.landed);
+	sampleEvent("resolved", watch.resolved);
+	sampleEvent("gave_up", watch.gaveUp);
+	sampleEvent("untracked", watch.untracked);
+}
 
 std::optional<PlayerEnterContext> PlayerLifecycleSystem::HostedPlacementContext(const HostedPlacement &placement)
 {

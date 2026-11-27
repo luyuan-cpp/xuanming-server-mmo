@@ -79,6 +79,11 @@
 // (warn|enforce|off,默认 warn)处理。
 class BattleClientEdge;
 
+namespace prometheus_text
+{
+class Writer;
+}
+
 class BattleRoomManager
 {
     // 单测直接驱动「Match 回了持久决定」并清房,不启动 match(房间按生产合同只由 Match 的决定收尾,DestroyBattle 删不掉);
@@ -183,6 +188,31 @@ public:
     // 本节点此刻的房间数:表里的全部房间,含停机作废后还在等 SQL 决定的(它们仍占着资源)。
     // CreateBattle 成功应答把它捎回给 match 比较负载(R6,BattleNodeImpl::HandleCreateBattle)。只在 loop 线程调用。
     uint32_t RoomCount() const { return static_cast<uint32_t>(rooms.Size()); }
+
+    // 只打采样日志的几类事件的累计(进程启动以来,只在 loop 线程读写),由 CollectMetrics 导出。
+    struct EventCounters
+    {
+        uint64_t framesDroppedNoDirect = 0;                  // metric=battle_frame_dropped_no_direct
+        uint64_t fingerprintRejected = 0;                    // metric=battle_table_fingerprint_reject(enforce,拒绝开局)
+        uint64_t fingerprintContinued = 0;                   // metric=battle_table_fingerprint_mismatch(warn,照常开局)
+        uint64_t observerSeatsReclaimedConnectTimeout = 0;   // metric=battle_observer_seat_reclaimed cause=connect_timeout
+        uint64_t observerSeatsReclaimedReconnectTimeout = 0; // metric=battle_observer_seat_reclaimed cause=reconnect_timeout
+    };
+
+    // 本节点的房间与事件计数写成 Prometheus 指标(2026-11-27 起导出,原来只有采样日志与滞留提醒行):
+    //   battle_rooms                                      gauge,本节点房间数(RoomCount,滞留提醒行的 node_rooms)
+    //   battle_sql_outcome_stuck_rooms                    gauge,SQL 终局迟迟没有决定的房间(滞留提醒行的 sql_unconfirmed)
+    //   battle_frames_dropped_no_direct_total             counter,战斗帧因玩家没有活直连被丢弃
+    //   battle_table_fingerprint_mismatches_total{result} counter,配表指纹不一致:rejected(enforce)/ continued(warn)
+    //   battle_observer_seats_reclaimed_total{cause}      counter,观众席到期回收:connect_timeout / reconnect_timeout
+    //   battle_spectate_frames_not_sent_total             counter,观战中继 / 广播帧没交给 Kafka 生产者
+    //                                                     (SpectateFramePublisher::SendFailures;入队后投递失败的归 cpp_node_kafka_producer_*)
+    // 每项进程一启动就以 0 导出;标签只有封闭的枚举,battle_id / player_id / observer 只在日志里(AGENTS.md §9)。只在 loop 线程调用。
+    // 滞留房间的告警在 deploy/k8s/battle-settlement-alerts.yaml(BattleSqlOutcomeRoomsStuck)。
+    void CollectMetrics(prometheus_text::Writer &writer) const;
+    // battle 启动时调一次(main.cpp),把 CollectMetrics 登记进进程的指标注册表;回调只绑 WeakSelf()(AGENTS.md §11.7)。
+    // 重复登记只打一行 ERROR。
+    void RegisterMetrics();
 
     // 房间还在就什么都不做:房间只由 Match 的持久决定收尾(COMPLETE / ABORT),过期的补偿不能把一局在打的房间作废。
     // 房间不存在时幂等成功;带放置操作的请求同时立一条操作墓碑,挡住同 battle_id 迟到的 CreateBattle。
@@ -323,8 +353,9 @@ public:
     // ---- 滞留房间提醒 ----
     //
     // 每 kStuckRoomReportIntervalSec 秒从房间表数一遍 SQL 终局迟迟没有决定的房间(ReportStuckOutcomeRooms),
-    // 不为 0 时打 metric=battle_personal_settlement_staging_exhausted_rooms sql_unconfirmed= stuck_total= node_rooms=。
-    // battle 进程没有 Prometheus 端点,这一行就是唯一信号(值班 LogQL 登记在 deploy/k8s/asset-channel-alerts.yaml)。
+    // 不为 0 时打 metric=battle_personal_settlement_staging_exhausted_rooms sql_unconfirmed= stuck_total= node_rooms=,
+    // 正文列出 battle_id 供排查。同一判据经 CollectMetrics 导出为 battle_sql_outcome_stuck_rooms(抓取时现数),
+    // 告警读指标(deploy/k8s/battle-settlement-alerts.yaml 的 BattleSqlOutcomeRoomsStuck,2026-11-27 起取代原来的 LogQL 值班查询)。
     static constexpr double kStuckRoomReportIntervalSec = 60.0;
 
     // ---- 观众席上限与回收(设计文档 §10.5)----
@@ -565,6 +596,8 @@ private:
     // 战报录制:拷一份观众版帧(RedactStateForViewer(state, 0))交给录制器;不录的房间直接返回。
     void RecordReplayRound(BattleRoom& room, const ::TurnResultS2C& result) const;
     static bool TerminalPending(const BattleRoom& room) { return room.outcomePending; }
+    // SQL 终局迟迟没有决定、房间滞留(滞留提醒行与 battle_sql_outcome_stuck_rooms 共用这一判据)。
+    static bool OutcomeStuck(const BattleRoom& room) { return room.outcomePending && room.outcomeExhausted; }
     // 逐局重放待提交终局(sqlOutcomeTimer_ 每秒一拍;BeginResultCommit / BeginRoomShutdown 也立即调一次)。
     // 每拍先按冻结时长推进全部房间的重放阶段(越界 / 放弃,与能不能发无关),再发这一拍到期的局:READY 的 match 副本
     // 只挑一次,至多发 sqlOutcomeSendsPerPump_ 局、最早到期的先发(停机排空窗口内不设上限)。
@@ -695,8 +728,8 @@ private:
     // 该玩家在房间里已验证、仍 connected 的直连;没有 / 已断 / 未装配直连面时返回空。
     muduo::net::TcpConnectionPtr LiveDirectConnOf(const BattleRoom &room, uint64_t playerId) const;
 
-    // 战斗帧出口:只走直连。无活直连即丢弃,打按 messageId 采样的
-    // LOG_INFO metric=battle_frame_dropped_no_direct(battle 无 Prometheus,采样防日志放大);
+    // 战斗帧出口:只走直连。无活直连即丢弃,计 battle_frames_dropped_no_direct_total(CollectMetrics),并打按 messageId 采样的
+    // LOG_INFO metric=battle_frame_dropped_no_direct(采样防日志放大,准确总数看指标);
     // 客户端直连就绪后 GetBattleState 补拉。用于 TurnResult / BattleEnd / SpectateState /
     // SpectateTurnResult / SpectateEnd 及直连建立后的一切战斗推送。
     // const:PushSpectateState 是 const 方法。
@@ -816,6 +849,8 @@ private:
     std::function<SqlOutcomeSend()> sqlOutcomeRoute;
     // 滞留房间提醒(EnsureStuckRoomReporter);装填后常驻。
     TimerTaskComp stuckRoomReportTimer;
+    // 事件累计(EventCounters)。mutable:战斗帧出口(PushBattleFrame / BattleFrameConnOf)是 const 方法,丢帧也要计数。
+    mutable EventCounters eventCounters;
 
     // WeakSelf() 的存活令牌。声明在最后 = 最先析构:析构期间任何迟到回调都已 lock 不到本对象。
     std::shared_ptr<char> lifeToken = std::make_shared<char>();

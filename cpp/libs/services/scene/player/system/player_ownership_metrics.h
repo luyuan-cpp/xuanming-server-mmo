@@ -12,8 +12,12 @@
 //   scene_owner_epoch_events_total{event}      counter,event 取 owner_epoch_stats::kFields 的 key
 //   scene_player_store_save_refused_total{result} counter,result 取 player_store_refused_stats::kCounterNames
 //                                              (存盘最终被确定性拒绝;发送前就被拒的超限存盘只在这里看得到)
+//   scene_persist_schema_regression_rejected_total counter,go/db 判定持久 schema 世代倒退而拒写的次数
+//                                              (persist_schema_stats;2026-11-27 起,原来只有 [PersistSchema] 日志)
+//   退出收尾与断线保留的五族(scene_exit_persist_events_total 等,2026-11-27 起),定义与 key 见 player_lifecycle.h 的
+//   WritePlayerExitMetrics
 // 计数本身不变(relaxed 原子 + 30s 汇总日志),这里只是第二个读者,字段名与汇总行同一份字段表。
 //
-// 采集回调在 Node 的 EventLoop(即 scene 逻辑线程)上执行,读 tlsEcs 的冻结组件是安全的。
+// 采集回调在 Node 的 EventLoop(即 scene 逻辑线程)上执行,读 tlsEcs 的冻结组件与断线保留的本线程计数是安全的。
 // scene 启动时调用一次;重复调用不会重复登记(注册表按名字拒绝),只打一行 ERROR。
 void RegisterPlayerOwnershipMetrics();

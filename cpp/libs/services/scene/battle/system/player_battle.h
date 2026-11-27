@@ -64,6 +64,10 @@ namespace battle_freeze_hold
 	enum class TerminalAnswer : uint8_t;
 	enum class FreezeHoldEvent : uint8_t;
 }
+namespace prometheus_text
+{
+	class Writer;
+}
 
 // 消息定义在 proto/scene/scene.proto(无 package → 全局命名空间),
 // muduo Scene 服务与 SceneNodeGrpc 控制面共享同一份类型。
@@ -243,8 +247,13 @@ public:
 	// 越过续冻上限的那一拍直接解冻,不再查询、也不等在途的查询,所以任何路径(含查询丢失)的解冻都不晚于越过上限后的
 	// 第一拍,早于按 FreezeHoldDeadlineMs + kLockExtraTtlSec 写的锁过期(player_battle.cpp 里 static_assert)。
 	static constexpr uint32_t kTerminalQueryDeadlineMs = 6000;
-	// 续冻事件的进程内累计次数(进程启动以来,不清零;relaxed 原子)。只读;单测与排障用,告警看同名结构化日志。
+	// reaper 事件的进程内累计次数(进程启动以来,不清零;relaxed 原子)。只读,单测用;值班看下面导出的指标。
 	static uint64_t FreezeHoldEventCount(battle_freeze_hold::FreezeHoldEvent event);
+	// 同一份计数写成 scene_battle_freeze_events_total{event}(event 取 battle_freeze_hold::kFreezeHoldEventNames),
+	// 每项进程一启动就以 0 导出。只读原子,不碰 ECS。告警在 deploy/k8s/battle-settlement-alerts.yaml。
+	static void WriteBattleFreezeMetrics(prometheus_text::Writer& writer);
+	// scene 启动时调一次,把 WriteBattleFreezeMetrics 登记进进程的指标注册表;重复登记只打一行 ERROR。
+	static void RegisterMetrics();
 
 	// 条件删锁命令的发送注入点。生产恒为空:走 tlsPlayerRedis 发条件删锁脚本。
 	// 单测注入后,删锁在判 Redis 可用之前优先交给它:返回 true = 已接管,回包由调用方经 onReply 回灌 —— 进的是与生产

@@ -39,7 +39,8 @@ namespace
 	thread_local AfkPassSystem::ProjectionSender tlsProjectionSenderForTest;
 	thread_local bool tlsProjectionFailForTest = false;
 
-	// 本线程投影写失败的累计,随每条失败日志打出(C++ 节点没有 Prometheus 出口,口径同托管在场心跳)。
+	// 本线程投影写失败的累计,随每条失败日志打出,也经 ProjectionFailures 导出(scene_afk_pass_projection_failures_total,
+	// 写法见 afk_hosting.h 的 WriteMetrics)。
 	thread_local uint64_t tlsProjectionFailures = 0;
 
 	// 规则表第一行。表空或取值不合法返回 false,problem 是原因(只进日志)。
@@ -590,4 +591,9 @@ void AfkPassSystem::SetProjectionSenderForTest(ProjectionSender sender)
 void AfkPassSystem::SetProjectionFailForTest(bool fail)
 {
 	tlsProjectionFailForTest = fail;
+}
+
+uint64_t AfkPassSystem::ProjectionFailures()
+{
+	return tlsProjectionFailures;
 }

@@ -141,10 +141,10 @@ func TestStartedFormationTiDBNoResultLeavesOnlyThroughSQLAbortAfterDeadline(t *t
 
 	// 权威截止已过：两个副本同时巡检，只有一方提交 ABORT。
 	expireStartedFormation(t, s, battleID)
-	replica := *s
+	replica := cloneTestStore(s)
 	start := make(chan struct{})
 	results := make(chan error, 2)
-	for _, store := range []*Store{s, &replica} {
+	for _, store := range []*Store{s, replica} {
 		go func(store *Store) {
 			<-start
 			_, _, err := store.RecoverExpiredOutcomes(ctx, 0, 0)
@@ -198,14 +198,14 @@ func TestStartedActivityFormationTiDBCancelSignsAbortOnlyAfterDeadline(t *testin
 
 	// 权威截止已过：两个 guild 副本同时取消，同一主键上只提交一份 ABORT，两份回执都证明 ABORT。
 	expireStartedFormation(t, s, battleID)
-	replica := *s
+	replica := cloneTestStore(s)
 	start := make(chan struct{})
 	type reply struct {
 		receipt *pb.CancelActivityBattleResponse
 		err     error
 	}
 	replies := make(chan reply, 2)
-	for _, store := range []*Store{s, &replica} {
+	for _, store := range []*Store{s, replica} {
 		go func(store *Store) {
 			<-start
 			receipt, err := store.CancelActivity(ctx, key, body)
@@ -294,10 +294,10 @@ func TestTerminalTiDBCommittedOutcomeIsDeliveredByOneReplicaPerLease(t *testing.
 		published = append(published, append([]byte(nil), raw...))
 		return nil
 	}
-	replica := *s
+	replica := cloneTestStore(s)
 	start := make(chan struct{})
 	results := make(chan error, 2)
-	for _, store := range []*Store{s, &replica} {
+	for _, store := range []*Store{s, replica} {
 		go func(store *Store) {
 			<-start
 			results <- store.PublishBattleOutcomesOnce(ctx, resolve, terminalFixtureSecret, publish)

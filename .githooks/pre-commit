@@ -1,5 +1,5 @@
 #!/bin/sh
-# 提交前门禁：仅检查暂存区中改动的 C++ 源码是否声明了裸指针成员（与 CI 规则一致）。
+# 提交前门禁：仅检查暂存区中改动的 C++ 源码（裸指针成员 + 异步回调捕获，与 CI 规则一致）。
 set -eu
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -10,11 +10,14 @@ if [ -z "$STAGED_CPP" ]; then
     exit 0
 fi
 
-CHECKER="$REPO_ROOT/tools/scripts/tests/test_cpp_no_raw_pointer_member.py"
-if [ ! -f "$CHECKER" ]; then
-    echo "[pre-commit] ERROR: checker script not found: $CHECKER" >&2
-    exit 1
-fi
+RAW_PTR_CHECKER="$REPO_ROOT/tools/scripts/tests/test_cpp_no_raw_pointer_member.py"
+ASYNC_CB_CHECKER="$REPO_ROOT/tools/scripts/tests/test_cpp_async_callback_capture.py"
+for checker in "$RAW_PTR_CHECKER" "$ASYNC_CB_CHECKER"; do
+    if [ ! -f "$checker" ]; then
+        echo "[pre-commit] ERROR: checker script not found: $checker" >&2
+        exit 1
+    fi
+done
 
 PYTHON_CMD=""
 for candidate in python python3; do
@@ -24,11 +27,21 @@ for candidate in python python3; do
     fi
 done
 
-if [ -n "$PYTHON_CMD" ]; then
-    exec "$PYTHON_CMD" -X utf8 -B "$CHECKER" --staged
-elif command -v py >/dev/null 2>&1 && py -3 -c "import sys; sys.exit(0)" >/dev/null 2>&1; then
-    exec py -3 -X utf8 -B "$CHECKER" --staged
-else
-    echo "[pre-commit] ERROR: Python 3 not found; cannot run no-raw-pointer-member check." >&2
-    exit 1
-fi
+run_checker() {
+    if [ -n "$PYTHON_CMD" ]; then
+        "$PYTHON_CMD" -X utf8 -B "$1" --staged
+    elif command -v py >/dev/null 2>&1 && py -3 -c "import sys; sys.exit(0)" >/dev/null 2>&1; then
+        py -3 -X utf8 -B "$1" --staged
+    else
+        echo "[pre-commit] ERROR: Python 3 not found; cannot run C++ static checks." >&2
+        return 1
+    fi
+}
+
+STATUS=0
+for checker in "$RAW_PTR_CHECKER" "$ASYNC_CB_CHECKER"; do
+    if ! run_checker "$checker"; then
+        STATUS=1
+    fi
+done
+exit "$STATUS"

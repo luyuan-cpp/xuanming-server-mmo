@@ -68,8 +68,6 @@ type ClientRequestRecord struct {
 	SealedBookItemId             uint64 `protobuf:"varint,37,opt,name=sealed_book_item_id,json=sealedBookItemId,proto3" json:"sealed_book_item_id,omitempty"`                                         // 技能书封卷入包：首次产出的 3414 封卷道籍背包实例 ID。
 	EquipmentPolishAttemptsUsed  uint32 `protobuf:"varint,38,opt,name=equipment_polish_attempts_used,json=equipmentPolishAttemptsUsed,proto3" json:"equipment_polish_attempts_used,omitempty"`        // V3 装备智能定档连磨：首次实际消耗打磨手数（1..8）。
 	EquipmentActualGoldSpent     uint64 `protobuf:"varint,39,opt,name=equipment_actual_gold_spent,json=equipmentActualGoldSpent,proto3" json:"equipment_actual_gold_spent,omitempty"`                 // V3 装备智能定档连磨：首次实际扣除银两（含代打费）。
-	WantedOrderId                uint64 `protobuf:"varint,40,opt,name=wanted_order_id,json=wantedOrderId,proto3" json:"wanted_order_id,omitempty"`                                                    // V5 西市悬赏求书：首次发榜/撤单/揭榜对应的悬赏单号。
-	WantedOrderGold              uint64 `protobuf:"varint,41,opt,name=wanted_order_gold,json=wantedOrderGold,proto3" json:"wanted_order_gold,omitempty"`                                              // V5 西市悬赏求书：首次托管、全额退还或揭榜净结算银两。
 	SkillLoadoutRentedSlots      uint32 `protobuf:"varint,42,opt,name=skill_loadout_rented_slots,json=skillLoadoutRentedSlots,proto3" json:"skill_loadout_rented_slots,omitempty"`                    // 7 套流派方案槽位租用：首次操作后的租用额外套数（1..5）。
 	SkillLoadoutRentExpiresAtSec uint64 `protobuf:"varint,43,opt,name=skill_loadout_rent_expires_at_sec,json=skillLoadoutRentExpiresAtSec,proto3" json:"skill_loadout_rent_expires_at_sec,omitempty"` // 7 套流派方案槽位租用：首次操作后的统一到期 Unix 秒。
 	SkillLoadoutRentSpentDiamond uint64 `protobuf:"varint,44,opt,name=skill_loadout_rent_spent_diamond,json=skillLoadoutRentSpentDiamond,proto3" json:"skill_loadout_rent_spent_diamond,omitempty"`   // 7 套流派方案槽位租用：首次实际扣除的真实灵石数。
@@ -376,20 +374,6 @@ func (x *ClientRequestRecord) GetEquipmentPolishAttemptsUsed() uint32 {
 func (x *ClientRequestRecord) GetEquipmentActualGoldSpent() uint64 {
 	if x != nil {
 		return x.EquipmentActualGoldSpent
-	}
-	return 0
-}
-
-func (x *ClientRequestRecord) GetWantedOrderId() uint64 {
-	if x != nil {
-		return x.WantedOrderId
-	}
-	return 0
-}
-
-func (x *ClientRequestRecord) GetWantedOrderGold() uint64 {
-	if x != nil {
-		return x.WantedOrderGold
 	}
 	return 0
 }
@@ -818,7 +802,7 @@ var File_proto_common_component_client_request_ledger_comp_proto protoreflect.Fi
 
 const file_proto_common_component_client_request_ledger_comp_proto_rawDesc = "" +
 	"\n" +
-	"7proto/common/component/client_request_ledger_comp.proto\"\x9d\x12\n" +
+	"7proto/common/component/client_request_ledger_comp.proto\"\xd5\x11\n" +
 	"\x13ClientRequestRecord\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\rR\x04kind\x12 \n" +
@@ -859,12 +843,10 @@ const file_proto_common_component_client_request_ledger_comp_proto_rawDesc = "" 
 	"\x12rewarded_ad_amount\x18$ \x01(\x04R\x10rewardedAdAmount\x12-\n" +
 	"\x13sealed_book_item_id\x18% \x01(\x04R\x10sealedBookItemId\x12C\n" +
 	"\x1eequipment_polish_attempts_used\x18& \x01(\rR\x1bequipmentPolishAttemptsUsed\x12=\n" +
-	"\x1bequipment_actual_gold_spent\x18' \x01(\x04R\x18equipmentActualGoldSpent\x12&\n" +
-	"\x0fwanted_order_id\x18( \x01(\x04R\rwantedOrderId\x12*\n" +
-	"\x11wanted_order_gold\x18) \x01(\x04R\x0fwantedOrderGold\x12;\n" +
+	"\x1bequipment_actual_gold_spent\x18' \x01(\x04R\x18equipmentActualGoldSpent\x12;\n" +
 	"\x1askill_loadout_rented_slots\x18* \x01(\rR\x17skillLoadoutRentedSlots\x12G\n" +
 	"!skill_loadout_rent_expires_at_sec\x18+ \x01(\x04R\x1cskillLoadoutRentExpiresAtSec\x12F\n" +
-	" skill_loadout_rent_spent_diamond\x18, \x01(\x04R\x1cskillLoadoutRentSpentDiamond\"\xa6\x04\n" +
+	" skill_loadout_rent_spent_diamond\x18, \x01(\x04R\x1cskillLoadoutRentSpentDiamondJ\x04\b(\x10)J\x04\b)\x10*\"\xa6\x04\n" +
 	"\x1dEquipmentMaterialRewardLedger\x12'\n" +
 	"\x10day_starts_at_ms\x18\x01 \x01(\x04R\rdayStartsAtMs\x12!\n" +
 	"\fearned_today\x18\x02 \x01(\rR\vearnedToday\x12'\n" +

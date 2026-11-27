@@ -1008,7 +1008,7 @@ TEST_F(PlayerCraftQualityTest, SealAndUnsealSkillBookPreserveIdentitySignatureBo
     EXPECT_EQ(kInvalidParameter, resealResp.error_message().id());
 }
 
-TEST(EquipCraftQualityRulesTest, V2ToV5PureRulesTitlesBitsAndWantedBounds) {
+TEST(EquipCraftQualityRulesTest, V2TitlesAndV4MilestoneBitsPureRules) {
     // V2 零属性雅号解锁门槛与署名格式化
     EXPECT_FALSE(equipcraft::IsCraftTitleUnlocked(1, 59, 0, 0, 0, 0));
     EXPECT_TRUE(equipcraft::IsCraftTitleUnlocked(1, 60, 0, 0, 0, 0));
@@ -1028,12 +1028,6 @@ TEST(EquipCraftQualityRulesTest, V2ToV5PureRulesTitlesBitsAndWantedBounds) {
     EXPECT_TRUE(equipcraft::HasBit(bits, 4));
     EXPECT_TRUE(equipcraft::HasBit(bits, 15)); // 高位未知 bit 原样保留
     EXPECT_FALSE(equipcraft::HasBit(bits, 5));
-
-    // V5 悬赏银两边界
-    EXPECT_FALSE(equipcraft::ValidWantedOrderGold(99));
-    EXPECT_TRUE(equipcraft::ValidWantedOrderGold(100));
-    EXPECT_TRUE(equipcraft::ValidWantedOrderGold(50000));
-    EXPECT_FALSE(equipcraft::ValidWantedOrderGold(50001));
 }
 
 TEST_F(PlayerCraftQualityTest, V2MasterReputationTitlesShowcaseTagAndFormattedSignature) {
@@ -1340,7 +1334,7 @@ TEST_F(PlayerCraftQualityTest, V4ScrollMilestonesAndBatchDismantleGuardDuplicate
     EXPECT_EQ(108u, InventoryOf(buyer).GetTotalItemCount(equipcraft::kScrollFragmentConfigId));
 }
 
-TEST_F(PlayerCraftQualityTest, V5TeamFreeProxyAndWantedOrderEscrowFulfillmentGuardBindAndSignature) {
+TEST_F(PlayerCraftQualityTest, V5TeamFreeProxyChargesTeammatesZeroCraftFee) {
     // 1. 同队情义 0 费原子代打/代制
     auto& masterCraft = tlsEcs.actorRegistry.get<PlayerCraftComp>(master);
     masterCraft.set_forge_mastery_exp(60);
@@ -1389,125 +1383,6 @@ TEST_F(PlayerCraftQualityTest, V5TeamFreeProxyAndWantedOrderEscrowFulfillmentGua
     EXPECT_EQ(masterGoldBefore, CurrencySystem::GetBalance(master, kCurrencyGold));
     EXPECT_EQ("欧冶子", proxyResp.crafted_book().crafter_name());
     EXPECT_EQ(1u, masterCraft.proxy_orders_completed());
-
-    // 2. 西市悬赏求书板：发榜、防绑定银两洗白、撤单全退、禁自揭、验署名、揭榜交卷(书架+背包封卷双源)
-    // 给 master 发榜 2 条求书单（第 1 条不限署名 1000 银两；第 2 条要求宗师署名 1000 银两）
-    tlsEcs.actorRegistry.get<CurrencyComp>(master).set_values(kCurrencyGold, 3000);
-    PostSkillBookWantedOrderRequest post1;
-    post1.set_skill_table_id(12020);
-    post1.set_require_master_signature(false);
-    post1.set_reward_gold(1000);
-    post1.set_expected_revision(0);
-    post1.set_client_request_id(++nextKey);
-    PostSkillBookWantedOrderResponse post1Resp;
-    PlayerCraftSystem::PostWantedOrder(master, post1, post1Resp);
-    ASSERT_FALSE(post1Resp.has_error_message()) << post1Resp.DebugString();
-    EXPECT_EQ(2000u, CurrencySystem::GetBalance(master, kCurrencyGold));
-    EXPECT_EQ(950u, post1Resp.order().seller_net_gold()); // 5% 税
-
-    // 撤单全额退还 1000 银两 + 幂等重放
-    CancelSkillBookWantedOrderRequest cancel1;
-    cancel1.set_order_id(post1Resp.order().order_id());
-    cancel1.set_expected_revision(1);
-    cancel1.set_client_request_id(++nextKey);
-    CancelSkillBookWantedOrderResponse cancel1Resp;
-    PlayerCraftSystem::CancelWantedOrder(master, cancel1, cancel1Resp);
-    ASSERT_FALSE(cancel1Resp.has_error_message()) << cancel1Resp.DebugString();
-    EXPECT_EQ(1000u, cancel1Resp.refunded_gold());
-    EXPECT_EQ(3000u, CurrencySystem::GetBalance(master, kCurrencyGold));
-    CancelSkillBookWantedOrderResponse cancel1Replay;
-    PlayerCraftSystem::CancelWantedOrder(master, cancel1, cancel1Replay);
-    EXPECT_TRUE(cancel1Replay.replayed());
-    EXPECT_EQ(3000u, CurrencySystem::GetBalance(master, kCurrencyGold));
-
-    // 发榜要求宗师署名求 12020（1000 银两）
-    PostSkillBookWantedOrderRequest postSig;
-    postSig.set_skill_table_id(12020);
-    postSig.set_require_master_signature(true);
-    postSig.set_reward_gold(1000);
-    postSig.set_expected_revision(2);
-    postSig.set_client_request_id(++nextKey);
-    PostSkillBookWantedOrderResponse postSigResp;
-    PlayerCraftSystem::PostWantedOrder(master, postSig, postSigResp);
-    ASSERT_FALSE(postSigResp.has_error_message()) << postSigResp.DebugString();
-
-    // 列表查询能看到该单
-    ListSkillBookWantedOrdersRequest listWantedReq;
-    listWantedReq.set_filter_skill_table_id(12020);
-    ListSkillBookWantedOrdersResponse listWantedResp;
-    PlayerCraftSystem::ListWantedOrders(buyer, listWantedReq, listWantedResp);
-    ASSERT_EQ(1, listWantedResp.orders_size());
-    EXPECT_EQ(postSigResp.order().order_id(), listWantedResp.orders(0).order_id());
-
-    // 禁止自己揭自己的榜
-    {
-        FulfillSkillBookWantedOrderRequest selfFulfill;
-        selfFulfill.set_poster_player_id(kMasterId);
-        selfFulfill.set_order_id(postSigResp.order().order_id());
-        selfFulfill.set_bookshelf_book_id(1);
-        selfFulfill.set_expected_revision(3);
-        selfFulfill.set_client_request_id(++nextKey);
-        FulfillSkillBookWantedOrderResponse resp;
-        PlayerCraftSystem::FulfillWantedOrder(master, selfFulfill, resp);
-        EXPECT_TRUE(resp.has_error_message());
-        EXPECT_EQ(kInvalidParameter, resp.error_message().id());
-    }
-
-    // 禁止用无署名常规书揭要求署名的榜
-    auto& buyerCraft = tlsEcs.actorRegistry.get<PlayerCraftComp>(buyer);
-    auto* unsignedBook = buyerCraft.add_skill_books();
-    unsignedBook->set_book_id(999);
-    unsignedBook->set_skill_table_id(12020);
-    unsignedBook->set_scroll_id(3);
-    unsignedBook->set_rarity_tier(0);
-    unsignedBook->set_bound(false);
-    {
-        FulfillSkillBookWantedOrderRequest badUnsigned;
-        badUnsigned.set_poster_player_id(kMasterId);
-        badUnsigned.set_order_id(postSigResp.order().order_id());
-        badUnsigned.set_bookshelf_book_id(999);
-        badUnsigned.set_expected_revision(1);
-        badUnsigned.set_client_request_id(++nextKey);
-        FulfillSkillBookWantedOrderResponse resp;
-        PlayerCraftSystem::FulfillWantedOrder(buyer, badUnsigned, resp);
-        EXPECT_TRUE(resp.has_error_message());
-        EXPECT_EQ(kInvalidParameter, resp.error_message().id());
-    }
-
-    // 把刚才宗师代制的带署名 12020 书先封卷入包(3414)，再用背包封卷一键揭榜交卷 -> 卖家得 950 净银两，买家书架收到带署名未绑书！
-    SealSkillBookRequest sealReq;
-    sealReq.set_book_id(proxyResp.crafted_book().book_id());
-    sealReq.set_expected_revision(1);
-    sealReq.set_client_request_id(++nextKey);
-    SealSkillBookResponse sealResp;
-    PlayerCraftSystem::SealSkillBook(buyer, sealReq, sealResp);
-    ASSERT_FALSE(sealResp.has_error_message()) << sealResp.DebugString();
-
-    const uint64_t sellerGoldBeforeFulfill = CurrencySystem::GetBalance(buyer, kCurrencyGold);
-    FulfillSkillBookWantedOrderRequest fulfillReq;
-    fulfillReq.set_poster_player_id(kMasterId);
-    fulfillReq.set_order_id(postSigResp.order().order_id());
-    fulfillReq.set_sealed_item_id(sealResp.item_id());
-    fulfillReq.set_expected_revision(2);
-    fulfillReq.set_client_request_id(++nextKey);
-    FulfillSkillBookWantedOrderResponse fulfillResp;
-    PlayerCraftSystem::FulfillWantedOrder(buyer, fulfillReq, fulfillResp);
-    ASSERT_FALSE(fulfillResp.has_error_message()) << fulfillResp.DebugString();
-    EXPECT_EQ(950u, fulfillResp.seller_net_gold());
-    EXPECT_EQ(sellerGoldBeforeFulfill + 950u, CurrencySystem::GetBalance(buyer, kCurrencyGold));
-    EXPECT_EQ(0u, InventoryOf(buyer).GetTotalItemCount(equipcraft::kSealedSkillBookConfigId));
-    EXPECT_EQ(0, masterCraft.wanted_orders_size());
-    ASSERT_EQ(1, masterCraft.skill_books_size());
-    EXPECT_EQ(12020u, masterCraft.skill_books(0).skill_table_id());
-    EXPECT_EQ("欧冶子", masterCraft.skill_books(0).crafter_name());
-    EXPECT_FALSE(masterCraft.skill_books(0).bound());
-
-    // 揭榜幂等重放：不重复发银两
-    FulfillSkillBookWantedOrderResponse fulfillReplay;
-    PlayerCraftSystem::FulfillWantedOrder(buyer, fulfillReq, fulfillReplay);
-    ASSERT_FALSE(fulfillReplay.has_error_message());
-    EXPECT_TRUE(fulfillReplay.replayed());
-    EXPECT_EQ(sellerGoldBeforeFulfill + 950u, CurrencySystem::GetBalance(buyer, kCurrencyGold));
 }
 
 TEST_F(PlayerCraftQualityTest, CrossNodeAndOfflineMasterProxyCraftRollsSignatureAndPaysOutAsyncViaAssetOp) {
@@ -1917,8 +1792,8 @@ TEST_F(PlayerCraftQualityTest, ProxyReputationDrainTakesAtomicallyAndGivesBackWh
     EXPECT_EQ(0, reputationCounters[orders]);
 }
 
-// r2-craft#2:未学书架有上界。满了制书、开卷都拒绝且不动材料与银两;揭榜时发榜人书架满,拒绝这次交付,腾出位置后可再揭。
-TEST_F(PlayerCraftQualityTest, BookshelfCapRejectsCraftUnsealAndFulfillWithoutSideEffects) {
+// r2-craft#2:未学书架有上界。满了制书、开卷都拒绝且不动材料与银两(悬赏揭榜已迁 trade,不再往书架加书)。
+TEST_F(PlayerCraftQualityTest, BookshelfCapRejectsCraftAndUnsealWithoutSideEffects) {
     auto fillShelf = [](PlayerCraftComp& craft, uint64_t firstBookId) {
         while (static_cast<uint32_t>(craft.skill_books_size()) < equipcraft::kMaxBookshelfBooks) {
             auto* book = craft.add_skill_books();
@@ -1972,45 +1847,6 @@ TEST_F(PlayerCraftQualityTest, BookshelfCapRejectsCraftUnsealAndFulfillWithoutSi
     EXPECT_EQ(static_cast<uint32_t>(kSkillBookshelfFull), unsealResp.error_message().id());
     EXPECT_EQ(1u, InventoryOf(buyer).GetTotalItemCount(equipcraft::kSealedSkillBookConfigId));
     EXPECT_EQ(static_cast<int>(equipcraft::kMaxBookshelfBooks), buyerCraft.skill_books_size());
-
-    // 3. 揭榜:发榜人书架满,拒绝这次交付;卖家的封卷与银两、发榜人的悬赏单都不动。
-    auto& masterCraft = tlsEcs.actorRegistry.get<PlayerCraftComp>(master);
-    tlsEcs.actorRegistry.get<CurrencyComp>(master).set_values(kCurrencyGold, 3000);
-    PostSkillBookWantedOrderRequest postReq;
-    postReq.set_skill_table_id(12020);
-    postReq.set_reward_gold(1000);
-    postReq.set_expected_revision(0);
-    postReq.set_client_request_id(++nextKey);
-    PostSkillBookWantedOrderResponse postResp;
-    PlayerCraftSystem::PostWantedOrder(master, postReq, postResp);
-    ASSERT_FALSE(postResp.has_error_message()) << postResp.DebugString();
-    fillShelf(masterCraft, 5000);
-    masterCraft.set_next_book_seq(6000);
-
-    FulfillSkillBookWantedOrderRequest fulfillReq;
-    fulfillReq.set_poster_player_id(kMasterId);
-    fulfillReq.set_order_id(postResp.order().order_id());
-    fulfillReq.set_sealed_item_id(sealResp.item_id());
-    fulfillReq.set_expected_revision(1);
-    fulfillReq.set_client_request_id(++nextKey);
-    FulfillSkillBookWantedOrderResponse fulfillResp;
-    PlayerCraftSystem::FulfillWantedOrder(buyer, fulfillReq, fulfillResp);
-    ASSERT_TRUE(fulfillResp.has_error_message());
-    EXPECT_EQ(static_cast<uint32_t>(kSkillWantedPosterBookshelfFull), fulfillResp.error_message().id());
-    EXPECT_EQ(1u, InventoryOf(buyer).GetTotalItemCount(equipcraft::kSealedSkillBookConfigId));
-    EXPECT_EQ(goldBefore, CurrencySystem::GetBalance(buyer, kCurrencyGold));
-    EXPECT_EQ(1, masterCraft.wanted_orders_size());
-    EXPECT_EQ(static_cast<int>(equipcraft::kMaxBookshelfBooks), masterCraft.skill_books_size());
-
-    // 发榜人腾出一格后,换一个请求号再揭即可成交,书架回到上限而不越过。
-    masterCraft.mutable_skill_books()->RemoveLast();
-    fulfillReq.set_client_request_id(++nextKey);
-    FulfillSkillBookWantedOrderResponse retryResp;
-    PlayerCraftSystem::FulfillWantedOrder(buyer, fulfillReq, retryResp);
-    ASSERT_FALSE(retryResp.has_error_message()) << retryResp.DebugString();
-    EXPECT_EQ(0u, InventoryOf(buyer).GetTotalItemCount(equipcraft::kSealedSkillBookConfigId));
-    EXPECT_EQ(0, masterCraft.wanted_orders_size());
-    EXPECT_EQ(static_cast<int>(equipcraft::kMaxBookshelfBooks), masterCraft.skill_books_size());
 }
 
 } // namespace

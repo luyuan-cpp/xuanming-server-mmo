@@ -54,7 +54,8 @@ void SpectateFramePublisher::Send(const char *channel, const ::contracts::kafka:
         return;
     }
     // 首次必打,之后每 1024 次一行(与 battle 其它采样日志同口径):broker 故障期间每回合每台 gate 都会走到这里。
-    // battle 没有 Prometheus 端点,failed_total 就是计数;标签只有低基数枚举,不带 battle_id。
+    // 准确总数是 sendFailures,由 BattleRoomManager::CollectMetrics 导出为 battle_spectate_frames_not_sent_total;
+    // 日志里的 channel / kind 只供排查,不带 battle_id。
     if ((sendFailures++ & 0x3FF) == 0)
     {
         LOG_WARN << "metric=battle_spectate_frame_send_failed channel=" << channel

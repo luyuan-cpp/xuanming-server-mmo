@@ -1748,6 +1748,7 @@ TEST(ConnectionLostHoldEcs, ExitingPlayerIsNotHeld)
 
 // ── 挂机月卡离线托管(docs/design/player-connection-lost-hold.md §4.1):开通挂机的玩家离线后角色常驻、照常跟随 ──
 // 本段在全局作用域(上面的 ConnectionLostHold* 同样不在匿名命名空间里),头文件就近包含,与本文件其它段的写法一致。
+#include "engine/core/metrics/prometheus_text.h" // 断线保留与离线托管计数的 /metrics 导出
 #include "player/system/afk_hosting.h"
 #include "player/system/team_follow_system.h"
 #include "proto/common/component/team_comp.pb.h"
@@ -1860,6 +1861,39 @@ TEST(ConnectionLostHoldAfkPassEcs, LateFailedOrForeignResultsChangeNothing)
     ASSERT_FALSE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player));
     AfkHostingSystem::ApplyProbeResult(kExitPlayerId, lostAt, false, true, pass, now);
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player)) << "接回之后到的结果直接丢弃";
+}
+
+// 断线保留与离线托管的本线程计数经 /metrics 导出(2026-11-27 起;WritePlayerExitMetrics / AfkHostingSystem::WriteMetrics),
+// 与日志里的 held_total / hosted_total 是同一份:进入保留计 held,确认月卡、开始托管计 hosted。月卡投影没失败过也以 0 导出。
+TEST(ConnectionLostHoldAfkPassEcs, HoldAndHostingCountersAreExportedAsMetrics)
+{
+    const auto sample = [](const std::string& series) -> uint64_t
+    {
+        prometheus_text::Writer writer;
+        WritePlayerExitMetrics(writer);
+        AfkHostingSystem::WriteMetrics(writer);
+        EXPECT_EQ(writer.DroppedSamples(), 0u);
+        const std::string& text = writer.Text();
+        const auto at = text.find(series + " ");
+        return at == std::string::npos ? UINT64_MAX : std::stoull(text.substr(at + series.size() + 1));
+    };
+    const std::string held = "scene_connection_lost_hold_events_total{event=\"held\"}";
+    const std::string hosted = "scene_afk_hosting_events_total{event=\"hosted\"}";
+    const uint64_t heldBefore = sample(held);
+    const uint64_t hostedBefore = sample(hosted);
+    ASSERT_NE(heldBefore, UINT64_MAX);
+    ASSERT_NE(hostedBefore, UINT64_MAX);
+    EXPECT_EQ(sample("scene_afk_pass_projection_failures_total"), AfkPassSystem::ProjectionFailures());
+
+    ScopedPersistedPlayerCleanup cleanup;
+    const auto player = MakeOnlinePlayer(kSessionAtExit);
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+    const auto lostAt = tlsEcs.actorRegistry.get<PlayerConnectionLostComp>(player).lostAt;
+    const uint64_t now = TimeSystem::NowSecondsUTC();
+    AfkHostingSystem::ApplyProbeResult(kExitPlayerId, lostAt, /*failed=*/false, /*found=*/true, std::to_string(now + 3600), now);
+
+    EXPECT_EQ(sample(held), heldBefore + 1);
+    EXPECT_EQ(sample(hosted), hostedBefore + 1);
 }
 
 // 2026-11-19 起 Probe 不读 Redis,读本实体存档里的到期时刻(docs/design/afk-monthly-card.md §5.3),

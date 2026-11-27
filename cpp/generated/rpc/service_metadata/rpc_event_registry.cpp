@@ -2790,26 +2790,6 @@ void InitMessageInfo()
         std::make_unique<::BatchDismantleSkillBooksRequest>(),
         std::make_unique<::BatchDismantleSkillBooksResponse>(),
         0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneSkillClientPlayerPostSkillBookWantedOrderMessageId] = RpcMethodMeta{
-        "SceneSkillClientPlayer", "PostSkillBookWantedOrder",
-        std::make_unique<::PostSkillBookWantedOrderRequest>(),
-        std::make_unique<::PostSkillBookWantedOrderResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneSkillClientPlayerCancelSkillBookWantedOrderMessageId] = RpcMethodMeta{
-        "SceneSkillClientPlayer", "CancelSkillBookWantedOrder",
-        std::make_unique<::CancelSkillBookWantedOrderRequest>(),
-        std::make_unique<::CancelSkillBookWantedOrderResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneSkillClientPlayerListSkillBookWantedOrdersMessageId] = RpcMethodMeta{
-        "SceneSkillClientPlayer", "ListSkillBookWantedOrders",
-        std::make_unique<::ListSkillBookWantedOrdersRequest>(),
-        std::make_unique<::ListSkillBookWantedOrdersResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
-    gRpcMethodRegistry[SceneSkillClientPlayerFulfillSkillBookWantedOrderMessageId] = RpcMethodMeta{
-        "SceneSkillClientPlayer", "FulfillSkillBookWantedOrder",
-        std::make_unique<::FulfillSkillBookWantedOrderRequest>(),
-        std::make_unique<::FulfillSkillBookWantedOrderResponse>(),
-        0, common::base::eNodeType::SceneNodeService};
     gRpcMethodRegistry[SceneSkillClientPlayerRentSkillLoadoutSlotsMessageId] = RpcMethodMeta{
         "SceneSkillClientPlayer", "RentSkillLoadoutSlots",
         std::make_unique<::RentSkillLoadoutSlotsRequest>(),
@@ -3642,10 +3622,6 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneSkillClientPlayerUnsealSkillBookMessageId:
 	case SceneSkillClientPlayerClaimScrollCollectionMilestoneMessageId:
 	case SceneSkillClientPlayerBatchDismantleSkillBooksMessageId:
-	case SceneSkillClientPlayerPostSkillBookWantedOrderMessageId:
-	case SceneSkillClientPlayerCancelSkillBookWantedOrderMessageId:
-	case SceneSkillClientPlayerListSkillBookWantedOrdersMessageId:
-	case SceneSkillClientPlayerFulfillSkillBookWantedOrderMessageId:
 	case SceneSkillClientPlayerRentSkillLoadoutSlotsMessageId:
 	case SceneSkillClientPlayerAckCraftProxyDigestMessageId:
 	case SceneSpiritShopClientPlayerGetSpiritShopInfoMessageId:

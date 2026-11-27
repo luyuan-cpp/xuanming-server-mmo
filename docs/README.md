@@ -82,6 +82,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [equipment-recycling-trade-economy-candidate.md](planning/equipment-recycling-trade-economy-candidate.md) — 回收、玩家变现与当面交易：首发经济系统候选及 UI 交接
 - [equipment-recycling-trade-economy-v1.md](planning/equipment-recycling-trade-economy-v1.md) — 旧装回收与玩家交易 V1
 - [equipment-v1-affixes-artifacts.md](planning/equipment-v1-affixes-artifacts.md) — 装备首发规格 V1：正式词条池、数值与八件法宝
+- [fair-monetization-expansion-v2.md](planning/fair-monetization-expansion-v2.md) — 《五行奇谈》不肝不氪可持续增收体系升级总方案（V2：货架纵深 × 轻享卡升级 × 社交排面 × 合规 IAA × 海外/Steam）
 - [player-leveling-and-battle-economy-v1.md](planning/player-leveling-and-battle-economy-v1.md) — 《五行奇谈》G1：角色平滑升级曲线与全玩法经验/银两产出闭环设计（V1）
 - [season-pvp-pve-economy-unified-v1.md](planning/season-pvp-pve-economy-unified-v1.md) — 《五行奇谈》赛季、PVP/PVE 衔接与强化材料经济统一落地设计（V1 合入 A）
 - [skill-build-loadout-7slots-v1.md](planning/skill-build-loadout-7slots-v1.md) — 7 套非永久「战法·加点」流派方案槽位系统完整设计方案（V1）
@@ -162,6 +163,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [economy-anti-scam-ui-codex-handoff.md](planning/ui-handoff/economy-anti-scam-ui-codex-handoff.md) — 经济防骗、卖家信用与官方 7:3 商城 UI 需求清单（纯功能规格，不定义美术风格）
 - [equipment-craft-v2-v5-ui-handoff.md](planning/ui-handoff/equipment-craft-v2-v5-ui-handoff.md) — 《五行奇谈》装备品相与典籍制书 V2–V5 增量图标纯功能交接单
 - [equipment-loadout-presets-ui-handoff.md](planning/ui-handoff/equipment-loadout-presets-ui-handoff.md) — 装备流派方案预设（一键多套换装）UI 纯功能需求清单
+- [fair-monetization-expansion-v2-ui-handoff.md](planning/ui-handoff/fair-monetization-expansion-v2-ui-handoff.md) — 不肝不氪增收体系 V2（B1–B4）异机 Codex 纯功能作图交接单
 - [growing-passive-skills-v2-ui-handoff.md](planning/ui-handoff/growing-passive-skills-v2-ui-handoff.md) — 率土式叠加成长战法 V2（《兵法叠势卷》）纯功能图标交接单
 - [guild-play-ui-handoff.md](planning/ui-handoff/guild-play-ui-handoff.md) — 帮会会武 · Unity UI 异机交接
 - [guild-play-v2-ui-handoff.md](planning/ui-handoff/guild-play-v2-ui-handoff.md) — 帮会全天帮战 V2 · Unity UI 异机交接（给 ChatGPT / Codex 完整技术细节版）

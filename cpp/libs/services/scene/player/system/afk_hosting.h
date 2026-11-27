@@ -16,9 +16,24 @@
 #include "entt/src/entt/entity/entity.hpp"
 #include "player/system/connection_lost_hold.h"
 
+namespace prometheus_text
+{
+	class Writer;
+}
+
 class AfkHostingSystem
 {
 public:
+	// 离线托管与月卡投影的计数写成 Prometheus 指标(2026-11-27 起导出,原来只随日志打出累计值):
+	//   scene_afk_hosting_events_total{event}     本线程的托管事件累计,event ∈ probe / probe_failed / hosted / renewed / ended,
+	//                                             后四项就是 [AfkHosting] 日志里的 *_total(同一份计数)
+	//   scene_afk_pass_projection_failures_total  月卡 Redis 投影写失败的累计(AfkPassSystem::ProjectionFailures)
+	// 每项进程一启动就以 0 导出,标签只有封闭的 event,不带玩家号(AGENTS.md §9)。计数是 scene 逻辑线程的 thread_local,
+	// 采集回调在同一个 loop 上执行(metrics_registry.h)。
+	static void WriteMetrics(prometheus_text::Writer &writer);
+	// scene 启动时调一次,把 WriteMetrics 登记进进程的指标注册表;重复登记只打一行 ERROR。
+	static void RegisterMetrics();
+
 	// 对一个保留中的实体发一次月卡查询:排到本轮之后读内存里的到期时刻,再走 ApplyProbeResult。不在保留中、已有查询在途、
 	// 没有 EventLoop(单测宿主)时什么都不做(状态不变;普通窗口内的下一次扫描会再来问)。
 	static void Probe(entt::entity player);

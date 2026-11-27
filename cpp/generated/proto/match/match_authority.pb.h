@@ -8566,6 +8566,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchRankedFeaturedBuildRecord fina
     kFeaturedTeamSizeFieldNumber = 13,
     kFeaturedTotalRoundsFieldNumber = 14,
     kUpdatedMsFieldNumber = 15,
+    kBuildKeyHighFieldNumber = 16,
+    kBuildKeyLowFieldNumber = 17,
   };
   // string build_key = 2;
   void clear_build_key() ;
@@ -8732,12 +8734,32 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchRankedFeaturedBuildRecord fina
   void _internal_set_updated_ms(::uint64_t value);
 
   public:
+  // uint64 build_key_high = 16;
+  void clear_build_key_high() ;
+  [[nodiscard]] ::uint64_t build_key_high() const;
+  void set_build_key_high(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_build_key_high() const;
+  void _internal_set_build_key_high(::uint64_t value);
+
+  public:
+  // uint64 build_key_low = 17;
+  void clear_build_key_low() ;
+  [[nodiscard]] ::uint64_t build_key_low() const;
+  void set_build_key_low(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_build_key_low() const;
+  void _internal_set_build_key_low(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:match.MatchRankedFeaturedBuildRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 15,
-                          0, 96,
+      ::google::protobuf::internal::TcParseTable<5, 17,
+                          0, 104,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -8780,6 +8802,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchRankedFeaturedBuildRecord fina
     ::uint32_t featured_team_size_;
     ::uint32_t featured_total_rounds_;
     ::uint64_t updated_ms_;
+    ::uint64_t build_key_high_;
+    ::uint64_t build_key_low_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -29104,6 +29128,54 @@ inline ::uint64_t MatchRankedFeaturedBuildRecord::_internal_updated_ms() const {
 inline void MatchRankedFeaturedBuildRecord::_internal_set_updated_ms(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.updated_ms_ = value;
+}
+
+// uint64 build_key_high = 16;
+inline void MatchRankedFeaturedBuildRecord::clear_build_key_high() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.build_key_high_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint64_t MatchRankedFeaturedBuildRecord::build_key_high() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedFeaturedBuildRecord.build_key_high)
+  return _internal_build_key_high();
+}
+inline void MatchRankedFeaturedBuildRecord::set_build_key_high(::uint64_t value) {
+  _internal_set_build_key_high(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedFeaturedBuildRecord.build_key_high)
+}
+inline ::uint64_t MatchRankedFeaturedBuildRecord::_internal_build_key_high() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.build_key_high_;
+}
+inline void MatchRankedFeaturedBuildRecord::_internal_set_build_key_high(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.build_key_high_ = value;
+}
+
+// uint64 build_key_low = 17;
+inline void MatchRankedFeaturedBuildRecord::clear_build_key_low() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.build_key_low_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint64_t MatchRankedFeaturedBuildRecord::build_key_low() const {
+  // @@protoc_insertion_point(field_get:match.MatchRankedFeaturedBuildRecord.build_key_low)
+  return _internal_build_key_low();
+}
+inline void MatchRankedFeaturedBuildRecord::set_build_key_low(::uint64_t value) {
+  _internal_set_build_key_low(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:match.MatchRankedFeaturedBuildRecord.build_key_low)
+}
+inline ::uint64_t MatchRankedFeaturedBuildRecord::_internal_build_key_low() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.build_key_low_;
+}
+inline void MatchRankedFeaturedBuildRecord::_internal_set_build_key_low(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.build_key_low_ = value;
 }
 
 // -------------------------------------------------------------------

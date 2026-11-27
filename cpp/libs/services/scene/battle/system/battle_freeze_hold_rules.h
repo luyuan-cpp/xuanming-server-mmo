@@ -74,18 +74,31 @@ namespace battle_freeze_hold
 		kCount
 	};
 
-	// 续冻相关的可计数事件(PlayerBattleSystem::FreezeHoldEventCount 读,进程内 relaxed 计数)。告警走同名的结构化日志
-	// metric=battle_freeze_held / battle_freeze_hold_cap_reached / battle_terminal_query_lost。kCount 恒为最后一项。
+	// reaper(冻结到期、道具预留与待退银两复核)的可计数事件,进程内 relaxed 计数:PlayerBattleSystem::FreezeHoldEventCount 读,
+	// scene 的 /metrics 导出为 scene_battle_freeze_events_total{event=kFreezeHoldEventNames[i]}(2026-11-27 起,原来只有日志)。
+	// 每一项与一条同时打出的结构化日志一一对应(下面行尾),日志带 player_id / battle_id 供排查,指标不带。
+	// 新增只追加在 kCount 之前并同步 kFreezeHoldEventNames;已有项不改名、不重排(告警按名字读,deploy/k8s/battle-settlement-alerts.yaml)。
 	enum class FreezeHoldEvent : uint8_t
 	{
-		kHeldComplete, // SQL 终局 COMPLETE 而本地还没应用:续冻一拍
-		kHeldUnknown,  // 终局查不到:续冻一拍
-		kCapReached,   // 续冻到上限:告警 + 照常解冻
-		kQueryLost,    // 查询在途超过一拍加一次调用期限仍没回:按未知处置
-		kHeldPending,  // 有可裁决原件而终局还没落定(NONE):续冻一拍
+		kHeldComplete,    // SQL 终局 COMPLETE 而本地还没应用:续冻一拍(metric=battle_freeze_held)
+		kHeldUnknown,     // 终局查不到:续冻一拍(metric=battle_freeze_held)
+		kCapReached,      // 续冻到上限:告警 + 照常解冻(metric=battle_freeze_hold_cap_reached)
+		kQueryLost,       // 查询在途超过一拍加一次调用期限仍没回:按未知处置(metric=battle_terminal_query_lost)
+		kHeldPending,     // 有可裁决原件而终局还没落定(NONE):续冻一拍(metric=battle_freeze_held)
+		kPrepareExpired,  // 备战到期作废:CreateBattle 一直没确认,match 断链或 gather 失败没取消(metric=battle_prepare_expired)
+		kExpiredReleased, // FIGHTING 到期照常解冻:ABORT / 没有可裁决原件 / 本地已应用 / 组件缺身份(metric=battle_freeze_expired)
+		kItemHoldOverdue, // 冻结已不在,这一局的道具预留越过「复核时刻 + 续冻上限」仍没收尾,每局每 10 分钟一次(metric=battle_item_hold_overdue)
+		kDuelFeeOverdue,  // 同上,普通生死状预扣的银两还没退还、也没被结算消耗(metric=jianghu_duel_fee_overdue)
 
 		kCount
 	};
+
+	inline constexpr const char* kFreezeHoldEventNames[] = {
+		"held_complete", "held_unknown", "cap_reached", "query_lost", "held_pending",
+		"prepare_expired", "expired_released", "item_hold_overdue", "duel_fee_overdue",
+	};
+	static_assert(std::size(kFreezeHoldEventNames) == static_cast<std::size_t>(FreezeHoldEvent::kCount),
+				  "kFreezeHoldEventNames 与 FreezeHoldEvent 逐项对应");
 
 	// answer:这一次查询的结论;nowMs:作判定的时刻(发出查询的那一拍);holdDeadlineMs:续冻上限
 	// (PlayerBattleSystem::FreezeHoldDeadlineMs)。nowMs 严格大于上限才算越过,与 reaper「严格大于才摘」同一口径。

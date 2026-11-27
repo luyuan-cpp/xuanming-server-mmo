@@ -59,7 +59,10 @@ struct RealmLeaderboardCache {
 thread_local std::array<RealmLeaderboardCache, 2> gRealmLeaderboards; // [0]=self, [1]=preset
 
 constexpr const char* kRealmLeaderboardWriteLua =
-    "redis.call('ZADD', KEYS[1], tonumber(ARGV[1]), ARGV[2]) "
+    "local newScore = tonumber(ARGV[1]) "
+    "local oldScore = tonumber(redis.call('ZSCORE', KEYS[1], ARGV[2])) "
+    "if oldScore and oldScore >= newScore then return 0 end "
+    "redis.call('ZADD', KEYS[1], newScore, ARGV[2]) "
     "redis.call('HSET', KEYS[2], ARGV[2], ARGV[3]) "
     "local total = redis.call('ZCARD', KEYS[1]) "
     "local cap = tonumber(ARGV[4]) "
@@ -168,6 +171,9 @@ void RefreshTowerLeaderboardFromRedisIfDue(uint32_t weekKey, bool useFreePreset,
             }
             SortAndTrimLeaderboard(refreshed);
             auto& target = gRealmLeaderboards[useFreePreset ? 1u : 0u];
+            if (target.weekKey > weekKey) {
+                return;
+            }
             target.weekKey = weekKey;
             target.entries = std::move(refreshed);
         },
@@ -203,9 +209,14 @@ void UpsertTowerLeaderboard(uint32_t weekKey, uint64_t playerId, const std::stri
         updated.add_sigil_ids(id);
     }
 
+    const double newScore = ComputeLeaderboardScore(bestFloor, bestRounds);
     auto it = std::find_if(cache.entries.begin(), cache.entries.end(),
                            [playerId](const WuxingTowerLeaderboardEntry& e) { return e.player_id() == playerId; });
     if (it != cache.entries.end()) {
+        const double oldScore = ComputeLeaderboardScore(it->best_floor(), it->best_rounds());
+        if (oldScore >= newScore) {
+            return;
+        }
         *it = updated;
     } else {
         cache.entries.push_back(updated);
@@ -1491,9 +1502,14 @@ void PlayerSeasonSystem::OnTowerSettlementApplied(entt::entity player,
         return;
     }
     const bool preset = tower.use_free_preset();
+    const bool isV2 = tower.realm_version() >= turnbattle::wuxing::kRealmV2Version;
+    const uint32_t maxFloors = isV2 ? turnbattle::wuxing::kRealmV2MaxNodes : turnbattle::wuxing::kTowerMaxFloors;
     const uint32_t bestFloor = preset ? tower.weekly_best_floor_preset() : tower.weekly_best_floor();
     const uint32_t bestRounds = preset ? tower.weekly_best_rounds_preset() : tower.weekly_best_rounds();
-    if (bestFloor == 0u) {
+    if (bestFloor == 0u || tower.current_floor() < bestFloor) {
+        return;
+    }
+    if (tower.current_floor() == maxFloors && bestRounds > 0u && tower.run_total_rounds() > bestRounds) {
         return;
     }
     const auto* guid = tlsEcs.actorRegistry.try_get<PlayerGuidComp>(player);

@@ -20,6 +20,7 @@
 #include "muduo/net/EventLoop.h"
 
 #include "core/security/service_call_auth.h"
+#include "engine/core/metrics/prometheus_text.h"
 #include "engine/core/time/system/time.h"
 #include "engine/core/type_define/player_guid_comp.h"
 #include "modules/bag/bag_service.h"
@@ -462,6 +463,7 @@ TEST_F(BattleFreezeHoldTest, AbortReleasesTheFreezeAsBefore)
     Fight(kSyntheticDeadlineMs);
     const uint64_t heldBefore = HeldTotal();
     const uint64_t capBefore = CountOf(FreezeHoldEvent::kCapReached);
+    const uint64_t releasedBefore = CountOf(FreezeHoldEvent::kExpiredReleased);
 
     PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(PlayerBattleSystem::FreezeExpiresAtMs(false, kSyntheticDeadlineMs, 0) + 1);
     ASSERT_TRUE(AnswerOldestQuery(TerminalAnswer::kAbort));
@@ -472,6 +474,7 @@ TEST_F(BattleFreezeHoldTest, AbortReleasesTheFreezeAsBefore)
     EXPECT_EQ(kBattleId, gLockReleases.front().second);
     EXPECT_EQ(heldBefore, HeldTotal());
     EXPECT_EQ(capBefore, CountOf(FreezeHoldEvent::kCapReached));
+    EXPECT_EQ(releasedBefore + 1, CountOf(FreezeHoldEvent::kExpiredReleased)) << "照常解冻计 expired_released(2026-11-27 起)";
 }
 
 // 有可裁决的 v1 原件而终局还没落定(NONE,match 回 terminal_expected = true):按「结果未知」续冻,不当场解冻。
@@ -1342,6 +1345,32 @@ TEST_F(BattleSilverFeeReviewTest, AbortAtFreezeExpiryRefundsTheFeeTogetherWithTh
 
     PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(expiresAtMs + 1 + kReaperTickMs);
     EXPECT_TRUE(gTerminalQueries.empty());
+}
+
+// reaper 事件经 /metrics 导出为 scene_battle_freeze_events_total{event}(2026-11-27 起)。名表钉死:告警按名字读
+// (deploy/k8s/battle-settlement-alerts.yaml,契约测试 battle_settlement_alerts_contract.tests.ps1 另行对照);
+// 没发生过的事件也以 0 导出,值就是 FreezeHoldEventCount 读的那份计数。
+TEST(BattleFreezeHoldMetrics, EveryEventIsExportedUnderItsPinnedName)
+{
+    const std::vector<std::string_view> expected = {
+        "held_complete", "held_unknown", "cap_reached", "query_lost", "held_pending",
+        "prepare_expired", "expired_released", "item_hold_overdue", "duel_fee_overdue",
+    };
+    const std::vector<std::string_view> names(std::begin(battle_freeze_hold::kFreezeHoldEventNames),
+                                              std::end(battle_freeze_hold::kFreezeHoldEventNames));
+    EXPECT_EQ(names, expected);
+
+    prometheus_text::Writer writer;
+    PlayerBattleSystem::WriteBattleFreezeMetrics(writer);
+    EXPECT_EQ(writer.DroppedSamples(), 0u);
+    const std::string& text = writer.Text();
+    EXPECT_NE(text.find("# TYPE scene_battle_freeze_events_total counter\n"), std::string::npos) << text;
+    for (std::size_t i = 0; i < names.size(); ++i)
+    {
+        const std::string line = "scene_battle_freeze_events_total{event=\"" + std::string(names[i]) + "\"} " +
+                                 std::to_string(CountOf(static_cast<FreezeHoldEvent>(i))) + "\n";
+        EXPECT_NE(text.find(line), std::string::npos) << line << "in:\n" << text;
+    }
 }
 
 } // namespace

@@ -49,6 +49,7 @@
 #include <utility>
 #include <vector>
 
+#include "engine/core/metrics/metrics_registry.h"
 #include "engine/core/time/system/time.h"
 #include "network/network_utils.h"
 #include "network/node_utils.h"
@@ -213,8 +214,9 @@ namespace
 	static_assert(kReaperIntervalMs + 1000ULL < static_cast<uint64_t>(PlayerBattleSystem::kLockExtraTtlSec) * 1000ULL,
 				  "越过续冻上限后的第一拍必须早于锁过期");
 
-	// 续冻事件的进程内计数(PlayerBattleSystem::FreezeHoldEventCount 读)。relaxed 原子:写只在 scene loop 线程,
-	// 读者(单测、日后的 /metrics 采集回调)只要单调的累计值。告警仍走同名结构化日志。
+	// reaper 事件的进程内计数(battle_freeze_hold::FreezeHoldEvent)。relaxed 原子:写只在 scene loop 线程,
+	// 读者(单测的 FreezeHoldEventCount、/metrics 的 WriteBattleFreezeMetrics)只要单调的累计值。
+	// 每次计数都伴随一条同名结构化日志(带 player_id / battle_id 供排查);告警读指标(deploy/k8s/battle-settlement-alerts.yaml)。
 	std::array<std::atomic<uint64_t>, static_cast<std::size_t>(battle_freeze_hold::FreezeHoldEvent::kCount)> gFreezeHoldEvents{};
 
 	void CountFreezeHoldEvent(const battle_freeze_hold::FreezeHoldEvent event)
@@ -3817,9 +3819,9 @@ void PlayerBattleSystem::ReapExpiredFreezes(const uint64_t nowMs)
 	for (const auto& entry : expired)
 	{
 		const uint64_t playerId = tlsEcs.GetPlayerId(entry.entity);
-		// 结构化 metric 日志:cpp scene 进程当前没有 Prometheus 端点,
-		// 由日志侧提取计数,见 open_issues。
-		// 两个 metric 区分:备战期作废(match gather 断链)vs 战斗期作废(battle 节点崩溃)
+		// 每种处置计一次 FreezeHoldEvent(导出为 scene_battle_freeze_events_total{event}),同时打一条同名结构化日志,
+		// 日志带 player_id / battle_id 供排查。备战期作废(prepare_expired:match gather 断链)与战斗期到期
+		// (expired_released / held_* / cap_reached:battle 节点崩溃或结算迟到)分开计。
 		if (entry.preparing)
 		{
 			// 备战到期:只摘 InBattleComp,不主动删锁 —— 锁 EX = prepare_deadline+60s 自然过期。
@@ -3832,6 +3834,7 @@ void PlayerBattleSystem::ReapExpiredFreezes(const uint64_t nowMs)
 					 << " prepare_deadline_ms=" << entry.deadlineMs
 					 << " now_ms=" << nowMs
 					 << ",preparation invalidated and component removed(CreateBattle unconfirmed;match disconnected or gather failed without cancellation);lock retained until TTL expiry for reconstruction by late confirmation";
+			CountFreezeHoldEvent(battle_freeze_hold::FreezeHoldEvent::kPrepareExpired);
 			// 锁刻意保留:组队跟随链读到锁会 fail-closed 跳过,玩家下次进场再补
 			RemoveInBattleComp(entry.entity);
 			continue;
@@ -3929,6 +3932,7 @@ void PlayerBattleSystem::ReviewBattleHoldAndFee(entt::entity player, const uint6
 				  << " review_after_ms=" << reviewAfterMs << " now_ms=" << nowMs
 				  << ",battle items are still held for a battle whose settlement has not applied here;"
 					 "they stay unmovable until the settlement applies or the battle is aborted";
+		CountFreezeHoldEvent(battle_freeze_hold::FreezeHoldEvent::kItemHoldOverdue);
 	}
 	if (overdueLogDue && holdsSilverFee)
 	{
@@ -3936,6 +3940,7 @@ void PlayerBattleSystem::ReviewBattleHoldAndFee(entt::entity player, const uint6
 				  << " review_after_ms=" << reviewAfterMs << " now_ms=" << nowMs
 				  << ",silver duel fee is still pre-debited for a battle whose terminal is not settled here;"
 					 "it is refunded on ABORT / no original, consumed by a COMPLETE settlement";
+		CountFreezeHoldEvent(battle_freeze_hold::FreezeHoldEvent::kDuelFeeOverdue);
 	}
 	if (holdsItems && IsBattleSettlementAppliedHere(player, battleId))
 	{
@@ -4002,6 +4007,7 @@ void PlayerBattleSystem::ResolveExpiredFightingFreeze(entt::entity player, const
 	{
 		LOG_ERROR << "[PlayerBattle] metric=battle_freeze_expired player_id=" << playerId << " battle_id=" << battleId
 				  << " terminal=no_identity now_ms=" << nowMs << ",expired freeze has no player or battle id;released without a terminal query";
+		CountFreezeHoldEvent(battle_freeze_hold::FreezeHoldEvent::kExpiredReleased);
 		ReleaseExpiredFightingFreeze(player, playerId, battleId);
 		return;
 	}
@@ -4013,6 +4019,7 @@ void PlayerBattleSystem::ResolveExpiredFightingFreeze(entt::entity player, const
 		LOG_WARN << "[PlayerBattle] metric=battle_freeze_expired player_id=" << playerId << " battle_id=" << battleId
 				 << " terminal=applied_here now_ms=" << nowMs
 				 << ",settlement of this battle is already applied on this entity;freeze released without a terminal query";
+		CountFreezeHoldEvent(battle_freeze_hold::FreezeHoldEvent::kExpiredReleased);
 		ReleaseExpiredFightingFreeze(player, playerId, battleId);
 		// 结算应用时已释放过预留;这里再放一次只为兜住「结算应用了而预留还在」的异常,幂等。
 		ReleaseBattleItemHold(player, playerId, battleId, "applied_here");
@@ -4086,6 +4093,7 @@ void PlayerBattleSystem::OnExpiredFightingTerminalAnswer(const uint64_t playerId
 				 << " held_ms=" << heldMs << " now_ms=" << nowMs
 				 << ",no settlement will arrive for this battle(SQL terminal is ABORT, or there is no adjudicable SQL original);"
 					"freeze released";
+		CountFreezeHoldEvent(battle_freeze_hold::FreezeHoldEvent::kExpiredReleased);
 		ReleaseExpiredFightingFreeze(player, playerId, battleId);
 		// 不会再有结算:道具预留一并释放(battle-item-reservation.md),普通生死状预扣的银两一并退还
 		// (玩家此刻不可改或入账失败时标记留着,冻结已解开,下一拍由终局复核接着退)。
@@ -4137,6 +4145,29 @@ uint64_t PlayerBattleSystem::FreezeHoldEventCount(const battle_freeze_hold::Free
 {
 	const auto index = static_cast<std::size_t>(event);
 	return index < gFreezeHoldEvents.size() ? gFreezeHoldEvents[index].load(std::memory_order_relaxed) : 0;
+}
+
+void PlayerBattleSystem::WriteBattleFreezeMetrics(prometheus_text::Writer& writer)
+{
+	writer.BeginFamily("scene_battle_freeze_events_total",
+					   "Battle freeze reaper events on this scene node since process start, by event (each one is also a "
+					   "metric=battle_* / jianghu_duel_fee_overdue log line naming the player and the battle): held_* (freeze kept "
+					   "for one more tick), cap_reached (released at the hold cap without a settlement), query_lost, prepare_expired, "
+					   "expired_released (released as usual), item_hold_overdue / duel_fee_overdue (items or a silver fee still held "
+					   "past the cap, once per battle every 10 minutes).",
+					   prometheus_text::MetricType::kCounter);
+	for (std::size_t i = 0; i < gFreezeHoldEvents.size(); ++i)
+	{
+		writer.Sample({{"event", battle_freeze_hold::kFreezeHoldEventNames[i]}}, gFreezeHoldEvents[i].load(std::memory_order_relaxed));
+	}
+}
+
+void PlayerBattleSystem::RegisterMetrics()
+{
+	if (!GlobalMetricsRegistry().Register("scene_battle_freeze", &PlayerBattleSystem::WriteBattleFreezeMetrics))
+	{
+		LOG_ERROR << "[Metrics] collector scene_battle_freeze is already registered";
+	}
 }
 
 void PlayerBattleSystem::StartReaper(muduo::net::EventLoop* loop)

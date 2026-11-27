@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
+#include <string> // release_fence_stats::Visit 拼带前缀的 key
 
 // SessionId / IsBoundSession:会话结束释放的登录身份判定(DecideSessionEndedBinding)用。写全路径,与 enter_fence.h 同理。
 #include "services/scene/player/system/player_exit_intent.h"
@@ -402,9 +403,10 @@ namespace release_fence
 	}
 } // namespace release_fence
 
-// 栅栏计数。写法同 enter_fence.h 的 enter_fence_stats(relaxed atomic、不接 Prometheus、player_id 不做 label、
+// 栅栏计数。写法同 enter_fence.h 的 enter_fence_stats(relaxed atomic、player_id 不做 label、
 // 只在 scene 逻辑线程上写),由 RedisSystem 的 30s 快照定时器在计数有变化时打成一行 [ReleaseFence](进程启动以来的累计值;
-// release_fence::Alarming 的几项有增长时 WARN,否则 INFO)。
+// release_fence::Alarming 的几项有增长时 WARN,否则 INFO);同样的 key 由 player_ownership_metrics.cpp 导出为
+// scene_release_fence_events_total{event}(2026-11-27 起)。两处都经下面的 Visit 取 key,不各写一份。
 //
 //   verdicts[]   HandleReleaseFromSceneManager / HandleSessionEndedRelease 对本地实体的每一次判定按结论计数,
 //                key 见 release_fence::kVerdictNames
@@ -562,5 +564,40 @@ namespace release_fence_stats
 		}
 		snapshot.sessionEndedKeptHeld = counters.sessionEndedKeptHeld.load(std::memory_order_relaxed);
 		return snapshot;
+	}
+
+	// [ReleaseFence] 行的 key 与顺序:emit(key, 值) 逐项交出。数组项的 key 是名表原文加前缀(credential_ / binding_ /
+	// credential_qualification_),带前缀的 key 是临时串,emit 只能当场用、不能留着。新 key 只追加在末尾(运维按原文检索)。
+	template <typename Emit>
+	void Visit(const Snapshot &stats, Emit &&emit)
+	{
+		for (std::size_t i = 0; i < stats.verdicts.size(); ++i)
+		{
+			emit(release_fence::kVerdictNames[i], stats.verdicts[i]);
+		}
+		emit("not_found", stats.notFound);
+		// 会话结束释放(docs/design/location-release-binding.md §3.3):总数、凭证判定分布与条件写结果,追加在原有 key 之后。
+		emit("session_ended", stats.sessionEnded);
+		for (std::size_t i = 0; i < stats.credentialDecisions.size(); ++i)
+		{
+			emit(std::string("credential_") + release_fence::kSessionEndedCredentialNames[i], stats.credentialDecisions[i]);
+		}
+		emit("credential_written", stats.credentialWritten);
+		emit("credential_epoch_moved", stats.credentialEpochMoved);
+		emit("credential_failed", stats.credentialFailed);
+		// 会话结束释放的登录身份判定(§13),追加在最后。
+		for (std::size_t i = 0; i < stats.bindingDecisions.size(); ++i)
+		{
+			emit(std::string("binding_") + release_fence::kSessionEndedBindingNames[i], stats.bindingDecisions[i]);
+		}
+		// 2026-10-23 追加在行尾(原有 key 的位置不变):凭证 CAS 返回 -2 的次数,与判 write 之后读资格原件的核对分布。
+		emit("credential_superseded", stats.credentialSuperseded);
+		for (std::size_t i = 0; i < stats.credentialQualifications.size(); ++i)
+		{
+			emit(std::string("credential_qualification_") + release_fence::kCredentialQualificationNames[i],
+				 stats.credentialQualifications[i]);
+		}
+		// 2026-11-12 追加在行尾:带 keep_held 的会话结束释放(托管归位撞门)遇到本节点持有、按约定不动的次数。
+		emit("session_ended_kept_held", stats.sessionEndedKeptHeld);
 	}
 } // namespace release_fence_stats

@@ -106,7 +106,7 @@ func TestInstanceGoneTiDBAndCompleteHaveOneWinner(t *testing.T) {
 	fixture, complete := terminalResultFixture(t, s, false)
 	f, err := s.Formation(ctx, fixture.BattleId)
 	require.NoError(t, err)
-	replica := *s
+	replica := cloneTestStore(s)
 	type result struct {
 		decision pb.BattleOutcomeDecision
 		err      error

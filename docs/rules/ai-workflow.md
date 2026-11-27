@@ -10,7 +10,7 @@
 
 - Claude ❌ 不跑 `msbuild` / `dotnet build` / `go build` / `go test` / `go vet` / `mvn` / `cmake` / `build.bat` / `build_linux.sh` 等任何构建、测试或压测命令，也不为“验证一下”而跑。
 - Claude ✅ 改完代码后，给出 Gemini 可直接执行的细节：**目标工程/服务、具体命令、工作目录、环境变量、前置清理、期望产物、通过标准、失败时要保留的日志或摘要**。多个工程要说明先后顺序；C++ MSBuild 必须串行 `/m:1`，并发会报假的 C1041 / LNK1104。
-- Claude ✅ 改了 C++ 源码时，交付前先在仓库根跑 `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`。它是只读的源码文本预检（几秒，不编译、不起服务），不在上面禁跑之列。类 / 结构体里不得有裸指针成员，违例会被 `.githooks/pre-commit`、CI（`test_cpp*`）以及显式开启 `/p:RunNoRawPointerMemberCheck=true` 的 MSBuild AST 门禁拦截；写法见 [cpp-runtime-and-build.md](cpp-runtime-and-build.md#c-类成员不放裸指针no-raw-pointer-member-门禁)。命中自己的文件就改，命中别的会话正在写的文件只告知对方；争议情形以 Clang AST 门禁为准。
+- Claude ✅ 改了 C++ 源码时，交付前先在仓库根跑 `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py` 与 `python tools/scripts/tests/test_cpp_async_callback_capture.py`。它们都是只读的源码文本预检（几秒，不编译、不起服务），不在上面禁跑之列。类 / 结构体不得有裸指针成员，异步回调不得捕获 `[=]`/`[&]`/裸 `this`/裸引用或 `std::bind(..., this/shared_from_this())`，违例会被 `.githooks/pre-commit`、CI（`test_cpp*`）以及显式开启 `/p:RunNoRawPointerMemberCheck=true` 的 MSBuild AST 门禁拦截；写法见 [cpp-runtime-and-build.md](cpp-runtime-and-build.md#c-类成员不放裸指针no-raw-pointer-member-门禁) 与 [engineering-principles.md §11.7](engineering-principles.md#7-连接与回调生命周期117muduo强制)。命中自己的文件就改，命中别的会话正在写的文件只告知对方；争议情形以 Clang AST 门禁与规范为准。
 - Gemini 按上述细节执行本地编译、测试、压测与汇总，不自行脑补压测口径或宣称性能结论。
 - Claude 在没有 Gemini 运行结果前，**不得声称“编译通过”“测试绿”“已验证”**；交付说明必须如实写明“未编译，待 Gemini 验证”。
 

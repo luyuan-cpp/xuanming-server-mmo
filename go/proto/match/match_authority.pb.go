@@ -3801,7 +3801,7 @@ func (x *MatchRankedRivalryRecord) GetUpdatedMs() uint64 {
 	return 0
 }
 
-// 论剑 V6 问道名局高段热门流派汇总表（按 (season_id, build_key) 幂等汇聚，featured_battle_id 建索引供公开回放鉴权）。
+// 论剑 V6 问道名局高段热门流派汇总表（按 (season_id, build_key) 幂等汇聚；整数复合主键符合 D-14，唯一键兜底精确去重，featured_battle_id 建索引供公开回放鉴权）。
 type MatchRankedFeaturedBuildRecord struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	SeasonId            uint32                 `protobuf:"varint,1,opt,name=season_id,json=seasonId,proto3" json:"season_id,omitempty"`
@@ -3819,6 +3819,8 @@ type MatchRankedFeaturedBuildRecord struct {
 	FeaturedTeamSize    uint32                 `protobuf:"varint,13,opt,name=featured_team_size,json=featuredTeamSize,proto3" json:"featured_team_size,omitempty"`
 	FeaturedTotalRounds uint32                 `protobuf:"varint,14,opt,name=featured_total_rounds,json=featuredTotalRounds,proto3" json:"featured_total_rounds,omitempty"`
 	UpdatedMs           uint64                 `protobuf:"varint,15,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	BuildKeyHigh        uint64                 `protobuf:"varint,16,opt,name=build_key_high,json=buildKeyHigh,proto3" json:"build_key_high,omitempty"` // build_key 的 SHA-256 前 64 位；与 build_key_low 构成 D-14 整数复合主键
+	BuildKeyLow         uint64                 `protobuf:"varint,17,opt,name=build_key_low,json=buildKeyLow,proto3" json:"build_key_low,omitempty"`    // build_key 的 SHA-256 次 64 位
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -3954,6 +3956,20 @@ func (x *MatchRankedFeaturedBuildRecord) GetFeaturedTotalRounds() uint32 {
 func (x *MatchRankedFeaturedBuildRecord) GetUpdatedMs() uint64 {
 	if x != nil {
 		return x.UpdatedMs
+	}
+	return 0
+}
+
+func (x *MatchRankedFeaturedBuildRecord) GetBuildKeyHigh() uint64 {
+	if x != nil {
+		return x.BuildKeyHigh
+	}
+	return 0
+}
+
+func (x *MatchRankedFeaturedBuildRecord) GetBuildKeyLow() uint64 {
+	if x != nil {
+		return x.BuildKeyLow
 	}
 	return 0
 }
@@ -6852,7 +6868,7 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\x0elast_battle_id\x18\t \x01(\x04R\flastBattleId\x12\x1d\n" +
 	"\n" +
 	"updated_ms\x18\n" +
-	" \x01(\x04R\tupdatedMs:`\x8a\x92\xf4\x01\x14match_ranked_rivalry\x92\x92\xf4\x01\x1fseason_id,player_id,opponent_idڒ\xf4\x01\x1eseason_id,player_id,updated_ms\"\xfc\x05\n" +
+	" \x01(\x04R\tupdatedMs:`\x8a\x92\xf4\x01\x14match_ranked_rivalry\x92\x92\xf4\x01\x1fseason_id,player_id,opponent_idڒ\xf4\x01\x1eseason_id,player_id,updated_ms\"\xf1\x06\n" +
 	"\x1eMatchRankedFeaturedBuildRecord\x12\x1b\n" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x1b\n" +
 	"\tbuild_key\x18\x02 \x01(\tR\bbuildKey\x12$\n" +
@@ -6870,7 +6886,9 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\x12featured_team_size\x18\r \x01(\rR\x10featuredTeamSize\x122\n" +
 	"\x15featured_total_rounds\x18\x0e \x01(\rR\x13featuredTotalRounds\x12\x1d\n" +
 	"\n" +
-	"updated_ms\x18\x0f \x01(\x04R\tupdatedMs:\x83\x01\x8a\x92\xf4\x01\x1bmatch_ranked_featured_build\x92\x92\xf4\x01\x13season_id,build_keyڒ\xf4\x01Fseason_id,high_tier_wins,wins,featured_rating_centi;featured_battle_id\"\xe6\t\n" +
+	"updated_ms\x18\x0f \x01(\x04R\tupdatedMs\x12$\n" +
+	"\x0ebuild_key_high\x18\x10 \x01(\x04R\fbuildKeyHigh\x12\"\n" +
+	"\rbuild_key_low\x18\x11 \x01(\x04R\vbuildKeyLow:\xae\x01\x8a\x92\xf4\x01\x1bmatch_ranked_featured_build\x92\x92\xf4\x01&season_id,build_key_high,build_key_lowڒ\xf4\x01Fseason_id,high_tier_wins,wins,featured_rating_centi;featured_battle_id\xe2\x92\xf4\x01\x13season_id,build_key\"\xe6\t\n" +
 	"\x1bMatchTournamentSeasonRecord\x12\x1b\n" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x1d\n" +
 	"\n" +

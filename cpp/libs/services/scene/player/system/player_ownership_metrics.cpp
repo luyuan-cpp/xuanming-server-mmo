@@ -1,12 +1,17 @@
 #include "player_ownership_metrics.h"
 
+#include <cstddef>
 #include <cstdint>
+#include <string_view>
 
 #include "muduo/base/Logging.h"
 
 #include "engine/core/metrics/metrics_registry.h"
 #include "player/comp/player_frozen_comp.h"
+#include "player/system/enter_fence.h"
 #include "player/system/player_lifecycle.h"
+#include "player/system/release_fence.h"
+#include "player/system/save_seq.h"
 #include "thread_context/ecs_context.h"
 #include "time/system/time.h"
 
@@ -92,6 +97,43 @@ namespace
 			writer.Sample({{"result", player_store_refused_stats::kCounterNames[i]}}, stats.values[i]);
 		}
 	}
+
+	// 持久 schema 世代倒退被拒写(persist_schema_stats)。被拒的玩家本次在线进度不落盘;健康时恒 0。
+	void CollectPersistSchema(prometheus_text::Writer &writer)
+	{
+		writer.BeginFamily("scene_persist_schema_regression_rejected_total",
+						   "Player saves on this scene node since process start that the player store refused because their "
+						   "persistent schema generation went backwards (same counter as the [PersistSchema] summary log line); "
+						   "should stay 0.",
+						   prometheus_text::MetricType::kCounter);
+		writer.Sample({}, persist_schema_stats::Read().regressionRejected);
+	}
+
+	// 入场 / 释放归属栅栏的结论与存盘发号异常(2026-11-27 起导出,原来只有 [EnterFence] / [ReleaseFence] / [SaveSeq] 汇总行)。
+	// key 取自各自的 Visit / kCounterNames,与汇总行同一份;各项含义见 enter_fence.h、release_fence.h、save_seq.h。
+	void CollectFencesAndSaveSeq(prometheus_text::Writer &writer)
+	{
+		const auto sampleEvent = [&writer](std::string_view key, uint64_t value) { writer.Sample({{"event", key}}, value); };
+		writer.BeginFamily("scene_enter_fence_events_total",
+						   "Enter session fence verdicts and rejections on this scene node since process start, by event "
+						   "(same keys as the [EnterFence] summary log line).",
+						   prometheus_text::MetricType::kCounter);
+		enter_fence_stats::Visit(enter_fence_stats::Read(), sampleEvent);
+		writer.BeginFamily("scene_release_fence_events_total",
+						   "Release fence verdicts and session-ended release results on this scene node since process start, by event "
+						   "(same keys as the [ReleaseFence] summary log line).",
+						   prometheus_text::MetricType::kCounter);
+		release_fence_stats::Visit(release_fence_stats::Read(), sampleEvent);
+		const auto saveSeq = save_seq_stats::Read();
+		writer.BeginFamily("scene_save_seq_events_total",
+						   "Save sequence anomalies on this scene node since process start, by event (same keys as the [SaveSeq] "
+						   "summary log line); every one should stay 0.",
+						   prometheus_text::MetricType::kCounter);
+		for (std::size_t i = 0; i < saveSeq.values.size(); ++i)
+		{
+			sampleEvent(save_seq_stats::kCounterNames[i], saveSeq.values[i]);
+		}
+	}
 } // namespace
 
 void RegisterPlayerOwnershipMetrics()
@@ -108,5 +150,17 @@ void RegisterPlayerOwnershipMetrics()
 	if (!registry.Register("scene_player_store_refused", &CollectPlayerStoreRefused))
 	{
 		LOG_ERROR << "[Metrics] collector scene_player_store_refused is already registered";
+	}
+	if (!registry.Register("scene_persist_schema", &CollectPersistSchema))
+	{
+		LOG_ERROR << "[Metrics] collector scene_persist_schema is already registered";
+	}
+	if (!registry.Register("scene_player_exit", &WritePlayerExitMetrics))
+	{
+		LOG_ERROR << "[Metrics] collector scene_player_exit is already registered";
+	}
+	if (!registry.Register("scene_fences_and_save_seq", &CollectFencesAndSaveSeq))
+	{
+		LOG_ERROR << "[Metrics] collector scene_fences_and_save_seq is already registered";
 	}
 }

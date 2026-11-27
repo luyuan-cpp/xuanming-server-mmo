@@ -34,12 +34,16 @@ struct RetiredField
     std::string_view message; // 消息全名,不带前导点
     int number;
 };
-inline constexpr std::array<RetiredField, 15> kRetiredFields = {{
+inline constexpr std::array<RetiredField, 19> kRetiredFields = {{
+    {"ClientRequestRecord", 40},
+    {"ClientRequestRecord", 41},
     {"MissionListComp", 3},
     {"PlayerAllData", 3},
     {"PlayerAllData", 4},
     {"PlayerAllData", 5},
     {"PlayerAllData", 6},
+    {"PlayerCraftComp", 16},
+    {"PlayerCraftComp", 17},
     {"QuestAllData", 1},
     {"QuestAllData", 2},
     {"QuestAllData", 4},

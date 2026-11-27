@@ -37,6 +37,7 @@
 namespace scene_manager { class EnterSceneRequest; class EnterSceneResponse; }
 namespace boost::cobalt { template<class T> struct task; }
 namespace storage { class PlayerLocation; }
+namespace prometheus_text { class Writer; }
 // 按值传给 PlayerLifecycleSystem::HandleSceneChangeEnterSceneReply;定义在 player/comp/player_ownership_comp.h。
 // 只前置声明:函数声明里的按值参数不要求完整类型,定义与调用都在 player_lifecycle.cpp(那里包含了组件头)。
 struct PlayerSceneChangeInFlightComp;
@@ -198,9 +199,9 @@ namespace owner_epoch_stats
 } // namespace owner_epoch_stats
 
 // 混版本持久字段保护:go/db 覆盖世代校验的拒写计数(docs/design/mixed-version-persist-field-protection.md §5.2)。
-// 与 owner_epoch_stats 同一套写法(relaxed atomic;这一项还没接 scene 的 Prometheus 出口,只有日志),由 core/system/redis.cpp
-// 每 30s 打成一行 [PersistSchema] 日志(有计数才打,级别 WARN)。逐次另有一条带 metric=persist_schema_regression 的日志
-// 供 LogQL 查询(deploy/k8s/README.md「玩家持久 schema 世代」小节)。正常应恒 0:
+// 与 owner_epoch_stats 同一套写法(relaxed atomic),由 core/system/redis.cpp 每 30s 打成一行 [PersistSchema] 日志
+// (有计数才打,级别 WARN),player_ownership_metrics.cpp 导出 scene_persist_schema_regression_rejected_total(2026-11-27 起)。
+// 逐次另有一条带 metric=persist_schema_regression 的日志,玩家号只在那一行(deploy/k8s/README.md「玩家持久 schema 世代」小节)。正常应恒 0:
 //   regression_rejected  判定倒退、拒写的次数。该玩家本次在线进度不落盘。
 namespace persist_schema_stats
 {
@@ -298,8 +299,9 @@ namespace player_store_refused_stats
 } // namespace player_store_refused_stats
 
 // 归属交接(跨 zone 传送 / 同 zone 跨节点换图)的成败计数。与 owner_epoch_stats 同一套写法
-// (relaxed atomic、不接 Prometheus),由 player_lifecycle.cpp 每 30s 打成一行 [TravelHandoff]
-// 日志:key=value 平铺、数值都是进程启动以来的累计值,有变化才打,级别 INFO。
+// (relaxed atomic),由 player_lifecycle.cpp 每 30s 打成一行 [TravelHandoff]
+// 日志:key=value 平铺、数值都是进程启动以来的累计值,有变化才打,级别 INFO;
+// player_ownership_metrics.cpp 按下面的 kFields 导出为 scene_travel_handoff_*。
 //
 // 为什么需要:生产配置(scene_manager AllowUnsafeCrossNodeHandoff=false)下每一次跨节点换图都走
 // 这条链,它是常规路径而不是异常路径。只有逐条日志的话,压测时「交接未成率」「冻结时长」无从统计,
@@ -562,9 +564,10 @@ namespace travel_handoff_stats
 } // namespace travel_handoff_stats
 
 // 退出存盘收尾(Z1 修复,cross-zone-scene-travel.md §12.6.3 第一步)的计数。与 travel_handoff_stats
-// 同一套写法(relaxed atomic、不接 Prometheus、只在 scene 逻辑线程上写),由 player_lifecycle.cpp 里与
+// 同一套写法(relaxed atomic、只在 scene 逻辑线程上写、player_id 不做 label),由 player_lifecycle.cpp 里与
 // [TravelHandoff] 同款的 30s 定时器(第一次有玩家退出时挂上)打成一行 [ExitPersist]:key=value 平铺、
-// 进程启动以来的累计值,有变化才打,级别 INFO。
+// 进程启动以来的累计值,有变化才打,级别 INFO。同样的 key 由 WritePlayerExitMetrics 导出为
+// scene_exit_persist_events_total{event}(2026-11-27 起;下面两组同理)。
 //
 //   exit_superseded        退出存盘落地时发现已被一个更新的会话取代(player_exit::IsSupersedingSession),
 //                          保留实体、摘退出标记。正常重连在 EnterScene 第 0 步就摘了标记,走不到这里,应接近 0
@@ -637,8 +640,9 @@ namespace exit_persist_stats
 } // namespace exit_persist_stats
 
 // 断线释放标记(A1′)与载入时清标记(A2′)的计数(cross-zone-scene-travel.md §12.6.3 第二步 / 第三步)。
-// 写法同 exit_persist_stats(relaxed atomic、不接 Prometheus、player_id 不做 label),由 player_lifecycle.cpp
-// 与 [ExitPersist] 同一个 30s 定时器打成一行 [ExitRelease](INFO,有变化才打,进程启动以来的累计值)。
+// 写法同 exit_persist_stats(relaxed atomic、player_id 不做 label),由 player_lifecycle.cpp
+// 与 [ExitPersist] 同一个 30s 定时器打成一行 [ExitRelease](INFO,有变化才打,进程启动以来的累计值),
+// 同样的 key 导出为 scene_exit_release_events_total{event}。
 //
 //   decisions[]           A1′ 每一次判定按结果计数,key 见 exit_release_mark::kExitReleaseDecisionNames:
 //                         attempted = 判定为写、发出了条件写;skip_* = 各类不写的原因
@@ -731,10 +735,11 @@ namespace exit_release_stats
 	}
 } // namespace exit_release_stats
 
-// 疏散 / 排空改派待确认表(relocate_confirm.h)的计数。写法同 exit_release_stats(relaxed atomic、不接 Prometheus、
+// 疏散 / 排空改派待确认表(relocate_confirm.h)的计数。写法同 exit_release_stats(relaxed atomic、
 // player_id 不做 label、只在 scene 逻辑线程上写),由 player_lifecycle.cpp 与 [ExitPersist] / [ExitRelease] 同一个
-// 30s 定时器打成一行 [RelocateConfirm](INFO,有变化才打,进程启动以来的累计值)。key 的原文与顺序见
-// player_lifecycle.cpp 的 FormatRelocateConfirmStats;数组项的 key 取自 relocate_confirm 的名表(runbook 按原文 grep)。
+// 30s 定时器打成一行 [RelocateConfirm](INFO,有变化才打,进程启动以来的累计值),同样的 key 导出为
+// scene_relocate_confirm_events_total{event}。key 的原文与顺序见 player_lifecycle.cpp 的 VisitRelocateConfirmStats;
+// 数组项的 key 取自 relocate_confirm 的名表(runbook 按原文 grep)。
 //
 //   ticketDecisions[]      票据取出时发不发改派(relocate_confirm::kTicketDecisionNames):dispatch = 票据没作废、进入派发
 //                          (表满未跟踪的 untracked_overflow 与没发出去的 not_sent 也计在内);
@@ -868,6 +873,16 @@ namespace relocate_confirm_stats
 		return snapshot;
 	}
 } // namespace relocate_confirm_stats
+
+// 退出收尾与断线保留的计数写成 Prometheus 指标(2026-11-27 起导出,原来只有日志),key 与日志同名、读同一份计数:
+//   scene_exit_persist_events_total{event}           [ExitPersist] 行的 key(exit_persist_stats)
+//   scene_exit_release_events_total{event}           [ExitRelease] 行的 key(exit_release_stats)
+//   scene_relocate_confirm_events_total{event}       [RelocateConfirm] 行的 key(relocate_confirm_stats)
+//   scene_connection_lost_hold_events_total{event}   [ConnectionLostHold] 日志里的 *_total(本线程计数)
+//   scene_hosted_placement_watch_events_total{event} [HostedPlacementRetry] 日志里的 *_total(本线程计数)
+// 每项进程一启动就以 0 导出;event 只取上面这些封闭的名字,不带玩家号(AGENTS.md §9)。
+// 在 scene 逻辑线程(/metrics 出口所在的 loop)上调用;由 player_ownership_metrics.cpp 登记。
+void WritePlayerExitMetrics(prometheus_text::Writer &writer);
 
 namespace player_exit
 {

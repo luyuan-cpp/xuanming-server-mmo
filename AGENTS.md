@@ -110,7 +110,7 @@
 
 ## 10. AI 协作约定
 
-- **§10.1 分工**：Claude 改代码/测试/文档（交付 C++ 前先跑只读预检 `test_cpp_no_raw_pointer_member.py`），不跑编译/测试/压测命令，交由 Gemini 执行；**Codex 仅负责作图（UI / 美术素材 / 视觉精修）**，不参与编码、分析、编译、协议生成、测试、压测与运维收尾（原由 Codex 承担的除作图外的职责统归 Gemini）；无运行证据不得声称已验证。
+- **§10.1 分工**：Claude 改代码/测试/文档（交付 C++ 前先跑只读预检 `test_cpp_no_raw_pointer_member.py` 与 `test_cpp_async_callback_capture.py`），不跑编译/测试/压测命令，交由 Gemini 执行；**Codex 仅负责作图（UI / 美术素材 / 视觉精修）**，不参与编码、分析、编译、协议生成、测试、压测与运维收尾（原由 Codex 承担的除作图外的职责统归 Gemini）；无运行证据不得声称已验证。
 - **§10.2 执行与交付**：先查既有改动，不覆盖他人工作；失败保留首错日志，遇红线立即停下汇报。
 - **§10.3 模型档位（强制）**：写/改代码以及**需求分析、设计分析、思想分析、漏洞分析、步骤分析、执行步骤**必须用各软件最高档模型（Claude Code `Fable 5.2 Max` / Gemini `Gemini 4 Neon Extra`）；仅编译、生成、跑测与冒烟用低档模型（Gemini `Carbon Medium` / Claude Code `Opus 5 High`）。**Codex 仅负责作图（UI / 美术素材 / 视觉精修）**，不参与编码、分析、编译、协议生成、测试、压测与运维收尾。
 - **§10.4 设计方案落盘 `.md`、反「上班」策划红线与异机作图交接（强制）**：以后编写策划/技术设计方案时，Claude Code（及其他 AI Agent）写好设计后必须将**需求分析、设计分析、思想分析、漏洞分析、步骤分析、执行步骤**及完整方案按目录分类保存——**玩法策划写入 `docs/planning/<主题>.md`，UI/美术交接写入 `docs/planning/ui-handoff/<主题>.md`，技术架构与工程实现写入 `docs/design/<主题>.md`**（或更新既有对应文档），不得只留在对话中；**策划设计严禁做成像「上班」**（禁止每日签到/点雕像收菜/捐献打卡、日清活跃条与高额日限购倒逼、固定钟点同时在线、强组队日清与帮会催打卡指标，禁止零操作收益倒挂正常游玩，详规见 [docs/planning/project-vision.md](docs/planning/project-vision.md) 红线第 2 条）；玩法接入完毕须确认逻辑、服务端/客户端代码与 UI 接入全部闭环，确实还能扩展得更好玩才继续扩展（**严禁硬扩展，没可玩性不要扩展**）；**需要让 Codex 作新 UI 时必须告知负责人，写完 `.md` 后必须在回复中直接给出可直接复制给 Codex 的纯功能作图信息**（另一台电脑 Codex 拿不到任何本地文件，严禁只给 `.md` 路径），且**只告诉 Codex 做什么 UI，不要告诉 GPT / Codex 要定什么风格**（严禁写任何画风词、风格词、材质词或色号/配色），**输出目录一律新建在图仓 `D:\work\image\designs\<新专题目录>\` 且严禁与 Unity / 游戏代码有任何关系**（禁写 `Unity`、`uGUI`、`Prefab`、`Assets/Resources/`、`.meta`、C# 脚本名等，只写要做什么 UI、用途、尺寸、文件名、透明底 PNG-32、文字留白规则、拉伸留白与图仓输出目录；详见 [docs/planning/project-vision.md](docs/planning/project-vision.md) 第三节）。
@@ -139,7 +139,7 @@
 
 - **§11.1–§11.5**：SOLID、KISS/YAGNI/DRY、**系统/模块间采用 Actor 消息通信（状态私有、只传不可变消息、串行消费、禁借全局单例绕过；模块内部保持正常直接调用，不把内部函数过度拆成消息）**、**适合用 23 种设计模式时主动采用并向程序说明原因**、**优先使用当前开发语言的标准库，标准库没有时再去 GitHub 找同语言高 Star 成熟库（门槛随该语言生态体量浮动），交由程序决定并说明原因**、显式依赖、**C++ 非必要不写宏定义（难懂且破坏可读性，禁止用宏生成声明）**、**C++ 裸指针约束（禁止类/结构体/联合体非静态成员、容器元素如 `std::vector<T*>`、业务返回值及裸 `new`/`delete`；函数参数可传指针，局部变量仅限接 ECS 组件、配置表行及无法改签名的外部/框架/生成/C API 接缝指针并就地判空使用、严禁持有或向外传播；类成员受 pre-commit/CI 及按需 MSBuild AST 门禁强制拦截）**、fail-closed、面向接口测试与交付门禁。
 - **§11.6 实例与布局分层**：实例层只描述「是什么」，布局层只描述「摆在哪」，布局层源码不得出现领域概念。
-- **§11.7 连接与回调生命周期（muduo 与异步回调，强制）**：应用层不拥有连接也不裸绑自己——**存连接只存 `weak_ptr`，关机两跳 `queueInLoop` 再 `quit()`**；新异步代码按**冷热分离四选一**（ECS 业务只按值捕 `entt::entity` + 业务 ID 保住 CPU Cache Line、多步流用协程/`LoopTaskScope`、基础设施对象用 `enable_shared_from_this` + 私有构造/`Create()` + `weak_from_this()`、冷路径句柄才用内部 `shared_ptr<State>` 且严禁塞业务热数据）；异步回调**禁 `[=]`/`[&]`、禁裸 `this`/引用、禁 `std::bind(..., this/shared_from_this())`、构造期不绑回调**，并配**先析构再触发回调**单测。
+- **§11.7 连接与回调生命周期（muduo 与异步回调，强制）**：应用层不拥有连接也不裸绑自己——**存连接只存 `weak_ptr`，关机两跳 `queueInLoop` 再 `quit()`**；新异步代码按**冷热分离四选一**（ECS 业务只按值捕 `entt::entity` + 业务 ID 保住 CPU Cache Line、多步流用协程/`LoopTaskScope`、基础设施对象用 `enable_shared_from_this` + 私有构造/`Create()` + `weak_from_this()`、冷路径句柄才用内部 `shared_ptr<State>` 且严禁塞业务热数据）；异步回调**禁 `[=]`/`[&]`、禁裸 `this`/引用、禁 `std::bind(..., this/shared_from_this())`、构造期不绑回调**（受 pre-commit 与 CI `test_cpp_async_callback_capture.py` 自动拦截），并配**先析构再触发回调**单测。
 - 完整细则见 → [docs/rules/engineering-principles.md](docs/rules/engineering-principles.md)。
 
 ## 12. 双版本服务器（C++/Go 版 + Java 版，强制）

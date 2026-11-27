@@ -6,10 +6,12 @@
 #include <optional>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "muduo/base/Logging.h"
 #include "gate_codec.h"
+#include "metrics/metrics_registry.h"
 #include "login_admission.h"
 #include "login_session_renewal.h"
 #include "minor_play_deadline.h"
@@ -233,6 +235,29 @@ std::optional<InflightCall> Claim(CallSeq seq)
 	return call;
 }
 
+// [lane] 汇总行的计数 key 与顺序;/metrics(CollectMetrics)用同一份 key 写 event 标签,两个出口不各写一份名单。
+template <typename Emit>
+void VisitLaneCounters(const LaneCounters &c, Emit &&emit)
+{
+	emit("admitted", c.admitted);
+	emit("sent", c.sent);
+	emit("replied", c.replied);
+	emit("failed", c.failed);
+	emit("expired", c.expired);
+	emit("expired_in_queue", c.expiredInQueue);
+	emit("no_router", c.noRouter);
+	emit("call_not_built", c.callNotBuilt);
+	emit("rejected_full", c.rejectedFull);
+	emit("rejected_redirected", c.rejectedRedirected);
+	emit("late_dropped", c.lateDropped);
+	emit("incarnation_mismatch", c.incarnationMismatch);
+	emit("dropped_on_close", c.droppedOnClose);
+	emit("dropped_on_redirect", c.droppedOnRedirect);
+	emit("rejected_not_logged_in", c.rejectedNotLoggedIn);
+	emit("rejected_stale_identity", c.rejectedStaleIdentity);
+	emit("rejected_before_send", c.rejectedBeforeSend);
+}
+
 void LogSummaryIfDue(SteadyTime now)
 {
 	if (now - tlsLastSummaryAt < kSummaryInterval)
@@ -240,19 +265,12 @@ void LogSummaryIfDue(SteadyTime now)
 		return;
 	}
 	tlsLastSummaryAt = now;
-	const auto &c = tlsCounters;
-	LOG_INFO << "[lane] summary admitted=" << c.admitted << " sent=" << c.sent << " replied=" << c.replied
-			 << " failed=" << c.failed << " expired=" << c.expired
-			 << " expired_in_queue=" << c.expiredInQueue << " no_router=" << c.noRouter
-			 << " call_not_built=" << c.callNotBuilt
-			 << " rejected_full=" << c.rejectedFull << " rejected_redirected=" << c.rejectedRedirected
-			 << " late_dropped=" << c.lateDropped << " incarnation_mismatch=" << c.incarnationMismatch
-			 << " dropped_on_close=" << c.droppedOnClose << " dropped_on_redirect=" << c.droppedOnRedirect
-			 << " rejected_not_logged_in=" << c.rejectedNotLoggedIn
-			 << " rejected_stale_identity=" << c.rejectedStaleIdentity
-			 << " rejected_before_send=" << c.rejectedBeforeSend
-			 << " in_flight=" << tlsInflight.Size() << " expiry_heap=" << tlsInflight.ExpiryHeapSize()
-			 << " max_depth_seen=" << c.maxDepthSeen;
+	std::ostringstream line;
+	line << "[lane] summary";
+	VisitLaneCounters(tlsCounters, [&line](std::string_view key, uint64_t value) { line << ' ' << key << '=' << value; });
+	line << " in_flight=" << tlsInflight.Size() << " expiry_heap=" << tlsInflight.ExpiryHeapSize()
+		 << " max_depth_seen=" << tlsCounters.maxDepthSeen;
+	LOG_INFO << line.str();
 }
 
 } // namespace
@@ -281,6 +299,34 @@ bool HasQueuedRequest(const SessionInfo &session, uint32_t messageId)
 const LaneCounters &GetCounters()
 {
 	return tlsCounters;
+}
+
+void CollectMetrics(prometheus_text::Writer &writer)
+{
+	using prometheus_text::MetricType;
+	writer.BeginFamily("gate_router_lane_events_total",
+					   "Router lane request events on this gate since process start, by event (same keys as the [lane] "
+					   "summary log line): every admitted request ends in exactly one of the outcomes, sent ones in replied, "
+					   "failed or expired.",
+					   MetricType::kCounter);
+	VisitLaneCounters(tlsCounters, [&writer](std::string_view key, uint64_t value) { writer.Sample({{"event", key}}, value); });
+	writer.BeginFamily("gate_router_lane_in_flight", "Router calls sent and not completed yet.", MetricType::kGauge);
+	writer.Sample({}, tlsInflight.Size());
+	writer.BeginFamily("gate_router_lane_expiry_heap_entries",
+					   "Entries in the router lane deadline heap, stale ones included (should stay near in_flight).",
+					   MetricType::kGauge);
+	writer.Sample({}, tlsInflight.ExpiryHeapSize());
+	writer.BeginFamily("gate_router_lane_max_depth_seen",
+					   "Deepest single session router lane queue seen since process start.", MetricType::kGauge);
+	writer.Sample({}, tlsCounters.maxDepthSeen);
+}
+
+void RegisterMetrics()
+{
+	if (!GlobalMetricsRegistry().Register("gate_router_lane", &CollectMetrics))
+	{
+		LOG_ERROR << "[Metrics] collector gate_router_lane is already registered";
+	}
 }
 
 void ResetForTesting()

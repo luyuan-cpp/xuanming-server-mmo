@@ -65,18 +65,6 @@ public:
     static void BatchDismantleSkillBooks(entt::entity player,
         const ::BatchDismantleSkillBooksRequest* request,
         ::BatchDismantleSkillBooksResponse* response);
-    static void PostSkillBookWantedOrder(entt::entity player,
-        const ::PostSkillBookWantedOrderRequest* request,
-        ::PostSkillBookWantedOrderResponse* response);
-    static void CancelSkillBookWantedOrder(entt::entity player,
-        const ::CancelSkillBookWantedOrderRequest* request,
-        ::CancelSkillBookWantedOrderResponse* response);
-    static void ListSkillBookWantedOrders(entt::entity player,
-        const ::ListSkillBookWantedOrdersRequest* request,
-        ::ListSkillBookWantedOrdersResponse* response);
-    static void FulfillSkillBookWantedOrder(entt::entity player,
-        const ::FulfillSkillBookWantedOrderRequest* request,
-        ::FulfillSkillBookWantedOrderResponse* response);
     static void RentSkillLoadoutSlots(entt::entity player,
         const ::RentSkillLoadoutSlotsRequest* request,
         ::RentSkillLoadoutSlotsResponse* response);
@@ -242,42 +230,6 @@ public:
             break;
         case 17:
 			{
-            static_assert(std::is_same_v<decltype(std::declval<::PostSkillBookWantedOrderResponse&>().mutable_error_message()), ::TipInfoMessage*>,
-                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
-            PostSkillBookWantedOrder(player,
-                static_cast<const ::PostSkillBookWantedOrderRequest*>(request),
-                static_cast<::PostSkillBookWantedOrderResponse*>(response));
-			}
-            break;
-        case 18:
-			{
-            static_assert(std::is_same_v<decltype(std::declval<::CancelSkillBookWantedOrderResponse&>().mutable_error_message()), ::TipInfoMessage*>,
-                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
-            CancelSkillBookWantedOrder(player,
-                static_cast<const ::CancelSkillBookWantedOrderRequest*>(request),
-                static_cast<::CancelSkillBookWantedOrderResponse*>(response));
-			}
-            break;
-        case 19:
-			{
-            static_assert(std::is_same_v<decltype(std::declval<::ListSkillBookWantedOrdersResponse&>().mutable_error_message()), ::TipInfoMessage*>,
-                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
-            ListSkillBookWantedOrders(player,
-                static_cast<const ::ListSkillBookWantedOrdersRequest*>(request),
-                static_cast<::ListSkillBookWantedOrdersResponse*>(response));
-			}
-            break;
-        case 20:
-			{
-            static_assert(std::is_same_v<decltype(std::declval<::FulfillSkillBookWantedOrderResponse&>().mutable_error_message()), ::TipInfoMessage*>,
-                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
-            FulfillSkillBookWantedOrder(player,
-                static_cast<const ::FulfillSkillBookWantedOrderRequest*>(request),
-                static_cast<::FulfillSkillBookWantedOrderResponse*>(response));
-			}
-            break;
-        case 21:
-			{
             static_assert(std::is_same_v<decltype(std::declval<::RentSkillLoadoutSlotsResponse&>().mutable_error_message()), ::TipInfoMessage*>,
                 "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
             RentSkillLoadoutSlots(player,
@@ -285,7 +237,7 @@ public:
                 static_cast<::RentSkillLoadoutSlotsResponse*>(response));
 			}
             break;
-        case 22:
+        case 18:
 			{
             static_assert(std::is_same_v<decltype(std::declval<::AckCraftProxyDigestResponse&>().mutable_error_message()), ::TipInfoMessage*>,
                 "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");

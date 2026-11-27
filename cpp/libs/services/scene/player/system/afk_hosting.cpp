@@ -5,6 +5,7 @@
 #include "muduo/base/Logging.h"
 #include "muduo/net/EventLoop.h"
 
+#include "engine/core/metrics/metrics_registry.h"
 #include "engine/core/type_define/player_guid_comp.h"
 #include "player/system/afk_pass.h"    // ExpiresAt:月卡的事实源就是本实体内存里的那一份
 #include "player/system/player_team.h" // OnOfflineHostingStarted:托管开始时由服务器开启跟随
@@ -13,7 +14,7 @@
 
 namespace
 {
-	// 本线程的事件累计,随每条 [AfkHosting] 日志打出(C++ 节点没有 Prometheus 出口,口径同断线保留的计数)。
+	// 本线程的事件累计,随每条 [AfkHosting] 日志打出,也由 WriteMetrics 导出(scene_afk_hosting_events_total{event})。
 	struct AfkHostingCounters
 	{
 		uint64_t probes{0};
@@ -148,4 +149,32 @@ void AfkHostingSystem::ApplyProbeResult(uint64_t playerId, connection_lost_hold:
 	// 托管开始:由服务器开启组队跟随,不等客户端声明(team-follow-server-trail.md §3.6)。之后不再用 held:
 	// 跟随这一步会挂别的组件、可能发 RPC,不碰保留组件,但没有理由再拿着指针。
 	PlayerTeamSystem::OnOfflineHostingStarted(player);
+}
+
+void AfkHostingSystem::WriteMetrics(prometheus_text::Writer &writer)
+{
+	const auto &c = tlsAfkHostingCounters;
+	writer.BeginFamily("scene_afk_hosting_events_total",
+					   "Offline hosting events on this scene node since process start: probe (AFK pass checks for a held character), "
+					   "probe_failed, hosted (hosting started), renewed (pass renewed while hosted), ended (pass gone while hosted). "
+					   "Same counters as the *_total fields of the [AfkHosting] log lines.",
+					   prometheus_text::MetricType::kCounter);
+	writer.Sample({{"event", "probe"}}, c.probes);
+	writer.Sample({{"event", "probe_failed"}}, c.probeFailed);
+	writer.Sample({{"event", "hosted"}}, c.hosted);
+	writer.Sample({{"event", "renewed"}}, c.renewed);
+	writer.Sample({{"event", "ended"}}, c.ended);
+	writer.BeginFamily("scene_afk_pass_projection_failures_total",
+					   "AFK pass Redis projection writes (SET or DEL) on this scene node since process start that were not sent "
+					   "or got no OK reply; the next commit, load or presence heartbeat writes it again.",
+					   prometheus_text::MetricType::kCounter);
+	writer.Sample({}, AfkPassSystem::ProjectionFailures());
+}
+
+void AfkHostingSystem::RegisterMetrics()
+{
+	if (!GlobalMetricsRegistry().Register("scene_afk_hosting", &AfkHostingSystem::WriteMetrics))
+	{
+		LOG_ERROR << "[Metrics] collector scene_afk_hosting is already registered";
+	}
 }

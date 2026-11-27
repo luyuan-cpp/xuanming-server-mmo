@@ -21,6 +21,7 @@
 #include "player/system/player_ownership_metrics.h"
 #include "player/system/player_save_metrics.h"
 #include "player/system/currency_metrics.h"
+#include "player/system/afk_hosting.h"
 #include "player/system/player_equip.h"
 #include "player/system/player_attribute.h"
 #include "player/system/player_inbox_system.h"
@@ -295,6 +296,10 @@ int main(int argc, char *argv[])
         RegisterAoiLoadMetrics();
         // 补缴扣还因欠款带更新版本字段而跳过的次数(player/system/currency_metrics.h),同一个出口。
         RegisterCurrencyMetrics();
+        // 战斗冻结到期处置、道具预留与待退银两超期(battle/system/player_battle.h),离线托管与月卡投影写失败
+        // (player/system/afk_hosting.h),同一个出口(2026-11-27 起,原来只有日志)。
+        PlayerBattleSystem::RegisterMetrics();
+        AfkHostingSystem::RegisterMetrics();
 
         // context 先于 node 构造、晚于 node 析构:方法表闭包捕获 grpcService 的 this,服务必须活过 Node。
         node.RegisterGrpcService(context->grpcService);

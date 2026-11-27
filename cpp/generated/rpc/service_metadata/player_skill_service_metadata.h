@@ -71,26 +71,10 @@ constexpr uint32_t SceneSkillClientPlayerBatchDismantleSkillBooksMessageId = 559
 constexpr uint32_t SceneSkillClientPlayerBatchDismantleSkillBooksIndex = 16;
 #define SceneSkillClientPlayerBatchDismantleSkillBooksMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(16)
 
-constexpr uint32_t SceneSkillClientPlayerPostSkillBookWantedOrderMessageId = 560;
-constexpr uint32_t SceneSkillClientPlayerPostSkillBookWantedOrderIndex = 17;
-#define SceneSkillClientPlayerPostSkillBookWantedOrderMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(17)
-
-constexpr uint32_t SceneSkillClientPlayerCancelSkillBookWantedOrderMessageId = 561;
-constexpr uint32_t SceneSkillClientPlayerCancelSkillBookWantedOrderIndex = 18;
-#define SceneSkillClientPlayerCancelSkillBookWantedOrderMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(18)
-
-constexpr uint32_t SceneSkillClientPlayerListSkillBookWantedOrdersMessageId = 562;
-constexpr uint32_t SceneSkillClientPlayerListSkillBookWantedOrdersIndex = 19;
-#define SceneSkillClientPlayerListSkillBookWantedOrdersMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(19)
-
-constexpr uint32_t SceneSkillClientPlayerFulfillSkillBookWantedOrderMessageId = 563;
-constexpr uint32_t SceneSkillClientPlayerFulfillSkillBookWantedOrderIndex = 20;
-#define SceneSkillClientPlayerFulfillSkillBookWantedOrderMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(20)
-
 constexpr uint32_t SceneSkillClientPlayerRentSkillLoadoutSlotsMessageId = 565;
-constexpr uint32_t SceneSkillClientPlayerRentSkillLoadoutSlotsIndex = 21;
-#define SceneSkillClientPlayerRentSkillLoadoutSlotsMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(21)
+constexpr uint32_t SceneSkillClientPlayerRentSkillLoadoutSlotsIndex = 17;
+#define SceneSkillClientPlayerRentSkillLoadoutSlotsMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(17)
 
 constexpr uint32_t SceneSkillClientPlayerAckCraftProxyDigestMessageId = 573;
-constexpr uint32_t SceneSkillClientPlayerAckCraftProxyDigestIndex = 22;
-#define SceneSkillClientPlayerAckCraftProxyDigestMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(22)
+constexpr uint32_t SceneSkillClientPlayerAckCraftProxyDigestIndex = 18;
+#define SceneSkillClientPlayerAckCraftProxyDigestMethod  ::SceneSkillClientPlayer_Stub::descriptor()->method(18)

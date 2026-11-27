@@ -723,3 +723,7 @@ retired=QuestAllData#1
 retired=QuestAllData#2
 retired=QuestAllData#4
 retired=QuestScopeData#3
+retired=ClientRequestRecord#40
+retired=ClientRequestRecord#41
+retired=PlayerCraftComp#16
+retired=PlayerCraftComp#17

@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "muduo/net/EventLoop.h"
@@ -128,6 +129,15 @@ namespace
 			LOG_INFO << FormatRedisClusterStats(prefix, current);
 		}
 		last = current;
+	}
+
+	// 汇总行追加 " key=value"。key 来自各统计命名空间的 Visit,/metrics 用同一个 Visit 写 event 标签。
+	void AppendStat(std::string &line, std::string_view key, uint64_t value)
+	{
+		line += ' ';
+		line += key;
+		line += '=';
+		line += std::to_string(value);
 	}
 } // namespace
 
@@ -323,16 +333,7 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
         if (fenceStats != lastEnterFence)
         {
             std::string line = "[EnterFence]";
-            for (std::size_t i = 0; i < fenceStats.verdicts.size(); ++i)
-            {
-                line += ' ';
-                line += enter_fence::kVerdictNames[i];
-                line += '=';
-                line += std::to_string(fenceStats.verdicts[i]);
-            }
-            line += " bind_rejected=" + std::to_string(fenceStats.bindRejected);
-            line += " session_update_rejected=" + std::to_string(fenceStats.sessionUpdateRejected);
-            line += " stale_gate_instance_rejected=" + std::to_string(fenceStats.staleGateInstanceRejected);
+            enter_fence_stats::Visit(fenceStats, [&line](std::string_view key, uint64_t value) { AppendStat(line, key, value); });
             if (fenceStats.Rejected() > lastEnterFence.Rejected())
             {
                 LOG_WARN << line;
@@ -350,48 +351,11 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
         const auto releaseFenceStats = release_fence_stats::Read();
         if (releaseFenceStats != lastReleaseFence)
         {
+            // key 与顺序见 release_fence_stats::Visit。binding_skip_newer_login / binding_skip_conflict 有增长时升 WARN
+            // (release_fence::BindingAlarming),no_qualification / malformed 同理(release_fence::QualificationAlarming)。
             std::string line = "[ReleaseFence]";
-            for (std::size_t i = 0; i < releaseFenceStats.verdicts.size(); ++i)
-            {
-                line += ' ';
-                line += release_fence::kVerdictNames[i];
-                line += '=';
-                line += std::to_string(releaseFenceStats.verdicts[i]);
-            }
-            line += " not_found=" + std::to_string(releaseFenceStats.notFound);
-            // 会话结束释放(docs/design/location-release-binding.md §3.3):总数、凭证判定分布与条件写结果,追加在原有 key 之后。
-            line += " session_ended=" + std::to_string(releaseFenceStats.sessionEnded);
-            for (std::size_t i = 0; i < releaseFenceStats.credentialDecisions.size(); ++i)
-            {
-                line += " credential_";
-                line += release_fence::kSessionEndedCredentialNames[i];
-                line += '=';
-                line += std::to_string(releaseFenceStats.credentialDecisions[i]);
-            }
-            line += " credential_written=" + std::to_string(releaseFenceStats.credentialWritten);
-            line += " credential_epoch_moved=" + std::to_string(releaseFenceStats.credentialEpochMoved);
-            line += " credential_failed=" + std::to_string(releaseFenceStats.credentialFailed);
-            // 会话结束释放的登录身份判定(location-release-binding.md §13),追加在最后。binding_skip_newer_login /
-            // binding_skip_conflict 有增长时升 WARN(release_fence::BindingAlarming)。
-            for (std::size_t i = 0; i < releaseFenceStats.bindingDecisions.size(); ++i)
-            {
-                line += " binding_";
-                line += release_fence::kSessionEndedBindingNames[i];
-                line += '=';
-                line += std::to_string(releaseFenceStats.bindingDecisions[i]);
-            }
-            // 2026-10-23 追加在行尾(原有 key 的位置不变):凭证 CAS 返回 -2 的次数,与判 write 之后读资格原件的核对分布
-            // (location-release-binding.md §3.3)。no_qualification / malformed 有增长时升 WARN(release_fence::QualificationAlarming)。
-            line += " credential_superseded=" + std::to_string(releaseFenceStats.credentialSuperseded);
-            for (std::size_t i = 0; i < releaseFenceStats.credentialQualifications.size(); ++i)
-            {
-                line += " credential_qualification_";
-                line += release_fence::kCredentialQualificationNames[i];
-                line += '=';
-                line += std::to_string(releaseFenceStats.credentialQualifications[i]);
-            }
-            // 2026-11-12 追加在行尾:带 keep_held 的会话结束释放(托管归位撞门)遇到本节点持有、按约定不动的次数。
-            line += " session_ended_kept_held=" + std::to_string(releaseFenceStats.sessionEndedKeptHeld);
+            release_fence_stats::Visit(releaseFenceStats,
+                                       [&line](std::string_view key, uint64_t value) { AppendStat(line, key, value); });
             if (releaseFenceStats.AlarmingIncreaseSince(lastReleaseFence))
             {
                 LOG_WARN << line;

@@ -20,6 +20,7 @@
 #include "muduo/base/Logging.h"
 
 #include "engine/infra/messaging/kafka/kafka_producer.h"
+#include "metrics/metrics_registry.h"
 #include "node/system/node/client_endpoint.h"
 #include "node/system/node/node.h"
 #include "node/system/node/node_command_route.h"
@@ -151,8 +152,8 @@ namespace
                         event.SerializeAsString());
     }
 
-    // 战斗帧无活直连被丢弃时的采样日志(turn-based §22 D68)。battle 无 Prometheus 端点,
-    // 由日志侧按 metric= 提取计数;每个 messageId 首次必打,之后每 1024 次打一行,防掉线玩家
+    // 战斗帧无活直连被丢弃时的采样日志(turn-based §22 D68)。准确总数是 battle_frames_dropped_no_direct_total
+    // (BattleFrameConnOf 计数,CollectMetrics 导出);每个 messageId 首次必打,之后每 1024 次打一行,防掉线玩家
     // 每回合一条把日志放大(与直连面 LogRejectionSampled 同口径)。messageId 只可能是
     // BattleClientPlayer 的几条 Notify 号(进程内常量),键集合有界;单 loop 线程访问,无锁。
     void LogBattleFrameDroppedSampled(const uint64_t battleId, const uint64_t playerId,
@@ -339,7 +340,9 @@ namespace
 
     // 校验 CreateBattleRequest 携带的指纹(request.table_fingerprint + 每个快照的
     // table_fingerprint,非空才比)与目标 provider 指纹一致。返回 false = 按 enforce 拒绝开局。
-    bool CheckTableFingerprintAgainst(const ::CreateBattleRequest &request, const std::string &self)
+    // 不一致时按处置计一次 counters(fingerprintRejected / fingerprintContinued)。
+    bool CheckTableFingerprintAgainst(const ::CreateBattleRequest &request, const std::string &self,
+                                      BattleRoomManager::EventCounters &counters)
     {
         const auto mode = CurrentFingerprintMode();
         if (mode == FingerprintMode::Off)
@@ -366,16 +369,18 @@ namespace
             return true;
         }
 
-        // 结构化 metric 日志(battle 进程无 Prometheus 端点,与 scene reaper 同款口径,
-        // 由日志侧提取计数);不含 player_id 标签之外的高基数字段
+        // 计数导出为 battle_table_fingerprint_mismatches_total{result}(CollectMetrics);结构化日志带 battle_id 与
+        // 不一致的玩家指纹供排查,这些只在日志里,不做标签
         if (mode == FingerprintMode::Enforce)
         {
+            ++counters.fingerprintRejected;
             LOG_ERROR << "metric=battle_table_fingerprint_reject battle_id=" << request.battle_id()
                       << " match_mode=" << request.match_mode()
                       << " self=" << self << " mismatch:" << mismatches
                       << ",table fingerprint mismatch;battle creation rejected(mode=enforce)";
             return false;
         }
+        ++counters.fingerprintContinued;
         LOG_WARN << "metric=battle_table_fingerprint_mismatch battle_id=" << request.battle_id()
                  << " match_mode=" << request.match_mode()
                  << " self=" << self << " mismatch:" << mismatches
@@ -636,7 +641,7 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
     // 未命中按 warn/enforce 判定。
     std::string matchedFingerprint;
     auto roomProvider = ResolveProviderForRequest(request, matchedFingerprint);
-    if (!CheckTableFingerprintAgainst(request, matchedFingerprint))
+    if (!CheckTableFingerprintAgainst(request, matchedFingerprint, eventCounters))
     {
         // TipInfoMessage 只有 id + parameters:说明文本放 parameters[0],match 日志可直接打出来
         response.mutable_error_message()->set_id(kFeatureUnavailable);
@@ -2444,7 +2449,8 @@ void BattleRoomManager::ReclaimExpiredObserverSeats(const uint64_t battleId,
     }
     for (const auto &[observerId, reconnect] : expired)
     {
-        // battle 没有 Prometheus 端点,按 metric= 行计数、按 cause 聚合;battle_id / observer 只供排查,不作标签
+        // 按 cause 计数,导出为 battle_observer_seats_reclaimed_total{cause}(CollectMetrics);battle_id / observer 只进日志供排查,不作标签
+        ++(reconnect ? eventCounters.observerSeatsReclaimedReconnectTimeout : eventCounters.observerSeatsReclaimedConnectTimeout);
         LOG_INFO << "metric=battle_observer_seat_reclaimed cause="
                  << (reconnect ? "reconnect_timeout" : "connect_timeout")
                  << " battle_id=" << battleId << " observer=" << observerId;
@@ -2711,6 +2717,7 @@ muduo::net::TcpConnectionPtr BattleRoomManager::BattleFrameConnOf(const BattleRo
     case battle_push_policy::PushRoute::kDrop:
         break;
     }
+    ++eventCounters.framesDroppedNoDirect;
     LogBattleFrameDroppedSampled(room.battleId, playerId, messageId);
     return nullptr;
 }
@@ -3089,7 +3096,7 @@ void BattleRoomManager::ReportStuckOutcomeRooms()
     for (const auto battleId : rooms.Ids())
     {
         const auto *room = FindRoom(battleId);
-        if (room == nullptr || !room->outcomePending || !room->outcomeExhausted)
+        if (room == nullptr || !OutcomeStuck(*room))
         {
             continue;
         }
@@ -3107,6 +3114,70 @@ void BattleRoomManager::ReportStuckOutcomeRooms()
     LOG_ERROR << "metric=battle_personal_settlement_staging_exhausted_rooms sql_unconfirmed=" << stuckTotal
               << " stuck_total=" << stuckTotal << " node_rooms=" << rooms.Size()
               << ";no SQL decision yet,this node cannot drain until these rooms are cleared;stuck battles: " << stuckBattles;
+}
+
+void BattleRoomManager::CollectMetrics(prometheus_text::Writer &writer) const
+{
+    using prometheus_text::MetricType;
+    // 滞留房间按抓取时的房间表现数(与 ReportStuckOutcomeRooms 同一判据):房间清掉之后自然归零,不另记集合。
+    uint64_t stuckRooms = 0;
+    for (const auto battleId : rooms.Ids())
+    {
+        const auto *room = rooms.Find(battleId);
+        if (room != nullptr && OutcomeStuck(*room))
+        {
+            ++stuckRooms;
+        }
+    }
+    writer.BeginFamily("battle_rooms",
+                       "Battle rooms on this node, including aborted rooms still waiting for a SQL outcome decision "
+                       "(node_rooms in the stuck room report line).",
+                       MetricType::kGauge);
+    writer.Sample({}, rooms.Size());
+    writer.BeginFamily("battle_sql_outcome_stuck_rooms",
+                       "Battle rooms on this node whose SQL outcome still has no decision after the fast replay span "
+                       "(sql_unconfirmed in the stuck room report line); the node cannot drain until they are cleared.",
+                       MetricType::kGauge);
+    writer.Sample({}, stuckRooms);
+    writer.BeginFamily("battle_frames_dropped_no_direct_total",
+                       "Battle frames dropped because the player had no live direct connection; the client fetches the "
+                       "battle state again once its direct connection is ready.",
+                       MetricType::kCounter);
+    writer.Sample({}, eventCounters.framesDroppedNoDirect);
+    writer.BeginFamily("battle_table_fingerprint_mismatches_total",
+                       "CreateBattle requests whose battle table fingerprint did not match this node: rejected (enforce mode) "
+                       "or continued (warn mode).",
+                       MetricType::kCounter);
+    writer.Sample({{"result", "rejected"}}, eventCounters.fingerprintRejected);
+    writer.Sample({{"result", "continued"}}, eventCounters.fingerprintContinued);
+    writer.BeginFamily("battle_observer_seats_reclaimed_total",
+                       "Observer seats reclaimed because the observer never connected (connect_timeout) or did not reconnect "
+                       "in time (reconnect_timeout).",
+                       MetricType::kCounter);
+    writer.Sample({{"cause", "connect_timeout"}}, eventCounters.observerSeatsReclaimedConnectTimeout);
+    writer.Sample({{"cause", "reconnect_timeout"}}, eventCounters.observerSeatsReclaimedReconnectTimeout);
+    writer.BeginFamily("battle_spectate_frames_not_sent_total",
+                       "Spectate relay and broadcast frames not handed to the Kafka producer (dropped without retry; the next "
+                       "frame carries the full state).",
+                       MetricType::kCounter);
+    writer.Sample({}, spectateFramePublisher.SendFailures());
+}
+
+void BattleRoomManager::RegisterMetrics()
+{
+    // 采集回调在节点 /metrics 出口所在的主 loop 上执行,与本对象同线程;只绑 WeakSelf()(AGENTS.md §11.7)。
+    const bool registered = GlobalMetricsRegistry().Register(
+        "battle_rooms", [weak = WeakSelf()](prometheus_text::Writer &writer)
+        {
+            if (const auto self = weak.lock())
+            {
+                self->CollectMetrics(writer);
+            }
+        });
+    if (!registered)
+    {
+        LOG_ERROR << "[Metrics] collector battle_rooms is already registered";
+    }
 }
 
 void BattleRoomManager::HandleIssueBattleTicket(const ::IssueBattleTicketRequest &request,

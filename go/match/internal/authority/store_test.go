@@ -33,6 +33,31 @@ func testInstall(t *testing.T, s *Store) *sql.DB {
 	return install.(*sql.DB)
 }
 
+// cloneTestStore 复制测试用 Store 的只读配置与依赖，避免值拷贝 atomic.Pointer 与缓存锁触发 go vet copylocks。
+func cloneTestStore(s *Store) *Store {
+	cp := &Store{
+		DB:               s.DB,
+		Secret:           s.Secret,
+		Config:           s.Config,
+		TeamConfig:       s.TeamConfig,
+		roleGuard:        s.roleGuard,
+		entryGuard:       s.entryGuard,
+		fence:            s.fence,
+		fenceStates:      s.fenceStates,
+		admissions:       s.admissions,
+		schedule:         s.schedule,
+		zones:            s.zones,
+		ratingCurve:      s.ratingCurve,
+		workOwner:        s.workOwner,
+		deadlineProbe:    s.deadlineProbe,
+		rankedNameLookup: s.rankedNameLookup,
+	}
+	cp.catalog.Store(s.catalog.Load())
+	cp.rankedCatalog.Store(s.rankedCatalog.Load())
+	cp.tournamentCatalog.Store(s.tournamentCatalog.Load())
+	return cp
+}
+
 func testStore(t *testing.T) *Store {
 	t.Helper()
 	addr := os.Getenv("MATCH_IT_TIDB")

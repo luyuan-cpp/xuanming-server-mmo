@@ -229,12 +229,12 @@ func TestFormationExitTiDBConcurrentReplicasReleaseOnce(t *testing.T) {
 		crashed, err := s.AcquireWork(ctx, battleID)
 		require.NoError(t, err)
 		expireWorkLease(t, s, battleID)
-		replica := *s
+		replica := cloneTestStore(s)
 		start := make(chan struct{})
 		results := make(chan outcome, 2)
 		// 两个副本各自按 runGlobalFormation 的顺序接手：领租约 → 判原件 → 发房前失败收尾。
 		// 守住的是 AcquireWork 互斥这一既有前提在新出口下仍成立（只释放一次），不是修复本身的红灯。
-		for _, store := range []*Store{s, &replica} {
+		for _, store := range []*Store{s, replica} {
 			go func(store *Store) {
 				<-start
 				work, err := store.AcquireWork(ctx, battleID)
@@ -280,10 +280,10 @@ func TestFormationExitTiDBConcurrentReplicasReleaseOnce(t *testing.T) {
 		persistV1Intent(t, s, work, true)
 		require.NoError(t, s.Unknown(ctx, work))
 		expireWorkLease(t, s, battleID)
-		replica := *s
+		replica := cloneTestStore(s)
 		start := make(chan struct{})
 		results := make(chan error, 2)
-		for _, store := range []*Store{s, &replica} {
+		for _, store := range []*Store{s, replica} {
 			go func(store *Store) {
 				<-start
 				_, _, err := store.RecoverExpiredOutcomes(ctx, 0, 0)

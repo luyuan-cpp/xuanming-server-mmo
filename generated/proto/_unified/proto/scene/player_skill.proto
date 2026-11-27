@@ -252,10 +252,11 @@ message SkillCraftingStateSnapshot {
   uint32 master_showcase_tag = 18;
   uint32 equipped_craft_title_id = 19;
   repeated uint32 unlocked_craft_title_ids = 20;
-  // ── V4/V5 藏经阁里程碑位图、情义免税代打与本人悬赏求书单 ──
+  // ── V4/V5 藏经阁里程碑位图与情义免税代打 ──
   bool team_free_proxy = 21;
   bytes claimed_scroll_milestone_bits = 22;
-  repeated SkillBookWantedOrderInfo my_wanted_orders = 23;
+  // 23 my_wanted_orders 已退役(2026-11-27):本人的悬赏单改由 trade 的 ListWantedSkillBookOrders(only_mine) 列出;字段号不复用。
+  reserved 23;
   // ── 离线/跨线名匠代打未读营业战报 ──
   CraftProxyDigestSummary unread_proxy_digest = 24;
 }
@@ -432,79 +433,6 @@ message BatchDismantleSkillBooksResponse {
   SkillCraftingStateSnapshot state = 6;
 }
 
-// ── V5 西市常规技能书悬赏求购板（原子托管非绑银两，零骗局交卷扣 5% 集市税） ──
-message SkillBookWantedOrderInfo {
-  uint64 order_id = 1;
-  uint64 poster_player_id = 2;
-  string poster_name = 3;
-  uint32 skill_table_id = 4;
-  string skill_name = 5;
-  uint32 scroll_id = 6;
-  string scroll_name = 7;
-  bool require_master_signature = 8;
-  uint64 reward_gold = 9;
-  uint64 seller_net_gold = 10; // 扣 5% 集市银两税后揭榜卖家实得净银两。
-  uint64 created_at_sec = 11;
-}
-
-message PostSkillBookWantedOrderRequest {
-  uint32 skill_table_id = 1;
-  bool require_master_signature = 2;
-  uint64 reward_gold = 3; // 100..50000 非绑定银两。
-  uint64 expected_revision = 4;
-  uint64 client_request_id = 5;
-}
-
-message PostSkillBookWantedOrderResponse {
-  TipInfoMessage error_message = 1;
-  uint64 client_request_id = 2;
-  bool replayed = 3;
-  SkillBookWantedOrderInfo order = 4;
-  SkillCraftingStateSnapshot state = 5;
-}
-
-message CancelSkillBookWantedOrderRequest {
-  uint64 order_id = 1;
-  uint64 expected_revision = 2;
-  uint64 client_request_id = 3;
-}
-
-message CancelSkillBookWantedOrderResponse {
-  TipInfoMessage error_message = 1;
-  uint64 client_request_id = 2;
-  bool replayed = 3;
-  uint64 refunded_gold = 4;
-  SkillCraftingStateSnapshot state = 5;
-}
-
-message ListSkillBookWantedOrdersRequest {
-  uint32 filter_skill_table_id = 1; // 0 = 全部常规技能；非 0 = 仅看该技能求购。
-  bool only_mine = 2;               // true = 仅看本人悬赏单。
-}
-
-message ListSkillBookWantedOrdersResponse {
-  TipInfoMessage error_message = 1;
-  repeated SkillBookWantedOrderInfo orders = 2;
-}
-
-message FulfillSkillBookWantedOrderRequest {
-  uint64 poster_player_id = 1;
-  uint64 order_id = 2;
-  uint64 sealed_item_id = 3;    // 二选一：背包中匹配的未绑定 3414 封卷道籍实例 ID。
-  uint64 bookshelf_book_id = 4; // 二选一：书架中匹配的未绑定常规技能书 book_id。
-  uint64 expected_revision = 5;
-  uint64 client_request_id = 6;
-}
-
-message FulfillSkillBookWantedOrderResponse {
-  TipInfoMessage error_message = 1;
-  uint64 client_request_id = 2;
-  bool replayed = 3;
-  uint64 order_id = 4;
-  uint64 seller_net_gold = 5;
-  SkillCraftingStateSnapshot state = 6;
-}
-
 // 修习(学习 = 从 0 升到 1)。修习者由服务端会话确定,请求里没有角色身份。
 message UpgradeSkillRequest {
   uint32 skill_table_id = 1;
@@ -542,10 +470,10 @@ service SceneSkillClientPlayer {
   rpc UnsealSkillBook (UnsealSkillBookRequest) returns (UnsealSkillBookResponse);
   rpc ClaimScrollCollectionMilestone (ClaimScrollCollectionMilestoneRequest) returns (ClaimScrollCollectionMilestoneResponse);
   rpc BatchDismantleSkillBooks (BatchDismantleSkillBooksRequest) returns (BatchDismantleSkillBooksResponse);
-  rpc PostSkillBookWantedOrder (PostSkillBookWantedOrderRequest) returns (PostSkillBookWantedOrderResponse);
-  rpc CancelSkillBookWantedOrder (CancelSkillBookWantedOrderRequest) returns (CancelSkillBookWantedOrderResponse);
-  rpc ListSkillBookWantedOrders (ListSkillBookWantedOrdersRequest) returns (ListSkillBookWantedOrdersResponse);
-  rpc FulfillSkillBookWantedOrder (FulfillSkillBookWantedOrderRequest) returns (FulfillSkillBookWantedOrderResponse);
+  // 悬赏求书四条(560~563 PostSkillBookWantedOrder / CancelSkillBookWantedOrder / ListSkillBookWantedOrders /
+  // FulfillSkillBookWantedOrder)2026-11-27 退役,改走 trade 求购单(ClientPlayerJubaozhai 582~584);号由 message_id.txt 墓碑保留。
+  // (与下一行之间留空行:这是独立注释,不能被生成器当成 RentSkillLoadoutSlots 的说明。)
+
   rpc RentSkillLoadoutSlots (RentSkillLoadoutSlotsRequest) returns (RentSkillLoadoutSlotsResponse);
   rpc AckCraftProxyDigest (AckCraftProxyDigestRequest) returns (AckCraftProxyDigestResponse);
 }

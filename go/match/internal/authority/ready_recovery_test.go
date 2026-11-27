@@ -218,7 +218,7 @@ func TestReadyTiDBExpiredOutcomeRecoveryIsIdempotentAcrossIndependentPools(t *te
 	cfg.Net, cfg.Addr, cfg.User, cfg.DBName = "tcp", os.Getenv("MATCH_IT_TIDB"), "root", database
 	cfg.Timeout, cfg.ReadTimeout, cfg.WriteTimeout = 3*time.Second, 3*time.Second, 3*time.Second
 	cfg.Params = map[string]string{"tidb_txn_mode": "'pessimistic'", "transaction_isolation": "'READ-COMMITTED'", "tidb_read_staleness": "0", "tidb_low_resolution_tso": "OFF", "tidb_read_consistency": "'strict'", "tidb_replica_read": "'leader'", "tidb_snapshot": "''"}
-	peer := *s
+	peer := cloneTestStore(s)
 	peer.DB, err = sql.Open("mysql", cfg.FormatDSN())
 	require.NoError(t, err)
 	defer peer.DB.Close()
@@ -234,7 +234,7 @@ func TestReadyTiDBExpiredOutcomeRecoveryIsIdempotentAcrossIndependentPools(t *te
 	require.NoError(t, b.Close())
 	start := make(chan struct{})
 	results := make(chan error, 2)
-	for _, store := range []*Store{s, &peer} {
+	for _, store := range []*Store{s, peer} {
 		go func(store *Store) {
 			<-start
 			decision, err := store.RecoverExpiredOutcome(ctx, f)

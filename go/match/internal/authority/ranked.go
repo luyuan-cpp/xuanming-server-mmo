@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -46,7 +47,7 @@ const (
 	seasonColumns        = "season_id,season_key,season_name,rank_generation,source_epoch,rule_version,state,rollover_stage,start_ms,end_ms,rank_board_id,expected_rank_cursor,champion_player_id,champion_name,champion_rating_centi,updated_ms"
 	playerSeasonColumns  = "season_id,player_id,qualified,qualified_at_ms,rating_centi,peak_rating_centi,peak_tier,valid_matches,wins,losses,draws,milestone_bits,honor_bits,final_rank,updated_ms,current_win_streak,best_win_streak"
 	rivalryColumns       = "season_id,player_id,opponent_id,opponent_name,wins,losses,draws,last_outcome,last_battle_id,updated_ms"
-	featuredBuildColumns = "season_id,build_key,season_seal_id,starter_pet_table_id,core_skill_ids,appearances,wins,high_tier_wins,featured_battle_id,featured_player_id,featured_player_name,featured_rating_centi,featured_team_size,featured_total_rounds,updated_ms"
+	featuredBuildColumns = "season_id,build_key_high,build_key_low,build_key,season_seal_id,starter_pet_table_id,core_skill_ids,appearances,wins,high_tier_wins,featured_battle_id,featured_player_id,featured_player_name,featured_rating_centi,featured_team_size,featured_total_rounds,updated_ms"
 )
 
 var (
@@ -1612,9 +1613,14 @@ func scanRivalryRecord(row scanner) (*pb.MatchRankedRivalryRecord, error) {
 	return r, err
 }
 
+func featuredBuildKeyHash(buildKey string) (uint64, uint64) {
+	sum := sha256.Sum256([]byte(buildKey))
+	return binary.BigEndian.Uint64(sum[:8]), binary.BigEndian.Uint64(sum[8:16])
+}
+
 func scanFeaturedBuildRecord(row scanner) (*pb.MatchRankedFeaturedBuildRecord, error) {
 	r := &pb.MatchRankedFeaturedBuildRecord{}
-	err := row.Scan(&r.SeasonId, &r.BuildKey, &r.SeasonSealId, &r.StarterPetTableId, &r.CoreSkillIds, &r.Appearances, &r.Wins, &r.HighTierWins, &r.FeaturedBattleId, &r.FeaturedPlayerId, &r.FeaturedPlayerName, &r.FeaturedRatingCenti, &r.FeaturedTeamSize, &r.FeaturedTotalRounds, &r.UpdatedMs)
+	err := row.Scan(&r.SeasonId, &r.BuildKeyHigh, &r.BuildKeyLow, &r.BuildKey, &r.SeasonSealId, &r.StarterPetTableId, &r.CoreSkillIds, &r.Appearances, &r.Wins, &r.HighTierWins, &r.FeaturedBattleId, &r.FeaturedPlayerId, &r.FeaturedPlayerName, &r.FeaturedRatingCenti, &r.FeaturedTeamSize, &r.FeaturedTotalRounds, &r.UpdatedMs)
 	return r, err
 }
 
@@ -1855,12 +1861,15 @@ func applyFeaturedBuildDeltasTx(ctx context.Context, tx *sql.Tx, seasonID uint32
 	reportRefDelta := make(map[uint64]int64)
 	for _, key := range keys {
 		d := deltas[key]
+		keyHigh, keyLow := featuredBuildKeyHash(d.buildKey)
 		rec, err := scanFeaturedBuildRecord(tx.QueryRowContext(ctx,
-			"SELECT "+featuredBuildColumns+" FROM match_ranked_featured_build WHERE season_id=? AND build_key=? FOR UPDATE",
-			seasonID, key))
+			"SELECT "+featuredBuildColumns+" FROM match_ranked_featured_build WHERE season_id=? AND build_key_high=? AND build_key_low=? AND build_key=? FOR UPDATE",
+			seasonID, keyHigh, keyLow, key))
 		if errors.Is(err, sql.ErrNoRows) {
 			rec = &pb.MatchRankedFeaturedBuildRecord{
 				SeasonId:          seasonID,
+				BuildKeyHigh:      keyHigh,
+				BuildKeyLow:       keyLow,
 				BuildKey:          d.buildKey,
 				SeasonSealId:      d.seasonSealID,
 				StarterPetTableId: d.starterPetTableID,
@@ -1889,9 +1898,9 @@ func applyFeaturedBuildDeltasTx(ctx context.Context, tx *sql.Tx, seasonID uint32
 		}
 		rec.UpdatedMs = stamp
 		if _, err = tx.ExecContext(ctx,
-			"INSERT INTO match_ranked_featured_build("+featuredBuildColumns+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "+
+			"INSERT INTO match_ranked_featured_build("+featuredBuildColumns+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "+
 				"ON DUPLICATE KEY UPDATE appearances=VALUES(appearances),wins=VALUES(wins),high_tier_wins=VALUES(high_tier_wins),featured_battle_id=VALUES(featured_battle_id),featured_player_id=VALUES(featured_player_id),featured_player_name=VALUES(featured_player_name),featured_rating_centi=VALUES(featured_rating_centi),featured_team_size=VALUES(featured_team_size),featured_total_rounds=VALUES(featured_total_rounds),updated_ms=VALUES(updated_ms)",
-			rec.SeasonId, rec.BuildKey, rec.SeasonSealId, rec.StarterPetTableId, rec.CoreSkillIds,
+			rec.SeasonId, rec.BuildKeyHigh, rec.BuildKeyLow, rec.BuildKey, rec.SeasonSealId, rec.StarterPetTableId, rec.CoreSkillIds,
 			rec.Appearances, rec.Wins, rec.HighTierWins, rec.FeaturedBattleId, rec.FeaturedPlayerId,
 			rec.FeaturedPlayerName, rec.FeaturedRatingCenti, rec.FeaturedTeamSize, rec.FeaturedTotalRounds, rec.UpdatedMs); err != nil {
 			return err

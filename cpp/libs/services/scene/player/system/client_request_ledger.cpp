@@ -128,8 +128,6 @@ ClientRequestVerdict Check(const ClientRequestLedgerComp &ledger, uint64_t key, 
 	result.sealedBookItemId = record->sealed_book_item_id();
 	result.equipmentPolishAttemptsUsed = record->equipment_polish_attempts_used();
 	result.equipmentActualGoldSpent = record->equipment_actual_gold_spent();
-	result.wantedOrderId = record->wanted_order_id();
-	result.wantedOrderGold = record->wanted_order_gold();
 	result.skillLoadoutRentedSlots = record->skill_loadout_rented_slots();
 	result.skillLoadoutRentExpiresAtSec = record->skill_loadout_rent_expires_at_sec();
 	result.skillLoadoutRentSpentDiamond = record->skill_loadout_rent_spent_diamond();
@@ -189,8 +187,6 @@ bool Remember(ClientRequestLedgerComp &ledger, uint64_t key, ClientRequestKind k
 	record->set_sealed_book_item_id(result.sealedBookItemId);
 	record->set_equipment_polish_attempts_used(result.equipmentPolishAttemptsUsed);
 	record->set_equipment_actual_gold_spent(result.equipmentActualGoldSpent);
-	record->set_wanted_order_id(result.wantedOrderId);
-	record->set_wanted_order_gold(result.wantedOrderGold);
 	record->set_skill_loadout_rented_slots(result.skillLoadoutRentedSlots);
 	record->set_skill_loadout_rent_expires_at_sec(result.skillLoadoutRentExpiresAtSec);
 	record->set_skill_loadout_rent_spent_diamond(result.skillLoadoutRentSpentDiamond);

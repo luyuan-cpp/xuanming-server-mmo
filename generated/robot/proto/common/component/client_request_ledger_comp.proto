@@ -62,8 +62,9 @@ message ClientRequestRecord {
   uint64 sealed_book_item_id = 37;              // 技能书封卷入包：首次产出的 3414 封卷道籍背包实例 ID。
   uint32 equipment_polish_attempts_used = 38;   // V3 装备智能定档连磨：首次实际消耗打磨手数（1..8）。
   uint64 equipment_actual_gold_spent = 39;      // V3 装备智能定档连磨：首次实际扣除银两（含代打费）。
-  uint64 wanted_order_id = 40;                  // V5 西市悬赏求书：首次发榜/撤单/揭榜对应的悬赏单号。
-  uint64 wanted_order_gold = 41;                // V5 西市悬赏求书：首次托管、全额退还或揭榜净结算银两。
+  // 40 wanted_order_id / 41 wanted_order_gold 已退役(2026-11-27):scene 的悬赏求书发榜 / 撤单 / 揭榜迁 trade 求购单,
+  // 防重改由 trade 的请求号承担;字段号永不复用。
+  reserved 40, 41;
   uint32 skill_loadout_rented_slots = 42;       // 7 套流派方案槽位租用：首次操作后的租用额外套数（1..5）。
   uint64 skill_loadout_rent_expires_at_sec = 43;// 7 套流派方案槽位租用：首次操作后的统一到期 Unix 秒。
   uint64 skill_loadout_rent_spent_diamond = 44; // 7 套流派方案槽位租用：首次实际扣除的真实灵石数。

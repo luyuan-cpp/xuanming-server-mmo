@@ -439,6 +439,9 @@ int main(int argc, char *argv[])
             context.clientEdge = std::make_shared<BattleClientEdge>();
             ConfigureClientAdmissionOrDie(*context.clientEdge);
             BattleRoomManager::Instance().SetClientEdge(context.clientEdge.get());
+            // 房间数、滞留房间与几类只打采样日志的事件计数挂到节点的 Prometheus 出口(设了 MMORPG_METRICS_PORT 才有出口,
+            // node.cpp 的 StartMetricsExporter;2026-11-27 起,原来只有日志)。
+            BattleRoomManager::Instance().RegisterMetrics();
             {
                 bool sendsValid = true;
                 const char *rawSends = std::getenv(BattleRoomManager::kSqlOutcomeSendsPerPumpEnv.data());

@@ -89,8 +89,8 @@ namespace scene_handoff_gate
 		const auto index = static_cast<uint32_t>(method.index());
 		if (service == SceneSkillClientPlayer::descriptor())
 		{
-			// 仅放行纯玩家本地状态查询/制书/研习/拆页/封卷/开卷/藏经阁里程碑/发撤悬赏；
-			// SetCraftProxyStall / ListCraftProxyStalls / ListSkillBookWantedOrders / FulfillSkillBookWantedOrder 绑当前场景摊位/悬赏交互，不跨节点重放。
+			// 仅放行纯玩家本地状态查询/制书/研习/拆页/封卷/开卷/藏经阁里程碑；
+			// SetCraftProxyStall / ListCraftProxyStalls 绑当前场景摊位交互，不跨节点重放。悬赏求书已迁 trade 求购单，不经 scene。
 			return index == SceneSkillClientPlayerListSkillsIndex ||
 				   index == SceneSkillClientPlayerUpgradeSkillIndex ||
 				   index == SceneSkillClientPlayerGetSkillCraftingStateIndex ||
@@ -103,9 +103,7 @@ namespace scene_handoff_gate
 				   index == SceneSkillClientPlayerBatchDismantleSkillBooksIndex ||
 				   index == SceneSkillClientPlayerSaveSkillLoadoutIndex ||
 				   index == SceneSkillClientPlayerSwitchSkillLoadoutIndex ||
-				   index == SceneSkillClientPlayerRentSkillLoadoutSlotsIndex ||
-				   index == SceneSkillClientPlayerPostSkillBookWantedOrderIndex ||
-				   index == SceneSkillClientPlayerCancelSkillBookWantedOrderIndex;
+				   index == SceneSkillClientPlayerRentSkillLoadoutSlotsIndex;
 		}
 		if (service == SceneSceneClientPlayer::descriptor())
 		{

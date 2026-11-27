@@ -586,10 +586,11 @@ message MatchRankedRivalryRecord {
   uint64 updated_ms = 10;
 }
 
-// 论剑 V6 问道名局高段热门流派汇总表（按 (season_id, build_key) 幂等汇聚，featured_battle_id 建索引供公开回放鉴权）。
+// 论剑 V6 问道名局高段热门流派汇总表（按 (season_id, build_key) 幂等汇聚；整数复合主键符合 D-14，唯一键兜底精确去重，featured_battle_id 建索引供公开回放鉴权）。
 message MatchRankedFeaturedBuildRecord {
   option (OptionTableName) = "match_ranked_featured_build";
-  option (OptionPrimaryKey) = "season_id,build_key";
+  option (OptionPrimaryKey) = "season_id,build_key_high,build_key_low";
+  option (OptionUniqueKey) = "season_id,build_key";
   option (OptionIndex) = "season_id,high_tier_wins,wins,featured_rating_centi;featured_battle_id";
   uint32 season_id = 1;
   string build_key = 2;
@@ -606,6 +607,8 @@ message MatchRankedFeaturedBuildRecord {
   uint32 featured_team_size = 13;
   uint32 featured_total_rounds = 14;
   uint64 updated_ms = 15;
+  uint64 build_key_high = 16; // build_key 的 SHA-256 前 64 位；与 build_key_low 构成 D-14 整数复合主键
+  uint64 build_key_low = 17;  // build_key 的 SHA-256 次 64 位
 }
 
 // ---- 全服赛季战队锦标赛《群仙问道赛》V1 权威表(docs/design/season-team-tournament-v1.md) ----

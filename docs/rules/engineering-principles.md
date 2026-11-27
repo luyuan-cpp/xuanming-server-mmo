@@ -143,3 +143,9 @@
 #### 3. 必补生命周期测试（缺一条不合入）
 
 - 新增或改造含异步回调 / 定时器 / 连接的类时，必须附带一条**「先析构再触发回调（Destroy-Before-Callback）」**回归测试：挂上回调 / 投递 `queueInLoop` / 设短定时器 → **立刻销毁对象** → 跑完 EventLoop 让滞后回调真正触发 → 断言**不崩、无状态副作用、无连接泄漏**（参考 `cpp/tests/rpc_controller_test/rpc_client_lifecycle_test.cpp`）。
+
+#### 4. 自动门禁与预检
+
+- **本地提交秒级拦截**：`.githooks/pre-commit` 对暂存区改动的 C++ 生产源码自动执行 `python tools/scripts/tests/test_cpp_async_callback_capture.py --staged`。
+- **远端 CI 与交付前全仓检查**：CI（`.github/workflows/cpp-build-ci.yml` 的 `test_cpp*`）与交付前命令 `python tools/scripts/tests/test_cpp_async_callback_capture.py` 全仓扫描 `cpp/libs` 与 `cpp/nodes`（排除测试目录与第三方/生成物），拦截未登记的 `[=]`、`[&]`、裸 `this`/`*this`、裸引用、`std::bind(..., this/shared_from_this())` 及危险初始化捕获。
+- **配额白名单与边界**：经核验的历史同寿命例外按 `(路径, 方法名, 归一化签名) -> (精确次数, 原因)` 登记在脚本 `ALLOWED` 中（免疫行号漂移、老文件新增即判红、重构清理后全仓单测自动提示收紧）；先赋给局部变量再传入或宏展开的回调不在文本筛查范围内，由代码评审按同一规则把关。

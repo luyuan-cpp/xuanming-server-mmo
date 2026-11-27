@@ -72,9 +72,11 @@ enum class ClientRequestKind : uint8_t
 	kUnsealSkillBook = 23,            // SceneSkillClientPlayer.UnsealSkillBook:背包封卷道籍开卷回书架
 	kClaimScrollMilestone = 24,       // SceneSkillClientPlayer.ClaimScrollCollectionMilestone:领取卷宗收集里程碑残页
 	kBatchDismantleSkillBooks = 25,   // SceneSkillClientPlayer.BatchDismantleSkillBooks:批量拆解未学常规书返还残页
-	kPostWantedOrder = 26,            // SceneSkillClientPlayer.PostSkillBookWantedOrder:发榜托管银两求购常规技能书
-	kCancelWantedOrder = 27,          // SceneSkillClientPlayer.CancelSkillBookWantedOrder:撤单全额退还托管悬赏银两
-	kFulfillWantedOrder = 28,         // SceneSkillClientPlayer.FulfillSkillBookWantedOrder:揭榜交卷结算悬赏净银两
+	// 26~28 已退役(2026-11-27):scene 的悬赏求书发榜 / 撤单 / 揭榜迁 trade 求购单,scene 不再记这三种请求。
+	// 值永久保留、不复用;上线前的开发库里残留的旧记录照常按容量挤出。
+	kRetiredPostWantedOrder = 26,
+	kRetiredCancelWantedOrder = 27,
+	kRetiredFulfillWantedOrder = 28,
 	kClearJianghuDefeatMark = 29,     // SceneJianghuClientPlayer.ClearJianghuDefeatMark:银两或清风洗尘符幂等清除30分钟战败印记
 	kRentSkillLoadoutSlots = 30,      // SceneSkillClientPlayer.RentSkillLoadoutSlots:7套非永久流派方案槽位按月灵石租用/扩容/续期
 	kCount
@@ -165,8 +167,6 @@ struct ClientRequestResult
 	uint64_t sealedBookItemId{0};
 	uint32_t equipmentPolishAttemptsUsed{0};
 	uint64_t equipmentActualGoldSpent{0};
-	uint64_t wantedOrderId{0};
-	uint64_t wantedOrderGold{0};
 	uint32_t skillLoadoutRentedSlots{0};
 	uint64_t skillLoadoutRentExpiresAtSec{0};
 	uint64_t skillLoadoutRentSpentDiamond{0};

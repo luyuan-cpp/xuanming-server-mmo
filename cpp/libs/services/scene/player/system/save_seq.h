@@ -119,8 +119,9 @@ namespace save_seq
 	};
 } // namespace save_seq
 
-// 发号异常计数。与 owner_epoch_stats 同一套写法(relaxed atomic、进程启动以来的累计值、不接 Prometheus、不带玩家维度),
-// 由 RedisSystem 的 30s 快照定时器在任一非 0 时打成一行 [SaveSeq](WARN)。三项正常都应恒为 0:
+// 发号异常计数。与 owner_epoch_stats 同一套写法(relaxed atomic、进程启动以来的累计值、不带玩家维度),
+// 由 RedisSystem 的 30s 快照定时器在任一非 0 时打成一行 [SaveSeq](WARN);player_ownership_metrics.cpp 按 kCounterNames
+// 导出为 scene_save_seq_events_total{event}(2026-11-27 起)。三项正常都应恒为 0:
 //   observe_beyond_bound   加载时种子超界、给该玩家挂了个人下限的次数。非 0 = 有坏数据或某台 scene 主机时钟超前;
 //   personal_floor_issued  按个人下限发号的存盘次数(挂着个人下限的玩家每次真写盘各计一次);
 //   exhausted              发号饱和、拒绝存盘的次数(进程水位或个人下限到了 UINT64_MAX)。

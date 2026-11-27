@@ -5391,11 +5391,11 @@ constexpr MatchRankedFeaturedBuildRecord::ParseTableT_ MatchRankedFeaturedBuildR
     {
       PROTOBUF_FIELD_OFFSET(MatchRankedFeaturedBuildRecord, _impl_._has_bits_),
       0, // no _extensions_
-      15, 120,  // max_field_number, fast_idx_mask
+      17, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294934528,  // skipmap
+      4294836224,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      15,  // num_field_entries
+      17,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -5466,6 +5466,28 @@ constexpr MatchRankedFeaturedBuildRecord::ParseTableT_ MatchRankedFeaturedBuildR
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MatchRankedFeaturedBuildRecord, _impl_.updated_ms_), 14>(),
        {120, 14, 0,
         PROTOBUF_FIELD_OFFSET(MatchRankedFeaturedBuildRecord, _impl_.updated_ms_)}},
+      // uint64 build_key_high = 16;
+      {::_pbi::TcParser::FastV64S2,
+       {384, 15, 0,
+        PROTOBUF_FIELD_OFFSET(MatchRankedFeaturedBuildRecord, _impl_.build_key_high_)}},
+      // uint64 build_key_low = 17;
+      {::_pbi::TcParser::FastV64S2,
+       {392, 16, 0,
+        PROTOBUF_FIELD_OFFSET(MatchRankedFeaturedBuildRecord, _impl_.build_key_low_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -5499,10 +5521,14 @@ constexpr MatchRankedFeaturedBuildRecord::ParseTableT_ MatchRankedFeaturedBuildR
       {PROTOBUF_FIELD_OFFSET(MatchRankedFeaturedBuildRecord, _impl_.featured_total_rounds_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 updated_ms = 15;
       {PROTOBUF_FIELD_OFFSET(MatchRankedFeaturedBuildRecord, _impl_.updated_ms_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 build_key_high = 16;
+      {PROTOBUF_FIELD_OFFSET(MatchRankedFeaturedBuildRecord, _impl_.build_key_high_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 build_key_low = 17;
+      {PROTOBUF_FIELD_OFFSET(MatchRankedFeaturedBuildRecord, _impl_.build_key_low_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
-      "\44\0\11\0\0\16\0\0\0\0\0\24\0\0\0\0"
+      "\44\0\11\0\0\16\0\0\0\0\0\24\0\0\0\0\0\0\0\0\0\0\0\0"
       "match.MatchRankedFeaturedBuildRecord"
       "build_key"
       "core_skill_ids"
@@ -5536,7 +5562,9 @@ inline constexpr MatchRankedFeaturedBuildRecord::Impl_::Impl_(
         featured_rating_centi_{::int64_t{0}},
         featured_team_size_{0u},
         featured_total_rounds_{0u},
-        updated_ms_{::uint64_t{0u}} {}
+        updated_ms_{::uint64_t{0u}},
+        build_key_high_{::uint64_t{0u}},
+        build_key_low_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr MatchRankedFeaturedBuildRecord::MatchRankedFeaturedBuildRecord(::_pbi::ConstantInitialized,
@@ -12369,7 +12397,7 @@ const ::uint32_t
         8,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::match::MatchRankedFeaturedBuildRecord, _impl_._has_bits_),
-        18, // hasbit index offset
+        20, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::match::MatchRankedFeaturedBuildRecord, _impl_.season_id_),
         PROTOBUF_FIELD_OFFSET(::match::MatchRankedFeaturedBuildRecord, _impl_.build_key_),
         PROTOBUF_FIELD_OFFSET(::match::MatchRankedFeaturedBuildRecord, _impl_.season_seal_id_),
@@ -12385,6 +12413,8 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::match::MatchRankedFeaturedBuildRecord, _impl_.featured_team_size_),
         PROTOBUF_FIELD_OFFSET(::match::MatchRankedFeaturedBuildRecord, _impl_.featured_total_rounds_),
         PROTOBUF_FIELD_OFFSET(::match::MatchRankedFeaturedBuildRecord, _impl_.updated_ms_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchRankedFeaturedBuildRecord, _impl_.build_key_high_),
+        PROTOBUF_FIELD_OFFSET(::match::MatchRankedFeaturedBuildRecord, _impl_.build_key_low_),
         3,
         0,
         4,
@@ -12400,6 +12430,8 @@ const ::uint32_t
         12,
         13,
         14,
+        15,
+        16,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::match::MatchTournamentSeasonRecord, _impl_._has_bits_),
         30, // hasbit index offset
@@ -12949,24 +12981,24 @@ static const ::_pbi::MigrationSchema
         {668, sizeof(::match::MatchRankedBattleRecord)},
         {681, sizeof(::match::MatchRankedRivalryRecord)},
         {704, sizeof(::match::MatchRankedFeaturedBuildRecord)},
-        {737, sizeof(::match::MatchTournamentSeasonRecord)},
-        {794, sizeof(::match::MatchTournamentChampionMembersBlob)},
-        {799, sizeof(::match::MatchTournamentSquadRecord)},
-        {840, sizeof(::match::MatchTournamentMemberRecord)},
-        {865, sizeof(::match::MatchTournamentInviteRecord)},
-        {882, sizeof(::match::MatchTournamentMatchRecord)},
-        {959, sizeof(::match::MatchTournamentMatchGameRecord)},
-        {980, sizeof(::match::MatchTournamentCheerRecord)},
-        {993, sizeof(::match::MatchTournamentRewardRecord)},
-        {1030, sizeof(::match::MatchTournamentPredictionRecord)},
-        {1055, sizeof(::match::MatchJianghuDuelInvitationRecord)},
-        {1100, sizeof(::match::MatchJianghuDuelCooldownRecord)},
-        {1115, sizeof(::match::MatchGrudgeRelationRecord)},
-        {1140, sizeof(::match::MatchGrudgeLogRecord)},
-        {1161, sizeof(::match::MatchGrudgeAppliedRecord)},
-        {1168, sizeof(::match::MatchTrialChallengeCardRecord)},
-        {1189, sizeof(::match::MatchTacticalPuzzleRecord)},
-        {1228, sizeof(::match::MatchTacticalPuzzleClearRecord)},
+        {741, sizeof(::match::MatchTournamentSeasonRecord)},
+        {798, sizeof(::match::MatchTournamentChampionMembersBlob)},
+        {803, sizeof(::match::MatchTournamentSquadRecord)},
+        {844, sizeof(::match::MatchTournamentMemberRecord)},
+        {869, sizeof(::match::MatchTournamentInviteRecord)},
+        {886, sizeof(::match::MatchTournamentMatchRecord)},
+        {963, sizeof(::match::MatchTournamentMatchGameRecord)},
+        {984, sizeof(::match::MatchTournamentCheerRecord)},
+        {997, sizeof(::match::MatchTournamentRewardRecord)},
+        {1034, sizeof(::match::MatchTournamentPredictionRecord)},
+        {1059, sizeof(::match::MatchJianghuDuelInvitationRecord)},
+        {1104, sizeof(::match::MatchJianghuDuelCooldownRecord)},
+        {1119, sizeof(::match::MatchGrudgeRelationRecord)},
+        {1144, sizeof(::match::MatchGrudgeLogRecord)},
+        {1165, sizeof(::match::MatchGrudgeAppliedRecord)},
+        {1172, sizeof(::match::MatchTrialChallengeCardRecord)},
+        {1193, sizeof(::match::MatchTacticalPuzzleRecord)},
+        {1232, sizeof(::match::MatchTacticalPuzzleClearRecord)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -13286,7 +13318,7 @@ const char descriptor_table_protodef_proto_2fmatch_2fmatch_5fauthority_2eproto[]
     "t_battle_id\030\t \001(\004\022\022\n\nupdated_ms\030\n \001(\004:`\212"
     "\222\364\001\024match_ranked_rivalry\222\222\364\001\037season_id,p"
     "layer_id,opponent_id\332\222\364\001\036season_id,playe"
-    "r_id,updated_ms\"\231\004\n\036MatchRankedFeaturedB"
+    "r_id,updated_ms\"\363\004\n\036MatchRankedFeaturedB"
     "uildRecord\022\021\n\tseason_id\030\001 \001(\r\022\021\n\tbuild_k"
     "ey\030\002 \001(\t\022\026\n\016season_seal_id\030\003 \001(\r\022\034\n\024star"
     "ter_pet_table_id\030\004 \001(\r\022\026\n\016core_skill_ids"
@@ -13296,212 +13328,214 @@ const char descriptor_table_protodef_proto_2fmatch_2fmatch_5fauthority_2eproto[]
     "\004\022\034\n\024featured_player_name\030\013 \001(\t\022\035\n\025featu"
     "red_rating_centi\030\014 \001(\003\022\032\n\022featured_team_"
     "size\030\r \001(\r\022\035\n\025featured_total_rounds\030\016 \001("
-    "\r\022\022\n\nupdated_ms\030\017 \001(\004:\203\001\212\222\364\001\033match_ranke"
-    "d_featured_build\222\222\364\001\023season_id,build_key"
-    "\332\222\364\001Fseason_id,high_tier_wins,wins,featu"
-    "red_rating_centi;featured_battle_id\"\265\006\n\033"
-    "MatchTournamentSeasonRecord\022\021\n\tseason_id"
-    "\030\001 \001(\r\022\022\n\nseason_key\030\002 \001(\t\022\023\n\013season_nam"
-    "e\030\003 \001(\t\022\024\n\014rule_version\030\004 \001(\r\022\r\n\005stage\030\005"
-    " \001(\r\022\035\n\025registration_start_ms\030\006 \001(\004\022\032\n\022q"
-    "ualifier_start_ms\030\007 \001(\004\022\031\n\021knockout_star"
-    "t_ms\030\010 \001(\004\022\027\n\017settle_start_ms\030\t \001(\004\022\016\n\006e"
-    "nd_ms\030\n \001(\004\022\030\n\020battle_team_size\030\013 \001(\r\022\027\n"
-    "\017roster_max_size\030\014 \001(\r\022\033\n\023knockout_team_"
-    "count\030\r \001(\r\022\031\n\021champion_squad_id\030\016 \001(\004\022\033"
-    "\n\023champion_squad_name\030\017 \001(\t\022\037\n\027champion_"
-    "member_summary\030\020 \001(\t\022\022\n\nsettled_ms\030\021 \001(\004"
-    "\022\022\n\nupdated_ms\030\022 \001(\004\022\035\n\025champion_members"
-    "_blob\030\023 \001(\014\022\032\n\022champion_emblem_id\030\025 \001(\r\022"
-    "\034\n\024third_place_squad_id\030\026 \001(\004\022\036\n\026third_p"
-    "lace_squad_name\030\027 \001(\t\022\035\n\025third_place_emb"
-    "lem_id\030\030 \001(\r\022\033\n\023final_mvp_player_id\030\031 \001("
-    "\004\022\035\n\025final_mvp_player_name\030\032 \001(\t\022\027\n\017fina"
-    "l_mvp_score\030\033 \001(\r\022\033\n\023champion_honor_bits"
-    "\030\034 \001(\r:>\212\222\364\001\027match_tournament_season\222\222\364\001"
-    "\tseason_id\332\222\364\001\017stage,season_idJ\004\010\024\020\025R\025ch"
-    "ampion_salute_count\"Y\n\"MatchTournamentCh"
-    "ampionMembersBlob\0223\n\007members\030\001 \003(\0132\".mat"
-    "ch.MatchTournamentMemberRecord\"\276\004\n\032Match"
-    "TournamentSquadRecord\022\020\n\010squad_id\030\001 \001(\004\022"
-    "\021\n\tseason_id\030\002 \001(\r\022\014\n\004name\030\003 \001(\t\022\021\n\tname"
-    "_norm\030\004 \001(\t\022\031\n\021captain_player_id\030\005 \001(\004\022\r"
-    "\n\005state\030\006 \001(\r\022\024\n\014member_count\030\007 \001(\r\022\030\n\020q"
-    "ualifier_points\030\010 \001(\r\022\030\n\020qualifier_playe"
-    "d\030\t \001(\r\022\026\n\016qualifier_wins\030\n \001(\r\022\030\n\020quali"
-    "fier_losses\030\013 \001(\r\022\027\n\017qualifier_draws\030\014 \001"
-    "(\r\022\021\n\tseed_rank\030\r \001(\r\022\022\n\nfinal_rank\030\016 \001("
-    "\r\022\023\n\013cheer_count\030\017 \001(\r\022\025\n\rregistered_ms\030"
-    "\020 \001(\004\022\022\n\nupdated_ms\030\021 \001(\004\022\021\n\temblem_id\030\022"
-    " \001(\r\022\022\n\nhonor_bits\030\023 \001(\r:\214\001\212\222\364\001\026match_to"
-    "urnament_squad\222\222\364\001\010squad_id\332\222\364\001Gseason_i"
-    "d,state,qualifier_points,squad_id;season"
-    "_id,final_rank,squad_id\342\222\364\001\023season_id,na"
-    "me_norm\"\270\002\n\033MatchTournamentMemberRecord\022"
-    "\021\n\tseason_id\030\001 \001(\r\022\021\n\tplayer_id\030\002 \001(\004\022\020\n"
-    "\010squad_id\030\003 \001(\004\022\014\n\004role\030\004 \001(\r\022\024\n\014starter"
-    "_slot\030\005 \001(\r\022\023\n\013player_name\030\006 \001(\t\022\017\n\007zone"
-    "_id\030\007 \001(\r\022\021\n\tjoined_ms\030\010 \001(\004\022\020\n\010class_id"
-    "\030\t \001(\r\022\016\n\006gender\030\n \001(\r\022\025\n\rappearance_id\030"
-    "\013 \001(\t:K\212\222\364\001\027match_tournament_member\222\222\364\001\023"
-    "season_id,player_id\332\222\364\001\022squad_id,player_"
-    "id\"\234\002\n\033MatchTournamentInviteRecord\022\020\n\010sq"
-    "uad_id\030\001 \001(\004\022\031\n\021invitee_player_id\030\002 \001(\004\022"
-    "\021\n\tseason_id\030\003 \001(\r\022\031\n\021inviter_player_id\030"
-    "\004 \001(\004\022\r\n\005state\030\005 \001(\r\022\022\n\ncreated_ms\030\006 \001(\004"
-    "\022\022\n\nexpires_ms\030\007 \001(\004:k\212\222\364\001\027match_tournam"
-    "ent_invite\222\222\364\001\032squad_id,invitee_player_i"
-    "d\332\222\364\001+invitee_player_id,state,expires_ms"
-    ",squad_id\"\264\007\n\032MatchTournamentMatchRecord"
-    "\022\020\n\010match_id\030\001 \001(\004\022\021\n\tseason_id\030\002 \001(\r\022\r\n"
-    "\005phase\030\003 \001(\r\022\023\n\013round_index\030\004 \001(\r\022\022\n\nslo"
-    "t_index\030\005 \001(\r\022\022\n\nsquad_a_id\030\006 \001(\004\022\022\n\nsqu"
-    "ad_b_id\030\007 \001(\004\022\020\n\010lineup_a\030\010 \001(\014\022\020\n\010lineu"
-    "p_b\030\t \001(\014\022\017\n\007ready_a\030\n \001(\010\022\017\n\007ready_b\030\013 "
-    "\001(\010\022\r\n\005state\030\014 \001(\r\022\021\n\tbattle_id\030\r \001(\004\022\027\n"
-    "\017winner_squad_id\030\016 \001(\004\022\017\n\007outcome\030\017 \001(\r\022"
-    "\031\n\021featured_spectate\030\020 \001(\010\022\032\n\022scheduled_"
-    "start_ms\030\021 \001(\004\022\023\n\013deadline_ms\030\022 \001(\004\022\023\n\013f"
-    "inished_ms\030\023 \001(\004\022\022\n\nupdated_ms\030\024 \001(\004\022\017\n\007"
-    "best_of\030\025 \001(\r\022\032\n\022current_game_index\030\026 \001("
-    "\r\022\016\n\006wins_a\030\027 \001(\r\022\016\n\006wins_b\030\030 \001(\r\022\037\n\027cur"
-    "rent_leyline_element\030\031 \001(\r\022\030\n\020leyline_se"
-    "quence\030\032 \001(\t\022 \n\030intermission_deadline_ms"
-    "\030\033 \001(\004\022\026\n\016is_third_place\030\034 \001(\010\022\025\n\rmvp_pl"
-    "ayer_id\030\035 \001(\004\022\027\n\017mvp_player_name\030\036 \001(\t\022\024"
-    "\n\014mvp_squad_id\030\037 \001(\004\022\021\n\tmvp_score\030  \001(\r\022"
-    "\022\n\nmvp_damage\030! \001(\004\022\023\n\013mvp_healing\030\" \001(\004"
-    "\022\024\n\014mvp_controls\030# \001(\r\022\030\n\020banned_leyline"
-    "_a\030$ \001(\r\022\030\n\020banned_leyline_b\030% \001(\r:|\212\222\364\001"
-    "\026match_tournament_match\222\222\364\001\010match_id\332\222\364\001"
-    "Oseason_id,phase,round_index,slot_index;"
-    "battle_id;season_id,phase,state,match_id"
-    "\"\263\002\n\036MatchTournamentMatchGameRecord\022\020\n\010m"
-    "atch_id\030\001 \001(\004\022\022\n\ngame_index\030\002 \001(\r\022\021\n\tsea"
-    "son_id\030\003 \001(\r\022\r\n\005phase\030\004 \001(\r\022\021\n\tbattle_id"
-    "\030\005 \001(\004\022\027\n\017leyline_element\030\006 \001(\r\022\027\n\017winne"
-    "r_squad_id\030\007 \001(\004\022\017\n\007outcome\030\010 \001(\r\022\023\n\013fin"
-    "ished_ms\030\t \001(\004:^\212\222\364\001\033match_tournament_ma"
-    "tch_game\222\222\364\001\023match_id,game_index\332\222\364\001\023sea"
-    "son_id,battle_id\342\222\364\001\tbattle_id\"\320\001\n\032Match"
-    "TournamentCheerRecord\022\021\n\tseason_id\030\001 \001(\r"
-    "\022\021\n\tplayer_id\030\002 \001(\004\022\020\n\010squad_id\030\003 \001(\004\022\020\n"
-    "\010rewarded\030\004 \001(\010\022\022\n\ncreated_ms\030\005 \001(\004:T\212\222\364"
-    "\001\026match_tournament_cheer\222\222\364\001\023season_id,p"
-    "layer_id\332\222\364\001\034season_id,squad_id,player_i"
-    "d\"\361\003\n\033MatchTournamentRewardRecord\022\021\n\tsea"
-    "son_id\030\001 \001(\r\022\021\n\tplayer_id\030\002 \001(\004\022\021\n\ttier_"
-    "kind\030\003 \001(\r\022\021\n\treward_id\030\004 \001(\004\022\020\n\010squad_i"
-    "d\030\005 \001(\004\022\022\n\nfinal_rank\030\006 \001(\r\022\017\n\007tier_id\030\007"
-    " \001(\r\022\023\n\013gold_amount\030\010 \001(\004\022\023\n\013attachments"
-    "\030\t \001(\014\022\022\n\ntitle_code\030\n \001(\t\022\022\n\nbadge_code"
-    "\030\013 \001(\t\022\026\n\016delivery_state\030\014 \001(\r\022\017\n\007mail_i"
-    "d\030\r \001(\004\022\022\n\nclaimed_ms\030\016 \001(\004\022\022\n\nupdated_m"
-    "s\030\017 \001(\004\022\022\n\nmail_title\030\020 \001(\t\022\021\n\tmail_body"
-    "\030\021 \001(\t:\204\001\212\222\364\001\027match_tournament_reward\222\222\364"
-    "\001\035season_id,player_id,tier_kind\332\222\364\001Aplay"
-    "er_id,season_id,tier_kind;delivery_state"
-    ",updated_ms,reward_id\"\233\003\n\037MatchTournamen"
-    "tPredictionRecord\022\021\n\tseason_id\030\001 \001(\r\022\021\n\t"
-    "player_id\030\002 \001(\004\022\020\n\010match_id\030\003 \001(\004\022\032\n\022pre"
-    "dicted_squad_id\030\004 \001(\004\022\023\n\013round_index\030\005 \001"
-    "(\r\022\026\n\016is_third_place\030\006 \001(\010\022\023\n\013player_nam"
-    "e\030\007 \001(\t\022\024\n\014result_state\030\010 \001(\r\022\025\n\rearned_"
-    "points\030\t \001(\r\022\022\n\ncreated_ms\030\n \001(\004\022\022\n\nupda"
-    "ted_ms\030\013 \001(\004:\214\001\212\222\364\001\033match_tournament_pre"
-    "diction\222\222\364\001\034season_id,player_id,match_id"
-    "\332\222\364\001Fseason_id,match_id,predicted_squad_"
-    "id;season_id,result_state,player_id\"\304\005\n "
-    "MatchJianghuDuelInvitationRecord\022\026\n\016duel"
-    "_invite_id\030\001 \001(\004\022\021\n\twrit_tier\030\002 \001(\r\022\021\n\tt"
-    "eam_size\030\003 \001(\r\022\r\n\005state\030\004 \001(\r\022\035\n\025challen"
-    "ger_captain_id\030\005 \001(\004\022\031\n\021target_captain_i"
-    "d\030\006 \001(\004\022\032\n\022challenger_account\030\007 \001(\t\022\033\n\023c"
-    "hallenger_revision\030\010 \001(\004\022\026\n\016target_accou"
-    "nt\030\t \001(\t\022\027\n\017target_revision\030\n \001(\004\022\017\n\007zon"
-    "e_id\030\013 \001(\r\022\027\n\017side_a_guild_id\030\014 \001(\004\022\031\n\021s"
-    "ide_a_guild_name\030\r \001(\t\022\027\n\017side_b_guild_i"
-    "d\030\016 \001(\004\022\031\n\021side_b_guild_name\030\017 \001(\t\022\027\n\017me"
-    "mbers_payload\030\020 \001(\014\022\022\n\ncreated_ms\030\021 \001(\004\022"
-    "\022\n\nexpires_ms\030\022 \001(\004\022\033\n\023confirm_deadline_"
-    "ms\030\023 \001(\004\022\021\n\tbattle_id\030\024 \001(\004\022\022\n\nupdated_m"
-    "s\030\025 \001(\004:\260\001\212\222\364\001\035match_jianghu_duel_invita"
-    "tion\222\222\364\001\016duel_invite_id\332\222\364\001gtarget_capta"
-    "in_id,state,expires_ms,duel_invite_id;ch"
-    "allenger_captain_id,state,expires_ms,due"
-    "l_invite_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\263\002\n\036MatchJian"
-    "ghuDuelCooldownRecord\022\034\n\024challenger_play"
-    "er_id\030\001 \001(\004\022\030\n\020target_player_id\030\002 \001(\004\022\031\n"
-    "\021cooldown_until_ms\030\003 \001(\004\022\017\n\007day_key\030\004 \001("
-    "\r\022\035\n\025daily_unmatched_count\030\005 \001(\r\022\022\n\nupda"
-    "ted_ms\030\006 \001(\004:z\212\222\364\001\033match_jianghu_duel_co"
-    "oldown\222\222\364\001%challenger_player_id,target_p"
-    "layer_id\332\222\364\001\034challenger_player_id,day_ke"
-    "y\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\366\002\n\031MatchGrudgeRelation"
-    "Record\022\021\n\tplayer_id\030\001 \001(\004\022\026\n\016owner_revis"
-    "ion\030\002 \001(\004\022\026\n\016peer_player_id\030\003 \001(\004\022\021\n\tpee"
-    "r_name\030\004 \001(\t\022\014\n\004wins\030\005 \001(\r\022\016\n\006losses\030\006 \001"
-    "(\r\022\r\n\005draws\030\007 \001(\r\022\022\n\nwin_streak\030\010 \001(\r\022\023\n"
-    "\013lose_streak\030\t \001(\r\022\026\n\016last_battle_ms\030\n \001"
-    "(\004\022\021\n\tdismissed\030\013 \001(\010:\201\001\212\222\364\001\025match_grudg"
-    "e_relation\222\222\364\001\'player_id,owner_revision,"
-    "peer_player_id\332\222\364\001\'player_id,owner_revis"
-    "ion,last_battle_ms\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\354\002\n\024Ma"
-    "tchGrudgeLogRecord\022\021\n\tplayer_id\030\001 \001(\004\022\026\n"
-    "\016owner_revision\030\002 \001(\004\022\026\n\016peer_player_id\030"
-    "\003 \001(\004\022\021\n\tbattle_id\030\004 \001(\004\022\030\n\020outcome_for_"
-    "self\030\005 \001(\r\022\024\n\014total_rounds\030\006 \001(\r\022\021\n\twrit"
-    "_tier\030\007 \001(\r\022\021\n\tteam_size\030\010 \001(\r\022\023\n\013finish"
-    "ed_ms\030\t \001(\004:\222\001\212\222\364\001\020match_grudge_log\222\222\364\0011"
-    "player_id,owner_revision,peer_player_id,"
-    "battle_id\332\222\364\0013player_id,owner_revision,p"
-    "eer_player_id,finished_ms\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004"
-    "\"j\n\030MatchGrudgeAppliedRecord\022\021\n\tbattle_i"
-    "d\030\001 \001(\004\022\022\n\napplied_ms\030\002 \001(\004:\'\212\222\364\001\024match_"
-    "grudge_applied\222\222\364\001\tbattle_id\"\317\002\n\035MatchTr"
-    "ialChallengeCardRecord\022\017\n\007card_id\030\001 \001(\004\022"
-    "\027\n\017owner_player_id\030\002 \001(\004\022\021\n\tbattle_id\030\003 "
-    "\001(\004\022\030\n\020journal_entry_id\030\004 \001(\r\022\020\n\010vow_mas"
-    "k\030\005 \001(\r\022\024\n\014total_rounds\030\006 \001(\r\022\022\n\ncreated"
-    "_ms\030\007 \001(\004\022\022\n\nexpires_ms\030\010 \001(\004\022\021\n\tcard_vi"
-    "ew\030\t \001(\014:t\212\222\364\001\032match_trial_challenge_car"
-    "d\222\222\364\001\007card_id\332\222\364\0015owner_player_id,create"
-    "d_ms,card_id;expires_ms,card_id\250\223\364\001\001\260\223\364\001"
-    "\004\270\223\364\001\004\"\307\004\n\031MatchTacticalPuzzleRecord\022\021\n\t"
-    "puzzle_id\030\001 \001(\004\022\030\n\020author_player_id\030\002 \001("
-    "\004\022\023\n\013author_name\030\003 \001(\t\022\r\n\005state\030\004 \001(\r\022\025\n"
-    "\rspec_revision\030\005 \001(\r\022\r\n\005title\030\006 \001(\t\022\021\n\th"
-    "int_text\030\007 \001(\t\022\020\n\010tag_mask\030\010 \001(\r\022\024\n\014spec"
-    "_payload\030\t \001(\014\022\032\n\022verified_battle_id\030\n \001"
-    "(\004\022\032\n\022author_best_rounds\030\013 \001(\r\022\025\n\rattemp"
-    "t_count\030\014 \001(\r\022\023\n\013clear_count\030\r \001(\r\022\032\n\022gl"
-    "obal_best_rounds\030\016 \001(\r\022\022\n\nlike_count\030\017 \001"
-    "(\r\022\022\n\ncreated_ms\030\020 \001(\004\022\024\n\014published_ms\030\021"
-    " \001(\004\022\022\n\nupdated_ms\030\022 \001(\004:\245\001\212\222\364\001\025match_ta"
-    "ctical_puzzle\222\222\364\001\tpuzzle_id\332\222\364\001iauthor_p"
-    "layer_id,updated_ms,puzzle_id;state,like"
-    "_count,clear_count,puzzle_id;state,publi"
-    "shed_ms,puzzle_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\257\002\n\036Mat"
-    "chTacticalPuzzleClearRecord\022\021\n\tpuzzle_id"
-    "\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\020\n\010attempts\030\003 "
-    "\001(\r\022\017\n\007cleared\030\004 \001(\010\022\023\n\013best_rounds\030\005 \001("
-    "\r\022\r\n\005liked\030\006 \001(\010\022\030\n\020first_cleared_ms\030\007 \001"
-    "(\004\022\022\n\nupdated_ms\030\010 \001(\004:r\212\222\364\001\033match_tacti"
-    "cal_puzzle_clear\222\222\364\001\023puzzle_id,player_id"
-    "\332\222\364\001&player_id,cleared,updated_ms,puzzle"
-    "_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004*\314\003\n\037MatchBattleComple"
-    "tionSourceKind\022.\n*MATCH_BATTLE_COMPLETIO"
-    "N_SOURCE_UNSPECIFIED\020\000\022(\n$MATCH_BATTLE_C"
-    "OMPLETION_SOURCE_KAFKA\020\001\022-\n)MATCH_BATTLE"
-    "_COMPLETION_SOURCE_BATTLE_RPC\020\002\0227\n3MATCH"
-    "_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE"
-    "_ABORT\020\003\0226\n2MATCH_BATTLE_COMPLETION_SOUR"
-    "CE_MATCH_NO_ROOM_ABORT\020\004\022/\n+MATCH_BATTLE"
-    "_COMPLETION_SOURCE_MANUAL_ABORT\020\005\022@\n<MAT"
-    "CH_BATTLE_COMPLETION_SOURCE_MATCH_REJECT"
-    "ED_ORIGINAL_ABORT\020\006\022<\n8MATCH_BATTLE_COMP"
-    "LETION_SOURCE_MATCH_INSTANCE_GONE_ABORT\020"
-    "\007B\rZ\013match/matchb\006proto3"
+    "\r\022\022\n\nupdated_ms\030\017 \001(\004\022\026\n\016build_key_high\030"
+    "\020 \001(\004\022\025\n\rbuild_key_low\030\021 \001(\004:\256\001\212\222\364\001\033matc"
+    "h_ranked_featured_build\222\222\364\001&season_id,bu"
+    "ild_key_high,build_key_low\332\222\364\001Fseason_id"
+    ",high_tier_wins,wins,featured_rating_cen"
+    "ti;featured_battle_id\342\222\364\001\023season_id,buil"
+    "d_key\"\265\006\n\033MatchTournamentSeasonRecord\022\021\n"
+    "\tseason_id\030\001 \001(\r\022\022\n\nseason_key\030\002 \001(\t\022\023\n\013"
+    "season_name\030\003 \001(\t\022\024\n\014rule_version\030\004 \001(\r\022"
+    "\r\n\005stage\030\005 \001(\r\022\035\n\025registration_start_ms\030"
+    "\006 \001(\004\022\032\n\022qualifier_start_ms\030\007 \001(\004\022\031\n\021kno"
+    "ckout_start_ms\030\010 \001(\004\022\027\n\017settle_start_ms\030"
+    "\t \001(\004\022\016\n\006end_ms\030\n \001(\004\022\030\n\020battle_team_siz"
+    "e\030\013 \001(\r\022\027\n\017roster_max_size\030\014 \001(\r\022\033\n\023knoc"
+    "kout_team_count\030\r \001(\r\022\031\n\021champion_squad_"
+    "id\030\016 \001(\004\022\033\n\023champion_squad_name\030\017 \001(\t\022\037\n"
+    "\027champion_member_summary\030\020 \001(\t\022\022\n\nsettle"
+    "d_ms\030\021 \001(\004\022\022\n\nupdated_ms\030\022 \001(\004\022\035\n\025champi"
+    "on_members_blob\030\023 \001(\014\022\032\n\022champion_emblem"
+    "_id\030\025 \001(\r\022\034\n\024third_place_squad_id\030\026 \001(\004\022"
+    "\036\n\026third_place_squad_name\030\027 \001(\t\022\035\n\025third"
+    "_place_emblem_id\030\030 \001(\r\022\033\n\023final_mvp_play"
+    "er_id\030\031 \001(\004\022\035\n\025final_mvp_player_name\030\032 \001"
+    "(\t\022\027\n\017final_mvp_score\030\033 \001(\r\022\033\n\023champion_"
+    "honor_bits\030\034 \001(\r:>\212\222\364\001\027match_tournament_"
+    "season\222\222\364\001\tseason_id\332\222\364\001\017stage,season_id"
+    "J\004\010\024\020\025R\025champion_salute_count\"Y\n\"MatchTo"
+    "urnamentChampionMembersBlob\0223\n\007members\030\001"
+    " \003(\0132\".match.MatchTournamentMemberRecord"
+    "\"\276\004\n\032MatchTournamentSquadRecord\022\020\n\010squad"
+    "_id\030\001 \001(\004\022\021\n\tseason_id\030\002 \001(\r\022\014\n\004name\030\003 \001"
+    "(\t\022\021\n\tname_norm\030\004 \001(\t\022\031\n\021captain_player_"
+    "id\030\005 \001(\004\022\r\n\005state\030\006 \001(\r\022\024\n\014member_count\030"
+    "\007 \001(\r\022\030\n\020qualifier_points\030\010 \001(\r\022\030\n\020quali"
+    "fier_played\030\t \001(\r\022\026\n\016qualifier_wins\030\n \001("
+    "\r\022\030\n\020qualifier_losses\030\013 \001(\r\022\027\n\017qualifier"
+    "_draws\030\014 \001(\r\022\021\n\tseed_rank\030\r \001(\r\022\022\n\nfinal"
+    "_rank\030\016 \001(\r\022\023\n\013cheer_count\030\017 \001(\r\022\025\n\rregi"
+    "stered_ms\030\020 \001(\004\022\022\n\nupdated_ms\030\021 \001(\004\022\021\n\te"
+    "mblem_id\030\022 \001(\r\022\022\n\nhonor_bits\030\023 \001(\r:\214\001\212\222\364"
+    "\001\026match_tournament_squad\222\222\364\001\010squad_id\332\222\364"
+    "\001Gseason_id,state,qualifier_points,squad"
+    "_id;season_id,final_rank,squad_id\342\222\364\001\023se"
+    "ason_id,name_norm\"\270\002\n\033MatchTournamentMem"
+    "berRecord\022\021\n\tseason_id\030\001 \001(\r\022\021\n\tplayer_i"
+    "d\030\002 \001(\004\022\020\n\010squad_id\030\003 \001(\004\022\014\n\004role\030\004 \001(\r\022"
+    "\024\n\014starter_slot\030\005 \001(\r\022\023\n\013player_name\030\006 \001"
+    "(\t\022\017\n\007zone_id\030\007 \001(\r\022\021\n\tjoined_ms\030\010 \001(\004\022\020"
+    "\n\010class_id\030\t \001(\r\022\016\n\006gender\030\n \001(\r\022\025\n\rappe"
+    "arance_id\030\013 \001(\t:K\212\222\364\001\027match_tournament_m"
+    "ember\222\222\364\001\023season_id,player_id\332\222\364\001\022squad_"
+    "id,player_id\"\234\002\n\033MatchTournamentInviteRe"
+    "cord\022\020\n\010squad_id\030\001 \001(\004\022\031\n\021invitee_player"
+    "_id\030\002 \001(\004\022\021\n\tseason_id\030\003 \001(\r\022\031\n\021inviter_"
+    "player_id\030\004 \001(\004\022\r\n\005state\030\005 \001(\r\022\022\n\ncreate"
+    "d_ms\030\006 \001(\004\022\022\n\nexpires_ms\030\007 \001(\004:k\212\222\364\001\027mat"
+    "ch_tournament_invite\222\222\364\001\032squad_id,invite"
+    "e_player_id\332\222\364\001+invitee_player_id,state,"
+    "expires_ms,squad_id\"\264\007\n\032MatchTournamentM"
+    "atchRecord\022\020\n\010match_id\030\001 \001(\004\022\021\n\tseason_i"
+    "d\030\002 \001(\r\022\r\n\005phase\030\003 \001(\r\022\023\n\013round_index\030\004 "
+    "\001(\r\022\022\n\nslot_index\030\005 \001(\r\022\022\n\nsquad_a_id\030\006 "
+    "\001(\004\022\022\n\nsquad_b_id\030\007 \001(\004\022\020\n\010lineup_a\030\010 \001("
+    "\014\022\020\n\010lineup_b\030\t \001(\014\022\017\n\007ready_a\030\n \001(\010\022\017\n\007"
+    "ready_b\030\013 \001(\010\022\r\n\005state\030\014 \001(\r\022\021\n\tbattle_i"
+    "d\030\r \001(\004\022\027\n\017winner_squad_id\030\016 \001(\004\022\017\n\007outc"
+    "ome\030\017 \001(\r\022\031\n\021featured_spectate\030\020 \001(\010\022\032\n\022"
+    "scheduled_start_ms\030\021 \001(\004\022\023\n\013deadline_ms\030"
+    "\022 \001(\004\022\023\n\013finished_ms\030\023 \001(\004\022\022\n\nupdated_ms"
+    "\030\024 \001(\004\022\017\n\007best_of\030\025 \001(\r\022\032\n\022current_game_"
+    "index\030\026 \001(\r\022\016\n\006wins_a\030\027 \001(\r\022\016\n\006wins_b\030\030 "
+    "\001(\r\022\037\n\027current_leyline_element\030\031 \001(\r\022\030\n\020"
+    "leyline_sequence\030\032 \001(\t\022 \n\030intermission_d"
+    "eadline_ms\030\033 \001(\004\022\026\n\016is_third_place\030\034 \001(\010"
+    "\022\025\n\rmvp_player_id\030\035 \001(\004\022\027\n\017mvp_player_na"
+    "me\030\036 \001(\t\022\024\n\014mvp_squad_id\030\037 \001(\004\022\021\n\tmvp_sc"
+    "ore\030  \001(\r\022\022\n\nmvp_damage\030! \001(\004\022\023\n\013mvp_hea"
+    "ling\030\" \001(\004\022\024\n\014mvp_controls\030# \001(\r\022\030\n\020bann"
+    "ed_leyline_a\030$ \001(\r\022\030\n\020banned_leyline_b\030%"
+    " \001(\r:|\212\222\364\001\026match_tournament_match\222\222\364\001\010ma"
+    "tch_id\332\222\364\001Oseason_id,phase,round_index,s"
+    "lot_index;battle_id;season_id,phase,stat"
+    "e,match_id\"\263\002\n\036MatchTournamentMatchGameR"
+    "ecord\022\020\n\010match_id\030\001 \001(\004\022\022\n\ngame_index\030\002 "
+    "\001(\r\022\021\n\tseason_id\030\003 \001(\r\022\r\n\005phase\030\004 \001(\r\022\021\n"
+    "\tbattle_id\030\005 \001(\004\022\027\n\017leyline_element\030\006 \001("
+    "\r\022\027\n\017winner_squad_id\030\007 \001(\004\022\017\n\007outcome\030\010 "
+    "\001(\r\022\023\n\013finished_ms\030\t \001(\004:^\212\222\364\001\033match_tou"
+    "rnament_match_game\222\222\364\001\023match_id,game_ind"
+    "ex\332\222\364\001\023season_id,battle_id\342\222\364\001\tbattle_id"
+    "\"\320\001\n\032MatchTournamentCheerRecord\022\021\n\tseaso"
+    "n_id\030\001 \001(\r\022\021\n\tplayer_id\030\002 \001(\004\022\020\n\010squad_i"
+    "d\030\003 \001(\004\022\020\n\010rewarded\030\004 \001(\010\022\022\n\ncreated_ms\030"
+    "\005 \001(\004:T\212\222\364\001\026match_tournament_cheer\222\222\364\001\023s"
+    "eason_id,player_id\332\222\364\001\034season_id,squad_i"
+    "d,player_id\"\361\003\n\033MatchTournamentRewardRec"
+    "ord\022\021\n\tseason_id\030\001 \001(\r\022\021\n\tplayer_id\030\002 \001("
+    "\004\022\021\n\ttier_kind\030\003 \001(\r\022\021\n\treward_id\030\004 \001(\004\022"
+    "\020\n\010squad_id\030\005 \001(\004\022\022\n\nfinal_rank\030\006 \001(\r\022\017\n"
+    "\007tier_id\030\007 \001(\r\022\023\n\013gold_amount\030\010 \001(\004\022\023\n\013a"
+    "ttachments\030\t \001(\014\022\022\n\ntitle_code\030\n \001(\t\022\022\n\n"
+    "badge_code\030\013 \001(\t\022\026\n\016delivery_state\030\014 \001(\r"
+    "\022\017\n\007mail_id\030\r \001(\004\022\022\n\nclaimed_ms\030\016 \001(\004\022\022\n"
+    "\nupdated_ms\030\017 \001(\004\022\022\n\nmail_title\030\020 \001(\t\022\021\n"
+    "\tmail_body\030\021 \001(\t:\204\001\212\222\364\001\027match_tournament"
+    "_reward\222\222\364\001\035season_id,player_id,tier_kin"
+    "d\332\222\364\001Aplayer_id,season_id,tier_kind;deli"
+    "very_state,updated_ms,reward_id\"\233\003\n\037Matc"
+    "hTournamentPredictionRecord\022\021\n\tseason_id"
+    "\030\001 \001(\r\022\021\n\tplayer_id\030\002 \001(\004\022\020\n\010match_id\030\003 "
+    "\001(\004\022\032\n\022predicted_squad_id\030\004 \001(\004\022\023\n\013round"
+    "_index\030\005 \001(\r\022\026\n\016is_third_place\030\006 \001(\010\022\023\n\013"
+    "player_name\030\007 \001(\t\022\024\n\014result_state\030\010 \001(\r\022"
+    "\025\n\rearned_points\030\t \001(\r\022\022\n\ncreated_ms\030\n \001"
+    "(\004\022\022\n\nupdated_ms\030\013 \001(\004:\214\001\212\222\364\001\033match_tour"
+    "nament_prediction\222\222\364\001\034season_id,player_i"
+    "d,match_id\332\222\364\001Fseason_id,match_id,predic"
+    "ted_squad_id;season_id,result_state,play"
+    "er_id\"\304\005\n MatchJianghuDuelInvitationReco"
+    "rd\022\026\n\016duel_invite_id\030\001 \001(\004\022\021\n\twrit_tier\030"
+    "\002 \001(\r\022\021\n\tteam_size\030\003 \001(\r\022\r\n\005state\030\004 \001(\r\022"
+    "\035\n\025challenger_captain_id\030\005 \001(\004\022\031\n\021target"
+    "_captain_id\030\006 \001(\004\022\032\n\022challenger_account\030"
+    "\007 \001(\t\022\033\n\023challenger_revision\030\010 \001(\004\022\026\n\016ta"
+    "rget_account\030\t \001(\t\022\027\n\017target_revision\030\n "
+    "\001(\004\022\017\n\007zone_id\030\013 \001(\r\022\027\n\017side_a_guild_id\030"
+    "\014 \001(\004\022\031\n\021side_a_guild_name\030\r \001(\t\022\027\n\017side"
+    "_b_guild_id\030\016 \001(\004\022\031\n\021side_b_guild_name\030\017"
+    " \001(\t\022\027\n\017members_payload\030\020 \001(\014\022\022\n\ncreated"
+    "_ms\030\021 \001(\004\022\022\n\nexpires_ms\030\022 \001(\004\022\033\n\023confirm"
+    "_deadline_ms\030\023 \001(\004\022\021\n\tbattle_id\030\024 \001(\004\022\022\n"
+    "\nupdated_ms\030\025 \001(\004:\260\001\212\222\364\001\035match_jianghu_d"
+    "uel_invitation\222\222\364\001\016duel_invite_id\332\222\364\001gta"
+    "rget_captain_id,state,expires_ms,duel_in"
+    "vite_id;challenger_captain_id,state,expi"
+    "res_ms,duel_invite_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\263\002\n"
+    "\036MatchJianghuDuelCooldownRecord\022\034\n\024chall"
+    "enger_player_id\030\001 \001(\004\022\030\n\020target_player_i"
+    "d\030\002 \001(\004\022\031\n\021cooldown_until_ms\030\003 \001(\004\022\017\n\007da"
+    "y_key\030\004 \001(\r\022\035\n\025daily_unmatched_count\030\005 \001"
+    "(\r\022\022\n\nupdated_ms\030\006 \001(\004:z\212\222\364\001\033match_jiang"
+    "hu_duel_cooldown\222\222\364\001%challenger_player_i"
+    "d,target_player_id\332\222\364\001\034challenger_player"
+    "_id,day_key\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\366\002\n\031MatchGrud"
+    "geRelationRecord\022\021\n\tplayer_id\030\001 \001(\004\022\026\n\016o"
+    "wner_revision\030\002 \001(\004\022\026\n\016peer_player_id\030\003 "
+    "\001(\004\022\021\n\tpeer_name\030\004 \001(\t\022\014\n\004wins\030\005 \001(\r\022\016\n\006"
+    "losses\030\006 \001(\r\022\r\n\005draws\030\007 \001(\r\022\022\n\nwin_strea"
+    "k\030\010 \001(\r\022\023\n\013lose_streak\030\t \001(\r\022\026\n\016last_bat"
+    "tle_ms\030\n \001(\004\022\021\n\tdismissed\030\013 \001(\010:\201\001\212\222\364\001\025m"
+    "atch_grudge_relation\222\222\364\001\'player_id,owner"
+    "_revision,peer_player_id\332\222\364\001\'player_id,o"
+    "wner_revision,last_battle_ms\250\223\364\001\001\260\223\364\001\004\270\223"
+    "\364\001\004\"\354\002\n\024MatchGrudgeLogRecord\022\021\n\tplayer_i"
+    "d\030\001 \001(\004\022\026\n\016owner_revision\030\002 \001(\004\022\026\n\016peer_"
+    "player_id\030\003 \001(\004\022\021\n\tbattle_id\030\004 \001(\004\022\030\n\020ou"
+    "tcome_for_self\030\005 \001(\r\022\024\n\014total_rounds\030\006 \001"
+    "(\r\022\021\n\twrit_tier\030\007 \001(\r\022\021\n\tteam_size\030\010 \001(\r"
+    "\022\023\n\013finished_ms\030\t \001(\004:\222\001\212\222\364\001\020match_grudg"
+    "e_log\222\222\364\0011player_id,owner_revision,peer_"
+    "player_id,battle_id\332\222\364\0013player_id,owner_"
+    "revision,peer_player_id,finished_ms\250\223\364\001\001"
+    "\260\223\364\001\004\270\223\364\001\004\"j\n\030MatchGrudgeAppliedRecord\022\021"
+    "\n\tbattle_id\030\001 \001(\004\022\022\n\napplied_ms\030\002 \001(\004:\'\212"
+    "\222\364\001\024match_grudge_applied\222\222\364\001\tbattle_id\"\317"
+    "\002\n\035MatchTrialChallengeCardRecord\022\017\n\007card"
+    "_id\030\001 \001(\004\022\027\n\017owner_player_id\030\002 \001(\004\022\021\n\tba"
+    "ttle_id\030\003 \001(\004\022\030\n\020journal_entry_id\030\004 \001(\r\022"
+    "\020\n\010vow_mask\030\005 \001(\r\022\024\n\014total_rounds\030\006 \001(\r\022"
+    "\022\n\ncreated_ms\030\007 \001(\004\022\022\n\nexpires_ms\030\010 \001(\004\022"
+    "\021\n\tcard_view\030\t \001(\014:t\212\222\364\001\032match_trial_cha"
+    "llenge_card\222\222\364\001\007card_id\332\222\364\0015owner_player"
+    "_id,created_ms,card_id;expires_ms,card_i"
+    "d\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\307\004\n\031MatchTacticalPuzzle"
+    "Record\022\021\n\tpuzzle_id\030\001 \001(\004\022\030\n\020author_play"
+    "er_id\030\002 \001(\004\022\023\n\013author_name\030\003 \001(\t\022\r\n\005stat"
+    "e\030\004 \001(\r\022\025\n\rspec_revision\030\005 \001(\r\022\r\n\005title\030"
+    "\006 \001(\t\022\021\n\thint_text\030\007 \001(\t\022\020\n\010tag_mask\030\010 \001"
+    "(\r\022\024\n\014spec_payload\030\t \001(\014\022\032\n\022verified_bat"
+    "tle_id\030\n \001(\004\022\032\n\022author_best_rounds\030\013 \001(\r"
+    "\022\025\n\rattempt_count\030\014 \001(\r\022\023\n\013clear_count\030\r"
+    " \001(\r\022\032\n\022global_best_rounds\030\016 \001(\r\022\022\n\nlike"
+    "_count\030\017 \001(\r\022\022\n\ncreated_ms\030\020 \001(\004\022\024\n\014publ"
+    "ished_ms\030\021 \001(\004\022\022\n\nupdated_ms\030\022 \001(\004:\245\001\212\222\364"
+    "\001\025match_tactical_puzzle\222\222\364\001\tpuzzle_id\332\222\364"
+    "\001iauthor_player_id,updated_ms,puzzle_id;"
+    "state,like_count,clear_count,puzzle_id;s"
+    "tate,published_ms,puzzle_id\250\223\364\001\001\260\223\364\001\004\270\223\364"
+    "\001\004\"\257\002\n\036MatchTacticalPuzzleClearRecord\022\021\n"
+    "\tpuzzle_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\020\n\010a"
+    "ttempts\030\003 \001(\r\022\017\n\007cleared\030\004 \001(\010\022\023\n\013best_r"
+    "ounds\030\005 \001(\r\022\r\n\005liked\030\006 \001(\010\022\030\n\020first_clea"
+    "red_ms\030\007 \001(\004\022\022\n\nupdated_ms\030\010 \001(\004:r\212\222\364\001\033m"
+    "atch_tactical_puzzle_clear\222\222\364\001\023puzzle_id"
+    ",player_id\332\222\364\001&player_id,cleared,updated"
+    "_ms,puzzle_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004*\314\003\n\037MatchBa"
+    "ttleCompletionSourceKind\022.\n*MATCH_BATTLE"
+    "_COMPLETION_SOURCE_UNSPECIFIED\020\000\022(\n$MATC"
+    "H_BATTLE_COMPLETION_SOURCE_KAFKA\020\001\022-\n)MA"
+    "TCH_BATTLE_COMPLETION_SOURCE_BATTLE_RPC\020"
+    "\002\0227\n3MATCH_BATTLE_COMPLETION_SOURCE_MATC"
+    "H_DEADLINE_ABORT\020\003\0226\n2MATCH_BATTLE_COMPL"
+    "ETION_SOURCE_MATCH_NO_ROOM_ABORT\020\004\022/\n+MA"
+    "TCH_BATTLE_COMPLETION_SOURCE_MANUAL_ABOR"
+    "T\020\005\022@\n<MATCH_BATTLE_COMPLETION_SOURCE_MA"
+    "TCH_REJECTED_ORIGINAL_ABORT\020\006\022<\n8MATCH_B"
+    "ATTLE_COMPLETION_SOURCE_MATCH_INSTANCE_G"
+    "ONE_ABORT\020\007B\rZ\013match/matchb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto_deps[3] = {
@@ -13513,7 +13547,7 @@ static ::absl::once_flag descriptor_table_proto_2fmatch_2fmatch_5fauthority_2epr
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto = {
     false,
     false,
-    19024,
+    19114,
     descriptor_table_protodef_proto_2fmatch_2fmatch_5fauthority_2eproto,
     "proto/match/match_authority.proto",
     &descriptor_table_proto_2fmatch_2fmatch_5fauthority_2eproto_once,
@@ -27958,9 +27992,9 @@ MatchRankedFeaturedBuildRecord::MatchRankedFeaturedBuildRecord(
                offsetof(Impl_, season_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, season_id_),
-           offsetof(Impl_, updated_ms_) -
+           offsetof(Impl_, build_key_low_) -
                offsetof(Impl_, season_id_) +
-               sizeof(Impl_::updated_ms_));
+               sizeof(Impl_::build_key_low_));
 
   // @@protoc_insertion_point(copy_constructor:match.MatchRankedFeaturedBuildRecord)
 }
@@ -27977,9 +28011,9 @@ inline void MatchRankedFeaturedBuildRecord::SharedCtor(::_pb::Arena* PROTOBUF_NU
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, season_id_),
            0,
-           offsetof(Impl_, updated_ms_) -
+           offsetof(Impl_, build_key_low_) -
                offsetof(Impl_, season_id_) +
-               sizeof(Impl_::updated_ms_));
+               sizeof(Impl_::build_key_low_));
 }
 MatchRankedFeaturedBuildRecord::~MatchRankedFeaturedBuildRecord() {
   // @@protoc_insertion_point(destructor:match.MatchRankedFeaturedBuildRecord)
@@ -28048,11 +28082,12 @@ PROTOBUF_NOINLINE void MatchRankedFeaturedBuildRecord::Clear() {
         reinterpret_cast<char*>(&_impl_.wins_) -
         reinterpret_cast<char*>(&_impl_.season_id_)) + sizeof(_impl_.wins_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     ::memset(&_impl_.high_tier_wins_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.updated_ms_) -
-        reinterpret_cast<char*>(&_impl_.high_tier_wins_)) + sizeof(_impl_.updated_ms_));
+        reinterpret_cast<char*>(&_impl_.build_key_high_) -
+        reinterpret_cast<char*>(&_impl_.high_tier_wins_)) + sizeof(_impl_.build_key_high_));
   }
+  _impl_.build_key_low_ = ::uint64_t{0u};
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -28214,6 +28249,24 @@ PROTOBUF_NOINLINE void MatchRankedFeaturedBuildRecord::Clear() {
     }
   }
 
+  // uint64 build_key_high = 16;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_build_key_high() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          16, this_._internal_build_key_high(), target);
+    }
+  }
+
+  // uint64 build_key_low = 17;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_build_key_low() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          17, this_._internal_build_key_low(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -28297,7 +28350,7 @@ PROTOBUF_NOINLINE void MatchRankedFeaturedBuildRecord::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint32 high_tier_wins = 8;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_high_tier_wins() != 0) {
@@ -28345,6 +28398,22 @@ PROTOBUF_NOINLINE void MatchRankedFeaturedBuildRecord::Clear() {
       if (this_._internal_updated_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_updated_ms());
+      }
+    }
+    // uint64 build_key_high = 16;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_build_key_high() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_build_key_high());
+      }
+    }
+  }
+   {
+    // uint64 build_key_low = 17;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_build_key_low() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_build_key_low());
       }
     }
   }
@@ -28419,7 +28488,7 @@ void MatchRankedFeaturedBuildRecord::MergeImpl(::google::protobuf::MessageLite& 
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_high_tier_wins() != 0) {
         _this->_impl_.high_tier_wins_ = from._impl_.high_tier_wins_;
@@ -28455,6 +28524,16 @@ void MatchRankedFeaturedBuildRecord::MergeImpl(::google::protobuf::MessageLite& 
         _this->_impl_.updated_ms_ = from._impl_.updated_ms_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_build_key_high() != 0) {
+        _this->_impl_.build_key_high_ = from._impl_.build_key_high_;
+      }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (from._internal_build_key_low() != 0) {
+      _this->_impl_.build_key_low_ = from._impl_.build_key_low_;
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -28479,8 +28558,8 @@ void MatchRankedFeaturedBuildRecord::InternalSwap(MatchRankedFeaturedBuildRecord
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.core_skill_ids_, &other->_impl_.core_skill_ids_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.featured_player_name_, &other->_impl_.featured_player_name_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(MatchRankedFeaturedBuildRecord, _impl_.updated_ms_)
-      + sizeof(MatchRankedFeaturedBuildRecord::_impl_.updated_ms_)
+      PROTOBUF_FIELD_OFFSET(MatchRankedFeaturedBuildRecord, _impl_.build_key_low_)
+      + sizeof(MatchRankedFeaturedBuildRecord::_impl_.build_key_low_)
       - PROTOBUF_FIELD_OFFSET(MatchRankedFeaturedBuildRecord, _impl_.season_id_)>(
           reinterpret_cast<char*>(&_impl_.season_id_),
           reinterpret_cast<char*>(&other->_impl_.season_id_));

@@ -31,14 +31,6 @@ class ClaimScrollCollectionMilestoneRequest;
 class ClaimScrollCollectionMilestoneResponse;
 class BatchDismantleSkillBooksRequest;
 class BatchDismantleSkillBooksResponse;
-class PostSkillBookWantedOrderRequest;
-class PostSkillBookWantedOrderResponse;
-class CancelSkillBookWantedOrderRequest;
-class CancelSkillBookWantedOrderResponse;
-class ListSkillBookWantedOrdersRequest;
-class ListSkillBookWantedOrdersResponse;
-class FulfillSkillBookWantedOrderRequest;
-class FulfillSkillBookWantedOrderResponse;
 class AckCraftProxyDigestRequest;
 class AckCraftProxyDigestResponse;
 class SkillCraftMasterySnapshot;
@@ -80,14 +72,6 @@ public:
                                                ClaimScrollCollectionMilestoneResponse& response);
     static void BatchDismantleSkillBooks(entt::entity player, const BatchDismantleSkillBooksRequest& request,
                                          BatchDismantleSkillBooksResponse& response);
-    static void PostWantedOrder(entt::entity player, const PostSkillBookWantedOrderRequest& request,
-                                PostSkillBookWantedOrderResponse& response);
-    static void CancelWantedOrder(entt::entity player, const CancelSkillBookWantedOrderRequest& request,
-                                  CancelSkillBookWantedOrderResponse& response);
-    static void ListWantedOrders(entt::entity player, const ListSkillBookWantedOrdersRequest& request,
-                                 ListSkillBookWantedOrdersResponse& response);
-    static void FulfillWantedOrder(entt::entity player, const FulfillSkillBookWantedOrderRequest& request,
-                                   FulfillSkillBookWantedOrderResponse& response);
     static void AckProxyDigest(entt::entity player, const AckCraftProxyDigestRequest& request,
                                AckCraftProxyDigestResponse& response);
 

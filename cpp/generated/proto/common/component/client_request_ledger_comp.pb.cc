@@ -464,7 +464,7 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
       offsetof(ParseTableT_, field_lookup_table),
       0,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      44,  // num_field_entries
+      42,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -601,7 +601,7 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.equip_loadout_unlocked_count_)}},
     }}, {{
       33, 0, 1,
-      61440, 32,
+      61824, 32,
       65535, 65535
     }}, {{
       // uint64 key = 1;
@@ -679,19 +679,15 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
       // uint64 sealed_book_item_id = 37;
       {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.sealed_book_item_id_), _Internal::kHasBitsOffset + 36, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 equipment_polish_attempts_used = 38;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.equipment_polish_attempts_used_), _Internal::kHasBitsOffset + 39, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.equipment_polish_attempts_used_), _Internal::kHasBitsOffset + 38, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 equipment_actual_gold_spent = 39;
       {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.equipment_actual_gold_spent_), _Internal::kHasBitsOffset + 37, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 wanted_order_id = 40;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.wanted_order_id_), _Internal::kHasBitsOffset + 38, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 wanted_order_gold = 41;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.wanted_order_gold_), _Internal::kHasBitsOffset + 41, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 skill_loadout_rented_slots = 42;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.skill_loadout_rented_slots_), _Internal::kHasBitsOffset + 40, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.skill_loadout_rented_slots_), _Internal::kHasBitsOffset + 39, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 skill_loadout_rent_expires_at_sec = 43;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.skill_loadout_rent_expires_at_sec_), _Internal::kHasBitsOffset + 42, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.skill_loadout_rent_expires_at_sec_), _Internal::kHasBitsOffset + 40, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 skill_loadout_rent_spent_diamond = 44;
-      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.skill_loadout_rent_spent_diamond_), _Internal::kHasBitsOffset + 43, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.skill_loadout_rent_spent_diamond_), _Internal::kHasBitsOffset + 41, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -744,10 +740,8 @@ inline constexpr ClientRequestRecord::Impl_::Impl_(
         rewarded_ad_amount_{::uint64_t{0u}},
         sealed_book_item_id_{::uint64_t{0u}},
         equipment_actual_gold_spent_{::uint64_t{0u}},
-        wanted_order_id_{::uint64_t{0u}},
         equipment_polish_attempts_used_{0u},
         skill_loadout_rented_slots_{0u},
-        wanted_order_gold_{::uint64_t{0u}},
         skill_loadout_rent_expires_at_sec_{::uint64_t{0u}},
         skill_loadout_rent_spent_diamond_{::uint64_t{0u}} {}
 
@@ -1227,7 +1221,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_._has_bits_),
-        47, // hasbit index offset
+        45, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.key_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.kind_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.fingerprint_),
@@ -1267,8 +1261,6 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.sealed_book_item_id_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.equipment_polish_attempts_used_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.equipment_actual_gold_spent_),
-        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.wanted_order_id_),
-        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.wanted_order_gold_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.skill_loadout_rented_slots_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.skill_loadout_rent_expires_at_sec_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.skill_loadout_rent_spent_diamond_),
@@ -1309,13 +1301,11 @@ const ::uint32_t
         33,
         35,
         36,
-        39,
-        37,
         38,
-        41,
+        37,
+        39,
         40,
-        42,
-        43,
+        41,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_._has_bits_),
         15, // hasbit index offset
@@ -1393,10 +1383,10 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::ClientRequestRecord)},
-        {91, sizeof(::EquipmentMaterialRewardLedger)},
-        {118, sizeof(::BattleEconomyLedger)},
-        {131, sizeof(::RewardedAdLedger)},
-        {148, sizeof(::ClientRequestLedgerComp)},
+        {87, sizeof(::EquipmentMaterialRewardLedger)},
+        {114, sizeof(::BattleEconomyLedger)},
+        {127, sizeof(::RewardedAdLedger)},
+        {144, sizeof(::ClientRequestLedgerComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1409,7 +1399,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n7proto/common/component/client_request_"
-    "ledger_comp.proto\"\374\n\n\023ClientRequestRecor"
+    "ledger_comp.proto\"\324\n\n\023ClientRequestRecor"
     "d\022\013\n\003key\030\001 \001(\004\022\014\n\004kind\030\002 \001(\r\022\023\n\013fingerpr"
     "int\030\003 \001(\014\022\013\n\003seq\030\004 \001(\004\022\027\n\017enhance_succes"
     "s\030\005 \001(\010\022\025\n\renhance_level\030\006 \001(\r\022\031\n\021create"
@@ -1440,11 +1430,10 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5freque
     "\022rewarded_ad_amount\030$ \001(\004\022\033\n\023sealed_book"
     "_item_id\030% \001(\004\022&\n\036equipment_polish_attem"
     "pts_used\030& \001(\r\022#\n\033equipment_actual_gold_"
-    "spent\030\' \001(\004\022\027\n\017wanted_order_id\030( \001(\004\022\031\n\021"
-    "wanted_order_gold\030) \001(\004\022\"\n\032skill_loadout"
-    "_rented_slots\030* \001(\r\022)\n!skill_loadout_ren"
-    "t_expires_at_sec\030+ \001(\004\022(\n skill_loadout_"
-    "rent_spent_diamond\030, \001(\004\"\335\002\n\035EquipmentMa"
+    "spent\030\' \001(\004\022\"\n\032skill_loadout_rented_slot"
+    "s\030* \001(\r\022)\n!skill_loadout_rent_expires_at"
+    "_sec\030+ \001(\004\022(\n skill_loadout_rent_spent_d"
+    "iamond\030, \001(\004J\004\010(\020)J\004\010)\020*\"\335\002\n\035EquipmentMa"
     "terialRewardLedger\022\030\n\020day_starts_at_ms\030\001"
     " \001(\004\022\024\n\014earned_today\030\002 \001(\r\022\027\n\017available_"
     "units\030\003 \001(\004\022\020\n\010revision\030\004 \001(\004\022\027\n\017lifetim"
@@ -1476,7 +1465,7 @@ static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fclient_5f
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto = {
     false,
     false,
-    2499,
+    2459,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto,
     "proto/common/component/client_request_ledger_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto_once,
@@ -1622,13 +1611,13 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
   cached_has_bits = _impl_._has_bits_[1];
   if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     ::memset(&_impl_.equip_loadout_used_item_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.equipment_polish_attempts_used_) -
-        reinterpret_cast<char*>(&_impl_.equip_loadout_used_item_id_)) + sizeof(_impl_.equipment_polish_attempts_used_));
+        reinterpret_cast<char*>(&_impl_.skill_loadout_rented_slots_) -
+        reinterpret_cast<char*>(&_impl_.equip_loadout_used_item_id_)) + sizeof(_impl_.skill_loadout_rented_slots_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
-    ::memset(&_impl_.skill_loadout_rented_slots_, 0, static_cast<::size_t>(
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    ::memset(&_impl_.skill_loadout_rent_expires_at_sec_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.skill_loadout_rent_spent_diamond_) -
-        reinterpret_cast<char*>(&_impl_.skill_loadout_rented_slots_)) + sizeof(_impl_.skill_loadout_rent_spent_diamond_));
+        reinterpret_cast<char*>(&_impl_.skill_loadout_rent_expires_at_sec_)) + sizeof(_impl_.skill_loadout_rent_spent_diamond_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1989,7 +1978,7 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
   }
 
   // uint32 equipment_polish_attempts_used = 38;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_equipment_polish_attempts_used() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2006,26 +1995,8 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
     }
   }
 
-  // uint64 wanted_order_id = 40;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-    if (this_._internal_wanted_order_id() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          40, this_._internal_wanted_order_id(), target);
-    }
-  }
-
-  // uint64 wanted_order_gold = 41;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
-    if (this_._internal_wanted_order_gold() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
-          41, this_._internal_wanted_order_gold(), target);
-    }
-  }
-
   // uint32 skill_loadout_rented_slots = 42;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_skill_loadout_rented_slots() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2034,7 +2005,7 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
   }
 
   // uint64 skill_loadout_rent_expires_at_sec = 43;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_skill_loadout_rent_expires_at_sec() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2043,7 +2014,7 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
   }
 
   // uint64 skill_loadout_rent_spent_diamond = 44;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_skill_loadout_rent_spent_diamond() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2350,45 +2321,31 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
                                         this_._internal_equipment_actual_gold_spent());
       }
     }
-    // uint64 wanted_order_id = 40;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      if (this_._internal_wanted_order_id() != 0) {
-        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
-                                        this_._internal_wanted_order_id());
-      }
-    }
     // uint32 equipment_polish_attempts_used = 38;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_equipment_polish_attempts_used() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_equipment_polish_attempts_used());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     // uint32 skill_loadout_rented_slots = 42;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_skill_loadout_rented_slots() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_skill_loadout_rented_slots());
       }
     }
-    // uint64 wanted_order_gold = 41;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
-      if (this_._internal_wanted_order_gold() != 0) {
-        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
-                                        this_._internal_wanted_order_gold());
-      }
-    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
     // uint64 skill_loadout_rent_expires_at_sec = 43;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_skill_loadout_rent_expires_at_sec() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
                                         this_._internal_skill_loadout_rent_expires_at_sec());
       }
     }
     // uint64 skill_loadout_rent_spent_diamond = 44;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_skill_loadout_rent_spent_diamond() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
                                         this_._internal_skill_loadout_rent_spent_diamond());
@@ -2617,33 +2574,23 @@ void ClientRequestRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      if (from._internal_wanted_order_id() != 0) {
-        _this->_impl_.wanted_order_id_ = from._impl_.wanted_order_id_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_equipment_polish_attempts_used() != 0) {
         _this->_impl_.equipment_polish_attempts_used_ = from._impl_.equipment_polish_attempts_used_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_skill_loadout_rented_slots() != 0) {
         _this->_impl_.skill_loadout_rented_slots_ = from._impl_.skill_loadout_rented_slots_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
-      if (from._internal_wanted_order_gold() != 0) {
-        _this->_impl_.wanted_order_gold_ = from._impl_.wanted_order_gold_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_skill_loadout_rent_expires_at_sec() != 0) {
         _this->_impl_.skill_loadout_rent_expires_at_sec_ = from._impl_.skill_loadout_rent_expires_at_sec_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_skill_loadout_rent_spent_diamond() != 0) {
         _this->_impl_.skill_loadout_rent_spent_diamond_ = from._impl_.skill_loadout_rent_spent_diamond_;
       }

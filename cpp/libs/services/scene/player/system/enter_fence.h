@@ -225,9 +225,10 @@ namespace enter_fence
 	}
 } // namespace enter_fence
 
-// 栅栏计数。写法同 player_lifecycle.h 的 exit_release_stats(relaxed atomic、不接 Prometheus、player_id 不做 label、
+// 栅栏计数。写法同 player_lifecycle.h 的 exit_release_stats(relaxed atomic、player_id 不做 label、
 // 只在 scene 逻辑线程上写),由 RedisSystem 的 30s 快照定时器在计数有变化时打成一行 [EnterFence](进程启动以来的累计值;
-// 有拒绝类计数增长时 WARN,否则 INFO)。
+// 有拒绝类计数增长时 WARN,否则 INFO);同样的 key 由 player_ownership_metrics.cpp 导出为
+// scene_enter_fence_events_total{event}(2026-11-27 起)。两处都经下面的 Visit 取 key,不各写一份。
 //
 //   verdicts[]                 入口(PlayerLifecycleSystem::HandleEnterGameNode)每一次判定按结论计数,key 见
 //                              enter_fence::kVerdictNames。admit_legacy 在 login 全量铸造后应恒为 0;reject_* 非 0 =
@@ -301,5 +302,18 @@ namespace enter_fence_stats
 		snapshot.sessionUpdateRejected = counters.sessionUpdateRejected.load(std::memory_order_relaxed);
 		snapshot.staleGateInstanceRejected = counters.staleGateInstanceRejected.load(std::memory_order_relaxed);
 		return snapshot;
+	}
+
+	// [EnterFence] 行的 key 与顺序:emit(key, 值) 逐项交出。新 key 只追加在末尾(运维按原文检索)。
+	template <typename Emit>
+	void Visit(const Snapshot &stats, Emit &&emit)
+	{
+		for (std::size_t i = 0; i < stats.verdicts.size(); ++i)
+		{
+			emit(enter_fence::kVerdictNames[i], stats.verdicts[i]);
+		}
+		emit("bind_rejected", stats.bindRejected);
+		emit("session_update_rejected", stats.sessionUpdateRejected);
+		emit("stale_gate_instance_rejected", stats.staleGateInstanceRejected);
 	}
 } // namespace enter_fence_stats

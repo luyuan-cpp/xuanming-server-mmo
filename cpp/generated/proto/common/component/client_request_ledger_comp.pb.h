@@ -896,10 +896,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
     kRewardedAdAmountFieldNumber = 36,
     kSealedBookItemIdFieldNumber = 37,
     kEquipmentActualGoldSpentFieldNumber = 39,
-    kWantedOrderIdFieldNumber = 40,
     kEquipmentPolishAttemptsUsedFieldNumber = 38,
     kSkillLoadoutRentedSlotsFieldNumber = 42,
-    kWantedOrderGoldFieldNumber = 41,
     kSkillLoadoutRentExpiresAtSecFieldNumber = 43,
     kSkillLoadoutRentSpentDiamondFieldNumber = 44,
   };
@@ -1288,16 +1286,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
   void _internal_set_equipment_actual_gold_spent(::uint64_t value);
 
   public:
-  // uint64 wanted_order_id = 40;
-  void clear_wanted_order_id() ;
-  [[nodiscard]] ::uint64_t wanted_order_id() const;
-  void set_wanted_order_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_wanted_order_id() const;
-  void _internal_set_wanted_order_id(::uint64_t value);
-
-  public:
   // uint32 equipment_polish_attempts_used = 38;
   void clear_equipment_polish_attempts_used() ;
   [[nodiscard]] ::uint32_t equipment_polish_attempts_used() const;
@@ -1316,16 +1304,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
   private:
   ::uint32_t _internal_skill_loadout_rented_slots() const;
   void _internal_set_skill_loadout_rented_slots(::uint32_t value);
-
-  public:
-  // uint64 wanted_order_gold = 41;
-  void clear_wanted_order_gold() ;
-  [[nodiscard]] ::uint64_t wanted_order_gold() const;
-  void set_wanted_order_gold(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_wanted_order_gold() const;
-  void _internal_set_wanted_order_gold(::uint64_t value);
 
   public:
   // uint64 skill_loadout_rent_expires_at_sec = 43;
@@ -1352,7 +1330,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 44,
+      ::google::protobuf::internal::TcParseTable<5, 42,
                           0, 0,
                           7>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1419,10 +1397,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClientRequestRecord final : public 
     ::uint64_t rewarded_ad_amount_;
     ::uint64_t sealed_book_item_id_;
     ::uint64_t equipment_actual_gold_spent_;
-    ::uint64_t wanted_order_id_;
     ::uint32_t equipment_polish_attempts_used_;
     ::uint32_t skill_loadout_rented_slots_;
-    ::uint64_t wanted_order_gold_;
     ::uint64_t skill_loadout_rent_expires_at_sec_;
     ::uint64_t skill_loadout_rent_spent_diamond_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -2918,7 +2894,7 @@ inline void ClientRequestRecord::_internal_set_sealed_book_item_id(::uint64_t va
 inline void ClientRequestRecord::clear_equipment_polish_attempts_used() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equipment_polish_attempts_used_ = 0u;
-  ClearHasBit(_impl_._has_bits_[1], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000040U);
 }
 inline ::uint32_t ClientRequestRecord::equipment_polish_attempts_used() const {
   // @@protoc_insertion_point(field_get:ClientRequestRecord.equipment_polish_attempts_used)
@@ -2926,7 +2902,7 @@ inline ::uint32_t ClientRequestRecord::equipment_polish_attempts_used() const {
 }
 inline void ClientRequestRecord::set_equipment_polish_attempts_used(::uint32_t value) {
   _internal_set_equipment_polish_attempts_used(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000040U);
   // @@protoc_insertion_point(field_set:ClientRequestRecord.equipment_polish_attempts_used)
 }
 inline ::uint32_t ClientRequestRecord::_internal_equipment_polish_attempts_used() const {
@@ -2962,59 +2938,11 @@ inline void ClientRequestRecord::_internal_set_equipment_actual_gold_spent(::uin
   _impl_.equipment_actual_gold_spent_ = value;
 }
 
-// uint64 wanted_order_id = 40;
-inline void ClientRequestRecord::clear_wanted_order_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.wanted_order_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[1], 0x00000040U);
-}
-inline ::uint64_t ClientRequestRecord::wanted_order_id() const {
-  // @@protoc_insertion_point(field_get:ClientRequestRecord.wanted_order_id)
-  return _internal_wanted_order_id();
-}
-inline void ClientRequestRecord::set_wanted_order_id(::uint64_t value) {
-  _internal_set_wanted_order_id(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000040U);
-  // @@protoc_insertion_point(field_set:ClientRequestRecord.wanted_order_id)
-}
-inline ::uint64_t ClientRequestRecord::_internal_wanted_order_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.wanted_order_id_;
-}
-inline void ClientRequestRecord::_internal_set_wanted_order_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.wanted_order_id_ = value;
-}
-
-// uint64 wanted_order_gold = 41;
-inline void ClientRequestRecord::clear_wanted_order_gold() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.wanted_order_gold_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[1], 0x00000200U);
-}
-inline ::uint64_t ClientRequestRecord::wanted_order_gold() const {
-  // @@protoc_insertion_point(field_get:ClientRequestRecord.wanted_order_gold)
-  return _internal_wanted_order_gold();
-}
-inline void ClientRequestRecord::set_wanted_order_gold(::uint64_t value) {
-  _internal_set_wanted_order_gold(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000200U);
-  // @@protoc_insertion_point(field_set:ClientRequestRecord.wanted_order_gold)
-}
-inline ::uint64_t ClientRequestRecord::_internal_wanted_order_gold() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.wanted_order_gold_;
-}
-inline void ClientRequestRecord::_internal_set_wanted_order_gold(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.wanted_order_gold_ = value;
-}
-
 // uint32 skill_loadout_rented_slots = 42;
 inline void ClientRequestRecord::clear_skill_loadout_rented_slots() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.skill_loadout_rented_slots_ = 0u;
-  ClearHasBit(_impl_._has_bits_[1], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000080U);
 }
 inline ::uint32_t ClientRequestRecord::skill_loadout_rented_slots() const {
   // @@protoc_insertion_point(field_get:ClientRequestRecord.skill_loadout_rented_slots)
@@ -3022,7 +2950,7 @@ inline ::uint32_t ClientRequestRecord::skill_loadout_rented_slots() const {
 }
 inline void ClientRequestRecord::set_skill_loadout_rented_slots(::uint32_t value) {
   _internal_set_skill_loadout_rented_slots(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000080U);
   // @@protoc_insertion_point(field_set:ClientRequestRecord.skill_loadout_rented_slots)
 }
 inline ::uint32_t ClientRequestRecord::_internal_skill_loadout_rented_slots() const {
@@ -3038,7 +2966,7 @@ inline void ClientRequestRecord::_internal_set_skill_loadout_rented_slots(::uint
 inline void ClientRequestRecord::clear_skill_loadout_rent_expires_at_sec() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.skill_loadout_rent_expires_at_sec_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[1], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000100U);
 }
 inline ::uint64_t ClientRequestRecord::skill_loadout_rent_expires_at_sec() const {
   // @@protoc_insertion_point(field_get:ClientRequestRecord.skill_loadout_rent_expires_at_sec)
@@ -3046,7 +2974,7 @@ inline ::uint64_t ClientRequestRecord::skill_loadout_rent_expires_at_sec() const
 }
 inline void ClientRequestRecord::set_skill_loadout_rent_expires_at_sec(::uint64_t value) {
   _internal_set_skill_loadout_rent_expires_at_sec(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000100U);
   // @@protoc_insertion_point(field_set:ClientRequestRecord.skill_loadout_rent_expires_at_sec)
 }
 inline ::uint64_t ClientRequestRecord::_internal_skill_loadout_rent_expires_at_sec() const {
@@ -3062,7 +2990,7 @@ inline void ClientRequestRecord::_internal_set_skill_loadout_rent_expires_at_sec
 inline void ClientRequestRecord::clear_skill_loadout_rent_spent_diamond() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.skill_loadout_rent_spent_diamond_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[1], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000200U);
 }
 inline ::uint64_t ClientRequestRecord::skill_loadout_rent_spent_diamond() const {
   // @@protoc_insertion_point(field_get:ClientRequestRecord.skill_loadout_rent_spent_diamond)
@@ -3070,7 +2998,7 @@ inline ::uint64_t ClientRequestRecord::skill_loadout_rent_spent_diamond() const 
 }
 inline void ClientRequestRecord::set_skill_loadout_rent_spent_diamond(::uint64_t value) {
   _internal_set_skill_loadout_rent_spent_diamond(value);
-  SetHasBit(_impl_._has_bits_[1], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000200U);
   // @@protoc_insertion_point(field_set:ClientRequestRecord.skill_loadout_rent_spent_diamond)
 }
 inline ::uint64_t ClientRequestRecord::_internal_skill_loadout_rent_spent_diamond() const {

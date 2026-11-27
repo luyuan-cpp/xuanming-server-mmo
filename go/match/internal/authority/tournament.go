@@ -3538,7 +3538,7 @@ func (s *Store) LoadTournamentPredictionBoard(ctx context.Context, seasonID uint
 		return nil, err
 	}
 	for rows.Next() {
-		var r pb.MatchTournamentPredictionRecord
+		r := &pb.MatchTournamentPredictionRecord{}
 		if e := rows.Scan(&r.SeasonId, &r.PlayerId, &r.MatchId, &r.PredictedSquadId, &r.RoundIndex, &r.IsThirdPlace, &r.PlayerName, &r.ResultState, &r.EarnedPoints, &r.CreatedMs, &r.UpdatedMs); e != nil {
 			rows.Close()
 			return nil, e
@@ -3560,8 +3560,7 @@ func (s *Store) LoadTournamentPredictionBoard(ctx context.Context, seasonID uint
 			agg.latestMs = r.UpdatedMs
 		}
 		if r.PlayerId == playerID {
-			cp := r
-			myRecs = append(myRecs, &cp)
+			myRecs = append(myRecs, r)
 		}
 	}
 	rows.Close()

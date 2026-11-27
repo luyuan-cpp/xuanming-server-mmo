@@ -528,7 +528,7 @@ func TestAbortWithoutRoomTiDBRacesCompleteForOneTerminal(t *testing.T) {
 	req := &pb.CommitBattleOutcomeRequest{BattleId: f.BattleId, PlacementOperationId: f.OperationId, TargetInstanceId: f.TargetInstanceId, RawResultPayload: resultBytes(t, event)}
 	observed, err := s.Now(ctx)
 	require.NoError(t, err)
-	replica := *s
+	replica := cloneTestStore(s)
 	type result struct {
 		decision pb.BattleOutcomeDecision
 		err      error

@@ -106,8 +106,8 @@
      - **同槽 Hash-Tag 键设计**：本人流派榜与公平 3×3 试炼榜物理隔离，键名统一使用 `{weekKey}` 作为 Redis Cluster Hash Tag，保证 ZSET 与元数据 HASH 必然落在同一哈希槽，单条 Lua `EVAL` 原生兼容 Redis Cluster 零 `CROSSSLOT` 报错：
        - 本人流派：`wuxing:realm:lb:{<weekKey>}:self`（ZSET） + `wuxing:realm:lb_meta:{<weekKey>}:self`（HASH）
        - 公平试炼：`wuxing:realm:lb:{<weekKey>}:preset`（ZSET） + `wuxing:realm:lb_meta:{<weekKey>}:preset`（HASH）
-     - **复合排序分值**：`score = bestFloor * 1,000,000 + (bestFloor >= 6 && bestRounds > 0 ? max(0, 999,999 - bestRounds) : 0)`，单次 `ZREVRANGE` 即可严格按「通关关数降序 → 全通回合数升序」稳定排位。
-     - **原子 Top-200 裁剪与 14 天 TTL**：单条 Lua 脚本在服务端原子执行「查旧分单调不倒退 → `ZADD` + `HSET` → 超 200 名原子 `ZREMRANGEBYRANK` 并同步 `HDEL` 淘汰者元数据 → 双方续期 `EXPIRE 1209600`（14 天）」，杜绝内存无限膨胀与僵尸元数据泄漏；客户端展示按 `Top 20` 投影返回。
+     - **复合排序分值**：`score = bestFloor * 1,000,000 - (bestRounds == 0 ? 999,999 : min(bestRounds, 999,999))`，单次 `ZREVRANGE` 即可严格按「通关关数降序 → 全通回合数升序」稳定排位。
+     - **原子 Top-200 裁剪、单调防倒退与 14 天 TTL**：单条 Lua 脚本在服务端原子执行「查旧分 `ZSCORE` 单调不倒退（仅 `newScore > oldScore` 才写，防同周重开低层局覆盖历史高分构筑与并发乱序回退）→ `ZADD` + `HSET` → 超 200 名原子 `ZRANGE` + `ZREM` 并同步 `HDEL` 淘汰者元数据 → 双方续期 `EXPIRE 1209600`（14 天）」，杜绝内存无限膨胀与僵尸元数据泄漏；同时 `OnTowerSettlementApplied` 拒绝低层/慢速重开局写榜、`RefreshTowerLeaderboardFromRedisIfDue` 异步回调拒收旧周迟到回包，客户端展示按 `Top 20` 投影返回。
      - **强降级安全**：单测或无 `tlsControlRedis` 环境自动安全退化到 `thread_local` 读穿缓存，不崩溃不阻塞。
 2. **跨周保局强一致性（根治 V1 周一 05:00 清空在途局挫败感）**：
    - **原 V1 问题**：V1 换周 `EnsureWeeklyReset` 直接清空 `run_active` 与 `active_sigil_ids`，周一清晨中断未打完的对局。

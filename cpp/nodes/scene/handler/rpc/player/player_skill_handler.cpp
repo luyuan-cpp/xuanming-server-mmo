@@ -208,42 +208,6 @@ void SceneSkillClientPlayerHandler::BatchDismantleSkillBooks(entt::entity player
 
 }
 
-void SceneSkillClientPlayerHandler::PostSkillBookWantedOrder(entt::entity player,const ::PostSkillBookWantedOrderRequest* request,
-	::PostSkillBookWantedOrderResponse* response)
-{
-///<<< BEGIN WRITING YOUR CODE
-	PlayerCraftSystem::PostWantedOrder(player, *request, *response);
-///<<< END WRITING YOUR CODE
-
-}
-
-void SceneSkillClientPlayerHandler::CancelSkillBookWantedOrder(entt::entity player,const ::CancelSkillBookWantedOrderRequest* request,
-	::CancelSkillBookWantedOrderResponse* response)
-{
-///<<< BEGIN WRITING YOUR CODE
-	PlayerCraftSystem::CancelWantedOrder(player, *request, *response);
-///<<< END WRITING YOUR CODE
-
-}
-
-void SceneSkillClientPlayerHandler::ListSkillBookWantedOrders(entt::entity player,const ::ListSkillBookWantedOrdersRequest* request,
-	::ListSkillBookWantedOrdersResponse* response)
-{
-///<<< BEGIN WRITING YOUR CODE
-	PlayerCraftSystem::ListWantedOrders(player, *request, *response);
-///<<< END WRITING YOUR CODE
-
-}
-
-void SceneSkillClientPlayerHandler::FulfillSkillBookWantedOrder(entt::entity player,const ::FulfillSkillBookWantedOrderRequest* request,
-	::FulfillSkillBookWantedOrderResponse* response)
-{
-///<<< BEGIN WRITING YOUR CODE
-	PlayerCraftSystem::FulfillWantedOrder(player, *request, *response);
-///<<< END WRITING YOUR CODE
-
-}
-
 void SceneSkillClientPlayerHandler::RentSkillLoadoutSlots(entt::entity player,const ::RentSkillLoadoutSlotsRequest* request,
 	::RentSkillLoadoutSlotsResponse* response)
 {

@@ -87,6 +87,8 @@ public:
 	// committed 是这一笔确实提交的整份快照(PlayerLifecycleSystem::OnPlayerStoreSaveDone 的非拒绝、非被取代分支)。
 	static void OnSaveCommitted(Guid playerId, const PlayerAllData &committed, uint64_t nowUnixSec);
 	static void RefreshProjection(entt::entity player, uint64_t nowUnixSec);
+	// 本线程投影写失败(没发出去,或回包不是成功)的累计,进程启动以来。由 AfkHostingSystem::WriteMetrics 导出。
+	static uint64_t ProjectionFailures();
 
 	// 单测注入:取代真实的 Redis 写出,收到 (玩家, 到期, true = SET / false = DEL)。生产恒为空。
 	using ProjectionSender = std::function<void(Guid playerId, uint64_t expiresAtSec, bool set)>;

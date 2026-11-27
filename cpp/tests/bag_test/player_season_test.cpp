@@ -171,6 +171,7 @@ protected:
 
         persistCalls = 0;
         PlayerSeasonSystem::SetPersistForTest(&CountPersist);
+        PlayerSeasonSystem::ResetTowerLeaderboardForTest();
 
         player = tlsEcs.actorRegistry.create();
         tlsEcs.actorRegistry.emplace<PlayerGuidComp>(player).value = 99001;
@@ -197,6 +198,7 @@ protected:
 
     void TearDown() override {
         PlayerSeasonSystem::SetPersistForTest(nullptr);
+        PlayerSeasonSystem::ResetTowerLeaderboardForTest();
         tlsEcs.playerList.erase(99001);
         if (tlsEcs.actorRegistry.valid(player)) {
             tlsEcs.actorRegistry.destroy(player);
@@ -1112,4 +1114,45 @@ TEST_F(PlayerSeasonSystemTest, WuxingRealmV2SixNodeBranchingEventsFairPresetCros
     EXPECT_FALSE(stDone.state().run_active());
     EXPECT_EQ(stDone.state().best_rounds_preset(), 12u) << "3+2+3+4 = 12 回合写入个人永久公平最速";
     EXPECT_EQ(stDone.state().weekly_leaderboard_preset_size(), 0) << "上周旧局跨周完结绝不污染新周榜";
+
+    // 新周开一轮打到第 3 关拿到 2 枚奇策写榜，再放弃重开打第 1 关（0 奇策）：单调防倒退守卫绝不覆盖旧的高分与奇策构筑
+    StartWuxingTowerRunResponse newWeekRun;
+    PlayerSeasonSystem::StartWuxingTowerRun(player, nextWeekMs, startReq, newWeekRun);
+    ASSERT_EQ(newWeekRun.error_message().id(), 0u);
+    winNode(1u, 101u, nextWeekMs, 2u);
+    GetWuxingTowerStateResponse stNw1;
+    ASSERT_EQ(PlayerSeasonSystem::GetWuxingTowerState(player, nextWeekMs, stNw1), kSuccess);
+    ASSERT_EQ(stNw1.state().weekly_leaderboard_preset_size(), 1);
+    PickWuxingTowerSigilRequest nwPick1;
+    nwPick1.set_expected_run_id(stNw1.state().run_id());
+    nwPick1.set_sigil_id(stNw1.state().pending_offer_sigil_ids(0));
+    PickWuxingTowerSigilResponse nwPick1Resp;
+    PlayerSeasonSystem::PickWuxingTowerSigil(player, nextWeekMs, nwPick1, nwPick1Resp);
+    ASSERT_EQ(nwPick1Resp.error_message().id(), 0u);
+    ChooseWuxingRealmBranchRequest nwBr2;
+    nwBr2.set_expected_run_id(stNw1.state().run_id());
+    nwBr2.set_branch(turnbattle::wuxing::kRealmBranchCombat);
+    ChooseWuxingRealmBranchResponse nwBr2Resp;
+    PlayerSeasonSystem::ChooseWuxingRealmBranch(player, nextWeekMs, nwBr2, nwBr2Resp);
+    ASSERT_EQ(nwBr2Resp.error_message().id(), 0u);
+    winNode(2u, 103u, nextWeekMs, 2u);
+    GetWuxingTowerStateResponse stNw2;
+    ASSERT_EQ(PlayerSeasonSystem::GetWuxingTowerState(player, nextWeekMs, stNw2), kSuccess);
+    ASSERT_EQ(stNw2.state().weekly_leaderboard_preset_size(), 1);
+    EXPECT_EQ(stNw2.state().weekly_leaderboard_preset(0).best_floor(), 2u);
+    ASSERT_EQ(stNw2.state().weekly_leaderboard_preset(0).sigil_ids_size(), 1);
+    const uint32_t savedBestBoon = stNw2.state().weekly_leaderboard_preset(0).sigil_ids(0);
+
+    // 同一周再开新轮仅打通第 1 关（此时无奇策），榜单必须保留第 2 关成绩与已选奇策
+    StartWuxingTowerRunResponse rerunResp;
+    PlayerSeasonSystem::StartWuxingTowerRun(player, nextWeekMs, startReq, rerunResp);
+    ASSERT_EQ(rerunResp.error_message().id(), 0u);
+    winNode(1u, 101u, nextWeekMs, 1u);
+    GetWuxingTowerStateResponse stRerun;
+    ASSERT_EQ(PlayerSeasonSystem::GetWuxingTowerState(player, nextWeekMs, stRerun), kSuccess);
+    ASSERT_EQ(stRerun.state().weekly_leaderboard_preset_size(), 1);
+    EXPECT_EQ(stRerun.state().weekly_leaderboard_preset(0).best_floor(), 2u);
+    ASSERT_EQ(stRerun.state().weekly_leaderboard_preset(0).sigil_ids_size(), 1);
+    EXPECT_EQ(stRerun.state().weekly_leaderboard_preset(0).sigil_ids(0), savedBestBoon)
+        << "低层重开局绝不允许覆盖本周最高层数的上榜奇策构筑";
 }

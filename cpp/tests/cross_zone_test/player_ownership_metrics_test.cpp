@@ -12,8 +12,11 @@
 
 #include "engine/core/metrics/metrics_registry.h"
 #include "player/comp/player_frozen_comp.h"
+#include "player/system/enter_fence.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_ownership_metrics.h"
+#include "player/system/release_fence.h"
+#include "player/system/save_seq.h"
 #include "thread_context/ecs_context.h"
 #include "time/system/time.h"
 
@@ -158,4 +161,54 @@ TEST(PlayerOwnershipMetrics, PlayerStoreRefusedResultsArePinnedAndExported)
 	const auto after = RenderAll();
 	EXPECT_EQ(SampleValue(after, tooLarge), tooLargeBefore + 1);
 	EXPECT_EQ(SampleValue(after, invalid), invalidBefore);
+}
+
+// 2026-11-27 起退出收尾、断线保留、托管落点看护、两道归属栅栏、存盘发号异常与持久 schema 拒写也经 /metrics 导出。
+// key 与各自的汇总行同名(同一个 Visit / 名表),值就是汇总行读的那份计数;0 也导出,increase 才抓得到第一次。
+TEST(PlayerOwnershipMetrics, ExitHoldFenceAndSchemaCountersAreExportedUnderTheSummaryLineKeys)
+{
+	exit_persist_stats::Inc(exit_persist_stats::Get().resave);
+	exit_release_stats::Inc(exit_release_stats::Get().written);
+	relocate_confirm_stats::Inc(relocate_confirm_stats::Get().hostedResent);
+	enter_fence_stats::Inc(enter_fence_stats::Get().bindRejected);
+	release_fence_stats::Inc(release_fence_stats::Get().notFound);
+	save_seq_stats::Inc(save_seq_stats::Counter::kExhausted);
+	persist_schema_stats::IncRegressionRejected();
+
+	const auto text = RenderAll();
+	const auto event = [](std::string_view family, std::string_view key)
+	{ return std::string(family) + "{event=\"" + std::string(key) + "\"}"; };
+	EXPECT_EQ(SampleValue(text, event("scene_exit_persist_events_total", "exit_resave")), exit_persist_stats::Read().resave);
+	EXPECT_EQ(SampleValue(text, event("scene_exit_release_events_total", "written")), exit_release_stats::Read().written);
+	EXPECT_EQ(SampleValue(text, event("scene_relocate_confirm_events_total", "hosted_resent")),
+			  relocate_confirm_stats::Read().hostedResent);
+	EXPECT_EQ(SampleValue(text, "scene_persist_schema_regression_rejected_total"),
+			  persist_schema_stats::Read().regressionRejected);
+	EXPECT_EQ(SampleValue(text, event("scene_save_seq_events_total", "exhausted")),
+			  save_seq_stats::Read().values[static_cast<std::size_t>(save_seq_stats::Counter::kExhausted)]);
+
+	// 两道栅栏的每个 key(含带前缀的数组项)都按汇总行的 Visit 导出,值逐项相同。
+	enter_fence_stats::Visit(enter_fence_stats::Read(), [&](std::string_view key, uint64_t value)
+	{ EXPECT_EQ(SampleValue(text, event("scene_enter_fence_events_total", key)), value) << key; });
+	release_fence_stats::Visit(release_fence_stats::Read(), [&](std::string_view key, uint64_t value)
+	{ EXPECT_EQ(SampleValue(text, event("scene_release_fence_events_total", key)), value) << key; });
+	for (const char *name : exit_release_mark::kExitReleaseDecisionNames)
+	{
+		EXPECT_NE(SampleValue(text, event("scene_exit_release_events_total", name)), UINT64_MAX) << name;
+	}
+	for (const char *name : relocate_confirm::kGatePushResultNames)
+	{
+		EXPECT_NE(SampleValue(text, event("scene_relocate_confirm_events_total", std::string("push_") + name)), UINT64_MAX) << name;
+	}
+
+	// 断线保留与托管落点看护是本线程计数:这个用例的线程没走过那些路径,也照样逐项以当前值导出。
+	for (const char *key : {"held", "resumed", "expired", "superseded_by_exit", "exit_now", "hosted_arrived", "hosted_relocating"})
+	{
+		EXPECT_NE(SampleValue(text, event("scene_connection_lost_hold_events_total", key)), UINT64_MAX) << key;
+	}
+	for (const char *key : {"watched", "replaced", "retried", "landed", "resolved", "gave_up", "untracked"})
+	{
+		EXPECT_NE(SampleValue(text, event("scene_hosted_placement_watch_events_total", key)), UINT64_MAX) << key;
+	}
+	EXPECT_EQ(text.find("player_id=\""), std::string::npos) << "玩家号不做标签(AGENTS.md §9)";
 }

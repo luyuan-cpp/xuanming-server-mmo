@@ -296,7 +296,8 @@ inline constexpr uint32_t kScrollMilestoneFullRewardFragments = 40;
 inline constexpr uint32_t kMaxBatchDismantleCount = 20;
 
 // 未学书架(PlayerCraftComp.skill_books)同时至多存的本数(r2-craft#2):存档里的集合要有上界(每行 1 MiB、每次整行重写)。
-// 100 = 95 项永久技能各一本还有余量;满了先研习、拆页或封卷。加书的三处(制书、开卷、揭榜送书)都在副作用之前判。
+// 100 = 95 项永久技能各一本还有余量;满了先研习、拆页或封卷。加书的两处(制书、开卷)都在副作用之前判;
+// 悬赏求书迁 trade 之后揭榜不再往书架加书(发榜人收到背包里的封卷道籍)。
 inline constexpr uint32_t kMaxBookshelfBooks = 100;
 
 inline constexpr uint32_t ScrollHalfThreshold(uint32_t totalSkills) {
@@ -334,15 +335,6 @@ inline void SetBit(std::string& bits, uint32_t bitIndex) {
     while (!bits.empty() && bits.back() == '\0') {
         bits.pop_back();
     }
-}
-
-// ── V5 西市常规技能书悬赏求购板 ──
-inline constexpr uint64_t kWantedOrderMinGold = 100;
-inline constexpr uint64_t kWantedOrderMaxGold = 50000;
-inline constexpr uint32_t kMaxActiveWantedOrders = 3;
-
-inline constexpr bool ValidWantedOrderGold(uint64_t rewardGold) {
-    return rewardGold >= kWantedOrderMinGold && rewardGold <= kWantedOrderMaxGold;
 }
 
 } // namespace equipcraft

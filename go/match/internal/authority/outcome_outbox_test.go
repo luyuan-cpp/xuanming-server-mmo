@@ -298,10 +298,10 @@ func TestOutcomeTiDBConcurrentReplicasDeliverEachRowOnce(t *testing.T) {
 	}
 	rec := newOutcomeRecorder()
 	options := OutcomeOutboxOptions{ResultBatch: 8, FirstBatch: 8, WaitingBatch: 8, Concurrency: 4, Observe: rec.observe}
-	replica := *s
+	replica := cloneTestStore(s)
 	start := make(chan struct{})
 	results := make(chan error, 2)
-	for _, store := range []*Store{s, &replica} {
+	for _, store := range []*Store{s, replica} {
 		go func(store *Store) {
 			<-start
 			results <- store.PublishBattleOutcomes(ctx, resolve, terminalFixtureSecret, publish, options)
