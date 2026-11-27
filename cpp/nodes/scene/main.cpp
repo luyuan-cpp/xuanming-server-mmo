@@ -305,6 +305,9 @@ int main(int argc, char *argv[])
         PlayerMailOutboxSystem::RegisterMetrics();
         // 资产通道的版本错位与归属未铸造被挡(player/system/asset_op_system.h),同一个出口。
         PlayerAssetOpSystem::RegisterMetrics();
+        // 组队跟随事件(player/system/team_follow_system.h)与两个 Redis 集群句柄的路由层计数(core/system/redis.h),同一个出口。
+        TeamFollowSystem::RegisterMetrics();
+        RegisterRedisClusterMetrics();
 
         // context 先于 node 构造、晚于 node 析构:方法表闭包捕获 grpcService 的 this,服务必须活过 Node。
         node.RegisterGrpcService(context->grpcService);

@@ -179,6 +179,7 @@
     <ClCompile Include="prometheus_text_test.cpp" />
     <ClCompile Include="process_fd_metrics_test.cpp" />
     <ClCompile Include="dependency_link_metrics_test.cpp" />
+    <ClCompile Include="grpc_server_metrics_test.cpp" />
     <ClCompile Include="acceptor_failure_policy_test.cpp" />
     <ClCompile Include="acceptor_admission_test.cpp" />
     <ClCompile Include="accept_admission_test.cpp" />

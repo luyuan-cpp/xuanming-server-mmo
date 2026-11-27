@@ -392,7 +392,7 @@ D3 已于 2026-10-15 拍板：独立进程 `go/player_inbox`，按 D-14 独占�
   1. 当前检出里的两份 yaml 相互矛盾。只靠这一层不够：zone（consumer_enabled）与 infra（EnqueueTypes）分开部署、可以来自不同 commit，「检出开消费之前的旧 commit 重跑 zone-up」与「同一提交里先跑 infra-up」它都放行（复核 H1）。
   2. 非 DryRun 时只读另一侧线上的值：本次把 false 渲染进 node-config，就读 infra 线上 `go-svc-player-inbox-config` 的白名单；本次把非空白名单渲染进 ConfigMap，就读全部 zone 线上 node-config 的开关。读不到即拒绝。它读的是 ConfigMap 不是进程，Pod 没滚动时看不出来，上线验收仍以 scene 启动行与 `GmSanctionPlayer` 的回包为准。
   3. staging / prod 的真部署拒绝两份 yaml 带未提交改动（部署读工作区文件，而 `bin/etc/game_config.yaml` 也是本机 scene 的配置）。
-- **关消费时的信号**：scene 启动时打 WARN `[PlayerInbox] metric=inbox_consumer_disabled`，之后 Tick 每 5 分钟补打同一行（`kNodeStuckRelogIntervalMs`，与 `inbox_registry_broken` 共用节拍）。告警侧还有「入箱在涨、锁路径 Fetch 不涨」的规则（§9.4）。
+- **关消费时的信号**：scene 导出 `scene_player_inbox_consumer_enabled = 0`，告警 `ScenePlayerInboxConsumerDisabled` 按 zone 报（2026-11-27 起，§9.4.1）；scene 启动时还打 WARN `[PlayerInbox] metric=inbox_consumer_disabled`，之后 Tick 每 5 分钟补打同一行（`kNodeStuckRelogIntervalMs`，与 `inbox_registry_broken` 共用节拍），供按台排查。告警侧另有「入箱在涨、锁路径 Fetch 不涨」的规则（§9.4）。
 - **Fetch / Ack 本身没有开关**：新版本二进制始终提供这两个接口；没有条目时只是返回 NO_STREAM 或空。
   - 旧版本二进制返回 UNIMPLEMENTED，scene 长退避 10 分钟，不计为故障（§7.6）。
 
@@ -990,7 +990,7 @@ func (s *Store) Enqueue(ctx context.Context, p EnqueueParams, inTx func(*sql.Tx,
 - **只有执行器 DEFER**（闸已过、条目已开始处理）才保留本地续做；续做时仍先过闸，闸不过同样丢掉剩下的副本，先确认前缀再重拉。这条例外的前提是 DEFER 的原因在会话内不会自愈（v1 只有缺持久组件）；会在会话内消失的原因（例如版本错位）不得用 DEFER，执行器回 `VERSION_SKEW`，收件箱停用本域，实体重建后重拉（§7.6 第 3 步）。
 - 退出期（`kExiting`）丢掉的这批多半再也拉不回来，另打一行 INFO `metric=inbox_leave_ack result=delivered_undecided source=apply_gate_exiting`（§7.7）。
 
-**不会自愈的延后**：目前只有 `ledger_invalid`（账本损坏）。除了延后原因变化时的 INFO `metric=inbox_deferred`，每次落地后首次出现打一条 WARN `metric=inbox_ledger_invalid source=apply_gate`，之后每 8 次失败（退避封顶 60 秒时约 8 分钟）再打一条（`kStuckWarnEveryFailures`）。节拍由 `player_inbox_rules.h` 的 `static_assert` 钉在 10 分钟告警窗口（`kSceneLogAlertWindowMs`）之内，改告警窗口要同步改这些常量。
+**不会自愈的延后**：目前只有 `ledger_invalid`（账本损坏）。除了延后原因变化时的 INFO `metric=inbox_deferred`，每次落地后首次出现打一条 WARN `metric=inbox_ledger_invalid source=apply_gate`，之后每 8 次失败（退避封顶 60 秒时约 8 分钟）再打一条（`kStuckWarnEveryFailures`）。节拍由 `player_inbox_rules.h` 的 `static_assert` 钉在 10 分钟窗口（`kSceneLogAlertWindowMs`）之内，改窗口要同步改这些常量。2026-11-27 起告警不再数这几行，改读抓取时现算的 `scene_player_inbox_ledger_invalid_players`（§9.4.1）；补打保留，值班在告警的 10 分钟窗口里按 `player_id` 总能搜到一行。
 
 **DependencyGate 不加收件箱**（`main.cpp:350-352`）。
 
@@ -1242,7 +1242,7 @@ v1 不接版本摘要（D4 已拍板）。只有当落地拉取的负载超出�
 | 21 | scene 或 go/db 降到不认识新字段的版本 | scene 旧版本按组件重建存档（`player_database_loader.cpp:140-163`），会丢掉新字段；go/db 旧版本按主键只更新已知列，账本列会停在旧值（违反 IB-3）。再升级回来，已应用、未确认的 `ATTACH_DEBT` 会被重复执行。**回滚下限** = 认识新字段的版本（§11.7）。低于下限的降级按 runbook 先关入箱和消费，对已投递、未确认的行挂 `VOID(QUARANTINED)`，升级回来之后逐条按存档核对 | 有回滚下限，破坏性降级有前置步骤 |
 | 22 | player_id 输错或玩家不存在 | 入箱前查归属区映射，返回 `kPlayerInboxPlayerNotFound` | 不留永远 PENDING 的行 |
 | 23 | 内网伪造 Fetch / Ack | 超大 epoch 判 EPOCH_AHEAD，不改状态；request_id 不一致判 MISMATCH；伪造的「已执行」由每小时对账发现（§1.6） | 不会锁死；残余风险可发现 |
-| 24 | 消费端关、入箱开（例行发布把开关写回 false、检出旧 commit 重跑 zone-up、先开了入箱，或有人只开了入箱） | 两个开关都只认 git 跟踪的 yaml；部署脚本写前门禁拒绝「消费关而白名单非空」：比当前检出的两份 yaml，非 DryRun 时再读另一侧线上的 ConfigMap，除非显式 `-AllowPlayerInboxConsumerOff`（§3.3）。漏网（ConfigMap 与进程不一致、绕过脚本、用旧脚本部署）时 scene 每 5 分钟打 WARN `metric=inbox_consumer_disabled`，告警「入箱在涨、锁路径 Fetch 不涨」亮起（§9.4）；后者被别的 zone 的投递盖住时只剩 scene 日志 | 发布前被拦下；漏网可发现，逐 zone 只能靠 scene 日志 |
+| 24 | 消费端关、入箱开（例行发布把开关写回 false、检出旧 commit 重跑 zone-up、先开了入箱，或有人只开了入箱） | 两个开关都只认 git 跟踪的 yaml；部署脚本写前门禁拒绝「消费关而白名单非空」：比当前检出的两份 yaml，非 DryRun 时再读另一侧线上的 ConfigMap，除非显式 `-AllowPlayerInboxConsumerOff`（§3.3）。漏网（ConfigMap 与进程不一致、绕过脚本、用旧脚本部署）时 scene 导出 `scene_player_inbox_consumer_enabled = 0`、`ScenePlayerInboxConsumerDisabled` 按 zone 亮起（2026-11-27 起，此前只有每 5 分钟一行的 WARN `metric=inbox_consumer_disabled`），收件箱侧「入箱在涨、锁路径 Fetch 不涨」也会亮（§9.4），后者会被别的 zone 的投递盖住 | 发布前被拦下；漏网可发现，逐 zone 看 scene 指标 |
 | 25 | scene 回放核对判 MISMATCH（环里同 seq 是另一个 request_id） | 该域停用，什么都不确认；每次落地都会再次停用。运维 `ReconcilePlayer` 确认后用 VoidItem 强制模式终结这一行（§7.9） | 经账本证明后可解卡 |
 
 ---
@@ -1341,33 +1341,78 @@ v1 的类型都不允许过期，也没有过期列，这里不做任何处理�
   - `player_inbox_notify_backlog`：`notify_due_ms` 非 0、且流行最后一次写入早于 5 分钟前的流，退避中的也计入（§6.3）
 - **连接池**：client_golang 的 DBStatsCollector 导出 `go_sql_*{db_name="player_inbox"}`，不是 `mmorpg_sql_pool_*`，告警文件里单独写了一条池饱和规则。
 - **直方图**：`player_inbox_fetch_scanned_rows`，数的是锁路径实际走过的行（含被过滤掉的终态行），不是返回条数。
-- **scene 侧**：没有 Prometheus 端点，沿用 `[PlayerInbox] metric=` 日志的写法：
-  - `metric=inbox_deferred reason=disabled|frozen|handoff|exiting|epoch_zero|ledger_invalid|in_battle|no_node|transport|unimplemented|stale_owner|server_error|executor_defer`（INFO，原因变化时打）
-  - `metric=inbox_unknown_type`、`metric=inbox_replay_mismatch`、`metric=inbox_halted`、`metric=inbox_stale_owner`、`metric=inbox_ack_anomaly`（ERROR）
-  - `metric=inbox_halted` 的补打（WARN，带 `relog=1`，2026-11-05 起）：域停用对当前实体一直有效，停用之后每 5 分钟补打一条（`player_inbox_rules::kHaltedDomainRelogIntervalMs`，与节点级停用同一节拍，落在 [10m] 告警窗口之内），实体销毁后自然停
-  - `metric=inbox_ledger_invalid source=loader|apply_gate`（评审 L13）：加载时 ERROR；前置闸首次 WARN，之后每 8 次退避补打（§7.5）
-  - `metric=inbox_registry_broken`（ERROR）：注册表自检失败、整个节点停用消费；启动时一条，之后 Tick 每 5 分钟补打
-  - `metric=inbox_consumer_disabled`（WARN，评审 H1）：消费开关关着；启动时一条，之后每 5 分钟补打（§3.3）
-  - `metric=inbox_leave_ack result=sent|not_sent|not_durable|delivered_undecided|fetch_inflight|ack_inflight|decided_prefix_queued`（INFO，评审 M4、LC-2、LC-3）：离开时补发 Ack 的结果（§7.7）
-  - 不会自愈的那几条，补打节拍由 `player_inbox_rules.h` 的 `static_assert` 钉在 10 分钟告警窗口（`kSceneLogAlertWindowMs`）之内。
+- **scene 侧**（2026-11-27 起经 C++ 节点的 Prometheus 出口导出，`MMORPG_METRICS_PORT`；改法与理由见 §9.4.1）：
+  - 指标（`PlayerInboxSystem::WriteMetrics`，`Initialize` 登记；每台 scene 报本节点的数，标签全是封闭名表，进程启动即以 0 导出）：
+    - `scene_player_inbox_consumer_enabled`（gauge）：配置开关 `player_inbox.consumer_enabled`，1 开 0 关；
+    - `scene_player_inbox_registry_broken`（gauge）：处置注册表自检失败、整个节点停用消费时为 1；
+    - `scene_player_inbox_halted_player_domains{reason}`（gauge）：此刻停用的（玩家，域）数，reason 取停用原因名表（不含 none）；
+    - `scene_player_inbox_ledger_invalid_players`（gauge）：此刻收件箱因账本无效停着的玩家数（加载判坏挂了标签，或已落地却缺账本组件，与前置闸同口径）；
+    - `scene_player_inbox_events_total{event}`（counter）：event = unknown_type / replay_mismatch / ack_anomaly / battle_duplicate_request / stale_owner；
+    - `scene_player_inbox_deferral_starts_total{reason}`（counter）：延后原因变成 reason 的次数，reason 取延后原因名表（不含 none）；
+    - `scene_player_inbox_leave_ack_total{result}`（counter）：离开时补发 Ack 的结局，取值同下面 `metric=inbox_leave_ack` 的 result。
+  - 日志照打不变（带 `player_id`，按人排查与 runbook 按原文检索都靠它）。计数紧跟同名日志自增，口径就是日志行数：
+    - `metric=inbox_deferred reason=disabled|frozen|handoff|exiting|epoch_zero|ledger_invalid|in_battle|no_node|transport|unimplemented|stale_owner|server_error|executor_defer`（INFO，原因变化时打）
+    - `metric=inbox_unknown_type`、`metric=inbox_replay_mismatch`、`metric=inbox_halted`、`metric=inbox_stale_owner`、`metric=inbox_ack_anomaly`（ERROR）
+    - `metric=inbox_halted` 的补打（WARN，带 `relog=1`，2026-11-05 起）：域停用对当前实体一直有效，停用之后每 5 分钟补打一条（`player_inbox_rules::kHaltedDomainRelogIntervalMs`，与节点级停用同一节拍，落在 10 分钟窗口之内），实体销毁后自然停
+    - `metric=inbox_ledger_invalid source=loader|apply_gate`（评审 L13）：加载时 ERROR；前置闸首次 WARN，之后每 8 次退避补打（§7.5）
+    - `metric=inbox_registry_broken`（ERROR）：注册表自检失败、整个节点停用消费；启动时一条，之后 Tick 每 5 分钟补打
+    - `metric=inbox_consumer_disabled`（WARN，评审 H1）：消费开关关着；启动时一条，之后每 5 分钟补打（§3.3）
+    - `metric=inbox_leave_ack result=sent|not_sent|not_durable|delivered_undecided|fetch_inflight|ack_inflight|decided_prefix_queued`（INFO，评审 M4、LC-2、LC-3）：离开时补发 Ack 的结果（§7.7）
+    - 不会自愈的那几条，补打节拍由 `player_inbox_rules.h` 的 `static_assert` 钉在 10 分钟窗口（`kSceneLogAlertWindowMs`）之内：告警改读 gauge 之后，补打只为值班在告警的 10 分钟窗口里按 `player_id` 总能搜到一行。
 
-**告警**：`deploy/k8s/player-inbox-alerts.yaml`，安装步骤登记在 `deploy/k8s/README.md`。规则按四组写（correctness / stuck / reconcile / info），表达式与阈值以该文件为准。
+**告警**：`deploy/k8s/player-inbox-alerts.yaml`，安装步骤登记在 `deploy/k8s/README.md`。规则按五组写（收件箱服务的 correctness / stuck / reconcile / info，加上 scene 侧的 scene.player-inbox），表达式与阈值以该文件为准。
 - **critical**：
   - `fence_regressed`、`epoch_ahead` 速率 > 0；
   - Ack 结果出现 MISMATCH / CONFLICT / NOT_DELIVERED / SKIP_NOT_REQUESTED / UNKNOWN_SEQ；
   - 对账出现不一致：`max(max_over_time(player_inbox_reconcile_inconsistent_rows[2h])) > 0`，`max_over_time` 跨过易主空档；
   - 出现 CursorAhead。
 - **warning**：
-  - **消费可能被关**（评审 H1）：6 小时内有新入箱（`enqueue_total{result="created"}`），而锁路径 Fetch（`fetch_total{path="locked"}`）一次都没有，持续 30 分钟。没写成「Fetch 增量 == 0」：fetch_total 没有预置，开关一直关着时这条序列根本不存在，`== 0` 得到空集、规则永远不触发。局限：目标玩家全部离线时也会亮；指标不分 zone，别的 zone 有投递会盖住，逐 zone 看 scene 日志 `metric=inbox_consumer_disabled`；主防线是部署脚本的写前门禁（§3.3）。
+  - **消费可能被关**（评审 H1）：6 小时内有新入箱（`enqueue_total{result="created"}`），而锁路径 Fetch（`fetch_total{path="locked"}`）一次都没有，持续 30 分钟。没写成「Fetch 增量 == 0」：fetch_total 没有预置，开关一直关着时这条序列根本不存在，`== 0` 得到空集、规则永远不触发。局限：目标玩家全部离线时也会亮；指标不分 zone，别的 zone 有投递会盖住，逐 zone 看 scene 侧的 `ScenePlayerInboxConsumerDisabled`；主防线是部署脚本的写前门禁（§3.3）。
   - 已投递未确认最老超过 1 小时（`delivered_unacked_oldest_seconds`，只算近 24 小时的投递），这是真正的「卡住」信号；
   - `max_delivery_count ≥ 5`（同一口径）；
   - 提醒积压超过 5 分钟；
   - 出现 SETTLED_UNKNOWN；
   - 对账存活：对账跑过、但最近 3 小时没有一轮 ok（3h = 3 × 默认间隔，写死在规则里，改间隔要同步改）；对账轮次 error / timeout；对账截断；对账读到不合法账本；
   - SQL 连接池饱和；
-  - scene 日志：`inbox_unknown_type`、`inbox_halted`、`inbox_ack_anomaly`、`inbox_ledger_invalid`、`inbox_registry_broken`、`inbox_consumer_disabled`（Loki ruler 还没接线，先作为告警文件头的值班固定查询）。`inbox_replay_mismatch` 按 critical。流选择器写 `{job="cpp_nodes", service="scene"}`：C++ 业务日志由 Alloy sidecar 读文件送 Loki，sidecar 不打 `app` 标签，写 `{app=...}` 的查询恒为空（2026-10-18 复核订正，契约测试核对）。
-- **只进 info，不告警**：未决条目数、最老未决时长、`delivered_unacked_stale`、强制终结（`void_total{path="force"}`）、`inbox_leave_ack` 的残留结果。流失玩家的条目永远不会被消费，按它告警会一直亮着，淹没真正的卡住信号。
-- **守卫**：metrics 包的 `TestAlertRulesReferenceRegisteredMetrics` 读告警文件，核对其中每个 `player_inbox_` 开头的名字都已注册，指标改名而告警漏改就红。它只核对指标名，不核对 label 取值。
+  - scene 侧（scene.player-inbox 组，2026-11-27 起由原来的 LogQL 值班查询改来，§9.4.1）：未知类型 `ScenePlayerInboxUnknownType`、域停用 `ScenePlayerInboxDomainHalted`（按 reason 分）、Ack 异常 `ScenePlayerInboxAckAnomaly`、账本无效 `ScenePlayerInboxLedgerInvalid`、注册表自检失败 `ScenePlayerInboxRegistryBroken`、消费开关关着 `ScenePlayerInboxConsumerDisabled`（按 namespace，一个 zone 一个 namespace）。回放不一致 `ScenePlayerInboxReplayMismatch` 按 critical。
+- **只进 info，不告警**：未决条目数、最老未决时长、`delivered_unacked_stale`、强制终结（`void_total{path="force"}`）、离开时补发 Ack 的残留结果（`scene_player_inbox_leave_ack_total`）、延后原因分布（`scene_player_inbox_deferral_starts_total`），后两条是告警文件头的 PromQL 看板查询。流失玩家的条目永远不会被消费，按它告警会一直亮着，淹没真正的卡住信号。
+- **守卫**：
+  - metrics 包的 `TestAlertRulesReferenceRegisteredMetrics` 读告警文件，核对其中每个 `player_inbox_` 开头的名字都已注册，指标改名而告警漏改就红。它只核对指标名，不核对 label 取值。scene 侧的指标以 `scene_player_inbox_` 开头，按词边界匹配的这条守卫不会误认。
+  - `tools/scripts/tests/player_inbox_alerts_contract.tests.ps1` 对照 C++ 源码钉住 scene 侧：指标名与标签取值由 `WriteMetrics` 导出、枚举与名表同序、每种 `metric=inbox_*` 日志都有去处且计数紧跟日志、规则名单与式子、文件头不留已转换的 LogQL、runbook 的处置表列着每条规则。它的文件名以 `player_inbox_` 开头，不能写进告警文件（会被上一条守卫当成指标名），只登记在 runbook §15。
+
+#### 9.4.1 scene 侧信号改走指标（2026-11-27）
+
+**问题**：scene 侧的收件箱信号原来只打结构化日志，告警是告警文件头的 9 条 LogQL 值班固定查询（7 条告警、2 条 info 看板）。Loki ruler 一直没有挂规则目录，这些查询不会自己响，等于没有告警；文件头还写着「scene 侧没有 Prometheus 端点」，这已经不成立：C++ 节点有出口（`Node::StartMetricsExporter`，`MMORPG_METRICS_PORT`，`GlobalMetricsRegistry().Register`），同一天战斗结算、离线托管、归属交接等模块都已接进去（[infra-reconnect-overview.md](infra-reconnect-overview.md) §1.8「业务计数同样导出」）。
+
+**怎么判断导出成什么**：先看信号是「状态」还是「事件」（工程原则「告警三核对」第三条）。
+- 问题还在就一直补打日志的四项本质是状态：消费开关、注册表自检、某玩家某域停用、某玩家账本无效。原 LogQL 靠「10 分钟里有日志行」表达状态，所以 scene 才要按节拍补打。导出成抓取时现算的 gauge，规则直接看「现在怎样」，不数日志、不看计数增量：开关读 `ConfiguredConsumerEnabled()`（与日志同一个判据，不含注册表自检，后者单独导出），自检读 `tlsRegistryBroken`，停用按运行时组件里每个域的 `halted` / `haltReason` 现数，账本无效数 `PlayerInboxLedgerInvalidComp`（加载判坏挂的标签）加上「已落地却缺 `PlayerInboxLedgerComp`」的实体，正好是前置闸判 `kLedgerInvalid` 的两种情形。
+- 其余是一次性事件：未知类型、回放不一致、Ack 异常、战斗同局重投、围栏 STALE、延后原因变化、离开时补发 Ack 的结局。导出成计数，每次计数紧跟同名日志自增（同一个分支、日志之后、下一条 `metric=` 日志之前），口径就是原 LogQL 数的日志行数。
+- 标签只取代码里已有的封闭名表：停用原因、延后原因用 `player_inbox_runtime_comp.h` 的两张表（下标 0 的 none 不是原因，不导出）；事件与离开结局原来是日志里的字面量，新增 `player_inbox_rules.h` 的 `ConsumerEvent` / `LeaveAckResult` 枚举与名表，取值与日志字面量逐字相同，`static_assert` 管长度、契约测试管同序。玩家号不进指标（AGENTS §9）。
+- 计数是 thread_local 普通整数：采集回调跑在 scene 主 loop 上，与写计数、读 `tlsEcs` 是同一个线程（`metrics_registry.h` 的约束）。登记放在 `Initialize` 第一行：开关关着时 `Initialize` 会提前返回，而开关状态本身就是要导出的信号；scene main 只调一次，单测每个用例都调，重复登记被注册表按名字拒绝、打一行 ERROR，无害。
+
+**九条 LogQL 逐条处置**（全部改成 PromQL，级别与阈值沿用原查询，原查询从文件头删掉，免得 ruler 接线之后同一件事报两遍）：
+
+| 原 LogQL（日志键） | 级别 | 改成 | 式子要点 |
+|---|---|---|---|
+| `inbox_replay_mismatch` | critical | `ScenePlayerInboxReplayMismatch` | `events_total{event="replay_mismatch"}` 的 10 分钟增量，另带「新序列」一支 |
+| `inbox_unknown_type` | warning | `ScenePlayerInboxUnknownType` | 同上，`event="unknown_type"` |
+| `inbox_ack_anomaly` | warning | `ScenePlayerInboxAckAnomaly` | 同上，`event="ack_anomaly"` |
+| `inbox_halted` | warning | `ScenePlayerInboxDomainHalted` | `sum by (namespace, reason) (max_over_time(halted_player_domains[10m])) > 0` |
+| `inbox_ledger_invalid` | warning | `ScenePlayerInboxLedgerInvalid` | `sum by (namespace) (max_over_time(ledger_invalid_players[10m])) > 0` |
+| `inbox_registry_broken` | warning | `ScenePlayerInboxRegistryBroken` | `sum by (namespace) (registry_broken) > 0`，值是台数 |
+| `inbox_consumer_disabled`（原按 zone 汇总） | warning | `ScenePlayerInboxConsumerDisabled` | `count by (namespace) (consumer_enabled == 0) > 0`，一个 zone 一个 namespace |
+| `inbox_deferred`（info 看板） | — | 文件头 PromQL 看板查询 | `sum by (namespace, reason) (increase(deferral_starts_total[10m]))` |
+| `inbox_leave_ack`（info 看板） | — | 文件头 PromQL 看板查询 | `sum by (namespace, result) (increase(leave_ack_total{result=~"…五种残余…"}[1h]))` |
+
+**几处取舍与理由**：
+- **逐玩家状态套 `max_over_time(...[10m])`**：原查询是「10 分钟里出现过就报」，玩家离开之后告警至少还亮 10 分钟；只看当前 gauge 的话，玩家一下线告警就熄，warning 级别等不到值班看。套 10 分钟窗口保留了原口径。节点级的两条（开关、自检）在进程存活期间一直是同一个值，不用窗口。
+- **残余**：停用或判坏之后实体活不到下一次抓取就销毁的，gauge 看不到；原 LogQL 靠停用那一刻的 ERROR 看得到。不为它再加「停用事件」计数：这种条目留在收件箱 PENDING，下次落地会再停；收件箱侧 `PlayerInboxDeliveredUnackedTooOld` / `PlayerInboxPoisonSuspect`（停用的条目已投递未确认）与 `PlayerInboxReconcileLedgerInvalid`（对账读到坏账本）会兜住；未知类型、回放不一致、Ack 异常三种停用另有逐次计数的规则。剩下只有缺陷类原因（epoch_required / epoch_ahead / batch_malformed / ledger_write）在极短会话里可能漏，代价可接受。
+- **计数带「新序列」一支**：计数进程一启动就以 0 导出，但新起的 scene 可能在第一次被抓取之前就计了数，首个样本已经不是 0，`increase()` 看不到这一跳；规则另带 `X unless X offset 10m`（与 battle-settlement-alerts.yaml 同一写法）。
+- **停用按 reason 分组**：reason 是封闭名表，低基数；带上它告警摘要就能直接写出原因，值班一眼分清 `version_skew`（混版本窗口，不要作废）和真正的缺陷，不用先翻日志。
+- **只导出不加规则**：`stale_owner`、`battle_duplicate_request` 原来就没有告警，没有既定阈值，加了只会乱响，先看趋势。
+- **指标名前缀是 `scene_player_inbox_`**：告警文件里 `\bplayer_inbox_[a-z0-9_]+` 的词都会被 Go 侧 `TestAlertRulesReferenceRegisteredMetrics` 当成收件箱服务的指标去核对；前面带 `scene_`，词边界不落在 `player` 前，守卫不会误认。同理，告警文件里不写契约测试的文件名。
+- **日志与补打节拍不动**：日志带 `player_id`，是按人排查的唯一入口，runbook 按原文检索；补打节拍的 `static_assert` 照旧把相邻两条钉在 10 分钟之内，告警亮着时的任何 10 分钟窗口里都搜得到。
+- 不导出的：`metric=persist_version_skew where=inbox_payload`（版本错位的逐条上下文，后果已由停用 gauge 的 `reason="version_skew"` 覆盖）。
 
 ---
 

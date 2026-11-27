@@ -1819,11 +1819,17 @@ ServerStatsSnapshot Server::Stats() const
     snapshot.dropped = stats.dropped;
     snapshot.droppedOffLoop = DroppedOffLoopCounter().load(std::memory_order_relaxed);
     snapshot.codes = stats.codes;
-    for (size_t i = 0; i < methods.size() && i < stats.methodCodes.size(); ++i)
+    for (size_t i = 0; i < methods.size(); ++i)
     {
+        // 没被调用过的方法也登记一个空的内层(server.h 的 methods 说明)。
+        auto &methodCodes = snapshot.methods[methods[i].displayName];
+        if (i >= stats.methodCodes.size())
+        {
+            continue;
+        }
         for (const auto &[code, count] : stats.methodCodes[i])
         {
-            snapshot.methods[methods[i].displayName][code] += count;
+            methodCodes[code] += count;
         }
     }
     return snapshot;

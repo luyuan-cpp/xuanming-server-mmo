@@ -75,7 +75,10 @@ struct RedisClusterOptions
 	redis_cluster::Duration seedFallbackDelay = std::chrono::seconds(5);
 };
 
-// 进程启动以来的累计计数,只增不减。没有玩家维度,可直接进日志或指标。
+// 累计计数,一个连接周期(Impl)内只增不减;没有玩家维度,可直接进日志或指标。scene 只在启动时 Connect 一次,所以就是
+// 进程启动以来的累计;Shutdown 之后 stats() 读到 0。scene 的 [PlayerRedis] / [ControlRedis] 汇总行与 Prometheus 的
+// scene_redis_cluster_events_total 都读它(scene 的 core/system/redis.cpp)。写指标的代码不放在 infra:Prometheus 写出器在
+// engine/core,core 依赖 infra,反过来不行。
 struct RedisClusterStats
 {
 	uint64_t rejectedByGuard = 0;        // 守卫拒绝(含命令格式化失败)

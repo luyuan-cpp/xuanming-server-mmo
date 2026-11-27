@@ -943,7 +943,7 @@ type Family struct {
 > - **前提补三条**(都不满足就不开工):
 >   1. §18.7 的围栏硬依赖已按拍板方案解决并落码验证(令牌发布脚本今天把排序锁、子表缓存、证据、`save_barrier` 绑在一段 Lua 里);
 >   2. 条件写已落地:db-write-fencing-mysql.md 当前版本(v0.4 + 2026-10-17 实施附注)上线,该组全部 zone 已切 `Fencing.Mode=dual`,且全部有写生产者的 DBTask 目标表都是围栏表(§18.3);
->   3. 全部 zone 的 `home_zone_unknown` 与 class-2 / class-3 计数稳定为 0(§18.2,与围栏 §8.5 同口径)。
+>   3. 全部 zone 的 `home_zone_unknown` 与 class-2 / class-3 计数稳定为 0(§18.2,与围栏 §8.5 同口径)。(2026-11-27 注:两项计数都已随 Redis 存档路径与 DBTask 存盘管线删除,这一条没有对象了,见 §18.2。)
 > - **与 L-09 的关系**:③ 消费组按 zone 的代码已入库(`go/db/internal/kafka/group_handoff.go`,随 `de4960bee` 入库;`k8s_deploy.ps1` 的 `-DbConsumerGroup keep|zone|legacy`;`go/db/etc/db.yaml` :21-24 的 `ConsumerGroup` / `GroupHandoffFrom`),但未验证。上面 2026-10-16 的 L-09 注照旧适用:各 zone 切到按 zone 的组并收尾之后,L-09 的全组 rebalance 问题才消失。负责人 2026-10-13 定 ③ 是开服门槛(PROGRESS「2026-10-14 存盘管线接手」§5 拍板第 15 条)。
 
 ### 5.6 子表缓存与读结果(第 3 批)
@@ -1528,11 +1528,9 @@ kind 上两个 zone 按 §5.5 逐个 zone 迁移。zone 号要选成一个是另
 - 扩分区锁 `distributed:lock:kafka:consumer:lock:<player_id>`(`tryLockAndProcess`,`key_ordered_consumer.go` 当前约 :2794)只含 player_id,不含 topic。
 - expand 是死代码,但保留(负责人 2026-10-13,PROGRESS「2026-10-14 存盘管线接手」§5 拍板第 5 条)。生产代码只读状态,唯一的写入是 `processDBTask`(当前约 :2741 起)把过期的 expanding 改回 normal(约 :2765);只有状态为 expanding、或读状态出错时才拿这把锁。
 - 互斥论证:同一玩家只在 home topic 上处理,竞争者都在同一组实例上,按组分实例不破坏互斥。
-- **残余一:home_zone 未知时的回落**。2026-10-17 起分两条路径(`player_lifecycle.cpp` :4321-4345):
-  - 严格路径(owner_epoch ≠ 0):home_zone 为 0 时计 `home_zone_unknown` 并**拒绝存盘**,不回落进程 zone(围栏文档 2026-10-17「收据身份与父快照投递恢复补充」);
-  - epoch = 0 的旧兼容路径:仍回落为进程 zone 并计数,滚动升级窗口里每次存盘都可能走到。这时同一玩家的 DBTask 可能进非 home 的 topic,从而落到另一组实例。
-- 今天正常态不取扩分区锁(只在 expanding 或读状态出错时取),排序锁、游标、epoch 都带 topic,跨 topic 本来就没有 Redis 侧互斥;回落路径只靠 MySQL 围栏,而围栏对 class-3(epoch=0)不生效(围栏 §5.6)。按组拆分不改变这一点。门禁保留,改为「`home_zone_unknown` 与 class-2 / class-3 计数在全部 zone 稳定为 0」(与围栏 §8.5 的 sql 进入条件同口径)。上线前没有旧 gate / 旧 scene 的滚动窗口,不阻塞。
-  - 读数:class-2 / class-3 看 go/db 的 `db_fence_write_total{class="legacy_epoch"|"legacy_zero"}`(`go/db/internal/metrics/pipeline.go` 的 `fenceClasses`)。C++ 节点没有指标出口,`home_zone_unknown` 的读数是 `cpp/libs/services/scene/core/system/redis.cpp`(约 :129)每 30 s 一行的 `[OwnerEpoch] home_zone_unknown=N` WARN 汇总,只能按日志判读;要不要补指标进 §25。
+- **残余一:home_zone 未知时的回落(2026-10-30 起不复存在,2026-11-27 按现状改正)**。原文分析的是 Redis 存档路径:`player_lifecycle.cpp` 的 `SavePlayerToRedisImpl` 按 home_zone 选 DBTask topic;home_zone 为 0 时,严格路径(owner_epoch ≠ 0)计 `home_zone_unknown` 并拒绝存盘,epoch = 0 的旧兼容路径回落进程 zone,同一玩家的 DBTask 可能进非 home 的 topic、落到另一组实例。2026-10-30 起玩家存档改成 scene 直接提交 player_store(TiDB,[player-save-direct-commit.md](player-save-direct-commit.md)),这条路径连同 `home_zone_unknown` 计数一起删除,不再有「回落进程 zone 的存盘」。
+- 原文这里的门禁「`home_zone_unknown` 与 class-2 / class-3 计数在全部 zone 稳定为 0」随之失去对象:`home_zone_unknown` 已删;class-2 / class-3 原来读 go/db 的 `db_fence_write_total{class="legacy_epoch"|"legacy_zero"}`,2026-11-27 核对 go/db 已没有这个指标(`internal/metrics/pipeline.go` 不在了)。扩分区锁、排序锁、游标那几段描述的也是同一条已删的 DBTask 存盘管线,只作历史保留。
+  - 原文「C++ 节点没有指标出口,只能按 `[OwnerEpoch]` 日志判读」也不成立:C++ 节点设了 `MMORPG_METRICS_PORT` 就有 /metrics 出口;`[OwnerEpoch]` 现在只剩 `stale_owner_write_rejected`、`stale_owner_rejected_exiting` 两项,同一份计数导出为 `scene_owner_epoch_events_total{event}`(`player_ownership_metrics.cpp`),日志那一行只在非 0 时打,指标 0 也导出。
 - **残余二:合服跨组**。合服改了 home_zone 之后,同一玩家旧 topic 下的游标、锁与重试在源 zone 的组,新 topic 在目标 zone 的组。源与目标跨组时,merge_zone 的 R2(等排序锁消失)与 P4 检查要两边都查,或者规定合服只在组内进行(待拍板,§25)。
 
 ### 18.3 前置:条件写落地
@@ -1879,7 +1877,7 @@ Java 版账号与角色已在 MySQL(§26),本项在 Java 是「已做,实现不�
 | 1a | 原 §3.4 第 1a 批,去掉「回档守卫补核心族」(回档已不再 FLUSHDB);拓扑函数按 zone 返回 DbCtl 的骨架;每个新实例显式 `--maxclients` 并进总账 | 与 L-02(打开排队与限流)的先后(时机待原 §13 第 10 条拍板);超过 30 文件需授权 | `k8s_deploy.ps1`、`dev_tools.ps1`(`k8s-redis-split-status`、`k8s-redis-wipe`)、`k8s_gate_drain.ps1`、`stress_snap.ps1` / `stress_summarize.ps1` | 待做(Java 没有 K8s 生产形态,§26) |
 | 1b | 迁移工具 `tools/redis_split` 与墓碑检查;族表按 §2.2 的更正补齐新键 | 1a | merge_zone、data_consistency_check、route_tool;redis-split runbook | 待做 |
 | 1c | 切 queue、mapping;mapping 三族是否同窗口改名按 §21 拍板;核心显式 maxmemory 按 §23 拍板 | 路径 A 只在开服前或 S1 以内可行,规模后走路径 B(§5.4 的更正);回档契约按拆分拓扑重写(映射复核改走 mapping 句柄加维护围栏;今天的契约要求 MappingRedis 与 go/db RedisClient 同实例同 DB,1c 之后回档 -Apply 必然拒绝,§2.3 的例外)。首次上线前做 1c 不阻塞,但契约要在上线前按新拓扑定稿 | 同 1a;核心重启走 `-ConfirmRedisCoreRestart`;`k8s_zone_rollback.ps1` 的部署事实核对与 `zone_rollback_discard` 契约 | 不适用 |
-| 2 | dbctl 按 zone 组分实例(§18) | §18.7 二选一落码并验证;go/db 句柄拆成控制面与核心两个;db-write-fencing v0.4 + 10-17 附注上线,该组全部 zone `Fencing.Mode=dual`;`home_zone_unknown` 与 class-2 / class-3 计数在全部 zone 稳定为 0(与围栏 §8.5 同口径,§18.2);补投在跑、积压告警正常(§18.3);③ 消费组按 zone 已验证并收尾;禁止在线扩分区与 merge_zone 的窗口 | zones 配置加组字段;`k8s_deploy.ps1` 的拓扑与闸;`k8s-redis-wipe` 遍历组实例;连接总账按实例;merge_zone 的 dbctl 句柄;`zone_rollback_discard`(未落地)的组映射 | 不适用(Java 不经 Kafka 落库) |
+| 2 | dbctl 按 zone 组分实例(§18) | §18.7 二选一落码并验证;go/db 句柄拆成控制面与核心两个;db-write-fencing v0.4 + 10-17 附注上线,该组全部 zone `Fencing.Mode=dual`;`home_zone_unknown` 与 class-2 / class-3 计数在全部 zone 稳定为 0(与围栏 §8.5 同口径,§18.2;两项计数 2026-11-27 核对已随 Redis 存档路径删除,这条没有对象);补投在跑、积压告警正常(§18.3);③ 消费组按 zone 已验证并收尾;禁止在线扩分区与 merge_zone 的窗口 | zones 配置加组字段;`k8s_deploy.ps1` 的拓扑与闸;`k8s-redis-wipe` 遍历组实例;连接总账按实例;merge_zone 的 dbctl 句柄;`zone_rollback_discard`(未落地)的组映射 | 不适用(Java 不经 Kafka 落库) |
 | 3 | redis-cache 必做(§19),形态按拍板 | §18.7;是否还写子表缓存先拍板(§19);restore 工具的缓存句柄(`save_barrier_restore` 在缓存实例上核验「子表缓存不存在」,§2.3 的例外) | 同上;Cluster 形态下清库与告警按主节点;`save_barrier_restore` 与 `zone_rollback_discard` 加缓存句柄 | 不适用 |
 | 4 | 单元化 + 单元内 Cluster 按 `{player_id}` 分片(§20) | 单元规模与分片数拍板;C++ 集群客户端与 FIFO 清单处置(§20.6);跨 tag 脚本改形(§20.4);全局键与 SCAN 改造(§20.5);键名迁移方式拍板(§20.7);账号目录落库(§22);冷卸载(§23);guild 迁出 DB 2;redis-match-cluster 的去留;friend 在线目录游标两版同批评审 | 全部清库 / 回档 / 合服 / 监控脚本按单元与主节点重写;各处「共享库不许集群化」的注释随落码更新:`deploy/k8s/README.md:792`、`k8s_deploy.ps1` :7554 / :7738、`go/friend/etc/friend.yaml:67`、`go/friend/internal/data/session_reader.go:34`、`go/friend/internal/svc/servicecontext.go:81`、`go/chat/internal/svc/servicecontext.go:32`、`go/match/etc/match_service.yaml:34`、`go/match/internal/config/config.go:22`、`go/match/internal/team/keys.go:11` | 待做;单元化与游标改格式要两版同批(§26) |
 
@@ -1924,7 +1922,7 @@ Java 版账号与角色已在 MySQL(§26),本项在 Java 是「已做,实现不�
 11. `redis-match-cluster` 是否纳入本稿:volatile-lru 会淘汰 match 的票据与锁,也会优先淘汰带 TTL 的 chat 历史;容量模型 A8 建议拆成两个集群(§2.2 G 的增补)。
 12. friend 在线目录的游标格式:逐节点 SCAN 后游标格式要变。proto 写明是不透明分页游标,字段与类型不变;风险限于滚动升级时在途的 v1 游标被拒与服务端 48 字节上限,服务端兼容读 v1、按重新开始处理即可,上线前没有在途游标。客户端是否解析或限长未核实,仍列为客户端与 Java 同批评审项;Java 只需语义一致,不要求同格式(§20.5、§26)。
 13. 核心闭包围栏键的迁移方式(§20.7):首次上线前改名,直接以新键名起步(见第 22 条);或上线后停写切换;或上线后版本门禁(门禁只保证翻转时全部写者认识新键名,翻转本身仍要停写排空,或逐玩家先写让旧名 CAS 必然失败的墓碑再写新键)。
-14. 第 2 批的门禁「`home_zone_unknown` 与 class-2 / class-3 计数在全部 zone 稳定为 0」(与围栏 §8.5 同口径;上线前不阻塞):`home_zone_unknown` 给 C++ 补指标出口,还是按 `redis.cpp` 的 30 s WARN 汇总判读;class-2 / class-3 读 `db_fence_write_total{class}`(§18.2)。
+14. ~~第 2 批的门禁「`home_zone_unknown` 与 class-2 / class-3 计数在全部 zone 稳定为 0」:`home_zone_unknown` 给 C++ 补指标出口,还是按 `redis.cpp` 的 30 s WARN 汇总判读~~。**已了结(2026-11-27 按现状改正)**:不用拍板。两项计数都已随 Redis 存档路径与 DBTask 存盘管线删除(§18.2);C++ 节点早有 /metrics 出口(`MMORPG_METRICS_PORT`),`[OwnerEpoch]` 剩下的两项导出为 `scene_owner_epoch_events_total{event}`。
 15. **(2026-10-18 新增)** C++ 集群客户端的选型(hiredis-cluster、redis-plus-plus 或其他)与新依赖评审;连接数「进程数 × 主节点数」进 maxclients 与 nofile 预算(§20.6)。
 16. **(2026-10-18 新增)** guild 从 DB 2 迁到 DB 0 的时机(§2.2 G 的增补)。
 17. **(2026-10-18 新增)** `zone_rollback_discard` 与 `save_barrier_restore` 在拆分 / Cluster 拓扑下的契约:多句柄、映射复核方式、zone → 组映射(§2.3 的例外、§18.6)。

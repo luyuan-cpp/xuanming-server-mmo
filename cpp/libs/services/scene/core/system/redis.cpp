@@ -11,6 +11,7 @@
 
 #include <node_config_manager.h>
 
+#include "engine/core/metrics/metrics_registry.h" // scene_redis_cluster 采集器(RegisterRedisClusterMetrics)
 #include "infra/storage/redis_cluster/redis_cluster_client.h"
 #include "player/system/dirty_save_stats.h"
 #include "player/system/player_appearance.h"
@@ -94,20 +95,32 @@ namespace
 				 << " seeds=" << seeds << " auth=" << (options.connect.password.empty() ? "off" : "on");
 	}
 
-	// prefix 是行首标签([PlayerRedis] / [ControlRedis]),其后的 key=value 写法由 tools/scripts/stress_summarize.ps1 解析,改了要同步改脚本。
-	std::string FormatRedisClusterStats(const char* prefix, const RedisClusterStats& stats)
+	// 汇总行追加 " key=value"。key 来自各统计命名空间的 Visit,/metrics 用同一个 Visit 写 event 标签。
+	void AppendStat(std::string &line, std::string_view key, uint64_t value)
 	{
-		return std::string(prefix) + " rejected_by_guard=" + std::to_string(stats.rejectedByGuard) +
-			   " rejected_not_connected=" + std::to_string(stats.rejectedNotConnected) +
-			   " rejected_queue_full=" + std::to_string(stats.rejectedQueueFull) +
-			   " moved=" + std::to_string(stats.movedRedirects) +
-			   " ask=" + std::to_string(stats.askRedirects) +
-			   " backoff_retries=" + std::to_string(stats.backoffRetries) +
-			   " budget_exhausted=" + std::to_string(stats.budgetExhausted) +
-			   " null_replies=" + std::to_string(stats.nullReplies) +
-			   " aborted=" + std::to_string(stats.abortedCommands) +
-			   " topology_applied=" + std::to_string(stats.topologyApplied) +
-			   " topology_refresh_failures=" + std::to_string(stats.topologyRefreshFailures);
+		line += ' ';
+		line += key;
+		line += '=';
+		line += std::to_string(value);
+	}
+
+	// [PlayerRedis] / [ControlRedis] 行的 key 与顺序(计数含义见 redis_cluster_client.h 的 RedisClusterStats)。
+	// /metrics(WriteRedisClusterMetrics)用同一个函数把 key 写成 event 标签,两个出口不各写一份名单。
+	// 新计数只追加在末尾:运维手册按原文判读这两行。
+	template <typename Emit>
+	void VisitRedisClusterStats(const RedisClusterStats &stats, Emit &&emit)
+	{
+		emit("rejected_by_guard", stats.rejectedByGuard);
+		emit("rejected_not_connected", stats.rejectedNotConnected);
+		emit("rejected_queue_full", stats.rejectedQueueFull);
+		emit("moved", stats.movedRedirects);
+		emit("ask", stats.askRedirects);
+		emit("backoff_retries", stats.backoffRetries);
+		emit("budget_exhausted", stats.budgetExhausted);
+		emit("null_replies", stats.nullReplies);
+		emit("aborted", stats.abortedCommands);
+		emit("topology_applied", stats.topologyApplied);
+		emit("topology_refresh_failures", stats.topologyRefreshFailures);
 	}
 
 	// 有变化才打一行,并把 last 更新成这次的计数。这一拍里拒绝类或预算耗尽有增长时升 WARN:这些命令没有执行,
@@ -130,16 +143,47 @@ namespace
 		}
 		last = current;
 	}
-
-	// 汇总行追加 " key=value"。key 来自各统计命名空间的 Visit,/metrics 用同一个 Visit 写 event 标签。
-	void AppendStat(std::string &line, std::string_view key, uint64_t value)
-	{
-		line += ' ';
-		line += key;
-		line += '=';
-		line += std::to_string(value);
-	}
 } // namespace
+
+// prefix 是行首标签([PlayerRedis] / [ControlRedis]),其后是 VisitRedisClusterStats 给的 key=value,与原来逐项拼写时逐字相同
+// (单测钉住整行)。运维手册 docs/ops/redis-player-cluster-runbook.md 按原文判读;tools/scripts/stress_summarize.ps1 目前不解析这两行。
+std::string FormatRedisClusterStats(std::string_view prefix, const RedisClusterStats &stats)
+{
+	std::string line(prefix);
+	VisitRedisClusterStats(stats, [&line](std::string_view key, uint64_t value) { AppendStat(line, key, value); });
+	return line;
+}
+
+void WriteRedisClusterMetrics(prometheus_text::Writer &writer, const RedisClusterStats &player, const RedisClusterStats &control)
+{
+	writer.BeginFamily("scene_redis_cluster_events_total",
+					   "Redis cluster routing layer events of this scene node since process start, by client (player = the "
+					   "player-domain handle, control = the control cluster handle) and event (same keys as the [PlayerRedis] / "
+					   "[ControlRedis] summary log lines): rejected_by_guard, rejected_not_connected, rejected_queue_full (refused "
+					   "before sending, never executed); moved, ask (redirects); backoff_retries; budget_exhausted (a slot queue ran "
+					   "out of retry budget and its commands got null replies); null_replies (in-flight commands that got a null "
+					   "reply, outcome unknown); aborted (commands finished locally with a null reply); topology_applied; "
+					   "topology_refresh_failures.",
+					   prometheus_text::MetricType::kCounter);
+	const auto sampleClient = [&writer](std::string_view client, const RedisClusterStats &stats)
+	{
+		VisitRedisClusterStats(stats, [&writer, client](std::string_view event, uint64_t value)
+							   { writer.Sample({{"client", client}, {"event", event}}, value); });
+	};
+	sampleClient("player", player);
+	sampleClient("control", control);
+}
+
+void RegisterRedisClusterMetrics()
+{
+	// 采集回调跑在节点主 loop(scene 逻辑线程)上,读的就是这个线程上的两个 thread_local 句柄,与建连、发命令同一个线程。
+	// 句柄还没 Connect(或已 Shutdown)时 stats() 全为 0。
+	if (!GlobalMetricsRegistry().Register("scene_redis_cluster", [](prometheus_text::Writer &writer)
+		{ WriteRedisClusterMetrics(writer, tlsPlayerRedis.stats(), tlsControlRedis.stats()); }))
+	{
+		LOG_ERROR << "[Metrics] collector scene_redis_cluster is already registered";
+	}
+}
 
 void RedisSystem::Initialize(muduo::net::EventLoop* loop)
 {
@@ -366,8 +410,9 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
             }
             lastReleaseFence = releaseFenceStats;
         }
-        // 两个集群句柄路由层的累计计数(redis-player-store-cluster.md §8.1 观察项),有变化才打。各自单独一行、单独前缀,
-        // 不动上面几行的解析格式。
+        // 两个集群句柄路由层的累计计数(redis-player-store-cluster.md §5.6「可观测」、§8.1 观察项),有变化才打。各自单独一行、
+        // 单独前缀,不动上面几行的解析格式。同一份计数 2026-11-27 起由 RegisterRedisClusterMetrics 导出为
+        // scene_redis_cluster_events_total{client,event},这两行照旧保留。
         LogRedisClusterStatsIfChanged("[PlayerRedis]", tlsPlayerRedis.stats(), lastPlayerRedis);
         LogRedisClusterStatsIfChanged("[ControlRedis]", tlsControlRedis.stats(), lastControlRedis); });
     snapshotTimerActive = true;

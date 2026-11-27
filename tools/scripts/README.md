@@ -699,7 +699,7 @@ Java 网关的限流集成测试由统一入口自动准备独占 Redis 单机�
 
 任一步骤失败即停止，不自动重试；日志保存在 `build/verification/docker-rebuild-all-<UTC>/`，并在终端直接输出脱敏后的关键编译/迁移/容器报错摘要（同时落盘 `failure-diagnostics.txt` 与 `result.json` 的 `diagnostics`）；若 C++ 或 Go 已构建成功、后续阶段在刷新前失败，还会打印可直接复用的 `--resume-builds-from` 命令。容器更新阶段失败会保留已完成的更新状态，不提供全事务回滚。配置未变化时仍可使用原单语言入口 `python tools/scripts/rebuild_docker_debug.py cpp`、`python tools/scripts/rebuild_docker_debug.py go --services login` 或 `python tools/scripts/rebuild_docker_debug.py java`；配置或来源检查报错时使用上面的统一入口。旧入口的 `--build-only` 只构建，不更新配置或容器，`--services sql-boot` 只换工具镜像。
 
-`build_docker_cpp_debug.py` 使用本机已验证且有效的 SDK 和 `Debug/-O0`，SDK 来源及依赖守卫位于忽略目录 `build/docker-debug-current/cpp-toolchain.json`；依赖源码变化时停止，不复用不匹配 SDK。`build_docker_go_debug.py` 使用当前 Go 1.27.2、`all=-N -l` 与固定 Delve v1.27.2，逐服务串行构建，并可能按原流程构建固定版本调试器，不能假设全流程完全离线。`build_docker_java_debug.py` 使用已有 JDK 23/Maven 和固定版本 protoc，按原有测试前置离线单线程执行测试、打包并核验行号表。三个底层构建器只输出本地镜像及 `--output/result.json`，不自行更新运行栈。
+`build_docker_cpp_debug.py` 使用本机已验证且有效的 SDK 和 `Debug/-O0`，SDK 来源及依赖守卫位于忽略目录 `build/docker-debug-current/cpp-toolchain.json`；依赖源码或 `tools/archived/muduo_linux_overlay/` 变化时停止，不复用不匹配 SDK。遇到 SDK 过期时先在仓库根执行 `python -X utf8 -B tools/scripts/refresh_docker_cpp_sdk.py`（加 `--check` 可只读查看变化清单），该入口会封存全部 `deps` 输入、按 `deploy/k8s/Dockerfile.cpp --target deps` 构建镜像、以 `--network=none --read-only` 运行 `verify_docker_cpp_sdk.sh` 验收后再原子更新 `cpp-toolchain.json`。`build_docker_go_debug.py` 使用当前 Go 1.27.2、`all=-N -l` 与固定 Delve v1.27.2，逐服务串行构建，并可能按原流程构建固定版本调试器，不能假设全流程完全离线。`build_docker_java_debug.py` 使用已有 JDK 23/Maven 和固定版本 protoc，按原有测试前置离线单线程执行测试、打包并核验行号表。三个底层构建器只输出本地镜像及 `--output/result.json`，不自行更新运行栈。
 
 `docker_cpp_sdk_guard.py` 收集 SDK 及独立依赖的实际文件集合；`docker_debug_manifest.py` 在容器构建中核验冻结源码、维护按 SHA 变化失效的对象缓存，并登记最终编译参数、节点与调试符号摘要。
 

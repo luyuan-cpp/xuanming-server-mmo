@@ -30,6 +30,7 @@ namespace muduo_grpc
 {
 class Server;
 class Service;
+struct ServerStatsSnapshot;
 } // namespace muduo_grpc
 
 // Prometheus /metrics 出口(core/metrics/metrics_http_exporter.h),完整定义只在 node.cpp 里需要。
@@ -314,6 +315,9 @@ protected:
     void InitKillSwitch();
     // 按 MMORPG_METRICS_PORT 开 Prometheus 出口(未设 = 不开;非法值拒启)。只在 Initialize 里调一次。
     void StartMetricsExporter();
+    // 出口每次抓取时调用(loop 线程):本节点 gRPC 服务端的统计写成 cpp_node_grpc_server_*(core/network/grpc_server_metrics.h)。
+    // 没注册 gRPC 服务的节点(gate)返回空串;服务端还没起时按全 0 导出,排空销毁之后导出排空那一刻的最终计数,计数不回落。
+    std::string RenderGrpcServerMetrics() const;
     // 在本 loop 上起 span 导出器并装上进程的 span 去处;没配地址(或被 OTEL_* 关掉、主机名解析不了)时什么都不起。
     // 要在 InitRpcServer 之后:资源属性用节点类型、uuid 与 zone。
     void StartSpanExporter();
@@ -448,6 +452,9 @@ protected:
     // Node 是它唯一的所有者。全部在本节点 EventLoop 上运行,不创建线程(第 4 批起没有 poller / 关机线程)。
     // 只在排队任务里或 loop 外销毁:OnGrpcServerDrained 里 reset;收尾时若仍在,经 queueInLoop 防御销毁。
     std::shared_ptr<muduo_grpc::Server> grpcServer;
+    // OnGrpcServerDrained 销毁服务端之前留下的最终统计,之后的 /metrics 抓取读它(RenderGrpcServerMetrics),
+    // 不让 cpp_node_grpc_server_* 在停机余下的排空期间回落成 0。只在 loop 线程读写;unique_ptr 只是为了在本头里只前向声明。
+    std::unique_ptr<muduo_grpc::ServerStatsSnapshot> drainedGrpcServerStats;
     // 排空起点(BeginShutdown 时刻),只用于 "gRPC server drained. drain_ms=" 日志。
     std::chrono::steady_clock::time_point grpcDrainStart{};
 };

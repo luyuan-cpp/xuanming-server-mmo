@@ -98,7 +98,7 @@ rc -p 6379 cluster migration status all
 - 每主 slot 数、键数、内存、ops 大致均匀。键数用 `rc --cluster info 127.0.0.1:6379`。控制集群的键按 hash tag 成组,一个组(如一个 zone 的 `{ctl:<zone>}`)只落一个 slot,所以只看键数不均不算异常,看是不是某一个 tag 过热。
 - `kubectl -n $NS logs job/$CLUSTER-cluster-init` 最后一行是 `redis cluster <集群名> verified: 16384 slots covered`。这个 Job 只在 `infra-up` 时跑,过期后被清理(1 小时)。
 - 客户端(玩家域):
-  - scene 启动日志有 `Player Redis: mode=cluster seeds=... auth=on`,周期日志 `[PlayerRedis] ...` 里 `budget_exhausted`、`null_replies`、`rejected_by_guard` 不涨。`moved` 在迁移时涨是正常的,`topology_refresh_failures` 持续涨要查。
+  - scene 启动日志有 `Player Redis: mode=cluster seeds=... auth=on`,周期日志 `[PlayerRedis] ...` 里 `budget_exhausted`、`null_replies`、`rejected_by_guard` 不涨。`moved` 在迁移时涨是正常的,`topology_refresh_failures` 持续涨要查。2026-11-27 起同一份计数也在 scene 的 /metrics 上:`scene_redis_cluster_events_total{client="player",event="<同名 key>"}`(控制集群句柄是 `client="control"`,对应 `[ControlRedis]` 行),看增长用 `increase()`,不必翻日志。
   - login 启动横幅有 `player redis: addrs=redis-player-0... cluster=true`、`login redis: addrs=redis-player-0... cluster=true`。
   - 没有服务日志里有 `CROSSSLOT` 或 `NOAUTH`。
 - 客户端(控制集群):第 6b 批接上服务后在这里补对应的启动日志。接上之前 `rc -p 6379 client list` 只有 exporter 和你自己。
@@ -141,7 +141,7 @@ rc -p 6379 cluster migration status all
 
    只能在主节点上发起,目标必须能 `CLUSTER MIGRATION` 的 slot 状态是稳定的。也可以用 `rc --cluster rebalance "$SEED:6379" --cluster-use-empty-masters`(全部节点 ≥ 8.4 时走原子迁移),但一次动得多,不好控制批量。第一次做要手工分批,记下单批时长和第 5 步的观察结果。
 5. **观察。** 迁移期间看:
-   - 玩家域:`[PlayerRedis]` 的 `moved`、`ask` 会涨,`budget_exhausted`、`null_replies` 不应该涨;
+   - 玩家域:`[PlayerRedis]` 的 `moved`、`ask` 会涨,`budget_exhausted`、`null_replies` 不应该涨(指标同名:`scene_redis_cluster_events_total{client="player",event=...}`);
    - Go 服务的错误率,只允许重定向;
    - 源节点内存(迁移时 fork,容器内存的 2 倍余量就是留给它的)和 `RedisPlayerMemoryNearMax` / `RedisControlMemoryNearMax`。
 6. **收尾。** 走一遍 §3,再看每主 slot、键、内存、ops 分布。之后部署都带新的主节点数(少给会被 `shrink` 闸拒绝)。

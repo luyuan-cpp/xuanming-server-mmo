@@ -150,7 +150,9 @@ struct ServerStatsSnapshot
     uint64_t dropped{0};                 // 句柄全部丢弃仍未完成(程序缺陷信号)
     uint64_t droppedOffLoop{0};          // 进程级:句柄在 loop 线程之外析构
     std::map<uint32_t, uint64_t> codes;  // 回给对端的 grpc-status → 次数(REFUSED_STREAM 与静默撤销不计)
-    std::map<std::string, std::map<uint32_t, uint64_t>> methods;   // 方法名 → (grpc-status → 次数)
+    // 方法名 → (grpc-status → 次数)。Start 之后每个已登记的方法都在,没被调用过的内层为空(2026-11-27 起):节点的
+    // /metrics 出口据此把每个方法以 0 起步导出;空的内层不进汇总行,FormatServerStats 的输出不变。
+    std::map<std::string, std::map<uint32_t, uint64_t>> methods;
 };
 
 // 一行汇总(不含 "[GrpcServer] summary " 前缀),字段顺序由单测锁住:

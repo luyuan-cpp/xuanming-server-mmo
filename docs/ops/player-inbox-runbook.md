@@ -5,6 +5,7 @@
 > 2026-10-18 第 C 批复核修复:写前门禁加线上交叉核对与来源核对(§2.1),回滚只回退镜像、不检出旧 commit 重跑(§2、§11),
 > scene 日志的 LogQL 选择器改为 sidecar 真有的标签(§2.1、§5),账本校验口径写明收件箱多查 request_id 为 0(§5.2、§10.4)。
 > 2026-11-05 第二轮审计 r2-inbox#1:§2.1 写明关消费会停掉全球结算,§11 第 2、3 步把不能作废的 Battle 结算域单独处理。只改手册。
+> 2026-11-27 scene 侧收件箱信号导出成指标,告警文件头的 9 条 LogQL 值班查询全部改成 PromQL 规则(`scene.player-inbox` 组,§5、§2.1);日志行不变。
 > **全部未编译、未测试、未在任何环境演练**,待 Gemini 验证(§15)。本手册以代码为准:代码行为变了,要回来同步这里。
 > **依据**:`docs/design/player-inbox-service.md`(下称「设计」)v1.0,尤其 §1.4、§1.6、§7.8、§8、§9、§11.7;
 > 计数器倒退的通用处置见 `docs/design/db-write-fencing-mysql.md`(下称「围栏设计」)v0.4 §9.1。
@@ -150,18 +151,22 @@ NotifyResendIntervalSeconds, GaugeIntervalSeconds, ReconcileIntervalMinutes, Rec
 - **开消费的顺序**(上线第 5、6 步):全部 zone `zone-up` 并滚动 scene、scene 打出 `consumer_enabled=1` 之后,才提交 `EnqueueTypes` 并跑 `infra-up`。
   顺序反了:`infra-up` 读到有 zone 线上还是 `false`,被拒。
 
-**怀疑开关被关了**:信号是 `PlayerInboxConsumerMaybeDisabled`(warning),或白名单已打开的环境里出现 scene 日志 `metric=inbox_consumer_disabled`。
-1. 逐 zone 查 scene 日志。收件箱全服一份、指标不分 zone,只有这条日志能定位到 zone。流选择器必须是 sidecar 真会打的标签
-   (C++ 日志没有 `app` 标签,写 `{app=...}` 的查询恒为空,会被误判成「开关开着」):
-   ```logql
-   sum by (zone) (count_over_time({job="cpp_nodes", service="scene"} |= "[PlayerInbox]" |= "metric=inbox_consumer_disabled" [10m]))
+**怀疑开关被关了**:直接的信号是 scene 侧的 `ScenePlayerInboxConsumerDisabled`(warning,按 zone 报,2026-11-27 起);
+间接的是收件箱侧的 `PlayerInboxConsumerMaybeDisabled`(warning,6 小时有入箱却没有锁路径拉取,不分 zone)。
+1. 看是哪个 zone、哪几台。`ScenePlayerInboxConsumerDisabled` 按 namespace 报(一个 zone 一个 namespace),值是开关关着的 scene 台数;
+   直接查 scene 指标:
+   ```promql
+   count by (namespace) (scene_player_inbox_consumer_enabled == 0)
    ```
-   单看一个 zone 就在选择器里加 `zone="<zone 名>"`。
+   去掉 `count by` 就看到是哪几个 instance。收件箱全服一份、它的指标不分 zone,定位到 zone 只能靠 scene 的指标。
+   要看何时开始,再查这些 scene 的日志 `metric=inbox_consumer_disabled`(启动时一条 WARN,之后每 5 分钟补打)。流选择器必须是
+   sidecar 真会打的标签 `{job="cpp_nodes", service="scene"}`(C++ 日志没有 `app` 标签,写 `{app=...}` 的查询恒为空)。
 2. 核对 git 里的 `bin/etc/game_config.yaml`,以及该 zone node-config 里 `game_config.yaml` 的 `player_inbox` 段。
    常见原因:yaml 被改回 `false`、检出开消费之前的旧 commit 重跑了 `zone-up`(§2「回滚」),或部署时用了 `-AllowPlayerInboxConsumerOff`。
 3. 按第 5 步重开并滚动 scene。
-- 误报:6 小时内新入箱的目标玩家全部离线时也会亮。这时 `player_inbox_fetch_total{path="fast"}` 仍随登录上涨,说明 scene 在拉。
-- 局限:别的 zone 有条目被投递,就会盖住关了开关的那个 zone。逐 zone 只能看第 1 步的日志,写前门禁才是主防线。
+- `PlayerInboxConsumerMaybeDisabled` 的误报:6 小时内新入箱的目标玩家全部离线时也会亮。这时 `player_inbox_fetch_total{path="fast"}`
+  仍随登录上涨,`ScenePlayerInboxConsumerDisabled` 也不亮,说明 scene 在拉。
+- 它的局限:别的 zone 有条目被投递,就会盖住关了开关的那个 zone。逐 zone 看第 1 步的 scene 指标;写前门禁才是主防线。
 
 ### 2.2 分片公式改为 mix64 之前写过的库(评审 L5)
 
@@ -307,25 +312,33 @@ grpcurl -plaintext -import-path . -proto proto/player_inbox/player_inbox_admin.p
 | `PlayerInboxForceVoided` | info | 有已投递的行被强制终结(`VoidItem mode=FORCE_MISMATCH`) | 对照审计 `action=FORCE_VOID` 与工单(§5.2) |
 | `PlayerInboxOpenItemsTrend` | info | 最老未决条目超过 30 天(多为流失玩家) | 只看趋势 |
 
-**scene 日志信号**(收件箱的这些信号还没导出成指标。scene 本身有 Prometheus 出口,导出了的信号改成 PromQL 规则,例如下文战斗道具预留超期的
-`SceneBattleItemHoldOverdue`;这里的 LogQL 写在告警文件头,Loki ruler 还没接线,目前是值班固定查询):
-- 流选择器一律写 `{job="cpp_nodes", service="scene"}`,逐 zone 再加 `zone="<zone 名>"`。C++ 业务日志只落文件、由 Alloy sidecar 送 Loki,
-  sidecar 不打 `app` 标签:写成 `{app=~"scene.*"}` 的查询恒为空,会被误判成「没有问题」。契约测试核对告警文件里的选择器只用 sidecar 真有的标签。
+**scene 侧的 Prometheus 规则**(`scene.player-inbox` 组,2026-11-27 起,设计 §9.4.1)。原来这里是告警文件头的 9 条 LogQL 值班固定查询:
+scene 的收件箱信号只打日志,而 Loki ruler 一直没接线,查询不会自己响。scene 节点有 Prometheus 出口(`MMORPG_METRICS_PORT`),
+信号由 `PlayerInboxSystem::WriteMetrics` 导出后全部改成 PromQL,级别与阈值沿用原查询。规则按 namespace 报(一个 zone 一个 namespace);
+具体是哪名玩家,在 Loki 里按「按人排查的日志」一列查同名 scene 日志(行内带 `player_id`,日志一律保留,键名不变):
 
-| 日志 | 级别 | 含义 | 处置 |
-|---|---|---|---|
-| `metric=inbox_replay_mismatch` | critical | 回放核对失败(IB-9):账本环里同 seq 记的是另一个 request_id(`ledger_request_id=`)。该玩家该域停用,每次落地都会再停 | §5.2 B |
-| `metric=inbox_halted` | warning | 该玩家该域停用,`reason=` 给出原因(`unknown_type` / `replay_mismatch` / `ack_anomaly` / `version_skew` 等)。停用对当前实体一直有效,实体重建(重新登录,或换到别的节点)后才重拉。停用那一刻打一条 ERROR,之后每 5 分钟补打一条带 `relog=1` 的 WARN,所以玩家在线期间告警一直亮着(2026-11-05 起) | 按 `reason`:§5.2 / §5.1 |
-| `metric=inbox_unknown_type` | warning | scene 不认识这个类型或指令(新类型先于 scene 支持被加进白名单),停在这一条,不记 REJECTED | §5.2 A |
-| `metric=inbox_ack_anomaly` | warning | scene 收到异常 Ack 回包(结果异常,或服务端回 InvalidParameter),停用该域 | §5.1 |
-| `metric=inbox_ledger_invalid` | warning | 该玩家已落盘账本结构校验不过,收件箱全部域停用 | §10.4 |
-| `metric=inbox_registry_broken` | warning | scene 处置注册表自检失败,本节点整体停用消费。启动时一条 ERROR,之后每 5 分钟补打 | §10.4 |
-| `metric=inbox_consumer_disabled` | warning | 本节点 `consumer_enabled` 关着。启动时一条 WARN,之后每 5 分钟补打;上线第 4–5 步之间出现是预期的 | §2.1 |
-| `metric=inbox_leave_ack` | info | 玩家离开本节点时没能补发 Ack 的行(`result=delivered_undecided` / `not_durable` / `fetch_inflight` / `ack_inflight` / `not_sent`) | §6;不是故障 |
-| `metric=inbox_deferred` | info | 延后原因分布(`reason=`) | §6 第 2 步 |
+| 告警 | 级别 | 读的指标 | 含义 | 按人排查的日志 | 处置 |
+|---|---|---|---|---|---|
+| `ScenePlayerInboxReplayMismatch` | critical | `scene_player_inbox_events_total{event="replay_mismatch"}` | 回放核对失败(IB-9):账本环里同 seq 记的是另一个 request_id。该玩家该域停用,每次落地都会再停 | `metric=inbox_replay_mismatch`(带 `ledger_request_id=`) | §5.2 B |
+| `ScenePlayerInboxDomainHalted` | warning | `scene_player_inbox_halted_player_domains{reason}` | 此刻有停用的(玩家, 域),告警带 `reason`(`unknown_type` / `replay_mismatch` / `ack_anomaly` / `version_skew` 等)。停用对当前实体一直有效,实体重建(重新登录,或换到别的节点)后才重拉。规则套 10 分钟 `max_over_time`,玩家离开后还亮 10 分钟 | `metric=inbox_halted`(停用那一刻一条 ERROR,之后每 5 分钟一条带 `relog=1` 的 WARN) | 按 `reason`:§5.2 / §5.1;`version_skew` 按 §5.2 A′,不要作废 |
+| `ScenePlayerInboxUnknownType` | warning | `scene_player_inbox_events_total{event="unknown_type"}` | scene 不认识这个类型或指令(新类型先于 scene 支持被加进白名单),停在这一条,不记 REJECTED | `metric=inbox_unknown_type` | §5.2 A |
+| `ScenePlayerInboxAckAnomaly` | warning | `scene_player_inbox_events_total{event="ack_anomaly"}` | scene 收到异常 Ack 回包(结果异常,或服务端回 InvalidParameter),停用该域 | `metric=inbox_ack_anomaly` | §5.1 |
+| `ScenePlayerInboxLedgerInvalid` | warning | `scene_player_inbox_ledger_invalid_players` | 此刻有玩家的已落盘账本结构校验不过(或已落地却缺账本组件),收件箱全部域停用。规则套 10 分钟 `max_over_time` | `metric=inbox_ledger_invalid`(`source=loader` / `source=apply_gate`,带 `reason=`) | §10.4 |
+| `ScenePlayerInboxRegistryBroken` | warning | `scene_player_inbox_registry_broken` | 有 scene 的处置注册表自检失败,整个节点停用消费;值是台数 | `metric=inbox_registry_broken`(`detail=` 写明哪一项不过) | §10.4 |
+| `ScenePlayerInboxConsumerDisabled` | warning | `scene_player_inbox_consumer_enabled` 为 0 的台数 | 有 scene 的 `consumer_enabled` 关着;上线第 4–5 步之间出现是预期的 | `metric=inbox_consumer_disabled` | §2.1 |
 
-不会自愈的三条(`inbox_ledger_invalid` / `inbox_registry_broken` / `inbox_consumer_disabled`),问题还在时 scene 会按节拍补打同一行。
-两行间隔钉在告警的 `[10m]` 窗口之内(scene 规则头文件里 `kSceneLogAlertWindowMs` 的 `static_assert`),所以告警会一直亮着。改窗口要同步改那组常量。
+只看趋势、不告警(info 看板查询,写在告警文件头):
+- 延后原因分布:`sum by (namespace, reason) (increase(scene_player_inbox_deferral_starts_total[10m]))`。原因变化才计一次,与 `metric=inbox_deferred` 的行数一致;判断见 §6 第 2 步。
+- 离开本节点时没能补发 Ack 的行:`sum by (namespace, result) (increase(scene_player_inbox_leave_ack_total{result=~"delivered_undecided|not_durable|fetch_inflight|ack_inflight|not_sent"}[1h]))`。不是故障,见 §6。
+- `scene_player_inbox_events_total` 另两个取值 `stale_owner`(Fetch 被围栏判 STALE)、`battle_duplicate_request`(同一局换新 seq 重投,只记 APPLIED)只导出、不告警。
+
+按人查 scene 日志:流选择器一律写 `{job="cpp_nodes", service="scene"}`,逐 zone 再加 `zone="<zone 名>"`,再按行过滤 `[PlayerInbox]` 与 `metric=inbox_<名字>`。
+C++ 业务日志只落文件、由 Alloy sidecar 送 Loki,sidecar 不打 `app` 标签:写成 `{app=~"scene.*"}` 的查询恒为空,会被误判成「没有问题」。
+
+告警不再数日志:停用、账本损坏、节点级停用都是抓取时现算的 gauge,问题还在就一直亮。问题还在时 scene 仍按节拍补打同一行
+(两行间隔钉在 10 分钟之内,scene 规则头文件里 `kSceneLogAlertWindowMs` 的 `static_assert`),所以告警亮着时的任何 10 分钟窗口里都能按 `player_id` 搜到。
+例外:停用或判坏之后实体活不到下一次抓取就销毁的,停用 / 账本两条规则看不到;条目留在收件箱 PENDING,下次落地会再停,
+收件箱侧的 `PlayerInboxDeliveredUnackedTooOld` / `PlayerInboxPoisonSuspect` / `PlayerInboxReconcileLedgerInvalid` 也会兜住。
 
 ### 5.1 Ack 异常结果
 
@@ -442,7 +455,8 @@ v1 **不做自动隔离**。
 
 **玩家离开时的补发**(第 B 批):玩家离开本节点时,退出存盘收敛之后、实体销毁之前,scene 尽力补发一次 Ack,不等回包。
 - 只覆盖「结局已定、且已落盘」的行。
-- 覆盖不到的,停在「已投递未确认」,等玩家下次落地重拉或补确认,scene 日志 `metric=inbox_leave_ack` 留一行线索:
+- 覆盖不到的,停在「已投递未确认」,等玩家下次落地重拉或补确认,scene 日志 `metric=inbox_leave_ack` 留一行线索
+  (按结局的分布看 `scene_player_inbox_leave_ack_total{result}`,§5 的看板查询):
 
 | `result=` | 含义 |
 |---|---|
@@ -559,7 +573,7 @@ FIGHTING 的 `battle:lock` 从开局起就活到续冻上限之后,结算一直�
   原因是邮件不可达、结果未知,或玩家邮箱满(`kMailRecipientBoxFull`,个人邮件上限 200 封)。条目留着按退避重试:
   结果未知 1 秒起、封顶 60 秒;邮箱满 30 秒起、封顶 5 分钟。邮箱满的让玩家删信;其余查 mail 是否可用、scene 能否发现
   `MailNodeService.rpc` 下的节点。只寄此刻登记在本节点、可改的玩家:离线、交接中的玩家等下次落地再寄,属预期。
-- **不会自己好的失败**:ERROR `metric=mail_outbox_stuck`(值班查询在 `deploy/k8s/asset-channel-alerts.yaml` 头注释),行里带 `reason=`:
+- **不会自己好的失败**:ERROR `metric=mail_outbox_stuck`(告警 `SceneMailOutboxStuck`,`deploy/k8s/battle-settlement-alerts.yaml`;计数 `scene_mail_outbox_stuck_total{reason}`),行里带 `reason=`:
   - 没配密钥或本地签名失败（`reason=no_secret` / `reason=sign_failed`）→ `mail-producer-battle` 由部署维护（[K8s 开服手册](k8s-open-server-runbook.md) §1）：重跑一次这个 zone 的部署，缺的会补上；值过短或与 infra 不同时部署拒绝并点名，确认后带 `-ResyncDomainServiceSecrets` 统一，并重启 scene 与 mail;
   - 验签被拒（`reason=signature_rejected`）→ 两边 `MAIL_PRODUCER_SECRET_BATTLE` 不同（有人手工改过 Secret，或 Pod 还带着改之前的值），或两边时钟相差超过 5 分钟。值不同按上一条处理，时钟按 NTP 修；改好后按退避自动寄出。被拒的请求邮件没有写，不会重复。
   - 条目形状不合法(加载时另有 `metric=mail_outbox_invalid`)→ 按事故上报,走存档修复流程;
@@ -873,8 +887,9 @@ SHOW TABLE mmorpg_player_inbox.player_inbox_item INDEX `uk_player_inbox_item` RE
 - **回档预检自动化**随单人回档栅栏接线同批做(§9)。
 - **TiDB 索引预切**只有手工 SQL(§12);收件箱库迁到 TiDB 后的 BR / PITR 未纳入备份。
 - **robot 的 GM 处置冒烟场景**(设计 §11.6)未做。
-- **scene 日志告警**只是值班固定查询:Loki ruler 还没挂规则目录(§5)。
-- 告警文件里的指标名由 metrics 包的 `TestAlertRulesReferenceRegisteredMetrics` 核对;**label 取值没有守卫**,
+- ~~**scene 日志告警**只是值班固定查询:Loki ruler 还没挂规则目录(§5)。~~ 2026-11-27 起 scene 侧信号导出成指标、改成 PromQL 规则(§5),
+  指标名、标签取值与规则由 `tools/scripts/tests/player_inbox_alerts_contract.tests.ps1` 对照 C++ 源码钉住;日志行保留供按人排查。
+- 告警文件里收件箱服务的指标名由 metrics 包的 `TestAlertRulesReferenceRegisteredMetrics` 核对;**label 取值没有守卫**,
   `enqueue_total` / `fetch_total` / `void_total` 的取值改名不会红,改的时候对照告警文件头的「label 取值契约」。
 - 批量处置脚本的限速值(§4.2)待压测确认。
 - K8s 上的抓取前提(指向 9270 的 ServiceMonitor / PodMonitor)仓库里没有,与其它 go-svc 同一缺口。
@@ -908,11 +923,24 @@ cd tools/merge_zone; go vet ./... ; go test -run 'PlayerInbox|ZoneDBName|RunAudi
 # 收件箱服务(含 TestAlertRulesReferenceRegisteredMetrics:读 deploy/k8s/player-inbox-alerts.yaml 核对指标名;
 # TestLedgerRecentCapacityMatchesConsumer:读 C++ 头文件核对环容量 32。两者都要在完整仓库检出下跑)
 cd go/player_inbox; gofmt -l . ; go vet ./... ; go test ./... -count=1
+
+# scene 侧收件箱告警契约(2026-11-27):指标名 / 标签取值由 C++ 导出、每处 metric=inbox_* 日志都有去处且计数紧跟同名日志、
+# scene.player-inbox 组的规则名单与式子、文件头不留已转换的 LogQL、本节 §5 的处置表列着每条规则。
+# 它的文件名不能写进告警文件(以收件箱服务的指标前缀开头,Go 侧守卫会当成指标名),只登记在这里。
+pwsh -NoProfile -File tools/scripts/tests/player_inbox_alerts_contract.tests.ps1
+
+# 规则语法(有 promtool 的机器):PrometheusRule 先取出 spec 再验
+python -c "import yaml; d=[x for x in yaml.safe_load_all(open('deploy/k8s/player-inbox-alerts.yaml',encoding='utf-8')) if x][0]; yaml.safe_dump(d['spec'], open('build/player-inbox-rules.yaml','w',encoding='utf-8'), allow_unicode=True)"
+promtool check rules build/player-inbox-rules.yaml
 ```
 
-C++ 侧(MSBuild 串行 `/m:1`):`currency_test.exe --gtest_filter=PlayerInboxRules.*:PlayerInboxSystemTest.*`,覆盖 M1 / L1 / L2 / M4 / H1 的状态机回归。
+C++ 侧(MSBuild 串行 `/m:1`):`currency_test.exe --gtest_filter=PlayerInboxRules.*:PlayerInboxSystemTest.*:PlayerInboxReplyTest.*`,覆盖 M1 / L1 / L2 / M4 / H1 的状态机回归,
+以及 2026-11-27 的三条指标用例(`PlayerInboxSystemTest.Metrics*`:每个标签取值都以当前值导出、gauge 跟着状态变、计数增量等于同名日志行数)。
+冒烟:scene 设了 `MMORPG_METRICS_PORT` 时,`curl -s http://<scene>:<端口>/metrics | grep scene_player_inbox_` 应看到 7 个族
+(`consumer_enabled`、`registry_broken`、`halted_player_domains`、`ledger_invalid_players`、`events_total`、`deferral_starts_total`、`leave_ack_total`),
+开着消费的正常节点上 `scene_player_inbox_consumer_enabled 1`、`scene_player_inbox_registry_broken 0`。
 
-通过标准:三个 `.tests.ps1` 的汇总 fail=0;Go 测试全绿;C++ 用例全绿。部署脚本的用例按 git 里的 `go/player_inbox/etc/player_inbox.yaml`
+通过标准:各 `.tests.ps1` 的汇总 fail=0;Go 测试全绿;C++ 用例全绿;promtool 回 SUCCESS(没有 promtool 就报告「规则语法未验证」)。部署脚本的用例按 git 里的 `go/player_inbox/etc/player_inbox.yaml`
 与 `bin/etc/game_config.yaml` 核对 §1 列出的键、`Middlewares` 段与消费开关。`k8s_deploy_contract.tests.ps1` 里与本手册直接相关的几条:
 写前门禁的三层(两份 yaml、线上交叉核对用假 kubectl、来源用注入的 git 状态)、DryRun 不读集群、告警文件 LogQL 选择器只用 sidecar 的流标签。
 线上交叉核对在真集群上的行为(跨 namespace 列 ConfigMap 的权限、kubectl 输出形状)没有自动化验证,首次在 staging 跑 `infra-up` / `zone-up` 时看门禁行的 `live=`。各批的完整验证步骤见交接 §4 与 §6.4。

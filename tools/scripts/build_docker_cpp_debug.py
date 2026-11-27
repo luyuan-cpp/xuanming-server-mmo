@@ -82,7 +82,10 @@ def validate_sdk() -> dict:
     differences.extend(sorted(name for name in dependency_expected.keys() | dependency_actual.keys()
                               if dependency_expected.get(name) != dependency_actual.get(name)))
     if differences:
-        raise RuntimeError("SDK 依赖输入已变化，须先更新 SDK；首项：" + differences[0])
+        raise RuntimeError(
+            "SDK 依赖输入已变化，须先更新 SDK（可运行 python -X utf8 -B tools/scripts/refresh_docker_cpp_sdk.py）；首项："
+            + differences[0]
+        )
     return config
 
 

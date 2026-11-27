@@ -28,8 +28,10 @@
 #     欠款与新字段原样保留,落到新版本节点后按新口径收。
 #   - 按 namespace 聚合(一个 zone 一个 namespace)。
 #   - 资产通道的六个 where 2026-11-27 起导出(上面 scene_asset_op_version_skew_total),规则 SceneAssetOpVersionSkew:滚动发布或热更期间属预期,
-#     按 where 分组报,10 分钟里出现就报(warning)。其余 where(inbox_payload / inbox_currency / battle_item / battle_pet 等)还只在 scene 日志里,
-#     值班固定查询见 player-inbox-alerts.yaml 文件头;哪个导出成指标了,就在本文件的组里加规则。
+#     按 where 分组报,10 分钟里出现就报(warning)。其余 where(inbox_payload / inbox_currency / battle_item / battle_pet 等)只有 scene 日志,
+#     不单独导出:收件箱的两类会让该玩家该域停用,已由 scene_player_inbox_halted_player_domains{reason="version_skew"}
+#     (player-inbox-alerts.yaml 的 ScenePlayerInboxDomainHalted)报出;battle_item / battle_pet 让结算整笔延后,由收件箱的积压告警兜住。
+#     哪个要单独看了,导出成指标后在本文件的组里加规则。
 #   - 持久 schema 世代倒退被拒写(scene_persist_schema_regression_rejected_total)不在这里加规则:同一事件 go/db 侧已经有
 #     DbPlayerStoreSchemaMismatch(player-store-alerts.yaml,result 含 SAVE_PLAYER_SCHEMA_REGRESSED),再加一条只会同一件事报两遍;
 #     scene 侧的计数用来看是哪台 scene,查询见 deploy/k8s/README.md「玩家持久 schema 世代」。

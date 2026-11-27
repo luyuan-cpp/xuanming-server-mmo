@@ -699,6 +699,33 @@ TEST_F(ServerLoopbackTest, EchoRoundTripCarriesMetadataDeadlineAndPeer)
     EXPECT_EQ(stats.dropped, 0u);
 }
 
+// Start 之后每个已登记的方法都在 Stats().methods 里,没被调用过的内层为空(2026-11-27 起):节点的 /metrics 出口
+// (core/network/grpc_server_metrics.h)据此把每个方法 × 状态码以 0 起步导出。空的内层不进汇总行,[GrpcServer] summary 不变。
+TEST_F(ServerLoopbackTest, StatsListEveryRegisteredMethodBeforeItIsCalled)
+{
+    ASSERT_NE(StartServer(), nullptr);
+    const ServerStatsSnapshot idle = Stats();
+    EXPECT_EQ(idle.methods.size(), 6u);
+    for (const std::string method : {"Echo", "Hold", "HoldNotStarted", "Drop", "Twice", "Order"})
+    {
+        const auto found = idle.methods.find(method);
+        ASSERT_NE(found, idle.methods.end()) << method;
+        EXPECT_TRUE(found->second.empty()) << method;
+    }
+    const std::string idleLine = muduo_grpc::FormatServerStats(idle);
+    EXPECT_NE(idleLine.find(" codes= methods={}"), std::string::npos) << idleLine;
+
+    const auto channel = MakeChannel();
+    ASSERT_NE(channel, nullptr);
+    const auto outcome = StartCall(*channel, kEchoPath, "ping");
+    ASSERT_TRUE(RunUntil([&] { return outcome->count > 0; }, 5s));
+    const ServerStatsSnapshot after = Stats();
+    EXPECT_EQ(after.methods.at("Echo").at(0), 1u);
+    EXPECT_TRUE(after.methods.at("Hold").empty());
+    const std::string line = muduo_grpc::FormatServerStats(after);
+    EXPECT_NE(line.find(" methods={Echo:0=1}"), std::string::npos) << "只有调用过的方法进汇总行: " << line;
+}
+
 TEST_F(ServerLoopbackTest, UnknownServiceAndMethodAreUnimplementedWithGrpcGoMessages)
 {
     ASSERT_NE(StartServer(), nullptr);

@@ -11,7 +11,7 @@ entt uses a **sparse-set** storage model. Each component type has its own packed
 - registry 内的单例只允许是该 registry 的派生索引，放 `ctx()`（现例 `ActorNetIdIndex`）。
 - 多个 registry 用自定义实体类型区分（现例 `SceneEntity`）。
 - 派生索引只有一个维护入口（`ActorNetIdIndex` 只由 `actor_net_id` 的 Assign 与 on_destroy 维护）。
-- dispatcher 判据见下文：没有消费者不发事件，dispatcher 只做可有可无的一对多通知，同玩家单 EventLoop 内强原子必需步骤走目标 `*System` 暴露的窄接口同步调用（**禁止绕过接口直接 `try_get`/`Swap`/改写他系统私有组件**；跨玩家、跨线程、跨进程一律走不可变消息/邮箱，详见 [engineering-principles.md](../rules/engineering-principles.md#1-模块与职责111)）。
+- dispatcher 判据见下文：没有消费者不发事件，dispatcher 只做可有可无的一对多通知，同玩家单 EventLoop 内强原子必需步骤走目标 `*System` 暴露的窄接口同步调用（**禁止绕过接口直接 `try_get`/`Swap`/改写他系统私有组件**；跨玩家、跨线程、跨进程一律走不可变消息/邮箱，详见 [engineering-principles.md](../rules/engineering-principles.md#1-模块与职责111)）。唯一例外是写时复制两段式提交：各所属 System 的 `Prepare*` 接口生成并校验副本，编排方只读原组件，全部准备成功后同步一次性 `Swap`（现例 `player_battle.cpp` 战后结算）。
 - 现存例外：节点 registry 上的 `RpcClientPtr`、`MuduoGrpcChannelPtr` 属存量，迁出见 审查报告（原 `docs/handoff/ecs-refactor/review-report-20261015.md`，已清理，见 `ccf2840b2`） §4.2。
 
 ## Three Access Patterns

@@ -488,8 +488,10 @@ K8s 上 numreplicas 由 `tools/scripts/k8s_deploy.ps1` 的 `Get-OwnerEpochMintWa
 
 ### 4.4 G4：C++ 存盘被拒细分（只检测）
 
+> **现状（2026-11-27 按现状改正）**：本节描述的是 Redis 存档路径上的检测。2026-10-30 起玩家存档改成 scene 直接提交 player_store（TiDB，[player-save-direct-commit.md](player-save-direct-commit.md)），严格屏障 Lua、`HandlePlayerSaveRejected` 的新码与 `owner_counter_behind` 计数随 Redis 存档路径一起删除，G4 已不存在；下面两条只作历史保留。原文「C++ 节点没有 Prometheus 出口」也不成立：C++ 节点设了 `MMORPG_METRICS_PORT` 就有 /metrics 出口，`[OwnerEpoch]` 现在只剩 `stale_owner_write_rejected`、`stale_owner_rejected_exiting` 两项，导出为 `scene_owner_epoch_events_total{event}`（`player_ownership_metrics.cpp`）。
+
 - 严格屏障 Lua 在 `if owner ~= ARGV[2] then return 0 end`（`redis_client.h:182`）之前，加十进制比较：存储值 < 缓存值时返回新码（例如 4），**仍然不写**。存储值 > 缓存值维持返回 0。owner 缺失维持 error_reply（现有「禁止自动补种」的口径）。
-- `HandlePlayerSaveRejected` 收到新码：照旧 `DestroyDeposedPlayer`，原因记 `owner_counter_behind`；`[OwnerEpoch]` 统计行加计数；ERROR 日志带上存储值与缓存值。C++ 节点没有 Prometheus 出口，按现有 LogQL 口径（`metric=`）。
+- `HandlePlayerSaveRejected` 收到新码：照旧 `DestroyDeposedPlayer`，原因记 `owner_counter_behind`；`[OwnerEpoch]` 统计行加计数；ERROR 日志带上存储值与缓存值。当时按 LogQL 口径（`metric=`）观测。
 - **为什么不做「前推到缓存值后照写」**（§10 详述）：回退丢掉源端冻结存盘、却留下了铸造时，目标节点载入的是更旧的父键。前推会让这份旧内容以更高的 epoch 写穿 SQL 行围栏，正是要防的旧盖新。持有者在本地分不清自己载入的是新内容还是旧内容，只能 fail-closed。
 - 旧二进制自带旧脚本（ScriptSlot 按脚本文本算 SHA），混跑时互不影响。
 
@@ -545,7 +547,7 @@ K8s 上 numreplicas 由 `tools/scripts/k8s_deploy.ps1` 的 `Get-OwnerEpochMintWa
 | `scene_manager_owner_epoch_mint_clock_behind_total` | SM | 无。存储值 ≥ 墙钟、地板没起作用（时钟偏差信号） |
 | `scene_manager_owner_epoch_mint_durable_total` / `_seconds` | SM | `result` ∈ confirmed / not_durable / error |
 | `asset_abandon_skipped_total`（沿用现有跳过计数） | assetop | 新增 `reason="redis_unverified"` |
-| C++ `[OwnerEpoch]` 统计行 `owner_counter_behind=` | scene | LogQL |
+| ~~C++ `[OwnerEpoch]` 统计行 `owner_counter_behind=`~~ | scene | 已随 Redis 存档路径删除（§4.4 现状注） |
 
 告警追加到 `deploy/k8s/owner-epoch-alerts.yaml` 和相应服务的告警文件。关键告警按该文件已有经验用绝对值。
 
@@ -555,7 +557,7 @@ K8s 上 numreplicas 由 `tools/scripts/k8s_deploy.ps1` 的 `Get-OwnerEpochMintWa
 | `LoginParentLoadSqlBehind` | `verdict="sql_behind"` 绝对值 > 0 | critical：SQL 侧回档或损坏 |
 | `LoginParentLoadReconcilingPersistent` | `verdict="reconciling"` 在 30 分钟内持续增长 | critical：转人工 `save_barrier_restore` |
 | `SceneManagerOwnerEpochMintNotDurable` | 10 分钟内出现 `result!="confirmed"`（not_durable / error）即报：健康的 AOF everysec + 同步副本上它应为 0，不用比例阈值（2026-11-12 定，见 `deploy/k8s/owner-epoch-alerts.yaml`） | warning |
-| `SceneOwnerCounterBehind` | LogQL `owner_counter_behind` > 0 | critical |
+| ~~`SceneOwnerCounterBehind`~~ | 已随 `owner_counter_behind` 计数删除，`deploy/k8s` 里没有这条（2026-11-27 核对） | — |
 
 ## 8. 回归测试清单（交 Gemini）
 
@@ -679,7 +681,7 @@ INFO 相关的 Lua 只能在真 Redis 上测（miniredis 不支持 `INFO server`
 | G2 ACK 高于 pending | 已落码 | `go/db/internal/kafka/player_cache_publish.go`、`go/db/internal/metrics/pipeline.go` |
 | G3a 铸造墙钟地板 | 已落码（2026-10-30，「owner_epoch 铸造后同节点 WAITAOF 防代次回退」会话；验证清单见 PROGRESS「2026-10-30 Claude：owner_epoch 铸造墙钟地板 G3a 落码」） | `go/scene_manager/internal/logic/{owner_epoch,changesceneutil}.go`；C++ `player_lifecycle.h` 的 `travel_outcome::ClassifyOwnership`、`player_lifecycle.cpp` 的 `ResumeTravelAfterRevocation`、`handoff_sql_barrier.h` 的 `kResumeFenceLua`；跨语言金样副本 `owner_epoch_crosslang_test.go` |
 | G3b 铸造后 WAITAOF | 已落码；两段回执（§4.3.4）2026-11-10 落码、未编译 | `go/scene_manager/internal/svc/owner_epoch_mint.go`（专用连接、同一 pipeline、自管重发）、`internal/config`（`OwnerEpochMint`）、`internal/logic/enterscenelogic.go`（没确认就单调回滚、回 7；下发待确认回执的 epoch 之前先确认）、`internal/logic/owner_epoch.go`（两段回执）、`internal/metrics`、`go/shared/ownerepoch`（回执两种形态）、C++ `player_ownership_comp.h`、`player_lifecycle.{h,cpp}`、`travel_freeze_cap.h`（判定表 B5′）、`tools/scripts/k8s_deploy.ps1`（连接总账） |
-| G4 C++ 计数器落后检测 | 已落码 | `redis_client.h`（严格屏障 Lua 回 `{4, 存储值}`、回包解析、被拒原因）、`player_lifecycle.{h,cpp}`（`owner_counter_behind` 计数与处置）、`core/system/redis.cpp`（统计行） |
+| G4 C++ 计数器落后检测 | 曾落码；2026-10-30 随 Redis 存档路径删除（§4.4 现状注） | 原在 `redis_client.h`（严格屏障 Lua 回 `{4, 存储值}`、回包解析、被拒原因）、`player_lifecycle.{h,cpp}`（`owner_counter_behind` 计数与处置）、`core/system/redis.cpp`（统计行）；这些代码现在都没有了，`redis_client.h` 整个删除 |
 | G5 资产放弃闸 | 已落码 | `go/shared/assetop/{abandon,reconcile,ledger_dataservice,metrics}.go`；`go/data_service/internal/logic/asset_op_ledger_verified.go`、`internal/server/dataserviceserver.go`；`proto/data_service/data_service.proto`（`verify_redis_copy` / `redis_copy_verified`，**需要 Gemini 重新生成协议**） |
 | 告警 | 已落码 | `deploy/k8s/owner-epoch-alerts.yaml` 的 `owner-epoch.redis-regression` 组（指标名已与实现核对） |
 

@@ -282,8 +282,8 @@ message TradeWantedSkillBookTerms {
 **Gemini 验证命令**(仓库根;只跑,红了保留首错原文交回):
 1. 导表:先 `git status --short data/` 核对别的会话的表改动,再 `dev.bat gen`;`go/shared/generated/pb/table` 里要有 `TradeError_kTradeWantedOrderLimitReached`、`TradeError_kTradeWantedBookMismatch`。
 2. 协议:`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`(已有人跑过一次,再跑 trade 部分应无 diff);`proto/message_id.txt` 里 582~584 不变。
-3. go/trade:`go build ./...`、`go vet ./...`;`go test ./internal/commerce/... ./internal/logic/... ./internal/config/... ./internal/constants/...`,点名 `TestWanted`、`TestLegTxType`、`TestCommerceEntriesAnswerMissingContractWithOrderNotFound`、`TestCommerceEntriesKeepContractReadFaultsAsFaults`、`TestEtcYamlContractValues`、`TestNoHandWrittenTipCodes`。
-4. 真库:配隔离 TiDB `COMMERCE_TEST_DSN` + `COMMERCE_REQUIRE_TIDB=1`,`go test ./internal/commerce/ -run 'TestTiDBWantedSkillBook|TestTiDBConsignmentConcurrentBuyAndWorkerRestart|TestTiDBPlayerTradeRequiresBothEscrowSummariesAndReturnsOnCancel' -count=1`。
+3. go/trade:`go build ./...`、`go vet ./...`;`go test ./internal/commerce/... ./internal/logic/... ./internal/config/... ./internal/constants/...`,点名 `TestWanted`、`TestAttemptAllowed`、`TestLegTxType`、`TestCommerceEntriesAnswerMissingContractWithOrderNotFound`、`TestCommerceEntriesKeepContractReadFaultsAsFaults`、`TestEtcYamlContractValues`、`TestWantedSkillBookRequiresAssetChannelAndTables`、`TestNoHandWrittenTipCodes`。
+4. 真库:配隔离 TiDB `COMMERCE_TEST_DSN` + `COMMERCE_REQUIRE_TIDB=1`,`go test ./internal/commerce/ -run 'TestTiDBWantedSkillBook|TestTiDBConsignment|TestTiDBRejectedBuyRetry|TestTiDBPlayerTrade' -count=1`(揭榜与寄售购买的尝试次数同批改过,寄售与被拒重试的真库用例一并跑)。
 5. 客户端:`mmorpg-client` 跑 `tools/gen_proto.ps1`、`tools/gen_messageids.ps1`、`tools/client_compile_check.ps1`(批 A 只新增消息,客户端还不调用)。
 
 通过标准:以上全绿;`git diff` 里 `data/tip/Tip.xlsx` 只多两行、`data/MessageLimiter.xlsx` 只多 582~584 三行。
@@ -299,7 +299,7 @@ message TradeWantedSkillBookTerms {
 
 ### 11.2 批 C、批 B 换电脑由 Claude Code 写(2026-11-27 负责人改定)
 
-> 剩余工作(批 A 验证、批 C、批 B、文档收尾)的执行入口是 [skill-book-wanted-order-remaining-handoff-20261127.md](../handoff/skill-book-wanted-order-remaining-handoff-20261127.md),逐文件改法、要先问负责人的事与完成判据都在那里;本节保留设计层面的要点。
+> 换电脑用的剩余工作交接单 `docs/handoff/skill-book-wanted-order-remaining-handoff-20261127.md` 2026-11-27 三批代码与文档写完后按负责人要求删除(原文用 `git show 77203c14d:docs/handoff/skill-book-wanted-order-remaining-handoff-20261127.md` 查);它里面的逐文件改法与完成记录已并入本节,Gemini 的验证命令在 §11.1 末(批 A)、本节「批 C 落码记录」末与「批 B 落码记录」末。
 
 Claude 全部模型周额度过 80%(81%),按负责人 11-26 口径停在批 A 边界。原定批 C、B 交 Gemini 4 Neon Extra 写;**负责人 11-27 改定:换一台电脑,由那边的 Claude Code 写**(按 AGENTS §10.3 用最高档模型 Fable 5.2 Max),**Gemini 不写这两批的代码**,只做写完之后 §9 的生成、编译、测试、冒烟。写的人在本节补五项记录;写完再按 §9 跑。顺序照旧 C → B(或上线前清档时三批一起上)。那台电脑要先拿到本机 main 的最新内容(含批 A 与还在工作区的文档改动),由负责人同步。
 
@@ -320,6 +320,7 @@ Claude 全部模型周额度过 80%(81%),按负责人 11-26 口径停在批 A �
 - 为什么这样选:求购单只依赖资产通道,跟同一个开关走,开关两头不会出现「求购单开着、通道关着」这种让 trade 拒启的组合;表沿用镜像自带的 `/generated/tables`,表包模式只是在它之上换成热更的包,和 match / mail 同一套。
 - 被否决的做法:①把 `-AssetOps` 的缺省改成 on——它的前提(两把密钥、`-NetworkPolicies on`、滚动整个 zone 的 scene)每个环境都要先准备,改缺省会让还没准备好的环境直接部署失败;②另加一个只管求购单的部署开关——多一个开关就多一种「通道关、求购单开」的错配。
 - 代价与边界:没有用 `-AssetOps on` 部署的环境,悬赏求书在批 B 之后不可用(发榜、揭榜回「功能未开放」,已有的单照常可撤);trade 进了表包模式的读表名单,`config-table-hot-reload.md` 的 Go 读表服务一条已补;sidecar 的就绪与 STATUS.json 没有为 trade 单独写用例,交 Gemini 在表包模式的 kind 冒烟里一并核对。
+- Gemini 验证(批 C):`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1` 全 `[PASS]`(含资产通道开 / 关两条用例里新加的求购单与 `TableDir` 断言),`tools/scripts/tests/k8s_table_bundle_contract.tests.ps1` 不回归;`cd go/trade; go build ./...; go vet ./...`;`k8s_deploy.ps1 -DryRun` 输出里 trade ConfigMap 有新键;表包模式的 kind 冒烟里核对 trade 的 sidecar 就绪与 STATUS.json。
 
 **批 B(scene 退役旧揭榜 + 客户端切换,必须同批)**,文件按 §8 批 B 表,另补:
 - scene 四条 RPC(560~563)删掉之后生成器自动把号转墓碑(一次 4 条,正好卡在 `maxNewMessageTombstonesPerRun = 4` 上,同一轮生成里不能再删别的 RPC);`MessageLimiter.xlsx` 里 560~563 四行同批删(先核对导表器允不允许限流行指向墓碑号)。

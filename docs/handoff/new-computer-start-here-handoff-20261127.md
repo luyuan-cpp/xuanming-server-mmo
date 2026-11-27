@@ -162,13 +162,13 @@
 
 接手前先按指向的设计稿或 PROGRESS 核对是否已经做了，做了的直接划掉。11-19 以前的 PROGRESS 条目只在 `git show ccf2840b2:docs/PROGRESS.md`。
 
-- 全服匹配：已建房票巡检 `ReadyAfter` 的分片，`assetop-redelivery-sharding-20261110.md` 写着按 11-06 约定由数据覆写审计会话接，没查到做完的记录。
+- ~~全服匹配：已建房票巡检 `ReadyAfter` 的分片~~ 11-27 核过已做：`go/match/internal/authority/ready_recovery.go` 的 `ReadyAfter` 用 `WorkShardFilter(workReadyTicket, "player_id")` 按片过滤（11-10 数据覆写审计批 B5，未编译），记录在 `global-match-hierarchical-pools.md` 「已建房票巡检」一条，回归用例 `TestReadyTiDBReadyAfterReadsOnlyOwnedShards`，只剩 Gemini 验证。
 - 客户端整图加载：负责人 11-10 定等新图做完再改，方案在客户端仓 `Docs/QdaoMapDeliveries20261102.md` 末节，未落码。
 - 论剑榜按模式分榜：页签没有设计稿（列进了 §5）。
 - 帮会恢复结论沿用：网络组三条红的补丁写回过客户端仓，只剩网络组重跑与联网冒烟。
 - 聊天世界频道三批：验证前要清 chat 库；TTL 的写法没有真库证据。
 - 战斗直连心跳：Unity 必须与服务端同批升级；C++ battle 部分当时没编译。
-- 聚合加载器 `all_table` 改名 `table_loader`：客户端 `.meta` 与 `robot/vendor` 待补。
+- ~~聚合加载器 `all_table` 改名 `table_loader`：客户端 `.meta` 与 `robot/vendor` 待补~~ 11-27 核过已做：`robot/vendor/shared/generated/table/table_loader.go` 已是新名，客户端仓已提交 `Assets/Scripts/Table/Generated/TableLoader.cs.meta`。
 - AOI 单向关注与物品封禁：查询的两条真库用例与两处英文文案待补跑。
 - AOI 仇恨名单要等刷怪接上才生效。
 - 观战分级扩容：7 条真 TiDB 用例与冒烟没跑。

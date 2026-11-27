@@ -227,7 +227,14 @@
 - **`connected()` 为真时 `command()` 也可能 `REDIS_ERR`**（这个 slot 的节点断了、排队满了）。忽略返回值的 10 处（`player_battle.cpp` 8 处、`player_team.cpp` 2 处）补了检查，走与「Redis 断开」相同的降级。其余调用点本来就检查。
 - **调用点里没有针对 MOVED 或连接地址的假设。**「ERROR = 确定没执行」的分支（如 `BeginTravelHandoff`）继续成立：READONLY、LOADING 这类错误到不了业务，预算耗尽走空应答，落到各处「结果未知」的分支，那是偏保守的一侧。
 - **重连回调（2026-11-11 起不挂）**：原来任一主节点握手都触发一轮补发。因为切主或网络恢复会连着触发很多次，还限成了每秒一轮，否则最坏是「主节点数 × 待撤回表上限」条带整段 Lua 的命令堆在 loop 线程上。R14 删掉了这个入口（负责人 2026-11-05 定「重连成功不做业务逻辑」）。现在补发只走 1s 定时器，只看各条目自己的重试时刻，上面那种堆积不会再出现。代价是 Redis 恢复后，条目要等到各自的下一次重试时刻才重发：撤回最多晚 5s，A2′ 与改派核实最多晚一个 1s 节拍。
-- **可观测**：`RedisSystem` 的 30s 快照多一行 `[PlayerRedis]`，有变化才打，守卫拒绝、排队满、预算耗尽有增长时是 WARN。
+- **可观测**：`RedisSystem` 的 30s 快照多一行 `[PlayerRedis]`（控制集群句柄另一行 `[ControlRedis]`），有变化才打，守卫拒绝、排队满、预算耗尽有增长时是 WARN。
+  - **2026-11-27 起同一份计数也经 /metrics 导出**（未编译、未测试）：`scene_redis_cluster_events_total{client,event}`，`client` ∈ player（`tlsPlayerRedis`）/ control（`tlsControlRedis`），`event` 取汇总行的 11 个 key（rejected_by_guard、rejected_not_connected、rejected_queue_full、moved、ask、backoff_retries、budget_exhausted、null_replies、aborted、topology_applied、topology_refresh_failures）。两个 client × 11 个 event 进程一启动就以 0 导出。原来只有日志，按 [断线重连总纲](infra-reconnect-overview.md) §1.8「业务计数同样导出」补上，两行日志照旧。
+  - **只有 scene 登记**：两个句柄只在 scene 的 `RedisSystem::Initialize` 里建连，gate、battle 恒未连接、计数恒为 0，导出只会多两组永远为 0 的序列，所以前缀用 `scene_`，登记函数 `RegisterRedisClusterMetrics()`（`core/system/redis.h`，采集器名 `scene_redis_cluster`）由 scene 启动时调一次，不放进 `Node::StartMetricsExporter`。
+  - **写指标的代码放在 scene，不放 infra**：`RedisClusterStats` 与两个句柄在 `engine/infra`，Prometheus 写出器在 `engine/core`；core 依赖 infra，反过来不行。采集回调跑在节点主 loop（scene 逻辑线程）上，读的就是这个线程的两个 thread_local 句柄，`stats()` 是值拷贝，句柄没连上时全为 0，不加锁、不跨线程。
+  - **key 只有一份**：`redis.cpp` 的 `VisitRedisClusterStats(stats, emit)` 给出 11 个 key 与顺序，`FormatRedisClusterStats` 与 `WriteRedisClusterMetrics` 都从它取，汇总行与原来逐项拼写时逐字相同（单测钉住整行）。新计数只能追加在末尾：运维手册 [redis-player-cluster-runbook.md](../ops/redis-player-cluster-runbook.md) §3、§4 按原文判读这两行。2026-11-27 核对：`tools/scripts/stress_summarize.ps1` 目前不解析这两行（`redis.cpp` 原注释说它解析，不对，已改）。
+  - **计数随连接周期**：计数在 `RedisClusterClient` 的每个连接周期（`Impl`）里，scene 只在启动时 `Connect` 一次；拆除时 `Shutdown` 之后读到 0，那时出口也在拆，最多让最后一次抓取看到一次计数回零（Prometheus 按计数器重置处理）。
+  - **本轮不加告警**：没有既定阈值，先看趋势。可以先看的读数：`budget_exhausted`、`null_replies`、`rejected_by_guard` 平时不涨，`moved` / `ask` 只在迁移时涨，`topology_refresh_failures` 持续涨要查。
+  - 单测（未运行）：`cpp/tests/cross_zone_test/redis_cluster_metrics_test.cpp` 的 `SceneRedisClusterMetrics.*`（汇总行逐字不变、每个 client × event 的值等于汇总行同名 key、全 0 也逐条导出、登记的采集器读的就是两个句柄）。
 
 **同一连接 FIFO 依赖的逐处结论**（§3.3 的清单，按当前代码核对）：
 

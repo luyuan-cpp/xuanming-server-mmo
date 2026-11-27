@@ -3392,8 +3392,9 @@ Test-Case 'LogQL 契约:告警文件里 C++ 侧的固定查询只用 C++ 日志 
     # MinSelectors 是各文件当前的条数:少了说明写法变了、本用例抽不到,先查是不是漏核。
     # 2026-11-27:asset-channel 的十条信号导出成指标、改成 PromQL 规则(battle-settlement-alerts.yaml / persist-version-skew-alerts.yaml),
     # 只剩停机时才打的 battle_sql_outcome_unflushed_at_shutdown 一条(进程随即退出,抓取等不到计数)。
+    # player-inbox 的九条同日全部改成 PromQL(scene.player-inbox 组),文件头已没有 LogQL;条目留着,以后再写 LogQL 照样逐条核标签。
     $alertFiles = @(
-        @{ Path = 'deploy/k8s/player-inbox-alerts.yaml'; MinSelectors = 9; Prefix = '^job="cpp_nodes", service="scene"' },
+        @{ Path = 'deploy/k8s/player-inbox-alerts.yaml'; MinSelectors = 0; Prefix = '^job="cpp_nodes", service="scene"' },
         @{ Path = 'deploy/k8s/asset-channel-alerts.yaml'; MinSelectors = 1; Prefix = '^job="cpp_nodes", service="(scene|battle)"' },
         @{ Path = 'deploy/k8s/data-service-audit-alerts.yaml'; MinSelectors = 1; Prefix = '^job="cpp_nodes", service="scene"' }
     )

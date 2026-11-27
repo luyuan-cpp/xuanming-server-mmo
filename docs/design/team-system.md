@@ -1700,7 +1700,7 @@ cd robot && go mod vendor && go build ./...
 - `RefreshTeammateAoi` 签名改为 `(player)`。
 - `ClearBattleFreeze`、重复结算分支、`ApplyPendingSettlement` 三处改成**先发条件删锁、再摘组件**:摘组件会同步触发跟随链,跟随链读 `battle:lock` fail-closed,删锁命令先进 hiredis 管道,才不依赖回调跳数。
 - 投影缺失 + `EXISTS team:rec = 0` 时,只有组件 tid 仍等于本次查询的 tid 才清除;MGET 回调里再核一次 IsInBattle 与活会话。
-- `team_follow_skipped` 等指标在 scene 里是结构化日志(scene 没有 Prometheus 端点)。
+- `team_follow_skipped` 等指标当时只打结构化日志。原文「scene 没有 Prometheus 端点」不成立:C++ 节点设了 `MMORPG_METRICS_PORT` 就有 /metrics 出口。2026-11-27 起同一组 `metric=team_follow_*` 事件按 [infra-reconnect-overview.md](infra-reconnect-overview.md) §1.8「业务计数同样导出」接进这个出口:`scene_team_follow_events_total{event,reason}` 与 `scene_team_follow_attached_total{placement}`,日志一行不动。取值、拆族理由与单测见 [team-follow-server-trail.md](team-follow-server-trail.md) §10。
 - `player_battle.cpp` 行号以 `8487d5e1f` 为准,共改 5 处摘组件点,HEAD 里已没有直接 `remove<InBattleComp>` 的地方。
 
 **robot 与合服(批 4)**

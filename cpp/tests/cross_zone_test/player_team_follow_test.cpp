@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <deque>
 #include <functional>
 #include <memory>
@@ -14,6 +15,7 @@
 #include <hiredis/hiredis.h>
 
 #include "../muduo_grpc_test/muduo_test_loop.h"
+#include "engine/core/metrics/prometheus_text.h" // 跟随事件计数的 /metrics 导出(TeamFollowSystem::WriteMetrics)
 #include "engine/core/type_define/player_guid_comp.h"
 #include "frame/manager/frame_time.h"
 #include "grpc_client/scene_manager/scene_manager_service_grpc_client.h"
@@ -1140,5 +1142,231 @@ TEST_F(PlayerTeamFollowTest, HostedPlayerAutoReturnsToMainCityWhenRemovedFromTea
     EXPECT_EQ(sceneManager.requests->size(), 1u);
 
     PlayerTeamFollowTestAccess::SetDefaultMainCity(0);
+}
+
+// ---- 跟随事件计数经 /metrics 导出(2026-11-27 起;TeamFollowSystem::WriteMetrics,team-follow-server-trail.md §10) ----
+// 计数是本线程的、跨用例累加,下面的用例都按「之前 / 之后」的差值断言。
+
+std::string TeamFollowEvent(std::string_view event, std::string_view reason = {})
+{
+    std::string series = "scene_team_follow_events_total{event=\"" + std::string(event) + "\"";
+    if (!reason.empty())
+    {
+        series += ",reason=\"" + std::string(reason) + "\"";
+    }
+    return series + "}";
+}
+
+std::string TeamFollowAttached(std::string_view placement)
+{
+    return "scene_team_follow_attached_total{placement=\"" + std::string(placement) + "\"}";
+}
+
+// 本线程计数此刻导出的值;没有这条样本返回 UINT64_MAX。样本行在行首,按 "\n<序列> " 找才不会落到 HELP 行上。
+uint64_t TeamFollowMetric(const std::string& series)
+{
+    prometheus_text::Writer writer;
+    TeamFollowSystem::WriteMetrics(writer);
+    EXPECT_EQ(writer.DroppedSamples(), 0u);
+    const std::string& text = writer.Text();
+    const auto at = text.find("\n" + series + " ");
+    return at == std::string::npos ? UINT64_MAX : std::stoull(text.substr(at + series.size() + 2));
+}
+
+uint64_t TeamFollowAttachedTotal()
+{
+    uint64_t total = 0;
+    for (const std::string_view placement : {"snap", "walk", "teleport"})
+    {
+        total += TeamFollowMetric(TeamFollowAttached(placement));
+    }
+    return total;
+}
+
+// 每个取值进程一启动就以 0 导出,increase() 才抓得到第一次。标签取值在这里钉死:skipped / recheck 与各处日志里
+// reason= 的字面量逐字相同,detached / dissolved 是 TeamFollowStopReason 的枚举名(日志同一个字符串),改名会让
+// 看板与日志查询对不上。计数是本线程的,换一条没跑过跟随的新线程渲染,每一项都应恰好是 0。
+TEST(TeamFollowMetrics, EveryEventReasonAndPlacementIsExportedFromZero)
+{
+    std::string text;
+    uint32_t dropped = UINT32_MAX;
+    std::thread([&text, &dropped]
+    {
+        prometheus_text::Writer writer;
+        TeamFollowSystem::WriteMetrics(writer);
+        text = writer.Text();
+        dropped = writer.DroppedSamples();
+    }).join();
+    EXPECT_EQ(dropped, 0u);
+    EXPECT_NE(text.find("# TYPE scene_team_follow_events_total counter\n"), std::string::npos);
+    EXPECT_NE(text.find("# TYPE scene_team_follow_attached_total counter\n"), std::string::npos);
+
+    std::vector<std::string> series;
+    for (const std::string_view reason : {"in_battle", "ownership_in_flight", "scene_change_in_flight", "redis_error",
+                                          "battle_lock", "cross_zone", "session_not_live", "formation_full"})
+    {
+        series.push_back(TeamFollowEvent("skipped", reason));
+    }
+    for (const std::string_view reason : {"hosting_heartbeat", "leader_settled"})
+    {
+        series.push_back(TeamFollowEvent("recheck", reason));
+    }
+    for (const std::string_view reason : {"client_follow", "client_leave", "offline_hosting"})
+    {
+        series.push_back(TeamFollowEvent("intent", reason));
+    }
+    for (const std::string_view reason :
+         {"TEAM_FOLLOW_STOP_REASON_UNSPECIFIED", "TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW", "TEAM_FOLLOW_STOP_REASON_TEAM_CHANGED",
+          "TEAM_FOLLOW_STOP_REASON_LEADER_CHANGED", "TEAM_FOLLOW_STOP_REASON_BECAME_LEADER",
+          "TEAM_FOLLOW_STOP_REASON_SCENE_CHANGED", "TEAM_FOLLOW_STOP_REASON_LEADER_GONE", "TEAM_FOLLOW_STOP_REASON_LEAVING"})
+    {
+        series.push_back(TeamFollowEvent("detached", reason));
+        series.push_back(TeamFollowEvent("dissolved", reason));
+    }
+    series.push_back(TeamFollowEvent("placed", "fell_behind"));
+    series.push_back(TeamFollowEvent("restarted"));
+    series.push_back(TeamFollowEvent("await_leader_expired"));
+    for (const std::string_view placement : {"snap", "walk", "teleport"})
+    {
+        series.push_back(TeamFollowAttached(placement));
+    }
+
+    for (const auto& one : series)
+    {
+        EXPECT_NE(text.find("\n" + one + " 0\n"), std::string::npos) << one;
+    }
+    // 没有名单之外的样本:两族各一行 HELP、一行 TYPE,其余每行一条样本。
+    EXPECT_EQ(static_cast<std::size_t>(std::count(text.begin(), text.end(), '\n')), series.size() + 4) << text;
+    EXPECT_EQ(text.find("player_id"), std::string::npos) << "玩家号不做标签(AGENTS.md §9)";
+}
+
+// 暂离计一次 intent(client_leave)与一次 detached(LEFT_FOLLOW);再声明、再接上计一次 attached;
+// 队长离队后下一 tick 解散队形,队长那边计 dissolved、队员这边计 detached,原因都是 LEADER_CHANGED。
+TEST_F(TeamFollowDriveTest, LeavingRejoiningAndDissolvingAreCountedLikeTheLogLines)
+{
+    const auto clientLeave = TeamFollowEvent("intent", "client_leave");
+    const auto leftFollow = TeamFollowEvent("detached", "TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW");
+    const auto memberLeaderChanged = TeamFollowEvent("detached", "TEAM_FOLLOW_STOP_REASON_LEADER_CHANGED");
+    const auto formationLeaderChanged = TeamFollowEvent("dissolved", "TEAM_FOLLOW_STOP_REASON_LEADER_CHANGED");
+    const uint64_t clientLeaveBefore = TeamFollowMetric(clientLeave);
+    const uint64_t leftFollowBefore = TeamFollowMetric(leftFollow);
+    const uint64_t attachedBefore = TeamFollowAttachedTotal();
+    ASSERT_NE(clientLeaveBefore, UINT64_MAX);
+    ASSERT_NE(leftFollowBefore, UINT64_MAX);
+
+    PlayerTeamSystem::OnClientFollowRequest(follower, false);
+    EXPECT_FALSE(TeamFollowSystem::IsDriven(follower));
+    EXPECT_EQ(TeamFollowMetric(clientLeave), clientLeaveBefore + 1);
+    EXPECT_EQ(TeamFollowMetric(leftFollow), leftFollowBefore + 1);
+
+    TeamFollowSystem::SetFollowIntent(follower, true);
+    ASSERT_TRUE(TeamFollowSystem::TryAttach(follower, leader, /*walkAllowed=*/true));
+    EXPECT_EQ(TeamFollowAttachedTotal(), attachedBefore + 1);
+
+    const uint64_t memberBefore = TeamFollowMetric(memberLeaderChanged);
+    const uint64_t formationBefore = TeamFollowMetric(formationLeaderChanged);
+    tlsEcs.actorRegistry.get<TeamId>(leader).set_team_id(0);
+    TeamFollowSystem::Update(0.05);
+    EXPECT_FALSE(TeamFollowSystem::IsDriven(follower));
+    EXPECT_EQ(TeamFollowMetric(memberLeaderChanged), memberBefore + 1);
+    EXPECT_EQ(TeamFollowMetric(formationLeaderChanged), formationBefore + 1);
+}
+
+// 队长瞬移重建队形、托管开始替他开启跟随、托管中的兜底重试,各对应一行日志、各计一次。
+TEST_F(TeamFollowDriveTest, LeaderJumpAndOfflineHostingAreCounted)
+{
+    const auto restarted = TeamFollowEvent("restarted");
+    const auto offlineHosting = TeamFollowEvent("intent", "offline_hosting");
+    const auto hostingHeartbeat = TeamFollowEvent("recheck", "hosting_heartbeat");
+    const uint64_t restartedBefore = TeamFollowMetric(restarted);
+    const uint64_t hostingBefore = TeamFollowMetric(offlineHosting);
+    const uint64_t heartbeatBefore = TeamFollowMetric(hostingHeartbeat);
+
+    // 队长一 tick 挪出 kTeamFollowMaxLeaderJump(4 米)以上:轨迹从新位置重来,队员按加入规则重新落位。
+    tlsEcs.actorRegistry.get<Transform>(leader).mutable_location()->set_x(10.0);
+    TeamFollowSystem::Update(0.05);
+    EXPECT_EQ(TeamFollowMetric(restarted), restartedBefore + 1);
+    ASSERT_TRUE(TeamFollowSystem::IsDriven(follower));
+
+    // 托管开始:服务器替他开启跟随;他已接在队长身后,不再发读。
+    PlayerTeamSystem::OnOfflineHostingStarted(follower);
+    EXPECT_EQ(TeamFollowMetric(offlineHosting), hostingBefore + 1);
+
+    // 兜底重试只替想跟却没接上的人计:接着的时候不计;摘下来(意图还在)之后计一次。
+    PlayerTeamSystem::OnOfflineHostingHeartbeat(follower);
+    EXPECT_EQ(TeamFollowMetric(hostingHeartbeat), heartbeatBefore);
+    TeamFollowSystem::Detach(follower, TEAM_FOLLOW_STOP_REASON_LEFT_FOLLOW);
+    PlayerTeamSystem::OnOfflineHostingHeartbeat(follower);
+    EXPECT_EQ(TeamFollowMetric(hostingHeartbeat), heartbeatBefore + 1);
+}
+
+// 队长离开本节点:队员以 LEADER_GONE 摘下、队形以 LEADER_GONE 解散;去留有了结论再跟一次,计 recheck(leader_settled)。
+TEST_F(TeamFollowDriveTest, WaitingForADepartedLeaderIsCountedWhenItSettles)
+{
+    const auto leaderGone = TeamFollowEvent("detached", "TEAM_FOLLOW_STOP_REASON_LEADER_GONE");
+    const auto dissolvedLeaderGone = TeamFollowEvent("dissolved", "TEAM_FOLLOW_STOP_REASON_LEADER_GONE");
+    const auto settled = TeamFollowEvent("recheck", "leader_settled");
+    const uint64_t leaderGoneBefore = TeamFollowMetric(leaderGone);
+    const uint64_t dissolvedBefore = TeamFollowMetric(dissolvedLeaderGone);
+    const uint64_t settledBefore = TeamFollowMetric(settled);
+
+    StartLeaderHandoff(leader);
+    TeamFollowSystem::Update(0.05);
+    EXPECT_EQ(TeamFollowMetric(leaderGone), leaderGoneBefore + 1);
+    EXPECT_EQ(TeamFollowMetric(dissolvedLeaderGone), dissolvedBefore + 1);
+
+    PlayerTeamSystem::FollowAfterLeaderSettled();
+    EXPECT_EQ(TeamFollowMetric(settled), settledBefore) << "队长还在交接中:没有结论,不重新检查";
+
+    tlsEcs.playerList.erase(kLeaderId);
+    tlsEcs.actorRegistry.destroy(leader);
+    PlayerTeamSystem::FollowAfterLeaderSettled();
+    EXPECT_EQ(TeamFollowMetric(settled), settledBefore + 1);
+}
+
+// 等满 kTeamFollowAwaitLeaderFrames 还没结论就放弃,计 await_leader_expired(这一项没有 reason)。
+TEST_F(TeamFollowDriveTest, GivingUpOnADepartedLeaderIsCounted)
+{
+    const auto expired = TeamFollowEvent("await_leader_expired");
+    const uint64_t expiredBefore = TeamFollowMetric(expired);
+    StartLeaderHandoff(leader);
+    TeamFollowSystem::Update(0.05);
+    ASSERT_TRUE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower));
+
+    auto& frameTime = tlsFrameTimeManager.frameTime;
+    const auto savedFrame = frameTime.current_frame();
+    frameTime.set_current_frame(savedFrame + kTeamFollowAwaitLeaderFrames);
+    PlayerTeamSystem::FollowAfterLeaderSettled();
+    frameTime.set_current_frame(savedFrame);
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<TeamFollowAwaitLeaderComp>(follower));
+    EXPECT_EQ(TeamFollowMetric(expired), expiredBefore + 1);
+}
+
+// 跟随检查在哪一步停下,就给那个原因计一次(与 metric=team_follow_skipped 日志一一对应)。
+TEST_F(PlayerTeamFollowTest, SkippedChecksAreCountedByReason)
+{
+    const auto skipped = [](std::string_view reason) { return TeamFollowMetric(TeamFollowEvent("skipped", reason)); };
+    const uint64_t crossZone = skipped("cross_zone");
+    const uint64_t battleLock = skipped("battle_lock");
+    const uint64_t redisError = skipped("redis_error");
+    const uint64_t inBattle = skipped("in_battle");
+
+    ASSERT_NO_FATAL_FAILURE(OpenLocationRead());
+    redis.Reply(REDIS_REPLY_STRING, LeaderLocation(kCurrentSceneId, kZoneId + 1)); // 队长在别的 zone
+    EXPECT_EQ(skipped("cross_zone"), crossZone + 1);
+
+    Check();
+    redis.Reply(REDIS_REPLY_STRING, "battle-1"); // 本人的战斗锁还在
+    EXPECT_EQ(skipped("battle_lock"), battleLock + 1);
+
+    Check();
+    redis.Reply(REDIS_REPLY_ERROR); // 战斗锁没读成
+    EXPECT_EQ(skipped("redis_error"), redisError + 1);
+
+    tlsEcs.actorRegistry.emplace<InBattleComp>(player);
+    Check(); // 入口的守卫就挡下,不发读
+    EXPECT_EQ(skipped("in_battle"), inBattle + 1);
+    EXPECT_TRUE(redis.pending.empty());
+    ExpectNoRegroup(player);
 }
 } // namespace

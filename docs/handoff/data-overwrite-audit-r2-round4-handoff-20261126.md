@@ -28,7 +28,7 @@
 0. **开工核对**：`git log` 里要有 `6b4ae7852`（11-27 旧电脑的 main 与 origin/main 都停在这里）；三批与 §7.4 的代码 `3eb57a09a`、`d77a458ee`、`76e2b59bb`、`24c13a311` 都在它之前。§6.1、§7 各节标「未提交」的测试与设计稿，11-27 核对已全部随后来的快照提交进了 main（最晚 `bcea63be6`），按已提交读。缺了就停下问负责人。`git status` 看清别的会话的在途改动，只动本单范围的行。各节末尾已写了复核结论或「已完成」的，不重做。
 1. **复核**（写的人与复核的人分开；新电脑上的会话没写过这些代码，可以复核）：按 §2「先复核，再改」逐批复核 §7.1 批 V、§7.2 批 W、§7.3 批 X、§7.4 五条、§6.1 九条里还没有复核结论的。批 X 已复核通过（§7.3 末条），不重做。diff 基线：批 V 用 `git diff 8a6697af0 a0b3d195e -- <§7.1 文件>`，批 W 用 `git diff 8a6697af0 HEAD -- <§7.2 文件与测试>`，§7.4 用 `git diff a0b3d195e HEAD -- <§7.4 文件>`。终点必须到 HEAD：当时没提交的测试与设计稿，是后来的快照提交带进来的；只看 `76e2b59bb`，或止于 `24c13a311`，都会漏。区间里混着别的会话对同一文件的改动，按 §6.1「还没做的」里复核那条的说明分开看。复核出问题当场改，在对应小节末尾写复核结论。
 2. **写代码**（按顺序）：
-   1. r2-craft#1 批 C（部署开通）、批 B（scene 与客户端接入）：**入口改为单独的交接文件 `docs/handoff/skill-book-wanted-order-remaining-handoff-20261127.md`**（自成一体，含批 A 的 Gemini 验证、两批的逐文件改法与完成判据，做完删掉它）；做法与前提在 `docs/design/skill-book-wanted-order-trade-escrow.md` §11.2；批 C 前提②（K8s 各档位是否打开 trade `AssetOp.Enabled`）开工前先问负责人，不自己定。
+   1. r2-craft#1 批 C（部署开通）、批 B（scene 与客户端接入）：**2026-11-27 都已写完（未编译）**，原先的单独交接文件 `docs/handoff/skill-book-wanted-order-remaining-handoff-20261127.md` 已删；改法、五项记录与 Gemini 验证命令都在 `docs/design/skill-book-wanted-order-trade-escrow.md` §11.1 末与 §11.2。
    2. guild 人工终结见证的条件写补比 `attempts`：逐行步骤在 §6「还没做的」第 2 条。
    3. 各批「剩余与取舍」「顺带发现」里记下的点，按「查出的问题现在修」逐条判断：是缺陷就修；确是有意取舍的，在所属设计稿写明不改的理由。至少包括：
       - 删角收尾不删 `guild_war_player_state` 与 `guild_war_garrison`（后者含玩家名与快照），补进账号注销清单；`docs/design/account-deletion.md` 登记新挂起项 `guild_war_credit_owed`（§7.4）。

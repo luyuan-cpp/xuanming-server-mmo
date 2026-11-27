@@ -360,3 +360,60 @@ rpc NotifyTeamFollowState (TeamFollowStateS2C) returns (Empty);  // PUSH
 - 原随从的唤醒只覆盖"因队长离开本节点而解散"的那一批;那一刻不在队形里的离线托管队员(例如正在战斗)靠战斗结束时的跟随检查,
   其余漏掉的由托管中的兜底重试(§3.7,每 15 秒)补上,最多晚一个周期(扫描偶尔跳过一秒时晚两个周期)。
 - 掉头时队员互相穿过;绕比间距大的圈时队员跟着绕(§3.3)。
+
+## 10. 观测:跟随事件计数(2026-11-27 起导出 /metrics,未编译、未测试)
+
+**起因**。跟随链有九种 `metric=team_follow_*` 日志(attached / detached / dissolved / intent / placed / recheck / restarted /
+await_leader_expired / skipped),原来只进日志;team-system.md 批 3 记的「scene 没有 Prometheus 端点」早已不成立,C++ 节点设了
+`MMORPG_METRICS_PORT` 就有出口。按 [infra-reconnect-overview.md](infra-reconnect-overview.md) §1.8「业务计数同样导出」接进同一个出口,
+日志一行不动。
+
+**先核对取值是不是封闭集合,再定标签**(都是写死的字面量或 proto 枚举,与玩家无关):
+
+| 日志 | 限定词 | 取值 |
+|---|---|---|
+| `team_follow_skipped` | `reason=` | in_battle、ownership_in_flight、scene_change_in_flight、redis_error、battle_lock、cross_zone、session_not_live(`player_team.cpp` 八处,其中 redis_error 两处),formation_full(`team_follow_system.cpp`) |
+| `team_follow_recheck` | `reason=` | hosting_heartbeat(只打 DEBUG)、leader_settled |
+| `team_follow_placed` | `reason=` | fell_behind |
+| `team_follow_detached` / `team_follow_dissolved` | `reason=` | `TeamFollowStopReason` 的枚举名(8 个,含 UNSPECIFIED),日志打的就是 `TeamFollowStopReason_Name` |
+| `team_follow_intent` | `follow=` / `source=` | follow=1、follow=0、follow=1 source=offline_hosting 三种 |
+| `team_follow_attached` | `placement=` | snap、walk、teleport |
+| `team_follow_restarted` / `team_follow_await_leader_expired` | 无 | — |
+
+日志里的 player_id、leader_id、slot、members、trail_points 等不进指标(AGENTS.md §9)。
+
+**导出的两族**(counter,每个取值进程一启动就以 0 导出,`increase()` 抓得到第一次):
+
+| 指标 | 标签 |
+|---|---|
+| `scene_team_follow_events_total` | `event` ∈ skipped / recheck / intent / detached / dissolved / placed 时带 `reason`(取值同上表;intent 的三种依次是 client_follow、client_leave、offline_hosting);`event` ∈ restarted / await_leader_expired 时不带 `reason` |
+| `scene_team_follow_attached_total` | `placement` ∈ snap / walk / teleport |
+
+**为什么是两族,不是一族 `{event,reason}`**:placement 是「怎么落位」,不是原因,塞进 `reason` 违反命名第一原则(AGENTS.md §8);
+同一族里各样本的标签名保持一致(Go 服务用的 client_golang 登记同名指标时就要求标签名相同,不同直接拒绝登记;两边口径一致,
+看板与告警按族聚合时也不会混进别的维度),所以 attached 单独一族。intent 的三种来源回答的是「跟随意图为什么变了」,算原因,留在 events 里,免得为三条序列再开一族。restarted 与
+await_leader_expired 本来就没有原因,样本不带 `reason`,与空值等价,不编造取值。
+
+**取值与日志的对应**:skipped / recheck / placed 的 `reason` 与日志字面量逐字相同;detached / dissolved 用枚举名,与日志是同一个
+字符串,proto 新增取值时导出自动跟上(按 `TeamFollowStopReason_MIN..MAX` 逐个导出);UNSPECIFIED 不是停止原因,正常恒为 0,
+不为 0 说明有调用方传错了原因。
+
+**计数怎么记**:
+- 本线程计数,不用原子:跟随只在 scene 逻辑线程上发生,/metrics 的采集回调也在这个 loop 上(与 `AfkHostingSystem` 的计数同口径)。
+- 与日志同一处计,但写在 `LOG_*` 语句外面:muduo 的 `LOG_*` 在级别不够时整句不求值,recheck reason=hosting_heartbeat 只打 DEBUG,
+  写进日志表达式里,生产(INFO)就会漏计。
+- 名字表放在 `team_follow_system.cpp`,与枚举用 `static_assert` 管等长;`player_team.cpp` 只调 `team_follow_stats::Count*`,
+  日志字面量原样保留。`PlaceMember` 原来用一个 `const char*` 局部变量记落位,改成枚举,日志与标签取同一张名字表。
+
+**登记**:`TeamFollowSystem::RegisterMetrics()`(采集器名 `scene_team_follow`),scene 启动时调一次,与
+`PlayerBattleSystem::RegisterMetrics()` 同处。
+
+**本轮不加告警**:没有既定阈值,先看趋势(与 §1.8 同批新导出的口径相同)。可以先看的读数:`skipped{reason="redis_error"}` 涨,
+是玩家域 Redis 读不成;`attached{placement="teleport"}` 占比高,是寻路接不上、队员被直接放进槽位;`recheck{reason="hosting_heartbeat"}`
+一直涨,是有托管队员一直没接上。
+
+**单测(未运行)**:`cpp/tests/cross_zone_test/player_team_follow_test.cpp` 的
+`TeamFollowMetrics.EveryEventReasonAndPlacementIsExportedFromZero`(在一条新线程上渲染,全部取值恰好以 0 导出、没有名单外的样本、
+不出现 player_id)、`TeamFollowDriveTest.LeavingRejoiningAndDissolvingAreCountedLikeTheLogLines`、
+`TeamFollowDriveTest.LeaderJumpAndOfflineHostingAreCounted`、`TeamFollowDriveTest.WaitingForADepartedLeaderIsCountedWhenItSettles`、
+`TeamFollowDriveTest.GivingUpOnADepartedLeaderIsCounted`、`PlayerTeamFollowTest.SkippedChecksAreCountedByReason`。

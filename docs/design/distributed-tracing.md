@@ -302,7 +302,7 @@ engine 侧的追踪实现在 `cpp/libs/engine/core/network/grpc_trace_hooks.{h,c
 - C++ 日志行尾多了后缀，行首不变。2026-11-11 核对过读 C++ 日志的脚本与规则，没有按行尾匹配的，都不受影响：
   - 本机 Alloy（`deploy/observability/alloy/config.alloy`）与 K8s sidecar（`k8s_deploy.ps1` 生成）按行首解析时间、线程、级别，路径正则里的 `$` 匹配的是文件名；
   - `stress_summarize.ps1`、`currency_crash_window.ps1`、`cpp_nodes.ps1`、`start_game.ps1` 只做子串匹配（如 `STARTED SUCCESSFULLY`）；
-  - `deploy/k8s/player-inbox-alerts.yaml` 的 LogQL 是子串过滤加 `reason=(\w+)` 一类取值，`\w+` 停在后缀之前；
+  - `deploy/k8s/player-inbox-alerts.yaml` 的 LogQL 是子串过滤加 `reason=(\w+)` 一类取值，`\w+` 停在后缀之前（2026-11-27 起这些 LogQL 都已改成读 scene 指标的 PromQL，文件头不再有 LogQL）；
   - C++ 单测用自己的日志输出函数，后缀只由 `Node::AsyncOutput` 加，测试碰不到。
 - 不改客户端契约，Java 版不需要同批改（§12）。
 

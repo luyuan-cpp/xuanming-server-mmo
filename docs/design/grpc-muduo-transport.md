@@ -1451,7 +1451,7 @@ FinalizeShutdownInLoop(阶段 0)
     - tcpSocket 探针注释(`:3466` 附近)补一句「新服务端对不发 preface 的连接静默处理;排空期间监听已关,探针失败属预期」。
   - `tools/scripts/lib/k8s_client_entry.ps1`:参数 `:619-620` 保留并标注已退役(未跟踪的 `lobby_authority_render.tests.ps1` 还在传它);删掉 `:692-693` 的注入;`:13 / :60` 注释同步。
   - 文档:`deploy/k8s/README.md:348/371`、`.github/copilot-instructions.md:105`、`docs/design/thread-count-monitoring{,_en,_zh}.md`、`scene-node-threading-model.md`、`scene-grpc-server-design.md`(抬头注明已被本节取代)、`battle-transport-decision.md:60`。
-- **低基数统计**:C++ 节点没有 Prometheus 出口,沿用 `[RpcChannel] summary` 的口径:Server 自己每 30s 检查一次,有变化才打一行。
+- **低基数统计**:沿用 `[RpcChannel] summary` 的口径:Server 自己每 30s 检查一次,有变化才打一行。(本节原文写「C++ 节点没有 Prometheus 出口」,不成立:节点设了 `MMORPG_METRICS_PORT` 就有 /metrics 出口,2026-11-27 起同一份快照也从那里导出,见下一条。)
 
 ```
 [GrpcServer] summary listen=<ip:port> conns=<cur>/<peak> accepted= closed_before_preface= handshake_timeout= protocol_errors=
@@ -1461,6 +1461,32 @@ FinalizeShutdownInLoop(阶段 0)
 ```
 
   维度只有方法(≤15 个)乘状态码(≤17 个);不出现 player_id 和 peer。
+- **Prometheus 导出(2026-11-27 起,未编译、未测试)**:`ServerStatsSnapshot` 由 core 写成 `cpp_node_grpc_server_*`(`cpp/libs/engine/core/network/grpc_server_metrics.h`),汇总行照旧。
+  - **分层**:muduo_grpc 保持不认指标([断线重连总纲](infra-reconnect-overview.md) §1.8「传输层不认指标」),只给值类型的快照;写指标的代码在 core。依赖方向不变:core 本来就依赖 muduo_grpc,不碰官方 gRPC SDK(`tools/scripts/tests/test_cpp_grpc_dependency_boundary.py` 只拦官方 SDK 的头、库与运行时调用)。
+  - **怎么取数**:服务端由 Node 持有(`grpcServer`),不登记进进程级的 `GlobalMetricsRegistry`:那里的采集回调活得比 Node 长,捕获 Node 的 `this` 会在 Node 之后悬空。改由 `Node::StartMetricsExporter` 里出口自己的渲染回调现取(`Node::RenderGrpcServerMetrics`,与节点身份、fd 指标同一层;那个回调本来就捕获 `this`,属于「与被绑对象同寿命的成员」)。抓取跑在节点 loop 线程上,`Server::Stats()` 照旧断言 loop 线程,不加锁、不跨线程。
+  - **三种时刻**:服务端在 etcd 分到端口之后才建,之前按全 0 导出;`OnGrpcServerDrained` 销毁服务端之前留下最终快照(`drainedGrpcServerStats`,收尾防御销毁那条路径同样留),之后的抓取读它,计数在停机余下的业务排空期间不回落成 0;没注册 gRPC 服务的节点(gate)不导出这几族。
+  - **方法维度以 0 起步**:`Server::Stats()` 改为 Start 之后每个已登记方法都出现在 `methods` 里,没被调用过的内层为空;导出按「每个方法 × 0..16 共 17 个码」逐条写。空的内层不进汇总行,`[GrpcServer] summary` 逐字不变(`ServerStatsFormatTest.FieldOrderIsStable` 与新加的 `ServerLoopbackTest.StatsListEveryRegisteredMethodBeforeItIsCalled` 钉住)。服务端起来之前方法表还没冻结,方法序列从 Start 起出现,同样是 0。
+  - **指标**(只有低基数标签,listen 与 peer 不做标签):
+
+    | 指标 | 类型 | 对应汇总行 |
+    |---|---|---|
+    | `cpp_node_grpc_server_connections` / `_connections_max` | gauge | `conns=<cur>/<peak>` |
+    | `cpp_node_grpc_server_connections_accepted_total` | counter | `accepted` |
+    | `cpp_node_grpc_server_connections_closed_before_preface_total` | counter | `closed_before_preface` |
+    | `cpp_node_grpc_server_handshake_timeouts_total` | counter | `handshake_timeout` |
+    | `cpp_node_grpc_server_connection_protocol_errors_total` | counter | `protocol_errors` |
+    | `cpp_node_grpc_server_calls_in_flight` / `_calls_in_flight_max` | gauge | `inflight=<cur>/<peak>` |
+    | `cpp_node_grpc_server_calls_dispatched_total` | counter | `dispatched` |
+    | `cpp_node_grpc_server_dispatch_backlog_max`、`cpp_node_grpc_server_dispatched_per_turn_max` | gauge | `max_backlog`、`max_dispatched_per_turn` |
+    | `cpp_node_grpc_server_calls_rejected_total{reason}` | counter | `reason` ∈ overload / protocol / unimplemented = `rejected_overload` / `rejected_protocol` / `unimplemented` |
+    | `cpp_node_grpc_server_calls_interrupted_total{cause,stage}` | counter | `cause` ∈ deadline / peer_cancel / shutdown × `stage` ∈ before_start / after_start = `deadline_*`、`cancelled_before_start` / `aborted_after_start`、`refused_on_shutdown` / `unavailable_on_shutdown` |
+    | `cpp_node_grpc_server_call_anomalies_total{kind}` | counter | `kind` ∈ late_finish / dropped / dropped_off_loop |
+    | `cpp_node_grpc_server_handled_total{code}` | counter | `codes=`;`code` 取 17 个规范名(OK、CANCELLED……),越界的码按 UNKNOWN 计 |
+    | `cpp_node_grpc_server_method_handled_total{method,code}` | counter | `methods={}`;找不到方法的调用(未知服务 / 方法、协议拒绝)只在上一族 |
+
+  - **为什么这样分族**:几组互斥的结局各合成一族加标签(拒绝原因、中断的原因 × 业务开始与否、收口异常),按族求和才有意义;`closed_before_preface` 与 `handshake_timeout` 会重叠(一条连接两项都计),各自单独一族,不放进同一个标签里让人误加。`stage="after_start"` 正好是「业务可能已执行」的那一半,与本节「业务开始之前的拒绝」的口径对齐。gauge 的 `_max` 后缀与 `cpp_node_rpc_client_in_flight_max` 同一写法。
+  - **本轮不加告警**:没有既定阈值,先看趋势。`call_anomalies_total{kind="dropped"}` 与 `{kind="dropped_off_loop"}` 正常恒为 0;`calls_interrupted_total{stage="after_start"}` 是结果未知的调用。
+  - 单测(未运行):`cpp/tests/rpc_controller_test/grpc_server_metrics_test.cpp` 的 `GrpcServerMetrics.*`(每个字段的值等于快照、全部取值以 0 起步且没有名单外的样本、越界码按 UNKNOWN 计、listen 不进标签);`cpp/tests/muduo_grpc_test/server_test.cpp` 的 `ServerLoopbackTest.StatsListEveryRegisteredMethodBeforeItIsCalled`。
 - **日志限频**:规则同 `ShouldLogRpcEvent`(前 8 条逐条打,之后每 1024 条打一条),在 server.cpp 本地实现,因为 muduo_grpc 不依赖 core。
   - ERROR:dropped(程序缺陷信号);
   - WARN:坏 magic、协议错误、过载、未知方法、排空到期强制收口(每次停机汇总一行);

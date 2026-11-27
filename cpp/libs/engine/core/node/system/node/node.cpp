@@ -59,6 +59,7 @@
 #include "muduo_grpc/address.h"
 #include "muduo_grpc/method_table.h"
 #include "muduo_grpc/server.h"
+#include "network/grpc_server_metrics.h"
 #include <node_config_manager.h>
 #include <array>
 #include <atomic>
@@ -1368,12 +1369,41 @@ void Node::StartMetricsExporter()
 		LOG_ERROR << "[Metrics] kafka_producer collector already registered; Kafka producer metrics may be missing";
 	}
 	// 回调捕获 this:出口是本 Node 的成员,在 FinalizeTeardownInLoop 里先于 Node 释放,
-	// 属于 AGENTS.md §11.7「与被绑对象同寿命的成员」的例外。只在 loop 线程上读 NodeInfo。
+	// 属于 AGENTS.md §11.7「与被绑对象同寿命的成员」的例外。只在 loop 线程上读 NodeInfo 与 gRPC 服务端。
+	// gRPC 服务端的统计(2026-11-27 起,原来只有 [GrpcServer] summary 日志)由本 Node 持有的 Server 现取,不登记进进程级的
+	// GlobalMetricsRegistry:那里的采集回调活得比 Node 长,捕获 this 就会在 Node 之后悬空。
 	metricsExporter = std::make_unique<MetricsHttpExporter>(&eventLoop, *port, [this]
 	{
-		return RenderNodeIdentityMetrics(GetNodeInfo()) + RenderProcessFdMetrics() + GlobalMetricsRegistry().Render();
+		return RenderNodeIdentityMetrics(GetNodeInfo()) + RenderProcessFdMetrics() + RenderGrpcServerMetrics() +
+			   GlobalMetricsRegistry().Render();
 	});
 	metricsExporter->Start();
+}
+
+std::string Node::RenderGrpcServerMetrics() const
+{
+	eventLoop.assertInLoopThread();
+	// 没注册 gRPC 服务的节点(gate)根本不起服务端,不导出这几族,免得多出一组恒为 0 的序列。
+	if (grpcServices.empty())
+	{
+		return {};
+	}
+	prometheus_text::Writer writer;
+	if (grpcServer)
+	{
+		grpc_server_metrics::Write(writer, grpcServer->Stats());
+	}
+	else if (drainedGrpcServerStats)
+	{
+		// 已排空销毁:导出排空那一刻的最终值,计数不回落(停机余下的业务排空期间仍有抓取)。
+		grpc_server_metrics::Write(writer, *drainedGrpcServerStats);
+	}
+	else
+	{
+		// 还没起(etcd 分到端口之前)或启动被跳过:全 0 导出。已登记方法要等 Server::Start 冻结方法表之后才出现。
+		grpc_server_metrics::Write(writer, muduo_grpc::ServerStatsSnapshot{});
+	}
+	return writer.Text();
 }
 
 namespace
@@ -1841,6 +1871,8 @@ void Node::OnGrpcServerDrained()
 	}
 	LOG_INFO << "gRPC server drained. drain_ms=" << drainMs << " "
 			 << muduo_grpc::FormatServerStats(stats);
+	// 销毁之前留下最终统计,之后的 /metrics 抓取读它(RenderGrpcServerMetrics)。
+	drainedGrpcServerStats = std::make_unique<muduo_grpc::ServerStatsSnapshot>(stats);
 	// 这里是排队任务:不在 Server 自己的栈上,也不在 I/O 事件处理期间,可以同步销毁(server.h 的析构前置条件)。
 	// 此时连接表已空、Acceptor 早已销毁;~Server 万一再排进 forceClose / connectDestroyed,由收尾末尾的两跳 quit 覆盖。
 	grpcServer.reset();
@@ -2512,6 +2544,7 @@ void Node::FinalizeShutdownInLoop()
 	{
 		LOG_ERROR << "gRPC server still alive at shutdown finalization; destroying it in a queued task. listen="
 				  << grpcServer->ListenAddress();
+		drainedGrpcServerStats = std::make_unique<muduo_grpc::ServerStatsSnapshot>(grpcServer->Stats()); // 同 OnGrpcServerDrained
 		eventLoop.queueInLoop([server = std::move(grpcServer)]() mutable
 							  { server.reset(); });
 	}

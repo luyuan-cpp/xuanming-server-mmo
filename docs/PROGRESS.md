@@ -8452,3 +8452,53 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
   2. `pwsh -NoProfile -File` 跑 `battle_settlement_alerts_contract.tests.ps1`、`persist_version_skew_alerts_contract.tests.ps1`、`k8s_deploy_contract.tests.ps1`(「LogQL 契约」)、`assetop_work_shard_alerts_contract.tests.ps1`、`loop_liveness_alerts_contract.tests.ps1`;把四份告警文件的 `spec` 抽成普通规则文件后 `promtool check rules`;
   3. 冒烟(调试栈,设 `MMORPG_METRICS_PORT`):`curl -s http://127.0.0.1:<端口>/metrics | grep -E 'battle_(settlement_source|sql_outcome_signing)|scene_(battle_result|battle_settlement_item_guid|battle_terminal_query|mail_outbox_stuck|asset_op_)|exit_save_outran_lease'`:每族都在、以 0 起步(没配 `MMORPG_MATCH_OUTCOME_SECRET_BATTLE` 的 battle 上 `battle_sql_outcome_signing_key_ready` 为 0);`[ExitPersist]` 行比改动前只在行尾多一个 key。
 - **同批另两块交给了子会话代理**(收件箱 9 条 LogQL;组队跟随 / Redis 集群客户端 / gRPC 服务端计数),结果核对后另记一条。
+
+## 2026-11-27 Claude:按负责人要求删掉悬赏求书剩余交接单(只改文档)
+
+- **删了**:`docs/handoff/skill-book-wanted-order-remaining-handoff-20261127.md`(三批代码与文档已写完;原文用 `git show 77203c14d:docs/handoff/skill-book-wanted-order-remaining-handoff-20261127.md` 查)。`gen_docs_index.py` 重生成后 `docs/README.md` 只少这一行。
+- **没丢的东西**:交接单 §2 里比设计稿更全的批 A 用例名(`TestAttemptAllowed`、`TestWantedSkillBookRequiresAssetChannelAndTables`、真库加 `TestTiDBRejectedBuyRetry`)并进设计稿 §11.1 末;批 C 的验证命令补进 §11.2「批 C 落码记录」末;§11.2 头注、r2 剩余交接单 §3.1、第 4 轮交接单 §0a 里指向它的链接改成指向设计稿。
+- **给 Gemini 的入口**:`docs/design/skill-book-wanted-order-trade-escrow.md` §11.1 末(批 A)、§11.2「批 C 落码记录」末与「批 B 落码记录」末;三批都还没跑。
+
+## 2026-11-27 Antigravity：局外人观战交流 V1 4 枚 Codex UI 切片验收导入与客户端视觉接线闭环
+
+- **美术验收（来源 `D:\work\image\designs\battle-spectate-chat-v1\` `builtin-v2`）**：4/4 切片 + 1 张 `1920×1080` 预览图逐张目视复核，风格与帮会标准参照一致（玉绿云纹顶栏 + 暖米白纸面底板、玉绿开聊胶囊与淡米白静默只读牌区分鲜明、无字、无光污染）；校验全部通过：
+  - `spectate_chat_drawer_bg.png`（`680×470` RGBA 四角 alpha=0、`spriteBorder={24,24,24,54}`、SHA-256 `dddb0c418bf6` 匹配）
+  - `spectate_chat_entry_open_bg.png`（`220×56` RGBA 四角 alpha=0、`spriteBorder={22,0,22,0}`、SHA-256 `2aab6a495629` 匹配）
+  - `spectate_chat_entry_silent_bg.png`（`220×56` RGBA 四角 alpha=0、`spriteBorder={22,0,22,0}`、SHA-256 `56e645c02e9d` 匹配）
+  - `spectate_chat_send_btn_bg.png`（`124×56` RGBA 四角 alpha=0、`spriteBorder={18,0,18,0}`、SHA-256 `db26e225999c` 匹配）
+- **客户端导入与接线（`mmorpg-client`）**：全部落盘 `Assets/Resources/UI/Ugui/BattleSpectateChatV1/` 并补齐目录与 4 枚 Sprite `.meta`（`textureCompression: 0`、`enableMipMap: 0`、全仓 `12,678` GUID 0 冲突）；更新 `BattleSpectateChatPanel.cs` 绑定 4 枚切片并按实图明暗对齐文字对比度（玉绿顶栏/开聊/发送配米白字，纸面正文/静默牌配深墨褐字，`RectMask2D` 无暗底遮挡，发送冷却置灰态，缺图自动回落现役 9-slice）。
+- **验证证据**：`pwsh -File tools/client_compile_check.ps1` **833/833 文件 0 错误**；离线 Roslyn+NUnit `BattleSpectateChatClientTests`（5/5，含 V1.5 本地静音停/复轮询）+ `SpectateClientStateMachineTests`（34/34）= **39/39 PASS**；同期在 `BattleSpectateChatPanel.cs` 补齐 V1.5 两项零协议/零新图实用增强（4 枚战况快捷短语直走 587 公开流/审核/冷却 + 「静音本局」本地暂停轮询）；Python 仓 `pytest tests/test_cpp_da97_spectate_chat_match_gate.py tests/test_cpp_da97_wuxing_realm_v2_battle.py` **13/13 PASS**；`PARITY.md` 已更新为「四仓 + 美术全绿」。
+
+## 2026-11-27 Claude:Actor 隔离改造审阅后的修复与定案(未编译、未运行;Java 只登记)
+
+- **负责人定**:审阅两条回归「按推荐改」,其余待定项按最标准做法当场定案;全文与判据在 [design/actor-isolation-review-20261127.md](design/actor-isolation-review-20261127.md) §2、§3、§5。
+- **Pandora Go(`D:\luyuan\xuanming-server` main,未提交)**:PresenceHub 回退为加锁版本(`presence.go` / `presence_test.go` 回到 `7f4514f7^`);ds / hub allocator 删在途上限;auction 审计 worker 不再误刷循环活性;push 广播入口拷一次后各流共享只读 payload;playerdisplay 依赖 panic 的分块记失败并补单测;`CLAUDE.md` 第 6 条补模块内加锁、fire-and-forget 不设满即丢上限、只读值可共享三条判据。
+- **Unity(`D:\luyuan\mmorpg-client` main,未提交)**:`RankedModels.cs` / `TournamentModels.cs` 的 `FreezeList` 一律拷贝。
+- **本仓文档**:`engineering-principles.md` 与 `ecs-component-access-rules.md` 补「写时复制两段式提交」唯一例外(现例 `player_battle.cpp` 战后结算);C++ 表达式无状态求值、配方缓存 `thread_local` 定案不改。
+- **Java**:逻辑线程断言补用例覆盖、迟到确认清锁分支恢复两条登记进 Java 仓 `PARITY.md`。
+- **另开会话**:Python 版代打摊位目录 / 口碑待回账 / 24h 热榜按 C++ r2-craft#4 改走 Redis。
+- **给 Gemini**:审阅文档 §7 三步(Pandora 六个包 `go test`、Unity 编译与三套 EditMode、本仓 `gen_docs_index.py --check`)。
+
+## 2026-11-27 Claude:C++ 指标导出第三批——收件箱 9 条 LogQL 改 PromQL、组队跟随 / Redis 集群 / gRPC 服务端计数导出(两批,未编译、未测试,待 Gemini 验证;Java 不涉及)
+
+- **接上一条**(「C++ 指标导出第二轮」)。这两批由本会话派出的两个子代理写、我复核后补收尾;C++、告警与部分单测已被别的会话的快照提交 `dee33b452` 带进 main(不是本会话提交的),其余在工作区未提交。
+- **批 E(收件箱,13 个文件)**:
+  - `player_inbox_rules.h` 新增 `ConsumerEvent` / `LeaveAckResult` 名表;`player_inbox_system.{h,cpp}` 的 `WriteMetrics` 在 `Initialize` 第一行登记(排在开关关着时的提前返回之前),导出四个抓取时现算的 gauge(`scene_player_inbox_consumer_enabled`、`_registry_broken`、`_halted_player_domains{reason}`、`_ledger_invalid_players`)与三族计数(`scene_player_inbox_events_total{event}`、`_deferral_starts_total{reason}`、`_leave_ack_total{result}`),每处 `metric=inbox_*` 日志后紧跟一次计数,日志文本不动;`player_database_loader.cpp` 只改注释;
+  - `deploy/k8s/player-inbox-alerts.yaml` 新组 `scene.player-inbox` 7 条(replay_mismatch critical,其余 warning),文件头 9 条 LogQL 全部删掉(两条 info 看板改写成 PromQL 看板查询);逐玩家状态用 `max_over_time(…[10m])` 保留原「10 分钟内出现过就报」的口径;指标统一 `scene_player_inbox_` 前缀(Go 侧 `TestAlertRulesReferenceRegisteredMetrics` 会把以 `player_inbox_` 开头的词当收件箱服务指标核对);
+  - 契约测试 `tools/scripts/tests/player_inbox_alerts_contract.tests.ps1`(新建);`k8s_deploy_contract.tests.ps1` 的该文件 LogQL 下限 9 → 0;单测 `PlayerInboxSystemTest.Metrics*` 三条;
+  - 文档:`player-inbox-service.md` §3.3 / §7.5 / §8 #24 / §9.4(新增 §9.4.1 逐条处置表与取舍)、`player-inbox-runbook.md`(告警名与处置一一对应);顺手改正 `persist-version-skew-alerts.yaml` 头注释与 `distributed-tracing.md` 里「收件箱文件头有 LogQL」的旧指向。
+- **批 F(组队跟随 / Redis / gRPC,28 个文件)**:
+  - 组队跟随:`team_follow_system.{h,cpp}`、`player_team.cpp`,`scene_team_follow_events_total{event[,reason]}`(原因都是日志里已有的封闭集合)与 `scene_team_follow_attached_total{placement}`(placement 不是原因,单独一族);计数放在 `LOG_*` 之外,DEBUG 级的 hosting_heartbeat 复核在生产也计得到;
+  - Redis 集群:`redis.{h,cpp}` 抽出 `VisitRedisClusterStats`,`[PlayerRedis]` / `[ControlRedis]` 行逐字不变(单测钉住整行),导出 `scene_redis_cluster_events_total{client,event}`;更正旧注释:`stress_summarize.ps1` 并不解析这两行,只有运维手册按原文判读;
+  - gRPC 服务端:新头文件 `core/network/grpc_server_metrics.h` 读 `Server::Stats()` 写 `cpp_node_grpc_server_*`(method ≤ 15 × 17 个状态码,全部以 0 起步;`Server::Stats()` 改为列出每个已登记方法);挂在 Node 自己的出口回调(`RenderGrpcServerMetrics`),不进进程级注册表,排空销毁服务端前留最终快照;gate 没有 gRPC 服务,不导出这一族;muduo_grpc 仍不认指标,`test_cpp_grpc_dependency_boundary.py` 通过;
+  - `cpp/nodes/scene/main.cpp` 加 `TeamFollowSystem::RegisterMetrics()`、`RegisterRedisClusterMetrics()`(我加的);
+  - 单测:`player_team_follow_test.cpp`,新 `cross_zone_test/redis_cluster_metrics_test.cpp`(登记进 `cross_zone_test.vcxproj` / `.filters`),新 `rpc_controller_test/grpc_server_metrics_test.cpp`(登记进 `rpc_controller_test.vcxproj`),`muduo_grpc_test/server_test.cpp`;
+  - 文档:`team-follow-server-trail.md` §10、`team-system.md`、`redis-player-store-cluster.md` §5.6、`redis-player-cluster-runbook.md`、`grpc-muduo-transport.md` §15.11、`shared-redis-split-by-purpose.md` §18.2 / §25 第 14 条、`zone-redis-regression-guard-20261022.md` §4.4 / §7 / §14.1(写明 G4 与 `home_zone_unknown` / `owner_counter_behind` 已随 Redis 存档路径删除)、`infra-reconnect-overview.md` §1.8(我补的清单)。本批不加告警:没有既定阈值。
+- **另改的三份文档(我)**:`cross-zone-scene-travel.md` 两处「交接计数不进 Prometheus」(10-24 已导出)、`db-write-fencing-mysql.md` 的 `owner_epoch_unknown` 观察项(计数已删除)、`gate-kernel-tuning-runbook.md` 的 fd 豁免(已导出为 `cpp_node_open_file_limit_exempted` 并有告警)。
+- **本地已核**:`test_cpp_no_raw_pointer_member.py`、`check_log_text_english.py`、`test_cpp_async_callback_capture.py`、`test_cpp_grpc_dependency_boundary.py` 都通过;子代理报告的契约测试正则已按文本在现源码上核过。
+- **Gemini 验证**(失败保留第一条编译错误与 gtest 完整输出,不改断言,不连续重试):
+  1. 改了 `node.h`,三种节点都受影响:`msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`(先编 muduo_grpc、core、scene 库再编测试工程);Linux 构建(`build_linux.sh`,新测试 .cpp 已登记进 vcxproj,CMakeLists 由它生成);
+  2. `pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter currency_test`、`-Filter cross_zone`、`-Filter rpc_controller`、`-Filter muduo_grpc`;定向:`currency_test.exe --gtest_filter=PlayerInboxRules.*:PlayerInboxSystemTest.*:PlayerInboxReplyTest.*`、`cross_zone_test.exe --gtest_filter=TeamFollowMetrics.*:TeamFollowDriveTest.*:PlayerTeamFollowTest.*:SceneRedisClusterMetrics.*`、`rpc_controller_test.exe --gtest_filter=GrpcServerMetrics.*`、`muduo_grpc_test.exe --gtest_filter=ServerLoopbackTest.StatsListEveryRegisteredMethodBeforeItIsCalled:ServerStatsFormatTest.*`(`PlayerInboxReplyTest` 每个用例重复调 `Initialize`,会多出无害的 `collector scene_player_inbox is already registered` ERROR 行);
+  3. `pwsh -NoProfile -File tools/scripts/tests/player_inbox_alerts_contract.tests.ps1`、`k8s_deploy_contract.tests.ps1`;`cd go/player_inbox; go test ./internal/metrics/ -run TestAlertRulesReferenceRegisteredMetrics -count=1`;按 `player-inbox-runbook.md` §15 抽出 `spec` 后 `promtool check rules`;
+  4. 冒烟(设 `MMORPG_METRICS_PORT`,`curl -s http://127.0.0.1:<端口>/metrics`):scene grep `scene_player_inbox_`(7 族:consumer_enabled 1、registry_broken 0、events 5 个 event、deferral_starts 13 个 reason、halted 8 个 reason、leave_ack 7 个 result、ledger_invalid 1 条)、`scene_team_follow_`、`scene_redis_cluster_events_total`、`cpp_node_grpc_server_method_handled_total`;battle grep `cpp_node_grpc_server_` 有;gate grep `cpp_node_grpc_server_` 应为 0 行;`[PlayerRedis]` / `[ControlRedis]` / `[GrpcServer] summary` 行与改动前同格式。
+- **残余**(写在 `player-inbox-service.md` §9.4.1):收件箱停用或判坏之后,实体活不到下一次抓取就销毁的,那两条规则看不到;这种条目留在收件箱 PENDING,下次落地会再停,收件箱侧告警兜住。
