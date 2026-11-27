@@ -5,7 +5,6 @@
 .DESCRIPTION
   以仓库里的 deploy/passport/init_data.json(本机沙盒用的那份)为底,只按本环境改下面几项,别的安全相关配置原样不动
   (docs/design/official-passport-registration.md §3.10):
-    - 游戏应用加安卓 App Links 回调 <PublicOrigin>/passport/app-callback(§3.8);
     - 游戏应用填《用户协议》《隐私政策》地址:注册页的协议勾选链接到它们(§3.9);
     - 给了 -WebhookUrl 时打开回调(§3.7):填地址与请求头密钥(环境变量 MMORPG_GATEWAY_PASSPORT_WEBHOOK_SECRET,与网关是同一个值)。
   回调密钥只进 Secret,不进 ConfigMap,脚本也不打印它。Casdoor 只在全新初始化时读这份数据(initDataNewOnly):
@@ -47,8 +46,6 @@ $data = Get-Content -LiteralPath $InitDataPath -Raw | ConvertFrom-Json -AsHashta
 $games = @($data.applications | Where-Object { $_.name -eq 'app-xuanming-game' })
 if ($games.Count -ne 1) { throw "init data must contain exactly one application app-xuanming-game" }
 $game = $games[0]
-$appLink = "$PublicOrigin/passport/app-callback"
-if (@($game.redirectUris) -notcontains $appLink) { $game.redirectUris = @($game.redirectUris) + $appLink }
 $game.termsOfUse = $TermsUrl
 $game.privacyPolicy = $PrivacyUrl
 

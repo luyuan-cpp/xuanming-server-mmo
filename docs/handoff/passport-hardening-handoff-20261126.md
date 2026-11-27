@@ -5,9 +5,9 @@
 - **内容**：负责人 2026-11-26 批准全做的四批，设计与取舍都在 [official-passport-registration.md](../design/official-passport-registration.md)：
   - §3.6 通行证改密 / 封禁 / 删除之后，登录与刷新时吊销改密之前的游戏会话并踢下线（新提示码 `kLoginPassportCredentialChanged` = 2059）；
   - §3.7 通行证回调（webhook）→ 网关 `POST /internal/passport/events` → login `LoginPreGate.HandlePassportEvent`，改密、封禁的那一刻就踢；
-  - §3.8 客户端正式包锁地址、桌面五个回调端口、安卓 App Links；
+  - §3.8 客户端正式包锁地址、桌面五个回调端口；手机回调用自定义协议头 + PKCE（安卓 11-27 复查后撤回 App Links，原因见设计稿 §3.8 第 3 条）；
   - §3.9 首启隐私弹窗与注册页协议勾选；
-  - §3.10 生产部署清单 `deploy/k8s/passport/`（白名单入口、网络隔离、验证码记录清理、按环境渲染初始化数据）。
+  - §3.10 生产部署清单 `deploy/k8s/passport/`（白名单入口、页面请求带静默登录参数 `prompt` / `silentSignin` 的回 403、网络隔离、验证码记录清理、按环境渲染初始化数据）。
 - **代码状态**：
   - 服务端：一部分已被别的会话的批量提交收进 HEAD（3eb57a09a、d77a458ee、76e2b59bb、a0b3d195e），其余在 main 工作区**未提交**：`deploy/passport/init_data.json`、`deploy/k8s/passport/`（新目录）、`go/login` 的 `pkg/auth/passport_provider.go`、`pkg/passportsession/`、`logic/loginpregate/handlepassporteventlogic.go`（新）、`server/loginpregate/loginpregateserver.go`、`rpclogging/config*.go`，网关的 `LoginRpcClient.java`、`PassportEventController.java`（新）、`application.yaml` 与两份新用例，`tools/scripts/k8s_deploy.ps1`、`tests/k8s_deploy_contract.tests.ps1`、`tests/passport_k8s_contract.tests.ps1`（新），`proto/login/login.proto`、`data/tip/Tip.xlsx`。
   - 客户端（`mmorpg-client`）：`GameClient.cs`、`AntiAddictionTests.cs` 已在 d9902efc；其余未提交：`Assets/Scripts/Core/ClientEndpoints.cs`、`PrivacyConsent.cs`、`ClientSettings.cs`，`Assets/Resources/ClientEndpoints.json`，`Assets/Editor/ClientEndpointsBuildGuard.cs`、`ClientPlayerBuild.cs`、`PassportMobileDeepLinkBuildPostProcess.cs`，`Assets/Scripts/Net/PassportOAuthProtocol.cs`、`PassportSignIn.cs`，`QdaoServerSelectView.cs` / `.LoginUtilities.cs` / `.Visuals.cs` / `.Privacy.cs`（新），`tools/build_client.ps1`，两份 EditMode 用例（新 `ClientEndpointsTests.cs`、改 `PassportSignInTests.cs`）；新文件都带 `.meta`。
@@ -70,7 +70,7 @@
    ```powershell
    $run = 'build/verification/<运行名>'; New-Item -ItemType Directory -Force $run | Out-Null
    $lines = Get-Content deploy/k8s/passport/public-entry.yaml
-   $start = [Array]::IndexOf($lines, '  nginx.conf: |') + 1; $end = [Array]::IndexOf($lines, '  assetlinks.json: |')
+   $start = [Array]::IndexOf($lines, '  nginx.conf: |') + 1; $end = [Array]::IndexOf($lines, '---')
    $lines[$start..($end - 1)] | ForEach-Object { if ($_.Length -ge 4) { $_.Substring(4) } else { '' } } | Set-Content "$run/nginx.conf"
    docker run --rm --add-host casdoor.passport.svc.cluster.local:127.0.0.1 -v "${PWD}/${run}/nginx.conf:/etc/nginx/nginx.conf:ro" nginx:1.30.8-alpine@sha256:8eb04fe3b385090e9aa02961f77398ad09b6bf33ab07f6669a5bb7acce22c0d3 nginx -t
    ```
@@ -85,13 +85,13 @@
 ## 4. 客户端（客户端仓根）
 
 1. `pwsh -File tools/client_compile_check.ps1 -ShowErrors 40`，期望 0 error（运行时代码、Editor 程序集、EditMode 测试程序集都要编过）。
-2. EditMode 跑 `MmorpgClient.Tests.EditMode.Net`，点名：`ClientEndpointsTests` 的 4 个（`ParseTrimsAndToleratesBadJson`、`ReleaseBuildsNeedExternalHttpsEndpoints`、`ReleaseOverridesAreCompiledOutOfPlayerBuilds`、`PrivacyConsentVersionOnlyGoesUp`），`PassportSignInTests` 新增的 `LoopbackRedirectCandidates_FiveConsecutivePortsOnlyForLoopback`、`AppLinkRedirectUri_OnlyForHttpsPassports` 与原有的全部，`AntiAddictionTests.PassportCredentialChangedHasTexts`。
+2. EditMode 跑 `MmorpgClient.Tests.EditMode.Net`，点名：`ClientEndpointsTests` 的 4 个（`ParseTrimsAndToleratesBadJson`、`ReleaseBuildsNeedExternalHttpsEndpoints`、`ReleaseOverridesAreCompiledOutOfPlayerBuilds`、`PrivacyConsentVersionOnlyGoesUp`），`PassportSignInTests` 新增的 `LoopbackRedirectCandidates_FiveConsecutivePortsOnlyForLoopback` 与原有的全部，`AntiAddictionTests.PassportCredentialChangedHasTexts`。
 3. 出包检查（Windows 包即可）：
    - `pwsh -File tools/build_client.ps1 -OutDir <新目录>`（正式包、不给地址）：脚本直接报 `A release build needs -GatewayUrl, -TermsUrl and -PrivacyUrl …`；
    - 正式包给回环或 http 地址（如 `-GatewayUrl http://127.0.0.1:8081`，协议地址给 https）：Unity 构建前检查 `ClientEndpointsBuildGuard` 让构建失败，日志里有原因；
    - 正式包给全套 https 地址：出包成功，`build-manifest.json` 记着这四个地址，出包后 `git status Assets/Resources/ClientEndpoints.json` 无改动（构建完已还原）；
    - `-Development`：不给地址也照常出包。
-   - 有安卓出包环境时：正式包的 `AndroidManifest.xml` 主 Activity 有带 `android:autoVerify="true"` 的 https intent-filter（host = 通行证域名、path = `/passport/app-callback`），没有 `xuanming` 协议头；开发包两者都有。没有环境就跳过并写明。
+   - 有安卓出包环境时：正式包与开发包的 `AndroidManifest.xml` 主 Activity 都有 `xuanming://passport/callback` 的 intent-filter（VIEW / DEFAULT / BROWSABLE），都没有 https 的 `autoVerify` 过滤器。有真机时在两三台国产手机上用它们自带的浏览器各走一次「官方账号登录」，能回到游戏并进入。没有环境就跳过并写明。
 
 ## 5. 冒烟
 
@@ -112,4 +112,4 @@
 6. **回调踢线（封禁）**：后台把 alice 设为禁用并保存 → 同样被踢，`{phase="event",result="user_forbidden"}` +1；再登录时 Casdoor 登录页自己拒绝（被封用户拿不到身份令牌）；解除禁用后能登录。
 7. **登录时吊销（不靠回调）**：后台关掉回调 → alice 在编辑器（A）在线 → 后台改密：A 不掉线（没有回调）→ 另起一个开发包客户端（B）用新密码登录 alice：A 当场被踢并显示同一句提示，login 日志 `[passport] sessions revoked: phase=login`，B 不受影响。
 8. 刷新时吊销、通行证故障放行、旧身份令牌被拒这几条，冒烟里不好造，由 §3.1 的 `TestRefresh*`、`TestPassportOutages*`、`TestCheckLogin*` 与 sandbox_mock 用例覆盖。
-9. **可选：白名单入口走一遍**（预发前最好做，README 第 7 步的本机版）：查 Casdoor 容器所在网络与地址 `docker inspect mmorpg-passport-casdoor -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{$v.IPAddress}}{{end}}'`，用 §3.4 第 5 步抽出的 `nginx.conf` 起一个 nginx：`--network <网络> --add-host casdoor.passport.svc.cluster.local:<地址> -p 127.0.0.1:8090:8080`。浏览器开 `http://127.0.0.1:8090/login/xuanming` 走登录、注册页（勾选协议）、找回密码；开发者工具里看有没有被 404 的 `/api/*`。有就记下路径交回 Claude 补进白名单与契约测试，不要自己加。
+9. **可选：白名单入口走一遍**（预发前最好做，README 第 7 步的本机版）：查 Casdoor 容器所在网络与地址 `docker inspect mmorpg-passport-casdoor -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{$v.IPAddress}}{{end}}'`，用 §3.4 第 5 步抽出的 `nginx.conf` 起一个 nginx：`--network <网络> --add-host casdoor.passport.svc.cluster.local:<地址> -p 127.0.0.1:8090:8080`。浏览器开 `http://127.0.0.1:8090/login/xuanming` 走登录、注册页（勾选协议）、找回密码；开发者工具里看有没有被 404 的 `/api/*`。有就记下路径交回 Claude 补进白名单与契约测试，不要自己加。再核对静默登录拦截：`curl.exe -s -o NUL -w "%{http_code}" "http://127.0.0.1:8090/login/oauth/authorize?client_id=xuanming-game-client&response_type=code&prompt=none"` 回 403，把 `prompt` 换成 `%70rompt`、`silentSignin=1` 也是 403，去掉这个参数回 200。

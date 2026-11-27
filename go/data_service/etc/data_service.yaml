@@ -145,7 +145,7 @@ PlayerName:
 # 非法值 = 拒启。K8s 上 MaxOpenConn / MaxIdleConn 取本文件,这里改了下次部署就生效。
 # MergedZoneRefreshSec:定时重读 zone_merged_into 的周期(秒),[1, 60]。GetPlayerHomeZone / BatchGetPlayerHomeZone / GetMergedZones 用它
 #   回答合服映射(别名合服,docs/design/player-data-tidb-scaling-plan.md §7.1),这个周期就是滞后上限。
-#   每个新版本先发布进 etcd 副本 /mmorpg/merged_zone_copy/<SnapshotMySQL.DBName>(上面 Etcd.Hosts 那一套)再用;目录第 0 片读不到时按副本回答
+#   每个新版本先发布进 etcd 副本 /mmorpg/merged_zone_copy/<目录第 0 片的库名>(上面 Etcd.Hosts 那一套;merge_zone 提交之后也发布)再用;目录第 0 片读不到时按副本回答
 #   (docs/design/merged-zone-etcd-copy.md)。启动时第 0 片和副本都给不出能用的映射才拒启;之后读失败保留旧值、
 #   打 ERROR 与 data_service_merged_zone_refresh_total{result="error"}(读不到第 0 片、照旧回答也算一次失败)。
 RouteStore:

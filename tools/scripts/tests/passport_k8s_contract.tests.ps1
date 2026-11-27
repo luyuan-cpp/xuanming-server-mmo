@@ -4,10 +4,10 @@
   官方通行证部署清单与初始化数据的契约(docs/design/official-passport-registration.md §3.6~§3.10、§8)。
 .DESCRIPTION
   钉住「写错了不报错、只会静默失效」的几样东西:
-    - 公网入口只放行名单里的接口,自助删除 / 改资料、管理接口一律不放行;集群内入口只有 login 要的三个;
+    - 公网入口只放行名单里的接口,自助删除 / 改资料、管理接口一律不放行;页面请求带静默登录参数的拒绝;集群内入口只有 login 要的三个;
     - 生产清单与本机 compose 用同一个按摘要固定的镜像;
-    - 初始化数据的安全缺省(argon2id、人机验证 Always、撞库与短信限额、注册协议勾选、桌面回调五个端口、回调缺省关闭);
-    - render-init-data.ps1 按本环境填 App Links 回调、协议地址与回调密钥,别的不动。
+    - 初始化数据的安全缺省(argon2id、人机验证 Always、撞库与短信限额、注册协议勾选、不自动登录、回调地址只有桌面五个端口与手机协议头、回调缺省关闭);
+    - render-init-data.ps1 按本环境填协议地址与回调密钥,别的不动。
 .EXAMPLE
   pwsh -NoProfile -File tools/scripts/tests/passport_k8s_contract.tests.ps1
 #>
@@ -37,7 +37,7 @@ function Get-ExactApiLocations {
 }
 
 $script:Entry = Read-RepoText -RelativePath 'deploy/k8s/passport/public-entry.yaml'
-$script:NginxConf = [regex]::Match($script:Entry, '(?ms)^  nginx\.conf: \|\n(?<conf>.*?)^  assetlinks\.json: \|').Groups['conf'].Value
+$script:NginxConf = [regex]::Match($script:Entry, '(?ms)^  nginx\.conf: \|\n(?<conf>.*?)^---').Groups['conf'].Value
 $script:InitData = (Read-RepoText -RelativePath 'deploy/passport/init_data.json') | ConvertFrom-Json -AsHashtable
 
 Write-Host '=== passport_k8s_contract ==='
@@ -59,11 +59,33 @@ Test-Case '公网入口:/api/ 只放行玩家要用的接口,其余 404;自助�
     foreach ($backend in @('/cas', '/scim', '/swagger', '/orgs/', '/.well-known/')) {
         Assert-Match -Text $public -Pattern ('(?m)^\s*location ' + [regex]::Escape($backend) + ' \{ return 404; \}') -Because "后端入口 $backend 不放行"
     }
-    Assert-Match -Text $public -Pattern '(?m)^\s*location / \{ limit_except GET \{ deny all; \}' -Because '页面与静态资源只读'
+    $pages = [regex]::Match($public, '(?ms)^\s*location / \{\n(?<body>.*?)^\s*\}\n').Groups['body'].Value
+    Assert-Match -Text $pages -Pattern 'limit_except GET \{ deny all; \}' -Because '页面与静态资源只读'
+    Assert-Match -Text $pages -Pattern 'if \(\$passport_silent_signin\) \{ return 403; \}' -Because '页面请求带静默登录参数的拒绝(§3.10 第 2 条)'
     foreach ($auth in @('/api/login', '/api/signup', '/api/send-verification-code', '/api/verify-code', '/api/set-password', '/api/login/oauth/access_token')) {
         Assert-Match -Text $public -Pattern ('(?m)^\s*location = ' + [regex]::Escape($auth) + ' \{[^\n]*limit_req zone=passport_auth') -Because "$auth 按每分钟限速"
     }
     Assert-Match -Text $script:NginxConf -Pattern 'limit_req_zone \$binary_remote_addr zone=passport_auth:10m rate=20r/m;' -Because '登录类接口的限速'
+}
+
+Test-Case '静默登录参数:带 prompt / silentSignin(含参数名百分号编码)的页面请求被拦,游戏客户端的授权地址照常放行' {
+    $map = [regex]::Match($script:NginxConf, '(?ms)map \$args \$passport_silent_signin \{\n(?<body>.*?)\n\s*\}').Groups['body'].Value
+    $rules = @([regex]::Matches($map, '(?m)^\s*"(?<flag>~\*?)(?<re>[^"]+)"\s+1;') | ForEach-Object {
+        $options = if ($_.Groups['flag'].Value -eq '~*') { [Text.RegularExpressions.RegexOptions]::IgnoreCase } else { [Text.RegularExpressions.RegexOptions]::None }
+        [regex]::new($_.Groups['re'].Value, $options)
+    })
+    Assert-Equal -Expected 2 -Actual $rules.Count -Because 'map 里两条拦截规则:参数名、参数名里的百分号'
+    Assert-Match -Text $map -Pattern '(?m)^\s*default 0;' -Because '缺省放行'
+    $blocked = { param([string]$query) foreach ($rule in $rules) { if ($rule.IsMatch($query)) { return $true } }; return $false }
+    foreach ($query in @('client_id=a&prompt=none', 'prompt=none', 'PROMPT=none&client_id=a', 'client_id=a&silentSignin=1', 'silentsignin',
+                         'client_id=a&%70rompt=none', '%73ilentSignin=1', 'x=1&prompt&y=2', 'client_id=a&prompt=login')) {
+        Assert-True -Condition (& $blocked $query) -Because "要拦: $query"
+    }
+    $client = 'client_id=xuanming-game-client&response_type=code&redirect_uri=http%3A%2F%2F127.0.0.1%3A18765%2Fpassport%2Fcallback' +
+        '&scope=openid&state=s%2Bt&code_challenge=abc-_x&code_challenge_method=S256'
+    foreach ($query in @('', $client, 'promptx=1', 'xprompt=1&a=b', 'redirect_uri=xuanming%3A%2F%2Fpassport%2Fcallback')) {
+        Assert-True -Condition (-not (& $blocked $query)) -Because "要放行: $query"
+    }
 }
 
 Test-Case '集群内入口只有 login 要的三个:验签公钥、查用户、删用户' {
@@ -104,12 +126,15 @@ Test-Case '初始化数据的安全缺省' {
         Assert-True -Condition (@($game.redirectUris) -contains "http://127.0.0.1:$port/passport/callback") -Because "桌面回调端口 $port 要登记"
     }
     Assert-Equal -Expected 'authorization_code' -Actual ((@($game.grantTypes)) -join ',') -Because '只开授权码'
+    Assert-Equal -Expected $false -Actual $game.enableAutoSignin -Because '已有会话时也要玩家点一下才签发授权码(手机自定义协议头回调的前提,§3.8)'
+    Assert-True -Condition (@($game.redirectUris) -contains 'xuanming://passport/callback') -Because '手机回调用自定义协议头'
+    Assert-Equal -Expected 6 -Actual @($game.redirectUris).Count -Because '回调地址只有桌面五个端口与手机协议头'
     $hook = @($script:InitData.webhooks | Where-Object { $_.name -eq 'webhook-xuanming-game-sessions' })
     Assert-True -Condition ($hook.Count -eq 1 -and -not $hook[0].isEnabled -and $hook[0].organization -eq 'built-in' -and $hook[0].isUserExtended) -Because '回调缺省关着、挂在 built-in(才连得到集群内)、带扩展用户'
     Assert-Equal -Expected 'delete-user,set-password,update-user' -Actual ((@($hook[0].events) | Sort-Object) -join ',') -Because '回调的事件'
 }
 
-Test-Case 'render-init-data.ps1 只按本环境填 App Links 回调、协议地址与回调密钥,输出 Secret 与 ConfigMap' {
+Test-Case 'render-init-data.ps1 只按本环境填协议地址与回调密钥,输出 Secret 与 ConfigMap' {
     $envName = 'MMORPG_GATEWAY_PASSPORT_WEBHOOK_SECRET'
     $saved = [Environment]::GetEnvironmentVariable($envName)
     $secret = 'contract-passport-webhook-secret-0123456789'
@@ -124,7 +149,8 @@ Test-Case 'render-init-data.ps1 只按本环境填 App Links 回调、协议地�
         $jsonText = [regex]::Match($text, '(?ms)^  init_data\.json: \|\n(?<json>.*?)\n---').Groups['json'].Value
         $rendered = ($jsonText -split "`n" | ForEach-Object { $_ -replace '^    ', '' }) -join "`n" | ConvertFrom-Json -AsHashtable
         $game = @($rendered.applications | Where-Object { $_.name -eq 'app-xuanming-game' })[0]
-        Assert-True -Condition (@($game.redirectUris) -contains 'https://passport.contract.test/passport/app-callback') -Because '加 App Links 回调'
+        $baseGame = @($script:InitData.applications | Where-Object { $_.name -eq 'app-xuanming-game' })[0]
+        Assert-Equal -Expected ((@($baseGame.redirectUris)) -join ',') -Actual ((@($game.redirectUris)) -join ',') -Because '回调地址原样不动'
         Assert-Equal -Expected 'https://www.contract.test/terms' -Actual $game.termsOfUse -Because '用户协议地址'
         Assert-Equal -Expected 'https://www.contract.test/privacy' -Actual $game.privacyPolicy -Because '隐私政策地址'
         $hook = @($rendered.webhooks)[0]

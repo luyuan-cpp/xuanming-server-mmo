@@ -163,8 +163,8 @@ kubectl --context "$KUBE_CONTEXT" --kubeconfig "$KUBE_CONFIG" -n "$INFRA_NS" \
 2. **先记下部署参数,再停写。** 部署参数不粘滞,namespace 删掉之后 `k8s_deploy.ps1` 没有现状可比,防误关和形态核对都不会触发,漏传的参数会静默落回默认值。所以先从发布记录取出上一次部署的完整命令,对照线上核实,至少包括 `-ReleaseProfile`、`-Region`、`-DirectoryLogicalShards`、`-PlayerStoreShards`、`-SqlClusters`、`-GateRouterMode`、`-ClientEntryMode` 和入口地址、`-PlayerRedisMasters`、`-ControlRedisMasters`、`-NodeOpenFileLimitMode`、`-Login*`。然后逐个 zone 跑 `dev_tools.ps1 -Command k8s-zone-down -ZoneName <zone>`,再用 `kubectl get namespace` 确认已删除。这个命令失败时不报错,不能只看退出码。单独部署的全局服务也要停。
 3. **恢复。** TiDB 档按 §4.1b,MySQL 档按 §4.1。先恢复到影子库或新集群核对,原库保留到开流量之后。T 之后搬过库的,恢复到映射现在指向的集群,但备份要用 T 时刻那个集群的。
 4. **核对闸门。** 每个逻辑库执行 `SELECT writable,HEX(freeze_run_id) FROM route_meta`,结果应该是可写、没有冻结标记。
-   **再核对合服映射**:对目录第 0 片跑 `pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit -MergeZoneRouteDbDsn <第 0 片 DSN>`,退出码应为 0:映射能解析,而且每一行映射在 `zone_merge_history` 里都有对应的合服记录(两张表同库、同一个事务写,回到同一个 T 之后仍然成对)。退出码 1 说明恢复出来的映射表有坏行或来历不明的行,按[不停服合服手册](merge-zone-runbook.md) §5 处理之后再起服。
-   **然后删掉 etcd 里的合服映射副本**(这时 data_service 按第 2 步都已停下,必须是停着的时候删):`kubectl -n <infra> exec etcd-0 -- etcdctl del /mmorpg/merged_zone_copy/<全局库名>`。副本不随数据库回退,还记着 T 之后的版本;回到 T 的第 0 片版本(合服历史的行数)比它小,data_service 会当成「第 0 片丢了合服」而拒启([合服映射的 etcd 副本](../design/merged-zone-etcd-copy.md) §6 V1)。删掉之后第一个起来的 data_service 按第 0 片重新发布。
+   **先删掉 etcd 里的合服映射副本**(这时 data_service 按第 2 步都已停下,必须是停着的时候删):`kubectl -n <infra> exec etcd-0 -- etcdctl del /mmorpg/merged_zone_copy/<第 0 片库名>`。副本不随数据库回退,还记着 T 之后的版本;回到 T 的第 0 片版本(合服历史的行数)比它小,data_service 会当成「第 0 片丢了合服」而拒启,合服审计也会按拒绝退出([合服映射的 etcd 副本](../design/merged-zone-etcd-copy.md) §6 V1)。删掉之后第一个起来的 data_service 按第 0 片重新发布。
+   **再核对合服映射**:对目录第 0 片跑 `pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit -MergeZoneRouteDbDsn <第 0 片 DSN> -MergeZoneEtcdHosts <etcd 地址>`,退出码应为 0:映射能解析,每一行映射在 `zone_merge_history` 里都有对应的合服记录(两张表同库、同一个事务写,回到同一个 T 之后仍然成对),副本一行是 `absent`(刚删掉)。退出码 1 说明恢复出来的映射表有坏行或来历不明的行,按[不停服合服手册](merge-zone-runbook.md) §5 处理之后再起服。
 5. **跳过 `match-results` 的积压。** T 之后的对局结果和数据库一起丢弃。起服之前把 `match-rating`、`guild-trial` 两个消费组的位点都重置到最新:
 
    ```powershell

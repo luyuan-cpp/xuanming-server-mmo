@@ -90,7 +90,7 @@ spec:
             description: >-
               过去 5 分钟约 {{ $value | printf "%.0f" }} 次失败,已持续 5 分钟。这些副本确认不了目录第 0 片上的映射,照旧回答已有的那一版,
               合服之后的玩家归属可能解析到已合走的区,落在那里的新公会、新商品没有人再收。
-              读不到第 0 片的副本会跟着 etcd 副本 /mmorpg/merged_zone_copy/<目录基名> 走(别的副本发布的新版本晚一个周期生效);
+              读不到第 0 片的副本会跟着 etcd 副本 /mmorpg/merged_zone_copy/<目录第 0 片的库名> 走(merge_zone 提交之后就发布,一个周期内生效);
               没有一个副本读得到第 0 片时新合服不生效。看 data_service 日志 [MergedZoneCache] 的原因:
               第 0 片连不上或没有 zone_merged_into、zone_merge_history 的读权限,查连接和授权;
               etcd 读写失败,查 etcd;「behind ... in the etcd copy」是第 0 片回档或清过表,确认是有意的,先停掉全部 data_service 再删副本键;

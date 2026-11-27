@@ -40,6 +40,7 @@
       "tokenFormat": "JWT-Standard",
       "expireInHours": 1,
       "refreshExpireInHours": 24,
+      "enableAutoSignin": false,
       "grantTypes": [
         "authorization_code"
       ],

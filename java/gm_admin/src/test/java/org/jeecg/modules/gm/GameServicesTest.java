@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.util.JsonFormat;
+import io.grpc.ManagedChannel;
 import io.grpc.Server;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.Status;
@@ -231,6 +232,24 @@ class GameServicesTest {
         assertFalse(services.mailEnabled());
         assertThrows(IllegalArgumentException.class, () -> new GameServices(PROTO, MAPPER,
                 "example.com:443", "", "", SECRET, true, 5000));
+    }
+
+    @Test
+    void plaintextIsAllowedOnlyForLoopbackOrClusterServiceNames() {
+        // 集群内服务间本来就是明文(设计 §11.4):回环与 <service>.<namespace>.svc[.cluster.local] 放行,别的照旧拒绝。
+        String longestLabel = "a".repeat(63);
+        for (String target : new String[]{"trade.mmorpg.svc:50051", "trade.mmorpg.svc.cluster.local:50051",
+                longestLabel + ".mmorpg.svc:50051", "127.0.0.1:50051", "localhost:50051", "[::1]:50051"}) {
+            ManagedChannel channel = GameServices.createChannel(target, true);
+            assertNotNull(channel, target);
+            channel.shutdownNow();
+        }
+        for (String target : new String[]{"trade.mmorpg:50051", "a.b.c.svc:50051", "x.svc.example.com:50051",
+                "trade.mmorpg.svc.:50051", "Trade.mmorpg.svc:50051", "trade.mmorpg.SVC:50051", "a" + longestLabel + ".mmorpg.svc:50051",
+                "10.0.0.8:50051", "[fe80::1]:50051", "user@trade.mmorpg.svc:50051", "trade.mmorpg.svc:50051?x=1",
+                "trade.mmorpg.svc:50051#f"}) {
+            assertThrows(IllegalArgumentException.class, () -> GameServices.createChannel(target, true), target);
+        }
     }
 
     @Test

@@ -25,6 +25,8 @@
 #include "proto/common/component/player_equip_loadout_comp.pb.h"
 #include "proto/common/component/player_item_gain_block_comp.pb.h"
 #include "proto/common/component/player_item_hold_comp.pb.h"
+#include "proto/common/component/player_pet_comp.pb.h"
+#include "proto/common/component/player_season_comp.pb.h"
 #include "proto/common/component/player_skill_comp.pb.h"
 #include "proto/common/database/mysql_database_table.pb.h"
 #include "proto/scene/player_bag.pb.h"
@@ -36,6 +38,8 @@
 #include "services/scene/player/system/equip_loadout_rules.h"
 #include "services/scene/player/system/player_attribute.h"
 #include "services/scene/player/system/player_equip_loadout.h"
+#include "services/scene/player/system/player_pet.h"
+#include "services/scene/player/system/player_season.h"
 #include "services/scene/player/system/player_skill.h"
 #include "services/scene/player/system/skill_loadout_rules.h"
 #include "table/code/attributeallocratio_table.h"
@@ -52,6 +56,7 @@
 #include "table/code/equipgemsocket_table.h"
 #include "table/code/equipslot_table.h"
 #include "table/code/item_table.h"
+#include "table/code/pet_table.h"
 #include "table/code/skill_table.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/equip_error_tip.pb.h"
@@ -124,6 +129,7 @@ protected:
 		EquipGemSocketTableManager::Instance().Load();
 		ClassTableManager::Instance().Load();
 		SkillTableManager::Instance().Load();
+		PetTableManager::Instance().Load();
 		AttributeDimensionTableManager::Instance().Load();
 		AttributePoolTableManager::Instance().Load();
 		AttributeRuleTableManager::Instance().Load();
@@ -826,6 +832,138 @@ TEST_F(PlayerEquipLoadoutTest, SwitchAppliesLinkedSchemesAndToleratesAttributeCo
 			EXPECT_EQ(2u, tlsEcs.actorRegistry.get<PlayerAttributeComp>(player_).active_scheme_id());
 			ASSERT_EQ(1, resp.linked_notices_size());
 		}
+	}
+}
+
+TEST_F(PlayerEquipLoadoutTest, SwitchAppliesLinkedPetAndWuxingFormationWithGracefulFallbackOnMissingPet)
+{
+	// 挂载灵宠组件（2 只 1 级可带灵宠）与赛季组件（承接 5 套免费五行阵法）
+	auto &petComp = tlsEcs.actorRegistry.emplace<PlayerPetComp>(player_);
+	auto *pet1 = petComp.add_pets();
+	pet1->set_pet_id(770001);
+	pet1->set_pet_table_id(PetSystem::kStarterPetTableId);
+	pet1->set_name("群攻灵狐");
+	pet1->set_level(1);
+	auto *pet2 = petComp.add_pets();
+	pet2->set_pet_id(770002);
+	pet2->set_pet_table_id(PetSystem::kStarterPetTableId);
+	pet2->set_name("高速控宠");
+	pet2->set_level(1);
+	petComp.set_active_pet_id(770001);
+
+	auto &seasonComp = tlsEcs.actorRegistry.emplace<PlayerSeasonComp>(player_);
+	seasonComp.set_equipped_formation_id(1);
+
+	ASSERT_EQ(kSuccess, Equipment().PutInstance(MakeEquipItem(6101, 1101), 3));
+	ASSERT_EQ(kSuccess, Inventory().PutInstance(MakeEquipItem(6102, 1101)));
+
+	// 1) 快照只读返回可选灵宠与 5 套免费阵法
+	{
+		GetEquipLoadoutsResponse getResp;
+		ASSERT_EQ(kSuccess, PlayerEquipLoadoutSystem::Get(player_, getResp));
+		ASSERT_EQ(2, getResp.snapshot().pets_size());
+		EXPECT_EQ(770001u, getResp.snapshot().pets(0).pet_id());
+		EXPECT_TRUE(getResp.snapshot().pets(0).active());
+		EXPECT_EQ("群攻灵狐", getResp.snapshot().pets(0).name());
+		EXPECT_EQ(770002u, getResp.snapshot().pets(1).pet_id());
+		EXPECT_FALSE(getResp.snapshot().pets(1).active());
+		ASSERT_EQ(5, getResp.snapshot().formations_size());
+		EXPECT_EQ(1u, getResp.snapshot().formations(0).scheme_id());
+		EXPECT_EQ("天覆阵", getResp.snapshot().formations(0).name());
+		EXPECT_EQ(5u, getResp.snapshot().formations(4).scheme_id());
+		EXPECT_EQ("虎翼阵", getResp.snapshot().formations(4).name());
+	}
+
+	// 2) 非法灵宠 ID 与非法阵法 ID（> 5）均须被保存阶段拒绝
+	{
+		SaveEquipLoadoutRequest badPet;
+		badPet.set_scheme_id(1);
+		badPet.set_capture_current_equipped(true);
+		badPet.set_linked_pet_id(999999);
+		badPet.set_state_version(CurrentVersion());
+		badPet.set_request_id("bad_linked_pet_req_01");
+		SaveEquipLoadoutResponse resp;
+		PlayerEquipLoadoutSystem::Save(player_, badPet, resp);
+		ASSERT_TRUE(resp.has_error_message());
+		EXPECT_EQ(kInvalidParameter, resp.error_message().id());
+	}
+	{
+		SaveEquipLoadoutRequest badFormation;
+		badFormation.set_scheme_id(1);
+		badFormation.set_capture_current_equipped(true);
+		badFormation.set_linked_formation_id(6);
+		badFormation.set_state_version(CurrentVersion());
+		badFormation.set_request_id("bad_linked_form_req01");
+		SaveEquipLoadoutResponse resp;
+		PlayerEquipLoadoutSystem::Save(player_, badFormation, resp);
+		ASSERT_TRUE(resp.has_error_message());
+		EXPECT_EQ(kInvalidParameter, resp.error_message().id());
+	}
+
+	// 3) 方案 1 绑定 群攻灵狐 + 天覆阵(1)，方案 2 绑定 高速控宠 + 虎翼阵(5)
+	{
+		SaveEquipLoadoutRequest req;
+		req.set_scheme_id(1);
+		req.set_capture_current_equipped(true);
+		req.set_linked_pet_id(770001);
+		req.set_linked_formation_id(1);
+		req.set_state_version(CurrentVersion());
+		req.set_request_id("pet_form_save1_req_01");
+		SaveEquipLoadoutResponse resp;
+		PlayerEquipLoadoutSystem::Save(player_, req, resp);
+		ASSERT_FALSE(resp.has_error_message()) << resp.error_message().id();
+		EXPECT_EQ(770001u, resp.snapshot().schemes(0).linked_pet_id());
+		EXPECT_EQ(1u, resp.snapshot().schemes(0).linked_formation_id());
+	}
+	{
+		SaveEquipLoadoutRequest req;
+		req.set_scheme_id(2);
+		auto *s3 = req.add_slots();
+		s3->set_slot(3);
+		s3->set_item_guid(6102);
+		req.set_linked_pet_id(770002);
+		req.set_linked_formation_id(5);
+		req.set_state_version(CurrentVersion());
+		req.set_request_id("pet_form_save2_req_01");
+		SaveEquipLoadoutResponse resp;
+		PlayerEquipLoadoutSystem::Save(player_, req, resp);
+		ASSERT_FALSE(resp.has_error_message()) << resp.error_message().id();
+		EXPECT_EQ(770002u, resp.snapshot().schemes(1).linked_pet_id());
+		EXPECT_EQ(5u, resp.snapshot().schemes(1).linked_formation_id());
+	}
+
+	// 4) 一键切至方案 2：装备、首发灵宠与五行阵法全部同步生效，零额外提示
+	{
+		SwitchEquipLoadoutRequest req;
+		req.set_scheme_id(2);
+		req.set_apply_linked_schemes(true);
+		req.set_state_version(CurrentVersion());
+		req.set_request_id("pet_form_sw2_req_0001");
+		SwitchEquipLoadoutResponse resp;
+		PlayerEquipLoadoutSystem::Switch(player_, req, resp);
+		ASSERT_FALSE(resp.has_error_message()) << resp.error_message().id();
+		EXPECT_TRUE(resp.linked_notices().empty());
+		EXPECT_EQ(6102u, Equipment().Layout().At(3));
+		EXPECT_EQ(770002u, petComp.active_pet_id());
+		EXPECT_EQ(5u, PlayerSeasonSystem::EquippedFormationId(player_));
+	}
+
+	// 5) 若方案 1 绑定的灵宠 770001 事后被交易/放生移出灵宠栏，切回方案 1 仍完成换装与切阵(1)，并在 linked_notices 明文提示
+	petComp.mutable_pets()->DeleteSubrange(0, 1);
+	{
+		SwitchEquipLoadoutRequest req;
+		req.set_scheme_id(1);
+		req.set_apply_linked_schemes(true);
+		req.set_state_version(CurrentVersion());
+		req.set_request_id("pet_form_sw1_req_0001");
+		SwitchEquipLoadoutResponse resp;
+		PlayerEquipLoadoutSystem::Switch(player_, req, resp);
+		ASSERT_FALSE(resp.has_error_message()) << resp.error_message().id();
+		EXPECT_EQ(6101u, Equipment().Layout().At(3));
+		EXPECT_EQ(1u, PlayerSeasonSystem::EquippedFormationId(player_));
+		EXPECT_EQ(770002u, petComp.active_pet_id()); // 原出战灵宠保持不动
+		ASSERT_EQ(1, resp.linked_notices_size());
+		EXPECT_NE(std::string::npos, resp.linked_notices(0).find("不在灵宠栏"));
 	}
 }
 

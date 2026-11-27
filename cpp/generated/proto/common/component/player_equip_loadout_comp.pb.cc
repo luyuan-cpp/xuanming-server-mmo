@@ -198,11 +198,11 @@ constexpr EquipLoadoutScheme::ParseTableT_ EquipLoadoutScheme::InternalGenerateP
     {
       PROTOBUF_FIELD_OFFSET(EquipLoadoutScheme, _impl_._has_bits_),
       0, // no _extensions_
-      6, 56,  // max_field_number, fast_idx_mask
+      8, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967232,  // skipmap
+      4294967040,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      6,  // num_field_entries
+      8,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -212,7 +212,10 @@ constexpr EquipLoadoutScheme::ParseTableT_ EquipLoadoutScheme::InternalGenerateP
       ::_pbi::TcParser::GetTable<::EquipLoadoutScheme>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 linked_formation_id = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipLoadoutScheme, _impl_.linked_formation_id_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(EquipLoadoutScheme, _impl_.linked_formation_id_)}},
       // uint32 scheme_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipLoadoutScheme, _impl_.scheme_id_), 2>(),
        {8, 2, 0,
@@ -237,7 +240,10 @@ constexpr EquipLoadoutScheme::ParseTableT_ EquipLoadoutScheme::InternalGenerateP
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipLoadoutScheme, _impl_.linked_attribute_scheme_id_), 5>(),
        {48, 5, 0,
         PROTOBUF_FIELD_OFFSET(EquipLoadoutScheme, _impl_.linked_attribute_scheme_id_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 linked_pet_id = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipLoadoutScheme, _impl_.linked_pet_id_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(EquipLoadoutScheme, _impl_.linked_pet_id_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -253,6 +259,10 @@ constexpr EquipLoadoutScheme::ParseTableT_ EquipLoadoutScheme::InternalGenerateP
       {PROTOBUF_FIELD_OFFSET(EquipLoadoutScheme, _impl_.linked_skill_scheme_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 linked_attribute_scheme_id = 6;
       {PROTOBUF_FIELD_OFFSET(EquipLoadoutScheme, _impl_.linked_attribute_scheme_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 linked_pet_id = 7;
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutScheme, _impl_.linked_pet_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 linked_formation_id = 8;
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutScheme, _impl_.linked_formation_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -262,7 +272,7 @@ constexpr EquipLoadoutScheme::ParseTableT_ EquipLoadoutScheme::InternalGenerateP
         #endif
     }},
     {{
-      "\22\0\4\0\0\0\0\0"
+      "\22\0\4\0\0\0\0\0\0\0\0\0\0\0\0\0"
       "EquipLoadoutScheme"
       "name"
     }},
@@ -285,7 +295,9 @@ inline constexpr EquipLoadoutScheme::Impl_::Impl_(
         scheme_id_{0u},
         role_tag_{0u},
         linked_skill_scheme_id_{0u},
-        linked_attribute_scheme_id_{0u} {}
+        linked_attribute_scheme_id_{0u},
+        linked_pet_id_{::uint64_t{0u}},
+        linked_formation_id_{0u} {}
 
 template <typename>
 constexpr EquipLoadoutScheme::EquipLoadoutScheme(::_pbi::ConstantInitialized,
@@ -594,19 +606,23 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutScheme, _impl_._has_bits_),
-        9, // hasbit index offset
+        11, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutScheme, _impl_.scheme_id_),
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutScheme, _impl_.name_),
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutScheme, _impl_.role_tag_),
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutScheme, _impl_.slots_),
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutScheme, _impl_.linked_skill_scheme_id_),
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutScheme, _impl_.linked_attribute_scheme_id_),
+        PROTOBUF_FIELD_OFFSET(::EquipLoadoutScheme, _impl_.linked_pet_id_),
+        PROTOBUF_FIELD_OFFSET(::EquipLoadoutScheme, _impl_.linked_formation_id_),
         2,
         1,
         3,
         0,
         4,
         5,
+        6,
+        7,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerEquipLoadoutComp, _impl_._has_bits_),
         10, // hasbit index offset
@@ -630,7 +646,7 @@ static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::EquipLoadoutSlotBinding)},
         {7, sizeof(::EquipLoadoutScheme)},
-        {22, sizeof(::PlayerEquipLoadoutComp)},
+        {26, sizeof(::PlayerEquipLoadoutComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -642,24 +658,25 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fequip
     protodesc_cold) = {
     "\n6proto/common/component/player_equip_lo"
     "adout_comp.proto\":\n\027EquipLoadoutSlotBind"
-    "ing\022\014\n\004slot\030\001 \001(\r\022\021\n\titem_guid\030\002 \001(\004\"\264\001\n"
+    "ing\022\014\n\004slot\030\001 \001(\r\022\021\n\titem_guid\030\002 \001(\004\"\350\001\n"
     "\022EquipLoadoutScheme\022\021\n\tscheme_id\030\001 \001(\r\022\014"
     "\n\004name\030\002 \001(\t\022\020\n\010role_tag\030\003 \001(\r\022\'\n\005slots\030"
     "\004 \003(\0132\030.EquipLoadoutSlotBinding\022\036\n\026linke"
     "d_skill_scheme_id\030\005 \001(\r\022\"\n\032linked_attrib"
-    "ute_scheme_id\030\006 \001(\r\"\332\001\n\026PlayerEquipLoado"
-    "utComp\022\035\n\025unlocked_scheme_count\030\001 \001(\r\022\030\n"
-    "\020active_scheme_id\030\002 \001(\r\022$\n\007schemes\030\003 \003(\013"
-    "2\023.EquipLoadoutScheme\022\025\n\rstate_version\030\004"
-    " \001(\004\022\027\n\017last_request_id\030\005 \001(\t\022\031\n\021last_ba"
-    "se_version\030\006 \001(\004\022\026\n\016last_scheme_id\030\007 \001(\r"
-    "B\022Z\020common/componentb\006proto3"
+    "ute_scheme_id\030\006 \001(\r\022\025\n\rlinked_pet_id\030\007 \001"
+    "(\004\022\033\n\023linked_formation_id\030\010 \001(\r\"\332\001\n\026Play"
+    "erEquipLoadoutComp\022\035\n\025unlocked_scheme_co"
+    "unt\030\001 \001(\r\022\030\n\020active_scheme_id\030\002 \001(\r\022$\n\007s"
+    "chemes\030\003 \003(\0132\023.EquipLoadoutScheme\022\025\n\rsta"
+    "te_version\030\004 \001(\004\022\027\n\017last_request_id\030\005 \001("
+    "\t\022\031\n\021last_base_version\030\006 \001(\004\022\026\n\016last_sch"
+    "eme_id\030\007 \001(\rB\022Z\020common/componentb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fequip_5floadout_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fequip_5floadout_5fcomp_2eproto = {
     false,
     false,
-    548,
+    600,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fequip_5floadout_5fcomp_2eproto,
     "proto/common/component/player_equip_loadout_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fequip_5floadout_5fcomp_2eproto_once,
@@ -944,9 +961,9 @@ EquipLoadoutScheme::EquipLoadoutScheme(
                offsetof(Impl_, scheme_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, scheme_id_),
-           offsetof(Impl_, linked_attribute_scheme_id_) -
+           offsetof(Impl_, linked_formation_id_) -
                offsetof(Impl_, scheme_id_) +
-               sizeof(Impl_::linked_attribute_scheme_id_));
+               sizeof(Impl_::linked_formation_id_));
 
   // @@protoc_insertion_point(copy_constructor:EquipLoadoutScheme)
 }
@@ -966,9 +983,9 @@ inline void EquipLoadoutScheme::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, scheme_id_),
            0,
-           offsetof(Impl_, linked_attribute_scheme_id_) -
+           offsetof(Impl_, linked_formation_id_) -
                offsetof(Impl_, scheme_id_) +
-               sizeof(Impl_::linked_attribute_scheme_id_));
+               sizeof(Impl_::linked_formation_id_));
 }
 EquipLoadoutScheme::~EquipLoadoutScheme() {
   // @@protoc_insertion_point(destructor:EquipLoadoutScheme)
@@ -1027,10 +1044,10 @@ PROTOBUF_NOINLINE void EquipLoadoutScheme::Clear() {
       _impl_.name_.ClearNonDefaultToEmpty();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003cU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000fcU)) {
     ::memset(&_impl_.scheme_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.linked_attribute_scheme_id_) -
-        reinterpret_cast<char*>(&_impl_.scheme_id_)) + sizeof(_impl_.linked_attribute_scheme_id_));
+        reinterpret_cast<char*>(&_impl_.linked_formation_id_) -
+        reinterpret_cast<char*>(&_impl_.scheme_id_)) + sizeof(_impl_.linked_formation_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1114,6 +1131,24 @@ PROTOBUF_NOINLINE void EquipLoadoutScheme::Clear() {
     }
   }
 
+  // uint64 linked_pet_id = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_linked_pet_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          7, this_._internal_linked_pet_id(), target);
+    }
+  }
+
+  // uint32 linked_formation_id = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_linked_formation_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          8, this_._internal_linked_formation_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1139,7 +1174,7 @@ PROTOBUF_NOINLINE void EquipLoadoutScheme::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // repeated .EquipLoadoutSlotBinding slots = 4;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_slots_size();
@@ -1182,6 +1217,20 @@ PROTOBUF_NOINLINE void EquipLoadoutScheme::Clear() {
             this_._internal_linked_attribute_scheme_id());
       }
     }
+    // uint64 linked_pet_id = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_linked_pet_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_linked_pet_id());
+      }
+    }
+    // uint32 linked_formation_id = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_linked_formation_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_linked_formation_id());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -1201,7 +1250,7 @@ void EquipLoadoutScheme::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_slots()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
@@ -1236,6 +1285,16 @@ void EquipLoadoutScheme::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.linked_attribute_scheme_id_ = from._impl_.linked_attribute_scheme_id_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_linked_pet_id() != 0) {
+        _this->_impl_.linked_pet_id_ = from._impl_.linked_pet_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_linked_formation_id() != 0) {
+        _this->_impl_.linked_formation_id_ = from._impl_.linked_formation_id_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -1259,8 +1318,8 @@ void EquipLoadoutScheme::InternalSwap(EquipLoadoutScheme* PROTOBUF_RESTRICT PROT
   _impl_.slots_.InternalSwap(&other->_impl_.slots_);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(EquipLoadoutScheme, _impl_.linked_attribute_scheme_id_)
-      + sizeof(EquipLoadoutScheme::_impl_.linked_attribute_scheme_id_)
+      PROTOBUF_FIELD_OFFSET(EquipLoadoutScheme, _impl_.linked_formation_id_)
+      + sizeof(EquipLoadoutScheme::_impl_.linked_formation_id_)
       - PROTOBUF_FIELD_OFFSET(EquipLoadoutScheme, _impl_.scheme_id_)>(
           reinterpret_cast<char*>(&_impl_.scheme_id_),
           reinterpret_cast<char*>(&other->_impl_.scheme_id_));

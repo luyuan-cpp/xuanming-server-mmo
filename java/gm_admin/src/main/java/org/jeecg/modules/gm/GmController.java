@@ -83,10 +83,12 @@ public class GmController {
         this.json = json; this.game = game; this.journal = journal;
         this.gateway = URI.create(gateway); this.gatewayKey = gatewayKey;
         String host = this.gateway.getHost();
-        boolean loopback = "127.0.0.1".equals(host) || "localhost".equals(host) || "[::1]".equals(host);
+        // 集群内服务间本来就是明文,靠 NetworkPolicy 只放行后台与各调用方 HMAC 保护(docs/design/admin-identity-and-dual-control.md §11.4)。
         if (host == null || this.gateway.getUserInfo() != null || this.gateway.getQuery() != null || this.gateway.getFragment() != null ||
-                !("https".equals(this.gateway.getScheme()) || ("http".equals(this.gateway.getScheme()) && loopback))) {
-            throw new IllegalArgumentException("GM gateway requires HTTPS or loopback HTTP");
+                !("https".equals(this.gateway.getScheme())
+                        || ("http".equals(this.gateway.getScheme()) && GameServices.isLoopbackOrClusterServiceHost(host)))) {
+            throw new IllegalArgumentException("GM gateway requires HTTPS, or HTTP on loopback or a cluster Service name"
+                    + " (<service>.<namespace>.svc[.cluster.local])");
         }
         String trimmedSecret = mailSecret == null ? "" : mailSecret.strip();
         this.mailEnabled = mailTarget != null && !mailTarget.isBlank()

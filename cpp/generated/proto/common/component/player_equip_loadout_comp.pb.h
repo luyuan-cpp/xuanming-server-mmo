@@ -455,6 +455,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipLoadoutScheme final : public :
     kRoleTagFieldNumber = 3,
     kLinkedSkillSchemeIdFieldNumber = 5,
     kLinkedAttributeSchemeIdFieldNumber = 6,
+    kLinkedPetIdFieldNumber = 7,
+    kLinkedFormationIdFieldNumber = 8,
   };
   // repeated .EquipLoadoutSlotBinding slots = 4;
   [[nodiscard]] int slots_size()
@@ -532,12 +534,32 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipLoadoutScheme final : public :
   void _internal_set_linked_attribute_scheme_id(::uint32_t value);
 
   public:
+  // uint64 linked_pet_id = 7;
+  void clear_linked_pet_id() ;
+  [[nodiscard]] ::uint64_t linked_pet_id() const;
+  void set_linked_pet_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_linked_pet_id() const;
+  void _internal_set_linked_pet_id(::uint64_t value);
+
+  public:
+  // uint32 linked_formation_id = 8;
+  void clear_linked_formation_id() ;
+  [[nodiscard]] ::uint32_t linked_formation_id() const;
+  void set_linked_formation_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_linked_formation_id() const;
+  void _internal_set_linked_formation_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:EquipLoadoutScheme)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
-                          1, 31,
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          1, 39,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -571,6 +593,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipLoadoutScheme final : public :
     ::uint32_t role_tag_;
     ::uint32_t linked_skill_scheme_id_;
     ::uint32_t linked_attribute_scheme_id_;
+    ::uint64_t linked_pet_id_;
+    ::uint32_t linked_formation_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1147,6 +1171,54 @@ inline ::uint32_t EquipLoadoutScheme::_internal_linked_attribute_scheme_id() con
 inline void EquipLoadoutScheme::_internal_set_linked_attribute_scheme_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.linked_attribute_scheme_id_ = value;
+}
+
+// uint64 linked_pet_id = 7;
+inline void EquipLoadoutScheme::clear_linked_pet_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.linked_pet_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t EquipLoadoutScheme::linked_pet_id() const {
+  // @@protoc_insertion_point(field_get:EquipLoadoutScheme.linked_pet_id)
+  return _internal_linked_pet_id();
+}
+inline void EquipLoadoutScheme::set_linked_pet_id(::uint64_t value) {
+  _internal_set_linked_pet_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:EquipLoadoutScheme.linked_pet_id)
+}
+inline ::uint64_t EquipLoadoutScheme::_internal_linked_pet_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.linked_pet_id_;
+}
+inline void EquipLoadoutScheme::_internal_set_linked_pet_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.linked_pet_id_ = value;
+}
+
+// uint32 linked_formation_id = 8;
+inline void EquipLoadoutScheme::clear_linked_formation_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.linked_formation_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t EquipLoadoutScheme::linked_formation_id() const {
+  // @@protoc_insertion_point(field_get:EquipLoadoutScheme.linked_formation_id)
+  return _internal_linked_formation_id();
+}
+inline void EquipLoadoutScheme::set_linked_formation_id(::uint32_t value) {
+  _internal_set_linked_formation_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:EquipLoadoutScheme.linked_formation_id)
+}
+inline ::uint32_t EquipLoadoutScheme::_internal_linked_formation_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.linked_formation_id_;
+}
+inline void EquipLoadoutScheme::_internal_set_linked_formation_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.linked_formation_id_ = value;
 }
 
 // -------------------------------------------------------------------

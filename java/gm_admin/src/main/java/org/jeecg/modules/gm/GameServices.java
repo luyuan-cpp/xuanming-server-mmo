@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
@@ -38,6 +39,11 @@ public final class GameServices {
     static final String IMPORT_RECIPIENTS = "mailpb.MailAdmin/ImportMailRecipients";
     static final String SEAL_CAMPAIGN = "mailpb.MailAdmin/SealMailCampaign";
     private static final BigInteger MAX_UINT64 = new BigInteger("18446744073709551615");
+    /** RFC 1123 标签,只认小写。 */
+    private static final String RFC1123_LABEL = "[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?";
+    /** 集群内 Service 名恰好两种形状:{@code <service>.<namespace>.svc} 与 {@code <service>.<namespace>.svc.cluster.local}。 */
+    private static final Pattern CLUSTER_SERVICE_HOST =
+            Pattern.compile(RFC1123_LABEL + "\\." + RFC1123_LABEL + "\\.svc(\\.cluster\\.local)?");
     private final GameProto proto;
     private final ObjectMapper mapper;
     private final ManagedChannel data;
@@ -118,7 +124,19 @@ public final class GameServices {
         return channel;
     }
 
-    /** 所有游戏服务连接的唯一建法:只收 host:port,明文只许本机回环。交易管理客户端也用它。 */
+    /**
+     * 明文 gRPC 与 http:// 唯一的主机规则(本类建连、GameMallAdmin 的商城地址、GmController 的网关地址共用):
+     * 本机回环(127.0.0.1、localhost、::1、[::1]),或 Kubernetes 集群内 Service 名
+     * {@code <service>.<namespace>.svc[.cluster.local]};其余主机一律不许明文。
+     */
+    static boolean isLoopbackOrClusterServiceHost(String host) {
+        if (host == null) return false;
+        // 集群内服务间本来就是明文,靠 NetworkPolicy 只放行后台与各调用方 HMAC 保护(docs/design/admin-identity-and-dual-control.md §11.4)。
+        return host.equalsIgnoreCase("localhost") || host.equals("127.0.0.1") || host.equals("::1") || host.equals("[::1]")
+                || CLUSTER_SERVICE_HOST.matcher(host).matches();
+    }
+
+    /** 所有游戏服务连接的唯一建法:只收 host:port,明文只许本机回环或集群内 Service 名。交易管理客户端也用它。 */
     static ManagedChannel createChannel(String target, boolean plaintext) {
         if (target == null || target.isBlank()) return null;
         URI uri;
@@ -130,8 +148,10 @@ public final class GameServices {
             throw new IllegalArgumentException("游戏服务地址必须是 host:port");
         }
         host = host.replace("[", "").replace("]", "");
-        boolean loopback = host.equalsIgnoreCase("localhost") || host.equals("127.0.0.1") || host.equals("::1");
-        if (plaintext && !loopback) throw new IllegalArgumentException("明文游戏连接只允许显式配置的本机回环地址");
+        // 集群内服务间本来就是明文,靠 NetworkPolicy 只放行后台与各调用方 HMAC 保护(docs/design/admin-identity-and-dual-control.md §11.4)。
+        if (plaintext && !isLoopbackOrClusterServiceHost(host)) {
+            throw new IllegalArgumentException("明文游戏连接只允许显式配置的本机回环地址或集群内 Service 名(<service>.<namespace>.svc[.cluster.local])");
+        }
         NettyChannelBuilder builder = NettyChannelBuilder.forAddress(host, uri.getPort())
                 .disableRetry().maxInboundMessageSize(1024 * 1024);
         if (plaintext) builder.usePlaintext(); else builder.useTransportSecurity();

@@ -29,18 +29,24 @@
 #include "player/system/player_level_rules.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_mutability.h"
+#include "player/system/player_pet.h"
+#include "player/system/player_season.h"
 #include "player/system/player_skill.h"
 #include "player/system/skill_loadout_rules.h"
 #include "proto/common/component/player_attribute_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"
 #include "proto/common/component/player_equip_loadout_comp.pb.h"
+#include "proto/common/component/player_pet_comp.pb.h"
 #include "proto/common/component/player_skill_comp.pb.h"
 #include "proto/scene/player_bag.pb.h"
+#include "services/battle/constants/wuxing_expansion_rules.h"
 #include "table/code/equipslot_table.h"
 #include "table/code/item_table.h"
+#include "table/code/pet_table.h"
 #include "table/proto/tip/attribute_error_tip.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/equip_error_tip.pb.h"
+#include "table/proto/tip/pet_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
 
 namespace
@@ -300,6 +306,54 @@ std::string SkillSchemeDisplayName(entt::entity player, uint32_t schemeId)
 	}
 }
 
+bool PetExists(entt::entity player, uint64_t petId)
+{
+	if (petId == 0)
+	{
+		return false;
+	}
+	const auto *petComp = tlsEcs.actorRegistry.try_get<PlayerPetComp>(player);
+	if (petComp == nullptr)
+	{
+		return false;
+	}
+	for (const auto &pet : petComp->pets())
+	{
+		if (pet.pet_id() == petId)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+std::string PetDisplayName(const PetInstance &pet)
+{
+	if (!pet.name().empty())
+	{
+		return pet.name();
+	}
+	if (const auto [row, ok] = PetTableManager::Instance().FindByIdSilent(pet.pet_table_id());
+		ok && row != nullptr && !row->name().empty())
+	{
+		return row->name();
+	}
+	return "灵宠#" + std::to_string(pet.pet_table_id());
+}
+
+const char *FormationDisplayName(uint32_t formationId)
+{
+	switch (formationId)
+	{
+	case 1u: return "天覆阵";
+	case 2u: return "地载阵";
+	case 3u: return "风扬阵";
+	case 4u: return "云垂阵";
+	case 5u: return "虎翼阵";
+	default: return "未布阵";
+	}
+}
+
 } // namespace
 
 void PlayerEquipLoadoutSystem::SetPersistForTest(PersistFn)
@@ -366,6 +420,8 @@ uint32_t PlayerEquipLoadoutSystem::BuildSnapshotAt(entt::entity player, uint64_t
 		info->set_role_tag(stored != nullptr ? stored->role_tag() : 0u);
 		info->set_linked_skill_scheme_id(stored != nullptr ? stored->linked_skill_scheme_id() : 0u);
 		info->set_linked_attribute_scheme_id(stored != nullptr ? stored->linked_attribute_scheme_id() : 0u);
+		info->set_linked_pet_id(stored != nullptr ? stored->linked_pet_id() : 0u);
+		info->set_linked_formation_id(stored != nullptr ? stored->linked_formation_id() : 0u);
 
 		std::map<uint32_t, uint64_t> boundBySlot;
 		if (stored != nullptr)
@@ -426,6 +482,24 @@ uint32_t PlayerEquipLoadoutSystem::BuildSnapshotAt(entt::entity player, uint64_t
 			opt->set_scheme_id(s.scheme_id());
 			opt->set_name(s.name().empty() ? ("加点方案" + std::to_string(s.scheme_id())) : s.name());
 		}
+	}
+	if (const auto *petComp = tlsEcs.actorRegistry.try_get<PlayerPetComp>(player); petComp != nullptr)
+	{
+		for (const auto &pet : petComp->pets())
+		{
+			auto *opt = snapshot.add_pets();
+			opt->set_pet_id(pet.pet_id());
+			opt->set_pet_table_id(pet.pet_table_id());
+			opt->set_name(PetDisplayName(pet));
+			opt->set_active(pet.pet_id() != 0 && pet.pet_id() == petComp->active_pet_id());
+		}
+	}
+	for (const auto &def : turnbattle::wuxing::kFormations)
+	{
+		auto *opt = snapshot.add_formations();
+		opt->set_scheme_id(def.id);
+		opt->set_name(FormationDisplayName(def.id));
+		opt->set_role_tag(def.element);
 	}
 
 	return kSuccess;
@@ -546,6 +620,16 @@ void PlayerEquipLoadoutSystem::SaveAt(entt::entity player, const SaveEquipLoadou
 		finish(kInvalidParameter);
 		return;
 	}
+	if (request.linked_pet_id() != 0 && !PetExists(player, request.linked_pet_id()))
+	{
+		finish(kInvalidParameter);
+		return;
+	}
+	if (request.linked_formation_id() != 0 && !turnbattle::wuxing::IsValidFormationId(request.linked_formation_id()))
+	{
+		finish(kInvalidParameter);
+		return;
+	}
 
 	auto &bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player);
 	Bag &inventory = bags.bags[kInventory];
@@ -620,6 +704,8 @@ void PlayerEquipLoadoutSystem::SaveAt(entt::entity player, const SaveEquipLoadou
 	scheme->set_role_tag(request.role_tag());
 	scheme->set_linked_skill_scheme_id(request.linked_skill_scheme_id());
 	scheme->set_linked_attribute_scheme_id(request.linked_attribute_scheme_id());
+	scheme->set_linked_pet_id(request.linked_pet_id());
+	scheme->set_linked_formation_id(request.linked_formation_id());
 	scheme->clear_slots();
 	for (const auto &[slot, guid] : validatedSlots)
 	{
@@ -1073,6 +1159,35 @@ void PlayerEquipLoadoutSystem::SwitchAt(entt::entity player, const SwitchEquipLo
 			else if (attrErr != kSuccess && attrErr != kAttributeSchemeAlreadyActive)
 			{
 				response.add_linked_notices("属性加点方案暂不可切换，本次仅完成装备切换");
+			}
+		}
+		if (storedScheme->linked_pet_id() != 0)
+		{
+			const uint32_t petErr = PetSystem::Summon(player, storedScheme->linked_pet_id());
+			if (petErr == kSuccess)
+			{
+				PetSystem::PushList(player);
+			}
+			else if (petErr == kPetNotFound)
+			{
+				response.add_linked_notices("绑定的首发灵宠已不在灵宠栏，本次仅完成其余流派切换");
+			}
+			else if (petErr == kPetOwnerLevelNotEnough)
+			{
+				response.add_linked_notices("绑定的首发灵宠等级不满足出战条件，本次仅完成其余流派切换");
+			}
+			else if (petErr != kPetAlreadyActive)
+			{
+				response.add_linked_notices("绑定的首发灵宠暂不可出战，本次仅完成其余流派切换");
+			}
+		}
+		if (storedScheme->linked_formation_id() != 0)
+		{
+			const uint32_t formationErr =
+				PlayerSeasonSystem::TryEquipLinkedFormation(player, storedScheme->linked_formation_id());
+			if (formationErr != kSuccess)
+			{
+				response.add_linked_notices("绑定的五行阵法暂不可切换，本次仅完成其余流派切换");
 			}
 		}
 	}

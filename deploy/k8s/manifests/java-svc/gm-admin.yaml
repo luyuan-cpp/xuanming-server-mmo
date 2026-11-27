@@ -1,0 +1,194 @@
+# gm-admin:独立 GM 后台(java/gm_admin,JeecgBoot 扩展;docs/design/admin-identity-and-dual-control.md §11.4)。
+#
+# 全局服务,只部署到 infra namespace 一次。k8s_deploy.ps1 的 $JavaSvcCatalogue 里该条目标了 Global = $true:
+# infra-up / all-up 部署全局 Go 服务、带 -JavaSvcRegistry 并给了 -GmAdminOidcIssuer 时才部署(Test-GmAdminDeployed),
+# 与官方商城同一步、排在它之后(Apply-GmAdminWorkload)。
+#
+# 只在集群内可达:Service 是 ClusterIP,不建 Ingress;管理员经 kubectl port-forward 打开前端(回调地址填 http://127.0.0.1:<本地端口>/login,
+# 后台只许回环地址走明文回调)。-NetworkPolicies on 时另有一份策略拒绝其它 Pod 连它(New-GmAdminIngressNetworkPolicyYaml)。
+# 登录只走 OIDC(gm.identity.mode=oidc,原生口令登录与原生 /sys/** 管理页关闭),双人复核恒开。
+#
+# 一个镜像、两个容器(deploy/k8s/Dockerfile.gm-admin):
+#   - gm-admin:JeecgBoot 后端,听 18090(context-path /jeecg-boot),只经同 Pod 的 nginx 被浏览器访问;
+#   - gm-admin-web:nginx,听 3101,发前端静态页,/jeecgboot/ 反代到 127.0.0.1:18090/jeecg-boot/(deploy/k8s/gm-admin-nginx.conf)。
+#
+# 配置:ConfigMap java-svc-gm-admin-config 的 application-k8s.yaml(k8s_deploy.ps1 New-GmAdminConfigMapYaml 生成),
+# 以 profile k8s 盖在 jar 内的 application-gm.yml 之上;密钥只写成对容器环境变量的引用。
+# 密钥:
+#   - 管理库与 Redis 的连接信息由运维预置在 Secret gm-admin-runtime(键见下面 env),部署脚本只核对键、不读值;
+#   - 邮件、榜单的 admin 生产者签名密钥直接引用运维预置的 domain-service-secrets(与 mail.yaml、rank.yaml 同一把);
+#   - 其余(OIDC 客户端密钥、交易 / 滞留阵容人工处置密钥、login / data-service / 收件箱运维口令、网关管理口令、商城 admin 密钥)
+#     由 k8s_deploy.ps1 经 Secret 注入 env 并写指纹注解,本文件不要手写。
+# 后台不是游戏的 SQL 写者:管理库独立(gm_admin),不进写者名册,所以是 Deployment。多副本安全(流水靠行锁与条件更新,
+# 登录中间态在管理库、会话在 Redis),要两副本改 replicas 即可。
+apiVersion: v1
+kind: Service
+metadata:
+  name: gm-admin
+  labels:
+    app: gm-admin
+    tier: java-svc
+spec:
+  type: ClusterIP
+  selector:
+    app: gm-admin
+  ports:
+    - name: web
+      port: 3101
+      targetPort: 3101
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gm-admin
+  labels:
+    app: gm-admin
+    tier: java-svc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gm-admin
+  template:
+    metadata:
+      labels:
+        app: gm-admin
+        tier: java-svc
+    spec:
+      # 后台不调 K8s API。
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 40
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: gm-admin
+          image: PLACEHOLDER_IMAGE
+          imagePullPolicy: PLACEHOLDER_PULL_POLICY
+          args:
+            - --spring.profiles.active=prod,gm,k8s
+            - --spring.config.additional-location=file:/app/config/
+          ports:
+            - containerPort: 18090
+              name: backend
+          env:
+            # 管理库与 Redis:运维预置的 Secret gm-admin-runtime(后台独立的管理库 gm_admin 与独立 Redis,不与游戏共用)。
+            - name: GM_JDBC_URL
+              valueFrom:
+                secretKeyRef: {name: gm-admin-runtime, key: jdbc-url, optional: false}
+            - name: GM_DB_USER
+              valueFrom:
+                secretKeyRef: {name: gm-admin-runtime, key: db-user, optional: false}
+            - name: GM_DB_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: gm-admin-runtime, key: db-password, optional: false}
+            - name: GM_REDIS_HOST
+              valueFrom:
+                secretKeyRef: {name: gm-admin-runtime, key: redis-host, optional: false}
+            - name: GM_REDIS_PORT
+              valueFrom:
+                secretKeyRef: {name: gm-admin-runtime, key: redis-port, optional: false}
+            - name: GM_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: gm-admin-runtime, key: redis-password, optional: false}
+            # 邮件与榜单的 admin 生产者签名:与 mail、rank 读的是 infra namespace 同一份运维预置的键。
+            - name: MAIL_PRODUCER_SECRET_ADMIN
+              valueFrom:
+                secretKeyRef: {name: domain-service-secrets, key: mail-producer-admin, optional: false}
+            - name: RANK_PRODUCER_SECRET_ADMIN
+              valueFrom:
+                secretKeyRef: {name: domain-service-secrets, key: rank-producer-admin, optional: false}
+          volumeMounts:
+            - name: svc-config
+              mountPath: /app/config
+              readOnly: true
+            - name: backend-tmp
+              mountPath: /tmp
+            - name: uploads
+              mountPath: /app/uploads
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          # 冷启动(JeecgBoot 装配 + 管理库迁移)可能超过 liveness 的失败预算:startupProbe 成功前暂停另两个探针。
+          startupProbe:
+            httpGet:
+              path: /jeecg-boot/actuator/health/readiness
+              port: 18090
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /jeecg-boot/actuator/health/readiness
+              port: 18090
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /jeecg-boot/actuator/health/liveness
+              port: 18090
+            periodSeconds: 20
+          lifecycle:
+            preStop:
+              exec:
+                command: [sh, -c, "sleep 5"]
+          resources:
+            requests:
+              cpu: 200m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+        - name: gm-admin-web
+          image: PLACEHOLDER_IMAGE
+          imagePullPolicy: PLACEHOLDER_PULL_POLICY
+          command: ["nginx", "-c", "/etc/nginx/gm-admin.conf", "-g", "daemon off;"]
+          ports:
+            - containerPort: 3101
+              name: web
+          volumeMounts:
+            - name: web-tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 3101
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 3101
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: svc-config
+          configMap:
+            name: java-svc-gm-admin-config
+        # 上限 = JVM 临时文件与 Tomcat 工作目录;后台日志只打控制台(logging.config 指向 logback-console.xml),不往这里写。
+        - name: backend-tmp
+          emptyDir:
+            sizeLimit: 256Mi
+        # jeecg.path.upload:GM 页面不上传文件,原生上传入口在 oidc 模式下随 /sys/** 一起关闭;留一个小卷给框架的临时落盘。
+        - name: uploads
+          emptyDir:
+            sizeLimit: 64Mi
+        # nginx 的 pid 与请求体 / 反代缓冲临时文件(gm-admin-nginx.conf 全部指到 /tmp)。
+        - name: web-tmp
+          emptyDir:
+            sizeLimit: 128Mi

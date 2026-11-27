@@ -63,18 +63,20 @@ public class GameMallAdmin {
         this.base = url == null || url.isBlank() ? null : baseOf(url.strip());
     }
 
-    /** 与 GmController 访问网关同一条规则:HTTPS,或本机回环上的 HTTP;不带认证信息、查询串与片段。 */
+    /** 与 GmController 访问网关同一条规则:HTTPS,或本机回环 / 集群内 Service 名上的 HTTP;不带认证信息、查询串与片段。 */
     private static URI baseOf(String url) {
         URI uri;
         try { uri = URI.create(url); }
         catch (IllegalArgumentException invalid) { throw new IllegalArgumentException("gm.game.mall-url is invalid"); }
         String host = uri.getHost();
-        boolean loopback = "127.0.0.1".equals(host) || "localhost".equals(host) || "[::1]".equals(host);
         String path = uri.getRawPath() == null ? "" : uri.getRawPath();
+        // 集群内服务间本来就是明文,靠 NetworkPolicy 只放行后台与各调用方 HMAC 保护(docs/design/admin-identity-and-dual-control.md §11.4)。
         if (host == null || uri.getUserInfo() != null || uri.getQuery() != null || uri.getFragment() != null
                 || path.contains("%") || path.contains(";") || path.contains("..") || path.contains("//")
-                || !("https".equals(uri.getScheme()) || ("http".equals(uri.getScheme()) && loopback))) {
-            throw new IllegalArgumentException("gm.game.mall-url requires HTTPS or loopback HTTP without credentials, query or fragment");
+                || !("https".equals(uri.getScheme())
+                        || ("http".equals(uri.getScheme()) && GameServices.isLoopbackOrClusterServiceHost(host)))) {
+            throw new IllegalArgumentException("gm.game.mall-url requires HTTPS, or HTTP on loopback or a cluster Service name"
+                    + " (<service>.<namespace>.svc[.cluster.local]), without credentials, query or fragment");
         }
         return uri;
     }

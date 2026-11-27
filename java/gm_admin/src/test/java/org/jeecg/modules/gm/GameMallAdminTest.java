@@ -101,4 +101,17 @@ class GameMallAdminTest {
         assertFalse(new GameMallAdmin(mapper, "", SECRET, "mall-admin", null).enabled());
         assertFalse(new GameMallAdmin(mapper, "https://mall.internal", "short", "mall-admin", null).enabled());
     }
+
+    @Test void plainHttpIsAllowedOnlyForLoopbackOrClusterServiceNames() {
+        // 集群内服务间本来就是明文(设计 §11.4):回环与 <service>.<namespace>.svc[.cluster.local] 上的 http 放行,别的照旧拒绝。
+        for (String url : List.of("http://mall.mmorpg.svc:8080/mall/rpc", "http://mall.mmorpg.svc.cluster.local:8080",
+                "http://127.0.0.1:8080", "http://localhost:8080", "http://[::1]:8080")) {
+            assertTrue(new GameMallAdmin(mapper, url, SECRET, "mall-admin", null).enabled(), url);
+        }
+        for (String url : List.of("http://mall.mmorpg:8080", "http://a.b.c.svc:8080", "http://x.svc.example.com:8080",
+                "http://Mall.mmorpg.svc:8080", "http://10.0.0.8:8080", "http://[fe80::1]:8080", "http://user@mall.mmorpg.svc:8080",
+                "http://mall.mmorpg.svc:8080?x=1", "http://mall.mmorpg.svc:8080#f")) {
+            assertThrows(IllegalArgumentException.class, () -> new GameMallAdmin(mapper, url, SECRET, "mall-admin", null), url);
+        }
+    }
 }

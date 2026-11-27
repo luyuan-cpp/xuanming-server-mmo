@@ -4,6 +4,8 @@
 #     Casdoor 的权限模型允许任何登录用户对「自己」调 /api/delete-user、/api/update-user(object/init.go 的自匹配条款),
 #     这些接口一律不放行,否则玩家能绕过 7 天冷静期删掉自己的通行证用户(§8.4 第 1 条)。管理后台的页面只是前端外壳,
 #     它要调的接口都不在名单里,公网上打开也什么都做不了。
+#     页面请求带静默登录参数(prompt、silentSignin)的一律 403:浏览器里已有通行证会话时,授权页见到它们会不经玩家点击
+#     直接签发授权码,恶意 App 自己拼一个授权地址就能悄悄拿到玩家的登录(§3.10 第 2 条)。
 #   - 集群内入口(8081,Ingress passport-internal,内部负载均衡):只给 login 用,验签公钥与管理接口查 / 删用户
 #     (AuthProviders.Passport.Endpoint 指向它;login 生产模式只收 https,所以走带证书的内部 Ingress)。
 #
@@ -44,6 +46,16 @@ data:
       limit_req_zone $binary_remote_addr zone=passport_api:10m rate=10r/s;
       limit_req_status 429;
 
+      # 静默登录参数(§3.10 第 2 条):Casdoor v4.27.1 的授权页(web/src/pages/auth/LoginPage.tsx)在浏览器已有会话时,
+      # 见到 prompt=none 或 silentSignin 就不经玩家点击签发授权码。授权地址谁都能拼,游戏客户端从不带这两个参数,
+      # 所以页面请求带了就拒绝。前端按 URLSearchParams 解码参数名(%70rompt 就是 prompt),参数名里带百分号的也拒绝;
+      # 正常参数只有值里有百分号(如 redirect_uri)。
+      map $args $passport_silent_signin {
+        default 0;
+        "~*(^|&)(prompt|silentsignin)(=|&|$)" 1;
+        "~(^|&)[^=&]*%" 1;
+      }
+
       upstream casdoor {
         server casdoor.passport.svc.cluster.local:8000;
         keepalive 32;
@@ -59,10 +71,6 @@ data:
       server {
         listen 8080;
         client_max_body_size 64k;
-
-        # 安卓 App Links(§3.8):归属声明与回调兜底页。系统核对通过时回调直接交给游戏,不会真的打开这一页。
-        location = /.well-known/assetlinks.json { default_type application/json; alias /etc/nginx/passport/assetlinks.json; }
-        location = /passport/app-callback { default_type text/html; alias /etc/nginx/passport/app-callback.html; }
 
         # OIDC 发现文档与验签公钥。
         location = /.well-known/openid-configuration { limit_except GET { deny all; } proxy_pass http://casdoor; }
@@ -93,8 +101,13 @@ data:
         location /orgs/ { return 404; }
         location /.well-known/ { return 404; }
 
-        # 前端页面与静态资源:只读。
-        location / { limit_except GET { deny all; } limit_req zone=passport_api burst=40 nodelay; proxy_pass http://casdoor; }
+        # 前端页面与静态资源:只读;带静默登录参数的拒绝(前端路由不分大小写、不认末尾斜杠,所以对所有页面查,不只授权页)。
+        location / {
+          if ($passport_silent_signin) { return 403; }
+          limit_except GET { deny all; }
+          limit_req zone=passport_api burst=40 nodelay;
+          proxy_pass http://casdoor;
+        }
       }
 
       # ── 集群内入口:只给 login(验签公钥、注销时查 / 删用户、登录与刷新前查用户) ──
@@ -107,25 +120,6 @@ data:
         location / { return 404; }
       }
     }
-  # 安卓 App Links 的归属声明:包名与签名证书的 SHA-256 指纹(Play 应用签名的那把,在 Play 管理中心「应用完整性」里)由运维填。
-  assetlinks.json: |
-    [
-      {
-        "relation": ["delegate_permission/common.handle_all_urls"],
-        "target": {
-          "namespace": "android_app",
-          "package_name": "REPLACE_WITH_ANDROID_PACKAGE_NAME",
-          "sha256_cert_fingerprints": ["REPLACE_WITH_RELEASE_SIGNING_CERT_SHA256"]
-        }
-      }
-    ]
-  app-callback.html: |
-    <!DOCTYPE html>
-    <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>官方通行证</title></head>
-    <body style="font-family:sans-serif;text-align:center;padding-top:20vh">
-    <h1>请返回游戏</h1><p>授权已完成。如果游戏没有自动打开，请切回游戏，按游戏内提示重新登录。</p>
-    </body></html>
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -159,14 +153,6 @@ spec:
             - name: conf
               mountPath: /etc/nginx/nginx.conf
               subPath: nginx.conf
-              readOnly: true
-            - name: conf
-              mountPath: /etc/nginx/passport/assetlinks.json
-              subPath: assetlinks.json
-              readOnly: true
-            - name: conf
-              mountPath: /etc/nginx/passport/app-callback.html
-              subPath: app-callback.html
               readOnly: true
           readinessProbe:
             tcpSocket:

@@ -414,7 +414,13 @@
     # k8s-image-* / k8s-release-* 显式给了即拒绝。追加在末尾,理由同上。
     [string]$ContentGuardWeChatAppId = "",
     [string]$ContentGuardDouyinAppId = "",
-    [switch]$ConfirmContentGuardPlatformChange
+    [switch]$ConfirmContentGuardPlatformChange,
+    # ── merge-zone 系列的 etcd ──
+    # 转给 tools/merge_zone 的 -etcd-hosts(逗号分隔的 host:port,data_service 节点注册那一套 etcd;本机调试栈 127.0.0.1:2379,
+    # K8s 先 port-forward infra namespace 的 etcd)。真合服、真撤销必须给:提交之后把映射发布进 etcd 副本
+    # (docs/design/merged-zone-etcd-copy.md);审计给了就比对副本;-DryRun 不转发。没有缺省值:指错 etcd 时发布会落到别处,
+    # 读不到第 0 片的 data_service 副本就看不到这次合服。追加在参数块末尾,理由同上。
+    [string]$MergeZoneEtcdHosts = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -1354,11 +1360,18 @@ function Get-MergeZoneCommandArgs {
             $mode = if ($MergeCommand -eq "merge-zone") { "merge" } else { "unmerge" }
             $a = @("-mode", $mode, "-source-zone", $MergeSourceZone, "-target-zone", $MergeTargetZone)
             $a += @(Get-MergeRouteDbArgs -MergeCommand $MergeCommand)
-            if ($DryRun) { $a += "-dry-run" }
-            return $a
+            if ($DryRun) { return $a + "-dry-run" }
+            # 真写提交之后要发布 etcd 副本,缺了工具会在写任何东西之前拒绝;这里先点名参数。
+            if ($MergeZoneEtcdHosts -eq "") {
+                throw ("$MergeCommand requires -MergeZoneEtcdHosts <host:port of the etcd that data_service registers in " +
+                       "(dev: 127.0.0.1:2379; K8s: port-forward etcd in the infra namespace)>: after committing, the tool publishes the mapping to the etcd copy")
+            }
+            return $a + @("-etcd-hosts", $MergeZoneEtcdHosts)
         }
         "merge-zone-audit" {
-            return @("-mode", "audit") + @(Get-MergeRouteDbArgs -MergeCommand $MergeCommand)
+            $a = @("-mode", "audit") + @(Get-MergeRouteDbArgs -MergeCommand $MergeCommand)
+            if ($MergeZoneEtcdHosts -ne "") { $a += @("-etcd-hosts", $MergeZoneEtcdHosts) }
+            return $a
         }
         default { throw "Get-MergeZoneCommandArgs: unknown merge command '$MergeCommand'" }
     }
@@ -1607,6 +1620,11 @@ Zone merge (合服) commands, online, no downtime — full SOP: docs/ops/merge-z
     written, 2 not done or outcome unknown (re-running is safe). If merge_zone fails to build,
     nothing runs and the exit code is 2. A real merge or unmerge also needs
     MMORPG_SQL_OPERATOR_PRINCIPAL; set MMORPG_SQL_BACKEND=mysql on the mysql tier.
+    A real merge or unmerge also REQUIRES -MergeZoneEtcdHosts <host:port of the etcd data_service
+    registers in>: after committing it publishes the mapping to the etcd copy
+    /mmorpg/merged_zone_copy/<directory shard 0 DB name>; exit code 2 then means the mapping IS
+    committed but not yet published (data_service publishes it within one refresh period; re-run
+    the same command to confirm). merge-zone-audit compares the copy when it is given.
     -Command merge-zone -MergeSourceZone <s> -MergeTargetZone <d> [-DryRun]
         Record <s> -> <d>. Refuses a merged-away target, a source merged elsewhere, and any
         mapping that would cycle or exceed the hop limit. -DryRun validates and prints only.

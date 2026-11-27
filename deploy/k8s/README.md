@@ -2928,7 +2928,7 @@ login 的三处挑 gate 与 scene_manager 的跨 zone 重定向给候选分档:�
   ```bash
   kubectl apply -n observability -f deploy/k8s/data-service-account-directory-alerts.yaml
   ```
-- **合服权限**:合服工具 `tools/merge_zone` 用操作员身份,`zone_merged_into` 的写权限在 `deploy/sql/authority_operator_role.sql`,这张表只在目录第 0 片,`-route-db-dsn` 指那里。match 读合服映射走 `GetMergedZones`,不连目录。
+- **合服权限**:合服工具 `tools/merge_zone` 用操作员身份,`zone_merged_into` 的写权限在 `deploy/sql/authority_operator_role.sql`,这张表只在目录第 0 片,`-route-db-dsn` 指那里。真写提交之后还要把映射发布进 etcd 副本 `/mmorpg/merged_zone_copy/<第 0 片库名>`,`-etcd-hosts` 指 infra namespace 的 etcd(先 port-forward;[设计](../../docs/design/merged-zone-etcd-copy.md))。match 读合服映射走 `GetMergedZones`,不连目录。
 
 ### route-tool 入口(`tools/scripts/k8s_route_tool.ps1`)
 

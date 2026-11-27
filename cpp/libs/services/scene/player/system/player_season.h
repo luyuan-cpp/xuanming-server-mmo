@@ -79,6 +79,8 @@ public:
     static void EquipFormation(entt::entity player, uint64_t nowMs,
                                const EquipWuxingFormationRequest& request,
                                EquipWuxingFormationResponse& response);
+    // 流派方案一键联动切阵接缝（只改已加载组件、不重复落盘，由调用方统一 RequestKeyProgressSave）。
+    static uint32_t TryEquipLinkedFormation(entt::entity player, uint32_t formationId);
     static uint32_t GetWuxingTowerState(entt::entity player, uint64_t nowMs,
                                         GetWuxingTowerStateResponse& response);
     static void StartWuxingTowerRun(entt::entity player, uint64_t nowMs,

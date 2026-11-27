@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -358,13 +359,13 @@ Kafka:
 	}
 }
 
-// ── AdminToken(运维 RPC 鉴权:Rollback* 与 ReleasePlayerName)────────────
+// ── AdminToken(运维 RPC 鉴权:ReleasePlayerName 的运维路径与 GM 回收的五个入口)────────────
 
 // TestAdminTokenAbsentMeansDisabled 钉住默认形态:yaml 里没有 AdminToken 时它是空串,
 // 而空串在 server 侧的语义是**该 RPC 停用**(不是免鉴权)。
-// data_service 在集群内网无鉴权可达,一个默认敞开的运维接口等于把"回档 / 强制释放名字"
+// data_service 在集群内网无鉴权可达,一个默认敞开的运维接口等于把"强制释放名字 / 回收资产"
 // 这类没有反向操作的能力交给任何能拨到它的进程。这条理由最初是为 remap 写的;remap 自 2026-10-12
-// 起不论 token 一律停用(proposal §4.3),token 现在只守三个 Rollback* 与 ReleasePlayerName 的运维路径。
+// 起不论 token 一律停用(proposal §4.3),token 现在守 ReleasePlayerName 的运维路径与 GM 回收的五个入口。
 func TestAdminTokenAbsentMeansDisabled(t *testing.T) {
 	c := loadYaml(t, minimalYaml)
 	if c.AdminToken != "" {
@@ -382,11 +383,79 @@ AdminToken: merge-window-token
 	}
 }
 
+// TestResolveAdminTokenAccepts 钉住常驻启动放行的三种形状:
+//   - K8s:ConfigMap 只写 AdminTokenEnv(从 yaml 读,顺带钉住键名能被 go-zero 读到),Secret 注入的变量值填进 AdminToken;
+//   - 本机:不写 AdminTokenEnv,照用字面量,机器上残留的同名变量不改本机行为;
+//   - 两样都不写:AdminToken 为空 = 运维 RPC 停用,不报错。
+func TestResolveAdminTokenAccepts(t *testing.T) {
+	const envName = "MMORPG_DATA_SERVICE_ADMIN_TOKEN"
+	fromSecret := strings.Repeat("s", MinAdminTokenBytes)
+	literal := strings.Repeat("l", MinAdminTokenBytes)
+	lookup := func(name string) (string, bool) { return fromSecret, name == envName }
+	cases := []struct {
+		name string
+		conf Config
+		want string
+	}{
+		{"K8s:只写 AdminTokenEnv", loadYaml(t, minimalYaml+"AdminTokenEnv: "+envName+"\n"), fromSecret},
+		{"本机:只写字面量", Config{AdminToken: literal}, literal},
+		{"都不写:停用", Config{}, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := tc.conf.ResolveAdminToken(lookup)
+			if err != nil {
+				t.Fatalf("ResolveAdminToken: %v", err)
+			}
+			if got.AdminToken != tc.want {
+				t.Fatalf("AdminToken = %q, want %q", got.AdminToken, tc.want)
+			}
+		})
+	}
+}
+
+// TestResolveAdminTokenRejects 钉住常驻启动拒启的形状:变量缺失或为空、字面量与变量名同时写(规则同 SharedRedisPasswordEnv,
+// 见 secretenv.Fill),变量名不像变量名,以及口令不论来源短于 MinAdminTokenBytes。报错点出原因,且不回显口令。
+func TestResolveAdminTokenRejects(t *testing.T) {
+	const envName = "MMORPG_DATA_SERVICE_ADMIN_TOKEN"
+	long := strings.Repeat("k", MinAdminTokenBytes)
+	cases := []struct {
+		name    string
+		conf    Config
+		env     map[string]string
+		wantErr string // 报错里必须有的片段
+	}{
+		{"指名的变量缺失", Config{AdminTokenEnv: envName}, nil, "unset or empty"},
+		{"指名的变量为空", Config{AdminTokenEnv: envName}, map[string]string{envName: ""}, "unset or empty"},
+		{"字面量与变量名同时写", Config{AdminToken: "stale-literal-" + long, AdminTokenEnv: envName}, map[string]string{envName: long}, "set literally"},
+		{"变量名不像变量名(疑似把口令贴了进来)", Config{AdminTokenEnv: "tiny-secret-pasted-in"}, nil, "must name an environment variable"},
+		{"字面量过短", Config{AdminToken: "tiny-secret"}, nil, "shorter than"},
+		{"变量里的口令过短", Config{AdminTokenEnv: envName}, map[string]string{envName: "tiny-secret"}, "shorter than"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.conf.ResolveAdminToken(func(name string) (string, bool) {
+				value, ok := tc.env[name]
+				return value, ok
+			})
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("want an error containing %q, got %v", tc.wantErr, err)
+			}
+			for _, secret := range []string{"tiny-secret", "stale-literal", long} {
+				if strings.Contains(err.Error(), secret) {
+					t.Fatalf("the error must not echo the token, got %v", err)
+				}
+			}
+		})
+	}
+}
+
 // TestShippedYamlLoads 保证仓库里那份 etc/data_service.yaml 始终能被 go-zero 读进来。
 //
 // 这条不是形式主义:go-zero 对多余的键一律静默忽略,同一段里写错键名只有读回来才看得见。
 // 顺带钉住 AdminToken 在这份 dev 配置里保持关闭 —— 本地栈不该默认开着运维 RPC
-// (今天是 Rollback* 与 ReleasePlayerName 的运维路径;remap 已停用,与 token 无关)。
+// (今天是 ReleasePlayerName 的运维路径与 GM 回收的五个入口;remap 已停用,与 token 无关);
+// 本地栈不注入口令变量,所以这份配置不注入任何变量也要过口令解析。
 func TestShippedYamlLoads(t *testing.T) {
 	var c Config
 	if err := conf.Load("../../etc/data_service.yaml", &c); err != nil {
@@ -397,6 +466,9 @@ func TestShippedYamlLoads(t *testing.T) {
 	}
 	if c.AdminToken != "" {
 		t.Fatalf("etc/data_service.yaml 不该内置 AdminToken(会让本地栈默认开着运维 RPC),got %q", c.AdminToken)
+	}
+	if _, err := c.ResolveAdminToken(func(string) (string, bool) { return "", false }); err != nil {
+		t.Fatalf("etc/data_service.yaml: 不注入任何变量也必须能过口令解析(本地栈没有口令 Secret): %v", err)
 	}
 }
 

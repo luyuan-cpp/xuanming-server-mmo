@@ -7960,3 +7960,21 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
 - 原定批 C（部署开通）、批 B（scene 与客户端接入）交 Gemini 4 Neon Extra 写；负责人改定为换一台电脑，由那边的 Claude Code（Fable 5.2 Max）写，Gemini 不写这两批的代码，只做写完之后的生成、编译、测试、冒烟。
 - 已改 `docs/design/skill-book-wanted-order-trade-escrow.md` §11.2 与第 4 轮交接单 §6；批 C 前提①（第 4 轮 §7.4 子代理改完 `k8s_deploy.ps1`）已满足：§7.4 没改这个文件，r2-tn#3 由「改名与内容安全第三轮」会话修完。前提②（K8s 各档位是否打开 trade `AssetOp.Enabled`）仍等负责人拍板。
 - 那台电脑要先拿到本机 main 的最新内容（含批 A 与还在工作区的文档改动），由负责人同步。
+
+## 2026-11-27 Antigravity：战前技能禁选 V2（每方 3 禁 + 1 保「护招破禁」+「队友已带」防误禁 + 开局亮牌揭示横幅）四仓闭环与 5 枚重做切片接入
+
+- **方案与设计**（落盘 [battle-prep-skill-ban-v1.md](planning/battle-prep-skill-ban-v1.md) §8）：零新 RPC、零新消息号、零配表新列、零 `rule_version` 变更，沿用同一 25 秒战前变阵窗：
+  - **每方「3 禁 + 1 保（护招破禁）」**：任意开禁招局（`skill_ban_slots_per_team > 0`）自动激活 `skill_protect_slots_per_team = 1`；每人可在候选池内独立提名 `0..1` 护招（严禁与本人禁招列表同招，客户端点选时单次原子请求自动移出冲突项）；队内聚合 `AggregateTeamProtect` 走 `votes DESC → nominatedByCaptain DESC → SplitMix64(seed ^ 0x50524F54454354ULL ^ sid) ASC → sid ASC`；`FinalizePrepPhase()` 由 B 队护招反制 A 队禁招、A 队护招反制 B 队禁招，被破禁化解技能写入 `countered_ban_skill_ids` 并从 `banned_skill_ids` 移出恢复可施放（双边同禁仅单边护招时另一方未受反制禁招仍生效，`countered_ban_skill_ids` 与 `banned_skill_ids` 严格互斥）。
+  - **「队友已带」防误禁标记（零泄密）**：`BattlePrepState.teammate_equipped_skill_ids = 13` 仅向同队参战者投影本队其他队友人物及当前所选首发宠携带的候选池技能（队友临场换宠实时刷新；1V1 / 对手 / 观众恒空）。
+  - **协议增量**：`BattlePrepPlayerState.nominated_protect_skill_id = 9`、`BattlePrepState.{skill_protect_slots_per_team = 11, team_effective_protected_skill_id = 12, teammate_equipped_skill_ids = 13}`、`BattleStateS2C.{team_a_protected_skill_id = 44, team_b_protected_skill_id = 45, countered_ban_skill_ids = 46}`（天然覆盖重连 / L2 观战 / 战报回放 / 看配装）、`UpdateBattlePrepRequest.{update_protected_skill = 7, protected_skill_id = 8}`。
+- **四仓实测证据**（未做 `git commit` / `git push`）：
+  - **C++ / Go（`xuanming-server-mmo-cpp`）**：`dev.bat proto` exit 0；更新 `turn_battle_constants.h`、`turn_battle_engine.{h,cpp}`、`battle_room_manager.cpp`、`ranked_battle_test.cpp`。验证：`check_log_text_english.py` **PASS**；`proto.lib`/`battle.lib`/`turn_battle_engine_test.exe`/`battle.exe` 0 错误编译、`turn_battle_engine_test.exe --gtest_filter=*RankedBattleTest*` **20/20 PASS**（含新增 `PrepSkillBanV2ProtectCounterAndTeammateEquippedSkills`）；Go `match` `./internal/{ranked,tournament,logic}/...` **ALL PASS**。
+  - **Java 独立服务端（`xuanming-server-mmo`）**：`ContractSync --maps-source` 同步通过；更新 `BattleConstants.java`、`TurnBattleEngine.java`、`BattleRoomServiceImpl.java`、`PrepSkillBanBattleEngineTest.java`（顺手修复并行会话在 `TurnBattleEngine.java:3637` 引入的 1 处 `BattleEffect.PERIODIC_DAMAGE → PERIODIC` 编译阻断）。验证：`game-proto`/`game-table`/`game-battle-engine` 编译安装成功、`PrepSkillBanBattleEngineTest` **2/2 PASS**（真实 55 招表池全闭环）、`game-battle` `BattleViewsTest` **6/6 PASS**（注：`BattleTacticalPrepRoomTest` 当前因并行会话 `SeasonSealEffect` 校验改动返回 `1002`、`TacticalPuzzleBattleEngineTest.java` 与 `game-discovery` 存在并行会话未完成编译项）。
+  - **Python 服务端（`xuanming-server-mmo-python`）**：同步 2 份 `.proto` 并重跑 `build_protocol.py`；更新 `battle_dropin_effects.py`、`battle.py` 与 `tests/test_cpp_1212_battle_match_team.py`。验证：`pytest tests/test_cpp_1212_battle_match_team.py` **10/10 PASS**。
+  - **Unity 客户端（`mmorpg-client`）**：`gen_proto.ps1` exit 0；导入 Codex 重做验收版 `72ca11aa44177de8d3a9997a92ef02c0a7a842b3` 全部 5 对透明 PNG-32 切片与 `.meta`（5/5 SHA-256 与 `manifest.json` 逐字节一致）至 `Assets/Resources/UI/Ugui/BattlePrepSkillBan/`（V1+V2 共 13 对）；更新 `BattleSkillBanModels.cs`、`BattleClient.cs`、`BattleScreen.cs`（战前护招槽与禁/保点选切换、候选卡 `[68,2,90,24]` 队友已带角标、顶部禁招条破禁替换与详情展开、开局 2.65 秒 `880×200` 九宫格亮牌揭示横幅且避让右上 140px 胶囊区）、`BattleReportPanel.cs`、`BattleSkillBanTests.cs`。验证：`client_compile_check.ps1` **825/825 0 错误**、隔离 Roslyn NUnit `BattleSkillBanTests` **6/6 PASS**（覆盖 13/13 V1+V2 切片与 `.meta` 及全部 V2 规则）。
+
+## 2026-11-27 Claude:开服线会话再核对「工作是否都在主仓 main、包括已删会话」——没有要合并的(只核对,没改代码)
+
+- 本会话(开服线 / B0-4 后续项)与它派出的会话都直接在 `D:\luyuan\xuanming-server-mmo-cpp` 的 main 工作区里改,没开分支、没开 worktree。本线的代码、设计稿、手册、规范与 PROGRESS 条目都已随批量提交进 main(核对时 HEAD 为 `bcea63be6`,与 `origin/main` 相同)。
+- 方法沿用 11-26「已删 / 已归档会话留在 git 里的残留逐项核对」,只看那之后的新增:本地分支只有 main;没有 stash;`.claude/worktrees` 为空;桌面端存储记录里会话 worktree 0 个(归档后保留的也是 0 个);HEAD 引用日志里不在 main 的仍只有 11-26 核对过的 5 个变基 / amend 前旧版本;悬空提交仍是 36 个,最新的就是这 5 个;`refs/archive/*`、`refs/codex/*` 没有新增。
+- 结论:已删会话没有在 main 之外留下改动,没有要合并的。

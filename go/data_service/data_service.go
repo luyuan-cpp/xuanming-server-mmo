@@ -289,6 +289,14 @@ func main() {
 		fmt.Fprintf(os.Stderr, "data_service refuses to start: %v\n", redisAuthErr)
 		os.Exit(1)
 	}
+	// 运维口令(AdminTokenEnv,K8s 上经 Secret 注入)只有常驻 gRPC 用得到;-migrate、发号器运维入口与 route_tool 在上面已退出,
+	// 它们的 Job 不注入这个变量。
+	var adminTokenErr error
+	c, adminTokenErr = c.ResolveAdminToken(os.LookupEnv)
+	if adminTokenErr != nil {
+		fmt.Fprintf(os.Stderr, "data_service refuses to start: %v\n", adminTokenErr)
+		os.Exit(1)
+	}
 	// 控制集群段:名字读缓存常驻就连它,不分开关(Recall 用的是同一段)。-migrate 与发号器运维入口不连 Redis,所以也放在它们之后。
 	if err := c.ValidateControlRedis(); err != nil {
 		fmt.Fprintf(os.Stderr, "data_service refuses to start: %v\n", err)

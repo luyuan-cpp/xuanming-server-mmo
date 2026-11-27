@@ -249,8 +249,8 @@ login、guild、match 只由发号器发号,match 随 A7c、login 与 guild 2026
 里映射回退一行同一口径),保证恢复后的 revision 严格大于恢复前任何进程见过的值。恢复之后核对:scene_manager 启动日志里 `[snowflakealloc]` 的申领
 都成功、没有 `slot ownership lost`;有的话按「槽被别人接管」处理,该进程已自己停发。
 
-**合服映射副本**(`/mmorpg/merged_zone_copy/<全局库名>`,[设计](../design/merged-zone-etcd-copy.md)):恢复之后马上删掉它
-(`etcdctl del /mmorpg/merged_zone_copy/<全局库名>`)。快照里的副本可能比各副本已经回答过的版本旧;目录第 0 片读不到时,新起的 data_service
+**合服映射副本**(`/mmorpg/merged_zone_copy/<第 0 片库名>`,[设计](../design/merged-zone-etcd-copy.md)):恢复之后马上删掉它
+(`etcdctl del /mmorpg/merged_zone_copy/<第 0 片库名>`)。快照里的副本可能比各副本已经回答过的版本旧;目录第 0 片读不到时,新起的 data_service
 会按它起,回答一份比别的副本旧的映射。删掉之后,读得到第 0 片的 data_service 按第 0 片重新发布;读不到的找不到副本就拒启,不会按旧版本起。
 这一种 data_service 不用停:第 0 片没有回退,在跑的副本读到的仍是同一条历史。
 

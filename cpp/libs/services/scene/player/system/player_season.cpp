@@ -1348,6 +1348,27 @@ void PlayerSeasonSystem::EquipFormation(entt::entity player, uint64_t nowMs,
     finish(kSuccess);
 }
 
+uint32_t PlayerSeasonSystem::TryEquipLinkedFormation(entt::entity player, uint32_t formationId) {
+    if (!tlsEcs.actorRegistry.valid(player)) {
+        return kEntityIsNull;
+    }
+    auto* seasonComp = tlsEcs.actorRegistry.try_get<PlayerSeasonComp>(player);
+    if (seasonComp == nullptr) {
+        return kSeasonUnavailable;
+    }
+    if (formationId == 0u || !turnbattle::wuxing::IsValidFormationId(formationId)) {
+        return kInvalidParameter;
+    }
+    if (const uint32_t writableErr = CheckWritable(player); writableErr != kSuccess) {
+        return writableErr;
+    }
+    if (seasonComp->equipped_formation_id() == formationId) {
+        return kSuccess;
+    }
+    seasonComp->set_equipped_formation_id(formationId);
+    return kSuccess;
+}
+
 uint32_t PlayerSeasonSystem::GetWuxingTowerState(entt::entity player, uint64_t nowMs,
                                                  GetWuxingTowerStateResponse& response) {
     response.Clear();

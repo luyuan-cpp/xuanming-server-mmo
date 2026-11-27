@@ -582,9 +582,9 @@ TEST_F(GatePushDelivery, LeaveGameResetSessionIsTreatedAsUnboundUntilNextBind)
 	const MessageContent reboundMsg = Content("rebound-unicast");
 
 	gate_push::DeliverToAll(Path::kKafka, &allMsg);
-	gate_push::DeliverToPlayer(Path::kKafka, kSession, kPlayerA, &oldRoleMsg);
-	gate_push::DeliverToPlayer(Path::kKafka, kSession, 0, &loginTipMsg);
-	gate_push::DeliverToPlayer(Path::kRpc, kOtherSession, kPlayerB, &reboundMsg);
+	gate_push::DeliverToSession(Path::kKafka, kSession, kPlayerA, &oldRoleMsg);
+	gate_push::DeliverToSession(Path::kKafka, kSession, 0, &loginTipMsg);
+	gate_push::DeliverToSession(Path::kRpc, kOtherSession, kPlayerB, &reboundMsg);
 
 	ExpectReceived(leftGame, Bytes(loginTipMsg));
 	ExpectReceived(rebound, Bytes(allMsg) + Bytes(reboundMsg));

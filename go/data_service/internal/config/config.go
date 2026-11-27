@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"shared/playerredis"
 	"shared/redisauth"
 	"shared/rolefence"
+	"shared/secretenv"
 
 	"github.com/zeromicro/go-zero/core/discov"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -45,15 +47,24 @@ type Config struct {
 
 	// AdminToken 是运维专用 RPC 的共享口令,调用方放在 gRPC metadata 的 `x-admin-token` 里。
 	//
-	// 现在只守 ReleasePlayerName 的运维路径(不限登记时间的释放)。
+	// 守两类入口:ReleasePlayerName 的运维路径(不限登记时间的释放),以及 GM 批量回收的五个入口 BatchRecallItems、
+	// GetRecallBatch、CancelRecallBatch、ResolveRecallOp、RegisterRecallReviewHandled(docs/design/exploit_loss_prevention_zh.md「鉴权」)。
 	//
-	// **空 = 该 RPC 整体停用**(fail closed),不是"免鉴权"。理由:data_service 在集群
+	// **空 = 这些 RPC 整体停用**(fail closed),不是"免鉴权"。理由:data_service 在集群
 	// 内网是无鉴权可达的,任何一个能拨到它的进程都能调;默认敞开意味着一次误配
-	// 或一个跑错环境的脚本就能释放任意玩家的名字。所以默认值只能是"不能用",
-	// 启用是一次显式的运维动作:维护窗口里临时下发,窗口结束就撤掉。
+	// 或一个跑错环境的脚本就能释放任意玩家的名字、发起或取消回收。所以默认值只能是"不能用",
+	// 启用要显式配置口令。非空时至少 MinAdminTokenBytes 字节,短了拒启(ResolveAdminToken)。
 	//
-	// 不放进 yaml 明文的话可以用 k8s Secret 挂成环境变量再由 ConfigMap 引用。
+	// 这个键只写字面量,只给本机与不经部署脚本的临时环境;仓库里的 etc/data_service.yaml 不写它(config_test 钉住)。
+	// K8s 的 ConfigMap 不放口令,只写 AdminTokenEnv;两个键只能写一个。
 	AdminToken string `json:",optional"`
+
+	// AdminTokenEnv 是运维口令所在的**环境变量名**,不是口令值。K8s 上只写它:变量名由部署脚本固定为
+	// MMORPG_DATA_SERVICE_ADMIN_TOKEN,口令只在 Secret 里,经 secretKeyRef 注入。不写 = 照用 AdminToken 字面量(本机)。
+	// 由 ResolveAdminToken 在常驻启动时把变量的值填进 AdminToken,规则同 SharedRedisPasswordEnv(shared/secretenv):
+	// 变量缺失或为空、或同时写了字面 AdminToken,都拒启。所以不开运维 RPC 的环境不写这个键,而不是写了键却不注入变量
+	// (与 player_inbox 的 PlayerInbox.AdminTokenEnv 不同:那边变量缺失 = 运维面停用,且会去掉值的首尾空白;这里值原样使用)。
+	AdminTokenEnv string `json:",optional"`
 
 	// AdminAllowUnapproved:为 true 时三个甲级回收入口(BatchRecallItems 执行、CancelRecallBatch、ResolveRecallOp)接受不带
 	// 双人复核批准记录的请求,只给本机开发(docs/design/admin-identity-and-dual-control.md §5.5、§5.7)。缺省 false。
@@ -265,6 +276,36 @@ func (c Config) ResolveSharedRedisPassword(lookup func(string) (string, bool)) (
 		redisauth.Target{Field: "ControlRedis.Password", Password: &c.ControlRedis.Password})
 	if err != nil {
 		return Config{}, err
+	}
+	return c, nil
+}
+
+// MinAdminTokenBytes 是 AdminToken 非空时的最短字节数,与 player_inbox、login、chat 的运维口令同值:太短的口令等于没有。
+const MinAdminTokenBytes = 16
+
+// adminTokenEnvPattern 约束 AdminTokenEnv 只能是一个环境变量名(同 player_inbox 的判据)。把口令本身贴进这个键是最常见的手滑,
+// 而 secretenv.Fill 的报错会带出变量名,所以先按形状拒绝,报错只给长度。
+var adminTokenEnvPattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
+
+// ResolveAdminToken 按 AdminTokenEnv 填 AdminToken,返回填好的副本;填值规则见 secretenv.Fill(与 SharedRedisPasswordEnv 同一口径)。
+// 填完再统一判长度:口令不论来自字面量还是变量,非空而短于 MinAdminTokenBytes 都返回错误。错误文本只点键名、变量名与长度,不含口令。
+// 只有常驻 gRPC 用得到口令,-migrate、发号器运维入口与 route_tool 都不调用(data_service.go),它们的 Job 也不注入这个变量。
+func (c Config) ResolveAdminToken(lookup func(string) (string, bool)) (Config, error) {
+	if c.AdminTokenEnv != "" && !adminTokenEnvPattern.MatchString(c.AdminTokenEnv) {
+		return Config{}, fmt.Errorf("AdminTokenEnv must name an environment variable such as MMORPG_DATA_SERVICE_ADMIN_TOKEN "+
+			"(got a %d-byte value that is not one; not echoed in case it is the token itself)", len(c.AdminTokenEnv))
+	}
+	if err := secretenv.Fill("AdminTokenEnv", c.AdminTokenEnv, lookup,
+		secretenv.Target{Field: "AdminToken", Value: &c.AdminToken}); err != nil {
+		return Config{}, err
+	}
+	if n := len(c.AdminToken); n != 0 && n < MinAdminTokenBytes {
+		source := "AdminToken"
+		if c.AdminTokenEnv != "" {
+			source = c.AdminTokenEnv + " (named by AdminTokenEnv)"
+		}
+		return Config{}, fmt.Errorf("%s holds a %d-byte admin token, shorter than the %d-byte minimum (value not echoed); "+
+			"leave AdminToken and AdminTokenEnv unset to keep the admin RPCs disabled", source, n, MinAdminTokenBytes)
 	}
 	return c, nil
 }

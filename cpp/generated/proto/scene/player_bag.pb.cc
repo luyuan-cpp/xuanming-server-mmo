@@ -133,6 +133,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto, /* tracker*/ nullptr,},
         // ::EquipLoadoutLinkedOption
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto, /* tracker*/ nullptr,},
+        // ::EquipLoadoutLinkedPetOption
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto, /* tracker*/ nullptr,},
         // ::EquipLoadoutSnapshot
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto, /* tracker*/ nullptr,},
         // ::GetEquipLoadoutsRequest
@@ -259,7 +261,7 @@ constexpr auto UnlockEquipLoadoutRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[59],
+      &file_reflection_data[60],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -567,7 +569,7 @@ constexpr auto SwitchEquipLoadoutRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[57],
+      &file_reflection_data[58],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -2047,7 +2049,7 @@ constexpr auto GetEquipLoadoutsRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[53],
+      &file_reflection_data[54],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -2804,6 +2806,173 @@ const ::_pbi::ClassData* EquipSlotInfo_get_class_data() {
   return EquipSlotInfo_globals_.GetClassData();
 #else
   return EquipSlotInfo_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class EquipLoadoutLinkedPetOption::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<EquipLoadoutLinkedPetOption>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(EquipLoadoutLinkedPetOption, _impl_._has_bits_);
+};
+
+constexpr EquipLoadoutLinkedPetOption::ParseTableT_ EquipLoadoutLinkedPetOption::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(EquipLoadoutLinkedPetOption, _impl_._has_bits_),
+      0, // no _extensions_
+      4, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967280,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      4,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::EquipLoadoutLinkedPetOption>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // bool active = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EquipLoadoutLinkedPetOption, _impl_.active_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(EquipLoadoutLinkedPetOption, _impl_.active_)}},
+      // uint64 pet_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipLoadoutLinkedPetOption, _impl_.pet_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(EquipLoadoutLinkedPetOption, _impl_.pet_id_)}},
+      // uint32 pet_table_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipLoadoutLinkedPetOption, _impl_.pet_table_id_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(EquipLoadoutLinkedPetOption, _impl_.pet_table_id_)}},
+      // string name = 3;
+      {::_pbi::TcParser::FastUS1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(EquipLoadoutLinkedPetOption, _impl_.name_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 pet_id = 1;
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutLinkedPetOption, _impl_.pet_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 pet_table_id = 2;
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutLinkedPetOption, _impl_.pet_table_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string name = 3;
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutLinkedPetOption, _impl_.name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // bool active = 4;
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutLinkedPetOption, _impl_.active_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    // no aux_entries
+    {{
+      "\33\0\0\4\0\0\0\0"
+      "EquipLoadoutLinkedPetOption"
+      "name"
+    }},
+  };
+}
+
+
+inline constexpr EquipLoadoutLinkedPetOption::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        pet_id_{::uint64_t{0u}},
+        pet_table_id_{0u},
+        active_{false} {}
+
+template <typename>
+constexpr EquipLoadoutLinkedPetOption::EquipLoadoutLinkedPetOption(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL EquipLoadoutLinkedPetOption::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) EquipLoadoutLinkedPetOption(arena);
+}
+constexpr auto EquipLoadoutLinkedPetOption::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(EquipLoadoutLinkedPetOption), alignof(EquipLoadoutLinkedPetOption));
+}
+constexpr auto EquipLoadoutLinkedPetOption::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &EquipLoadoutLinkedPetOption::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<EquipLoadoutLinkedPetOption>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &EquipLoadoutLinkedPetOption::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<EquipLoadoutLinkedPetOption>(), &EquipLoadoutLinkedPetOption::ByteSizeLong,
+              &EquipLoadoutLinkedPetOption::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(EquipLoadoutLinkedPetOption, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[52],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct EquipLoadoutLinkedPetOptionGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr EquipLoadoutLinkedPetOptionGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 EquipLoadoutLinkedPetOption_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(EquipLoadoutLinkedPetOption::InternalGenerateClassData_(
+            _default, &EquipLoadoutLinkedPetOption_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<EquipLoadoutLinkedPetOption>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~EquipLoadoutLinkedPetOptionGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) EquipLoadoutLinkedPetOption _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<EquipLoadoutLinkedPetOption>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(EquipLoadoutLinkedPetOptionGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST EquipLoadoutLinkedPetOptionGlobalsTypeInternal EquipLoadoutLinkedPetOption_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* EquipLoadoutLinkedPetOption_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return EquipLoadoutLinkedPetOption_globals_.GetClassData();
+#else
+  return EquipLoadoutLinkedPetOption_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -5117,11 +5286,11 @@ constexpr SaveEquipLoadoutRequest::ParseTableT_ SaveEquipLoadoutRequest::Interna
     {
       PROTOBUF_FIELD_OFFSET(SaveEquipLoadoutRequest, _impl_._has_bits_),
       0, // no _extensions_
-      9, 120,  // max_field_number, fast_idx_mask
+      11, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966784,  // skipmap
+      4294965248,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      9,  // num_field_entries
+      11,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -5168,8 +5337,14 @@ constexpr SaveEquipLoadoutRequest::ParseTableT_ SaveEquipLoadoutRequest::Interna
       {::_pbi::TcParser::FastUS1,
        {74, 2, 0,
         PROTOBUF_FIELD_OFFSET(SaveEquipLoadoutRequest, _impl_.request_id_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 linked_pet_id = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SaveEquipLoadoutRequest, _impl_.linked_pet_id_), 10>(),
+       {80, 10, 0,
+        PROTOBUF_FIELD_OFFSET(SaveEquipLoadoutRequest, _impl_.linked_pet_id_)}},
+      // uint32 linked_formation_id = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SaveEquipLoadoutRequest, _impl_.linked_formation_id_), 9>(),
+       {88, 9, 0,
+        PROTOBUF_FIELD_OFFSET(SaveEquipLoadoutRequest, _impl_.linked_formation_id_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -5195,6 +5370,10 @@ constexpr SaveEquipLoadoutRequest::ParseTableT_ SaveEquipLoadoutRequest::Interna
       {PROTOBUF_FIELD_OFFSET(SaveEquipLoadoutRequest, _impl_.state_version_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string request_id = 9;
       {PROTOBUF_FIELD_OFFSET(SaveEquipLoadoutRequest, _impl_.request_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 linked_pet_id = 10;
+      {PROTOBUF_FIELD_OFFSET(SaveEquipLoadoutRequest, _impl_.linked_pet_id_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 linked_formation_id = 11;
+      {PROTOBUF_FIELD_OFFSET(SaveEquipLoadoutRequest, _impl_.linked_formation_id_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -5233,7 +5412,9 @@ inline constexpr SaveEquipLoadoutRequest::Impl_::Impl_(
         capture_current_equipped_{false},
         linked_skill_scheme_id_{0u},
         state_version_{::uint64_t{0u}},
-        linked_attribute_scheme_id_{0u} {}
+        linked_attribute_scheme_id_{0u},
+        linked_formation_id_{0u},
+        linked_pet_id_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr SaveEquipLoadoutRequest::SaveEquipLoadoutRequest(::_pbi::ConstantInitialized,
@@ -5276,7 +5457,7 @@ constexpr auto SaveEquipLoadoutRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[55],
+      &file_reflection_data[56],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -9469,11 +9650,11 @@ constexpr EquipLoadoutSchemeInfo::ParseTableT_ EquipLoadoutSchemeInfo::InternalG
     {
       PROTOBUF_FIELD_OFFSET(EquipLoadoutSchemeInfo, _impl_._has_bits_),
       0, // no _extensions_
-      8, 56,  // max_field_number, fast_idx_mask
+      10, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967040,  // skipmap
+      4294966272,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      8,  // num_field_entries
+      10,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -9483,10 +9664,7 @@ constexpr EquipLoadoutSchemeInfo::ParseTableT_ EquipLoadoutSchemeInfo::InternalG
       ::_pbi::TcParser::GetTable<::EquipLoadoutSchemeInfo>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 missing_count = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipLoadoutSchemeInfo, _impl_.missing_count_), 7>(),
-       {64, 7, 0,
-        PROTOBUF_FIELD_OFFSET(EquipLoadoutSchemeInfo, _impl_.missing_count_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint32 scheme_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipLoadoutSchemeInfo, _impl_.scheme_id_), 2>(),
        {8, 2, 0,
@@ -9515,6 +9693,23 @@ constexpr EquipLoadoutSchemeInfo::ParseTableT_ EquipLoadoutSchemeInfo::InternalG
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipLoadoutSchemeInfo, _impl_.linked_attribute_scheme_id_), 6>(),
        {56, 6, 0,
         PROTOBUF_FIELD_OFFSET(EquipLoadoutSchemeInfo, _impl_.linked_attribute_scheme_id_)}},
+      // uint32 missing_count = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipLoadoutSchemeInfo, _impl_.missing_count_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(EquipLoadoutSchemeInfo, _impl_.missing_count_)}},
+      // uint64 linked_pet_id = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipLoadoutSchemeInfo, _impl_.linked_pet_id_), 8>(),
+       {72, 8, 0,
+        PROTOBUF_FIELD_OFFSET(EquipLoadoutSchemeInfo, _impl_.linked_pet_id_)}},
+      // uint32 linked_formation_id = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipLoadoutSchemeInfo, _impl_.linked_formation_id_), 9>(),
+       {80, 9, 0,
+        PROTOBUF_FIELD_OFFSET(EquipLoadoutSchemeInfo, _impl_.linked_formation_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -9534,6 +9729,10 @@ constexpr EquipLoadoutSchemeInfo::ParseTableT_ EquipLoadoutSchemeInfo::InternalG
       {PROTOBUF_FIELD_OFFSET(EquipLoadoutSchemeInfo, _impl_.linked_attribute_scheme_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 missing_count = 8;
       {PROTOBUF_FIELD_OFFSET(EquipLoadoutSchemeInfo, _impl_.missing_count_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 linked_pet_id = 9;
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSchemeInfo, _impl_.linked_pet_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 linked_formation_id = 10;
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSchemeInfo, _impl_.linked_formation_id_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -9568,7 +9767,9 @@ inline constexpr EquipLoadoutSchemeInfo::Impl_::Impl_(
         role_tag_{0u},
         linked_skill_scheme_id_{0u},
         linked_attribute_scheme_id_{0u},
-        missing_count_{0u} {}
+        missing_count_{0u},
+        linked_pet_id_{::uint64_t{0u}},
+        linked_formation_id_{0u} {}
 
 template <typename>
 constexpr EquipLoadoutSchemeInfo::EquipLoadoutSchemeInfo(::_pbi::ConstantInitialized,
@@ -10570,12 +10771,12 @@ constexpr EquipLoadoutSnapshot::ParseTableT_ EquipLoadoutSnapshot::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_._has_bits_),
       0, // no _extensions_
-      21, 248,  // max_field_number, fast_idx_mask
+      23, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4292870144,  // skipmap
+      4286578688,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      21,  // num_field_entries
-      3,  // num_aux_entries
+      23,  // num_field_entries
+      5,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -10586,48 +10787,48 @@ constexpr EquipLoadoutSnapshot::ParseTableT_ EquipLoadoutSnapshot::InternalGener
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint32 unlocked_scheme_count = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipLoadoutSnapshot, _impl_.unlocked_scheme_count_), 3>(),
-       {8, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipLoadoutSnapshot, _impl_.unlocked_scheme_count_), 5>(),
+       {8, 5, 0,
         PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.unlocked_scheme_count_)}},
       // uint32 max_scheme_count = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipLoadoutSnapshot, _impl_.max_scheme_count_), 4>(),
-       {16, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipLoadoutSnapshot, _impl_.max_scheme_count_), 6>(),
+       {16, 6, 0,
         PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.max_scheme_count_)}},
       // uint32 active_scheme_id = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipLoadoutSnapshot, _impl_.active_scheme_id_), 6>(),
-       {24, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipLoadoutSnapshot, _impl_.active_scheme_id_), 8>(),
+       {24, 8, 0,
         PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.active_scheme_id_)}},
       // uint64 state_version = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipLoadoutSnapshot, _impl_.state_version_), 5>(),
-       {32, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipLoadoutSnapshot, _impl_.state_version_), 7>(),
+       {32, 7, 0,
         PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.state_version_)}},
       // repeated .EquipLoadoutSchemeInfo schemes = 5;
       {::_pbi::TcParser::FastMtR1,
        {42, 0, 0,
         PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.schemes_)}},
       // uint64 next_unlock_cost_diamond = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipLoadoutSnapshot, _impl_.next_unlock_cost_diamond_), 8>(),
-       {48, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipLoadoutSnapshot, _impl_.next_unlock_cost_diamond_), 10>(),
+       {48, 10, 0,
         PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.next_unlock_cost_diamond_)}},
       // bool next_unlock_allow_bind_diamond = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EquipLoadoutSnapshot, _impl_.next_unlock_allow_bind_diamond_), 7>(),
-       {56, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(EquipLoadoutSnapshot, _impl_.next_unlock_allow_bind_diamond_), 9>(),
+       {56, 9, 0,
         PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.next_unlock_allow_bind_diamond_)}},
       // uint32 unlock_item_config_id = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipLoadoutSnapshot, _impl_.unlock_item_config_id_), 12>(),
-       {64, 12, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipLoadoutSnapshot, _impl_.unlock_item_config_id_), 14>(),
+       {64, 14, 0,
         PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.unlock_item_config_id_)}},
       // uint64 unlock_item_owned = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipLoadoutSnapshot, _impl_.unlock_item_owned_), 9>(),
-       {72, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipLoadoutSnapshot, _impl_.unlock_item_owned_), 11>(),
+       {72, 11, 0,
         PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.unlock_item_owned_)}},
       // uint64 diamond_balance = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipLoadoutSnapshot, _impl_.diamond_balance_), 10>(),
-       {80, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipLoadoutSnapshot, _impl_.diamond_balance_), 12>(),
+       {80, 12, 0,
         PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.diamond_balance_)}},
       // uint64 bind_diamond_balance = 11;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipLoadoutSnapshot, _impl_.bind_diamond_balance_), 11>(),
-       {88, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EquipLoadoutSnapshot, _impl_.bind_diamond_balance_), 13>(),
+       {88, 13, 0,
         PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.bind_diamond_balance_)}},
       // repeated .EquipLoadoutLinkedOption skill_schemes = 12;
       {::_pbi::TcParser::FastMtR1,
@@ -10638,39 +10839,45 @@ constexpr EquipLoadoutSnapshot::ParseTableT_ EquipLoadoutSnapshot::InternalGener
        {106, 2, 2,
         PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.attribute_schemes_)}},
       // uint32 free_schemes = 14;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipLoadoutSnapshot, _impl_.free_schemes_), 13>(),
-       {112, 13, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipLoadoutSnapshot, _impl_.free_schemes_), 15>(),
+       {112, 15, 0,
         PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.free_schemes_)}},
       // uint32 light_card_bonus_schemes = 15;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipLoadoutSnapshot, _impl_.light_card_bonus_schemes_), 14>(),
-       {120, 14, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipLoadoutSnapshot, _impl_.light_card_bonus_schemes_), 16>(),
+       {120, 16, 0,
         PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.light_card_bonus_schemes_)}},
       // uint32 rented_extra_slots = 16;
       {::_pbi::TcParser::FastV32S2,
-       {384, 15, 0,
+       {384, 17, 0,
         PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rented_extra_slots_)}},
       // uint64 rent_expires_at_sec = 17;
       {::_pbi::TcParser::FastV64S2,
-       {392, 16, 0,
+       {392, 18, 0,
         PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rent_expires_at_sec_)}},
       // uint64 server_now_sec = 18;
       {::_pbi::TcParser::FastV64S2,
-       {400, 17, 0,
+       {400, 19, 0,
         PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.server_now_sec_)}},
       // uint64 rent_unit_price_diamond = 19;
       {::_pbi::TcParser::FastV64S2,
-       {408, 18, 0,
+       {408, 20, 0,
         PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rent_unit_price_diamond_)}},
       // uint32 rent_period_days = 20;
       {::_pbi::TcParser::FastV32S2,
-       {416, 19, 0,
+       {416, 21, 0,
         PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rent_period_days_)}},
       // uint32 rent_max_remaining_days = 21;
       {::_pbi::TcParser::FastV32S2,
-       {424, 20, 0,
+       {424, 22, 0,
         PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rent_max_remaining_days_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // repeated .EquipLoadoutLinkedPetOption pets = 22;
+      {::_pbi::TcParser::FastMtR2,
+       {434, 3, 3,
+        PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.pets_)}},
+      // repeated .EquipLoadoutLinkedOption formations = 23;
+      {::_pbi::TcParser::FastMtR2,
+       {442, 4, 4,
+        PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.formations_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -10683,47 +10890,51 @@ constexpr EquipLoadoutSnapshot::ParseTableT_ EquipLoadoutSnapshot::InternalGener
       65535, 65535
     }}, {{
       // uint32 unlocked_scheme_count = 1;
-      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.unlocked_scheme_count_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.unlocked_scheme_count_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 max_scheme_count = 2;
-      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.max_scheme_count_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.max_scheme_count_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 active_scheme_id = 3;
-      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.active_scheme_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.active_scheme_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 state_version = 4;
-      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.state_version_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.state_version_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // repeated .EquipLoadoutSchemeInfo schemes = 5;
       {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.schemes_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint64 next_unlock_cost_diamond = 6;
-      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.next_unlock_cost_diamond_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.next_unlock_cost_diamond_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // bool next_unlock_allow_bind_diamond = 7;
-      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.next_unlock_allow_bind_diamond_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.next_unlock_allow_bind_diamond_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // uint32 unlock_item_config_id = 8;
-      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.unlock_item_config_id_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.unlock_item_config_id_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 unlock_item_owned = 9;
-      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.unlock_item_owned_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.unlock_item_owned_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 diamond_balance = 10;
-      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.diamond_balance_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.diamond_balance_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 bind_diamond_balance = 11;
-      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.bind_diamond_balance_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.bind_diamond_balance_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // repeated .EquipLoadoutLinkedOption skill_schemes = 12;
       {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.skill_schemes_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // repeated .EquipLoadoutLinkedOption attribute_schemes = 13;
       {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.attribute_schemes_), _Internal::kHasBitsOffset + 2, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint32 free_schemes = 14;
-      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.free_schemes_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.free_schemes_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 light_card_bonus_schemes = 15;
-      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.light_card_bonus_schemes_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.light_card_bonus_schemes_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 rented_extra_slots = 16;
-      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rented_extra_slots_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rented_extra_slots_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 rent_expires_at_sec = 17;
-      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rent_expires_at_sec_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rent_expires_at_sec_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 server_now_sec = 18;
-      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.server_now_sec_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.server_now_sec_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 rent_unit_price_diamond = 19;
-      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rent_unit_price_diamond_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rent_unit_price_diamond_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 rent_period_days = 20;
-      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rent_period_days_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rent_period_days_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 rent_max_remaining_days = 21;
-      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rent_max_remaining_days_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rent_max_remaining_days_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // repeated .EquipLoadoutLinkedPetOption pets = 22;
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.pets_), _Internal::kHasBitsOffset + 3, 3, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // repeated .EquipLoadoutLinkedOption formations = 23;
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.formations_), _Internal::kHasBitsOffset + 4, 4, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -10735,6 +10946,16 @@ constexpr EquipLoadoutSnapshot::ParseTableT_ EquipLoadoutSnapshot::InternalGener
         {::_pbi::TcParser::GetTable<::EquipLoadoutLinkedOption>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::EquipLoadoutLinkedOption_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::EquipLoadoutLinkedOption>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::EquipLoadoutLinkedOption_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::EquipLoadoutLinkedPetOption>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::EquipLoadoutLinkedPetOption_globals_},
         #endif
         #ifndef PROTOBUF_MESSAGE_GLOBALS
         {::_pbi::TcParser::GetTable<::EquipLoadoutLinkedOption>()},
@@ -10765,6 +10986,16 @@ inline constexpr EquipLoadoutSnapshot::Impl_::Impl_(
         attribute_schemes_ { visibility, ::_pbi::InternalMetadataOffset::Build<
             ::EquipLoadoutSnapshot,
             PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.attribute_schemes_)>()
+         }
+        ,
+        pets_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::EquipLoadoutSnapshot,
+            PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.pets_)>()
+         }
+        ,
+        formations_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::EquipLoadoutSnapshot,
+            PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.formations_)>()
          }
         ,
         unlocked_scheme_count_{0u},
@@ -10827,7 +11058,7 @@ constexpr auto EquipLoadoutSnapshot::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[52],
+      &file_reflection_data[53],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -11065,7 +11296,7 @@ constexpr auto UnlockEquipLoadoutResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[60],
+      &file_reflection_data[61],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -11291,7 +11522,7 @@ constexpr auto SwitchEquipLoadoutResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[58],
+      &file_reflection_data[59],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -11469,7 +11700,7 @@ constexpr auto SaveEquipLoadoutResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[56],
+      &file_reflection_data[57],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -11628,7 +11859,7 @@ constexpr auto GetEquipLoadoutsResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[54],
+      &file_reflection_data[55],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
@@ -12426,7 +12657,7 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutSchemeInfo, _impl_._has_bits_),
-        11, // hasbit index offset
+        13, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutSchemeInfo, _impl_.scheme_id_),
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutSchemeInfo, _impl_.unlocked_),
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutSchemeInfo, _impl_.name_),
@@ -12435,6 +12666,8 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutSchemeInfo, _impl_.linked_skill_scheme_id_),
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutSchemeInfo, _impl_.linked_attribute_scheme_id_),
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutSchemeInfo, _impl_.missing_count_),
+        PROTOBUF_FIELD_OFFSET(::EquipLoadoutSchemeInfo, _impl_.linked_pet_id_),
+        PROTOBUF_FIELD_OFFSET(::EquipLoadoutSchemeInfo, _impl_.linked_formation_id_),
         2,
         3,
         1,
@@ -12443,6 +12676,8 @@ const ::uint32_t
         5,
         6,
         7,
+        8,
+        9,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutLinkedOption, _impl_._has_bits_),
         6, // hasbit index offset
@@ -12453,8 +12688,19 @@ const ::uint32_t
         0,
         2,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::EquipLoadoutLinkedPetOption, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::EquipLoadoutLinkedPetOption, _impl_.pet_id_),
+        PROTOBUF_FIELD_OFFSET(::EquipLoadoutLinkedPetOption, _impl_.pet_table_id_),
+        PROTOBUF_FIELD_OFFSET(::EquipLoadoutLinkedPetOption, _impl_.name_),
+        PROTOBUF_FIELD_OFFSET(::EquipLoadoutLinkedPetOption, _impl_.active_),
+        1,
+        2,
+        0,
+        3,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_._has_bits_),
-        24, // hasbit index offset
+        26, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.unlocked_scheme_count_),
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.max_scheme_count_),
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.active_scheme_id_),
@@ -12476,27 +12722,31 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.rent_unit_price_diamond_),
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.rent_period_days_),
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.rent_max_remaining_days_),
-        3,
-        4,
-        6,
+        PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.pets_),
+        PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.formations_),
         5,
-        0,
+        6,
         8,
         7,
-        12,
-        9,
+        0,
         10,
+        9,
+        14,
         11,
+        12,
+        13,
         1,
         2,
-        13,
-        14,
         15,
         16,
         17,
         18,
         19,
         20,
+        21,
+        22,
+        3,
+        4,
         0x000, // bitmap
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::GetEquipLoadoutsResponse, _impl_._has_bits_),
@@ -12507,7 +12757,7 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SaveEquipLoadoutRequest, _impl_._has_bits_),
-        12, // hasbit index offset
+        14, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::SaveEquipLoadoutRequest, _impl_.scheme_id_),
         PROTOBUF_FIELD_OFFSET(::SaveEquipLoadoutRequest, _impl_.name_),
         PROTOBUF_FIELD_OFFSET(::SaveEquipLoadoutRequest, _impl_.role_tag_),
@@ -12517,6 +12767,8 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::SaveEquipLoadoutRequest, _impl_.linked_attribute_scheme_id_),
         PROTOBUF_FIELD_OFFSET(::SaveEquipLoadoutRequest, _impl_.state_version_),
         PROTOBUF_FIELD_OFFSET(::SaveEquipLoadoutRequest, _impl_.request_id_),
+        PROTOBUF_FIELD_OFFSET(::SaveEquipLoadoutRequest, _impl_.linked_pet_id_),
+        PROTOBUF_FIELD_OFFSET(::SaveEquipLoadoutRequest, _impl_.linked_formation_id_),
         3,
         1,
         4,
@@ -12526,6 +12778,8 @@ const ::uint32_t
         8,
         7,
         2,
+        10,
+        9,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SaveEquipLoadoutResponse, _impl_._has_bits_),
         7, // hasbit index offset
@@ -12658,16 +12912,17 @@ static const ::_pbi::MigrationSchema
         {702, sizeof(::ClaimEquipmentMaterialRewardResponse)},
         {723, sizeof(::EquipLoadoutSlotView)},
         {738, sizeof(::EquipLoadoutSchemeInfo)},
-        {757, sizeof(::EquipLoadoutLinkedOption)},
-        {766, sizeof(::EquipLoadoutSnapshot)},
-        {811, sizeof(::GetEquipLoadoutsRequest)},
-        {812, sizeof(::GetEquipLoadoutsResponse)},
-        {819, sizeof(::SaveEquipLoadoutRequest)},
-        {840, sizeof(::SaveEquipLoadoutResponse)},
-        {851, sizeof(::SwitchEquipLoadoutRequest)},
-        {862, sizeof(::SwitchEquipLoadoutResponse)},
-        {881, sizeof(::UnlockEquipLoadoutRequest)},
-        {890, sizeof(::UnlockEquipLoadoutResponse)},
+        {761, sizeof(::EquipLoadoutLinkedOption)},
+        {770, sizeof(::EquipLoadoutLinkedPetOption)},
+        {781, sizeof(::EquipLoadoutSnapshot)},
+        {830, sizeof(::GetEquipLoadoutsRequest)},
+        {831, sizeof(::GetEquipLoadoutsResponse)},
+        {838, sizeof(::SaveEquipLoadoutRequest)},
+        {863, sizeof(::SaveEquipLoadoutResponse)},
+        {874, sizeof(::SwitchEquipLoadoutRequest)},
+        {885, sizeof(::SwitchEquipLoadoutResponse)},
+        {904, sizeof(::UnlockEquipLoadoutRequest)},
+        {913, sizeof(::UnlockEquipLoadoutResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -12723,6 +12978,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::EquipLoadoutSlotView_globals_,
         &::EquipLoadoutSchemeInfo_globals_,
         &::EquipLoadoutLinkedOption_globals_,
+        &::EquipLoadoutLinkedPetOption_globals_,
         &::EquipLoadoutSnapshot_globals_,
         &::GetEquipLoadoutsRequest_globals_,
         &::GetEquipLoadoutsResponse_globals_,
@@ -12972,107 +13228,114 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fbag_2eproto[] ABSL
     "\014\n\004slot\030\001 \001(\r\022\021\n\tslot_name\030\002 \001(\t\022\022\n\nequi"
     "p_kind\030\003 \001(\r\022\021\n\titem_guid\030\004 \001(\004\022\'\n\006statu"
     "s\030\005 \001(\0162\027.EquipLoadoutSlotStatus\022\032\n\004item"
-    "\030\006 \001(\0132\014.BagItemInfo\"\336\001\n\026EquipLoadoutSch"
+    "\030\006 \001(\0132\014.BagItemInfo\"\222\002\n\026EquipLoadoutSch"
     "emeInfo\022\021\n\tscheme_id\030\001 \001(\r\022\020\n\010unlocked\030\002"
     " \001(\010\022\014\n\004name\030\003 \001(\t\022\020\n\010role_tag\030\004 \001(\r\022$\n\005"
     "slots\030\005 \003(\0132\025.EquipLoadoutSlotView\022\036\n\026li"
     "nked_skill_scheme_id\030\006 \001(\r\022\"\n\032linked_att"
     "ribute_scheme_id\030\007 \001(\r\022\025\n\rmissing_count\030"
-    "\010 \001(\r\"M\n\030EquipLoadoutLinkedOption\022\021\n\tsch"
-    "eme_id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\020\n\010role_tag\030\003"
-    " \001(\r\"\262\005\n\024EquipLoadoutSnapshot\022\035\n\025unlocke"
-    "d_scheme_count\030\001 \001(\r\022\030\n\020max_scheme_count"
-    "\030\002 \001(\r\022\030\n\020active_scheme_id\030\003 \001(\r\022\025\n\rstat"
-    "e_version\030\004 \001(\004\022(\n\007schemes\030\005 \003(\0132\027.Equip"
-    "LoadoutSchemeInfo\022 \n\030next_unlock_cost_di"
-    "amond\030\006 \001(\004\022&\n\036next_unlock_allow_bind_di"
-    "amond\030\007 \001(\010\022\035\n\025unlock_item_config_id\030\010 \001"
-    "(\r\022\031\n\021unlock_item_owned\030\t \001(\004\022\027\n\017diamond"
-    "_balance\030\n \001(\004\022\034\n\024bind_diamond_balance\030\013"
-    " \001(\004\0220\n\rskill_schemes\030\014 \003(\0132\031.EquipLoado"
-    "utLinkedOption\0224\n\021attribute_schemes\030\r \003("
-    "\0132\031.EquipLoadoutLinkedOption\022\024\n\014free_sch"
-    "emes\030\016 \001(\r\022 \n\030light_card_bonus_schemes\030\017"
-    " \001(\r\022\032\n\022rented_extra_slots\030\020 \001(\r\022\033\n\023rent"
-    "_expires_at_sec\030\021 \001(\004\022\026\n\016server_now_sec\030"
-    "\022 \001(\004\022\037\n\027rent_unit_price_diamond\030\023 \001(\004\022\030"
-    "\n\020rent_period_days\030\024 \001(\r\022\037\n\027rent_max_rem"
-    "aining_days\030\025 \001(\r\"\031\n\027GetEquipLoadoutsReq"
-    "uest\"k\n\030GetEquipLoadoutsResponse\022&\n\rerro"
-    "r_message\030\001 \001(\0132\017.TipInfoMessage\022\'\n\010snap"
-    "shot\030\002 \001(\0132\025.EquipLoadoutSnapshot\"\206\002\n\027Sa"
-    "veEquipLoadoutRequest\022\021\n\tscheme_id\030\001 \001(\r"
-    "\022\014\n\004name\030\002 \001(\t\022\020\n\010role_tag\030\003 \001(\r\022\'\n\005slot"
-    "s\030\004 \003(\0132\030.EquipLoadoutSlotBinding\022 \n\030cap"
-    "ture_current_equipped\030\005 \001(\010\022\036\n\026linked_sk"
-    "ill_scheme_id\030\006 \001(\r\022\"\n\032linked_attribute_"
-    "scheme_id\030\007 \001(\r\022\025\n\rstate_version\030\010 \001(\004\022\022"
-    "\n\nrequest_id\030\t \001(\t\"\221\001\n\030SaveEquipLoadoutR"
-    "esponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfo"
-    "Message\022\'\n\010snapshot\030\002 \001(\0132\025.EquipLoadout"
-    "Snapshot\022\022\n\nrequest_id\030\003 \001(\t\022\020\n\010replayed"
-    "\030\004 \001(\010\"w\n\031SwitchEquipLoadoutRequest\022\021\n\ts"
-    "cheme_id\030\001 \001(\r\022\034\n\024apply_linked_schemes\030\002"
-    " \001(\010\022\025\n\rstate_version\030\003 \001(\004\022\022\n\nrequest_i"
-    "d\030\004 \001(\t\"\366\001\n\032SwitchEquipLoadoutResponse\022&"
-    "\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022\025"
-    "\n\003bag\030\002 \001(\0132\010.BagInfo\022\033\n\tequipment\030\003 \001(\013"
-    "2\010.BagInfo\022\'\n\010snapshot\030\004 \001(\0132\025.EquipLoad"
-    "outSnapshot\022\025\n\rmissing_slots\030\005 \003(\r\022\026\n\016li"
-    "nked_notices\030\006 \003(\t\022\022\n\nrequest_id\030\007 \001(\t\022\020"
-    "\n\010replayed\030\010 \001(\010\"w\n\031UnlockEquipLoadoutRe"
-    "quest\022\031\n\021client_request_id\030\001 \001(\004\022\037\n\027expe"
-    "cted_unlocked_count\030\002 \001(\r\022\036\n\026use_bind_di"
-    "amond_first\030\003 \001(\010\"\272\003\n\032UnlockEquipLoadout"
-    "Response\022&\n\rerror_message\030\001 \001(\0132\017.TipInf"
-    "oMessage\022\031\n\021client_request_id\030\002 \001(\004\0224\n\007o"
-    "utcome\030\003 \001(\0162#.UnlockEquipLoadoutRespons"
-    "e.Outcome\022\017\n\007durable\030\004 \001(\010\022\020\n\010replayed\030\005"
-    " \001(\010\022\035\n\025result_unlocked_count\030\006 \001(\r\022\036\n\026c"
-    "urrent_unlocked_count\030\007 \001(\r\022\033\n\023used_item"
-    "_config_id\030\010 \001(\r\022\032\n\022spent_bind_diamond\030\t"
-    " \001(\004\022\025\n\rspent_diamond\030\n \001(\004\022\025\n\003bag\030\013 \001(\013"
-    "2\010.BagInfo\022\'\n\010snapshot\030\014 \001(\0132\025.EquipLoad"
-    "outSnapshot\"1\n\007Outcome\022\013\n\007UNKNOWN\020\000\022\014\n\010R"
-    "EJECTED\020\001\022\013\n\007APPLIED\020\002*\240\001\n\026EquipLoadoutS"
-    "lotStatus\022\034\n\030EQUIP_LOADOUT_SLOT_EMPTY\020\000\022"
-    "\037\n\033EQUIP_LOADOUT_SLOT_EQUIPPED\020\001\022\035\n\031EQUI"
-    "P_LOADOUT_SLOT_IN_BAG\020\002\022(\n$EQUIP_LOADOUT"
-    "_SLOT_MISSING_OR_STORED\020\0032\254\n\n\024SceneBagCl"
-    "ientPlayer\022)\n\006GetBag\022\016.GetBagRequest\032\017.G"
-    "etBagResponse\022,\n\007SortBag\022\017.SortBagReques"
-    "t\032\020.SortBagResponse\0222\n\tEquipItem\022\021.Equip"
-    "ItemRequest\032\022.EquipItemResponse\0228\n\013Unequ"
-    "ipItem\022\023.UnequipItemRequest\032\024.UnequipIte"
-    "mResponse\0228\n\013GmGrantItem\022\023.GmGrantItemRe"
-    "quest\032\024.GmGrantItemResponse\022;\n\014EnhanceEq"
-    "uip\022\024.EnhanceEquipRequest\032\025.EnhanceEquip"
-    "Response\022/\n\010InlayGem\022\020.InlayGemRequest\032\021"
-    ".InlayGemResponse\0222\n\tRemoveGem\022\021.RemoveG"
-    "emRequest\032\022.RemoveGemResponse\022Y\n\026Retriev"
-    "eTemporaryItems\022\036.RetrieveTemporaryItems"
-    "Request\032\037.RetrieveTemporaryItemsResponse"
-    "\022Y\n\026GetEquipmentCraftRules\022\036.GetEquipmen"
-    "tCraftRulesRequest\032\037.GetEquipmentCraftRu"
-    "lesResponse\022V\n\025PreviewEquipmentCraft\022\035.P"
-    "reviewEquipmentCraftRequest\032\036.PreviewEqu"
-    "ipmentCraftResponse\022S\n\024CommitEquipmentCr"
-    "aft\022\034.CommitEquipmentCraftRequest\032\035.Comm"
-    "itEquipmentCraftResponse\022e\n\032GetEquipment"
-    "MaterialReward\022\".GetEquipmentMaterialRew"
-    "ardRequest\032#.GetEquipmentMaterialRewardR"
-    "esponse\022k\n\034ClaimEquipmentMaterialReward\022"
-    "$.ClaimEquipmentMaterialRewardRequest\032%."
-    "ClaimEquipmentMaterialRewardResponse\022G\n\020"
-    "GetEquipLoadouts\022\030.GetEquipLoadoutsReque"
-    "st\032\031.GetEquipLoadoutsResponse\022G\n\020SaveEqu"
-    "ipLoadout\022\030.SaveEquipLoadoutRequest\032\031.Sa"
-    "veEquipLoadoutResponse\022M\n\022SwitchEquipLoa"
-    "dout\022\032.SwitchEquipLoadoutRequest\032\033.Switc"
-    "hEquipLoadoutResponse\022M\n\022UnlockEquipLoad"
-    "out\022\032.UnlockEquipLoadoutRequest\032\033.Unlock"
-    "EquipLoadoutResponse\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005scen"
-    "e\200\001\001\230\324a\003b\006proto3"
+    "\010 \001(\r\022\025\n\rlinked_pet_id\030\t \001(\004\022\033\n\023linked_f"
+    "ormation_id\030\n \001(\r\"M\n\030EquipLoadoutLinkedO"
+    "ption\022\021\n\tscheme_id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\020"
+    "\n\010role_tag\030\003 \001(\r\"a\n\033EquipLoadoutLinkedPe"
+    "tOption\022\016\n\006pet_id\030\001 \001(\004\022\024\n\014pet_table_id\030"
+    "\002 \001(\r\022\014\n\004name\030\003 \001(\t\022\016\n\006active\030\004 \001(\010\"\215\006\n\024"
+    "EquipLoadoutSnapshot\022\035\n\025unlocked_scheme_"
+    "count\030\001 \001(\r\022\030\n\020max_scheme_count\030\002 \001(\r\022\030\n"
+    "\020active_scheme_id\030\003 \001(\r\022\025\n\rstate_version"
+    "\030\004 \001(\004\022(\n\007schemes\030\005 \003(\0132\027.EquipLoadoutSc"
+    "hemeInfo\022 \n\030next_unlock_cost_diamond\030\006 \001"
+    "(\004\022&\n\036next_unlock_allow_bind_diamond\030\007 \001"
+    "(\010\022\035\n\025unlock_item_config_id\030\010 \001(\r\022\031\n\021unl"
+    "ock_item_owned\030\t \001(\004\022\027\n\017diamond_balance\030"
+    "\n \001(\004\022\034\n\024bind_diamond_balance\030\013 \001(\004\0220\n\rs"
+    "kill_schemes\030\014 \003(\0132\031.EquipLoadoutLinkedO"
+    "ption\0224\n\021attribute_schemes\030\r \003(\0132\031.Equip"
+    "LoadoutLinkedOption\022\024\n\014free_schemes\030\016 \001("
+    "\r\022 \n\030light_card_bonus_schemes\030\017 \001(\r\022\032\n\022r"
+    "ented_extra_slots\030\020 \001(\r\022\033\n\023rent_expires_"
+    "at_sec\030\021 \001(\004\022\026\n\016server_now_sec\030\022 \001(\004\022\037\n\027"
+    "rent_unit_price_diamond\030\023 \001(\004\022\030\n\020rent_pe"
+    "riod_days\030\024 \001(\r\022\037\n\027rent_max_remaining_da"
+    "ys\030\025 \001(\r\022*\n\004pets\030\026 \003(\0132\034.EquipLoadoutLin"
+    "kedPetOption\022-\n\nformations\030\027 \003(\0132\031.Equip"
+    "LoadoutLinkedOption\"\031\n\027GetEquipLoadoutsR"
+    "equest\"k\n\030GetEquipLoadoutsResponse\022&\n\rer"
+    "ror_message\030\001 \001(\0132\017.TipInfoMessage\022\'\n\010sn"
+    "apshot\030\002 \001(\0132\025.EquipLoadoutSnapshot\"\272\002\n\027"
+    "SaveEquipLoadoutRequest\022\021\n\tscheme_id\030\001 \001"
+    "(\r\022\014\n\004name\030\002 \001(\t\022\020\n\010role_tag\030\003 \001(\r\022\'\n\005sl"
+    "ots\030\004 \003(\0132\030.EquipLoadoutSlotBinding\022 \n\030c"
+    "apture_current_equipped\030\005 \001(\010\022\036\n\026linked_"
+    "skill_scheme_id\030\006 \001(\r\022\"\n\032linked_attribut"
+    "e_scheme_id\030\007 \001(\r\022\025\n\rstate_version\030\010 \001(\004"
+    "\022\022\n\nrequest_id\030\t \001(\t\022\025\n\rlinked_pet_id\030\n "
+    "\001(\004\022\033\n\023linked_formation_id\030\013 \001(\r\"\221\001\n\030Sav"
+    "eEquipLoadoutResponse\022&\n\rerror_message\030\001"
+    " \001(\0132\017.TipInfoMessage\022\'\n\010snapshot\030\002 \001(\0132"
+    "\025.EquipLoadoutSnapshot\022\022\n\nrequest_id\030\003 \001"
+    "(\t\022\020\n\010replayed\030\004 \001(\010\"w\n\031SwitchEquipLoado"
+    "utRequest\022\021\n\tscheme_id\030\001 \001(\r\022\034\n\024apply_li"
+    "nked_schemes\030\002 \001(\010\022\025\n\rstate_version\030\003 \001("
+    "\004\022\022\n\nrequest_id\030\004 \001(\t\"\366\001\n\032SwitchEquipLoa"
+    "doutResponse\022&\n\rerror_message\030\001 \001(\0132\017.Ti"
+    "pInfoMessage\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\022\033\n\te"
+    "quipment\030\003 \001(\0132\010.BagInfo\022\'\n\010snapshot\030\004 \001"
+    "(\0132\025.EquipLoadoutSnapshot\022\025\n\rmissing_slo"
+    "ts\030\005 \003(\r\022\026\n\016linked_notices\030\006 \003(\t\022\022\n\nrequ"
+    "est_id\030\007 \001(\t\022\020\n\010replayed\030\010 \001(\010\"w\n\031Unlock"
+    "EquipLoadoutRequest\022\031\n\021client_request_id"
+    "\030\001 \001(\004\022\037\n\027expected_unlocked_count\030\002 \001(\r\022"
+    "\036\n\026use_bind_diamond_first\030\003 \001(\010\"\272\003\n\032Unlo"
+    "ckEquipLoadoutResponse\022&\n\rerror_message\030"
+    "\001 \001(\0132\017.TipInfoMessage\022\031\n\021client_request"
+    "_id\030\002 \001(\004\0224\n\007outcome\030\003 \001(\0162#.UnlockEquip"
+    "LoadoutResponse.Outcome\022\017\n\007durable\030\004 \001(\010"
+    "\022\020\n\010replayed\030\005 \001(\010\022\035\n\025result_unlocked_co"
+    "unt\030\006 \001(\r\022\036\n\026current_unlocked_count\030\007 \001("
+    "\r\022\033\n\023used_item_config_id\030\010 \001(\r\022\032\n\022spent_"
+    "bind_diamond\030\t \001(\004\022\025\n\rspent_diamond\030\n \001("
+    "\004\022\025\n\003bag\030\013 \001(\0132\010.BagInfo\022\'\n\010snapshot\030\014 \001"
+    "(\0132\025.EquipLoadoutSnapshot\"1\n\007Outcome\022\013\n\007"
+    "UNKNOWN\020\000\022\014\n\010REJECTED\020\001\022\013\n\007APPLIED\020\002*\240\001\n"
+    "\026EquipLoadoutSlotStatus\022\034\n\030EQUIP_LOADOUT"
+    "_SLOT_EMPTY\020\000\022\037\n\033EQUIP_LOADOUT_SLOT_EQUI"
+    "PPED\020\001\022\035\n\031EQUIP_LOADOUT_SLOT_IN_BAG\020\002\022(\n"
+    "$EQUIP_LOADOUT_SLOT_MISSING_OR_STORED\020\0032"
+    "\254\n\n\024SceneBagClientPlayer\022)\n\006GetBag\022\016.Get"
+    "BagRequest\032\017.GetBagResponse\022,\n\007SortBag\022\017"
+    ".SortBagRequest\032\020.SortBagResponse\0222\n\tEqu"
+    "ipItem\022\021.EquipItemRequest\032\022.EquipItemRes"
+    "ponse\0228\n\013UnequipItem\022\023.UnequipItemReques"
+    "t\032\024.UnequipItemResponse\0228\n\013GmGrantItem\022\023"
+    ".GmGrantItemRequest\032\024.GmGrantItemRespons"
+    "e\022;\n\014EnhanceEquip\022\024.EnhanceEquipRequest\032"
+    "\025.EnhanceEquipResponse\022/\n\010InlayGem\022\020.Inl"
+    "ayGemRequest\032\021.InlayGemResponse\0222\n\tRemov"
+    "eGem\022\021.RemoveGemRequest\032\022.RemoveGemRespo"
+    "nse\022Y\n\026RetrieveTemporaryItems\022\036.Retrieve"
+    "TemporaryItemsRequest\032\037.RetrieveTemporar"
+    "yItemsResponse\022Y\n\026GetEquipmentCraftRules"
+    "\022\036.GetEquipmentCraftRulesRequest\032\037.GetEq"
+    "uipmentCraftRulesResponse\022V\n\025PreviewEqui"
+    "pmentCraft\022\035.PreviewEquipmentCraftReques"
+    "t\032\036.PreviewEquipmentCraftResponse\022S\n\024Com"
+    "mitEquipmentCraft\022\034.CommitEquipmentCraft"
+    "Request\032\035.CommitEquipmentCraftResponse\022e"
+    "\n\032GetEquipmentMaterialReward\022\".GetEquipm"
+    "entMaterialRewardRequest\032#.GetEquipmentM"
+    "aterialRewardResponse\022k\n\034ClaimEquipmentM"
+    "aterialReward\022$.ClaimEquipmentMaterialRe"
+    "wardRequest\032%.ClaimEquipmentMaterialRewa"
+    "rdResponse\022G\n\020GetEquipLoadouts\022\030.GetEqui"
+    "pLoadoutsRequest\032\031.GetEquipLoadoutsRespo"
+    "nse\022G\n\020SaveEquipLoadout\022\030.SaveEquipLoado"
+    "utRequest\032\031.SaveEquipLoadoutResponse\022M\n\022"
+    "SwitchEquipLoadout\022\032.SwitchEquipLoadoutR"
+    "equest\032\033.SwitchEquipLoadoutResponse\022M\n\022U"
+    "nlockEquipLoadout\022\032.UnlockEquipLoadoutRe"
+    "quest\032\033.UnlockEquipLoadoutResponse\032\n\200\250\303\001"
+    "\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto_deps[4] = {
@@ -13085,13 +13348,13 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto = {
     false,
     false,
-    13496,
+    13790,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fbag_2eproto,
     "proto/scene/player_bag.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto_once,
     descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto_deps,
     4,
-    61,
+    62,
     schemas,
     file_message_globals,
     TableStruct_proto_2fscene_2fplayer_5fbag_2eproto::offsets,
@@ -30162,9 +30425,9 @@ EquipLoadoutSchemeInfo::EquipLoadoutSchemeInfo(
                offsetof(Impl_, scheme_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, scheme_id_),
-           offsetof(Impl_, missing_count_) -
+           offsetof(Impl_, linked_formation_id_) -
                offsetof(Impl_, scheme_id_) +
-               sizeof(Impl_::missing_count_));
+               sizeof(Impl_::linked_formation_id_));
 
   // @@protoc_insertion_point(copy_constructor:EquipLoadoutSchemeInfo)
 }
@@ -30184,9 +30447,9 @@ inline void EquipLoadoutSchemeInfo::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE a
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, scheme_id_),
            0,
-           offsetof(Impl_, missing_count_) -
+           offsetof(Impl_, linked_formation_id_) -
                offsetof(Impl_, scheme_id_) +
-               sizeof(Impl_::missing_count_));
+               sizeof(Impl_::linked_formation_id_));
 }
 EquipLoadoutSchemeInfo::~EquipLoadoutSchemeInfo() {
   // @@protoc_insertion_point(destructor:EquipLoadoutSchemeInfo)
@@ -30249,6 +30512,11 @@ PROTOBUF_NOINLINE void EquipLoadoutSchemeInfo::Clear() {
     ::memset(&_impl_.scheme_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.missing_count_) -
         reinterpret_cast<char*>(&_impl_.scheme_id_)) + sizeof(_impl_.missing_count_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    ::memset(&_impl_.linked_pet_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.linked_formation_id_) -
+        reinterpret_cast<char*>(&_impl_.linked_pet_id_)) + sizeof(_impl_.linked_formation_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -30350,6 +30618,24 @@ PROTOBUF_NOINLINE void EquipLoadoutSchemeInfo::Clear() {
     }
   }
 
+  // uint64 linked_pet_id = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_linked_pet_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          9, this_._internal_linked_pet_id(), target);
+    }
+  }
+
+  // uint32 linked_formation_id = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_linked_formation_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          10, this_._internal_linked_formation_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -30432,6 +30718,22 @@ PROTOBUF_NOINLINE void EquipLoadoutSchemeInfo::Clear() {
       }
     }
   }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    // uint64 linked_pet_id = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_linked_pet_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_linked_pet_id());
+      }
+    }
+    // uint32 linked_formation_id = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_linked_formation_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_linked_formation_id());
+      }
+    }
+  }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
 }
@@ -30496,6 +30798,18 @@ void EquipLoadoutSchemeInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_linked_pet_id() != 0) {
+        _this->_impl_.linked_pet_id_ = from._impl_.linked_pet_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_linked_formation_id() != 0) {
+        _this->_impl_.linked_formation_id_ = from._impl_.linked_formation_id_;
+      }
+    }
+  }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
@@ -30518,8 +30832,8 @@ void EquipLoadoutSchemeInfo::InternalSwap(EquipLoadoutSchemeInfo* PROTOBUF_RESTR
   _impl_.slots_.InternalSwap(&other->_impl_.slots_);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(EquipLoadoutSchemeInfo, _impl_.missing_count_)
-      + sizeof(EquipLoadoutSchemeInfo::_impl_.missing_count_)
+      PROTOBUF_FIELD_OFFSET(EquipLoadoutSchemeInfo, _impl_.linked_formation_id_)
+      + sizeof(EquipLoadoutSchemeInfo::_impl_.linked_formation_id_)
       - PROTOBUF_FIELD_OFFSET(EquipLoadoutSchemeInfo, _impl_.scheme_id_)>(
           reinterpret_cast<char*>(&_impl_.scheme_id_),
           reinterpret_cast<char*>(&other->_impl_.scheme_id_));
@@ -30813,6 +31127,309 @@ void EquipLoadoutLinkedOption::InternalSwap(EquipLoadoutLinkedOption* PROTOBUF_R
 }
 // ===================================================================
 
+EquipLoadoutLinkedPetOption::EquipLoadoutLinkedPetOption(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, EquipLoadoutLinkedPetOption_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:EquipLoadoutLinkedPetOption)
+}
+PROTOBUF_NDEBUG_INLINE EquipLoadoutLinkedPetOption::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::EquipLoadoutLinkedPetOption& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        name_(arena, from.name_) {}
+
+EquipLoadoutLinkedPetOption::EquipLoadoutLinkedPetOption(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const EquipLoadoutLinkedPetOption& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, EquipLoadoutLinkedPetOption_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  EquipLoadoutLinkedPetOption* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, pet_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, pet_id_),
+           offsetof(Impl_, active_) -
+               offsetof(Impl_, pet_id_) +
+               sizeof(Impl_::active_));
+
+  // @@protoc_insertion_point(copy_constructor:EquipLoadoutLinkedPetOption)
+}
+PROTOBUF_NDEBUG_INLINE EquipLoadoutLinkedPetOption::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        name_(arena) {}
+
+inline void EquipLoadoutLinkedPetOption::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, pet_id_),
+           0,
+           offsetof(Impl_, active_) -
+               offsetof(Impl_, pet_id_) +
+               sizeof(Impl_::active_));
+}
+EquipLoadoutLinkedPetOption::~EquipLoadoutLinkedPetOption() {
+  // @@protoc_insertion_point(destructor:EquipLoadoutLinkedPetOption)
+  SharedDtor(*this);
+}
+inline void EquipLoadoutLinkedPetOption::SharedDtor(MessageLite& self) {
+  EquipLoadoutLinkedPetOption& this_ = static_cast<EquipLoadoutLinkedPetOption&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.name_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull EquipLoadoutLinkedPetOption_class_data_ =
+        EquipLoadoutLinkedPetOption::InternalGenerateClassData_(EquipLoadoutLinkedPetOption_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+EquipLoadoutLinkedPetOption::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&EquipLoadoutLinkedPetOption_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(EquipLoadoutLinkedPetOption_class_data_.tc_table);
+  return EquipLoadoutLinkedPetOption_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+EquipLoadoutLinkedPetOption::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&EquipLoadoutLinkedPetOption_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&EquipLoadoutLinkedPetOption_globals_));
+  return EquipLoadoutLinkedPetOption_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const EquipLoadoutLinkedPetOption::ParseTableT_
+    EquipLoadoutLinkedPetOption::_table_ =
+        EquipLoadoutLinkedPetOption::InternalGenerateParseTable_(EquipLoadoutLinkedPetOption_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void EquipLoadoutLinkedPetOption::Clear() {
+// @@protoc_insertion_point(message_clear_start:EquipLoadoutLinkedPetOption)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.name_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000eU)) {
+    ::memset(&_impl_.pet_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.active_) -
+        reinterpret_cast<char*>(&_impl_.pet_id_)) + sizeof(_impl_.active_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL EquipLoadoutLinkedPetOption::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const EquipLoadoutLinkedPetOption& this_ = static_cast<const EquipLoadoutLinkedPetOption&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL EquipLoadoutLinkedPetOption::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const EquipLoadoutLinkedPetOption& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:EquipLoadoutLinkedPetOption)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 pet_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_pet_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_pet_id(), target);
+    }
+  }
+
+  // uint32 pet_table_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_pet_table_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_pet_table_id(), target);
+    }
+  }
+
+  // string name = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_name().empty()) {
+      const ::std::string& _s = this_._internal_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "EquipLoadoutLinkedPetOption.name");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // bool active = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_active() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          4, this_._internal_active(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:EquipLoadoutLinkedPetOption)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t EquipLoadoutLinkedPetOption::ByteSizeLong(const MessageLite& base) {
+  const EquipLoadoutLinkedPetOption& this_ = static_cast<const EquipLoadoutLinkedPetOption&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t EquipLoadoutLinkedPetOption::ByteSizeLong() const {
+  const EquipLoadoutLinkedPetOption& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:EquipLoadoutLinkedPetOption)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    // string name = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_name());
+      }
+    }
+    // uint64 pet_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_pet_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_pet_id());
+      }
+    }
+    // uint32 pet_table_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_pet_table_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_pet_table_id());
+      }
+    }
+    // bool active = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_active() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void EquipLoadoutLinkedPetOption::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<EquipLoadoutLinkedPetOption*>(&to_msg);
+  auto& from = static_cast<const EquipLoadoutLinkedPetOption&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:EquipLoadoutLinkedPetOption)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_name().empty()) {
+        _this->_internal_set_name(from._internal_name());
+      } else {
+        if (_this->_impl_.name_.IsDefault()) {
+          _this->_internal_set_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_pet_id() != 0) {
+        _this->_impl_.pet_id_ = from._impl_.pet_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_pet_table_id() != 0) {
+        _this->_impl_.pet_table_id_ = from._impl_.pet_table_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_active() != 0) {
+        _this->_impl_.active_ = from._impl_.active_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void EquipLoadoutLinkedPetOption::CopyFrom(const EquipLoadoutLinkedPetOption& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:EquipLoadoutLinkedPetOption)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void EquipLoadoutLinkedPetOption::InternalSwap(EquipLoadoutLinkedPetOption* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(EquipLoadoutLinkedPetOption, _impl_.active_)
+      + sizeof(EquipLoadoutLinkedPetOption::_impl_.active_)
+      - PROTOBUF_FIELD_OFFSET(EquipLoadoutLinkedPetOption, _impl_.pet_id_)>(
+          reinterpret_cast<char*>(&_impl_.pet_id_),
+          reinterpret_cast<char*>(&other->_impl_.pet_id_));
+}
+
+::google::protobuf::Metadata EquipLoadoutLinkedPetOption::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 EquipLoadoutSnapshot::EquipLoadoutSnapshot(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, EquipLoadoutSnapshot_get_class_data()) {
@@ -30847,6 +31464,20 @@ PROTOBUF_NDEBUG_INLINE EquipLoadoutSnapshot::Impl_::Impl_(
               ::EquipLoadoutSnapshot,
               PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.attribute_schemes_)>()
           , from.attribute_schemes_
+        }
+        ,
+        pets_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::EquipLoadoutSnapshot,
+              PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.pets_)>()
+          , from.pets_
+        }
+        ,
+        formations_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::EquipLoadoutSnapshot,
+              PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.formations_)>()
+          , from.formations_
         }
      {}
 
@@ -30891,6 +31522,16 @@ PROTOBUF_NDEBUG_INLINE EquipLoadoutSnapshot::Impl_::Impl_(
         attribute_schemes_ { visibility, ::_pbi::InternalMetadataOffset::Build<
             ::EquipLoadoutSnapshot,
             PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.attribute_schemes_)>()
+         }
+        ,
+        pets_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::EquipLoadoutSnapshot,
+            PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.pets_)>()
+         }
+        ,
+        formations_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::EquipLoadoutSnapshot,
+            PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.formations_)>()
          }
      {}
 
@@ -30951,7 +31592,7 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.schemes_.Clear();
     }
@@ -30961,21 +31602,27 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       _impl_.attribute_schemes_.Clear();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.pets_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      _impl_.formations_.Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000e0U)) {
     ::memset(&_impl_.unlocked_scheme_count_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.next_unlock_allow_bind_diamond_) -
-        reinterpret_cast<char*>(&_impl_.unlocked_scheme_count_)) + sizeof(_impl_.next_unlock_allow_bind_diamond_));
+        reinterpret_cast<char*>(&_impl_.state_version_) -
+        reinterpret_cast<char*>(&_impl_.unlocked_scheme_count_)) + sizeof(_impl_.state_version_));
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
-    ::memset(&_impl_.next_unlock_cost_diamond_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.rented_extra_slots_) -
-        reinterpret_cast<char*>(&_impl_.next_unlock_cost_diamond_)) + sizeof(_impl_.rented_extra_slots_));
+    ::memset(&_impl_.active_scheme_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.free_schemes_) -
+        reinterpret_cast<char*>(&_impl_.active_scheme_id_)) + sizeof(_impl_.free_schemes_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
-    ::memset(&_impl_.rent_expires_at_sec_, 0, static_cast<::size_t>(
+  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
+    ::memset(&_impl_.light_card_bonus_schemes_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.rent_max_remaining_days_) -
-        reinterpret_cast<char*>(&_impl_.rent_expires_at_sec_)) + sizeof(_impl_.rent_max_remaining_days_));
+        reinterpret_cast<char*>(&_impl_.light_card_bonus_schemes_)) + sizeof(_impl_.rent_max_remaining_days_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -31001,7 +31648,7 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 unlocked_scheme_count = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_unlocked_scheme_count() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -31010,7 +31657,7 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
   }
 
   // uint32 max_scheme_count = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_max_scheme_count() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -31019,7 +31666,7 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
   }
 
   // uint32 active_scheme_id = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_active_scheme_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -31028,7 +31675,7 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
   }
 
   // uint64 state_version = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_state_version() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -31050,7 +31697,7 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
   }
 
   // uint64 next_unlock_cost_diamond = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_next_unlock_cost_diamond() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -31059,7 +31706,7 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
   }
 
   // bool next_unlock_allow_bind_diamond = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_next_unlock_allow_bind_diamond() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -31068,7 +31715,7 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
   }
 
   // uint32 unlock_item_config_id = 8;
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_unlock_item_config_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -31077,7 +31724,7 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
   }
 
   // uint64 unlock_item_owned = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_unlock_item_owned() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -31086,7 +31733,7 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
   }
 
   // uint64 diamond_balance = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_diamond_balance() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -31095,7 +31742,7 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
   }
 
   // uint64 bind_diamond_balance = 11;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_bind_diamond_balance() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -31130,7 +31777,7 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
   }
 
   // uint32 free_schemes = 14;
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
     if (this_._internal_free_schemes() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -31139,7 +31786,7 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
   }
 
   // uint32 light_card_bonus_schemes = 15;
-  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
     if (this_._internal_light_card_bonus_schemes() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -31148,7 +31795,7 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
   }
 
   // uint32 rented_extra_slots = 16;
-  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
     if (this_._internal_rented_extra_slots() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -31157,7 +31804,7 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
   }
 
   // uint64 rent_expires_at_sec = 17;
-  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
     if (this_._internal_rent_expires_at_sec() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -31166,7 +31813,7 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
   }
 
   // uint64 server_now_sec = 18;
-  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
     if (this_._internal_server_now_sec() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -31175,7 +31822,7 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
   }
 
   // uint64 rent_unit_price_diamond = 19;
-  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
     if (this_._internal_rent_unit_price_diamond() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -31184,7 +31831,7 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
   }
 
   // uint32 rent_period_days = 20;
-  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
     if (this_._internal_rent_period_days() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -31193,11 +31840,37 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
   }
 
   // uint32 rent_max_remaining_days = 21;
-  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00400000U)) {
     if (this_._internal_rent_max_remaining_days() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           21, this_._internal_rent_max_remaining_days(), target);
+    }
+  }
+
+  // repeated .EquipLoadoutLinkedPetOption pets = 22;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_pets_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_pets().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              22, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  // repeated .EquipLoadoutLinkedOption formations = 23;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_formations_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_formations().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              23, repfield, repfield.GetCachedSize(),
+              target, stream);
     }
   }
 
@@ -31248,130 +31921,144 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // uint32 unlocked_scheme_count = 1;
+    // repeated .EquipLoadoutLinkedPetOption pets = 22;
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      total_size += 2UL * this_._internal_pets_size();
+      for (const auto& msg : this_._internal_pets()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // repeated .EquipLoadoutLinkedOption formations = 23;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      total_size += 2UL * this_._internal_formations_size();
+      for (const auto& msg : this_._internal_formations()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // uint32 unlocked_scheme_count = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_unlocked_scheme_count() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_unlocked_scheme_count());
       }
     }
     // uint32 max_scheme_count = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_max_scheme_count() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_max_scheme_count());
       }
     }
     // uint64 state_version = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_state_version() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_state_version());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint32 active_scheme_id = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_active_scheme_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_active_scheme_id());
       }
     }
     // bool next_unlock_allow_bind_diamond = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_next_unlock_allow_bind_diamond() != 0) {
         total_size += 2;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint64 next_unlock_cost_diamond = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_next_unlock_cost_diamond() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_next_unlock_cost_diamond());
       }
     }
     // uint64 unlock_item_owned = 9;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_unlock_item_owned() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_unlock_item_owned());
       }
     }
     // uint64 diamond_balance = 10;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_diamond_balance() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_diamond_balance());
       }
     }
     // uint64 bind_diamond_balance = 11;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_bind_diamond_balance() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_bind_diamond_balance());
       }
     }
     // uint32 unlock_item_config_id = 8;
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_unlock_item_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_unlock_item_config_id());
       }
     }
     // uint32 free_schemes = 14;
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (this_._internal_free_schemes() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_free_schemes());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
     // uint32 light_card_bonus_schemes = 15;
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_light_card_bonus_schemes() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_light_card_bonus_schemes());
       }
     }
     // uint32 rented_extra_slots = 16;
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (this_._internal_rented_extra_slots() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_rented_extra_slots());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
     // uint64 rent_expires_at_sec = 17;
-    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
       if (this_._internal_rent_expires_at_sec() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
                                         this_._internal_rent_expires_at_sec());
       }
     }
     // uint64 server_now_sec = 18;
-    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
       if (this_._internal_server_now_sec() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
                                         this_._internal_server_now_sec());
       }
     }
     // uint64 rent_unit_price_diamond = 19;
-    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
       if (this_._internal_rent_unit_price_diamond() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
                                         this_._internal_rent_unit_price_diamond());
       }
     }
     // uint32 rent_period_days = 20;
-    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
       if (this_._internal_rent_period_days() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_rent_period_days());
       }
     }
     // uint32 rent_max_remaining_days = 21;
-    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
       if (this_._internal_rent_max_remaining_days() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_rent_max_remaining_days());
@@ -31413,95 +32100,105 @@ void EquipLoadoutSnapshot::MergeImpl(::google::protobuf::MessageLite& to_msg,
           from._internal_attribute_schemes());
     }
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _this->_internal_mutable_pets()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_pets());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      _this->_internal_mutable_formations()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_formations());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_unlocked_scheme_count() != 0) {
         _this->_impl_.unlocked_scheme_count_ = from._impl_.unlocked_scheme_count_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_max_scheme_count() != 0) {
         _this->_impl_.max_scheme_count_ = from._impl_.max_scheme_count_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_state_version() != 0) {
         _this->_impl_.state_version_ = from._impl_.state_version_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      if (from._internal_active_scheme_id() != 0) {
-        _this->_impl_.active_scheme_id_ = from._impl_.active_scheme_id_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      if (from._internal_next_unlock_allow_bind_diamond() != 0) {
-        _this->_impl_.next_unlock_allow_bind_diamond_ = from._impl_.next_unlock_allow_bind_diamond_;
       }
     }
   }
   if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_active_scheme_id() != 0) {
+        _this->_impl_.active_scheme_id_ = from._impl_.active_scheme_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_next_unlock_allow_bind_diamond() != 0) {
+        _this->_impl_.next_unlock_allow_bind_diamond_ = from._impl_.next_unlock_allow_bind_diamond_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_next_unlock_cost_diamond() != 0) {
         _this->_impl_.next_unlock_cost_diamond_ = from._impl_.next_unlock_cost_diamond_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_unlock_item_owned() != 0) {
         _this->_impl_.unlock_item_owned_ = from._impl_.unlock_item_owned_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_diamond_balance() != 0) {
         _this->_impl_.diamond_balance_ = from._impl_.diamond_balance_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (from._internal_bind_diamond_balance() != 0) {
         _this->_impl_.bind_diamond_balance_ = from._impl_.bind_diamond_balance_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_unlock_item_config_id() != 0) {
         _this->_impl_.unlock_item_config_id_ = from._impl_.unlock_item_config_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (from._internal_free_schemes() != 0) {
         _this->_impl_.free_schemes_ = from._impl_.free_schemes_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (from._internal_light_card_bonus_schemes() != 0) {
         _this->_impl_.light_card_bonus_schemes_ = from._impl_.light_card_bonus_schemes_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (from._internal_rented_extra_slots() != 0) {
         _this->_impl_.rented_extra_slots_ = from._impl_.rented_extra_slots_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
-    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
       if (from._internal_rent_expires_at_sec() != 0) {
         _this->_impl_.rent_expires_at_sec_ = from._impl_.rent_expires_at_sec_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
       if (from._internal_server_now_sec() != 0) {
         _this->_impl_.server_now_sec_ = from._impl_.server_now_sec_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
       if (from._internal_rent_unit_price_diamond() != 0) {
         _this->_impl_.rent_unit_price_diamond_ = from._impl_.rent_unit_price_diamond_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
       if (from._internal_rent_period_days() != 0) {
         _this->_impl_.rent_period_days_ = from._impl_.rent_period_days_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
       if (from._internal_rent_max_remaining_days() != 0) {
         _this->_impl_.rent_max_remaining_days_ = from._impl_.rent_max_remaining_days_;
       }
@@ -31527,6 +32224,8 @@ void EquipLoadoutSnapshot::InternalSwap(EquipLoadoutSnapshot* PROTOBUF_RESTRICT 
   _impl_.schemes_.InternalSwap(&other->_impl_.schemes_);
   _impl_.skill_schemes_.InternalSwap(&other->_impl_.skill_schemes_);
   _impl_.attribute_schemes_.InternalSwap(&other->_impl_.attribute_schemes_);
+  _impl_.pets_.InternalSwap(&other->_impl_.pets_);
+  _impl_.formations_.InternalSwap(&other->_impl_.formations_);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rent_max_remaining_days_)
       + sizeof(EquipLoadoutSnapshot::_impl_.rent_max_remaining_days_)
@@ -31910,9 +32609,9 @@ SaveEquipLoadoutRequest::SaveEquipLoadoutRequest(
                offsetof(Impl_, scheme_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, scheme_id_),
-           offsetof(Impl_, linked_attribute_scheme_id_) -
+           offsetof(Impl_, linked_pet_id_) -
                offsetof(Impl_, scheme_id_) +
-               sizeof(Impl_::linked_attribute_scheme_id_));
+               sizeof(Impl_::linked_pet_id_));
 
   // @@protoc_insertion_point(copy_constructor:SaveEquipLoadoutRequest)
 }
@@ -31933,9 +32632,9 @@ inline void SaveEquipLoadoutRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE 
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, scheme_id_),
            0,
-           offsetof(Impl_, linked_attribute_scheme_id_) -
+           offsetof(Impl_, linked_pet_id_) -
                offsetof(Impl_, scheme_id_) +
-               sizeof(Impl_::linked_attribute_scheme_id_));
+               sizeof(Impl_::linked_pet_id_));
 }
 SaveEquipLoadoutRequest::~SaveEquipLoadoutRequest() {
   // @@protoc_insertion_point(destructor:SaveEquipLoadoutRequest)
@@ -32003,7 +32702,11 @@ PROTOBUF_NOINLINE void SaveEquipLoadoutRequest::Clear() {
         reinterpret_cast<char*>(&_impl_.state_version_) -
         reinterpret_cast<char*>(&_impl_.scheme_id_)) + sizeof(_impl_.state_version_));
   }
-  _impl_.linked_attribute_scheme_id_ = 0u;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    ::memset(&_impl_.linked_attribute_scheme_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.linked_pet_id_) -
+        reinterpret_cast<char*>(&_impl_.linked_attribute_scheme_id_)) + sizeof(_impl_.linked_pet_id_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -32114,6 +32817,24 @@ PROTOBUF_NOINLINE void SaveEquipLoadoutRequest::Clear() {
     }
   }
 
+  // uint64 linked_pet_id = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_linked_pet_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          10, this_._internal_linked_pet_id(), target);
+    }
+  }
+
+  // uint32 linked_formation_id = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_linked_formation_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          11, this_._internal_linked_formation_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -32196,12 +32917,26 @@ PROTOBUF_NOINLINE void SaveEquipLoadoutRequest::Clear() {
       }
     }
   }
-   {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     // uint32 linked_attribute_scheme_id = 7;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_linked_attribute_scheme_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_linked_attribute_scheme_id());
+      }
+    }
+    // uint32 linked_formation_id = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_linked_formation_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_linked_formation_id());
+      }
+    }
+    // uint64 linked_pet_id = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_linked_pet_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_linked_pet_id());
       }
     }
   }
@@ -32273,9 +33008,21 @@ void SaveEquipLoadoutRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-    if (from._internal_linked_attribute_scheme_id() != 0) {
-      _this->_impl_.linked_attribute_scheme_id_ = from._impl_.linked_attribute_scheme_id_;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_linked_attribute_scheme_id() != 0) {
+        _this->_impl_.linked_attribute_scheme_id_ = from._impl_.linked_attribute_scheme_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_linked_formation_id() != 0) {
+        _this->_impl_.linked_formation_id_ = from._impl_.linked_formation_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_linked_pet_id() != 0) {
+        _this->_impl_.linked_pet_id_ = from._impl_.linked_pet_id_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -32301,8 +33048,8 @@ void SaveEquipLoadoutRequest::InternalSwap(SaveEquipLoadoutRequest* PROTOBUF_RES
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.request_id_, &other->_impl_.request_id_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(SaveEquipLoadoutRequest, _impl_.linked_attribute_scheme_id_)
-      + sizeof(SaveEquipLoadoutRequest::_impl_.linked_attribute_scheme_id_)
+      PROTOBUF_FIELD_OFFSET(SaveEquipLoadoutRequest, _impl_.linked_pet_id_)
+      + sizeof(SaveEquipLoadoutRequest::_impl_.linked_pet_id_)
       - PROTOBUF_FIELD_OFFSET(SaveEquipLoadoutRequest, _impl_.scheme_id_)>(
           reinterpret_cast<char*>(&_impl_.scheme_id_),
           reinterpret_cast<char*>(&other->_impl_.scheme_id_));

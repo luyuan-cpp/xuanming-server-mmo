@@ -134,6 +134,9 @@ type itEnv struct {
 	backend   authoritysql.Backend
 	operator  authoritysql.Permission
 	principal string // 这个库上 CURRENT_USER() 的原值,历史的 sql_principal 应当等于它
+	// copies 是 etcd 副本的内存替身(真 etcd 的 CAS 形状由 shared/mergedzonecopy 的真 etcd 用例钉住);
+	// 这里核的是发布出去的内容来自真库上的那条一致读。
+	copies *memCopies
 }
 
 func newITEnv(t *testing.T) *itEnv {
@@ -194,7 +197,7 @@ func newITEnv(t *testing.T) *itEnv {
 	if err := raw.QueryRowContext(ctx, "SELECT CURRENT_USER()").Scan(&principal); err != nil {
 		t.Fatal(err)
 	}
-	return &itEnv{ctx: ctx, raw: raw, dsn: dsn, backend: backend, operator: authoritysql.Operator(principal), principal: principal}
+	return &itEnv{ctx: ctx, raw: raw, dsn: dsn, backend: backend, operator: authoritysql.Operator(principal), principal: principal, copies: newMemCopies()}
 }
 
 func (e *itEnv) newStore(t *testing.T) *routeStore {
@@ -268,7 +271,7 @@ func (e *itEnv) runID(t *testing.T, src uint32) string {
 
 func (e *itEnv) run(store mappingStore, mode string, src, dst uint32, dryRun bool) (string, error) {
 	var out bytes.Buffer
-	err := execute(e.ctx, store, options{mode: mode, sourceZone: src, targetZone: dst, dryRun: dryRun}, time.Now(), &out)
+	err := execute(e.ctx, store, e.copies, options{mode: mode, sourceZone: src, targetZone: dst, dryRun: dryRun}, time.Now(), &out)
 	return out.String(), err
 }
 
@@ -289,6 +292,15 @@ func TestIT_MergeWritesOneRowWithAuditColumns(t *testing.T) {
 	if dst != 902 || !strings.HasPrefix(runID, "901-902-") || mergedAt < before {
 		t.Fatalf("row = dst %d run_id %q merged_at_ms %d", dst, runID, mergedAt)
 	}
+	// 提交之后发布出去的副本来自真库上的那条一致读(mergedzonecopy.ReadSQL):版本 = 历史行数,世代 = route_meta.generation。
+	var historyRows uint64
+	if err := env.raw.QueryRowContext(env.ctx, "SELECT COUNT(*) FROM zone_merge_history").Scan(&historyRows); err != nil {
+		t.Fatal(err)
+	}
+	published := env.copies.value
+	if published.Version != historyRows || published.Generation != itGeneration || published.Merges[901] != 902 || len(published.Merges) != 1 {
+		t.Fatalf("published copy = %+v, want version %d (the history rows), generation %s and only 901 -> 902", published, historyRows, itGeneration)
+	}
 }
 
 func TestIT_MergeIsIdempotent(t *testing.T) {
@@ -305,7 +317,7 @@ func TestIT_MergeIsIdempotent(t *testing.T) {
 	// 第二次用晚一小时的时钟:run_id 带时间戳,被改写的话一眼看得出来。
 	var out bytes.Buffer
 	o := options{mode: modeMerge, sourceZone: 901, targetZone: 902}
-	if err := execute(env.ctx, store, o, time.Now().Add(time.Hour), &out); err != nil || !strings.Contains(out.String(), "nothing written") {
+	if err := execute(env.ctx, store, env.copies, o, time.Now().Add(time.Hour), &out); err != nil || !strings.Contains(out.String(), "nothing written") {
 		t.Fatalf("re-run: out=%q err=%v", out.String(), err)
 	}
 	var secondRun string

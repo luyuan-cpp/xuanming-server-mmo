@@ -17,7 +17,7 @@
 
 ## 1. 客户端（`D:\luyuan\mmorpg-client`）
 
-> **状态（11-26 晚，会话「11-12 残余收口各批的独立评审」）**：本节三项都已落码，未编译。1.1 按含义拆开 2005（没有用 2007，原因见 `client-request-ordering.md` §6.2）；1.2 补了四条真 TCP 用例（`EnterGameRoleSwitchFlowTests`），选角页回选次数上限在完整登录管线里，没补；1.3 三项都改了。命令见 PROGRESS 2026-11-26「交接单第 1 节与第 4 节第 2~4 条」。
+> **状态（11-26 晚，会话「11-12 残余收口各批的独立评审」）**：本节三项都已落码，未编译。1.1 按含义拆开 2005（没有用 2007，原因见 `client-request-ordering.md` §6.2）；1.2 补了四条真 TCP 用例（`EnterGameRoleSwitchFlowTests`），选角页回选次数上限（`MaxEnterReselects`，第 4 次 3023 拆连接）在完整登录管线里，11-27 负责人定换电脑由 Claude Code 补这条用例，见第 8 节；1.3 三项都改了。命令见 PROGRESS 2026-11-26「交接单第 1 节与第 4 节第 2~4 条」。
 
 ### 1.1 同一角色重发 EnterGame 收到 2005 一律按「前一次还在进行」处理
 
@@ -113,3 +113,25 @@
 5. 代价与边界。
 
 写法可以照已修五批的记录：`kafka-bound-consumer-group.md` §15、`horizontal-scale-logical-db.md`「标了保留的建角 ref」一段末尾、`guild-phase2/03-names.md` 的 `bound_name_role_missing`。修完之后在 r2 审计文档 §1a 补一行入口。
+
+## 8. 换电脑接续：选角页回选上限的用例（11-27，交另一台电脑上的 Claude Code）
+
+负责人 11-27 定：换电脑由 Claude Code 写这条用例，Gemini 只编译、跑测。只加用例，不改产品代码。写完在本节标状态，并在 PROGRESS 追加一条。
+
+- **要钉住的行为**（客户端仓 `Assets/Scripts/Game/GameClient.cs`）：
+  - 选角循环在 `ConnectAndEnter` 里，约 1255–1305 行。EnterGame 受理之后服务端推进场失败（3023），`EnterGameAndWaitScene`（约 1452 行起）调 `onReselect(EnterRejectedReselectHint)` 回选角页。
+  - 只有 `reselects < MaxEnterReselects` 时才给回选的回调（约 1302 行；`MaxEnterReselects = 3`，在 `GameClient.RoleSwitch.cs`）。三次用完之后再来 3023，照旧拆连接、回选服。
+  - 3023 由推送带进来：`DispatchInbound` 里 `if (_awaitingSceneEntry && IsEnterFailureTip(tip.Id)) _enterFailedTipId = tip.Id;`，约 2865 行。先读这一段，弄清推送的消息号与包体。
+- **用例**：新文件 `Assets/Tests/EditMode/Net/EnterGameReselectCapTests.cs`，配 `.meta`，GUID 新生成。
+  1. 用反射调私有协程 `ConnectAndEnter(gen, zoneId, ip, port, payload, signature, …)`（约 1151 行，其余参数照现有调用点填），直接连本机假 gate，不走 HTTP。
+  2. 假 gate：验票，令牌 Login 回一份带两个角色的列表；每次收到 EnterGame 都受理（回 `EnterGameResponse { PlayerId }`），紧接着推 3023。
+  3. `PlayerChooser` 每次都选同一个角色，并记下被调用的次数和每次看到的 `EnterRejectHint`。
+  4. 断言：
+     - 一共选了 4 次（首次 1 次 + 回选 3 次），后 3 次的提示都是 `EnterRejectedReselectHint`；
+     - 第 4 次 EnterGame 受理后再推 3023，管线收掉：onError 只调用一次，连接已拆，`InGame` 为假；
+     - 没有第 5 次 EnterGame。
+  5. 另加一条对照：重定向或短重连路径（`_redirecting` / `_reconnecting` 为真）下，第一次 3023 就拆连接，不回选角。
+- **可抄的夹具**：
+  - `Assets/Tests/EditMode/Net/GameClientReconnectTests.cs`：`SetUp` 里的客户端装配；`ServeEnteredGate`，即验票、Login、EnterGame 的假 gate；`PumpRecovery`，按生产协程语义展开嵌套协程并等 `AsyncOperation`；还有反射辅助函数。
+  - `Assets/Tests/EditMode/Net/EnterGameRoleSwitchFlowTests.cs`：按脚本逐条应答的假 gate（`Serve`），以及带 10 秒护栏的 `Pump`。
+- **跑（交 Gemini）**：EditMode 跑新文件、`EnterGameRoleSwitchFlowTests` 与 `GameClientReconnectTests`，全部通过；客户端仓根跑 `tools/client_compile_check.ps1`。

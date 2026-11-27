@@ -9,6 +9,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -117,7 +118,9 @@ func (s *memStore) Committed(context.Context) (mergedzonecopy.Mapping, error) {
 }
 
 // memCopies 是 etcd 副本的内存替身:revision 0 = 没有键,每写一次加 1;Put 按 revision 比较,和 etcd 的 ModRevision 同一语义。
+// 真库的并发用例里几个 worker 共用一份,所以加锁。
 type memCopies struct {
+	mu       sync.Mutex
 	value    mergedzonecopy.Mapping
 	revision int64
 	getErr   error
@@ -132,6 +135,8 @@ func newMemCopies() *memCopies { return &memCopies{} }
 func (c *memCopies) Key() string { return mergedzonecopy.Key("mem_global_00") }
 
 func (c *memCopies) Get(context.Context) (mergedzonecopy.Mapping, int64, bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.getErr != nil {
 		return mergedzonecopy.Mapping{}, 0, false, c.getErr
 	}
@@ -144,6 +149,8 @@ func (c *memCopies) Get(context.Context) (mergedzonecopy.Mapping, int64, bool, e
 }
 
 func (c *memCopies) Put(_ context.Context, revision int64, mapping mergedzonecopy.Mapping) (bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.puts++
 	if c.racer != nil {
 		c.racer(c)
@@ -742,5 +749,145 @@ func TestOpenStoreFor_RejectsUnknownBackend(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "MMORPG_SQL_BACKEND") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+// 真写提交之后把第 0 片现在的映射发布进 etcd 副本:版本 = 历史条数;幂等重跑不再写;撤销同样发布;dry-run 不发布。
+func TestRealWritesPublishTheCommittedMapping(t *testing.T) {
+	store := newMemStore(nil)
+	copies := newMemCopies()
+	out, err := runModeWithCopies(store, copies, modeMerge, 5, 6, false)
+	if err != nil || !strings.Contains(out, "published version 1") {
+		t.Fatalf("out=%q err=%v", out, err)
+	}
+	if copies.value.Generation != memGeneration || copies.value.Version != 1 || !maps.Equal(copies.value.Merges, map[uint32]uint32{5: 6}) {
+		t.Fatalf("copy = %+v", copies.value)
+	}
+	out, err = runModeWithCopies(store, copies, modeMerge, 5, 6, false)
+	if err != nil || copies.puts != 1 || !strings.Contains(out, "already holds version 1") {
+		t.Fatalf("an idempotent re-run publishes nothing new: out=%q err=%v puts=%d", out, err, copies.puts)
+	}
+	out, err = runModeWithCopies(store, copies, modeUnmerge, 5, 6, false)
+	if err != nil || copies.value.Version != 2 || len(copies.value.Merges) != 0 || !strings.Contains(out, "published version 2") {
+		t.Fatalf("an unmerge publishes too: out=%q err=%v copy=%+v", out, err, copies.value)
+	}
+	if _, err := runModeWithCopies(store, copies, modeMerge, 5, 6, true); err != nil || copies.puts != 2 {
+		t.Fatalf("a dry-run publishes nothing: err=%v puts=%d", err, copies.puts)
+	}
+}
+
+// 提交之后发布失败:映射已提交,按「没做成或结局未知」报(退出码 2),不是拒绝;重跑同一条命令补上发布。
+func TestPublishFailureAfterCommitIsNotARefusalAndARerunRepairs(t *testing.T) {
+	store := newMemStore(nil)
+	copies := newMemCopies()
+	copies.putErr = errors.New("etcd request timed out")
+	out, err := runModeWithCopies(store, copies, modeMerge, 5, 6, false)
+	if exitCodeOf(err) != exitFailed || !strings.Contains(err.Error(), "the mapping is committed") {
+		t.Fatalf("err = %v, want exit 2 saying the mapping is committed", err)
+	}
+	if _, ok := store.rows[5]; !ok || !strings.Contains(out, "merged: zone 5 -> zone 6") {
+		t.Fatalf("the mapping is committed and reported before publishing: out=%q rows=%v", out, store.rows)
+	}
+	copies.putErr = nil
+	out, err = runModeWithCopies(store, copies, modeMerge, 5, 6, false)
+	if err != nil || copies.value.Version != 1 || !strings.Contains(out, "already merged") || !strings.Contains(out, "published version 1") {
+		t.Fatalf("the re-run publishes: out=%q err=%v copy=%+v", out, err, copies.value)
+	}
+
+	// 提交之后读不回第 0 片、读不到副本,同样是退出码 2。
+	store.committedErr = errors.New("connection reset")
+	if _, err := runModeWithCopies(store, newMemCopies(), modeMerge, 7, 6, false); exitCodeOf(err) != exitFailed {
+		t.Fatalf("err = %v", err)
+	}
+	store.committedErr = nil
+	unreadable := newMemCopies()
+	unreadable.getErr = errors.New("etcd unavailable")
+	if _, err := runModeWithCopies(store, unreadable, modeMerge, 8, 6, false); exitCodeOf(err) != exitFailed {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+// 副本领先于第 0 片(第 0 片回档过)、同版本内容不同、世代不同:映射照样已提交,但不发布,按退出码 2 报出原因。
+func TestPublishRefusesACopyThatDisagreesWithShardZero(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		published mergedzonecopy.Mapping
+		want      string
+	}{
+		{"副本领先", mergedzonecopy.Mapping{Generation: memGeneration, Version: 9, Merges: map[uint32]uint32{1: 2}}, "behind version 9"},
+		{"同版本内容不同", mergedzonecopy.Mapping{Generation: memGeneration, Version: 1, Merges: map[uint32]uint32{5: 7}}, "different contents"},
+		{"世代不同", mergedzonecopy.Mapping{Generation: "another", Merges: map[uint32]uint32{}}, "another directory database"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := newMemStore(nil)
+			copies := &memCopies{value: tc.published, revision: 3}
+			_, err := runModeWithCopies(store, copies, modeMerge, 5, 6, false)
+			if exitCodeOf(err) != exitFailed || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("err = %v", err)
+			}
+			if copies.puts != 0 || copies.revision != 3 {
+				t.Fatalf("nothing is published: puts=%d revision=%d", copies.puts, copies.revision)
+			}
+		})
+	}
+}
+
+// 发布撞上别的写者:重读,对方已经发布了同一个版本就不再写。
+func TestPublishRetriesWhenAnotherWriterWins(t *testing.T) {
+	store := newMemStore(nil)
+	copies := newMemCopies()
+	copies.racer = func(c *memCopies) {
+		c.value = mergedzonecopy.Mapping{Generation: memGeneration, Version: 1, Merges: map[uint32]uint32{5: 6}}
+		c.revision, c.racer = c.revision+1, nil
+	}
+	out, err := runModeWithCopies(store, copies, modeMerge, 5, 6, false)
+	if err != nil || copies.puts != 1 || !strings.Contains(out, "already holds version 1") {
+		t.Fatalf("out=%q err=%v puts=%d", out, err, copies.puts)
+	}
+}
+
+// 真写没有 etcd 副本时什么都不写就拒绝(参数层已经拦下,这是 execute 自己的兜底);dry-run 与审计不要副本。
+func TestRealWritesNeedTheEtcdCopy(t *testing.T) {
+	store := newMemStore(nil)
+	var out bytes.Buffer
+	err := execute(context.Background(), store, nil, options{mode: modeMerge, sourceZone: 5, targetZone: 6}, testNow, &out)
+	if !errors.Is(err, errRefused) || len(store.locked) != 0 || len(store.rows) != 0 {
+		t.Fatalf("err=%v locked=%v rows=%v", err, store.locked, store.rows)
+	}
+	if err := execute(context.Background(), store, nil, options{mode: modeMerge, sourceZone: 5, targetZone: 6, dryRun: true}, testNow, &out); err != nil {
+		t.Fatal(err)
+	}
+	if err := execute(context.Background(), store, nil, options{mode: modeAudit}, testNow, &out); err != nil || !strings.Contains(out.String(), "etcd copy: not checked") {
+		t.Fatalf("err=%v out=%q", err, out.String())
+	}
+}
+
+// 审计比对副本:缺席、落后、一致照常退出;领先按拒绝退出;读不到副本是退出码 2;审计从不写副本。
+func TestRunAudit_ComparesTheEtcdCopy(t *testing.T) {
+	store := newMemStore(map[uint32]uint32{5: 6}) // 一条历史,版本 1
+	for _, tc := range []struct {
+		name     string
+		copies   *memCopies
+		wantCode int
+		want     string
+	}{
+		{"缺席", newMemCopies(), exitOK, "absent"},
+		{"落后", &memCopies{value: mergedzonecopy.Mapping{Generation: memGeneration, Merges: map[uint32]uint32{}}, revision: 2}, exitOK, "behind directory shard 0"},
+		{"一致", &memCopies{value: mergedzonecopy.Mapping{Generation: memGeneration, Version: 1, Merges: map[uint32]uint32{5: 6}}, revision: 2}, exitOK, "version 1, 1 merged zone(s)"},
+		{"领先", &memCopies{value: mergedzonecopy.Mapping{Generation: memGeneration, Version: 3, Merges: map[uint32]uint32{5: 6}}, revision: 2}, exitRefused, "behind version 3"},
+		{"读不到", &memCopies{getErr: errors.New("etcd unavailable")}, exitFailed, "etcd unavailable"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := runModeWithCopies(store, tc.copies, modeAudit, 0, 0, false)
+			if exitCodeOf(err) != tc.wantCode {
+				t.Fatalf("exit = %d (err %v), want %d\n%s", exitCodeOf(err), err, tc.wantCode, out)
+			}
+			if !strings.Contains(out+fmt.Sprint(err), tc.want) {
+				t.Fatalf("output misses %q:\n%s\nerr: %v", tc.want, out, err)
+			}
+			if tc.copies.puts != 0 {
+				t.Fatal("the audit never writes the copy")
+			}
+		})
 	}
 }

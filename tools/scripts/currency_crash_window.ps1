@@ -188,7 +188,8 @@ function Clear-GlobalRouteTables {
 # 合过服的环境清表之后还要重启 data_service:在跑的进程回答过大于 0 的版本,不会跟着退回 0,只会一直报 restart this replica。
 function Remove-MergedZoneEtcdCopy {
     param([bool]$HasDocker)
-    $copyKey = "/mmorpg/merged_zone_copy/$GlobalDbName"
+    # 键按目录第 0 片的库名取(shared/mergedzonecopy.Key):K=1 时就是基名,否则是 <基名>_00。
+    $copyKey = "/mmorpg/merged_zone_copy/$(@((Get-GlobalResetDatabases).Directory)[0])"
     if (-not $HasDocker) {
         Write-Warning "[reset] docker unavailable - the etcd copy $copyKey of the merged zone mapping was not deleted"
         return

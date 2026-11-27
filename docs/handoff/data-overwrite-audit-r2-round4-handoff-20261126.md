@@ -11,6 +11,25 @@
 - 审计基线 HEAD `bc6e70850`，审计期间别的会话推进到 `2d20f6b68`，交接时 HEAD 是 `8a6697af0`。行号可能已漂移，按函数名定位。
 - 三路查找原文在本目录旁的 [data-overwrite-audit-r2-round4-20261126/](data-overwrite-audit-r2-round4-20261126/)（`asset-crosszone-idseg.json` 跨区与号段、`fault-partition-lease.json` 网络分区与租约、`entry-ops-cli.json` 运维工具）。每条的触发步骤、证据和 `fix` 建议以原文为准。
 
+## 0a. 换电脑后继续：本单全部剩余工作（负责人 11-27 定）
+
+负责人在另一台电脑上说「继续 handoff 里面所有东西」时，那边的 Claude Code（AGENTS §10.3 最高档 Fable 5.2 Max）按本节从头做到尾。**本单里凡写「交 Gemini 写」的代码，一律改由 Claude Code 写**，Gemini 只跑生成、编译、测试、冒烟。只在 main 上改，不开分支，提交由负责人定；Java 独立仓只在 `PARITY.md` 登记待做。
+
+0. **开工核对**：`git log` 里要有 `3eb57a09a`、`d77a458ee`、`76e2b59bb`、`24c13a311`（三批与 §7.4 的代码），以及旧电脑上还没提交的测试与设计稿改动（§6.1、§7 各节标「未提交」的文件），由负责人先同步过来；缺了就停下问负责人。`git status` 看清别的会话的在途改动，只动本单范围的行。各节末尾已写了复核结论或「已完成」的，不重做。
+1. **复核**（写的人与复核的人分开；新电脑上的会话没写过这些代码，可以复核）：按 §2「先复核，再改」逐批复核 §7.1 批 V、§7.2 批 W、§7.3 批 X、§7.4 五条、§6.1 九条里还没有复核结论的。diff 基线：批 V、X 用 `git diff 8a6697af0 -- <文件>`，批 W 用 `git show 76e2b59bb -- <文件>`，§7.4 用 `git diff a0b3d195e 24c13a311 -- <文件>`，都再加工作区 `git diff HEAD`。复核出问题当场改，在对应小节末尾写复核结论。
+2. **写代码**（按顺序）：
+   1. r2-craft#1 批 C（部署开通）、批 B（scene 与客户端接入）：做法与前提在 `docs/design/skill-book-wanted-order-trade-escrow.md` §11.2；批 C 前提②（K8s 各档位是否打开 trade `AssetOp.Enabled`）开工前先问负责人，不自己定。
+   2. guild 人工终结见证的条件写补比 `attempts`：逐行步骤在 §6「还没做的」第 2 条。
+   3. 各批「剩余与取舍」「顺带发现」里记下的点，按「查出的问题现在修」逐条判断：是缺陷就修；确是有意取舍的，在所属设计稿写明不改的理由。至少包括：
+      - 删角收尾不删 `guild_war_player_state` 与 `guild_war_garrison`（后者含玩家名与快照），补进账号注销清单；`docs/design/account-deletion.md` 登记新挂起项 `guild_war_credit_owed`（§7.4）。
+      - 客户端可见的 `guild.proto` 里 EXPIRED 状态注释与实际含义不符（§7.4）；客户端 `BountyStatusLabel` 没有状态 6 的文案（§7.1）。改客户端可见协议时两版共享的契约同批改。
+      - 待入账积压（`guild_war_credit_owed`）没有指标与告警，生死状待退银两超期（`metric=jianghu_duel_fee_overdue`）没有告警规则（§7.3、§7.4）。
+      - `CheckJianghuDuelEligibility` 不判「旧局待退银两未结清」，要到备战才拒（§7.3）。
+      - 锦标赛领奖遇邮箱满时玩家看到的是内部错误，mail 的满箱提示没透传（§7.2）。
+3. **文档**：每改一条，按 §4 在所属功能的设计稿写五项（问题、方案、为什么这样选、被否决的做法、代价与边界），不容易想到的好方案一定写进去；r2 审计文档 `docs/design/data-overwrite-rollback-audit-r2-20261019.md` 的 §5.0 补全第 4 轮各编号的最终状态、§1a 补入口、§1「仍开着」划掉第 4 轮；`docs/PROGRESS.md` 纯追加；新建文档后按 AGENTS §5 更新文档索引（先 `--check`，diff 只许加行）。
+4. **交 Gemini 只跑**：生成、编译、测试、冒烟，命令在 §6.1、§7.1～§7.4 与设计稿 §11.1、§11.2；红了保留首错原文交回 Claude Code，不由 Gemini 改代码。
+5. **第 5 轮审计**：以上都落完后开，做法见 §6（`D_ROUNDS[4]` 自由视角三路，并进旧核心机制的网络分区推演，去重清单 133 条）；审计脚本与旧去重清单用 `git show ccf2840b2:docs/handoff/data-overwrite-audit-r2-20261019/<文件>` 读。
+
 ## 1. 发现（17 条：3 high、6 medium、8 low，几乎都在 11-20 以后的新玩法代码）
 
 「已核」= Claude 主会话逐行读过代码路径属实；可达性与上游守卫还要对抗复核。
@@ -240,7 +259,7 @@
 
 **还没做的**（写回这里，按负责人口径额度过 80% 交 Gemini）：
 - r2-craft#1 落码：批 A 已写（未编译，验证命令见设计稿 §11.1 末）；**批 C、批 B 负责人 11-27 改定换电脑由 Claude Code（Fable 5.2 Max）写，Gemini 不写，只做写完后的生成、编译、测试**（设计稿 §11.2，写完同节补五项记录，再按设计稿 §9 跑）。Gemini 跑批 A 时把导表放在最前：两条新 tip 不导出来 go/trade 编不过。
-- guild 人工终结的条件写补比 `attempts`（r2 早期遗留第 1 条的最后一处）：**2026-11-27 交 Gemini 4 Neon Extra 写**。会话「复核第 4 轮批 V/W 并补 guild 见证 SQL」开工时 Claude 全部模型周额度 81%，按 §6 口径没动手；§0 的「Gemini 不要改本单的代码」不适用于本条。
+- guild 人工终结的条件写补比 `attempts`（r2 早期遗留第 1 条的最后一处）：**2026-11-27 交 Gemini 4 Neon Extra 写**（负责人随后改定：换电脑由 Claude Code 写，见 §0a）。会话「复核第 4 轮批 V/W 并补 guild 见证 SQL」开工时 Claude 全部模型周额度 81%，按 §6 口径没动手；§0 的「Gemini 不要改本单的代码」不适用于本条。
   - 文件已空出：§7.4 没改过 `asset_store.go`，现在没有会话占着。行号按 HEAD `24c13a311` 核过。
   - `go/guild/internal/data/asset_store.go:259`：`sqlResolveAssetOpQuiet` 末尾加 `` AND `attempts` = ? ``。
   - 同文件 :739：`ResolveManuallyIfQuiet` 的实参在 `witness.LastSendMs` 之后加 `witness.Attempts`。

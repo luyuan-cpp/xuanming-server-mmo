@@ -9,7 +9,7 @@
 | [`proto_generator/`](proto_generator/) | Go | 协议生成器 proto-gen:从 `proto/` 生成 C++、Go、机器人、客户端代码 |
 | [`data_table_exporter/`](data_table_exporter/) | Python | 导表器:从 `data/` 生成表数据与各语言的查表代码 |
 | [`scripts/`](scripts/) | PowerShell、Shell、Python | 工程脚本:启动、构建、部署、发布、压测 |
-| `merge_zone/` | Go | 不停服合服工具:写、删、查 `zone_merged_into` 映射(手册 [`docs/ops/merge-zone-runbook.md`](../docs/ops/merge-zone-runbook.md)) |
+| `merge_zone/` | Go | 不停服合服工具:写、删、查 `zone_merged_into` 映射,真写提交之后发布 etcd 副本、审计比对副本(手册 [`docs/ops/merge-zone-runbook.md`](../docs/ops/merge-zone-runbook.md),副本见 [`docs/design/merged-zone-etcd-copy.md`](../docs/design/merged-zone-etcd-copy.md)) |
 | `dbmove/` | Go | 不停服搬逻辑库:把一个逻辑库从物理集群 A 搬到 B(手册 [`docs/ops/db-move-runbook.md`](../docs/ops/db-move-runbook.md)) |
 | `data_consistency_check/` | Go | 跨区数据交叉引用巡检 |
 | `navmesh_baker/` | C++ / Python | 场景导航烘焙(Recast);`prepare_{bajing_body,biyuan_body,yuexi_bay}.py` 与 `verify_pc_original_map_parity.py` 烘焙并校验正式版本化地图导航 |

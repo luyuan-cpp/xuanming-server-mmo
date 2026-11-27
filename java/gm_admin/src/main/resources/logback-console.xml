@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- K8s 上的后台只把日志打到控制台,由集群的容器日志采集器收走(docs/design/admin-identity-and-dual-control.md §11.4)。
+     上游 logback-spring.xml 还往 ../logs 写滚动文件,容器根文件系统只读、也不该占 Pod 的临时卷,所以 K8s 的配置模板
+     (k8s_deploy.ps1 New-GmAdminConfigMapYaml)用 logging.config 换成本文件。本机开发仍用上游那份。 -->
+<configuration>
+	<appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+		<encoder>
+			<pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50}:%L - %msg%n</pattern>
+		</encoder>
+	</appender>
+	<root level="INFO">
+		<appender-ref ref="STDOUT" />
+	</root>
+</configuration>

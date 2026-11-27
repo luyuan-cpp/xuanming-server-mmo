@@ -30,7 +30,7 @@
 - data_service 的 boot 名册(`rosterFile`)每条 entry 的 `requests` 要恰好是片库、流水库和 `MMORPG_DB_ALLOWED_DATABASES` 列出的全部存档库,一共 K+1+存档库数份,多一份少一份都拒绝启动。`k8s_deploy.ps1` 在 apply 之前核一次,对不上就拒绝。
 - `-Region` 是地域码,写进 ConfigMap 模板的 `IdSegment.Issuer.Region`,同时注入 data-service 主容器的 `MMORPG_ID_ISSUER_EXPECTED_REGION`。常驻进程读的是 Secret 里抄的配置,抄错了 data_service 比对这个变量,拒绝启动。staging、prod 必须显式给 1..63,0 只给 dev。一旦发号不能改,不能和别的地域重复。开新地域见 [开新地域手册](open-new-region-runbook.md)。
 - `-IdRegistryEtcd` 是全局号源登记处的地址(`host:port`,全世界共用一套),写进 ConfigMap 模板的 `IdSegment.Issuer.RegistryEtcd`。staging、prod 必须给,不能是本集群的 `etcd` 或 `etcd-id-secondary`;托管登记处的那一个集群用 `-HostIdRegistry`(`infra-up` 部署 `etcd-id-registry`,地址取本集群的 Service)。Secret 里的配置要抄上同样的 `RegistryEtcd`。见[发号器运维手册](id-issuer-runbook.md) §1、§2。
-- 合服映射只在目录第 0 片,各服务经 `GetMergedZones` 读,不连目录。合服工具的写权限在操作员角色 `deploy/sql/authority_operator_role.sql` 里,不进运行账号。data_service 把每个新版本先发布进 etcd 副本 `/mmorpg/merged_zone_copy/<全局库名>` 再用,第 0 片读不到时按副本回答([设计](../design/merged-zone-etcd-copy.md));副本只有 data_service 写,合服工具不碰 etcd。
+- 合服映射只在目录第 0 片,各服务经 `GetMergedZones` 读,不连目录。合服工具的写权限在操作员角色 `deploy/sql/authority_operator_role.sql` 里,不进运行账号。data_service 把每个新版本先发布进 etcd 副本 `/mmorpg/merged_zone_copy/<第 0 片库名>` 再用,第 0 片读不到时按副本回答([设计](../design/merged-zone-etcd-copy.md));副本只有 data_service 写,合服工具不碰 etcd。
 - **运维预置的每 boot 配置要带上新段**。常驻进程的配置来自 `runtimeConfigSecret`,schema Job 来自 `schemaConfigSecret`,`k8s_deploy.ps1` 渲染的 ConfigMap 是模板:把 ConfigMap 里的 `Directory`、`RoleFence`、`Recall`、`SharedRedis`、`PlayerRedis`、`MethodTimeouts`、`DbPlacement`、`IdSegment.Issuer`(`Region`、两套本地 etcd、`RegistryEtcd`)、`DataServiceRpc`、`GuildRpc`、`MatchRpc` 抄进去,再填账号。两边不一致时以 Secret 为准,配置缺了服务拒绝启动。match 另有一项 `GlobalMatch.BattlePodNamespace`(2026-11-11,战斗服所在的命名空间,原样抄、不要改):漏抄不会拒绝启动,match 启动时打一行 ERROR `battle pod lookup disabled`,Agones 下战斗服崩溃后的对局就只能等截止才作废,见 [人工 ABORT 手册](match-formation-manual-abort-runbook.md) §9。密钥按来源分两种填:
   - 全服同值的密钥照抄模板,只写变量名,值由部署注入 Pod:共享 Redis 口令(各段 `Password: ""` 加顶层 `SharedRedisPasswordEnv`,口令非空时模板才有这一行)、gate 令牌与 login 的几把 HMAC 密钥(`Secrets.*.Env`)、match 的 `Spectate.*Env`、gateway 的 `"${变量名}"`。
   - 数据库口令是这个槽位(schema Job 是 schema 主体)自己的,直接写进 Secret 里配置的口令字段:db `ServerConfig.Database.Passwd`、data-service `SnapshotMySQL.Password`、其余 Go 服务 `MySQL.Password`、gateway `spring.datasource.password`;模板里这些字段是空串,账号字段是模板用户名,抄的时候换成这个槽位的。部署脚本不给任何 Pod 与 Job 注入共享数据库口令。staging、prod 的 `schemaConfigSecret` 必须带 `DbPlacement`,没有时 `-migrate` 拒绝运行(`MMORPG_DB_PLACEMENT_REQUIRED`):它靠这一段看库是不是在搬。go/db 的 `db-migrate` Job 同样注入;手工跑 `cmd/migrate -command up` 时自己设这个环境变量,配置文件同样带这一段。gateway 的 `runtimeConfigSecret` 从 `java-svc-gateway-config` 抄:JDBC URL 指向全球权威入口,`mmorpg.sql.backend` 跟 `-DatabaseBackend`(tidb 或 mysql),`mmorpg.run-mode: prod`,tidb 档 `mmorpg.sql.require-tidb: true`;login 的同理按 TiDB 入口重做。
@@ -307,7 +307,7 @@ kubectl get svc -n mmorpg-zone-yesterday
   - 已经在跑的副本照常服务落在健康集群上的库,落在失联集群上的调用回不可用。
   - 这期间新起的 Pod(被回收重建的、扩出来的、发布换上的)照样起得来。注册器跳过连不上的库(init 日志 `skipped=<库> reason=unreachable`),主容器启动日志打「no writer grant」。这些库这一代一直关着,Pod 照常经 etcd 被发现、服务健康库,但 `/readyz` 不就绪(`READY 0/1`),告警 `SqlWriterGrantsIncomplete`。
   - 注册时连得上、主容器启动时才连不上的 data-service Pod(两步之间断的)有写资格,只是那些库的池先关着。`/readyz` 同样不就绪,但不报 `SqlWriterGrantsIncomplete`。后台每 15 秒重核一次,恢复之后自己打开、自己就绪,不用重建。
-  - 目录第 0 片(合服映射所在)连不上时,新 Pod 从 etcd 里的合服映射副本起,启动日志 `starting from version N in the etcd copy`,和别的库一样关着、不就绪([合服映射的 etcd 副本](../design/merged-zone-etcd-copy.md))。这期间合服晚一个周期生效;恢复之前别合服(合服手册 §3)。
+  - 目录第 0 片(合服映射所在)连不上时,新 Pod 从 etcd 里的合服映射副本起,启动日志 `starting from version N in the etcd copy`,和别的库一样关着、不就绪([合服映射的 etcd 副本](../design/merged-zone-etcd-copy.md))。合服工具提交之后就发布副本,这些 Pod 也在一个刷新周期内看到新合服;但合服本身要写第 0 片,它的集群恢复之前合不了(合服手册 §3)。
   - 例外:下面三种新 Pod 仍起不来。
     - etcd 里还没有副本(全新环境第一次起服时第 0 片就连不上),或者全新空环境的空环境判据读不全。
       - 注册器跳过了目录片的:主容器以 78 退出,`sql-writer-pod-reaper` 约每分钟删一次,StatefulSet 按同序号重建,直到它恢复。每次重建都在连得上的库上换一代,每库多约 2 KB 收据。
@@ -315,7 +315,7 @@ kubectl get svc -n mmorpg-zone-yesterday
       - 两种都在集群恢复之后自己起来,不用人工删。
     - 第 0 片连得上却读不对,启动日志 `not a connectivity failure`(多半是运行账号没有 `zone_merged_into`、`zone_merge_history` 的读权限,见 §1):这是部署错误,有副本也不顶替,发布停在第一个副本。按错误原文补授权。
     - 第 0 片连得上,却和副本对不上:启动日志 `behind version ... in the etcd copy`(第 0 片回档、清过路由表)、`different contents`(有人绕过 merge_zone 改了映射)或 `another directory database`(指错了库,或目录库重建过)。这是有意的拒启。
-      - 确认回档、清表、重建是有意的:**先把 data-service 全部停掉**(缩到 0),删副本键 `kubectl -n <infra> exec etcd-0 -- etcdctl del /mmorpg/merged_zone_copy/<全局库名>`,再起。在跑的进程不会跟着第 0 片退回去,只会一直报 `restart this replica`。
+      - 确认回档、清表、重建是有意的:**先把 data-service 全部停掉**(缩到 0),删副本键 `kubectl -n <infra> exec etcd-0 -- etcdctl del /mmorpg/merged_zone_copy/<第 0 片库名>`,再起。在跑的进程不会跟着第 0 片退回去,只会一直报 `restart this replica`。
       - 手改映射的按合服手册 §5 处理;指错库的改配置。
   - **故障期间别滚动重启、别发布**:新 Pod 一样缺这些库,发布会停在第一个不就绪的 Pod 上(这是有意的保护)。
   - **集群恢复之后要重建缺写资格的 Pod**(告警 `SqlWriterGrantsIncomplete` 点名的那些):它们不会自己补齐。一次删一个 `kubectl -n <namespace> delete pod <pod>`,等新 Pod 就绪(`/readyz` 200、告警消失)再删下一个。新的一代在全部库注册,并在换代事务里退休被跳过那些库上留着的上一代。

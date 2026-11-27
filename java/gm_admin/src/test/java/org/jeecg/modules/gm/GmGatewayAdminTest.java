@@ -72,4 +72,19 @@ class GmGatewayAdminTest {
         assertThrows(UnauthorizedException.class, () -> controller.gatewayAdmin("{\"method\":\"POST\",\"path\":\"/admin/zones\"}"));
         assertEquals(List.of(), seen);
     }
+
+    @Test void plainHttpGatewayIsAllowedOnlyForLoopbackOrClusterServiceNames() {
+        // 集群内服务间本来就是明文(设计 §11.4):回环与 <service>.<namespace>.svc[.cluster.local] 上的 http 放行,别的照旧拒绝。
+        GameServices game = mock(GameServices.class);
+        GmCommandJournal journal = mock(GmCommandJournal.class);
+        for (String url : List.of("http://gateway.mmorpg.svc:8081", "http://gateway.mmorpg.svc.cluster.local:8081",
+                "http://127.0.0.1:8081", "http://localhost:8081", "http://[::1]:8081")) {
+            assertDoesNotThrow(() -> new GmController(json, game, journal, url, KEY, "", ""), url);
+        }
+        for (String url : List.of("http://gateway.mmorpg:8081", "http://a.b.c.svc:8081", "http://x.svc.example.com:8081",
+                "http://Gateway.mmorpg.svc:8081", "http://10.0.0.8:8081", "http://[fe80::1]:8081", "http://user@gateway.mmorpg.svc:8081",
+                "http://gateway.mmorpg.svc:8081?x=1", "http://gateway.mmorpg.svc:8081#f")) {
+            assertThrows(IllegalArgumentException.class, () -> new GmController(json, game, journal, url, KEY, "", ""), url);
+        }
+    }
 }

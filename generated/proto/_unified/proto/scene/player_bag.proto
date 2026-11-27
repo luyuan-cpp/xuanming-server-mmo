@@ -522,12 +522,21 @@ message EquipLoadoutSchemeInfo {
   uint32 linked_skill_scheme_id = 6;         // 0 = 不联动；>0 = 关联战法方案号
   uint32 linked_attribute_scheme_id = 7;     // 0 = 不联动；>0 = 关联属性加点方案号
   uint32 missing_count = 8;                  // 实时缺失槽位数
+  uint64 linked_pet_id = 9;                  // 0 = 不联动；>0 = 关联首发灵宠永久 pet_id
+  uint32 linked_formation_id = 10;           // 0 = 不联动；1..5 = 关联免费五行阵法 ID
 }
 
 message EquipLoadoutLinkedOption {
   uint32 scheme_id = 1;
   string name = 2;
   uint32 role_tag = 3;
+}
+
+message EquipLoadoutLinkedPetOption {
+  uint64 pet_id = 1;       // 永久灵宠实例 ID
+  uint32 pet_table_id = 2; // 灵宠种类表 ID
+  string name = 3;         // 展示名（自定义名优先，否则 PetTable.name）
+  bool active = 4;         // 当前是否为首发灵宠
 }
 
 message EquipLoadoutSnapshot {
@@ -553,6 +562,8 @@ message EquipLoadoutSnapshot {
   uint64 rent_unit_price_diamond = 19;                      // 单套 30 天真实灵石价（固定 30，装备+战法+加点共享）
   uint32 rent_period_days = 20;                             // 单期租用天数（固定 30）
   uint32 rent_max_remaining_days = 21;                      // 最长剩余叠加天数（固定 180）
+  repeated EquipLoadoutLinkedPetOption pets = 22;           // 可选联动的首发灵宠列表（只读取自 PlayerPetComp）
+  repeated EquipLoadoutLinkedOption formations = 23;        // 可选联动的免费五行阵法列表（1..5）
 }
 
 message GetEquipLoadoutsRequest {}
@@ -571,6 +582,8 @@ message SaveEquipLoadoutRequest {
   uint32 linked_attribute_scheme_id = 7;      // 0 = 不联动
   uint64 state_version = 8;                   // 乐观锁版本号
   string request_id = 9;                      // 16..64 字节 ASCII 幂等键
+  uint64 linked_pet_id = 10;                  // 0 = 不联动；>0 = 联动首发灵宠永久 pet_id
+  uint32 linked_formation_id = 11;            // 0 = 不联动；1..5 = 联动免费五行阵法 ID
 }
 message SaveEquipLoadoutResponse {
   TipInfoMessage error_message = 1;

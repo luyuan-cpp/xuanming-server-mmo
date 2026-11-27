@@ -17,6 +17,8 @@ message EquipLoadoutScheme {
   repeated EquipLoadoutSlotBinding slots = 4;   // 按 slot 升序，严禁靠下标承载槽位语义
   uint32 linked_skill_scheme_id = 5;            // 0 = 不联动；1..7 = 联动 SkillLoadoutScheme
   uint32 linked_attribute_scheme_id = 6;        // 0 = 不联动；>0 = 联动 AttributeScheme
+  uint64 linked_pet_id = 7;                     // 0 = 不联动；>0 = 联动首发灵宠永久 pet_id
+  uint32 linked_formation_id = 8;               // 0 = 不联动；1..5 = 联动免费五行阵法 ID
 }
 
 message PlayerEquipLoadoutComp {

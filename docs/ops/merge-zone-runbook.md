@@ -2,7 +2,7 @@
 
 > **负责人要求(2026-10-30)**:合服目标改为**不停服合服**。具体方案由 Claude Code 自行调研现有实现与成熟方案,选择最适合本项目的方式。
 > **状态**:工具、guild、trade、match 已按本手册落码,**未编译、未测试、未演练**。部署改动还没做(§9)。§11 的验证跑通之前,不能在真实环境执行。
-> **2026-11-27**:data_service 读映射多了一份 etcd 副本,目录第 0 片失联时照样启动([合服映射的 etcd 副本](../design/merged-zone-etcd-copy.md),未编译)。合服工具、映射表、历史表、授权都没变;本手册 §1、§3、§4、§5、§11 跟着补了副本的说法。
+> **2026-11-27**:data_service 读映射多了一份 etcd 副本,目录第 0 片失联时照样启动([合服映射的 etcd 副本](../design/merged-zone-etcd-copy.md),未编译)。映射表、历史表、授权、工具的判定都没变;工具真写提交之后多一步发布副本,所以真写要多给 `-MergeZoneEtcdHosts`,审计给了它就比对副本。本手册 §1、§3、§4、§5、§6、§11 跟着改了。
 > **方案**:[总体方案 §7.1](../design/player-data-tidb-scaling-plan.md)。**旧手册**:[停服版](../archive/merge-zone-runbook-stop-the-world.md),已作废。别处写的「merge-zone-runbook §N」指的都是旧手册的章节。
 
 ## 1. 方案与选型
@@ -39,7 +39,8 @@
 ### 三个完成条件
 
 - **归属合并**:映射提交即完成,各服务 2 个刷新周期内生效(data_service 重读目录第 0 片 5 秒,guild、trade、match 重读 data_service 5 秒,共约 10 秒)。
-  - data_service 每读到一个新版本,先把它发布进 etcd 副本 `/mmorpg/merged_zone_copy/<全局库名>` 再用;读不到第 0 片的副本按 etcd 副本回答,要等一个读得到第 0 片的副本先发布,所以经它的服务最多 3 个周期([设计](../design/merged-zone-etcd-copy.md) §5.3)。§3 的前置条件让合服时没有这种副本。
+  - 工具提交之后马上把映射发布进 etcd 副本 `/mmorpg/merged_zone_copy/<第 0 片库名>`(输出 `etcd copy ...: published version N`);data_service 每读到一个新版本也先发布再用。读不到第 0 片的 data_service 副本按副本回答,同样一个周期内看到,所以**所有副本都是 2 个周期**([设计](../design/merged-zone-etcd-copy.md) §5.3)。
+  - 工具发布失败时退出码 2,但映射**已经提交**(错误文案是 `the mapping is committed, but ...`):读得到第 0 片的 data_service 一个周期内自己发布;读不到的要等那次发布,最多晚一个周期。重跑同一条命令就补上发布。
   - 版本号就是 `zone_merge_history` 的行数:每次真改了映射恰好追加一行,所以副本里的 `version` 应当等于审计里 `merge history` 的条数。
 - **数据归并**:不需要。玩家存档留在原来的库,靠 `player_route.storage_id` 找到。
 - **源资源退役**:场景节点、gate 按现有排空流程随时下线,和合服解耦(§8)。源库不退役。
@@ -103,10 +104,13 @@
    $env:MERGE_ZONE_ROUTE_DB_DSN = '<账号:口令@tcp(地址:端口)/目录第 0 片>'   # K=1: dev testdb, K8s mmorpg_global;否则 <全局库>_00
    $env:MMORPG_SQL_OPERATOR_PRINCIPAL = '<账号@主机>'                   # 这个账号 SELECT CURRENT_USER() 的结果,真写才要
    $env:MMORPG_SQL_BACKEND = 'mysql'                                    # 只有 mysql 档要设,缺省 tidb
+   $env:MERGE_ZONE_ETCD_HOSTS = '127.0.0.1:2379'                        # data_service 节点注册那一套 etcd;真写必填,审计给了就比对副本
    ```
 
+   K8s 上先把 infra namespace 的 etcd 转到本机,另开一个窗口一直开着:`kubectl -n <infra> port-forward svc/etcd 2379:2379`。本机调试栈的 etcd 就在 `127.0.0.1:2379`。
+
 6. **账号权限**:操作员账号要有 `route_meta` 的 SELECT、UPDATE(`FOR UPDATE` 要它),`zone_merged_into` 的 SELECT、INSERT、DELETE,`zone_merge_history` 的 SELECT、INSERT(**没有** UPDATE、DELETE:历史只增不改),都在 `deploy/sql/authority_operator_role.sql` 的 maintenance 身份里。dry-run 只要两张映射表与 `route_meta` 的 SELECT;审计还要 `zone_merge_history` 的 SELECT。两张表只在目录第 0 片,操作员的授权由这个库的 `render-roles` 计划(`directorySchema`)带出(`tools/scripts/maintenance_drain.ps1` 的 `MERGE_ZONE_GRANT`)。`zone_merge_history` 由 data_service `-migrate` 建,旧版本迁移过的库要先用新版本再迁移一次,授权要在迁移之后渲染(表不在时 GRANT 报 1146)。match、guild、trade 读映射走 `GetMergedZones`,运行账号不用这两张表的权限;data_service 的运行账号要两张表的 SELECT,由第 0 片计划的 `tables` 给出(开服手册 §1)。
-7. **data_service 全部就绪、etcd 健康**:`kubectl -n <namespace> get pods` 里 data-service 全部 `READY 1/1`,`kubectl -n <infra> exec etcd-0 -- etcdctl endpoint health --cluster` 全部健康。不就绪的副本读不到第 0 片时按 etcd 副本跟进,新合服晚一个周期;etcd 不健康时 data_service 发布不了新版本,合服在 etcd 恢复之前不生效(先发布后使用,[设计](../design/merged-zone-etcd-copy.md) §6 V12、V13)。有不就绪的先按开服手册 §9 处理。
+7. **data_service 全部就绪、etcd 健康**:`kubectl -n <namespace> get pods` 里 data-service 全部 `READY 1/1`,`kubectl -n <infra> exec etcd-0 -- etcdctl endpoint health --cluster` 全部健康。etcd 不健康时工具提交之后发布失败(退出码 2),data_service 也发布不了新版本,合服在 etcd 恢复之前不生效(先发布后使用,[设计](../design/merged-zone-etcd-copy.md) §6 V13)。有不就绪的先按开服手册 §9 处理:不就绪的副本多半读不到第 0 片,在走副本。
 
 ## 4. 操作步骤
 
@@ -115,7 +119,7 @@
 **第 1 步:看现状。**
 
 ```powershell
-pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit -MergeZoneRouteDbDsn $env:MERGE_ZONE_ROUTE_DB_DSN
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit -MergeZoneRouteDbDsn $env:MERGE_ZONE_ROUTE_DB_DSN -MergeZoneEtcdHosts $env:MERGE_ZONE_ETCD_HOSTS
 ```
 
 判据:退出码 0,`route_meta.writable: true`,目标区不在 `src_zone` 列。
@@ -123,7 +127,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit -MergeZoneRoute
 **第 2 步:预演。**
 
 ```powershell
-pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone -MergeSourceZone <源> -MergeTargetZone <目标> -MergeZoneRouteDbDsn $env:MERGE_ZONE_ROUTE_DB_DSN -DryRun
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone -MergeSourceZone <源> -MergeTargetZone <目标> -MergeZoneRouteDbDsn $env:MERGE_ZONE_ROUTE_DB_DSN -MergeZoneEtcdHosts $env:MERGE_ZONE_ETCD_HOSTS -DryRun
 ```
 
 判据:退出码 0,输出 `[DRY-RUN] would record zone <源> -> zone <目标>`。预演不加锁,真写时在锁内重判。
@@ -131,21 +135,22 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone -MergeSourceZone <源
 **第 3 步:合服。**
 
 ```powershell
-pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone -MergeSourceZone <源> -MergeTargetZone <目标> -MergeZoneRouteDbDsn $env:MERGE_ZONE_ROUTE_DB_DSN
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone -MergeSourceZone <源> -MergeTargetZone <目标> -MergeZoneRouteDbDsn $env:MERGE_ZONE_ROUTE_DB_DSN -MergeZoneEtcdHosts $env:MERGE_ZONE_ETCD_HOSTS
 ```
 
-判据:退出码 0,输出 `merged: zone <源> -> zone <目标>`。这一步之后归属合并就完成了。
+判据:退出码 0,输出 `merged: zone <源> -> zone <目标>` 和 `etcd copy /mmorpg/merged_zone_copy/<第 0 片库名>: published version N`(或 `already holds version N`:data_service 抢先发布了同一版)。这一步之后归属合并就完成了。
+退出码 2 而错误以 `the mapping is committed` 开头:映射已提交、副本还没确认,查 etcd 连接(port-forward 还开着没有)之后重跑同一条命令,输出 `already merged` 和 `published version N` 就补上了。
 
 **第 4 步:确认生效。** 等 2 个刷新周期(默认约 10 秒)。
 
 ```powershell
-pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit -MergeZoneRouteDbDsn $env:MERGE_ZONE_ROUTE_DB_DSN
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit -MergeZoneRouteDbDsn $env:MERGE_ZONE_ROUTE_DB_DSN -MergeZoneEtcdHosts $env:MERGE_ZONE_ETCD_HOSTS
 ```
 
 判据,全部满足:
 
 - 审计里源区的 `final_zone` 是预期的最终区,`final zone <目标> includes zones [...]` 含源区;`merge history` 最后多出一行 `merge <源> <序号> <目标> <run_id> <操作员账号>`,`run_id` 与映射行相同;没有 `untracked mapping` 行;
-- etcd 副本跟上了:`kubectl -n <infra> exec etcd-0 -- etcdctl get /mmorpg/merged_zone_copy/<全局库名>` 的 `version` 等于审计里 `merge history` 的条数,`merges` 里有 `{"src":<源>,"dst":<目标>}`(本机调试栈:`docker exec etcd etcdctl get /mmorpg/merged_zone_copy/<全局库名>`);
+- etcd 副本跟上了:审计末尾 `directory shard 0: ... mapping version N` 与 `etcd copy ...: ... version N` 的 N 相同,没有 `behind` 也没有拒绝(直接看副本:`kubectl -n <infra> exec etcd-0 -- etcdctl get /mmorpg/merged_zone_copy/<第 0 片库名>`,本机调试栈 `docker exec etcd etcdctl get ...`,`merges` 里有 `{"src":<源>,"dst":<目标>}`);
 - 每个 data_service 副本打过 `[MergedZoneCache] mapping changed`,每个 guild 副本打过 `[guild] merged zone mapping changed`,每个 trade 副本打过 `[trade] merged zone mapping changed`,每个 match 副本打过 `[match] merged zone mapping changed`;
 - `data_service_merged_zone_refresh_total`、`guild_merged_zone_refresh_total`、`trade_merged_zone_refresh_total`、`match_merged_zone_refresh_total` 的 `result="error"` 不再增长;
 - 公会榜旧键已折叠:guild 打过 `[guild] folded ... rank entries`(源区本来没榜就不打),`redis-cli -c -h <guild 的 ControlRedis 地址> EXISTS guild_rank:zone:{gr:<源>}` 返回 0。
@@ -175,19 +180,22 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit -MergeZoneRoute
 | 工具退出码 1,`route_meta has no row` | DSN 指错库,或迁移没跑 | 核对 DSN |
 | 工具退出码 2,锁等待、连接失败 | 没做成 | 查清占锁的会话或连接问题,重跑 |
 | 工具退出码 2,`commit: the outcome is unknown` | 可能已提交 | 重跑同一条命令,或先审计。不要手写表 |
+| 工具退出码 2,`the mapping is committed, but ...` | 映射已经提交,发布 etcd 副本这一步没做成:etcd 连不上(port-forward 断了)、读回第 0 片失败,或副本和第 0 片对不上(后面跟着 `behind version`、`different contents`、`another directory database`) | 前两种:恢复连接后重跑同一条命令(走幂等分支,只补发布)。不重跑的话读得到第 0 片的 data_service 一个周期内自己发布,读不到的最多晚一个周期。对不上的那几种按下面同名的行处理。不要手写副本 |
+| 工具退出码 1,`a real merge needs -etcd-hosts` | 真写没给 etcd 地址 | 什么都没写。按 §3 设 `$env:MERGE_ZONE_ETCD_HOSTS` 再跑 |
+| 审计退出码 1,`the etcd copy disagrees with directory shard 0` | 副本领先于第 0 片、同版本内容不同,或世代不同 | 按下面 `behind version`、`different contents`、`another directory database` 那几行处理 |
 | 工具退出码 2,`append zone_merge_history` 报 1146 / 1142 | 历史表不在(data_service 还没用新版本迁移),或操作员没有它的 INSERT 权限 | 映射没变(同一个事务回滚了)。先用新版本跑 data_service `-migrate`,再重新渲染并执行操作员授权,然后重跑 |
 | 审计退出码 1,`untracked mapping: zone S -> zone T` | 这一行映射在历史里找不到对应的 merge 记录:被人手写过,或是建历史表之前写的 | 先查清这一行的来历。确认要保留就用本工具撤销再合一次,让它有历史;不要往历史表里手补记录 |
 | 工具报 `MMORPG_SQL_OPERATOR_PRINCIPAL`,或连库报「物理会话或boot身份核验失败」 | 操作员身份不对,或 `MMORPG_SQL_BACKEND` 和实际的库不符 | 用这个账号 `SELECT CURRENT_USER()` 的结果;核对档位 |
 | 映射提交了,服务迟迟不生效 | 看刷新指标和日志 | 下面两行 |
 | `DataServiceMergedZoneRefreshFailing` | data_service 确认不了第 0 片上的映射,继续用已有的那一版;读不到第 0 片的副本跟着 etcd 副本走 | 看 data_service 日志 `[MergedZoneCache]` 的原因:第 0 片连不上,或运行账号没有 `zone_merged_into`、`zone_merge_history` 的读权限(开服手册 §1);etcd 读写失败;下面两行的「落后于副本」「内容不同」。旧映射下玩家归属还是原值,最坏是同区判定拒绝,没有错误数据。恢复后等 2 个周期。**正在合服时先别做业务核对** |
-| data_service 拒启或刷新失败,日志 `behind version ... in the etcd copy` | 第 0 片的映射版本(合服历史的行数)比 etcd 副本小:第 0 片回档了、清过路由表,或主从切换丢了已提交的合服 | 有意的回档或清表:**先把 data-service 全部停掉**(缩到 0),删副本键 `kubectl -n <infra> exec etcd-0 -- etcdctl del /mmorpg/merged_zone_copy/<全局库名>`,再起,第一个读得到第 0 片的副本按第 0 片重新发布。不停的话,在跑的副本不会跟着退回去,一直报 `restart this replica`。不是有意的:先别删,这是第 0 片丢了合服。`etcdctl get` 看副本的 `merges`,对照审计找出第 0 片缺的那几次,用本工具补做;补完版本和内容都对上就自己好,对不上再按有意的那种处理 |
+| data_service 拒启或刷新失败,日志 `behind version ... in the etcd copy` | 第 0 片的映射版本(合服历史的行数)比 etcd 副本小:第 0 片回档了、清过路由表,或主从切换丢了已提交的合服 | 有意的回档或清表:**先把 data-service 全部停掉**(缩到 0),删副本键 `kubectl -n <infra> exec etcd-0 -- etcdctl del /mmorpg/merged_zone_copy/<第 0 片库名>`,再起,第一个读得到第 0 片的副本按第 0 片重新发布。不停的话,在跑的副本不会跟着退回去,一直报 `restart this replica`。不是有意的:先别删,这是第 0 片丢了合服。`etcdctl get` 看副本的 `merges`,对照审计找出第 0 片缺的那几次,用本工具补做;补完版本和内容都对上就自己好,对不上再按有意的那种处理 |
 | data_service 拒启或刷新失败,日志 `different contents` | 第 0 片与副本版本相同、映射不同:有人绕过本工具改了 `zone_merged_into`(没追加历史),或副本被改过 | 审计看 `untracked mapping`;按 §5 上面「来历不明的映射」处理,用本工具撤销再合(版本加 2、重新发布)。不要手改副本 |
 | data_service 拒启,日志 `another directory database` 或 `restart this replica` | 前者:副本是另一个目录库的(这个进程指错了库,或目录库重建过);后者:在跑的进程手里那一份和第 0 片不是同一条历史(删过副本键、第 0 片回档、换了库) | 指错库的改配置。库重建过或回档过的,按上一行「有意的」那样停服、删键、再起 |
 | `GuildMergedZoneRefreshFailing`、`TradeMergedZoneRefreshFailing` | 读不到 data_service,继续用旧映射 | 查 data_service。恢复后等 1 个周期 |
 | `MatchMergedZoneRefreshFailing` | match 读不到 data_service,继续用旧映射 | 查 data_service 是否就绪,以及 match 到它的连接(`DataServiceRpc`)。旧映射下最坏是同区判定拒绝和多等一拍,没有错误数据。恢复后等 1 个周期 |
 | match 起不来,启动日志说读不到合服映射 | data_service 没起、连不上,或者映射表写坏 | 启动时等 60 秒读不到就退出,和 guild、trade 同一套。先让 data_service 就绪,按错误原文处理。这是有意的:分不清「没有合服」和「读不到」的实例不能对外服务 |
 | 开战回 `kTeamCrossZoneDenied`,队里的人明明一直在一起 | 撤销合服留下的跨原始区队伍(§7) | 踢人或离队之后再开。要合就重新合服 |
-| `does not resolve` 同时刷新一直失败 | 映射表写坏,缓存拒绝坏表、保留旧值;坏映射也不会进 etcd 副本 | 按审计结果用 `merge-zone-unmerge` 删掉坏的那一行(撤销不校验整张表)。修好之前不要重启服务:第 0 片读得到坏表时启动会拒绝(不会拿 etcd 副本顶替) |
+| `does not resolve` 同时刷新一直失败 | 映射表写坏,缓存拒绝坏表、保留旧值;坏映射也不会进 etcd 副本 | 按审计结果用 `merge-zone-unmerge` 删掉坏的那一行(撤销不校验整张表)。表里不止一处坏行时,前几次撤销已提交、但坏表不发布,退出码 2 带 `is broken`;删完最后一处的那次撤销会发布。修好之前不要重启服务:第 0 片读得到坏表时启动会拒绝(不会拿 etcd 副本顶替) |
 | guild 或 trade 起不来,报 `GetMergedZones` | 启动时等了 60 秒还读不到映射 | 先起 data_service(zone 级,`zone-up` 才有)。这是有意的:分不清「没有合服」和「读不到」的实例不能对外服务 |
 | 榜单缺源区公会超过 1 分钟 | 折叠失败,看 guild 日志 `fold ranks of merged zones failed` | 通常是抢不到榜维护锁(另一副本正在重建或折叠)或 Redis 故障。可滚动重启 guild,启动时按当前映射与 MySQL 对齐全部分区榜 |
 | 榜上某公会分数比 `guild.score` 旧 | 推分提交之后写榜那一步失败(Redis 抖动、请求超时),guild 日志有 `update rank cache for guild`。2026-11-11 起折叠按版本合并,不会再用旧分盖掉新分 | 只影响显示。下一次推分或重启 guild 自愈,权威分在 `guild.score`(版本在 `guild.score_version`) |
@@ -196,8 +204,8 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit -MergeZoneRoute
 ## 6. 撤销
 
 ```powershell
-pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-unmerge -MergeSourceZone <源> -MergeTargetZone <目标> -MergeZoneRouteDbDsn $env:MERGE_ZONE_ROUTE_DB_DSN -DryRun
-pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-unmerge -MergeSourceZone <源> -MergeTargetZone <目标> -MergeZoneRouteDbDsn $env:MERGE_ZONE_ROUTE_DB_DSN
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-unmerge -MergeSourceZone <源> -MergeTargetZone <目标> -MergeZoneRouteDbDsn $env:MERGE_ZONE_ROUTE_DB_DSN -MergeZoneEtcdHosts $env:MERGE_ZONE_ETCD_HOSTS -DryRun
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-unmerge -MergeSourceZone <源> -MergeTargetZone <目标> -MergeZoneRouteDbDsn $env:MERGE_ZONE_ROUTE_DB_DSN -MergeZoneEtcdHosts $env:MERGE_ZONE_ETCD_HOSTS
 ```
 
 撤销之后**滚动重启一次 guild**:启动时 `RebuildRanks` 按当前映射把榜拆回去。不重启的话,已折叠的条目留在目标区榜上,直到下一次重启。
@@ -305,7 +313,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/
 
 ```bash
 cd tools/merge_zone && go mod tidy && go vet ./... && go test -count=1 ./...
-cd go/shared && go test -count=1 ./mergedzone/ ./placement/
+cd go/shared && go test -count=1 ./mergedzone/ ./mergedzonecopy/ ./placement/
 cd go/guild && go build ./... && go test -count=1 ./...
 cd go/trade && go build ./... && go test -count=1 ./...
 cd go/match && go build ./... && go vet ./... && go test -count=1 ./...

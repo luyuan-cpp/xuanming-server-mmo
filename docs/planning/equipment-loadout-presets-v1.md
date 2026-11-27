@@ -115,3 +115,40 @@
    - 升级 `SkillBookClient.cs`（`RentLoadoutSlots` 脱离技能窗首拉前提并暴露 `LoadoutSlotsRented` 事件）与 `GameClient.cs`（续租/轻享卡同步刷新 `EquipLoadouts`）；
    - 升级 `EquipmentWindow.{cs,Loadout.cs}`（顶栏 7 页签复用 `SkillBuildLoadoutV1/tab_build_*`、锁定方案只读预览、原解锁弹窗改为复用 `panel_build_rent_modal` 的统一 7 套席位租用与轻享卡引导弹窗）、`SkillLoadoutSubPanel.cs`、`AfkPassUiRoot.cs` 文案对齐「装备 + 战法 + 加点三合一共享 7 套」与 `PreBattleLoadoutQuickBar.cs` 7 槽紧凑排布；
    - 更新 `EquipLoadoutUiTests.cs`，跑通 `tools/client_compile_check.ps1` 与 EditMode NUnit 单测。
+
+---
+
+## 七、V2.1 减负延伸：首发灵宠 + 五行阵法可选联动（五合一，2026-11-27 负责人拍板）
+
+### 7.1 需求分析
+- 玩家在 PVE（群攻刷本/五行幻境）与 PVP（人宠会武/问道赛/切磋）之间切换时，除了换「装备 + 战法 + 加点」，往往还要同步切「首发灵宠（如输出宠 ↔ 高速控场/助战宠）」与「免费五行阵法（如天覆阵 ↔ 地载阵/风扬阵/云垂阵/虎翼阵）」。
+- 将「首发灵宠」与「五行阵法」作为装备方案的可选联动项（`0 = 不联动`），纳入既有 7 套三合一共享流派席位内：**纯减负、零额外数值、零额外付费、不触碰上班红线**。
+
+### 7.2 设计分析
+- **持久化契约**（`proto/common/component/player_equip_loadout_comp.proto` 末尾追加，旧存档零迁移默认 `0` 不联动）：
+  - `EquipLoadoutScheme.linked_pet_id = 7`（`uint64`，`0 = 不联动`，`>0` 为 `PlayerPetComp.pets[].pet_id` 永久实例 ID）；
+  - `EquipLoadoutScheme.linked_formation_id = 8`（`uint32`，`0 = 不联动`，`1..5` 对应 `turnbattle::wuxing::kFormations` 5 套免费道家五行阵法）。
+- **传输契约**（`proto/scene/player_bag.proto` 末尾追加，不改变 RPC 序号）：
+  - `EquipLoadoutSchemeInfo` 追加 `linked_pet_id = 9`、`linked_formation_id = 10`；
+  - 新增只读选项 `EquipLoadoutLinkedPetOption`（`pet_id / pet_table_id / name / active`）；
+  - `EquipLoadoutSnapshot` 追加 `repeated EquipLoadoutLinkedPetOption pets = 22`、`repeated EquipLoadoutLinkedOption formations = 23`；
+  - `SaveEquipLoadoutRequest` 追加 `linked_pet_id = 10`、`linked_formation_id = 11`。
+- **界面零新图复用**：装备方案主管理弹窗右半区既有两道长条框（`y=410` 与 `y=476`，单条宽 `651*s`）各自左右等分为两格（各 `318*s`）：上排 `[联动战法 | 联动加点]`，下排 `[联动灵宠 | 联动阵法]`；左下同步开关更新为「同步切战法/加点/宠/阵」，无需重画美术底图。
+
+### 7.3 思想分析
+- **实例与布局分离、单一真相源**：方案只存 `pet_id` 与 `formation_id` 引用，绝不复制灵宠属性或阵法配置；切换时统一委托权威系统 `PetSystem::Summon` 与 `PlayerSeasonSystem::TryEquipLinkedFormation` 执行校验与落盘，且整笔切方案末尾仍只做 1 次 `RequestKeyProgressSave`。
+- **优雅降级（Best-Effort Linked Switch）**：联动灵宠/阵法失败绝不回滚已完成的 8 槽原子换装，而是沿既有 `SwitchEquipLoadoutResponse.linked_notices` 向玩家透明提示原因。
+
+### 7.4 漏洞与边界分析
+1. **绑定的灵宠后续被交易/上架聚宝斋/放生**：`SaveAt` 校验必须拥有该 `pet_id`（防写入他人或虚构 ID）；`SwitchAt` 若 `PetSystem::Summon` 返回 `kPetNotFound`，不阻断换装并写入 `linked_notices`（「绑定的首发灵宠已不在灵宠栏，本次仅完成其余流派切换」）；前端下拉仍展示「灵宠：已不在栏（点重选）」引导重选。
+2. **灵宠携带等级高于当前主人等级（如回滚/特殊场景）**：`PetSystem::Summon` 权威校验 `kPetOwnerLevelNotEnough`，跳过并回报 `linked_notices`，绝不绕过灵宠等级闸。
+3. **当前首发灵宠已是目标灵宠**：`PetSystem::Summon` 返回 `kPetAlreadyActive` 视为幂等成功，不弹多余错误提示。
+4. **非法阵法 ID（`> 5`）或缺失 `PlayerSeasonComp`**：`SaveAt` 校验 `turnbattle::wuxing::IsValidFormationId` 拦截 `> 5`；`TryEquipLinkedFormation` 缺组件返回 `kSeasonUnavailable` 且绝不静默创建持久组件，写入 `linked_notices` 跳过。
+5. **战斗中/跨区冻结中**：外层 `SwitchAt` 已在最前执行 `CheckWritable`，且底层 `Summon`/`TryEquipLinkedFormation` 二次兜底校验，杜绝局内偷换宠/偷换阵。
+
+### 7.5 步骤分析与执行步骤
+1. 更新 `player_equip_loadout_comp.proto` 与 `player_bag.proto` 末尾追加字段并重跑服务端 `proto-gen.exe` 与客户端 `gen_proto.ps1` / `gen_messageids.ps1`。
+2. `PlayerSeasonSystem` 新增 `TryEquipLinkedFormation` 轻量接缝；`PlayerEquipLoadoutSystem` 在 `BuildSnapshotAt` / `SaveAt` / `SwitchAt` 接入灵宠与阵法选项、保存校验、联动切换及 `PetSystem::PushList`。
+3. 增补 `player_equip_loadout_test.cpp` 单测覆盖灵宠+阵法保存/联动切换/已出战幂等/灵宠遗失优雅降级/非法 ID 拒绝。
+4. 更新 Unity 客户端 `PlayerFeaturesClient.EquipLoadout.cs`、`GameClient.cs`、`EquipLoadoutModel.cs`、`EquipmentWindow.Loadout.cs` 及 `EquipLoadoutUiTests.cs`，同步登记 `PARITY.md`。
+5. 跑通 C++ 静态门禁、MSBuild 串行编译与 GTest，以及 Unity 编译与 EditMode NUnit 单测。

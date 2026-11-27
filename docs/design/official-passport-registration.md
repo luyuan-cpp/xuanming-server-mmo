@@ -1,6 +1,6 @@
 # 官方通行证与账号注册接入设计（Casdoor OIDC）
 
-状态：2026-11-24 已完成服务端 OIDC 接缝、独立 Casdoor 部署栈、Unity 道家 Q 版客户端 UI/PKCE 与移动端深度链接构建后处理，并通过真实 Casdoor v4.27.1 容器 → `go/login` `PassportProvider` 端到端实测验证。2026-11-26 Claude Code 对照 Casdoor v4.27.1 源码审核，结论与定案见 §5.4；同日落码（未编译、未运行，验证命令见 `docs/PROGRESS.md` 同日「官方通行证审核」条目）：只收身份令牌（§4 第 11 项）、账号注销时删除通行证用户（§3.5）、初始化数据改为注册必须验证邮箱并新增服务端专用应用、K8s 部署参数、iOS 改用系统认证会话（§4 第 14 项）。同日第二轮独立审查（不沿用现有做法、按行业标准重看）的结论见 §8：初始化数据缺省开人机验证、审计记录保留 180 天（已改，未起容器）；玩家可自删通行证用户、注册缺协议勾选等待办见 §8.3、§8.4。同日负责人批准全做之后落码（未编译、未运行，验证交 Gemini，交接单 `docs/handoff/passport-hardening-handoff-20261126.md`）：§3.6 改密 / 封禁 / 删除之后登录与刷新时吊销改密之前的会话并踢下线；§3.7 通行证回调实时推送；§3.8 客户端正式包锁地址、桌面多端口回调、安卓 App Links；§3.9 首启隐私弹窗与注册协议勾选；§3.10 生产部署清单（白名单入口、网络隔离、验证码记录清理、按环境渲染初始化数据）。
+状态：2026-11-24 已完成服务端 OIDC 接缝、独立 Casdoor 部署栈、Unity 道家 Q 版客户端 UI/PKCE 与移动端深度链接构建后处理，并通过真实 Casdoor v4.27.1 容器 → `go/login` `PassportProvider` 端到端实测验证。2026-11-26 Claude Code 对照 Casdoor v4.27.1 源码审核，结论与定案见 §5.4；同日落码（未编译、未运行，验证命令见 `docs/PROGRESS.md` 同日「官方通行证审核」条目）：只收身份令牌（§4 第 11 项）、账号注销时删除通行证用户（§3.5）、初始化数据改为注册必须验证邮箱并新增服务端专用应用、K8s 部署参数、iOS 改用系统认证会话（§4 第 14 项）。同日第二轮独立审查（不沿用现有做法、按行业标准重看）的结论见 §8：初始化数据缺省开人机验证、审计记录保留 180 天（已改，未起容器）；玩家可自删通行证用户、注册缺协议勾选等待办见 §8.3、§8.4。同日负责人批准全做之后落码（未编译、未运行，验证交 Gemini，交接单 `docs/handoff/passport-hardening-handoff-20261126.md`）：§3.6 改密 / 封禁 / 删除之后登录与刷新时吊销改密之前的会话并踢下线；§3.7 通行证回调实时推送；§3.8 客户端正式包锁地址、桌面多端口回调（安卓 11-27 复查后改回自定义协议头）；§3.9 首启隐私弹窗与注册协议勾选；§3.10 生产部署清单（白名单入口、拦静默登录参数、网络隔离、验证码记录清理、按环境渲染初始化数据）。
 
 关联：[认证提供者框架](./auth-provider-framework.md)、[第三方登录端到端设计](./third-party-login-end-to-end-design.md)、[双 Token 体系](./dual-token-authentication.md)、[账号注销](./account-deletion.md)、[账号角色目录](./account-role-authority.md)。
 
@@ -178,20 +178,26 @@ AuthProviders:
 **链路**：Casdoor 回调（webhook）→ 网关 `POST /internal/passport/events`（`PassportEventController`）→ login `LoginPreGate.HandlePassportEvent` → `passportsession.HandleEvent` → 同 §3.6 的 `settle`。
 
 1. **回调只用来找人，不信内容。** 回调体是 Casdoor 的一条操作记录（`object/record.go` 的 `Record`，`isUserExtended` 时多一个 `extendedUser`）。login 从里面取出用户 id 或「组织/用户名」：改密（`set-password`）时记录的组织与用户就是目标用户；后台改资料（`update-user`）时记录的是操作人，目标在请求体原文 `object` 里；管理组织 `built-in` 的人一律不核对，一次最多 4 个。然后逐个现查通行证（`LookupUser` / `LookupUserByName`），按查到的状态处理。回调是伪造、重复、乱序的都无所谓：只会多查几次通行证，改不了任何人的状态。所以不需要签名，固定请求头密钥只是挡掉随手的请求。
-2. **网关**：请求头 `X-Passport-Webhook-Secret` 按 SHA-256 摘要常量时间比较 `passport.webhook-secret`（至少 32 字节；没配就回 404，入口关着）；请求体限 64 KiB；原样转给 login。状态码给 Casdoor 的重投用：200 处理完；400 请求体不对，不必重投；401 密钥不对；503 login 暂时处理不了。网关的 Ingress 只路由 `/api`，这个入口公网够不着。
+2. **网关**：请求头 `X-Passport-Webhook-Secret` 按 SHA-256 摘要常量时间比较 `passport.webhook-secret`（至少 32 字节；没配就回 404，入口关着）；密钥核对过才读请求体，最多读 64 KiB + 1 字节（不用 `@RequestBody`：它先把整个请求体读进内存，集群内谁都能用一个大请求撑爆网关）；原样转给 login。状态码给 Casdoor 的重投用：200 处理完；400 请求体不对，不必重投；401 密钥不对；503 login 暂时处理不了。网关的 Ingress 只路由 `/api`，这个入口公网够不着。
 3. **login**：令牌存在全地域共用的登录域，任一 login 都能处理，网关不按区选路、可以重试。核对不了或吊销失败回 `Unavailable`（网关 503，Casdoor 按 `maxRetries: 10`、指数退避重投）；格式不对回 `InvalidArgument`。请求体带玩家邮箱、手机号，`HandlePassportEvent` 进了请求体日志屏蔽名单（`internal/rpclogging`）。
 4. **Casdoor 侧**（`deploy/passport/init_data.json` 的 `webhooks`）：回调挂在 `built-in` 组织下、`singleOrgOnly: false`。原因是 v4.27.1 只让 `built-in` 的回调连内网地址（`object/webhook_util.go` 的 `sendWebhook`：别的组织的回调走「只许公网」的 HTTP 客户端，防组织管理员拿回调探内网）。事件是 `set-password`、`update-user`、`delete-user`。仓库里缺省关着（`isEnabled: false`、地址与密钥是占位）；生产由 `deploy/k8s/passport/render-init-data.ps1` 填地址与密钥并打开。
 5. **部署**：网关的密钥经 `k8s_deploy.ps1` 工作负载密钥目录 `gateway-passport-webhook` 注入（部署机设 `MMORPG_GATEWAY_PASSPORT_WEBHOOK_SECRET` 才注入，没设就不注入、入口关着），与 Casdoor 回调请求头是同一个值。
 6. **删用户**：通行证里删掉用户之后，回调只剩组织与用户名，已经查不到这是谁（`sub` 随用户一起没了），这一条按 `ignored` 计；这个人的游戏令牌在下一次刷新或登录时按 `user_gone` 吊销（§3.6）。
 
-### 3.8 客户端加固：正式包锁地址、桌面多端口回调、安卓 App Links（2026-11-26）
+### 3.8 客户端加固：正式包锁地址、桌面多端口回调、手机回调（2026-11-26，11-27 改定安卓不用 App Links）
 
 1. **正式包只认构建时写进包里的地址。** 原来网关和通行证地址都能被启动参数（`-gateway`、`-passport-origin` 等）和本机设置（PlayerPrefs，Windows 上是当前用户可写的注册表）覆盖：一个带参数的快捷方式（「登录器」「加速器」常见的分发形式，杀毒软件不报）就能让正版客户端把玩家带到钓鱼页去输通行证口令，或把口令登录发给假网关。现在：
    - 地址放在 `Assets/Resources/ClientEndpoints.json`（`ClientEndpoints`），仓库里是本机联调的值；`tools/build_client.ps1 -GatewayUrl … -PassportOrigin … -TermsUrl … -PrivacyUrl …` 出正式包时写进去、构建完还原。
    - 启动参数与本机设置只在编辑器与开发包里生效（`ClientSettings.EndpointOverridesAllowed`，按 `UNITY_EDITOR || DEVELOPMENT_BUILD` 条件编译）。
    - `ClientEndpointsBuildGuard`（构建前检查，所有平台、所有出包入口都经过）不让正式包带着回环地址、明文 http 或缺协议地址出去；开发包不查。
 2. **桌面回调登记五个端口。** 原来只有 `127.0.0.1:18765`：多开的第二个客户端起不了监听，本机任何程序占住这个端口，通行证登录就用不了。RFC 8252 §7.3 建议每次随机端口，但 Casdoor 对回调地址精确匹配，做不到。现在通行证登记 18765~18769 五个，客户端先占端口再拼授权地址（`PassportOAuthProtocol.LoopbackRedirectCandidates`），授权与换票都用实际监听的那一个；开发时改过回调地址就只试它自己。
-3. **安卓正式包改用 App Links。** 自定义协议头 `xuanming://` 别的 App 也能注册：PKCE 只保证谁发起谁换票，拦不住恶意 App 自己发起一次授权、让玩家在真的通行证页面登录、再截走回调（RFC 8252 §8.6）。现在通行证是 https 时，安卓的回调是 `https://<通行证域名>/passport/app-callback`（`PassportOAuthProtocol.AppLinkRedirectUri`），构建后处理给主 Activity 登记带 `autoVerify` 的 intent-filter，系统按通行证域名下的 `/.well-known/assetlinks.json` 核对这个链接归本 App；自定义协议头只在开发包里登记（本机联调的 http 通行证用它）。`assetlinks.json` 与回调兜底页由通行证的公网入口发布（§3.10），通行证里登记这条回调由 `render-init-data.ps1` 加。iOS 仍是系统认证会话（回调只交给发起会话的 App），不受影响。没改成 Custom Tabs：系统浏览器同样符合 RFC 8252，Custom Tabs 只是体验更好，要加安卓依赖，留到看注册转化再定。
+3. **手机回调用自定义协议头 + PKCE，安卓不用 App Links（11-27 复查改定）。** iOS、安卓的回调都是 `xuanming://passport/callback`（RFC 8252 §7.1）。11-26 一度把安卓正式包改成 App Links（`https://<通行证域名>/passport/app-callback` + `assetlinks.json`），复查时撤回：
+   - 国内多数安卓手机没有谷歌服务，系统对 `assetlinks.json` 的核对不一定做得成。核对不成，回调就在浏览器里打开成一个网页，游戏收不到授权码，登录直接失败。
+   - 即便核对成了，浏览器也只在有点击的跳转上把链接交给 App：已经登录过通行证、页面自动跳转的情形不交（AppAuth-Android 的已知问题），三星浏览器、火狐的自定义标签页等也各有不交的情形。一个只在部分手机上能用的登录，比自定义协议头的残余风险更糟。
+   - 自定义协议头的风险是别的 App 注册同名协议头。截到我们发起的授权码没有用（没有 PKCE 校验串换不了票）；能利用的只有「恶意 App 自己发起授权，让玩家的浏览器不经点击自动签发授权码」这一条（RFC 8252 §8.6）。Casdoor v4.27.1 自动签发的入口有三个：应用开了 `enableAutoSignin`，授权地址带 `prompt=none` 或 `silentSignin`（`web/src/pages/auth/LoginPage.tsx`：浏览器里已有会话就直接 `loginAsCurrentAccount`）。初始化数据把前者显式关掉（契约测试钉住），公网入口拦掉带后两者的页面请求（§3.10 第 2 条）。剩下的情形是玩家在恶意 App 拉起的通行证页面上自己输口令、点登录，这和恶意 App 自己画一个登录框骗口令是同一件事，换任何跳转方式都防不住。
+   - 这道拦截对 iOS（别的 App 也能用同名协议头发起系统认证会话）与桌面（本机别的程序也能占回调端口）同样起作用。
+   - 协议头的名字：RFC 8252 §7.1 要求用反向域名（如 `com.<公司>.<游戏>`），为的是不和别的 App 撞名，与安全无关。安卓包名、iOS Bundle ID 还没定，定了之后同批改客户端常量、初始化数据与契约测试（`deploy/k8s/passport/README.md`「上线前还要人办的」）。
+   - 没做 Custom Tabs，也没用 Chrome 的 Auth Tab：后者能像 iOS 系统认证会话一样只把回调交给发起的 App，但要装了新版 Chrome，国内手机大多没有；系统浏览器同样符合 RFC 8252。
 
 ### 3.9 《用户协议》《隐私政策》：首启弹窗与注册勾选（2026-11-26）
 
@@ -206,12 +212,17 @@ AuthProviders:
 审查时查出的几条生产问题（§8.4）原本只写在清单里靠人办，现在落成清单与脚本：
 
 1. **公网入口按白名单放行**（`public-entry.yaml`，nginx）。Casdoor 的权限模型允许任何登录用户对自己调 `/api/delete-user`、`/api/update-user`（`object/init.go` 的自匹配条款）：不挡的话，玩家用自己的通行证令牌就能删掉自己的通行证用户，绕过 7 天冷静期、游戏账号变成谁也登不上的孤儿。默认全拒，只放行玩家要用的十几个接口与只读页面；登录、注册、发验证码、找回密码、换票按来源地址每分钟限速（口令哈希是 argon2id，每次校验约 64 MiB，不限速就是现成的内存放大器）。用独立的 nginx 而不是 Ingress 控制器的注解：名单在一处、与控制器无关、契约测试能钉住（`tools/scripts/tests/passport_k8s_contract.tests.ps1`）。
-2. **集群内入口给 login**（同一个 nginx 的 8081，内部 Ingress）：只有验签公钥与 `get-user`、`delete-user`。login 生产模式只收 https 的 `Endpoint`，所以走带证书的内部 Ingress，不直连 `casdoor:8000`。
-3. **网络隔离**（`networkpolicy.yaml`）：Casdoor 只收代理的 8000（它在容器里起的 RADIUS UDP 监听也就够不着了）；代理只收 Ingress 控制器的流量。
-4. **初始化数据按环境渲染**（`render-init-data.ps1`）：以仓库里的 `init_data.json` 为底，只填 App Links 回调、协议地址与回调地址 / 密钥，别的安全配置原样不动；输出 Secret（密钥不进 ConfigMap），用 JSON 解析改字段而不是文本替换。
-5. **验证码记录定时清理**（`verification-record-cleanup.yaml`）：Casdoor 没有任何清理 `verification_record` 的代码、删用户也带不走它；每天删 180 天以前的，用只有这张表删除权限的库账号。
-6. **镜像按摘要固定**：Casdoor、MySQL、nginx 都写 `@sha256:`（2026-11-26 向 registry-1.docker.io 查的），本机 compose 与生产清单是同一个摘要（契约测试核对）。
-7. **初始化数据的安全缺省**（`deploy/passport/init_data.json`，契约测试钉住）：口令哈希 `argon2id`（OWASP 对新系统的首选，项目没有存量用户、可以清库，趁现在换；名字写错会被当成不哈希）；人机验证 `Always`；撞库拦截（同一来源 10 分钟内 30 个不同账号登录失败封 15 分钟，按运营商大出口共用地址留了余量）；短信每号每小时 5 条、每天 10 条、同号段每小时 100 条、只发国内号码、每天 1 万条告警（现在只开了邮箱注册，开手机号时直接生效）；`countryCodes` 只有 `CN`。
+2. **页面请求带静默登录参数的一律 403**（`public-entry.yaml` 的 `map $args $passport_silent_signin`）。为什么要拦见 §3.8 第 3 条。要点：
+   - 查的是所有页面请求，不只授权页：前端路由不分大小写、不认末尾斜杠，`/LOGIN/OAUTH/AUTHORIZE/` 也会渲染授权页。
+   - 参数名是 `prompt` 或 `silentSignin`（不分大小写）就拦；参数名里出现百分号也拦：前端按 `URLSearchParams` 解码参数名，`%70rompt` 就是 `prompt`。游戏客户端的授权地址只有值里有百分号（`redirect_uri`），不受影响。
+   - 签发授权码只走 `POST /api/login`（v4.27.1 后端没有服务端的授权页路由），它在白名单里只收 POST，恶意 App 只能让浏览器打开一个地址、发不出这个请求，所以拦页面就够了。
+   - 契约测试按样例核对两条规则：要拦的九种写法、要放行的客户端授权地址。
+3. **集群内入口给 login**（同一个 nginx 的 8081，内部 Ingress）：只有验签公钥与 `get-user`、`delete-user`。login 生产模式只收 https 的 `Endpoint`，所以走带证书的内部 Ingress，不直连 `casdoor:8000`。
+4. **网络隔离**（`networkpolicy.yaml`）：Casdoor 只收代理的 8000（它在容器里起的 RADIUS UDP 监听也就够不着了）；代理只收 Ingress 控制器的流量。
+5. **初始化数据按环境渲染**（`render-init-data.ps1`）：以仓库里的 `init_data.json` 为底，只填协议地址与回调地址 / 密钥，别的安全配置原样不动；输出 Secret（密钥不进 ConfigMap），用 JSON 解析改字段而不是文本替换。
+6. **验证码记录定时清理**（`verification-record-cleanup.yaml`）：Casdoor 没有任何清理 `verification_record` 的代码、删用户也带不走它；每天删 180 天以前的，用只有这张表删除权限的库账号。
+7. **镜像按摘要固定**：Casdoor、MySQL、nginx 都写 `@sha256:`（2026-11-26 向 registry-1.docker.io 查的），本机 compose 与生产清单是同一个摘要（契约测试核对）。
+8. **初始化数据的安全缺省**（`deploy/passport/init_data.json`，契约测试钉住）：游戏应用 `enableAutoSignin: false`（已有会话也要玩家点一下，§3.8 第 3 条），回调地址只有桌面五个端口与手机协议头；口令哈希 `argon2id`（OWASP 对新系统的首选，项目没有存量用户、可以清库，趁现在换；名字写错会被当成不哈希）；人机验证 `Always`；撞库拦截（同一来源 10 分钟内 30 个不同账号登录失败封 15 分钟，按运营商大出口共用地址留了余量）；短信每号每小时 5 条、每天 10 条、同号段每小时 100 条、只发国内号码、每天 1 万条告警（现在只开了邮箱注册，开手机号时直接生效）；`countryCodes` 只有 `CN`。
 
 ---
 
@@ -236,7 +247,7 @@ AuthProviders:
 | **15. 改密之后盗号者照样续期、照样在线** | Casdoor 改密只作废它自己签的令牌，不通知游戏；游戏的 refresh token 30 天，续一次再续 30 天，已在游戏里的连接也不断。 | 登录、刷新、通行证回调三处按会话的认证时刻（身份令牌 iat，跨轮换不变）与通行证里的改密时刻比：只吊销改密之前的会话，被封被删吊销全部，吊销了就踢下线（§3.6、§3.7）。 |
 | **16. 玩家自删通行证用户绕过冷静期** | Casdoor 允许登录用户对自己调 `/api/delete-user`（`object/init.go` 的自匹配条款）：冷静期被绕过，游戏账号变成谁也登不上的孤儿。 | 公网入口按白名单放行，`delete-user`、`update-user` 与全部管理接口不放行；login 的管理调用走集群内入口（§3.10）。 |
 | **17. 带参数的快捷方式把正版客户端带到钓鱼站** | 启动参数与本机设置能覆盖网关和通行证地址。 | 正式包只认构建时写进包里的地址，覆盖只在编辑器与开发包里生效；构建检查不让正式包带着回环地址或明文 http 出去（§3.8）。 |
-| **18. 别的 App 抢注 `xuanming://` 截走安卓的授权回调** | 自定义协议头谁都能注册（RFC 8252 §8.6）。 | 安卓正式包用 App Links（`assetlinks.json` 核对归属），自定义协议头只在开发包里登记（§3.8）。 |
+| **18. 别的 App / 程序注册同名协议头或占回调端口，悄悄拿走玩家的登录** | 自定义协议头谁都能注册，本机回环端口谁都能占；浏览器里已有通行证会话时，Casdoor 见到 `prompt=none`、`silentSignin` 或应用开了自动登录，就不经点击签发授权码（RFC 8252 §8.6）。 | 截走我们发起的授权码没用（PKCE）；初始化数据关掉自动登录，公网入口拦带静默登录参数的页面请求，每次签发都要玩家在通行证页面上自己点（§3.8 第 3 条、§3.10 第 2 条）。安卓没改成 App Links：国内手机核对不一定成功，会让登录直接失败（§3.8）。 |
 | **19. 没有首启隐私弹窗与注册协议勾选** | 国内应用商店与 App Store 都查，属 `AGENTS.md` §9 一票否决项。 | 首启弹窗 + 注册页必填勾选；正式包缺协议地址出不了包（§3.9）。 |
 
 ---
@@ -348,7 +359,7 @@ Claude Code 对照 Casdoor v4.27.1 源码（`object/token_jwt.go`、`token_stand
 
 1. **邮件 / 短信发码通道、行为验证码**：在 Casdoor 后台配，供应商密钥不进仓库。
 2. **《用户协议》《隐私政策》正文与页面**：法务出，地址填进客户端正式包与 `render-init-data.ps1`。
-3. **域名、证书、安卓签名指纹**：填 `public-entry.yaml` 的两个 Ingress 与 `assetlinks.json`。
+3. **域名与证书**：填 `public-entry.yaml` 的两个 Ingress。安卓包名、iOS Bundle ID 定了之后，手机回调的协议头改成反向域名形式（§3.8 第 3 条）。
 4. **Java 版服务端**：`passport` 渠道、令牌类型校验、注销删通行证用户、登录与刷新前的核对与踢线、回调入口（§3.6、§3.7）都只在本仓实现，Java 仓 `PARITY.md` 登记待做；客户端（§3.8、§3.9）两版共用。
 
 ---
@@ -448,13 +459,13 @@ Claude Code 对照 Casdoor v4.27.1 源码（`object/token_jwt.go`、`token_stand
 1. **改密 / 找回密码 / 封禁之后游戏里的登录不失效** → §3.6（登录、刷新时核对，只吊销改密之前的会话，吊销了就踢下线）与 §3.7（通行证回调实时推送）。原先建议的「按账号记改密时刻水位」没有采用，理由在 §3.6。
 2. **注册没有协议勾选、客户端没有首启隐私弹窗** → §3.9。弹窗复用登录界面现有美术，不需要新图；协议正文与地址仍要法务出。
 3. **正式包也能用启动参数改网关和通行证地址** → §3.8 第 1 条（构建时写进包里、正式包不认覆盖、构建检查拦回环与明文）。
-4. **安卓回调用自定义协议头** → §3.8 第 3 条（App Links，自定义协议头只在开发包登记）。Custom Tabs 没做，理由在 §3.8。
+4. **安卓回调用自定义协议头** → 11-26 改成 App Links，11-27 复查撤回：国内手机核对不一定成功，登录会直接失败。改为保留自定义协议头 + PKCE，关掉自动登录、公网入口拦静默登录参数（§3.8 第 3 条、§3.10 第 2 条）。
 5. **桌面回调固定端口** → §3.8 第 2 条（登记五个端口，依次占）。
 
 ### 8.4 生产清单补充的去向（接 §5.4）
 
 1. **公网入口按白名单放行，不能放 `/api/delete-user`、`/api/update-user`** → `deploy/k8s/passport/public-entry.yaml`（§3.10 第 1 条），名单由 `passport_k8s_contract.tests.ps1` 钉住。原因：Casdoor 的权限模型允许任何登录用户对自己调这两个接口（`object/init.go:534` 的自匹配条款，`authz/authz.go:281` 的名单），`controllers/user.go:568` 对「删自己」没有别的检查；Casdoor 对「任何人」放行的接口有 131 条（含 `/scim`、`/cas`、`/api/oauth/register`、`/api/init-admin-password`、`/api/metrics`），玩家用得到的只有十几条。名单是按源码推的，预发环境要按 README 第 7 步走一遍。
-2. **`AuthProviders.Passport.Endpoint` 必须指向集群内入口** → 同一个 nginx 的 8081 + 内部 Ingress（§3.10 第 2 条）。指错了，注销卡在「执行中」直到 24 小时告警，登录与刷新前的核对全部按故障放行（`LoginPassportSessionCheckFailing` 会响）。
+2. **`AuthProviders.Passport.Endpoint` 必须指向集群内入口** → 同一个 nginx 的 8081 + 内部 Ingress（§3.10 第 3 条）。指错了，注销卡在「执行中」直到 24 小时告警，登录与刷新前的核对全部按故障放行（`LoginPassportSessionCheckFailing` 会响）。
 3. **`verification_record` 定时清理** → `verification-record-cleanup.yaml`（每天删 180 天以前的，最小权限库账号）。
 4. **撞库拦截** → 初始化数据 `securityPolicy`：同一来源 10 分钟内 30 个不同账号登录失败封 15 分钟（按运营商大出口共用地址留了余量，有了真实失败率再调）。
 5. **口令哈希** → 换成 `argon2id`（OWASP 对新系统的首选；项目没有存量用户、可以清库）。代价是每次校验约 64 MiB：Casdoor 的内存上限按同时校验 20 次留量，公网入口对登录类接口限速。

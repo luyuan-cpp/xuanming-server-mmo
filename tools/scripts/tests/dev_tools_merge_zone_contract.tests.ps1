@@ -34,7 +34,8 @@ foreach ($name in $functionNames) {
 $mergeParams = @($ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -match '^(Merge|DryRun$)' })
 # -RouteDbDsn:-MergeZoneRouteDbDsn 在 param 块里没有缺省值(必填)。别的用例钉的是别的转发,
 # 复位时缺省填一个假 DSN 让它们照常组装;专测必填的用例显式传 -RouteDbDsn ''。
-function Reset-MergeParams([string]$RouteDbDsn = 'route:secret@tcp(10.0.0.9:3306)/testdb') {
+# -EtcdHosts:-MergeZoneEtcdHosts 同理(真合服、真撤销必填),专测它的用例显式传 -EtcdHosts ''。
+function Reset-MergeParams([string]$RouteDbDsn = 'route:secret@tcp(10.0.0.9:3306)/testdb', [string]$EtcdHosts = '127.0.0.1:2379') {
     foreach ($p in $mergeParams) {
         $value = if ($null -ne $p.DefaultValue) { & ([scriptblock]::Create($p.DefaultValue.Extent.Text)) }
                  elseif ($p.StaticType -eq [switch]) { $false }
@@ -42,6 +43,7 @@ function Reset-MergeParams([string]$RouteDbDsn = 'route:secret@tcp(10.0.0.9:3306
         Set-Variable -Name $p.Name.VariablePath.UserPath -Value $value -Scope Script
     }
     $script:MergeZoneRouteDbDsn = $RouteDbDsn
+    $script:MergeZoneEtcdHosts = $EtcdHosts
 }
 
 # k8s-route-tool 的转发读 $ZoneName / $NamespacePrefix / $KubeContext / $KubeConfig / $DryRun / $RouteTool*,默认值同样现取。
@@ -91,9 +93,9 @@ try {
         foreach ($cmd in @('merge-zone-relocate', 'merge-zone-relocate-abort', 'merge-zone-pin-placement', 'merge-zone-storage-audit', 'merge-zone-capability-check')) {
             Assert-True (-not ($cmd -in $allowed)) "tools/merge_zone 已删掉对应模式,-Command 不再接受 $cmd"
         }
-        # 合服参数只留这三个(-DryRun 与其它命令共用):多一个就是工具不认的旗标,或者一个没人读的开关。
+        # 合服参数只留这四个(-DryRun 与其它命令共用):多一个就是工具不认的旗标,或者一个没人读的开关。
         $mergeNames = @($paramNames | Where-Object { $_ -like 'Merge*' } | Sort-Object)
-        Assert-Equal 'MergeSourceZone|MergeTargetZone|MergeZoneRouteDbDsn' ($mergeNames -join '|') '合服参数只留源区、目标区和全局库 DSN'
+        Assert-Equal 'MergeSourceZone|MergeTargetZone|MergeZoneEtcdHosts|MergeZoneRouteDbDsn' ($mergeNames -join '|') '合服参数只留源区、目标区、全局库 DSN 和 etcd 地址'
         Assert-True (-not ('VerifyMerged' -in $paramNames)) '-VerifyMerged 对应的合服后复核已删除'
     }
 
@@ -198,6 +200,31 @@ try {
             $fn = $ast.Find({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name }, $true)
             Assert-NotMatch $fn.Extent.Text 'Write-Host' "$name 不得 Write-Host(DSN 含口令)"
         }
+    }
+
+    # 真写提交之后发布 etcd 副本(docs/design/merged-zone-etcd-copy.md):真合服、真撤销缺了 -MergeZoneEtcdHosts 在调用工具之前点名拒绝;
+    # -DryRun 不要也不转发;审计给了才转发(比对副本),没给照常审计。
+    Test-Case 'etcd:-MergeZoneEtcdHosts 没有缺省值,真写缺了点名拒绝;给了原样转发;-DryRun 不转发;审计可选' {
+        $param = $ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'MergeZoneEtcdHosts' }
+        Assert-True ($null -ne $param) 'param 块必须有 -MergeZoneEtcdHosts'
+        Assert-Equal '' $param.DefaultValue.Value '缺省必须为空:指错 etcd 时发布会落到别处'
+        $hosts = '10.0.0.7:2379,10.0.0.8:2379'
+        foreach ($cmd in @('merge-zone', 'merge-zone-unmerge')) {
+            Reset-MergeParams -EtcdHosts ''
+            $script:MergeSourceZone = 1; $script:MergeTargetZone = 2
+            Assert-Match (Get-ThrownMessage { Get-CmdArgs $cmd }) 'MergeZoneEtcdHosts' "$cmd 真写缺 -MergeZoneEtcdHosts 必须点名拒绝"
+            $script:DryRun = $true
+            $a = Get-CmdArgs $cmd
+            Assert-True (($a -contains '-dry-run') -and -not ($a -contains '-etcd-hosts')) "$cmd -DryRun 不要 etcd,也不转发 -etcd-hosts"
+
+            Reset-MergeParams -EtcdHosts $hosts
+            $script:MergeSourceZone = 1; $script:MergeTargetZone = 2
+            Assert-Equal $hosts (Get-ArgValue (Get-CmdArgs $cmd) '-etcd-hosts') "$cmd 必须原样转发 -etcd-hosts"
+        }
+        Reset-MergeParams -EtcdHosts ''
+        Assert-True (-not ((Get-CmdArgs 'merge-zone-audit') -contains '-etcd-hosts')) '审计没给 etcd 时不转发,照常审计'
+        Reset-MergeParams -EtcdHosts $hosts
+        Assert-Equal $hosts (Get-ArgValue (Get-CmdArgs 'merge-zone-audit') '-etcd-hosts') '审计给了 etcd 就转发,工具比对副本'
     }
 
     # ── k8s-route-tool ───────────────────
@@ -348,7 +375,8 @@ function go {
             '$ErrorActionPreference = ''Stop''') +
             @($definitions | ForEach-Object { $_.Extent.Text }) +
             @($paramAssignments) +
-            @(('$ScriptDir = ''{0}''' -f $script:ScriptDir.Replace("'", "''")), '$MergeSourceZone = 1', '$MergeTargetZone = 2', '$MergeZoneRouteDbDsn = ''route:x@tcp(h:1)/db''', $fakeGo,
+            @(('$ScriptDir = ''{0}''' -f $script:ScriptDir.Replace("'", "''")), '$MergeSourceZone = 1', '$MergeTargetZone = 2', '$MergeZoneRouteDbDsn = ''route:x@tcp(h:1)/db''',
+              '$MergeZoneEtcdHosts = ''127.0.0.1:2379''', $fakeGo,
               'Invoke-MergeZoneGo -MergeCommand ''merge-zone''', 'exit 99'))
 
         $pwshPath = (Get-Process -Id $PID).Path
@@ -389,6 +417,7 @@ function go {
             Assert-Equal 'merge' (Get-ArgValue $toolArgs '-mode') '参数原样转发'
             Assert-Equal '1' (Get-ArgValue $toolArgs '-source-zone') '参数原样转发'
             Assert-Equal 'route:x@tcp(h:1)/db' (Get-ArgValue $toolArgs '-route-db-dsn') '参数原样转发'
+            Assert-Equal '127.0.0.1:2379' (Get-ArgValue $toolArgs '-etcd-hosts') '参数原样转发'
 
             $r = Invoke-Child -BuildExit 1 -ToolExit 0
             Assert-Equal 2 $r.Code "编译失败时工具一行没跑,退出码必须是 2(没做成 / 结论不可信),不得是 0。子进程输出: $($r.Output)"

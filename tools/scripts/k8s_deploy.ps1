@@ -717,7 +717,20 @@
 	[string]$TableSyncS3Bucket = "",
 	[string]$TableSyncS3Region = "",
 	[string]$TableSyncS3SecretName = "",
-	[switch]$TableSyncDevFixture
+	[switch]$TableSyncDevFixture,
+	# 后台 java/gm_admin 上 K8s(docs/design/admin-identity-and-dual-control.md §11.4;deploy/k8s/README.md「GM 后台 gm-admin」)。
+	# 给了 -GmAdminOidcIssuer 就在 infra namespace 部署后台:要同时部署全局 Go 服务并给了 -JavaSvcRegistry(镜像 mmorpg-gm-admin),
+	# 别的命令给了即拒绝。只在集群内可达(ClusterIP、不建 Ingress),登录只走 OIDC(gm.identity.mode=oidc)。四项一起给:
+	#   - Issuer:身份提供方发行方,https;ClientId:登记的机密客户端号;
+	#   - RedirectUri:后台前端的登录页,https,或 kubectl port-forward 时的 http://127.0.0.1:<端口>/login(后台只许回环走明文回调);
+	#   - RoleMapping:JSON 对象,身份提供方分组 → 后台角色编码(admin / gm_operator / gm_approver / gm_auditor),不能为空。
+	# OIDC 客户端密钥经环境变量 MMORPG_GM_OIDC_CLIENT_SECRET 进工作负载密钥目录(gm-admin-oidc)。管理库与 Redis 的连接信息由运维预置在
+	# infra namespace 的 Secret gm-admin-runtime(键 jdbc-url / db-user / db-password / redis-host / redis-port / redis-password),
+	# 本脚本在任何写操作之前核对它在、键齐,不读值。留空 = 本次不部署后台(已部署的不删)。
+	[string]$GmAdminOidcIssuer = "",
+	[string]$GmAdminOidcClientId = "",
+	[string]$GmAdminOidcRedirectUri = "",
+	[string]$GmAdminOidcRoleMapping = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -980,21 +993,25 @@ $script:AssetOpSecrets = @{}
 #   payment:client-rpc-router(路由表 PaymentNodeService)。渠道回调口 18130 是清单里声明的其它端口,对任何来源开放:回调来自集群外,靠渠道签名验真。
 #   mall(Java,策略由 Apply-MallWorkload 生成):受保护的是内部 HTTP 口 18120,调用方是 trade(gateway、delivery 两个角色)与 payment(payment 角色)。
 #          策略名沿用 -grpc-allowlist 后缀:k8s_netpol_probe.ps1 按这个后缀找策略,商城这一份同样会被实测。
+# 2026-11-27 补 GM 后台(docs/design/admin-identity-and-dual-control.md §11.4):管理入口与业务方法共用一个 gRPC / HTTP 口,准入只能按来源放行,
+#   所以后台调到的口都加 gm-admin:login(LoginAdmin)、trade(TradeAdmin)、mail(MailAdmin)、rank(RankAdmin)、match(MatchInternal 滞留阵容)、
+#   mall(/internal/admin/*)。方法级的拒绝靠各自的调用方证明:口令 / 密钥只挂给后台与资源服务本身。data-service、player-locator、
+#   player-inbox 与 gateway 没有准入名单(集群内本来就可达),后台不用登记。
 # 名单是 app 标签;运维工具(如 go/guild/cmd/assetopfix、TradeAdmin 的造数)要在名单内的 Pod 里跑、经 kubectl port-forward
 # (kubelet 在 Pod 自己的网络命名空间里连本机端口,不经过策略),或临时关掉策略。
 # 表里只写真实清单的标签(契约测试逐个核对)。金丝雀副本用 app: <名字>-canary(全局 Go 服务与 battle),生成策略时由 Get-ReleaseTrackAppLabels 补进两侧名单。
 $script:GrpcAllowLists = [ordered]@{
 	scene  = [pscustomobject]@{ PolicyName = 'scene-grpc-allowlist'; TargetApps = @('scene', 'scene-world', 'scene-instance'); AllowedApps = @('scene-manager', 'match', 'player-inbox', 'guild', 'trade', 'mail', 'data-service') }
 	guild  = [pscustomobject]@{ PolicyName = 'guild-grpc-allowlist'; TargetApps = @('guild'); AllowedApps = @('client-rpc-router', 'data-service', 'mail', 'match') }
-	match  = [pscustomobject]@{ PolicyName = 'match-grpc-allowlist'; TargetApps = @('match'); AllowedApps = @('client-rpc-router', 'guild', 'gate', 'data-service', 'scene', 'scene-world', 'scene-instance', 'battle') }
-	login  = [pscustomobject]@{ PolicyName = 'login-grpc-allowlist'; TargetApps = @('login'); AllowedApps = @('gate', 'client-rpc-router', 'gateway') }
+	match  = [pscustomobject]@{ PolicyName = 'match-grpc-allowlist'; TargetApps = @('match'); AllowedApps = @('client-rpc-router', 'guild', 'gate', 'data-service', 'scene', 'scene-world', 'scene-instance', 'battle', 'gm-admin') }
+	login  = [pscustomobject]@{ PolicyName = 'login-grpc-allowlist'; TargetApps = @('login'); AllowedApps = @('gate', 'client-rpc-router', 'gateway', 'gm-admin') }
 	chat   = [pscustomobject]@{ PolicyName = 'chat-grpc-allowlist'; TargetApps = @('chat'); AllowedApps = @('client-rpc-router', 'match') }
 	friend = [pscustomobject]@{ PolicyName = 'friend-grpc-allowlist'; TargetApps = @('friend'); AllowedApps = @('client-rpc-router', 'data-service', 'match') }
-	trade  = [pscustomobject]@{ PolicyName = 'trade-grpc-allowlist'; TargetApps = @('trade'); AllowedApps = @('client-rpc-router', 'data-service') }
-	mail   = [pscustomobject]@{ PolicyName = 'mail-grpc-allowlist'; TargetApps = @('mail'); AllowedApps = @('client-rpc-router', 'data-service', 'rank', 'match', 'scene', 'scene-world', 'scene-instance') }
-	rank   = [pscustomobject]@{ PolicyName = 'rank-grpc-allowlist'; TargetApps = @('rank'); AllowedApps = @('client-rpc-router', 'match') }
+	trade  = [pscustomobject]@{ PolicyName = 'trade-grpc-allowlist'; TargetApps = @('trade'); AllowedApps = @('client-rpc-router', 'data-service', 'gm-admin') }
+	mail   = [pscustomobject]@{ PolicyName = 'mail-grpc-allowlist'; TargetApps = @('mail'); AllowedApps = @('client-rpc-router', 'data-service', 'rank', 'match', 'scene', 'scene-world', 'scene-instance', 'gm-admin') }
+	rank   = [pscustomobject]@{ PolicyName = 'rank-grpc-allowlist'; TargetApps = @('rank'); AllowedApps = @('client-rpc-router', 'match', 'gm-admin') }
 	payment = [pscustomobject]@{ PolicyName = 'payment-grpc-allowlist'; TargetApps = @('payment'); AllowedApps = @('client-rpc-router') }
-	mall   = [pscustomobject]@{ PolicyName = 'mall-grpc-allowlist'; TargetApps = @('mall'); AllowedApps = @('trade', 'payment') }
+	mall   = [pscustomobject]@{ PolicyName = 'mall-grpc-allowlist'; TargetApps = @('mall'); AllowedApps = @('trade', 'payment', 'gm-admin') }
 	# 2026-11-20 内容安全(docs/design/rename-and-content-safety.md §6.1):调用方是收玩家文字的服务——login(建角名)、guild(帮会名、公告)、
 	# chat(聊天)、trade(人民币寄售标题)、Scene(角色改名、宠物名)。它没有调用方签名(只读、无副作用),来源只靠这张名单限制;客户端经路由服到不了它,所以名单里没有 client-rpc-router。
 	'content-guard' = [pscustomobject]@{ PolicyName = 'content-guard-grpc-allowlist'; TargetApps = @('content-guard'); AllowedApps = @('login', 'guild', 'chat', 'trade', 'match', 'scene', 'scene-world', 'scene-instance') }
@@ -1061,7 +1078,8 @@ $script:WorkloadSecretCatalog = [ordered]@{
 		Value = { [string]$script:CommerceSecrets['payment'] } }
 	'commerce-delivery' = @{ Env = 'MMORPG_COMMERCE_DELIVERY_SECRET'; SecretKey = 'secret'; Consumers = @('mall', 'trade')
 		Value = { [string]$script:CommerceSecrets['delivery'] } }
-	'commerce-admin'    = @{ Env = 'MMORPG_COMMERCE_ADMIN_SECRET'; SecretKey = 'secret'; Consumers = @('mall')
+	# admin 角色只给 GM 后台(运营处置页的商城部分,java/gm_admin GameMallAdmin)与商城本身。
+	'commerce-admin'    = @{ Env = 'MMORPG_COMMERCE_ADMIN_SECRET'; SecretKey = 'secret'; Consumers = @('mall', 'gm-admin')
 		Value = { [string]$script:CommerceSecrets['admin'] } }
 	# 支付服务 devpay 联调渠道的密钥:只有 dev 档、没给 -PaymentConfigPath 时有值(脚本自带的配置段只开 devpay,Get-PaymentDeployPlan)。
 	# 给了 -PaymentConfigPath 时渠道密钥全部来自运维预置的 Secret payment-channel-secrets,这一把不注入。
@@ -1096,7 +1114,29 @@ $script:WorkloadSecretCatalog = [ordered]@{
 		Value = { [string]$script:ContentGuardWeChatAppSecret } }
 	'content-guard-douyin' = @{ Env = 'MMORPG_CONTENT_GUARD_DOUYIN_APP_SECRET'; SecretKey = 'secret'; Consumers = @('content-guard')
 		Value = { [string]$script:ContentGuardDouyinAppSecret } }
+	# 双人复核批 7(docs/design/admin-identity-and-dual-control.md §11.4):GM 后台与各资源服务管理入口的口令 / 密钥。每把只给后台与资源服务
+	# 本身(§6 第 3 条,契约测试钉住消费者);全部可空:没设 = 不建 Secret、不注入,资源服务的入口保持关闭(fail-closed),后台的那一路不可用。
+	# 值在 Initialize-InjectedSecrets 里解析并核过形状与互不相同(Resolve-AdminEntrySecrets)。资源服务的配置只写变量名:
+	# trade 的 Commerce.ManualResolutionSecretEnv、match 的 GlobalMatch.ManualResolutionSecretEnv、data-service 的 AdminTokenEnv;
+	# login 的代码直接读 MMORPG_LOGIN_ADMIN_TOKEN;gateway 写 admin.machine-key: "${...}";后台的配置模板(New-GmAdminConfigMapYaml)写对同名变量的引用。
+	'gm-admin-oidc' = @{ Env = 'MMORPG_GM_OIDC_CLIENT_SECRET'; SecretKey = 'client-secret'; Consumers = @('gm-admin')
+		Value = { [string]$script:GmAdminOidcClientSecret } }
+	'trade-manual-resolution' = @{ Env = 'MMORPG_TRADE_MANUAL_RESOLUTION_SECRET'; SecretKey = 'secret'; Consumers = @('trade', 'gm-admin')
+		Value = { [string]$script:AdminEntrySecrets['trade-manual-resolution'] } }
+	'match-manual-resolution' = @{ Env = 'MMORPG_MATCH_MANUAL_RESOLUTION_SECRET'; SecretKey = 'secret'; Consumers = @('match', 'gm-admin')
+		Value = { [string]$script:AdminEntrySecrets['match-manual-resolution'] } }
+	'data-service-admin-token' = @{ Env = 'MMORPG_DATA_SERVICE_ADMIN_TOKEN'; SecretKey = 'token'; Consumers = @('data-service', 'gm-admin')
+		Value = { [string]$script:AdminEntrySecrets['data-service-admin-token'] } }
+	'login-admin-token' = @{ Env = 'MMORPG_LOGIN_ADMIN_TOKEN'; SecretKey = 'token'; Consumers = @('login', 'gm-admin')
+		Value = { [string]$script:AdminEntrySecrets['login-admin-token'] } }
+	# gateway 的机器口令(admin.machine-key,批 6):只能访问 /admin/tables/**、操作人固定为 table-bundle,给配置表发布命令行用;与 admin.api-key 必须不同。
+	# 集群里没有它的另一个消费者:table-bundle 在运维机或 CI 上跑,口令由运维交给它(MMORPG_ADMIN_KEY,带 -operator table-bundle)。
+	'gateway-admin-machine-key' = @{ Env = 'MMORPG_GATEWAY_ADMIN_MACHINE_KEY'; SecretKey = 'key'; Consumers = @('gateway')
+		Value = { [string]$script:AdminEntrySecrets['gateway-admin-machine-key'] } }
 }
+# GM 后台的 OIDC 客户端密钥与各管理入口的口令 / 密钥(见上面目录表末尾的说明),由 Initialize-InjectedSecrets 解析;空 = 本次不注入。
+$script:GmAdminOidcClientSecret = ""
+$script:AdminEntrySecrets = @{}
 
 # 削峰(G4b)开服档起步值。单一来源:ConfigMap 生成、Pod 指纹、部署打印都只读这里。全部「待压测确认」(L-14)。
 #   ZoneDefaultRps/Burst   docs/design/open-server-rate-limit-design.md「Layer 1 配额参考」的「开服日 / 大版本回归」档
@@ -1944,6 +1984,44 @@ function Initialize-InjectedSecrets {
 			if ([System.Text.Encoding]::UTF8.GetByteCount($script:PaymentDevPaySecret) -lt 32 -or $script:PaymentDevPaySecret -match '["\\\s\p{Cc}]') {
 				throw 'MMORPG_PAYMENT_DEVPAY_SECRET must be at least 32 bytes and must not contain whitespace, double quotes, backslashes or control characters (the value is not shown). Nothing was written.'
 			}
+		}
+	}
+
+	# GM 后台与各资源服务管理入口的口令 / 密钥(工作负载密钥目录末尾几把,docs/design/admin-identity-and-dual-control.md §11.4)。
+	# 只解析本次有消费者要部署的那几把:资源服务随各自的部署走,后台(Test-GmAdminDeployed)要它连的全部入口。没设 = 入口保持关闭,不阻断部署。
+	# 同一把在 infra-up(后台、trade、match)与 zone-up(login、data-service、gateway)之间要保持同值:不同值的后果是那一路一律被拒,不会改错数据。
+	$gmAdminDeployed = Test-GmAdminDeployed
+	$adminEntryWanted = @()
+	if ((Test-GlobalGoSvcDeployed) -or $gmAdminDeployed) { $adminEntryWanted += @('trade-manual-resolution', 'match-manual-resolution') }
+	if ((Test-ZoneDbDeployed) -or $gmAdminDeployed) { $adminEntryWanted += @('data-service-admin-token', 'login-admin-token') }
+	if (Test-ZoneGatewayDeployed) { $adminEntryWanted += 'gateway-admin-machine-key' }
+	# 后台经同一把 X-Admin-Key 调 zone 的 gateway:本次不部署 gateway 时也要解析(规则同上面 gateway 那段;值只进 infra namespace 的 Secret)。
+	if ($gmAdminDeployed -and [string]::IsNullOrEmpty($script:GatewayAdminApiKey)) {
+		$script:GatewayAdminApiKey = Resolve-InjectedSecret -EnvName "MMORPG_GATEWAY_ADMIN_API_KEY" `
+			-DevFallback "change-me-in-production" -ReleaseProfile $ReleaseProfile -Purpose "Java Gateway 管理面口令(GM 后台的 gm.game.gateway-admin-key)" -MinLength 32
+		Assert-SpringPlaceholderSafe -EnvName 'MMORPG_GATEWAY_ADMIN_API_KEY' -Value $script:GatewayAdminApiKey
+	}
+	$script:AdminEntrySecrets = Resolve-AdminEntrySecrets -ReleaseProfile $ReleaseProfile -Wanted $adminEntryWanted -OtherSecrets @(
+		@{ Env = 'MMORPG_GATE_TOKEN_SECRET'; Value = $script:GateTokenSecret }
+		@{ Env = 'MMORPG_INTERNAL_AUTH_SIGNING_KEY'; Value = $script:InternalAuthSigningKey }
+		@{ Env = 'MMORPG_GATEWAY_ADMIN_API_KEY'; Value = $script:GatewayAdminApiKey }
+		@{ Env = 'MMORPG_PLAYER_INBOX_ADMIN_TOKEN'; Value = $script:PlayerInboxAdminToken }
+		@{ Env = 'MMORPG_COMMERCE_ADMIN_SECRET'; Value = [string]$script:CommerceSecrets['admin'] }
+		@{ Env = 'MAIL_PRODUCER_SECRET_ADMIN'; Value = [Environment]::GetEnvironmentVariable('MAIL_PRODUCER_SECRET_ADMIN') }
+		@{ Env = 'MMORPG_MATCH_OPS_CALLER_SECRET'; Value = [Environment]::GetEnvironmentVariable('MMORPG_MATCH_OPS_CALLER_SECRET') }
+	)
+	foreach ($adminEntryName in $adminEntryWanted) {
+		if (-not $script:AdminEntrySecrets.Contains($adminEntryName)) {
+			Write-Host "admin entry: $($script:WorkloadSecretCatalog[$adminEntryName].Env) unset (ReleaseProfile=$ReleaseProfile); that admin entry stays disabled (fail-closed), no Secret is created."
+		}
+	}
+	# 后台的 OIDC 客户端密钥:部署后台就必须有(机密客户端换码要它),各档位都没有回落值,不替运维猜。
+	$script:GmAdminOidcClientSecret = ""
+	if ($gmAdminDeployed) {
+		$script:GmAdminOidcClientSecret = Resolve-InjectedSecret -EnvName 'MMORPG_GM_OIDC_CLIENT_SECRET' -DevFallback '' `
+			-ReleaseProfile $ReleaseProfile -Purpose 'GM 后台 OIDC 机密客户端的 client secret(gm.oidc.client-secret)' -MinLength 16
+		if ([System.Text.Encoding]::UTF8.GetByteCount($script:GmAdminOidcClientSecret) -lt 16 -or $script:GmAdminOidcClientSecret -match '["\\\s\p{Cc}]' -or $script:GmAdminOidcClientSecret.Contains('${')) {
+			throw 'MMORPG_GM_OIDC_CLIENT_SECRET is required when the GM admin is deployed: at least 16 bytes, without whitespace, quotes, backslashes, control characters or "${" (the value is not shown). Nothing was written.'
 		}
 	}
 

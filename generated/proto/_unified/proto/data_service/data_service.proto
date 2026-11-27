@@ -659,6 +659,9 @@ message RegisterRecallReviewHandledRequest {
   RecallReviewReason review_reason = 7;    // 预览里这条指令的原因
   string operator = 8;                     // 必填,≤ 64 字
   string reason = 9;                       // 必填,≤ 191 字:工单号与处置方式(例如 GmSanctionPlayer 挂了多少欠款)
+  // 双人复核批准记录(docs/design/admin-identity-and-dual-control.md §11.2):登记之后这些流水永久按已消费处理、以后的回收都跳过它们,
+  // 做完撤不回,按甲级要求另一人批准;发起人就是 operator。
+  common.base.AdminApproval approval = 10;
 }
 
 // error_code:0 且 registered = 本次登记;0 且未 registered = 这条指令早已登记过,什么都没改;

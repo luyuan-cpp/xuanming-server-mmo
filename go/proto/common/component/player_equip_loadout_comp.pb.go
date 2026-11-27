@@ -85,6 +85,8 @@ type EquipLoadoutScheme struct {
 	Slots                   []*EquipLoadoutSlotBinding `protobuf:"bytes,4,rep,name=slots,proto3" json:"slots,omitempty"`                                                                         // 按 slot 升序，严禁靠下标承载槽位语义
 	LinkedSkillSchemeId     uint32                     `protobuf:"varint,5,opt,name=linked_skill_scheme_id,json=linkedSkillSchemeId,proto3" json:"linked_skill_scheme_id,omitempty"`             // 0 = 不联动；1..7 = 联动 SkillLoadoutScheme
 	LinkedAttributeSchemeId uint32                     `protobuf:"varint,6,opt,name=linked_attribute_scheme_id,json=linkedAttributeSchemeId,proto3" json:"linked_attribute_scheme_id,omitempty"` // 0 = 不联动；>0 = 联动 AttributeScheme
+	LinkedPetId             uint64                     `protobuf:"varint,7,opt,name=linked_pet_id,json=linkedPetId,proto3" json:"linked_pet_id,omitempty"`                                       // 0 = 不联动；>0 = 联动首发灵宠永久 pet_id
+	LinkedFormationId       uint32                     `protobuf:"varint,8,opt,name=linked_formation_id,json=linkedFormationId,proto3" json:"linked_formation_id,omitempty"`                     // 0 = 不联动；1..5 = 联动免费五行阵法 ID
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -157,6 +159,20 @@ func (x *EquipLoadoutScheme) GetLinkedSkillSchemeId() uint32 {
 func (x *EquipLoadoutScheme) GetLinkedAttributeSchemeId() uint32 {
 	if x != nil {
 		return x.LinkedAttributeSchemeId
+	}
+	return 0
+}
+
+func (x *EquipLoadoutScheme) GetLinkedPetId() uint64 {
+	if x != nil {
+		return x.LinkedPetId
+	}
+	return 0
+}
+
+func (x *EquipLoadoutScheme) GetLinkedFormationId() uint32 {
+	if x != nil {
+		return x.LinkedFormationId
 	}
 	return 0
 }
@@ -260,14 +276,16 @@ const file_proto_common_component_player_equip_loadout_comp_proto_rawDesc = "" +
 	"6proto/common/component/player_equip_loadout_comp.proto\"J\n" +
 	"\x17EquipLoadoutSlotBinding\x12\x12\n" +
 	"\x04slot\x18\x01 \x01(\rR\x04slot\x12\x1b\n" +
-	"\titem_guid\x18\x02 \x01(\x04R\bitemGuid\"\x82\x02\n" +
+	"\titem_guid\x18\x02 \x01(\x04R\bitemGuid\"\xd6\x02\n" +
 	"\x12EquipLoadoutScheme\x12\x1b\n" +
 	"\tscheme_id\x18\x01 \x01(\rR\bschemeId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x19\n" +
 	"\brole_tag\x18\x03 \x01(\rR\aroleTag\x12.\n" +
 	"\x05slots\x18\x04 \x03(\v2\x18.EquipLoadoutSlotBindingR\x05slots\x123\n" +
 	"\x16linked_skill_scheme_id\x18\x05 \x01(\rR\x13linkedSkillSchemeId\x12;\n" +
-	"\x1alinked_attribute_scheme_id\x18\x06 \x01(\rR\x17linkedAttributeSchemeId\"\xc4\x02\n" +
+	"\x1alinked_attribute_scheme_id\x18\x06 \x01(\rR\x17linkedAttributeSchemeId\x12\"\n" +
+	"\rlinked_pet_id\x18\a \x01(\x04R\vlinkedPetId\x12.\n" +
+	"\x13linked_formation_id\x18\b \x01(\rR\x11linkedFormationId\"\xc4\x02\n" +
 	"\x16PlayerEquipLoadoutComp\x122\n" +
 	"\x15unlocked_scheme_count\x18\x01 \x01(\rR\x13unlockedSchemeCount\x12(\n" +
 	"\x10active_scheme_id\x18\x02 \x01(\rR\x0eactiveSchemeId\x12-\n" +
