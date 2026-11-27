@@ -121,6 +121,8 @@ AuthProviders:
 | **6. 与游戏服自有社交渠道冲突造成双账号分裂** | 若在 Casdoor 里同时打开微信/Apple/Google 登录，玩家可能一条走游戏服原生 `apple`，一条走 `passport` 里的 Apple，分裂成两个游戏账号。 | Casdoor 组织与 `app-xuanming-game` **仅开启官方自有注册（邮箱/手机/密码/验证码）**，严禁在 Casdoor 内开启已由 `go/login` 原生接入的社交渠道。 |
 | **7. JWKS 中间人篡改 / 算法混淆 / 账号超长** | 明文 HTTP 拉取 JWKS 可被篡改公钥；伪造 `alg=none/HS256` 或超长 `sub`（超过 `account_directory` 191 字节上限）导致异常。 | 生产模式强制 `Issuer` 与 `Endpoint` 均为 `https://`；复用 `idtoken.go` 仅接受 `RS256` + ≥2048-bit RSA 公钥；`PassportProvider` 额外拦截含空白或拼接后超 191 字节的 `sub`。 |
 | **8. 密钥误入 Git 或未展开 `${VAR}`** | YAML 写 `${CLIENT_ID}`（go-zero 不展开）或把 DB 密码提交进仓库。 | `passport_auth.go` 复用 `containsUnexpandedPlaceholder` 在启动期拒绝 `${...}`；`deploy/passport/` 所有数据库密码均通过 `${VAR:?...}` 运行时环境变量强制注入。 |
+| **9. Casdoor 管理员首启接管** | Casdoor v4.27.1 首启时 `built-in/admin` 无口令，日志提示「在浏览器里设置」，端口暴露期间任何访问者都能抢先设置管理员口令并接管整个通行证。 | `docker-compose.yml` 强制注入 `initAdminPassword: ${PASSPORT_ADMIN_PASSWORD:?...}`，并默认只绑 `127.0.0.1`（`PASSPORT_BIND` 显式放开）；2026-11-26 真容器实测配置口令可登录、默认 `123` 不可登录。 |
+| **10. `redirect_uri` 宽松匹配外泄授权码** | 若 IdP 对回调地址做子串/正则宽松匹配，攻击者可构造带合法回调串的外站地址截走授权码。 | 2026-11-26 真容器实测 v4.27.1 对 10 种变形（外站夹带、前后缀、`.` 通配、子域拼接、`localhost`/其它回环端口）全部拒绝，仅精确的两个回调地址签发授权码；升级 Casdoor 版本时须重跑该探针。 |
 
 ---
 
@@ -145,7 +147,9 @@ AuthProviders:
 # 1. 在终端注入本地开发数据库口令（不落盘、不进 Git）
 $env:PASSPORT_DB_ROOT_PASSWORD = "<local-root-password>"
 $env:PASSPORT_DB_PASSWORD      = "<local-casdoor-password>"
+$env:PASSPORT_ADMIN_PASSWORD   = "<local-casdoor-admin-password>"   # 首启写入 built-in/admin 口令
 $env:PASSPORT_ORIGIN           = "http://127.0.0.1:8000"
+# 端口默认只绑 127.0.0.1;真机局域网联调时再设 $env:PASSPORT_BIND = "0.0.0.0"
 
 # 2. 启动独立 Casdoor 通行证服务（http://127.0.0.1:8000）
 docker compose -f deploy/passport/docker-compose.yml up -d

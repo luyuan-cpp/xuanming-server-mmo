@@ -5944,4 +5944,47 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
   (`go/login/internal/logic/loginpregate/assigngatelogic.go` 的 `reconnectingPlayer`);挑 gate 时全部到水位也退到「连得上的」一档(`gate_eligibility.go`)。
   每台 gate 90% 到 100% 只有重连用得到。上一条写的「login 对新登录与重连一视同仁」是错的,设计稿 P2-3 第 3 条与状态行已改。
 - **P1-5 `resources.requests`**:不交 Gemini,由会话「gate 未验签连接预算、LRU 淘汰与按概率早拒(准入 P0-2)」落码,取值同交接单第 1 节,验证命令写在它自己的 PROGRESS 条目里。
-  交接单 `docs/handoff/gate-admission-remaining-handoff-20261126.md` 已删去第 2 节,第 1 �
+  交接单 `docs/handoff/gate-admission-remaining-handoff-20261126.md` 已删去第 2 节,第 1 节落码后整份删除。
+- Java:不涉及,没有新增待做。
+
+## 2026-11-26 Claude:断线重连 R3 / R6 / R17 / R19 复核收口,`readGameConfig` 重复加载不再累加 seeds(未编译;验证交 Gemini;Java 不涉及)
+
+- **复核**(「接着做完服务器剩下的代码(缺口清单续)」会话):11-19 四条(「断线重连 R3 收尾」「R6 残余」「R19」「R17」)的改动都已随 `55eae6be3` / `0f9bc81d6` 入库。11-24 的 Docker 全量重建 `docker-rebuild-all-20261124T094844.599108Z` 里 C++、Go、Java 三段 exitCode 都是 0(那次整体判失败是因为构建期间 match 的源码被改,不是编译错)。四条里点名的新单测与契约测试还没有运行记录。
+  - R19 的 `Etcd.Hosts` 校验曾让 `turn_battle_engine_test` 在同一进程第二次读配置时误报 got 2,Gemini 11-20 已在 `readBaseDeployConfig` 开头 `Clear()` 并补了回归用例。
+- **本次改动**:`readGameConfig` 同病——测试进程里多组用例对同一个对象重复加载时,`control_redis` / `player_redis` 的 seeds 会越读越多。开头加 `gameConfig.Clear()`;`configuration_table_test.cpp` 新增 `GameConfigControlRedis.ReadGameConfigTwiceDoesNotAccumulateSeeds`。node.cpp 读它之前没有任何地方先写 GameConfig,清空不丢东西。
+- **交 Gemini**(仓库根;C++ 串行;失败保留首个错误与完整用例输出,不改断言,不连续重试):
+  1. `msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`,0 错误;`pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter configuration_table_test`,全绿(含新用例与 `ReadBaseDeployConfigTwiceDoesNotAccumulateRepeatedFields`)。
+  2. 按 11-19 四条各自的「验证」段跑:Go 的 guild / player_locator / login / shared(noderegistry、authoritysql)/ trade / player_inbox / data_service / mail / rank / scene_manager / client_rpc_router / db;C++ `rpc_controller_test`(`DependencyLinkMetrics.*`、`RedisClusterTopologyTest.RefreshPolicy*` 三条、`RedisManager*`、`RpcClientLifecycle*`、`GrpcClient*`)、`muduo_grpc_test`、`routing_identity_test`、`cross_zone_test`;契约 `noderegistry_alerts_contract.tests.ps1`、`cpp_node_dependency_alerts_contract.tests.ps1` 各 4 条;冒烟按 R19、R17 两条的第 4 步。
+- **文件**:`cpp/libs/engine/config/config.cpp`、`cpp/tests/configuration_table_test/configuration_table_test.cpp`、本条。
+
+## 2026-11-26 Claude:data_service 逻辑库熔断:调用方取消不再记成成功(一处代码 + 一条用例,未编译、未运行,待 Gemini;Java 不涉及)
+
+- **范围**:设计稿 `docs/design/data-service-breaker-per-logical-db.md` 的作者会话。负责人问这条线做完没有,对照设计稿把 Gemini 11-20 的落码逐项读了一遍:服务端关按方法熔断(`data_service.go`)、建连钩子(`shared/authoritysql/pool.go`)、按逻辑库的熔断(`internal/svc/db_breaker.go`)与装配、`shared/dsclient` 及守卫用例、现在的 15 个客户端构造点、四处配置说明、三份同步的设计文档。都在 main,没有缺的;与同日「go/db 与 data_service 两处熔断按后端隔离复核」的结论一致。
+- **发现一处要改的**(设计稿自己的规则,不是落码走样):结算时把调用方取消(`context.Canceled`)记成了成功。
+  - 调用方的截止时间短于建连超时(1 秒)时(guild 读账本 300ms、login 角色列表 500ms、建角登记 800ms),坏库上的建连是被调用方的截止时间打断的。服务端这时有两个信号几乎同时到:按 `grpc-timeout` 设的截止定时器(`DeadlineExceeded`),和调用方到点发来的 RST(grpc 把 ctx 取消成 `Canceled`)。谁先到不定。
+  - 表现成 `Canceled` 的那部分被记成成功,等于给坏库加成功数:占比过三分之二熔断永远不开,不到也开得慢。
+- **改动**(main 工作区,未提交):
+  - `go/data_service/internal/svc/db_breaker.go`:取消时不结算,成功和失败都不记(go-zero 的 promise 不占名额,丢掉即不进统计);建连成功照旧 `Accept`,其余失败照旧 `Reject`。
+  - `go/data_service/internal/svc/db_breaker_test.go`:新增 `TestLogicalDBConnectGateDoesNotCountCancellationAsSuccess`(每 3 次取消夹 1 次真实失败,熔断必须打开;按旧写法永远不开)。
+  - 设计稿 §4.1、§5.1、§7、§8 与文首状态同步。
+- **没改的**:
+  - go/db 的 `enterStore` 仍把取消记成成功:scene 调它的截止时间(14 秒)长于它自己的方法时限(12 秒),先到的总是服务端的 `DeadlineExceeded`,没有这个竞争。
+  - 启动期不在隔离范围内(设计稿 §8 新增一条):一个集群失联期间,已在跑的 data_service 照常服务健康库,新起或重启的副本因 `Store.Required` 起不来。这是既定的 fail-closed 规则,没有放宽;运维含义是单集群故障期间不要滚动重启 data_service。
+- **给 Gemini 的验证**(低档模型即可;环境 `$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`;失败保留编译错误全文、失败用例名与断言原文,不改断言,不连续重试):
+  ```
+  cd go/data_service
+  gofmt -l internal/svc/db_breaker.go internal/svc/db_breaker_test.go
+  go vet ./internal/svc/...
+  go test -count=1 -run 'TestLogicalDBConnectGate' -v ./internal/svc/
+  go test -count=3 -run 'TestLogicalDBConnectGate' ./internal/svc/
+  ```
+  通过标准:`gofmt -l` 无输出,vet 无错;`TestLogicalDBConnectGateIsolatesFailingDatabase`、`TestLogicalDBConnectGateDoesNotCountCancellationAsSuccess`、`TestLogicalDBConnectGateIgnoresCallerCancellation` 三条逐个 PASS,`-count=3` 也全过。
+  可选的反向确认:把 `db_breaker.go` 取消分支临时改回 `promise.Accept()`,新用例应当失败(报 `never opened`),改回后恢复通过。
+  这条线其余的命令(shared 的 `authoritysql`、`dsclient`,go/db)不变,见同日「go/db 与 data_service 两处『熔断按后端隔离』复核」。
+- **Java 版(AGENTS §12)**:不涉及(Java 版没有 data_service 与 go-zero),不加 PARITY 行。
+- **提交情况**:main 工作区,未提交。
+
+### 2026-11-26 Claude:上一条的提交情况更正(data_service 逻辑库熔断)
+
+- 写上一条的中途,工作区被批量提交了一次(`a1285cb8a`):新用例 `TestLogicalDBConnectGateDoesNotCountCancellationAsSuccess` 已随它进了 HEAD,而 `go/data_service/internal/svc/db_breaker.go` 的修复是之后才写的,仍在工作区未提交。
+- 所以只按 HEAD(不带工作区)跑这条用例会红,报 `never opened`;带上工作区的 `db_breaker.go` 才是配套的。验证请在主工作区跑;下次提交把 `db_breaker.go` 带上。

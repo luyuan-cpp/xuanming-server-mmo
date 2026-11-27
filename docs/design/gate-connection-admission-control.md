@@ -161,7 +161,7 @@ cookie 一点忙不帮）；反过来，应用层再怎么改也吸收不了带�
 | G8 | **`idleFd_` 不是可靠兜底**：`close(idleFd_)` 与 `::accept` 之间被别的线程抢走名额时 `idleFd_` 会变成 -1 且**没有任何重新装填路径**（重开 `/dev/null` 的返回值根本不检查），对进程剩余生命周期彻底失效 | `Acceptor.cc` EMFILE 分支。gate 进程里 grpc/redis/kafka 客户端都在别的线程开 fd，窗口是存在的。**（2026-11-12 状态：已改，未编译，见 P0-4。）** |
 | G9 | **零 per-source 限制**，且**做之前有前置条件未满足**：`peerAddress()` 全仓只出现在 5 行日志里；而 `gate-entry` Service 未设 `externalTrafficPolicy` → 默认 `Cluster` → kube-proxy SNAT → `peerAddress()` 拿到的是 **node IP**。**(2026-09-29 更正:前置条件在 external 形态下已由部署层满足,podip 形态仍不满足,见下方 §4.2.1;per-source 限制本身仍为零)** | `k8s_deploy.ps1:928-947`（Service spec 只有 type/selector/ports）——**行号已漂移**,2026-09-29 现为 `tools/scripts/k8s_deploy.ps1:2405-2424` `New-GateServiceYaml` |
 | G10 | **pre-auth 路径的按包防护为零**：`DispatchClientRpcMessage` 在 `:736` 的 `verified` 判定**排在** `ValidateClientMessage`（`:707`）之前；`DispatchTokenVerify`（`:780`）从头到尾不调限流器、也不调 `CheckMessageSize` | 未认证连接可反复让 gate 缓冲 64KB（`codec.h:64`）+ adler32 + 反射建 message + parse。**（2026-11-26 状态：前半句「`verified` 判定排在 `ValidateClientMessage` 之后」核对时已不成立，现在先判 `verified`；后半句已改，未编译：codec 加了验签前的单帧上限 `setPreAuthMessageLimit`，未验签的连接声明超过 4KB 的帧当场断开，TCP 与 WebSocket 都收紧，gate 与 battle 直连都接上。`DispatchTokenVerify` 不需要 `CheckMessageSize`：验签前的帧已被这道上限挡住，验签失败当场断开。）** |
-| G11 | **gate 容器 BestEffort**：无 `resources`、无探针、无 `securityContext`、无 PDB。`oom_score_adj=1000`，节点内存压力时最先被驱逐，且连接洪峰打的是整个 node | `k8s_deploy.ps1:560-632`（`New-NodeDeploymentYaml` 全文）。对照 go-svc 的 login/gateway 都配了 limits |
+| G11 | **gate 容器 BestEffort**：无 `resources`、无探针、无 `securityContext`、无 PDB。`oom_score_adj=1000`，节点内存压力时最先被驱逐，且连接洪峰打的是整个 node。**(2026-11-26 现状)** 探针、宽限期与 PDB 已有；主容器的 `resources.requests` 已落码、未运行，见 P1-5 表 | `k8s_deploy.ps1:560-632`（`New-NodeDeploymentYaml` 全文）。对照 go-svc 的 login/gateway 都配了 limits |
 | G12 | **131071 硬上限是借来的**：`network_utils.h:12` 借 `snow_flake.h:26` 的 `kNodeBits=17` 当 seq 位宽。编译期打开 `ENABLE_SNOWFLAKE_TESTING` 会让它**静默变成 511**，并让默认的 `GateMaxConnections: 20000` 在 `main.cpp:116` 直接 `LOG_FATAL` | 两个语义完全无关的常量共用一个名字。**（2026-11-26 状态：已改，未编译。`network_utils.h` 改用会话号自己的 `kSessionSequenceBits = 17`，`static_assert` 钉住 131071；值没变，跨服务按位拆会话号的地方不受影响。）** |
 | G13 | **应用侧零 Prometheus 埋点** | `cpp/nodes/gate` 全仓 grep 不到 prometheus。现在只能靠内核计数器 + 采样日志间接推断。**（2026-11-12 状态：C++ 节点已有 Prometheus 出口，`MMORPG_METRICS_PORT`；fd 用量与 accept 降级的指标已加，见 P0-4。P1-4 列的连接类 SLI 同日另一批落码，未编译，见 P1-4。）** |
 
@@ -691,8 +691,9 @@ gate 与 battle 直连共用一份，gate 的 `connection_admission.h` 用 using
 改动必须落在那两个 PowerShell 函数里，并同步补一条
 `tools/scripts/tests/k8s_deploy_contract.tests.ps1` 的契约断言（那里已经有对 `GateMaxConnections` 的断言先例）。
 
-- `resources.requests/limits`——把 QoS 从 BestEffort 抬到 Burstable（`oom_score_adj` 立刻从 1000 降下来）。
-  ⚠️ limit 一旦配上，`GateMaxConnections` 必须和它对齐，否则又是「真正生效的闸门不是你写的那个」。
+- `resources.requests/limits`——主容器要有自己的 memory request。开着日志 sidecar 时 Pod 已经是 Burstable（sidecar 带 requests），
+  但 kubelet 按容器算 `oom_score_adj`：主容器没有 request 就按 0 算，得到 999，节点内存紧张时仍是最先被杀、最先被驱逐的那个。
+  ⚠️ limit 一旦配上，`GateMaxConnections` 必须和它对齐，否则又是「真正生效的闸门不是你写的那个」。所以本项只配 requests（下表）。
 - `readinessProbe` / `terminationGracePeriodSeconds` / PDB。
 - `externalTrafficPolicy: Local`（或 LB 开 PROXY protocol）——**这是 per-source 限制从「不可能正确」
   变成「可能正确」的前提**，应排在写限速代码之前。代价：没有 gate pod 的 node 会拒绝该 NodePort 流量，
@@ -713,7 +714,7 @@ gate 与 battle 直连共用一份，gate 的 `connection_admission.h` 用 using
 
 | 条目 | 状态 |
 | --- | --- |
-| `resources.requests` | **未做，已交接 Gemini**（`docs/handoff/gate-admission-remaining-handoff-20261126.md` 第 1 节，取值与理由在那里定好了）。只配 requests、不配 memory limit：limit 要和「连接上限 × 每连接高水位」对齐，那个乘积要先按 §9.5 实测 |
+| `resources.requests` | **已落码（2026-11-26，未运行）**。gate / scene / battle 主容器都带 requests，五套模板（`k8s_deploy.ps1` 的 `New-NodeDeploymentYaml`、`New-SceneFleetYaml`，lib 的 gate StatefulSet、battle Fleet、battle hostPort）取同一张表 `Get-CppNodeResourceRequests`：staging / prod 档 gate、battle 为 cpu `1`、memory `512Mi`，scene 为 cpu `1`、memory `1Gi`；dev 档 cpu `100m`，memory `128Mi`（scene `256Mi`）。只配 requests：cpu 不配 limit，免得 CFS 限流把单线程 loop 的 tick 打出毛刺；memory 不配 limit，limit 要和「连接上限 × 每连接高水位」对齐，那个乘积要先按 §9.5 实测。取值都是估计，压测后按 `process_resident_memory` 调这张表 |
 | `readinessProbe` / `terminationGracePeriodSeconds` / PDB | 已有：集群外入口的 gate StatefulSet 模板（`tools/scripts/lib/k8s_client_entry.ps1`）带这三项 |
 | `externalTrafficPolicy: Local` | 已有（2026-09-29 那条更正） |
 | safe sysctl（`tcp_keepalive_*`、`tcp_rmem` / `tcp_wmem`） | **定为不做**。keepalive 要回收的死连接，应用层已经有更快的两道：验签前 10 秒握手期限、验签后 30 秒心跳判死（`gate-client-heartbeat.md`）；这几个 sysctl 还要求集群 ≥ 1.29 / 1.32，版本不够时 Pod 直接起不来。收发缓冲调小会换来吞吐下降，没有实测不动内核缺省 |

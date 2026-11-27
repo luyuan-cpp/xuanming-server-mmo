@@ -340,6 +340,8 @@ bool readBaseDeployConfig(const std::string &filename, BaseDeployConfig &baseCon
 bool readGameConfig(const std::string &filename, GameConfig &gameConfig)
 {
 	YAML::Node root = YAML::LoadFile(filename);
+	// 同 readBaseDeployConfig:同一个对象重复加载时不能累加 repeated 字段(control_redis / player_redis 的 seeds)。
+	gameConfig.Clear();
 
 	if (root["SceneNodeType"])
 	{

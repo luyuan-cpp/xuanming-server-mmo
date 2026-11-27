@@ -146,7 +146,31 @@ func (c *Config) validatePlatform() error {
 	if c.Platform.LookupTimeoutMs < 0 || c.Platform.LookupTimeoutMs > 2000 {
 		return fmt.Errorf("Platform.LookupTimeoutMs (%d) must be within [0, 2000]", c.Platform.LookupTimeoutMs)
 	}
+	if c.Platform.WeChat.AppID == "" && c.Platform.Douyin.AppID == "" {
+		return nil
+	}
+	// 调用方(chat、guild、scene……)只带 player_id,渠道与 openid 要到目录里查。没配这条连接时每一次平台审核都会被
+	// 悄悄跳过,只剩本地词库,而配置看起来是接了平台的:宁可起不来。
+	if !c.HasDataServiceRpc() {
+		return errors.New("DataServiceRpc is required when Platform.WeChat or Platform.Douyin is configured: callers send only the player id, and without the directory lookup every platform review would be skipped silently")
+	}
+	// zrpc 服务端的 Timeout 到点就掐断处理函数:小于最长的一段平台调用加查渠道身份时,那一段永远等不满(0 = 不设上限)。
+	need := int64(max(orDefault(c.Platform.SyncTimeoutMs, 1500), orDefault(c.Platform.AsyncTimeoutMs, 2500)) + orDefault(c.Platform.LookupTimeoutMs, 150) + platformTimeoutMarginMs)
+	if c.Timeout > 0 && c.Timeout < need {
+		return fmt.Errorf("Timeout (%d ms) must be at least %d ms when a platform is configured: the longest platform call (Platform.SyncTimeoutMs / AsyncTimeoutMs) plus Platform.LookupTimeoutMs has to finish inside the server timeout", c.Timeout, need)
+	}
 	return nil
+}
+
+// platformTimeoutMarginMs 是平台调用之外留给本地判定、序列化与调度的余量。
+const platformTimeoutMarginMs = 200
+
+// orDefault 把「没写」(0)换成缺省值:三个平台时限写 0 时路由器用的就是这几个缺省值(platform.NewRouter)。
+func orDefault(value, fallback int) int {
+	if value == 0 {
+		return fallback
+	}
+	return value
 }
 
 // validateStatContentSuppressed 确认带原文请求体的 RPC 不会被 go-zero 的 Stat 拦截器打进日志。

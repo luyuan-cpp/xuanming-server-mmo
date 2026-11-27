@@ -4866,6 +4866,9 @@ bool PlayerLifecycleSystem::DispatchEmergencyRelocate(Guid playerId, bool earlie
 	// 实体又绑上了活会话(新登录接回过),或登录身份已不是票据那一次,就作废,由接回的那次登录照常收尾。改派代表的
 	// 登录代次就是托管的那次登录(发票时抄下的)。
 	const bool hostedTicket = ticket.hosted.has_value();
+	// 托管条目的 gate 实例:断开那次登录所在的进程(登录身份组件记下的),只作条目在入场栅栏里的身份(enter_fence.h kRelocateEntry)。
+	// 票据自己的实例号留空:它会进 EnterScene,托管落点不带 gate(scene-enter-chain-residuals.md §14.8)。
+	std::string hostedGateInstanceId;
 	relocate_confirm::TicketDecision ticketDecision = relocate_confirm::TicketDecision::kDispatch;
 	if (hostedTicket)
 	{
@@ -4875,6 +4878,10 @@ bool PlayerLifecycleSystem::DispatchEmergencyRelocate(Guid playerId, bool earlie
 		ticketDecision = relocate_confirm::DecideHostedTicket(player_exit::IsBoundSession(currentSession),
 															  identityIsTicketIdentity);
 		ticket.loginGeneration = ticket.hosted->loginGeneration;
+		if (identityIsTicketIdentity)
+		{
+			hostedGateInstanceId = identity->gateInstanceId;
+		}
 	}
 	else
 	{
@@ -4920,14 +4927,14 @@ bool PlayerLifecycleSystem::DispatchEmergencyRelocate(Guid playerId, bool earlie
 	registration.sessionId = ticket.sessionId;
 	registration.loginGeneration = loginGeneration;
 	registration.gateNodeId = ticket.gateNodeId;
-	registration.gateInstanceId = ticket.gateInstanceId;
+	registration.gateInstanceId = hostedTicket ? hostedGateInstanceId : ticket.gateInstanceId;
 	registration.ownerEpoch = ownerEpoch; // 可能落后于 Redis(回滚把 epoch 推进了而本节点还没取证),只进日志
 	registration.sourceSceneId = exitIntent != nullptr ? exitIntent->sceneIdAtExit : 0;
 	registration.markValue = value;
     registration.holderFence = holderFence;
     registration.publishedFence = publishedFence.value_or("");
 	registration.earlierEnterSceneMayReply = earlierEnterSceneMayReply;
-	// 托管条目:会话号与代次是断开那次登录(上面已按票据填),没有 gate;重发时要原样带回去向提示与归属修订。
+	// 托管条目:会话号、代次与 gate 实例是断开那次登录(上面已填),不推送;重发时要原样带回去向提示与归属修订。
 	registration.hosted = hostedTicket;
 	registration.target = ticket.target;
 	registration.ownerRevision = ticket.ownerRevision;

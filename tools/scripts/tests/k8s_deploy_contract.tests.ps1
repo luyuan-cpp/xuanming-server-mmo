@@ -9936,6 +9936,68 @@ Test-Case '负向:-ConnectionAdmissionEnv 拼错名字、值不是规范十进�
     }
 }
 
+# ─────────────────────────────────────────────────────────────────
+# C++ 节点主容器的 resources.requests(2026-11-26,gate 准入设计 P1-5 / G11)
+# ─────────────────────────────────────────────────────────────────
+# 分档表只在 k8s_deploy.ps1 的 Get-CppNodeResourceRequests 一处:按 AST 取出来直接调,核三档 × 三个角色。DryRun 核五套模板都把本角色那一档
+# 写进主容器,紧跟 imagePullPolicy、只有 requests(日志 sidecar 自己的 requests / limits 不算)。默认值复用上文的几次 DryRun。
+
+# 主容器 resources 段的「cpu/memory」:必须恰好一处、紧跟 imagePullPolicy 且后面就是 workingDir(段里只有 requests,没有 limits),否则 throw。
+function Get-CppMainContainerRequests {
+    param(
+        [Parameter(Mandatory = $true)][string]$Block,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+    $found = [regex]::Matches($Block, '(?m)^(?<ind>[ ]+)imagePullPolicy: \S+[ ]*\n\k<ind>resources:\n\k<ind>  requests:\n\k<ind>    cpu: (?<cpu>\S+)\n\k<ind>    memory: (?<mem>\S+)\n\k<ind>workingDir: /app/bin[ ]*$')
+    if ($found.Count -ne 1) { throw "${Label}:主容器紧跟 imagePullPolicy 的 resources 段应恰好一处、只有 requests,实际 $($found.Count) 处" }
+    return '{0}/{1}' -f $found[0].Groups['cpu'].Value, $found[0].Groups['mem'].Value
+}
+
+Test-Case 'P1-5:Get-CppNodeResourceRequests 的分档表(dev / staging / prod × gate / battle / scene);认不出的角色在参数绑定处拒' {
+    . ([scriptblock]::Create((Get-ToolScriptFunctionText -ScriptName 'k8s_deploy.ps1' -FunctionName 'Get-CppNodeResourceRequests')))
+    $expected = @{
+        dev     = @{ gate = '100m/128Mi'; battle = '100m/128Mi'; scene = '100m/256Mi' }
+        staging = @{ gate = '1/512Mi'; battle = '1/512Mi'; scene = '1/1Gi' }
+        prod    = @{ gate = '1/512Mi'; battle = '1/512Mi'; scene = '1/1Gi' }
+    }
+    foreach ($releaseProfileName in @('dev', 'staging', 'prod')) {
+        # 被测函数按动态作用域读脚本参数 $ReleaseProfile,这里放进本作用域。
+        $ReleaseProfile = $releaseProfileName
+        foreach ($role in @('gate', 'battle', 'scene')) {
+            $requests = Get-CppNodeResourceRequests -Role $role
+            Assert-Equal -Expected $expected[$releaseProfileName][$role] -Actual ('{0}/{1}' -f $requests.Cpu, $requests.Memory) -Because "$releaseProfileName 档 $role 的 requests(取值与理由见函数注释)"
+        }
+    }
+    $err = $null
+    try { Get-CppNodeResourceRequests -Role 'scene-world' | Out-Null } catch { $err = $_.Exception.Message }
+    Assert-True -Condition ($null -ne $err) -Because '认不出的角色必须拒绝:新加 C++ 工作负载要先在表里定值,不能静默不写 requests'
+}
+
+Test-Case 'P1-5:五套 C++ 模板的主容器都带本角色那一档的 resources.requests,紧跟 imagePullPolicy,没有 limits' {
+    $devValues = @{ gate = '100m/128Mi'; battle = '100m/128Mi'; scene = '100m/256Mi' }
+    $fullValues = @{ gate = '1/512Mi'; battle = '1/512Mi'; scene = '1/1Gi' }
+    foreach ($case in @(
+        @{ Label = 'zone-up 缺省'; Run = $devRun; Expected = @('Deployment/gate', 'Deployment/scene'); Values = $devValues }
+        @{ Label = 'zone-up external gate + Agones scene'; Run = $zoneRedisEntryRun; Expected = @('StatefulSet/gate', 'Fleet/scene'); Values = $devValues }
+        @{ Label = 'infra-up battle Deployment'; Run = $battleInfraRun; Expected = @('Deployment/battle'); Values = $devValues }
+        @{ Label = 'infra-up battle hostPort'; Run = $oflBattleHostPortWarnRun; Expected = @('Deployment/battle'); Values = $devValues }
+        @{ Label = 'infra-up battle Agones Fleet'; Run = $battleZoneRedisFleetRun; Expected = @('Fleet/battle'); Values = $devValues }
+        @{ Label = 'zone-up staging'; Run = $peakStagingRun; Expected = @('Deployment/gate'); Values = $fullValues }
+    )) {
+        Assert-Equal -Expected 0 -Actual $case.Run.ExitCode -Because "$($case.Label):DryRun 应当成功。输出: $($case.Run.Output)"
+        $workloads = @(Get-CppWorkloadBlocks -Output $case.Run.Output)
+        $keys = @($workloads | ForEach-Object { $_.Key })
+        foreach ($key in $case.Expected) {
+            Assert-True -Condition ($keys -ccontains $key) -Because "$($case.Label):这次 DryRun 要渲染 $key(夹具前提;实际 $($keys -join ','))"
+        }
+        foreach ($workload in $workloads) {
+            $name = $workload.Key.Split('/')[1]
+            $role = if ($name -like 'scene*') { 'scene' } else { $name }
+            Assert-Equal -Expected $case.Values[$role] -Actual (Get-CppMainContainerRequests -Block $workload.Block -Label "$($case.Label) $($workload.Key)") -Because "$($case.Label) $($workload.Key):主容器按 $role 那一档(漏了这一套模板,主容器 oom_score_adj 仍是 999,节点内存紧张时整台在线玩家最先被杀)"
+        }
+    }
+}
+
 Test-Case 'B0-4:C++ Deployment(gate / scene / battle)显式 maxUnavailable 0、maxSurge 留缺省;battle hostPort 仍是 maxSurge 0 / maxUnavailable 1' {
     # scene 缺省 4 副本,K8s 缺省 25% 向下取整 = 先缩 1 台旧 scene;新 Pod 因 nofile 硬限不够拒启时,这份容量一直缺到回滚。
     foreach ($case in @(

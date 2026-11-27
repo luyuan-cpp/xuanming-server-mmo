@@ -206,7 +206,7 @@ GrpcClient:
     PlayerInboxNodeService: 6000       # go/player_inbox/etc/player_inbox.yaml 显式写的 zrpc Timeout(≤ 4000)+2000;scene 的 Fetch / Ack 失败只退避,不阻断进场(player-inbox-service.md IB-7)
     PlayerStoreNodeService: 14000      # go/db/etc/db.yaml 的 MethodTimeouts 12s(大于 SQL 锁等待 10s)+2000
     MailNodeService: 6000              # go/mail/etc/mail.yaml 的 zrpc Timeout 3500 + 2000 + 500;scene 寄待寄邮件失败只退避(battle-overflow-mail.md)
-    ContentGuardNodeService: 3500      # go/content_guard/etc/content_guard.yaml 的 zrpc Timeout 1000 + 2000 + 500;scene 送检名字,超时按不可用回可重试的提示(rename-and-content-safety.md §6.6)
+    ContentGuardNodeService: 5500      # go/content_guard/etc/content_guard.yaml 的 zrpc Timeout 3000(接外部平台时要等微信 / 抖音答复)+ 2000 + 500;scene 送检名字,超时按不可用回可重试的提示(rename-and-content-safety.md §6.6)
 
 # 内容安全(go/content_guard)对 scene 是否可有可无(docs/design/rename-and-content-safety.md §6.6)。
 # 缺省(不写这一段)= 必须可达:发现不到实例或调用失败时,玩家填写的名字(角色改名、宠物名)一律不放行。

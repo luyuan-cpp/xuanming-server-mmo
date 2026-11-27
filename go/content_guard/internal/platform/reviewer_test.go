@@ -6,6 +6,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -21,7 +23,18 @@ func TestWeChatAdapterTokenCacheRetryAndVerdicts(t *testing.T) {
 	expireFirstCheck := false
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/cgi-bin/token":
+		case "/cgi-bin/stable_token":
+			// 稳定版接口:POST,AppSecret 在请求体里,URL 上不带任何凭据。
+			var body struct {
+				GrantType string `json:"grant_type"`
+				AppID     string `json:"appid"`
+				Secret    string `json:"secret"`
+			}
+			if r.Method != http.MethodPost || r.URL.RawQuery != "" || json.NewDecoder(r.Body).Decode(&body) != nil ||
+				body.GrantType != "client_credential" || body.AppID != "app1" || body.Secret != "sec1" {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
 			n := tokenCalls.Add(1)
 			_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "tok-" + string(rune('0'+n)), "expires_in": 7200})
 		case "/wxa/msg_sec_check":
@@ -62,6 +75,27 @@ func TestWeChatAdapterTokenCacheRetryAndVerdicts(t *testing.T) {
 	res = adapter.Check(context.Background(), cgpb.TextScene_TEXT_SCENE_ROLE_NAME, "oid-1", "正常发言")
 	if res.Outcome != OutcomePass || tokenCalls.Load() != 2 || checkCalls.Load() != 2 {
 		t.Fatalf("token refresh retry failed: res=%+v tokenCalls=%d checkCalls=%d", res, tokenCalls.Load(), checkCalls.Load())
+	}
+}
+
+// 请求失败时进日志的错误不能带 URL:微信审核接口的查询串里有调用凭据。
+func TestWithoutURLDropsTheRequestURL(t *testing.T) {
+	cause := errors.New("dial tcp 10.0.0.1:443: i/o timeout")
+	// http.Client 的请求错误就是这个形状:文本里带完整的 URL。
+	raw := &url.Error{Op: "Post", URL: "https://api.weixin.qq.com/wxa/msg_sec_check?access_token=SECRET-TOKEN", Err: cause}
+	if !strings.Contains(raw.Error(), "SECRET-TOKEN") {
+		t.Fatalf("precondition: the raw error should carry the URL, got %q", raw.Error())
+	}
+	redacted := withoutURL(raw)
+	if text := redacted.Error(); strings.Contains(text, "SECRET-TOKEN") || strings.Contains(text, "access_token") || !strings.Contains(text, "i/o timeout") {
+		t.Fatalf("redacted error must drop the URL and keep the cause: %q", text)
+	}
+	if !errors.Is(redacted, cause) {
+		t.Fatalf("the cause must stay reachable through errors.Is")
+	}
+	// 不是请求错误的照原样返回。
+	if withoutURL(cause) != cause {
+		t.Fatalf("a non-request error must be returned unchanged")
 	}
 }
 

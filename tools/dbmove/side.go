@@ -247,6 +247,25 @@ func (a *sqlAdmin) TablesWithTTLEnabled(ctx context.Context, schema string) ([]s
 	return enabled, nil
 }
 
+// ttlJobAliveWithin:TTL 任务的属主在这段时间之内刷新过心跳(current_job_owner_hb_time)才算它还在跑。
+// 关掉 TTL 之后属主节点死掉的任务没有人接手,那一行会一直留着;只看 current_job_id 的话搬库会被它永远卡住。
+// TiDB 自己判属主失联用的是几分钟,这里取得更宽:万一把还在跑的判成没在跑,窗口里的静止比对仍会拦下,只是多回滚一次。
+const ttlJobAliveWithin = 10 * time.Minute
+
+// TablesWithRunningTTLJob 见 adminSide。mysql.tidb_ttl_table_status 每张表一行(分区表每个分区一行),parent_table_id 是表的 id;
+// 有任务时 current_job_id 非空(v8.5.2 实测)。
+func (a *sqlAdmin) TablesWithRunningTTLJob(ctx context.Context, schema string) ([]string, error) {
+	backend, err := a.ServerBackend(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if backend != string(authoritysql.BackendTiDB) {
+		return nil, nil
+	}
+	return queryNames(ctx, a.db, fmt.Sprintf("SELECT DISTINCT t.table_name FROM information_schema.tables t JOIN mysql.tidb_ttl_table_status s ON s.parent_table_id=t.tidb_table_id "+
+		"WHERE t.table_schema=? AND s.current_job_id IS NOT NULL AND s.current_job_owner_hb_time > NOW() - INTERVAL %d SECOND ORDER BY t.table_name", int(ttlJobAliveWithin.Seconds())), schema)
+}
+
 func (a *sqlAdmin) CreateSchema(ctx context.Context, schema, charset, collation string) error {
 	if !identifierRe.MatchString(schema) || !identifierRe.MatchString(charset) || !identifierRe.MatchString(collation) {
 		return errors.New("bad database name, charset or collation")

@@ -998,7 +998,7 @@ namespace relocate_confirm
 		// (scene-enter-session-fence.md §5.1 第 3 处),否则陈旧入场会把条目误结成 superseded。本头不读它。
 		uint64_t loginGeneration{0};
 		uint32_t gateNodeId{0};
-		std::string gateInstanceId; // 发票时 gate 的实例号;空 = 推送时不比对实例
+		std::string gateInstanceId; // 发票时 gate 的实例号(托管条目:断开那次登录所在的进程);空 = 未知,推送时不比对实例
 		uint64_t ownerEpoch{0};		// 派发时实体缓存的 owner_epoch。可能落后于 Redis,**只进日志**
 		uint64_t sourceSceneId{0};	// 退出发起时所在的场景(PlayerExitIntentComp.sceneIdAtExit);0 = 未知
 		std::string holderFence; // 原实体资格，核实读到的新 epoch 不能替它换资格
@@ -1007,7 +1007,8 @@ namespace relocate_confirm
 		// 本节点替他发出的更早 EnterScene 还可能被处理(见 RequestOutcomeUnsettled)。默认取保守的一侧:
 		// 漏填只会多等到 settle、读不到时不盲踢。
 		bool earlierEnterSceneMayReply{true};
-		// 托管条目(离线托管的角色,文件头"契约"):sessionId / loginGeneration 是断开那次登录,gateNodeId 为 0、gateInstanceId 为空。
+		// 托管条目(离线托管的角色,文件头"契约"):sessionId / loginGeneration / gateInstanceId 是断开那次登录(实例只作入场栅栏的
+		// 身份,托管条目不推送),gateNodeId 为 0。
 		// 粘合层逐字段显式赋值;在线票据保持 false。
 		bool hosted{false};
 		// 托管条目重发时要原样带回的两项(在线条目不重发,只进日志):派发时的去向提示与归属修订。

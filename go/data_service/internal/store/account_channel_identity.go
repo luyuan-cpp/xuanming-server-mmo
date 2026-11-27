@@ -79,7 +79,7 @@ func (s *AccountDirectoryStore) ChannelIdentityOfPlayer(ctx context.Context, pla
 			out.PlayerLevel = d.GetLevel()
 		}
 	} else {
-		// 等级读失败不应阻断 content_guard 拿 open_id;调用方按需判 retry 或重查。
+		// 等级读失败整次按没读成回(服务端回 Retry):聊天按等级判世界频道门槛,拿一个 0 级回去会把人挡在外面。
 		return nil, dispErr
 	}
 	return out, nil

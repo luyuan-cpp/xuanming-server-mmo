@@ -45,6 +45,38 @@ func TestContainsAdCatchesObfuscatedContactsAndURLs(t *testing.T) {
 	}
 }
 
+// 域名的白名单按域名本身的范围比对;紧挨着的第二个域名照样要判;后面紧跟字母的不是域名。
+func TestDomainDetectionUsesTheExactSpanAndSeesAdjacentDomains(t *testing.T) {
+	contains := func(text string, allow func(start, end int32) bool) bool {
+		elems, _ := textnorm.Fold(text)
+		return ContainsAd(text, elems, allow)
+	}
+	// 「官网」占下标 0、1,域名 xuanming.com 占 2..13。
+	official := "官网xuanming.com欢迎"
+	var asked [][2]int32
+	if contains(official, func(start, end int32) bool {
+		asked = append(asked, [2]int32{start, end})
+		return start == 2 && end == 13
+	}) {
+		t.Fatalf("an allow entry covering exactly the domain must exempt it; asked spans %v", asked)
+	}
+	if len(asked) != 1 || asked[0] != [2]int32{2, 13} {
+		t.Fatalf("the allow callback must be asked about the domain itself, got %v", asked)
+	}
+	// 第一个域名在白名单里,紧挨着的第二个不在:照样是广告。
+	if !contains("xuanming.com,spam-shop.top", func(start, _ int32) bool { return start == 0 }) {
+		t.Fatal("a second domain right after an allowed one must still be detected")
+	}
+	for _, clean := range []string{"abc.community 是个单词", "版本 v1.top10 榜单"} {
+		if contains(clean, nil) {
+			t.Errorf("a suffix followed by letters or digits is not a domain: %q", clean)
+		}
+	}
+	if !contains("来abc.com", nil) || !contains("x1.cn。", nil) {
+		t.Fatal("plain domains at the end of the text or before punctuation must be detected")
+	}
+}
+
 func TestContainsAdRespectsAllowListCallback(t *testing.T) {
 	msg := "官网 https://safe.example.com"
 	elems, _ := textnorm.Fold(msg)

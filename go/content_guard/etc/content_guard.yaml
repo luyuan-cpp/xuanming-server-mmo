@@ -7,8 +7,11 @@ Name: content_guard.rpc
 ListenOn: 127.0.0.1:50250
 # 本机用 dev。不写 Mode 时 go-zero 取 pro,而 pro / pre 下 RequireLexicon 必须为 true(config.Validate)。
 Mode: dev
-# 判定是纯内存计算,正常在 1 毫秒内;1 秒只是兜底。
-Timeout: 1000
+# zrpc 服务端的超时(毫秒),到点就掐断处理函数。本地词库是纯内存计算,1 毫秒内;接了外部平台(Platform 段)时
+# 要等微信 / 抖音答复:名字类最长 Platform.SyncTimeoutMs(1500),世界频道异步补审最长 Platform.AsyncTimeoutMs(2500),
+# 再加查渠道身份的 Platform.LookupTimeoutMs(150)。所以取 3000;小于这几段之和时 config.Validate 拒启。
+# 调用方的时限(各服务 ContentGuard.Rpc.Timeout 3500、scene 的 CallDeadlineMs.ContentGuardNodeService)都要大于它。
+Timeout: 3000
 Etcd:
   Hosts:
     - 127.0.0.1:2379

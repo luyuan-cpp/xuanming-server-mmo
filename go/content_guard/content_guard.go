@@ -104,6 +104,10 @@ func main() {
 			if rpcErr != nil {
 				return platform.Identity{}, rpcErr
 			}
+			// 目录这一次没读成(Retry):不能当成「这名玩家没有渠道身份」,那会把平台审核悄悄跳过。
+			if resp.GetRetry() {
+				return platform.Identity{}, fmt.Errorf("directory identity lookup signaled retry for player %d", playerID)
+			}
 			if !resp.GetFound() {
 				return platform.Identity{}, nil
 			}

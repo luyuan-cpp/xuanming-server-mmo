@@ -712,6 +712,19 @@ TEST(GameConfigControlRedis, ShippedYamlIsLocalStandalone)
     EXPECT_EQ(cfg.control_redis().seeds(0), "127.0.0.1:6379");
 }
 
+// 测试进程里多组用例对同一个对象重复加载(test_config_helper.h):种子不能越读越多。
+TEST(GameConfigControlRedis, ReadGameConfigTwiceDoesNotAccumulateSeeds)
+{
+    GameConfig cfg;
+    ClearEnvVar("CONTROL_REDIS_PASSWORD");
+    ASSERT_TRUE(readGameConfig("etc/game_config.yaml", cfg));
+    const int controlSeeds = cfg.control_redis().seeds_size();
+    const int playerSeeds = cfg.player_redis().seeds_size();
+    ASSERT_TRUE(readGameConfig("etc/game_config.yaml", cfg));
+    EXPECT_EQ(cfg.control_redis().seeds_size(), controlSeeds);
+    EXPECT_EQ(cfg.player_redis().seeds_size(), playerSeeds);
+}
+
 TEST(GameConfigControlRedis, MissingSectionFallsBackToLocalStandalone)
 {
     const auto path = WriteTempGameConfig("game_config_control_redis_missing.yaml", "");

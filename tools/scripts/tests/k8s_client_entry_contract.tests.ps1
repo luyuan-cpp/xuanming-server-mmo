@@ -707,6 +707,33 @@ Test-Case '库:连接准入覆盖变量 —— 「名字=值」按契约名单�
     }
 }
 
+Test-Case '库:主容器 resources.requests —— PodCommon 给了才写,紧跟 imagePullPolicy、只有 requests 没有 limits,三个生成器都写;形状不对在渲染时 throw' {
+    # gate 准入设计 P1-5:主容器没有自己的 memory request 时 kubelet 按 0 算 oom_score_adj(999 / 1000),节点内存紧张时整台在线玩家最先被杀。
+    # 取值在 k8s_deploy.ps1 Get-CppNodeResourceRequests(那边的契约测试核分档);这里只核渲染。
+    $commonArgs = @{ Image = $NodeImageRef; ImagePullPolicy = 'IfNotPresent'; LogVolumeSizeLimit = '2Gi' }
+    $plain = New-ClientEntryPodCommon @commonArgs
+    $withRequests = New-ClientEntryPodCommon @commonArgs -ResourceRequests ([ordered]@{ Cpu = '1'; Memory = '512Mi' })
+    $renderers = @(
+        @{ Name = 'gate StatefulSet'; Indent = '          '; Render = { param($pc) New-GateStatefulSetYaml -PodCommon $pc -Plan $LibNodePortPlan -RpcPort 18000 -StartCommand './gate' -ConfigMapName 'node-config' -GateRouterMode '1' -InternalAuthPublicKeys $LibInternalAuthPublicKeys } }
+        @{ Name = 'battle Fleet'; Indent = '              '; Render = { param($pc) New-BattleFleetYaml -PodCommon $pc -Replicas 2 -RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' -ClientEntryMode podip -Health $LibFleetHealth -BuildLabel '0123456789ab' } }
+        @{ Name = 'battle hostPort'; Indent = '          '; Render = { param($pc) New-BattleHostPortDeploymentYaml -PodCommon $pc -Replicas 1 -RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' } }
+    )
+    foreach ($r in $renderers) {
+        $plainDoc = ConvertTo-LfText (& $r.Render $plain)
+        $doc = ConvertTo-LfText (& $r.Render $withRequests)
+        Assert-NotMatch -Text $plainDoc -Pattern '(?m)^[ ]+resources:' -Because "$($r.Name):不传时不写(生成物与引入前逐字相同)"
+        $block = "`n$($r.Indent)resources:`n$($r.Indent)  requests:`n$($r.Indent)    cpu: 1`n$($r.Indent)    memory: 512Mi"
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($doc, [regex]::Escape("imagePullPolicy: IfNotPresent$block`n$($r.Indent)workingDir: /app/bin")).Count) -Because "$($r.Name):主容器紧跟 imagePullPolicy 写一份,段里只有 requests"
+        Assert-True -Condition ($doc.Replace($block, '') -ceq $plainDoc) -Because "$($r.Name):除了这一段,生成物与不传时逐字相同"
+        Assert-NotMatch -Text $doc -Pattern 'limits:' -Because "$($r.Name):不配 limits(memory limit 要先按设计稿 §9.5 实测「连接上限 × 每连接高水位」)"
+    }
+    foreach ($bad in @(@{ Cpu = '0'; Memory = '512Mi' }, @{ Cpu = '1.5'; Memory = '512Mi' }, @{ Cpu = '1'; Memory = '512M' }, @{ Cpu = ''; Memory = '1Gi' }, @{ Cpu = '1'; Memory = '' })) {
+        $err = $null
+        try { New-BattleHostPortDeploymentYaml -PodCommon (New-ClientEntryPodCommon @commonArgs -ResourceRequests $bad) -Replicas 1 -RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config' | Out-Null } catch { $err = $_.Exception.Message }
+        Assert-Match -Text $err -Pattern 'PodCommon\.ResourceRequests needs Cpu' -Because "cpu='$($bad.Cpu)' memory='$($bad.Memory)':渲染时 throw,不渲染出 apply 才报错的清单"
+    }
+}
+
 Test-Case '库:-SecretEnv 渲染成 secretKeyRef(optional: false)、接在公共 env 之后,三个生成器都写;不给或空列表时逐字不变;名字非法、缺键、重名在打包时 throw' {
     # k8s_deploy.ps1 经 -SecretEnv 传 gate / battle 的工作负载密钥(Get-CppNodeWorkloadSecretEnvEntries,如 Secret gate-token 的 MMORPG_GATE_TOKEN_SECRET):
     # 密钥只在 Secret 里,不进 battle-node-config / node-config。optional: false 让 Secret 缺失的 Pod 停在 CreateContainerConfigError,不带空值起来。

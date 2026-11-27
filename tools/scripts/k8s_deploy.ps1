@@ -18334,4 +18334,11 @@ switch ($Command) {
 		Show-InfraStatus
 		$zonesPath = Resolve-ZonesConfigPath
 		$zones = Get-ZonesFromJson -Path $zonesPath
-		foreach ($zone in 
+		foreach ($zone in $zones) {
+			Show-ZoneStatus -CurrentZoneName $zone.name
+		}
+	}
+	default {
+		throw "Unsupported command: $Command"
+	}
+}

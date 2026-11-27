@@ -24,6 +24,10 @@ const (
 
 // WeChatAdapter 封装微信小游戏内容安全接口 msgSecCheck v2。
 // AppSecret 仅由进程启动期从环境变量读入内存,不进配置和日志。
+//
+// 调用凭据用「稳定版」接口(/cgi-bin/stable_token)取:普通模式下有效期内重复调用拿到的是同一个凭据,不会让别的副本手里的
+// 凭据失效。老接口(/cgi-bin/token)每取一次就让上一个凭据在几分钟后失效,本服务多副本各取各的会互相挤掉,
+// 副本越多越频繁,还会撞上每天的取用次数上限。稳定版把 AppSecret 放在请求体里,不进 URL。
 type WeChatAdapter struct {
 	appID     string
 	appSecret string
@@ -62,15 +66,22 @@ func (w *WeChatAdapter) accessToken(ctx context.Context) (string, error) {
 	}
 	w.mu.Unlock()
 
-	endpoint := fmt.Sprintf("%s/cgi-bin/token?grant_type=client_credential&appid=%s&secret=%s",
-		w.baseURL, url.QueryEscape(w.appID), url.QueryEscape(w.appSecret))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	payload, err := json.Marshal(struct {
+		GrantType string `json:"grant_type"`
+		AppID     string `json:"appid"`
+		Secret    string `json:"secret"`
+	}{GrantType: "client_credential", AppID: w.appID, Secret: w.appSecret})
 	if err != nil {
 		return "", err
 	}
-	resp, err := w.client.Do(req)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.baseURL+"/cgi-bin/stable_token", bytes.NewReader(payload))
 	if err != nil {
 		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := w.client.Do(req)
+	if err != nil {
+		return "", withoutURL(err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -180,7 +191,8 @@ func (w *WeChatAdapter) Check(ctx context.Context, scene cgpb.TextScene, openID,
 
 		resp, err := w.client.Do(req)
 		if err != nil {
-			logx.Errorf("[content_guard/wechat] msg_sec_check request failed: %v", err)
+			// 这个 URL 的查询串里带着调用凭据:只记去掉 URL 之后的原因。
+			logx.Errorf("[content_guard/wechat] msg_sec_check request failed: %v", withoutURL(err))
 			return ReviewResult{Outcome: OutcomeUnavailable, Provider: ProviderWeChat}
 		}
 		if resp.StatusCode != http.StatusOK {

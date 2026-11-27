@@ -130,6 +130,8 @@ type adminSide interface {
 	TablesWithoutPrimaryKey(ctx context.Context, schema string) ([]string, error)
 	// TablesWithTTLEnabled 列这个库里 TTL 开着的表(TiDB 的表属性 TTL_ENABLE='ON')。MySQL 没有这个属性,回空。
 	TablesWithTTLEnabled(ctx context.Context, schema string) ([]string, error)
+	// TablesWithRunningTTLJob 列这个库里还有 TTL 任务在跑的表:关掉 TTL 属性不会让已经开始的任务停下。MySQL 回空。
+	TablesWithRunningTTLJob(ctx context.Context, schema string) ([]string, error)
 	CreateSchema(ctx context.Context, schema, charset, collation string) error
 	DropSchema(ctx context.Context, schema string) error
 	AccountExists(ctx context.Context, principal string) (bool, error)
@@ -880,9 +882,9 @@ func (m *mover) checkProcessesKnowCluster(ctx context.Context, cluster string) e
 	return nil
 }
 
-// requireTTLOff 核两侧这个库的表都没有开着 TTL。TTL 任务是库自己发起的删除,不过闸门:源库冻结之后它照样删行,
+// requireTTLOff 核两侧这个库的表都没有开着 TTL,也没有 TTL 任务还在跑。TTL 任务是库自己发起的删除,不过闸门:源库冻结之后它照样删行,
 // 窗口里的静止比对、翻转之后的 audit(读冻结的源库的当前数据)都会因此对不上;目标上开着的话,两边各删各的。
-// 目标的 TTL 在 audit 通过之后由运维打开(手册 §4 第 8 步)。
+// 属性关掉之后已经开始的任务不会立刻停,所以两样都核。目标的 TTL 在 audit 通过之后由运维打开(手册 §4 第 8 步)。
 func (m *mover) requireTTLOff(ctx context.Context) error {
 	for _, side := range []struct {
 		role  string
@@ -895,6 +897,14 @@ func (m *mover) requireTTLOff(ctx context.Context) error {
 		if len(tables) != 0 {
 			return refusedf("these tables of %s have TTL enabled on the %s: %s. TTL jobs delete rows without passing the gate, so the frozen source and the target would stop matching (the comparison inside the window, and audit afterwards). Nothing was changed: run ALTER TABLE ... TTL_ENABLE='OFF' on each, wait until no TTL job is running on them, then re-run cutover, see docs/ops/db-move-runbook.md §4 step 5",
 				m.o.db, side.role, strings.Join(tables, ", "))
+		}
+		running, err := side.admin.TablesWithRunningTTLJob(ctx, m.o.db)
+		if err != nil {
+			return refusedf("cannot tell whether a TTL job is still running on the %s, nothing was changed: %v", side.role, err)
+		}
+		if len(running) != 0 {
+			return refusedf("a TTL job is still running on these tables of %s on the %s: %s. Turning TTL off does not stop a job that already started, and it deletes rows without passing the gate. Nothing was changed: wait until it ends (current_job_id in mysql.tidb_ttl_table_status becomes NULL), then re-run cutover, see docs/ops/db-move-runbook.md §4 step 5",
+				m.o.db, side.role, strings.Join(running, ", "))
 		}
 	}
 	return nil

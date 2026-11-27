@@ -103,6 +103,10 @@ services:
       # Required local-only shared secret for the dev-gated robot_ password
       # provider. Compose fails before startup when the host did not inject it.
       - LOGIN_DEV_PASSWORD_SHARED_SECRET=${LOGIN_DEV_PASSWORD_SHARED_SECRET:?set LOGIN_DEV_PASSWORD_SHARED_SECRET}
+      # NPPA real-name secretKey. login reads it only when login.yaml sets
+      # AntiAddiction.Enabled: true (docs/ops/wechat-qq-sandbox-runbook.md §J);
+      # empty is fine while anti-addiction stays off.
+      - MMORPG_LOGIN_NPPA_SECRET_KEY=${MMORPG_LOGIN_NPPA_SECRET_KEY:-}
       - MMORPG_SQL_WRITER_GRANT_FILE=/run/sql-writer/grant.json
       - MMORPG_SQL_WRITER_GRANT_SHA256=${LOGIN_SQL_WRITER_GRANT_SHA256:?set verified grant sha256}
       - MMORPG_SQL_WRITER_CONSUME_DIR=/run/sql-writer/consume

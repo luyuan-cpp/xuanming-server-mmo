@@ -14,7 +14,10 @@ package platform
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -328,4 +331,14 @@ func (r *Router) resolveAdapter(ctx context.Context, playerID uint64, account st
 
 func newDefaultHTTPClient() *http.Client {
 	return &http.Client{Timeout: 5 * time.Second}
+}
+
+// withoutURL 去掉 net/http 请求错误里的 URL,只留操作和原因。http.Client 的错误是 *url.Error,它的文本带着完整的请求 URL;
+// 平台接口把调用凭据放在查询串里(微信的 access_token),原样打进日志就是把凭据写进了日志。
+func withoutURL(err error) error {
+	var requestErr *url.Error
+	if errors.As(err, &requestErr) {
+		return fmt.Errorf("%s: %w", requestErr.Op, requestErr.Err)
+	}
+	return err
 }

@@ -123,7 +123,17 @@ public:
 	static constexpr double kPollIntervalSeconds = 2.0;
 	static constexpr std::chrono::minutes kRetainDuration{10};
 
-	explicit TableBundleManager(muduo::net::EventLoop &loop);
+	// 时间来源可注入:留空的一项用系统时钟。单测注入假时钟,配合 PollOnce 推进,不用 sleep。
+	//   - wallUnixMs:判 activate_at_ms 到没到点,也是 STATUS.json 的时间戳;
+	//   - steadyNow:判旧 TableSet 的 10 分钟保留期过没过。
+	// 准备耗时、单片耗时这类指标不走这里,它们量的是主循环真实被占用的时间。
+	struct Clock
+	{
+		std::function<uint64_t()> wallUnixMs;
+		std::function<std::chrono::steady_clock::time_point()> steadyNow;
+	};
+
+	explicit TableBundleManager(muduo::net::EventLoop &loop, Clock clock = {});
 
 	// 进程级节点钩子注册:须在 Node 构造之前(ApplyPreConstructionHooks)完成。
 	static void SetProcessHooks(Hooks hooks);
@@ -138,7 +148,7 @@ public:
 	// 供 /metrics 采集回调写出 §11 全部五组表热更指标。
 	void WriteMetrics(prometheus_text::Writer &writer) const;
 
-	// 供单测直接驱动单拍轮询与时间推进(不依赖真实时钟)。
+	// 轮询一拍。生产由 2 秒定时器按 wallUnixMs 调用;单测直接调,nowMs 与注入的 wallUnixMs 取同一个值。
 	void PollOnce(uint64_t nowMs);
 
 private:
@@ -175,6 +185,8 @@ private:
 						 uint64_t nowMs);
 
 	std::reference_wrapper<muduo::net::EventLoop> eventLoop;
+	// 构造时已把留空的项补成系统时钟,之后两项都可以直接调用。
+	Clock timeSource;
 	TimerTaskComp pollTimer;
 	bool stopped = false;
 	bool bundleMode = false;

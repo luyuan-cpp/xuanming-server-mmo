@@ -317,6 +317,11 @@ pwsh -File tools/scripts/artifacts_retention.ps1 -KeepLast 10
 - Do not treat `LoadBalancer` as the universal default. If the cluster does not have a mature, production-grade LB implementation, `NodePort` plus an external L4 balancer is usually the more stable choice.
 - Internal-only services should stay inside the cluster and do not need external exposure.
 - Stability baseline per zone: `centre=1`, `gate=2`, `scene=4`.
+- C++ 节点主容器的 `resources.requests`(2026-11-26,未运行;gate 准入设计 P1-5,一张表在 `k8s_deploy.ps1` 的 `Get-CppNodeResourceRequests`):
+  - staging / prod:gate、battle 每个 `1` 核 / `512Mi`,scene 每个 `1` 核 / `1Gi`。按上面的基线,一个 zone 的调度请求是 6 核 / 5Gi,另加 battle 池每台 1 核 / 512Mi。
+  - dev:`100m` / `128Mi`(scene `256Mi`),只为让主容器有自己的 request,kind 这类单节点集群放得下。
+  - 都不配 limits:cpu limit 的 CFS 限流会打出单线程 loop 的毛刺;memory limit 要先实测「连接上限 × 每连接输出缓冲高水位」。节点池按 requests 规划,
+    请求放不下时 Pod 停在 Pending,不会挤占已在跑的节点。
 - 日志采集的常驻开销(默认开着 sidecar 时要算进容量):
   - 每个 C++ Pod 多一个 sidecar 容器,`requests` `20m` / `64Mi`、`limits` `256Mi`。按上面那条基线,一个 zone 是 `gate=2` + `scene=4` 共 6 份,再加不分 zone 的 battle 池。
     - "6 份"只对**默认编排 + legacy 单 scene 池**成立(`-SceneOrchestrator deployment` + `-SceneReplicas`)。`-SceneOrchestrator agones` 下 scene 那部分按 **Fleet 当前副本数**算(开了 `-AgonesAutoscale` 还会随房间容量上下浮动,不是一个固定数);scene 角色拆分档(`-SceneWorldReplicas` / `-SceneInstanceReplicas`,见 `docs/ops/scene-node-role-split.md`)会把 scene 拆成 `scene-world` + `scene-instance` 两个池,份数按两池之和算。

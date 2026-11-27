@@ -54,8 +54,11 @@ var channelCues = []cueDef{
 	{"咸鱼", cueTrade},
 }
 
-// domainSuffixes 是最常见的外链广告顶级域名;要求前面是点号且紧接域名边界,减少自然英文误伤。
-var domainSuffixRe = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])([a-z0-9-]{2,}\.(?:com|cn|net|org|xyz|top|vip|cc|tv|me|gg|io|club|shop|work|site))(?:$|[^a-z0-9])`)
+// domainRe 是最常见的外链广告域名:一段字母数字加点号加常见顶级域。域名后面的边界(不能紧跟字母数字,否则是 abc.community
+// 这种普通单词)在 hasUnallowedDomain 里判,不写进正则:Go 的正则没有零宽断言,边界字符写进去会被这一个匹配吃掉,
+// 紧挨着的第二个域名就匹配不到了,白名单要比对的范围也会多出前后各一个字。
+// 前面的边界不用判:这一段字符类已经包含全部字母数字,最左匹配必然从这一段的开头起。
+var domainRe = regexp.MustCompile(`(?i)[a-z0-9-]{2,}\.(?:com|cn|net|org|xyz|top|vip|cc|tv|me|gg|io|club|shop|work|site)`)
 var urlSchemeRe = regexp.MustCompile(`(?i)(?:https?://|www\.)[a-z0-9.-]+`)
 
 // cnDigitMap 把渠道线索词之后常见的汉字数字与语音谐音折回阿拉伯数字。
@@ -80,7 +83,7 @@ func ContainsAd(text string, elems []textnorm.Elem, allowCheck func(startOrig, e
 	if hasUnallowedRegexMatch(urlSchemeRe, text, allowCheck) {
 		return true
 	}
-	if hasUnallowedRegexMatch(domainSuffixRe, text, allowCheck) {
+	if hasUnallowedDomain(text, allowCheck) {
 		return true
 	}
 
@@ -112,6 +115,24 @@ func hasUnallowedRegexMatch(re *regexp.Regexp, orig string, allowCheck func(int3
 		return true
 	}
 	for _, loc := range locs {
+		startRune := int32(len([]rune(orig[:loc[0]])))
+		endRune := int32(len([]rune(orig[:loc[1]])) - 1)
+		if !allowCheck(startRune, endRune) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasUnallowedDomain 报告原文里有没有不在白名单里的域名。白名单比对的范围恰好是域名本身(按字符下标,两端都含)。
+func hasUnallowedDomain(orig string, allowCheck func(int32, int32) bool) bool {
+	for _, loc := range domainRe.FindAllStringIndex(orig, -1) {
+		if loc[1] < len(orig) && textnorm.IsASCIIAlnum(rune(orig[loc[1]])) {
+			continue
+		}
+		if allowCheck == nil {
+			return true
+		}
 		startRune := int32(len([]rune(orig[:loc[0]])))
 		endRune := int32(len([]rune(orig[:loc[1]])) - 1)
 		if !allowCheck(startRune, endRune) {

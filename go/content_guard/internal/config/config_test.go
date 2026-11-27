@@ -48,6 +48,16 @@ func TestValidateRejections(t *testing.T) {
 		"stat content not ignored":  func(c *Config) { c.Middlewares.StatConf.IgnoreContentMethods = nil },
 		"platform method unignored": func(c *Config) { c.Middlewares.StatConf.IgnoreContentMethods = []string{CheckTextFullMethod} },
 		"invalid async timeout":     func(c *Config) { c.Platform.AsyncTimeoutMs = 10001 },
+		// 接了平台却没配目录连接:每次平台审核都会被悄悄跳过。
+		"platform without directory": func(c *Config) {
+			c.Platform.WeChat = MiniGamePlatformConf{AppID: "wx-app", AppSecretEnv: "WX_SECRET"}
+			c.DataServiceRpc.Etcd.Key = ""
+		},
+		// 服务端超时盖不住最长的一段平台调用。
+		"server timeout below platform budget": func(c *Config) {
+			c.Platform.Douyin = MiniGamePlatformConf{AppID: "dy-app", AppSecretEnv: "DY_SECRET"}
+			c.Timeout = 2000
+		},
 	}
 	for name, mutate := range cases {
 		c := loadShipped(t)
@@ -64,6 +74,14 @@ func TestValidateAcceptedVariants(t *testing.T) {
 		"custom prefix":         func(c *Config) { c.LexiconPrefix = "/staging/content_guard/lexicon/" },
 		"stat disabled":         func(c *Config) { c.Middlewares.Stat = false; c.Middlewares.StatConf.IgnoreContentMethods = nil },
 		"metrics port disabled": func(c *Config) { c.MetricsListenAddr = "" },
+		// 随服务提交的超时(3000)要盖得住缺省的平台时限,接上平台不用再改它。
+		"platform with shipped timeouts": func(c *Config) {
+			c.Platform.WeChat = MiniGamePlatformConf{AppID: "wx-app", AppSecretEnv: "WX_SECRET"}
+		},
+		"no server timeout": func(c *Config) {
+			c.Platform.WeChat = MiniGamePlatformConf{AppID: "wx-app", AppSecretEnv: "WX_SECRET"}
+			c.Timeout = 0
+		},
 	}
 	for name, mutate := range cases {
 		c := loadShipped(t)

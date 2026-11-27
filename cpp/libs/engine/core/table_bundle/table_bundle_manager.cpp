@@ -566,9 +566,18 @@ std::optional<int> RunValidateTablesCli(int argc,
 	return 0;
 }
 
-TableBundleManager::TableBundleManager(muduo::net::EventLoop &loop)
-	: eventLoop(loop)
+TableBundleManager::TableBundleManager(muduo::net::EventLoop &loop, Clock clock)
+	: eventLoop(loop), timeSource(std::move(clock))
 {
+	if (!timeSource.wallUnixMs)
+	{
+		timeSource.wallUnixMs = &TableBundleManager::NowUnixMs;
+	}
+	if (!timeSource.steadyNow)
+	{
+		timeSource.steadyNow = []
+		{ return std::chrono::steady_clock::now(); };
+	}
 }
 
 void TableBundleManager::SetProcessHooks(Hooks hooks)
@@ -622,7 +631,7 @@ void TableBundleManager::LoadAtStartup(const std::string &imageConfigDir, const 
 		}
 		if (initialLine)
 		{
-			const uint64_t nowMs = NowUnixMs();
+			const uint64_t nowMs = timeSource.wallUnixMs();
 			std::optional<PointerTarget> effective;
 			if (initialLine->next && (initialLine->next->immediate || nowMs >= initialLine->next->activateAtMs))
 			{
@@ -704,7 +713,7 @@ void TableBundleManager::LoadAtStartup(const std::string &imageConfigDir, const 
 		onCommitted(CurrentTableSet());
 	}
 
-	WriteStatusFile(NowUnixMs());
+	WriteStatusFile(timeSource.wallUnixMs());
 
 	if (bundleMode)
 	{
@@ -713,11 +722,11 @@ void TableBundleManager::LoadAtStartup(const std::string &imageConfigDir, const 
 							{
 								if (const auto self = weakSelf.lock())
 								{
-									self->PollOnce(NowUnixMs());
+									self->PollOnce(self->timeSource.wallUnixMs());
 								}
 							});
 		// 启动时指针里已有未到点的 next,立即触发首拍准备(不白等 2 秒)。
-		PollOnce(NowUnixMs());
+		PollOnce(timeSource.wallUnixMs());
 	}
 }
 
@@ -736,7 +745,7 @@ void TableBundleManager::PollOnce(const uint64_t nowMs)
 		return;
 	}
 
-	ReapRetired(std::chrono::steady_clock::now());
+	ReapRetired(timeSource.steadyNow());
 
 	const std::string pointerPath = (std::filesystem::path(bundleRoot) / kPointerFilename).string();
 	std::optional<PointerLine> line;
@@ -925,7 +934,7 @@ void TableBundleManager::RunOnePrepareSlice(const uint64_t generation)
 	{
 		const PointerTarget failedTarget = staging->target;
 		staging.reset();
-		RejectCandidate(failedTarget, "rejected", "table parse failed: " + err, false, NowUnixMs());
+		RejectCandidate(failedTarget, "rejected", "table parse failed: " + err, false, timeSource.wallUnixMs());
 		return;
 	}
 
@@ -955,7 +964,7 @@ void TableBundleManager::FinishPrepare(const uint64_t generation)
 		{
 			const PointerTarget failedTarget = staging->target;
 			staging.reset();
-			RejectCandidate(failedTarget, "rejected", "validation failed: " + err, false, NowUnixMs());
+			RejectCandidate(failedTarget, "rejected", "validation failed: " + err, false, timeSource.wallUnixMs());
 			return;
 		}
 	}
@@ -965,7 +974,7 @@ void TableBundleManager::FinishPrepare(const uint64_t generation)
 	lastMaxSliceSeconds = staging->maxSliceSeconds;
 	staging->prepared = true;
 
-	const uint64_t nowMs = NowUnixMs();
+	const uint64_t nowMs = timeSource.wallUnixMs();
 	LOG_INFO << "Table hot-reload prepared: schema_digest=" << std::string(kTableSchemaDigest)
 			 << " content_digest=" << staging->target.contentDigest
 			 << " version=" << staging->target.version
@@ -1000,7 +1009,7 @@ void TableBundleManager::CommitStaged(const uint64_t nowMs)
 	{
 		retiredSets.push_back(RetiredEntry{
 			std::move(previous),
-			std::chrono::steady_clock::now() + kRetainDuration,
+			timeSource.steadyNow() + kRetainDuration,
 		});
 	}
 

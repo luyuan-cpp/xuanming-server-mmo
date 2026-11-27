@@ -209,6 +209,22 @@ AuthProviders:
     ClientId: "xuanming-game-client"
     Endpoint: "http://sandbox-mock:18090"
 
+# 实名认证与未成年人防沉迷(docs/design/real-name-anti-addiction.md §5.8)。三个地址指向 sandbox-mock 里的国家系统 mock
+# (go/login/cmd/sandbox_mock/nppa.go),路径与真系统相同;cmd/sandbox_mock/nppa_test.go 钉住这一段。
+# 缺省关着:robot 与口令冒烟不带实名,开着会在 gate 的 Login 被要求先实名。
+# 要走实名链路时把 Enabled 改成 true,并给 login 容器注入 MMORPG_LOGIN_NPPA_SECRET_KEY(填 mock 的开发密钥;
+# docker-compose.login-stack.yml 照传这个变量),步骤见 docs/ops/wechat-qq-sandbox-runbook.md §J。
+AntiAddiction:
+  Enabled: false
+  PlatformManagedAuthTypes: ["wechat_minigame", "douyin_minigame"]
+  Nppa:
+    AppId: "sandbox-app"
+    BizId: "sandbox-biz"
+    SecretKeyEnv: "MMORPG_LOGIN_NPPA_SECRET_KEY"
+    CheckUrl: "http://sandbox-mock:18090/idcard/authentication/check"
+    QueryUrl: "http://sandbox-mock:18090/idcard/authentication/query"
+    LoginoutUrl: "http://sandbox-mock:18090/behavior/collection/loginout"
+
 Kafka:
   Brokers:
     - host.docker.internal:9092

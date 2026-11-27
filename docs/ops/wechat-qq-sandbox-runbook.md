@@ -656,6 +656,85 @@ curl -s -X POST http://127.0.0.1:8081/api/account/delete/cancel -H 'Content-Type
 # 期望 code:0、state:0;之后建角、进游戏照常。冷静期内不撤销直接进游戏:EnterGame 回 tip 2038
 ```
 
+## J. 国家防沉迷实名认证系统 mock(2026-11-26 起,已落码,未编译、未运行)
+
+设计见[实名认证与未成年人防沉迷](../design/real-name-anti-addiction.md)。只有自有渠道(口令、微信 / QQ App、Apple / Google 等)走这条链路;
+小游戏渠道由平台实名,login 不调国家接口。mock 在 `go/login/cmd/sandbox_mock/nppa.go`:实名认证、认证结果查询、上下线上报三个接口,
+路径与真系统相同,请求按规范验签、解密(与 login 的 `nppa` 包是同一份实现)。
+
+### J.1 打开
+
+`go/login/etc/login.yaml`(`Mode: dev`)加:
+
+```yaml
+AntiAddiction:
+  Enabled: true
+  PlatformManagedAuthTypes: [wechat_minigame, douyin_minigame]
+  Nppa:
+    AppId: "sandbox-app"
+    BizId: "sandbox-biz"
+    SecretKeyEnv: LOGIN_NPPA_SECRET_KEY
+    CheckUrl: "http://127.0.0.1:18090/idcard/authentication/check"
+    QueryUrl: "http://127.0.0.1:18090/idcard/authentication/query"
+    LoginoutUrl: "http://127.0.0.1:18090/behavior/collection/loginout"
+```
+
+启动 login 之前,在它的环境里设 `LOGIN_NPPA_SECRET_KEY=2836e95fcd10e04b0069bb1ee659955b`。这是技术规范 V1.9 里公开的样例密钥,
+mock 写死用它(`sandboxNppaSecretKey`),不是真密钥。两边不一致时每个请求都验签失败,实名提交回 `tip 2047`。
+
+linux 登录栈(docker)的 `deploy/login-stack.linux/login.yaml` 已经带这一段,地址指向 `sandbox-mock:18090`,缺省 `Enabled: false`。
+要用时改成 `true`,并在起 compose 的 shell 里 `export MMORPG_LOGIN_NPPA_SECRET_KEY=<上面那个样例密钥>`。
+缺省关着,是因为 robot 走口令登录、没有实名,开着会在 gate 的 Login 被拒(`tip 2042`)。
+
+重启 login,期望日志 `[anti-addiction] enabled: platform_managed_auth_types=[wechat_minigame douyin_minigame] ...`。
+
+### J.2 测试用的人
+
+mock 的结果只看提交的姓名和身份证号。地区码 999999 不存在,下面的号码不属于任何人;同一个号码每次得到同一个 pi。
+
+| 提交 | 结果 |
+|---|---|
+| `999999199001010016`(1990 年生) | 成年人,认证成功 |
+| `99999920120601001X`(2012 年生) | 未成年人,8–16 岁那一档 |
+| `99999920200601001X`(2020 年生) | 未满 8 岁,不能充值 |
+| 姓名里带「认证中」 | 认证中(`tip 2044`);再调一次 `/api/login`,login 去查询,拿到成功 |
+| 姓名里带「不匹配」 | 认证失败(`tip 2043`) |
+| 校验码不对的号码 | login 本地就拒(`tip 2043`),不会发到 mock |
+
+### J.3 端到端
+
+```bash
+# 1. 用自有渠道登录(这里是 §G 的微信 mock;口令登录同理):应答里 anti_addiction.real_name_required 为 true
+RESP=$(curl -s -X POST http://127.0.0.1:8081/api/login -H 'Content-Type: application/json' \
+  -d '{"zone_id":1,"auth_type":"wechat","auth_token":"Urealname1","device_id":"sandbox-1"}')
+ACCESS=$(echo "$RESP" | sed 's/.*"access_token":"\([^"]*\)".*/\1/')
+# 这时拿这个账号连 gate 发 Login:期望被拒,tip 2042
+
+# 2. 提交实名(成年人):期望 code:0,anti_addiction.real_name_required 为 false、minor 为 false
+curl -s -X POST http://127.0.0.1:8081/api/real-name -H 'Content-Type: application/json' \
+  -d "{\"zone_id\":1,\"access_token\":\"$ACCESS\",\"name\":\"张三\",\"id_number\":\"999999199001010016\"}"
+
+# 3. 用这个账号进游戏(客户端或 robot),再看 mock 收到的上下线:
+curl -s http://127.0.0.1:18090/mock/nppa/behaviors
+# 期望:进游戏后一两秒出现一条 bt=1;断开后一两秒出现 si 相同的一条 bt=0
+```
+
+- **robot**:robot 账号走口令登录,也是自有渠道。打开防沉迷之后,先对每个 robot 账号各做一次上面的第 1、2 步,再起 robot。
+- **未成年人**:换一个账号,用 `99999920120601001X` 实名。
+  - 不在周五到周日 20:00–21:00(北京时间)时:应答里 `minor` 为 true,gate 的 Login 回 `tip 2048`。
+  - 在时段内:应答带 `play_deadline_ms`(当天 21:00);20:59:55 前后 gate 给客户端发踢线(`tip 2049`),然后断开,mock 随即收到下线。
+  - `AntiAddiction.ExtraPlayDays` 加上当天日期只放开「哪一天」,钟点仍是 20:00–21:00。
+  - 再用这个账号在 payment 下一笔超过 50 元的单:期望被限额闸拒绝。
+- **认证中**:姓名带「认证中」提交,回 `tip 2044`;再调一次 `/api/login`,应答里 `real_name_required` 变成 false。
+- **重试**:停掉 mock 20 秒再启动。期望 login 日志出现 `[nppa] Loginout report failed, the batch is retried in 15s`,mock 回来后事件补发。
+  mock 重启会清空 `/mock/nppa/behaviors`,只看重启之后收到的。
+- **login 被强杀**:进游戏后立刻 `kill -9` login 再起一个。事件都在 Redis 的会话账本里,上线照样发出;断线通知丢了的会话,
+  在租约到期后由清扫补一条下线。
+- **指标**:`login_nppa_report_total{result="sent"}` 在涨;`login_anti_addiction_backstop_kick_total` 应当一直是 0,不是 0 说明有 gate 没在到点时断开未成年人。
+
+mock 像真系统一样只收发生时刻在 180 秒以内的上下线,超时的逐条拒收(login 记 `rejected`)。真系统的测试地址与测试用例由企业端后台给,
+拿到 appId / bizId / secretKey 之后把三个地址换过去即可(设计稿 §9)。
+
 ## 关联文档
 - [auth-provider-framework.md](../design/auth-provider-framework.md) §How to Add — 加新 provider 的 4 步骤(Apple Sign-in / Google Play Games 都按这个加)
 - [third-party-login-end-to-end-design.md](../design/third-party-login-end-to-end-design.md) — 完整设计 + UserBindings 表(账号合并未来要用)
@@ -663,6 +742,7 @@ curl -s -X POST http://127.0.0.1:8081/api/account/delete/cancel -H 'Content-Type
 - 代码: `go/login/internal/logic/pkg/auth/providers.go`(WeChatProvider / QQProvider)
 - 代码: `go/login/internal/logic/pkg/auth/minigame_providers.go`(WeChatMiniGameProvider / DouyinMiniGameProvider,§H)
 - 代码: `go/login/internal/logic/pkg/auth/idtoken.go`、`idtoken_providers.go`(Apple / Google 身份令牌校验,§I);mock 端在 `go/login/cmd/sandbox_mock/idtoken.go`
+- 代码: `go/login/internal/logic/pkg/nppa/`(国家防沉迷系统的客户端、会话账本与上报器,§J);mock 端在 `go/login/cmd/sandbox_mock/nppa.go`
 - 代码: `go/login/internal/svc/auth_init.go`(provider 注册)
 - 代码: `java/gateway_node/.../grpc/LoginRpcClient.java`(auth_type/auth_token wire 透传)
 - 部署: `tools/scripts/k8s_deploy.ps1`(`-LoginWeChatAppId` 等六个参数、`Assert-LoginAuthProviderClusterState` 防误关)
