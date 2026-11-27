@@ -74,9 +74,9 @@ enum class ClientRequestKind : uint8_t
 	kBatchDismantleSkillBooks = 25,   // SceneSkillClientPlayer.BatchDismantleSkillBooks:批量拆解未学常规书返还残页
 	// 26~28 已退役(2026-11-27):scene 的悬赏求书发榜 / 撤单 / 揭榜迁 trade 求购单,scene 不再记这三种请求。
 	// 值永久保留、不复用;上线前的开发库里残留的旧记录照常按容量挤出。
-	kRetiredPostWantedOrder = 26,
-	kRetiredCancelWantedOrder = 27,
-	kRetiredFulfillWantedOrder = 28,
+	kRetiredWantedOrderPost = 26,
+	kRetiredWantedOrderCancel = 27,
+	kRetiredWantedOrderFulfill = 28,
 	kClearJianghuDefeatMark = 29,     // SceneJianghuClientPlayer.ClearJianghuDefeatMark:银两或清风洗尘符幂等清除30分钟战败印记
 	kRentSkillLoadoutSlots = 30,      // SceneSkillClientPlayer.RentSkillLoadoutSlots:7套非永久流派方案槽位按月灵石租用/扩容/续期
 	kCount

@@ -32,6 +32,11 @@ class ProcessClientPlayerMessageResponse;
 class RpcStatus;
 struct SessionInfo;
 
+namespace prometheus_text
+{
+class Writer;
+}
+
 namespace gate_scene_lane
 {
 
@@ -100,7 +105,8 @@ void OnSessionRedirected(SessionId sessionId, SessionInfo &session);
 //   3. 每 30s 打一行 [scene_lane] 汇总。
 void Tick(SteadyTime now);
 
-// 只用于每 30s 一行的 [scene_lane] 汇总日志(gate 没有 Prometheus 出口)。不按会话、玩家或消息号分维度(AGENTS.md §9)。
+// 两个读者读同一份计数:每 30s 一行的 [scene_lane] 汇总日志,与 /metrics 的 gate_scene_lane_*(CollectMetrics,2026-11-27 起;
+// event 标签与汇总行同一份 key)。不按会话、玩家或消息号分维度(AGENTS.md §9)。
 // 对账:
 //   - admitted 的请求最终恰好落进 replied / failed / no_content / dropped_uncorrelated / expired_in_queue / expired_on_hold /
 //     no_scene / dropped_on_redirect / inflight_lost 之一,或仍在排队 / 在途,或随会话关闭消失;
@@ -136,6 +142,17 @@ const SceneLaneCounters &GetCounters();
 // 队头在等重投的会话数、在途索引里的调用数(汇总日志与单测用)。
 std::size_t HoldingSessionCount();
 std::size_t InFlightCount();
+
+// 把上面的计数写成 Prometheus 指标(metrics/metrics_registry.h 的采集回调):
+//   gate_scene_lane_events_total{event}   counter,event 取 [scene_lane] 汇总行的计数 key(admitted / sent / replied / ...)
+//   gate_scene_lane_in_flight             gauge,已发出、还没完成的 scene 调用
+//   gate_scene_lane_expiry_heap_entries   gauge,截止时刻堆的条目(含已完成的陈旧项,应贴近 in_flight)
+//   gate_scene_lane_holding_sessions      gauge,队头在等重投的会话数
+//   gate_scene_lane_max_depth_seen        gauge,单个会话 lane 的最大队长(进程启动以来)
+// 每项进程一启动就以 0 导出。在 /metrics 出口所在的 gate 主 loop 上执行,读的就是本线程的计数。
+void CollectMetrics(prometheus_text::Writer &writer);
+// gate 启动时调一次,把 CollectMetrics 登记进进程的指标注册表;重复登记只记一行 ERROR。
+void RegisterMetrics();
 
 // 只给单测用:清空计数、在途索引与等重投登记表,摘掉注入的发送函数。调用序号的发号器不回退。
 void ResetForTesting();

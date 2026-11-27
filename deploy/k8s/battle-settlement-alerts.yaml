@@ -1,0 +1,132 @@
+# 战斗结算收尾的告警:battle 节点上 SQL 终局迟迟没有决定的房间,scene 节点上冻结到期续冻到上限、道具预留与普通生死状待退银两超期。
+#
+# 2026-11-27 起由原来的 LogQL 值班固定查询改成 PromQL 规则(deploy/k8s/asset-channel-alerts.yaml 文件头原有的四条:
+# battle_personal_settlement_staging_exhausted_rooms / battle_freeze_hold_cap_reached / battle_item_hold_overdue /
+# jianghu_duel_fee_overdue)。原因:那四个信号已经导出成指标,而 Loki ruler 还没接线,固定查询不会自己响;
+# 改成 PromQL 就由 Prometheus 直接评估。日志行保留不动:它们带 battle_id / player_id,是按局排查的入口(下面各条 description 写了怎么查),
+# 但不再各自作为告警。
+#
+# 指标由 C++ 节点的 Prometheus 出口导出(环境变量 MMORPG_METRICS_PORT,k8s_deploy.ps1 -CppMetricsPort 缺省 9400,
+# 抓取注解随 Pod 模板渲染;battle 的 Agones Fleet 与 hostPort Deployment 两种形态都开):
+#   battle_sql_outcome_stuck_rooms          gauge,battle 节点上 SQL 终局迟迟没有决定的房间(抓取时按房间表现数,与 60s 一行的
+#                                           metric=battle_personal_settlement_staging_exhausted_rooms 的 sql_unconfirmed 同一判据);
+#                                           定义在 cpp/nodes/battle/logic/battle_room_manager.cpp 的 BattleRoomManager::CollectMetrics。
+#                                           同一采集回调另导出 battle_rooms(本节点房间总数,即提醒行的 node_rooms)
+#   scene_battle_freeze_events_total{event} counter,scene 节点上冻结 reaper 的事件,event 取 battle_freeze_hold::kFreezeHoldEventNames
+#                                           (cpp/libs/services/scene/battle/system/battle_freeze_hold_rules.h);每次计数与一条同名结构化日志同一处,
+#                                           定义在 cpp/libs/services/scene/battle/system/player_battle.cpp 的 WriteBattleFreezeMetrics
+# 计数进程一启动就以 0 导出。但新起的 scene 可能在第一次被抓取之前就计了数(例如玩家加载时带着早已超期的预留,reaper 第一拍就报),
+# 首个样本已经不是 0,increase() 看不到这一跳:scene 组的规则另带一支「新序列」(X unless X offset 10m,与
+# persist-version-skew-alerts.yaml 同一写法)。
+# 规则引用的指标名与 event 取值由 tools/scripts/tests/battle_settlement_alerts_contract.tests.ps1 对照 C++ 源码钉住。
+#
+# Install as a PrometheusRule CR (kube-prometheus stack),与其余告警文件同法:
+#   kubectl apply -n observability -f deploy/k8s/battle-settlement-alerts.yaml
+#
+# 口径(2026-11-27 定,不等压测):
+#   - 四个信号健康时都恒为 0,出现就报,不依赖基线;阈值与级别沿用原来的值班查询(stuck rooms critical,其余 warning)。
+#   - battle 是全服一个池,按 (namespace, instance) 报:instance 就是要处置的那台 GameServer。
+#   - scene 按 namespace 聚合(一个 zone 一个 namespace);具体是哪名玩家、哪一局看同名日志。
+#
+# Severity conventions(与 scene-manager-alerts.yaml 相同):
+#   critical = pager, someone wakes up
+#   warning  = next-business-hours channel
+#   info     = dashboard annotation / trend signal
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: battle-settlement-alerts
+  labels:
+    app: battle
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: battle.settlement-rooms
+      interval: 30s
+      rules:
+        # SQL 终局迟迟没有决定的房间(原件无效、或越过了快速重放跨度)留在节点上,节点不会自然排空。
+        # 房间清掉之前一直会响;慢速重放满跨度仍无决定时房间自己会删(metric=battle_sql_outcome_abandoned),由 match 凭持久原件裁决。
+        - alert: BattleSqlOutcomeRoomsStuck
+          expr: |
+            max by (namespace, instance) (battle_sql_outcome_stuck_rooms) > 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }} 的 battle {{ $labels.instance }} 有 {{ $value | printf \"%.0f\" }} 个房间的 SQL 终局迟迟没有决定"
+            description: >-
+              这些房间不会自然消失,这台 battle 因此排不空。前因看这台 battle 日志里一次性的 metric=battle_sql_outcome_unconfirmed
+              (越过快速重放跨度)与 metric=battle_sql_outcome_source_invalid(终局原件生成失败);滞留的 battle_id 在每 60 秒一行的
+              metric=battle_personal_settlement_staging_exhausted_rooms 正文里。先查 match 是否可达、CommitBattleOutcome 为什么没有决定,
+              再分三步收尾,不要直接删 Pod(会把同节点上正在打的房间一起作废):
+              1. kubectl -n mmorpg-infra label gs <name> mmorpg.io/drain=true(进程 5 秒内读到,拒绝新房间);
+              2. 等同一 instance 的 battle_rooms 降到与 battle_sql_outcome_stuck_rooms 相等(其余房间已打完;单局时长上限见
+              go/match/internal/catalog 的 MaxBattleSeconds);
+              3. kubectl -n mmorpg-infra delete gs <name>,优雅停机由 AbortAllRooms 清房。
+              非 Agones 的 Deployment 形态没有排空标签,只能择低峰删 Pod,并接受同节点在打的房间被作废。
+            runbook_url: docs/design/cross-zone-matchmaking.md
+
+    - name: scene.battle-freeze
+      interval: 30s
+      rules:
+        # FIGHTING 冻结到期查 SQL 终局后续冻,续到上限(到期 + 15 分钟)仍没应用就照常解冻(只放开人,道具预留留着)。
+        - alert: SceneBattleFreezeHoldCapReached
+          expr: |
+            sum by (namespace) (increase(scene_battle_freeze_events_total{event="cap_reached"}[10m])) > 0
+            or
+            sum by (namespace) (
+              scene_battle_freeze_events_total{event="cap_reached"}
+              unless scene_battle_freeze_events_total{event="cap_reached"} offset 10m
+            ) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 scene 有战斗冻结续到上限仍没收到结算,已照常解冻"
+            description: >-
+              过去 10 分钟约 {{ $value | printf "%.0f" }} 次。要么 match 写了 COMPLETE 而收件箱一直没投到,要么有原件却迟迟没有终局
+              (match 不可用或 ABORT 补写滞后)。解冻只放开人:这一局带进战斗的道具仍被预留押着,结算再到照样从预留里扣。
+              scene 日志 metric=battle_freeze_hold_cap_reached 给出 player_id 与 battle_id,按 battle_id 核对 match_battle_completion 与收件箱。
+            runbook_url: docs/design/turn-battle-gap-closure.md
+
+        # 冻结已经不在,这一局带进战斗的道具还押在预留里,越过「复核时刻 + 15 分钟」仍没收尾(每局每 10 分钟计一次)。
+        - alert: SceneBattleItemHoldOverdue
+          expr: |
+            sum by (namespace) (increase(scene_battle_freeze_events_total{event="item_hold_overdue"}[10m])) > 0
+            or
+            sum by (namespace) (
+              scene_battle_freeze_events_total{event="item_hold_overdue"}
+              unless scene_battle_freeze_events_total{event="item_hold_overdue"} offset 10m
+            ) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 scene 有战斗道具预留超期没收尾"
+            description: >-
+              过去 10 分钟约 {{ $value | printf "%.0f" }} 局次。预留只在结算应用、或 SQL 终局是 ABORT / 没有可裁决原件时释放;COMPLETE、
+              终局未定、查不到都留着,没有上限,这段时间玩家转不走、用不掉押着的那几样道具(人照常能玩)。前因多是收件箱迟迟没投到或 match 不可用。
+              scene 日志 metric=battle_item_hold_overdue 给出 player_id 与 battle_id,按 battle_id 核对 match_battle_completion 与收件箱。
+            runbook_url: docs/ops/player-inbox-runbook.md
+
+        # 普通生死状预扣的银两越过「复核时刻 + 15 分钟」仍没退还、也没被结算消耗(每人每 10 分钟计一次)。
+        - alert: SceneJianghuDuelFeeOverdue
+          expr: |
+            sum by (namespace) (increase(scene_battle_freeze_events_total{event="duel_fee_overdue"}[10m])) > 0
+            or
+            sum by (namespace) (
+              scene_battle_freeze_events_total{event="duel_fee_overdue"}
+              unless scene_battle_freeze_events_total{event="duel_fee_overdue"} offset 10m
+            ) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 scene 有普通生死状预扣银两超期没收尾"
+            description: >-
+              过去 10 分钟约 {{ $value | printf "%.0f" }} 次。退还只在 SQL 终局是 ABORT / 没有可裁决原件时发生,COMPLETE 由结算消耗;
+              终局未定、match 不可用时一直留着(钱不丢,只是晚退),这段时间这名玩家开不了新的普通战书(金帖档不受影响)。
+              scene 日志 metric=jianghu_duel_fee_overdue 给出 player_id 与 battle_id,按 battle_id 核对 match_battle_completion。
+            runbook_url: docs/planning/battle-jianghu-grudge-duel-phase1-implementation-plan.md

@@ -57,6 +57,8 @@
 
 ## 4. 批 B:scene 退役旧揭榜 + 客户端切换(必须同一批,否则客户端调不存在的接口)
 
+> **2026-11-27 已完成(会话「悬赏求书批 B」,Opus 5.5;未编译、未运行)**:下面第 1~12 条全部改完,第 13 条的验证交 Gemini,顺序见设计稿 `docs/design/skill-book-wanted-order-trade-escrow.md` §11.2§11.2 末「Gemini 验证顺序(批 B)」。五项记录与逐文件改法在设计稿 `docs/design/skill-book-wanted-order-trade-escrow.md` §11.2「批 B 落码记录」。与本节原文不同的三处:①发榜之后按同一请求号重发发榜查结论,不用 `GetCommerceOrder`(托管悬赏与有人交书都是订单状态 3,分不清);②`CommerceClient` 不加三条调用,悬赏写操作留在 `SkillCraftClient`(它已有待确认写槽与恢复存储,`CommerceClient` 只在聚宝斋界面里按需创建);③`ClientRequestKind` 26~28 改名 `kRetiredWantedOrderPost` / `Cancel` / `Fulfill` 留值。另:工作区里别的会话已按改后的 proto 跑过一轮生成,`message_id.txt` 的四个墓碑与 `persist_schema_gen.txt` 的四行 `retired=` 已在,Gemini 重跑不会新增墓碑。下面原文留作对照。
+
 **服务端(C++ 与协议)**:
 1. `proto/scene/player_skill.proto`:删 `PostSkillBookWantedOrder`、`CancelSkillBookWantedOrder`、`ListSkillBookWantedOrders`、`FulfillSkillBookWantedOrder` 四条 RPC(message_id 560~563)及其请求 / 响应消息与 `SkillBookWantedOrderInfo`;`SkillCraftingStateSnapshot.my_wanted_orders = 23` 写 `reserved 23;`。生成器会把四个号自动转墓碑:一轮生成最多新转 4 条(`maxNewMessageTombstonesPerRun = 4`),正好卡线,**同一轮生成里不要再删别的 RPC**。
 2. `proto/common/component/player_craft_comp.proto`:`wanted_orders = 16`、`next_wanted_order_seq = 17` 写 `reserved`,删 `SkillBookWantedOrder` 消息。这是玩家存档字段:按混版本字段保护台账(`docs/design/mixed-version-persist-field-protection.md`),生成器会在 `proto/persist_schema_gen.txt` 写 `retired=` 行,diff 只许多退役行。
@@ -81,6 +83,8 @@
 
 ## 5. 文档收尾(每批做完同批写)
 
+> **2026-11-27 已写(批 B 会话)**:设计稿 §11.2 批 B 五项与文件头状态、§10 用例名;策划稿 §2.4 第 2 条、思想分析第 2 条与 §4 四行;第 4 轮交接单 §6.1 的 r2-craft#1 行;审计文档 §5.0 的 r2-craft#1 行;`docs/PROGRESS.md` 新条目;Java 仓 `PARITY.md` 那一节补「客户端已切」。
+
 - 设计稿 `docs/design/skill-book-wanted-order-trade-escrow.md`:§11.2 改成批 C、B 的实施记录(五项:问题、方案、为什么这样选、被否决的做法、代价与边界);文件头状态改成实际状态。
 - 策划稿 `docs/planning/equipment-quality-and-skill-crafting-v2-v5.md` §2.4 / §4:同步体验变化(成交后发榜人收到背包里的封卷道籍;有托管中 / 交易中过渡态;悬赏榜全服可见;同一角色对同一张单最多试 3 次)。
 - 第 4 轮交接单 `docs/handoff/data-overwrite-audit-r2-round4-handoff-20261126.md` §6.1 的 r2-craft#1 行改成实际状态;审计文档 `docs/design/data-overwrite-rollback-audit-r2-20261019.md` §5.0 补 r2-craft#1 的最终状态。
@@ -88,6 +92,8 @@
 - Java 仓 `PARITY.md` 已有「2026-11-27 悬赏求书改走 trade 托管合同」一节(客户端契约变化与 Java 待做),批 B 落地后补一句「客户端已切、scene 560~563 已退役」。
 
 ## 6. 完成判据与收尾
+
+> **2026-11-27(批 B 会话)**:第 1 条满足(`grep -rn "FulfillWantedOrder\|wanted_orders" cpp/libs cpp/nodes` 无结果)、第 2 条满足、第 3 条的命令在 `docs/PROGRESS.md` 2026-11-27「悬赏求书批 B」条目。**第 4 条(删本文件)等 Gemini 按设计稿 §11.1 末与 §11.2 末两组命令跑绿之后再做**:在那之前本文件仍是验证入口,红了把首错原文交回 Claude 改。
 
 全部满足才算做完:
 1. 批 C、批 B 的服务端与客户端代码写完,§3、§4 逐条有「已完成」记录;scene 里不再有同帧改两名玩家的揭榜代码(`grep -rn "FulfillWantedOrder\|wanted_orders" cpp/libs cpp/nodes` 没有结果)。

@@ -31,6 +31,11 @@ class ClientRequest;
 class SessionDetails;
 struct SessionInfo;
 
+namespace prometheus_text
+{
+class Writer;
+}
+
 namespace google::protobuf
 {
 class Message;
@@ -128,7 +133,8 @@ void OnSessionClosing(SessionInfo &session);
 // 连接已释放时信封不发(SendEnvelope),计数照记。
 void OnSessionRedirected(SessionInfo &session);
 
-// 只用于每 30s 一行的 [lane] 汇总日志(gate 没有 Prometheus 出口)。不按会话、玩家或消息号分维度(AGENTS.md §9)。
+// 两个读者读同一份计数:每 30s 一行的 [lane] 汇总日志,与 /metrics 的 gate_router_lane_*(CollectMetrics,2026-11-27 起;
+// event 标签与汇总行同一份 key)。不按会话、玩家或消息号分维度(AGENTS.md §9)。
 // 一条被受理(admitted)的请求最终恰好落进下面一项:sent / expired_in_queue / rejected_not_logged_in /
 // rejected_stale_identity / rejected_before_send / no_router / call_not_built / dropped_on_close / dropped_on_redirect,
 // 或仍在排队;sent 之后再恰好落进 replied / failed / expired 之一,或随断线注销(late_dropped 计其迟到的完成)。
@@ -156,6 +162,16 @@ struct LaneCounters
 
 // 当前线程(gate 的 EventLoop)的累计计数。单测据此核对分支。
 const LaneCounters &GetCounters();
+
+// 把上面的计数写成 Prometheus 指标(metrics/metrics_registry.h 的采集回调):
+//   gate_router_lane_events_total{event}   counter,event 取 [lane] 汇总行的计数 key(admitted / sent / replied / ...)
+//   gate_router_lane_in_flight             gauge,已发出、还没完成的路由调用
+//   gate_router_lane_expiry_heap_entries   gauge,截止时刻堆的条目(含已完成的陈旧项,应贴近 in_flight)
+//   gate_router_lane_max_depth_seen        gauge,单个会话 lane 的最大队长(进程启动以来)
+// 每项进程一启动就以 0 导出。在 /metrics 出口所在的 gate 主 loop 上执行,读的就是本线程的计数。
+void CollectMetrics(prometheus_text::Writer &writer);
+// gate 启动时调一次,把 CollectMetrics 登记进进程的指标注册表;重复登记只记一行 ERROR。
+void RegisterMetrics();
 
 // 只给单测用:清空在途索引与计数,摘掉注入的发送函数与发出钩子。调用序号与会话代次的发号器不回退。
 void ResetForTesting();

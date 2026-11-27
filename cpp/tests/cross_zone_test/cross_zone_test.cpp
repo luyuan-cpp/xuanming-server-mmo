@@ -1873,9 +1873,10 @@ TEST(ConnectionLostHoldAfkPassEcs, HoldAndHostingCountersAreExportedAsMetrics)
         WritePlayerExitMetrics(writer);
         AfkHostingSystem::WriteMetrics(writer);
         EXPECT_EQ(writer.DroppedSamples(), 0u);
+        // 样本行在行首;# HELP 行里也出现无标签的族名,按 "\n族名 " 找才不会落到 HELP 上。
         const std::string& text = writer.Text();
-        const auto at = text.find(series + " ");
-        return at == std::string::npos ? UINT64_MAX : std::stoull(text.substr(at + series.size() + 1));
+        const auto at = text.find("\n" + series + " ");
+        return at == std::string::npos ? UINT64_MAX : std::stoull(text.substr(at + series.size() + 2));
     };
     const std::string held = "scene_connection_lost_hold_events_total{event=\"held\"}";
     const std::string hosted = "scene_afk_hosting_events_total{event=\"hosted\"}";

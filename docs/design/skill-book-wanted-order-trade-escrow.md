@@ -1,7 +1,7 @@
 # 悬赏求书迁 go/trade 托管合同与未学书架上限(数据覆写审计 r2 第 4 轮 craft#1、#2)
 
 > 日期:2026-11-26
-> 状态:**§10 书架上限已落码(未编译,待 Gemini 验证);§1~§9 悬赏求书迁 trade:负责人 2026-11-26 晚批准分三批(A→C→B)做。批 A(trade 侧合同)2026-11-27 已落码,未编译,待 Gemini 验证(§11.1);批 C、批 B 因 Claude 全部模型周额度过 80%,按负责人 11-26 口径交 Gemini 4 Neon Extra(§11.2)**。落地时与本文 §3 不同的几处以 §11.1 为准。
+> 状态:**§10 书架上限已落码(未编译,待 Gemini 验证);§1~§9 悬赏求书迁 trade:负责人 2026-11-26 晚批准分三批(A→C→B)做,2026-11-27 三批代码全部写完——批 A(trade 侧合同,§11.1,已独立复核)、批 C(K8s 部署开通,§11.2)、批 B(scene 退役旧揭榜 + 客户端切 trade,§11.2「批 B 落码记录」)。全部未编译、未运行,待 Gemini 按 §11.1 与 §11.2 的命令验证**。落地时与本文 §3 不同的几处以 §11 为准。
 > 上位:[装备品相与技能制书 V2–V5 策划](../planning/equipment-quality-and-skill-crafting-v2-v5.md) §2.4 / §4;[聚宝斋与托管合同](jubaozhai-market.md) §6、§15;[通用资产通道](guild-phase2/04-asset-channel.md) §S4;审计 [data-overwrite-rollback-audit-r2-20261019.md](data-overwrite-rollback-audit-r2-20261019.md) §3.12。
 > 负责人 2026-11-26 定:悬赏求书改走 go/trade 托管合同,发榜时托管悬赏银两,揭榜时托管技能书,两条发放腿由 trade 交付;沿用现有托管合同的写法,不另造一套;顺带解决悬赏榜只看得到同场景节点的玩家。
 
@@ -117,7 +117,7 @@ message TradeWantedSkillBookTerms {
 ### 3.10 scene 与客户端
 
 - scene 退役 `PostSkillBookWantedOrder / CancelSkillBookWantedOrder / ListSkillBookWantedOrders / FulfillSkillBookWantedOrder`(消息 560~563)及其账本类型(`kPostWantedOrder = 26`、`kCancelWantedOrder = 27`、`kFulfillWantedOrder = 28`),`PlayerCraftComp.wanted_orders = 16 / next_wanted_order_seq = 17` 与 `SkillCraftingStateSnapshot.my_wanted_orders` 写 `reserved`。项目未上线,上线前清档,不读旧格式;本机开发库里残留的旧悬赏单(银两已扣)需要清档或在旧版本上先撤单。
-- 客户端:`SkillCraftClient` 改调 trade(`CommerceClient` 加三条调用);书架书揭榜 = 先 `SealSkillBook` 再揭榜;发榜 / 揭榜之后按合同状态轮询(托管中 → 挂榜中 / 交易中 → 已成交),与寄售界面同一套轮询;「我的悬赏」改读 `only_mine` 列表。
+- 客户端:`SkillCraftClient` 直接调 trade 生成的 `ClientPlayerJubaozhaiRpc`(悬赏写操作留在它自己的待确认写槽里,不经 `CommerceClient`,§11.2 批 B「为什么这样选」第 2 条);书架书揭榜 = 先 `SealSkillBook` 再揭榜;发榜 / 揭榜之后按同一请求号重发原请求查结论(托管中 → 挂榜中 / 交易中 → 已成交或退回);「我的悬赏」读 `only_mine` 列表。
 - 两版共享的客户端契约变了(scene 四条 RPC 退役、trade 加三条),按 AGENTS §12 同批改客户端,Java 版只登记待做(它本来没有这个玩法)。
 
 ## 4. 思想分析
@@ -205,7 +205,7 @@ message TradeWantedSkillBookTerms {
 | `cpp/tests/bag_test/player_craft_quality_test.cpp` | 删 V5 悬赏段与 §10 用例里的揭榜段 |
 | 混版本字段保护台账(`docs/design/mixed-version-persist-field-protection.md` 的台账表) | 退役字段登记 |
 | 客户端 `Assets/Scripts/Game/Skills/SkillCraftClient.cs` | 改调 trade |
-| 客户端 `Assets/Scripts/Game/Jubaozhai/CommerceClient.cs` | 三条调用 |
+| 客户端 `Assets/Scripts/Game/Jubaozhai/CommerceClient.cs` | 落码时定为不改(悬赏写操作留在 `SkillCraftClient`,§11.2 批 B「为什么这样选」第 2 条) |
 | 客户端 `Assets/Scripts/UI/Ugui/Skills/SkillCraftModels.cs`、`SkillCraftWindow.cs` | 先封卷再揭榜、过渡态、我的悬赏改读 trade |
 | 客户端 `Assets/Scripts/Game/GameClient.cs` | 回包分发 |
 | 客户端 `Assets/Tests/EditMode/Skills/SkillCraftClientTests.cs` | 用例改写 |
@@ -233,7 +233,7 @@ message TradeWantedSkillBookTerms {
 - `UnsealSkillBook`:满了回 `kSkillBookshelfFull`,封卷道籍留在背包。
 - `FulfillWantedOrder`:发榜人书架满了回新 tip `kSkillWantedPosterBookshelfFull`,拒绝这一次交付(卖家的书与银两、发榜人的悬赏单都不动),发榜人腾出位置后可再揭。
 
-用例 `PlayerCraftQualityTest.BookshelfCapRejectsCraftUnsealAndFulfillWithoutSideEffects` 钉住:三处满了都拒绝且无副作用,腾出一格后揭榜成交、书架回到上限而不越过。
+用例 `PlayerCraftQualityTest.BookshelfCapRejectsCraftAndUnsealWithoutSideEffects` 钉住:制书、开卷满了都拒绝且无副作用(揭榜那一处随批 B 删掉,用例里的揭榜段一并删、用例改名)。
 
 **为什么这样选**:书架是玩家主动管理的收纳(研习、拆页、封卷都能腾位置),满了拒绝新增是背包同类的标准做法,不丢任何东西。100 = 95 项永久技能各一本还有余量;按每本约 60 字节(含宗师署名)算,满架约 6 KB,离 1 MiB 很远。加书前判、不在加载时裁:裁掉就是删玩家的书。
 
@@ -325,6 +325,42 @@ Claude 全部模型周额度过 80%(81%),按负责人 11-26 口径停在批 A �
 - scene 四条 RPC(560~563)删掉之后生成器自动把号转墓碑(一次 4 条,正好卡在 `maxNewMessageTombstonesPerRun = 4` 上,同一轮生成里不能再删别的 RPC);`MessageLimiter.xlsx` 里 560~563 四行同批删(先核对导表器允不允许限流行指向墓碑号)。
 - 玩家存档字段退役(`PlayerCraftComp.wanted_orders = 16`、`next_wanted_order_seq = 17`、`SkillCraftingStateSnapshot.my_wanted_orders = 23`)走混版本字段保护台账:生成器写 `retired=` 行,`proto/persist_schema_gen.txt` 的 diff 只许多退役行;`ClientRequestKind` 26~28 只退役不复用。
 - `equip_craft_quality_rules.h` 删悬赏常量之后,trade 的跨语言用例对这三项自动不比;`kProxyTaxBps` 与 `kSealedSkillBookConfigId` 不能删(代打分成与封卷还在用,用例照比)。`kSkillWantedPosterBookshelfFull` 随旧揭榜不再使用,tip 行保留、不复用。
-- 客户端:`CommerceClient` 加三条调用;揭榜书架书 = 先 `SealSkillBook` 拿到道具号再 `FulfillWantedSkillBookOrder`;发榜后按 `GetCommerceOrder` 轮询到挂榜或撤单结案,揭榜后按同一请求号重发揭榜轮询结果(§11.1 方案第 3 条);「我的悬赏」读 `only_mine`;撤单走 `CancelCommerceOrder`;阶段文案按 `WantedSkillBookOrderPhase`。客户端用服务端给的 `seller_net_gold`,不自己算税。
+- 客户端(落码时的取舍见下面「批 B 落码记录」):`SkillCraftClient` 直接调 trade;揭榜书架书 = 先 `SealSkillBook` 拿到道具号再 `FulfillWantedSkillBookOrder`;发榜与揭榜之后都按同一请求号重发原请求查结论(发榜不用 `GetCommerceOrder`:托管悬赏与有人交书都是订单状态 3);「我的悬赏」读 `only_mine`;撤单走 `CancelCommerceOrder`;阶段文案按 `WantedSkillBookOrderPhase`。客户端用服务端给的 `seller_net_gold`,不自己算税。
 - 策划稿 `docs/planning/equipment-quality-and-skill-crafting-v2-v5.md` §2.4 / §4 同步体验变化(§7 第 2 条:成交后发榜人收到背包里一枚封卷道籍;有托管中 / 交易中过渡态;悬赏榜全服可见)。
 - Java 仓 `PARITY.md` 已登记待做(2026-11-27 一节),批 B 落地时补一句「客户端已切」。
+
+**批 B 落码记录(2026-11-27,Opus 5.5;未编译、未运行,待 Gemini 验证)**:
+
+- 问题:批 A 加了 trade 的求购单,但 scene 的旧揭榜(同一帧改两名玩家、各自存盘)还在运行,客户端也还调 scene 的四条;r2-craft#1 只有旧路径整条退役、客户端切到 trade 之后才真正消失。两边必须同批落,否则客户端会调不存在的接口。
+- 方案(服务端):
+  - 协议:`proto/scene/player_skill.proto` 删 560~563 四条 RPC、八个请求 / 响应与 `SkillBookWantedOrderInfo`,`SkillCraftingStateSnapshot` 写 `reserved 23;`;service 里的退役说明与下一条 RPC 之间留空行,是独立注释,生成器只取紧贴方法的前导注释,不会把它当成 `RentSkillLoadoutSlots` 的说明。`player_craft_comp.proto` 删 `SkillBookWantedOrder`、`reserved 16, 17;`;`client_request_ledger_comp.proto` `reserved 40, 41;`。
+  - 生成:别的会话的一轮 `proto-gen` 已按这些 proto 在工作区跑过一次:`proto/message_id.txt` 的 560~563 已转成 `reserved:` 墓碑(恰好 4 条,卡在 `maxNewMessageTombstonesPerRun = 4` 上),`proto/persist_schema_gen.txt` 只多 `retired=ClientRequestRecord#40`、`#41`、`retired=PlayerCraftComp#16`、`#17` 四行;`SkillBookWantedOrder#1..8` 的台账行按生成器既有口径「所在类型已不再从玩家表可达,台账行保留不动」留着(`persistschema/apply.go`)。混版本字段保护台账就是这份生成的 `persist_schema_gen.txt`,`mixed-version-persist-field-protection.md` 里没有另一张手写的退役表,不用改。Gemini 再跑一次不会新增墓碑。
+  - C++:`player_craft.{h,cpp}` 删四个入口与只给它们用的 `FillWantedOrderInfo`、`FindWantedOrderIndex`、`RemoveWantedOrderAt`、`CanCreditProxyMaster`(删前逐个 grep 过调用者),以及 `FillStateSnapshot` 里填我的悬赏的部分;`SealSkillBook` / `UnsealSkillBook` 不动。`client_request_ledger.{h,cpp}`:26~28 改名 `kRetiredWantedOrderPost` / `kRetiredWantedOrderCancel` / `kRetiredWantedOrderFulfill`,值保留不复用,删 `ClientRequestResult` 的 `wantedOrderId` / `wantedOrderGold` 及读写。`equip_craft_quality_rules.h` 删悬赏额区间、3 单上限与 `ValidWantedOrderGold`(`kProxyTaxBps`、`ProxyTaxGold`、`ProxyNetGold`、`kSealedSkillBookConfigId` 留着)。`player_skill_handler.cpp` 删四个 handler 整个函数(守护段非空、方法又不在 proto 里时生成器拒绝生成,`handler_gen.go` 的 `readCheckedCodeSections`);`player_handoff_gate.h` 删两条可跨节点重放的分类。`bag_test`:删悬赏段;纯规则用例改名 `EquipCraftQualityRulesTest.V2TitlesAndV4MilestoneBitsPureRules`,V5 用例只留同队免费代打、改名 `V5TeamFreeProxyChargesTeammatesZeroCraftFee`,书架上限用例只留制书、开卷两处满架拒绝、改名 `BookshelfCapRejectsCraftAndUnsealWithoutSideEffects`。
+  - 配表:`tools/scripts/scene_wanted_order_retire_xlsx_patch.py`(幂等,已跑,删行后读回核对其余行逐行不变)删 `data/MessageLimiter.xlsx` 的 560~563 四行;号按名字从 `message_id.txt` 查,活号行与墓碑行都认。`kSkillWantedPosterBookshelfFull` 的 Tip 行保留、不复用。
+  - trade 跨语言用例 `wanted_skill_book_crosslang_test.go`:删掉悬赏额区间与 3 单的比对(C++ 已没有这几项,规则只剩 trade 一份),5% 税的写法与 3414 照比。
+- 方案(客户端 `mmorpg-client`):
+  - `SkillCraftClient` 的三种悬赏写操作改发 trade:发榜 `CreateWantedSkillBookOrder`、揭榜 `FulfillWantedSkillBookOrder`、撤单 `CancelCommerceOrder`;仍走它原有的「先存本机恢复记录再发送、结果未确认按原字节重发」待确认写槽,恢复记录换了前缀(`tradewantedpost` / `tradewantedcancel` / `tradewantedfulfill`),按种类核对身份字段齐全。trade 回包与交易行(`CommerceClient`)同口径:故障码、没有订单的空成功都算结果未确认,保留原请求。
+  - 书架书揭榜:先发 scene 的 `SealSkillBook`,封卷回包带回道具号就立刻发揭榜(这是同一次点击的第二步,不受 800 毫秒写间隔限制);「封卷后揭榜」只记在内存里,发送前先记(回包可能在发送调用里同步回来),封卷失败、未发出或客户端重启都只剩封卷,书以封卷道籍留在背包,不丢。
+  - 过渡态:发榜回「托管中」、揭榜回「交易中 / 交付中」时,每 2 秒按同一请求号重发原请求查结论,最多 15 次(约 30 秒);只在内存里跟,不占待确认写槽。有了结论提示挂榜、银两没托管成、成交实得(服务端给的 `seller_net_gold`)、书不符已原样退回、书没扣下,揭榜结论触发背包重拉(`WantedFulfillConcluded`)。
+  - 悬赏榜:公开榜一页 50、按游标续取(列表末行「加载更多悬赏」);「我的悬赏」读 `only_mine`,显示阶段(`WantedSkillBookOrderPhase`),只有托管中与挂榜中能撤;跟进期间悬赏页写按钮锁住。`SkillCraftModels`、`SkillCraftWindow`、`GameClient` 跟着改。
+  - EditMode 用例(`SkillCraftClientTests`):V5 段改写为发榜跟到挂榜、撤单、翻页、揭榜跟到成交;新加 `WantedFulfillFromBookshelfSealsFirstAndUncertainReplyReplaysSameRequestIdAcrossRecreate`(书架书先封卷再揭榜、超时后重建客户端按同一请求号重发、书不符退回)。
+- 为什么这样选:
+  1. 发榜与揭榜的结论都按同一请求号重发原请求查:trade 对同号重发回当前合同(`priorRequest` 读的是当前行),一次就拿到 `WantedSkillBookOrderPhase`。`GetCommerceOrder` 只给 `CommerceOrderState`,托管悬赏(`wanted_escrow`)与有人交书(`wanted_fill`)都是状态 3,分不清;揭榜那边书不符退回与书没扣下都让单子回到挂榜,订单状态一样,只有按请求号重发才分得清。交接单原写「发榜后按 `GetCommerceOrder` 轮询」,按此改。
+  2. 悬赏写操作留在 `SkillCraftClient`,不加到 `CommerceClient`:悬赏页的界面、状态与待确认写槽都在 `SkillCraftClient`;`CommerceClient` 只在聚宝斋界面里按需创建(`JubaozhaiUiRoot`),带自己的一份恢复存储。放进 `CommerceClient` 会让同一类请求分在两个存储、有两个重放者;生成的 `ClientPlayerJubaozhaiRpc` 走同一条网关连接,`SkillCraftClient` 直接调。交接单 §4 第 10 条原写「`CommerceClient` 加三条调用」,按此改为不加(加了没人调)。
+  3. 跟进不占待确认写槽:交付可能要等发榜人腾背包(可能很久),占着写槽会把制书、研习、拆页全部锁住;结果由服务端照常办完,客户端最多只是看不到提示。
+  4. `ClientRequestKind` 26~28 改名留值而不是删:值是存档里的数字,删掉之后有人按顺序补新枚举就会复用;名字带 `Retired` 让任何新调用点一眼看出已退役。
+  5. 限流行删掉:导表器不拦(没有引用约束),但墓碑号永不派发,留着是死配置,还会让人以为这几个号仍在用。
+- 被否决的做法:①揭榜后用 `GetCommerceOrder` 轮询(见上第 1 条);②把跟进放进待确认写槽、有结论才清(见上第 3 条);③旧 scene 格式的恢复记录(`postwanted:` 等)读出来直接丢弃——上线前清档、不读旧格式,读不出按既有口径锁住写操作并提示(fail-closed),只可能出现在开发机上;④给客户端加按技能筛选——服务端是页内过滤、一页可能不满,界面也没有筛选入口,不加。
+- 代价与边界:
+  - 悬赏求书只在 trade 资产通道打开的环境可用(K8s 以 `-AssetOps on` 部署,批 C);没打开时发榜、揭榜、公开榜回「功能未开放」,本人的单照常列、照常可撤。
+  - 跟进的约 30 秒内悬赏页写按钮锁住;跟满次数仍没结论(多半是发榜人背包满)就提示稍后刷新,不再自动查。客户端重启后不再跟进,结论要玩家自己刷新悬赏榜与背包看;发榜人没有成交推送,书在下次背包刷新时出现。
+  - 开发机上残留的旧悬赏单(scene 存档里银两已扣)随清档消失;不清档的话那部分银两回不来(字段已 `reserved`,不读旧格式)。
+  - 工作区里那一轮生成已把客户端 `SceneSkillClientPlayerRpc.cs` 更新到「四条已删」,但当时 proto 的退役说明紧贴 `RentSkillLoadoutSlots`,被生成成了它的说明;proto 已改成独立注释,Gemini 重跑生成后去掉。
+
+**Gemini 验证顺序(批 B;仓库根执行,只跑,红了保留首错原文交回 Claude 改)**:
+1. 导表:先 `git status --short data/` 看别的会话的表改动,再 `dev.bat gen`;`python tools/scripts/scene_wanted_order_retire_xlsx_patch.py --dry-run` 报 `[ALREADY CURRENT]`;`git diff HEAD -- data/MessageLimiter.xlsx` 相对 HEAD 只少 560~563 四行。批 A 的两条 trade tip 与 r2-craft#2 的两条 skill tip 都要生成出来。
+2. 协议:`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`;`proto/message_id.txt` 相对 HEAD 只有 560~563 变成墓碑、582~584 不变;`proto/persist_schema_gen.txt` 相对 HEAD 只多四行 `retired=`;`cpp/nodes/scene/handler/rpc/player/player_skill_handler.h` 不再有四个悬赏方法;客户端生成的 `RentSkillLoadoutSlots` 不再带悬赏退役说明。
+3. 客户端 `mmorpg-client`:`tools/gen_proto.ps1`、`tools/gen_messageids.ps1`、`tools/client_compile_check.ps1`(含 EditMode 程序集),再跑 EditMode `SkillCraftClientTests`(两条悬赏用例)。
+4. C++:串行 MSBuild(`/m:1`)先编库再编 scene 与 `bag_test`;`bag_test.exe --gtest_filter=PlayerCraftQualityTest.*:EquipCraftQualityRulesTest.*`;`python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`(本机只读跑过,13 条通过)。
+5. Go:`go/trade` 下 `go build ./...`、`go vet ./...`、`go test ./internal/commerce/... ./internal/logic/...`,点名 `TestWantedRulesMatchTheCppConstants` 与批 A 的 `TestWanted*`。仓库里没有 `go/scene`,`go/scene_manager` 不涉及。
+6. 冒烟(§9 第 3 条,环境以 `-AssetOps on` 部署):发榜(托管中 → 挂榜中)、揭榜(背包封卷与书架书两种)、撤单、书不符原样退回、发榜人背包满(书等腾出一格才到账,揭榜人银两随后到账)、发榜人被获取封禁时整单退回且退全额。

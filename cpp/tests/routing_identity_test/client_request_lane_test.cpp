@@ -21,6 +21,7 @@
 #include <string>
 #include <vector>
 
+#include "metrics/prometheus_text.h"
 #include "handler/event/scene_route_helper.h"
 #include "handler/rpc/client_request_lane.h"
 #include "handler/rpc/session_details_builder.h"
@@ -275,5 +276,35 @@ namespace
 		EXPECT_TRUE(Router().afterSend.empty());
 		EXPECT_EQ(GetCounters().rejectedBeforeSend, 1u);
 		EXPECT_TRUE(Session().routerLane.Idle());
+	}
+
+	// 计数经 /metrics 导出为 gate_router_lane_*(2026-11-27 起):event 标签与 [lane] 汇总行同一份 key,值就是 GetCounters 那一份;
+	// 没发生过的事件也以 0 导出。标签不带会话号与玩家号(AGENTS.md §9)。
+	TEST_F(ClientRequestLane, CountersAreExportedAsPrometheusMetrics)
+	{
+		Receive(1, kQueryMessageId);
+		Receive(2, kQuery2MessageId);
+		gate_lane::OnSessionRedirected(Session());
+
+		prometheus_text::Writer writer;
+		gate_lane::CollectMetrics(writer);
+		const std::string &text = writer.Text();
+		EXPECT_EQ(writer.DroppedSamples(), 0u) << text;
+		const auto &c = GetCounters();
+		for (const std::string line : {
+				 "gate_router_lane_events_total{event=\"admitted\"} " + std::to_string(c.admitted) + "\n",
+				 "gate_router_lane_events_total{event=\"sent\"} " + std::to_string(c.sent) + "\n",
+				 "gate_router_lane_events_total{event=\"dropped_on_redirect\"} " + std::to_string(c.droppedOnRedirect) + "\n",
+				 std::string("gate_router_lane_events_total{event=\"rejected_before_send\"} 0\n"),
+				 std::string("gate_router_lane_in_flight 1\n"), // 第一条还在途
+				 "gate_router_lane_max_depth_seen " + std::to_string(c.maxDepthSeen) + "\n",
+			 })
+		{
+			EXPECT_NE(text.find(line), std::string::npos) << "missing sample line: " << line << "in:\n" << text;
+		}
+		EXPECT_EQ(c.droppedOnRedirect, 1u) << "前提:第二条在排队时被交出";
+		EXPECT_NE(text.find("# TYPE gate_router_lane_expiry_heap_entries gauge\n"), std::string::npos);
+		EXPECT_EQ(text.find("session_id"), std::string::npos);
+		EXPECT_EQ(text.find("player_id"), std::string::npos);
 	}
 } // namespace

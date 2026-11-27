@@ -7,6 +7,11 @@
 struct SessionInfo;
 struct SceneRouteTarget;
 
+namespace prometheus_text
+{
+class Writer;
+}
+
 // gate 侧 RoutePlayerEvent 进场转发的补发与收口(CPP-2;设计与残余见 cross-zone-scene-travel.md 的
 // "CPP-2 gate 侧进场转发补发"一节)。
 //
@@ -56,4 +61,13 @@ void OnClientEnterGame(SessionId sessionId, SessionInfo &session);
 
 // 250ms 扫描定时器的回调:按需打 30s 汇总,对到期的欠账各尝试一次。
 void RetryDueSceneEntries(Clock::time_point now);
+
+// 补发计数写成 Prometheus 指标(2026-11-27 起导出,原来只有 30s 一行的 [SceneEntry] 汇总):
+//   gate_scene_entry_events_total{event}  counter,event 取 [SceneEntry] 汇总行的计数 key
+//                                         (deferred / recovered / gave_up / superseded / session_closed / player_changed)
+//   gate_scene_entry_pending_sessions     gauge,此刻有补发欠账的会话数(汇总行的 pending)
+// 每项进程一启动就以 0 导出,不带玩家号与会话号。在 /metrics 出口所在的 gate 主 loop 上执行,读的就是本线程的计数。
+void CollectMetrics(prometheus_text::Writer &writer);
+// gate 启动时调一次,把 CollectMetrics 登记进进程的指标注册表;重复登记只记一行 ERROR。
+void RegisterMetrics();
 }

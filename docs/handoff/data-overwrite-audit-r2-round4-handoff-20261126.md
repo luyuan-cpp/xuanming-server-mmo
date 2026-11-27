@@ -279,7 +279,7 @@
 | 编号 | 结论 | 改了什么 | 设计记录 |
 |---|---|---|---|
 | r2-mall#1 | 成立（门控，缺省不可达） | `java/mall_game` `ManualAdminStore`：RETURN_TO_SELLER 只认付款已撤销；新增 RETRY_DELIVERY（订单 7→1、交付待办回 PENDING，由 trade 重新回执）；网关 `mall-admin.html` 下拉；`rmb_cancel_test.go` 补断言（trade 代码不动） | `jubaozhai-market.md` §16.1；隔离手册 §4.2 / §6 |
-| r2-craft#1 | 成立 | 负责人 11-26 晚批准分三批。**批 A（trade 侧 kind 7 求购单合同）2026-11-27 已落码，未编译，待 Gemini 验证**（同日复查又把揭榜与寄售购买的尝试次数改成每人 3 次、整单 256 次，`engine.go` 的 `attemptAllowed`，设计稿 §11.1 第 7 条）：`go/trade/internal/commerce/wanted_skill_book.go`（新）与 `engine.go` / `delivery_order.go` / `leg_tx_type.go` / `schedule.go`，logic / server / config / svc / `trade.yaml`，三份 trade proto（RPC 582~584），Tip 两条与限流三行（`tools/scripts/trade_wanted_skill_book_xlsx_patch.py`，已跑）；一部分已随快照提交 `24c13a311` 进 HEAD，**导表之前 go/trade 编不过**。**批 C（部署）、批 B（scene 退役旧揭榜 + 客户端）因 Claude 全部模型周额度 81% 交 Gemini 4 Neon Extra 写**，要点与前提在设计稿 §11.2；批 C 先问 §7.4 会话 `k8s_deploy.ps1` 改完没有、再等负责人拍板 K8s 是否开 trade `AssetOp.Enabled`。scene 旧揭榜（两笔存盘）在批 B 之前照旧运行 | `skill-book-wanted-order-trade-escrow.md` §0～§9 设计、§11.1 批 A 实施记录与 Gemini 命令、§11.2 批 C / B 交接 |
+| r2-craft#1 | 成立 | 负责人 11-26 晚批准分三批,**2026-11-27 三批代码全部写完,未编译、未运行,待 Gemini 验证**。批 A(trade 侧 kind 7 求购单合同,RPC 582~584,已独立复核)见设计稿 §11.1;批 C(K8s 各档位以 `-AssetOps on` 部署,求购单开关跟着打开,trade 读镜像里的表、表包模式挂 sidecar)与批 B(scene 删 560~563 四条 RPC 与悬赏存档字段、`ClientRequestKind` 26~28 退役、限流行删除;客户端 `SkillCraftClient` 改调 trade,书架书先封卷再揭榜,发榜 / 揭榜按同一请求号重发查结论)见 §11.2。scene 里已没有同帧改两名玩家的揭榜代码 | `skill-book-wanted-order-trade-escrow.md` §0～§9 设计、§11.1 批 A、§11.2 批 C / B 落码记录与 Gemini 验证顺序 |
 | r2-craft#2 | 成立 | 书架上限 100 本，制书 / 开卷 / 揭榜送书三处副作用前判；Tip.xlsx `//skill_error` 段末加 `SkillBookshelfFull`、`SkillWantedPosterBookshelfFull`（本会话用 `tools/scripts/craft_bookshelf_cap_xlsx_patch.py` 加，幂等，**导表未跑**） | 同上 §10；策划 v2-v5 §2.4 |
 | r2-craft#3 | 成立（只在 `Sweep.Mode=delete` 时可达） | mail 新表 `mail_request_receipt`（判重收据，清理不删），发件先查收据、收据先于邮件行写 | `mail-system.md` §2.4.1 |
 | r2-craft#4 | 成立（只影响口碑展示） | 口碑回账改 Lua 原子取走（HMGET + HDEL）再入账，宗师离开或存盘排不上原样还回 | `craft-proxy-reputation-digest-and-hot-ranking.md` §2.5 |
@@ -297,7 +297,7 @@
 6. r2-craft#1 批 A（go/trade 求购单）：第 1 步导表要出 `TradeError_kTradeWantedOrderLimitReached`、`TradeError_kTradeWantedBookMismatch`；之后 `go/trade` 的 build / vet / 单测与真 TiDB 用例（`TestTiDBWantedSkillBook*`）、客户端三步，命令与通过标准见 `skill-book-wanted-order-trade-escrow.md` §11.1 末。
 
 **还没做的**（写回这里，按负责人口径额度过 80% 交 Gemini）：
-- r2-craft#1 落码：批 A 已写（未编译，验证命令见设计稿 §11.1 末）；**批 C、批 B 负责人 11-27 改定换电脑由 Claude Code（Fable 5.2 Max）写，Gemini 不写，只做写完后的生成、编译、测试**（设计稿 §11.2，写完同节补五项记录，再按设计稿 §9 跑）。Gemini 跑批 A 时把导表放在最前：两条新 tip 不导出来 go/trade 编不过。
+- r2-craft#1 落码：**2026-11-27 批 A、批 C、批 B 都已写完（未编译）**，验证命令见设计稿 §11.1 末与 §11.2 末；原定「批 C、批 B 负责人 11-27 改定换电脑由 Claude Code（Fable 5.2 Max）写，Gemini 不写，只做写完后的生成、编译、测试」（设计稿 §11.2，写完同节补五项记录，再按设计稿 §9 跑）。Gemini 跑批 A 时把导表放在最前：两条新 tip 不导出来 go/trade 编不过。
 - guild 人工终结的条件写补比 `attempts`（r2 早期遗留第 1 条的最后一处）：**2026-11-27 已由会话「复核第 4 轮批 V/W 并补 guild 见证 SQL」写完（负责人在该会话说「开始做吧」），未编译，验证见 r2 剩余单 §3.2。** 以下为当时的交接原文：**2026-11-27 交 Gemini 4 Neon Extra 写**（负责人随后改定：换电脑由 Claude Code 写，见 §0a）。会话「复核第 4 轮批 V/W 并补 guild 见证 SQL」开工时 Claude 全部模型周额度 81%，按 §6 口径没动手；§0 的「Gemini 不要改本单的代码」不适用于本条。
   - 文件已空出：§7.4 没改过 `asset_store.go`，现在没有会话占着。行号按 HEAD `24c13a311` 核过。
   - `go/guild/internal/data/asset_store.go:259`：`sqlResolveAssetOpQuiet` 末尾加 `` AND `attempts` = ? ``。

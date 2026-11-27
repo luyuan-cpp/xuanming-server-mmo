@@ -689,6 +689,11 @@ int main(int argc, char *argv[])
             gate_connection_admission::RegisterMetrics();
             // 断线通知的待送达条数与送达计数(handler/rpc/login_session_renewal.h)同样挂到出口。
             gate_login_renewal::RegisterMetrics();
+            // 路由 lane、场景 lane 与进场转发补发的计数(client_request_lane.h / client_scene_lane.h / scene_entry_dispatch.h)
+            // 同样挂到出口(2026-11-27 起,原来只有 30s 汇总日志)。
+            gate_lane::RegisterMetrics();
+            gate_scene_lane::RegisterMetrics();
+            gate_scene_entry::RegisterMetrics();
 
             // Post-startup: attach client TCP callbacks + initialize session ID generator.
             // Override connection/message callbacks BEFORE WaitAndRun so that any

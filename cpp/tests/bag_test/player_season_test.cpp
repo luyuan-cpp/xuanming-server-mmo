@@ -1131,7 +1131,7 @@ TEST_F(PlayerSeasonSystemTest, WuxingRealmV2SixNodeBranchingEventsFairPresetCros
     ASSERT_EQ(nwPick1Resp.error_message().id(), 0u);
     ChooseWuxingRealmBranchRequest nwBr2;
     nwBr2.set_expected_run_id(stNw1.state().run_id());
-    nwBr2.set_branch(turnbattle::wuxing::kRealmBranchCombat);
+    nwBr2.set_branch(turnbattle::wuxing::kRealmBranchElite);
     ChooseWuxingRealmBranchResponse nwBr2Resp;
     PlayerSeasonSystem::ChooseWuxingRealmBranch(player, nextWeekMs, nwBr2, nwBr2Resp);
     ASSERT_EQ(nwBr2Resp.error_message().id(), 0u);

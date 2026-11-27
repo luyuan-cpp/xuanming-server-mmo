@@ -4,12 +4,15 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <sstream>
+#include <string_view>
 #include <type_traits>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
 #include "muduo/base/Logging.h"
+#include "metrics/metrics_registry.h"
 #include "session/manager/session_manager.h"
 #include "scene_route_helper.h"
 #include "handler/rpc/client_session_handler.h"
@@ -38,7 +41,8 @@ using gate_scene_entry::Clock;
 // 扫描 find 不到欠账就把索引项删掉,不需要断线回调来配合。thread_local:只由 gate 主 EventLoop 线程读写。
 thread_local std::unordered_set<SessionId> tlsSessionsWithPendingEntry;
 
-// 只走日志的计数(C++ 还没接 Prometheus)。都是进程累计值,不以 player_id 做任何维度。
+// 进程累计值,不以 player_id 做任何维度。两个读者读同一份:30s 一行的 [SceneEntry] 汇总,与 /metrics 的
+// gate_scene_entry_*(gate_scene_entry::CollectMetrics,2026-11-27 起;key 都取 VisitSceneEntryCounters)。
 struct SceneEntryCounters
 {
     uint64_t deferred{0};      // 首次尝试没发出去、进入补发的路由决策数
@@ -53,6 +57,18 @@ struct SceneEntryCounters
 
 thread_local SceneEntryCounters tlsCounters;
 thread_local SceneEntryCounters tlsLastSummaryCounters;
+
+// [SceneEntry] 汇总行的计数 key 与顺序(pending 另写,它是此刻的欠账数,不是累计值)。
+template <typename Emit>
+void VisitSceneEntryCounters(const SceneEntryCounters &c, Emit &&emit)
+{
+    emit("deferred", c.deferred);
+    emit("recovered", c.recovered);
+    emit("gave_up", c.gaveUp);
+    emit("superseded", c.superseded);
+    emit("session_closed", c.sessionClosed);
+    emit("player_changed", c.playerChanged);
+}
 thread_local std::size_t tlsLastSummaryPending{0};
 thread_local Clock::time_point tlsNextSummaryAt{};
 
@@ -318,13 +334,11 @@ void MaybeLogSummary(const Clock::time_point now)
     tlsLastSummaryCounters = tlsCounters;
     tlsLastSummaryPending = pending;
 
-    LOG_INFO << "[SceneEntry] deferred=" << tlsCounters.deferred
-             << " recovered=" << tlsCounters.recovered
-             << " gave_up=" << tlsCounters.gaveUp
-             << " superseded=" << tlsCounters.superseded
-             << " session_closed=" << tlsCounters.sessionClosed
-             << " player_changed=" << tlsCounters.playerChanged
-             << " pending=" << pending;
+    std::ostringstream line;
+    line << "[SceneEntry]";
+    VisitSceneEntryCounters(tlsCounters, [&line](std::string_view key, uint64_t value) { line << ' ' << key << '=' << value; });
+    line << " pending=" << pending;
+    LOG_INFO << line.str();
 }
 } // namespace
 
@@ -431,6 +445,28 @@ void RetryDueSceneEntries(const Clock::time_point now)
             continue;
         }
         AttemptAndSettle(sessionId, it->second, now);
+    }
+}
+
+void CollectMetrics(prometheus_text::Writer &writer)
+{
+    writer.BeginFamily("gate_scene_entry_events_total",
+                       "Scene entry forwarding retries on this gate since process start, by event (same keys as the "
+                       "[SceneEntry] summary log line): deferred (first attempt not sent), recovered, gave_up (pushed 3023 "
+                       "and kicked), superseded, session_closed, player_changed.",
+                       prometheus_text::MetricType::kCounter);
+    VisitSceneEntryCounters(tlsCounters, [&writer](std::string_view key, uint64_t value) { writer.Sample({{"event", key}}, value); });
+    writer.BeginFamily("gate_scene_entry_pending_sessions",
+                       "Sessions on this gate with a scene entry still waiting to be forwarded (pending in the summary line).",
+                       prometheus_text::MetricType::kGauge);
+    writer.Sample({}, tlsSessionsWithPendingEntry.size());
+}
+
+void RegisterMetrics()
+{
+    if (!GlobalMetricsRegistry().Register("gate_scene_entry", &CollectMetrics))
+    {
+        LOG_ERROR << "[Metrics] collector gate_scene_entry is already registered";
     }
 }
 } // namespace gate_scene_entry

@@ -28,8 +28,10 @@
 #include <vector>
 
 #include "entt/src/entt/entity/entity.hpp"
+#include "handler/event/scene_entry_dispatch.h"
 #include "handler/rpc/client_request_lane.h"
 #include "handler/rpc/client_scene_lane.h"
+#include "metrics/prometheus_text.h"
 #include "network/rpc_status.h"
 #include "proto/common/base/message.pb.h"
 #include "proto/common/base/node.pb.h"
@@ -661,5 +663,51 @@ namespace
 		EXPECT_EQ(HoldingSessionCount(), 0u);
 		EXPECT_EQ(Scene().attempts, attemptsBefore);
 		EXPECT_TRUE(fresh.sceneLane.Empty());
+	}
+
+	// 计数经 /metrics 导出为 gate_scene_lane_*(2026-11-27 起):event 标签与 [scene_lane] 汇总行同一份 key,值就是 GetCounters
+	// 那一份;没发生过的事件也以 0 导出。标签不带会话号与玩家号(AGENTS.md §9)。
+	TEST_F(ClientSceneLane, CountersAreExportedAsPrometheusMetrics)
+	{
+		ClientSends(1, kEquipMessageId, At(0));
+		SceneAnswersRetryLater(At(10)); // 扣住 1 号等重投:held、retry_verdicts 各一次,会话进等重投登记
+
+		prometheus_text::Writer writer;
+		gate_scene_lane::CollectMetrics(writer);
+		const std::string &text = writer.Text();
+		EXPECT_EQ(writer.DroppedSamples(), 0u) << text;
+		const auto &c = GetCounters();
+		for (const std::string line : {
+				 "gate_scene_lane_events_total{event=\"admitted\"} " + std::to_string(c.admitted) + "\n",
+				 "gate_scene_lane_events_total{event=\"held\"} " + std::to_string(c.held) + "\n",
+				 "gate_scene_lane_events_total{event=\"retry_verdicts\"} " + std::to_string(c.retryVerdicts) + "\n",
+				 std::string("gate_scene_lane_events_total{event=\"inflight_lost\"} 0\n"),
+				 "gate_scene_lane_holding_sessions " + std::to_string(HoldingSessionCount()) + "\n",
+				 "gate_scene_lane_in_flight " + std::to_string(InFlightCount()) + "\n",
+				 "gate_scene_lane_max_depth_seen " + std::to_string(c.maxDepthSeen) + "\n",
+			 })
+		{
+			EXPECT_NE(text.find(line), std::string::npos) << "missing sample line: " << line << "in:\n" << text;
+		}
+		EXPECT_EQ(c.retryVerdicts, 1u) << "前提:答复过一次稍后重投";
+		EXPECT_EQ(HoldingSessionCount(), 1u) << "前提:会话在等重投";
+		EXPECT_NE(text.find("# TYPE gate_scene_lane_expiry_heap_entries gauge\n"), std::string::npos);
+		EXPECT_EQ(text.find("session_id"), std::string::npos);
+	}
+
+	// 进场转发补发(scene_entry_dispatch.h)的计数同样经 /metrics 导出:六个事件与 pending 欠账数逐项以当前值导出(没发生过的为 0)。
+	TEST(GateSceneEntryMetrics, EveryEventAndThePendingCountAreExported)
+	{
+		prometheus_text::Writer writer;
+		gate_scene_entry::CollectMetrics(writer);
+		const std::string &text = writer.Text();
+		EXPECT_EQ(writer.DroppedSamples(), 0u) << text;
+		EXPECT_NE(text.find("# TYPE gate_scene_entry_events_total counter\n"), std::string::npos) << text;
+		for (const char *event : {"deferred", "recovered", "gave_up", "superseded", "session_closed", "player_changed"})
+		{
+			EXPECT_NE(text.find(std::string("gate_scene_entry_events_total{event=\"") + event + "\"} "), std::string::npos)
+				<< event << " in:\n" << text;
+		}
+		EXPECT_NE(text.find("# TYPE gate_scene_entry_pending_sessions gauge\n"), std::string::npos) << text;
 	}
 } // namespace

@@ -4,6 +4,8 @@
 #include <chrono>
 #include <cstdint>
 #include <optional>
+#include <sstream>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -12,6 +14,7 @@
 #include "entt/src/entt/entity/entity.hpp"
 #include "client_request_lane.h"
 #include "gate_codec.h"
+#include "metrics/metrics_registry.h"
 #include "scene_client_call_reply.h"
 #include "network/rpc_status.h"
 #include "proto/common/base/message.pb.h"
@@ -216,6 +219,32 @@ void Pump(SessionId sessionId, SessionInfo &session, SteadyTime now)
 	TrackHolding(sessionId, session);
 }
 
+// [scene_lane] 汇总行的计数 key 与顺序;/metrics(CollectMetrics)用同一份 key 写 event 标签,两个出口不各写一份名单。
+template <typename Emit>
+void VisitSceneLaneCounters(const SceneLaneCounters &c, Emit &&emit)
+{
+	emit("admitted", c.admitted);
+	emit("sent", c.sent);
+	emit("replied", c.replied);
+	emit("failed", c.failed);
+	emit("no_content", c.noContent);
+	emit("dropped_uncorrelated", c.droppedUncorrelated);
+	emit("held", c.held);
+	emit("retry_verdicts", c.retryVerdicts);
+	emit("expired_on_hold", c.expiredOnHold);
+	emit("expired_in_queue", c.expiredInQueue);
+	emit("no_scene", c.noScene);
+	emit("rejected_full", c.rejectedFull);
+	emit("dropped_on_redirect", c.droppedOnRedirect);
+	emit("one_way_direct", c.oneWayDirect);
+	emit("one_way_queued", c.oneWayQueued);
+	emit("one_way_sent", c.oneWaySent);
+	emit("one_way_dropped", c.oneWayDropped);
+	emit("sent_on_new_route", c.sentOnNewRoute);
+	emit("inflight_lost", c.inflightLost);
+	emit("late_dropped", c.lateDropped);
+}
+
 void LogSummaryIfDue(SteadyTime now)
 {
 	if (now - tlsLastSummaryAt < kSummaryInterval)
@@ -223,19 +252,12 @@ void LogSummaryIfDue(SteadyTime now)
 		return;
 	}
 	tlsLastSummaryAt = now;
-	const auto &c = tlsCounters;
-	LOG_INFO << "[scene_lane] summary admitted=" << c.admitted << " sent=" << c.sent << " replied=" << c.replied
-			 << " failed=" << c.failed << " no_content=" << c.noContent
-			 << " dropped_uncorrelated=" << c.droppedUncorrelated << " held=" << c.held
-			 << " retry_verdicts=" << c.retryVerdicts << " expired_on_hold=" << c.expiredOnHold
-			 << " expired_in_queue=" << c.expiredInQueue << " no_scene=" << c.noScene
-			 << " rejected_full=" << c.rejectedFull << " dropped_on_redirect=" << c.droppedOnRedirect
-			 << " one_way_direct=" << c.oneWayDirect << " one_way_queued=" << c.oneWayQueued
-			 << " one_way_sent=" << c.oneWaySent << " one_way_dropped=" << c.oneWayDropped
-			 << " sent_on_new_route=" << c.sentOnNewRoute
-			 << " inflight_lost=" << c.inflightLost << " late_dropped=" << c.lateDropped
-			 << " in_flight=" << tlsInflight.Size() << " expiry_heap=" << tlsInflight.ExpiryHeapSize()
-			 << " holding_sessions=" << tlsHolding.size() << " max_depth_seen=" << c.maxDepthSeen;
+	std::ostringstream line;
+	line << "[scene_lane] summary";
+	VisitSceneLaneCounters(tlsCounters, [&line](std::string_view key, uint64_t value) { line << ' ' << key << '=' << value; });
+	line << " in_flight=" << tlsInflight.Size() << " expiry_heap=" << tlsInflight.ExpiryHeapSize()
+		 << " holding_sessions=" << tlsHolding.size() << " max_depth_seen=" << tlsCounters.maxDepthSeen;
+	LOG_INFO << line.str();
 }
 
 // 在途调用过了「RPC0 超时 + 余量」仍没有完成回调(RPC0 承诺恰好一次,正常不会发生):判丢。
@@ -311,6 +333,37 @@ std::size_t HoldingSessionCount()
 std::size_t InFlightCount()
 {
 	return tlsInflight.Size();
+}
+
+void CollectMetrics(prometheus_text::Writer &writer)
+{
+	using prometheus_text::MetricType;
+	writer.BeginFamily("gate_scene_lane_events_total",
+					   "Scene lane message events on this gate since process start, by event (same keys as the [scene_lane] "
+					   "summary log line); inflight_lost should stay 0.",
+					   MetricType::kCounter);
+	VisitSceneLaneCounters(tlsCounters,
+						   [&writer](std::string_view key, uint64_t value) { writer.Sample({{"event", key}}, value); });
+	writer.BeginFamily("gate_scene_lane_in_flight", "Scene calls sent and not completed yet.", MetricType::kGauge);
+	writer.Sample({}, tlsInflight.Size());
+	writer.BeginFamily("gate_scene_lane_expiry_heap_entries",
+					   "Entries in the scene lane deadline heap, stale ones included (should stay near in_flight).",
+					   MetricType::kGauge);
+	writer.Sample({}, tlsInflight.ExpiryHeapSize());
+	writer.BeginFamily("gate_scene_lane_holding_sessions",
+					   "Sessions whose scene lane head is waiting to be resent after a retry-later answer.", MetricType::kGauge);
+	writer.Sample({}, tlsHolding.size());
+	writer.BeginFamily("gate_scene_lane_max_depth_seen",
+					   "Deepest single session scene lane queue seen since process start.", MetricType::kGauge);
+	writer.Sample({}, tlsCounters.maxDepthSeen);
+}
+
+void RegisterMetrics()
+{
+	if (!GlobalMetricsRegistry().Register("gate_scene_lane", &CollectMetrics))
+	{
+		LOG_ERROR << "[Metrics] collector gate_scene_lane is already registered";
+	}
 }
 
 void ResetForTesting()

@@ -33,6 +33,7 @@
 #include "muduo/net/TcpClient.h"
 #include "muduo/net/TcpConnection.h"
 #include "muduo/net/TcpServer.h"
+#include "metrics/prometheus_text.h"
 #include "network/codec/codec.h"
 #include "node/system/node/node.h"
 #include "node/system/node/node_command_topic.h"
@@ -926,10 +927,44 @@ TEST_F(BattleObserverContract, FullRoomRejectsWithSpectateFullWhileSeatedReplayS
     EXPECT_EQ(OBSERVER_ADMISSION_ABSENT, Query(overflow));
 }
 
+namespace {
+// BattleRoomManager::CollectMetrics 此刻输出里一条样本的值,没有这一条返回 UINT64_MAX。样本行在行首,
+// # HELP 行里也出现无标签的族名,所以按 "\n族名 " 找。
+uint64_t BattleMetricSample(const std::string& series) {
+    prometheus_text::Writer writer;
+    BattleRoomManager::Instance().CollectMetrics(writer);
+    EXPECT_EQ(writer.DroppedSamples(), 0u);
+    const std::string& text = writer.Text();
+    const auto at = text.find("\n" + series + " ");
+    return at == std::string::npos ? UINT64_MAX : std::stoull(text.substr(at + series.size() + 2));
+}
+} // namespace
+
+// 房间与事件计数的导出(2026-11-27 起,原来只有日志):每一族、每个标签取值都以当前值导出,没发生过的为 0;
+// 房间数与滞留房间数在抓取时从房间表现数。告警读 battle_sql_outcome_stuck_rooms(deploy/k8s/battle-settlement-alerts.yaml)。
+TEST_F(BattleObserverContract, RoomAndEventCountersAreExportedAsMetrics) {
+    ASSERT_NO_FATAL_FAILURE(Create());
+    EXPECT_EQ(BattleMetricSample("battle_rooms"), BattleRoomManager::Instance().RoomCount());
+    EXPECT_EQ(BattleMetricSample("battle_sql_outcome_stuck_rooms"), 0u) << "刚建的房间没有滞留的终局";
+    for (const std::string series : {
+             std::string("battle_frames_dropped_no_direct_total"),
+             std::string("battle_table_fingerprint_mismatches_total{result=\"rejected\"}"),
+             std::string("battle_table_fingerprint_mismatches_total{result=\"continued\"}"),
+             std::string("battle_observer_seats_reclaimed_total{cause=\"connect_timeout\"}"),
+             std::string("battle_observer_seats_reclaimed_total{cause=\"reconnect_timeout\"}"),
+             std::string("battle_spectate_frames_not_sent_total"),
+         }) {
+        EXPECT_NE(BattleMetricSample(series), UINT64_MAX) << series;
+    }
+}
+
 // 登记后一直没建直连的席位:连接宽限内保持 ACTIVE(补签不延长宽限),宽限后被回收为 ABSENT;
 // 回收封闭原 op(同 op 不复活),新 op 可以重新准入。时刻由回收入口显式传入,不等真实 30s。
 TEST_F(BattleObserverContract, NeverConnectedSeatReclaimedAfterConnectGraceWithoutRevival) {
     ASSERT_NO_FATAL_FAILURE(Create());
+    const std::string reclaimedSeries = "battle_observer_seats_reclaimed_total{cause=\"connect_timeout\"}";
+    const uint64_t reclaimedBefore = BattleMetricSample(reclaimedSeries);
+    ASSERT_NE(reclaimedBefore, UINT64_MAX);
     const auto first = Original(kFirstOperation);
     const auto before = std::chrono::steady_clock::now();
     ASSERT_EQ(0u, AddError(first));
@@ -946,6 +981,7 @@ TEST_F(BattleObserverContract, NeverConnectedSeatReclaimedAfterConnectGraceWitho
     manager().ReclaimExpiredObserverSeats(battleId, after + BattleRoomManager::kObserverConnectGrace);
     EXPECT_EQ(OBSERVER_ADMISSION_ABSENT, Query(first));
     EXPECT_EQ(static_cast<uint32_t>(::kInvalidParameter), TicketError(first));
+    EXPECT_EQ(BattleMetricSample(reclaimedSeries), reclaimedBefore + 1) << "回收按 cause 计数并导出";
 
     // 墓碑已封闭(原准入截止未过)或已删(截止已过,由时间校验挡住),同 op 都回 kInvalidParameter
     EXPECT_EQ(static_cast<uint32_t>(::kInvalidParameter), AddError(first));

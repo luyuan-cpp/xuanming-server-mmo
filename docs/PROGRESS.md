@@ -8339,3 +8339,12 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
 - **给 Gemini 的验证**:`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1` 全 `[PASS]`、`k8s_table_bundle_contract.tests.ps1` 不回归;`cd go/trade; go build ./...; go vet ./...`;表包模式的 kind 冒烟里核对 trade 的 sidecar 就绪与 STATUS.json。
 - **剩下**:悬赏求书批 B(scene 退役旧揭榜 + 客户端切换),做法在设计稿 §11.2。
 - **提交情况**:main 工作区,未提交。
+
+## 2026-11-27 Claude:悬赏求书批 B(scene 退役旧揭榜 + 客户端切到 trade 求购单)——r2-craft#1 三批代码全部写完(未编译、未运行,待 Gemini 验证;Java 只登记)
+
+- **改了什么(服务端)**:`proto/scene/player_skill.proto` 删 560~563 四条 RPC 与消息、`reserved 23`;`player_craft_comp.proto` `reserved 16, 17`、删 `SkillBookWantedOrder`;`client_request_ledger_comp.proto` `reserved 40, 41`;C++ `player_craft.{h,cpp}` 删四个入口与只给它们用的辅助函数,`client_request_ledger.{h,cpp}` 26~28 改名 `kRetiredWantedOrder*` 留值,`equip_craft_quality_rules.h` 删悬赏常量(税与 3414 留着),`player_skill_handler.cpp` 删四个 handler,`player_handoff_gate.h` 删两条分类,`bag_test` 删悬赏段、三个用例改名;`tools/scripts/scene_wanted_order_retire_xlsx_patch.py`(新,幂等,已跑)删 `MessageLimiter.xlsx` 560~563 四行;trade 跨语言用例删掉已无 C++ 对照的三项。别的会话的一轮生成已按改后的 proto 写出四个墓碑与四行 `retired=`。
+- **改了什么(客户端 `mmorpg-client`)**:`SkillCraftClient` 发榜 / 揭榜 / 撤单改调 trade(582 / 583 / `CancelCommerceOrder`),书架书先封卷再揭榜,发榜与揭榜按同一请求号重发查结论(只在内存里跟,约 30 秒);悬赏榜读 584(公开榜翻页、我的悬赏 `only_mine`);`SkillCraftModels`、`SkillCraftWindow`、`GameClient` 跟着改;EditMode 用例改写并新加一条。`CommerceClient` 不加调用(理由见设计稿)。
+- **记录**:五项与 Gemini 验证顺序在 `docs/design/skill-book-wanted-order-trade-escrow.md` §11.2「批 B 落码记录」;策划稿 §2.4 / §4 改写;第 4 轮交接单 §6.1、r2 剩余交接单 §3.1、审计文档 §5.0 同步;Java 仓 `PARITY.md` 补「客户端已切」。
+- **静态检查(本机,只读)**:`test_cpp_no_raw_pointer_member.py` 13 条通过;`check_log_text_english.py` 通过;`gofmt -l` 对改动的 Go 文件无输出;`grep -rn "FulfillWantedOrder\|wanted_orders" cpp/libs cpp/nodes` 无结果。
+- **给 Gemini 的验证(按顺序,红了保留首错交回 Claude)**:导表(`dev.bat gen`)→ `proto-gen-run` → 客户端 `tools/gen_proto.ps1`、`tools/gen_messageids.ps1`、`tools/client_compile_check.ps1` 与 EditMode `SkillCraftClientTests` → C++ 串行 MSBuild 库、scene、`bag_test`,`bag_test.exe --gtest_filter=PlayerCraftQualityTest.*:EquipCraftQualityRulesTest.*` → `go/trade` 的 build / vet / `go test ./internal/commerce/... ./internal/logic/...` → 冒烟(设计稿 §9 第 3 条)。逐条通过标准见设计稿 §11.2 末;批 A(§11.1 末)、批 C 的验证仍未跑,一并跑。
+- **提交情况**:主仓与客户端仓都在 main 工作区,未提交。
