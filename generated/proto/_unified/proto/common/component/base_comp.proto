@@ -1,0 +1,15 @@
+syntax = "proto3";
+option go_package = "proto/common/component";
+
+
+
+message Vector3
+{
+	double x = 1;
+	double y = 2;
+	double z = 3;
+}
+
+
+
+

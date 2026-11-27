@@ -1,0 +1,13 @@
+syntax = "proto3";
+package common.base;
+option go_package = "proto/common/base";
+
+// 内部邮件/榜控制请求的调用者证明；客户端协议不携带它。
+// HMAC 规范串为 v1\n<完整RPC方法>\n<caller>\n<timestamp_ms>\n
+// <清空auth后请求的确定性protobuf字节SHA256小写hex>。方法名防跨入口重放。
+// request_id/cursor 在业务SQL事务内持久判重；同键不同载荷明确拒绝。
+message ServiceCallAuth {
+  string caller = 1;
+  uint64 timestamp_ms = 2;
+  string signature_hex = 3;
+}

@@ -1,0 +1,96 @@
+syntax = "proto3";
+option go_package = "proto/common/component";
+
+// 玩家近期战斗结果(docs/design/battle-result-recovery.md §4)。
+//
+// 落在 player_database.battle_results(字段 23,PROFILE 组)。结算应用的同一帧写入,与奖励、收件箱账本随同一次存档、
+// 同一个整笔序号提交(player-data-tidb-scaling-plan.md §4.3):要么一起在盘上,要么一起没有。
+// 记的是本人实际入账的结果,不是终局原件:消耗按实际持有夹紧,经验与角色累计经验在同一次存档提交。
+// 存档确认提交之前不对客户端公开(与 BattleEndS2C 同一个公开时机)。
+//
+// 持久数据:只在加载时创建(PlayerDatabaseMessageFieldsUnmarshal),存盘缺它整份拒存(docs/design/ecs-component-access-rules.md)。
+// 客户端查询(proto/scene/player_battle_result.proto)直接下发 PlayerBattleResult,同 CurrencyComp 的用法。
+// 枚举存 uint32(eBattleOutcome、CurrencyType):common 不反向依赖 battle 包。
+// 新旧只看 result_seq,不看下标(AGENTS §11.6);存放顺序只为确定性序列化。
+// 字段号上线后不复用,删字段写 reserved(AGENTS §4)。
+
+// 一种货币的实际入账额。
+message PlayerBattleResultCurrency {
+  uint32 currency_type = 1;  // CurrencyType:0 金币、1 钻石、2 绑定钻石
+  uint64 amount = 2;         // 本局入账额;先抵欠款的部分也算在内
+}
+
+// 一种物品的实际数量。
+message PlayerBattleResultItem {
+  uint32 item_table_id = 1;
+  uint64 count = 2;
+}
+
+// 一局的本人结果。
+message PlayerBattleResult {
+  uint64 result_seq = 1;      // 本玩家的结果序号,从 1 起只增;新旧看它
+  uint64 battle_id = 2;       // 去重键:同一局至多一条
+  uint32 outcome = 3;         // eBattleOutcome:A 胜 / B 胜 / 平局 / 作废(VOID:本局被 Match 作废,下面的明细全空);不会是 ONGOING
+  uint32 team_index = 4;      // 本人所在方(0 = A 方);胜负 = outcome 对照它
+  bool is_dead = 5;           // 本人终局时阵亡
+  bool fled = 6;              // 本人逃离了战斗
+  uint32 total_rounds = 7;
+  uint64 finished_at_ms = 8;  // 战斗结束时刻(battle 冻结终局时的 UTC 毫秒);0 = 结算原件没带
+  uint64 settled_at_ms = 9;   // 奖励入账时刻(scene 应用结算时的 UTC 毫秒)
+  repeated PlayerBattleResultCurrency currencies = 10;  // 按 currency_type 升序,只含非 0
+  repeated PlayerBattleResultItem items_gained = 11;    // 本人实得的掉落(入了人物背包或临时背包;items_mailed 时改由邮件发放),按 item_table_id 升序
+  repeated PlayerBattleResultItem items_consumed = 12;  // 实际扣除的战斗消耗,按 item_table_id 升序
+  bool lines_truncated = 13;  // 物品行超过上限被截掉了一部分(只留配置号最小的那些)
+  bool seen = 14;             // 客户端已确认展示过(AckBattleResults)
+  uint32 match_mode = 15;     // MatchMode 数值;0 = 结算原件没带
+  uint32 battle_config_id = 16; // 战斗配置号;0 = 结算原件没带
+  // 掉落放不进人物背包与临时背包,整批改由邮件发放(docs/design/battle-overflow-mail.md)。items_gained 照常列出这批掉落
+  // (它们已经是本人的,只是要去邮箱领);客户端据此在结算屏提示。
+  bool items_mailed = 17;
+  uint64 exp_gain = 18;       // 本局实际计入 LevelComp.total_exp 的经验；旧结果缺字段为 0
+  uint32 material_credit_units_added = 19; // 本局实际新增的装备材料可领额度(0 或 10)
+  uint32 season_id = 20;      // 论剑排位赛季编号(非排位为 0)
+  uint32 trial_journal_entry_id = 21; // 五行试炼志关联关卡格 ID(0 = 非试炼志对局，结算页据此决定是否显示「看试炼志」)
+  repeated uint32 trial_newly_lit_seal_ids = 22; // 本局首次点亮的战法印 ID 列表
+  bool trial_new_solo_best = 23; // 本局是否刷新单人最少回合纪录
+  bool trial_new_coop_best = 24; // 本局是否刷新好友合战最快回合纪录
+  uint32 material_tradable_units_added = 25; // 本局实际新增材料中可交易份数（0 或 1；仅胜局且账号/阶段余量充足时为 1）
+  bool material_pvp_loss_ineligible = 26;    // true = 本局为未达防挂机有效对抗门槛的 PVP 负/平局（+0 且不扣永久 660 额度）
+  // 瑞兽迎春限时活动结算增量（非活动局全 0/空）。
+  uint32 festival_activity_instance_id = 27;
+  string festival_reward_identity = 28;
+  uint32 festival_wins_before = 29;
+  uint32 festival_wins_after = 30;
+  uint32 festival_required_wins = 31;
+  bool festival_newly_eligible = 32;
+  uint64 material_available_units_after = 33;
+  uint32 material_earnable_remaining_after = 34;
+  // 单槽赛季印本局结算增量（非赛季合格局全 0/false）。
+  uint32 season_seal_points_added = 35;
+  uint32 season_seal_progress_after = 36;
+  uint32 season_seal_max_points = 37;
+  bool season_honor_newly_unlocked = 38;
+  bool surrendered = 39; // true = 本方通过 PVP 延迟投降结束本局（重登补弹与现场结算同口径展示「体面认输」）
+  // 角色升级与战斗银两周上限增量（docs/planning/player-leveling-and-battle-economy-v1.md §2.3）。
+  uint32 level_before = 40;
+  uint32 level_after = 41;
+  uint64 total_exp_after = 42;
+  uint64 next_level_total_exp = 43;
+  uint64 battle_silver_weekly_used = 44;
+  uint64 battle_silver_weekly_soft_cap = 45;
+  bool battle_silver_diminished = 46;
+  uint32 trial_vow_mask = 47;    // 五行试炼志 V3：本局生效的试炼誓约位掩码（0=常规）
+  bool trial_new_vow_best = 48;  // 五行试炼志 V3：本局是否刷新该试炼格最高誓约纪录
+  uint64 trial_battle_id = 49;   // 五行试炼志 V3：可供一键发帖约战/回放的权威 battle_id（仅胜局非 0）
+  // 满级溢出流向「往季徽章追忆」的单局增量（与 BattleEndS2C 同源，断线补弹零丢失）。
+  uint32 retro_honor_season_id = 50;
+  uint32 retro_honor_points_added = 51;
+  uint32 retro_honor_progress_after = 52;
+  uint32 retro_honor_max_points = 53;
+  bool retro_honor_newly_unlocked = 54;
+}
+
+message PlayerBattleResultComp {
+  uint64 last_result_seq = 1;               // 发过的最大 result_seq,只增不减(淘汰旧条目不回退)
+  repeated PlayerBattleResult entries = 2;  // 至多 10 条(battle_result_history.h 的 kMaxEntries)
+}

@@ -309,6 +309,18 @@ Claude 全部模型周额度过 80%(81%),按负责人 11-26 口径停在批 A �
 - 契约测试:`tools/scripts/tests/k8s_*_contract.tests.ps1` 里钉 trade ConfigMap 的几份同批改。
 - `docs/ops/trade-commerce-quarantine-runbook.md` 加 kind 7 口径:退书腿没到账用 reissue 补 `seller_return_<n>`;有过退书的单不能整单退回(§11.1 代价第 2 条);发榜人收书被拒由引擎自动整单退回、退全额,不用人工。`deploy/k8s/README.md` 一行。
 
+**批 C 落码记录(2026-11-27,会话「复核第 4 轮批 V/W 并补 guild 见证 SQL」,Opus 5.5;未运行,待 Gemini 验证)**:
+- 问题:K8s 上 trade 的求购单开关一直是服务 yaml 的缺省 false,ConfigMap 也没有 `TableDir`;表包模式下 trade 不在挂 sidecar 的读表服务里。批 B 切过去之后,集群里的悬赏求书会整个不可用。
+- 前提②的拍板:负责人 2026-11-27 定 **K8s 各档位都打开 trade 资产通道**。部署脚本早有 `-AssetOps on|off`(签名密钥注入、`-NetworkPolicies on` 前提、先 zone 后 infra 的顺序、跨命令核对),所以「打开」就是各档位都以 `-AssetOps on` 部署,不改开关本身的缺省与前提。
+- 方案:
+  - `tools/scripts/k8s_deploy.ps1`:`-AssetOps on` 时 trade ConfigMap 的 `Commerce.WantedSkillBook.Enabled` 改 true(服务 yaml 里那一行必须恰好一处,不猜);trade ConfigMap 恒写 `TableDir: /generated/tables`(镜像自带的表);`$script:TableSyncGoServices` 在 `-AssetOps on` 时加上 trade,表包模式下与别的读表服务一样挂 sidecar、跟随热更。trade ConfigMap 那段「所有档位固定 false」的过时注释改写成现状。
+  - `go/trade/trade.go` 补 `--validate-tables` 入口(`tablebundle.MaybeRunValidateTablesCLI`,校验钩子 `svc.ValidateTables`,与启动、热更同一判据)。
+  - 契约测试 `k8s_deploy_contract.tests.ps1`:关着时求购单关、`TableDir` 在;打开时求购单开、`TableDir` 在。
+  - 隔离手册 §4.2 补 kind 7 的三条口径;`deploy/k8s/README.md` 的 `-AssetOps on` 一节补一行。
+- 为什么这样选:求购单只依赖资产通道,跟同一个开关走,开关两头不会出现「求购单开着、通道关着」这种让 trade 拒启的组合;表沿用镜像自带的 `/generated/tables`,表包模式只是在它之上换成热更的包,和 match / mail 同一套。
+- 被否决的做法:①把 `-AssetOps` 的缺省改成 on——它的前提(两把密钥、`-NetworkPolicies on`、滚动整个 zone 的 scene)每个环境都要先准备,改缺省会让还没准备好的环境直接部署失败;②另加一个只管求购单的部署开关——多一个开关就多一种「通道关、求购单开」的错配。
+- 代价与边界:没有用 `-AssetOps on` 部署的环境,悬赏求书在批 B 之后不可用(发榜、揭榜回「功能未开放」,已有的单照常可撤);trade 进了表包模式的读表名单,`config-table-hot-reload.md` 的 Go 读表服务一条已补;sidecar 的就绪与 STATUS.json 没有为 trade 单独写用例,交 Gemini 在表包模式的 kind 冒烟里一并核对。
+
 **批 B(scene 退役旧揭榜 + 客户端切换,必须同批)**,文件按 §8 批 B 表,另补:
 - scene 四条 RPC(560~563)删掉之后生成器自动把号转墓碑(一次 4 条,正好卡在 `maxNewMessageTombstonesPerRun = 4` 上,同一轮生成里不能再删别的 RPC);`MessageLimiter.xlsx` 里 560~563 四行同批删(先核对导表器允不允许限流行指向墓碑号)。
 - 玩家存档字段退役(`PlayerCraftComp.wanted_orders = 16`、`next_wanted_order_seq = 17`、`SkillCraftingStateSnapshot.my_wanted_orders = 23`)走混版本字段保护台账:生成器写 `retired=` 行,`proto/persist_schema_gen.txt` 的 diff 只许多退役行;`ClientRequestKind` 26~28 只退役不复用。

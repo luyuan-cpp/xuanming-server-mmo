@@ -1,0 +1,10 @@
+syntax = "proto3";
+option go_package = "proto/common/constants";
+
+
+// Test flag type enum
+enum eTestFlagType 
+{
+    kTestMessageStatistics = 0; // Enable message statistics
+    kTestClearEmptyTiles = 1;   // Enable clearing empty AOI tiles
+};

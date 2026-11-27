@@ -181,6 +181,11 @@ commercefix -endpoint <trade Pod IP>:<端口> resolve -commerce <commerce_id> -a
 
 工具与入口只改合同行，不碰 op 行，不发资产；新腿由引擎发号投递，与玩家操作同一条写路径。官方商城交付的人工处理要和商城订单一起做，不用这个工具。人民币寄售（kind 6）在交付阶段转人工时，商城的寄售人工单停在 MANUAL：先在这里把合同推出 `manual`（隔离 `corrupt` 的原因消除后 `resume`；交付腿部分发放的见 §6），再到商城管理入口对这张寄售单做 `RETRY_DELIVERY`，商城把交付待办交还 trade，按合同现状重新回执；付款已被渠道撤销的才用 `RETURN_TO_SELLER`（设计 [jubaozhai-market.md](../design/jubaozhai-market.md) §16.1）。
 
+**悬赏求书求购单(kind 7,2026-11-27 补;设计 [skill-book-wanted-order-trade-escrow.md](../design/skill-book-wanted-order-trade-escrow.md) §11.1)**:
+- 揭榜交上的书不符合条款时,引擎原样退书(腿名 `seller_return_<揭榜序号>`)。退书腿没到账会转人工(`final_credit_failed`),用 `reissue` 补发这条退书腿;补发到账后单子自动回到挂榜。
+- 有过「不符退书」的单不能 `refund` 整单退回:`refundCommon` 见到已到账的退书腿就拒绝,这是有意的 fail-closed(防止把书退两遍)。改用 `reissue` / `resume`。
+- 发榜人收书被拒(获取封禁等终局拒绝)不用人工:引擎自动整单退回,书回揭榜人、悬赏全额回发榜人。
+
 ### 4.3 角色冲突
 
 - 暂时冻结、还在投票：不用处理，等结局。

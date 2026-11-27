@@ -1,0 +1,15 @@
+syntax = "proto3";
+option go_package = "proto/common/component";
+
+
+
+//https://github.com/raysan5/raylib.git
+//https://github.com/recastnavigation/recastnavigation.git
+message FrameTime
+{
+ uint64 previous_time = 1;    // Previous time measure
+ double delta_time = 2;       // Frame time (Update + Draw + Wait time)
+ uint32 target_fps = 3;    	  // Our initial target fps
+ double time_accumulator = 4;      // Accumulative time counter (seconds)
+ uint32 current_frame = 5;
+}

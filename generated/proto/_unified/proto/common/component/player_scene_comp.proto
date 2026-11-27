@@ -1,0 +1,17 @@
+syntax = "proto3";
+option go_package = "proto/common/component";
+
+
+
+message PlayerSceneInfoComp
+{
+  uint32 scene_config_id = 1;
+  uint32 guid = 2;
+}
+
+message PlayerSceneContextComp
+{
+	PlayerSceneInfoComp scene_info = 1;
+	PlayerSceneInfoComp scene_info_last_time = 2;
+}
+

@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "proto/common/options";
+
+// 跨进程命令入口必须显式允许；未标注的事件不能经 Kafka 派发。
+// 入口由事件文件所属目录决定，载荷不能携带进程内实体句柄。
+extend google.protobuf.MessageOptions {
+  optional bool OptionKafkaIngress = 700001;
+}

@@ -1,0 +1,12 @@
+syntax = "proto3";
+option go_package = "proto/common/base";
+
+
+
+message MessageStatistics
+{
+  uint32 count = 1;
+  uint32 flow_rate_second = 2;
+  uint64 flow_rate_total = 3;
+  uint32 second = 4;
+}

@@ -1,0 +1,102 @@
+syntax = "proto3";
+option go_package = "proto/scene";
+
+import "proto/db/proto_option.proto";
+import "proto/common/base/tip.proto";
+import "proto/scene/player_bag.proto";
+
+option cc_generic_services = true;
+option (OptionFileDefaultNode) = NODE_SCENE;
+
+// 官方灵石百宝阁(docs/design/spirit-shop-and-starter-packs-v1.md):
+// 承接真钱充值所得灵石(CURRENCY_TYPE_DIAMOND = 1)的游戏内官方直购货架,
+// 支持单物品与双物品(如绑定 3001+3002 首套修行提速包)原子直发、共享组终身限额、单品限购与报价防呆。
+// 客户端零配表:所有展示名、说明、价格、绑定态、双余额与剩余限额均由服务端权威下发。
+
+message SpiritShopItemEntry {
+  uint32 item_config_id = 1;
+  uint32 item_count = 2;
+  bool bound = 3;
+}
+
+message SpiritShopLimitGroupView {
+  uint32 group_id = 1;
+  string name = 2;
+  uint32 reset_kind = 3;     // 0 = 终身不重置,1 = 每周重置(UTC+8 周一 05:00)
+  uint32 max_weight = 4;     // 共享组总上限(如首套提速 = 300 份)
+  uint32 used_weight = 5;    // 请求者已用权重
+  uint64 next_reset_ms = 6;  // reset_kind == 1 时下一次重置时间戳(UTC 毫秒),终身填 0
+}
+
+message SpiritShopGoodsView {
+  uint32 goods_id = 1;
+  uint32 tab_id = 2;                 // 1 = 首套提速,2 = 精进配套,3 = 外观便利
+  uint32 sort_order = 3;
+  string name = 4;
+  string description = 5;
+  string icon_key = 6;
+  string badge_text = 7;
+  uint32 currency_type = 8;          // CurrencyType(首批核心商品统一为 1 = 灵石)
+  uint64 unit_price = 9;             // 单份价格
+  uint32 max_buy_per_request = 10;   // 单次请求最大份数(1..99)
+  repeated SpiritShopItemEntry items = 11; // 1..2 项,顺序与配表一致
+  uint32 limit_reset_kind = 12;      // 0 = 终身,1 = 每周
+  uint32 limit_count = 13;           // 0 = 不限购
+  uint32 bought_count = 14;          // 本周期或终身已购份数
+  uint32 limit_group_id = 15;        // 0 = 无共享组
+  uint32 limit_group_weight = 16;    // 每份消耗共享组权重
+  uint64 next_reset_ms = 17;         // limit_count > 0 且 limit_reset_kind == 1 时有效
+  uint64 start_time_ms = 18;         // 定时开售 UTC 毫秒(0 = 立即开售)
+  uint64 end_time_ms = 19;           // 定时下架 UTC 毫秒(0 = 永不下架)
+  uint32 grant_mode = 20;            // 0 = 全部发放(1..4项), 1 = 多选一自选(2..4项任选1项)
+  uint64 original_price = 21;        // 原价划线展示(0 = 无划线; > unit_price 时客户端显示原价划线与折数)
+  uint32 min_level = 22;             // 最低可见/可购有效等级(0 = 不限)
+  uint32 max_level = 23;             // 最高可见/可购有效等级(0 = 不限)
+}
+
+message SpiritShopInfo {
+  uint64 server_time_ms = 1;
+  uint64 shop_revision = 2;
+  uint64 diamond_balance = 3;        // 灵石余额(CURRENCY_TYPE_DIAMOND = 1),只供展示
+  uint64 bind_diamond_balance = 4;   // 绑定灵石余额(CURRENCY_TYPE_BIND_DIAMOND = 2),区分展示防误解
+  repeated SpiritShopLimitGroupView limit_groups = 5;
+  repeated SpiritShopGoodsView goods = 6;
+}
+
+message GetSpiritShopInfoRequest {}
+
+message GetSpiritShopInfoResponse {
+  TipInfoMessage error_message = 1;
+  SpiritShopInfo info = 2;
+}
+
+message BuySpiritShopGoodsRequest {
+  uint64 client_request_id = 1;         // 必填非 0 客户端幂等键
+  uint32 goods_id = 2;
+  uint32 count = 3;                     // 1..max_buy_per_request
+  // 报价防呆:任意一项与服务端当前配表不一致(热更改价/改内容/改绑定态)均拒绝并回 kSpiritShopPriceChanged。
+  // grant_mode == 0(全部发放)时 expected_items 为全部 1..4 项且 chosen_item_index 须为 0;
+  // grant_mode == 1(多选一)时 chosen_item_index 为所选候选项下标(0..items.size()-1), expected_items 仅含所选那 1 项。
+  uint32 expected_currency_type = 4;
+  uint64 expected_unit_price = 5;
+  repeated SpiritShopItemEntry expected_items = 6;
+  uint32 chosen_item_index = 7;
+}
+
+message BuySpiritShopGoodsResponse {
+  TipInfoMessage error_message = 1;
+  SpiritShopInfo info = 2; // 成功(含重放)时返回最新货架与余额
+  BagInfo bag = 3;         // 成功(含重放)时返回全量背包
+  bool replayed = 4;       // true = 幂等重放命中首次成功记录,未重复扣费与发物
+}
+
+service SceneSpiritShopClientPlayer {
+  option (OptionIsPlayerService) = true;
+  option (OptionIsClientProtocolService) = true;
+
+  // 查询当前灵石百宝阁货架、双余额与个人/共享组限购状态。纯读取。
+  rpc GetSpiritShopInfo (GetSpiritShopInfoRequest) returns (GetSpiritShopInfoResponse);
+  // 购买商品:单事务同步原子校验、发绑定物品、扣灵石、记限购、记幂等并触发关键进度存盘。
+  rpc BuySpiritShopGoods (BuySpiritShopGoodsRequest) returns (BuySpiritShopGoodsResponse);
+  // ── 以下只许在末尾追加:生成的 CallMethod 按 method index 分发 ──
+}

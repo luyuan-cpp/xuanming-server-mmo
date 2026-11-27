@@ -1,0 +1,45 @@
+syntax = "proto3";
+option go_package = "proto/scene";
+
+import "proto/db/proto_option.proto";
+import "proto/common/base/tip.proto";
+import "proto/common/component/player_battle_result_comp.proto";
+
+option cc_generic_services = true;
+option (OptionFileDefaultNode) = NODE_SCENE;
+
+// 近期战斗结果:重登 / 重连之后补看最近几局的胜负与奖励明细(docs/design/battle-result-recovery.md)。
+//
+// 结果在结算应用的同一帧写进玩家存档(player_database.battle_results),与奖励同一次提交;存档确认提交之后才对客户端可见,
+// 与 BattleEndS2C 同一个公开时机。只认会话里的本人:请求不带 player_id,scene 按会话解析出的实体回答。
+// 客户端用法(设计 §7):每次落地查一次;收到没有战斗上下文的 BattleEndS2C 时再查一次;展示 seen = false 的结果,
+// 展示之后 AckBattleResults。按 battle_id 去重。
+
+message GetRecentBattleResultsRequest {
+}
+
+message GetRecentBattleResultsResponse {
+  TipInfoMessage error_message = 1;
+  // 已随存档提交的结果,新的在前(result_seq 降序),至多 10 条;同一 battle_id 至多一条。
+  // 顺序以 result_seq 为准,客户端不要依赖下标。
+  repeated PlayerBattleResult results = 2;
+}
+
+message AckBattleResultsRequest {
+  // 已展示过的局,至多 10 个(超过回 1015)。不认识的局(已淘汰 / 从未有过 / 还没提交)忽略;重复确认无副作用。
+  repeated uint64 battle_ids = 1;
+}
+
+message AckBattleResultsResponse {
+  TipInfoMessage error_message = 1;
+}
+
+service SceneBattleResultClientPlayer {
+  option (OptionIsPlayerService) = true;
+  option (OptionIsClientProtocolService) = true;
+
+  // 只读,冻结 / 交接中也能查;结果组件缺失(加载不变量被破坏)回 1003。
+  rpc GetRecentBattleResults (GetRecentBattleResultsRequest) returns (GetRecentBattleResultsResponse);
+  // 冻结 / 交接 / 没有归属围栏的实体回 1006;已读标记随下一次存盘落地,不单独触发存盘。
+  rpc AckBattleResults (AckBattleResultsRequest) returns (AckBattleResultsResponse);
+}

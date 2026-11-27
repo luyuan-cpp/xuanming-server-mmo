@@ -1,0 +1,19 @@
+syntax = "proto3";
+option go_package = "proto/common/component";
+
+
+
+enum eCombatState
+{
+	kSilence = 0;
+}
+
+message CombatStateDetailsComp 
+{
+    map<uint64, bool> sources = 1;
+}
+
+message CombatStateCollectionComp 
+{
+    map<uint32, CombatStateDetailsComp> states = 1;
+}

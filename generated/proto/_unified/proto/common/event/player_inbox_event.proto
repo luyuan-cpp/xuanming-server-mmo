@@ -1,0 +1,17 @@
+syntax = "proto3";
+option go_package = "proto/common/event";
+import "proto/common/options/event_ingress_option.proto";
+
+// 玩家收件箱的在线提醒(docs/design/player-inbox-service.md §6.3、§7.13)。
+// 经 SceneCommand{DispatchEvent} 进 scene 节点进程内分发(scene 侧生成 handler/event/player_inbox_event_handler)。
+// Kafka 投递要求(照 proto/common/event/team_event.proto):topic = scene-cmd_g<N>,key = player_id(保序,AGENTS §7 #3);
+// SceneCommand{DispatchEvent, player_id, target_scene_id = scene_node_id,
+//              target_instance_id = 目标 scene 节点 uuid(防僵尸,AGENTS §7 #2), event_id}。
+
+// player_inbox → scene:该玩家某个域有新条目,请安排一次检查(把 nextCheckMs 改成 now)。
+// 只是提醒,不携带条目:乱序、重复、丢失都安全(落地无条件拉取 + 在线有界兜底会补上,设计 §6.3)。
+message PlayerInboxNotifyEvent {
+  option (OptionKafkaIngress) = true;
+  uint64 player_id = 1;
+  uint32 domain = 2;          // PlayerInboxDomain
+}

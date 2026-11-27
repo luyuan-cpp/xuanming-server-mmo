@@ -1,0 +1,41 @@
+syntax = "proto3";
+option go_package = "proto/scene";
+
+import "proto/db/proto_option.proto";
+import "proto/common/base/tip.proto";
+import "google/protobuf/empty.proto";
+import "proto/common/component/scene_comp.proto";
+
+option cc_generic_services = true;
+option (OptionFileDefaultNode) = NODE_SCENE;
+
+message GsEnterSceneRequest
+{
+  uint32 session_id = 1;
+  uint64 scene_id = 2;
+}
+
+
+message GsLeaveSceneRequest
+{
+  ChangeSceneInfoComp change_scene_info = 2;
+}
+
+
+message EnterSceneS2CRequest
+{
+}
+
+message EnterSceneS2CResponse
+{
+  TipInfoMessage error_message = 1;
+}
+
+service SceneScenePlayer
+{
+  option (OptionIsPlayerService) = true;
+
+  rpc EnterScene (GsEnterSceneRequest) returns (google.protobuf.Empty);
+  rpc LeaveScene (GsLeaveSceneRequest) returns (google.protobuf.Empty);
+  rpc EnterSceneS2C (EnterSceneS2CRequest) returns (EnterSceneS2CResponse);
+}

@@ -288,6 +288,7 @@ void SceneSceneClientPlayerHandler::GetSpectateChatSetting(entt::entity player,c
 	response->set_preference(pref);
 	response->set_effective_allow(pref != SPECTATE_CHAT_PREF_FORBID);
 ///<<< END WRITING YOUR CODE
+
 }
 
 void SceneSceneClientPlayerHandler::SetSpectateChatSetting(entt::entity player,const ::SetSpectateChatSettingRequest* request,
@@ -326,4 +327,5 @@ void SceneSceneClientPlayerHandler::SetSpectateChatSetting(entt::entity player,c
 	response->set_preference(profile->spectate_chat_pref());
 	response->set_effective_allow(profile->spectate_chat_pref() != SPECTATE_CHAT_PREF_FORBID);
 ///<<< END WRITING YOUR CODE
+
 }

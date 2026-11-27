@@ -1,0 +1,22 @@
+syntax = "proto3";
+option go_package = "proto/common/component";
+
+
+import "proto/common/component/actor_comp.proto";
+
+
+message SkillComp
+{
+  uint32 skill_table_id = 1;
+}
+
+message SkillContextComp {
+    uint64 caster = 1; // Caster
+    uint64 target = 2; // Target (if any)
+    uint64 SkillId = 3; // Skill unique ID
+    uint32 skillTableId = 4; // Skill table ID
+    Transform castPosition = 5; // Cast position
+    uint64 castTime = 6; // Cast time
+    string state = 7; // Current state
+    map<string, uint32> additionalData = 8; // Additional data
+}

@@ -1,0 +1,169 @@
+syntax = "proto3";
+option go_package = "proto/scene";
+
+import "proto/db/proto_option.proto";
+import "proto/common/base/tip.proto";
+import "proto/common/component/player_trial_journal_comp.proto";
+
+option cc_generic_services = true;
+option (OptionFileDefaultNode) = NODE_SCENE;
+
+// 五行试炼志 V2 客户端契约（设计见 docs/design/long-term-progression-v2.md）。
+// 所有印记点亮、纪录、分母、里程碑进度与法宝拓印兑换均以服务端权威快照为准，客户端不在本地推算或发奖。
+
+message TrialJournalSealView {
+  uint32 seal_id = 1;
+  uint32 seal_slot_kind = 2;   // 1=通，2=守，3=巧，4=速
+  uint32 condition_type = 3;
+  uint32 condition_param = 4;
+  string title = 5;
+  string desc = 6;
+  bool lit = 7;
+}
+
+message TrialJournalEntryView {
+  uint32 entry_id = 1;
+  uint32 chapter_id = 2;
+  uint32 season_id = 3;
+  uint32 source_kind = 4;
+  uint32 difficulty = 5;
+  string variant_key = 6;
+  uint32 rule_version = 7;
+  string rule_version_name = 8;
+  uint32 sort_order = 9;
+  string display_name = 10;
+  string icon_key = 11;
+  string desc = 12;
+
+  repeated TrialJournalSealView seals = 13;
+  uint32 lit_seal_count = 14;
+  uint32 total_seal_count = 15;
+
+  bool solo_recorded = 16;
+  TrialJournalSoloRecord solo_best = 17;
+  bool coop_recorded = 18;
+  TrialJournalCoopRecord coop_best = 19;
+  bool has_legacy_record_only = 20; // true = 当前规则版暂无纪录但存在历史版本纪录（UI 提示「本版暂无纪录，战法印已保留」）
+
+  bool can_enter = 21;
+  string enter_blocked_reason = 22;
+  string jump_target = 23;
+  bool vow_supported = 24;        // V3：本关卡格是否支持勾选试炼誓约（卷一/卷二/卷四 PVE 首领为 true）
+  uint32 best_vow_mask = 25;      // V3：最高誓约纪录位掩码
+  uint32 best_vow_count = 26;     // V3：最高达成誓约条数（0..4）
+  uint32 best_vow_rounds = 27;    // V3：最高誓约纪录回合数
+  uint64 best_vow_battle_id = 28; // V3：最高誓约纪录权威 battle_id
+}
+
+message TrialJournalChapterView {
+  uint32 chapter_id = 1;
+  uint32 season_id = 2;
+  string chapter_name = 3;
+  uint32 lit_seal_count = 4;
+  uint32 total_seal_count = 5;
+  repeated TrialJournalEntryView entries = 6;
+}
+
+message TrialJournalMilestoneView {
+  uint32 milestone_id = 1;
+  uint32 scope_chapter_id = 2; // 0=全部永久卷汇总，1=卷一，2=卷二，3=卷三赛季
+  uint32 season_id = 3;
+  uint32 required_seals = 4;
+  uint32 current_seals = 5;
+  string title = 6;
+  string desc = 7;
+  uint32 bound_sand_count = 8;
+  uint32 bound_artifact_voucher_count = 9;
+  string badge_key = 10;
+  string badge_name = 11;
+  string commentary_key = 12;
+  string commentary_title = 13;
+  string commentary_body = 14;
+  string grant_appearance_id = 15;
+  string grant_appearance_name = 16;
+  bool reached = 17;
+  bool claimed = 18;
+  bool claimable = 19; // reached && !claimed && 当前角色可操作
+  uint32 grant_pet_cosmetic_id = 20;
+  string grant_pet_cosmetic_name = 21;
+  uint32 grant_skill_vfx_id = 22;
+  string grant_skill_vfx_name = 23;
+}
+
+message TrialRedeemableArtifactOption {
+  uint32 item_config_id = 1; // Item.id（3301..3308）
+  uint32 artifact_effect_id = 2; // EquipArtifact.id（1..8）
+  string name = 3;
+  string description = 4;
+  string icon_key = 5;
+  uint32 owned_count = 6; // 背包 + 装备栏合计持有数量（允许同名双件）
+}
+
+message TrialJournalSnapshot {
+  bool available = 1;
+  string unavailable_reason = 2;
+  uint64 state_revision = 3;
+  uint64 server_now_ms = 4;
+
+  uint32 total_permanent_lit_seals = 5;
+  uint32 total_permanent_seals = 6;
+
+  uint64 voucher_balance = 7;    // 人物背包可用「自用法宝拓印」(3404) 数量
+  uint64 bound_sand_balance = 8; // 人物背包可用「仅自用重铸砂」(3403) 数量
+  bool can_operate = 9;
+  string action_unavailable_reason = 10;
+
+  repeated TrialJournalChapterView chapters = 11;
+  repeated TrialJournalMilestoneView milestones = 12;
+  repeated TrialRedeemableArtifactOption redeemable_artifacts = 13;
+  // true = 本角色已通关任意普通难度首领试炼，具备困难难度首领试炼准入资格（组队困难需全员均为 true）。
+  bool hard_boss_trial_unlocked = 14;
+}
+
+message GetTrialJournalRequest {}
+
+message GetTrialJournalResponse {
+  TipInfoMessage error_message = 1;
+  TrialJournalSnapshot snapshot = 2;
+}
+
+// 领取已达标的试炼志一次性里程碑（含背包空间预检与 client_request_id 幂等防重）。
+message ClaimTrialJournalMilestoneRequest {
+  uint64 client_request_id = 1;
+  uint32 milestone_id = 2;
+}
+
+message ClaimTrialJournalMilestoneResponse {
+  TipInfoMessage error_message = 1;
+  TrialJournalSnapshot snapshot = 2;
+  bool replayed = 3;
+  uint32 granted_sand_count = 4;
+  uint32 granted_voucher_count = 5;
+  string granted_appearance_id = 6;
+  uint32 granted_pet_cosmetic_id = 7;
+  uint32 granted_skill_vfx_id = 8;
+}
+
+// 消耗 1 张「自用法宝拓印」(Item 3404)，指定兑换 8 件 V1 法宝中的任意 1 件（产出仅自用实例，允许同名第二件）。
+message RedeemBoundArtifactVoucherRequest {
+  uint64 client_request_id = 1;
+  uint32 artifact_item_config_id = 2; // Item.id（3301..3308）
+}
+
+message RedeemBoundArtifactVoucherResponse {
+  TipInfoMessage error_message = 1;
+  TrialJournalSnapshot snapshot = 2;
+  bool replayed = 3;
+  uint64 created_item_id = 4;
+  uint32 artifact_item_config_id = 5;
+}
+
+service SceneTrialJournalClientPlayer {
+  option (OptionIsPlayerService) = true;
+  option (OptionIsClientProtocolService) = true;
+
+  rpc GetTrialJournal (GetTrialJournalRequest) returns (GetTrialJournalResponse);
+  rpc ClaimTrialJournalMilestone (ClaimTrialJournalMilestoneRequest) returns (ClaimTrialJournalMilestoneResponse);
+  rpc RedeemBoundArtifactVoucher (RedeemBoundArtifactVoucherRequest) returns (RedeemBoundArtifactVoucherResponse);
+  // ── 以下只许在末尾追加：生成的 CallMethod 按 method index 分发 ──
+}

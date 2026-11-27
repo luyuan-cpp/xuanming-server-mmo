@@ -1,0 +1,14 @@
+syntax = "proto3";
+option go_package = "proto/common/component";
+
+message PlayerSessionSnapshotComp {
+    uint64 player_id = 1;
+    uint32 gate_session_id = 2;
+	map<uint32, uint32> node_id = 3;
+	string login_token = 4;
+	// Session version and idempotency fields
+	uint32 session_version = 5;
+	uint64 token_expiry_ms = 6;
+	string token_id = 7; // Server-side token ID (only ID, not secret)
+	string last_request_id = 8;
+}

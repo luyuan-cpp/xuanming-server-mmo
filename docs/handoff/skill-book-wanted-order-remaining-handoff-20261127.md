@@ -39,6 +39,8 @@
 
 ## 3. 批 C:部署开通
 
+> **2026-11-27 已做(旧电脑会话「复核第 4 轮批 V/W 并补 guild 见证 SQL」,未运行)**:负责人定 K8s 各档位都打开 trade 资产通道(各档位以 `-AssetOps on` 部署);改法、五项与取舍在设计稿 §11.2「批 C 落码记录」。只剩下面第 5 条的验证交 Gemini:`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1` 全 `[PASS]`(含资产通道开 / 关两条用例里新加的求购单与 `TableDir` 断言)、`tools/scripts/tests/k8s_table_bundle_contract.tests.ps1` 不回归;`cd go/trade; go build ./...; go vet ./...`。批 A 的复核也已通过(设计稿 §11.1 末条)。下面原文留作对照。
+
 目标:K8s 上 trade 能托管求购单(否则批 B 一切,集群里的悬赏求书就用不了)。
 
 **要先问负责人的一件事**:K8s 各档位打不打开 trade 的资产通道 `AssetOp.Enabled`(现在 `tools/scripts/k8s_deploy.ps1` 给 trade 的 ConfigMap 所有档位固定写 false)。

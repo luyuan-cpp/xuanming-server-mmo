@@ -8330,3 +8330,12 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
   2. `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py` 通过;
   3. `pwsh -NoProfile -File tools/scripts/tests/cpp_node_dependency_alerts_contract.tests.ps1`:`total=4 pass=4`;把 `spec` 抽成普通规则文件后 `promtool check rules`;
   4. 冒烟(调试栈,设 `MMORPG_METRICS_PORT`):起 gate、scene 各一个,`curl -s http://127.0.0.1:<端口>/metrics | grep -E 'cpp_node_rpc_|cpp_node_kafka_producer_'`:九个 outcome 都有序列;玩家登录走一遍后 `cpp_node_rpc_client_calls_total{outcome="ok"}` 在涨;`cpp_node_kafka_producer_failures_total` 两个 reason 都以 0 出现。
+
+## 2026-11-27 Claude:悬赏求书批 C(K8s 部署开通)——负责人定各档位都打开 trade 资产通道(未运行,待 Gemini 验证;Java 不涉及)
+
+- **负责人决定**:K8s 各档位都打开 trade 的 `AssetOp.Enabled`,即各档位都以 `-AssetOps on` 部署(开关本身的缺省与前提不变:两把签名密钥、`-NetworkPolicies on`、先 zone 后 infra)。
+- **改了什么**:`tools/scripts/k8s_deploy.ps1`——`-AssetOps on` 时 trade ConfigMap 的 `Commerce.WantedSkillBook.Enabled` 改 true,ConfigMap 恒写 `TableDir: /generated/tables`,`$script:TableSyncGoServices` 在 `-AssetOps on` 时加 trade(表包模式挂 sidecar),过时的「所有档位固定 false」注释改写;`go/trade/trade.go` 补 `--validate-tables`(钩子 `svc.ValidateTables`);契约测试 `k8s_deploy_contract.tests.ps1` 两条用例各加两条断言;隔离手册 §4.2 补 kind 7 三条口径;`deploy/k8s/README.md`、`config-table-hot-reload.md` 各补一处。五项在 `docs/design/skill-book-wanted-order-trade-escrow.md` §11.2「批 C 落码记录」。
+- **静态检查**:`k8s_deploy.ps1` 与契约测试用 PowerShell Parser 解析 0 错误;`gofmt` 对改动的 Go 文件无新增问题。
+- **给 Gemini 的验证**:`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1` 全 `[PASS]`、`k8s_table_bundle_contract.tests.ps1` 不回归;`cd go/trade; go build ./...; go vet ./...`;表包模式的 kind 冒烟里核对 trade 的 sidecar 就绪与 STATUS.json。
+- **剩下**:悬赏求书批 B(scene 退役旧揭榜 + 客户端切换),做法在设计稿 §11.2。
+- **提交情况**:main 工作区,未提交。

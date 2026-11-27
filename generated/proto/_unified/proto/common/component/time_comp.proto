@@ -1,0 +1,21 @@
+syntax = "proto3";
+option go_package = "proto/common/component";
+
+
+
+message TimeMeterComp
+{
+  uint64 start = 1;
+  uint64 duration = 2;
+}
+
+message CooldownTimeComp
+{
+  uint64 start = 1;
+  uint32 cooldown_table_id = 2;
+}
+
+message CooldownTimeListComp
+{
+  map<uint32, CooldownTimeComp> cooldown_list = 1;
+}

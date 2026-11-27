@@ -1,0 +1,19 @@
+syntax = "proto3";
+package contracts.kafka;
+
+option go_package = "proto/contracts/kafka";
+
+// Transport contract for Kafka messages sent to Scene nodes.
+// Topic convention: scene-{node_id}.
+message SceneCommand {
+  enum CommandType {
+    DispatchEvent = 0; // Use event_id + payload for in-process dispatch
+  }
+
+  CommandType command_type = 1;
+  uint64 player_id = 2;
+  uint32 target_scene_id = 3;   // Target Scene node ID
+  bytes payload = 4;            // Encoded event payload
+  string target_instance_id = 5; // Target Scene node instance UUID
+  optional uint32 event_id = 6; // Global event id for payload decoding
+}

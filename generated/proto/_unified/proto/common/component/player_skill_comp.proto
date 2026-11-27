@@ -1,0 +1,37 @@
+syntax = "proto3";
+option go_package = "proto/common/component";
+
+
+
+message PlayerSkillComp {
+  uint64 id = 1; 
+  uint32 skill_table_id = 2; 
+  // 技能等级(2026-10-19 四职业技能,docs/design/class-skills.md §3)。
+  // 职业技能(Skill.class_id != 0):已学为 >= 1;0 与条目不存在同义,都是未学(修习复用这一条,不另加条目)。
+  // 存储值可能高于本版本 Skill.max_rank(新版本调大上限后写入,或上限下调):加载不改写,原样携带,
+  // 按 min(存储值, 当前角色等级的上限) 生效(docs/design/mixed-version-persist-field-protection.md §12.1 D5)。
+  // 旧通用技能(Skill.class_id == 0)不分等级,读写都忽略本字段:存档里写着什么原样携带,下发技能书时不带。
+  uint32 rank = 3;
+}
+
+// 人物战法与加点一体化流派方案（布局层：与 skill_list 实例层解耦，不靠下标承载槽位语义）。
+message SkillLoadoutScheme {
+  uint32 scheme_id = 1;                   // 1..7 显式流派方案号（1..2 永久免费；轻享卡 +2；按套按月租用 0..5，封顶 7 套）
+  uint32 role_tag = 2;                    // 0默认 / 1输出 / 2控场 / 3辅助 / 4生存
+  repeated uint32 passive_skill_ids = 3;  // 最多 3 个被动战法（同 exclusive_group 互斥）
+  repeated uint32 pursuit_skill_ids = 4;  // 最多 1 个追击战法
+  repeated uint32 opening_skill_ids = 5;  // 最多 1 个开场战法
+  string name = 6;                        // 自定义方案名（UTF-8 1..12 字符；空则回退「方案一..七」）
+}
+
+message PlayerSkillListComp {
+  repeated PlayerSkillComp skill_list = 1;
+  uint32 active_loadout_scheme_id = 2;           // 0 = 未启用自定义装配（全量非互斥兼容态）；1..7 = 启用对应方案
+  repeated SkillLoadoutScheme loadout_schemes = 3;
+  uint64 loadout_state_version = 4;              // 战法装配乐观锁版本号（0 按 1 计）
+  string loadout_last_request_id = 5;            // 最近一次战法装配/切换幂等键
+  uint64 loadout_last_base_version = 6;          // 最近一次战法装配/切换请求的期望版本
+  uint32 loadout_last_scheme_id = 7;             // 最近一次战法装配/切换的目标方案号
+  uint32 rented_extra_slots = 8;                 // 非永久按套租用的额外方案槽位数（0..5，共享统一到期日）
+  uint64 rent_expires_at_sec = 9;                // 付费租用方案槽位统一到期 Unix 秒（0 或 <= 当前时刻为未租/已到期，到期只锁不删）
+}

@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+option go_package = "proto/db";
+
+import "proto/db/proto_option.proto";
+
+import "proto/common/base/empty.proto";
+
+option (OptionFileDefaultNode) = NODE_DB;
+
+service db {
+  rpc Test (TestRequest) returns (TestResponse);
+}
+
+message TestRequest {
+  // Can nest imported messages, but outer must be from current proto
+  Empty empty = 1;
+}
+
+message TestResponse {
+  Empty empty = 1;
+}

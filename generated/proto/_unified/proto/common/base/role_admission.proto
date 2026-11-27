@@ -1,0 +1,31 @@
+syntax = "proto3";
+package common.base;
+option go_package = "proto/common/base";
+
+// scene 在任何可激活副作用之前，按目录原 owner_revision 注册本进程的入场世代。
+// instance 每次进程启动换 UUID；generation 是本进程单调 uint64，重投保留原值。
+// owner_revision 来自 login 的原请求，不能用新目录归属给旧路由补权。
+message RoleAdmissionIdentity {
+  uint64 player_id = 1;
+  string scene_instance_id = 2;
+  uint64 generation = 3;
+  uint64 owner_revision = 4;
+  uint64 owner_epoch = 5;
+  string scene_node_id = 6;
+  uint64 scene_id = 7;
+  uint32 zone_id = 8;
+  uint32 session_id = 9;
+  uint64 login_generation = 10;
+}
+
+// listing 固定 holder 上界。迟到 seal 只覆盖原 instance/revision 的 <= upper，
+// 不能形成玩家级永久墓碑，不能触及取消后新世代或过户后买家。
+message RoleTradeSeal {
+  uint64 listing_id = 1;
+  uint64 player_id = 2;
+  uint64 owner_revision = 3;
+  string scene_instance_id = 4;
+  uint64 through_generation = 5;
+  string scene_node_id = 6;
+  uint32 zone_id = 7;
+}

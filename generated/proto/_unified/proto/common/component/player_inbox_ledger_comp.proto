@@ -1,0 +1,31 @@
+syntax = "proto3";
+option go_package = "proto/common/component";
+
+// 玩家收件箱的消费端账本(docs/design/player-inbox-service.md §4.4)。
+//
+// 落在 player_database.inbox_ledger,与 currency / bag_component 同记录、同一次 Marshal、同一次 Redis SET 写出:
+// 处置效果与账本要么一起在盘上,要么一起没有(IB-3,与资产账本的不变量 I3 同构)。
+// 落盘之后才向收件箱 Ack;重复投递按 (seq, request_id, msg_type) 三项核对一致后回放原结局,不一致 fail-closed(IB-9)。
+//
+// 枚举字段存 uint32(对应 proto/player_inbox/player_inbox.proto 的枚举):common 不反向依赖服务包。
+// 本消息只放可持久化的事实;phase / 在途请求 / 退避等运行时状态在 C++ PlayerInboxRuntimeComp,不入库(AGENTS §11.6)。
+
+// 一条已处理条目的结局。
+message PlayerInboxDecision {
+  uint64 seq = 1;
+  uint32 outcome = 2;         // PlayerInboxOutcome:APPLIED / REJECTED / SKIPPED(UNKNOWN 不入环)
+  uint32 reason = 3;          // REJECTED:tip id;SKIPPED:PlayerInboxVoidReason;APPLIED:0
+  uint64 request_id = 4;      // 回放前核对(IB-9),也供对账
+  uint32 msg_type = 5;        // PlayerInboxMessageType;回放前核对(IB-9)
+}
+
+// 单个域的消费游标。
+message PlayerInboxDomainCursor {
+  uint32 domain = 1;                         // PlayerInboxDomain
+  uint64 decided_through_seq = 2;            // 已按 seq 升序处理到这里(含)
+  repeated PlayerInboxDecision recent = 3;   // 按 seq 升序,≤ 32 条;补确认时回放原结局,超出挤掉最旧的
+}
+
+message PlayerInboxLedgerComp {
+  repeated PlayerInboxDomainCursor cursors = 1;  // 按 domain 字段查找,不靠下标(AGENTS §11.6);每域至多一条
+}

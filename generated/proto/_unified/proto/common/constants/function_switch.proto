@@ -1,0 +1,11 @@
+syntax = "proto3";
+option go_package = "proto/common/constants";
+
+
+enum eFunctionSwitchBitType
+{
+	kFunctionSwitchTeam = 0;//
+	kFunctionSwitchFriends = 1;//
+};
+
+

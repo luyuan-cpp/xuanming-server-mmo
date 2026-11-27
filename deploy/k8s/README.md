@@ -1299,6 +1299,7 @@ content-guard 是全局池服务(`$GoSvcCatalogue['content-guard']`,`Global = $t
 - 写成单键 Secret `asset-op-secret-guild` / `asset-op-secret-trade`(键 `secret`),经 secretKeyRef(非 optional)注入:guild 只拿 GUILD、trade 只拿 TRADE、scene 两把都拿(验签)。
   Secret 先于引用它的工作负载落地;off 时删掉残留(放在工作负载 apply 之后)。
 - guild ConfigMap 的 `AssetOp.Enabled` 写 true;trade ConfigMap 的 `AssetOp` 整块从 `go/trade/etc/trade.yaml` 原样搬运(落地恢复与 `Cleanup*` 键随之生效)、Enabled 改 true。
+- 悬赏求书求购单(trade kind 7)跟着一起开:trade ConfigMap 的 `Commerce.WantedSkillBook.Enabled` 写 true,`TableDir: /generated/tables`(镜像自带的表);表包模式下 trade 也挂 table-sync sidecar。**负责人 2026-11-27 定:K8s 各档位都以 `-AssetOps on` 部署**(`docs/design/skill-book-wanted-order-trade-escrow.md` §11.2 批 C)。
 - 三方 Pod 模板都带密钥指纹注解(`mmorpg.io/asset-op-secret-guild-hash` / `-trade-hash`,SHA-256 前 12 位、以 Secret 名做域分隔):只换密钥也会滚动;
   非 DryRun 时脚本据此做**跨命令核对**(`Assert-AssetOpClusterConsistency`,只读 kubectl,任何写操作之前):
   - zone-up(及带 `-SkipInfra` 的 all-up):调用方(infra 里的 guild / trade Deployment)开着而本次 scene 不开,或两边指纹不同 → 拒绝;

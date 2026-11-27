@@ -1,0 +1,403 @@
+syntax = "proto3";
+package match;
+
+import "proto/db/proto_option.proto";
+import "proto/battle/battle_data.proto";
+import "proto/battle/battle_script.proto";
+import "proto/battle/player_battle.proto";
+import "proto/common/base/service_call_auth.proto";
+import "proto/common/base/admin_approval.proto";
+
+option go_package = "proto/match";
+option cc_generic_services = false;
+option (OptionFileDefaultNode) = NODE_MATCH;
+
+// match 内部服务(帮会同道历练,docs/design/guild-phase2/06-activities.md §6.16–§6.18)。
+// Start/Cancel/占用的调用方为 Guild；Commit 的调用方为 Battle。
+// 按完整方法分别核固定签名白名单，缺密钥拒绝；客户端与组队服务不得直接调用。
+// 照 proto/trade/trade_admin.proto 的隔离做法:
+//   - 刻意不标 OptionIsClientProtocolService,且与客户端协议 match_service.proto 分文件:
+//     gate 的 IsClientMessageId 不收这些消息号,客户端发来直接丢弃;
+//   - 路由服对 ClientProtocol=false 的条目回信封拒绝;
+//   - match 的会话拦截器对"带会话 metadata 调 MatchInternal.*"回 gRPC PermissionDenied;
+//   - 内部签名由 shared/serviceauth 核验，NetworkPolicy 只是额外网络边界；
+//   - 客户端 tools/gen_proto.ps1 不列本文件,内部 schema 不进客户端包。
+
+// 拒绝原因。业务拒绝一律走响应里的 reject,不回 gRPC 错误;
+// gRPC 错误只用于 PermissionDenied(带会话调用)与传输层故障,guild 统一映射为 GuildTrialServiceBusy。
+enum ActivityBattleReject {
+  ACTIVITY_BATTLE_REJECT_NONE = 0;               // 成功:battle_id 非 0,gather 已异步启动
+  ACTIVITY_BATTLE_REJECT_INVALID_ARGUMENT = 1;   // 人数越界 / 0 或重复 id / battle_config_id 为 0 / 上下文缺失或字段为 0 / 发起人不在首位
+  ACTIVITY_BATTLE_REJECT_MEMBER_OFFLINE = 2;     // offender 无在线会话
+  ACTIVITY_BATTLE_REJECT_MEMBER_IN_BATTLE = 3;   // offender 持有 battle:lock(已在战斗中)
+  ACTIVITY_BATTLE_REJECT_MEMBER_NOT_READY = 4;   // offender 无场景位置 / 有未自愈的在途票据 / 建 matched 票失败
+  ACTIVITY_BATTLE_REJECT_INTERNAL = 5;           // match 内部故障:发号失败 / Redis 读写出错(guild 映射为 GuildTrialServiceBusy)
+  ACTIVITY_BATTLE_REJECT_OUTSIDE_WINDOW = 6;     // SQL 权威提交点时间不在活动开放窗口 [effective_start_at_ms, effective_end_at_ms) 内
+}
+
+message StartActivityBattleRequest {
+  uint32 battle_config_id = 1;                 // DungeonTable id(= GuildActivity.dungeon_id 或 FestivalBeastActivity.battle_config_id);非 0
+  // 站位顺序即队伍顺序,发起人在首位;1..kMaxBattleTeamSize(5)人、非 0、不重复。
+  // 名单是 guild 邀请房间里全员已同意的同帮成员,match 只做在线 / 战斗锁 / 位置 / 在途票的只读预检,不复核帮会归属。
+  repeated uint64 member_player_ids = 2;
+  // 活动上下文:kind 必须非 NONE,initiator_player_id == member_player_ids[0]。match 深拷贝后原样放进 CreateBattleRequest.activity_context。
+  BattleActivityContext activity_context = 3;
+  uint64 request_id = 4; // 帮会历练调用方持久的邀请房间号；瑞兽迎春改用 request_high/request_low（128 位 UUID）。
+  // 内部调用方签名（GUILD_TRIAL 只认 "guild"，FESTIVAL_BEAST 只认 "scene"）。
+  // 持久化的意图正文不含它：每次重试的时间戳不同，正文要逐字节相等。
+  common.base.ServiceCallAuth auth = 5;
+  // 瑞兽迎春客户端 128 位 UUID 拆分（Kind=5 幂等主键）；两者不得同时为 0。
+  uint64 request_high = 6;
+  uint64 request_low = 7;
+}
+
+message StartActivityBattleResponse {
+  ActivityBattleReject reject = 1;
+  uint64 offender_player_id = 2;   // reject 为 MEMBER_OFFLINE / MEMBER_IN_BATTLE / MEMBER_NOT_READY 时非 0(名单顺序里第一个不满足的人);其余为 0
+  // reject == NONE 时非 0:match 同步从发号器领号(biz_tag=battle,match 是 battle_id 唯一生产者)并已为全员建好 matched 票、
+  // 异步启动 gather;guild 据此登记 guild_trial_battle。gather 之后失败时全员删票、不回队列,
+  // 该 battle_id 不会产生结果事件,由 guild 巡检器兜底判 EXPIRED。
+  uint64 battle_id = 3;
+  uint32 formation_state = 4; // 全球SQL成局状态1..5；不独自作为可安全撤销的证明。
+  uint64 admitted_at_ms = 5;  // Match SQL 事务持久准入时刻 UTC 毫秒（瑞兽迎春等用于确认在途准入）
+}
+
+// 取消必须绑定整份原Start；未知结果只能按原request重放，不能换名单或活动上下文。
+message CancelActivityBattleRequest {
+  StartActivityBattleRequest original = 1;
+  common.base.ServiceCallAuth auth = 2;
+}
+message CancelActivityBattleResponse {
+  uint64 battle_id = 1;
+  bool request_cancelled = 2; // true且battle_id=0：持久墓碑已提交，迟到Start不能再开战。
+  uint32 formation_state = 3;
+  common.base.ServiceCallAuth auth = 4;
+  string request_digest = 5; // 清空原Cancel.auth后请求摘要；签名回复必须与本请求原件匹配。
+  BattleOutcomeDecision terminal_decision = 6;
+}
+
+enum BattleOutcomeDecision {
+  BATTLE_OUTCOME_DECISION_UNKNOWN = 0;
+  BATTLE_OUTCOME_DECISION_COMPLETE = 1;
+  BATTLE_OUTCOME_DECISION_ABORT = 2;
+}
+
+// 完整原事件在个人副作用前提交；相同局只接受相同字节，未知提交重放原件。
+message CommitBattleOutcomeRequest {
+  uint64 battle_id = 1;
+  string placement_operation_id = 2;
+  string target_instance_id = 3;
+  bytes raw_result_payload = 4;
+  common.base.ServiceCallAuth auth = 5;
+  // 战报回放(battle-report-replay.md BR-4)。空 = 本局不录,或录制被丢弃;不影响终局。
+  // 与 raw_result_payload 一起冻结:重放时逐字节相同,摘要与签名都覆盖它。
+  // 不放进 raw_result_payload:那份原件会经发件箱进 Kafka,有 960 KiB 上限。
+  BattleReplayEnvelope replay = 6;
+}
+message CommitBattleOutcomeResponse {
+  BattleOutcomeDecision decision = 1;
+  string request_digest = 2;
+  common.base.ServiceCallAuth auth = 3;
+}
+
+// 运营把一场公开局标成 / 取消标成赛事局(docs/design/battle-spectate-tiered-fanout.md §15.6,Q3)。
+// 调用方为运维工具(serviceauth 调用方 "ops",只放行本方法);标记即立刻尝试升全服广播(受全服配额约束)。
+// 私密局、不存在或已结束的局一律拒绝;重复设置同值幂等成功。
+enum SpectateFeaturedReject {
+  SPECTATE_FEATURED_REJECT_NONE = 0;
+  SPECTATE_FEATURED_REJECT_NOT_FOUND = 1;   // 观战记录不存在(局不存在或已结束)
+  SPECTATE_FEATURED_REJECT_PRIVATE = 2;     // 非公开局不能标成赛事局
+  SPECTATE_FEATURED_REJECT_INTERNAL = 3;    // Redis 读写失败(可重试)
+  // 入口未开启或调用方验签失败。走业务拒绝而不是 gRPC PermissionDenied:拒绝发生在任何副作用之前,
+  // 结局是确定的,不能让发布准入把它记成未知结局而拖住本实例的排空证明(go/shared/drainproof)。
+  SPECTATE_FEATURED_REJECT_DENIED = 4;
+}
+message SetSpectateFeaturedRequest {
+  uint64 battle_id = 1;
+  bool featured = 2;
+  common.base.ServiceCallAuth auth = 3;
+}
+message SetSpectateFeaturedResponse {
+  SpectateFeaturedReject reject = 1;
+  eSpectateTier tier = 2;                   // 处理后的档位(标记后升 L2 成功即为 BROADCAST;配额满时保持原档)
+}
+
+// 帮会历练的战斗入口占用(docs/design/horizontal-scale-logical-db.md §4)。match 是战斗入口占用的唯一权威。
+// 结论一律走响应里的 reject，不回 gRPC 错误：发布准入把 gRPC 错误记成未知结局，会拖住排空证明。
+enum TrialOccupancyReject {
+  TRIAL_OCCUPANCY_REJECT_NONE = 0;
+  TRIAL_OCCUPANCY_REJECT_OCCUPIED = 1;  // 有票、有未终结的整队开战，或别的大厅占着
+  TRIAL_OCCUPANCY_REJECT_ROLE = 2;      // 角色冻结、已删除，或原身份已换主
+  TRIAL_OCCUPANCY_REJECT_DENIED = 3;    // 调用方验签失败、入口未就绪或参数不合法
+  TRIAL_OCCUPANCY_REJECT_RETRY = 4;     // 这一次没有结论(目录或 SQL 暂不可用)。占用有租约，重放幂等
+}
+
+message TrialOccupancyRole {
+  uint64 player_id = 1;
+  // 原身份。首次占用时对端的身份还没捕获，留空(revision 0)，由 match 从本库护栏副本写入；之后每次重放都带上。
+  string account = 2;
+  uint64 owner_revision = 3;
+}
+
+// 全成或全不成，同 owner 重放幂等。过期的占用视为空闲。
+message AcquireTrialOccupancyRequest {
+  uint64 owner_id = 1;   // 大厅号，等于 StartActivityBattleRequest.request_id
+  repeated TrialOccupancyRole roster = 2;
+  uint64 ttl_ms = 3;     // 只延长不缩短
+  common.base.ServiceCallAuth auth = 4;
+}
+message AcquireTrialOccupancyResponse {
+  TrialOccupancyReject reject = 1;
+  uint64 offender_player_id = 2;  // reject 为 OCCUPIED 时是第一个不空闲的角色
+}
+
+// 只删 owner 相同的行，幂等。
+message ReleaseTrialOccupancyRequest {
+  uint64 owner_id = 1;
+  repeated uint64 player_ids = 2;
+  common.base.ServiceCallAuth auth = 3;
+}
+message ReleaseTrialOccupancyResponse {
+  TrialOccupancyReject reject = 1;
+}
+
+// 取代 guild 对 match_battle_completion 的跨库读。
+message GetBattleCompletionRequest {
+  uint64 battle_id = 1;
+  common.base.ServiceCallAuth auth = 2;
+}
+message GetBattleCompletionResponse {
+  TrialOccupancyReject reject = 1;
+  // UNKNOWN 表示这局还没有终局。ABORT 没有 battle 原字节。
+  BattleOutcomeDecision decision = 2;
+  bytes raw_payload = 3;  // 只有 COMPLETE 才有
+}
+
+// scene 的 FIGHTING 冻结到期时查这一局的 SQL 终局(2026-11-06,数据覆写审计 R2 r2-v1#1 残余窗口;
+// docs/design/turn-battle-gap-closure.md §11)。COMPLETE 不受截止约束,Match 发件箱积压时结算可能晚于冻结到期才到:
+// scene 据此判断是续冻(COMPLETE 而本地还没应用 / 有原件而终局还没落定 / 查不到)还是照常解冻(ABORT / 这一局没有可裁决的原件)。
+// 只读 match_battle_completion(终局唯一权威),不读发件箱投影,积压时发件箱同样查不到;不加锁、不写任何行。
+// 调用方只有 scene:serviceauth 调用方 "scene",与 TeamAuthority.ReadMembership 同一把场景密钥
+// (MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE)。不复用 GetBattleCompletion:那条只放行 guild、回包不签名、还带最多 960KiB 的原字节。
+message GetBattleTerminalDecisionRequest {
+  uint64 battle_id = 1;  // 非 0
+  common.base.ServiceCallAuth auth = 2;
+}
+// 回包签名与 CommitBattleOutcome 同一套:Match 以调用方 "match"、方法 + "/reply" 签整份回包(清空 auth 之后),
+// request_digest 绑定本次请求原件;scene 验不过一律按「未知」处理。
+// 读失败不回 gRPC 错误,带内 retry = true:只读查询没有结局未知,回 Unavailable 会被发布准入记成未知结局、拖住排空证明。
+message GetBattleTerminalDecisionResponse {
+  // UNKNOWN = SQL 里这一局还没有终局决定(没有终局行,或只有 Kafka 归档、尚无决定),即 NONE;是不是终局证据看 terminal_expected。
+  BattleOutcomeDecision decision = 1;
+  bool retry = 2;             // true = 这一次没读成(或读到非法持久值),decision 无意义,调用方按「未知」处理
+  string request_digest = 3;  // 清空请求 auth 之后的请求摘要
+  common.base.ServiceCallAuth auth = 4;
+  // 只在 decision 为 UNKNOWN 时有意义。true = 这一局有可裁决的 v1 Create 原件(截止 ABORT 读的同一判据):终局迟早会落定,
+  // UNKNOWN 只说明还没落定 —— match 不可用,或截止 + 宽限之后的 ABORT 补写滞后 —— COMPLETE 仍可能先落库,不是终局证据;
+  // false = 没有成局行,或原件不可裁决(终局协议 0、旧局、坏形状):COMPLETE 永远落不了库,这一局不会有任何结算。
+  bool terminal_expected = 5;
+}
+
+// ---- 永久 UNKNOWN 全球成局的人工处置(2026-11-05,cross-zone-matchmaking.md §13.3,手册 docs/ops/match-formation-manual-abort-runbook.md)----
+// 事故出口,替代不了自动路径:只处置「TiDB 时刻已过截止加终局宽限、没有任何终局行、持久 Create 原件过不了终局核对、
+// 工作租约已到期」的成局;原件合格的局归到期恢复 / 帮会取消自动裁决,这里一律拒绝。
+// 调用方是后台 java/gm_admin(ABORT 经双人复核,2026-11-26)与运维工具 go/match/cmd/formationfix(列表、SHOW、DRY_RUN),
+// 同一个 serviceauth 调用方 "ops-formation",密钥来自 GlobalMatch.ManualResolutionSecretEnv
+// 指名的环境变量,不与观战运营的 "ops" 共用;没配(缺省)就关闭,一律 PermissionDenied。带会话调用一律 PermissionDenied。
+// ABORT 与截止裁决走同一个事务入口(authority.commitAbortTx),同一事务写审计行 match_manual_resolution;
+// 帮会历练局之后由 guild 恢复器重放取消读到这份 ABORT,按 formation=5 / ABORT 释放。
+// 结论走响应里的 verdict;gRPC 错误只用于 PermissionDenied、InvalidArgument,以及 ABORT 提交结果未知(Unavailable,先 SHOW 重查)。
+
+enum StrandedFormationClass {
+  STRANDED_FORMATION_CLASS_UNSPECIFIED = 0;
+  // 原件合格:到期恢复 / 帮会取消会自动裁决,人工不得抢
+  STRANDED_FORMATION_CLASS_AUTO = 1;
+  // 到期恢复候选形状合格,持久 Create 正文与成局字段不符(到期恢复每次访问计 original_mismatch)
+  STRANDED_FORMATION_CLASS_ORIGINAL_MISMATCH = 2;
+  // 形状不合格:协议版本或能力证据缺失、预检实例与目标不符、采用回执非法(含 battle 明确采用旧协议),不进到期恢复候选
+  STRANDED_FORMATION_CLASS_SHAPE_INVALID = 3;
+}
+
+enum StrandedFormationMode {
+  STRANDED_FORMATION_MODE_UNSPECIFIED = 0;
+  STRANDED_FORMATION_MODE_SHOW = 1;     // 锁外只读核对:不加锁、不写
+  STRANDED_FORMATION_MODE_DRY_RUN = 2;  // 与 ABORT 同一锁序、同一判据复核后整段回滚
+  STRANDED_FORMATION_MODE_ABORT = 3;    // 复核通过后写 ABORT 与审计行
+}
+
+enum StrandedFormationVerdict {
+  STRANDED_FORMATION_VERDICT_UNSPECIFIED = 0;
+  STRANDED_FORMATION_VERDICT_ELIGIBLE = 1;   // 可处置(SHOW / DRY_RUN 未写);ABORT 时表示已提交
+  STRANDED_FORMATION_VERDICT_REFUSED = 2;    // 前置条件不满足,原因码见 formation.refusal(或 refusal);未改动
+  STRANDED_FORMATION_VERDICT_CHANGED = 3;    // 锁内成局摘要与 expect_digest 不符;未改动,重新 SHOW
+  STRANDED_FORMATION_VERDICT_RESOLVED = 4;   // 已有终局决定(ABORT / COMPLETE);未改动
+  STRANDED_FORMATION_VERDICT_NOT_FOUND = 5;  // 没有这一局
+  STRANDED_FORMATION_VERDICT_RETRY = 6;      // 读库失败,或写入在提交之前失败(事务已回滚、未改动);稍后重试
+}
+
+message StrandedFormationTicket {
+  uint64 player_id = 1;
+  uint32 state = 2;           // 1 排队、2 已成局、3 结果未知或待结算、4 结束
+  uint64 formation_id = 3;    // 票当前指向的成局;不等于本局说明这名玩家已换轮
+  uint64 owner_revision = 4;  // 原身份修订;账号本身不外发
+}
+
+// 一局成局的人工处置核对结果。只是展示投影:match_internal.proto 被 match_authority.proto 引用,不能反向引用成局表消息。
+message StrandedFormation {
+  uint64 battle_id = 1;
+  uint32 state = 2;
+  string operation_id = 3;
+  string target_instance_id = 4;
+  string preflight_instance_id = 5;
+  uint32 match_mode = 6;
+  uint32 config_id = 7;
+  uint32 member_count = 8;
+  bool activity = 9;                          // 帮会活动成局(activity_context 非空)
+  uint64 created_ms = 10;
+  uint64 deadline_ms = 11;
+  uint64 retry_at_ms = 12;
+  uint32 outcome_protocol_version = 13;
+  uint32 preflight_supported_version = 14;
+  uint32 adopted_outcome_protocol_version = 15;
+  bool adopted_outcome_observed = 16;
+  uint32 create_request_bytes = 17;
+  bool create_decodable = 18;                 // false 时下面四个原件字段为 0
+  uint64 create_created_at_ms = 19;
+  uint64 create_deadline_ms = 20;
+  uint64 create_admit_before_ms = 21;
+  uint32 create_player_count = 22;
+  StrandedFormationClass formation_class = 23;
+  string failed_check = 24;                   // 第一项不通过的原件核对(ASCII 原因码);AUTO 时为空
+  // max(成局截止, 原件截止, 原件准入期限);人工 ABORT 要求 TiDB 时刻过了它加 60 秒终局宽限
+  uint64 effective_deadline_ms = 25;
+  bool has_terminal_row = 26;                 // match_battle_completion 里已有这一局的行(终局或只有归档)
+  BattleOutcomeDecision terminal_decision = 27;
+  uint32 terminal_source_kind = 28;           // MatchBattleCompletionSourceKind 的数值(该枚举在 match_authority.proto)
+  string digest = 29;                         // 成局行确定性序列化的 SHA-256(hex);DRY_RUN / ABORT 的 expect_digest 填它
+  string refusal = 30;                        // 不可处置的原因码(ASCII);空 = 可处置
+  repeated StrandedFormationTicket tickets = 31; // 只有 ResolveStrandedFormation 填
+}
+
+// 列出已过截止加宽限、仍停在 state 2/3/4 且带持久 Create 原件的成局(含原件合格、等自动恢复的局),只读、不加锁。
+// 按 battle_id 升序翻页(2026-11-11 起;retry_at_ms 会随取证排期变化,按它翻页会重复列出同一局)。
+message ListStrandedFormationsRequest {
+  uint64 after_retry_at_ms = 1;  // 保留不用(2026-11-11 起服务端忽略、回包恒为 0);游标只看 after_battle_id
+  uint64 after_battle_id = 2;    // 游标;0 从头开始
+  uint32 limit = 3;              // 1..100
+  common.base.ServiceCallAuth auth = 4;
+}
+message ListStrandedFormationsResponse {
+  bool retry = 1;                // true = 这一次没读成,其余字段无意义
+  repeated StrandedFormation formations = 2;
+  uint64 next_retry_at_ms = 3;   // 保留不用,恒为 0(2026-11-11)
+  uint64 next_battle_id = 4;     // 下一页游标;0 = 已到末尾
+  uint64 now_ms = 5;             // TiDB 时刻
+  string target = 6;             // 本部署的环境名 GlobalMatch.ManualResolutionEnvironment
+}
+
+message ResolveStrandedFormationRequest {
+  uint64 battle_id = 1;          // 非 0
+  StrandedFormationMode mode = 2;
+  // 下面四项 DRY_RUN / ABORT 必填;SHOW 忽略
+  string expect_digest = 3;      // SHOW 回的 formation.digest
+  string expect_target = 4;      // 工单上写明的环境名(不从 SHOW 照抄),须与服务端的环境名逐字相等,连错环境回 target_mismatch
+  string operator_name = 5;      // ≤64 字节,不含控制字符
+  string reason = 6;             // ≤191 字节,不含控制字符:工单号与核对结论
+  common.base.ServiceCallAuth auth = 7;
+  // ABORT 必带(docs/design/admin-identity-and-dual-control.md §5.4):后台双人复核的批准记录,proposer 必须等于 operator_name;
+  // 批准号与批准人随 ABORT 写进 match_manual_resolution。SHOW / DRY_RUN 不要求,带了照样核。
+  // 只有部署显式打开 GlobalMatch.ManualResolutionAllowUnapproved(本机开发)时才接受不带它的 ABORT。不合格回 REFUSED,不碰库。
+  common.base.AdminApproval approval = 8;
+}
+message ResolveStrandedFormationResponse {
+  StrandedFormationVerdict verdict = 1;
+  StrandedFormation formation = 2;  // 处置前的核对结果;NOT_FOUND / RETRY,以及 REFUSED 的 target_mismatch / formation_unreadable 时为空
+  uint64 now_ms = 3;                // TiDB 时刻
+  string target = 4;                // 本部署的环境名 GlobalMatch.ManualResolutionEnvironment
+  string replica = 5;               // 处理本次调用的 match 副本(主机名)
+  string refusal = 6;               // REFUSED 时的原因码(与 formation.refusal 相同;target_mismatch 时没有 formation)
+  string audit_line = 7;            // DRY_RUN / ABORT:服务端打进日志的同一行 [FormationManual],贴进工单
+}
+
+service MatchInternal {
+  rpc StartActivityBattle(StartActivityBattleRequest) returns (StartActivityBattleResponse);
+  rpc CancelActivityBattle(CancelActivityBattleRequest) returns (CancelActivityBattleResponse);
+  rpc CommitBattleOutcome(CommitBattleOutcomeRequest) returns (CommitBattleOutcomeResponse);
+  rpc SetSpectateFeatured(SetSpectateFeaturedRequest) returns (SetSpectateFeaturedResponse);
+  rpc AcquireTrialOccupancy(AcquireTrialOccupancyRequest) returns (AcquireTrialOccupancyResponse);
+  rpc ReleaseTrialOccupancy(ReleaseTrialOccupancyRequest) returns (ReleaseTrialOccupancyResponse);
+  rpc GetBattleCompletion(GetBattleCompletionRequest) returns (GetBattleCompletionResponse);
+  rpc GetBattleTerminalDecision(GetBattleTerminalDecisionRequest) returns (GetBattleTerminalDecisionResponse);
+  // 人工处置永久 UNKNOWN 的全球成局(2026-11-05,调用方是后台与运维工具 formationfix,见上文消息定义处)。
+  rpc ListStrandedFormations(ListStrandedFormationsRequest) returns (ListStrandedFormationsResponse);
+  rpc ResolveStrandedFormation(ResolveStrandedFormationRequest) returns (ResolveStrandedFormationResponse);
+  // 运营审核玩家上传的战斗剧本(docs/design/battle-script.md §6.3;调用方只有运营工具 battlescriptreview,
+  // serviceauth 调用方 ops,与 SetSpectateFeatured 共用运营密钥)。
+  rpc ListPendingBattleScripts(ListPendingBattleScriptsRequest) returns (ListPendingBattleScriptsResponse);
+  rpc ReviewBattleScript(ReviewBattleScriptRequest) returns (ReviewBattleScriptResponse);
+  // 帮会全天帮战 V2 无匹配池直打入口(docs/design/guild-play-v2.md):支持真人双侧直打与攻方打守旗 AI 快照。
+  rpc StartGuildWarBattle(StartGuildWarBattleRequest) returns (StartGuildWarBattleResponse);
+}
+
+// ---- 帮会全天帮战 V2 无匹配池直打(MatchInternal.StartGuildWarBattle) ----
+message StartGuildWarBattleRequest {
+  uint32 battle_config_id = 1;                        // DungeonTable id(PVP 竞技或守卫副本模板)
+  uint32 match_mode = 2;                              // MatchMode: 9=GUILD_WAR_PVP / 10=GUILD_WAR_SIEGE
+  repeated uint64 attacker_player_ids = 3;            // team_index=0 真人角色 ID(1..5)
+  repeated uint64 defender_player_ids = 4;            // team_index=1 真人角色 ID(LIVE_PVP 时 1..5;SIEGE 时为空)
+  repeated BattlePlayerSnapshot ai_defender_snapshots = 5; // SIEGE 守旗阵快照(强制置 team_index=1, ai_controlled=true)
+  BattleActivityContext activity_context = 6;         // kind 必须为 BATTLE_ACTIVITY_KIND_GUILD_WAR
+  uint64 request_id = 7;                              // 调用方幂等请求号
+  common.base.ServiceCallAuth auth = 8;
+}
+
+message StartGuildWarBattleResponse {
+  ActivityBattleReject reject = 1;
+  uint64 offender_player_id = 2;                      // 被占或离线角色 ID
+  uint64 offender_battle_id = 3;                      // offender 正处于战斗中时返回其 battle_id(客户端直转一键观战)
+  uint64 battle_id = 4;                               // reject == NONE 时非 0
+  uint32 formation_state = 5;
+}
+
+// ---- 战斗剧本审核(运营入口) ----
+
+// 带内拒绝:验签不过 / 参数不合法 / 审的不是当前待审版 / 库故障。业务结果都在带内,gRPC 恒返回 OK
+enum BattleScriptReviewReject {
+  BATTLE_SCRIPT_REVIEW_REJECT_NONE = 0;
+  BATTLE_SCRIPT_REVIEW_REJECT_DENIED = 1;    // 客户端来源、入口未开启(没配运营密钥)或签名无效
+  BATTLE_SCRIPT_REVIEW_REJECT_INVALID = 2;   // 参数不合法(limit 越界、驳回没写原因、审核员名超长……)
+  BATTLE_SCRIPT_REVIEW_REJECT_STALE = 3;     // 这一版已不是当前待审版(作者又改了、删了,或已被审过):重新拉待审列表
+  BATTLE_SCRIPT_REVIEW_REJECT_INTERNAL = 4;  // 库故障;只读列表可直接重试,审核提交结果未知时先重新拉列表核对
+}
+
+message ListPendingBattleScriptsRequest {
+  uint32 limit = 1;  // 1..50
+  common.base.ServiceCallAuth auth = 2;
+}
+
+message PendingBattleScript {
+  uint64 script_id = 1;
+  uint64 owner_player_id = 2;
+  uint32 revision = 3;
+  BattleScript content = 4;    // 待审的这一版正文
+  uint64 submitted_ms = 5;
+  uint32 approved_revision = 6;  // 作者上一次通过的版本;0 = 首次送审
+}
+
+message ListPendingBattleScriptsResponse {
+  BattleScriptReviewReject reject = 1;
+  repeated PendingBattleScript scripts = 2;  // 先提交的在前
+}
+
+message ReviewBattleScriptRequest {
+  uint64 script_id = 1;
+  uint32 revision = 2;    // 审的是哪一版:必须仍是当前提交版且待审,否则 STALE
+  bool approve = 3;
+  string reviewer = 4;    // 1..64 字节,不含控制字符
+  string reason = 5;      // ≤191 字节;驳回必填(作者会看到)
+  common.base.ServiceCallAuth auth = 6;
+}
+
+message ReviewBattleScriptResponse {
+  BattleScriptReviewReject reject = 1;
+}

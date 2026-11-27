@@ -1,0 +1,668 @@
+syntax = "proto3";
+option go_package = "proto/scene";
+
+import "proto/db/proto_option.proto";
+import "proto/common/base/tip.proto";
+import "proto/common/component/currency_comp.proto";
+import "proto/common/component/player_equip_loadout_comp.proto";
+
+option cc_generic_services = true;
+option (OptionFileDefaultNode) = NODE_SCENE;
+
+// 装备 tooltip 的一行属性(设计文档 docs/design/equipment-attributes.md §3.2)。
+// 客户端零配表:名称、上限、是否百分比全部由服务器下发。
+message EquipAttrLineInfo {
+  uint32 attr_id = 1;   // EquipAttribute 表 id
+  string name = 2;
+  uint32 tier = 3;      // 0 基础属性 / 1 蓝 / 2 粉 / 3 黄 / 4 绿(预留)
+  uint64 value = 4;     // 当前值(已按当前表上限夹取)
+  uint64 cap = 5;       // 上限;基础属性行为 0,客户端不显示「/上限」
+  bool percent = 6;     // true = 显示成 N%
+  uint32 seq = 7;       // 档内序号;显示顺序 = (tier, seq)
+  // ── 以下两项只在装备的基础属性行(BagItemInfo.base_attrs)上有意义(docs/design/equipment-enhance-inlay.md §3.3)──
+  uint64 enhance_bonus = 8;       // 强化带来的增量,**已含在 value 内**(value − enhance_bonus = 表值);未强化为 0
+  uint64 enhance_next_value = 9;  // 仅该装备带 enhance_next 时:强化到下一级后这一行的 value(预览);否则为 0
+}
+
+// 装备栏的一个槽位定义(含空槽),客户端据此画出全部栏位。
+message EquipSlotInfo {
+  uint32 slot = 1;
+  uint32 equip_kind = 2;
+  string name = 3;      // 部位名(武器 / 帽子 …);只有「没配名字却被占着」的槽才会为空
+}
+
+// 装备上的一个宝石孔(设计文档 docs/design/equipment-enhance-inlay.md §3.3)。
+// 「占用」与「生效」是两件事:占用只看 gem_config_id(与服务器判「该孔已镶」同口径),
+// 生效看带不带 attr(与属性加成同口径)。
+message EquipGemSocketInfo {
+  uint32 socket = 1;           // 孔位号(0 起)
+  uint32 gem_type = 2;         // 该孔接纳的宝石类型,0 = 任意
+  uint32 gem_config_id = 3;    // 占着这个孔的宝石 config;0 = 空孔。**「是否占用」只看它**
+  string gem_name = 4;         // 宝石名(空孔为空;宝石的 Item 行查不到时也为空)
+  string gem_icon_key = 5;     // 宝石图标(规则同 gem_name)
+  // 宝石**当前生效**的属性。gem_config_id != 0 却不带 attr = 已镶但当前不生效(仍可取下)。
+  // tier 恒 0、cap 恒 0、seq 恒 0。
+  EquipAttrLineInfo attr = 6;
+  string name = 7;             // 孔位显示名(可为空,客户端空名时显示「孔位 N」)
+}
+
+// 下一次强化的预览(客户端零配表)。金币 / 材料成败都扣。
+message EquipEnhancePreview {
+  uint32 next_level = 1;          // 强化成功后的等级(= 当前等级 + 1)
+  uint32 success_rate = 2;        // 万分比
+  uint64 cost_gold = 3;
+  uint32 material_config_id = 4;  // 0 = 不要材料
+  string material_name = 5;       // 材料的 Item 行查不到时为空
+  uint32 material_count = 6;
+  uint32 bonus_permyriad = 7;     // 升到 next_level 后基础属性的总加成(万分比)
+  uint32 fail_level_loss = 8;     // 失败时掉几级,0 = 不掉
+  string material_icon_key = 9;
+  uint32 pity_limit = 10;         // 保底必成上限次数（0 = 无保底；>0 时满 pity_limit 次必成，客户端须精确公示）
+  uint32 current_pity_count = 11; // 当前已累计失败次数（0..pity_limit-1）
+  bool pity_guaranteed_next = 12; // true = 本次点击已达保底（100% 必成）
+  bool will_bind_on_enhance = 13; // true = 当前装备可交易但可交易强化石不足，需长按确认混用绑定石（强化后装备转为绑定）
+  uint64 tradable_material_available = 14; // 当前背包中可用的可交易强化石数量（不含战斗预留）
+}
+
+// 实例与布局分离；显示信息不写入玩家持久化记录。
+message SealedSkillBookInfo {
+  uint32 skill_table_id = 1;
+  string skill_name = 2;
+  uint32 scroll_id = 3;
+  string scroll_name = 4;
+  uint32 rarity_tier = 5;
+  string crafter_name = 6;
+  uint64 crafter_player_id = 7;
+}
+
+message BagItemInfo {
+  uint64 item_id = 1;
+  uint32 config_id = 2;
+  uint32 count = 3;
+  uint32 max_stack = 4;
+  uint32 equip_kind = 5;
+  string name = 6;        // 来自物品表;缺配时为空,客户端不许编造。
+  string description = 7;
+  string icon_key = 8;
+  // ── 以下仅装备(equip_kind != 0)有意义 ──
+  uint32 equip_level = 9;                       // 佩戴等级
+  uint32 equip_class = 10;                      // 职业要求,0 = 不限
+  string equip_class_name = 11;                 // 职业名;职业表无名称列时为空
+  repeated EquipAttrLineInfo base_attrs = 12;   // 基础属性,seq 升序
+  repeated EquipAttrLineInfo affixes = 13;      // 随机属性,已按 (tier, seq) 排好
+  // ── 强化与镶嵌(docs/design/equipment-enhance-inlay.md §3.3)。14–17、20 仅装备;18、19 仅宝石物品 ──
+  uint32 enhance_level = 14;                     // 装备:当前强化等级(已按表上限夹取)
+  uint32 enhance_max_level = 15;                 // 装备:强化上限;0 = 强化未开放
+  EquipEnhancePreview enhance_next = 16;         // 装备:下一级预览;已满级 / 未开放 / 实例未初始化 / 下一级的行不可用时不带
+  repeated EquipGemSocketInfo gem_sockets = 17;  // 装备:该部位的全部孔位(含空孔),按 socket 升序;实例未初始化时不带
+  uint32 gem_type = 18;                          // 宝石物品:宝石类型(≥ 1);不是宝石 = 0
+  EquipAttrLineInfo gem_attr = 19;               // 宝石物品:这颗宝石提供的属性(不是宝石、或属性行不可用时不带)。tier / cap / seq 恒 0
+  uint32 enhance_bonus_permyriad = 20;           // 装备:当前有效等级的基础属性总加成(万分比);0 级为 0,满级也写
+  uint32 equip_profile = 21;
+  repeated EquipFixedAffixSlotInfo fixed_affix_slots = 22;
+  EquipArtifactInfo artifact = 23;
+  uint32 enhance_pity_count = 24; // 装备：当前目标强化等级的失败保底累计次数
+  bool bound = 25;                // true = 仅自用绑定（不可交易/上架/赠送）
+  string crafter_name = 26;       // 宗师打造/打磨极品永久署名（空 = 无署名）
+  uint64 crafter_player_id = 27;  // 宗师玩家 ID（仅追溯）
+  SealedSkillBookInfo sealed_skill_book = 28; // 3414 封卷道籍：封存的技能书展示数据（非封卷为空）
+}
+
+message BagSlotInfo {
+  uint32 slot = 1;
+  uint64 item_id = 2;
+  uint32 width = 3;
+  uint32 height = 4;
+}
+
+message BagLayoutInfo {
+  uint32 bag_type = 1;    // 0 人物背包 / 1 仓库 / 2 装备栏 / 3 临时格。
+  uint32 capacity = 2;
+  repeated BagSlotInfo slots = 3; // 顺序无语义，位置只认 slot。
+  bool can_sort = 4;
+  // 仅装备栏(bag_type = 2):槽位定义,slot 升序。服务器只下发容量内的槽;
+  // 没配部位名的槽(不对玩家展示)只在被占用时才下发。
+  repeated EquipSlotInfo equip_slots = 5;
+}
+
+// 人物背包里一种物品被占住的数量(战斗道具预留,docs/design/battle-item-reservation.md):这些数量押在还没结算的战斗里,
+// 交易、捐献等出包操作暂时动不了它们,那一局结算或作废之后放开。按配置号给数量,不指定是哪一堆、哪一格(AGENTS §11.6)。
+message BagHeldItemInfo {
+  uint32 config_id = 1;
+  uint64 count = 2; // 被占住的数量,不超过背包里这种物品的总数
+}
+
+message BagInfo {
+  repeated BagItemInfo items = 1; // 顺序无语义，布局通过 item_id 关联。
+  BagLayoutInfo layout = 2;
+  CurrencyComp currency = 3;
+  // 仅人物背包(bag_type = 0):被占住的数量,按 config_id 升序、互不重复;没有时为空。别的包恒为空。
+  // 客户端据此显示「战斗结算中」的数量,并在选物品交易时只让选没被占住的部分;能不能出包仍由服务器裁决。
+  repeated BagHeldItemInfo held_items = 4;
+}
+
+message GetBagRequest { uint32 bag_type = 1; }
+message GetBagResponse {
+  TipInfoMessage error_message = 1;
+  BagInfo bag = 2;
+}
+message SortBagRequest { uint32 bag_type = 1; }
+message SortBagResponse {
+  TipInfoMessage error_message = 1;
+  BagInfo bag = 2;
+  bool changed = 3;
+}
+
+// 穿上:物品必须在人物背包里。同名不同实例允许占用两个同类槽。
+// target_slot有值时只操作该槽,须在容量内且接受装备类型；槽0也是合法显式值。
+// 未指定时兼容旧客户端:先找第一个接受该部位的空槽,都占着则替换槽号最小的那个。
+// 旧装备回背包。成功回两个包的全量,客户端整体覆盖。
+message EquipItemRequest {
+  uint64 item_id = 1;
+  optional uint32 target_slot = 2;
+}
+message EquipItemResponse {
+  TipInfoMessage error_message = 1;
+  BagInfo bag = 2;        // 人物背包
+  BagInfo equipment = 3;  // 装备栏
+}
+
+// 卸下:物品必须在装备栏里,回到人物背包(背包满则拒绝)。
+message UnequipItemRequest { uint64 item_id = 1; }
+message UnequipItemResponse {
+  TipInfoMessage error_message = 1;
+  BagInfo bag = 2;
+  BagInfo equipment = 3;
+}
+
+// 开发 / 测试用发物(prod 关闭,不是鉴权,见 cpp/nodes/gate/SECURITY.md)。
+message GmGrantItemRequest {
+  uint32 config_id = 1;
+  uint32 count = 2;
+}
+message GmGrantItemResponse {
+  TipInfoMessage error_message = 1;
+  BagInfo bag = 2;        // 人物背包
+}
+
+// 强化:装备可以在人物背包里,也可以穿在身上(仓库 / 临时格里的不行)。消耗金币与材料,**成败都扣**。
+// 只要请求被受理(error_message 为空)就回两个包的全量,客户端整体覆盖 —— 掷骰没过的那一次也一样。
+//
+// expected_level 是乐观比较(与 UpgradeSkillRequest.expected_rank 同构,docs/design/equipment-enhance-inlay.md §4.3):
+// 客户端填它此刻显示的强化等级,即这件装备 BagItemInfo.enhance_level(已按表上限夹取,0 级也要填 0)。
+// 与服务器当前的有效等级不一致就整笔拒绝(kEquipEnhanceLevelChanged):不扣金币、不扣材料、不掷骰。
+// 于是结局未知(1003)之后重发的旧请求,在上一次已经成功或掉过级时不会再扣一次、再掉一次级。
+// 掷骰失败且不掉级时等级没变,同一个 expected_level 仍会被当作新的一次强化受理 ——
+// 这一种由 client_request_id 兜住:带同一个键的重发命中首次结果,不再扣、不再掷。
+// 不带键(0)的旧客户端收到 1003 仍不得自动重发,先 GetBag 刷新,由玩家看过结果再决定点不点。
+message EnhanceEquipRequest {
+  uint64 item_id = 1;
+  uint32 expected_level = 2;
+  // 客户端幂等键(docs/design/client-request-idempotency.md)。玩家每点一次「强化」生成一个非 0 的随机 64 位数;
+  // 这一次强化拿到明确结果(受理,或带 tip 的拒绝)之前的所有重发 —— 超时、断线重连、gate 回 1003、
+  // 回包没到时玩家又点了同一件 —— 都带同一个键,item_id、expected_level 原样不变。
+  // scene 按 (玩家, 键) 去重,查账排在 expected_level 比较之前:同键同参数的重发不再扣、不再掷,
+  // 回首次的 success / enhance_level 与当前两份快照并标 replayed;同键换了参数回 kInvalidParameter,不执行。
+  // 0 = 旧客户端,不去重。键随玩家存档落盘(每名玩家最近 32 个,player_database.client_request_ledger):
+  // 下线重登、换节点、scene 重启之后照样认得;被挤出账本的旧键再来按新的一次强化处理,仍有 expected_level 兜底。
+  uint64 client_request_id = 3;
+  // 乐观比较当前保底累计次数（+11 等概率保底行使用）：客户端显式携带时须与服务器一致，否则拒回 kEquipEnhanceLevelChanged，
+  // 配合 client_request_id 杜绝概率失败不改等级场景下的弱网重复扣料。
+  optional uint32 expected_pity_count = 4;
+  // 防染毒确认：可交易装备强化默认仅消耗可交易强化石；可交易石不足时须玩家长按 2 秒确认并传 true 才允许混用绑定石并转为绑定。
+  bool allow_bound_materials = 5;
+}
+message EnhanceEquipResponse {
+  TipInfoMessage error_message = 1;
+  BagInfo bag = 2;           // 人物背包全量(金币、材料变化)
+  BagInfo equipment = 3;     // 装备栏全量
+  // 本次强化是否成功。**失败不是错误**:掷骰没过时 error_message 为空、两份快照照常带回
+  // (金币与材料已扣,客户端有 tip 就会保留旧快照,所以不能走 tip)。
+  bool success = 4;
+  uint32 enhance_level = 5;  // 操作后的强化等级
+  // true = 这一次是重发(client_request_id 命中了已受理的那一次):没有再扣、没有再掷;
+  // success / enhance_level 是首次的结果,bag / equipment 是此刻的状态。客户端按首次那一次的结果展示。
+  bool replayed = 6;
+  uint32 enhance_pity_count = 7; // 操作后的保底累计次数（成功归零，失败 +1）
+  uint32 enhance_pity_limit = 8; // 本级保底上限（0 = 无保底）
+}
+
+// 镶嵌:把人物背包里的一颗宝石嵌进装备的指定孔位。按宝石的 config 消耗 1 颗(不指定哪一堆);
+// 孔里已有宝石要先取下。
+message InlayGemRequest {
+  uint64 item_id = 1;        // 装备
+  uint32 socket = 2;         // 孔位号(0 起,0 是合法值)
+  uint32 gem_config_id = 3;  // 宝石的 Item 表 id
+}
+message InlayGemResponse {
+  TipInfoMessage error_message = 1;
+  BagInfo bag = 2;        // 人物背包
+  BagInfo equipment = 3;  // 装备栏
+}
+
+// 取下:孔里的宝石原样退回 1 颗到人物背包(背包放不下则拒绝),免费。
+message RemoveGemRequest {
+  uint64 item_id = 1;     // 装备
+  uint32 socket = 2;      // 孔位号
+}
+message RemoveGemResponse {
+  TipInfoMessage error_message = 1;
+  BagInfo bag = 2;        // 人物背包
+  BagInfo equipment = 3;  // 装备栏
+}
+
+// 从临时格取回到人物背包(docs/design/bag-rule-policy-layering.md §6.6)。
+// 临时格只装「主背包放不下的战斗掉落」,满了**不再挤掉旧物**:新到的掉落整笔留在来源(战斗结算延后重试),
+// 玩家用这个请求把东西取回人物背包、腾出位置之后自动补发。
+//
+// 二选一:item_id != 0 取回这一件(一堆);take_all = true 取回临时格里的全部。两者都给或都不给 = kInvalidParameter。
+// 全或无:人物背包放不下这一批就整批拒绝(kBagTemporaryRetrieveBagFull),两个包都不动(可以改成一件一件取)。
+// 搬的是实例本身:装备的 guid、随机属性、强化等级、宝石原样带走;可叠加物品先并进人物背包同种物品的未满堆,并剩的仍是原来那一堆。
+// 传送途中拒绝(kBagTemporaryRetrieveBusy);战斗中放行(人物背包只进不出,整笔延后的那一局正要靠取回腾位才补得上)。
+// item_id 不在临时格里 = kBagTemporaryItemNotFound
+// (「上一次其实已经取回、回包丢了」的重发也是这个码,两个包都不动,刷新即可);take_all 时临时格是空的 = 成功、什么都不动。
+message RetrieveTemporaryItemsRequest {
+  uint64 item_id = 1;
+  bool take_all = 2;
+}
+message RetrieveTemporaryItemsResponse {
+  TipInfoMessage error_message = 1;
+  BagInfo bag = 2;        // 人物背包全量
+  BagInfo temporary = 3;  // 临时格全量
+}
+
+// 固定词条数值统一为万分比；unit区分相对百分比与概率百分点。
+message EquipFixedAffixInfo {
+  uint32 affix_id = 1;
+  uint32 pool = 2; // 1方向、2效能、3通用。
+  string name = 3;
+  string description = 4;
+  uint32 value_bps = 5;
+  uint32 source_cap_bps = 6;
+  uint32 effect = 7;
+  uint32 effect_param = 8;
+  uint32 unit = 9; // 1相对百分比、2概率/抗性百分点。
+  uint32 material_config_id = 10;
+  uint32 material_count = 11;
+  uint32 quality_tier = 12;               // 5 档品相（1凡品..5极品，0 = 规则目录展示满值）。
+  string quality_name = 13;               // 品相展示名（凡品/良品/上品/珍品/极品）。
+  uint32 quality_ratio_pct = 14;          // 占满值百分比（80/85/90/95/100）。
+  uint32 max_value_bps = 15;              // 该词条满值万分比（与表 value_permyriad 一致）。
+  uint32 polish_pity_count = 16;          // 当前累计未出极品次数（0..7）。
+  uint32 polish_pity_limit = 17;          // 保底上限（8 次必出极品；豁免速度词条为 0）。
+  bool polish_exempt = 18;                // true = G02 速度词条豁免品相随机，固定满值。
+  uint32 polish_material_config_id = 19;  // 打磨消耗材料（3403 重铸砂）。
+  uint32 polish_material_count = 20;      // 打磨消耗数（1）。
+  uint64 polish_gold_cost = 21;           // 打磨消耗银两（20）。
+  uint32 reforge_material_config_id = 22; // 重铸换词条消耗材料（3403 重铸砂）。
+  uint32 reforge_material_count = 23;     // 重铸消耗数（1）。
+  uint64 reforge_gold_cost = 24;          // 重铸消耗银两（20）。
+}
+message EquipAffixQualityInfo {
+  uint32 quality_tier = 1;
+  string name = 2;
+  uint32 ratio_pct = 3;
+  uint32 apprentice_rate_bps = 4;
+  uint32 artisan_rate_bps = 5;
+  uint32 master_rate_bps = 6;
+}
+message CraftMasteryInfo {
+  uint32 tier = 1;                  // 1学徒、2巧匠、3宗师。
+  string tier_name = 2;
+  uint32 exp = 3;
+  uint32 next_tier_exp = 4;         // 满级宗师为 0。
+  uint32 top_quality_rate_bps = 5;  // 当前生效的极品概率（万分比：500/700/1000）或制卷返页概率。
+}
+message EquipFixedAffixSlotInfo {
+  uint32 slot = 1;
+  uint32 pool = 2;
+  EquipFixedAffixInfo selected = 3; // 无此段表示有效空位，不自动补条。
+}
+message EquipArtifactInfo {
+  uint32 effect_id = 1;
+  string name = 2;
+  string description = 3;
+  uint32 bonus_bps = 4;
+  uint32 cap_bps = 5;
+  uint32 per_round_limit = 6;
+  uint32 battle_limit = 7;
+  uint32 active_rounds = 8;
+  uint32 health_threshold_bps = 9;
+}
+message EquipmentCraftChoice {
+  enum Operation {
+    UNSPECIFIED = 0;
+    CREATE_ITEM = 1;
+    INSTALL_AFFIX = 2;
+    REFORGE_AFFIX = 3; // 同槽重铸换词条（1重铸砂+20银两，100%无损保留当前品相与保底进度）。
+    POLISH_AFFIX = 4;  // 单条打磨淬炼（1重铸砂+20银两，只升不降，累计第8次必达极品100%）。
+    UNSEAL_TO_TRADABLE = 5; // 解封剥离符(3409)：清空绑定装备全部绑定养成（强化/保底/词条/署名），仅恢复纯可交易原胚，不洗白B材料。
+    INHERIT_ENHANCE = 6;    // 流派副套继承符(3410)：将同部位同等级段源装备的强化等级与保底无损继承给目标副套装备（目标转为仅自用绑定）。
+    UPGRADE_TIER = 7;       // V1 装备原地无损升档：基础装(profile=1)与首饰(profile=2)纯银两升至同部位更高佩戴等级模板(config_id)，100% 保留强化、+11保底、词条/品相/打磨保底、宗师署名与可交易状态。
+  }
+  Operation operation = 1;
+  uint32 config_id = 2; // CREATE_ITEM / UPGRADE_TIER 目标模板使用；其余操作必须为0。
+  uint64 item_id = 3;   // INSTALL_AFFIX / REFORGE_AFFIX / POLISH_AFFIX / UNSEAL_TO_TRADABLE / INHERIT_ENHANCE / UPGRADE_TIER目标使用；CREATE_ITEM必须为0。
+  uint32 affix_slot = 4;
+  uint32 affix_id = 5;  // INSTALL_AFFIX / REFORGE_AFFIX使用；其余为0。
+  bool use_guarantee_charm = 6;        // POLISH_AFFIX可选：额外消耗1张绑定「定星保底符(3405)」直接必达极品。
+  bool allow_bound_materials = 7;      // 防染毒确认：可交易装备默认仅耗可交易材料，需玩家二次确认后传true才可混扣绑定材料。
+  uint64 proxy_master_player_id = 8;   // 主城宗师原子代打摊位摊主ID（0=本人打造）。
+  optional uint32 expected_polish_pity_count = 9; // POLISH_AFFIX可选乐观保底计数校验，配合client_request_id防重放。
+  uint64 source_item_id = 10;          // INHERIT_ENHANCE源装备实例ID（须与item_id同部位同等级段且强化等级更高）。
+  uint32 target_quality_tier = 11;     // V3 POLISH_AFFIX可选：智能定档连磨目标品相（0=单次打磨，2..5=达标或保底即停）。
+  uint32 max_polish_attempts = 12;     // V3 POLISH_AFFIX可选：智能连磨最多手数（0/1=单次，2..8=封顶至8次硬保底）。
+}
+message PolishStepTrace {
+  uint32 attempt_index = 1;    // 本次连磨的第几手（从 1 开始）。
+  uint32 rolled_tier = 2;      // 该手实际掷出的品相档位（1..5）。
+  uint32 tier_before = 3;      // 该手前的词条品相档位（1..5）。
+  uint32 tier_after = 4;       // 该手后的词条品相档位（只升不降，1..5）。
+  bool guaranteed_by_pity = 5; // true = 该手由 8 次硬保底或定星保底符直出极品。
+}
+message EquipmentCraftMaterial {
+  uint32 config_id = 1;
+  string name = 2;
+  string icon_key = 3;
+  uint32 count = 4;
+  uint64 owned = 5;
+  uint64 available = 6; // 不含战斗预留和本版本不可扣的实例。
+}
+message EquipmentCraftRecipe {
+  BagItemInfo product = 1;
+  uint32 material_config_id = 2;
+  uint32 material_count = 3;
+}
+message GetEquipmentCraftRulesRequest {}
+message GetEquipmentCraftRulesResponse {
+  TipInfoMessage error_message = 1;
+  bytes rules_fingerprint = 2; // 权威配置的确定性摘要；客户端只原样携带。
+  uint64 forge_revision = 3;
+  repeated EquipmentCraftRecipe recipes = 4;
+  repeated EquipFixedAffixInfo affixes = 5;
+  repeated EquipAffixQualityInfo quality_tiers = 6; // 5 档品相与概率公示表。
+  CraftMasteryInfo forge_mastery = 7;               // 本人铸器手艺熟练度快照。
+}
+message EquipmentCraftPreview {
+  EquipmentCraftChoice choice = 1;
+  bytes rules_fingerprint = 2;
+  uint64 expected_forge_revision = 3;
+  BagItemInfo result = 4;
+  EquipmentCraftMaterial material = 5;
+  bool available = 6;
+  uint32 unavailable_tip = 7;
+  uint64 gold_cost = 8;
+  EquipmentCraftMaterial extra_material = 9; // 定星保底符等可选附加材料展示。
+  uint64 proxy_fee_gold = 10;                // 主城宗师代打手工费（银两）。
+  string proxy_master_name = 11;             // 代打宗师名。
+  bool will_bind_item = 12;                  // true = 本次混用绑定材料将使原可交易装备变为仅自用。
+  uint32 max_polish_attempts = 13;           // V3 智能连磨预计最多手数（受保底余量与当前材料上限封顶）。
+  uint32 max_polish_sand_cost = 14;          // V3 智能连磨最坏情况下消耗的重铸砂总数。
+  uint64 max_polish_gold_cost = 15;          // V3 智能连磨最坏情况下消耗的总银两（基础+代打费）。
+  bool team_free_proxy_applied = 16;         // V5 true = 同队情义零费原子代打生效（代打费为 0）。
+}
+message PreviewEquipmentCraftRequest { EquipmentCraftChoice choice = 1; }
+message PreviewEquipmentCraftResponse {
+  TipInfoMessage error_message = 1;
+  EquipmentCraftPreview preview = 2;
+}
+// 发送前持久保存整份请求；超时/断线只重放原字节，不替换水位、选项或摘要。
+message CommitEquipmentCraftRequest {
+  EquipmentCraftChoice choice = 1;
+  bytes rules_fingerprint = 2;
+  uint64 expected_forge_revision = 3;
+  uint64 client_request_id = 4; // 必须非0。
+}
+message CommitEquipmentCraftResponse {
+  enum Outcome {
+    UNKNOWN = 0; // 包括旧水位回执已淘汰，不能解释为首次失败。
+    REJECTED = 1; // 本意图在提交前明确拒绝，无资产变更。
+    APPLIED = 2;
+  }
+  TipInfoMessage error_message = 1;
+  uint64 client_request_id = 2;
+  Outcome outcome = 3;
+  bool durable = 4; // 仅确认提交的完整存档含该成功水位时为true。
+  bool replayed = 5;
+  uint64 item_id = 6;
+  uint64 result_forge_revision = 7;
+  uint64 current_forge_revision = 8;
+  BagInfo bag = 9;
+  BagInfo equipment = 10;
+  uint32 result_quality_tier = 11;        // 装条/打磨后的品相档位（1..5）。
+  uint32 result_polish_pity_count = 12;   // 打磨后的单条保底计数（出极品归0）。
+  bool guaranteed_by_pity = 13;           // true = 本次由8次硬保底或定星保底符保底出极品。
+  CraftMasteryInfo forge_mastery = 14;    // 操作后的最新铸器熟练度。
+  uint32 polish_attempts_used = 15;       // V3 实际执行打磨手数（单磨为 1，连磨为 1..8）。
+  repeated PolishStepTrace polish_steps = 16; // V3 逐手掷骰明细（首次执行返回）。
+  uint64 actual_gold_spent = 17;          // V3 本次实际扣除银两总量（含代打费）。
+}
+
+// 额度由权威战斗结算产生。PVE/PVP共享游戏日上限，未领取余额跨日保留。
+// 展示与数量以本快照为准；本次批次最多20份，不能把美术样例当作领取权。
+message EquipmentMaterialRewardSnapshot {
+  bool available = 1;
+  string unavailable_reason = 2;
+  uint64 day_starts_at_ms = 3;
+  uint64 next_reset_at_ms = 4;
+  uint32 earned_today = 5;
+  uint32 daily_limit = 6;
+  uint64 available_units = 7;
+  uint32 batch_units = 8;
+  uint64 revision = 9;
+  EquipmentCraftMaterial crafting_material = 10;
+  EquipmentCraftMaterial enhancement_stone = 11;
+  bool can_claim = 12;
+  uint32 lifetime_earned = 13;          // 阶段一永久首套累计已获份数（上限 660）
+  uint32 lifetime_limit = 14;           // 阶段一首套上限（660）
+  uint32 tradable_earned_total = 15;    // 阶段一累计已获可交易份数（上限 60）
+  uint32 tradable_lifetime_limit = 16;  // 阶段一可交易上限（60）
+  uint64 available_tradable_units = 17; // 当前未领总余额中可交易子集
+  uint32 batch_tradable_units = 18;     // 本次可领批次中包含的可交易份数（优先分给打造的份数，余数分给强化石）
+  bool weekly_phase_active = 19;        // true = 已满 660 进入阶段二（+11 顶格周平滑精进期，每周 100 绑定）
+  uint64 week_starts_at_ms = 20;        // 阶段二当前游戏周起点（UTC+8 周一 05:00）
+  uint64 next_week_reset_at_ms = 21;    // 阶段二下次周重置时刻
+  uint32 earned_this_week = 22;         // 阶段二本周已获绑定份数
+  uint32 weekly_limit = 23;             // 阶段二每周上限（100）
+}
+message GetEquipmentMaterialRewardRequest {}
+message GetEquipmentMaterialRewardResponse {
+  TipInfoMessage error_message = 1;
+  EquipmentMaterialRewardSnapshot snapshot = 2;
+}
+// 发送前持久化整份请求；未知结果只重放原键、原水位和原分配。
+message ClaimEquipmentMaterialRewardRequest {
+  uint64 client_request_id = 1;
+  uint64 expected_revision = 2;
+  uint32 crafting_material_count = 3;
+  uint32 enhancement_stone_count = 4;
+}
+message ClaimEquipmentMaterialRewardResponse {
+  enum Outcome {
+    UNKNOWN = 0; // 含旧回执已淘汰；不得据此生成新请求重复领取。
+    REJECTED = 1; // 提交前明确拒绝，本请求没有资产变更。
+    APPLIED = 2;
+  }
+  TipInfoMessage error_message = 1;
+  uint64 client_request_id = 2;
+  Outcome outcome = 3;
+  bool durable = 4; // 真实确认的本归属代次完整存档已包含领取水位。
+  bool replayed = 5;
+  uint64 result_revision = 6;
+  uint64 current_revision = 7;
+  BagInfo bag = 8;
+  EquipmentMaterialRewardSnapshot snapshot = 9;
+}
+
+// ── 装备流派方案预设（一键多套换装 + 付费扩展套位，docs/planning/equipment-loadout-presets-v1.md）──
+// 实例与布局严格分离：方案只记录 8 槽真实装备 guid 引用，未穿戴副套装备保留在人物背包 kInventory。
+
+enum EquipLoadoutSlotStatus {
+  EQUIP_LOADOUT_SLOT_EMPTY = 0;              // 该槽位未绑定任何装备
+  EQUIP_LOADOUT_SLOT_EQUIPPED = 1;           // 所绑装备当前正穿在身上（kEquipment）
+  EQUIP_LOADOUT_SLOT_IN_BAG = 2;             // 所绑装备当前在人物背包中（kInventory）
+  EQUIP_LOADOUT_SLOT_MISSING_OR_STORED = 3;  // 所绑装备已不在身上和背包（已出售/存仓/分解等）
+}
+
+message EquipLoadoutSlotView {
+  uint32 slot = 1;                    // EquipSlot.xlsx 正式槽位号（3..10）
+  string slot_name = 2;               // 部位显示名（武器/帽子/衣服/鞋子/首饰一/首饰二/法宝一/法宝二）
+  uint32 equip_kind = 3;              // 该槽位接受的 equip_kind
+  uint64 item_guid = 4;               // 方案绑定的装备永久 guid（0 表示留空）
+  EquipLoadoutSlotStatus status = 5;  // 实时状态
+  BagItemInfo item = 6;               // 存在时的道具简要预览（缺失或留空不填）
+}
+
+message EquipLoadoutSchemeInfo {
+  uint32 scheme_id = 1;                      // 1..7 显式方案号
+  bool unlocked = 2;                         // 是否在当前生效席位内（false 表示未解锁或到期只读锁定）
+  string name = 3;                           // 自定义方案名（空则展示默认「方案一..七」）
+  uint32 role_tag = 4;                       // 0默认 / 1输出 / 2控场 / 3辅助 / 4生存
+  repeated EquipLoadoutSlotView slots = 5;   // 8 个正式槽位按 slot 升序（到期只锁不删，仍返回已存配置）
+  uint32 linked_skill_scheme_id = 6;         // 0 = 不联动；>0 = 关联战法方案号
+  uint32 linked_attribute_scheme_id = 7;     // 0 = 不联动；>0 = 关联属性加点方案号
+  uint32 missing_count = 8;                  // 实时缺失槽位数
+  uint64 linked_pet_id = 9;                  // 0 = 不联动；>0 = 关联首发灵宠永久 pet_id
+  uint32 linked_formation_id = 10;           // 0 = 不联动；1..5 = 关联免费五行阵法 ID
+}
+
+message EquipLoadoutLinkedOption {
+  uint32 scheme_id = 1;
+  string name = 2;
+  uint32 role_tag = 3;
+}
+
+message EquipLoadoutLinkedPetOption {
+  uint64 pet_id = 1;       // 永久灵宠实例 ID
+  uint32 pet_table_id = 2; // 灵宠种类表 ID
+  string name = 3;         // 展示名（自定义名优先，否则 PetTable.name）
+  bool active = 4;         // 当前是否为首发灵宠
+}
+
+message EquipLoadoutSnapshot {
+  uint32 unlocked_scheme_count = 1;                         // 当前生效已解锁套数（2..7，与战法·加点三合一共享）
+  uint32 max_scheme_count = 2;                              // 套位总上限（固定 7）
+  uint32 active_scheme_id = 3;                              // 当前激活方案号（1..7；到期锁定态允许保留直至切走）
+  uint64 state_version = 4;                                 // 乐观锁版本号
+  repeated EquipLoadoutSchemeInfo schemes = 5;              // 1..7 全部套位，按 scheme_id 升序
+  uint64 next_unlock_cost_diamond = 6;                      // 历史保留字段（方案 A 合一租用模式下恒为 0）
+  bool next_unlock_allow_bind_diamond = 7;                  // 历史保留字段（方案 A 合一租用模式下恒为 false）
+  uint32 unlock_item_config_id = 8;                         // 历史保留字段（3413）
+  uint64 unlock_item_owned = 9;                             // 历史保留字段
+  uint64 diamond_balance = 10;                              // 当前非绑灵石余额
+  uint64 bind_diamond_balance = 11;                         // 当前绑定灵石余额
+  repeated EquipLoadoutLinkedOption skill_schemes = 12;     // 可选联动的战法方案列表（1..unlocked）
+  repeated EquipLoadoutLinkedOption attribute_schemes = 13; // 可选联动的属性加点方案列表
+  // ── 方案 A：7 套三合一共享流派席位投影（与 SkillLoadoutSnapshot 同口径）──
+  uint32 free_schemes = 14;                                 // 永久免费基础套数（2；85 级满级自动升至 3）
+  uint32 light_card_bonus_schemes = 15;                     // 仙途轻享卡生效附赠套数（0 或 2）
+  uint32 rented_extra_slots = 16;                           // 当前有效租期内的额外按月租用套数（0..5，到期为 0）
+  uint64 rent_expires_at_sec = 17;                          // 统一到期 Unix 秒（0 或 <= server_now_sec 表示未租/已到期）
+  uint64 server_now_sec = 18;                               // 服务器当前 Unix 秒（供前端倒计时与补差价试算）
+  uint64 rent_unit_price_diamond = 19;                      // 单套 30 天真实灵石价（固定 30，装备+战法+加点共享）
+  uint32 rent_period_days = 20;                             // 单期租用天数（固定 30）
+  uint32 rent_max_remaining_days = 21;                      // 最长剩余叠加天数（固定 180）
+  repeated EquipLoadoutLinkedPetOption pets = 22;           // 可选联动的首发灵宠列表（只读取自 PlayerPetComp）
+  repeated EquipLoadoutLinkedOption formations = 23;        // 可选联动的免费五行阵法列表（1..5）
+}
+
+message GetEquipLoadoutsRequest {}
+message GetEquipLoadoutsResponse {
+  TipInfoMessage error_message = 1;
+  EquipLoadoutSnapshot snapshot = 2;
+}
+
+message SaveEquipLoadoutRequest {
+  uint32 scheme_id = 1;                       // 1..unlocked_scheme_count
+  string name = 2;                            // UTF-8 1..12 字符（空则使用默认名）
+  uint32 role_tag = 3;                        // 0..4
+  repeated EquipLoadoutSlotBinding slots = 4; // capture_current_equipped=false 时生效
+  bool capture_current_equipped = 5;          // true = 一键保存当前身上 8 槽装备
+  uint32 linked_skill_scheme_id = 6;          // 0 = 不联动
+  uint32 linked_attribute_scheme_id = 7;      // 0 = 不联动
+  uint64 state_version = 8;                   // 乐观锁版本号
+  string request_id = 9;                      // 16..64 字节 ASCII 幂等键
+  uint64 linked_pet_id = 10;                  // 0 = 不联动；>0 = 联动首发灵宠永久 pet_id
+  uint32 linked_formation_id = 11;            // 0 = 不联动；1..5 = 联动免费五行阵法 ID
+}
+message SaveEquipLoadoutResponse {
+  TipInfoMessage error_message = 1;
+  EquipLoadoutSnapshot snapshot = 2;
+  string request_id = 3;
+  bool replayed = 4;
+}
+
+message SwitchEquipLoadoutRequest {
+  uint32 scheme_id = 1;            // 1..unlocked_scheme_count
+  bool apply_linked_schemes = 2;   // 是否一键联动切换关联战法/加点方案
+  uint64 state_version = 3;        // 乐观锁版本号
+  string request_id = 4;           // 16..64 字节 ASCII 幂等键
+}
+message SwitchEquipLoadoutResponse {
+  TipInfoMessage error_message = 1;
+  BagInfo bag = 2;                    // 最新人物背包全量
+  BagInfo equipment = 3;              // 最新装备栏全量
+  EquipLoadoutSnapshot snapshot = 4;  // 最新方案快照
+  repeated uint32 missing_slots = 5;  // 因装备缺失而被跳过保持原状的槽位号
+  repeated string linked_notices = 6; // 联动切换提示（如加点冷却中未切提示）
+  string request_id = 7;
+  bool replayed = 8;
+}
+
+// 发送前须经 DurableRequestFileStore 持久保存原字节；超时/断线仅重放原请求。
+message UnlockEquipLoadoutRequest {
+  uint64 client_request_id = 1;       // 持久化幂等键（必须非 0）
+  uint32 expected_unlocked_count = 2; // 客户端看到的当前已解锁套数（防连点连买两套）
+  bool use_bind_diamond_first = 3;    // 仅第 2 套生效：无扩容符时优先扣绑定灵石并用非绑灵石补足
+}
+message UnlockEquipLoadoutResponse {
+  enum Outcome {
+    UNKNOWN = 0;   // 含旧回执已淘汰或存盘未定，不可换键重发
+    REJECTED = 1;  // 提交前明确拒绝，无扣费/扣符
+    APPLIED = 2;   // 已生效（仅 durable=true 后才确认落盘）
+  }
+  TipInfoMessage error_message = 1;
+  uint64 client_request_id = 2;
+  Outcome outcome = 3;
+  bool durable = 4;                  // 仅确认提交的本代次完整存档包含新套数时为 true
+  bool replayed = 5;
+  uint32 result_unlocked_count = 6;  // 本次解锁后的套数（2..5）
+  uint32 current_unlocked_count = 7; // 服务端当前最新套数
+  uint32 used_item_config_id = 8;    // 若消耗扩容符则为 3413，否则为 0
+  uint64 spent_bind_diamond = 9;     // 本次实扣绑定灵石
+  uint64 spent_diamond = 10;         // 本次实扣非绑灵石
+  BagInfo bag = 11;                  // 最新人物背包全量（含货币与道具扣减）
+  EquipLoadoutSnapshot snapshot = 12;
+}
+
+service SceneBagClientPlayer {
+  option (OptionIsPlayerService) = true;
+  option (OptionIsClientProtocolService) = true;
+  // 纯读取；开窗不合堆、不整理、不创建缺失组件。
+  rpc GetBag (GetBagRequest) returns (GetBagResponse);
+  // 仅支持人物背包和仓库，玩家显式点击后走 BagService 审计入口。
+  rpc SortBag (SortBagRequest) returns (SortBagResponse);
+  // ── 以下只许在末尾追加:生成的 CallMethod 按 method index 分发 ──
+  // 穿上 / 卸下:战斗中、跨区冻结中拒绝;成功后服务器重算属性并推属性面板。
+  rpc EquipItem (EquipItemRequest) returns (EquipItemResponse);
+  rpc UnequipItem (UnequipItemRequest) returns (UnequipItemResponse);
+  // 名字必须是 Gm + 大写字母开头:gate / scene 的 GM 闸按这个前缀识别。
+  rpc GmGrantItem (GmGrantItemRequest) returns (GmGrantItemResponse);
+  // 强化 / 镶嵌 / 取下:战斗中、跨区冻结中拒绝;改的是穿着的那件时服务器重算属性并推属性面板。
+  // 三个方法的顺序不可变(method index 5 / 6 / 7);名字不许以 Gm 开头(那是 GM 闸的前缀)。
+  rpc EnhanceEquip (EnhanceEquipRequest) returns (EnhanceEquipResponse);
+  rpc InlayGem (InlayGemRequest) returns (InlayGemResponse);
+  rpc RemoveGem (RemoveGemRequest) returns (RemoveGemResponse);
+  // 临时格 → 人物背包(玩家显式操作,method index 8)。传送途中拒绝、战斗中放行;不改装备栏,不重算属性。
+  rpc RetrieveTemporaryItems (RetrieveTemporaryItemsRequest) returns (RetrieveTemporaryItemsResponse);
+  rpc GetEquipmentCraftRules (GetEquipmentCraftRulesRequest) returns (GetEquipmentCraftRulesResponse);
+  rpc PreviewEquipmentCraft (PreviewEquipmentCraftRequest) returns (PreviewEquipmentCraftResponse);
+  rpc CommitEquipmentCraft (CommitEquipmentCraftRequest) returns (CommitEquipmentCraftResponse);
+  rpc GetEquipmentMaterialReward (GetEquipmentMaterialRewardRequest) returns (GetEquipmentMaterialRewardResponse);
+  rpc ClaimEquipmentMaterialReward (ClaimEquipmentMaterialRewardRequest) returns (ClaimEquipmentMaterialRewardResponse);
+  // ── 装备流派方案预设（method index 14..17，严禁重排）──
+  rpc GetEquipLoadouts (GetEquipLoadoutsRequest) returns (GetEquipLoadoutsResponse);
+  rpc SaveEquipLoadout (SaveEquipLoadoutRequest) returns (SaveEquipLoadoutResponse);
+  rpc SwitchEquipLoadout (SwitchEquipLoadoutRequest) returns (SwitchEquipLoadoutResponse);
+  rpc UnlockEquipLoadout (UnlockEquipLoadoutRequest) returns (UnlockEquipLoadoutResponse);
+}

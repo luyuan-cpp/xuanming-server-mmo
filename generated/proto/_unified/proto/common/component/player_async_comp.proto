@@ -1,0 +1,12 @@
+syntax = "proto3";
+option go_package = "proto/common/component";
+
+
+
+message PlayerGameNodeEntryInfoComp
+{
+  reserved 1; // was centre_node_id
+  uint32 session_id = 2;
+  uint32 enter_gs_type = 3;    // LOGIN_FIRST / LOGIN_RECONNECT / LOGIN_REPLACE
+  uint64 scene_id = 4;         // Target scene instance GUID from SceneManager
+}

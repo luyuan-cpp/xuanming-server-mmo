@@ -1,0 +1,238 @@
+syntax = "proto3";
+option go_package = "proto/scene";
+
+import "proto/db/proto_option.proto";
+import "proto/common/base/tip.proto";
+import "proto/common/base/empty.proto";
+
+option cc_generic_services = true;
+option (OptionFileDefaultNode) = NODE_SCENE;
+
+// 角色形象永久收藏衣柜、形象卡永久解锁（10 元）与一小时免费试用（bit 位图存储）。
+// 设计文档: docs/design/character-appearance-switch.md。
+//
+// 业务规则:
+//   1. 每个角色持有永久已拥有形象集合(PlayerProfileComp.appearance_owned_bits + 当前永久形象 appearance_id):
+//      已拥有的形象可随时 0 消耗免费切换;未拥有且配表允许兑换(card_unlockable=1)的形象,消耗 1 张角色形象卡
+//      (Item 3402,官方商城售价 10 元 CNY)即可永久解锁入柜并切换,原永久形象同步保留在衣柜中。
+//   2. 每个尚未拥有的可选形象每角色可免费试用 1 小时(AppearanceRule.trial_duration_seconds = 3600),
+//      试用标记按 CharacterAppearance 表的 (cfg_bit_index) 紧凑位图存储在 PlayerProfileComp.appearance_trial_used_bits;
+//      试用与永久拥有位图完全独立,试用绝不授予永久权。
+//   3. 试用期间大世界 AOI 与战斗快照展示试用形象,不覆盖选角永久形象;支持提前取消或覆盖试用其他未试用形象,
+//      到期后服务端自动还原永久形象并广播。
+
+message CharacterAppearanceEntry
+{
+	uint32 config_id = 1;     // CharacterAppearance.id(永久主键)
+	string appearance_id = 2; // 稳定资源外观 ID(如 "00_reference_topright_boy")
+	string name = 3;          // 中文展示名
+	uint32 sort_order = 4;    // 界面排序(升序)
+	bool trial_used = 5;      // 由玩家 appearance_trial_used_bits 对应 bit 算出
+	bool owned = 6;           // 是否已永久拥有(含当前永久形象;已拥有可 0 消耗免费切换)
+	bool card_unlockable = 7; // 未拥有时是否允许消耗角色形象卡永久解锁(CharacterAppearance.card_unlockable)
+	uint32 series_id = 8;     // 所属人物收藏系列 ID(AppearanceSeries.id,0 = 未归册;纯外观与叙事分册,零属性加成)
+}
+
+// 角色收藏系列图鉴进度(由服务端按权威拥有位图与配表实时派生,不单独落盘;纯外观印章与合篇故事,零属性加成)。
+message CharacterAppearanceSeriesProgress
+{
+	uint32 series_id = 1;                    // AppearanceSeries.id
+	string series_key = 2;                   // 稳定系列标识符(如 "lantern_courtyard")
+	string name = 3;                         // 系列中文名
+	uint32 sort_order = 4;                   // 图鉴展示排序(升序)
+	uint32 owned_count = 5;                  // 该系列当前已永久拥有的现役成员数(试用不计入)
+	uint32 total_count = 6;                  // 该系列当前启用的现役成员总数
+	bool completed = 7;                      // total_count > 0 && owned_count >= total_count(集齐即点亮印章与解锁合篇)
+	string completion_badge_name = 8;        // 集齐印章/铭牌展示名(纯装饰,无数值)
+	string epilogue_title = 9;               // 集齐解锁合篇故事篇名(正文由客户端查 AppearanceSeries 本地配表)
+	repeated string member_appearance_ids = 10; // 该系列当前启用的成员 appearance_id(按 sort_order 升序)
+}
+
+message PlayerAppearanceInfo
+{
+	string permanent_appearance_id = 1;               // 当前永久使用的形象
+	string active_appearance_id = 2;                  // 此刻实际生效展示的形象(试用中为试用形象,否则为永久形象)
+	string trial_appearance_id = 3;                   // 当前正在试用的形象;空串 = 未试用
+	uint64 trial_expires_at = 4;                      // 试用到期 Unix 秒;0 = 未试用
+	uint64 server_now = 5;                            // 服务器墙钟 Unix 秒(客户端据此算倒计时,不信本机墙钟)
+	uint32 card_item_id = 6;                          // 形象卡道具 ID(AppearanceRule.card_item_id, 默认 3402)
+	uint32 card_item_count = 7;                       // 每次解锁消耗张数(默认 1)
+	uint32 owned_card_count = 8;                      // 玩家人物背包当前可用形象卡张数(已扣预留)
+	uint32 trial_duration_seconds = 9;                // 免费试用时长秒数(默认 3600)
+	uint64 mall_sku_id = 10;                          // 商城对应 SKU ID(快捷跳转购买用)
+	uint64 mall_price_fen = 11;                       // 商城标价(人民币分, 默认 1000 = 10 元)
+	bytes trial_used_bits = 12;                       // 试用紧凑位图原样(低位在前,与 CharacterAppearance bit_index 对应)
+	repeated CharacterAppearanceEntry appearances = 13; // 当前可用形象列表(按 sort_order 升序)
+	bytes owned_bits = 14;                            // 已永久拥有紧凑位图(低位在前,含当前永久形象对应位,保留未知高位)
+	repeated CharacterAppearanceSeriesProgress series_progress = 15; // 收藏系列图鉴进度(按 sort_order 升序,纯外观零属性)
+	bytes pet_cosmetic_owned_bits = 16;               // 已永久拥有的灵宠幻化位图(低位在前,与 PetCosmetic bit_index 对应)
+	repeated PetCosmeticEntry pet_cosmetics = 17;     // 当前开放的灵宠幻化目录(按 sort_order 升序,纯外观零数值)
+	repeated PetEquippedCosmetic equipped_pet_cosmetics = 18; // 当前玩家各灵宠实例实际穿戴的幻化映射
+	bytes skill_vfx_owned_bits = 19;                  // 已永久拥有的技能特效位图(低位在前,与 SkillVfxCosmetic bit_index 对应)
+	repeated SkillVfxCosmeticEntry skill_vfx_cosmetics = 20; // 当前开放的技能特效目录(按 sort_order 升序,纯画面零数值)
+	map<uint32, uint32> equipped_skill_vfx = 21;      // 当前实际生效的技能特效映射(skill_table_id -> SkillVfxCosmetic.id)
+}
+
+// 灵宠幻化目录项（纯外观表现，零战斗/成长属性）。
+message PetCosmeticEntry
+{
+	uint32 config_id = 1;            // PetCosmetic.id(永久主键)
+	string cosmetic_key = 2;         // 稳定外观标识键
+	string name = 3;                 // 中文展示名
+	uint32 target_pet_table_id = 4;  // 适用灵宠种类 ID(0 = 通用)
+	uint32 visual_pet_table_id = 5;  // 表现复用灵宠种类 ID
+	string visual_art_key = 6;       // 客户端外观资源键
+	uint32 sort_order = 7;           // 展示排序(升序)
+	bool owned = 8;                  // 是否已永久拥有
+	uint64 mall_sku_id = 9;          // 官方商城永久衣柜对应 SKU ID(0 = 非直售/未上架)
+	string acquire_hint = 10;        // 未拥有且未上架时展示的取得条件
+	string desc = 11;                // 外观简述
+	uint32 card_item_id = 12;        // 解锁券道具 ID(0 = 仅专属获取;非 0 = 允许耗券永久解锁)
+	uint32 card_item_count = 13;     // 每次解锁消耗券张数
+	uint32 owned_card_count = 14;    // 玩家背包当前可用解锁券张数(已扣预留)
+	uint32 spirit_shop_goods_id = 15; // 灵石百宝阁快捷跳转商品 ID(0 = 非百宝阁售卖)
+}
+
+// 单只灵宠实例当前的权威幻化穿戴状态。
+message PetEquippedCosmetic
+{
+	uint64 pet_id = 1;               // 灵宠实例永久 ID
+	uint32 cosmetic_id = 2;          // 当前生效的 PetCosmetic.id(0 = 原形)
+}
+
+// 技能特效目录项（纯战斗画面表现，零数值/机制变更）。
+message SkillVfxCosmeticEntry
+{
+	uint32 config_id = 1;            // SkillVfxCosmetic.id(永久主键)
+	string vfx_key = 2;              // 稳定特效标识键
+	string name = 3;                 // 中文展示名
+	uint32 skill_table_id = 4;       // 适用技能 ID(Skill.id)
+	string fx_id = 5;                // 主特效帧条 ID
+	string projectile_fx_id = 6;     // 可选飞行段帧条 ID
+	string telegraph_fx_id = 7;      // 可选预示段帧条 ID
+	string tint_hex = 8;             // 可选色调覆盖(#RRGGBB)
+	uint32 sort_order = 9;           // 展示排序(升序)
+	bool owned = 10;                 // 是否已永久拥有
+	uint64 mall_sku_id = 11;         // 官方商城永久衣柜对应 SKU ID(0 = 非直售/未上架)
+	string acquire_hint = 12;        // 未拥有且未上架时展示的取得条件
+	string desc = 13;                // 特效简述
+	uint32 card_item_id = 14;        // 解锁券道具 ID(0 = 仅专属获取;非 0 = 允许耗券永久解锁)
+	uint32 card_item_count = 15;     // 每次解锁消耗券张数
+	uint32 owned_card_count = 16;    // 玩家背包当前可用解锁券张数(已扣预留)
+	uint32 spirit_shop_goods_id = 17; // 灵石百宝阁快捷跳转商品 ID(0 = 非百宝阁售卖)
+}
+
+// 为指定灵宠实例穿戴或清除幻化外观（cosmetic_id = 0 表示恢复原形；未拥有且 expect_free_equip=false 且配表开放券解锁时原子耗券解锁并穿戴）。
+message EquipPetCosmeticRequest
+{
+	uint64 client_request_id = 1;    // 必须非 0
+	uint64 pet_id = 2;               // 目标灵宠实例永久 ID
+	uint32 cosmetic_id = 3;          // 目标 PetCosmetic.id；0 = 恢复原形
+	bool expect_free_equip = 4;      // true = 仅限已拥有免费穿戴(未拥有拒回,绝不误扣券); false = 允许耗券解锁并穿戴
+}
+
+message EquipPetCosmeticResponse
+{
+	TipInfoMessage error_message = 1;
+	PlayerAppearanceInfo info = 2;
+	uint64 pet_id = 3;
+	uint32 equipped_cosmetic_id = 4;
+	bool replayed = 5;
+}
+
+// 为指定技能启用或恢复默认特效（cosmetic_id = 0 表示恢复默认；未拥有且 expect_free_equip=false 且配表开放券解锁时原子耗券解锁并穿戴）。
+message EquipSkillVfxRequest
+{
+	uint64 client_request_id = 1;    // 必须非 0
+	uint32 skill_table_id = 2;       // 目标技能 ID(Skill.id)
+	uint32 cosmetic_id = 3;          // 目标 SkillVfxCosmetic.id；0 = 恢复默认
+	bool expect_free_equip = 4;      // true = 仅限已拥有免费启用(未拥有拒回,绝不误扣券); false = 允许耗券解锁并启用
+}
+
+message EquipSkillVfxResponse
+{
+	TipInfoMessage error_message = 1;
+	PlayerAppearanceInfo info = 2;
+	uint32 skill_table_id = 3;
+	uint32 equipped_cosmetic_id = 4;
+	bool replayed = 5;
+}
+
+message GetAppearanceInfoRequest {}
+
+message GetAppearanceInfoResponse
+{
+	TipInfoMessage error_message = 1;
+	PlayerAppearanceInfo info = 2;
+}
+
+// 切换永久形象(已拥有则 0 消耗免费切换;未拥有且允许卡换则消耗角色形象卡永久解锁并切换;带幂等键)。
+message SwitchAppearanceRequest
+{
+	uint64 client_request_id = 1; // 必须非 0;同一次操作重发带同一键
+	string appearance_id = 2;     // 目标形象稳定 ID
+	bool expect_free_switch = 3;  // true = 仅限已拥有免费切换(未拥有则拒绝,绝不误扣形象卡); false = 允许扣卡永久解锁并切换
+}
+
+message SwitchAppearanceResponse
+{
+	TipInfoMessage error_message = 1;
+	PlayerAppearanceInfo info = 2;
+	bool replayed = 3;
+}
+
+// 开启 1 小时免费试用(每个形象每角色限 1 次,写入 bit 标记)。
+message StartAppearanceTrialRequest
+{
+	uint64 client_request_id = 1; // 必须非 0
+	string appearance_id = 2;     // 目标形象稳定 ID
+}
+
+message StartAppearanceTrialResponse
+{
+	TipInfoMessage error_message = 1;
+	PlayerAppearanceInfo info = 2;
+	bool replayed = 3;
+}
+
+// 手动提前结束当前试用,立即恢复永久形象。
+message CancelAppearanceTrialRequest {}
+
+message CancelAppearanceTrialResponse
+{
+	TipInfoMessage error_message = 1;
+	PlayerAppearanceInfo info = 2;
+}
+
+// 场景内某玩家生效展示形象变更广播(发给本人 + AOI 视野内可见观察者)。
+message ActorAppearanceChangedS2C
+{
+	uint64 entity = 1;           // 场景内不透明 actor 网络号(同 ActorCreateS2C.entity)
+	uint64 player_id = 2;        // 玩家永久 ID(同 ActorCreateS2C.guid)
+	string appearance_id = 3;    // 变更后的生效展示形象
+	bool is_trial = 4;           // true = 正在试用, false = 永久形象
+	uint64 trial_expires_at = 5; // 试用到期 Unix 秒(非试用为 0)
+}
+
+// 本人试用到期自动还原或状态变化推送(单播给本人)。
+message AppearanceStateNotify
+{
+	PlayerAppearanceInfo info = 1;
+	bool trial_expired = 2; // true = 因 1 小时试用到期自动还原
+}
+
+service SceneAppearanceClientPlayer
+{
+	option (OptionIsPlayerService) = true;
+	option (OptionIsClientProtocolService) = true;
+
+	rpc GetAppearanceInfo (GetAppearanceInfoRequest) returns (GetAppearanceInfoResponse);
+	rpc SwitchAppearance (SwitchAppearanceRequest) returns (SwitchAppearanceResponse);
+	rpc StartAppearanceTrial (StartAppearanceTrialRequest) returns (StartAppearanceTrialResponse);
+	rpc CancelAppearanceTrial (CancelAppearanceTrialRequest) returns (CancelAppearanceTrialResponse);
+	rpc NotifyActorAppearanceChanged (ActorAppearanceChangedS2C) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
+	rpc NotifyAppearanceState (AppearanceStateNotify) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
+	// ── 以下只许在末尾追加:生成的 CallMethod 按 method index 分发 ──
+	rpc EquipPetCosmetic (EquipPetCosmeticRequest) returns (EquipPetCosmeticResponse);
+	rpc EquipSkillVfx (EquipSkillVfxRequest) returns (EquipSkillVfxResponse);
+}

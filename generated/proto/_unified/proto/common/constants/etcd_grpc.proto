@@ -1,0 +1,11 @@
+syntax = "proto3";
+option go_package = "proto/common/constants";
+
+// gRPC operation type enum
+enum GrpcOperation {
+    READ = 0;         // Read operation
+    INIT = 1;         // Init operation
+    WRITE = 2;        // Write operation
+    WRITES_DONE = 3;  // Writes done
+    FINISH = 4;       // Operation finished
+}

@@ -1,0 +1,17 @@
+syntax = "proto3";
+option go_package = "proto/common/base";
+
+option cc_generic_services = true;
+
+// Shared request/response for GM-triggered graceful shutdown.
+// Used by both Gate and Scene admin RPCs.
+message GmGracefulShutdownRequest
+{
+  string operator = 1; // GM operator name for audit log
+  string reason = 2;   // e.g. "maintenance", "hotfix"
+}
+
+message GmGracefulShutdownResponse
+{
+  uint32 affected_count = 1; // players saved (scene) or sessions closed (gate)
+}

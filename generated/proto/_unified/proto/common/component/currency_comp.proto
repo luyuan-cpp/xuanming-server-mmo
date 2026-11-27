@@ -1,0 +1,26 @@
+syntax = "proto3";
+option go_package = "proto/common/component";
+
+// A single deferred-clawback (补缴) debt record, keyed by currency type.
+message CurrencyDebtEntry
+{
+  uint32 currency_type = 1;       // Which currency this debt applies to
+  uint64 owed = 2;                // Total amount originally owed
+  uint64 paid = 3;                // Amount already repaid via automatic deduction
+  string reason = 4;              // Why the debt was created (GM note)
+  string gm_operator = 5;         // Who created this debt
+  uint64 created_at = 6;          // Unix timestamp when debt was attached
+  uint64 expires_at = 7;          // Unix timestamp; 0 = never expires
+  bool frozen = 8;                // If true, auto-deduction is paused (GM freeze)
+}
+
+// Persistent currency slot array stored per player.
+// Slot index is defined by CurrencyType (kCurrencyGold, ...).
+message CurrencyComp
+{
+  repeated uint64 values = 1;
+  // GM-blocked currency types — AddCurrency is rejected for these types.
+  repeated uint32 blocked_types = 2;
+  // Deferred-clawback debts (补缴): persisted per player, auto-deducted on AddCurrency.
+  repeated CurrencyDebtEntry debts = 3;
+}

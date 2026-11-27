@@ -1,0 +1,20 @@
+syntax = "proto3";
+package contracts.kafka;
+
+option go_package = "proto/contracts/kafka";
+
+// Transport contract for Kafka messages sent to Gate.
+// Command type is identified by event_id (from global event_id registry).
+// Payload carries the serialized per-event proto (e.g. RoutePlayerEvent, KickPlayerEvent).
+message GateCommand {
+  reserved 1; // was CommandType enum field
+
+  uint64 player_id = 2;
+  uint32 target_node_id = 3;     // Target Scene node ID for routing
+  uint32 session_id = 4;         // Gate session ID
+  bytes payload = 5;             // Serialized event proto (decoded via event_id)
+  uint32 target_gate_id = 6;     // Target Gate ID
+  string target_instance_id = 7; // Target Gate instance UUID to avoid stale commands
+  uint32 event_id = 8;           // Global event ID — identifies payload type
+  uint32 enter_gs_type = 9;      // Login decision: LOGIN_FIRST / LOGIN_RECONNECT / LOGIN_REPLACE
+}

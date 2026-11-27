@@ -1,0 +1,27 @@
+syntax = "proto3";
+option go_package = "proto/common/component";
+
+// 神秘商人的个人限购记录(scene 侧玩家实体组件,**落库**)。
+// 设计文档:docs/design/mystery-merchant.md §5.3。
+//
+// 为什么落在玩家存档里而不是放 Redis 或节点内存:
+//   - 它必须与 currency / bag_component 同在 player_database 一行、同一次存盘落地(与 asset_op_ledger
+//     是同一条不变量 I3):崩溃回档时「钱、货、已购数」三样一起退回同一个时刻,
+//     不会出现「货没了但限购名额已经用掉」或「货还在但名额被清零可以再买一遍」。
+//   - 商人所在的线会换节点(节点判死后在别的节点重建、空线被 rebalance 迁走),放节点内存的话
+//     换一次节点名额就清零一次。
+//
+// 只记「当前这一轮」:round_id 与商人当前轮次不同 = 整份记录作废(读侧按空处理,写侧先清空再记)。
+// 所以这份记录的大小恒不超过一轮货架的件数(MysteryMerchantRule.shelf_size),不需要另设清理。
+message MysteryMerchantPurchase {
+  uint32 goods_id = 1; // MysteryMerchantGoods 表 id
+  uint32 count = 2;    // 本轮已买份数
+}
+
+message PlayerMysteryMerchantComp {
+  // purchases 属于哪一轮(MysteryMerchantState.round_id,即那一轮出现时刻的 Unix 秒)。0 = 从未买过。
+  // 轮次号不含 zone:跨 zone 访客在两个 zone 的同一个时间窗里共用这一份记录(同一 goods_id 的名额共享,只会更严)。
+  uint64 round_id = 1;
+  // 条目之间无序,按 goods_id 找(AGENTS.md §11.6:下标不承载业务语义);同一 goods_id 至多一条。
+  repeated MysteryMerchantPurchase purchases = 2;
+}

@@ -1,0 +1,23 @@
+syntax = "proto3";
+option go_package = "proto/common/component";
+
+
+
+enum EnterGsType
+{
+	  LOGIN_NONE = 0;// Normal enter or scene change
+	  LOGIN_FIRST= 1;// First login
+	  LOGIN_REPLACE = 2;// Session takeover (kick existing)
+	  LOGIN_RECONNECT = 3;// Reconnect
+	  LOGIN_DISCONNECTED = 4;// Mark offline and record version (for deferred cleanup check)
+}
+	
+message PlayerEnterGameStateComp
+{
+	uint32 enter_gs_type = 1;
+}
+
+message PlayerDisconnectInfoComp{
+	uint64 disconnected_at = 1;
+	uint64 snapshot_version = 2;
+}

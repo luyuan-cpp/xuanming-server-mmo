@@ -1,0 +1,811 @@
+syntax = "proto3";
+package guildpb;
+
+option go_package = "proto/guild";
+
+import "proto/db/proto_option.proto";
+
+// 帮会独占库 mmorpg_guild 的表结构,唯一事实源(port-decisions D-14,§8 已修订)。
+// - 建表 / 加列只经 go/schemamigrate(go/guild 的 -migrate 与启动期 Schema.AutoMigrate);业务 SQL 手写。
+// - D-14 §2:主键只用整数 / 枚举列;每表至多一个唯一键。string 列的建法(proto2mysql v0.2.0 起):进唯一键的列建成
+//   **整列** VARCHAR(191)(utf8mb4_0900_bin、NOT NULL DEFAULT ''),唯一键覆盖整列(STATISTICS.SUB_PART = NULL,不再是 191 前缀);
+//   其余 string 列仍是可空的 MEDIUMTEXT。依据见 docs/design/guild-phase2/01-storage.md 的 2026-09-28 落码修正。
+// - 改表纪律见 docs/design/guild-phase2/01-storage.md §6.4:新表 / 新字段只追加;OptionIndex 组只能追加到末尾,
+//   不得调序;已有唯一键或索引组的列一旦改动,开发期必须删库重建。
+// - 与 guild.proto 同包:message 一律带 Record 后缀,枚举值一律带枚举名前缀。
+// - 本文件不进客户端 tools/gen_proto.ps1 清单,不定义 service。
+// - 加锁顺序:guild → guild_player_state → guild_member → guild_application → guild_player_op_seq
+//   → guild_asset_op → guild_daily_counter → guild_activity_progress → guild_trial_battle → guild_trial_reward_owed
+//   → guild_client_request
+//   (同上文档 §2.1;2026-09-21 死锁修复后以 92-handoff.md §12.2 与 go/guild/internal/data/tables.go 为准)。
+// - 后续表由 B5 / B6a / B6b 在本文件追加 message,并在 go/guild/internal/data/tables.go 追加。
+
+message GuildRecord {
+  option(OptionTableName) = "guild";
+  option(OptionPrimaryKey) = "guild_id";
+  option(OptionUniqueKey) = "name_norm";      // 生成 uk_guild;帮名全服唯一,判重只看规范化值
+  option(OptionIndex) = "zone_id;leader_id";  // idx_guild_0 = 按区查询(zone_id IN 合服组);idx_guild_1 = 按会长查
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 guild_id = 1;        // data_service 号段 biz_tag=guild
+  string name = 2;            // 展示名:TrimSpace 后原样保存,不建索引;≤ MaxGuildNameRunes=24
+  uint64 leader_id = 3;       // 与 guild_member.role=3 同事务维护
+  uint32 level = 4;           // 建帮写 1;B5 升级改写
+  string announcement = 5;    // ≤ MaxAnnouncementBytes=600
+  uint64 create_time_ms = 6;
+  uint32 max_members = 7;     // 建帮写入;B5 起按 GuildLevel.max_members 改写
+  uint32 zone_id = 8;         // 建帮时的归属区,此后不改写;合服只登记映射 zone_merged_into,按区比较、查询先解析到最终区
+  int64 score = 9;            // 排行分权威副本;Redis ZSET 由 RebuildRanks 重建
+  uint64 funds = 10;          // 帮会资金;B1 恒为 0,B5 起写入
+  string name_norm = 11;      // data.GuildNameNorm(name):NFKC → TrimSpace → 小写;≤ 48 rune(远小于列长 VARCHAR(191),uk_guild 是整列索引)
+  // score 的版本:建帮写 0,UpdateGuildScore 在写 score 的同一事务里 +1。Redis 分区榜按它做条件写入,
+  // 只接受不比已记版本旧的分数,所以写榜不用抢全服锁(docs/design/guild_ranking_architecture_zh.md §3)。
+  uint64 score_version = 12;
+  // 上一次帮会改名成功的时刻 Unix 毫秒(0 = 从未改过名;冷却判定以此为准)。
+  uint64 renamed_ms = 13;
+  // 追加区:从 14 起。
+}
+
+message GuildPlayerStateRecord {
+  option(OptionTableName) = "guild_player_state";
+  option(OptionPrimaryKey) = "player_id";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 player_id = 1;       // 每玩家一行,只作串行化锁行(§2.1 规则 3);INSERT IGNORE 于事务外建行
+  uint64 updated_ms = 2;      // 最近一次加锁写入的时刻,仅诊断用
+  // 追加区:从 3 起。刻意不存"待审申请数":帮会侧批量删过期申请、解散删申请都不锁申请人行,计数会漂;
+  // 上限判定一律在持有本行锁后对 guild_application 做加锁计数(§2.1 规则 4)。
+}
+
+message GuildMemberRecord {
+  option(OptionTableName) = "guild_member";
+  option(OptionPrimaryKey) = "guild_id,player_id";
+  option(OptionUniqueKey) = "player_id";      // 生成 uk_guild_member;一人至多一个帮
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 guild_id = 1;
+  uint64 player_id = 2;
+  uint32 role = 3;                   // 0 成员 / 1 长老 / 3 帮主(D-4;权限比较走 constants.Rank)
+  uint64 join_time_ms = 4;
+  uint64 last_active_ms = 5;         // 目前只在入帮时写入
+  uint64 contribution_total = 6;     // 累计帮贡,只增;B5 起写入
+  uint64 contribution_balance = 7;   // 可消费帮贡;商店扣减;B5 起写入
+  // 追加区:从 8 起。
+}
+
+message GuildApplicationRecord {
+  option(OptionTableName) = "guild_application";
+  option(OptionPrimaryKey) = "guild_id,player_id";
+  option(OptionIndex) = "player_id;expire_ms";  // idx_guild_application_0 = 本人申请;idx_guild_application_1 = 过期清理
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 guild_id = 1;
+  uint64 player_id = 2;        // 申请人
+  uint64 apply_ms = 3;         // 最近一次申请(重复申请会刷新)的时刻
+  uint64 expire_ms = 4;        // apply_ms + GuildRule.application_expire_hours × 3600000
+  // 追加区:从 5 起(B2)。只存待审;通过、拒绝、撤销、过期都删行。
+}
+
+// ── 资产三表(B5a)────────────────────────────────────────────────
+// 完整定义出自 docs/design/guild-phase2/90-consistency.md 第 2 部分 §1(X-01:各节正文都只给了增量)。
+// guild 经通用资产通道(go/shared/assetop)向 scene 发"扣货币 / 发物品"指令:
+// guild_player_op_seq 发每个 (玩家, 流) 的序号,guild_asset_op 是指令账本(outbox),
+// guild_daily_counter 记每日 / 每周用量。三张表的列名被 go/shared/assetop 的 SQL 直接引用,改名前先查那边。
+//
+// 业务 SQL 一律绑定下面三个枚举的生成常量,不写数字字面量(`status = 1` 这类写法评审直接拒)。
+
+// 与 assetop.Status 语义一一映射;数值由本枚举定(1 基:0 留给"漏写状态列的行",它不会被当成未决行领走)。
+// guild.proto 的 GuildAssetOrderStatus 是它的客户端镜像,1..5 数值逐项相同。
+// 例外:ABANDONED(6)只是库内状态,**不**进客户端枚举 —— 客户端视图把它映射成已有的 ABORTED("超时或人工撤销"),
+// 映射只在 logic.orderViewOf 一处(docs/design/landing-recovery-sync-digest.md §6.3「状态与展示」)。
+// 其余新增状态仍按"两边同加"处理。
+enum GuildAssetOpStatus {
+  GUILD_ASSET_OP_STATUS_UNSPECIFIED = 0;
+  GUILD_ASSET_OP_STATUS_PENDING = 1;
+  GUILD_ASSET_OP_STATUS_APPLIED = 2;
+  GUILD_ASSET_OP_STATUS_REJECTED = 3;
+  GUILD_ASSET_OP_STATUS_ABORTED = 4;
+  GUILD_ASSET_OP_STATUS_APPLIED_PARTIAL = 5;  // 只终结:不做对侧账、不自动清理,转人工补偿(X-15)
+  // 自动放弃(落地恢复 §6.3):PENDING 超过 AbandonAfterDays、玩家无位置、距最后一次可能的发送超过安全间隔、
+  // 已落盘账本确认 scene 从未见过这个 seq 时,由 assetop.Loop.AbandonOnce 经 GuildAssetStore.Abandon 终结。
+  // 对侧账同 REJECTED / ABORTED(捐献退次数、兑换退帮贡与限购、活动发奖只留审计行);不置 durable、不改 last_outcome;
+  // 终态清理与 APPLIED / REJECTED / ABORTED 同等对待(30 天后删)。人工终结(assetopfix)不写这个状态。
+  GUILD_ASSET_OP_STATUS_ABANDONED = 6;
+}
+
+enum GuildAssetOpKind {
+  GUILD_ASSET_OP_KIND_UNSPECIFIED = 0;
+  GUILD_ASSET_OP_KIND_DONATE = 1;           // 捐献:GUILD_DEBIT 流扣货币
+  GUILD_ASSET_OP_KIND_SHOP = 2;             // 商店:GUILD_CREDIT 流发物品
+  GUILD_ASSET_OP_KIND_ACTIVITY_REWARD = 3;  // 活动发奖(B6):GUILD_CREDIT 流
+  // 没有"捐献退款":用户决策 D2(README §3)——离帮 / 被踢 / 解散后已扣款的捐献照记给帮会、不退款。
+  // 90 清单原文里的 DONATE_REFUND = 4 随之作废,4 号未占用。
+  GUILD_ASSET_OP_KIND_WAR_REWARD = 5;       // 帮战 V2 奖励:GUILD_CREDIT 流(银两/周宝箱/灵脉分红)
+  GUILD_ASSET_OP_KIND_BOUNTY_ESCROW = 6;    // 追杀令预扣:GUILD_DEBIT 流扣发布者银两
+  GUILD_ASSET_OP_KIND_BOUNTY_PAYOUT = 7;    // 追杀令结单/反杀/过期退本:GUILD_CREDIT 流
+}
+
+enum GuildDailyCounterKind {
+  GUILD_DAILY_COUNTER_KIND_UNSPECIFIED = 0;
+  GUILD_DAILY_COUNTER_KIND_DONATE = 1;
+  GUILD_DAILY_COUNTER_KIND_SHOP = 2;
+  GUILD_DAILY_COUNTER_KIND_ACTIVITY = 3;    // B6
+  GUILD_DAILY_COUNTER_KIND_WAR_BOUNTY_PAYOUT = 4; // 帮战 V2:本人每日领取追杀/反杀银两赏金次数(上限 5)
+  GUILD_DAILY_COUNTER_KIND_WAR_PUBLIC_BOUNTY = 5; // 帮战 V2:帮会公费追杀令每日次数(按 player_id=guild_id 记)
+}
+
+message GuildPlayerOpSeqRecord {              // 锁序位置 5
+  option(OptionTableName) = "guild_player_op_seq";
+  option(OptionPrimaryKey) = "player_id,stream";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 player_id = 1;
+  uint32 stream = 2;           // AssetOpStream 数值(本文件不 import asset_op.proto,避免库表定义依赖通道协议)
+  uint64 next_seq = 3;
+  uint64 updated_ms = 4;
+  uint64 epoch = 5;            // 建行毫秒,>0;库恢复手册显式抬高(04-asset-channel.md §4.31)
+  // 追加区:从 6 起。行由 assetop.EnsureSeqRow 在事务外 INSERT IGNORE 建,事务内只加锁读改。
+}
+
+message GuildAssetOpRecord {                  // 锁序位置 6
+  option(OptionTableName) = "guild_asset_op";
+  option(OptionPrimaryKey) = "op_id";
+  option(OptionUniqueKey) = "player_id,stream,stream_epoch,seq";  // 生成 uk_guild_asset_op;同一序号只可能有一条指令
+  // idx_guild_asset_op_0 = 到期领取 / 终态清理 / 回档前检查(B5d);列是 (status, next_attempt_ms, op_id, player_id)
+  //   (2026-11-11,缺口清单第 25 条):op_id 让 ORDER BY next_attempt_ms, op_id 直接走索引顺序(TiDB 上主键非聚簇,
+  //   不带它就要整段读完再排序),player_id 让按玩家分片的条件在索引上判,别的副本的行不回表;
+  // idx_guild_asset_op_1 = 按帮查;
+  // idx_guild_asset_op_2 = AllocateSeq 对未决行加锁读、离帮提前截止、本人待结算列表(只扫未决行)、
+  //   落地唤醒按玩家列未决行(GuildAssetStore.ListPendingByPlayer,非加锁读)。
+  // 索引名从 0 起编号,组只能追加到末尾、不得调序(见文件头改表纪律)。
+  option(OptionIndex) = "status,next_attempt_ms,op_id,player_id;guild_id,op_id;player_id,stream,stream_epoch,status,seq";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 op_id = 1;              // data_service 号段 biz_tag=guild_asset_op;同时作资产通道的 correlation_id
+  uint64 player_id = 2;
+  uint32 stream = 3;             // AssetOpStream 数值
+  uint64 seq = 4;
+  uint64 guild_id = 5;           // 发起时绑定的帮会;结算一律记给它,不看结算时玩家在哪个帮(D2)
+  GuildAssetOpKind kind = 6;
+  GuildAssetOpStatus status = 7;
+  // 0/1:最后一次 scene 答复(last_outcome / last_reason 记的那一次)是否报告结局已落盘;只有落盘的 APPLIED / REJECTED 能终结一行。
+  // Reschedule 按每次答复覆盖,Finalize 写 1;人工终结(assetopfix)与自动放弃不是 scene 的答复,不改它,也不改那两列,
+  // 终态行上留着最后一次投递时 scene 实际回的值。谁终结的看 resolved_by(人工终结写操作人),不看 durable。
+  uint32 durable = 8;
+  uint32 attempts = 9;
+  uint64 next_attempt_ms = 10;   // 未决:下次重投时刻;终态:终结时刻(清理与回档检查按它判龄)
+  uint64 deadline_ms = 11;       // 只有 DONATE 非 0;到期改发中止。商店 / 活动发奖恒 0,永不中止
+  bytes payload = 12;            // AssetBundle 序列化字节
+  uint32 ref_id = 13;            // donate_id / goods_id / activity_id
+  uint32 ref_count = 14;         // 捐献恒 1;商店为份数
+  uint32 period_key = 15;        // 占用的计数行周期键(gameday.DayKey / WeekKey);0 = 未占计数行,退回时跳过
+  uint64 contribution_delta = 16;  // 捐献:应得帮贡;商店:已扣帮贡(永久拒绝时退回)
+  uint64 funds_delta = 17;       // 捐献:应记帮会资金
+  uint32 reason_tip_id = 18;     // 终态原因,只在终结时写一次(APPLIED / ABORTED 写 0)
+  uint64 created_ms = 19;
+  uint64 updated_ms = 20;
+  uint64 lease_until_ms = 21;    // 领取租约截止;0 = 未被领取
+  uint64 lease_token = 22;       // 领取令牌;Reschedule 须匹配,不匹配 = 租约已被别的副本接走
+  uint32 tx_type = 23;           // TransactionType 数值,重投时原样带上
+  uint32 last_outcome = 24;      // 最近一次 AssetOpOutcome(诊断)
+  uint32 last_reason = 25;       // 最近一次 scene 回的 reason:每次 Reschedule / Finalize 覆盖;PENDING 视图展示它;兼作部分发放粘性标记
+  uint64 stream_epoch = 26;      // = 分号时 guild_player_op_seq.epoch
+  string resolved_by = 27;       // 人工终结(assetopfix)写:操作人,代码侧限 ≤64
+  string resolve_reason = 28;    // 人工终结原因,代码侧限 ≤191
+  // 此前任何一次投递请求**可能**发出的最晚时刻(毫秒),自动放弃的安全依据(落地恢复 §6.3「last_send_ms 契约」,
+  // 实现以 go/shared/assetop/abandon.go 文件头为准)。插行写 created_ms;Claim 的 CAS 在改 lease_until_ms 之前把旧租约折进来;
+  // Reschedule 只在本次确实可能发出过请求(非本地 NOT_HERE)时推进到 now;毒行推迟 / 归还租约不动它。
+  // 不能用 updated_ms 代替:领取与停放档的本地重排都写 updated_ms。
+  // 存量行懒初始化,不做单独回填:schemamigrate ADD COLUMN 后存量行为 0,Claim 时先取 GREATEST(created_ms, updated_ms) 作初值。
+  // 0 = 未维护,放弃路径一律跳过。
+  uint64 last_send_ms = 29;
+  // 追加区:从 30 起。
+}
+
+message GuildDailyCounterRecord {             // 锁序位置 7
+  option(OptionTableName) = "guild_daily_counter";
+  option(OptionPrimaryKey) = "player_id,counter_kind,ref_id,period_key";
+  option(OptionIndex) = "period_key";  // idx_guild_daily_counter_0:过期清理按周期键范围删,否则全表扫
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 player_id = 1;
+  GuildDailyCounterKind counter_kind = 2;
+  uint32 ref_id = 3;           // donate_id / goods_id / activity_id
+  uint32 period_key = 4;       // gameday.DayKey(8 位)或 WeekKey(6 位);两个数值域不相交
+  uint32 used_count = 5;       // 含结算中的占用;REJECTED / ABORTED 时退回
+  uint64 updated_ms = 6;
+  // 追加区:从 7 起。计数一律用带上限的 upsert 改写,不得"锁不存在的行再插入"(X-13)。
+}
+
+// ── 帮会活动(B6a)────────────────────────────────────────────────
+// 设计:docs/design/guild-phase2/06-activities.md §6.5(表)、§6.11–§6.14(事务与解散)。
+// 周期口径(README §3 U1):个人次数不在本表,挂在 guild_daily_counter(counter_kind = ACTIVITY,按游戏日,
+// 换帮不重置);本表只记**帮会级**进度,按活动档期 —— 点灯阈值、团圆锁存、资金只发一次,都以这一行为准。
+//
+// 锁序位置 8:guild_daily_counter(7)之后,B6b 的 guild_trial_battle(9)/ guild_trial_reward_owed(10)之前。
+// 本表任一行的锁定者 / 写者都必须先持有同一 guild_id 的 guild 行锁(灯会、团圆、历练结算、解散的第一把锁都是它),
+// 本表的行因此在帮会粒度上被 guild 行串行。取锁序列与理由见 go/guild/internal/data/tables.go。
+//
+// 刻意没有二级索引:读写都是完整主键点操作或 guild_id 主键前缀(视图读、解散删)。v1 不清理旧期行
+// (每帮每天至多 3 行);v1.1 若按 period_key 清理需要加 OptionIndex = "period_key" —— schemamigrate 对已存在的表
+// 不补建普通索引(只告警),上线前要么定下来、要么开发期删库重建。
+message GuildActivityProgressRecord {         // 锁序位置 8
+  option(OptionTableName) = "guild_activity_progress";
+  option(OptionPrimaryKey) = "guild_id,activity_id,period_key";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 guild_id = 1;
+  uint32 activity_id = 2;            // GuildActivity.id
+  // 帮会期键 activity.GuildPeriodKey:灯会 / 团圆 = 档期 start_at_ms 当天的游戏日键(一届活动跨多天仍是同一行);
+  // start / end 都为 0 的常开行(仅开发)退化为当天游戏日键;历练 = 开战时的游戏日键(每日计资金胜场上限)。
+  uint32 period_key = 3;
+  uint32 progress_count = 4;         // 灯会:本档期点灯人次;历练:本游戏日已计资金胜场;团圆不用(恒 0)
+  uint64 threshold_reached_ms = 5;   // 0 = 未达;非 0 = 首次达成时刻。锁存:写一次后不再改,团圆据此跨游戏日仍可领
+  uint32 funds_granted = 6;          // 0/1:本期帮会资金已发。与阈值判定在同一把 guild 行锁下读改,保证只发一次
+  uint64 updated_ms = 7;
+  // 追加区:从 8 起。
+}
+
+// ── 同道历练(B6b)──────────────────────────────────────────────────
+// 设计:docs/design/guild-phase2/06-activities.md §6.5(表)、§6.26(登记)、§6.29–§6.33(结算、毒消息、待入队、巡检)。
+// 落码与正文不同的地方(取锁序列、解散只删在途行、帮会已解散时不落行)以 go/guild/internal/data/activity_repo.go 文件头与
+// 92-handoff.md §12.2 / §12.4 的 B6b 落码修正为准 —— 06 正文写于死锁修复之前。
+
+// 一局历练在 guild 侧的状态。SETTLED 是唯一的终态,也是结算的幂等闸门。
+enum GuildTrialBattleState {
+  GUILD_TRIAL_BATTLE_STATE_UNSPECIFIED = 0;
+  GUILD_TRIAL_BATTLE_STATE_STARTED = 1;   // 已开战、未结算
+  GUILD_TRIAL_BATTLE_STATE_SETTLED = 2;   // 已结算(终态;重复的结果事件到这里即止)
+  GUILD_TRIAL_BATTLE_STATE_EXPIRED = 3;   // 巡检判定长时间无结果(gather 失败 / 战斗作废);不是终态,迟到的结果仍可把它结算成 SETTLED
+}
+
+// 结算结论,只在 state = SETTLED 时有意义(其余状态恒为 UNSPECIFIED)。
+enum GuildTrialSettleResult {
+  GUILD_TRIAL_SETTLE_RESULT_UNSPECIFIED = 0;
+  GUILD_TRIAL_SETTLE_RESULT_WIN = 1;
+  GUILD_TRIAL_SETTLE_RESULT_LOSS = 2;            // 失败 / 平局
+  // 保留值,当前代码不写入:历练行只在持有该帮 guild 行锁时才写(见 GuildTrialBattleRecord 注释),帮会已解散就什么都不落,
+  // 结果只进日志与指标 guild_trial_result_total{result="guild_gone"}。数值留着是为了日后要落审计时不必改号。
+  GUILD_TRIAL_SETTLE_RESULT_GUILD_GONE = 3;
+  GUILD_TRIAL_SETTLE_RESULT_CONFIG_MISSING = 4;  // 活动行被删或类型不符,不发奖
+  GUILD_TRIAL_SETTLE_RESULT_POISON = 5;          // 确定性失败(溢出 / 奖励包构建失败 / 结果过旧),不发奖,转人工审计与补发
+}
+
+// 一局历练一行:开战时登记(STARTED),结果到达时结算(SETTLED),巡检器把长时间无结果的判为 EXPIRED。
+//
+// 锁序位置 9(guild_activity_progress 之后)。与 guild_activity_progress 同一条不变量:
+// **本表任一行的插入者 / 锁定者 / 写者,都先持有该行 guild_id 对应的 guild 行锁(FOR UPDATE)** ——
+// 登记、结算、毒消息标记、巡检判 EXPIRED、解散删在途行的第一把锁都是它;不持 guild 行锁的路径只许普通读。
+// 帮会已解散(guild 行不存在)时没有任何路径写本表:解散在同一事务里已删掉该帮全部 STARTED 行,
+// 剩下的 SETTLED / EXPIRED 行此后不可变,作历史保留(v1 不清理)。
+//
+// idx_guild_trial_battle_0 (guild_id, state):解散按"本帮 + STARTED"取候选(在途对局数有上界,与帮会历史长短无关);
+// idx_guild_trial_battle_1 (state, created_ms):巡检扫超时的 STARTED 行。
+// 06 §6.5 原写 idx_0 = (guild_id):解散改为只删在途行后补上 state 列,候选读才是索引内的范围读,不必回表过滤全部历史行。
+message GuildTrialBattleRecord {              // 锁序位置 9
+  option(OptionTableName) = "guild_trial_battle";
+  option(OptionPrimaryKey) = "battle_id";
+  option(OptionIndex) = "guild_id,state;state,created_ms";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 battle_id = 1;                // match 从发号器领的永久 ID(biz_tag=battle,不能解析);与 BattleResultEvent.battle_id、SharedRedis 结果键同值
+  uint64 guild_id = 2;                 // 发起帮会;插入后不变(本表的守卫行就按它取)
+  uint32 activity_id = 3;              // GuildActivity.id
+  uint32 period_key = 4;               // 开战时的游戏日键(个人每日次数记在这一天)
+  uint32 guild_period_key = 5;         // 开战时的帮会期键(历练 = 游戏日键;每日计资金胜场上限记在这一期)
+  uint64 initiator_player_id = 6;
+  GuildTrialBattleState state = 7;
+  GuildTrialSettleResult settle_result = 8;
+  uint32 rewarded_count = 9;           // 得帮贡人数(审计)
+  uint64 created_ms = 10;              // 登记时刻;结算时补登记的行取对局结束时刻
+  uint64 settled_ms = 11;              // 进入 SETTLED / EXPIRED 的时刻;STARTED 为 0
+  uint64 launch_request_id = 12;       // 开战前已提交的原请求；不能在结算时从当前归属补造
+  // 追加区:从 13 起。
+}
+
+// 以下三个非表消息保存服务端私有原件；账号不能进入客户端可见的房间成员视图。
+message GuildTrialRoleIdentity {
+  uint64 player_id = 1;
+  string account = 2;
+  uint64 owner_revision = 3;
+}
+message GuildTrialLobbyConsent {
+  uint64 lobby_id = 1;
+  GuildTrialRoleIdentity identity = 2;
+}
+// 私有大厅固定邀请原件。名册为无符号升序授权集合，发起人由独立字段指明。
+message GuildTrialLobbyOriginal {
+  uint64 lobby_id = 1;
+  uint64 guild_id = 2;
+  uint32 activity_id = 3;
+  uint64 initiator_player_id = 4;
+  repeated GuildTrialRoleIdentity roster = 5;
+  uint64 created_ms = 6;
+  uint64 expires_ms = 7;
+}
+// 同意集合复用唯一正式消息；拒绝另造并行身份或手拼PB字节流。
+message GuildTrialLobbyConsents {
+  repeated GuildTrialLobbyConsent consents = 1;
+}
+// 大厅与原玩家占位同角色P/G锁事务提交，Redis只保留展示/通知缓存。
+message GuildTrialLobbyRecord {
+  option(OptionTableName) = "guild_trial_lobby";
+  option(OptionPrimaryKey) = "lobby_id";
+  option(OptionIndex) = "guild_id,state,lobby_id;state,updated_ms,lobby_id;state,lobby_id";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+  uint64 lobby_id = 1;
+  uint64 guild_id = 2;
+  uint32 activity_id = 3;
+  uint64 initiator_player_id = 4;
+  uint32 state = 5;                    // 1=PENDING，2=LAUNCHING，3=LAUNCHED，4=ENDED
+  bytes view_proto = 6;               // GuildTrialLobbyView，展示投影不含账号
+  bytes original_proto = 7;           // GuildTrialLobbyOriginal确定性原字节
+  bytes consent_proto = 8;            // GuildTrialLobbyConsents，逐人原同意
+  uint64 expires_ms = 9;
+  uint64 launch_deadline_ms = 10;
+  uint64 battle_id = 11;
+  uint64 created_ms = 12;
+  uint64 updated_ms = 13;
+}
+message GuildTrialLobbySlotRecord {
+  option(OptionTableName) = "guild_trial_lobby_slot";
+  option(OptionPrimaryKey) = "player_id";
+  option(OptionIndex) = "lobby_id,player_id";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+  uint64 player_id = 1;
+  uint64 lobby_id = 2;                 // 0为已结清占位墓碑；非0须核真实大厅精确终态
+  uint64 cooldown_until_ms = 3;        // 业务冷却，不充当未知开局已结束的证据
+}
+message GuildTrialLaunchOriginal {
+  uint64 request_id = 1;
+  uint64 guild_id = 2;
+  uint32 activity_id = 3;
+  uint32 period_key = 4;
+  uint32 guild_period_key = 5;
+  uint64 initiator_player_id = 6;
+  uint32 dungeon_id = 7;
+  repeated GuildTrialRoleIdentity roster = 8;
+  uint64 created_ms = 9;
+}
+
+// 外部开战前同全员角色首锁与帮会锁提交；未知结果只重放原请求，不换名单/周期/归属。
+message GuildTrialLaunchRecord {
+  option(OptionTableName) = "guild_trial_launch";
+  option(OptionPrimaryKey) = "request_id";
+  option(OptionIndex) = "state,updated_ms;battle_id;state,next_check_ms";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+  uint64 request_id = 1;
+  uint64 battle_id = 2;
+  uint32 state = 3;                    // 1=PREPARED，2=STARTED，3=TERMINAL
+  bytes original_proto = 4;             // GuildTrialLaunchOriginal确定性原字节
+  bytes request_digest = 5;
+  uint64 created_ms = 6;
+  uint64 updated_ms = 7;
+  bytes cancel_receipt = 8;             // 提交时已核签且绑定原请求的CancelActivityBattleResponse原字节
+  // 恢复器调度(2026-11-05,r2-guild#1 评审;go/guild/internal/data/trial_launch_repo.go「恢复器的到期认领」)。只决定何时、由哪个副本去查,不参与释放判定。
+  uint64 next_check_ms = 9;             // 下一次检查时刻(SQL 时钟毫秒):新原件 = max(开局截止, Prepare 提交) + 30s;每次认领改成 SQL 现在 + 退避间隔
+  uint32 check_attempts = 10;           // 认领次数(只增不减),决定退避间隔
+  // 实时开局路径拿到 match 的确定答复而没开成时的结束原因(2026-11-11):base.TipInfoMessage 的确定性原字节(tip id 与参数,
+  // 如「某人离线」)。只用于恢复器作废释放时写回大厅,让名单上所有人看到与发起人同一个具体原因;不参与任何释放判定。
+  // 空 = 没有记录(Start 结局未知、开局后作废),释放时写默认原因。只写一次,只对还没登记对局的 state1 原件写。
+  bytes realtime_end_tip = 11;
+}
+
+// 原件的可索引投影；与launch同事务写入/终结，防止角色过户漏过尚未发奖的对局。
+message GuildTrialLaunchRoleRecord {
+  option(OptionTableName) = "guild_trial_launch_role";
+  option(OptionPrimaryKey) = "player_id,request_id";
+  option(OptionIndex) = "request_id,player_id;player_id,state,request_id";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+  uint64 player_id = 1;
+  uint64 request_id = 2;
+  string account = 3;
+  uint64 owner_revision = 4;
+  uint32 state = 5;                    // 1=ACTIVE，2=TERMINAL
+}
+
+// 历练结算时某位得奖者的 GUILD_CREDIT 流未决指令已满(assetop.ErrTooManyPending):物品先记在这里,
+// 由后台循环等窗口有空位再转成 guild_asset_op 行(同一事务里删本行)。**绝不跳过** —— 帮贡当场已发,物品只是晚到。
+//
+// 锁序位置 10(全序末尾)。行的写者:结算(插新行,位置 9 之后)、转换(持该玩家 GUILD_CREDIT 流的 seq 行 → 插指令行 → 点删本行)、
+// 诊断计数(自动提交,只改无索引列 attempts)。解散不删:物品属于玩家。
+// 有本行就一定有该玩家 GUILD_CREDIT 流的 seq 行(本行正是因为 seq 分配被守卫拒绝才产生的),转换不必再建 seq 行。
+//
+// idx_guild_trial_reward_owed_0 (created_ms):后台循环按先来后到翻页。
+message GuildTrialRewardOwedRecord {          // 锁序位置 10
+  option(OptionTableName) = "guild_trial_reward_owed";
+  option(OptionPrimaryKey) = "player_id,battle_id";
+  option(OptionIndex) = "created_ms";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 player_id = 1;
+  uint64 battle_id = 2;
+  uint64 guild_id = 3;                 // 结算时的帮会;转入指令行的 guild_id,此外只作审计
+  uint32 activity_id = 4;              // 转入指令行的 ref_id
+  uint32 period_key = 5;               // 转入指令行的 period_key(开战时的游戏日键,审计用)
+  bytes payload = 6;                   // AssetBundle 序列化字节,原样转入指令行
+  uint32 attempts = 7;                 // 因窗口仍满而跳过的轮数(诊断)
+  uint64 created_ms = 8;
+  // 追加区:从 9 起。
+}
+
+// ── 客户端幂等键(2026-10-15)──────────────────────────────────────
+// 设计:docs/design/guild-phase2/05-economy.md 顶部「客户端幂等键」覆盖块。
+// DonateToGuild / BuyGuildShopGoods 的 client_request_id(非 0)写成指令时,在**同一个预留事务**里插一行:
+// (玩家, 键) → 首次写成的 op_id。重发凭它找回首次那笔指令,不再发号、不再扣。
+//
+// 为什么另起一张表,而不是给 guild_asset_op 加列 + 唯一键:
+//   - D-14 每表至多一个唯一键,guild_asset_op 已有 uk_guild_asset_op;
+//   - 存量行与旧客户端的新行都是 0,(player_id, client_request_id) 上的唯一键会把它们判成重复;
+//   - schemamigrate 对已存在的表不补建索引(只告警),在 guild_asset_op 上加索引只能停服手工做。
+//   新表首次建出就带主键与索引,存量数据不需要回填。
+//
+// 锁序位置 11(全序末尾,记号 R)。写者只有两类:
+//   - 捐献 / 兑换预留(T-D / T-S):锁本人成员行 M 之后**普通读**本表复核(读到 = 首次已提交,整体回滚),
+//     事务最后(O、C、扣帮贡之后)插新行。同一玩家的全部插入者都先持他唯一的那一行 M(uk_guild_member),
+//     所以同一 (p, 键) 在途的插入者至多一个,首插者回滚时没有排队者;
+//   - 清理(asset_store.go,不持其它锁):普通读过期候选 → 逐行 RC 短事务{主键点锁 → 带 created_ms 复核的点删}。
+//     它只删保留期外的行,预留只插新行,两者行集合不相交。
+// 读路径(重发前查首次结果)一律普通读。
+//
+// 寿命:created_ms 早于 now − AssetOp.TerminalRetentionDays 的行由清理删掉(与终态指令同一个保留期配置,同一轮里先删本表)。
+// 终态指令按终结时刻判龄、终结时刻不早于创建时刻,所以一笔指令可删时它的去重记录早已可删;批次上限或单行失败
+// 仍可能让少量本行比指令行晚一轮删,那段时间重发同一个键会查到本行却查不到指令行 —— 按拒绝答复,绝不重新执行。
+// PENDING / APPLIED_PARTIAL 指令永不删,它们的去重记录照样按创建时刻过期
+// (那之后同一个键会被当成新请求;客户端不会在保留期之外重发同一个键)。
+//
+// idx_guild_client_request_0 (created_ms):清理按创建时刻范围取候选。
+message GuildClientRequestRecord {            // 锁序位置 11
+  option(OptionTableName) = "guild_client_request";
+  option(OptionPrimaryKey) = "player_id,client_request_id";
+  option(OptionIndex) = "created_ms";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 player_id = 1;
+  uint64 client_request_id = 2;        // DonateToGuildRequest / BuyGuildShopGoodsRequest.client_request_id,非 0
+  uint64 op_id = 3;                    // 首次写成的 guild_asset_op.op_id;种类与参数以那一行为准,本表不重复存
+  uint64 created_ms = 4;               // = 那一行的 created_ms(预留事务的 now);清理按它判龄
+  // 追加区:从 5 起。
+}
+
+// 帮会改名旧名保护表(docs/design/rename-and-content-safety.md §5):锁序位置 12(全序末尾)。
+// D-14 要求显式声明整数主键(hold_id),唯一性由 uk_guild_name_hold(name_norm,整列 VARCHAR(191)) 保证。
+// 事务顺序固定:必须先写 guild(INSERT / UPDATE 拿到 uk_guild 锁),再查/改本表,防止并发抢注刚放下的旧名。
+message GuildNameHoldRecord {
+  option(OptionTableName) = "guild_name_hold";
+  option(OptionPrimaryKey) = "hold_id";
+  option(OptionUniqueKey) = "name_norm";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 hold_id = 1;
+  string name_norm = 2;
+  uint64 guild_id = 3;
+  uint64 held_until_ms = 4;
+}
+
+// ── 帮会全天帮战 V2(docs/design/guild-play-v2.md) ────────────────────────────
+// 全库锁序顺延位置 13..19(排在 guild_name_hold=12 之后,单调追加,不回头锁旧表)。
+
+// 锁序位置 13:三座灵脉归属、旗势、整备护盾与每小时分红游标。
+message GuildWarLeylineRecord {
+  option(OptionTableName) = "guild_war_leyline";
+  option(OptionPrimaryKey) = "zone_id,leyline_id";
+  option(OptionIndex) = "owner_guild_id";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint32 zone_id = 1;
+  uint32 leyline_id = 2;             // 1=八仙岛(scene 2) / 2=碧渊水宫(scene 5) / 3=月汐湾(scene 3)
+  uint64 owner_guild_id = 3;         // 0 = 无主(原生灵脉守卫镇守)
+  uint32 banner_hp = 4;              // 0..1000
+  uint64 shield_until_ms = 5;        // 易主整备护盾截止时刻
+  uint64 captured_at_ms = 6;
+  uint64 last_dividend_at_ms = 7;    // 多副本幂等周期分红推进时间戳
+  uint32 dividend_week_key = 8;      // 本周已产分红计数对应的周键
+  uint32 weekly_dividend_count = 9;  // 本周已产分红份数(上限 24)
+  uint64 last_siege_alert_ms = 10;   // 踢馆警报 60s 节流时间戳
+  uint64 updated_ms = 11;
+}
+
+// 锁序位置 14:本帮 5 槽守旗阵 AI 托管快照(不占用玩家本人在线/战斗)。
+message GuildWarGarrisonRecord {
+  option(OptionTableName) = "guild_war_garrison";
+  option(OptionPrimaryKey) = "guild_id,slot_index";
+  option(OptionUniqueKey) = "player_id";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 guild_id = 1;
+  uint32 slot_index = 2;             // 1..5
+  uint64 player_id = 3;
+  string player_name = 4;
+  uint32 level = 5;
+  string appearance_id = 6;
+  string pet_name = 7;
+  uint32 pet_table_id = 8;
+  bytes snapshot_payload = 9;        // 序列化 BattlePlayerSnapshot(开局强制置 ai_controlled=true)
+  uint64 updated_ms = 10;
+}
+
+// 锁序位置 15:帮会每周帮战进度(全帮周战功、本帮周分红池与建帮首胜史记)。
+message GuildWarWeeklyProgressRecord {
+  option(OptionTableName) = "guild_war_weekly_progress";
+  option(OptionPrimaryKey) = "guild_id,week_key";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 guild_id = 1;
+  uint32 week_key = 2;               // gameday.WeekKey(ISO 周,周一 05:00 UTC+8)
+  uint64 guild_merit = 3;            // 本帮本周累计战功
+  uint32 dividend_pool_count = 4;    // 本帮本周累计灵脉分红份数
+  uint64 mvp1_player_id = 5;         // 本周战功第 1 功臣
+  uint64 mvp1_merit = 6;
+  uint64 mvp2_player_id = 7;         // 本周战功第 2 功臣
+  uint64 mvp2_merit = 8;
+  uint64 first_win_player1_id = 9;   // 建帮首胜史记(week_key=0 专用永久行保存)
+  uint64 first_win_player2_id = 10;
+  uint64 first_win_at_ms = 11;
+  uint64 updated_ms = 12;
+}
+
+// 锁序位置 16:玩家帮战个人态(和平免战、挂牌迎战、连胜、周领奖位图防换帮重领)。
+message GuildWarPlayerStateRecord {
+  option(OptionTableName) = "guild_war_player_state";
+  option(OptionPrimaryKey) = "player_id";
+  option(OptionIndex) = "zone_id,open_challenge";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 player_id = 1;
+  uint32 zone_id = 2;
+  uint32 peace_mode = 3;             // 0=战意(默认) / 1=和平免战
+  uint64 peace_ready_at_ms = 4;      // 脱战 60s 冷却截止(now >= 它才可从战意切和平)
+  uint32 open_challenge = 5;         // 0=未挂牌 / 1=界面挂牌迎战
+  uint64 protect_until_ms = 6;       // 战后 10s 防堵门保护截止
+  uint32 streak_count = 7;           // 当前连胜层数
+  uint32 streak_distinct_count = 8;  // 连胜期内击败的不同对手数(悬赏需 >=2)
+  uint64 streak_last_opponent_id = 9;// 防同一人刷连胜
+  uint32 weekly_week_key = 10;       // 下面三列对应的 ISO 周键
+  uint64 weekly_merit = 11;          // 本人本周战功(>=30 解锁周箱与分红)
+  uint32 milestone_claimed_mask = 12;// 本周已领里程碑位图(bit 0..3 对应档位 1..4,换帮不重置)
+  uint32 dividend_claimed_count = 13;// 本周已领灵脉分红份数(上限 12,换帮不重置)
+  uint64 bounty_protect_until_ms = 14;// 被成功追杀销单后 30 分钟免再挂保护截止
+  uint64 last_garrison_refresh_ms = 15;// 守旗刷新 60s 冷却基准
+  uint64 last_track_ms = 16;         // 追杀追踪 15s 冷却基准
+  uint64 updated_ms = 17;
+}
+
+// 锁序位置 17:江湖追杀令托管与生命周期。
+// 第 4 个索引 (status,expires_at_ms) 给到期收尾按到期时刻翻页扫 ACTIVE 行(war_repo.go ListDueBounties;
+// 前三个索引都不以 status 开头,跨区扫不动),也给终态旧行的保留期清理按到期时刻取候选(PurgeTerminalBounties,r2-gw#7)。
+// 第 5 个索引 (escrow_op_id) 给预扣指令终结按指令号找追杀令(asset_store.go 的 BOUNTY_ESCROW 分支),否则每次终结都全表扫(r2-gw#7)。
+// schemamigrate 不给已存在的表补建索引,本地库要重建这张表。
+message GuildWarBountyRecord {
+  option(OptionTableName) = "guild_war_bounty";
+  option(OptionPrimaryKey) = "bounty_id";
+  option(OptionIndex) = "target_player_id,status;issuer_guild_id,status;zone_id,status,expires_at_ms;status,expires_at_ms;escrow_op_id";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 bounty_id = 1;              // 发号器永久 ID
+  uint32 zone_id = 2;
+  uint64 issuer_player_id = 3;
+  uint64 issuer_guild_id = 4;
+  uint64 target_player_id = 5;
+  uint64 target_guild_id = 6;
+  uint32 tier = 7;                   // 1=普通5000银两 / 2=重金15000银两 / 3=帮会公费2000资金
+  uint64 escrow_silver = 8;          // 赏金池银两:银两档 = 发布者扣 10% 销毁税后托管的本金(到期原路退回);公费档 = 系统配给的赏金(不是谁出的,不退)
+  uint32 public_board = 9;           // 0=仅本帮 / 1=全区江湖榜
+  uint32 status = 10;                // 1=ESCROW_PENDING / 2=ACTIVE / 3=COMPLETED / 4=TORN_BY_TARGET / 5=EXPIRED(到期且已原路退回) / 6=ESCROW_FAILED(预扣没扣成,无托管)
+  uint64 escrow_op_id = 11;          // 对应 guild_asset_op.op_id(公费档为 0)
+  uint32 counter_kills = 12;         // 目标已成功反杀不同追兵次数(达 2 撕单)
+  uint64 last_counter_attacker_id = 13;// 防止同一追兵刷反杀次数
+  uint64 hunter_player_id = 14;      // 最终结单猎手 ID
+  uint64 created_at_ms = 15;
+  uint64 expires_at_ms = 16;
+  uint64 resolved_at_ms = 17;
+  uint64 escrow_guild_funds = 18;    // 公费档发单时实扣的帮会资金(银两档为 0):到期全退、撕单退一半给发单帮;按实扣额退,不按退款时的配表
+}
+
+// 锁序位置 18:帮战终局幂等闸门、大事记与本人结算回查。
+message GuildWarBattleRecord {
+  option(OptionTableName) = "guild_war_battle";
+  option(OptionPrimaryKey) = "battle_id";
+  option(OptionIndex) = "attacker_guild_id,finished_at_ms;defender_guild_id,finished_at_ms";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 battle_id = 1;
+  uint32 zone_id = 2;
+  uint32 war_battle_kind = 3;        // 1..5
+  uint32 leyline_id = 4;
+  uint64 bounty_id = 5;
+  uint64 attacker_guild_id = 6;
+  uint64 defender_guild_id = 7;
+  uint32 outcome = 8;                // eBattleOutcome
+  uint32 total_rounds = 9;
+  uint32 banner_hp_before = 10;
+  uint32 banner_hp_after = 11;
+  uint32 banner_shielded = 12;
+  uint32 bounty_outcome_tag = 13;    // 0无/1终结连胜/2追杀成功/3反杀成功/4反杀撕单/5破旗首功
+  uint64 jackpot_contribution = 14;
+  uint64 jackpot_silver = 15;
+  uint32 diminish_percent = 16;      // 100/50/20/0
+  uint64 attacker_contribution = 17;
+  uint64 attacker_silver = 18;
+  uint64 attacker_funds = 19;
+  uint64 attacker_merit = 20;
+  uint64 defender_contribution = 21;
+  uint64 defender_silver = 22;
+  uint64 defender_funds = 23;
+  uint64 defender_merit = 24;
+  bytes summary_payload = 25;        // 序列化双方成员 ID/名字快照供大事记与结算页展示
+  uint64 finished_at_ms = 26;
+}
+
+// 锁序位置 19:两帮本周宿敌计数(每周交手 >= 5 次或互挂追杀自动结为宿敌,+20% 帮贡与战功)。
+message GuildWarRivalryRecord {
+  option(OptionTableName) = "guild_war_rivalry";
+  option(OptionPrimaryKey) = "guild_id_low,guild_id_high,week_key";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 guild_id_low = 1;
+  uint64 guild_id_high = 2;
+  uint32 week_key = 3;
+  uint32 clash_count = 4;
+  uint32 bounty_marked = 5;          // 1 = 互挂过追杀令直接成宿敌
+  uint64 updated_ms = 6;
+}
+
+// 锁序位置 20:帮派生死状恩怨汇总(docs/design/battle-jianghu-grudge-duel-bounty-v1.md §2.2)。
+message GuildJianghuRivalSummaryRecord {
+  option(OptionTableName) = "guild_jianghu_rival_summary";
+  option(OptionPrimaryKey) = "guild_id,rival_guild_id";
+  option(OptionIndex) = "guild_id,last_battle_ms";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 guild_id = 1;
+  uint64 rival_guild_id = 2;
+  string rival_guild_name = 3;
+  uint32 wins = 4;
+  uint32 losses = 5;
+  uint32 draws = 6;
+  uint64 last_battle_ms = 7;
+}
+
+// 锁序位置 21:帮派生死状恩怨墙近期战绩(每帮保留最近 20 场,按 (guild_id, battle_id) 幂等去重)。
+message GuildJianghuGrudgeRecord {
+  option(OptionTableName) = "guild_jianghu_grudge_record";
+  option(OptionPrimaryKey) = "guild_id,battle_id";
+  option(OptionIndex) = "guild_id,finished_ms";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 guild_id = 1;
+  uint64 battle_id = 2;
+  uint64 rival_guild_id = 3;
+  string rival_guild_name = 4;
+  uint32 outcome_for_guild = 5; // 1=胜, 2=负, 3=平
+  uint32 writ_tier = 6;         // 1=普通战书, 2=金帖生死状
+  uint32 team_size = 7;
+  uint32 total_rounds = 8;
+  string our_captain_name = 9;
+  string rival_captain_name = 10;
+  uint64 finished_ms = 11;
+}
+
+// 锁序位置 22:帮会全天帮战 V2.5 宿敌约战战书(2 小时全帮约战 + 实时比分 + 24h 冷却)。
+message GuildWarFeudRecord {
+  option(OptionTableName) = "guild_war_feud";
+  option(OptionPrimaryKey) = "feud_id";
+  option(OptionIndex) = "zone_id,status,ends_at_ms;issuer_guild_id,created_at_ms;target_guild_id,created_at_ms";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 feud_id = 1;
+  uint32 zone_id = 2;
+  uint64 issuer_guild_id = 3;
+  string issuer_guild_name = 4;
+  uint64 target_guild_id = 5;
+  string target_guild_name = 6;
+  uint32 status = 7;                // GuildWarFeudStatus
+  uint32 issuer_wins = 8;
+  uint32 target_wins = 9;
+  uint64 issuer_merit = 10;
+  uint64 target_merit = 11;
+  uint64 created_at_ms = 12;
+  uint64 accept_deadline_ms = 13;
+  uint64 started_at_ms = 14;
+  uint64 ends_at_ms = 15;
+  uint64 winner_guild_id = 16;
+  uint64 updated_ms = 17;
+}
+
+// 锁序位置 23:帮派恩怨墙的入账闸门,一局一行,记「这一局已经入过两帮的恩怨墙」(jianghu_grudge_repo.go)。
+// 去重键不能放在 guild_jianghu_grudge_record 里:那张表每帮只留最近 20 场,被裁掉之后重投的旧结果查不到行,
+// 两帮胜负会再算一遍(数据覆写审计 r2 第 4 轮 r2-jh#3)。本表不裁剪,帮会解散也不删:删了重放会给对手帮再算一次。
+// 入账事务在写完位置 20、21 之后最后插本表(单调追加在全序末尾,不回头取靠前的表)。
+message GuildJianghuGrudgeAppliedRecord {
+  option(OptionTableName) = "guild_jianghu_grudge_applied";
+  option(OptionPrimaryKey) = "battle_id";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 battle_id = 1;
+  uint64 applied_ms = 2;            // 入账时刻(库时钟),只供排查与日后按保留期清理
+}
+
+// 锁序位置 24(全序末尾):帮战入账的待入账行(数据覆写审计 r2 第 4 轮 r2-gw#5 / #6;设计见
+// docs/planning/guild-play-v2-implementation-plan.md 末节)。帮战结算(war_repo.go SettleWarBattle)与追杀令到期收尾(ExpireBounty)
+// 给某人插 GUILD_CREDIT 指令时,两种情况不插指令、改在同一事务里记本表一行,不挡同局其他人:
+//   - 他本流未决指令已满(assetop.ErrTooManyPending:16 条或跨度 512);
+//   - 他的角色护栏副本冻结中(过户投票、寄售中、删角投票):冻结期间不给他插任何资产指令。
+// 已删除(墓碑)的角色不记本表,这一笔直接放弃。
+// 转换(war_credit_owed.go ConvertWarCreditOwed,挂在待入队物品循环上):锁他的护栏副本 → 墓碑就删本行放弃 → 仍冻结就留着 →
+// 分 seq(仍满就留着)→ 插 guild_asset_op(op_id 就是本行的 op_id,不另发号,同一笔不会入账两次)→ 点删本行,同一事务。
+// 有本行就挡他的过户与删角冻结(role_fence_pending.go),与 guild_trial_reward_owed 同一口径。
+// idx_guild_war_credit_owed_0 (created_ms):循环按先来后到翻页。
+message GuildWarCreditOwedRecord {          // 锁序位置 24
+  option(OptionTableName) = "guild_war_credit_owed";
+  option(OptionPrimaryKey) = "player_id,op_id";
+  option(OptionIndex) = "created_ms";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 player_id = 1;
+  uint64 op_id = 2;                  // 事务前预发的指令号;转换时原样用作 guild_asset_op.op_id(幂等键)
+  uint64 guild_id = 3;               // 转入指令行的 guild_id(审计)
+  uint32 kind = 4;                   // 转入指令行的 GuildAssetOpKind:WAR_REWARD / BOUNTY_PAYOUT
+  uint32 tx_type = 5;                // 转入指令行的 rollback TransactionType:TX_GUILD_WAR_REWARD / TX_GUILD_BOUNTY_PAYOUT
+  uint32 ref_id = 6;                 // 转入指令行的 ref_id(灵脉号 / 追杀令档位)
+  uint32 period_key = 7;             // 转入指令行的 period_key
+  bytes payload = 8;                 // AssetBundle 序列化字节,原样转入指令行
+  uint64 source_id = 9;              // 来源:帮战结算记 battle_id,到期收尾记 bounty_id(审计)
+  uint64 created_ms = 10;
+}
