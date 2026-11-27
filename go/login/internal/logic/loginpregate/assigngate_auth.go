@@ -19,13 +19,23 @@ import (
 // 自己的账号名(wx_<unionid> 由服务端算出),合法的免排队反而用不上。
 //
 // 没带令牌的匿名分配只为旧流程保留:旧 gate 凭据登录是「先分配 gate、连上之后才认证」,分配时还没有令牌
-// (robot 也是这个顺序)。所以匿名分配与旧路径同一个开关(LegacyGateLoginEnabled):运维关掉旧路径时匿名分配一起关,
-// 不留一个不认证就能占排队位的入口。关之前看 login_assign_gate_auth_total{result="anonymous"} 降到零。
+// (robot 不开 use_http_login 时也是这个顺序)。所以匿名分配与旧路径同一个开关(LegacyGateLoginEnabled):运维关掉旧路径时
+// 匿名分配一起关。关之前看 login_assign_gate_auth_total{result="anonymous"} 降到零。
+// 排队开着时匿名分配一律不接,与这个开关无关(2026-11-26,anonymousAssignAllowed)。
+
+// anonymousAssignAllowed:不带令牌的分配什么时候放行——旧 gate 凭据登录开着,并且排队关着。
+//
+// 排队按账号认人:一个账号一个条目、一个在途名额,签出的票只对这个账号有效。没有身份的分配在排队开着时没有可认的东西:
+// 放它进来,每次调用都是一个新条目、一枚新占位,拿到的票不绑账号、谁都能用,上面几条就都绕得开。
+// 此前只看 LegacyGateLoginEnabled(缺省开着),排队开着也接匿名分配。
+func anonymousAssignAllowed(legacyGateLoginEnabled, queueEnabled bool) bool {
+	return legacyGateLoginEnabled && !queueEnabled
+}
 
 // assignGateAuthTotal 按鉴权结果统计 AssignGate(不含带 queue_token 的排队重入,排队令牌本身就是先前已分配的凭证):
 //   - authenticated:带了有效的 access token;
-//   - anonymous:没带令牌,旧路径开着,按匿名分配(不免排队,排队身份为空);
-//   - rejected_anonymous:没带令牌,旧路径已关;
+//   - anonymous:没带令牌,按匿名分配(排队关着、旧路径开着);
+//   - rejected_anonymous:没带令牌,匿名分配不放行(旧路径已关,或排队开着);
 //   - rejected_token:令牌不能用(格式、未知、过期、家族已吊销);
 //   - error:令牌存储故障,回 StatusError 让客户端稍后重试。
 var assignGateAuthTotal = metric.NewCounterVec(&metric.CounterVecOpts{
@@ -42,12 +52,13 @@ type accessTokenValidator interface {
 	ValidateAccess(ctx context.Context, accessToken string) (*token.TokenData, error)
 }
 
-// authenticateAssignGate 返回 (account, nil) 表示放行:account 非空 = 已鉴权,空串 = 匿名(只在旧路径开着时)。
+// authenticateAssignGate 返回 (account, nil) 表示放行:account 非空 = 已鉴权,空串 = 匿名(只在 anonymousAllowed 时)。
 // 返回 (_, resp) 表示拒绝或故障,调用方原样回给网关。日志不带令牌原文(ValidateAccess 的错误本身不含令牌值)。
+// anonymousAllowed 由调用方按 anonymousAssignAllowed 算。
 func authenticateAssignGate(ctx context.Context, validator accessTokenValidator, accessToken string,
-	legacyGateLoginEnabled bool) (string, *loginpb.AssignGateResponse) {
+	anonymousAllowed bool) (string, *loginpb.AssignGateResponse) {
 	if accessToken == "" {
-		if legacyGateLoginEnabled {
+		if anonymousAllowed {
 			assignGateAuthTotal.Inc("anonymous")
 			return "", nil
 		}
@@ -64,6 +75,12 @@ func authenticateAssignGate(ctx context.Context, validator accessTokenValidator,
 		}
 		assignGateAuthTotal.Inc("error")
 		logx.WithContext(ctx).Errorf("[assign-gate] access token lookup failed: %v", err)
+		return "", &loginpb.AssignGateResponse{Status: uint32(loginqueue.StatusError), Error: "token lookup failed"}
+	}
+	if data.Account == "" {
+		// 令牌数据里没有账号只可能是存储写坏了。按故障回,不当成匿名:空账号往下走就是匿名条目、不绑账号的票。
+		assignGateAuthTotal.Inc("error")
+		logx.WithContext(ctx).Errorf("[assign-gate] access token resolved to an empty account")
 		return "", &loginpb.AssignGateResponse{Status: uint32(loginqueue.StatusError), Error: "token lookup failed"}
 	}
 	assignGateAuthTotal.Inc("authenticated")

@@ -19,18 +19,18 @@ func TestReplayPolicyDecidesEveryMatchMode(t *testing.T) {
 // 负责人 2026-11-06 定:只录 PVP。
 func TestRecordReplayOnlyPVP(t *testing.T) {
 	cases := map[matchpb.MatchMode]bool{
-		matchpb.MatchMode_MATCH_MODE_1V1:           true,
-		matchpb.MatchMode_MATCH_MODE_5V5:           true,
-		matchpb.MatchMode_MATCH_MODE_PVP_TEAM:      true,
+		matchpb.MatchMode_MATCH_MODE_1V1:               true,
+		matchpb.MatchMode_MATCH_MODE_5V5:               true,
+		matchpb.MatchMode_MATCH_MODE_PVP_TEAM:          true,
 		matchpb.MatchMode_MATCH_MODE_POLARITY_5V5:      true,
 		matchpb.MatchMode_MATCH_MODE_GUILD_WAR_PVP:     true,
 		matchpb.MatchMode_MATCH_MODE_GUILD_WAR_SIEGE:   false,
 		matchpb.MatchMode_MATCH_MODE_SEASON_TOURNAMENT: true,
 		matchpb.MatchMode_MATCH_MODE_PVP_CHALLENGE:     true,
-		matchpb.MatchMode_MATCH_MODE_3V3:           true,
-		matchpb.MatchMode_MATCH_MODE_PVE_SOLO:      false,
-		matchpb.MatchMode_MATCH_MODE_PVE_TEAM:      false,
-		matchpb.MatchMode_MATCH_MODE_UNSPECIFIED:   false,
+		matchpb.MatchMode_MATCH_MODE_3V3:               true,
+		matchpb.MatchMode_MATCH_MODE_PVE_SOLO:          false,
+		matchpb.MatchMode_MATCH_MODE_PVE_TEAM:          false,
+		matchpb.MatchMode_MATCH_MODE_UNSPECIFIED:       false,
 	}
 	for mode, want := range cases {
 		if got := recordReplayFor(true, mode); got != want {

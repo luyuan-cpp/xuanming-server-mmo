@@ -83,3 +83,28 @@ func TestAssignGateAuthStoreFailureIsRetryableError(t *testing.T) {
 		t.Fatal("故障回包不得回显令牌")
 	}
 }
+
+// 令牌解出空账号(存储写坏)按故障回,不降级成匿名放行。去掉 authenticateAssignGate 里的空账号判断,本用例红。
+func TestAssignGateAuthEmptyAccountIsAnError(t *testing.T) {
+	validator := &fakeAccessValidator{account: ""}
+	account, denied := authenticateAssignGate(context.Background(), validator, assignGateTestToken, true)
+	if denied == nil || denied.Status != uint32(loginqueue.StatusError) || account != "" {
+		t.Fatalf("空账号的令牌应回 ERROR,实际 account=%q denied=%+v", account, denied)
+	}
+}
+
+// 排队开着时不接匿名分配,与旧路径开关无关(2026-11-26):没有身份就没有「一个账号一个条目、一个在途名额」可认,
+// 签出的票也不绑账号、谁都能用。
+func TestAnonymousAssignAllowedOnlyWithLegacyOnAndQueueOff(t *testing.T) {
+	cases := []struct{ legacy, queueEnabled, want bool }{
+		{legacy: true, queueEnabled: false, want: true},
+		{legacy: true, queueEnabled: true, want: false},
+		{legacy: false, queueEnabled: false, want: false},
+		{legacy: false, queueEnabled: true, want: false},
+	}
+	for _, c := range cases {
+		if got := anonymousAssignAllowed(c.legacy, c.queueEnabled); got != c.want {
+			t.Errorf("anonymousAssignAllowed(legacy=%v, queueEnabled=%v) = %v, want %v", c.legacy, c.queueEnabled, got, c.want)
+		}
+	}
+}

@@ -1,6 +1,6 @@
 # 官方通行证与账号注册接入设计（Casdoor OIDC）
 
-状态：2026-11-24 已完成服务端 OIDC 接缝、独立 Casdoor 部署栈、Unity 道家 Q 版客户端 UI/PKCE 与移动端深度链接构建后处理，并通过真实 Casdoor v4.27.1 容器 → `go/login` `PassportProvider` 端到端实测验证。2026-11-26 Claude Code 对照 Casdoor v4.27.1 源码审核，结论与定案见 §5.4；同日落码（未编译、未运行，验证命令见 `docs/PROGRESS.md` 同日「官方通行证审核」条目）：只收身份令牌（§4 第 11 项）、账号注销时删除通行证用户（§3.5）、初始化数据改为注册必须验证邮箱并新增服务端专用应用、K8s 部署参数、iOS 改用系统认证会话（§4 第 14 项）。
+状态：2026-11-24 已完成服务端 OIDC 接缝、独立 Casdoor 部署栈、Unity 道家 Q 版客户端 UI/PKCE 与移动端深度链接构建后处理，并通过真实 Casdoor v4.27.1 容器 → `go/login` `PassportProvider` 端到端实测验证。2026-11-26 Claude Code 对照 Casdoor v4.27.1 源码审核，结论与定案见 §5.4；同日落码（未编译、未运行，验证命令见 `docs/PROGRESS.md` 同日「官方通行证审核」条目）：只收身份令牌（§4 第 11 项）、账号注销时删除通行证用户（§3.5）、初始化数据改为注册必须验证邮箱并新增服务端专用应用、K8s 部署参数、iOS 改用系统认证会话（§4 第 14 项）。同日第二轮独立审查（不沿用现有做法、按行业标准重看）的结论见 §8：初始化数据缺省开人机验证、审计记录保留 180 天（已改，未起容器）；玩家可自删通行证用户、改密不踢游戏登录、注册缺协议勾选等待办见 §8.3、§8.4。
 
 关联：[认证提供者框架](./auth-provider-framework.md)、[第三方登录端到端设计](./third-party-login-end-to-end-design.md)、[双 Token 体系](./dual-token-authentication.md)、[账号注销](./account-deletion.md)、[账号角色目录](./account-role-authority.md)。
 
@@ -110,8 +110,8 @@ AuthProviders:
 ### 3.4 独立部署栈（`deploy/passport/`）
 - `deploy/passport/docker-compose.yml`：独立运行官方 `casbin/casdoor:v4.27.1` 与专属 MySQL 8.0（`passport-db`），全部数据库口令通过环境变量必填注入（`${PASSPORT_DB_PASSWORD:?...}`），不把任何密码写入仓库。
 - `deploy/passport/conf/app.conf`：无密钥基础配置（`initDataNewOnly = true` 保证首次初始化后重启不覆盖运行时数据）。
-- `deploy/passport/init_data.json`：预置组织 `xuanming`（`passwordType: bcrypt`、`enableSoftDeletion: false`——必须保持关闭，开了之后删用户只打标记，见 §3.5）与两个应用：
-  - 公开 PKCE 应用 `app-xuanming-game`（`clientId: "xuanming-game-client"`、`enableSignUp: true`、`tokenFormat: "JWT-Standard"`、`expireInHours: 1`、`grantTypes` 只有 `authorization_code`、不预置内联 `clientSecret`、不在 Casdoor 内重复开启游戏服已有第三方社交渠道）。注册项 `Email` 的 `rule` 是 `Normal`（必须验证邮箱；2026-11-26 由 `No verification` 改回）：没给应用挂邮件通道之前自助注册发不出验证码、注册不了，这是有意的缺省；本地联调用管理接口建测试用户（§5.2）。
+- `deploy/passport/init_data.json`：预置组织 `xuanming`（`passwordType: bcrypt`、`enableSoftDeletion: false`——必须保持关闭，开了之后删用户只打标记，见 §3.5；`recordRetentionDays: 180`，接口审计记录到期自动清，见 §8.2）与两个应用：
+  - 公开 PKCE 应用 `app-xuanming-game`（`clientId: "xuanming-game-client"`、`enableSignUp: true`、`tokenFormat: "JWT-Standard"`、`expireInHours: 1`、`grantTypes` 只有 `authorization_code`、不预置内联 `clientSecret`、不在 Casdoor 内重复开启游戏服已有第三方社交渠道）。`providers` 挂内置图片验证码 `provider_captcha_default`、规则 `Always`：注册、发验证码、登录都先过人机验证（§8.2）。注册项 `Email` 的 `rule` 是 `Normal`（必须验证邮箱；2026-11-26 由 `No verification` 改回）：没给应用挂邮件通道之前自助注册发不出验证码、注册不了，这是有意的缺省；本地联调用管理接口建测试用户（§5.2）。
   - 机密应用 `app-xuanming-server`（`clientId: "xuanming-game-server"`，不能登录、没有回调地址）：只给 `go/login` 调管理接口删用户用。Casdoor 让应用凭据在它自己的组织里有管理权限，所以它必须与客户端的公开应用分开；`clientSecret` 不进仓库，首启时由 Casdoor 随机生成，运维从后台取出放进 login 的密钥。
 - `go/login/cmd/sandbox_mock/passport.go`：提供离线单测/本地冒烟用的 `GET /.well-known/jwks`、`GET /mock/passport/id_token`（种子 `ACCESS_TOKEN` / `REFRESH_TOKEN` 签另外两种令牌类型）与管理接口 `GET /api/get-user`、`POST /api/delete-user`（`GET /mock/passport/deleted_users` 查被删的用户），无需起 Docker 也可验证验签与注销删用户两条链路。
 
@@ -254,6 +254,8 @@ Claude Code 对照 Casdoor v4.27.1 源码（`object/token_jwt.go`、`token_stand
 9. **真机回归。** iOS / Android 各走一遍登录、注册、注销重新认证，含应用被系统回收后从回调冷启动的情况（冷启动时内存里的 `code_verifier` 已丢，本次授权作废，玩家重新点登录）。
 10. **升级 Casdoor 之前**重跑：回调地址探针（§4 第 10 项）、三种令牌的 `tokenType` 取值、`get-user` / `delete-user` 的应答形状（§3.5 依赖这些，都是 v4.27.1 的行为）。
 
+第二轮审查对这份清单的补充与修正见 §8.4：第 1 条要落成公网入口的接口白名单（不放行 `/api/delete-user` 等，否则玩家能自删通行证用户），login 的 `Endpoint` 因此必须指向内网入口；第 3 条的人机验证、第 5 条的 `record` 清理已在初始化数据里缺省配好（§8.2），`verification_record` 仍要部署侧定时清。
+
 ---
 
 ## 6. 不在仓库里做的事
@@ -334,3 +336,90 @@ Claude Code 对照 Casdoor v4.27.1 源码（`object/token_jwt.go`、`token_stand
    - 运行 `mmorpg-client/tools/client_compile_check.ps1` 与受影响的 EditMode 测试；
    - 编辑器预览验证登录弹窗在不同分辨率（16:9 / 21:9）下「官方账号登录 / 注册」按钮无遮挡、无文字溢出；
    - 若服务端与 `deploy/passport` 已启动，完成一次端到端手工联调：点「官方账号登录 / 注册」→ Casdoor 注册新邮箱 → 回调返回游戏 → `/api/login` 成功拿双 Token → 选服进角色界面。
+
+---
+
+## 8. 独立审查（2026-11-26 第二轮：不沿用现有做法，按行业通行标准重看）
+
+负责人要求不受现有方案影响再查一遍。本轮由另一个 Claude Code 会话做，逐项读了 Casdoor v4.27.1 源码（`raw.githubusercontent.com/casdoor/casdoor/v4.27.1/`，下文的「文件:行」都指这个版本）、`go/login` 与 `mmorpg-client` 的现有代码。没有编译，没有起容器。
+
+### 8.1 结论
+
+整体架构不用改：通行证只管「你是谁」，游戏账号库管「你有什么」，两边只凭标准 OIDC 令牌衔接，是各家官方通行证的通行做法；公开客户端 + PKCE、服务端验签 + 一次性消费、iOS 用系统认证会话也都是标准做法。`go/login` 的验签、配置门禁、删通行证用户三段代码逐行核过，没有发现缺陷。
+
+与行业标准的差距：2 处本轮已改（§8.2），5 处要负责人拍板或等上线资料（§8.3），另有 7 条生产清单补充（§8.4，其中第 1 条不做就有实际漏洞）。
+
+### 8.2 本轮已改（只动 `deploy/passport/init_data.json`，未起容器验证）
+
+| 问题 | 依据 | 改法与代价 |
+|---|---|---|
+| **注册、发验证码、登录都没有人机验证** | 游戏应用没挂任何人机验证提供方，而 Casdoor 的判定是「应用没挂就永远不要求」（`object/check.go:1024`）。生产一旦挂上邮件 / 短信通道，三个入口都对脚本敞开。发码频率只按「来源 IP + 用户」限 60 秒一条（`object/verification.go:83`），不按收件人限：换 IP 就能对同一个邮箱 / 手机号连发（骚扰、刷短信费），也能批量注册小号。原清单把它放在「上线前去后台配」，漏配没有任何报错。 | 应用的 `providers` 挂内置的 `provider_captcha_default`（图片验证码，Casdoor 首启自带，`owner` 是 `admin`，各组织的应用都能引用——`object/provider.go:194`），规则 `Always`。不选 `Dynamic`：它只在「该用户口令连错到上限」后才要验证码，注册发码时还没有用户，等于不拦。不选 `Internet-Only`：它按来源 IP 是否公网判断，反向代理没被认成可信代理时所有请求都成了内网地址，验证码整体失效且没有报错。**代价**：用脚本直接调接口登录 / 发码会被拦（浏览器里人工操作不受影响），脚本联调时用管理员会话把这条规则临时改成 `None`。图片验证码强度一般，生产换成行为验证码（v4.27.1 自带阿里云、极验、Turnstile 的对接），规则仍用 `Always`。 |
+| **接口审计记录永久保留** | `record` 表记着账号与来源 IP，没设保留期就一直留，账号注销后仍在。原清单写「生产定期清」，靠人工。 | 组织加 `recordRetentionDays: 180`，Casdoor 自带的清理任务按它删（`object/record_cleanup.go`）。180 天是《网络安全法》第二十一条「网络日志留存不少于六个月」的下限，也符合个人信息保护法第十九条「保存期限为必要的最短时间」；隐私政策里的日志保留期要写成一致。`verification_record` 没有自带清理，见 §8.4。 |
+
+两项都只在全新初始化时生效（`initDataNewOnly = true`）：已经初始化过的库不会跟着变，要在后台手动改，或重建卷。
+
+### 8.3 待负责人拍板
+
+**1. 通行证改密 / 找回密码 / 封禁之后，游戏里的登录不失效（建议上线前做）。**
+
+- 现状：Casdoor 改密只作废它自己的令牌与会话（`controllers/user.go:860-866`），不通知游戏。游戏的 refresh token 有效期 30 天（`go/login/internal/config/config.go` 的 `RefreshTokenTTL`），`token.Manager.RevokeAll` 早就有（`dual-token-authentication.md` 写着「e.g. on password change」），但通行证渠道没有任何地方调它。
+- 后果：账号被盗后玩家去通行证改了密码，盗号者手里的游戏令牌还能一直续 30 天。各家通行证的通行做法是改密即全端下线。
+- Casdoor 的 OIDC 登出通知（back-channel logout）帮不上：它只通知「还有未过期令牌」的应用（`object/user.go:1372`），我们的令牌 1 小时过期；改密路径也不走它。
+- 建议做法（拉，不新开入口）：`go/login` 在通行证账号**登录**和**刷新令牌**时，用已有的管理凭据查一次该用户（`GET /api/get-user?userId=`）的 `lastChangePasswordTime`（改密时更新，`controllers/user.go:843`）与 `isForbidden`。登录时把改密时间按账号记进 Redis；之后登录或刷新发现改密时间变了、用户被封或不在了，就 `RevokeAll` 并要求重新登录。只改 `go/login`，不动协议、网关、Java 网关；代价是通行证账号每次登录、每次刷新（约 2 小时一次）多一次内网调用，通行证不可用时放行并计数（不让通行证故障把在线玩家全踢掉）。
+- 另一种（推）：Casdoor 的 webhook（带持久化重试，`object/webhook.go`）在改密 / 封禁事件上回调游戏，要在 Java 网关新开一个入口再转给 login，两个仓都要改。实时，但改动面大，可以以后再加。
+- 这是新增联动，要动刷新令牌这条主链路，没有负责人点头本轮不写。
+
+**2. 注册没有《用户协议》《隐私政策》的展示与勾选（提审前必须有）。**
+
+- 现状：通行证注册项没有 `Agreement`；`mmorpg-client` 全仓搜不到协议 / 隐私相关界面，首次启动也没有隐私同意弹窗。
+- 属于 `AGENTS.md` §9「可能导致不过审」的一票否决项：国内安卓商店与 App Store 都查首启隐私弹窗与注册时的明示同意（个人信息保护法第十三、十四、十七条）。
+- 要先有两份正式文本和可访问的地址（法务 / 负责人）。有了之后：应用填 `termsOfUse`、`privacyPolicy`，注册项加必填的 `Agreement`；客户端首启弹窗是另一项界面工作（要给 Codex 出图）。原 §5.4 第 3 条把它当成「上线前配一下」，这里提升为**开放注册的前置条件**：两个地址没填之前，不要给应用挂邮件 / 短信通道。
+
+**3. 发布包也能用启动参数改登录网关和通行证地址。**
+
+- 现状：`ClientLaunchArguments` 的 `-gateway`、`-passport-origin`、`-passport-client-id`、`-passport-redirect-uri` 不区分开发包与发布包；`ClientSettings` 还会读 PlayerPrefs（Windows 上是当前用户可写的注册表）。
+- 后果：一个带参数的快捷方式（「登录器」「加速器」常见的分发形式，杀毒软件不报）就能让正版客户端把玩家带到钓鱼站去输通行证口令，或把口令登录发给假网关。
+- 通行做法：生产地址编进发布包，覆盖只在编辑器与开发包生效。改动很小（几行 `#if UNITY_EDITOR || DEVELOPMENT_BUILD`），但现有冒烟脚本可能正用这些参数启动非开发包，所以放到「定发布构建配置」时一起改。发布包的缺省网关现在还是 `http://127.0.0.1:8081`、通行证地址缺省为空，说明发布构建配置本来就还没做。
+
+**4. Android 回调用自定义协议头 `xuanming://`，别的 App 可以注册同名协议头。**
+
+- PKCE 只保证「谁发起、谁换票」，拦不住恶意 App 自己发起一次授权（客户端 ID 是公开的）、让玩家在真的通行证页面登录、再截走回调并以玩家身份登录（RFC 8252 §8.6）。标准做法是 Android App Links：回调改成 `https://<通行证域名>/...`，由系统按 `assetlinks.json` 核对归属，别的 App 接不到（RFC 8252 §7.2）。
+- 需要正式域名和签名证书指纹，上线前做；同时把「跳系统浏览器」换成应用内的 Custom Tabs（不离开游戏，不会因为被系统回收而丢掉本次授权）。iOS 已经是系统认证会话，没有这个问题。
+
+**5. 桌面回调固定端口 18765（小问题，有反馈再做）。**
+
+- 两个客户端同时停在「等待授权」时，后一个起不了监听（多开玩家会遇到）；本机任何程序占住这个端口，通行证登录就用不了。RFC 8252 §7.3 的做法是每次随机端口，但 Casdoor 对回调地址是精确匹配，做不到。折中：登记 3～5 个固定端口，客户端依次尝试。
+
+### 8.4 生产清单补充（接 §5.4）
+
+1. **公网入口按白名单放行，白名单里不能有 `/api/delete-user`、`/api/update-user`（必须做）。** §5.4 第 1 条只说了「管理后台不对公网开放」，没说清楚的是：Casdoor 的权限模型允许任何登录用户对**自己**调用一批接口（`object/init.go:534` 的自匹配条款，`authz/authz.go:281` 的名单里有 `/api/delete-user`），`controllers/user.go:568` 对「删自己」没有别的检查。玩家用自己的通行证令牌（客户端换票时就拿得到，客户端 ID 是公开的）调一次 `POST /api/delete-user`，通行证用户立刻被删：
+   - 绕过游戏的 7 天冷静期；
+   - 游戏账号 `passport_<sub>` 变成孤儿：`sub` 没了，谁也登不上，角色、充值、实名记录都留在游戏库里，玩家没法再从游戏内发起注销；
+   - 盗号者拿到口令或一小时内的访问令牌就能永久毁号，冷静期本来是给找回留的。
+
+   Casdoor 对「任何人」放行的接口有 131 条（`authz/authz.go`，含 `/scim`、`/cas`、`/api/oauth/register`、`/api/init-admin-password`、`/api/metrics` 等），玩家用得到的只有十几条。公网入口（Ingress / 反向代理）只放行下面这些，其余一律拒绝。**这份名单是按 v4.27.1 源码推的草案，未实测**：预发环境挂上名单后，把登录、注册、找回密码三条流程各走一遍，页面缺哪个接口再加（缺了页面会直接报错，方向是安全的）。
+   - 页面与静态资源：`GET` 非 `/api/`、非 `/scim`、非 `/cas` 的路径（登录 / 注册 / 找回密码页面与管理后台是同一套前端文件，没有接口就拿不到任何数据）。
+   - `GET /.well-known/openid-configuration`、`GET /.well-known/jwks`。
+   - 页面用：`GET /api/get-app-login`、`GET /api/get-application`、`GET /api/get-account`、`POST /api/login`、`POST /api/signup`、`POST /api/send-verification-code`、`POST /api/verify-code`、`POST /api/set-password`、`GET /api/get-email-and-phone`、`GET /api/get-captcha`、`GET /api/get-captcha-status`、`POST /api/verify-captcha`。
+   - 游戏客户端用：`POST /api/login/oauth/access_token`。
+2. **`AuthProviders.Passport.Endpoint` 必须配成内网入口。** 公网入口不放行管理接口之后，login 删通行证用户调的 `/api/get-user`、`/api/delete-user` 就不能再走公网的 `Issuer`：`Endpoint` 留空时所有通行证账号的注销都卡在「执行中」直到 24 小时告警。生产模式 `Endpoint` 只收 `https://`，所以内网入口要有证书（内部 Ingress 或服务网格）。
+3. **`verification_record` 定时清理。** 发过的验证码（含收件邮箱 / 手机号、来源 IP）v4.27.1 里没有任何清理代码。部署侧加定时任务按保留期删；表结构以实际库为准，未实测。
+4. **撞库拦截按数据开。** 组织的 `securityPolicy.stuffingFailureThreshold` / `stuffingBlockMinutes`：同一 IP 10 分钟内有 N 个不同账号登录失败就封这个 IP（`object/password_security.go:98`），缺省关。没有直接开：运营商大量用户共用出口 IP，阈值定低了会误封一片；有了登录失败的真实数据再定。人机验证加单账号连错 5 次冻结 15 分钟已经在挡。
+5. **口令哈希保持 bcrypt 可以；想更稳就趁没有存量用户换 `argon2id`。** Casdoor 的 bcrypt 写死 cost 10（`cred/bcrypt.go:13`），正好是 OWASP 对 bcrypt 的下限；OWASP 对新系统的首选是 Argon2id，v4.27.1 支持（`passwordType: "argon2id"`）。名字写错会被当成不哈希、口令明文入库（`cred/manager.go:42` 回空，`object/user_cred.go:59` 跳过），改的时候逐字核对。Argon2id 每次校验约占 64 MiB 内存，要给容器留够。上线后再换只能等用户下次登录时重算。本轮没换：没有容器实测，不为它动一条已经实测通过的链路。
+6. **镜像按摘要固定。** 生产清单里 `casbin/casdoor:v4.27.1` 写成 `@sha256:…`；通行证是全链路最敏感的第三方组件。
+7. **签名私钥在库里是明文**（`cert` 表）。通行证库的备份等同于「能冒充任何玩家登录」的钥匙：备份加密、限制读库权限。
+
+### 8.5 核对过、没有问题的（v4.27.1 源码）
+
+- **自助改资料不能提权。** 初始化数据里组织没写 `accountItems` 时会补缺省规则（`object/init_data.go:475`、`object/init.go:59`）：`ID` 不可改（管理员也不行，所以 `sub` 稳定），用户名、管理员标记、封禁标记只有管理员能改。组织的规则要是被清空，Casdoor 对任何字段都放行（`object/organization.go:483`），所以后台不要删这些规则。
+- **注册不进管理组织。** 内置组织 `built-in` 里的任何用户都是全局管理员（`object/user.go:1775`），内置应用缺省开着注册（`object/init.go:310`），但注册接口对 `built-in` 组织一律拒绝，也不接受「应用与组织不配套」的注册（`object/application_util.go:905`）。
+- **验证码有次数限制。** 同一目标错 5 次冻结，另按来源 IP 计（`object/verification.go:467`、`object/verification_ip.go:120`）。计数在进程内存里，多副本时各算各的；6 位码 10 分钟有效，影响可以忽略。
+- **限速绕不过。** 来源 IP 只在直连对端是内网 / 回环（或在 `trustedProxies` 名单里）时才信 `X-Forwarded-For`，并从右往左取第一个不可信地址（`util/request.go:37-101`）。
+- **共用电脑不串号。** 游戏应用 `enableSigninSession: false` 时授权码流程不留通行证会话（`controllers/auth.go:248`），网吧里后一个人点「官方账号登录」不会直接进前一个人的账号。
+- **应用凭据的权限限于自己的组织**（`authz/authz.go:210-221`、`object/user_util.go:1187`），`app-xuanming-server` 管不到 `built-in`。
+- **注销时删通行证用户（§3.5）依赖的三处行为与源码一致**（上一轮标了「未核实」）：应用凭据按 `userId` 查用户走 `controllers/user.go:185-267`，同组织的应用凭据通过 `object/check.go:467` 的权限判断；用户不在时不论凭据对错都回 `data: null`，用户在而凭据不对回错误；初始化数据里不写 `clientSecret` 的应用会自动生成密钥（`object/application.go:570`）。应答的具体形状仍要真容器跑一次才算数。
+
+### 8.6 体验上与大厂做法不同、但不建议现在改的
+
+- 大厂的自有通行证多数在游戏里直接出登录 / 注册界面，不跳浏览器。跳浏览器是 OAuth 对原生应用的安全建议（RFC 8252），实现最省、风险最低；代价是全屏游戏里要切出去，Android 上游戏可能被系统回收。等上线后看注册转化数据，再决定要不要做游戏内界面（那时人机验证要嵌网页，界面要给 Codex 出图）。
+- 国内大厂的主注册方式是手机号 + 短信验证码。现在只开了邮箱；要开手机号时，同批把组织的 `countryCodes` 限到上线地区、配上 `securityPolicy` 的每号每小时 / 每天条数上限（`object/sms_security.go`），防国际短信盗刷。

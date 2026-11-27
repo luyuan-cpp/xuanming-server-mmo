@@ -1,6 +1,6 @@
 import { defHttp } from '/@/utils/http/axios';
 
-export type GmCommandStatus = 'DRAFT' | 'SENDING' | 'DELIVERED' | 'REJECTED' | 'UNKNOWN';
+export type GmCommandStatus = 'DRAFT' | 'SENDING' | 'DELIVERED' | 'REJECTED' | 'UNKNOWN' | 'DECLINED';
 
 export interface GmCurrencyOption {
   id: number;
@@ -11,6 +11,8 @@ export interface GmOverview {
   zones: Record<string, unknown>[];
   zonesAvailable?: boolean;
   mailEnabled: boolean;
+  // 双人复核是否开启：开启时发起人不能批准自己的申请。
+  dualControl?: boolean;
   currencies?: GmCurrencyOption[];
 }
 
@@ -66,6 +68,9 @@ export interface GmCommand {
   reason: string;
   request: Record<string, unknown>;
   result: Record<string, unknown> | null;
+  // 第一次放行的人与时刻；还没放行时为 null。
+  approver?: string | null;
+  approvedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -278,7 +283,7 @@ function checkedCommand(command: GmCommand): GmCommand {
     !command.request ||
     typeof command.request !== 'object' ||
     Array.isArray(command.request) ||
-    !['DRAFT', 'SENDING', 'DELIVERED', 'REJECTED', 'UNKNOWN'].includes(command.status)
+    !['DRAFT', 'SENDING', 'DELIVERED', 'REJECTED', 'UNKNOWN', 'DECLINED'].includes(command.status)
   ) {
     throw new Error('命令响应缺少字符串 ID，请刷新审计记录核对。');
   }

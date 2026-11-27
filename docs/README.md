@@ -154,6 +154,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [battle-festival-beast-ui-handoff.md](planning/ui-handoff/battle-festival-beast-ui-handoff.md) — 瑞兽迎春：另一台电脑 Codex 的 UI 交接
 - [battle-prep-skill-ban-ui-handoff.md](planning/ui-handoff/battle-prep-skill-ban-ui-handoff.md) — 战前技能禁选（每方 3 Ban · 方案 A）UI 纯功能作图交接清单
 - [battle-season-one-ui-handoff.md](planning/ui-handoff/battle-season-one-ui-handoff.md) — 破阵之季 · 给另一台电脑 Codex 的 UI 制作单
+- [craft-digest-and-ranked-v7-ui-handoff.md](planning/ui-handoff/craft-digest-and-ranked-v7-ui-handoff.md) — 西市名匠离线营业战报 + 论剑 V7 最后 12 张无字透明 UI 切图交接
 - [economy-anti-scam-ui-codex-handoff.md](planning/ui-handoff/economy-anti-scam-ui-codex-handoff.md) — 经济防骗、卖家信用与官方 7:3 商城 UI 需求清单（纯功能规格，不定义美术风格）
 - [equipment-craft-v2-v5-ui-handoff.md](planning/ui-handoff/equipment-craft-v2-v5-ui-handoff.md) — 《五行奇谈》装备品相与典籍制书 V2–V5 增量图标纯功能交接单
 - [equipment-loadout-presets-ui-handoff.md](planning/ui-handoff/equipment-loadout-presets-ui-handoff.md) — 装备流派方案预设（一键多套换装）UI 纯功能需求清单
@@ -454,8 +455,10 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 
 #### 未分类
 
+- [cpp-node-fd-exhaustion-handling.md](design/cpp-node-fd-exhaustion-handling.md) — C++ 节点文件描述符耗尽的处置：启动门槛、用量告警、accept 降级与崩溃原因可见 (2026-11-26)
 - [craft-proxy-offline-and-support-enhance.md](design/craft-proxy-offline-and-support-enhance.md) — 跨节点/离线名匠代打与控辅强化公平受益设计
 - [craft-proxy-reputation-digest-and-hot-ranking.md](design/craft-proxy-reputation-digest-and-hot-ranking.md) — 离线名匠口碑雅号异步回账、营业战报与西市极品热榜设计方案
+- [data-service-startup-isolation.md](design/data-service-startup-isolation.md) — data_service 启动期故障隔离:一个 SQL 集群连不上时照样启动
 - [rewarded-ad-system.md](design/rewarded-ad-system.md) — 激励视频广告与绑定银两（`CURRENCY_TYPE_BIND_GOLD`）全端技术与零拒审工程设计
 
 #### 成套技术设计
@@ -538,23 +541,25 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 
 ### 交接说明(`handoff/`)
 
-- [account-deletion-handoff-20261120.md](handoff/account-deletion-handoff-20261120.md) — 账号注销与 Apple / Google 登录:剩余代码与全部验证交接(2026-11-20,交 Gemini)
+- [account-deletion-handoff-20261120.md](handoff/account-deletion-handoff-20261120.md) — 账号注销与 Apple / Google 登录:全部验证交接(2026-11-20,交 Gemini;代码已改完,Gemini 只验证)
 - [battle-report-replay-client.md](handoff/battle-report-replay-client.md) — 交接:战报回放的客户端细节(2026-11-06)
 - [battle-script-review-retention-handoff-20261126.md](handoff/battle-script-review-retention-handoff-20261126.md) — 剧本审核流水保留期清理与 match 保留期告警:全部验证交接(2026-11-26,交 Gemini)
 - [config-table-hot-reload-handoff-20261126.md](handoff/config-table-hot-reload-handoff-20261126.md) — 配置表热更：验证与收尾交接（2026-11-26，交 Gemini）
 - [data-consistency-review-handoff-20261126.md](handoff/data-consistency-review-handoff-20261126.md) — 数据一致性复查线:交 Gemini 验证(2026-11-26)
 - [data-overwrite-audit-r2-handoff-20261126.md](handoff/data-overwrite-audit-r2-handoff-20261126.md) — 数据覆写审计第二轮（r2）验证交接（2026-11-26，交 Gemini）
+- [data-overwrite-audit-r2-round4-handoff-20261126.md](handoff/data-overwrite-audit-r2-round4-handoff-20261126.md) — 数据覆写审计 r2·换视角查找第 4 轮：复核与修复交接（2026-11-26，交 Gemini）
 - [login-queue-verification-handoff-20261126.md](handoff/login-queue-verification-handoff-20261126.md) — 登录排队:验证与开闸交接(2026-11-26,交 Gemini)
 - [minigame-websocket-handoff-20261120.md](handoff/minigame-websocket-handoff-20261120.md) — 小游戏 WebSocket 入口:待验证项交接(2026-11-20 起交 Gemini,2026-11-26 按当前仓库校正)
 - [payment-integration-handoff-20261120.md](handoff/payment-integration-handoff-20261120.md) — 真钱支付接入:剩余事项(2026-11-26 更新,交 Gemini 与负责人)
 - [real-name-anti-addiction-handoff-20261126.md](handoff/real-name-anti-addiction-handoff-20261126.md) — 实名认证与防沉迷：代码已写完，全部验证交 Gemini（2026-11-26）
 - [redis-cluster-all-domains-handoff-20261126.md](handoff/redis-cluster-all-domains-handoff-20261126.md) — 全部 Redis 上 Cluster(缺口第 34 条)验证交接(2026-11-26,交 Gemini)
+- [review-suggestions-remaining-handoff-20261126.md](handoff/review-suggestions-remaining-handoff-20261126.md) — 11-19 评审建议项的剩余部分（2026-11-26 交接）
 - [scene-gate-instance-session-handoff-20261126.md](handoff/scene-gate-instance-session-handoff-20261126.md) — scene 按 (gate 实例, session_id) 认会话(e 方案 C)全线:验证交接(2026-11-26,交 Gemini)
 - [server-code-completion-20261120.md](handoff/server-code-completion-20261120.md) — 服务器代码完成度核对与决定(2026-11-20)
 - [server-gap-audit-20261101.md](handoff/server-gap-audit-20261101.md) — 服务器代码缺口清单(2026-11-01)
 - [spectate-tiered-fanout-followup-20261121.md](handoff/spectate-tiered-fanout-followup-20261121.md) — 观战分级扩容（L0 / L1 / L2）：环境受限后续验证交接（2026-11-21）
 - [team-follow-afk-hosting-handoff-20261120.md](handoff/team-follow-afk-hosting-handoff-20261120.md) — 组队跟随 / 离线托管 / 挂机月卡 / 冷却与 Buff 跨重登:待验证项交接(2026-11-20,交 Gemini;2026-11-22 代码收口完,余编译/单测/冒烟交 Gemini)
-- [third-party-login-and-anti-addiction-handoff-20261126.md](handoff/third-party-login-and-anti-addiction-handoff-20261126.md) — 第三方登录与实名防沉迷：剩余代码与全部验证交接（2026-11-26，交 Gemini）
+- [third-party-login-and-anti-addiction-handoff-20261126.md](handoff/third-party-login-and-anti-addiction-handoff-20261126.md) — 第三方登录与实名防沉迷：全部验证交接（2026-11-26，交 Gemini；代码已改完，Gemini 只验证）
 
 ### 笔记(`notes/`)
 

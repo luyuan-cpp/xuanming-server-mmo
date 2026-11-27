@@ -99,6 +99,9 @@ public final class GameServices {
 
     public ArrayNode currencyTypes() { return proto.currencyTypes(); }
 
+    /** 同一份协议描述给交易管理客户端(GameTradeAdmin)复用,不重复加载。 */
+    GameProto proto() { return proto; }
+
     public boolean supportsCurrency(int currencyType) { return proto.supportsCurrency(currencyType); }
 
     public boolean mailEnabled() {
@@ -115,7 +118,8 @@ public final class GameServices {
         return channel;
     }
 
-    private ManagedChannel createChannel(String target, boolean plaintext) {
+    /** 所有游戏服务连接的唯一建法:只收 host:port,明文只许本机回环。交易管理客户端也用它。 */
+    static ManagedChannel createChannel(String target, boolean plaintext) {
         if (target == null || target.isBlank()) return null;
         URI uri;
         try { uri = URI.create("tcp://" + target); }

@@ -20,8 +20,12 @@ import (
 )
 
 const (
-	// MaxBundleBytes 是单个表包压缩或解包后的硬上限(256 MiB,设计 §7)。
-	MaxBundleBytes = 256 * 1024 * 1024
+	// MaxBundleBytes 是单个表包压缩或解包后的硬上限(64 MiB,设计 §7「磁盘预算」)。
+	// 它和部署给 table-bundles 卷的 sizeLimit(1Gi)是一对:一个 Pod 同一时刻最多放「每条 schema 线 current + next」
+	// + 最近 2 个没人用的包(PruneUnusedBundles 的上限)+ 一次下载的压缩包与解包临时目录,三条线时共 10 份。
+	// 超过 sizeLimit 时 kubelet 会把整个 Pod 驱逐,而所有 Pod 拉的是同一包,等于整条轨道一起掉。现在全部表约 1.1 MiB。
+	// 要放大时两个数一起改,并同步设计稿的算式。
+	MaxBundleBytes = 64 * 1024 * 1024
 	// MaxBundleFiles 是单个表包允许包含的最大文件数(1024,设计 §7)。
 	MaxBundleFiles = 1024
 	// ManifestFilename 是表包根目录的清单文件名。
@@ -404,6 +408,11 @@ func VerifyAndExtract(tarGzPath, expectedBundleSHA, expectedSchemaDigest, expect
 			_ = os.RemoveAll(stageDir)
 		}
 	}()
+	// MkdirTemp 建出来是 0700,改名成正式目录后权限不变:业务容器只要换一个 UID 跑,就一个包都读不了。
+	// 现在两边恰好都是 10001,这里显式放开读,不让「读得到」依赖两个镜像的用户号碰巧相同。
+	if err := os.Chmod(stageDir, 0o755); err != nil {
+		return "", nil, err
+	}
 
 	f, err := os.Open(tarGzPath)
 	if err != nil {

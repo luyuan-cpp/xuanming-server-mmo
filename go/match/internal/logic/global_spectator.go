@@ -233,6 +233,8 @@ func (l *WatchBattleLogic) prepareGlobalWatch(in *pb.WatchBattleRequest, player 
 	name := challengePublicName(l.ctx, s, player)
 	original, err := s.Authority.BeginSpectator(l.ctx, player, in, target.formation, &battlepb.AddObserverRequest{
 		ObserverName: name, Routing: &battlepb.BattleRouting{SessionId: target.sessionId, GateNodeId: target.gateNodeId, GateInstanceId: target.gateInstanceId, ZoneId: l.observerZoneId(player)},
+		// 未成年观众当天的截止时刻随原件冻结:battle 给他的票封顶、到点关他的直连(docs/design/real-name-anti-addiction.md §5.4)
+		MinorPlayDeadlineMs: target.minorPlayDeadlineMs,
 	})
 	switch {
 	case err == nil:
@@ -254,6 +256,9 @@ type globalWatchTarget struct {
 	sessionId      uint32
 	gateNodeId     uint32
 	gateInstanceId string
+	// 观众会话记录里未成年人当天的截止时刻(PlayerSession.minor_play_deadline_ms,0 = 不限),只有 L0 原件用:
+	// L1 / L2 观众的帧经大厅连接到达,由 gate 到点关掉。
+	minorPlayDeadlineMs uint64
 }
 
 // locateGlobalWatch 核对目标成局与观众会话(首次 prepare 与 LOBBY 重放共用)。rejectTip≠0 是能证明的业务拒绝:
@@ -311,7 +316,7 @@ func (l *WatchBattleLogic) locateGlobalWatch(battle, player uint64) (target glob
 	if detail.SessionId != session.SessionId || detail.GateInstanceId != session.GateInstanceId || uint32(gate) != detail.GateNodeId {
 		return target, constants.ErrSpectateOffline, nil
 	}
-	return globalWatchTarget{formation: formation, sessionId: session.SessionId, gateNodeId: uint32(gate), gateInstanceId: session.GateInstanceId}, 0, nil
+	return globalWatchTarget{formation: formation, sessionId: session.SessionId, gateNodeId: uint32(gate), gateInstanceId: session.GateInstanceId, minorPlayDeadlineMs: session.GetMinorPlayDeadlineMs()}, 0, nil
 }
 
 // admitGlobalLobby 对选定的一场做 L1 / L2 准入(首次与重放共用)。battle 回房间不存在时摘索引(与列表读到已结束的场同口径):

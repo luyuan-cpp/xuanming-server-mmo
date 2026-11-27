@@ -33,6 +33,7 @@
 #include "proto/match/match_internal.pb.h"
 #include "time/system/time.h"
 
+#include "battle_minor_play_deadline.h"
 #include "battle_push_policy.h"
 #include "battle_security.h"
 #include "client/battle_client_edge.h"
@@ -664,6 +665,12 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
         if (!snapshot.ai_controlled())
         {
             room->routingByPlayer.emplace(snapshot.player_id(), snapshot.routing());
+            // 未成年人当天的截止时刻(match 从会话记录带来,0 = 不限的人不进表):随名单记下,必须先于下面的预签 ——
+            // 票据期限要按它封顶(real-name-anti-addiction.md §5.4)
+            if (snapshot.minor_play_deadline_ms() != 0)
+            {
+                room->minorPlayLimits[snapshot.player_id()].deadlineMs = snapshot.minor_play_deadline_ms();
+            }
         }
         ::BattleActorBuildSummary summary;
         summary.set_player_id(snapshot.player_id());
@@ -757,6 +764,8 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
     roomPtr->battleTimer.RunAfter(static_cast<double>(deadlineMs - nowMs) / 1000.0,
                                   [this, battleId]
                                   { OnBattleDeadline(battleId); });
+    // 有未成年参战者时挂到点定时器(没有就什么都不挂):到点关他的直连,战斗照常进行
+    ArmMinorPlayDeadlineTimer(*roomPtr);
 
     const bool inPrepPhase = roomPtr->engine.IsInPrepPhase();
     if (inPrepPhase)
@@ -1210,6 +1219,14 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
         return;
     }
 
+    // 观众当天的截止时刻(未成年人;match 从会话记录带来,0 = 不限的人不进表)先于预签落到房间上:票据期限要按它封顶
+    // (real-name-anti-addiction.md §5.4)。先清后写:表项只随登记写入、随 RetireObserver 删除,这里不沿用任何旧值。
+    room->minorPlayLimits.erase(observerId);
+    if (request.minor_play_deadline_ms() != 0)
+    {
+        room->minorPlayLimits[observerId].deadlineMs = request.minor_play_deadline_ms();
+    }
+
     // fail-closed 预签(turn-based §22 D70):登记之前签票,签不出不登记 ——
     // 观众连不上直连就看不到任何战斗帧,登记进来只会占一个观众名额
     ::BattleAssignedS2C assigned;
@@ -1218,6 +1235,7 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
         LOG_ERROR << "metric=battle_ticket_issue_failed battle_id=" << battleId
                   << " player_id=" << observerId << " role=observer path=new"
                   << ",spectator ticket signing failed;spectating rejected(kServiceUnavailable)";
+        room->minorPlayLimits.erase(observerId);
         response.mutable_error_message()->set_id(kServiceUnavailable);
         return;
     }
@@ -1228,6 +1246,11 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
     operation->second.cancelled = false;
     // 从登记起计连接宽限:到期仍未挂上直连就回收席位,不让拿了票不来的观众一直占座
     StartObserverSeatGrace(*room, observerId, false);
+    if (request.minor_play_deadline_ms() != 0)
+    {
+        // 未成年观众:到点关他的直连;已到点的下一轮 loop 就记为已截止,他手上的票此刻也已过期
+        ArmMinorPlayDeadlineTimer(*room);
+    }
 
     // 只下发落点分配(大厅公告)。观战首帧随直连握手下发(§22 D69 snapshot on connect):
     // 此刻观众一定还没有直连,在这里推首帧只会被战斗帧出口丢弃
@@ -2325,6 +2348,8 @@ void BattleRoomManager::RetireObserver(BattleRoom &room, const uint64_t observer
     room.routingByObserver.erase(observerId);
     room.observerNames.erase(observerId);
     room.observerSeatDeadlines.erase(observerId);
+    // 未成年观众的直连限制随名单一起删;到点定时器不重挂(早到一次由 EnforceMinorPlayDeadlines 重挂)
+    room.minorPlayLimits.erase(observerId);
     CloseDirectConnectionOf(room, observerId, reason);
 }
 
@@ -2400,6 +2425,84 @@ void BattleRoomManager::ReclaimExpiredObserverSeats(const uint64_t battleId,
         RetireObserver(*room, observerId, "observer_seat_reclaimed");
     }
     ArmObserverSeatTimer(*room);
+}
+
+// ---- 未成年人到点断开战斗直连(docs/design/real-name-anti-addiction.md §5.4) ----
+
+void BattleRoomManager::ArmMinorPlayDeadlineTimer(BattleRoom &room)
+{
+    // 还没到点的人里最早的直连服务截止时刻。没有这样的人(绝大多数房间:全是成年人)就不挂
+    std::optional<uint64_t> earliestCloseAtMs;
+    for (const auto &[playerId, limit] : room.minorPlayLimits)
+    {
+        if (limit.ended)
+        {
+            continue;
+        }
+        const uint64_t closeAtMs = battle_minor_deadline::DirectCloseAtMs(limit.deadlineMs);
+        if (!earliestCloseAtMs || closeAtMs < *earliestCloseAtMs)
+        {
+            earliestCloseAtMs = closeAtMs;
+        }
+    }
+    if (!earliestCloseAtMs)
+    {
+        room.minorPlayDeadlineTimer.Cancel();
+        return;
+    }
+    // 截止时刻是绝对的 Unix 毫秒,延迟按墙钟算;已到点的按 0 延迟挂(本轮 loop 之后执行)。到期时按墙钟重判:
+    // 定时器早到(墙钟被校准过)时没到点的人留着并重挂,不会提前关;晚到只让关闭迟到,期间握手仍被票据期限挡住。
+    const uint64_t nowMs = TimeSystem::NowMillisecondsUTC();
+    const double delaySec =
+        *earliestCloseAtMs > nowMs ? static_cast<double>(*earliestCloseAtMs - nowMs) / 1000.0 : 0.0;
+    const bool armed = room.minorPlayDeadlineTimer.RunAfter(
+        delaySec,
+        [weakSelf = WeakSelf(), battleId = room.battleId]
+        {
+            if (const auto self = weakSelf.lock())
+            {
+                self->EnforceMinorPlayDeadlines(battleId, TimeSystem::NowMillisecondsUTC());
+            }
+        });
+    if (!armed)
+    {
+        // 只可能是当前线程没有 EventLoop(装配错误):到点不会主动关直连(握手仍被票据期限与准入判定挡住),响亮报出来
+        LOG_ERROR << "minor play deadline timer arm failed: battle_id=" << room.battleId
+                  << " limited_players=" << room.minorPlayLimits.size();
+    }
+}
+
+void BattleRoomManager::EnforceMinorPlayDeadlines(const uint64_t battleId, const uint64_t nowMs)
+{
+    auto *room = FindRoom(battleId);
+    if (room == nullptr)
+    {
+        // 定时器迟到打到已销毁的房间:直连早已随收尾 / 作废路径关闭
+        return;
+    }
+    for (auto &[playerId, limit] : room->minorPlayLimits)
+    {
+        if (limit.ended || !battle_minor_deadline::Reached(limit.deadlineMs, nowMs))
+        {
+            continue;
+        }
+        limit.ended = true;
+        // 只关连接:不摘表项、不碰战斗状态。断开回调(BattleClientEdge::HandleClosed → DetachDirectConnection)照常解绑,
+        // 与掉线、空闲超时同一处置 —— 参战者的回合按超时自动出手,观众进重连宽限、期满回收席位。
+        // forceClose 立刻把连接置成关闭中(真正的关闭排到之后的 loop 轮次),这一刻起战斗帧出口就不再往它写。
+        const auto direct = room->directConnByPlayer.find(playerId);
+        const auto conn = direct == room->directConnByPlayer.end() ? nullptr : direct->second.lock();
+        const bool closing = conn && conn->connected();
+        if (closing)
+        {
+            conn->forceClose();
+        }
+        // battle_id / player_id 只供排查,不作标签;按 metric= 行计数
+        LOG_INFO << "metric=battle_minor_play_deadline_reached battle_id=" << battleId << " player_id=" << playerId
+                 << " role=" << (room->routingByPlayer.count(playerId) != 0 ? "participant" : "observer")
+                 << " play_deadline_ms=" << limit.deadlineMs << " direct_connection_closed=" << (closing ? 1 : 0);
+    }
+    ArmMinorPlayDeadlineTimer(*room);
 }
 
 std::size_t BattleRoomManager::ResolveSqlOutcomeSendsPerPump(const std::string_view rawValue, bool *valid)
@@ -2670,12 +2773,18 @@ bool BattleRoomManager::BuildAssignment(const BattleRoom &room, const uint64_t p
         return false;
     }
 
+    // 票据期限:房间作废期限;未成年人再按他的直连服务截止时刻封顶(real-name-anti-addiction.md §5.4),
+    // 到点后同一张票握手即被直连面判过期。开局、观战接入与补签都走这里,三处同一个封顶。
+    const auto minorLimit = room.minorPlayLimits.find(playerId);
+    const uint64_t expireAtMs = battle_minor_deadline::TicketExpireAtMs(
+        room.deadlineMs, minorLimit == room.minorPlayLimits.end() ? 0 : minorLimit->second.deadlineMs);
+
     ::BattleTicketPayload payload;
     payload.set_battle_id(room.battleId);
     payload.set_player_id(playerId);
     payload.set_battle_node_id(self.node_id());
     payload.set_battle_instance_id(self.node_uuid());
-    payload.set_expire_at_ms(room.deadlineMs);
+    payload.set_expire_at_ms(expireAtMs);
     payload.set_role(role);
     if (role == ::BATTLE_TICKET_ROLE_OBSERVER) {
         if (spectatorOperation.empty()) {
@@ -2709,7 +2818,7 @@ bool BattleRoomManager::BuildAssignment(const BattleRoom &room, const uint64_t p
     out.set_ws_url(self.client_ws_url());
     out.set_token_payload(payloadBytes);
     out.set_token_signature(signature);
-    out.set_expire_at_ms(room.deadlineMs);
+    out.set_expire_at_ms(expireAtMs);
     out.set_role(role);
     return true;
 }
@@ -2770,6 +2879,19 @@ bool BattleRoomManager::AttachDirectConnection(const uint64_t battleId, const ui
     {
         LOG_WARN << "battle direct connection attachment rejected: player not in roster, battle_id=" << battleId
                  << " player_id=" << playerId << " role=" << ::eBattleTicketRole_Name(role);
+        return false;
+    }
+
+    // 未成年人到点之后,本场不再接受他的握手(real-name-anti-addiction.md §5.4)。到点的票本身已过期(BuildAssignment
+    // 按同一时点封顶),直连面会先按期限拒掉;这里不依赖票据期限,也不依赖定时器已经跑过:已截止或墙钟已到点都拒。
+    if (const auto limit = room->minorPlayLimits.find(playerId);
+        limit != room->minorPlayLimits.end() &&
+        (limit->second.ended ||
+         battle_minor_deadline::Reached(limit->second.deadlineMs, TimeSystem::NowMillisecondsUTC())))
+    {
+        LOG_INFO << "battle direct connection attachment rejected: minor play deadline reached, battle_id=" << battleId
+                 << " player_id=" << playerId << " role=" << ::eBattleTicketRole_Name(role)
+                 << " play_deadline_ms=" << limit->second.deadlineMs;
         return false;
     }
 

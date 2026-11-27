@@ -18,9 +18,10 @@ export const PLAYER_OPERATIONS = [
 ] as const;
 
 export type PlayerOperation = (typeof PLAYER_OPERATIONS)[number]['code'];
-export type PlayerCommandStatus = 'DRAFT' | 'SENDING' | 'EXECUTED' | 'UNKNOWN' | 'REJECTED';
+export type PlayerCommandStatus = 'DRAFT' | 'SENDING' | 'EXECUTED' | 'UNKNOWN' | 'REJECTED' | 'DECLINED';
 export interface PlayerCommandCatalog {
   enabled: boolean;
+  dualControl?: boolean;
   currencies: { id: number; label: string }[];
   limits?: { maxLevel?: number; maxItemCount?: number };
   operations: { code: PlayerOperation; label: string; permission: string; enabled: boolean; description: string }[];
@@ -42,6 +43,8 @@ export interface PlayerCommand {
   request: Record<string, unknown>;
   status: PlayerCommandStatus;
   result: Record<string, unknown> | null;
+  approver?: string | null;
+  approvedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -110,7 +113,7 @@ function checkedPlayerCommand(command: PlayerCommand): PlayerCommand {
     typeof command.playerId !== 'string' ||
     command.commandType !== 'PLAYER' ||
     !PLAYER_OPERATIONS.some((entry) => entry.code === command.operation) ||
-    !['DRAFT', 'SENDING', 'EXECUTED', 'UNKNOWN', 'REJECTED'].includes(command.status) ||
+    !['DRAFT', 'SENDING', 'EXECUTED', 'UNKNOWN', 'REJECTED', 'DECLINED'].includes(command.status) ||
     !command.request ||
     typeof command.request !== 'object' ||
     Array.isArray(command.request)

@@ -218,7 +218,12 @@ public class AdminTableBundleController {
                     : (active != null ? active.contentDigest() : "");
 
             for (PodStatus ps : pods) {
-                String state = ps.pendingState() == null ? "" : ps.pendingState();
+                // pending_* 说的是进程自己当时看到的那一包。指针刚换目标时,进程的回报还停在上一包
+                // (进程每 2 秒读一次指针,sidecar 再隔几秒转报),不能把上一包的结论算到新包头上:
+                // 发布工具看到 rejected > 0 就判这次发布失败,到点前还会撤回 next。
+                // 对不上的回报不计入任何一类,等它跟上来。
+                boolean aboutDesired = !desiredDigest.isEmpty() && desiredDigest.equals(ps.pendingDigest());
+                String state = aboutDesired && ps.pendingState() != null ? ps.pendingState() : "";
                 if ("rejected".equals(state)) {
                     rejected++;
                     rejectedPods.add(new PodIssue(ps.pod(), ps.service(), state, ps.pendingDigest(), ps.pendingReason()));

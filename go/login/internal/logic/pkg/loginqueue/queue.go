@@ -526,7 +526,11 @@ return {code, redis.call('ZRANK', KEYS[1], ARGV[1]), redis.call('ZCARD', KEYS[1]
 //
 // (2026-11-05)生产入口一律用 NewAdmitSigner:签之前复核 slot 里的 gate,它已停写、满载或不在此刻的候选里就改签另一台;
 // 复核读不到候选时照签 slot 里的 gate,复核本身不产生错误(见 admit_recheck.go)。
-type SignAdmitFn func(slot *AdmitSlot) (*AdmitToken, error)
+//
+// (2026-11-26)account 是这个条目入队时的账号(meta 的 account 字段,lookupScript 随放行槽在同一段里读出),签出的票只对它
+// 有效(SignGateToken)。排队令牌本身不认人,谁拿着都能来取放行槽;票绑了账号,取到也只有入队的那个账号能用。
+// 匿名条目(account 为空串,只有测试会造)签出的票不绑账号。
+type SignAdmitFn func(slot *AdmitSlot, account string) (*AdmitToken, error)
 
 // Poll 轮询排队状态，仍排队时按需续期，取到放行槽时消费并签票。signFn 只在取到放行槽时调用，必须非 nil
 // (queuestatuslogic / assigngatelogic 传 NewAdmitSigner)。
@@ -544,7 +548,8 @@ type SignAdmitFn func(slot *AdmitSlot) (*AdmitToken, error)
 //  3. lookupScript(与放行脚本互斥原子):
 //     - token 索引不在,或不指向这个 queueId:EXPIRED(meta_gone)。空闲超过 QueueEntryTTL 的条目走这里;
 //     - 取到放行槽(GETDEL,只成功一次):在 meta 里记下这个槽与重取截止(取走时刻 + handoffGrace),现签 gate 票
-//     (consumeAdmitAndSign),ADMITTED;
+//     (consumeAdmitAndSign),ADMITTED;票绑定 meta 里记的入队账号,所以这时 meta 必须还在,不在就按下一条回 EXPIRED
+//     (2026-11-26,见 lookupScript);
 //     - meta 不在、不是 hash,或 zone 不符:EXPIRED(meta_gone);
 //     - meta 有 admitted_at、放行槽不在、记下的重取截止还没到(2026-11-11 起,R8):同一令牌重取,返回同一个槽、现签一张
 //     新票,ADMITTED。这是取走那次回包丢了之后的重试(客户端重发、go-redis 超时重发);占位改为「现在 + handoffGrace」,
@@ -590,7 +595,7 @@ func (q *Queue) Poll(ctx context.Context, token string, zoneID uint32, signFn Si
 	case lookupAdmitTaken, lookupAdmitRetaken:
 		// 条目的生命到此为止,只剩重取窗口里同一令牌再取同一个槽(见 lookupScript)。meta 与 token 索引留到 TTL
 		// (见 consumeAdmitAndSign 末尾);在途占位不撤,consumeAdmitAndSign 把它改成再留 handoffGrace。
-		admit, err := q.consumeAdmitAndSign(ctx, zoneID, queueID, res.slotJSON, signFn, res.code == lookupAdmitRetaken)
+		admit, err := q.consumeAdmitAndSign(ctx, zoneID, queueID, res.slotJSON, res.account, signFn, res.code == lookupAdmitRetaken)
 		if err != nil {
 			return nil, err
 		}
@@ -621,8 +626,14 @@ func (q *Queue) Poll(ctx context.Context, token string, zoneID uint32, signFn Si
 //	ARGV[5] = E 毫秒(续期阈值,QueueEntryTTL)   ARGV[6] = entryRenewTTL 毫秒(续期写入值)
 //	ARGV[7] = metaFieldTakenSlot   ARGV[8] = metaFieldRetakeUntil   ARGV[9] = 现在(毫秒,Queue.now)
 //	ARGV[10] = 重取截止(毫秒,现在 + handoffGrace;只在这次取走放行槽时写进 meta)
-//	返回 {code, rank, total, slot}:code 见 lookup* 常量;rank / total 只在 QUEUEING 时有意义;slot 只在取到或重取到放行槽时
-//	是放行槽 JSON,其余为空串。四个元素的类型固定(整数、整数、整数、字符串)。
+//	返回 {code, rank, total, slot, account}:code 见 lookup* 常量;rank / total 只在 QUEUEING 时有意义;slot 只在取到或重取到
+//	放行槽时是放行槽 JSON,其余为空串;account 只在同样两种情况下是 meta 里记的入队账号(匿名条目为空串),其余为空串。
+//	五个元素的类型固定(整数、整数、整数、字符串、字符串)。
+//
+// 账号随放行槽一起读出(2026-11-26):签出的 gate 票要绑定入队的账号(SignAdmitFn),账号与槽在同一段里读,不多一次往返,
+// 也没有「槽取到了、账号没读到」的中间状态。为此取走时 meta 必须还在:放行槽在、meta 却不在(或不是 hash)时回 1(meta_gone),
+// 槽已被 GETDEL、不再给票。此前这种情况照样给票(只是不改占位);它要求 meta 在放行之后的 AdmitTTL 之内过期而 token 索引还在,
+// 正常到不了,但到了就会签出一张谁都能用的不绑账号的票,所以按 EXPIRED 处理,客户端重新入队,占位留到放行时的分数到期。
 //
 // 重取(2026-11-11,R8):取走放行槽的那一次,在同一段里把槽与重取截止写进 meta(meta 是 hash 时才写,HSET 不改它的 TTL,
 // 也不会凭空建出 meta)。此后放行槽已不在、meta 有 admitted_at 时,截止之前回 6(重取,带同一个槽),之后回 5。此前取走即
@@ -630,6 +641,8 @@ func (q *Queue) Poll(ctx context.Context, token string, zoneID uint32, signFn Si
 // 排到号的玩家拿不到票。宽限取 handoffGrace:截止之前,取走时写下的在途占位(取走时刻 + handoffGrace)一定还在,重取
 // 不会签出一张没有名额兜着的票。同一令牌在窗口里能多拿几张票,不扩大危害面:gate 票本来就不是一次性的(C++ gate 只验签名、
 // gate 号与过期,不记用过没有),一张票在有效期里就能被重复使用。截止只在取走那次写,重取不推后它。
+// (2026-11-26 补注)「能被重复使用」只对持票账号成立:票绑了入队的账号,多拿的几张、被转给别人的票,别的账号都登不上
+// (TicketIssuedTo)。
 // 写满:GETDEL 是写命令,它之后的 HSET 不再受 maxmemory 约束(见 admitEntryScript 注释 (c));GETDEL 删掉的放行槽与新写的
 // 两个字段大小相当,不会因此明显越线。
 //
@@ -660,31 +673,32 @@ func (q *Queue) Poll(ctx context.Context, token string, zoneID uint32, signFn Si
 // 而不是放行槽:测试按「第一个键以 admit: 开头」认放行脚本(admitScriptKey),两者不能混。
 var lookupScript = redis.NewScript(`
 if redis.call('GET', KEYS[3]) ~= ARGV[1] then
-	return {1, 0, 0, ''}
+	return {1, 0, 0, '', ''}
 end
 local slot = redis.call('GETDEL', KEYS[4])
 if slot then
-	if redis.call('TYPE', KEYS[1]).ok == 'hash' then
-		redis.call('HSET', KEYS[1], ARGV[7], slot, ARGV[8], ARGV[10])
+	if redis.call('TYPE', KEYS[1]).ok ~= 'hash' then
+		return {1, 0, 0, '', ''}
 	end
-	return {2, 0, 0, slot}
+	redis.call('HSET', KEYS[1], ARGV[7], slot, ARGV[8], ARGV[10])
+	return {2, 0, 0, slot, redis.call('HGET', KEYS[1], 'account') or ''}
 end
 if redis.call('TYPE', KEYS[1]).ok ~= 'hash' then
-	return {1, 0, 0, ''}
+	return {1, 0, 0, '', ''}
 end
-local f = redis.call('HMGET', KEYS[1], ARGV[3], ARGV[4], ARGV[7], ARGV[8])
+local f = redis.call('HMGET', KEYS[1], ARGV[3], ARGV[4], ARGV[7], ARGV[8], 'account')
 if f[1] ~= ARGV[2] then
-	return {1, 0, 0, ''}
+	return {1, 0, 0, '', ''}
 end
 if f[2] then
 	if f[3] and tonumber(ARGV[9]) < (tonumber(f[4]) or 0) then
-		return {6, 0, 0, f[3]}
+		return {6, 0, 0, f[3], f[5] or ''}
 	end
-	return {5, 0, 0, ''}
+	return {5, 0, 0, '', ''}
 end
 local rank = redis.call('ZRANK', KEYS[2], ARGV[1])
 if not rank then
-	return {4, 0, 0, ''}
+	return {4, 0, 0, '', ''}
 end
 local idle = tonumber(ARGV[5])
 for i = 1, 3 do
@@ -693,7 +707,7 @@ for i = 1, 3 do
 		redis.call('PEXPIRE', KEYS[i], ARGV[6])
 	end
 end
-return {3, rank, redis.call('ZCARD', KEYS[2]), ''}
+return {3, rank, redis.call('ZCARD', KEYS[2]), '', ''}
 `)
 
 // lookupScript 返回数组的第一个元素(2026-11-06;1、3、4 与此前 lookupStateScript 同义,2 改为「取到放行槽」,
@@ -707,15 +721,17 @@ const (
 	lookupAdmitRetaken      = 6 // 放行槽已被取走、重取截止还没到:第四个元素是取走时记下的同一个放行槽 JSON(R8)
 )
 
-// lookupResult 是一次 lookupScript 的结果。slotJSON 只在 code 为 lookupAdmitTaken 或 lookupAdmitRetaken 时非空。
+// lookupResult 是一次 lookupScript 的结果。slotJSON 只在 code 为 lookupAdmitTaken 或 lookupAdmitRetaken 时非空;
+// account 是同样两种情况下 meta 里记的入队账号(匿名条目为空串)。
 type lookupResult struct {
 	code        int64
 	rank, total uint32
 	slotJSON    []byte
+	account     string
 }
 
 // lookupEntry 对一个条目跑一次 lookupScript。只由 Poll 调用。用 Script.Run(先 EVALSHA,NOSCRIPT 时回退 EVAL:
-// EVALSHA 撞上 NOSCRIPT 时脚本没有执行,回退不会重复取走放行槽)。返回值不是 4 个元素、类型不对或 code 未知时回错误。
+// EVALSHA 撞上 NOSCRIPT 时脚本没有执行,回退不会重复取走放行槽)。返回值不是 5 个元素、类型不对或 code 未知时回错误。
 // 现在与重取截止在这里取一次:go-redis 重发同一条命令时带的是同一组值,重发那次按第一次写下的截止判重取。
 func (q *Queue) lookupEntry(ctx context.Context, token, queueID string, zoneID uint32) (lookupResult, error) {
 	now := q.now()
@@ -728,16 +744,17 @@ func (q *Queue) lookupEntry(ctx context.Context, token, queueID string, zoneID u
 	if err != nil {
 		return lookupResult{}, err
 	}
-	if len(vals) != 4 {
-		return lookupResult{}, fmt.Errorf("script returned %d values, want 4", len(vals))
+	if len(vals) != 5 {
+		return lookupResult{}, fmt.Errorf("script returned %d values, want 5", len(vals))
 	}
 	code, okCode := vals[0].(int64)
 	rank, okRank := vals[1].(int64)
 	total, okTotal := vals[2].(int64)
 	slot, okSlot := vals[3].(string)
-	if !okCode || !okRank || !okTotal || !okSlot {
-		return lookupResult{}, fmt.Errorf("script returned values of types %T %T %T %T, want three integers and a string",
-			vals[0], vals[1], vals[2], vals[3])
+	account, okAccount := vals[4].(string)
+	if !okCode || !okRank || !okTotal || !okSlot || !okAccount {
+		return lookupResult{}, fmt.Errorf("script returned values of types %T %T %T %T %T, want three integers and two strings",
+			vals[0], vals[1], vals[2], vals[3], vals[4])
 	}
 	switch code {
 	case lookupMetaGone, lookupAdmitTaken, lookupQueueing, lookupQueueGone, lookupAdmitWindowPassed, lookupAdmitRetaken:
@@ -747,6 +764,7 @@ func (q *Queue) lookupEntry(ctx context.Context, token, queueID string, zoneID u
 	res := lookupResult{code: code, rank: uint32(rank), total: uint32(total)}
 	if code == lookupAdmitTaken || code == lookupAdmitRetaken {
 		res.slotJSON = []byte(slot)
+		res.account = account
 	}
 	return res, nil
 }
@@ -768,14 +786,16 @@ func (q *Queue) lookupEntry(ctx context.Context, token, queueID string, zoneID u
 // PopAdmit and the token could sit in Redis for 4-5 min before the client
 // GetDel'd it, burning most of its TTL. See
 // stress-1zone-45k-2026-06-03-round17.md §4 R1 for the diagnosis.
-func (q *Queue) consumeAdmitAndSign(ctx context.Context, zoneID uint32, queueID string, slotJSON []byte, signFn SignAdmitFn, retake bool) (*AdmitToken, error) {
+//
+// account 是条目入队时的账号(lookupScript 随放行槽读出),原样交给 signFn:签出的票只对它有效(2026-11-26)。
+func (q *Queue) consumeAdmitAndSign(ctx context.Context, zoneID uint32, queueID string, slotJSON []byte, account string, signFn SignAdmitFn, retake bool) (*AdmitToken, error) {
 	var slot AdmitSlot
 	if err := json.Unmarshal(slotJSON, &slot); err != nil {
 		return nil, fmt.Errorf("unmarshal admit slot: %w", err)
 	}
 
 	// Sign NOW so the token's expire starts ticking from this moment.
-	admit, err := signFn(&slot)
+	admit, err := signFn(&slot, account)
 	if err != nil {
 		// The slot has already been taken (GETDEL in lookupScript) — the entry
 		// is gone from Redis. Surface the signing error; the client will see

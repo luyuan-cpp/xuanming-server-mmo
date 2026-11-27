@@ -17,12 +17,12 @@
   - 客户端这几天新加的代码里没有绕过 `ClientTransport` 直接建连的,也没有小游戏里会卡死的写法(`Task.Run`、`Task.Delay`、线程池等);新文件按客户端仓 `AGENTS.md`「小游戏(WebGL)兼容约束」写。
   - 服务端所有带客户端地址的下发消息都带着对应的 WebSocket 地址字段。
   - robot 没有新的裸 TCP 拨号;gate / battle 的客户端口仍是 18000 / 20000,与 ws-edge 的转发目标一致。
-- **剩下的全是执行**:协议生成、编译、单测、契约测试、冒烟;失败时按根因修。
+- **剩下的全是执行**:协议生成、编译、单测、契约测试、冒烟。**代码已改完,Gemini 只验证**:跑红要改代码(含测试代码、部署脚本)时,保留首错原文与复现命令停下,交回 Claude 改(负责人 2026-11-26 定:逻辑代码由 Claude 改,Gemini 只负责生成、编译、测试、冒烟)。
 
 ## 1. 开工前必读与规矩
 
 - 先读 `AGENTS.md` 全文与它引用的 `docs/rules/` 分章:`ai-workflow.md`(分工、写回、模型档位)、`proto-and-tables.md`(§2 协议同步)、`cpp-runtime-and-build.md`(构建与测试命令)、`engineering-principles.md`(§11.7 连接与回调生命周期)、`stress-testing.md`(冒烟前清数据)。按 `AGENTS.md` §10.1,编译、生成、测试与冒烟都由 Gemini 执行。
-- **模型档位(`AGENTS.md` §10.3)**:生成、编译、跑测试与冒烟用 `Carbon Medium`。要改代码时先保留首错原文停下,切到 `Gemini 4 Neon Extra` 再改。
+- **模型档位(`AGENTS.md` §10.3)**:生成、编译、跑测试与冒烟用 `Carbon Medium`。本单不需要 Gemini 改代码:要改代码时保留首错原文停下,交回 Claude;只有负责人明说让 Gemini 接手写代码时例外。
 - 只在 main 工作区做,不开分支 / worktree,不 `git push` / `git tag`。
 - **只有负责人明确要求才 commit**,而且只提交自己的修复;见第 6 节。
 - 工作区里有几百个别的会话未提交的文件:不 `git stash` / `reset` / `checkout --`,不整理别人的改动。
@@ -33,9 +33,10 @@
   - `run_cpp_tests.ps1 -Build` 不重编库:`websocket.cpp`、`codec.cpp` 在 core 库里,先整解。
   - 类 / 结构体不放裸指针成员;节点代码不新起线程;连接与回调只存 / 只绑 `weak_ptr`(§11.7)。
 - 失败时:
-  - 保留第一条错误(文件:行)或失败输出原文。
-  - 修根因。不注释断言、不放宽断言、不跳测试、不连续自动重试。
-  - 报错落在别的会话的改动上(`git diff` 分得清),原样记录、不修,在结果里写明归属。
+  - 保留第一条错误(文件:行)或失败输出原文,这一步停在这里。
+  - 不自己改代码:把原文和复现命令写进 PROGRESS,交回 Claude 按根因改。不注释断言、不放宽断言、不跳测试、不连续自动重试。
+  - 报错落在别的会话的改动上(`git diff` 分得清),原样记录,在结果里写明归属。
+  - 和这一步无关的后续步骤可以接着跑,结果里写明哪些是在红的基础上跑的。
 - 游戏未上线,数据可以全部清空。冒烟前按 §6.2 清 Redis、MySQL、etcd,重置 Kafka offset。
 - 结果写进 `docs/PROGRESS.md`:**文末追加新条目,不改旧条目**。标题写「Gemini:小游戏 WebSocket 验证」,列命令、通过数、失败原文摘要;日志放 `build/verification/minigame-ws-<日期>/`。条目里不贴大段原始输出。
 - Java 版不写代码:负责人定「java 留到 todo」,已在 Java 仓 `PARITY.md` 登记。
@@ -145,7 +146,7 @@ python tools/scripts/check_log_text_english.py
 
 ### 3.6 边缘 nginx 配置的静态检查(需要本机 docker,不连集群)
 
-`geo` 以路径里捕获的地址为键、`map` 取 /24,这两处写法都没有实测过。这一步十秒钟就能定下来:
+`geo` 以路径里捕获的地址为键、`map` 取 /24,这两处写法都没有实跑过。2026-11-26 Claude 按 nginx 源码语义静态核对,结论是成立(理由在设计稿 W8「两处少见写法为什么成立」),所以这一步预期直接通过;它十秒钟就能定下来:
 
 ```powershell
 . tools/scripts/lib/k8s_client_entry.ps1
@@ -160,7 +161,7 @@ docker run --rm -v "${out}:/work:ro" nginx:1.28.0 sh -c "mkdir -p /etc/nginx/tls
 
 通过标准:两份配置都打出 `syntax is ok` 与 `test is successful`。
 
-- 报 `unknown "ws_target_ip" variable` 或 `unknown "ws_source_24" variable`,就是这两处写法不成立。按根因改 `New-WsEdgeYaml` 的模板,同步改 `k8s_client_entry_contract.tests.ps1` 里钉住的那几行,再跑 3.5。
+- 报 `unknown "ws_target_ip" variable` 或 `unknown "ws_source_24" variable`,就是静态核对漏了、这两处写法不成立。**不要自己改**:把 nginx 的完整输出与两份 `nginx-*.conf` 留在 `build/verification/` 下,交回 Claude 改 `New-WsEdgeYaml` 的模板和 `k8s_client_entry_contract.tests.ps1` 里钉住的那几行,改完再跑 3.5 与本步。
 - 镜像里没有 `openssl` 命令时,换成在宿主机生成一对自签证书,挂进 `/etc/nginx/tls`。
 
 ### 3.7 客户端(仓根 `D:\luyuan\mmorpg-client`,先关掉占着工程的 Unity)
@@ -228,6 +229,6 @@ gate 与 battle 不用设 `CLIENT_WS_BASE_URL`:它们的客户端端口本来就
 
 ## 6. 提交(只在负责人要求时)
 
-- 本线的代码已全部提交,这一节只管验证中修出来的改动。
+- 本线的代码已全部提交,这一节只管验证跑红后由 Claude 修出来的改动。
 - 只提交到本地 main,不 push。只提交自己的修复:工作区常有别的会话未提交的文件,同一文件里混着别人的改动时,只暂存自己的那几块。
 - 服务端、客户端分开提交,说明里写清修的是本线哪一条、验证结果如何。

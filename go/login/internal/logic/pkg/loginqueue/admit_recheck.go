@@ -63,12 +63,13 @@ type GateCandidateSource interface {
 // 两个取走入口(AssignGate 携排队令牌重入、QueryQueueStatus)都用它,签法只有这一份。
 // ctx 是本次请求的 ctx,复核读候选时用。source 为 nil 时不复核,照签选定的 gate(计 unchecked)。
 // 返回的函数并发安全(复核只读候选、记指标);签名失败才回错误,复核本身不回错误。
+// 签出的票绑定条目入队时的账号(Poll 随放行槽一起读出、传进来),见 SignGateToken。
 func NewAdmitSigner(ctx context.Context, source GateCandidateSource, secret []byte, ttl time.Duration) SignAdmitFn {
-	return func(slot *AdmitSlot) (*AdmitToken, error) {
+	return func(slot *AdmitSlot, account string) (*AdmitToken, error) {
 		if slot == nil {
 			return nil, fmt.Errorf("nil admit slot")
 		}
-		return SignGateToken(recheckAdmitGate(ctx, source, slot), secret, ttl)
+		return SignGateToken(recheckAdmitGate(ctx, source, slot), secret, ttl, account)
 	}
 }
 

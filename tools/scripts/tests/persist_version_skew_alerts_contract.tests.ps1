@@ -105,6 +105,8 @@ Test-Case 'persist-version-skew-alerts.yaml:引用的指标都由 C++ 导出,按
             Assert-True -Condition ($script:Families -ccontains $metric) -Because "$($rule.Name):$metric 必须由 currency_metrics.cpp 导出(改名后告警静默失效)"
         }
         Assert-Match -Text $expr -Pattern 'increase\(scene_currency_clawback_version_skew_total\[10m\]\)' -Because "$($rule.Name) 读计数的 10 分钟增量"
+        # 回滚出来的旧 Pod 可能在第一次被抓取之前就计了数:首个样本已不是 0,increase 看不到,要靠「新序列」这一支。
+        Assert-Match -Text $expr -Pattern '(?s)\bor\b.*scene_currency_clawback_version_skew_total\s+unless scene_currency_clawback_version_skew_total offset 10m' -Because "$($rule.Name) 带新序列一支,窗口与 increase 相同"
     }
 }
 

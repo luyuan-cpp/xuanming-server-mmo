@@ -170,7 +170,7 @@ func TestNewAdmitSigner_SignsForRepickedGate(t *testing.T) {
 		{NodeID: 1, IP: "10.0.0.1", Port: 9000, ZoneID: 3, Stale: true},
 		{NodeID: 2, IP: "10.0.0.2", Port: 9100, PlayerCount: 5, ZoneID: 3},
 	}}
-	admit, err := NewAdmitSigner(context.Background(), src, recheckSecret, time.Minute)(admittedToGate1())
+	admit, err := NewAdmitSigner(context.Background(), src, recheckSecret, time.Minute)(admittedToGate1(), "")
 	if err != nil {
 		t.Fatalf("sign: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestNewAdmitSigner_UncheckedSignsOriginal(t *testing.T) {
 	for name, src := range cases {
 		t.Run(name, func(t *testing.T) {
 			before := admitRecheckValue(t, admitRecheckUnchecked)
-			admit, err := NewAdmitSigner(context.Background(), src, recheckSecret, time.Minute)(admittedToGate1())
+			admit, err := NewAdmitSigner(context.Background(), src, recheckSecret, time.Minute)(admittedToGate1(), "")
 			if err != nil {
 				t.Fatalf("sign: %v (the recheck must never turn into an error)", err)
 			}
@@ -214,7 +214,7 @@ func TestNewAdmitSigner_UncheckedSignsOriginal(t *testing.T) {
 
 // 没有放行槽可签:回错误,不签票。
 func TestNewAdmitSigner_NilSlotIsAnError(t *testing.T) {
-	if _, err := NewAdmitSigner(context.Background(), nil, recheckSecret, time.Minute)(nil); err == nil {
+	if _, err := NewAdmitSigner(context.Background(), nil, recheckSecret, time.Minute)(nil, ""); err == nil {
 		t.Fatal("signing a nil admit slot must fail")
 	}
 }
@@ -239,7 +239,7 @@ func TestAdmit_WsURLFollowsTheSignedGate(t *testing.T) {
 		{NodeID: 1, IP: "10.0.0.1", Port: 9000, ZoneID: 3, WsURL: gate1Ws, Stale: true},
 		{NodeID: 2, IP: "10.0.0.2", Port: 9100, ZoneID: 3, WsURL: gate2Ws},
 	}}
-	repicked, err := NewAdmitSigner(context.Background(), src, recheckSecret, time.Minute)(slot)
+	repicked, err := NewAdmitSigner(context.Background(), src, recheckSecret, time.Minute)(slot, "")
 	if err != nil {
 		t.Fatalf("sign: %v", err)
 	}
@@ -255,7 +255,7 @@ func TestAdmit_WsURLFollowsTheSignedGate(t *testing.T) {
 	if err := json.Unmarshal(raw, stored); err != nil {
 		t.Fatalf("unmarshal admit slot: %v", err)
 	}
-	unchecked, err := NewAdmitSigner(context.Background(), nil, recheckSecret, time.Minute)(stored)
+	unchecked, err := NewAdmitSigner(context.Background(), nil, recheckSecret, time.Minute)(stored, "")
 	if err != nil {
 		t.Fatalf("sign: %v", err)
 	}
@@ -291,6 +291,10 @@ func TestPoll_ConsumeRepicksGateThatWentStaleAfterAdmit(t *testing.T) {
 	}
 	if got := decodeGatePayload(t, st.Admit).GetGateNodeId(); got != 2 || st.Admit.IP != "10.0.0.2" {
 		t.Fatalf("token for gate %d at %s, want gate 2: the gate picked at admit time stopped writing its record", got, st.Admit.IP)
+	}
+	// 票绑定入队的账号(2026-11-26):Poll 把 meta 里的账号随放行槽读出、交给签票函数。没绑时 TicketIssuedTo 对谁都回 true,红在 bob 上。
+	if digest := decodeGatePayload(t, st.Admit).GetAccountDigest(); !TicketIssuedTo(digest, "alice") || TicketIssuedTo(digest, "bob") {
+		t.Fatalf("ticket account digest = %x, want a ticket only alice (the account that enqueued) can use", digest)
 	}
 	if got := admitRecheckValue(t, admitRecheckStale) - before; got != 1 {
 		t.Fatalf(`login_queue_admit_gate_recheck_total{outcome="stale"} grew by %v, want 1`, got)

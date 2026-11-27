@@ -16,6 +16,10 @@ zone_id: 1
 # 用 1000 robot 当 baseline,5000 robot 触发排队
 ```
 
+`use_http_login: true` 是必须的(2026-11-26 起):排队开着时 login 不接不带 access token 的分配,robot 要先走 `/api/login` 拿令牌再分配 gate(与 Unity 客户端同序)。
+不开它的 robot、以及各冒烟场景(它们先匿名分配、连上 gate 再认证)在排队开着的环境里全部卡在分配上,robot 日志是
+`anonymous AssignGate rejected (legacy gate login is disabled, or the login queue is on; set use_http_login: true)`。
+
 ```yaml
 # go/login/etc/login.yaml
 Queue:
@@ -208,6 +212,17 @@ gate 机器 sysctl net.ipv4.ip_local_port_range 内 TIME_WAIT 占满
 **这是 CLAUDE.md §7 提的老问题,排队层不应该引入新风险**,但要确认:
 - queue-aware robot 是否在 admit 后立刻 close → 重连?(我的实现:admit 后建 TCP 连接,close 在 robot 完整 session 结束才发生,所以这条不应该被排队恶化)
 - 看 `ss -s` 的 TIME_WAIT 计数,对比开排队前后
+
+### 模式 8:分配被拒(401)或 gate 上登录被拒(票据绑定账号,2026-11-26 起)
+```
+robot:anonymous AssignGate rejected (legacy gate login is disabled, or the login queue is on; set use_http_login: true)
+login:Login rejected: the gate ticket of this connection was issued to another account; account=... session_id=...
+```
+规则见设计稿 §5「票据绑定账号」:排队开着时分配必须带 access token;签出的 gate 票只对这个账号有效,gate 上的 Login 认证出的账号不符就拒。
+**排查**:
+- 第一行:看 `login_assign_gate_auth_total{result="rejected_anonymous"}` 在不在涨。压测 robot 没开 `use_http_login`,或跑的是冒烟场景(只能在排队关着的环境跑)。真实客户端不会走到这里(Unity 先登录再分配)。
+- 第二行:拿 A 账号的票、在 gate 上用 B 账号登录。正常客户端不会这样做;成批出现说明有人在转手票据或令牌。按 `account` 与 `session_id` 查是哪个账号、哪条连接,不用改配置,这一行本身就是防线生效。
+- 两者都不是故障:不要为了让它们消失去关 `Queue.Enabled` 或开匿名分配。
 
 ---
 

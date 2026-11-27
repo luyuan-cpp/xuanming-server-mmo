@@ -3,7 +3,12 @@
 # 指标由 go/content_guard/internal/metrics/metrics.go 注册:
 #   - content_guard_lexicon_version:生效中的词库版本;0 = 只有内置的几个防冒充词,没有从 etcd 加载到词库;
 #   - content_guard_lexicon_load_failures_total{reason}:从 etcd 加载词库失败,reason ∈ etcd / corrupt / apply / watch;失败时继续用旧词库;
-#   - content_guard_checks_total{scene,verdict,category}:判定次数;verdict=unavailable 是「要求词库而没有词库,一律回不可用」。
+#   - content_guard_checks_total{scene,verdict,category}:判定次数;verdict=unavailable 是回了不可用:要求词库而没有词库,
+#     或者接了外部平台审核(k8s_deploy.ps1 -ContentGuardWeChatAppId / -ContentGuardDouyinAppId)而名字类场景等不到平台的答复
+#     (平台超时、凭据不对、出站被挡;名字类对平台不可用的口径是拒绝,设计 §6.5)。两种用下一个指标区分;
+#   - content_guard_platform_reviews_total{provider,outcome}:每一次外部平台调用的结局,provider ∈ wechat / douyin,
+#     outcome ∈ pass / reject / unavailable / skip / deferred;deferred 是世界频道先行的短预算没等到、交给后台补审(那一次另记),不算失败。
+#     世界频道补审再不可用时消息照常留着、只打日志,所以平台挂了只有这个指标看得见(设计 §6.9)。
 # label 只有场景、结局、类别、失败原因这几个固定集合,不带 player_id,也不带被检文字(AGENTS.md §9)。
 #
 # 为什么要报:建角(自定义名字)、改名、帮会名、聊天都要过它。没有词库的副本在 staging / prod 不监听、不注册、不就绪;
@@ -95,6 +100,26 @@ spec:
           annotations:
             summary: "{{ $labels.namespace }} 的内容安全服务在拒绝判定"
             description: >-
-              有请求打到了没有词库的副本上并被回了不可用,已持续 5 分钟:调用方按拒绝处理,玩家起不了名字、发不出聊天。
-              正常不会出现:要求词库的副本在加载到词库之前不监听、不注册(content_guard.go waitForLexicon)。
+              有请求被回了不可用,已持续 5 分钟:调用方按拒绝处理,玩家起不了名字、发不出聊天。原因有两种,
+              看 content_guard_platform_reviews_total{outcome="unavailable"} 同期有没有涨(涨了是第二种,通常 ContentGuardPlatformFailing 也在报):
+              一是请求打到了没有词库的副本。这正常不会出现:要求词库的副本在加载到词库之前不监听、不注册(content_guard.go waitForLexicon);
               出现说明这条保护被绕过了,先让词库加载上(同 ContentGuardNoLexiconAnywhere),再查这个副本为什么没有词库却在接请求。
+              二是接了外部平台审核,名字类场景等不到微信 / 抖音的答复,处理见 ContentGuardPlatformFailing。
+        - alert: ContentGuardPlatformFailing
+          expr: |
+            sum by (namespace, provider) (rate(content_guard_platform_reviews_total{outcome="unavailable"}[10m]))
+              > 0.05 * sum by (namespace, provider) (rate(content_guard_platform_reviews_total{outcome!="deferred"}[10m]))
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的内容安全服务调 {{ $labels.provider }} 的审核接口,失败超过 5%"
+            description: >-
+              最近 10 分钟调外部平台审核(按 provider:wechat = 微信 msgSecCheck,douyin = 抖音 antidirt)的调用里,等不到答复的超过 5%,
+              已持续 10 分钟。名字、帮会名、公告这类场景对平台不可用的口径是拒绝(ContentGuardRefusingChecks 会一起报);
+              世界频道先按本地词库的结果发出、后台补审,补审也等不到时消息照常留着,等于这段时间的世界频道没有经过平台审核。
+              看 content-guard 日志里 [content_guard/wechat] / [content_guard/douyin] 的报错:取凭据失败多半是 AppSecret 换过或抄错;
+              微信回 openid 无效多半是 -ContentGuardWeChatAppId 不是玩家登录用的那个小游戏;连接超时先查集群出站能否到 api.weixin.qq.com /
+              developer.toutiao.com 的 443。平台整体故障又一时恢复不了,可以不带这个平台的参数重新部署 infra-up
+              (要加 -ConfirmContentGuardPlatformChange),退回只用本地词库,恢复后再带上。
+              5% / 10 分钟是起步值,接上实网后按平时的失败率调。

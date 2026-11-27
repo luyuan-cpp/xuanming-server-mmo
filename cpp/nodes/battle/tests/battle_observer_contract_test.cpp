@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "battle_minor_play_deadline.h"
 #include "client/battle_client_edge.h"
 #include "core/security/service_call_auth.h"
 #include "data/table_battle_data_provider.h"
@@ -2476,4 +2477,252 @@ TEST_F(BattleObserverContract, RetiredTableProviderLeavesThePoolAfterRetentionBu
     EXPECT_FALSE(olderAlive.expired());
     BattleRoomManagerTestAccess::EraseAllRooms();
     EXPECT_TRUE(olderAlive.expired());
+}
+
+// ---- 未成年人到点断开战斗直连(docs/design/real-name-anti-addiction.md §5.4)----
+// 截止时刻由 match 随 CreateBattle(参战者快照)与 AddObserver 带来,房间按人记下:票据按它封顶,到点关他的直连,
+// 之后本场不再接受他握手;战斗照常进行。夹具没有可注入的墙钟:到点由 EnforceMinorPlayDeadlines 的显式时刻驱动
+// (生产由房间定时器以墙钟调用);握手一侧的墙钟判定只用「离现在还远」与「已经过去」两种截止时刻,不卡边界
+// (边界在 battle_minor_play_deadline_test.cpp)。用例里没有直连面,断开回调由用例直接调 DetachDirectConnection 模拟。
+
+namespace {
+using battle_minor_deadline::kCloseLeadMs;
+
+// 经补签入口取一张票:票据载荷里的期限与落点分配包里的期限。签不出时记失败,两个都留 0。
+struct IssuedTicketExpiry {
+    uint64_t payloadMs = 0;
+    uint64_t assignmentMs = 0;
+};
+
+IssuedTicketExpiry IssueTicketExpiry(const uint64_t battleId, const uint64_t playerId, const std::string& operation = {}) {
+    IssueBattleTicketRequest request;
+    request.set_battle_id(battleId);
+    request.set_player_id(playerId);
+    request.set_target_instance_id(kInstance);
+    request.set_spectator_operation_id(operation);
+    IssueBattleTicketResponse reply;
+    BattleRoomManager::Instance().HandleIssueBattleTicket(request, reply);
+    EXPECT_EQ(0u, reply.error_message().id()) << "player=" << playerId;
+    BattleTicketPayload payload;
+    EXPECT_TRUE(payload.ParseFromString(reply.assignment().token_payload()));
+    return {payload.expire_at_ms(), reply.assignment().expire_at_ms()};
+}
+
+// 这条服务端侧连接已经被关(置成关闭中,或已销毁)。
+bool DirectClosed(const LoopbackDirectConnection& direct) {
+    const auto conn = direct.ServerSide();
+    return !conn || !conn->connected();
+}
+}  // namespace
+
+// 票据期限取房间作废期限与持票人直连服务截止时刻(截止时刻前 5 秒)里较早的一个;没有截止时刻的人不变。
+// 参战者、观众、补签同一条规则(都走 BuildAssignment),落点分配包里的期限与票据载荷同值。
+TEST_F(BattleObserverContract, MinorPlayDeadlineCapsEveryTicketAtTheEarlierOfRoomAndPlayDeadline) {
+    auto creation = OriginalCreation();
+    const uint64_t roomDeadlineMs = creation.deadline_ms();
+    const uint64_t playDeadlineMs = originalNowMs + 60000;
+    ASSERT_LT(playDeadlineMs, roomDeadlineMs);
+    creation.mutable_players(0)->set_minor_play_deadline_ms(playDeadlineMs);
+    CreateBattleResponse created;
+    manager().HandleCreateBattle(creation, created);
+    ASSERT_EQ(0u, created.error_message().id());
+
+    const auto minor = IssueTicketExpiry(battleId, kFirstPlayer);
+    EXPECT_EQ(playDeadlineMs - kCloseLeadMs, minor.payloadMs);
+    EXPECT_EQ(minor.payloadMs, minor.assignmentMs);
+    const auto adult = IssueTicketExpiry(battleId, kSecondPlayer);
+    EXPECT_EQ(roomDeadlineMs, adult.payloadMs) << "没有截止时刻的人仍是房间作废期限";
+    EXPECT_EQ(adult.payloadMs, adult.assignmentMs);
+
+    auto minorObserver = Original(kFirstOperation);
+    minorObserver.set_minor_play_deadline_ms(playDeadlineMs);
+    ASSERT_EQ(0u, AddError(minorObserver));
+    const auto adultObserver = OriginalFor(kFillerObserverBase, FillerOperation(0));
+    ASSERT_EQ(0u, AddError(adultObserver));
+    const auto watchingMinor = IssueTicketExpiry(battleId, kObserver, kFirstOperation);
+    EXPECT_EQ(playDeadlineMs - kCloseLeadMs, watchingMinor.payloadMs);
+    EXPECT_EQ(watchingMinor.payloadMs, watchingMinor.assignmentMs);
+    EXPECT_EQ(roomDeadlineMs, IssueTicketExpiry(battleId, kFillerObserverBase, FillerOperation(0)).payloadMs);
+
+    // 截止时刻晚于房间作废期限:票据不因它变长
+    const auto laterBattle = nextBattleId.fetch_add(1, std::memory_order_relaxed);
+    auto later = OriginalCreation();
+    later.set_battle_id(laterBattle);
+    later.mutable_players(0)->set_minor_play_deadline_ms(roomDeadlineMs + 3600000);
+    CreateBattleResponse laterCreated;
+    manager().HandleCreateBattle(later, laterCreated);
+    ASSERT_EQ(0u, laterCreated.error_message().id());
+    EXPECT_EQ(roomDeadlineMs, IssueTicketExpiry(laterBattle, kFirstPlayer).payloadMs);
+}
+
+// 到点只关未成年人那一条直连;之后他换新连接来握手被拒(同一张票、同一名玩家),对手的直连与重连都不受影响,
+// 房间还在、回合照常结算。到点判定重复触发无害。
+TEST_F(BattleObserverContract, MinorPlayDeadlineClosesOnlyThatPlayersDirectConnectionAndRefusesHisLaterHandshakes) {
+    auto creation = OriginalCreation();
+    const uint64_t playDeadlineMs = originalNowMs + 60000;
+    const uint64_t closeAtMs = playDeadlineMs - kCloseLeadMs;
+    creation.mutable_players(0)->set_minor_play_deadline_ms(playDeadlineMs);
+    CreateBattleResponse created;
+    manager().HandleCreateBattle(creation, created);
+    ASSERT_EQ(0u, created.error_message().id());
+
+    LoopbackDirectConnection minorDirect(*loop);
+    LoopbackDirectConnection adultDirect(*loop);
+    ASSERT_TRUE(minorDirect.Open("minor_direct"));
+    ASSERT_TRUE(adultDirect.Open("adult_direct"));
+    ASSERT_TRUE(manager().AttachDirectConnection(battleId, kFirstPlayer, ::BATTLE_TICKET_ROLE_PARTICIPANT,
+                                                 minorDirect.ServerSide(), nullptr));
+    ASSERT_TRUE(manager().AttachDirectConnection(battleId, kSecondPlayer, ::BATTLE_TICKET_ROLE_PARTICIPANT,
+                                                 adultDirect.ServerSide(), nullptr));
+
+    // 到点前一毫秒:谁都不关
+    manager().EnforceMinorPlayDeadlines(battleId, closeAtMs - 1);
+    EXPECT_FALSE(DirectClosed(minorDirect));
+    EXPECT_FALSE(DirectClosed(adultDirect));
+
+    // 到点:只关未成年人那一条
+    manager().EnforceMinorPlayDeadlines(battleId, closeAtMs);
+    EXPECT_TRUE(DirectClosed(minorDirect));
+    EXPECT_FALSE(DirectClosed(adultDirect));
+    EXPECT_TRUE(manager().OwnsDirectConnection(battleId, kSecondPlayer, ::BATTLE_TICKET_ROLE_PARTICIPANT,
+                                               adultDirect.ServerSide(), {}));
+    // 直连面的断开回调:照常解绑,与掉线同一处置
+    manager().DetachDirectConnection(battleId, kFirstPlayer, minorDirect.ServerSide());
+
+    // 之后握手被拒。墙钟此刻离他的截止时刻还有近一分钟:拒绝靠的是已截止标记,不随墙钟放开
+    LoopbackDirectConnection minorRetry(*loop);
+    ASSERT_TRUE(minorRetry.Open("minor_retry"));
+    EXPECT_FALSE(manager().AttachDirectConnection(battleId, kFirstPlayer, ::BATTLE_TICKET_ROLE_PARTICIPANT,
+                                                  minorRetry.ServerSide(), nullptr));
+    EXPECT_FALSE(manager().OwnsDirectConnection(battleId, kFirstPlayer, ::BATTLE_TICKET_ROLE_PARTICIPANT,
+                                                minorRetry.ServerSide(), {}));
+
+    // 定时器早到 / 重复触发:无害,没有截止时刻的人永远不关
+    manager().EnforceMinorPlayDeadlines(battleId, playDeadlineMs + 3600000);
+    EXPECT_FALSE(DirectClosed(adultDirect));
+    LoopbackDirectConnection adultRetry(*loop);
+    ASSERT_TRUE(adultRetry.Open("adult_retry"));
+    EXPECT_TRUE(manager().AttachDirectConnection(battleId, kSecondPlayer, ::BATTLE_TICKET_ROLE_PARTICIPANT,
+                                                 adultRetry.ServerSide(), nullptr));
+
+    // 战斗照常进行:房间还在,对手照常出手;他仍在参战名单上(胜负与结算不变),补签只拿得到到点就过期的票。
+    // 他的角色此后按回合超时自动出手(现有掉线规则),这里不等回合定时器,也不替他发任何客户端请求。
+    ASSERT_NO_FATAL_FAILURE(SetAuto(battleId, kSecondPlayer, true));
+    EXPECT_EQ(closeAtMs, IssueTicketExpiry(battleId, kFirstPlayer).payloadMs);
+    EXPECT_EQ(BATTLE_CREATION_PRESENT, CreationState().state());
+}
+
+// 建房时就已到点(开战恰好撞上截止前 5 秒):房间照建、对手照打,他从一开始就握不上手,拿到的票生来过期。
+TEST_F(BattleObserverContract, MinorPlayDeadlineAlreadyReachedRefusesTheHandshakeFromTheStart) {
+    LoopbackDirectConnection minorDirect(*loop);
+    LoopbackDirectConnection adultDirect(*loop);
+    ASSERT_TRUE(minorDirect.Open("minor_direct"));
+    ASSERT_TRUE(adultDirect.Open("adult_direct"));
+
+    auto creation = OriginalCreation();
+    creation.mutable_players(0)->set_minor_play_deadline_ms(originalNowMs + 1000);
+    ASSERT_LT(creation.players(0).minor_play_deadline_ms(), originalNowMs + kCloseLeadMs);
+    CreateBattleResponse created;
+    manager().HandleCreateBattle(creation, created);
+    ASSERT_EQ(0u, created.error_message().id()) << "到点不影响建房:战斗照常进行";
+
+    EXPECT_FALSE(manager().AttachDirectConnection(battleId, kFirstPlayer, ::BATTLE_TICKET_ROLE_PARTICIPANT,
+                                                  minorDirect.ServerSide(), nullptr));
+    const auto ticket = IssueTicketExpiry(battleId, kFirstPlayer);
+    EXPECT_EQ(originalNowMs + 1000 - kCloseLeadMs, ticket.payloadMs);
+    EXPECT_LT(ticket.payloadMs, originalNowMs) << "票据期限已在过去,直连面按过期拒绝";
+
+    EXPECT_TRUE(manager().AttachDirectConnection(battleId, kSecondPlayer, ::BATTLE_TICKET_ROLE_PARTICIPANT,
+                                                 adultDirect.ServerSide(), nullptr));
+}
+
+// 观众同样生效:到点只关未成年观众的直连,之后握手被拒;席位按掉线处置,重连宽限期满回收,别的观众不受影响。
+TEST_F(BattleObserverContract, MinorPlayDeadlineAppliesToObserversAndTheSeatFollowsTheReconnectGrace) {
+    ASSERT_NO_FATAL_FAILURE(Create());
+    const uint64_t playDeadlineMs = originalNowMs + 60000;
+    const uint64_t closeAtMs = playDeadlineMs - kCloseLeadMs;
+    auto minor = Original(kFirstOperation);
+    minor.set_minor_play_deadline_ms(playDeadlineMs);
+    ASSERT_EQ(0u, AddError(minor));
+    const auto adult = OriginalFor(kFillerObserverBase, FillerOperation(0));
+    ASSERT_EQ(0u, AddError(adult));
+
+    LoopbackDirectConnection minorDirect(*loop);
+    LoopbackDirectConnection adultDirect(*loop);
+    ASSERT_TRUE(minorDirect.Open("minor_observer_direct"));
+    ASSERT_TRUE(adultDirect.Open("adult_observer_direct"));
+    ASSERT_TRUE(manager().AttachDirectConnection(battleId, kObserver, ::BATTLE_TICKET_ROLE_OBSERVER,
+                                                 minorDirect.ServerSide(), nullptr, kFirstOperation));
+    ASSERT_TRUE(manager().AttachDirectConnection(battleId, adult.observer_player_id(), ::BATTLE_TICKET_ROLE_OBSERVER,
+                                                 adultDirect.ServerSide(), nullptr, adult.spectator_operation_id()));
+
+    manager().EnforceMinorPlayDeadlines(battleId, closeAtMs - 1);
+    EXPECT_FALSE(DirectClosed(minorDirect));
+
+    manager().EnforceMinorPlayDeadlines(battleId, closeAtMs);
+    EXPECT_TRUE(DirectClosed(minorDirect));
+    EXPECT_FALSE(DirectClosed(adultDirect));
+    // 与掉线同一处置:此刻仍在名单上,断开回调开始重连宽限
+    EXPECT_EQ(OBSERVER_ADMISSION_ACTIVE, Query(minor));
+    manager().DetachDirectConnection(battleId, kObserver, minorDirect.ServerSide());
+    const auto afterDetach = std::chrono::steady_clock::now();
+
+    // 宽限期内换新连接握手:拒绝(普通掉线的观众此时可以重连)
+    LoopbackDirectConnection minorRetry(*loop);
+    ASSERT_TRUE(minorRetry.Open("minor_observer_retry"));
+    EXPECT_FALSE(manager().AttachDirectConnection(battleId, kObserver, ::BATTLE_TICKET_ROLE_OBSERVER,
+                                                  minorRetry.ServerSide(), nullptr, kFirstOperation));
+
+    // 期满回收席位;别的观众还在、直连还在
+    manager().ReclaimExpiredObserverSeats(battleId, afterDetach + BattleRoomManager::kObserverReconnectGrace);
+    EXPECT_EQ(OBSERVER_ADMISSION_ABSENT, Query(minor));
+    EXPECT_EQ(OBSERVER_ADMISSION_ACTIVE, Query(adult));
+    manager().EnforceMinorPlayDeadlines(battleId, playDeadlineMs + 3600000);
+    EXPECT_FALSE(DirectClosed(adultDirect));
+}
+
+// 没有任何截止时刻的房间:到点判定什么都不做,哪怕时刻给到最大。
+TEST_F(BattleObserverContract, RoomWithoutMinorPlayDeadlinesIsUntouchedByEnforcement) {
+    ASSERT_NO_FATAL_FAILURE(Create());
+    LoopbackDirectConnection firstDirect(*loop);
+    LoopbackDirectConnection secondDirect(*loop);
+    ASSERT_TRUE(firstDirect.Open("first_direct"));
+    ASSERT_TRUE(secondDirect.Open("second_direct"));
+    ASSERT_TRUE(manager().AttachDirectConnection(battleId, kFirstPlayer, ::BATTLE_TICKET_ROLE_PARTICIPANT,
+                                                 firstDirect.ServerSide(), nullptr));
+    ASSERT_TRUE(manager().AttachDirectConnection(battleId, kSecondPlayer, ::BATTLE_TICKET_ROLE_PARTICIPANT,
+                                                 secondDirect.ServerSide(), nullptr));
+
+    manager().EnforceMinorPlayDeadlines(battleId, UINT64_MAX);
+    EXPECT_FALSE(DirectClosed(firstDirect));
+    EXPECT_FALSE(DirectClosed(secondDirect));
+    EXPECT_TRUE(manager().OwnsDirectConnection(battleId, kFirstPlayer, ::BATTLE_TICKET_ROLE_PARTICIPANT,
+                                               firstDirect.ServerSide(), {}));
+    // 房间不存在:no-op
+    manager().EnforceMinorPlayDeadlines(battleId + 100000, UINT64_MAX);
+}
+
+// 观众的截止时刻只跟着这一次登记走:签票失败没登记上的那次不留痕迹,同一名观众换新 op、不带截止时刻再来,
+// 票据就是房间作废期限。
+TEST_F(BattleObserverContract, MinorPlayDeadlineOfARefusedObserverDoesNotStickToHisNextAdmission) {
+    ASSERT_NO_FATAL_FAILURE(Create());
+    auto refused = Original(kFirstOperation);
+    refused.set_minor_play_deadline_ms(originalNowMs + 60000);
+    // 只让签票地址判定失败(同 AssignmentFailureRemovesOriginalOperationAndNewOperationRecovers)
+    node->MutableNodeInfo().clear_endpoint();
+    node->MutableNodeInfo().clear_client_endpoint();
+    const auto failed = AddError(refused);
+    node->MutableNodeInfo() = originalNode;
+    ASSERT_EQ(static_cast<uint32_t>(::kServiceUnavailable), failed);
+    ASSERT_EQ(OBSERVER_ADMISSION_ABSENT, Query(refused));
+
+    const auto next = Original(kSecondOperation);
+    ASSERT_EQ(0u, AddError(next));
+    EXPECT_EQ(OriginalCreation().deadline_ms(), IssueTicketExpiry(battleId, kObserver, kSecondOperation).payloadMs);
+    LoopbackDirectConnection direct(*loop);
+    ASSERT_TRUE(direct.Open("next_observer_direct"));
+    ASSERT_TRUE(manager().AttachDirectConnection(battleId, kObserver, ::BATTLE_TICKET_ROLE_OBSERVER,
+                                                 direct.ServerSide(), nullptr, kSecondOperation));
+    manager().EnforceMinorPlayDeadlines(battleId, UINT64_MAX);
+    EXPECT_FALSE(DirectClosed(direct));
 }

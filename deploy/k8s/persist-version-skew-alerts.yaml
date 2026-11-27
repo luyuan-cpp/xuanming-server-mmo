@@ -6,7 +6,9 @@
 #   scene_currency_clawback_version_skew_total   counter,没有标签。补缴扣还(CurrencySystem::AddCurrency)遇到带着更新版本字段的欠款,
 #                                                按冻结处理、不扣还也不删除、收入全额入账的次数;与逐次的
 #                                                `metric=persist_version_skew where=currency_clawback` WARN 同一时刻、同一口径。
-# 进程启动时以 0 导出,increase() 抓得到第一次,不需要「新序列」分支。instance = 被抓取的 scene Pod。
+# 进程启动时以 0 导出,第一次被抓取之后的增长 increase() 都抓得到。但回滚出来的旧 Pod 可能在第一次被抓取之前就遇到了这种欠款,
+# 首个样本已经不是 0,increase() 看不到这一跳:规则另带一支「新序列」(X unless X offset 10m,与 login-alerts.yaml 同一写法,2026-11-26)。
+# instance = 被抓取的 scene Pod。
 # 规则引用的指标名由 tools/scripts/tests/persist_version_skew_alerts_contract.tests.ps1 对照 C++ 源码钉住。
 #
 # Install as a PrometheusRule CR (kube-prometheus stack),与 owner-epoch-alerts.yaml 同法:
@@ -47,6 +49,11 @@ spec:
         - alert: SceneCurrencyClawbackVersionSkew
           expr: |
             sum by (namespace) (increase(scene_currency_clawback_version_skew_total[10m])) > 0
+            or
+            sum by (namespace) (
+              scene_currency_clawback_version_skew_total
+              unless scene_currency_clawback_version_skew_total offset 10m
+            ) > 0
           for: 0m
           labels:
             severity: warning

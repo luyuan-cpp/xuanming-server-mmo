@@ -110,8 +110,9 @@ public:
 	//     同一根因只计一次的两处取舍:equip_kind == 0 的行不属于任何部位,不参加后两项;越界的 socket 已逐行
 	//     报过,它留下的缺口不另计 ——「不是 0..n-1」只在界内的缺口数多于越界行数时才报
 	//     (否则把某个孔误填成 9 会被计两条)。
-	// 校验只打日志不拒启、单表热更也不重跑,所以写入口对缺行与被配成装备的材料 / 宝石行另有 fail-closed
-	// (见 Enhance / InlayGem / IsGem)。
+	// 启动时(InstallItemInitializer)只打日志不拒启;整包热更时由 scene 的 TableLoadHandler::Validate 调用,
+	// 返回值不为 0 就拒绝那一包。启动那条路仍会带着坏行跑起来,所以写入口对缺行与被配成装备的材料 / 宝石行
+	// 另有 fail-closed(见 Enhance / InlayGem / IsGem)。
 	static uint32_t ValidateTables();
 
 	// ---- 新铸实例 ----

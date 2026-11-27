@@ -84,7 +84,7 @@ type TransactionLogStore struct {
 
 // NewTransactionLogStore opens the pool. It does NOT create tables — see schema.go.
 func NewTransactionLogStore(cfg MySQLConfig) (*TransactionLogStore, error) {
-	db, err := openMySQL(cfg)
+	db, err := openCheckedPool(cfg, buildDSN(cfg), nil)
 	if err != nil {
 		return nil, err
 	}

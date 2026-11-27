@@ -13,6 +13,7 @@
       - 建连 / 验签路径确实调了未验签占位的两个钩子;
       - 未验签预算(设计稿 P0-2):淘汰只经会话里的 weak 连接 forceClose、不在准入回调里删会话,按会话代次核对,
         预算排在速率闸之前判;
+      - 收包路径确实接上了登录过渡闸与未授权消息号闸(2026-11-26):这三处少接一行编译照过,闸直接失效;
       - 指标标签只有 reason 与 result 两个封闭集合:对端地址、会话号、账号、玩家号不进指标(AGENTS.md §9);
       - PrometheusRule 形状、规则名单、每条规则的 severity / summary / description / runbook_url / for;
       - 告警名在 deploy/k8s 的全部告警文件里不重名。
@@ -216,6 +217,15 @@ Test-Case '本文件钉的每条告警的名字在 deploy/k8s 的全部告警文
     foreach ($name in @($script:ExpectedRules.Keys)) {
         Assert-Equal -Expected 1 -Actual (@($all | Where-Object { $_ -ceq $name })).Count -Because "$name 在 Alertmanager 里按 alertname 分组,重名会互相掩盖"
     }
+}
+
+# 判定与处置在 client_entry_admission.h,行为由 GateClientEntryWiring.*(client_entry_admission_test.cpp)测;这里只钉「接上了」:
+# 抽出判定之后,调用点少一行不报错、单测照绿(单测自己装钩子、自己调判定),线上两道闸却不生效。
+Test-Case 'gate 收包路径:登录过渡闸装进 lane 的发送钩子、直连发出前各判一次,未授权消息号闸在收包入口' {
+    $handler = Read-RepoText -RelativePath 'cpp/nodes/gate/handler/rpc/client_session_handler.cpp'
+    Assert-Match -Text $handler -Pattern 'gate_lane::SetSendHooks\(&gate_client_entry::LoginTransitionRejectTip,\s*&ApplyLoginTransition\);' -Because '经场景 lane 排队的 LeaveGame / EnterGame 在发出前一刻按登录过渡判拒:少了这一行钩子是空的,一律放行'
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($handler, '(?m)^\s*if \(gate_client_entry::RejectUnauthorizedMessageId\(sessionId, session, conn, request->message_id\(\)\)\)').Count) -Because '收包入口按会话已授权的消息号把关(含只能由 gate 合成的号),只有这一处调用'
+    Assert-Equal -Expected 2 -Actual ([regex]::Matches($handler, '(?m)^\s*if \(gate_client_entry::RejectLoginTransitionBeforeDirectSend\(sessionId, ').Count) -Because '不经 lane 的两条发出路径(直连 gRPC 节点、非 gRPC 协议)各自在真正发出前判一次登录过渡'
 }
 
 exit (Complete-TestRun -SuiteName 'gate_connection_alerts_contract')

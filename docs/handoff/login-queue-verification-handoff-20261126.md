@@ -7,10 +7,10 @@
 
 | 项 | 状态 |
 |---|---|
-| 服务端代码 | 写完。`b6a08148c`(入队按账号幂等、队列上限、每拍上限、重连占位、只接本区)、`f067d01fc`(会话带 `gate_zone_id`、`/api/refresh-token` 限流)、2026-11-26 三处(K8s 镜像两个上限键、告警 `LoginQueueFull`,已入库;快速通道一个账号只占一个在途名额,未提交) |
-| 客户端代码 | 写完(Unity 持票轮询与收尾、robot 状态机),见 `docs/PROGRESS.md` 2026-11-19~20 四条 |
-| 协议 | 已生成(`go/proto` 里有 `GetClientWsUrl`、`GateZoneId`) |
-| 编译 | login 生产代码在 2026-11-23 的 Docker 构建里编过;`assigngatelogic.go` 11-25 之后又改过,没有新记录。**测试代码从没被编译过** |
+| 服务端代码 | 写完。`b6a08148c`(入队按账号幂等、队列上限、每拍上限、重连占位、只接本区)、`f067d01fc`(会话带 `gate_zone_id`、`/api/refresh-token` 限流)、2026-11-26 三处(K8s 镜像两个上限键、告警 `LoginQueueFull`、快速通道一个账号只占一个在途名额,已入库);2026-11-26 晚:票据绑定账号、排队开着时不接匿名分配(login、gate、robot,未提交,见 `docs/PROGRESS.md` 同名条目) |
+| 客户端代码 | 写完(Unity 持票轮询与收尾、robot 状态机),见 `docs/PROGRESS.md` 2026-11-19~20 四条。Unity 这次不用改代码(早已先登录再分配),只要重新生成协议 |
+| 协议 | 2026-11-26 晚改了 `proto/common/base/message.proto`(`GateTokenPayload` 字段 7 `account_digest`)与 `session.proto`(`SessionDetails` 字段 11 `ticket_account_digest`),**未生成** |
+| 编译 | login 生产代码在 2026-11-23 的 Docker 构建里编过;之后 `assigngatelogic.go`、`queue.go`、`gatetoken.go`、`loginlogic.go`、`gate_migration.go` 与 C++ gate 都又改过,没有新记录。**测试代码从没被编译过** |
 | 测试 | 排队 Go 单测、网关用例、真实 Redis 冒烟都没有运行记录(2026-11-08 那份已过期) |
 | 开关 | 所有环境关着:`go/login/etc/login.yaml` 的 `Queue.Enabled: false`,`tools/scripts/k8s_deploy.ps1` 的 `$script:LoginQueueMergeGateCleared = $false` |
 
@@ -20,12 +20,14 @@
 
 | 步 | 做什么 | 入口(`docs/PROGRESS.md` 条目标题) |
 |---|---|---|
+| P | 生成协议(必须最先做):仓库根 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`;同级 `mmorpg-client` 依次 `pwsh -File tools/gen_proto.ps1`、`tools/gen_messageids.ps1`、`tools/client_compile_check.ps1`;`robot` 目录 `go mod vendor`(把新生成的 `go/proto` 带进 `robot/vendor`,别的会话没生成完的协议也会一起进来,见 [WebSocket 交接](./minigame-websocket-handoff-20261120.md) §3.4) | 本单第 3 节「协议」 |
 | 0 | 语法与格式:`gofmt -l -e` 扫第 3 节列的 Go 文件。有语法错误就停下,交回 Claude | 本单第 3 节 |
-| 1 | `go/login`、`go/player_locator`、`robot` 的 build、vet、单测 | 2026-11-20「登录排队遗留项收口」第 2 步;同日 Gemini「登录排队 / 开服限流与 Unity 客户端全链路标准收口」第 2 步 |
+| 1 | `go/login`、`go/player_locator`、`robot` 的 build、vet、单测 | 2026-11-20「登录排队遗留项收口」第 2 步;同日 Gemini「登录排队 / 开服限流与 Unity 客户端全链路标准收口」第 2 步;2026-11-26「登录排队:票据绑定账号」 |
+| 1b | C++:**整解**重编(`msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`),再跑 `routing_identity_test`(至少 `SessionDetailsBuilder.*`)与 gate 的测试工程。`SessionInfo` 多了一个成员,布局变了:所有包含 `session_info_comp.h` 的库和工程都要重编,只编测试工程会链到旧布局的库 | 2026-11-26「登录排队:票据绑定账号」 |
 | 2 | 门槛 ① ②:25 条点名用例、`-count=10` 稳定性 | 2026-11-20「登录排队清合入门槛的 Codex 验证单」第一部分。要在第 1 步之后跑:其中 7 条被改过账号字面量 |
 | 3 | 本仓网关:`AssignGateServiceAuthTest`、`AssignGateRateLimiterTest`、`RefreshTokenControllerTest` 等 | 「遗留项收口」第 3 步;Gemini 条目第 3 步 |
 | 4 | 契约测试:`gate_pick_alerts_contract.tests.ps1`、`k8s_deploy_contract.tests.ps1` | 2026-11-26「登录排队复核与两处补齐」 |
-| 5 | 变异取红 12 项(A~L),在 `%TEMP%` 的副本上做 | 「遗留项收口」第 4 步(A~K);2026-11-26「登录排队:快速通道一个账号只占一个在途名额」(L) |
+| 5 | 变异取红 18 项(A~R),在 `%TEMP%` 的副本上做 | 「遗留项收口」第 4 步(A~K);2026-11-26「登录排队:快速通道一个账号只占一个在途名额」(L);2026-11-26「登录排队:票据绑定账号」(M~R) |
 | 6 | Unity 编译与 EditMode | Gemini 条目第 5 步 |
 | 7 | 门槛 ③:真实 Redis 冒烟两轮(7.2 单实例、8.10.2 Cluster),各 11 个核对步骤加 4 个补充项 | 验证单第二部分;「遗留项收口」第 5 步 |
 
@@ -40,6 +42,12 @@
 - `go/login/internal/logic/loginpregate/assigngate_reconnect_test.go`。
 - `java/gateway_node/src/test/java/com/game/gateway/service/AssignGateServiceAuthTest.java` 的两条 `queueFull*`。
 - `tools/scripts/tests/gate_pick_alerts_contract.tests.ps1` 的「login.queue-length 组…」用例。
+- 2026-11-26 晚「票据绑定账号」这一批(先做第 P 步,否则 `GetAccountDigest` / `GetTicketAccountDigest` / `set_ticket_account_digest` 都不存在):
+  - `go/login/internal/logic/pkg/loginqueue/`:`gatetoken.go`(`SignGateToken`、`PickAndSignGateToken`、`SignMigrationGateToken` 都多一个 `account` 参数,新增 `TicketAccountDigest`、`TicketIssuedTo`);`queue.go`(`SignAdmitFn` 多一个 `account` 参数,`lookupScript` 的返回值从 4 个元素改成 5 个);`gatedrain_migrate_test.go` 的 `TestSignGateToken_BindsTheAccountOnly`(由 `TestSignGateToken_StaysUnbound` 改写);`queue_test.go` 的 `TestPoll_AdmitSlotWithoutMeta_GivesNoTicket`(新)与 `TestPoll_RetakeInsideWindow_ReturnsSameSlot`(加断言);`admit_recheck_test.go` 的 `TestPoll_ConsumeRepicksGateThatWentStaleAfterAdmit`(加断言)。
+  - `go/login/internal/logic/loginpregate/assigngate_auth_test.go` 的 `TestAssignGateAuthEmptyAccountIsAnError`、`TestAnonymousAssignAllowedOnlyWithLegacyOnAndQueueOff`(新)。
+  - `go/login/internal/logic/clientplayerlogin/gate_ticket_account_test.go`(新文件,复用同包 `legacy_gate_killswitch_login_test.go` 的环境)。
+  - `robot/main.go`(`loginAndEnterWithAuth`、`loginAndEnterViaHttpGateway` 多一个参数,新增 `httpLoginTokens`)、`robot/authored_navmesh_e2e_test.go`。
+  - `cpp/tests/routing_identity_test/session_details_builder_test.cpp` 的 `CopiesGateAndSessionIdentityFields`(加断言)。
 
 判读提示:
 
@@ -47,8 +55,16 @@
 - 入队从 MULTI 改成了一段脚本(`enqueueScript`)。按命令名拦截 `evalsha` / `eval` 的测试钩子会连入队一起拦到;放行脚本靠第一个键以 `admit:` 开头来认,入队脚本的第一个键是 `queue:{q:<z>}`。
 - `TryReserveFastPathSlot` 多了第四个参数(账号,2026-11-26):带账号时占位成员是账号的条目号,一个账号只占一枚。既有用例都传空串,行为与以前相同。
 - 验证单第二部分第 3 步写的「快速通道的成员以 `fast:` 开头」只对匿名分配成立。robot 带账号登录时,快速通道的占位成员是 `a-` 开头的条目号,同样约 20 秒后消失;按这个判。
-- `gofmt -l` 列出上面这些文件时,允许 `gofmt -w` 后重跑并在结果里注明(新用例是手排的)。列出别的文件只记录。
+- `gofmt -l` 列出上面这些文件时停下,把输出交回 Claude 改,Gemini 不改源码(2026-11-26 晚核对:`queue_test.go`、`dispatcher_test.go`、`assigngate_reconnect_test.go` 当时 `gofmt -l` 无输出)。列出别的文件只记录。
 - 红了不要改断言迁就。保留失败用例的完整 `-v` 输出,停下报告。
+- 第 7 步冒烟(2026-11-26 晚起):robot 配置必须 `use_http_login: true`,排队开着时 login 不接匿名分配。冒烟期间 `login_assign_gate_auth_total{result="rejected_anonymous"}` 应为 0,login 日志不应出现 `Login rejected: the gate ticket of this connection was issued to another account`;出现就是 robot 配置或代码问题,保留原文交回 Claude。robot 的各冒烟场景(`resolveGateAddrLocal`)是匿名分配,只在排队关着时跑。
+- 变异 M~R(在副本上做,做法同 A~L,改完跑点名用例,确认红在下面写的地方,再还原):
+  - M:`gatetoken.go` 的 `signGateToken` 删掉 `AccountDigest: TicketAccountDigest(account),` → `TestSignGateToken_BindsTheAccountOnly` 红(摘要长度),`TestPoll_ConsumeRepicksGateThatWentStaleAfterAdmit` 红(bob 也能用)。
+  - N:`clientplayerlogin/loginlogic.go` 删掉 `TicketIssuedTo` 那个 `if` → `TestGateLoginRejectsATicketIssuedToAnotherAccount` 红(别人的票绑上了会话)。
+  - O:`lookupScript` 取走分支里删掉「meta 不是 hash 就回 1」那三行,并把 `HSET` 改回只在 meta 是 hash 时执行 → `TestPoll_AdmitSlotWithoutMeta_GivesNoTicket` 红(signFn 被调用)。
+  - P:`anonymousAssignAllowed` 改成 `return legacyGateLoginEnabled` → `TestAnonymousAssignAllowedOnlyWithLegacyOnAndQueueOff` 红。
+  - Q:`authenticateAssignGate` 删掉空账号判断 → `TestAssignGateAuthEmptyAccountIsAnError` 红。
+  - R:C++ `session_details_builder.h` 删掉 `set_ticket_account_digest` 那个 `if` → `SessionDetailsBuilder.CopiesGateAndSessionIdentityFields` 红。
 
 ## 4. 开闸(改常量)
 

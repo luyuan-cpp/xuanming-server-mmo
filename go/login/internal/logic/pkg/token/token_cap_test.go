@@ -18,13 +18,13 @@ func TestIssue_CapNeverEvictsTheJustIssuedFamily(t *testing.T) {
 
 	long := NewManager(rdb, Config{AccessTokenTTL: time.Hour, RefreshTokenTTL: 720 * time.Hour})
 	for i := 0; i < maxRefreshTokensPerAccount; i++ {
-		if _, err := long.Issue(ctx, "cap-account", "password", ""); err != nil {
+		if _, err := long.Issue(ctx, "cap-account", "password", "", 0); err != nil {
 			t.Fatal(err)
 		}
 	}
 
 	short := NewManager(rdb, Config{AccessTokenTTL: time.Hour, RefreshTokenTTL: 2 * time.Hour})
-	pair, err := short.Issue(ctx, "cap-account", "password", "")
+	pair, err := short.Issue(ctx, "cap-account", "password", "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}

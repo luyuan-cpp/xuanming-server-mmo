@@ -6,6 +6,7 @@
 
 - **尽可能避免使用 `static` 存储**：像 gRPC channel 缓存这类有状态组件，应由 `Node` 持有，而不是用静态存储实现（新起线程约束见 [naming-and-boundaries.md](naming-and-boundaries.md#硬禁令)）。
 - **Kubernetes 外部 Gate 暴露建议**：托管云 K8s 通常优先使用 `LoadBalancer`；自建 / 裸金属 K8s 通常优先在外部四层负载均衡器后使用 `NodePort`。当集群缺乏成熟的 LB 实现时，不要将 `LoadBalancer` 作为一刀切的默认方案推荐。
+- **muduo 的网络源码有三份副本，改一份要同步另外两份**：`cpp/libs/engine/muduo_windows/src/muduo/net/`（Windows 编进 muduo.lib）、`third_party/muduo/muduo/net/`（业务代码与测试 `#include` 实际命中的头文件）、`tools/archived/muduo_linux_overlay/muduo/net/`（Linux 构建时整文件覆盖进上游源码，生产用这份）。前两份不一致时链接照样成功，运行期才因类布局错位而堆损坏。守卫是 `tools/scripts/tests/muduo_acceptor_copies_contract.tests.ps1`，原因见 [cpp-node-fd-exhaustion-handling.md](../design/cpp-node-fd-exhaustion-handling.md) §3.6。
 
 ## 2. C++ 源文件编码（MSVC `/utf-8`）
 

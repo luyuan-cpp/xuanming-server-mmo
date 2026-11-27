@@ -260,6 +260,14 @@
           <a-descriptions-item label="创建时间">{{ reviewedCommand.createdAt }}</a-descriptions-item>
           <a-descriptions-item label="更新时间">{{ reviewedCommand.updatedAt }}</a-descriptions-item>
         </a-descriptions>
+        <ApprovalPanel
+          :command="reviewedCommand"
+          kind="mail"
+          :can-release="hasPermission('gm:mail:send')"
+          :can-propose="hasPermission('gm:mail:prepare')"
+          :busy="mutationBusy"
+          @declined="onReviewedDeclined"
+        />
         <a-collapse class="gm-space">
           <a-collapse-panel key="request" header="完整请求记录">
             <pre class="gm-json">{{ pretty(reviewedCommand.request) }}</pre>
@@ -325,7 +333,7 @@
           :disabled="mutationBusy || !mailEnabled || !reviewConfirmed"
           @click="sendReviewedMail"
         >
-          {{ retryingCommand ? '沿用原命令重试' : '确认发送' }}
+          {{ retryingCommand ? '沿用原命令重试' : dualControl ? '批准并发送' : '确认发送' }}
         </a-button>
       </template>
     </BasicModal>
@@ -341,6 +349,8 @@
   import { useMessage } from '/@/hooks/web/useMessage';
   import PlayerCommands from './PlayerCommands.vue';
   import SystemMail from './SystemMail.vue';
+  import ApprovalPanel from './ApprovalPanel.vue';
+  import { APPROVAL_STATUS_COLORS, APPROVAL_STATUS_LABELS, awaitsAnotherApprover, dualControl, type ApprovalView } from '/@/api/gm/approval';
   import { PLAYER_OPERATIONS } from '/@/api/gm/playerCommands';
   import {
     buildMailDraft,
@@ -388,6 +398,7 @@
     { value: 'DELIVERED', label: '已投递' },
     { value: 'REJECTED', label: '已拒绝' },
     { value: 'UNKNOWN', label: '结果未知' },
+    { value: 'DECLINED', label: '已驳回' },
   ];
   const serviceMessage = computed(() =>
     overviewLoading.value ? '正在检查邮件服务状态…' : overviewError.value || '邮件服务尚未接入或未启用，暂不能生成或发送邮件。'
@@ -416,7 +427,8 @@
   const retryingCommand = computed(() => reviewedCommand.value?.status === 'UNKNOWN' || reviewedCommand.value?.id === unconfirmedCommandId.value);
   const canSendReviewed = computed(() => {
     const command = reviewedCommand.value;
-    return !!command && hasPermission('gm:mail:send') && ['DRAFT', 'UNKNOWN'].includes(command.status);
+    // 自己发起、还没人批准的申请，开着双人复核时自己不能放行，按钮不显示（后台同样会拒绝）。
+    return !!command && hasPermission('gm:mail:send') && ['DRAFT', 'UNKNOWN'].includes(command.status) && !awaitsAnotherApprover(command);
   });
   const auditRecords = ref<GmCommand[]>([]);
   const auditTotal = ref(0);
@@ -562,14 +574,14 @@
 
   function statusLabel(status: string): string {
     return (
-      ({ DRAFT: '待确认草稿', SENDING: '发送中', DELIVERED: '已投递', REJECTED: '已拒绝', UNKNOWN: '结果未知' } as Record<string, string>)[status] ||
+      ({ DRAFT: '待确认草稿', SENDING: '发送中', DELIVERED: '已投递', REJECTED: '已拒绝', UNKNOWN: '结果未知', ...APPROVAL_STATUS_LABELS } as Record<string, string>)[status] ||
       status
     );
   }
 
   function statusColor(status: string): string {
     return (
-      ({ DRAFT: 'blue', SENDING: 'processing', DELIVERED: 'success', REJECTED: 'error', UNKNOWN: 'warning' } as Record<string, string>)[status] ||
+      ({ DRAFT: 'blue', SENDING: 'processing', DELIVERED: 'success', REJECTED: 'error', UNKNOWN: 'warning', ...APPROVAL_STATUS_COLORS } as Record<string, string>)[status] ||
       'default'
     );
   }
@@ -579,6 +591,7 @@
     overviewLoading.value = true;
     try {
       overview.value = await getGmOverview();
+      dualControl.value = overview.value?.dualControl === true;
       overviewError.value = '';
     } catch (error) {
       overview.value = undefined;
@@ -676,6 +689,16 @@
     } finally {
       if (version === auditHistoryVersion) auditHistoryLoading.value = false;
     }
+  }
+
+  /** 驳回或撤回之后：换上后台返回的最新状态，并刷新轨迹与列表。 */
+  async function onReviewedDeclined(command: ApprovalView) {
+    if (reviewedCommand.value?.id !== command.id) return;
+    reviewedCommand.value = command as GmCommand;
+    if (preparedCommand.value?.id === command.id) preparedCommand.value = command as GmCommand;
+    reviewConfirmed.value = false;
+    await loadAuditHistory(command.id);
+    await loadAudit();
   }
 
   async function refreshReviewedCommand() {

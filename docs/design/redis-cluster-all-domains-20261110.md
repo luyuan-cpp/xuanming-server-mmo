@@ -13,11 +13,11 @@
 1. **生产只剩三套 Redis Cluster。**
    - 玩家域集群 `redis-player`:玩家域加登录域,沿用已有设计;代码已落,还没有任何运行证据。
    - 新建控制集群 `redis-control`:除玩家域、登录域和 match 私有键之外的全部用途。
-   - match 私有集群 `redis-match-cluster`:已经是 Cluster,只统一版本。
+   - match 私有集群 `redis-match-cluster`:已经是 Cluster,统一版本;观战大厅的三把全服键拆桶,句柄也换成 `shared/clusterredis`(§4.9)。
    - 核心 `redis` / `redis-ha`、`redis-queue-g<N>`、`redis-ctl-g<N>` 退役,遗留的 `redis-rank.yaml` 删除。本机开发仍用单实例,但客户端走与集群相同的路径和守卫(standalone 模式)。
 2. **控制集群里,同一个多键操作的键共用一个 hash tag。** scene_manager 控制域、login 排队、gate 标记各自按 zone 打 tag,guild 缓存按帮或按玩家打,player_locator 的控制键共用一个 tag。盘点确认没有跨 zone、跨 tag 的原子操作需要拆(§3)。单键命令不强制带 tag。
 3. **扩容 = 加主节点 + 原子迁 slot**(Redis 8.10.x 的 `CLUSTER MIGRATION`)。zone、帮、玩家与唤醒分片随 slot 散到各主节点,数据和读写一起搬过去。**单个 zone 的控制域与排队各自仍落在一个槽上**,一个 zone 的上限是一整台主节点(可以把这个 zone 的槽迁到独占的主节点)。这是按 zone 原子提交的代价;再大就拆 zone,不拆脚本里的键。余量与到顶后的路线见 §6(2026-11-19 定案)。
-4. **唤醒频道改分片 Pub/Sub。** `assetop:wake` 按 `player_id % 64` 拆成 64 个频道,用 `SPUBLISH` 发布,分片规则与资产通道的工作分片相同。订阅侧的扇出今天随 zone 数增长(每个 zone 的 data_service 都订全部唤醒)。要等缺口第 25 条按分片分工、每个副本只订自己的分片,扇出才不随 zone 数增长(§4.6)。
+4. **唤醒频道改分片 Pub/Sub。** `assetop:wake` 按 `player_id % 64` 拆成 64 个频道,用 `SPUBLISH` 发布,分片规则与资产通道的工作分片相同。订阅只订本副本负责的片(2026-11-19 落码):每条唤醒只投给 3 个副本,扇出与副本数、zone 数无关(§4.6)。
 5. **客户端统一。**
    - Go:非玩家域句柄全部改成 `redis.UniversalClient`,用与玩家域同一个构造器(键守卫 + 结果未知不重放)。go-zero 的 Redis 句柄全部退役:go-zero 写死 `MaxRetries = 3`,没有配置项(§5.1)。这同时收掉[断线重连清单](infra-reconnect-overview.md)的 R8。
    - C++:scene 的两个 `RedisManager` 句柄合成一个 `RedisClusterClient`。gate、battle 不再连 Redis,它们今天只发 AUTH 和存活 PING。
@@ -28,11 +28,67 @@
    - 单 zone 排队再分片:2026-11-19 定案不做,每个 zone 一个有序集合加服务端按名次拉长轮询间隔与区服容量封顶,理由与余量见 §6.2。
    - 接入代理:理由同[玩家域设计](redis-player-store-cluster.md) §6.4。
 
+## 0a. 设计要点速览
+
+这一节把全稿里值得记住的做法集中列一遍:遇到什么问题、怎么做、为什么这样做、代价在哪。细节看「详见」指的小节。
+
+### 水平扩展怎么成立
+
+- 三套 Redis Cluster 各自加主节点、原子迁 slot 扩容。服务副本不存状态,只持句柄,照常按 CPU 加减。
+- **随 slot 散开的**:zone、帮、玩家、64 个唤醒分片、观战大厅的 48 个桶、每局的观战键。主节点从 M 台加到 2M 台,它们在每台上的负载各减一半。
+- **不散开的**:一个 zone 的控制域、排队、gate 标记、网关区桶各在一个槽上。这是按 zone 原子提交的代价,上限与出路见下面「容量边界」。
+
+### 键形与域
+
+| 问题 | 做法 | 为什么这样做,代价在哪 | 详见 |
+|---|---|---|---|
+| 只把地址指向集群:多键 Lua、事务、MGET 跨槽,报错或静默失效(排队入不了队,限流与 gate 过滤 fail-open) | 先改键形:同一个原子操作的键共用 hash tag `{族:身份}`,按 zone、帮或玩家打;单键命令不强制带 | Cluster 的原子操作只能在一个槽里。盘点确认没有跨 tag 的原子操作要拆,脚本逻辑不用动。按 zone 打还让 `death_at` 与「摘出负载集」落在同一条复制流里,切主不会只丢其中一个 | §2.3、§3、§4.1 |
+| 两个域的键发错句柄,开发环境(同一个单实例)不报错,上了集群才悄悄落在两边 | 域靠 tag 的形状区分,发送前守卫按句柄所属的域检查,单实例下同样生效。match 私有集群的 tag 形状与玩家域分不开,改用键前缀 `spectate:` | 错误在开发期和单测里就暴露。Go 与 C++ 各一份族表,金样测试逐字核对 | §3.1、§5、§4.9 |
+| 多键命令的键「碰巧同槽」 | 控制集群要求多键命令是同一个 tag,不只是同槽 | 不同 tag 碰巧同槽时 Redis 照常执行,代码就依赖了哈希巧合,换一个 zone 号或帮会号就变成 CROSSSLOT | §5.1 |
+| 场景键原来不带 zone,只给场景号的入口靠另一把键查它在哪个 zone | zone 成为键地址的一部分;删掉 `scene:<id>:zone` 与 `foreign` 分支;别的 zone 的场景一律读成「不存在」,而且「不存在」不走销毁 | 原来能读到别的 zone 的场景是部署巧合(同一个实例),不变量本来就禁止依赖它 | §3.3 |
+
+### 强一致
+
+| 问题 | 做法 | 为什么这样做,代价在哪 | 详见 |
+|---|---|---|---|
+| 读超时或 EOF 之后客户端自动重发,已经执行的 Lua 或计数命令被再跑一遍(go-zero 写死重试 3 次,没有配置项) | 统一构造器 `shared/clusterredis`:节点客户端不重试,结果未知原样报给调用方;go-zero 的 Redis 句柄全部退役 | 「执行了没有」只有调用方知道怎么处理(重查、按令牌条件删除、等租约到期)。代价:没有 go-zero 的熔断,超时成了显式的 1 秒 | §5.1、§4.9 |
+| 集群客户端的管道在内部遇到 EOF 或超时会整批重发,钩子拦不到 | 非幂等命令(EVAL、INCR、`SET NX` 等)不许进管道,守卫当场拒绝。确实要成批发的(login 放行),先按槽取主节点,用钉在那个节点上的专用句柄发 | 管道里只剩幂等命令,重发无害。代价:帮会写榜由一批变成逐条往返 | §4.3、§4.8、§5.1 |
+| 选主之后的写要挡住旧主 | 锁键与数据同 tag,写脚本先核对锁键的值再写;不加任期号 | 任期号放在 Redis 里,切主可能丢掉最后一次 INCR,任期会倒退;核对锁值不需要第二把键 | §4.7、§13 |
+
+### 热点与扇出
+
+| 问题 | 做法 | 为什么这样做,代价在哪 | 详见 |
+|---|---|---|---|
+| 集群里普通 PUBLISH 经集群总线广播到全部节点,不随节点数扩展 | 唤醒改分片 Pub/Sub:`SPUBLISH assetop:wake:{aw:<player_id % 64>}`,64 片,与资产通道的工作分片同一规则 | 只用一个分片频道会全部落在一个槽上;64 片随 slot 散到各主节点 | §4.6 |
+| 每个副本订全部唤醒,每条唤醒投给 4 + 2Z 个副本(Z 是 zone 数) | 订阅只订本副本负责的片:与重投同一张分工表,data_service 另开一张全服成员表 | 每条唤醒只投 3 个副本,与副本数、zone 数无关。圈多了只是那一片暂时收不到唤醒,退回重投的退避,不丢行 | §4.6 |
+| go-redis 在集群上自动重订分片频道会连到随机节点,收包循环吞掉 `-MOVED`,订阅静默失聪 | 订阅确认、收包、空闲 PING 与重订都自己做:迁槽、`-MOVED`、断线或没有回音就整条重订,退避 1 秒起翻倍、封顶 30 秒 | 失聪没有任何报错,只能靠自己的健康检查发现。另有指标 `assetop_wake_subscribed_shards`,各副本之和应为 64 | §4.6 |
+| 观战大厅三把全服 ZSET 各是一个键,每局开局、终局都写,加主节点分不开 | 每把按 `battle_id % 16` 拆 16 个桶;跨桶的读放进一个 pipeline;列表读加每副本 1 秒的进程内缓存,同一时刻只有一个请求回源 | Redis 读量与玩家请求量无关;随机选场按累计和落桶,每场被挑中的概率仍然均匀。代价:列表最多旧 1 秒;全服配额「数全服、没满就占」拆成三步,并发时宁少不多 | §4.9 |
+| 名字缓存一次 MGET 最多 500 个不带 tag 的键 | 改成单键 GET 的管道,不用按槽分组的 MGET | 500 个 id 里至少两个同槽的概率约 99.9%,同槽的那一组是不带 tag 的多键命令,守卫拒绝后整批退化成回源 | §4.8 |
+| 帮会榜用 SCAN 找各区的榜键,集群里 SCAN 只扫一个节点 | 区清单从 SQL 取,逐区处理;榜的三把键与维护锁按区同 tag,维护锁每区一把 | 不依赖扫库;重建一个区不挡别的区 | §4.8 |
+| 网关限流的两桶脚本跨槽 | 拆成两段单键脚本:先扣 IP 桶,再判区桶,区桶空时退还 IP 令牌 | 退还没执行时多扣一个令牌,偏严不偏松。不给 IP 桶按 zone 打 tag:那样每个 zone 各有一个 IP 桶,语义变了 | §4.5 |
+
+### 容量边界
+
+| 问题 | 做法 | 为什么这样做,代价在哪 | 详见 |
+|---|---|---|---|
+| 一个 zone 的排队在一个槽上:10 万人固定 2 秒轮询约 5 万次脚本/秒,接近单台主节点饱和 | 不拆分片。服务端按名次拉长下发的 `RetryAfterMs`(前 2000 名 2 秒,之后与名次成正比,上限是 30 秒与 AdmitTTL 一半里较小的),再加区服容量封顶 | 单一有序集合的名次与总数出自同一个快照,拆片之后就不是了。拉长后 10 万人约 6000 次/秒,100 万人约 3.6 万次/秒。前提是客户端按 `retry_after_ms` 轮询;不照做只是负载回到固定间隔,不影响正确性 | §6.2 |
+| 一个 zone 的控制域超过一台主节点 | 把这个 zone 热的那个槽迁到独占的主节点;再大就拆 zone(开新区),不拆脚本里的键 | 控制域脚本把场景键与 zone 级集合绑在一起,拆 tag 就丢原子性。多开分线没有用:同一个 zone 的各条线共用一个 tag | §6.3 |
+| 扩容时数据怎么搬 | 加主节点,原子迁 slot(`CLUSTER MIGRATION`);三套集群同一个 8.10.2 镜像摘要 | 数据与读写一起搬。加主节点不增加单节点的连接数,只增加每个客户端进程的连接数 | §6.1、§7 |
+
+### 连接、部署与防回退
+
+| 问题 | 做法 | 为什么这样做,代价在哪 | 详见 |
+|---|---|---|---|
+| gate、battle 连着 Redis,却只发 AUTH 和 PING | 删掉它们的 Redis 连接、配置与口令环境变量 | 少一类连接,少一处口令分发 | §4.2 |
+| 连接池用客户端缺省大小(10 × GOMAXPROCS),随 CPU limit 漂移,总账对不上集群 | 每个句柄的池上限写在服务 yaml 里;ConfigMap 与连接总账读同一个键,不是正整数就在任何集群写操作之前拒绝 | 总账读到的就是集群里生效的值。每主节点连接数 = Σ(Go 服务副本数 × 每节点池上限)+ scene 进程数 + 网关副本数 + 订阅连接 | §6.1、§7、§10.9 |
+| 两套集群各写一份清单会漂移 | 一份模板渲染两次,差别只在 `Get-RedisCluster -Kind` 一处;开控制集群必须同时开玩家域集群 | 拓扑、变更闸、就绪等待、清库是同一组函数 | §7、§10.6、§10.7 |
+| 换句柄之后有人把旧句柄或跨域的键写回来 | 测试夹具用生产同一个构造器(带守卫);模块扫描用例不许再导入 go-zero 的 Redis 包;跨语言常量由 Go 测试逐字解析 C++ 头 | 回退在单测里就变红。扫描根目录写成 `../..` 时它的名字是 `..`,按「点开头」跳目录要排除根,否则整棵树被跳过 | §10.4、§10.9、§3.1 |
+
 ## 1. 需求与范围
 
 - 控制面设计稿的 11-05 原稿 §4.1 选「按 zone 组分实例、不上 Cluster」,§5 写了「以后一个组装不下再按 zone 改 tag 上 Cluster」(该稿 2026-11-19 已按现状改写)。本稿就是做这一步,时间提前到首次上线之前。
 - 范围是服务端对 Redis 的全部使用:C++ 的 gate、scene、battle,各 Go 服务,本仓 Java 网关,运维与压测脚本,K8s 清单。
-- 玩家域与登录域的键形不在本稿。match 私有键只统一版本;观战大厅的三把全局键单独协调(§4.9)。
+- 玩家域与登录域的键形不在本稿。match 私有键的键形不变,只统一版本、换句柄;观战大厅的三把全局键单独协调(§4.9)。
 - Java 版服务器在独立仓,本稿不写它的代码,只登记待做(§11)。
 
 ## 2. 现状(2026-11-10 盘点)
@@ -310,6 +366,19 @@
 
 - 每局的键已带 `{<battle_id>}`,多键 DEL 同槽 [C]。
 - 镜像从 7.2 升到与另外两套相同的 8.10.2 摘要,扩缩容走原子迁移。
+- **句柄换成 `shared/clusterredis`**(2026-11-26 落码,未编译;落码细节见 §10.9)。原来 `MatchRedis` 是 go-zero 的集群句柄,写死重试 3 次:读超时或 EOF 之后会把已经写出的命令再发一遍(R8),§5.1 定的是这类句柄全部退役,初稿的退役清单漏了它。
+  - **重发的后果(逐条看过它的写命令)**:升档、记中继 gate 两段 Lua 重发无害;升 L2 的尝试租约(`SET NX`,值写死 `"1"`)重发后被当成没拿到,多等一个 3 秒租约;抢 L2 配额的 Lua 重发回「已在集合里」,跳过全服复数,极少数并发下会比上限 B 多占一个名额。都是协调数据,不丢权威数据。
+  - **键策略** `clusterredis.MatchPrivateKeys`:键形规则同玩家域(每个键带 hash tag、多键命令同 slot、不出现控制集群的族 tag),另加一条——键必须以 `spectate:` 开头。match 同时持有玩家域句柄,两个域的 tag 都可以是纯数字(`{<battle_id>}` 与 `{<player_id>}`),靠 tag 形状分不开;玩家域的键误走私有句柄,由前缀当场拒绝。反方向(`spectate:*` 键误走玩家域句柄)守卫分不出,靠这些键只在 `spectate_*.go` 里拼、只经 `svcCtx.MatchRedis` 发出来保证。
+  - **配置**:`MatchRedis` 与 `PlayerRedis` 同一种配置段(`Addrs`、`Cluster`、`PoolSizePerNode`、超时)。没写 `Addrs` 时落到 `Redis` 段那一个实例(`EffectiveMatchRedis`,本地单库形态,与 `EffectivePlayerRedis` 同口径)。K8s 渲染写六个 Pod 作种子、`Cluster: true`,池上限镜像服务 yaml 的 `MatchRedis.PoolSizePerNode`。这套集群不设口令。
+  - **连接总账**:池上限现为 20,与换句柄前按 10 × GOMAXPROCS(G = 2)记的数相同,每主节点的连接数不变;区别是它成了显式上限,不再随 CPU limit 漂移,总账里从此没有缺省大小的池。
+  - **行为变化**:
+    - 结果未知的命令不再由客户端重发,原样报给调用方。调用方本来就按失败处理:留在原档、只记日志,或 fail-closed 报错。
+    - `spectateRedisOpTimeout` 的 ctx 截止现在同时约束 socket 读写(句柄开着 `ContextTimeoutEnabled`)。
+    - 读写与取连接超时由 go-zero 下的 3 秒 / 4 秒变成 1 秒(`clusterredis` 缺省;K8s 上 match 的玩家域句柄早已是这个口径)。
+    - go-zero 句柄自带的熔断没有了,与其余换过句柄的服务相同。
+    - 构造时不再探活。go-zero 的 `MustNewRedis` 连不上会让 match 起不来;现在 match 照常起服,观战命令各自报错,排队与成局不受影响(它们的权威在 SQL)。
+  - **守卫**:`TestMatchModuleDoesNotImportGoZeroRedis` 扫整个 match 模块,不许再导入 go-zero 的 Redis 包。
+  - Java 版不加待做行:这是 Go 侧 go-zero 句柄的问题,Java 的句柄与重放口径记在[断线重连总览](infra-reconnect-overview.md)的 Java 一节。
 - **观战大厅三把全服 ZSET 拆桶**(2026-11-19 落码,未编译;负责人 11-19 要求不等压测先修)。原来活跃集合 `spectate:battles:active`、L2 配额 `spectate:bcast:active`、赛事局索引 `spectate:featured:active` 各是一个键,每局开局、终局都要写它们,是三个单键热点,加主节点分不开。
   - **键形**:每把按 `battle_id % 16` 拆成 16 个 ZSET,`spectate:battles:active:{sba:<k>}`、`spectate:bcast:active:{sbc:<k>}`、`spectate:featured:active:{sft:<k>}`(k = 0~15)。桶自带 tag,48 个桶落 48 个不同的 slot(`TestSpectateIndexBucketsSpreadAcrossSlots` 按 CRC16 逐个核对)。桶数是 `go/match/internal/logic/spectate_index.go` 的常量 `spectateIndexBuckets`,键只在 `spectateIndex.bucketKey` 一处拼。**上线后改桶数要停写迁移**:成员按旧桶数落的桶,换了桶数之后 ZADD / ZREM 找不到它,只剩按分数的定期清理能摘掉,L2 配额也会少算。
   - **写**:ZADD / ZREM 只写本局所在的那个桶。
@@ -330,10 +399,11 @@
 - **构造器**:沿用 `shared/playerredis` 的实现(UniversalClient、单机 / 集群同一套守卫、结果未知不重放、`MGetBySlot`、`ScanEachMaster`、`MasterForKey`)。
   - 包名在第 1 批改成 `shared/clusterredis`,`playerredis` 保留类型别名,现有导入不用改;
   - 新代码从 `clusterredis` 导入。
-- **两种键策略**:
+- **三种键策略**:
   - 玩家域策略不变:所有键带玩家域或登录域的 tag;
-  - 控制集群策略:多键命令同 tag 且是登记过的族前缀,单键可以不带 tag,任何命令出现玩家域 tag 形状都拒绝。
-- **go-zero 句柄全部退役**:scene_manager 的 `Redis` / `CoreRedis`、friend、data_service 名字缓存、chat。
+  - 控制集群策略:多键命令同 tag 且是登记过的族前缀,单键可以不带 tag,任何命令出现玩家域 tag 形状都拒绝;
+  - match 私有集群策略(2026-11-26):键形规则同玩家域,且每个键以 `spectate:` 开头(§4.9)。
+- **go-zero 句柄全部退役**:scene_manager 的 `Redis` / `CoreRedis`、friend、data_service 名字缓存、chat,以及 match 的 `MatchRedis`(2026-11-26 补上,§4.9)。
   - 原因:go-zero v1.10.0 写死 `maxRetries = 3`(`core/stores/redis/redisclientmanager.go:14`,集群版 `redisclustermanager.go:33`),没有配置项 [C];
   - 「结果未知不重放」必须由我们的构造器把节点客户端的重试关掉;
   - 只给 go-zero 改 `Type: cluster` 收不掉 R8。
@@ -477,8 +547,9 @@ Lettuce 集群客户端(限流自建的那一个,加上 Spring 自动配置的�
 | 6b-1 | 各服务接控制集群:ConfigMap 渲染 `ControlRedis`、C++ node-config 的 `control_redis`、gate / battle 去掉 Redis 口令环境变量、Java 网关集群节点、gate 排空脚本认集群;口令按服务取控制端点的 Secret;开控制集群必须同时开玩家域集群;总账按域拆;退役 queue、ctl 实例与 `-RedisSplit` 等五个参数;集群成员反亲和按档位渲染;部署契约测试 | 22 | 2b~5 批定下各服务的配置段;6a;第 3 批(C++ 契约) | 代码写完,未运行(2026-11-13~19,「控制面按 zone 化」会话)。落码与偏差见 §10.7,验证命令见 PROGRESS 2026-11-19「全部 Redis 上 Cluster 第 6b-1 批」 |
 | 6b-2 | 退役 staging / prod 的核心单实例:核心只在 dev 没开控制集群时部署、`-RedisReplicas` 与 `redis-ha.yaml`、不用核心时不再要求 `MMORPG_REDIS_PASSWORD`;告警头注释与其余手册里的 queue / ctl / 高可用说明;附带删 login 的 `Node.QueueRedis`(单独验证) | 23 + 7 | 6b-1 | 代码写完,未运行(2026-11-19,「控制面按 zone 化」会话)。落码、定案与偏差见 §10.8,验证命令见 PROGRESS 2026-11-19「全部 Redis 上 Cluster 第 6b-2 批」 |
 | 7 | 文档改写:控制面设计稿 §1 / §4 / §5 / §6,玩家域设计 §1 / §5.1 域表 / §10.2,TiDB 总体方案 §2.1 / §8 / §8.4,G4a 设计稿(标历史稿)与索引,AGENTS.md §6 压测口径,`tools/scripts/README.md` 的本机开发集群;本稿 §6.2 / §6.3 / §12 按负责人 11-19「不等压测,按最标准的定」改成定案 | 10 | 6 | 已完成(2026-11-19,只改文档,见 PROGRESS 同日「全部 Redis 上 Cluster 第 7 批」)。`deploy/k8s/README.md` 与 `deploy/k8s/AGENTS.md` 由第 6b 批会话随渲染改,本批没碰 |
+| 8 | match 私有集群句柄换成 `shared/clusterredis`(§4.9):新键策略 `MatchPrivateKeys`;`MatchRedis` 配置段改形;观战逻辑的调用点与测试夹具;match 的 ConfigMap 渲染、连接池镜像、`redis-match-cluster` 连接总账与部署契约测试 | 26 + 10 | 1;观战拆桶(§4.9) | 代码写完,未编译未运行(2026-11-26,「Redis 分布式水平扩展」会话;11-26 复核发现初稿的退役清单漏了它,负责人同日答「改吧」)。分两批:Go 26 个文件、部署与文档 10 个文件;落码与偏差见 §10.9,验证命令见 PROGRESS 2026-11-26「全部 Redis 上 Cluster 第 8 批」 |
 
-合计约 170~200 个文件。
+合计约 170~200 个文件(不含第 8 批)。
 
 ### 10.1 第 2a 批动手前的协调记录(2026-11-11)
 
@@ -685,6 +756,23 @@ Lettuce 集群客户端(限流自建的那一个,加上 Spring 自动配置的�
 - **其余**:告警头注释(`redis-alerts.yaml` 只剩核心与 match 集群,`redis-control-alerts.yaml`、`redis-player-alerts.yaml`)、发布清单、排队压测手册、归属手册与告警里的 queue / ctl / 高可用说明按现状改写;`redis_exporter_contract` 与 `redis_maxclients_contract` 去掉高可用清单;scene_manager 的 `internal/config/config.go` 与 `etc/scene_manager_service.yaml` 里指向已删函数 `Get-OwnerEpochMintWaitAOFNumReplicas` 的两处注释改成按玩家域取值(只改注释)。
 - **验证**:未运行,命令见 PROGRESS 2026-11-19「全部 Redis 上 Cluster 第 6b-2 批」。
 
+### 10.9 第 8 批的落码与偏差(2026-11-26,「Redis 分布式水平扩展」会话)
+
+- **起因**:11-26 负责人问「逻辑代码都做完了吗」,按 HEAD 逐批抽查时发现 go/match 还在导入 go-zero 的 Redis 包。初稿 §0 写的是 go-zero 句柄全部退役,§5.1 的清单却没列 match(当时把它算成「已经是 Cluster,只统一版本」);R8 的剩余部分又约定由本稿的句柄替换批收掉(§13)。负责人答「切好了,改吧」。
+- **共享包**(`go/shared/clusterredis`):`KeyPolicy` 加 `MatchPrivateKeys`,常量 `MatchPrivateKeyPrefix = "spectate:"`,错误 `ErrNotMatchPrivateKey`;玩家域的检查函数改名 `checkTaggedSameSlotKeys`,两个域共用,域名只进错误文本。C++ 不连这套集群,`KeyDomain` 不用跟。用例 `match_policy_test.go`(规则表与线上守卫)。
+- **配置**(`go/match/internal/config`):`MatchRedis` 的类型由 go-zero 的 `redis.RedisConf` 换成 `clusterredis.Config`;`EffectiveMatchRedis` 与 `EffectivePlayerRedis` 共用 `redisSectionInstance`(没写 `Addrs` 时的落点),回落口径的常量改名 `redisSectionFallback*`;`Validate` 加 `MatchRedis.ValidateSection`(`Cluster: true` 却没写种子,加载期拒绝)。go-zero 的 conf 不拒未知键:旧形状的配置(`Host` / `Type`)加载不报错,效果是没写 `Addrs`、私有键落到 `Redis` 段的实例上;K8s 上那台在 staging / prod 不存在,失败可见。仓内 yaml、K8s 渲染与契约测试同批改成新形状。
+- **句柄**(`go/match/internal/svc`):`ServiceContext.MatchRedis` 的类型是 `redis.UniversalClient`;`NewRedisHandles` 改名 `NewMatchRedis`,返回错误、不 panic;关停时与玩家域句柄一起 `Close`。观战索引成员的类型由 go-zero 的 `redis.Pair` 换成 `svc.SpectateIndexMember{Member, Score}`。
+- **调用点**(`go/match/internal/logic`):`spectateIndex` 加 `add` / `remove`(ZADD / ZREM 本场所在的桶),十处重复的写法收成这两个方法;其余按 go-redis 的方法名逐处改写,语义不变(`GET` 的键不存在仍当成直连档,`EXISTS` 按返回 1 判存在)。原来不带 ctx 的调用(终局清理、赛季锦标赛写赛事局索引)现在各自带 `spectateRedisOpTimeout` 的截止,一次清理里的几条命令共用一份。管道里只有幂等命令,非幂等命令(三段 Lua、`SET NX`)都是单条发送,守卫也不许它们进管道。
+- **测试**:夹具用生产同一个构造器(`clusterredis.New(…, MatchPrivateKeys)`),键发错句柄在单测里当场报错;新用例 `TestEffectiveMatchRedis`、`TestValidateRejectsMatchRedisClusterWithoutSeeds`、`TestNewMatchRedisFallsBackToRedisSection`、`TestNewMatchRedisSeparatesWhenConfigured`、`TestNewMatchRedisRejectsInvalidConfig`、`TestMatchModuleDoesNotImportGoZeroRedis`、`TestMatchPrivateKeysRules`、`TestMatchPrivateClientGuardsOnTheWire`。
+- **顺带修的一处**:scene_manager 的 `TestControlRedisHandleContract_NoGoZeroRedisInModule`(第 2b 批)把根目录 `../..` 当成点开头的目录跳过了,整棵树一个文件都没扫,`scanned > 50` 的断言必红。加上 `path != root`;match 的同类用例直接按正确写法写。
+- **部署**:`New-PlayerRedisConfigYaml` 多认一个段名 `MatchRedis`;新函数 `Get-RedisMatchPoolMirror` 读服务 yaml 的 `MatchRedis.PoolSizePerNode`(不是正整数即 throw),ConfigMap 与连接总账读同一个键;`Get-RedisMatchConnectionLedgerInputs` 的 match 行由一个缺省池改成显式池。契约测试改三处:ConfigMap 的种子逐个核对、`Cluster: true`、池上限镜像、旧键不再渲染;总账行的形状;副本数核对那段的注释。
+- **偏差**:
+  - 对负责人估的是 15~20 个文件,实际 36 个:测试夹具分散在 11 个测试文件里,部署侧还有连接总账与 README。按每批不超过 30 个拆成 Go(26)与部署、文档(10)两批,中间通读过一遍 Go 批的 diff。
+  - 没有做「match 私有键换一套 tag 形状、三个域全靠 tag 区分」:要改全部本场键的键名,换不来比前缀规则更多的保护,不在本批。
+  - 没有给尝试租约换成带持有者标识的值:结果未知时白占 3 秒,与失败不提前释放是同一种退避,不值得多一段核对脚本。
+- **提交情况**:11-26 21:24 的批量提交 `8a6697af0` 把当时已改完的 23 个 Go 文件带进了 main;仓内 yaml(`go/match/etc/match_service.yaml`)、scene_manager 那条用例、两处测试夹具的注释、部署脚本、契约测试与文档在它之后改,留在工作区。**两部分要一起用**:只有 `8a6697af0` 时,K8s 渲染出的还是旧形状的 `MatchRedis`,match 的私有键会指向不存在的核心实例。
+- **验证**:未编译、未运行,命令见 PROGRESS 2026-11-26「全部 Redis 上 Cluster 第 8 批」。
+
 ## 11. Java 版(AGENTS.md §12)
 
 - Java 版服务器(独立仓)是 Redisson 单实例。它的 `PARITY.md` 第 369 行已有「Redis Cluster」待做行 [C]。
@@ -695,7 +783,7 @@ Lettuce 集群客户端(限流自建的那一个,加上 Spring 自动配置的�
 
 1. **单个 zone 的上限是一整台主节点**(§6.2、§6.3,2026-11-19 定案)。排队不拆分片,靠按名次拉长轮询间隔与区服容量封顶压住;控制域到顶时把这个 zone 的槽迁到独占的主节点,再大就拆 zone,不拆脚本里的键。余量是推算 [I],压测只复核;按主节点 CPU / ops 的告警还没有,现有信号只有内存两条(§6.3)。
 2. **只给场景号的入口改了语义**(§3.3)。逐个入口核对并补用例;「不存在」不得走销毁。
-3. **唤醒扇出依赖缺口第 25 条**(§4.6)。第 25 条落地前,唤醒在 2000 万 PCU 口径下不可扩展。
+3. **唤醒扇出**(§4.6):2026-11-19 已按分工表改成只订本副本负责的片,每条唤醒只投 3 个副本。代码未编译,真集群上的重订(迁槽、杀主)还没有运行证据。
 4. **排队拉长轮询间隔的前提是客户端遵守 `RetryAfterMs`**:客户端契约写明按它轮询(网关 `AssignGateRequest` 的注释:基础间隔 = max(retry_after_ms, 下限)),Unity 客户端是否照做没在客户端仓核对(要客户端任务授权)。不照做时退回固定间隔,不影响正确性,只是排队那一片的负载回到固定 2 秒的口径(§6.2)。
 5. **多个会话正在改同一批文件**:gate 排空与停写、scene_manager 拆除与归属、`k8s_deploy.ps1` 的总账、Hiredis 生命周期、login 排队上限、观战、shared/leader(R7)。每批动手前核对工作区、互发文件清单。
 6. **依赖的玩家域集群代码与 C++ 路由层都还没有运行证据。**
@@ -726,3 +814,5 @@ Lettuce 集群客户端(限流自建的那一个,加上 Spring 自动配置的�
 - 2026-11-19:第 6b-1 批落码(未运行)。§7 补成员反亲和与两套的搭配;§10 表第 6b 行拆成 6b-1(本批)与 6b-2(退役 staging / prod 的核心单实例),新增 §10.7。
 - 2026-11-19:第 7 批(只改文档)。负责人 11-19「不等压测,按最标准的定」:§6.2 排队定为不拆分片(每 zone 一个有序集合 + 按名次拉长 `RetryAfterMs` + 区服容量封顶),10 万人的轮询量按 `retry_after.go` 的估算改成约 6000 次/秒;§6.3 定为单 zone 的槽可迁到独占主节点、再大拆 zone、不拆脚本里的键,写明余量与告警口径;§0 第 3、7 条,§7「AGENTS.md §6」一条,§12 第 1、4 条同步;§10 表第 7 行改已完成;状态行更新。
 - 2026-11-19:第 6b-2 批落码(未运行)。§10 表第 6b-2 行改状态与内容(match / mail 回落段定案为不换、compose 不另加控制集群、附带删 login 的 `Node.QueueRedis`),§10.7 的偏差标明由本批收掉,新增 §10.8。
+- 2026-11-26:第 8 批落码(未编译未运行)。match 私有集群的句柄由 go-zero 换成 `shared/clusterredis`:§0、§1、§4.9、§5.1 改正文(三种键策略、go-zero 退役清单补上 match),§10 表新增第 8 行,新增 §10.9(落码、偏差、提交情况;顺带修 scene_manager 那条扫描用例)。
+- 2026-11-26:新增 §0a「设计要点速览」(水平扩展怎么成立、键形与域、强一致、热点与扇出、容量边界、连接部署与防回退,每条写问题、做法、原因与代价);§0 第 4 点与 §12 第 3 条的唤醒扇出改成现状(11-19 已按分工表只订本副本负责的片)。

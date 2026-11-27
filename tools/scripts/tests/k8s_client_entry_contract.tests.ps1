@@ -2166,6 +2166,9 @@ $WrapperPairs = @(
             'LoginPassportIssuer', 'LoginPassportClientId', 'LoginPassportEndpoint', 'LoginPassportAdminClientId',
             # 实名与防沉迷的六个参数,口径同上(漏传 = 重新部署时关掉或改掉线上的防沉迷)。
             'LoginNppaAppId', 'LoginNppaBizId', 'LoginAntiAddictionExtraPlayDays', 'LoginNppaCheckUrl', 'LoginNppaQueryUrl', 'LoginNppaLoginoutUrl',
+            # content-guard 外部平台审核的两个参数与它的防误关确认开关:不粘滞,包装入口漏传 = 经它重新部署时被防误关闸拦下,
+            # 而确认开关传不下去就关不掉、改不了。
+            'ContentGuardWeChatAppId', 'ContentGuardDouyinAppId', 'ConfirmContentGuardPlatformChange',
             # 托管内部密钥的修复开关:漏传 = 经包装入口修复不了不一致的值。
             'ResyncDomainServiceSecrets',
             # 配置表热更分发 sidecar(table-sync):漏传 = 经包装入口部署不挂 table-sync。
@@ -2211,6 +2214,7 @@ Test-Case 'k8s_deploy.ps1 的集群外入口参数名与类型(包装层与文�
         LoginPassportIssuer = 'String'; LoginPassportClientId = 'String'; LoginPassportEndpoint = 'String'; LoginPassportAdminClientId = 'String'
         LoginNppaAppId = 'String'; LoginNppaBizId = 'String'; LoginAntiAddictionExtraPlayDays = 'String'; LoginNppaCheckUrl = 'String'
         LoginNppaQueryUrl = 'String'; LoginNppaLoginoutUrl = 'String'; ResyncDomainServiceSecrets = 'SwitchParameter'
+        ContentGuardWeChatAppId = 'String'; ContentGuardDouyinAppId = 'String'; ConfirmContentGuardPlatformChange = 'SwitchParameter'
         TableSyncImage = 'String'; TableSyncS3Endpoint = 'String'; TableSyncS3Bucket = 'String'; TableSyncS3Region = 'String'
         TableSyncS3SecretName = 'String'; TableSyncDevFixture = 'SwitchParameter'
         WsEdgeHost = 'String'; WsEdgeTlsSecret = 'String'; WsEdgePodCidrs = 'String'; WsEdgeReplicas = 'Int32'; WsEdgeServiceType = 'String'

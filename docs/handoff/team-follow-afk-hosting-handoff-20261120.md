@@ -36,7 +36,7 @@
     - `Assets/Scripts/UI/Ugui/WorldHudNavigation.cs`
     - `tools/gen_proto.ps1`、`tools/gen_messageids.ps1`
   - 多个会话共用主工作区,这些文件里可能混有别的会话的改动。提交时按内容分清,只提交本线的部分,而且只在负责人要求时提交。
-- **剩下的全是执行**:改 xlsx、导表、协议生成、编译、单测、冒烟、联机验收;失败时按根因修。
+- **剩下的全是执行**:改 xlsx、导表、协议生成、编译、单测、冒烟、联机验收。**代码已改完,Gemini 只验证**(2026-11-26 复核:本单不再有交给 Gemini 的代码改动,§4 的 robot 注释也已改好):跑红要改代码时,保留首错原文与复现命令停下,交回 Claude 改(负责人 2026-11-26 定:逻辑代码由 Claude 改)。
 - **一条都没验证过**:`build/verification/` 最近一次运行是 11-18;本线用例名(`HostedPlacement*`、`ConnectionLostHoldAfkPassEcs.*`、`BuffKeepOnLogoutTest.*`、`AfkPassSystemTest.*` 等)没有任何运行记录。11-06 APS 快照里 `aoi_test` 84 条通过的记录在之后的改动面前已作废。
 
 ## 1. 开工前必读与规矩
@@ -52,9 +52,9 @@
   - `run_cpp_tests.ps1 -Build` 不重编库:改了库要先整解,再跑测试。
   - 新增 `.cpp` 只登记 `.vcxproj` / `.filters`;`CMakeLists.txt` 由 `build_linux.sh` 按 vcxproj 生成,别手改。
 - 失败时的做法:
-  - 保留第一条编译错误(文件:行)或完整的失败输出。
-  - 修根因。不注释断言、不放宽阈值、不跳测试、不连续自动重试。
-  - 报错落在别的会话正改的文件里,先 `git diff` 分清是谁的改动;不是本线的就原样记录、不修。
+  - 保留第一条编译错误(文件:行)或完整的失败输出,这一步停在这里。
+  - 不自己改代码:把原文和复现命令写进 PROGRESS,交回 Claude 按根因改。不注释断言、不放宽阈值、不跳测试、不连续自动重试。
+  - 报错落在别的会话正改的文件里,先 `git diff` 分清是谁的改动;不是本线的就原样记录。
 - 游戏未上线,玩家数据可以全部清空。冒烟前按 `AGENTS.md` §6.2 清 Redis(`dev_tools.ps1 -Command redis-wipe-local -ConfirmWipeAllRedis`)、MySQL、etcd,并重置 Kafka offset。
 - 结果写进 `docs/PROGRESS.md`:**在文末追加新条目,不改旧条目**。标题写「Gemini:… 验证」,列出命令、通过数和失败原文摘要。日志放 `build/verification/<运行名>/`。
 - Java 版不写代码。负责人定「java 留到 todo」,Java 仓 `PARITY.md` 已登记待做。
@@ -95,7 +95,7 @@
    - 有别的会话未提交的表改动时,停下报告,不整批导出。
 2. **xlsx**:
    - 先跑 `python tools/scripts/afk_pass_xlsx_patch.py new-tables`,再跑 `python tools/scripts/afk_pass_xlsx_patch.py tip-codes`。
-   - 32000 段被占时,改脚本顶部的 `TIP_BASE`,并同步 `docs/design/afk-monthly-card.md` §4.5。
+   - 32000 段被占时停下,保留脚本的报错原文,交回 Claude 改脚本顶部的 `TIP_BASE` 并同步 `docs/design/afk-monthly-card.md` §4.5(Gemini 不改脚本)。按本单开头 11-22 的记录,第 1~4 步已落盘,通常不会再走到这里。
 3. **导表**:
    - `dev.bat gen`
    - `py tools/data_table_exporter/tools/gen_schema_index.py`
@@ -179,9 +179,9 @@
   - 客户端开发包的本地 GM 面板**没有**设月卡按钮,这是定案。
 - **协议生成用默认配置**。11-06、11-12 两条写的是 `-ConfigPath … proto_gen.no-unity.yaml`,那是客户端授权之前的口径。
 - **robot 冒烟不再需要直线 72 米**。11-19 第一条里的这个要求,已被同日「遗留项清零」改成分步走,每步 16 米。
-- **robot 里有过时的注释**(只是注释,不影响行为;请顺手改成 60,并说明是分步走):
-  - `robot/team_follow_smoke_scenario.go` 文件头第 7、14 行写的「>= 12」,实际常量 `teamFollowSmokeSeparation` 是 60。
-  - `robot/etc/team_follow_smoke.yaml` 文件头的 F1「离 B 12 以上」与前置 4「走出 12 以上」。
+- **robot 里过时的注释:已改,不用再动**(2026-11-26 核对当前文件):
+  - `robot/team_follow_smoke_scenario.go` 文件头 F1、F6 两行已写「>= 60」「每步 16」,与常量 `teamFollowSmokeSeparation = 60`、`teamFollowSmokeStride = 16` 一致。
+  - `robot/etc/team_follow_smoke.yaml` 文件头的 F1 与前置 4 已写「60 以上(每步 16)」。
 
 ## 5. 风险与要特别看的
 

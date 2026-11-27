@@ -1,0 +1,28 @@
+# 抓 table-sync sidecar 自己的指标(docs/design/config-table-hot-reload.md §11)。
+# 安装方式(和 table-bundle-alerts.yaml 一起装):
+#   kubectl apply -n observability -f deploy/k8s/table-sync-podmonitor.yaml
+#
+# 为什么要单独一份:sidecar 的指标(table_sync_etcd_last_read_timestamp_seconds,TableSyncStale 告警靠它)在 sidecar 自己的
+# 9099 端口上,而 Pod 上的 prometheus.io/* 注解只能指一个端口,指的是业务容器的指标端口。只按注解抓取,永远抓不到 sidecar,
+# TableSyncStale 就是哑的:表达式没有数据不报错,和「一切正常」长得一样。
+#
+# 怎么选中:selector 为空 = 所有 namespace 的所有 Pod,Prometheus Operator 再按端口名只留带 table-sync-http 端口的容器,
+# 不用给 gate / scene / battle / 各 Go 服务另加标签。端口名与 tools/scripts/k8s_deploy.ps1 的 New-TableSyncSidecarContainerYaml
+# 一致,契约测试 tools/scripts/tests/k8s_table_bundle_contract.tests.ps1 守着。
+# 前提:Prometheus 的 podMonitorSelector / podMonitorNamespaceSelector 选得到这份(标签与 table-bundle-alerts.yaml 的规则同一套)。
+# 抓取时 Operator 默认附加 namespace / pod 标签,TableSyncStale 的 {{ $labels.pod }} 来自这里。
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: table-sync
+  labels:
+    app: table-bundle
+    prometheus: kube-prometheus
+spec:
+  namespaceSelector:
+    any: true
+  selector: {}
+  podMetricsEndpoints:
+    - port: table-sync-http
+      path: /metrics
+      interval: 30s

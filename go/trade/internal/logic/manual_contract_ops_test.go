@@ -68,6 +68,10 @@ func resolveRequest(t *testing.T, mode tradepb.ManualContractMode, mutate func(*
 	t.Helper()
 	in := &tradepb.ResolveManualContractRequest{CommerceId: 42, Mode: mode, Action: "refund", ExpectVersion: 7, ExpectTarget: "staging-global",
 		Operator: "ops", Reason: "ticket-1"}
+	// 生产上 EXECUTE 只从后台来,总带着另一名管理员的批准记录;用例要测「没带」时在 mutate 里清掉。
+	if mode == tradepb.ManualContractMode_MANUAL_CONTRACT_MODE_EXECUTE {
+		in.Approval = &base.AdminApproval{ApprovalId: "900", Proposer: "ops", Approver: "reviewer", ApprovedAtMs: 1_800_000_000_000}
+	}
 	if mutate != nil {
 		mutate(in)
 	}
@@ -286,4 +290,88 @@ func TestManualContractOpsList(t *testing.T) {
 	out, err = list(5)
 	require.NoError(t, err)
 	require.True(t, out.Retry)
+}
+
+// EXECUTE 必带合格的双人复核批准记录:没带、自己批自己、发起人不是操作人都拒绝,且不碰合同。
+func TestManualContractOpsExecuteRequiresADualControlApproval(t *testing.T) {
+	cases := map[string]struct {
+		mutate func(*tradepb.ResolveManualContractRequest)
+		prefix string
+	}{
+		"没带批准记录":   {func(in *tradepb.ResolveManualContractRequest) { in.Approval = nil }, "dual_control_approval_required"},
+		"自己批自己":    {func(in *tradepb.ResolveManualContractRequest) { in.Approval.Approver = "ops" }, "dual_control_approval_invalid"},
+		"发起人不是操作人": {func(in *tradepb.ResolveManualContractRequest) { in.Approval.Proposer = "someone-else" }, "dual_control_approval_invalid"},
+		"批准号不合规":   {func(in *tradepb.ResolveManualContractRequest) { in.Approval.ApprovalId = "x-1" }, "dual_control_approval_invalid"},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			store := &fakeManualStore{}
+			ops := newTestManualOps(t, store)
+			out, err := ops.ResolveManualContract(context.Background(), resolveRequest(t, tradepb.ManualContractMode_MANUAL_CONTRACT_MODE_EXECUTE, c.mutate))
+			require.NoError(t, err)
+			require.Equal(t, tradepb.ManualContractVerdict_MANUAL_CONTRACT_VERDICT_REFUSED, out.Verdict)
+			require.True(t, strings.HasPrefix(out.Refusal, c.prefix), out.Refusal)
+			require.Empty(t, store.requests, "被拒的调用不碰合同")
+			require.True(t, strings.HasSuffix(out.AuditLine, "executed=false"))
+		})
+	}
+}
+
+// 合格的批准记录原样交给 commerce:批准号当幂等键、批准人进留痕;审计行带上两项。
+func TestManualContractOpsPassesTheApprovalToTheContract(t *testing.T) {
+	store := &fakeManualStore{result: commerce.ManualResult{Stage: "return", Status: commerce.CancelPending,
+		Audit: &tradepb.TradeCommerceManualAction{Action: "refund", ApprovalId: "900", Approver: "reviewer"}}}
+	ops := newTestManualOps(t, store)
+	out, err := ops.ResolveManualContract(context.Background(), resolveRequest(t, tradepb.ManualContractMode_MANUAL_CONTRACT_MODE_EXECUTE, nil))
+	require.NoError(t, err)
+	require.Equal(t, tradepb.ManualContractVerdict_MANUAL_CONTRACT_VERDICT_OK, out.Verdict)
+	require.Len(t, store.requests, 1)
+	require.Equal(t, "900", store.requests[0].ApprovalID)
+	require.Equal(t, "reviewer", store.requests[0].Approver)
+	require.Contains(t, out.AuditLine, `approval_id="900" approver="reviewer" already_executed=false executed=true`)
+}
+
+// 同一个批准号的重放:commerce 认出已执行,回包 already_executed=true,审计行不算 executed。
+func TestManualContractOpsReplayOfAnExecutedApprovalIsReportedNotRepeated(t *testing.T) {
+	recorded := &tradepb.TradeCommerceManualAction{Action: "refund", VersionBefore: 7, ApprovalId: "900", Approver: "reviewer"}
+	store := &fakeManualStore{result: commerce.ManualResult{AlreadyExecuted: true, Stage: "return", Status: commerce.CancelPending, Audit: recorded}}
+	ops := newTestManualOps(t, store)
+	out, err := ops.ResolveManualContract(context.Background(), resolveRequest(t, tradepb.ManualContractMode_MANUAL_CONTRACT_MODE_EXECUTE, nil))
+	require.NoError(t, err)
+	require.Equal(t, tradepb.ManualContractVerdict_MANUAL_CONTRACT_VERDICT_OK, out.Verdict)
+	require.True(t, out.AlreadyExecuted)
+	require.True(t, proto.Equal(recorded, out.Plan))
+	require.True(t, strings.HasSuffix(out.AuditLine, "already_executed=true executed=false"))
+}
+
+// 只有部署显式放开时才接受不带批准记录的 EXECUTE;DRY_RUN 从来不要求。
+func TestManualContractOpsUnapprovedExecuteOnlyWhenExplicitlyAllowed(t *testing.T) {
+	withoutApproval := func(in *tradepb.ResolveManualContractRequest) { in.Approval = nil }
+	store := &fakeManualStore{}
+	ops := newTestManualOps(t, store)
+	out, err := ops.ResolveManualContract(context.Background(), resolveRequest(t, tradepb.ManualContractMode_MANUAL_CONTRACT_MODE_DRY_RUN, nil))
+	require.NoError(t, err)
+	require.Equal(t, tradepb.ManualContractVerdict_MANUAL_CONTRACT_VERDICT_OK, out.Verdict)
+	require.Equal(t, []bool{false}, store.executes)
+
+	ops.allowUnapproved = true
+	out, err = ops.ResolveManualContract(context.Background(), resolveRequest(t, tradepb.ManualContractMode_MANUAL_CONTRACT_MODE_EXECUTE, withoutApproval))
+	require.NoError(t, err)
+	require.Equal(t, tradepb.ManualContractVerdict_MANUAL_CONTRACT_VERDICT_OK, out.Verdict)
+	require.Equal(t, []bool{false, true}, store.executes)
+	require.Empty(t, store.requests[1].ApprovalID)
+	require.Contains(t, out.AuditLine, `approval_id="" approver=""`)
+}
+
+// 配置项缺省就是要求批准记录。
+func TestManualContractOpsFromConfigRequiresApprovalByDefault(t *testing.T) {
+	getenv := func(string) string { return testManualSecret }
+	engine := &commerce.Engine{}
+	ops, err := NewManualContractOpsFromConfig(engine, config.CommerceConf{ManualResolutionSecretEnv: "X", ManualResolutionEnvironment: "staging"}, getenv)
+	require.NoError(t, err)
+	require.False(t, ops.allowUnapproved)
+	ops, err = NewManualContractOpsFromConfig(engine, config.CommerceConf{ManualResolutionSecretEnv: "X", ManualResolutionEnvironment: "staging",
+		ManualResolutionAllowUnapproved: true}, getenv)
+	require.NoError(t, err)
+	require.True(t, ops.allowUnapproved)
 }

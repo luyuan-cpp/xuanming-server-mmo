@@ -209,6 +209,9 @@
     <ClCompile Include="../../nodes/battle/tests/battle_push_policy_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
       <AdditionalIncludeDirectories>../../nodes/battle/;../../nodes/battle/logic/;../../libs/services/battle/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
+    <ClCompile Include="../../nodes/battle/tests/battle_minor_play_deadline_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/battle/;../../nodes/battle/logic/;../../libs/services/battle/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
     <ClCompile Include="../../nodes/battle/tests/battle_observer_contract_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
       <AdditionalIncludeDirectories>../../nodes/battle/;../../nodes/battle/logic/;../../libs/services/battle/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>

@@ -131,7 +131,7 @@ function checkedMailCommand(command: GmCommand): GmCommand {
     !command.request ||
     typeof command.request !== 'object' ||
     Array.isArray(command.request) ||
-    !['DRAFT', 'SENDING', 'DELIVERED', 'REJECTED', 'UNKNOWN'].includes(command.status)
+    !['DRAFT', 'SENDING', 'DELIVERED', 'REJECTED', 'UNKNOWN', 'DECLINED'].includes(command.status)
   ) {
     throw new Error('系统邮件命令响应无效，请刷新审计核对。');
   }

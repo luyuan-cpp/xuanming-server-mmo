@@ -2,6 +2,8 @@ CREATE TABLE IF NOT EXISTS gm_command (
     id VARCHAR(20) PRIMARY KEY,
     command_type VARCHAR(16) NOT NULL DEFAULT 'MAIL',
     operator_name VARBINARY(512) NOT NULL,
+    approver_name VARBINARY(512),
+    approved_ms BIGINT,
     client_request_id VARBINARY(128) NOT NULL,
     player_id VARCHAR(20) NOT NULL,
     reason TEXT NOT NULL,
@@ -24,4 +26,12 @@ CREATE TABLE IF NOT EXISTS gm_command_audit (
     result_json LONGTEXT,
     created_ms BIGINT NOT NULL,
     CONSTRAINT fk_gm_command_audit FOREIGN KEY (command_id) REFERENCES gm_command(id)
+);
+
+-- 一次 OIDC 登录从发起授权到带着授权码回来之间的中间态;换码时取出即删,五分钟没回来的在下次发起时清掉。
+CREATE TABLE IF NOT EXISTS gm_oidc_attempt (
+    state VARCHAR(64) PRIMARY KEY,
+    nonce VARCHAR(64) NOT NULL,
+    code_verifier VARCHAR(64) NOT NULL,
+    created_ms BIGINT NOT NULL
 );

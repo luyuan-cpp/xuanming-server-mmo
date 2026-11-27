@@ -217,6 +217,45 @@ dispatcher 放行时只挑 gate、不签票，放行槽在 Redis 里最多待 `A
 
 - Java 版（`game-discovery` 的 `GatePicker`）三项都未做，记在 Java 仓 `PARITY.md` 待做；做的时候按同一分档（排空并入，不先行剔除）。
 
+### login 读排空标记：按 zone 缓存 1 秒（2026-11-05 起，缺口清单第 31 条；已落码，未编译、未测试，待 Gemini 验证；2026-11-26 入档）
+
+代码：`go/login/internal/logic/pkg/loginqueue/gatedrain_cache.go`（`DrainMarkCache`），时长常量 `gateDrainMarkRefresh = time.Second`
+（`go/login/internal/svc/servicecontext.go`）。唯一读入口是 `candidatesFromNodes`，所有选 gate 路径都经过它。
+
+- **问题**：选 gate 的每条路径都经 `CandidatesForZone`：AssignGate 快速通道、容量判断、dispatcher 每一拍、取走放行时的复核。
+  原来每次各打一次 MGET 读排空标记。开服洪峰时这几条路径的调用量是登录量的几倍；一个 zone 的标记共用 hash tag `{gm:<zone>}`，
+  在集群里是同一个槽，读量随本 zone 的登录量一起涨，全压在一个主节点上。
+- **方案**：
+  1. 一次 MGET 的结果按 zone 缓存 1 秒。这 1 秒里同一 zone 的所有选 gate 共用一份，每个 login 实例每个 zone 每秒至多查一次。
+  2. 过期时只有一个调用方去查。每个 zone 的条目有自己的锁，查询在锁里做；同 zone 并发的调用等它查完、共用结果，
+     不会在过期那一刻一起打 Redis。不同 zone 互不阻塞。
+  3. 查询失败照旧按「没人在排空」放行（`DrainingGates` 回 nil），并把这个空结果同样缓存 1 秒。
+  4. 命中时，集合里没有的 node_id（包括之后才登记的新 gate）按没在排空处理：新起的 gate 不会正在排空。
+  5. 候选为空时不查、不建条目，条目数不超过真正有 gate 的 zone 数。
+  6. 缓存按调用方给的 zone 分区（0 = 不按 zone 过滤的那一份），标记键按本 login 的 `Node.ZoneId` 拼：候选全部来自本 login 的 GateWatcher，都是这个 zone 的 gate。
+  7. 过期判断用 `time.Now()` 自带的单调时钟读数，墙钟回拨不影响。
+- **为什么晚生效 1 秒可以接受**：
+  - 排空是运维缩容前的计划内动作，以分钟计，不是故障切换。
+  - 标记之前签出的票在有效期内照样能连上这台 gate；gate 的在线数要等它下一次上报（每 10 秒）才看得到。
+    排空流程本来就要容忍这批晚到的玩家（`gatedrain.go` 的三步：标记 → 等在线降到阈值或超时，期间可限速迁移 → 看到 drained 才删 Pod，
+    见 [gate 排空迁移](gate-drain-session-migration.md)）。标记后 1 秒内再分进来的玩家与它们是同一类，随排空流程照常改派。
+    多出来的人数上限是 1 秒里本 login 实例分给这台 gate 的量。
+  - 所以排空的完成条件不变，只是这台 gate 上要迁走或等下线的人略多几个。
+- **为什么查询失败也缓存**：这条路径失败的方向本来就是放行。一律拦截更糟：一次 Redis 抖动会放大成整区登不上。
+  失败不缓存的话，Redis 卡住时每个登录请求都要先等满一次命令超时才放行，登录延迟被拖长，Redis 恢复那一刻请求又一起涌上去。
+  缓存 1 秒后，每个 zone 每秒只撞一次超时，失败日志 `[GateDrain] query draining gates failed` 也随之每个 login 实例每个 zone 每秒至多一条。
+  代价：Redis 恢复后最多晚 1 秒看到标记。
+- **没有采用的做法**（落码时没有逐条留下讨论记录，这里补上不选的原因）：
+  - 不缓存、每次都查：原状，读量随登录量涨，单槽热点。
+  - 让 Redis 推送标记的变更（keyspace notification 或 Pub/Sub）：要开 `notify-keyspace-events`；集群下 keyspace 通知只在键所在的节点发，
+    订阅要连所有节点，还要处理断线期间漏掉的通知。为了把 1 秒缩到几十毫秒不值得。
+  - 缓存更久（例如对齐 gate 的 10 秒上报）：缩容前多分进来 10 倍的人，排空更慢。
+  - 引 `golang.org/x/sync/singleflight` 合并并发查询：它只合并在途的那一次，结果和过期时刻还要另存；每个 zone 一把锁加一个过期时刻就够了。
+- **scene_manager 不缓存**：它只在跨 zone 重定向、换 gate 时读，频率远低于登录，每次一次 MGET、失败放行，两边各读各的。
+- **调大调小**：调大，缩容前多分进来几秒的玩家（之后照常随排空流程改派）；调小，接近每次都查。常量旁的注释写着同样的口径。
+- **测试**：`gatedrain_cache_test.go` 六条：每个刷新周期每 zone 只查一次、zone 之间分开缓存、失败放行且缓存、时长为 0 每次都查、
+  没有 Redis / 没有候选 / nil 缓存、并发调用共用一次查询。
+
 ### 本进程在途票（2026-11-11 起；已落码，未编译、未测试，待 Gemini 验证）
 
 gate 人数每 10s 才上报一次，login 看到的人数最多晚约 15s。只按它挑，两条挑法都会在一个上报周期里往同一台最闲的 gate 上堆人：

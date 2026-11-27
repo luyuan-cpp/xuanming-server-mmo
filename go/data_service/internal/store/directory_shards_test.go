@@ -58,18 +58,38 @@ func shardCfgForTest(k int) MySQLConfig {
 	return MySQLConfig{DBName: "mmorpg_global", LogicalShards: k, Permission: authoritysql.Reader()}
 }
 
+// noShapeCheck 是替身片的 describe:不给 DSN,也没有表形状核对,只剩 openShardPools 自己的片号核对。
+func noShapeCheck(MySQLConfig) (string, poolCheck) { return "", nil }
+
+// fakeShardOpener 照 openCheckedPool 的当场分支开替身池:按库名取替身连接器,跑 check,不过就关池回错误。
+func fakeShardOpener(connectorOf func(schema string) driver.Connector) shardOpener {
+	return func(one MySQLConfig, _ string, check poolCheck) (*sql.DB, error) {
+		db := sql.OpenDB(connectorOf(one.DBName))
+		if err := check(db); err != nil {
+			_ = db.Close()
+			return nil, err
+		}
+		return db, nil
+	}
+}
+
+// testShardSlot 从片库名(<base>_NN)取片号。
+func testShardSlot(schema string) int64 {
+	var slot int64
+	_, _ = fmt.Sscanf(schema, "mmorpg_global_%02d", &slot)
+	return slot
+}
+
 func TestOpenShardPoolsOpensEveryShardByName(t *testing.T) {
 	const k = 4
 	var mu sync.Mutex
 	opened := map[string]bool{}
-	shards, err := openShardPools(shardCfgForTest(k), func(one MySQLConfig) (*sql.DB, error) {
+	shards, err := openShardPoolsWith(shardCfgForTest(k), noShapeCheck, fakeShardOpener(func(schema string) driver.Connector {
 		mu.Lock()
-		opened[one.DBName] = true
+		opened[schema] = true
 		mu.Unlock()
-		var slot int64
-		_, _ = fmt.Sscanf(one.DBName, "mmorpg_global_%02d", &slot)
-		return sql.OpenDB(fakeShardConnector{logicalShards: k, slot: slot}), nil
-	})
+		return fakeShardConnector{logicalShards: k, slot: testShardSlot(schema)}
+	}))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = shards.Close() })
 	require.Equal(t, k, shards.k)
@@ -84,10 +104,10 @@ func TestOpenShardPoolsOpensEveryShardByName(t *testing.T) {
 func TestOpenShardPoolsSingleShardUsesBaseName(t *testing.T) {
 	for _, k := range []int{0, 1} {
 		var got string
-		shards, err := openShardPools(shardCfgForTest(k), func(one MySQLConfig) (*sql.DB, error) {
-			got = one.DBName
-			return sql.OpenDB(fakeShardConnector{logicalShards: 1}), nil
-		})
+		shards, err := openShardPoolsWith(shardCfgForTest(k), noShapeCheck, fakeShardOpener(func(schema string) driver.Connector {
+			got = schema
+			return fakeShardConnector{logicalShards: 1}
+		}))
 		require.NoError(t, err)
 		require.Equal(t, 1, shards.k)
 		require.Equal(t, "mmorpg_global", got)
@@ -98,7 +118,7 @@ func TestOpenShardPoolsSingleShardUsesBaseName(t *testing.T) {
 // K 不是 64 的约数:一片都不开。
 func TestOpenShardPoolsRejectsBadK(t *testing.T) {
 	for _, k := range []int{-1, 3, 128} {
-		_, err := openShardPools(shardCfgForTest(k), func(MySQLConfig) (*sql.DB, error) {
+		_, err := openShardPoolsWith(shardCfgForTest(k), noShapeCheck, func(MySQLConfig, string, poolCheck) (*sql.DB, error) {
 			t.Fatal("K 非法不该开池")
 			return nil, nil
 		})
@@ -115,9 +135,9 @@ func TestOpenShardPoolsUsesPermissionOfEachSchema(t *testing.T) {
 		}
 		return authoritysql.Reader(), nil
 	}
-	_, err := openShardPools(cfg, func(one MySQLConfig) (*sql.DB, error) {
-		return sql.OpenDB(fakeShardConnector{logicalShards: 2}), nil
-	})
+	_, err := openShardPoolsWith(cfg, noShapeCheck, fakeShardOpener(func(string) driver.Connector {
+		return fakeShardConnector{logicalShards: 2}
+	}))
 	require.ErrorContains(t, err, "no grant")
 }
 
@@ -136,7 +156,7 @@ func TestOpenShardPoolsVerifiesDirectoryShard(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			var mu sync.Mutex
 			var pools []*sql.DB
-			_, err := openShardPools(shardCfgForTest(k), func(one MySQLConfig) (*sql.DB, error) {
+			_, err := openShardPoolsWith(shardCfgForTest(k), noShapeCheck, func(one MySQLConfig, _ string, check poolCheck) (*sql.DB, error) {
 				conn := fakeShardConnector{logicalShards: k, slot: 0}
 				if one.DBName == "mmorpg_global_01" {
 					conn = tc.conn
@@ -145,6 +165,10 @@ func TestOpenShardPoolsVerifiesDirectoryShard(t *testing.T) {
 				mu.Lock()
 				pools = append(pools, db)
 				mu.Unlock()
+				if err := check(db); err != nil {
+					_ = db.Close()
+					return nil, err
+				}
 				return db, nil
 			})
 			require.ErrorContains(t, err, tc.want)
@@ -155,12 +179,24 @@ func TestOpenShardPoolsVerifiesDirectoryShard(t *testing.T) {
 	}
 }
 
+// describe 给的表形状核对排在片号核对前面,不过就拒绝,片号核对不再跑。
+func TestOpenShardPoolsRunsTheShapeCheckFirst(t *testing.T) {
+	shapeErr := errors.New("account_directory primary key mismatch")
+	_, err := openShardPoolsWith(shardCfgForTest(1), func(MySQLConfig) (string, poolCheck) {
+		return "", func(*sql.DB) error { return shapeErr }
+	}, fakeShardOpener(func(string) driver.Connector {
+		return fakeShardConnector{err: errors.New("directory_shard must not be read after a failed shape check")}
+	}))
+	require.ErrorIs(t, err, shapeErr)
+}
+
 func TestOpenShardPoolsOpenFailureNamesTheShard(t *testing.T) {
-	_, err := openShardPools(shardCfgForTest(2), func(one MySQLConfig) (*sql.DB, error) {
+	healthy := fakeShardOpener(func(string) driver.Connector { return fakeShardConnector{logicalShards: 2, slot: 0} })
+	_, err := openShardPoolsWith(shardCfgForTest(2), noShapeCheck, func(one MySQLConfig, dsn string, check poolCheck) (*sql.DB, error) {
 		if one.DBName == "mmorpg_global_01" {
 			return nil, errFlow
 		}
-		return sql.OpenDB(fakeShardConnector{logicalShards: 2, slot: 0}), nil
+		return healthy(one, dsn, check)
 	})
 	require.ErrorIs(t, err, errFlow)
 	require.ErrorContains(t, err, "mmorpg_global_01")

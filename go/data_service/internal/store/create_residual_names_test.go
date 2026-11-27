@@ -170,7 +170,7 @@ func TestCreateResidualSettlesOrphanNames(t *testing.T) {
 	f.reserved(144, "sealed", old) // 不带名字的墓碑(证明写的)
 	f.residualTombstone(144, "")
 	f.reserved(145, "fresh", uint64(residualNow.UnixMilli())) // 刚登记:可能是在途的建角
-	f.put(146, "acct", "Mine")                                 // 活角色自己的名字还是预留态:角色行扫描报 name_unbound
+	f.put(146, "acct", "Mine")                                // 活角色自己的名字还是预留态:角色行扫描报 name_unbound
 	f.unbound["mine"], f.nameCreated["mine"] = true, old
 	f.put(147, "acct", "Live")
 	f.reserved(147, "stray", old) // 活角色名下另有一条预留态:ID 复用事故
@@ -220,6 +220,35 @@ func TestCreateResidualSettlesOrphanNames(t *testing.T) {
 		"143 orphan_name manual store_saved",
 		"147 orphan_name manual live_role_holds_other_name",
 	}, residualOutline(report.Findings), "重放只剩要人看的")
+}
+
+// 评审建议(2026-11-26):名字已经绑定、持有者却连角色行都没有(玩家片恢复点早于角色提交、名字片晚于绑定),以前两种扫描都报不出来:
+// 名字行扫描跳过已绑定的,角色行扫描扫不到不存在的角色行。现在名字行扫描整页批量核一次,只报告、选了修名字也不动它。
+// 活角色、墓碑名下的已绑定名字不在这里报。
+func TestCreateResidualReportsBoundNamesWhoseRoleRowIsMissing(t *testing.T) {
+	ctx := context.Background()
+	f := newResidualFake()
+	f.names["ghost"] = 181 // 已绑定(不在 unbound 里),181 没有角色行
+	f.put(182, "acct", "Alive")
+	f.residualTombstone(183, "Buried")
+	f.names["buried"] = 183 // 墓碑名下还绑着:角色行扫描报 removed_role_name
+	a, cache := residualAuditorWithCacheForTest(f)
+
+	for _, repair := range []CreateResidualRepairs{{}, {Names: true}} {
+		report, err := a.Run(ctx, CreateResidualScan{Target: ResidualTargetNames, Repair: repair})
+		require.NoError(t, err)
+		require.Equal(t, []string{"181 bound_name_role_missing manual role_row_missing"}, residualOutline(report.Findings))
+		require.True(t, report.Findings[0].NeedsAttention(), "要人看:退出码非 0")
+	}
+	require.Empty(t, f.writes(), "只报告,不写")
+	require.Empty(t, cache.deleted)
+	require.Equal(t, uint64(181), f.names["ghost"], "名字留着,交给人定")
+
+	f.fail["describePlayers"] = []error{errors.New("player shard down")}
+	report, err := a.Run(ctx, CreateResidualScan{Target: ResidualTargetNames})
+	require.Error(t, err, "核不了角色行:这一页不下结论")
+	require.Empty(t, report.Findings)
+	require.Empty(t, report.NextAfterName, "游标停在这一页之前")
 }
 
 // 修之前复核:扫完之后角色建成了(活角色)拒绝;没有角色行的重新找一遍证据,有了就拒绝;证明的事务里读到在役角色也拒绝。都不删名字。

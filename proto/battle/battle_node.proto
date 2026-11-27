@@ -134,6 +134,9 @@ message AddObserverRequest {
   string spectator_operation_id = 5; // 原SQL观战意图UUID；重试复用，不能只按player_id覆盖。
   uint64 admit_before_ms = 6; // 原准入截止，至多未来30秒；取消墓碑至少保留到此时。
   string target_instance_id = 7; // 固定战斗实例；进程重启不能继承旧准入。
+  // 观众当天能玩到的时刻(Unix 毫秒;0 = 不限),match 与 routing 一起从观众的会话记录取,随原件冻结。
+  // 口径同 BattlePlayerSnapshot.minor_play_deadline_ms:票据封顶、到点关直连、之后拒绝握手。
+  uint64 minor_play_deadline_ms = 8;
 }
 
 // 房间不存在(kEntityIsNull)/直连席已满(单房间或节点配额,kMatchSpectateFull)/观众是参战者或非公开局(kInvalidParameter)/
@@ -178,6 +181,7 @@ message QueryObserverResponse {
 // 客户端丢票经大厅会话调 MatchService.RequestBattleTicket,match 定位房间所在 battle 节点后调本 RPC。
 // 仅当 player_id 仍是该房间的参战者或观众时才签;否则 error_message 非零且 assignment 为空。
 // 内部 RPC:player_id 由 match 从会话 metadata 取得后填入,battle 只核对名单不再鉴权。
+// 不带未成年人截止时刻:battle 在建房 / 观战登记时已按人记下,补签的票沿用同一个封顶。
 message IssueBattleTicketRequest {
   uint64 battle_id = 1;
   uint64 player_id = 2;

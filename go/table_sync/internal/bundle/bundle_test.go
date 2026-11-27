@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -146,6 +147,11 @@ func TestPackVerifyExtractAndPermanentIDRollback(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, filepath.Join(bundlesDir, d1), extracted)
 	require.Equal(t, uint64(1), manifest.Version)
+	if runtime.GOOS != "windows" { // Windows 上目录没有 POSIX 权限位
+		info, err := os.Stat(extracted)
+		require.NoError(t, err)
+		require.Equal(t, os.FileMode(0o755), info.Mode().Perm(), "business containers read bundles under another UID only if the dir is world-readable")
+	}
 
 	// 摘要不匹配必须拒绝解包。
 	_, _, err = VerifyAndExtract(res.ArchivePath, "0000000000000000000000000000000000000000000000000000000000000000", testSchema, d1, bundlesDir)

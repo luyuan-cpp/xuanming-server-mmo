@@ -44,6 +44,33 @@ python java/gm_admin/run_local.py status
 
 所有 GM 入口要求原生认证主体。查询、个人邮件与系统/活动邮件权限为 `gm:zone:read`、`gm:player:read`、`gm:mail:prepare`、`gm:mail:send`、`gm:system-mail:prepare`、`gm:system-mail:send`、`gm:audit:read`；玩家命令另有 `gm:currency:add`、`gm:currency:deduct`、`gm:currency:block`、`gm:currency:unblock`、`gm:player:level`、`gm:pet:grant`、`gm:item:grant`。后端在创建及发送时分别检查。初始管理员获得全部权限，其他运营账号通过原生用户和角色管理分配。管理员和玩家账号相互独立。
 
+## 登录模式
+
+由 `GM_IDENTITY_MODE` 决定，设计见 [后台管理员身份与双人复核](../../docs/design/admin-identity-and-dual-control.md) §5.2。
+
+- `native`（缺省，本机开发）：JeecgBoot 原生口令登录，行为与以前相同。**只在监听地址（`GM_HTTP_ADDRESS`）是回环时允许启动**，否则启动失败。
+- `oidc`（生产）：登录走外部身份提供方的授权码流程（带 PKCE）。原生口令登录、验证码与全部原生 `/sys/**` 管理页一律拒绝，只留会话读取与登出。
+
+`oidc` 模式的配置（缺任何一项都拒绝启动）：
+
+| 环境变量 | 含义 |
+|---|---|
+| `GM_OIDC_ISSUER` | 发行方地址，必须是 HTTPS，且与发现文档里的 `issuer` 逐字相同 |
+| `GM_OIDC_CLIENT_ID` / `GM_OIDC_CLIENT_SECRET` | 在身份提供方登记的机密客户端 |
+| `GM_OIDC_REDIRECT_URI` | 回调地址，填后台前端的登录页（如 `https://gm.example.com/login`），与登记值逐字相同 |
+| `GM_OIDC_ROLE_MAPPING_JSON` | 身份提供方分组 → 后台角色编码，如 `{"gm-admins":"admin"}`；不能为空 |
+| `GM_OIDC_SUBJECT_CLAIM` | 当操作人标识的声明，缺省 `sub`。必须稳定且只含字母数字和 `. _ @ -`，最长 64 个字符；不满足时换成别的稳定声明 |
+| `GM_OIDC_GROUPS_CLAIM` / `GM_OIDC_NAME_CLAIM` / `GM_OIDC_SCOPE` | 缺省 `groups` / `name` / `openid profile` |
+| `GM_OIDC_SESSION_HOURS` | 会话上限，缺省 12 小时，到期不续 |
+
+要点：
+
+- 操作人标识就是身份提供方的主体，原样当后台用户名；账号在第一次登录时自动建立，口令列是一段没人知道的随机数。
+- 角色每次登录按分组映射整体替换，本地不管角色。没有任何分组映射到角色的人登不进来。
+- 首次安装在 `oidc` 模式下不需要 `GM_BOOTSTRAP_PASSWORD`。
+- 从 `native` 切到 `oidc` 之前清空后台 Redis 里的会话键（`prefix_user_token:*`）：原生模式签发的会话最长能续到七天。
+- 本机要联调 OIDC，可以起一个只监听回环的测试身份提供方：发行方是 `http://127.0.0.1:<端口>` 时允许明文。
+
 ## 冻结命令
 
 草稿先落管理库，再核对目标、参数和原因；发送只提交命令号。

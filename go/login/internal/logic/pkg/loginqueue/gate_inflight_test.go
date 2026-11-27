@@ -140,11 +140,11 @@ func TestPickAndSignGateToken_RecordsOnlySignedTokens(t *testing.T) {
 	g := NewGateInflight(clk.now)
 	secret := []byte("0123456789abcdef0123456789abcdef")
 
-	if _, err := PickAndSignGateToken(nil, g, secret, time.Minute); err == nil {
+	if _, err := PickAndSignGateToken(nil, g, secret, time.Minute, ""); err == nil {
 		t.Fatal("no candidates must fail")
 	}
 	cands := []GateCandidate{{NodeID: 7, IP: "127.0.0.1", Port: 30000, ZoneID: 1}}
-	if _, err := PickAndSignGateToken(cands, g, secret, time.Minute); err != nil {
+	if _, err := PickAndSignGateToken(cands, g, secret, time.Minute, ""); err != nil {
 		t.Fatal(err)
 	}
 	if got := inflightOf(g.Annotate(cands)); got != "[7:1]" {

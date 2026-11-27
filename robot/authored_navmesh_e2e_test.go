@@ -403,7 +403,7 @@ func authoredLogin(cfg *config.Config, name, account string, stats *metrics.Stat
 	if err != nil {
 		return nil, fmt.Errorf("canonical gate connection: %w", err)
 	}
-	if err := loginAndEnterViaHttpGateway(gc, cfg, stats); err != nil {
+	if err := loginAndEnterViaHttpGateway(gc, cfg, stats, nil); err != nil {
 		gc.Close()
 		return nil, fmt.Errorf("canonical HTTP login and entry: %w", err)
 	}

@@ -4,7 +4,7 @@
 
 - **代码五批都写完了**：11-20 落码，随 `f067d01fc` 入库。
   - 改了哪些文件看 `docs/PROGRESS.md` 里「2026-11-20 配置表热更全 5 批落码」这一条（按标题 grep）。
-  - 方案以 [设计稿](../design/config-table-hot-reload.md) 为准：§16 已逐项核实，§17 是 13 张可热更表的审计台账。
+  - 方案以 [设计稿](../design/config-table-hot-reload.md) 为准：§16 已逐项核实，§17 是可热更表的审计台账（原 13 张，加上 11-26 复核的后来放开的 20 张）。
   - 操作步骤看 [运维手册](../ops/table-hot-reload-runbook.md)。
 - **别的线顺带验证过的**（不用重做，出现回归再管）：
   - 导表器已经全量跑过多次。产物已经是 manifest 第 2 版：`schema_digest = 88750c2d961d8710`，83 张表。C++ 的 `kTableSchemaDigest` 和 Go 的 `SchemaDigest` 都是这个值。
@@ -24,6 +24,15 @@
 - **C++ 单测 11-26 已由 Claude 补上，还没编译**（§3.7）：
   - 覆盖表包管理器、清单与指针解析、表达式只读求值、battle 按指纹选表与旧表保留。
   - 为了能测，表包管理器和 battle 的旧表保留期都换成了可注入的时钟，缺省仍是系统时钟。
+- **11-26 晚 Claude 逐行审查五批代码，修了 7 处逻辑问题，连同配套单测都还没编译**（明细看 `docs/PROGRESS.md`「2026-11-26 配置表热更逐行审查」这一条）：
+  - sidecar 与发布工具按「表名 → 条目」的对象读清单，而导表器写的是数组，真实的包一个都过不了核对；
+  - C++ 节点写的 `STATUS.json` 字段名和 sidecar、管理接口读的不是一套；
+  - 表包没同步下来时，重启的进程会静默退回镜像里的旧表，现在改成拒绝启动；
+  - 被拒绝 / 需要重启的结论在指针撤走后不清；
+  - 管理接口把上一包的拒绝算到新包头上；
+  - scene 的装备表、神秘商人、游历手册三项校验没接进热更的拒绝闸门；
+  - C++ 启动时不核对清单摘要与指针是否一致。
+  - 其中 C++ 表包管理器、Go 与 sidecar 的改动已随负责人 21:24 的批量提交 `8a6697af0` 入库；C++ 单测、scene 钩子、神秘商人、gateway 的改动在工作区。
 - **缺登记**：Java 仓 `PARITY.md` 还没有本线这一行。
 - **分工**（负责人 11-26 定：「逻辑代码方面你去改，Gemini 只负责编译」）：
   - 本单由 Gemini 跑生成、编译、测试、冒烟，并登记结果。
@@ -117,8 +126,11 @@ foreach ($m in 'match','guild','login','scene_manager','mail','rank','player_loc
 通过标准：
 
 - 0 失败。
-- `tablebundle` 的 5 条用例要全过：`TestVerifyTableDirManifest*` 三条、`TestManagerStartupFallsBackToImageAndHotReloadsScheduled`、`TestManagerNeedsRestartAndRejectedDoNotRetry`。
-- `table_sync` 的 4 条也要全过：`TestPackVerifyExtractAndPermanentIDRollback`、`TestVerifyAndExtractRejectsTraversalAndSymlinks`、`TestKeysAndPruneUnusedBundles`、`TestSigV4PutHeadGetAndSizeLimit`。
+- `tablebundle` 的 6 条用例要全过：`TestVerifyTableDirManifest*` 三条、`TestManagerStartupFallsBackToImageAndHotReloadsScheduled`、`TestManagerNeedsRestartAndRejectedDoNotRetry`，以及 11-26 新增的 `TestStartupRefusesImageFallbackWhenOwnLineFailedToSync`（本线表包没同步下来时拒绝启动）。
+- `table_sync` 的 7 条也要全过：`TestPackVerifyExtractAndPermanentIDRollback`、`TestVerifyAndExtractRejectsTraversalAndSymlinks`、`TestKeysAndPruneUnusedBundles`、`TestSigV4PutHeadGetAndSizeLimit`，以及 11-26 新增的三条：
+  - `TestManifestJSONUsesExporterArrayShape`：清单的 `tables` 是数组，缺名、重名被拒；
+  - `TestVerifyDirManifestAcceptsRealExporterOutput`：仓里 `generated/tables` 能过 sidecar 的清单核对。这一条红了说明 sidecar 读不了真实的包，线上一个包都下不来；
+  - `TestDocumentRoundTripCarriesSyncErrors`：`POINTER.json` 的 `sync_errors` 读写往返。
 - `-race` 要 cgo，本机没有 gcc 就去掉 `-race` 跑一遍，并写明。
 
 ### 3.4 Java gateway_node
@@ -128,7 +140,7 @@ mvn -f java/gateway_node/pom.xml test -Dtest=AdminTableBundleControllerTest,Admi
 mvn -f java/gateway_node/pom.xml test
 ```
 
-通过标准：0 failures、0 errors。
+通过标准：0 failures、0 errors。`AdminTableBundleControllerTest` 现在是 4 条，11-26 新增 `listDoesNotBlameTheNewBundleForWhatPodsSaidAboutAnOlderOne`（实例回报还停在上一包时，不把上一包的拒绝算到新包头上）。
 
 ### 3.5 部署脚本契约测试
 
@@ -160,20 +172,22 @@ pwsh -File tools/scripts/run_cpp_tests.ps1 -LogDir build/verification/<运行名
 ```powershell
 pwsh -File tools/scripts/run_cpp_tests.ps1 -Filter configuration_table -LogDir build/verification/<运行名>/cpp-tests
 pwsh -File tools/scripts/run_cpp_tests.ps1 -Filter rpc_controller -LogDir build/verification/<运行名>/cpp-tests
+pwsh -File tools/scripts/run_cpp_tests.ps1 -Filter bag_test -LogDir build/verification/<运行名>/cpp-tests
 ```
 
-**`cpp/tests/configuration_table_test/table_bundle_manager_test.cpp`**（新文件，已登记进工程），共 13 条。前 12 条里除第 4 条外都属于 `TableBundleManagerTest`：
+**`cpp/tests/configuration_table_test/table_bundle_manager_test.cpp`**（已登记进工程），共 14 条。除「逐表差异」和最后一条外都属于 `TableBundleManagerTest`：
 
 | 用例 | 验什么 |
 |---|---|
 | `ManifestVerificationAcceptsShippedTablesAndRejectsOtherSchema` | 仓里导出的表能过清单核对；`schema_digest` 不同被拒 |
 | `ManifestVerificationRejectsTamperedFileAndOldManifestVersion` | 文件被改过被拒；第 1 版清单被拒 |
 | `PointerLineIsReadPerSchemaLine` | 指针按 schema 线读；没有本线返回空；JSON 写坏报错 |
+| `SyncErrorIsReadPerSchemaLine`（11-26 晚新增） | `sync_errors` 按 schema 线读：有本线返回原因，别的线没同步下来不影响本线，JSON 写坏返回没有 |
 | `TableBundleManifestDiffTest.ListsChangedAddedAndRemovedTablesSortedForTheActiveFormat` | 逐表差异：改、增、删都列出并排好序，json / binary 各算各的 |
-| `StartupLoadsTheBundleThePointerNames` | 启动时按指针加载那一包 |
+| `StartupLoadsTheBundleThePointerNames`（11-26 晚加断言） | 启动时按指针加载那一包；`STATUS.json` 用的是约定的字段名（`service`、`loaded_digest`、`loaded_at_ms`、`pending_digest` 等） |
 | `HotReloadableChangeIsPreparedInSlicesThenCommittedWhole` | 准备期间现役表不动；提交后各表读到新包，旧的一套还能读 |
-| `StructuralTableChangeNeedsRestartAndIsNotRetried` | 改到不可热更的表：needs_restart，不重试 |
-| `ValidationRunsOnStagedTablesAndRejectionKeepsCurrentOnes` | 校验钩子读到的是暂存的新包；拒绝后现役表原样 |
+| `StructuralTableChangeNeedsRestartAndIsNotRetried`（11-26 晚加一段） | 改到不可热更的表：needs_restart，不重试；整条线从指针文件里消失后，这个结论被清掉 |
+| `ValidationRunsOnStagedTablesAndRejectionKeepsCurrentOnes`（11-26 晚加一段） | 校验钩子读到的是暂存的新包；拒绝后现役表原样；撤掉 next 后拒绝结论被清掉；同一包再发一次会重新校验（拒绝计数到 2） |
 | `UnparsableTableRejectsTheBundle` | 有一张表解析失败：整包拒绝 |
 | `ScheduledBundleWaitsPreparedUntilActivateAt` | 没到点只准备；差 1 毫秒不提交；到点提交 |
 | `WithdrawnNextDropsThePreparedBundle` | 到点前撤掉 next：到点也不切 |
@@ -187,7 +201,13 @@ pwsh -File tools/scripts/run_cpp_tests.ps1 -Filter rpc_controller -LogDir build/
 | `TableProviderIsChosenByTheFingerprintTheRequestCarries` | 按请求或玩家快照带的指纹选那一套表；没带或找不到就用现役的 |
 | `RetiredTableProviderLeavesThePoolAfterRetentionButItsRoomKeepsIt` | 旧的一套 10 分钟后移出保留表；已开的房间仍拿着它，清房才放 |
 
-通过标准：这 15 条全过，两个工程的老用例不回归。
+**`cpp/tests/bag_test/player_mystery_merchant_test.cpp`**，11-26 晚新增 1 条，属于 `PlayerMysteryMerchantTest`：
+
+| 用例 | 验什么 |
+|---|---|
+| `TableValidationFailsOnUnsellableShelvedGoodsAndOutOfRangeDistance` | 神秘商人表校验现在有返回值：导出的表过；上架却卖不了的商品、购买距离为 0 不过；下架（weight = 0）的行不算坏行 |
+
+通过标准：这 17 条全过，三个工程的老用例不回归。
 
 没覆盖的：battle 的 warn / enforce 判定模式每个进程只读一次配置，单测里切不了。
 
@@ -208,6 +228,7 @@ Go 的 6 个读表服务（match、guild、login、scene_manager、mail、rank�
 
 - C++ 成功打 `table validation passed`，失败在 stderr 打 `table validation failed (manifest|parse|hook)`。
 - Go 成功打 `[TableBundle] validate-tables OK`。
+- scene 的预检从 11-26 晚起多跑三项（装备表、神秘商人、游历手册）。仓里现有的表按单测应当全过；如果 scene 退出码非 0，把 stderr 里 `hook` 后面那句原因和它上面的 `[PlayerEquip]` / `[MysteryMerchant]` / `[TravelPass]` 报错行记下来交回 Claude，不要改表、不要把校验摘掉。
 
 ### 3.9 本机热更冒烟（不需要 etcd 和对象存储）
 
@@ -217,20 +238,26 @@ Go 的 6 个读表服务（match、guild、login、scene_manager、mail、rank�
    pwsh -File tools/scripts/dev_tools.ps1 -Command tables-reload-local
    ```
 
-2. 设 `MMORPG_TABLE_BUNDLE_ROOT=<仓库>/run/table_bundles` 和 `MMORPG_TABLE_STATUS_ROOT=<仓库>/run/table_status`，起 gate、scene、battle，再加一个 Go 读表服务（guild 或 match）。
+2. 设 `MMORPG_TABLE_BUNDLE_ROOT=<仓库>/run/table_bundles`，起 gate、scene、battle，再加一个 Go 读表服务（guild 或 match）。`MMORPG_TABLE_STATUS_ROOT` **每个进程各用一个目录**（`<仓库>/run/table_status/<进程名>`）：几个进程共用一个目录会互相覆盖同一个 `STATUS.json`，第 4 步就看不出是谁拒绝的。
    - 核对启动日志打出了表的 `version` 与 `content_digest`。
    - 核对 `/metrics` 里 `table_bundle_info{source="bundle"}` 是 1。
+   - 核对每个进程的 `STATUS.json` 都有 `service`、`loaded_digest`、`loaded_at_ms` 这几个字段，C++ 与 Go 写出来的字段名一样。
 3. 做一份**只改了可热更表**的包，不碰仓库里的 xlsx：
    - 把 `generated/tables` 拷到 `%TEMP%`。
    - 改 `messagelimiter.json` 里一行的数值。节点按 `bin/etc/base_deploy_config.yaml` 的 `table_data_format` 加载，是 json 就改 json。
    - 在这个临时目录的 `manifest.json` 里，把这个文件的 `size` / `sha256` 改成现状，再把 `content_digest` 换成一个新的 64 位小写十六进制值（比如对旧值再做一次 sha256）。进程只拿它当这包表的名字，不会重算。改清单的一次性脚本也放 `%TEMP%`，不进仓库。
    - 发出去：`pwsh -File tools/scripts/dev_tools.ps1 -Command tables-reload-local -TableSource <那个临时目录>`。
 
-   通过标准：4 秒内 C++ 进程打出 `Table hot-reload committed`、Go 服务打出 `[TableBundle] reload committed`；`run/table_status/STATUS.json` 显示新摘要、状态 loaded；`table_reload_total{result="committed"}` 加 1；gate 的限流按新值生效。
+   通过标准：4 秒内 C++ 进程打出 `Table hot-reload committed`、Go 服务打出 `[TableBundle] reload committed`；各进程 `STATUS.json` 的 `loaded_digest` 是新摘要、`pending_state` 为空；`table_reload_total{result="committed"}` 加 1；gate 的限流按新值生效。
 4. 同样的办法再做两份包：
-   - 改一张不可热更的表（例如 `world.json`）：期望打出 needs_restart，进程不切换。
-   - 把 `MysteryMerchantRule` 改成校验不过的值：期望 scene 打出 rejected，原因写进它的 `STATUS.json`，scene 不切换。gate、battle 不校验这张表，会照常切过去，这正是「到点后被拒」时部分进程新、部分进程旧的样子。验完再发一次好的包，让各进程回到同一版。
-5. 有 robot 的话，另开一局回合制战斗，在打的过程中发一次第 3 步的包。核对这一局照常打完，结算没有指纹报错。
+   - 改一张不可热更的表（例如 `world.json`）：期望打出 needs_restart，进程不切换，`STATUS.json` 里 `pending_state` 是 `needs_restart`、`pending_digest` 是这一包。
+   - 把 `mysterymerchantrule.json` 里的 `interact_range` 改成 0：期望 scene 打出 `Table hot-reload rejected`，它的 `STATUS.json` 里 `pending_state` 是 `rejected`、`pending_reason` 带 `MysteryMerchantRule`，scene 不切换。gate、battle 不校验这张表，会照常切过去，这正是「到点后被拒」时部分进程新、部分进程旧的样子。
+   - 验完再发一次第 3 步那份好的包：各进程回到同一版，scene 的 `STATUS.json` 里 `pending_state`、`pending_digest`、`pending_reason` 都清空。
+5. 表包没到位时拒绝启动（不需要真的 sidecar）：停掉 scene 和那个 Go 服务，手工改 `run/table_bundles/POINTER.json`，把 `lines` 里本线（键是 §3.2 的 `schema_digest`）那一项删掉，并在顶层加 `"sync_errors": {"<schema_digest>": "smoke test"}`，再起这两个进程。
+   - 期望都起不来，日志里有 `Startup refused: table bundle for schema line`（C++）/ `startup refused: table bundle for schema line`（Go）。
+   - 把 `sync_errors` 也删掉（`lines` 里仍没有本线）再起：期望正常启动，`table_bundle_info{source="image"}` 是 1。
+   - 验完重跑第 1 步的 `tables-reload-local` 恢复指针。
+6. 有 robot 的话，另开一局回合制战斗，在打的过程中发一次第 3 步的包。核对这一局照常打完，结算没有指纹报错。
 
 ### 3.10 kind 上端到端（只在 dev 集群）
 
@@ -253,7 +280,7 @@ S3 签名是自己写的 SigV4，**第一次连真的 S3 兼容存储就在这�
   - 逐节写出命令、通过数和失败原文摘要；没跑的写原因。
   - 不贴大段原始输出，日志留在 `build/verification/<运行名>/`。
 - 把设计稿第 3 行的状态改成实际的验证结果，直接改正文。
-- 在 Java 仓 `PARITY.md` 登记一行待做。本仓提交写 `f067d01fc`（五批）和 `2d20f6b68`（表包管理器的可注入时钟），外加 §3.7 那批单测入库后的提交。只登记，不写 Java 代码。
+- 在 Java 仓 `PARITY.md` 登记一行待做。本仓提交写 `f067d01fc`（五批）、`2d20f6b68`（表包管理器的可注入时钟）、`8a6697af0`（11-26 晚审查修复里已入库的那部分），外加其余修复与 §3.7 那批单测入库后的提交。只登记，不写 Java 代码。登记里写明 Java 版要对齐的三条约定：清单 `tables` 是数组、`STATUS.json` 的字段名、`POINTER.json` 的 `sync_errors` 与「表包没到位拒绝启动」。
 - 改了或新增了文档，跑 `python tools/scripts/gen_docs_index.py`。
 - 要提交就等负责人发话，只提交本线的文件。
 
@@ -262,6 +289,9 @@ S3 签名是自己写的 SigV4，**第一次连真的 S3 兼容存储就在这�
 | 现象 | 先看 |
 |---|---|
 | 启动直接退出 | 开了表包模式却没有 `POINTER.json`（§3.9 第 1 步）；或者本地包的 `schema_digest` 和二进制里的不一样 |
+| 启动报 `Startup refused: table bundle for schema line` | sidecar 没把本线的表包同步下来。看 `POINTER.json` 的 `sync_errors` 和 sidecar 日志（对象存储不通、包不存在、摘要对不上）。这是有意的拒绝，不是代码问题；同步好之后进程自己能起来 |
+| 发布工具刚 `publish` 就报被拒绝 | 看 `GET /admin/tables` 里被拒绝实例的 `digest` 是不是这次发的包。不是的话是管理接口的汇总出了问题，记下响应原文交回 Claude |
+| 管理接口里看不到 C++ 节点、或它的 `loaded` 一直是 0 | 看那个 Pod 的 `STATUS.json` 字段名是不是 `loaded_digest` / `pending_digest` 这一套；旧二进制写的是 `content_digest` / `pending_content_digest`，要重编 |
 | 热更后某个功能拒绝了整包 | 后来接进 `Validate` 钩子的校验（挂机月卡、技能制书、灵石百宝阁、江湖恩怨、赛季等）有一个返回 false，整包就拒绝，这是预期行为。看 `STATUS.json` 里的原因是哪一个钩子给的 |
 | `Validate` 期间的东西泄漏到了提交之后 | 校验函数只许读，不许装东西、不许写静态变量。`InstallItemInitializer`、导航网格这类只在启动时做，在 `OnLoaded` 里，不在 `Validate` 里 |
 | Go 服务跨表判定读到半新半旧 | `Commit` 是逐张换的。一次判定要用多张同一版的表时，必须先 `ts := table.Current()` 再从 `ts` 读，查调用点有没有照这个做 |

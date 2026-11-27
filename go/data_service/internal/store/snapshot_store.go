@@ -206,6 +206,9 @@ type SnapshotStore struct {
 	// 人工 DROP),重启 data_service 即重新探测 —— 这比每次写入都去问一遍库便宜得多,
 	// 也不会让写路径的行为在同一进程里跳来跳去、把日志变成猜谜。
 	uniqueGuidKey bool
+	// probePending 从建 store 起置上,探测做完才清掉。常驻进程里流水库可能启动时连不上(lazyPool),
+	// 探测要等到这个池第一条连接之前才跑;读 uniqueGuidKey 的方法先过 ready,不在探测之前按缺省值选语句。
+	probePending atomic.Bool
 
 	// deadlockRetries 累计 InsertSnapshotIfGuidAbsent 因 1213 就地重跑语句的次数。
 	// 只给日志与真库回归用例用:用例要证明"死锁确实撞上了、并且被就地重跑吸收",
@@ -224,26 +227,40 @@ type SnapshotStore struct {
 // NewSnapshotStore opens the pool. It does NOT create tables — see schema.go.
 // 建池之后探一次 uk_snapshot_guid_nz,决定 InsertSnapshotIfGuidAbsent 用哪条语句去重。
 func NewSnapshotStore(cfg MySQLConfig) (*SnapshotStore, error) {
-	db, err := openMySQL(cfg)
+	s := &SnapshotStore{dbName: cfg.DBName}
+	s.probePending.Store(true)
+	db, err := openCheckedPool(cfg, buildDSN(cfg), s.probeGuidKey)
 	if err != nil {
 		return nil, err
 	}
+	s.db = db
 	logx.Infof("[SnapshotStore] connected to %s/%s", cfg.Host, cfg.DBName)
+	return s, nil
+}
 
-	s := &SnapshotStore{db: db, dbName: cfg.DBName}
+// ready 保证唯一键探测已经做完,调用方之后才能读 uniqueGuidKey。探测在这个池第一条连接之前跑(openCheckedPool),
+// 所以没探过时先借一条连接:流水库还没打开就回错误,不按缺省值走 NOT EXISTS 退路(TiDB 上那条退路不成立)。
+func (s *SnapshotStore) ready(ctx context.Context) error {
+	if !s.probePending.Load() {
+		return nil
+	}
+	return s.db.PingContext(ctx)
+}
+
+// probeGuidKey 是这个池投入使用之前的只读核对:探一次 uk_snapshot_guid_nz,记下用哪条语句去重。失败时由 openCheckedPool 关池。
+func (s *SnapshotStore) probeGuidKey(db *sql.DB) error {
 	ctx, cancel := context.WithTimeout(context.Background(), uniqueGuidKeyProbeTimeout)
 	defer cancel()
 	key, isTiDB, err := nullableUniqueKeyForServer(ctx, db, snapshotGuidNullableKey)
 	if err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("snapshot GUID 方言探测失败: %w", err)
+		return fmt.Errorf("snapshot GUID 方言探测失败: %w", err)
 	}
 	// 与迁移使用同一判据：索引恰好覆盖生成列全长，列形态、表达式与 uint64/NULL 语义一致。
 	// MySQL 的 NOT EXISTS 退路依赖 RR 间隙锁；TiDB 不具备此前提，不能把探测失败当成功建池。
-	hasKey, err := hasNullableUniqueIndex(ctx, db, cfg.DBName, key)
+	hasKey, err := hasNullableUniqueIndex(ctx, db, s.dbName, key)
 	if err == nil && hasKey {
 		var hasCol bool
-		hasCol, err = hasGeneratedColumn(ctx, db, cfg.DBName, key.table, key.column, key.columnExpr, key.columnStorage)
+		hasCol, err = hasGeneratedColumn(ctx, db, s.dbName, key.table, key.column, key.columnExpr, key.columnStorage)
 		if err == nil && !hasCol {
 			err = fmt.Errorf("唯一键 %s 在,但它约束的列 %s 不存在(键在、列坏的中间态)",
 				SnapshotGuidUniqueKey, SnapshotGuidNzColumn)
@@ -253,11 +270,10 @@ func NewSnapshotStore(cfg MySQLConfig) (*SnapshotStore, error) {
 		}
 	}
 	if isTiDB && (err != nil || !hasKey) {
-		_ = db.Close()
 		if err == nil {
 			err = fmt.Errorf("唯一约束 %s 缺失", SnapshotGuidUniqueKey)
 		}
-		return nil, fmt.Errorf("TiDB 快照 GUID 唯一约束不可用，拒绝启用写池；先停写并执行正式 -migrate: %w", err)
+		return fmt.Errorf("TiDB 快照 GUID 唯一约束不可用，拒绝启用写池；先停写并执行正式 -migrate: %w", err)
 	}
 	if err != nil {
 		logx.Errorf("[SnapshotStore] Failed to inspect %s.%s (%v): treating unique key as absent; snapshot deduplication falling back to "+
@@ -276,7 +292,8 @@ func NewSnapshotStore(cfg MySQLConfig) (*SnapshotStore, error) {
 			"and eliminate the fallback statement's gap-lock cycle on idx(snapshot_guid)",
 			PlayerSnapshotTableName, SnapshotGuidUniqueKey)
 	}
-	return s, nil
+	s.probePending.Store(false)
+	return nil
 }
 
 // UseRowIDs 接上两张表的行号来源。必须在第一次写入之前调用,之后只读。
@@ -438,6 +455,9 @@ func (s *SnapshotStore) InsertSnapshotIfGuidAbsent(ctx context.Context, row *Sna
 	if row.SnapshotGuid == 0 {
 		return 0, false, fmt.Errorf("snapshot_guid must be non-zero for check-then-insert")
 	}
+	if err := s.ready(ctx); err != nil {
+		return 0, false, err
+	}
 
 	// 就地重跑 1213 用同一个行号:牺牲方的语句已整条回滚,这个行号并没有落库。
 	rowID, err := nextRowID(ctx, s.snapshotRowIDs)
@@ -565,6 +585,9 @@ func (s *SnapshotStore) InsertSnapshotsIfGuidAbsent(ctx context.Context, rows []
 		if r.SnapshotGuid == 0 {
 			return 0, fmt.Errorf("snapshot_guid must be non-zero for check-then-insert")
 		}
+	}
+	if err := s.ready(ctx); err != nil {
+		return 0, err
 	}
 	if !s.uniqueGuidKey {
 		return s.insertSnapshotsRowByRow(ctx, rows)

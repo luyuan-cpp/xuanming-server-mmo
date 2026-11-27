@@ -621,12 +621,24 @@ var (
 		Help:      "Periodic reads of the merged zone mapping from data_service by result (ok|error). On error the previous mapping stays in use.",
 	}, []string{"result"})
 
+	// 不带双人复核批准记录而被接受的人工处置 EXECUTE;只在部署打开 Commerce.ManualResolutionAllowUnapproved 时才会增长。
+	manualUnapprovedExecuteTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Subsystem: "trade",
+		Name:      "manual_resolution_unapproved_execute_total",
+		Help:      "TradeAdmin.ResolveManualContract EXECUTE calls accepted without a dual-control approval record (only while Commerce.ManualResolutionAllowUnapproved is on).",
+	})
+
 	registerMetricsOnce sync.Once
 )
 
 // ObserveHomeZoneLookup 记录一次 home_zone 查询的结果。
 func ObserveHomeZoneLookup(result string) {
 	homeZoneLookupTotal.WithLabelValues(result).Inc()
+}
+
+// ObserveManualUnapprovedExecute 记录一次没带双人复核批准记录却被接受的人工处置 EXECUTE。
+func ObserveManualUnapprovedExecute() {
+	manualUnapprovedExecuteTotal.Inc()
 }
 
 // ObserveSeedListing 记录一次 SeedListing 的终态。
@@ -642,7 +654,7 @@ func StartMetrics(addr string) {
 		return
 	}
 	registerMetricsOnce.Do(func() {
-		prometheus.MustRegister(homeZoneLookupTotal, seedListingTotal, mergedZoneRefreshTotal)
+		prometheus.MustRegister(homeZoneLookupTotal, seedListingTotal, mergedZoneRefreshTotal, manualUnapprovedExecuteTotal)
 		// 预建全部 result 序列(值 0):否则"从未出错"与"指标不存在"在告警规则里长得一样。
 		for _, r := range []string{ResultOK, ResultUnmapped, ResultError} {
 			homeZoneLookupTotal.WithLabelValues(r)

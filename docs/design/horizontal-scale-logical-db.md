@@ -85,7 +85,7 @@
 - `authoritysql.Open` 自己的核对(`SELECT DATABASE()`、强读会话、闸门表形状)不过闸门。这几条不碰业务数据。
 - 这个 boot 在这个库上还没有事务过过闸门时,写者池上不带事务的读语句放行(`guardedConn.readPassesFrozenGateLocked`)。各服务开池之后的只读核对(表形状、片号、`rolefence.VerifySchema`、go/db 的 schema 闸)都走这条,不用逐个服务改。第一笔事务过闸之后回到常规语义。放行的只有读,拿到的是冻结时的数据,和只读连接池一样;显式事务和写任何时候都不放。
 - 启动期的写改成先读:chat `ensurePolicy`、match `EnsureGlobalPolicy`。策略行写过一次就不再变,重启只读。只有第一次部署(行还不存在)撞上窗口才失败,而第一次部署不可能在搬这个库。
-- data_service、go/db 按需开池撞上冻结不进 10 秒冷却,错误照样包着 `ErrWriterFrozen`。
+- data_service、go/db 按需开池撞上冻结不进 10 秒冷却,错误照样包着 `ErrWriterFrozen`。2026-11-27 起 data_service 的目录各片和流水库也按需核对(启动时连不上就先关着,见[启动期故障隔离](./data-service-startup-isolation.md)),冷却与冻结规则相同,两处共用同一份实现(`store.openOnce`)。
 
 **REGISTER 不绑 epoch**:名册是预先渲染的,每次 cutover 或回滚 epoch 加 2,绑了整份名册就废了,Pod 永久起不来,多库 entry 还留下半套注册。所以 REGISTER 的 `expected_epoch` 必须是 0,只核 generation、`writable`、`freeze_run_id`,收据记落地时的实际 epoch,新写者的 slot 按当前 epoch 建。RETIRE 继续绑,它要和同 epoch 的维护 run 对账。
 
@@ -448,9 +448,9 @@ func DirectoryDBName(base string, slot, k int) string // K=1 是 base,否则 <ba
 
 过户收据跟玩家走,请求里都有 `player_id`。listing、tx_id 的主键只在一片内唯一:两个玩家用同一个 listing 不再互相挡,它们都由发号器发,本来就不会撞。
 
-**`directory_shard`**:每片一行 `(id=1, logical_shards, slot)`,`-migrate` 种下,每个 store 开池时核对。配错 K 会把玩家路由到别的片,读到「角色不存在」而且没有报错,所以对不上拒绝启动。
+**`directory_shard`**:每片一行 `(id=1, logical_shards, slot)`,`-migrate` 种下,每个 store 开池时核对。配错 K 会把玩家路由到别的片,读到「角色不存在」而且没有报错,所以对不上拒绝启动。常驻进程里启动时连不上的片,这道核对挪到它第一条连接之前做,对不上永远不放行;启动时连得上而对不上照旧拒启(2026-11-27,[启动期故障隔离](./data-service-startup-isolation.md) §3)。
 
-**连接池**:每片一个池、一份写资格。`AccountDirectory.MaxOpenConn`、`PlayerName.MaxOpenConn`、`RouteStore.MaxOpenConn` 都是每片的上限,连接总账按片算。写者启动目录给的写资格必须恰好是片库 + 流水库 + 全部存档库(`Config.WriterSchemas`),多一份少一份都拒绝启动。
+**连接池**:每片一个池、一份写资格。`AccountDirectory.MaxOpenConn`、`PlayerName.MaxOpenConn`、`RouteStore.MaxOpenConn` 都是每片的上限,连接总账按片算。写者启动目录给的写资格必须恰好是片库 + 流水库 + 全部存档库(`Config.WriterSchemas`),多一份少一份都拒绝启动。常驻进程里某一片启动时连不上不算失败:句柄照常在,那一片的池关着,用到时核对通过才给连接;合服映射所在的第 0 片除外,它连不上照旧拒启(同上 §4)。
 
 **`-migrate`**:逐库开池、拿迁移锁,先核完全部库都是空的再动手,只要有一个库已有表就一张都不建。中途失败时已经建好的库不回退,人工清掉那批库再跑(未上线,没有存量)。库要提前建好,`-migrate` 不建库。
 
@@ -474,6 +474,20 @@ func DirectoryDBName(base string, slot, k int) string // K=1 是 base,否则 <ba
 | PENDING、`tx_id=0`(建角) | 角色行已存在且不是这个账号:严格插入不会再成功,删。没有角色行:未超过 5 分钟不动(可能在途);超过之后先找这名角色提交过的证据(名字行已绑定、存档库进过场或存过盘、这名角色在某个账号上有 ACTIVE 的 ref(按 `idx_account_role_ref_player` 查各账号片,2026-11-12 起);路由行、存档库名单、名字登记表缺了算核不全),有证据或核不全就不写墓碑、不删,把 ref 标成保留(`held_ms` / `held_reason`),第一次标时记 ERROR 加 `account_role_ref_tombstone_held_total`,留给核账或人工(多集群恢复点错开时角色行可能丢了,墓碑不可逆,2026-11-06 评审补);证据读失败这一轮不写,下一轮再试。没有证据才在玩家分片的事务里写一条墓碑挡住迟到的建角,然后才删。写墓碑时发现建角先提交了,补 ACTIVE |
 
 **标了保留的建角 ref**(2026-11-12):后台扫描(`scanPendingRefs`)只扫 `held_ms = 0` 的,标了保留的不再每轮重算、不再按 `created_ms` 排在队首挤占名额;它们在每轮单独的复核名额(8 条,按 `held_ms` 从旧到新,复核还留着就刷新 `held_ms` 排到队尾)里轮着重判:角色行补回来了就补 ACTIVE 并清掉标记,证据没了就照常写墓碑删。读路径(`rolesOfRefs`)不把已保留的排进后台队列,队列里遇到已保留的也跳过,不占名额。改写这条 ref 的写(建角重放、过户第 1 步、补 ACTIVE)一律清掉标记。索引 `idx_account_role_ref_state` 改为 `(state, held_ms, created_ms)`,扫描、复核、计数各走一段。各账号片还标着保留的条数由每轮的计数报成 gauge `data_service_account_role_ref_held`,告警 `DataServiceRoleRefHeldForReview`。
+这个 gauge 一注册就是 0、这一轮没数成时停在旧值,单看它分不清「没有保留的 ref」和「没数成」:每次数成(以及后台循环起来时)把时刻写进
+`data_service_account_directory_backlog_counted_timestamp_seconds{count="role_ref_held"}`,超过 5 分钟没数成并持续 15 分钟由
+`DataServiceAccountDirectoryBacklogCountStale` 报(2026-11-26;注销逾期的 gauge 同样处理,count 取 `deletion_overdue`)。
+标保留的那条 UPDATE 改到 0 行(读完之后 ref 被迟到的建角改写)不算留下,不记日志、不计数,下一轮按新状态重判。
+
+设计记录(2026-11-26):
+
+- **积压数为什么另报「数成的时刻」**。问题:这类「还有多少条」的 gauge 一注册就是 0,这一轮没数成时停在旧值;告警按 `> 0` 判,
+  从启动起一直数不成、或者数成过又一直失败,都看着像没有积压。方案:每次数成写一次时刻,后台循环起来时也写一次,告警按「多久没数成」判。
+  被否决的做法:首次数成才注册 gauge,没数成时序列不存在,`> 0` 的规则照样不响,还得另配一条「序列不存在」的规则,而数成过又失败的那种仍停在旧值;
+  给数失败单独计数,循环整个停住时计数不涨,报不出来。一个时刻盖住「从没数成、数成过又失败、循环停了」三种。
+  代价:后台清理走 RELAY 门禁,维护排空期间不跑,排空超过 20 分钟时保留 ref 那一支会响,告警文案写明属预期。
+- **标保留为什么看受影响行数**。连接不带 `clientFoundRows`(名字登记靠它判 no-op,有用例钉住),受影响行数就是实际改动的行数;
+  `held_ms` 取毫秒时钟,标上了必然改动这一行。所以 0 行只可能是读完之后 ref 被改写,它已不是残留。
 
 **过户的 PENDING 先读 listing、后读真相**。反过来的话:读到真相是卖家,这时过户提交,再读到 listing 已是 TRANSFERRED,就把买家的 ref 当陈旧删了;第 3 步补 ACTIVE 又失败的话,买家拥有角色却没有 ref,没有任何路径能再发现。先读 listing 时,读到终态说明这笔过户的提交已经在这之前,接着读到的真相一定盖住了它;读到 FROZEN 就不删。
 
@@ -743,6 +757,7 @@ data_service 按 `storage_id` 持有存档库连接池(`Directory.StoragePools`,
 | FX3 | 一轮独立评审的修复:复制流身份、目标账号锁定、REGISTER 不绑 epoch、`IsWriterFrozen` 和后台循环不打 HOLD、账号授权和目标集群预检、`admission_recover` 守闸门、启动路径扛冻结、`writer_frozen_seconds`、audit 复用目标位置、翻转标记、默认集群持久化、admin 连接串核对 | 已写完,未编译,待 Gemini 验证。serverbase 的排空判定不在这批 |
 | R1 | 评审,文档,验证清单 | 已完成。三路评审 26 条全部修复,排空判定的最后一处(闸门冻结确定没写不 Hold、`ResourceExhausted`)在主会话改完。修复本身没有再评审 |
 | B1 | `data_service` 按逻辑库建连熔断(`shared/authoritysql.WithConnectGate`)、关服务端与 14 个调用方 zrpc 按方法熔断(`shared/dsclient.Conf`),防止单分片失联连坐健康库([设计稿](./data-service-breaker-per-logical-db.md)) | 已写完,未编译,待 Gemini 验证 |
+| S1 | `data_service` 启动期故障隔离:目录各片与流水库按需核对,一个集群连不上时照样启动、服务健康库;写者注册层是批 2([设计稿](./data-service-startup-isolation.md)) | 批 1 已写完,未编译,待 Gemini 验证;批 2 待负责人同意 |
 
 G1 落地后、F1~D1 落地前的过渡状态(D1 已写完,这段结束):闸门已按库拆开,但跨库 SQL 还在。data_service 的建角初始行和判死还在目录事务里写存档库,这些写只受目录库闸门保护,不受落点库闸门保护;go/db 选库还跨库读 `player_route`,库名来自配置 `Placement.RouteSchema`。这些都要求全部库还在一个集群,所以 F1~D1 落地之前不能真的搬库。
 

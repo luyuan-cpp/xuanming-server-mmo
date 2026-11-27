@@ -46,7 +46,9 @@ import (
 //     (多集群恢复点错开时角色行可能丢了,墓碑不可逆);落点不在本次的存档库名单里、有 ref 却没有路由行也只报告(核不全)。
 //
 // 反过来「有名字、有路由、有 ref,没有角色行」是没建成的建角(或者玩家片恢复点早于提交):PENDING ref 由后台判陈旧,
-// 名字由上面的孤儿名字一项收,初始行没人读得到。
+// 名字由上面的孤儿名字一项收,初始行没人读得到。名字已经绑定而角色行不在(bound_name_role_missing,2026-11-26)只可能是
+// 玩家片恢复点早于提交、名字片晚于绑定:绑定只在角色行提交之后做,角色行又从不删除。名字行扫描整页批量核一次角色行,只报告:
+// 这个名字谁都登记不了,要人决定是把玩家片恢复到更晚的点,还是手工释放。
 //
 // 默认只报告。修复要显式选种类;每一项修之前重读角色行复核前提,变了就拒绝。ref 和初始行各在一个逻辑库的一个事务里写完,
 // 名字修复复用建角的登记(PlayerNameStore.Reserve,两步各自幂等,提交点是名字行)再置为已绑定(PlayerNameStore.Bind),
@@ -122,6 +124,8 @@ const (
 	// ResidualOrphanName 预留态的名字行登记很久了,这个 player_id 没有活角色(没有角色行,或者是不带这个名字的墓碑):
 	// 建角回滚的释放没做成。没有提交过的证据时可修(先证明永远不会提交,再删预留态),有证据只报告。
 	ResidualOrphanName
+	// ResidualBoundNameRoleMissing 名字已绑定,这个 player_id 却没有角色行(连墓碑都没有):玩家片恢复点早于角色提交。只报告。
+	ResidualBoundNameRoleMissing
 )
 
 // String 进工具输出,固定的英文词。
@@ -153,6 +157,8 @@ func (k CreateResidualKind) String() string {
 		return "removed_role_name"
 	case ResidualOrphanName:
 		return "orphan_name"
+	case ResidualBoundNameRoleMissing:
+		return "bound_name_role_missing"
 	default:
 		return "unknown"
 	}
@@ -501,7 +507,7 @@ func judgeRemoved(slot int, r residualRole, names map[uint64]residualName, holde
 }
 
 // runNames 扫一片名字行的一段:按判重键分页读,预留态、登记早于 ResidualOrphanNameMinAge 的逐个去玩家片核角色(孤儿名字很少,
-// 逐个点查),当场判、选了就修。Scanned 数的是名字行。
+// 逐个点查),当场判、选了就修;已绑定的整页批量核一次角色行在不在(boundNamesWithoutRole),不在的只报告。Scanned 数的是名字行。
 func (a *CreateResidualAuditor) runNames(ctx context.Context, scan CreateResidualScan, batch int, report CreateResidualReport) (CreateResidualReport, error) {
 	cutoffMs := uint64(a.now().Add(-ResidualOrphanNameMinAge).UnixMilli())
 	for scan.Limit == 0 || report.Scanned < scan.Limit {
@@ -514,8 +520,13 @@ func (a *CreateResidualAuditor) runNames(ctx context.Context, scan CreateResidua
 			return report, fmt.Errorf("scan player_name on shard %d: %w", scan.Slot, err)
 		}
 		var findings []CreateResidualFinding
+		var bound []residualNameEntry
 		for _, entry := range page {
-			if entry.BoundMs != 0 || entry.CreatedMs >= cutoffMs {
+			if entry.BoundMs != 0 {
+				bound = append(bound, entry)
+				continue
+			}
+			if entry.CreatedMs >= cutoffMs {
 				continue
 			}
 			f, reported, err := a.judgeOrphan(ctx, scan.Slot, entry)
@@ -527,6 +538,11 @@ func (a *CreateResidualAuditor) runNames(ctx context.Context, scan CreateResidua
 				findings = append(findings, f)
 			}
 		}
+		roleless, err := a.boundNamesWithoutRole(ctx, scan.Slot, bound)
+		if err != nil {
+			return report, fmt.Errorf("check bound names on shard %d: %w", scan.Slot, err)
+		}
+		findings = append(findings, roleless...)
 		for i := range findings {
 			a.settle(ctx, &findings[i], scan.Repair)
 		}
@@ -541,6 +557,29 @@ func (a *CreateResidualAuditor) runNames(ctx context.Context, scan CreateResidua
 		}
 	}
 	return report, nil
+}
+
+// boundNamesWithoutRole 批量核一页里已绑定的名字:持有者连角色行都没有(墓碑也算有)的各报一项,只报告。
+// 带着名字的墓碑不在这里报,角色行扫描按 removed_role_name 报它。
+func (a *CreateResidualAuditor) boundNamesWithoutRole(ctx context.Context, slot int, bound []residualNameEntry) ([]CreateResidualFinding, error) {
+	var findings []CreateResidualFinding
+	for chunk := range slices.Chunk(bound, residualLookupChunk) {
+		holders := make([]uint64, len(chunk))
+		for i, entry := range chunk {
+			holders[i] = entry.Holder
+		}
+		info, err := a.steps.describePlayers(ctx, holders)
+		if err != nil {
+			return nil, fmt.Errorf("read the roles of bound names: %w", err)
+		}
+		for _, entry := range chunk {
+			if !info[entry.Holder].RoleRow {
+				findings = append(findings, CreateResidualFinding{Slot: slot, PlayerID: entry.Holder, Kind: ResidualBoundNameRoleMissing,
+					Result: ResidualManual, Reason: "role_row_missing", norm: entry.Norm, seen: residualRole{PlayerID: entry.Holder}})
+			}
+		}
+	}
+	return findings, nil
 }
 
 // judgeOrphan 判一条老的预留态名字行,回这一项和要不要报。活角色、带着这个名字的墓碑不在这里报:角色行扫描按 name_unbound、
@@ -870,8 +909,9 @@ type residualRefKey struct {
 	player  uint64
 }
 
-// residualPlayer 是名字占用者的情况:是不是活角色,建角时刻(路由行 created_at_ms,0 是没有路由行)。
+// residualPlayer 是名字占用者的情况:有没有角色行(墓碑也算有)、是不是活角色,建角时刻(路由行 created_at_ms,0 是没有路由行)。
 type residualPlayer struct {
+	RoleRow     bool
 	Live        bool
 	CreatedAtMs uint64
 }

@@ -303,6 +303,14 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up `
 | `gate_preauth_reaped_total` / `gate_preauth_evicted_total` | 基本不涨 | 持续上涨(承压时多半记在淘汰里) |
 | 处置 | `accept_rate` 在拒绝时调高速率闸;`capacity` 在拒绝时加 gate 台数 | 速率闸、未验签预算与握手期限在按设计工作;去上游(L4、防火墙、云清洗)处置来源 |
 
+**洪水持续时的处置**(各道闸按时间怎么接力见设计稿 §8.1):
+- 头 3 秒新玩家可能进不来(`preauth_early_drop` / `preauth_budget` 在涨),之后 `gate_preauth_evicted_total` 开始涨、新玩家恢复能进。这一段不用人工介入。
+- 之后如果 `gate_rejected_total{reason="accept_rate"}` 一直在涨、未验签池也停在高位,说明新玩家在和攻击连接抢速率名额。
+  - gate 看得到真实源地址(external 入口 + `externalTrafficPolicy: Local`)时:带 `-ConnectionAdmissionEnv GATE_SOURCE_RATE_PER_SECOND=<启动日志里的推荐值>` 重新部署,
+    让按来源限速接手。它只在承压时生效、只限公网来源,不会影响平时。
+  - 看不到真实源地址(podip、代理型 LB 后面)时:gate 这一层分不出来源,只能去上游(L4、防火墙、云清洗)处置。
+- 按来源限速是每台 gate 各算各的(设计稿 §8.2):来源把连接打散到多台时,每台各给一份额度;要跨台限制同一个来源,做在上游。
+
 **告警**:`deploy/k8s/gate-connection-alerts.yaml`,手工 apply:`kubectl apply -n observability -f deploy/k8s/gate-connection-alerts.yaml`。
 
 | 告警 | 含义 | 先看什么 |
@@ -469,3 +477,4 @@ sudo sysctl --system
 - [docs/design/ARCH.md](../design/ARCH.md) §9 总体调优
 - [docs/design/architecture-current-state-vs-gaps-2026-05.md](../design/architecture-current-state-vs-gaps-2026-05.md) 缺口清单
 - [docs/design/gate-load-balancing-design.md](../design/gate-load-balancing-design.md) gate 有状态约束
+- [docs/design/cpp-node-fd-exhaustion-handling.md](../design/cpp-node-fd-exhaustion-handling.md) fd 耗尽的五道防线：§3.1 这些步骤为什么这样定、告警响了说明什么

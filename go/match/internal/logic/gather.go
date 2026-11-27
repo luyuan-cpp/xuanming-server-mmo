@@ -492,8 +492,8 @@ func gatherTeamAssignment(s *svc.ServiceContext, f *matchpb.MatchFormationRecord
 }
 
 // preparePlayerFenced 定位玩家所在 scene 节点并调 PrepareBattle,返回校验过的响应
-// (快照非空且属于这名玩家;调用方另取 table_fingerprint)。返回的 endpoint 为空表示还没定位
-// 到对端(位置缺失/节点未注册),用于区分 no_location 与 prepare_failed 两类指标。
+// (快照非空且属于这名玩家,未成年人截止时刻已按会话记录盖上;调用方另取 table_fingerprint)。返回的 endpoint 为空表示
+// 还没定位到对端(位置或会话缺失 / 读失败、节点未注册),用于区分 no_location 与 prepare_failed 两类指标。
 // before 在冻结 RPC 之前持久化精确端点，并校验本代工作租约。
 func preparePlayerFenced(svcCtx *svc.ServiceContext, playerId, battleId uint64, battleNodeId uint32, deadlineMs, prepareDeadlineMs uint64, battleConfigId, matchMode uint32, rankedCtx *battlepb.RankedMatchContext, activityCtx *battlepb.BattleActivityContext, before func(string) error) (string, *scenepb.PrepareBattleResponse, error) {
 	return preparePlayerFencedWithExtras(svcCtx, playerId, battleId, battleNodeId, deadlineMs, prepareDeadlineMs, battleConfigId, matchMode, rankedCtx, activityCtx, false, nil, before)
@@ -513,6 +513,17 @@ func preparePlayerFencedWithJianghuFee(svcCtx *svc.ServiceContext, playerId, bat
 	}
 	if loc == nil {
 		return "", nil, fmt.Errorf("玩家位置不存在(不在线或未进场): %w", errPrepareRejected)
+	}
+	// 未成年人当天的截止时刻在玩家会话记录里(PlayerSession.minor_play_deadline_ms,login 进游戏时写,0 = 不限),
+	// 成局时盖到快照上带给 battle:票据按它封顶,到点关战斗直连(docs/design/real-name-anti-addiction.md §5.4)。
+	// 读不到会话就不知道他有没有截止时刻,不能当成不限放进战斗:读失败与读位置失败同口径(结果未知,不定罪);
+	// 没有会话记录就是不在线,与没有位置同口径(定罪)。都在冻结之前判,不白冻一次。
+	session, err := loadPlayerSession(svcCtx, playerId)
+	if err != nil {
+		return "", nil, fmt.Errorf("读玩家会话失败: %w", err)
+	}
+	if session == nil {
+		return "", nil, fmt.Errorf("玩家会话不存在(不在线): %w", errPrepareRejected)
 	}
 
 	endpoint, err := svcCtx.SceneNodes.EndpointOf(loc.ZoneId, loc.NodeId)
@@ -556,6 +567,8 @@ func preparePlayerFencedWithJianghuFee(svcCtx *svc.ServiceContext, playerId, bat
 	if got := resp.GetSnapshot().GetPlayerId(); got != playerId {
 		return endpoint, nil, fmt.Errorf("scene 返回的快照属于玩家 %d,不是备战玩家", got)
 	}
+	// 无条件按会话记录覆盖:scene 不知道年龄,它填的值(应为 0)不作数;成年人如实写 0。
+	resp.GetSnapshot().MinorPlayDeadlineMs = session.GetMinorPlayDeadlineMs()
 	return endpoint, resp, nil
 }
 

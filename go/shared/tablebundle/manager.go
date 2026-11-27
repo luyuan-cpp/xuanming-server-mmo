@@ -12,6 +12,7 @@ import (
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"shared/generated/table"
+	"shared/releasetrack"
 	"shared/safego"
 )
 
@@ -65,6 +66,9 @@ type Manager struct {
 	pollInterval      time.Duration
 	podName           string
 	releaseTrack      string
+	// releaseTrackLabel 是 table_bundle_info 的 release_track 标签值,与节点注册同一判据(releasetrack.FromEnv,不设 = stable)。
+	// 告警按「轨道 + schema 线」比较各实例手上的包;不带轨道就会把 stable 和 canary 混在一起比,金丝雀期间必然误报。
+	releaseTrackLabel string
 
 	mu                  sync.Mutex
 	currentManifest     *BundleManifest
@@ -108,7 +112,11 @@ func LoadAtStartup(opts Options) (*Manager, error) {
 		pollInterval:      opts.PollInterval,
 		podName:           strings.TrimSpace(os.Getenv("POD_NAME")),
 		releaseTrack:      strings.TrimSpace(os.Getenv("MMORPG_RELEASE_TRACK")),
+		releaseTrackLabel: "invalid-track",
 		stopCh:            make(chan struct{}),
+	}
+	if track, err := releasetrack.FromEnv(); err == nil {
+		m.releaseTrackLabel = track.String()
 	}
 	if m.loadTablesFn == nil {
 		m.loadTablesFn = table.Prepare
@@ -233,7 +241,7 @@ func LoadAtStartup(opts Options) (*Manager, error) {
 	}
 	m.mu.Unlock()
 
-	setActiveBundleMetric(m.schemaDigest, contentDigest, source)
+	setActiveBundleMetric(m.releaseTrackLabel, m.schemaDigest, contentDigest, source)
 	logx.Infof("[TableBundle] startup loaded service=%s source=%s version=%d schema_digest=%s content_digest=%s dir=%s",
 		opts.ServiceName, source, version, m.schemaDigest, shortDigest(contentDigest), loadDir)
 	m.writeStatusBestEffort(nowMs)
@@ -513,7 +521,7 @@ func (m *Manager) commitPreparedLocked(nowMs uint64) {
 	m.lastRejectedDigest = ""
 	m.lastNeedsRestartDig = ""
 
-	setActiveBundleMetric(m.schemaDigest, m.currentDigest, m.currentSource)
+	setActiveBundleMetric(m.releaseTrackLabel, m.schemaDigest, m.currentDigest, m.currentSource)
 	observeReloadResult("committed")
 	logx.Infof("[TableBundle] reload committed service=%s schema_digest=%s content_digest=%s version=%d load_seq=%d",
 		m.opts.ServiceName, m.schemaDigest, shortDigest(m.currentDigest), m.currentVersion, m.loadSeq)
@@ -552,7 +560,9 @@ func (m *Manager) writeStatusBestEffort(nowMs uint64) {
 	m.writeStatusLocked(nowMs)
 }
 
+// writeStatusLocked 是每次状态变化后的唯一出口:更新 table_bundle_needs_restart,再写 STATUS.json(没配状态目录时只更新指标)。
 func (m *Manager) writeStatusLocked(nowMs uint64) {
+	observePendingState(m.pendingState)
 	if m.opts.StatusRoot == "" {
 		return
 	}

@@ -199,6 +199,33 @@
 - 导出 `sql.DBStats`，label 只用池类别。
 - 把全局库池和访客池拆成两个旋钮。`ExtraStoreMaxOpenConn` 现在是全局单旋钮（PROGRESS.md:7183）。
 
+**连接池指标的统一注册口径（`go/shared/sqlpoolstats`；G2b 起，2026-11-05 推到各 Go 服务；未编译、未部署验证；2026-11-26 入档）**
+
+此前这些只写在包注释、各服务入口的注释和 PROGRESS 里。总账（`Get-MysqlConnectionLedger`）算的是「每类池一共能开多少」，指标要能和它逐项对上。
+
+- **问题**：总账按池类别、副本数、zone 数算出峰值，但运行期没有对应的观测：池上限够不够、有没有人在排队拿连接、go/db 实际打开了几个存档库，都看不到。各服务要是各写各的导出，指标名、label、语义会各不相同，告警没法写成一条。
+- **方案**（一个包、一套指标、一条注册路径）：
+  1. 指标 `mmorpg_sql_pool_*`：池个数、`max_open`、`open`、`in_use`、`idle` 五个 gauge，`wait_count`、`wait_duration_seconds`、三种关闭原因五个 counter。变量 label 只有 `pool`（池类别），常量 label `sql_client`（服务名）。
+  2. **池类别是声明好的低基数封闭集合**，不放库名、不放 player_id（AGENTS §9）。单池服务一律用 `primary`。多池的服务声明自己的类别：go/db 是 `store`（每个打开的存档库一个池，同类求和）；data_service 是 `snapshot`、`transaction_log`、`recall`、`player_name`、`player_route`；login 开着口令登录时是 `password_auth`。不在声明里的样本归到 `other`，只在确实出现时输出，不扩张基数。
+  3. **声明的类别每次抓取都输出一组序列**：没有池时 `pools = 0`、其余为 0。面板上「这个功能没开」和「池掉了」分得开，告警不会因为序列从无到有而漏报（`DbStorePoolsBeyondPlan` 依赖这一点）。
+  4. **抓取时现取 `sql.DBStats`**：不缓存，所以注册早于或晚于 `/metrics` 开始监听都不丢数据。`Source` 的契约是并发安全、不做网络 I/O、不阻塞（`DBStats` 只取一把内存锁）。
+  5. **在进程入口注册一次**（`main` 里的 `sqlpoolstats.Register`，或 go/db、data_service 各自的 `RegisterSQLPools`），不放进 `ServiceContext`：单测会多次构造 `ServiceContext`，默认注册表重复注册会失败。
+  6. **注册失败只记 ERROR，不挡启动**：指标是观测面，不能因为它让业务起不来。
+  7. 参数非法（服务名或类别为空、类别重复、类别写成保留名 `other`）在构造时 panic：这是启动期的编程错误，与 `prometheus.MustRegister` 同语义。
+  8. 任一池不限上限（`MaxOpenConnections = 0`）时，`max_open` 导出为 `+Inf`，饱和度告警的商为 0，不会误报。
+- **为什么这样选**：
+  - 按类别求和、不按库名分序列：go/db 的落点库按需打开、库数不设上限（`player-storage-placement.md` §6.1），按库名打 label，序列数会随库数增长；总账关心的本来就是「这一类一共能开多少、开了多少」。
+  - 常量 label 叫 `sql_client`，不叫 `service`：kube-prometheus 的 ServiceMonitor 会给抓到的序列加一个叫 `service` 的目标 label，同名时原 label 被改名成 `exported_service`，按 `service` 写的告警表达式会静默落空。
+- **没有采用的做法**：
+  - client_golang 自带的 `collectors.NewDBStatsCollector`：一个池一个 Collector、label 是 `db_name`，同一个 `db_name` 注册两次直接报错，也做不了按类别求和。player_inbox 早先按自己的设计用的就是它（`go_sql_*`，`db_name="player_inbox"`），没有迁过来，不进本口径的告警。
+  - 各服务在 `ServiceContext` 里注册：见上面第 5 条。
+  - 注册失败 panic：把观测面的故障升级成业务不可用。
+- **代价与边界**：
+  - counter 是类别内求和，靠「池常驻、不移除」保持单调。**移除一个池会让求和回退，被 Prometheus 当成 counter reset**；以后给 go/db 的落点库池加回收，要同时改聚合口径（例如把已关闭池的终值累进一个常量），`SqlPoolSlowAcquire` 的注释写着同样的约束。
+  - 只看客户端一侧。服务端的实际连接数（MySQL `Threads_connected`、TiDB 的连接数）仍要靠库侧的监控，仓库里还没有 mysqld_exporter（L-04、L-08 原注）。
+  - Java 两个服务不走这个包：gateway 经 Micrometer 导出 `hikaricp_connections_*{pool="gateway"}`（告警组 `sql-pool.gateway`），mall_game 同样走 Hikari 的指标（`MallHikari*` 两条告警）。
+- **现在接了哪些**（2026-11-26 按代码 grep）：chat、friend、guild、mail、match、payment、rank、trade 各报一个 `primary` 池；login（开着口令登录时）、go/db、data_service 按上面的类别。告警在 `deploy/k8s/mysql-connection-alerts.yaml`：`SqlPoolSlowAcquire`、`SqlPoolSaturated`、`DbStorePoolsBeyondPlan`。
+
 ### 2.5 配置（§D4 更新版）
 
 | 位置 | 项 | 默认 | 取值 | 依据 |

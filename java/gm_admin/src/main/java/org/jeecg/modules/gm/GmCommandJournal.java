@@ -15,9 +15,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.LongSupplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
@@ -25,14 +29,23 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
-/** 管理库中的冻结命令和发送意图；不持有游戏资产，也不在数据库事务内执行网络调用。 */
+/**
+ * 管理库中的冻结命令和发送意图；不持有游戏资产，也不在数据库事务内执行网络调用。
+ *
+ * <p>双人复核（docs/design/admin-identity-and-dual-control.md §5.3）也在这里，而且只在这里：
+ * 草稿由发起人创建后不可改；开启双人复核时，第一次放行必须由另一个人来做，放行即执行。
+ * 「两人不同」判两遍：Java 里先比较并给出明确报错，状态迁移的 UPDATE 条件里再带一次，两处都是按字节比较。
+ * 批准人只记第一次；结果未知后的重试不改批准人，因为这条命令已经过了双人。
+ */
 @Service
 @Lazy(false)
 public final class GmCommandJournal {
+    private static final Logger LOG = LoggerFactory.getLogger(GmCommandJournal.class);
     static final long PLAYER_DRAFT_TTL_MS = 300_000L;
     private static final int MAX_PAGE = 10_000;
     private static final int MAX_PAGE_SIZE = 100;
@@ -41,28 +54,60 @@ public final class GmCommandJournal {
     private static final long CAMPAIGN_LEASE_MS = 120_000L;
     private static final List<String> FROZEN_MAIL_FIELDS = List.of("requestId", "request_id", "expireMs", "expire_ms",
             "auth", "recipient_player_id", "campaignId", "campaign_id", "manifestGeneration", "manifest_generation");
-    private static final Set<String> MAIL_STATUSES = Set.of("DRAFT", "SENDING", "DELIVERED", "REJECTED", "UNKNOWN");
-    private static final Set<String> PLAYER_STATUSES = Set.of("DRAFT", "SENDING", "EXECUTED", "REJECTED", "UNKNOWN");
+    // REJECTED 是游戏服务拒绝执行；DECLINED 是批准人驳回或发起人撤回，命令从未发出。
+    private static final Set<String> MAIL_STATUSES = Set.of("DRAFT", "SENDING", "DELIVERED", "REJECTED", "UNKNOWN", "DECLINED");
+    private static final Set<String> PLAYER_STATUSES = Set.of("DRAFT", "SENDING", "EXECUTED", "REJECTED", "UNKNOWN", "DECLINED");
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
     private final TransactionTemplate tx;
     private final Clock clock;
     private final LongSupplier ids;
+    private final boolean dualControl;
+    private final long approvalTtlMs;
 
     @Autowired
-    public GmCommandJournal(JdbcTemplate jdbc, ObjectMapper mapper, PlatformTransactionManager manager) {
-        this(jdbc, mapper, manager, Clock.systemUTC(), new SecureRandom()::nextLong);
+    public GmCommandJournal(JdbcTemplate jdbc, ObjectMapper mapper, PlatformTransactionManager manager,
+            @Value("${gm.identity.mode:native}") String identityMode, @Value("${gm.dual-control.enforce:}") String enforce,
+            @Value("${gm.dual-control.approval-ttl-hours:24}") long approvalTtlHours) {
+        this(jdbc, mapper, manager, Clock.systemUTC(), new SecureRandom()::nextLong,
+                dualControlEnforced(identityMode, enforce), approvalTtlHours);
+    }
+
+    /** 不开双人复核的流水：行为与引入双人复核之前相同，只有草稿创建者可以发送。 */
+    GmCommandJournal(JdbcTemplate jdbc, ObjectMapper mapper, PlatformTransactionManager manager,
+            Clock clock, LongSupplier ids) {
+        this(jdbc, mapper, manager, clock, ids, false, 24);
     }
 
     GmCommandJournal(JdbcTemplate jdbc, ObjectMapper mapper, PlatformTransactionManager manager,
-            Clock clock, LongSupplier ids) {
+            Clock clock, LongSupplier ids, boolean dualControl, long approvalTtlHours) {
+        if (approvalTtlHours < 1 || approvalTtlHours > 168)
+            throw new IllegalStateException("gm.dual-control.approval-ttl-hours must be between 1 and 168");
         this.jdbc = jdbc;
         this.mapper = mapper;
         this.clock = clock;
         this.ids = ids;
+        this.dualControl = dualControl;
+        this.approvalTtlMs = approvalTtlHours * 3_600_000L;
         tx = new TransactionTemplate(manager);
         tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
+
+    /**
+     * 双人复核开不开。OIDC 模式（生产）恒开，显式关掉则拒绝启动；原生口令模式（本机开发）缺省关，
+     * 一个人能跑通，也可以显式打开用两个本地账号测。
+     */
+    static boolean dualControlEnforced(String identityMode, String configured) {
+        boolean oidc = GmOidcLogin.isOidc(identityMode);
+        if (configured == null || configured.isBlank()) return oidc;
+        if (!configured.equals("true") && !configured.equals("false"))
+            throw new IllegalStateException("gm.dual-control.enforce must be true or false");
+        boolean enforce = configured.equals("true");
+        if (oidc && !enforce) throw new IllegalStateException("gm.dual-control.enforce cannot be false in OIDC mode");
+        return enforce;
+    }
+
+    public boolean dualControl() { return dualControl; }
 
     public ObjectNode prepare(String operator, String clientRequestId, String playerId,
             String reason, ObjectNode input) {
@@ -82,12 +127,17 @@ public final class GmCommandJournal {
         return prepareInternal(operator, clientRequestId, playerId, reason, input, "PLAYER");
     }
 
+    /** 交易人工处置(docs/design/admin-identity-and-dual-control.md §5.6):冻结 ResolveManualContract 的业务字段,不绑定单个玩家。 */
+    public ObjectNode prepareTradeManual(String operator, String clientRequestId, String reason, ObjectNode input) {
+        return prepareInternal(operator, clientRequestId, "0", reason, input, "TRADE_MANUAL");
+    }
+
     private ObjectNode prepareInternal(String operator, String clientRequestId, String playerId,
             String reason, ObjectNode input, String kind) {
         check(operator != null && !operator.isBlank() && bytes(operator).length <= 512, "操作者非法");
         check(clientRequestId != null && clientRequestId.matches("[A-Za-z0-9._:-]{1,128}"), "客户端幂等号非法");
-        if (kind.equals("SYSTEM_MAIL") || kind.equals("MAIL_CAMPAIGN")) {
-            check("0".equals(playerId), "系统邮件不绑定单个玩家");
+        if (kind.equals("SYSTEM_MAIL") || kind.equals("MAIL_CAMPAIGN") || kind.equals("TRADE_MANUAL")) {
+            check("0".equals(playerId), "该类命令不绑定单个玩家");
         } else {
             check(playerId != null && playerId.matches("[1-9][0-9]{0,19}"), "玩家 ID 非法");
         }
@@ -109,6 +159,12 @@ public final class GmCommandJournal {
             if (kind.equals("MAIL")) {
                 check(!input.has("recipientPlayerId") || playerId.equals(input.path("recipientPlayerId").asText()), "玩家不一致");
             }
+        } else if (kind.equals("TRADE_MANUAL")) {
+            check(input.path("commerceId").isTextual() && input.path("action").isTextual() && input.path("expectVersion").isTextual()
+                    && input.path("expectTarget").isTextual(), "交易人工处置格式非法");
+            // 操作人、原因由服务端冻结;模式与批准记录在放行时由服务端补上,草稿里不许出现。
+            for (String frozen : List.of("operator", "reason", "mode", "approval", "auth", "requestId"))
+                check(!input.has(frozen), "不得覆盖服务端冻结字段");
         } else {
             check(input.path("operation").isTextual() && input.path("arguments").isObject(), "玩家命令格式非法");
             check(!input.has("operator") && !input.has("reason") && !input.has("issuedAtMs") && !input.has("playerId"), "不得覆盖服务端冻结字段");
@@ -138,6 +194,8 @@ public final class GmCommandJournal {
                         .put("campaignId", id)
                         .put("manifestGeneration", "1")
                         .put("expireMs", Long.toString(Math.addExact(now, days * 86_400_000L)));
+            } else if (kind.equals("TRADE_MANUAL")) {
+                request.put("operator", operator).put("reason", reason);
             } else {
                 request.put("requestId", id)
                         .put("playerId", playerId).put("operator", operator).put("reason", reason)
@@ -200,6 +258,10 @@ public final class GmCommandJournal {
         return list("MAIL_CAMPAIGN", page, pageSize, null, status);
     }
 
+    public ObjectNode listTradeManual(int page, int pageSize, String status) {
+        return list("TRADE_MANUAL", page, pageSize, null, status);
+    }
+
     public ObjectNode listPlayerCommands() {
         return listPlayerCommands(1, 50, null, null);
     }
@@ -233,7 +295,7 @@ public final class GmCommandJournal {
         ObjectNode result = mapper.createObjectNode();
         var records = result.putArray("records");
         // 列表只读取视图字段，避免将活动邮件的原始 input_json 大名单一并拉入内存。
-        jdbc.query("SELECT id,command_type,operator_name,player_id,reason,request_json,status,result_json,created_ms,updated_ms FROM gm_command "
+        jdbc.query("SELECT id,command_type,operator_name,approver_name,approved_ms,player_id,reason,request_json,status,result_json,created_ms,updated_ms FROM gm_command "
                 + where + " ORDER BY created_ms DESC,id DESC LIMIT ? OFFSET ?",
                 this::mapView, pageArgs.toArray()).forEach(records::add);
         Long total = jdbc.queryForObject("SELECT COUNT(*) FROM gm_command " + where, Long.class, filterArgs.toArray());
@@ -264,38 +326,81 @@ public final class GmCommandJournal {
         return result;
     }
 
+    /**
+     * 驳回一条还没放行的申请；发起人用它撤回自己的申请。驳回后这条命令永远不会发出，要做同一件事得重新发起。
+     * ownOnly 为 true 表示操作人只有发起权限、没有放行权限：他只能撤回自己发起的那一条。
+     */
+    public ObjectNode decline(String id, String operator, String reason, String kind, boolean ownOnly) {
+        check(id != null && id.matches("[1-9][0-9]{0,19}"), "命令 ID 非法");
+        check(reason != null && !reason.isBlank() && reason.codePointCount(0, reason.length()) <= 191, "驳回原因须为 1 至 191 个字符");
+        return tx.execute(status -> {
+            Row current = row(id, true);
+            if (!kind.equals(current.view.path("commandType").asText())) throw conflict("命令类型与操作入口不符");
+            if (ownOnly && !current.view.path("operator").asText().equals(operator)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "只能撤回自己发起的申请");
+            }
+            long now = clock.millis();
+            ObjectNode outcome = mapper.createObjectNode().put("declinedBy", operator).put("reason", reason);
+            int changed = jdbc.update("UPDATE gm_command SET status='DECLINED',result_json=?,updated_ms=? WHERE id=? AND status='DRAFT'",
+                    outcome.toString(), now, id);
+            if (changed != 1) throw conflict("只有尚未放行的申请可以驳回");
+            audit(id, operator, "DECLINED", current.attempt, outcome, now);
+            return get(id);
+        });
+    }
+
     public ObjectNode send(String id, String operator, Function<ObjectNode, ObjectNode> sender) {
-        return sendInternal(id, operator, sender, "MAIL");
+        return sendInternal(id, operator, (request, approval) -> sender.apply(request), "MAIL");
     }
 
     public ObjectNode sendSystemMail(String id, String operator, Function<ObjectNode, ObjectNode> sender) {
-        return sendInternal(id, operator, sender, "SYSTEM_MAIL");
+        return sendInternal(id, operator, (request, approval) -> sender.apply(request), "SYSTEM_MAIL");
     }
 
     public ObjectNode sendMailCampaign(String id, String operator, Function<ObjectNode, ObjectNode> sender) {
-        return sendInternal(id, operator, sender, "MAIL_CAMPAIGN");
+        return sendInternal(id, operator, (request, approval) -> sender.apply(request), "MAIL_CAMPAIGN");
     }
 
     public ObjectNode sendPlayerCommand(String id, String operator, Function<ObjectNode, ObjectNode> sender) {
-        return sendInternal(id, operator, sender, "PLAYER");
+        return sendInternal(id, operator, (request, approval) -> sender.apply(request), "PLAYER");
     }
 
-    private ObjectNode sendInternal(String id, String operator, Function<ObjectNode, ObjectNode> sender, String kind) {
+    /**
+     * 交易人工处置的放行。sender 的第二个参数是下传给 trade 的批准记录(approvalId、proposer、approver、approvedAtMs);
+     * 没开双人复核(本机开发)时为 null,trade 要显式放开才接受。批准记录只在第一次放行时生成,重试原样复用,请求摘要不变。
+     */
+    public ObjectNode sendTradeManual(String id, String operator, BiFunction<ObjectNode, ObjectNode, ObjectNode> sender) {
+        return sendInternal(id, operator, sender, "TRADE_MANUAL");
+    }
+
+    private ObjectNode sendInternal(String id, String operator, BiFunction<ObjectNode, ObjectNode, ObjectNode> sender, String kind) {
         Objects.requireNonNull(sender);
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("Sending inside an ambient transaction is forbidden");
         }
         boolean mailKind = isMailKind(kind);
+        // 下游按请求号或批准号判重的命令,结果未知后可以用原号重试;在线玩家的直接 GM 没有这样的判重,不能重试。
+        boolean retryable = mailKind || kind.equals("TRADE_MANUAL");
         String complete = mailKind ? "DELIVERED" : "EXECUTED";
         long leaseMs = kind.equals("MAIL_CAMPAIGN") ? CAMPAIGN_LEASE_MS : MAIL_LEASE_MS;
         Row claimed = tx.execute(status -> {
             Row current = row(id, true);
             if (!kind.equals(current.view.path("commandType").asText())) throw conflict("命令类型与操作入口不符");
-            if (!current.view.path("operator").asText().equals(operator)) {
+            String proposer = current.view.path("operator").asText();
+            // 还没有批准人的命令，第一次放行就是批准：开了双人复核必须是另一个人，没开则只有创建者本人。
+            // 已有批准人的命令只会是结果未知后的重试，谁来重试都不改批准人。
+            boolean firstRelease = current.approver == null;
+            if (dualControl && firstRelease && proposer.equals(operator)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "发起人不能批准自己的申请，需要另一名管理员批准");
+            }
+            if (!dualControl && !proposer.equals(operator)) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅草稿创建者可发送");
             }
             if (current.view.path("status").asText().equals(complete)) return current;
             long now = clock.millis();
+            if (dualControl && firstRelease && now - current.createdMs > approvalTtlMs) {
+                throw conflict("申请已超过批准时限，请重新发起");
+            }
             if (mailKind && current.view.path("status").asText().equals("DRAFT")) {
                 JsonNode mailNode = kind.equals("MAIL_CAMPAIGN") ? current.fullRequest.path("mail") : current.fullRequest;
                 long expireMs = parsePositiveLong(mailNode.path("expireMs").asText(""));
@@ -310,17 +415,34 @@ public final class GmCommandJournal {
                     throw conflict("草稿已过期，请重新创建并核对");
                 }
             }
-            int changed;
-            if (mailKind) {
-                changed = jdbc.update("UPDATE gm_command SET status='SENDING',attempt=attempt+1,updated_ms=? "
-                        + "WHERE id=? AND attempt=? AND (status IN ('DRAFT','UNKNOWN') OR (status='SENDING' AND updated_ms<?))",
-                        now, id, current.attempt, now - leaseMs);
+            // 批准人与批准时刻只在第一次放行时写入（COALESCE 保住已有值）；「两人不同」在这条 UPDATE 的条件里再判一次，
+            // 即使上面的 Java 判断将来被改坏，库里也写不进「自己批自己」。用户名列是二进制类型，比较不受库的大小写规则影响。
+            List<Object> args = new ArrayList<>(List.of(now));
+            String approval = "";
+            if (dualControl) {
+                approval = ",approver_name=COALESCE(approver_name,?),approved_ms=COALESCE(approved_ms,?)";
+                args.add(bytes(operator));
+                args.add(now);
+            }
+            args.add(id);
+            args.add(current.attempt);
+            String states;
+            if (retryable) {
+                states = "(status IN ('DRAFT','UNKNOWN') OR (status='SENDING' AND updated_ms<?))";
+                args.add(now - leaseMs);
             } else {
                 // 在线玩家的直接 GM 没有跨进程持久去重；一旦开始执行，未知结果永远不能重发。
-                changed = jdbc.update("UPDATE gm_command SET status='SENDING',attempt=attempt+1,updated_ms=? "
-                        + "WHERE id=? AND attempt=? AND status='DRAFT'", now, id, current.attempt);
+                states = "status='DRAFT'";
             }
+            String distinct = "";
+            if (dualControl) {
+                distinct = " AND (approver_name IS NOT NULL OR operator_name<>?)";
+                args.add(bytes(operator));
+            }
+            int changed = jdbc.update("UPDATE gm_command SET status='SENDING',attempt=attempt+1,updated_ms=?" + approval
+                    + " WHERE id=? AND attempt=? AND " + states + distinct, args.toArray());
             if (changed != 1) throw conflict("命令正在发送或已拒绝，请核对当前状态");
+            if (dualControl && firstRelease) audit(id, operator, "APPROVED", current.attempt + 1, null, now);
             audit(id, operator, "SENDING", current.attempt + 1, null, now);
             return row(id, false);
         });
@@ -328,7 +450,7 @@ public final class GmCommandJournal {
         ObjectNode outcome;
         String state;
         try {
-            outcome = Objects.requireNonNull(sender.apply(claimed.fullRequest.deepCopy()));
+            outcome = Objects.requireNonNull(sender.apply(claimed.fullRequest.deepCopy(), approvalOf(claimed)));
             state = complete;
         } catch (GameServices.CallFailure error) {
             outcome = mapper.createObjectNode().put("code", error.getCode()).put("tipId", error.getTipId())
@@ -393,7 +515,17 @@ public final class GmCommandJournal {
     private Row map(ResultSet rs, int index) throws SQLException {
         String commandType = rs.getString("command_type");
         ObjectNode fullRequest = parse(rs.getString("request_json"));
-        return new Row(buildView(rs, commandType, fullRequest), fullRequest, parse(rs.getString("input_json")), rs.getLong("attempt"));
+        byte[] approver = rs.getBytes("approver_name");
+        return new Row(buildView(rs, commandType, fullRequest), fullRequest, parse(rs.getString("input_json")), rs.getLong("attempt"),
+                approver == null ? null : new String(approver, StandardCharsets.UTF_8), rs.getLong("created_ms"), rs.getLong("approved_ms"));
+    }
+
+    /** 下传给资源服务的批准记录;还没有批准人(没开双人复核)时为 null。流水号同时是资源服务的幂等键。 */
+    private ObjectNode approvalOf(Row claimed) {
+        if (claimed.approver == null) return null;
+        return mapper.createObjectNode().put("approvalId", claimed.view.path("id").asText())
+                .put("proposer", claimed.view.path("operator").asText()).put("approver", claimed.approver)
+                .put("approvedAtMs", Long.toString(claimed.approvedMs));
     }
 
     private ObjectNode buildView(ResultSet rs, String commandType, ObjectNode fullRequest) throws SQLException {
@@ -402,6 +534,11 @@ public final class GmCommandJournal {
                 .put("playerId", rs.getString("player_id")).put("reason", rs.getString("reason"))
                 .put("createdAt", Instant.ofEpochMilli(rs.getLong("created_ms")).toString())
                 .put("updatedAt", Instant.ofEpochMilli(rs.getLong("updated_ms")).toString());
+        // 批准人与批准时刻在第一次放行前为空；页面据此区分「待批准」与「已批准」。
+        byte[] approver = rs.getBytes("approver_name");
+        long approvedMs = rs.getLong("approved_ms");
+        view.put("approver", approver == null ? null : new String(approver, StandardCharsets.UTF_8));
+        view.put("approvedAt", approver == null || approvedMs == 0 ? null : Instant.ofEpochMilli(approvedMs).toString());
         view.set("request", commandType.equals("MAIL_CAMPAIGN") ? compactCampaignRequest(fullRequest) : fullRequest.deepCopy());
         if (commandType.equals("PLAYER")) view.put("operation", fullRequest.path("operation").asText());
         String result = rs.getString("result_json");
@@ -441,6 +578,15 @@ public final class GmCommandJournal {
     private void audit(String id, String operator, String event, long attempt, ObjectNode result, long now) {
         jdbc.update("INSERT INTO gm_command_audit (command_id,operator_name,event,attempt,result_json,created_ms) VALUES (?,?,?,?,?,?)",
                 id, bytes(operator), event, attempt, result == null ? null : result.toString(), now);
+        // 审计行提交之后再打一行日志进日志系统：库里的行以后若被改动，可以和日志对出来。回滚的事务不打。
+        Runnable line = () -> LOG.info("GM command audit command_id={} event={} operator={} attempt={}", id, event, operator, attempt);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override public void afterCommit() { line.run(); }
+            });
+        } else {
+            line.run();
+        }
     }
 
     private static byte[] bytes(String value) { return value.getBytes(StandardCharsets.UTF_8); }
@@ -448,5 +594,6 @@ public final class GmCommandJournal {
         if (!allowed) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
     }
     private static ResponseStatusException conflict(String message) { return new ResponseStatusException(HttpStatus.CONFLICT, message); }
-    private record Row(ObjectNode view, ObjectNode fullRequest, ObjectNode original, long attempt) { }
+    /** approver 为 null 表示还没有人放行过；createdMs 用来判申请是否过了批准时限。 */
+    private record Row(ObjectNode view, ObjectNode fullRequest, ObjectNode original, long attempt, String approver, long createdMs, long approvedMs) { }
 }

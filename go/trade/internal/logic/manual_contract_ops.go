@@ -15,10 +15,12 @@ import (
 
 	tradepb "proto/trade"
 	"shared/authoritysql"
+	"shared/dualcontrol"
 	"shared/roleidentity"
 	"shared/serviceauth"
 	"trade/internal/commerce"
 	"trade/internal/config"
+	"trade/internal/svc"
 )
 
 // 转人工合同的人工处置入口(TradeAdmin.ListManualContracts / ResolveManualContract,2026-11-11,
@@ -27,6 +29,8 @@ import (
 //   - 调用方准入:带客户端会话一律 PermissionDenied(会话拦截器已挡,这里再挡一层);入口没开一律 PermissionDenied;
 //     只认 serviceauth 调用方 config.ManualResolutionCaller,签名绑定方法与整个请求,时间戳窗口 5 分钟;
 //   - DRY_RUN / EXECUTE 核对目标环境(expect_target 与本部署的环境名逐字相等);
+//   - EXECUTE 必带后台的双人复核批准记录(shared/dualcontrol 核对两人不同、发起人就是 operator),批准号同时是幂等键;
+//     只有部署显式打开 Commerce.ManualResolutionAllowUnapproved(本机开发)才接受不带记录的 EXECUTE,每次都打 ERROR 并计数;
 //   - 把 commerce 的结论映射成带内 verdict,写审计日志行 [CommerceManual]。
 //
 // 为什么工具不直连交易库:写者身份、角色护栏的权威读与本库写者闸门都在服务进程里;交给运行中的副本执行,
@@ -70,6 +74,8 @@ type ManualContractOps struct {
 	verifier *serviceauth.Verifier
 	target   string // 本部署的环境名:Commerce.ManualResolutionEnvironment
 	replica  string // 本副本主机名,只进审计行
+	// allowUnapproved:Commerce.ManualResolutionAllowUnapproved。缺省 false,EXECUTE 必须带双人复核批准记录。
+	allowUnapproved bool
 }
 
 // manualResolutionEnvironmentRe 是环境名的字符集:进审计行与工具输出不用转义,也不会被读成别的字段。
@@ -104,7 +110,15 @@ func NewManualContractOpsFromConfig(engine *commerce.Engine, c config.CommerceCo
 		return nil, errors.New("trade: manual resolution entry needs the commerce engine (AssetOp.Enabled)")
 	}
 	replica, _ := os.Hostname()
-	return NewManualContractOps(engineManualStore{engine: engine}, getenv(name), c.ManualResolutionEnvironment, replica)
+	ops, err := NewManualContractOps(engineManualStore{engine: engine}, getenv(name), c.ManualResolutionEnvironment, replica)
+	if err != nil {
+		return nil, err
+	}
+	ops.allowUnapproved = c.ManualResolutionAllowUnapproved
+	if ops.allowUnapproved {
+		logx.Errorf("[CommerceManual] Commerce.ManualResolutionAllowUnapproved is on: EXECUTE without a dual-control approval record is accepted; keep it off outside local development")
+	}
+	return ops, nil
 }
 
 // verify 是两个方法共用的调用方准入,拒绝发生在任何读写之前:带会话(客户端来源)、入口关闭(o 为 nil)、验签失败、
@@ -216,11 +230,18 @@ func (o *ManualContractOps) resolve(ctx context.Context, in *tradepb.ResolveManu
 		o.audit(ctx, in, out)
 		return out, nil
 	}
+	if refusal := o.admitApproval(ctx, in, execute); refusal != "" {
+		out.Verdict, out.Refusal = tradepb.ManualContractVerdict_MANUAL_CONTRACT_VERDICT_REFUSED, refusal
+		o.audit(ctx, in, out)
+		return out, nil
+	}
+	req.ApprovalID, req.Approver = in.GetApproval().GetApprovalId(), in.GetApproval().GetApprover()
 	result, err := o.store.Resolve(ctx, req, execute)
 	switch {
 	case err == nil:
 		out.Verdict = tradepb.ManualContractVerdict_MANUAL_CONTRACT_VERDICT_OK
 		out.Plan, out.Stage, out.Status = result.Audit, result.Stage, result.Status
+		out.AlreadyExecuted = result.AlreadyExecuted
 		if result.Linked != nil {
 			out.LinkedPlan = result.Linked.Audit
 		}
@@ -234,7 +255,7 @@ func (o *ManualContractOps) resolve(ctx context.Context, in *tradepb.ResolveManu
 		// 结局未知:不报成功也不报没写;回 Unavailable,运维先 SHOW 重查。
 		logx.WithContext(ctx).Errorf("[CommerceManual] EXECUTE commit outcome unknown commerce_id=%d operator=%q: %v; run show before anything else",
 			in.GetCommerceId(), in.GetOperator(), err)
-		return nil, status.Error(codes.Unavailable, "commit outcome unknown: run show first; a manual_actions entry with this operator means it was applied")
+		return nil, status.Error(codes.Unavailable, "commit outcome unknown: retry with the same approval_id (it returns the recorded result if the change was applied), or run show first")
 	default:
 		// 读库失败,或写入在提交之前失败:事务已回滚,没有改动。
 		logx.WithContext(ctx).Errorf("[CommerceManual] Manual resolution failed commerce_id=%d: %v", in.GetCommerceId(), err)
@@ -242,6 +263,28 @@ func (o *ManualContractOps) resolve(ctx context.Context, in *tradepb.ResolveManu
 	}
 	o.audit(ctx, in, out)
 	return out, nil
+}
+
+// admitApproval 核对双人复核批准记录,回非空串就是带内拒绝的原因。不带记录的 EXECUTE 只在部署显式放开时接受,
+// 每次都打 ERROR 并计数(告警据此触发);带了记录就必须合格,DRY_RUN 也一样:它用来查同一个批准号是否已经执行过。
+func (o *ManualContractOps) admitApproval(ctx context.Context, in *tradepb.ResolveManualContractRequest, execute bool) string {
+	approval := in.GetApproval()
+	if approval == nil {
+		if !execute {
+			return ""
+		}
+		if !o.allowUnapproved {
+			return "dual_control_approval_required"
+		}
+		svc.ObserveManualUnapprovedExecute()
+		logx.WithContext(ctx).Errorf("[CommerceManual] EXECUTE accepted without a dual-control approval record commerce_id=%d operator=%q (Commerce.ManualResolutionAllowUnapproved is on)",
+			in.GetCommerceId(), in.GetOperator())
+		return ""
+	}
+	if err := dualcontrol.Require(approval, in.GetOperator()); err != nil {
+		return "dual_control_approval_invalid: " + err.Error()
+	}
+	return ""
 }
 
 // manualRequestOf 把请求翻成 commerce.ManualRequest。动作名或缺口写错回 ErrManualNotAllowed(带内 REFUSED)。
@@ -271,15 +314,17 @@ func manualRequestOf(in *tradepb.ResolveManualContractRequest) (commerce.ManualR
 // 免得填成 `x executed=true` 在行里伪造出字段(与 match 的 [FormationManual] 同一条教训)。其余字段都来自服务端。
 func (o *ManualContractOps) audit(ctx context.Context, in *tradepb.ResolveManualContractRequest, out *tradepb.ResolveManualContractResponse) {
 	plan := out.GetPlan()
-	executed := in.GetMode() == tradepb.ManualContractMode_MANUAL_CONTRACT_MODE_EXECUTE && out.GetVerdict() == tradepb.ManualContractVerdict_MANUAL_CONTRACT_VERDICT_OK
+	// 同一个批准号的重放没有写库,不算 executed。
+	executed := in.GetMode() == tradepb.ManualContractMode_MANUAL_CONTRACT_MODE_EXECUTE && out.GetVerdict() == tradepb.ManualContractVerdict_MANUAL_CONTRACT_VERDICT_OK &&
+		!out.GetAlreadyExecuted()
 	out.AuditLine = fmt.Sprintf("[CommerceManual] operator=%q commerce_id=%d action=%q mode=%s verdict=%s refusal=%q version_before=%d "+
 		"quarantine_stage=%s quarantine_reason=%s stage=%s status=%d new_legs=%v superseded=%v retargeted=%v party=%s from=%d to=%d "+
-		"linked=%d linked_version_before=%d parts=%q target=%s replica=%s reason=%q executed=%t",
+		"linked=%d linked_version_before=%d parts=%q target=%s replica=%s reason=%q approval_id=%q approver=%q already_executed=%t executed=%t",
 		in.GetOperator(), in.GetCommerceId(), in.GetAction(), in.GetMode(), out.GetVerdict(), out.GetRefusal(), plan.GetVersionBefore(),
 		plan.GetQuarantine().GetStage(), plan.GetQuarantine().GetReason(), out.GetStage(), out.GetStatus(),
 		plan.GetNewLegs(), plan.GetSupersededLegs(), plan.GetRetargetedLegs(), plan.GetParty(), plan.GetFromPlayerId(), plan.GetToPlayerId(),
 		plan.GetLinkedCommerceId(), out.GetLinkedPlan().GetVersionBefore(), strings.Join(in.GetParts(), ";"),
-		out.GetTarget(), o.replica, in.GetReason(), executed)
+		out.GetTarget(), o.replica, in.GetReason(), in.GetApproval().GetApprovalId(), in.GetApproval().GetApprover(), out.GetAlreadyExecuted(), executed)
 	if executed {
 		logx.WithContext(ctx).Error(out.AuditLine)
 		return

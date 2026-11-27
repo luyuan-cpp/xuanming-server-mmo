@@ -218,4 +218,65 @@ class AdminTableBundleControllerTest {
         assertTrue(del.deleted());
         assertTrue(store.get("/mmorpg/tables/pointer/stable/" + SCHEMA).isEmpty());
     }
+
+    private void putStatus(String pod, String loadedDigest, String pendingState, String pendingDigest) {
+        store.kv.put("/mmorpg/tables/status/stable/" + pod, new TablePointerStore.Entry(
+                "{\"service\":\"scene\",\"schema_digest\":\"" + SCHEMA + "\",\"loaded_digest\":\"" + loadedDigest
+                        + "\",\"pending_state\":\"" + pendingState + "\",\"pending_digest\":\"" + pendingDigest
+                        + "\",\"pending_reason\":\"unit test\"}", 20));
+    }
+
+    // 进程的 pending_* 说的是它当时看到的那一包。指针已经换成 V2,回报还停在 V1 的,
+    // 不能算成「V2 被拒绝」:发布工具会据此判 V2 发布失败并撤回。
+    @Test
+    void listDoesNotBlameTheNewBundleForWhatPodsSaidAboutAnOlderOne() {
+        String loadedBefore = "0".repeat(64);
+        controller.publish(new AdminTableBundleController.PublishRequest(
+                "stable", SCHEMA, DIGEST_V2, SHA_V2, 6L, null, true, "v6"), request);
+
+        putStatus("scene-0", loadedBefore, "rejected", DIGEST_V1);
+        putStatus("scene-1", loadedBefore, "needs_restart", DIGEST_V1);
+        putStatus("scene-2", loadedBefore, "prepared", DIGEST_V1);
+        putStatus("scene-3", DIGEST_V2, "", "");
+
+        var stale = controller.list().get(0);
+        assertEquals(4, stale.summary().total());
+        assertEquals(1, stale.summary().loaded());
+        assertEquals(0, stale.summary().rejected());
+        assertEquals(0, stale.summary().needsRestart());
+        assertEquals(0, stale.summary().prepared());
+        assertTrue(stale.rejectedPods().isEmpty());
+        assertTrue(stale.needsRestartPods().isEmpty());
+
+        // 回报跟上来之后照常计数。
+        putStatus("scene-0", loadedBefore, "rejected", DIGEST_V2);
+        putStatus("scene-1", loadedBefore, "needs_restart", DIGEST_V2);
+        putStatus("scene-2", DIGEST_V2, "", "");
+
+        var caughtUp = controller.list().get(0);
+        assertEquals(2, caughtUp.summary().loaded());
+        assertEquals(1, caughtUp.summary().rejected());
+        assertEquals(1, caughtUp.summary().needsRestart());
+        assertEquals("scene-0", caughtUp.rejectedPods().get(0).pod());
+        assertEquals(DIGEST_V2, caughtUp.rejectedPods().get(0).digest());
+    }
+
+    // 各 zone namespace 里的 StatefulSet 同名,sidecar 的状态键是 <轨道>/<namespace>/<pod>(go/table_sync 的 statusIdentity)。
+    // 两个 zone 的 scene-0 要算两个实例,其中一个的拒绝不能被另一个的「已加载」盖掉;有实例在回报时删线照样拒绝。
+    @Test
+    void listCountsSameNamedPodsOfDifferentZonesSeparately() {
+        controller.publish(new AdminTableBundleController.PublishRequest(
+                "stable", SCHEMA, DIGEST_V2, SHA_V2, 7L, null, true, "v7"), request);
+
+        putStatus("mmorpg-zone-1/scene-0", DIGEST_V2, "", "");
+        putStatus("mmorpg-zone-2/scene-0", DIGEST_V1, "rejected", DIGEST_V2);
+
+        var view = controller.list().get(0);
+        assertEquals(2, view.summary().total());
+        assertEquals(1, view.summary().loaded());
+        assertEquals(1, view.summary().rejected());
+        assertEquals("mmorpg-zone-2/scene-0", view.rejectedPods().get(0).pod());
+
+        assertEquals(HttpStatus.CONFLICT, statusOf(() -> controller.deleteLine("stable", SCHEMA, request)));
+    }
 }

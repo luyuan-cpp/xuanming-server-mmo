@@ -147,10 +147,13 @@ func (s *ServiceContext) signGateMigration(ctx context.Context, details *login_p
 		return unspecified, "failed"
 	}
 
-	// 选角界面的连接(还没绑角色)签的是不绑持票人的票,等同一张普通 AssignGate 票据。先确认这条连接确实登录过:
-	// 迁移是给已登录的连接换个 gate,不能变成一条绕过排队拿票的路。游戏中的连接票据绑定本人,EnterGame 还要先 Login。
+	// 选角界面的连接(还没绑角色)签的票不绑角色,绑这条连接登录的账号,与普通 AssignGate 票据相同。先确认这条连接确实登录过:
+	// 迁移是给已登录的连接换个 gate,不能变成一条绕过排队拿票的路——没登录的不签,签出的票别的账号也用不了(2026-11-26)。
+	// 游戏中的连接票据绑定本人(player_id),EnterGame 还要先 Login。
+	account := ""
 	if details.GetPlayerId() == 0 {
-		if _, err := loginsession.GetAccount(ctx, s.LoginRedis, ref); err != nil {
+		var err error
+		if account, err = loginsession.GetAccount(ctx, s.LoginRedis, ref); err != nil {
 			if errors.Is(err, redis.Nil) {
 				return unspecified, "not_logged_in"
 			}
@@ -184,7 +187,7 @@ func (s *ServiceContext) signGateMigration(ctx context.Context, details *login_p
 		return unspecified, "failed"
 	}
 
-	admit, err := loginqueue.SignMigrationGateToken(target, secret, gateMigrationTokenTTL, details.GetPlayerId())
+	admit, err := loginqueue.SignMigrationGateToken(target, secret, gateMigrationTokenTTL, details.GetPlayerId(), account)
 	if err != nil {
 		logx.Errorf("[GateMigration] sign ticket for gate %d failed: %v", target.NodeID, err)
 		return unspecified, "failed"

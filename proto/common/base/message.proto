@@ -178,6 +178,10 @@ message GateTokenPayload {
   // 跨 zone 传送的目标 zone:目标 zone 的 login 看到 target_zone_id == 本 zone 时不按 home_zone 弹回。
   // 0=普通登录票据(按 home_zone 规则)。见 cross-zone-scene-travel.md CZ-8。
   uint32 target_zone_id = 6;
+  // 持票账号绑定:这张票发给哪个账号,存的是账号的摘要(login 的 loginqueue.TicketAccountDigest,16 字节),不是账号原文
+  // (载荷要经客户端转交 gate,第三方登录的账号名不下发给客户端)。gate 只透传;login 在 gate 上的 Login 认证出账号之后比对,
+  // 不符即拒。空 = 不绑(排队关着时的匿名分配、跨 zone 重定向票)。见 docs/design/login-queue-2026-05.md §5「票据绑定账号」。
+  bytes account_digest = 7;
 }
 
 // Client sends this as the FIRST protobuf message after TCP-connecting to Gate.

@@ -131,7 +131,7 @@ spec:
               zone_config.capacity(login_queue_configured_capacity)小:本区在接客的 gate 到自报 max_connections 的 90%
               一共只装得下这么多人,排队到这里就开始拦人,不会再放出连上 gate 才被拒的票。不断线、不多放,是容量规划与实际不符:
               gate 副本比配置的容量需要的少(每台 GateMaxConnections 20000 到水位 18000,配 45000 至少要 3 台),或有 gate
-              停写、被标了排空、挂了。扩 gate 副本,或经 PUT /admin/zones/<id> 把 zone_config.capacity 调到 gate 承载以内;
+              停写、被标了排空、挂了。扩 gate 副本,或经 PUT /admin/zones/<id>(先 GET 取 ETag,PUT 带 If-Match)把 zone_config.capacity 调到 gate 承载以内;
               login 日志搜 "admission capacity is limited by its gates" 看当时的两个数与 gate 台数。
             runbook_url: docs/design/login-queue-2026-05.md
 

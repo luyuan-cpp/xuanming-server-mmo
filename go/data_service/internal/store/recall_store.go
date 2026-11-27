@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	assetpb "proto/common/asset"
 	dbpb "proto/common/database"
@@ -218,15 +219,24 @@ type RecallStore struct {
 // NewRecallStore 连流水库。表由 -migrate 预建,这里只读核护栏副本表。cfg 是 ForSchema 之后的流水库配置。
 func NewRecallStore(ctx context.Context, cfg MySQLConfig) (*RecallStore, error) {
 	// 和 RouteStore 同样钉 READ COMMITTED 和 1 秒锁等待:协调者问参与者的 1.5 秒预算按这个算。
-	db, err := openMySQLWithDSN(cfg, buildRouteDSN(cfg))
+	db, err := openCheckedPool(cfg, buildRouteDSN(cfg), func(db *sql.DB) error {
+		// 常驻进程里流水库启动时连不上的话,这段核对要等到第一次用到才跑(openCheckedPool),那时装配的 ctx 早就过期了:
+		// 只沿用它的值,时限另给。
+		check, cancel := context.WithTimeout(context.WithoutCancel(ctx), recallSchemaProbeTimeout)
+		defer cancel()
+		if err := rolefence.VerifySchema(check, db); err != nil {
+			return fmt.Errorf("recall store: role_fence: %w", err)
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	if err := rolefence.VerifySchema(ctx, db); err != nil {
-		return nil, errors.Join(fmt.Errorf("recall store: role_fence: %w", err), db.Close())
-	}
 	return &RecallStore{db: db}, nil
 }
+
+// recallSchemaProbeTimeout 是核护栏副本表形状的时限。
+const recallSchemaProbeTimeout = 5 * time.Second
 
 // Close 关连接池。
 func (s *RecallStore) Close() error { return s.db.Close() }

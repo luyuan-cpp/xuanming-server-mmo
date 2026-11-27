@@ -26,6 +26,7 @@ const (
 )
 
 // shardPools 是目录 K 片的连接池,下标就是片号。构造后只读。
+// 每片的句柄始终在:常驻进程里启动时连不上的片,池是关着的,借连接时回错误,核对通过之后才给(lazy_open.go)。
 type shardPools struct {
 	k     int
 	names []string
@@ -37,8 +38,17 @@ func singleShardPools(db *sql.DB, name string) *shardPools {
 	return &shardPools{k: 1, names: []string{name}, pools: []*sql.DB{db}}
 }
 
-// openShardPools 逐片开池并核对 directory_shard。open 决定这一片的 DSN、连接池上限和表形状核对。任一片失败就关掉已开的,回错误。
-func openShardPools(cfg MySQLConfig, open func(MySQLConfig) (*sql.DB, error)) (*shardPools, error) {
+// shardOpener 开一片的池,投入使用之前跑 check。生产是 openCheckedPool,单测换成替身。
+type shardOpener func(one MySQLConfig, dsn string, check poolCheck) (*sql.DB, error)
+
+// openShardPools 逐片开池。describe 给出这一片的 DSN 和表形状核对(可以为 nil);片号核对(directory_shard)由这里接在它后面,
+// 一起交给 openCheckedPool:每一片投入使用之前都核过它是 K 片里的这一片,不靠调用方记得。任一片回错误就关掉已开的,回错误。
+// 常驻进程(cfg.Lazy)里连不上的片不回错误,那一片的池保持关闭,核对挪到第一条连接之前(openCheckedPool)。
+func openShardPools(cfg MySQLConfig, describe func(one MySQLConfig) (dsn string, check poolCheck)) (*shardPools, error) {
+	return openShardPoolsWith(cfg, describe, openCheckedPool)
+}
+
+func openShardPoolsWith(cfg MySQLConfig, describe func(one MySQLConfig) (string, poolCheck), open shardOpener) (*shardPools, error) {
 	k := dirshard.Normalize(cfg.LogicalShards)
 	if err := dirshard.Validate(k); err != nil {
 		return nil, err
@@ -49,14 +59,18 @@ func openShardPools(cfg MySQLConfig, open func(MySQLConfig) (*sql.DB, error)) (*
 		if err != nil {
 			return err
 		}
-		db, err := open(one)
+		dsn, check := describe(one)
+		db, err := open(one, dsn, func(db *sql.DB) error {
+			if check != nil {
+				if err := check(db); err != nil {
+					return err
+				}
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), shardProbeTimeout)
+			defer cancel()
+			return verifyDirectoryShard(ctx, db, slot, k)
+		})
 		if err != nil {
-			return fmt.Errorf("directory shard %s: %w", shards.names[slot], err)
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), shardProbeTimeout)
-		defer cancel()
-		if err := verifyDirectoryShard(ctx, db, slot, k); err != nil {
-			_ = db.Close()
 			return fmt.Errorf("directory shard %s: %w", shards.names[slot], err)
 		}
 		shards.pools[slot] = db

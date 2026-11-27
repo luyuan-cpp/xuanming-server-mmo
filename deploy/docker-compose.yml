@@ -297,7 +297,7 @@ services:
   # match 服务的私有存储(docs/design/cross-zone-matchmaking.md §2 D2 / §7):
   # 3 主 3 从,宿主机 Go 进程直连。默认 `docker compose up` 不会拉起,需要
   #   docker compose -f deploy/docker-compose.yml --profile redis-cluster up -d
-  # 并把 go/match/etc/match_service.yaml 的 MatchRedis 指到 127.0.0.1:7000,Type: cluster。
+  # 并把 go/match/etc/match_service.yaml 的 MatchRedis 指到 127.0.0.1:7000~7005(Addrs 写种子,Cluster: true)。
   #
   # 为什么六个节点共用 redis-cluster-0 的网络命名空间(network_mode: service:…):
   #   集群客户端会跟随 MOVED 跳到节点 announce 的地址,所以节点必须 announce

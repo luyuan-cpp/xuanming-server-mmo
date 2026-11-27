@@ -155,7 +155,7 @@ func capByGates(ceiling, configured uint32, candidates []GateCandidate, zoneID u
 	if configured > 0 && capacityCapLog.allow(capacityCapLogEvery) {
 		logx.Errorf("[loginqueue] zone %d admission capacity is limited by its gates: configured=%d, the serving gates "+
 			"hold %d at %d%% of their max_connections (%d gate candidates); the queue starts holding players at %d. "+
-			"Add gate replicas or lower zone_config.capacity (PUT /admin/zones/<id>); compare login_queue_capacity with "+
+			"Add gate replicas or lower zone_config.capacity (PUT /admin/zones/<id> with the ETag of a prior GET in If-Match); compare login_queue_capacity with "+
 			"login_queue_configured_capacity. Further reports are suppressed for %s",
 			zoneID, configured, gateCapacity, gatepick.FullPercent, len(candidates), gateCapacity, capacityCapLogEvery)
 	}

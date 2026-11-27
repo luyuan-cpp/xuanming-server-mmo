@@ -292,6 +292,9 @@ TEST(SessionDetailsBuilder, CopiesGateAndSessionIdentityFields)
 	SessionInfo session = UnboundSession();
 	session.ticketPlayerId = 777;
 	session.ticketTargetZoneId = 2;
+	// 票据绑定的账号摘要(16 字节,含 0 字节):gate 原样透传,login 的 Login 据此拒掉借来的票。
+	const std::string accountDigest("\x01\x00\xfe" "0123456789abc", 16);
+	session.ticketAccountDigest = accountDigest;
 	session.ownerRevision = 5;
 	const SessionDetails wire = OverTheWire(BuildForForward(session));
 	EXPECT_EQ(wire.session_id(), kSessionId);
@@ -299,6 +302,7 @@ TEST(SessionDetailsBuilder, CopiesGateAndSessionIdentityFields)
 	EXPECT_EQ(wire.gate_instance_id(), kGateInstanceId);
 	EXPECT_EQ(wire.ticket_player_id(), 777u);
 	EXPECT_EQ(wire.ticket_target_zone_id(), 2u);
+	EXPECT_EQ(wire.ticket_account_digest(), accountDigest);
 	EXPECT_EQ(wire.session_incarnation(), kIncarnation);
 	EXPECT_EQ(wire.owner_revision(), 5u);
 }

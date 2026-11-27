@@ -26,7 +26,7 @@ func registerSpectateBattle(svcCtx *svc.ServiceContext, battleId uint64, mode ma
 }
 
 // installSpectateZaddFault 让活跃集合的 ZADD 失败。钩子可能在 Lua 的 redis.call 里带锁重入,所以只读自身的谓词,绝不调 mr.*;
-// 与 SetError 共用槽位,装了就别再用 SetError。单个 svcCtx 注入的失败控制在 5 次以内(go-zero Redis 客户端自带 Google SRE 熔断,protection=5)。
+// 与 SetError 共用槽位,装了就别再用 SetError。私有句柄是 shared/clusterredis:没有熔断,也不重发,注入几次失败就是几次。
 func installSpectateZaddFault(t *testing.T, mr *miniredis.Miniredis) {
 	t.Helper()
 	mr.Server().SetPreHook(func(c *server.Peer, cmd string, args ...string) bool {

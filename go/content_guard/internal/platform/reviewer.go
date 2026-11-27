@@ -24,6 +24,8 @@ import (
 	cgpb "proto/content_guard"
 
 	"github.com/zeromicro/go-zero/core/logx"
+
+	"content_guard/internal/metrics"
 )
 
 const (
@@ -267,16 +269,37 @@ func (r *Router) Review(ctx context.Context, scene cgpb.TextScene, playerID uint
 		res := adapter.Check(callCtx, scene, openID, text)
 		if res.Outcome == OutcomeUnavailable {
 			if asyncWorld {
+				// 先行的短预算没等到不算平台故障:chat 落库后用完整预算补审(ReviewSync),那一次再记结局。
+				metrics.ObservePlatformReview(adapter.Provider(), metrics.PlatformOutcomeDeferred)
 				return ReviewResult{Outcome: OutcomePending, Provider: res.Provider}
 			}
+			observePlatformReview(adapter.Provider(), res.Outcome)
 			return ReviewResult{Outcome: OutcomeSkip, Provider: res.Provider}
 		}
+		observePlatformReview(adapter.Provider(), res.Outcome)
 		return res
 	}
 
 	callCtx, cancel := context.WithTimeout(ctx, r.syncTimeout)
 	defer cancel()
-	return adapter.Check(callCtx, scene, openID, text)
+	res := adapter.Check(callCtx, scene, openID, text)
+	observePlatformReview(adapter.Provider(), res.Outcome)
+	return res
+}
+
+// observePlatformReview 记一次平台调用的最终结局(platform_reviews_total)。世界频道的平台不可用会被改成先放行、后台补审,
+// 补审再不可用只打日志,所以不在这里记的话,平台挂了没有任何指标看得见(docs/design/rename-and-content-safety.md §6.9)。
+func observePlatformReview(provider string, outcome Outcome) {
+	name := metrics.PlatformOutcomeSkip
+	switch outcome {
+	case OutcomePass:
+		name = metrics.PlatformOutcomePass
+	case OutcomeReject:
+		name = metrics.PlatformOutcomeReject
+	case OutcomeUnavailable:
+		name = metrics.PlatformOutcomeUnavailable
+	}
+	metrics.ObservePlatformReview(provider, name)
 }
 
 // ReviewSync 使用完整异步/同步预算同步执行外部平台审核(CheckPlatformText RPC 使用)。
@@ -301,7 +324,9 @@ func (r *Router) ReviewSync(ctx context.Context, scene cgpb.TextScene, playerID 
 	}
 	callCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
-	return adapter.Check(callCtx, scene, openID, text)
+	res := adapter.Check(callCtx, scene, openID, text)
+	observePlatformReview(adapter.Provider(), res.Outcome)
+	return res
 }
 
 // resolveAdapter 选出审这位填写者的平台和要带给平台的用户标识;返回 nil 适配器 = 这位填写者不走平台审核。

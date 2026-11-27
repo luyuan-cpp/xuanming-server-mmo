@@ -376,6 +376,14 @@
           <a-descriptions-item label="创建时间">{{ reviewed.createdAt }}</a-descriptions-item>
           <a-descriptions-item label="更新时间">{{ reviewed.updatedAt }}</a-descriptions-item>
         </a-descriptions>
+        <ApprovalPanel
+          :command="reviewed"
+          :kind="reviewKind === 'campaign' ? 'mail-campaigns' : 'system-mail'"
+          :can-release="hasPermission('gm:system-mail:send')"
+          :can-propose="hasPermission('gm:system-mail:prepare')"
+          :busy="blocked"
+          @declined="onReviewedDeclined"
+        />
 
         <a-collapse class="space">
           <a-collapse-panel key="request" header="冻结请求详情">
@@ -446,7 +454,7 @@
           :disabled="blocked || !mailEnabled || !reviewConfirmed"
           @click="sendReviewed"
         >
-          {{ retryingReviewed ? '沿用原命令重试' : '确认发布' }}
+          {{ retryingReviewed ? '沿用原命令重试' : dualControl ? '批准并发布' : '确认发布' }}
         </a-button>
       </template>
     </BasicModal>
@@ -459,6 +467,8 @@
   import { BasicModal, useModal } from '/@/components/Modal';
   import { usePermission } from '/@/hooks/web/usePermission';
   import { useMessage } from '/@/hooks/web/useMessage';
+  import ApprovalPanel from './ApprovalPanel.vue';
+  import { APPROVAL_STATUS_COLORS, APPROVAL_STATUS_LABELS, awaitsAnotherApprover, dualControl, type ApprovalView } from '/@/api/gm/approval';
   import {
     currencyLabel,
     MAX_MAIL_CURRENCIES,
@@ -508,6 +518,7 @@
     { value: 'DELIVERED', label: '已发布' },
     { value: 'REJECTED', label: '已拒绝' },
     { value: 'UNKNOWN', label: '结果未知' },
+    { value: 'DECLINED', label: '已驳回' },
   ];
 
   // 全服纯文本公告表单与审计状态
@@ -571,7 +582,7 @@
   );
   const canSendReviewed = computed(() => {
     const command = reviewed.value;
-    return !!command && hasPermission('gm:system-mail:send') && ['DRAFT', 'UNKNOWN'].includes(command.status);
+    return !!command && hasPermission('gm:system-mail:send') && ['DRAFT', 'UNKNOWN'].includes(command.status) && !awaitsAnotherApprover(command);
   });
 
   function reviewedMailNode(): Record<string, unknown> {
@@ -675,13 +686,13 @@
   }
   function statusLabel(status: string): string {
     return (
-      ({ DRAFT: '待确认草稿', SENDING: '发布中', DELIVERED: '已发布', REJECTED: '已拒绝', UNKNOWN: '结果未知' } as Record<string, string>)[status] ||
+      ({ DRAFT: '待确认草稿', SENDING: '发布中', DELIVERED: '已发布', REJECTED: '已拒绝', UNKNOWN: '结果未知', ...APPROVAL_STATUS_LABELS } as Record<string, string>)[status] ||
       status
     );
   }
   function statusColor(status: string): string {
     return (
-      ({ DRAFT: 'blue', SENDING: 'processing', DELIVERED: 'success', REJECTED: 'error', UNKNOWN: 'warning' } as Record<string, string>)[status] ||
+      ({ DRAFT: 'blue', SENDING: 'processing', DELIVERED: 'success', REJECTED: 'error', UNKNOWN: 'warning', ...APPROVAL_STATUS_COLORS } as Record<string, string>)[status] ||
       'default'
     );
   }
@@ -766,6 +777,19 @@
     } finally {
       if (version === auditHistoryVersion) auditHistoryLoading.value = false;
     }
+  }
+
+  /** 驳回或撤回之后：换上后台返回的最新状态，并刷新轨迹与列表。 */
+  async function onReviewedDeclined(command: ApprovalView) {
+    if (reviewed.value?.id !== command.id) return;
+    const kind = reviewKind.value;
+    reviewed.value = command as GmCommand;
+    if (kind === 'notice' && noticePrepared.value?.id === command.id) noticePrepared.value = command as GmCommand;
+    if (kind === 'campaign' && campaignPrepared.value?.id === command.id) campaignPrepared.value = command as GmCommand;
+    reviewConfirmed.value = false;
+    await loadAuditHistory(kind, command.id);
+    if (kind === 'campaign') await loadCampaignAudit();
+    else await loadNoticeAudit();
   }
 
   async function refreshReviewed() {

@@ -126,6 +126,9 @@ $WorkloadSecretSpecs = [ordered]@{
     'login-apple-signin'    = @{ Env = 'MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY'; Key = 'private-key'; Consumers = @('login') }
     'login-passport-admin'  = @{ Env = 'MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET'; Key = 'client-secret'; Consumers = @('login') }
     'login-nppa'            = @{ Env = 'MMORPG_LOGIN_NPPA_SECRET_KEY'; Key = 'secret'; Consumers = @('login') }
+    # content-guard 外部平台审核的两把 AppSecret(infra namespace;用例在本文件末尾「content-guard 外部平台审核」一节)。
+    'content-guard-wechat'  = @{ Env = 'MMORPG_CONTENT_GUARD_WECHAT_APP_SECRET'; Key = 'secret'; Consumers = @('content-guard') }
+    'content-guard-douyin'  = @{ Env = 'MMORPG_CONTENT_GUARD_DOUYIN_APP_SECRET'; Key = 'secret'; Consumers = @('content-guard') }
 }
 
 # C++ 节点角色读的工作负载密钥,按契约表顺序(= 目录表顺序 = Pod 模板上指纹的先后,见 k8s_deploy.ps1 的 New-CppPodAnnotationBlock)。
@@ -4478,7 +4481,8 @@ Test-Case 'Redis 总账输入(两个域都在核心上,dev 缺省):客户端表 
         Assert-Equal -Expected 0 -Actual ([int]$client.DefaultPools + [int]$client.PubSub) -Because "$($client.Name) 在玩家域没有缺省池和 Pub/Sub(各行的池上限见 redis_player_cluster_contract)"
     }
 
-    # match 私有集群那份总账(Get-RedisMatchConnectionLedgerInputs)同样按缺省池记 match 的 go-zero 集群句柄,一并核副本数与 CPU limit。
+    # match 私有集群那份总账(Get-RedisMatchConnectionLedgerInputs)一并核副本数。它也是显式池(shared/clusterredis,缺口第 34 条),
+    # 没有缺省池,下面的 CPU limit 核对对它不生效;有缺省池的行才核。
     foreach ($client in @($inputs.Clients) + @((Get-RedisMatchConnectionLedgerInputs).Clients)) {
         $manifestText = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) $client.Manifest)) -replace "`r`n", "`n"
         $replicas = [regex]::Matches($manifestText, '(?m)^  replicas:[ \t]*(\d+)[ \t]*$')
@@ -5528,32 +5532,44 @@ Test-Case 'match 不再发评分快照:ConfigMap 没有 RatingSnapshot* 键,Pod 
     Assert-True -Condition ($paramNames -notcontains 'MatchRatingSnapshotPublish') -Because '参数已删,传它要在参数绑定时报错'
 }
 
-Test-Case 'Redis 连接总账:match 行没有缺省池的前提 —— match ConfigMap 恒写 MatchRedis,指向 redis-match-cluster 的每个 Pod,Type cluster' {
+Test-Case 'Redis 连接总账:match 私有键不落核心的前提 —— match ConfigMap 恒写 MatchRedis,种子是 redis-match-cluster 的每个 Pod,Cluster: true,池上限镜像服务 yaml' {
     $RepoRoot = Get-RepoRoot
-    # go/match 的 NewRedisHandles 在 MatchRedis.Host 为空时静默回落到 Redis 段(核心库),多一个 go-zero 缺省池(10 × GOMAXPROCS)。
-    # 总账 match 行记 DefaultPools = 0 只在这一段恒写时成立;这一段没了或指错地方,这里先变红,逼着同改总账那一行。
+    # go/match 的 NewMatchRedis 在 MatchRedis.Addrs 没写时落到 Redis 段(核心库),核心上就多一个 match 私有键的池(config.EffectiveMatchRedis)。
+    # 核心总账的 match 行不记这个池,只在这一段恒写时成立;这一段没了或指错地方,这里先变红,逼着同改总账那一行。
     Assert-Equal -Expected 0 -Actual $guildInfraRun.ExitCode -Because "带全局 Go 服务的 infra-up DryRun 必须成功。输出: $($guildInfraRun.Output)"
     $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $guildInfraRun.Output -Name 'go-svc-match-config')
-    Assert-Equal -Expected 'cluster' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.match_service.yaml.MatchRedis.Type') -Because 'MatchRedis 是 Redis Cluster'
+    Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.match_service.yaml.MatchRedis.Cluster') -Because 'MatchRedis 是 Redis Cluster(shared/clusterredis 的 Cluster: true)'
     # 种子地址独立从集群清单的副本数推出来,不抄生成器里的常数:清单改了副本数而生成器没跟,这里同样变红。
     $clusterManifest = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'deploy/k8s/manifests/infra/redis-match-cluster.yaml'))
     $replicas = [regex]::Matches($clusterManifest, '(?m)^  replicas:[ \t]*(\d+)[ \t]*\r?$')
     Assert-Equal -Expected 1 -Actual $replicas.Count -Because 'redis-match-cluster.yaml 里两格缩进的 replicas 行应恰好 1 处'
-    $expectedHosts = @(0..([int]$replicas[0].Groups[1].Value - 1) | ForEach-Object { "redis-match-cluster-$_.redis-match-cluster.contract-battle-infra.svc.cluster.local:6379" }) -join ','
-    Assert-Equal -Expected $expectedHosts -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.match_service.yaml.MatchRedis.Host') -Because 'MatchRedis.Host 必须是 redis-match-cluster 每个 Pod 的 headless DNS:不能为空,也不能指向核心 redis'
+    $seedCount = [int]$replicas[0].Groups[1].Value
+    foreach ($index in 0..($seedCount - 1)) {
+        Assert-Equal -Expected "redis-match-cluster-$index.redis-match-cluster.contract-battle-infra.svc.cluster.local:6379" `
+            -Actual (Get-FlatValue -Flat $flat -KeyPath "data.match_service.yaml.MatchRedis.Addrs[$index]") `
+            -Because 'MatchRedis.Addrs 必须是 redis-match-cluster 每个 Pod 的 headless DNS:不能为空,也不能指向核心 redis'
+    }
+    Assert-True -Condition (-not $flat.Scalars.Contains("data.match_service.yaml.MatchRedis.Addrs[$seedCount]")) -Because '种子个数等于集群清单的副本数,不多写'
+    Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/match/etc/match_service.yaml' -KeyPath 'MatchRedis.PoolSizePerNode') `
+        -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.match_service.yaml.MatchRedis.PoolSizePerNode') -Because '池上限镜像服务 yaml(连接总账读同一个键)'
+    # 旧的 go-zero 形状(Host 逗号串 / Type / Key)与口令都不再渲染:clusterredis.Config 没有这些键,写了也没人读;这套集群不设口令。
+    foreach ($key in @('Host', 'Type', 'Key', 'Pass', 'Password', 'PasswordEnv')) {
+        Assert-True -Condition (-not $flat.Scalars.Contains("data.match_service.yaml.MatchRedis.$key")) -Because "match ConfigMap 的 MatchRedis 段不该有 $key"
+    }
     $matchRow = @((Get-RedisConnectionLedgerInputs).Clients | Where-Object { $_.Name -eq 'match' })
     Assert-Equal -Expected 1 -Actual $matchRow.Count -Because 'Redis 连接总账里 match 只能有一行'
     Assert-Equal -Expected '0/0' -Actual ('{0}/{1}' -f $matchRow[0].DefaultPools, $matchRow[0].GoMaxProcs) -Because '前提成立时 match 在核心 Redis 上没有缺省池'
 }
 
-Test-Case 'Redis 连接总账:redis-match-cluster 单独一份 —— 只有 match 的 go-zero 集群句柄,每副本对每个主节点一个缺省池;写路径打一行,-WaitReady 等建群 Job 后逐节点核对 maxclients' {
+Test-Case 'Redis 连接总账:redis-match-cluster 单独一份 —— 只有 match 的 clusterredis 句柄,每副本对每个主节点一个显式上限的池;写路径打一行,-WaitReady 等建群 Job 后逐节点核对 maxclients' {
     $RepoRoot = Get-RepoRoot
     $inputs = Get-RedisMatchConnectionLedgerInputs
     Assert-Equal -Expected (Get-RedisMaxClientsFromManifest -RelativePath 'deploy/k8s/manifests/infra/redis-match-cluster.yaml') -Actual $inputs.MaxClients -Because 'maxclients 读 redis-match-cluster.yaml 的 MAXCLIENTS'
     Assert-Equal -Expected 'match' -Actual (@($inputs.Clients | ForEach-Object { $_.Name }) -join ',') -Because '连这套集群的只有 match(chat 已不连 Redis);新增一个连它的服务 = 这份总账加一行'
     $row = @($inputs.Clients)[0]
-    Assert-Equal -Expected 'global/0/1/2/0/0' -Actual ('{0}/{1}/{2}/{3}/{4}/{5}' -f $row.Scope, $row.ConfiguredPoolConns, $row.DefaultPools, $row.GoMaxProcs, $row.PubSub, $row.Fixed) `
-        -Because 'go-zero 的集群客户端没有池参数:每副本对每个主节点一个缺省池(10 × GOMAXPROCS,G 按 2 记),没有订阅、没有固定连接'
+    $matchPool = Get-EtcValue -RelativePath 'go/match/etc/match_service.yaml' -KeyPath 'MatchRedis.PoolSizePerNode'
+    Assert-Equal -Expected "global/$matchPool/0/0/0/0" -Actual ('{0}/{1}/{2}/{3}/{4}/{5}' -f $row.Scope, $row.ConfiguredPoolConns, $row.DefaultPools, $row.GoMaxProcs, $row.PubSub, $row.Fixed) `
+        -Because 'shared/clusterredis 的句柄:每副本对每个主节点一个显式上限的池(服务 yaml 的 MatchRedis.PoolSizePerNode),没有缺省池、没有订阅、没有固定连接'
     # 写路径(这里是 -WaitReady 的 infra-up DryRun)打的那一行,数值与纯函数同源:滚动余量、运维余量、告警比例取规划档,只有全局客户端,zone 数传 1。
     $plan = Get-RedisConnectionPlan
     $ledger = Get-RedisConnectionLedger -Inputs $inputs -ZoneCount 1 -CppZoneProcesses 0 -BattleProcesses 0 `
@@ -8363,6 +8379,233 @@ Test-Case 'Apple 撤销令牌源码形状:私钥只在 Initialize-InjectedSecret
 }
 
 # ─────────────────────────────────────────────────────────────────
+# login 官方通行证(自托管 Casdoor OIDC,docs/design/official-passport-registration.md):AuthProviders.Passport 渲染与管理凭据注入
+# ─────────────────────────────────────────────────────────────────
+# 链路:-LoginPassportIssuer / -LoginPassportClientId / -LoginPassportAdminClientId(要么都给要么都不给)+ 可选的 -LoginPassportEndpoint →
+# login ConfigMap 的 AuthProviders.Passport(Issuer、ClientId、给了的 Endpoint、AdminClientId 与只写变量名的 AdminClientSecretEnv);
+# 环境变量 MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET(通行证里机密应用的 ClientSecret)→ zone namespace 的单键 Secret login-passport-admin
+# (键 client-secret)→ login 容器的同名变量(secretKeyRef)+ 指纹注解。走工作负载密钥目录,断言复用文件开头的工具。
+# Go 侧契约见 go/login/internal/config/passport_auth.go(PassportAuthConf / resolvePassportProvider:生产模式缺管理凭据即拒启,
+# AdminClientId 不能等于 ClientId,Issuer 生产只认 https 且不带末尾的 /)。
+# 纯函数沿用前几节抽出的那几个,另抽 Resolve-LoginPassportAdminClientSecret;端到端另起 3 个 DryRun 子进程(都带 -SkipJavaSvc)。
+$loginPassportResolverAst = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Resolve-LoginPassportAdminClientSecret' }, $false)
+if ($null -eq $loginPassportResolverAst) { throw 'k8s_deploy.ps1 缺少函数 Resolve-LoginPassportAdminClientSecret(官方通行证管理凭据的解析被删了?后续断言无意义)' }
+Set-Item -Path 'Function:script:Resolve-LoginPassportAdminClientSecret' -Value $loginPassportResolverAst.Body.GetScriptBlock()
+
+$LoginPassportTestIssuer = 'https://passport.contract.test'
+$LoginPassportTestClientId = 'contract-game-client'
+$LoginPassportTestAdminClientId = 'contract-game-server'
+$LoginPassportTestEndpoint = 'http://casdoor.contract-infra:8000'
+# 不短于 16 位、非占位、不含首尾空白,与别的测试密钥都不同;用来断言它不出现在任何输出里。
+$LoginPassportTestSecret = 'contract-passport-admin-secret-0123456789'
+$LoginPassportArgs = @('-LoginPassportIssuer', $LoginPassportTestIssuer, '-LoginPassportClientId', $LoginPassportTestClientId, '-LoginPassportAdminClientId', $LoginPassportTestAdminClientId)
+# dev:官方通行证,带内网的 http Endpoint。
+$loginPassportDevRun = Invoke-DeployDryRun -Arguments ($LoginAuthDevArgs + $LoginPassportArgs + @('-LoginPassportEndpoint', $LoginPassportTestEndpoint)) -Env @{ MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET = $LoginPassportTestSecret }
+# 负向:三项给齐却没设管理凭据(dev 也没有回落值)。
+$loginPassportNoSecretRun = Invoke-DeployDryRun -Arguments ($LoginAuthDevArgs + $LoginPassportArgs) -Env @{ MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET = '' }
+# 负向:没给 -LoginPassportAdminClientId。管理凭据给齐,拒绝只能来自参数门禁。
+$loginPassportHalfRun = Invoke-DeployDryRun -Arguments ($LoginAuthDevArgs + @('-LoginPassportIssuer', $LoginPassportTestIssuer, '-LoginPassportClientId', $LoginPassportTestClientId)) `
+    -Env @{ MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET = $LoginPassportTestSecret }
+
+Test-Case '纯函数 Get-LoginAuthProviderParamErrors(官方通行证):三项不齐、AdminClientId 等于 ClientId、非 dev 档的 http Issuer、带末尾 / 或用户信息或查询串或片段的 Issuer、非法的应用标识、单给 Endpoint 都报错并点名参数,不回显值;一处错只报一条;合法组合放行' {
+    # 在合法的三项上改几项(给空串 = 不给这一项),带上档位。
+    $with = {
+        param([hashtable]$Set, [string]$ReleaseProfile = 'prod')
+        $fnArgs = @{ PassportIssuer = $LoginPassportTestIssuer; PassportClientId = $LoginPassportTestClientId; PassportAdminClientId = $LoginPassportTestAdminClientId; ReleaseProfile = $ReleaseProfile }
+        foreach ($key in $Set.Keys) { $fnArgs[$key] = $Set[$key] }
+        return $fnArgs
+    }
+    $rejects = @(
+        @{ Why = '缺管理应用'; Args = (& $with @{ PassportAdminClientId = '' }); Pattern = '-LoginPassportIssuer、-LoginPassportClientId 与 -LoginPassportAdminClientId 要么都给要么都不给' }
+        @{ Why = '缺签发方'; Args = (& $with @{ PassportIssuer = '' } 'dev'); Pattern = '-LoginPassportIssuer、-LoginPassportClientId 与 -LoginPassportAdminClientId 要么都给要么都不给' }
+        @{ Why = '缺客户端应用'; Args = (& $with @{ PassportClientId = '' } 'staging'); Pattern = '-LoginPassportIssuer、-LoginPassportClientId 与 -LoginPassportAdminClientId 要么都给要么都不给' }
+        @{ Why = '只给签发方'; Args = (& $with @{ PassportClientId = ''; PassportAdminClientId = '' } 'dev'); Pattern = '-LoginPassportIssuer、-LoginPassportClientId 与 -LoginPassportAdminClientId 要么都给要么都不给' }
+        @{ Why = 'AdminClientId 等于 ClientId'; Args = (& $with @{ PassportAdminClientId = $LoginPassportTestClientId }); Pattern = '-LoginPassportAdminClientId 与 -LoginPassportClientId 相同' }
+        @{ Why = 'prod 档 http Issuer'; Args = (& $with @{ PassportIssuer = 'http://passport.contract.test' }); Pattern = '-LoginPassportIssuer 在 -ReleaseProfile prod 只接受 https://' }
+        @{ Why = 'staging 档 http Issuer'; Args = (& $with @{ PassportIssuer = 'http://passport.contract.test:8000' } 'staging'); Pattern = '-LoginPassportIssuer 在 -ReleaseProfile staging 只接受 https://' }
+        @{ Why = 'Issuer 带末尾的 /'; Args = (& $with @{ PassportIssuer = 'https://passport.contract.test/' } 'dev'); Pattern = '-LoginPassportIssuer 须是 https://主机' }
+        @{ Why = 'Issuer 的路径带末尾的 /'; Args = (& $with @{ PassportIssuer = 'https://passport.contract.test/auth/' }); Pattern = '-LoginPassportIssuer 须是 https://主机' }
+        @{ Why = 'Issuer 带用户信息'; Args = (& $with @{ PassportIssuer = 'https://ops:hunter2pw@passport.contract.test' }); Pattern = '-LoginPassportIssuer 须是 https://主机'; NoEcho = 'hunter2pw' }
+        @{ Why = 'Issuer 带查询串'; Args = (& $with @{ PassportIssuer = 'https://passport.contract.test?tenant=1' }); Pattern = '-LoginPassportIssuer 须是 https://主机' }
+        @{ Why = 'Issuer 带片段'; Args = (& $with @{ PassportIssuer = 'https://passport.contract.test#top' }); Pattern = '-LoginPassportIssuer 须是 https://主机' }
+        @{ Why = 'Issuer 没有 scheme'; Args = (& $with @{ PassportIssuer = 'passport.contract.test' } 'dev'); Pattern = '-LoginPassportIssuer 须是 https://主机' }
+        @{ Why = 'Issuer 结尾带换行($ 会放过,必须 \z)'; Args = (& $with @{ PassportIssuer = "https://passport.contract.test`n" }); Pattern = '-LoginPassportIssuer 须是 https://主机' }
+        @{ Why = 'Issuer 含 ${'; Args = (& $with @{ PassportIssuer = 'https://${PASSPORT_HOST}' } 'dev'); Pattern = '-LoginPassportIssuer 含未展开的' }
+        @{ Why = 'ClientId 含空格'; Args = (& $with @{ PassportClientId = 'contract game client' } 'dev'); Pattern = '-LoginPassportClientId 只允许 \[A-Za-z0-9_\.-\]' }
+        @{ Why = 'AdminClientId 结尾带换行'; Args = (& $with @{ PassportAdminClientId = "$LoginPassportTestAdminClientId`n" }); Pattern = '-LoginPassportAdminClientId 只允许 \[A-Za-z0-9_\.-\]' }
+        @{ Why = '单给 Endpoint'; Args = @{ PassportEndpoint = 'https://casdoor.contract.test'; ReleaseProfile = 'prod' }; Pattern = '给了 -LoginPassportEndpoint 却没给 -LoginPassportClientId' }
+        @{ Why = 'prod 档 http Endpoint'; Args = (& $with @{ PassportEndpoint = $LoginPassportTestEndpoint }); Pattern = '-LoginPassportEndpoint 在 -ReleaseProfile prod 只接受 https://.*验签公钥' }
+    )
+    foreach ($case in $rejects) {
+        $fnArgs = $case.Args
+        $errors = @(Get-LoginAuthProviderParamErrors @fnArgs)
+        Assert-True -Condition ($errors.Count -ge 1) -Because "$($case.Why):必须报错(fail-closed),不能放行"
+        Assert-Match -Text ($errors -join "`n") -Pattern $case.Pattern -Because "$($case.Why):错误文本必须点名参数与原因"
+        $message = ''
+        try { New-LoginAuthProvidersYaml @fnArgs -WeChatAppSecretEnv 'LOGIN_WECHAT_APP_SECRET' | Out-Null } catch { $message = $_.Exception.Message }
+        Assert-Match -Text $message -Pattern '^生成 login ConfigMap 的 AuthProviders 段失败:' -Because "$($case.Why):生成器用同一份规则纵深防御,必须 throw"
+        if ($case.NoEcho) {
+            Assert-NotMatch -Text (($errors -join "`n") + "`n" + $message) -Pattern ([regex]::Escape($case.NoEcho)) -Because "$($case.Why):报错不回显 Issuer 的值(用户信息里可能有口令)"
+        }
+    }
+    # 一处错只报一条:http 的 Issuer 不再叠一条形状错误,三项不齐不再叠一条「相同」。
+    foreach ($single in @((& $with @{ PassportIssuer = 'http://passport.contract.test' }), (& $with @{ PassportAdminClientId = '' }))) {
+        $errors = @(Get-LoginAuthProviderParamErrors @single)
+        Assert-Equal -Expected 1 -Actual $errors.Count -Because "一处错只报一条(实际:$($errors -join ' | '))"
+    }
+
+    $passes = @(
+        @{ Why = 'prod 档三项给齐'; Args = (& $with @{}) }
+        @{ Why = 'prod 档带 https Endpoint,Issuer 带端口与路径'; Args = (& $with @{ PassportIssuer = 'https://passport.contract.test:8443/auth'; PassportEndpoint = 'https://casdoor.contract.test:8000' }) }
+        @{ Why = 'dev 档 http 的 Issuer 与内网 Endpoint'; Args = (& $with @{ PassportIssuer = 'http://passport.contract.test:8000'; PassportEndpoint = $LoginPassportTestEndpoint } 'dev') }
+        @{ Why = '都不给(不开通行证)'; Args = @{ ReleaseProfile = 'prod' } }
+    )
+    foreach ($case in $passes) {
+        $fnArgs = $case.Args
+        $errors = @(Get-LoginAuthProviderParamErrors @fnArgs)
+        Assert-Equal -Expected 0 -Actual $errors.Count -Because "$($case.Why):合法组合必须放行(实际报错:$($errors -join ' | '))"
+    }
+}
+
+Test-Case '纯函数 New-LoginAuthProvidersYaml(官方通行证):给了三项才写 Passport 段,键是 Issuer / ClientId / AdminClientId / AdminClientSecretEnv,Endpoint 只在给了时写;AdminClientSecretEnv 是目录表 login-passport-admin 的变量名,从不写内联密钥;七段齐全时通行证排在最后;没开时片段里不出现这一段' {
+    $flat = ConvertFrom-YamlToFlatMap -Text (New-LoginAuthProvidersYaml -PassportIssuer $LoginPassportTestIssuer -PassportClientId $LoginPassportTestClientId `
+            -PassportAdminClientId $LoginPassportTestAdminClientId -ReleaseProfile 'prod' -WeChatAppSecretEnv 'LOGIN_WECHAT_APP_SECRET')
+    Assert-Equal -Expected 'AuthProviders,AuthProviders.Passport,AuthProviders.Passport.Issuer,AuthProviders.Passport.ClientId,AuthProviders.Passport.AdminClientId,AuthProviders.Passport.AdminClientSecretEnv' `
+        -Actual ((Get-FlatSubtreeKeys -Flat $flat -Path 'AuthProviders') -join ',') -Because '只配通行证且不给 Endpoint:四个键,管理凭据本身不进配置(Endpoint 不写 = login 直接用 Issuer)'
+    Assert-True -Condition ($flat.Scalars['AuthProviders.Passport.Issuer'] -ceq $LoginPassportTestIssuer -and $flat.Scalars['AuthProviders.Passport.ClientId'] -ceq $LoginPassportTestClientId -and
+        $flat.Scalars['AuthProviders.Passport.AdminClientId'] -ceq $LoginPassportTestAdminClientId) -Because 'Issuer / ClientId / AdminClientId 原样写出'
+    # 生成器里的 AdminClientSecretEnv 是字面量(它会被按 AST 单独抽出来跑,不读目录表):核对它与目录表的变量名逐字相同,否则 login 读的变量没人注入。
+    $catalogAssign = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.AssignmentStatementAst] -and $a.Left.Extent.Text -eq '$script:WorkloadSecretCatalog' }, $true)
+    $catalog = & ([scriptblock]::Create($catalogAssign.Right.Extent.Text))
+    Assert-True -Condition ($catalog.Contains('login-passport-admin')) -Because '工作负载密钥目录里要有 login-passport-admin'
+    Assert-Equal -Expected ([string]$catalog['login-passport-admin'].Env) -Actual $flat.Scalars['AuthProviders.Passport.AdminClientSecretEnv'] -Because 'AuthProviders.Passport.AdminClientSecretEnv 必须是目录表给 login-passport-admin 注入的那个变量'
+    Assert-True -Condition (-not $flat.Scalars.Contains('AuthProviders.Passport.AdminClientSecret')) -Because '从不写内联的 AdminClientSecret(login 生产模式拒绝内联密钥)'
+
+    $withEndpoint = ConvertFrom-YamlToFlatMap -Text (New-LoginAuthProvidersYaml -PassportIssuer $LoginPassportTestIssuer -PassportClientId $LoginPassportTestClientId `
+            -PassportEndpoint 'https://casdoor.contract.test:8000' -PassportAdminClientId $LoginPassportTestAdminClientId -ReleaseProfile 'prod' -WeChatAppSecretEnv 'LOGIN_WECHAT_APP_SECRET')
+    Assert-Equal -Expected 'AuthProviders,AuthProviders.Passport,AuthProviders.Passport.Issuer,AuthProviders.Passport.ClientId,AuthProviders.Passport.Endpoint,AuthProviders.Passport.AdminClientId,AuthProviders.Passport.AdminClientSecretEnv' `
+        -Actual ((Get-FlatSubtreeKeys -Flat $withEndpoint -Path 'AuthProviders') -join ',') -Because '给了 Endpoint 才多这一个键'
+    Assert-Equal -Expected 'https://casdoor.contract.test:8000' -Actual $withEndpoint.Scalars['AuthProviders.Passport.Endpoint'] -Because 'Endpoint 原样写出'
+
+    $allText = New-LoginAuthProvidersYaml -WeChatAppId $LoginWeChatTestAppId -QQAppId $LoginQQTestAppId `
+        -WeChatMiniGameAppId $LoginWeChatMiniGameTestAppId -DouyinMiniGameAppId $LoginDouyinMiniGameTestAppId `
+        -AppleClientId $LoginAppleTestClientId -GoogleClientId $LoginGoogleTestClientId `
+        -PassportIssuer $LoginPassportTestIssuer -PassportClientId $LoginPassportTestClientId -PassportAdminClientId $LoginPassportTestAdminClientId `
+        -ReleaseProfile 'prod' -WeChatAppSecretEnv 'LOGIN_WECHAT_APP_SECRET'
+    $sectionOrder = (@([regex]::Matches($allText, '(?m)^  (?<name>[A-Za-z]+):[ ]*$') | ForEach-Object { $_.Groups['name'].Value }) -join ',')
+    Assert-Equal -Expected 'WeChat,QQ,WeChatMiniGame,DouyinMiniGame,Apple,Google,Passport' -Actual $sectionOrder -Because '七段的先后固定(防误关的照传串按这个顺序拼),通行证排在最后'
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($allText, '(?m)^AuthProviders:[ ]*$').Count) -Because '片段里顶层 AuthProviders: 恰好一个'
+
+    $appleOnlyText = New-LoginAuthProvidersYaml -AppleClientId $LoginAppleTestClientId -ReleaseProfile 'prod' -WeChatAppSecretEnv 'LOGIN_WECHAT_APP_SECRET'
+    Assert-NotMatch -Text $appleOnlyText -Pattern 'Passport|Issuer|AdminClient|通行证' -Because '没配通行证时片段里不出现这一段(与接入之前逐字相同)'
+}
+
+Test-Case '纯函数 Resolve-LoginPassportAdminClientSecret:任何档位缺失即 throw(dev 也没有回落值)并点名参数与环境变量;prod 占位串与过短、各档的首尾空白与 ${ 都拒绝且不回显值;合法值原样返回' {
+    $envName = 'MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET'
+    $saved = [System.Environment]::GetEnvironmentVariable($envName)
+    try {
+        $cases = @(
+            @{ Why = 'dev 未设置'; Profile = 'dev'; Value = ''; Pattern = '-LoginPassportIssuer / -LoginPassportAdminClientId 需要环境变量 MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET' }
+            @{ Why = 'staging 未设置'; Profile = 'staging'; Value = ''; Pattern = 'ReleaseProfile=staging 要求从环境变量 MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET' }
+            @{ Why = 'prod 占位串'; Profile = 'prod'; Value = 'change-me-in-production'; Pattern = 'MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET.*仍是占位串' }
+            @{ Why = 'prod 短于 16 位'; Profile = 'prod'; Value = 'short-secret-01'; Pattern = 'MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET.*长度 15 < 要求的 16'; NoEcho = $true }
+            @{ Why = 'dev 结尾带换行'; Profile = 'dev'; Value = "$LoginPassportTestSecret`n"; Pattern = 'MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET 的值含首尾空白'; NoEcho = $true }
+            @{ Why = 'prod 开头带空格'; Profile = 'prod'; Value = " $LoginPassportTestSecret"; Pattern = 'MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET 的值含首尾空白'; NoEcho = $true }
+            @{ Why = 'staging 含 ${'; Profile = 'staging'; Value = 'contract-${PASSPORT_ADMIN_SECRET}-0123'; Pattern = 'MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET 的值含未展开的'; NoEcho = $true }
+        )
+        foreach ($case in $cases) {
+            [System.Environment]::SetEnvironmentVariable($envName, $case.Value)
+            $message = ''
+            try { Resolve-LoginPassportAdminClientSecret -ReleaseProfile $case.Profile | Out-Null } catch { $message = $_.Exception.Message }
+            Assert-Match -Text $message -Pattern $case.Pattern -Because "$($case.Why):必须在写操作之前 throw 并点名环境变量"
+            if ($case.NoEcho) {
+                Assert-NotMatch -Text $message -Pattern ([regex]::Escape($case.Value.Trim())) -Because "$($case.Why):报错不回显值"
+            }
+        }
+        foreach ($profileName in @('dev', 'staging', 'prod')) {
+            [System.Environment]::SetEnvironmentVariable($envName, $LoginPassportTestSecret)
+            $got = Resolve-LoginPassportAdminClientSecret -ReleaseProfile $profileName
+            Assert-True -Condition ($got -ceq $LoginPassportTestSecret) -Because "$profileName 档合法值必须原样返回"
+        }
+    }
+    finally {
+        [System.Environment]::SetEnvironmentVariable($envName, $saved)
+    }
+}
+
+Test-Case 'login 官方通行证不配(基线):login 不注入管理凭据、不带它的指纹、不建 Secret login-passport-admin,残留的 Secret 照删;摘要行写明没开' {
+    $doc = Select-WorkloadSecretDoc -Output $devOut -Name 'login' -Label 'dev 基线 login'
+    Assert-NoWorkloadSecret -Doc $doc -SecretName 'login-passport-admin' -Label 'dev 基线 login'
+    Assert-NotMatch -Text $devOut -Pattern '# Secret login-passport-admin ' -Because '没给 -LoginPassportIssuer 就不建 Secret'
+    Assert-Match -Text $devOut -Pattern '(?m)^\[dry-run\] kubectl delete secret login-passport-admin -n \S+ --ignore-not-found\s*$' -Because '不粘滞:上次开过、这次没给,要删掉残留的管理凭据 Secret'
+    Assert-Match -Text $devOut -Pattern 'login_passport=False' -Because '写路径入口的摘要行要写明通行证没开'
+}
+
+Test-Case '端到端 dev 档配官方通行证:ConfigMap 写 Issuer / ClientId / Endpoint / AdminClientId 与变量名,管理凭据原文不进输出,经单键 Secret login-passport-admin 注入并带指纹,Secret 先于引用、开着时不删;摘要行写明开了' {
+    $run = $loginPassportDevRun
+    Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "dev 档配官方通行证并给了管理凭据必须成功。输出: $($run.Output)"
+    $out = $run.Output
+    $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $out -Name 'go-svc-login-config')
+    $expected = [ordered]@{
+        'data.login.yaml.AuthProviders.Passport.Issuer'               = $LoginPassportTestIssuer
+        'data.login.yaml.AuthProviders.Passport.ClientId'             = $LoginPassportTestClientId
+        'data.login.yaml.AuthProviders.Passport.Endpoint'             = $LoginPassportTestEndpoint
+        'data.login.yaml.AuthProviders.Passport.AdminClientId'        = $LoginPassportTestAdminClientId
+        'data.login.yaml.AuthProviders.Passport.AdminClientSecretEnv' = $WorkloadSecretSpecs['login-passport-admin'].Env
+    }
+    foreach ($key in $expected.Keys) {
+        $actual = Get-FlatValue -Flat $flat -KeyPath $key
+        Assert-True -Condition ($actual -ceq $expected[$key]) -Because "$key 期望 '$($expected[$key])',实际 '$actual'"
+    }
+    $leafKeys = @(Get-FlatSubtreeKeys -Flat $flat -Path 'data.login.yaml.AuthProviders' | Where-Object { $flat.Scalars[$_] -ne '' })
+    Assert-Equal -Expected ($expected.Keys -join ',') -Actual ($leafKeys -join ',') -Because 'AuthProviders 下只有这五个值:管理凭据不进 ConfigMap,只写变量名'
+    Assert-True -Condition (-not $out.Contains($LoginPassportTestSecret)) -Because '管理凭据只经 Secret 进容器:ConfigMap、Secret 意图行、指纹注解、日志里都不得有原文'
+
+    $doc = Select-WorkloadSecretDoc -Output $out -Name 'login' -Label 'dev 官方通行证 login'
+    Assert-WorkloadSecretEnvRef -Doc $doc -SecretName 'login-passport-admin' -Label 'dev 官方通行证 login'
+    Assert-WorkloadSecretHash -Doc $doc -SecretName 'login-passport-admin' -Value $LoginPassportTestSecret -Label 'dev 官方通行证 login'
+    $pattern = '(?m)^\[dry-run\] kubectl apply -n \S+ -f -   # Secret login-passport-admin \(key client-secret; value hidden\)'
+    $line = [regex]::Match($out, $pattern)
+    $firstRef = $out.IndexOf("- name: $($WorkloadSecretSpecs['login-passport-admin'].Env)")
+    Assert-True -Condition ($line.Success -and $firstRef -gt $line.Index) -Because 'Secret login-passport-admin 必须先于引用它的 login 落地(secretKeyRef 不是 optional)'
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($out, $pattern).Count) -Because '同一次运行里 Secret login-passport-admin 只写一次'
+    Assert-NotMatch -Text $out -Pattern 'kubectl delete secret login-passport-admin ' -Because '开着通行证时不删自己要用的 Secret'
+    Assert-Match -Text $out -Pattern 'login_anti_addiction=False login_passport=True' -Because '写路径入口的摘要行要写明通行证开了(只展示是否启用,不展示密钥)'
+}
+
+Test-Case '端到端负向:dev 档给了官方通行证三项却没设 MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET,在任何 kubectl 写操作之前拒绝(没有回落值)' {
+    $run = $loginPassportNoSecretRun
+    Assert-True -Condition ($run.ExitCode -ne 0) -Because "缺管理凭据必须阻断:login 对缺失的 AdminClientSecretEnv 拒启。输出: $($run.Output)"
+    Assert-Match -Text $run.Output -Pattern '-LoginPassportIssuer / -LoginPassportAdminClientId 需要环境变量 MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET' -Because '错误必须点名参数与缺哪个环境变量'
+    Assert-NotMatch -Text $run.Output -Pattern '\[dry-run\] kubectl [^\r\n]*\b(apply|create|delete|patch|replace)\b' -Because '密钥解析(Initialize-InjectedSecrets)先于任何写操作,不留半截部署'
+}
+
+Test-Case '端到端负向:没给 -LoginPassportAdminClientId,在密钥解析与任何 kubectl 写操作之前拒绝,报的是参数原因(参数传进了参数门禁)' {
+    $run = $loginPassportHalfRun
+    Assert-True -Condition ($run.ExitCode -ne 0) -Because "三项不齐必须拒绝:login 生产模式对缺管理凭据的配置拒启。输出: $($run.Output)"
+    Assert-Match -Text $run.Output -Pattern 'login 第三方登录参数校验失败' -Because '拒绝来自写路径入口的参数门禁(Assert-LoginAuthProviderParams)'
+    Assert-Match -Text $run.Output -Pattern '-LoginPassportIssuer、-LoginPassportClientId 与 -LoginPassportAdminClientId 要么都给要么都不给' -Because '错误必须点名三个参数与原因'
+    Assert-NotMatch -Text $run.Output -Pattern '\[dry-run\] kubectl [^\r\n]*\b(apply|create|delete|patch|replace)\b' -Because '参数门禁先于任何写操作'
+    Assert-NotMatch -Text $run.Output -Pattern 'Client entry: mode=' -Because '参数门禁排在入口摘要行之前,拒绝后不再往下走'
+}
+
+Test-Case '官方通行证源码形状:管理凭据只在 Initialize-InjectedSecrets 解析、只在部署 login 且给了 -LoginPassportIssuer 时;删残留用的 Secret 名就是工作负载密钥目录的键' {
+    $initFn = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Initialize-InjectedSecrets' }, $false)
+    Assert-True -Condition ($null -ne $initFn) -Because '要有 Initialize-InjectedSecrets'
+    $resolveCalls = @($deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.CommandAst] -and $a.GetCommandName() -eq 'Resolve-LoginPassportAdminClientSecret' }, $true))
+    Assert-Equal -Expected 1 -Actual $resolveCalls.Count -Because '管理凭据只在一处解析'
+    Assert-True -Condition ($resolveCalls[0].Extent.StartOffset -gt $initFn.Extent.StartOffset -and $resolveCalls[0].Extent.EndOffset -lt $initFn.Extent.EndOffset) -Because '解析在 Initialize-InjectedSecrets 里(写路径入口懒解析,*-down / *-status 不被它挡住)'
+    $guard = $resolveCalls[0].Parent
+    while ($null -ne $guard -and $guard -isnot [System.Management.Automation.Language.IfStatementAst]) { $guard = $guard.Parent }
+    Assert-True -Condition ($null -ne $guard) -Because '解析必须包在 if 里'
+    $condition = $guard.Clauses[0].Item1.Extent.Text
+    Assert-True -Condition ($condition.Contains('$LoginPassportIssuer') -and $condition.Contains('Test-ZoneLoginDeployed')) -Because "只在部署 login 且给了 -LoginPassportIssuer 时解析(实际条件:$condition)"
+    $applyOne = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Apply-OneGoSvc' }, $false)
+    Assert-True -Condition ($null -ne $applyOne) -Because '要有 Apply-OneGoSvc'
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($applyOne.Extent.Text, '"delete", "secret", "login-passport-admin"').Count) -Because 'Apply-OneGoSvc 删残留的 Secret 名必须是目录表的键 login-passport-admin(名字不一致就删不到)'
+}
+
+# ─────────────────────────────────────────────────────────────────
 # login 实名与未成年人防沉迷(docs/design/real-name-anti-addiction.md §5.8):AntiAddiction 段渲染与国家系统 secretKey 注入
 # ─────────────────────────────────────────────────────────────────
 # 链路:-LoginNppaAppId / -LoginNppaBizId(要么都给要么都不给)+ 可选的 -LoginAntiAddictionExtraPlayDays 与三个地址 → login ConfigMap 顶层的
@@ -10374,6 +10617,368 @@ Test-Case 'zone-up:db 与回收 CronJob 先于 scene 下发;staging / prod 恒�
         Assert-Equal -Expected 1 -Actual ([regex]::Matches($out, '\[applied\] db ->').Count) -Because 'db 只下发一次,scene 之后那批 Go 服务跳过它'
         Assert-True -Condition ((Get-OutputIndex -Text $out -Needle '[applied] data-service ->') -gt $sceneAt) -Because '其余 Go 服务照旧在 scene 之后'
     }
+}
+
+# ─────────────────────────────────────────────────────────────────
+# content-guard 外部平台审核(微信 msgSecCheck / 抖音 antidirt;docs/design/rename-and-content-safety.md §6.5、§6.9)
+# ─────────────────────────────────────────────────────────────────
+# 链路:-ContentGuardWeChatAppId / -ContentGuardDouyinAppId → content-guard ConfigMap 的 Platform.WeChat / Platform.Douyin(AppID + AppSecretEnv);
+# 环境变量 MMORPG_CONTENT_GUARD_WECHAT_APP_SECRET / MMORPG_CONTENT_GUARD_DOUYIN_APP_SECRET → infra namespace 的单键 Secret
+# content-guard-wechat / content-guard-douyin → content-guard 容器的同名变量(secretKeyRef)+ 各自的指纹注解。两个都不给 = 不写 Platform。
+# 防误关闸(线上接着平台而本次漏传或换了 AppID)只在真跑时查集群,这里按 AST 抽出纯函数与闸本身,把读集群那一步换成夹具。
+# Go 侧契约见 go/content_guard/internal/config/config.go(validatePlatform、Timeout 预算)与 content_guard.go buildPlatformRouter。
+# 端到端另起 3 个 DryRun 子进程:dev infra-up 接两个平台、dev infra-up 缺 AppSecret、zone-up 给了参数(不生效)。基线复用 $guildInfraRun。
+$ContentGuardPlatformFunctionNames = @('Get-ContentGuardPlatformParamErrors', 'New-ContentGuardPlatformYaml', 'Resolve-ContentGuardPlatformAppSecret',
+    'ConvertFrom-ContentGuardPlatformYaml', 'Get-ContentGuardPlatformDrift', 'Assert-ContentGuardPlatformClusterState')
+foreach ($contentGuardFnAst in $deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
+    if ($ContentGuardPlatformFunctionNames -contains $contentGuardFnAst.Name) {
+        Set-Item -Path "Function:script:$($contentGuardFnAst.Name)" -Value $contentGuardFnAst.Body.GetScriptBlock()
+    }
+}
+foreach ($contentGuardFnName in $ContentGuardPlatformFunctionNames) {
+    if (-not (Test-Path "Function:$contentGuardFnName")) { throw "k8s_deploy.ps1 缺少函数 $contentGuardFnName(content-guard 外部平台审核的渲染 / 校验 / 防误关被删了?后续断言无意义)" }
+}
+# 防误关闸读集群的那一步换成夹具:闸只经它拿线上现状,测试里改 $script:ContentGuardLiveFixture 就能模拟各种线上状态。
+$script:ContentGuardLiveFixture = $null
+Set-Item -Path 'Function:script:Get-ContentGuardPlatformLiveState' -Value { param([string]$Namespace) return $script:ContentGuardLiveFixture }
+
+$ContentGuardWeChatTestAppId = 'wxcafe0123456789ab'
+$ContentGuardDouyinTestAppId = 'ttcafe0123456789ab'
+# ≥16 位、非占位、不含首尾空白与 ${,互不相同,也与本文件别处的测试密钥不同;用来断言它们不出现在任何输出里。
+$ContentGuardWeChatTestSecret = 'contract-cg-wechat-secret-0123456789'
+$ContentGuardDouyinTestSecret = 'contract-cg-douyin-secret-9876543210'
+$ContentGuardPlatforms = @(
+    @{ Section = 'WeChat'; SecretName = 'content-guard-wechat'; Env = 'MMORPG_CONTENT_GUARD_WECHAT_APP_SECRET'; Param = '-ContentGuardWeChatAppId'; AppId = $ContentGuardWeChatTestAppId; Secret = $ContentGuardWeChatTestSecret }
+    @{ Section = 'Douyin'; SecretName = 'content-guard-douyin'; Env = 'MMORPG_CONTENT_GUARD_DOUYIN_APP_SECRET'; Param = '-ContentGuardDouyinAppId'; AppId = $ContentGuardDouyinTestAppId; Secret = $ContentGuardDouyinTestSecret }
+)
+# dev infra-up(参数同 $guildInfraArgs)接两个平台。
+$contentGuardPlatformDevRun = Invoke-DeployDryRun -Arguments ($guildInfraArgs + @('-ContentGuardWeChatAppId', $ContentGuardWeChatTestAppId, '-ContentGuardDouyinAppId', $ContentGuardDouyinTestAppId)) `
+    -Env ($BattleTestEnv + @{ MMORPG_CONTENT_GUARD_WECHAT_APP_SECRET = $ContentGuardWeChatTestSecret; MMORPG_CONTENT_GUARD_DOUYIN_APP_SECRET = $ContentGuardDouyinTestSecret })
+# 负向:dev 档给了微信的 AppID 却没设它的 AppSecret(dev 也没有回落值)。
+$contentGuardPlatformNoSecretRun = Invoke-DeployDryRun -Arguments ($guildInfraArgs + @('-ContentGuardWeChatAppId', $ContentGuardWeChatTestAppId)) `
+    -Env ($BattleTestEnv + @{ MMORPG_CONTENT_GUARD_WECHAT_APP_SECRET = '' })
+# zone-up 不部署全局服务:给了参数只告警,也不解析它的 AppSecret(这里刻意不设环境变量)。
+$contentGuardPlatformZoneRun = Invoke-DeployDryRun -Arguments ($LoginAuthDevArgs + @('-ContentGuardWeChatAppId', $ContentGuardWeChatTestAppId)) `
+    -Env @{ MMORPG_CONTENT_GUARD_WECHAT_APP_SECRET = '' }
+
+Test-Case '纯函数 New-ContentGuardPlatformYaml:没给 AppID 不写 Platform;给了才写 AppID 与 AppSecretEnv(变量名,与工作负载密钥目录一致),不写密钥值、时限与地址;两段先后固定、顶层键只有一个;键名与 Go 侧配置结构一致' {
+    Assert-Equal -Expected '' -Actual (New-ContentGuardPlatformYaml) -Because '两个 AppID 都没给 = 空串:模板里不出现 Platform,只跑本地词库层(与接线之前相同)'
+    $wechatOnly = ConvertFrom-YamlToFlatMap -Text (New-ContentGuardPlatformYaml -WeChatAppId $ContentGuardWeChatTestAppId)
+    Assert-Equal -Expected 'Platform,Platform.WeChat,Platform.WeChat.AppID,Platform.WeChat.AppSecretEnv' -Actual ((Get-FlatSubtreeKeys -Flat $wechatOnly -Path 'Platform') -join ',') `
+        -Because '只接微信:只写 AppID 与 AppSecretEnv;BaseURL 不写 = 生产地址,四个时限不写 = 服务的缺省值(服务的 Timeout 按缺省值核过,见下一条)'
+    Assert-True -Condition ($wechatOnly.Scalars['Platform.WeChat.AppID'] -ceq $ContentGuardWeChatTestAppId) -Because 'AppID 原样写出'
+
+    $bothText = New-ContentGuardPlatformYaml -WeChatAppId $ContentGuardWeChatTestAppId -DouyinAppId $ContentGuardDouyinTestAppId
+    $both = ConvertFrom-YamlToFlatMap -Text $bothText
+    $sectionOrder = (@([regex]::Matches($bothText, '(?m)^  (?<name>[A-Za-z]+):[ ]*$') | ForEach-Object { $_.Groups['name'].Value }) -join ',')
+    Assert-Equal -Expected 'WeChat,Douyin' -Actual $sectionOrder -Because '两段的先后固定'
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($bothText, '(?m)^Platform:[ ]*$').Count) -Because '片段里顶层 Platform: 恰好一个'
+    Assert-True -Condition (-not $bothText.Contains('${')) -Because 'AppSecretEnv 是变量名,不是 ${...}:服务对含 ${ 的 AppSecretEnv 拒绝启动'
+
+    # 生成器里的 AppSecretEnv 是字面量(它会被按 AST 单独抽出来跑,不读目录表):这里核对它与目录表的变量名逐字相同,否则服务读的变量没人注入、拒绝启动。
+    $catalogAssign = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.AssignmentStatementAst] -and $a.Left.Extent.Text -eq '$script:WorkloadSecretCatalog' }, $true)
+    Assert-True -Condition ($null -ne $catalogAssign) -Because 'k8s_deploy.ps1 里必须有 $script:WorkloadSecretCatalog'
+    $catalog = & ([scriptblock]::Create($catalogAssign.Right.Extent.Text))
+    foreach ($platform in $ContentGuardPlatforms) {
+        Assert-True -Condition ($catalog.Contains($platform.SecretName)) -Because "工作负载密钥目录里要有 $($platform.SecretName)"
+        Assert-Equal -Expected ([string]$catalog[$platform.SecretName].Env) -Actual $both.Scalars["Platform.$($platform.Section).AppSecretEnv"] -Because "Platform.$($platform.Section).AppSecretEnv 必须是目录表给 $($platform.SecretName) 注入的那个变量"
+        Assert-Equal -Expected $platform.Env -Actual ([string]$catalog[$platform.SecretName].Env) -Because "$($platform.SecretName) 的变量名与部署输入同名"
+        Assert-Equal -Expected 'content-guard' -Actual (@($catalog[$platform.SecretName].Consumers) -join ',') -Because "$($platform.SecretName) 只注入 content-guard"
+    }
+
+    # 键名核对自服务的配置结构:Go 侧改了字段名,渲染出的键会被 go-zero 当未知键忽略、平台审核悄悄不开,所以这里先红。
+    $configGo = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'go/content_guard/internal/config/config.go'))
+    foreach ($field in @('Platform\s+PlatformConfig', 'WeChat\s+MiniGamePlatformConf', 'Douyin\s+MiniGamePlatformConf', 'AppID\s+string', 'AppSecretEnv\s+string')) {
+        Assert-Match -Text $configGo -Pattern ('(?m)^\s*' + $field + '\s+`json:",optional"`') -Because "content-guard 的配置结构里要有 $field(生成器按这个键名写)"
+    }
+}
+
+Test-Case '服务端超时盖得住平台调用:content-guard 的 Timeout(服务 yaml,ConfigMap 镜像同一个值)不小于「最长的平台调用 + 查渠道身份 + 200」;生成器不写时限,按服务的缺省值算' {
+    $configGo = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'go/content_guard/internal/config/config.go'))
+    $defaults = [ordered]@{}
+    foreach ($name in @('SyncTimeoutMs', 'AsyncTimeoutMs', 'LookupTimeoutMs')) {
+        $m = [regex]::Match($configGo, '(?m)^\s*' + $name + '\s+int\s+`json:",default=(?<v>\d+)"`')
+        Assert-True -Condition $m.Success -Because "夹具前提:config.go 的 PlatformConfig.$name 带 default 标签"
+        $defaults[$name] = [int]$m.Groups['v'].Value
+    }
+    $margin = [regex]::Match($configGo, '(?m)^const platformTimeoutMarginMs = (?<v>\d+)')
+    Assert-True -Condition $margin.Success -Because '夹具前提:config.go 有常量 platformTimeoutMarginMs'
+    $need = [Math]::Max($defaults['SyncTimeoutMs'], $defaults['AsyncTimeoutMs']) + $defaults['LookupTimeoutMs'] + [int]$margin.Groups['v'].Value
+    $timeout = [int](Get-EtcValue -RelativePath 'go/content_guard/etc/content_guard.yaml' -KeyPath 'Timeout')
+    Assert-True -Condition ($timeout -ge $need) -Because "go/content_guard/etc/content_guard.yaml 的 Timeout($timeout)必须不小于 ${need}:小于时接了平台的 content-guard 拒绝启动(config.Validate)"
+
+    Assert-Equal -Expected 0 -Actual $contentGuardPlatformDevRun.ExitCode -Because "接两个平台的 infra-up DryRun 必须成功。输出: $($contentGuardPlatformDevRun.Output)"
+    $embedded = Get-ConfigMapEmbeddedText -Block (Select-ManifestByName -Output $contentGuardPlatformDevRun.Output -Name 'go-svc-content-guard-config') -FileName 'content_guard.yaml'
+    Assert-Match -Text $embedded -Pattern ("(?m)^Timeout: {0}\s*$" -f $timeout) -Because '接了平台时 ConfigMap 的 Timeout 照样镜像服务 yaml'
+    foreach ($name in $defaults.Keys) {
+        Assert-NotMatch -Text $embedded -Pattern ("(?m)^\s+{0}:" -f $name) -Because "生成器不写 Platform.${name}:按服务的缺省值算,上面的不等式才成立"
+    }
+    Assert-NotMatch -Text $embedded -Pattern '(?m)^\s+BaseURL:' -Because '不写 BaseURL = 平台的生产地址'
+}
+
+Test-Case '纯函数 Get-ContentGuardPlatformParamErrors:非法 AppID 报错并点名参数;微信与 login 微信小游戏的 AppID 不同即拒绝,抖音不比;合法组合放行;生成器用同一份规则纵深防御' {
+    $rejects = @(
+        @{ Why = '微信 AppID 含空格'; Args = @{ WeChatAppId = 'wx 0123' }; Pattern = '-ContentGuardWeChatAppId only allows \[A-Za-z0-9_\.-\]' }
+        @{ Why = '抖音 AppID 含 ${'; Args = @{ DouyinAppId = 'tt01${APP_ID}' }; Pattern = '-ContentGuardDouyinAppId only allows' }
+        @{ Why = '微信 AppID 结尾带换行($ 会放过,必须 \z)'; Args = @{ WeChatAppId = "wx0123`n" }; Pattern = '-ContentGuardWeChatAppId only allows' }
+        @{ Why = '抖音 AppID 含引号'; Args = @{ DouyinAppId = 'tt"01' }; Pattern = '-ContentGuardDouyinAppId only allows' }
+        @{ Why = '微信与 login 微信小游戏的 AppID 不同'; Args = @{ WeChatAppId = 'wx0123'; LoginWeChatMiniGameAppId = 'wx4567' }; Pattern = '-ContentGuardWeChatAppId differs from -LoginWeChatMiniGameAppId' }
+        @{ Why = '只差大小写也算不同(按字节比)'; Args = @{ WeChatAppId = 'wxABC'; LoginWeChatMiniGameAppId = 'wxabc' }; Pattern = '-ContentGuardWeChatAppId differs from -LoginWeChatMiniGameAppId' }
+    )
+    foreach ($case in $rejects) {
+        $fnArgs = $case.Args
+        $errors = @(Get-ContentGuardPlatformParamErrors @fnArgs)
+        Assert-True -Condition ($errors.Count -ge 1) -Because "$($case.Why):必须报错(fail-closed),不能放行"
+        Assert-Match -Text ($errors -join "`n") -Pattern $case.Pattern -Because "$($case.Why):错误文本必须点名参数与原因"
+    }
+    foreach ($bad in @(@{ WeChatAppId = 'wx 0123' }, @{ DouyinAppId = "tt0123`n" })) {
+        $message = ''
+        try { New-ContentGuardPlatformYaml @bad | Out-Null } catch { $message = $_.Exception.Message }
+        Assert-Match -Text $message -Pattern '^Cannot render the Platform section of the content-guard ConfigMap: ' -Because '生成器用同一份规则纵深防御,必须 throw'
+    }
+    $passes = @(
+        @{ Why = '都不给'; Args = @{} }
+        @{ Why = '两个都给'; Args = @{ WeChatAppId = 'wx0123'; DouyinAppId = 'tt0123' } }
+        @{ Why = '微信与 login 微信小游戏的 AppID 相同'; Args = @{ WeChatAppId = 'wx0123'; LoginWeChatMiniGameAppId = 'wx0123' } }
+        @{ Why = '只给 login 那一边(无从比较)'; Args = @{ LoginWeChatMiniGameAppId = 'wx0123' } }
+        @{ Why = '只给 content-guard 这一边(无从比较)'; Args = @{ WeChatAppId = 'wx0123' } }
+    )
+    foreach ($case in $passes) {
+        $fnArgs = $case.Args
+        $errors = @(Get-ContentGuardPlatformParamErrors @fnArgs)
+        Assert-Equal -Expected 0 -Actual $errors.Count -Because "$($case.Why):合法组合必须放行(实际报错:$($errors -join ' | '))"
+    }
+    # 抖音的内容检测只带应用的调用凭据、不带玩家标识(go/content_guard/internal/platform/douyin.go),AppID 与 login 的不同也调得通:不比,也不收那个参数。
+    $paramFn = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Get-ContentGuardPlatformParamErrors' }, $false)
+    $paramNames = @($paramFn.Body.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
+    Assert-Equal -Expected 'WeChatAppId,DouyinAppId,LoginWeChatMiniGameAppId' -Actual ($paramNames -join ',') -Because '只比微信:抖音不收 login 的 AppId'
+}
+
+Test-Case '纯函数 Resolve-ContentGuardPlatformAppSecret:任何档位缺失即 throw(dev 也没有回落值)并点名参数与环境变量;staging 短于 16 位、prod 占位串、首尾空白、${ 都拒绝且不回显值;合法值原样返回' {
+    foreach ($platform in $ContentGuardPlatforms) {
+        $envName = $platform.Env
+        $saved = [System.Environment]::GetEnvironmentVariable($envName)
+        try {
+            $cases = @(
+                @{ Why = 'dev 未设置'; Profile = 'dev'; Value = ''; Pattern = ([regex]::Escape($platform.Param) + ' needs the environment variable ' + $envName) }
+                @{ Why = 'staging 未设置'; Profile = 'staging'; Value = ''; Pattern = ('ReleaseProfile=staging 要求从环境变量 ' + $envName) }
+                @{ Why = 'staging 短于 16 位'; Profile = 'staging'; Value = 'cg-short-secret'; Pattern = ($envName + '.*长度 15 < 要求的 16'); NoEcho = $true }
+                @{ Why = 'prod 占位串'; Profile = 'prod'; Value = 'change-me-in-production'; Pattern = ($envName + '.*仍是占位串') }
+                @{ Why = 'dev 首尾空白'; Profile = 'dev'; Value = "$($platform.Secret) "; Pattern = ('The environment variable ' + $envName + ' has leading or trailing whitespace'); NoEcho = $true }
+                @{ Why = 'prod 首尾空白'; Profile = 'prod'; Value = " $($platform.Secret)"; Pattern = ('The environment variable ' + $envName + ' has leading or trailing whitespace'); NoEcho = $true }
+                @{ Why = 'dev 含 ${'; Profile = 'dev'; Value = 'contract-${CG_APP_SECRET}-0123'; Pattern = ('The environment variable ' + $envName + ' contains an unexpanded') }
+            )
+            foreach ($case in $cases) {
+                [System.Environment]::SetEnvironmentVariable($envName, $case.Value)
+                $message = ''
+                try { Resolve-ContentGuardPlatformAppSecret -EnvName $envName -ParamName $platform.Param -Section $platform.Section -ReleaseProfile $case.Profile | Out-Null } catch { $message = $_.Exception.Message }
+                Assert-Match -Text $message -Pattern $case.Pattern -Because "$($platform.Section) $($case.Why):必须在写操作之前 throw 并点名环境变量"
+                if ($case.NoEcho) {
+                    Assert-NotMatch -Text $message -Pattern ([regex]::Escape($case.Value.Trim())) -Because "$($platform.Section) $($case.Why):报错不回显密钥"
+                }
+            }
+            foreach ($profileName in @('dev', 'staging', 'prod')) {
+                [System.Environment]::SetEnvironmentVariable($envName, $platform.Secret)
+                $got = Resolve-ContentGuardPlatformAppSecret -EnvName $envName -ParamName $platform.Param -Section $platform.Section -ReleaseProfile $profileName
+                Assert-True -Condition ($got -ceq $platform.Secret) -Because "$($platform.Section) $profileName 档合法密钥必须原样返回(不 trim、不改写)"
+            }
+        }
+        finally {
+            [System.Environment]::SetEnvironmentVariable($envName, $saved)
+        }
+    }
+}
+
+Test-Case 'content-guard 外部平台审核不配(基线 dev infra-up):ConfigMap 没有 Platform,不注入这两把 AppSecret、不带指纹、不建 Secret,残留的 Secret 照删;清单不引用任何 Secret;摘要行写明都没开,DryRun 不查集群现状' {
+    $out = [string]$guildInfraRun.Output
+    $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $out -Name 'go-svc-content-guard-config')
+    $platformKeys = @(Get-FlatSubtreeKeys -Flat $flat -Path 'data.content_guard.yaml.Platform')
+    Assert-True -Condition ($platformKeys.Count -eq 0) -Because "没给参数 = 不写 Platform,只跑本地词库层(实际出现:$($platformKeys -join ', '))"
+    $doc = Select-WorkloadSecretDoc -Output $out -Name 'content-guard' -Label 'dev 基线 content-guard'
+    foreach ($platform in $ContentGuardPlatforms) {
+        Assert-NoWorkloadSecret -Doc $doc -SecretName $platform.SecretName -Label 'dev 基线 content-guard'
+        Assert-NotMatch -Text $out -Pattern ('# Secret ' + [regex]::Escape($platform.SecretName) + ' ') -Because "没接这个平台就不建 Secret $($platform.SecretName)"
+        Assert-Match -Text $out -Pattern ('(?m)^\[dry-run\] kubectl delete secret ' + [regex]::Escape($platform.SecretName) + ' -n \S+ --ignore-not-found\s*$') -Because "不粘滞:上次接过、这次没给,要删掉残留的 Secret $($platform.SecretName)(集群里没有就是空操作)"
+    }
+    $manifest = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'deploy/k8s/manifests/go-svc/content-guard.yaml'))
+    Assert-NotMatch -Text $manifest -Pattern '(?m)^[ \t]*[^#\s][^\r\n]*secretKeyRef' -Because '清单不引用任何 Secret:没接平台时不能要求 Secret 存在;接了才由 k8s_deploy.ps1 注入'
+    Assert-NotMatch -Text $manifest -Pattern '(?m)^[ \t]*-[ \t]+name:[ \t]*"?MMORPG_CONTENT_GUARD_' -Because '两把 AppSecret 的变量由 k8s_deploy.ps1 注入,清单里手写会被 Add-GoSvcSecretEnv 拒绝'
+    Assert-Match -Text $out -Pattern 'content-guard platform review: wechat=False douyin=False' -Because '写路径入口要写明两个平台都没开'
+    Assert-Match -Text $out -Pattern '\[dry-run\] Skipping content-guard platform review' -Because 'DryRun 不查集群现状,只打一行说明(真跑时防误关闸在任何写操作之前查)'
+}
+
+Test-Case '端到端 dev 档接微信 + 抖音(infra-up):ConfigMap 写 Platform 两段(AppID + 变量名)与账号目录连接,两把 AppSecret 原文不进输出,各经 infra namespace 的单键 Secret 注入并带指纹,Secret 先于引用、各写一次,开着的平台不删 Secret;摘要行写明都开了' {
+    $run = $contentGuardPlatformDevRun
+    Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "dev 档接两个平台并给了 AppSecret 必须成功。输出: $($run.Output)"
+    $out = [string]$run.Output
+
+    $cmBlock = Select-ManifestByName -Output $out -Name 'go-svc-content-guard-config'
+    $flat = ConvertTo-FlatManifest -Block $cmBlock
+    $expected = [ordered]@{
+        'data.content_guard.yaml.Platform.WeChat.AppID'        = $ContentGuardWeChatTestAppId
+        'data.content_guard.yaml.Platform.WeChat.AppSecretEnv' = 'MMORPG_CONTENT_GUARD_WECHAT_APP_SECRET'
+        'data.content_guard.yaml.Platform.Douyin.AppID'        = $ContentGuardDouyinTestAppId
+        'data.content_guard.yaml.Platform.Douyin.AppSecretEnv' = 'MMORPG_CONTENT_GUARD_DOUYIN_APP_SECRET'
+    }
+    foreach ($key in $expected.Keys) {
+        $actual = Get-FlatValue -Flat $flat -KeyPath $key
+        Assert-True -Condition ($actual -ceq $expected[$key]) -Because "$key 期望 '$($expected[$key])',实际 '$actual'"
+    }
+    $leafKeys = @(Get-FlatSubtreeKeys -Flat $flat -Path 'data.content_guard.yaml.Platform' | Where-Object { $flat.Scalars[$_] -ne '' })
+    Assert-Equal -Expected ($expected.Keys -join ',') -Actual ($leafKeys -join ',') -Because 'Platform 下只有这四个值:不写内联密钥,不写时限与地址'
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches($cmBlock, '(?m)^ {4}Platform:[ ]*\r?$').Count) -Because 'content_guard.yaml 里顶层 Platform: 只能有一个'
+    Assert-Equal -Expected 'dataservice.rpc' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.content_guard.yaml.DataServiceRpc.Etcd.Key') -Because '接了平台要能查账号目录(DataServiceRpc),没有它服务拒绝启动'
+    foreach ($platform in $ContentGuardPlatforms) {
+        Assert-True -Condition (-not $out.Contains($platform.Secret)) -Because "$($platform.Section) 的 AppSecret 只经 Secret 进容器:ConfigMap、Secret 意图行、指纹注解、日志里都不得有原文"
+    }
+
+    $doc = Select-WorkloadSecretDoc -Output $out -Name 'content-guard' -Label 'dev 平台审核 content-guard'
+    foreach ($platform in $ContentGuardPlatforms) {
+        $secretName = $platform.SecretName
+        Assert-WorkloadSecretEnvRef -Doc $doc -SecretName $secretName -Label 'dev 平台审核 content-guard'
+        Assert-WorkloadSecretHash -Doc $doc -SecretName $secretName -Value $platform.Secret -Label 'dev 平台审核 content-guard'
+        $pattern = '(?m)^\[dry-run\] kubectl apply -n contract-battle-infra -f -   # Secret ' + [regex]::Escape($secretName) + ' \(key secret; value hidden\)'
+        $line = [regex]::Match($out, $pattern)
+        $firstRef = $out.IndexOf("- name: $($platform.Env)")
+        Assert-True -Condition ($line.Success -and $firstRef -gt $line.Index) -Because "infra namespace 的 Secret $secretName 必须先于引用它的 content-guard 落地(secretKeyRef 不是 optional)"
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($out, $pattern).Count) -Because "同一次运行里 Secret $secretName 只写一次"
+        Assert-NotMatch -Text $out -Pattern ('kubectl delete secret ' + [regex]::Escape($secretName) + ' ') -Because "开着的平台不删自己要用的 Secret $secretName"
+    }
+    Assert-Match -Text $out -Pattern 'content-guard platform review: wechat=True douyin=True' -Because '写路径入口要写明两个平台都开了(只展示开没开,不展示密钥)'
+}
+
+Test-Case '端到端负向:dev 档给了 -ContentGuardWeChatAppId 却没设 MMORPG_CONTENT_GUARD_WECHAT_APP_SECRET,在任何 kubectl 写操作之前拒绝(没有回落值)' {
+    $run = $contentGuardPlatformNoSecretRun
+    Assert-True -Condition ($run.ExitCode -ne 0) -Because "缺微信 AppSecret 必须阻断:content-guard 对缺失的 AppSecretEnv 拒绝启动。输出: $($run.Output)"
+    Assert-Match -Text $run.Output -Pattern '-ContentGuardWeChatAppId needs the environment variable MMORPG_CONTENT_GUARD_WECHAT_APP_SECRET' -Because '错误必须点名参数与缺哪个环境变量'
+    Assert-NotMatch -Text $run.Output -Pattern '\[dry-run\] kubectl [^\r\n]*\b(apply|create|delete|patch|replace)\b' -Because '密钥解析(Initialize-InjectedSecrets)先于任何写操作,不留半截部署'
+}
+
+Test-Case 'zone-up 不部署全局服务:给了 -ContentGuardWeChatAppId 只告警「不生效」,不解析它的 AppSecret(没设环境变量也照常部署),不打开关摘要' {
+    $run = $contentGuardPlatformZoneRun
+    Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "zone-up 不部署 content-guard,不能因为它的 AppSecret 没设而被挡。输出: $($run.Output)"
+    Assert-Match -Text $run.Output -Pattern '\[content-guard\]PlatformReview=ignored' -Because '给了不生效的参数要告警'
+    Assert-True -Condition ($null -eq (Select-ManifestByName -Output $run.Output -Name 'go-svc-content-guard-config')) -Because 'zone-up 不生成 content-guard 的 ConfigMap'
+    Assert-NotMatch -Text $run.Output -Pattern 'content-guard platform review: wechat=' -Because '摘要只说本次部署的 content-guard,不部署就不打'
+}
+
+Test-Case '纯函数 ConvertFrom-ContentGuardPlatformYaml:读回生成器写的 Platform 段;没有 Platform 时 Present 为假;顶格键大小写或引号不是生成器的写法、出现两次、同一行带值、段里读不到 AppID,都记进 Errors(判不出,不能当作没开)' {
+    $none = ConvertFrom-ContentGuardPlatformYaml -ConfigYaml "Name: content_guard.rpc`nTimeout: 3000`n"
+    Assert-True -Condition (-not $none.Present -and $none.WeChatAppId -eq '' -and $none.DouyinAppId -eq '' -and @($none.Errors).Count -eq 0) -Because '没有 Platform 段 = 线上没接平台'
+    Assert-True -Condition (-not (ConvertFrom-ContentGuardPlatformYaml -ConfigYaml '').Present) -Because '空文本(ConfigMap 不存在)= 没接'
+    $generated = "Name: content_guard.rpc`n" + (New-ContentGuardPlatformYaml -WeChatAppId $ContentGuardWeChatTestAppId -DouyinAppId $ContentGuardDouyinTestAppId) + "`nTelemetry:`n  Disabled: true`n"
+    $live = ConvertFrom-ContentGuardPlatformYaml -ConfigYaml $generated
+    Assert-True -Condition ($live.Present -and $live.WeChatAppId -ceq $ContentGuardWeChatTestAppId -and $live.DouyinAppId -ceq $ContentGuardDouyinTestAppId -and @($live.Errors).Count -eq 0) -Because '生成器写的段要原样读回(防误关闸按它比对)'
+    $wechatOnly = ConvertFrom-ContentGuardPlatformYaml -ConfigYaml (New-ContentGuardPlatformYaml -WeChatAppId $ContentGuardWeChatTestAppId)
+    Assert-True -Condition ($wechatOnly.Present -and $wechatOnly.WeChatAppId -ceq $ContentGuardWeChatTestAppId -and $wechatOnly.DouyinAppId -eq '' -and @($wechatOnly.Errors).Count -eq 0) -Because '只接微信时抖音读成空串,不算认不出'
+    foreach ($case in @(
+            @{ Why = '顶格键小写(go-zero 照样生效)'; Yaml = "platform:`n  WeChat:`n    AppID: `"wx0123`"`n" }
+            @{ Why = '顶格键带引号'; Yaml = "`"Platform`":`n  WeChat:`n    AppID: `"wx0123`"`n" }
+            @{ Why = '出现两次'; Yaml = "Platform:`n  WeChat:`n    AppID: `"wx0123`"`nPlatform:`n  Douyin:`n    AppID: `"tt0123`"`n" }
+            @{ Why = '同一行带值'; Yaml = "Platform: {}`n" }
+            @{ Why = '段里读不到 AppID'; Yaml = "Platform:`n  WeChat:`n    AppSecretEnv: `"MMORPG_CONTENT_GUARD_WECHAT_APP_SECRET`"`n" }
+        )) {
+        $parsed = ConvertFrom-ContentGuardPlatformYaml -ConfigYaml $case.Yaml
+        Assert-True -Condition ($parsed.Present -and @($parsed.Errors).Count -ge 1) -Because "$($case.Why):必须记进 Errors(判不出就 fail-closed)"
+    }
+}
+
+Test-Case '纯函数 Get-ContentGuardPlatformDrift:线上没接、本次新开或照传都不拦;漏传(会关掉)、换了 AppID、线上段认不出都要确认,并给出照传现状的参数串;认不出的值不拼进命令行' {
+    $liveBoth = [pscustomobject]@{ Present = $true; WeChatAppId = 'wxlive01'; DouyinAppId = 'ttlive01'; Errors = [string[]]@() }
+    $liveNone = [pscustomobject]@{ Present = $false; WeChatAppId = ''; DouyinAppId = ''; Errors = [string[]]@() }
+    $liveUnreadable = [pscustomobject]@{ Present = $true; WeChatAppId = ''; DouyinAppId = ''; Errors = [string[]]@('shape') }
+    $cases = @(
+        @{ Why = '线上没接、本次新开'; Live = $liveNone; Args = @{ WeChatAppId = 'wxnew01' }; Drifts = 0 }
+        @{ Why = '线上没接、本次也不给'; Live = $liveNone; Args = @{}; Drifts = 0 }
+        @{ Why = '照传现状'; Live = $liveBoth; Args = @{ WeChatAppId = 'wxlive01'; DouyinAppId = 'ttlive01' }; Drifts = 0 }
+        @{ Why = '两个都漏传'; Live = $liveBoth; Args = @{}; Drifts = 2; Pattern = 'platform review on WeChat is on .*-ContentGuardWeChatAppId was not given: this deployment switches it off' }
+        @{ Why = '漏传抖音'; Live = $liveBoth; Args = @{ WeChatAppId = 'wxlive01' }; Drifts = 1; Pattern = 'platform review on Douyin is on .*deletes the Secret content-guard-douyin' }
+        @{ Why = '换了微信的 AppID'; Live = $liveBoth; Args = @{ WeChatAppId = 'wxother01'; DouyinAppId = 'ttlive01' }; Drifts = 1; Pattern = 'Platform\.WeChat\.AppID differs from the live one' }
+        @{ Why = '只差大小写也算换了(按字节比)'; Live = $liveBoth; Args = @{ WeChatAppId = 'WXLIVE01'; DouyinAppId = 'ttlive01' }; Drifts = 1; Pattern = 'Platform\.WeChat\.AppID differs' }
+        @{ Why = '线上段认不出'; Live = $liveUnreadable; Args = @{ WeChatAppId = 'wxnew01' }; Drifts = 1; Pattern = 'cannot be read \(shape\)' }
+    )
+    foreach ($case in $cases) {
+        $fnArgs = $case.Args
+        $drift = Get-ContentGuardPlatformDrift -Live $case.Live @fnArgs
+        Assert-Equal -Expected $case.Drifts -Actual (@($drift.Drifts).Count) -Because "$($case.Why):差异条数"
+        if ($case.Pattern) {
+            Assert-Match -Text ($drift.Drifts -join "`n") -Pattern $case.Pattern -Because "$($case.Why):文本要点名平台、参数与后果"
+        }
+    }
+    Assert-Equal -Expected '-ContentGuardWeChatAppId wxlive01 -ContentGuardDouyinAppId ttlive01' -Actual (Get-ContentGuardPlatformDrift -Live $liveBoth).KeepArgs -Because '照传串按线上值拼,先微信后抖音'
+    $odd = Get-ContentGuardPlatformDrift -Live ([pscustomobject]@{ Present = $true; WeChatAppId = 'wx 0123'; DouyinAppId = ''; Errors = [string[]]@() })
+    Assert-Equal -Expected '-ContentGuardWeChatAppId <see ConfigMap>' -Actual $odd.KeepArgs -Because '认不出的值不原样拼进命令行'
+}
+
+Test-Case '防误关闸 Assert-ContentGuardPlatformClusterState:线上接着平台而本次漏传,在任何写操作之前拒绝并给出照传串与确认开关;加 -ConfirmContentGuardPlatformChange 只告警放行;线上没接或照传不拦' {
+    $InfraNamespace = 'contract-cg-infra'
+    $ContentGuardWeChatAppId = ''
+    $ContentGuardDouyinAppId = ''
+    $ConfirmContentGuardPlatformChange = $false
+    $script:ContentGuardLiveFixture = [pscustomobject]@{ Present = $true; WeChatAppId = 'wxlive01'; DouyinAppId = ''; Errors = [string[]]@() }
+    $message = ''
+    try { Assert-ContentGuardPlatformClusterState } catch { $message = $_.Exception.Message }
+    Assert-Match -Text $message -Pattern '^content-guard platform review cluster-state check failed; nothing was written\.' -Because '线上接着微信、本次漏传:必须在写操作之前拒绝'
+    Assert-Match -Text $message -Pattern 'namespace contract-cg-infra: ' -Because '报错点名 namespace'
+    Assert-Match -Text $message -Pattern 'To keep the live setup pass -ContentGuardWeChatAppId wxlive01;' -Because '报错给出照传现状的参数串'
+    Assert-Match -Text $message -Pattern 'add -ConfirmContentGuardPlatformChange' -Because '报错点名确认开关'
+
+    $ConfirmContentGuardPlatformChange = $true
+    $message = ''
+    $captured = @()
+    try { $captured = @(Assert-ContentGuardPlatformClusterState 3>&1) } catch { $message = $_.Exception.Message }
+    Assert-Equal -Expected '' -Actual $message -Because '加了确认开关只告警放行'
+    Assert-Match -Text (($captured | ForEach-Object { [string]$_ }) -join "`n") -Pattern '\[content-guard\]PlatformChange=confirmed: ' -Because '放行时要告警,写明放行了什么'
+
+    $ConfirmContentGuardPlatformChange = $false
+    $ContentGuardWeChatAppId = 'wxlive01'
+    $message = ''
+    try { Assert-ContentGuardPlatformClusterState } catch { $message = $_.Exception.Message }
+    Assert-Equal -Expected '' -Actual $message -Because '照传现状不拦'
+
+    $script:ContentGuardLiveFixture = [pscustomobject]@{ Present = $false; WeChatAppId = ''; DouyinAppId = ''; Errors = [string[]]@() }
+    $ContentGuardWeChatAppId = ''
+    $message = ''
+    try { Assert-ContentGuardPlatformClusterState } catch { $message = $_.Exception.Message }
+    Assert-Equal -Expected '' -Actual $message -Because '线上没接(首次部署、ConfigMap 不存在)不拦'
+}
+
+Test-Case 'content-guard 平台审核源码形状:写路径入口在密钥解析之前调预检,DryRun 不查集群;两把 AppSecret 只在 Initialize-InjectedSecrets 解析、只在部署全局 Go 服务且给了对应 AppID 时;删残留用的 Secret 名就是工作负载密钥目录的键' {
+    $preflightCalls = @($deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.CommandAst] -and $a.GetCommandName() -eq 'Assert-ContentGuardPlatformPreflight' }, $true))
+    Assert-Equal -Expected 1 -Actual $preflightCalls.Count -Because '写路径入口只调一次预检'
+    $initCalls = @($deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.CommandAst] -and $a.GetCommandName() -eq 'Initialize-InjectedSecrets' }, $true))
+    Assert-True -Condition ($initCalls.Count -ge 1) -Because '夹具前提:写路径入口调 Initialize-InjectedSecrets'
+    foreach ($initCall in $initCalls) {
+        Assert-True -Condition ($preflightCalls[0].Extent.StartOffset -lt $initCall.Extent.StartOffset) -Because '参数形状与防误关闸排在密钥解析之前:报的是参数或线上现状的原因,不是「缺环境变量」'
+    }
+    $preflight = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Assert-ContentGuardPlatformPreflight' }, $false)
+    $dryRunAt = $preflight.Extent.Text.IndexOf('if ($DryRun)')
+    $assertAt = $preflight.Extent.Text.IndexOf('Assert-ContentGuardPlatformClusterState')
+    Assert-True -Condition ($dryRunAt -ge 0 -and $assertAt -gt $dryRunAt) -Because 'DryRun 先返回、不查集群;真跑才进防误关闸'
+    Assert-True -Condition ($preflight.Extent.Text.Contains('Test-GlobalGoSvcDeployed')) -Because '只在本次部署全局 Go 服务时查'
+
+    $initFn = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Initialize-InjectedSecrets' }, $false)
+    $resolveCalls = @($deadlineDeployAst.FindAll({ param($a) $a -is [System.Management.Automation.Language.CommandAst] -and $a.GetCommandName() -eq 'Resolve-ContentGuardPlatformAppSecret' }, $true))
+    Assert-Equal -Expected 2 -Actual $resolveCalls.Count -Because '两个平台各解析一次,没有第三处'
+    $guardedBy = @()
+    foreach ($call in $resolveCalls) {
+        Assert-True -Condition ($call.Extent.StartOffset -gt $initFn.Extent.StartOffset -and $call.Extent.EndOffset -lt $initFn.Extent.EndOffset) -Because '解析在 Initialize-InjectedSecrets 里(写路径入口懒解析,*-down / *-status 不被它挡住)'
+        $guard = $call.Parent
+        while ($null -ne $guard -and $guard -isnot [System.Management.Automation.Language.IfStatementAst]) { $guard = $guard.Parent }
+        Assert-True -Condition ($null -ne $guard) -Because '解析必须包在 if 里'
+        $condition = $guard.Clauses[0].Item1.Extent.Text
+        $platform = @($ContentGuardPlatforms | Where-Object { $call.Extent.Text.Contains($_.Env) })
+        Assert-Equal -Expected 1 -Actual $platform.Count -Because "每次解析读的是两个环境变量里的一个(实际调用:$($call.Extent.Text))"
+        $appIdVariable = '$ContentGuard' + $platform[0].Section + 'AppId'
+        Assert-True -Condition ($condition.Contains($appIdVariable) -and $condition.Contains('Test-GlobalGoSvcDeployed')) -Because "只在部署全局 Go 服务且给了 $($platform[0].Param) 时解析(实际条件:$condition)"
+        Assert-True -Condition ($call.Extent.Text.Contains('"' + $platform[0].Param + '"')) -Because "报错里点名的参数必须是 $($platform[0].Param)"
+        $guardedBy += $platform[0].Section
+    }
+    Assert-Equal -Expected 'Douyin,WeChat' -Actual ((@($guardedBy | Sort-Object)) -join ',') -Because '两个平台各一处'
+
+    $applyOne = $deadlineDeployAst.Find({ param($a) $a -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $a.Name -eq 'Apply-OneGoSvc' }, $false)
+    $deleted = @([regex]::Matches($applyOne.Extent.Text, '"delete", "secret", "(?<name>content-guard-[a-z]+)"') | ForEach-Object { $_.Groups['name'].Value })
+    Assert-Equal -Expected 'content-guard-douyin,content-guard-wechat' -Actual ((@($deleted | Sort-Object)) -join ',') -Because 'Apply-OneGoSvc 删残留的 Secret 名必须是目录表的键(名字不一致就删不到),各一处'
 }
 
 exit (Complete-TestRun -SuiteName "k8s_deploy contract")

@@ -29,4 +29,7 @@ message SessionDetails
   // 仅服务端传递；下游必须先验证整份 SessionDetails 的调用方签名，不能信客户端自报。
   // 角色解绑时清理，不能按 player_id 查询当前 owner 补值。
   string authenticated_account = 10;
+  // 票据绑定的账号摘要:gate 验签通过后从 GateTokenPayload.account_digest 原样拷入,会话存续期内不变,gate 只透传。
+  // 主判定在 login 的 Login:认证出的账号与它不符即拒(loginqueue.TicketIssuedTo)。空 = 票没绑账号 / 免验签的开发环境 / 旧版 gate。
+  bytes ticket_account_digest = 11;
 }

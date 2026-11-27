@@ -1,6 +1,7 @@
-# 账号注销与 Apple / Google 登录:剩余代码与全部验证交接(2026-11-20,交 Gemini)
+# 账号注销与 Apple / Google 登录:全部验证交接(2026-11-20,交 Gemini;代码已改完,Gemini 只验证)
 
-> 2026-11-26 按当前状态更新:服务端与客户端代码(含第 3 节第 8 步两处品牌合规收尾与四张官方品牌原件替换)均已写完,当前只剩重新烘焙登录预制体及全部生成、编译、测试与冒烟(交 `Carbon Medium` 执行)。
+> 2026-11-26 按当前状态更新:服务端与客户端代码(含第 3 节第 8 步两处品牌合规收尾与四张官方品牌原件替换)均已写完并提交,当前只剩重新烘焙登录预制体及全部生成、编译、测试与冒烟(交 `Carbon Medium` 执行)。
+> 2026-11-26 晚(Claude「交接单里的代码改动清零」会话)核对:第 8 步的客户端改动已随客户端仓 `bf57e6af` 入库,diff 读过无误;本单不再有交给 Gemini 的代码改动。验证跑红要改代码时,保留首错原文停下,交回 Claude 改(负责人 11-26 定:逻辑代码由 Claude 改,Gemini 只负责生成、编译、测试、冒烟)。
 
 ## 0. 现状
 
@@ -10,12 +11,12 @@
 - 派生任务「剧本审核流水保留期清理」(`match_battle_script_review` 保留 180 天)也已写完,代码随批量提交 `b6a08148c` 进了 HEAD,之后又补了一轮失败与逾期告警。它的验证单独成单:[battle-script-review-retention-handoff-20261126.md](battle-script-review-retention-handoff-20261126.md),测试命令以那份 §3 为准;与本线同批跑时,生成与清库合并成一次。
 - 2026-11-21 Gemini 补了 `kickPlayerSession` 的 4 条单测(PROGRESS 11-21「Gemini…全仓代码完成度终审」第 4 项)。
 - **一条都没验证过**:截至 2026-11-26,`build/verification/` 里没有本线任何用例的运行记录。
-- **剩下的**:重新烘焙登录预制体,加上全部生成、编译、测试与冒烟(第 3 节第 8 步第 1 项的两处品牌合规改动已于 2026-11-26 由 Gemini 4 Neon Extra 落码于客户端仓工作区,未提交)。
+- **剩下的**:重新烘焙登录预制体,加上全部生成、编译、测试与冒烟(第 3 节第 8 步第 1 项的两处品牌合规改动已于 2026-11-26 由 Gemini 4 Neon Extra 落码,随客户端仓 `bf57e6af` 提交)。
 
 ## 1. 规矩
 
-- 与 [组队跟随交接单](team-follow-afk-hosting-handoff-20261120.md) §1 相同:读 `AGENTS.md` 全文;只在 main、不开分支、不 push;**只有负责人明确要求才 commit**,而且只提交本线的部分;不手改生成产物;日志英文;失败先留首错原文、修根因、不跳测试;结果追加进 `docs/PROGRESS.md`,日志放 `build/verification/<运行名>/`。
-- 分工以 `docs/rules/ai-workflow.md` 为准:生成、编译、测试、冒烟都由 Gemini 执行,Codex 只作图。改代码用最高档模型,编译、测试、冒烟用低档模型(`AGENTS.md` §10.3)。
+- 与 [组队跟随交接单](team-follow-afk-hosting-handoff-20261120.md) §1 相同:读 `AGENTS.md` 全文;只在 main、不开分支、不 push;**只有负责人明确要求才 commit**,而且只提交本线的部分;不手改生成产物;日志英文;失败先留首错原文与复现命令停下、交回 Claude 改,不注释断言、不跳测试、不连续自动重试;结果追加进 `docs/PROGRESS.md`,日志放 `build/verification/<运行名>/`。
+- 分工以 `docs/rules/ai-workflow.md` 为准:生成、编译、测试、冒烟都由 Gemini 执行(低档模型 `Carbon Medium`),Codex 只作图。逻辑代码(含测试代码)只由 Claude 改(负责人 2026-11-26 定);只有负责人明说让 Gemini 接手写代码时例外。
 - 本线补充:
   - tip 码只由导表器发号,不在代码里写数字。本线的码是 login 段 2038~2041 与 mail 段 `MailRecipientDeleted`(应为 17011),已有的码号一个都不能变。
   - 重新烘焙登录预制体前先关掉 Unity。
@@ -55,13 +56,13 @@
    5. 帮会:帮主本人申请被拦(`guild_leader`);运维代办不拦;执行时帮主让给长老;只剩他时帮会解散,并从帮会榜消失;
    6. 1V1 评级榜上的人删完后从榜上消失;
    7. 删完后给他发榜单奖励邮件被拒(`kMailRecipientDeleted`),rank 奖励转放弃、只记 Info 日志。
-8. **代码待做**(改代码,最高档模型):
-   1. **登录页 Apple / Google 按钮的品牌合规收尾:已落码于客户端仓工作区(2026-11-26,Gemini 4 Neon Extra,待重新烘焙预制体并跑单测)**。
+8. **代码(已改完,Gemini 只验证)**:
+   1. **登录页 Apple / Google 按钮的品牌合规收尾:代码已改,Gemini 只验证**(2026-11-26 Gemini 4 Neon Extra 落码,已随客户端仓 `bf57e6af` 提交;同日 Claude 读过 diff:按钮文字子节点名 `<按钮名>Text`、图标 `<按钮名>Icon` 与新用例取的名字一致;待重新烘焙预制体并跑单测)。
       - `Assets/Scripts/UI/Ugui/QdaoServerSelectView.Visuals.cs`:Google 按钮文案已改为 Google 官方简体中文「使用 Google 账号登录」(Apple 的「通过 Apple 登录」不变),同步放宽按钮文本框(318px → 420px,图标左移至 x=72)防止 TMP 省略号截断,`StyleChannelSignInButton` 同步校正标签文本。
       - `Assets/Resources/UI/Ugui/RefreshV8/{apple_signin_button,apple_logo,google_signin_button,google_logo}.png`:核实 11-20 初版为本地脚本自绘(96 DPI 同时间戳、双底图像素分布一致、Apple 标志轮廓失真),已全部替换为官方来源原件(Google `signin-assets.zip` 与 Apple `appleid.auth.js` / `appleid/button`),并在同目录补充 `BRAND_ASSETS_PROVENANCE.md` 与 `.meta` 记录官网 URL 与 SHA-256。
       - `Assets/Tests/EditMode/Tianyong/QdaoLoginPresentationTests.cs`:新增 `ChannelSignInButtons_FollowAppleAndGoogleBrandCopyAndSizing` 守卫文案、标志/底图资源名、双按钮同尺寸及 ≥44pt(@2x=88px)高度。
       - **验证时(Carbon Medium)**:先关闭 Unity 重新烘焙 `QdaoServerSelect.prefab`(`QdaoUguiBuilder.BuildAll`),再跑 `QdaoServerSelectPrefabTests` 与 `QdaoLoginPresentationTests`。
-   2. 修第 1~7 步发现的问题。错误落在别的会话正改的文件里时,先用 `git diff` 分清,不是本线的只记录、不修。
+   2. 第 1~7 步跑红、需要改代码或断言的:保留第一条错误原文(编译错误写到 文件:行)与复现命令,停下交回 Claude 改,Gemini 不改。错误落在别的会话正改的文件里时,先用 `git diff` 分清,不是本线的只记录。
 9. **收尾**:在 `docs/PROGRESS.md` 文末追加「Gemini:账号注销与 Apple / Google 登录验证」一条,写清命令、通过数、失败原文摘要和改过的文件;负责人要求提交时,只提交本线的部分。
 
 ## 4. 已定案,修 bug 时不要改回

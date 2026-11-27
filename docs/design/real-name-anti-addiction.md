@@ -1,6 +1,6 @@
 # 实名认证与未成年人防沉迷
 
-> **状态：2026-11-19 负责人定「App 形态也首发，按清单写」，§5 已落码，未生成、未编译、未测试，待 Gemini 验证（命令见 `docs/PROGRESS.md` 同日「实名认证与未成年人防沉迷」落码条目）。** 规则与平台能力的来源见 §10。§8 末尾原先没做的两项都已在 2026-11-19 补落码、未运行：K8s 部署参数，go/payment 的限额闸（§5.6）。2026-11-20 又补了三处原来标为「以后」的：国家接口的全服调用额度（§5.2，原来按副本限速、副本不能超过 10 个）、上报器停机时发完手上的事件（§5.5）、客服重置实名（§5.2 末）；单日充值上限定为单次上限（§5.6）。都未运行。2026-11-20 第二批：上下线上报改成登录域 Redis 里的会话账本（§5.5，11-21 Gemini 分成 16 片），到点断开改由 gate 本地按截止时刻做、login 兜底（§5.4）。2026-11-26 复核发现截止时刻一到清扫就删掉账本条目，login 兜底随之失效，同日已改（§5.5「未成年人的租约」）；国家系统的沙箱 mock 也在同日写完（[沙盒手册](../ops/wechat-qq-sandbox-runbook.md) §J）。同日再复查，补了两处（§5.4）：到点断开时 scene 立即存盘下线；有挂机月卡的未成年人，离线托管不越过截止时刻（要重新生成协议，`player_locator.proto` 加了字段）。战斗直连由服务端强制断开一项待负责人定（§5.4 末条）。全部未编译、未运行，验证交 Gemini（[交接单](../handoff/real-name-anti-addiction-handoff-20261126.md)）。
+> **状态：2026-11-19 负责人定「App 形态也首发，按清单写」，§5 已落码，未生成、未编译、未测试，待 Gemini 验证（命令见 `docs/PROGRESS.md` 同日「实名认证与未成年人防沉迷」落码条目）。** 规则与平台能力的来源见 §10。§8 末尾原先没做的两项都已在 2026-11-19 补落码、未运行：K8s 部署参数，go/payment 的限额闸（§5.6）。2026-11-20 又补了三处原来标为「以后」的：国家接口的全服调用额度（§5.2，原来按副本限速、副本不能超过 10 个）、上报器停机时发完手上的事件（§5.5）、客服重置实名（§5.2 末）；单日充值上限定为单次上限（§5.6）。都未运行。2026-11-20 第二批：上下线上报改成登录域 Redis 里的会话账本（§5.5，11-21 Gemini 分成 16 片），到点断开改由 gate 本地按截止时刻做、login 兜底（§5.4）。2026-11-26 复核发现截止时刻一到清扫就删掉账本条目，login 兜底随之失效，同日已改（§5.5「未成年人的租约」）；国家系统的沙箱 mock 也在同日写完（[沙盒手册](../ops/wechat-qq-sandbox-runbook.md) §J）。同日再复查，补了两处（§5.4）：到点断开时 scene 立即存盘下线；有挂机月卡的未成年人，离线托管不越过截止时刻（要重新生成协议，`player_locator.proto` 加了字段）。同日又补上战斗直连（§5.4 末条）：未成年人到点，战斗服关掉他的战斗直连，本场不再接受他握手，战斗照常进行（要重新生成协议，`battle_data.proto`、`battle_node.proto` 各加了一个字段，客户端仓也要重新生成）。全部未编译、未运行，验证交 Gemini（[交接单](../handoff/real-name-anti-addiction-handoff-20261126.md)）。
 
 ## 0. 结论
 
@@ -127,7 +127,24 @@
   - login 进游戏时从会话账本取出截止时刻，写进玩家会话记录（`PlayerSession.minor_play_deadline_ms`，SetSession 和 Reconnect 两条路都带，不沿用旧记录的值）。账本读不了就拒绝进游戏（`kLoginRedisError`）。
   - player_locator 的租约监视器给月卡玩家续租时，续的时长不超过离截止时刻的剩余时间；到点就不再续租，按普通断线收尾，scene 收到 LeaveScene 后存盘下线（`leasemonitor.go` 的 `hostedLeaseSeconds`）。
   - 截止时刻之前断线的未成年人照常托管到点为止。
-- **战斗直连（已知边界，待负责人定）**：战斗流量走客户端直连战斗服的第二条连接，不经过 gate。官方客户端在大厅连接断开时会自己关掉它（`GameClient` 的 `BattleLink.Close("lobby_disconnected")`）。服务端目前不强制断开：改过的客户端可以把手上这一场打完，但开不了新战斗，票据随房间作废。要堵上，得让战斗服按参战者的截止时刻给票据封顶、到点关直连，涉及 match 与 battle 的协议和存储。
+- **战斗直连到点由战斗服断开**（2026-11-26，未生成、未编译、未运行）：战斗流量走客户端直连战斗服的第二条连接，不经过 gate，gate 到点只关得掉大厅连接。官方客户端在大厅断开时会自己关战斗直连（`GameClient` 的 `BattleLink.Close("lobby_disconnected")`），但那只是客户端自觉：原来票据期限等于房间作废期限，同一张票可以反复重连，改过的客户端能把手上这一场打完（房间期限缺省可达 302 个回合），观众同理。可玩时段之外不能以任何形式提供游戏服务，所以改由战斗服执行：
+  - **截止时刻从哪来**：玩家会话记录 `PlayerSession.minor_play_deadline_ms`（上一条，login 进游戏时写，0 = 不限：成年人、平台管的小游戏渠道、没开防沉迷的部署）。match 成局时在 `gather.go` 的 `preparePlayerFencedWithJianghuFee`（组装参战者快照的唯一位置）读出来，盖到 `BattlePlayerSnapshot.minor_play_deadline_ms`（第 33 号字段），scene 不知道年龄，它填的值不作数。观战时 `global_spectator.go` 的 `locateGlobalWatch` 本来就读会话，把值放进 `AddObserverRequest.minor_play_deadline_ms`（第 8 号字段）。两份都随原件落 SQL 冻结，match 重启后恢复发出的还是同一份字节。
+  - **读不到会话就不放进战斗**：成局时会话记录读失败，按结果未知处理（这一局不开、不定罪，成员回队，与读位置失败同口径）；没有会话记录按不在线处理（与没有位置同口径，定罪）。两种都在冻结玩家之前判，不白冻一次。观战时读失败沿用现有口径：这次请求报错，同 request_id 可以重试，不记结论。
+  - **战斗服按人记**：房间里的 `minorPlayLimits`（player_id → 截止时刻、是否已截止）。参战者随建房记下、整场不变；观众随登记记下，出名单时删。
+  - **票据封顶**：票据期限取「房间作废期限」与「截止时刻前 5 秒」里较早的一个（`cpp/nodes/battle/battle_minor_play_deadline.h` 的 `TicketExpireAtMs`）。开局、观战接入、补签都经 `BuildAssignment` 这一处签，所以补签请求 `IssueBattleTicketRequest` 不用再带截止时刻：战斗服已经按人记下，补签沿用同一个封顶。到点之后同一张票握手，被直连面按「已过期」拒绝（`expire_at_ms <= now`，与到点判定在同一毫秒翻转）。
+  - **到点关直连**：房间挂一个一次性定时器，指向还没到点的人里最早的「截止前 5 秒」。这与 gate 关大厅连接是同一时点（`battle_minor_deadline::kCloseLeadMs` 与 `gate_minor_deadline::kCloseLeadMs` 同为 5000），两条连接都在 21:00:00 之前断开。到期按墙钟重判：到点的人记为已截止，`forceClose` 他那一条直连，再重挂下一个。定时器在主 EventLoop 上，回调只捕获管理器的弱引用与 battle_id，不新开线程；没有未成年人的房间不挂。定时器早到（墙钟被校准过）时，没到点的人留着重挂，不会提前关；晚到只让关闭迟到，期间握手照样被票据期限挡住。
+  - **之后不再接受握手**：`AttachDirectConnection` 对已截止、或墙钟已到点的人一律拒绝，不依赖票据期限，也不依赖定时器已经跑过。「已截止」只升不降，墙钟回拨也不放开。
+  - **战斗照常进行**：只关连接，不动名单、引擎与结算。断开之后与掉线同一处置：参战者的回合按超时自动出手，胜负、结算与对手的体验都不变；观众进重连宽限，期满回收席位。L1 / L2 观众（gate 中继、全服广播）的帧走大厅连接，gate 到点关掉大厅连接就收不到了，不归战斗服管。
+  - **客户端不用改**：同一时刻 gate 关大厅连接，推踢线原因 `kLoginMinorPlayTimeOver`，客户端按它提示；直连断开之后同票重连被拒，补签要走大厅连接，大厅已断。落点分配包里的 `expire_at_ms` 可能早于房间期限，客户端本来就不凭它判战斗已结束。
+  - **水平扩展**：不加任何共享状态。限制记在房间内存里，房间本来就只在一台战斗服上，随房间销毁；节点数随房间数加减，与这条规则无关。match 成局时多读一次玩家域 Redis 的会话键（与位置键同一个哈希标签，同一槽位），观战连这一次都不多读。
+  - **时钟**：截止时刻是绝对的 Unix 毫秒，战斗服按自己的墙钟比，偏差由节点启动时的时钟核对（30 秒门槛）兜住，与 gate 同口径。
+  - **没有选的做法**：
+    1. 握手时回问 login 或 player_locator：握手热路径上多一个跨服务依赖和一种失败方式，查不到时还得决定放不放行。截止时刻在开局那一刻就已确定，随原件带过去最简单。
+    2. 到点由 gate 或 login 经 Kafka 通知战斗服：要靠消息按时送达；gate 也不知道玩家有没有战斗直连、在哪台战斗服上。
+    3. 补签请求也带截止时刻（交接时的建议）：多一个来源，补签那一刻读到的值和开局时不一样时，还得再定以谁为准。战斗服按人记一次就够了。
+    4. 到点把人判负或移出战斗：改了胜负和对手的体验，超出这项的范围。可玩时段之外不提供服务，关掉连接、不再接受握手就已做到。
+  - **观测**：`metric=battle_minor_play_deadline_reached`（INFO，每个到点的人一行，带 `role` 与 `direct_connection_closed`）；握手被拒打 INFO `battle direct connection attachment rejected: minor play deadline reached`。直连拒绝原因的枚举不加：到点的票走 `expired`。
+  - 用例与验证命令见[交接单](../handoff/real-name-anti-addiction-handoff-20261126.md) §2.4、§3；战斗服直连面的契约见 [turn-based-battle-server.md](turn-based-battle-server.md) §18.9。
 - **踢线原因**：`KickPlayerEvent` 加 `reason_tip`（0 = 原来的「账号在别处登录」），gate 的 `KickPlayerEventHandler` 用它填 `GameKickPlayerRequest.reason`。gate 只改这一行。
 - **提前提醒**：客户端按 `play_deadline_ms` 在剩 10、5、1 分钟时提示。服务端不推送：提醒漏了不违规，真正的限制是服务端的踢线。
 
@@ -244,6 +261,7 @@ AntiAddiction:
 | data_service（4） | `internal/store/account_directory_store.go`、`internal/server/account_directory.go` 与两处测试 |
 | login（约 20） | `internal/config/config.go` 与新增的配置门禁和测试；新增 `internal/logic/pkg/nppa/`（客户端、全服调用额度 `quota.go`、会话账本 `ledger.go`、上报器 `reporter.go` 与测试，测试用规范里的加密和签名样例；另有国家系统那一侧的验签解密 `server.go`，沙箱 mock `cmd/sandbox_mock/nppa.go` 与单测共用）；`clientplayerlogin/` 的 `loginlogic.go`、`account_directory.go`、`renewsessionlogic.go`、`disconnectlogic.go`，新增 `anti_addiction.go`、`submitrealnamelogic.go` 与测试；`svc/gate_command.go`（踢线原因）、`svc/servicecontext.go`；`pkg/auth/provider.go`、`providers.go`（结果带渠道）；`shared/redisslot/login_keys.go`；`etc/login.yaml`。转发层手写（goctl 与 `go/build.ps1` 11-21 已退役），`SubmitRealName`、`ResetAccountRealName` 已接上，由 `TestGoctlServerWrappersImplementEveryRPC` 核对 |
 | C++ gate（约 10） | `cpp/nodes/gate/handler/event/gate_event_handler.cpp`（踢线原因）；2026-11-20 起另有到点断开：新增 `handler/rpc/minor_play_deadline.{h,cpp}` 与 `tests/minor_play_deadline_test.cpp`（登记在 `cpp/tests/routing_identity_test`），改 `login_admission.h`、`client_request_lane.cpp`、`rpc_reply_bridge.cpp`、`client_session_handler.cpp`、`main.cpp`、`cpp/libs/services/gate/session/comp/session_info_comp.h`、`gate.vcxproj(.filters)` |
+| 战斗直连到点断开（2026-11-26，§5.4 末条） | 协议：`proto/battle/battle_data.proto`（`BattlePlayerSnapshot` 第 33 号字段）、`proto/battle/battle_node.proto`（`AddObserverRequest` 第 8 号字段）、`proto/battle/player_battle.proto`（只改注释）。C++ battle：新增 `cpp/nodes/battle/battle_minor_play_deadline.h`，改 `logic/battle_room_manager.{h,cpp}`、`battle.vcxproj(.filters)`；用例新增 `tests/battle_minor_play_deadline_test.cpp`、`tests/battle_observer_contract_test.cpp` 加 6 条，登记在 `cpp/tests/rpc_controller_test`。Go match：`internal/logic/gather.go`、`global_spectator.go`，用例 `gather_fingerprint_test.go`、`global_spectate_lobby_native_test.go`、`testfixture_test.go` |
 | 本仓 Java 网关（约 6） | `/api/real-name` 的 controller、service、`LoginRpcClient`、请求与应答 DTO、测试 |
 | 客户端（约 6） | `GatewayHttpClient.cs`、`GameClient.cs`、新增实名窗与倒计时提示、踢线原因处理、EditMode 测试 |
 | K8s（约 3） | `tools/scripts/k8s_deploy.ps1`（AppId、BizId、Secret `login-nppa`）、`dev_tools.ps1`、契约测试 |

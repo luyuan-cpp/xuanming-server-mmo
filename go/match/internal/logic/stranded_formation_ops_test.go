@@ -83,11 +83,11 @@ func TestStrandedFormationOpsRejectsCallerBeforeStore(t *testing.T) {
 		ctx context.Context
 		in  *pb.ResolveStrandedFormationRequest
 	}{
-		"客户端会话":     {ops, sessionCtx, signedResolve(t, abortRequest(pb.StrandedFormationMode_STRANDED_FORMATION_MODE_SHOW), config.ManualResolutionCaller, method)},
-		"入口关闭":      {nil, context.Background(), signedResolve(t, abortRequest(pb.StrandedFormationMode_STRANDED_FORMATION_MODE_SHOW), config.ManualResolutionCaller, method)},
-		"观战运营的调用方":  {ops, context.Background(), signedResolve(t, abortRequest(pb.StrandedFormationMode_STRANDED_FORMATION_MODE_SHOW), config.SpectateOpsCaller, method)},
-		"签给了列表方法":   {ops, context.Background(), signedResolve(t, abortRequest(pb.StrandedFormationMode_STRANDED_FORMATION_MODE_SHOW), config.ManualResolutionCaller, pb.MatchInternal_ListStrandedFormations_FullMethodName)},
-		"没有签名":      {ops, context.Background(), abortRequest(pb.StrandedFormationMode_STRANDED_FORMATION_MODE_SHOW)},
+		"客户端会话":    {ops, sessionCtx, signedResolve(t, abortRequest(pb.StrandedFormationMode_STRANDED_FORMATION_MODE_SHOW), config.ManualResolutionCaller, method)},
+		"入口关闭":     {nil, context.Background(), signedResolve(t, abortRequest(pb.StrandedFormationMode_STRANDED_FORMATION_MODE_SHOW), config.ManualResolutionCaller, method)},
+		"观战运营的调用方": {ops, context.Background(), signedResolve(t, abortRequest(pb.StrandedFormationMode_STRANDED_FORMATION_MODE_SHOW), config.SpectateOpsCaller, method)},
+		"签给了列表方法":  {ops, context.Background(), signedResolve(t, abortRequest(pb.StrandedFormationMode_STRANDED_FORMATION_MODE_SHOW), config.ManualResolutionCaller, pb.MatchInternal_ListStrandedFormations_FullMethodName)},
+		"没有签名":     {ops, context.Background(), abortRequest(pb.StrandedFormationMode_STRANDED_FORMATION_MODE_SHOW)},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := c.ops.ResolveStrandedFormation(c.ctx, c.in)
@@ -106,10 +106,12 @@ func TestStrandedFormationOpsValidatesBeforeStore(t *testing.T) {
 	method := pb.MatchInternal_ResolveStrandedFormation_FullMethodName
 	for name, edit := range map[string]func(*pb.ResolveStrandedFormationRequest){
 		"没有 battle_id": func(in *pb.ResolveStrandedFormationRequest) { in.BattleId = 0 },
-		"没有 mode":      func(in *pb.ResolveStrandedFormationRequest) { in.Mode = pb.StrandedFormationMode_STRANDED_FORMATION_MODE_UNSPECIFIED },
-		"没有摘要":         func(in *pb.ResolveStrandedFormationRequest) { in.ExpectDigest = "" },
-		"没有操作人":        func(in *pb.ResolveStrandedFormationRequest) { in.OperatorName = " " },
-		"依据含换行":        func(in *pb.ResolveStrandedFormationRequest) { in.Reason = "INC-7\n[FormationManual] forged" },
+		"没有 mode": func(in *pb.ResolveStrandedFormationRequest) {
+			in.Mode = pb.StrandedFormationMode_STRANDED_FORMATION_MODE_UNSPECIFIED
+		},
+		"没有摘要":  func(in *pb.ResolveStrandedFormationRequest) { in.ExpectDigest = "" },
+		"没有操作人": func(in *pb.ResolveStrandedFormationRequest) { in.OperatorName = " " },
+		"依据含换行": func(in *pb.ResolveStrandedFormationRequest) { in.Reason = "INC-7\n[FormationManual] forged" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			in := abortRequest(pb.StrandedFormationMode_STRANDED_FORMATION_MODE_ABORT)

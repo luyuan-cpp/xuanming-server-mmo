@@ -112,6 +112,14 @@ void ClearBadgeFields(PlayerJianghuComp &comp)
 	comp.set_clear_badge_style_id(0);
 }
 
+// 待退标记的三个字段总是一起写、一起清(预扣时写,退还 / 结算消耗 / 过户时清)。
+void ClearPendingSilverFee(PlayerJianghuComp &comp)
+{
+	comp.set_pending_silver_fee_battle_id(0);
+	comp.set_pending_silver_fee_amount(0);
+	comp.set_pending_silver_fee_review_after_ms(0);
+}
+
 void NormalizeOwnerRevision(PlayerJianghuComp &comp, uint64_t currentOwnerRev)
 {
 	if (currentOwnerRev == 0)
@@ -123,8 +131,7 @@ void NormalizeOwnerRevision(PlayerJianghuComp &comp, uint64_t currentOwnerRev)
 		// 官方角色过户换手后清空旧号主战败印记、洒脱徽记与未结银两痕迹，防止新号主替旧号主背仇。
 		ClearDefeatMarkFields(comp);
 		ClearBadgeFields(comp);
-		comp.set_pending_silver_fee_battle_id(0);
-		comp.set_pending_silver_fee_amount(0);
+		ClearPendingSilverFee(comp);
 	}
 	comp.set_owner_revision(currentOwnerRev);
 }

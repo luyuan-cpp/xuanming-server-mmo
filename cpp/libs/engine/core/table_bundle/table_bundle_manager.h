@@ -205,6 +205,8 @@ private:
 	std::string statusRoot;
 	std::string imageConfigDir;
 	std::string serviceName;
+	// table_bundle_info 的 release_track 标签值(stable / canary),启动时按部署注入的环境变量定下。
+	std::string releaseTrackName;
 
 	bool hasActiveManifest = false;
 	BundleManifest activeManifest;

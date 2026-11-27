@@ -51,13 +51,29 @@ var (
 		Help:      "Failed attempts to load the lexicon from etcd, by reason (etcd / corrupt / apply / watch). The previous lexicon stays in use.",
 	}, []string{"reason"})
 
+	platformReviews = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "content_guard",
+		Name:      "platform_reviews_total",
+		Help:      "Calls to an external platform reviewer, by provider (wechat / douyin) and outcome (pass / reject / unavailable / skip / deferred).",
+	}, []string{"provider", "outcome"})
+
 	registerOnce sync.Once
+)
+
+// 外部平台审核一次调用的结局(platform_reviews_total 的 outcome,docs/design/rename-and-content-safety.md §6.9)。
+// deferred = 世界频道先行的短预算没等到答复,交给后台补审,那一次另记结局,所以它不算失败;告警只按 unavailable 算失败率。
+const (
+	PlatformOutcomePass        = "pass"
+	PlatformOutcomeReject      = "reject"
+	PlatformOutcomeUnavailable = "unavailable"
+	PlatformOutcomeSkip        = "skip"
+	PlatformOutcomeDeferred    = "deferred"
 )
 
 // Register 注册全部指标,可重复调用。
 func Register() {
 	registerOnce.Do(func() {
-		prometheus.MustRegister(checks, checkSeconds, lexiconVersion, lexiconWords, lexiconLoadedTimestamp, lexiconLoadFailures)
+		prometheus.MustRegister(checks, checkSeconds, lexiconVersion, lexiconWords, lexiconLoadedTimestamp, lexiconLoadFailures, platformReviews)
 	})
 }
 
@@ -78,6 +94,11 @@ func SetLexicon(version uint64, denyWords, allowWords int, loadedAt time.Time) {
 // IncLoadFailure 记一次词库加载失败。
 func IncLoadFailure(reason string) {
 	lexiconLoadFailures.WithLabelValues(reason).Inc()
+}
+
+// ObservePlatformReview 记一次外部平台审核调用的结局。provider 与 outcome 都是固定集合(outcome 取上面的 PlatformOutcome* 常量)。
+func ObservePlatformReview(provider, outcome string) {
+	platformReviews.WithLabelValues(provider, outcome).Inc()
 }
 
 // Start 在 addr 上开 /metrics、/healthz 与 /livez;addr 为空则不开。

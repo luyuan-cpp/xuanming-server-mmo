@@ -263,12 +263,13 @@ func TestSignMigrationGateToken_BindsPlayerAndNeverPinsZone(t *testing.T) {
 	gate := &GateCandidate{NodeID: 9, IP: "gate-9.example.com", Port: 30009, ZoneID: 3}
 	secret := []byte("0123456789abcdef0123456789abcdef")
 
-	admit, err := SignMigrationGateToken(gate, secret, 5*time.Minute, 42)
+	admit, err := SignMigrationGateToken(gate, secret, 5*time.Minute, 42, "")
 	require.NoError(t, err)
 	p := decodeGatePayload(t, admit)
 	assert.EqualValues(t, 9, p.GetGateNodeId())
 	assert.EqualValues(t, 3, p.GetZoneId())
 	assert.EqualValues(t, 42, p.GetPlayerId(), "游戏中的连接绑定本人")
+	assert.Empty(t, p.GetAccountDigest(), "游戏中的连接按角色绑,调用方不传账号")
 	assert.EqualValues(t, 0, p.GetTargetZoneId(), "钉了本 zone,到达时就不会回原场景(设计文档 §3 第 1 条)")
 	assert.Len(t, p.GetHmacSessionKey(), hmacSessionKeyLen)
 	assert.Equal(t, string(hmacHex(secret, admit.TokenPayload)), string(admit.TokenSignature))
@@ -276,16 +277,33 @@ func TestSignMigrationGateToken_BindsPlayerAndNeverPinsZone(t *testing.T) {
 	assert.EqualValues(t, 30009, admit.Port)
 	assert.Equal(t, p.GetExpireTimestamp(), admit.TokenDeadline)
 
-	unbound, err := SignMigrationGateToken(gate, secret, 5*time.Minute, 0)
+	roleSelect, err := SignMigrationGateToken(gate, secret, 5*time.Minute, 0, "alice")
 	require.NoError(t, err)
-	assert.EqualValues(t, 0, decodeGatePayload(t, unbound).GetPlayerId(), "选角界面的连接不绑玩家")
+	rp := decodeGatePayload(t, roleSelect)
+	assert.EqualValues(t, 0, rp.GetPlayerId(), "选角界面的连接不绑玩家")
+	assert.True(t, TicketIssuedTo(rp.GetAccountDigest(), "alice"), "选角界面的连接绑登录的账号")
+	assert.False(t, TicketIssuedTo(rp.GetAccountDigest(), "bob"), "迁移票不能拿给别的账号免排队")
 }
 
-// 普通 AssignGate 票据与重构前相同:不绑持票人,不钉 zone。
-func TestSignGateToken_StaysUnbound(t *testing.T) {
-	admit, err := SignGateToken(&GateCandidate{NodeID: 9, ZoneID: 3}, []byte("0123456789abcdef0123456789abcdef"), time.Minute)
+// 普通 AssignGate 票据:不绑持票角色,不钉 zone;带账号时绑这个账号(2026-11-26),别的账号拿去登不上。
+// 去掉 signGateToken 里的 AccountDigest 一行,本用例红在摘要长度上。
+func TestSignGateToken_BindsTheAccountOnly(t *testing.T) {
+	gate := &GateCandidate{NodeID: 9, ZoneID: 3}
+	secret := []byte("0123456789abcdef0123456789abcdef")
+
+	admit, err := SignGateToken(gate, secret, time.Minute, "alice")
 	require.NoError(t, err)
 	p := decodeGatePayload(t, admit)
 	assert.EqualValues(t, 0, p.GetPlayerId())
 	assert.EqualValues(t, 0, p.GetTargetZoneId())
+	assert.Len(t, p.GetAccountDigest(), ticketAccountDigestLen)
+	assert.True(t, TicketIssuedTo(p.GetAccountDigest(), "alice"))
+	assert.False(t, TicketIssuedTo(p.GetAccountDigest(), "bob"), "票是发给 alice 的,bob 拿去登不上")
+	assert.False(t, TicketIssuedTo(p.GetAccountDigest(), ""), "绑了账号的票,认不出账号时不放行")
+	assert.NotContains(t, string(admit.TokenPayload), "alice", "载荷里放的是摘要,不是账号原文")
+
+	anonymous, err := SignGateToken(gate, secret, time.Minute, "")
+	require.NoError(t, err)
+	assert.Empty(t, decodeGatePayload(t, anonymous).GetAccountDigest(), "没有账号就不绑")
+	assert.True(t, TicketIssuedTo(nil, "bob"), "没绑账号的票不比对")
 }

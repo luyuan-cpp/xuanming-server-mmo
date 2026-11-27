@@ -14,6 +14,9 @@ import java.util.Objects;
 @RequestMapping("/admin/whitelist")
 public class AdminWhitelistController {
 
+    /** zone_whitelist.note 的列宽(字符数)。 */
+    static final int NOTE_MAX_CHARS = 128;
+
     private final ZoneWhitelistRepository whitelistRepo;
     private final TransactionOperations tx;
 
@@ -39,14 +42,16 @@ public class AdminWhitelistController {
      *       (zone_id, account_id) —— 既是越过业务键改数据,也是「先主键、后唯一键」的反向取锁。</li>
      *   <li>缺 zone_id / account_id 回 400(旧写法是 Hibernate 非空校验失败,冒成 500)。2026-11-12 起 400 带
      *       problem details 错误体(字段名 + 原因码,见 {@link AdminProblems}),之前不带响应体。</li>
+     *   <li>note 超过列宽({@link #NOTE_MAX_CHARS} 个字符)回 400 {@code too_long}(2026-11-26):之前落库报「Data too long」冒成 500。</li>
      * </ul>
      *
      * <p>upsert 与回读在同一个事务里:upsert 持有该行的 X 直到提交,其间并发的 remove 删不掉它。回读用加锁读
      * ({@link ZoneWhitelistRepository#findByZoneIdAndAccountIdForUpdate},2026-11-12):它读最新的已提交版本加本事务的修改,
      * 「已存在、note 没变」时也看得见那一行,回读必然命中,与隔离级别无关;要锁的记录 upsert 都已锁住,整个事务的锁集与单条
      * upsert 相同。之前是普通一致性读,TiDB 的 RR 下可能看不见别人在本事务开始之后提交的那一行。
-     * 回读还兜住行号撞号(不同副本同一毫秒,见 {@code com.game.gateway.entity.RowIds}):ODKU 这时改的是别人那一行的 note、
-     * 这一行没写进去,回读不到,或者读到的 note 不是这次写的,就抛错,整个事务回滚,那一行的 note 也还原。
+     * 回读还兜住行号撞号(不同副本同一毫秒,见 {@code com.game.gateway.entity.RowIds}):ODKU 这时命中的是别人那一行的主键,
+     * 语句不改它(见 {@link ZoneWhitelistRepository#UPSERT_SQL} 的 CASE),这一行也没写进去;回读不到,或者读到的 note 不是
+     * 这次写的,就抛错,整个事务回滚。本键已存在、note 又与这次相同时回读对得上,照常回 200:结果本来就是这一行。
      *
      * <p>整事务包在 {@link InnoDbDeadlockRetry#execute} 里:ODKU 已拆掉 #18 的环,那里只兜 InnoDB 固有的
      * 1213,收敛论证也在那里。
@@ -65,6 +70,9 @@ public class AdminWhitelistController {
         long zoneId = entry.getZoneId();
         long accountId = entry.getAccountId();
         String note = entry.getNote();
+        if (note != null && note.codePointCount(0, note.length()) > NOTE_MAX_CHARS) {
+            throw AdminProblems.badRequest(FieldViolation.tooLong("note", "note exceeds " + NOTE_MAX_CHARS + " characters"));
+        }
         ZoneWhitelist stored = InnoDbDeadlockRetry.execute(tx, "whitelist add", zoneId, () -> {
             whitelistRepo.upsert(zoneId, accountId, note);
             ZoneWhitelist row = whitelistRepo.findByZoneIdAndAccountIdForUpdate(zoneId, accountId)

@@ -15,7 +15,11 @@
   | D(11-26) | 源节点上托管角色的改派待确认条目也记实例 | §14.8 末条 | 代码在 HEAD;两条用例与设计稿在工作区未提交(`cross_zone_test.cpp`、`scene-enter-chain-residuals.md`) |
 
 - **一条都没验证过**,没有生成、编译或测试记录。Claude 只做过 `test_cpp_no_raw_pointer_member.py` 预检(通过)与静态核对。
-- 设计:[scene-enter-chain-residuals.md](../design/scene-enter-chain-residuals.md) §14~§14.8(两处不变量措辞的定论在 §14.1,变异表在 §14.4、§14.7、§14.8);
+  唯一沾边的是 11-21 一次 Docker Linux 全量构建(`build/verification/docker-rebuild-all-20261121T040528.237014Z`):它在 core 库停在别的线的
+  `table_bundle_manager.cpp`(把 `string_view` 写进 muduo 日志流,现已改成 `std::string(...)`),停之前本线的 `rpc_channel.cpp`、`network_utils.cpp`、
+  `client_message_sender.cpp` 用 GCC 13 编过,scene 库与节点都没编到。只当参考,不算本线的编译证据。
+- 设计:[scene-enter-chain-residuals.md](../design/scene-enter-chain-residuals.md) §14~§14.9(两处不变量措辞的定论在 §14.1,变异表在 §14.4、§14.7、§14.8,
+  修后主流程、方案取舍与水平扩展分析在 §14.9);
   [scene-enter-session-fence.md](../design/scene-enter-session-fence.md) §5.2~§5.7;[muduo-rpc-channel.md](../design/muduo-rpc-channel.md) §8.3。
 - PROGRESS 里四条(按标题开头 grep):「Claude:scene 按 gate 实例认会话」(11-20)、「Claude:scene → gate 的回推与自发 EnterScene」(11-20)、
   「Claude:location 记 gate 实例、托管落点带实例」(11-26)、「Claude:托管角色的改派待确认条目也记 gate 实例」(11-26)。

@@ -3,8 +3,11 @@
 # 安装方式:
 #   kubectl apply -n observability -f deploy/k8s/table-bundle-alerts.yaml
 # 抓取前提:
-#   - 业务进程(C++ 节点 /metrics 与 Go 服务 /metrics)暴露 table_bundle_info / table_reload_total;
+#   - 业务进程(C++ 节点 /metrics 与 Go 服务 /metrics)暴露 table_bundle_info{release_track, ...} / table_reload_total /
+#     table_bundle_needs_restart,按各服务的 Pod 注解或 PodMonitor 抓取(全项目上线前统一定,同其它告警文件);
 #   - 每个带表包 sidecar 的 Pod 暴露 table-sync :9099/metrics(table_sync_etcd_last_read_timestamp_seconds)。
+#     Pod 注解只能指一个端口(指的是业务容器),sidecar 要靠 deploy/k8s/table-sync-podmonitor.yaml 抓,
+#     没装它 TableSyncStale 就是哑的。
 # 契约测试:tools/scripts/tests/k8s_table_bundle_contract.tests.ps1。
 ---
 apiVersion: monitoring.coreos.com/v1
@@ -67,11 +70,12 @@ spec:
               当前业务进程不受影响(继续使用本地已有表包),但无法接收新表包或定时切换。检查 etcd 连通性与 sidecar 日志。
             runbook_url: docs/ops/table-hot-reload-runbook.md
 
+        # 判据是状态量 table_bundle_needs_restart(此刻停在 needs_restart = 1),不是事件计数:
+        # increase(table_reload_total{result="needs_restart"}[24h]) 只说明 24 小时内发生过,配上 for: 24h 会在事件后第 24 小时
+        # 窗口刚好滑走时才勉强成立,重没重启都一样。
         - alert: TableBundleNeedsRestart
           expr: |
-            sum by (namespace, pod) (
-              increase(table_reload_total{result="needs_restart"}[24h])
-            ) > 0
+            max by (namespace, pod) (table_bundle_needs_restart) == 1
           for: 24h
           labels:
             severity: info

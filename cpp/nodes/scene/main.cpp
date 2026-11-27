@@ -124,8 +124,24 @@ namespace
 
             static bool Validate(std::string &err)
             {
-                // 神秘商人三表与改名表在暂存作用域内校验;角色改名表校验失败直接拒绝热更。
-                PlayerMysteryMerchantSystem::ValidateTables();
+                // 各系统在暂存作用域里核自己的表(此时读表单例读到的是候选这一包),任何一项不过都拒绝整包。
+                // 新加一个带 ValidateTables 的系统时,这里和下面的 OnCommitted 都要登记:只登记 OnCommitted 的话,
+                // 坏表照样能热更上线,只是多打一行日志。
+                if (PlayerEquipSystem::ValidateTables() != 0)
+                {
+                    err = "scene equipment table validation failed (EquipAttribute / EquipAffix* / EquipEnhance / EquipGem* / Item equip rows)";
+                    return false;
+                }
+                if (!PlayerMysteryMerchantSystem::ValidateTables())
+                {
+                    err = "scene MysteryMerchantRule / MysteryMerchantGoods table validation failed";
+                    return false;
+                }
+                if (!PlayerTravelPassSystem::ValidateTables())
+                {
+                    err = "scene TravelPassSeason / TravelPassTier table validation failed";
+                    return false;
+                }
                 if (!PlayerRenameSystem::ValidateTables())
                 {
                     err = "scene RoleNameRule table validation failed";

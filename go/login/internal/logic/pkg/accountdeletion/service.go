@@ -46,7 +46,7 @@ type AppleRevoker interface {
 	Revoke(ctx context.Context, grant auth.AppleGrant) error
 }
 
-// PassportUsers 删除官方通行证(Casdoor)里的用户(*auth.PassportUserDeleter)。用户已经不在也算成功,可以重复调。
+// PassportUsers 删除官方通行证(Casdoor)里的用户(*auth.PassportAdmin)。用户已经不在也算成功,可以重复调。
 type PassportUsers interface {
 	DeleteUser(ctx context.Context, sub string) error
 }

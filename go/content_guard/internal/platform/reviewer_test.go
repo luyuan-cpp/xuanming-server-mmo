@@ -14,6 +14,10 @@ import (
 	"time"
 
 	cgpb "proto/content_guard"
+
+	"github.com/prometheus/client_golang/prometheus"
+
+	"content_guard/internal/metrics"
 )
 
 func TestWeChatAdapterTokenCacheRetryAndVerdicts(t *testing.T) {
@@ -285,5 +289,62 @@ func TestRouterScenePoliciesLookupCacheAndPendingAsyncSync(t *testing.T) {
 	// 世界频道 ReviewSync 用完整 AsyncTimeout 跑完并判定违规。
 	if res := router.ReviewSync(context.Background(), cgpb.TextScene_TEXT_SCENE_CHAT_WORLD, 7, "", "隐藏广告"); res.Outcome != OutcomeReject {
 		t.Fatalf("world chat ReviewSync got %+v, want Reject", res)
+	}
+}
+
+// platformReviewCount 读 content_guard_platform_reviews_total{provider, outcome} 的当前值;没出现过的组合是 0。
+func platformReviewCount(t *testing.T, provider, outcome string) float64 {
+	t.Helper()
+	metrics.Register()
+	families, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		t.Fatalf("gather metrics: %v", err)
+	}
+	for _, family := range families {
+		if family.GetName() != "content_guard_platform_reviews_total" {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			labels := map[string]string{}
+			for _, label := range metric.GetLabel() {
+				labels[label.GetName()] = label.GetValue()
+			}
+			if labels["provider"] == provider && labels["outcome"] == outcome {
+				return metric.GetCounter().GetValue()
+			}
+		}
+	}
+	return 0
+}
+
+// 平台调用按最终结局计数:世界频道先行的短预算没等到记 deferred(交给后台补审,不算故障),补审与名字类等不到记 unavailable。
+// 告警按 unavailable 的占比报平台故障(deploy/k8s/content-guard-alerts.yaml ContentGuardPlatformFailing);
+// 世界频道补审再不可用只打日志,没有这个计数就看不见平台挂了。
+func TestRouterCountsPlatformOutcomes(t *testing.T) {
+	down := &fakeAdapter{provider: ProviderDouyin, res: ReviewResult{Outcome: OutcomeUnavailable}}
+	router := NewRouter(RouterOptions{
+		Lookup: IdentityLookupFunc(func(context.Context, uint64, string) (Identity, error) {
+			return Identity{Channel: "douyin_minigame", OpenID: "dy-open", Account: "dy_acc"}, nil
+		}),
+		Adapters: []Adapter{down},
+	})
+	deferredBefore := platformReviewCount(t, ProviderDouyin, metrics.PlatformOutcomeDeferred)
+	unavailableBefore := platformReviewCount(t, ProviderDouyin, metrics.PlatformOutcomeUnavailable)
+
+	if res := router.Review(context.Background(), cgpb.TextScene_TEXT_SCENE_CHAT_WORLD, 5, "", "大家好", true); res.Outcome != OutcomePending {
+		t.Fatalf("world chat with the platform down got %+v, want Pending", res)
+	}
+	if res := router.ReviewSync(context.Background(), cgpb.TextScene_TEXT_SCENE_CHAT_WORLD, 5, "", "大家好"); res.Outcome != OutcomeUnavailable {
+		t.Fatalf("async re-check with the platform down got %+v, want Unavailable", res)
+	}
+	if res := router.Review(context.Background(), cgpb.TextScene_TEXT_SCENE_ROLE_NAME, 5, "", "青云客", false); res.Outcome != OutcomeUnavailable {
+		t.Fatalf("role name with the platform down got %+v, want Unavailable", res)
+	}
+
+	if got := platformReviewCount(t, ProviderDouyin, metrics.PlatformOutcomeDeferred) - deferredBefore; got != 1 {
+		t.Fatalf("deferred grew by %v, want 1 (only the world chat fast path)", got)
+	}
+	if got := platformReviewCount(t, ProviderDouyin, metrics.PlatformOutcomeUnavailable) - unavailableBefore; got != 2 {
+		t.Fatalf("unavailable grew by %v, want 2 (the async re-check and the role name)", got)
 	}
 }

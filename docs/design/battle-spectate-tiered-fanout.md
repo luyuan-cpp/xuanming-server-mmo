@@ -25,7 +25,7 @@
 | battle 推送 | 观众版帧只脱敏一次，但每个观众都要各自序列化、加帧头、算 adler32、send；全部跑在一条 loop 线程上（`:1783-1808`、`battle_client_edge.cpp:82-94`） | 成本随观众数线性增长，全压在源站的单线程上 |
 | battle 连接 | 观众和参战者共用 `battle_max_connections`（本地 4096），观众没有单独配额（turn-based §18.7） | 热门局的观众会挤占参战者的连接 |
 | match 准入（生产＝全局模式） | 生产强制全局模式（`go/match/internal/svc/servicecontext.go:160`）。每个观众约 5 个事务；`BeginSpectator` 尾段对 `match_formation` 按 battle_id `FOR UPDATE`（`go/match/internal/authority/spectator.go:330`） | 同一场观众的提交尾段在同一行锁上串行。第 21 人起还要白走一遍事务、锁和两次 gRPC，最后拿到 16004「请稍后重试」（`global_spectator.go:25-27,230-231`） |
-| gate 扇出 | `BroadcastToPlayersEvent` 已有。已提交代码（HEAD `720179638`）每个 session 都要重新编码（`codec.h:86-93`、`codec.cpp:24-76`）；**2026-10-31 更正：C 批（§15.8）已在工作区改为编码一次、复用字节，RPC 与 Kafka 两条入口共用 `gate_push_delivery.cpp`，尚未提交，未见运行验证；每个目标仍各调一次 `conn->send`，也没有按会话合包**。单 IO 线程；Kafka 回调在主 loop 上同步跑完整次扇出，不分片（G8）；输出缓冲超过 2MB 直接 `forceClose` 整条大厅连接（`client_session_handler.cpp:657-667`） | 一次大扇出会卡住整台 gate，慢客户端会被整条踢掉 |
+| gate 扇出 | `BroadcastToPlayersEvent` 已有。**编码一次、复用字节**：同一条广播只编码一份客户端帧字节（`cpp/nodes/gate/handler/gate_push_delivery.h` 的 `EncodedFrame`；经 WebSocket 连上的会话另有一份加了 WebSocket 帧头的字节，同样只生成一次），RPC 与 Kafka 两条入口共用 `gate_push_delivery.cpp`；每个目标仍各调一次 `conn->send(data, len)`，没有按会话合包。C 批（§15.8）做的，已在 main；2026-11-21 Gemini 全量 `routing_identity_test` 481/481 通过（含 `GatePushDelivery.*`），之后该文件只在 11-25 做过成员改名（`0f9bc81d6`），改名后未见新的运行记录。写本文时（2026-10-23）的旧实现是每个 session 重新编码一次。单 IO 线程；Kafka 回调在主 loop 上同步跑完整次扇出，不分片（G8）；输出缓冲超过 2MB 直接 `forceClose` 整条大厅连接（`client_session_handler.cpp:657-667`） | 一次大扇出会卡住整台 gate，慢客户端会被整条踢掉 |
 | gate 订阅 | 会话表只按 session_id 索引，SessionInfo 没有任何频道或订阅字段（`session_manager.h:6`、`session_info_comp.h`） | 没有地方记录「这台 gate 上谁在看哪场」 |
 | 全服广播 | Kafka 版 `BroadcastToAll` / `BroadcastToScene` 的 handler 守护段是空的，消息被静默吞掉（`gate_event_handler.cpp:388-397`）；chat 不推送 | 仓库里没有可直接复用的全服推送通路 |
 
@@ -344,7 +344,7 @@ A 批修第 1、2、5 条。C++ / Go 与 Java 同批完成，每份改动都经�
 | G2 | Kafka 版推送没有身份栅栏 | 属实 | PushToPlayer 和 BroadcastToPlayers 都没有，事件里根本没有可比对的 player_id；RPC 版有 ClassifyPush |
 | G3 | Kafka 版 BroadcastToScene / All 是空实现 | 属实 | 静默丢弃，不打日志；目前没有生产者 |
 | G4 | 单 IO 线程、2MB 强关、上限 2 万连接 | 属实 | 高水位回调延后执行且只触发一次 |
-| G5 | 每个 session 重新编码 | 属实（2026-10-23） | 2026-10-31 补记：C 批已在工作区改为编码一次（`gate_push_delivery.cpp`），尚未提交，未见运行验证；HEAD `720179638` 仍是旧实现 |
+| G5 | 每个 session 重新编码 | 属实（2026-10-23） | 之后 C 批已改成编码一次（`gate_push_delivery.h` 的 `EncodedFrame`，RPC 与 Kafka 两条入口共用），已在 main；运行证据见 §1「gate 扇出」行 |
 | G6 | 编码一次可行 | 属实 | Linux gitlink 和两棵 Windows 树的 TcpConnection 逐字相同；不能用 `send(Buffer*)` |
 | G7 | 会话表只按 session_id 索引 | 属实 | |
 | G8 | 扇出在主 loop 上同步执行 | 属实 | Kafka 线程 → queueInLoop，队列无界，没有背压 |

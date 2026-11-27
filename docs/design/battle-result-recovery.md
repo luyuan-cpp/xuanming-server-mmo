@@ -217,7 +217,7 @@ scene 进程没有 Prometheus 端点,计数从结构化日志提取。player_id 
 
 - 经验累计入账已接入；自动升级仍待策划提供升级曲线，不在战果恢复层编造经验阈值。
 - 长历史不在本列表里做,见 §3 对 (b) 的说明。PVP 战报回放由[战报回放](battle-report-replay.md)另做。
-- robot 冒烟场景本轮不写,冒烟步骤见 §10,由 Gemini 用改好的客户端或补 robot 场景执行。
+- robot 冒烟场景本轮不写,冒烟步骤见 §10,由 Gemini 用改好的客户端执行(客户端 §7 已于 2026-11-12 落码)。以后要补 robot 场景,由 Claude 写,Gemini 只跑。
 - Java 版待做(§11)。
 
 ## 10. 验证(交 Gemini,AGENTS §10.1)
@@ -233,7 +233,7 @@ scene 进程没有 Prometheus 端点,计数从结构化日志提取。player_id 
    - `bag_test`:`BattleResultHistory.*`、`PlayerBattleSettlementTest.*BattleResult*`、`PlayerBattleSettlementItemTest.*BattleResult*` 全过;`PersistRoundTripTest.UnknownFieldsOnEveryCarriedNodeSurviveLoadAndSave` 的覆盖率断言不点名本次新增的四个类型;`PlayerFeaturePersistenceTest.MarshalRefusesWhenAnyPersistedComponentIsMissing` 过。其余失败集合不得超出 11-02 r3 基线(`build/player-store-verify-20261102-r3-prep/06-cpp-tests/bag_test.stdout.log` 的 16 条)。
    - `currency_test`:`PlayerInboxSystemTest.*` 全过(三条战斗结算域用例要求夹具已挂结果组件)。
    - `cross_zone_test`、`turn_battle_engine_test`:全量不回归;`BattleResultCommit.FullSourcePreservesAllAssetsAndFixedBytes` 过(终局时刻已盖进个人结算)。
-4. **冒烟**(本机调试栈,两版 Redis 按惯例):用改好的客户端(或补一个 robot 场景)开一局 PVE、开自动战斗,战斗中断开客户端,等战斗结束、结算入账(scene 日志出现 `metric=battle_result_recorded` 与 `metric=battle_result_published` 各一次),再重新登录。观察:
+4. **冒烟**(本机调试栈,两版 Redis 按惯例):用改好的客户端开一局 PVE、开自动战斗,战斗中断开客户端,等战斗结束、结算入账(scene 日志出现 `metric=battle_result_recorded` 与 `metric=battle_result_published` 各一次),再重新登录。观察:
    - 落地后 `GetRecentBattleResults` 返回的结果里,这一局 **恰好一条**,`seen = false`,货币与掉落和背包实际变化一致,`finished_at_ms` 非 0;
    - 发 `AckBattleResults` 之后再查,同一条 `seen = true`,条数不变;
    - 情形 B(完全下线、重登才应用)另跑一次:重登后客户端收到无上下文的 `BattleEndS2C` 触发查询,同样只一条;

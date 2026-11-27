@@ -35,6 +35,9 @@ type MySQLConfig struct {
 	PermissionFor func(schema string) (authoritysql.Permission, error)
 	// PoolOptionsFor 按逻辑库给拨号选项。一次性工具用它逐库读一次映射;常驻服务的 Watcher 本身按库解析,用 PoolOptions。
 	PoolOptionsFor func(schema string) ([]authoritysql.OpenOption, error)
+	// Lazy 只有常驻的 data_service 置上:目录各片和流水库的池在启动时连不上不算失败,核对挪到第一条连接之前(openCheckedPool)。
+	// 工具、迁移和测试不置,开池当场连库核对,任何失败回错误。
+	Lazy bool
 }
 
 // ForSchema 给出连某个逻辑库的参数:库名、权限、拨号选项都换成这个库的。账号口令和连接池上限不变。
@@ -101,34 +104,84 @@ func openMySQL(cfg MySQLConfig) (*sql.DB, error) {
 	return openMySQLWithDSN(cfg, buildDSN(cfg))
 }
 
+// poolLimits 是连接池的打开上限和空闲上限:没配时 5 和 2。
+func poolLimits(cfg MySQLConfig) (maxOpen, maxIdle int) {
+	maxOpen, maxIdle = 5, 2
+	if cfg.MaxOpenConn > 0 {
+		maxOpen = cfg.MaxOpenConn
+	}
+	if cfg.MaxIdleConn > 0 {
+		maxIdle = cfg.MaxIdleConn
+	}
+	return maxOpen, maxIdle
+}
+
 // openMySQLWithDSN 同 openMySQL,只是 DSN 由调用方给(RouteStore 要在 buildDSN 之上加会话变量,见 buildRouteDSN)。
 // 池上限仍取 cfg;dsn 含口令,出错时的错误信息里不带它。
 func openMySQLWithDSN(cfg MySQLConfig, dsn string) (*sql.DB, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), mysqlPingTimeout)
 	defer cancel()
-	maxOpen := cfg.MaxOpenConn
-	if maxOpen <= 0 {
-		maxOpen = 5
-	}
+	maxOpen, maxIdle := poolLimits(cfg)
 	db, err := authoritysql.Open(ctx, dsn, cfg.DBName, cfg.Backend, maxOpen, cfg.Permission, cfg.PoolOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("open mysql: %w", err)
 	}
-
-	if cfg.MaxOpenConn > 0 {
-		db.SetMaxOpenConns(cfg.MaxOpenConn)
-	} else {
-		db.SetMaxOpenConns(5)
-	}
-	if cfg.MaxIdleConn > 0 {
-		db.SetMaxIdleConns(cfg.MaxIdleConn)
-	} else {
-		db.SetMaxIdleConns(2)
-	}
+	db.SetMaxOpenConns(maxOpen)
+	db.SetMaxIdleConns(maxIdle)
 
 	if err := db.PingContext(ctx); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("ping mysql: %w", err)
+		// 同 authoritysql.Open 的判据:拿不到可用连接就是「连不上」,常驻进程据此让这个库先关着。
+		return nil, fmt.Errorf("ping mysql: %w: %w", authoritysql.ErrUnreachable, err)
+	}
+	return db, nil
+}
+
+// lazyProbeConns 是按需模式下核对用的一次性小池的连接上限:核对是顺序的几条读,2 条够了。
+const lazyProbeConns = 2
+
+// openCheckedPool 开一个连接池,投入使用之前跑 check(只读核对,可以为 nil)。返回错误时池已关闭。
+//
+// 工具、迁移和测试(cfg.Lazy 为假)当场连库核对,任何失败回错误。
+// 常驻进程(cfg.Lazy)先回句柄,连不上不算失败,见 lazyPool。两种模式跑的是同一段核对:
+// 按需模式的核对就是对同一个库再走一遍这里的当场分支,用一个一次性的小池,用完即关。
+// 核对一项没少,只换了时刻(docs/design/data-service-startup-isolation.md §3)。
+func openCheckedPool(cfg MySQLConfig, dsn string, check poolCheck) (*sql.DB, error) {
+	if cfg.Lazy {
+		probe := cfg
+		probe.Lazy = false
+		probe.MaxOpenConn, probe.MaxIdleConn = lazyProbeConns, 1
+		return lazyPool(cfg.DBName, time.Now,
+			func() error {
+				db, err := openCheckedPool(probe, dsn, check)
+				if err != nil {
+					return err
+				}
+				_ = db.Close()
+				return nil
+			},
+			func(gate authoritysql.ConnectGate) (*sql.DB, error) {
+				maxOpen, maxIdle := poolLimits(cfg)
+				// 首次核对的钩子排在最前:没核对过时直接拒绝,不去问 cfg.PoolOptions 里的逻辑库熔断。
+				options := append([]authoritysql.OpenOption{authoritysql.WithConnectGate(gate)}, cfg.PoolOptions...)
+				db, err := authoritysql.OpenUnverified(dsn, cfg.DBName, cfg.Backend, maxOpen, cfg.Permission, options...)
+				if err != nil {
+					return nil, fmt.Errorf("open mysql: %w", err)
+				}
+				db.SetMaxOpenConns(maxOpen)
+				db.SetMaxIdleConns(maxIdle)
+				return db, nil
+			})
+	}
+	db, err := openMySQLWithDSN(cfg, dsn)
+	if err != nil {
+		return nil, err
+	}
+	if check != nil {
+		if err := check(db); err != nil {
+			_ = db.Close()
+			return nil, err
+		}
 	}
 	return db, nil
 }

@@ -570,3 +570,63 @@ func TestRealDBManualFillDoesNotQuarantineTheParent(t *testing.T) {
 	sr, _ = state(t, e, sell)
 	require.Equal(t, Cancelled, sr.Status, "子单结案唤醒母单")
 }
+
+// 双人复核的批准号就是幂等键:同一个批准号重放回原结果、不再加腿,换一个批准号照旧按版本拒绝
+// (docs/design/admin-identity-and-dual-control.md §5.6)。
+func TestRealDBManualReplayOfTheSameApprovalReturnsTheRecordedResult(t *testing.T) {
+	e := realDBEngine(t)
+	ctx := context.Background()
+	offer := consignment(t, e, 171, "manual-approval-replay-01")
+	tick(t, e)
+	_, w := state(t, e, offer.CommerceId)
+	ok, err := assetop.ResolveManually(ctx, e.Repo.Ops, assetop.ManualResolution{
+		OpID: leg(w, "seller_debit").OpId, Final: assetop.StatusApplied, Operator: "ops-regression", Reason: "按 scene 流水判定",
+	}, nil, time.Now)
+	require.NoError(t, err)
+	require.True(t, ok)
+	tick(t, e)
+	r, _ := state(t, e, offer.CommerceId)
+	_, quarantined, err := e.quarantine(ctx, r, errors.New("回归用例注入的坏数据"))
+	require.NoError(t, err)
+	require.True(t, quarantined)
+	r, _ = state(t, e, offer.CommerceId)
+
+	req := ManualRequest{CommerceID: offer.CommerceId, ExpectVersion: r.Version, Action: ManualRefund, Operator: "alice", Reason: "ticket-7",
+		ApprovalID: "9007199254740993", Approver: "bob"}
+	first, err := ResolveManual(ctx, manualDeps(e), req, e.now(), true)
+	require.NoError(t, err)
+	require.False(t, first.AlreadyExecuted)
+	r2, w2 := state(t, e, offer.CommerceId)
+	require.Equal(t, r.Version+1, r2.Version)
+	require.Len(t, w2.ManualActions, 1)
+	require.Equal(t, "alice", w2.ManualActions[0].Operator)
+	require.Equal(t, "9007199254740993", w2.ManualActions[0].ApprovalId)
+	require.Equal(t, "bob", w2.ManualActions[0].Approver)
+
+	// 结果未知后的重放:同一个批准号、同一个(已过时的)版本,回当时那一条留痕,合同不动。
+	again, err := ResolveManual(ctx, manualDeps(e), req, e.now(), true)
+	require.NoError(t, err)
+	require.True(t, again.AlreadyExecuted)
+	require.True(t, proto.Equal(w2.ManualActions[0], again.Audit))
+	r3, w3 := state(t, e, offer.CommerceId)
+	require.Equal(t, r2.Version, r3.Version)
+	require.Len(t, w3.ManualActions, 1)
+	require.Len(t, w3.Legs, len(w2.Legs), "重放不能再加一次腿")
+
+	// 只算计划也认得出:带同一个批准号的 DRY_RUN 直接报已执行。
+	dry, err := ResolveManual(ctx, manualDeps(e), req, e.now(), false)
+	require.NoError(t, err)
+	require.True(t, dry.AlreadyExecuted)
+
+	// 另一条后台命令(另一个批准号)拿着旧版本来,照旧按版本拒绝。
+	other := req
+	other.ApprovalID = "9007199254740995"
+	_, err = ResolveManual(ctx, manualDeps(e), other, e.now(), true)
+	require.ErrorIs(t, err, ErrManualVersionChanged)
+
+	// 批准号与批准人只给一个是用法错误。
+	half := req
+	half.Approver = ""
+	_, err = ResolveManual(ctx, manualDeps(e), half, e.now(), false)
+	require.ErrorIs(t, err, ErrManualNotAllowed)
+}

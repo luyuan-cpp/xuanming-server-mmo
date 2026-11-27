@@ -81,11 +81,12 @@ func (p *PassportProvider) Validate(ctx context.Context, identityToken string) (
 		return nil, err
 	}
 	account := passportAccountPrefix + claims.Sub
+	iat, _ := claims.Iat.Int64() // verifyClaims 已核过
 	logx.Infof("%s auth ok: account=%s", PassportAuthType, maskAccount(account, len(passportAccountPrefix)))
-	return &AuthResult{Account: account}, nil
+	return &AuthResult{Account: account, IdentityIssuedAt: iat}, nil
 }
 
-// PassportSubject 从账号名取回通行证的 sub;不是通行证账号回 false。账号注销按它找到通行证里的用户(passport_admin.go)。
+// PassportSubject 从账号名取回通行证的 sub;不是通行证账号回 false。账号注销与刷新前的核对按它找到通行证里的用户(passport_admin.go)。
 func PassportSubject(account string) (string, bool) {
 	sub, ok := strings.CutPrefix(account, passportAccountPrefix)
 	return sub, ok && sub != ""

@@ -170,6 +170,10 @@ type CommerceConf struct {
 	// ManualResolutionEnvironment:本部署的环境名(例如 prod-global、staging-global),1~64 个 ASCII 字母、数字或 . _ -。
 	// 工具的 -expect-target 要与它逐字相等,连错环境时服务端回 target_mismatch;开了入口却没写有效值时入口保持关闭。
 	ManualResolutionEnvironment string `json:",optional"`
+	// ManualResolutionAllowUnapproved:为 true 时接受不带双人复核批准记录的 EXECUTE(docs/design/admin-identity-and-dual-control.md §5.7)。
+	// 只给本机开发与应急:缺省 false,EXECUTE 必须带后台签发的批准记录(发起人与批准人不同)。打开期间每一次不带记录的 EXECUTE
+	// 都打 ERROR 并计入 trade_manual_resolution_unapproved_execute_total,告警 TradeManualResolutionUnapprovedExecute 据此触发。
+	ManualResolutionAllowUnapproved bool `json:",optional"`
 }
 
 // PlayerTradeConf 是游戏内当面交易防骗配置项。

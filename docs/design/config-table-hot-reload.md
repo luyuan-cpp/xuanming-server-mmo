@@ -1,6 +1,6 @@
 # 配置表热更：表包、轨道指针与进程内整批切换（2026-11-20）
 
-> **状态**：**全部 5 批已落码（2026-11-20，随 `f067d01fc` 入库）**。之后别的线已全量导表（manifest 第 2 版），顺带编过 scene / battle，跑过 `scene.exe --validate-tables`；热更这条线自己的单测、预检、本机冒烟与集群端到端都还没跑。C++ 侧的单测 11-26 补上了（15 条，未编译），同时把表包管理器与 battle 的旧表保留期换成了可注入的时钟。剩下的编译、测试、冒烟与登记交 Gemini，要改代码的交回 Claude，见[交接单](../handoff/config-table-hot-reload-handoff-20261126.md)。独立 Java 仓留到 `PARITY.md` 待做。运维手册见 [docs/ops/table-hot-reload-runbook.md](../ops/table-hot-reload-runbook.md)。
+> **状态**：**全部 5 批已落码（2026-11-20，随 `f067d01fc` 入库）**。之后别的线已全量导表（manifest 第 2 版），顺带编过 scene / battle，跑过 `scene.exe --validate-tables`；热更这条线自己的单测、预检、本机冒烟与集群端到端都还没跑。C++ 侧的单测 11-26 补上了（15 条，未编译），同时把表包管理器与 battle 的旧表保留期换成了可注入的时钟。**11-26 晚逐行审查五批代码，查出并修掉 7 处逻辑问题**（sidecar 与发布工具读不了导表器写出的清单、C++ 状态文件字段名与约定不一致、表包没同步下来时重启的进程静默退回镜像旧表、过期的拒绝结论不清、管理接口把上一包的拒绝算到新包头上、scene 三项表校验没接进热更闸门、C++ 启动不核对清单摘要；明细见 `docs/PROGRESS.md` 同日条目），连同配套单测都未编译。剩下的编译、测试、冒烟与登记交 Gemini，要改代码的交回 Claude，见[交接单](../handoff/config-table-hot-reload-handoff-20261126.md)。独立 Java 仓留到 `PARITY.md` 待做。运维手册见 [docs/ops/table-hot-reload-runbook.md](../ops/table-hot-reload-runbook.md)。
 > **相关**：[RPC 热关停](rpc-kill-switch.md)（同一种「etcd 事实源 + 管理接口 + 各进程自己生效」的形态）、[发布轨道](release-track-gray-canary.md)（stable / canary 两条轨道）、[混版本持久字段保护](mixed-version-persist-field-protection.md) §13（表行只增不删）、[配置表 API](table-api-reference-zh.md)、[data/AGENTS.md](../../data/AGENTS.md)、[可配置模板](configurable-templates.md) §3.6（「v1 不做热更」和它列的三条前提，本文把这三条都落实）。
 > **核对基线**：HEAD `ccf2840b2` 加 11-20 工作区。同时有多个会话在改，行号会漂，按函数名找。
 > **上线状态**：未上线。没有存量指针，没有存量表包，不需要迁移。
@@ -216,6 +216,8 @@ zone 级的开关不走表：停服维护用已有的 `/admin/zones/{id}/mainten
 
 gateway_node 不碰对象存储，不验证表包是否存在；指到一个不存在的包，sidecar 会回报同步失败并告警，进程保持原状。
 
+**汇总只认「说的是当前目标那一包」的回报。** 实例回报里的 `pending_state`（已准备、被拒绝、需要重启）带着它当时看到的那一包的摘要 `pending_digest`。指针刚换目标时，实例的回报还停在上一包（进程每 2 秒读一次指针，sidecar 再隔几秒转报）；`GET /admin/tables` 只在 `pending_digest` 等于这条线当前目标（有 `next` 取 `next`，否则取生效的那一包）时才把它计进对应的一类，对不上的不计入任何一类，等它跟上来。否则上一包的拒绝会被算到新包头上，发布工具一轮询就判新包发布失败并撤回。
+
 发布工具 `table-bundle`（与 sidecar 同一个 Go 模块，共用校验与对象存储代码；`dev_tools.ps1` 加包装命令）把一次发布做成有头有尾的操作：
 
 1. `pack` / `upload`：打包、算摘要、上传（已存在就跳过）。
@@ -239,11 +241,15 @@ $MMORPG_TABLE_STATUS_ROOT/
   STATUS.json                      业务进程写：手上是哪一包、准备中的那一包是什么状态；同样先写后改名
 ```
 
+`POINTER.json` 的形状：`{"track": "...", "lines": {"<schema_digest>": {current, next, ...}}, "sync_errors": {"<schema_digest>": "<原因>"}}`。`lines` 里只有「引用到的包本地都齐了」的线；`sync_errors` 只在有线没同步下来时出现，按线记一句原因（最长 256 字符）。
+
+`STATUS.json` 的字段名是业务进程、sidecar、管理接口三方之间的约定，三种语言逐个一致（事实源是 Go 的 `tablebundle.StatusReport`）：`service`、`schema_digest`、`source`（`image` / `bundle`）、`loaded_digest`、`loaded_version`、`loaded_at_ms`、`load_seq`、`pending_state`（空、`preparing`、`prepared`、`rejected`、`needs_restart`）、`pending_digest`、`pending_version`、`pending_reason`、`updated_at_ms`。`pod` 与 `track` 进程可以不写，sidecar 转报时补上。sidecar 靠 `loaded_digest` / `pending_digest` 决定哪些包目录不能清，管理接口靠同一组字段汇总，写错一个名字对方就读成空。
+
 **sidecar 做的事：**
 
 1. 启动先全量读前缀 `/mmorpg/tables/pointer/<本轨道>/`，之后 watch，并每 20 秒全量读一次复核（和热关停一样：watch 通道开着不代表读得到）。
 2. 对读到的每条线的 `current` 和 `next`：本地没有就下载。先核对压缩包的 sha256，对上了才解包。解包时拒绝带路径的条目、链接、超过 256 MiB 的包、超过 1024 个的文件；解到临时目录，核对 manifest 里的 `schema_digest`、每个文件的大小与 sha256，全部通过才改名成正式目录。
-3. **引用到的包全部到位之后**才写 `POINTER.json`。业务进程因此永远不会读到一个指向本地还没有的包的指针。
+3. **引用到的包全部到位之后**才把这条线写进 `POINTER.json`。业务进程因此永远不会读到一个指向本地还没有的包的指针。某条线这一拍没同步下来（包取不到、校验不过、指针 JSON 写坏）时：沿用上一次成功写出的那条线，并在 `sync_errors` 里记原因；这个 Pod 上从没成功过的线不出现在 `lines` 里，只出现在 `sync_errors` 里。sidecar 自己重启时，先把落盘的 `POINTER.json` 里的线读回来当「上一次」，所以重启后头几拍取不到包也不会让一条线从文件里消失。
 4. 读 `STATUS.json`，带 30 秒租约写到 `/mmorpg/tables/status/<轨道>/<Pod 名>`。
 5. 清理：不被 `POINTER.json` 和 `STATUS.json` 引用、且放了超过 10 分钟的包目录删掉。
 6. 暴露 `/readyz`（至少成功写过一次 `POINTER.json`）和 `/metrics`。
@@ -262,7 +268,9 @@ $MMORPG_TABLE_STATUS_ROOT/
 
 开了表包模式之后：
 
-**启动时**：读 `POINTER.json`（读不到就启动失败），按自己的 `schema_digest` 找到那条线，取生效的那一包，从 `bundles/<摘要>/` 加载；这条线没有指针就加载镜像自带的表。加载前按 manifest 逐文件核对大小与 sha256。启动阶段的失败处理不变：解析失败照旧拒启，校验问题照旧只打日志。
+**启动时**：读 `POINTER.json`（读不到就启动失败），按自己的 `schema_digest` 找到那条线，取生效的那一包，从 `bundles/<摘要>/` 加载；这条线没有指针就加载镜像自带的表。加载前按 manifest 逐文件核对大小与 sha256，清单里自报的 `content_digest` 还要等于指针给的摘要（和热更路径同一道核对）。启动阶段的失败处理不变：解析失败照旧拒启，校验问题照旧只打日志。
+
+**「没有指针」和「有指针但表包没到位」要分清。** 本线不在 `lines` 里有两种情况：etcd 里确实没有这条线（新版本刚发布、还没人发过热更），用镜像自带的表是对的；etcd 里有，但这个 Pod 的 sidecar 没把包同步下来，这时用镜像自带的表等于静默退回更旧的数据，而同一条线上别的进程跑的是指针指的那一包。所以 `sync_errors` 里有本线时**拒绝启动**（Go 返回错误，C++ `LOG_FATAL`），容器按退避重启，等 sidecar 同步好再起来。已经在跑的进程不受影响：它读到的仍是上一次成功的那条线。
 
 **运行中**，每 2 秒看一次 `POINTER.json`：
 
@@ -280,6 +288,7 @@ $MMORPG_TABLE_STATUS_ROOT/
 
 - **提交是一次换掉全部表**，连同校验阶段编译好的派生数据一起换。不存在半新半旧。
 - **被拒绝的包不重试**，直到指针再变。
+- **结论跟着指针走**：指针不再指向那一包（`next` 被撤销、指回了现役的包、整条线被删）时，进程把手上「已准备 / 被拒绝 / 需要重启」的结论连同正在准备的暂存表一起清掉并重新回报；之后同一包再次发布，重新准备、重新校验。不清的话，管理接口会一直看到这个进程在拒绝一个指针早就不指的包。
 - **同一时刻只有一包在准备**。准备途中指针又变了，丢掉手上的，从头来。
 - **派生数据必须两阶段**：凡是「从表里算出来、存在别处」的东西，拆成「在暂存表上算，可能失败」和「提交时装上，不会失败」两步。两步用同一个函数的同一次结果，避免校验时过了、装的时候算出来不一样。
 - **启动和热更的严格程度不同，这是有意的**：同一包表，热更时校验不过会被拒绝，而进程重启时只打日志照样加载。启动时拒绝会把一次配表失误变成停服；这个缺口由 §5.4 的预检和 `TableBundleRejected` 告警来堵，不靠拒启。
@@ -321,7 +330,7 @@ $MMORPG_TABLE_STATUS_ROOT/
 | 进程 | 读什么 | 热更时要处理的 |
 |---|---|---|
 | gate | `MessageLimiter`（限流值） | 用时现查，没有派生数据 |
-| scene | 绝大多数表 | 装备表校验、神秘商人三表校验搬进 `Validate()`；指纹每次提交刷新；导航网格与装备挂点只在启动做 |
+| scene | 绝大多数表 | 各系统的 `ValidateTables` 全部接进 `Validate()`，任何一项不过就拒绝整包（11-26 补齐三项：装备表原先只在启动时核、神秘商人只打日志、游历手册只在提交后核）；新加带校验的系统要同时登记 `Validate()` 与 `OnCommitted()`；指纹每次提交刷新；导航网格与装备挂点只在启动做 |
 | battle | 八张战斗表，经 `BattleDataProvider` | §8.4 |
 | scene_manager | `World`（启动时铺场景）、神秘商人三表与 `Item`（用时现读） | `World` 是结构表，不可热更 |
 | match | `PlayMode`、`Dungeon`、`ZoneGroup`、官方剧本 | `Catalog` 与剧本两阶段；`ZoneGroup` 是结构表 |
@@ -351,7 +360,10 @@ $MMORPG_TABLE_STATUS_ROOT/
 | 出了什么事 | 结果 |
 |---|---|
 | etcd 连不上 | sidecar 不改 `POINTER.json`，进程继续用手上的表。指标显示同步过期，超过 2 分钟告警 |
-| 对象存储连不上，或包不存在 | sidecar 不发布指向这个包的指针，这条线保持原状，回报同步失败 |
+| 对象存储连不上，或包不存在 | sidecar 不发布指向这个包的指针：这条线沿用上一次成功同步的内容，`POINTER.json` 的 `sync_errors` 记原因。在跑的进程保持原状；这个 Pod 上从没同步成功过这条线时，业务进程启动会被拒绝（不退回镜像里的旧表），等同步好再起来 |
+| sidecar 自己重启 | 先把落盘的 `POINTER.json` 读回来当「上一次」，同步失败的线照样沿用旧内容，不会从文件里消失 |
+| 发了新包，个别实例的回报还停在上一包 | 管理接口只统计说的是当前目标那一包的回报（§6.4），上一包的拒绝不会被算到新包头上 |
+| 撤掉了被拒绝的包 | 进程清掉「被拒绝 / 需要重启」的结论并重新回报；同一包再次发布会重新校验（§8.1） |
 | 压缩包被改过 | sha256 对不上，不解包 |
 | 新包解析失败、校验不过 | 该进程回报 `rejected`，继续用旧表。到点之前发布工具自动撤销；已经到点就是部分进程新、部分旧，告警后由人回滚或向前修 |
 | 进程在准备途中崩了 | 重启后按 `POINTER.json` 加载当时生效的那一包 |
@@ -463,3 +475,20 @@ sidecar：`table_sync_etcd_last_read_timestamp_seconds`、`table_sync_bundle_fet
 | `Cooldown` | battle、scene | battle 每局绑定 `TableSet` | battle 新开局生效，scene 刷新指纹 | 无持久引用 |
 | `SkillPermission` | battle、scene | battle 每局绑定 `TableSet` | battle 新开局生效，scene 现查 | 无持久引用 |
 | `Monster` | battle、scene、match | battle 每局绑定 `TableSet`；match 校验剧本 | battle 新开局按指纹绑定新套表，match 两阶段重编官方剧本 | 副本/剧本按 id 引用，删行前先确认 `Dungeon` 无引用（导表外键守卫） |
+
+**2026-11-26 复核：台账之后又放开的 20 张表。** 上表写完之后，各功能线陆续给自己的表加了 `(cfg_hot_reload) = true`，可热更名单现在是 33 张，多出来的 20 张没有逐行补进台账。这次只核了两件事：读它的代码有没有在启动时把内容存成长期结构、它的校验有没有接进热更的拒绝闸门。「删行是否有存档引用风险」一栏没有逐张核，由各功能线的设计稿负责。
+
+| 表 | 谁读它 | 存没存长期结构 | 校验接没接进闸门 |
+|---|---|---|---|
+| `SeasonRule`、`SeasonSeal` | scene `player_season` | 否，用时现查 | `PlayerSeasonSystem::ValidateTables` |
+| `TrialJournalEntry`、`TrialJournalMilestone`、`TrialJournalSeal` | scene `player_trial_journal`；`TrialJournalEntry` 另被 match 编进 `Catalog` | scene 否；match 两阶段重编 | `PlayerTrialJournalSystem::ValidateTables`；match 在 `Prepare` 阶段编译 |
+| `EquipAffixQuality`、`SkillScrollCraft` | scene `player_craft` | 否 | `PlayerCraftSystem::ValidateTables` |
+| `SpiritShopGoods`、`SpiritShopLimitGroup` | scene `player_spirit_shop` | 否 | `PlayerSpiritShopSystem::ValidateTables` |
+| `RewardedAdSlot` | scene `player_rewarded_ad` | 否 | `PlayerRewardedAdSystem::ValidateTables` |
+| `TravelPassSeason`、`TravelPassTier` | scene `player_travel_pass` | 否 | `PlayerTravelPassSystem::ValidateTables`（**11-26 才接进闸门**，之前只在提交后打日志，坏表能热更上线） |
+| `BattleProgressionReward`、`BattleProgressionRule`、`PlayerLevelExp` | scene `player_attribute` | 否 | `PlayerAttributeSystem::ValidateProgressionTables` |
+| `FestivalBeastActivity`、`FestivalBeastTier` | scene `player_festival_beast` | 否 | 没有校验函数 |
+| `JianghuRule` | scene `player_jianghu`、match `jianghu_duel_logic` | 否，按行 1 现查，缺行用内置缺省值 | 没有校验函数 |
+| `GuildWarRule`、`GuildWarMilestone` | go/guild `war` | 否 | `war.ValidateTablesIn`（在候选表上校验） |
+
+以后给一张表加 `(cfg_hot_reload) = true`，同一批补一行到这里；带 `ValidateTables` 的 scene 系统要同时登记 `TableLoadHandler::Validate` 与 `OnCommitted`。

@@ -559,6 +559,25 @@
 	# 确认本次部署就是要关掉或改动线上 login 的第三方登录配置(见上一段「防误关」)。不给时,线上配置会被本次参数关掉或改掉
 	# 就在任何写操作之前拒绝;给了只打警告放行。它是许可不是指令:线上与本次一致时给了也不改任何东西。不粘滞,只在被指定时透传。
 	[switch]$ConfirmLoginAuthProviderChange,
+	# 集群内 content-guard(内容安全,全局服务)的外部平台审核(微信 msgSecCheck / 抖音 antidirt;docs/design/rename-and-content-safety.md §6.5)。
+	# -ContentGuardWeChatAppId / -ContentGuardDouyinAppId 非空才在 content-guard 的 ConfigMap 里渲染 Platform.WeChat / Platform.Douyin
+	# (AppID + AppSecretEnv,只写变量名);两个都不给 = 不写 Platform 段,只跑本地词库层。只允许 [A-Za-z0-9_.-]。
+	# 两个 AppID 都填玩家登录用的那个小游戏的 AppID。微信是硬要求:送平台的 openid 是账号目录里记的、login 小游戏登录拿到的那个,
+	# 只在那个小游戏的 AppID 下有效,换一个应用的凭据去调,平台按 openid 无效拒掉每一次审核,而名字类场景对平台不可用的口径是拒绝。
+	# 所以同一次运行里 -LoginWeChatMiniGameAppId 也给了却与 -ContentGuardWeChatAppId 不同,在写操作之前拒绝(只给一边时无从比较,不查)。
+	# 抖音的内容检测只用应用的调用凭据、不带玩家标识,AppID 不同也调得通,不查;仍按同一个小游戏填(调用量按应用算)。
+	# 两把 AppSecret 走工作负载密钥目录($script:WorkloadSecretCatalog 的 content-guard-wechat / content-guard-douyin):部署侧从环境变量
+	# MMORPG_CONTENT_GUARD_WECHAT_APP_SECRET / MMORPG_CONTENT_GUARD_DOUYIN_APP_SECRET 读入 infra namespace 的单键 Secret,经 secretKeyRef
+	# 注入 content-guard 容器的同名变量,绝不进 ConfigMap;Pod 模板带各自的指纹注解,只轮换密钥也会滚动。**任何档位**未设置都在写操作之前拒绝。
+	# 只在本次部署全局 Go 服务时生效(infra-up,或不带 -SkipInfra 的 all-up;要 -GoSvcRegistry、不带 -SkipGoSvc),别的命令给了只告警。
+	# 不粘滞:每次部署按本次取值重写 ConfigMap;本次没给的平台,它的 Secret 在 content-guard 部署之后删掉,平台审核随新 Pod 一起关闭。
+	# 防误关(fail-closed,Assert-ContentGuardPlatformClusterState,非 DryRun、任何写操作之前):线上 content-guard 的 ConfigMap 接着某个平台,
+	# 而本次漏传(会关掉它)或换了 AppID,就整条拒绝,报错给出照传现状的参数串;线上段认不出同样拒绝。确要关闭或改动时加
+	# -ConfirmContentGuardPlatformChange(给了只告警放行;是许可不是指令,线上与本次一致时给了也不改任何东西)。线上没有、本次新开不需要确认。
+	# 包装入口照传:dev_tools.ps1(k8s-infra-up / k8s-all-up)非空 / 被指定才透传;k8s-image-* / k8s-release-* 显式给了即拒绝。
+	[string]$ContentGuardWeChatAppId = "",
+	[string]$ContentGuardDouyinAppId = "",
+	[switch]$ConfirmContentGuardPlatformChange,
 	# 削峰(G4b,docs/design/open-server-rate-limit-design.md §十一):gateway 限流(Lua 脚本 RedisRateLimitStore,2026-11-05 起不再用 Bucket4j)/ login 登录排队。
 	# auto(缺省)= 跟随 -ReleaseProfile:dev 关(ConfigMap 与 G4b 之前逐字相同);staging / prod 开,阈值见 $script:PeakShavingLaunchTier。
 	# off 只用于事故止血与基线压测(AGENTS §6 对比的「关削峰」那一轮);on 只用于 dev 档联调。
@@ -830,6 +849,11 @@ $script:LoginPassportAdminClientSecret = ""
 # login 实名与防沉迷的国家系统 secretKey(-LoginNppaAppId),同样走工作负载密钥目录(login-nppa)。
 # 由 Initialize-InjectedSecrets 解析(只在本次部署 login 且给了 -LoginNppaAppId 时);空串 = 本次不注入。
 $script:LoginNppaSecretKey = ""
+# content-guard 外部平台审核的 AppSecret(-ContentGuardWeChatAppId / -ContentGuardDouyinAppId),同样走工作负载密钥目录
+# (content-guard-wechat / content-guard-douyin,infra namespace)。由 Initialize-InjectedSecrets 解析(只在本次部署全局 Go 服务且给了
+# 对应 AppID 时);空串 = 本次不注入。
+$script:ContentGuardWeChatAppSecret = ""
+$script:ContentGuardDouyinAppSecret = ""
 # gateway 管理面(/admin/**)的 X-Admin-Key,即 Spring 属性 admin.api-key(AdminApiKeyFilter 的 @Value("${admin.api-key}"))。
 # 部署侧从环境变量 MMORPG_GATEWAY_ADMIN_API_KEY 读入 zone namespace 的 Secret,经 secretKeyRef 注入 gateway 容器的 ADMIN_APIKEY,
 # 不进 ConfigMap。env 名取 Spring Boot 文档的规范写法(点换下划线、去掉短横、大写);OS 环境变量优先于 jar 内与 ConfigMap 挂载的
@@ -1054,6 +1078,12 @@ $script:WorkloadSecretCatalog = [ordered]@{
 	# New-LoginAntiAddictionYaml 里的字面量与这里的 Env 一致由契约测试核对)。
 	'login-nppa' = @{ Env = 'MMORPG_LOGIN_NPPA_SECRET_KEY'; SecretKey = 'secret'; Consumers = @('login')
 		Value = { [string]$script:LoginNppaSecretKey } }
+	# content-guard 外部平台审核的 AppSecret(-ContentGuardWeChatAppId / -ContentGuardDouyinAppId 才有值)。content-guard 的配置只写变量名
+	# (Platform.<段>.AppSecretEnv,New-ContentGuardPlatformYaml 里的字面量与这里的 Env 一致由契约测试核对)。
+	'content-guard-wechat' = @{ Env = 'MMORPG_CONTENT_GUARD_WECHAT_APP_SECRET'; SecretKey = 'secret'; Consumers = @('content-guard')
+		Value = { [string]$script:ContentGuardWeChatAppSecret } }
+	'content-guard-douyin' = @{ Env = 'MMORPG_CONTENT_GUARD_DOUYIN_APP_SECRET'; SecretKey = 'secret'; Consumers = @('content-guard')
+		Value = { [string]$script:ContentGuardDouyinAppSecret } }
 }
 
 # 削峰(G4b)开服档起步值。单一来源:ConfigMap 生成、Pod 指纹、部署打印都只读这里。全部「待压测确认」(L-14)。
@@ -1418,6 +1448,42 @@ function Resolve-LoginNppaSecretKey {
 
 <#
 .SYNOPSIS
+	解析 content-guard 一个外部平台的 AppSecret(-EnvName 指的环境变量),返回值;不可用一律 throw。由 Initialize-InjectedSecrets 在写路径入口调用
+	(只在本次部署全局 Go 服务且给了 -ParamName 那个 AppID 时)。
+
+.DESCRIPTION
+	- 任何档位都没有回落值:content-guard 对 AppSecretEnv 指向的变量缺失 / 为空拒绝启动(go/content_guard/content_guard.go buildPlatformRouter)。
+	  staging / prod 的「未设置 / 占位 / 短于 16 位」由 Resolve-InjectedSecret 按它的原文 throw;dev 档 Resolve-InjectedSecret 回落空串,这里补一次拒绝。
+	- 各档都拒首尾空白与 `${`:平台发的 AppSecret 不带这些,带着多半是抄错了(行尾换行、照文档写的占位符)。content-guard 不核 AppSecret 的形状,
+	  拿到错的值照样起得来,只是每一次平台调用都失败;名字类场景对平台不可用的口径是拒绝,小游戏玩家就建不了自定义名字的角色、改不了名。
+	  所以在写操作之前拦下,规则与 Resolve-LoginMiniGameAppSecret 相同(两边通常是同一把 AppSecret)。
+	- 报错只点参数名与环境变量名,不回显值。读环境变量、不读本脚本的变量,契约测试按 AST 抽出来直接调。
+	-Section 是配置段名(Platform.<段名>),只用于 Resolve-InjectedSecret 的用途说明。
+#>
+function Resolve-ContentGuardPlatformAppSecret {
+	param(
+		[Parameter(Mandatory = $true)][string]$EnvName,
+		[Parameter(Mandatory = $true)][string]$ParamName,
+		[Parameter(Mandatory = $true)][string]$Section,
+		[Parameter(Mandatory = $true)][ValidateSet('dev', 'staging', 'prod')][string]$ReleaseProfile
+	)
+
+	$value = Resolve-InjectedSecret -EnvName $EnvName -DevFallback "" -ReleaseProfile $ReleaseProfile `
+		-Purpose "content-guard platform review AppSecret (Platform.$Section.AppSecretEnv)" -MinLength 16
+	if ([string]::IsNullOrWhiteSpace($value)) {
+		throw "$ParamName needs the environment variable $EnvName (the AppSecret of that mini game, injected into content-guard through a Secret); it is not set, so the deployment is refused (no profile has a fallback value)."
+	}
+	if ($value -cne $value.Trim()) {
+		throw "The environment variable $EnvName has leading or trailing whitespace (often a trailing newline): an AppSecret never has any, so the value was most likely copied wrong. Nothing was written."
+	}
+	if ($value.Contains('${')) {
+		throw "The environment variable $EnvName contains an unexpanded `${...}: content-guard does not expand environment variables, so the platform would reject every review. Nothing was written."
+	}
+	return $value
+}
+
+<#
+.SYNOPSIS
 	SQL boot 目录里 login 条目的 passwordAuthSecret(口令登录只读连接串所在的 Secret 名)。纯函数:只看条目,合格就返回名字,不合格一律 throw。
 
 .DESCRIPTION
@@ -1755,6 +1821,20 @@ function Initialize-InjectedSecrets {
 	$script:LoginNppaSecretKey = ""
 	if (-not [string]::IsNullOrEmpty($LoginNppaAppId) -and (Test-ZoneLoginDeployed)) {
 		$script:LoginNppaSecretKey = Resolve-LoginNppaSecretKey -ReleaseProfile $ReleaseProfile
+	}
+
+	# content-guard 外部平台审核的 AppSecret(见 $script:ContentGuardWeChatAppSecret 处的说明)。参数形状与防误关闸在这之前已由
+	# Assert-ContentGuardPlatformPreflight 查过。只在本次部署全局 Go 服务且给了对应 AppID 时解析;其余时候保持空串,
+	# 工作负载密钥目录就不建 Secret、不注入(Get-WorkloadSecretsFor 跳过空值)。规则见 Resolve-ContentGuardPlatformAppSecret。
+	$script:ContentGuardWeChatAppSecret = ""
+	if (-not [string]::IsNullOrEmpty($ContentGuardWeChatAppId) -and (Test-GlobalGoSvcDeployed)) {
+		$script:ContentGuardWeChatAppSecret = Resolve-ContentGuardPlatformAppSecret -EnvName "MMORPG_CONTENT_GUARD_WECHAT_APP_SECRET" `
+			-ParamName "-ContentGuardWeChatAppId" -Section "WeChat" -ReleaseProfile $ReleaseProfile
+	}
+	$script:ContentGuardDouyinAppSecret = ""
+	if (-not [string]::IsNullOrEmpty($ContentGuardDouyinAppId) -and (Test-GlobalGoSvcDeployed)) {
+		$script:ContentGuardDouyinAppSecret = Resolve-ContentGuardPlatformAppSecret -EnvName "MMORPG_CONTENT_GUARD_DOUYIN_APP_SECRET" `
+			-ParamName "-ContentGuardDouyinAppId" -Section "Douyin" -ReleaseProfile $ReleaseProfile
 	}
 
 	# 登录排队令牌的 HMAC 密钥(login Secrets.QueueToken,G4b)。生产模式开了排队就必需,且不得与 GateToken / InternalAuth 复用
@@ -3629,6 +3709,24 @@ function Get-RedisPlayerPoolMirror {
 
 <#
 .SYNOPSIS
+	match 私有集群句柄的每节点连接池上限:go/match/etc/match_service.yaml 的 MatchRedis.PoolSizePerNode。不是正整数即 throw。
+
+.DESCRIPTION
+	两处调用、同一个键(与 Get-RedisPoolMirror 同一纪律):match 的 ConfigMap 把它镜像进集群,redis-match-cluster 的连接总账
+	(Get-RedisMatchConnectionLedgerInputs)按它记账。
+#>
+function Get-RedisMatchPoolMirror {
+	$source = 'go/match/etc/match_service.yaml'
+	$raw = Get-AuthoritativeScalar -RelativePath $source -KeyPath 'MatchRedis.PoolSizePerNode'
+	$poolSize = 0
+	if (-not [int]::TryParse([string]$raw, [ref]$poolSize) -or $poolSize -le 0) {
+		throw "Redis 连接池镜像:$source 的 MatchRedis.PoolSizePerNode='$raw' 必须是正整数(fail-closed:每节点池上限决定 redis-match-cluster 每个主节点的连接数)"
+	}
+	return $poolSize
+}
+
+<#
+.SYNOPSIS
 	核心单实例(manifests/infra/redis.yaml,只有 dev 部署)的连接总账输入:每行的副本数读 manifest、池上限读服务 yaml、maxclients 读 redis.yaml,
 	交给 Get-RedisConnectionLedger。
 
@@ -3781,22 +3879,23 @@ function Get-RedisClusterConnectionLedgerInputs {
 	算的是**每个主节点**的连接数。
 
 .DESCRIPTION
-	连这套集群的只有 match 的 MatchRedis(go/match/internal/svc/servicecontext.go 的 NewRedisHandles)。K8s 的 ConfigMap 恒写 MatchRedis,
+	连这套集群的只有 match 的 MatchRedis(go/match/internal/svc/servicecontext.go 的 NewMatchRedis)。K8s 的 ConfigMap 恒写 MatchRedis,
 	由 k8s_deploy_contract 钉住。chat 已不连 Redis。
-	go-zero 的集群客户端没有池参数:go-redis ClusterClient 对每个节点各建一个缺省大小的池(10 × GOMAXPROCS),
-	所以每主节点 = match 副本数 × 10 × G。G 与核心总账同口径按 2 记;有缺省池的行由契约测试钉住 manifest 的 CPU limit ≤ G。
-	没有 Pub/Sub(go-zero 的 redis.Redis 不提供订阅),也没有 C++ 与非 Go 客户端。
+	句柄是 shared/clusterredis(缺口第 34 条,取代 go-zero 的集群句柄):每个节点一个显式上限的池,上限是服务 yaml 的
+	MatchRedis.PoolSizePerNode(Get-RedisMatchPoolMirror,ConfigMap 镜像同一个值),所以每主节点 = match 副本数 × 池上限,
+	不随 CPU limit 漂移,没有缺省大小的池。
+	没有 Pub/Sub,也没有 C++ 与非 Go 客户端。
 	只有全局客户端,zone 数不影响结果。maxclients 读 manifests/infra/redis-match-cluster.yaml 的 MAXCLIENTS。
 	新增一个连这套集群的客户端 = 这里加一行。缺 manifest、replicas 不是恰好一处、MAXCLIENTS 不是恰好一处,照常 throw。
 #>
 function Get-RedisMatchConnectionLedgerInputs {
 	$ledgerName = 'Redis connection ledger (match cluster)'
 	$clients = @(
-		[ordered]@{ Name = 'match'; Scope = 'global'; Manifest = 'deploy/k8s/manifests/go-svc/match.yaml'; DefaultPools = 1; GoMaxProcs = 2; PubSub = 0; Fixed = 0 }
+		[ordered]@{ Name = 'match'; Scope = 'global'; Manifest = 'deploy/k8s/manifests/go-svc/match.yaml'; DefaultPools = 0; GoMaxProcs = 0; PubSub = 0; Fixed = 0 }
 	)
 	foreach ($client in $clients) {
 		$client['Replicas'] = Get-ManifestDeploymentReplicas -RelativePath $client.Manifest -LedgerName $ledgerName
-		$client['ConfiguredPoolConns'] = 0
+		$client['ConfiguredPoolConns'] = Get-RedisMatchPoolMirror
 	}
 	return [ordered]@{
 		MaxClients               = Get-RedisMaxClientsFromManifest -RelativePath 'deploy/k8s/manifests/infra/redis-match-cluster.yaml'
@@ -5503,16 +5602,17 @@ function Wait-RedisMatchClusterReady {
 
 <#
 .SYNOPSIS
-	Go 服务配置里的 PlayerRedis 段与 login 的 LoginRedis 段(playerredis.Config 形状,纯函数)。返回顶格的 YAML 文本。
+	Go 服务配置里的 PlayerRedis 段、login 的 LoginRedis 段与 match 的 MatchRedis 段(clusterredis.Config 形状,纯函数)。返回顶格的 YAML 文本。
 
 .DESCRIPTION
 	开了集群:种子、Cluster: true、PasswordEnv(口令经 Secret 进容器,不进 ConfigMap)。
 	没开集群:只写池上限,地址与口令由服务的 OrDefault 指向它现有的实例(PlayerRedis 与 login 的 LoginRedis 都是这样)。
 	LoginRedis 段只有 login 自己有:其余服务只认 gate 签名的会话身份原件,不读登录态。
+	MatchRedis 段只有 match 有:恒指向 redis-match-cluster(Topology 恒 Enabled),那套集群不设口令。
 #>
 function New-PlayerRedisConfigYaml {
 	param(
-		[Parameter(Mandatory = $true)][ValidateSet('PlayerRedis', 'LoginRedis')][string]$Section,
+		[Parameter(Mandatory = $true)][ValidateSet('PlayerRedis', 'LoginRedis', 'MatchRedis')][string]$Section,
 		[Parameter(Mandatory = $true)]$Topology,
 		[Parameter(Mandatory = $true)][int]$PoolSizePerNode,
 		[AllowEmptyString()][string]$ClusterPasswordEnv = ''
@@ -9496,6 +9596,12 @@ function New-TableSyncSidecarContainerYaml {
 		"${keyIndent}    valueFrom:",
 		"${keyIndent}      fieldRef:",
 		"${keyIndent}        fieldPath: metadata.name",
+		# etcd 状态键是 <轨道>/<namespace>/<pod>:各 zone namespace 里的 StatefulSet 同名(guild-0、gate-0…),
+		# 却共用 infra 的同一个 etcd,只用 Pod 名会在同一轨道上互相覆盖(go/table_sync 的 statusIdentity)。
+		"${keyIndent}  - name: POD_NAMESPACE",
+		"${keyIndent}    valueFrom:",
+		"${keyIndent}      fieldRef:",
+		"${keyIndent}        fieldPath: metadata.namespace",
 		"${keyIndent}  - name: MMORPG_RELEASE_TRACK",
 		"${keyIndent}    value: `"$effectiveTrack`"",
 		"${keyIndent}  - name: MMORPG_TABLE_SYNC_ETCD_ENDPOINTS",
@@ -9612,6 +9718,49 @@ stringData:
   secret-access-key: "$script:TableSyncDevReadSecretKey"
 "@
 	Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $secretYaml
+}
+
+<#
+.SYNOPSIS
+	外接对象存储(-TableSyncS3Endpoint)时核对运维预置的表包只读凭据:本 namespace 里有这个 Secret,access-key-id 与 secret-access-key 都非空。
+	不合格就 throw,本步什么都不写。
+
+.DESCRIPTION
+	table-sync 按 secretKeyRef(optional: false)引用它。缺了的话,本 namespace 里所有带 table-sync 的 Pod(gate / scene / battle 与读表的 Go 服务)
+	都会卡在 CreateContainerConfigError,整个 zone 或全局池起不来;而 kubectl apply 本身照样成功,要等 rollout 超时才看得出来。
+	所以在本 namespace 的任何工作负载之前核对(调用点紧跟 Apply-TableSyncDevSecret)。
+	Secret 只查键名与长度(kubectl go-template 列出 .data 的键与 base64 长度,同 Assert-LoginPasswordAuthSecrets),本进程不读凭据的值。
+	dev 夹具(-TableSyncDevFixture)的凭据由 Apply-TableSyncDevSecret 写入,这里不查;没启用表包模式时什么都不做。
+	DryRun 不连集群,只打一行将要核对什么。kubectl 失败(集群不可达、Forbidden)直接 throw:查不到不等于在。
+#>
+function Assert-TableSyncS3SecretProvisioned {
+	param([Parameter(Mandatory = $true)][string]$Namespace)
+	if (-not $script:TableSyncEnabled -or $TableSyncDevFixture) { return }
+	$name = (Get-TableSyncSettings).SecretName
+	if ($DryRun) {
+		Write-Host "[dry-run] would check that Secret $name in namespace $Namespace has non-empty keys access-key-id and secret-access-key (table-sync S3 read credentials; the values are not read)"
+		return
+	}
+	$allArgs = @()
+	$allArgs += Build-KubectlBaseArgs
+	$allArgs += @('get', 'secret', $name, '-n', $Namespace, '--ignore-not-found', '-o', 'go-template=found;{{range $k, $v := .data}}{{$k}}={{len $v}};{{end}}')
+	$out = & kubectl @allArgs
+	$exitCode = $LASTEXITCODE
+	if ($exitCode -ne 0) {
+		throw "Cannot read Secret $name in namespace $Namespace (table-sync S3 read credentials): kubectl exit code $exitCode. Nothing was written for this step."
+	}
+	$tokens = @(([string]($out | Out-String)).Trim() -split ';' | Where-Object { $_ -ne '' })
+	if ($tokens.Count -eq 0 -or $tokens[0] -cne 'found') {
+		throw "Secret $name does not exist in namespace $Namespace. Every pod with the table-sync sidecar references it and would not start. Provision it with the keys access-key-id and secret-access-key first (docs/ops/table-hot-reload-runbook.md). Nothing was written for this step."
+	}
+	$missing = @()
+	foreach ($key in @('access-key-id', 'secret-access-key')) {
+		$lengths = @($tokens | Select-Object -Skip 1 | Where-Object { $_ -cmatch ('^' + [regex]::Escape($key) + '=\d+$') } | ForEach-Object { [int]($_.Substring($key.Length + 1)) })
+		if ($lengths.Count -ne 1 -or $lengths[0] -le 0) { $missing += $key }
+	}
+	if ($missing.Count -gt 0) {
+		throw "Secret $name in namespace $Namespace has no non-empty $($missing -join ', '). table-sync needs both access-key-id and secret-access-key (docs/ops/table-hot-reload-runbook.md). Nothing was written for this step."
+	}
 }
 
 <#
@@ -11802,6 +11951,248 @@ function Get-PlayerInboxEnqueueTypesYaml {
 	return (@('  EnqueueTypes:') + @($items | ForEach-Object { "    - $_" })) -join "`n"
 }
 
+<#
+.SYNOPSIS
+	content-guard 外部平台审核参数(-ContentGuardWeChatAppId / -ContentGuardDouyinAppId)的形状校验。纯函数:只看入参,返回错误文本数组
+	(空 = 合法),不抛、不打印。
+
+.DESCRIPTION
+	调用方:写路径入口的 Assert-ContentGuardPlatformPreflight(密钥解析与任何写操作之前,一次报全)与生成器 New-ContentGuardPlatformYaml(纵深防御)。
+	  - AppID 空串 = 不接这个平台;只允许 [A-Za-z0-9_.-](原样写进 YAML 双引号标量,也进发给平台的请求体)。
+	  - 微信:送平台的 openid 是账号目录里记的、玩家经 login 小游戏登录拿到的那个,只在那个小游戏的 AppID 下有效。所以 login 微信小游戏登录的
+	    AppId(-LoginWeChatMiniGameAppId)也给了却与这里不同就拒绝:平台按 openid 无效拒掉每一次审核,名字类场景随之全部被拒。按字节比。
+	    只给一边时无从比较,不查(生成器不传 login 那一项;部署之后靠 ContentGuardRefusingChecks 告警兜底)。
+	  - 抖音:内容检测只带应用的调用凭据、不带玩家标识(go/content_guard/internal/platform/douyin.go),AppID 与 login 的不同也调得通,不查。
+	正则以 \z 收尾:.NET 的 $ 会放过结尾的一个换行,换行进 YAML 就是注入。报错只点参数名,不回显值。
+#>
+function Get-ContentGuardPlatformParamErrors {
+	param(
+		[AllowEmptyString()][string]$WeChatAppId = '',
+		[AllowEmptyString()][string]$DouyinAppId = '',
+		[AllowEmptyString()][string]$LoginWeChatMiniGameAppId = ''
+	)
+
+	$errors = [System.Collections.Generic.List[string]]::new()
+	foreach ($platform in @(
+			[pscustomobject]@{ Param = '-ContentGuardWeChatAppId'; AppId = $WeChatAppId }
+			[pscustomobject]@{ Param = '-ContentGuardDouyinAppId'; AppId = $DouyinAppId })) {
+		if (-not [string]::IsNullOrEmpty($platform.AppId) -and $platform.AppId -cnotmatch '^[A-Za-z0-9_.-]+\z') {
+			$errors.Add("$($platform.Param) only allows [A-Za-z0-9_.-] (it is written verbatim into the content-guard ConfigMap).")
+		}
+	}
+	if (-not [string]::IsNullOrEmpty($WeChatAppId) -and -not [string]::IsNullOrEmpty($LoginWeChatMiniGameAppId) -and $WeChatAppId -cne $LoginWeChatMiniGameAppId) {
+		$errors.Add('-ContentGuardWeChatAppId differs from -LoginWeChatMiniGameAppId: the openid sent to WeChat belongs to the mini game players log in to, so with another app WeChat rejects every review as an invalid openid and every custom name is refused.')
+	}
+	# 逐条写进管道:调用方一律用 @(...) 收集,合法时得到空数组。
+	return $errors.ToArray()
+}
+
+<#
+.SYNOPSIS
+	content_guard.yaml 顶层的 Platform 段(外部平台审核,-ContentGuardWeChatAppId / -ContentGuardDouyinAppId)。两个 AppID 都为空 = 空串
+	(不写 Platform,content-guard 只跑本地词库层)。纯函数:只看入参,参数不合法即 throw。
+
+.DESCRIPTION
+	键名核对自 go/content_guard/internal/config/config.go PlatformConfig / MiniGamePlatformConf:给了 AppID 的平台写 AppID 与 AppSecretEnv。
+	  - AppSecretEnv 是函数里的字面量 MMORPG_CONTENT_GUARD_WECHAT_APP_SECRET / MMORPG_CONTENT_GUARD_DOUYIN_APP_SECRET:是环境变量名,
+	    不是 ${...}(服务对含 ${ 的 AppSecretEnv 拒绝启动)。它们要与工作负载密钥目录 content-guard-wechat / content-guard-douyin 的 Env
+	    逐字相同,由契约测试核对;本函数会被契约测试按 AST 单独抽出来跑,所以不读目录表。**从不写密钥值**,配置结构里也没有内联密钥的键。
+	  - BaseURL 不写 = 平台的生产地址;四个时限不写 = 服务的缺省值(名字类 1500、世界频道先行 250、补审 2500、查渠道身份 150 毫秒)。
+	    模板从服务 yaml 镜像的 Timeout 要盖得住「最长的平台调用 + 查渠道身份 + 200」,否则服务拒绝启动(config.Validate;契约测试也核)。
+	  - 接了平台必须有 DataServiceRpc(调用方只带 player_id,渠道与 openid 到账号目录查),模板里恒有这一段。
+	值写成 YAML 双引号标量,字符集已由 Get-ContentGuardPlatformParamErrors 限定,不需要转义。Platform 在整份 content_guard.yaml 里只此一处顶层键。
+	调用方:New-GoSvcConfigMapYaml 生成 content-guard 的 ConfigMap。
+#>
+function New-ContentGuardPlatformYaml {
+	param(
+		[AllowEmptyString()][string]$WeChatAppId = '',
+		[AllowEmptyString()][string]$DouyinAppId = ''
+	)
+
+	$errors = @(Get-ContentGuardPlatformParamErrors -WeChatAppId $WeChatAppId -DouyinAppId $DouyinAppId)
+	if ($errors.Count -gt 0) {
+		throw ('Cannot render the Platform section of the content-guard ConfigMap: ' + ($errors -join ' '))
+	}
+	if ([string]::IsNullOrEmpty($WeChatAppId) -and [string]::IsNullOrEmpty($DouyinAppId)) { return '' }
+
+	$lines = [System.Collections.Generic.List[string]]::new()
+	$lines.Add('# 外部平台审核(k8s_deploy.ps1 -ContentGuardWeChatAppId / -ContentGuardDouyinAppId,New-ContentGuardPlatformYaml 生成;docs/design/rename-and-content-safety.md §6.5)。')
+	$lines.Add('# 只写公开值:AppSecret 各经自己的单键 Secret 注入 AppSecretEnv 指向的容器环境变量。时限不写 = 服务的缺省值。')
+	$lines.Add('Platform:')
+	if (-not [string]::IsNullOrEmpty($WeChatAppId)) {
+		$lines.Add('  WeChat:')
+		$lines.Add("    AppID: `"$WeChatAppId`"")
+		$lines.Add('    AppSecretEnv: "MMORPG_CONTENT_GUARD_WECHAT_APP_SECRET"')
+	}
+	if (-not [string]::IsNullOrEmpty($DouyinAppId)) {
+		$lines.Add('  Douyin:')
+		$lines.Add("    AppID: `"$DouyinAppId`"")
+		$lines.Add('    AppSecretEnv: "MMORPG_CONTENT_GUARD_DOUYIN_APP_SECRET"')
+	}
+	return ($lines -join "`n")
+}
+
+<#
+.SYNOPSIS
+	从 content_guard.yaml 文本里读出外部平台审核的现状(形状同 New-ContentGuardPlatformYaml),供防误关闸比对。纯函数。
+
+.DESCRIPTION
+	返回 { Present; WeChatAppId; DouyinAppId; Errors }:
+	  - Present:有没有顶格的 Platform 键。按不区分大小写、可带引号找:go-zero 读配置时键名不区分大小写,别的写法在服务里照样生效。
+	  - WeChatAppId / DouyinAppId:Platform.WeChat.AppID / Platform.Douyin.AppID 的值,没有就是空串。
+	  - Errors:认不出的形状(顶格键不是生成器写的 `Platform:`、出现多次、段里两个 AppID 都读不到)。非空时调用方当作「判不出」
+	    (fail-closed),不能当作没开。只写键名,不回显值。
+	键值用 release_common.ps1 的 ConvertFrom-YamlToFlatMap 读(契约测试读 ConfigMap 用的同一个解析器)。
+#>
+function ConvertFrom-ContentGuardPlatformYaml {
+	param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$ConfigYaml)
+
+	$topLevel = @([regex]::Matches($ConfigYaml, '(?im)^["'']?platform["'']?[ \t]*:[^\r\n]*') | ForEach-Object { $_.Value })
+	if ($topLevel.Count -eq 0) {
+		return [pscustomobject]@{ Present = $false; WeChatAppId = ''; DouyinAppId = ''; Errors = [string[]]@() }
+	}
+	$errors = [System.Collections.Generic.List[string]]::new()
+	if ($topLevel.Count -ne 1 -or $topLevel[0] -cnotmatch '^Platform:[ \t]*$') {
+		$errors.Add('the top-level Platform key is not written the way the generator writes it (exactly once, as "Platform:")')
+	}
+	$scalars = (ConvertFrom-YamlToFlatMap -Text $ConfigYaml).Scalars
+	$weChatAppId = [string]$scalars['Platform.WeChat.AppID']
+	$douyinAppId = [string]$scalars['Platform.Douyin.AppID']
+	if ($weChatAppId.Length -eq 0 -and $douyinAppId.Length -eq 0) {
+		$errors.Add('the Platform section has neither Platform.WeChat.AppID nor Platform.Douyin.AppID')
+	}
+	return [pscustomobject]@{ Present = $true; WeChatAppId = $weChatAppId; DouyinAppId = $douyinAppId; Errors = [string[]]$errors.ToArray() }
+}
+
+<#
+.SYNOPSIS
+	content-guard 外部平台审核的防误关判据(纯函数):线上现状(ConvertFrom-ContentGuardPlatformYaml 的结果)与本次两个 AppID 比,
+	返回 { Drifts; KeepArgs }。Drifts 为空 = 放行。
+
+.DESCRIPTION
+	线上没有的平台、本次新开,不需要确认。要确认的三种:
+	  - 线上段认不出(Errors 非空):判不出本次会不会关掉它,按会关掉算(fail-closed)。
+	  - 线上接着某个平台、本次没给它的 AppID:这次部署关掉它、删掉它的 Secret,名字与聊天只过本地词库。
+	  - 线上接着某个平台、本次给的 AppID 不同:换应用要连 AppSecret 一起换,确认是有意为之。
+	KeepArgs:线上接着的平台照传的参数串;值不是 [A-Za-z0-9_.-] 时写 <see ConfigMap>,不把认不出的值原样拼进命令行。线上一个都没有时是空串。
+#>
+function Get-ContentGuardPlatformDrift {
+	param(
+		[Parameter(Mandatory = $true)]$Live,
+		[AllowEmptyString()][string]$WeChatAppId = '',
+		[AllowEmptyString()][string]$DouyinAppId = ''
+	)
+
+	$drifts = [System.Collections.Generic.List[string]]::new()
+	$keepArgs = [System.Collections.Generic.List[string]]::new()
+	if (-not $Live.Present) { return [pscustomobject]@{ Drifts = [string[]]@(); KeepArgs = '' } }
+	foreach ($reason in @($Live.Errors)) {
+		$drifts.Add("the Platform section of the live content-guard ConfigMap cannot be read ($reason), so this deployment may switch platform review off")
+	}
+	foreach ($platform in @(
+			[pscustomobject]@{ Section = 'WeChat'; Param = '-ContentGuardWeChatAppId'; SecretName = 'content-guard-wechat'; Live = [string]$Live.WeChatAppId; Run = $WeChatAppId }
+			[pscustomobject]@{ Section = 'Douyin'; Param = '-ContentGuardDouyinAppId'; SecretName = 'content-guard-douyin'; Live = [string]$Live.DouyinAppId; Run = $DouyinAppId })) {
+		if ($platform.Live.Length -eq 0) { continue }
+		$shown = if ($platform.Live -cmatch '^[A-Za-z0-9_.-]+\z') { $platform.Live } else { '<see ConfigMap>' }
+		$keepArgs.Add("$($platform.Param) $shown")
+		if ([string]::IsNullOrEmpty($platform.Run)) {
+			$drifts.Add("platform review on $($platform.Section) is on in the live content-guard ConfigMap and $($platform.Param) was not given: this deployment switches it off (names and chat are then checked by the local lexicon only) and deletes the Secret $($platform.SecretName)")
+		}
+		elseif ($platform.Run -cne $platform.Live) {
+			$drifts.Add("Platform.$($platform.Section).AppID differs from the live one ($($platform.Param) changed): the AppSecret in the environment has to belong to the new app")
+		}
+	}
+	return [pscustomobject]@{ Drifts = [string[]]$drifts.ToArray(); KeepArgs = ($keepArgs -join ' ') }
+}
+
+<#
+.SYNOPSIS
+	读 infra namespace 里 content-guard 外部平台审核配置的线上现状。只读,返回 ConvertFrom-ContentGuardPlatformYaml 的结果。
+
+.DESCRIPTION
+	ConfigMap 名与内嵌文件名取自 $GoSvcCatalogue['content-guard'] 的 ConfigMap / ConfigFile,与生成器同源。ConfigMap 不存在 = 线上还没有
+	content-guard(首次部署):Present 为 $false。ConfigMap 在却没有配置键、或返回不是 JSON:记进 Errors(判不出,调用方 fail-closed)。
+	任何 kubectl 失败都 throw(集群不可达、Forbidden):查不到不等于没开。不支持 DryRun,调用方在 DryRun 下不调用。
+#>
+function Get-ContentGuardPlatformLiveState {
+	param([Parameter(Mandatory = $true)][string]$Namespace)
+
+	$info = $GoSvcCatalogue['content-guard']
+	$configMap = Invoke-ClientEntryKubectl -KubectlArgs @('get', 'configmap', $info.ConfigMap, '-n', $Namespace, '--ignore-not-found', '-o', 'json') `
+		-KubeContext $KubeContext -KubeConfig $KubeConfig -CaptureOutput
+	if ([string]::IsNullOrWhiteSpace($configMap.Stdout)) {
+		return ConvertFrom-ContentGuardPlatformYaml -ConfigYaml ''
+	}
+	$unreadable = {
+		param([string]$Reason)
+		[pscustomobject]@{ Present = $true; WeChatAppId = ''; DouyinAppId = ''; Errors = [string[]]@($Reason) }
+	}
+	$document = $null
+	try { $document = $configMap.Stdout | ConvertFrom-Json -ErrorAction Stop }
+	catch { return (& $unreadable "kubectl did not return JSON for configmap/$($info.ConfigMap)") }
+	$configYaml = Get-ClientEntryMember -Object $document -Path 'data', $info.ConfigFile
+	if ($null -eq $configYaml) {
+		return (& $unreadable "configmap/$($info.ConfigMap) has no data.$($info.ConfigFile)")
+	}
+	return ConvertFrom-ContentGuardPlatformYaml -ConfigYaml ([string]$configYaml)
+}
+
+<#
+.SYNOPSIS
+	content-guard 外部平台审核的防误关闸(集群现状预检,非 DryRun):线上 content-guard 的 ConfigMap 接着某个平台,而本次参数会把它关掉
+	或换掉 AppID,就在任何写操作之前拒绝。由 Assert-ContentGuardPlatformPreflight 在本次部署全局 Go 服务时调用。
+
+.DESCRIPTION
+	两个 AppID 参数不粘滞。漏传时 apply 照样成功,content-guard 换上不带 Platform 段的配置,名字与聊天只过本地词库,
+	哪里都不报错:平台审核被悄悄关掉,对内容安全是 fail-open,所以和 login 的第三方登录一样设闸。
+	判据只有一份(Get-ContentGuardPlatformDrift);线上现状由 Get-ContentGuardPlatformLiveState 读 content-guard 的 ConfigMap。
+	给了 -ConfirmContentGuardPlatformChange 只打警告放行。任何 kubectl 失败都 throw(查不到不等于没开)。
+#>
+function Assert-ContentGuardPlatformClusterState {
+	$state = Get-ContentGuardPlatformLiveState -Namespace $InfraNamespace
+	$drift = Get-ContentGuardPlatformDrift -Live $state -WeChatAppId ([string]$ContentGuardWeChatAppId) -DouyinAppId ([string]$ContentGuardDouyinAppId)
+	if ($drift.Drifts.Count -eq 0) { return }
+	$keep = if ($drift.KeepArgs) { "To keep the live setup pass $($drift.KeepArgs)" } else { 'The live ConfigMap has nothing that can be passed again' }
+	$text = "namespace ${InfraNamespace}: " + ($drift.Drifts -join '; ') + ". $keep; to switch it off or change it on purpose add -ConfirmContentGuardPlatformChange."
+	if ($ConfirmContentGuardPlatformChange) {
+		# 开头不留空格,理由同 Assert-ContentGuardPlatformPreflight 里的告警。
+		Write-Warning "[content-guard]PlatformChange=confirmed: $text"
+		return
+	}
+	throw "content-guard platform review cluster-state check failed; nothing was written. $text"
+}
+
+<#
+.SYNOPSIS
+	content-guard 外部平台审核的写路径入口预检(-ContentGuardWeChatAppId / -ContentGuardDouyinAppId / -ConfirmContentGuardPlatformChange),
+	早于密钥解析与任何写操作:参数形状、本次两个平台的开关、防误关闸(非 DryRun)。
+
+.DESCRIPTION
+	参数形状不论本次部署什么都查:错的参数配在不部署它的命令上,下次带同一条命令部署时照样会错;报的是参数原因,不是「缺环境变量」。
+	本次不部署全局 Go 服务时这组参数不生效,给了只告警。部署时恒打一行两个平台的开关(只展示开没开),再查集群现状;DryRun 不查集群,只打一行说明。
+#>
+function Assert-ContentGuardPlatformPreflight {
+	$errors = @(Get-ContentGuardPlatformParamErrors -WeChatAppId $ContentGuardWeChatAppId -DouyinAppId $ContentGuardDouyinAppId `
+		-LoginWeChatMiniGameAppId $LoginWeChatMiniGameAppId)
+	if ($errors.Count -gt 0) {
+		throw ("content-guard platform review parameter check failed ($($errors.Count) problem(s)); nothing was written:`n  - " + ($errors -join "`n  - "))
+	}
+	$hasPlatformParam = -not [string]::IsNullOrEmpty($ContentGuardWeChatAppId) -or -not [string]::IsNullOrEmpty($ContentGuardDouyinAppId)
+	if (-not (Test-GlobalGoSvcDeployed)) {
+		if ($hasPlatformParam -or $ConfirmContentGuardPlatformChange) {
+			# 开头「[content-guard]PlatformReview=ignored」刻意不留空格:Write-Warning 可能按窗口宽度在空格处折行,契约测试只断这一段。
+			Write-Warning "[content-guard]PlatformReview=ignored: -ContentGuardWeChatAppId / -ContentGuardDouyinAppId / -ConfirmContentGuardPlatformChange supplied, but the global Go services are not deployed in this run (only infra-up, or all-up without -SkipInfra; requires -GoSvcRegistry without -SkipGoSvc); flags have no effect."
+		}
+		return
+	}
+	Write-Host "content-guard platform review: wechat=$(-not [string]::IsNullOrEmpty($ContentGuardWeChatAppId)) douyin=$(-not [string]::IsNullOrEmpty($ContentGuardDouyinAppId))"
+	if ($DryRun) {
+		Write-Host "[dry-run] Skipping content-guard platform review (Platform section of $($GoSvcCatalogue['content-guard'].ConfigMap)) cluster-state preflight; actual execution checks before any writes."
+		return
+	}
+	Assert-ContentGuardPlatformClusterState
+}
+
 # login / guild / chat 的 ContentGuard 段(内容安全服务的调用端,docs/design/rename-and-content-safety.md §6.6):
 # 从服务自己的 yaml 镜像,只改 etcd 地址,并删掉 Optional 那一行。所有档位都是严格的(调用端的缺省):内容安全在集群里随
 # 全局服务一起部署,不可达时名字与聊天被拒,而不是不检就放行。Optional: true 只是本机 yaml 的写法,不上集群。
@@ -12160,9 +12551,11 @@ function New-GoSvcConfigMapYaml {
 	if ($matchMatchedTicketTTL.Found) {
 		$matchMatchedTicketTTLLine = "MatchedTicketTTLSeconds: $($matchMatchedTicketTTL.Value)"
 	}
-	# MatchRedis:六个 StatefulSet pod 的 headless DNS 逗号串,go-zero 的 cluster 客户端按逗号拆
-	# (core/stores/redis/redisclustermanager.go splitClusterAddrs)。
-	$matchRedisClusterHosts = @(0..5 | ForEach-Object { "redis-match-cluster-$_.redis-match-cluster.${InfraNamespace}.svc.cluster.local:6379" }) -join ','
+	# MatchRedis:redis-match-cluster 六个 StatefulSet pod 的 headless DNS 作种子(shared/clusterredis 的 Addrs + Cluster: true,
+	# 缺口第 34 条:match 的私有句柄不再是 go-zero)。池上限镜像服务 yaml 的 MatchRedis.PoolSizePerNode,连接总账读同一个键
+	# (Get-RedisMatchPoolMirror)。这套集群不设口令,不写 PasswordEnv。
+	$matchRedisSeeds = @(0..5 | ForEach-Object { "redis-match-cluster-$_.redis-match-cluster.${InfraNamespace}.svc.cluster.local:6379" })
+	$matchRedisBlock = New-PlayerRedisConfigYaml -Section 'MatchRedis' -Topology ([pscustomobject]@{ Enabled = $true; Seeds = $matchRedisSeeds }) -PoolSizePerNode (Get-RedisMatchPoolMirror)
 
 	# chat 的契约值(超时预算 / 租约 / 长度闸 / 限速 / 历史窗口)同样只从服务自己的 yaml 取,不在这里另抄常数。
 	# 与上面 match 那组不同,这里**只在生成 chat 自己的 ConfigMap 时求值**:本函数也被 zone-up 为 db / login 等
@@ -12261,6 +12654,16 @@ function New-GoSvcConfigMapYaml {
 		if ($ReleaseProfile -eq 'dev') {
 			$contentGuardMode           = Get-AuthoritativeScalar -RelativePath $contentGuardYaml -KeyPath 'Mode'
 			$contentGuardRequireLexicon = Get-AuthoritativeScalar -RelativePath $contentGuardYaml -KeyPath 'RequireLexicon'
+		}
+	}
+	# content-guard 的外部平台审核段(-ContentGuardWeChatAppId / -ContentGuardDouyinAppId,New-ContentGuardPlatformYaml)。只在生成它自己的 ConfigMap 时
+	# 求值;两个 AppID 都没给 = 空串,模板里不出现 Platform。只写公开值:AppSecret 经工作负载密钥目录的 Secret content-guard-wechat /
+	# content-guard-douyin 注入 AppSecretEnv 指向的变量,绝不进 ConfigMap。Platform 在模板别处没有,整份 content_guard.yaml 只此一处顶层键。
+	$contentGuardPlatformBlock = ''
+	if ($SvcName -eq 'content-guard') {
+		$contentGuardPlatformYaml = New-ContentGuardPlatformYaml -WeChatAppId $ContentGuardWeChatAppId -DouyinAppId $ContentGuardDouyinAppId
+		if (-not [string]::IsNullOrEmpty($contentGuardPlatformYaml)) {
+			$contentGuardPlatformBlock = "`n" + $contentGuardPlatformYaml
 		}
 	}
 
@@ -13257,17 +13660,15 @@ Etcd:
 #   Redis       = 核心单实例,只作回落目标:MatchRedis 本渲染总是写集群地址;PlayerRedis 只在没开玩家域集群(只有 dev)时回落到这里,
 #                 staging / prod 两段都走集群、不部署核心,这个地址不会被连
 #   PlayerRedis = 玩家域,只读跨运行时契约 key(player:{id}:location / player:session:{id} / battle:lock:{id},写者含 C++ scene)
-#   MatchRedis  = match 独占的 Redis Cluster,只放观战协调键 spectate:*(排队、票据、成局、组队的权威都在 SQL)
+#   MatchRedis  = match 独占的 Redis Cluster,只放观战协调键 spectate:*(排队、票据、成局、组队的权威都在 SQL);
+#                 与 PlayerRedis 同一种配置段(shared/clusterredis):种子、Cluster: true、每节点池上限
 Redis:
   Host: redis.${InfraNamespace}:6379
   Type: node
   Pass: ""
   Key: matchservice
 ${playerRedisBlock}
-MatchRedis:
-  Host: ${matchRedisClusterHosts}
-  Type: cluster
-  Key: matchservice
+${matchRedisBlock}
 # 全局池:ZoneId 只影响 etcd 注册路径,gate 按非 zone-scoped 前缀发现,任何 zone 的 gate 都能连到。
 ZoneId: ${CurrentZoneId}
 LeaseTTL: ${matchLeaseTTL}
@@ -13411,7 +13812,10 @@ Name: ${contentGuardName}
 ListenOn: 0.0.0.0:50250
 # dev 档 = go/content_guard/etc/content_guard.yaml 的值;staging / prod 固定 pro。显式写出,不赌 go-zero 缺省值。
 Mode: ${contentGuardMode}
-# 判定是纯内存计算,超时只是兜底。
+# zrpc 服务端的超时(毫秒),到点就掐断处理函数;值镜像 go/content_guard/etc/content_guard.yaml。本地词库是纯内存计算,1 毫秒内;接了外部平台
+# (Platform 段)时要等微信 / 抖音答复:名字类最长 Platform.SyncTimeoutMs(1500),世界频道异步补审最长 Platform.AsyncTimeoutMs(2500),
+# 再加查渠道身份的 Platform.LookupTimeoutMs(150)。小于这几段之和加 200 时服务的 config.Validate 拒启。
+# 调用方的时限(各服务 ContentGuard.Rpc.Timeout、scene 的 CallDeadlineMs.ContentGuardNodeService)都要大于它。
 Timeout: ${contentGuardTimeout}
 # **必带**(服务 config.Validate 缺了直接拒启动):CheckText 的请求里是玩家的聊天原文和名字,
 # 不屏蔽的话 go-zero 的 Stat 拦截器会把它打进日志。
@@ -13444,7 +13848,7 @@ DataServiceRpc:
       - "etcd.${InfraNamespace}:2379"
     Key: dataservice.rpc
   Timeout: 500
-  NonBlock: true
+  NonBlock: true${contentGuardPlatformBlock}
 "@
 		}
 		"trade" {
@@ -15522,6 +15926,16 @@ function Apply-OneGoSvc {
 	if ($SvcName -eq 'login' -and [string]::IsNullOrEmpty($script:LoginNppaSecretKey)) {
 		Invoke-Kubectl -Args @("delete", "secret", "login-nppa", "-n", $Namespace, "--ignore-not-found")
 	}
+	# content-guard 的外部平台审核(-ContentGuardWeChatAppId / -ContentGuardDouyinAppId)同样不粘滞:本次没接的平台,删掉它的 AppSecret Secret
+	# (放在 Deployment apply 之后,理由同上)。工作负载密钥目录只建不删,所以在这里显式删:关掉的平台不该还留着第三方凭据。
+	# Secret 名就是目录表里那两项的键(契约测试核对)。线上开着而本次没给的情形已被 Assert-ContentGuardPlatformClusterState 拦下或确认过。
+	# 服务名判断留在 -and 左边(本函数会被按 AST 单独抽出来跑别的服务,那里右边的变量没有定义)。
+	if ($SvcName -eq 'content-guard' -and [string]::IsNullOrEmpty($script:ContentGuardWeChatAppSecret)) {
+		Invoke-Kubectl -Args @("delete", "secret", "content-guard-wechat", "-n", $Namespace, "--ignore-not-found")
+	}
+	if ($SvcName -eq 'content-guard' -and [string]::IsNullOrEmpty($script:ContentGuardDouyinAppSecret)) {
+		Invoke-Kubectl -Args @("delete", "secret", "content-guard-douyin", "-n", $Namespace, "--ignore-not-found")
+	}
 	if ($SvcName -eq 'player-inbox' -and -not $isPlayerInboxAdmin) {
 		# 本次未注入运维口令:新 Deployment 不再引用 Secret,删掉残留(放在 Deployment apply 之后,理由同上);
 		# 不粘滞 —— 上次带口令部署过、这次没带,运维接口随新 Pod 一起停用。
@@ -17306,6 +17720,7 @@ function Apply-Zone {
 	# 任何工作负载(scene / Go 服务)之前;all-up 若已在 Apply-Infra 写过则这里是空操作。
 	Sync-ManagedDomainServiceSecrets
 	Apply-TableSyncDevSecret -Namespace $namespace
+	Assert-TableSyncS3SecretProvisioned -Namespace $namespace
 
 	# Agones 模式:必须先在本 namespace 里建 agones-sdk 的 SA + RoleBinding,
 	# 必须在 Fleet 之前 apply —— 反过来的话第一批 GameServer 会先失败一轮。
@@ -17980,6 +18395,7 @@ function Apply-Infra {
 	# 集群 UID、TLS Secret)之后、任何 infra 清单与工作负载之前;执行后清掉计划,all-up 进 Apply-Zone 不重复写。
 	Sync-ManagedDomainServiceSecrets
 	Apply-TableSyncDevSecret -Namespace $InfraNamespace
+	Assert-TableSyncS3SecretProvisioned -Namespace $InfraNamespace
 
 	# redis-match-cluster.yaml:match 私有的 Redis Cluster(StatefulSet + 建群 Job)。
 	# 建群脚本要先 `kubectl -n <infra> delete job redis-match-cluster-init` 再 apply。
@@ -18352,6 +18768,9 @@ if ($Command -in @("zone-up", "all-up", "infra-up")) {
 	Assert-AssetOpsSwitchPreflight
 	# gRPC 口准入(gate-online-identity.md §10.2):staging / prod 没开就拒绝(DryRun 只告警)。排在上一行之后:输出里先有本次取值。
 	Assert-NetworkPoliciesPreflight
+	# content-guard 外部平台审核(-ContentGuardWeChatAppId / -ContentGuardDouyinAppId):参数形状与防误关闸(只读 kubectl;DryRun 不查集群)。
+	# 排在密钥解析之前:报的是参数或线上现状的原因,而不是「缺环境变量」。
+	Assert-ContentGuardPlatformPreflight
 	Initialize-InjectedSecrets
 	# 3 副本 Loki 的对象存储访问密钥(只进 Secret,不进 ConfigMap 与日志)。
 	Initialize-LokiS3Credentials

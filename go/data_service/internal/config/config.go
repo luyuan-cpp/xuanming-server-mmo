@@ -440,8 +440,12 @@ func (c IdSegmentConfig) IssuerEndpoints(fallback []string) (primary, secondary,
 
 // StoreConfig 决定 MySQL 侧的 store(快照 / 流水 / 号段 / 名字注册表)装配不起来时进程怎么办。
 type StoreConfig struct {
-	// Required=true:四个 store 任一没装配起来(MySQL 启动瞬间不可达、迁移失败、表结构不对)就**拒绝启动**,
+	// Required=true:任一 store 没装配起来(配置非法、迁移没跑、表结构不对、片号对不上)就**拒绝启动**,
 	// 而且发生在任何 etcd 注册之前。缺省 false = 沿用旧行为:降级运行,依赖它的 RPC 各自返回错误。
+	//
+	// 某个逻辑库启动时**连不上**不算没装配(2026-11-27,docs/design/data-service-startup-isolation.md §5):
+	// store 照常装配,那个库的池先关着,第一次用到时再核对,通过才给连接,落在健康集群上的库照常服务。
+	// 连上了而核对不过仍算没装配。合服映射所在的目录第 0 片连不上时照旧拒启(MergedZonesUnassembled)。
 	//
 	// 为什么多副本必须开:store 为 nil 的实例 gRPC 健康检查照样是 SERVING、两条 etcd 注册照常进行。
 	// 单实例时这是"全挂",很显眼;多实例时是**按比例失败**(p2c / 随机挑到它的请求才失败),隐蔽得多;

@@ -15,7 +15,7 @@
 | 搬库:cutover 核 TTL 已关、cleanup 先核 TiCDC 健康 | 11-19 | 没跑 |
 | 搬库:TTL 任务还在跑也拒绝;audit 比对之前先核源库的 TTL;cleanup 对 TiCDC 的「没有」隔 3 秒确认两轮 | 11-26 | 没跑 |
 
-提交注意:`2d20f6b68` 只带进了 `tools/dbmove` 11-26 改动的一部分(`mover.go`、`side.go` 的新接口方法),其余还在工作区:`mover.go`、`main.go`、`replication.go` 与三个测试文件。**`tools/dbmove` 整个目录一起提交**,否则 HEAD 上它的测试编不过。
+提交状态(2026-11-26 晚核对):`2d20f6b68` 只带进了 `tools/dbmove` 11-26 改动的一部分(`mover.go`、`side.go` 的新接口方法),其余(`mover.go`、`main.go`、`replication.go` 与三个测试文件)已随 `00f92d49f` 入库;现在 `tools/dbmove` 在工作区没有未提交改动,HEAD 上是完整的一套。
 
 ## 2. 要跑的(按顺序;失败保留第一条错误原文,不改断言,不连续重试)
 
@@ -37,7 +37,7 @@ C++(MSBuild 串行 `/m:1`;只改库不重编会跑旧代码):
 
 9. 真 Redis,7.2 与 8.x 各一轮(隔离容器):`SET player:{1}:holder_lease x PX 15000` 之后 `PTTL` 在 (0, 15000] 内、`GET` 返回原值。
 10. 有 promtool 时 `promtool check rules deploy/k8s/scene-manager-alerts.yaml`(先取出 PrometheusRule 的 spec);没有就报告未校验。
-11. 真实 TiCDC:`curl -i <cdc>/api/v2/health` 健康时 200;`curl -i <cdc>/api/v2/changefeeds/no-such-feed` 是 400,响应体含 `CDC:ErrChangeFeedNotExists`;`curl <cdc>/api/v2/changefeeds/<真实 id>` 的顶层字段有 `state`、`checkpoint_ts`、`start_ts`、`create_time`。不符就把回答原样贴回,改 `tools/dbmove/replication.go`。
+11. 真实 TiCDC:`curl -i <cdc>/api/v2/health` 健康时 200;`curl -i <cdc>/api/v2/changefeeds/no-such-feed` 是 400,响应体含 `CDC:ErrChangeFeedNotExists`;`curl <cdc>/api/v2/changefeeds/<真实 id>` 的顶层字段有 `state`、`checkpoint_ts`、`start_ts`、`create_time`。不符就把回答原样贴回,由 Claude 改 `tools/dbmove/replication.go`(Gemini 不改,见 §4)。
 12. 演练:手册 §10 的表(含末尾两行:带 TTL 的表、TiCDC 升级中 cleanup);etcd 单边失联演练的口径在 `docs/ops/cross-zone-failure-test-runbook.md` 2026-11-12 的 Changelog。
 
 ## 3. 已经定案的,不要当成缺口再提

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"match/internal/discovery"
+	"match/internal/playercontract"
 	"match/internal/svc"
 
 	battlepb "proto/battle"
@@ -30,7 +31,9 @@ const testBattle7Instance = "5b0f3c1e-7a42-4d0e-9a51-2f6c8d9e0b17"
 // 不会撞上用例里手写的小号。battle_id 只由发号器发(AGENTS.md §7 第 1 条),替身不能用 snowflake。
 type issuerShapedBattleIDs struct{ counter atomic.Uint64 }
 
-func (g *issuerShapedBattleIDs) Generate() (uint64, error) { return idsegment.MixID(g.counter.Add(1)), nil }
+func (g *issuerShapedBattleIDs) Generate() (uint64, error) {
+	return idsegment.MixID(g.counter.Add(1)), nil
+}
 
 // newGatherSvcCtx 在 newTestSvcCtx 之上补齐发号器与节点镜像:
 // zone1 / zone2 各一个 node_id=1 的 scene(与 setPlayerLocation 写的 NodeId "1" 对齐),battle 池一个节点。
@@ -121,6 +124,8 @@ func TestPreparePlayerFencedClassifiesFailures(t *testing.T) {
 	require.Empty(t, requests)
 
 	setPlayerLocation(t, mr, player, 1)
+	// 成局要从会话记录取未成年人截止时刻(下一条用例),没有会话记录就是不在线
+	setPlayerSessionOnline(t, mr, player)
 
 	// 持久化端点失败(工作租约已失):不发冻结 RPC,不定罪。
 	endpoint, _, err = prepare(func(got string) error {
@@ -182,4 +187,55 @@ func TestPreparePlayerFencedClassifiesFailures(t *testing.T) {
 	require.Equal(t, uint32(7), requests[0].GetBattleNodeId())
 	require.Equal(t, uint64(5000), requests[0].GetDeadlineMs())
 	require.Equal(t, uint64(4000), requests[0].GetPrepareDeadlineMs())
+}
+
+// 未成年人当天的截止时刻在会话记录里(PlayerSession.minor_play_deadline_ms),成局时盖到快照上带给 battle:
+// battle 据此给他的票封顶、到点关他的战斗直连(docs/design/real-name-anti-addiction.md §5.4)。
+// 读不到会话记录就不知道他有没有截止时刻,不能当成不限放进战斗:都在冻结之前判。
+func TestPreparePlayerFencedStampsTheMinorPlayDeadlineFromTheSession(t *testing.T) {
+	svcCtx, mr := newGatherSvcCtx(t)
+	const player, battle = uint64(9002), uint64(78)
+	const deadlineMs = uint64(1_795_784_400_000)
+	var reply *scenepb.PrepareBattleResponse
+	var requests []*scenepb.PrepareBattleRequest
+	prev := prepareBattleFn
+	prepareBattleFn = func(_ string, req *scenepb.PrepareBattleRequest) (*scenepb.PrepareBattleResponse, error) {
+		requests = append(requests, req)
+		return reply, nil
+	}
+	t.Cleanup(func() { prepareBattleFn = prev })
+	prepare := func() (string, *scenepb.PrepareBattleResponse, error) {
+		return preparePlayerFenced(svcCtx, player, battle, 7, 5000, 4000, 1, uint32(matchpb.MatchMode_MATCH_MODE_PVE_SOLO), nil, nil, nil)
+	}
+	setPlayerLocation(t, mr, player, 1)
+
+	// 有位置、没有会话记录:不在线,与没有位置同口径定罪;不冻结。
+	endpoint, _, err := prepare()
+	require.Empty(t, endpoint)
+	require.ErrorIs(t, err, errPrepareRejected)
+	require.Empty(t, requests)
+
+	// 会话记录读不出(字节损坏):结果未知,与读位置失败同口径不定罪;同样不冻结。
+	require.NoError(t, mr.Set(playercontract.SessionKey(player), "\x0a\x05ab"))
+	endpoint, _, err = prepare()
+	require.Empty(t, endpoint)
+	require.Error(t, err)
+	require.NotErrorIs(t, err, errPrepareRejected)
+	require.Empty(t, requests)
+
+	// 未成年人:截止时刻按会话记录盖到快照上;scene 不知道年龄,它填的值不作数。
+	setPlayerSessionOnline(t, mr, player)
+	setSessionMinorPlayDeadline(t, mr, player, deadlineMs)
+	reply = &scenepb.PrepareBattleResponse{Snapshot: &battlepb.BattlePlayerSnapshot{PlayerId: player, MinorPlayDeadlineMs: 1}}
+	_, resp, err := prepare()
+	require.NoError(t, err)
+	require.Equal(t, deadlineMs, resp.GetSnapshot().GetMinorPlayDeadlineMs())
+	require.Len(t, requests, 1)
+
+	// 成年人(会话记录里是 0):如实写 0,scene 填的值同样被覆盖。
+	setPlayerSessionOnline(t, mr, player)
+	reply = &scenepb.PrepareBattleResponse{Snapshot: &battlepb.BattlePlayerSnapshot{PlayerId: player, MinorPlayDeadlineMs: deadlineMs}}
+	_, resp, err = prepare()
+	require.NoError(t, err)
+	require.Zero(t, resp.GetSnapshot().GetMinorPlayDeadlineMs())
 }

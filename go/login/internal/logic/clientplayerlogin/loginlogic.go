@@ -9,6 +9,7 @@ import (
 	"login/internal/logic/pkg/ctxkeys"
 	"login/internal/logic/pkg/homezone"
 	"login/internal/logic/pkg/locker"
+	"login/internal/logic/pkg/loginqueue"
 	"login/internal/logic/pkg/loginsession"
 	"login/internal/logic/pkg/playernamereg"
 	"login/internal/logic/pkg/sessionfence"
@@ -88,11 +89,23 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 	}
 
 	// Resolve account via auth provider
-	account, channel, openID, err := l.resolveAccount(in)
+	resolved, err := l.resolveAccount(in)
 	if err != nil {
 		tip := authFailureTip(err)
 		logx.Errorf("Auth failed: type=%s tip=%d err=%v", in.AuthType, tip, err)
 		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: tip}
+		return resp, nil
+	}
+	account, channel, openID := resolved.Account, resolved.Channel, resolved.OpenID
+
+	// 票据绑定的账号:这条连接用的 gate 票是 AssignGate 发给某个账号的(GateTokenPayload.account_digest,gate 原样带来),
+	// 认证出的账号与它不符就拒绝。排队按账号放人,已在游戏里的账号免排队;票能给别的账号用的话,一个在线账号就能不停地领票
+	// 给别人免排队(docs/design/login-queue-2026-05.md §5「票据绑定账号」)。同一条连接上每次 Login 都比对,换账号再登也拦得住。
+	// 在抢账号锁之前拒绝,什么都不写。沿用 kLoginUnknownError,理由同上面的 kill switch:只有改过的客户端会走到这里。
+	if path != loginPathHTTP && !loginqueue.TicketIssuedTo(sessionDetails.GetTicketAccountDigest(), account) {
+		logx.Errorf("Login rejected: the gate ticket of this connection was issued to another account; account=%s session_id=%d",
+			account, sessionDetails.GetSessionId())
+		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginUnknownError)}
 		return resp, nil
 	}
 
@@ -138,7 +151,7 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 			// 这条路径上 token 就是登录的全部产出:客户端接着要拿 access_token 去 gate 上 Login 绑定会话。
 			// 签发失败时不能回「成功但没有 token」——第三方 code 已被消费,客户端只会拿着空 token 卡在下一步。
 			// 回故障码,让客户端重新走一遍登录(渠道凭证要重新取)。
-			tokenPair, tokenErr := l.issueTokens(account, authType)
+			tokenPair, tokenErr := l.issueTokens(account, authType, resolved.IdentityIssuedAt)
 			if tokenErr != nil {
 				logx.Errorf("Failed to issue tokens for account=%s: %v", account, tokenErr)
 				resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginTokenIssueFailed)}
@@ -241,7 +254,7 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 		authType = "password"
 	}
 	if authType != "access_token" {
-		tokenPair, tokenErr := l.issueTokens(account, authType)
+		tokenPair, tokenErr := l.issueTokens(account, authType, resolved.IdentityIssuedAt)
 		if tokenErr != nil {
 			logx.Errorf("Failed to issue tokens for account=%s: %v", account, tokenErr)
 			// Non-fatal(与上面 HTTP 分支刻意不同):gate 上的会话此时已经绑定,登录本身成功了,
@@ -389,31 +402,33 @@ func authFailureTip(err error) uint32 {
 // resolveAccount determines the account identifier based on the auth type.
 // Empty auth_type is the legacy spelling of "password" and therefore follows
 // the same fail-closed path. Third-party auth_token values use the registry.
-// channel 是凭证最初来自的渠道:access_token 取签发令牌时的 auth_type,其余就是请求的 auth_type(防沉迷按它判,§4)。
-func (l *LoginLogic) resolveAccount(in *login_proto.LoginRequest) (string, string, string, error) {
+// 返回的 Channel 是凭证最初来自的渠道:access_token 取签发令牌时的 auth_type,其余就是请求的 auth_type(防沉迷按它判,§4)。
+func (l *LoginLogic) resolveAccount(in *login_proto.LoginRequest) (*auth.AuthResult, error) {
 	authType := in.AuthType
 	if authType == "" {
 		authType = "password"
 	}
 	if authType == "password" {
 		resolved, err := resolvePasswordAccount(l.ctx, in, auth.GetPassword())
-		return resolved, authType, "", err
+		if err != nil {
+			return nil, err
+		}
+		return &auth.AuthResult{Account: resolved, Channel: authType}, nil
 	}
 
 	provider := auth.Get(authType)
 	if provider == nil {
-		return "", "", "", fmt.Errorf("unknown auth type: %s", authType)
+		return nil, fmt.Errorf("unknown auth type: %s", authType)
 	}
 
 	result, err := provider.Validate(l.ctx, in.AuthToken)
 	if err != nil {
-		return "", "", "", err
+		return nil, err
 	}
-	ch := result.Channel
-	if ch == "" {
-		ch = authType
+	if result.Channel == "" {
+		result.Channel = authType
 	}
-	return result.Account, ch, result.OpenID, nil
+	return result, nil
 }
 
 // recordChannelIdentity 把第三方登录返回的 channel + open_id 同步到 data_service 账号分片,
@@ -453,6 +468,7 @@ func accountLoginLockKey(account string) string {
 }
 
 // issueTokens generates an access/refresh token pair for the authenticated account.
-func (l *LoginLogic) issueTokens(account, authType string) (*token.TokenPair, error) {
-	return l.svcCtx.TokenManager.Issue(l.ctx, account, authType, "")
+// identityIssuedAt 是身份令牌的签发时刻(只有官方通行证有),写进令牌载荷,刷新前按它核对通行证改密(refreshtokenlogic.go)。
+func (l *LoginLogic) issueTokens(account, authType string, identityIssuedAt int64) (*token.TokenPair, error) {
+	return l.svcCtx.TokenManager.Issue(l.ctx, account, authType, "", identityIssuedAt)
 }

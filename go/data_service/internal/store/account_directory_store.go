@@ -75,21 +75,20 @@ func NewAccountDirectoryStore(cfg MySQLConfig, backend authoritysql.Backend, max
 	if maxRoles < 1 || maxRoles > maxRefRows {
 		return nil, accountdirectory.ErrInvalid
 	}
-	shards, err := openShardPools(cfg, func(one MySQLConfig) (*sql.DB, error) {
-		openCtx, cancelOpen := context.WithTimeout(context.Background(), mysqlPingTimeout)
-		db, err := authoritysql.Open(openCtx, buildDSN(one), one.DBName, backend, maxOpenConn, one.Permission, one.PoolOptions...)
-		cancelOpen()
-		if err != nil {
-			return nil, err
+	// 下限在这里拒绝:openCheckedPool 把 0 当成没配、换成缺省值。上限由 authoritysql.Open 拒绝。
+	if maxOpenConn < 1 {
+		return nil, accountdirectory.ErrInvalid
+	}
+	// 每片的上限显式给,空闲上限与它相同;s.cfg 留原样(存档库连接池从它派生)。
+	shardCfg := cfg
+	shardCfg.Backend, shardCfg.MaxOpenConn, shardCfg.MaxIdleConn = backend, maxOpenConn, maxOpenConn
+	shards, err := openShardPools(shardCfg, func(one MySQLConfig) (string, poolCheck) {
+		return buildDSN(one), func(db *sql.DB) error {
+			// 权威连接池核对与业务表形状核对各用自己的有界预算。
+			shapeCtx, cancelShape := context.WithTimeout(context.Background(), mysqlPingTimeout)
+			defer cancelShape()
+			return assertAccountDirectoryShape(shapeCtx, db, one.DBName)
 		}
-		// 权威连接池核对与业务表形状核对各用自己的有界启动预算。
-		shapeCtx, cancelShape := context.WithTimeout(context.Background(), mysqlPingTimeout)
-		defer cancelShape()
-		if err = assertAccountDirectoryShape(shapeCtx, db, one.DBName); err != nil {
-			_ = db.Close()
-			return nil, err
-		}
-		return db, nil
 	})
 	if err != nil {
 		return nil, err

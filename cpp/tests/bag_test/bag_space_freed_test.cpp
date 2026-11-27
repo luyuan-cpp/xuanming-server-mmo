@@ -144,6 +144,34 @@ TEST_F(BagSpaceFreedTest, ConsumeAndGrantNotifiesWhenItConsumedSomething)
 	EXPECT_EQ(5u, Inventory().GetTotalItemCount(kPotion));
 }
 
+// 严格兑换(打造、技能书、百宝阁这些 11-17 起的入口,2026-11-26 补):提交前被拒整笔零副作用,不通知;只替换实例、一件没扣也不通知;
+// 扣到了材料通知一次。发获得的那一半要铸号,不在这里铺(文件头:不碰 item 号段)。
+TEST_F(BagSpaceFreedTest, ExactExchangeNotifiesOnceOnlyWhenMaterialsWereConsumed)
+{
+	ScopedSpaceFreedRecorder recorder;
+	std::vector<GuidVector> written;
+	const auto refuse = [](const std::vector<GuidVector> &) { return static_cast<uint32_t>(kInvalidParameter); };
+	const auto accept = [](const std::vector<GuidVector> &) { return static_cast<uint32_t>(kSuccess); };
+
+	EXPECT_EQ(kInvalidParameter,
+			  BagService::ExchangeInventoryExact(player, {{kPotion, 2}}, {}, {}, /*correlationId=*/3, "{}", written, refuse));
+	EXPECT_TRUE(Notified().empty()) << "提交前被拒:材料没扣,不通知";
+	EXPECT_EQ(6u, Inventory().GetTotalItemCount(kPotion));
+
+	BagService::InstanceReplacement rebind;
+	ASSERT_NE(nullptr, Inventory().GetItemCompByGuid(kTalismanA));
+	rebind.expected = *Inventory().GetItemCompByGuid(kTalismanA);
+	rebind.replacement = rebind.expected;
+	rebind.replacement.set_bound(true);
+	ASSERT_EQ(kSuccess, BagService::ExchangeInventoryExact(player, {}, {}, {rebind}, /*correlationId=*/4, "{}", written, accept));
+	EXPECT_TRUE(Notified().empty()) << "只改了实例内容,一件没扣,不通知";
+
+	ASSERT_EQ(kSuccess,
+			  BagService::ExchangeInventoryExact(player, {{kPotion, 2}}, {}, {}, /*correlationId=*/5, "{}", written, accept));
+	EXPECT_EQ(Once(), Notified());
+	EXPECT_EQ(4u, Inventory().GetTotalItemCount(kPotion));
+}
+
 // 整理:合堆退役了实例(格子空出来)才通知;已经最优、什么都没合时不通知。
 TEST_F(BagSpaceFreedTest, SortingNotifiesOnlyWhenStacksWereMerged)
 {

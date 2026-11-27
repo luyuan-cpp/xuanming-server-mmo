@@ -52,15 +52,19 @@ func NewAssignGateLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Assign
 //     (2026-10-18 补注:也可能回 EXPIRED——admit_window_passed / meta_gone / queue_gone,
 //     判定顺序见 loginqueue.Queue.Poll;传给 Poll 的 zone 一律取自已验签的令牌。)
 //  2. Authenticate: account comes only from req.access_token (authenticateAssignGate, assigngate_auth.go).
-//     Invalid token → UNAUTHENTICATED; no token → anonymous only while LegacyGateLoginEnabled.
+//     Invalid token → UNAUTHENTICATED; no token → anonymous only while LegacyGateLoginEnabled AND the queue is off
+//     (anonymousAssignAllowed): with the queue on every assignment has an account.
 //  3. Queue disabled (kill switch): legacy behavior, sign and return.
 //  4. Queue enabled, but the request is for another zone (or zone 0): ERROR. This login only queues its own zone.
 //  5. Reconnect/replace exemption: one of the account's roles already holds a live PlayerSession in this zone
 //     (reconnectingPlayer) → hold an in-flight slot for it, bypass the queue and sign.
-//     (Anonymous callers have no account to look up.)
 //  6. Capacity available + queue empty: reserve an in-flight slot, sign and return.
-//  7. Otherwise: enqueue (queue identity = authenticated account, "" if anonymous), return QUEUEING —
+//  7. Otherwise: enqueue (queue identity = authenticated account), return QUEUEING —
 //     or QUEUE_FULL when the zone queue is at Queue.MaxQueueLength.
+//
+// Every ticket signed here is bound to the account it was issued to (loginqueue.SignGateToken); login refuses a
+// gate-side Login by any other account (loginqueue.TicketIssuedTo). 排队按账号放人,票不绑账号的话,一个已在游戏里的
+// 账号(第 5 步)就能不停地领票给别的账号免排队。
 //
 // Errors are surfaced via AssignGateResponse.error (HTTP 200 with body) so
 // the Java Gateway shim doesn't need separate error-mapping plumbing.
@@ -74,14 +78,16 @@ func (l *AssignGateLogic) AssignGate(in *loginpb.AssignGateRequest) (*loginpb.As
 	}
 
 	// 2. 鉴权。身份只从 access token 解出,不看请求正文;排队重入在上面已经返回,排队令牌本身就是先前分配的凭证。
-	account, denied := authenticateAssignGate(l.ctx, l.svcCtx.TokenManager, in.AccessToken, config.AppConfig.LegacyGateLoginEnabled)
+	//    排队开着时不接匿名分配(anonymousAssignAllowed),所以第 4 步往后 account 一定非空。
+	account, denied := authenticateAssignGate(l.ctx, l.svcCtx.TokenManager, in.AccessToken,
+		anonymousAssignAllowed(config.AppConfig.LegacyGateLoginEnabled, queueEnabled))
 	if denied != nil {
 		return denied, nil
 	}
 
 	// 3. 排队关着:直接签票,与没有排队时相同。重连本来就由 gate 的验票与 BindSession 处理。
 	if !queueEnabled {
-		return l.signFastPath(in.ZoneId)
+		return l.signFastPath(in.ZoneId, 0, account)
 	}
 
 	// 4. 排队开着时只接本区的请求。队列、名额与放行循环都按本 login 的 Node.ZoneId:别的 zone(含 0)的条目写进去
@@ -95,14 +101,13 @@ func (l *AssignGateLogic) AssignGate(in *loginpb.AssignGateRequest) (*loginpb.As
 	//    会话记的 GateID 只是节点号,那台 gate 可能已经换掉;会话状态在 player_locator,换一台 gate 照样接得上。
 	//    免排队的人不经过名额判断,所以先给他记一枚在途占位,连上之前由占位替他占着名额(HoldReconnectSlot)。
 	//    占位写不进不拦他:已经在游戏里的人不该因为 Redis 抖动被挡在外面,代价是这一个人在连上之前没被算进在途。
-	if account != "" {
-		if playerID, ok := l.reconnectingPlayer(account, in.ZoneId); ok {
-			if err := l.svcCtx.LoginQueue.HoldReconnectSlot(l.ctx, in.ZoneId, playerID); err != nil {
-				logx.Errorf("[loginqueue] hold reconnect slot zone=%d player=%d err=%v", in.ZoneId, playerID, err)
-			}
-			loginqueue.RecordAssign(in.ZoneId, loginqueue.AssignOutcomeReconnect)
-			return l.signFastPathForPlayer(in.ZoneId, playerID)
+	//    这一步不看名额、可以反复调用,每次都签一张新票:票绑了账号,领得再多也只有他自己能用。
+	if playerID, ok := l.reconnectingPlayer(account, in.ZoneId); ok {
+		if err := l.svcCtx.LoginQueue.HoldReconnectSlot(l.ctx, in.ZoneId, playerID); err != nil {
+			logx.Errorf("[loginqueue] hold reconnect slot zone=%d player=%d err=%v", in.ZoneId, playerID, err)
 		}
+		loginqueue.RecordAssign(in.ZoneId, loginqueue.AssignOutcomeReconnect)
+		return l.signFastPath(in.ZoneId, playerID, account)
 	}
 
 	free, capacity, online, admitted, err := loginqueue.FreeSlots(
@@ -141,13 +146,13 @@ func (l *AssignGateLogic) AssignGate(in *loginpb.AssignGateRequest) (*loginpb.As
 			logx.Debugf("[loginqueue] fast-path zone=%d free=%d online=%d admitted=%d budget=%d",
 				in.ZoneId, free, online, admitted, budget)
 			loginqueue.RecordAssign(in.ZoneId, loginqueue.AssignOutcomeFastPath)
-			return l.signFastPath(in.ZoneId)
+			return l.signFastPath(in.ZoneId, 0, account)
 		}
 		// 占位没抢到 = 名额已被并发请求占满,改走入队。
 	}
 
 	// 7. 入队。排队身份是鉴权得到的账号:同一账号在本区只有一个条目,再次入队沿用原位置(loginqueue.Queue.Enqueue)。
-	//    匿名分配为空串,每次都是新条目。队列到上限时不入队,回「排队已满」,客户端等够 retry_after_ms 再来。
+	//    队列到上限时不入队,回「排队已满」,客户端等够 retry_after_ms 再来。
 	res, err := l.svcCtx.LoginQueue.Enqueue(l.ctx, in.ZoneId, account, in.DeviceId)
 	if errors.Is(err, loginqueue.ErrQueueFull) {
 		loginqueue.RecordAssign(in.ZoneId, loginqueue.AssignOutcomeQueueFull)
@@ -215,11 +220,10 @@ func (l *AssignGateLogic) handleReentry(token string) (*loginpb.AssignGateRespon
 // signFastPath signs a gate token directly (no queue involvement). This is
 // the legacy AssignGate behavior used when Queue.Enabled=false or when the
 // queue is empty AND capacity is available.
-func (l *AssignGateLogic) signFastPath(zoneID uint32) (*loginpb.AssignGateResponse, error) {
-	return l.signFastPathForPlayer(zoneID, 0)
-}
-
-func (l *AssignGateLogic) signFastPathForPlayer(zoneID uint32, playerID uint64) (*loginpb.AssignGateResponse, error) {
+//
+// playerID 只用来按 cell 挑 gate(免排队重连时已知是哪个角色;其余传 0)。account 是持票账号:票只对它有效;
+// 空串只出现在排队关着时的匿名分配,签出的票不绑账号。
+func (l *AssignGateLogic) signFastPath(zoneID uint32, playerID uint64, account string) (*loginpb.AssignGateResponse, error) {
 	candidates, err := l.svcCtx.QueueCapacityProvider().CandidatesForZone(l.ctx, zoneID)
 	if err != nil {
 		logx.Errorf("[loginqueue] fast-path candidates zone=%d err=%v", zoneID, err)
@@ -237,7 +241,7 @@ func (l *AssignGateLogic) signFastPathForPlayer(zoneID uint32, playerID uint64) 
 		}, nil
 	}
 	// 签出的票记进本进程的在途账,本进程后面的挑选会把它算进这台 gate 的负载(loginqueue/gate_inflight.go)。
-	admit, err := loginqueue.PickAndSignGateToken(candidates, l.svcCtx.GateInflight(), l.svcCtx.GateTokenSigningSecret(), gateTokenTTL)
+	admit, err := loginqueue.PickAndSignGateToken(candidates, l.svcCtx.GateInflight(), l.svcCtx.GateTokenSigningSecret(), gateTokenTTL, account)
 	if err != nil {
 		logx.Errorf("[loginqueue] fast-path sign zone=%d err=%v", zoneID, err)
 		return &loginpb.AssignGateResponse{Status: uint32(loginqueue.StatusError), Error: "sign failed"}, nil

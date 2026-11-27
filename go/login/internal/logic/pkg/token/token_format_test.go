@@ -282,7 +282,7 @@ func TestTokenLifecycleKeysStayInTheAccountSlot(t *testing.T) {
 				}
 			}
 
-			pair, err := m.Issue(ctx, account, testAuthType, testDevice)
+			pair, err := m.Issue(ctx, account, testAuthType, testDevice, 0)
 			if err != nil {
 				t.Fatalf("Issue: %v", err)
 			}
@@ -326,7 +326,7 @@ func TestTokenLifecycleKeysStayInTheAccountSlot(t *testing.T) {
 
 			// 账号封顶:多签几枚,超出的被淘汰,现拼的 refresh 与 family 键都要真的删掉。
 			for i := 0; i < maxRefreshTokensPerAccount+2; i++ {
-				if _, err := m.Issue(ctx, account, testAuthType, testDevice); err != nil {
+				if _, err := m.Issue(ctx, account, testAuthType, testDevice, 0); err != nil {
 					t.Fatalf("Issue #%d: %v", i, err)
 				}
 			}

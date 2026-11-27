@@ -500,6 +500,13 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
     注销账号时撤销 Apple 令牌(2026-11-19,未运行):再给 `-LoginAppleTeamId` / `-LoginAppleKeyId`(各 10 位大写字母或数字,要么都给要么都不给),
     `AuthProviders.Apple` 多写 `TeamId`、`KeyId` 与 `PrivateKeyEnv`(变量名);.p8 私钥读部署机环境变量 `MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY`,
     经工作负载密钥目录的单键 Secret `login-apple-signin`(键 `private-key`)注入 login 容器的同名变量,见沙盒手册 §I.4。
+  - 官方通行证登录(自托管 Casdoor OIDC,`auth_type` 是 `passport`;2026-11-26,未运行):`-LoginPassportIssuer` / `-LoginPassportClientId` /
+    `-LoginPassportAdminClientId` 要么都给要么都不给,给了才渲染 `AuthProviders.Passport`;`-LoginPassportEndpoint` 可选(取验签公钥与调管理接口的
+    内网基址,留空直接用 Issuer),只能与它们一起给。Issuer 只接受 `https://`(dev 档也接受 `http://`),不带末尾 `/`、用户信息、查询串与片段;
+    AdminClientId 是注销账号时删通行证用户用的机密应用,不能与 ClientId 相同。它的 ClientSecret 读部署机环境变量
+    `MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET`(任何档位都没有回落值,值含首尾空白即拒绝),经工作负载密钥目录的单键 Secret `login-passport-admin`
+    (键 `client-secret`)注入 login 容器的同名变量,Pod 模板带指纹;`AdminClientSecretEnv` 只写变量名。不粘滞与防误关同上(线上开着而本次漏传或
+    换了值,在写操作之前拒绝);没开时它的 Secret 在 login 部署之后删掉。设计见 `docs/design/official-passport-registration.md`。
   - 实名与防沉迷(国内 App 形态,2026-11-19,未运行):`-LoginNppaAppId` / `-LoginNppaBizId`(要么都给要么都不给,只允许 `[A-Za-z0-9_.-]`)渲染 login 顶层
     `AntiAddiction` 段(`Enabled: true`、两个小游戏渠道由平台管、`Nppa.SecretKeyEnv` 只写变量名);`-LoginAntiAddictionExtraPlayDays`(逗号分隔的北京日期)
     与接口测试用的 `-LoginNppaCheckUrl` / `-LoginNppaQueryUrl` / `-LoginNppaLoginoutUrl`(http 与 https 都收)给了才写。secretKey 读部署机环境变量
@@ -630,6 +637,8 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
     低于 login 实际用的区容量 `login_queue_capacity`(区服目录 `zone_config.capacity` 再按本区 gate 到 90% 水位的承载封顶)。否则排队一开,
     新登录全部入队,直到在线降下来才出队,dispatcher 不会因此报错(规格 R20)。超过的先经 `PUT /admin/zones/<id>`(先 `GET` 取 `ETag`,`PUT` 带 `If-Match`)调大区容量并按
     「gate 副本 × 18000 ≥ 区容量」补 gate,或先只开 gateway 限流(`-LoginQueue off`)。
+    整行 PUT 比的是强 ETag:不要把管理面 `/admin/**` 放到会压缩响应的代理后面,压缩之后强 ETag 会被改成 `W/` 弱标签,
+    带回来的 If-Match 永远对不上、PUT 永远 412(现在管理面不经 Ingress、网关没开压缩,不受影响;2026-11-26 记)。
     (2026-10-15 补:「首次打开排队」还要先过上面的合入门槛;门槛未清时排队在任何环境都关着,本条暂不适用。)
   - **调阈值**:阈值只在常量表 `$script:PeakShavingLaunchTier`(不设覆盖参数);改常量后重跑部署,gateway / login 按指纹自动滚动。
     (2026-11-05 改,服务器缺口清单第 29 条)限流不再用 Bucket4j,改成一段令牌桶 Lua(`ratelimit/RedisRateLimitStore.java`),rps / burst 每次随调用传进脚本,
@@ -1174,7 +1183,7 @@ guild 与 trade / friend 同形:全局池服务(`$GoSvcCatalogue.guild`,`Global 
 > 状态:部署脚本、清单、告警与契约测试已落码;**未跑契约测试、未上集群**,待 Gemini。
 
 content-guard 是全局池服务(`$GoSvcCatalogue['content-guard']`,`Global = $true`),`infra-up` / `all-up` 部署到 infra namespace 一次。
-它不连数据库 / Redis / Kafka,只连 etcd,所以没有迁移 Job、没有密钥。
+它不连数据库 / Redis / Kafka,只连 etcd,所以没有迁移 Job。开了外部平台审核才另连 data-service(查渠道身份)、才有两把 AppSecret(见下面「外部平台审核」)。
 
 - **工作负载**:`manifests/go-svc/content-guard.yaml` = Service `content-guard`(50250)+ Deployment(`replicas: 2`、podAntiAffinity、
   `preStop sleep 5`、Downward API `POD_IP`、metrics 9290)+ 同文件 PDB `content-guard-pdb`。ConfigMap `go-svc-content-guard-config` 由脚本生成,
@@ -1196,8 +1205,22 @@ content-guard 是全局池服务(`$GoSvcCatalogue['content-guard']`,`Global = $t
   词文件一行一个词。运营临时加词用 `lexicon add -by <人> -category ad -word <词>`,几秒内全部副本生效,不用重启;
   发错了用 `lexicon rollback -by <人> -to <版本号>`(etcd 里保留最近 3 个版本)。
 - **准入**:`-NetworkPolicies on` 时 50250 只放行 login、guild、chat、scene 三种工作负载(下一节的表)。它没有调用方签名,来源只靠这张名单。
+- **外部平台审核**(可选,微信 `msgSecCheck` / 抖音 `antidirt`;2026-11-26,未运行;设计与取舍见 `docs/design/rename-and-content-safety.md` §6.9):
+  `-ContentGuardWeChatAppId` / `-ContentGuardDouyinAppId` 非空才在 ConfigMap 里写 `Platform.WeChat` / `Platform.Douyin`(只有 `AppID` 与变量名 `AppSecretEnv`)。
+  AppSecret 从部署机的环境变量 `MMORPG_CONTENT_GUARD_WECHAT_APP_SECRET` / `MMORPG_CONTENT_GUARD_DOUYIN_APP_SECRET` 读入 infra namespace 的单键 Secret
+  `content-guard-wechat` / `content-guard-douyin`,经 secretKeyRef 注入,Pod 模板带指纹(换密钥即滚动);任何档位缺环境变量都在写操作之前拒绝。
+  两个 AppID 都填玩家登录用的那个小游戏的;微信的与 `-LoginWeChatMiniGameAppId` 同时给了却不同即拒绝(openid 只在那个 AppID 下有效)。
+  不粘滞:本次没给的平台,它的 Secret 在 content-guard 部署之后删掉;线上接着而本次漏传或换了 AppID 时在写操作之前拒绝(防误关闸),
+  确要关或换加 `-ConfirmContentGuardPlatformChange`。只对 `infra-up` / `all-up` 生效,`zone-up` 给了只告警。集群若限制出站,要放行
+  `api.weixin.qq.com`、`developer.toutiao.com` 的 443。
+
+  ```powershell
+  $env:MMORPG_CONTENT_GUARD_WECHAT_APP_SECRET = '<微信小游戏的 AppSecret>'
+  pwsh -File tools/scripts/k8s_deploy.ps1 -Command infra-up <其余参数照常> -ContentGuardWeChatAppId <微信小游戏的 AppID>
+  ```
 - **告警**:`deploy/k8s/content-guard-alerts.yaml`(PrometheusRule,与其余告警文件同法安装):全部副本没有词库(critical)、单个副本没有词库、
-  加载反复失败、各副本词库版本不一致、有请求被回了不可用(critical)。契约测试 `tools/scripts/tests/content_guard_alerts_contract.tests.ps1`。
+  加载反复失败、各副本词库版本不一致、有请求被回了不可用(critical)、某个外部平台的调用失败超过 5%(warning,`ContentGuardPlatformFailing`,
+  读 `content_guard_platform_reviews_total`)。契约测试 `tools/scripts/tests/content_guard_alerts_contract.tests.ps1`。
 
   ```bash
   kubectl apply -n observability -f deploy/k8s/content-guard-alerts.yaml
@@ -1724,8 +1747,9 @@ payment 与 rank 同形:全局池服务(`$GoSvcCatalogue.payment`,`Global = $tru
 - **池上限全部显式**(2026-11-12 起句柄全部是 `shared/clusterredis` / `shared/playerredis`,第 2b、4、5 批):控制域的键是各服务 yaml 的 `ControlRedis.PoolSizePerNode`
   (login 没有这一段,本机回落 `Node.RedisClient`,池上限取 `Node.RedisClient.PoolSize`,K8s 上原样写进它的 `ControlRedis` 段);玩家域是 `PlayerRedis.PoolSizePerNode`,
   login 另有 `LoginRedis.PoolSizePerNode`。集群上按每节点计。ConfigMap 生成器镜像同一个键、总账读同一个键;写路径入口先于任何集群写操作把这些键读一遍,
-  不是正整数就拒绝(`Redis 连接池镜像:...`)。go-zero 的 Redis 句柄已全部退役,这几份账里没有缺省大小的池,GOMAXPROCS 不再影响它们;只有 match 私有集群那份
-  (go-zero 集群客户端)还按缺省池(10G)记。**改值 = 重算总账**:看部署时打印的 `Redis connection ledger` 一行;池等满时调用方排队(`PoolTimeoutMs`)。
+  不是正整数就拒绝(`Redis 连接池镜像:...`)。go-zero 的 Redis 句柄已全部退役(match 私有集群的句柄 2026-11-26 也换成 `shared/clusterredis`,
+  池上限是 `MatchRedis.PoolSizePerNode`),各份账里都没有缺省大小的池,GOMAXPROCS 不再影响它们。
+  **改值 = 重算总账**:看部署时打印的 `Redis connection ledger` 一行;池等满时调用方排队(`PoolTimeoutMs`)。
 - **公式**(P = 控制域池上限,PP = 玩家域池上限;池没有后台回收,一律按池上限记账):
   ```text
   控制域(每副本)
@@ -1755,15 +1779,17 @@ payment 与 rank 同形:全局池服务(`$GoSvcCatalogue.payment`,`Global = $tru
   - login 的 PasswordAuth 失败配额池只在开了 `-LoginPasswordAuth` 时计入:每个 login 副本 4 条(`go/login/internal/svc/auth_init.go` 的
     `passwordQuotaRedisPoolSize`),连登录域,所以跟着玩家域走:没建玩家域集群时记在核心那份,建了记在玩家域那一份(每节点)。
   - **match 私有集群 redis-match-cluster(2026-11-11 起单独一份总账)**:
-    - 只有 match 连它。go-zero 的集群客户端没有池参数,对每个节点各一个缺省池,所以每主节点 = match 副本数 × 10G,G 同上按 2 记。
+    - 只有 match 连它。句柄是 `shared/clusterredis`(2026-11-26 取代 go-zero 的集群客户端):每个节点一个显式上限的池,
+      所以每主节点 = match 副本数 × `MatchRedis.PoolSizePerNode`(服务 yaml 的值,现为 20,与换句柄前按 10G、G = 2 记的数相同),不随 CPU limit 漂移。
     - `MAXCLIENTS=40000` 写在集群清单 Pod 模板的启动薄壳里,与核心同值,启动时打印同格式的 `redis fd limit:` 一行。
     - 写路径打一行 `Redis match connection ledger: per_master match_replicas=<n> steady=… peak=… maxclients=… warn_at=… headroom=…`,超过 80% 水位打 `[RedisMatchConnectionLedger]OverWarnRatio:`,只告警。
     - `-WaitReady` 等建群 Job `redis-match-cluster-init` 完成,再逐节点核对生效的 maxclients(同核心与玩家域集群)。
     - 改 `MAXCLIENTS` 会改 Pod 模板,六个节点会滚动重启。
   - 契约测试钉住:控制域每一行的池上限等于服务 yaml 的值(`ControlRedis.PoolSizePerNode`,login 是 `Node.RedisClient.PoolSize`)、ConfigMap 镜像同一个值、
-    yaml 写 0 / 负数 / 非整数时部署侧 throw;有缺省池的行(现在只有 match 集群那份)「manifest 的 CPU limit ≤ G 核」—— 调大 CPU limit 会悄悄放大缺省池,
+    yaml 写 0 / 负数 / 非整数时部署侧 throw;有缺省池的行(现在一行都没有)「manifest 的 CPU limit ≤ G 核」—— 以后谁再引入缺省大小的池,调大 CPU limit 会悄悄放大它,
     那时测试变红,逼着重算这一列;guild 申请配额池、login 放行流水线池、guild 摘要池、scene-manager 铸造通道等于源码常量,而且装配处必须引用它;
-    match ConfigMap 恒写 `MatchRedis`(redis-match-cluster 每个 Pod、`Type: cluster`)。不写时 go/match 会静默回落到这台、多一个缺省池,match 行就不能再记 0;
+    match ConfigMap 恒写 `MatchRedis`(redis-match-cluster 每个 Pod 作种子、`Cluster: true`、池上限镜像服务 yaml)。不写时 go/match 的私有键会落到这台、
+    多一个池,核心总账的 match 行就不能不记它;
     match 集群清单的 `MAXCLIENTS` 恰好一处、与核心同值(`redis_maxclients_contract` T8)。
 - **取值**:`MAXCLIENTS=40000` 时 80% 水位 32000,需要 40032 个 fd;规划档(Z=4,来自 MySQL 规划档)的峰值与余量看部署时打印的那一行。
   契约测试钉住「规划档峰值 ≤ 80% × MAXCLIENTS」。Z≈220 或目标形态(每 zone gate 5~22、scene 9~44,login 4 核)落地时要重算。
@@ -2887,7 +2913,7 @@ login 的三处挑 gate 与 scene_manager 的跨 zone 重定向给候选分档:�
   ```bash
   kubectl apply -n observability -f deploy/k8s/data-service-route-alerts.yaml
   ```
-- **账号目录告警**(2026-11-12):`deploy/k8s/data-service-account-directory-alerts.yaml`,同法安装,抓取前提同上。五条都是 warning:`DataServiceRoleNameBindFailed`(建角提交之后名字没绑上)、`DataServiceRemovedRoleNameReleaseFailed`(删角之后释放名字或删收尾小表失败)、`DataServiceRoleRemovalResumeStuck`(后台删角收尾持续 15 分钟没做完)、`DataServiceRoleRefHeldForReview`(后台判陈旧标了保留、等人处理的建角 ref)、`DataServiceAccountDeletionOverdue`(2026-11-19,冷静期满超过 24 小时还没删完的注销账号,持续 30 分钟才报,见 `docs/design/account-deletion.md` §4.5)。处置写在各条 description 里,核账见 `docs/ops/mysql-backup-pitr-runbook.md` §4.1a。指标名与日志原文由 `tools/scripts/tests/data_service_account_directory_alerts_contract.tests.ps1` 从源码核对。
+- **账号目录告警**(2026-11-12):`deploy/k8s/data-service-account-directory-alerts.yaml`,同法安装,抓取前提同上。六条都是 warning:`DataServiceRoleNameBindFailed`(建角提交之后名字没绑上)、`DataServiceRemovedRoleNameReleaseFailed`(删角之后释放名字或删收尾小表失败)、`DataServiceRoleRemovalResumeStuck`(后台删角收尾持续 15 分钟没做完)、`DataServiceRoleRefHeldForReview`(后台判陈旧标了保留、等人处理的建角 ref)、`DataServiceAccountDeletionOverdue`(2026-11-19,冷静期满超过 24 小时还没删完的注销账号,持续 30 分钟才报,见 `docs/design/account-deletion.md` §4.5)、`DataServiceAccountDirectoryBacklogCountStale`(2026-11-26,前两条按的积压计数超过 5 分钟没数成并持续 15 分钟:那两个 gauge 一注册就是 0、数不成时停在旧值,这段时间里它们不响不代表没有积压;维护排空超过 20 分钟时保留 ref 那一支会响,属预期)。处置写在各条 description 里,核账见 `docs/ops/mysql-backup-pitr-runbook.md` §4.1a。指标名与日志原文由 `tools/scripts/tests/data_service_account_directory_alerts_contract.tests.ps1` 从源码核对。
   ```bash
   kubectl apply -n observability -f deploy/k8s/data-service-account-directory-alerts.yaml
   ```

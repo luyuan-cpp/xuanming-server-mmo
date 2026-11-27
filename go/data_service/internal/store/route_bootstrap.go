@@ -8,18 +8,21 @@ import (
 )
 
 // HasAnyRoute 只判正规 SQL 是否为空,逐片问;不以进程记忆或本实例 zone 代替。
+// 任一片有行就是有。读不了的片先跳过(常驻进程里连不上的片是关着的):一行都没找到而又有片读不了时回错误,
+// 分不清「全空」和「没读到」,不能按空环境放行(docs/design/data-service-startup-isolation.md §4)。
 func (s *RouteStore) HasAnyRoute(ctx context.Context) (bool, error) {
-	for _, db := range s.pools.pools {
+	var unread error
+	for slot, db := range s.pools.pools {
 		var present int
 		err := db.QueryRowContext(ctx, "SELECT 1 FROM player_route LIMIT 1").Scan(&present)
 		if err == nil {
 			return true, nil
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
-			return false, err
+			unread = errors.Join(unread, fmt.Errorf("directory shard %s: %w", s.pools.names[slot], err))
 		}
 	}
-	return false, nil
+	return false, unread
 }
 
 // HasHistoricalPlayers 给空路由启动判据用:路由全空时,目录或任一已配置落点库有角色历史都说明不是新空环境。

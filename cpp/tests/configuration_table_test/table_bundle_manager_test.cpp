@@ -274,7 +274,7 @@ protected:
 		clock.steadyNow = [fake = fakeClock]
 		{ return fake->steady; };
 		auto manager = std::make_shared<TableBundleManager>(loop, std::move(clock));
-		manager->LoadAtStartup(GetConfigDir(), false);
+		manager->LoadAtStartup(GetConfigDir(), false, "table-bundle-test");
 		return manager;
 	}
 
@@ -355,6 +355,30 @@ TEST_F(TableBundleManagerTest, PointerLineIsReadPerSchemaLine)
 	EXPECT_FALSE(line.has_value());
 }
 
+// 启动时本线不在 lines 里,靠 sync_errors 分清「etcd 里没有这条线」和「有,但表包没取到」:后一种拒绝启动。
+TEST_F(TableBundleManagerTest, SyncErrorIsReadPerSchemaLine)
+{
+	const std::string pointerPath = (root / table_bundle::kPointerFilename).string();
+	std::string reason = "stale";
+
+	// sidecar 一切正常时不写 sync_errors
+	EXPECT_FALSE(table_bundle::ReadPointerSyncError(pointerPath, kTableSchemaDigest, reason));
+	EXPECT_TRUE(reason.empty());
+
+	WriteAll(root / table_bundle::kPointerFilename,
+			 "{\"track\":\"stable\",\"lines\":{},\"sync_errors\":{\"" + std::string(kTableSchemaDigest) +
+				 "\":\"download tables/x.tar.gz: status 503\"}}");
+	EXPECT_TRUE(table_bundle::ReadPointerSyncError(pointerPath, kTableSchemaDigest, reason));
+	EXPECT_EQ(reason, "download tables/x.tar.gz: status 503");
+
+	// 别的线没同步下来,不影响本线
+	EXPECT_FALSE(table_bundle::ReadPointerSyncError(pointerPath, "ffffffffffffffff", reason));
+	EXPECT_TRUE(reason.empty());
+
+	WriteAll(root / table_bundle::kPointerFilename, "{not json");
+	EXPECT_FALSE(table_bundle::ReadPointerSyncError(pointerPath, kTableSchemaDigest, reason));
+}
+
 ManifestTableEntry EntryWithDigests(const std::string &name, const std::string &jsonSha, const std::string &binarySha)
 {
 	ManifestTableEntry entry;
@@ -393,8 +417,21 @@ TEST_F(TableBundleManagerTest, StartupLoadsTheBundleThePointerNames)
 	const auto current = CurrentTableSet();
 	EXPECT_EQ(current->identity.contentDigest, baseDigest);
 	EXPECT_EQ(current->identity.source, "bundle");
-	EXPECT_THAT(StatusText(), HasSubstr("\"content_digest\":\"" + baseDigest + "\""));
-	EXPECT_THAT(MetricsText(*manager), HasSubstr("source=\"bundle\"} 1\n"));
+	const std::string metrics = MetricsText(*manager);
+	EXPECT_THAT(metrics, HasSubstr("source=\"bundle\"} 1\n"));
+	// 告警按「轨道 + schema 线」比较各实例手上的包,两边(C++ / Go)都要带 release_track;单测里没设环境变量 = stable
+	EXPECT_THAT(metrics, HasSubstr("table_bundle_info{release_track=\"stable\","));
+	EXPECT_THAT(metrics, HasSubstr("table_bundle_needs_restart 0\n"));
+
+	// STATUS.json 的字段名是和 sidecar、管理接口之间的约定(Go 的 tablebundle.StatusReport),写错一个对方就读成空
+	const std::string status = StatusText();
+	EXPECT_THAT(status, HasSubstr("\"service\":\"table-bundle-test\""));
+	EXPECT_THAT(status, HasSubstr("\"schema_digest\":\"" + std::string(kTableSchemaDigest) + "\""));
+	EXPECT_THAT(status, HasSubstr("\"source\":\"bundle\""));
+	EXPECT_THAT(status, HasSubstr("\"loaded_digest\":\"" + baseDigest + "\""));
+	EXPECT_THAT(status, HasSubstr("\"loaded_at_ms\":" + std::to_string(fakeClock->wallMs) + ","));
+	EXPECT_THAT(status, HasSubstr("\"pending_state\":\"\""));
+	EXPECT_THAT(status, HasSubstr("\"pending_digest\":\"\""));
 }
 
 TEST_F(TableBundleManagerTest, HotReloadableChangeIsPreparedInSlicesThenCommittedWhole)
@@ -416,7 +453,7 @@ TEST_F(TableBundleManagerTest, HotReloadableChangeIsPreparedInSlicesThenCommitte
 	EXPECT_EQ(before->identity.contentDigest, baseDigest) << "还被拿着的旧一套照样能读";
 
 	const std::string status = StatusText();
-	EXPECT_THAT(status, HasSubstr("\"content_digest\":\"" + next + "\""));
+	EXPECT_THAT(status, HasSubstr("\"loaded_digest\":\"" + next + "\""));
 	EXPECT_THAT(status, HasSubstr("\"pending_state\":\"\""));
 	const std::string metrics = MetricsText(*manager);
 	EXPECT_THAT(metrics, HasSubstr("table_reload_total{result=\"committed\"} 1\n"));
@@ -435,11 +472,22 @@ TEST_F(TableBundleManagerTest, StructuralTableChangeNeedsRestartAndIsNotRetried)
 	EXPECT_EQ(CurrentTableSet()->identity.contentDigest, baseDigest);
 	const std::string status = StatusText();
 	EXPECT_THAT(status, HasSubstr("\"pending_state\":\"needs_restart\""));
+	EXPECT_THAT(status, HasSubstr("\"pending_digest\":\"" + next + "\""));
 	EXPECT_THAT(status, HasSubstr("World"));
 	EXPECT_THAT(MetricsText(*manager), HasSubstr("table_reload_total{result=\"needs_restart\"} 1\n"));
+	EXPECT_THAT(MetricsText(*manager), HasSubstr("table_bundle_needs_restart 1\n")) << "24 小时没重启的告警读的是这个状态量";
 
 	manager->PollOnce(fakeClock->wallMs);
 	EXPECT_THAT(MetricsText(*manager), HasSubstr("table_reload_total{result=\"needs_restart\"} 1\n")) << "指针没变,不重试";
+
+	// 整条线从 etcd 删掉(POINTER.json 里不再有本线):「要重启」的结论跟着撤,进程继续用手上的表
+	WriteAll(root / table_bundle::kPointerFilename, "{\"track\":\"stable\",\"lines\":{}}");
+	manager->PollOnce(fakeClock->wallMs);
+	const std::string cleared = StatusText();
+	EXPECT_THAT(cleared, HasSubstr("\"pending_state\":\"\""));
+	EXPECT_THAT(cleared, HasSubstr("\"pending_digest\":\"\""));
+	EXPECT_THAT(cleared, HasSubstr("\"loaded_digest\":\"" + baseDigest + "\""));
+	EXPECT_THAT(MetricsText(*manager), HasSubstr("table_bundle_needs_restart 0\n"));
 }
 
 TEST_F(TableBundleManagerTest, ValidationRunsOnStagedTablesAndRejectionKeepsCurrentOnes)
@@ -468,10 +516,26 @@ TEST_F(TableBundleManagerTest, ValidationRunsOnStagedTablesAndRejectionKeepsCurr
 	EXPECT_EQ(CurrentTableSet()->identity.contentDigest, baseDigest);
 	const std::string status = StatusText();
 	EXPECT_THAT(status, HasSubstr("\"pending_state\":\"rejected\""));
-	EXPECT_THAT(status, HasSubstr("unit test rejects this bundle"));
+	EXPECT_THAT(status, HasSubstr("\"pending_digest\":\"" + next + "\""));
+	EXPECT_THAT(status, HasSubstr("\"pending_reason\":\"validation failed: unit test rejects this bundle\""));
 
 	manager->PollOnce(fakeClock->wallMs);
 	EXPECT_THAT(MetricsText(*manager), HasSubstr("table_reload_total{result=\"rejected\"} 1\n")) << "指针没变,不重试";
+
+	// 运营撤掉这一包:拒绝记录跟着撤。不撤的话管理接口会一直把这个进程算在「拒绝」里,
+	// 后面发的包哪怕它还没看到,也会被这条旧记录判成发布失败。
+	WritePointer(baseDigest, std::nullopt);
+	manager->PollOnce(fakeClock->wallMs);
+	const std::string cleared = StatusText();
+	EXPECT_THAT(cleared, HasSubstr("\"pending_state\":\"\""));
+	EXPECT_THAT(cleared, HasSubstr("\"pending_digest\":\"\""));
+	EXPECT_THAT(cleared, HasSubstr("\"pending_reason\":\"\""));
+
+	// 同一包重新发布:重新走一遍准备与校验,不被上一次的拒绝记录挡住
+	WritePointer(baseDigest, NextTarget{next, 0, true});
+	manager->PollOnce(fakeClock->wallMs);
+	ASSERT_TRUE(RunLoopUntil(loop, [&manager]
+							 { return MetricsText(*manager).find("table_reload_total{result=\"rejected\"} 2\n") != std::string::npos; }));
 }
 
 TEST_F(TableBundleManagerTest, UnparsableTableRejectsTheBundle)

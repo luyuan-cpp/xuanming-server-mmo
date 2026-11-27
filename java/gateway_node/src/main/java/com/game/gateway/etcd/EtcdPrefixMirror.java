@@ -42,7 +42,8 @@ import java.util.function.LongSupplier;
  *
  * <p>同步规则:watch 报错或结束(含 jetcd 自己会重试的瞬时错误)一律作废这一轮镜像,下一次读重新整段读并重建 watch,
  * 旧 watch 迟到的事件按代次丢弃。另外每 {@link #MAX_AGE_MS} 强制重新整段读一次:watch 若在半开连接上悄无声息地停住,
- * 镜像最多旧这么久(Kubernetes 的 reflector 同样定期重新 list)。
+ * 镜像最多旧这么久(Kubernetes 的 reflector 用同一思路给静默停住的 watch 设上限:每条 watch 带 5~10 分钟的超时,到点重建;
+ * 它从上次的 resourceVersion 接着 watch,这里直接整段重读,更简单,代价是一次 range)。
  *
  * <p>线程安全:可以多个线程读同一个镜像(login 的镜像就由 login 发现与区服健康两个定时任务读)。状态都在 {@link #lock} 下读写;
  * 整段读不持 {@link #lock},免得最长 listTimeoutMs 的等待卡住 jetcd 的事件回调线程。重新同步由 {@link #resyncLock} 串行化:

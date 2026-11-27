@@ -105,7 +105,7 @@ func newTestManager(t *testing.T) (*Manager, *redis.Client, *miniredis.Miniredis
 // issueSeed 签出用例的起始 token 对(走 Login 用的 Issue,与生产同一条路径)。
 func issueSeed(t *testing.T, m *Manager) *TokenPair {
 	t.Helper()
-	pair, err := m.Issue(context.Background(), testAccount, testAuthType, testDevice)
+	pair, err := m.Issue(context.Background(), testAccount, testAuthType, testDevice, 0)
 	if err != nil {
 		t.Fatalf("seed Issue: %v", err)
 	}
@@ -532,17 +532,17 @@ func TestIssue_RejectsBadInputWithoutWriting(t *testing.T) {
 	m, rdb, mr := newTestManager(t)
 	ctx := context.Background()
 	for _, tc := range []struct{ account, authType string }{{"", testAuthType}, {testAccount, ""}} {
-		if _, err := m.Issue(ctx, tc.account, tc.authType, testDevice); err == nil {
+		if _, err := m.Issue(ctx, tc.account, tc.authType, testDevice, 0); err == nil {
 			t.Fatalf("Issue(%q, %q) 不该成功", tc.account, tc.authType)
 		}
 	}
 	subMillisecond := NewManager(rdb, Config{AccessTokenTTL: time.Microsecond, RefreshTokenTTL: time.Hour})
-	if _, err := subMillisecond.Issue(ctx, testAccount, testAuthType, testDevice); err == nil {
+	if _, err := subMillisecond.Issue(ctx, testAccount, testAuthType, testDevice, 0); err == nil {
 		t.Fatal("亚毫秒 TTL 不该签发成功")
 	}
 	cancelled, cancel := context.WithCancel(ctx)
 	cancel()
-	if _, err := m.Issue(cancelled, testAccount, testAuthType, testDevice); err == nil {
+	if _, err := m.Issue(cancelled, testAccount, testAuthType, testDevice, 0); err == nil {
 		t.Fatal("请求已取消不该签发成功")
 	}
 	if keys := mr.Keys(); len(keys) != 0 {

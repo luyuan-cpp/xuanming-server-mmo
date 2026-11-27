@@ -302,18 +302,12 @@ type PlayerNameStore struct {
 // NewPlayerNameStore 逐片开自己的池(与其它 store 同一套 openMySQL),核两张表的主键。认不出来就建不出 store:
 // 主键不对时 ODKU 撞不到键,"名字全服唯一"和"一个角色只登记一个名字"都会静默失效。
 func NewPlayerNameStore(cfg MySQLConfig) (*PlayerNameStore, error) {
-	pools, err := openShardPools(cfg, func(one MySQLConfig) (*sql.DB, error) {
-		db, err := openMySQL(one)
-		if err != nil {
-			return nil, err
+	pools, err := openShardPools(cfg, func(one MySQLConfig) (string, poolCheck) {
+		return buildDSN(one), func(db *sql.DB) error {
+			ctx, cancel := context.WithTimeout(context.Background(), playerNameShapeProbeTimeout)
+			defer cancel()
+			return assertPlayerNameKeys(ctx, db, one.DBName)
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), playerNameShapeProbeTimeout)
-		defer cancel()
-		if err := assertPlayerNameKeys(ctx, db, one.DBName); err != nil {
-			_ = db.Close()
-			return nil, err
-		}
-		return db, nil
 	})
 	if err != nil {
 		return nil, err

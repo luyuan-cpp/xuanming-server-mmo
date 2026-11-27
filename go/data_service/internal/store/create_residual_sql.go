@@ -368,6 +368,7 @@ func (st *sqlResidualSteps) describePlayers(ctx context.Context, players []uint6
 	out := make(map[uint64]residualPlayer, len(players))
 	var mu sync.Mutex
 	err := st.shards.eachPlayerGroup(players, func(db *sql.DB, group []uint64) error {
+		// live 里有键就是有角色行(墓碑的值是 false)。
 		live := make(map[uint64]bool, len(group))
 		rows, err := db.QueryContext(ctx, "SELECT player_id,account FROM account_role WHERE player_id IN ("+placeholders(len(group))+")", residualIDArgs(group)...)
 		if err != nil {
@@ -394,7 +395,8 @@ func (st *sqlResidualSteps) describePlayers(ctx context.Context, players []uint6
 		mu.Lock()
 		defer mu.Unlock()
 		for _, player := range group {
-			out[player] = residualPlayer{Live: live[player], CreatedAtMs: routes[player].CreatedAtMs}
+			alive, found := live[player]
+			out[player] = residualPlayer{RoleRow: found, Live: alive, CreatedAtMs: routes[player].CreatedAtMs}
 		}
 		return nil
 	})

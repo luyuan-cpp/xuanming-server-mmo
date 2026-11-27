@@ -40,7 +40,7 @@ Gateway 在 `application.yaml` 中配置 Jackson `SNAKE_CASE`，HTTP JSON 使用
 
 生产的第三方登录只有一条路径：客户端把渠道凭据交给 `/api/login`，由 Go login 直连渠道校验（App 形态 auth_type=`wechat` / `qq`，小游戏形态 `wechat_minigame` / `douyin_minigame`，见 §十一；海外 `apple` / `google`，见 §十二）。
 
-`/api/assign-gate` 凭 `/api/login` 签发的 access token 鉴权（2026-11-12 起，已落码未编译）：账号只从令牌解出，请求里不再有 `account`；令牌不能用回 HTTP 401。不带令牌的匿名分配只在 `LegacyGateLoginEnabled` 开着时允许。第三方登录的客户端不知道自己的账号名（`wx_<unionid>` 等由服务端算出），这样它们的断线重连也能免排队。细节见 [登录排队](./login-queue-2026-05.md) §5 末尾的更正。`java/springboot_satoken_auth_starter` 是示例应用，没有部署清单；它的 `/auth/dev-login` 免 OAuth 按任意账号名签 SA-Token，只在 Spring profile `dev` 下注册，不得部署到玩家可达的环境。
+`/api/assign-gate` 凭 `/api/login` 签发的 access token 鉴权（2026-11-12 起，已落码未编译）：账号只从令牌解出，请求里不再有 `account`；令牌不能用回 HTTP 401。不带令牌的匿名分配只在 `LegacyGateLoginEnabled` 开着、并且排队关着时允许；签出的票绑定持票账号，在 gate 上换别的账号登不上（2026-11-26 起，见 [登录排队](./login-queue-2026-05.md) §5「票据绑定账号」）。第三方登录的客户端不知道自己的账号名（`wx_<unionid>` 等由服务端算出），这样它们的断线重连也能免排队。细节见 [登录排队](./login-queue-2026-05.md) §5 末尾的更正。`java/springboot_satoken_auth_starter` 是示例应用，没有部署清单；它的 `/auth/dev-login` 免 OAuth 按任意账号名签 SA-Token，只在 Spring profile `dev` 下注册，不得部署到玩家可达的环境。
 
 ## 三、返回码与 Gateway 配置
 

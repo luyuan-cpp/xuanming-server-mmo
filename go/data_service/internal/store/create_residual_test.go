@@ -225,7 +225,7 @@ func (f *residualFake) describePlayers(_ context.Context, players []uint64) (map
 	out := map[uint64]residualPlayer{}
 	for _, player := range players {
 		if r := f.roles[player]; r != nil {
-			out[player] = residualPlayer{Live: r.Account != "", CreatedAtMs: r.Route.CreatedAtMs}
+			out[player] = residualPlayer{RoleRow: true, Live: r.Account != "", CreatedAtMs: r.Route.CreatedAtMs}
 		} else if other, ok := f.others[player]; ok {
 			out[player] = other
 		}

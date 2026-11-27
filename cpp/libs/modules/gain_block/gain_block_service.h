@@ -31,7 +31,12 @@ public:
     // 买家的退款也进不了账,合同只能转人工(数据覆写审计 r2-trade#1)。成交所得(TX_AUCTION_BUY)照常判封禁。
     // 只看交易类型:TX_AUCTION_RETURN 只由交易服务给退回腿使用(go/trade/internal/commerce/leg_tx_type.go),
     // 资产通道按流绑定调用方,别的服务发不出这条流。
-    static constexpr bool CountsAsGain(TransactionType txType) { return txType != TX_AUCTION_RETURN; }
+    // TX_JIANGHU_DUEL_REFUND 同理:退还的是这名玩家备战时自己预扣的普通战书银两(PlayerJianghuSystem),封禁挡住它就只能
+    // 一直留着待退标记(2026-11-26,数据覆写审计 r2 第 4 轮)。它只由 scene 内部调用,不在资产通道任何一条流的允许表里。
+    static constexpr bool CountsAsGain(TransactionType txType)
+    {
+        return txType != TX_AUCTION_RETURN && txType != TX_JIANGHU_DUEL_REFUND;
+    }
 
     enum class GainType : uint32_t
     {

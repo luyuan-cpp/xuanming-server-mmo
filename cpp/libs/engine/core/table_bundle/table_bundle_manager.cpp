@@ -23,6 +23,7 @@
 #include "config.h"
 #include "metrics/metrics_registry.h"
 #include "metrics/prometheus_text.h"
+#include "node/system/node/release_track.h"
 #include <node_config_manager.h>
 #include "utils/encode/sha256.h"
 
@@ -628,6 +629,11 @@ void TableBundleManager::LoadAtStartup(const std::string &imageConfigDir, const 
 	this->imageConfigDir = imageConfigDir;
 	this->useBinary = useBinary;
 	this->serviceName = std::move(serviceName);
+	// 与 NodeInfo.release_track 同一来源(部署注入的环境变量,不设 = stable)。告警按「轨道 + schema 线」比较各实例手上的包,
+	// 不带轨道会把 stable 和 canary 混在一起比,金丝雀期间必然误报。取值非法时节点在 InitRpcServer 里已经拒启,
+	// 这里只给单测这类场景一个不会被当成 stable 的值。
+	const auto releaseTrack = release_track::FromEnv();
+	releaseTrackName = releaseTrack ? std::string(release_track::Name(*releaseTrack)) : std::string("invalid-track");
 	bundleRoot = NonEmptyEnv(kBundleRootEnv);
 	statusRoot = NonEmptyEnv(kStatusRootEnv);
 	bundleMode = !bundleRoot.empty();
@@ -1181,10 +1187,18 @@ void TableBundleManager::WriteMetrics(prometheus_text::Writer &writer) const
 	writer.BeginFamily("table_bundle_info",
 					   "Active config table bundle identity (always 1).",
 					   prometheus_text::MetricType::kGauge);
-	writer.Sample({{"schema_digest", activeIdentity.schemaDigest},
+	writer.Sample({{"release_track", releaseTrackName},
+				   {"schema_digest", activeIdentity.schemaDigest},
 				   {"content_digest", shortDigest},
 				   {"source", activeIdentity.source}},
 				  1);
+
+	// 「此刻停在 needs_restart」的状态量:TableBundleNeedsRestart 告警靠它判断「超过 24 小时没重启」;
+	// table_reload_total{result="needs_restart"} 是事件计数,只能说明发生过。
+	writer.BeginFamily("table_bundle_needs_restart",
+					   "1 while the pointer targets a bundle that changes non-hot-reloadable tables and this process waits for a restart; 0 otherwise.",
+					   prometheus_text::MetricType::kGauge);
+	writer.Sample({}, pendingState == "needs_restart" ? uint64_t{1} : uint64_t{0});
 
 	writer.BeginFamily("table_reload_total",
 					   "Total number of table hot-reload outcomes by result.",

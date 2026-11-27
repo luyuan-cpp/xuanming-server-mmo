@@ -54,9 +54,16 @@ public interface ZoneWhitelistRepository extends Repository<ZoneWhitelist, Long>
      *   <li>代价:MySQL 8.0.20 起 {@code VALUES()} 在 ODKU 里标记弃用,执行会带 1287 告警,但语义不变、仍可用。
      *       哪天 MySQL 真移除它,须全仓一起换写法,不要只改这一处。</li>
      * </ul>
+     *
+     * <h3>为什么更新分支带 CASE(2026-11-26)</h3>
+     * 行号是应用发的,不同副本同一毫秒可能发出同一个({@link RowIds})。新行的行号撞上别的业务键的行时,ODKU 命中的是<b>主键</b>,
+     * 不带条件的 {@code note = VALUES(note)} 会改掉那一行的 note。调用方的回读能发现大多数情形并回滚,但本键已存在、note 又与
+     * 这次相同时回读对得上,那一行的 note 就被悄悄改了。CASE 让更新只落在业务键相同的那一行上,撞号时什么都不改,
+     * 由调用方回读发现本键没写进去、回滚重试。用标准 CASE 而不是 {@code IF()}:MySQL、TiDB、H2 都认。锁序不变。
      */
     String UPSERT_SQL = "INSERT INTO zone_whitelist (id, zone_id, account_id, note) VALUES (:id, :zoneId, :accountId, :note)"
-            + " ON DUPLICATE KEY UPDATE note = VALUES(note)";
+            + " ON DUPLICATE KEY UPDATE note = CASE WHEN zone_id = VALUES(zone_id) AND account_id = VALUES(account_id)"
+            + " THEN VALUES(note) ELSE note END";
 
     /** {@link #deleteByZoneIdAndAccountId} 的语句(JPQL)。Hibernate 翻译成按 uk_zone_account 定位的单条 DELETE。 */
     String DELETE_BY_KEY_JPQL = "DELETE FROM ZoneWhitelist w WHERE w.zoneId = :zoneId AND w.accountId = :accountId";

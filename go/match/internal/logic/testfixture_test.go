@@ -77,3 +77,17 @@ func setPlayerSessionOnline(t *testing.T, mr *miniredis.Miniredis, playerId uint
 	t.Helper()
 	setPlayerSessionOnGate(t, mr, playerId, "3", "gate-inst-3")
 }
+
+// setSessionMinorPlayDeadline 给已写好的 player:session:{id} 补上未成年人当天的截止时刻
+// (PlayerSession.minor_play_deadline_ms,login 进游戏时写;0 = 不限)。
+func setSessionMinorPlayDeadline(t *testing.T, mr *miniredis.Miniredis, playerId, deadlineMs uint64) {
+	t.Helper()
+	raw, err := mr.Get(playercontract.SessionKey(playerId))
+	require.NoError(t, err)
+	session := &plpb.PlayerSession{}
+	require.NoError(t, proto.Unmarshal([]byte(raw), session))
+	session.MinorPlayDeadlineMs = deadlineMs
+	updated, err := proto.Marshal(session)
+	require.NoError(t, err)
+	require.NoError(t, mr.Set(playercontract.SessionKey(playerId), string(updated)))
+}

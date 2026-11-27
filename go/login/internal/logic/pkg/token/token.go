@@ -15,7 +15,7 @@
 //
 // Redis keys(登录域,键形在 shared/redisslot/login_keys.go,一个账号的键全部同槽,每段脚本都是一次原子提交):
 //
-//	access_token:{<tag>}:<secret>       → JSON{account, auth_type, device_id, created_at, family_id}          TTL=AccessTokenTTL
+//	access_token:{<tag>}:<secret>       → JSON{account, auth_type, device_id, created_at, family_id, identity_issued_at} TTL=AccessTokenTTL
 //	refresh_token:{<tag>}:<secret>      → 同上                                                                 TTL=RefreshTokenTTL
 //	refresh_family:{<tag>}:<id>         → HASH{account, head, prev, created_at, rotated_at}                    TTL=RefreshTokenTTL
 //	refresh_rotated:{<tag>}:<旧 secret> → HASH{access, refresh, access_expire, refresh_expire, rotated_at}     TTL=RefreshReuseGrace
@@ -193,6 +193,10 @@ type TokenData struct {
 	CreatedAt int64  `json:"created_at"`
 	// FamilyID:这枚令牌所属的家族,与令牌自身嵌的家族号相同(读出时核对,不一致按损坏拒绝)。
 	FamilyID string `json:"family_id"`
+	// IdentityIssuedAt:这次登录用的身份令牌的签发时刻(签发方的时钟,unix 秒),同一家族轮换时原样带下去。
+	// 只有官方通行证填(其余渠道为 0):刷新前与通行证里的改密时刻比,改密之前的登录不再续期
+	// (docs/design/official-passport-registration.md §3.6)。不能拿 CreatedAt 比:它每次轮换都更新,也是 login 自己的时钟。
+	IdentityIssuedAt int64 `json:"identity_issued_at,omitempty"`
 }
 
 // TokenPair is returned after issuing or refreshing tokens.
@@ -271,7 +275,8 @@ func familyLogTag(familyID string) string {
 }
 
 // Issue generates a new access+refresh token pair and stores them in Redis.
-func (m *Manager) Issue(ctx context.Context, account, authType, deviceID string) (*TokenPair, error) {
+// identityIssuedAt 是这次登录用的身份令牌的签发时刻,写进载荷(见 TokenData.IdentityIssuedAt);没有就传 0。
+func (m *Manager) Issue(ctx context.Context, account, authType, deviceID string, identityIssuedAt int64) (*TokenPair, error) {
 	if !m.cfg.ttlUsable() {
 		return nil, fmt.Errorf("token TTL 必须至少为 1ms")
 	}
@@ -291,7 +296,8 @@ func (m *Manager) Issue(ctx context.Context, account, authType, deviceID string)
 	if err != nil {
 		return nil, fmt.Errorf("generate refresh token: %w", err)
 	}
-	dataBytes, err := json.Marshal(&TokenData{Account: account, AuthType: authType, DeviceID: deviceID, CreatedAt: now.Unix(), FamilyID: familyID})
+	dataBytes, err := json.Marshal(&TokenData{Account: account, AuthType: authType, DeviceID: deviceID, CreatedAt: now.Unix(), FamilyID: familyID,
+		IdentityIssuedAt: identityIssuedAt})
 	if err != nil {
 		return nil, fmt.Errorf("marshal token data: %w", err)
 	}
@@ -388,6 +394,21 @@ func (m *Manager) Refresh(ctx context.Context, refreshToken string) (*TokenPair,
 	return pair, nil
 }
 
+// ReadRefreshPayload 读出一枚仍有效的 refresh token 的载荷,什么都不写。令牌格式不对、已经不在(过期、已轮换、从没有过)回 (nil, nil):
+// 这些情况交给 Refresh 照原规则判(拒绝,或宽限窗口内重发同一对)。刷新之前要按载荷做业务核对时用
+// (官方通行证改密 / 封禁,clientplayerlogin/refreshtokenlogic.go)。
+func (m *Manager) ReadRefreshPayload(ctx context.Context, refreshToken string) (*TokenData, error) {
+	t, ok := parseToken(refreshToken)
+	if !ok || t.kind != refreshKind {
+		return nil, nil
+	}
+	_, data, err := m.load(ctx, t, redisslot.RefreshTokenKey(t.tag, t.secret))
+	if errors.Is(err, errTokenNotFound) {
+		return nil, nil
+	}
+	return data, err
+}
+
 // rotate 发出轮换脚本。旧 token 已不是读到的那一份时回 (nil, refreshNotLive, nil),什么都没写。
 func (m *Manager) rotate(ctx context.Context, t parsedToken, raw []byte, data *TokenData) (*TokenPair, int64, error) {
 	now := time.Now()
@@ -407,6 +428,8 @@ func (m *Manager) rotate(ctx context.Context, t parsedToken, raw []byte, data *T
 		DeviceID:  data.DeviceID,
 		CreatedAt: now.Unix(),
 		FamilyID:  t.familyID,
+		// 不随轮换更新:它说的是这一家族最初那次登录,更新了就能借一次续期把改密之前的登录洗成改密之后的。
+		IdentityIssuedAt: data.IdentityIssuedAt,
 	})
 	if err != nil {
 		refreshTotal.WithLabelValues("error").Inc()

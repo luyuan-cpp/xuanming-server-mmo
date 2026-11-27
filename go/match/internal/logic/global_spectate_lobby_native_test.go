@@ -67,12 +67,15 @@ type fakeBattleNode struct {
 	removes    int
 	attaches   []*battlepb.AttachRelayGateRequest
 	promotes   int
+	// addRequests 按到达顺序记下收到的每一份 AddObserver 原件。
+	addRequests []*battlepb.AddObserverRequest
 }
 
 func (b *fakeBattleNode) AddObserver(_ context.Context, req *battlepb.AddObserverRequest) (*battlepb.AddObserverResponse, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.adds++
+	b.addRequests = append(b.addRequests, req)
 	op := req.GetSpectatorOperationId()
 	tip, replayed := b.tombstones[op]
 	if !replayed {
@@ -157,6 +160,16 @@ func (b *fakeBattleNode) attachedGate(index int) uint32 {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.attaches[index].GetGateNodeId()
+}
+
+// lastAdd 是最近收到的一份 AddObserver 原件;一份都没收到时为 nil。
+func (b *fakeBattleNode) lastAdd() *battlepb.AddObserverRequest {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if len(b.addRequests) == 0 {
+		return nil
+	}
+	return b.addRequests[len(b.addRequests)-1]
 }
 
 type globalLobbyFixture struct {
@@ -540,8 +553,8 @@ func TestGlobalWatchTiDBFreeSeatStaysDirect(t *testing.T) {
 	require.Zero(t, attaches)
 }
 
-// failTierRaise 让升档 Lua 报错,把返回的开关置 false 后恢复。钩子与 SetError 共用槽位;
-// 单个 svcCtx 注入的失败控制在 5 次以内(go-zero Redis 客户端自带熔断)。
+// failTierRaise 让升档 Lua 报错,把返回的开关置 false 后恢复。钩子与 SetError 共用槽位。
+// 私有句柄是 shared/clusterredis:没有熔断,也不重发,注入几次失败就是几次。
 func failTierRaise(t *testing.T, mr *miniredis.Miniredis) *atomic.Bool {
 	t.Helper()
 	enabled := &atomic.Bool{}
@@ -1013,4 +1026,26 @@ func TestGlobalWatchTiDBRandomPickSkipsCanaryBattleForStableViewer(t *testing.T)
 	require.Zero(t, direct.GetErrorMessage().GetId(), "tip=%v", direct.GetErrorMessage())
 	require.Equal(t, deliveryDirect, direct.GetDelivery())
 	require.Equal(t, battleId, direct.GetBattleId())
+}
+
+// 未成年观众(docs/design/real-name-anti-addiction.md §5.4):会话记录里当天的截止时刻随 L0 原件冻结、带进 AddObserver,
+// battle 据此给他的观战票封顶、到点关他的直连;成年人的会话记录是 0,原件里如实是 0。
+func TestGlobalWatchTiDBCarriesTheViewersMinorPlayDeadlineIntoAddObserver(t *testing.T) {
+	f := newGlobalLobbyFixture(t)
+	const minorViewer, adultViewer, battleId = uint64(96), uint64(97), uint64(910035)
+	const deadlineMs = uint64(1_795_784_400_000)
+	f.addFormation(t, battleId)
+	f.addViewer(t, minorViewer)
+	setSessionMinorPlayDeadline(t, f.mr, minorViewer, deadlineMs)
+	f.addViewer(t, adultViewer)
+
+	for _, viewer := range []struct{ player, deadlineMs uint64 }{{minorViewer, deadlineMs}, {adultViewer, 0}} {
+		resp := f.watch(t, viewer.player, &pb.WatchBattleRequest{RequestId: uuid.NewString(), BattleId: battleId})
+		require.Zero(t, resp.GetErrorMessage().GetId(), "viewer=%d tip=%v", viewer.player, resp.GetErrorMessage())
+		require.Equal(t, deliveryDirect, resp.GetDelivery())
+		add := f.battle.lastAdd()
+		require.NotNil(t, add)
+		require.Equal(t, viewer.player, add.GetObserverPlayerId())
+		require.Equal(t, viewer.deadlineMs, add.GetMinorPlayDeadlineMs(), "viewer=%d", viewer.player)
+	}
 }

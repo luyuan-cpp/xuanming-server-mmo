@@ -5,26 +5,19 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"shared/accountdirectory"
 	"shared/authoritysql"
 	"shared/placement"
-
-	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/syncx"
 )
 
 // 存档库和目录可能不在一个集群(docs/design/horizontal-scale-logical-db.md §6),所以 data_service 按 storage_id 各持一个连接池,
 // 闸门按库。和 go/db 同口径:第一次用到才打开,之后常驻;打开只连接和只读核对,从不建库。
+// 「成功后常驻、失败冷却、闸门冻结不进冷却」这套规则在 openOnce(lazy_open.go),目录各片和流水库的首次核对也用它。
 
-const (
-	// playerStoreOpenTimeout 是一次打开的预算。打开发生在请求路径上。
-	playerStoreOpenTimeout = 10 * time.Second
-	// playerStoreOpenBackoff 是打开失败后的冷却:期间直接回上次的错误,坏库不拖住别的玩家。
-	playerStoreOpenBackoff = 10 * time.Second
-)
+// playerStoreOpenTimeout 是一次打开的预算。打开发生在请求路径上。
+const playerStoreOpenTimeout = 10 * time.Second
 
 // PlayerStorePoolOptions 是每个存档库连接池的参数(config.DirectoryConfig.StoragePools)。
 type PlayerStorePoolOptions struct {
@@ -33,27 +26,18 @@ type PlayerStorePoolOptions struct {
 	ConnMaxIdleTime time.Duration
 }
 
-type playerStoreOpenFailure struct {
-	at  time.Time
-	err error
-}
-
 // PlayerStorePools 按 storage_id 给出已打开的存档库。并发安全。
 type PlayerStorePools struct {
 	cfg     MySQLConfig
 	backend authoritysql.Backend
 	options PlayerStorePoolOptions
 	allowed map[uint32]bool
-	now     func() time.Time
-	flight  syncx.SingleFlight
 	// opener 打开一个库,nil 时走 openPool。单测换成替身。
 	opener func(schema string) (*sql.DB, error)
 	// reads 是每个库留给账本、展示读的名额(readSlots),白名单里的库各一份,构造后只读。
 	reads map[uint32]readSlots
-
-	mu       sync.RWMutex
-	pools    map[uint32]*sql.DB
-	failures map[uint32]playerStoreOpenFailure
+	// opens 是每个库的打开状态,白名单里的库各一份,这张表构造后只读。
+	opens map[uint32]*openOnce[*sql.DB]
 }
 
 // newPlayerStorePools 校验白名单。白名单是部署声明的可访问范围,不从 Regions 或本实例 zone 推导。
@@ -62,11 +46,14 @@ func newPlayerStorePools(cfg MySQLConfig, backend authoritysql.Backend, storageI
 		return nil, accountdirectory.ErrUnavailable
 	}
 	allowed := make(map[uint32]bool, len(storageIDs))
+	opens := make(map[uint32]*openOnce[*sql.DB], len(storageIDs))
 	for _, id := range storageIDs {
-		if _, ok := placement.StoreDBName(id); !ok || allowed[id] {
+		schema, ok := placement.StoreDBName(id)
+		if !ok || allowed[id] {
 			return nil, accountdirectory.ErrInvalid
 		}
 		allowed[id] = true
+		opens[id] = newOpenOnce[*sql.DB]("player store "+schema, time.Now)
 	}
 	if options.MaxOpenConn <= 0 {
 		options.MaxOpenConn = 8
@@ -78,17 +65,7 @@ func newPlayerStorePools(cfg MySQLConfig, backend authoritysql.Backend, storageI
 	for id := range allowed {
 		reads[id] = newReadSlots(options.MaxOpenConn)
 	}
-	return &PlayerStorePools{
-		cfg:      cfg,
-		backend:  backend,
-		options:  options,
-		allowed:  allowed,
-		now:      time.Now,
-		flight:   syncx.NewSingleFlight(),
-		reads:    reads,
-		pools:    map[uint32]*sql.DB{},
-		failures: map[uint32]playerStoreOpenFailure{},
-	}, nil
+	return &PlayerStorePools{cfg: cfg, backend: backend, options: options, allowed: allowed, reads: reads, opens: opens}, nil
 }
 
 // Allowed 报告这个落点在不在白名单里。
@@ -104,17 +81,16 @@ func (p *PlayerStorePools) DB(_ context.Context, storageID uint32) (*sql.DB, str
 	if !ok {
 		return nil, "", accountdirectory.ErrInvalid
 	}
-	p.mu.RLock()
-	db := p.pools[storageID]
-	p.mu.RUnlock()
-	if db != nil {
-		return db, schema, nil
-	}
-	v, err := p.flight.Do(schema, func() (any, error) { return p.open(storageID, schema) })
+	db, err := p.opens[storageID].get(func() (*sql.DB, error) {
+		opener := p.opener
+		if opener == nil {
+			opener = p.openPool
+		}
+		return opener(schema)
+	})
 	if err != nil {
 		return nil, "", err
 	}
-	db, _ = v.(*sql.DB)
 	if db == nil {
 		return nil, "", fmt.Errorf("open player store %s: no pool", schema)
 	}
@@ -134,42 +110,6 @@ func (p *PlayerStorePools) ReadDB(ctx context.Context, storageID uint32) (db *sq
 		return nil, nil, err
 	}
 	return db, release, nil
-}
-
-func (p *PlayerStorePools) open(storageID uint32, schema string) (*sql.DB, error) {
-	p.mu.RLock()
-	db := p.pools[storageID]
-	failure, failed := p.failures[storageID]
-	p.mu.RUnlock()
-	if db != nil {
-		return db, nil
-	}
-	if failed && p.now().Sub(failure.at) < playerStoreOpenBackoff {
-		return nil, failure.err
-	}
-	opener := p.opener
-	if opener == nil {
-		opener = p.openPool
-	}
-	db, err := opener(schema)
-	if err != nil {
-		wrapped := fmt.Errorf("open player store %s: %w", schema, err)
-		// 闸门冻结是搬库窗口,秒级,库本身没有坏:不进冷却,窗口一过下一个请求就能打开。
-		if authoritysql.IsWriterFrozen(err) {
-			logx.Infof("[player-store] open hit a frozen writer gate, not backing off: %s", schema)
-			return nil, wrapped
-		}
-		p.mu.Lock()
-		p.failures[storageID] = playerStoreOpenFailure{at: p.now(), err: wrapped}
-		p.mu.Unlock()
-		logx.Errorf("[player-store] open failed, next attempt in %v: %s: %v", playerStoreOpenBackoff, schema, err)
-		return nil, wrapped
-	}
-	p.mu.Lock()
-	p.pools[storageID] = db
-	delete(p.failures, storageID)
-	p.mu.Unlock()
-	return db, nil
 }
 
 func (p *PlayerStorePools) openPool(schema string) (*sql.DB, error) {
@@ -201,12 +141,11 @@ func (p *PlayerStorePools) Close() error {
 	if p == nil {
 		return nil
 	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
 	var result error
-	for id, db := range p.pools {
-		result = errors.Join(result, db.Close())
-		delete(p.pools, id)
+	for _, once := range p.opens {
+		if db, ok := once.loaded(); ok && db != nil {
+			result = errors.Join(result, db.Close())
+		}
 	}
 	return result
 }

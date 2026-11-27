@@ -207,6 +207,107 @@ func TestWithConnectGateSetsOption(t *testing.T) {
 	}
 }
 
+// 多个建连钩子按传入顺序执行(docs/design/data-service-startup-isolation.md §6):data_service 先过首次核对,再过逻辑库熔断。
+func TestWithConnectGateChainsInOrder(t *testing.T) {
+	type call struct {
+		gate    string
+		outcome error
+	}
+	build := func(calls *[]call, firstErr, secondErr error) ConnectGate {
+		gate := func(name string, reject error) ConnectGate {
+			return func(context.Context, string) (func(error), error) {
+				*calls = append(*calls, call{gate: name + " enter"})
+				if reject != nil {
+					return nil, reject
+				}
+				return func(outcome error) { *calls = append(*calls, call{gate: name + " settle", outcome: outcome}) }, nil
+			}
+		}
+		var opts openOptions
+		WithConnectGate(gate("first", firstErr))(&opts)
+		WithConnectGate(nil)(&opts) // 传 nil 不清掉已有的钩子
+		WithConnectGate(gate("second", secondErr))(&opts)
+		return opts.connectGate
+	}
+
+	t.Run("both admit, both settle with the connect outcome", func(t *testing.T) {
+		var calls []call
+		settle, err := build(&calls, nil, nil)(context.Background(), "mmorpg_global")
+		if err != nil || settle == nil {
+			t.Fatalf("gate = (%v, %v), want admit", settle == nil, err)
+		}
+		dialErr := errors.New("dial failed")
+		settle(dialErr)
+		want := []call{{gate: "first enter"}, {gate: "second enter"}, {gate: "second settle", outcome: dialErr}, {gate: "first settle", outcome: dialErr}}
+		if len(calls) != len(want) {
+			t.Fatalf("calls = %+v, want %+v", calls, want)
+		}
+		for i := range want {
+			if calls[i] != want[i] {
+				t.Fatalf("calls[%d] = %+v, want %+v", i, calls[i], want[i])
+			}
+		}
+	})
+
+	t.Run("first rejects, second is never asked", func(t *testing.T) {
+		var calls []call
+		reject := errors.New("logical database is not open")
+		if _, err := build(&calls, reject, nil)(context.Background(), "mmorpg_global"); !errors.Is(err, reject) {
+			t.Fatalf("err = %v, want %v", err, reject)
+		}
+		if len(calls) != 1 || calls[0].gate != "first enter" {
+			t.Fatalf("calls = %+v, want only the first gate", calls)
+		}
+	})
+
+	t.Run("second rejects, first is settled with that error", func(t *testing.T) {
+		var calls []call
+		reject := errors.New("circuit breaker is open")
+		if _, err := build(&calls, nil, reject)(context.Background(), "mmorpg_global"); !errors.Is(err, reject) {
+			t.Fatalf("err = %v, want %v", err, reject)
+		}
+		want := []call{{gate: "first enter"}, {gate: "second enter"}, {gate: "first settle", outcome: reject}}
+		if len(calls) != len(want) || calls[2] != want[2] {
+			t.Fatalf("calls = %+v, want %+v", calls, want)
+		}
+	})
+}
+
+// 127.0.0.1:1 没有监听,拨号当场失败,不依赖外部库。
+const unreachableTestDSN = "u:p@tcp(127.0.0.1:1)/mmorpg_global"
+
+// Open 拿不到第一条连接时回 ErrUnreachable:data_service 启动时凭它区分「连不上」(这个库先关着)和「连上了但核对不过」(拒启)。
+func TestOpenReportsUnreachableWhenNoConnectionCanBeMade(t *testing.T) {
+	db, err := Open(context.Background(), unreachableTestDSN, "mmorpg_global", BackendMySQL, 1, Reader())
+	if !errors.Is(err, ErrUnreachable) || db != nil {
+		t.Fatalf("Open() = (%v, %v), want ErrUnreachable", db, err)
+	}
+}
+
+// OpenUnverified 不连库;挂上的钩子拒绝时,这个池一条连接都拿不到。
+func TestOpenUnverifiedDoesNotDialAndTheGateGuardsTheFirstConnection(t *testing.T) {
+	notOpen := errors.New("logical database mmorpg_global is not open")
+	asked := 0
+	db, err := OpenUnverified(unreachableTestDSN, "mmorpg_global", BackendMySQL, 1, Reader(),
+		WithConnectGate(func(context.Context, string) (func(error), error) {
+			asked++
+			return nil, notOpen
+		}))
+	if err != nil {
+		t.Fatalf("OpenUnverified() err = %v, want a handle without dialing", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if asked != 0 {
+		t.Fatalf("the gate ran %d times before any use", asked)
+	}
+	if err := db.PingContext(context.Background()); !errors.Is(err, notOpen) {
+		t.Fatalf("Ping() err = %v, want the gate error", err)
+	}
+	if asked == 0 {
+		t.Fatal("the gate was not asked before the first connection")
+	}
+}
+
 type failingConnector struct{ err error }
 
 func (f failingConnector) Connect(context.Context) (driver.Conn, error) { return nil, f.err }

@@ -35,9 +35,11 @@ public:
 	// 停掉周期刷新。停机入口调;之后缓存不再更新(已缓存的那一轮仍按自己的离开时刻失效)。
 	static void Stop();
 
-	// 配表加载完成后核对神秘商人用到的三张表,把问题打进日志(不阻断启动:坏行只会让对应的商品买不了)。
-	// 在 TableLoadHandler::OnLoaded 里调。
-	static void ValidateTables();
+	// 核对神秘商人用到的三张表,问题逐条打进日志;有任何一条就返回 false。纯读取。
+	// 热更的整批校验(scene 的 TableLoadHandler::Validate)据此拒绝这一包:规则表空了、购买距离越界、
+	// 或者有上架(weight > 0)却卖不了的商品行,都不该在线上生效。
+	// 启动与提交后的那次调用(OnCommitted)只看日志、不看返回值:启动不因配表问题拒启,坏行只会让对应的商品买不了。
+	static bool ValidateTables();
 
 	// 把神秘商人此刻对这名玩家可见的状态写进 out(out 会先被清空)。纯读取,不改任何状态。
 	// nowMs 由调用方传入(RPC 入口取墙钟),便于单测。

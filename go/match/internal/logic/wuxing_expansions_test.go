@@ -44,7 +44,7 @@ func TestSpectateVisibilityForBattleCustomDuelOptIn(t *testing.T) {
 
 func TestBuildCustomDuelFreePresetContextUnrated(t *testing.T) {
 	rules := &battlepb.CustomDuelRules{
-		UseFreePreset:              true,
+		UseFreePreset:               true,
 		ChallengerCharacterPresetId: 102,
 		ChallengerPetPresetId:       202,
 	}

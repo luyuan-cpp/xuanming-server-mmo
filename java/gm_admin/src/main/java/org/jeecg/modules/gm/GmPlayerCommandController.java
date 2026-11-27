@@ -47,7 +47,7 @@ public class GmPlayerCommandController {
         if (!subject.isPermitted("gm:audit:read") && OPERATIONS.stream().noneMatch(op -> subject.isPermitted(op.permission)))
             throw new AuthorizationException();
         boolean enabled = game.playerCommandsEnabled();
-        ObjectNode result = json.createObjectNode().put("enabled", enabled);
+        ObjectNode result = json.createObjectNode().put("enabled", enabled).put("dualControl", journal.dualControl());
         result.putObject("limits").put("maxItemCount", 99).put("maxLevel", GamePlayerAdmin.MAX_PLAYER_LEVEL);
         result.set("currencies", game.currencyTypes());
         var operations = result.putArray("operations");
@@ -99,6 +99,22 @@ public class GmPlayerCommandController {
             if (age < 0 || age > GmCommandJournal.PLAYER_DRAFT_TTL_MS) throw new ResponseStatusException(HttpStatus.CONFLICT, "草稿已过期，请重新创建并核对");
         }
         return ok(journal.sendPlayerCommand(id, actor, game::sendPlayerCommand));
+    }
+
+    /** 七项玩家 GM 各只有一个权限串，发起和放行共用；持有它的人可以驳回或撤回这类申请。 */
+    @PostMapping("/{id}/decline")
+    public String decline(@PathVariable String id, @RequestBody String body) {
+        Subject subject = authenticated();
+        if (OPERATIONS.stream().noneMatch(op -> subject.isPermitted(op.permission))) {
+            throw new AuthorizationException();
+        }
+        decimal(id, "命令 ID");
+        ObjectNode command = journal.get(id);
+        if (!command.path("commandType").asText().equals("PLAYER")) bad("命令类型不符");
+        String actor = require(operation(command.path("operation").asText()).permission);
+        ObjectNode input = parse(body);
+        fields(input, Set.of("reason"));
+        return ok(journal.decline(id, actor, text(input, "reason", 1, 191), "PLAYER", false));
     }
 
     @GetMapping

@@ -60,8 +60,19 @@ type syncConfig struct {
 	BundleRoot    string
 	StatusRoot    string
 	PodName       string
+	PodNamespace  string
 	ListenAddr    string
 	S3            s3client.Config
+}
+
+// statusIdentity 是本 Pod 在 etcd 状态键里的身份:<namespace>/<pod>,没有 namespace(不在 K8s 里跑)时只用 Pod 名。
+// 只用 Pod 名不够:各 zone namespace 里的 StatefulSet 同名(guild-0、login-0、gate-0…),却共用 infra 的同一个 etcd,
+// 同一轨道上会互相覆盖状态键。管理接口因此少算实例,还可能看不到某个实例的拒绝,发布工具就不会自动撤回。
+func (c syncConfig) statusIdentity() string {
+	if c.PodNamespace == "" {
+		return c.PodName
+	}
+	return c.PodNamespace + "/" + c.PodName
 }
 
 type syncer struct {
@@ -74,6 +85,8 @@ type syncer struct {
 	publishedDoc pointer.Document
 
 	statusLeaseID clientv3.LeaseID
+	// lastReportedStatus 是挂在当前租约下、最近一次写成功的状态值;换了租约或写失败就清空。内容没变时只续租不写。
+	lastReportedStatus string
 }
 
 func envOrDefault(key, def string) string {
@@ -98,6 +111,7 @@ func parseConfig() (syncConfig, error) {
 	bundleRootFlag := flag.String("bundle-root", envOrDefault("MMORPG_TABLE_BUNDLE_ROOT", "/var/lib/mmorpg/tables"), "directory for bundles/ and POINTER.json")
 	statusRootFlag := flag.String("status-root", envOrDefault("MMORPG_TABLE_STATUS_ROOT", "/var/lib/mmorpg/tables-status"), "directory containing STATUS.json")
 	podNameFlag := flag.String("pod-name", envOrDefault("POD_NAME", ""), "pod name used in etcd status key")
+	podNamespaceFlag := flag.String("pod-namespace", envOrDefault("POD_NAMESPACE", ""), "pod namespace joined into the etcd status key so same-named pods in different zone namespaces do not overwrite each other")
 	listenFlag := flag.String("listen", envOrDefault("MMORPG_TABLE_SYNC_LISTEN_ADDR", ":9099"), "HTTP listen address for /readyz and /metrics")
 	s3EndpointFlag := flag.String("s3-endpoint", envOrDefault("MMORPG_TABLE_S3_ENDPOINT", ""), "S3 compatible endpoint URL")
 	s3BucketFlag := flag.String("s3-bucket", envOrDefault("MMORPG_TABLE_S3_BUCKET", "mmorpg-tables"), "S3 bucket name")
@@ -139,6 +153,7 @@ func parseConfig() (syncConfig, error) {
 		BundleRoot:    strings.TrimSpace(*bundleRootFlag),
 		StatusRoot:    strings.TrimSpace(*statusRootFlag),
 		PodName:       podName,
+		PodNamespace:  strings.TrimSpace(*podNamespaceFlag),
 		ListenAddr:    strings.TrimSpace(*listenFlag),
 		S3: s3client.Config{
 			Endpoint:           strings.TrimSpace(*s3EndpointFlag),
@@ -216,7 +231,7 @@ func main() {
 	mux.Handle("/metrics", promhttp.Handler())
 	httpSrv := &http.Server{Addr: cfg.ListenAddr, Handler: mux}
 	go func() {
-		log.Printf("[table-sync] HTTP listening on %s track=%s pod=%s", cfg.ListenAddr, cfg.Track, cfg.PodName)
+		log.Printf("[table-sync] HTTP listening on %s track=%s pod=%s", cfg.ListenAddr, cfg.Track, cfg.statusIdentity())
 		if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("[table-sync] HTTP server failed: %v", err)
 		}
@@ -463,9 +478,8 @@ func (s *syncer) reportStatusOnce(ctx context.Context) error {
 	if st == nil {
 		return nil
 	}
-	if st.Pod == "" {
-		st.Pod = s.cfg.PodName
-	}
+	// 键与值里的 pod 一律用 sidecar 的身份(带 namespace):业务进程只知道自己的 Pod 名,写进来的值会和键对不上。
+	st.Pod = s.cfg.statusIdentity()
 	if st.Track == "" {
 		st.Track = s.cfg.Track
 	}
@@ -489,13 +503,24 @@ func (s *syncer) reportStatusOnce(ctx context.Context) error {
 			return fmt.Errorf("grant status lease: %w", err)
 		}
 		s.statusLeaseID = grant.ID
+		s.lastReportedStatus = ""
 	}
 
-	key := pointer.StatusKey(s.cfg.Track, s.cfg.PodName)
+	// 存活靠续租表达(续租不写键、不产生新 revision),状态键只在内容变了或换了租约时才写。
+	// 每 5 秒无条件写一次的话,etcd 写入量随 Pod 数线性涨:2000 个 Pod 就是每秒 400 次写键,
+	// 而共用的 infra etcd 按 revision 只保留最近 100 万条历史,等于别的 watcher 只剩约 40 分钟的历史可追。
+	// STATUS.json 只在状态变化时改写,稳态下内容不变,写入量趋于 0。
+	// 代价:有人绕过管理接口手工删了这个键,要等下一次状态变化或换租约才会补回。
+	if string(raw) == s.lastReportedStatus {
+		return nil
+	}
+	key := pointer.StatusKey(s.cfg.Track, s.cfg.statusIdentity())
 	if _, err := s.etcd.Put(opCtx, key, string(raw), clientv3.WithLease(s.statusLeaseID)); err != nil {
 		s.statusLeaseID = 0
+		s.lastReportedStatus = ""
 		return fmt.Errorf("put status %s: %w", key, err)
 	}
+	s.lastReportedStatus = string(raw)
 	return nil
 }
 

@@ -93,7 +93,8 @@ func TestControlRedisHandleContract_NoGoZeroRedisInModule(t *testing.T) {
 			return walkErr
 		}
 		if d.IsDir() {
-			if name := d.Name(); name == "generated" || strings.HasPrefix(name, ".") {
+			// 根目录写成 "../..",它的 Name() 是 "..":不排除它的话「点开头的目录」这条会把整棵树跳过,scanned 恒为 0。
+			if name := d.Name(); path != root && (name == "generated" || strings.HasPrefix(name, ".")) {
 				return filepath.SkipDir
 			}
 			return nil

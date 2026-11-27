@@ -70,9 +70,8 @@ Etcd:
   Key: matchservice.rpc
 
 # ---- 双存储(设计文档 cross-zone-matchmaking.md D2)----
-# Redis:既有共享库。MatchRedis 不配时私有 key 的回落目标,PlayerRedis 不写 Addrs 时玩家域的落点。
-# MatchRedis:match 私有协调 key(spectate:* 观战索引、档位与配额)的存储,可指向
-#   Redis Cluster。不配即回落到 Redis(两类 key 同一实例,本地单库形态)。
+# Redis:既有共享库。PlayerRedis / MatchRedis 不写 Addrs 时的落点(各类 key 同一实例,本地单库形态)。
+# MatchRedis:match 私有集群,只放观战协调 key(spectate:* 观战索引、档位与配额),见下面那一段。
 Redis:
   Host: 127.0.0.1:6379
   Type: node
@@ -87,11 +86,21 @@ Redis:
 PlayerRedis:
   PoolSizePerNode: 20
 
-# 本地集群样例(docker compose --profile redis-cluster,6 节点 3 主 3 从):
-# Host 逗号分隔多个种子地址,Type 必须是 cluster。
+# match 私有集群(docs/design/redis-cluster-all-domains-20261110.md §4.9):与 PlayerRedis 同一种配置段(shared/clusterredis)。
+#   句柄只放行 spectate: 开头、带 hash tag 的键;结果未知的命令不由客户端重发。不写 Addrs = 指向上面的 Redis 实例。
+# 下面是本地集群样例(docker compose --profile redis-cluster,6 节点 3 主 3 从):Addrs 是种子地址,Cluster 必须是 true。
+# PoolSizePerNode 是每个节点的连接池上限;K8s 的 ConfigMap 与 redis-match-cluster 的连接总账镜像这个值。
+# 读写、取连接、拨号超时不写即各 1s(shared/clusterredis 缺省)。
 MatchRedis:
-  Host: 127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003,127.0.0.1:7004,127.0.0.1:7005
-  Type: cluster
+  Addrs:
+    - 127.0.0.1:7000
+    - 127.0.0.1:7001
+    - 127.0.0.1:7002
+    - 127.0.0.1:7003
+    - 127.0.0.1:7004
+    - 127.0.0.1:7005
+  Cluster: true
+  PoolSizePerNode: 20
 # C++ 约定 etcd 注册路径用的 zone id。MatchNodeService 不是 zone-scoped 节点类型,
 # gate 连的是全 zone 的 match 实例(随机路由);zone 只影响 etcd 注册路径,
 # 匹配池全局不分 zone。本地 dev-start-zones 每 zone 起一份 = 多实例。

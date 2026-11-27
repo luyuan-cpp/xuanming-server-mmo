@@ -406,7 +406,15 @@
     [string]$LoginPassportIssuer = "",
     [string]$LoginPassportClientId = "",
     [string]$LoginPassportEndpoint = "",
-    [string]$LoginPassportAdminClientId = ""
+    [string]$LoginPassportAdminClientId = "",
+    # 集群内 content-guard(内容安全,全局服务)的外部平台审核(微信 msgSecCheck / 抖音 antidirt),透传给 k8s_deploy.ps1 同名参数
+    # (k8s-infra-up / k8s-all-up;k8s-zone-up 给了由 k8s_deploy.ps1 告警「不生效」)。语义、形状校验与两把 AppSecret(环境变量
+    # MMORPG_CONTENT_GUARD_WECHAT_APP_SECRET / MMORPG_CONTENT_GUARD_DOUYIN_APP_SECRET,不经参数)都只在 k8s_deploy.ps1 一处;非空才透传。
+    # 不粘滞:漏传由 k8s_deploy.ps1 的防误关闸在写操作之前拦下,确要关闭或改动加 -ConfirmContentGuardPlatformChange(只在被指定时透传)。
+    # k8s-image-* / k8s-release-* 显式给了即拒绝。追加在末尾,理由同上。
+    [string]$ContentGuardWeChatAppId = "",
+    [string]$ContentGuardDouyinAppId = "",
+    [switch]$ConfirmContentGuardPlatformChange
 )
 
 $ErrorActionPreference = "Stop"
@@ -936,6 +944,10 @@ function Invoke-K8sDeploy {
     if (-not [string]::IsNullOrWhiteSpace($LoginPassportClientId)) { $args.LoginPassportClientId = $LoginPassportClientId }
     if (-not [string]::IsNullOrWhiteSpace($LoginPassportEndpoint)) { $args.LoginPassportEndpoint = $LoginPassportEndpoint }
     if (-not [string]::IsNullOrWhiteSpace($LoginPassportAdminClientId)) { $args.LoginPassportAdminClientId = $LoginPassportAdminClientId }
+    # content-guard 外部平台审核的两个参数同一口径:非空才传。它们只对部署全局 Go 服务的命令生效,别的命令给了由 k8s_deploy.ps1 告警。
+    if (-not [string]::IsNullOrWhiteSpace($ContentGuardWeChatAppId)) { $args.ContentGuardWeChatAppId = $ContentGuardWeChatAppId }
+    if (-not [string]::IsNullOrWhiteSpace($ContentGuardDouyinAppId)) { $args.ContentGuardDouyinAppId = $ContentGuardDouyinAppId }
+    if ($ConfirmContentGuardPlatformChange) { $args.ConfirmContentGuardPlatformChange = $true }
     # 实名与防沉迷的六个参数同一口径。
     if (-not [string]::IsNullOrWhiteSpace($LoginNppaAppId)) { $args.LoginNppaAppId = $LoginNppaAppId }
     if (-not [string]::IsNullOrWhiteSpace($LoginNppaBizId)) { $args.LoginNppaBizId = $LoginNppaBizId }
@@ -1145,6 +1157,9 @@ function Invoke-K8sImage {
     if (-not [string]::IsNullOrWhiteSpace($LoginPassportClientId)) { $notForwarded += '-LoginPassportClientId' }
     if (-not [string]::IsNullOrWhiteSpace($LoginPassportEndpoint)) { $notForwarded += '-LoginPassportEndpoint' }
     if (-not [string]::IsNullOrWhiteSpace($LoginPassportAdminClientId)) { $notForwarded += '-LoginPassportAdminClientId' }
+    if (-not [string]::IsNullOrWhiteSpace($ContentGuardWeChatAppId)) { $notForwarded += '-ContentGuardWeChatAppId' }
+    if (-not [string]::IsNullOrWhiteSpace($ContentGuardDouyinAppId)) { $notForwarded += '-ContentGuardDouyinAppId' }
+    if ($ConfirmContentGuardPlatformChange) { $notForwarded += '-ConfirmContentGuardPlatformChange' }
     if (-not [string]::IsNullOrWhiteSpace($LoginNppaAppId)) { $notForwarded += '-LoginNppaAppId' }
     if (-not [string]::IsNullOrWhiteSpace($LoginNppaBizId)) { $notForwarded += '-LoginNppaBizId' }
     if (-not [string]::IsNullOrWhiteSpace($LoginAntiAddictionExtraPlayDays)) { $notForwarded += '-LoginAntiAddictionExtraPlayDays' }

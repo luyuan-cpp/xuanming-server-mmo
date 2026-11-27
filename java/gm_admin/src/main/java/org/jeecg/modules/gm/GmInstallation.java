@@ -25,22 +25,43 @@ import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-/** 仅初始化独立 GM 库；关闭演示账号和无关公开入口，后续启动与多副本并发启动均不重置管理员。 */
+/**
+ * 仅初始化独立 GM 库；关闭演示账号和无关公开入口，后续启动与多副本并发启动均不重置管理员。
+ *
+ * <p>访问保护按身份模式分两套（docs/design/admin-identity-and-dual-control.md §5.2）：
+ * OIDC 模式下原生口令登录与全部原生 /sys 管理页一律拒绝，只留会话读取与登出；原生口令模式只给本机开发用，监听地址不是回环就拒绝启动。
+ */
 @Configuration
 @Lazy(false)
 public class GmInstallation implements ApplicationRunner, WebMvcConfigurer {
     // 上游 logout 为 Shiro anon，控制器自行验证签名并撤销令牌，不能要求此时已有认证 Subject。
-    private static final Set<String> OPEN = Set.of("/sys/login", "/sys/checkCaptcha", "/sys/getEncryptedString", "/sys/logout");
+    private static final Set<String> NATIVE_OPEN = Set.of("/sys/login", "/sys/checkCaptcha", "/sys/getEncryptedString", "/sys/logout", "/gm/sso/config");
+    // 企业登录的三个入口本身就是登录过程，此时还没有认证主体；会话由 GmOidcLogin 在身份提供方校验通过后签发。
+    private static final Set<String> OIDC_OPEN = Set.of("/sys/logout", "/gm/sso/config", "/gm/sso/authorize", "/gm/sso/token");
     private static final Set<String> SESSION_READ = Set.of("/sys/user/getUserInfo", "/sys/permission/getUserPermissionByToken", "/sys/user/queryUserComponent",
             "/sys/permission/getPermCode", "/sys/dict/queryAllDictItems", "/sys/user/verifyIzDefaultPwd", "/sys/annountCement/getUnreadMessageCount");
     private final JdbcTemplate db;
     private final TransactionTemplate tx;
     private final String password;
+    private final boolean oidc;
     private volatile boolean ready;
 
     public GmInstallation(JdbcTemplate db, PlatformTransactionManager transactions,
-            @Value("${gm.bootstrap-password:}") String password) {
+            @Value("${gm.bootstrap-password:}") String password, @Value("${gm.identity.mode:native}") String identityMode,
+            @Value("${server.address:}") String listenAddress) {
         this.db = db; this.tx = new TransactionTemplate(transactions); this.password = password;
+        this.oidc = GmOidcLogin.isOidc(identityMode);
+        // 在构造期判，早于 Web 服务器开始监听：口令存在后台自己库里的模式不能出现在本机之外。
+        if (!oidc && !isLoopback(listenAddress))
+            throw new IllegalStateException("GM native password mode is only allowed when server.address is a loopback address; set gm.identity.mode=oidc");
+    }
+
+    private static boolean isLoopback(String address) {
+        try {
+            return address != null && !address.isBlank() && java.net.InetAddress.getByName(address.strip()).isLoopbackAddress();
+        } catch (java.net.UnknownHostException unresolvable) {
+            return false;
+        }
     }
 
     @Override public void run(ApplicationArguments args) throws Exception {
@@ -48,14 +69,24 @@ public class GmInstallation implements ApplicationRunner, WebMvcConfigurer {
             throw new IllegalStateException("GM installation requires its dedicated gm_admin database");
         new ResourceDatabasePopulator(new ClassPathResource("gm-schema.sql")).execute(db.getDataSource());
         ensureColumn("gm_command", "command_type", "ALTER TABLE gm_command ADD COLUMN command_type VARCHAR(16) NOT NULL DEFAULT 'MAIL'");
+        // 双人复核：第一次放行时写入批准人与批准时刻，之后不再改（GmCommandJournal）。
+        ensureColumn("gm_command", "approver_name", "ALTER TABLE gm_command ADD COLUMN approver_name VARBINARY(512) NULL");
+        ensureColumn("gm_command", "approved_ms", "ALTER TABLE gm_command ADD COLUMN approved_ms BIGINT NULL");
         db.execute("CREATE TABLE IF NOT EXISTS gm_install (version INTEGER PRIMARY KEY, installed_at TIMESTAMP NOT NULL)");
         if (!hasVersion(1)) {
-            if (password.length() < 20) throw new IllegalStateException("GM bootstrap password must be injected and at least 20 characters");
-            byte[] saltBytes = new byte[4]; new SecureRandom().nextBytes(saltBytes);
+            SecureRandom random = new SecureRandom();
+            String bootstrap = password;
+            if (bootstrap.length() < 20) {
+                if (!oidc) throw new IllegalStateException("GM bootstrap password must be injected and at least 20 characters");
+                // OIDC 模式下原生口令登录是关着的，初始管理员用不上口令：给它一段没人知道的随机数，不要求部署方再保管一份用不上的凭据。
+                byte[] unknown = new byte[32]; random.nextBytes(unknown);
+                bootstrap = HexFormat.of().formatHex(unknown);
+            }
+            byte[] saltBytes = new byte[4]; random.nextBytes(saltBytes);
             String salt = HexFormat.of().formatHex(saltBytes);
             // 复用上游登录算法，不维护第二套密码实现。
             String encoded = (String) Class.forName("org.jeecg.common.util.PasswordUtil")
-                    .getMethod("encrypt", String.class, String.class, String.class).invoke(null, "admin", password, salt);
+                    .getMethod("encrypt", String.class, String.class, String.class).invoke(null, "admin", bootstrap, salt);
             if (encoded == null || encoded.isBlank()) throw new IllegalStateException("GM bootstrap password encoding failed");
             runMigration(1, () -> {
                 db.update("UPDATE sys_user SET status=2");
@@ -117,7 +148,52 @@ public class GmInstallation implements ApplicationRunner, WebMvcConfigurer {
             }
             db.update("UPDATE sys_permission SET is_leaf=0 WHERE id='gm_console'");
         });
+        runMigration(7, () -> {
+            // OIDC 模式下原生角色管理页是关着的，角色只能由迁移建好；身份提供方的分组经 gm.oidc.role-mapping 映射到这些角色编码。
+            // 发起与批准分成两个角色，同一个人可以两个都有：双人复核只看一条命令上的两个人是否不同。
+            // 七项玩家 GM 各只有一个权限串，发起和放行共用，所以发起人与批准人都持有。
+            List<String> read = List.of("gm_console", "gm_permission_0", "gm_permission_1", "gm_permission_4");
+            List<String> playerCommands = List.of("gm_player_permission_0", "gm_player_permission_1", "gm_player_permission_2",
+                    "gm_player_permission_3", "gm_player_permission_4", "gm_player_permission_5", "gm_player_permission_6");
+            addRole("gm_role_operator", "gm_operator", "GM 发起人", read, playerCommands, List.of("gm_permission_2", "gm_sys_mail_permission_0"));
+            addRole("gm_role_approver", "gm_approver", "GM 批准人", read, playerCommands, List.of("gm_permission_3", "gm_sys_mail_permission_1"));
+            addRole("gm_role_auditor", "gm_auditor", "GM 审计", read, List.of(), List.of());
+        });
+        runMigration(8, () -> {
+            // 交易人工处置(GmTradeController):查看、发起、批准三个权限串;发起与批准分给不同的标准角色。
+            String roleId = db.queryForObject("SELECT id FROM sys_role WHERE role_code='admin'", String.class);
+            String[] permissions = {GmTradeController.READ, GmTradeController.PREPARE, GmTradeController.APPROVE};
+            String[] labels = {"查看交易人工处置", "发起交易人工处置", "批准交易人工处置"};
+            for (int i = 0; i < permissions.length; i++) {
+                String id = "gm_trade_permission_" + i;
+                addMenu(id, "gm_console", labels[i], null, null, 2, permissions[i]);
+                db.update("INSERT INTO sys_role_permission(id,role_id,permission_id) VALUES(?,?,?)", "gm_admin_trade_" + i, roleId, id);
+            }
+            grant("gm_role_operator", "trade", List.of("gm_trade_permission_0", "gm_trade_permission_1"));
+            grant("gm_role_approver", "trade", List.of("gm_trade_permission_0", "gm_trade_permission_2"));
+            grant("gm_role_auditor", "trade", List.of("gm_trade_permission_0"));
+            db.update("UPDATE sys_permission SET is_leaf=0 WHERE id='gm_console'");
+        });
         ready = true;
+    }
+
+    /** 给迁移 7 建好的标准角色追加权限;tag 让各次迁移写入的关系行 id 互不相撞。 */
+    private void grant(String roleId, String tag, List<String> permissions) {
+        for (int i = 0; i < permissions.size(); i++) {
+            db.update("INSERT INTO sys_role_permission(id,role_id,permission_id) VALUES(?,?,?)", roleId + "_" + tag + "_" + i, roleId, permissions.get(i));
+        }
+    }
+
+    @SafeVarargs
+    private void addRole(String id, String code, String name, List<String>... permissionGroups) {
+        db.update("INSERT INTO sys_role(id,role_name,role_code,description,create_by,create_time,tenant_id) VALUES(?,?,?,?,'gm-install',CURRENT_TIMESTAMP,0)",
+                id, name, code, name);
+        int index = 0;
+        for (List<String> group : permissionGroups) {
+            for (String permission : group) {
+                db.update("INSERT INTO sys_role_permission(id,role_id,permission_id) VALUES(?,?,?)", id + "_" + index++, id, permission);
+            }
+        }
     }
 
     private boolean hasVersion(int version) {
@@ -191,9 +267,12 @@ public class GmInstallation implements ApplicationRunner, WebMvcConfigurer {
                 if ("GET".equalsIgnoreCase(request.getMethod()) && "/actuator/health/liveness".equals(path)) return true;
                 if (!ready) return reject(response, 503);
                 if ("GET".equalsIgnoreCase(request.getMethod()) && "/actuator/health/readiness".equals(path)) return true;
-                if (OPEN.contains(path) || path.startsWith("/sys/randomImage/")) return true;
+                boolean open = oidc ? OIDC_OPEN.contains(path) : (NATIVE_OPEN.contains(path) || path.startsWith("/sys/randomImage/"));
+                if (open) return true;
                 if (!SecurityUtils.getSubject().isAuthenticated()) return reject(response, 401);
                 if (path.startsWith("/gm/") || SESSION_READ.contains(path)) return true;
+                // OIDC 模式下角色来自身份提供方、权限由迁移写死，原生的账号/角色/菜单管理页没有用处，整体关闭。
+                if (oidc) return reject(response, 403);
                 // 只开放原生账号/角色管理给管理员，游戏运营角色不能访问平台的演示、报表或任意数据源。
                 if (path.startsWith("/sys/") && SecurityUtils.getSubject().hasRole("admin") && !blocked(path)) return true;
                 return reject(response, 403);

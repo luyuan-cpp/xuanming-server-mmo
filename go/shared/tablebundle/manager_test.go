@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 	"shared/generated/table"
 )
@@ -282,6 +283,7 @@ func TestManagerNeedsRestartAndRejectedDoNotRetry(t *testing.T) {
 	require.Contains(t, st.PendingReason, "World")
 	require.Equal(t, imgDigest, st.LoadedDigest)
 	require.Equal(t, 1, prepareCalls)
+	require.Equal(t, 1.0, gaugeValue(t, "table_bundle_needs_restart"), "the 24h restart alert reads this state gauge")
 
 	// 2. 改 Skill 但校验失败 -> 回报 rejected,继续用旧表,第二次轮询不再重试。
 	hookErr = errors.New("bad skill balance")
@@ -301,6 +303,22 @@ func TestManagerNeedsRestartAndRejectedDoNotRetry(t *testing.T) {
 	require.Contains(t, st.PendingReason, "bad skill balance")
 	require.Equal(t, imgDigest, st.LoadedDigest)
 	require.Equal(t, 2, prepareCalls)
+	require.Equal(t, 0.0, gaugeValue(t, "table_bundle_needs_restart"), "the pointer moved off the structural bundle")
+}
+
+// gaugeValue 从默认注册表读一个无标签 gauge 的当前值(经 Gather 读,不为测试引入 client_model / testutil 依赖)。
+func gaugeValue(t *testing.T, name string) float64 {
+	t.Helper()
+	families, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+	for _, family := range families {
+		if family.GetName() == name {
+			require.Len(t, family.GetMetric(), 1)
+			return family.GetMetric()[0].GetGauge().GetValue()
+		}
+	}
+	t.Fatalf("metric %s is not registered", name)
+	return 0
 }
 
 // 表包没同步下来时,sidecar 把这条线记在 sync_errors 里,不写进 lines。

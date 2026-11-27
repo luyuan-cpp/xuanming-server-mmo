@@ -423,6 +423,12 @@ static void SetSecretLookupForTest(AssetOpSecretLookup fn);     // 第 8 部分 
      - `err == kSuccess` → `Record(APPLIED)` → RequestPersist → APPLIED。
      - 其它 → 前面的闸门都已通过,这里不应失败:LOG_ERROR,回 `RETRY`、reason=err,不记账。
 10. **Credit 应用**(先物品后货币:只有物品会暂时失败,先做它就不会留下半截)。**本步以第 9 部分 4.33 为准**:货币封禁预检 → 物品获得封禁预检(全服 + 本人,按数量与完整实例一起判,2026-11-05)→ 物品 guid 余量预检 → 背包空间预检 → `AddItems(..., txType, correlation_id)`（2026-10-15 起 Bag 候选提交，mutated 出参已删，物品失败恒零改动；各分支：背包满 RETRY kAssetBagFull、kAssetBlocked 或 kInvalidParameter 记 REJECTED kAssetBlocked、其它 RETRY)→ 逐条 AddCurrency(补缴抵扣属于正常应用)。一旦已有改动后又失败,记 `kAppliedPartial` 并回 `APPLIED + partial=true + kAssetPartialApplied`,**不再**把部分发放记成完整成功。
+    - **退回本人托管的资产不判获取封禁**(2026-11-12,数据覆写审计 r2-trade#1)。交易撤单、过期、整单退回等退回腿带 `TX_AUCTION_RETURN`,货币封禁、物品获得封禁两道预检,以及 `AddCurrency`、带交易类型的 `BagService::AddItems`,都先问 `GainBlockService::CountsAsGain(txType)`,对它不判。原因:资产本来就是这名玩家的,不是新增获得;判了的话,被封禁的卖家取不回自己托管的物品,合同只能转人工。成交所得照常判。
+    - **货币入账溢出在任何改动之前判**(2026-11-12,同上一并修)。排在两道获取封禁预检之后、号段与背包两道 RETRY 预检之前,逐币种按补缴扣还后的净额判余额会不会溢出 uint64,命中记 `REJECTED kAssetInvalidBundle`,打 `metric=asset_credit_currency_overflow`。
+      - 为什么要提前判:货币排在物品之后入账,溢出原来要到 `AddCurrency` 才判。物品已入包时成了部分到账、要人工补偿;一点没改时回 RETRY,对一个永远成功不了的请求无限重投。
+      - 为什么排在 RETRY 预检之前:与封禁同理,确定失败的请求不能先回「背包满、稍后重试」。
+      - 判据只有一份:扣还计划(扣还多少、净入账多少、欠款带新版本字段时跳过扣还)抽成 `currency_system.cpp` 的 `PlanCredit`,入账 `AddCurrency` 与只读预检 `CurrencySystem::CreditOverflows` 共用,两处结论不会不同。被否决的做法是在资产通道里再写一遍净额计算,那会让两边口径慢慢分叉。
+      - 边界:欠款恰好在预检与入账之间过期(秒级)时两次判断可能不同,那一笔照旧由 `AddCurrency` 拒绝,成部分到账转人工,不会回绕。Java 版的 `checkAdd` 是同样的提前判。
 11. 每次调用结束打一行 INFO:`[AssetOp] rpc=… player_id=… stream=… seq=… corr=… outcome=… reason=… durable=…`(日志不是指标,可以带 player_id)。
 
 **客户端余额/背包刷新**:本批不加 scene 推送。帮会写 RPC 返回后,由客户端主动拉背包(S5 负责)。
@@ -454,6 +460,7 @@ void SceneNodeGrpcImpl::HandleAssetDebit(const ::AssetOpRequest* request, ::Asse
 | 退出中 | RETRY | kAssetPlayerNotHere | 否 |
 | 战斗中(Debit/Credit) | RETRY | kAssetInBattle | 否 |
 | 包内容非法 | REJECTED | kAssetInvalidBundle | 是 |
+| 货币入账会让余额溢出(按补缴扣还后的净额,任何改动之前判) | REJECTED | kAssetInvalidBundle | 是 |
 | 余额不足 | REJECTED | kAssetCurrencyInsufficient | 是 |
 | 货币或物品被封禁 | REJECTED | kAssetBlocked | 是 |
 | 背包满 | RETRY | kAssetBagFull | 否 |

@@ -23,6 +23,7 @@ import (
 // 支持两类模式：
 //   - MATCH_MODE_GUILD_WAR_PVP (9)：真人双方 1..5v1..5 直打（界面活人、野外路战、灵脉攻防、追杀结单）；
 //   - MATCH_MODE_GUILD_WAR_SIEGE (10)：进攻方 1..5 人攻打 AI 托管守旗阵快照（ai_defender_snapshots）。
+//
 // 当任一真人目标已在战斗中时返回 ACTIVITY_BATTLE_REJECT_MEMBER_IN_BATTLE 与 offender_battle_id，
 // 便于客户端直接切换一键实时观战。
 type StartGuildWarBattleLogic struct {

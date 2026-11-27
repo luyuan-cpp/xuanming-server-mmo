@@ -15,6 +15,9 @@ type AuthResult struct {
 	Channel string
 	// OpenID 是第三方渠道返回的渠道内用户标识(如微信 / 抖音小游戏 openid)。内容安全接口(msgSecCheck)按它标识发言者。
 	OpenID string
+	// IdentityIssuedAt 是身份令牌的签发时刻(签发方的时钟,unix 秒)。只有官方通行证填:签发游戏令牌时写进载荷、跨轮换不变,
+	// 刷新前与通行证里的改密时刻比(docs/design/official-passport-registration.md §3.6)。
+	IdentityIssuedAt int64
 }
 
 // Provider validates an auth token and returns the resolved account.

@@ -143,6 +143,10 @@ struct SessionInfo
 	// 默认值用 0 而不是 kInvalidGuid:与 proto 的"0 = 未填 / 普通票据"同形,login 对 0 一律放行。
 	Guid ticketPlayerId{0};
 	uint32_t ticketTargetZoneId{0};
+	// 票据绑定的账号摘要(GateTokenPayload.account_digest,login 签票时填):这张票是发给哪个账号的。写入时机与上面两项相同,
+	// gate 只把它透传进 SessionDetails,不比对——gate 不认证账号,主判定在 login 的 Login(认证出的账号与摘要不符即拒)。
+	// 空 = 票没绑账号 / 免验签的开发环境。见 docs/design/login-queue-2026-05.md §5「票据绑定账号」。
+	std::string ticketAccountDigest;
 	bool verified{false};			// True after client passes Gate connection token verification
 	// 未验签占位(pre_auth_slot.h):建连时发给还没验签的会话,验签成功时归还;会话销毁时随之归还。
 	// 只由 nodes/gate/handler/rpc/connection_admission.cpp 读写。空 = 已验签,或建连即免验签(dev)。

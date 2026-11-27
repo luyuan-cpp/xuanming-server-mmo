@@ -140,6 +140,7 @@ public:
     // 票据握手通过后把直连挂到房间上。校验"房间仍存在 + 该玩家按 role 确在名单上";
     // 同一玩家已有直连(重连)则关闭旧连接、换成新的。成功时回填该玩家的 gate 会话号
     // (合成 SessionDetails 用,仅日志对齐),返回 false = 拒绝握手。
+    // 未成年人到了当天的截止时刻(提前 5 秒)之后一律拒绝,见下面「未成年人到点断开战斗直连」。
     // 观众挂上直连即停止其席位计时(连接宽限 / 重连宽限)。
     bool AttachDirectConnection(uint64_t battleId, uint64_t playerId, ::eBattleTicketRole role,
                                 const muduo::net::TcpConnectionPtr &conn, uint32_t *gateSessionId,
@@ -368,6 +369,20 @@ public:
     // 房间不存在时 no-op;没有到期席位时只重挂定时器(幂等,定时器早到无害)。只能在 loop 线程调用。
     void ReclaimExpiredObserverSeats(uint64_t battleId, std::chrono::steady_clock::time_point now);
 
+    // ---- 未成年人到点断开战斗直连(docs/design/real-name-anti-addiction.md §5.4;判定在 battle_minor_play_deadline.h)----
+    //
+    // 可玩时段之外不能以任何形式提供游戏服务。大厅连接由 gate 到点关掉;战斗直连不经过 gate,由本节点自己关。
+    // 截止时刻(Unix 毫秒,0 = 不限)由 match 从玩家会话记录取,随 CreateBattle(每名参战者的快照)与 AddObserver 带来,
+    // 房间按人记下(BattleRoom::minorPlayLimits):
+    //   签票:票据期限取房间作废期限与该玩家直连服务截止时刻(截止时刻前 5 秒)里较早的一个(BuildAssignment,补签同样);
+    //   到点:关掉他的直连,此后本场不再接受他握手(AttachDirectConnection 拒绝);
+    //   战斗照常进行:连接关掉之后与掉线同一处置,参战者的回合按超时自动出手,观众进重连宽限、期满回收席位。
+    //
+    // 把 battleId 房间里到 nowMs 已到点的玩家记为已截止并关掉其直连,再按剩余最早的直连服务截止时刻重挂房间定时器。
+    // 房间定时器到期时以墙钟调用(截止时刻是绝对的 Unix 毫秒,只能和墙钟比);测试以显式时刻驱动,不等真实时间。
+    // 房间不存在时 no-op;没有到点的人时只重挂定时器(定时器早到无害)。只能在 loop 线程调用。
+    void EnforceMinorPlayDeadlines(uint64_t battleId, uint64_t nowMs);
+
 private:
     BattleRoomManager() = default;
 
@@ -467,6 +482,18 @@ private:
         // weak_ptr(AGENTS.md §11.7:应用层不拥有连接):连接由 edge 的 TcpServer 拥有,这里只是
         // "谁有直连"的索引;对端断开后 lock() 失败 == 缺项,不会钉住死连接和 fd。
         std::map<uint64_t, std::weak_ptr<muduo::net::TcpConnection>> directConnByPlayer;
+        // 未成年人的直连限制(docs/design/real-name-anti-addiction.md §5.4):player_id(参战者或观众)→ 当天的截止时刻。
+        // 只收有截止时刻的人(0 = 不限的人不进表)。参战者在建房时写入、整场不变;观众随登记写入、出名单时删(RetireObserver)。
+        // ended = 已到点:只升不降,本场剩余时间里拒绝他握手,墙钟回拨也不放开。
+        struct MinorPlayLimit
+        {
+            uint64_t deadlineMs = 0;
+            bool ended = false;
+        };
+        std::map<uint64_t, MinorPlayLimit> minorPlayLimits;
+        // 只挂「还没到点的人里最早的直连服务截止时刻」的一次性定时器。回调只捕获 WeakSelf() 与 battleId
+        // (AGENTS.md §11.7),随房间析构取消。没有未成年人的房间不挂。
+        TimerTaskComp minorPlayDeadlineTimer;
     };
 
     struct RetainedProvider
@@ -659,6 +686,10 @@ private:
     // 回调只捕获 WeakSelf() 与 battleId,到期重查房间(AGENTS.md §11.7)。
     void ArmObserverSeatTimer(BattleRoom &room);
 
+    // 按 minorPlayLimits 里还没到点的最早直连服务截止时刻挂一次性定时器(没有这样的人就取消)。延迟按墙钟算;
+    // 到期走 EnforceMinorPlayDeadlines 按墙钟重判,早到时没到点的人留着并重挂,不会提前关。
+    void ArmMinorPlayDeadlineTimer(BattleRoom &room);
+
     // ---- 客户端直连(设计文档 §18;下行出口见 turn-based §22 D68) ----
 
     // 该玩家在房间里已验证、仍 connected 的直连;没有 / 已断 / 未装配直连面时返回空。
@@ -690,7 +721,8 @@ private:
 
     // 签票据并组装落点分配包。false = 签不出(空密钥 + prod / OpenSSL 失败 / 本节点没有
     // 客户端可达地址),调用方必须拒绝开局 / 拒绝观战(turn-based §22 D70 fail-closed),
-    // 不能放玩家进一场连不上的战斗。expire_at_ms = room.deadlineMs(调用前必须已落到房间上)。
+    // 不能放玩家进一场连不上的战斗。expire_at_ms = room.deadlineMs(调用前必须已落到房间上);未成年人再按他的
+    // 直连服务截止时刻封顶(minorPlayLimits,同样要在调用前落到房间上),到点后的票握手即被判过期。
     // host/port 取 client_endpoint::ClientFacing(集群外入口 D78):client_endpoint 可用就用它,
     // 否则 required=false 时回落 endpoint,required=true(CLIENT_ENDPOINT_REQUIRED=1)时拒签。
     // NodeInfo 由 Node 持有、只在 loop 线程写;跨线程读写不同步,本函数仍只能在 loop 线程调用。

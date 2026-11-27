@@ -32,6 +32,7 @@
   <ItemGroup>
     <ClInclude Include="battle_admission_advertise.h" />
     <ClInclude Include="battle_admission_gate.h" />
+    <ClInclude Include="battle_minor_play_deadline.h" />
     <ClInclude Include="battle_push_policy.h" />
     <ClInclude Include="battle_room_table.h" />
     <ClInclude Include="client\battle_client_edge.h" />

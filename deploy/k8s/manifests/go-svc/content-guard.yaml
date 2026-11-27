@@ -2,6 +2,8 @@
 #
 # **全局池,只部署到 mmorpg-infra namespace 一次,不进任何 zone namespace。**
 # 无状态:不连数据库 / Redis / Kafka,只连 etcd(读词库、注册、热关停)。
+# 开了外部平台审核(k8s_deploy.ps1 -ContentGuardWeChatAppId / -ContentGuardDouyinAppId,设计 §6.5)时另连 data-service(按玩家查渠道与 openid),
+# 并出集群调平台的 HTTPS 接口:集群若限制出站,要放行 api.weixin.qq.com、developer.toutiao.com 的 443。
 # 调用方是收玩家文字的服务:login / guild / chat 按 go-zero 的发现键 contentguard.rpc 找,
 # scene 按 NodeInfo 前缀 ContentGuardNodeService.rpc 找;客户端到不了它(路由服的路由表里没有这个服务)。
 # k8s_deploy.ps1 的 $GoSvcCatalogue 里该条目标了 Global = $true,zone-up 会跳过它。
@@ -63,6 +65,11 @@ spec:
         - name: content-guard
           image: PLACEHOLDER_IMAGE
           imagePullPolicy: PLACEHOLDER_PULL_POLICY
+          # 外部平台审核的两把 AppSecret(MMORPG_CONTENT_GUARD_WECHAT_APP_SECRET / MMORPG_CONTENT_GUARD_DOUYIN_APP_SECRET)不写在这份清单里。
+          # 给了 -ContentGuardWeChatAppId / -ContentGuardDouyinAppId 时,k8s_deploy.ps1 往下面的 env 注入对应的 secretKeyRef
+          # (Secret content-guard-wechat / content-guard-douyin,不写 optional:Secret 缺失的 Pod 起不来,而不是带着空密钥起来),
+          # 并给 Pod 模板加密钥指纹注解(换密钥即滚动)。没给就不注入,也不要求这两个 Secret 存在。
+          # 手写同名变量会被脚本拒绝(Add-GoSvcSecretEnv),所以这里只留说明。
           env:
             - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
               value: warn

@@ -71,3 +71,10 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command tables-reload-local
 | `TableBundleNotConverged` | warning | 调 `GET /admin/tables` 找出滞后 Pod；查该 Pod `table-sync` 容器日志（是否 S3 拉取/校验失败）与业务日志（是否 `needs_restart`） |
 | `TableSyncStale` | warning | 检查 `table-sync` 到 `etcd.<infra>:2379` 的连通性与 etcd 集群健康；期间业务容器继续用本地旧表，不影响在线玩家 |
 | `TableBundleNeedsRestart` | info | 变更触及未标 `(cfg_hot_reload) = true` 的结构表，按常规发布手册滚动重启对应工作负载即可生效 |
+
+## 6. 不带告警的两种现象
+
+| 现象 | 原因与处置 |
+|---|---|
+| 新 Pod 的业务容器反复重启，日志里是 `Startup refused: table bundle for schema line …`（Go 是小写开头的同一句） | 这个 Pod 的 `table-sync` 没把本线的表包同步下来（对象存储不通、包不存在、摘要对不上），业务进程因此拒绝启动，不退回镜像里更旧的表。看 `kubectl logs <pod> -c table-sync`，以及卷里 `POINTER.json` 的 `sync_errors`。同步好之后业务容器自己会起来，不用人工干预；已经在跑的 Pod 不受影响 |
+| 被拒绝的包撤掉或回滚之后，`GET /admin/tables` 里的拒绝记录过几秒自己消失 | 正常。进程发现指针不再指向那一包，就清掉自己的拒绝 / 需要重启结论并重新回报。同一包再发一次会重新校验 |

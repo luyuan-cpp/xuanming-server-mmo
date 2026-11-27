@@ -168,18 +168,18 @@ type ServiceContext struct {
 	RoleAdmissionAuth         *serviceauth.Verifier
 	// RoleFenceStates、RoleAdmissionChecks、RoleFenceAuth 给 GetRoleFenceState、VerifyRoleAdmission 用。RoleRemovals 是删角的后台收尾,协调者缺席时为 nil。
 	// RoleRefs 是陈旧账号角色索引的后台清理,RolePreparing 撤销没人重放的超时 PREPARING,都不依赖协调者。见 configureRoleFence。
-	RoleFenceStates        RoleFenceStateReader
-	RoleAdmissionChecks    RoleAdmissionChecker
-	RoleFenceAuth          *serviceauth.Verifier
-	RoleRemovals           RoleRemovalResumer
-	RoleRefs               RoleRefSweeper
-	RolePreparing          RolePreparingAborter
+	RoleFenceStates     RoleFenceStateReader
+	RoleAdmissionChecks RoleAdmissionChecker
+	RoleFenceAuth       *serviceauth.Verifier
+	RoleRemovals        RoleRemovalResumer
+	RoleRefs            RoleRefSweeper
+	RolePreparing       RolePreparingAborter
 	// RoleRenames 是角色改名(RenameRole RPC 与后台续做),只认 scene 的调用证明(RoleAdmissionAuth)。见 configureRoleFence。
 	RoleRenames RoleRenamer
 	// RoleAppearances 是角色永久外观目录同步(UpdateRoleAppearance RPC),只认 scene 的调用证明(RoleAdmissionAuth)。
 	RoleAppearances RoleAppearanceUpdater
 	// AccountTradableQuota 是阶段一账号级可交易装备材料配额同步(SyncAccountStage1Tradable RPC),只认 scene 的调用证明。
-	AccountTradableQuota AccountTradableQuotaStore
+	AccountTradableQuota   AccountTradableQuotaStore
 	PlayerRouteAuth        *serviceauth.Verifier // GetPlayerRoute 的调用证明,缺席时回 Unavailable
 	roleFenceCoordinator   io.Closer
 	stopRemovalResumer     func(context.Context) error
@@ -253,8 +253,26 @@ func checkWriterSchemas(writers map[string]authoritysql.WriterConfig, schemas []
 	return nil
 }
 
+// placementResolver 回答逻辑库当前的落点,*dbplacement.Watcher 满足它。单测换成替身。
+type placementResolver interface {
+	ResolvePlacement(logicalDB string) (addr string, version uint64, err error)
+}
+
+// requirePlacements 逐个问要写的逻辑库落点在哪,有一个解析不出就回错误。
+// Watcher 会把问过的库记成「连过」,没有映射键的库从此上报版本 0,与它真实的落点相同,不影响 dbmove audit 的判断。
+func requirePlacements(resolver placementResolver, schemas []string) error {
+	for _, schema := range schemas {
+		if _, _, err := resolver.ResolvePlacement(schema); err != nil {
+			return fmt.Errorf("logical database %s has no usable placement: %w", schema, err)
+		}
+	}
+	return nil
+}
+
 // MissingStores 返回没装配起来的 MySQL store 的名字(固定顺序);全部就绪时返回 nil。
 // main 在 Store.Required=true 时据此拒绝启动(见 config.StoreConfig)。
+// 某个逻辑库启动时连不上不算缺:store 照常装配,那个库的池关着,用到时再核对(store.openCheckedPool)。
+// 缺席只剩两种原因:配置非法,或者某个池连上了而核对不过。
 func (s *ServiceContext) MissingStores() []string {
 	var missing []string
 	if s.AccountDirectory == nil || s.AccountDirectoryAuth == nil {
@@ -318,6 +336,9 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 	c.RouteStore = c.RouteStore.Normalize()
 
 	mysqlCfg := MySQLConfigOf(c)
+	// 常驻进程:目录各片和流水库启动时连不上不算失败,那个库先关着,第一次用到时再核对,通过才给连接;
+	// 连上了而核对不过照旧拒启(docs/design/data-service-startup-isolation.md)。-migrate 与工具走自己的装配,不置它。
+	mysqlCfg.Lazy = true
 	var writerConfigs map[string]authoritysql.WriterConfig
 	var writerConfig authoritysql.WriterConfig
 	// 常驻进程没有 schema 凭据。历史上缺省启动迁移的行为在这里收口，
@@ -346,6 +367,13 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 		}
 		if err := checkWriterSchemas(writers, schemas); err != nil {
 			panic(fmt.Sprintf("data_service %v", err))
+		}
+		// 按需打开之后,开池时解析不出落点会被当成「连不上」、那个库先关着。可它是配置错误(映射是坏值,
+		// 或指向本进程 SqlClusters 里没有的集群),所以在连任何库之前逐库问一次,当场拒启。没有映射时都连 DSN 里的地址,不用问。
+		if dbPlacement != nil {
+			if err := requirePlacements(dbPlacement, schemas); err != nil {
+				panic(fmt.Sprintf("data_service %v", err))
+			}
 		}
 		writerConfigs = writers
 		// 一个 boot 的写者身份在每个库上相同,取哪一份都一样。

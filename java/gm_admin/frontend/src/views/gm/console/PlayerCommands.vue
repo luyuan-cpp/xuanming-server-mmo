@@ -227,6 +227,14 @@
               : "草稿时间未提供，禁止执行"
           }}</a-descriptions-item>
         </a-descriptions>
+        <ApprovalPanel
+          :command="reviewed"
+          kind="player-commands"
+          :can-release="hasPermission(reviewPermission)"
+          :can-propose="hasPermission(reviewPermission)"
+          :busy="blocked"
+          @declined="onReviewedDeclined"
+        />
         <a-alert
           v-if="reviewed.status === 'DRAFT' && draftExpired"
           class="space"
@@ -334,7 +342,7 @@
           :loading="sending"
           :disabled="blocked || !confirmed"
           @click="send"
-          >确认执行</a-button
+          >{{ dualControl ? "批准并执行" : "确认执行" }}</a-button
         >
       </template>
     </BasicModal>
@@ -348,6 +356,14 @@ import { BasicTable, useTable, type BasicColumn } from "/@/components/Table";
 import { BasicModal, useModal } from "/@/components/Modal";
 import { usePermission } from "/@/hooks/web/usePermission";
 import { useMessage } from "/@/hooks/web/useMessage";
+import ApprovalPanel from "./ApprovalPanel.vue";
+import {
+  APPROVAL_STATUS_COLORS,
+  APPROVAL_STATUS_LABELS,
+  awaitsAnotherApprover,
+  dualControl,
+  type ApprovalView,
+} from "/@/api/gm/approval";
 import {
   currencyLabel,
   newClientRequestId,
@@ -434,7 +450,9 @@ const canSend = computed(() => {
     catalog.value.operations.some(
       (entry) => entry.code === command.operation && entry.enabled,
     ) &&
-    hasPermission(reviewPermission.value)
+    hasPermission(reviewPermission.value) &&
+    // 自己发起、还没人批准的申请，开着双人复核时自己不能放行（后台同样会拒绝）。
+    !awaitsAnotherApprover(command)
   );
 });
 const reviewedArguments = computed<Record<string, unknown>>(() => {
@@ -456,6 +474,7 @@ const playerStatusOptions = [
   { value: "EXECUTED", label: "已执行" },
   { value: "UNKNOWN", label: "结果未知" },
   { value: "REJECTED", label: "已拒绝" },
+  { value: "DECLINED", label: "已驳回" },
 ];
 const auditLoading = ref(false);
 const auditError = ref("");
@@ -625,6 +644,7 @@ function statusLabel(value: string) {
         EXECUTED: "已执行",
         UNKNOWN: "结果未知",
         REJECTED: "已拒绝",
+        ...APPROVAL_STATUS_LABELS,
       } as Record<string, string>
     )[value] || value
   );
@@ -638,6 +658,7 @@ function statusColor(value: string) {
         EXECUTED: "success",
         UNKNOWN: "warning",
         REJECTED: "error",
+        ...APPROVAL_STATUS_COLORS,
       } as Record<string, string>
     )[value] || "default"
   );
@@ -672,6 +693,7 @@ async function loadCatalog() {
   catalogLoading.value = true;
   try {
     catalog.value = await getPlayerCommandCatalog();
+    dualControl.value = catalog.value.dualControl === true;
     catalogError.value = "";
     if (
       getFieldsValue().currencyType === undefined &&
@@ -738,6 +760,16 @@ async function loadAuditHistory(commandId: string) {
   } finally {
     if (version === auditHistoryVersion) auditHistoryLoading.value = false;
   }
+}
+/** 驳回或撤回之后：换上后台返回的最新状态，并刷新轨迹与列表。 */
+async function onReviewedDeclined(command: ApprovalView) {
+  if (reviewed.value?.id !== command.id) return;
+  reviewed.value = command as PlayerCommand;
+  if (preparedCommand.value?.id === command.id)
+    preparedCommand.value = command as PlayerCommand;
+  confirmed.value = false;
+  await loadAuditHistory(command.id);
+  await loadAudit();
 }
 async function refreshReviewed() {
   const current = reviewed.value;

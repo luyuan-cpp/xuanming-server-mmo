@@ -65,6 +65,14 @@ def patch_login(frontend):
     if department_code.count("url: '/sys/loginGetUserDeparts'") != 1:
         raise SystemExit("Unexpected pinned login department request")
     replace_once(department_code, "  // 独立 GM 仅使用原生账号登录，验证码输入期间不发起部门预查询。\n  function checkAccount() {}\n")
+    # 企业登录（docs/design/admin-identity-and-dual-control.md §5.2）：问到登录模式之前、以及 OIDC 模式下，
+    # 登录框里只有企业登录组件；只有后台明确回答是本机口令模式，才显示上游的口令表单。
+    replace_once('            <div class="aui-formBox">\n',
+                 '            <GmSsoLogin v-if="identityMode !== \'native\'" />\n            <div class="aui-formBox" v-else>\n')
+    replace_once("  import { useUserStore } from '/@/store/modules/user';\n",
+                 "  import { useUserStore } from '/@/store/modules/user';\n"
+                 "  import GmSsoLogin from '/@/views/gm/sso/GmSsoLogin.vue';\n"
+                 "  import { identityMode } from '/@/api/gm/sso';\n")
     (frontend / "src/views/system/loginmini/MiniLogin.vue").write_text(source, encoding="utf-8")
 
 
@@ -134,14 +142,18 @@ def main():
     run(options.protoc, "--proto_path=.", "--proto_path=third_party/protobuf/src", "--include_imports",
         f"--descriptor_set_out={generated / 'gm-contracts.pb'}", "proto/mail/mail_admin.proto",
         "proto/data_service/data_service.proto", "proto/player_locator/player_locator.proto",
-        "proto/common/base/currency_type.proto", "proto/scene_manager/scene_node_service.proto")
+        "proto/common/base/currency_type.proto", "proto/scene_manager/scene_node_service.proto",
+        # 交易人工处置(GameTradeAdmin);批准记录 common/base/admin_approval.proto 随 --include_imports 带上。
+        "proto/trade/trade_admin.proto")
     shutil.copy2(generated / "gm-contracts.pb", start / "src/main/resources/gm-contracts.pb")
     # 原生模块不引入独立测试 POM 的框架版本；只补入所需的传输依赖。
     pom = start / "pom.xml"
     content = pom.read_text(encoding="utf-8")
     dependencies = [("io.grpc", "grpc-netty-shaded", "1.80.0"), ("io.grpc", "grpc-protobuf", "1.80.0"),
                     ("io.grpc", "grpc-stub", "1.80.0"), ("com.google.protobuf", "protobuf-java", "4.34.2"),
-                    ("com.google.protobuf", "protobuf-java-util", "4.34.2")]
+                    ("com.google.protobuf", "protobuf-java-util", "4.34.2"),
+                    # ID Token 验签（GmOidcProvider）；与 java/gm_admin/pom.xml 同版本。
+                    ("com.nimbusds", "nimbus-jose-jwt", "10.0.2")]
     # 与固定上游 BOM 对齐，禁止 gRPC core/API 与 transport 混用版本。
     content = content.replace("<version>1.70.0</version>", "<version>1.80.0</version>")
     content = content.replace("<version>4.29.3</version>", "<version>4.34.2</version>")

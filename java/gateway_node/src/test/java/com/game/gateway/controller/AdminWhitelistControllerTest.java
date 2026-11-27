@@ -78,6 +78,23 @@ class AdminWhitelistControllerTest {
         verifyNoInteractions(repo);
     }
 
+    /** note 超过列宽(128 个字符)回 400 too_long,不碰库(2026-11-26);之前落库报 Data too long,冒成 500。刚好 128 个照常写。 */
+    @Test
+    void addRejectsNoteLongerThanTheColumnWithoutTouchingDb() {
+        ErrorResponseException refused = assertThrows(ErrorResponseException.class,
+                () -> controller.add(request(ZONE, ACCOUNT, "备".repeat(AdminWhitelistController.NOTE_MAX_CHARS + 1))));
+        assertEquals(HttpStatus.BAD_REQUEST, refused.getStatusCode());
+        assertEquals("too_long", refused.getBody().getProperties().get("reason"));
+        assertEquals("note", refused.getBody().getProperties().get("field"));
+        assertFalse(refused.getBody().getDetail().contains("备"), "错误体不回显请求里的值");
+        verifyNoInteractions(repo);
+
+        String widest = "备".repeat(AdminWhitelistController.NOTE_MAX_CHARS);
+        when(repo.findByZoneIdAndAccountIdForUpdate(ZONE, ACCOUNT)).thenReturn(Optional.of(row(1002L, widest)));
+        assertEquals(HttpStatus.OK, controller.add(request(ZONE, ACCOUNT, widest)).getStatusCode());
+        verify(repo).upsert(ZONE, ACCOUNT, widest);
+    }
+
     private static void assertMissing(String field, Executable call) {
         ErrorResponseException refused = assertThrows(ErrorResponseException.class, call);
         assertEquals(HttpStatus.BAD_REQUEST, refused.getStatusCode());
@@ -153,7 +170,7 @@ class AdminWhitelistControllerTest {
         verify(repo, times(1)).upsert(ZONE, ACCOUNT, "n");
     }
 
-    /** 行号撞上别的行:ODKU 改了那一行,这一行还是旧 note。必须抛错让事务回滚,不能回 200。 */
+    /** 行号撞上别的行:ODKU 命中那一行的主键、什么都不改,这一行还是旧 note。必须抛错让事务回滚,不能回 200。 */
     @Test
     void addFailsLoudlyWhenReadBackNoteIsNotOurs() {
         when(repo.findByZoneIdAndAccountIdForUpdate(ZONE, ACCOUNT)).thenReturn(Optional.of(row(5L, "old")));

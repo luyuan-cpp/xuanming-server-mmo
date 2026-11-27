@@ -1662,6 +1662,8 @@ void GateClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnecti
 	// 重定向票据的绑定信息(CZ-8):只存不判,随 SessionDetails 交给 login EnterGame 校验。
 	session.ticketPlayerId = payload.player_id();
 	session.ticketTargetZoneId = payload.target_zone_id();
+	// 票据绑定的账号摘要:同样只存不判,随 SessionDetails 交给 login 的 Login 比对(借来的票登不上别的账号)。
+	session.ticketAccountDigest.assign(payload.account_digest());
 
 	session.verified = true;
 	sendReply(true, "");

@@ -149,7 +149,7 @@ G1     在线数降到阈值 → login 写 drained=below_threshold → 脚本删
 **签票**（新逻辑 `RequestGateMigration`）：
 
 1. 身份取自 gate 签名的 SessionDetails，走现有的 `callerauth`；没有经验签的身份、或缺 gate 实例号与会话代次，一律不签。
-   - 选角界面的连接（`player_id = 0`）要签的是不绑玩家的票，先确认这条连接有登录态（`loginsession.GetAccount`），没有就不签：迁移只给已登录的连接换 gate，不能变成一条绕过排队拿票的路。
+   - 选角界面的连接（`player_id = 0`）要签的是不绑玩家的票，先确认这条连接有登录态（`loginsession.GetAccount`），没有就不签：迁移只给已登录的连接换 gate，不能变成一条绕过排队拿票的路。读出的账号同时用来绑票（第 4 步）。
 2. 调用方必须是本 zone 目录里正在排空的那一台，否则回 `NOT_DRAINING`：
    - 在 gate 目录（watch 镜像）里，按本 login 的 zone、调用方的 node_id 与实例 uuid 找得到这台 gate。路由服把请求送错 zone、或同号 gate 的旧进程迟到的请求，都在这里挡下；
    - 它的 draining 标记存在。gate 的 bug 或迟到的许可，不能把一台健康 gate 上的人迁走；
@@ -158,6 +158,7 @@ G1     在线数降到阈值 → login 写 drained=below_threshold → 脚本删
    - **迁移不回落。** 登录时「全部不合格就回落全集」是为了不把人挡在门外；迁移时回落只会把人推到满载或排空中的 gate 上。没有合格目标就回 `NO_TARGET`，玩家留在原地，等之后的拍子或等到期。
 4. 签票：载荷与 `SignGateToken` 相同，再填两个字段，TTL 300 秒：
    - `player_id = 会话玩家`：票据只能本人用（login EnterGame 的持票人检查）。选角界面的会话还没有角色，填 0，等同一张普通的 AssignGate 票据；这个连接已经登录过，不经过排队不算绕过准入；
+   - `account_digest`（2026-11-26 起）：选角界面的连接填它登录的账号的摘要，与普通 AssignGate 票据一样只对这个账号有效，换到新 gate 之后别的账号拿它登不上（login 的 Login 比对，见[登录排队](./login-queue-2026-05.md) §5「票据绑定账号」）。游戏中的连接已按 `player_id` 绑本人，不填；
    - `target_zone_id = 0`：到达时的 EnterGame 走重连规则，发 `ZoneId = 0`，`resumeSceneOf` 才会派回原场景（§3 第 1 条）。客户端在 `target_zone_id` 为 0 时用 `zone_id` 记当前所在 zone，访客迁移后仍认为自己在本 zone。
 5. 应答：目标地址（`clientendpoint.Select` 的结果）、payload、signature、deadline。
 

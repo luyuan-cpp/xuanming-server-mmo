@@ -73,6 +73,30 @@ Test-Case 'table-bundle-alerts.yaml 包含 4 条告警、指标与代码同源�
     Assert-Match -Text $goMetrics -Pattern '"table_reload_total"' -Because 'Go 暴露 table_reload_total'
     Assert-Match -Text $syncMain -Pattern '"table_sync_etcd_last_read_timestamp_seconds"' -Because 'sidecar 暴露 table_sync_etcd_last_read_timestamp_seconds'
 
+    # TableBundleNotConverged 按 (release_track, schema_digest) 分组:两边的 table_bundle_info 都要带 release_track,
+    # 否则 stable 和 canary 混在一起比,金丝雀期间必然误报。
+    Assert-Match -Text $cppMetrics -Pattern '\{"release_track", releaseTrackName\}' -Because 'C++ 的 table_bundle_info 带 release_track'
+    Assert-Match -Text $goMetrics -Pattern '\[\]string\{"release_track", "schema_digest", "content_digest", "source"\}' -Because 'Go 的 table_bundle_info 带 release_track'
+    $notConverged = ($rules | Where-Object { $_.Name -eq 'TableBundleNotConverged' }).Body
+    Assert-Match -Text $notConverged -Pattern 'by \(release_track, schema_digest\)' -Because '收敛按轨道 + schema 线判断'
+
+    # TableBundleNeedsRestart 读的是状态量(此刻停在 needs_restart),不是事件计数。
+    Assert-Match -Text $cppMetrics -Pattern '"table_bundle_needs_restart"' -Because 'C++ 暴露 table_bundle_needs_restart'
+    Assert-Match -Text $goMetrics -Pattern '"table_bundle_needs_restart"' -Because 'Go 暴露 table_bundle_needs_restart'
+    $needsRestart = ($rules | Where-Object { $_.Name -eq 'TableBundleNeedsRestart' }).Body
+    Assert-Match -Text $needsRestart -Pattern 'table_bundle_needs_restart\) == 1' -Because '判据是状态量'
+    Assert-NotMatch -Text $needsRestart -Pattern 'increase\(' -Because '事件计数说明不了「现在还停在那里」'
+
+    # sidecar 的指标端口不在 Pod 注解里(注解只能指一个端口),靠 PodMonitor 按端口名抓;端口名两处必须一致。
+    $podMonitor = Read-RepoText 'deploy/k8s/table-sync-podmonitor.yaml'
+    Assert-Match -Text $podMonitor -Pattern '(?m)^kind:\s*PodMonitor\s*$' -Because 'sidecar 指标靠 PodMonitor 抓'
+    $deployText = Read-RepoText 'tools/scripts/k8s_deploy.ps1'
+    $portMatch = [regex]::Match($deployText, '"\$\{keyIndent\}  - containerPort: 9099",\s*\n\s*"\$\{keyIndent\}    name: (?<port>[a-z0-9-]+)"')
+    Assert-True -Condition $portMatch.Success -Because 'k8s_deploy.ps1 的 table-sync sidecar 声明了命名端口 9099'
+    Assert-Match -Text $podMonitor -Pattern ('(?m)^\s+- port: ' + [regex]::Escape($portMatch.Groups['port'].Value) + '\s*$') -Because 'PodMonitor 抓的端口名与 sidecar 声明的一致'
+    Assert-True -Condition ($portMatch.Groups['port'].Value.Length -le 15) -Because 'K8s 端口名最长 15 个字符'
+    Assert-Match -Text $alertsText -Pattern 'table-sync-podmonitor\.yaml' -Because '告警文件头写明 sidecar 指标的抓取前提'
+
     # 告警名在 deploy/k8s/*alerts*.yaml 中不重名。
     $allAlertFiles = Get-ChildItem (Join-Path $script:RepoRoot 'deploy/k8s') -Filter '*alerts*.yaml'
     $otherAlertNames = @()
@@ -126,6 +150,8 @@ Test-Case 'table-sync sidecar 只注入读表 Go 服务,兼容有/无 initContai
     Assert-Match -Text $guildOut -Pattern 'restartPolicy: Always' -Because '原生 sidecar'
     Assert-Match -Text $guildOut -Pattern 'path: /readyz' -Because 'startupProbe 探 /readyz'
     Assert-Match -Text $guildOut -Pattern 'MMORPG_RELEASE_TRACK\n\s+value: "canary"' -Because '传递轨道'
+    Assert-Match -Text $guildOut -Pattern '- name: POD_NAMESPACE\n\s+valueFrom:\n\s+fieldRef:\n\s+fieldPath: metadata\.namespace' `
+        -Because '状态键带 namespace:各 zone 的同名 StatefulSet Pod 共用 infra 的 etcd,只用 Pod 名会互相覆盖'
     Assert-Match -Text $guildOut -Pattern 'MMORPG_TABLE_BUNDLE_ROOT' -Because '主容器注入表包路径'
     Assert-Match -Text $guildOut -Pattern '- name: sql-writer-registrar' -Because '保留原有 initContainer'
 
@@ -135,6 +161,66 @@ Test-Case 'table-sync sidecar 只注入读表 Go 服务,兼容有/无 initContai
 
     $plOut = Add-TableSyncSidecarToGoSvcManifest -SvcName 'player-locator' -ManifestContent $plYaml -Track 'stable'
     Assert-Equal -Expected $plYaml -Actual $plOut -Because 'player-locator 不读表,不挂 table-sync'
+}
+
+Test-Case 'Assert-TableSyncS3SecretProvisioned:外接 S3 时核对凭据 Secret 在、两个键非空,只列键名与长度不读值;dev 夹具与关闭时不查' {
+    Import-K8sDeployFunctions -Names @('Build-KubectlBaseArgs', 'Get-TableSyncSettings', 'Assert-TableSyncS3SecretProvisioned')
+    $script:InfraNamespace = 'mmorpg-infra'
+    $script:GoSvcRegistry = 'ghcr.io/luyuancpp'
+    $script:GoSvcTag = 'v1'
+    $script:TableSyncImage = ''
+    $script:TableSyncS3Endpoint = 'https://s3.example.internal'
+    $script:TableSyncS3Bucket = ''
+    $script:TableSyncS3Region = ''
+    $script:TableSyncS3SecretName = ''
+    $KubeContext = 'contract-ctx'; $KubeConfig = ''
+    $output = ''
+    $exitCode = 0
+    $kubectlCalls = [System.Collections.Generic.List[object]]::new()
+    function kubectl { $kubectlCalls.Add(@($args)); $global:LASTEXITCODE = $exitCode; return $output }
+    function Get-Thrown([scriptblock]$Action) {
+        try { & $Action; return '' } catch { return $_.Exception.Message }
+    }
+
+    # 关闭表包模式、dev 夹具:都不连集群。
+    $DryRun = [switch]$false
+    $script:TableSyncEnabled = $false
+    $script:TableSyncDevFixture = [switch]$false
+    Assert-TableSyncS3SecretProvisioned -Namespace 'mmorpg-zone-z1'
+    $script:TableSyncEnabled = $true
+    $script:TableSyncDevFixture = [switch]$true
+    Assert-TableSyncS3SecretProvisioned -Namespace 'mmorpg-zone-z1'
+    Assert-Equal -Expected 0 -Actual $kubectlCalls.Count -Because '关着或 dev 夹具时不查(dev 的凭据由 Apply-TableSyncDevSecret 写入)'
+
+    # DryRun:只打一行。
+    $script:TableSyncDevFixture = [switch]$false
+    $DryRun = [switch]$true
+    $lines = @(Assert-TableSyncS3SecretProvisioned -Namespace 'mmorpg-zone-z1' 6>&1 | ForEach-Object { [string]$_ })
+    Assert-Equal -Expected 0 -Actual $kubectlCalls.Count -Because 'DryRun 不连集群'
+    Assert-Match -Text ($lines -join "`n") -Pattern '\[dry-run\] would check that Secret table-sync-s3 in namespace mmorpg-zone-z1' -Because '写明要查哪个 Secret'
+
+    # 真跑:两个键都非空才过。
+    $DryRun = [switch]$false
+    $output = 'found;access-key-id=20;secret-access-key=40;'
+    Assert-Equal -Expected '' -Actual (Get-Thrown { Assert-TableSyncS3SecretProvisioned -Namespace 'mmorpg-zone-z1' }) -Because '两个键都在'
+    $call = $kubectlCalls[$kubectlCalls.Count - 1]
+    Assert-Match -Text ($call -join ' ') -Pattern '^--context contract-ctx get secret table-sync-s3 -n mmorpg-zone-z1 --ignore-not-found -o ' -Because '只查询,带部署用的 context'
+    Assert-Match -Text ([string]$call[-1]) -Pattern '^go-template=found;\{\{range \$k, \$v := \.data\}\}\{\{\$k\}\}=\{\{len \$v\}\};\{\{end\}\}$' -Because '只取键名与长度'
+
+    $output = ''
+    Assert-Match -Text (Get-Thrown { Assert-TableSyncS3SecretProvisioned -Namespace 'mmorpg-zone-z1' }) -Pattern 'Secret table-sync-s3 does not exist in namespace mmorpg-zone-z1.*Nothing was written for this step\.' -Because '没有 Secret 就停'
+    $output = 'found;access-key-id=20;'
+    Assert-Match -Text (Get-Thrown { Assert-TableSyncS3SecretProvisioned -Namespace 'mmorpg-zone-z1' }) -Pattern 'has no non-empty secret-access-key' -Because '缺键就停'
+    $output = 'found;access-key-id=0;secret-access-key=40;'
+    Assert-Match -Text (Get-Thrown { Assert-TableSyncS3SecretProvisioned -Namespace 'mmorpg-zone-z1' }) -Pattern 'has no non-empty access-key-id' -Because '空值等于没给'
+    $exitCode = 1
+    Assert-Match -Text (Get-Thrown { Assert-TableSyncS3SecretProvisioned -Namespace 'mmorpg-zone-z1' }) -Pattern 'Cannot read Secret table-sync-s3 in namespace mmorpg-zone-z1 .*kubectl exit code 1' -Because '查不到不等于在'
+
+    # 两个调用点都紧跟 dev 凭据写入、在本 namespace 的工作负载之前。
+    $deployText = Read-RepoText 'tools/scripts/k8s_deploy.ps1'
+    foreach ($ns in @('\$namespace', '\$InfraNamespace')) {
+        Assert-Match -Text $deployText -Pattern ("Apply-TableSyncDevSecret -Namespace $ns\n\s*Assert-TableSyncS3SecretProvisioned -Namespace $ns\n") -Because "调用点($ns)紧跟 Apply-TableSyncDevSecret"
+    }
 }
 
 Test-Case 'go_svc_image.ps1 登记了 table-sync 镜像条目且 Agones Fleet 在仅开 table-sync 时仍写出 container 行' {

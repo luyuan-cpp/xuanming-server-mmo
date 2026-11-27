@@ -19,6 +19,10 @@
 //	commercefix -endpoint <trade grpc> resolve -commerce <id> -action <动作> -expect-version <版本> -expect-target <环境名> \
 //	    -operator <名字> -reason <依据> -confirm <id> [动作参数] [-execute]
 //
+// 生产上写库要双人复核(docs/design/admin-identity-and-dual-control.md §5.7):EXECUTE 必带后台签发的批准记录,本工具不带,
+// 所以只用来 list / show / 不带 -execute 的 resolve(锁内算计划);真正处置在后台「交易人工处置」页由发起人提交、另一人批准。
+// 只有本机开发的 trade 打开了 Commerce.ManualResolutionAllowUnapproved,-execute 才会被接受。
+//
 // resolve 默认只在锁内算计划(DRY_RUN,不写),加 -execute 才写库。-expect-target 是工单上写明的环境名
 // (trade 配置 Commerce.ManualResolutionEnvironment),不从 show 的输出照抄:连错环境时服务端回 target_mismatch。
 // 退出码:0 成功;1 执行出错、读库失败或提交结果未知;2 参数不合法、入口未开或签名被拒、前置条件不满足、合同不存在;
@@ -80,6 +84,9 @@ Actions: resume, reissue, refund, partial, redirect, void-auction.
   void-auction  -linked <bid commerce_id> -linked-version <bid version from show>
 
 resolve only plans under the same locks by default (nothing written); add -execute to apply.
+In production -execute is refused with dual_control_approval_required: changes go through the GM console's
+trade manual page, proposed by one administrator and approved by another. -execute only works against a local
+trade that sets Commerce.ManualResolutionAllowUnapproved.
 -expect-version is the version printed by show; -expect-target is the environment name on the ticket (not copied from show).
 The signing secret is read from an environment variable (default MMORPG_TRADE_COMMERCE_FIX_SECRET, rename with -secret-env).
 
@@ -495,6 +502,9 @@ func runResolve(ctx context.Context, client adminClient, o resolveOptions, stdou
 		return exitOK
 	case tradepb.ManualContractVerdict_MANUAL_CONTRACT_VERDICT_REFUSED:
 		fmt.Fprintf(stderr, "Refused, no change: %s\n", resp.GetRefusal())
+		if resp.GetRefusal() == "dual_control_approval_required" {
+			fmt.Fprintln(stderr, "This deployment requires dual control: propose the change on the GM console's trade manual page and have another administrator approve it.")
+		}
 		return exitRejected
 	case tradepb.ManualContractVerdict_MANUAL_CONTRACT_VERDICT_NOT_FOUND:
 		fmt.Fprintf(stderr, "Refused, no change: no contract commerce_id=%d on target=%s\n", id, resp.GetTarget())

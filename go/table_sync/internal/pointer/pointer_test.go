@@ -51,6 +51,47 @@ func TestKeysAndPruneUnusedBundles(t *testing.T) {
 	require.True(t, os.IsNotExist(err))
 }
 
+// 卷的大小有上限(sizeLimit 1Gi,超了整个 Pod 被驱逐):保留期内没人用的包只留最新两个,
+// sidecar 中途被杀留下的临时文件过了保留期也要删;被引用的包、正在用的新临时文件不能动。
+func TestPruneCapsRecentUnreferencedBundlesAndRemovesOrphanedTempFiles(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now()
+	makeAt := func(name string, age time.Duration, isDir bool) string {
+		p := filepath.Join(dir, name)
+		if isDir {
+			require.NoError(t, os.MkdirAll(p, 0o755))
+		} else {
+			require.NoError(t, os.WriteFile(p, []byte("x"), 0o644))
+		}
+		at := now.Add(-age)
+		require.NoError(t, os.Chtimes(p, at, at))
+		return p
+	}
+	digest := func(c byte) string { return strings.Repeat(string(c), 64) }
+
+	referencedFresh := makeAt(digest('a'), 1*time.Minute, true)
+	newest := makeAt(digest('b'), 2*time.Minute, true)
+	second := makeAt(digest('c'), 3*time.Minute, true)
+	third := makeAt(digest('d'), 4*time.Minute, true)
+	fourth := makeAt(digest('e'), 5*time.Minute, true)
+	orphanExtract := makeAt(".extract-111", 15*time.Minute, true)
+	orphanDownload := makeAt(".download-222.tar.gz", 15*time.Minute, false)
+	activeExtract := makeAt(".extract-333", 10*time.Second, true)
+
+	removed, err := PruneUnusedBundles(dir, map[string]bool{digest('a'): true}, 10*time.Minute, now)
+	require.NoError(t, err)
+	require.Equal(t, 4, removed)
+
+	for _, kept := range []string{referencedFresh, newest, second, activeExtract} {
+		_, err := os.Stat(kept)
+		require.NoError(t, err, "must keep %s", filepath.Base(kept))
+	}
+	for _, gone := range []string{third, fourth, orphanExtract, orphanDownload} {
+		_, err := os.Stat(gone)
+		require.True(t, os.IsNotExist(err), "must remove %s", filepath.Base(gone))
+	}
+}
+
 // POINTER.json 的往返:sync_errors 没有内容时不写出,有内容时业务进程按 "sync_errors" 这个键读;
 // sidecar 重启时用 ReadDocument 把上一次落盘的线读回来。
 func TestDocumentRoundTripCarriesSyncErrors(t *testing.T) {

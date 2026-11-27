@@ -94,8 +94,43 @@ func WithPlacement(resolver PlacementResolver) OpenOption {
 
 // WithConnectGate 给 Open / OpenForMigration 建的连接池挂上建连钩子(例如按逻辑库的熔断)。
 // 不传或传 nil 时与改动前逐字相同;PinCurrentSession / PinPlacedSession 不带钩子,不受影响。
+// 可以传多次,按传入顺序执行(chainConnectGates):data_service 先过首次核对,再过逻辑库熔断。
 func WithConnectGate(gate ConnectGate) OpenOption {
-	return func(o *openOptions) { o.connectGate = gate }
+	return func(o *openOptions) {
+		switch {
+		case gate == nil:
+		case o.connectGate == nil:
+			o.connectGate = gate
+		default:
+			o.connectGate = chainConnectGates(o.connectGate, gate)
+		}
+	}
+}
+
+// chainConnectGates 让 first 先过、second 后过。second 拒绝时不建连,first 已拿到的结算按这个错误结算;
+// 都放行时两个结算都带着这次建连的结局各调一次。
+func chainConnectGates(first, second ConnectGate) ConnectGate {
+	return func(ctx context.Context, logicalDB string) (func(error), error) {
+		settleFirst, err := first(ctx, logicalDB)
+		if err != nil {
+			return nil, err
+		}
+		settleSecond, err := second(ctx, logicalDB)
+		if err != nil {
+			if settleFirst != nil {
+				settleFirst(err)
+			}
+			return nil, err
+		}
+		return func(outcome error) {
+			if settleSecond != nil {
+				settleSecond(outcome)
+			}
+			if settleFirst != nil {
+				settleFirst(outcome)
+			}
+		}, nil
+	}
 }
 
 // placedDialer 按映射选集群建连,并给每条连接一个「映射是否已变」的判定。
@@ -315,10 +350,24 @@ func AssertCurrentSession(ctx context.Context, db *sql.DB, backend Backend) erro
 	return nil
 }
 
+// ErrUnreachable 表示打开连接池时拿不到第一条可用连接:拨号、握手、会话初始化、写者身份核对任一步没过。
+// 这时对这个库一无所知(集群失联,或者账号、注册不对),调用方不能据此下「库是好的」或「库是坏的」的结论。
+// 档位不符(ErrBackendMismatch)是确定的部署错误,不算在内。拿到连接之后的核对失败也不算。
+var ErrUnreachable = errors.New("权威SQL启动失败")
+
 // Open 不记录DSN；新物理连接逐条清历史快照后再关闭staleness，禁止URL绕过。
 // 生产期望库名由领域代码常量给出；测试只能为本次随机库传入对应名字。
 func Open(ctx context.Context, dsn, expectedDatabase string, backend Backend, maxOpen int, permission Permission, options ...OpenOption) (*sql.DB, error) {
 	return open(ctx, dsn, expectedDatabase, backend, maxOpen, 5*time.Second, permission, options)
+}
+
+// OpenUnverified 只做静态校验,不连库:返回的句柄没有做过 Open 的任何一项启动核对(Ping、实际库名、强读会话、闸门表形状)。
+// 调用方必须自己保证这个池在核对通过之前拿不到连接:用 WithConnectGate 挂一个钩子,在第一条物理连接建立之前
+// 对同一个库跑一遍 Open 再放行(data_service 的按需打开,docs/design/data-service-startup-isolation.md §2)。
+// 每条物理连接的 pin 照旧。除此之外不要用它。
+func OpenUnverified(dsn, expectedDatabase string, backend Backend, maxOpen int, permission Permission, options ...OpenOption) (*sql.DB, error) {
+	db, _, err := newPool(dsn, expectedDatabase, backend, maxOpen, 5*time.Second, permission, options)
+	return db, err
 }
 
 // OpenForMigration 与运行池复用相同的强会话约束，但DDL由迁移器的
@@ -352,27 +401,28 @@ func DSNForSchema(dsn, schema string) (string, error) {
 // 而且那时语句已经发出,结局未知(docs/design/infra-reconnect-overview.md §4 R2)。
 const connMaxIdle = 3 * time.Minute
 
-func open(ctx context.Context, dsn, expectedDatabase string, backend Backend, maxOpen int, ioTimeout time.Duration, permission Permission, options []OpenOption) (*sql.DB, error) {
+// newPool 是 open 不连库的那一半:校验参数、建连接器、设连接池上限。
+func newPool(dsn, expectedDatabase string, backend Backend, maxOpen int, ioTimeout time.Duration, permission Permission, options []OpenOption) (*sql.DB, Backend, error) {
 	var opts openOptions
 	for _, option := range options {
 		option(&opts)
 	}
 	if err := permission.validate(); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	parsedBackend, err := ParseBackend(string(backend))
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if expectedDatabase == "" || maxOpen < 1 || maxOpen > 128 {
-		return nil, errors.New("权威SQL配置无效")
+		return nil, "", errors.New("权威SQL配置无效")
 	}
 	parsed, err := mysql.ParseDSN(dsn)
 	if err != nil {
-		return nil, errors.New("权威SQL连接串无效")
+		return nil, "", errors.New("权威SQL连接串无效")
 	}
 	if parsed.DBName != expectedDatabase {
-		return nil, errors.New("权威SQL目标库不匹配")
+		return nil, "", errors.New("权威SQL目标库不匹配")
 	}
 	// 不让驱动在有序初始化之前设置这些会话变量。
 	for key := range parsed.Params {
@@ -387,7 +437,7 @@ func open(ctx context.Context, dsn, expectedDatabase string, backend Backend, ma
 	parsed.WriteTimeout = ioTimeout
 	inner, err := mysql.NewConnector(parsed)
 	if err != nil {
-		return nil, errors.New("权威SQL连接器无效")
+		return nil, "", errors.New("权威SQL连接器无效")
 	}
 	conn := connector{
 		inner:       inner,
@@ -404,6 +454,14 @@ func open(ctx context.Context, dsn, expectedDatabase string, backend Backend, ma
 	db.SetMaxIdleConns(maxOpen)
 	db.SetConnMaxLifetime(15 * time.Minute)
 	db.SetConnMaxIdleTime(connMaxIdle)
+	return db, parsedBackend, nil
+}
+
+func open(ctx context.Context, dsn, expectedDatabase string, backend Backend, maxOpen int, ioTimeout time.Duration, permission Permission, options []OpenOption) (*sql.DB, error) {
+	db, parsedBackend, err := newPool(dsn, expectedDatabase, backend, maxOpen, ioTimeout, permission, options)
+	if err != nil {
+		return nil, err
+	}
 	ready := false
 	defer func() {
 		if !ready {
@@ -413,7 +471,11 @@ func open(ctx context.Context, dsn, expectedDatabase string, backend Backend, ma
 	check, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if err := db.PingContext(check); err != nil {
-		return nil, fmt.Errorf("权威SQL启动失败: %w", err)
+		// 档位不符是确定的部署错误,不归进「连不上」。两支的错误文本和以前相同。
+		if errors.Is(err, ErrBackendMismatch) {
+			return nil, fmt.Errorf("权威SQL启动失败: %w", err)
+		}
+		return nil, fmt.Errorf("%w: %w", ErrUnreachable, err)
 	}
 	// 写资格是一次性的:这几条核对撞上冻结的闸门就报错退出的话,这个 Pod 的 grant 就烧掉了。它们不碰业务数据,不过闸门。
 	check = startupProbe(check)

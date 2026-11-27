@@ -1403,6 +1403,7 @@ Java 侧 `--check` 会报契约漂移。Java 仓须同批运行 `java tools/Cont
 | 版本 | 日期 | 内容 |
 |---|---|---|
 | v0.1 | 2026-10-16 | 初稿:按接手记录 §3.3 的选定做法汇总四份调研,抽查关键事实。补正了一处调研写「未核实」的点:非 0 码在交接应答里一律走 `ResolveTravelOutcome(kFailed)`。补充了 a 的「实例号不明按同一连接处理」(防自踢)、落点 Lua 的 ARGV[4] 缺省按 `any`(保住现有直接 EVAL 的用例)、疏散票据带代次的落点位置。未改代码 |
+| v0.4 | 2026-11-20 ~ 26 | §14.6 的残余逐条收口:回推与自发请求按实例找 gate(§14.7)、location 记实例与托管落点带实例、托管改派条目记实例(§14.8);「双方都没有登录代次」核实为生产上走不到;补 §14.9(排查步骤、修后主流程、方案取舍、水平扩展与一致性)。全部未生成、未编译、未测试,验证交 Gemini([交接单](../handoff/scene-gate-instance-session-handoff-20261126.md)) |
 | v0.3 | 2026-11-20 | §10 第 1 条「e 方案 C」落码:定下不变量 2 的措辞(同一会话 = 同一 (gate 实例, session_id))与「连接身份是请求身份的一部分、不是栅栏前的另一道判定」;RPC0 入站侧握手时把对端 node_uuid 记在连接的 channel 上;scene 入场栅栏、客户端消息入口(含 ExitGame)、入场被拒提示、改派条目按实例认会话;login 跨实例同号改回踢线(删 `skip_cross_instance`)。正文 §0、§1.1、§1.4、§2.2 ⑤、§2.5、§6.6、§6.8、§10、§12.3 同步改写,详见 §14。未编译、未测试 |
 | v0.2 | 2026-10-16 | 按「正确性」(C-F1–F8)与「发布与可实施性」(R-F1–F14)两路对抗复核修订,逐条处置见 §12。主要变化:①发布 / 回滚总顺序改为硬约束(§0),player_locator 先于 scene_manager 与 login;②b 写明 `keep_newer` 不漏删的前提,Reconnect 重放分支补比代次,`keep_conflict` 改用「会话有效」口径;③d 的 legacy 行不降级已有身份,samePlacement 推路由失败不回滚身份,`expectLoc` 零值语义写明并由行为用例守住三处生产构造点;④a 复读确认已提交时补挂断线租约,本链实例号为空一律不踢,T4 反向顺序登记为残余,§1.4 如实写明 R13 下 d1 仍成立;⑤e 的风险核对改为如实描述对账器兜底;⑥§7 按工作区重新核对在途改动,生成器用例改放新文件,player_locator 包内测试约定唯一假实现与前缀,W3 加「全域到账续批」写入方停手的前置条件;⑦§8 改为生成基线比对 + 两轮 Gemini 运行(先复现后修复);⑧§9 Java 结论按 PARITY.md 改写并补 ContractSync 同步要求。未改代码,未编译、未测试 |
 
@@ -1773,3 +1774,62 @@ node_id 投给同一 node_id 上的另一个进程;实例未知时按会话号�
 与同目录 `{placement_identity_test.go,enterscene_identity_test.go,enter_hosted_placement_test.go,enter_holder_release_test.go,leave_release_test.go}`;
 `cpp/libs/services/scene/player/system/{player_lifecycle.h,player_lifecycle.cpp,relocate_confirm.h}`、`cpp/nodes/scene/handler/event/player_placement_event_handler.cpp`(守护段)、
 `cpp/tests/cross_zone_test/cross_zone_test.cpp`。不新增 `.cpp`,不新起线程。
+
+### 14.9 方案取舍、修后主流程与水平扩展(2026-11-26 补记)
+
+**怎么查出来、怎么定的。** 这条线按下面的步骤做,以后同类「编号会复用」的问题照此查:
+
+1. 先列会撞号的值和它的来源:gate 会话号 = `node_id<<17 | 序号`,node_id 在老进程租约过期后立刻给新进程,新进程的序号从头发。
+2. 再列所有「按会话号认会话」的判断点:scene 入场栅栏的三处身份、待入场上下文的合并、「换没换客户端」、改派待确认条目的对账、
+   客户端消息入口(含代发的 ExitGame)、被拒入场的提示、回推与自发请求找 gate、scene_manager 的落点判定、托管落点、login 的「同一连接」。
+3. 核实关键前提:新进程存在时,老进程到 scene 的连接还在不在。在 —— etcd 摘除只销毁 gate 节点实体,不关入站连接(§6.8)。
+   这决定了实例号只能记在连接上,不能从节点实体反查。
+4. 定一个口径:「同一会话」= 同一 (gate 实例, 会话号),任一边未知按会话号认;逐处替换第 2 步的判断点,不留第二种口径。
+5. 每个会拒绝的点再查一遍「拒绝时的副作用落到谁身上」:被拒入场的 3023 按会话号推会推给新进程上的活玩家,改成只推请求出自的进程。
+6. 每一面写复现用例,再用变异核对给出「旧口径下会红」的证据(§14.4、§14.7、§14.8)。
+
+**修后的主流程**(gate 以同一 node_id 重启,老进程 I1 还连着 scene,玩家 P 在新进程 I2 上又拿到会话号 3:k):
+
+1. I1 与 etcd 失联、租约过期:scene 销毁 I1 的节点实体,I1 到 scene 的连接还开着,连接上记着握手身份 I1。I2 起来接走 node_id 3。
+2. P 连到 I2、拿到 3:k。login 判 ReplaceLogin,提交会话记录 (3:k, gB, I2) 之后踢 I1 上的旧连接(命令的 `target_instance_id` = I1,I2 丢弃)。
+3. scene_manager:location 记着 (3:k, gA, I1),login 发来 EnterScene{3:k, gB, I2}。会话号相同、实例不同,按代次判 newer,
+   写入 (3:k, gB, I2),路由的 `target_instance_id` = I2。
+4. I2 转发入场。scene 栅栏:实体身份 (3:k, gA, I1) 对请求 (3:k, gB, I2),按代次接管,身份组件记下 I2。
+5. I1 被踢、关闭旧连接,经 I1 的连接向 scene 发 ExitGame(3:k, P):`IsStaleGateInstance` 认出是另一个进程,不派发。
+   同时向 login 发 Disconnect(3:k, I1),player_locator 按实例号忽略(§6.2)。
+6. I1 的进场待办迟到补发的入场、或 I1 上会话在途的换图:scene 栅栏按代次拒(3023 只推 I1);scene_manager 判 stale 回 25,location 不动。
+7. scene 之后给 P 的推送按身份组件记的 I2 找 gate;I2 的实体不在本节点时不推,不改投 I1。
+
+**核对过、不需要改的判断点**(2026-11-26 复审;以后加「同一会话」类判断时先对照这张表):
+
+| 判断点 | 只看什么 | 为什么不用加实例 |
+|---|---|---|
+| login `DecideEnterGame` | 记录状态与账号 | 不看会话号,首登 / 短线重连 / 顶号的分流与实例无关 |
+| login `DeleteSession` 的本地预检 | 会话号 | 实例交给 player_locator 在 GET 到的同一份字节上判(§6.2、§13.1),本地不重复 |
+| scene `CancelExitOnReconnect`(`EnterScene` 第 0 步) | 无条件 | 只要入场被栅栏放行就取消退出,栅栏已按 (实例, 会话号, 代次) 判过 |
+| scene 断线保留接回 `connection_lost_hold::IsResumedBy` | 会话号与代次 | 同号跨进程的新登录代次更大,照样接回;同号同代次而实例不同是 G2 冲突,栅栏先拒 |
+| scene 退出落地时的「被新会话取代」`player_exit::IsSupersedingSession` | 会话号 | 正常重连在 `EnterScene` 第 0 步就摘了退出标记,走不到这里;唯一绕过第 0 步改绑会话的 `UpdateSessionDetail` 按代次 0 过栅栏,另一个进程上的同号会话会被判 `kRejectUnversioned`,改绑不进来 |
+
+**方案取舍。** 下面几种做法都考虑过,写明不用的理由,免得以后重新走一遍:
+
+| 做法 | 结论 | 理由 |
+|---|---|---|
+| 消息体里自报 gate 实例 | 不用 | 每条消息都要带;值可能是从别处抄来的旧值;连接身份由 gate 进程在握手里报一次,发起方收到成功才发业务,同一条连接上的消息都读得到 |
+| 从 gate 节点实体反查连接属于哪个进程 | 不用 | 老进程从 etcd 摘除时实体随之销毁,连接却还开着,恰好在主场景里查不到(§14.2) |
+| 栅栏之前加一道「这条连接是不是 node_id 当前持有者」的判定(查 etcd 发现) | 不用 | 依赖本节点发现视图的新鲜度,watch 延迟的窗口里两边都会放行;多出一道栅栏之前的判定,与不变量 1 字面冲突;也管不到 location、托管落点这些不经连接的记录 |
+| `SessionMap` 改成按 (实例, 会话号) 做键,让两条同号会话并存 | 不用 | 每个调用点都要改;老进程是要排空的进程,同号两条会话并存没有业务价值;单键、后放行者覆盖,再由身份组件与待入场上下文记实例,足以分辨 |
+| ExitGame 带登录代次(方案 B) | 不用 | 只堵一面,与入场栅栏的会话口径不一致(§6.8) |
+| login 跨实例同号只计数不踢(10-16 的定论) | 改回踢线 | 方案 C 之后旧实例的 ExitGame 不再伤新会话;不踢反而让旧连接一直占着、旧消息照发 |
+
+**水平扩展与一致性。**
+
+- 不新增共享状态、中心表或跨实例协调。实例号随连接(握手)、随持久记录(location 第 10 号字段、托管落点事件第 8 号字段)、
+  随运行时身份(身份组件、待入场上下文、改派条目)走。gate、scene、scene_manager、player_locator 各加多少副本都不用改。
+- scene:判定都在节点主 EventLoop 上读本节点内存,单线程,没有竞争。每条客户端消息多一次身份组件查找和一次字符串比较,O(1);
+  推送按实例找 gate 是对本 zone gate 表的线性扫描,与原来按 (zone, node_id) 扫描同阶。
+- scene_manager:判定读的就是落点 Lua 原文期望用的那一份 location 字节,判定的结论随同一次原子脚本提交,中间没有「判完再写」的窗口。
+  多个副本并发处理同一名玩家时只有一个 CAS 成功,其余回 19 由调用方重试,结论与副本数无关。
+- player_locator(e 方案 A):同样在 GET 到的同一份字节上判,整字节 CAS 提交。
+- login:踢线只在会话记录提交成功之后发,目标实例取旧记录,gate 按 `target_instance_id` 过滤僵尸消费者。
+- 存储:location 只多一个 UUID 量级的字符串,不改键名,不影响 Redis Cluster 的槽分布。旧格式 location 按「实例未知」比较,
+  项目未上线,上线前清档即可。

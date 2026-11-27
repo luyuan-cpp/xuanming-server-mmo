@@ -217,6 +217,10 @@ Deleted、Absent 之后按名字删 owner 行;Bound、OutsideWindow 两边都不
 
 - `removed_role_name`:角色行扫描连墓碑一起扫,按墓碑里留着的原名查。名字行或名字副本还在已删的角色名下(名字片恢复点早于删角释放),先复核墓碑,再按 `(player_id, 判重键)` 条件删(`PlayerNameStore.ReleaseRemoved`,和删角收尾同一步)。名字副本指着别的名字只报告。
 - `orphan_name`:`-target names` 按名字片翻页扫名字行(名字表刻意没有二级索引,按主键翻页、在编排里筛),预留态、登记超过 30 分钟、这个 player_id 没有活角色的就是孤儿:建角回滚的释放没做成(玩家片冻结或不可达时证明写不了墓碑,login 判不出结局、来不及补偿时也会留下)。修法同运维带 token 的释放:先在玩家片证明永远不会提交(工具在同一个事务里先锁本库闸门行;有路由行、没有角色行时写墓碑),再只删预留态。没有角色行时先找提交过的证据(存档库进过场或存过盘、这名角色在某个账号上有 ACTIVE 的 ref、落点不在本次名单里、有 ref 却没有路由行),有就只报告。
+- `bound_name_role_missing`(2026-11-26):同一次名字行扫描里,已绑定的名字整页批量核一次角色行;持有者连角色行(含墓碑)都没有的只报告。绑定只在角色行提交之后做、角色行从不删除,所以它只可能是玩家片恢复点早于提交而名字片晚于绑定。
+  取舍:整页批量核而不是逐条点查,已绑定的名字行数等于全体角色数,逐条点查一次全扫要几百万次往返;只报告、不自动释放,
+  这个名字可能是那名角色存在过的最后证据,释放不可逆,要不要把玩家片恢复到更晚的点由人定。墓碑名下的已绑定名字不在这里报,
+  角色行扫描按 `removed_role_name` 报并能修。
 - 名字每修一处(补回、置绑定、释放)都删这名玩家的名字缓存(`player:name:{id}`,正、负缓存同一个键),修完马上查得到;`-repair name` 必须给 `-name-cache-addrs`(名字缓存 2026-11-13 起在控制集群 `ControlRedis` 上,集群形态再加 `-name-cache-cluster`),删不掉标 `name_cache_not_invalidated`,算要人看。
 
 **失败的计数与告警**(2026-11-12):绑定没做完按原因计 `data_service_account_role_name_bind_failures_total{reason}`(`error`、`taken`、`conflict`、`role_mismatch`、`role_removed`、`rules_changed`),删角收尾没做完按步骤计 `data_service_account_role_removal_settle_failures_total{step}`(`release_name`、`drop_removal_row`),后台 `ResumeRemovals` 每一行的结局计 `data_service_account_role_removal_resume_total{result}`:收尾没做完算 `unsettled`,不再算完成。计数接缝是 `store.DirectoryEvents`(svc 接到 metrics,store 不依赖指标包),告警在 `deploy/k8s/data-service-account-directory-alerts.yaml`。目录自己补回(`BindRestored`)或删角释放名字之后也删名字缓存(`store.NameCacheInvalidator`)。

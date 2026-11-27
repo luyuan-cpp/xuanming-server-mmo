@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -21,6 +22,10 @@ const (
 	StatusFilename = "STATUS.json"
 	// DefaultPruneGrace 是未被引用的旧表包目录保留时长(10 分钟,设计 §7)。
 	DefaultPruneGrace = 10 * time.Minute
+	// MaxRecentUnreferencedBundles 是保留期内最多留几个没人用的包,多出来的从旧到新删。
+	// 保留期只为一个很窄的窗口:业务进程刚读到指针、还没把「正在准备哪一包」写进 STATUS.json,指针就又换走了;
+	// 那一包一定是最近的一两个。不封顶的话,短时间里连发多包会把卷撑过 sizeLimit(见 bundle.MaxBundleBytes)。
+	MaxRecentUnreferencedBundles = 2
 )
 
 // Target 描述一条 schema 线的 current 或 next 表包目标。
@@ -198,7 +203,10 @@ func ReadStatusFile(path string) (*StatusReport, error) {
 	return &st, nil
 }
 
-// PruneUnusedBundles 清理 bundlesDir 中既不被 POINTER 也不被 STATUS 引用、且修改时间超过 grace 的旧表包目录。
+// PruneUnusedBundles 清理 bundlesDir:
+//   - 既不被 POINTER 也不被 STATUS 引用的包目录,放过 grace 就删;没放过 grace 的只留最新的 MaxRecentUnreferencedBundles 个;
+//   - sidecar 自己的临时文件(以 . 开头:.download-*、.extract-*)放过 grace 还在的,是 sidecar 中途被杀留下的,也删掉。
+//     一次下载最长 60 秒,正在用的临时文件不会这么老。
 func PruneUnusedBundles(bundlesDir string, referenced map[string]bool, grace time.Duration, now time.Time) (int, error) {
 	entries, err := os.ReadDir(bundlesDir)
 	if err != nil {
@@ -208,24 +216,41 @@ func PruneUnusedBundles(bundlesDir string, referenced map[string]bool, grace tim
 		return 0, err
 	}
 	removed := 0
+	remove := func(name string) {
+		if err := os.RemoveAll(filepath.Join(bundlesDir, name)); err == nil {
+			removed++
+		}
+	}
+	type recentBundle struct {
+		name    string
+		modTime time.Time
+	}
+	var recent []recentBundle
 	for _, entry := range entries {
 		name := entry.Name()
-		if !entry.IsDir() || strings.HasPrefix(name, ".") {
-			continue
-		}
-		if referenced[name] {
-			continue
-		}
 		info, err := entry.Info()
 		if err != nil {
 			continue
 		}
-		if now.Sub(info.ModTime()) < grace {
+		expired := now.Sub(info.ModTime()) >= grace
+		if strings.HasPrefix(name, ".") {
+			if expired {
+				remove(name)
+			}
 			continue
 		}
-		if err := os.RemoveAll(filepath.Join(bundlesDir, name)); err == nil {
-			removed++
+		if !entry.IsDir() || referenced[name] {
+			continue
 		}
+		if expired {
+			remove(name)
+			continue
+		}
+		recent = append(recent, recentBundle{name: name, modTime: info.ModTime()})
+	}
+	sort.Slice(recent, func(i, j int) bool { return recent[i].modTime.After(recent[j].modTime) })
+	for i := MaxRecentUnreferencedBundles; i < len(recent); i++ {
+		remove(recent[i].name)
 	}
 	return removed, nil
 }

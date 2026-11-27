@@ -142,7 +142,8 @@ Refresh token 续签是"无状态"操作(只看 refresh token 本身,不需要 s
 | AssignGate | 登录界面 | **Java Gateway → login** | gate 不参与 |
 
 2026-11-12 起(已落码,未编译)AssignGate 凭 `/api/login` 签发的 access token 鉴权,账号只从令牌解出;不带令牌的匿名分配只在
-`LegacyGateLoginEnabled` 开着时允许(旧流程先分配 gate、连上再认证)。见 [登录排队](./login-queue-2026-05.md) §5 末尾的更正。
+`LegacyGateLoginEnabled` 开着、并且排队关着时允许(旧流程先分配 gate、连上再认证)。见 [登录排队](./login-queue-2026-05.md) §5 末尾的更正。
+2026-11-26 起 AssignGate 签出的票绑定持票账号,gate 上的 Login 认证出的账号与票不符即拒(login 比对,gate 只透传),见同一文档 §5「票据绑定账号」。
 
 ---
 

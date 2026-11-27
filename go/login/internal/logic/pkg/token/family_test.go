@@ -249,11 +249,11 @@ func TestTokenFamily_IssueRotationAndAccountRevocation(t *testing.T) {
 	if err != nil || fields["account"] != testAccount || fields["head"] != secretOf(t, old.RefreshToken) || fields["prev"] != "" || mr.TTL(key) != testConfig.RefreshTokenTTL {
 		t.Fatal("新认证必须同时提交 family 归属、head 与 TTL")
 	}
-	other, err := m.Issue(ctx, "other-account", testAuthType, testDevice)
+	other, err := m.Issue(ctx, "other-account", testAuthType, testDevice, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := m.Issue(ctx, testAccount, testAuthType, testDevice)
+	second, err := m.Issue(ctx, testAccount, testAuthType, testDevice, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1023,7 +1023,7 @@ func TestTokenFamily_RevokeDoesNotDeleteAuthenticationIssuedAfterCommit(t *testi
 	var next *TokenPair
 	rdb.AddHook(&afterFirstCommand{do: func() {
 		var err error
-		next, err = otherManager.Issue(ctx, testAccount, testAuthType, testDevice)
+		next, err = otherManager.Issue(ctx, testAccount, testAuthType, testDevice, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1043,7 +1043,7 @@ func TestTokenFamily_CrossAccountIndexCorruptionCannotDeleteForeignFamily(t *tes
 	m, rdb, mr := newTestManager(t)
 	ctx := context.Background()
 	issueSeed(t, m)
-	other, err := m.Issue(ctx, "foreign-account", testAuthType, testDevice)
+	other, err := m.Issue(ctx, "foreign-account", testAuthType, testDevice, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1076,7 +1076,7 @@ func TestTokenFamily_WrongIndexTypeWritesNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := familySnapshot(t, mr)
-	if _, err := m.Issue(ctx, testAccount, testAuthType, testDevice); err == nil {
+	if _, err := m.Issue(ctx, testAccount, testAuthType, testDevice, 0); err == nil {
 		t.Fatal("损坏 ZSET 不得签出部分新 pair")
 	}
 	if _, err := m.Refresh(ctx, pair.RefreshToken); err == nil {
@@ -1103,7 +1103,7 @@ func TestTokenFamily_DamagedRevocationCandidateWritesNothing(t *testing.T) {
 			rdb.ZAdd(ctx, testIndexKey, redis.Z{Score: float64(time.Now().Add(testConfig.RefreshTokenTTL).Unix() + 100), Member: secretOf(t, bad.RefreshToken)})
 			switch kind {
 			case "foreign-head":
-				foreign, err := m.Issue(ctx, "foreign-head-account", testAuthType, testDevice)
+				foreign, err := m.Issue(ctx, "foreign-head-account", testAuthType, testDevice, 0)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1217,7 +1217,7 @@ func TestIssue_CollisionIsRejectedWithoutOverwriting(t *testing.T) {
 				}
 			}})
 
-			_, err := m.Issue(context.Background(), testAccount, testAuthType, testDevice)
+			_, err := m.Issue(context.Background(), testAccount, testAuthType, testDevice, 0)
 
 			if err == nil || !strings.Contains(err.Error(), "token identity collision") {
 				t.Fatalf("err = %v, want 撞键", err)
@@ -1343,7 +1343,7 @@ func TestTokenFamily_RealRedis(t *testing.T) {
 	issue := func(t *testing.T, mgr *Manager, acct string) *TokenPair {
 		t.Helper()
 		keys = append(keys, redisslot.AccountRefreshKey(acct))
-		pair, err := mgr.Issue(ctx, acct, testAuthType, testDevice)
+		pair, err := mgr.Issue(ctx, acct, testAuthType, testDevice, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1479,7 +1479,7 @@ func TestTokenFamily_RealRedis(t *testing.T) {
 		localKeys := []string{setKey}
 		var bad *TokenPair
 		for range 2 {
-			pair, err := m.Issue(ctx, nullAccount, testAuthType, testDevice)
+			pair, err := m.Issue(ctx, nullAccount, testAuthType, testDevice, 0)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1523,7 +1523,7 @@ func TestTokenFamily_RealRedis(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			caseAccount := account + "-" + kind
 			keys = append(keys, redisslot.AccountRefreshKey(caseAccount))
-			pair, err := m.Issue(ctx, caseAccount, testAuthType, testDevice)
+			pair, err := m.Issue(ctx, caseAccount, testAuthType, testDevice, 0)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -2,10 +2,10 @@
 
 审计文档：[data-overwrite-rollback-audit-r2-20261019.md](../design/data-overwrite-rollback-audit-r2-20261019.md)。逐条最终状态以 §5.0 为准，各批收口记在 §6。
 
-**2026-11-26 晚更正：代码还没修完。** 以下三处由 Claude 在修：
-- 第 4 轮查找报的 3 条 high、4 条 medium；
-- 11-19 评审记下的约 30 条建议；
-- 早期各批的 4 条遗留（审计 §6「2026-11-26 清点」）。
+**2026-11-26 晚更正：代码还没修完。** Claude 的 Fable 周额度当晚用完，以下三处的复核和改码都交 Gemini 4 Neon Extra：
+- 第 4 轮查找报的 3 条 high、4 至 6 条 medium：`docs/handoff/data-overwrite-audit-r2-round4-handoff-20261126.md`（第 4 轮会话在写）；
+- 11-19 评审剩下的建议：`docs/handoff/review-suggestions-remaining-handoff-20261126.md` 第 1~3 节；
+- 早期各批的 4 条遗留：同一份交接单第 4 节（出处在审计 §6「2026-11-26 清点」）。
 
 下表的条目可以先验，但这三处修完会新增 PROGRESS 条目，受影响的模块要重跑。最省事的是等审计 §1「仍开着」清空之后，再整体跑一遍。
 

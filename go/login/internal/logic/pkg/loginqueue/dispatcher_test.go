@@ -94,7 +94,7 @@ func mustNewDispatcher(t *testing.T, q *Queue, prov CapacityProvider, rdb *redis
 // SignAdmitFn to turn that slot into an AdmitToken at consume time. The
 // stub copies slot fields straight through and stamps a fixed deadline,
 // matching what production handlers do via SignGateToken.
-func stubSignFn(slot *AdmitSlot) (*AdmitToken, error) {
+func stubSignFn(slot *AdmitSlot, _ string) (*AdmitToken, error) {
 	return &AdmitToken{
 		IP:            slot.IP,
 		Port:          slot.Port,

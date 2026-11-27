@@ -13,7 +13,6 @@ import (
 	"shared/authoritysql"
 
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-zero/core/syncx"
 )
 
 // fakeGateRowConnector 只回答闸门行那条读。
@@ -64,7 +63,9 @@ func TestPlayerStorePoolOpenFrozenDoesNotBackOff(t *testing.T) {
 	const storage = uint32(1000000)
 	opens := 0
 	var result error
-	pools := &PlayerStorePools{allowed: map[uint32]bool{storage: true}, now: time.Now, flight: syncx.NewSingleFlight(), pools: map[uint32]*sql.DB{}, failures: map[uint32]playerStoreOpenFailure{},
+	clock := time.Unix(1_800_000_000, 0)
+	once := newOpenOnce[*sql.DB]("player store under test", func() time.Time { return clock })
+	pools := &PlayerStorePools{allowed: map[uint32]bool{storage: true}, opens: map[uint32]*openOnce[*sql.DB]{storage: once},
 		opener: func(string) (*sql.DB, error) {
 			opens++
 			if result != nil {
@@ -82,7 +83,6 @@ func TestPlayerStorePoolOpenFrozenDoesNotBackOff(t *testing.T) {
 	_, _, err = pools.DB(ctx, storage)
 	require.True(t, authoritysql.IsWriterFrozen(err))
 	require.Equal(t, 2, opens, "冻结不进冷却,每次都再试")
-	require.Empty(t, pools.failures)
 
 	result = errors.New("connection refused")
 	_, _, err = pools.DB(ctx, storage)
@@ -91,12 +91,17 @@ func TestPlayerStorePoolOpenFrozenDoesNotBackOff(t *testing.T) {
 	require.Error(t, err)
 	require.Equal(t, 3, opens, "真的打不开才冷却")
 
-	// 解冻之后打开成功。
-	pools.failures = map[uint32]playerStoreOpenFailure{}
+	// 冷却过了才再试,这一次打开成功;之后常驻,不再打开。
+	clock = clock.Add(lazyOpenBackoff)
 	result = nil
 	db, _, err := pools.DB(ctx, storage)
 	require.NoError(t, err)
 	require.NotNil(t, db)
+	require.Equal(t, 4, opens)
+	again, _, err := pools.DB(ctx, storage)
+	require.NoError(t, err)
+	require.Same(t, db, again)
+	require.Equal(t, 4, opens)
 }
 
 // admission_recover 用维护身份,不过闸门。闸门冻结时同事务拒绝,什么都不写;别的读失败也不能当成开着。

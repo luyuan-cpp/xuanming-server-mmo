@@ -42,7 +42,8 @@ management:
           include: readinessState
 jeecg:
   shiro:
-    excludeUrls: ''
+    # 企业登录的三个入口发生在拿到会话之前，必须对 Shiro 匿名开放；它们的访问保护在 GmInstallation 与 GmOidcLogin。
+    excludeUrls: /gm/sso/config,/gm/sso/authorize,/gm/sso/token
   path:
     upload: ${GM_UPLOAD_PATH}
     webapp: ${GM_UPLOAD_PATH}
@@ -52,6 +53,31 @@ logging:
     org.jeecg.config.shiro: WARN
 gm:
   bootstrap-password: ${GM_BOOTSTRAP_PASSWORD:}
+  identity:
+    # oidc：生产用，登录走外部身份提供方，原生口令登录与原生管理页关闭。
+    # native：本机开发用，口令在后台自己库里；监听地址不是回环就拒绝启动。
+    mode: ${GM_IDENTITY_MODE:native}
+  oidc:
+    issuer: ${GM_OIDC_ISSUER:}
+    client-id: ${GM_OIDC_CLIENT_ID:}
+    client-secret: ${GM_OIDC_CLIENT_SECRET:}
+    # 必须与在身份提供方登记的回调地址逐字相同，指向后台前端的登录页。
+    redirect-uri: ${GM_OIDC_REDIRECT_URI:}
+    scope: ${GM_OIDC_SCOPE:openid profile}
+    # 当操作人标识用的声明；必须稳定、不会换人，且只含字母数字和 . _ @ -，最长 64 个字符。
+    subject-claim: ${GM_OIDC_SUBJECT_CLAIM:sub}
+    groups-claim: ${GM_OIDC_GROUPS_CLAIM:groups}
+    name-claim: ${GM_OIDC_NAME_CLAIM:name}
+    # JSON 对象：身份提供方的分组名 → 后台角色编码，例如 {"gm-admins":"admin"}。角色每次登录按它整体替换。
+    role-mapping: '${GM_OIDC_ROLE_MAPPING_JSON:{}}'
+    # 会话上限（小时），到期不续，需要重新登录。
+    session-hours: ${GM_OIDC_SESSION_HOURS:12}
+  dual-control:
+    # 双人复核：流水里的写命令要另一名管理员批准才执行。oidc 模式恒开（设成 false 会拒绝启动）；
+    # native 模式缺省关，一个人能跑通；设成 true 可以用两个本地账号测。
+    enforce: ${GM_DUAL_CONTROL_ENFORCE:}
+    # 申请多久没人批准就作废（小时）。玩家 GM 另有五分钟的草稿时限，邮件另受自身到期时间约束。
+    approval-ttl-hours: ${GM_DUAL_CONTROL_APPROVAL_TTL_HOURS:24}
   game:
     gateway-url: ${GM_GATEWAY_URL:http://127.0.0.1:8081}
     gateway-admin-key: ${GM_GATEWAY_ADMIN_KEY:}
@@ -63,3 +89,7 @@ gm:
     scene-targets-json: '${GM_SCENE_TARGETS_JSON:{}}'
     scene-etcd-url: ${GM_SCENE_ETCD_URL:}
     scene-admin-secret: ${GM_SCENE_ADMIN_SECRET:}
+    # 交易人工处置(TradeAdmin):trade 的 gRPC 地址,与 trade 配置 Commerce.ManualResolutionSecretEnv 指名的同一把密钥(调用方 ops-commerce)。
+    # 这把密钥只挂给后台这个工作负载,不发给个人;任一项为空时交易人工处置页只读不可用。
+    trade-target: ${GM_TRADE_TARGET:}
+    trade-admin-secret: ${GM_TRADE_ADMIN_SECRET:}

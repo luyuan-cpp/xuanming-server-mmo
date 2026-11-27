@@ -29,6 +29,9 @@ class AdminProblemAdvice {
     /**
      * 控制器抛出的 400 / 412 / 428:原样回状态、头与错误体,同时记一行 WARN(路径里有区服号,错误体里只有字段名与原因码,
      * 都不含请求里的值)。
+     *
+     * <p>约定:这两个控制器只经 {@link AdminProblems} 抛错。{@code ResponseStatusException} 是 {@link ErrorResponseException}
+     * 的子类,直接抛它也会走到这里,原因文案原样进 detail、没有 reason 码,调用方就没法按原因码分支了。
      */
     @ExceptionHandler(ErrorResponseException.class)
     ResponseEntity<ProblemDetail> problem(ErrorResponseException e, HttpServletRequest request) {

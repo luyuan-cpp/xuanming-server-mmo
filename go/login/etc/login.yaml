@@ -528,7 +528,7 @@ AuthProviders:
 #      下滚完:排队开着混跑时,旧版 leader 弹出、尚未写完的条目会被新版判为 queue_gone 并打回队尾,上面「不丢人」在
 #      本版本的升级窗口里不成立。
 #   1. Deploy with Enabled=false → verify no behavior change.
-#   2. Set zone_config.capacity for each live zone (PUT /admin/zones/<id> on the gateway; use observed
+#   2. Set zone_config.capacity for each live zone (PUT /admin/zones/<id> on the gateway, with the ETag of a prior GET in If-Match; use observed
 #      peak * 0.9 as the initial value; tune from there) and size gate replicas so that
 #      replicas * GateMaxConnections * 90% >= capacity (login_queue_capacity shows the effective value).
 #   3. Flip Enabled=true on one canary login pod, watch admit/queue counters.

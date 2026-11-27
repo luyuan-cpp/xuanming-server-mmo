@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-zero/core/syncx"
 	"google.golang.org/protobuf/proto"
 
 	componentpb "proto/common/component"
@@ -60,19 +59,18 @@ const fakeStorePoolMaxOpen = 2
 // fakeStorePools 给每个落点配好连接池和读名额,不走打开。openFailed 里的落点打开失败,处在冷却期。
 func fakeStorePools(t *testing.T, connectors map[uint32]fakeStoreConnector, openFailed map[uint32]error) *PlayerStorePools {
 	t.Helper()
-	pools := &PlayerStorePools{allowed: map[uint32]bool{}, now: time.Now, flight: syncx.NewSingleFlight(), reads: map[uint32]readSlots{},
-		pools: map[uint32]*sql.DB{}, failures: map[uint32]playerStoreOpenFailure{}}
+	pools := &PlayerStorePools{allowed: map[uint32]bool{}, reads: map[uint32]readSlots{}, opens: map[uint32]*openOnce[*sql.DB]{}}
 	for storage, connector := range connectors {
 		db := sql.OpenDB(connector)
 		t.Cleanup(func() { _ = db.Close() })
 		pools.allowed[storage] = true
 		pools.reads[storage] = newReadSlots(fakeStorePoolMaxOpen)
-		pools.pools[storage] = db
+		pools.opens[storage] = openedForTest(db)
 	}
 	for storage, err := range openFailed {
 		pools.allowed[storage] = true
 		pools.reads[storage] = newReadSlots(fakeStorePoolMaxOpen)
-		pools.failures[storage] = playerStoreOpenFailure{at: pools.now(), err: err}
+		pools.opens[storage] = failedOpenForTest[*sql.DB](err)
 	}
 	return pools
 }

@@ -16,7 +16,14 @@ var (
 	tableBundleInfo = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "table_bundle_info",
 		Help: "Currently active config table bundle identity (constant 1; one series per process).",
-	}, []string{"schema_digest", "content_digest", "source"})
+	}, []string{"release_track", "schema_digest", "content_digest", "source"})
+
+	// table_bundle_needs_restart 是「此刻停在 needs_restart」的状态量,TableBundleNeedsRestart 告警靠它判断「超过 24 小时没重启」。
+	// table_reload_total{result="needs_restart"} 是事件计数,只能说明发生过,说明不了现在还停在那里。
+	tableBundleNeedsRestart = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "table_bundle_needs_restart",
+		Help: "1 while the pointer targets a bundle that changes non-hot-reloadable tables and this process waits for a restart; 0 otherwise.",
+	})
 
 	tableReloadTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "table_reload_total",
@@ -31,6 +38,7 @@ var (
 )
 
 type infoLabels struct {
+	releaseTrack  string
 	schemaDigest  string
 	contentDigest string
 	source        string
@@ -40,6 +48,7 @@ func registerMetrics() {
 	metricsOnce.Do(func() {
 		for _, c := range []prometheus.Collector{
 			tableBundleInfo,
+			tableBundleNeedsRestart,
 			tableReloadTotal,
 			tableReloadPrepareSeconds,
 		} {
@@ -62,9 +71,10 @@ func shortDigest(digest string) string {
 }
 
 // setActiveBundleMetric 确保每个进程任意时刻仅暴露一条 table_bundle_info 序列(设计 §11)。
-func setActiveBundleMetric(schemaDigest, contentDigest, source string) {
+func setActiveBundleMetric(releaseTrack, schemaDigest, contentDigest, source string) {
 	registerMetrics()
 	next := infoLabels{
+		releaseTrack:  releaseTrack,
 		schemaDigest:  schemaDigest,
 		contentDigest: shortDigest(contentDigest),
 		source:        source,
@@ -73,13 +83,23 @@ func setActiveBundleMetric(schemaDigest, contentDigest, source string) {
 	defer metricsMu.Unlock()
 	if activeInfoLabels != nil && *activeInfoLabels != next {
 		tableBundleInfo.DeleteLabelValues(
+			activeInfoLabels.releaseTrack,
 			activeInfoLabels.schemaDigest,
 			activeInfoLabels.contentDigest,
 			activeInfoLabels.source,
 		)
 	}
-	tableBundleInfo.WithLabelValues(next.schemaDigest, next.contentDigest, next.source).Set(1)
+	tableBundleInfo.WithLabelValues(next.releaseTrack, next.schemaDigest, next.contentDigest, next.source).Set(1)
 	activeInfoLabels = &next
+}
+
+func observePendingState(pendingState string) {
+	registerMetrics()
+	if pendingState == "needs_restart" {
+		tableBundleNeedsRestart.Set(1)
+	} else {
+		tableBundleNeedsRestart.Set(0)
+	}
 }
 
 func observeReloadResult(result string) {

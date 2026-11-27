@@ -94,7 +94,7 @@ func main() {
 	// 拿不到(空)时 loginAndEnterWithAuth 自己会回落到主认证。
 	pkg.SetRedirectRelogin(func(gc *pkg.GameClient) error {
 		access, _, accessExpire, _ := gc.SnapshotTokens()
-		return loginAndEnterWithAuth(gc, cfg, stats, access, accessExpire)
+		return loginAndEnterWithAuth(gc, cfg, stats, access, accessExpire, nil)
 	})
 
 	// Features-smoke never invokes the common auto-create login/relogin path.
@@ -475,11 +475,32 @@ func runRobotOnce(account string, cfg *config.Config, stats *metrics.Stats, stop
 	// Fetch a fresh gate token for each connection attempt so the gate token
 	// TTL (10min since Round 19, see login assigngatelogic.gateTokenTTL) is
 	// never stale — even under high robot counts or retry backoff.
-	// 重连时带上一轮的 access token:login 鉴权后对仍有在线会话的账号免排队,与真实客户端同一口径;首次登录没有令牌,匿名分配。
-	host, portStr, tokenPayload, tokenSig, err := resolveGateViaHTTPLocal(cfg, reusableAccessToken(prevAccessToken, prevAccessExpire))
+	// 分配 gate 带 access token,与 Unity 客户端同序:重连带上一轮的令牌(login 鉴权后对仍有在线会话的账号免排队);
+	// use_http_login 的首次登录先走 /api/login 拿令牌再分配。排队开着时 login 不接匿名分配,签出的票也只对令牌里的账号有效
+	// (docs/design/login-queue-2026-05.md §5「票据绑定账号」)。/api/login 失败时照旧匿名分配、连上 gate 再认证,只在排队关着时走得通。
+	assignToken := reusableAccessToken(prevAccessToken, prevAccessExpire)
+	var httpLoggedIn *httpLoginResponse
+	httpLoginSaToken := ""
+	if assignToken == "" && cfg.UseHttpLogin {
+		rsp, saToken, loginErr := httpLoginTokens(account, cfg)
+		if loginErr != nil {
+			revokeSaToken(cfg.SaTokenAddr, saToken)
+			zap.L().Warn("http-login before assign-gate failed; assigning anonymously", zap.String("account", account), zap.Error(loginErr))
+		} else {
+			httpLoggedIn, assignToken, httpLoginSaToken = rsp, rsp.AccessToken, saToken
+			// 这一轮后面失败时把新令牌交回外层,下一轮直接拿它分配、绑定,不再登录一次。
+			newAccessToken, newAccessExpire = rsp.AccessToken, rsp.AccessTokenExpire
+		}
+	}
+	host, portStr, tokenPayload, tokenSig, err := resolveGateViaHTTPLocal(cfg, assignToken)
 	if err != nil {
 		zap.L().Error("resolve gate address failed", zap.String("account", account), zap.Error(err))
 		stats.LoginFail()
+		revokeSaToken(cfg.SaTokenAddr, httpLoginSaToken)
+		if errors.Is(err, errAssignGateUnauthenticated) {
+			// 令牌被拒(已吊销),匿名分配也不收:丢掉缓存的令牌,下一轮重新登录,不再拿它分配。
+			newAccessToken, newAccessExpire = "", 0
+		}
 		return
 	}
 	port, _ := strconv.Atoi(portStr)
@@ -488,8 +509,10 @@ func runRobotOnce(account string, cfg *config.Config, stats *metrics.Stats, stop
 	if err != nil {
 		zap.L().Error("connect failed", zap.String("account", account), zap.Error(err))
 		stats.LoginFail()
+		revokeSaToken(cfg.SaTokenAddr, httpLoginSaToken)
 		return
 	}
+	gc.SaToken = httpLoginSaToken // 会话结束时吊销;为空 = 这一轮没有在分配前换过 SA-Token
 	// 断线通知由 gate 在 TCP 关闭时合成(带会话代次,client_session_handler.cpp 的连接关闭处理),
 	// 这里只需关连接:login 收到后把 player_locator 会话转成 Disconnecting(带重连租约),
 	// 下一轮 EnterGame 不会被残留的 ONLINE 会话顶成 ReplaceLogin。客户端不得自己发 Disconnect:
@@ -517,7 +540,7 @@ func runRobotOnce(account string, cfg *config.Config, stats *metrics.Stats, stop
 	}
 
 	loginStart := time.Now()
-	if err := loginAndEnterWithAuth(gc, cfg, stats, prevAccessToken, prevAccessExpire); err != nil {
+	if err := loginAndEnterWithAuth(gc, cfg, stats, prevAccessToken, prevAccessExpire, httpLoggedIn); err != nil {
 		zap.L().Error("login flow failed", zap.String("account", account), zap.Error(err))
 		return
 	}
@@ -724,8 +747,8 @@ type gateAssignmentLocal struct {
 }
 
 // resolveGateAddrLocal keeps main.go runnable as a single-file command.
-// 不带 access token,匿名分配:各冒烟场景都是先分配 gate、连上之后才认证,只在 login 的旧 gate 凭据登录还开着时可用。
-// 主压测循环的重连带上一轮的令牌,见 runRobotOnce。
+// 不带 access token,匿名分配:各冒烟场景都是先分配 gate、连上之后才认证,只在 login 的旧 gate 凭据登录还开着、
+// 并且排队关着时可用(排队开着时 login 不接匿名分配)。主压测循环带令牌分配,见 runRobotOnce。
 func resolveGateAddrLocal(cfg *config.Config) (host, port string, payload, signature []byte, err error) {
 	return resolveGateViaHTTPLocal(cfg, "")
 }
@@ -748,8 +771,8 @@ func reusableAccessToken(accessToken string, accessExpire int64) string {
 // robots actually exercise the queue path instead of treating it as an error.
 //
 // accessToken 非空时带上(login 鉴权后对已有在线会话的账号免排队,与真实客户端重连同一口径);
-// 被拒(code=401:过期或已吊销)就丢掉、改匿名分配。匿名也被拒说明 login 已关旧 gate 凭据登录,
-// 先分配后认证的流程走不通,重试也不会变,直接返回错误。
+// 被拒(code=401:过期或已吊销)就丢掉、改匿名分配。匿名也被拒说明 login 已关旧 gate 凭据登录或开着排队,
+// 先分配后认证的流程走不通,重试也不会变,直接返回错误(runRobotOnce 据此丢掉缓存的令牌,下一轮先登录)。
 func resolveGateViaHTTPLocal(cfg *config.Config, accessToken string) (host, port string, payload, signature []byte, err error) {
 	zoneID := cfg.ZoneID
 	if zoneID == 0 {
@@ -769,7 +792,7 @@ func resolveGateViaHTTPLocal(cfg *config.Config, accessToken string) (host, port
 		}
 		if errors.Is(assignErr, errAssignGateUnauthenticated) {
 			if accessToken == "" {
-				return "", "", nil, nil, fmt.Errorf("anonymous AssignGate rejected (legacy gate login is disabled on login): %w", assignErr)
+				return "", "", nil, nil, fmt.Errorf("anonymous AssignGate rejected (legacy gate login is disabled, or the login queue is on; set use_http_login: true): %w", assignErr)
 			}
 			zap.L().Info("AssignGate rejected the previous access token; retrying anonymously", zap.Error(assignErr))
 			accessToken = ""
@@ -935,7 +958,11 @@ func loginAndEnterLocal(gc *pkg.GameClient, password string, stats *metrics.Stat
 // FollowRedirect 返回的错误目前只被 logic/handler 的重定向处理器记一行日志,RecvLoop 继续读这条未认证的新连接
 // (muduo 的 Close 也唤不醒它),会话就此空转到 stop,仍按已连接计数。这是「确定失败、不做有竞态的回落」的代价;
 // 让重定向失败结束会话要改 logic/handler 与 pkg,不在本文件范围。
-func loginAndEnterWithAuth(gc *pkg.GameClient, cfg *config.Config, stats *metrics.Stats, prevAccessToken string, prevAccessExpire int64) error {
+//
+// httpLoggedIn 非 nil:调用方在分配 gate 之前已经走过 /api/login(runRobotOnce,分配要带令牌),http 登录这一支直接拿它在 gate 上
+// 绑定会话,不再登录一次。其余调用方传 nil。
+func loginAndEnterWithAuth(gc *pkg.GameClient, cfg *config.Config, stats *metrics.Stats, prevAccessToken string, prevAccessExpire int64,
+	httpLoggedIn *httpLoginResponse) error {
 	// Use access_token reconnect when available and with at least 60s of TTL left.
 	if reusableAccessToken(prevAccessToken, prevAccessExpire) != "" {
 		if err := loginAndEnterAccessToken(gc, prevAccessToken, stats); err == nil {
@@ -958,7 +985,7 @@ func loginAndEnterWithAuth(gc *pkg.GameClient, cfg *config.Config, stats *metric
 	// channel just to bind the session. Falls back to legacy on any
 	// non-2xx so a half-rolled gateway doesn't break stress runs.
 	if cfg.UseHttpLogin {
-		if err := loginAndEnterViaHttpGateway(gc, cfg, stats); err == nil {
+		if err := loginAndEnterViaHttpGateway(gc, cfg, stats, httpLoggedIn); err == nil {
 			return nil
 		} else if errors.Is(err, errLoginStuck) {
 			// 同上:gate 上的握手已超时,这条连接不能再用(errLoginStuck)。
@@ -987,29 +1014,53 @@ func loginAndEnterWithAuth(gc *pkg.GameClient, cfg *config.Config, stats *metric
 // This is exactly the static-shape we want for production clients: one
 // HTTP round trip moves the OAuth/3rd-party heavy lifting off the gate, and
 // the gate Login RPC degenerates into a Redis lookup + a Kafka BindSession.
-func loginAndEnterViaHttpGateway(gc *pkg.GameClient, cfg *config.Config, stats *metrics.Stats) error {
+//
+// httpLoggedIn 非 nil 时不再登录,直接用它(调用方在分配 gate 之前已经登录过,见 loginAndEnterWithAuth)。
+func loginAndEnterViaHttpGateway(gc *pkg.GameClient, cfg *config.Config, stats *metrics.Stats, httpLoggedIn *httpLoginResponse) error {
+	rsp := httpLoggedIn
+	if rsp == nil {
+		loggedIn, saToken, err := httpLoginTokens(gc.Account, cfg)
+		if saToken != "" {
+			gc.SaToken = saToken
+		}
+		if err != nil {
+			stats.LoginFail()
+			return err
+		}
+		rsp = loggedIn
+	}
+	gc.SetTokens(rsp.AccessToken, rsp.RefreshToken, rsp.AccessTokenExpire, rsp.RefreshTokenExpire)
+
+	// Now run the cheap path on the gate TCP channel: server sees
+	// auth_type="access_token" and skips provider validation entirely.
+	return loginAndEnterAccessToken(gc, rsp.AccessToken, stats)
+}
+
+// httpLoginTokens 走一次 Java Gateway 的 POST /api/login,成功时返回带 access token 的回包。
+//
+// 两个调用方:loginAndEnterViaHttpGateway(连上 gate 之后),runRobotOnce(分配 gate 之前,见那里的说明)。
+// 失败不计数,由调用方决定算不算一次 LoginFail。
+//
+// satoken 方式先向 SA-Token 换凭据,与旧的 SA-Token 流程相同,只是凭据交换走 HTTP。换到的凭据随返回值交出
+// (之后 /api/login 失败也照样返回):调用方要把它记到连接上,会话结束时吊销。
+func httpLoginTokens(account string, cfg *config.Config) (rsp *httpLoginResponse, saToken string, err error) {
 	loginReq := &httpLoginRequest{
 		ZoneID:   cfg.ZoneID,
-		Account:  gc.Account,
+		Account:  account,
 		Password: cfg.Password,
 		AuthType: cfg.AuthType,
 	}
-	// SA-Token path: behave exactly like the legacy SA-Token flow, only
-	// the credential exchange happens over HTTP instead of via the gate.
 	if cfg.AuthType == "satoken" {
-		tok, err := fetchSaToken(cfg.SaTokenAddr, gc.Account)
+		saToken, err = fetchSaToken(cfg.SaTokenAddr, account)
 		if err != nil {
-			stats.LoginFail()
-			return fmt.Errorf("fetch satoken: %w", err)
+			return nil, "", fmt.Errorf("fetch satoken: %w", err)
 		}
-		gc.SaToken = tok
-		loginReq.AuthToken = tok
+		loginReq.AuthToken = saToken
 	}
 
-	rsp, err := httpLogin(cfg.GatewayAddr, loginReq, 10*time.Second)
+	rsp, err = httpLogin(cfg.GatewayAddr, loginReq, 10*time.Second)
 	if err != nil {
-		stats.LoginFail()
-		return fmt.Errorf("/api/login: %w", err)
+		return nil, saToken, fmt.Errorf("/api/login: %w", err)
 	}
 	switch rsp.Code {
 	case 0:
@@ -1018,21 +1069,14 @@ func loginAndEnterViaHttpGateway(gc *pkg.GameClient, cfg *config.Config, stats *
 		// queue / rate-limit — surface as "fail" so the outer retry loop
 		// honours the backoff. retry_after_ms hint is logged but the
 		// outer loop owns the actual sleep.
-		stats.LoginFail()
-		return fmt.Errorf("/api/login queue (code=%d retry_after_ms=%d)", rsp.Code, rsp.RetryAfterMs)
+		return nil, saToken, fmt.Errorf("/api/login queue (code=%d retry_after_ms=%d)", rsp.Code, rsp.RetryAfterMs)
 	default:
-		stats.LoginFail()
-		return fmt.Errorf("/api/login error code=%d msg=%s", rsp.Code, rsp.Message)
+		return nil, saToken, fmt.Errorf("/api/login error code=%d msg=%s", rsp.Code, rsp.Message)
 	}
 	if rsp.AccessToken == "" {
-		stats.LoginFail()
-		return fmt.Errorf("/api/login returned empty access_token")
+		return nil, saToken, fmt.Errorf("/api/login returned empty access_token")
 	}
-	gc.SetTokens(rsp.AccessToken, rsp.RefreshToken, rsp.AccessTokenExpire, rsp.RefreshTokenExpire)
-
-	// Now run the cheap path on the gate TCP channel: server sees
-	// auth_type="access_token" and skips provider validation entirely.
-	return loginAndEnterAccessToken(gc, rsp.AccessToken, stats)
+	return rsp, saToken, nil
 }
 
 // errLoginStuck 标记同步握手(sendAndRecvLocal 与 login.go 的 sendAndRecvTimeout)在预算内没等到回包。

@@ -59,6 +59,10 @@ inline SessionDetails Build(SessionId sessionId, Guid playerId, uint32_t gateNod
 	{
 		sessionDetails.set_ticket_player_id(session->ticketPlayerId);
 		sessionDetails.set_ticket_target_zone_id(session->ticketTargetZoneId);
+		if (!session->ticketAccountDigest.empty())
+		{
+			sessionDetails.set_ticket_account_digest(session->ticketAccountDigest);
+		}
 		sessionDetails.set_session_incarnation(session->incarnation);
 		sessionDetails.set_owner_revision(session->ownerRevision);
 		if (!session->authenticatedAccount.empty())

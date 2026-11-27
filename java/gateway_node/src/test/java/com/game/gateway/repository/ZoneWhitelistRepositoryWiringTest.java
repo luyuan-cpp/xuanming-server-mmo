@@ -64,6 +64,21 @@ class ZoneWhitelistRepositoryWiringTest {
         assertEquals(1, repo.findByZoneId(ZONE).size());
     }
 
+    /**
+     * 行号撞上别的业务键的行(不同副本同一毫秒发了同一个行号,2026-11-26):ODKU 命中的是主键,不能改那一行的 note,
+     * 本键也没写进去(控制器回读发现后回滚重试)。修复前那一行的 note 被改成这次的。
+     */
+    @Test
+    void upsertWithACollidingRowIdLeavesTheOtherRowUntouched() {
+        repo.upsertRow(77L, ZONE, ACCOUNT, "mine");
+
+        repo.upsertRow(77L, ZONE, ACCOUNT + 1, "theirs");
+
+        assertEquals("mine", repo.findByZoneIdAndAccountId(ZONE, ACCOUNT).orElseThrow().getNote(),
+                "行号撞上别的业务键时不能改那一行的 note");
+        assertTrue(repo.findByZoneIdAndAccountId(ZONE, ACCOUNT + 1).isEmpty(), "撞号时本键没写进去");
+    }
+
     @Test
     void deleteByNaturalKeyRunsInItsOwnTransactionAndReportsAffectedRows() {
         repo.upsert(ZONE, ACCOUNT, "x");

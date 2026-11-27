@@ -47,6 +47,10 @@ func TestPassportProviderValidatesTokenAndUsesWellKnownJWKS(t *testing.T) {
 			if res.Account != "passport_550e8400-e29b-41d4-a716-446655440000" {
 				t.Fatalf("account = %q", res.Account)
 			}
+			// 签发时刻要交给令牌载荷,刷新前与通行证的改密时刻比(§3.6)。
+			if res.IdentityIssuedAt != now {
+				t.Fatalf("IdentityIssuedAt = %d, want the token iat %d", res.IdentityIssuedAt, now)
+			}
 			if got := <-stub.paths; got != tc.wantPath {
 				t.Fatalf("JWKS path = %q, want %q", got, tc.wantPath)
 			}

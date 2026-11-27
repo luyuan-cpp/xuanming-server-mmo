@@ -307,18 +307,12 @@ func NewRouteStore(cfg MySQLConfig, opts RouteStoreOptions) (*RouteStore, error)
 	if err := opts.validate(); err != nil {
 		return nil, err
 	}
-	shards, err := openShardPools(cfg, func(one MySQLConfig) (*sql.DB, error) {
-		db, err := openMySQLWithDSN(one, buildRouteDSN(one))
-		if err != nil {
-			return nil, err
+	shards, err := openShardPools(cfg, func(one MySQLConfig) (string, poolCheck) {
+		return buildRouteDSN(one), func(db *sql.DB) error {
+			ctx, cancel := context.WithTimeout(context.Background(), routeProbeTimeout)
+			defer cancel()
+			return verifyRouteShard(ctx, db, one.DBName)
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), routeProbeTimeout)
-		defer cancel()
-		if err := verifyRouteShard(ctx, db, one.DBName); err != nil {
-			_ = db.Close()
-			return nil, err
-		}
-		return db, nil
 	})
 	if err != nil {
 		// 不写 cfg.Host:这条错误会打到 route_tool 的 stderr 和启动日志,物理地址不出错误文案(AGENTS.md §11.3)。

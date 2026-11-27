@@ -16,6 +16,7 @@
 package loginqueue
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -94,12 +95,13 @@ func (c GateCandidate) load() uint64 {
 // (2026-11-05)取走现签之前还会复核放行时选定的 gate,不合格就用 PickGate 的规则重挑,见 admit_recheck.go 的 NewAdmitSigner。
 //
 // 签票成功后给选中的 gate 记一张在途票(inflight 为 nil 时不记),本进程后面的挑选会把它算进那台的负载,见 gate_inflight.go。
-func PickAndSignGateToken(candidates []GateCandidate, inflight *GateInflight, secret []byte, ttl time.Duration) (*AdmitToken, error) {
+// account 是持票账号,见 SignGateToken。
+func PickAndSignGateToken(candidates []GateCandidate, inflight *GateInflight, secret []byte, ttl time.Duration, account string) (*AdmitToken, error) {
 	gate, err := PickGate(candidates)
 	if err != nil {
 		return nil, err
 	}
-	admit, err := SignGateToken(gate, secret, ttl)
+	admit, err := SignGateToken(gate, secret, ttl, account)
 	if err != nil {
 		return nil, err
 	}
@@ -203,24 +205,52 @@ func (p *gatePicker) lighter(i, j int) bool {
 // Caller is responsible for handing AdmitToken back to the client (write
 // to admit:{queueId}, return inline in AssignGateResponse, etc.). The
 // shape mirrors what AssignGateResponse expects.
-func SignGateToken(gate *GateCandidate, secret []byte, ttl time.Duration) (*AdmitToken, error) {
-	return signGateToken(gate, secret, ttl, 0)
+//
+// account 是持票账号(2026-11-26 起):非空时这张票只对这个账号有效,login 在 gate 上的 Login 认证出账号之后比对
+// (TicketIssuedTo)。空串 = 不绑,只有排队关着时的匿名分配会传空串。
+func SignGateToken(gate *GateCandidate, secret []byte, ttl time.Duration, account string) (*AdmitToken, error) {
+	return signGateToken(gate, secret, ttl, 0, account)
 }
 
 // SignMigrationGateToken 给 gate 排空迁移签票(docs/design/gate-drain-session-migration.md §4.4)。
 //
-// 载荷与 SignGateToken 是同一份(同一个 signGateToken),只多绑一个持票人:
+// 载荷与 SignGateToken 是同一份(同一个 signGateToken),按连接所处的阶段绑持票人:
 //   - playerID 非 0(游戏中的连接):login EnterGame 只放这名玩家进游戏(持票人检查,cross-zone-scene-travel.md CZ-8);
-//   - playerID 为 0(停在选角界面的连接):等同一张普通 AssignGate 票据。
+//   - playerID 为 0(停在选角界面的连接):绑这条连接登录的账号(account),与普通 AssignGate 票据相同。
 //
 // target_zone_id 恒为 0,**不能**像跨 zone 重定向那样填本 zone:票据钉了本 zone,login 会发 ZoneId = 本 zone 的 EnterScene,
 // scene_manager 的 resumeSceneOf 就不生效,玩家被放到默认大世界(设计文档 §3 第 1 条)。
-func SignMigrationGateToken(gate *GateCandidate, secret []byte, ttl time.Duration, playerID uint64) (*AdmitToken, error) {
-	return signGateToken(gate, secret, ttl, playerID)
+func SignMigrationGateToken(gate *GateCandidate, secret []byte, ttl time.Duration, playerID uint64, account string) (*AdmitToken, error) {
+	return signGateToken(gate, secret, ttl, playerID, account)
 }
 
-// signGateToken 是两种票据共用的签发实现:payload 的形状只在这里定义一次。playerID 为 0 时不绑持票人。
-func signGateToken(gate *GateCandidate, secret []byte, ttl time.Duration, playerID uint64) (*AdmitToken, error) {
+// ticketAccountDigestLen 是票据里账号摘要的字节数。16 字节:要挡的是「另找一个账号撞上同一个摘要」,账号名可以由注册的人挑,
+// 摘要短了(比如 8 字节)两个相撞的账号名离线就算得出来。
+const ticketAccountDigestLen = 16
+
+// TicketAccountDigest 返回票据里绑定账号用的摘要(GateTokenPayload.account_digest);account 为空串返回 nil,表示不绑。
+//
+// 用摘要、不用账号原文:票据载荷要经客户端转交 gate,而第三方登录的账号名(wx_<unionid> 这类)不下发给客户端。
+// 不带密钥:摘要只拿来比对,不是凭证(整张票已经由 HMAC 签名保护);带上签票密钥,密钥轮换期间旧票就比不上了。
+func TicketAccountDigest(account string) []byte {
+	if account == "" {
+		return nil
+	}
+	sum := sha256.Sum256([]byte("gate-ticket-account|" + account))
+	return sum[:ticketAccountDigestLen]
+}
+
+// TicketIssuedTo 判断一张票能不能给 account 用。digest 是 gate 从票据里原样带来的账号摘要
+// (SessionDetails.ticket_account_digest);为空 = 票没绑账号(排队关着时的匿名分配、跨 zone 重定向票、免验签的开发环境),放行。
+//
+// 为什么要绑:票是按账号发的(排队一个账号一个条目、一个在途名额,已在游戏里的账号免排队),不绑的票谁拿到都能用,
+// 一个已在游戏里的账号就能不停地领票给别的账号免排队。
+func TicketIssuedTo(digest []byte, account string) bool {
+	return len(digest) == 0 || bytes.Equal(digest, TicketAccountDigest(account))
+}
+
+// signGateToken 是各种票据共用的签发实现:payload 的形状只在这里定义一次。playerID 为 0 时不绑持票角色,account 为空串时不绑账号。
+func signGateToken(gate *GateCandidate, secret []byte, ttl time.Duration, playerID uint64, account string) (*AdmitToken, error) {
 	if gate == nil {
 		return nil, fmt.Errorf("nil gate")
 	}
@@ -244,6 +274,7 @@ func signGateToken(gate *GateCandidate, secret []byte, ttl time.Duration, player
 		ExpireTimestamp: expireTS,
 		HmacSessionKey:  sessionKey,
 		PlayerId:        playerID,
+		AccountDigest:   TicketAccountDigest(account),
 	}
 	payloadBytes, err := proto.Marshal(payload)
 	if err != nil {

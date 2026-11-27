@@ -1,4 +1,4 @@
-# 第三方登录与实名防沉迷：剩余代码与全部验证交接（2026-11-26，交 Gemini）
+# 第三方登录与实名防沉迷：全部验证交接（2026-11-26，交 Gemini；代码已改完，Gemini 只验证）
 
 本单也是「全球账号库与第三方登录」会话派生的四条线的总入口：§4 给出四条线合在一起、一遍跑完的顺序。
 
@@ -9,7 +9,7 @@
   - 动手前先看各交接单的最新状态，以及 `docs/PROGRESS.md` 文末的新条目。
   - 同一项只留一个写者。
   - 本单 §3.2 的两项已去问实名会话由谁来做。11-26 实名会话的答复：设计稿正文它已改完；它复核时另发现一处缺陷；细节写在 [real-name-anti-addiction-handoff-20261126.md](real-name-anti-addiction-handoff-20261126.md)。11-26 晚实名会话换回 Fable 5.2 后，把缺陷修复与沙箱 mock 也写完了：本单 §3.2 没有待写项，实名这条线只剩验证，不要再写一遍。
-  - 改代码按 AGENTS §10.3 用 Gemini 4 Neon Extra；11-27 时这几个 Claude 会话都跑在 Opus 5.5 上，不满足 §10.3。
+  - 负责人 2026-11-26 定：逻辑代码（含测试代码）由 Claude 改，Gemini 只负责生成、编译、测试、冒烟。本单与四条线的交接单里已经没有交给 Gemini 的代码改动（同日「交接单里的代码改动清零」会话逐份核对过）；验证跑红要改代码时，保留首错原文停下，交回对应的 Claude 会话。
 - 四条线与各自的交接单：
 
 | 线 | 细节在哪 | 本单管什么 |
@@ -28,9 +28,8 @@
 原文以 `AGENTS.md` 与 `docs/rules/` 为准，这里只摘本单用到的：
 
 - **模型档位（AGENTS §10.3）**
-  - 写代码、改文档、分析原因：用 `Gemini 4 Neon Extra`。
-  - 生成、编译、跑测试、冒烟：用 `Carbon Medium`。
-  - 运行中发现要改代码时，先保留第一条错误的原文，切回 Neon Extra 修根因，再回 Carbon Medium 继续跑。
+  - 生成、编译、跑测试、冒烟：用 `Carbon Medium`。本单不需要 Gemini 写代码。
+  - 运行中发现要改代码（含测试代码、部署脚本）时，保留第一条错误的原文与复现命令，这一步停下，交回 Claude 按根因改；和这一步无关的后续步骤可以接着跑，结果里写明哪些是在红的基础上跑的。只有负责人明说让 Gemini 接手写代码时，才用 `Gemini 4 Neon Extra` 改。
 - 只在 main 工作区做，不开分支或 worktree，不 `git push`、不 `git tag`。负责人明确要求时才提交，而且只提交自己的改动。
   - 工作区里常有几百个别的会话未提交的文件：不要 `git add -A`，不要 `git reset`，不要 `git checkout --`。
 - 不手改 `generated/` 与各语言的 proto 输出树。日志文案用英文；文档、注释、提交说明用中文。
@@ -115,12 +114,14 @@
 - 以上全部没有编译，没有运行。
 - 负责人要亲自办的手续不归 Gemini，见设计稿 §9：版号、国家系统企业端注册（bizId / appId / secretKey）、渠道登记、出口 IP。
 
-### 3.2 还要写的（Neon Extra）
+### 3.2 原来要写的（已全部写完，留作对照；Gemini 不用写）
 
 细节以 [real-name-anti-addiction-handoff-20261126.md](real-name-anti-addiction-handoff-20261126.md)（下称「实名细节单」）为准，这里只列项。下面第 2 项原来的写法保留作对照，已全部吸收进实名细节单 §2.2，两处有出入时按实名细节单做。
 
-1. **改正设计稿正文：已做。** 11-26 实名会话已按现在的代码重写 §5.3–§5.5 与 §8。原来这里写的「会话收尾时 GETDEL 失败、丢一条下线上报是定案」已过时：现在没有 GETDEL 了，End 失败时由账本清扫补下线。旧键名 `login_anti_addiction` 的残留仍要 grep 一遍。
+1. **改正设计稿正文：已做。** 11-26 实名会话已按现在的代码重写 §5.3–§5.5 与 §8。原来这里写的「会话收尾时 GETDEL 失败、丢一条下线上报是定案」已过时：现在没有 GETDEL 了，End 失败时由账本清扫补下线。旧键名 `login_anti_addiction` 的残留 **11-26 晚已 grep 过**（`go/`、`deploy/`、`docs/` 除 PROGRESS 外）：没有键名残留，剩下的命中是指标 `login_anti_addiction_backstop_kick_total` 与部署摘要行 `login_anti_addiction=`，都是现行名字；只有 `go/login/internal/logic/clientplayerlogin/disconnectlogic.go` 一处注释还写着「防沉迷记录用 GETDEL 取走」，已改成账本 End 的现行语义（只改注释）。
 1a. **缺陷修复：已做**（11-26 晚，实名会话）。原来截止时刻一到，清扫就删掉账本条目，login 的兜底踢线随之失效。改动与回归用例见实名细节单 §2.1。
+1b. **到点立即存盘下线、未成年人离线托管不越过截止时刻：已做**（11-26，实名会话）。这一批给 `proto/player_locator/player_locator.proto` 加了字段，§4 第 2 步的生成之后才编得过。见实名细节单 §2.3。
+1c. **战斗服到点断开战斗直连：已做**（11-26，「未成年人到点时战斗服断开战斗直连」会话，未生成、未编译）。改了 match 与 battle，`battle_data.proto`、`battle_node.proto` 各加了一个字段，客户端仓要重新生成。改动、用例与命令见实名细节单 §2.4、§3，PROGRESS 同日另有一条。
 2. **国家系统沙箱 mock：已写**（11-26 晚，实名会话）。下面是原来的要求，留作对照；实现与它的两处出入见实名细节单 §2.2。
    - 位置：在 `go/login/cmd/sandbox_mock` 加三个接口，路径与 `nppa.DefaultCheckURL`、`DefaultQueryURL`、`DefaultLoginoutURL` 相同。报文格式以 `go/login/internal/logic/pkg/nppa/client.go` 为准：报文体用 secretKey 做 AES-128-GCM 再 Base64，请求头签名见 `sign`。
    - 校验：核请求头签名并解开报文；签名错或解不开时，回规范里的错误码。secretKey 只用开发值。
@@ -133,7 +134,7 @@
      - linux 登录栈 `deploy/login-stack.linux/login.yaml` 加 `AntiAddiction` 段，测试地址 `AntiAddiction.Nppa.CheckUrl` / `QueryUrl` / `LoginoutUrl` 指向 `http://sandbox-mock:18090`。字段见 `go/login/internal/config/anti_addiction.go`。
      - secretKey 只走环境变量。
    - 手册：沙盒手册加一节 §J，写清端到端的步骤。
-3. **PROGRESS**：在文末追加一条，列出改动的文件与验证命令。
+3. **PROGRESS：已做。** 实名会话 11-26 追加了「实名与防沉迷：修账本截止时刻缺陷、写国家系统沙箱 mock」，列了改动的文件与验证命令。
 
 ### 3.3 验证
 
@@ -203,6 +204,6 @@
 - **分配 gate**
   - 不带令牌的匿名分配，只在 `LegacyGateLoginEnabled` 开着时允许。
   - 令牌被拒回 401，令牌存储故障回 500。
-- **实名**：会话收尾时 GETDEL 失败、丢一条下线上报可以接受。
+- **实名**：Disconnect 不为上报重放；会话收尾的 End 失败只记日志，由账本清扫在租约到期后补报下线（现在没有 GETDEL 了，原来写的「GETDEL 失败、丢一条下线上报可以接受」已过时，口径以实名细节单 §4 为准）。
 - **小游戏**：转小游戏包上线前再做，走 Unity 7。
 - **Java 独立仓**：只登记待做，不写代码。

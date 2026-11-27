@@ -169,7 +169,7 @@ func TestPopAdmitWritesAdmitToken(t *testing.T) {
 		t.Fatalf("enqueue: %v", err)
 	}
 
-	stubSign := func(slot *AdmitSlot) (*AdmitToken, error) {
+	stubSign := func(slot *AdmitSlot, _ string) (*AdmitToken, error) {
 		return &AdmitToken{
 			IP:            slot.IP,
 			Port:          slot.Port,
@@ -956,7 +956,7 @@ func TestConsume_SignFailureKeepsAdmitTimeScore(t *testing.T) {
 	want := float64(admittedAt.Add(q.admitTTL).UnixMilli())
 
 	clk.Advance(2 * time.Second) // 客户端的下一次轮询
-	failSign := func(*AdmitSlot) (*AdmitToken, error) { return nil, context.DeadlineExceeded }
+	failSign := func(*AdmitSlot, string) (*AdmitToken, error) { return nil, context.DeadlineExceeded }
 	if st, err := q.Poll(ctx, res.QueueToken, 1, failSign); err == nil {
 		t.Fatalf("lookup = (%+v, nil), want the signing error", st)
 	}
@@ -1213,7 +1213,7 @@ func admitTotalValue(t *testing.T, zone string) float64 {
 
 // signMustNotRun:没有放行槽可取时 signFn 不该被调用。
 func signMustNotRun(t *testing.T) SignAdmitFn {
-	return func(*AdmitSlot) (*AdmitToken, error) {
+	return func(*AdmitSlot, string) (*AdmitToken, error) {
 		t.Fatal("signFn called although there is no admit slot to take")
 		return nil, nil
 	}
@@ -1281,9 +1281,9 @@ func TestPoll_PollAfterConsume_ReturnsExpired(t *testing.T) {
 		t.Fatalf("popadmit = (%d, %v), want (1, nil)", n, err)
 	}
 	signs := 0
-	countingSign := func(slot *AdmitSlot) (*AdmitToken, error) {
+	countingSign := func(slot *AdmitSlot, _ string) (*AdmitToken, error) {
 		signs++
-		return stubSignFn(slot)
+		return stubSignFn(slot, "")
 	}
 	if st, err := q.Poll(ctx, res.QueueToken, 1, countingSign); err != nil || st.Status != StatusAdmitted {
 		t.Fatalf("first lookup = (%+v, %v), want ADMITTED", st, err)
@@ -1323,9 +1323,11 @@ func TestPoll_RetakeInsideWindow_ReturnsSameSlot(t *testing.T) {
 		t.Fatalf("popadmit = (%d, %v), want (1, nil)", n, err)
 	}
 	var signed []AdmitSlot
-	recordingSign := func(slot *AdmitSlot) (*AdmitToken, error) {
+	var signedFor []string
+	recordingSign := func(slot *AdmitSlot, account string) (*AdmitToken, error) {
 		signed = append(signed, *slot)
-		return stubSignFn(slot)
+		signedFor = append(signedFor, account)
+		return stubSignFn(slot, account)
 	}
 	takenAt := clk.Now()
 	if st, err := q.Poll(ctx, res.QueueToken, 1, recordingSign); err != nil || st.Status != StatusAdmitted {
@@ -1349,6 +1351,10 @@ func TestPoll_RetakeInsideWindow_ReturnsSameSlot(t *testing.T) {
 	if len(signed) != 2 || signed[0] != want || signed[1] != want {
 		t.Fatalf("signed slots = %+v, want the same slot %+v twice (take, then retake)", signed, want)
 	}
+	// 两次签票拿到的都是入队的账号(2026-11-26):取走与重取两个分支各自从 meta 读出它,票据此绑定账号。
+	if len(signedFor) != 2 || signedFor[0] != "alice" || signedFor[1] != "alice" {
+		t.Fatalf("tickets were signed for accounts %q, want alice for both the take and the retake", signedFor)
+	}
 	if n, err := rdb.Exists(ctx, admitKey(1, res.QueueID)).Result(); err != nil || n != 0 {
 		t.Fatalf("admit slot exists=%d err=%v after the retake, want none: a retake never writes a slot back", n, err)
 	}
@@ -1361,6 +1367,31 @@ func TestPoll_RetakeInsideWindow_ReturnsSameSlot(t *testing.T) {
 	}
 	if got, err := rdb.HGet(ctx, metaKey(1, res.QueueID), metaFieldRetakeUntil).Result(); err != nil || got != wantUntil {
 		t.Fatalf("meta %s after the retake = (%q, %v), want %s: a retake must not push the deadline", metaFieldRetakeUntil, got, err, wantUntil)
+	}
+}
+
+// 票绑定入队账号之后(2026-11-26),取走放行槽时 meta 必须还在:账号是从 meta 读的。放行之后 meta 没了(人工删键,或条目空闲到
+// meta 先于 token 索引过期)时不给票,回 EXPIRED(meta_gone);放行槽已被取走,不留给下一次。此前这种情况照样签票,
+// 现在照签的话签出来的是一张不绑账号、谁都能用的票。lookupScript 取走分支去掉对 meta 的判断,本用例红在 signFn 被调用上。
+func TestPoll_AdmitSlotWithoutMeta_GivesNoTicket(t *testing.T) {
+	q, rdb, _ := newClockedQueue(t)
+	ctx := context.Background()
+
+	res, err := q.Enqueue(ctx, 1, "alice", "dev1")
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	if n, err := q.PopAdmit(ctx, 1, 1, noBudgetLimit, pickZone1Gate); err != nil || n != 1 {
+		t.Fatalf("popadmit = (%d, %v), want (1, nil)", n, err)
+	}
+	if err := rdb.Del(ctx, metaKey(1, res.QueueID)).Err(); err != nil {
+		t.Fatalf("del meta: %v", err)
+	}
+	if st, err := q.Poll(ctx, res.QueueToken, 1, signMustNotRun(t)); err != nil || st.Status != StatusExpired {
+		t.Fatalf("lookup = (%+v, %v), want EXPIRED (meta_gone): there is no account left to bind the ticket to", st, err)
+	}
+	if n, err := rdb.Exists(ctx, admitKey(1, res.QueueID)).Result(); err != nil || n != 0 {
+		t.Fatalf("admit slot exists=%d err=%v, want it taken and dropped", n, err)
 	}
 }
 
@@ -1409,9 +1440,9 @@ func TestPoll_LookupResentAfterTake_ReturnsSameSlot(t *testing.T) {
 		t.Fatalf("popadmit = (%d, %v), want (1, nil)", n, err)
 	}
 	signs := 0
-	countingSign := func(slot *AdmitSlot) (*AdmitToken, error) {
+	countingSign := func(slot *AdmitSlot, _ string) (*AdmitToken, error) {
 		signs++
-		return stubSignFn(slot)
+		return stubSignFn(slot, "")
 	}
 	replays := 0
 	rdb.AddHook(replayLookupScriptHook{metaKey: metaKey(1, res.QueueID), replays: &replays})
@@ -1445,7 +1476,7 @@ func TestPoll_SignFailureThenRetryInsideRetakeWindow_SameSlot(t *testing.T) {
 		t.Fatalf("popadmit = (%d, %v), want (1, nil)", n, err)
 	}
 	clk.Advance(2 * time.Second)
-	failSign := func(*AdmitSlot) (*AdmitToken, error) { return nil, context.DeadlineExceeded }
+	failSign := func(*AdmitSlot, string) (*AdmitToken, error) { return nil, context.DeadlineExceeded }
 	if st, err := q.Poll(ctx, res.QueueToken, 1, failSign); err == nil {
 		t.Fatalf("lookup = (%+v, nil), want the signing error", st)
 	}
@@ -1526,9 +1557,9 @@ func TestPoll_AdmitBetweenPolls_TakenInOneScript(t *testing.T) {
 		return next(ctx, cmd)
 	}})
 	signs := 0
-	countingSign := func(slot *AdmitSlot) (*AdmitToken, error) {
+	countingSign := func(slot *AdmitSlot, _ string) (*AdmitToken, error) {
 		signs++
-		return stubSignFn(slot)
+		return stubSignFn(slot, "")
 	}
 
 	st, err := q.Poll(ctx, res.QueueToken, 1, countingSign)
@@ -2219,9 +2250,9 @@ func TestPopAdmit_OverlappingLeaders_SameEntryAdmittedOnce(t *testing.T) {
 	}
 	mustAdmittedCount(t, q, 1, "one placeholder for one admit")
 	signs := 0
-	countingSign := func(slot *AdmitSlot) (*AdmitToken, error) {
+	countingSign := func(slot *AdmitSlot, _ string) (*AdmitToken, error) {
 		signs++
-		return stubSignFn(slot)
+		return stubSignFn(slot, "")
 	}
 	if st, err := q.Poll(ctx, res.QueueToken, 1, countingSign); err != nil || st.Status != StatusAdmitted {
 		t.Fatalf("first lookup = (%+v, %v), want ADMITTED", st, err)
@@ -2685,9 +2716,9 @@ func TestPopAdmit_AdmitScriptReplayedAfterConsume_DoesNotReissue(t *testing.T) {
 		t.Fatalf("enqueue: %v", err)
 	}
 	signs := 0
-	countingSign := func(slot *AdmitSlot) (*AdmitToken, error) {
+	countingSign := func(slot *AdmitSlot, _ string) (*AdmitToken, error) {
 		signs++
-		return stubSignFn(slot)
+		return stubSignFn(slot, "")
 	}
 	replays := 0
 	var consumedAt time.Time

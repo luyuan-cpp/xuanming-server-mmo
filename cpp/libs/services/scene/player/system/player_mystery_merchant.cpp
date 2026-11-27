@@ -408,17 +408,20 @@ void PlayerMysteryMerchantSystem::Stop()
 	LOG_INFO << "[MysteryMerchant] Record refresh stopped";
 }
 
-void PlayerMysteryMerchantSystem::ValidateTables()
+bool PlayerMysteryMerchantSystem::ValidateTables()
 {
+	bool allValid = true;
 	const auto &ruleRows = MysteryMerchantRuleTableManager::Instance().FindAll().data();
 	if (ruleRows.empty())
 	{
 		LOG_ERROR << "[MysteryMerchant] MysteryMerchantRule table is empty; purchase range falls back to " << kDefaultInteractRange;
+		allValid = false;
 	}
 	else if (ruleRows.begin()->interact_range() == 0 || ruleRows.begin()->interact_range() > kMaxInteractRange)
 	{
 		LOG_ERROR << "[MysteryMerchant] MysteryMerchantRule.interact_range=" << ruleRows.begin()->interact_range()
 				  << " is not in 1.." << kMaxInteractRange << ", effective value " << InteractRange();
+		allValid = false;
 	}
 
 	uint32_t sellable = 0;
@@ -438,12 +441,14 @@ void PlayerMysteryMerchantSystem::ValidateTables()
 		{
 			LOG_ERROR << "[MysteryMerchant] MysteryMerchantGoods row is not sellable; players will not be able to buy it once shelved: id=" << row.id()
 					  << " reason=" << reason;
+			allValid = false;
 			continue;
 		}
 		++sellable;
 	}
 	LOG_INFO << "[MysteryMerchant] Table check finished: sellable_goods=" << sellable << " spots="
 			 << MysteryMerchantSpotTableManager::Instance().Count() << " interact_range=" << InteractRange();
+	return allValid;
 }
 
 void PlayerMysteryMerchantSystem::FillInfo(entt::entity player, uint64_t nowMs, ::MysteryMerchantInfo &out)

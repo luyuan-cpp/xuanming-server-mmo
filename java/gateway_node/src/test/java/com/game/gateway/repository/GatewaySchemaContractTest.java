@@ -117,6 +117,85 @@ class GatewaySchemaContractTest {
         }
     }
 
+    /**
+     * 白名单 add 在同一事务里「upsert 之后回读」必须用加锁读(2026-11-26 补的真库证据;之前只有 mock / H2 钉住用的是哪个方法)。
+     * TiDB 的 REPEATABLE READ 快照建在事务开始时:事务 A 开始之后别人提交了同一个键、同一个 note 的行,A 的 upsert 走
+     * 「已存在、note 没变」,自己没有任何修改,普通读看不见那一行(改之前的回读就在这里报 row invisible),加锁读看得见。
+     * 两条语句用的是生产的同一份文本(命名参数换成 ?)。
+     */
+    @Test
+    @EnabledIfEnvironmentVariable(named = "GATEWAY_SCHEMA_TIDB_URL", matches = ".+")
+    void lockedReadBackSeesARowCommittedAfterTheTransactionBeganOnRealTiDb() throws Exception {
+        String endpoint = System.getenv("GATEWAY_SCHEMA_TIDB_URL");
+        requireOwnedTiDbEndpoint(endpoint);
+        String user = System.getenv("GATEWAY_SCHEMA_TIDB_USER");
+        String password = System.getenv("GATEWAY_SCHEMA_TIDB_PASSWORD");
+        assertNotNull(user, "测试账号必须从环境注入");
+        assertNotNull(password, "测试口令必须显式从环境注入，可为空但不猜测");
+        String database = "gateway_schema_" + UUID.randomUUID().toString().replace("-", "") + "_test";
+        String url = endpoint + database + "?useSSL=false&connectTimeout=3000&socketTimeout=10000";
+        String upsert = ZoneWhitelistRepository.UPSERT_SQL.replaceAll(":[A-Za-z]+", "?");
+        String lockedRead = ZoneWhitelistRepository.FIND_BY_KEY_FOR_UPDATE_SQL.replaceAll(":[A-Za-z]+", "?");
+        boolean created = false;
+        try (Connection server = strongTiDbConnection(DriverManager.getConnection(
+                endpoint + "?connectTimeout=3000&socketTimeout=10000", user, password))) {
+            try {
+                try (Statement statement = server.createStatement()) {
+                    statement.execute("CREATE DATABASE `" + database + "` CHARACTER SET utf8mb4");
+                    created = true;
+                }
+                try (Connection writer = strongTiDbConnection(DriverManager.getConnection(url, user, password));
+                     Connection reader = strongTiDbConnection(DriverManager.getConnection(url, user, password))) {
+                    ScriptUtils.executeSqlScript(writer, new ClassPathResource("schema.sql"));
+                    // 夹具把会话设成 READ COMMITTED;这条用例要的是生产缺省的 REPEATABLE READ(快照建在事务开始时)。
+                    reader.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
+                    reader.setAutoCommit(false);
+                    assertFalse(whitelistNote(reader, "SELECT note FROM zone_whitelist WHERE zone_id = ? AND account_id = ?")
+                            .isPresent(), "事务 A 先读一次,钉住快照;这时行还不在");
+
+                    try (PreparedStatement insert = writer.prepareStatement(upsert)) { // 别人在 A 开始之后提交同一个键
+                        bindWhitelist(insert, 9001L);
+                        insert.executeUpdate();
+                    }
+
+                    try (PreparedStatement again = reader.prepareStatement(upsert)) { // A 的 upsert:已存在、note 没变
+                        bindWhitelist(again, 9002L);
+                        again.executeUpdate();
+                    }
+                    assertFalse(whitelistNote(reader, "SELECT note FROM zone_whitelist WHERE zone_id = ? AND account_id = ?")
+                            .isPresent(), "普通读按 A 开始时的快照,看不见之后提交的那一行:回读不能用它");
+                    assertEquals("same-note", whitelistNote(reader, lockedRead).orElse(null),
+                            "加锁读读最新的已提交版本,回读必然命中");
+                    reader.rollback();
+                }
+            } finally {
+                if (created) {
+                    try (Statement statement = server.createStatement()) {
+                        statement.execute("DROP DATABASE `" + database + "`");
+                    }
+                }
+            }
+        }
+    }
+
+    private static void bindWhitelist(PreparedStatement statement, long rowId) throws java.sql.SQLException {
+        statement.setLong(1, rowId);
+        statement.setLong(2, 3L);
+        statement.setLong(3, 1234L);
+        statement.setString(4, "same-note");
+    }
+
+    /** 按 (zone 3, account 1234) 读 note;sql 的两个占位符依次是 zone_id、account_id。没有行返回 empty。 */
+    private static java.util.Optional<String> whitelistNote(Connection connection, String sql) throws java.sql.SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, 3L);
+            statement.setLong(2, 1234L);
+            try (ResultSet rows = statement.executeQuery()) {
+                return rows.next() ? java.util.Optional.of(rows.getString("note")) : java.util.Optional.empty();
+            }
+        }
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"jdbc:mysql://127.0.0.1:24000/", "jdbc:mysql://127.0.0.2:1/",
             "jdbc:mysql://[::1]:65535/"})

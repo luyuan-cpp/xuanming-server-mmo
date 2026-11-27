@@ -78,7 +78,8 @@ public class GmController {
     public String overview() {
         Subject subject = authenticated();
         if (PERMISSIONS.stream().noneMatch(subject::isPermitted)) throw new AuthorizationException();
-        ObjectNode result = json.createObjectNode().put("mailEnabled", mailEnabled);
+        // dualControl 只是给页面看的：开着时页面把「发送」显示成「批准并发送」，并把自己发起的申请标成不能自批。规则本身在流水里。
+        ObjectNode result = json.createObjectNode().put("mailEnabled", mailEnabled).put("dualControl", journal.dualControl());
         ArrayNode currencies = game.currencyTypes();
         result.set("currencies", currencies != null ? currencies : json.createArrayNode());
         result.putArray("zones");
@@ -134,6 +135,21 @@ public class GmController {
         return ok(journal.send(id, actor, game::sendMail));
     }
 
+    @PostMapping("/mail/commands/{id}/decline")
+    public String decline(@PathVariable String id, @RequestBody String body) {
+        return decline(id, body, "MAIL", "gm:mail:prepare", "gm:mail:send");
+    }
+
+    /** 驳回要有放行权限；只有发起权限的人只能撤回自己发起的申请。 */
+    private String decline(String id, String body, String kind, String preparePermission, String releasePermission) {
+        boolean mayRelease = authenticated().isPermitted(releasePermission);
+        String actor = require(mayRelease ? releasePermission : preparePermission);
+        decimal(id, BigInteger.valueOf(Long.MAX_VALUE), "命令 ID");
+        ObjectNode input = parse(body, DEFAULT_MAX_BODY_BYTES);
+        input.fieldNames().forEachRemaining(key -> { if (!key.equals("reason")) bad("存在未知字段"); });
+        return ok(journal.decline(id, actor, text(input, "reason", 1, 191), kind, !mayRelease));
+    }
+
     @GetMapping("/mail/commands")
     public String commands(
             @RequestParam(defaultValue = "1") int page,
@@ -177,6 +193,11 @@ public class GmController {
         requireMailEnabled();
         decimal(id, BigInteger.valueOf(Long.MAX_VALUE), "命令 ID");
         return ok(journal.sendSystemMail(id, actor, game::sendSystemMail));
+    }
+
+    @PostMapping("/system-mail/commands/{id}/decline")
+    public String declineSystemMail(@PathVariable String id, @RequestBody String body) {
+        return decline(id, body, "SYSTEM_MAIL", "gm:system-mail:prepare", "gm:system-mail:send");
     }
 
     @GetMapping("/system-mail/commands")
@@ -246,6 +267,11 @@ public class GmController {
         requireMailEnabled();
         decimal(id, BigInteger.valueOf(Long.MAX_VALUE), "命令 ID");
         return ok(journal.sendMailCampaign(id, actor, game::sendMailCampaign));
+    }
+
+    @PostMapping("/mail-campaigns/commands/{id}/decline")
+    public String declineMailCampaign(@PathVariable String id, @RequestBody String body) {
+        return decline(id, body, "MAIL_CAMPAIGN", "gm:system-mail:prepare", "gm:system-mail:send");
     }
 
     @GetMapping("/mail-campaigns/commands")

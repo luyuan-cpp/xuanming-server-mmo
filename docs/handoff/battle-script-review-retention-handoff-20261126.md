@@ -17,7 +17,7 @@
   - [account-deletion.md](../design/account-deletion.md) §6.2 match 行。
 - 代码在哪:
   - **11-20 的两轮改动在 HEAD**,由批量提交 `b6a08148c` 收入。之后别的功能的提交改过其中 6 个文件,11-26 已核对没碰到本线部分。
-  - **11-26 的一轮改动在工作区,没提交**(Claude 用 Fable 5.2 改的),文件见 §2 带「11-26」标记的几项。内容:
+  - **11-26 的一轮改动也已入库**(Claude 用 Fable 5.2 改的,随批量提交 `a1285cb8a` 进了 HEAD;同日晚逐个文件核对过 `git log -1` 与 `git status`,工作区没有本线的未提交改动),文件见 §2 带「11-26」标记的几项。内容:
     - 搬库冻结不算清理失败。两个清理循环一轮的结局改由共用的 `observeRetentionRound` 记(`go/match/internal/logic/retention_purge.go`)。
     - `schema.go` 一行 gofmt 空白修正。别的功能插进的 `MatchTrialChallengeCardRecord` 一行打乱了注释对齐,`git diff -w` 为空。
 - **一条都没验证过**,没有生成、编译或测试记录。Claude 只做过静态核对:
@@ -60,7 +60,7 @@
 
 ## 2. 本线的文件
 
-带「11-26」的在工作区、没提交,其余在 HEAD。
+全部在 HEAD:带「11-26」的随 `a1285cb8a` 入库,其余随 `b6a08148c`。`go/match` 工作区里现有的未提交改动(`spectate*.go`、`config.go`、`servicecontext.go` 等)是别的线的,不属本单。
 
 - 协议:`proto/match/match_authority.proto`(`MatchBattleScriptReviewRecord` 的注释与 `OptionIndex`)。
 - `go/match/internal/authority/`:

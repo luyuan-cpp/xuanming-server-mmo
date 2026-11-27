@@ -46,9 +46,9 @@ $script:Rules = @(Get-AlertRules -Text $script:Alerts)
 Write-Host ''
 Write-Host '=== content_guard_alerts_contract ==='
 
-Test-Case '规则名单:go.content-guard 组恰好五条,各有 severity / summary / description' {
+Test-Case '规则名单:go.content-guard 组恰好六条,各有 severity / summary / description' {
     Assert-Match -Text $script:Alerts -Pattern '(?m)^    - name:[ ]*go\.content-guard[ ]*$' -Because '组名'
-    $expected = 'ContentGuardNoLexiconAnywhere,ContentGuardReplicaWithoutLexicon,ContentGuardLexiconLoadFailing,ContentGuardLexiconVersionSkew,ContentGuardRefusingChecks'
+    $expected = 'ContentGuardNoLexiconAnywhere,ContentGuardReplicaWithoutLexicon,ContentGuardLexiconLoadFailing,ContentGuardLexiconVersionSkew,ContentGuardRefusingChecks,ContentGuardPlatformFailing'
     Assert-Equal -Expected $expected -Actual (($script:Rules | ForEach-Object Name) -join ',') -Because '规则名单'
     foreach ($rule in $script:Rules) {
         foreach ($key in @('severity', 'summary', 'description')) {
@@ -70,12 +70,32 @@ Test-Case '式子里的指标都在 metrics.go 里定义;分组 label 只用代�
         }
         foreach ($by in [regex]::Matches($expr, '\bby \((?<labels>[^)]*)\)')) {
             foreach ($label in @($by.Groups['labels'].Value -split ',' | ForEach-Object { $_.Trim() })) {
-                Assert-True -Condition ($label -in @('namespace', 'pod', 'reason')) -Because "$($rule.Name) 只按 namespace / pod / reason 分组;$label 不是这组指标的 label"
+                Assert-True -Condition ($label -in @('namespace', 'pod', 'reason', 'provider')) -Because "$($rule.Name) 只按 namespace / pod / reason / provider 分组;$label 不是这组指标的 label"
             }
         }
     }
     Assert-Match -Text $script:Metrics -Pattern '\[\]string\{"scene", "verdict", "category"\}' -Because '夹具前提:判定计数的 label 是 scene / verdict / category'
     Assert-Match -Text $script:Metrics -Pattern '\[\]string\{"reason"\}' -Because '夹具前提:加载失败计数的 label 只有 reason'
+    Assert-Match -Text $script:Metrics -Pattern '\[\]string\{"provider", "outcome"\}' -Because '夹具前提:外部平台调用计数的 label 是 provider / outcome'
+}
+
+Test-Case '外部平台调用的 outcome 取值来自代码:告警按 unavailable 算失败、分母去掉 deferred;路由在世界频道先行没等到时记 deferred,其余调用记最终结局' {
+    $platform = @($script:Rules | Where-Object Name -ceq 'ContentGuardPlatformFailing')[0]
+    Assert-True -Condition ($null -ne $platform) -Because '要有 ContentGuardPlatformFailing'
+    $expr = Get-RuleExpr -Body $platform.Body
+    Assert-Match -Text $expr -Pattern 'content_guard_platform_reviews_total\{outcome="unavailable"\}' -Because '分子是等不到答复的调用'
+    Assert-Match -Text $expr -Pattern 'content_guard_platform_reviews_total\{outcome!="deferred"\}' -Because '分母去掉 deferred:世界频道先行的短预算没等到不是失败,后台补审那一次另记结局'
+    $codeOutcomes = @([regex]::Matches($script:Metrics, '(?m)^\s*PlatformOutcome[A-Za-z]+\s*=\s*"(?<o>[a-z_]+)"') | ForEach-Object { $_.Groups['o'].Value } | Sort-Object)
+    Assert-Equal -Expected 'deferred,pass,reject,skip,unavailable' -Actual ($codeOutcomes -join ',') -Because 'metrics.go 的 outcome 取值;告警用到的 unavailable 与 deferred 都在其中'
+    $header = [regex]::Match($script:Alerts, '(?m)^#\s+outcome ∈ (?<list>[a-z_ /]+);')
+    Assert-True -Condition $header.Success -Because '文件头要列出 outcome 的全部取值'
+    $documented = @($header.Groups['list'].Value -split '/' | ForEach-Object { $_.Trim() } | Where-Object { $_ } | Sort-Object)
+    Assert-Equal -Expected ($codeOutcomes -join ',') -Actual ($documented -join ',') -Because '文件头列的 outcome 取值与代码一致'
+    $reviewer = Read-RepoText -RelativePath 'go/content_guard/internal/platform/reviewer.go'
+    Assert-Match -Text $reviewer -Pattern 'metrics\.ObservePlatformReview\(adapter\.Provider\(\), metrics\.PlatformOutcomeDeferred\)' -Because '世界频道先行没等到时记 deferred'
+    Assert-Equal -Expected 3 -Actual ([regex]::Matches($reviewer, '\badapter\.Check\(').Count) -Because '夹具前提:路由里调平台的地方共三处(世界频道先行、名字类、补审)'
+    # 三处调用之后的出口:世界频道先行有三个(没等到且不补审、没等到且补审 = deferred、等到了),名字类一个,补审一个。
+    Assert-Equal -Expected 4 -Actual ([regex]::Matches($reviewer, '(?m)^\s*observePlatformReview\(adapter\.Provider\(\), res\.Outcome\)\s*$').Count) -Because '除了记 deferred 的那一处,每个出口都按最终结局记一次'
 }
 
 Test-Case 'verdict 与 reason 的取值来自代码' {

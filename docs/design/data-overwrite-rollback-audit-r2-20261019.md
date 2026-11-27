@@ -28,7 +28,8 @@
   - 随迁移失效（机制已删）：r2-db#1/#2/#3、r2-rr#1~#5、r2-ps#1（go/db 侧）、r2-ps#3/#4、r2-low#1/#2（代码部分）、r2-login#1、r2-battle#1/#4、r2-mz#1/#2、r2-ds#2。
   - 负责人拍板：r2-match#1（10-23，首发开全球匹配）。
 - **独立评审查出并修掉的必修**共 8 处（R1、R2a、R2b、R3～R7 八轮，见 §6 收口段），其中 6 处会直接丢数据或给丢数据背书：排空框架把被保留期删掉、谁都没处理过的记录记成已结清；`ReleasePlayerName` 被拒时也写不可逆墓碑；奖励尝试上限让还能领几十天的奖励被提前放弃；临时格取回在战斗中被拒，延后的结算一直补不上；号段续段误报 buffers_full 导致结算永久延后；状态缺失的 FIGHTING 冻结永远解不了冻。
-- **仍开着**（2026-11-26 晚更正，代码都还要改）：换视角查找第 4 轮报了 3 条 high、4 条 medium，在第 4 轮会话里复核和修；11-19 六批评审记下的约 30 条「建议、没做」，在「11-12 残余收口各批的独立评审」会话里修；早期各批记了「没做」、没人认领的 4 条，见 §6「2026-11-26 清点」。三处修完之前，r2 不能算代码全部修好。
+- **仍开着**（2026-11-26 晚更正，代码都还要改；Claude 的 Fable 周额度当晚用完，按负责人「量不够交 Gemini」的口径，下面三处的复核和改码都交 Gemini 4 Neon Extra）：换视角查找第 4 轮报了 3 条 high、6 条 medium、8 条 low，集中在 11-20 以后的帮战追杀令、生死状预扣银两、锦标赛领奖、悬赏求书；第 4 轮会话当晚撞 Fable 额度中断，对抗复核没跑完、代码没改，发现、修复设计与三份查找原文已写进 `docs/handoff/data-overwrite-audit-r2-round4-handoff-20261126.md`（§3.12 只留入口）；11-19 六批评审记下的约 30 条「建议、没做」：五批已落码（11-26，未编译），客户端、修复身份两批与 snowflake 旧前缀清理交 Gemini；早期各批记了「没做」、没人认领的 4 条（§6「2026-11-26 清点」）同样交 Gemini；交接单 `docs/handoff/review-suggestions-remaining-handoff-20261126.md`。三处修完之前，r2 不能算代码全部修好。
+- **负责人 11-26 定**：悬赏求书（r2-craft#1）改走 go/trade 托管；第 4 轮修完后跑第 5 轮，旧核心机制的网络分区推演并进同一轮。详见第 4 轮交接单 §3「其余」与 §6。
 - **原记的两项转出已落码**（2026-11-26 核对）：match 不可用跨过截止 + 60s 把已打完的局 ABORT：全球终局收尾批 B5 给 ABORT 加了硬上限，最晚约在截止 + 14.2 分钟（PROGRESS 2026-11-11「go/match 全球局终局协议收尾批 B5」及同日后续条目）。第一轮第 12 条评级停写卡消费：全服匹配第四批改为评分照记、跳过投榜、不阻塞消费（PROGRESS 2026-11-06「全服匹配第四批」，纯单测已过）。11-10 新增 4 条已于 11-12 落码（批 S、T、U，§6「2026-11-12」），11-20 的评审修正与可选项也已落码；混版设计 §8.2 的世代预检定案不做。各批的已知残余写在对应 PROGRESS 条目的「残余」里，都已接受或另有负责方。11-19 交负责人定的两项都已定并落码（§6「2026-11-19」）：维护身份在业务表上的写权限定为新增修复身份；排空框架在组从没提交过的分区上，接纳第一条记录之前先把它提交成起点。
 - **验证现状**：所有修复都未编译、未测试，验证交 Gemini。顺序、通过标准和各批 PROGRESS 条目的索引见[验证交接单](../handoff/data-overwrite-audit-r2-handoff-20261126.md)；11-19 以前的条目只在 `git show ccf2840b2:docs/PROGRESS.md`。
 
@@ -58,6 +59,61 @@
 - 字段保护在缺省配置下 go/db 侧实际不生效：产物世代为 1、台账在 bootstrap，C1/C1b/C2 都走不到，C0 要等人工写引导关闭标记。C++ 携带还只在工作区未跟踪文件里；只提交已跟踪文件会断构建，停在 HEAD 时第一轮 low「存盘不保留未知字段」仍成立。
 - 神秘商人：购买三步同线程同步完成、同行同次落盘，没有共享库存，冻结闸与退出闸都覆盖，只有 1 条限购可被绕过的 low（付费购买，不复制资产）。
 - login：第一轮 §4 的「账号 blob 有两个写者不走建角锁」在当前代码里已不成立，四个写者同锁加令牌 CAS。loginqueue 与 dataloader 因额度未读。
+
+## 1a. 设计要点速览（2026-11-26 汇总）
+
+本节把这条线修出来的、不容易想到又决定数据安全的做法集中写一遍。每条写明要防的问题、怎么做、为什么不用别的做法；细节和取舍在「详见」的设计文档里，这里只给入口。
+
+**审计流程本身**（§2、§6）：分波查找；每条先复核成立再修，修后再派独立评审；评审的必修当场改，「建议」也按负责人口径现在改，不留以后。换视角查找每轮都换角度（迟到消息、两个写者、重放、分区与租约、运维工具），要连续两轮没有新发现才停，否则按轮数上限停并写明。
+
+### 1a.1 旧写者、迟到消息不能盖掉新状态
+
+- **交接围栏用永久下限，不用带 TTL 的标记**（r2-lc#1/#2）。问题：标记过期后，迟到的旧代次消息会被当成新的。做法：`save_barrier.handoff_fence` 按代次各维度只记下限、只增不减，旧代次的消息无论多晚到都被拒。详见 [location-release-binding.md](location-release-binding.md)。
+- **判死释放要证据，不靠「查不到」**（r2-sm#1~#3）。问题：负载表里查不到持有节点，曾被当成「已释放」，把活着的持有者的位置放掉。做法：释放前比写权行的三列（代次、持有实例、认领序号）与读到时一致，并且只复用调用者到达之后发出的那一轮注册表复核；任何一步不满足就不释放、位置保留。详见 [location-release-binding.md](location-release-binding.md)、[data-consistency-guarantee-map-20261020.md](data-consistency-guarantee-map-20261020.md)。
+- **会话栅栏的键永不复用**。键是 gate 进程 UUID 加会话代次，一周兜底寿命挡不住别的连接；所有栅栏操作都是单键原子脚本，login 多副本安全。不用玩家 id 作键：同一玩家的新旧连接会撞在一起。详见 [client-request-ordering.md](client-request-ordering.md)、[gate-online-identity.md](gate-online-identity.md)。
+- **存档世代闸：看不懂就让对方重试，不猜**（r2-ps#11）。认领时遇到未知行种，回可重试的 `SCHEMA_TOO_NEW`；退役行种判 `INVALID`；发布顺序固定为先 go/db、后 scene。不选「丢掉看不懂的行」：那就是静默丢数据。详见 [player-save-direct-commit.md](player-save-direct-commit.md)、[mixed-version-persist-field-protection.md](mixed-version-persist-field-protection.md)。
+
+### 1a.2 异步投递：不丢、不重、出事看得见
+
+- **排空证明只认三种结局**（r2-kc#1）：交接时每条接纳的记录要么已结清，要么已重放，要么已交还；说不清的就 HOLD（停下等人），不提交位点。不选「提交了位点就算处理过」：保留期会把没处理的记录删掉，位点照样往前走。详见 [kafka-bound-consumer-group.md](kafka-bound-consumer-group.md)。
+- **组从没提交过的分区，接纳第一条之前先把它的 offset 提交成起点**（负责人 11-19 定）。这样记录之后被保留期删掉，下一位属主打开时会报「越过保留范围」并 HOLD，而不是从日志起点静默跳过。不在打开分区时就提交：那时这一代还没读到东西，会把起点钉错。详见同上。
+- **死信写成功才提交**：坏消息写进 `<group>-dlq` 成功之后才提交原位点；写失败就留在原处。不选「跳过并提交」：原件就丢了。
+- **结果未知一律挂起**：投递 RPC 超时、成功码却没带结果、对方回故障码，都可能已经写入，排空证明按未完成处理（`Hold`），不拿同步返回当终局；反过来，确定没写的（写者闸门冻结、事务已回滚）不 Hold。详见 [horizontal-scale-logical-db.md](horizontal-scale-logical-db.md) §3.3。
+- **重投的载荷逐字节相同，判重键用业务请求号**：排行奖励的请求号就是 reward_id，过期时刻在封榜时写定，标题正文是常量，所以重投不会被当成「同号不同内容」；`mailadmin` 发带附件的邮件必须显式带 `-request-id` 和 `-expire-ms`，原样重跑同一条命令不会重复发附件。不选每次随机请求号：结果未知后重跑会重复发放。详见 [mail-system.md](mail-system.md)。
+
+- **消费组:提交一直失败时退避、停止时先短重试提交、死信留出头的余量、打开分区时的丢失也按丢失报**(2026-11-26 评审建议项)。
+  四条都是「不丢数据,但不处理会持续打库、让排空 HOLD、让分区停住、或只报 warning」。详见 `kafka-bound-consumer-group.md` §15。
+
+### 1a.3 人工终结与核账
+
+- **人工终结只有一份共享判据**（`go/shared/assetop` 的 `JudgeManual`）：行必须静默够久才能人工终结，静默间隔取 max(30 分钟, 租约)，见证看租约和最后一次发送时刻（`last_send_ms`）。guild、GM 回收都改调它，不各写一套。详见 [exploit_loss_prevention_zh.md](exploit_loss_prevention_zh.md)、[guild-phase2/05-economy.md](guild-phase2/05-economy.md)。
+- **GM 回收的人工终结按账本判，且先登记后处置**：玩家侧明确拒绝的记 REJECTED 或 ABORTED，从没应用过的记 ABORTED，已应用或部分应用的拒绝人工终结，查不到的记 PARTIAL；`needs_review` 里的指令要人工处置时，先用 `RegisterRecallReviewHandled` 登记，再动手。详见 [exploit_loss_prevention_zh.md](exploit_loss_prevention_zh.md)。
+- **角色名两阶段：先预留，建角提交后再绑定**。在役角色的名字不能被放掉；登记超过 30 分钟、没有活角色的预留名字由 `create_residual -target names` 收；判不了陈旧的建角 ref 标成保留，不占每轮扫描名额。详见 [guild-phase2/03-names.md](guild-phase2/03-names.md)、[horizontal-scale-logical-db.md](horizontal-scale-logical-db.md)。
+- **修复工具用单独的修复身份，按工具实际执行的语句逐表授权**（负责人 11-19 定）：闸门行只读，墓碑只许插入，不给 DDL 和 GRANT。不选给维护身份开业务表写权限：能改闸门行就能解冻被冻结的库。详见 [mysql-backup-pitr-runbook.md](../ops/mysql-backup-pitr-runbook.md) §4.1a。
+
+### 1a.4 对局终局与冻结
+
+- **终局先取证，并且有硬上限**：match 不可用时不在截止 + 60 秒就作废已打完的局，先向 battle 取证（`GetBattleTerminalDecision`）；证明不了也有硬上限，ABORT 最晚约在截止 + 14.2 分钟；scene 侧 FIGHTING 冻结续冻最多到期 + 15 分钟，锁的 TTL 覆盖这个上限。详见 [cross-zone-matchmaking.md](cross-zone-matchmaking.md)、[turn-battle-gap-closure.md](turn-battle-gap-closure.md)。
+
+### 1a.5 资产与交易
+
+- **强化带期望等级**：客户端带上看到的等级，服务器对不上就拒，重发不会多强化一次；临时格满了直接拒，战斗中也能取回。详见 [equipment-enhance-inlay.md](equipment-enhance-inlay.md)、[bag-rule-policy-layering.md](bag-rule-policy-layering.md)。
+- **交易交付先买家后卖家，退回腿不受获取封禁**：退回腿带 `TX_AUCTION_RETURN`，scene 不按获取封禁拦；每条发放腿记下付出的是谁托管的资产（`escrow_owner_id`），按托管者判。详见 [jubaozhai-market.md](jubaozhai-market.md)、[player-inbox-service.md](player-inbox-service.md)。
+- **资产通道入账前先做溢出预检**，溢出就拒，不写半截。详见 [guild-phase2/04-asset-channel.md](guild-phase2/04-asset-channel.md)。
+
+### 1a.6 管理接口与可观测
+
+- **网关区服写入用乐观并发**：表上加 `version` 列，写入必须带 `If-Match`（没带回 428，对不上回 412），错误体统一用 ProblemDetail。不选「后写覆盖前写」：两个运维同时改，前一个人的改动会被静默盖掉。详见 [zone-full-handling.md](zone-full-handling.md)。
+- **存盘最终被拒在 scene 侧计数**：`scene_player_store_save_refused_total{result}`，包括 scene 发送前按传输上限拒掉、go/db 根本收不到的那一笔；告警 `ScenePlayerStoreSaveRefused`。只看 go/db 的计数会漏掉这一笔。
+- **发号槽位回收比 ModRevision**：只删「还是我读到的那一版」的槽位，已被别人重新申领的不会被过期的回收删掉。
+
+- **「还有多少条」的 gauge 要配「多久没数成」**(2026-11-26)。gauge 一注册就是 0、数不成时停在旧值,单看它分不清没有积压和没数成。
+  详见 `horizontal-scale-logical-db.md`「标了保留的建角 ref」一段的设计记录。
+- **用 increase 表达「持续」时,统计窗口必须短于 for**(2026-11-26)。窗口比 for 长,一次瞬时失败也会响。详见 `kafka-bound-consumer-group.md` §15.5。
+- **按业务键 upsert 而行号由应用发时,更新分支要带业务键条件**(2026-11-26,网关白名单)。问题:行号撞上别的业务键的行时,
+  `ON DUPLICATE KEY UPDATE` 命中的是主键,不带条件就改掉了那一行;同一事务的回读能发现大多数情形,但本键已存在、值又相同时发现不了。
+  做法:更新分支写成 `CASE WHEN 业务键相同 THEN 新值 ELSE 原值 END`,撞号时什么都不改,由回读发现本键没写进去、回滚重试。
+  不用 `IF()`:MySQL、TiDB、H2 都认标准 CASE。不改成先查后写:那会重新引入唯一键上的死锁环。详见 `ZoneWhitelistRepository.UPSERT_SQL` 的注释。
 
 ## 2. 方法与范围
 
@@ -329,6 +385,10 @@
 - **文档说法不准，不算数据问题**：`player_exit_intent.h` 注释仍说「MySQL 补齐由存盘意图补投承担」，引用的是已删的 saveoutbox。第 2 轮 `fault-kafka-crash.json` 排除项里「收件箱终态行保留 30 天」的说法也已过时，以 r2-doc#2 为准。
 - **只读核对**：三路转录里没有 Edit / Write 调用，`git show` 没有重定向，%TEMP% 里没有仓库文件副本。其中一路的 grep 超时被工具转入后台，在会话的 tasks 目录生成过一个空输出文件，已停掉。
 
+### 3.12 第四波：换视角查找第 4 轮（2026-11-26，跨区与号段、网络分区与租约、运维工具三路）
+
+17 条：3 high（r2-gw#1、r2-gw#2、r2-tn#1）、6 medium、8 low，几乎都在 11-20 以后新加的玩法代码。对抗复核没跑完，代码还没改；发现表、修复设计（批 V 帮战、批 W 锦标赛领奖与 match 发件接线、批 X 生死状银两）与三份查找原文见[第 4 轮交接单](../handoff/data-overwrite-audit-r2-round4-handoff-20261126.md)，复核与改码交 Gemini。复核结论与各编号的最终状态，修完后补在本节与 §5.0。
+
 ## 4. 已排除（尝试推翻成功）
 
 
@@ -472,6 +532,12 @@
 | r2-equip#1 | 强化请求带 `expected_level`（与 `UpgradeSkill` 的 `expected_rank` 同构）做乐观比较；改客户端可见 proto，客户端与协议生成交 Gemini |
 
 ## 6. 后续各波与收口
+
+**2026-11-26 评审建议项收口(五批已落码,未编译、未测试)**:11-19 六条「评审修正·」下的「建议，没做」,排空框架与消费组、一致性核对工具、
+账号目录、网关、背包与 gate 五批已改,文件、用例与验证命令见 `docs/PROGRESS.md` 2026-11-26「收 11-19 六条…」,设计记录见 §1a 新增的四行入口。
+客户端(重发 EnterGame 收到 2005 的歧义等)、修复身份(dbmove 核对等)两批与 snowflake 旧前缀兼容层删除没做,
+见 `docs/handoff/review-suggestions-remaining-handoff-20261126.md`。停下的原因是 Fable 周额度用完(当晚到 100%),会话切到 Opus 5.5 之后按 §10.3 不再改逻辑。
+这几项和下面「清点」的 4 条一起交 Gemini 最高档(交接单第 4 节),4 条修完后由修的一方在各条后面标状态。
 
 **2026-11-26 清点：早期各批记了「没做」、没人认领的项**（只读清点，代码未改；4 条都要改逻辑，按 AGENTS §10.3 由最高档模型改）：
 

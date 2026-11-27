@@ -63,7 +63,8 @@ func (l *DisconnectLogic) Disconnect(in *login_proto.LoginNodeDisconnectRequest)
 	//   - 栅栏 Close 可重放:每次都写 closed、把记录续到 sessionFenceTTL,并返回同一个绑定的玩家(Close 不删 player)。
 	//     gate 的重发间隔封顶 30 秒出头,远短于 sessionFenceTTL(6 分钟),绑定在重发期间一直读得到;只有一台 gate 积压到
 	//     每拍预算排不过来(约 7 万条以上)时重发才可能晚于它,那时这条通知只剩会话头带来的玩家能收尾;
-	//   - 清登录态按连接身份(gate 实例 + 会话代次)删键,删过再删是空操作;防沉迷记录用 GETDEL 取走,下线只报一次;
+	//   - 清登录态按连接身份(gate 实例 + 会话代次)删键,删过再删是空操作;防沉迷账本的 End 在一段脚本里删登记并排一条下线,
+	//     登记已不在时什么都不做,所以下线只报一次;End 失败只记日志,由账本清扫在租约到期后补报(nppa/ledger.go);
 	//   - SetDisconnecting 对已是 DISCONNECTING 的会话直接回成功、不延长租约;会话号、gate 实例或会话代次不符时忽略。
 	bound, err := sessionfence.Close(l.ctx, l.svcCtx.LoginRedis, sessionRef.Fence(), sessionFenceTTL)
 	if err != nil {

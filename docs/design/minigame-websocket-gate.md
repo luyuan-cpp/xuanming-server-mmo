@@ -135,6 +135,11 @@ gate 和 battle 的客户端端口同时接受两种连接:首字节是 `G` 的�
 - 给了 `-WsEdgeHost`,gate 的 StatefulSet 与 battle 的 Fleet / hostPort Deployment 就带上 `CLIENT_WS_BASE_URL=wss://<域名>/ws`(经 PodCommon,三个生成器同一处)。
 - 参数不粘滞:线上的 gate / battle 已经在自报 WebSocket 地址,而本次漏传或换了域名时,`Get-GateAddressDrift` / `Get-BattleEntryDrift` 在任何写操作之前拒绝,确认要改加 `-AllowDisruptiveSwitch`。否则之后重建的节点不再自报,落到它上面的小游戏玩家拿不到入口,且不报任何错。留空不会删已有的 ws-edge。
 - 路由:`/ws/<IPv4>/<端口>` 转发到 `http://<IPv4>:<端口>`。IPv4 用 `geo` 限定在 Pod 网段(部署参数),端口用正则限定为 gate 与 battle 的 RpcPort(部署参数,现为 18000 与 20000),不符合的回 403,其余路径 404。`proxy_read_timeout` / `proxy_send_timeout` 120s(大于 gate / battle 自己的空闲超时,谁该断由 gate / battle 说了算),关代理缓冲,带 `X-Forwarded-For`。nginx 收全请求头才连上游,慢速发头的连接停在边缘,到不了 gate。
+- 两处少见写法为什么成立(2026-11-26 按 nginx 源码语义静态核对,**没有实跑 `nginx -t`**,实跑见 §7 第 8 步):
+  - **`geo $ws_target_ip $ws_target_allowed`,键是 location 正则里的命名捕获。** 担心的是 geo 写在 location 前面,解析到它时这个变量还没定义,报 `unknown "ws_target_ip" variable`。不会:geo 的第一个参数可以是任意变量(0.7.27 起),解析时只给变量名登记一个下标;命名捕获在解析 location 正则时登记成变量(`ngx_http_regex_compile` 里的 `ngx_http_add_variable`);「未知变量」是整份配置解析完之后统一查的(`ngx_http_variables_init_vars`),与先后顺序无关。运行期,`if ($ws_target_allowed = 0)` 在 location 匹配之后的 rewrite 阶段才求值,那时捕获已经写进请求的变量表。捕获到的串不是合法地址时(如 `999.1.1.1`,正则只限了数字个数),geo 按 255.255.255.255 查表,落到 `default 0`,回 403。
+  - **`map $remote_addr $ws_source_prefix { ~^(?<ws_source_24>\d+\.\d+\.\d+)\.\d+$ $ws_source_24; default $remote_addr; }`。** map 的结果值可以是变量(0.9.0 起),源值正则里的命名捕获可以在结果值里引用,这是文档写明的用法;源值按原样当正则编译,末尾的 `$` 是行尾锚,不做变量展开。IPv6 来源不匹配这条正则,走 `default`,按整个地址限。
+  - **限速不消耗非法目标的名额。** `if … return 403` 在 rewrite 阶段就结束请求,`limit_req` 在它之后的 preaccess 阶段才计数。
+  - 被否决的写法:把网段判断写成一串 `if ($ws_target_ip ~ ^10\.244\.)` 正则。网段不是按字节对齐时(如 `/20`)正则写不对,而且每多一个网段多一条 `if`;`geo` 按 CIDR 查基数树,网段数量与写法无关。
 - 出站限制:scene 的节点口也是 20000,只靠网段加端口,边缘还能把一个 HTTP 请求发到 scene 的内部口(scene 会按非法帧断开,建不成通道)。所以给 ws-edge 加一条只选中它自己的 egress NetworkPolicy:只许连 `app` 为 gate、battle(含金丝雀)的 Pod 的客户端口。网络插件不执行 NetworkPolicy 时这条不生效,剩下 nginx 的网段与端口限定。仓里现有的 gRPC 口准入策略(`-NetworkPolicies on`)对节点口不设来源限制,不挡边缘。
 - 为什么按 Pod IP 定向:gate 票据绑节点(`token_gate_node_mismatch`),连接必须到达指定实例;battle 由 Agones 管,实例随时生灭,没有稳定的 Service。Pod IP 对两者都适用,不用为每台建 Service 或路由规则,也不动 Agones 端口。
 - 为什么是独立的 nginx 而不是 Ingress:按路径里的变量转发到任意 Pod 需要 snippet 注解,ingress-nginx 新版默认禁用;独立 nginx 的配置就是一个静态文件,审阅即可。
@@ -209,7 +214,7 @@ gate 和 battle 的客户端端口同时接受两种连接:首字节是 `G` 的�
 5. 部署契约测试:`k8s_client_entry_contract.tests.ps1` 覆盖预检的六种组合、三个生成器的 env 注入、ws-edge 四份清单的内容与参数拒绝、zone-up / infra-up 的 DryRun、三条包装链的透传。
 6. 客户端:EditMode 用例 `WebSocketFramedConnectionTests`(假驱动、可拨时钟);编辑器加 `MMORPG_FORCE_WS` 连本机 gate 联调。微信、抖音开发者工具与真机联调需要开发者账号和转换工具,不在本批。
 7. robot(W11):先 `go mod vendor`(把 `golang.org/x/net/websocket` 与新生成的协议带进 `robot/vendor`),再跑 `robot/pkg` 的用例:传输层(假的回显 WebSocket 服务端:地址选择、一帧一条二进制消息、经 `dial_addr` 的 TLS、必须下发时本地失败、TCP 缺省不变),以及原有的 Call / 心跳 / 重定向用例(它们现在跑在仓内的 `wireConn` 上)。之后拿现有冒烟配置加 `transport.kind: websocket` 各跑一遍,这是本文唯一一条端到端的自动化路径;kind 上再加 `require_advertised` 走边缘。
-8. 边缘配置的静态检查:把 `-DryRun` 渲染出来的 `nginx.conf`(不带与带 `-WsEdgeSourceRatePerSecond` 各一份)放进钉住的 nginx 镜像里跑 `nginx -t`,证书用临时自签的。`geo` 以路径里捕获的地址为键、`map` 取 /24 这两处写法没有实测过,这一步十秒钟就能定下来,不用等 kind。
+8. 边缘配置的静态检查:把 `-DryRun` 渲染出来的 `nginx.conf`(不带与带 `-WsEdgeSourceRatePerSecond` 各一份)放进钉住的 nginx 镜像里跑 `nginx -t`,证书用临时自签的。`geo` 以路径里捕获的地址为键、`map` 取 /24 这两处写法 2026-11-26 按 nginx 源码语义静态核对是成立的(理由在 W8「两处少见写法为什么成立」),但仍没有实跑过;这一步十秒钟就能定下来,不用等 kind。实跑报错时保留 nginx 的原文,交回 Claude 改模板。
 
 ## 8. 明确不做
 

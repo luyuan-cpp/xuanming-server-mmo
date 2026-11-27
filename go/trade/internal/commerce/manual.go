@@ -220,6 +220,11 @@ type ManualRequest struct {
 	// LinkedID、LinkedVersion:void-auction 时拍品引用的出价号,与操作人看过的出价版本。
 	LinkedID      uint64
 	LinkedVersion uint64
+	// ApprovalID、Approver:后台双人复核的批准号与批准人(入口已用 shared/dualcontrol 核对过,发起人就是 Operator)。
+	// 批准号同时是幂等键:合同留痕里已有同一个批准号就回原结果、不再改动(docs/design/admin-identity-and-dual-control.md §5.6)。
+	// 没经双人复核(本机开发)时两项为空,重放只能靠 ExpectVersion 拦。
+	ApprovalID string
+	Approver   string
 }
 
 func (q ManualRequest) validate() error {
@@ -240,6 +245,9 @@ func (q ManualRequest) validate() error {
 		if strings.IndexFunc(field.value, unicode.IsControl) >= 0 {
 			return notAllowed("%s 不能带换行或控制字符", field.name)
 		}
+	}
+	if (q.ApprovalID == "") != (q.Approver == "") {
+		return notAllowed("批准号与批准人要么都给,要么都不给")
 	}
 	// 每个动作只收自己的参数:多给的参数说明操作人想的和要执行的不是一回事。
 	if q.Action == ManualPartial {
@@ -301,6 +309,8 @@ type ManualResult struct {
 	Linked   *ManualResult
 	// Audit 是写进 manual_actions 的那一条;只算计划时也给出,供核对。
 	Audit *tradepb.TradeCommerceManualAction
+	// AlreadyExecuted:请求带的批准号早已执行过。本次没有改动,Audit 是当时写进留痕的那一条。
+	AlreadyExecuted bool
 }
 
 var (
@@ -349,6 +359,9 @@ func ResolveManual(ctx context.Context, deps ManualDeps, req ManualRequest, nowM
 	if err != nil {
 		return ManualResult{}, err
 	}
+	if locks.executed != nil {
+		return *locks.executed, nil
+	}
 	var result ManualResult
 	err = deps.Roles.RunTx(ctx, func() error {
 		return deps.Repo.Tx(ctx, func(tx *sql.Tx) error {
@@ -381,6 +394,8 @@ func manualError(err error) error {
 type manualLocks struct {
 	players []uint64
 	lotID   uint64 // 非 0:出价所属的拍品,或作废拍卖的拍品本身
+	// executed 非空:请求的批准号已经执行过,不用加锁,直接回它。
+	executed *ManualResult
 }
 
 // manualLockSet 不加锁读一次合同(作废拍卖时连同出价),定锁序:先锁哪些角色、要不要先锁拍品。
@@ -392,6 +407,10 @@ func manualLockSet(ctx context.Context, repo *data.CommerceRepo, req ManualReque
 	}
 	if err != nil {
 		return manualLocks{}, err
+	}
+	// 先认批准号再比版本:执行成功后版本已经加一,结果未知的重放若先比版本,只会得到「版本已变」,看不出是不是自己做的。
+	if done, ok := alreadyExecuted(pre, req.ApprovalID); ok {
+		return manualLocks{executed: &done}, nil
 	}
 	if pre.Version != req.ExpectVersion {
 		return manualLocks{}, versionChanged(pre.CommerceId, pre.Version, req.ExpectVersion)
@@ -462,6 +481,10 @@ func resolveManualTx(ctx context.Context, deps ManualDeps, tx *sql.Tx, req Manua
 	if r == nil {
 		return ManualResult{}, ErrManualNotFound
 	}
+	// 锁内再认一次批准号:锁外读之后、加锁之前,同一个批准号的另一次请求可能刚提交。
+	if done, ok := alreadyExecuted(r, req.ApprovalID); ok {
+		return done, nil
+	}
 	if r.Version != req.ExpectVersion {
 		return ManualResult{}, versionChanged(r.CommerceId, r.Version, req.ExpectVersion)
 	}
@@ -514,6 +537,7 @@ func resolveManualTx(ctx context.Context, deps ManualDeps, tx *sql.Tx, req Manua
 		result.Linked.Audit = &tradepb.TradeCommerceManualAction{
 			Action: string(req.Action), Operator: req.Operator, Reason: req.Reason, AtMs: nowMs,
 			VersionBefore: req.LinkedVersion, Quarantine: result.Linked.Quarantine, LinkedCommerceId: r.CommerceId,
+			ApprovalId: req.ApprovalID, Approver: req.Approver,
 		}
 	}
 	if !execute {
@@ -565,7 +589,28 @@ func manualAudit(req ManualRequest, result ManualResult, nowMs uint64) *tradepb.
 		RetargetedLegs:   result.RetargetedLegs,
 		LinkedCommerceId: result.LinkedID,
 		PartialParts:     result.PartialParts,
+		ApprovalId:       req.ApprovalID,
+		Approver:         req.Approver,
 	}
+}
+
+// alreadyExecuted 在合同留痕里找同一个批准号:找到说明这条后台命令已经执行过(结果未知后的重放),回原结果、不再改动。
+// 留痕只追加,看到就是已提交。没带批准号、工作流解不开都当没找到,交给后面的正常路径处理(解不开时那里会报错)。
+func alreadyExecuted(r *tradepb.TradeCommerceRecord, approvalID string) (ManualResult, bool) {
+	if approvalID == "" {
+		return ManualResult{}, false
+	}
+	w, err := data.Workflow(r)
+	if err != nil {
+		return ManualResult{}, false
+	}
+	for _, action := range w.ManualActions {
+		if action.GetApprovalId() == approvalID {
+			return ManualResult{AlreadyExecuted: true, VersionBefore: action.GetVersionBefore(), Quarantine: action.GetQuarantine(),
+				Stage: w.Stage, Status: r.Status, Audit: action}, true
+		}
+	}
+	return ManualResult{}, false
 }
 
 // legSettling 是 settleLegOutcomes 对个别动作的放宽。

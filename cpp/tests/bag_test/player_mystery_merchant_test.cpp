@@ -675,6 +675,28 @@ TEST_F(PlayerMysteryMerchantTest, GoodsThatCannotBeSoldAreLeftOffTheShelf)
 	EXPECT_EQ(stackGoods, info.goods(0).goods_id());
 }
 
+// ── 表校验 ────────────────────────────────────────────────────────────────────
+
+// 热更的整批校验拿这个返回值决定收不收一包表:导出的表必须过;上架却卖不了的行、越界的购买距离必须不过;
+// weight = 0 是运营的立即停售手段,不能被当成坏行拦下。
+TEST_F(PlayerMysteryMerchantTest, TableValidationFailsOnUnsellableShelvedGoodsAndOutOfRangeDistance)
+{
+	ASSERT_TRUE(PlayerMysteryMerchantSystem::ValidateTables()) << kExportFirst;
+
+	auto &goods = const_cast<MysteryMerchantGoodsTable &>(*GoodsRowOrNull(stackGoods));
+	goods.set_price(0);
+	EXPECT_FALSE(PlayerMysteryMerchantSystem::ValidateTables()) << "上架的商品原价为 0,玩家买不了";
+	goods.set_weight(0);
+	EXPECT_TRUE(PlayerMysteryMerchantSystem::ValidateTables()) << "下架的行不参加可售核对";
+
+	auto &rule = const_cast<MysteryMerchantRuleTable &>(
+		*MysteryMerchantRuleTableManager::Instance().FindAll().data().begin());
+	rule.set_interact_range(0);
+	EXPECT_FALSE(PlayerMysteryMerchantSystem::ValidateTables()) << "购买距离为 0";
+
+	LoadTables(); // 上面改的是现役表里的行,还原给后面的用例
+}
+
 // ── 购买:成功 ────────────────────────────────────────────────────────────────
 
 TEST_F(PlayerMysteryMerchantTest, BuyChargesGrantsAndRecordsTogether)
