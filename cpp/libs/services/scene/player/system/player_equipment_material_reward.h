@@ -17,7 +17,7 @@ class SyncAccountStage1TradableResponse;
 // 两阶段总账（合入 A + 经济总纲 account-level 60 + 月卡资格）：
 //   - 第一阶段（lifetime_earned < 660）：无每日/每周刷新，永久 660 份总池（首套 600 + 60 容错）；
 //     其中胜局每满 10 份基础额包含至多 1 份可交易，跨角色/删角共享单账号终身 60 份硬上限（权威落在 data_service account_directory），余量全绑定。
-//   - 第二阶段（lifetime_earned >= 660）：自动切换为每周平滑 150 份池（UTC+8 周一 05:00 重置，防回拨），
+//   - 第二阶段（lifetime_earned >= 660）：自动切换为每周 +150 份的 4 周滚存蓄水池（UTC+8 周一 05:00 补充，未用额度滚存封顶 600 份，防回拨），
 //     零氪全绑定自用；持有有效「仙途轻享卡」（afk_pass_expires_at > nowSec）时每场有效胜局将其中 1 份解锁为市场可交易产出（不增总额度/战力）。
 // 领取通过严格背包事务同时扣额度、记回执，可交易与绑定分堆入包；revision 只随成功领取增加，入账不改变领取水位。
 // 生产环境领取含阶段一可交易份数的批次前，须等待 data_service 确认账号级 60 上限（fail-closed）；APPLIED 仍须 durable 才能向玩家展示成功。
@@ -30,7 +30,9 @@ public:
     static constexpr uint32_t kBonusUnits = 5;             // 困难 PVE / PVP 胜局额外绑定份数
     static constexpr uint32_t kLifetimeLimit = 660;        // 第一阶段首套永久总池
     static constexpr uint32_t kTradableLifetimeLimit = 60; // 第一阶段账号级跨角色终身可交易硬上限
-    static constexpr uint32_t kWeeklyLimit = 150;          // 第二阶段每周平滑总池
+    static constexpr uint32_t kWeeklyLimit = 150;          // 第二阶段每周补充额
+    static constexpr uint32_t kWeeklyRolloverMaxWeeks = 4; // 第二阶段最多滚存 4 周
+    static constexpr uint32_t kWeeklyRolloverMaxPool = kWeeklyLimit * kWeeklyRolloverMaxWeeks; // 600 份蓄水池封顶
     static constexpr uint32_t kPvpMinRoundsForLoss = 3;
     static constexpr uint32_t kPvpMinManualRoundsForLoss = 2;
     static constexpr uint32_t kCraftingMaterial = 3001;

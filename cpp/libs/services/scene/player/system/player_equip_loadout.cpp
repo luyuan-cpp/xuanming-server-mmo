@@ -14,14 +14,13 @@
 #include <muduo/base/Logging.h>
 
 #include "battle/system/player_battle.h"
+#include "engine/core/time/system/time.h"
 #include "engine/core/type_define/player_guid_comp.h"
 #include "modules/bag/bag_service.h"
 #include "modules/bag/comp/player_bags_comp.h"
 #include "modules/currency/constants/currency.h"
 #include "modules/currency/system/currency_system.h"
-#include "player/comp/last_persisted_snapshot_comp.h"
-#include "player/comp/player_ownership_comp.h"
-#include "player/system/client_request_ledger.h"
+#include "player/system/afk_pass.h"
 #include "player/system/equip_attribute_rules.h"
 #include "player/system/equip_loadout_rules.h"
 #include "player/system/player_attribute.h"
@@ -31,12 +30,11 @@
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_mutability.h"
 #include "player/system/player_skill.h"
-#include "proto/common/component/client_request_ledger_comp.pb.h"
+#include "player/system/skill_loadout_rules.h"
 #include "proto/common/component/player_attribute_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"
 #include "proto/common/component/player_equip_loadout_comp.pb.h"
 #include "proto/common/component/player_skill_comp.pb.h"
-#include "proto/common/rollback/transaction_log.pb.h"
 #include "proto/scene/player_bag.pb.h"
 #include "table/code/equipslot_table.h"
 #include "table/code/item_table.h"
@@ -48,18 +46,20 @@
 namespace
 {
 
-struct EquipLoadoutPersistRequestComp
-{
-	std::chrono::steady_clock::time_point requested{};
-};
-
-PlayerEquipLoadoutSystem::PersistFn gPersistFn = &PlayerLifecycleSystem::SavePlayerForAssetCommit;
-
 PlayerEquipLoadoutSystem::NameFilterFn &NameFilterSlot()
 {
 	static PlayerEquipLoadoutSystem::NameFilterFn slot;
 	return slot;
 }
+
+struct UnifiedSeatState
+{
+	uint32_t freeSchemes{skillloadout::kBaseFreeSchemes};
+	uint32_t lightCardBonusSchemes{0};
+	uint32_t rentedExtraSlots{0};
+	uint64_t rentExpiresAtSec{0};
+	uint32_t unlockedSchemes{skillloadout::kBaseFreeSchemes};
+};
 
 const ItemTable *ItemRow(uint32_t configId)
 {
@@ -255,72 +255,24 @@ uint32_t ValidateEquipmentCandidate(entt::entity player, const Bag &equipment, c
 	return kSuccess;
 }
 
-bool IsUnlockDurable(entt::entity player, uint32_t unlockedCount)
+UnifiedSeatState ResolveUnifiedSeatState(entt::entity player, uint64_t nowUnixSec)
 {
-	const auto *persisted = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
-	const auto *identity = tlsEcs.actorRegistry.try_get<PlayerGuidComp>(player);
-	const auto *owner = tlsEcs.actorRegistry.try_get<PlayerOwnerEpochComp>(player);
-	if (unlockedCount < 2u || identity == nullptr || !player_mutability::HasFencedOwnership(player) ||
-		owner == nullptr || persisted == nullptr || !persisted->IsCommittedForOwner(owner->epoch))
+	UnifiedSeatState state;
+	state.freeSchemes = skillloadout::FreeSchemesForLevel(PlayerLevel(player));
+	const bool lightCardActive = AfkPassSystem::IsActive(player, nowUnixSec);
+	state.lightCardBonusSchemes = lightCardActive ? skillloadout::kLightCardBonusSchemes : 0u;
+	uint32_t storedRented = 0u;
+	uint64_t storedExpiresAt = 0u;
+	if (const auto *skillComp = tlsEcs.actorRegistry.try_get<PlayerSkillListComp>(player); skillComp != nullptr)
 	{
-		return false;
+		storedRented = skillComp->rented_extra_slots();
+		storedExpiresAt = skillComp->rent_expires_at_sec();
 	}
-	const auto &saved = persisted->snapshot->player_database_data();
-	return saved.player_id() == identity->value &&
-		   saved.equip_loadout_component().unlocked_scheme_count() >= unlockedCount;
-}
-
-void RequestUnlockPersist(entt::entity player, bool force)
-{
-	if (!player_mutability::IsPlayerMutable(player))
-	{
-		return;
-	}
-	auto &state = tlsEcs.actorRegistry.get_or_emplace<EquipLoadoutPersistRequestComp>(player);
-	const auto now = std::chrono::steady_clock::now();
-	if (!force && state.requested != std::chrono::steady_clock::time_point{} &&
-		now - state.requested < std::chrono::seconds(1))
-	{
-		return;
-	}
-	state.requested = now;
-	if (gPersistFn != nullptr)
-	{
-		gPersistFn(player);
-	}
-}
-
-void FillUnlockAppliedReply(entt::entity player, const ClientRequestResult &result, bool replayed,
-							UnlockEquipLoadoutResponse &response)
-{
-	const auto &comp = tlsEcs.actorRegistry.get<PlayerEquipLoadoutComp>(player);
-	response.set_outcome(UnlockEquipLoadoutResponse::APPLIED);
-	response.set_replayed(replayed);
-	response.set_result_unlocked_count(result.equipLoadoutUnlockedCount);
-	response.set_current_unlocked_count(equiploadout::EffectiveUnlockedCount(comp.unlocked_scheme_count()));
-	response.set_used_item_config_id(result.equipLoadoutUsedItemId);
-	response.set_spent_bind_diamond(result.equipLoadoutSpentBindDiamond);
-	response.set_spent_diamond(result.equipLoadoutSpentDiamond);
-	response.set_durable(IsUnlockDurable(player, result.equipLoadoutUnlockedCount));
-	if (const auto snapErr = PlayerEquipLoadoutSystem::BuildSnapshot(player, *response.mutable_snapshot());
-		snapErr != kSuccess)
-	{
-		response.clear_snapshot();
-		response.mutable_error_message()->set_id(snapErr);
-	}
-	if (const auto bagErr = PlayerBagSystem::BuildSnapshot(player, kInventory, *response.mutable_bag());
-		bagErr != kSuccess)
-	{
-		response.clear_bag();
-		if (!response.has_error_message())
-		{
-			response.mutable_error_message()->set_id(bagErr);
-		}
-	}
-	if (!response.durable())
-	{
-		RequestUnlockPersist(player, !replayed);
-	}
+	state.rentedExtraSlots = skillloadout::ActiveRentedSlots(storedRented, storedExpiresAt, nowUnixSec);
+	state.rentExpiresAtSec = state.rentedExtraSlots > 0u ? storedExpiresAt : 0u;
+	state.unlockedSchemes = skillloadout::UnlockedSchemes(state.freeSchemes, lightCardActive, storedRented,
+														  storedExpiresAt, nowUnixSec);
+	return state;
 }
 
 std::string SkillSchemeDisplayName(entt::entity player, uint32_t schemeId)
@@ -350,9 +302,8 @@ std::string SkillSchemeDisplayName(entt::entity player, uint32_t schemeId)
 
 } // namespace
 
-void PlayerEquipLoadoutSystem::SetPersistForTest(PersistFn fn)
+void PlayerEquipLoadoutSystem::SetPersistForTest(PersistFn)
 {
-	gPersistFn = fn != nullptr ? fn : &PlayerLifecycleSystem::SavePlayerForAssetCommit;
 }
 
 void PlayerEquipLoadoutSystem::SetNameFilterForTest(NameFilterFn fn)
@@ -361,6 +312,12 @@ void PlayerEquipLoadoutSystem::SetNameFilterForTest(NameFilterFn fn)
 }
 
 uint32_t PlayerEquipLoadoutSystem::BuildSnapshot(entt::entity player, EquipLoadoutSnapshot &snapshot)
+{
+	return BuildSnapshotAt(player, TimeSystem::NowSecondsUTC(), snapshot);
+}
+
+uint32_t PlayerEquipLoadoutSystem::BuildSnapshotAt(entt::entity player, uint64_t nowUnixSec,
+												   EquipLoadoutSnapshot &snapshot)
 {
 	snapshot.Clear();
 	if (const auto err = CheckRequiredInputs(player); err != kSuccess)
@@ -372,30 +329,30 @@ uint32_t PlayerEquipLoadoutSystem::BuildSnapshot(entt::entity player, EquipLoado
 	Bag &inventory = bags.bags[kInventory];
 	Bag &equipment = bags.bags[kEquipment];
 
-	const uint32_t unlocked = equiploadout::EffectiveUnlockedCount(comp.unlocked_scheme_count());
-	const uint32_t active = equiploadout::EffectiveActiveSchemeId(comp.active_scheme_id(), unlocked);
+	const auto seats = ResolveUnifiedSeatState(player, nowUnixSec);
+	const uint32_t unlocked = seats.unlockedSchemes;
+	// 到期只锁不删：保留 1..7 内的当前激活方案号，绝不强行切回方案一。
+	const uint32_t active = equiploadout::EffectiveActiveSchemeId(comp.active_scheme_id(), equiploadout::kMaxSchemes);
 	const uint64_t version = equiploadout::EffectiveStateVersion(comp.state_version());
 
 	snapshot.set_unlocked_scheme_count(unlocked);
 	snapshot.set_max_scheme_count(equiploadout::kMaxSchemes);
 	snapshot.set_active_scheme_id(active);
 	snapshot.set_state_version(version);
+	snapshot.set_next_unlock_cost_diamond(0);
+	snapshot.set_next_unlock_allow_bind_diamond(false);
 	snapshot.set_unlock_item_config_id(equiploadout::kUnlockItemConfigId);
 	snapshot.set_unlock_item_owned(BagService::RemovableCount(player, inventory, equiploadout::kUnlockItemConfigId));
 	snapshot.set_diamond_balance(CurrencySystem::GetBalance(player, kCurrencyDiamond));
 	snapshot.set_bind_diamond_balance(CurrencySystem::GetBalance(player, kCurrencyBindDiamond));
-
-	if (unlocked < equiploadout::kMaxSchemes)
-	{
-		const auto nextSpec = equiploadout::UnlockSpecForTarget(unlocked + 1u);
-		snapshot.set_next_unlock_cost_diamond(nextSpec.costDiamond);
-		snapshot.set_next_unlock_allow_bind_diamond(nextSpec.allowBindDiamond);
-	}
-	else
-	{
-		snapshot.set_next_unlock_cost_diamond(0);
-		snapshot.set_next_unlock_allow_bind_diamond(false);
-	}
+	snapshot.set_free_schemes(seats.freeSchemes);
+	snapshot.set_light_card_bonus_schemes(seats.lightCardBonusSchemes);
+	snapshot.set_rented_extra_slots(seats.rentedExtraSlots);
+	snapshot.set_rent_expires_at_sec(seats.rentExpiresAtSec);
+	snapshot.set_server_now_sec(nowUnixSec);
+	snapshot.set_rent_unit_price_diamond(skillloadout::kRentUnitPriceDiamond);
+	snapshot.set_rent_period_days(skillloadout::kRentPeriodDays);
+	snapshot.set_rent_max_remaining_days(skillloadout::kRentMaxRemainingDays);
 
 	for (uint32_t schemeId = 1u; schemeId <= equiploadout::kMaxSchemes; ++schemeId)
 	{
@@ -454,7 +411,7 @@ uint32_t PlayerEquipLoadoutSystem::BuildSnapshot(entt::entity player, EquipLoado
 		info->set_missing_count(missingCount);
 	}
 
-	const uint32_t skillSchemes = PlayerSkillSystem::UnlockedLoadoutSchemeCount(player);
+	const uint32_t skillSchemes = PlayerSkillSystem::UnlockedLoadoutSchemeCountAt(player, nowUnixSec);
 	for (uint32_t sid = 1u; sid <= skillSchemes; ++sid)
 	{
 		auto *opt = snapshot.add_skill_schemes();
@@ -476,8 +433,13 @@ uint32_t PlayerEquipLoadoutSystem::BuildSnapshot(entt::entity player, EquipLoado
 
 uint32_t PlayerEquipLoadoutSystem::Get(entt::entity player, GetEquipLoadoutsResponse &response)
 {
+	return GetAt(player, TimeSystem::NowSecondsUTC(), response);
+}
+
+uint32_t PlayerEquipLoadoutSystem::GetAt(entt::entity player, uint64_t nowUnixSec, GetEquipLoadoutsResponse &response)
+{
 	response.Clear();
-	const auto err = BuildSnapshot(player, *response.mutable_snapshot());
+	const auto err = BuildSnapshotAt(player, nowUnixSec, *response.mutable_snapshot());
 	if (err != kSuccess)
 	{
 		response.clear_snapshot();
@@ -489,6 +451,12 @@ uint32_t PlayerEquipLoadoutSystem::Get(entt::entity player, GetEquipLoadoutsResp
 void PlayerEquipLoadoutSystem::Save(entt::entity player, const SaveEquipLoadoutRequest &request,
 									SaveEquipLoadoutResponse &response)
 {
+	SaveAt(player, request, TimeSystem::NowSecondsUTC(), response);
+}
+
+void PlayerEquipLoadoutSystem::SaveAt(entt::entity player, const SaveEquipLoadoutRequest &request, uint64_t nowUnixSec,
+									  SaveEquipLoadoutResponse &response)
+{
 	response.Clear();
 	response.set_request_id(request.request_id());
 
@@ -497,7 +465,8 @@ void PlayerEquipLoadoutSystem::Save(entt::entity player, const SaveEquipLoadoutR
 		{
 			response.mutable_error_message()->set_id(errorTip);
 		}
-		if (const auto snapErr = BuildSnapshot(player, *response.mutable_snapshot()); snapErr != kSuccess)
+		if (const auto snapErr = BuildSnapshotAt(player, nowUnixSec, *response.mutable_snapshot());
+			snapErr != kSuccess)
 		{
 			response.clear_snapshot();
 			if (errorTip == kSuccess)
@@ -539,8 +508,8 @@ void PlayerEquipLoadoutSystem::Save(entt::entity player, const SaveEquipLoadoutR
 		return;
 	}
 
-	const uint32_t unlocked = equiploadout::EffectiveUnlockedCount(comp.unlocked_scheme_count());
-	if (!equiploadout::ValidSchemeId(request.scheme_id(), unlocked))
+	const auto seats = ResolveUnifiedSeatState(player, nowUnixSec);
+	if (!equiploadout::ValidSchemeId(request.scheme_id(), seats.unlockedSchemes))
 	{
 		finish(kEquipLoadoutSchemeInvalid);
 		return;
@@ -566,7 +535,7 @@ void PlayerEquipLoadoutSystem::Save(entt::entity player, const SaveEquipLoadoutR
 	}
 
 	if (request.linked_skill_scheme_id() != 0 &&
-		request.linked_skill_scheme_id() > PlayerSkillSystem::UnlockedLoadoutSchemeCount(player))
+		request.linked_skill_scheme_id() > PlayerSkillSystem::UnlockedLoadoutSchemeCountAt(player, nowUnixSec))
 	{
 		finish(kInvalidParameter);
 		return;
@@ -687,6 +656,12 @@ void PlayerEquipLoadoutSystem::Save(entt::entity player, const SaveEquipLoadoutR
 void PlayerEquipLoadoutSystem::Switch(entt::entity player, const SwitchEquipLoadoutRequest &request,
 									  SwitchEquipLoadoutResponse &response)
 {
+	SwitchAt(player, request, TimeSystem::NowSecondsUTC(), response);
+}
+
+void PlayerEquipLoadoutSystem::SwitchAt(entt::entity player, const SwitchEquipLoadoutRequest &request,
+										uint64_t nowUnixSec, SwitchEquipLoadoutResponse &response)
+{
 	response.Clear();
 	response.set_request_id(request.request_id());
 
@@ -712,7 +687,8 @@ void PlayerEquipLoadoutSystem::Switch(entt::entity player, const SwitchEquipLoad
 				}
 			}
 		}
-		if (const auto snapErr = BuildSnapshot(player, *response.mutable_snapshot()); snapErr != kSuccess)
+		if (const auto snapErr = BuildSnapshotAt(player, nowUnixSec, *response.mutable_snapshot());
+			snapErr != kSuccess)
 		{
 			response.clear_snapshot();
 			if (errorTip == kSuccess && !response.has_error_message())
@@ -754,8 +730,8 @@ void PlayerEquipLoadoutSystem::Switch(entt::entity player, const SwitchEquipLoad
 		return;
 	}
 
-	const uint32_t unlocked = equiploadout::EffectiveUnlockedCount(comp.unlocked_scheme_count());
-	if (!equiploadout::ValidSchemeId(request.scheme_id(), unlocked))
+	const auto seats = ResolveUnifiedSeatState(player, nowUnixSec);
+	if (!equiploadout::ValidSchemeId(request.scheme_id(), seats.unlockedSchemes))
 	{
 		finish(kEquipLoadoutSchemeInvalid, false);
 		return;
@@ -1128,17 +1104,19 @@ void PlayerEquipLoadoutSystem::Unlock(entt::entity player, const UnlockEquipLoad
 	response.Clear();
 	response.set_client_request_id(request.client_request_id());
 
+	const uint64_t nowSec = TimeSystem::NowSecondsUTC();
 	const auto reject = [&](uint32_t errorTip, bool knownOutcome = true) {
 		response.set_outcome(knownOutcome ? UnlockEquipLoadoutResponse::REJECTED
 										  : UnlockEquipLoadoutResponse::UNKNOWN);
 		response.mutable_error_message()->set_id(errorTip);
-		if (const auto *curComp = tlsEcs.actorRegistry.try_get<PlayerEquipLoadoutComp>(player); curComp != nullptr)
+		if (CheckRequiredInputs(player) == kSuccess)
 		{
-			response.set_current_unlocked_count(equiploadout::EffectiveUnlockedCount(curComp->unlocked_scheme_count()));
-		}
-		if (BuildSnapshot(player, *response.mutable_snapshot()) != kSuccess)
-		{
-			response.clear_snapshot();
+			const auto seats = ResolveUnifiedSeatState(player, nowSec);
+			response.set_current_unlocked_count(seats.unlockedSchemes);
+			if (BuildSnapshotAt(player, nowSec, *response.mutable_snapshot()) != kSuccess)
+			{
+				response.clear_snapshot();
+			}
 		}
 	};
 
@@ -1147,193 +1125,14 @@ void PlayerEquipLoadoutSystem::Unlock(entt::entity player, const UnlockEquipLoad
 		reject(err, false);
 		return;
 	}
-	auto *ledger = tlsEcs.actorRegistry.try_get<ClientRequestLedgerComp>(player);
-	const auto *identity = tlsEcs.actorRegistry.try_get<PlayerGuidComp>(player);
-	if (identity == nullptr || identity->value == 0 || ledger == nullptr ||
-		tlsEcs.actorRegistry.any_of<ClientRequestLedgerInvalidComp>(player) ||
-		!client_request_ledger::Validate(*ledger).empty())
-	{
-		reject(kServiceUnavailable, false);
-		return;
-	}
-	if (request.client_request_id() == 0)
-	{
-		reject(kInvalidParameter, true);
-		return;
-	}
-
-	const std::string fingerprint = ClientRequestFingerprint(request);
-	ClientRequestResult firstResult;
-	const auto verdict = client_request_dedup::Check(player, request.client_request_id(),
-													 ClientRequestKind::kEquipLoadoutUnlock, fingerprint, firstResult);
-	if (verdict == ClientRequestVerdict::kReplay)
-	{
-		FillUnlockAppliedReply(player, firstResult, true, response);
-		return;
-	}
-	if (verdict == ClientRequestVerdict::kMismatch)
-	{
-		reject(kInvalidParameter, true);
-		return;
-	}
-	if (verdict != ClientRequestVerdict::kNew)
-	{
-		reject(kServiceUnavailable, false);
-		return;
-	}
-
 	if (const auto err = CheckWritable(player); err != kSuccess)
 	{
 		reject(err, true);
 		return;
 	}
 
-	auto &comp = tlsEcs.actorRegistry.get<PlayerEquipLoadoutComp>(player);
-	const uint32_t currentUnlocked = equiploadout::EffectiveUnlockedCount(comp.unlocked_scheme_count());
-	if (request.expected_unlocked_count() != currentUnlocked)
-	{
-		// 回执未命中且当前已解锁数大于预期：原解锁可能早已成功但回执被淘汰，标 UNKNOWN 避免客户端误判失败。
-		const bool known = currentUnlocked < request.expected_unlocked_count();
-		reject(kEquipLoadoutUnlockCountChanged, known);
-		return;
-	}
-	if (currentUnlocked >= equiploadout::kMaxSchemes)
-	{
-		reject(kEquipLoadoutMaxUnlocked, true);
-		return;
-	}
-	if (ledger->next_seq() == std::numeric_limits<uint64_t>::max() ||
-		comp.state_version() == std::numeric_limits<uint64_t>::max())
-	{
-		reject(kServiceUnavailable, false);
-		return;
-	}
-
-	const uint32_t targetSchemeId = currentUnlocked + 1u;
-	const auto spec = equiploadout::UnlockSpecForTarget(targetSchemeId);
-	if (!spec.valid)
-	{
-		reject(kEquipLoadoutMaxUnlocked, true);
-		return;
-	}
-
-	auto &bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player);
-	Bag &inventory = bags.bags[kInventory];
-	const uint32_t talismanAvailable =
-		BagService::RemovableCount(player, inventory, equiploadout::kUnlockItemConfigId);
-	const uint64_t bindBalance = CurrencySystem::GetBalance(player, kCurrencyBindDiamond);
-	const uint64_t diamondBalance = CurrencySystem::GetBalance(player, kCurrencyDiamond);
-
-	const auto payment = equiploadout::PlanUnlockPayment(spec, talismanAvailable, bindBalance, diamondBalance,
-														 request.use_bind_diamond_first());
-	if (!payment.canAfford)
-	{
-		reject(kEquipLoadoutDiamondNotEnough, true);
-		return;
-	}
-
-	ClientRequestResult receipt;
-	receipt.equipLoadoutUnlockedCount = targetSchemeId;
-	receipt.equipLoadoutUsedItemId = payment.useTalisman ? equiploadout::kUnlockItemConfigId : 0u;
-	receipt.equipLoadoutSpentBindDiamond = payment.spendBindDiamond;
-	receipt.equipLoadoutSpentDiamond = payment.spendDiamond;
-
-	ClientRequestLedgerComp candidateLedger = *ledger;
-	if (!client_request_ledger::Remember(candidateLedger, request.client_request_id(),
-										 ClientRequestKind::kEquipLoadoutUnlock, fingerprint, receipt) ||
-		!client_request_ledger::Validate(candidateLedger).empty())
-	{
-		reject(kServiceUnavailable, false);
-		return;
-	}
-
-	const uint64_t nextVersion = equiploadout::EffectiveStateVersion(comp.state_version()) + 1u;
-	if (payment.useTalisman)
-	{
-		std::vector<GuidVector> written;
-		const std::string extraJson = std::string("{\"source\":\"equip_loadout_unlock\",\"target_scheme\":") +
-									  std::to_string(targetSchemeId) + "}";
-		const uint32_t exchangeErr = BagService::ExchangeInventoryExact(
-			player, {{equiploadout::kUnlockItemConfigId, 1u}}, {}, {}, request.client_request_id(), extraJson,
-			written, [&](const std::vector<GuidVector> &) -> uint32_t {
-				if (!player_mutability::IsPlayerMutable(player))
-				{
-					return kEquipFrozen;
-				}
-				comp.set_unlocked_scheme_count(targetSchemeId);
-				if (comp.active_scheme_id() == 0)
-				{
-					comp.set_active_scheme_id(1u);
-				}
-				FindOrCreateScheme(comp, targetSchemeId);
-				comp.set_state_version(nextVersion);
-				ledger->Swap(&candidateLedger);
-				return kSuccess;
-			});
-		if (exchangeErr != kSuccess)
-		{
-			reject(exchangeErr == kEquipFrozen ? kEquipFrozen : kEquipLoadoutDiamondNotEnough, true);
-			return;
-		}
-	}
-	else
-	{
-		if (payment.spendBindDiamond > 0 &&
-			!CurrencySystem::CanAfford(player, kCurrencyBindDiamond, static_cast<int64_t>(payment.spendBindDiamond)))
-		{
-			reject(kEquipLoadoutDiamondNotEnough, true);
-			return;
-		}
-		if (payment.spendDiamond > 0 &&
-			!CurrencySystem::CanAfford(player, kCurrencyDiamond, static_cast<int64_t>(payment.spendDiamond)))
-		{
-			reject(kEquipLoadoutDiamondNotEnough, true);
-			return;
-		}
-
-		if (payment.spendBindDiamond > 0)
-		{
-			if (const auto err = CurrencySystem::DeductCurrency(
-					player, kCurrencyBindDiamond, static_cast<int64_t>(payment.spendBindDiamond),
-					TX_EQUIP_LOADOUT_UNLOCK, targetSchemeId);
-				err != kSuccess)
-			{
-				reject(kEquipLoadoutDiamondNotEnough, true);
-				return;
-			}
-		}
-		if (payment.spendDiamond > 0)
-		{
-			if (const auto err = CurrencySystem::DeductCurrency(
-					player, kCurrencyDiamond, static_cast<int64_t>(payment.spendDiamond),
-					TX_EQUIP_LOADOUT_UNLOCK, targetSchemeId);
-				err != kSuccess)
-			{
-				if (payment.spendBindDiamond > 0)
-				{
-					CurrencySystem::AddCurrency(player, kCurrencyBindDiamond,
-												static_cast<int64_t>(payment.spendBindDiamond),
-												TX_EQUIP_LOADOUT_UNLOCK, targetSchemeId);
-				}
-				reject(kEquipLoadoutDiamondNotEnough, true);
-				return;
-			}
-		}
-
-		comp.set_unlocked_scheme_count(targetSchemeId);
-		if (comp.active_scheme_id() == 0)
-		{
-			comp.set_active_scheme_id(1u);
-		}
-		FindOrCreateScheme(comp, targetSchemeId);
-		comp.set_state_version(nextVersion);
-		ledger->Swap(&candidateLedger);
-	}
-
-	LOG_INFO << "[PlayerEquipLoadout] Scheme slot unlocked: player_id=" << tlsEcs.GetPlayerId(player)
-			 << " unlocked=" << targetSchemeId << " used_item=" << receipt.equipLoadoutUsedItemId
-			 << " spent_bind_diamond=" << receipt.equipLoadoutSpentBindDiamond
-			 << " spent_diamond=" << receipt.equipLoadoutSpentDiamond
-			 << " client_request_id=" << request.client_request_id();
-	FillUnlockAppliedReply(player, receipt, false, response);
+	// 方案 A（7 套流派席位合一）：装备、战法、加点共用统一席位权限，单独买断入口退役以防双扣费。
+	LOG_INFO << "[PlayerEquipLoadout] Legacy separate unlock rejected; equip loadouts share unified 7-slot entitlement: player_id="
+			 << tlsEcs.GetPlayerId(player) << " client_request_id=" << request.client_request_id();
+	reject(kFeatureUnavailable, true);
 }

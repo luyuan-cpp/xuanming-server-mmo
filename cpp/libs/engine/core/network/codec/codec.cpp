@@ -163,14 +163,19 @@ void ProtobufCodec::onMessage(const TcpConnectionPtr& conn,
     return;
   }
 
+  // 这一批的单帧上限:还没验签的连接只收小帧(setPreAuthMessageLimit,准入设计 G10),声明一个大帧就当场断开。
+  const int messageLimit = (isAuthenticated && !isAuthenticated(conn) && preAuthMaxMessageLen < maxMessageLen)
+                               ? preAuthMaxMessageLen
+                               : maxMessageLen;
+
   // WebSocket 连接(小游戏):先去掉帧头,剩下的仍是同一套客户端帧;原始 TCP 原样返回 buf。
-  // 单个 WebSocket 帧的载荷上限 = 一个最大的客户端帧(长度前缀 + maxMessageLen_)。
-  buf = websocket::Unwrap(conn, buf, static_cast<size_t>(maxMessageLen) + kHeaderLen);
+  // 单个 WebSocket 帧的载荷上限 = 一个最大的客户端帧(长度前缀 + 这一批的单帧上限)。
+  buf = websocket::Unwrap(conn, buf, static_cast<size_t>(messageLimit) + kHeaderLen);
 
   while (buf != nullptr && buf->readableBytes() >= kMinMessageLen + kHeaderLen)
   {
     const int32_t len = buf->peekInt32();
-    if (len > maxMessageLen || len < kMinMessageLen)
+    if (len > messageLimit || len < kMinMessageLen)
     {
       errorCallback(conn, buf, receiveTime, kInvalidLength);
       break;

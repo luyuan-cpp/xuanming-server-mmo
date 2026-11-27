@@ -280,6 +280,46 @@ const ItemTable* Material(uint32_t id) {
     return row != nullptr && row->id() == id && row->max_stack_size() != 0 &&
         row->equip_kind() == 0 && row->battle_usable() == 0 ? row : nullptr;
 }
+// 计算阶段二在 weekStart 时刻的生效滚存上限与本周期已获份数（4 周蓄水池：每周 +150，封顶 600，抗时钟回拨）。
+struct Stage2WeekState {
+    uint32_t earned{0};
+    uint32_t poolCap{System::kWeeklyLimit};
+    bool rolledBack{false};
+};
+
+Stage2WeekState ResolveStage2WeekState(const EquipmentMaterialRewardLedger& state, uint64_t weekStart) {
+    Stage2WeekState out;
+    const uint64_t prevWeek = state.week_starts_at_ms();
+    if (prevWeek == 0) {
+        out.earned = 0u;
+        out.poolCap = System::kWeeklyLimit;
+        return out;
+    }
+    const uint32_t prevCap = state.stage2_pool_cap() > 0u
+        ? std::clamp<uint32_t>(state.stage2_pool_cap(), System::kWeeklyLimit, System::kWeeklyRolloverMaxPool)
+        : System::kWeeklyLimit;
+    if (weekStart < prevWeek) {
+        out.earned = state.earned_this_week();
+        out.poolCap = prevCap;
+        out.rolledBack = true;
+        return out;
+    }
+    if (weekStart == prevWeek) {
+        out.earned = state.earned_this_week();
+        out.poolCap = prevCap;
+        return out;
+    }
+    const uint64_t weeksElapsed = std::min<uint64_t>(
+        System::kWeeklyRolloverMaxWeeks,
+        std::max<uint64_t>(1ULL, (weekStart - prevWeek) / kWeekMs));
+    const uint32_t carry = prevCap > state.earned_this_week() ? (prevCap - state.earned_this_week()) : 0u;
+    const uint64_t added = weeksElapsed * static_cast<uint64_t>(System::kWeeklyLimit);
+    out.poolCap = static_cast<uint32_t>(std::min<uint64_t>(
+        System::kWeeklyRolloverMaxPool, static_cast<uint64_t>(carry) + added));
+    out.earned = 0u;
+    return out;
+}
+
 uint32_t FillSnapshot(entt::entity player, uint64_t nowMs, EquipmentMaterialRewardSnapshot& out) {
     out.Clear();
     uint64_t dayStart = 0, dayNext = 0;
@@ -300,7 +340,7 @@ uint32_t FillSnapshot(entt::entity player, uint64_t nowMs, EquipmentMaterialRewa
     const uint32_t batchTradable = static_cast<uint32_t>(std::min<uint64_t>(batchUnits, availableTradable));
     const bool weeklyPhase = lifetimeEarned >= System::kLifetimeLimit;
     const bool lightCardActive = AfkPassSystem::ExpiresAt(player) > (nowMs / 1000ULL);
-    const uint32_t earnedThisWeek = (weeklyPhase && state.week_starts_at_ms() == weekStart) ? state.earned_this_week() : 0u;
+    const Stage2WeekState stage2 = weeklyPhase ? ResolveStage2WeekState(state, weekStart) : Stage2WeekState{};
 
     out.set_available(true);
     out.set_day_starts_at_ms(dayStart);
@@ -319,8 +359,8 @@ uint32_t FillSnapshot(entt::entity player, uint64_t nowMs, EquipmentMaterialRewa
     out.set_weekly_phase_active(weeklyPhase);
     out.set_week_starts_at_ms(weekStart);
     out.set_next_week_reset_at_ms(weekNext);
-    out.set_earned_this_week(earnedThisWeek);
-    out.set_weekly_limit(System::kWeeklyLimit);
+    out.set_earned_this_week(stage2.earned);
+    out.set_weekly_limit(stage2.poolCap);
 
     const auto& inventory = tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
     const auto display = [&](const ItemTable& row, EquipmentCraftMaterial& value) {
@@ -335,8 +375,8 @@ uint32_t FillSnapshot(entt::entity player, uint64_t nowMs, EquipmentMaterialRewa
     if (out.batch_units() == 0) {
         out.set_unavailable_reason(weeklyPhase
             ? (lightCardActive
-                ? "完成主要战斗可获得本周材料自选份数（每周上限150份，仙途轻享卡生效中：胜局含1份可交易）。"
-                : "完成主要战斗可获得本周材料自选份数（每周上限150份，全绑定；开通仙途轻享卡可解锁胜局可交易产出）。")
+                ? "完成主要战斗可获得精进材料自选份数（每周一补充150份，最多滚存4周/600份，仙途轻享卡生效中：胜局含1份可交易）。"
+                : "完成主要战斗可获得精进材料自选份数（每周一补充150份，最多滚存4周/600份，全绑定；开通仙途轻享卡可解锁胜局可交易产出）。")
             : "完成主要战斗可获得首套材料自选份数（首套总池660份，无每日限制）。");
     } else if (writable == kEquipInBattle) {
         out.set_unavailable_reason("战斗中暂不能领取，请在结算完成后重试。");
@@ -456,17 +496,17 @@ uint32_t System::PrepareBattleCredit(const ClientRequestLedgerComp& current,
         state->set_available_units(previous.available_units() + addTotal);
         state->set_available_tradable_units(prevAvailableTradable + addTradable);
     } else {
-        // 第二阶段：每周平滑 150 份池（UTC+8 周一 05:00 重置，防时钟回拨）。
+        // 第二阶段：4 周滚存蓄水池（每周一 05:00 补充 150 份，未用额度滚存封顶 600 份，防时钟回拨）。
         // 零氪同样 100% 拿满绑定自用推进毕业；持有「仙途轻享卡」时每场有效胜局将其中 1 份解锁为市场可交易产出（不增加总额度/战力）。
-        if (weekStart < previous.week_starts_at_ms()) return kSuccess;
-        const uint32_t earnedWeek = (weekStart > previous.week_starts_at_ms()) ? 0u : previous.earned_this_week();
-        if (earnedWeek >= kWeeklyLimit) return kSuccess;
-        addTotal = std::min(grossUnits, kWeeklyLimit - earnedWeek);
+        const Stage2WeekState stage2 = ResolveStage2WeekState(previous, weekStart);
+        if (stage2.rolledBack || stage2.earned >= stage2.poolCap) return kSuccess;
+        addTotal = std::min(grossUnits, stage2.poolCap - stage2.earned);
         addTradable = (lightCardActive && eval.isWin && addTotal >= kBattleUnits) ? 1u : 0u;
         if (previous.available_units() > std::numeric_limits<uint64_t>::max() - addTotal) return kFeatureUnavailable;
         state->set_migrated_to_v2(true);
         state->set_week_starts_at_ms(weekStart);
-        state->set_earned_this_week(earnedWeek + addTotal);
+        state->set_stage2_pool_cap(stage2.poolCap);
+        state->set_earned_this_week(stage2.earned + addTotal);
         state->set_available_units(previous.available_units() + addTotal);
         if (addTradable > 0u) {
             state->set_available_tradable_units(prevAvailableTradable + addTradable);

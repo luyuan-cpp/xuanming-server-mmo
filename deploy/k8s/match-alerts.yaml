@@ -102,7 +102,7 @@ spec:
       interval: 60s
       rules:
         # 按副本、按清理逐条判,不聚合。一个副本一小时 60 轮,门槛 30 = 过去一小时有一半以上的轮次失败;再持续 1 小时才报,
-        # 库短暂不可用、偶发的写冲突不会响。
+        # 库短暂不可用、偶发的写冲突不会响。搬库冻结窗口里被写者闸门拒绝的轮次不计失败(那一轮确定没写),搬大库也不会响。
         - alert: MatchRetentionPurgeFailing
           expr: |
             increase(match_retention_purge_failures_total[1h]) > 30
@@ -113,9 +113,9 @@ spec:
             summary: "{{ $labels.namespace }}/{{ $labels.pod }} 的保留期清理 {{ $labels.purge }} 持续失败"
             description: >-
               过去一小时这个副本的清理失败了 {{ $value | printf "%.0f" }} 轮(一分钟一轮)。到期的行下一轮还在,数据不会错,只是没有按期删除:
-              剧本审核流水过了保留期仍留着玩家写的正文,观战意图表一直涨。按 purge 查这个 Pod 的日志
-              (`Review retention purge failed` / `Spectator intent retention purge failed`)里的错误:库不可达、搬库窗口写者冻结,
-              或清理用的索引被删(读页超时)。只有一个副本在响时别的副本仍在删,先看这个 Pod 连库是否正常。
+              剧本审核流水过了保留期仍留着玩家写的正文,观战意图表一直涨。查这个 Pod 的日志 `[retention] {{ $labels.purge }} purge failed`
+              后面带的错误:库不可达,或清理用的索引被删(读页超时)。搬库冻结窗口不计入这里(日志是 `purge paused: writer gate frozen`)。
+              只有一个副本在响时别的副本仍在删,先看这个 Pod 连库是否正常。
 
         # 清理的结果(只有剧本审核流水报):每轮清理之后各副本报表里现存最老一行的审核时刻(表是空的报读的那一刻),以及生效的保留期。
         # 报的是时刻不是年龄,年龄在这里用 time() 减:副本读不动库时它照样变老。各副本报的都是「现存最老一行不早于它」的下界,

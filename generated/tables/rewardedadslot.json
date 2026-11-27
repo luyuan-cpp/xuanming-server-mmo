@@ -3,7 +3,7 @@
   {
    "cooldown_sec": 60,
    "currency_type": 3,
-   "daily_limit": 2,
+   "daily_limit": 14,
    "enabled": 0,
    "id": 1,
    "min_level": 10,

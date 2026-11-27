@@ -280,6 +280,80 @@ TEST_F(PlayerRenameSystemTest, StaleSeqAdvancesSequenceAndReleasesHoldWithoutCon
 	EXPECT_EQ(notifies[0].error_message().id(), static_cast<uint32_t>(kServiceUnavailable));
 }
 
+// 结局回来时玩家正在交接(存档不可改):一个字都不动,记录和占用都留着;解冻后用同一个 seq 重发,拿到结局再扣卡、改名。
+TEST_F(PlayerRenameSystemTest, OutcomeArrivingWhileFrozenIsKeptAndAppliedAfterRetry)
+{
+	const uint64_t cardsBefore = CardCountInBag();
+	ASSERT_EQ(PlayerRenameSystem::RequestRename(player, "云深不知", kNowMs), kSuccess);
+	PassContentGuard();
+	PlayerRenameSystem::OnSaveCommitted(kPlayerGuid, SnapshotCurrent(), kNowMs + 10);
+	ASSERT_EQ(sentRequests.size(), 1u);
+	const int savesBefore = saveRequests;
+
+	tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
+	data_service::RenameRoleResponse ok;
+	ok.set_result(data_service::RENAME_ROLE_OK);
+	ok.set_name("云深不知");
+	ok.set_renamed_ms(kNowMs + 30);
+	pendingRpcDone(true, &ok);
+
+	const auto &profile = tlsEcs.actorRegistry.get<PlayerProfileComp>(player);
+	EXPECT_EQ(profile.name(), "旧名道友");
+	EXPECT_TRUE(profile.has_rename_op());
+	EXPECT_EQ(CardCountInBag(), cardsBefore);
+	EXPECT_EQ(BagService::HeldCount(player, tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory], cardItemId), cardCount);
+	EXPECT_EQ(saveRequests, savesBefore);
+	EXPECT_TRUE(notifies.empty());
+
+	// 还冻着:到点也不发。
+	PlayerRenameSystem::Tick(kNowMs + 5'000);
+	EXPECT_EQ(sentRequests.size(), 1u);
+
+	tlsEcs.actorRegistry.erase<PlayerFrozenComp>(player);
+	PlayerRenameSystem::Tick(kNowMs + 60'000);
+	ASSERT_EQ(sentRequests.size(), 2u);
+	EXPECT_EQ(sentRequests[1].seq(), sentRequests[0].seq());
+	pendingRpcDone(true, &ok);
+	EXPECT_EQ(profile.name(), "云深不知");
+	EXPECT_FALSE(profile.has_rename_op());
+	EXPECT_EQ(CardCountInBag(), cardsBefore - cardCount);
+	ASSERT_EQ(notifies.size(), 1u);
+	EXPECT_EQ(notifies[0].error_message().id(), 0u);
+}
+
+// 本版本不认识的结局不能当成失败:占用和记录留着重发,不把卡还给玩家。
+TEST_F(PlayerRenameSystemTest, UnknownResultIsRetriedNotTreatedAsRejection)
+{
+	EXPECT_TRUE(player_rename::IsTransientResult(static_cast<data_service::RenameRoleResult>(99)));
+	EXPECT_TRUE(player_rename::IsTransientResult(data_service::RENAME_ROLE_BUSY));
+	EXPECT_FALSE(player_rename::IsTransientResult(data_service::RENAME_ROLE_OK));
+	EXPECT_FALSE(player_rename::IsTransientResult(data_service::RENAME_ROLE_EXPIRED));
+
+	ASSERT_EQ(PlayerRenameSystem::RequestRename(player, "一剑霜寒", kNowMs), kSuccess);
+	PassContentGuard();
+	PlayerRenameSystem::OnSaveCommitted(kPlayerGuid, SnapshotCurrent(), kNowMs + 10);
+	ASSERT_EQ(sentRequests.size(), 1u);
+	data_service::RenameRoleResponse unknown;
+	unknown.set_result(static_cast<data_service::RenameRoleResult>(99));
+	pendingRpcDone(true, &unknown);
+	EXPECT_TRUE(tlsEcs.actorRegistry.get<PlayerProfileComp>(player).has_rename_op());
+	EXPECT_EQ(BagService::HeldCount(player, tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory], cardItemId), cardCount);
+	EXPECT_TRUE(notifies.empty());
+}
+
+// 加载时没有进行中的改名、却留着改名的占用:放掉,改名卡重新可用。
+TEST_F(PlayerRenameSystemTest, OrphanRenameHoldIsReleasedOnLoad)
+{
+	const item_hold::HoldLines lines{{cardItemId, cardCount}};
+	ASSERT_EQ(BagService::PlaceHold(player, 770001, item_hold::ItemHoldKind::kRename, lines, kNowMs, kNowMs + 1), kSuccess);
+	const auto &bag = tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
+	ASSERT_EQ(BagService::HeldCount(player, bag, cardItemId), cardCount);
+
+	PlayerRenameSystem::OnPlayerLoaded(player, kNowMs);
+	EXPECT_EQ(BagService::HeldCount(player, bag, cardItemId), 0u);
+	EXPECT_TRUE(sentRequests.empty());
+}
+
 TEST_F(PlayerRenameSystemTest, TransientBusyRetriesOnTickAndLoginResumesPersistedOp)
 {
 	ASSERT_EQ(PlayerRenameSystem::RequestRename(player, "紫电青霜", kNowMs), kSuccess);

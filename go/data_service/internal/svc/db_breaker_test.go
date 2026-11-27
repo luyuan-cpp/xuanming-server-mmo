@@ -47,6 +47,32 @@ func TestLogicalDBConnectGateIsolatesFailingDatabase(t *testing.T) {
 	}
 }
 
+// 调用方取消既不算失败也不算成功:取消夹在真实的建连失败之间时,熔断照样要打开。
+// 把取消记成成功的话,3 次取消配 1 次失败会让「成功数 × 1.5」一直大于总数,坏库永远不被挡。
+func TestLogicalDBConnectGateDoesNotCountCancellationAsSuccess(t *testing.T) {
+	gate := newLogicalDBConnectGate()
+	dbName := "test_breaker_canceled_between_failures_db"
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	dialErr := errors.New("dial tcp: i/o timeout")
+
+	for round := 0; round < 200; round++ {
+		for i := 0; i < 3; i++ {
+			settle, err := gate(canceledCtx, dbName)
+			if err != nil {
+				return // 已经打开
+			}
+			settle(context.Canceled)
+		}
+		settle, err := gate(context.Background(), dbName)
+		if err != nil {
+			return // 已经打开
+		}
+		settle(dialErr)
+	}
+	t.Fatalf("breaker for %s never opened: caller cancellations must not be recorded as successes", dbName)
+}
+
 func TestLogicalDBConnectGateIgnoresCallerCancellation(t *testing.T) {
 	gate := newLogicalDBConnectGate()
 	dbName := "test_breaker_canceled_only_db"

@@ -110,7 +110,7 @@ func DefaultFallback() *Catalog {
 		QualifierMaxMatches:         6,
 		ParticipationMinMatches:     2,
 		KnockoutMaxTeams:            16,
-		KnockoutRoundTimeoutSeconds: 1800,
+		KnockoutRoundTimeoutSeconds: 14400,
 		QualifierWinPoints:          3,
 		QualifierDrawPoints:         1,
 		QualifierLossPoints:         0,

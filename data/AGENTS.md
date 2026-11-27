@@ -193,7 +193,7 @@ cd tools/data_table_exporter && py -m pytest -q
 | **FestivalBeastTier** | `FestivalBeastTier.xlsx` | `festivalbeasttier_table.proto` | 8 | 8 | 8 | — | — | — | — | — | — | — |
 | **GlobalVariable** | `GlobalVariable.xlsx` | `globalvariable_table.proto` | 8 | 1 | 16 | — | — | — | — | — | — | — |
 | **GuildActivity** | `GuildActivity.xlsx` | `guildactivity_table.proto` | 15 | 15 | 3 | — | — | `reward_id` `dungeon_id` | `reward_id→Reward.id` `dungeon_id→Dungeon.id` | — | — | — |
-| **GuildDonate** | `GuildDonate.xlsx` | `guilddonate_table.proto` | 8 | 8 | 3 | — | — | — | — | — | — | — |
+| **GuildDonate** | `GuildDonate.xlsx` | `guilddonate_table.proto` | 8 | 8 | 1 | — | — | — | — | — | — | — |
 | **GuildLevel** | `GuildLevel.xlsx` | `guildlevel_table.proto` | 4 | 4 | 10 | — | — | — | — | — | — | — |
 | **GuildRule** | `GuildRule.xlsx` | `guildrule_table.proto` | 13 | 13 | 1 | — | — | — | — | — | — | — |
 | **GuildShop** | `GuildShop.xlsx` | `guildshop_table.proto` | 9 | 9 | 17 | — | — | `item_id` | `item_id→Item.id` | — | — | — |

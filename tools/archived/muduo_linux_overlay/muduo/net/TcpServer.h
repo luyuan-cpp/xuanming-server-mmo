@@ -13,8 +13,9 @@
 // 拷到 third_party/muduo-linux/muduo/net/TcpServer.h。必须与同目录 TcpServer.cc、Acceptor.h、Acceptor.cc 覆盖件一起生效。
 //
 // 底稿是上游 v2.0.3-1(f1fc77e)。b55b0ac(v2.0.2)的这个文件只差一处注释里的拼写(listenning),整文件覆盖两版都能编。
-// 除标 LOCAL DELTA 的一处外与上游逐字一致:加 setAdmissionCallback,把准入回调转给 Acceptor
-// (docs/design/gate-connection-admission-control.md P1-1)。只多一个成员函数,类的数据成员不变。
+// 除标 LOCAL DELTA 的两处外与上游逐字一致:加 setAdmissionCallback(把准入回调转给 Acceptor,P1-1)与
+// setDeferAccept(监听 socket 开 TCP_DEFER_ACCEPT,P2-1),见 docs/design/gate-connection-admission-control.md。
+// 只多两个成员函数,类的数据成员不变。
 // Windows 侧同一改动在 cpp/libs/engine/muduo_windows/src/muduo/net/TcpServer.h。
 //
 // 升级 muduo 子模块时:用新的上游文件覆盖本文件,再逐处补回 LOCAL DELTA。
@@ -109,6 +110,12 @@ class TcpServer : noncopyable
   /// rate, shutting down). Not thread safe: call it in the loop thread.
   typedef std::function<bool (const InetAddress& peerAddr)> AdmissionCallback;
   void setAdmissionCallback(const AdmissionCallback& cb);
+
+  /// LOCAL DELTA: TCP_DEFER_ACCEPT on the listening socket (Linux only; see
+  /// Acceptor::setDeferAccept and docs/design/gate-connection-admission-control.md P2-1).
+  /// Only for protocols where the client speaks first; 0 turns it off.
+  /// No-op on other platforms. Not thread safe: call it in the loop thread.
+  void setDeferAccept(int seconds);
 
  private:
   /// Not thread safe, but in loop

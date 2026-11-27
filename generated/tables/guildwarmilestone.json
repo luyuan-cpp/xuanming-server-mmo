@@ -2,7 +2,7 @@
  "data": [
   {
    "id": 1,
-   "required_guild_merit": 300,
+   "required_guild_merit": 200,
    "reward_contribution": 80,
    "reward_item1_count": 2,
    "reward_item1_id": 3403,
@@ -13,7 +13,7 @@
   },
   {
    "id": 2,
-   "required_guild_merit": 1200,
+   "required_guild_merit": 600,
    "reward_contribution": 120,
    "reward_item1_count": 4,
    "reward_item1_id": 3406,
@@ -24,7 +24,7 @@
   },
   {
    "id": 3,
-   "required_guild_merit": 3000,
+   "required_guild_merit": 1200,
    "reward_contribution": 180,
    "reward_item1_count": 6,
    "reward_item1_id": 3406,
@@ -35,7 +35,7 @@
   },
   {
    "id": 4,
-   "required_guild_merit": 6000,
+   "required_guild_merit": 2000,
    "reward_contribution": 300,
    "reward_item1_count": 1,
    "reward_item1_id": 3407,

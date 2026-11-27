@@ -80,13 +80,12 @@
   `session_reconciler.go` 按实例存活对账是同一口径。
 - scene 侧 2026-11-20 起「同一会话」= (gate 实例, session_id)(方案 C,§14):gate 实例取自请求所走 RPC0 入站连接的握手身份,
   老进程迟到的入场、它关闭旧连接时代发的 ExitGame、旧客户端照发的消息,scene 都认得出不是当前会话。
-- 实例号不并进 location 身份。后果要如实写:同号跨实例时(gate 以同一 node_id 重启,旧实例 I1 上的 `3:k`(gA)与新实例 I2 上的
-  `3:k`(gB > gA)会话号相同),
-  - b 的判定表以代次为主,迟到的 LeaveScene{3:k, gA} 遇到 gB 判 `keep_newer`,不受影响;
-  - d 的判定表「会话号优先」:A 迟到的 EnterScene{3:k, gA} 被判 `admit_same_session`,d1 在这种情形下仍成立。
-    这就是已登记的 R13(§5.8)。scene_manager 推出的路由按 `target_instance_id` 只投给老实例 I1,老进程转来的入场到 scene
-    被栅栏按实例与代次拒掉(§14.2),所以 scene 上的实体不受影响;剩下的只是 location 身份的口径。
-  - location 也记实例号(需与 GO-3 协调字段号)仍另立项(§14.6)。
+- 2026-11-26 起实例号也并进 location 身份(`PlayerLocation.gate_instance_id = 10`,§14.8)。同号跨实例时(gate 以同一 node_id
+  重启,旧实例 I1 上的 `3:k`(gA)与新实例 I2 上的 `3:k`(gB > gA)会话号相同):
+  - b 的判定表以代次为主,迟到的 LeaveScene{3:k, gA} 遇到 gB 判 `keep_newer`,不受影响,也不需要实例;
+  - d 的判定表「同一会话」= 会话号相同,且两边实例都已知时实例也相同:A 迟到的 EnterScene{3:k, gA, I1} 遇到 location 的
+    {3:k, gB, I2} 不再判 `admit_same_session`,按代次判 `stale` 回 25,location 与人数一个字节都不改(原 R13 的 d1 形态)。
+  - 托管落点不带 gate,同一会话沿用 location 记的实例,并经 `PlayerHostedPlacementEvent.gate_instance_id` 带给目标节点。
 
 ## 2. 余项 a:login 踢线
 
@@ -977,7 +976,7 @@ W3(C++):
 | 不变量 | 结论 |
 |---|---|
 | 1 入口栅栏第一步且零副作用 | C++ `HandleEnterGameNode` 第 0 步不改;C++ 只改发往 SM 的请求盖章,不在入场处理路径上。SM 照同一原则:身份判定在读完 location 与 epoch 之后、一切预占 / 补种 / 写入 / 路由之前,纯函数;此前唯一的副作用是已有的去重 SETNX,由 defer 在错误应答时释放 |
-| 2 同一会话一律放行 | scene 栅栏不改;SM 判定表对同会话一律放行、代次取 max,不因 G4 落后拒绝。同会话唯一新增的失败是原文 CAS 冲突回 19,发生在发路由之前,gate 根本没收到路由,不会出现「gate 已在 kSent 提交而 scene 未执行」的三方分叉。已登记的 R13(gate 重启后会话号复用)在 SM 同样按同会话放行,不是本次引入 |
+| 2 同一会话一律放行 | scene 栅栏不改;SM 判定表对同会话一律放行、代次取 max,不因 G4 落后拒绝。同会话唯一新增的失败是原文 CAS 冲突回 19,发生在发路由之前,gate 根本没收到路由,不会出现「gate 已在 kSent 提交而 scene 未执行」的三方分叉。R13(gate 重启后会话号复用)2026-11-26 起由 location 记 gate 实例收口:会话号相同而实例不同不算同一会话(§14.8) |
 | 3 SessionMap 只擦本玩家的映射 | 不碰 C++ SessionMap 擦除路径 |
 | 4 gate `loginGeneration` 写入规则 | gate 不改。scene 自发路由带实体代次(≤ 会话值),`ApplyRouteIdentity` 对同一角色取 max,会话值不变,对别的角色不动;SM 拒绝意味着不产生路由,不属于 gate 丢路由 |
 
@@ -1024,7 +1023,8 @@ C++ `cross_zone_test.cpp`:
 
 - 混版窗口(旧 SM 副本、旧 scene、无代次 login)里 d 维持现状,legacy 计数应在全部升级后趋近 0。
 - 回滚到旧 SM 后留下的落后身份:再升级后到这名玩家下一次写入身份之前,d 维持现状(§3.5、§5.5)。
-- R13:gate 重启后会话号复用,SM 与 scene 一样按同会话放行(已登记)。跨实例同号时 d1 仍成立(§1.4)。
+- R13:gate 重启后会话号复用。scene 侧 2026-11-20 起按 (gate 实例, 会话号) 认会话(§14.2),SM 侧 2026-11-26 起 location 记实例、
+  判定表同口径(§14.8),跨实例同号的 d1 / d2 都回 25。只剩两边实例都未知(旧格式记录、请求不带实例)时按会话号认。
 - 【未核实】B 的入场会不会中止 A 在途的同 zone 交接冻结,这关系到 d2 跨节点变体在修复前的实际危害;修复后 A 的交接请求会先拿 25。
 
 ## 6. 余项 e:断线 / 登出上报带 gate 实例号
@@ -1648,14 +1648,14 @@ C++ 用例在 `cpp/tests/cross_zone_test/cross_zone_test.cpp` 末尾与 `cpp/tes
 
 ### 14.6 残余
 
-- **location 不记实例号**:scene_manager 的 d 判定表仍「会话号优先」,A 迟到的 EnterScene{3:k, gA} 在 SM 被判 `admit_same_session`
-  (R13,§1.4、§5.8)。路由按 `target_instance_id` 只投给老实例,老进程转来的入场在 scene 被拒,实体不受影响;剩下的只是 location
-  身份的口径。location 记实例号要与 GO-3 一起定字段号,另立项。
+- **location 不记实例号**:已落码(2026-11-26,未生成、未编译、未测试),见 §14.8。原判断「实体不受影响,剩下的只是 location 身份的
+  口径」偏轻:老进程同号会话在途的换图(目标是同节点另一场景)被判 `admit_same_session` 时 location 与人数会挪到新场景,
+  实体却被 scene 栅栏留在原地,直到下一次落点才收敛。GO-3 已改用交接资格里的实例号(cross-zone-scene-travel.md §13.10),
+  不占字段,本条取 10 号。
 - **scene → gate 的回推按 node_id 找 gate**:已落码(2026-11-20,未编译、未测试),见 §14.7。回推与 scene 自发的请求按身份组件
   记下的实例找 gate,找不到不退回按 node_id;实例未知(旧实体、托管落点建出的实体)时仍按 node_id,与改动前相同。
-- **托管落点不带实例**:托管落点经 scene_manager 的 Kafka 事件到达,不经 gate 连接。在别的节点上建出的托管实体,身份组件的实例未知,
-  老进程同号的迟到入场在那个节点上按会话号认(与改动前同一口径)。要补得让 location 与托管落点事件带上实例,随第一条(location
-  记实例号)一起做。
+- **托管落点不带实例**:已落码(2026-11-26,未生成、未编译、未测试),见 §14.8。托管落点事件带上 location 为断开那次登录记下的实例,
+  目标节点记进登录身份。
 - **双方都没有登录代次**:会话号相同、实例不同、代次都为 0 时按判定表走 `kAdmitLegacy`(后到者胜)。只有旧版 login 不铸代次时才会出现,
   login 全量铸造后不可达。
 - **Java 版**:Java 网关不走 RPC0 握手,会话与归属模型不同(§9);是否有同类窗口待核实,已在 Java 仓 `PARITY.md` 登记待做。
@@ -1708,3 +1708,61 @@ node_id 投给同一 node_id 上的另一个进程;实例未知时按会话号�
 `cpp/libs/services/scene/battle/system/player_battle.cpp`、`cpp/nodes/scene/handler/rpc/player/player_scene_handler.cpp`(守护段)、
 `cpp/nodes/scene/handler/rpc/scene_handler.cpp`(守护段)、`cpp/tests/cross_zone_test/{cross_zone_test.cpp,player_team_follow_test.cpp}`。
 不改 proto、gate、scene_manager;不新起线程。发布与回滚同 §14.5:只改 scene 一侧的运行时查找,不涉及持久数据。
+
+### 14.8 location 记 gate 实例、托管落点带实例(2026-11-26 落码,未生成、未编译、未测试)
+
+收口 §14.6 第一、三条。两条同一根因:location 的会话身份只有 (会话号, 代次),scene_manager 的落点判定「会话号相同即同一会话」。
+
+**修前的后果**(gate 以同一 node_id 重启,老进程 I1 上的 `11`(gA)与新进程 I2 上的 `11`(gB > gA)会话号相同):
+
+- SM:location 记着 (11, gB);I1 上会话在途的同节点换图 EnterScene{11, gA} 判 `admit_same_session`,location 改到目标场景、两边人数
+  跟着挪,路由投给 I1,scene 栅栏按实例拒掉入场,实体留在原场景。location 与实体不一致,直到下一次落点。
+- scene:托管落点不带实例,目标节点上托管实体的登录身份实例未知;另一个进程同号、更早的一次登录的入场(gate 补发不经 SM)按会话号认、被放行。
+
+**规则。**
+
+- `PlayerLocation.gate_instance_id = 10`(storage.proto 注释原预留「从 10 起取」,GO-3 已改用交接资格里的实例号,不占字段):放行请求的
+  `EnterSceneRequest.gate_instance_id`。login 发起时是会话所在的 gate,scene 自发时是 `BoundGateInstanceId`(§14.7)。
+- `decidePlacementIdentity` 的「同一会话」行加 `sameGateInstance`,口径与 C++ `enter_fence::SameGateInstance` 相同:两边都已知且不同才不是
+  同一会话。会话号相同而实例不同落进按代次裁决的各行:更旧 → stale,相等 → conflict(G2),都回 25;更新 → newer。
+- 写入的实例:同一会话的请求带了实例就记它(旧格式 location 由此补上),不带(托管落点)就沿用 location 记的;legacy 行的 (sid_R, 0) 带请求实例;
+  fresh / newer 记请求的。samePlacement 的「身份变了才写」把实例算进身份。
+- 托管落点事件 `PlayerHostedPlacementEvent.gate_instance_id = 8` 取本次放行写进(或确认于)location 的身份里的实例。scene 的
+  `HostedPlacementContext` 抄进 `PlayerEnterContext::gateInstanceId`,入场栅栏与 `RecordLoginIdentity` 照常按 (实例, 会话号) 认;实例为空不算字段不全。
+- 跟着改:`identityIsHostedLogin` 改成逐项比会话号与代次。托管归位不带 gate,原来的整结构相等在 location 记了实例之后会恒假,
+  持有节点就永远收不到释放。`enterHolderReleaseRequester` 的 covered 身份多带实例,RPC 只发会话号与代次。
+- 不变:离场表(b)以代次为主,`LeaveSceneRequest` 不带实例;路由与重定向的 `target_instance_id` 照旧取请求的 `gate_instance_id`。
+- 不做:源节点上托管角色的改派待确认条目仍不带实例(票据的实例号会进 EnterScene,托管请求必须为空;要补得把实例另记进断线保留组件)。
+  经 SM 的迟到请求先被本节拦下;不经 SM 的 gate 补发要求另一个进程在同号上持有同一玩家更早的登录,并恰好落在条目存续的那几秒里,不另做。
+
+**测试**(新增与改写,未运行):
+
+| 用例 | 断言 |
+|---|---|
+| `TestDecidePlacementIdentity_GateInstance`(go/scene_manager) | 同号跨进程按代次裁决;同进程、任一边未知仍是同一会话;同会话补记 / 沿用实例 |
+| `TestEnterScene_SameSessionIdFromAnotherGateProcessIsStale`(复现) | location 属于新进程 (11, gB);老进程同号会话在途的同节点换图回 25,location、人数、路由都不动;同进程同会话照常放行、实例不变 |
+| `TestEnterScene_HostedPlacementCarriesTheGateInstanceRecordedForTheLostLogin`(复现) | 托管落点事件带 location 记的实例;location 不把实例抹成未知 |
+| `TestIdentityIsHostedLogin`、`TestIdentityStrictlyNewer` 各加一行 | 记了实例的 location 照样认得出托管登录;同号跨进程的新登录照样请持有节点释放 |
+| `HostedPlacementEcs.ContextCarriesTheLostLoginAndNoNotifiableSession`(改) | 实例随上下文;实例为空不算字段不全 |
+| `HostedPlacementReentry.HostedPlacementRecordsTheGateInstanceSoALateEnterFromAnotherProcessIsRejected` | 托管入场后登录身份记下实例;另一进程同号、更早的入场被拒、实体不动 |
+
+同步改的既有用例:`placement_identity_test.go` 两张判定表改用表内 (会话号, 代次) 简写类型(行不动);`enter_holder_release_test.go`、
+`leave_release_test.go` 的两值字面量补第三项,进场路径的 covered 与落点后的 location 身份带请求的 `gate-b-uuid`;
+`TestEnterScene_SamePlacementUpdatesIdentityPreservingOtherFields` 的期望加 10 号字段。
+
+| 变异(每个单独做、跑完恢复) | 期望变红 |
+|---|---|
+| M8 `decidePlacementIdentity` 去掉 `sameGateInstance` 条件 | `TestDecidePlacementIdentity_GateInstance` 前两行、`TestEnterScene_SameSessionIdFromAnotherGateProcessIsStale` 第一段 |
+| M9 同一会话行的实例改成恒取请求的 | `request_without_instance_keeps_the_recorded_one`、`TestEnterScene_HostedPlacementCarriesTheGateInstanceRecordedForTheLostLogin` |
+| M10 `routeHostedPlayerToScene` 不填 `GateInstanceId` | `TestEnterScene_HostedPlacementCarriesTheGateInstanceRecordedForTheLostLogin` 的事件断言 |
+| M11 `HostedPlacementContext` 不抄实例 | `ContextCarriesTheLostLoginAndNoNotifiableSession` 的实例断言 |
+| M12 `identityIsHostedLogin` 改回整结构相等 | `TestIdentityIsHostedLogin` 的 `hosted login recorded with its gate instance` |
+
+**发布与兼容。** 项目未上线、location 可清;新字段对旧读者是未知字段(proto3 原样跳过)。旧格式 location(没有实例)按「实例未知」比较,
+同会话下一次带实例的放行补上。scene 与 scene_manager 同批发布;Java 版只登记(AGENTS §12)。
+
+**文件。** `proto/scene_manager/storage.proto`、`proto/common/event/player_placement_event.proto`(要跑协议生成);
+`go/scene_manager/internal/logic/{placement_identity.go,changesceneutil.go,enter_hosted_placement.go,enterscenelogic.go,enter_holder_release.go}`
+与同目录 `{placement_identity_test.go,enterscene_identity_test.go,enter_hosted_placement_test.go,enter_holder_release_test.go,leave_release_test.go}`;
+`cpp/libs/services/scene/player/system/{player_lifecycle.h,player_lifecycle.cpp}`、`cpp/nodes/scene/handler/event/player_placement_event_handler.cpp`(守护段)、
+`cpp/tests/cross_zone_test/cross_zone_test.cpp`。不新增 `.cpp`,不新起线程。

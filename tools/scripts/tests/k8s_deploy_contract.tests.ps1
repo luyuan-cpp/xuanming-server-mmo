@@ -2190,7 +2190,7 @@ Test-Case '削峰 staging / prod 档开:login Queue 段除两项外 == go/login/
         $block = Select-ManifestByName -Output $case.Run.Output -Name 'go-svc-login-config'
         $flat = ConvertTo-FlatManifest -Block $block
         Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.Queue.Enabled') -Because "$($case.Label) 档 login 排队必须打开"
-        foreach ($key in @('DispatchInterval', 'AdmitTTL', 'QueueEntryTTL', 'SoftCapMultiplier', 'DefaultRetryAfterMs', 'DispatcherLockTTL')) {
+        foreach ($key in @('DispatchInterval', 'AdmitTTL', 'QueueEntryTTL', 'SoftCapMultiplier', 'DefaultRetryAfterMs', 'DispatcherLockTTL', 'MaxAdmitPerTick', 'MaxQueueLength')) {
             Assert-Equal -Expected (Get-EtcValue -RelativePath $loginYaml -KeyPath "Queue.$key") -Actual (Get-FlatValue -Flat $flat -KeyPath "data.login.yaml.Queue.$key") -Because "$($case.Label) 档 Queue.$key 必须镜像 $loginYaml(生成器不得自带常数)"
         }
         $lockKey = Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.Queue.DispatcherLockKey'
@@ -6660,7 +6660,7 @@ Test-Case 'content-guard:目录、镜像名、清单端口对得上;dev 档 Conf
     Assert-Match -Text $deployScript -Pattern "(?m)^\s*\`$contentGuardRequireLexicon\s*=\s*'true'\s*$" -Because '非 dev 档必须要求词库:只凭内置的几个词对外判定等于没有屏蔽字'
 }
 
-Test-Case '内容安全调用端:login / guild / chat / trade 的 ConfigMap 都带 ContentGuard 段,发现键等于服务端注册的键;本机的 Optional 不上集群' {
+Test-Case '内容安全调用端:login / guild / chat / trade / match 的 ConfigMap 都带 ContentGuard 段,发现键等于服务端注册的键;本机的 Optional 不上集群' {
     Assert-Equal -Expected 0 -Actual $guildInfraRun.ExitCode -Because "带全局 Go 服务的 infra-up DryRun 必须成功。输出: $($guildInfraRun.Output)"
     $serverKey = Get-EtcValue -RelativePath 'go/content_guard/etc/content_guard.yaml' -KeyPath 'Etcd.Key'
     foreach ($case in @(
@@ -6668,6 +6668,7 @@ Test-Case '内容安全调用端:login / guild / chat / trade 的 ConfigMap 都�
             @{ Output = $guildInfraRun.Output; ConfigMap = 'go-svc-guild-config'; File = 'guild.yaml'; Source = 'go/guild/etc/guild.yaml' }
             @{ Output = $guildInfraRun.Output; ConfigMap = 'go-svc-chat-config';  File = 'chat.yaml';  Source = 'go/chat/etc/chat.yaml' }
             @{ Output = $guildInfraRun.Output; ConfigMap = 'go-svc-trade-config'; File = 'trade.yaml'; Source = 'go/trade/etc/trade.yaml' }
+            @{ Output = $guildInfraRun.Output; ConfigMap = 'go-svc-match-config'; File = 'match_service.yaml'; Source = 'go/match/etc/match_service.yaml' }
         )) {
         $block = Select-ManifestByName -Output $case.Output -Name $case.ConfigMap
         Assert-True -Condition ($null -ne $block) -Because "DryRun 产物里应当有 $($case.ConfigMap)"
@@ -6694,7 +6695,7 @@ Test-Case 'content-guard 的 gRPC 口准入(infra namespace):只放行收玩家�
     Assert-True -Condition ($null -ne $policy) -Because '打开时 infra 里要有 content-guard-grpc-allowlist'
     $shape = Get-GrpcAllowListShape -Block $policy
     Assert-Equal -Expected 'content-guard' -Actual ($shape.TargetApps -join ',') -Because '它不提供金丝雀副本,策略只选中它自己'
-    Assert-Equal -Expected 'login,guild,chat,trade,scene,scene-world,scene-instance,guild-canary,chat-canary,trade-canary' -Actual ($shape.AllowedApps -join ',') -Because 'content-guard 的 gRPC 调用方名单;增删要同时改这里。客户端经路由服到不了它,名单里没有 client-rpc-router'
+    Assert-Equal -Expected 'login,guild,chat,trade,match,scene,scene-world,scene-instance,guild-canary,chat-canary,trade-canary,match-canary' -Actual ($shape.AllowedApps -join ',') -Because 'content-guard 的 gRPC 调用方名单;增删要同时改这里。客户端经路由服到不了它,名单里没有 client-rpc-router'
     Assert-Equal -Expected 50250 -Actual $shape.GrpcPort -Because 'gRPC 口取 $GoSvcCatalogue 的 Port'
     $manifest = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'deploy/k8s/manifests/go-svc/content-guard.yaml'))
     $declared = @(Get-ManifestContainerPorts -ManifestContent $manifest | Where-Object { $_ -ne 50250 })

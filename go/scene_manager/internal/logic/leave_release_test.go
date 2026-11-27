@@ -219,7 +219,7 @@ func TestLeaveScene_HolderNotReleasedKeepsLocationAndRequestsRelease(t *testing.
 	assert.Equal(t, "2", sceneMemberCount(mr, sceneID), "不删就不扣人数")
 	assert.Equal(t, "2", nodeMemberCount(mr, testZoneId, "10"))
 	assert.Equal(t, []leaveReleaseCall{{zoneID: testZoneId, nodeID: "10", playerID: playerID, expectedOwnerEpoch: 3,
-		covered: placementIdentity{11, identGenA}}}, calls(), "覆盖到被清理的会话(离场请求的身份,§13)")
+		covered: placementIdentity{11, identGenA, ""}}}, calls(), "覆盖到被清理的会话(离场请求的身份,§13)")
 	assert.Equal(t, pendingBefore+1, leaveReleaseCount(t, "pending"))
 	assert.True(t, mr.Exists(leaveReleaseWaitKey(playerID)), "第一次拒绝登记等待计时")
 
@@ -250,8 +250,8 @@ func TestLeaveScene_PendingCoversLeaveRequestIdentityNotLocation(t *testing.T) {
 	got := calls()
 	require.Len(t, got, 1, "gen_L < gen_R 判 deleted → pending,请持有节点释放")
 	assert.Equal(t, uint64(3), got[0].expectedOwnerEpoch)
-	assert.Equal(t, placementIdentity{22, identGenB}, got[0].covered, "覆盖到离场请求的身份(§13.2)")
-	assert.NotEqual(t, placementIdentity{11, identGenA}, got[0].covered, "不得退回 location 记的旧身份")
+	assert.Equal(t, placementIdentity{22, identGenB, ""}, got[0].covered, "覆盖到离场请求的身份(§13.2)")
+	assert.NotEqual(t, placementIdentity{11, identGenA, ""}, got[0].covered, "不得退回 location 记的旧身份")
 }
 
 // 持有节点写出当前代标记(A1′ / 凭证)之后,下一次重试删 location、扣一次人数、删等待计时。
@@ -880,7 +880,7 @@ func TestLeaveGameQuickReloginGoesThroughHandoffGate(t *testing.T) {
 	require.Len(t, holderCalls, 1)
 	assert.Equal(t, "10", holderCalls[0].nodeID)
 	assert.Equal(t, uint64(3), holderCalls[0].expectedOwnerEpoch)
-	assert.Equal(t, placementIdentity{22, identGenB}, holderCalls[0].covered, "覆盖到这次登录自己的身份(§13)")
+	assert.Equal(t, placementIdentity{22, identGenB, "gate-b-uuid"}, holderCalls[0].covered, "覆盖到这次登录自己的身份(§13)")
 
 	// 3. 持有节点退出存盘落地,A1′ 写出当前代标记 → 重试放行并铸造 4,location 指向节点 20 与新登录。
 	require.NoError(t, mr.Set(ownerepoch.HandoffKey(playerID), "3:1700000000000"))

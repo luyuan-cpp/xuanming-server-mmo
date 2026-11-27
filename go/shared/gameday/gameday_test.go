@@ -145,7 +145,8 @@ func TestPeriodKey(t *testing.T) {
 		{"不限:键为 0,不占计数行", PeriodNone, 0, true},
 		{"每日", PeriodDaily, 20260916, true},
 		{"每周", PeriodWeekly, 202638, true},
-		{"未知周期拒绝", 3, 0, false},
+		{"终身限购:固定键 1,不进清理范围", PeriodLifetime, LifetimePeriodKey, true},
+		{"未知周期拒绝", 4, 0, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -160,6 +161,9 @@ func TestPeriodKey(t *testing.T) {
 // TestKeyRangesAreDisjoint 钉住清理任务的另一个前提:日键 8 位、周键 6 位,互不落入对方数值域。
 func TestKeyRangesAreDisjoint(t *testing.T) {
 	const minDayKey, maxWeekKey = 19700101, 999953
+	if LifetimePeriodKey == 0 || LifetimePeriodKey >= 100000 {
+		t.Fatalf("LifetimePeriodKey=%d 必须在 (0, 100000) 内以免落入周/日清理范围", LifetimePeriodKey)
+	}
 	for _, in := range []time.Time{at(1970, 1, 2, 5, 0, 0), at(2026, 9, 16, 12, 0, 0), at(9999, 12, 31, 12, 0, 0)} {
 		if d := DayKey(in); d < minDayKey {
 			t.Fatalf("DayKey(%v) = %d,低于日键下界 %d", in, d, minDayKey)

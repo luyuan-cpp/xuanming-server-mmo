@@ -1530,7 +1530,7 @@ void GateClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnecti
 		resp.set_success(success);
 		if (!error.empty())
 			resp.set_error(error);
-		// 验签成功:回包通告心跳参数,并从这一刻起按空闲超时判死这条连接(含已验证会话重发验签、dev 免验签两条成功路径,
+		// 验签成功:回包通告心跳参数,并从这一刻起按空闲超时判死这条连接(含 dev 免验签:那里每条验签请求都答,
 		// 重复调用不重复登记)。docs/design/gate-client-heartbeat.md §5.1。
 		// 同一时刻归还未验签占位、把握手耗时记进直方图(connection_admission.h;没有占位时什么也不做,同样可重复调用)。
 		if (success)
@@ -1551,12 +1551,6 @@ void GateClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnecti
 		conn->forceCloseWithDelay(0.1);
 	};
 
-	if (session.verified)
-	{
-		sendReply(true, "");
-		return;
-	}
-
 	// 与 HandleConnectionEstablished 同一条判据:空密钥的处置由显式运行模式
 	// 决定,不能只看"密钥是不是空字符串"。这条路径尤其致命 —— 旧写法下客户端
 	// 只要发一条 ClientTokenVerifyRequest,不带任何签名,就能拿到 success=true
@@ -1566,10 +1560,26 @@ void GateClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnecti
 	const auto secretVerdict = gate_security::ClassifyTokenSecret(secret, runMode);
 	if (secretVerdict == gate_security::TokenSecretVerdict::kDevBypass)
 	{
+		// 明确授权的免验签(dev / test 且没配密钥):会话建连时已标成已验证,每条验签请求都答成功、不看票据。
 		session.verified = true;
 		sendReply(true, "");
 		return;
 	}
+
+	// 已经验过签的连接又发验签请求。客户端每条连接只发一次(mmorpg-client 的 GameClient.ConnectAndEnter),重发是协议违例:
+	// 不回包(回包等于白送一次序列化与下行),计一次非法包,到阈值断开(docs/design/gate-connection-admission-control.md §5 第 5 条)。
+	if (session.verified)
+	{
+		LogClientSecurityRejectionSampled("token_verify_repeated", sessionId);
+		if (IllegalPacketCounter::RegisterAndShouldKill(session.illegalPacketCount))
+		{
+			LOG_WARN << "Session illegal-packet threshold exceeded (repeated token verify) -- forceClose."
+					 << " count=" << session.illegalPacketCount << " session_id=" << sessionId;
+			conn->forceClose();
+		}
+		return;
+	}
+
 	if (secretVerdict == gate_security::TokenSecretVerdict::kRefuse)
 	{
 		rejectAndClose("token_secret_not_configured", "gate token secret not configured");

@@ -67,7 +67,7 @@ struct FCfgRewardedAdSlotRow : public FTableRowBase
 	UPROPERTY(BlueprintReadOnly, Category = "Config|RewardedAdSlot")
 	int32 min_level = 0;
 
-	/** 每日最大领取次数(UTC+8 05:00 切日,默认 2) */
+	/** 每周最大领取次数(UTC+8 周一 05:00 切周,默认 14;字段名保留 daily_limit 兼容既有协议) */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|RewardedAdSlot")
 	int32 daily_limit = 0;
 

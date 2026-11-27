@@ -161,9 +161,9 @@ uint32_t PlayerRewardedAdSystem::GetInfo(entt::entity player, const GetRewardedA
 	{
 		return kRewardedAdUnavailable;
 	}
-	uint64_t dayStartMs = 0;
-	uint64_t nextDayMs = 0;
-	if (!rewarded_ad_rules::ResolveGameDay(nowMs, dayStartMs, nextDayMs))
+	uint64_t weekStartMs = 0;
+	uint64_t nextWeekMs = 0;
+	if (!rewarded_ad_rules::ResolveGameWeek(nowMs, weekStartMs, nextWeekMs))
 	{
 		return kRewardedAdUnavailable;
 	}
@@ -195,7 +195,7 @@ uint32_t PlayerRewardedAdSystem::GetInfo(entt::entity player, const GetRewardedA
 	for (const auto &cfg : validSlots)
 	{
 		FillSlotView(cfg, ledger.rewarded_ad(), request.client_platform(), playerLevel,
-					 dayStartMs, nextDayMs, nowMs, *response.add_slots());
+					 weekStartMs, nextWeekMs, nowMs, *response.add_slots());
 	}
 	return kSuccess;
 }
@@ -244,17 +244,17 @@ uint32_t PlayerRewardedAdSystem::BeginSession(entt::entity player, const BeginRe
 		return kRewardedAdLevelNotEnough;
 	}
 
-	uint64_t dayStartMs = 0;
-	uint64_t nextDayMs = 0;
-	if (!rewarded_ad_rules::ResolveGameDay(nowMs, dayStartMs, nextDayMs))
+	uint64_t weekStartMs = 0;
+	uint64_t nextWeekMs = 0;
+	if (!rewarded_ad_rules::ResolveGameWeek(nowMs, weekStartMs, nextWeekMs))
 	{
 		return kRewardedAdUnavailable;
 	}
 
 	auto &ledger = tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player);
 	auto &adLedger = *ledger.mutable_rewarded_ad();
-	const uint32_t claimedToday = rewarded_ad_rules::EffectiveClaimedToday(adLedger, dayStartMs);
-	if (claimedToday >= cfg.dailyLimit)
+	const uint32_t claimedInPeriod = rewarded_ad_rules::EffectiveClaimedToday(adLedger, weekStartMs);
+	if (claimedInPeriod >= cfg.dailyLimit)
 	{
 		return kRewardedAdDailyLimitReached;
 	}
@@ -272,7 +272,7 @@ uint32_t PlayerRewardedAdSystem::BeginSession(entt::entity player, const BeginRe
 		return kRewardedAdUnavailable;
 	}
 
-	rewarded_ad_rules::AdvanceDayIfNeeded(adLedger, dayStartMs);
+	rewarded_ad_rules::AdvanceDayIfNeeded(adLedger, weekStartMs);
 	const uint64_t sessionId = GenerateSessionId(adLedger.active_session_id());
 	adLedger.set_active_session_id(sessionId);
 	adLedger.set_active_session_issued_ms(nowMs);
@@ -328,17 +328,17 @@ uint32_t PlayerRewardedAdSystem::Claim(entt::entity player, const ClaimRewardedA
 		response.set_currency_balance(CurrencySystem::GetBalance(player, kCurrencyBindGold));
 		response.set_gold_balance(CurrencySystem::GetBalance(player, kCurrencyGold));
 		response.set_replayed(true);
-		uint64_t dayStartMs = 0;
-		uint64_t nextDayMs = 0;
+		uint64_t weekStartMs = 0;
+		uint64_t nextWeekMs = 0;
 		rewarded_ad_rules::SlotConfig cfg;
 		const char *reason = nullptr;
 		if (HasRequiredComponents(player) &&
-			rewarded_ad_rules::ResolveGameDay(nowMs, dayStartMs, nextDayMs) &&
+			rewarded_ad_rules::ResolveGameWeek(nowMs, weekStartMs, nextWeekMs) &&
 			TryResolveSlot(request.slot_id(), cfg, reason))
 		{
 			const auto &ledger = tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player);
 			const uint32_t level = tlsEcs.actorRegistry.get<LevelComp>(player).level();
-			FillSlotView(cfg, ledger.rewarded_ad(), 0u, level, dayStartMs, nextDayMs, nowMs,
+			FillSlotView(cfg, ledger.rewarded_ad(), 0u, level, weekStartMs, nextWeekMs, nowMs,
 						 *response.mutable_slot());
 		}
 		return kSuccess;
@@ -375,16 +375,16 @@ uint32_t PlayerRewardedAdSystem::Claim(entt::entity player, const ClaimRewardedA
 		return kRewardedAdLevelNotEnough;
 	}
 
-	uint64_t dayStartMs = 0;
-	uint64_t nextDayMs = 0;
-	if (!rewarded_ad_rules::ResolveGameDay(nowMs, dayStartMs, nextDayMs))
+	uint64_t weekStartMs = 0;
+	uint64_t nextWeekMs = 0;
+	if (!rewarded_ad_rules::ResolveGameWeek(nowMs, weekStartMs, nextWeekMs))
 	{
 		return kRewardedAdUnavailable;
 	}
 
 	auto &ledger = tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player);
 	const auto &adLedger = ledger.rewarded_ad();
-	if (rewarded_ad_rules::EffectiveClaimedToday(adLedger, dayStartMs) >= cfg.dailyLimit)
+	if (rewarded_ad_rules::EffectiveClaimedToday(adLedger, weekStartMs) >= cfg.dailyLimit)
 	{
 		return kRewardedAdDailyLimitReached;
 	}
@@ -440,7 +440,7 @@ uint32_t PlayerRewardedAdSystem::Claim(entt::entity player, const ClaimRewardedA
 
 	ClientRequestLedgerComp candidateLedger = ledger;
 	auto &candidateAd = *candidateLedger.mutable_rewarded_ad();
-	rewarded_ad_rules::AdvanceDayIfNeeded(candidateAd, dayStartMs);
+	rewarded_ad_rules::AdvanceDayIfNeeded(candidateAd, weekStartMs);
 	candidateAd.set_claimed_today(candidateAd.claimed_today() + 1u);
 	candidateAd.set_last_claim_at_ms(nowMs);
 	if (candidateAd.total_claimed_lifetime() < std::numeric_limits<uint64_t>::max())
@@ -484,7 +484,7 @@ uint32_t PlayerRewardedAdSystem::Claim(entt::entity player, const ClaimRewardedA
 	response.set_currency_balance(CurrencySystem::GetBalance(player, kCurrencyBindGold));
 	response.set_gold_balance(CurrencySystem::GetBalance(player, kCurrencyGold));
 	response.set_replayed(false);
-	FillSlotView(cfg, ledger.rewarded_ad(), 0u, playerLevel, dayStartMs, nextDayMs, nowMs,
+	FillSlotView(cfg, ledger.rewarded_ad(), 0u, playerLevel, weekStartMs, nextWeekMs, nowMs,
 				 *response.mutable_slot());
 
 	LOG_INFO << "[RewardedAd] metric=rewarded_ad_claimed " << PlayerLogId(player)

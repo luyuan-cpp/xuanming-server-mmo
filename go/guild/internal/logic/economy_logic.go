@@ -866,7 +866,7 @@ func (l *GuildLogic) donateOnce(ctx context.Context, eco *EconomyDeps, req *pb.D
 		ContributionGain: row.GetContributionGain(),
 		FundsGain:        row.GetFundsGain(),
 		DailyLimit:       row.GetDailyLimit(),
-		PeriodKey:        gameday.DayKey(start),
+		PeriodKey:        gameday.WeekKey(start),
 		DeadlineMs:       deadlineMs,
 		LeaseUntilMs:     startMs + durationMs(eco.Lease),
 		LeaseToken:       token,
@@ -1239,7 +1239,7 @@ func (l *GuildLogic) getGuildDonateOptions(ctx context.Context, _ *pb.GetGuildDo
 		l.verifyMapping(ctx, playerID, g.GuildID)
 		return &pb.GetGuildDonateOptionsResponse{ErrorMessage: tipErr(constants.ErrNotInGuild, "not a member of the guild")}, resultNotMember, nil
 	}
-	usage, err := eco.Repo.DonateUsage(ctx, playerID, gameday.DayKey(now))
+	usage, err := eco.Repo.DonateUsage(ctx, playerID, gameday.WeekKey(now))
 	if err != nil {
 		return nil, resultError, fmt.Errorf("read donate usage of player %d: %w", playerID, err)
 	}
@@ -1259,7 +1259,7 @@ func (l *GuildLogic) getGuildDonateOptions(ctx context.Context, _ *pb.GetGuildDo
 	resp := &pb.GetGuildDonateOptionsResponse{
 		ContributionTotal:   total,
 		ContributionBalance: balance,
-		NextDailyResetMs:    uint64(gameday.NextDailyReset(now).UnixMilli()),
+		NextDailyResetMs:    uint64(gameday.NextWeeklyReset(now).UnixMilli()),
 	}
 	for _, row := range sortedDonateRows() {
 		resp.Options = append(resp.Options, &pb.GuildDonateOptionView{

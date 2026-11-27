@@ -104,7 +104,8 @@ struct PlayerEnterContext
 	uint64_t loginGeneration{0};
 	// 本次入场出自哪个 gate 进程:SceneHandler::PlayerEnterGameNode 取请求所走入站连接的握手身份(gate 的 node_uuid),
 	// 不取消息体自报的值。与 enterInfo.session_id 一起构成"哪一条会话"(enter_fence.h 的 SameGateInstance;
-	// scene-enter-chain-residuals.md §14)。空 = 未知:托管落点等不经 gate 连接的入场,按会话号认。
+	// scene-enter-chain-residuals.md §14)。托管落点不经 gate 连接,取 scene_manager 在 location 里为断开的那次登录记下的
+	// 实例(PlayerHostedPlacementEvent.gate_instance_id,§14.8)。空 = 未知,按会话号认。
 	std::string gateInstanceId;
 	uint64_t ownerRevision{0};
 	uint64_t roleAdmissionGeneration{0};
@@ -1336,6 +1337,8 @@ public:
 		SessionId sessionId{kInvalidSessionId};
 		uint64_t loginGeneration{0};
 		uint64_t ownerRevision{0};
+		// 断开的那次登录所在的 gate 进程(location 为它记下的实例);空 = 未知,不算字段不全。
+		std::string gateInstanceId;
 	};
 
 	// 托管落点入口(PlayerPlacementEventHandler 的守护段只委托到这里)。字段不全(任一身份 / 归属字段为 0)的整条丢弃并打

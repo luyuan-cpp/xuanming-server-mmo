@@ -51,6 +51,7 @@ import (
 	pb "proto/guild"
 
 	"shared/assetop"
+	"shared/gameday"
 
 	"guild/internal/constants"
 )
@@ -117,7 +118,7 @@ const (
 	sqlSelectDonateUsage = `SELECT ref_id, used_count FROM guild_daily_counter
 	WHERE player_id = ? AND counter_kind = ? AND period_key = ?`
 	sqlSelectShopUsage = `SELECT ref_id, period_key, used_count FROM guild_daily_counter
-	WHERE player_id = ? AND counter_kind = ? AND period_key IN (?, ?)`
+	WHERE player_id = ? AND counter_kind = ? AND period_key IN (?, ?, ?)`
 	sqlSelectMemberContribution = `SELECT contribution_total, contribution_balance FROM guild_member
 	WHERE guild_id = ? AND player_id = ?`
 	sqlSelectOpState = "SELECT `status`, `last_reason`, `reason_tip_id` FROM " + guildAssetOpTable + " WHERE `op_id` = ?"
@@ -1037,12 +1038,12 @@ func (r *EconomyRepo) DonateUsage(ctx context.Context, playerID uint64, dayKey u
 // 调用方不必知道哪个商品是哪种周期就能直接查。
 type ShopUsageKey struct{ GoodsID, PeriodKey uint32 }
 
-// ShopUsage 返回本人本游戏日 / 本游戏周的商店用量。日键 8 位、周键 6 位,数值域不重叠,一条 IN 就够。
+// ShopUsage 返回本人本游戏日 / 本游戏周 / 终身限购的商店用量。日键 8 位、周键 6 位、终身键 1,数值域两两不重叠,一条 IN 就够。
 func (r *EconomyRepo) ShopUsage(ctx context.Context, playerID uint64, dayKey, weekKey uint32) (map[ShopUsageKey]uint32, error) {
 	ctx, cancel := context.WithTimeout(ctx, economyReadBudget)
 	defer cancel()
 	rows, err := r.db.QueryContext(ctx, sqlSelectShopUsage,
-		playerID, int32(pb.GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_SHOP), dayKey, weekKey)
+		playerID, int32(pb.GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_SHOP), dayKey, weekKey, gameday.LifetimePeriodKey)
 	if err != nil {
 		return nil, fmt.Errorf("read shop usage of player %d: %w", playerID, err)
 	}

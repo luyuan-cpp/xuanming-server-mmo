@@ -10570,11 +10570,11 @@ constexpr EquipLoadoutSnapshot::ParseTableT_ EquipLoadoutSnapshot::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_._has_bits_),
       0, // no _extensions_
-      13, 120,  // max_field_number, fast_idx_mask
+      21, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294959104,  // skipmap
+      4292870144,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      13,  // num_field_entries
+      21,  // num_field_entries
       3,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -10637,6 +10637,46 @@ constexpr EquipLoadoutSnapshot::ParseTableT_ EquipLoadoutSnapshot::InternalGener
       {::_pbi::TcParser::FastMtR1,
        {106, 2, 2,
         PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.attribute_schemes_)}},
+      // uint32 free_schemes = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipLoadoutSnapshot, _impl_.free_schemes_), 13>(),
+       {112, 13, 0,
+        PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.free_schemes_)}},
+      // uint32 light_card_bonus_schemes = 15;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EquipLoadoutSnapshot, _impl_.light_card_bonus_schemes_), 14>(),
+       {120, 14, 0,
+        PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.light_card_bonus_schemes_)}},
+      // uint32 rented_extra_slots = 16;
+      {::_pbi::TcParser::FastV32S2,
+       {384, 15, 0,
+        PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rented_extra_slots_)}},
+      // uint64 rent_expires_at_sec = 17;
+      {::_pbi::TcParser::FastV64S2,
+       {392, 16, 0,
+        PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rent_expires_at_sec_)}},
+      // uint64 server_now_sec = 18;
+      {::_pbi::TcParser::FastV64S2,
+       {400, 17, 0,
+        PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.server_now_sec_)}},
+      // uint64 rent_unit_price_diamond = 19;
+      {::_pbi::TcParser::FastV64S2,
+       {408, 18, 0,
+        PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rent_unit_price_diamond_)}},
+      // uint32 rent_period_days = 20;
+      {::_pbi::TcParser::FastV32S2,
+       {416, 19, 0,
+        PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rent_period_days_)}},
+      // uint32 rent_max_remaining_days = 21;
+      {::_pbi::TcParser::FastV32S2,
+       {424, 20, 0,
+        PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rent_max_remaining_days_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
@@ -10668,6 +10708,22 @@ constexpr EquipLoadoutSnapshot::ParseTableT_ EquipLoadoutSnapshot::InternalGener
       {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.skill_schemes_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // repeated .EquipLoadoutLinkedOption attribute_schemes = 13;
       {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.attribute_schemes_), _Internal::kHasBitsOffset + 2, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint32 free_schemes = 14;
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.free_schemes_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 light_card_bonus_schemes = 15;
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.light_card_bonus_schemes_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 rented_extra_slots = 16;
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rented_extra_slots_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 rent_expires_at_sec = 17;
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rent_expires_at_sec_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 server_now_sec = 18;
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.server_now_sec_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 rent_unit_price_diamond = 19;
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rent_unit_price_diamond_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 rent_period_days = 20;
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rent_period_days_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 rent_max_remaining_days = 21;
+      {PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rent_max_remaining_days_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -10720,7 +10776,15 @@ inline constexpr EquipLoadoutSnapshot::Impl_::Impl_(
         unlock_item_owned_{::uint64_t{0u}},
         diamond_balance_{::uint64_t{0u}},
         bind_diamond_balance_{::uint64_t{0u}},
-        unlock_item_config_id_{0u} {}
+        unlock_item_config_id_{0u},
+        free_schemes_{0u},
+        light_card_bonus_schemes_{0u},
+        rented_extra_slots_{0u},
+        rent_expires_at_sec_{::uint64_t{0u}},
+        server_now_sec_{::uint64_t{0u}},
+        rent_unit_price_diamond_{::uint64_t{0u}},
+        rent_period_days_{0u},
+        rent_max_remaining_days_{0u} {}
 
 template <typename>
 constexpr EquipLoadoutSnapshot::EquipLoadoutSnapshot(::_pbi::ConstantInitialized,
@@ -12390,7 +12454,7 @@ const ::uint32_t
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_._has_bits_),
-        16, // hasbit index offset
+        24, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.unlocked_scheme_count_),
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.max_scheme_count_),
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.active_scheme_id_),
@@ -12404,6 +12468,14 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.bind_diamond_balance_),
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.skill_schemes_),
         PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.attribute_schemes_),
+        PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.free_schemes_),
+        PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.light_card_bonus_schemes_),
+        PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.rented_extra_slots_),
+        PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.rent_expires_at_sec_),
+        PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.server_now_sec_),
+        PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.rent_unit_price_diamond_),
+        PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.rent_period_days_),
+        PROTOBUF_FIELD_OFFSET(::EquipLoadoutSnapshot, _impl_.rent_max_remaining_days_),
         3,
         4,
         6,
@@ -12417,6 +12489,14 @@ const ::uint32_t
         11,
         1,
         2,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
         0x000, // bitmap
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::GetEquipLoadoutsResponse, _impl_._has_bits_),
@@ -12580,14 +12660,14 @@ static const ::_pbi::MigrationSchema
         {738, sizeof(::EquipLoadoutSchemeInfo)},
         {757, sizeof(::EquipLoadoutLinkedOption)},
         {766, sizeof(::EquipLoadoutSnapshot)},
-        {795, sizeof(::GetEquipLoadoutsRequest)},
-        {796, sizeof(::GetEquipLoadoutsResponse)},
-        {803, sizeof(::SaveEquipLoadoutRequest)},
-        {824, sizeof(::SaveEquipLoadoutResponse)},
-        {835, sizeof(::SwitchEquipLoadoutRequest)},
-        {846, sizeof(::SwitchEquipLoadoutResponse)},
-        {865, sizeof(::UnlockEquipLoadoutRequest)},
-        {874, sizeof(::UnlockEquipLoadoutResponse)},
+        {811, sizeof(::GetEquipLoadoutsRequest)},
+        {812, sizeof(::GetEquipLoadoutsResponse)},
+        {819, sizeof(::SaveEquipLoadoutRequest)},
+        {840, sizeof(::SaveEquipLoadoutResponse)},
+        {851, sizeof(::SwitchEquipLoadoutRequest)},
+        {862, sizeof(::SwitchEquipLoadoutResponse)},
+        {881, sizeof(::UnlockEquipLoadoutRequest)},
+        {890, sizeof(::UnlockEquipLoadoutResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -12900,7 +12980,7 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fbag_2eproto[] ABSL
     "ribute_scheme_id\030\007 \001(\r\022\025\n\rmissing_count\030"
     "\010 \001(\r\"M\n\030EquipLoadoutLinkedOption\022\021\n\tsch"
     "eme_id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\020\n\010role_tag\030\003"
-    " \001(\r\"\315\003\n\024EquipLoadoutSnapshot\022\035\n\025unlocke"
+    " \001(\r\"\262\005\n\024EquipLoadoutSnapshot\022\035\n\025unlocke"
     "d_scheme_count\030\001 \001(\r\022\030\n\020max_scheme_count"
     "\030\002 \001(\r\022\030\n\020active_scheme_id\030\003 \001(\r\022\025\n\rstat"
     "e_version\030\004 \001(\004\022(\n\007schemes\030\005 \003(\0132\027.Equip"
@@ -12911,82 +12991,88 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fbag_2eproto[] ABSL
     "_balance\030\n \001(\004\022\034\n\024bind_diamond_balance\030\013"
     " \001(\004\0220\n\rskill_schemes\030\014 \003(\0132\031.EquipLoado"
     "utLinkedOption\0224\n\021attribute_schemes\030\r \003("
-    "\0132\031.EquipLoadoutLinkedOption\"\031\n\027GetEquip"
-    "LoadoutsRequest\"k\n\030GetEquipLoadoutsRespo"
-    "nse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMess"
-    "age\022\'\n\010snapshot\030\002 \001(\0132\025.EquipLoadoutSnap"
-    "shot\"\206\002\n\027SaveEquipLoadoutRequest\022\021\n\tsche"
-    "me_id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\020\n\010role_tag\030\003 "
-    "\001(\r\022\'\n\005slots\030\004 \003(\0132\030.EquipLoadoutSlotBin"
-    "ding\022 \n\030capture_current_equipped\030\005 \001(\010\022\036"
-    "\n\026linked_skill_scheme_id\030\006 \001(\r\022\"\n\032linked"
-    "_attribute_scheme_id\030\007 \001(\r\022\025\n\rstate_vers"
-    "ion\030\010 \001(\004\022\022\n\nrequest_id\030\t \001(\t\"\221\001\n\030SaveEq"
-    "uipLoadoutResponse\022&\n\rerror_message\030\001 \001("
-    "\0132\017.TipInfoMessage\022\'\n\010snapshot\030\002 \001(\0132\025.E"
-    "quipLoadoutSnapshot\022\022\n\nrequest_id\030\003 \001(\t\022"
-    "\020\n\010replayed\030\004 \001(\010\"w\n\031SwitchEquipLoadoutR"
-    "equest\022\021\n\tscheme_id\030\001 \001(\r\022\034\n\024apply_linke"
-    "d_schemes\030\002 \001(\010\022\025\n\rstate_version\030\003 \001(\004\022\022"
-    "\n\nrequest_id\030\004 \001(\t\"\366\001\n\032SwitchEquipLoadou"
-    "tResponse\022&\n\rerror_message\030\001 \001(\0132\017.TipIn"
-    "foMessage\022\025\n\003bag\030\002 \001(\0132\010.BagInfo\022\033\n\tequi"
-    "pment\030\003 \001(\0132\010.BagInfo\022\'\n\010snapshot\030\004 \001(\0132"
-    "\025.EquipLoadoutSnapshot\022\025\n\rmissing_slots\030"
-    "\005 \003(\r\022\026\n\016linked_notices\030\006 \003(\t\022\022\n\nrequest"
-    "_id\030\007 \001(\t\022\020\n\010replayed\030\010 \001(\010\"w\n\031UnlockEqu"
-    "ipLoadoutRequest\022\031\n\021client_request_id\030\001 "
-    "\001(\004\022\037\n\027expected_unlocked_count\030\002 \001(\r\022\036\n\026"
-    "use_bind_diamond_first\030\003 \001(\010\"\272\003\n\032UnlockE"
-    "quipLoadoutResponse\022&\n\rerror_message\030\001 \001"
-    "(\0132\017.TipInfoMessage\022\031\n\021client_request_id"
-    "\030\002 \001(\004\0224\n\007outcome\030\003 \001(\0162#.UnlockEquipLoa"
-    "doutResponse.Outcome\022\017\n\007durable\030\004 \001(\010\022\020\n"
-    "\010replayed\030\005 \001(\010\022\035\n\025result_unlocked_count"
-    "\030\006 \001(\r\022\036\n\026current_unlocked_count\030\007 \001(\r\022\033"
-    "\n\023used_item_config_id\030\010 \001(\r\022\032\n\022spent_bin"
-    "d_diamond\030\t \001(\004\022\025\n\rspent_diamond\030\n \001(\004\022\025"
-    "\n\003bag\030\013 \001(\0132\010.BagInfo\022\'\n\010snapshot\030\014 \001(\0132"
-    "\025.EquipLoadoutSnapshot\"1\n\007Outcome\022\013\n\007UNK"
-    "NOWN\020\000\022\014\n\010REJECTED\020\001\022\013\n\007APPLIED\020\002*\240\001\n\026Eq"
-    "uipLoadoutSlotStatus\022\034\n\030EQUIP_LOADOUT_SL"
-    "OT_EMPTY\020\000\022\037\n\033EQUIP_LOADOUT_SLOT_EQUIPPE"
-    "D\020\001\022\035\n\031EQUIP_LOADOUT_SLOT_IN_BAG\020\002\022(\n$EQ"
-    "UIP_LOADOUT_SLOT_MISSING_OR_STORED\020\0032\254\n\n"
-    "\024SceneBagClientPlayer\022)\n\006GetBag\022\016.GetBag"
-    "Request\032\017.GetBagResponse\022,\n\007SortBag\022\017.So"
-    "rtBagRequest\032\020.SortBagResponse\0222\n\tEquipI"
-    "tem\022\021.EquipItemRequest\032\022.EquipItemRespon"
-    "se\0228\n\013UnequipItem\022\023.UnequipItemRequest\032\024"
-    ".UnequipItemResponse\0228\n\013GmGrantItem\022\023.Gm"
-    "GrantItemRequest\032\024.GmGrantItemResponse\022;"
-    "\n\014EnhanceEquip\022\024.EnhanceEquipRequest\032\025.E"
-    "nhanceEquipResponse\022/\n\010InlayGem\022\020.InlayG"
-    "emRequest\032\021.InlayGemResponse\0222\n\tRemoveGe"
-    "m\022\021.RemoveGemRequest\032\022.RemoveGemResponse"
-    "\022Y\n\026RetrieveTemporaryItems\022\036.RetrieveTem"
-    "poraryItemsRequest\032\037.RetrieveTemporaryIt"
-    "emsResponse\022Y\n\026GetEquipmentCraftRules\022\036."
-    "GetEquipmentCraftRulesRequest\032\037.GetEquip"
-    "mentCraftRulesResponse\022V\n\025PreviewEquipme"
-    "ntCraft\022\035.PreviewEquipmentCraftRequest\032\036"
-    ".PreviewEquipmentCraftResponse\022S\n\024Commit"
-    "EquipmentCraft\022\034.CommitEquipmentCraftReq"
-    "uest\032\035.CommitEquipmentCraftResponse\022e\n\032G"
-    "etEquipmentMaterialReward\022\".GetEquipment"
-    "MaterialRewardRequest\032#.GetEquipmentMate"
-    "rialRewardResponse\022k\n\034ClaimEquipmentMate"
-    "rialReward\022$.ClaimEquipmentMaterialRewar"
-    "dRequest\032%.ClaimEquipmentMaterialRewardR"
-    "esponse\022G\n\020GetEquipLoadouts\022\030.GetEquipLo"
-    "adoutsRequest\032\031.GetEquipLoadoutsResponse"
-    "\022G\n\020SaveEquipLoadout\022\030.SaveEquipLoadoutR"
-    "equest\032\031.SaveEquipLoadoutResponse\022M\n\022Swi"
-    "tchEquipLoadout\022\032.SwitchEquipLoadoutRequ"
-    "est\032\033.SwitchEquipLoadoutResponse\022M\n\022Unlo"
-    "ckEquipLoadout\022\032.UnlockEquipLoadoutReque"
-    "st\032\033.UnlockEquipLoadoutResponse\032\n\200\250\303\001\001\210\250"
-    "\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
+    "\0132\031.EquipLoadoutLinkedOption\022\024\n\014free_sch"
+    "emes\030\016 \001(\r\022 \n\030light_card_bonus_schemes\030\017"
+    " \001(\r\022\032\n\022rented_extra_slots\030\020 \001(\r\022\033\n\023rent"
+    "_expires_at_sec\030\021 \001(\004\022\026\n\016server_now_sec\030"
+    "\022 \001(\004\022\037\n\027rent_unit_price_diamond\030\023 \001(\004\022\030"
+    "\n\020rent_period_days\030\024 \001(\r\022\037\n\027rent_max_rem"
+    "aining_days\030\025 \001(\r\"\031\n\027GetEquipLoadoutsReq"
+    "uest\"k\n\030GetEquipLoadoutsResponse\022&\n\rerro"
+    "r_message\030\001 \001(\0132\017.TipInfoMessage\022\'\n\010snap"
+    "shot\030\002 \001(\0132\025.EquipLoadoutSnapshot\"\206\002\n\027Sa"
+    "veEquipLoadoutRequest\022\021\n\tscheme_id\030\001 \001(\r"
+    "\022\014\n\004name\030\002 \001(\t\022\020\n\010role_tag\030\003 \001(\r\022\'\n\005slot"
+    "s\030\004 \003(\0132\030.EquipLoadoutSlotBinding\022 \n\030cap"
+    "ture_current_equipped\030\005 \001(\010\022\036\n\026linked_sk"
+    "ill_scheme_id\030\006 \001(\r\022\"\n\032linked_attribute_"
+    "scheme_id\030\007 \001(\r\022\025\n\rstate_version\030\010 \001(\004\022\022"
+    "\n\nrequest_id\030\t \001(\t\"\221\001\n\030SaveEquipLoadoutR"
+    "esponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfo"
+    "Message\022\'\n\010snapshot\030\002 \001(\0132\025.EquipLoadout"
+    "Snapshot\022\022\n\nrequest_id\030\003 \001(\t\022\020\n\010replayed"
+    "\030\004 \001(\010\"w\n\031SwitchEquipLoadoutRequest\022\021\n\ts"
+    "cheme_id\030\001 \001(\r\022\034\n\024apply_linked_schemes\030\002"
+    " \001(\010\022\025\n\rstate_version\030\003 \001(\004\022\022\n\nrequest_i"
+    "d\030\004 \001(\t\"\366\001\n\032SwitchEquipLoadoutResponse\022&"
+    "\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022\025"
+    "\n\003bag\030\002 \001(\0132\010.BagInfo\022\033\n\tequipment\030\003 \001(\013"
+    "2\010.BagInfo\022\'\n\010snapshot\030\004 \001(\0132\025.EquipLoad"
+    "outSnapshot\022\025\n\rmissing_slots\030\005 \003(\r\022\026\n\016li"
+    "nked_notices\030\006 \003(\t\022\022\n\nrequest_id\030\007 \001(\t\022\020"
+    "\n\010replayed\030\010 \001(\010\"w\n\031UnlockEquipLoadoutRe"
+    "quest\022\031\n\021client_request_id\030\001 \001(\004\022\037\n\027expe"
+    "cted_unlocked_count\030\002 \001(\r\022\036\n\026use_bind_di"
+    "amond_first\030\003 \001(\010\"\272\003\n\032UnlockEquipLoadout"
+    "Response\022&\n\rerror_message\030\001 \001(\0132\017.TipInf"
+    "oMessage\022\031\n\021client_request_id\030\002 \001(\004\0224\n\007o"
+    "utcome\030\003 \001(\0162#.UnlockEquipLoadoutRespons"
+    "e.Outcome\022\017\n\007durable\030\004 \001(\010\022\020\n\010replayed\030\005"
+    " \001(\010\022\035\n\025result_unlocked_count\030\006 \001(\r\022\036\n\026c"
+    "urrent_unlocked_count\030\007 \001(\r\022\033\n\023used_item"
+    "_config_id\030\010 \001(\r\022\032\n\022spent_bind_diamond\030\t"
+    " \001(\004\022\025\n\rspent_diamond\030\n \001(\004\022\025\n\003bag\030\013 \001(\013"
+    "2\010.BagInfo\022\'\n\010snapshot\030\014 \001(\0132\025.EquipLoad"
+    "outSnapshot\"1\n\007Outcome\022\013\n\007UNKNOWN\020\000\022\014\n\010R"
+    "EJECTED\020\001\022\013\n\007APPLIED\020\002*\240\001\n\026EquipLoadoutS"
+    "lotStatus\022\034\n\030EQUIP_LOADOUT_SLOT_EMPTY\020\000\022"
+    "\037\n\033EQUIP_LOADOUT_SLOT_EQUIPPED\020\001\022\035\n\031EQUI"
+    "P_LOADOUT_SLOT_IN_BAG\020\002\022(\n$EQUIP_LOADOUT"
+    "_SLOT_MISSING_OR_STORED\020\0032\254\n\n\024SceneBagCl"
+    "ientPlayer\022)\n\006GetBag\022\016.GetBagRequest\032\017.G"
+    "etBagResponse\022,\n\007SortBag\022\017.SortBagReques"
+    "t\032\020.SortBagResponse\0222\n\tEquipItem\022\021.Equip"
+    "ItemRequest\032\022.EquipItemResponse\0228\n\013Unequ"
+    "ipItem\022\023.UnequipItemRequest\032\024.UnequipIte"
+    "mResponse\0228\n\013GmGrantItem\022\023.GmGrantItemRe"
+    "quest\032\024.GmGrantItemResponse\022;\n\014EnhanceEq"
+    "uip\022\024.EnhanceEquipRequest\032\025.EnhanceEquip"
+    "Response\022/\n\010InlayGem\022\020.InlayGemRequest\032\021"
+    ".InlayGemResponse\0222\n\tRemoveGem\022\021.RemoveG"
+    "emRequest\032\022.RemoveGemResponse\022Y\n\026Retriev"
+    "eTemporaryItems\022\036.RetrieveTemporaryItems"
+    "Request\032\037.RetrieveTemporaryItemsResponse"
+    "\022Y\n\026GetEquipmentCraftRules\022\036.GetEquipmen"
+    "tCraftRulesRequest\032\037.GetEquipmentCraftRu"
+    "lesResponse\022V\n\025PreviewEquipmentCraft\022\035.P"
+    "reviewEquipmentCraftRequest\032\036.PreviewEqu"
+    "ipmentCraftResponse\022S\n\024CommitEquipmentCr"
+    "aft\022\034.CommitEquipmentCraftRequest\032\035.Comm"
+    "itEquipmentCraftResponse\022e\n\032GetEquipment"
+    "MaterialReward\022\".GetEquipmentMaterialRew"
+    "ardRequest\032#.GetEquipmentMaterialRewardR"
+    "esponse\022k\n\034ClaimEquipmentMaterialReward\022"
+    "$.ClaimEquipmentMaterialRewardRequest\032%."
+    "ClaimEquipmentMaterialRewardResponse\022G\n\020"
+    "GetEquipLoadouts\022\030.GetEquipLoadoutsReque"
+    "st\032\031.GetEquipLoadoutsResponse\022G\n\020SaveEqu"
+    "ipLoadout\022\030.SaveEquipLoadoutRequest\032\031.Sa"
+    "veEquipLoadoutResponse\022M\n\022SwitchEquipLoa"
+    "dout\022\032.SwitchEquipLoadoutRequest\032\033.Switc"
+    "hEquipLoadoutResponse\022M\n\022UnlockEquipLoad"
+    "out\022\032.UnlockEquipLoadoutRequest\032\033.Unlock"
+    "EquipLoadoutResponse\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005scen"
+    "e\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto_deps[4] = {
@@ -12999,7 +13085,7 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto = {
     false,
     false,
-    13267,
+    13496,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fbag_2eproto,
     "proto/scene/player_bag.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto_once,
@@ -30782,9 +30868,9 @@ EquipLoadoutSnapshot::EquipLoadoutSnapshot(
                offsetof(Impl_, unlocked_scheme_count_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, unlocked_scheme_count_),
-           offsetof(Impl_, unlock_item_config_id_) -
+           offsetof(Impl_, rent_max_remaining_days_) -
                offsetof(Impl_, unlocked_scheme_count_) +
-               sizeof(Impl_::unlock_item_config_id_));
+               sizeof(Impl_::rent_max_remaining_days_));
 
   // @@protoc_insertion_point(copy_constructor:EquipLoadoutSnapshot)
 }
@@ -30813,9 +30899,9 @@ inline void EquipLoadoutSnapshot::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE are
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, unlocked_scheme_count_),
            0,
-           offsetof(Impl_, unlock_item_config_id_) -
+           offsetof(Impl_, rent_max_remaining_days_) -
                offsetof(Impl_, unlocked_scheme_count_) +
-               sizeof(Impl_::unlock_item_config_id_));
+               sizeof(Impl_::rent_max_remaining_days_));
 }
 EquipLoadoutSnapshot::~EquipLoadoutSnapshot() {
   // @@protoc_insertion_point(destructor:EquipLoadoutSnapshot)
@@ -30881,10 +30967,15 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
         reinterpret_cast<char*>(&_impl_.next_unlock_allow_bind_diamond_) -
         reinterpret_cast<char*>(&_impl_.unlocked_scheme_count_)) + sizeof(_impl_.next_unlock_allow_bind_diamond_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     ::memset(&_impl_.next_unlock_cost_diamond_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.unlock_item_config_id_) -
-        reinterpret_cast<char*>(&_impl_.next_unlock_cost_diamond_)) + sizeof(_impl_.unlock_item_config_id_));
+        reinterpret_cast<char*>(&_impl_.rented_extra_slots_) -
+        reinterpret_cast<char*>(&_impl_.next_unlock_cost_diamond_)) + sizeof(_impl_.rented_extra_slots_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
+    ::memset(&_impl_.rent_expires_at_sec_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.rent_max_remaining_days_) -
+        reinterpret_cast<char*>(&_impl_.rent_expires_at_sec_)) + sizeof(_impl_.rent_max_remaining_days_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -31038,6 +31129,78 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
     }
   }
 
+  // uint32 free_schemes = 14;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_free_schemes() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          14, this_._internal_free_schemes(), target);
+    }
+  }
+
+  // uint32 light_card_bonus_schemes = 15;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_light_card_bonus_schemes() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          15, this_._internal_light_card_bonus_schemes(), target);
+    }
+  }
+
+  // uint32 rented_extra_slots = 16;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_rented_extra_slots() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          16, this_._internal_rented_extra_slots(), target);
+    }
+  }
+
+  // uint64 rent_expires_at_sec = 17;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_rent_expires_at_sec() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          17, this_._internal_rent_expires_at_sec(), target);
+    }
+  }
+
+  // uint64 server_now_sec = 18;
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (this_._internal_server_now_sec() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          18, this_._internal_server_now_sec(), target);
+    }
+  }
+
+  // uint64 rent_unit_price_diamond = 19;
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (this_._internal_rent_unit_price_diamond() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          19, this_._internal_rent_unit_price_diamond(), target);
+    }
+  }
+
+  // uint32 rent_period_days = 20;
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (this_._internal_rent_period_days() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          20, this_._internal_rent_period_days(), target);
+    }
+  }
+
+  // uint32 rent_max_remaining_days = 21;
+  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (this_._internal_rent_max_remaining_days() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          21, this_._internal_rent_max_remaining_days(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -31120,7 +31283,7 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint64 next_unlock_cost_diamond = 6;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_next_unlock_cost_diamond() != 0) {
@@ -31154,6 +31317,64 @@ PROTOBUF_NOINLINE void EquipLoadoutSnapshot::Clear() {
       if (this_._internal_unlock_item_config_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_unlock_item_config_id());
+      }
+    }
+    // uint32 free_schemes = 14;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_free_schemes() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_free_schemes());
+      }
+    }
+    // uint32 light_card_bonus_schemes = 15;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_light_card_bonus_schemes() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_light_card_bonus_schemes());
+      }
+    }
+    // uint32 rented_extra_slots = 16;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_rented_extra_slots() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_rented_extra_slots());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
+    // uint64 rent_expires_at_sec = 17;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_rent_expires_at_sec() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_rent_expires_at_sec());
+      }
+    }
+    // uint64 server_now_sec = 18;
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (this_._internal_server_now_sec() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_server_now_sec());
+      }
+    }
+    // uint64 rent_unit_price_diamond = 19;
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (this_._internal_rent_unit_price_diamond() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_rent_unit_price_diamond());
+      }
+    }
+    // uint32 rent_period_days = 20;
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (this_._internal_rent_period_days() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_rent_period_days());
+      }
+    }
+    // uint32 rent_max_remaining_days = 21;
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (this_._internal_rent_max_remaining_days() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_rent_max_remaining_days());
       }
     }
   }
@@ -31217,7 +31438,7 @@ void EquipLoadoutSnapshot::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_next_unlock_cost_diamond() != 0) {
         _this->_impl_.next_unlock_cost_diamond_ = from._impl_.next_unlock_cost_diamond_;
@@ -31243,6 +31464,48 @@ void EquipLoadoutSnapshot::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.unlock_item_config_id_ = from._impl_.unlock_item_config_id_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_free_schemes() != 0) {
+        _this->_impl_.free_schemes_ = from._impl_.free_schemes_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_light_card_bonus_schemes() != 0) {
+        _this->_impl_.light_card_bonus_schemes_ = from._impl_.light_card_bonus_schemes_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_rented_extra_slots() != 0) {
+        _this->_impl_.rented_extra_slots_ = from._impl_.rented_extra_slots_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (from._internal_rent_expires_at_sec() != 0) {
+        _this->_impl_.rent_expires_at_sec_ = from._impl_.rent_expires_at_sec_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (from._internal_server_now_sec() != 0) {
+        _this->_impl_.server_now_sec_ = from._impl_.server_now_sec_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (from._internal_rent_unit_price_diamond() != 0) {
+        _this->_impl_.rent_unit_price_diamond_ = from._impl_.rent_unit_price_diamond_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (from._internal_rent_period_days() != 0) {
+        _this->_impl_.rent_period_days_ = from._impl_.rent_period_days_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (from._internal_rent_max_remaining_days() != 0) {
+        _this->_impl_.rent_max_remaining_days_ = from._impl_.rent_max_remaining_days_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -31265,8 +31528,8 @@ void EquipLoadoutSnapshot::InternalSwap(EquipLoadoutSnapshot* PROTOBUF_RESTRICT 
   _impl_.skill_schemes_.InternalSwap(&other->_impl_.skill_schemes_);
   _impl_.attribute_schemes_.InternalSwap(&other->_impl_.attribute_schemes_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.unlock_item_config_id_)
-      + sizeof(EquipLoadoutSnapshot::_impl_.unlock_item_config_id_)
+      PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.rent_max_remaining_days_)
+      + sizeof(EquipLoadoutSnapshot::_impl_.rent_max_remaining_days_)
       - PROTOBUF_FIELD_OFFSET(EquipLoadoutSnapshot, _impl_.unlocked_scheme_count_)>(
           reinterpret_cast<char*>(&_impl_.unlocked_scheme_count_),
           reinterpret_cast<char*>(&other->_impl_.unlocked_scheme_count_));

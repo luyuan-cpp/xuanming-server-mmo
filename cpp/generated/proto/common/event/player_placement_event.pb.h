@@ -221,6 +221,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerHostedPlacementEvent final : 
 
   // accessors -------------------------------------------------------
   enum : int {
+    kGateInstanceIdFieldNumber = 8,
     kPlayerIdFieldNumber = 1,
     kSceneIdFieldNumber = 2,
     kOwnerEpochFieldNumber = 4,
@@ -229,6 +230,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerHostedPlacementEvent final : 
     kLoginGenerationFieldNumber = 6,
     kOwnerRevisionFieldNumber = 7,
   };
+  // string gate_instance_id = 8;
+  void clear_gate_instance_id() ;
+  [[nodiscard]] const ::std::string& gate_instance_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_gate_instance_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_gate_instance_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_gate_instance_id();
+  void set_allocated_gate_instance_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_gate_instance_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_gate_instance_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_gate_instance_id();
+
+  public:
   // uint64 player_id = 1;
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
@@ -303,8 +319,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerHostedPlacementEvent final : 
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
-                          0, 0,
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          0, 59,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -332,6 +348,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerHostedPlacementEvent final : 
         const PlayerHostedPlacementEvent& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr gate_instance_id_;
     ::uint64_t player_id_;
     ::uint64_t scene_id_;
     ::uint64_t owner_epoch_;
@@ -365,7 +382,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerHostedPlacementEvent final : 
 inline void PlayerHostedPlacementEvent::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline ::uint64_t PlayerHostedPlacementEvent::player_id() const {
   // @@protoc_insertion_point(field_get:PlayerHostedPlacementEvent.player_id)
@@ -373,7 +390,7 @@ inline ::uint64_t PlayerHostedPlacementEvent::player_id() const {
 }
 inline void PlayerHostedPlacementEvent::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:PlayerHostedPlacementEvent.player_id)
 }
 inline ::uint64_t PlayerHostedPlacementEvent::_internal_player_id() const {
@@ -389,7 +406,7 @@ inline void PlayerHostedPlacementEvent::_internal_set_player_id(::uint64_t value
 inline void PlayerHostedPlacementEvent::clear_scene_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.scene_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint64_t PlayerHostedPlacementEvent::scene_id() const {
   // @@protoc_insertion_point(field_get:PlayerHostedPlacementEvent.scene_id)
@@ -397,7 +414,7 @@ inline ::uint64_t PlayerHostedPlacementEvent::scene_id() const {
 }
 inline void PlayerHostedPlacementEvent::set_scene_id(::uint64_t value) {
   _internal_set_scene_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:PlayerHostedPlacementEvent.scene_id)
 }
 inline ::uint64_t PlayerHostedPlacementEvent::_internal_scene_id() const {
@@ -413,7 +430,7 @@ inline void PlayerHostedPlacementEvent::_internal_set_scene_id(::uint64_t value)
 inline void PlayerHostedPlacementEvent::clear_home_zone_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.home_zone_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t PlayerHostedPlacementEvent::home_zone_id() const {
   // @@protoc_insertion_point(field_get:PlayerHostedPlacementEvent.home_zone_id)
@@ -421,7 +438,7 @@ inline ::uint32_t PlayerHostedPlacementEvent::home_zone_id() const {
 }
 inline void PlayerHostedPlacementEvent::set_home_zone_id(::uint32_t value) {
   _internal_set_home_zone_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:PlayerHostedPlacementEvent.home_zone_id)
 }
 inline ::uint32_t PlayerHostedPlacementEvent::_internal_home_zone_id() const {
@@ -437,7 +454,7 @@ inline void PlayerHostedPlacementEvent::_internal_set_home_zone_id(::uint32_t va
 inline void PlayerHostedPlacementEvent::clear_owner_epoch() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.owner_epoch_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint64_t PlayerHostedPlacementEvent::owner_epoch() const {
   // @@protoc_insertion_point(field_get:PlayerHostedPlacementEvent.owner_epoch)
@@ -445,7 +462,7 @@ inline ::uint64_t PlayerHostedPlacementEvent::owner_epoch() const {
 }
 inline void PlayerHostedPlacementEvent::set_owner_epoch(::uint64_t value) {
   _internal_set_owner_epoch(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:PlayerHostedPlacementEvent.owner_epoch)
 }
 inline ::uint64_t PlayerHostedPlacementEvent::_internal_owner_epoch() const {
@@ -461,7 +478,7 @@ inline void PlayerHostedPlacementEvent::_internal_set_owner_epoch(::uint64_t val
 inline void PlayerHostedPlacementEvent::clear_session_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.session_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t PlayerHostedPlacementEvent::session_id() const {
   // @@protoc_insertion_point(field_get:PlayerHostedPlacementEvent.session_id)
@@ -469,7 +486,7 @@ inline ::uint32_t PlayerHostedPlacementEvent::session_id() const {
 }
 inline void PlayerHostedPlacementEvent::set_session_id(::uint32_t value) {
   _internal_set_session_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:PlayerHostedPlacementEvent.session_id)
 }
 inline ::uint32_t PlayerHostedPlacementEvent::_internal_session_id() const {
@@ -485,7 +502,7 @@ inline void PlayerHostedPlacementEvent::_internal_set_session_id(::uint32_t valu
 inline void PlayerHostedPlacementEvent::clear_login_generation() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.login_generation_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint64_t PlayerHostedPlacementEvent::login_generation() const {
   // @@protoc_insertion_point(field_get:PlayerHostedPlacementEvent.login_generation)
@@ -493,7 +510,7 @@ inline ::uint64_t PlayerHostedPlacementEvent::login_generation() const {
 }
 inline void PlayerHostedPlacementEvent::set_login_generation(::uint64_t value) {
   _internal_set_login_generation(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:PlayerHostedPlacementEvent.login_generation)
 }
 inline ::uint64_t PlayerHostedPlacementEvent::_internal_login_generation() const {
@@ -509,7 +526,7 @@ inline void PlayerHostedPlacementEvent::_internal_set_login_generation(::uint64_
 inline void PlayerHostedPlacementEvent::clear_owner_revision() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.owner_revision_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t PlayerHostedPlacementEvent::owner_revision() const {
   // @@protoc_insertion_point(field_get:PlayerHostedPlacementEvent.owner_revision)
@@ -517,7 +534,7 @@ inline ::uint64_t PlayerHostedPlacementEvent::owner_revision() const {
 }
 inline void PlayerHostedPlacementEvent::set_owner_revision(::uint64_t value) {
   _internal_set_owner_revision(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:PlayerHostedPlacementEvent.owner_revision)
 }
 inline ::uint64_t PlayerHostedPlacementEvent::_internal_owner_revision() const {
@@ -527,6 +544,70 @@ inline ::uint64_t PlayerHostedPlacementEvent::_internal_owner_revision() const {
 inline void PlayerHostedPlacementEvent::_internal_set_owner_revision(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.owner_revision_ = value;
+}
+
+// string gate_instance_id = 8;
+inline void PlayerHostedPlacementEvent::clear_gate_instance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gate_instance_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& PlayerHostedPlacementEvent::gate_instance_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PlayerHostedPlacementEvent.gate_instance_id)
+  return _internal_gate_instance_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerHostedPlacementEvent::set_gate_instance_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.gate_instance_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:PlayerHostedPlacementEvent.gate_instance_id)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerHostedPlacementEvent::mutable_gate_instance_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_gate_instance_id();
+  // @@protoc_insertion_point(field_mutable:PlayerHostedPlacementEvent.gate_instance_id)
+  return _s;
+}
+inline const ::std::string& PlayerHostedPlacementEvent::_internal_gate_instance_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.gate_instance_id_.Get();
+}
+inline void PlayerHostedPlacementEvent::_internal_set_gate_instance_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gate_instance_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerHostedPlacementEvent::_internal_mutable_gate_instance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.gate_instance_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerHostedPlacementEvent::release_gate_instance_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:PlayerHostedPlacementEvent.gate_instance_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.gate_instance_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.gate_instance_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerHostedPlacementEvent::set_allocated_gate_instance_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.gate_instance_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.gate_instance_id_.IsDefault()) {
+    _impl_.gate_instance_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:PlayerHostedPlacementEvent.gate_instance_id)
 }
 
 #ifdef __GNUC__

@@ -415,3 +415,38 @@ func TestLookupConcurrentWithSetRules(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestLookupFeatureGroupsAndProtectedPrecedence(t *testing.T) {
+	s := New(Config{
+		NodeTypes: []string{"TradeNodeService"},
+		Protected: []string{"/trade.TradeService/CancelOrder"},
+		Features: map[string][]string{
+			"trade": {
+				"/trade.TradeService/CreateOrder",
+				"/trade.TradeService/ConfirmOrder",
+				"/trade.TradeService/CancelOrder",
+			},
+		},
+	})
+	s.AddInstance("node-uuid-1")
+
+	s.SetRules(map[string]Rule{
+		"feature/trade":                    {Deny: true, Reason: "trade freeze"},
+		"trade.TradeService/ConfirmOrder":  {Deny: false},
+		"type/TradeNodeService/feature/ex": {Deny: true, Reason: "type feature"},
+	})
+	s.RegisterFeature("ex", "/trade.TradeService/ExtraOp")
+
+	if r, blocked := s.Lookup("/trade.TradeService/CreateOrder"); !blocked || r.Reason != "trade freeze" {
+		t.Fatalf("feature/trade should block CreateOrder, got blocked=%v reason=%q", blocked, r.Reason)
+	}
+	if _, blocked := s.Lookup("/trade.TradeService/ConfirmOrder"); blocked {
+		t.Fatal("exact deny:false must exempt ConfirmOrder from feature/trade")
+	}
+	if _, blocked := s.Lookup("/trade.TradeService/CancelOrder"); blocked {
+		t.Fatal("protected method must remain immune to feature/trade")
+	}
+	if r, blocked := s.Lookup("/trade.TradeService/ExtraOp"); !blocked || r.Reason != "type feature" {
+		t.Fatalf("type-scoped feature rule should block ExtraOp, got blocked=%v reason=%q", blocked, r.Reason)
+	}
+}

@@ -11,7 +11,7 @@
    "invite_ttl_seconds": 259200,
    "knockout_days": 2,
    "knockout_max_teams": 16,
-   "knockout_round_timeout_seconds": 1800,
+   "knockout_round_timeout_seconds": 14400,
    "leyline_ban_enabled": true,
    "min_level": 15,
    "participation_min_matches": 2,

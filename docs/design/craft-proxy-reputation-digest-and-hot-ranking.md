@@ -30,9 +30,9 @@
 - Java 侧同步补齐 `PlayerCraftState` 中原缺省的 `proxy_orders_completed` / `supreme_forged_count` / `rare_books_crafted_count` / `master_showcase_tag` / `equipped_craft_title_id` 持久字段，使三服口碑与雅号口径 100% 一致。
 
 ### 2.2 跨节点/离线共享待回账台账与 24h 热榜（Redis 同槽原子计数）
-- 复用既有控制面 Redis 同槽 hash tag `{ctl:<zone>}`，新增伴随 Hash 键：
+- 复用既有控制面/同区共享 Redis 同槽 hash tag，新增伴随 Hash 键：
   - C++：`craft_proxy_reputation:{ctl:<zone>}`（`PlayerCraftSystem::ProxyReputationLedgerKey(zoneId)`）
-  - Java：`<ns>:craft_proxy_reputation:{ctl:<zone>}`（`RedisKeys.craftProxyReputation(zoneId)`）
+  - Java：`<ns>:world:{z:<zone>}:craft-proxy-reputation`（`RedisKeys.craftProxyReputation(zoneId)`，与 `craftProxyStalls(zoneId)` 同槽）
 - 每位宗师 `M` 对应以下独立字段，**全部使用 Redis `HINCRBY` 原子增减**，杜绝多场景节点并发下单覆盖丢数：
   - `<M>:o` — 待回账口碑单数（买家 `+1`，宗师持久化成功后 `-drained`）
   - `<M>:s` — 待回账极品产出数
@@ -100,13 +100,13 @@
 
 ## 6. 执行步骤
 
-- [ ] 写入设计文档并运行 `python tools/scripts/gen_docs_index.py`
-- [ ] 更新 `player_craft_comp.proto` 与 `player_skill.proto` 并完成 C++/Go/客户端协议生成
-- [ ] C++ 实现离线口碑/雅号异步回账、战报确认 RPC 与西市极品热榜并通过单测与静态门禁
-- [ ] Java 同步实现并通过 Schema 与多模块 Maven 测试、更新 `PARITY.md`
-- [ ] Python 同步实现并通过 `pytest`
-- [ ] Unity 客户端接入离线营业战报弹窗与西市极品热榜 UI 并通过编译与 NUnit 测试
-- [ ] 核查四仓 `git status` 并在回复中交付完整可复制给 Codex 的纯作图交接正文
+- [x] 写入设计文档并运行 `python tools/scripts/gen_docs_index.py`
+- [x] 更新 `player_craft_comp.proto` 与 `player_skill.proto` 并完成 C++/Go/客户端协议生成
+- [x] C++ 实现离线口碑/雅号异步回账、战报确认 RPC 与西市极品热榜并通过单测与静态门禁
+- [x] Java 同步实现并通过 Schema 与多模块 Maven 测试、更新 `PARITY.md`
+- [x] Python 同步实现并通过 `pytest`
+- [x] Unity 客户端接入离线营业战报弹窗与西市极品热榜 UI 并通过编译与 NUnit 测试
+- [x] 核查四仓 `git status` 并在回复中交付完整可复制给 Codex 的纯作图交接正文
 
 ---
 
@@ -142,14 +142,14 @@ D:\work\image\designs\craft-proxy-digest-and-ranking-v1\
 2. previews/02-west-market-hot-ranking-preview.png — 1920x1080，展示名匠代打界面中段新增「极品热榜 Top 3」三卡横向条与下方名匠列表的整体排布。
 
 二、独立无字切图（全部透明底 PNG-32，目录：ui/ 与 icons/）
-1. ui/panel_proxy_digest.png — 1200x820，无字弹窗主底板，预留顶部标题牌位、中部四项战报数据留空区、新解锁雅号高亮带位与底部双按钮区；四周边框内缩留出 64px 九宫格安全拉伸区，内部留白干净均匀，无任何文字与数字。
-2. ui/banner_hot_masters.png — 1400x96，无字横幅底条，用于西市极品热榜 Top 3 区段标题栏；左右两端装饰各不超过 120px，中段横向平整可拉伸，完全无字。
+1. ui/panel_proxy_digest.png — 1200x820，无字弹窗主底板，预留顶部标题牌位、中部四项战报数据留空区、新解锁雅号提示带位与底部双按钮区；四周边框内缩留出 64px 九宫格安全拉伸区，内部留白干净均匀，无任何文字与数字。
+2. ui/banner_hot_masters.png — 1400x96，无字横幅底条，用于西市极品热榜 Top 3 区段标题栏；左右两端各预留不超过 120px 的固定边界区，中段横向平整可拉伸，完全无字。
 3. ui/card_hot_master.png — 440x168，无字单张热榜名匠底卡（用于第 1～3 名三卡并排）；四角保留 32px 安全九宫格边距，左上角预留 72x72 名次角标贴位，右侧预留文字与按钮留空区，完全无字。
 4. ui/badge_hot_rank_1.png — 128x128，独立图标角标，表示热榜第 1 名（榜首），居中构图四周留白 ≥ 8px，严禁带数字“1”或文字。
 5. ui/badge_hot_rank_2.png — 128x128，独立图标角标，表示热榜第 2 名（榜眼），居中构图四周留白 ≥ 8px，严禁带数字“2”或文字。
 6. ui/badge_hot_rank_3.png — 128x128，独立图标角标，表示热榜第 3 名（探花），居中构图四周留白 ≥ 8px，严禁带数字“3”或文字。
-7. ui/badge_title_unlocked.png — 480x76，无字横幅喜报标签底条，用于战报弹窗内展示「新解锁雅号」文字（运行时居中叠字），左右装饰各 ≤ 72px，中段横向平整可拉伸，完全无字。
-8. icons/icon_digest_scroll.png — 256x256，独立图标，表示宗师离线营业账簿/战报卷轴，用于弹窗顶标与摊位区「营业战报」按钮装饰，居中构图四周留白 ≥ 16px，完全无字。
+7. ui/badge_title_unlocked.png — 480x76，无字横幅喜报标签底条，用于战报弹窗内展示「新解锁雅号」文字（运行时居中叠字），左右两端各预留 ≤ 72px 的固定边界区，中段横向平整可拉伸，完全无字。
+8. icons/icon_digest_scroll.png — 256x256，独立图标，表示宗师离线营业账册/战报，用于弹窗顶标与摊位区「营业战报」按钮配图，居中构图四周留白 ≥ 16px，完全无字。
 
 三、配套交付记录（目录根目录）
 - manifest.json：记录每张成品的文件路径、像素尺寸、是否透明底、九宫格/拉伸安全边距与对应参考图清单。

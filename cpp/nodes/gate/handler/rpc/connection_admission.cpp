@@ -296,6 +296,19 @@ void OnSessionVerified(SessionInfo &session, const SteadyTime now)
 	++tlsState.counters.handshakes;
 }
 
+bool IsVerifiedConnection(const muduo::net::TcpConnectionPtr &conn)
+{
+	// 拒连路径的连接上下文是 kInvalidSessionId,还没装上下文的是空:都找不到会话,按未验签算。
+	const auto *sessionId = boost::any_cast<SessionId>(&conn->getContext());
+	if (sessionId == nullptr)
+	{
+		return false;
+	}
+	const auto &sessions = tlsSessionManager.sessions();
+	const auto it = sessions.find(*sessionId);
+	return it != sessions.end() && it->second.verified;
+}
+
 const Counters &GetCounters()
 {
 	return tlsState.counters;

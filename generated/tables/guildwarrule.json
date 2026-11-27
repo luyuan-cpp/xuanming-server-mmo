@@ -14,7 +14,7 @@
    "diminish_window_sec": 1800,
    "dividend_guild_weekly_cap": 24,
    "dividend_interval_sec": 3600,
-   "dividend_min_personal_merit": 30,
+   "dividend_min_personal_merit": 15,
    "dividend_player_weekly_cap": 12,
    "frenzy_start_round": 12,
    "garrison_max_slots": 5,

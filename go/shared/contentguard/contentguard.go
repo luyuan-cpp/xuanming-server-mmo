@@ -11,6 +11,7 @@ package contentguard
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -28,9 +29,22 @@ type Conf struct {
 	// Optional 为真时内容安全是可有可无的:没配目标、或服务不可达时不送检,原样放行并打 ERROR。只许本机开发这样写。
 	// 缺省为假(staging / prod 的 ConfigMap 不写这一键):没配目标拒启,服务不可达时文字不放行。
 	Optional bool `json:",default=false"`
-	// TimeoutMs 是单次送检的时限(毫秒)。判定是纯内存计算,正常在几毫秒内;时限只是兜底。
-	TimeoutMs int64 `json:",default=300"`
+	// TimeoutMs 是聊天、私有标签这类场景单次送检的时限(毫秒)。本地词库是纯内存计算,几毫秒;世界频道另外只在内容安全服务里
+	// 等外部平台很短的一段(它的 Platform.WorldTimeoutMs,缺省 250,加查渠道身份 150),等不到就先放行、事后补审。
+	// 所以这一档要大于那两段之和,缺省 600。
+	TimeoutMs int64 `json:",default=600"`
+	// NameTimeoutMs 是名字、公告、寄售标题这类场景的时限(毫秒)。这几类要等外部平台(微信 / 抖音)答复才算数,
+	// 内容安全服务里那一段最长是它的 Platform.SyncTimeoutMs(缺省 1500)加查渠道身份,所以缺省 2000;0 = 用缺省值。
+	// 没接外部平台时判定同样是几毫秒,这个上限只在平台慢的时候才用得上。
+	// Rpc.Timeout(zrpc 客户端自己的超时)对每次调用都是硬上限,必须不小于这里最大的一档和异步补审的 3000。
+	NameTimeoutMs int64 `json:",default=2000"`
 }
+
+// defaultNameTimeoutMs 是 NameTimeoutMs 没写(0)时用的值:Conf 由结构体字面量构造时拿不到 json 标签里的缺省值。
+const defaultNameTimeoutMs = 2000
+
+// platformRecheckTimeout 是世界频道异步补审(CheckPlatform)的时限:内容安全服务里那一段最长是 Platform.AsyncTimeoutMs(缺省 2500)。
+const platformRecheckTimeout = 3 * time.Second
 
 // Configured 报告是否写了目标。
 func (c Conf) Configured() bool {
@@ -45,7 +59,26 @@ func (c Conf) Validate() error {
 	if c.Configured() && (c.TimeoutMs < 20 || c.TimeoutMs > 5000) {
 		return errors.New("ContentGuard.TimeoutMs must be in [20, 5000]")
 	}
+	if c.Configured() && c.NameTimeoutMs != 0 && (c.NameTimeoutMs < c.TimeoutMs || c.NameTimeoutMs > 10000) {
+		return errors.New("ContentGuard.NameTimeoutMs must be in [TimeoutMs, 10000]")
+	}
+	// zrpc 客户端的 Timeout 给每次调用再套一层截止时刻,比哪一档小,哪一档就永远等不满(0 = 不套)。
+	if limit := c.largestBudgetMs(); c.Configured() && c.Rpc.Timeout > 0 && c.Rpc.Timeout < limit {
+		return fmt.Errorf("ContentGuard.Rpc.Timeout (%d ms) must be at least %d ms: it caps every call, including name checks and the asynchronous platform recheck", c.Rpc.Timeout, limit)
+	}
 	return nil
+}
+
+func (c Conf) nameTimeoutMs() int64 {
+	if c.NameTimeoutMs == 0 {
+		return defaultNameTimeoutMs
+	}
+	return c.NameTimeoutMs
+}
+
+// largestBudgetMs 是本客户端单次调用会用到的最长时限(毫秒)。
+func (c Conf) largestBudgetMs() int64 {
+	return max(c.TimeoutMs, c.nameTimeoutMs(), platformRecheckTimeout.Milliseconds())
 }
 
 // Verdict 是送检的结局。
@@ -90,6 +123,8 @@ func (f Func) Check(ctx context.Context, scene cgpb.TextScene, playerID uint64, 
 type Client struct {
 	rpc     cgpb.ContentGuardClient
 	timeout time.Duration
+	// nameTimeout 是要同步等外部平台的那几类场景的时限(Conf.NameTimeoutMs)。
+	nameTimeout time.Duration
 	// optional 为真时调用失败按放行处理(Conf.Optional)。
 	optional    bool
 	lastLogUnix atomic.Int64
@@ -112,12 +147,31 @@ func New(service string, conf Conf, options ...zrpc.ClientOption) (*Client, erro
 	if err != nil {
 		return nil, err
 	}
-	return &Client{rpc: cgpb.NewContentGuardClient(rpc.Conn()), timeout: time.Duration(conf.TimeoutMs) * time.Millisecond, optional: conf.Optional}, nil
+	return &Client{
+		rpc:         cgpb.NewContentGuardClient(rpc.Conn()),
+		timeout:     time.Duration(conf.TimeoutMs) * time.Millisecond,
+		nameTimeout: time.Duration(conf.nameTimeoutMs()) * time.Millisecond,
+		optional:    conf.Optional,
+	}, nil
 }
 
-// NewWithClient 用现成的 gRPC 客户端建一个严格的客户端(测试、或调用方自己管连接时用)。
+// NewWithClient 用现成的 gRPC 客户端建一个严格的客户端(测试、或调用方自己管连接时用)。两档时限都用 timeout。
 func NewWithClient(rpc cgpb.ContentGuardClient, timeout time.Duration) *Client {
-	return &Client{rpc: rpc, timeout: timeout}
+	return &Client{rpc: rpc, timeout: timeout, nameTimeout: timeout}
+}
+
+// waitsForPlatform 报告这个场景是不是要同步等外部平台(微信 / 抖音)答复:名字、公告、寄售标题。
+// 聊天只在内容安全服务里等很短的一段(世界频道),私聊、队伍、私有标签完全不走平台。新场景缺省按短的一档。
+func waitsForPlatform(scene cgpb.TextScene) bool {
+	switch scene {
+	case cgpb.TextScene_TEXT_SCENE_ROLE_NAME,
+		cgpb.TextScene_TEXT_SCENE_GUILD_NAME,
+		cgpb.TextScene_TEXT_SCENE_PET_NAME,
+		cgpb.TextScene_TEXT_SCENE_GUILD_ANNOUNCEMENT,
+		cgpb.TextScene_TEXT_SCENE_TRADE_TITLE:
+		return true
+	}
+	return false
 }
 
 // Enabled 报告是否真的会送检。
@@ -156,11 +210,7 @@ func (c *Client) CheckPlatform(ctx context.Context, scene cgpb.TextScene, player
 	if text == "" || !c.Enabled() {
 		return Result{Verdict: Pass}
 	}
-	budget := c.timeout
-	if budget < 3*time.Second {
-		budget = 3 * time.Second
-	}
-	callCtx, cancel := context.WithTimeout(ctx, budget)
+	callCtx, cancel := context.WithTimeout(ctx, max(c.nameTimeout, platformRecheckTimeout))
 	defer cancel()
 	out, err := c.rpc.CheckPlatformText(callCtx, &cgpb.CheckTextRequest{
 		Scene:    scene,
@@ -179,7 +229,11 @@ func (c *Client) doCheck(ctx context.Context, scene cgpb.TextScene, playerID uin
 	if text == "" || !c.Enabled() {
 		return Result{Verdict: Pass}
 	}
-	callCtx, cancel := context.WithTimeout(ctx, c.timeout)
+	budget := c.timeout
+	if waitsForPlatform(scene) {
+		budget = c.nameTimeout
+	}
+	callCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 	out, err := c.rpc.CheckText(callCtx, &cgpb.CheckTextRequest{
 		Scene:         scene,

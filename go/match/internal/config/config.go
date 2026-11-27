@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"shared/authoritysql"
+	"shared/contentguard"
 	"shared/dbplacement"
 	"shared/idsegment"
 	"shared/playerredis"
@@ -149,6 +150,9 @@ type Config struct {
 	GuildRpc      zrpc.RpcClientConf `json:",optional"`
 	MailRpc       zrpc.RpcClientConf `json:",optional"`
 	MailSecretEnv string             `json:",optional"`
+	// ContentGuard:赛事战队名送检用的内容安全服务客户端(docs/design/rename-and-content-safety.md §6.6)。
+	// 缺省严格:没配目标拒启、不可达时建队被拒(回可重试的提示);只有本机 yaml 写 Optional: true 才放宽。
+	ContentGuard contentguard.Conf `json:"ContentGuard,optional"`
 
 	// ---- 观战分级(docs/design/battle-spectate-tiered-fanout.md §15.6)----
 

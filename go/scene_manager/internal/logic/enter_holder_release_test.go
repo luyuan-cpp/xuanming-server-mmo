@@ -181,12 +181,15 @@ func TestIdentityStrictlyNewer(t *testing.T) {
 		req  placementIdentity
 		want bool
 	}{
-		{"newer login replaces the location session", enterHolderReleaseZombie, placementIdentity{22, identGenB}, true},
-		{"location without generation", placementIdentity{11, 0}, placementIdentity{22, identGenB}, false},
-		{"same session re-entry", enterHolderReleaseZombie, placementIdentity{11, identGenB}, false},
-		{"request without generation", enterHolderReleaseZombie, placementIdentity{22, 0}, false},
-		{"location without identity", placementIdentity{}, placementIdentity{22, identGenB}, false},
-		{"stale login", placementIdentity{11, identGenB}, placementIdentity{22, identGenA}, false},
+		{"newer login replaces the location session", enterHolderReleaseZombie, placementIdentity{22, identGenB, ""}, true},
+		{"location without generation", placementIdentity{11, 0, ""}, placementIdentity{22, identGenB, ""}, false},
+		{"same session re-entry", enterHolderReleaseZombie, placementIdentity{11, identGenB, ""}, false},
+		{"request without generation", enterHolderReleaseZombie, placementIdentity{22, 0, ""}, false},
+		{"location without identity", placementIdentity{}, placementIdentity{22, identGenB, ""}, false},
+		{"stale login", placementIdentity{11, identGenB, ""}, placementIdentity{22, identGenA, ""}, false},
+		// 会话号相同而 gate 实例不同:另一个进程上更新的登录,与会话号不同的新登录同样请释放(§14.8)。
+		{"newer login with the same session id on another gate process",
+			placementIdentity{11, identGenA, "gate-old-process"}, placementIdentity{11, identGenB, "gate-new-process"}, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -218,7 +221,7 @@ func TestEnterScene_LoginBehindUnreleasedHolderRequestsReleaseOnce(t *testing.T)
 	calls := requested()
 	require.Len(t, calls, 1, "登录撞上未释放的持有者:回 18 之前请持有节点释放一次")
 	assert.Equal(t, enterHolderReleaseCall{zoneID: testZoneId, nodeID: "10", playerID: playerID,
-		expectedOwnerEpoch: 3, covered: placementIdentity{22, identGenB}, locationNodeAtCall: "10"}, calls[0],
+		expectedOwnerEpoch: 3, covered: placementIdentity{22, identGenB, "gate-b-uuid"}, locationNodeAtCall: "10"}, calls[0],
 		"覆盖到这次登录自己的身份,不是 location 记的旧身份(§13.2)")
 	assert.Empty(t, leaveRequested(), "EnterScene 走同步请求,不走 LeaveScene 的异步派发")
 	assert.Equal(t, deliveredBefore+1, enterHolderReleaseCount(t, enterHolderReleaseOutcomeDelivered))
@@ -233,7 +236,7 @@ func TestEnterScene_LoginBehindUnreleasedHolderRequestsReleaseOnce(t *testing.T)
 	loc := identLocation(t, sc, playerID)
 	require.NotNil(t, loc)
 	assert.Equal(t, "20", loc.NodeId)
-	assert.Equal(t, placementIdentity{22, identGenB}, identityOfLocation(loc))
+	assert.Equal(t, placementIdentity{22, identGenB, "gate-b-uuid"}, identityOfLocation(loc), "location 连同这次登录所在的 gate 进程一起记下")
 	assert.Len(t, requested(), 1, "放行路径不请会话结束释放")
 	transferCalls, _ := transfer.snapshot()
 	require.Len(t, transferCalls, 1, "放行后照常通知旧节点(交接释放)")
@@ -303,11 +306,11 @@ func TestEnterScene_LoginWithoutStrictlyNewerIdentityDoesNotRequestRelease(t *te
 		mutate      func(*scene_manager.EnterSceneRequest)
 	}{
 		// LeaveGame 后同连接重进:同一会话,gate 收到 LeaveGame 时已代发 ExitGame。
-		{"same session re-entry", placementIdentity{22, identGenA}, func(*scene_manager.EnterSceneRequest) {}},
+		{"same session re-entry", placementIdentity{22, identGenA, ""}, func(*scene_manager.EnterSceneRequest) {}},
 		// 旧版 login:请求没有代次,location 可能属于一次更新的登录。
 		{"request without generation", enterHolderReleaseZombie, func(req *scene_manager.EnterSceneRequest) { req.LoginGeneration = 0 }},
 		// 旧版写入方留下的 location:没有代次可比。
-		{"location without generation", placementIdentity{11, 0}, func(*scene_manager.EnterSceneRequest) {}},
+		{"location without generation", placementIdentity{11, 0, ""}, func(*scene_manager.EnterSceneRequest) {}},
 	}
 	for i, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -435,9 +438,12 @@ func TestIdentityIsHostedLogin(t *testing.T) {
 	}{
 		{"exactly the hosted login", enterHolderReleaseZombie, enterHolderReleaseZombie, true},
 		{"same session number, newer generation (gate restarted and reused it)", enterHolderReleaseZombie,
-			placementIdentity{11, identGenB}, false},
-		{"another login", enterHolderReleaseZombie, placementIdentity{22, identGenA}, false},
-		{"location without generation", placementIdentity{11, 0}, placementIdentity{11, 0}, false},
+			placementIdentity{11, identGenB, ""}, false},
+		{"another login", enterHolderReleaseZombie, placementIdentity{22, identGenA, ""}, false},
+		{"location without generation", placementIdentity{11, 0, ""}, placementIdentity{11, 0, ""}, false},
+		// 托管归位不带 gate:location 记着实例也照样认得出是那一次登录(代次唯一确定登录,G2)。
+		{"hosted login recorded with its gate instance", placementIdentity{11, identGenA, "gate-a-uuid"},
+			enterHolderReleaseZombie, true},
 		{"location without identity", placementIdentity{}, placementIdentity{}, false},
 	}
 	for _, tc := range cases {
@@ -486,7 +492,7 @@ func TestEnterScene_HostedResumeForAnotherLoginDoesNotRequestRelease(t *testing.
 	before := enterHolderReleaseCount(t, enterHolderReleaseIdentityNotNewer.String())
 
 	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(
-		enterHolderReleaseHostedResume(playerID, targetScene, placementIdentity{11, identGenB}))
+		enterHolderReleaseHostedResume(playerID, targetScene, placementIdentity{11, identGenB, ""}))
 	requireHandoffRejectedUnchanged(t, sc, mr, playerID, resp, err, enterHolderReleaseZombie)
 	assert.Empty(t, requested(), "只替 location 记的那一次登录请释放")
 	assert.Equal(t, before+1, enterHolderReleaseCount(t, enterHolderReleaseIdentityNotNewer.String()))

@@ -9,6 +9,8 @@ import (
 	"match/internal/authority"
 	"match/internal/metrics"
 
+	"shared/authoritysql"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -86,18 +88,21 @@ func TestBattleScriptReviewPurgeCountsFailedOldestRead(t *testing.T) {
 	require.Equal(t, float64(1_700_000_000), metrics.RetentionOldestValue(metrics.RetentionPurgeBattleScriptReview))
 }
 
-// 一直是满页时一轮清到页数上限为止,不占着循环;扫完或出错立刻结束。
-func TestDrainRetentionPagesStopsAtPageCapEndOrError(t *testing.T) {
-	pages := 0
-	require.NoError(t, drainRetentionPages(func() (bool, error) { pages++; return true, nil }))
-	require.Equal(t, retentionPurgePagesPerRound, pages)
+// 搬库冻结窗口:清页与读最老一行都被写者闸门拒绝,这一轮确定没写,不计失败、不动游标;
+// 读最老一行换成别的错误(冻结里混着真失败)时照常计失败。
+func TestBattleScriptReviewPurgeDoesNotCountFrozenWriter(t *testing.T) {
+	first := authority.BattleScriptReviewCursor{ReviewedMs: 1, ScriptID: 2, Revision: 3}
+	purger := &fakeReviewPurger{oldestErr: authoritysql.ErrWriterFrozen, page: func(after authority.BattleScriptReviewCursor) (authority.BattleScriptReviewCursor, error) {
+		return after, authoritysql.ErrWriterFrozen
+	}}
+	purge := &battleScriptReviewPurge{retention: time.Hour, after: first}
+	failures := metrics.RetentionPurgeFailureValue(metrics.RetentionPurgeBattleScriptReview)
 
-	pages = 0
-	require.NoError(t, drainRetentionPages(func() (bool, error) { pages++; return pages < 3, nil }))
-	require.Equal(t, 3, pages, "扫完(more=false)就结束")
+	purge.round(context.Background(), purger)
+	require.Equal(t, failures, metrics.RetentionPurgeFailureValue(metrics.RetentionPurgeBattleScriptReview), "闸门冻结不是清理失败")
+	require.Equal(t, first, purge.after, "冻结的一轮不动游标")
 
-	pages = 0
-	failed := errors.New("page failed")
-	require.ErrorIs(t, drainRetentionPages(func() (bool, error) { pages++; return true, failed }), failed)
-	require.Equal(t, 1, pages, "出错不再清下一页")
+	purger.oldestErr = errors.New("TiDB unavailable")
+	purge.round(context.Background(), purger)
+	require.Equal(t, failures+1, metrics.RetentionPurgeFailureValue(metrics.RetentionPurgeBattleScriptReview), "冻结里混着别的错误,照常计失败")
 }

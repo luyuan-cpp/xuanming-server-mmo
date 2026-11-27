@@ -265,8 +265,12 @@ void NoteRejectedAfterAccept(RejectReason reason);
 // 会话刚插入会话表:计一次接纳;还没验签的会话领一个未验签占位(SessionInfo::preAuthSlot),并按建连先后进淘汰索引。
 void OnSessionOpened(SessionId sessionId, SessionInfo &session, SteadyTime now);
 
-// 验签成功:归还占位,握手耗时进直方图。没有占位(已验证会话重发验签、dev 免验签)时什么也不做,可重复调用。
+// 验签成功:归还占位,握手耗时进直方图。没有占位(dev 免验签)时什么也不做,可重复调用。
 void OnSessionVerified(SessionInfo &session, SteadyTime now);
+
+// 这条连接是否已验签:有会话且 verified。给编解码器的验签前单帧上限用(ProtobufCodec::setPreAuthMessageLimit,
+// accept_admission::kPreAuthMaxMessageBytes,准入设计 G10)。只读、不打日志:调用频率由公网流量决定。
+bool IsVerifiedConnection(const muduo::net::TcpConnectionPtr &conn);
 
 // 进程级累计计数(gate loop 线程,单调不减)。供指标与单测读。
 struct Counters

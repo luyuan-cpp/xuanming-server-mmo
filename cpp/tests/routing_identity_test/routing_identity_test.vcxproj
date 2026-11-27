@@ -247,6 +247,12 @@
       <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ObjectFileName>$(IntDir)gate_connection_admission\</ObjectFileName>
     </ClCompile>
+    <!-- 验签之前的单帧上限(ProtobufCodec::setPreAuthMessageLimit,准入设计 G10):codec 在 core.lib,判据在上面的
+         connection_admission.cpp,连接用回环 TCP(nodes/gate/tests/loopback_connection.h)。ObjectFileName 的理由同上。 -->
+    <ClCompile Include="../../nodes/gate/tests/pre_auth_message_limit_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <AdditionalIncludeDirectories>../../nodes/gate/;../../libs/services/gate/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ObjectFileName>$(IntDir)gate_pre_auth_limit\</ObjectFileName>
+    </ClCompile>
     <!-- gate 路由服子集(handler/rpc/router_subset_policy.h,docs/design/connection-fanout-subsetting-20261106.md §3.2):
          只测纯计算头,不编 router_subset.cpp(它拖着节点注册表与 gRPC 通道)。ObjectFileName 的理由同上。 -->
     <ClCompile Include="../../nodes/gate/tests/router_subset_test.cpp" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">

@@ -71,9 +71,9 @@ message ClientRequestRecord {
 
 // 与战斗结算、物品和请求回执同属完整玩家存档。未领取余额不随周期重置。
 // 来源防重由战斗收件箱的永久消费水位负责；不能用近期结果列表充当去重账本。
-// 合入 A 两阶段模型（docs/design/season-pvp-pve-economy-unified-v1.md）：
+// 合入 A 两阶段模型（docs/planning/season-pvp-pve-economy-unified-v1.md + anti-chore-remediation-v1.md）：
 //   阶段一（lifetime_earned < 660）：无每日/周清打卡，永久累计至 660 份，其中胜局基础含至多 60 份可交易；
-//   阶段二（lifetime_earned >= 660）：开启 +11 顶格周平滑精进池，每周 100 份绑定自选（UTC+8 周一 05:00 重置）。
+//   阶段二（lifetime_earned >= 660）：4 周滚存蓄水池（每周一 05:00 +150 份，未用额度滚存封顶 600 份）。
 message EquipmentMaterialRewardLedger {
   uint64 day_starts_at_ms = 1; // 历史日账字段（旧档兼容保留）。
   uint32 earned_today = 2;
@@ -83,25 +83,28 @@ message EquipmentMaterialRewardLedger {
   uint32 tradable_earned_total = 6;     // 阶段一累计已获可交易份数（上限 60）。
   uint64 available_tradable_units = 7;  // 当前未领余额中可交易子集（不变量：<= available_units）。
   uint64 week_starts_at_ms = 8;         // 阶段二当前游戏周起点（UTC+8 周一 05:00）。
-  uint32 earned_this_week = 9;          // 阶段二本周已获份数（上限 150）。
+  uint32 earned_this_week = 9;          // 阶段二当前周周期内已获份数（<= stage2_pool_cap）。
   bool migrated_to_v2 = 10;             // 标记已进入两阶段新账（旧档历史余额全额保留为自用，不抵扣新 660）。
   uint32 stage1_tradable_confirmed = 11; // 已由 data_service 账号目录确认的本角色阶段一可交易份数（<= tradable_earned_total）。
+  uint32 stage2_pool_cap = 12;           // 阶段二当前周期生效滚存上限（150..600，步长 5；0=兼容旧档视为 150）。
 }
 
-// 战斗成长经济周账本（docs/planning/player-leveling-and-battle-economy-v1.md §2.2）：
+// 战斗成长经济周滚存账本（docs/planning/player-leveling-and-battle-economy-v1.md + anti-chore-remediation-v1.md）：
 // 与 CurrencyComp、EquipmentMaterialRewardLedger 同在 WALLET 存盘组，同帧原子提交。
-// 每周 UTC+8 周一 05:00 重置（抗时钟回拨），控制常规战斗银两周软/硬上限，不截断经验升级。
+// 每周 UTC+8 周一 05:00 补充单周额度并向后滚存至多 3 周（90k 全额 / 135k 硬顶，抗时钟回拨），不截断经验升级。
 message BattleEconomyLedger {
   uint64 week_starts_at_ms = 1;       // 当前游戏周起点（UTC+8 周一 05:00）
-  uint64 battle_silver_this_week = 2; // 本周战斗结算累计实际入账银两
-  uint64 battle_exp_this_week = 3;    // 本周战斗累计入账经验（统计监控用）
+  uint64 battle_silver_this_week = 2; // 当前周周期内战斗结算累计实际入账银两
+  uint64 battle_exp_this_week = 3;    // 当前周周期内战斗累计入账经验（统计监控用）
+  uint64 silver_rollover_soft_cap = 4; // 当前周期生效全额银两软上限滚存池（0=兼容旧档按单周软上限计）
+  uint64 silver_rollover_hard_cap = 5; // 当前周期生效银两硬封顶滚存池（0=兼容旧档按单周硬封顶计）
 }
 
-// 激励视频广告日账本与短效挂起会话（docs/design/rewarded-ad-system.md §3.4）：
+// 激励视频广告周账本与短效挂起会话（docs/design/rewarded-ad-system.md + anti-chore-remediation-v1.md）：
 // 与 CurrencyComp 同在 WALLET 存盘组原子提交，抗 30 秒全屏视频暂停心跳引发的断线重连丢会话。
 message RewardedAdLedger {
-  uint64 day_starts_at_ms = 1;         // 当前游戏日起点（UTC+8 05:00，抗时钟回拨）
-  uint32 claimed_today = 2;            // 今日已成功领取次数
+  uint64 day_starts_at_ms = 1;         // 当前配额周期起点（UTC+8 周一 05:00，抗时钟回拨；沿用旧字段名保线兼容）
+  uint32 claimed_today = 2;            // 当前周期内已成功领取次数（周池上限 14）
   uint64 last_claim_at_ms = 3;         // 最近一次成功领取时间（UTC 毫秒）
   uint64 total_claimed_lifetime = 4;   // 终身累计成功次数（仅监控统计）
   uint64 active_session_id = 5;        // 当前待核销的短效会话号（0 = 无）

@@ -126,15 +126,20 @@ type PlayerLocation struct {
 	// - 唯一消费者是源 scene 的 ResolveTravelOutcome:只认与自己本次交接标记原文逐字节相同的回执。
 	//   其它读 location 的服务一律忽略这个字段。
 	// - GO-3 不再需要新字段:改用持有进程在交接资格里自己盖的实例号判「已被顶替」(cross-zone-scene-travel.md §13.10)。
-	//   以后要加字段从 10 起取(8 / 9 已被会话身份占用)。
+	//   以后要加字段从 11 起取(8 / 9 / 10 已被会话身份占用)。
 	RollbackReceipt string `protobuf:"bytes,7,opt,name=rollback_receipt,json=rollbackReceipt,proto3" json:"rollback_receipt,omitempty"`
 	// 最近一次被 scene_manager 放行、并写入或确认这条 location 的 EnterScene 所代表的会话
 	// (docs/design/scene-enter-chain-residuals.md §3 / §5)。0 / 0 = 无身份(旧版 scene_manager 写入或请求不带会话),
 	// 所有比较退回旧行为。只由落点 Lua 写入;bump 回滚克隆旧值、keep 回滚恢复原字节,两者都保留身份。
 	SessionId       uint32 `protobuf:"varint,8,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	LoginGeneration uint64 `protobuf:"varint,9,opt,name=login_generation,json=loginGeneration,proto3" json:"login_generation,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// 这条会话所在的 gate 进程(gate 的 node_uuid,取自放行请求的 EnterSceneRequest.gate_instance_id;§14.8)。
+	// 会话号由 gate 的 node_id 派生,同一 node_id 短暂有两个 gate 进程时同号可以出自两个进程:「同一会话」= 会话号相同,
+	// 且两边实例都已知时实例也相同(与 scene 入场栅栏 enter_fence::SameGateInstance 同一口径)。空 = 未知,按会话号认。
+	// 同一会话的请求不带实例(托管落点)时沿用记下的值;托管落点事件把它带给目标节点(PlayerHostedPlacementEvent.gate_instance_id)。
+	GateInstanceId string `protobuf:"bytes,10,opt,name=gate_instance_id,json=gateInstanceId,proto3" json:"gate_instance_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *PlayerLocation) Reset() {
@@ -230,6 +235,13 @@ func (x *PlayerLocation) GetLoginGeneration() uint64 {
 	return 0
 }
 
+func (x *PlayerLocation) GetGateInstanceId() string {
+	if x != nil {
+		return x.GateInstanceId
+	}
+	return ""
+}
+
 var File_proto_scene_manager_storage_proto protoreflect.FileDescriptor
 
 const file_proto_scene_manager_storage_proto_rawDesc = "" +
@@ -242,7 +254,7 @@ const file_proto_scene_manager_storage_proto_rawDesc = "" +
 	"\vcreate_time\x18\x04 \x01(\x03R\n" +
 	"createTime\x12\x1d\n" +
 	"\n" +
-	"scene_type\x18\x05 \x01(\rR\tsceneType\"\xc7\x02\n" +
+	"scene_type\x18\x05 \x01(\rR\tsceneType\"\xf1\x02\n" +
 	"\x0ePlayerLocation\x12\x19\n" +
 	"\bscene_id\x18\x01 \x01(\x04R\asceneId\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x1f\n" +
@@ -255,7 +267,9 @@ const file_proto_scene_manager_storage_proto_rawDesc = "" +
 	"\x10rollback_receipt\x18\a \x01(\tR\x0frollbackReceipt\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\b \x01(\rR\tsessionId\x12)\n" +
-	"\x10login_generation\x18\t \x01(\x04R\x0floginGenerationB\x15Z\x13proto/scene_managerb\x06proto3"
+	"\x10login_generation\x18\t \x01(\x04R\x0floginGeneration\x12(\n" +
+	"\x10gate_instance_id\x18\n" +
+	" \x01(\tR\x0egateInstanceIdB\x15Z\x13proto/scene_managerb\x06proto3"
 
 var (
 	file_proto_scene_manager_storage_proto_rawDescOnce sync.Once

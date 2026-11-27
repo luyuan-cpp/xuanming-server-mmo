@@ -6201,6 +6201,27 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
                 break;
             }
         }
+        // 论剑 V7：正式 1V1 排位正常终局透传对阵对手身份，供结算页 15 秒切磋「不服再战」（零排位分）。
+        if (outcome != BATTLE_OUTCOME_ONGOING && CompletedRounds() > 0u) {
+            uint32_t allyHumans = 0;
+            uint32_t enemyHumans = 0;
+            const BattleActorState* soleEnemy = nullptr;
+            for (const auto& other : actors) {
+                if (other.actor_type() != BATTLE_ACTOR_TYPE_PLAYER) {
+                    continue;
+                }
+                if (other.team_index() == actor->team_index()) {
+                    ++allyHumans;
+                } else {
+                    ++enemyHumans;
+                    soleEnemy = &other;
+                }
+            }
+            if (allyHumans == 1u && enemyHumans == 1u && soleEnemy != nullptr && soleEnemy->actor_id() != 0) {
+                settlement.set_rematch_opponent_id(soleEnemy->actor_id());
+                settlement.set_rematch_opponent_name(soleEnemy->name());
+            }
+        }
     }
 
     // 出战宝宝的战后终值:随主人的结算一起回 scene(scene 是唯一应用者);论剑临时竞技宠不回写永久宠物。

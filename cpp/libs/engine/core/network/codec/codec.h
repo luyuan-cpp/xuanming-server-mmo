@@ -83,6 +83,18 @@ class ProtobufCodec : muduo::noncopyable
                  muduo::net::Buffer* buf,
                  muduo::Timestamp receiveTime);
 
+  // 验签之前的单帧上限(docs/design/gate-connection-admission-control.md G10)。设了之后,isAuthenticated 判为否的连接上
+  // 声明长度超过 limitBeforeAuth 的帧按 kInvalidLength 处理(断开),不先把整帧缓冲到 maxMessageLen 再算校验和、反射建消息;
+  // WebSocket 连接的单帧载荷上限同样收紧。验签之前合法的只有很小的握手请求。
+  // isAuthenticated 在每次 onMessage 开头问一次(连接所属的 loop 线程上);同一批里紧跟握手的帧仍按收紧的上限收。
+  // 不设就不收紧。
+  typedef std::function<bool (const muduo::net::TcpConnectionPtr&)> AuthenticatedPredicate;
+  void setPreAuthMessageLimit(int limitBeforeAuth, const AuthenticatedPredicate& authenticatedCheck)
+  {
+    preAuthMaxMessageLen = limitBeforeAuth;
+    isAuthenticated = authenticatedCheck;
+  }
+
   // 发一个客户端帧。连接已升级成 WebSocket(小游戏)时包成一条二进制消息,原始 TCP 照旧
   // (network/codec/websocket.h)。只能在连接所属的 loop 线程调用。
   // static:不用 codec 实例的任何状态,const 上下文(battle 的发送函数)可以直接调。
@@ -103,6 +115,8 @@ class ProtobufCodec : muduo::noncopyable
   ProtobufMessageCallback messageCallback;
   ErrorCallback errorCallback;
   int maxMessageLen{kDefaultMaxMessageLen};
+  int preAuthMaxMessageLen{kDefaultMaxMessageLen};
+  AuthenticatedPredicate isAuthenticated;
 
   const static int kHeaderLen = sizeof(int32_t);
   const static int kMinMessageLen = 2*kHeaderLen + 2; // nameLen + typeName + checkSum

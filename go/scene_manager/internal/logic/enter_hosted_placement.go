@@ -93,19 +93,21 @@ func (l *EnterSceneLogic) resolveHostedPlacementInstance(in *scene_manager.Enter
 // routePlacement 发本次落点的路由:带 gate 的推 RoutePlayerEvent 给 gate,托管落点直接推 PlayerHostedPlacementEvent 给目标
 // scene 节点。两者都以 broker ACK 为提交点,调用方对两种失败做同一种处置(第 4 步只回 7,第 7 步回滚后回 7)。
 // 调用方保证 in.GateId != "" 或 in.HostedPlacement(两者互斥,rejectMalformedHostedPlacement 已判)。
+// loginGateInstance 是本次放行写进(或确认于)location 的会话身份里的 gate 实例(identityRecord.gateInstanceID),只给托管落点用。
 func (l *EnterSceneLogic) routePlacement(in *scene_manager.EnterSceneRequest, nodeID, hostedInstance string, sceneID uint64,
-	homeZoneID uint32, ownerEpoch uint64) error {
+	homeZoneID uint32, ownerEpoch uint64, loginGateInstance string) error {
 	if in.HostedPlacement {
-		return l.routeHostedPlayerToScene(in, nodeID, hostedInstance, sceneID, homeZoneID, ownerEpoch)
+		return l.routeHostedPlayerToScene(in, nodeID, hostedInstance, sceneID, homeZoneID, ownerEpoch, loginGateInstance)
 	}
 	return l.routePlayerToGate(in, nodeID, sceneID, homeZoneID, ownerEpoch)
 }
 
 // routeHostedPlayerToScene 是 routePlayerToGate 在托管落点上的等价物。字段与 RoutePlayerEvent 一一对应,
-// 会话号与登录代次是断开的那次登录(目标节点只记作登录身份,不绑定)。
+// 会话号与登录代次是断开的那次登录(目标节点只记作登录身份,不绑定)。托管落点请求不带 gate,断开那次登录所在的
+// gate 进程取 location 为它记下的实例(loginGateInstance,空 = 未知),目标节点记进登录身份(§14.8)。
 // key = player_id(同一玩家保序,AGENTS §7 #3);topic / 分区由 kafkacmd 唯一入口按目标节点号算。
 func (l *EnterSceneLogic) routeHostedPlayerToScene(in *scene_manager.EnterSceneRequest, nodeID, instanceID string, sceneID uint64,
-	homeZoneID uint32, ownerEpoch uint64) error {
+	homeZoneID uint32, ownerEpoch uint64, loginGateInstance string) error {
 	targetNodeID, err := strconv.ParseUint(nodeID, 10, 32)
 	if err != nil {
 		return fmt.Errorf("invalid scene node id %q: %w", nodeID, err)
@@ -122,6 +124,7 @@ func (l *EnterSceneLogic) routeHostedPlayerToScene(in *scene_manager.EnterSceneR
 		SessionId:       in.SessionId,
 		LoginGeneration: in.LoginGeneration,
 		OwnerRevision:   in.OwnerRevision,
+		GateInstanceId:  loginGateInstance,
 	})
 	if err != nil {
 		return fmt.Errorf("marshal PlayerHostedPlacementEvent: %w", err)

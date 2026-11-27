@@ -574,4 +574,50 @@ TEST_F(EquipmentMaterialRewardTest, AccountLevelSixtyTradableCapSurvivesAltAndFa
     tlsEcs.playerList.erase(altId);
     tlsEcs.actorRegistry.destroy(alt);
 }
+
+TEST_F(EquipmentMaterialRewardTest, Stage2RolloverPoolAccumulatesUpToFourWeeks600AndResistsRollback) {
+    // 先把阶段一推满 660。
+    uint64_t bid = 1000;
+    while (Ledger().material_reward().lifetime_earned() < 660) {
+        Credit(++bid, kNow, match::MATCH_MODE_PVE_TEAM, 2);
+    }
+    ASSERT_EQ(660u, Ledger().material_reward().lifetime_earned());
+
+    // 第 1 周只打 50 份（结余 100 份未用）。
+    for (int i = 0; i < 5; ++i) {
+        Credit(++bid, kNow, match::MATCH_MODE_PVE_SOLO, 1);
+    }
+    EXPECT_EQ(50u, Ledger().material_reward().earned_this_week());
+    EXPECT_EQ(150u, Ledger().material_reward().stage2_pool_cap());
+
+    // 第 2 周回归：滚存 100 + 本周 150 = 250 份。
+    GetEquipmentMaterialRewardResponse snapW2;
+    ASSERT_EQ(kSuccess, Reward::Get(player, kNow + 7 * kDay, snapW2));
+    EXPECT_EQ(0u, snapW2.snapshot().earned_this_week());
+    EXPECT_EQ(250u, snapW2.snapshot().weekly_limit());
+
+    // 跳过 2 周（第 4 周回归）：100 + 3*150 = 550 份。
+    GetEquipmentMaterialRewardResponse snapW4;
+    ASSERT_EQ(kSuccess, Reward::Get(player, kNow + 21 * kDay, snapW4));
+    EXPECT_EQ(550u, snapW4.snapshot().weekly_limit());
+
+    // 跳过 10 周：封顶 4 周 = 600 份，可完整刷满 600 份且账本校验合法。
+    const uint64_t w11 = kNow + 70 * kDay;
+    GetEquipmentMaterialRewardResponse snapW11;
+    ASSERT_EQ(kSuccess, Reward::Get(player, w11, snapW11));
+    EXPECT_EQ(600u, snapW11.snapshot().weekly_limit());
+    for (int i = 0; i < 40; ++i) {
+        Credit(++bid, w11, match::MATCH_MODE_PVP_TEAM, 1);
+    }
+    EXPECT_EQ(600u, Ledger().material_reward().earned_this_week());
+    EXPECT_EQ(600u, Ledger().material_reward().stage2_pool_cap());
+    EXPECT_TRUE(client_request_ledger::Validate(Ledger()).empty());
+
+    // 满 600 后本周期不再增加；时钟回拨到更早周亦不增加也不重置。
+    Reward::BattleCreditDelta extra, rb;
+    Credit(++bid, w11, match::MATCH_MODE_PVE_SOLO, 1, &extra);
+    EXPECT_EQ(0u, extra.totalUnitsAdded);
+    Credit(++bid, kNow + 7 * kDay, match::MATCH_MODE_PVE_SOLO, 1, &rb);
+    EXPECT_EQ(0u, rb.totalUnitsAdded);
+}
 }

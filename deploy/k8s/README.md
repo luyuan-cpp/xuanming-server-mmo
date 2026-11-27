@@ -557,7 +557,8 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
       不写 `wave.*`(开服波次要一个开服时刻,属运营决策)、`zone-overrides` 和没有消费方的 `queue-timeout-ms`。关时不写,落回 jar 内的 `enabled: false`。
     - `-LoginQueue`(login 登录排队):开时 login ConfigMap 写 `Queue` 段:`Enabled: true`;`DispatcherLockKey` = login.yaml 的值加 `:zone:<本 zone>`(见下面 ②);
       不写区容量(2026-11-10 起只认网关区服目录 `zone_config.capacity`,本区网关经 etcd 发布给本区 login;此前写的 `ZoneCapacityOverride` 已删);其余键(`DispatchInterval` / `AdmitTTL` / `QueueEntryTTL` /
-      `SoftCapMultiplier` / `DefaultRetryAfterMs` / `DispatcherLockTTL`)从 `go/login/etc/login.yaml` 镜像。`Secrets` 下另写 `QueueToken.Value`(见下一条)。
+      `SoftCapMultiplier` / `DefaultRetryAfterMs` / `DispatcherLockTTL` / `MaxAdmitPerTick` / `MaxQueueLength`)从 `go/login/etc/login.yaml` 镜像。`Secrets` 下另写
+      `QueueToken.Env: MMORPG_LOGIN_QUEUE_TOKEN_SECRET`:ConfigMap 里只有变量名,密钥本身在 Secret `login-queue-token` 里(见下一条)。
     - 与开关无关:gateway ConfigMap 的 `spring.data.redis` 在 `MMORPG_REDIS_PASSWORD` 非空时写 `password`(staging / prod 必须设该变量;dev 档没设时回落空串,不写)。
       限流专用的 Lettuce 客户端只从这个属性取口令,而 release 档的 Redis 带 `--requirepass`;不写口令时限流过不了 Redis 认证,要么每次调用都 fail-open 放行,
       要么 gateway 建连接时就起不来(取决于 Lettuce 的握手行为,未实测)。2026-11-06 起这里写的是引用 `"${SHARED_REDIS_PASSWORD}"`,口令经 Secret `redis-auth`
@@ -1523,6 +1524,8 @@ payment 与 rank 同形:全局池服务(`$GoSvcCatalogue.payment`,`Global = $tru
   `match_loop_last_run_unixtime{point}`。停摆规则按副本判,随各自的告警文件安装:`asset-channel-alerts.yaml` 的 `asset-channel.loop-liveness` 组(3 条)、
   `mail-alerts.yaml` 的 `MailSweepStalled`、`match-outcome-outbox-alerts.yaml` 的 `MatchOutcomeOutboxLoopStalled`、`match-alerts.yaml` 的
   `MatchBackgroundLoopStalled`(按副本、按点位判)。设计见 `docs/design/assetop-redelivery-sharding-20261110.md` §14.3、§14.10。
+- 活性只看「有没有跑完一轮」,成败都算。match 的两个保留期清理(剧本审核流水、观战意图)另有失败与逾期告警:`match-alerts.yaml` 的
+  `match.retention` 组(`MatchRetentionPurgeFailing`、`MatchRetentionBehind`,2026-11-20),随该文件一起安装;设计见 `docs/design/battle-script.md` §6.4。
 - 这些循环与 match 的撮合、投榜循环每一轮各自 recover:一轮 panic 不打死进程、循环不退出,那一轮按结局未知打 HOLD。兜住的 panic 计
   `safego_panic_total{point}`(全部 Go 服务共用)。**告警**:`deploy/k8s/go-background-alerts.yaml`(PrometheusRule,与 `owner-epoch-alerts.yaml` 同法安装):
   ```
@@ -2825,6 +2828,7 @@ login 的三处挑 gate 与 scene_manager 的跨 zone 重定向给候选分档:�
 
 - `deploy/k8s/login-alerts.yaml`(组 `login.gate-pick`),2 条:`LoginGatePickFallbackStale`(critical,reason 为 stale:本 zone 的 gate 全部停写,新登录多半连不上)、`LoginGatePickFallbackDegraded`(warning,reason 为 draining / full / mixed:没有完全合格的 gate,在连得上的里挑;draining 多半是整个 zone 被误标排空,full 是有人没经过区级准入:排队关着、重连豁免或人数上报滞后,2026-11-10 起排队开着时区容量已按 gate 承载封顶)。
 - 同文件组 `login.queue-capacity`(2026-11-10 起),1 条:`LoginQueueCapacityLimitedByGates`(warning,for 10m:排队实际用的区容量 `login_queue_capacity` 被本 zone 在接客的 gate 到水位的承载压到区服目录的 `zone_config.capacity`(`login_queue_configured_capacity`)以下,gate 副本不够目录里的容量;每台 20000 到水位 18000,区容量 45000 至少要 3 台)。排队关着时没有这两个 gauge,不响。
+- 同文件组 `login.queue-length`(2026-11-20 起),1 条:`LoginQueueFull`(critical,for 5m:本 zone 的登录队列到了 `Queue.MaxQueueLength`,`login_queue_assign_total{outcome="queue_full"}` 持续在涨,新玩家拿不到排位、只收到 30~40 秒后重试的提示)。排队关着时没有这个计数,不响。
 - 同文件组 `login.role-list`(2026-11-19 起),1 条:`LoginRoleListHomeZoneFallbackSustained`(warning,for 10m:login 返回角色列表时补归属的 `BatchGetPlayerHomeZone` 持续整次失败,只能保留建角时的 zone,合服后的角色会显示旧区;data_service 整个连不上时只有这条看得见)。
 - `deploy/k8s/scene-manager-alerts.yaml` 加组 `scene-manager.gate-redirect`,1 条:`SceneManagerGateRedirectFallback`(warning,跨 zone 重定向时目标 zone 没有完全合格的 gate;目标 zone 的 gate 全卡住时由 login 那条 critical 呼人,这条不重复呼)。
   ```bash

@@ -1698,7 +1698,7 @@ TEST(RankedBattleTest, RivalryPrepRedactionRevengeAndFeaturedBuildSnapshot) {
         return s;
     };
     const auto seal101 = makeSeal(101, 7, "破阵锐印");
-    const auto seal103 = makeSeal(103, 8, "固阵守印");
+    const auto seal103 = makeSeal(103, 1, "固阵守印");
 
     auto makePet = [](uint64_t petId, uint64_t ownerId, uint32_t tableId, const char* name) {
         BattlePetSnapshot p;
@@ -1825,9 +1825,13 @@ TEST(RankedBattleTest, RivalryPrepRedactionRevengeAndFeaturedBuildSnapshot) {
     EXPECT_EQ(settleA.player_display_name(), "青云");
     ASSERT_GE(settleA.core_skill_ids_size(), 2);
     EXPECT_EQ(settleA.core_skill_ids(0), 10002u);
+    EXPECT_EQ(settleA.rematch_opponent_id(), 201u);
+    EXPECT_EQ(settleA.rematch_opponent_name(), "玄烈");
 
     const auto settleB = engine.BuildSettlement(201);
     EXPECT_FALSE(settleB.revenged_rival());
+    EXPECT_EQ(settleB.rematch_opponent_id(), 101u);
+    EXPECT_EQ(settleB.rematch_opponent_name(), "青云");
 }
 
 }  // namespace

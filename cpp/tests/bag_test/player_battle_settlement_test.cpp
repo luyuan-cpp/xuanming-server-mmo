@@ -4565,3 +4565,42 @@ TEST_F(PlayerBattleProgressionTest, MixedVersionAndGmHighLevelNeverDowngradeOnEx
     ASSERT_EQ(kSuccess, PlayerAttributeSystem::BuildPanel(player, panel));
     EXPECT_EQ(0u, panel.current_level_exp()); // 防止无符号下溢
 }
+
+TEST_F(PlayerBattleProgressionTest, BattleSilverRolloverPoolAccumulatesUpToThreeWeeksAndCapsFreshAccount) {
+    battleprogression::WeeklySilverRule rule{30000, 2000, 45000};
+    const auto rewards = PlayerAttributeSystem::LoadBattleProgressionRewards();
+    settlement.set_battle_id(8601);
+    settlement.set_match_mode(match::MATCH_MODE_PVE_SOLO);
+    settlement.set_battle_difficulty(2); // 困难 PVE 胜 1000 银两
+    settlement.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN);
+
+    const uint64_t w1 = 10ULL * battleprogression::kWeekMs;
+    BattleEconomyLedger cur;
+    BattleEconomyLedger cand1;
+    battleprogression::BattleProgressionDelta d1;
+    // 1. 新号首周初始化为单周 30k/45k（防新号首日 3 倍爆发）。
+    battleprogression::PrepareEconomyLedger(cur, w1, settlement, 0, 0, rewards, &rule, cand1, d1);
+    EXPECT_EQ(30000u, cand1.silver_rollover_soft_cap());
+    EXPECT_EQ(45000u, cand1.silver_rollover_hard_cap());
+    EXPECT_EQ(30000u, d1.weeklySilverSoftCap);
+    EXPECT_EQ(1000u, cand1.battle_silver_this_week());
+
+    // 2. 第 1 周仅用 10,000（结余 20,000 软 / 35,000 硬），第 2 周回归滚存至 50,000 / 80,000。
+    cand1.set_battle_silver_this_week(10000);
+    BattleEconomyLedger cand2;
+    battleprogression::BattleProgressionDelta d2;
+    battleprogression::PrepareEconomyLedger(cand1, w1 + battleprogression::kWeekMs, settlement, 0, 0, rewards, &rule, cand2, d2);
+    EXPECT_EQ(50000u, cand2.silver_rollover_soft_cap());
+    EXPECT_EQ(80000u, cand2.silver_rollover_hard_cap());
+    EXPECT_EQ(50000u, d2.weeklySilverSoftCap);
+    EXPECT_EQ(1000u, d2.silverGain);
+    EXPECT_FALSE(d2.silverDiminished);
+
+    // 3. 离开 10 周回归：严格封顶 3 周 = 90,000 软上限 / 135,000 硬封顶。
+    BattleEconomyLedger cand10;
+    battleprogression::BattleProgressionDelta d10;
+    battleprogression::PrepareEconomyLedger(cand2, w1 + 11ULL * battleprogression::kWeekMs, settlement, 0, 0, rewards, &rule, cand10, d10);
+    EXPECT_EQ(90000u, cand10.silver_rollover_soft_cap());
+    EXPECT_EQ(135000u, cand10.silver_rollover_hard_cap());
+    EXPECT_EQ(90000u, d10.weeklySilverSoftCap);
+}

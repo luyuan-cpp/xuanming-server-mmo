@@ -417,10 +417,10 @@ func (x *ClientRequestRecord) GetSkillLoadoutRentSpentDiamond() uint64 {
 
 // 与战斗结算、物品和请求回执同属完整玩家存档。未领取余额不随周期重置。
 // 来源防重由战斗收件箱的永久消费水位负责；不能用近期结果列表充当去重账本。
-// 合入 A 两阶段模型（docs/design/season-pvp-pve-economy-unified-v1.md）：
+// 合入 A 两阶段模型（docs/planning/season-pvp-pve-economy-unified-v1.md + anti-chore-remediation-v1.md）：
 //
 //	阶段一（lifetime_earned < 660）：无每日/周清打卡，永久累计至 660 份，其中胜局基础含至多 60 份可交易；
-//	阶段二（lifetime_earned >= 660）：开启 +11 顶格周平滑精进池，每周 100 份绑定自选（UTC+8 周一 05:00 重置）。
+//	阶段二（lifetime_earned >= 660）：4 周滚存蓄水池（每周一 05:00 +150 份，未用额度滚存封顶 600 份）。
 type EquipmentMaterialRewardLedger struct {
 	state                   protoimpl.MessageState `protogen:"open.v1"`
 	DayStartsAtMs           uint64                 `protobuf:"varint,1,opt,name=day_starts_at_ms,json=dayStartsAtMs,proto3" json:"day_starts_at_ms,omitempty"` // 历史日账字段（旧档兼容保留）。
@@ -431,9 +431,10 @@ type EquipmentMaterialRewardLedger struct {
 	TradableEarnedTotal     uint32                 `protobuf:"varint,6,opt,name=tradable_earned_total,json=tradableEarnedTotal,proto3" json:"tradable_earned_total,omitempty"`              // 阶段一累计已获可交易份数（上限 60）。
 	AvailableTradableUnits  uint64                 `protobuf:"varint,7,opt,name=available_tradable_units,json=availableTradableUnits,proto3" json:"available_tradable_units,omitempty"`     // 当前未领余额中可交易子集（不变量：<= available_units）。
 	WeekStartsAtMs          uint64                 `protobuf:"varint,8,opt,name=week_starts_at_ms,json=weekStartsAtMs,proto3" json:"week_starts_at_ms,omitempty"`                           // 阶段二当前游戏周起点（UTC+8 周一 05:00）。
-	EarnedThisWeek          uint32                 `protobuf:"varint,9,opt,name=earned_this_week,json=earnedThisWeek,proto3" json:"earned_this_week,omitempty"`                             // 阶段二本周已获份数（上限 150）。
+	EarnedThisWeek          uint32                 `protobuf:"varint,9,opt,name=earned_this_week,json=earnedThisWeek,proto3" json:"earned_this_week,omitempty"`                             // 阶段二当前周周期内已获份数（<= stage2_pool_cap）。
 	MigratedToV2            bool                   `protobuf:"varint,10,opt,name=migrated_to_v2,json=migratedToV2,proto3" json:"migrated_to_v2,omitempty"`                                  // 标记已进入两阶段新账（旧档历史余额全额保留为自用，不抵扣新 660）。
 	Stage1TradableConfirmed uint32                 `protobuf:"varint,11,opt,name=stage1_tradable_confirmed,json=stage1TradableConfirmed,proto3" json:"stage1_tradable_confirmed,omitempty"` // 已由 data_service 账号目录确认的本角色阶段一可交易份数（<= tradable_earned_total）。
+	Stage2PoolCap           uint32                 `protobuf:"varint,12,opt,name=stage2_pool_cap,json=stage2PoolCap,proto3" json:"stage2_pool_cap,omitempty"`                               // 阶段二当前周期生效滚存上限（150..600，步长 5；0=兼容旧档视为 150）。
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -545,16 +546,25 @@ func (x *EquipmentMaterialRewardLedger) GetStage1TradableConfirmed() uint32 {
 	return 0
 }
 
-// 战斗成长经济周账本（docs/planning/player-leveling-and-battle-economy-v1.md §2.2）：
+func (x *EquipmentMaterialRewardLedger) GetStage2PoolCap() uint32 {
+	if x != nil {
+		return x.Stage2PoolCap
+	}
+	return 0
+}
+
+// 战斗成长经济周滚存账本（docs/planning/player-leveling-and-battle-economy-v1.md + anti-chore-remediation-v1.md）：
 // 与 CurrencyComp、EquipmentMaterialRewardLedger 同在 WALLET 存盘组，同帧原子提交。
-// 每周 UTC+8 周一 05:00 重置（抗时钟回拨），控制常规战斗银两周软/硬上限，不截断经验升级。
+// 每周 UTC+8 周一 05:00 补充单周额度并向后滚存至多 3 周（90k 全额 / 135k 硬顶，抗时钟回拨），不截断经验升级。
 type BattleEconomyLedger struct {
-	state                protoimpl.MessageState `protogen:"open.v1"`
-	WeekStartsAtMs       uint64                 `protobuf:"varint,1,opt,name=week_starts_at_ms,json=weekStartsAtMs,proto3" json:"week_starts_at_ms,omitempty"`                   // 当前游戏周起点（UTC+8 周一 05:00）
-	BattleSilverThisWeek uint64                 `protobuf:"varint,2,opt,name=battle_silver_this_week,json=battleSilverThisWeek,proto3" json:"battle_silver_this_week,omitempty"` // 本周战斗结算累计实际入账银两
-	BattleExpThisWeek    uint64                 `protobuf:"varint,3,opt,name=battle_exp_this_week,json=battleExpThisWeek,proto3" json:"battle_exp_this_week,omitempty"`          // 本周战斗累计入账经验（统计监控用）
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	WeekStartsAtMs        uint64                 `protobuf:"varint,1,opt,name=week_starts_at_ms,json=weekStartsAtMs,proto3" json:"week_starts_at_ms,omitempty"`                      // 当前游戏周起点（UTC+8 周一 05:00）
+	BattleSilverThisWeek  uint64                 `protobuf:"varint,2,opt,name=battle_silver_this_week,json=battleSilverThisWeek,proto3" json:"battle_silver_this_week,omitempty"`    // 当前周周期内战斗结算累计实际入账银两
+	BattleExpThisWeek     uint64                 `protobuf:"varint,3,opt,name=battle_exp_this_week,json=battleExpThisWeek,proto3" json:"battle_exp_this_week,omitempty"`             // 当前周周期内战斗累计入账经验（统计监控用）
+	SilverRolloverSoftCap uint64                 `protobuf:"varint,4,opt,name=silver_rollover_soft_cap,json=silverRolloverSoftCap,proto3" json:"silver_rollover_soft_cap,omitempty"` // 当前周期生效全额银两软上限滚存池（0=兼容旧档按单周软上限计）
+	SilverRolloverHardCap uint64                 `protobuf:"varint,5,opt,name=silver_rollover_hard_cap,json=silverRolloverHardCap,proto3" json:"silver_rollover_hard_cap,omitempty"` // 当前周期生效银两硬封顶滚存池（0=兼容旧档按单周硬封顶计）
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *BattleEconomyLedger) Reset() {
@@ -608,12 +618,26 @@ func (x *BattleEconomyLedger) GetBattleExpThisWeek() uint64 {
 	return 0
 }
 
-// 激励视频广告日账本与短效挂起会话（docs/design/rewarded-ad-system.md §3.4）：
+func (x *BattleEconomyLedger) GetSilverRolloverSoftCap() uint64 {
+	if x != nil {
+		return x.SilverRolloverSoftCap
+	}
+	return 0
+}
+
+func (x *BattleEconomyLedger) GetSilverRolloverHardCap() uint64 {
+	if x != nil {
+		return x.SilverRolloverHardCap
+	}
+	return 0
+}
+
+// 激励视频广告周账本与短效挂起会话（docs/design/rewarded-ad-system.md + anti-chore-remediation-v1.md）：
 // 与 CurrencyComp 同在 WALLET 存盘组原子提交，抗 30 秒全屏视频暂停心跳引发的断线重连丢会话。
 type RewardedAdLedger struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
-	DayStartsAtMs         uint64                 `protobuf:"varint,1,opt,name=day_starts_at_ms,json=dayStartsAtMs,proto3" json:"day_starts_at_ms,omitempty"`                         // 当前游戏日起点（UTC+8 05:00，抗时钟回拨）
-	ClaimedToday          uint32                 `protobuf:"varint,2,opt,name=claimed_today,json=claimedToday,proto3" json:"claimed_today,omitempty"`                                // 今日已成功领取次数
+	DayStartsAtMs         uint64                 `protobuf:"varint,1,opt,name=day_starts_at_ms,json=dayStartsAtMs,proto3" json:"day_starts_at_ms,omitempty"`                         // 当前配额周期起点（UTC+8 周一 05:00，抗时钟回拨；沿用旧字段名保线兼容）
+	ClaimedToday          uint32                 `protobuf:"varint,2,opt,name=claimed_today,json=claimedToday,proto3" json:"claimed_today,omitempty"`                                // 当前周期内已成功领取次数（周池上限 14）
 	LastClaimAtMs         uint64                 `protobuf:"varint,3,opt,name=last_claim_at_ms,json=lastClaimAtMs,proto3" json:"last_claim_at_ms,omitempty"`                         // 最近一次成功领取时间（UTC 毫秒）
 	TotalClaimedLifetime  uint64                 `protobuf:"varint,4,opt,name=total_claimed_lifetime,json=totalClaimedLifetime,proto3" json:"total_claimed_lifetime,omitempty"`      // 终身累计成功次数（仅监控统计）
 	ActiveSessionId       uint64                 `protobuf:"varint,5,opt,name=active_session_id,json=activeSessionId,proto3" json:"active_session_id,omitempty"`                     // 当前待核销的短效会话号（0 = 无）
@@ -840,7 +864,7 @@ const file_proto_common_component_client_request_ledger_comp_proto_rawDesc = "" 
 	"\x11wanted_order_gold\x18) \x01(\x04R\x0fwantedOrderGold\x12;\n" +
 	"\x1askill_loadout_rented_slots\x18* \x01(\rR\x17skillLoadoutRentedSlots\x12G\n" +
 	"!skill_loadout_rent_expires_at_sec\x18+ \x01(\x04R\x1cskillLoadoutRentExpiresAtSec\x12F\n" +
-	" skill_loadout_rent_spent_diamond\x18, \x01(\x04R\x1cskillLoadoutRentSpentDiamond\"\xfe\x03\n" +
+	" skill_loadout_rent_spent_diamond\x18, \x01(\x04R\x1cskillLoadoutRentSpentDiamond\"\xa6\x04\n" +
 	"\x1dEquipmentMaterialRewardLedger\x12'\n" +
 	"\x10day_starts_at_ms\x18\x01 \x01(\x04R\rdayStartsAtMs\x12!\n" +
 	"\fearned_today\x18\x02 \x01(\rR\vearnedToday\x12'\n" +
@@ -853,11 +877,14 @@ const file_proto_common_component_client_request_ledger_comp_proto_rawDesc = "" 
 	"\x10earned_this_week\x18\t \x01(\rR\x0eearnedThisWeek\x12$\n" +
 	"\x0emigrated_to_v2\x18\n" +
 	" \x01(\bR\fmigratedToV2\x12:\n" +
-	"\x19stage1_tradable_confirmed\x18\v \x01(\rR\x17stage1TradableConfirmed\"\xa8\x01\n" +
+	"\x19stage1_tradable_confirmed\x18\v \x01(\rR\x17stage1TradableConfirmed\x12&\n" +
+	"\x0fstage2_pool_cap\x18\f \x01(\rR\rstage2PoolCap\"\x9a\x02\n" +
 	"\x13BattleEconomyLedger\x12)\n" +
 	"\x11week_starts_at_ms\x18\x01 \x01(\x04R\x0eweekStartsAtMs\x125\n" +
 	"\x17battle_silver_this_week\x18\x02 \x01(\x04R\x14battleSilverThisWeek\x12/\n" +
-	"\x14battle_exp_this_week\x18\x03 \x01(\x04R\x11battleExpThisWeek\"\xd9\x02\n" +
+	"\x14battle_exp_this_week\x18\x03 \x01(\x04R\x11battleExpThisWeek\x127\n" +
+	"\x18silver_rollover_soft_cap\x18\x04 \x01(\x04R\x15silverRolloverSoftCap\x127\n" +
+	"\x18silver_rollover_hard_cap\x18\x05 \x01(\x04R\x15silverRolloverHardCap\"\xd9\x02\n" +
 	"\x10RewardedAdLedger\x12'\n" +
 	"\x10day_starts_at_ms\x18\x01 \x01(\x04R\rdayStartsAtMs\x12#\n" +
 	"\rclaimed_today\x18\x02 \x01(\rR\fclaimedToday\x12'\n" +

@@ -38,6 +38,7 @@ import (
 	"shared/accountdirectory"
 	"shared/buildinfo"
 	"shared/clockcheck"
+	"shared/contentguard"
 	"shared/generated/clientrpc"
 	"shared/grpcstats"
 	"shared/grpckeepalive"
@@ -133,6 +134,13 @@ func main() {
 		panic(err)
 	}
 	svcCtx := svc.NewServiceContextWithAdmission(c, writer, root, relay, globalBackground)
+	// 赛事战队名别的玩家看得到,建队前送内容安全。没配目标(又不是本机的 Optional)或客户端建不起来,起服即失败,
+	// 不带着「战队名不送检」对外服务。
+	contentGuard, err := contentguard.New("match", c.ContentGuard)
+	if err != nil {
+		logx.Must(fmt.Errorf("content guard client: %w", err))
+	}
+	svcCtx.ContentGuard = contentGuard
 	// guild 调 MatchInternal 的独立证明；未配置时保持nil并在RPC入口拒绝，绝不降级为无签名。
 	if secret := strings.TrimSpace(os.Getenv("MMORPG_MATCH_INTERNAL_SECRET_GUILD")); secret != "" {
 		verifier, err := serviceauth.New(map[string]string{"guild": secret})

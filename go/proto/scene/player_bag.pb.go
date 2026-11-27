@@ -4524,11 +4524,11 @@ func (x *EquipLoadoutSlotView) GetItem() *BagItemInfo {
 
 type EquipLoadoutSchemeInfo struct {
 	state                   protoimpl.MessageState  `protogen:"open.v1"`
-	SchemeId                uint32                  `protobuf:"varint,1,opt,name=scheme_id,json=schemeId,proto3" json:"scheme_id,omitempty"`                                                  // 1..5 显式方案号
-	Unlocked                bool                    `protobuf:"varint,2,opt,name=unlocked,proto3" json:"unlocked,omitempty"`                                                                  // 是否已解锁
-	Name                    string                  `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`                                                                           // 自定义方案名（空则展示默认「方案一..五」）
+	SchemeId                uint32                  `protobuf:"varint,1,opt,name=scheme_id,json=schemeId,proto3" json:"scheme_id,omitempty"`                                                  // 1..7 显式方案号
+	Unlocked                bool                    `protobuf:"varint,2,opt,name=unlocked,proto3" json:"unlocked,omitempty"`                                                                  // 是否在当前生效席位内（false 表示未解锁或到期只读锁定）
+	Name                    string                  `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`                                                                           // 自定义方案名（空则展示默认「方案一..七」）
 	RoleTag                 uint32                  `protobuf:"varint,4,opt,name=role_tag,json=roleTag,proto3" json:"role_tag,omitempty"`                                                     // 0默认 / 1输出 / 2控场 / 3辅助 / 4生存
-	Slots                   []*EquipLoadoutSlotView `protobuf:"bytes,5,rep,name=slots,proto3" json:"slots,omitempty"`                                                                         // 8 个正式槽位按 slot 升序
+	Slots                   []*EquipLoadoutSlotView `protobuf:"bytes,5,rep,name=slots,proto3" json:"slots,omitempty"`                                                                         // 8 个正式槽位按 slot 升序（到期只锁不删，仍返回已存配置）
 	LinkedSkillSchemeId     uint32                  `protobuf:"varint,6,opt,name=linked_skill_scheme_id,json=linkedSkillSchemeId,proto3" json:"linked_skill_scheme_id,omitempty"`             // 0 = 不联动；>0 = 关联战法方案号
 	LinkedAttributeSchemeId uint32                  `protobuf:"varint,7,opt,name=linked_attribute_scheme_id,json=linkedAttributeSchemeId,proto3" json:"linked_attribute_scheme_id,omitempty"` // 0 = 不联动；>0 = 关联属性加点方案号
 	MissingCount            uint32                  `protobuf:"varint,8,opt,name=missing_count,json=missingCount,proto3" json:"missing_count,omitempty"`                                      // 实时缺失槽位数
@@ -4684,21 +4684,30 @@ func (x *EquipLoadoutLinkedOption) GetRoleTag() uint32 {
 
 type EquipLoadoutSnapshot struct {
 	state                      protoimpl.MessageState      `protogen:"open.v1"`
-	UnlockedSchemeCount        uint32                      `protobuf:"varint,1,opt,name=unlocked_scheme_count,json=unlockedSchemeCount,proto3" json:"unlocked_scheme_count,omitempty"`                          // 已解锁套数（1..5）
-	MaxSchemeCount             uint32                      `protobuf:"varint,2,opt,name=max_scheme_count,json=maxSchemeCount,proto3" json:"max_scheme_count,omitempty"`                                         // 套位总上限（固定 5）
-	ActiveSchemeId             uint32                      `protobuf:"varint,3,opt,name=active_scheme_id,json=activeSchemeId,proto3" json:"active_scheme_id,omitempty"`                                         // 当前激活方案号（1..unlocked）
+	UnlockedSchemeCount        uint32                      `protobuf:"varint,1,opt,name=unlocked_scheme_count,json=unlockedSchemeCount,proto3" json:"unlocked_scheme_count,omitempty"`                          // 当前生效已解锁套数（2..7，与战法·加点三合一共享）
+	MaxSchemeCount             uint32                      `protobuf:"varint,2,opt,name=max_scheme_count,json=maxSchemeCount,proto3" json:"max_scheme_count,omitempty"`                                         // 套位总上限（固定 7）
+	ActiveSchemeId             uint32                      `protobuf:"varint,3,opt,name=active_scheme_id,json=activeSchemeId,proto3" json:"active_scheme_id,omitempty"`                                         // 当前激活方案号（1..7；到期锁定态允许保留直至切走）
 	StateVersion               uint64                      `protobuf:"varint,4,opt,name=state_version,json=stateVersion,proto3" json:"state_version,omitempty"`                                                 // 乐观锁版本号
-	Schemes                    []*EquipLoadoutSchemeInfo   `protobuf:"bytes,5,rep,name=schemes,proto3" json:"schemes,omitempty"`                                                                                // 1..5 全部套位，按 scheme_id 升序
-	NextUnlockCostDiamond      uint64                      `protobuf:"varint,6,opt,name=next_unlock_cost_diamond,json=nextUnlockCostDiamond,proto3" json:"next_unlock_cost_diamond,omitempty"`                  // 下一套解锁灵石价格（已满为 0）
-	NextUnlockAllowBindDiamond bool                        `protobuf:"varint,7,opt,name=next_unlock_allow_bind_diamond,json=nextUnlockAllowBindDiamond,proto3" json:"next_unlock_allow_bind_diamond,omitempty"` // 下一套是否允许优先使用绑定灵石（仅第 2 套为 true）
-	UnlockItemConfigId         uint32                      `protobuf:"varint,8,opt,name=unlock_item_config_id,json=unlockItemConfigId,proto3" json:"unlock_item_config_id,omitempty"`                           // 装备方案扩容符配置号（3413）
-	UnlockItemOwned            uint64                      `protobuf:"varint,9,opt,name=unlock_item_owned,json=unlockItemOwned,proto3" json:"unlock_item_owned,omitempty"`                                      // 背包当前可用的扩容符数量
+	Schemes                    []*EquipLoadoutSchemeInfo   `protobuf:"bytes,5,rep,name=schemes,proto3" json:"schemes,omitempty"`                                                                                // 1..7 全部套位，按 scheme_id 升序
+	NextUnlockCostDiamond      uint64                      `protobuf:"varint,6,opt,name=next_unlock_cost_diamond,json=nextUnlockCostDiamond,proto3" json:"next_unlock_cost_diamond,omitempty"`                  // 历史保留字段（方案 A 合一租用模式下恒为 0）
+	NextUnlockAllowBindDiamond bool                        `protobuf:"varint,7,opt,name=next_unlock_allow_bind_diamond,json=nextUnlockAllowBindDiamond,proto3" json:"next_unlock_allow_bind_diamond,omitempty"` // 历史保留字段（方案 A 合一租用模式下恒为 false）
+	UnlockItemConfigId         uint32                      `protobuf:"varint,8,opt,name=unlock_item_config_id,json=unlockItemConfigId,proto3" json:"unlock_item_config_id,omitempty"`                           // 历史保留字段（3413）
+	UnlockItemOwned            uint64                      `protobuf:"varint,9,opt,name=unlock_item_owned,json=unlockItemOwned,proto3" json:"unlock_item_owned,omitempty"`                                      // 历史保留字段
 	DiamondBalance             uint64                      `protobuf:"varint,10,opt,name=diamond_balance,json=diamondBalance,proto3" json:"diamond_balance,omitempty"`                                          // 当前非绑灵石余额
 	BindDiamondBalance         uint64                      `protobuf:"varint,11,opt,name=bind_diamond_balance,json=bindDiamondBalance,proto3" json:"bind_diamond_balance,omitempty"`                            // 当前绑定灵石余额
-	SkillSchemes               []*EquipLoadoutLinkedOption `protobuf:"bytes,12,rep,name=skill_schemes,json=skillSchemes,proto3" json:"skill_schemes,omitempty"`                                                 // 可选联动的战法方案列表
+	SkillSchemes               []*EquipLoadoutLinkedOption `protobuf:"bytes,12,rep,name=skill_schemes,json=skillSchemes,proto3" json:"skill_schemes,omitempty"`                                                 // 可选联动的战法方案列表（1..unlocked）
 	AttributeSchemes           []*EquipLoadoutLinkedOption `protobuf:"bytes,13,rep,name=attribute_schemes,json=attributeSchemes,proto3" json:"attribute_schemes,omitempty"`                                     // 可选联动的属性加点方案列表
-	unknownFields              protoimpl.UnknownFields
-	sizeCache                  protoimpl.SizeCache
+	// ── 方案 A：7 套三合一共享流派席位投影（与 SkillLoadoutSnapshot 同口径）──
+	FreeSchemes           uint32 `protobuf:"varint,14,opt,name=free_schemes,json=freeSchemes,proto3" json:"free_schemes,omitempty"`                                   // 永久免费基础套数（2；85 级满级自动升至 3）
+	LightCardBonusSchemes uint32 `protobuf:"varint,15,opt,name=light_card_bonus_schemes,json=lightCardBonusSchemes,proto3" json:"light_card_bonus_schemes,omitempty"` // 仙途轻享卡生效附赠套数（0 或 2）
+	RentedExtraSlots      uint32 `protobuf:"varint,16,opt,name=rented_extra_slots,json=rentedExtraSlots,proto3" json:"rented_extra_slots,omitempty"`                  // 当前有效租期内的额外按月租用套数（0..5，到期为 0）
+	RentExpiresAtSec      uint64 `protobuf:"varint,17,opt,name=rent_expires_at_sec,json=rentExpiresAtSec,proto3" json:"rent_expires_at_sec,omitempty"`                // 统一到期 Unix 秒（0 或 <= server_now_sec 表示未租/已到期）
+	ServerNowSec          uint64 `protobuf:"varint,18,opt,name=server_now_sec,json=serverNowSec,proto3" json:"server_now_sec,omitempty"`                              // 服务器当前 Unix 秒（供前端倒计时与补差价试算）
+	RentUnitPriceDiamond  uint64 `protobuf:"varint,19,opt,name=rent_unit_price_diamond,json=rentUnitPriceDiamond,proto3" json:"rent_unit_price_diamond,omitempty"`    // 单套 30 天真实灵石价（固定 30，装备+战法+加点共享）
+	RentPeriodDays        uint32 `protobuf:"varint,20,opt,name=rent_period_days,json=rentPeriodDays,proto3" json:"rent_period_days,omitempty"`                        // 单期租用天数（固定 30）
+	RentMaxRemainingDays  uint32 `protobuf:"varint,21,opt,name=rent_max_remaining_days,json=rentMaxRemainingDays,proto3" json:"rent_max_remaining_days,omitempty"`    // 最长剩余叠加天数（固定 180）
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *EquipLoadoutSnapshot) Reset() {
@@ -4820,6 +4829,62 @@ func (x *EquipLoadoutSnapshot) GetAttributeSchemes() []*EquipLoadoutLinkedOption
 		return x.AttributeSchemes
 	}
 	return nil
+}
+
+func (x *EquipLoadoutSnapshot) GetFreeSchemes() uint32 {
+	if x != nil {
+		return x.FreeSchemes
+	}
+	return 0
+}
+
+func (x *EquipLoadoutSnapshot) GetLightCardBonusSchemes() uint32 {
+	if x != nil {
+		return x.LightCardBonusSchemes
+	}
+	return 0
+}
+
+func (x *EquipLoadoutSnapshot) GetRentedExtraSlots() uint32 {
+	if x != nil {
+		return x.RentedExtraSlots
+	}
+	return 0
+}
+
+func (x *EquipLoadoutSnapshot) GetRentExpiresAtSec() uint64 {
+	if x != nil {
+		return x.RentExpiresAtSec
+	}
+	return 0
+}
+
+func (x *EquipLoadoutSnapshot) GetServerNowSec() uint64 {
+	if x != nil {
+		return x.ServerNowSec
+	}
+	return 0
+}
+
+func (x *EquipLoadoutSnapshot) GetRentUnitPriceDiamond() uint64 {
+	if x != nil {
+		return x.RentUnitPriceDiamond
+	}
+	return 0
+}
+
+func (x *EquipLoadoutSnapshot) GetRentPeriodDays() uint32 {
+	if x != nil {
+		return x.RentPeriodDays
+	}
+	return 0
+}
+
+func (x *EquipLoadoutSnapshot) GetRentMaxRemainingDays() uint32 {
+	if x != nil {
+		return x.RentMaxRemainingDays
+	}
+	return 0
 }
 
 type GetEquipLoadoutsRequest struct {
@@ -5859,7 +5924,7 @@ const file_proto_scene_player_bag_proto_rawDesc = "" +
 	"\x18EquipLoadoutLinkedOption\x12\x1b\n" +
 	"\tscheme_id\x18\x01 \x01(\rR\bschemeId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x19\n" +
-	"\brole_tag\x18\x03 \x01(\rR\aroleTag\"\xb5\x05\n" +
+	"\brole_tag\x18\x03 \x01(\rR\aroleTag\"\xac\b\n" +
 	"\x14EquipLoadoutSnapshot\x122\n" +
 	"\x15unlocked_scheme_count\x18\x01 \x01(\rR\x13unlockedSchemeCount\x12(\n" +
 	"\x10max_scheme_count\x18\x02 \x01(\rR\x0emaxSchemeCount\x12(\n" +
@@ -5874,7 +5939,15 @@ const file_proto_scene_player_bag_proto_rawDesc = "" +
 	" \x01(\x04R\x0ediamondBalance\x120\n" +
 	"\x14bind_diamond_balance\x18\v \x01(\x04R\x12bindDiamondBalance\x12>\n" +
 	"\rskill_schemes\x18\f \x03(\v2\x19.EquipLoadoutLinkedOptionR\fskillSchemes\x12F\n" +
-	"\x11attribute_schemes\x18\r \x03(\v2\x19.EquipLoadoutLinkedOptionR\x10attributeSchemes\"\x19\n" +
+	"\x11attribute_schemes\x18\r \x03(\v2\x19.EquipLoadoutLinkedOptionR\x10attributeSchemes\x12!\n" +
+	"\ffree_schemes\x18\x0e \x01(\rR\vfreeSchemes\x127\n" +
+	"\x18light_card_bonus_schemes\x18\x0f \x01(\rR\x15lightCardBonusSchemes\x12,\n" +
+	"\x12rented_extra_slots\x18\x10 \x01(\rR\x10rentedExtraSlots\x12-\n" +
+	"\x13rent_expires_at_sec\x18\x11 \x01(\x04R\x10rentExpiresAtSec\x12$\n" +
+	"\x0eserver_now_sec\x18\x12 \x01(\x04R\fserverNowSec\x125\n" +
+	"\x17rent_unit_price_diamond\x18\x13 \x01(\x04R\x14rentUnitPriceDiamond\x12(\n" +
+	"\x10rent_period_days\x18\x14 \x01(\rR\x0erentPeriodDays\x125\n" +
+	"\x17rent_max_remaining_days\x18\x15 \x01(\rR\x14rentMaxRemainingDays\"\x19\n" +
 	"\x17GetEquipLoadoutsRequest\"\x83\x01\n" +
 	"\x18GetEquipLoadoutsResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x121\n" +

@@ -128,6 +128,50 @@ func TestEmptyTextAndDisabledClientPassWithoutCalling(t *testing.T) {
 	}
 }
 
+// 名字、公告、寄售标题要同步等外部平台,用长的一档;聊天用短的一档。短的一档等不到的慢回包,长的一档等得到。
+func TestNameScenesGetTheLongerBudget(t *testing.T) {
+	slow := &fakeRPC{out: &cgpb.CheckTextResponse{Verdict: cgpb.TextVerdict_TEXT_VERDICT_PASS}, delay: 80 * time.Millisecond}
+	client := &Client{rpc: slow, timeout: 20 * time.Millisecond, nameTimeout: 2 * time.Second}
+	for scene, want := range map[cgpb.TextScene]Verdict{
+		cgpb.TextScene_TEXT_SCENE_ROLE_NAME:          Pass,
+		cgpb.TextScene_TEXT_SCENE_GUILD_NAME:         Pass,
+		cgpb.TextScene_TEXT_SCENE_PET_NAME:           Pass,
+		cgpb.TextScene_TEXT_SCENE_GUILD_ANNOUNCEMENT: Pass,
+		cgpb.TextScene_TEXT_SCENE_TRADE_TITLE:        Pass,
+		cgpb.TextScene_TEXT_SCENE_CHAT_WORLD:         Unavailable,
+		cgpb.TextScene_TEXT_SCENE_CHAT_PRIVATE:       Unavailable,
+		cgpb.TextScene_TEXT_SCENE_PRIVATE_LABEL:      Unavailable,
+	} {
+		if got := client.Check(context.Background(), scene, 1, "text"); got.Verdict != want {
+			t.Errorf("scene %s: verdict %d, want %d", scene, got.Verdict, want)
+		}
+	}
+}
+
+// zrpc 客户端自己的 Timeout 是每次调用的硬上限:比任何一档小,那一档就永远等不满,配置必须拒绝。
+func TestConfRejectsAnRpcTimeoutBelowTheLargestBudget(t *testing.T) {
+	conf := Conf{Rpc: zrpc.RpcClientConf{Endpoints: []string{"127.0.0.1:50250"}, Timeout: 500}, TimeoutMs: 600}
+	if err := conf.Validate(); err == nil {
+		t.Fatalf("Rpc.Timeout=500 is below the 3000 ms platform recheck budget and must be rejected")
+	}
+	conf.Rpc.Timeout = 3500
+	if err := conf.Validate(); err != nil {
+		t.Fatalf("Rpc.Timeout=3500 covers every budget: %v", err)
+	}
+	conf.Rpc.Timeout = 0
+	if err := conf.Validate(); err != nil {
+		t.Fatalf("Rpc.Timeout=0 means no extra cap: %v", err)
+	}
+	conf.NameTimeoutMs = 500
+	if err := conf.Validate(); err == nil {
+		t.Fatalf("NameTimeoutMs below TimeoutMs must be rejected")
+	}
+	conf.NameTimeoutMs = 10001
+	if err := conf.Validate(); err == nil {
+		t.Fatalf("NameTimeoutMs above 10000 must be rejected")
+	}
+}
+
 func TestFuncIsAChecker(t *testing.T) {
 	var checker Checker = Func(func(_ context.Context, scene cgpb.TextScene, _ uint64, text string) Result {
 		if scene == cgpb.TextScene_TEXT_SCENE_ROLE_NAME && text == "bad" {

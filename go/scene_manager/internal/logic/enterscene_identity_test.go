@@ -216,6 +216,48 @@ func TestEnterScene_StaleSessionSceneChangeRejected(t *testing.T) {
 	assert.Equal(t, verdictBefore+1, placementIdentityCount(t, "enter", "stale"))
 }
 
+// 同号跨进程(§14.8):location 属于新 gate 进程上的 (11, gB);老进程上同号会话 11 在途的换图(scene 自发,代次 gA)。
+// 只比会话号时被判同一会话放行,location 改到 S2、人数跟着挪,实体却被 scene 栅栏留在 S1(d2 的跨进程形态)。
+// 按 (gate 实例, 会话号) 认 → 25,什么都不改;同一进程上的同一会话照旧放行,实例原样保留。
+func TestEnterScene_SameSessionIdFromAnotherGateProcessIsStale(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+	const (
+		playerID = uint64(6619)
+		s1       = uint64(7691)
+		s2       = uint64(7692)
+	)
+	identSameNodeTwoScenes(mr, playerID, s1, s2)
+	before := identSeedLocation(t, sc, playerID, &scene_manager.PlayerLocation{
+		SceneId: s1, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 1, UpdateTime: 100,
+		SessionId: 11, LoginGeneration: identGenB, GateInstanceId: "gate-new-process",
+	})
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: playerID, SceneId: s2, ZoneId: testZoneId, SessionId: 11, LoginGeneration: identGenA,
+		CorrelationId: 9011, GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-old-process",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrPlacementSessionSuperseded, resp.ErrorCode,
+		"变异红:另一个 gate 进程上的同号会话不是 location 记的那一条")
+	assert.Equal(t, before, identLocationRaw(t, sc, playerID))
+	assert.Equal(t, "1", sceneCountText(sc, s1))
+	assert.Equal(t, "0", sceneCountText(sc, s2))
+	assert.Empty(t, *captured, "被拒的请求不发路由")
+
+	resp, err = NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{OwnerRevision: 1,
+		PlayerId: playerID, SceneId: s2, ZoneId: testZoneId, SessionId: 11, LoginGeneration: identGenA,
+		CorrelationId: 9012, GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-new-process",
+	})
+	require.NoError(t, err)
+	require.Equal(t, uint32(0), resp.ErrorCode)
+	loc := identLocation(t, sc, playerID)
+	require.NotNil(t, loc)
+	assert.Equal(t, s2, loc.SceneId)
+	assert.Equal(t, identGenB, loc.LoginGeneration, "同会话代次取 max")
+	assert.Equal(t, "gate-new-process", loc.GateInstanceId)
+}
+
 // 同一会话、请求不带代次(旧版 scene 自发换图)放行,location 代次保持 gB,不被降成 0。
 func TestEnterScene_SameSessionWithoutGenerationAdmittedPreservesGeneration(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
@@ -303,7 +345,7 @@ func TestEnterScene_LegacyAdmitDoesNotDowngradeIdentity(t *testing.T) {
 	assert.Equal(t, identGenB, loc.LoginGeneration)
 }
 
-// samePlacement 的身份写只改 8 / 9 号字段:rollback_receipt / pending / update_time / owner_epoch 原样保留,
+// samePlacement 的身份写只改 8 / 9 / 10 号字段:rollback_receipt / pending / update_time / owner_epoch 原样保留,
 // owner_epoch 键与人数不动,路由带观察到的 epoch。
 func TestEnterScene_SamePlacementUpdatesIdentityPreservingOtherFields(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
@@ -333,9 +375,10 @@ func TestEnterScene_SamePlacementUpdatesIdentityPreservingOtherFields(t *testing
 	want := gproto.Clone(seeded).(*scene_manager.PlayerLocation)
 	want.SessionId = 22
 	want.LoginGeneration = identGenB
+	want.GateInstanceId = "gate-b-uuid"
 	got := identLocation(t, sc, playerID)
 	require.NotNil(t, got)
-	assert.True(t, gproto.Equal(want, got), "只允许 8 / 9 号字段变化: want=%v got=%v", want, got)
+	assert.True(t, gproto.Equal(want, got), "只允许 8 / 9 / 10 号字段变化: want=%v got=%v", want, got)
 	assert.Equal(t, "3", ownerEpochRaw(t, sc, playerID), "身份写不铸造")
 	assert.Equal(t, "1", sceneCountText(sc, s1), "身份写不动人数")
 	assert.Equal(t, "1", nodeCountText(sc, testZoneId, "10"))

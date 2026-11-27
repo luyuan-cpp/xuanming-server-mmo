@@ -171,9 +171,25 @@ namespace player_rename
 		return delay > kCapMs ? kCapMs : delay;
 	}
 
+	// 明确的结局只有下面列出的这几种;其余取值(BUSY、未指定,以及本版本不认识的新取值)一律当「还没有结局」,
+	// 用同一个 seq 稍后重发。不认识的取值不能当成失败:那会解除改名卡的占用,而 data_service 可能已经把角色改了名。
 	constexpr bool IsTransientResult(data_service::RenameRoleResult result)
 	{
-		return result == data_service::RENAME_ROLE_BUSY || result == data_service::RENAME_ROLE_RESULT_UNSPECIFIED;
+		switch (result)
+		{
+		case data_service::RENAME_ROLE_OK:
+		case data_service::RENAME_ROLE_TAKEN:
+		case data_service::RENAME_ROLE_INVALID:
+		case data_service::RENAME_ROLE_COOLDOWN:
+		case data_service::RENAME_ROLE_FROZEN:
+		case data_service::RENAME_ROLE_STALE_SEQ:
+		case data_service::RENAME_ROLE_SAME_NAME:
+		case data_service::RENAME_ROLE_NOT_FOUND:
+		case data_service::RENAME_ROLE_EXPIRED:
+			return false;
+		default:
+			return true;
+		}
 	}
 
 	// 将 data_service 明确拒绝的枚举映射为客户端提示码。

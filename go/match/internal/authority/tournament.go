@@ -2502,7 +2502,7 @@ func (s *Store) transitionToKnockout(ctx context.Context, seasonID uint32, stamp
 		totalRounds := tournament.TotalKnockoutRounds(bracketSize)
 		roundWindowMs := uint64(rule.GetKnockoutRoundTimeoutSeconds()) * 1000
 		if roundWindowMs == 0 {
-			roundWindowMs = 1800_000
+			roundWindowMs = 14400_000
 		}
 		pairs := tournament.SeedPairs(bracketSize)
 		idCursor := 0

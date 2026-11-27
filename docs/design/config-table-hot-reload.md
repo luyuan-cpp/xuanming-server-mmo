@@ -1,6 +1,6 @@
 # 配置表热更：表包、轨道指针与进程内整批切换（2026-11-20）
 
-> **状态**：**全部 5 批已落码（2026-11-20）**，未重新导表、未编译、未跑测试（交 Gemini 验证）。独立 Java 仓留到 `PARITY.md` 待做。运维手册见 [docs/ops/table-hot-reload-runbook.md](../ops/table-hot-reload-runbook.md)。
+> **状态**：**全部 5 批已落码（2026-11-20，随 `f067d01fc` 入库）**。之后别的线已全量导表（manifest 第 2 版），顺带编过 scene / battle，跑过 `scene.exe --validate-tables`；热更这条线自己的单测、预检、本机冒烟与集群端到端都还没跑，C++ 侧缺单测。剩下的验证、补测与登记 11-26 整体交 Gemini，见[交接单](../handoff/config-table-hot-reload-handoff-20261126.md)。独立 Java 仓留到 `PARITY.md` 待做。运维手册见 [docs/ops/table-hot-reload-runbook.md](../ops/table-hot-reload-runbook.md)。
 > **相关**：[RPC 热关停](rpc-kill-switch.md)（同一种「etcd 事实源 + 管理接口 + 各进程自己生效」的形态）、[发布轨道](release-track-gray-canary.md)（stable / canary 两条轨道）、[混版本持久字段保护](mixed-version-persist-field-protection.md) §13（表行只增不删）、[配置表 API](table-api-reference-zh.md)、[data/AGENTS.md](../../data/AGENTS.md)、[可配置模板](configurable-templates.md) §3.6（「v1 不做热更」和它列的三条前提，本文把这三条都落实）。
 > **核对基线**：HEAD `ccf2840b2` 加 11-20 工作区。同时有多个会话在改，行号会漂，按函数名找。
 > **上线状态**：未上线。没有存量指针，没有存量表包，不需要迁移。
@@ -414,7 +414,7 @@ sidecar：`table_sync_etcd_last_read_timestamp_seconds`、`table_sync_bundle_fet
 | 4 | 分发：`go/table_sync`（sidecar 与 `table-bundle`）、gateway_node `/admin/tables`、部署脚本接线（sidecar、两个卷、Secret、dev 的桶）、告警与契约测试、运维手册 | 新 Go 模块、`java/gateway_node`、`tools/scripts`、`deploy/k8s` | 集群上能用 |
 | 5 | 逐表放开：按审计结论给表加 `(cfg_hot_reload)` | `data/schema`、本文附表 | 第一批候选：`MessageLimiter`、活动排期与活跃度三张、神秘商人的规则与商品、`GuildShop` |
 
-每批都可能超过 30 个文件（批 1 重新生成的代码就有一百多个），按 `AGENTS.md` §10.2 要先拿到负责人对这一批的同意。每批写完时在 `docs/PROGRESS.md` 给出 Gemini 的验证步骤；本文不预写命令，免得和落码时的实际文件对不上。
+五批已于 11-20 全部落码。验证命令与通过标准不写在本文，统一见[交接单](../handoff/config-table-hot-reload-handoff-20261126.md) §3。
 
 批 5 每放开一张表，在本文末尾追加一行：谁读它、读出来的东西存没存、换表后怎么跟上、删行有没有存档引用。
 

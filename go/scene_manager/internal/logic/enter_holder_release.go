@@ -130,9 +130,10 @@ func identityStrictlyNewer(verdict placementVerdict, loc placementIdentity) bool
 }
 
 // identityIsHostedLogin:托管归位代表的正是 location 记的那一次登录 —— 会话号与代次逐一相等、代次非 0。decidePlacementIdentity
-// 的 same_session 只比会话号(代次取大),gate 以同一 node_id 重启后会话号会复用,这里不借它,按两项逐一比。
+// 的 same_session 不比代次(代次取大),这里不借它,按两项逐一比。不比 gate 实例:托管归位不带 gate(实例为空),
+// 非 0 代次已唯一确定那一次登录(G2)。
 func identityIsHostedLogin(loc, req placementIdentity) bool {
-	return loc.loginGeneration != 0 && loc == req
+	return loc.loginGeneration != 0 && loc.sessionID == req.sessionID && loc.loginGeneration == req.loginGeneration
 }
 
 // isHostedResume:player_locator 替离线托管中的角色发的托管归位(hosted_placement、关联号 0)。scene 节点发的托管落点

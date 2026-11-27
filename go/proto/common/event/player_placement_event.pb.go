@@ -37,8 +37,11 @@ type PlayerHostedPlacementEvent struct {
 	SessionId       uint32                 `protobuf:"varint,5,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`                   // 断开的那次登录的会话号:只作登录身份,不绑定、不推送
 	LoginGeneration uint64                 `protobuf:"varint,6,opt,name=login_generation,json=loginGeneration,proto3" json:"login_generation,omitempty"` // 断开的那次登录的代次
 	OwnerRevision   uint64                 `protobuf:"varint,7,opt,name=owner_revision,json=ownerRevision,proto3" json:"owner_revision,omitempty"`       // 账号目录放行的所有权修订
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// 断开的那次登录所在的 gate 进程:location 为这条会话记下的实例(PlayerLocation.gate_instance_id)。目标节点把它记进
+	// 登录身份,老 gate 进程同号的迟到入场照样按实例认得出(docs/design/scene-enter-chain-residuals.md §14.8)。空 = 未知。
+	GateInstanceId string `protobuf:"bytes,8,opt,name=gate_instance_id,json=gateInstanceId,proto3" json:"gate_instance_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *PlayerHostedPlacementEvent) Reset() {
@@ -120,11 +123,18 @@ func (x *PlayerHostedPlacementEvent) GetOwnerRevision() uint64 {
 	return 0
 }
 
+func (x *PlayerHostedPlacementEvent) GetGateInstanceId() string {
+	if x != nil {
+		return x.GateInstanceId
+	}
+	return ""
+}
+
 var File_proto_common_event_player_placement_event_proto protoreflect.FileDescriptor
 
 const file_proto_common_event_player_placement_event_proto_rawDesc = "" +
 	"\n" +
-	"/proto/common/event/player_placement_event.proto\x1a/proto/common/options/event_ingress_option.proto\"\x8f\x02\n" +
+	"/proto/common/event/player_placement_event.proto\x1a/proto/common/options/event_ingress_option.proto\"\xb9\x02\n" +
 	"\x1aPlayerHostedPlacementEvent\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x19\n" +
 	"\bscene_id\x18\x02 \x01(\x04R\asceneId\x12 \n" +
@@ -135,7 +145,8 @@ const file_proto_common_event_player_placement_event_proto_rawDesc = "" +
 	"\n" +
 	"session_id\x18\x05 \x01(\rR\tsessionId\x12)\n" +
 	"\x10login_generation\x18\x06 \x01(\x04R\x0floginGeneration\x12%\n" +
-	"\x0eowner_revision\x18\a \x01(\x04R\rownerRevision:\x05\x88\xe6\xd5\x02\x01B\x14Z\x12proto/common/eventb\x06proto3"
+	"\x0eowner_revision\x18\a \x01(\x04R\rownerRevision\x12(\n" +
+	"\x10gate_instance_id\x18\b \x01(\tR\x0egateInstanceId:\x05\x88\xe6\xd5\x02\x01B\x14Z\x12proto/common/eventb\x06proto3"
 
 var (
 	file_proto_common_event_player_placement_event_proto_rawDescOnce sync.Once

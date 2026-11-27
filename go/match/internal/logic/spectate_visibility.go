@@ -47,6 +47,16 @@ func spectateVisibilityForBattle(mode matchpb.MatchMode, activity *battlepb.Batt
 	return spectateVisibilityFor(mode, activity)
 }
 
+// spectateVisibilityForRankedBattle 在道友切磋坊之外，额外开放论剑 V7 高段正式自养排位的公开实时围观（青锋及以上冻结 allow_public_spectate=true）。
+func spectateVisibilityForRankedBattle(mode matchpb.MatchMode, activity *battlepb.BattleActivityContext, customDuelRules *battlepb.CustomDuelRules, rankedCtx *battlepb.RankedMatchContext) battlepb.ESpectateVisibility {
+	if activity == nil || activity.GetKind() == battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_NONE {
+		if mode == matchpb.MatchMode_MATCH_MODE_PVP_TEAM && rankedCtx != nil && !rankedCtx.GetUseFreePreset() && rankedCtx.GetAllowPublicSpectate() {
+			return battlepb.ESpectateVisibility_SPECTATE_VISIBILITY_PUBLIC
+		}
+	}
+	return spectateVisibilityForBattle(mode, activity, customDuelRules)
+}
+
 // spectateVisibilityOfMode 是按对局模式的显式决策表:每个 MatchMode 枚举值各占一行、各写理由。decided=false
 // 只给表外的值(此时同样返回 PRIVATE)。TestSpectateVisibilityDecidesEveryMatchMode 遍历 MatchMode_name 守住
 // 「每个枚举值都在表里」:proto 新增模式而这里没加一行,测试即红,不会被 default 静默归到哪一边。

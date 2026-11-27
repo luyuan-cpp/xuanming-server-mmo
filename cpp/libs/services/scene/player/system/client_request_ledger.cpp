@@ -208,7 +208,7 @@ std::string Validate(const ClientRequestLedgerComp &ledger)
 		if (material.lifetime_earned() != 0 || material.tradable_earned_total() != 0 ||
 			material.stage1_tradable_confirmed() != 0 ||
 			material.available_tradable_units() != 0 || material.week_starts_at_ms() != 0 ||
-			material.earned_this_week() != 0 ||
+			material.earned_this_week() != 0 || material.stage2_pool_cap() != 0 ||
 			material.earned_today() > PlayerEquipmentMaterialRewardSystem::kDailyLimit ||
 			material.earned_today() % PlayerEquipmentMaterialRewardSystem::kBattleUnits != 0 ||
 			material.available_units() % PlayerEquipmentMaterialRewardSystem::kBattleUnits != 0 ||
@@ -220,8 +220,11 @@ std::string Validate(const ClientRequestLedgerComp &ledger)
 	}
 	else
 	{
-		// 两阶段 v2 账本不变量（合入 A）：首套 660（跨角色可交易<=60）+ 二阶段每周 150（月卡胜局解锁可交易），5 份步长。
+		// 两阶段 v2 账本不变量（合入 A + 反「上班」4 周滚存池）：首套 660（跨角色可交易<=60）+ 二阶段滚存上限 150..600，5 份步长。
 		uint64_t weekStart = 0, nextWeek = 0;
+		const uint32_t effectiveStage2Cap = material.stage2_pool_cap() == 0u
+			? PlayerEquipmentMaterialRewardSystem::kWeeklyLimit
+			: material.stage2_pool_cap();
 		if (material.lifetime_earned() > PlayerEquipmentMaterialRewardSystem::kLifetimeLimit ||
 			material.lifetime_earned() % PlayerEquipmentMaterialRewardSystem::kMinClaimStepUnits != 0 ||
 			material.tradable_earned_total() > PlayerEquipmentMaterialRewardSystem::kTradableLifetimeLimit ||
@@ -231,7 +234,12 @@ std::string Validate(const ClientRequestLedgerComp &ledger)
 			material.available_tradable_units() > material.available_units() ||
 			(material.lifetime_earned() < PlayerEquipmentMaterialRewardSystem::kLifetimeLimit &&
 				material.available_tradable_units() > material.tradable_earned_total()) ||
-			material.earned_this_week() > PlayerEquipmentMaterialRewardSystem::kWeeklyLimit ||
+			(material.stage2_pool_cap() != 0u && (
+				material.week_starts_at_ms() == 0u ||
+				material.stage2_pool_cap() < PlayerEquipmentMaterialRewardSystem::kWeeklyLimit ||
+				material.stage2_pool_cap() > PlayerEquipmentMaterialRewardSystem::kWeeklyRolloverMaxPool ||
+				material.stage2_pool_cap() % PlayerEquipmentMaterialRewardSystem::kMinClaimStepUnits != 0u)) ||
+			material.earned_this_week() > effectiveStage2Cap ||
 			material.earned_this_week() % PlayerEquipmentMaterialRewardSystem::kMinClaimStepUnits != 0 ||
 			(material.week_starts_at_ms() == 0 && material.earned_this_week() != 0) ||
 			(material.week_starts_at_ms() != 0 && (material.earned_this_week() == 0 ||

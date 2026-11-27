@@ -3,6 +3,8 @@
 > 日期：2026-11-24  
 > 状态：**设计方案落盘（尚未写代码、未改 proto/配表、未运行编译或联机验收；待负责人终审后启动实现）**  
 > 与旧稿关系：本稿按负责人 2026-11-24 确认方向（**全天随时可一直打、取消匹配池、路上点击任意异帮即可开战、界面直打与地图现场双入口并存、加入江湖追杀令与仇敌追踪、大幅丰富帮会奖励**），全面替代 2026-11-22 的 [guild-play-v1.md](guild-play-v1.md)（2V2 匹配会武 + 一次性永久首胜）；V1 原稿保留作历史候选记录。配套 UI 交接见 [guild-play-v2-ui-handoff.md](ui-handoff/guild-play-v2-ui-handoff.md)。
+>
+> **2026-11-26 反「上班」升级覆盖（详见 [anti-chore-remediation-v1.md](anti-chore-remediation-v1.md)）**：① `GuildWarMilestone` 4 档全帮战功由 `300/1200/3000/6000` 降为 **`200/600/1200/2000`**，`dividend_min_personal_merit` 由 `30` 降为 **`15`**；② `GuildShop` 新增 **`limit_period=3` 终身限购**，清零全部每日限购，`202/204/304/305/306` 珍藏与 `305 角色形象卡` 改为终身限购（彻底修正误配周限），其余周耗材大幅减负；③ `GuildDonate` 移除灵石捐献与大额捐献并改为每周上限 3 次自愿小捐；④ `GuildActivity` 3 项旧日常默认 `enabled=false`；⑤ `GuildLevel` 1→10 级升级资金降为 `1,007,000`。
 
 ---
 

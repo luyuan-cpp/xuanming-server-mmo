@@ -1,35 +1,30 @@
-# 小游戏 WebSocket 入口:待验证项交接(2026-11-20,交 Gemini)
+# 小游戏 WebSocket 入口:待验证项交接(2026-11-20 起交 Gemini,2026-11-26 按当前仓库校正)
 
 ## 0. 现状
 
-- 负责人 2026-11-20 把这条线的全部待做交给 Gemini,原 Claude 会话停在这里。设计与全部定案在 [minigame-websocket-gate.md](../design/minigame-websocket-gate.md)(W1–W11),先通读一遍。
+- 负责人 2026-11-20 把这条线的全部待做交给 Gemini。设计与全部定案在 [minigame-websocket-gate.md](../design/minigame-websocket-gate.md)(W1–W11),先通读一遍。
 - 内容:微信 / 抖音小游戏经 WebSocket 连 gate 与 battle。
   - gate / battle 的客户端端口按首字节分流,同时接 TCP 与 WebSocket。
   - 边缘 nginx(ws-edge)终止 wss,按 `/ws/<PodIP>/<端口>` 转发。
   - 节点自报 `client_ws_url`,随登录分配、排队、msg 124、战斗分配、测速目标下发。
   - Unity 客户端加了 WebSocket 传输与小游戏登录。
   - robot 可以走 WebSocket(`transport.kind: websocket`)。
-- **代码已全部写完,一条都没验证过**:没生成协议、没编译、没跑任何测试。只做过静态检查:PowerShell 语法解析、`gofmt -l`、C++ 裸指针成员预检。
-- **已提交**:11-19 的大部分改动在 `9824368eb`、`55eae6be3`,文档在 `c441ce75e`。
-- **还没提交的本线改动**都在主工作区,没有 worktree。下面的文件里**混有别的会话的改动**,本线只占其中一部分:
-  - 服务端(11-20 收尾):
-    - `cpp/nodes/battle/client/battle_connection_admission.{h,cpp}`:本线只加了 `battle_websocket_*` 两族指标,其余是「battle 直连准入」会话的按来源限速。
-    - `tools/scripts/tests/battle_connection_alerts_contract.tests.ps1`:本线只加了两族与 `reason,result` 标签。
-    - `tools/scripts/lib/k8s_client_entry.ps1`、`k8s_deploy.ps1`、`dev_tools.ps1`、`k8s_image.ps1`、`tests/k8s_client_entry_contract.tests.ps1`:本线只加了 `WsEdgeSourceRatePerSecond` 一族;同文件里的 `LoginNppa*` 等属于防沉迷会话。
-    - `robot/pkg/wire_conn.go`(新)、`robot/pkg/{transport,transport_test,client,client_test,heartbeat,heartbeat_test}.go`、`robot/README.md`:都是本线。
-  - 客户端 `D:\luyuan\mmorpg-client`(11-19 起本线的全部改动都没提交):
-    - 新文件:`Assets/Scripts/Net/{ClientTransport,WebSocketFramedConnection,WebSocketDrivers,MiniGameLogin}.cs`(含 `.meta`)、`Assets/Plugins/WebGL/MmorpgMiniGame.jslib`、`Assets/Tests/EditMode/Net/WebSocketFramedConnectionTests.cs`。
-    - 修改:`Assets/Scripts/Net/{IFramedConnection,BattleDirectLink,RegionProbeClient,GatewayHttpClient}.cs`、`Assets/Scripts/Game/{GameClient,GameClient.Reconnect}.cs`、`Assets/Scripts/UI/Ugui/{QdaoServerSelectView,QdaoServerSelectView.LoginUtilities}.cs`、`AGENTS.md`(「小游戏(WebGL)兼容约束」一节)。
-    - 这些客户端文件里同样混有 Apple / Google 登录、账号注销、支付等会话的改动。
-  - Java 仓 `D:\luyuan\xuanming-server-mmo\PARITY.md`:本线追加了一条待做登记,没提交。
+- **代码已全部写完并已提交,一条都没验证过**:
+  - 服务端在 `9824368eb`、`55eae6be3`、`c441ce75e`、`b6a08148c` 等批量提交里;客户端 `D:\luyuan\mmorpg-client` 在 `02e0ec54`;Java 仓 `PARITY.md` 的待做登记也已提交。
+  - 之后的批量提交里协议已被别的会话重新生成过(生成代码里已有 `client_ws_url`、`ws_url`、`target_ws_url` 等字段),但没有任何一次运行跑过本线的用例:`docs/PROGRESS.md` 里没有本线的验证条目。
+  - 本线自己只做过静态检查:PowerShell 语法解析、`gofmt -l`、C++ 裸指针成员预检。
+- **2026-11-26 按当前 HEAD 复核过,没有要补的代码**:
+  - 客户端这几天新加的代码里没有绕过 `ClientTransport` 直接建连的,也没有小游戏里会卡死的写法(`Task.Run`、`Task.Delay`、线程池等);新文件按客户端仓 `AGENTS.md`「小游戏(WebGL)兼容约束」写。
+  - 服务端所有带客户端地址的下发消息都带着对应的 WebSocket 地址字段。
+  - robot 没有新的裸 TCP 拨号;gate / battle 的客户端口仍是 18000 / 20000,与 ws-edge 的转发目标一致。
 - **剩下的全是执行**:协议生成、编译、单测、契约测试、冒烟;失败时按根因修。
 
 ## 1. 开工前必读与规矩
 
-- 先读 `AGENTS.md` 全文,重点 §3、§4、§6.2、§9、§10.2、§10.3、§11、§11.7。
+- 先读 `AGENTS.md` 全文与它引用的 `docs/rules/` 分章:`ai-workflow.md`(分工、写回、模型档位)、`proto-and-tables.md`(§2 协议同步)、`cpp-runtime-and-build.md`(构建与测试命令)、`engineering-principles.md`(§11.7 连接与回调生命周期)、`stress-testing.md`(冒烟前清数据)。按 `AGENTS.md` §10.1,编译、生成、测试与冒烟都由 Gemini 执行。
 - **模型档位(`AGENTS.md` §10.3)**:生成、编译、跑测试与冒烟用 `Carbon Medium`。要改代码时先保留首错原文停下,切到 `Gemini 4 Neon Extra` 再改。
 - 只在 main 工作区做,不开分支 / worktree,不 `git push` / `git tag`。
-- **只有负责人明确要求才 commit**,而且只提交本线的部分;提交办法见第 6 节。
+- **只有负责人明确要求才 commit**,而且只提交自己的修复;见第 6 节。
 - 工作区里有几百个别的会话未提交的文件:不 `git stash` / `reset` / `checkout --`,不整理别人的改动。
 - 不手改 `generated/` 与各语言 proto 输出树。
 - 日志文案用英文;文档、注释、提交说明用中文。
@@ -62,15 +57,19 @@
 
 ### 3.0 协议生成
 
-本线有客户端任务授权,用默认配置(会写客户端仓的生成代码):
+本线有客户端任务授权,用默认配置(会写客户端仓的生成代码)。按 `docs/rules/proto-and-tables.md` §2,服务端生成完之后要在客户端仓同步:
 
 ```
 pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-build
 pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run
 pwsh -File go/build.ps1
+cd D:\luyuan\mmorpg-client
+.\gen.bat client
 ```
 
-通过标准:三条退出码 0。没生成之前 C++、Go、robot、客户端都编不过(引用了 `client_ws_url`、`ws_url`、`target_ws_url` 等新字段)。
+`gen.bat client` 依次跑 `tools/sync_tables.ps1`、`tools/gen_proto.ps1`、`tools/gen_messageids.ps1`、`tools/client_compile_check.ps1`。
+
+通过标准:全部退出码 0,客户端编译检查 0 error。协议之前被别的会话生成过,这一步多半没有新改动;有改动也照常留在工作区,不用单独提交。
 
 ### 3.1 C++
 
@@ -228,6 +227,6 @@ gate 与 battle 不用设 `CLIENT_WS_BASE_URL`:它们的客户端端口本来就
 
 ## 6. 提交(只在负责人要求时)
 
-- 只提交到本地 main,不 push。
-- 第 0 节列的混合文件里有别的会话的改动:只提交本线的那几块(用 `git add -p`,或按「HEAD + 本线的替换」造暂存内容),别的会话的部分原样留在工作区。
-- 服务端、客户端、Java 仓各提交一次,说明里写清是「小游戏 WebSocket 入口」哪几条,并写明验证结果。
+- 本线的代码已全部提交,这一节只管验证中修出来的改动。
+- 只提交到本地 main,不 push。只提交自己的修复:工作区常有别的会话未提交的文件,同一文件里混着别人的改动时,只暂存自己的那几块。
+- 服务端、客户端分开提交,说明里写清修的是本线哪一条、验证结果如何。

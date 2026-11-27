@@ -36,6 +36,10 @@ REVIEWED = {
     "ChatMessage.content": "TEXT_SCENE_CHAT_WORLD / TEXT_SCENE_CHAT_PRIVATE",
     "RenamePetRequest.name": "TEXT_SCENE_PET_NAME",
     "CreateRmbConsignmentRequest.title": "TEXT_SCENE_TRADE_TITLE",
+    # 买家评价的文字全服可见:go/trade 的 economy_credit_logic.go 经 checkTradeTitle 送检。
+    "SubmitSellerReviewRequest.comment": "TEXT_SCENE_TRADE_TITLE",
+    # 赛事战队名别的玩家看得到:go/match 的 tournamentlogic.go 按帮会名的口径送检。
+    "CreateTournamentSquadRequest.squad_name": "TEXT_SCENE_GUILD_NAME",
 }
 
 # 豁免:字段 -> 为什么不用送检。
@@ -62,6 +66,19 @@ EXEMPT = {
     # 只有自己看得见。
     "CreateAttributeSchemeRequest.name": "加点方案名只有自己可见;送检是异步的,会破坏这个同步接口的契约",
     "RenameAttributeSchemeRequest.name": "同上",
+    "SaveEquipLoadoutRequest.name": "装备预设方案名只有自己可见(只经 GetEquipLoadouts 回给本人),与加点方案名同口径",
+    "SaveSkillLoadoutRequest.name": "技能装配方案名只有自己可见,同上",
+    "SavedBattleBuildBookmarkView.title": "流派收藏是玩家给自己存的书签,标题只回给本人",
+    "SavedBattleBuildBookmarkView.source_player_name": "同上:书签里记的来源玩家名,只回给本人",
+    "SavedBattleBuildBookmarkView.active_pet_name": "同上:书签里记的宝宝名,只回给本人",
+    # 配置键、凭证这类机器取值,不是给人看的文字。
+    "ClaimFestivalBeastRewardRequest.reward_identity": "奖励条目的标识,机器取值",
+    "ClaimRewardedAdRequest.ssv_proof": "广告平台的服务端校验凭证",
+    "EquipTravelPassCosmeticRequest.cosmetic_key": "外观的配置键",
+    "RankedCosmeticLoadout.equipped_avatar_pattern_code": "外观的配置码",
+    "RankedCosmeticLoadout.equipped_card_bg_code": "外观的配置码",
+    "RankedCosmeticLoadout.equipped_talisman_code": "外观的配置码",
+    "RankedCosmeticLoadout.equipped_title_code": "外观的配置码",
     # 有别的审核流程。
     "BattleScript.name": "玩家剧本上传后人工审核通过才可用(eBattleScriptOrigin)",
     "BattleScript.description": "同上",
@@ -74,6 +91,9 @@ EXEMPT = {
     "ReportChatRequest.detail": "仅入举报审计表,不向其他玩家展示",
     # 聊天撤回原因:内部/GM/后台撤回审计用,CLIENT_RPC_SERVER_ONLY 禁止客户端直调。
     "RetractWorldChatRequest.reason": "服务端内部/GM撤回原因,客户端不可调(CLIENT_RPC_SERVER_ONLY)",
+    # 系统世界公告:服务端内部发起(CLIENT_RPC_SERVER_ONLY),带的是已经审过的角色名。
+    "PublishSystemWorldNoticeRequest.actor_a_name": "服务端内部发起的系统公告,名字是已审过的角色名,客户端不可调",
+    "PublishSystemWorldNoticeRequest.actor_b_name": "同上",
 }
 
 # 待接入:别的玩家看得到、现在还没送检的字段。登记在这里是为了不让它悄悄留着;接上之后挪到 REVIEWED。

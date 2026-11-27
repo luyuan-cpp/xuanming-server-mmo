@@ -21,9 +21,10 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// 装备流派方案预设（docs/planning/equipment-loadout-presets-v1.md）。
+// 装备流派方案预设（docs/planning/equipment-loadout-presets-v1.md，方案 A · 7 套三合一共享席位）。
 // 实例与布局严格分离：方案只记录 8 个正式槽位（EquipSlot.xlsx 3..10）指向的真实装备 guid，
 // 绝不复制 ItemComp、绝不另建隐藏背包；未穿戴副套装备留在人物背包 kInventory。
+// 有效席位上限（2..7）统一由 PlayerSkillListComp + AfkPassComp + LevelComp 计算，到期只锁不删。
 type EquipLoadoutSlotBinding struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Slot          uint32                 `protobuf:"varint,1,opt,name=slot,proto3" json:"slot,omitempty"`                         // 对应 EquipSlot.xlsx 正式槽位号（3..10）
@@ -78,11 +79,11 @@ func (x *EquipLoadoutSlotBinding) GetItemGuid() uint64 {
 
 type EquipLoadoutScheme struct {
 	state                   protoimpl.MessageState     `protogen:"open.v1"`
-	SchemeId                uint32                     `protobuf:"varint,1,opt,name=scheme_id,json=schemeId,proto3" json:"scheme_id,omitempty"`                                                  // 1..5 显式方案号
-	Name                    string                     `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`                                                                           // UTF-8 1..12 字符（空则显示默认「方案一..五」）
+	SchemeId                uint32                     `protobuf:"varint,1,opt,name=scheme_id,json=schemeId,proto3" json:"scheme_id,omitempty"`                                                  // 1..7 显式方案号
+	Name                    string                     `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`                                                                           // UTF-8 1..12 字符（空则显示默认「方案一..七」）
 	RoleTag                 uint32                     `protobuf:"varint,3,opt,name=role_tag,json=roleTag,proto3" json:"role_tag,omitempty"`                                                     // 0默认 / 1输出 / 2控场 / 3辅助 / 4生存
 	Slots                   []*EquipLoadoutSlotBinding `protobuf:"bytes,4,rep,name=slots,proto3" json:"slots,omitempty"`                                                                         // 按 slot 升序，严禁靠下标承载槽位语义
-	LinkedSkillSchemeId     uint32                     `protobuf:"varint,5,opt,name=linked_skill_scheme_id,json=linkedSkillSchemeId,proto3" json:"linked_skill_scheme_id,omitempty"`             // 0 = 不联动；1..6 = 联动 SkillLoadoutScheme
+	LinkedSkillSchemeId     uint32                     `protobuf:"varint,5,opt,name=linked_skill_scheme_id,json=linkedSkillSchemeId,proto3" json:"linked_skill_scheme_id,omitempty"`             // 0 = 不联动；1..7 = 联动 SkillLoadoutScheme
 	LinkedAttributeSchemeId uint32                     `protobuf:"varint,6,opt,name=linked_attribute_scheme_id,json=linkedAttributeSchemeId,proto3" json:"linked_attribute_scheme_id,omitempty"` // 0 = 不联动；>0 = 联动 AttributeScheme
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
@@ -162,9 +163,9 @@ func (x *EquipLoadoutScheme) GetLinkedAttributeSchemeId() uint32 {
 
 type PlayerEquipLoadoutComp struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
-	UnlockedSchemeCount uint32                 `protobuf:"varint,1,opt,name=unlocked_scheme_count,json=unlockedSchemeCount,proto3" json:"unlocked_scheme_count,omitempty"` // 已解锁套数（0 兼容按 1 处理，上限 5）
-	ActiveSchemeId      uint32                 `protobuf:"varint,2,opt,name=active_scheme_id,json=activeSchemeId,proto3" json:"active_scheme_id,omitempty"`                // 当前激活方案号（0 兼容按 1 处理，1..unlocked）
-	Schemes             []*EquipLoadoutScheme  `protobuf:"bytes,3,rep,name=schemes,proto3" json:"schemes,omitempty"`                                                       // 已解锁方案明细（按 scheme_id 升序）
+	UnlockedSchemeCount uint32                 `protobuf:"varint,1,opt,name=unlocked_scheme_count,json=unlockedSchemeCount,proto3" json:"unlocked_scheme_count,omitempty"` // 历史保留字段（方案 A 由统一 7 套席位权威推导，不再单独收费）
+	ActiveSchemeId      uint32                 `protobuf:"varint,2,opt,name=active_scheme_id,json=activeSchemeId,proto3" json:"active_scheme_id,omitempty"`                // 当前激活方案号（0 兼容按 1 处理，1..7；到期锁定态允许保留直至切走）
+	Schemes             []*EquipLoadoutScheme  `protobuf:"bytes,3,rep,name=schemes,proto3" json:"schemes,omitempty"`                                                       // 已保存方案明细（1..7 按 scheme_id 升序，到期只锁不删）
 	StateVersion        uint64                 `protobuf:"varint,4,opt,name=state_version,json=stateVersion,proto3" json:"state_version,omitempty"`                        // 乐观锁版本号（0 按 1 计）
 	LastRequestId       string                 `protobuf:"bytes,5,opt,name=last_request_id,json=lastRequestId,proto3" json:"last_request_id,omitempty"`                    // 最近一次保存/切换幂等键
 	LastBaseVersion     uint64                 `protobuf:"varint,6,opt,name=last_base_version,json=lastBaseVersion,proto3" json:"last_base_version,omitempty"`             // 最近一次请求的期望版本

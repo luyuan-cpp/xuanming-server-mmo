@@ -947,7 +947,7 @@ $script:GrpcAllowLists = [ordered]@{
 	mall   = [pscustomobject]@{ PolicyName = 'mall-grpc-allowlist'; TargetApps = @('mall'); AllowedApps = @('trade', 'payment') }
 	# 2026-11-20 内容安全(docs/design/rename-and-content-safety.md §6.1):调用方是收玩家文字的服务——login(建角名)、guild(帮会名、公告)、
 	# chat(聊天)、trade(人民币寄售标题)、Scene(角色改名、宠物名)。它没有调用方签名(只读、无副作用),来源只靠这张名单限制;客户端经路由服到不了它,所以名单里没有 client-rpc-router。
-	'content-guard' = [pscustomobject]@{ PolicyName = 'content-guard-grpc-allowlist'; TargetApps = @('content-guard'); AllowedApps = @('login', 'guild', 'chat', 'trade', 'scene', 'scene-world', 'scene-instance') }
+	'content-guard' = [pscustomobject]@{ PolicyName = 'content-guard-grpc-allowlist'; TargetApps = @('content-guard'); AllowedApps = @('login', 'guild', 'chat', 'trade', 'match', 'scene', 'scene-world', 'scene-instance') }
 }
 # 共享 Redis 口令(MMORPG_REDIS_PASSWORD),由 Initialize-InjectedSecrets 解析:dev 档未注入时是空串。$null = 还没解析,
 # 控制端点在单实例时的口令来源(Get-ControlRedisPasswordSource → Get-SharedRedisClientPassword)与 Secret 同步(Sync-RedisAuthSecret)据此拒绝,不把「没解析」当成「没口令」。
@@ -8539,6 +8539,32 @@ function New-CppConnectionAdmissionEnvLines {
 	return $lines
 }
 
+<#
+.SYNOPSIS
+	C++ 节点主容器的 resources.requests(gate 准入设计 P1-5 / G11),按角色与 -ReleaseProfile 分档,只有这一张表。
+
+.DESCRIPTION
+	本脚本的两个模板(New-NodeDeploymentYaml、New-SceneFleetYaml)与 lib 的三个生成器(经 PodCommon.ResourceRequests,见
+	New-CppNodePodCommon)都从这里取,渲染统一走 lib 的 Get-ClientEntryResourcesYaml。只配 requests、不配 limits:
+	  - cpu:C++ 节点只有主 EventLoop 一个线程在干活(AGENTS.md §9 不开新线程),满载就是吃满一个核,request 1 让调度器真留出一个核;
+	    不配 cpu limit,免得 CFS 限流把 tick 打出毛刺。
+	  - memory:gate / battle 512Mi ≈ 连接上限 2 万 × 每条约 10KB(设计稿 §9.5)+ 进程基线约 200MB,是稳态的下限估计;
+	    scene 1Gi 是配表全量常驻加一台几千玩家 ECS 状态的估计,没有实测,压测后按 process_resident_memory 调。
+	  - 不配 memory limit:limit 要和「连接上限 × 每连接输出缓冲高水位 2MB」对齐(§9.5),那个乘积是理论值、要先实测;
+	    配错就是 OOMKill 掉一整台在线玩家。主容器有了自己的 memory request,kubelet 给它的 oom_score_adj 才不再是 999 / 1000
+	    (没有 request 按 0 算:同一节点内存紧张时最先被杀、最先被驱逐,即使同 Pod 的日志 sidecar 已经让 Pod 成了 Burstable)。
+	  - dev 档取小值:只为让主容器有自己的 request;kind 这类本机集群一个节点要放下全部 Pod,按生产值排不进去。
+	scene 的各个池(scene / scene-world / scene-instance …)都按 scene 取。认不出的角色在参数绑定处就拒:新加 C++ 工作负载必须先在这里定值。
+#>
+function Get-CppNodeResourceRequests {
+	param([Parameter(Mandatory = $true)][ValidateSet('gate', 'battle', 'scene')][string]$Role)
+
+	if ($ReleaseProfile -eq 'dev') {
+		return [ordered]@{ Cpu = '100m'; Memory = $(if ($Role -eq 'scene') { '256Mi' } else { '128Mi' }) }
+	}
+	return [ordered]@{ Cpu = '1'; Memory = $(if ($Role -eq 'scene') { '1Gi' } else { '512Mi' }) }
+}
+
 # 发布轨道的 env 行(-ReleaseTrack,见参数处注释),给本脚本自己的两个 C++ 模板用(New-NodeDeploymentYaml、New-SceneFleetYaml);
 # lib 的三个生成器经 PodCommon.ReleaseTrack 写同一个变量(Get-ClientEntryNodeBaseEnv),Go 服务经 Add-GoSvcReleaseTrackEnv。
 # env 名取 lib 契约,几处同一份。stable 返回空数组:进程不设即 stable,模板与引入参数之前逐字相同。
@@ -8810,6 +8836,10 @@ function New-NodeDeploymentYaml {
 	$extraEnvLines += @(New-CppOpenFileLimitModeEnvLines -ItemIndent "`t`t`t")
 	# 连接准入覆盖变量(-ConnectionAdmissionEnv):gate 写 GATE_*、battle 写 BATTLE_*,scene 没有;没给不写。
 	$extraEnvLines += @(New-CppConnectionAdmissionEnvLines -ItemIndent "`t`t`t" -Role $NodeName)
+	# 主容器的 resources.requests(Get-CppNodeResourceRequests;scene 的各个池按 scene 取),接在 imagePullPolicy 那一行之后。
+	# 制表符缩进同本模板,换算后落第 10 列。
+	$resourceRole = if ($SceneNodeType -ge 0) { 'scene' } else { $NodeName }
+	$cppResourcesBlock = Get-ClientEntryResourcesYaml -PodCommon @{ ResourceRequests = (Get-CppNodeResourceRequests -Role $resourceRole) } -KeyIndent "`t`t  "
 	# Prometheus 出口(-CppMetricsPort):gate / scene / battle 都开,0 不写。
 	$extraEnvLines += @(New-CppMetricsEnvLines -ItemIndent "`t`t`t")
 	# 发布轨道(-ReleaseTrack canary,只在 zone-up):gate / scene 写;battle 只在 infra-up 渲染,那里只能是 stable,stable 不写。
@@ -8927,7 +8957,7 @@ spec:
 	  containers:
 		- name: $NodeName
 		  image: $Image
-		  imagePullPolicy: $PullPolicy
+		  imagePullPolicy: $PullPolicy$cppResourcesBlock
 		  workingDir: /app/bin
 		  command: ["/bin/sh", "-lc"]
 		  args: ["mkdir -p /app/bin/logs/cpp_nodes && $CppLogPrunerCommand$StartCommand"]
@@ -9900,7 +9930,7 @@ $gameServerContainerLine      ports:
           containers:
             - name: $FleetName
               image: $NodeImage
-              imagePullPolicy: $ImagePullPolicy
+              imagePullPolicy: $ImagePullPolicy$(Get-ClientEntryResourcesYaml -PodCommon @{ ResourceRequests = (Get-CppNodeResourceRequests -Role 'scene') } -KeyIndent (' ' * 14))
               workingDir: /app/bin
               command: ["/bin/sh", "-lc"]
               args: ["mkdir -p /app/bin/logs/cpp_nodes && $CppLogPrunerCommand$StartCommand"]
@@ -10226,7 +10256,8 @@ function New-CppNodePodCommon {
 		-LogVolumeSizeLimit $script:CppLogVolumeSizeLimit -LogPrunerCommand $script:CppLogPrunerCommand `
 		-GrpcServerMaxPollers 0 -PodAnnotations $podAnnotations -OpenFileLimitMode $NodeOpenFileLimitMode -MetricsPort $CppMetricsPort `
 		-ReleaseTrack $Track -BuildLabel (Get-CppBuildLabelValue -Image $Image) -ClientWsBaseUrl (Get-ClientWsBaseUrl) `
-		-ConnectionAdmissionEnv (Get-CppConnectionAdmissionEnv -Role $Role) -SecretEnv $secretEnv @sidecar @tableSyncCommon
+		-ConnectionAdmissionEnv (Get-CppConnectionAdmissionEnv -Role $Role) `
+		-ResourceRequests $(if ([string]::IsNullOrEmpty($Role)) { $null } else { Get-CppNodeResourceRequests -Role $Role }) -SecretEnv $secretEnv @sidecar @tableSyncCommon
 }
 
 # 小游戏 WebSocket 入口的基地址(-WsEdgeHost,docs/design/minigame-websocket-gate.md W7):gate / battle 据它自报
@@ -10702,6 +10733,8 @@ function New-LoginQueueYaml {
 	$softCap          = Get-AuthoritativeScalar -RelativePath $y -KeyPath 'Queue.SoftCapMultiplier'
 	$retryAfterMs     = Get-AuthoritativeScalar -RelativePath $y -KeyPath 'Queue.DefaultRetryAfterMs'
 	$lockTtl          = Get-AuthoritativeScalar -RelativePath $y -KeyPath 'Queue.DispatcherLockTTL'
+	$maxAdmitPerTick  = Get-AuthoritativeScalar -RelativePath $y -KeyPath 'Queue.MaxAdmitPerTick'
+	$maxQueueLength   = Get-AuthoritativeScalar -RelativePath $y -KeyPath 'Queue.MaxQueueLength'
 	$lockKeyBase      = Get-AuthoritativeScalar -RelativePath $y -KeyPath 'Queue.DispatcherLockKey'
 	if ($CurrentZoneId -lt 1) { throw "生成 login Queue 段失败:ZoneId=$CurrentZoneId 必须为正。" }
 
@@ -10717,6 +10750,8 @@ Queue:
   SoftCapMultiplier: $softCap
   DefaultRetryAfterMs: $retryAfterMs
   DispatcherLockTTL: $lockTtl
+  MaxAdmitPerTick: $maxAdmitPerTick
+  MaxQueueLength: $maxQueueLength
   DispatcherLockKey: "${lockKeyBase}:zone:${CurrentZoneId}"
 "@
 }
@@ -11943,7 +11978,10 @@ function New-GoSvcConfigMapYaml {
 	# 生成器里另抄一份就是又一处会漂移的常数,一律从服务自己的 yaml 取。
 	$matchYaml                  = 'go/match/etc/match_service.yaml'
 	$matchMode = 'pro'; $matchGlobalBlock = ''; $matchRatingBlock = ''; $matchMiddlewaresBlock = ''; $matchIdSegmentBlock = ''
+	$matchContentGuardBlock = ''
 	if ($SvcName -eq 'match') {
+		# 赛事战队名送检。
+		$matchContentGuardBlock = New-ContentGuardClientYaml -RelativePath $matchYaml
 		$matchMiddlewaresBlock = Get-AuthoritativeYamlBlock -RelativePath $matchYaml -Key 'Middlewares'
 		$matchIdSegmentBlock = Get-AuthoritativeYamlBlock -RelativePath $matchYaml -Key 'IdSegment'
 		if ($ReleaseProfile -eq 'dev') { $matchMode = 'dev' }
@@ -13079,6 +13117,8 @@ RequireClientEndpoint: ${requireClientEndpointValue}${sceneManagerAgonesBlock}
 @"
 Name: matchservice.rpc
 Mode: ${matchMode}
+# 赛事战队名送检(内容安全服务;New-ContentGuardClientYaml 从 go/match/etc/match_service.yaml 镜像,不带本机的 Optional)。
+${matchContentGuardBlock}
 ${matchGlobalBlock}
 ${matchRatingBlock}
 ${matchMiddlewaresBlock}
@@ -18294,11 +18334,4 @@ switch ($Command) {
 		Show-InfraStatus
 		$zonesPath = Resolve-ZonesConfigPath
 		$zones = Get-ZonesFromJson -Path $zonesPath
-		foreach ($zone in $zones) {
-			Show-ZoneStatus -CurrentZoneName $zone.name
-		}
-	}
-	default {
-		throw "Unsupported command: $Command"
-	}
-}
+		foreach ($zone in 

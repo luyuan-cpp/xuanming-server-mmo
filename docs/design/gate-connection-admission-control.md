@@ -5,7 +5,11 @@
 > 运维覆盖变量、battle 直连同一套**）、P0-3（LogLevel）、P0-4（accept 资源耗尽降级）、
 > **P1-1 ~ P1-4（准入前移到 Acceptor、拒绝发 RST、新建连接速率闸、连接类指标，2026-11-12 落码，未编译）**、
 > **P2-2（gate 按来源前缀限速，缺省关闭、开了只在承压时生效，2026-11-19 落码，未编译）**。
-> 仍未做：P1-5 的其余条目、P2-1 / P2-3 第 3、4 条 / P2-4。
+> **2026-11-26 落码（未编译）：G10 验签前只收 4KB 以内的帧、§5 第 5 条已验签连接重发验签改为不回包并计非法包、
+> G12 会话号序号位宽改用自己的常量、P2-1 `TCP_DEFER_ACCEPT`（gate 与 battle 直连）。**
+> **2026-11-26 定案：P2-4 票据先行定为不做（理由见该节）；P1-5 的 sysctl 定为不做；P1-5 的 NetworkPolicy 已由端口白名单那批做完；
+> P2-3 第 4 条（排队）已由 login 登录排队承担。**
+> P2-3 第 3 条（断线重连优先）核对后已由 login 做了（见该条）。P1-5 的 `resources.requests` 2026-11-26 由会话「gate 未验签连接预算、LRU 淘汰与按概率早拒」落码，状态以 P1-5 那张表为准。
 > 文中引用的 `client_message_processor.cpp` 已更名为 `client_session_handler.cpp`，§4、§5 里的行号是 2026-09-03 的，以当前文件为准。
 >
 > 回答的是
@@ -156,9 +160,9 @@ cookie 一点忙不帮）；反过来，应用层再怎么改也吸收不了带�
 | G7 | **`Acceptor` 的 EMFILE 分支自带日志洪水**：`LOG_SYSERR` 在 `errno==EMFILE` 判断**之外**，LT epoll + EMFILE = 忙循环，每转一圈一行同步日志 | `Acceptor.cc` handleRead 的 else 分支第一行。应用层采样在这一层完全帮不上忙。**（2026-11-12 状态：已改，未编译，见 P0-4。）** |
 | G8 | **`idleFd_` 不是可靠兜底**：`close(idleFd_)` 与 `::accept` 之间被别的线程抢走名额时 `idleFd_` 会变成 -1 且**没有任何重新装填路径**（重开 `/dev/null` 的返回值根本不检查），对进程剩余生命周期彻底失效 | `Acceptor.cc` EMFILE 分支。gate 进程里 grpc/redis/kafka 客户端都在别的线程开 fd，窗口是存在的。**（2026-11-12 状态：已改，未编译，见 P0-4。）** |
 | G9 | **零 per-source 限制**，且**做之前有前置条件未满足**：`peerAddress()` 全仓只出现在 5 行日志里；而 `gate-entry` Service 未设 `externalTrafficPolicy` → 默认 `Cluster` → kube-proxy SNAT → `peerAddress()` 拿到的是 **node IP**。**(2026-09-29 更正:前置条件在 external 形态下已由部署层满足,podip 形态仍不满足,见下方 §4.2.1;per-source 限制本身仍为零)** | `k8s_deploy.ps1:928-947`（Service spec 只有 type/selector/ports）——**行号已漂移**,2026-09-29 现为 `tools/scripts/k8s_deploy.ps1:2405-2424` `New-GateServiceYaml` |
-| G10 | **pre-auth 路径的按包防护为零**：`DispatchClientRpcMessage` 在 `:736` 的 `verified` 判定**排在** `ValidateClientMessage`（`:707`）之前；`DispatchTokenVerify`（`:780`）从头到尾不调限流器、也不调 `CheckMessageSize` | 未认证连接可反复让 gate 缓冲 64KB（`codec.h:64`）+ adler32 + 反射建 message + parse |
+| G10 | **pre-auth 路径的按包防护为零**：`DispatchClientRpcMessage` 在 `:736` 的 `verified` 判定**排在** `ValidateClientMessage`（`:707`）之前；`DispatchTokenVerify`（`:780`）从头到尾不调限流器、也不调 `CheckMessageSize` | 未认证连接可反复让 gate 缓冲 64KB（`codec.h:64`）+ adler32 + 反射建 message + parse。**（2026-11-26 状态：前半句「`verified` 判定排在 `ValidateClientMessage` 之后」核对时已不成立，现在先判 `verified`；后半句已改，未编译：codec 加了验签前的单帧上限 `setPreAuthMessageLimit`，未验签的连接声明超过 4KB 的帧当场断开，TCP 与 WebSocket 都收紧，gate 与 battle 直连都接上。`DispatchTokenVerify` 不需要 `CheckMessageSize`：验签前的帧已被这道上限挡住，验签失败当场断开。）** |
 | G11 | **gate 容器 BestEffort**：无 `resources`、无探针、无 `securityContext`、无 PDB。`oom_score_adj=1000`，节点内存压力时最先被驱逐，且连接洪峰打的是整个 node | `k8s_deploy.ps1:560-632`（`New-NodeDeploymentYaml` 全文）。对照 go-svc 的 login/gateway 都配了 limits |
-| G12 | **131071 硬上限是借来的**：`network_utils.h:12` 借 `snow_flake.h:26` 的 `kNodeBits=17` 当 seq 位宽。编译期打开 `ENABLE_SNOWFLAKE_TESTING` 会让它**静默变成 511**，并让默认的 `GateMaxConnections: 20000` 在 `main.cpp:116` 直接 `LOG_FATAL` | 两个语义完全无关的常量共用一个名字 |
+| G12 | **131071 硬上限是借来的**：`network_utils.h:12` 借 `snow_flake.h:26` 的 `kNodeBits=17` 当 seq 位宽。编译期打开 `ENABLE_SNOWFLAKE_TESTING` 会让它**静默变成 511**，并让默认的 `GateMaxConnections: 20000` 在 `main.cpp:116` 直接 `LOG_FATAL` | 两个语义完全无关的常量共用一个名字。**（2026-11-26 状态：已改，未编译。`network_utils.h` 改用会话号自己的 `kSessionSequenceBits = 17`，`static_assert` 钉住 131071；值没变，跨服务按位拆会话号的地方不受影响。）** |
 | G13 | **应用侧零 Prometheus 埋点** | `cpp/nodes/gate` 全仓 grep 不到 prometheus。现在只能靠内核计数器 + 采样日志间接推断。**（2026-11-12 状态：C++ 节点已有 Prometheus 出口，`MMORPG_METRICS_PORT`；fd 用量与 accept 降级的指标已加，见 P0-4。P1-4 列的连接类 SLI 同日另一批落码，未编译，见 P1-4。）** |
 
 > **2026-10-18 G4 落码说明(未编译、未验证,待 Gemini 跑容器级对照与 kind 实测)**:进程启动时自抬软限并做门槛检查,
@@ -228,7 +232,9 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
 >   gate 看得到真实源地址的部署形态里可以开按来源前缀限速（P2-2，缺省关闭），开了之后承压期间单个前缀最多拿到全局速率的一成。
 > - 第 2 条：每条被拒连接的开销降到 3 次系统调用、零分配、无 TIME_WAIT；被接纳的速率有上界（桶深 + 速率 × 时间）。
 >   建连又立刻关、但没超过速率的那部分仍然付全价，`:325` 那次 `toIpPort()` 也还在。
-> - 第 3、5 条：没有变化，见 G10。
+> - 第 3、5 条：没有变化，见 G10。**（2026-11-26 更正：两条都已改，未编译。第 3 条：未验签的连接声明超过 4KB 的帧当场断开，
+>   最坏情况从「预算内每条未验签连接各占 64KB 输入缓冲」降到 4KB；第 5 条：已验签的连接再发验签请求不回包、计一次非法包，到阈值断开，
+>   客户端每条连接只发一次验签，dev 免验签照旧每条都答。）**
 > - 第 4 条：fd 耗尽不再崩溃（P0-4）；满员时被拒的连接不再占 fd 到下一轮。
 
 ---
@@ -703,14 +709,33 @@ gate 与 battle 直连共用一份，gate 的 `connection_admission.h` 用 using
 - NetworkPolicy default-deny：现在全仓**零 NetworkPolicy**，集群里任意 pod 都能直连
   gate:18000 / scene:20000 / etcd:2379 / mysql:3306 / redis:6379 / kafka:9092。
 
+**2026-11-26 逐条状态：**
+
+| 条目 | 状态 |
+| --- | --- |
+| `resources.requests` | **未做，已交接 Gemini**（`docs/handoff/gate-admission-remaining-handoff-20261126.md` 第 1 节，取值与理由在那里定好了）。只配 requests、不配 memory limit：limit 要和「连接上限 × 每连接高水位」对齐，那个乘积要先按 §9.5 实测 |
+| `readinessProbe` / `terminationGracePeriodSeconds` / PDB | 已有：集群外入口的 gate StatefulSet 模板（`tools/scripts/lib/k8s_client_entry.ps1`）带这三项 |
+| `externalTrafficPolicy: Local` | 已有（2026-09-29 那条更正） |
+| safe sysctl（`tcp_keepalive_*`、`tcp_rmem` / `tcp_wmem`） | **定为不做**。keepalive 要回收的死连接，应用层已经有更快的两道：验签前 10 秒握手期限、验签后 30 秒心跳判死（`gate-client-heartbeat.md`）；这几个 sysctl 还要求集群 ≥ 1.29 / 1.32，版本不够时 Pod 直接起不来。收发缓冲调小会换来吞吐下降，没有实测不动内核缺省 |
+| NetworkPolicy | 已有：`k8s_deploy.ps1` 生成的入站端口白名单（「在线服务端口白名单」那批）。被选中的 Pod 只放行白名单端口，其余入站默认拒绝 |
+
 ### P2-1 · `TCP_DEFER_ACCEPT`（**前提已核实可用**）
 
 **这条是 §0 那个更正的直接收益**：gate 是客户端先说话，所以内核可以在收到第一个数据包之前
 不把连接交给应用——精准命中「握手完成但零字节挂机」这类连接，而且**零应用层成本**。
 
-⚠️ 上线前必须实测 UE 客户端行为：`TCP_DEFER_ACCEPT` 超时后不是「放行」而是
-**重传 SYN-ACK 直到 `tcp_synack_retries` 用完然后丢弃**。如果客户端是 connect 成功后先显示界面、
-等玩家输入才发包，这些连接会被**无声丢掉**。
+**状态（2026-11-26）：已落码，未编译、未运行，待 Gemini 验证。** muduo 的 `Acceptor` / `TcpServer` 加了 `setDeferAccept(seconds)`（三份副本同改，
+Windows 上什么也不做），gate 在 `main.cpp`、battle 直连在 `BattleClientEdge::Install` 里设 `accept_admission::kDeferAcceptSeconds = 1`。
+
+- **客户端行为已核对**：Unity 客户端连上 gate 之后第一件事就是发验签请求（`GameClient.ConnectAndEnter`），战斗直连同样先发握手（`BattleDirectLink.BeginHandshake`），
+  小游戏走 WebSocket 时第一段数据是升级请求。三种都是建连后立刻说话，不会被推迟。
+- **取 1 秒**：与 HAProxy `defer-accept` 同一语义（有数据就接，最迟等第一次 SYN-ACK 重传）。连上就断的扫描、K8s 的 TCP 探活这类不说话的连接在内核里就结束，
+  不建连接对象、不占会话；一直不说话但不断开的连接约 1 秒后照样交上来，由握手期限与未验签预算处置。取大了没有更多保护：
+  洪峰时半连接队列一满，内核改发 syncookies，这些连接就不再被推迟。
+- **推迟期满时连接被接受，不是丢弃**（模型知识，未联网核实，按 §9.6 在 Linux 上实测）：原稿写的「超时后重传 SYN-ACK 到用完然后丢弃」
+  是 2.6.32 之前的行为。现在推迟期满时内核重发一次 SYN-ACK，对端回 ACK 后连接即被接受；只有对端已经不在、不回 ACK 时才在重传次数用完后丢弃。
+  所以「先显示界面、等玩家输入才发包」的客户端只是晚约 1 秒被应用看到，不会被无声丢掉。
+- 观测：内核计数器 `TcpExtTCPDeferAcceptDrop`（`nstat -az TcpExtTCPDeferAcceptDrop`）是推迟期间丢掉的裸 ACK 数，涨说明有连接在建连后不说话。
 
 ### P2-2 · per-source 限制（默认关闭，告警后开启）
 
@@ -796,8 +821,15 @@ gate 与 battle 直连共用一份，gate 的 `connection_admission.h` 用 using
 2. Random early drop（sshd 公式）——避免悬崖。（同上；只在池里没有可以让位的连接时才按概率拒。）
 3. **为重连预留配额**：分级降级的原则是「保住已在局内的玩家 > 接纳新玩家」，
    而断线重连比全新登录优先。参照 Redis/PG「保留管理通道」的同一条硬规矩。
+   **（2026-11-26 核对：login 已经做了，不在 gate。gate 在 accept 与验签时认不出谁是重连，这条只能在 login 做，现状是：
+   新登录要过区级准入 `FreeSlots`，区容量按本区 gate「到水位（自报上限的 90%）」的承载封顶（`go/login/internal/logic/pkg/loginqueue/capacity.go`）；
+   重连 / 顶号（账号已有角色在本区持有在线会话）在 `AssignGate` 第 5 步免排队、不过 `FreeSlots`（`loginpregate/assigngatelogic.go` 的 `reconnectingPlayer`），
+   挑 gate 时全部到水位也会退到「连得上的」一档（`gate_eligibility.go` 的 `eligibleGates`）。
+   所以每台 gate 90% 到 100% 这一段只有重连用得到，就是给重连留的配额；gate 自己按 `GateMaxConnections` 兜底。
+   这里之前写的「login 对新登录与重连一视同仁」是错的。）**
 4. 排队服——⚠️ 只是把「连接耗尽」换成「队列耗尽」，队列本身需要独立上限、超时和防刷
    （排队资格绑账号不绑连接）。不是容量问题的答案。
+   **（2026-11-26：已由 login 的登录排队承担，`go/login/internal/logic/pkg/loginqueue/`，排队资格绑账号。）**
 
 ### P2-4 · 票据先行（时序改造，改动最大）
 
@@ -806,6 +838,18 @@ gate 的票据零件**全都有**（HMAC-SHA256 + expire + gate_node_id 绑定 +
 ⚠️ **换更强的算法不会带来任何改善**——票据的价值 100% 在「服务器分配任何 per-client 状态之前完成校验」。
 这是 Valve SDR 的 `SteamDatagramRelayAuthTicket`、netcode.io 的 ConnectToken + challenge token
 （slot 只在 challenge 成功后才分配）的共同形状。
+
+**2026-11-26 定为不做。** 理由：
+
+1. **这两个参照都是 UDP。** UDP 上一个包就能让服务端建状态，源地址还能伪造，所以必须先验票再分配 slot。gate 是 TCP：
+   能走到应用层的连接都已完成三次握手（源地址是真的），内核 socket 与 muduo 的连接对象在验票之前本来就躲不开，票据先行省不掉它们。
+2. **验票之前的应用层状态现在已有硬上界。** 未验签连接最多上限的 10%（P0-2 预算），每条最多活 10 秒（握手期限），
+   承压时最老的先让位，新建速率有上界（P1-3），验签前的帧不超过 4KB（G10）。剩下的是每条一个 `SessionInfo`：
+   上限 2 万时最多 2000 个，按每个几 KB 估只有几 MB，与 2000 条 TCP 连接自身的内核与缓冲开销同一量级，不是瓶颈。
+3. **改动面大、回归风险高。** 握手期限、未验签预算与淘汰、断开回调、排空迁移、心跳都按「每条连接一个会话」写；
+   把会话推迟到验签之后要同时改这些路径与它们的单测，换来的只是上面那几 MB。
+
+重新考虑的条件：§9.5 实测每条未验签会话的内存明显大于估算（例如超过 16KB），或者 gate 以后改走 UDP / QUIC。
 
 ---
 
@@ -949,6 +993,9 @@ output buffer。单独看每个都合理，乘起来超过任何合理预算。
 | loop 卡顿时不淘汰 | 池到起点之后给 gate 发 `SIGSTOP`，5 秒后 `SIGCONT`，紧接着建 50 条 | 恢复后的头一两秒 `gate_preauth_evicted_total` 不涨、新连接按早拒 / 预算处置；之后恢复淘汰 |
 | 按来源限速缺省关闭 | 不设 `GATE_SOURCE_RATE_PER_SECOND`，从同一个 IP 在 1 秒内建 1500 条不发包的连接 | `gate_source_rate_limit_per_second` 为 0；`gate_rejected_total{reason="source_rate"}` 不动（拒绝都记在 `preauth_*`） |
 | 按来源限速只在承压时生效 | `GATE_SOURCE_RATE_PER_SECOND=20` 启动。先从 A 网段（一个 /24）建 300 条不发包的连接（不承压）；再从 B 网段建 1000 条把池推到起点之后；接着从 A 再建 300 条、从 C 网段建 50 条 | 不承压时 A 的 300 条全部接纳；承压后 A 先进约 200 条（桶深）、之后约 20 条/秒，其余读到 `ECONNRESET`、记在 `source_rate`；C 的 50 条全部接纳；`gate_source_rate_active` 为 1 |
+| 验签前只收小帧（G10，2026-11-26 补） | 建一条连接，不验签，先发一个长度头声明 8192 字节的帧，再慢慢补字节 | 发出长度头后连接立刻被关（读到 EOF 或 `ECONNRESET`），gate 不等后面的字节；`codec` 的采样 ERROR 行 `reason=kInvalidLength`。同样的帧在验签之后发，连接不被关（之后按业务上限处理） |
+| 已验签连接重发验签（§5 第 5 条，2026-11-26 补） | 正常验签成功后，在同一条连接上再连发验签请求 | 不再收到应答；连发到 `GATE_ILLEGAL_PACKET_THRESHOLD` 条时连接被关，日志有 `repeated token verify` |
+| `TCP_DEFER_ACCEPT`（P2-1，2026-11-26 补） | 前后各取一次 `nstat -az TcpExtTCPDeferAcceptDrop`；裸 dial 循环建 100 条连上就断的连接，再建 20 条连上后一直不发包的连接，最后跑一轮 robot 登录 | 连上就断的 100 条不出现在 `gate_accepted_total` 里（内核里就结束了）；不发包的 20 条约 1 秒后才计入 `gate_accepted_total`，10 秒后被握手期限关掉；计数器 `TcpExtTCPDeferAcceptDrop` 增加；robot 全部登录成功，握手耗时分布与开启前一致 |
 
 判据仍是 §9.4 那三条：攻击进行中已登录玩家的延迟不变、新玩家登录成功率高于阈值、进程 RSS 不涨。
 

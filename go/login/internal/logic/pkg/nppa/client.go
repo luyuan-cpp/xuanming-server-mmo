@@ -76,17 +76,9 @@ func NewClient(cfg Config, httpClient *http.Client) (*Client, error) {
 	if cfg.AppID == "" || cfg.BizID == "" {
 		return nil, errors.New("nppa: AppId and BizId are required")
 	}
-	key, err := hex.DecodeString(cfg.SecretKey)
-	if err != nil || len(key) != 16 {
-		return nil, errors.New("nppa: secret key must be 32 hex characters")
-	}
-	block, err := aes.NewCipher(key)
+	gcm, err := newGCM(cfg.SecretKey)
 	if err != nil {
-		return nil, fmt.Errorf("nppa: %w", err)
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, fmt.Errorf("nppa: %w", err)
+		return nil, err
 	}
 	if cfg.CheckURL == "" {
 		cfg.CheckURL = DefaultCheckURL
@@ -305,6 +297,23 @@ func (c *Client) do(req *http.Request, query map[string]string, body string) (*r
 		return nil, fmt.Errorf("%w: unparsable response", ErrUnavailable)
 	}
 	return &resp, nil
+}
+
+// newGCM 用 secretKey(32 位十六进制)建报文体的 AES-128-GCM。
+func newGCM(secretKey string) (cipher.AEAD, error) {
+	key, err := hex.DecodeString(secretKey)
+	if err != nil || len(key) != 16 {
+		return nil, errors.New("nppa: secret key must be 32 hex characters")
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, fmt.Errorf("nppa: %w", err)
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("nppa: %w", err)
+	}
+	return gcm, nil
 }
 
 // encrypt 返回 Base64(nonce || 密文 || 认证标签),nonce 12 字节随机。

@@ -1,6 +1,6 @@
 # 实名认证与未成年人防沉迷
 
-> **状态：2026-11-19 负责人定「App 形态也首发，按清单写」，§5 已落码，未生成、未编译、未测试，待 Gemini 验证（命令见 `docs/PROGRESS.md` 同日「实名认证与未成年人防沉迷」落码条目）。** 规则与平台能力的来源见 §10。§8 末尾原先没做的两项都已在 2026-11-19 补落码、未运行：K8s 部署参数，go/payment 的限额闸（§5.6）。2026-11-20 又补了三处原来标为「以后」的：国家接口的全服调用额度（§5.2，原来按副本限速、副本不能超过 10 个）、上报器停机时发完手上的事件（§5.5）、客服重置实名（§5.2 末）；单日充值上限定为单次上限（§5.6）。都未运行。
+> **状态：2026-11-19 负责人定「App 形态也首发，按清单写」，§5 已落码，未生成、未编译、未测试，待 Gemini 验证（命令见 `docs/PROGRESS.md` 同日「实名认证与未成年人防沉迷」落码条目）。** 规则与平台能力的来源见 §10。§8 末尾原先没做的两项都已在 2026-11-19 补落码、未运行：K8s 部署参数，go/payment 的限额闸（§5.6）。2026-11-20 又补了三处原来标为「以后」的：国家接口的全服调用额度（§5.2，原来按副本限速、副本不能超过 10 个）、上报器停机时发完手上的事件（§5.5）、客服重置实名（§5.2 末）；单日充值上限定为单次上限（§5.6）。都未运行。2026-11-20 第二批：上下线上报改成登录域 Redis 里的会话账本（§5.5，11-21 Gemini 分成 16 片），到点断开改由 gate 本地按截止时刻做、login 兜底（§5.4）。2026-11-26 复核发现截止时刻一到清扫就删掉账本条目，login 兜底随之失效；§5.4、§5.5 已按修正后的做法写，代码待改，连同沙箱 mock 与全部验证交 Gemini（[交接单](../handoff/real-name-anti-addiction-handoff-20261126.md)）。
 
 ## 0. 结论
 
@@ -111,37 +111,33 @@
 - **gate 上的 Login**（`auth_type=access_token` 绑定会话）：唯一的拦截点。它是 login_session 的唯一写入点，CreatePlayer、EnterGame 读不到 login_session 就进不了游戏（`loginlogic.go` 的注释写明了这一点）。
   - 本渠道要实名而账号没有 pi → 回 `kLoginRealNameRequired`；
   - 未成年且现在不在可玩时段 → 回 `kLoginMinorNotInPlayTime`；
-  - 未成年且在时段内 → 照常绑定，写 `login_anti_addiction:{<连接身份>}`，应答带 `play_deadline_ms`。
+  - 未成年且在时段内 → 照常绑定，应答带 `play_deadline_ms`（当天 21:00 的 Unix 毫秒）。
+  - 放行之前先进会话账本（§5.5）：自有渠道实名的会话排一条上线，未成年人记下截止时刻。登记不上（Redis 出错）就拒绝绑定，回 `kLoginRedisSetFailed`：报不了上线、到点兜不住的会话不放行。走平台渠道的成年人什么都不登记。绑定半途发现连接已断（`sessionfence.ErrClosed`）时，当场收尾这条登记。
 - **AssignGate 不改**：正常客户端在 `/api/login` 之后就停了；改过的客户端排完队还是在 gate 的 Login 被拦下。
 
 ### 5.4 到点下线与提前提醒
 
 - **可玩日**：周五、周六、周日，或 `AntiAddiction.ExtraPlayDays` 里的日期（法定节假日中不落在周五到周日的那些天，运维按每年的国务院放假通知填）。名单空着就只有周五到周日，偏严，不违规。
 - **时段**：20:00–21:00，北京时间。规则是法规定的，写成常量；用 `time.FixedZone("CST", 8*3600)`，不依赖容器里的时区库。
-- **到点下线**：复用 gate 定期代发的 RenewSession（`renewsessionlogic.go`，间隔由 login 在应答里给）。
-  - 连接有 `login_anti_addiction` 记录、离截止还有时间时，把 `renew_after_seconds` 缩到截止时刻；
-  - 到点之后的那次续租，login 用现有的踢线命令（`svc/gate_command.go` 的 `KickPlayerEvent`）踢掉这条连接。
-  - gate 把续租间隔夹到至少 5 秒、最多提前五分之一（`login_session_renewal.cpp` 的 `NextInterval`），所以最晚在 21:00 之后约 5 秒踢下线。
+- **到点下线由 gate 自己做**（2026-11-20，`cpp/nodes/gate/handler/rpc/minor_play_deadline.{h,cpp}`）：gate 从 Login 成功的回包里读 `anti_addiction.play_deadline_ms`（路由模式在 `client_request_lane.cpp`，直连模式在 `rpc_reply_bridge.cpp`），记进会话的 `minorPlayDeadlineMs` 和一个按时刻排序的队列。主 EventLoop 每秒一拍，截止前 5 秒发 `GameKickPlayerRequest`（`reason = kLoginMinorPlayTimeOver`），然后 `shutdown`，1 秒后强关。不新开线程。同一连接再次登录成功时以最新回包为准（成年人的回包清掉截止时刻）；会话号被复用时按会话代次核对，旧条目不会误关新连接。
+  - 原方案靠 gate 代发的 RenewSession 到点踢线，有两处靠不住：gate 每拍最多发 200 次续租，在线多时续租排队，踢线跟着晚；gate 也只给它认为还连着的连接续租。改成 gate 本地按时刻关连接，就不依赖续租了。
+- **login 兜底**：会话账本（§5.5）里记着未成年人的截止时刻。过了截止时刻还收到这条连接的续租，说明那台 gate 没关它（比如没读到回包里的截止时刻）。这时 login 用 `KickPlayerEvent`（`reason_tip = kLoginMinorPlayTimeOver`）补踢一次，打 ERROR，计 `login_anti_addiction_backstop_kick_total`；这个数不为 0 就要查 gate。兜底最晚在截止后一个续租间隔生效（登录态寿命的三分之一，默认 10 分钟）。为此截止时刻之后账本不能删这条会话，见 §5.5「未成年人的租约」。
 - **踢线原因**：`KickPlayerEvent` 加 `reason_tip`（0 = 原来的「账号在别处登录」），gate 的 `KickPlayerEventHandler` 用它填 `GameKickPlayerRequest.reason`。gate 只改这一行。
 - **提前提醒**：客户端按 `play_deadline_ms` 在剩 10、5、1 分钟时提示。服务端不推送：提醒漏了不违规，真正的限制是服务端的踢线。
 
 ### 5.5 上下线上报
 
 - **只报我们自己实名的会话**（自有渠道、账号有 pi）；小游戏会话由平台报，`ct=2` 的游客永远不用。
-- **记录**：gate 上 Login 绑定时写 `login_anti_addiction:{<连接身份>}` = `{pi, deadline_ms, report}`，TTL 跟 login_session 一样，RenewSession 时续期。
-  - 绑定时排一条上线（`bt=1`）；
-  - Disconnect 时读出并删掉这条记录，`report` 为真就排一条下线（`bt=0`）；
-  - `si` 取连接身份做 SHA-256 后的前 32 位十六进制，上线和下线一致。
-- **上报器**：每个 login 副本一个，进程内攒批：每批 ≤ 128 条，每秒一拍，每发一批先从全服共用的上报额度（8/s，见 §5.2「全服调用额度」）里取一个名额。取不到就攒到下一拍，批次自然变大。失败就重试，直到这批里最早的事件已过 150 秒，丢弃并计数（`login_nppa_report_total{result="dropped_age"}`）。
-- **限流与扩容**：副本加多少都不超出系统的 10 QPS，全服上限约每秒 1000 条上下线（8 批 × 128 条）。超过这个量要联系国家系统管理员调流控（规范备注第 4 条），与副本数无关。
-- **停机**：上报循环结束前，先把队列里剩下的取完，再在 2 秒内一批批发；发不完的计 `dropped_shutdown`。滚动重启不再丢事件。
-- **已知局限**：进程被强杀（OOM、kill -9）会丢还没发出的几秒。180 秒的时限让持久化队列的收益很小。要零丢失时，改成登录域 Redis 里的流，由一个副本集中发。
-- **会话收尾取不到记录时不重放 Disconnect**（2026-11-19 与断线重连会话对齐）：GETDEL 出错只记日志，Disconnect 照常回成功，这一条下线就不报了。理由有三：
-  - 上报器本身至多一次（内存队列、150 秒内重试、进程退出即丢），在 Disconnect 上做到至少一次换不来端到端的保证；
-  - GETDEL 结果未知时记录可能已经删掉，重放也取不回来；
-  - 让上报这条旁路的抖动决定 Disconnect 成败，会拖住断线收尾（断线租约、player_locator），主次颠倒。
-  
-  登录域 Redis 真不可用时，Disconnect 关栅栏那一步先失败、回 `Unavailable`，gate 重发时 GETDEL 跟着重试。
+- **会话账本**（2026-11-20，`go/login/internal/logic/pkg/nppa/ledger.go`）：放在登录域 Redis，所有 login 副本共用。按连接身份分 16 片（`redisslot.NppaLedgerShardCount`，键带 `{nppa:<片>}`，11-21 Gemini 分的片），每片四把键：会话表（连接身份 → `si|pi|截止毫秒`）、租约（ZSET，连接身份 → 到期毫秒）、待发事件（ZSET）、清扫记录。每个动作是一段 Lua，片内原子；时刻取 Redis 的 `TIME`，各副本时钟有偏差也不影响。
+  - **Begin**（gate 上 Login 放行之前）：登记，排一条上线。同一连接上还留着上一次的会话，就先给它排下线。`si` 每次上线新生成（32 位随机十六进制），上线和下线用同一个。
+  - **Renew**（每次 RenewSession）：租约顺延一个登录态寿命，并回截止时刻给兜底用。
+  - **End**（Disconnect、LeaveGame、续租发现登录态已经没了、绑定发现连接已断）：删登记，排一条下线。没有登记就什么都不做，所以重放无害。
+  - **Sweep**（每个副本每秒逐片扫一遍）：租约到期还没收尾的（gate 进程没了、断线通知丢了、End 出错），补一条下线。发生时刻取租约到期时刻，最多往回填 120 秒，因为国家系统只收 180 秒内的事件。如果所有副本都停过、超过租约的三分之一，先暂停清扫一个租约那么久：那段时间续租也送不进来，活着的连接得先续上，之后还到期的才是真没了。
+  - **未成年人的租约**不超过截止时刻：gate 进程没了的时候，下线按截止时刻补报，不会报成 21:00 之后还在线。租约在截止时刻到期时，清扫补报下线，但**不删登记**，而是改成只带截止时刻、不再上报的条目，再续一个租约。连接还在（gate 没关）时，下一次续租照样拿到截止时刻，login 兜底踢线（§5.4）；断开时 End 删掉它，不再报下线；连接早没了的，再过一个租约由清扫删掉。截止时刻过后，续租不再把租约封顶。**（2026-11-26 复核时发现的缺陷：现在的代码在截止时刻直接删登记，兜底找不到条目，就不踢线了。代码待改，见交接单 §2.1。）**
+- **上报器**（`reporter.go`）：每个副本一个，每秒一拍。先清扫，再从各片领一批（≤128 条）；领走的 15 秒内别的副本看不见。从全服共用额度（8/s，§5.2「全服调用额度」）里取到名额才发，取不到就放回。发成功的删掉；失败的过 15 秒会被再领一次，所以是至少一次。发生时刻早于 150 秒前的丢弃并计数；发生时刻晚于本机时钟的先留着，免得报出「未来」的时刻。指标：`login_nppa_report_total{result=sent|rejected|dropped_age|send_failed|swept}`。
+- **限流与扩容**：副本加多少都不会超过系统的 10 QPS，全服上限约每秒 1000 条上下线（8 批 × 128 条）。量再大就要联系国家系统管理员调流控（规范备注第 4 条），与副本数无关。
+- **停机与强杀**：事件都在 Redis 里，进程退出（包括 OOM、kill -9）不丢。没发完的，由别的副本或下一次启动接着发，停机不用排空。
+- **Disconnect 不为上报重放**（2026-11-19 与断线重连会话对齐，11-20 换了理由）：End 出错只记日志，Disconnect 照常回成功。登记还在账本里，租约到期后清扫会补上下线。让上报这条旁路决定 Disconnect 的成败，会拖住断线收尾（断线租约、player_locator），主次颠倒。
 
 ### 5.6 充值限额
 
@@ -240,8 +236,8 @@ AntiAddiction:
 | tip（1） | `data/tip/Tip.xlsx`（§5.9 八个码，生成物由导表器出） |
 | Go 共用（2） | 新增 `go/shared/antiaddiction/antiaddiction.go` 与测试：pi 解出生日期、年龄段、可玩时段、身份证校验码 |
 | data_service（4） | `internal/store/account_directory_store.go`、`internal/server/account_directory.go` 与两处测试 |
-| login（约 20） | `internal/config/config.go` 与新增的配置门禁和测试；新增 `internal/logic/pkg/nppa/`（客户端、上报器与测试，测试用规范里的加密和签名样例）；`clientplayerlogin/` 的 `loginlogic.go`、`account_directory.go`、`renewsessionlogic.go`、`disconnectlogic.go`，新增 `anti_addiction.go`、`submitrealnamelogic.go` 与测试；`svc/gate_command.go`（踢线原因）、`svc/servicecontext.go`；`pkg/auth/provider.go`、`providers.go`（结果带渠道）；`shared/redisslot/login_keys.go`；`etc/login.yaml`。goctl 包装由 `go/build.ps1` 重生成 |
-| C++ gate（1–2） | `cpp/nodes/gate/handler/event/gate_event_handler.cpp`，可能加一个用例 |
+| login（约 20） | `internal/config/config.go` 与新增的配置门禁和测试；新增 `internal/logic/pkg/nppa/`（客户端、全服调用额度 `quota.go`、会话账本 `ledger.go`、上报器 `reporter.go` 与测试，测试用规范里的加密和签名样例）；`clientplayerlogin/` 的 `loginlogic.go`、`account_directory.go`、`renewsessionlogic.go`、`disconnectlogic.go`，新增 `anti_addiction.go`、`submitrealnamelogic.go` 与测试；`svc/gate_command.go`（踢线原因）、`svc/servicecontext.go`；`pkg/auth/provider.go`、`providers.go`（结果带渠道）；`shared/redisslot/login_keys.go`；`etc/login.yaml`。goctl 包装由 `go/build.ps1` 重生成 |
+| C++ gate（约 10） | `cpp/nodes/gate/handler/event/gate_event_handler.cpp`（踢线原因）；2026-11-20 起另有到点断开：新增 `handler/rpc/minor_play_deadline.{h,cpp}` 与 `tests/minor_play_deadline_test.cpp`（登记在 `cpp/tests/routing_identity_test`），改 `login_admission.h`、`client_request_lane.cpp`、`rpc_reply_bridge.cpp`、`client_session_handler.cpp`、`main.cpp`、`cpp/libs/services/gate/session/comp/session_info_comp.h`、`gate.vcxproj(.filters)` |
 | 本仓 Java 网关（约 6） | `/api/real-name` 的 controller、service、`LoginRpcClient`、请求与应答 DTO、测试 |
 | 客户端（约 6） | `GatewayHttpClient.cs`、`GameClient.cs`、新增实名窗与倒计时提示、踢线原因处理、EditMode 测试 |
 | K8s（约 3） | `tools/scripts/k8s_deploy.ps1`（AppId、BizId、Secret `login-nppa`）、`dev_tools.ps1`、契约测试 |

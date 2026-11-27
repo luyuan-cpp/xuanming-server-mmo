@@ -455,7 +455,7 @@ G4b-G 换成新键 `admitted:zset:{q:<z>}`(ZSET,分数 = 占位到期的 Unix �
 
 **20s 从哪来**:票交出去之后,这个人要「连上 gate(耗时 `c`)→ gate 下一次上报人数(C++ gate 每 10s 一次,`cpp/nodes/gate/main.cpp` 的 `playerCountReportTimer`)→ login 读 etcd(不缓存)」才出现在 `online` 里,最坏滞后 `c + 10s`。20s = 两个上报周期 = 一个周期的上报滞后 + 10s 建连与传播余量。Java 版是 15s,它的 gate 每 5s 发布一次,余量同为 10s。2026-10-13 本仓库照搬 15s,余量只有 5s;10-15 负责人按「最标准」改为 20s,两版余量对齐,宽限值本身不再相同。
 
-- 20s 是代码常量 `loginqueue.defaultHandoffGrace`,不是配置。它与 gate 的上报周期没有机械关联,改上报周期时要同步核对它。数值待 L-14 测「交票 → gate 会话建立」的分布后确认。
+- 20s 是代码常量 `loginqueue.defaultHandoffGrace`,不是配置。它与 gate 的上报周期没有机械关联,改上报周期时要同步核对它。数值已定为 20s(负责人 2026-10-15 定:两个上报周期,一个周期的上报滞后,再留一个周期给建连与传播);压测测出「交票 → gate 会话建立」的分布后只用来复核,偏离时改这一个常量。
 - 快速通道当场交票,等同排队路径的「已取走」,所以也取同一个宽限(20s,代码里是同一个字段),不取 `AdmitTTL`(Java 版取 60s,这一点两版有意不同)。
 
 **算式**:记 `C` 容量,`O` gate 上报的在线数,`A` 未到期的占位数,`free = max(0, C − O − A)`;`v = c + φ` 是交票后这个人出现在 `O` 里的时刻,`φ ∈ [0, 10s)` 是距下一次上报的相位。以下按 `G` = 20s 算(10-13 版按 15s 算的数字见 spec_G4b-G.md §5.2 的括注)。
@@ -468,7 +468,7 @@ G4b-G 换成新键 `admitted:zset:{q:<z>}`(ZSET,分数 = 占位到期的 Unix �
 
 - 放进去的人留在线上(正常玩家):名额从占位转给在线数,不放回。排队的长期放行速率 = 在线玩家的离开速率;`O + A` 顶到 `C` 之后 `q_admitted` 不涨是**正常回压**,不是 dispatcher 卡死。
 - 拿了票不连 gate,或连上很快就走:名额每约 22~23s(取走延迟 ≤ 轮询 2s + 一拍 1s,再加 20s)周转一次,任意这样一个窗口内经排队放行的人数 ≤ 窗口起点的 `C − O`。修复前这个周期是 2~3s(Q2)。
-- §11 与 runbook 里写于 2026-05 的节奏数字没有按这个上界标定过,待 L-14 重新标定。
+- §11 与 runbook 的判读口径已按这个上界改写(2026-11-26):不再给固定的放行速率与等待时长。压测出基线后把实测值补进 runbook「放行节奏」一节。
 
 **新旧版本混跑与部署顺序**:旧 Pod 读写 `admitted:zone:{z}`(SET),新 Pod 读写 `admitted:zset:{q:<z>}`(ZSET)。键不同,不会 `WRONGTYPE`;但两边互相看不见对方的占位。
 
@@ -724,7 +724,7 @@ Queue:
 
 - `MaxAdmitPerTick: 2000`。空位一下子腾出来时(运维调大区容量、一台 gate 掉线后人数清零),不设上限的话这一拍会把空位全部放满,几万人在同一个轮询周期里拿到票,同时去连 gate、进场景。2000 与网关前置限流开服档的区桶同值(每秒 2000,[限流设计](./open-server-rate-limit-design.md) §11.2):快速通道那一侧由区桶限速,放行这一侧由它限速,两条路的上限一致。它不是实测的进场吞吐,压测出基线后两处一起调。
 - `MaxQueueLength: 1000000`。取自单 zone 排队容量分析的上界([全部 Redis 上 Cluster](./redis-cluster-all-domains-20261110.md) §6.2 分析到 100 万人):超过分析过的规模就拒绝,不进入没有分析过的区间。
-- K8s 的 login ConfigMap 不渲染这两个键(`New-LoginQueueYaml` 只镜像它列出的键),集群里用代码缺省值,与 `login.yaml` 相同。要在 K8s 上改,先把这两个键加进那个函数与它的契约用例。
+- K8s 上这两个键与本段其它键一样,由 `New-LoginQueueYaml` 从 `login.yaml` 原样镜像进 login ConfigMap(2026-11-26 补上,契约用例同批加了这两个键;此前集群里只能用代码缺省值,在 `login.yaml` 里改了不生效)。
 
 > **(2026-10-18 更正,上面 `QueueEntryTTL` 一行的注释;原文保留;未编译、未测试)** 「ZSET / meta / token-index 的 TTL 上限」改读如下。
 > - **空闲 TTL。** meta、token 索引与队列键自最后一次成功的排队中查询(或入队)起算,至少保留 `QueueEntryTTL`、至多 1.25 倍。持续轮询的人不会因为等满 1h 被弹回队尾。
@@ -736,7 +736,7 @@ Queue:
 **K8s 上的取值(G4b,2026-10-14;已落码,未编译、未测试,待 Gemini 验证)**:`tools/scripts/k8s_deploy.ps1` 按 `-LoginQueue auto|on|off` 决定 login ConfigMap 写不写本段。
 缺省 `auto` 跟随 `-ReleaseProfile`:dev 不写(go-zero 零值 `Enabled=false`,产物与 G4b 之前逐字相同),staging / prod 写。写的时候:
 
-- `Enabled: true`;`DispatchInterval` / `AdmitTTL` / `QueueEntryTTL` / `SoftCapMultiplier` / `DefaultRetryAfterMs` / `DispatcherLockTTL` 从 `go/login/etc/login.yaml` 原样镜像。
+- `Enabled: true`;`DispatchInterval` / `AdmitTTL` / `QueueEntryTTL` / `SoftCapMultiplier` / `DefaultRetryAfterMs` / `DispatcherLockTTL` / `MaxAdmitPerTick` / `MaxQueueLength` 从 `go/login/etc/login.yaml` 原样镜像。
 - `DispatcherLockKey: "dispatcher:lock:login_queue:{q:<本 zone>}"`:写进 ConfigMap 的前缀已经带本 zone,login 再按 §7.1 拼一次 `:zone:<Node.ZoneId>`,
   所以 **K8s 上本 zone 的实际锁键是 `dispatcher:lock:login_queue:{q:<id>}:{q:<id>}`**,选主日志 `[loginqueue] elected dispatcher leader zone=<id> key=…` 里打的也是它。
   每个 zone 仍恰好一把锁;§3、§15 与 `docs/ops/login-queue-stress-runbook.md` 写的 `dispatcher:lock:login_queue:{q:<id>}` 是本地 / compose 默认配置下的键名,在 K8s 上排查时按带两段 zone 的键查。
@@ -767,9 +767,9 @@ q_entered=4080 q_admitted=920 q_expired=3 q_avg_wait=28s q_max_rank=4078
 
 | 指标 | 健康 | 红线 |
 |---|---|---|
-| q_admitted 增速 | 上界是在线玩家的离开速率,加上拿了票没留在线上的那部分名额每约 22~23s 周转一次(§5「放行节奏的上界」;交票后宽限 20s,10-15 前按 15s 是约 17s;数字待 L-14 标定) | `在线 + login_queue_admitted_inflight ≥ capacity` 时不涨是正常回压;停滞且同时满足 `在线 + 在途 < capacity` 才判 dispatcher 卡死 |
+| q_admitted 增速 | 上界是在线玩家的离开速率,加上拿了票没留在线上的那部分名额每约 22~23s 周转一次(§5「放行节奏的上界」;交票后宽限 20s,10-15 前按 15s 是约 17s);排队放行每拍不超过 `Queue.MaxAdmitPerTick` | `在线 + login_queue_admitted_inflight ≥ capacity` 时不涨是正常回压;停滞且同时满足 `在线 + 在途 < capacity` 才判 dispatcher 卡死 |
 | q_expired / q_entered | < 1% | > 5% → AdmitTTL 太短或客户端轮询慢 |
-| q_avg_wait | < 60s(待 L-14 标定:放行速率受上一行的上界约束,不是固定的 admit 速率) | > 5min → dispatcher 落后 EnterGame |
+| q_avg_wait | 没有固定上限:等待 = 名次 ÷ 放行速率,放行速率受上一行的上界约束。健康的形状是它随 q_max_rank 下降而回落 | 等待变长本身不是故障;要查的是上一行的红线(队列不动) |
 | q_max_rank | 早期升高,后期单调下降到 0 | 不下降 → 该玩家卡住 |
 
 详细判读见 [docs/ops/login-queue-stress-runbook.md](../ops/login-queue-stress-runbook.md)。

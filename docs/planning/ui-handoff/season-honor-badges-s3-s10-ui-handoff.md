@@ -50,6 +50,6 @@
 
 ## 本机研发导入备忘（仅本机研发参考，勿复制给 Codex）
 
-1. Codex 交付并经负责人验收后，将 `D:\work\image\designs\season-honor-badges-s3-s10-v1\icons\honor_s3_lihuo.png` 至 `honor_s10_hunyuan.png` 8 张透明 PNG-32 图标复制到 `mmorpg-client/Assets/Resources/UI/SeasonHonors/`，并同步生成/提交对应 `.meta`（Sprite Single，MeshType FullRect，MipMaps 关）。
-2. 客户端 `SeasonV1UiArt.LoadHonorBadgeIcon` 与 `SeasonRule.xlsx`（`honor_badge_icon_key = UI/SeasonHonors/honor_s3_lihuo` … `honor_s10_hunyuan`）已完成对接；图标落地后无需改动任何 C# 或服务端代码即可自动生效（缺图期间优雅回落既有赛季玉印，不报错不黑块）。
-3. 协议、配表与编译验证已由 Gemini 端完成（C++ `SeasonBattleTest` 24/24、`PlayerSeasonSystemTest` 12/12；Java `SeasonBattleEngineTest` 7/7、`PlayerStateSchemaLedgerTest` 1/1（第 22 代）、`SeasonFeatureAndServiceTest` + `CoreGameplayLoopParityTest` 12/12；Python `pytest` 29/29；Unity `SeasonClientTests` 8/8）。
+1. **已验收落地（2026-11-26，图仓提交 `70a5622fa202e91119b84734c6072b299cd6d3f1`）**：8 枚 512×512 RGBA 透明 PNG-32（`honor_s3_lihuo.png` 至 `honor_s10_hunyuan.png`）及对应 `.meta`（Sprite Single、FullRect、MipMaps 关、AlphaIsTransparency 开、全仓 0 GUID 冲突）均已落地 `mmorpg-client/Assets/Resources/UI/SeasonHonors/`，8/8 经逐张目视检查与 SHA-256 逐字节核验一致。
+2. 客户端 `SeasonV1UiArt.LoadHonorBadgeIcon`、`SeasonSealPanel`（荣誉墙 2×5 + 休赛期荣誉条 + 满级条）、`CoreSettlementRewardSection`（结算解锁/追忆反馈）与 `Assets/StreamingAssets/Tables/seasonrule.pb` 10/10 键已完成端到端核验。
+3. 编译与单测验证：C++ `SeasonBattleTest` 24/24、`PlayerSeasonSystemTest` 12/12；Java `SeasonBattleEngineTest` 7/7、`PlayerStateSchemaLedgerTest` 1/1（第 22 代）、`SeasonFeatureAndServiceTest` + `CoreGameplayLoopParityTest` 12/12；Python `pytest` 29/29；Unity `client_compile_check.ps1` **816/816 0 错误**、`SeasonClientTests` **8/8 PASS**。

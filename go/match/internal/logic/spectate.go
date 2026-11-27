@@ -107,13 +107,21 @@ func spectateRecordFromFormation(f *matchpb.MatchFormationRecord) (*matchpb.Spec
 	for _, p := range create.Players {
 		names = append(names, p.PlayerName)
 	}
+	var rankedTeamSize uint32
+	var rankedPeakRating int64
+	if rc := create.GetRankedContext(); rc != nil && !rc.GetUseFreePreset() && rc.GetSeasonId() != 0 {
+		rankedTeamSize = rc.GetTeamSize()
+		rankedPeakRating = rc.GetPeakRatingCenti()
+	}
 	return &matchpb.SpectateBattleRecord{
 		Summary: &matchpb.BattleWatchSummary{
-			BattleId:       f.BattleId,
-			Mode:           matchpb.MatchMode(f.Mode),
-			BattleConfigId: f.ConfigId,
-			PlayerNames:    names,
-			CreatedAtMs:    f.CreatedMs,
+			BattleId:              f.BattleId,
+			Mode:                  matchpb.MatchMode(f.Mode),
+			BattleConfigId:        f.ConfigId,
+			PlayerNames:           names,
+			CreatedAtMs:           f.CreatedMs,
+			RankedTeamSize:        rankedTeamSize,
+			RankedPeakRatingCenti: rankedPeakRating,
 		},
 		BattleNodeId:     f.TargetNodeId,
 		Visibility:       create.GetSpectateVisibility(),

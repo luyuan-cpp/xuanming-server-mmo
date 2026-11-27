@@ -3996,6 +3996,8 @@ std::optional<PlayerEnterContext> PlayerLifecycleSystem::HostedPlacementContext(
 	ctx.ownerEpoch = placement.ownerEpoch;
 	ctx.loginGeneration = placement.loginGeneration;
 	ctx.ownerRevision = placement.ownerRevision;
+	// 不经 gate 连接,没有握手身份:取 location 为这次登录记下的实例,入场栅栏与登录身份照样按 (实例, 会话号) 认(§14.8)。
+	ctx.gateInstanceId = placement.gateInstanceId;
 	ctx.hostedPlacement = true;
 	return ctx;
 }

@@ -228,12 +228,15 @@ ContentGuard:
       Hosts:
         - 127.0.0.1:2379
       Key: contentguard.rpc
-    Timeout: 500
+    # 每次调用的硬上限(毫秒),要盖住下面最长的一档和异步补审的 3000。
+    Timeout: 3500
     NonBlock: true
     Middlewares:
       Breaker: true
   Optional: true
-  TimeoutMs: 300
+  # 聊天、私有标签一档;名字、公告、寄售标题要等外部平台(微信 / 抖音),用长的一档。
+  TimeoutMs: 600
+  NameTimeoutMs: 2000
 
 # 链路追踪阶段三(docs/design/distributed-tracing.md §10.3):go-zero 把 span 经 OTLP/gRPC 送本机 Alloy
 # (deploy/docker-compose.observability.yml,dev.bat obs 起),Alloy 尾部采样后存进 Tempo。Name 与 Loki 的 service 标签同值。

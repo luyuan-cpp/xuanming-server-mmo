@@ -18,6 +18,15 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const rankedRematchMaxTTLSeconds = 15
+
+func challengeTTLSecondsFor(baseSeconds int, rules *battlepb.CustomDuelRules) int {
+	if rules != nil && rules.GetRematchSourceBattleId() != 0 && (baseSeconds <= 0 || baseSeconds > rankedRematchMaxTTLSeconds) {
+		return rankedRematchMaxTTLSeconds
+	}
+	return baseSeconds
+}
+
 func (l *ChallengeLogic) createGlobalChallenge(in *pb.ChallengePlayerRequest, challenger uint64) (*pb.ChallengePlayerResponse, error) {
 	for _, player := range []uint64{challenger, in.TargetPlayerId} {
 		locked, err := isPlayerBattleLocked(l.svcCtx, player)
@@ -50,7 +59,8 @@ func (l *ChallengeLogic) createGlobalChallenge(in *pb.ChallengePlayerRequest, ch
 			return &pb.ChallengePlayerResponse{ErrorMessage: tipErr(constants.ErrInternal, "自定义切磋规则编码失败")}, nil
 		}
 	}
-	invitation, err := l.svcCtx.Authority.CreateChallengeWithRules(l.ctx, id, challenger, in.TargetPlayerId, in.BattleConfigId, uint64(l.challengeTTL())*1000, rulesPayload)
+	ttlSeconds := challengeTTLSecondsFor(l.challengeTTL(), in.GetCustomRules())
+	invitation, err := l.svcCtx.Authority.CreateChallengeWithRules(l.ctx, id, challenger, in.TargetPlayerId, in.BattleConfigId, uint64(ttlSeconds)*1000, rulesPayload)
 	if err != nil {
 		return l.globalChallengeCreateFailure(err), nil
 	}

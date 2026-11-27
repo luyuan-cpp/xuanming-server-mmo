@@ -15998,6 +15998,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipLoadoutSnapshot final : public
     kDiamondBalanceFieldNumber = 10,
     kBindDiamondBalanceFieldNumber = 11,
     kUnlockItemConfigIdFieldNumber = 8,
+    kFreeSchemesFieldNumber = 14,
+    kLightCardBonusSchemesFieldNumber = 15,
+    kRentedExtraSlotsFieldNumber = 16,
+    kRentExpiresAtSecFieldNumber = 17,
+    kServerNowSecFieldNumber = 18,
+    kRentUnitPriceDiamondFieldNumber = 19,
+    kRentPeriodDaysFieldNumber = 20,
+    kRentMaxRemainingDaysFieldNumber = 21,
   };
   // repeated .EquipLoadoutSchemeInfo schemes = 5;
   [[nodiscard]] int schemes_size()
@@ -16162,11 +16170,91 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipLoadoutSnapshot final : public
   void _internal_set_unlock_item_config_id(::uint32_t value);
 
   public:
+  // uint32 free_schemes = 14;
+  void clear_free_schemes() ;
+  [[nodiscard]] ::uint32_t free_schemes() const;
+  void set_free_schemes(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_free_schemes() const;
+  void _internal_set_free_schemes(::uint32_t value);
+
+  public:
+  // uint32 light_card_bonus_schemes = 15;
+  void clear_light_card_bonus_schemes() ;
+  [[nodiscard]] ::uint32_t light_card_bonus_schemes() const;
+  void set_light_card_bonus_schemes(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_light_card_bonus_schemes() const;
+  void _internal_set_light_card_bonus_schemes(::uint32_t value);
+
+  public:
+  // uint32 rented_extra_slots = 16;
+  void clear_rented_extra_slots() ;
+  [[nodiscard]] ::uint32_t rented_extra_slots() const;
+  void set_rented_extra_slots(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_rented_extra_slots() const;
+  void _internal_set_rented_extra_slots(::uint32_t value);
+
+  public:
+  // uint64 rent_expires_at_sec = 17;
+  void clear_rent_expires_at_sec() ;
+  [[nodiscard]] ::uint64_t rent_expires_at_sec() const;
+  void set_rent_expires_at_sec(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_rent_expires_at_sec() const;
+  void _internal_set_rent_expires_at_sec(::uint64_t value);
+
+  public:
+  // uint64 server_now_sec = 18;
+  void clear_server_now_sec() ;
+  [[nodiscard]] ::uint64_t server_now_sec() const;
+  void set_server_now_sec(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_server_now_sec() const;
+  void _internal_set_server_now_sec(::uint64_t value);
+
+  public:
+  // uint64 rent_unit_price_diamond = 19;
+  void clear_rent_unit_price_diamond() ;
+  [[nodiscard]] ::uint64_t rent_unit_price_diamond() const;
+  void set_rent_unit_price_diamond(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_rent_unit_price_diamond() const;
+  void _internal_set_rent_unit_price_diamond(::uint64_t value);
+
+  public:
+  // uint32 rent_period_days = 20;
+  void clear_rent_period_days() ;
+  [[nodiscard]] ::uint32_t rent_period_days() const;
+  void set_rent_period_days(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_rent_period_days() const;
+  void _internal_set_rent_period_days(::uint32_t value);
+
+  public:
+  // uint32 rent_max_remaining_days = 21;
+  void clear_rent_max_remaining_days() ;
+  [[nodiscard]] ::uint32_t rent_max_remaining_days() const;
+  void set_rent_max_remaining_days(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_rent_max_remaining_days() const;
+  void _internal_set_rent_max_remaining_days(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:EquipLoadoutSnapshot)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 13,
+      ::google::protobuf::internal::TcParseTable<5, 21,
                           3, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -16208,6 +16296,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipLoadoutSnapshot final : public
     ::uint64_t diamond_balance_;
     ::uint64_t bind_diamond_balance_;
     ::uint32_t unlock_item_config_id_;
+    ::uint32_t free_schemes_;
+    ::uint32_t light_card_bonus_schemes_;
+    ::uint32_t rented_extra_slots_;
+    ::uint64_t rent_expires_at_sec_;
+    ::uint64_t server_now_sec_;
+    ::uint64_t rent_unit_price_diamond_;
+    ::uint32_t rent_period_days_;
+    ::uint32_t rent_max_remaining_days_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -31291,6 +31387,198 @@ inline ::google::protobuf::RepeatedPtrField<::EquipLoadoutLinkedOption>* PROTOBU
 EquipLoadoutSnapshot::_internal_mutable_attribute_schemes() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.attribute_schemes_;
+}
+
+// uint32 free_schemes = 14;
+inline void EquipLoadoutSnapshot::clear_free_schemes() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.free_schemes_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint32_t EquipLoadoutSnapshot::free_schemes() const {
+  // @@protoc_insertion_point(field_get:EquipLoadoutSnapshot.free_schemes)
+  return _internal_free_schemes();
+}
+inline void EquipLoadoutSnapshot::set_free_schemes(::uint32_t value) {
+  _internal_set_free_schemes(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:EquipLoadoutSnapshot.free_schemes)
+}
+inline ::uint32_t EquipLoadoutSnapshot::_internal_free_schemes() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.free_schemes_;
+}
+inline void EquipLoadoutSnapshot::_internal_set_free_schemes(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.free_schemes_ = value;
+}
+
+// uint32 light_card_bonus_schemes = 15;
+inline void EquipLoadoutSnapshot::clear_light_card_bonus_schemes() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.light_card_bonus_schemes_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint32_t EquipLoadoutSnapshot::light_card_bonus_schemes() const {
+  // @@protoc_insertion_point(field_get:EquipLoadoutSnapshot.light_card_bonus_schemes)
+  return _internal_light_card_bonus_schemes();
+}
+inline void EquipLoadoutSnapshot::set_light_card_bonus_schemes(::uint32_t value) {
+  _internal_set_light_card_bonus_schemes(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:EquipLoadoutSnapshot.light_card_bonus_schemes)
+}
+inline ::uint32_t EquipLoadoutSnapshot::_internal_light_card_bonus_schemes() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.light_card_bonus_schemes_;
+}
+inline void EquipLoadoutSnapshot::_internal_set_light_card_bonus_schemes(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.light_card_bonus_schemes_ = value;
+}
+
+// uint32 rented_extra_slots = 16;
+inline void EquipLoadoutSnapshot::clear_rented_extra_slots() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rented_extra_slots_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint32_t EquipLoadoutSnapshot::rented_extra_slots() const {
+  // @@protoc_insertion_point(field_get:EquipLoadoutSnapshot.rented_extra_slots)
+  return _internal_rented_extra_slots();
+}
+inline void EquipLoadoutSnapshot::set_rented_extra_slots(::uint32_t value) {
+  _internal_set_rented_extra_slots(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:EquipLoadoutSnapshot.rented_extra_slots)
+}
+inline ::uint32_t EquipLoadoutSnapshot::_internal_rented_extra_slots() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rented_extra_slots_;
+}
+inline void EquipLoadoutSnapshot::_internal_set_rented_extra_slots(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rented_extra_slots_ = value;
+}
+
+// uint64 rent_expires_at_sec = 17;
+inline void EquipLoadoutSnapshot::clear_rent_expires_at_sec() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rent_expires_at_sec_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint64_t EquipLoadoutSnapshot::rent_expires_at_sec() const {
+  // @@protoc_insertion_point(field_get:EquipLoadoutSnapshot.rent_expires_at_sec)
+  return _internal_rent_expires_at_sec();
+}
+inline void EquipLoadoutSnapshot::set_rent_expires_at_sec(::uint64_t value) {
+  _internal_set_rent_expires_at_sec(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:EquipLoadoutSnapshot.rent_expires_at_sec)
+}
+inline ::uint64_t EquipLoadoutSnapshot::_internal_rent_expires_at_sec() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rent_expires_at_sec_;
+}
+inline void EquipLoadoutSnapshot::_internal_set_rent_expires_at_sec(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rent_expires_at_sec_ = value;
+}
+
+// uint64 server_now_sec = 18;
+inline void EquipLoadoutSnapshot::clear_server_now_sec() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.server_now_sec_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline ::uint64_t EquipLoadoutSnapshot::server_now_sec() const {
+  // @@protoc_insertion_point(field_get:EquipLoadoutSnapshot.server_now_sec)
+  return _internal_server_now_sec();
+}
+inline void EquipLoadoutSnapshot::set_server_now_sec(::uint64_t value) {
+  _internal_set_server_now_sec(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:EquipLoadoutSnapshot.server_now_sec)
+}
+inline ::uint64_t EquipLoadoutSnapshot::_internal_server_now_sec() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.server_now_sec_;
+}
+inline void EquipLoadoutSnapshot::_internal_set_server_now_sec(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.server_now_sec_ = value;
+}
+
+// uint64 rent_unit_price_diamond = 19;
+inline void EquipLoadoutSnapshot::clear_rent_unit_price_diamond() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rent_unit_price_diamond_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+}
+inline ::uint64_t EquipLoadoutSnapshot::rent_unit_price_diamond() const {
+  // @@protoc_insertion_point(field_get:EquipLoadoutSnapshot.rent_unit_price_diamond)
+  return _internal_rent_unit_price_diamond();
+}
+inline void EquipLoadoutSnapshot::set_rent_unit_price_diamond(::uint64_t value) {
+  _internal_set_rent_unit_price_diamond(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  // @@protoc_insertion_point(field_set:EquipLoadoutSnapshot.rent_unit_price_diamond)
+}
+inline ::uint64_t EquipLoadoutSnapshot::_internal_rent_unit_price_diamond() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rent_unit_price_diamond_;
+}
+inline void EquipLoadoutSnapshot::_internal_set_rent_unit_price_diamond(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rent_unit_price_diamond_ = value;
+}
+
+// uint32 rent_period_days = 20;
+inline void EquipLoadoutSnapshot::clear_rent_period_days() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rent_period_days_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+}
+inline ::uint32_t EquipLoadoutSnapshot::rent_period_days() const {
+  // @@protoc_insertion_point(field_get:EquipLoadoutSnapshot.rent_period_days)
+  return _internal_rent_period_days();
+}
+inline void EquipLoadoutSnapshot::set_rent_period_days(::uint32_t value) {
+  _internal_set_rent_period_days(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  // @@protoc_insertion_point(field_set:EquipLoadoutSnapshot.rent_period_days)
+}
+inline ::uint32_t EquipLoadoutSnapshot::_internal_rent_period_days() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rent_period_days_;
+}
+inline void EquipLoadoutSnapshot::_internal_set_rent_period_days(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rent_period_days_ = value;
+}
+
+// uint32 rent_max_remaining_days = 21;
+inline void EquipLoadoutSnapshot::clear_rent_max_remaining_days() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rent_max_remaining_days_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+}
+inline ::uint32_t EquipLoadoutSnapshot::rent_max_remaining_days() const {
+  // @@protoc_insertion_point(field_get:EquipLoadoutSnapshot.rent_max_remaining_days)
+  return _internal_rent_max_remaining_days();
+}
+inline void EquipLoadoutSnapshot::set_rent_max_remaining_days(::uint32_t value) {
+  _internal_set_rent_max_remaining_days(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  // @@protoc_insertion_point(field_set:EquipLoadoutSnapshot.rent_max_remaining_days)
+}
+inline ::uint32_t EquipLoadoutSnapshot::_internal_rent_max_remaining_days() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rent_max_remaining_days_;
+}
+inline void EquipLoadoutSnapshot::_internal_set_rent_max_remaining_days(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rent_max_remaining_days_ = value;
 }
 
 // -------------------------------------------------------------------

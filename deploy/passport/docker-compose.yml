@@ -10,6 +10,7 @@
 # 本地启动示例（PowerShell）：
 #   $env:PASSPORT_DB_ROOT_PASSWORD = "<local-root-password>"
 #   $env:PASSPORT_DB_PASSWORD      = "<local-casdoor-password>"
+#   $env:PASSPORT_ADMIN_PASSWORD   = "<local-casdoor-admin-password>"
 #   $env:PASSPORT_ORIGIN           = "http://127.0.0.1:8000"
 #   docker compose -f deploy/passport/docker-compose.yml up -d
 #
@@ -47,12 +48,15 @@ services:
       passport-db:
         condition: service_healthy
     ports:
-      - "${PASSPORT_PORT:-8000}:8000"
+      # 默认只绑本机回环:Casdoor 首启前未设管理员口令时任何能访问端口的人都能抢先设置;真机局域网联调再显式设 PASSPORT_BIND=0.0.0.0。
+      - "${PASSPORT_BIND:-127.0.0.1}:${PASSPORT_PORT:-8000}:8000"
     environment:
       RUNNING_IN_DOCKER: "true"
       driverName: mysql
       dataSourceName: "casdoor:${PASSPORT_DB_PASSWORD:?set PASSPORT_DB_PASSWORD}@tcp(passport-db:3306)/"
       dbName: casdoor
+      # 首启即写入 built-in/admin 口令,杜绝「首个访问者在浏览器里设置管理员口令」的接管窗口。
+      initAdminPassword: ${PASSPORT_ADMIN_PASSWORD:?set PASSPORT_ADMIN_PASSWORD}
       origin: ${PASSPORT_ORIGIN:-http://127.0.0.1:8000}
       runmode: ${PASSPORT_RUNMODE:-dev}
       initDataFile: "./init_data.json"

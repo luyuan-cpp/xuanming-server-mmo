@@ -45,7 +45,8 @@ inline void NoteInboundFrame(SessionInfo &session)
 void ExpectHandshake(SessionId sessionId, const SessionInfo &session, client_liveness::SteadyTime now);
 
 // 验签成功、即将回 ClientTokenVerifyResponse{success = true}:回包填心跳参数,并从这一刻起按空闲超时判死这条连接。
-// 三条成功路径(正常验签、已验证会话重发验签、dev 免验签)都调;重复调用只填参数,不重复登记。
+// 两条成功路径(正常验签、dev 免验签)都调;dev 下每条验签请求都答,重复调用只填参数,不重复登记。
+// 已验签的连接再发验签请求不回包、计非法包(client_session_handler.cpp DispatchTokenVerify),不走到这里。
 void OnTokenVerified(SessionId sessionId, SessionInfo &session, ClientTokenVerifyResponse &response,
 					 client_liveness::SteadyTime now);
 

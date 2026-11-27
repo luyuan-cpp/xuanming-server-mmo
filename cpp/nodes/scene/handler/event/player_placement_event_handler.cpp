@@ -19,6 +19,7 @@ void PlayerPlacementEventHandler::PlayerHostedPlacementEventHandler(const Player
     placement.sessionId = event.session_id();
     placement.loginGeneration = event.login_generation();
     placement.ownerRevision = event.owner_revision();
+    placement.gateInstanceId = event.gate_instance_id();
     PlayerLifecycleSystem::HandleHostedPlacement(placement);
 ///<<< END WRITING YOUR CODE
 }

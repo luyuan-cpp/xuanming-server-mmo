@@ -5,6 +5,8 @@
 > 上位红线：[项目设定](project-vision.md)（好玩优先 / 不肝防多开 / 小小氪金 / 官方 7:3 / 物价稳得住 / 防骗与资金安全）  
 > 配套技术设计：[激励视频广告与绑定银两全端技术与零拒审工程设计](../design/rewarded-ad-system.md)  
 > 衔接文档：[经济与官方 7:3 总纲](equipment-economy-charter.md) · [官方灵石百宝阁 V1](spirit-shop-and-starter-packs-v1.md) · [角色升级与战斗银两经济 V1](player-leveling-and-battle-economy-v1.md) · [真钱充值设计](../design/payment-recharge.md) · [客户端小游戏与 App 双形态强制规范](../../../mmorpg-client/Docs/rules/minigame-and-app-platforms.md)
+>
+> **2026-11-26 反「上班」升级覆盖（详见 [anti-chore-remediation-v1.md](anti-chore-remediation-v1.md)）**：严守首审默认关闭（`enabled = 0`）与物理隔离绑定银两（`currency_type = 3`）红线不变；配额由“每日 2 次（05:00 日清）”升级为**每周 14 次（UTC+8 周一 05:00 切周）**，总上限等价且零每日打卡压力。
 
 ---
 

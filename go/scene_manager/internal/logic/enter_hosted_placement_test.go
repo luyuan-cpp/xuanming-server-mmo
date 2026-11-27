@@ -139,6 +139,41 @@ func TestEnterScene_HostedPlacementSameNodeDeliversSceneCommand(t *testing.T) {
 	assert.Empty(t, calls, "同节点换图不派 ReleasePlayer")
 }
 
+// 托管落点请求不带 gate:同一会话沿用 location 为这次登录记下的 gate 实例,事件把它带给目标节点(§14.8),
+// 目标节点记进登录身份后,老 gate 进程同号的迟到入场照样按实例认得出;location 也不把实例抹成未知。
+func TestEnterScene_HostedPlacementCarriesTheGateInstanceRecordedForTheLostLogin(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	rec := installReleaseDispatchRecorder(t, sc, nil)
+	capture := installHostedRouteCapture(sc, rec, nil)
+	const (
+		playerID = uint64(6979)
+		oldScene = uint64(7991)
+		target   = uint64(7992)
+	)
+	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
+	seedSceneOnNode(mr, testZoneId, target, "10", "4")
+	identSeedLocation(t, sc, playerID, &scene_manager.PlayerLocation{
+		SceneId: oldScene, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 1, UpdateTime: 100,
+		SessionId: hostedTestSession, LoginGeneration: hostedTestGeneration, GateInstanceId: "gate-lost-login-uuid",
+	})
+	adoptSceneMember(mr, oldScene, playerID)
+	setKnownNodeInstanceForTest(t, testZoneId, "10", "scene-10-uuid")
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(hostedPlacementRequest(playerID, target))
+	require.NoError(t, err)
+	require.Equal(t, uint32(0), resp.ErrorCode, resp.ErrorMessage)
+
+	loc := identLocation(t, sc, playerID)
+	require.NotNil(t, loc)
+	assert.Equal(t, target, loc.SceneId)
+	assert.Equal(t, "gate-lost-login-uuid", loc.GetGateInstanceId(), "同一会话的请求不带实例:沿用记下的,不抹成未知")
+	messages := capture.snapshot()
+	require.Len(t, messages, 1)
+	_, placement := decodeHostedPlacement(t, messages[0])
+	assert.Equal(t, hostedTestSession, placement.GetSessionId())
+	assert.Equal(t, "gate-lost-login-uuid", placement.GetGateInstanceId(), "变异红:目标节点要知道断开的那次登录在哪个 gate 进程上")
+}
+
 // 跨节点:凭源节点为当前代写的标记放行,铸造新 epoch,事件发给目标节点、带新 epoch;提交之后才派 ReleasePlayer 给源节点。
 func TestEnterScene_HostedPlacementCrossNodeWithMarkerMintsAndDeliversToTarget(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)

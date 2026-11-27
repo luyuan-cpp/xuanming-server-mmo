@@ -63,15 +63,21 @@ func NextWeeklyReset(t time.Time) time.Time {
 
 // 限购周期的取值,与配表 GuildShop.limit_period 的数值一致。
 const (
-	PeriodNone   uint32 = 0 // 不限:不占计数行
-	PeriodDaily  uint32 = 1 // 每游戏日
-	PeriodWeekly uint32 = 2 // 每游戏周
+	PeriodNone     uint32 = 0 // 不限:不占计数行
+	PeriodDaily    uint32 = 1 // 每游戏日(保留兼容,现役零使用)
+	PeriodWeekly   uint32 = 2 // 每游戏周
+	PeriodLifetime uint32 = 3 // 终身限购(固定键 LifetimePeriodKey = 1,永不重置与清理)
+
+	// LifetimePeriodKey 是终身限购在 guild_daily_counter 中的固定周期键:
+	// 严格小于周键下界(100000)与日键下界(19700101),且非 0(占计数行),永不被历史周期清理误删。
+	LifetimePeriodKey uint32 = 1
 )
 
 // PeriodKey 按限购周期取周期键:PeriodNone → (0, true),0 表示"不占计数行";
-// PeriodDaily → DayKey;PeriodWeekly → WeekKey;其它值 → (0, false),调用方应当作配置错误拒绝。
+// PeriodDaily → DayKey;PeriodWeekly → WeekKey;PeriodLifetime → LifetimePeriodKey(1);
+// 其它值 → (0, false),调用方应当作配置错误拒绝。
 //
-// DayKey(8 位)与 WeekKey(6 位)的数值域不相交,清理任务靠这一点分别删日键行与周键行。
+// LifetimePeriodKey(1)、WeekKey(6 位)与 DayKey(8 位)的数值域两两不相交,清理任务只删日键/周键范围。
 func PeriodKey(limitPeriod uint32, t time.Time) (key uint32, ok bool) {
 	switch limitPeriod {
 	case PeriodNone:
@@ -80,6 +86,8 @@ func PeriodKey(limitPeriod uint32, t time.Time) (key uint32, ok bool) {
 		return DayKey(t), true
 	case PeriodWeekly:
 		return WeekKey(t), true
+	case PeriodLifetime:
+		return LifetimePeriodKey, true
 	default:
 		return 0, false
 	}

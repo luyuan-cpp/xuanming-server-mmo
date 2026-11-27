@@ -12,6 +12,7 @@
 //   - accept 失败的分类、进程级计数与降级处理的声明。资源耗尽时不再崩溃,原因见 Acceptor.cc 文件头。
 //   - 准入回调:accept 成功之后、建任何每连接对象之前问一次要不要这条连接,不要就当场以 RST 关掉
 //     (docs/design/gate-connection-admission-control.md 的 P1-1、P1-2)。
+//   - setDeferAccept:监听 socket 上开 TCP_DEFER_ACCEPT(同一设计稿的 P2-1)。
 
 #ifndef MUDUO_NET_ACCEPTOR_H
 #define MUDUO_NET_ACCEPTOR_H
@@ -75,6 +76,12 @@ class Acceptor : noncopyable
   typedef std::function<bool (const InetAddress& peerAddr)> AdmissionCallback;
   void setAdmissionCallback(const AdmissionCallback& cb)
   { admissionCallback_ = cb; }
+
+  // LOCAL DELTA: 监听 socket 上开 TCP_DEFER_ACCEPT(Linux;docs/design/gate-connection-admission-control.md P2-1):
+  // 对端发来第一段数据之前内核不把连接交上来,连上就断的连接根本不进 accept 队列;一直不说话的连接约 seconds 秒后
+  // 照样交上来(内核在那时重发一次 SYN-ACK,对端回 ACK 即接入)。只适合客户端先说话的协议。0 = 关闭。
+  // 其他平台没有这个选项,调用什么也不做。设置失败打一行 SYSERR,监听照常。在 loop 线程上调用。
+  void setDeferAccept(int seconds);
 
   void listen();
 

@@ -733,10 +733,10 @@ type globalSpectatorIntentPurge struct {
 	after authority.SpectatorIntentCursor
 }
 
-// round 连续清页(drainRetentionPages)。失败的那一页不动游标,记一次失败计数与日志,下一轮重试:意图保留没有未知结局,不进 HoldRelay。
-// 持续失败由告警 MatchRetentionPurgeFailing 报(deploy/k8s/match-alerts.yaml)。
+// round 连续清页(drainRetentionPages)。失败的那一页不动游标,下一轮重试;结局交给 observeRetentionRound
+// (失败计数与日志;搬库冻结不算失败)。
 func (p *globalSpectatorIntentPurge) round(ctx context.Context, purger spectatorIntentPurger) {
-	err := drainRetentionPages(func() (bool, error) {
+	observeRetentionRound(metrics.RetentionPurgeSpectatorIntent, drainRetentionPages(func() (bool, error) {
 		pageCtx, cancel := context.WithTimeout(ctx, globalSpectatorIntentPurgeBudget)
 		defer cancel()
 		next, deleted, err := purger.PurgeClosedSpectatorIntents(pageCtx, p.after, globalSpectatorIntentPurgeBatch)
@@ -746,11 +746,7 @@ func (p *globalSpectatorIntentPurge) round(ctx context.Context, purger spectator
 		p.after = next
 		metrics.ObserveSpectatorIntentPurged(deleted)
 		return next != (authority.SpectatorIntentCursor{}), nil
-	})
-	if err != nil {
-		metrics.ObserveRetentionPurgeFailure(metrics.RetentionPurgeSpectatorIntent)
-		logx.Errorf("[spectate] Spectator intent retention purge failed; retrying next round: %v", err)
-	}
+	}))
 }
 
 // 固定高水位覆盖旧占用；每状态索引页合并、两在途许可、单操作3秒，未知继续游标。

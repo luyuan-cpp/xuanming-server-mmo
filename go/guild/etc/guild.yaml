@@ -104,12 +104,15 @@ ContentGuard:
       Hosts:
         - 127.0.0.1:2379
       Key: contentguard.rpc
-    Timeout: 500
+    # 每次调用的硬上限(毫秒),要盖住下面最长的一档和异步补审的 3000。
+    Timeout: 3500
     NonBlock: true
     Middlewares:
       Breaker: true
   Optional: true
-  TimeoutMs: 300
+  # 聊天、私有标签一档;名字、公告、寄售标题要等外部平台(微信 / 抖音),用长的一档。
+  TimeoutMs: 600
+  NameTimeoutMs: 2000
 
 # guild_id 号段发号(docs/design/node-id-overhaul-plan-20260908.md §6)。
 # Enabled:**只有显式写 true 才开**;整块不写 = 关 = 发不出 id,建帮一律失败。

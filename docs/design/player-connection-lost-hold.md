@@ -178,7 +178,8 @@ scene 主动踢人(34)时,scene 自己先销毁实体,之后到达的 `DISCONNEC
      通常是上一条事件还没被消费)照样再发一次,失败只回 7、不回滚。
    - 第 7b 步跨节点时给源节点派 ReleasePlayer,不变(源节点交接在途,忽略它,由交接应答收尾)。
 3. **目标节点**(`PlayerPlacementEventHandler` → `PlayerLifecycleSystem::HandleHostedPlacement`):事件是 gate 路由在"没有 gate 会话"时的等价物,
-   字段与 `PlayerEnterGameNodeRequest` 一一对应。组一份 `PlayerEnterContext{hostedPlacement = true}`,走与 gate 路由**同一条入场链**:
+   字段与 `PlayerEnterGameNodeRequest` 一一对应。gate 实例取事件的 `gate_instance_id`(location 为断开那次登录记下的实例,
+   scene-enter-chain-residuals.md §14.8),gate 路由取的是入站连接的握手身份。组一份 `PlayerEnterContext{hostedPlacement = true}`,走与 gate 路由**同一条入场链**:
    `RoleAdmissionSystem::RequestEnter`(全局 SQL 角色登记 + `handoff_fence` 交接栅栏)→ `HandleEnterGameNode`(入场会话栅栏、复用实体或认领载入)
    → `EnterScene`。`hostedPlacement` 只改三件事:
    - 会话号照常当**登录身份**用(角色登记原件、入场栅栏、`PlayerLoginIdentityComp`、断线保留的接回判据),但**不绑** SessionMap、快照会话保持无效、

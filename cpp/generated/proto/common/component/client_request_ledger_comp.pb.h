@@ -536,6 +536,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentMaterialRewardLedger final
     kWeekStartsAtMsFieldNumber = 8,
     kMigratedToV2FieldNumber = 10,
     kStage1TradableConfirmedFieldNumber = 11,
+    kStage2PoolCapFieldNumber = 12,
   };
   // uint64 day_starts_at_ms = 1;
   void clear_day_starts_at_ms() ;
@@ -647,11 +648,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentMaterialRewardLedger final
   void _internal_set_stage1_tradable_confirmed(::uint32_t value);
 
   public:
+  // uint32 stage2_pool_cap = 12;
+  void clear_stage2_pool_cap() ;
+  [[nodiscard]] ::uint32_t stage2_pool_cap() const;
+  void set_stage2_pool_cap(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_stage2_pool_cap() const;
+  void _internal_set_stage2_pool_cap(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:EquipmentMaterialRewardLedger)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 11,
+      ::google::protobuf::internal::TcParseTable<4, 12,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -691,6 +702,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipmentMaterialRewardLedger final
     ::uint64_t week_starts_at_ms_;
     bool migrated_to_v2_;
     ::uint32_t stage1_tradable_confirmed_;
+    ::uint32_t stage2_pool_cap_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1571,6 +1583,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleEconomyLedger final : public 
     kWeekStartsAtMsFieldNumber = 1,
     kBattleSilverThisWeekFieldNumber = 2,
     kBattleExpThisWeekFieldNumber = 3,
+    kSilverRolloverSoftCapFieldNumber = 4,
+    kSilverRolloverHardCapFieldNumber = 5,
   };
   // uint64 week_starts_at_ms = 1;
   void clear_week_starts_at_ms() ;
@@ -1602,11 +1616,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleEconomyLedger final : public 
   void _internal_set_battle_exp_this_week(::uint64_t value);
 
   public:
+  // uint64 silver_rollover_soft_cap = 4;
+  void clear_silver_rollover_soft_cap() ;
+  [[nodiscard]] ::uint64_t silver_rollover_soft_cap() const;
+  void set_silver_rollover_soft_cap(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_silver_rollover_soft_cap() const;
+  void _internal_set_silver_rollover_soft_cap(::uint64_t value);
+
+  public:
+  // uint64 silver_rollover_hard_cap = 5;
+  void clear_silver_rollover_hard_cap() ;
+  [[nodiscard]] ::uint64_t silver_rollover_hard_cap() const;
+  void set_silver_rollover_hard_cap(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_silver_rollover_hard_cap() const;
+  void _internal_set_silver_rollover_hard_cap(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:BattleEconomyLedger)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<3, 5,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1638,6 +1672,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleEconomyLedger final : public 
     ::uint64_t week_starts_at_ms_;
     ::uint64_t battle_silver_this_week_;
     ::uint64_t battle_exp_this_week_;
+    ::uint64_t silver_rollover_soft_cap_;
+    ::uint64_t silver_rollover_hard_cap_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3314,6 +3350,30 @@ inline void EquipmentMaterialRewardLedger::_internal_set_stage1_tradable_confirm
   _impl_.stage1_tradable_confirmed_ = value;
 }
 
+// uint32 stage2_pool_cap = 12;
+inline void EquipmentMaterialRewardLedger::clear_stage2_pool_cap() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.stage2_pool_cap_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t EquipmentMaterialRewardLedger::stage2_pool_cap() const {
+  // @@protoc_insertion_point(field_get:EquipmentMaterialRewardLedger.stage2_pool_cap)
+  return _internal_stage2_pool_cap();
+}
+inline void EquipmentMaterialRewardLedger::set_stage2_pool_cap(::uint32_t value) {
+  _internal_set_stage2_pool_cap(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:EquipmentMaterialRewardLedger.stage2_pool_cap)
+}
+inline ::uint32_t EquipmentMaterialRewardLedger::_internal_stage2_pool_cap() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.stage2_pool_cap_;
+}
+inline void EquipmentMaterialRewardLedger::_internal_set_stage2_pool_cap(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.stage2_pool_cap_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // BattleEconomyLedger
@@ -3388,6 +3448,54 @@ inline ::uint64_t BattleEconomyLedger::_internal_battle_exp_this_week() const {
 inline void BattleEconomyLedger::_internal_set_battle_exp_this_week(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_exp_this_week_ = value;
+}
+
+// uint64 silver_rollover_soft_cap = 4;
+inline void BattleEconomyLedger::clear_silver_rollover_soft_cap() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.silver_rollover_soft_cap_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t BattleEconomyLedger::silver_rollover_soft_cap() const {
+  // @@protoc_insertion_point(field_get:BattleEconomyLedger.silver_rollover_soft_cap)
+  return _internal_silver_rollover_soft_cap();
+}
+inline void BattleEconomyLedger::set_silver_rollover_soft_cap(::uint64_t value) {
+  _internal_set_silver_rollover_soft_cap(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:BattleEconomyLedger.silver_rollover_soft_cap)
+}
+inline ::uint64_t BattleEconomyLedger::_internal_silver_rollover_soft_cap() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.silver_rollover_soft_cap_;
+}
+inline void BattleEconomyLedger::_internal_set_silver_rollover_soft_cap(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.silver_rollover_soft_cap_ = value;
+}
+
+// uint64 silver_rollover_hard_cap = 5;
+inline void BattleEconomyLedger::clear_silver_rollover_hard_cap() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.silver_rollover_hard_cap_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t BattleEconomyLedger::silver_rollover_hard_cap() const {
+  // @@protoc_insertion_point(field_get:BattleEconomyLedger.silver_rollover_hard_cap)
+  return _internal_silver_rollover_hard_cap();
+}
+inline void BattleEconomyLedger::set_silver_rollover_hard_cap(::uint64_t value) {
+  _internal_set_silver_rollover_hard_cap(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:BattleEconomyLedger.silver_rollover_hard_cap)
+}
+inline ::uint64_t BattleEconomyLedger::_internal_silver_rollover_hard_cap() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.silver_rollover_hard_cap_;
+}
+inline void BattleEconomyLedger::_internal_set_silver_rollover_hard_cap(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.silver_rollover_hard_cap_ = value;
 }
 
 // -------------------------------------------------------------------

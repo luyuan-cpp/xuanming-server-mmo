@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
   "schema_digest": "88750c2d961d8710",
-  "version": 101,
-  "content_digest": "04e6e9adf0d9702c72eaeb5ce1be98764b15ca8025c920246f009db6ca7806d3",
-  "generated_at": "2026-11-26T13:40:24Z",
+  "version": 102,
+  "content_digest": "950e1948474657b3d8c52c7b92ee2d1a5e6f483d4f7ad5abe62cf6327bf73f01",
+  "generated_at": "2026-11-27T01:09:09Z",
   "source_rev": {
-    "commit": "60b0bd6b30feb6fd60bc0654ebff73a4b5bdf11b",
+    "commit": "bc6e708508dad77aba7a8fd2ff7624e02b37db70",
     "data_dirty": true
   },
   "table_count": 83,
@@ -917,21 +917,21 @@
       "rows": 3,
       "source": {
         "file": "GuildActivity.xlsx",
-        "size": 5915,
-        "sha256": "d3559daa229a81c3a05f25e39a2cc958bd9a77a4117f23e3b2007d7e46d4e6d0"
+        "size": 5929,
+        "sha256": "cc44ff7702ed2eb8b8b32640e06fd1b433a34ff8e80026baeda67064de1b3448"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "guildactivity.json",
-          "size": 1010,
-          "sha256": "91eb84e4a1f20c348987072c5a5e2206c60309cabcb1eba0b5dcfcc71af9997f"
+          "size": 1013,
+          "sha256": "3cbffab556dece3389bd3b0a2713d02bcc2193a23d94a781d657b02cdbb674a8"
         },
         {
           "kind": "binary",
           "file": "guildactivity.pb",
-          "size": 106,
-          "sha256": "e7cbc20d1377218ca096468ec0b203457ed6b1a9b572e3e8b3849a80f2d92026"
+          "size": 100,
+          "sha256": "ea642f2692d9598e2eb2b4f84e26f3f57dbd9fc6118f68a1d2fbce2cdcb73443"
         }
       ]
     },
@@ -939,24 +939,24 @@
       "name": "GuildDonate",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 3,
+      "rows": 1,
       "source": {
         "file": "GuildDonate.xlsx",
-        "size": 5441,
-        "sha256": "053335c5eb7dc45bbe6d896edec8cf9005ebe4a6bf109b2b765cdcf8bc5181bd"
+        "size": 5345,
+        "sha256": "20b977bf07229ff53805b8b3f3953115e8a583fc43a2b7b0a5c9ff19b8878c06"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "guilddonate.json",
-          "size": 595,
-          "sha256": "55636091453cb76d002b9d87bf55e50b3ab13eb30e12ad862c7354bbc1485d35"
+          "size": 214,
+          "sha256": "754e2f4f282bad61717cfad4a7da12b8c1f1d0276d521fbdd2007defa520c43a"
         },
         {
           "kind": "binary",
           "file": "guilddonate.pb",
-          "size": 94,
-          "sha256": "0601bca03ea6288602fa5397fec091e0fe4da7659ae1503c2a4c930fa0ab35ba"
+          "size": 36,
+          "sha256": "6ae4290fc7149d2a07aff4fb1d9f4f4550b26249657d8f741aa395ce4d30e096"
         }
       ]
     },
@@ -967,21 +967,21 @@
       "rows": 10,
       "source": {
         "file": "GuildLevel.xlsx",
-        "size": 5263,
-        "sha256": "99129c0a3768dc1841eea06886340f9250ec1af33695d539991af4dd9d88487c"
+        "size": 5277,
+        "sha256": "25cf50819f97557c12f5b84fd84f065111a377b4d11e5b46f2e24d2450ca9bc2"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "guildlevel.json",
-          "size": 982,
-          "sha256": "499603f3e7bfdef8cac0ec0c05c37816f0b1ef1be5b227b21b1fa6a5a93df3f2"
+          "size": 977,
+          "sha256": "c22d2185528f7102bbd33b5bc466c42911820b0848c3e3de0abeee7f8a736119"
         },
         {
           "kind": "binary",
           "file": "guildlevel.pb",
-          "size": 116,
-          "sha256": "482875085dad8f51772a79fc27995ef2d92dae868e6fa4006e0b2e18388d0bb8"
+          "size": 114,
+          "sha256": "20b8967b8cb1e52f006e8b2ff6ebeb05edadf396bcf1a1b03aacf42f0fd1e09c"
         }
       ]
     },
@@ -1017,21 +1017,21 @@
       "rows": 17,
       "source": {
         "file": "GuildShop.xlsx",
-        "size": 6298,
-        "sha256": "ee6ba92226c3c510356daff52471d43088eecd52af673d3b413d4244e6c272f5"
+        "size": 6293,
+        "sha256": "2e74430e9ce5b3e5867904f7f692bebeafd85600cd5b66d7b19c6b1862f1d4ea"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "guildshop.json",
-          "size": 3552,
-          "sha256": "94d5f0dde2d83638d8cbb42cf5540ce27045f71a72c50b4f035300182a8effcc"
+          "size": 3548,
+          "sha256": "d5ce8e08a93f927bac162e0b2b3ae81f54b8c574d820723dc2021b7c9b1753ca"
         },
         {
           "kind": "binary",
           "file": "guildshop.pb",
-          "size": 567,
-          "sha256": "f2217aeb74b0a5cdd5e46c125b5bfaab70689444d4f08be674ea9e4ad225cd5c"
+          "size": 539,
+          "sha256": "132bb1cf612b6418690c5729f2a8f2642209d827ab5680691ad85042dc5aefad"
         }
       ]
     },
@@ -1042,21 +1042,21 @@
       "rows": 4,
       "source": {
         "file": "GuildWarMilestone.xlsx",
-        "size": 5390,
-        "sha256": "866cdb1bafd07589baae5a5c164f7f47b0f7bd1ec6d9b527013481a88a838142"
+        "size": 5389,
+        "sha256": "ed379316dd779da9830e027d8119cf8dbbdc62f04ee6bfa40d7ea59e2c0fd73a"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "guildwarmilestone.json",
-          "size": 1182,
-          "sha256": "ad22132f2616322e13329e74ef850858b78f5bbfefc8adf4a8f7f0360ed2b06c"
+          "size": 1181,
+          "sha256": "ae7e7e77490fe1aaf11b1296a600a5d68e662a0f53cc9af2e332bdbc478951dd"
         },
         {
           "kind": "binary",
           "file": "guildwarmilestone.pb",
           "size": 275,
-          "sha256": "31e72b5f9e6a43ab148b843fa90a0ce9c34ac8320ef66092113dbc446bd93169"
+          "sha256": "7db36302c33f08709434a03a8ffeee5d52ae263694000e1a8247ac1355deae60"
         }
       ]
     },
@@ -1067,21 +1067,21 @@
       "rows": 1,
       "source": {
         "file": "GuildWarRule.xlsx",
-        "size": 5937,
-        "sha256": "1caa76e400abca8e65d8f75f426e50148ecd8e8e7d97c9c4f94a4732a0e53c5a"
+        "size": 5929,
+        "sha256": "cae12fe0ce8c706ffa1fcc0642f28d4c5bedc09ba1f68d71b3bc9ba4f16caa5b"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "guildwarrule.json",
           "size": 1006,
-          "sha256": "2983eafaceff36e83f4835c346bbec23310e2ae5e11efede73592756671b4d09"
+          "sha256": "baba300e2aa187ad71a2e7985924174b6850a69557c1f4b1a5e2d89bf5054523"
         },
         {
           "kind": "binary",
           "file": "guildwarrule.pb",
           "size": 94,
-          "sha256": "2774bdb027626b37a5ed255b17f0bf9eb5a0cea725fdc72dcca038e7467b8f8c"
+          "sha256": "d77e8dd5dd674c086500d2ff111c216f9e9eb0a290445d4c66c4073f952f4c35"
         }
       ]
     },
@@ -1567,21 +1567,21 @@
       "rows": 1,
       "source": {
         "file": "RewardedAdSlot.xlsx",
-        "size": 5566,
-        "sha256": "bd3bcd7ccfce4e54d27b63df5ce42789f20bff0e7b9bc161591ac800f3e28a8c"
+        "size": 5573,
+        "sha256": "52a2ea5ccc071993af7cb1ca212110772583c1be3c46a9b92acdfa4c33161ba3"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "rewardedadslot.json",
-          "size": 260,
-          "sha256": "edb3be4203b32de902698ee1194e97eac88141f301c10f2c9628ce92c1d3029a"
+          "size": 261,
+          "sha256": "b9c23aee44ef26fc679488ba7d591d9a7b49496a08464fcde7cc3460d3901168"
         },
         {
           "kind": "binary",
           "file": "rewardedadslot.pb",
           "size": 22,
-          "sha256": "6c4bc279f1c3d46fde0d764fbea7b98e9c9b04abdb5072385eb50ee0024766b4"
+          "sha256": "c05dd58ed7c0bdf4c599dde3d40ca83b5c5dd3d1365c98dd7362b6beaa2f4c3e"
         }
       ]
     },
@@ -1892,21 +1892,21 @@
       "rows": 1,
       "source": {
         "file": "TournamentRule.xlsx",
-        "size": 6079,
-        "sha256": "3ded39889325c964c568dc29c0bdfad0a7f04676aa168711998efda23051ec72"
+        "size": 6070,
+        "sha256": "fe2b9f33e4e25c95ff55e488abf43fd08d04f663df1232f6908c05be6c79c231"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "tournamentrule.json",
-          "size": 1006,
-          "sha256": "3178e1622ab65220859cae2e616bfc03c707b383d8a709e667cc38a94890a3b1"
+          "size": 1007,
+          "sha256": "8c4214a6ff49444eb1b53c507a258557b607042d3f261aa3412f12366ba7d987"
         },
         {
           "kind": "binary",
           "file": "tournamentrule.pb",
           "size": 227,
-          "sha256": "9aa1085992f109ac7ee9630473f8f6dc48f48c3b4c6a64e5d949ec04c4a07fa2"
+          "sha256": "334580e02c1bb409a66155fe9bd4bfc92d10a740f8c7b7228ad46f5d64436065"
         }
       ]
     },

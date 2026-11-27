@@ -146,6 +146,16 @@ securityContext:
 
 **上线前置(硬性:发布带本项的镜像之前先做,别默认「大家会先读硬限」)**:
 
+**目标集群还没有旧 Pod 时(首次上线就是这种情况)**:容器的 nofile 由节点池的容器运行时决定,与跑的是哪个进程无关。在每个节点池上起一个一次性的探针 Pod 读一次,读完自动删除;镜像用要发布的节点镜像,不用另拉镜像:
+
+```bash
+kubectl -n <namespace> run nofile-probe --rm -i --restart=Never --image=<节点镜像> \
+  --overrides='{"spec":{"nodeSelector":{"<节点池标签名>":"<节点池标签值>"}}}' \
+  --command -- sh -c 'echo soft=$(ulimit -Sn) hard=$(ulimit -Hn)'
+```
+
+硬限不低于需求(gate 24096、battle 8192、scene 4096,改过准入上限的按「上限 + 4096」算)才发布;读数记进 `docs/PROGRESS.md`。已有旧 Pod 的集群按下面第 1 步读。
+
 1. 在每个目标集群的每个节点池上,从现有旧 Pod 读一次容器 nofile。gate / scene 的启动命令不是 `exec`,PID 1 可能是 `sh`,**不要读 `/proc/1/limits`**,按进程名找 pid:
    ```bash
    kubectl -n <ns> exec <pod> -c <容器名> -- sh -c 'for p in /proc/[0-9]*; do n=$(cat $p/comm 2>/dev/null); case "$n" in gate|scene|battle) echo $n; grep "Max open files" $p/limits;; esac; done'

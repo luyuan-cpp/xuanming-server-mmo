@@ -33,7 +33,7 @@ func Tables() []proto.Message {
 		&pb.MatchBattleCompletionRecord{}, &pb.MatchBattleSettlementSourceRecord{}, &pb.MatchRoleOccupancyRecord{},
 		&pb.MatchManualResolutionRecord{},                                  // 人工处置审计(2026-11-05,manual_abort.go)
 		&pb.MatchBattleReportRecord{}, &pb.MatchPlayerBattleReportRecord{}, // 战报回放(battle_report.go)
-		&pb.MatchTrialChallengeCardRecord{},                                // 试炼志 V3 好友约战帖(trial_challenge_card.go)
+		&pb.MatchTrialChallengeCardRecord{},                                                                      // 试炼志 V3 好友约战帖(trial_challenge_card.go)
 		&pb.MatchBattleScriptRecord{}, &pb.MatchBattleScriptReviewRecord{}, &pb.MatchBattleScriptLoadoutRecord{}, // 战斗剧本(battle_script.go)
 		&pb.MatchRankedSeasonRecord{}, &pb.MatchRankedPlayerPrefsRecord{}, &pb.MatchRankedPlayerSeasonRecord{}, &pb.MatchRankedRewardRecord{}, &pb.MatchRankedBattleRecord{}, &pb.MatchRankedRivalryRecord{}, &pb.MatchRankedFeaturedBuildRecord{}, // 论剑排位(ranked.go)
 		&pb.MatchTournamentSeasonRecord{}, &pb.MatchTournamentSquadRecord{}, &pb.MatchTournamentMemberRecord{}, &pb.MatchTournamentInviteRecord{}, &pb.MatchTournamentMatchRecord{}, &pb.MatchTournamentMatchGameRecord{}, &pb.MatchTournamentCheerRecord{}, &pb.MatchTournamentRewardRecord{}, &pb.MatchTournamentPredictionRecord{}, // 全服赛季战队锦标赛(tournament.go)

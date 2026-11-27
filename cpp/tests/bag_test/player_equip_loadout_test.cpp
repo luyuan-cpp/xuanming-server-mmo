@@ -28,6 +28,7 @@
 #include "proto/common/component/player_skill_comp.pb.h"
 #include "proto/common/database/mysql_database_table.pb.h"
 #include "proto/scene/player_bag.pb.h"
+#include "proto/scene/player_skill.pb.h"
 #include "proto/common/component/battle_comp.pb.h"
 #include "services/scene/player/comp/last_persisted_snapshot_comp.h"
 #include "services/scene/player/comp/player_frozen_comp.h"
@@ -35,6 +36,8 @@
 #include "services/scene/player/system/equip_loadout_rules.h"
 #include "services/scene/player/system/player_attribute.h"
 #include "services/scene/player/system/player_equip_loadout.h"
+#include "services/scene/player/system/player_skill.h"
+#include "services/scene/player/system/skill_loadout_rules.h"
 #include "table/code/attributeallocratio_table.h"
 #include "table/code/attributedimension_table.h"
 #include "table/code/attributepool_table.h"
@@ -156,6 +159,7 @@ protected:
 		tlsEcs.actorRegistry.emplace<PlayerItemHoldComp>(player_);
 		tlsEcs.actorRegistry.emplace<PlayerEquipLoadoutComp>(player_);
 		tlsEcs.actorRegistry.emplace<PlayerSkillListComp>(player_);
+		tlsEcs.actorRegistry.emplace<PlayerUint64Comp>(player_);
 
 		tlsEcs.actorRegistry.emplace<LevelComp>(player_).set_level(80);
 		auto &u32 = tlsEcs.actorRegistry.emplace<PlayerUint32Comp>(player_);
@@ -227,40 +231,32 @@ protected:
 		return resp.snapshot().state_version();
 	}
 
+	uint64_t CurrentVersionAt(uint64_t nowUnixSec)
+	{
+		GetEquipLoadoutsResponse resp;
+		EXPECT_EQ(kSuccess, PlayerEquipLoadoutSystem::GetAt(player_, nowUnixSec, resp));
+		return resp.snapshot().state_version();
+	}
+
 	entt::entity player_{entt::null};
 };
 
-TEST(EquipLoadoutRulesTest, TierPricingNameValidationAndSwapPlan)
+TEST(EquipLoadoutRulesTest, UnifiedSevenSlotDefaultsNameValidationAndSwapPlan)
 {
-	// 1. 价格阶梯验证
-	EXPECT_FALSE(equiploadout::UnlockSpecForTarget(1).valid);
-	const auto s2 = equiploadout::UnlockSpecForTarget(2);
-	EXPECT_TRUE(s2.valid);
-	EXPECT_EQ(60u, s2.costDiamond);
-	EXPECT_TRUE(s2.allowBindDiamond);
-	EXPECT_EQ(120u, equiploadout::UnlockSpecForTarget(3).costDiamond);
-	EXPECT_FALSE(equiploadout::UnlockSpecForTarget(3).allowBindDiamond);
-	EXPECT_EQ(180u, equiploadout::UnlockSpecForTarget(4).costDiamond);
-	EXPECT_EQ(240u, equiploadout::UnlockSpecForTarget(5).costDiamond);
-	EXPECT_FALSE(equiploadout::UnlockSpecForTarget(6).valid);
+	// 1. 方案 A 统一席位基础常量（免费 2 套起，总上限 7 套，与战法·加点对齐）
+	EXPECT_EQ(2u, equiploadout::kFreeSchemes);
+	EXPECT_EQ(7u, equiploadout::kMaxSchemes);
+	EXPECT_EQ("方案一", equiploadout::DefaultSchemeName(1));
+	EXPECT_EQ("方案六", equiploadout::DefaultSchemeName(6));
+	EXPECT_EQ("方案七", equiploadout::DefaultSchemeName(7));
+	EXPECT_EQ(2u, equiploadout::EffectiveUnlockedCount(0));
+	EXPECT_EQ(7u, equiploadout::EffectiveUnlockedCount(99));
+	// 到期锁定态允许保留 1..7 的激活方案号，不强切回方案一
+	EXPECT_EQ(7u, equiploadout::EffectiveActiveSchemeId(7, equiploadout::kMaxSchemes));
+	EXPECT_EQ(1u, equiploadout::EffectiveActiveSchemeId(0, equiploadout::kMaxSchemes));
+	EXPECT_EQ(1u, equiploadout::EffectiveActiveSchemeId(8, equiploadout::kMaxSchemes));
 
-	// 2. 扣费计划（3413 优先 > 方案 2 绑灵补非绑 > 非绑灵石）
-	const auto byTalisman = equiploadout::PlanUnlockPayment(s2, 1, 0, 0, true);
-	EXPECT_TRUE(byTalisman.canAfford);
-	EXPECT_TRUE(byTalisman.useTalisman);
-	EXPECT_EQ(0u, byTalisman.spendBindDiamond);
-	EXPECT_EQ(0u, byTalisman.spendDiamond);
-
-	const auto splitBind = equiploadout::PlanUnlockPayment(s2, 0, 45, 20, true);
-	EXPECT_TRUE(splitBind.canAfford);
-	EXPECT_FALSE(splitBind.useTalisman);
-	EXPECT_EQ(45u, splitBind.spendBindDiamond);
-	EXPECT_EQ(15u, splitBind.spendDiamond);
-
-	const auto s3NoBind = equiploadout::PlanUnlockPayment(equiploadout::UnlockSpecForTarget(3), 0, 500, 100, true);
-	EXPECT_FALSE(s3NoBind.canAfford);
-
-	// 3. 名称合法性校验
+	// 2. 名称合法性校验
 	EXPECT_TRUE(equiploadout::ValidateSchemeName("PVP高速控场"));
 	EXPECT_TRUE(equiploadout::ValidateSchemeName("五行极速控场PVP主力套")); // 12 字符上限
 	EXPECT_FALSE(equiploadout::ValidateSchemeName("五行极速控场PVP主力套超")); // 13 字符拒
@@ -268,7 +264,7 @@ TEST(EquipLoadoutRulesTest, TierPricingNameValidationAndSwapPlan)
 	EXPECT_FALSE(equiploadout::ValidateSchemeName("<b>加粗</b>"));
 	EXPECT_FALSE(equiploadout::ValidateSchemeName("官方最强套"));
 
-	// 4. 8v8 原位互换净背包需求为 0
+	// 3. 8v8 原位互换净背包需求为 0
 	std::map<uint32_t, uint64_t> cur;
 	std::map<uint32_t, uint64_t> desired;
 	for (uint32_t i = 0; i < 8; ++i)
@@ -302,7 +298,7 @@ TEST_F(PlayerEquipLoadoutTest, FullEightVsEightSwapSucceedsWithZeroFreeBagSlots)
 	}
 	ASSERT_EQ(0u, Inventory().Layout().FreeCells());
 
-	// 保存方案 1（捕获当前穿着 A 套）
+	// 方案 1 与方案 2 均永久免费：零付费直接保存两套方案！
 	SaveEquipLoadoutRequest save1;
 	save1.set_scheme_id(1);
 	save1.set_name("主线输出套");
@@ -313,15 +309,6 @@ TEST_F(PlayerEquipLoadoutTest, FullEightVsEightSwapSucceedsWithZeroFreeBagSlots)
 	SaveEquipLoadoutResponse save1Resp;
 	PlayerEquipLoadoutSystem::Save(player_, save1, save1Resp);
 	ASSERT_FALSE(save1Resp.has_error_message()) << save1Resp.error_message().id();
-
-	// 解锁方案 2 并保存 B 套
-	GrantCurrency(kCurrencyDiamond, 60);
-	UnlockEquipLoadoutRequest unlockReq;
-	unlockReq.set_client_request_id(9001);
-	unlockReq.set_expected_unlocked_count(1);
-	UnlockEquipLoadoutResponse unlockResp;
-	PlayerEquipLoadoutSystem::Unlock(player_, unlockReq, unlockResp);
-	ASSERT_EQ(UnlockEquipLoadoutResponse::APPLIED, unlockResp.outcome());
 
 	SaveEquipLoadoutRequest save2;
 	save2.set_scheme_id(2);
@@ -486,147 +473,187 @@ TEST_F(PlayerEquipLoadoutTest, MissingItemSkippedAndReturnedInMissingSlots)
 	EXPECT_EQ(5002u, Equipment().Layout().At(4)); // 缺失槽 4 保持原件不动
 }
 
-TEST_F(PlayerEquipLoadoutTest, TieredUnlockTalismanBindDiamondAndMaxCap)
+TEST_F(PlayerEquipLoadoutTest, UnifiedSevenSeatsWithMaxLevelLightCardRentAndExpiryLockOnly)
 {
-	// 方案 2：60 灵石，允许优先绑灵（40）+ 非绑补足（20）
-	GrantCurrency(kCurrencyBindDiamond, 40);
-	GrantCurrency(kCurrencyDiamond, 20);
+	constexpr uint64_t kNow = 1'780'000'000ULL;
+	ASSERT_EQ(kSuccess, Equipment().PutInstance(MakeEquipItem(7001, 1101), 3));
+	ASSERT_EQ(kSuccess, Inventory().PutInstance(MakeEquipItem(7002, 1101)));
+
+	// 1. 80 级无月卡无租用：默认永久免费 2 套（上限 7 套），方案 3 不可保存
 	{
-		UnlockEquipLoadoutRequest req;
-		req.set_client_request_id(10002);
-		req.set_expected_unlocked_count(1);
-		req.set_use_bind_diamond_first(true);
-		UnlockEquipLoadoutResponse resp;
-		PlayerEquipLoadoutSystem::Unlock(player_, req, resp);
-		ASSERT_EQ(UnlockEquipLoadoutResponse::APPLIED, resp.outcome());
-		EXPECT_EQ(2u, resp.result_unlocked_count());
-		EXPECT_EQ(2u, resp.current_unlocked_count());
-		EXPECT_EQ(0u, resp.used_item_config_id());
-		EXPECT_EQ(40u, resp.spent_bind_diamond());
-		EXPECT_EQ(20u, resp.spent_diamond());
-		EXPECT_EQ(0u, CurrencySystem::GetBalance(player_, kCurrencyBindDiamond));
-		EXPECT_EQ(0u, CurrencySystem::GetBalance(player_, kCurrencyDiamond));
+		GetEquipLoadoutsResponse resp;
+		ASSERT_EQ(kSuccess, PlayerEquipLoadoutSystem::GetAt(player_, kNow, resp));
+		EXPECT_EQ(2u, resp.snapshot().unlocked_scheme_count());
+		EXPECT_EQ(7u, resp.snapshot().max_scheme_count());
+		EXPECT_EQ(7, resp.snapshot().schemes_size());
+		EXPECT_EQ(2u, resp.snapshot().free_schemes());
+		EXPECT_EQ(0u, resp.snapshot().light_card_bonus_schemes());
+		EXPECT_EQ(0u, resp.snapshot().rented_extra_slots());
+		EXPECT_EQ(30u, resp.snapshot().rent_unit_price_diamond());
+		EXPECT_EQ(30u, resp.snapshot().rent_period_days());
+		EXPECT_EQ(180u, resp.snapshot().rent_max_remaining_days());
+		EXPECT_TRUE(resp.snapshot().schemes(0).unlocked());
+		EXPECT_TRUE(resp.snapshot().schemes(1).unlocked());
+		EXPECT_FALSE(resp.snapshot().schemes(2).unlocked());
+
+		SaveEquipLoadoutRequest req;
+		req.set_scheme_id(3);
+		req.set_capture_current_equipped(true);
+		req.set_state_version(resp.snapshot().state_version());
+		req.set_request_id("save_locked3_req_0001");
+		SaveEquipLoadoutResponse saveResp;
+		PlayerEquipLoadoutSystem::SaveAt(player_, req, kNow, saveResp);
+		EXPECT_EQ(static_cast<uint32_t>(kEquipLoadoutSchemeInvalid), saveResp.error_message().id());
 	}
 
-	// 方案 3：优先扣 3413 扩容符（零灵石亦可成功）
-	GrantTalisman(1);
+	// 2. 升至 85 级满级：自动永久免费第 3 套
+	tlsEcs.actorRegistry.get<LevelComp>(player_).set_level(85);
 	{
-		UnlockEquipLoadoutRequest req;
-		req.set_client_request_id(10003);
-		req.set_expected_unlocked_count(2);
-		UnlockEquipLoadoutResponse resp;
-		PlayerEquipLoadoutSystem::Unlock(player_, req, resp);
-		ASSERT_EQ(UnlockEquipLoadoutResponse::APPLIED, resp.outcome());
-		EXPECT_EQ(3u, resp.result_unlocked_count());
-		EXPECT_EQ(equiploadout::kUnlockItemConfigId, resp.used_item_config_id());
-		EXPECT_EQ(0u, resp.spent_diamond());
-		EXPECT_EQ(0u, Inventory().GetTotalItemCount(equiploadout::kUnlockItemConfigId));
+		GetEquipLoadoutsResponse resp;
+		ASSERT_EQ(kSuccess, PlayerEquipLoadoutSystem::GetAt(player_, kNow, resp));
+		EXPECT_EQ(3u, resp.snapshot().free_schemes());
+		EXPECT_EQ(3u, resp.snapshot().unlocked_scheme_count());
+		EXPECT_TRUE(resp.snapshot().schemes(2).unlocked());
+		EXPECT_FALSE(resp.snapshot().schemes(3).unlocked());
 	}
 
-	// 方案 4：180 非绑灵石（绑灵不生效）
-	GrantCurrency(kCurrencyBindDiamond, 500);
-	GrantCurrency(kCurrencyDiamond, 100);
+	// 3. 轻享卡生效：再 +2 套（共 5 套）
+	tlsEcs.actorRegistry.get<PlayerUint64Comp>(player_).set_afk_pass_expires_at(kNow + 10ULL * 86400ULL);
 	{
-		UnlockEquipLoadoutRequest req;
-		req.set_client_request_id(10004);
-		req.set_expected_unlocked_count(3);
-		req.set_use_bind_diamond_first(true);
-		UnlockEquipLoadoutResponse resp;
-		PlayerEquipLoadoutSystem::Unlock(player_, req, resp);
-		EXPECT_EQ(UnlockEquipLoadoutResponse::REJECTED, resp.outcome());
-		EXPECT_EQ(static_cast<uint32_t>(kEquipLoadoutDiamondNotEnough), resp.error_message().id());
-	}
-	GrantCurrency(kCurrencyDiamond, 80); // 凑足 180 非绑
-	{
-		UnlockEquipLoadoutRequest req;
-		req.set_client_request_id(10005);
-		req.set_expected_unlocked_count(3);
-		UnlockEquipLoadoutResponse resp;
-		PlayerEquipLoadoutSystem::Unlock(player_, req, resp);
-		ASSERT_EQ(UnlockEquipLoadoutResponse::APPLIED, resp.outcome());
-		EXPECT_EQ(4u, resp.result_unlocked_count());
-		EXPECT_EQ(180u, resp.spent_diamond());
-		EXPECT_EQ(500u, CurrencySystem::GetBalance(player_, kCurrencyBindDiamond));
+		GetEquipLoadoutsResponse resp;
+		ASSERT_EQ(kSuccess, PlayerEquipLoadoutSystem::GetAt(player_, kNow, resp));
+		EXPECT_EQ(2u, resp.snapshot().light_card_bonus_schemes());
+		EXPECT_EQ(5u, resp.snapshot().unlocked_scheme_count());
 	}
 
-	// 方案 5：240 非绑灵石
-	GrantCurrency(kCurrencyDiamond, 240);
+	// 4. 经统一战法·加点租用接口租 +2 套（60 灵石 / 30 天）：装备侧同步立开至 7 套，零二次收费！
+	GrantCurrency(kCurrencyDiamond, 60);
 	{
-		UnlockEquipLoadoutRequest req;
-		req.set_client_request_id(10006);
-		req.set_expected_unlocked_count(4);
-		UnlockEquipLoadoutResponse resp;
-		PlayerEquipLoadoutSystem::Unlock(player_, req, resp);
-		ASSERT_EQ(UnlockEquipLoadoutResponse::APPLIED, resp.outcome());
-		EXPECT_EQ(5u, resp.result_unlocked_count());
-		EXPECT_EQ(240u, resp.spent_diamond());
+		RentSkillLoadoutSlotsRequest rentReq;
+		rentReq.set_client_request_id(555001);
+		rentReq.set_target_rented_slots(2);
+		rentReq.set_add_periods(1);
+		rentReq.set_expected_cost_diamond(60);
+		RentSkillLoadoutSlotsResponse rentResp;
+		PlayerSkillSystem::RentLoadoutSlotsAt(player_, rentReq, kNow, rentResp);
+		ASSERT_FALSE(rentResp.has_error_message()) << rentResp.error_message().id();
+		EXPECT_EQ(2u, rentResp.rented_extra_slots());
+		EXPECT_EQ(60u, rentResp.spent_diamond());
+	}
+	{
+		GetEquipLoadoutsResponse resp;
+		ASSERT_EQ(kSuccess, PlayerEquipLoadoutSystem::GetAt(player_, kNow, resp));
+		EXPECT_EQ(7u, resp.snapshot().unlocked_scheme_count());
+		EXPECT_EQ(2u, resp.snapshot().rented_extra_slots());
+		EXPECT_EQ(kNow + skillloadout::kRentPeriodSeconds, resp.snapshot().rent_expires_at_sec());
+		EXPECT_TRUE(resp.snapshot().schemes(6).unlocked());
 	}
 
-	// 已达上限 5 套：拒绝
-	GrantCurrency(kCurrencyDiamond, 500);
+	// 5. 在第 7 套保存自定义名称与装备，并切换激活第 7 套
 	{
-		UnlockEquipLoadoutRequest req;
-		req.set_client_request_id(10007);
-		req.set_expected_unlocked_count(5);
-		UnlockEquipLoadoutResponse resp;
-		PlayerEquipLoadoutSystem::Unlock(player_, req, resp);
-		EXPECT_EQ(UnlockEquipLoadoutResponse::REJECTED, resp.outcome());
-		EXPECT_EQ(static_cast<uint32_t>(kEquipLoadoutMaxUnlocked), resp.error_message().id());
+		SaveEquipLoadoutRequest req;
+		req.set_scheme_id(7);
+		req.set_name("帮战抗控套");
+		req.set_role_tag(4);
+		auto *s3 = req.add_slots();
+		s3->set_slot(3);
+		s3->set_item_guid(7002);
+		req.set_state_version(CurrentVersionAt(kNow));
+		req.set_request_id("save_scheme7_req_0001");
+		SaveEquipLoadoutResponse saveResp;
+		PlayerEquipLoadoutSystem::SaveAt(player_, req, kNow, saveResp);
+		ASSERT_FALSE(saveResp.has_error_message()) << saveResp.error_message().id();
+
+		SwitchEquipLoadoutRequest swReq;
+		swReq.set_scheme_id(7);
+		swReq.set_apply_linked_schemes(false);
+		swReq.set_state_version(saveResp.snapshot().state_version());
+		swReq.set_request_id("switch_scheme7_req_01");
+		SwitchEquipLoadoutResponse swResp;
+		PlayerEquipLoadoutSystem::SwitchAt(player_, swReq, kNow, swResp);
+		ASSERT_FALSE(swResp.has_error_message()) << swResp.error_message().id();
+		EXPECT_EQ(7u, swResp.snapshot().active_scheme_id());
+		EXPECT_EQ(7002u, Equipment().Layout().At(3));
 	}
 
-	// 预期套数过期：拒绝并标 UNKNOWN
+	// 6. 到期后（轻享卡与月租均过 31 天）：只锁不删、保留已存 7 套与当前激活态、禁止再切入锁定套，允许切回 1..3
+	const uint64_t afterExpiry = kNow + 31ULL * 86400ULL;
 	{
-		UnlockEquipLoadoutRequest req;
-		req.set_client_request_id(10008);
-		req.set_expected_unlocked_count(2);
-		UnlockEquipLoadoutResponse resp;
-		PlayerEquipLoadoutSystem::Unlock(player_, req, resp);
-		EXPECT_EQ(UnlockEquipLoadoutResponse::UNKNOWN, resp.outcome());
-		EXPECT_EQ(static_cast<uint32_t>(kEquipLoadoutUnlockCountChanged), resp.error_message().id());
+		GetEquipLoadoutsResponse resp;
+		ASSERT_EQ(kSuccess, PlayerEquipLoadoutSystem::GetAt(player_, afterExpiry, resp));
+		EXPECT_EQ(3u, resp.snapshot().unlocked_scheme_count());
+		EXPECT_EQ(0u, resp.snapshot().light_card_bonus_schemes());
+		EXPECT_EQ(0u, resp.snapshot().rented_extra_slots());
+		EXPECT_EQ(0u, resp.snapshot().rent_expires_at_sec());
+		// 保留当前激活态 7（不半夜强切）且完整保留方案 7 名称与装备槽位供只读预览
+		EXPECT_EQ(7u, resp.snapshot().active_scheme_id());
+		EXPECT_FALSE(resp.snapshot().schemes(6).unlocked());
+		EXPECT_EQ("帮战抗控套", resp.snapshot().schemes(6).name());
+		EXPECT_EQ(7002u, resp.snapshot().schemes(6).slots(0).item_guid());
+
+		// 切回免费方案 1 成功
+		SwitchEquipLoadoutRequest sw1;
+		sw1.set_scheme_id(1);
+		sw1.set_state_version(resp.snapshot().state_version());
+		sw1.set_request_id("switch_back1_expired1");
+		SwitchEquipLoadoutResponse sw1Resp;
+		PlayerEquipLoadoutSystem::SwitchAt(player_, sw1, afterExpiry, sw1Resp);
+		ASSERT_FALSE(sw1Resp.has_error_message()) << sw1Resp.error_message().id();
+		EXPECT_EQ(1u, sw1Resp.snapshot().active_scheme_id());
+
+		// 切走后再试图切回锁定方案 7 被拒
+		SwitchEquipLoadoutRequest sw7;
+		sw7.set_scheme_id(7);
+		sw7.set_state_version(sw1Resp.snapshot().state_version());
+		sw7.set_request_id("switch_lock7_expired1");
+		SwitchEquipLoadoutResponse sw7Resp;
+		PlayerEquipLoadoutSystem::SwitchAt(player_, sw7, afterExpiry, sw7Resp);
+		EXPECT_EQ(static_cast<uint32_t>(kEquipLoadoutSchemeInvalid), sw7Resp.error_message().id());
+	}
+
+	// 7. 续期 4 套（120 灵石）后，方案 7 原样复活并可再次切换
+	GrantCurrency(kCurrencyDiamond, 120);
+	{
+		RentSkillLoadoutSlotsRequest renewReq;
+		renewReq.set_client_request_id(555002);
+		renewReq.set_target_rented_slots(4);
+		renewReq.set_add_periods(1);
+		renewReq.set_expected_cost_diamond(120);
+		RentSkillLoadoutSlotsResponse renewResp;
+		PlayerSkillSystem::RentLoadoutSlotsAt(player_, renewReq, afterExpiry, renewResp);
+		ASSERT_FALSE(renewResp.has_error_message()) << renewResp.error_message().id();
+
+		SwitchEquipLoadoutRequest sw7;
+		sw7.set_scheme_id(7);
+		sw7.set_state_version(CurrentVersionAt(afterExpiry));
+		sw7.set_request_id("switch_revived7_req01");
+		SwitchEquipLoadoutResponse sw7Resp;
+		PlayerEquipLoadoutSystem::SwitchAt(player_, sw7, afterExpiry, sw7Resp);
+		ASSERT_FALSE(sw7Resp.has_error_message()) << sw7Resp.error_message().id();
+		EXPECT_EQ(7u, sw7Resp.snapshot().active_scheme_id());
+		EXPECT_EQ(7002u, Equipment().Layout().At(3));
 	}
 }
 
-TEST_F(PlayerEquipLoadoutTest, UnlockIdempotencyPreventsDoubleChargeAndRequiresDurableCommit)
+TEST_F(PlayerEquipLoadoutTest, LegacySeparateUnlockRejectedWithoutCharging)
 {
-	GrantCurrency(kCurrencyDiamond, 120);
+	GrantCurrency(kCurrencyDiamond, 500);
+	GrantCurrency(kCurrencyBindDiamond, 200);
+	GrantTalisman(2);
 
 	UnlockEquipLoadoutRequest req;
 	req.set_client_request_id(777001);
-	req.set_expected_unlocked_count(1);
-	req.set_use_bind_diamond_first(false);
+	req.set_expected_unlocked_count(2);
+	req.set_use_bind_diamond_first(true);
 
-	UnlockEquipLoadoutResponse first;
-	PlayerEquipLoadoutSystem::Unlock(player_, req, first);
-	ASSERT_EQ(UnlockEquipLoadoutResponse::APPLIED, first.outcome());
-	EXPECT_FALSE(first.replayed());
-	EXPECT_FALSE(first.durable());
-	EXPECT_EQ(1, gPersistCalls);
-	EXPECT_EQ(60u, CurrencySystem::GetBalance(player_, kCurrencyDiamond));
-
-	// 同键同参重放：不二次扣钱，replayed = true
-	UnlockEquipLoadoutResponse replay;
-	PlayerEquipLoadoutSystem::Unlock(player_, req, replay);
-	ASSERT_EQ(UnlockEquipLoadoutResponse::APPLIED, replay.outcome());
-	EXPECT_TRUE(replay.replayed());
-	EXPECT_FALSE(replay.durable());
-	EXPECT_EQ(60u, replay.spent_diamond());
-	EXPECT_EQ(60u, CurrencySystem::GetBalance(player_, kCurrencyDiamond));
-
-	// 同键异参：拒 kInvalidParameter
-	UnlockEquipLoadoutRequest mismatch = req;
-	mismatch.set_use_bind_diamond_first(true);
-	UnlockEquipLoadoutResponse mismatchResp;
-	PlayerEquipLoadoutSystem::Unlock(player_, mismatch, mismatchResp);
-	EXPECT_EQ(UnlockEquipLoadoutResponse::REJECTED, mismatchResp.outcome());
-	EXPECT_EQ(static_cast<uint32_t>(kInvalidParameter), mismatchResp.error_message().id());
-
-	// 真实存盘确认后，重放回 durable = true
-	CommitPersistedUnlockedCount(2);
-	UnlockEquipLoadoutResponse durableReplay;
-	PlayerEquipLoadoutSystem::Unlock(player_, req, durableReplay);
-	ASSERT_EQ(UnlockEquipLoadoutResponse::APPLIED, durableReplay.outcome());
-	EXPECT_TRUE(durableReplay.replayed());
-	EXPECT_TRUE(durableReplay.durable());
+	UnlockEquipLoadoutResponse resp;
+	PlayerEquipLoadoutSystem::Unlock(player_, req, resp);
+	EXPECT_EQ(UnlockEquipLoadoutResponse::REJECTED, resp.outcome());
+	EXPECT_EQ(static_cast<uint32_t>(kFeatureUnavailable), resp.error_message().id());
+	EXPECT_EQ(2u, resp.current_unlocked_count());
+	EXPECT_EQ(500u, CurrencySystem::GetBalance(player_, kCurrencyDiamond));
+	EXPECT_EQ(200u, CurrencySystem::GetBalance(player_, kCurrencyBindDiamond));
+	EXPECT_EQ(2u, Inventory().GetTotalItemCount(equiploadout::kUnlockItemConfigId));
 }
 
 TEST_F(PlayerEquipLoadoutTest, BattleAndFrozenStatesRejectWriteOperations)
@@ -729,17 +756,9 @@ TEST_F(PlayerEquipLoadoutTest, SwitchAppliesLinkedSchemesAndToleratesAttributeCo
 	ASSERT_EQ(kSuccess, PlayerAttributeSystem::CreateScheme(player_, "控速加点", attrScheme2));
 	ASSERT_EQ(2u, attrScheme2);
 
-	// 准备两把武器与 2 套装备方案
+	// 准备两把武器与 2 套装备方案（方案 1 与方案 2 均永久免费）
 	ASSERT_EQ(kSuccess, Equipment().PutInstance(MakeEquipItem(6001, 1101), 3));
 	ASSERT_EQ(kSuccess, Inventory().PutInstance(MakeEquipItem(6002, 1101)));
-
-	GrantCurrency(kCurrencyDiamond, 60);
-	UnlockEquipLoadoutRequest ulReq;
-	ulReq.set_client_request_id(66001);
-	ulReq.set_expected_unlocked_count(1);
-	UnlockEquipLoadoutResponse ulResp;
-	PlayerEquipLoadoutSystem::Unlock(player_, ulReq, ulResp);
-	ASSERT_EQ(UnlockEquipLoadoutResponse::APPLIED, ulResp.outcome());
 
 	// 方案 1 绑定战法 1 + 加点 1
 	{
@@ -816,11 +835,17 @@ TEST_F(PlayerEquipLoadoutTest, RpcHandlerEndToEndSmoke)
 	GetEquipLoadoutsResponse getResp;
 	SceneBagClientPlayerHandler::GetEquipLoadouts(player_, &getReq, &getResp);
 	ASSERT_FALSE(getResp.has_error_message());
-	EXPECT_EQ(1u, getResp.snapshot().unlocked_scheme_count());
-	EXPECT_EQ(5u, getResp.snapshot().max_scheme_count());
-	EXPECT_EQ(equiploadout::kUnlockItemConfigId, getResp.snapshot().unlock_item_config_id());
-	EXPECT_EQ(60u, getResp.snapshot().next_unlock_cost_diamond());
-	EXPECT_TRUE(getResp.snapshot().next_unlock_allow_bind_diamond());
+	EXPECT_EQ(2u, getResp.snapshot().unlocked_scheme_count());
+	EXPECT_EQ(7u, getResp.snapshot().max_scheme_count());
+	EXPECT_EQ(7, getResp.snapshot().schemes_size());
+	EXPECT_EQ(2u, getResp.snapshot().free_schemes());
+	EXPECT_EQ(0u, getResp.snapshot().light_card_bonus_schemes());
+	EXPECT_EQ(0u, getResp.snapshot().rented_extra_slots());
+	EXPECT_EQ(30u, getResp.snapshot().rent_unit_price_diamond());
+	EXPECT_EQ(30u, getResp.snapshot().rent_period_days());
+	EXPECT_EQ(180u, getResp.snapshot().rent_max_remaining_days());
+	EXPECT_EQ(0u, getResp.snapshot().next_unlock_cost_diamond());
+	EXPECT_FALSE(getResp.snapshot().next_unlock_allow_bind_diamond());
 }
 
 } // namespace

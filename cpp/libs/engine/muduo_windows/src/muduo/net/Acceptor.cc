@@ -36,6 +36,10 @@
 //#include <sys/types.h>
 //#include <sys/stat.h>
 #include <unistd.h>
+#ifdef __linux__
+#include <netinet/in.h>   // LOCAL DELTA: IPPROTO_TCP
+#include <netinet/tcp.h>  // LOCAL DELTA: TCP_DEFER_ACCEPT
+#endif // __linux__
 
 using namespace muduo;
 using namespace muduo::net;
@@ -159,6 +163,23 @@ void Acceptor::listen()
   acceptSocket_.listen();
   acceptChannel_.enableReading();
 }
+
+// LOCAL DELTA begin: 见 Acceptor.h 的 setDeferAccept。
+void Acceptor::setDeferAccept(int seconds)
+{
+#ifdef __linux__
+  if (::setsockopt(acceptSocket_.fd(), IPPROTO_TCP, TCP_DEFER_ACCEPT, &seconds,
+                   static_cast<socklen_t>(sizeof seconds)) < 0)
+  {
+    LOG_SYSERR << "Acceptor::setDeferAccept seconds=" << seconds;
+  }
+#endif // __linux__
+#ifdef WIN32
+  // Windows 没有 TCP_DEFER_ACCEPT,这里只是本地开发形态:什么也不做。
+  (void)seconds;
+#endif // WIN32
+}
+// LOCAL DELTA end
 
 void Acceptor::handleRead()
 {

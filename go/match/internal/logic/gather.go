@@ -317,7 +317,7 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 		DeadlineMs:             deadlineMs,
 		TableFingerprint:       tableFingerprint,
 		ActivityContext:        activityContext,
-		SpectateVisibility:     spectateVisibilityForBattle(mode, activityContext, customDuelRules),
+		SpectateVisibility:     spectateVisibilityForRankedBattle(mode, activityContext, customDuelRules, rankedCtx),
 		RecordReplay:           recordReplayForBattle(svcCtx.Config.BattleReport.Enabled, mode, trialCtx),
 		RequiredPhysicalRegion: f.PhysicalRegion,
 		PlacementOperationId:   f.OperationId,

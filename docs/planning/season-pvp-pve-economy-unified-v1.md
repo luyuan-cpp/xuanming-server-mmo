@@ -5,6 +5,8 @@
 > 上位红线：[项目设定](project-vision.md) · 经济与官方 7:3 总纲：[equipment-economy-charter.md](equipment-economy-charter.md) · 核心循环 V1：[core-gameplay-loop.md](core-gameplay-loop.md) · 赛季技能与单槽赛季印：[season-skills-and-seal-design.md](season-skills-and-seal-design.md)
 >
 > 说明：本文严格承接并尊重工作区既有并行总纲（不覆写 `project-vision.md` / `core-gameplay-loop.md` / `equipment-economy-charter.md`），作为**赛季 × PVP/PVE × 装备 +11 顶格突破 × 两阶段材料账 × 3 首领/轮换娱乐场 × 1V1/3V3 冷启动开关**的统一工程契约。
+>
+> **2026-11-26 反「上班」升级覆盖（详见 [anti-chore-remediation-v1.md](anti-chore-remediation-v1.md)）**：阶段二每周 150 份材料上限已由“周一 05:00 一刀切清零”升级为**4 周滚存蓄水池**（每周一 05:00 补充 `+150` 份、未赚取额度滚存累计至多 **4 周 = 600 份**；首入阶段二初始 150 份防新号爆发，抗时钟回拨）。
 
 ---
 

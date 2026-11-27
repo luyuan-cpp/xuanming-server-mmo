@@ -1586,7 +1586,7 @@ Go 与 proto:
 
 | 文件 | 符号 | 内容 |
 |---|---|---|
-| `proto/scene_manager/storage.proto` | `PlayerLocation.rollback_receipt = 7` | 回滚回执,值是被回滚那次铸造所凭的 handoff 标记原文。只由回滚 Lua 写,唯一消费者是源 scene 的取证。GO-3 的新字段从 8 起(*2026-10-22 更正:8 / 9 已被 `session_id` / `login_generation` 占用,从 10 起*) |
+| `proto/scene_manager/storage.proto` | `PlayerLocation.rollback_receipt = 7` | 回滚回执,值是被回滚那次铸造所凭的 handoff 标记原文。只由回滚 Lua 写,唯一消费者是源 scene 的取证。GO-3 的新字段从 8 起(*2026-10-22 更正:8 / 9 已被 `session_id` / `login_generation` 占用,从 10 起;2026-11-26 更正:GO-3 不占字段,10 已被 `gate_instance_id` 占用(scene-enter-chain-residuals.md §14.8),以后从 11 起*) |
 | `proto/scene_manager/scene_manager_service.proto` | `EnterSceneResponse.owner_epoch_after_rollback = 5` | 只出现在 `ErrKafkaRoute` 应答里,只进日志 |
 | `owner_epoch.go` | `luaRollbackPlayerPlacement` | 回滚 Lua。KEYS = location / owner_epoch / handoff;ARGV 七个:本次写入的 location 字节、回滚后的 location 字节(空串 = DEL)、本次落点的 epoch、`"bump"` 或 `"keep"`、所凭标记原文、转写后的标记、转写标记的 TTL 秒数(`ownerepoch.HandoffTTL`,300s)。返回值见定稿设计第 2 条 |
 | 同上 | `rollbackMode`(`rollbackModeKeep` / `rollbackModeBump`)、`routeRollbackPlan`、`planRouteRollback` | 回滚计划,一次算好,首发与 go-redis 重发用同一份字节。取代已删除的 `rollbackEpochFor` |

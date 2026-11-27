@@ -1,0 +1,99 @@
+# 登录排队:验证与开闸交接(2026-11-26,交 Gemini)
+
+> 范围:登录排队这条线(login 排队、本仓网关前置限流、Unity / robot 持票轮询)。代码已经写完并入库,本单只剩运行验证,以及验证通过后的开闸。
+> 执行方:Gemini(AGENTS §10.1)。编译、生成、跑测用低档模型;发现要改代码时保留首错原文停下,切最高档模型再改(AGENTS §10.3)。
+
+## 1. 现状
+
+| 项 | 状态 |
+|---|---|
+| 服务端代码 | 写完。`b6a08148c`(入队按账号幂等、队列上限、每拍上限、重连占位、只接本区)、`f067d01fc`(会话带 `gate_zone_id`、`/api/refresh-token` 限流)、2026-11-26 两处补齐(K8s 镜像两个上限键、告警 `LoginQueueFull`,未提交) |
+| 客户端代码 | 写完(Unity 持票轮询与收尾、robot 状态机),见 `docs/PROGRESS.md` 2026-11-19~20 四条 |
+| 协议 | 已生成(`go/proto` 里有 `GetClientWsUrl`、`GateZoneId`) |
+| 编译 | login 生产代码在 2026-11-23 的 Docker 构建里编过;`assigngatelogic.go` 11-25 之后又改过,没有新记录。**测试代码从没被编译过** |
+| 测试 | 排队 Go 单测、网关用例、真实 Redis 冒烟都没有运行记录(2026-11-08 那份已过期) |
+| 开关 | 所有环境关着:`go/login/etc/login.yaml` 的 `Queue.Enabled: false`,`tools/scripts/k8s_deploy.ps1` 的 `$script:LoginQueueMergeGateCleared = $false` |
+
+## 2. 按顺序执行
+
+命令、通过标准、失败时保留什么,都写在 `docs/PROGRESS.md` 的条目里,这里只给顺序和入口。旧条目标题写的「待 Codex 验证」一律由 Gemini 执行。
+
+| 步 | 做什么 | 入口(`docs/PROGRESS.md` 条目标题) |
+|---|---|---|
+| 0 | 语法与格式:`gofmt -l -e` 扫第 3 节列的 Go 文件。有语法错误就停下,先修 | 本单第 3 节 |
+| 1 | `go/login`、`go/player_locator`、`robot` 的 build、vet、单测 | 2026-11-20「登录排队遗留项收口」第 2 步;同日 Gemini「登录排队 / 开服限流与 Unity 客户端全链路标准收口」第 2 步 |
+| 2 | 门槛 ① ②:25 条点名用例、`-count=10` 稳定性 | 2026-11-20「登录排队清合入门槛的 Codex 验证单」第一部分。要在第 1 步之后跑:其中 7 条被改过账号字面量 |
+| 3 | 本仓网关:`AssignGateServiceAuthTest`、`AssignGateRateLimiterTest`、`RefreshTokenControllerTest` 等 | 「遗留项收口」第 3 步;Gemini 条目第 3 步 |
+| 4 | 契约测试:`gate_pick_alerts_contract.tests.ps1`、`k8s_deploy_contract.tests.ps1` | 2026-11-26「登录排队复核与两处补齐」 |
+| 5 | 变异取红 11 项(A~K),在 `%TEMP%` 的副本上做 | 「遗留项收口」第 4 步 |
+| 6 | Unity 编译与 EditMode | Gemini 条目第 5 步 |
+| 7 | 门槛 ③:真实 Redis 冒烟两轮(7.2 单实例、8.10.2 Cluster),各 11 个核对步骤加 4 个补充项 | 验证单第二部分;「遗留项收口」第 5 步 |
+
+结果另起一条写进 `docs/PROGRESS.md`(不改旧条目),证据原件放 `build/verification/login-queue-gate-<UTC>/`。第 7 步的命令原文与输出摘要必须写进去,这是门槛 ③ 的要求。
+
+## 3. 最可能红在哪
+
+下面这些文件里有从没被编译过的代码,第 0、1 步先看它们:
+
+- `go/login/internal/logic/pkg/loginqueue/queue_test.go` 文末 8 个用例(`TestQueueIDForAccount_*`、`TestEnqueue_*` 6 条、`TestHoldReconnectSlot_*`)。
+- `go/login/internal/logic/pkg/loginqueue/dispatcher_test.go` 文末 `TestDispatchOnce_AdmitsAtMostTheTickLimit`。
+- `go/login/internal/logic/loginpregate/assigngate_reconnect_test.go`。
+- `java/gateway_node/src/test/java/com/game/gateway/service/AssignGateServiceAuthTest.java` 的两条 `queueFull*`。
+- `tools/scripts/tests/gate_pick_alerts_contract.tests.ps1` 的「login.queue-length 组…」用例。
+
+判读提示:
+
+- 既有用例里凡是在循环里入队的,账号都已改成空串(匿名)。同一个账号现在只会得到一个条目;哪条用例的队列长度比预期少,先看它是不是用同一个账号入了多次。
+- 入队从 MULTI 改成了一段脚本(`enqueueScript`)。按命令名拦截 `evalsha` / `eval` 的测试钩子会连入队一起拦到;放行脚本靠第一个键以 `admit:` 开头来认,入队脚本的第一个键是 `queue:{q:<z>}`。
+- `gofmt -l` 列出上面这些文件时,允许 `gofmt -w` 后重跑并在结果里注明(新用例是手排的)。列出别的文件只记录。
+- 红了不要改断言迁就。保留失败用例的完整 `-v` 输出,停下报告。
+
+## 4. 开闸(改常量)
+
+**前提**:第 2、5、7 步全部通过并已写进 `docs/PROGRESS.md`,负责人确认。缺一项都不改。
+
+同一个提交里做四件事:
+
+1. `tools/scripts/k8s_deploy.ps1`:`$script:LoginQueueMergeGateCleared = $true`,并在它上方的注释里写上那条结果条目的标题。只能写字面量(契约测试按 AST 核对)。
+2. `tools/scripts/tests/k8s_deploy_contract.tests.ps1`:用例 19、20 现在断的是「门槛未清」时的产物,换成下面两段(按 2026-11-26 的文件写的草稿;执行时辅助函数名以当时的文件为准)。用例 21、22 不动。同时改掉文件里 `# 登录排队合入门槛(用例 19–22…` 那段注释中「未清」的说法。
+
+   ```powershell
+   Test-Case '合入门槛已清(不带测试接缝):staging zone-up 的 -LoginQueue auto 解析为开,login 写 Queue 段与排队密钥的变量名,带削峰指纹' {
+       # 用例 19。显式置空接缝变量:本例证明的是常量本身已经放开,不靠接缝。
+       $env2 = @{} + $ProdEnv
+       $env2['MMORPG_TEST_LOGIN_QUEUE_GATE_CLEARED'] = ''
+       $run = Invoke-DeployDryRun -Arguments ($BaseArgs + @('-ReleaseProfile', 'staging', '-SkipPreflight', '-NodeImage', $PeakNodeImage)) -Env $env2
+       Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "门槛已清时 staging 按档位开排队。输出: $($run.Output)"
+       Assert-Match -Text $run.Output -Pattern 'PeakShaving: gateway_rate_limit=on\(-GatewayRateLimit auto\) login_queue=on\(-LoginQueue auto\) profile=staging ' -Because '计划行:限流与排队都按档位开'
+       Assert-NotMatch -Text $run.Output -Pattern '\[PeakShaving\]LoginQueueGate=closed' -Because '门槛已清,不再打门槛警告'
+       $loginFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $run.Output -Name 'go-svc-login-config')
+       Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $loginFlat -KeyPath 'data.login.yaml.Queue.Enabled') -Because '排队开'
+       Assert-Equal -Expected 'MMORPG_LOGIN_QUEUE_TOKEN_SECRET' -Actual (Get-FlatValue -Flat $loginFlat -KeyPath 'data.login.yaml.Secrets.QueueToken.Env') -Because 'ConfigMap 里只写排队密钥的变量名'
+       $loginWorkload = @(Get-ManifestBlocks -Output $run.Output | Where-Object {
+           $_ -cmatch '(?m)^kind: StatefulSet\s*$' -and $_ -cmatch '(?m)^  name: login\s*$'
+       }) | Select-Object -First 1
+       Assert-True -Condition ($null -ne $loginWorkload) -Because 'DryRun 输出里应当有 login 的工作负载'
+       Assert-Match -Text $loginWorkload -Pattern 'peak-shaving-hash' -Because '排队开 = login 的 Pod 模板带削峰指纹'
+   }
+
+   Test-Case '合入门槛已清(不带测试接缝):prod -LoginQueue on 放行' {
+       # 用例 20。
+       $env2 = @{} + $ProdEnv
+       $env2['MMORPG_TEST_LOGIN_QUEUE_GATE_CLEARED'] = ''
+       $run = Invoke-DeployDryRun -Arguments ($ProdArgs + @('-LoginQueue', 'on')) -Env $env2
+       Assert-Equal -Expected 0 -Actual $run.ExitCode -Because "门槛已清时 -LoginQueue on 放行。输出: $($run.Output)"
+       Assert-Match -Text $run.Output -Pattern 'login_queue=on\(-LoginQueue on\)' -Because '计划行写明排队按显式参数开'
+       Assert-NotMatch -Text $run.Output -Pattern '合入门槛未清' -Because '不再拒绝'
+   }
+   ```
+
+3. 把写着「当前 `$false`」「仍关闭」的说明改成现状:`docs/design/open-server-rate-limit-design.md` §11.1、`deploy/k8s/README.md`「登录排队的合入门槛」、`go/login/etc/login.yaml` 上线清单的「门槛」一段、`docs/ops/login-queue-stress-runbook.md` 的两处门槛说明、`docs/handoff/launch-readiness-20261013/spec_G4b.md` §7。
+4. 重跑整套 `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`,退出码 0。
+
+改完常量之后,staging / prod 的下一次部署会按档位打开排队。`go/login/etc/login.yaml` 的 `Queue.Enabled` 保持 `false`(本机缺省不排队),不用改。
+
+## 5. 不在本单范围
+
+- 压测(L-14):`MaxAdmitPerTick`、区桶阈值、`handoffGrace` 都已按依据定值,压测只用来复核。压测流程按 AGENTS §6。
+- 独立 Java 版:只登记待做,见 Java 仓 `PARITY.md` 2026-11-20「登录排队与开服限流标准收口」一节第 1~4 条。
+- 网关 `AssignGateService.checkZoneAdmission` 注释里的「PREVIEW 区白名单暂不消费」:属于区服目录的预览区功能,不是排队。

@@ -106,6 +106,15 @@ void BattleClientEdge::Install(muduo::net::TcpServer &server)
                                 {
         const auto self = weak.lock();
         return self != nullptr && self->AdmitConnection(peer, std::chrono::steady_clock::now()); });
+    // 客户端先说话:没发任何数据的连接先留在内核里,连上就断的扫描与探活不建连接对象(准入设计 P2-1,只在 Linux 生效)。
+    server.setDeferAccept(accept_admission::kDeferAcceptSeconds);
+    // 握手之前只收小帧(准入设计 G10,与 gate 同一上限):未握手的直连声明一个大帧就当场断开,不先替它缓冲 64KB 再解析。
+    codec.setPreAuthMessageLimit(accept_admission::kPreAuthMaxMessageBytes,
+                                 [weak](const muduo::net::TcpConnectionPtr &conn)
+                                 {
+                                     const auto self = weak.lock();
+                                     return self != nullptr && self->IsVerifiedConnection(conn);
+                                 });
     server.setConnectionCallback([weak](const muduo::net::TcpConnectionPtr &conn)
                                  { if(auto self=weak.lock()) self->OnConnection(conn); });
     server.setMessageCallback([weak](const muduo::net::TcpConnectionPtr &conn, muduo::net::Buffer *buf,
@@ -356,6 +365,12 @@ BattleClientEdge::DirectSession *BattleClientEdge::FindSession(const muduo::net:
     }
     const auto it = sessions.find(connId);
     return it == sessions.end() ? nullptr : &it->second;
+}
+
+bool BattleClientEdge::IsVerifiedConnection(const muduo::net::TcpConnectionPtr &conn) const
+{
+    const auto it = sessions.find(ConnIdOf(conn));
+    return it != sessions.end() && it->second.verified;
 }
 
 void BattleClientEdge::OnConnection(const muduo::net::TcpConnectionPtr &conn)

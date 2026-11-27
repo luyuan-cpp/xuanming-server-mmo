@@ -514,11 +514,11 @@ message EquipLoadoutSlotView {
 }
 
 message EquipLoadoutSchemeInfo {
-  uint32 scheme_id = 1;                      // 1..5 显式方案号
-  bool unlocked = 2;                         // 是否已解锁
-  string name = 3;                           // 自定义方案名（空则展示默认「方案一..五」）
+  uint32 scheme_id = 1;                      // 1..7 显式方案号
+  bool unlocked = 2;                         // 是否在当前生效席位内（false 表示未解锁或到期只读锁定）
+  string name = 3;                           // 自定义方案名（空则展示默认「方案一..七」）
   uint32 role_tag = 4;                       // 0默认 / 1输出 / 2控场 / 3辅助 / 4生存
-  repeated EquipLoadoutSlotView slots = 5;   // 8 个正式槽位按 slot 升序
+  repeated EquipLoadoutSlotView slots = 5;   // 8 个正式槽位按 slot 升序（到期只锁不删，仍返回已存配置）
   uint32 linked_skill_scheme_id = 6;         // 0 = 不联动；>0 = 关联战法方案号
   uint32 linked_attribute_scheme_id = 7;     // 0 = 不联动；>0 = 关联属性加点方案号
   uint32 missing_count = 8;                  // 实时缺失槽位数
@@ -531,19 +531,28 @@ message EquipLoadoutLinkedOption {
 }
 
 message EquipLoadoutSnapshot {
-  uint32 unlocked_scheme_count = 1;                         // 已解锁套数（1..5）
-  uint32 max_scheme_count = 2;                              // 套位总上限（固定 5）
-  uint32 active_scheme_id = 3;                              // 当前激活方案号（1..unlocked）
+  uint32 unlocked_scheme_count = 1;                         // 当前生效已解锁套数（2..7，与战法·加点三合一共享）
+  uint32 max_scheme_count = 2;                              // 套位总上限（固定 7）
+  uint32 active_scheme_id = 3;                              // 当前激活方案号（1..7；到期锁定态允许保留直至切走）
   uint64 state_version = 4;                                 // 乐观锁版本号
-  repeated EquipLoadoutSchemeInfo schemes = 5;              // 1..5 全部套位，按 scheme_id 升序
-  uint64 next_unlock_cost_diamond = 6;                      // 下一套解锁灵石价格（已满为 0）
-  bool next_unlock_allow_bind_diamond = 7;                  // 下一套是否允许优先使用绑定灵石（仅第 2 套为 true）
-  uint32 unlock_item_config_id = 8;                         // 装备方案扩容符配置号（3413）
-  uint64 unlock_item_owned = 9;                             // 背包当前可用的扩容符数量
+  repeated EquipLoadoutSchemeInfo schemes = 5;              // 1..7 全部套位，按 scheme_id 升序
+  uint64 next_unlock_cost_diamond = 6;                      // 历史保留字段（方案 A 合一租用模式下恒为 0）
+  bool next_unlock_allow_bind_diamond = 7;                  // 历史保留字段（方案 A 合一租用模式下恒为 false）
+  uint32 unlock_item_config_id = 8;                         // 历史保留字段（3413）
+  uint64 unlock_item_owned = 9;                             // 历史保留字段
   uint64 diamond_balance = 10;                              // 当前非绑灵石余额
   uint64 bind_diamond_balance = 11;                         // 当前绑定灵石余额
-  repeated EquipLoadoutLinkedOption skill_schemes = 12;     // 可选联动的战法方案列表
+  repeated EquipLoadoutLinkedOption skill_schemes = 12;     // 可选联动的战法方案列表（1..unlocked）
   repeated EquipLoadoutLinkedOption attribute_schemes = 13; // 可选联动的属性加点方案列表
+  // ── 方案 A：7 套三合一共享流派席位投影（与 SkillLoadoutSnapshot 同口径）──
+  uint32 free_schemes = 14;                                 // 永久免费基础套数（2；85 级满级自动升至 3）
+  uint32 light_card_bonus_schemes = 15;                     // 仙途轻享卡生效附赠套数（0 或 2）
+  uint32 rented_extra_slots = 16;                           // 当前有效租期内的额外按月租用套数（0..5，到期为 0）
+  uint64 rent_expires_at_sec = 17;                          // 统一到期 Unix 秒（0 或 <= server_now_sec 表示未租/已到期）
+  uint64 server_now_sec = 18;                               // 服务器当前 Unix 秒（供前端倒计时与补差价试算）
+  uint64 rent_unit_price_diamond = 19;                      // 单套 30 天真实灵石价（固定 30，装备+战法+加点共享）
+  uint32 rent_period_days = 20;                             // 单期租用天数（固定 30）
+  uint32 rent_max_remaining_days = 21;                      // 最长剩余叠加天数（固定 180）
 }
 
 message GetEquipLoadoutsRequest {}

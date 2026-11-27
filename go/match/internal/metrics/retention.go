@@ -19,9 +19,10 @@ const (
 
 var (
 	// retentionPurgeFailuresTotal 清理循环失败的轮数。失败的一轮不动游标,下一轮重试;持续上涨 = 到期的行一直没删。
+	// 搬库冻结窗口里被写者闸门拒绝的轮次不计(logic.observeRetentionRound):那一轮确定没写,不是清理坏了。
 	retentionPurgeFailuresTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem, Name: "retention_purge_failures_total",
-		Help: "Failed rounds of a retention purge loop by purge (spectator_intent|battle_script_review). A failed round is retried one interval later.",
+		Help: "Failed rounds of a retention purge loop by purge (spectator_intent|battle_script_review). A failed round is retried one interval later. Rounds rejected only because the writer gate is frozen (database move) are not counted.",
 	}, []string{"purge"})
 	// retentionOldestUnixtime 表里现存最老一行的时刻。记时刻、不记年龄:年龄由告警规则用 time() 减出来,这个副本读不动库时
 	// 它照样随时间变老,不会停在最后一次读到的值上。只有剧本审核流水报:观战意图的请求头行有意一直留着,最老一行没有意义。

@@ -234,7 +234,12 @@ func TestRenewSessionKicksAMinorTheGateFailedToClose(t *testing.T) {
 	require.True(t, e.renew(t, details).GetRenewed())
 	require.Equal(t, before, testutil.ToFloat64(backstopKickTotal), "没到截止时刻不踢")
 
+	// 线上上报器每秒清扫一次账本,截止时刻一过,这条会话的租约就到期。清扫必须把截止时刻留在账本里:
+	// 整条删掉的话,下面这次续租查不到它,兜底就不踢了(2026-11-26 复核出的缺陷)。
 	e.now = antiAddictionDeadline.Add(time.Minute)
+	e.mr.SetTime(e.now)
+	_, err := e.aa.Ledger.Sweep(context.Background())
+	require.NoError(t, err)
 	require.True(t, e.renew(t, details).GetRenewed())
 	require.Equal(t, before+1, testutil.ToFloat64(backstopKickTotal))
 }

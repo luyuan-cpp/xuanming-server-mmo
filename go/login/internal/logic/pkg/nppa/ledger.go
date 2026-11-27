@@ -29,9 +29,11 @@ import (
 //
 // 同一分片内四个键同一个槽,每个动作一段脚本,原子。时刻一律取 Redis 服务器的时钟,各副本的时钟差不影响结论。
 //   - Begin:登记会话、排一条上线;同一条连接上还留着上一次的会话,先给它排下线。
-//   - Renew:连接还活着(gate 的续租到了),租约顺延,并回它的截止时刻。未成年人的租约不超过当天的截止时刻。
+//   - Renew:连接还活着(gate 的续租到了),租约顺延,并回它的截止时刻。截止时刻到来之前,未成年人的租约不超过它。
 //   - End:会话收尾(断线、离开游戏),删掉登记、排一条下线。没有登记就什么都不做,所以重放无害。
 //   - Sweep:逐片清扫租约到期还没收尾的(gate 进程没了、断线通知丢了、End 那次 Redis 出错),按租约到期时刻补一条下线。
+//     租约正好在截止时刻到期的,下线照补,但截止时刻还要在账本里留一个租约:连接可能还活着(gate 没关掉它),
+//     login 要凭它在下一次续租时兜底踢线(sweepScript)。
 //   - Claim / Ack / Release:轮询各片领走一批到期的事件(领走的 15 秒内别人看不见),发成功了按片删掉,没发的按片放回去;
 //     发了却没来得及删的,15 秒后会被再发一次(至少一次)。
 type Ledger struct {
@@ -51,6 +53,9 @@ const (
 
 // luaPrelude 是各段脚本共用的开头:Redis 服务器的时钟,以及写数字、排事件、算租约到期时刻的三个函数。
 // 数字一律用 %.0f 写:毫秒时刻超过 Lua 默认的有效位数时会被写成科学计数法。
+//
+// lease_end:截止时刻(cap_ms,0 = 不限)还没到时,租约封顶在截止时刻;已经过了就不封顶。过了截止时刻还在续租的连接
+// 是 gate 没关掉的,它的登记要留着给 login 兜底,不能每次续租都当场到期。
 const luaPrelude = `
 local t = redis.call('TIME')
 local now_s = tonumber(t[1])
@@ -61,7 +66,7 @@ local function emit(outbox, kind, ot, si, pi)
 end
 local function lease_end(lease_ms, cap_ms)
   local e = now_ms + lease_ms
-  if cap_ms > 0 and cap_ms < e then e = cap_ms end
+  if cap_ms > now_ms and cap_ms < e then e = cap_ms end
   return e
 end
 `
@@ -99,10 +104,18 @@ if si ~= '' then emit(KEYS[3], 'out', now_s, si, pi) end
 return 1
 `)
 
-// KEYS: 会话表、租约、待发事件、清扫记录。ARGV: 租约毫秒、一次至多几个、最多回填几秒。
+// KEYS: 会话表、租约、待发事件、清扫记录。ARGV: 租约毫秒、一次至多几个、最多回填几秒。返回收尾了几条会话。
 //
 // 清扫停过(所有 login 副本都不在)超过租约的三分之一时,先暂停一个租约那么久:那段时间 gate 的续租也送不进来,
 // 活着的连接的租约可能已经到期,不能当成断了。暂停期间活着的连接都会续上租约,之后还到期的才是真的没了。
+//
+// 租约正好在截止时刻到期的(lease_ended == cap)是未成年人玩到了点:要上报的照样补一条下线,但登记不删,
+// 改成只带截止时刻、不再上报的条目("||截止毫秒"),再续一个租约。分三种结局:
+//   - 连接还活着(gate 没关掉它):下一次续租 Renew 照样回截止时刻,login 兜底踢线;
+//   - 连接随后断开:End 删掉这条,si 已空,不会再报一次下线;
+//   - 连接早就没了:没有续租,这个租约到期后在下面的普通分支里删掉。它已经不是会话,不计入返回的收尾数。
+//
+// 整条删掉的话,截止之后的续租查不到登记,兜底就不踢线了。
 var sweepScript = redis.NewScript(luaPrelude + `
 local lease = tonumber(ARGV[1])
 local last = tonumber(redis.call('HGET', KEYS[4], 'last') or '0')
@@ -115,22 +128,33 @@ if now_ms < tonumber(redis.call('HGET', KEYS[4], 'hold_until') or '0') then
 end
 local backfill = tonumber(ARGV[3])
 local due = redis.call('ZRANGEBYSCORE', KEYS[2], '-inf', num(now_ms), 'WITHSCORES', 'LIMIT', 0, tonumber(ARGV[2]))
+local ended = 0
 for i = 1, #due, 2 do
-  local conn = due[i]
-  redis.call('ZREM', KEYS[2], conn)
+  local conn, lease_ended = due[i], tonumber(due[i + 1])
   local v = redis.call('HGET', KEYS[1], conn)
-  if v then
-    redis.call('HDEL', KEYS[1], conn)
-    local si, pi = string.match(v, '^([^|]*)|([^|]*)|')
+  if not v then
+    redis.call('ZREM', KEYS[2], conn)
+  else
+    local si, pi, cap = string.match(v, '^([^|]*)|([^|]*)|([^|]*)$')
+    cap = tonumber(cap)
     if si ~= '' then
-      local ot = math.floor(tonumber(due[i + 1]) / 1000)
+      local ot = math.floor(lease_ended / 1000)
       if ot > now_s then ot = now_s end
       if ot < now_s - backfill then ot = now_s - backfill end
       emit(KEYS[3], 'out', ot, si, pi)
     end
+    if cap > 0 and lease_ended == cap then
+      redis.call('HSET', KEYS[1], conn, '||' .. num(cap))
+      redis.call('ZADD', KEYS[2], num(now_ms + lease), conn)
+      ended = ended + 1
+    else
+      redis.call('HDEL', KEYS[1], conn)
+      redis.call('ZREM', KEYS[2], conn)
+      if si ~= '' or cap == 0 or lease_ended < cap then ended = ended + 1 end
+    end
   end
 end
-return #due / 2
+return ended
 `)
 
 // KEYS: 待发事件。ARGV: 一次至多几条、领走后不可见的毫秒数。
@@ -152,8 +176,8 @@ func (l *Ledger) sessionKeys(shard int) []string {
 }
 
 // Begin 登记一条会话。conn 是连接身份(gate 实例加会话代次)。要上报的会话给 si(用 NewID 生成)与 pi,并排一条上线;
-// 不上报、只有截止时刻的会话两者都给空串。playDeadline 是未成年人当天的截止时刻,零值 = 不限:租约不会超过它,
-// 连接没了而断线通知又丢了时,下线按它补报。
+// 不上报、只有截止时刻的会话两者都给空串。playDeadline 是未成年人当天的截止时刻,零值 = 不限:截止之前租约不会超过它,
+// 连接没了而断线通知又丢了时,下线按它补报;截止之后它还在账本里留一个租约,供 login 兜底(见 sweepScript)。
 func (l *Ledger) Begin(ctx context.Context, conn, si, pi string, playDeadline time.Time) error {
 	var capMs int64
 	if !playDeadline.IsZero() {

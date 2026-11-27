@@ -24,4 +24,7 @@ message PlayerHostedPlacementEvent {
   uint32 session_id = 5;        // 断开的那次登录的会话号:只作登录身份,不绑定、不推送
   uint64 login_generation = 6;  // 断开的那次登录的代次
   uint64 owner_revision = 7;    // 账号目录放行的所有权修订
+  // 断开的那次登录所在的 gate 进程:location 为这条会话记下的实例(PlayerLocation.gate_instance_id)。目标节点把它记进
+  // 登录身份,老 gate 进程同号的迟到入场照样按实例认得出(docs/design/scene-enter-chain-residuals.md §14.8)。空 = 未知。
+  string gate_instance_id = 8;
 }

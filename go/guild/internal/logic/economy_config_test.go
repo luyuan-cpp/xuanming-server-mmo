@@ -124,7 +124,8 @@ func TestValidateEconomyTablesRejects(t *testing.T) {
 		{"商品等级为 0", func(e *economyTables) { e.shops[0].RequiredGuildLevel = 0 }, "required_guild_level"},
 		// X-04:GuildLevel 有 10 级,越界例从旧稿的 6 改为 11。
 		{"商品等级 11", func(e *economyTables) { e.shops[7].RequiredGuildLevel = 11 }, "required_guild_level"},
-		{"限购周期非法", func(e *economyTables) { e.shops[0].LimitPeriod = 3 }, "limit_period"},
+		{"限购周期非法", func(e *economyTables) { e.shops[0].LimitPeriod = 4 }, "limit_period"},
+		{"终身限购却填 0 份", func(e *economyTables) { e.shops[0].LimitPeriod = 3; e.shops[0].LimitCount = 0 }, "limit_count"},
 		{"不限购却填了份数", func(e *economyTables) { e.shops[10].LimitCount = 5 }, "limit_count"},
 		{"限购却填 0 份", func(e *economyTables) { e.shops[0].LimitCount = 0 }, "limit_count"},
 		{"缺节庆分类", func(e *economyTables) { e.shops = e.shops[:8] }, "category=3"},
@@ -141,6 +142,13 @@ func TestValidateEconomyTablesRejects(t *testing.T) {
 			assert.Contains(t, err.Error(), tc.wantContains)
 		})
 	}
+}
+
+func TestValidateEconomyTablesAcceptsLifetimeShopLimit(t *testing.T) {
+	tables := legalEconomyTables()
+	tables.shops[0].LimitPeriod = 3
+	tables.shops[0].LimitCount = 1
+	require.NoError(t, validateEconomyTables(tables))
 }
 
 // TestValidateAssetOpTiming:配置与配表各自合法、组合起来会出错的两条交叉约束。

@@ -119,7 +119,7 @@ type ServiceContext struct {
 	liveTournament   atomic.Pointer[tournament.Catalog]
 	TournamentCheers *tournament.SpectateCheerHub
 	cheerHubOnce     sync.Once
-	// ContentGuard 用于战队名称等 UGC 文本审核(未装配时为 nil,保留本地字符集与唯一键校验)。
+	// ContentGuard 用于战队名称等 UGC 文本审核。生产由 match_service.go 装配(没配目标拒启);nil 只出现在单测里,那时不送检。
 	ContentGuard contentguard.Checker
 	// MailAdmin / MailSecret 用于向玩家邮箱幂等投递锦标赛赛季奖励与生死状普通战书退费附件(可选装配)。
 	MailAdmin  mailpb.MailAdminClient

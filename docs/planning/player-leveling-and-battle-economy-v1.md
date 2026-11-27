@@ -4,6 +4,8 @@
 > 状态：**设计定稿落盘，待工作区并行会话提交清理后分批实施**（本轮仅落盘设计文档，未改动任何代码、协议、配表或并行会话未提交文件）
 > 上位红线：[项目设定](project-vision.md) · [核心循环 V1](core-gameplay-loop.md) · [全局玩法统一收口总账](gameplay-unified-design-v1.md) · [经济与官方 7:3 总纲](equipment-economy-charter.md) · [角色属性加点系统](../design/player-attribute-allocation.md)
 > 适用仓库：`xuanming-server-mmo-cpp`（C++ Scene/Battle + 共享表/协议）、`xuanming-server-mmo`（Java 独立服同步对齐）、`mmorpg-client`（Unity 非 UI 模型 + UGUI 展示）
+>
+> **2026-11-26 反「上班」升级覆盖（详见 [anti-chore-remediation-v1.md](anti-chore-remediation-v1.md)）**：常规战斗银两周上限已由“周一 05:00 清零”升级为**3 周滚存蓄水池**（每周一 05:00 补充 `+30,000` 全额软上限 / `+45,000` 硬封顶，未赚取额度滚存累计至多 **3 周 = 90,000 软上限 / 135,000 硬封顶**；新号首周维持 30k/45k 防脚本爆发，抗时钟回拨）。
 
 ---
 

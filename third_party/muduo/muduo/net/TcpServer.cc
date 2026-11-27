@@ -63,6 +63,13 @@ void TcpServer::setAdmissionCallback(const AdmissionCallback& cb)
   acceptor_->setAdmissionCallback(cb);
 }
 
+// LOCAL DELTA(与 Linux 覆盖件同一改动): 转给 Acceptor(见 Acceptor::setDeferAccept)。
+void TcpServer::setDeferAccept(int seconds)
+{
+  loop_->assertInLoopThread();
+  acceptor_->setDeferAccept(seconds);
+}
+
 void TcpServer::start()
 {
   if (started_.getAndSet(1) == 0)

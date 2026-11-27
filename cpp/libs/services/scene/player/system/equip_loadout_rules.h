@@ -12,19 +12,21 @@
 #include <vector>
 
 // 装备流派方案预设纯规则（不依赖 ECS / Protobuf / 时钟 / 网络，便于独立单测）。
-// 对应设计文档：docs/planning/equipment-loadout-presets-v1.md
+// 对应设计文档：docs/planning/equipment-loadout-presets-v1.md（方案 A · 7 套三合一共享流派席位）。
+// 有效席位上限（2..7）与战法·加点方案统一由 skill_loadout_rules.h 计算：
+// 创角永久免费 2 套 + 85 级满级永久 +1 套 + 轻享卡有效期内 +2 套 + 按套月租 0..5 套，总封顶 7 套，到期只锁不删。
 namespace equiploadout
 {
 
 // EquipSlot.xlsx 正式 8 槽：3 武器 / 4 帽子 / 5 衣服 / 6 鞋子 / 7 首饰一 / 8 首饰二 / 9 法宝一 / 10 法宝二。
 inline constexpr std::array<uint32_t, 8> kFormalSlots = {3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u};
 
-inline constexpr uint32_t kFreeSchemes = 1u;
-inline constexpr uint32_t kMaxSchemes = 5u;
+inline constexpr uint32_t kFreeSchemes = 2u;
+inline constexpr uint32_t kMaxSchemes = 7u;
 inline constexpr uint32_t kMaxRoleTag = 4u; // 0默认 / 1输出 / 2控场 / 3辅助 / 4生存
 inline constexpr uint32_t kMaxNameCodePoints = 12u;
 
-// Item.xlsx 装备方案扩容符 ID（原草案 3411 已被灵宠幻化符占用，按 append-only 顺延为 3413）。
+// Item.xlsx 历史预留 ID（方案 A 统一经战法·加点按月租用接口共享 7 套席位，不再单独扣符买断）。
 inline constexpr uint32_t kUnlockItemConfigId = 3413u;
 
 inline constexpr bool IsFormalSlot(uint32_t slot)
@@ -46,10 +48,10 @@ inline constexpr uint32_t EffectiveUnlockedCount(uint32_t stored)
 	return stored > kMaxSchemes ? kMaxSchemes : stored;
 }
 
-inline constexpr uint32_t EffectiveActiveSchemeId(uint32_t stored, uint32_t unlockedCount)
+inline constexpr uint32_t EffectiveActiveSchemeId(uint32_t stored, uint32_t maxAllowed = kMaxSchemes)
 {
-	const uint32_t unlocked = EffectiveUnlockedCount(unlockedCount);
-	return (stored >= 1u && stored <= unlocked) ? stored : 1u;
+	const uint32_t cap = EffectiveUnlockedCount(maxAllowed);
+	return (stored >= 1u && stored <= cap) ? stored : 1u;
 }
 
 inline constexpr uint64_t EffectiveStateVersion(uint64_t stored)
@@ -71,6 +73,8 @@ inline std::string DefaultSchemeName(uint32_t schemeId)
 	case 3u: return "方案三";
 	case 4u: return "方案四";
 	case 5u: return "方案五";
+	case 6u: return "方案六";
+	case 7u: return "方案七";
 	default: return "方案" + std::to_string(schemeId);
 	}
 }

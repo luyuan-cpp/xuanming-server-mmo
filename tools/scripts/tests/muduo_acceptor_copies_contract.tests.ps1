@@ -23,7 +23,9 @@
       - A6 Linux 覆盖件与 Windows 编译件的 TcpServer 类体(去注释后)一致,三份 TcpServer.cc 都在 loop 线程上把准入回调转给 Acceptor;
       - A7 三份 Acceptor.cc 的 handleRead:先问准入回调、不要的连接走 abortiveClose,之后才交给 newConnectionCallback_;
         每次可读事件只 accept 一条(不改成循环);
-      - A8 三份 Acceptor.cc 的 abortiveClose 先设 SO_LINGER(on, 0) 再关,fd 用尽时让位排掉的那一条也走它。
+      - A8 三份 Acceptor.cc 的 abortiveClose 先设 SO_LINGER(on, 0) 再关,fd 用尽时让位排掉的那一条也走它;
+      - A9 三份 Acceptor.cc 的 setDeferAccept 在 Linux 上对监听 fd 设 TCP_DEFER_ACCEPT,三份 TcpServer.cc 在 loop 线程上转给 Acceptor
+        (准入设计 P2-1;Windows 编译件里 Linux 分支在 #ifdef __linux__ 下)。
 
     CI:.github/workflows/deploy-config-tests.yml 在这几个文件有改动时触发,一级目录下的本脚本自动执行。
 
@@ -181,6 +183,22 @@ Test-Case 'A8 三份 Acceptor.cc 的 abortiveClose:先设 SO_LINGER(on, 0) 再�
         Assert-Match -Text $shed -Pattern '(?m)^abortiveClose\(shedFd\);$' -Because "${relative}:fd 用尽时排掉的连接同样不留 TIME_WAIT"
         Assert-NotMatch -Text $shed -Pattern '(?m)^::(close|winclosesock)\(shedFd\);$' -Because "${relative}:排掉的连接不再走 FIN 关闭"
     }
+}
+
+Test-Case 'A9 三份 Acceptor.cc 对监听 fd 设 TCP_DEFER_ACCEPT,三份 TcpServer.cc 在 loop 线程上转给 Acceptor' {
+    foreach ($dir in @($script:WindowsDir, $script:MirrorDir, $script:LinuxDir)) {
+        $acceptorPath = Join-Path $dir 'Acceptor.cc'
+        $relative = [IO.Path]::GetRelativePath($script:RepoRoot, $acceptorPath)
+        $source = Read-SourceText $acceptorPath
+        $defer = ConvertTo-CodeOnly -Text (Get-FunctionBody -SourceText $source -Signature 'void Acceptor::setDeferAccept(int seconds)')
+        Assert-Match -Text $defer -Pattern '(?m)^if \(::setsockopt\(acceptSocket_\.fd\(\), IPPROTO_TCP, TCP_DEFER_ACCEPT, &seconds,$' -Because "${relative}:设在监听 fd 上,选项是 TCP_DEFER_ACCEPT"
+        Assert-Match -Text $source -Pattern '(?m)^#include <netinet/tcp\.h>' -Because "${relative}:TCP_DEFER_ACCEPT 定义在 netinet/tcp.h"
+        $serverRelative = [IO.Path]::GetRelativePath($script:RepoRoot, (Join-Path $dir 'TcpServer.cc'))
+        $forward = ConvertTo-CodeOnly -Text (Get-FunctionBody -SourceText (Read-SourceText (Join-Path $dir 'TcpServer.cc')) -Signature 'void TcpServer::setDeferAccept(int seconds)')
+        Assert-Equal -Expected "loop_->assertInLoopThread();`nacceptor_->setDeferAccept(seconds);" -Actual $forward -Because "${serverRelative}:只在 loop 线程上转给 Acceptor"
+    }
+    $windowsDefer = ConvertTo-CodeOnly -Text (Get-FunctionBody -SourceText (Read-SourceText (Join-Path $script:WindowsDir 'Acceptor.cc')) -Signature 'void Acceptor::setDeferAccept(int seconds)')
+    Assert-Match -Text $windowsDefer -Pattern '(?s)^#ifdef __linux__\nif \(::setsockopt' -Because 'Windows 编译件里 setsockopt 只在 Linux 分支(Windows 没有 TCP_DEFER_ACCEPT)'
 }
 
 exit (Complete-TestRun -SuiteName 'muduo_acceptor_copies_contract')

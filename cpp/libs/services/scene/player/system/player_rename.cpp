@@ -227,6 +227,15 @@ namespace
 					 << " result=" << (reply != nullptr ? static_cast<int>(reply->result()) : -1);
 			return;
 		}
+		// 落结局是存档改动(扣卡、改名、清记录、解除占用):此刻不可改(交接、退出中、没有归属围栏)就一个字都不动,
+		// 记录和占用都留着。稍后(或交接之后的下一个持有者在加载时)用同一个 seq 重发,data_service 回同一个结局。
+		if (!player_mutability::IsPlayerMutable(entity))
+		{
+			ScheduleRetry(playerId, nowMs);
+			LOG_INFO << "[PlayerRename] RenameRole answered while the player is not mutable, outcome kept for a later retry: player_id="
+					 << playerId << " seq=" << seq << " result=" << static_cast<int>(reply->result());
+			return;
+		}
 
 		const PlayerRenameOp op = profile->rename_op();
 		player_rename::Rule rule;
@@ -243,8 +252,15 @@ namespace
 					entity, consumed, gained, op.hold_id(), "player_rename", {}, op.hold_id());
 				if (consumeErr != kSuccess)
 				{
-					LOG_WARN << "[PlayerRename] committed rename card consumption returned non-success: player_id="
-							 << playerId << " seq=" << seq << " hold_id=" << op.hold_id() << " err=" << consumeErr;
+					// 角色在 data_service 已经改了名,卡却没扣成:不能就这样落结局(等于白改一次)。记录和占用都留着,
+					// 退避后重发同一个 seq(data_service 回同一个「已提交」),直到扣成。占用挡着别的入口拿走这张卡,
+					// 正常走不到这里;走到了每次重试都报一行,要人看。
+					LOG_ERROR << "[PlayerRename] metric=player_rename_card_not_consumed player_id=" << playerId << " seq=" << seq
+							  << " hold_id=" << op.hold_id() << " err=" << consumeErr
+							  << ",the role is already renamed in data_service but the rename card could not be consumed;"
+								 " the rename stays pending and is retried";
+					ScheduleRetry(playerId, nowMs);
+					return;
 				}
 			}
 			BagService::ReleaseHold(entity, op.hold_id());
@@ -294,12 +310,20 @@ namespace
 		const auto *profile = tlsEcs.actorRegistry.try_get<PlayerProfileComp>(entity);
 		if (profile == nullptr || !profile->has_rename_op())
 		{
+			// 记录已经不在(结局落过了):运行态一起清掉,否则 Tick 每一拍都会再来问一次。
+			tlsRuntimeOps.erase(playerId);
 			return;
 		}
 		const auto &op = profile->rename_op();
 		auto &rt = tlsRuntimeOps[playerId];
 		if (rt.rpcInFlight && rt.inFlightSeq == op.seq())
 		{
+			return;
+		}
+		// 结局回来要改存档,此刻不可改就先不发(发了也落不了),退避后再看。交接走了的由下一个持有者在加载时接着发。
+		if (!player_mutability::IsPlayerMutable(entity))
+		{
+			ScheduleRetry(playerId, nowMs);
 			return;
 		}
 
@@ -336,6 +360,31 @@ namespace
 		if (!sent)
 		{
 			ScheduleRetry(playerId, nowMs);
+		}
+	}
+
+	// 没有进行中的改名,却留着改名的占用:两者在同一帧里一起改、同一笔存盘,正常不会分家。真分家了改名卡会永远转不走也用不掉,
+	// 所以加载时放掉并报错。先收集再释放:释放会改 PlayerItemHoldComp,不能边遍历边改。
+	void ReleaseOrphanRenameHolds(entt::entity player, Guid playerId)
+	{
+		const auto *holds = tlsEcs.actorRegistry.try_get<PlayerItemHoldComp>(player);
+		if (holds == nullptr)
+		{
+			return;
+		}
+		std::vector<uint64_t> orphans;
+		for (const auto &hold : holds->holds())
+		{
+			if (hold.kind() == static_cast<uint32_t>(item_hold::ItemHoldKind::kRename))
+			{
+				orphans.push_back(hold.hold_id());
+			}
+		}
+		for (const uint64_t holdId : orphans)
+		{
+			LOG_ERROR << "[PlayerRename] metric=player_rename_orphan_hold player_id=" << playerId << " hold_id=" << holdId
+					  << ",a rename card hold has no pending rename; releasing it";
+			BagService::ReleaseHold(player, holdId);
 		}
 	}
 
@@ -515,8 +564,13 @@ void PlayerRenameSystem::OnPlayerLoaded(entt::entity player, uint64_t nowMs)
 	}
 	const auto *guid = tlsEcs.actorRegistry.try_get<PlayerGuidComp>(player);
 	const auto *profile = tlsEcs.actorRegistry.try_get<PlayerProfileComp>(player);
-	if (guid == nullptr || guid->value == kInvalidGuid || profile == nullptr || !profile->has_rename_op())
+	if (guid == nullptr || guid->value == kInvalidGuid || profile == nullptr)
 	{
+		return;
+	}
+	if (!profile->has_rename_op())
+	{
+		ReleaseOrphanRenameHolds(player, guid->value);
 		return;
 	}
 	LOG_INFO << "[PlayerRename] resuming persisted rename_op on login: player_id=" << guid->value

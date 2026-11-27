@@ -217,6 +217,8 @@ private:
 
     static uint64_t ConnIdOf(const muduo::net::TcpConnectionPtr &conn);
     DirectSession *FindSession(const muduo::net::TcpConnectionPtr &conn);
+    // 这条直连是否已完成票据握手。给编解码器的验签前单帧上限用(准入设计 G10);只读、不打日志。
+    bool IsVerifiedConnection(const muduo::net::TcpConnectionPtr &conn) const;
 
     ProtobufDispatcher dispatcher;
     ProtobufCodec codec;

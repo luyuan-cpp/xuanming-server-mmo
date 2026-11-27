@@ -10568,9 +10568,12 @@ TEST(HostedPlacementEcs, ContextCarriesTheLostLoginAndNoNotifiableSession)
     placement.sessionId = kSessionAtExit;
     placement.loginGeneration = 1760400000300;
     placement.ownerRevision = 7;
+    placement.gateInstanceId = "gate-of-the-lost-login";
     const auto ctx = PlayerLifecycleSystem::HostedPlacementContext(placement);
     ASSERT_TRUE(ctx);
     EXPECT_TRUE(ctx->hostedPlacement);
+    EXPECT_EQ(ctx->gateInstanceId, "gate-of-the-lost-login")
+        << "变异红:断开那次登录所在的 gate 进程随上下文进入场栅栏与登录身份(scene-enter-chain-residuals.md §14.8)";
     EXPECT_EQ(ctx->enterInfo.session_id(), kSessionAtExit) << "会话号照常当登录身份用";
     EXPECT_EQ(ctx->NotifiableSessionId(), 0u) << "没有在场的客户端:任何提示都不推";
     EXPECT_EQ(ctx->enterInfo.enter_gs_type(), 0u) << "不是一次登录";
@@ -10601,6 +10604,11 @@ TEST(HostedPlacementEcs, ContextCarriesTheLostLoginAndNoNotifiableSession)
         broken[i](copy);
         EXPECT_FALSE(PlayerLifecycleSystem::HostedPlacementContext(copy)) << "字段不全的整条丢弃";
     }
+    auto withoutInstance = placement;
+    withoutInstance.gateInstanceId.clear();
+    const auto unknownInstance = PlayerLifecycleSystem::HostedPlacementContext(withoutInstance);
+    ASSERT_TRUE(unknownInstance) << "实例未知不算字段不全";
+    EXPECT_TRUE(unknownInstance->gateInstanceId.empty());
 }
 
 namespace
@@ -10750,6 +10758,41 @@ TEST_F(HostedPlacementReentry, LiveSessionEntityIsNotTurnedIntoAnOfflineHold)
     ASSERT_NO_FATAL_FAILURE(ExpectBoundTo(player, kSessionAtExit, kReentryLoginGeneration));
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<PlayerConnectionLostComp>(player));
     EXPECT_EQ(CurrentScene(), source);
+}
+
+TEST_F(HostedPlacementReentry, HostedPlacementRecordsTheGateInstanceSoALateEnterFromAnotherProcessIsRejected)
+{
+    // scene-enter-chain-residuals.md §14.6「托管落点不带实例」的端到端口径:托管落点不经 gate 连接,旧代码的上下文不带实例,托管实体的
+    // 登录身份一直不知道断开那次登录在哪个 gate 进程上,同一 node_id 上另一个进程同号、更早的一次登录迟到的入场在这里按会话号认、
+    // 被放行。现在托管落点事件带上 location 为那次登录记下的实例(§14.8),入场后记进登录身份。事件 → 上下文那一段由
+    // HostedPlacementEcs.ContextCarriesTheLostLoginAndNoNotifiableSession 守着,这里直接组上下文。
+    constexpr std::string_view kLostLoginGate = "gate-process-of-the-lost-login";
+    constexpr std::string_view kOtherGate = "gate-process-reusing-the-session-id";
+    PlayerLifecycleSystem::HandleClientConnectionLost(player);
+    PlayerEnterContext hosted;
+    hosted.enterInfo.set_scene_id(kRelocateSourceScene + 1);
+    hosted.enterInfo.set_session_id(kSessionAtExit);
+    hosted.loginGeneration = kReentryLoginGeneration;
+    hosted.hostedPlacement = true;
+    hosted.gateInstanceId = std::string(kLostLoginGate);
+    SetFixtureAdmission(hosted);
+    ASSERT_EQ(PlayerLifecycleSystem::EnterGameNodeOutcome::kEnteredExisting,
+              PlayerLifecycleSystem::HandleEnterGameNode(kExitPlayerId, hosted));
+    EXPECT_EQ(tlsEcs.actorRegistry.get<PlayerLoginIdentityComp>(player).gateInstanceId, kLostLoginGate)
+        << "托管落点带来的实例记进登录身份(原来实例未知)";
+
+    PlayerEnterContext late;
+    late.enterInfo.set_scene_id(kRelocateSourceScene);
+    late.enterInfo.set_session_id(kSessionAtExit);
+    late.enterInfo.set_enter_gs_type(LOGIN_RECONNECT);
+    late.loginGeneration = kReentryLoginGeneration - 1;
+    late.gateInstanceId = std::string(kOtherGate);
+    SetFixtureAdmission(late);
+    EXPECT_EQ(PlayerLifecycleSystem::EnterGameNodeOutcome::kRejected,
+              PlayerLifecycleSystem::HandleEnterGameNode(kExitPlayerId, late))
+        << "变异红:另一个 gate 进程上同号、更早的登录不是托管的那一次";
+    EXPECT_EQ(CurrentScene(), target) << "被拒的入场不动实体";
+    EXPECT_EQ(tlsEcs.actorRegistry.get<PlayerLoginIdentityComp>(player).gateInstanceId, kLostLoginGate);
 }
 
 // ── 服务器发起的同 zone 交接(组队跟随换到本 zone 别的节点,team-follow-server-trail.md §3.7)──

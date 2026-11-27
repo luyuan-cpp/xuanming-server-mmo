@@ -130,6 +130,10 @@ func (l *TournamentLogic) CreateTournamentSquad(in *matchpb.CreateTournamentSqua
 	// UGC 队名先走 content_guard 内容安全审核(事务外执行,绝不放进 SQL 事务)。
 	if l.svcCtx.ContentGuard != nil {
 		res := l.svcCtx.ContentGuard.Check(l.ctx, cgpb.TextScene_TEXT_SCENE_GUILD_NAME, playerID, in.GetSquadName())
+		if res.Verdict == contentguard.Unavailable {
+			// 内容安全不可达:没检过的名字不建队,但这不是名字的问题,回服务端故障让玩家稍后再试。
+			return &matchpb.CreateTournamentSquadResponse{ErrorMessage: tournamentTip(constants.ErrInternal)}, nil
+		}
 		if res.Verdict != contentguard.Pass {
 			return &matchpb.CreateTournamentSquadResponse{ErrorMessage: tournamentTip(constants.ErrTournamentSquadNameInvalid)}, nil
 		}

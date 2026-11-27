@@ -39,7 +39,7 @@ message GuildShopTable {
   uint64 cost_contribution = 6;
   // 需要的帮会等级(1..GuildLevel 最高级)
   uint32 required_guild_level = 7;
-  // 限购周期:0 不限 / 1 每游戏日 / 2 每周(周一 05:00 切周)
+  // 限购周期:0 不限 / 1 每游戏日(保留兼容,现役零使用) / 2 每周(周一 05:00 切周) / 3 终身限购(永不重置)
   uint32 limit_period = 8;
   // 周期内限购份数:limit_period=0 时必须为 0,否则 >=1
   uint32 limit_count = 9;

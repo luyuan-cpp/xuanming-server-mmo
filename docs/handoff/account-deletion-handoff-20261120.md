@@ -1,19 +1,21 @@
 # 账号注销与 Apple / Google 登录:剩余代码与全部验证交接(2026-11-20,交 Gemini)
 
+> 2026-11-26 按当前状态更新:客户端本线已提交,按钮品牌化已大部分做完,只剩第 3 节第 8 步两处;其余仍是全部验证。
+
 ## 0. 现状
 
 - 负责人 2026-11-20 把这条线的全部待做交给 Gemini,原 Claude 会话停在这里。设计:[account-deletion.md](../design/account-deletion.md)(§9 定案、§10「收尾批」列了每处改动与文件)。
-- **服务端代码已全部写完,而且都在 HEAD**(批量提交 `9824368eb`、`55eae6be3` 收进去的)。工作区里 `data/tip/Tip.xlsx`、`go/guild/guild.go`、`go/match/internal/authority/schema.go`、`role_fence_purge.go`、`proto/match/match_authority.proto` 仍是 M,那是别的会话后来的改动,不是本线的。
-- **客户端(`D:\luyuan\mmorpg-client`)本线全部未提交**,与别的会话的改动混在同一批文件里:
-  - 未跟踪:`Assets/Plugins/iOS/MmorpgAppleSignIn.mm`、`Assets/Plugins/Android/MmorpgGoogleSignIn.androidlib/`、`Assets/Editor/AppleSignInBuildPostProcess.cs`、`Assets/Scripts/Net/PlatformSignIn.cs`、`Assets/Tests/EditMode/Net/PlatformSignInTests.cs`、`AccountDeletionTests.cs`、`AntiAddictionTests.cs`(实名会话建的,本线在里面加了 `AccountDeletionKickReasonsHaveTexts`)。
-  - 修改:`Assets/Scripts/Core/ClientSettings.cs`、`Assets/Scripts/Net/GatewayHttpClient.cs`、`Assets/Scripts/Game/GameClient.cs`、`Assets/Scripts/UI/Ugui/QdaoServerSelectView.cs`、`.Visuals.cs`、`.LoginUtilities.cs`。
-- 派生任务「剧本审核流水保留期清理」(`match_battle_script_review` 保留 180 天)也已写完,代码在工作区。那个会话后来撞了额度上限,但代码与 PROGRESS 条目都已落盘。
-- **一条都没验证过**:没有生成、编译、测试或冒烟记录。
+- **服务端代码已全部写完,而且都在 HEAD**(批量提交 `9824368eb`、`55eae6be3` 收进去的)。
+- **客户端(`D:\luyuan\mmorpg-client`)本线也已全部提交**(客户端仓 11-20~24 的批量提交,含 `2a0eb3d8`):Apple / Google 登录桥(`Assets/Plugins/iOS/MmorpgAppleSignIn.mm`、`Assets/Plugins/Android/MmorpgGoogleSignIn.androidlib/`、`Assets/Scripts/Net/PlatformSignIn.cs`)、注销界面(`QdaoServerSelectView*.cs`)、下线原因(`GameClient.DescribeKickReason`)与对应 EditMode 用例。
+- 派生任务「剧本审核流水保留期清理」(`match_battle_script_review` 保留 180 天)也已写完,代码随批量提交 `b6a08148c` 进了 HEAD,之后又补了一轮失败与逾期告警。它的验证单独成单:[battle-script-review-retention-handoff-20261126.md](battle-script-review-retention-handoff-20261126.md),测试命令以那份 §3 为准;与本线同批跑时,生成与清库合并成一次。
+- 2026-11-21 Gemini 补了 `kickPlayerSession` 的 4 条单测(PROGRESS 11-21「Gemini…全仓代码完成度终审」第 4 项)。
+- **一条都没验证过**:截至 2026-11-26,`build/verification/` 里没有本线任何用例的运行记录。
+- **剩下的**:第 3 节第 8 步的两处客户端小改动,加上全部生成、编译、测试与冒烟。
 
 ## 1. 规矩
 
 - 与 [组队跟随交接单](team-follow-afk-hosting-handoff-20261120.md) §1 相同:读 `AGENTS.md` 全文;只在 main、不开分支、不 push;**只有负责人明确要求才 commit**,而且只提交本线的部分;不手改生成产物;日志英文;失败先留首错原文、修根因、不跳测试;结果追加进 `docs/PROGRESS.md`,日志放 `build/verification/<运行名>/`。
-- 改代码用最高档模型,编译、测试、冒烟用低档模型(`AGENTS.md` §10.3)。
+- 分工以 `docs/rules/ai-workflow.md` 为准:生成、编译、测试、冒烟都由 Gemini 执行,Codex 只作图。改代码用最高档模型,编译、测试、冒烟用低档模型(`AGENTS.md` §10.3)。
 - 本线补充:
   - tip 码只由导表器发号,不在代码里写数字。本线的码是 login 段 2038~2041 与 mail 段 `MailRecipientDeleted`(应为 17011),已有的码号一个都不能变。
   - 重新烘焙登录预制体前先关掉 Unity。
@@ -27,7 +29,7 @@
 |---|---|---|
 | 11-19 | Claude:账号注销三批落码 | 第 0~11 步 |
 | 11-20 | Claude:账号注销收尾批 | 第 0~9 步 |
-| 11-20 | Claude:剧本审核流水保留期清理 | 第 0~9 步 |
+| 11-20 / 11-26 | Claude:剧本审核流水保留期清理、Claude:补记 11-20 第二轮 | 按 [剧本审核流水交接单](battle-script-review-retention-handoff-20261126.md) §3 跑,第一条里的旧用例名已失效 |
 | 11-20 | Claude:小游戏 WebSocket 收尾 | 只看第 1 条「小游戏账号注销不了」相关的客户端用例 |
 
 ## 3. 按这个顺序做完
@@ -54,10 +56,10 @@
    6. 1V1 评级榜上的人删完后从榜上消失;
    7. 删完后给他发榜单奖励邮件被拒(`kMailRecipientDeleted`),rank 奖励转放弃、只记 Info 日志。
 8. **代码待做**(改代码,最高档模型):
-   1. **登录页 Apple / Google 按钮改成官方样式**。现在两个按钮用的是游戏通用底图加文字(`Assets/Scripts/UI/Ugui/QdaoServerSelectView.Visuals.cs` 第 243~246 行,底图 `clean_tab`),App Store 与 Google Play 审核会按品牌规范打回:
-      - Apple 按 Human Interface Guidelines「Sign in with Apple」:黑底、白底或白底黑描边三选一,左侧 Apple 标志加「通过 Apple 登录」,圆角,高度不低于 44pt,标志用 Apple 官方素材,不改色、不拉伸;
-      - Google 按 Sign-In 品牌规范:浅色或深色两种,左侧 Google「G」标志,文字「使用 Google 账号登录」。
-      - 素材从 Apple、Google 官网下载,来源与授权按各自规矩确认。改完重新烘焙预制体,跑 `QdaoServerSelectPrefabTests` 与 `QdaoLoginPresentationTests`。
+   1. **登录页 Apple / Google 按钮的品牌合规收尾**。按钮已改成品牌底图加标志(`Assets/Scripts/UI/Ugui/QdaoServerSelectView.Visuals.cs` 的 `BuildChannelSignInButton`,素材 `Assets/Resources/UI/Ugui/RefreshV8/` 下的 `apple_signin_button`、`apple_logo`、`google_signin_button`、`google_logo`)。还剩两处,不合规会被审核打回(`AGENTS.md` §9「不过审一票否决」):
+      - Google 按钮文字现在是「Google 登录」,不在 Google Sign-In 品牌规范允许的文案里。改成 Google 官方中文「使用 Google 账号登录」;Apple 的「通过 Apple 登录」是 Apple 官方中文,不改。
+      - 核实四张 PNG 来自 Apple(Sign in with Apple 按钮资源)与 Google(Sign-In 品牌资源)官网原件:标志不改色、不变形、不自绘,Apple 按钮高度不低于 44pt,两个按钮同尺寸、同样醒目(App Review 4.8)。来源写进这四个文件所在目录的说明里;不是官方原件就换成官方原件。品牌标志只能用官方原件,不交 Codex 作图。
+      - 改完重新烘焙预制体,跑 `QdaoServerSelectPrefabTests` 与 `QdaoLoginPresentationTests`。
    2. 修第 1~7 步发现的问题。错误落在别的会话正改的文件里时,先用 `git diff` 分清,不是本线的只记录、不修。
 9. **收尾**:在 `docs/PROGRESS.md` 文末追加「Gemini:账号注销与 Apple / Google 登录验证」一条,写清命令、通过数、失败原文摘要和改过的文件;负责人要求提交时,只提交本线的部分。
 

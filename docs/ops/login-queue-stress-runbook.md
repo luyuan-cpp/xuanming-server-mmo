@@ -52,12 +52,12 @@ curl -X PUT http://127.0.0.1:8081/admin/zones/1 -H "X-Admin-Key: <admin-key>" -H
 | `q_entered` | 4000±200(总数 5000 − 容量 1000) | 远低于 4000 = 容量计算错了/排队判定没触发 |
 | `q_admitted` | 单调上升,最终 → q_entered;增速受下方「放行节奏」的上界约束 | `在线 + login_queue_admitted_inflight ≥ capacity` 时不涨是**正常回压**;停滞且 `在线 + 在途 < capacity` 才是 dispatcher 卡死(模式 1) |
 | `q_expired` | < 1% of q_entered | > 5% = AdmitTTL 太短 OR 客户端轮询太慢 |
-| `q_avg_wait` | < 60s(1000/s admit 速率下;待 L-14 重新标定) | > 5min = dispatcher 严重落后 EnterGame |
+| `q_avg_wait` | 没有固定上限:等待 = 名次 ÷ 放行速率,而放行速率的上界是在线玩家的离开速率(见下方「放行节奏」)。健康的形状是它随 `q_max_rank` 下降而回落 | 等待变长本身不是故障。要查的是「队列不动」:`在线 + 在途 < capacity` 而 `q_admitted` 不涨(模式 1) |
 | `q_max_rank` | 单调下降到 0 | 长时间不变 = 该 robot 卡住,看 Redis 检查 |
-| `login_ok` 增速 | 不超过「放行节奏」的上界(G4b-G 之前写的是「接近 zone capacity / login_avg」,待 L-14 重新标定) | login_ok 不涨但 q_admitted 涨 = gate 链路坏 |
+| `login_ok` 增速 | 不超过「放行节奏」的上界;排队放行那一部分每拍不超过 `Queue.MaxAdmitPerTick`(缺省 2000) | login_ok 不涨但 q_admitted 涨 = gate 链路坏 |
 | `recon_fb` | 接近 0 | > 5% = 重连豁免判定有 bug,看 player_locator 日志 |
 
-**放行节奏(G4b-G,2026-10-13 起)**:本节的节奏数字(上表的增速、下面的样例与「关键观察」)写于 G4b-G 之前,没有按修复后的上界标定,**待 L-14 重新标定**。修复后的上界:
+**放行节奏**:放行不是固定速率。下面是由放行规则推出的上界,判读以它为准;这里没有实测的节奏数字,压测出基线后把实测值补在本节。
 
 - 每次放行都以 `在线 + 在途 ≤ capacity` 为界。排队放行的人取走票后,名额 20s 内不放回(在途占位再留 20s,盖住 gate 人数的上报滞后;2026-10-15 起,此前是 15s);之后他若已在线,名额转给在线数,也不放回。
 - 只有拿了票没连 gate、或连上很快就走的那部分名额,每约 22~23s(取走延迟 + 20s)周转一次(15s 时是约 17~18s)。
@@ -70,7 +70,7 @@ curl -X PUT http://127.0.0.1:8081/admin/zones/1 -H "X-Admin-Key: <admin-key>" -H
 - 各台在线数已经相近、一拍放行的人数又多于台数时,放行仍全部落在同一台 gate 上(只有一台的 `PlayerCount` 在涨,其余不动)= 跑的是 10-15 之前的版本(那时每放一个人重读一次目录,只按 `PlayerCount` 挑,而它 10s 才上报一次,一拍之内不变)。某台明显比别的闲时,整批先去填它属正常。
 - 快速通道(直接签票)仍是每次单独挑一次,规则相同,不跨请求记账。
 
-### 周期 report 示例(健康状态)
+### 周期 report 示例(只示意字段)
 
 ```
 [stats 30s] conn=5000 login_ok=920 login_fail=12 ... q_entered=4080 q_admitted=920 q_expired=3 q_avg_wait=28.4s q_max_rank=4078
@@ -78,7 +78,12 @@ curl -X PUT http://127.0.0.1:8081/admin/zones/1 -H "X-Admin-Key: <admin-key>" -H
 [stats 90s] conn=5000 login_ok=3050 login_fail=18 ... q_entered=4080 q_admitted=3050 q_expired=7 q_avg_wait=33.8s q_max_rank=4078
 ```
 
-**关键观察**:`q_admitted` 的涨速以上面「放行节奏」为准。样例里每 30s 涨约 1000(一个 zone capacity)写于 G4b-G 之前,成立的前提是放行的人不长期占着名额;robot 保持在线时,放满 capacity 之后 `q_admitted` 不涨属正常回压(先核对在线 + 在途是否已到 capacity),这个数字待 L-14 重新标定。`q_avg_wait` 稳定在 30s 附近(等于排队的平均位置 × 1s 出队节奏);`q_max_rank` 在第一波入队后就固定不变(没有新的"插队")。
+**怎么读**:上面三行只示意字段格式,数字写于 2026-05,不作判读依据(那时放行的人不占名额,所以每 30s 涨约一个区容量)。按现行规则,robot 登录后保持在线的压测里健康的形状是:
+
+- `q_entered` 在第一波入队后固定(同一批账号重复入队不会让它翻倍,一个账号一个条目)。
+- `q_admitted` 先随快速通道把容量放满,之后只在有 robot 下线或调大区容量时上涨,每拍至多 `Queue.MaxAdmitPerTick`。放满之后不涨是正常回压,先核对在线 + 在途是否已到 capacity。
+- `q_max_rank` 在第一波入队后不再升高,随放行下降。
+- `q_expired` 接近 0。
 
 ---
 

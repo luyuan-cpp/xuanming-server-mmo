@@ -4,7 +4,7 @@ package logic
 //
 // location 原本只记「在哪」与「哪一代归属」(owner_epoch),不记「哪次登录放行了它」。owner_epoch 只在持有节点
 // 换了时铸造,同节点顶号不变,所以迟到的 LeaveScene(b)与陈旧登录 / 旧会话的同节点换图(d)都能照常改写
-// location 与人数。本文件给 location 记上会话身份 (session_id, login_generation),并给出两张纯判定表:
+// location 与人数。本文件给 location 记上会话身份 (session_id, login_generation, gate_instance_id),并给出两张纯判定表:
 //
 //   - decidePlacementIdentity:EnterScene 入口,读完 location 与 owner_epoch 之后、任何预占 / 补种 / 写入 /
 //     路由之前调用;拒绝回私有码 25(constants.ErrPlacementSessionSuperseded)。
@@ -13,7 +13,9 @@ package logic
 // 比较口径(与 scene 入场栅栏 enter_fence::Decide 同源):
 //   1. 以代次为主,只用 > 判新旧;唯一的相等判断是 G2 冲突检测(代次相等、会话都有效且不同)。
 //   2. 任一侧代次为 0 表示不比较(旧版发送方 / 旧格式记录),退回旧行为并计 legacy,不当成「更旧」。
-//   3. 同一会话(会话号相同且有效)一律放行,代次取 max,不因 location 记的代次落后而拒(G4)。
+//   3. 同一会话(会话号相同且有效,两边 gate 实例都已知时实例也相同)一律放行,代次取 max,不因 location 记的代次落后而拒(G4)。
+//      会话号由 gate 的 node_id 派生,同一 node_id 短暂有两个 gate 进程时同号可以出自两个进程,只比会话号会把老进程迟到的
+//      请求当成当前会话(§14.8,口径同 scene 入场栅栏 enter_fence::SameGateInstance)。
 //
 // 两张表共用同一个 validSession,口径与 C++ player_exit::IsBoundSession 一致。
 // 本文件只放纯函数:不读 Redis、不读时钟、不写日志与指标,调用方负责计数与日志。
@@ -30,11 +32,13 @@ func validSession(sessionID uint32) bool {
 	return sessionID != 0 && sessionID != unboundSessionID
 }
 
-// placementIdentity 是一次登录的会话身份:哪条会话(session_id)、第几次登录(login_generation)。
+// placementIdentity 是一次登录的会话身份:哪条会话(session_id)、第几次登录(login_generation)、
+// 这条会话在哪个 gate 进程上(gate_instance_id,空 = 未知)。
 // 零值 = 无身份(旧版 scene_manager 写入的 location,或不带会话的请求)。
 type placementIdentity struct {
 	sessionID       uint32
 	loginGeneration uint64
+	gateInstanceID  string
 }
 
 // absent:没有身份可比(sid 与代次都是 0)。
@@ -44,15 +48,24 @@ func (id placementIdentity) absent() bool {
 
 // identityOfLocation 取 location 里记的身份;loc 为 nil 时返回零值。
 func identityOfLocation(loc *smpb.PlayerLocation) placementIdentity {
-	return placementIdentity{sessionID: loc.GetSessionId(), loginGeneration: loc.GetLoginGeneration()}
+	return placementIdentity{sessionID: loc.GetSessionId(), loginGeneration: loc.GetLoginGeneration(),
+		gateInstanceID: loc.GetGateInstanceId()}
 }
 
-// identityOfEnterRequest 取 EnterScene 请求代表的会话身份。
+// identityOfEnterRequest 取 EnterScene 请求代表的会话身份。托管落点不带 gate,实例为空(未知)。
 func identityOfEnterRequest(in *smpb.EnterSceneRequest) placementIdentity {
-	return placementIdentity{sessionID: in.GetSessionId(), loginGeneration: in.GetLoginGeneration()}
+	return placementIdentity{sessionID: in.GetSessionId(), loginGeneration: in.GetLoginGeneration(),
+		gateInstanceID: in.GetGateInstanceId()}
+}
+
+// sameGateInstance:两个会话号相同的会话是否出自同一个 gate 进程。两边实例都已知且不同 = 另一个进程上的另一条会话;
+// 任一边未知(空)不比较,按会话号认。与 C++ enter_fence::SameGateInstance 同一口径。
+func sameGateInstance(cur, req string) bool {
+	return cur == "" || req == "" || cur == req
 }
 
 // identityOfLeaveRequest 取 LeaveScene 请求带的被删会话身份(player_locator 从被删的会话记录里取原值)。
+// 离场表以代次为主,不需要实例(LeaveSceneRequest 也不带)。
 func identityOfLeaveRequest(in *smpb.LeaveSceneRequest) placementIdentity {
 	return placementIdentity{sessionID: in.GetSessionId(), loginGeneration: in.GetLoginGeneration()}
 }
@@ -108,18 +121,21 @@ func (v placementVerdict) admits() bool {
 //
 //   - cur / curExists:本次 EnterScene **观察到的原始** location 里记的身份,以及 location 是否存在。
 //     用 Gone / Dead 过滤之前的那一份:过滤只决定换手门放不放过,身份比较与它无关。
-//   - req:请求的 (session_id, login_generation)。
+//   - req:请求的 (session_id, login_generation, gate_instance_id)。
 //
 // 返回结论与「放行时应写入 location 的身份」(拒绝时为零值)。按顺序判:
 //
 //	| 情形                                              | 结论                 | 应写入的身份                         |
 //	| L 不存在(无 location,或 sid_L = 0 且 gen_L = 0)   | fresh                | R                                    |
-//	| sid_R 有效且 sid_R == sid_L                       | same_session         | (sid, max(gen_L, gen_R))             |
-//	| gen_R == 0(会话不同)                             | legacy               | gen_L ≠ 0 时保持 L;gen_L == 0 时 (sid_R, 0) |
+//	| sid_R 有效且 sid_R == sid_L,实例相同或任一边未知   | same_session         | (sid, max(gen_L, gen_R), inst_R 非空取 inst_R 否则 inst_L) |
+//	| gen_R == 0(会话不同)                             | legacy               | gen_L ≠ 0 时保持 L;gen_L == 0 时 (sid_R, 0, inst_R) |
 //	| gen_L == 0,gen_R ≠ 0                             | newer                | R                                    |
 //	| gen_R > gen_L                                     | newer                | R                                    |
 //	| gen_R < gen_L                                     | stale(拒)           | —                                    |
-//	| gen_R == gen_L,会话不同                          | sid_L 有效 → conflict(拒);sid_L 无效 → same_session | — / (sid_R, gen) |
+//	| gen_R == gen_L,会话不同                          | sid_L 有效 → conflict(拒);sid_L 无效 → same_session | — / R |
+//
+// 「会话不同」含会话号相同而实例不同(另一个 gate 进程上的同号会话):按代次裁决,老进程迟到的请求代次更小 → stale,
+// 相等 → conflict(G2),新进程上更新的登录 → newer。同一会话的请求不带实例(托管落点)时沿用 L 记的实例,不抹成未知。
 //
 // legacy 行**不降级**已有身份:location 已有非 0 代次时保持 L,落点照常写入,只是身份沿用 L(否则陈旧实体
 // 一次无代次的换图就能把高代次身份抹成 (sid_A, 0),之后 A 的迟到 LeaveScene 判 legacy 删除、A 的换图判同会话
@@ -130,18 +146,23 @@ func decidePlacementIdentity(cur placementIdentity, curExists bool, req placemen
 	if !curExists || cur.absent() {
 		return placementAdmitFresh, req
 	}
-	if validSession(req.sessionID) && req.sessionID == cur.sessionID {
+	if validSession(req.sessionID) && req.sessionID == cur.sessionID && sameGateInstance(cur.gateInstanceID, req.gateInstanceID) {
 		generation := cur.loginGeneration
 		if req.loginGeneration > generation {
 			generation = req.loginGeneration
 		}
-		return placementAdmitSameSession, placementIdentity{sessionID: cur.sessionID, loginGeneration: generation}
+		instance := cur.gateInstanceID
+		if req.gateInstanceID != "" {
+			instance = req.gateInstanceID
+		}
+		return placementAdmitSameSession, placementIdentity{sessionID: cur.sessionID, loginGeneration: generation,
+			gateInstanceID: instance}
 	}
 	if req.loginGeneration == 0 {
 		if cur.loginGeneration != 0 {
 			return placementAdmitLegacy, cur
 		}
-		return placementAdmitLegacy, placementIdentity{sessionID: req.sessionID}
+		return placementAdmitLegacy, placementIdentity{sessionID: req.sessionID, gateInstanceID: req.gateInstanceID}
 	}
 	if cur.loginGeneration == 0 || req.loginGeneration > cur.loginGeneration {
 		return placementAdmitNewer, req
@@ -149,11 +170,11 @@ func decidePlacementIdentity(cur placementIdentity, curExists bool, req placemen
 	if req.loginGeneration < cur.loginGeneration {
 		return placementRejectStale, placementIdentity{}
 	}
-	// 代次相等、会话不同(或请求会话无效)。
+	// 代次相等、会话不同(或请求会话无效,或会话号相同而实例不同)。
 	if validSession(cur.sessionID) {
 		return placementRejectConflict, placementIdentity{}
 	}
-	return placementAdmitSameSession, placementIdentity{sessionID: req.sessionID, loginGeneration: req.loginGeneration}
+	return placementAdmitSameSession, req
 }
 
 // ---------------------------------------------------------------------------

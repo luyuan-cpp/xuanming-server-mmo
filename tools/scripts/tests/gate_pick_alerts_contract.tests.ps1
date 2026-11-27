@@ -198,6 +198,35 @@ Test-Case 'login-alerts.yaml:login.queue-capacity 组只有 LoginQueueCapacityLi
     Assert-Equal -Expected 1 -Actual (@($all | Where-Object { $_ -ceq 'LoginQueueCapacityLimitedByGates' })).Count -Because '告警名不重名'
 }
 
+Test-Case 'login-alerts.yaml:login.queue-length 组只有 LoginQueueFull,引用的计数由 loginqueue 注册,outcome 取值是源码里的常量' {
+    $group = Get-AlertGroupText -Text $script:LoginAlerts -Group 'login.queue-length'
+    Assert-Match -Text $group -Pattern '(?m)^      interval:[ ]*30s[ ]*$' -Because '评估间隔'
+    $rules = @(Get-AlertRules -GroupText $group)
+    Assert-Equal -Expected 'LoginQueueFull' -Actual ((@($rules | ForEach-Object { $_.Name }) | Sort-Object) -join ',') -Because '规则名单钉死'
+    $rule = $rules[0]
+    Assert-Match -Text $rule.Body -Pattern '(?m)^            severity:[ ]*critical[ ]*$' -Because '队列满了新玩家连排位都拿不到,要马上有人看'
+    foreach ($field in @('summary', 'description', 'runbook_url')) {
+        Assert-Match -Text $rule.Body -Pattern ('(?m)^            {0}:' -f $field) -Because "要有 $field"
+    }
+    Assert-Match -Text $rule.Body -Pattern '(?m)^          for:[ ]*[1-9]\d*m[ ]*$' -Because '按持续判,for 要大于 0'
+
+    $metricsSource = Read-RepoText -RelativePath 'go/login/internal/logic/pkg/loginqueue/metrics.go'
+    $ns = [regex]::Match($metricsSource, '(?m)^const metricNamespace = "(?<v>[a-z_]+)"').Groups['v'].Value
+    Assert-Match -Text $metricsSource -Pattern '(?s)Namespace:\s*metricNamespace,\s*Subsystem:\s*"",\s*Name:\s*"assign_total"' -Because "${ns}_assign_total 必须由 loginqueue/metrics.go 注册(改名后告警静默失效)"
+    Assert-Match -Text $metricsSource -Pattern '(?m)^\s*AssignOutcomeQueueFull\s*=\s*"queue_full"' -Because 'outcome="queue_full" 是队列到上限时的取值'
+    $expr = Get-RuleExpr -Body $rule.Body
+    $referenced = @([regex]::Matches($expr, '\blogin_[a-z0-9_]+') | ForEach-Object { $_.Value } | Sort-Object -Unique)
+    Assert-Equal -Expected "${ns}_assign_total" -Actual ($referenced -join ',') -Because '只引用一个计数'
+    Assert-Match -Text $expr -Pattern ('\b{0}\{{outcome="queue_full"\}}' -f [regex]::Escape("${ns}_assign_total")) -Because '只看 outcome="queue_full"'
+    Assert-Match -Text $expr -Pattern '\bincrease\(' -Because '按 increase() 判'
+    Assert-Match -Text $expr -Pattern '\bsum by \(namespace, zone\)' -Because '按 zone 报:一个 zone 满了不能被别的 zone 摊平'
+
+    $all = @(Get-ChildItem -LiteralPath (Join-Path $script:RepoRoot 'deploy/k8s') -Filter '*-alerts.yaml' -File | ForEach-Object {
+            ([IO.File]::ReadAllText($_.FullName)) -replace "`r`n", "`n"
+        } | ForEach-Object { [regex]::Matches($_, '(?m)^\s+- alert:[ ]*(\S+)[ ]*$') } | ForEach-Object { $_.Groups[1].Value })
+    Assert-Equal -Expected 1 -Actual (@($all | Where-Object { $_ -ceq 'LoginQueueFull' })).Count -Because '告警名不重名'
+}
+
 Test-Case 'login-alerts.yaml:login.gate-health 组两条持续型规则,引用的计数由 loginqueue 注册,标签取值是源码里的常量' {
     $rules = Get-AlertRules -GroupText (Get-AlertGroupText -Text $script:LoginAlerts -Group 'login.gate-health')
     Assert-Equal -Expected 'LoginGateStaleExcludedSustained,LoginQueueAdmitRecheckBlind' -Actual ((@($rules | ForEach-Object { $_.Name }) | Sort-Object) -join ',') -Because '规则名单钉死'

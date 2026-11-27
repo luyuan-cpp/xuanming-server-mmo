@@ -1,6 +1,14 @@
 package logic
 
-import "time"
+import (
+	"time"
+
+	"match/internal/metrics"
+
+	"shared/authoritysql"
+
+	"github.com/zeromicro/go-zero/core/logx"
+)
 
 // match 的两个保留期清理循环(观战意图 global_spectator.go、剧本审核流水 battle_script_review_purge.go)共用的一轮口径:
 // 一分钟一轮,一轮里连续清页。一轮只清一页时吞吐封顶在每分钟一页(一天约 144 万行),而且不随副本数增长(各副本扫的是同一段索引);
@@ -22,4 +30,20 @@ func drainRetentionPages(page func() (more bool, err error)) error {
 		}
 	}
 	return nil
+}
+
+// observeRetentionRound 记一轮清理的结局(purge 取 metrics.RetentionPurge* 之一,日志里也用它,和告警的 purge 标签对得上)。
+// 失败的一轮下一轮重试:清理只做幂等删除,没有未知结局,不进 HoldRelay;持续失败由告警 MatchRetentionPurgeFailing 报
+// (deploy/k8s/match-alerts.yaml)。
+// 搬库的冻结窗口里写者池上的读写都被闸门拒绝(authoritysql.IsWriterFrozen:这一轮确定没写),那不是清理坏了:只记 Info、不计失败,
+// 口径同 HoldRelay 与终局发件箱。冻结里混着别的错误时照常计失败。
+func observeRetentionRound(purge string, err error) {
+	switch {
+	case err == nil:
+	case authoritysql.IsWriterFrozen(err):
+		logx.Infof("[retention] %s purge paused: writer gate frozen; retrying next round", purge)
+	default:
+		metrics.ObserveRetentionPurgeFailure(purge)
+		logx.Errorf("[retention] %s purge failed; retrying next round: %v", purge, err)
+	}
 }

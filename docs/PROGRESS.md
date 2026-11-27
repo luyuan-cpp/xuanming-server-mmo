@@ -5642,3 +5642,306 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
   - **Java 独立服**（`xuanming-server-mmo`）：`ContractSync` 全量同步且 `--check` 退出 0；清理 `match_feature_tables.proto`、`MatchFeatureTables`、`MatchMethods`、`MatchFeatureConfiguration`、`TournamentSeasonDriver`、`TournamentRules`、`TournamentTables`、`TournamentService`、`TournamentStore` 及 5 份单测，同步更新 `PARITY.md`。验证：`mvnw -pl game-proto,game-table,game-gate,game-match -am clean install -DskipTests` **BUILD SUCCESS**，`MatchMethodsTest` **5/5 PASS**、`TournamentParityTest` **3/3 PASS**。
   - **Python 服务端**（`xuanming-server-mmo-python`）：对齐移除 `proto/match/{match_service,match_authority}.proto`、`proto/message_id.txt`（`506=reserved:...`）、`src/xuanming/match/{errors,match_service,tournament}.py` 与 `tests/test_cpp_wt_tournament_v3.py`，重编 `tools/build_protocol.py` 退出 0。验证：`pytest tests/test_cpp_wt_tournament_v3.py tests/test_latest_cpp_sync_systems.py` **10/10 PASS**。
   - **设计文档**：同步更新 `docs/planning/season-team-tournament-{v2,v3,v4}.md` 与 `docs/planning/ui-handoff/season-team-tournament-v2-ui-handoff.md`。四仓改动均留在工作区，未执行 `git commit` / `git push`。
+
+## 2026-11-26 Claude：开服线（B0-4 后续项）验证单重新登记给 Gemini（只改文档；代码未动，仍未编译、未运行）
+
+- **为什么重登**：本线 11-11、11-12 两条条目与交接文档在 11-20 瘦身时移出了工作树，验证命令只剩在历史里；`build/verification` 里也查不到 `AcceptorFailurePolicy` / `ProcessFdMetrics` 的运行记录。原条目写的是交 Codex，按现行 AGENTS §10.1 改由 Gemini 执行。
+- **11-26 核对（只读）**：
+  - 代码都已入库且完整：muduo `Acceptor` 三份副本的分类一致，Windows 编译件与头文件镜像逐字节相同；`node.cpp` 的 `EchoFatalLineToStderr`、`RenderProcessFdMetrics` 在；两个 C++ 测试已登记进 `rpc_controller_test.vcxproj`；login 的 F.B-1 文案在。
+  - 11-19 报告过的 `cpp/nodes/gate/handler/rpc/connection_admission.cpp` 提交截断，现已补齐（HEAD 与工作区同为 469 行）。
+  - `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`：13 条通过。
+- **交 Gemini**（没有 proto 改动；前一步红就停下归因；细节与通过标准见 `git show ccf2840b2:docs/PROGRESS.md` 里的两条「开服线」条目）：
+  1. 仓库根，两份合同测试全过（第一份现为 9 条，A6~A9 是 gate 准入后加的；第二份 5 条）：
+     - `pwsh -NoProfile -File tools/scripts/tests/muduo_acceptor_copies_contract.tests.ps1`
+     - `pwsh -NoProfile -File tools/scripts/tests/cpp_node_resource_alerts_contract.tests.ps1`
+  2. Windows 整解（改了 muduo.lib 与 core.lib，不能只编测试工程）：`msbuild game.sln /t:Build /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64`。
+  3. `pwsh -NoProfile -File tools/scripts/run_cpp_tests.ps1 -Build -Filter <名>`，依次：
+     - `rpc_controller`：`ProcessFdMetrics.*` 5 条、`AcceptorFailurePolicy.*` 5 条；
+     - `client_endpoint`：`OpenFileLimit.*` 21 条；
+     - `muduo_grpc`：全过。
+  4. `go/login` 下 `go vet ./internal/logic/clientplayerlogin/` 与 `go test -count=1 ./internal/logic/clientplayerlogin/`。
+  5. Linux（需负责人授权 Docker）：`deploy/k8s/Dockerfile.cpp` 构建，deps 阶段应打印 `overlaid: muduo/net/Acceptor.h`、`Acceptor.cc`、`SocketsOps.cc`，并以 `-Werror` 编过；再压低 `--ulimit nofile` 起 gate、保持超过上限的连接，期望进程不退出、`Acceptor: accept failed` 日志每秒不超过一行、`cpp_node_accept_exhausted_total` 大于 0。
+- **仍要运维做**：发布前读各节点池的 nofile 硬限（`docs/ops/gate-kernel-tuning-runbook.md` §3.1）。
+- **Java 版（AGENTS §12）**：本条只改文档，对应 Java 版本号无；Java 的 fd 上限检查仍是待做，沿用 `PARITY.md` 已登记的 B0-4 一行。
+
+## 2026-11-26 Claude:补记 11-20 第二轮——match 保留期清理的失败与逾期告警、一轮连续清多页(剧本审核流水与观战意图;代码已随 b6a08148c 进 main;未编译、未测试,待 Gemini 验证;Java 0.1.0-SNAPSHOT 待做)
+
+- **补记原因**:11-20「Claude:剧本审核流水保留期清理」之后同一会话又改了一轮,代码随批量提交 `b6a08148c` 进了 main,当时的 PROGRESS 条目没来得及追加。那一条第 4 步的 `TestBattleScriptReviewPurgeKeepsCursorOnFailure` 已改名(照旧命令跑会显示没有用例却照样通过),「已知风险」里「没有单独的失败计数与告警」也已作废。两条的验证合并成一份交接单:[battle-script-review-retention-handoff-20261126.md](handoff/battle-script-review-retention-handoff-20261126.md),**以它的 §3 为准**。
+- **起因**:负责人 11-20「查出的问题现在修,按最标准的定,不等压测」。清理持续失败只记日志、循环活性按「成败都算」照常前进,看不出来;清理一轮只清一页,吞吐封顶每分钟 1000 行、不随副本数增长,观战意图的请求头行删不掉、每一遍都要翻过去,行数上去以后永远追不上。
+- **做了什么**:
+  1. 指标(新 `go/match/internal/metrics/retention.go`):`match_retention_purge_failures_total{purge}`、`match_retention_oldest_unixtime{purge}`(表里现存最老一行的时刻)、`match_retention_max_age_seconds{purge}`;`purge` 只取常量 `battle_script_review` / `spectator_intent`。
+  2. `authority.OldestBattleScriptReviewMs`:读 `(reviewed_ms, 主键)` 索引第一项,空表回库当前时刻。
+  3. 一轮连续清页(新 `go/match/internal/logic/retention_purge.go` 的 `drainRetentionPages`,两个清理共用):清到扫完、出错、满 20 页或超过 10 秒;一页仍是 3 秒预算。
+  4. 剧本审核流水循环每轮清页后读最老一行报指标,任一步失败记一次失败;观战意图循环改成连续清页并记失败(不报最老一行:请求头行有意一直留着)。
+  5. 告警组 `match.retention`(`deploy/k8s/match-alerts.yaml`):`MatchRetentionPurgeFailing`(某副本一小时失败超过 30 轮,持续 1 小时)、`MatchRetentionBehind`(最老一行比保留期还老一天以上,持续 1 小时),都是 warning,写法同 data_service 的审计表清理告警。
+  6. 契约:`k8s_deploy_contract.tests.ps1` 的 match-alerts 规则数 5 → 7;`loop_liveness_alerts_contract.tests.ps1` 新增「match 保留期清理…」一条(门槛 30 与一分钟一轮联动、逾期式子、指标写入点、一轮最坏 16 秒)。
+  7. 文档:`docs/design/battle-script.md` §6.4(容量、不分片、不用 TiDB 表 TTL 的理由)、§9;`battle-spectate-tiered-fanout.md`「意图保留期」;Java 仓 `PARITY.md` 同日条目补了告警要求。
+- **文件**:`go/match/internal/metrics/retention.go`(新)、`metrics.go`;`internal/authority/battle_script.go`、`battle_script_test.go`;`internal/logic/retention_purge.go`(新)、`battle_script_review_purge.go`、`battle_script_review_purge_test.go`、`global_spectator.go`、`spectate_tier_test.go`;`deploy/k8s/match-alerts.yaml`;两份契约 ps1;上面的文档。
+- **验证**:没有编译、没有跑任何测试。只做过 `gofmt -l`(干净)、两份 ps1 的 PowerShell 解析(0 错误)、新契约用例的正则对着实际文件逐条匹配。11-26 复核:HEAD 里两轮改动齐全,之后别的功能的提交改过 `match_authority.proto`、`schema.go`、`schema_test.go`、`config.go`、`global_spectator.go`、`k8s_deploy_contract.tests.ps1`,没碰到本线部分;match 当前的后台循环点位与契约登记的 15 个一致。
+- **已知风险**:告警只能做语法检查,没在有数据的 Prometheus 上求过值;失败门槛 30 绑定一分钟一轮(契约钉住);观战意图清理每分钟每副本最多读 20 页,是有意增加的读量。
+- **Java 版(AGENTS §12)**:待做,0.1.0-SNAPSHOT,不是客户端契约。
+
+## 2026-11-26 Claude:第三方登录与实名防沉迷交 Gemini——交接单与四条线的一遍跑完顺序(只写文档,未运行任何命令)
+
+- **起因**:负责人 11-26 定「Claude 出交接细节、Gemini 做完所有」。「全球账号库与第三方登录」派生的四个 Claude 会话都撞了周额度停下。其中账号注销与小游戏 WebSocket 两条 11-20 已有交接单,第三方登录与实名防沉迷两条没有。
+- **新交接单**:[third-party-login-and-anti-addiction-handoff-20261126.md](handoff/third-party-login-and-anti-addiction-handoff-20261126.md),四条线的总入口:
+  - §2 第三方登录:只剩验证。原验证条目在 11-20 瘦身时移出,用 `git show ccf2840b2:docs/PROGRESS.md` 查;交接单里有按现状合并的版本。
+  - §3 实名防沉迷:还要写两样。一是设计稿 §5.3–§5.5,还是旧的按连接写键,没写会话账本与 gate 到点断开,要改正文;二是国家系统沙箱 mock,实名会话原计划的下一步,没写。另外,实名会话最后一批(账本、gate `minor_play_deadline`、login 接线)当时没写 PROGRESS,在交接单 §3.1 补记了。
+  - §4 四条线合并的运行顺序,§5 已定案项。
+- **核对到的状态**(11-26):
+  - 这几条线的服务端代码都在 HEAD,`go/login`、`go/shared/redisslot`、`proto/login`、gate `minor_play_deadline.*` 没有未提交改动。
+  - 11-20 以来 `go/login` 没有编译记录。
+- **改动**:新增上述交接单;`docs/README.md` 用 `gen_docs_index.py` 重生成了索引,多出本单一行。另一行 `anti-chore-remediation-v1.md` 是别的会话的,运行前就已在工作区。
+- **未验证**:本条只写文档,没有生成、编译或测试。
+
+## 2026-11-26 Claude:小游戏 WebSocket 入口按当前 HEAD 复核——没有要补的代码,交接单已校正
+
+- 复核范围:2026-11-20 之后各会话的 48 个批量提交。客户端没有新的绕过 `ClientTransport` 的建连,也没有小游戏里会卡死的写法;服务端带客户端地址的下发消息都带 WebSocket 地址;robot 没有新的裸 TCP 拨号;gate / battle 客户端口与 ws-edge 转发目标一致。
+- 代码状态:本线已全部提交(服务端 `9824368eb`、`55eae6be3`、`c441ce75e`、`b6a08148c`,客户端 `02e0ec54`),协议已被后续提交重新生成,但本线用例仍一条都没跑过。
+- 交接单 `docs/handoff/minigame-websocket-handoff-20261120.md` 按新规范校正:执行方是 Gemini(`AGENTS.md` §10.1);协议生成后要在客户端仓跑 `gen.bat client`(`docs/rules/proto-and-tables.md` §2);提交一节改为只管验证中修出的改动。
+- Java 版:不涉及,`PARITY.md` 的待做登记已在。
+
+## 2026-11-26 Claude：真钱支付接入核对——代码已全部完成，只剩环境与负责人事项
+
+- 核对结论：11-20 交给 Gemini 的 4 项代码（渠道测试、安卓 `MmorpgPay.androidlib`、商城 HTTP 健康检查、Unity IAP 修正）都已落地并提交 main；单测、隔离 TiDB 真库、部署契约、Unity 四平台编译与 devpay 真进程冒烟都有 Gemini 11-21 的通过记录。
+- 还剩：Go `-race`（缺 gcc）、带 trade 与 scene 的整链路冒烟（devpay 冒烟没起这两个）、kind 集群冒烟（本机没装 kind）；真实商户、回调域名、真机验收、合规闸取值归负责人。
+- 交接单已改写成剩余事项：`docs/handoff/payment-integration-handoff-20261120.md`。本次没改代码。
+- Java 独立仓（AGENTS §12）：只登记待做，`PARITY.md` 已有条目。
+
+## 2026-11-26 Claude:go/db 与 data_service 两处「熔断按后端隔离」复核——代码都在 main、无待写,只剩 Gemini 跑单测(本次只改一行设计稿;Java 不涉及)
+
+- **范围**:11-20 本会话做的 go/db(删运行期冷却、熔断按存档库),以及由它提出、Gemini 同日落码的 data_service(熔断按逻辑库、调用方关客户端熔断)。负责人问这条线做完没有,逐项复核。
+- **结论**:
+  - 两处代码都已入库,之后的提交没有改坏(`go/db/db.go` 只多了一个 keepalive 选项);11-19 删掉的 `store_health.go`、`internal/storeerr` 没有被合并带回来。
+  - 编译有证据:`build/verification/docker-rebuild-all-20261124T094844.599108Z` 的 Go 阶段退出码 0,`db`、`data-service` 镜像都建成(那次整体失败在后面的源文件核对,与这两处无关)。
+  - 单测没有运行证据。静态读过 data_service 这批的核心:`shared/authoritysql/pool.go` 的建连钩子(具名返回值的结算路径正确、不挂钩子时行为不变)、`data_service/internal/svc/db_breaker.go`、`shared/dsclient` 与三份用例。「冻结不计建连失败」那条用例里开事务前读的是 5 列的 `route_meta`,和假驱动对得上。现在 15 个构造 data_service 客户端的文件都过了 `dsclient.Conf`(按守卫用例的规则 grep 核对)。没有发现要改的代码。
+  - 设计稿 `docs/design/data-service-breaker-per-logical-db.md` §8 补一条残余:建连钩子分不清「连不上」和「会话核对不过」,后果有界,现在不做。
+- **给 Gemini 的验证**(低档模型即可;环境 `$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`;失败保留编译错误全文、失败用例名与断言原文,不改断言):
+  ```
+  cd go/db
+  gofmt -l db.go internal/playerstore internal/logic/pkg/proto_sql internal/metrics
+  go vet . ./internal/playerstore/ ./internal/logic/pkg/proto_sql/ ./internal/metrics/
+  go test -count=1 ./internal/playerstore/ ./internal/logic/pkg/proto_sql/ ./internal/metrics/
+  go test -count=3 -run 'TestServer_' ./internal/playerstore/
+  cd ../shared
+  go vet ./authoritysql/... ./dsclient/...
+  go test -count=1 ./authoritysql/... ./dsclient/...
+  cd ../data_service
+  go vet ./internal/svc/...
+  go test -count=1 -run 'TestLogicalDBConnectGate' -v ./internal/svc/
+  cd ../..
+  pwsh -NoProfile -File tools/scripts/test_stress_summarize.ps1
+  ```
+  通过标准:`gofmt -l` 无输出,vet 无错;点名的用例逐个 PASS——go/db 的 `TestServer_BreakerIsPerStore`、`TestServer_FrozenGateDoesNotOpenTheStoreBreaker`,shared 的三条 `TestConnectGate*`、`TestWithConnectGateSetsOption`、`TestConfDisablesOnlyBreaker`、`TestAllDataServiceClientConstructorsUseDsclientConf`,data_service 的两条 `TestLogicalDBConnectGate*`;压测汇总自测末行 `PASS`。没有真库时跳过的用例如实报未运行。
+  可选冒烟(要两个 SQL 实例或两个存档库):停一个,另一个上的账号照常登录、存盘;单实例的调试栈做不了,如实报未运行。
+- **Java 版(AGENTS §12)**:不涉及,不加 PARITY 行。
+
+## 2026-11-26 Claude:实名与防沉迷第二批补记、复核出一处缺陷,剩余代码与全部验证交 Gemini(未编译、未运行;Java 11-24 已对齐)
+
+- 2026-11-20 第二批(上下线上报改为登录域 Redis 会话账本、到点断开改由 gate 本地做并由 login 续租兜底)之前没有单独条目,文件清单补记在交接单 §1;代码已随 b6a08148c / 3aea2802d 进 main,11-21 Gemini 把账本分成了 16 片。
+- 复核发现:未成年人的租约封顶在截止时刻,上报器每秒清扫,一到截止就删掉账本条目,之后的续租找不到它,login 兜底踢线因此失效(gate 本地没关掉的未成年人会一直在线)。修法写进设计稿 §5.5「未成年人的租约」与交接单 §2.1,代码未改。
+- 设计稿 `docs/design/real-name-anti-addiction.md` 的 §5.3~§5.5 与 §8 已按现在的代码重写(原文还是逐连接记录、靠续租踢线、内存上报队列)。
+- 交 Gemini:§2.1 缺陷修复与回归用例、§2.2 国家系统沙箱 mock、§3 全部生成 / 编译 / 测试 / 冒烟。交接单:[docs/handoff/real-name-anti-addiction-handoff-20261126.md](handoff/real-name-anti-addiction-handoff-20261126.md)。
+
+### 2026-11-26 Claude:配置表热更剩余的验证、补测与登记整体交给 Gemini(只写了文档,没跑任何构建或测试;Java 待做)
+
+- **核对结论**:
+  - 五批代码 11-20 已全部落码(`f067d01fc`)。
+  - 之后别的线已全量导表(manifest 第 2 版,`schema_digest=88750c2d961d8710`,83 张表),顺带编过 scene / battle,跑过 `scene.exe --validate-tables`。
+  - 热更这条线自己的单测、9 个进程的预检、本机冒烟、kind 端到端,都没有运行记录。
+  - C++ 侧没有单测,缺的是:`TableBundleManager`、清单与指针解析、`ExcelExpression::Evaluate`、battle 按指纹选表。
+- **新增交接单** `docs/handoff/config-table-hot-reload-handoff-20261126.md`,每一步都写了命令与通过标准,顺序如下:
+  1. 静态守卫;
+  2. 导表器;
+  3. Go;
+  4. gateway;
+  5. 部署脚本契约测试;
+  6. C++ 整解;
+  7. 补 C++ 单测(含给退役回收加可注入的单调时钟);
+  8. 9 个进程的 `--validate-tables`;
+  9. 本机热更冒烟(不碰仓库 xlsx,用 `tables-reload-local -TableSource`);
+  10. kind 端到端;
+  11. 收尾登记。
+- **授权**:负责人 11-20 原话「你出交接细节 我让gemini 去做……让他做完所有」。交接单里的验证、补测、修红、登记由 Gemini 一并做完;要推翻设计定案、加第三方依赖、动客户端、碰 kind 以外的集群时,停下来问负责人。
+- **文档**:设计稿状态行改成当前实际状态,并链到交接单。`gen_docs_index.py` 重新生成了索引,顺带收录了别的线今天改过标题或新增的三份交接单。
+- **Java 版**:`PARITY.md` 还没登记,交接单 §3.11 要求 Gemini 登记待做。
+
+## 2026-11-26 Claude:登录排队复核与两处补齐——K8s 镜像两个上限键、「排队已满」告警;代码写完,只剩 Gemini 验证(未运行;Java 0.1.0-SNAPSHOT 待做)
+
+- **复核结论(只读)**:
+  - 11-20 的两批都已入库:「登录排队遗留项收口」在 `b6a08148c`,Gemini「全链路标准收口」在 `f067d01fc`。收口条目登记的那条残余(合服并进来的角色、原 gate 掉线时重连要排队)已由 Gemini 加的 `PlayerSession.gate_zone_id` 关掉。
+  - login 的生产代码编过一次:`build/verification/docker-rebuild-go-20261123T024142.457667Z/build` 里 login 构建成功,源码清单中 `loginqueue/queue.go`、`dispatcher.go` 的哈希与当前文件相同。`assigngatelogic.go` 在 11-25(`330711e6f`)又改过,之后没有构建记录。
+  - 排队的 Go 单测、网关用例、真实 Redis 冒烟仍然没有运行记录(11-08 那份已过期)。`$script:LoginQueueMergeGateCleared` 仍是 `$false`,`Queue.Enabled` 仍是 `false`。
+- **本次补的两处**(11-20 收口条目里留下的口子):
+  1. K8s 的 login ConfigMap 没有镜像 `Queue.MaxAdmitPerTick`、`Queue.MaxQueueLength`,在 `login.yaml` 里改了集群不生效。`k8s_deploy.ps1` 的 `New-LoginQueueYaml` 加上这两个键,`k8s_deploy_contract.tests.ps1` 的镜像键名单同步。
+  2. 「排队已满」只有计数、没有告警。`deploy/k8s/login-alerts.yaml` 加组 `login.queue-length`、规则 `LoginQueueFull`(critical,for 5m,按 zone 报);`gate_pick_alerts_contract.tests.ps1` 加一条对应用例。
+  - 随之改的说明:`go/login/etc/login.yaml` 注释、`docs/design/login-queue-2026-05.md` §10、`deploy/k8s/README.md` 告警清单。
+- **验证(交 Gemini,AGENTS §10.1)**:11-20 两条的标题写的是「待 Codex 验证」,按现行分工由 Gemini 执行。
+  1. 按 11-20「登录排队遗留项收口」第 2~6 步与「登录排队清合入门槛的 Codex 验证单」执行。那两条写的前置(先生成协议)已经满足:`go/proto` 里已有 `GetClientWsUrl` 与 `GateZoneId`。
+  2. 本次两处(仓库根):
+     ```powershell
+     pwsh -NoProfile -File tools/scripts/tests/gate_pick_alerts_contract.tests.ps1
+     pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
+     ```
+     通过标准:两条退出码 0;新用例「login.queue-length 组只有 LoginQueueFull…」通过;「Queue.<键> 必须镜像」对 `MaxAdmitPerTick`、`MaxQueueLength` 成立。`k8s_deploy_contract` 红在别处时按用例名分清是不是这两个键。
+  - 本会话做过的只读检查:三份 ps1 的语法解析零错误;`login-alerts.yaml` 用 PyYAML 解析通过,新规则的字段齐全。没有运行任何测试。
+- **Java 版(AGENTS §12)**:待做。Java 仓 `PARITY.md` 11-20「登录排队与开服限流标准收口」一节补登第 4 条(入队按账号幂等、队列上限、每拍上限、重连占位、看全部角色、只接本区、排队已满的计数与告警)。
+- **提交情况**:本次改动在 main 工作区,未提交。
+
+## 2026-11-26 Claude：开服线遗留项复核——三条定案，代码无新增（只改运维手册；Java 无待做）
+
+- **起因**：负责人要求「说过以后修的现在修，等压测再定的先按标准做法定」。把本线登记过的遗留逐条过了一遍，没有要新写的代码。
+- **补上的一处**：`docs/ops/gate-kernel-tuning-runbook.md` §3.1 原来只写「从现有旧 Pod 读容器 nofile 硬限」。首次上线的集群没有旧 Pod，这一步做不了。现在补了一段：在每个节点池上起一次性探针 Pod（用要发布的节点镜像）读 `ulimit -Sn / -Hn`，读完自动删除。
+- **三条定案（不再作为待办）**：
+  - `node_log_level::RejectStartup`（LogLevel 配错时的拒启）在节点进程里会往 stderr 写两行内容相同的原因。不改：它在 config 库里，够不到 `node.cpp` 的去重标记；为一条罕见配置错误跨库加接线不值得。
+  - 内核低于 6.2 时，每次抓取指标要逐项数 `/proc/self/fd`。不改：这是 Prometheus 各语言客户端库的通行做法，只在抓取时发生一次。
+  - `ENFILE` / `ENOBUFS` / `ENOMEM` 三条路径单测里造不出来，只有分类表有单测。不改：靠容器步骤验证。
+- **Java 版（AGENTS §12）**：Java 的 gate、battle 监听用的是 Netty（`ServerBootstrap` + `NioServerSocketChannel`）。Netty 的接入处理器遇到 accept 异常会自己停止接入 1 秒再恢复，进程不会退出，属于已有等价行为，不往 `PARITY.md` 加行。这是按 Netty 自带行为判断的，没有在 Java 仓运行验证。fd 上限检查仍沿用 `PARITY.md` 已登记的 B0-4 一行。对应 Java 版本号无。
+- **交 Gemini**：没有新增命令，仍按上一条「2026-11-26 Claude：开服线（B0-4 后续项）验证单重新登记给 Gemini」的五步执行。本线代码至今未编译、未运行。
+
+## 2026-11-26 Claude:改名与内容安全复核——修 scene 改名三处、补 match 战队名送检装配、守卫登记表补齐(未编译、未运行,交 Gemini 验证;Java 仍待做)
+
+- **范围**:`docs/design/rename-and-content-safety.md` 六批源码 11-20 已全部在 `main`(协议、配表已生成)。本条是 11-26 的复核:逐项读了 scene 的 `player_rename.cpp`、data_service 的 `RenameRole` 入口与后台续做、guild 的 `RenameGuild` 事务、chat 的 `Send`。帮会改名的锁序(先改 guild 行拿唯一索引、再锁读保护表)、建帮复核保护表、聊天「送检在事务外、被拒前先看是不是重放」都对,没有改。
+- **改了四处**(都在 `main` 工作区,未提交):
+  1. `cpp/libs/services/scene/player/system/player_rename.cpp`:结局回来时玩家存档不可改(交接、退出中)就一个字都不动,退避后重发同一个 `seq`;发送前同样先看可不可改。原来会照样改名、清记录,而 `ConsumeInventoryAndGrant` 对不可改的玩家直接拒绝,等于白改一次。
+  2. 同文件:收到 `RENAME_ROLE_OK` 而改名卡没扣成时不落结局,记录和占用留着重发(ERROR `metric=player_rename_card_not_consumed`);原来只打一行 WARN 就落成功。加载时没有进行中的改名却留着改名的占用,放掉并报 `metric=player_rename_orphan_hold`。记录已不在时清掉运行态,Tick 不再每拍空问。
+  3. `player_rename_rules.h` 的 `IsTransientResult`:只有九种明确的结局算结局,其余取值(含本版本不认识的)一律重发。原来不认识的取值会被当成失败、解除改名卡的占用。
+  4. go/match 的赛事战队名:`tournamentlogic.go` 写了送检,但 `ServiceContext.ContentGuard` 从没被赋值,实际不检。补 `config.ContentGuard`、`match_service.go` 装配(没配目标又不是本机 `Optional` 就拒启)、`etc/match_service.yaml`、`k8s_deploy.ps1` 的 match ConfigMap 与 content-guard 准入名单(加 `match`)、契约测试的期望;内容安全不可达时回 `ErrInternal`,不再回「名字不合规」。
+- **守卫登记表**:`tools/scripts/tests/test_client_text_fields_reviewed.py` 在 11-20 之后被新协议带红(16 个文字字段没人表态)。逐个核过后登记:`SubmitSellerReviewRequest.comment`、`CreateTournamentSquadRequest.squad_name` 是已有送检;装备预设名、技能装配方案名、流派收藏三个字段只回给本人,豁免;其余是配置键、凭证、服务端内部公告。
+- **已跑的只读检查**:上述守卫 2/2 通过;`test_cpp_no_raw_pointer_member.py` 13/13 通过;两份 ps1 `Parser::ParseFile` 0 错误;本次新写的 Go 行 gofmt 无差异(`go/match` 那三个文件在 HEAD 就未格式化,没有动)。
+- **已有的运行证据**(不是本次跑的):`build/verification/team-follow-afk-hosting-20261121/cpp-tests-run2/all/bag_test.stdout.log` 里 `PlayerRenameRulesTest` 1 条、`PlayerRenameSystemTest` 4 条、`PetRenameReviewTest` 7 条、`ContentGuardClientTest` 2 条通过。Go 单测、真库用例、部署契约、端到端冒烟没有找到运行记录。
+- **新增用例**(`cpp/tests/bag_test/player_rename_test.cpp`):`OutcomeArrivingWhileFrozenIsKeptAndAppliedAfterRetry`、`UnknownResultIsRetriedNotTreatedAsRejection`、`OrphanRenameHoldIsReleasedOnLoad`。
+- **交 Gemini**(仓库根;C++ 严格 `/m:1`;不需要重新生成协议,本次没有改 proto 与配表):
+  1. `msbuild /m:1 game.sln /p:Configuration=Debug /p:Platform=x64`,再 `pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter "bag_test"`。通过标准:`PlayerRenameSystemTest` 7 条、`PlayerRenameRulesTest` 1 条全过。
+  2. `go/match`、`go/shared`、`go/data_service`、`go/guild`、`go/chat`、`go/content_guard`、`go/trade`、`go/login`:各自 `go build ./... && go vet ./... && go test ./... -count=1`(`$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`)。`go/match` 起服需要 `ContentGuard` 段:本机 yaml 已带 `Optional: true`;别处自备的 match 配置没有这一段会在启动时拒启,报 `content guard client: ContentGuard.Rpc has no target`。
+  3. 隔离 TiDB 下跑 `go/data_service/internal/store` 的 `TestTiDBRenameRoleCommitHoldReplayAndResume` 与名字表用例、`go/chat/internal/authority` 的真库用例(`TestChatTiDBContentReviewRejectsBeforeAnyRowAndReplayKeepsTheOriginal` 等)、`go/guild/internal/data` 的 `TestRenameGuildTransactionHoldAndCreateGuard`。旧库缺 `player_name.held_until_ms` 列会拒启,清库后 `-migrate`。
+  4. `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`(关注「内容安全调用端」与「content-guard 的 gRPC 口准入」两条)。`k8s_deploy.ps1` 与这份测试当时还带着别的会话未提交的改动,红了先分清是谁的。
+  5. 清库冒烟一轮:建角名命中屏蔽词被拒;角色改名成功后扣卡、旧名七天内别人占不了、冷却内再改被拒;改名途中切场景节点,结局在切换后落地;帮会改名;建赛事战队用屏蔽词被拒。
+- **没做**:`TX_ROLE_RENAME`(流水类型 33)目前没有被使用,扣卡走的是 `ConsumeInventoryAndGrant`,流水记成销毁并带 `extra=player_rename`,枚举值留着没删;本机一键启动与调试栈仍没有把 `content_guard` 列进去(各调用端本机配置是 `Optional: true`,它没起时不送检并打 ERROR);客户端代码是 11-20 Gemini 写的,这次没有复核。
+- **Java 版(AGENTS §12)**:本次四处都是服务端内部行为,不改客户端契约;Java 仓 `PARITY.md` 里这条线的待做行仍在,本次没有动 Java 仓。
+
+## 2026-11-26 Claude:剧本审核流水保留期清理复核——查出一处待修(搬库冻结窗口被记成清理失败),修法写进交接单交 Gemini;schema.go 的 gofmt 已修(未提交)
+
+- **复核范围**:按 HEAD 逐文件重读两轮改动;查了这张表的其他读者(没有)、`proto/persist_schema_gen.txt`(只管玩家存档,不含 match 的表)、match 后台循环点位(与契约登记的 15 个一致)。整仓 `check_log_text_english.py` 通过。
+- **待修**:搬库冻结窗口里写者池上的读写都回 `ErrWriterFrozen`,两个清理循环会每轮记一次失败,大库搬迁时 `MatchRetentionPurgeFailing` 会误报;仓库的口径(`HoldRelay`、终局发件箱)是冻结不算故障。修法、测试与文档改动写在 [battle-script-review-retention-handoff-20261126.md](handoff/battle-script-review-retention-handoff-20261126.md) §3 第 0 步。本会话跑的是 Opus 5.5,按 `AGENTS.md` §10.3 不改代码,交 Gemini 最高档模型。
+- **已修**:HEAD 里 `go/match/internal/authority/schema.go` 没过 gofmt(别的功能插进的 `MatchTrialChallengeCardRecord` 一行打乱了注释对齐),`gofmt -w` 只改这一行空白,在工作区未提交。
+- **文档**:交接单 §0 / §2 / §4 改正;`docs/design/battle-script.md` §11 第 5 步、`deploy/k8s/README.md` 后台循环告警一节补了 `match.retention`。
+- **未验证**:全部。
+
+## 2026-11-26 Claude:gate 准入:验签前只收小帧、已验签连接重发验签不回包、会话号位宽解耦、TCP_DEFER_ACCEPT(准入设计 G10 / §5 第 5 条 / G12 / P2-1;未编译、未测试,待 Gemini 验证;Java 0.1.0-SNAPSHOT 待做)
+
+- **核对**(`docs/design/gate-connection-admission-control.md` 剩余项):G10 前半句(`verified` 判定排在 `ValidateClientMessage` 之后)现在已不成立;后半句、§5 第 5 条、G12、P2-1 都没做;
+  P1-5 只差 `resources`;P2-3 第 3 条没人做;P2-4 没做。
+- **改了什么**:
+  - **G10 验签前只收小帧**:`ProtobufCodec` 加 `setPreAuthMessageLimit(上限, 判据)`。判据为否的连接声明超过上限的帧按 `kInvalidLength` 断开,看到长度头就断,不等整帧;
+    WebSocket 的单帧载荷上限同样收紧。上限 `accept_admission::kPreAuthMaxMessageBytes = 4KB`(验签请求编码后不到 300 字节)。
+    gate 用 `gate_connection_admission::IsVerifiedConnection`,battle 直连用 `BattleClientEdge::IsVerifiedConnection`(在 `Install` 里绑 weak)。
+    预算内每条未验签连接最坏占的输入缓冲从 64KB 降到 4KB。
+  - **§5 第 5 条**:gate `DispatchTokenVerify` 里,已验签的连接再发验签请求不回包、计一次非法包,到阈值断开。客户端每条连接只发一次验签(`GameClient.ConnectAndEnter`)。
+    dev 免验签的判断挪到前面,dev 下照旧每条都答。battle 的重复握手保持原来的幂等回包(它只对持有效票据的直连可达,应答很小),没有改。
+  - **G12**:`network_utils.h` 的会话号序号位宽改用自己的 `kSessionSequenceBits = 17`,不再借 snowflake 的 `kNodeBits`(`ENABLE_SNOWFLAKE_TESTING` 下会变成 9)。
+    加了 `static_assert(kSeqMask == 131071)`。值没变。
+  - **P2-1 `TCP_DEFER_ACCEPT`**:muduo 的 `Acceptor` / `TcpServer` 加 `setDeferAccept(seconds)`,三份副本同改,Windows 上什么也不做。
+    gate(`main.cpp`)与 battle 直连(`Install`)设 `accept_admission::kDeferAcceptSeconds = 1`,与 HAProxy `defer-accept` 同一语义。
+    三种客户端(Unity 大厅、战斗直连、小游戏 WebSocket)都是建连后立刻说话,已核对。设计稿原来写「超时后丢弃」是旧内核的行为,已改正文。
+- **定案**(写进设计稿):P2-4 票据先行定为不做(TCP 上验票前的状态已被预算、期限、速率、4KB 帧上限封住,剩每条一个 `SessionInfo`,几 MB 量级;改动面大);
+  P1-5 的 sysctl 定为不做(应用层握手期限与心跳更快,且要求集群版本);P1-5 的 NetworkPolicy 已由端口白名单那批做完;P2-3 第 4 条由登录排队承担。
+- **交接 Gemini**:`docs/handoff/gate-admission-remaining-handoff-20261126.md`:P1-5 的 `resources.requests`(取值已定:prod gate / battle 1 核 512Mi,scene 1 核 1Gi,dev 档小值,不配 limits),
+  P2-3 第 3 条断线重连优先(在 login 做:不排队、挑 gate 用硬上限)。
+- **文件**:
+  - 修改:`cpp/libs/engine/core/network/codec/codec.{h,cpp}`、`cpp/libs/engine/core/network/accept_admission.h`、`cpp/libs/engine/core/network/network_utils.h`;
+    `cpp/nodes/gate/main.cpp`、`cpp/nodes/gate/handler/rpc/client_session_handler.cpp`、`client_heartbeat.h`(注释)、`connection_admission.{h,cpp}`;
+    `cpp/nodes/battle/client/battle_client_edge.{h,cpp}`;
+    muduo 三份副本的 `Acceptor.{h,cc}`、`TcpServer.{h,cc}`(`cpp/libs/engine/muduo_windows/src/muduo/net/`、`third_party/muduo/muduo/net/` 逐字节同步、`tools/archived/muduo_linux_overlay/muduo/net/`);
+    `tools/scripts/tests/muduo_acceptor_copies_contract.tests.ps1`(新增 A9);`cpp/tests/routing_identity_test/routing_identity_test.vcxproj`;
+    `docs/design/gate-connection-admission-control.md`(状态、G10 / G12、§5、P1-5 表、P2-1、P2-3、P2-4、§9.6 三行)。
+  - 新增:`cpp/nodes/gate/tests/pre_auth_message_limit_test.cpp`(5 条)、`docs/handoff/gate-admission-remaining-handoff-20261126.md`(新文档,还没登记进 `docs/README.md`,按 AGENTS §5 跑索引生成)。
+- **已做的静态检查**:`python tools/scripts/tests/test_cpp_no_raw_pointer_member.py` 13 条通过;改过的契约测试用 PowerShell 解析器查过语法(0 个错误),没有执行。
+- **交 Gemini**(没有 proto 改动;前一步红就停下归因):
+  1. 仓库根:`pwsh -NoProfile -File tools/scripts/tests/muduo_acceptor_copies_contract.tests.ps1`,9 条全过。
+  2. Windows 整解:`msbuild game.sln /t:Build /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64`。muduo.lib(`Acceptor` / `TcpServer`)与 core.lib(codec、`network_utils.h`)都变了,必须整解。
+     首错落在上面的文件里交回 Claude。已知风险点:Windows `Acceptor.cc` 里 `setsockopt` 只在 `#ifdef __linux__` 分支。
+  3. 测试,`pwsh -NoProfile -File tools/scripts/run_cpp_tests.ps1 -Build -Filter <名>`:
+     - `routing_identity_test`:`PreAuthMessageLimit.*` 5 条 PASS;`ConnectionAdmission*`、`ClientHeartbeat*`、`GateClientEntryWiring.*` 等 gate 用例不回归;
+     - `rpc_controller_test`:`AcceptorAdmission.*`、`AcceptorFailurePolicy.*`、`accept_admission_test.cpp` 与 battle 直连准入的用例不回归;
+     - `muduo_grpc_test`:它直接用 `Acceptor`,全过。
+  4. Linux:`docker --context desktop-linux build -f deploy/k8s/Dockerfile.cpp --build-arg BUILD_JOBS=2 -t mmorpg-node:admission-g10 .`;
+     deps 阶段打印 `overlaid:` 的 `Acceptor.h`、`Acceptor.cc`、`TcpServer.h`、`TcpServer.cc`,muduo 以 `-Werror` 编过。
+  5. 行为(Linux 容器):设计稿 §9.6 新加的三行(验签前大帧、已验签重发验签、`TCP_DEFER_ACCEPT`)。
+  6. 冒烟:缺省参数跑一轮 robot 登录,全部成功,`gate_rejected_total` 各原因为 0。
+  7. 失败时保留首个编译错误原文、失败用例的完整输出;不改断言,不跳过用例。
+- **Java 版(AGENTS §12)**:待做,`PARITY.md` 末尾登记了「验签前只收小帧、重复验签不回包、TCP_DEFER_ACCEPT」。不涉及客户端契约。
+- **未提交,未编译,未测试。**
+
+## 2026-11-26 Claude:location 记 gate 实例、托管落点带实例——收口 e 方案 C 最后两条残余(未生成、未编译、未测试;Java 0.1.0-SNAPSHOT 待做)
+
+- **起因**:[scene-enter-chain-residuals.md](design/scene-enter-chain-residuals.md) §14.6 第一、三条,同一根因:location 的会话身份只有 (会话号, 代次),scene_manager 落点判定「会话号相同即同一会话」。gate 以同一 node_id 重启后,老进程上同号会话在途的同节点换图会被放行,location 与人数挪到新场景、实体被 scene 栅栏留在原地(原文档写的「只是 location 身份口径」偏轻);托管落点不带实例,目标节点上托管实体的登录身份不知道在哪个 gate 进程上。设计与修前后对照见该文新 §14.8。
+- **做了什么**(main 工作区,未提交):`PlayerLocation.gate_instance_id = 10`、`PlayerHostedPlacementEvent.gate_instance_id = 8`;Go `decidePlacementIdentity` 的「同一会话」加实例比较(与 C++ `enter_fence::SameGateInstance` 同口径),跨进程同号按代次裁决回 25;同会话带实例就记、不带就沿用;托管落点事件带 location 记的实例,scene 的 `HostedPlacementContext` 抄进入场上下文;`identityIsHostedLogin` 改逐项比会话号与代次(否则记了实例后托管归位永远请不动持有节点)。离场表不变。源节点托管角色的改派条目不补实例,理由写在 §14.8「不做」。
+- **文件**:`proto/scene_manager/storage.proto`、`proto/common/event/player_placement_event.proto`;`go/scene_manager/internal/logic/{placement_identity.go,changesceneutil.go,enter_hosted_placement.go,enterscenelogic.go,enter_holder_release.go}` 与同目录 `{placement_identity_test.go,enterscene_identity_test.go,enter_hosted_placement_test.go,enter_holder_release_test.go,leave_release_test.go}`;`cpp/libs/services/scene/player/system/{player_lifecycle.h,player_lifecycle.cpp}`、`cpp/nodes/scene/handler/event/player_placement_event_handler.cpp`(守护段)、`cpp/tests/cross_zone_test/cross_zone_test.cpp`;文档 `docs/design/{scene-enter-chain-residuals.md,player-connection-lost-hold.md,cross-zone-scene-travel.md}`、本条。不新增 `.cpp`,不新起线程。
+- **新增用例(未运行)**:Go `TestDecidePlacementIdentity_GateInstance`、`TestEnterScene_SameSessionIdFromAnotherGateProcessIsStale`(复现)、`TestEnterScene_HostedPlacementCarriesTheGateInstanceRecordedForTheLostLogin`(复现),`TestIdentityIsHostedLogin` / `TestIdentityStrictlyNewer` 各加一行;C++ `HostedPlacementReentry.HostedPlacementRecordsTheGateInstanceSoALateEnterFromAnotherProcessIsRejected`,`HostedPlacementEcs.ContextCarriesTheLostLoginAndNoNotifiableSession` 加实例断言。跟着改的既有 Go 用例见 §14.8。
+- **预检**:`python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`,13 tests OK。没有生成、编译,没有跑任何测试。
+- **给 Gemini 的验证步骤**(AGENTS §10.1:协议生成、编译、测试、冒烟由 Gemini 跑;仓库根,串行;工作区有别的会话未提交的改动,不要回退;失败保留首个错误原文与失败用例完整输出,不改断言、不连续重试):
+  1. 协议生成:`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`(两个 proto 都不是客户端契约,不写客户端仓)。通过:Go / C++ 生成物里 `PlayerLocation` 多 `GateInstanceId`、`PlayerHostedPlacementEvent` 多 `GateInstanceId`。
+  2. Go(`go/scene_manager` 目录):`go test ./internal/logic/ -count=1 -run "TestDecidePlacementIdentity|TestDecideLeaveIdentity|TestEnterScene_SameSessionIdFromAnotherGateProcessIsStale|TestEnterScene_HostedPlacement|TestIdentityIsHostedLogin|TestIdentityStrictlyNewer|TestEnterScene_SamePlacement|TestEnterScene_LoginBehindUnreleasedHolderRequestsReleaseOnce|TestEnterScene_HostedResume|TestEnterScene_LoginWithoutStrictlyNewerIdentity"`,全绿;再 `go vet ./...` 与 `go test ./... -count=1`。另在读 location 的 `go/player_locator`、`go/guild`、`go/match`、`go/player_inbox`、`go/shared` 各跑 `go build ./...`(只读字段,确认重新生成后能编)。
+  3. C++ 整解:`msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`(改了 scene 库,`run_cpp_tests -Build` 不重编库,必须先做)。期望 0 error。
+  4. `pwsh -NoProfile -File tools/scripts/run_cpp_tests.ps1 -Build -Filter cross_zone_test -LogDir build/verification/location-gate-instance-20261126/cpp-tests`:先单跑 `build\cpp\tests\cross_zone_test.exe --gtest_filter=HostedPlacementEcs.*:HostedPlacementReentry.*:GateInstance*:PlayerTeamFollowTest.*`,含上面的新用例且全绿;再跑全量。可与 11-20 两条(「scene 按 gate 实例认会话」「回推与自发 EnterScene 按会话所在的 gate 进程找 gate」)的第 2~4 步合成一次。
+  5. 变异核对(每个单独做、跑完逐字节恢复,期望见设计稿 §14.8 的表):M8 去掉 `sameGateInstance` 条件;M9 同一会话行实例恒取请求的;M10 `routeHostedPlayerToScene` 不填 `GateInstanceId`;M11 `HostedPlacementContext` 不抄实例;M12 `identityIsHostedLogin` 改回整结构相等。M8~M10、M12 跑第 2 步的 Go 用例,M11 跑第 4 步。
+  6. Linux:`build_linux.sh` 编过(没有新增源文件)。
+  - **通过标准**:第 1 步生成物只多这两个字段;第 2~4 步全绿;第 5 步红绿与设计稿一致;第 6 步编过。回报每步实跑条数与平台。
+- **发布**:项目未上线,location 可清;旧格式 location 按实例未知比较。scene 与 scene_manager 同批发布。
+- **未验证**:全部没有生成、编译、运行。
+- **Java 版(AGENTS §12)**:对应 Java 版本 `0.1.0-SNAPSHOT`,待做,本轮不写 Java 代码,只在 Java 仓 `PARITY.md` 末尾登记(Java 的 location 是否只按会话号认会话、托管落点是否带网关实例待核实;Java 需同批跑 `ContractSync` 同步这两个 proto)。
+
+## 2026-11-26 Claude:data_service 熔断设计稿 §8 的残余逐条定案、其余 Go 服务核对完(只改设计稿,无代码改动;Java 不涉及)
+
+- 接本日「go/db 与 data_service 两处熔断按后端隔离复核」。负责人口径是不留到以后,把 `docs/design/data-service-breaker-per-logical-db.md` §8 里原来写「以后再议 / 现在不做 / 不在核对范围」的三条定掉:
+  - 语句层不加熔断:语句立刻回错本身就是快速失败;语句挂住由 5 秒读写超时关连接,转成建连失败,建连处的熔断接得住。
+  - 建连钩子不区分「连不上」与「会话核对不过」:守卫里读 `route_meta` 失败和资格不符是同一个错误,「TiDB 在、存储不可用」正靠这一步计入熔断,分开会漏掉它;计进去的后果有界(同库各池同一份写资格,恢复最多滞后 10 秒)。
+  - 其余 Go 服务不用改:chat、friend、guild、login、mail、match、payment、player_inbox、rank、trade 各只有一个逻辑库(各一处 `authoritysql.Open`,不按请求选库);client_rpc_router 的下游失败随包回提示码、gRPC 状态是 OK,不计入按方法的熔断,且另有按实例的熔断。
+- 这条线没有待写的代码;验证命令见本日「go/db 与 data_service 两处『熔断按后端隔离』复核」那一条。Java 不涉及,不加 PARITY 行。
+
+## 2026-11-26 Claude:登录排队交接 Gemini——交接单、开闸步骤与文档收口(只改文档,未运行;Java 0.1.0-SNAPSHOT 待做)
+
+- **复查结论**:这条线没有待写的代码。又扫了一遍设计稿、手册、限流设计和代码里的「待压测 / 残余 / 以后」标记,剩下的都是文档:
+  - `docs/ops/login-queue-stress-runbook.md` 与设计稿 §11 里「待 L-14 重新标定」的节奏数字,改成按现行放行规则推出的判读口径:等待没有固定上限,要查的是「队列不动」;旧样例只示意字段。
+  - 设计稿写明 `handoffGrace` 已定为 20s,压测只用来复核。
+  - `deploy/k8s/README.md`:镜像键名单补上两个上限键;`QueueToken.Value` 的旧说法改成现状(ConfigMap 只有变量名,密钥在 Secret `login-queue-token`)。
+- **交接单**:`docs/handoff/login-queue-verification-handoff-20261126.md`。内容是 8 步验证的顺序与入口、最可能红的文件(测试代码从没被编译过)、开闸(改常量)要同批做的四件事,以及契约用例 19 / 20 的替换草稿。
+  - `python tools/scripts/gen_docs_index.py` 重新生成了索引,同时带进了别的会话今天新增、还没进索引的几份交接单;`--check` 通过。
+- **未验证**:没有运行任何构建或测试。
+- **Java 版(AGENTS §12)**:待做,已登记在 Java 仓 `PARITY.md`。
+- **提交情况**:本条与同日上一条的改动都在 main 工作区,未提交。
+
+## 2026-11-26 Claude:全部 Redis 上 Cluster(缺口第 34 条)交 Gemini 验证——交接单与文档收口(只改文档,未运行)
+
+- **复查结论**:第 34 条没有待写的代码。设计稿 §10 表第 1~7 批都已写完(第 1~5 批已落码未编译,6a / 6b-1 / 6b-2 代码写完未运行,第 7 批文档 11-19 完成);观战大厅拆 16 桶的测试 11-20 已随 `55eae6be3` 入库,与 `9824368eb` 提交的生产代码对上。
+- **交接单**:`docs/handoff/redis-cluster-all-domains-handoff-20261126.md`,7 步:协议生成 → Go 单测 → C++ 整解与单测 → 部署契约 → 真集群集成(期间迁槽、杀主)→ kind 冒烟 → 3 主对 6 主的容量对比表。各步的具体命令仍以各批 PROGRESS 条目为准。
+- **文档**:缺口清单第 34 条加 11-26 复核、归属表改为交 Gemini,并改正「配套测试还在工作区」的旧说法;设计稿 §10 开头指向交接单;`gen_docs_index.py` 重新生成索引,只加了两行(本交接单与别的会话的 gate 准入交接单)。
+- **不属本条**:工作区里 `go/match/internal/logic/spectate.go`、`spectate_visibility.go` 的未提交改动是论剑 V7 高段排位公开观战,交接单里写明了。
+- **未验证**:没有运行任何构建或测试。
+- **Java 版(AGENTS §12)**:待做,Java 仓 `PARITY.md` 已有「Redis Cluster」待做行。
+- **提交情况**:在 main 工作区,未提交。
+
+## 2026-11-26 Claude:保留期清理搬库冻结不计失败——两个清理循环一轮的结局收到一处(未编译、未测试,待 Gemini 验证;Java 不涉及)
+
+- **起因**:同日「剧本审核流水保留期清理复核」查出的待修项。负责人 11-26 定「逻辑代码由 Claude 改,Gemini 只负责编译」,模型切回 Fable 5.2 后落码;复核条目里「修法写进交接单交 Gemini」作废。
+- **做了什么**:
+  1. `go/match/internal/logic/retention_purge.go` 新增 `observeRetentionRound(purge, err)`:成功不计;`authoritysql.IsWriterFrozen(err)`(搬库冻结窗口,这一轮确定没写)只记 Info;其余失败计 `match_retention_purge_failures_total{purge}` 并记 Error。冻结里混着别的错误照常计失败。口径同 `HoldRelay` 与终局发件箱。
+  2. 剧本审核流水与观战意图两个清理循环的 `round` 都改成调它,失败计数在 logic 里只剩这一处调用。
+  3. 日志文案改成 `[retention] <purge> purge failed` 与 `[retention] <purge> purge paused: writer gate frozen`,`<purge>` 与告警的 `purge` 标签同值(`battle_script_review` / `spectator_intent`)。
+  4. 测试:新文件 `retention_purge_test.go`(`TestObserveRetentionRoundDoesNotCountFrozenWriter`;`TestDrainRetentionPagesStopsAtPageCapEndOrError` 从审核流水的测试文件搬过来);`battle_script_review_purge_test.go` 加 `TestBattleScriptReviewPurgeDoesNotCountFrozenWriter`(冻结不计失败、不动游标;读最老一行换成真错误时计一次)。
+  5. 契约:`loop_liveness_alerts_contract.tests.ps1` 的「match 保留期清理…」用例改为核对两处 `observeRetentionRound(...)` 调用、冻结分支排在失败计数之前、失败计数只有一处调用。
+  6. 告警说明与文档:`deploy/k8s/match-alerts.yaml`(`MatchRetentionPurgeFailing` 的注释与 description)、`go/match/internal/metrics/retention.go` 的 Help、`docs/design/battle-script.md` §6.4 / §9、`battle-spectate-tiered-fanout.md`「意图保留期」。
+- **文件**:上面点名的 9 个,另有交接单与 `go/match/internal/logic/battle_script_review_purge.go`、`global_spectator.go`。都在工作区,未提交。
+- **验证**:没有编译、没有跑测试。静态核对:`gofmt -l` 干净;整仓 `check_log_text_english.py` 通过;契约 ps1 解析 0 错误,改过的正则对着实际文件逐条匹配。Gemini 按 [battle-script-review-retention-handoff-20261126.md](handoff/battle-script-review-retention-handoff-20261126.md) §3 跑(第 5 步的用例名单已更新为 9 个);需要改逻辑代码时保留首错原文停下,交回 Claude。
+- **已知风险**:冻结那一支只有单测覆盖,没做过真的 `cutover` 演练。
+- **Java 版(AGENTS §12)**:不涉及。写者闸门是本仓的机制;Java 仓 `PARITY.md` 里保留期清理的待做要求不变。
+
+## 2026-11-26 Claude:更正上一条「gate 准入:验签前只收小帧」的交接——断线重连优先 login 早就做了,`resources.requests` 改由 P0-2 会话落码(只改文档)
+
+- **P2-3 第 3 条(断线重连优先)核对后已有,不用写代码**:新登录要过区级准入 `FreeSlots`,区容量按本区 gate 到水位(自报上限的 90%)的承载封顶
+  (`go/login/internal/logic/pkg/loginqueue/capacity.go`);重连 / 顶号在 `AssignGate` 第 5 步免排队、不过 `FreeSlots`
+  (`go/login/internal/logic/loginpregate/assigngatelogic.go` 的 `reconnectingPlayer`);挑 gate 时全部到水位也退到「连得上的」一档(`gate_eligibility.go`)。
+  每台 gate 90% 到 100% 只有重连用得到。上一条写的「login 对新登录与重连一视同仁」是错的,设计稿 P2-3 第 3 条与状态行已改。
+- **P1-5 `resources.requests`**:不交 Gemini,由会话「gate 未验签连接预算、LRU 淘汰与按概率早拒(准入 P0-2)」落码,取值同交接单第 1 节,验证命令写在它自己的 PROGRESS 条目里。
+  交接单 `docs/handoff/gate-admission-remaining-handoff-20261126.md` 已删去第 2 节,第 1 �

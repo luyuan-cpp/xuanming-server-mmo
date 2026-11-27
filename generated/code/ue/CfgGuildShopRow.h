@@ -83,7 +83,7 @@ struct FCfgGuildShopRow : public FTableRowBase
 	UPROPERTY(BlueprintReadOnly, Category = "Config|GuildShop")
 	int32 required_guild_level = 0;
 
-	/** 限购周期:0 不限 / 1 每游戏日 / 2 每周(周一 05:00 切周) */
+	/** 限购周期:0 不限 / 1 每游戏日(保留兼容,现役零使用) / 2 每周(周一 05:00 切周) / 3 终身限购(永不重置) */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|GuildShop")
 	int32 limit_period = 0;
 

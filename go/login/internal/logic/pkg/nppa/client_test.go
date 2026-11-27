@@ -2,10 +2,6 @@ package nppa
 
 import (
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -24,36 +20,15 @@ const (
 	validPI        = "1hpfml09b57f3f8185f8cb5094ea3f26278efb"
 )
 
-// decrypt 是 encrypt 的逆:Base64 解码后前 12 字节是 nonce,其余是密文加认证标签。
-func decrypt(t *testing.T, secretKey, data string) string {
-	t.Helper()
-	key, err := hex.DecodeString(secretKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		t.Fatal(err)
-	}
-	raw, err := base64.StdEncoding.DecodeString(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	plain, err := gcm.Open(nil, raw[:gcm.NonceSize()], raw[gcm.NonceSize():], nil)
-	if err != nil {
-		t.Fatalf("decrypt: %v", err)
-	}
-	return string(plain)
-}
-
-// 规范的样例密文能被同样的布局解开,说明 nonce 在前、标签在后的布局与系统一致。
+// 规范的样例密文能被 decrypt 解开,说明 nonce 在前、标签在后的布局与系统一致。encrypt 再由下面的用例经
+// ReadRequest(同一个 decrypt)对回来,两头就都对上了规范。
 func TestSpecCiphertextUsesNoncePrefixLayout(t *testing.T) {
-	if got := decrypt(t, specSecretKey, specCiphertext); got != specPlain {
-		t.Fatalf("decrypted spec sample = %q, want %q", got, specPlain)
+	gcm, err := newGCM(specSecretKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := decrypt(gcm, specCiphertext); err != nil || string(got) != specPlain {
+		t.Fatalf("decrypted spec sample = %q, %v; want %q", got, err, specPlain)
 	}
 }
 
@@ -82,32 +57,31 @@ func newTestClient(t *testing.T, handler http.HandlerFunc) *Client {
 	return client
 }
 
-// verifyRequest 按规范在服务端重算签名并解开报文体,返回明文。
+// verifyRequest 像国家系统那样核一条请求:系统参数、签名、报文体(ReadRequest,沙箱 mock 用的同一份),返回明文。
 func verifyRequest(t *testing.T, r *http.Request) string {
 	t.Helper()
-	body, _ := io.ReadAll(r.Body)
-	params := map[string]string{
-		"appId": r.Header.Get("appId"), "bizId": r.Header.Get("bizId"), "timestamps": r.Header.Get("timestamps"),
+	if r.Header.Get("appId") != "app" || r.Header.Get("bizId") != "biz" || r.Header.Get("timestamps") != "1700000000000" {
+		t.Errorf("system headers = %v", r.Header)
 	}
-	for k, v := range r.URL.Query() {
-		params[k] = v[0]
+	plain, err := ReadRequest(specSecretKey, r)
+	if err != nil {
+		t.Errorf("request does not verify: %v", err)
 	}
-	if params["appId"] != "app" || params["bizId"] != "biz" || params["timestamps"] != "1700000000000" {
-		t.Errorf("system headers = %v", params)
+	return string(plain)
+}
+
+// 签名覆盖系统参数:请求被改过一位,服务端就认不出来。沙箱 mock 靠这一条挡住配错密钥的 login。
+func TestReadRequestRejectsATamperedRequest(t *testing.T) {
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Set("timestamps", "1700000000001")
+		if _, err := ReadRequest(specSecretKey, r); !errors.Is(err, ErrBadSignature) {
+			t.Errorf("ReadRequest of a tampered request = %v, want ErrBadSignature", err)
+		}
+		_, _ = io.WriteString(w, `{"errcode":0,"data":{"result":{"status":1}}}`)
+	})
+	if _, err := client.Check(context.Background(), "a1", "张三", "11010519491231002X"); err != nil {
+		t.Fatal(err)
 	}
-	if got := r.Header.Get("sign"); got != sign(specSecretKey, params, string(body)) {
-		t.Errorf("sign header does not verify")
-	}
-	if len(body) == 0 {
-		return ""
-	}
-	var envelope struct {
-		Data string `json:"data"`
-	}
-	if err := json.Unmarshal(body, &envelope); err != nil {
-		t.Fatalf("body is not {\"data\": ...}: %v", err)
-	}
-	return decrypt(t, specSecretKey, envelope.Data)
 }
 
 func TestCheckSendsEncryptedSignedRequest(t *testing.T) {

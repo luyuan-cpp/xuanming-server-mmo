@@ -8,7 +8,12 @@
 #include "core/utils/id/node_id_generator.h"
 #include <utils/id/snow_flake.h>
 
-using SessionIdGenerator = TransientNodeCompositeIdGenerator<uint32_t, kNodeBits>;
+// session_id 的布局:[gate node_id : 15 位][进程内序号 : 17 位],载体 uint32。序号位宽是会话号自己的常量,不借 snowflake 的
+// kNodeBits:那个常量在 ENABLE_SNOWFLAKE_TESTING 下变成 9,会话号的安全上界会从 131071 静默掉到 511,默认的
+// GateMaxConnections 直接拒启(docs/design/gate-connection-admission-control.md G12)。GetGateNodeId 按同一个位宽拆。
+inline constexpr std::size_t kSessionSequenceBits = 17;
+using SessionIdGenerator = TransientNodeCompositeIdGenerator<uint32_t, kSessionSequenceBits>;
+static_assert(SessionIdGenerator::kSeqMask == 131071, "a gate issues at most 2^17 - 1 concurrent session ids");
 
 void ParseIpPort(const std::string &input, std::string &ip, uint16_t &port);
 

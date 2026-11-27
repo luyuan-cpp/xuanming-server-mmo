@@ -925,7 +925,8 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 			} else if in.HostedPlacement {
 				// 托管角色的 location 已经指向这个场景:通常是上一条托管落点的事件还没被目标节点消费。照样再发一次,
 				// 让实体收敛到 location(scene 侧对"已在目标场景"幂等);失败只回 7,理由同上,不回滚。
-				if err := l.routePlacement(in, nodeId, hostedInstance, sceneId, homeZoneID, routedEpoch); err != nil {
+				if err := l.routePlacement(in, nodeId, hostedInstance, sceneId, homeZoneID, routedEpoch,
+					identityRecord.gateInstanceID); err != nil {
 					l.Logger.Errorf("[HostedPlacement] failed to re-deliver same-placement hosted route for player %d: %v", in.PlayerId, err)
 					return errResp(constants.ErrKafkaRoute, fmt.Sprintf("route hosted player to scene node failed: %v", err)), nil
 				}
@@ -1031,7 +1032,8 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	// 提交点与失败回滚和推 gate 路由完全相同(routePlacement,enter_hosted_placement.go)。
 	if in.GateId != "" || in.HostedPlacement {
 		routeStart := time.Now()
-		if err := l.routePlacement(in, nodeId, hostedInstance, sceneId, homeZoneID, placed.epoch); err != nil {
+		if err := l.routePlacement(in, nodeId, hostedInstance, sceneId, homeZoneID, placed.epoch,
+			identityRecord.gateInstanceID); err != nil {
 			l.Logger.Errorf("Failed to route player %d to its new placement, rolling back location/epoch/counts: %v", in.PlayerId, err)
 			// 回滚:location 退回本次之前的值,epoch 只进不退(GO-2,cross-zone-scene-travel.md §12.8)。
 			// 铸造过的再 INCR 一格(bump);凭标记铸造的以「所凭标记原样还在」为前提,并写回执、转写标记。

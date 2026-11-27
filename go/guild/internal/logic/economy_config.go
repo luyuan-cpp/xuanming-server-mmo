@@ -228,9 +228,10 @@ func validateShopRows(rows []*tablepb.GuildShopTable, maxLevel uint32, stackOf f
 			return fmt.Errorf("GuildShop[%d].required_guild_level=%d 越界,应在 [1,%d](GuildLevel 最高级)", id, v, maxLevel)
 		}
 		period := row.GetLimitPeriod()
-		if period != gameday.PeriodNone && period != gameday.PeriodDaily && period != gameday.PeriodWeekly {
-			return fmt.Errorf("GuildShop[%d].limit_period=%d 非法,只允许 %d(不限)/ %d(每日)/ %d(每周)",
-				id, period, gameday.PeriodNone, gameday.PeriodDaily, gameday.PeriodWeekly)
+		if period != gameday.PeriodNone && period != gameday.PeriodDaily &&
+			period != gameday.PeriodWeekly && period != gameday.PeriodLifetime {
+			return fmt.Errorf("GuildShop[%d].limit_period=%d 非法,只允许 %d(不限)/ %d(每日)/ %d(每周)/ %d(终身)",
+				id, period, gameday.PeriodNone, gameday.PeriodDaily, gameday.PeriodWeekly, gameday.PeriodLifetime)
 		}
 		// 不限购就不占计数行(period_key=0);限购却填 0 份等于永远买不了。两者必须同时成立或同时不成立。
 		if (period == gameday.PeriodNone) != (row.GetLimitCount() == 0) {

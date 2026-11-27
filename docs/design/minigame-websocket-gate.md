@@ -1,7 +1,7 @@
 # 小游戏客户端经 WebSocket 连接 gate 与 battle(W1–W11)
 
 - **日期**:2026-11-19。
-- **状态**:代码已全部写完(服务端、部署脚本、客户端、robot),**未生成协议、未编译、未测试、未上集群,待 Gemini 验证**(AGENTS.md §10.1)。本文任何「通过」「生效」都指设计意图,不是运行证据。验证命令在 `docs/PROGRESS.md` 2026-11-19「小游戏 WebSocket 入口」条目,robot 的在同日「robot 加 WebSocket 传输」条目。2026-11-20 的收尾(边缘按来源限速、battle 的 WebSocket 计数、小游戏账号注销的重新认证、robot 去掉回环桥)在 `docs/PROGRESS.md` 2026-11-20「小游戏 WebSocket 收尾」条目。
+- **状态**:代码已全部写完(服务端、部署脚本、客户端、robot),**未生成协议、未编译、未测试、未上集群,待 Gemini 验证**(AGENTS.md §10.1)。本文任何「通过」「生效」都指设计意图,不是运行证据。验证命令在 `docs/PROGRESS.md` 2026-11-19「小游戏 WebSocket 入口」条目,robot 的在同日「robot 加 WebSocket 传输」条目。2026-11-20 的收尾(边缘按来源限速、battle 的 WebSocket 计数、小游戏账号注销的重新认证、robot 去掉回环桥)在 `docs/PROGRESS.md` 2026-11-20「小游戏 WebSocket 收尾」条目。2026-11-20 起全部待验证项交给 Gemini,一遍跑完的顺序见[交接单](../handoff/minigame-websocket-handoff-20261120.md)(2026-11-26 按当前仓库校正过)。
 - **授权**:改动约 60 个文件,超过 AGENTS.md §10.2 的 30 个文件门槛。负责人 2026-11-19 逐项同意 W1(共用端口)、W7(新增地址字段)、W10(客户端改法),说明 TLS 放在哪按最标准的做法定、Unity 有官方 WebSocket 就用官方的(前提是能上小游戏),确认原生 App 仍然直连之后回复「开始改」。
 - **范围**:让微信、抖音小游戏客户端连上 gate(大厅长连接)和 battle(每局直连、观战直连)。登录侧的小游戏登录已落码(`auth_type` 为 `wechat_minigame` / `douyin_minigame`,见 [第三方登录端到端设计](third-party-login-end-to-end-design.md) §十一),本文只管登录之后的长连接。
 - **决策编号**:本文 W1–W11。地址模型沿用 [集群外客户端入口](k8s-client-entry.md) D76(进程自报客户端可达地址)。

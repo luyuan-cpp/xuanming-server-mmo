@@ -21,6 +21,8 @@ inline constexpr uint32_t kOutcomeTierQualifiedNonWin = 2u;
 inline constexpr uint32_t kPvpMinRoundsForLoss = 3u;
 inline constexpr uint32_t kPvpMinManualRoundsForLoss = 2u;
 inline constexpr uint32_t kPermyriadBase = 10000u;
+inline constexpr uint64_t kWeekMs = 7ULL * 86400000ULL;
+inline constexpr uint64_t kSilverRolloverMaxWeeks = 3ULL;
 
 struct LevelExpRow {
 	uint32_t level{0};
@@ -303,7 +305,14 @@ inline WeeklySilverEval EvaluateWeeklySilverCap(uint64_t rawSilver, uint64_t use
 	return out;
 }
 
-// 统一在当前周账本上计算本局最终经验、实得银两与更新后的周账本候选。
+// 安全饱和乘法，防极端配置值溢出。
+inline uint64_t SaturatedMul(uint64_t a, uint64_t b) {
+	if (a == 0 || b == 0) return 0;
+	if (a > std::numeric_limits<uint64_t>::max() / b) return std::numeric_limits<uint64_t>::max();
+	return a * b;
+}
+
+// 统一在当前周滚存账本上计算本局最终经验、实得银两与更新后的周账本候选（最多滚存 3 周，抗时钟回拨）。
 inline void PrepareEconomyLedger(const ::BattleEconomyLedger& current, uint64_t currentWeekStartMs,
 								 const ::BattleSettlementData& settlement,
 								 uint64_t explicitExp, uint64_t explicitSilver,
@@ -314,13 +323,57 @@ inline void PrepareEconomyLedger(const ::BattleEconomyLedger& current, uint64_t 
 	candidateOut = current;
 	deltaOut = BattleProgressionDelta{};
 
-	// 抗时钟回拨：仅当新周起点严格晚于账本记录周起点时清零本周计数。
+	const bool validRule = rule != nullptr && ValidateWeeklySilverRule(*rule);
+	const uint64_t maxSoftCap = validRule ? SaturatedMul(rule->softCap, kSilverRolloverMaxWeeks) : 0;
+	const uint64_t maxHardCap = validRule ? SaturatedMul(rule->hardCap, kSilverRolloverMaxWeeks) : 0;
+
+	// 抗时钟回拨：仅当新周起点严格晚于账本记录周起点时推进滚存池并清零本周期已用计数。
 	bool weekReset = false;
-	if (currentWeekStartMs > candidateOut.week_starts_at_ms()) {
+	uint64_t effectiveSoft = validRule ? rule->softCap : 0;
+	uint64_t effectiveHard = validRule ? rule->hardCap : 0;
+	const uint64_t prevWeekStart = candidateOut.week_starts_at_ms();
+	if (currentWeekStartMs > prevWeekStart) {
+		if (validRule) {
+			if (prevWeekStart == 0) {
+				// 新号首周维持单周额度，防批量建号首日 3 倍爆发。
+				effectiveSoft = rule->softCap;
+				effectiveHard = rule->hardCap;
+			} else {
+				const uint64_t prevSoft = candidateOut.silver_rollover_soft_cap() > 0
+					? std::min<uint64_t>(candidateOut.silver_rollover_soft_cap(), maxSoftCap)
+					: rule->softCap;
+				const uint64_t prevHard = candidateOut.silver_rollover_hard_cap() > 0
+					? std::min<uint64_t>(candidateOut.silver_rollover_hard_cap(), maxHardCap)
+					: rule->hardCap;
+				const uint64_t prevUsed = candidateOut.battle_silver_this_week();
+				const uint64_t carrySoft = prevSoft > prevUsed ? (prevSoft - prevUsed) : 0;
+				const uint64_t carryHard = prevHard > prevUsed ? (prevHard - prevUsed) : 0;
+				const uint64_t weeksElapsed = std::min<uint64_t>(
+					kSilverRolloverMaxWeeks,
+					std::max<uint64_t>(1ULL, (currentWeekStartMs - prevWeekStart) / kWeekMs));
+				const uint64_t addSoft = SaturatedMul(weeksElapsed, rule->softCap);
+				const uint64_t addHard = SaturatedMul(weeksElapsed, rule->hardCap);
+				effectiveSoft = std::min<uint64_t>(maxSoftCap,
+					carrySoft > std::numeric_limits<uint64_t>::max() - addSoft ? maxSoftCap : (carrySoft + addSoft));
+				effectiveHard = std::min<uint64_t>(maxHardCap,
+					carryHard > std::numeric_limits<uint64_t>::max() - addHard ? maxHardCap : (carryHard + addHard));
+				if (effectiveHard < effectiveSoft) effectiveHard = effectiveSoft;
+			}
+			candidateOut.set_silver_rollover_soft_cap(effectiveSoft);
+			candidateOut.set_silver_rollover_hard_cap(effectiveHard);
+		}
 		candidateOut.set_week_starts_at_ms(currentWeekStartMs);
 		candidateOut.set_battle_silver_this_week(0);
 		candidateOut.set_battle_exp_this_week(0);
 		weekReset = true;
+	} else if (validRule) {
+		effectiveSoft = candidateOut.silver_rollover_soft_cap() > 0
+			? std::clamp<uint64_t>(candidateOut.silver_rollover_soft_cap(), rule->softCap, maxSoftCap)
+			: rule->softCap;
+		effectiveHard = candidateOut.silver_rollover_hard_cap() > 0
+			? std::clamp<uint64_t>(candidateOut.silver_rollover_hard_cap(), rule->hardCap, maxHardCap)
+			: rule->hardCap;
+		if (effectiveHard < effectiveSoft) effectiveHard = effectiveSoft;
 	}
 
 	uint64_t tableExp = 0;
@@ -345,11 +398,12 @@ inline void PrepareEconomyLedger(const ::BattleEconomyLedger& current, uint64_t 
 	uint64_t usedAfter = candidateOut.battle_silver_this_week();
 	uint64_t softCap = 0;
 
-	if (rule != nullptr && ValidateWeeklySilverRule(*rule)) {
-		softCap = rule->softCap;
+	if (validRule) {
+		const WeeklySilverRule effectiveRule{effectiveSoft, rule->diminishedRatePermyriad, effectiveHard};
+		softCap = effectiveSoft;
 		// 只有命中配置表银两路径时才纳入周软上限账本；若仅是未加载配置表的历史单测显式金币，原样保留不破坏旧断言。
 		if (tableSilver > 0) {
-			const auto eval = EvaluateWeeklySilverCap(rawSilver, candidateOut.battle_silver_this_week(), *rule);
+			const auto eval = EvaluateWeeklySilverCap(rawSilver, candidateOut.battle_silver_this_week(), effectiveRule);
 			creditedSilver = eval.creditedSilver;
 			usedAfter = eval.usedAfter;
 			diminished = eval.diminished;

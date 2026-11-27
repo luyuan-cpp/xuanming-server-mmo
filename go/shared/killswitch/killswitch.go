@@ -90,9 +90,14 @@ type Config struct {
 	NodeTypes []string
 
 	// Protected 是受保护的方法全名("/pkg.Svc/Method",用生成的 *_FullMethodName 常量):只认精确到方法的规则,
-	// `*` 与 `服务/*` 关不掉(docs/design/rpc-kill-switch.md §8)。放会话收尾、补偿与回执这类「在途工作的收尾」——
+	// `*`、`服务/*` 与 `feature/<name>` 均关不掉(docs/design/rpc-kill-switch.md §8)。放会话收尾、补偿与回执这类「在途工作的收尾」——
 	// 热关停只挡新工作,挡住它们会让在途工作收不了尾。
 	Protected []string
+
+	// Features 将一组方法全名归入业务功能组(移植自 xuanming-server/pkg/killswitch),支持 etcd 键
+	// `feature/<name>`（以及 `type/<nodeType>/feature/<name>`、`instance/<uuid>/feature/<name>`）一键止血整条玩法链路。
+	// 优先级位于 `服务/*` 之后、`*` 之前；受保护方法仍不受 feature 组影响。
+	Features map[string][]string
 }
 
 func (c Config) prefix() string {
@@ -186,6 +191,10 @@ type Switch struct {
 	idMu sync.Mutex
 	// protected 是受保护的方法全名(带开头斜杠),构造后不变。
 	protected map[string]struct{}
+	// methodFeatures 将规范化方法名(无开头斜杠)映射到所属 feature 规则键("feature/<name>",已排序去重)。
+	// 写由 featureMu 保护,读通过 atomic.Pointer 零锁访问。
+	featureMu      sync.Mutex
+	methodFeatures atomic.Pointer[map[string][]string]
 	// now 便于测试注入时钟,生产恒为 time.Now。
 	now func() time.Time
 }
@@ -198,7 +207,48 @@ func New(cfg Config) *Switch {
 		s.protected["/"+strings.TrimPrefix(method, "/")] = struct{}{}
 	}
 	s.id.Store(newIdentity(slices.Clone(cfg.NodeTypes), nil))
+	for name, methods := range cfg.Features {
+		s.RegisterFeature(name, methods...)
+	}
 	return s
+}
+
+// RegisterFeature 将一组 gRPC 方法归入功能组 name（对应规则键 "feature/<name>"）。
+// 重复调用同 name 会合并而非覆盖；并发安全。
+func (s *Switch) RegisterFeature(name string, methods ...string) {
+	name = strings.TrimSpace(strings.TrimPrefix(name, "feature/"))
+	if name == "" || len(methods) == 0 {
+		return
+	}
+	featureKey := "feature/" + name
+	s.featureMu.Lock()
+	defer s.featureMu.Unlock()
+	next := map[string][]string{}
+	if cur := s.methodFeatures.Load(); cur != nil {
+		for m, list := range *cur {
+			next[m] = slices.Clone(list)
+		}
+	}
+	for _, method := range methods {
+		m := strings.TrimLeft(strings.TrimSpace(method), "/")
+		if m == "" {
+			continue
+		}
+		if !slices.Contains(next[m], featureKey) {
+			next[m] = append(next[m], featureKey)
+			slices.Sort(next[m])
+		}
+	}
+	s.methodFeatures.Store(&next)
+}
+
+func (s *Switch) featureKeysFor(fullMethod string) []string {
+	cur := s.methodFeatures.Load()
+	if cur == nil {
+		return nil
+	}
+	m := strings.TrimPrefix(fullMethod, "/")
+	return (*cur)[m]
 }
 
 // AddInstance 登记本进程的一个节点 uuid(noderegistry 注册成功后调用),此后 instance/<uuid>/ 下的规则对本进程生效。
@@ -278,19 +328,45 @@ func (s *Switch) Lookup(fullMethod string) (Rule, bool) {
 	}
 
 	keys := MatchKeys(fullMethod)
+	var featureKeys []string
 	if s.isProtected(fullMethod) {
-		keys = ExactKeys(fullMethod) // 受保护的方法:通配规则关不掉
+		keys = ExactKeys(fullMethod) // 受保护的方法:通配与 feature 规则均关不掉
+	} else {
+		featureKeys = s.featureKeysFor(fullMethod)
 	}
-	// 范围「实例 → 类型 → 全局」,同一范围里「方法 → 服务 → *」;命中即定谳,
+	// 范围「实例 → 类型 → 全局」,同一范围里「方法 → 服务 → feature/<name> → *」;命中即定谳,
 	// 更精确的规则可以用 deny:false 显式豁免更宽的规则。
 	for _, layer := range s.id.Load().layers {
 		for _, key := range keys {
+			if key == globalPattern && len(featureKeys) > 0 {
+				if r, found := lookupFeatureLayer(rs.rules, layer, featureKeys); found {
+					return r, r.Deny
+				}
+			}
 			if r, found := lookupLayer(rs.rules, layer, key); found {
 				return r, r.Deny
 			}
 		}
 	}
 	return Rule{}, false
+}
+
+// lookupFeatureLayer 在同一范围层里匹配当前方法所属的全部 feature/<name> 规则。
+// 若同层命中多条 feature 规则且存在相反动作，取关停(与 lookupLayer 同语义)。
+func lookupFeatureLayer(rules map[string]Rule, layer []string, featureKeys []string) (Rule, bool) {
+	var allow Rule
+	found := false
+	for _, fkey := range featureKeys {
+		r, ok := lookupLayer(rules, layer, fkey)
+		if !ok {
+			continue
+		}
+		if r.Deny {
+			return r, true
+		}
+		allow, found = r, true
+	}
+	return allow, found
 }
 
 // lookupLayer 在同一范围层(本进程的若干个 uuid,或若干种节点类型)里找 key。

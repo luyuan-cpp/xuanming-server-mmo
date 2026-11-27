@@ -687,6 +687,9 @@ state=bootstrap
 1=PlayerCraftComp#22 optional uint64 unread_proxy_digest_net_gold
 1=PlayerCraftComp#23 optional string unread_proxy_digest_last_buyer
 1=PlayerCraftComp#24 optional uint32 unread_proxy_digest_new_titles_mask
+1=BattleEconomyLedger#4 optional uint64 silver_rollover_soft_cap
+1=BattleEconomyLedger#5 optional uint64 silver_rollover_hard_cap
+1=EquipmentMaterialRewardLedger#12 optional uint32 stage2_pool_cap
 
 retired=player_database#10
 retired=player_database#17

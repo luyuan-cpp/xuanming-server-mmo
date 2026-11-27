@@ -239,6 +239,7 @@ func placePlayerLocationCtx(ctx context.Context, svcCtx *svc.ServiceContext, pla
 
 		SessionId:       guard.identity.sessionID,
 		LoginGeneration: guard.identity.loginGeneration,
+		GateInstanceId:  guard.identity.gateInstanceID,
 	}
 	data, err := proto.Marshal(loc)
 	if err != nil {
@@ -353,6 +354,7 @@ func setLocationIdentityIfUnchanged(svcCtx *svc.ServiceContext, playerId uint64,
 	updated := proto.Clone(observed).(*smpb.PlayerLocation)
 	updated.SessionId = identity.sessionID
 	updated.LoginGeneration = identity.loginGeneration
+	updated.GateInstanceId = identity.gateInstanceID
 	data, err := proto.Marshal(updated)
 	if err != nil {
 		return err

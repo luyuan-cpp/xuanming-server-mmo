@@ -101,6 +101,12 @@ class TcpServer : noncopyable
   typedef std::function<bool (const InetAddress& peerAddr)> AdmissionCallback;
   void setAdmissionCallback(const AdmissionCallback& cb);
 
+  /// LOCAL DELTA: TCP_DEFER_ACCEPT on the listening socket (Linux only; see
+  /// Acceptor::setDeferAccept and docs/design/gate-connection-admission-control.md P2-1).
+  /// Only for protocols where the client speaks first; 0 turns it off.
+  /// No-op on other platforms. Not thread safe: call it in the loop thread.
+  void setDeferAccept(int seconds);
+
  private:
   /// Not thread safe, but in loop
   void newConnection(int sockfd, const InetAddress& peerAddr);

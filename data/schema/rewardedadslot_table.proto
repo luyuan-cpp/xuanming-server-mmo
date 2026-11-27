@@ -25,7 +25,7 @@ message RewardedAdSlotTable {
   uint32 enabled = 2 [(cfg_owner) = "server"];
   // 解锁最低角色等级(默认 10)
   uint32 min_level = 3 [(cfg_owner) = "server"];
-  // 每日最大领取次数(UTC+8 05:00 切日,默认 2)
+  // 每周最大领取次数(UTC+8 周一 05:00 切周,默认 14;字段名保留 daily_limit 兼容既有协议)
   uint32 daily_limit = 4 [(cfg_owner) = "server"];
   // 两次成功领取最短冷却秒数(默认 60)
   uint32 cooldown_sec = 5 [(cfg_owner) = "server"];

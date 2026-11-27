@@ -328,7 +328,7 @@ Test-Case 'match 后台循环一族:点位名单钉死;每个调用点的间隔�
     Assert-True -Condition ($terms['match_loop_last_run_unixtime'] -ge 3 * $longestSec) -Because "match 后台循环阈值 $($terms['match_loop_last_run_unixtime']) 秒应不小于 3 × (最长间隔 + 最长一轮预算) = $(3 * $longestSec) 秒"
 }
 
-Test-Case 'match 保留期清理:两个清理失败时各自计数;失败门槛是一个副本一小时轮数的一半;逾期按最老一行的时刻判;一轮最坏预算不超过 30 秒' {
+Test-Case 'match 保留期清理:两个清理的结局都交给共用的一处计数,搬库冻结不计;失败门槛是一个副本一小时轮数的一半;逾期按最老一行的时刻判;一轮最坏预算不超过 30 秒' {
     $rules = @(Get-AlertRules -GroupText (Get-AlertGroupText -Text $script:MatchPoolAlerts -Group 'match.retention'))
     Assert-Equal -Expected 'MatchRetentionPurgeFailing,MatchRetentionBehind' -Actual (($rules | ForEach-Object { $_.Name }) -join ',') -Because 'match.retention 组:失败一条、逾期一条'
 
@@ -341,11 +341,15 @@ Test-Case 'match 保留期清理:两个清理失败时各自计数;失败门槛�
     $behind = Get-RuleExpr -Body (Get-Rule -Rules $rules -Name 'MatchRetentionBehind').Body
     Assert-Match -Text $behind -Pattern '^\s*time\(\) - max by \(purge\) \(match_retention_oldest_unixtime\)\s*> on \(purge\) max by \(purge\) \(match_retention_max_age_seconds\) \+ 86400\s*$' -Because '逾期 = 现在减各副本报的最老一行时刻里最新的那个,比保留期还老一天以上'
 
-    # 指标的写入点:两个清理失败时各记一次;剧本审核流水每轮报最老一行、起循环时报生效的保留期。
+    # 指标的写入点:两个清理一轮的结局都交给 observeRetentionRound,失败只在那一处计数,搬库冻结(这一轮确定没写)不计;
+    # 剧本审核流水每轮报最老一行、起循环时报生效的保留期。
     $review = Read-RepoText -RelativePath 'go/match/internal/logic/battle_script_review_purge.go'
     $spectator = Read-RepoText -RelativePath 'go/match/internal/logic/global_spectator.go'
-    Assert-Match -Text $review -Pattern 'metrics\.ObserveRetentionPurgeFailure\(metrics\.RetentionPurgeBattleScriptReview\)' -Because '剧本审核流水清理失败要计数'
-    Assert-Match -Text $spectator -Pattern 'metrics\.ObserveRetentionPurgeFailure\(metrics\.RetentionPurgeSpectatorIntent\)' -Because '观战意图清理失败要计数'
+    $shared = Read-RepoText -RelativePath 'go/match/internal/logic/retention_purge.go'
+    Assert-Match -Text $review -Pattern 'observeRetentionRound\(metrics\.RetentionPurgeBattleScriptReview, ' -Because '剧本审核流水清理一轮的结局要记'
+    Assert-Match -Text $spectator -Pattern 'observeRetentionRound\(metrics\.RetentionPurgeSpectatorIntent, ' -Because '观战意图清理一轮的结局要记'
+    Assert-Match -Text $shared -Pattern '(?s)case authoritysql\.IsWriterFrozen\(err\):.*?default:\s*metrics\.ObserveRetentionPurgeFailure\(purge\)' -Because '搬库冻结不计失败,其余失败计一次(同 HoldRelay 的口径)'
+    Assert-Equal -Expected 1 -Actual ([regex]::Matches(($review + $spectator + $shared), 'metrics\.ObserveRetentionPurgeFailure\(').Count) -Because '失败计数只在共用的一处调用,不让哪个清理绕过冻结判定'
     Assert-Match -Text $review -Pattern 'metrics\.SetRetentionOldest\(metrics\.RetentionPurgeBattleScriptReview, oldestMs\)' -Because '每轮报最老一行'
     Assert-Match -Text $review -Pattern 'metrics\.SetRetentionMaxAge\(metrics\.RetentionPurgeBattleScriptReview, purge\.retention\)' -Because '起循环时报生效的保留期'
     $retentionGo = Read-RepoText -RelativePath 'go/match/internal/metrics/retention.go'
@@ -355,7 +359,6 @@ Test-Case 'match 保留期清理:两个清理失败时各自计数;失败门槛�
     }
 
     # 一轮预算:连续清页的时间上限只在两页之间看,最坏 = 上限 + 正在清的一页;剧本审核流水再加读最老一行的一步。
-    $shared = Read-RepoText -RelativePath 'go/match/internal/logic/retention_purge.go'
     $roundBudget = [regex]::Match($shared, 'retentionPurgeRoundBudget\s*=\s*(?<s>\d+) \* time\.Second')
     $reviewBudget = [regex]::Match($review, 'battleScriptReviewPurgeBudget\s*=\s*(?<s>\d+) \* time\.Second')
     $spectatorBudget = [regex]::Match($spectator, 'globalSpectatorIntentPurgeBudget\s*=\s*(?<s>\d+) \* time\.Second')

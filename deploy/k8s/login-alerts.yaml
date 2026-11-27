@@ -18,6 +18,9 @@
 #     capacity.go 的 capByGates),login_queue_configured_capacity{zone} 是区服目录的 zone_config.capacity(经 etcd 发布给
 #     本区 login,0 = 读不到区服策略)。
 #     两者都是 gauge,每次算容量时写;排队关着时不算容量,没有序列,这组规则不响。
+#   - login 排队的入口结果(2026-11-20 起,组 login.queue-length;同一个 metrics.go):
+#       login_queue_assign_total{zone,outcome=fast_path|reconnect|enqueued|rejoined|queue_full}
+#         queue_full = 队列到了 Queue.MaxQueueLength、这次没有入队;持续出现才告警。
 #
 # Install as a PrometheusRule CR (kube-prometheus stack),与 owner-epoch-alerts.yaml 同法:
 #   kubectl apply -n observability -f deploy/k8s/login-alerts.yaml
@@ -131,6 +134,27 @@ spec:
               停写、被标了排空、挂了。扩 gate 副本,或经 PUT /admin/zones/<id> 把 zone_config.capacity 调到 gate 承载以内;
               login 日志搜 "admission capacity is limited by its gates" 看当时的两个数与 gate 台数。
             runbook_url: docs/design/login-queue-2026-05.md
+
+    # 排队已满(2026-11-20 起):本区队列到了 Queue.MaxQueueLength,新来的人不入队,只拿到「稍后再试」。
+    # 按「持续」判,理由同下面 login.gate-health 组:go-zero 计数没有预置 0 值序列。排队关着时没有这个序列,规则不响。
+    - name: login.queue-length
+      interval: 30s
+      rules:
+        - alert: LoginQueueFull
+          expr: |
+            sum by (namespace, zone) (increase(login_queue_assign_total{outcome="queue_full"}[5m])) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }} zone {{ $labels.zone }} 的登录排队已满,新玩家进不了队"
+            description: >-
+              过去 5 分钟有约 {{ $value | printf "%.0f" }} 次 AssignGate 因本区队列到了 Queue.MaxQueueLength(缺省 1000000)
+              没有入队:玩家拿到的是 30~40 秒后重试的提示,没有排位;已经在排的人不受影响。先看 login_queue_size 是不是真的
+              到了上限,再看是不是有大量不再轮询的条目占着队列(login_queue_expired_total 的 meta_gone)。确实是人多,就给
+              这个 zone 扩容(gate 副本与 zone_config.capacity)让队列走得更快;要调大 Queue.MaxQueueLength,先核对这个 zone
+              的排队键所在 Redis 主节点的内存余量(redis-control-alerts.yaml)。login 日志搜 "queue is full at"。
+            runbook_url: docs/ops/login-queue-stress-runbook.md
 
     # gate 健康(2026-11-11 起):两条都不影响挑 gate 本身,只说明有 gate 或复核出了持续的问题。
     # 都按「持续」判(for > 0):go-zero 计数没有预置 0 值序列,第一次 Inc 被 increase() 漏看只会晚一拍,

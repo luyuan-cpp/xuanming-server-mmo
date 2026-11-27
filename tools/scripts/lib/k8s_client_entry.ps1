@@ -77,6 +77,7 @@
 	                                    [-SidecarContainerYaml ''] [-SidecarVolumeYaml ''] [-SidecarConfigHash '']
 	                                    [-PodAnnotations $null] [-OpenFileLimitMode ''(B0-4 豁免开关,留空不写)]
 	                                    [-ConnectionAdmissionEnv $null(连接准入覆盖变量,按角色的一组,留空不写)]
+	                                    [-ResourceRequests $null(主容器 resources.requests,@{ Cpu; Memory },留空不写)]
 	                                    [-SecretEnv @()(经 Secret 注入的附加 env,每项 @{ Name; SecretName; SecretKey })]
 	    New-GateStatefulSetYaml         -PodCommon -Plan -RpcPort -StartCommand -ConfigMapName -GateRouterMode -InternalAuthPublicKeys
 	                                    [-TerminationGracePeriodSeconds 30]
@@ -129,7 +130,7 @@
 	                                    (同上;读同一份 login ConfigMap 的 AntiAddiction 段)
 
 	  内部辅助(接入方不要直接依赖,签名可能调整):ConvertFrom-ClientEntryYamlScalar、ConvertTo-ClientEntryLf、ConvertTo-ClientEntryYamlString、Add-ClientEntryIndent、
-	    Get-ClientEntryMember、Test-ClientEntryHostName、ConvertTo-ClientEntryCidrList、Get-ClientEntryInvalidCidrs、Test-ClientEntryConnectionAdmissionValue、
+	    Get-ClientEntryMember、Test-ClientEntryHostName、ConvertTo-ClientEntryCidrList、Get-ClientEntryInvalidCidrs、Test-ClientEntryConnectionAdmissionValue、Get-ClientEntryResourcesYaml、
 	    Get-ClientEntryEnvYaml、Get-ClientEntryNodeBaseEnv、Get-ClientEntryStartScript、Get-ClientEntryVolumeMountYaml、
 	    Get-ClientEntryPodVolumeYaml、Get-ClientEntrySidecarBlocks、Get-ClientEntryPodAnnotationBlock、Measure-FleetRolloutReadiness(纯函数,契约测试可直测)、
 	    ConvertTo-ClientEntryUtcTime、Get-ClientEntryStringMapText、New-ClientEntryObsoleteItem、
@@ -730,6 +731,9 @@ function New-ClientEntryPodCommon {
 		# 连接准入覆盖变量(k8s_deploy.ps1 -ConnectionAdmissionEnv 里归这个角色的一组:gate 的 GATE_*、battle 的 BATTLE_*),键 = 变量名、
 		# 值 = 十进制字符串,按给出的顺序写。留空或空表 = 不写,生成物与不传时逐字相同。名字与值在渲染时(Get-ClientEntryNodeBaseEnv)校验。
 		[AllowNull()][System.Collections.IDictionary]$ConnectionAdmissionEnv = $null,
+		# C++ 主容器的 resources.requests(gate 准入设计 P1-5;k8s_deploy.ps1 Get-CppNodeResourceRequests 按角色与档位给),@{ Cpu; Memory }。
+		# 留空 = 不写 resources,生成物与不传时逐字相同;形状在渲染时(Get-ClientEntryResourcesYaml)校验。本库只写 requests,不写 limits。
+		[AllowNull()][System.Collections.IDictionary]$ResourceRequests = $null,
 		# 经 Secret 注入的附加 env,每项 @{ Name; SecretName; SecretKey },按给出的顺序接在公共 env 之后,渲染成 secretKeyRef(optional: false)。
 		# 留空 = 不加,生成物与不传时逐字相同。名字不是大写环境变量名、三项有空、或名字重复,在这里 throw。
 		[AllowNull()][AllowEmptyCollection()][object[]]$SecretEnv = @(),
@@ -775,6 +779,10 @@ function New-ClientEntryPodCommon {
 	if ($null -ne $ConnectionAdmissionEnv) {
 		foreach ($key in $ConnectionAdmissionEnv.Keys) { $connectionAdmissionCopy[[string]$key] = [string]$ConnectionAdmissionEnv[$key] }
 	}
+	$resourceRequestsCopy = $null
+	if ($null -ne $ResourceRequests) {
+		$resourceRequestsCopy = [ordered]@{ Cpu = [string]$ResourceRequests['Cpu']; Memory = [string]$ResourceRequests['Memory'] }
+	}
 
 	return [pscustomobject]@{
 		Image                = $Image
@@ -793,6 +801,7 @@ function New-ClientEntryPodCommon {
 		BuildLabel           = $BuildLabel
 		ClientWsBaseUrl      = $ClientWsBaseUrl
 		ConnectionAdmissionEnv   = $connectionAdmissionCopy
+		ResourceRequests         = $resourceRequestsCopy
 		SecretEnv                = $secretEnvCopy
 		ExtraInitContainerYaml   = $ExtraInitContainerYaml
 		ExtraVolumeYaml          = $ExtraVolumeYaml
@@ -998,6 +1007,27 @@ function Get-ClientEntryMetricsPort {
 		throw "Get-ClientEntryMetricsPort: PodCommon.MetricsPort 必须在 0..65535,实际 $port。"
 	}
 	return $port
+}
+
+# C++ 主容器的 resources 段(PodCommon.ResourceRequests),接在调用方 imagePullPolicy 那一行之后(带前导换行)。缺成员或为空时返回空串,
+# 生成物与引入前逐字相同。只写 requests、不写 limits,取值与理由在 k8s_deploy.ps1 Get-CppNodeResourceRequests;
+# 那个脚本自己的两个模板也用本函数渲染(传 @{ ResourceRequests = ... } 当 PodCommon),格式与校验只有这一份。-KeyIndent = 容器键所在缩进。
+function Get-ClientEntryResourcesYaml {
+	param(
+		[Parameter(Mandatory = $true)]$PodCommon,
+		[Parameter(Mandatory = $true)][string]$KeyIndent
+	)
+	$requests = Get-ClientEntryMember -Object $PodCommon -Path @('ResourceRequests')
+	if ($null -eq $requests) {
+		return ''
+	}
+	$cpu = [string](Get-ClientEntryMember -Object $requests -Path @('Cpu'))
+	$memory = [string](Get-ClientEntryMember -Object $requests -Path @('Memory'))
+	# K8s quantity 的一个子集:cpu 写整核或毫核,memory 写 Mi / Gi。写错要到 apply 才报错,不如渲染时就拒。
+	if ($cpu -cnotmatch '^[1-9][0-9]*m?$' -or $memory -cnotmatch '^[1-9][0-9]*(Mi|Gi)$') {
+		throw "Get-ClientEntryResourcesYaml: PodCommon.ResourceRequests needs Cpu like 1 or 500m and Memory like 512Mi or 1Gi, got cpu='$cpu' memory='$memory'."
+	}
+	return "`n${KeyIndent}resources:`n${KeyIndent}  requests:`n${KeyIndent}    cpu: $cpu`n${KeyIndent}    memory: $memory"
 }
 
 # C++ /metrics 出口的容器端口项,接在调用方 ports 列表最后一项之后(带前导换行)。端口为 0 时返回空串,生成物与引入前逐字相同。
@@ -1244,7 +1274,7 @@ spec:
       containers:
         - name: gate
           image: $($PodCommon.Image)
-          imagePullPolicy: $($PodCommon.ImagePullPolicy)
+          imagePullPolicy: $($PodCommon.ImagePullPolicy)$(Get-ClientEntryResourcesYaml -PodCommon $PodCommon -KeyIndent '          ')
           workingDir: /app/bin
           command: ["/bin/sh", "-lc"]
           args:
@@ -1497,7 +1527,7 @@ spec:
           containers:
             - name: battle
               image: $($PodCommon.Image)
-              imagePullPolicy: $($PodCommon.ImagePullPolicy)
+              imagePullPolicy: $($PodCommon.ImagePullPolicy)$(Get-ClientEntryResourcesYaml -PodCommon $PodCommon -KeyIndent '              ')
               workingDir: /app/bin
               command: ["/bin/sh", "-lc"]
               args: [$argsValue]
@@ -1586,7 +1616,7 @@ spec:
       containers:
         - name: battle
           image: $($PodCommon.Image)
-          imagePullPolicy: $($PodCommon.ImagePullPolicy)
+          imagePullPolicy: $($PodCommon.ImagePullPolicy)$(Get-ClientEntryResourcesYaml -PodCommon $PodCommon -KeyIndent '          ')
           workingDir: /app/bin
           command: ["/bin/sh", "-lc"]
           args: [$argsValue]

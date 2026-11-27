@@ -1,6 +1,7 @@
 // Sandbox mock for WeChat Open Platform / QQ Connect, the WeChat / Douyin
-// mini game code2Session, and Sign in with Apple / Google identity tokens
-// (signing keys plus a token minting stand-in for the client SDK, idtoken.go).
+// mini game code2Session, Sign in with Apple / Google identity tokens
+// (signing keys plus a token minting stand-in for the client SDK, idtoken.go),
+// and the NPPA real-name / anti-addiction system (nppa.go).
 //
 // What this does:
 //
@@ -92,6 +93,7 @@ func main() {
 	log.Printf("  /mgplatform/api/apps/jscode2session (Douyin mini game) — code 'EXPIRED' returns an error response")
 	log.Printf("  /auth/keys, /oauth2/v3/certs, /.well-known/jwks (Apple / Google / Passport signing keys)")
 	log.Printf("  /mock/apple/id_token, /mock/google/id_token, /mock/passport/id_token?user=<seed>&aud=<ClientId>[&iss=<Issuer>] — mint an identity token; user 'EXPIRED' mints an expired one")
+	log.Printf("  /idcard/authentication/check, /idcard/authentication/query, /behavior/collection/loginout (NPPA real-name system) — GET /mock/nppa/behaviors lists the accepted logins / logouts")
 
 	srv := &http.Server{
 		Addr:              *addr,
@@ -127,6 +129,12 @@ func newMux() *http.ServeMux {
 	mux.HandleFunc("/auth/token", apple.handleToken)
 	mux.HandleFunc("/auth/revoke", apple.handleRevoke)
 	mux.HandleFunc("/mock/apple/revocations", apple.handleRevocations)
+	// 国家防沉迷实名认证系统(nppa.go):实名认证、认证结果查询、上下线上报,路径与真系统相同。
+	realName := newNppaStub()
+	mux.HandleFunc("/idcard/authentication/check", realName.handleCheck)
+	mux.HandleFunc("/idcard/authentication/query", realName.handleQuery)
+	mux.HandleFunc("/behavior/collection/loginout", realName.handleLoginout)
+	mux.HandleFunc("/mock/nppa/behaviors", realName.handleBehaviors)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok"))
 	})

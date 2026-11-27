@@ -109,18 +109,18 @@ TEST(RewardedAdRulesTest, StrictBindGoldOnlyAndAntiClockRollback)
 	cfg.currencyType = static_cast<uint32_t>(common::base::CURRENCY_TYPE_DIAMOND);
 	EXPECT_FALSE(rewarded_ad_rules::ValidateSlotConfig(cfg, reason));
 
-	// 切日与抗回拨校验。
-	uint64_t dayStart = 0;
-	uint64_t nextDay = 0;
-	ASSERT_TRUE(rewarded_ad_rules::ResolveGameDay(kNowMs, dayStart, nextDay));
-	EXPECT_EQ(dayStart + rewarded_ad_rules::kDayMs, nextDay);
+	// 切周(UTC+8 周一 05:00)与抗回拨校验。
+	uint64_t weekStart = 0;
+	uint64_t nextWeek = 0;
+	ASSERT_TRUE(rewarded_ad_rules::ResolveGameWeek(kNowMs, weekStart, nextWeek));
+	EXPECT_EQ(weekStart + rewarded_ad_rules::kWeekMs, nextWeek);
 
 	RewardedAdLedger ledger;
-	ledger.set_day_starts_at_ms(dayStart);
+	ledger.set_day_starts_at_ms(weekStart);
 	ledger.set_claimed_today(2);
-	EXPECT_EQ(2u, rewarded_ad_rules::EffectiveClaimedToday(ledger, dayStart));
-	EXPECT_EQ(2u, rewarded_ad_rules::EffectiveClaimedToday(ledger, dayStart - rewarded_ad_rules::kDayMs));
-	EXPECT_EQ(0u, rewarded_ad_rules::EffectiveClaimedToday(ledger, nextDay));
+	EXPECT_EQ(2u, rewarded_ad_rules::EffectiveClaimedToday(ledger, weekStart));
+	EXPECT_EQ(2u, rewarded_ad_rules::EffectiveClaimedToday(ledger, weekStart - rewarded_ad_rules::kWeekMs));
+	EXPECT_EQ(0u, rewarded_ad_rules::EffectiveClaimedToday(ledger, nextWeek));
 }
 
 TEST_F(PlayerRewardedAdTest, DefaultDisabledAndInvalidCurrencyFailClosed)
@@ -218,17 +218,21 @@ TEST_F(PlayerRewardedAdTest, FullLifecycleBindGoldIdempotencyReconnectAndLimits)
 	EXPECT_EQ(kRewardedAdDailyLimitReached,
 			  PlayerRewardedAdSystem::BeginSession(player_, beginReq, secondStartMs + 120000, beginResp));
 
-	// 跨过 UTC+8 05:00 到次日，且校验过期会话(TTL > 300s)拦截。
-	const uint64_t nextDayMs = kNowMs + rewarded_ad_rules::kDayMs;
-	ASSERT_EQ(kSuccess, PlayerRewardedAdSystem::BeginSession(player_, beginReq, nextDayMs, beginResp));
+	// 同一周内次日不重置（防止变成每日打卡），跨过 UTC+8 周一 05:00 到下周后才重置，并校验过期会话(TTL > 300s)拦截。
+	const uint64_t nextDaySameWeekMs = kNowMs + rewarded_ad_rules::kDayMs;
+	EXPECT_EQ(kRewardedAdDailyLimitReached,
+			  PlayerRewardedAdSystem::BeginSession(player_, beginReq, nextDaySameWeekMs, beginResp));
+
+	const uint64_t nextWeekMs = kNowMs + rewarded_ad_rules::kWeekMs;
+	ASSERT_EQ(kSuccess, PlayerRewardedAdSystem::BeginSession(player_, beginReq, nextWeekMs, beginResp));
 	ClaimRewardedAdRequest expiredClaim;
 	expiredClaim.set_client_request_id(10003);
 	expiredClaim.set_slot_id(1);
 	expiredClaim.set_ad_session_id(beginResp.ad_session_id());
 	EXPECT_EQ(kRewardedAdSessionExpired,
-			  PlayerRewardedAdSystem::Claim(player_, expiredClaim, nextDayMs + 301000, claimResp));
+			  PlayerRewardedAdSystem::Claim(player_, expiredClaim, nextWeekMs + 301000, claimResp));
 
 	// 6. 绑定银两被封禁时在 BeginSession 即拦截，避免玩家白看广告。
 	ASSERT_EQ(kSuccess, CurrencySystem::BlockCurrency(player_, kCurrencyBindGold));
-	EXPECT_EQ(kRewardedAdCurrencyBlocked, PlayerRewardedAdSystem::BeginSession(player_, beginReq, nextDayMs + 1000, beginResp));
+	EXPECT_EQ(kRewardedAdCurrencyBlocked, PlayerRewardedAdSystem::BeginSession(player_, beginReq, nextWeekMs + 1000, beginResp));
 }

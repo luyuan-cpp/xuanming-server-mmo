@@ -661,6 +661,9 @@ int main(int argc, char *argv[])
                                        { disconnectAllClients(n); });
 
             InitGateCodec(context.codec);
+            // 验签之前只收小帧(准入设计 G10):未验签的连接声明一个大帧就当场断开,不先替它缓冲 64KB 再解析。
+            context.codec.setPreAuthMessageLimit(accept_admission::kPreAuthMaxMessageBytes,
+                                                 &gate_connection_admission::IsVerifiedConnection);
 
             // 排空迁移与重定向滞留关闭的计数挂到 Prometheus 出口(设了 MMORPG_METRICS_PORT 才有出口,
             // 见 metrics_http_exporter.h)。采集回调在本 loop 上执行,读的就是本线程的计数。
@@ -710,6 +713,8 @@ int main(int argc, char *argv[])
                             [](const muduo::net::InetAddress& peer) {
                                 return gate_connection_admission::AdmitConnection(peer, std::chrono::steady_clock::now());
                             });
+                        // 客户端先说话:没发任何数据的连接先留在内核里,连上就断的扫描与探活不建连接对象(准入设计 P2-1,只在 Linux 生效)。
+                        n.GetTcpServer().setDeferAccept(accept_admission::kDeferAcceptSeconds);
                         n.GetTcpServer().setConnectionCallback(
                             [&context](const TcpConnectionPtr& conn) {
                                 if (context.sourceClosed && conn->connected()) { conn->forceClose(); return; }

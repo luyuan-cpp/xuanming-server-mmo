@@ -35,6 +35,19 @@ namespace accept_admission
 
 using SteadyTime = std::chrono::steady_clock::time_point;
 
+// 验签之前收的单帧上限(准入设计 G10),经 ProtobufCodec::setPreAuthMessageLimit 生效。验签之前合法的只有握手请求
+// (ClientTokenVerifyRequest / BattleTokenVerifyRequest,以及 battle 的网络探测帧),编码后都不到 300 字节:
+// 票据约 100 字节、签名 32 字节,加类型名与帧头。4KB 留了十倍以上余量给票据以后加字段;
+// 验签之后的业务帧本身不超过 1KB(gate CheckMessageSize),所以同一批里紧跟握手的帧也不会被它误拒。
+inline constexpr int kPreAuthMaxMessageBytes = 4 * 1024;
+
+// 监听 socket 上的 TCP_DEFER_ACCEPT 秒数(准入设计 P2-1,TcpServer::setDeferAccept)。两个客户端面都是客户端先说话
+// (握手请求、WebSocket 升级请求都是建连后的第一段数据):带数据的连接照常立刻交上来;连上就断的扫描与探活在内核里就结束,
+// 不建连接对象;一直不说话的连接约 1 秒后照样交上来,再由握手期限与未验签预算处置。
+// 取 1:与 HAProxy 的 defer-accept 同一语义(有数据就接,最迟等第一次 SYN-ACK 重传)。取大了只是让不说话的连接在内核里多等,
+// 洪峰时半连接队列一满,内核改发 syncookies,这些连接就不再被推迟,所以更大的值换不来更多保护。
+inline constexpr int kDeferAcceptSeconds = 1;
+
 // 新建连接速率闸的参数。
 struct RateLimit
 {

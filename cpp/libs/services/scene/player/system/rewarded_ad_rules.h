@@ -12,7 +12,10 @@
 namespace rewarded_ad_rules
 {
 inline constexpr uint64_t kDayMs = 86400000ULL;
+inline constexpr uint64_t kWeekMs = 7ULL * kDayMs;
 inline constexpr uint64_t kShiftMs = 10800000ULL; // UTC+8 05:00 切日(同 player_equipment_material_reward.cpp)
+// 1970-01-04 21:00:00 UTC = 1970-01-05 05:00:00 UTC+8（首个完整周一 05:00 切周点，与材料/战斗银两完全同源）。
+inline constexpr uint64_t kFirstMonday05Utc8Ms = 3ULL * kDayMs + 21ULL * 3600000ULL;
 inline constexpr uint32_t kMaxDailyLimit = 20u;
 inline constexpr uint32_t kMaxSessionTtlSec = 3600u;
 inline constexpr uint64_t kMaxRewardAmount = 100000ULL;
@@ -41,7 +44,25 @@ enum class SessionVerdict : uint8_t
 	kExpired = 3,
 };
 
-// 解析 nowMs 所属游戏日区间 [dayStartOut, nextDayOut),切点 UTC+8 每日 05:00。
+// 解析 nowMs 所属游戏周区间 [weekStartOut, nextWeekOut),切点 UTC+8 每周一 05:00(反「上班」周池化)。
+inline bool ResolveGameWeek(uint64_t nowMs, uint64_t &weekStartOut, uint64_t &nextWeekOut)
+{
+	if (nowMs < kFirstMonday05Utc8Ms)
+	{
+		return false;
+	}
+	const uint64_t offset = (nowMs - kFirstMonday05Utc8Ms) % kWeekMs;
+	const uint64_t start = nowMs - offset;
+	if (start > std::numeric_limits<uint64_t>::max() - kWeekMs)
+	{
+		return false;
+	}
+	weekStartOut = start;
+	nextWeekOut = start + kWeekMs;
+	return true;
+}
+
+// 解析 nowMs 所属游戏日区间 [dayStartOut, nextDayOut),切点 UTC+8 每日 05:00(保留供兼容单测)。
 inline bool ResolveGameDay(uint64_t nowMs, uint64_t &dayStartOut, uint64_t &nextDayOut)
 {
 	if (nowMs > std::numeric_limits<uint64_t>::max() - kShiftMs - kDayMs)

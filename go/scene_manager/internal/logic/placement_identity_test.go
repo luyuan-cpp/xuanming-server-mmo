@@ -22,7 +22,12 @@ func TestValidSessionMatchesCppIsBoundSession(t *testing.T) {
 }
 
 func TestDecidePlacementIdentity_Table(t *testing.T) {
-	type id = placementIdentity
+	// id 是本表的 (会话号, 代次) 简写:这些行都不带 gate 实例(未知);带实例的行见 TestDecidePlacementIdentity_GateInstance。
+	type id struct {
+		sid uint32
+		gen uint64
+	}
+	identity := func(v id) placementIdentity { return placementIdentity{sessionID: v.sid, loginGeneration: v.gen} }
 	const (
 		gA = uint64(1757000000001)
 		gB = uint64(1757000000002)
@@ -64,12 +69,55 @@ func TestDecidePlacementIdentity_Table(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			verdict, record := decidePlacementIdentity(c.cur, c.curExists, c.req)
+			verdict, record := decidePlacementIdentity(identity(c.cur), c.curExists, identity(c.req))
 			assert.Equal(t, c.wantVerd, verdict, "verdict=%s", verdict)
-			assert.Equal(t, c.wantRecord, record)
+			assert.Equal(t, identity(c.wantRecord), record)
 			assert.Equal(t, c.wantVerd != placementRejectStale && c.wantVerd != placementRejectConflict, verdict.admits())
 		})
 	}
+}
+
+// 会话号相同而 gate 实例不同 = 另一个 gate 进程上的另一条会话(scene-enter-chain-residuals.md §14.8):不走同一会话那一行,
+// 按代次裁决;任一边实例未知时仍按会话号认。与 C++ GateInstanceFence.ReusedSessionIdOnAnotherGateProcessIsNotTheSameSession
+// 同一组情形(只差 legacy 那一行,见文件头)。
+func TestDecidePlacementIdentity_GateInstance(t *testing.T) {
+	const (
+		gA      = uint64(1757000000001)
+		gB      = uint64(1757000000002)
+		oldGate = "gate-node3-old-process"
+		newGate = "gate-node3-new-process"
+	)
+	onNew := placementIdentity{sessionID: 11, loginGeneration: gB, gateInstanceID: newGate}
+	cases := []struct {
+		name       string
+		cur        placementIdentity
+		req        placementIdentity
+		wantVerd   placementVerdict
+		wantRecord placementIdentity
+	}{
+		{"old_process_late_request_is_stale", onNew, placementIdentity{11, gA, oldGate}, placementRejectStale, placementIdentity{}},
+		{"old_process_equal_generation_conflicts", onNew, placementIdentity{11, gB, oldGate}, placementRejectConflict, placementIdentity{}},
+		{"old_process_without_generation_is_legacy_and_keeps_identity", onNew, placementIdentity{11, 0, oldGate},
+			placementAdmitLegacy, onNew},
+		{"newer_login_on_another_process_takes_over", placementIdentity{11, gA, oldGate}, placementIdentity{11, gB, newGate},
+			placementAdmitNewer, onNew},
+		{"same_process_is_the_same_session", onNew, placementIdentity{11, gA, newGate}, placementAdmitSameSession, onNew},
+		{"request_without_instance_keeps_the_recorded_one", onNew, placementIdentity{11, gB, ""}, placementAdmitSameSession, onNew},
+		{"location_without_instance_learns_it", placementIdentity{11, gB, ""}, placementIdentity{11, gA, newGate},
+			placementAdmitSameSession, onNew},
+		{"fresh_records_the_request_instance", placementIdentity{}, placementIdentity{11, gA, newGate}, placementAdmitFresh,
+			placementIdentity{11, gA, newGate}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			verdict, record := decidePlacementIdentity(c.cur, true, c.req)
+			assert.Equal(t, c.wantVerd, verdict, "verdict=%s", verdict)
+			assert.Equal(t, c.wantRecord, record)
+		})
+	}
+	assert.True(t, sameGateInstance("", oldGate), "location 实例未知:按会话号认")
+	assert.True(t, sameGateInstance(newGate, ""), "请求实例未知(托管落点):按会话号认")
+	assert.False(t, sameGateInstance(newGate, oldGate), "两边都已知且不同")
 }
 
 func TestPlacementVerdictNamesCoverEveryValue(t *testing.T) {
@@ -88,7 +136,12 @@ func TestPlacementVerdictNamesCoverEveryValue(t *testing.T) {
 }
 
 func TestDecideLeaveIdentity_Table(t *testing.T) {
-	type id = placementIdentity
+	// id 是本表的 (会话号, 代次) 简写:离场表以代次为主,不看 gate 实例。
+	type id struct {
+		sid uint32
+		gen uint64
+	}
+	identity := func(v id) placementIdentity { return placementIdentity{sessionID: v.sid, loginGeneration: v.gen} }
 	const (
 		g1 = uint64(100)
 		g2 = uint64(200)
@@ -112,7 +165,7 @@ func TestDecideLeaveIdentity_Table(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := decideLeaveIdentity(c.loc, c.req)
+			got := decideLeaveIdentity(identity(c.loc), identity(c.req))
 			assert.Equal(t, c.want, got, "verdict=%s", got)
 			assert.Equal(t, c.want == leaveVerdictLegacy || c.want == leaveVerdictDeleted, got.deletes())
 		})

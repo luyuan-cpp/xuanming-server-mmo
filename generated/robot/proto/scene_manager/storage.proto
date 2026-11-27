@@ -39,11 +39,16 @@ message PlayerLocation {
   // - 唯一消费者是源 scene 的 ResolveTravelOutcome:只认与自己本次交接标记原文逐字节相同的回执。
   //   其它读 location 的服务一律忽略这个字段。
   // - GO-3 不再需要新字段:改用持有进程在交接资格里自己盖的实例号判「已被顶替」(cross-zone-scene-travel.md §13.10)。
-  //   以后要加字段从 10 起取(8 / 9 已被会话身份占用)。
+  //   以后要加字段从 11 起取(8 / 9 / 10 已被会话身份占用)。
   string rollback_receipt = 7;
   // 最近一次被 scene_manager 放行、并写入或确认这条 location 的 EnterScene 所代表的会话
   // (docs/design/scene-enter-chain-residuals.md §3 / §5)。0 / 0 = 无身份(旧版 scene_manager 写入或请求不带会话),
   // 所有比较退回旧行为。只由落点 Lua 写入;bump 回滚克隆旧值、keep 回滚恢复原字节,两者都保留身份。
   uint32 session_id = 8;
   uint64 login_generation = 9;
+  // 这条会话所在的 gate 进程(gate 的 node_uuid,取自放行请求的 EnterSceneRequest.gate_instance_id;§14.8)。
+  // 会话号由 gate 的 node_id 派生,同一 node_id 短暂有两个 gate 进程时同号可以出自两个进程:「同一会话」= 会话号相同,
+  // 且两边实例都已知时实例也相同(与 scene 入场栅栏 enter_fence::SameGateInstance 同一口径)。空 = 未知,按会话号认。
+  // 同一会话的请求不带实例(托管落点)时沿用记下的值;托管落点事件把它带给目标节点(PlayerHostedPlacementEvent.gate_instance_id)。
+  string gate_instance_id = 10;
 }

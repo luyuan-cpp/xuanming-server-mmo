@@ -447,9 +447,10 @@ namespace MmorpgClient.Game.Guild
 | 2 | `banner_leyline_world_flag.png` | `256×384 px` | 固定比例立旗图标，不做九宫格或拉伸，按等比缩放显示 | 野外三张帮战地图（八景岛 / 碧渊水宫 / 月汐湾）3D 场景中的可点击灵脉战旗实体，以及点击战旗后底部弹出的「灵脉旗台动作条」左侧图标位 | 代表野外场景中可实地点击交互的灵脉据点战旗，玩家在地图上能一眼识别并点击该战旗发起攻打灵脉、驰援守旗或观战 |
 | 3 | `alert_banner_feud.png` | `960×120 px` | 横向三段拉伸（Sprite Border：左 `110px`、右 `110px`、上 `0`、下 `0`；中部横跨区纹理平顺连续，确保任意拉伸宽度不失真，左右 110px 内保留安全装饰端头） | 游戏主界面顶部非阻断全帮/战区预警横幅底板 | 承托「宿敌下发 2 小时约战战书」「约战正式打响 / 收官战报」「5/8 连胜封神与高连胜终结悬赏捷报」四类动态实时公告文字与右侧快捷按钮 |
 
-### 3. 验收核对
-- 输出目录与 3 个文件名逐字一致，共 3 张 PNG。
-- 尺寸分别为 `128×128`、`256×384`、`960×120`；均为 32 位 RGBA 透明底 PNG、四角 Alpha=0、边缘平滑闭合无矩形硬切块、图内无任何烘焙文字或数字。
-- `alert_banner_feud.png` 满足左右 `110px` 横向三段拉伸结构，中间区用于客户端动态叠加两行高对比度文字与按钮。
+### 3. 验收核对（已交付并导入 Unity，提交 `a4182cdee1e` / `c11bbb868f8`）
+- 3 张 PNG 已全部交付至 `D:/work/image/designs/guild-war-ui-v2/slices/` 并通过实图视觉与字节核验，已同步导入 `mmorpg-client/Assets/Resources/UI/Ugui/GuildWarV2/`（含 `.meta` 与 0 GUID 冲突校验），`GuildWarUiArt.AllAssetKeys` 已扩充至 36 张全量纳管：
+  - `badge_feud_edict.png`：`128×128`，32 位 RGBA，四角 Alpha=0，SHA-256 `d4b62108bcab8051…`
+  - `banner_leyline_world_flag.png`：`256×384`，32 位 RGBA，四角 Alpha=0，SHA-256 `3480e41b6aefc443…`
+  - `alert_banner_feud.png`：`960×120`，32 位 RGBA，四角 Alpha=0，Sprite Border `(110, 0, 110, 0)`，SHA-256 `94abdd8129b85ccd…`
 
 

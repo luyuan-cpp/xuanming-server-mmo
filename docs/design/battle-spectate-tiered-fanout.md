@@ -537,7 +537,7 @@ FIX-CPP / FIX-GO / FIX-JAVA 第二轮语义评审与修正已全部闭环并通�
 - **同 op 重放回首次拒绝码**：battle 墓碑记下首次拒绝码，同 op、同请求重放回同一结论，前台请求与后台恢复并发时结论一致。
 - **凭证**：签发前查注册表，来源实例已换就按房间不存在处理，不给死实例签凭证；Go、C++、Java 共用一组跨语言固定向量（secret `spectate-cross-language-vector-secret-0123456789`，payload hex `080110021a016920032804`，签名 `81e49d087e684b9df52c0c7bde47b88afce761af48f37b8dda6bdc3f01c2b0d8`）。
 - **运营入口**：`SetSpectateFeatured` 未开启或验签失败回 `SPECTATE_FEATURED_REJECT_DENIED`，不回 gRPC PermissionDenied：拒绝发生在副作用之前，结局确定，不能拖住实例的排空证明。
-- **意图保留期**：`match_spectator_intent` 已关闭且不是请求头的行，创建满 7 天后由低频任务分批删除（新增 `created_ms` 列与索引）。依据：同 request_id 的重放窗口是秒级，战斗最长约 1 小时。一分钟一轮，一轮连续清页，清到扫完、出错、满 20 页（每页 1000 行）或超过 10 秒为止（2026-11-20，`go/match/internal/logic/retention_purge.go`）：请求头的行（每名看过观战的玩家一行）删不掉、每一遍都要翻过去，原来一轮只翻一页，一遍要「请求头行数 / 1000」分钟，入库超过每分钟 1000 行就永远追不上，而且各副本扫的是同一段索引、吞吐不随副本数增长；现在一天能翻约 2880 万行。失败的轮次计 `match_retention_purge_failures_total{purge="spectator_intent"}`，持续失败由告警 `MatchRetentionPurgeFailing` 报（`deploy/k8s/match-alerts.yaml` 的 `match.retention` 组）。
+- **意图保留期**：`match_spectator_intent` 已关闭且不是请求头的行，创建满 7 天后由低频任务分批删除（新增 `created_ms` 列与索引）。依据：同 request_id 的重放窗口是秒级，战斗最长约 1 小时。一分钟一轮，一轮连续清页，清到扫完、出错、满 20 页（每页 1000 行）或超过 10 秒为止（2026-11-20，`go/match/internal/logic/retention_purge.go`）：请求头的行（每名看过观战的玩家一行）删不掉、每一遍都要翻过去，原来一轮只翻一页，一遍要「请求头行数 / 1000」分钟，入库超过每分钟 1000 行就永远追不上，而且各副本扫的是同一段索引、吞吐不随副本数增长；现在一天能翻约 2880 万行。失败的轮次计 `match_retention_purge_failures_total{purge="spectator_intent"}`，持续失败由告警 `MatchRetentionPurgeFailing` 报（`deploy/k8s/match-alerts.yaml` 的 `match.retention` 组）；搬库冻结窗口里被写者闸门拒绝的轮次不计失败（2026-11-26，`observeRetentionRound`）。
 - **登录 Bind 之前的失败提示**：`PushToPlayerEvent.player_id` 显式留 0（兼容放行），这是「生产者拒发 0」的唯一例外；否则未绑定会话上的 3023 提示会被身份栅栏丢掉，客户端要干等 60 秒。
 
 **已知残余（不阻断）**：

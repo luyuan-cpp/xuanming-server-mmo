@@ -8,8 +8,6 @@ import (
 	"match/internal/authority"
 	"match/internal/metrics"
 	"match/internal/svc"
-
-	"github.com/zeromicro/go-zero/core/logx"
 )
 
 // 剧本审核流水 match_battle_script_review 的保留期清理(docs/design/battle-script.md §6.4),写法同观战意图的保留期清理
@@ -42,17 +40,14 @@ func startBattleScriptReviewPurge(ctx context.Context, s *svc.ServiceContext) {
 	s.StartRelayLoop(ctx, "match.battle_script_review.purge", battleScriptReviewPurgeInterval, func(ctx context.Context) { purge.round(ctx, s.Authority) })
 }
 
-// round 跑一轮。失败记一次失败计数与英文日志,下一轮重试:清理没有未知结局,不进 HoldRelay。
-// 持续失败由告警 MatchRetentionPurgeFailing 报,到期的行没删掉由 MatchRetentionBehind 报(deploy/k8s/match-alerts.yaml)。
+// round 跑一轮,结局交给 observeRetentionRound(失败计数与日志;搬库冻结不算失败)。
+// 到期的行没删掉由告警 MatchRetentionBehind 报(deploy/k8s/match-alerts.yaml)。
 func (p *battleScriptReviewPurge) round(ctx context.Context, purger battleScriptReviewPurger) {
-	if err := p.purgeAndMeasure(ctx, purger); err != nil {
-		metrics.ObserveRetentionPurgeFailure(metrics.RetentionPurgeBattleScriptReview)
-		logx.Errorf("[battle_script] Review retention purge failed; retrying next round: %v", err)
-	}
+	observeRetentionRound(metrics.RetentionPurgeBattleScriptReview, p.purgeAndMeasure(ctx, purger))
 }
 
 // purgeAndMeasure 连续清页,再读表里现存最老一行的时刻报给逾期告警。清理失败的那一页不动游标。清理失败也照读最老一行:
-// 删不动(例如搬库窗口写者冻结)而读得动时,指标照样反映表里的行在变老。
+// 删不动而读得动时(例如 DELETE 超时),指标照样反映表里的行在变老。
 func (p *battleScriptReviewPurge) purgeAndMeasure(ctx context.Context, purger battleScriptReviewPurger) error {
 	purgeErr := drainRetentionPages(func() (bool, error) {
 		pageCtx, cancel := context.WithTimeout(ctx, battleScriptReviewPurgeBudget)

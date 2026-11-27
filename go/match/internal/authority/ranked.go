@@ -200,6 +200,7 @@ func (s *Store) freezeRankedFormationContextTx(ctx context.Context, tx *sql.Tx, 
 	}
 	var memberStreaks map[uint64]uint32
 	minRatingCenti := int64(0)
+	maxRatingCenti := int64(0)
 	hasMemberRating := false
 	for _, t := range current {
 		var streak uint32
@@ -215,14 +216,26 @@ func (s *Store) freezeRankedFormationContextTx(ctx context.Context, tx *sql.Tx, 
 		} else if !errors.Is(sErr, sql.ErrNoRows) {
 			return sErr
 		}
-		if !hasMemberRating || ratingCenti < minRatingCenti {
+		if !hasMemberRating {
 			minRatingCenti = ratingCenti
+			maxRatingCenti = ratingCenti
 			hasMemberRating = true
+		} else {
+			if ratingCenti < minRatingCenti {
+				minRatingCenti = ratingCenti
+			}
+			if ratingCenti > maxRatingCenti {
+				maxRatingCenti = ratingCenti
+			}
 		}
 	}
 	skillBanSlots := uint32(0)
 	if ruleBanSlots := cat.Rule().GetSkillBanSlotsPerTeam(); ruleBanSlots > 0 && hasMemberRating && minRatingCenti >= int64(cat.Rule().GetSkillBanMinRatingCenti()) {
 		skillBanSlots = ruleBanSlots
+	}
+	spectateMinCenti := int64(cat.Rule().GetTierQingfengCenti())
+	if spectateMinCenti <= 0 {
+		spectateMinCenti = 152000
 	}
 	rivalryEncounters, err := loadRivalryEncountersForFormationTx(ctx, tx, cur.SeasonId, f.GetMembers())
 	if err != nil {
@@ -239,6 +252,8 @@ func (s *Store) freezeRankedFormationContextTx(ctx context.Context, tx *sql.Tx, 
 		MemberWinStreaks:     memberStreaks,
 		SkillBanSlotsPerTeam: skillBanSlots,
 		RivalryEncounters:    rivalryEncounters,
+		AllowPublicSpectate:  hasMemberRating && maxRatingCenti >= spectateMinCenti,
+		PeakRatingCenti:      maxRatingCenti,
 	}
 	raw, err := (proto.MarshalOptions{Deterministic: true}).Marshal(frozen)
 	if err != nil {
