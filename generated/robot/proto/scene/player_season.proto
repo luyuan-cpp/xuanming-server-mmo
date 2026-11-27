@@ -158,16 +158,18 @@ message WuxingTowerLeaderboardEntry {
   uint32 best_rounds = 5;
   uint32 formation_id = 6;
   repeated uint32 sigil_ids = 7;
+  bool use_free_preset = 8;
+  uint32 resonance_element = 9;
 }
 
 message WuxingTowerStateSnapshot {
   uint32 week_key = 1;
   bool run_active = 2;
   uint64 run_id = 3;
-  uint32 current_floor = 4;                  // 当前待挑战层（1..10）
-  uint32 max_floors = 5;                     // 固定 10 层
-  uint32 current_floor_dungeon_id = 6;       // 当前层开战应传入的 PVE_SOLO battle_config_id
-  uint32 current_floor_leyline_element = 7;  // 本层环境五行灵脉（1..5）
+  uint32 current_floor = 4;                  // 当前待推进关（V2 为 1..6）
+  uint32 max_floors = 5;                     // V2 为 6 关
+  uint32 current_floor_dungeon_id = 6;       // 当前战斗节点开战应传入的 PVE_SOLO battle_config_id
+  uint32 current_floor_leyline_element = 7;  // 本关环境五行灵脉（1..5）
   uint32 run_total_rounds = 8;
   repeated uint32 active_sigil_ids = 9;
   repeated uint32 pending_offer_sigil_ids = 10;
@@ -176,6 +178,20 @@ message WuxingTowerStateSnapshot {
   uint32 weekly_best_rounds = 13;
   uint64 revision = 14;
   repeated WuxingTowerLeaderboardEntry weekly_leaderboard = 15;
+  uint32 run_week_key = 16;                  // 本轮开局周键（跨周保留在途轮次不清空）
+  uint32 realm_version = 17;                 // 2=V2 6 关奇策秘境
+  bool use_free_preset = 18;                 // true=公平 3x3 试炼模式
+  uint32 character_preset_id = 19;           // 公平模式人物预设（101..103）
+  uint32 pet_preset_id = 20;                 // 公平模式灵宠预设（201..203）
+  uint32 current_node_kind = 21;             // 当前节点类型（0=待选分岔,1=普通,2=精英,3=首领,4=奇遇,5=休整）
+  uint32 pending_event_kind = 22;            // 待抉择非战斗事件（0=无,1=第2关奇遇,2=第4关休整）
+  uint32 active_resonance_element = 23;      // 当前激活的 3 同系五行奇策共鸣（0=无,1..5）
+  uint32 route_choice_mask = 24;             // 本轮分岔轨迹位图（bit0=第2关右路,bit1=第4关右路）
+  uint32 best_rounds_self = 25;              // 个人历史最速全通回合（本人流派）
+  uint32 best_rounds_preset = 26;            // 个人历史最速全通回合（公平试炼）
+  uint32 weekly_best_floor_preset = 27;      // 本周公平试炼最高通关关数
+  uint32 weekly_best_rounds_preset = 28;     // 本周公平试炼全通最速回合
+  repeated WuxingTowerLeaderboardEntry weekly_leaderboard_preset = 29; // 本周公平试炼分榜 Top 20
 }
 
 message GetWuxingTowerStateRequest {}
@@ -185,7 +201,11 @@ message GetWuxingTowerStateResponse {
   WuxingTowerStateSnapshot state = 2;
 }
 
-message StartWuxingTowerRunRequest {}
+message StartWuxingTowerRunRequest {
+  bool use_free_preset = 1;                  // true=公平 3x3 免费试炼；false=本人流派
+  uint32 character_preset_id = 2;            // 公平模式人物预设（0=默认 101，白名单 101..103）
+  uint32 pet_preset_id = 3;                  // 公平模式灵宠预设（0=默认 201，白名单 201..203）
+}
 
 message StartWuxingTowerRunResponse {
   TipInfoMessage error_message = 1;
@@ -209,6 +229,31 @@ message AbandonWuxingTowerRunRequest {
 message AbandonWuxingTowerRunResponse {
   TipInfoMessage error_message = 1;
   WuxingTowerStateSnapshot state = 2;
+}
+
+// 五行幻境 V2：在第 2/4 关二选一分岔节点选择行进路线（1=左路精英强敌，2=右路奇遇事件/秘境休整）。
+message ChooseWuxingRealmBranchRequest {
+  uint64 expected_run_id = 1;
+  uint32 branch = 2;
+}
+
+message ChooseWuxingRealmBranchResponse {
+  TipInfoMessage error_message = 1;
+  WuxingTowerStateSnapshot state = 2;
+}
+
+// 五行幻境 V2：在奇遇事件（第2关右路）或秘境休整（第4关右路）节点执行二选一抉择。
+// option_index: 奇遇(1=道缘寻策直接领灵品奇策, 2=五行悟道三选一); 休整(1=奇策淬炼升品, 2=同源寻策偏向共鸣三选一)。
+message ResolveWuxingRealmEventRequest {
+  uint64 expected_run_id = 1;
+  uint32 option_index = 2;
+  uint32 target_boon_id = 3;
+}
+
+message ResolveWuxingRealmEventResponse {
+  TipInfoMessage error_message = 1;
+  WuxingTowerStateSnapshot state = 2;
+  uint32 granted_boon_id = 3;
 }
 
 message SaveBattleBuildBookmarkRequest {
@@ -292,4 +337,6 @@ service SceneSeasonClientPlayer {
   rpc SaveBattleBuildBookmark (SaveBattleBuildBookmarkRequest) returns (SaveBattleBuildBookmarkResponse);
   rpc DeleteBattleBuildBookmark (DeleteBattleBuildBookmarkRequest) returns (DeleteBattleBuildBookmarkResponse);
   rpc SetRetroHonorTarget (SetRetroHonorTargetRequest) returns (SetRetroHonorTargetResponse);
+  rpc ChooseWuxingRealmBranch (ChooseWuxingRealmBranchRequest) returns (ChooseWuxingRealmBranchResponse);
+  rpc ResolveWuxingRealmEvent (ResolveWuxingRealmEventRequest) returns (ResolveWuxingRealmEventResponse);
 }

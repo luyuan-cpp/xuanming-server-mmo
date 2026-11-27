@@ -259,14 +259,27 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerCompState final : public
     kActiveSigilIdsFieldNumber = 6,
     kPendingOfferSigilIdsFieldNumber = 7,
     kWeekKeyFieldNumber = 1,
-    kRunActiveFieldNumber = 2,
-    kRunIdFieldNumber = 3,
     kCurrentFloorFieldNumber = 4,
+    kRunIdFieldNumber = 3,
     kRunTotalRoundsFieldNumber = 5,
     kWeeklyClearedMaskFieldNumber = 8,
+    kRunActiveFieldNumber = 2,
+    kUseFreePresetFieldNumber = 14,
     kWeeklyBestFloorFieldNumber = 9,
     kRevisionFieldNumber = 11,
     kWeeklyBestRoundsFieldNumber = 10,
+    kRunWeekKeyFieldNumber = 12,
+    kRealmVersionFieldNumber = 13,
+    kCharacterPresetIdFieldNumber = 15,
+    kPetPresetIdFieldNumber = 16,
+    kCurrentNodeKindFieldNumber = 17,
+    kPendingEventKindFieldNumber = 18,
+    kEventRerollCountFieldNumber = 19,
+    kBestRoundsSelfFieldNumber = 20,
+    kBestRoundsPresetFieldNumber = 21,
+    kWeeklyBestFloorPresetFieldNumber = 22,
+    kWeeklyBestRoundsPresetFieldNumber = 23,
+    kRouteChoiceMaskFieldNumber = 24,
   };
   // repeated uint32 active_sigil_ids = 6;
   [[nodiscard]] int active_sigil_ids_size()
@@ -318,14 +331,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerCompState final : public
   void _internal_set_week_key(::uint32_t value);
 
   public:
-  // bool run_active = 2;
-  void clear_run_active() ;
-  [[nodiscard]] bool run_active() const;
-  void set_run_active(bool value);
+  // uint32 current_floor = 4;
+  void clear_current_floor() ;
+  [[nodiscard]] ::uint32_t current_floor() const;
+  void set_current_floor(::uint32_t value);
 
   private:
-  bool _internal_run_active() const;
-  void _internal_set_run_active(bool value);
+  ::uint32_t _internal_current_floor() const;
+  void _internal_set_current_floor(::uint32_t value);
 
   public:
   // uint64 run_id = 3;
@@ -336,16 +349,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerCompState final : public
   private:
   ::uint64_t _internal_run_id() const;
   void _internal_set_run_id(::uint64_t value);
-
-  public:
-  // uint32 current_floor = 4;
-  void clear_current_floor() ;
-  [[nodiscard]] ::uint32_t current_floor() const;
-  void set_current_floor(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_current_floor() const;
-  void _internal_set_current_floor(::uint32_t value);
 
   public:
   // uint32 run_total_rounds = 5;
@@ -366,6 +369,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerCompState final : public
   private:
   ::uint32_t _internal_weekly_cleared_mask() const;
   void _internal_set_weekly_cleared_mask(::uint32_t value);
+
+  public:
+  // bool run_active = 2;
+  void clear_run_active() ;
+  [[nodiscard]] bool run_active() const;
+  void set_run_active(bool value);
+
+  private:
+  bool _internal_run_active() const;
+  void _internal_set_run_active(bool value);
+
+  public:
+  // bool use_free_preset = 14;
+  void clear_use_free_preset() ;
+  [[nodiscard]] bool use_free_preset() const;
+  void set_use_free_preset(bool value);
+
+  private:
+  bool _internal_use_free_preset() const;
+  void _internal_set_use_free_preset(bool value);
 
   public:
   // uint32 weekly_best_floor = 9;
@@ -398,11 +421,131 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerCompState final : public
   void _internal_set_weekly_best_rounds(::uint32_t value);
 
   public:
+  // uint32 run_week_key = 12;
+  void clear_run_week_key() ;
+  [[nodiscard]] ::uint32_t run_week_key() const;
+  void set_run_week_key(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_run_week_key() const;
+  void _internal_set_run_week_key(::uint32_t value);
+
+  public:
+  // uint32 realm_version = 13;
+  void clear_realm_version() ;
+  [[nodiscard]] ::uint32_t realm_version() const;
+  void set_realm_version(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_realm_version() const;
+  void _internal_set_realm_version(::uint32_t value);
+
+  public:
+  // uint32 character_preset_id = 15;
+  void clear_character_preset_id() ;
+  [[nodiscard]] ::uint32_t character_preset_id() const;
+  void set_character_preset_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_character_preset_id() const;
+  void _internal_set_character_preset_id(::uint32_t value);
+
+  public:
+  // uint32 pet_preset_id = 16;
+  void clear_pet_preset_id() ;
+  [[nodiscard]] ::uint32_t pet_preset_id() const;
+  void set_pet_preset_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_pet_preset_id() const;
+  void _internal_set_pet_preset_id(::uint32_t value);
+
+  public:
+  // uint32 current_node_kind = 17;
+  void clear_current_node_kind() ;
+  [[nodiscard]] ::uint32_t current_node_kind() const;
+  void set_current_node_kind(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_current_node_kind() const;
+  void _internal_set_current_node_kind(::uint32_t value);
+
+  public:
+  // uint32 pending_event_kind = 18;
+  void clear_pending_event_kind() ;
+  [[nodiscard]] ::uint32_t pending_event_kind() const;
+  void set_pending_event_kind(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_pending_event_kind() const;
+  void _internal_set_pending_event_kind(::uint32_t value);
+
+  public:
+  // uint32 event_reroll_count = 19;
+  void clear_event_reroll_count() ;
+  [[nodiscard]] ::uint32_t event_reroll_count() const;
+  void set_event_reroll_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_event_reroll_count() const;
+  void _internal_set_event_reroll_count(::uint32_t value);
+
+  public:
+  // uint32 best_rounds_self = 20;
+  void clear_best_rounds_self() ;
+  [[nodiscard]] ::uint32_t best_rounds_self() const;
+  void set_best_rounds_self(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_best_rounds_self() const;
+  void _internal_set_best_rounds_self(::uint32_t value);
+
+  public:
+  // uint32 best_rounds_preset = 21;
+  void clear_best_rounds_preset() ;
+  [[nodiscard]] ::uint32_t best_rounds_preset() const;
+  void set_best_rounds_preset(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_best_rounds_preset() const;
+  void _internal_set_best_rounds_preset(::uint32_t value);
+
+  public:
+  // uint32 weekly_best_floor_preset = 22;
+  void clear_weekly_best_floor_preset() ;
+  [[nodiscard]] ::uint32_t weekly_best_floor_preset() const;
+  void set_weekly_best_floor_preset(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_weekly_best_floor_preset() const;
+  void _internal_set_weekly_best_floor_preset(::uint32_t value);
+
+  public:
+  // uint32 weekly_best_rounds_preset = 23;
+  void clear_weekly_best_rounds_preset() ;
+  [[nodiscard]] ::uint32_t weekly_best_rounds_preset() const;
+  void set_weekly_best_rounds_preset(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_weekly_best_rounds_preset() const;
+  void _internal_set_weekly_best_rounds_preset(::uint32_t value);
+
+  public:
+  // uint32 route_choice_mask = 24;
+  void clear_route_choice_mask() ;
+  [[nodiscard]] ::uint32_t route_choice_mask() const;
+  void set_route_choice_mask(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_route_choice_mask() const;
+  void _internal_set_route_choice_mask(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:WuxingTowerCompState)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 11,
+      ::google::protobuf::internal::TcParseTable<5, 24,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -436,14 +579,27 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerCompState final : public
     ::google::protobuf::RepeatedField<::uint32_t> pending_offer_sigil_ids_;
     ::google::protobuf::internal::CachedSize _pending_offer_sigil_ids_cached_byte_size_;
     ::uint32_t week_key_;
-    bool run_active_;
-    ::uint64_t run_id_;
     ::uint32_t current_floor_;
+    ::uint64_t run_id_;
     ::uint32_t run_total_rounds_;
     ::uint32_t weekly_cleared_mask_;
+    bool run_active_;
+    bool use_free_preset_;
     ::uint32_t weekly_best_floor_;
     ::uint64_t revision_;
     ::uint32_t weekly_best_rounds_;
+    ::uint32_t run_week_key_;
+    ::uint32_t realm_version_;
+    ::uint32_t character_preset_id_;
+    ::uint32_t pet_preset_id_;
+    ::uint32_t current_node_kind_;
+    ::uint32_t pending_event_kind_;
+    ::uint32_t event_reroll_count_;
+    ::uint32_t best_rounds_self_;
+    ::uint32_t best_rounds_preset_;
+    ::uint32_t weekly_best_floor_preset_;
+    ::uint32_t weekly_best_rounds_preset_;
+    ::uint32_t route_choice_mask_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1688,7 +1844,7 @@ inline void WuxingTowerCompState::_internal_set_week_key(::uint32_t value) {
 inline void WuxingTowerCompState::clear_run_active() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.run_active_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline bool WuxingTowerCompState::run_active() const {
   // @@protoc_insertion_point(field_get:WuxingTowerCompState.run_active)
@@ -1696,7 +1852,7 @@ inline bool WuxingTowerCompState::run_active() const {
 }
 inline void WuxingTowerCompState::set_run_active(bool value) {
   _internal_set_run_active(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:WuxingTowerCompState.run_active)
 }
 inline bool WuxingTowerCompState::_internal_run_active() const {
@@ -1736,7 +1892,7 @@ inline void WuxingTowerCompState::_internal_set_run_id(::uint64_t value) {
 inline void WuxingTowerCompState::clear_current_floor() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.current_floor_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint32_t WuxingTowerCompState::current_floor() const {
   // @@protoc_insertion_point(field_get:WuxingTowerCompState.current_floor)
@@ -1744,7 +1900,7 @@ inline ::uint32_t WuxingTowerCompState::current_floor() const {
 }
 inline void WuxingTowerCompState::set_current_floor(::uint32_t value) {
   _internal_set_current_floor(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:WuxingTowerCompState.current_floor)
 }
 inline ::uint32_t WuxingTowerCompState::_internal_current_floor() const {
@@ -1760,7 +1916,7 @@ inline void WuxingTowerCompState::_internal_set_current_floor(::uint32_t value) 
 inline void WuxingTowerCompState::clear_run_total_rounds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.run_total_rounds_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t WuxingTowerCompState::run_total_rounds() const {
   // @@protoc_insertion_point(field_get:WuxingTowerCompState.run_total_rounds)
@@ -1768,7 +1924,7 @@ inline ::uint32_t WuxingTowerCompState::run_total_rounds() const {
 }
 inline void WuxingTowerCompState::set_run_total_rounds(::uint32_t value) {
   _internal_set_run_total_rounds(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:WuxingTowerCompState.run_total_rounds)
 }
 inline ::uint32_t WuxingTowerCompState::_internal_run_total_rounds() const {
@@ -1886,7 +2042,7 @@ WuxingTowerCompState::_internal_mutable_pending_offer_sigil_ids() {
 inline void WuxingTowerCompState::clear_weekly_cleared_mask() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.weekly_cleared_mask_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t WuxingTowerCompState::weekly_cleared_mask() const {
   // @@protoc_insertion_point(field_get:WuxingTowerCompState.weekly_cleared_mask)
@@ -1894,7 +2050,7 @@ inline ::uint32_t WuxingTowerCompState::weekly_cleared_mask() const {
 }
 inline void WuxingTowerCompState::set_weekly_cleared_mask(::uint32_t value) {
   _internal_set_weekly_cleared_mask(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:WuxingTowerCompState.weekly_cleared_mask)
 }
 inline ::uint32_t WuxingTowerCompState::_internal_weekly_cleared_mask() const {
@@ -1910,7 +2066,7 @@ inline void WuxingTowerCompState::_internal_set_weekly_cleared_mask(::uint32_t v
 inline void WuxingTowerCompState::clear_weekly_best_floor() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.weekly_best_floor_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t WuxingTowerCompState::weekly_best_floor() const {
   // @@protoc_insertion_point(field_get:WuxingTowerCompState.weekly_best_floor)
@@ -1918,7 +2074,7 @@ inline ::uint32_t WuxingTowerCompState::weekly_best_floor() const {
 }
 inline void WuxingTowerCompState::set_weekly_best_floor(::uint32_t value) {
   _internal_set_weekly_best_floor(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:WuxingTowerCompState.weekly_best_floor)
 }
 inline ::uint32_t WuxingTowerCompState::_internal_weekly_best_floor() const {
@@ -1934,7 +2090,7 @@ inline void WuxingTowerCompState::_internal_set_weekly_best_floor(::uint32_t val
 inline void WuxingTowerCompState::clear_weekly_best_rounds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.weekly_best_rounds_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t WuxingTowerCompState::weekly_best_rounds() const {
   // @@protoc_insertion_point(field_get:WuxingTowerCompState.weekly_best_rounds)
@@ -1942,7 +2098,7 @@ inline ::uint32_t WuxingTowerCompState::weekly_best_rounds() const {
 }
 inline void WuxingTowerCompState::set_weekly_best_rounds(::uint32_t value) {
   _internal_set_weekly_best_rounds(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:WuxingTowerCompState.weekly_best_rounds)
 }
 inline ::uint32_t WuxingTowerCompState::_internal_weekly_best_rounds() const {
@@ -1958,7 +2114,7 @@ inline void WuxingTowerCompState::_internal_set_weekly_best_rounds(::uint32_t va
 inline void WuxingTowerCompState::clear_revision() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.revision_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint64_t WuxingTowerCompState::revision() const {
   // @@protoc_insertion_point(field_get:WuxingTowerCompState.revision)
@@ -1966,7 +2122,7 @@ inline ::uint64_t WuxingTowerCompState::revision() const {
 }
 inline void WuxingTowerCompState::set_revision(::uint64_t value) {
   _internal_set_revision(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:WuxingTowerCompState.revision)
 }
 inline ::uint64_t WuxingTowerCompState::_internal_revision() const {
@@ -1976,6 +2132,318 @@ inline ::uint64_t WuxingTowerCompState::_internal_revision() const {
 inline void WuxingTowerCompState::_internal_set_revision(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.revision_ = value;
+}
+
+// uint32 run_week_key = 12;
+inline void WuxingTowerCompState::clear_run_week_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.run_week_key_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::uint32_t WuxingTowerCompState::run_week_key() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerCompState.run_week_key)
+  return _internal_run_week_key();
+}
+inline void WuxingTowerCompState::set_run_week_key(::uint32_t value) {
+  _internal_set_run_week_key(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerCompState.run_week_key)
+}
+inline ::uint32_t WuxingTowerCompState::_internal_run_week_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.run_week_key_;
+}
+inline void WuxingTowerCompState::_internal_set_run_week_key(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.run_week_key_ = value;
+}
+
+// uint32 realm_version = 13;
+inline void WuxingTowerCompState::clear_realm_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.realm_version_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint32_t WuxingTowerCompState::realm_version() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerCompState.realm_version)
+  return _internal_realm_version();
+}
+inline void WuxingTowerCompState::set_realm_version(::uint32_t value) {
+  _internal_set_realm_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerCompState.realm_version)
+}
+inline ::uint32_t WuxingTowerCompState::_internal_realm_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.realm_version_;
+}
+inline void WuxingTowerCompState::_internal_set_realm_version(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.realm_version_ = value;
+}
+
+// bool use_free_preset = 14;
+inline void WuxingTowerCompState::clear_use_free_preset() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.use_free_preset_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline bool WuxingTowerCompState::use_free_preset() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerCompState.use_free_preset)
+  return _internal_use_free_preset();
+}
+inline void WuxingTowerCompState::set_use_free_preset(bool value) {
+  _internal_set_use_free_preset(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:WuxingTowerCompState.use_free_preset)
+}
+inline bool WuxingTowerCompState::_internal_use_free_preset() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.use_free_preset_;
+}
+inline void WuxingTowerCompState::_internal_set_use_free_preset(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.use_free_preset_ = value;
+}
+
+// uint32 character_preset_id = 15;
+inline void WuxingTowerCompState::clear_character_preset_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.character_preset_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint32_t WuxingTowerCompState::character_preset_id() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerCompState.character_preset_id)
+  return _internal_character_preset_id();
+}
+inline void WuxingTowerCompState::set_character_preset_id(::uint32_t value) {
+  _internal_set_character_preset_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerCompState.character_preset_id)
+}
+inline ::uint32_t WuxingTowerCompState::_internal_character_preset_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.character_preset_id_;
+}
+inline void WuxingTowerCompState::_internal_set_character_preset_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.character_preset_id_ = value;
+}
+
+// uint32 pet_preset_id = 16;
+inline void WuxingTowerCompState::clear_pet_preset_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_preset_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint32_t WuxingTowerCompState::pet_preset_id() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerCompState.pet_preset_id)
+  return _internal_pet_preset_id();
+}
+inline void WuxingTowerCompState::set_pet_preset_id(::uint32_t value) {
+  _internal_set_pet_preset_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerCompState.pet_preset_id)
+}
+inline ::uint32_t WuxingTowerCompState::_internal_pet_preset_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pet_preset_id_;
+}
+inline void WuxingTowerCompState::_internal_set_pet_preset_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_preset_id_ = value;
+}
+
+// uint32 current_node_kind = 17;
+inline void WuxingTowerCompState::clear_current_node_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.current_node_kind_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint32_t WuxingTowerCompState::current_node_kind() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerCompState.current_node_kind)
+  return _internal_current_node_kind();
+}
+inline void WuxingTowerCompState::set_current_node_kind(::uint32_t value) {
+  _internal_set_current_node_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerCompState.current_node_kind)
+}
+inline ::uint32_t WuxingTowerCompState::_internal_current_node_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.current_node_kind_;
+}
+inline void WuxingTowerCompState::_internal_set_current_node_kind(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.current_node_kind_ = value;
+}
+
+// uint32 pending_event_kind = 18;
+inline void WuxingTowerCompState::clear_pending_event_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pending_event_kind_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline ::uint32_t WuxingTowerCompState::pending_event_kind() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerCompState.pending_event_kind)
+  return _internal_pending_event_kind();
+}
+inline void WuxingTowerCompState::set_pending_event_kind(::uint32_t value) {
+  _internal_set_pending_event_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerCompState.pending_event_kind)
+}
+inline ::uint32_t WuxingTowerCompState::_internal_pending_event_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pending_event_kind_;
+}
+inline void WuxingTowerCompState::_internal_set_pending_event_kind(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pending_event_kind_ = value;
+}
+
+// uint32 event_reroll_count = 19;
+inline void WuxingTowerCompState::clear_event_reroll_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.event_reroll_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+}
+inline ::uint32_t WuxingTowerCompState::event_reroll_count() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerCompState.event_reroll_count)
+  return _internal_event_reroll_count();
+}
+inline void WuxingTowerCompState::set_event_reroll_count(::uint32_t value) {
+  _internal_set_event_reroll_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerCompState.event_reroll_count)
+}
+inline ::uint32_t WuxingTowerCompState::_internal_event_reroll_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.event_reroll_count_;
+}
+inline void WuxingTowerCompState::_internal_set_event_reroll_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.event_reroll_count_ = value;
+}
+
+// uint32 best_rounds_self = 20;
+inline void WuxingTowerCompState::clear_best_rounds_self() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.best_rounds_self_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+}
+inline ::uint32_t WuxingTowerCompState::best_rounds_self() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerCompState.best_rounds_self)
+  return _internal_best_rounds_self();
+}
+inline void WuxingTowerCompState::set_best_rounds_self(::uint32_t value) {
+  _internal_set_best_rounds_self(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerCompState.best_rounds_self)
+}
+inline ::uint32_t WuxingTowerCompState::_internal_best_rounds_self() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.best_rounds_self_;
+}
+inline void WuxingTowerCompState::_internal_set_best_rounds_self(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.best_rounds_self_ = value;
+}
+
+// uint32 best_rounds_preset = 21;
+inline void WuxingTowerCompState::clear_best_rounds_preset() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.best_rounds_preset_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+}
+inline ::uint32_t WuxingTowerCompState::best_rounds_preset() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerCompState.best_rounds_preset)
+  return _internal_best_rounds_preset();
+}
+inline void WuxingTowerCompState::set_best_rounds_preset(::uint32_t value) {
+  _internal_set_best_rounds_preset(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerCompState.best_rounds_preset)
+}
+inline ::uint32_t WuxingTowerCompState::_internal_best_rounds_preset() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.best_rounds_preset_;
+}
+inline void WuxingTowerCompState::_internal_set_best_rounds_preset(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.best_rounds_preset_ = value;
+}
+
+// uint32 weekly_best_floor_preset = 22;
+inline void WuxingTowerCompState::clear_weekly_best_floor_preset() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.weekly_best_floor_preset_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+}
+inline ::uint32_t WuxingTowerCompState::weekly_best_floor_preset() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerCompState.weekly_best_floor_preset)
+  return _internal_weekly_best_floor_preset();
+}
+inline void WuxingTowerCompState::set_weekly_best_floor_preset(::uint32_t value) {
+  _internal_set_weekly_best_floor_preset(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerCompState.weekly_best_floor_preset)
+}
+inline ::uint32_t WuxingTowerCompState::_internal_weekly_best_floor_preset() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.weekly_best_floor_preset_;
+}
+inline void WuxingTowerCompState::_internal_set_weekly_best_floor_preset(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.weekly_best_floor_preset_ = value;
+}
+
+// uint32 weekly_best_rounds_preset = 23;
+inline void WuxingTowerCompState::clear_weekly_best_rounds_preset() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.weekly_best_rounds_preset_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+}
+inline ::uint32_t WuxingTowerCompState::weekly_best_rounds_preset() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerCompState.weekly_best_rounds_preset)
+  return _internal_weekly_best_rounds_preset();
+}
+inline void WuxingTowerCompState::set_weekly_best_rounds_preset(::uint32_t value) {
+  _internal_set_weekly_best_rounds_preset(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerCompState.weekly_best_rounds_preset)
+}
+inline ::uint32_t WuxingTowerCompState::_internal_weekly_best_rounds_preset() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.weekly_best_rounds_preset_;
+}
+inline void WuxingTowerCompState::_internal_set_weekly_best_rounds_preset(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.weekly_best_rounds_preset_ = value;
+}
+
+// uint32 route_choice_mask = 24;
+inline void WuxingTowerCompState::clear_route_choice_mask() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.route_choice_mask_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+}
+inline ::uint32_t WuxingTowerCompState::route_choice_mask() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerCompState.route_choice_mask)
+  return _internal_route_choice_mask();
+}
+inline void WuxingTowerCompState::set_route_choice_mask(::uint32_t value) {
+  _internal_set_route_choice_mask(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerCompState.route_choice_mask)
+}
+inline ::uint32_t WuxingTowerCompState::_internal_route_choice_mask() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.route_choice_mask_;
+}
+inline void WuxingTowerCompState::_internal_set_route_choice_mask(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.route_choice_mask_ = value;
 }
 
 // -------------------------------------------------------------------

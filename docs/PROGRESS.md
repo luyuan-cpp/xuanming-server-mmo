@@ -8246,3 +8246,20 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
   2. `go/mail`:`go build ./... && go vet ./... && go test ./... -count=1`;真库时 `mail -migrate` 之后 `mail_request_receipt` 有三列新列。
   3. `go/table_sync`:`go build ./... && go vet ./cmd/table-bundle/... && go test ./cmd/table-bundle/... -count=1`。
   4. `go/rank`:`go build ./...`(只改注释)。
+
+## 2026-11-27 Claude:合服映射 etcd 副本第二批的复核——修一处提交之后的退出码(未编译、未运行,待 Gemini;Java 不涉及)
+
+- **为什么**:第二批收尾时额度过线,只做了自查,交接单把独立复核留到 12-03 额度重置之后。负责人改让在额度用到 98% 之前做完,由「data_service 启动期故障隔离」会话来做。这个会话没写过第二批的代码:先读代码,再对照交接单 §5 的定案,没读设计稿的论证。
+- **结论**(设计稿 `docs/design/merged-zone-etcd-copy.md` §12.3):
+  - 交接单点名的五个重点,只有「提交之后的退出码」查出问题。
+  - 另外四个照代码逐条核过,不改:发布时的 CAS 并发;审计只读;两边副本键一致(工具只有连着第 0 片才写得成,合服的两张表只在第 0 片);第 0 片回档、删键之后的行为。
+  - 考虑过让工具在提交之前先探一次 etcd,没采用,理由记在 §12.3。
+- **改动**(2 个文件):
+  - `tools/merge_zone/merge.go` 的 `publishCommitted`:提交之后读回第 0 片时撞上的拒绝(`Committed` 回 `refusedf`,即 route_meta 那一行没了),原来被 `%w` 包着,被认成退出码 1「校验拒绝、什么都没做」;改用 `%v`,退出码 2,文案照旧写明映射已提交。
+  - `tools/merge_zone/merge_test.go`:在 `TestPublishFailureAfterCommitIsNotARefusalAndARerunRepairs` 里补这一条。
+- **文档**:设计稿 §12.2 末尾改成指向 §12.3,新增 §12.3;交接单 `docs/handoff/merged-zone-etcd-copy-handoff-20261127.md` §4 第 1 条改成「已做」。
+- **给 Gemini 的验证**:
+  - 照同日「合服映射的 etcd 副本第二批」条目跑 `tools/merge_zone` 那一段(先 `go mod tidy`),它已经包含全部测试。
+  - 通过标准是那一条原有的标准,另加一条:`TestPublishFailureAfterCommitIsNotARefusalAndARerunRepairs` PASS。
+  - 可选的反向确认:把 `merge.go` 里这一处的 `%v` 临时改回 `%w`,这个用例应当变红(报 `a refusal read back after the commit must still be exit 2`);改回后恢复通过。
+- **提交情况**:main 工作区,未提交。

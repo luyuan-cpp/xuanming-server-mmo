@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include <vector>
 #include <entt/src/entt/entity/entity.hpp>
 #include "services/battle/system/season_rules.h"
@@ -10,6 +11,8 @@ class AbandonWuxingTowerRunResponse;
 class BattleSettlementData;
 class CatchupSeasonSealRequest;
 class CatchupSeasonSealResponse;
+class ChooseWuxingRealmBranchRequest;
+class ChooseWuxingRealmBranchResponse;
 class DeleteBattleBuildBookmarkRequest;
 class DeleteBattleBuildBookmarkResponse;
 class EquipSeasonSealRequest;
@@ -22,11 +25,14 @@ class GetWuxingTowerStateResponse;
 class PickWuxingTowerSigilRequest;
 class PickWuxingTowerSigilResponse;
 class PlayerSeasonComp;
+class ResolveWuxingRealmEventRequest;
+class ResolveWuxingRealmEventResponse;
 class SaveBattleBuildBookmarkRequest;
 class SaveBattleBuildBookmarkResponse;
 class SeasonSealEffect;
 class SetRetroHonorTargetRequest;
 class SetRetroHonorTargetResponse;
+class StartWuxingTowerRunRequest;
 class StartWuxingTowerRunResponse;
 class WuxingTowerBattleContext;
 
@@ -58,7 +64,13 @@ public:
     static uint32_t PrepareWuxingTowerContext(entt::entity player,
                                               uint64_t nowMs,
                                               uint32_t battleConfigId,
-                                              WuxingTowerBattleContext& outContext);
+                                              WuxingTowerBattleContext& outContext,
+                                              uint32_t* outCharPresetId = nullptr,
+                                              uint32_t* outPetPresetId = nullptr);
+
+    // 水平扩展周榜 Redis Cluster 键规范（同一 {weekKey} hash-tag 确保 ZSET 与元信息 HASH 同 slot）。
+    static std::string RealmLeaderboardZsetKey(uint32_t weekKey, bool useFreePreset);
+    static std::string RealmLeaderboardMetaKey(uint32_t weekKey, bool useFreePreset);
 
     // 汇总当前活跃赛季单槽赛季印的轻属性与机制到 EquipmentEffects（无活跃赛季或组件缺失则留空）。
     static void CollectEffects(entt::entity player, uint64_t nowMs, EquipmentEffects& effects);
@@ -84,6 +96,9 @@ public:
     static uint32_t GetWuxingTowerState(entt::entity player, uint64_t nowMs,
                                         GetWuxingTowerStateResponse& response);
     static void StartWuxingTowerRun(entt::entity player, uint64_t nowMs,
+                                    const StartWuxingTowerRunRequest& request,
+                                    StartWuxingTowerRunResponse& response);
+    static void StartWuxingTowerRun(entt::entity player, uint64_t nowMs,
                                     StartWuxingTowerRunResponse& response);
     static void PickWuxingTowerSigil(entt::entity player, uint64_t nowMs,
                                      const PickWuxingTowerSigilRequest& request,
@@ -91,6 +106,12 @@ public:
     static void AbandonWuxingTowerRun(entt::entity player, uint64_t nowMs,
                                       const AbandonWuxingTowerRunRequest& request,
                                       AbandonWuxingTowerRunResponse& response);
+    static void ChooseWuxingRealmBranch(entt::entity player, uint64_t nowMs,
+                                        const ChooseWuxingRealmBranchRequest& request,
+                                        ChooseWuxingRealmBranchResponse& response);
+    static void ResolveWuxingRealmEvent(entt::entity player, uint64_t nowMs,
+                                        const ResolveWuxingRealmEventRequest& request,
+                                        ResolveWuxingRealmEventResponse& response);
     static void SaveBattleBuildBookmark(entt::entity player, uint64_t nowMs,
                                         const SaveBattleBuildBookmarkRequest& request,
                                         SaveBattleBuildBookmarkResponse& response);

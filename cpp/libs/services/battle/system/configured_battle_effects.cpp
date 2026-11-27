@@ -1053,8 +1053,13 @@ uint64_t TurnBattleEngine::ResolveConfiguredDamage(BattleActorState& source, Bat
     }
     EquipmentBreakShields(source, target, shieldDamage, damageType, context, originalShields, result);
     EffectContext triggered = context; triggered.actualDamage = dealt;
-    if (dealt > 0 && context.origin == BattleDamageOrigin::Direct && hitKind != BATTLE_HIT_COUNTER) {
-        ApplyWuxingPostDirectHitEffects(source, target, dealt, context.critical, result);
+    if ((dealt > 0 || absorbed > 0) && context.origin == BattleDamageOrigin::Direct && hitKind != BATTLE_HIT_COUNTER) {
+        const bool broke = absorbed > 0 && !HasAnyActiveShield(target);
+        ApplyWuxingPostDirectHitEffects(source, target, dealt, context.critical, result,
+                                        absorbed, broke, absorbed, context.skillId, context.isMultiTargetSkill);
+    }
+    if (dealt > 0 && context.origin == BattleDamageOrigin::Periodic && target.team_index() == 1) {
+        ApplyWuxingPeriodicSpread(source.actor_id(), target, dealt, result);
     }
     if (dealt > 0 && (context.origin == BattleDamageOrigin::Direct || context.origin == BattleDamageOrigin::Redirect) && IsActorActive(target))
         TriggerConfiguredBuffs(target, source, BattleTrigger::AfterTake, damageType, triggered, result);

@@ -466,7 +466,7 @@ func (e *Engine) mutate(ctx context.Context, me, id uint64, action string, seale
 			if w.DesignatedBuyerPlayerId != 0 && w.DesignatedBuyerPlayerId != me {
 				return ErrConflict
 			}
-			if w.QuantityReserved >= 32 {
+			if !attemptAllowed(w, "buyer_debit_", me) {
 				return ErrConflict
 			}
 			r.BuyerPlayerId = me
@@ -665,6 +665,30 @@ func marketRemainder(r *tradepb.TradeCommerceRecord) (*assetpb.AssetBundle, erro
 // emptyBundle 报告资产包里什么都没有(不用发)。
 func emptyBundle(b *assetpb.AssetBundle) bool {
 	return len(b.GetCurrencies())+len(b.GetItems())+len(b.GetItemInstances())+len(b.GetItemUuids()) == 0 && b.GetPetInstance() == nil && b.GetPetId() == 0
+}
+
+// 挂出来的单(寄售、求购单)被尝试成交的次数上限。每次尝试留一条托管扣款腿(求购单书不符时再加一条退书腿)。
+// 只按单限总数(原先寄售每单 32 次)挡不住滥用:没扣到的尝试对尝试者零成本,几个号几秒就能把一张单用满,
+// 真想买、真想交书的人再也进不来(数据覆写审计 r2-craft#1 复查,2026-11-27)。所以先按人限次,再按单限总数保 workflow 有界
+// (每次尝试约 300 字节,256 次约 80 KB)。用满总数的单只能由挂单人撤单(全额退回)重挂。
+const (
+	maxAttemptsPerActor   = 3
+	maxAttemptsPerListing = 256
+)
+
+// attemptAllowed 报告 player 还能不能再对这张单发起一次尝试。legPrefix 是这类尝试的托管扣款腿名前缀
+// (寄售 buyer_debit_,求购单 seller_debit_),按腿的 PlayerId 数这个人发起过几次;重放不新建腿,不算次数。
+func attemptAllowed(w *tradepb.TradeCommerceWorkflow, legPrefix string, player uint64) bool {
+	if w.QuantityReserved >= maxAttemptsPerListing {
+		return false
+	}
+	mine := 0
+	for _, l := range w.Legs {
+		if l.PlayerId == player && strings.HasPrefix(l.Role, legPrefix) {
+			mine++
+		}
+	}
+	return mine < maxAttemptsPerActor
 }
 
 // maxNewLegsPerStep 是 advance 一步最多发出的新腿数(一步预取这么多 op_id)。人工处理一次加的腿也不能超过它。

@@ -304,6 +304,7 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
     hasTowerContext = false;
     towerContext.Clear();
     towerSigilTotals = {};
+    boonRuntime = {};
     hasCustomDuelRules = false;
     customDuelRules.Clear();
     wuxingSynergyActiveThisRound = false;
@@ -364,33 +365,46 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
                 return false;
             }
             const auto& tc = snapshot.tower_context();
-            if (tc.floor() < 1u || tc.floor() > wuxing::kTowerMaxFloors || tc.run_id() == 0u) {
+            const bool isV2 = tc.realm_version() >= wuxing::kRealmV2Version;
+            const uint32_t maxFloor = isV2 ? wuxing::kRealmV2MaxNodes : wuxing::kTowerMaxFloors;
+            if (tc.floor() < 1u || tc.floor() > maxFloor || tc.run_id() == 0u) {
+                return false;
+            }
+            if (isV2 && !wuxing::IsRealmCombatNodeKind(tc.node_kind())) {
                 return false;
             }
             for (const uint32_t sigilId : tc.active_sigil_ids()) {
-                if (!wuxing::IsValidTowerSigilId(sigilId)) {
+                if (wuxing::IsValidTowerSigilId(sigilId)) {
+                    const auto def = wuxing::FindTowerSigil(sigilId);
+                    towerSigilTotals.damagePct += def.damagePct;
+                    towerSigilTotals.critPct += def.critPct;
+                    towerSigilTotals.critDamagePct += def.critDamagePct;
+                    towerSigilTotals.shieldBreakBonusPct += def.shieldBreakBonusPct;
+                    towerSigilTotals.healShieldPct += def.healShieldPct;
+                    towerSigilTotals.petDamagePct += def.petDamagePct;
+                    towerSigilTotals.roundHpRegenPct += def.roundHpRegenPct;
+                    towerSigilTotals.roundManaRegenPct += def.roundManaRegenPct;
+                    towerSigilTotals.controlResistPct += def.controlResistPct;
+                    towerSigilTotals.onHitManaRegenPct += def.onHitManaRegenPct;
+                    towerSigilTotals.damageTakenReducePct += def.damageTakenReducePct;
+                    towerSigilTotals.first3RoundsDamagePct += def.first3RoundsDamagePct;
+                    towerSigilTotals.singleTargetDamagePct += def.singleTargetDamagePct;
+                    towerSigilTotals.critBurnMaxHpPct += def.critBurnMaxHpPct;
+                    towerSigilTotals.openingShieldPct += def.openingShieldPct;
+                    towerSigilTotals.reflectPct += def.reflectPct;
+                } else if (isV2 && wuxing::IsValidRealmBoonId(sigilId)) {
+                    boonRuntime.boonMask |= wuxing::RealmBoonBit(sigilId);
+                } else {
                     return false;
                 }
-                const auto def = wuxing::FindTowerSigil(sigilId);
-                towerSigilTotals.damagePct += def.damagePct;
-                towerSigilTotals.critPct += def.critPct;
-                towerSigilTotals.critDamagePct += def.critDamagePct;
-                towerSigilTotals.shieldBreakBonusPct += def.shieldBreakBonusPct;
-                towerSigilTotals.healShieldPct += def.healShieldPct;
-                towerSigilTotals.petDamagePct += def.petDamagePct;
-                towerSigilTotals.roundHpRegenPct += def.roundHpRegenPct;
-                towerSigilTotals.roundManaRegenPct += def.roundManaRegenPct;
-                towerSigilTotals.controlResistPct += def.controlResistPct;
-                towerSigilTotals.onHitManaRegenPct += def.onHitManaRegenPct;
-                towerSigilTotals.damageTakenReducePct += def.damageTakenReducePct;
-                towerSigilTotals.first3RoundsDamagePct += def.first3RoundsDamagePct;
-                towerSigilTotals.singleTargetDamagePct += def.singleTargetDamagePct;
-                towerSigilTotals.critBurnMaxHpPct += def.critBurnMaxHpPct;
-                towerSigilTotals.openingShieldPct += def.openingShieldPct;
-                towerSigilTotals.reflectPct += def.reflectPct;
             }
             hasTowerContext = true;
             towerContext = tc;
+            if (isV2) {
+                const uint32_t computedResonance = wuxing::ComputeActiveResonanceElement(tc.active_sigil_ids());
+                boonRuntime.resonanceElement = computedResonance;
+                towerContext.set_active_resonance_element(computedResonance);
+            }
         }
     }
 
@@ -616,6 +630,12 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
         shieldPct += wuxing::FormationOf(TeamFormationId(actor.team_index())).openingShieldPct;
         if (hasTowerContext && actor.team_index() == 0) {
             shieldPct += towerSigilTotals.openingShieldPct;
+            if (HasRealmBoon(wuxing::kBoonEarthShieldStrike)) {
+                shieldPct += 18ULL;
+            }
+            if (HasRealmResonance(wuxing::kElementEarth)) {
+                shieldPct += 10ULL;
+            }
         }
         if (bossWeeklyAffixId == bossaffix::kAffixMetal && actor.team_index() == 1 &&
             actor.actor_type() == BATTLE_ACTOR_TYPE_MONSTER) {
@@ -1006,8 +1026,12 @@ bool TurnBattleEngine::InitMonsters(const CreateBattleRequest& request) {
         const uint64_t scaledHp = baseHp * unitHpScale;
         uint64_t finalHp = scaledHp;
         if (hasTowerContext) {
-            const uint32_t hpPct = wuxing::TowerMonsterHealthPct(towerContext.floor());
-            const uint32_t atkPct = wuxing::TowerMonsterAttackPct(towerContext.floor());
+            const uint32_t hpPct = IsWuxingRealmV2()
+                ? wuxing::RealmMonsterHealthPct(towerContext.floor(), towerContext.node_kind())
+                : wuxing::TowerMonsterHealthPct(towerContext.floor());
+            const uint32_t atkPct = IsWuxingRealmV2()
+                ? wuxing::RealmMonsterAttackPct(towerContext.floor(), towerContext.node_kind())
+                : wuxing::TowerMonsterAttackPct(towerContext.floor());
             finalHp = std::max<uint64_t>(1ULL, (scaledHp * hpPct) / 100ULL);
             if (spawned.attributes().strength() > 0) {
                 spawned.mutable_attributes()->set_strength(
@@ -1524,6 +1548,9 @@ TurnResultS2C TurnBattleEngine::ResolveCurrentRound() {
         }
     }
     // 锦标赛 V2 水润灵脉 + 云垂阵 + 五行幻境回合初法力/气血恢复（均封顶至最大值）。
+    boonRuntime.freeManaUsedThisRound.clear();
+    boonRuntime.firstAttackUsedThisRound.clear();
+    boonRuntime.petAssistUsedThisRound.clear();
     const bool waterLeyline = ActiveTournamentLeyline() == TOURNAMENT_LEYLINE_WATER;
     for (auto& actor : actors) {
         if (!IsActorActive(actor)) {
@@ -1536,17 +1563,23 @@ TurnResultS2C TurnBattleEngine::ResolveCurrentRound() {
         }
         if (manaRegenPct > 0 && actor.max_mana() > 0 && actor.attributes().mana() < actor.max_mana()) {
             const uint64_t curMana = actor.attributes().mana();
-            const uint64_t regen = std::max<uint64_t>(1ULL, (actor.max_mana() * manaRegenPct) / 100ULL);
+            uint64_t regen = std::max<uint64_t>(1ULL, (actor.max_mana() * manaRegenPct) / 100ULL);
+            if (actor.team_index() == 0 && HasRealmResonance(wuxing::kElementWater)) {
+                regen = (regen * 130ULL) / 100ULL;
+            }
             actor.mutable_attributes()->set_mana(std::min(actor.max_mana(), SaturatingAdd(curMana, regen)));
         }
-        if (hasTowerContext && actor.team_index() == 0 && towerSigilTotals.roundHpRegenPct > 0 &&
-            actor.max_health() > 0 && actor.attributes().health() < actor.max_health()) {
+        uint64_t hpRegenPct = (hasTowerContext && actor.team_index() == 0) ? towerSigilTotals.roundHpRegenPct : 0ULL;
+        if (actor.team_index() == 0 && HasRealmResonance(wuxing::kElementWood)) {
+            hpRegenPct += 6ULL;
+        }
+        if (hpRegenPct > 0 && actor.max_health() > 0 && actor.attributes().health() < actor.max_health()) {
             const uint64_t curHp = actor.attributes().health();
-            const uint64_t regenHp =
-                std::max<uint64_t>(1ULL, (actor.max_health() * towerSigilTotals.roundHpRegenPct) / 100ULL);
+            const uint64_t regenHp = std::max<uint64_t>(1ULL, (actor.max_health() * hpRegenPct) / 100ULL);
             actor.mutable_attributes()->set_health(std::min(actor.max_health(), SaturatingAdd(curHp, regenHp)));
         }
     }
+    ApplyWuxingRoundStartBoonEffects(result);
     FillDefaultActions();
 
     // 事件组编号每回合从 1 起(表现规格 D2);出手序在回合开始时一次排定并保留下来
@@ -1598,6 +1631,7 @@ TurnResultS2C TurnBattleEngine::ResolveCurrentRound() {
     // 3. 回合末 buff tick:周期效果 → 持续减一 → 到期移除
     TickBuffsAtRoundEnd(result);
     TickConfiguredBuffs(result);
+    ApplyWuxingRoundEndBoonEffects(result);
 
     // 4. 冷却回合递减
     DecayCooldowns();
@@ -2389,6 +2423,8 @@ bool TurnBattleEngine::ResolveBasicAttackHit(BattleActorState& attacker, BattleA
     if (EscalationStacks() > 0) {
         finalDamage *= static_cast<double>(EscalationDamagePct()) / 100.0;
     }
+    const uint64_t shieldCapBefore = CurrentTotalShieldOf(target);
+    const bool hadShieldBefore = shieldCapBefore > 0u;
     uint64_t dealt = 0;
     if (HasActiveEncounterDamageModifiers()) {
         double scaled = finalDamage;
@@ -2403,6 +2439,9 @@ bool TurnBattleEngine::ResolveBasicAttackHit(BattleActorState& attacker, BattleA
     } else {
         dealt = ApplyDamage(target, finalDamage);
     }
+    const uint64_t shieldCapAfter = CurrentTotalShieldOf(target);
+    const uint64_t shieldAbsorbed = shieldCapBefore > shieldCapAfter ? (shieldCapBefore - shieldCapAfter) : 0ULL;
+    const bool shieldBroke = hadShieldBefore && !HasAnyActiveShield(target);
     if (hitKind != BATTLE_HIT_COUNTER) {
         RecordTrialDirectDamage(attacker, target, combatdamage::kPhysicalDamage, dealt);
     }
@@ -2428,8 +2467,9 @@ bool TurnBattleEngine::ResolveBasicAttackHit(BattleActorState& attacker, BattleA
     if (target.attributes().health() == 0) {
         HandleDeath(target, attacker.actor_id(), result);
     }
-    if (dealt > 0 && hitKind != BATTLE_HIT_COUNTER) {
-        ApplyWuxingPostDirectHitEffects(attacker, target, dealt, isCritical, result);
+    if ((dealt > 0 || shieldAbsorbed > 0) && hitKind != BATTLE_HIT_COUNTER) {
+        ApplyWuxingPostDirectHitEffects(attacker, target, dealt, isCritical, result,
+                                        shieldAbsorbed, shieldBroke, shieldCapBefore, 0u, false);
     }
 
     // 反震(D5)排在落伤害之后、连击续段判定之前。反击那一下不触发:
@@ -2503,8 +2543,12 @@ void TurnBattleEngine::TryReflectDamage(BattleActorState& attacker, BattleActorS
     // 弹回的是「已经结算完的实扣值」的一个比例:直接扣血,不再过减伤公式、不掷必杀、
     // 也不走 ApplyDamage(那里会按出手者的防御指令减半)
     const uint64_t healthBefore = attacker.attributes().health();
-    const uint64_t reflected = std::min<uint64_t>(
-        healthBefore, std::max<uint64_t>(1, PercentCeil(dealt, kReflectDamagePercent)));
+    uint64_t baseReflected = std::max<uint64_t>(1, PercentCeil(dealt, kReflectDamagePercent));
+    if (target.team_index() == 0 && HasRealmBoon(wuxing::kBoonEarthDoubleReflect)) {
+        baseReflected = SaturatingAdd(baseReflected, baseReflected);
+        boonRuntime.armorBrokenUntilRound[attacker.actor_id()] = roundIndex + 2u;
+    }
+    const uint64_t reflected = std::min<uint64_t>(healthBefore, baseReflected);
     attacker.mutable_attributes()->set_health(healthBefore - reflected);
 
     auto* reflectEvent =
@@ -2662,6 +2706,8 @@ void TurnBattleEngine::ApplySkillToTarget(BattleActorState& actor, const BattleA
             context.isMultiTargetSkill = IsAreaSkill(skillRow);
             ResolveConfiguredDamage(actor, target, finalDamage, skillRow.damage_type(), context, result);
         } else {
+        const uint64_t shieldCapBefore = CurrentTotalShieldOf(target);
+        const bool hadShieldBefore = shieldCapBefore > 0u;
         uint64_t dealt = 0;
         bool splashReduced = false;
         if (HasActiveEncounterDamageModifiers()) {
@@ -2679,6 +2725,9 @@ void TurnBattleEngine::ApplySkillToTarget(BattleActorState& actor, const BattleA
         } else {
             dealt = ApplyDamage(target, finalDamage);
         }
+        const uint64_t shieldCapAfter = CurrentTotalShieldOf(target);
+        const uint64_t shieldAbsorbed = shieldCapBefore > shieldCapAfter ? (shieldCapBefore - shieldCapAfter) : 0ULL;
+        const bool shieldBroke = hadShieldBefore && !HasAnyActiveShield(target);
         RecordTrialDirectDamage(actor, target, skillRow.damage_type(), dealt);
         if (dealt > 0) {
             RecordEffectiveContribution(actor);
@@ -2696,8 +2745,10 @@ void TurnBattleEngine::ApplySkillToTarget(BattleActorState& actor, const BattleA
         if (target.attributes().health() == 0) {
             HandleDeath(target, actor.actor_id(), result);
         }
-        if (dealt > 0) {
-            ApplyWuxingPostDirectHitEffects(actor, target, dealt, isCritical, result);
+        if (dealt > 0 || shieldAbsorbed > 0) {
+            ApplyWuxingPostDirectHitEffects(actor, target, dealt, isCritical, result,
+                                            shieldAbsorbed, shieldBroke, shieldCapBefore,
+                                            action.skill_table_id(), IsAreaSkill(skillRow));
         }
         }
     }
@@ -2743,6 +2794,10 @@ uint64_t TurnBattleEngine::SkillManaCost(const BattleActorState& actor, const Sk
     if (const uint32_t discountPct = DefendManaDiscountResonancePct(actor, skillRow.id()); discountPct > 0u) {
         cost = seasonrules::ComputeManaDiscounted(cost, discountPct);
     }
+    if (actor.team_index() == 0 && HasRealmBoon(wuxing::kBoonWaterFreeFirstCast) &&
+        !boonRuntime.freeManaUsedThisRound.contains(actor.actor_id())) {
+        return 0ULL;
+    }
     return cost;
 }
 
@@ -2760,6 +2815,9 @@ uint64_t TurnBattleEngine::LegacySkillManaCost(const SkillTable& skillRow) {
 void TurnBattleEngine::ConsumeSkillMana(BattleActorState& actor, const SkillTable& skillRow,
                                         uint32_t skillTableId, TurnResultS2C& result) {
     const uint64_t manaCost = SkillManaCost(actor, skillRow);
+    if (actor.team_index() == 0 && HasRealmBoon(wuxing::kBoonWaterFreeFirstCast)) {
+        boonRuntime.freeManaUsedThisRound.insert(actor.actor_id());
+    }
     if (manaCost == 0) {
         return;  // 无耗蓝技能不产出 MANA 事件
     }
@@ -2964,6 +3022,8 @@ void TurnBattleEngine::ApplyClassSkillToTarget(BattleActorState& actor, const Sk
                 context.isMultiTargetSkill = isMultiTarget;
                 ResolveConfiguredDamage(actor, target, finalDamage, skillRow.damage_type(), context, result);
             } else {
+            const uint64_t shieldCapBefore = CurrentTotalShieldOf(target);
+            const bool hadShieldBefore = shieldCapBefore > 0u;
             uint64_t dealt = 0;
             bool splashReduced = false;
             if (HasActiveEncounterDamageModifiers()) {
@@ -2979,6 +3039,9 @@ void TurnBattleEngine::ApplyClassSkillToTarget(BattleActorState& actor, const Sk
             } else {
                 dealt = ApplyDamage(target, finalDamage);
             }
+            const uint64_t shieldCapAfter = CurrentTotalShieldOf(target);
+            const uint64_t shieldAbsorbed = shieldCapBefore > shieldCapAfter ? (shieldCapBefore - shieldCapAfter) : 0ULL;
+            const bool shieldBroke = hadShieldBefore && !HasAnyActiveShield(target);
             RecordTrialDirectDamage(actor, target, skillRow.damage_type(), dealt);
             if (dealt > 0) {
                 RecordEffectiveContribution(actor);
@@ -2994,8 +3057,10 @@ void TurnBattleEngine::ApplyClassSkillToTarget(BattleActorState& actor, const Sk
             if (target.attributes().health() == 0) {
                 HandleDeath(target, actor.actor_id(), result);
             }
-            if (dealt > 0) {
-                ApplyWuxingPostDirectHitEffects(actor, target, dealt, isCritical, result);
+            if (dealt > 0 || shieldAbsorbed > 0) {
+                ApplyWuxingPostDirectHitEffects(actor, target, dealt, isCritical, result,
+                                                shieldAbsorbed, shieldBroke, shieldCapBefore,
+                                                skillRow.id(), isMultiTarget);
             }
             }
         }
@@ -3786,6 +3851,9 @@ void TurnBattleEngine::ApplyBuffIntervalEffect(BattleActorState& actor,
         if (actor.attributes().health() == 0) {
             HandleDeath(actor, entry.caster_id(), result);
         }
+        if (dealt > 0 && actor.team_index() == 1) {
+            ApplyWuxingPeriodicSpread(entry.caster_id(), actor, dealt, result);
+        }
         break;
     }
     default:
@@ -3796,10 +3864,11 @@ void TurnBattleEngine::ApplyBuffIntervalEffect(BattleActorState& actor,
 
 void TurnBattleEngine::DecayCooldowns() {
     for (auto& actor : actors) {
+        const uint32_t step = (actor.team_index() == 0 && HasRealmResonance(wuxing::kElementWater)) ? 2u : 1u;
         auto* cooldownMap = actor.mutable_skill_cooldown_rounds();
         for (auto it = cooldownMap->begin(); it != cooldownMap->end(); ++it) {
             if (it->second > 0) {
-                it->second -= 1;
+                it->second = it->second > step ? (it->second - step) : 0u;
             }
         }
     }
@@ -4103,9 +4172,41 @@ double TurnBattleEngine::DamageBeforeCriticalRoll(const BattleActorState& caster
         if (towerSigilTotals.shieldBreakBonusPct > 0u && HasAnyActiveShield(target)) {
             attackerBonusPct += towerSigilTotals.shieldBreakBonusPct;
         }
+        if (HasRealmBoon(wuxing::kBoonMetalFirstPierce) &&
+            !boonRuntime.firstAttackUsedThisRound.contains(caster.actor_id())) {
+            attackerBonusPct += 35u;
+        }
+        if (HasRealmBoon(wuxing::kBoonWoodHealEmpower) &&
+            boonRuntime.healShieldEmpoweredActors.contains(caster.actor_id())) {
+            attackerBonusPct += 20u;
+        }
+        if (HasRealmBoon(wuxing::kBoonFireLowHpFury) && caster.max_health() > 0u) {
+            const uint64_t hpPct = (caster.attributes().health() * 100ULL) / caster.max_health();
+            if (hpPct < 60ULL) {
+                attackerBonusPct += static_cast<uint32_t>(((60ULL - hpPct) * 35ULL) / 60ULL);
+            }
+        }
+    }
+    if (IsWuxingRealmV2()) {
+        if (const auto it = boonRuntime.vulnerableUntilRound.find(target.actor_id());
+            it != boonRuntime.vulnerableUntilRound.end() && it->second >= roundIndex) {
+            attackerBonusPct += 18u;
+        }
+        if (const auto it = boonRuntime.armorBrokenUntilRound.find(target.actor_id());
+            it != boonRuntime.armorBrokenUntilRound.end() && it->second >= roundIndex) {
+            attackerBonusPct += 15u;
+        }
     }
     if (attackerBonusPct > 0u) {
         damage *= (100.0 + attackerBonusPct) / 100.0;
+    }
+    if (caster.team_index() == 0 && HasRealmBoon(wuxing::kBoonEarthShieldStrike)) {
+        const uint64_t curShield = CurrentTotalShieldOf(caster);
+        if (curShield > 0u) {
+            const uint64_t bonus = std::min(wuxing::kBoonShieldAttackBonusCap,
+                                            std::max<uint64_t>(1ULL, (curShield * 25ULL) / 100ULL));
+            damage += static_cast<double>(bonus);
+        }
     }
     uint32_t defenderReducePct = wuxing::FormationOf(dstFormId).damageTakenReducePct;
     if (hasTowerContext && target.team_index() == 0) {
@@ -4134,6 +4235,12 @@ double TurnBattleEngine::CriticalChance(const BattleActorState& caster, uint32_t
     }
     if (hasTowerContext && caster.team_index() == 0 && towerSigilTotals.critPct > 0u) {
         critRateBonus = SaturatingAdd(critRateBonus, towerSigilTotals.critPct);
+    }
+    if (caster.team_index() == 0 && HasRealmBoon(wuxing::kBoonFireLowHpFury) && caster.max_health() > 0u) {
+        const uint64_t hpPct = (caster.attributes().health() * 100ULL) / caster.max_health();
+        if (hpPct < 60ULL) {
+            critRateBonus = SaturatingAdd(critRateBonus, ((60ULL - hpPct) * 20ULL) / 60ULL);
+        }
     }
     // 暴击率为整数百分比口径,基础 + 加成之后换算并夹到 [0,1](与实时 CalculateFinalDamage 一致)
     const uint32_t equipmentCrit = damageType == combatdamage::kPhysicalDamage ? caster.equipment_effects().physical_crit_bps() :
@@ -4210,6 +4317,9 @@ uint64_t TurnBattleEngine::ApplyHeal(BattleActorState& target, double rawHeal) {
     const uint64_t healed = LandedHeal(target, rawHeal);
     if (healed > 0) {
         target.mutable_attributes()->set_health(target.attributes().health() + healed);
+        if (target.team_index() == 0 && HasRealmBoon(wuxing::kBoonWoodHealEmpower)) {
+            boonRuntime.healShieldEmpoweredActors.insert(target.actor_id());
+        }
     }
     return healed;
 }
@@ -5840,13 +5950,21 @@ void TurnBattleEngine::AddBuffToActor(BattleActorState& target, uint32_t buffTab
         return;
     }
 
+    const auto* controlCaster = FindActor(casterId);
+    const bool extendControlBoon = IsHardControlBuff(buffTableId) &&
+                                   controlCaster != nullptr && controlCaster->team_index() == 0 &&
+                                   target.team_index() != 0 &&
+                                   HasRealmBoon(wuxing::kBoonWaterExtendControl);
     // 免疫:目标现有 buff 的 immune_tag 覆盖新 buff 的任一 tag 即挡下
     if (IsImmuneToBuff(target, *buffRow)) {
+        if (extendControlBoon) {
+            boonRuntime.vulnerableUntilRound[target.actor_id()] = roundIndex + 2u;
+        }
         return;
     }
     if (IsHardControlBuff(buffTableId)) {
-        if (const auto* caster = FindActor(casterId);
-            caster != nullptr && caster->team_index() != target.team_index() && IsControlBannedForActor(*caster)) {
+        if (controlCaster != nullptr && controlCaster->team_index() != target.team_index() &&
+            IsControlBannedForActor(*controlCaster)) {
             auto* resistEvent = AppendEvent(result, BATTLE_EVENT_RESIST, casterId, target.actor_id());
             resistEvent->set_buff_table_id(buffTableId);
             return;
@@ -5858,6 +5976,9 @@ void TurnBattleEngine::AddBuffToActor(BattleActorState& target, uint32_t buffTab
     // 子 buff 是整条递归进来的,父 buff 被抵抗时它们也一并不落地。
     // 快照带入的 buff 不经过本函数(InitPlayers 直接拷贝 + SanitizeSnapshotBuffs),不会被判抵抗
     if (RollAilmentResist(target, *buffRow, casterId)) {
+        if (extendControlBoon) {
+            boonRuntime.vulnerableUntilRound[target.actor_id()] = roundIndex + 2u;
+        }
         auto* resistEvent = AppendEvent(result, BATTLE_EVENT_RESIST, casterId, target.actor_id());
         resistEvent->set_buff_table_id(buffTableId);
         return;
@@ -5903,7 +6024,7 @@ void TurnBattleEngine::AddBuffToActor(BattleActorState& target, uint32_t buffTab
     if (buffRow->infinite_duration() != 0) {
         entry->set_remain_rounds(0);
     } else if (buffRow->duration() > 0) {
-        entry->set_remain_rounds(RoundsFromSeconds(buffRow->duration()));
+        entry->set_remain_rounds(RoundsFromSeconds(buffRow->duration()) + (extendControlBoon ? 1u : 0u));
     } else {
         // duration=0 且非无限:实时侧是"挂上即到期"的瞬时 buff,
         // 这里同口径:驱散/子 buff 已生效,条目本身立即移除
@@ -6300,6 +6421,9 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
         towerSettle->set_run_id(towerContext.run_id());
         towerSettle->set_floor(towerContext.floor());
         towerSettle->set_total_rounds(CompletedRounds());
+        towerSettle->set_realm_version(towerContext.realm_version());
+        towerSettle->set_node_kind(towerContext.node_kind());
+        towerSettle->set_use_free_preset(towerContext.use_free_preset());
     }
     if (IsRankedBattle()) {
         settlement.set_competitive_ranked(true);
@@ -7934,13 +8058,174 @@ bool TurnBattleEngine::IsControlSkill(const SkillTable& skillRow) const {
     return false;
 }
 
-void TurnBattleEngine::ApplyWuxingPostDirectHitEffects(BattleActorState& attacker, BattleActorState& target,
-                                                       uint64_t dealt, bool isCritical, TurnResultS2C& result) {
-    if (!hasTowerContext || dealt == 0) {
+uint64_t TurnBattleEngine::CurrentTotalShieldOf(const BattleActorState& target) const {
+    uint64_t total = 0ULL;
+    if (bossTrialKind == kBossTrialKindBarrier && target.is_boss() && bossBarrierShield > 0) {
+        total = SaturatingAdd(total, bossBarrierShield);
+    }
+    if (const auto it = leylineEarthShieldByActor.find(target.actor_id());
+        it != leylineEarthShieldByActor.end() && it->second > 0) {
+        total = SaturatingAdd(total, it->second);
+    }
+    for (const auto& entry : target.buffs()) {
+        if (entry.remaining_capacity() == 0) {
+            continue;
+        }
+        const auto* row = dataProvider->FindBuff(entry.buff_table_id());
+        if (row != nullptr && row->battle_op() == static_cast<uint32_t>(BattleEffectOp::Shield)) {
+            total = SaturatingAdd(total, entry.remaining_capacity());
+        }
+    }
+    return total;
+}
+
+void TurnBattleEngine::ApplyWuxingPeriodicSpread(uint64_t sourceActorId, const BattleActorState& victim,
+                                                 uint64_t dealt, TurnResultS2C& result) {
+    if (dealt == 0 || !HasRealmBoon(wuxing::kBoonWoodDotSpread) ||
+        boonRuntime.procDepth >= wuxing::kBoonMaxProcDepth) {
         return;
     }
-    // 火系仙品符印（403 业火）：暴击附带目标 3% 最大气血真伤（单次封顶 1500）。
-    if (attacker.team_index() == 0 && isCritical && towerSigilTotals.critBurnMaxHpPct > 0 && IsActorActive(target)) {
+    const uint64_t spread = std::min<uint64_t>(wuxing::kBoonRoundEndBurnCap, std::max<uint64_t>(1ULL, dealt / 2ULL));
+    ++boonRuntime.procDepth;
+    for (auto& other : actors) {
+        if (other.actor_id() == victim.actor_id() || other.team_index() != 1 || !IsActorActive(other)) {
+            continue;
+        }
+        const uint64_t applied = std::min(other.attributes().health(), spread);
+        if (applied == 0) {
+            continue;
+        }
+        other.mutable_attributes()->set_health(other.attributes().health() - applied);
+        auto* ev = AppendEvent(result, BATTLE_EVENT_DAMAGE, sourceActorId, other.actor_id());
+        ev->set_value(applied);
+        ev->set_target_health_after(other.attributes().health());
+        ev->set_target_mana_after(other.attributes().mana());
+        if (other.attributes().health() == 0) {
+            HandleDeath(other, sourceActorId, result);
+        }
+    }
+    --boonRuntime.procDepth;
+}
+
+void TurnBattleEngine::ApplyWuxingRoundStartBoonEffects(TurnResultS2C& result) {
+    if (!HasRealmResonance(wuxing::kElementWood) || boonRuntime.procDepth >= wuxing::kBoonMaxProcDepth) {
+        return;
+    }
+    // 3 木共鸣·生生不息：敌方持续灼伤/玄毒在回合初额外结算 1 次 50% 伤害。
+    uint64_t ownerId = 0ULL;
+    for (const auto& a : actors) {
+        if (a.team_index() == 0 && a.actor_type() == BATTLE_ACTOR_TYPE_PLAYER) {
+            ownerId = a.actor_id();
+            break;
+        }
+    }
+    ++boonRuntime.procDepth;
+    for (auto& enemy : actors) {
+        if (enemy.team_index() != 1 || !IsActorActive(enemy)) {
+            continue;
+        }
+        uint64_t extra = 0ULL;
+        if (const auto it = boonRuntime.fireBurnStacks.find(enemy.actor_id());
+            it != boonRuntime.fireBurnStacks.end() && it->second > 0u) {
+            const uint64_t stackBurn = std::min(wuxing::kBoonRoundEndBurnCap,
+                std::max<uint64_t>(1ULL, (enemy.max_health() * 4ULL * it->second) / 100ULL));
+            extra = SaturatingAdd(extra, std::max<uint64_t>(1ULL, stackBurn / 2ULL));
+        }
+        for (const auto& b : enemy.buffs()) {
+            const auto* row = dataProvider->FindBuff(b.buff_table_id());
+            if (row == nullptr) {
+                continue;
+            }
+            if (row->buff_type() == kBuffTypePoison || row->buff_type() == kBuffTypeBurn ||
+                row->battle_op() == static_cast<uint32_t>(BattleEffectOp::Periodic)) {
+                const uint64_t tickVal = b.snapshot_value() > 0u
+                    ? b.snapshot_value()
+                    : (row->interval_effect_size() > 0 ? static_cast<uint64_t>(std::max(1.0, row->interval_effect(0))) : 0ULL);
+                if (tickVal > 0u) {
+                    extra = SaturatingAdd(extra, std::max<uint64_t>(1ULL, tickVal / 2ULL));
+                }
+            }
+        }
+        if (extra == 0ULL) {
+            continue;
+        }
+        const uint64_t applied = std::min({enemy.attributes().health(), wuxing::kBoonRoundEndBurnCap, extra});
+        if (applied > 0ULL) {
+            enemy.mutable_attributes()->set_health(enemy.attributes().health() - applied);
+            auto* ev = AppendEvent(result, BATTLE_EVENT_DAMAGE, ownerId, enemy.actor_id());
+            ev->set_value(applied);
+            ev->set_target_health_after(enemy.attributes().health());
+            ev->set_target_mana_after(enemy.attributes().mana());
+            if (enemy.attributes().health() == 0) {
+                HandleDeath(enemy, ownerId, result);
+            }
+        }
+    }
+    --boonRuntime.procDepth;
+}
+
+void TurnBattleEngine::ApplyWuxingRoundEndBoonEffects(TurnResultS2C& result) {
+    if (!HasRealmBoon(wuxing::kBoonFireRoundEndBurn) || boonRuntime.procDepth >= wuxing::kBoonMaxProcDepth) {
+        return;
+    }
+    uint64_t ownerId = 0ULL;
+    BattleActorState* highestHpEnemy = nullptr;
+    for (auto& actor : actors) {
+        if (actor.team_index() == 0 && actor.actor_type() == BATTLE_ACTOR_TYPE_PLAYER && ownerId == 0ULL) {
+            ownerId = actor.actor_id();
+        }
+        if (actor.team_index() == 1 && IsActorActive(actor)) {
+            if (highestHpEnemy == nullptr ||
+                actor.attributes().health() > highestHpEnemy->attributes().health() ||
+                (actor.attributes().health() == highestHpEnemy->attributes().health() &&
+                 actor.actor_id() < highestHpEnemy->actor_id())) {
+                highestHpEnemy = &actor;
+            }
+        }
+    }
+    if (highestHpEnemy == nullptr) {
+        return;
+    }
+    uint32_t& stacks = boonRuntime.fireBurnStacks[highestHpEnemy->actor_id()];
+    if (stacks < 3u) {
+        ++stacks;
+    }
+    const uint64_t rawBurn = std::max<uint64_t>(1ULL, (highestHpEnemy->max_health() * 4ULL * stacks) / 100ULL);
+    const uint64_t burn = std::min({highestHpEnemy->attributes().health(), wuxing::kBoonRoundEndBurnCap, rawBurn});
+    if (burn == 0ULL) {
+        return;
+    }
+    highestHpEnemy->mutable_attributes()->set_health(highestHpEnemy->attributes().health() - burn);
+    auto* ev = AppendEvent(result, BATTLE_EVENT_DAMAGE, ownerId, highestHpEnemy->actor_id());
+    ev->set_value(burn);
+    ev->set_target_health_after(highestHpEnemy->attributes().health());
+    ev->set_target_mana_after(highestHpEnemy->attributes().mana());
+    if (highestHpEnemy->attributes().health() == 0) {
+        HandleDeath(*highestHpEnemy, ownerId, result);
+    }
+    ApplyWuxingPeriodicSpread(ownerId, *highestHpEnemy, burn, result);
+}
+
+void TurnBattleEngine::ApplyWuxingPostDirectHitEffects(BattleActorState& attacker, BattleActorState& target,
+                                                       uint64_t dealt, bool isCritical, TurnResultS2C& result,
+                                                       uint64_t shieldAbsorbed, bool shieldBroke,
+                                                       uint64_t brokenShieldCap, uint32_t skillTableId,
+                                                       bool isMultiTarget) {
+    if (!hasTowerContext || (dealt == 0 && shieldAbsorbed == 0)) {
+        return;
+    }
+    // 消耗本回合首攻与治疗增伤标记（仅一次行动主段生效）。
+    if (attacker.team_index() == 0 && boonRuntime.procDepth == 0u) {
+        if (HasRealmBoon(wuxing::kBoonMetalFirstPierce)) {
+            boonRuntime.firstAttackUsedThisRound.insert(attacker.actor_id());
+        }
+        if (HasRealmBoon(wuxing::kBoonWoodHealEmpower)) {
+            boonRuntime.healShieldEmpoweredActors.erase(attacker.actor_id());
+        }
+    }
+
+    // 火系仙品符印（V1 403 业火）：暴击附带目标 3% 最大气血真伤（单次封顶 1500）。
+    if (dealt > 0 && attacker.team_index() == 0 && isCritical && towerSigilTotals.critBurnMaxHpPct > 0 && IsActorActive(target)) {
         const uint64_t rawBurn =
             std::max<uint64_t>(1ULL, (target.max_health() * towerSigilTotals.critBurnMaxHpPct) / 100ULL);
         const uint64_t burn = std::min({rawBurn, wuxing::kFireCritBurnCapPerHit, target.attributes().health()});
@@ -7955,19 +8240,27 @@ void TurnBattleEngine::ApplyWuxingPostDirectHitEffects(BattleActorState& attacke
             }
         }
     }
-    // 水系灵品符印（302 归元）：受击回复 4% 最大法力。
-    if (target.team_index() == 0 && IsActorActive(target) && towerSigilTotals.onHitManaRegenPct > 0 &&
+    // 水系灵品符印（V1 302 归元）：受击回复 4% 最大法力。
+    if (dealt > 0 && target.team_index() == 0 && IsActorActive(target) && towerSigilTotals.onHitManaRegenPct > 0 &&
         target.max_mana() > 0 && target.attributes().mana() < target.max_mana()) {
         const uint64_t gain =
             std::max<uint64_t>(1ULL, (target.max_mana() * towerSigilTotals.onHitManaRegenPct) / 100ULL);
         target.mutable_attributes()->set_mana(std::min(target.max_mana(), SaturatingAdd(target.attributes().mana(), gain)));
     }
-    // 土系灵品/仙品符印（502 镇岳 / 503 昆仑）：反弹实扣伤害的 12%/15%。
+    // 土系反震（V1 502/503 + V2 641 镇岳倍反 ×2 破甲 + 3 土共鸣护盾承伤亦反震）。
+    const uint64_t reflectBase = HasRealmResonance(wuxing::kElementEarth) ? SaturatingAdd(dealt, shieldAbsorbed) : dealt;
+    uint32_t reflectPct = towerSigilTotals.reflectPct;
+    if (HasRealmBoon(wuxing::kBoonEarthDoubleReflect)) {
+        reflectPct += 12u;
+    }
     if (target.team_index() == 0 && IsActorActive(target) && IsActorActive(attacker) &&
-        attacker.team_index() != 0 && towerSigilTotals.reflectPct > 0) {
-        const uint64_t reflected = std::min(
-            attacker.attributes().health(),
-            std::max<uint64_t>(1ULL, (dealt * towerSigilTotals.reflectPct) / 100ULL));
+        attacker.team_index() != 0 && reflectBase > 0 && reflectPct > 0) {
+        uint64_t rawReflect = std::max<uint64_t>(1ULL, (reflectBase * reflectPct) / 100ULL);
+        if (HasRealmBoon(wuxing::kBoonEarthDoubleReflect)) {
+            rawReflect = SaturatingAdd(rawReflect, rawReflect);
+            boonRuntime.armorBrokenUntilRound[attacker.actor_id()] = roundIndex + 2u;
+        }
+        const uint64_t reflected = std::min(attacker.attributes().health(), rawReflect);
         if (reflected > 0) {
             attacker.mutable_attributes()->set_health(attacker.attributes().health() - reflected);
             auto* ev = AppendEvent(result, BATTLE_EVENT_DAMAGE, target.actor_id(), attacker.actor_id());
@@ -7980,6 +8273,141 @@ void TurnBattleEngine::ApplyWuxingPostDirectHitEffects(BattleActorState& attacke
             }
         }
     }
+
+    if (!IsWuxingRealmV2() || boonRuntime.procDepth >= wuxing::kBoonMaxProcDepth) {
+        return;
+    }
+
+    // 全部 V2 奇策与共鸣派生段均受 procDepth 守卫（最大深度 1），从根源杜绝连招循环递归。
+    ++boonRuntime.procDepth;
+    auto dealTrueProcDamage = [&](uint64_t srcId, BattleActorState& dst, uint64_t dmg) {
+        if (dmg == 0ULL || !IsActorActive(dst)) {
+            return;
+        }
+        const uint64_t applied = std::min(dst.attributes().health(), dmg);
+        if (applied == 0ULL) {
+            return;
+        }
+        dst.mutable_attributes()->set_health(dst.attributes().health() - applied);
+        auto* ev = AppendEvent(result, BATTLE_EVENT_DAMAGE, srcId, dst.actor_id());
+        ev->set_value(applied);
+        ev->set_target_health_after(dst.attributes().health());
+        ev->set_target_mana_after(dst.attributes().mana());
+        if (dst.attributes().health() == 0) {
+            HandleDeath(dst, srcId, result);
+        }
+    };
+
+    // 642 绝境磐石：主角或出战灵宠每战首次气血跌破 35% 自动获得 25% 最大气血护盾。
+    if (target.team_index() == 0 && IsActorActive(target) && HasRealmBoon(wuxing::kBoonEarthClutchShield) &&
+        target.max_health() > 0 && target.attributes().health() * 100ULL < target.max_health() * 35ULL &&
+        boonRuntime.emergencyShieldTriggered.insert(target.actor_id()).second) {
+        const uint64_t shieldCap = std::max<uint64_t>(1ULL, (target.max_health() * 25ULL) / 100ULL);
+        leylineEarthShieldByActor[target.actor_id()] =
+            SaturatingAdd(leylineEarthShieldByActor[target.actor_id()], shieldCap);
+        if (HasRealmBoon(wuxing::kBoonWoodHealEmpower)) {
+            boonRuntime.healShieldEmpoweredActors.insert(target.actor_id());
+        }
+    }
+
+    // 601 破盾返元：击碎敌方任意护盾时返还施法者 50% 最大法力并追加 60% 威力斩击。
+    if (shieldBroke && attacker.team_index() == 0 && target.team_index() == 1 &&
+        HasRealmBoon(wuxing::kBoonMetalBreakRefund) && IsActorActive(attacker)) {
+        if (attacker.max_mana() > 0) {
+            const uint64_t refund = std::max<uint64_t>(1ULL, attacker.max_mana() / 2ULL);
+            attacker.mutable_attributes()->set_mana(
+                std::min(attacker.max_mana(), SaturatingAdd(attacker.attributes().mana(), refund)));
+        }
+        if (IsActorActive(target)) {
+            const uint64_t atk = std::max({EffectivePhysicalAttack(attacker), attacker.magic_attack(), 1ULL});
+            const uint64_t bonusStrike = std::max<uint64_t>(1ULL, (atk * 60ULL) / 100ULL);
+            dealTrueProcDamage(attacker.actor_id(), target, bonusStrike);
+        }
+    }
+
+    // 631 焚盾爆炎：任意护盾碎裂时对敌方全体造成护盾上限 30% 火焰真伤（单次封顶 1800）。
+    if (shieldBroke && brokenShieldCap > 0 && HasRealmBoon(wuxing::kBoonFireShieldBlast)) {
+        const uint64_t blast = std::min(wuxing::kBoonShieldShatterDamageCap,
+                                        std::max<uint64_t>(1ULL, (brokenShieldCap * 30ULL) / 100ULL));
+        const uint64_t srcId = attacker.team_index() == 0 ? attacker.actor_id() : target.actor_id();
+        for (auto& enemy : actors) {
+            if (enemy.team_index() == 1 && IsActorActive(enemy)) {
+                dealTrueProcDamage(srcId, enemy, blast);
+            }
+        }
+    }
+
+    // 602 绝锋连斩：单体暴击向另一存活敌方溅射 40% 实伤。
+    if (dealt > 0 && attacker.team_index() == 0 && isCritical && !isMultiTarget &&
+        HasRealmBoon(wuxing::kBoonMetalCritSplash)) {
+        for (auto& other : actors) {
+            if (other.team_index() == 1 && other.actor_id() != target.actor_id() && IsActorActive(other)) {
+                dealTrueProcDamage(attacker.actor_id(), other, std::max<uint64_t>(1ULL, (dealt * 40ULL) / 100ULL));
+                break;
+            }
+        }
+    }
+
+    // 613 灵宠协战：主角普攻或单体技能后，存活出战灵宠免费追击 1 次 70% 威力普攻（每回合限 1 次）。
+    if (attacker.team_index() == 0 && attacker.actor_type() == BATTLE_ACTOR_TYPE_PLAYER && !isMultiTarget &&
+        HasRealmBoon(wuxing::kBoonWoodPetFollowUp) &&
+        !boonRuntime.petAssistUsedThisRound.contains(attacker.actor_id())) {
+        BattleActorState* pet = nullptr;
+        for (auto& candidate : actors) {
+            if (candidate.actor_type() == BATTLE_ACTOR_TYPE_PET && candidate.owner_player_id() == attacker.actor_id() &&
+                IsActorActive(candidate)) {
+                pet = &candidate;
+                break;
+            }
+        }
+        if (pet != nullptr) {
+            BattleActorState* assistTarget = IsActorActive(target) ? &target : nullptr;
+            if (assistTarget == nullptr) {
+                for (auto& enemy : actors) {
+                    if (enemy.team_index() == 1 && IsActorActive(enemy)) {
+                        assistTarget = &enemy;
+                        break;
+                    }
+                }
+            }
+            if (assistTarget != nullptr) {
+                boonRuntime.petAssistUsedThisRound.insert(attacker.actor_id());
+                const uint64_t petAtk = std::max({EffectivePhysicalAttack(*pet), pet->magic_attack(), 1ULL});
+                const uint64_t assistDmg = std::max<uint64_t>(1ULL, (petAtk * 70ULL) / 100ULL);
+                dealTrueProcDamage(pet->actor_id(), *assistTarget, assistDmg);
+            }
+        }
+    }
+
+    // 623 镜花水月：主角每第 3 次主动进攻技能额外以 55% 威力连发 1 次。
+    if (dealt > 0 && attacker.team_index() == 0 && attacker.actor_type() == BATTLE_ACTOR_TYPE_PLAYER &&
+        skillTableId != 0u && HasRealmBoon(wuxing::kBoonWaterSkillEcho)) {
+        const uint32_t casts = ++boonRuntime.skillCastCounts[attacker.actor_id()];
+        if (casts % 3u == 0u && IsActorActive(target)) {
+            dealTrueProcDamage(attacker.actor_id(), target, std::max<uint64_t>(1ULL, (dealt * 55ULL) / 100ULL));
+        }
+    }
+
+    // 3 火共鸣·焚城烈焰：己方直击附带 15% 溅射灼伤至另一存活敌方。
+    if (dealt > 0 && attacker.team_index() == 0 && HasRealmResonance(wuxing::kElementFire)) {
+        for (auto& other : actors) {
+            if (other.team_index() == 1 && other.actor_id() != target.actor_id() && IsActorActive(other)) {
+                dealTrueProcDamage(attacker.actor_id(), other, std::max<uint64_t>(1ULL, (dealt * 15ULL) / 100ULL));
+                break;
+            }
+        }
+    }
+
+    // 3 金共鸣·破军锋芒：敌方受击后气血跌至斩杀阈值（首领 12% / 非首领 20%）直接斩杀。
+    if (attacker.team_index() == 0 && target.team_index() == 1 && IsActorActive(target) &&
+        HasRealmResonance(wuxing::kElementMetal) && target.max_health() > 0) {
+        const uint64_t execPct = target.is_boss() ? 12ULL : 20ULL;
+        if (target.attributes().health() * 100ULL <= target.max_health() * execPct) {
+            dealTrueProcDamage(attacker.actor_id(), target, target.attributes().health());
+        }
+    }
+
+    --boonRuntime.procDepth;
 }
 
 }  // namespace turnbattle

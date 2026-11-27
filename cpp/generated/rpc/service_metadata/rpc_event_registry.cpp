@@ -491,7 +491,7 @@ namespace trade{void SendTradeAdminRecordSellerViolationErased(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 585,
+static_assert(kMaxRpcMethodCount == 587,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -2671,6 +2671,16 @@ void InitMessageInfo()
         std::make_unique<::SetRetroHonorTargetRequest>(),
         std::make_unique<::SetRetroHonorTargetResponse>(),
         0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSeasonClientPlayerChooseWuxingRealmBranchMessageId] = RpcMethodMeta{
+        "SceneSeasonClientPlayer", "ChooseWuxingRealmBranch",
+        std::make_unique<::ChooseWuxingRealmBranchRequest>(),
+        std::make_unique<::ChooseWuxingRealmBranchResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSeasonClientPlayerResolveWuxingRealmEventMessageId] = RpcMethodMeta{
+        "SceneSeasonClientPlayer", "ResolveWuxingRealmEvent",
+        std::make_unique<::ResolveWuxingRealmEventRequest>(),
+        std::make_unique<::ResolveWuxingRealmEventResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneSkillClientPlayer ---
     gRpcMethodRegistry[SceneSkillClientPlayerReleaseSkillMessageId] = RpcMethodMeta{
@@ -3589,6 +3599,8 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneSeasonClientPlayerSaveBattleBuildBookmarkMessageId:
 	case SceneSeasonClientPlayerDeleteBattleBuildBookmarkMessageId:
 	case SceneSeasonClientPlayerSetRetroHonorTargetMessageId:
+	case SceneSeasonClientPlayerChooseWuxingRealmBranchMessageId:
+	case SceneSeasonClientPlayerResolveWuxingRealmEventMessageId:
 	case SceneSkillClientPlayerReleaseSkillMessageId:
 	case SceneSkillClientPlayerListSkillsMessageId:
 	case SceneSkillClientPlayerUpgradeSkillMessageId:

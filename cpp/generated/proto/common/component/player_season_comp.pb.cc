@@ -54,11 +54,11 @@ constexpr WuxingTowerCompState::ParseTableT_ WuxingTowerCompState::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_._has_bits_),
       0, // no _extensions_
-      11, 120,  // max_field_number, fast_idx_mask
+      24, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294965248,  // skipmap
+      4278190080,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      11,  // num_field_entries
+      24,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -74,20 +74,20 @@ constexpr WuxingTowerCompState::ParseTableT_ WuxingTowerCompState::InternalGener
        {8, 2, 0,
         PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.week_key_)}},
       // bool run_active = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(WuxingTowerCompState, _impl_.run_active_), 3>(),
-       {16, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(WuxingTowerCompState, _impl_.run_active_), 7>(),
+       {16, 7, 0,
         PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.run_active_)}},
       // uint64 run_id = 3;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(WuxingTowerCompState, _impl_.run_id_), 4>(),
        {24, 4, 0,
         PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.run_id_)}},
       // uint32 current_floor = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerCompState, _impl_.current_floor_), 5>(),
-       {32, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerCompState, _impl_.current_floor_), 3>(),
+       {32, 3, 0,
         PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.current_floor_)}},
       // uint32 run_total_rounds = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerCompState, _impl_.run_total_rounds_), 6>(),
-       {40, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerCompState, _impl_.run_total_rounds_), 5>(),
+       {40, 5, 0,
         PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.run_total_rounds_)}},
       // repeated uint32 active_sigil_ids = 6;
       {::_pbi::TcParser::FastV32P1,
@@ -98,21 +98,76 @@ constexpr WuxingTowerCompState::ParseTableT_ WuxingTowerCompState::InternalGener
        {58, 1, 0,
         PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.pending_offer_sigil_ids_)}},
       // uint32 weekly_cleared_mask = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerCompState, _impl_.weekly_cleared_mask_), 7>(),
-       {64, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerCompState, _impl_.weekly_cleared_mask_), 6>(),
+       {64, 6, 0,
         PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.weekly_cleared_mask_)}},
       // uint32 weekly_best_floor = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerCompState, _impl_.weekly_best_floor_), 8>(),
-       {72, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerCompState, _impl_.weekly_best_floor_), 9>(),
+       {72, 9, 0,
         PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.weekly_best_floor_)}},
       // uint32 weekly_best_rounds = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerCompState, _impl_.weekly_best_rounds_), 10>(),
-       {80, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerCompState, _impl_.weekly_best_rounds_), 11>(),
+       {80, 11, 0,
         PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.weekly_best_rounds_)}},
       // uint64 revision = 11;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(WuxingTowerCompState, _impl_.revision_), 9>(),
-       {88, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(WuxingTowerCompState, _impl_.revision_), 10>(),
+       {88, 10, 0,
         PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.revision_)}},
+      // uint32 run_week_key = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerCompState, _impl_.run_week_key_), 12>(),
+       {96, 12, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.run_week_key_)}},
+      // uint32 realm_version = 13;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerCompState, _impl_.realm_version_), 13>(),
+       {104, 13, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.realm_version_)}},
+      // bool use_free_preset = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(WuxingTowerCompState, _impl_.use_free_preset_), 8>(),
+       {112, 8, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.use_free_preset_)}},
+      // uint32 character_preset_id = 15;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerCompState, _impl_.character_preset_id_), 14>(),
+       {120, 14, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.character_preset_id_)}},
+      // uint32 pet_preset_id = 16;
+      {::_pbi::TcParser::FastV32S2,
+       {384, 15, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.pet_preset_id_)}},
+      // uint32 current_node_kind = 17;
+      {::_pbi::TcParser::FastV32S2,
+       {392, 16, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.current_node_kind_)}},
+      // uint32 pending_event_kind = 18;
+      {::_pbi::TcParser::FastV32S2,
+       {400, 17, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.pending_event_kind_)}},
+      // uint32 event_reroll_count = 19;
+      {::_pbi::TcParser::FastV32S2,
+       {408, 18, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.event_reroll_count_)}},
+      // uint32 best_rounds_self = 20;
+      {::_pbi::TcParser::FastV32S2,
+       {416, 19, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.best_rounds_self_)}},
+      // uint32 best_rounds_preset = 21;
+      {::_pbi::TcParser::FastV32S2,
+       {424, 20, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.best_rounds_preset_)}},
+      // uint32 weekly_best_floor_preset = 22;
+      {::_pbi::TcParser::FastV32S2,
+       {432, 21, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.weekly_best_floor_preset_)}},
+      // uint32 weekly_best_rounds_preset = 23;
+      {::_pbi::TcParser::FastV32S2,
+       {440, 22, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.weekly_best_rounds_preset_)}},
+      // uint32 route_choice_mask = 24;
+      {::_pbi::TcParser::FastV32S2,
+       {448, 23, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.route_choice_mask_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -123,25 +178,51 @@ constexpr WuxingTowerCompState::ParseTableT_ WuxingTowerCompState::InternalGener
       // uint32 week_key = 1;
       {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.week_key_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // bool run_active = 2;
-      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.run_active_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.run_active_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // uint64 run_id = 3;
       {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.run_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 current_floor = 4;
-      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.current_floor_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.current_floor_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 run_total_rounds = 5;
-      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.run_total_rounds_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.run_total_rounds_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // repeated uint32 active_sigil_ids = 6;
       {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.active_sigil_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
       // repeated uint32 pending_offer_sigil_ids = 7;
       {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.pending_offer_sigil_ids_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
       // uint32 weekly_cleared_mask = 8;
-      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.weekly_cleared_mask_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.weekly_cleared_mask_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 weekly_best_floor = 9;
-      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.weekly_best_floor_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.weekly_best_floor_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 weekly_best_rounds = 10;
-      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.weekly_best_rounds_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.weekly_best_rounds_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 revision = 11;
-      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.revision_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.revision_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 run_week_key = 12;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.run_week_key_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 realm_version = 13;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.realm_version_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool use_free_preset = 14;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.use_free_preset_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 character_preset_id = 15;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.character_preset_id_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 pet_preset_id = 16;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.pet_preset_id_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 current_node_kind = 17;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.current_node_kind_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 pending_event_kind = 18;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.pending_event_kind_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 event_reroll_count = 19;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.event_reroll_count_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 best_rounds_self = 20;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.best_rounds_self_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 best_rounds_preset = 21;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.best_rounds_preset_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 weekly_best_floor_preset = 22;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.weekly_best_floor_preset_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 weekly_best_rounds_preset = 23;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.weekly_best_rounds_preset_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 route_choice_mask = 24;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.route_choice_mask_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -167,14 +248,27 @@ inline constexpr WuxingTowerCompState::Impl_::Impl_(
         ,
         _pending_offer_sigil_ids_cached_byte_size_{0},
         week_key_{0u},
-        run_active_{false},
-        run_id_{::uint64_t{0u}},
         current_floor_{0u},
+        run_id_{::uint64_t{0u}},
         run_total_rounds_{0u},
         weekly_cleared_mask_{0u},
+        run_active_{false},
+        use_free_preset_{false},
         weekly_best_floor_{0u},
         revision_{::uint64_t{0u}},
-        weekly_best_rounds_{0u} {}
+        weekly_best_rounds_{0u},
+        run_week_key_{0u},
+        realm_version_{0u},
+        character_preset_id_{0u},
+        pet_preset_id_{0u},
+        current_node_kind_{0u},
+        pending_event_kind_{0u},
+        event_reroll_count_{0u},
+        best_rounds_self_{0u},
+        best_rounds_preset_{0u},
+        weekly_best_floor_preset_{0u},
+        weekly_best_rounds_preset_{0u},
+        route_choice_mask_{0u} {}
 
 template <typename>
 constexpr WuxingTowerCompState::WuxingTowerCompState(::_pbi::ConstantInitialized,
@@ -1076,7 +1170,7 @@ const ::uint32_t
         6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_._has_bits_),
-        14, // hasbit index offset
+        27, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.week_key_),
         PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.run_active_),
         PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.run_id_),
@@ -1088,17 +1182,43 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.weekly_best_floor_),
         PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.weekly_best_rounds_),
         PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.revision_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.run_week_key_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.realm_version_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.use_free_preset_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.character_preset_id_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.pet_preset_id_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.current_node_kind_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.pending_event_kind_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.event_reroll_count_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.best_rounds_self_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.best_rounds_preset_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.weekly_best_floor_preset_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.weekly_best_rounds_preset_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.route_choice_mask_),
         2,
-        3,
+        7,
         4,
+        3,
         5,
-        6,
         0,
         1,
-        7,
-        8,
-        10,
+        6,
         9,
+        11,
+        10,
+        12,
+        13,
+        8,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_._has_bits_),
         16, // hasbit index offset
@@ -1158,9 +1278,9 @@ static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::PlayerSeasonSealRecord)},
         {17, sizeof(::WuxingTowerCompState)},
-        {42, sizeof(::SavedBattleBuildBookmark)},
-        {71, sizeof(::PlayerSeasonComp_RetroHonorProgressEntry_DoNotUse)},
-        {78, sizeof(::PlayerSeasonComp)},
+        {68, sizeof(::SavedBattleBuildBookmark)},
+        {97, sizeof(::PlayerSeasonComp_RetroHonorProgressEntry_DoNotUse)},
+        {104, sizeof(::PlayerSeasonComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1177,39 +1297,48 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fseaso
     "season_id\030\001 \001(\r\022\030\n\020equipped_seal_id\030\002 \001("
     "\r\022\027\n\017progress_points\030\003 \001(\r\022\025\n\rbattle_poi"
     "nts\030\004 \001(\r\022\026\n\016catchup_points\030\005 \001(\r\022\020\n\010rev"
-    "ision\030\006 \001(\004\022\021\n\tlast_term\030\007 \001(\r\"\236\002\n\024Wuxin"
+    "ision\030\006 \001(\004\022\021\n\tlast_term\030\007 \001(\r\"\201\005\n\024Wuxin"
     "gTowerCompState\022\020\n\010week_key\030\001 \001(\r\022\022\n\nrun"
     "_active\030\002 \001(\010\022\016\n\006run_id\030\003 \001(\004\022\025\n\rcurrent"
     "_floor\030\004 \001(\r\022\030\n\020run_total_rounds\030\005 \001(\r\022\030"
     "\n\020active_sigil_ids\030\006 \003(\r\022\037\n\027pending_offe"
     "r_sigil_ids\030\007 \003(\r\022\033\n\023weekly_cleared_mask"
     "\030\010 \001(\r\022\031\n\021weekly_best_floor\030\t \001(\r\022\032\n\022wee"
-    "kly_best_rounds\030\n \001(\r\022\020\n\010revision\030\013 \001(\004\""
-    "\314\002\n\030SavedBattleBuildBookmark\022\023\n\013bookmark"
-    "_id\030\001 \001(\004\022\r\n\005title\030\002 \001(\t\022\030\n\020source_battl"
-    "e_id\030\003 \001(\004\022\030\n\020source_player_id\030\004 \001(\004\022\032\n\022"
-    "source_player_name\030\005 \001(\t\022\020\n\010class_id\030\006 \001"
-    "(\r\022\024\n\014formation_id\030\007 \001(\r\022\026\n\016season_seal_"
-    "id\030\010 \001(\r\022\033\n\023active_pet_table_id\030\t \001(\r\022\027\n"
-    "\017active_pet_name\030\n \001(\t\022\027\n\017skill_table_id"
-    "s\030\013 \003(\r\022\030\n\020wuxing_sigil_ids\030\014 \003(\r\022\023\n\013sav"
-    "ed_at_ms\030\r \001(\004\"\201\003\n\020PlayerSeasonComp\022(\n\007r"
-    "ecords\030\001 \003(\0132\027.PlayerSeasonSealRecord\022\035\n"
-    "\025equipped_formation_id\030\002 \001(\r\022+\n\014wuxing_t"
-    "ower\030\003 \001(\0132\025.WuxingTowerCompState\022/\n\014sav"
-    "ed_builds\030\004 \003(\0132\031.SavedBattleBuildBookma"
-    "rk\022\034\n\024unlocked_honor_words\030\005 \003(\004\022$\n\034retr"
-    "o_honor_target_season_id\030\006 \001(\r\022G\n\024retro_"
-    "honor_progress\030\007 \003(\0132).PlayerSeasonComp."
-    "RetroHonorProgressEntry\0329\n\027RetroHonorPro"
-    "gressEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\002"
-    "8\001B\022Z\020common/componentb\006proto3"
+    "kly_best_rounds\030\n \001(\r\022\020\n\010revision\030\013 \001(\004\022"
+    "\024\n\014run_week_key\030\014 \001(\r\022\025\n\rrealm_version\030\r"
+    " \001(\r\022\027\n\017use_free_preset\030\016 \001(\010\022\033\n\023charact"
+    "er_preset_id\030\017 \001(\r\022\025\n\rpet_preset_id\030\020 \001("
+    "\r\022\031\n\021current_node_kind\030\021 \001(\r\022\032\n\022pending_"
+    "event_kind\030\022 \001(\r\022\032\n\022event_reroll_count\030\023"
+    " \001(\r\022\030\n\020best_rounds_self\030\024 \001(\r\022\032\n\022best_r"
+    "ounds_preset\030\025 \001(\r\022 \n\030weekly_best_floor_"
+    "preset\030\026 \001(\r\022!\n\031weekly_best_rounds_prese"
+    "t\030\027 \001(\r\022\031\n\021route_choice_mask\030\030 \001(\r\"\314\002\n\030S"
+    "avedBattleBuildBookmark\022\023\n\013bookmark_id\030\001"
+    " \001(\004\022\r\n\005title\030\002 \001(\t\022\030\n\020source_battle_id\030"
+    "\003 \001(\004\022\030\n\020source_player_id\030\004 \001(\004\022\032\n\022sourc"
+    "e_player_name\030\005 \001(\t\022\020\n\010class_id\030\006 \001(\r\022\024\n"
+    "\014formation_id\030\007 \001(\r\022\026\n\016season_seal_id\030\010 "
+    "\001(\r\022\033\n\023active_pet_table_id\030\t \001(\r\022\027\n\017acti"
+    "ve_pet_name\030\n \001(\t\022\027\n\017skill_table_ids\030\013 \003"
+    "(\r\022\030\n\020wuxing_sigil_ids\030\014 \003(\r\022\023\n\013saved_at"
+    "_ms\030\r \001(\004\"\201\003\n\020PlayerSeasonComp\022(\n\007record"
+    "s\030\001 \003(\0132\027.PlayerSeasonSealRecord\022\035\n\025equi"
+    "pped_formation_id\030\002 \001(\r\022+\n\014wuxing_tower\030"
+    "\003 \001(\0132\025.WuxingTowerCompState\022/\n\014saved_bu"
+    "ilds\030\004 \003(\0132\031.SavedBattleBuildBookmark\022\034\n"
+    "\024unlocked_honor_words\030\005 \003(\004\022$\n\034retro_hon"
+    "or_target_season_id\030\006 \001(\r\022G\n\024retro_honor"
+    "_progress\030\007 \003(\0132).PlayerSeasonComp.Retro"
+    "HonorProgressEntry\0329\n\027RetroHonorProgress"
+    "Entry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001B\022Z"
+    "\020common/componentb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto = {
     false,
     false,
-    1270,
+    1625,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto,
     "proto/common/component/player_season_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto_once,
@@ -1607,9 +1736,9 @@ WuxingTowerCompState::WuxingTowerCompState(
                offsetof(Impl_, week_key_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, week_key_),
-           offsetof(Impl_, weekly_best_rounds_) -
+           offsetof(Impl_, route_choice_mask_) -
                offsetof(Impl_, week_key_) +
-               sizeof(Impl_::weekly_best_rounds_));
+               sizeof(Impl_::route_choice_mask_));
 
   // @@protoc_insertion_point(copy_constructor:WuxingTowerCompState)
 }
@@ -1635,9 +1764,9 @@ inline void WuxingTowerCompState::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE are
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, week_key_),
            0,
-           offsetof(Impl_, weekly_best_rounds_) -
+           offsetof(Impl_, route_choice_mask_) -
                offsetof(Impl_, week_key_) +
-               sizeof(Impl_::weekly_best_rounds_));
+               sizeof(Impl_::route_choice_mask_));
 }
 WuxingTowerCompState::~WuxingTowerCompState() {
   // @@protoc_insertion_point(destructor:WuxingTowerCompState)
@@ -1697,13 +1826,18 @@ PROTOBUF_NOINLINE void WuxingTowerCompState::Clear() {
   }
   if (BatchCheckHasBit(cached_has_bits, 0x000000fcU)) {
     ::memset(&_impl_.week_key_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.weekly_cleared_mask_) -
-        reinterpret_cast<char*>(&_impl_.week_key_)) + sizeof(_impl_.weekly_cleared_mask_));
+        reinterpret_cast<char*>(&_impl_.run_active_) -
+        reinterpret_cast<char*>(&_impl_.week_key_)) + sizeof(_impl_.run_active_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
-    ::memset(&_impl_.weekly_best_floor_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.weekly_best_rounds_) -
-        reinterpret_cast<char*>(&_impl_.weekly_best_floor_)) + sizeof(_impl_.weekly_best_rounds_));
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    ::memset(&_impl_.use_free_preset_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.pet_preset_id_) -
+        reinterpret_cast<char*>(&_impl_.use_free_preset_)) + sizeof(_impl_.pet_preset_id_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
+    ::memset(&_impl_.current_node_kind_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.route_choice_mask_) -
+        reinterpret_cast<char*>(&_impl_.current_node_kind_)) + sizeof(_impl_.route_choice_mask_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1738,7 +1872,7 @@ PROTOBUF_NOINLINE void WuxingTowerCompState::Clear() {
   }
 
   // bool run_active = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_run_active() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -1756,7 +1890,7 @@ PROTOBUF_NOINLINE void WuxingTowerCompState::Clear() {
   }
 
   // uint32 current_floor = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_current_floor() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1765,7 +1899,7 @@ PROTOBUF_NOINLINE void WuxingTowerCompState::Clear() {
   }
 
   // uint32 run_total_rounds = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_run_total_rounds() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1796,7 +1930,7 @@ PROTOBUF_NOINLINE void WuxingTowerCompState::Clear() {
   }
 
   // uint32 weekly_cleared_mask = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_weekly_cleared_mask() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1805,7 +1939,7 @@ PROTOBUF_NOINLINE void WuxingTowerCompState::Clear() {
   }
 
   // uint32 weekly_best_floor = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_weekly_best_floor() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1814,7 +1948,7 @@ PROTOBUF_NOINLINE void WuxingTowerCompState::Clear() {
   }
 
   // uint32 weekly_best_rounds = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_weekly_best_rounds() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1823,11 +1957,128 @@ PROTOBUF_NOINLINE void WuxingTowerCompState::Clear() {
   }
 
   // uint64 revision = 11;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_revision() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           11, this_._internal_revision(), target);
+    }
+  }
+
+  // uint32 run_week_key = 12;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_run_week_key() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          12, this_._internal_run_week_key(), target);
+    }
+  }
+
+  // uint32 realm_version = 13;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_realm_version() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          13, this_._internal_realm_version(), target);
+    }
+  }
+
+  // bool use_free_preset = 14;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_use_free_preset() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          14, this_._internal_use_free_preset(), target);
+    }
+  }
+
+  // uint32 character_preset_id = 15;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_character_preset_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          15, this_._internal_character_preset_id(), target);
+    }
+  }
+
+  // uint32 pet_preset_id = 16;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_pet_preset_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          16, this_._internal_pet_preset_id(), target);
+    }
+  }
+
+  // uint32 current_node_kind = 17;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_current_node_kind() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          17, this_._internal_current_node_kind(), target);
+    }
+  }
+
+  // uint32 pending_event_kind = 18;
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (this_._internal_pending_event_kind() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          18, this_._internal_pending_event_kind(), target);
+    }
+  }
+
+  // uint32 event_reroll_count = 19;
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (this_._internal_event_reroll_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          19, this_._internal_event_reroll_count(), target);
+    }
+  }
+
+  // uint32 best_rounds_self = 20;
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (this_._internal_best_rounds_self() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          20, this_._internal_best_rounds_self(), target);
+    }
+  }
+
+  // uint32 best_rounds_preset = 21;
+  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (this_._internal_best_rounds_preset() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          21, this_._internal_best_rounds_preset(), target);
+    }
+  }
+
+  // uint32 weekly_best_floor_preset = 22;
+  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (this_._internal_weekly_best_floor_preset() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          22, this_._internal_weekly_best_floor_preset(), target);
+    }
+  }
+
+  // uint32 weekly_best_rounds_preset = 23;
+  if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+    if (this_._internal_weekly_best_rounds_preset() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          23, this_._internal_weekly_best_rounds_preset(), target);
+    }
+  }
+
+  // uint32 route_choice_mask = 24;
+  if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+    if (this_._internal_route_choice_mask() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          24, this_._internal_route_choice_mask(), target);
     }
   }
 
@@ -1878,10 +2129,11 @@ PROTOBUF_NOINLINE void WuxingTowerCompState::Clear() {
             this_._internal_week_key());
       }
     }
-    // bool run_active = 2;
+    // uint32 current_floor = 4;
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
-      if (this_._internal_run_active() != 0) {
-        total_size += 2;
+      if (this_._internal_current_floor() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_current_floor());
       }
     }
     // uint64 run_id = 3;
@@ -1891,48 +2143,139 @@ PROTOBUF_NOINLINE void WuxingTowerCompState::Clear() {
             this_._internal_run_id());
       }
     }
-    // uint32 current_floor = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
-      if (this_._internal_current_floor() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_current_floor());
-      }
-    }
     // uint32 run_total_rounds = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_run_total_rounds() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_run_total_rounds());
       }
     }
     // uint32 weekly_cleared_mask = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_weekly_cleared_mask() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_weekly_cleared_mask());
       }
     }
+    // bool run_active = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_run_active() != 0) {
+        total_size += 2;
+      }
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
-    // uint32 weekly_best_floor = 9;
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    // bool use_free_preset = 14;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_use_free_preset() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint32 weekly_best_floor = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_weekly_best_floor() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_weekly_best_floor());
       }
     }
     // uint64 revision = 11;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_revision() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_revision());
       }
     }
     // uint32 weekly_best_rounds = 10;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_weekly_best_rounds() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_weekly_best_rounds());
+      }
+    }
+    // uint32 run_week_key = 12;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_run_week_key() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_run_week_key());
+      }
+    }
+    // uint32 realm_version = 13;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_realm_version() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_realm_version());
+      }
+    }
+    // uint32 character_preset_id = 15;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_character_preset_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_character_preset_id());
+      }
+    }
+    // uint32 pet_preset_id = 16;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_pet_preset_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_pet_preset_id());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
+    // uint32 current_node_kind = 17;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_current_node_kind() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_current_node_kind());
+      }
+    }
+    // uint32 pending_event_kind = 18;
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (this_._internal_pending_event_kind() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_pending_event_kind());
+      }
+    }
+    // uint32 event_reroll_count = 19;
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (this_._internal_event_reroll_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_event_reroll_count());
+      }
+    }
+    // uint32 best_rounds_self = 20;
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (this_._internal_best_rounds_self() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_best_rounds_self());
+      }
+    }
+    // uint32 best_rounds_preset = 21;
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (this_._internal_best_rounds_preset() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_best_rounds_preset());
+      }
+    }
+    // uint32 weekly_best_floor_preset = 22;
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (this_._internal_weekly_best_floor_preset() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_weekly_best_floor_preset());
+      }
+    }
+    // uint32 weekly_best_rounds_preset = 23;
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+      if (this_._internal_weekly_best_rounds_preset() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_weekly_best_rounds_preset());
+      }
+    }
+    // uint32 route_choice_mask = 24;
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (this_._internal_route_choice_mask() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_route_choice_mask());
       }
     }
   }
@@ -1966,8 +2309,8 @@ void WuxingTowerCompState::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
-      if (from._internal_run_active() != 0) {
-        _this->_impl_.run_active_ = from._impl_.run_active_;
+      if (from._internal_current_floor() != 0) {
+        _this->_impl_.current_floor_ = from._impl_.current_floor_;
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
@@ -1976,35 +2319,102 @@ void WuxingTowerCompState::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
-      if (from._internal_current_floor() != 0) {
-        _this->_impl_.current_floor_ = from._impl_.current_floor_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_run_total_rounds() != 0) {
         _this->_impl_.run_total_rounds_ = from._impl_.run_total_rounds_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_weekly_cleared_mask() != 0) {
         _this->_impl_.weekly_cleared_mask_ = from._impl_.weekly_cleared_mask_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_run_active() != 0) {
+        _this->_impl_.run_active_ = from._impl_.run_active_;
+      }
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_use_free_preset() != 0) {
+        _this->_impl_.use_free_preset_ = from._impl_.use_free_preset_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_weekly_best_floor() != 0) {
         _this->_impl_.weekly_best_floor_ = from._impl_.weekly_best_floor_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_revision() != 0) {
         _this->_impl_.revision_ = from._impl_.revision_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_weekly_best_rounds() != 0) {
         _this->_impl_.weekly_best_rounds_ = from._impl_.weekly_best_rounds_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_run_week_key() != 0) {
+        _this->_impl_.run_week_key_ = from._impl_.run_week_key_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_realm_version() != 0) {
+        _this->_impl_.realm_version_ = from._impl_.realm_version_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_character_preset_id() != 0) {
+        _this->_impl_.character_preset_id_ = from._impl_.character_preset_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_pet_preset_id() != 0) {
+        _this->_impl_.pet_preset_id_ = from._impl_.pet_preset_id_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (from._internal_current_node_kind() != 0) {
+        _this->_impl_.current_node_kind_ = from._impl_.current_node_kind_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (from._internal_pending_event_kind() != 0) {
+        _this->_impl_.pending_event_kind_ = from._impl_.pending_event_kind_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (from._internal_event_reroll_count() != 0) {
+        _this->_impl_.event_reroll_count_ = from._impl_.event_reroll_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (from._internal_best_rounds_self() != 0) {
+        _this->_impl_.best_rounds_self_ = from._impl_.best_rounds_self_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (from._internal_best_rounds_preset() != 0) {
+        _this->_impl_.best_rounds_preset_ = from._impl_.best_rounds_preset_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (from._internal_weekly_best_floor_preset() != 0) {
+        _this->_impl_.weekly_best_floor_preset_ = from._impl_.weekly_best_floor_preset_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+      if (from._internal_weekly_best_rounds_preset() != 0) {
+        _this->_impl_.weekly_best_rounds_preset_ = from._impl_.weekly_best_rounds_preset_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (from._internal_route_choice_mask() != 0) {
+        _this->_impl_.route_choice_mask_ = from._impl_.route_choice_mask_;
       }
     }
   }
@@ -2028,8 +2438,8 @@ void WuxingTowerCompState::InternalSwap(WuxingTowerCompState* PROTOBUF_RESTRICT 
   _impl_.active_sigil_ids_.InternalSwap(&other->_impl_.active_sigil_ids_);
   _impl_.pending_offer_sigil_ids_.InternalSwap(&other->_impl_.pending_offer_sigil_ids_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.weekly_best_rounds_)
-      + sizeof(WuxingTowerCompState::_impl_.weekly_best_rounds_)
+      PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.route_choice_mask_)
+      + sizeof(WuxingTowerCompState::_impl_.route_choice_mask_)
       - PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.week_key_)>(
           reinterpret_cast<char*>(&_impl_.week_key_),
           reinterpret_cast<char*>(&other->_impl_.week_key_));

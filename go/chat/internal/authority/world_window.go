@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"shared/safego"
+	"shared/tracing/ctxdetach"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -88,8 +89,9 @@ func (w *worldWindow) get(ctx context.Context) (*worldSnapshot, error) {
 		load = &worldLoad{done: make(chan struct{})}
 		w.inflight = load
 		epoch := w.epoch
-		// 重读在独立 goroutine 里跑:发起它的请求超时或取消时,等着同一结果的其他请求不受牵连。
-		loadCtx := context.WithoutCancel(ctx)
+		// 重读在独立 goroutine 里跑:用白名单 tracing.Detach 只保 OTel trace/baggage，
+		// 彻底剥离触发请求的取消、截止与 gRPC metadata/鉴权上下文，不把请求级对象泄漏进共享后台重读。
+		loadCtx := ctxdetach.Detach(ctx)
 		safego.Go("chat.world_window_load", func() { w.run(loadCtx, load, epoch) })
 	}
 	w.mu.Unlock()

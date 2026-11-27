@@ -638,6 +638,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailRequestReceiptRecord final : pu
   // accessors -------------------------------------------------------
   enum : int {
     kRequestHashFieldNumber = 4,
+    kApprovalIdFieldNumber = 7,
+    kProposerFieldNumber = 8,
+    kApproverFieldNumber = 9,
     kRequestIdFieldNumber = 2,
     kMailIdFieldNumber = 3,
     kSenderKindFieldNumber = 1,
@@ -657,6 +660,51 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailRequestReceiptRecord final : pu
   const ::std::string& _internal_request_hash() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_request_hash(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_request_hash();
+
+  public:
+  // string approval_id = 7;
+  void clear_approval_id() ;
+  [[nodiscard]] const ::std::string& approval_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_approval_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_approval_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_approval_id();
+  void set_allocated_approval_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_approval_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_approval_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_approval_id();
+
+  public:
+  // string proposer = 8;
+  void clear_proposer() ;
+  [[nodiscard]] const ::std::string& proposer() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_proposer(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_proposer();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_proposer();
+  void set_allocated_proposer(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_proposer() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_proposer(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_proposer();
+
+  public:
+  // string approver = 9;
+  void clear_approver() ;
+  [[nodiscard]] const ::std::string& approver() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_approver(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_approver();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_approver();
+  void set_allocated_approver(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_approver() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_approver(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_approver();
 
   public:
   // uint64 request_id = 2;
@@ -713,8 +761,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailRequestReceiptRecord final : pu
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
-                          0, 52,
+      ::google::protobuf::internal::TcParseTable<4, 9,
+                          0, 87,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -743,6 +791,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MailRequestReceiptRecord final : pu
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr request_hash_;
+    ::google::protobuf::internal::ArenaStringPtr approval_id_;
+    ::google::protobuf::internal::ArenaStringPtr proposer_;
+    ::google::protobuf::internal::ArenaStringPtr approver_;
     ::uint64_t request_id_;
     ::uint64_t mail_id_;
     ::uint32_t sender_kind_;
@@ -3849,7 +3900,7 @@ inline void MailRecord::set_allocated_approver(::std::string* PROTOBUF_NULLABLE 
 inline void MailRequestReceiptRecord::clear_sender_kind() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.sender_kind_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t MailRequestReceiptRecord::sender_kind() const {
   // @@protoc_insertion_point(field_get:mailpb.MailRequestReceiptRecord.sender_kind)
@@ -3857,7 +3908,7 @@ inline ::uint32_t MailRequestReceiptRecord::sender_kind() const {
 }
 inline void MailRequestReceiptRecord::set_sender_kind(::uint32_t value) {
   _internal_set_sender_kind(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:mailpb.MailRequestReceiptRecord.sender_kind)
 }
 inline ::uint32_t MailRequestReceiptRecord::_internal_sender_kind() const {
@@ -3873,7 +3924,7 @@ inline void MailRequestReceiptRecord::_internal_set_sender_kind(::uint32_t value
 inline void MailRequestReceiptRecord::clear_request_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.request_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint64_t MailRequestReceiptRecord::request_id() const {
   // @@protoc_insertion_point(field_get:mailpb.MailRequestReceiptRecord.request_id)
@@ -3881,7 +3932,7 @@ inline ::uint64_t MailRequestReceiptRecord::request_id() const {
 }
 inline void MailRequestReceiptRecord::set_request_id(::uint64_t value) {
   _internal_set_request_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:mailpb.MailRequestReceiptRecord.request_id)
 }
 inline ::uint64_t MailRequestReceiptRecord::_internal_request_id() const {
@@ -3897,7 +3948,7 @@ inline void MailRequestReceiptRecord::_internal_set_request_id(::uint64_t value)
 inline void MailRequestReceiptRecord::clear_mail_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.mail_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t MailRequestReceiptRecord::mail_id() const {
   // @@protoc_insertion_point(field_get:mailpb.MailRequestReceiptRecord.mail_id)
@@ -3905,7 +3956,7 @@ inline ::uint64_t MailRequestReceiptRecord::mail_id() const {
 }
 inline void MailRequestReceiptRecord::set_mail_id(::uint64_t value) {
   _internal_set_mail_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:mailpb.MailRequestReceiptRecord.mail_id)
 }
 inline ::uint64_t MailRequestReceiptRecord::_internal_mail_id() const {
@@ -3985,7 +4036,7 @@ inline void MailRequestReceiptRecord::set_allocated_request_hash(::std::string* 
 inline void MailRequestReceiptRecord::clear_kind() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.kind_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t MailRequestReceiptRecord::kind() const {
   // @@protoc_insertion_point(field_get:mailpb.MailRequestReceiptRecord.kind)
@@ -3993,7 +4044,7 @@ inline ::uint32_t MailRequestReceiptRecord::kind() const {
 }
 inline void MailRequestReceiptRecord::set_kind(::uint32_t value) {
   _internal_set_kind(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:mailpb.MailRequestReceiptRecord.kind)
 }
 inline ::uint32_t MailRequestReceiptRecord::_internal_kind() const {
@@ -4009,7 +4060,7 @@ inline void MailRequestReceiptRecord::_internal_set_kind(::uint32_t value) {
 inline void MailRequestReceiptRecord::clear_created_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t MailRequestReceiptRecord::created_ms() const {
   // @@protoc_insertion_point(field_get:mailpb.MailRequestReceiptRecord.created_ms)
@@ -4017,7 +4068,7 @@ inline ::uint64_t MailRequestReceiptRecord::created_ms() const {
 }
 inline void MailRequestReceiptRecord::set_created_ms(::uint64_t value) {
   _internal_set_created_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:mailpb.MailRequestReceiptRecord.created_ms)
 }
 inline ::uint64_t MailRequestReceiptRecord::_internal_created_ms() const {
@@ -4027,6 +4078,198 @@ inline ::uint64_t MailRequestReceiptRecord::_internal_created_ms() const {
 inline void MailRequestReceiptRecord::_internal_set_created_ms(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_ms_ = value;
+}
+
+// string approval_id = 7;
+inline void MailRequestReceiptRecord::clear_approval_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.approval_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& MailRequestReceiptRecord::approval_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:mailpb.MailRequestReceiptRecord.approval_id)
+  return _internal_approval_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void MailRequestReceiptRecord::set_approval_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.approval_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:mailpb.MailRequestReceiptRecord.approval_id)
+}
+inline ::std::string* PROTOBUF_NONNULL MailRequestReceiptRecord::mutable_approval_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_approval_id();
+  // @@protoc_insertion_point(field_mutable:mailpb.MailRequestReceiptRecord.approval_id)
+  return _s;
+}
+inline const ::std::string& MailRequestReceiptRecord::_internal_approval_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.approval_id_.Get();
+}
+inline void MailRequestReceiptRecord::_internal_set_approval_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.approval_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL MailRequestReceiptRecord::_internal_mutable_approval_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.approval_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE MailRequestReceiptRecord::release_approval_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:mailpb.MailRequestReceiptRecord.approval_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.approval_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.approval_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void MailRequestReceiptRecord::set_allocated_approval_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.approval_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.approval_id_.IsDefault()) {
+    _impl_.approval_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:mailpb.MailRequestReceiptRecord.approval_id)
+}
+
+// string proposer = 8;
+inline void MailRequestReceiptRecord::clear_proposer() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proposer_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& MailRequestReceiptRecord::proposer() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:mailpb.MailRequestReceiptRecord.proposer)
+  return _internal_proposer();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void MailRequestReceiptRecord::set_proposer(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.proposer_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:mailpb.MailRequestReceiptRecord.proposer)
+}
+inline ::std::string* PROTOBUF_NONNULL MailRequestReceiptRecord::mutable_proposer()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_proposer();
+  // @@protoc_insertion_point(field_mutable:mailpb.MailRequestReceiptRecord.proposer)
+  return _s;
+}
+inline const ::std::string& MailRequestReceiptRecord::_internal_proposer() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.proposer_.Get();
+}
+inline void MailRequestReceiptRecord::_internal_set_proposer(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.proposer_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL MailRequestReceiptRecord::_internal_mutable_proposer() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.proposer_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE MailRequestReceiptRecord::release_proposer() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:mailpb.MailRequestReceiptRecord.proposer)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.proposer_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.proposer_.Set("", GetArena());
+  }
+  return released;
+}
+inline void MailRequestReceiptRecord::set_allocated_proposer(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.proposer_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.proposer_.IsDefault()) {
+    _impl_.proposer_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:mailpb.MailRequestReceiptRecord.proposer)
+}
+
+// string approver = 9;
+inline void MailRequestReceiptRecord::clear_approver() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.approver_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& MailRequestReceiptRecord::approver() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:mailpb.MailRequestReceiptRecord.approver)
+  return _internal_approver();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void MailRequestReceiptRecord::set_approver(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.approver_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:mailpb.MailRequestReceiptRecord.approver)
+}
+inline ::std::string* PROTOBUF_NONNULL MailRequestReceiptRecord::mutable_approver()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_approver();
+  // @@protoc_insertion_point(field_mutable:mailpb.MailRequestReceiptRecord.approver)
+  return _s;
+}
+inline const ::std::string& MailRequestReceiptRecord::_internal_approver() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.approver_.Get();
+}
+inline void MailRequestReceiptRecord::_internal_set_approver(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.approver_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL MailRequestReceiptRecord::_internal_mutable_approver() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.approver_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE MailRequestReceiptRecord::release_approver() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:mailpb.MailRequestReceiptRecord.approver)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.approver_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.approver_.Set("", GetArena());
+  }
+  return released;
+}
+inline void MailRequestReceiptRecord::set_allocated_approver(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.approver_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.approver_.IsDefault()) {
+    _impl_.approver_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:mailpb.MailRequestReceiptRecord.approver)
 }
 
 // -------------------------------------------------------------------

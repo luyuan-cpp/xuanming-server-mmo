@@ -85,9 +85,10 @@ public:
     bool IsRankedBattle() const {
         return createRequest.has_ranked_context() && createRequest.ranked_context().season_id() != 0;
     }
-    // 免费 3×3 预设娱乐场(护卫救援 / 物法易势 5V5): 仅 use_free_preset=true 时放行临时竞技宠并禁止回写场外宠物。
+    // 免费 3×3 预设娱乐场(护卫救援 / 物法易势 5V5 / 五行幻境 V2 公平试炼): 放行临时竞技宠并禁止回写场外宠物。
     bool UsesFreePreset() const {
-        return createRequest.has_ranked_context() && createRequest.ranked_context().use_free_preset();
+        return (createRequest.has_ranked_context() && createRequest.ranked_context().use_free_preset()) ||
+               (hasTowerContext && towerContext.use_free_preset());
     }
     // 帮会全天帮战 V2（9=真人帮战 / 10=守旗阵踢馆 AI 托管）：真实养成入场、第 12 回合起决胜煞气、打满判平。
     bool IsGuildWarBattle() const {
@@ -891,6 +892,31 @@ private:
     bool hasTowerContext = false;
     ::WuxingTowerBattleContext towerContext;
     TowerSigilAggregate towerSigilTotals;
+    struct WuxingBoonRuntime {
+        uint32_t boonMask = 0u;
+        uint32_t resonanceElement = 0u;
+        uint32_t procDepth = 0u;
+        std::set<uint64_t> freeManaUsedThisRound;
+        std::set<uint64_t> firstAttackUsedThisRound;
+        std::set<uint64_t> petAssistUsedThisRound;
+        std::set<uint64_t> healShieldEmpoweredActors;
+        std::set<uint64_t> emergencyShieldTriggered;
+        std::map<uint64_t, uint32_t> skillCastCounts;
+        std::map<uint64_t, uint32_t> fireBurnStacks;
+        std::map<uint64_t, uint32_t> vulnerableUntilRound;
+        std::map<uint64_t, uint32_t> armorBrokenUntilRound;
+    };
+    WuxingBoonRuntime boonRuntime;
+    bool IsWuxingRealmV2() const {
+        return hasTowerContext && towerContext.realm_version() >= wuxing::kRealmV2Version;
+    }
+    bool HasRealmBoon(uint32_t boonId) const {
+        return IsWuxingRealmV2() && (boonRuntime.boonMask & wuxing::RealmBoonBit(boonId)) != 0u;
+    }
+    bool HasRealmResonance(uint32_t element) const {
+        return IsWuxingRealmV2() && element != 0u && boonRuntime.resonanceElement == element;
+    }
+    uint64_t CurrentTotalShieldOf(const BattleActorState& target) const;
     bool hasCustomDuelRules = false;
     ::CustomDuelRules customDuelRules;
     bool hasTacticalPuzzleContext = false;
@@ -925,7 +951,14 @@ private:
     uint32_t WuxingControlResistPct(const BattleActorState& target) const;
     bool IsControlSkill(const SkillTable& skillRow) const;
     void ApplyWuxingPostDirectHitEffects(BattleActorState& attacker, BattleActorState& target,
-                                         uint64_t dealt, bool isCritical, TurnResultS2C& result);
+                                         uint64_t dealt, bool isCritical, TurnResultS2C& result,
+                                         uint64_t shieldAbsorbed = 0u, bool shieldBroke = false,
+                                         uint64_t brokenShieldCap = 0u, uint32_t skillTableId = 0u,
+                                         bool isMultiTarget = false);
+    void ApplyWuxingPeriodicSpread(uint64_t sourceActorId, const BattleActorState& victim,
+                                   uint64_t dealt, TurnResultS2C& result);
+    void ApplyWuxingRoundStartBoonEffects(TurnResultS2C& result);
+    void ApplyWuxingRoundEndBoonEffects(TurnResultS2C& result);
 
     uint32_t currentGroupId = 0;            // 当前事件组 id,每回合结算开始归 0(D2)
     uint32_t currentHitIndex = 0;           // 当前事件组内的段序/目标序(D2)

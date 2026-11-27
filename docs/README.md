@@ -98,6 +98,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [battle-prep-skill-ban-v1.md](planning/battle-prep-skill-ban-v1.md) — 《五行奇谈》战前技能禁选（每方 3 Ban · 方案 A）玩法与全端工程设计（V1）
 - [battle-season-one-simple-design.md](planning/battle-season-one-simple-design.md) — 破阵之季 · 首季玩法与 Gemini 逻辑交接
 - [battle-skill-and-pet-cultivation-expansion.md](planning/battle-skill-and-pet-cultivation-expansion.md) — 战斗战法深度与宝宝养成全量扩展设计（扩展包 A+B+C+D）
+- [battle-spectate-chat-v1.md](planning/battle-spectate-chat-v1.md) — 《五行奇谈》局外人观战交流模式与个人禁交开关设计（V1）
 - [boss-trial-planning-ui.md](planning/boss-trial-planning-ui.md) — 首领试炼：深度策略玩法 V2、UI 美术规格与双机交接
 - [boss-trial-weekly-wuxing-affix-v1.md](planning/boss-trial-weekly-wuxing-affix-v1.md) — 首领试炼「周常五行词缀」V1 设计文档
 - [turn-battle-presentation.md](planning/turn-battle-presentation.md) — 回合制战斗表现规格(问道 / 梦幻西游式演出)v1
@@ -465,6 +466,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [craft-proxy-reputation-digest-and-hot-ranking.md](design/craft-proxy-reputation-digest-and-hot-ranking.md) — 离线名匠口碑雅号异步回账、营业战报与西市极品热榜设计方案
 - [cross-repo-port-batch4-20261127.md](design/cross-repo-port-batch4-20261127.md) — 双仓双向方案对比与移植设计 Batch 4（`xuanming-server` ↔ `xuanming-server-mmo-cpp`）
 - [cross-repo-port-batch5-20261127.md](design/cross-repo-port-batch5-20261127.md) — 双仓双向方案对比与移植设计 Batch 5（`xuanming-server` ↔ `xuanming-server-mmo-cpp`）
+- [cross-repo-port-batch6-20261127.md](design/cross-repo-port-batch6-20261127.md) — 双仓双向方案对比与移植设计 Batch 6（`xuanming-server` ↔ `xuanming-server-mmo-cpp`）
 - [data-service-startup-isolation.md](design/data-service-startup-isolation.md) — data_service 启动期故障隔离:一个 SQL 集群连不上时照样启动
 - [merged-zone-etcd-copy.md](design/merged-zone-etcd-copy.md) — 合服映射的 etcd 副本:目录第 0 片失联时 data_service 照样启动
 - [ranked-play-production-architecture.md](design/ranked-play-production-architecture.md) — 《论剑 / 人宠会武》生产级强一致性与水平扩展架构设计

@@ -115,22 +115,35 @@ func (x *PlayerSeasonSealRecord) GetLastTerm() uint32 {
 	return 0
 }
 
-// 五行幻境·轻肉鸽周常爬塔持久化状态（10 层周常，出塔清空局内符印，位图记录首通层，AGENTS.md §13）。
+// 五行幻境 V2·五行奇策轻肉鸽秘境持久化状态（6 关分岔探索，出图清空局内奇策，位图记录首通，AGENTS.md §13）。
 type WuxingTowerCompState struct {
-	state                protoimpl.MessageState `protogen:"open.v1"`
-	WeekKey              uint32                 `protobuf:"varint,1,opt,name=week_key,json=weekKey,proto3" json:"week_key,omitempty"`                                                   // ISO/游戏周键（周一 05:00 换周）
-	RunActive            bool                   `protobuf:"varint,2,opt,name=run_active,json=runActive,proto3" json:"run_active,omitempty"`                                             // 是否处于一轮进行中的幻境爬塔
-	RunId                uint64                 `protobuf:"varint,3,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`                                                         // 单调递增轮次号，防重复结算与确定性抽符
-	CurrentFloor         uint32                 `protobuf:"varint,4,opt,name=current_floor,json=currentFloor,proto3" json:"current_floor,omitempty"`                                    // 当前待挑战层数（1..10）
-	RunTotalRounds       uint32                 `protobuf:"varint,5,opt,name=run_total_rounds,json=runTotalRounds,proto3" json:"run_total_rounds,omitempty"`                            // 本轮已累计胜利回合数
-	ActiveSigilIds       []uint32               `protobuf:"varint,6,rep,packed,name=active_sigil_ids,json=activeSigilIds,proto3" json:"active_sigil_ids,omitempty"`                     // 本轮已选局内五行符印（至多 9 枚，重开清空）
-	PendingOfferSigilIds []uint32               `protobuf:"varint,7,rep,packed,name=pending_offer_sigil_ids,json=pendingOfferSigilIds,proto3" json:"pending_offer_sigil_ids,omitempty"` // 刚通关一层后待三选一的符印候选（非空时须先选符）
-	WeeklyClearedMask    uint32                 `protobuf:"varint,8,opt,name=weekly_cleared_mask,json=weeklyClearedMask,proto3" json:"weekly_cleared_mask,omitempty"`                   // 本周首通层位图（bit (floor-1)，1..10）
-	WeeklyBestFloor      uint32                 `protobuf:"varint,9,opt,name=weekly_best_floor,json=weeklyBestFloor,proto3" json:"weekly_best_floor,omitempty"`                         // 本周最高通关层数（0..10）
-	WeeklyBestRounds     uint32                 `protobuf:"varint,10,opt,name=weekly_best_rounds,json=weeklyBestRounds,proto3" json:"weekly_best_rounds,omitempty"`                     // 本周 10 层全通最少总回合数（0=未全通）
-	Revision             uint64                 `protobuf:"varint,11,opt,name=revision,proto3" json:"revision,omitempty"`                                                               // 写操作递增修订号
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	WeekKey                uint32                 `protobuf:"varint,1,opt,name=week_key,json=weekKey,proto3" json:"week_key,omitempty"`                                                   // 当前本周统计周键（周一 05:00 换周）
+	RunActive              bool                   `protobuf:"varint,2,opt,name=run_active,json=runActive,proto3" json:"run_active,omitempty"`                                             // 是否处于一轮进行中的幻境探索（跨周保留不清空）
+	RunId                  uint64                 `protobuf:"varint,3,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`                                                         // 单调递增轮次号，防重复结算与确定性抽策
+	CurrentFloor           uint32                 `protobuf:"varint,4,opt,name=current_floor,json=currentFloor,proto3" json:"current_floor,omitempty"`                                    // 当前待推进关卡（V2 为 1..6；兼容旧字段名）
+	RunTotalRounds         uint32                 `protobuf:"varint,5,opt,name=run_total_rounds,json=runTotalRounds,proto3" json:"run_total_rounds,omitempty"`                            // 本轮已累计胜利回合数
+	ActiveSigilIds         []uint32               `protobuf:"varint,6,rep,packed,name=active_sigil_ids,json=activeSigilIds,proto3" json:"active_sigil_ids,omitempty"`                     // 本轮已选局内奇策/符印（V2 为 601..643，出图清空）
+	PendingOfferSigilIds   []uint32               `protobuf:"varint,7,rep,packed,name=pending_offer_sigil_ids,json=pendingOfferSigilIds,proto3" json:"pending_offer_sigil_ids,omitempty"` // 待三选一奇策候选（非空时须先选策）
+	WeeklyClearedMask      uint32                 `protobuf:"varint,8,opt,name=weekly_cleared_mask,json=weeklyClearedMask,proto3" json:"weekly_cleared_mask,omitempty"`                   // 本周首通关位图（bit (node-1)）
+	WeeklyBestFloor        uint32                 `protobuf:"varint,9,opt,name=weekly_best_floor,json=weeklyBestFloor,proto3" json:"weekly_best_floor,omitempty"`                         // 本周本人流派最高通关关数
+	WeeklyBestRounds       uint32                 `protobuf:"varint,10,opt,name=weekly_best_rounds,json=weeklyBestRounds,proto3" json:"weekly_best_rounds,omitempty"`                     // 本周本人流派全通最少总回合数（0=未全通）
+	Revision               uint64                 `protobuf:"varint,11,opt,name=revision,proto3" json:"revision,omitempty"`                                                               // 写操作递增修订号
+	RunWeekKey             uint32                 `protobuf:"varint,12,opt,name=run_week_key,json=runWeekKey,proto3" json:"run_week_key,omitempty"`                                       // 本轮开局冻结周键（跨周不作废在途轮次，仅用于当周榜归属）
+	RealmVersion           uint32                 `protobuf:"varint,13,opt,name=realm_version,json=realmVersion,proto3" json:"realm_version,omitempty"`                                   // 2=V2 6关分岔奇策秘境（0/1=旧版）
+	UseFreePreset          bool                   `protobuf:"varint,14,opt,name=use_free_preset,json=useFreePreset,proto3" json:"use_free_preset,omitempty"`                              // true=公平 3x3 试炼模式；false=本人真实流派
+	CharacterPresetId      uint32                 `protobuf:"varint,15,opt,name=character_preset_id,json=characterPresetId,proto3" json:"character_preset_id,omitempty"`                  // 公平模式所选人物预设（101..103）
+	PetPresetId            uint32                 `protobuf:"varint,16,opt,name=pet_preset_id,json=petPresetId,proto3" json:"pet_preset_id,omitempty"`                                    // 公平模式所选灵宠预设（201..203）
+	CurrentNodeKind        uint32                 `protobuf:"varint,17,opt,name=current_node_kind,json=currentNodeKind,proto3" json:"current_node_kind,omitempty"`                        // 当前节点类型（0=待选分岔,1=普通,2=精英,3=首领,4=奇遇,5=休整）
+	PendingEventKind       uint32                 `protobuf:"varint,18,opt,name=pending_event_kind,json=pendingEventKind,proto3" json:"pending_event_kind,omitempty"`                     // 待抉择非战斗事件（0=无,1=第2关奇遇,2=第4关休整）
+	EventRerollCount       uint32                 `protobuf:"varint,19,opt,name=event_reroll_count,json=eventRerollCount,proto3" json:"event_reroll_count,omitempty"`                     // 本轮休整寻策计数（参与确定性种子防 SL）
+	BestRoundsSelf         uint32                 `protobuf:"varint,20,opt,name=best_rounds_self,json=bestRoundsSelf,proto3" json:"best_rounds_self,omitempty"`                           // 历史个人最速全通回合（本人流派，跨周永久保留）
+	BestRoundsPreset       uint32                 `protobuf:"varint,21,opt,name=best_rounds_preset,json=bestRoundsPreset,proto3" json:"best_rounds_preset,omitempty"`                     // 历史个人最速全通回合（公平试炼，跨周永久保留）
+	WeeklyBestFloorPreset  uint32                 `protobuf:"varint,22,opt,name=weekly_best_floor_preset,json=weeklyBestFloorPreset,proto3" json:"weekly_best_floor_preset,omitempty"`    // 本周公平试炼最高通关关数
+	WeeklyBestRoundsPreset uint32                 `protobuf:"varint,23,opt,name=weekly_best_rounds_preset,json=weeklyBestRoundsPreset,proto3" json:"weekly_best_rounds_preset,omitempty"` // 本周公平试炼全通最少总回合数
+	RouteChoiceMask        uint32                 `protobuf:"varint,24,opt,name=route_choice_mask,json=routeChoiceMask,proto3" json:"route_choice_mask,omitempty"`                        // 本轮分岔轨迹位图（bit0=第2关右路奇遇, bit1=第4关右路休整）
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *WuxingTowerCompState) Reset() {
@@ -236,6 +249,97 @@ func (x *WuxingTowerCompState) GetWeeklyBestRounds() uint32 {
 func (x *WuxingTowerCompState) GetRevision() uint64 {
 	if x != nil {
 		return x.Revision
+	}
+	return 0
+}
+
+func (x *WuxingTowerCompState) GetRunWeekKey() uint32 {
+	if x != nil {
+		return x.RunWeekKey
+	}
+	return 0
+}
+
+func (x *WuxingTowerCompState) GetRealmVersion() uint32 {
+	if x != nil {
+		return x.RealmVersion
+	}
+	return 0
+}
+
+func (x *WuxingTowerCompState) GetUseFreePreset() bool {
+	if x != nil {
+		return x.UseFreePreset
+	}
+	return false
+}
+
+func (x *WuxingTowerCompState) GetCharacterPresetId() uint32 {
+	if x != nil {
+		return x.CharacterPresetId
+	}
+	return 0
+}
+
+func (x *WuxingTowerCompState) GetPetPresetId() uint32 {
+	if x != nil {
+		return x.PetPresetId
+	}
+	return 0
+}
+
+func (x *WuxingTowerCompState) GetCurrentNodeKind() uint32 {
+	if x != nil {
+		return x.CurrentNodeKind
+	}
+	return 0
+}
+
+func (x *WuxingTowerCompState) GetPendingEventKind() uint32 {
+	if x != nil {
+		return x.PendingEventKind
+	}
+	return 0
+}
+
+func (x *WuxingTowerCompState) GetEventRerollCount() uint32 {
+	if x != nil {
+		return x.EventRerollCount
+	}
+	return 0
+}
+
+func (x *WuxingTowerCompState) GetBestRoundsSelf() uint32 {
+	if x != nil {
+		return x.BestRoundsSelf
+	}
+	return 0
+}
+
+func (x *WuxingTowerCompState) GetBestRoundsPreset() uint32 {
+	if x != nil {
+		return x.BestRoundsPreset
+	}
+	return 0
+}
+
+func (x *WuxingTowerCompState) GetWeeklyBestFloorPreset() uint32 {
+	if x != nil {
+		return x.WeeklyBestFloorPreset
+	}
+	return 0
+}
+
+func (x *WuxingTowerCompState) GetWeeklyBestRoundsPreset() uint32 {
+	if x != nil {
+		return x.WeeklyBestRoundsPreset
+	}
+	return 0
+}
+
+func (x *WuxingTowerCompState) GetRouteChoiceMask() uint32 {
+	if x != nil {
+		return x.RouteChoiceMask
 	}
 	return 0
 }
@@ -487,7 +591,7 @@ const file_proto_common_component_player_season_comp_proto_rawDesc = "" +
 	"\rbattle_points\x18\x04 \x01(\rR\fbattlePoints\x12%\n" +
 	"\x0ecatchup_points\x18\x05 \x01(\rR\rcatchupPoints\x12\x1a\n" +
 	"\brevision\x18\x06 \x01(\x04R\brevision\x12\x1b\n" +
-	"\tlast_term\x18\a \x01(\rR\blastTerm\"\xbd\x03\n" +
+	"\tlast_term\x18\a \x01(\rR\blastTerm\"\x80\b\n" +
 	"\x14WuxingTowerCompState\x12\x19\n" +
 	"\bweek_key\x18\x01 \x01(\rR\aweekKey\x12\x1d\n" +
 	"\n" +
@@ -501,7 +605,21 @@ const file_proto_common_component_player_season_comp_proto_rawDesc = "" +
 	"\x11weekly_best_floor\x18\t \x01(\rR\x0fweeklyBestFloor\x12,\n" +
 	"\x12weekly_best_rounds\x18\n" +
 	" \x01(\rR\x10weeklyBestRounds\x12\x1a\n" +
-	"\brevision\x18\v \x01(\x04R\brevision\"\x80\x04\n" +
+	"\brevision\x18\v \x01(\x04R\brevision\x12 \n" +
+	"\frun_week_key\x18\f \x01(\rR\n" +
+	"runWeekKey\x12#\n" +
+	"\rrealm_version\x18\r \x01(\rR\frealmVersion\x12&\n" +
+	"\x0fuse_free_preset\x18\x0e \x01(\bR\ruseFreePreset\x12.\n" +
+	"\x13character_preset_id\x18\x0f \x01(\rR\x11characterPresetId\x12\"\n" +
+	"\rpet_preset_id\x18\x10 \x01(\rR\vpetPresetId\x12*\n" +
+	"\x11current_node_kind\x18\x11 \x01(\rR\x0fcurrentNodeKind\x12,\n" +
+	"\x12pending_event_kind\x18\x12 \x01(\rR\x10pendingEventKind\x12,\n" +
+	"\x12event_reroll_count\x18\x13 \x01(\rR\x10eventRerollCount\x12(\n" +
+	"\x10best_rounds_self\x18\x14 \x01(\rR\x0ebestRoundsSelf\x12,\n" +
+	"\x12best_rounds_preset\x18\x15 \x01(\rR\x10bestRoundsPreset\x127\n" +
+	"\x18weekly_best_floor_preset\x18\x16 \x01(\rR\x15weeklyBestFloorPreset\x129\n" +
+	"\x19weekly_best_rounds_preset\x18\x17 \x01(\rR\x16weeklyBestRoundsPreset\x12*\n" +
+	"\x11route_choice_mask\x18\x18 \x01(\rR\x0frouteChoiceMask\"\x80\x04\n" +
 	"\x18SavedBattleBuildBookmark\x12\x1f\n" +
 	"\vbookmark_id\x18\x01 \x01(\x04R\n" +
 	"bookmarkId\x12\x14\n" +

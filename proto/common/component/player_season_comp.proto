@@ -13,19 +13,32 @@ message PlayerSeasonSealRecord {
   uint32 last_term = 7;        // 最近写入本记录所属的全局赛季届号（0=历史遗留第1届，跨届自动重置当届12点轻进度）
 }
 
-// 五行幻境·轻肉鸽周常爬塔持久化状态（10 层周常，出塔清空局内符印，位图记录首通层，AGENTS.md §13）。
+// 五行幻境 V2·五行奇策轻肉鸽秘境持久化状态（6 关分岔探索，出图清空局内奇策，位图记录首通，AGENTS.md §13）。
 message WuxingTowerCompState {
-  uint32 week_key = 1;                       // ISO/游戏周键（周一 05:00 换周）
-  bool run_active = 2;                       // 是否处于一轮进行中的幻境爬塔
-  uint64 run_id = 3;                         // 单调递增轮次号，防重复结算与确定性抽符
-  uint32 current_floor = 4;                  // 当前待挑战层数（1..10）
-  uint32 run_total_rounds = 5;               // 本轮已累计胜利回合数
-  repeated uint32 active_sigil_ids = 6;      // 本轮已选局内五行符印（至多 9 枚，重开清空）
-  repeated uint32 pending_offer_sigil_ids = 7; // 刚通关一层后待三选一的符印候选（非空时须先选符）
-  uint32 weekly_cleared_mask = 8;            // 本周首通层位图（bit (floor-1)，1..10）
-  uint32 weekly_best_floor = 9;              // 本周最高通关层数（0..10）
-  uint32 weekly_best_rounds = 10;            // 本周 10 层全通最少总回合数（0=未全通）
-  uint64 revision = 11;                      // 写操作递增修订号
+  uint32 week_key = 1;                         // 当前本周统计周键（周一 05:00 换周）
+  bool run_active = 2;                         // 是否处于一轮进行中的幻境探索（跨周保留不清空）
+  uint64 run_id = 3;                           // 单调递增轮次号，防重复结算与确定性抽策
+  uint32 current_floor = 4;                    // 当前待推进关卡（V2 为 1..6；兼容旧字段名）
+  uint32 run_total_rounds = 5;                 // 本轮已累计胜利回合数
+  repeated uint32 active_sigil_ids = 6;        // 本轮已选局内奇策/符印（V2 为 601..643，出图清空）
+  repeated uint32 pending_offer_sigil_ids = 7; // 待三选一奇策候选（非空时须先选策）
+  uint32 weekly_cleared_mask = 8;              // 本周首通关位图（bit (node-1)）
+  uint32 weekly_best_floor = 9;                // 本周本人流派最高通关关数
+  uint32 weekly_best_rounds = 10;              // 本周本人流派全通最少总回合数（0=未全通）
+  uint64 revision = 11;                        // 写操作递增修订号
+  uint32 run_week_key = 12;                    // 本轮开局冻结周键（跨周不作废在途轮次，仅用于当周榜归属）
+  uint32 realm_version = 13;                   // 2=V2 6关分岔奇策秘境（0/1=旧版）
+  bool use_free_preset = 14;                   // true=公平 3x3 试炼模式；false=本人真实流派
+  uint32 character_preset_id = 15;             // 公平模式所选人物预设（101..103）
+  uint32 pet_preset_id = 16;                   // 公平模式所选灵宠预设（201..203）
+  uint32 current_node_kind = 17;               // 当前节点类型（0=待选分岔,1=普通,2=精英,3=首领,4=奇遇,5=休整）
+  uint32 pending_event_kind = 18;              // 待抉择非战斗事件（0=无,1=第2关奇遇,2=第4关休整）
+  uint32 event_reroll_count = 19;              // 本轮休整寻策计数（参与确定性种子防 SL）
+  uint32 best_rounds_self = 20;                // 历史个人最速全通回合（本人流派，跨周永久保留）
+  uint32 best_rounds_preset = 21;              // 历史个人最速全通回合（公平试炼，跨周永久保留）
+  uint32 weekly_best_floor_preset = 22;        // 本周公平试炼最高通关关数
+  uint32 weekly_best_rounds_preset = 23;       // 本周公平试炼全通最少总回合数
+  uint32 route_choice_mask = 24;               // 本轮分岔轨迹位图（bit0=第2关右路奇遇, bit1=第4关右路休整）
 }
 
 // 战报一键收藏的公开脱敏配装条（最多保存 12 条，仅存公开构筑摘要，不含私密属性概率）。

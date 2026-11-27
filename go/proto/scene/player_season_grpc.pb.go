@@ -30,6 +30,8 @@ const (
 	SceneSeasonClientPlayer_SaveBattleBuildBookmark_FullMethodName   = "/SceneSeasonClientPlayer/SaveBattleBuildBookmark"
 	SceneSeasonClientPlayer_DeleteBattleBuildBookmark_FullMethodName = "/SceneSeasonClientPlayer/DeleteBattleBuildBookmark"
 	SceneSeasonClientPlayer_SetRetroHonorTarget_FullMethodName       = "/SceneSeasonClientPlayer/SetRetroHonorTarget"
+	SceneSeasonClientPlayer_ChooseWuxingRealmBranch_FullMethodName   = "/SceneSeasonClientPlayer/ChooseWuxingRealmBranch"
+	SceneSeasonClientPlayer_ResolveWuxingRealmEvent_FullMethodName   = "/SceneSeasonClientPlayer/ResolveWuxingRealmEvent"
 )
 
 // SceneSeasonClientPlayerClient is the client API for SceneSeasonClientPlayer service.
@@ -48,6 +50,8 @@ type SceneSeasonClientPlayerClient interface {
 	SaveBattleBuildBookmark(ctx context.Context, in *SaveBattleBuildBookmarkRequest, opts ...grpc.CallOption) (*SaveBattleBuildBookmarkResponse, error)
 	DeleteBattleBuildBookmark(ctx context.Context, in *DeleteBattleBuildBookmarkRequest, opts ...grpc.CallOption) (*DeleteBattleBuildBookmarkResponse, error)
 	SetRetroHonorTarget(ctx context.Context, in *SetRetroHonorTargetRequest, opts ...grpc.CallOption) (*SetRetroHonorTargetResponse, error)
+	ChooseWuxingRealmBranch(ctx context.Context, in *ChooseWuxingRealmBranchRequest, opts ...grpc.CallOption) (*ChooseWuxingRealmBranchResponse, error)
+	ResolveWuxingRealmEvent(ctx context.Context, in *ResolveWuxingRealmEventRequest, opts ...grpc.CallOption) (*ResolveWuxingRealmEventResponse, error)
 }
 
 type sceneSeasonClientPlayerClient struct {
@@ -168,6 +172,26 @@ func (c *sceneSeasonClientPlayerClient) SetRetroHonorTarget(ctx context.Context,
 	return out, nil
 }
 
+func (c *sceneSeasonClientPlayerClient) ChooseWuxingRealmBranch(ctx context.Context, in *ChooseWuxingRealmBranchRequest, opts ...grpc.CallOption) (*ChooseWuxingRealmBranchResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ChooseWuxingRealmBranchResponse)
+	err := c.cc.Invoke(ctx, SceneSeasonClientPlayer_ChooseWuxingRealmBranch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneSeasonClientPlayerClient) ResolveWuxingRealmEvent(ctx context.Context, in *ResolveWuxingRealmEventRequest, opts ...grpc.CallOption) (*ResolveWuxingRealmEventResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveWuxingRealmEventResponse)
+	err := c.cc.Invoke(ctx, SceneSeasonClientPlayer_ResolveWuxingRealmEvent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneSeasonClientPlayerServer is the server API for SceneSeasonClientPlayer service.
 // All implementations must embed UnimplementedSceneSeasonClientPlayerServer
 // for forward compatibility.
@@ -184,6 +208,8 @@ type SceneSeasonClientPlayerServer interface {
 	SaveBattleBuildBookmark(context.Context, *SaveBattleBuildBookmarkRequest) (*SaveBattleBuildBookmarkResponse, error)
 	DeleteBattleBuildBookmark(context.Context, *DeleteBattleBuildBookmarkRequest) (*DeleteBattleBuildBookmarkResponse, error)
 	SetRetroHonorTarget(context.Context, *SetRetroHonorTargetRequest) (*SetRetroHonorTargetResponse, error)
+	ChooseWuxingRealmBranch(context.Context, *ChooseWuxingRealmBranchRequest) (*ChooseWuxingRealmBranchResponse, error)
+	ResolveWuxingRealmEvent(context.Context, *ResolveWuxingRealmEventRequest) (*ResolveWuxingRealmEventResponse, error)
 	mustEmbedUnimplementedSceneSeasonClientPlayerServer()
 }
 
@@ -226,6 +252,12 @@ func (UnimplementedSceneSeasonClientPlayerServer) DeleteBattleBuildBookmark(cont
 }
 func (UnimplementedSceneSeasonClientPlayerServer) SetRetroHonorTarget(context.Context, *SetRetroHonorTargetRequest) (*SetRetroHonorTargetResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetRetroHonorTarget not implemented")
+}
+func (UnimplementedSceneSeasonClientPlayerServer) ChooseWuxingRealmBranch(context.Context, *ChooseWuxingRealmBranchRequest) (*ChooseWuxingRealmBranchResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ChooseWuxingRealmBranch not implemented")
+}
+func (UnimplementedSceneSeasonClientPlayerServer) ResolveWuxingRealmEvent(context.Context, *ResolveWuxingRealmEventRequest) (*ResolveWuxingRealmEventResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveWuxingRealmEvent not implemented")
 }
 func (UnimplementedSceneSeasonClientPlayerServer) mustEmbedUnimplementedSceneSeasonClientPlayerServer() {
 }
@@ -447,6 +479,42 @@ func _SceneSeasonClientPlayer_SetRetroHonorTarget_Handler(srv interface{}, ctx c
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SceneSeasonClientPlayer_ChooseWuxingRealmBranch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChooseWuxingRealmBranchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSeasonClientPlayerServer).ChooseWuxingRealmBranch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSeasonClientPlayer_ChooseWuxingRealmBranch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSeasonClientPlayerServer).ChooseWuxingRealmBranch(ctx, req.(*ChooseWuxingRealmBranchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneSeasonClientPlayer_ResolveWuxingRealmEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveWuxingRealmEventRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSeasonClientPlayerServer).ResolveWuxingRealmEvent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSeasonClientPlayer_ResolveWuxingRealmEvent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSeasonClientPlayerServer).ResolveWuxingRealmEvent(ctx, req.(*ResolveWuxingRealmEventRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SceneSeasonClientPlayer_ServiceDesc is the grpc.ServiceDesc for SceneSeasonClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -497,6 +565,14 @@ var SceneSeasonClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetRetroHonorTarget",
 			Handler:    _SceneSeasonClientPlayer_SetRetroHonorTarget_Handler,
+		},
+		{
+			MethodName: "ChooseWuxingRealmBranch",
+			Handler:    _SceneSeasonClientPlayer_ChooseWuxingRealmBranch_Handler,
+		},
+		{
+			MethodName: "ResolveWuxingRealmEvent",
+			Handler:    _SceneSeasonClientPlayer_ResolveWuxingRealmEvent_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

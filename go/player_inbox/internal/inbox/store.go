@@ -145,6 +145,28 @@ const (
 	itemPK   = "`shard` = ? AND `player_id` = ? AND `domain` = ? AND `seq` = ?"
 )
 
+// VerifySchema verifies at startup that the three player_inbox tables and their core columns
+// exist before serving traffic (ported fail-fast pattern from xuanming-server/pkg/mysqlx/schema.go).
+func VerifySchema(ctx context.Context, db *sql.DB) error {
+	const hint = "player_inbox -migrate"
+	if err := authoritysql.CheckTables(ctx, db, hint, streamTable, itemTable, auditTable); err != nil {
+		return err
+	}
+	if err := authoritysql.CheckColumns(ctx, db, hint, streamTable,
+		"shard", "player_id", "domain", "next_seq", "fence_epoch",
+	); err != nil {
+		return err
+	}
+	if err := authoritysql.CheckColumns(ctx, db, hint, itemTable,
+		"shard", "player_id", "domain", "seq", "state", "owner_account", "owner_revision",
+	); err != nil {
+		return err
+	}
+	return authoritysql.CheckColumns(ctx, db, hint, auditTable,
+		"shard", "player_id", "domain", "seq", "operator",
+	)
+}
+
 // terminalStatesSQL 是终态集合的 SQL 字面量(APPLIED / REJECTED / VOIDED / SETTLED_UNKNOWN)。
 // 由枚举值拼出而不是手写数字,改枚举时跟着变。
 var terminalStatesSQL = fmt.Sprintf("(%d,%d,%d,%d)",

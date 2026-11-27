@@ -46,3 +46,11 @@ constexpr uint32_t SceneSeasonClientPlayerDeleteBattleBuildBookmarkIndex = 9;
 constexpr uint32_t SceneSeasonClientPlayerSetRetroHonorTargetMessageId = 569;
 constexpr uint32_t SceneSeasonClientPlayerSetRetroHonorTargetIndex = 10;
 #define SceneSeasonClientPlayerSetRetroHonorTargetMethod  ::SceneSeasonClientPlayer_Stub::descriptor()->method(10)
+
+constexpr uint32_t SceneSeasonClientPlayerChooseWuxingRealmBranchMessageId = 585;
+constexpr uint32_t SceneSeasonClientPlayerChooseWuxingRealmBranchIndex = 11;
+#define SceneSeasonClientPlayerChooseWuxingRealmBranchMethod  ::SceneSeasonClientPlayer_Stub::descriptor()->method(11)
+
+constexpr uint32_t SceneSeasonClientPlayerResolveWuxingRealmEventMessageId = 586;
+constexpr uint32_t SceneSeasonClientPlayerResolveWuxingRealmEventIndex = 12;
+#define SceneSeasonClientPlayerResolveWuxingRealmEventMethod  ::SceneSeasonClientPlayer_Stub::descriptor()->method(12)

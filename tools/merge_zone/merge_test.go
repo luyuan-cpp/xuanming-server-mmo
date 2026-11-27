@@ -799,6 +799,11 @@ func TestPublishFailureAfterCommitIsNotARefusalAndARerunRepairs(t *testing.T) {
 	if _, err := runModeWithCopies(store, newMemCopies(), modeMerge, 7, 6, false); exitCodeOf(err) != exitFailed {
 		t.Fatalf("err = %v", err)
 	}
+	// 读回时撞上的拒绝(route_meta 没了)同样是退出码 2:映射已经提交,不能报成「校验拒绝、什么都没做」。
+	store.committedErr = refusedf("route_meta has no row id=1")
+	if _, err := runModeWithCopies(store, newMemCopies(), modeMerge, 9, 6, false); exitCodeOf(err) != exitFailed {
+		t.Fatalf("a refusal read back after the commit must still be exit 2: err = %v", err)
+	}
 	store.committedErr = nil
 	unreadable := newMemCopies()
 	unreadable.getErr = errors.New("etcd unavailable")

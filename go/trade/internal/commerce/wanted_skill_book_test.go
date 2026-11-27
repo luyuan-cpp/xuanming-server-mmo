@@ -278,11 +278,25 @@ func TestWantedFulfillGuards(t *testing.T) {
 		_, err := fulfill(t, r, w, wantedFulfiller, wantedRequest, wantedBookUUID)
 		require.ErrorIs(t, err, ErrConflict)
 	})
-	t.Run("揭榜次数用满", func(t *testing.T) {
+	t.Run("整单揭榜次数用满", func(t *testing.T) {
 		r, w := openWantedOrder(false)
-		w.QuantityReserved = maxWantedFulfillAttempts
+		w.QuantityReserved = maxAttemptsPerListing
 		_, err := fulfill(t, r, w, wantedFulfiller, wantedRequest, wantedBookUUID)
 		require.ErrorIs(t, err, ErrConflict)
+	})
+	t.Run("同一揭榜人试满三次,别人照样能揭", func(t *testing.T) {
+		r, w := openWantedOrder(false)
+		for i := range maxAttemptsPerActor {
+			_, err := fulfill(t, r, w, wantedFulfiller, "fulfill-request-100"+string(rune('0'+i)), wantedBookUUID)
+			require.NoError(t, err)
+			landDebit(w, outcomeRejected, nil) // 书没扣到:零成本的失败尝试
+			plan(t, r, w, 1000)
+			require.Equal(t, stageWantedOpen, w.Stage)
+		}
+		_, err := fulfill(t, r, w, wantedFulfiller, "fulfill-request-1009", wantedBookUUID)
+		require.ErrorIs(t, err, ErrConflict, "一个号不能把整张单的次数耗光")
+		_, err = fulfill(t, r, w, 3, "fulfill-request-2000", 9002)
+		require.NoError(t, err)
 	})
 	t.Run("不是求购单", func(t *testing.T) {
 		r, w := openWantedOrder(false)
@@ -395,4 +409,20 @@ func TestWantedBoardCursorRoundTrip(t *testing.T) {
 		_, ok := ParseWantedBoardCursor(raw)
 		require.False(t, ok, raw)
 	}
+}
+
+// 寄售与求购单共用的尝试次数判定:先按人限次,再按单限总数;只数这类尝试的扣款腿,别人的、别的腿都不算。
+func TestAttemptAllowedCapsEachActorAndTheListing(t *testing.T) {
+	w := &tradepb.TradeCommerceWorkflow{Legs: []*tradepb.TradeCommerceLeg{
+		{Role: "buyer_debit_1_a", PlayerId: 5}, {Role: "buyer_debit_2_b", PlayerId: 5},
+		{Role: "buyer_debit_3_c", PlayerId: 6}, {Role: "seller_debit", PlayerId: 5}, {Role: "buyer_receive", PlayerId: 5},
+	}, QuantityReserved: 3}
+	require.True(t, attemptAllowed(w, "buyer_debit_", 5), "两次,还能试第三次")
+	w.Legs = append(w.Legs, &tradepb.TradeCommerceLeg{Role: "buyer_debit_4_d", PlayerId: 5})
+	w.QuantityReserved = 4
+	require.False(t, attemptAllowed(w, "buyer_debit_", 5), "同一个人试满三次")
+	require.True(t, attemptAllowed(w, "buyer_debit_", 6))
+	require.True(t, attemptAllowed(w, "seller_debit_", 5), "别的前缀不算")
+	w.QuantityReserved = maxAttemptsPerListing
+	require.False(t, attemptAllowed(w, "buyer_debit_", 7), "整单试满")
 }

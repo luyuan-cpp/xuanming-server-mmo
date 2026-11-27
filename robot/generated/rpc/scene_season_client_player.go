@@ -284,3 +284,49 @@ func (sceneSeasonClientPlayerRpc) decodeSetRetroHonorTarget(reply *base.MessageC
 	}
 	return resp, nil
 }
+
+// ChooseWuxingRealmBranch 异步调用 SceneSeasonClientPlayer.ChooseWuxingRealmBranch(REQUEST),done 的契约见 SceneSeasonClientPlayer。
+func (r sceneSeasonClientPlayerRpc) ChooseWuxingRealmBranch(c *pkg.GameClient, req *scene.ChooseWuxingRealmBranchRequest, timeout time.Duration, done func(*scene.ChooseWuxingRealmBranchResponse, error)) {
+	c.Call(game.SceneSeasonClientPlayerChooseWuxingRealmBranchMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeChooseWuxingRealmBranch(reply, err))
+	})
+}
+
+// ChooseWuxingRealmBranchSync 同步调用 SceneSeasonClientPlayer.ChooseWuxingRealmBranch(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSeasonClientPlayerRpc) ChooseWuxingRealmBranchSync(ctx context.Context, c *pkg.GameClient, req *scene.ChooseWuxingRealmBranchRequest, timeout time.Duration) (*scene.ChooseWuxingRealmBranchResponse, error) {
+	return r.decodeChooseWuxingRealmBranch(c.CallSync(ctx, game.SceneSeasonClientPlayerChooseWuxingRealmBranchMessageId, req, timeout))
+}
+
+func (sceneSeasonClientPlayerRpc) decodeChooseWuxingRealmBranch(reply *base.MessageContent, err error) (*scene.ChooseWuxingRealmBranchResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.ChooseWuxingRealmBranchResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSeasonClientPlayer.ChooseWuxingRealmBranch reply: %w", err)
+	}
+	return resp, nil
+}
+
+// ResolveWuxingRealmEvent 异步调用 SceneSeasonClientPlayer.ResolveWuxingRealmEvent(REQUEST),done 的契约见 SceneSeasonClientPlayer。
+func (r sceneSeasonClientPlayerRpc) ResolveWuxingRealmEvent(c *pkg.GameClient, req *scene.ResolveWuxingRealmEventRequest, timeout time.Duration, done func(*scene.ResolveWuxingRealmEventResponse, error)) {
+	c.Call(game.SceneSeasonClientPlayerResolveWuxingRealmEventMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeResolveWuxingRealmEvent(reply, err))
+	})
+}
+
+// ResolveWuxingRealmEventSync 同步调用 SceneSeasonClientPlayer.ResolveWuxingRealmEvent(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSeasonClientPlayerRpc) ResolveWuxingRealmEventSync(ctx context.Context, c *pkg.GameClient, req *scene.ResolveWuxingRealmEventRequest, timeout time.Duration) (*scene.ResolveWuxingRealmEventResponse, error) {
+	return r.decodeResolveWuxingRealmEvent(c.CallSync(ctx, game.SceneSeasonClientPlayerResolveWuxingRealmEventMessageId, req, timeout))
+}
+
+func (sceneSeasonClientPlayerRpc) decodeResolveWuxingRealmEvent(reply *base.MessageContent, err error) (*scene.ResolveWuxingRealmEventResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.ResolveWuxingRealmEventResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSeasonClientPlayer.ResolveWuxingRealmEvent reply: %w", err)
+	}
+	return resp, nil
+}

@@ -45,6 +45,11 @@ message MailRequestReceiptRecord {
   string request_hash = 4;   // 首次请求的摘要(serviceauth.Digest),同键不同摘要回冲突
   uint32 kind = 5;           // MailKind
   uint64 created_ms = 6;
+  // 双人复核的批准记录(docs/design/admin-identity-and-dual-control.md §11.2):收据不随邮件行清理,长期留痕落在这里;
+  // 不带批准记录的发件(系统调用方)为空串。
+  string approval_id = 7;
+  string proposer = 8;
+  string approver = 9;
 }
 // 有附件的系统邮件只在名单完整seal的同事务插入mail_message；导入中的活动不可见。
 message MailCampaignRecord {

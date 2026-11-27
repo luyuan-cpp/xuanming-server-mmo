@@ -552,3 +552,5 @@ const MatchServiceGetTacticalPuzzleSolutionReplayMessageId = 581
 const ClientPlayerJubaozhaiCreateWantedSkillBookOrderMessageId = 582
 const ClientPlayerJubaozhaiFulfillWantedSkillBookOrderMessageId = 583
 const ClientPlayerJubaozhaiListWantedSkillBookOrdersMessageId = 584
+const SceneSeasonClientPlayerChooseWuxingRealmBranchMessageId = 585
+const SceneSeasonClientPlayerResolveWuxingRealmEventMessageId = 586

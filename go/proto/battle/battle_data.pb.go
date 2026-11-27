@@ -5289,16 +5289,20 @@ func (x *TournamentBattleContext) GetSkillBanSlotsPerTeam() uint32 {
 	return 0
 }
 
-// ---- 五行幻境·轻肉鸽周常爬塔上下文与结算回传(docs/design/wuxing-gameplay-expansions-v1.md) ----
+// ---- 五行幻境 V2·五行奇策轻肉鸽秘境上下文与结算回传(docs/planning/wuxing-roguelike-realm-v2.md) ----
 type WuxingTowerBattleContext struct {
-	state          protoimpl.MessageState   `protogen:"open.v1"`
-	WeekKey        uint32                   `protobuf:"varint,1,opt,name=week_key,json=weekKey,proto3" json:"week_key,omitempty"`                                                    // 开战冻结周键
-	RunId          uint64                   `protobuf:"varint,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`                                                          // 开战冻结轮次 ID
-	Floor          uint32                   `protobuf:"varint,3,opt,name=floor,proto3" json:"floor,omitempty"`                                                                       // 当前挑战层数（1..10）
-	LeylineElement TournamentLeylineElement `protobuf:"varint,4,opt,name=leyline_element,json=leylineElement,proto3,enum=TournamentLeylineElement" json:"leyline_element,omitempty"` // 本层环境五行灵脉（1..5）
-	ActiveSigilIds []uint32                 `protobuf:"varint,5,rep,packed,name=active_sigil_ids,json=activeSigilIds,proto3" json:"active_sigil_ids,omitempty"`                      // 本轮已选局内五行符印（仅本场生效）
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state                  protoimpl.MessageState   `protogen:"open.v1"`
+	WeekKey                uint32                   `protobuf:"varint,1,opt,name=week_key,json=weekKey,proto3" json:"week_key,omitempty"`                                                    // 开局冻结轮次周键
+	RunId                  uint64                   `protobuf:"varint,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`                                                          // 开战冻结轮次 ID
+	Floor                  uint32                   `protobuf:"varint,3,opt,name=floor,proto3" json:"floor,omitempty"`                                                                       // 当前挑战关数（V2 为 1..6；V1 为 1..10）
+	LeylineElement         TournamentLeylineElement `protobuf:"varint,4,opt,name=leyline_element,json=leylineElement,proto3,enum=TournamentLeylineElement" json:"leyline_element,omitempty"` // 本关环境五行灵脉（1..5）
+	ActiveSigilIds         []uint32                 `protobuf:"varint,5,rep,packed,name=active_sigil_ids,json=activeSigilIds,proto3" json:"active_sigil_ids,omitempty"`                      // 本轮已选局内奇策/符印（V2:601..643, V1:101..503）
+	RealmVersion           uint32                   `protobuf:"varint,6,opt,name=realm_version,json=realmVersion,proto3" json:"realm_version,omitempty"`                                     // 2=V2 五行奇策轻肉鸽秘境；0/1=V1 爬塔
+	NodeKind               uint32                   `protobuf:"varint,7,opt,name=node_kind,json=nodeKind,proto3" json:"node_kind,omitempty"`                                                 // V2 节点类型（1=普通战, 2=精英强敌, 3=终局首领）
+	UseFreePreset          bool                     `protobuf:"varint,8,opt,name=use_free_preset,json=useFreePreset,proto3" json:"use_free_preset,omitempty"`                                // true=公平 3x3 试炼模式；false=本人流派
+	ActiveResonanceElement uint32                   `protobuf:"varint,9,opt,name=active_resonance_element,json=activeResonanceElement,proto3" json:"active_resonance_element,omitempty"`     // 集齐 >=3 枚同系奇策触发的五行共鸣（0=无, 1..5）
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *WuxingTowerBattleContext) Reset() {
@@ -5366,12 +5370,43 @@ func (x *WuxingTowerBattleContext) GetActiveSigilIds() []uint32 {
 	return nil
 }
 
+func (x *WuxingTowerBattleContext) GetRealmVersion() uint32 {
+	if x != nil {
+		return x.RealmVersion
+	}
+	return 0
+}
+
+func (x *WuxingTowerBattleContext) GetNodeKind() uint32 {
+	if x != nil {
+		return x.NodeKind
+	}
+	return 0
+}
+
+func (x *WuxingTowerBattleContext) GetUseFreePreset() bool {
+	if x != nil {
+		return x.UseFreePreset
+	}
+	return false
+}
+
+func (x *WuxingTowerBattleContext) GetActiveResonanceElement() uint32 {
+	if x != nil {
+		return x.ActiveResonanceElement
+	}
+	return 0
+}
+
 type WuxingTowerSettlementEcho struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	WeekKey       uint32                 `protobuf:"varint,1,opt,name=week_key,json=weekKey,proto3" json:"week_key,omitempty"`
 	RunId         uint64                 `protobuf:"varint,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
 	Floor         uint32                 `protobuf:"varint,3,opt,name=floor,proto3" json:"floor,omitempty"`
 	TotalRounds   uint32                 `protobuf:"varint,4,opt,name=total_rounds,json=totalRounds,proto3" json:"total_rounds,omitempty"`
+	RealmVersion  uint32                 `protobuf:"varint,5,opt,name=realm_version,json=realmVersion,proto3" json:"realm_version,omitempty"`
+	NodeKind      uint32                 `protobuf:"varint,6,opt,name=node_kind,json=nodeKind,proto3" json:"node_kind,omitempty"`
+	UseFreePreset bool                   `protobuf:"varint,7,opt,name=use_free_preset,json=useFreePreset,proto3" json:"use_free_preset,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5432,6 +5467,27 @@ func (x *WuxingTowerSettlementEcho) GetTotalRounds() uint32 {
 		return x.TotalRounds
 	}
 	return 0
+}
+
+func (x *WuxingTowerSettlementEcho) GetRealmVersion() uint32 {
+	if x != nil {
+		return x.RealmVersion
+	}
+	return 0
+}
+
+func (x *WuxingTowerSettlementEcho) GetNodeKind() uint32 {
+	if x != nil {
+		return x.NodeKind
+	}
+	return 0
+}
+
+func (x *WuxingTowerSettlementEcho) GetUseFreePreset() bool {
+	if x != nil {
+		return x.UseFreePreset
+	}
+	return false
 }
 
 // ---- 道友切磋坊·自定义规则切磋(docs/design/wuxing-gameplay-expansions-v1.md) ----
@@ -6660,18 +6716,25 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x11squad_b_emblem_id\x18\r \x01(\rR\x0esquadBEmblemId\x12\x1b\n" +
 	"\tis_warmup\x18\x0e \x01(\bR\bisWarmup\x12$\n" +
 	"\x0eis_third_place\x18\x0f \x01(\bR\fisThirdPlace\x126\n" +
-	"\x18skill_ban_slots_per_team\x18\x10 \x01(\rR\x14skillBanSlotsPerTeam\"\xd0\x01\n" +
+	"\x18skill_ban_slots_per_team\x18\x10 \x01(\rR\x14skillBanSlotsPerTeam\"\xf4\x02\n" +
 	"\x18WuxingTowerBattleContext\x12\x19\n" +
 	"\bweek_key\x18\x01 \x01(\rR\aweekKey\x12\x15\n" +
 	"\x06run_id\x18\x02 \x01(\x04R\x05runId\x12\x14\n" +
 	"\x05floor\x18\x03 \x01(\rR\x05floor\x12B\n" +
 	"\x0fleyline_element\x18\x04 \x01(\x0e2\x19.TournamentLeylineElementR\x0eleylineElement\x12(\n" +
-	"\x10active_sigil_ids\x18\x05 \x03(\rR\x0eactiveSigilIds\"\x86\x01\n" +
+	"\x10active_sigil_ids\x18\x05 \x03(\rR\x0eactiveSigilIds\x12#\n" +
+	"\rrealm_version\x18\x06 \x01(\rR\frealmVersion\x12\x1b\n" +
+	"\tnode_kind\x18\a \x01(\rR\bnodeKind\x12&\n" +
+	"\x0fuse_free_preset\x18\b \x01(\bR\ruseFreePreset\x128\n" +
+	"\x18active_resonance_element\x18\t \x01(\rR\x16activeResonanceElement\"\xf0\x01\n" +
 	"\x19WuxingTowerSettlementEcho\x12\x19\n" +
 	"\bweek_key\x18\x01 \x01(\rR\aweekKey\x12\x15\n" +
 	"\x06run_id\x18\x02 \x01(\x04R\x05runId\x12\x14\n" +
 	"\x05floor\x18\x03 \x01(\rR\x05floor\x12!\n" +
-	"\ftotal_rounds\x18\x04 \x01(\rR\vtotalRounds\"\xf6\x03\n" +
+	"\ftotal_rounds\x18\x04 \x01(\rR\vtotalRounds\x12#\n" +
+	"\rrealm_version\x18\x05 \x01(\rR\frealmVersion\x12\x1b\n" +
+	"\tnode_kind\x18\x06 \x01(\rR\bnodeKind\x12&\n" +
+	"\x0fuse_free_preset\x18\a \x01(\bR\ruseFreePreset\"\xf6\x03\n" +
 	"\x0fCustomDuelRules\x12&\n" +
 	"\x0fuse_free_preset\x18\x01 \x01(\bR\ruseFreePreset\x128\n" +
 	"\x18enable_polarity_rotation\x18\x02 \x01(\bR\x16enablePolarityRotation\x120\n" +

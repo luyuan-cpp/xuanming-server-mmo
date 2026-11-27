@@ -260,13 +260,18 @@ func (x *MailRecord) GetApprover() string {
 // 过期清理不删它。邮件行被清理之后同一 (sender_kind, request_id) 再来,仍按收据回原 mail_id、不再建第二封,
 // 所以发件方(scene 待寄邮件、rank、trade、match)重试多久都不会重复发物。活动邮件的判重在 mail_campaign,清理不碰。
 type MailRequestReceiptRecord struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SenderKind    uint32                 `protobuf:"varint,1,opt,name=sender_kind,json=senderKind,proto3" json:"sender_kind,omitempty"`
-	RequestId     uint64                 `protobuf:"varint,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	MailId        uint64                 `protobuf:"varint,3,opt,name=mail_id,json=mailId,proto3" json:"mail_id,omitempty"`               // 首次建的那封;邮件行可能已被清理
-	RequestHash   string                 `protobuf:"bytes,4,opt,name=request_hash,json=requestHash,proto3" json:"request_hash,omitempty"` // 首次请求的摘要(serviceauth.Digest),同键不同摘要回冲突
-	Kind          uint32                 `protobuf:"varint,5,opt,name=kind,proto3" json:"kind,omitempty"`                                 // MailKind
-	CreatedMs     uint64                 `protobuf:"varint,6,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	SenderKind  uint32                 `protobuf:"varint,1,opt,name=sender_kind,json=senderKind,proto3" json:"sender_kind,omitempty"`
+	RequestId   uint64                 `protobuf:"varint,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	MailId      uint64                 `protobuf:"varint,3,opt,name=mail_id,json=mailId,proto3" json:"mail_id,omitempty"`               // 首次建的那封;邮件行可能已被清理
+	RequestHash string                 `protobuf:"bytes,4,opt,name=request_hash,json=requestHash,proto3" json:"request_hash,omitempty"` // 首次请求的摘要(serviceauth.Digest),同键不同摘要回冲突
+	Kind        uint32                 `protobuf:"varint,5,opt,name=kind,proto3" json:"kind,omitempty"`                                 // MailKind
+	CreatedMs   uint64                 `protobuf:"varint,6,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	// 双人复核的批准记录(docs/design/admin-identity-and-dual-control.md §11.2):收据不随邮件行清理,长期留痕落在这里;
+	// 不带批准记录的发件(系统调用方)为空串。
+	ApprovalId    string `protobuf:"bytes,7,opt,name=approval_id,json=approvalId,proto3" json:"approval_id,omitempty"`
+	Proposer      string `protobuf:"bytes,8,opt,name=proposer,proto3" json:"proposer,omitempty"`
+	Approver      string `protobuf:"bytes,9,opt,name=approver,proto3" json:"approver,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -341,6 +346,27 @@ func (x *MailRequestReceiptRecord) GetCreatedMs() uint64 {
 		return x.CreatedMs
 	}
 	return 0
+}
+
+func (x *MailRequestReceiptRecord) GetApprovalId() string {
+	if x != nil {
+		return x.ApprovalId
+	}
+	return ""
+}
+
+func (x *MailRequestReceiptRecord) GetProposer() string {
+	if x != nil {
+		return x.Proposer
+	}
+	return ""
+}
+
+func (x *MailRequestReceiptRecord) GetApprover() string {
+	if x != nil {
+		return x.Approver
+	}
+	return ""
 }
 
 // 有附件的系统邮件只在名单完整seal的同事务插入mail_message；导入中的活动不可见。
@@ -1203,7 +1229,7 @@ const file_proto_mail_mail_table_proto_rawDesc = "" +
 	"\vapproval_id\x18\x0f \x01(\tR\n" +
 	"approvalId\x12\x1a\n" +
 	"\bproposer\x18\x10 \x01(\tR\bproposer\x12\x1a\n" +
-	"\bapprover\x18\x11 \x01(\tR\bapprover:\x83\x01\x8a\x92\xf4\x01\fmail_message\x92\x92\xf4\x01\amail_idڒ\xf4\x017owner_player_id,mail_id;kind,expire_ms;guild_id,mail_id\xe2\x92\xf4\x01\x16sender_kind,request_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xff\x01\n" +
+	"\bapprover\x18\x11 \x01(\tR\bapprover:\x83\x01\x8a\x92\xf4\x01\fmail_message\x92\x92\xf4\x01\amail_idڒ\xf4\x017owner_player_id,mail_id;kind,expire_ms;guild_id,mail_id\xe2\x92\xf4\x01\x16sender_kind,request_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xd8\x02\n" +
 	"\x18MailRequestReceiptRecord\x12\x1f\n" +
 	"\vsender_kind\x18\x01 \x01(\rR\n" +
 	"senderKind\x12\x1d\n" +
@@ -1213,7 +1239,11 @@ const file_proto_mail_mail_table_proto_rawDesc = "" +
 	"\frequest_hash\x18\x04 \x01(\tR\vrequestHash\x12\x12\n" +
 	"\x04kind\x18\x05 \x01(\rR\x04kind\x12\x1d\n" +
 	"\n" +
-	"created_ms\x18\x06 \x01(\x04R\tcreatedMs:4\x8a\x92\xf4\x01\x14mail_request_receipt\x92\x92\xf4\x01\x16sender_kind,request_id\"\xbd\x06\n" +
+	"created_ms\x18\x06 \x01(\x04R\tcreatedMs\x12\x1f\n" +
+	"\vapproval_id\x18\a \x01(\tR\n" +
+	"approvalId\x12\x1a\n" +
+	"\bproposer\x18\b \x01(\tR\bproposer\x12\x1a\n" +
+	"\bapprover\x18\t \x01(\tR\bapprover:4\x8a\x92\xf4\x01\x14mail_request_receipt\x92\x92\xf4\x01\x16sender_kind,request_id\"\xbd\x06\n" +
 	"\x12MailCampaignRecord\x12\x1f\n" +
 	"\vsender_kind\x18\x01 \x01(\rR\n" +
 	"senderKind\x12\x1f\n" +

@@ -47,10 +47,6 @@ const (
 	// SealedSkillBookConfigID 是封卷道籍的道具模板(C++ equipcraft::kSealedSkillBookConfigId)。
 	SealedSkillBookConfigID = uint32(3414)
 
-	// maxWantedFulfillAttempts 是一张求购单累计揭榜次数的上限,与寄售每单 32 次购买尝试(QuantityReserved)同口径:
-	// 每次揭榜在 workflow 里留一两条腿,不设上限 workflow 会无界增长。用满之后这张单揭不了,发榜人撤单(全额退回)重发。
-	maxWantedFulfillAttempts = 32
-
 	stageWantedEscrow = "wanted_escrow" // 托管发榜人的悬赏银两
 	stageWantedOpen   = "wanted_open"   // 挂榜,可揭榜、可撤单
 	stageWantedFill   = "wanted_fill"   // 一次揭榜进行中:托管揭榜人的书、核对、不符时退书
@@ -220,7 +216,8 @@ func (e *Engine) fulfillWantedLocked(ctx context.Context, tx *sql.Tx, me uint64,
 	if me == r.BuyerPlayerId {
 		return false, ErrSelf
 	}
-	if w.QuantityReserved >= maxWantedFulfillAttempts {
+	if !attemptAllowed(w, wantedDebitPrefix, me) {
+		// 同一揭榜人对这张单已试满 maxAttemptsPerActor 次,或整单试满 maxAttemptsPerListing 次(engine.go)。
 		return false, ErrConflict
 	}
 	owned, err := e.Roles.Ownership(ctx, tx, me)

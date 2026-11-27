@@ -260,7 +260,8 @@ func publishCommitted(ctx context.Context, store mappingStore, copies mergedzone
 		}
 		committed, err := store.Committed(ctx)
 		if err != nil {
-			return fmt.Errorf("the mapping is committed, but directory shard 0 could not be read back to publish it; re-run the same command: %w", err)
+			// 用 %v 不用 %w:Committed 回的拒绝(route_meta 没了)不能让这里算成退出码 1「什么都没做」,映射已经提交了。
+			return fmt.Errorf("the mapping is committed, but directory shard 0 could not be read back to publish it; re-run the same command: %v", err)
 		}
 		publish, err := mergedzonecopy.Decide(key, published, found, committed)
 		if err != nil {

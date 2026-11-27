@@ -134,6 +134,8 @@ type externalDeps struct {
 	openMySQL func(config.MySQLConf) (*sql.DB, error)
 	// checkRoleFence 只读核本库的 role_fence 表,缺表拒启。
 	checkRoleFence func(context.Context, *sql.DB) error
+	// checkInboxSchema 只读核本库的 player_inbox_stream / player_inbox_item / player_inbox_audit 表及核心列,缺表拒启。
+	checkInboxSchema func(context.Context, *sql.DB) error
 	// newRoleAuthority 建角色护栏:本库副本 + 经 data_service 读权威状态和入场登记。
 	newRoleAuthority func(*sql.DB, dspb.DataServiceClient) (inbox.RoleAuthority, error)
 	// openControlRedis 建控制集群客户端并探活;返回错误时自己负责关掉已建的客户端。
@@ -154,6 +156,7 @@ func productionDeps() externalDeps {
 		},
 		openMySQL:        OpenMySQL,
 		checkRoleFence:   rolefence.VerifySchema,
+		checkInboxSchema: inbox.VerifySchema,
 		newRoleAuthority: newFenceRoleAuthority,
 		openControlRedis: openControlRedis,
 		openPlayerRedis:  openPlayerRedis,
@@ -286,9 +289,12 @@ func newServiceContextWithAdmission(c config.Config, deps externalDeps, writer a
 	}
 	roleCtx, roleCancel := context.WithTimeout(context.Background(), mysqlPingTimeout)
 	err = deps.checkRoleFence(roleCtx, sc.DB)
+	if err == nil && deps.checkInboxSchema != nil {
+		err = deps.checkInboxSchema(roleCtx, sc.DB)
+	}
 	roleCancel()
 	if err != nil {
-		return nil, fmt.Errorf("player_inbox: role_fence 表不可用,先执行 -migrate: %w", err)
+		return nil, fmt.Errorf("player_inbox: schema check failed, run -migrate first: %w", err)
 	}
 
 	sc.ControlRedis, err = deps.openControlRedis(c.EffectiveControlRedis())

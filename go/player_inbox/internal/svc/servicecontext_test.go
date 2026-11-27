@@ -162,6 +162,12 @@ func (r *recordingDeps) deps() externalDeps {
 			}
 			return nil
 		},
+		checkInboxSchema: func(context.Context, *sql.DB) error {
+			if r.failAt == "inbox_schema" {
+				return errInjected
+			}
+			return nil
+		},
 		newRoleAuthority: func(*sql.DB, dspb.DataServiceClient) (inbox.RoleAuthority, error) {
 			if r.failAt == "role_authority" {
 				return nil, errInjected
@@ -285,6 +291,15 @@ func TestNewServiceContextClosesOpenedResourcesOnFailure(t *testing.T) {
 	}
 	if rec.conn.GetState() != connectivity.Shutdown || !redisClosed(rec.rds) || !dbClosed(rec.db) || rec.etcd.Ctx().Err() == nil {
 		t.Error("角色护栏装配失败时 data_service / Redis / MySQL / etcd 都应已关闭")
+	}
+
+	rec = newRecordingDeps(t)
+	rec.failAt = "inbox_schema"
+	if sc, err := newServiceContext(testConfig(), rec.deps()); err == nil || sc != nil || !errors.Is(err, errInjected) {
+		t.Fatalf("收件箱表校验失败应返回错误: sc=%v err=%v", sc, err)
+	}
+	if !dbClosed(rec.db) || rec.etcd.Ctx().Err() == nil {
+		t.Error("收件箱表校验失败时 MySQL 与 etcd 必须关闭")
 	}
 }
 

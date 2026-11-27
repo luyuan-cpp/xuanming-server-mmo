@@ -21,6 +21,7 @@ import (
 	"shared/cellroute"
 	"shared/generated/pb/table"
 	"shared/redisslot"
+	"shared/tracing"
 	"strconv"
 	"time"
 
@@ -250,12 +251,10 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 	enterCtx := flowState // value-copied state for the closure
 	playerID := in.PlayerId
 
-	// 后台链的 ctx 不受 gRPC ctx 的取消与截止约束(本函数一返回它就被取消),但保留它的值:
-	// trace 与日志上下文(player_id)随后台链走,链上的 RPC、发给 gate 的 Kafka 命令和日志都接着这次 EnterGame
-	// (docs/design/distributed-tracing.md §6.2)。WithoutCancel 是标准库给「请求返回后继续跑的工作」的做法;
-	// 它带过去的其余值(会话元数据、验签原件)链上没有代码读,出站拦截器也不读。
+	// 后台链的 ctx 经 tracing.Detach 白名单剥离，仅保留 OTel trace/baggage 并显式附带 player_id 日志字段，
+	// 彻底阻断 ctxkeys.SessionDetails 与请求 gRPC incoming metadata 逃逸到后台协程。
 	// chainCancel both stops the timeout and cancels manually from the lost-lock heartbeat path.
-	detachedCtx := context.WithoutCancel(ctx)
+	detachedCtx := logx.ContextWithFields(tracing.Detach(ctx), logx.Field("player_id", playerID))
 	const chainBudget = enterGameChainBudget
 	chainCtx, chainCancel := context.WithTimeout(detachedCtx, chainBudget)
 

@@ -1664,6 +1664,8 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 		request.match_mode() == static_cast<uint32_t>(match::MATCH_MODE_JIANGHU_DUEL);
 
 	::WuxingTowerBattleContext towerCtx;
+	uint32_t towerCharPresetId = 0u;
+	uint32_t towerPetPresetId = 0u;
 	if (isWuxingTower)
 	{
 		if (request.match_mode() != match::MATCH_MODE_PVE_SOLO || isFestivalBeast)
@@ -1672,7 +1674,8 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 			return;
 		}
 		const uint32_t towerErr = PlayerSeasonSystem::PrepareWuxingTowerContext(
-			player, TimeSystem::NowMillisecondsUTC(), request.battle_config_id(), towerCtx);
+			player, TimeSystem::NowMillisecondsUTC(), request.battle_config_id(), towerCtx,
+			&towerCharPresetId, &towerPetPresetId);
 		if (towerErr != kSuccess)
 		{
 			LOG_WARN << "[PlayerBattle] PrepareBattle rejected: wuxing tower precheck failed, player_id=" << playerId
@@ -1730,12 +1733,36 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 		}
 	}
 
-	// 先组快照,失败不留任何冻结痕迹：仅免费预设娱乐场(use_free_preset=true)构建免费 3×3 预设快照；
-	// 正式人宠会武(season_id != 0 && !use_free_preset)与首领试炼均使用本人真实装备/词条/法宝/技能/宝宝快照。
+	// 先组快照,失败不留任何冻结痕迹：免费预设娱乐场或五行幻境 V2 公平试炼构建免费 3×3 预设快照（全权取自服务端权威档案，绝不信客户端）；
+	// 正式人宠会武(season_id != 0 && !use_free_preset)、首领试炼与五行幻境本人流派均使用本人真实装备/词条/法宝/技能/宝宝快照。
 	uint32_t errorTipId = kSuccess;
 	const bool allowEmptyPuzzlePet = bossTrialKind == turnbattle::kBossTrialKindTacticalPuzzle;
-	const bool built = useFreePreset
-		? BuildCompetitiveBattleSnapshot(player, request.ranked_context(), *response.mutable_snapshot(), errorTipId, allowEmptyPuzzlePet)
+	const bool towerFairPreset = isWuxingTower && towerCtx.use_free_preset();
+	::RankedMatchContext effectiveRankedCtx;
+	const ::RankedMatchContext* rankedCtxPtr = &request.ranked_context();
+	if (towerFairPreset)
+	{
+		const auto* rule = RankedRuleTableManager::Instance().FindByIdSilent(rankedpreset::kRuleRowId).first;
+		if (rule == nullptr)
+		{
+			response.clear_snapshot();
+			response.mutable_error_message()->set_id(kInvalidTableData);
+			return;
+		}
+		effectiveRankedCtx.set_season_id(0u);
+		effectiveRankedCtx.set_use_free_preset(true);
+		effectiveRankedCtx.set_team_size(1u);
+		effectiveRankedCtx.set_rule_version(rule->rule_version());
+		effectiveRankedCtx.set_config_fingerprint(rankedpreset::ComputeConfigFingerprint());
+		auto* member = effectiveRankedCtx.add_members();
+		member->set_player_id(playerId);
+		member->mutable_presets()->set_character_preset_id(towerCharPresetId);
+		member->mutable_presets()->set_pet_preset_id(towerPetPresetId);
+		rankedCtxPtr = &effectiveRankedCtx;
+	}
+	const bool effectiveFreePreset = useFreePreset || towerFairPreset;
+	const bool built = effectiveFreePreset
+		? BuildCompetitiveBattleSnapshot(player, *rankedCtxPtr, *response.mutable_snapshot(), errorTipId, allowEmptyPuzzlePet)
 		: BuildBattleSnapshot(player, *response.mutable_snapshot(), errorTipId);
 	if (!built)
 	{
@@ -1747,7 +1774,7 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 	{
 		*response.mutable_snapshot()->mutable_tower_context() = std::move(towerCtx);
 	}
-	if (!useFreePreset && isolateBattleTempState)
+	if (!effectiveFreePreset && isolateBattleTempState)
 	{
 		auto* snap = response.mutable_snapshot();
 		snap->mutable_base_attributes()->set_health(snap->max_health());

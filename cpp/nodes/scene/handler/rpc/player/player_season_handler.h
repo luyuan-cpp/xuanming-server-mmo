@@ -47,6 +47,12 @@ public:
     static void SetRetroHonorTarget(entt::entity player,
         const ::SetRetroHonorTargetRequest* request,
         ::SetRetroHonorTargetResponse* response);
+    static void ChooseWuxingRealmBranch(entt::entity player,
+        const ::ChooseWuxingRealmBranchRequest* request,
+        ::ChooseWuxingRealmBranchResponse* response);
+    static void ResolveWuxingRealmEvent(entt::entity player,
+        const ::ResolveWuxingRealmEventRequest* request,
+        ::ResolveWuxingRealmEventResponse* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -152,6 +158,24 @@ public:
             SetRetroHonorTarget(player,
                 static_cast<const ::SetRetroHonorTargetRequest*>(request),
                 static_cast<::SetRetroHonorTargetResponse*>(response));
+			}
+            break;
+        case 11:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::ChooseWuxingRealmBranchResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            ChooseWuxingRealmBranch(player,
+                static_cast<const ::ChooseWuxingRealmBranchRequest*>(request),
+                static_cast<::ChooseWuxingRealmBranchResponse*>(response));
+			}
+            break;
+        case 12:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::ResolveWuxingRealmEventResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            ResolveWuxingRealmEvent(player,
+                static_cast<const ::ResolveWuxingRealmEventRequest*>(request),
+                static_cast<::ResolveWuxingRealmEventResponse*>(response));
 			}
             break;
         default:

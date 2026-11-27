@@ -1177,6 +1177,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerSettlementEcho final : p
     kWeekKeyFieldNumber = 1,
     kFloorFieldNumber = 3,
     kTotalRoundsFieldNumber = 4,
+    kRealmVersionFieldNumber = 5,
+    kNodeKindFieldNumber = 6,
+    kUseFreePresetFieldNumber = 7,
   };
   // uint64 run_id = 2;
   void clear_run_id() ;
@@ -1218,11 +1221,41 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerSettlementEcho final : p
   void _internal_set_total_rounds(::uint32_t value);
 
   public:
+  // uint32 realm_version = 5;
+  void clear_realm_version() ;
+  [[nodiscard]] ::uint32_t realm_version() const;
+  void set_realm_version(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_realm_version() const;
+  void _internal_set_realm_version(::uint32_t value);
+
+  public:
+  // uint32 node_kind = 6;
+  void clear_node_kind() ;
+  [[nodiscard]] ::uint32_t node_kind() const;
+  void set_node_kind(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_node_kind() const;
+  void _internal_set_node_kind(::uint32_t value);
+
+  public:
+  // bool use_free_preset = 7;
+  void clear_use_free_preset() ;
+  [[nodiscard]] bool use_free_preset() const;
+  void set_use_free_preset(bool value);
+
+  private:
+  bool _internal_use_free_preset() const;
+  void _internal_set_use_free_preset(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:WuxingTowerSettlementEcho)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<3, 7,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1255,6 +1288,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerSettlementEcho final : p
     ::uint32_t week_key_;
     ::uint32_t floor_;
     ::uint32_t total_rounds_;
+    ::uint32_t realm_version_;
+    ::uint32_t node_kind_;
+    bool use_free_preset_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1415,6 +1451,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerBattleContext final : pu
     kWeekKeyFieldNumber = 1,
     kFloorFieldNumber = 3,
     kLeylineElementFieldNumber = 4,
+    kRealmVersionFieldNumber = 6,
+    kNodeKindFieldNumber = 7,
+    kUseFreePresetFieldNumber = 8,
+    kActiveResonanceElementFieldNumber = 9,
   };
   // repeated uint32 active_sigil_ids = 5;
   [[nodiscard]] int active_sigil_ids_size()
@@ -1476,11 +1516,51 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerBattleContext final : pu
   void _internal_set_leyline_element(::TournamentLeylineElement value);
 
   public:
+  // uint32 realm_version = 6;
+  void clear_realm_version() ;
+  [[nodiscard]] ::uint32_t realm_version() const;
+  void set_realm_version(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_realm_version() const;
+  void _internal_set_realm_version(::uint32_t value);
+
+  public:
+  // uint32 node_kind = 7;
+  void clear_node_kind() ;
+  [[nodiscard]] ::uint32_t node_kind() const;
+  void set_node_kind(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_node_kind() const;
+  void _internal_set_node_kind(::uint32_t value);
+
+  public:
+  // bool use_free_preset = 8;
+  void clear_use_free_preset() ;
+  [[nodiscard]] bool use_free_preset() const;
+  void set_use_free_preset(bool value);
+
+  private:
+  bool _internal_use_free_preset() const;
+  void _internal_set_use_free_preset(bool value);
+
+  public:
+  // uint32 active_resonance_element = 9;
+  void clear_active_resonance_element() ;
+  [[nodiscard]] ::uint32_t active_resonance_element() const;
+  void set_active_resonance_element(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_active_resonance_element() const;
+  void _internal_set_active_resonance_element(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:WuxingTowerBattleContext)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
+      ::google::protobuf::internal::TcParseTable<4, 9,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1515,6 +1595,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerBattleContext final : pu
     ::uint32_t week_key_;
     ::uint32_t floor_;
     int leyline_element_;
+    ::uint32_t realm_version_;
+    ::uint32_t node_kind_;
+    bool use_free_preset_;
+    ::uint32_t active_resonance_element_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -29613,6 +29697,102 @@ WuxingTowerBattleContext::_internal_mutable_active_sigil_ids() {
   return &_impl_.active_sigil_ids_;
 }
 
+// uint32 realm_version = 6;
+inline void WuxingTowerBattleContext::clear_realm_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.realm_version_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t WuxingTowerBattleContext::realm_version() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerBattleContext.realm_version)
+  return _internal_realm_version();
+}
+inline void WuxingTowerBattleContext::set_realm_version(::uint32_t value) {
+  _internal_set_realm_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:WuxingTowerBattleContext.realm_version)
+}
+inline ::uint32_t WuxingTowerBattleContext::_internal_realm_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.realm_version_;
+}
+inline void WuxingTowerBattleContext::_internal_set_realm_version(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.realm_version_ = value;
+}
+
+// uint32 node_kind = 7;
+inline void WuxingTowerBattleContext::clear_node_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.node_kind_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t WuxingTowerBattleContext::node_kind() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerBattleContext.node_kind)
+  return _internal_node_kind();
+}
+inline void WuxingTowerBattleContext::set_node_kind(::uint32_t value) {
+  _internal_set_node_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:WuxingTowerBattleContext.node_kind)
+}
+inline ::uint32_t WuxingTowerBattleContext::_internal_node_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.node_kind_;
+}
+inline void WuxingTowerBattleContext::_internal_set_node_kind(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.node_kind_ = value;
+}
+
+// bool use_free_preset = 8;
+inline void WuxingTowerBattleContext::clear_use_free_preset() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.use_free_preset_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline bool WuxingTowerBattleContext::use_free_preset() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerBattleContext.use_free_preset)
+  return _internal_use_free_preset();
+}
+inline void WuxingTowerBattleContext::set_use_free_preset(bool value) {
+  _internal_set_use_free_preset(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:WuxingTowerBattleContext.use_free_preset)
+}
+inline bool WuxingTowerBattleContext::_internal_use_free_preset() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.use_free_preset_;
+}
+inline void WuxingTowerBattleContext::_internal_set_use_free_preset(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.use_free_preset_ = value;
+}
+
+// uint32 active_resonance_element = 9;
+inline void WuxingTowerBattleContext::clear_active_resonance_element() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_resonance_element_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t WuxingTowerBattleContext::active_resonance_element() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerBattleContext.active_resonance_element)
+  return _internal_active_resonance_element();
+}
+inline void WuxingTowerBattleContext::set_active_resonance_element(::uint32_t value) {
+  _internal_set_active_resonance_element(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:WuxingTowerBattleContext.active_resonance_element)
+}
+inline ::uint32_t WuxingTowerBattleContext::_internal_active_resonance_element() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.active_resonance_element_;
+}
+inline void WuxingTowerBattleContext::_internal_set_active_resonance_element(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_resonance_element_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // WuxingTowerSettlementEcho
@@ -29711,6 +29891,78 @@ inline ::uint32_t WuxingTowerSettlementEcho::_internal_total_rounds() const {
 inline void WuxingTowerSettlementEcho::_internal_set_total_rounds(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.total_rounds_ = value;
+}
+
+// uint32 realm_version = 5;
+inline void WuxingTowerSettlementEcho::clear_realm_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.realm_version_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t WuxingTowerSettlementEcho::realm_version() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerSettlementEcho.realm_version)
+  return _internal_realm_version();
+}
+inline void WuxingTowerSettlementEcho::set_realm_version(::uint32_t value) {
+  _internal_set_realm_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:WuxingTowerSettlementEcho.realm_version)
+}
+inline ::uint32_t WuxingTowerSettlementEcho::_internal_realm_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.realm_version_;
+}
+inline void WuxingTowerSettlementEcho::_internal_set_realm_version(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.realm_version_ = value;
+}
+
+// uint32 node_kind = 6;
+inline void WuxingTowerSettlementEcho::clear_node_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.node_kind_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t WuxingTowerSettlementEcho::node_kind() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerSettlementEcho.node_kind)
+  return _internal_node_kind();
+}
+inline void WuxingTowerSettlementEcho::set_node_kind(::uint32_t value) {
+  _internal_set_node_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:WuxingTowerSettlementEcho.node_kind)
+}
+inline ::uint32_t WuxingTowerSettlementEcho::_internal_node_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.node_kind_;
+}
+inline void WuxingTowerSettlementEcho::_internal_set_node_kind(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.node_kind_ = value;
+}
+
+// bool use_free_preset = 7;
+inline void WuxingTowerSettlementEcho::clear_use_free_preset() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.use_free_preset_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline bool WuxingTowerSettlementEcho::use_free_preset() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerSettlementEcho.use_free_preset)
+  return _internal_use_free_preset();
+}
+inline void WuxingTowerSettlementEcho::set_use_free_preset(bool value) {
+  _internal_set_use_free_preset(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:WuxingTowerSettlementEcho.use_free_preset)
+}
+inline bool WuxingTowerSettlementEcho::_internal_use_free_preset() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.use_free_preset_;
+}
+inline void WuxingTowerSettlementEcho::_internal_set_use_free_preset(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.use_free_preset_ = value;
 }
 
 // -------------------------------------------------------------------

@@ -66,8 +66,7 @@ void SceneSeasonClientPlayerHandler::StartWuxingTowerRun(entt::entity player,con
 	::StartWuxingTowerRunResponse* response)
 {
 ///<<< BEGIN WRITING YOUR CODE
-	(void)request;
-	PlayerSeasonSystem::StartWuxingTowerRun(player, TimeSystem::NowMillisecondsUTC(), *response);
+	PlayerSeasonSystem::StartWuxingTowerRun(player, TimeSystem::NowMillisecondsUTC(), *request, *response);
 ///<<< END WRITING YOUR CODE
 
 }
@@ -115,4 +114,20 @@ void SceneSeasonClientPlayerHandler::SetRetroHonorTarget(entt::entity player,con
 	PlayerSeasonSystem::SetRetroHonorTarget(player, TimeSystem::NowMillisecondsUTC(), *request, *response);
 ///<<< END WRITING YOUR CODE
 
+}
+
+void SceneSeasonClientPlayerHandler::ChooseWuxingRealmBranch(entt::entity player,const ::ChooseWuxingRealmBranchRequest* request,
+	::ChooseWuxingRealmBranchResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	PlayerSeasonSystem::ChooseWuxingRealmBranch(player, TimeSystem::NowMillisecondsUTC(), *request, *response);
+///<<< END WRITING YOUR CODE
+}
+
+void SceneSeasonClientPlayerHandler::ResolveWuxingRealmEvent(entt::entity player,const ::ResolveWuxingRealmEventRequest* request,
+	::ResolveWuxingRealmEventResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	PlayerSeasonSystem::ResolveWuxingRealmEvent(player, TimeSystem::NowMillisecondsUTC(), *request, *response);
+///<<< END WRITING YOUR CODE
 }

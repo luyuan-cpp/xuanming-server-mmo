@@ -752,13 +752,17 @@ message TournamentBattleContext {
   uint32 skill_ban_slots_per_team = 16;            // 战前技能禁选每队槽数（默认 3，0=关闭）
 }
 
-// ---- 五行幻境·轻肉鸽周常爬塔上下文与结算回传(docs/design/wuxing-gameplay-expansions-v1.md) ----
+// ---- 五行幻境 V2·五行奇策轻肉鸽秘境上下文与结算回传(docs/planning/wuxing-roguelike-realm-v2.md) ----
 message WuxingTowerBattleContext {
-  uint32 week_key = 1;                             // 开战冻结周键
+  uint32 week_key = 1;                             // 开局冻结轮次周键
   uint64 run_id = 2;                               // 开战冻结轮次 ID
-  uint32 floor = 3;                                // 当前挑战层数（1..10）
-  TournamentLeylineElement leyline_element = 4;    // 本层环境五行灵脉（1..5）
-  repeated uint32 active_sigil_ids = 5;            // 本轮已选局内五行符印（仅本场生效）
+  uint32 floor = 3;                                // 当前挑战关数（V2 为 1..6；V1 为 1..10）
+  TournamentLeylineElement leyline_element = 4;    // 本关环境五行灵脉（1..5）
+  repeated uint32 active_sigil_ids = 5;            // 本轮已选局内奇策/符印（V2:601..643, V1:101..503）
+  uint32 realm_version = 6;                        // 2=V2 五行奇策轻肉鸽秘境；0/1=V1 爬塔
+  uint32 node_kind = 7;                            // V2 节点类型（1=普通战, 2=精英强敌, 3=终局首领）
+  bool use_free_preset = 8;                        // true=公平 3x3 试炼模式；false=本人流派
+  uint32 active_resonance_element = 9;             // 集齐 >=3 枚同系奇策触发的五行共鸣（0=无, 1..5）
 }
 
 message WuxingTowerSettlementEcho {
@@ -766,6 +770,9 @@ message WuxingTowerSettlementEcho {
   uint64 run_id = 2;
   uint32 floor = 3;
   uint32 total_rounds = 4;
+  uint32 realm_version = 5;
+  uint32 node_kind = 6;
+  bool use_free_preset = 7;
 }
 
 // ---- 道友切磋坊·自定义规则切磋(docs/design/wuxing-gameplay-expansions-v1.md) ----

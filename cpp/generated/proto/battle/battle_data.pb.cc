@@ -144,11 +144,11 @@ constexpr WuxingTowerSettlementEcho::ParseTableT_ WuxingTowerSettlementEcho::Int
     {
       PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      7, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294967168,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
+      7,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -158,10 +158,7 @@ constexpr WuxingTowerSettlementEcho::ParseTableT_ WuxingTowerSettlementEcho::Int
       ::_pbi::TcParser::GetTable<::WuxingTowerSettlementEcho>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 total_rounds = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerSettlementEcho, _impl_.total_rounds_), 3>(),
-       {32, 3, 0,
-        PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_.total_rounds_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint32 week_key = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerSettlementEcho, _impl_.week_key_), 1>(),
        {8, 1, 0,
@@ -174,6 +171,22 @@ constexpr WuxingTowerSettlementEcho::ParseTableT_ WuxingTowerSettlementEcho::Int
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerSettlementEcho, _impl_.floor_), 2>(),
        {24, 2, 0,
         PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_.floor_)}},
+      // uint32 total_rounds = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerSettlementEcho, _impl_.total_rounds_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_.total_rounds_)}},
+      // uint32 realm_version = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerSettlementEcho, _impl_.realm_version_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_.realm_version_)}},
+      // uint32 node_kind = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerSettlementEcho, _impl_.node_kind_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_.node_kind_)}},
+      // bool use_free_preset = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(WuxingTowerSettlementEcho, _impl_.use_free_preset_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_.use_free_preset_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -185,6 +198,12 @@ constexpr WuxingTowerSettlementEcho::ParseTableT_ WuxingTowerSettlementEcho::Int
       {PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_.floor_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 total_rounds = 4;
       {PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_.total_rounds_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 realm_version = 5;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_.realm_version_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 node_kind = 6;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_.node_kind_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool use_free_preset = 7;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_.use_free_preset_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
@@ -200,7 +219,10 @@ inline constexpr WuxingTowerSettlementEcho::Impl_::Impl_(
         run_id_{::uint64_t{0u}},
         week_key_{0u},
         floor_{0u},
-        total_rounds_{0u} {}
+        total_rounds_{0u},
+        realm_version_{0u},
+        node_kind_{0u},
+        use_free_preset_{false} {}
 
 template <typename>
 constexpr WuxingTowerSettlementEcho::WuxingTowerSettlementEcho(::_pbi::ConstantInitialized,
@@ -306,11 +328,11 @@ constexpr WuxingTowerBattleContext::ParseTableT_ WuxingTowerBattleContext::Inter
     {
       PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_._has_bits_),
       0, // no _extensions_
-      5, 56,  // max_field_number, fast_idx_mask
+      9, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967264,  // skipmap
+      4294966784,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      5,  // num_field_entries
+      9,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -341,6 +363,26 @@ constexpr WuxingTowerBattleContext::ParseTableT_ WuxingTowerBattleContext::Inter
       {::_pbi::TcParser::FastV32P1,
        {42, 0, 0,
         PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.active_sigil_ids_)}},
+      // uint32 realm_version = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerBattleContext, _impl_.realm_version_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.realm_version_)}},
+      // uint32 node_kind = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerBattleContext, _impl_.node_kind_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.node_kind_)}},
+      // bool use_free_preset = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(WuxingTowerBattleContext, _impl_.use_free_preset_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.use_free_preset_)}},
+      // uint32 active_resonance_element = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(WuxingTowerBattleContext, _impl_.active_resonance_element_), 8>(),
+       {72, 8, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.active_resonance_element_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
@@ -356,6 +398,14 @@ constexpr WuxingTowerBattleContext::ParseTableT_ WuxingTowerBattleContext::Inter
       {PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.leyline_element_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // repeated uint32 active_sigil_ids = 5;
       {PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.active_sigil_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
+      // uint32 realm_version = 6;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.realm_version_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 node_kind = 7;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.node_kind_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool use_free_preset = 8;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.use_free_preset_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 active_resonance_element = 9;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.active_resonance_element_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -377,7 +427,11 @@ inline constexpr WuxingTowerBattleContext::Impl_::Impl_(
         run_id_{::uint64_t{0u}},
         week_key_{0u},
         floor_{0u},
-        leyline_element_{static_cast< ::TournamentLeylineElement >(0)} {}
+        leyline_element_{static_cast< ::TournamentLeylineElement >(0)},
+        realm_version_{0u},
+        node_kind_{0u},
+        use_free_preset_{false},
+        active_resonance_element_{0u} {}
 
 template <typename>
 constexpr WuxingTowerBattleContext::WuxingTowerBattleContext(::_pbi::ConstantInitialized,
@@ -11702,28 +11756,42 @@ const ::uint32_t
         15,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::WuxingTowerBattleContext, _impl_._has_bits_),
-        8, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::WuxingTowerBattleContext, _impl_.week_key_),
         PROTOBUF_FIELD_OFFSET(::WuxingTowerBattleContext, _impl_.run_id_),
         PROTOBUF_FIELD_OFFSET(::WuxingTowerBattleContext, _impl_.floor_),
         PROTOBUF_FIELD_OFFSET(::WuxingTowerBattleContext, _impl_.leyline_element_),
         PROTOBUF_FIELD_OFFSET(::WuxingTowerBattleContext, _impl_.active_sigil_ids_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerBattleContext, _impl_.realm_version_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerBattleContext, _impl_.node_kind_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerBattleContext, _impl_.use_free_preset_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerBattleContext, _impl_.active_resonance_element_),
         2,
         1,
         3,
         4,
         0,
+        5,
+        6,
+        7,
+        8,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::WuxingTowerSettlementEcho, _impl_._has_bits_),
-        7, // hasbit index offset
+        10, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::WuxingTowerSettlementEcho, _impl_.week_key_),
         PROTOBUF_FIELD_OFFSET(::WuxingTowerSettlementEcho, _impl_.run_id_),
         PROTOBUF_FIELD_OFFSET(::WuxingTowerSettlementEcho, _impl_.floor_),
         PROTOBUF_FIELD_OFFSET(::WuxingTowerSettlementEcho, _impl_.total_rounds_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerSettlementEcho, _impl_.realm_version_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerSettlementEcho, _impl_.node_kind_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerSettlementEcho, _impl_.use_free_preset_),
         1,
         0,
         2,
         3,
+        4,
+        5,
+        6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::CustomDuelRules, _impl_._has_bits_),
         12, // hasbit index offset
@@ -11905,13 +11973,13 @@ static const ::_pbi::MigrationSchema
         {888, sizeof(::BattleTrialJournalFacts)},
         {949, sizeof(::TournamentBattleContext)},
         {984, sizeof(::WuxingTowerBattleContext)},
-        {997, sizeof(::WuxingTowerSettlementEcho)},
-        {1008, sizeof(::CustomDuelRules)},
-        {1029, sizeof(::BattleActorBuildSummary)},
-        {1060, sizeof(::JianghuDuelBattleContext)},
-        {1087, sizeof(::TacticalPuzzleEnemySpec)},
-        {1100, sizeof(::TacticalPuzzleSpec)},
-        {1125, sizeof(::TacticalPuzzleBattleContext)},
+        {1005, sizeof(::WuxingTowerSettlementEcho)},
+        {1022, sizeof(::CustomDuelRules)},
+        {1043, sizeof(::BattleActorBuildSummary)},
+        {1074, sizeof(::JianghuDuelBattleContext)},
+        {1101, sizeof(::TacticalPuzzleEnemySpec)},
+        {1114, sizeof(::TacticalPuzzleSpec)},
+        {1139, sizeof(::TacticalPuzzleBattleContext)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -12292,117 +12360,121 @@ const char descriptor_table_protodef_proto_2fbattle_2fbattle_5fdata_2eproto[] AB
     "(\004\022\024\n\014squad_b_name\030\013 \001(\t\022\031\n\021squad_a_embl"
     "em_id\030\014 \001(\r\022\031\n\021squad_b_emblem_id\030\r \001(\r\022\021"
     "\n\tis_warmup\030\016 \001(\010\022\026\n\016is_third_place\030\017 \001("
-    "\010\022 \n\030skill_ban_slots_per_team\030\020 \001(\r\"\231\001\n\030"
+    "\010\022 \n\030skill_ban_slots_per_team\030\020 \001(\r\"\376\001\n\030"
     "WuxingTowerBattleContext\022\020\n\010week_key\030\001 \001"
     "(\r\022\016\n\006run_id\030\002 \001(\004\022\r\n\005floor\030\003 \001(\r\0222\n\017ley"
     "line_element\030\004 \001(\0162\031.TournamentLeylineEl"
-    "ement\022\030\n\020active_sigil_ids\030\005 \003(\r\"b\n\031Wuxin"
-    "gTowerSettlementEcho\022\020\n\010week_key\030\001 \001(\r\022\016"
-    "\n\006run_id\030\002 \001(\004\022\r\n\005floor\030\003 \001(\r\022\024\n\014total_r"
-    "ounds\030\004 \001(\r\"\263\002\n\017CustomDuelRules\022\027\n\017use_f"
-    "ree_preset\030\001 \001(\010\022 \n\030enable_polarity_rota"
-    "tion\030\002 \001(\010\022\034\n\024round_limit_override\030\003 \001(\r"
-    "\022\032\n\022ban_control_skills\030\004 \001(\010\022\035\n\025allow_pu"
-    "blic_spectate\030\005 \001(\010\022&\n\036challenger_charac"
-    "ter_preset_id\030\006 \001(\r\022 \n\030challenger_pet_pr"
-    "eset_id\030\007 \001(\r\022 \n\030skill_ban_slots_per_tea"
-    "m\030\010 \001(\r\022 \n\030rematch_source_battle_id\030\t \001("
-    "\004\"\324\002\n\027BattleActorBuildSummary\022\021\n\tplayer_"
-    "id\030\001 \001(\004\022\014\n\004name\030\002 \001(\t\022\022\n\nteam_index\030\003 \001"
-    "(\r\022\020\n\010class_id\030\004 \001(\r\022\r\n\005level\030\005 \001(\r\022\024\n\014f"
-    "ormation_id\030\006 \001(\r\022\026\n\016wuxing_element\030\007 \001("
-    "\r\022\026\n\016season_seal_id\030\010 \001(\r\022\033\n\023active_pet_"
-    "table_id\030\t \001(\r\022\027\n\017active_pet_name\030\n \001(\t\022"
-    "\032\n\022active_pet_element\030\013 \001(\r\022\027\n\017skill_tab"
-    "le_ids\030\014 \003(\r\022\030\n\020wuxing_sigil_ids\030\r \003(\r\022\030"
-    "\n\020used_free_preset\030\016 \001(\010\"\326\002\n\030JianghuDuel"
-    "BattleContext\022\026\n\016duel_invite_id\030\001 \001(\004\022\021\n"
-    "\twrit_tier\030\002 \001(\r\022\035\n\025challenger_captain_i"
-    "d\030\003 \001(\004\022\037\n\027challenger_captain_name\030\004 \001(\t"
-    "\022\031\n\021target_captain_id\030\005 \001(\004\022\033\n\023target_ca"
-    "ptain_name\030\006 \001(\t\022\027\n\017side_a_guild_id\030\007 \001("
-    "\004\022\031\n\021side_a_guild_name\030\010 \001(\t\022\027\n\017side_b_g"
-    "uild_id\030\t \001(\004\022\031\n\021side_b_guild_name\030\n \001(\t"
-    "\022\034\n\024round_limit_override\030\013 \001(\r\022\021\n\tteam_s"
-    "ize\030\014 \001(\r\"\233\001\n\027TacticalPuzzleEnemySpec\022\030\n"
-    "\020monster_table_id\030\001 \001(\r\022\026\n\016initial_hp_pc"
-    "t\030\002 \001(\r\022\032\n\022initial_shield_pct\030\003 \001(\r\022\027\n\017s"
-    "peed_delta_pct\030\004 \001(\005\022\031\n\021initial_buff_kin"
-    "d\030\005 \001(\r\"\360\002\n\022TacticalPuzzleSpec\022\023\n\013round_"
-    "limit\030\001 \001(\r\022\033\n\023character_preset_id\030\002 \001(\r"
-    "\022\025\n\rpet_preset_id\030\003 \001(\r\022\024\n\014formation_id\030"
-    "\004 \001(\r\022\035\n\025player_initial_hp_pct\030\005 \001(\r\022\035\n\025"
-    "player_initial_mp_pct\030\006 \001(\r\022!\n\031player_in"
-    "itial_shield_pct\030\007 \001(\r\022\"\n\032player_initial"
-    "_debuff_kind\030\010 \001(\r\022)\n\007enemies\030\t \003(\0132\030.Ta"
-    "cticalPuzzleEnemySpec\0222\n\017leyline_element"
-    "\030\n \001(\0162\031.TournamentLeylineElement\022\027\n\017ban"
-    "ned_skill_id\030\013 \001(\r\"\311\001\n\033TacticalPuzzleBat"
-    "tleContext\022\021\n\tpuzzle_id\030\001 \001(\004\022\025\n\rspec_re"
-    "vision\030\002 \001(\r\022\030\n\020is_author_verify\030\003 \001(\010\022\024"
-    "\n\014puzzle_title\030\004 \001(\t\022\030\n\020author_player_id"
-    "\030\005 \001(\004\022\023\n\013author_name\030\006 \001(\t\022!\n\004spec\030\007 \001("
-    "\0132\023.TacticalPuzzleSpec*\206\001\n\020eBattleActorT"
-    "ype\022\032\n\026BATTLE_ACTOR_TYPE_NONE\020\000\022\034\n\030BATTL"
-    "E_ACTOR_TYPE_PLAYER\020\001\022\035\n\031BATTLE_ACTOR_TY"
-    "PE_MONSTER\020\002\022\031\n\025BATTLE_ACTOR_TYPE_PET\020\003*"
-    "\377\001\n\021eBattleActionType\022\026\n\022BATTLE_ACTION_N"
-    "ONE\020\000\022\030\n\024BATTLE_ACTION_ATTACK\020\001\022\027\n\023BATTL"
-    "E_ACTION_SKILL\020\002\022\030\n\024BATTLE_ACTION_DEFEND"
-    "\020\003\022\026\n\022BATTLE_ACTION_ITEM\020\004\022\026\n\022BATTLE_ACT"
-    "ION_FLEE\020\005\022\031\n\025BATTLE_ACTION_CAPTURE\020\006\022\034\n"
-    "\030BATTLE_ACTION_RECALL_PET\020\007\022\034\n\030BATTLE_AC"
-    "TION_SUMMON_PET\020\010*\235\005\n\020eBattleEventType\022\025"
-    "\n\021BATTLE_EVENT_NONE\020\000\022\027\n\023BATTLE_EVENT_AT"
-    "TACK\020\001\022\026\n\022BATTLE_EVENT_SKILL\020\002\022\027\n\023BATTLE"
-    "_EVENT_DAMAGE\020\003\022\025\n\021BATTLE_EVENT_HEAL\020\004\022\031"
-    "\n\025BATTLE_EVENT_BUFF_ADD\020\005\022\034\n\030BATTLE_EVEN"
-    "T_BUFF_REMOVE\020\006\022\032\n\026BATTLE_EVENT_BUFF_TIC"
-    "K\020\007\022\026\n\022BATTLE_EVENT_DEATH\020\010\022\027\n\023BATTLE_EV"
-    "ENT_DEFEND\020\t\022\025\n\021BATTLE_EVENT_ITEM\020\n\022\025\n\021B"
-    "ATTLE_EVENT_FLEE\020\013\022\025\n\021BATTLE_EVENT_MISS\020"
-    "\014\022\026\n\022BATTLE_EVENT_BLOCK\020\r\022\025\n\021BATTLE_EVEN"
-    "T_MANA\020\016\022\027\n\023BATTLE_EVENT_RESIST\020\017\022\030\n\024BAT"
-    "TLE_EVENT_CAPTURE\020\020\022\027\n\023BATTLE_EVENT_REVI"
-    "VE\020\021\022\033\n\027BATTLE_EVENT_MAX_HEALTH\020\022\022\034\n\030BAT"
-    "TLE_EVENT_PET_RETREAT\020\023\022\027\n\023BATTLE_EVENT_"
-    "SHIELD\020\024\022\031\n\025BATTLE_EVENT_ARTIFACT\020\025\022\036\n\032B"
-    "ATTLE_EVENT_BOSS_MECHANIC\020\026\022\037\n\033BATTLE_EV"
-    "ENT_WUXING_SYNERGY\020\027\022\033\n\027BATTLE_EVENT_SUM"
-    "MON_PET\020\030*\234\001\n\016eBattleHitKind\022\025\n\021BATTLE_H"
-    "IT_NORMAL\020\000\022\024\n\020BATTLE_HIT_COMBO\020\001\022\026\n\022BAT"
-    "TLE_HIT_COUNTER\020\002\022\026\n\022BATTLE_HIT_REFLECT\020"
-    "\003\022\026\n\022BATTLE_HIT_PURSUIT\020\004\022\025\n\021BATTLE_HIT_"
-    "MIRROR\020\005*\216\001\n\016BattlePingKind\022\033\n\027BATTLE_PI"
-    "NG_UNSPECIFIED\020\000\022\025\n\021BATTLE_PING_FOCUS\020\001\022"
-    "\027\n\023BATTLE_PING_CONTROL\020\002\022\027\n\023BATTLE_PING_"
-    "PROTECT\020\003\022\026\n\022BATTLE_PING_DISPEL\020\004*\347\001\n\023Ba"
-    "ttleHighlightKind\022\031\n\025BATTLE_HIGHLIGHT_NO"
-    "NE\020\000\022\"\n\036BATTLE_HIGHLIGHT_PRIMARY_FOCUS\020\001"
-    "\022%\n!BATTLE_HIGHLIGHT_TACTICAL_CONTROL\020\002\022"
-    "#\n\037BATTLE_HIGHLIGHT_SAVIOR_SUPPORT\020\003\022\037\n\033"
-    "BATTLE_HIGHLIGHT_IRON_GUARD\020\004\022$\n BATTLE_"
-    "HIGHLIGHT_CLUTCH_COMEBACK\020\005*\234\001\n\016eBattleO"
-    "utcome\022\032\n\026BATTLE_OUTCOME_ONGOING\020\000\022\035\n\031BA"
-    "TTLE_OUTCOME_SIDE_A_WIN\020\001\022\035\n\031BATTLE_OUTC"
-    "OME_SIDE_B_WIN\020\002\022\027\n\023BATTLE_OUTCOME_DRAW\020"
-    "\003\022\027\n\023BATTLE_OUTCOME_VOID\020\004*\247\001\n\023eBattleAc"
-    "tivityKind\022\035\n\031BATTLE_ACTIVITY_KIND_NONE\020"
-    "\000\022$\n BATTLE_ACTIVITY_KIND_GUILD_TRIAL\020\001\022"
-    "\'\n#BATTLE_ACTIVITY_KIND_FESTIVAL_BEAST\020\002"
-    "\022\"\n\036BATTLE_ACTIVITY_KIND_GUILD_WAR\020\003*{\n\023"
-    "eSpectateVisibility\022#\n\037SPECTATE_VISIBILI"
-    "TY_UNSPECIFIED\020\000\022\037\n\033SPECTATE_VISIBILITY_"
-    "PRIVATE\020\001\022\036\n\032SPECTATE_VISIBILITY_PUBLIC\020"
-    "\002*_\n\reSpectateTier\022\030\n\024SPECTATE_TIER_DIRE"
-    "CT\020\000\022\027\n\023SPECTATE_TIER_RELAY\020\001\022\033\n\027SPECTAT"
-    "E_TIER_BROADCAST\020\002*\322\001\n\030TournamentLeyline"
-    "Element\022\"\n\036TOURNAMENT_LEYLINE_UNSPECIFIE"
-    "D\020\000\022\034\n\030TOURNAMENT_LEYLINE_METAL\020\001\022\033\n\027TOU"
-    "RNAMENT_LEYLINE_WOOD\020\002\022\034\n\030TOURNAMENT_LEY"
-    "LINE_WATER\020\003\022\033\n\027TOURNAMENT_LEYLINE_FIRE\020"
-    "\004\022\034\n\030TOURNAMENT_LEYLINE_EARTH\020\005B\010Z\006battl"
-    "eb\006proto3"
+    "ement\022\030\n\020active_sigil_ids\030\005 \003(\r\022\025\n\rrealm"
+    "_version\030\006 \001(\r\022\021\n\tnode_kind\030\007 \001(\r\022\027\n\017use"
+    "_free_preset\030\010 \001(\010\022 \n\030active_resonance_e"
+    "lement\030\t \001(\r\"\245\001\n\031WuxingTowerSettlementEc"
+    "ho\022\020\n\010week_key\030\001 \001(\r\022\016\n\006run_id\030\002 \001(\004\022\r\n\005"
+    "floor\030\003 \001(\r\022\024\n\014total_rounds\030\004 \001(\r\022\025\n\rrea"
+    "lm_version\030\005 \001(\r\022\021\n\tnode_kind\030\006 \001(\r\022\027\n\017u"
+    "se_free_preset\030\007 \001(\010\"\263\002\n\017CustomDuelRules"
+    "\022\027\n\017use_free_preset\030\001 \001(\010\022 \n\030enable_pola"
+    "rity_rotation\030\002 \001(\010\022\034\n\024round_limit_overr"
+    "ide\030\003 \001(\r\022\032\n\022ban_control_skills\030\004 \001(\010\022\035\n"
+    "\025allow_public_spectate\030\005 \001(\010\022&\n\036challeng"
+    "er_character_preset_id\030\006 \001(\r\022 \n\030challeng"
+    "er_pet_preset_id\030\007 \001(\r\022 \n\030skill_ban_slot"
+    "s_per_team\030\010 \001(\r\022 \n\030rematch_source_battl"
+    "e_id\030\t \001(\004\"\324\002\n\027BattleActorBuildSummary\022\021"
+    "\n\tplayer_id\030\001 \001(\004\022\014\n\004name\030\002 \001(\t\022\022\n\nteam_"
+    "index\030\003 \001(\r\022\020\n\010class_id\030\004 \001(\r\022\r\n\005level\030\005"
+    " \001(\r\022\024\n\014formation_id\030\006 \001(\r\022\026\n\016wuxing_ele"
+    "ment\030\007 \001(\r\022\026\n\016season_seal_id\030\010 \001(\r\022\033\n\023ac"
+    "tive_pet_table_id\030\t \001(\r\022\027\n\017active_pet_na"
+    "me\030\n \001(\t\022\032\n\022active_pet_element\030\013 \001(\r\022\027\n\017"
+    "skill_table_ids\030\014 \003(\r\022\030\n\020wuxing_sigil_id"
+    "s\030\r \003(\r\022\030\n\020used_free_preset\030\016 \001(\010\"\326\002\n\030Ji"
+    "anghuDuelBattleContext\022\026\n\016duel_invite_id"
+    "\030\001 \001(\004\022\021\n\twrit_tier\030\002 \001(\r\022\035\n\025challenger_"
+    "captain_id\030\003 \001(\004\022\037\n\027challenger_captain_n"
+    "ame\030\004 \001(\t\022\031\n\021target_captain_id\030\005 \001(\004\022\033\n\023"
+    "target_captain_name\030\006 \001(\t\022\027\n\017side_a_guil"
+    "d_id\030\007 \001(\004\022\031\n\021side_a_guild_name\030\010 \001(\t\022\027\n"
+    "\017side_b_guild_id\030\t \001(\004\022\031\n\021side_b_guild_n"
+    "ame\030\n \001(\t\022\034\n\024round_limit_override\030\013 \001(\r\022"
+    "\021\n\tteam_size\030\014 \001(\r\"\233\001\n\027TacticalPuzzleEne"
+    "mySpec\022\030\n\020monster_table_id\030\001 \001(\r\022\026\n\016init"
+    "ial_hp_pct\030\002 \001(\r\022\032\n\022initial_shield_pct\030\003"
+    " \001(\r\022\027\n\017speed_delta_pct\030\004 \001(\005\022\031\n\021initial"
+    "_buff_kind\030\005 \001(\r\"\360\002\n\022TacticalPuzzleSpec\022"
+    "\023\n\013round_limit\030\001 \001(\r\022\033\n\023character_preset"
+    "_id\030\002 \001(\r\022\025\n\rpet_preset_id\030\003 \001(\r\022\024\n\014form"
+    "ation_id\030\004 \001(\r\022\035\n\025player_initial_hp_pct\030"
+    "\005 \001(\r\022\035\n\025player_initial_mp_pct\030\006 \001(\r\022!\n\031"
+    "player_initial_shield_pct\030\007 \001(\r\022\"\n\032playe"
+    "r_initial_debuff_kind\030\010 \001(\r\022)\n\007enemies\030\t"
+    " \003(\0132\030.TacticalPuzzleEnemySpec\0222\n\017leylin"
+    "e_element\030\n \001(\0162\031.TournamentLeylineEleme"
+    "nt\022\027\n\017banned_skill_id\030\013 \001(\r\"\311\001\n\033Tactical"
+    "PuzzleBattleContext\022\021\n\tpuzzle_id\030\001 \001(\004\022\025"
+    "\n\rspec_revision\030\002 \001(\r\022\030\n\020is_author_verif"
+    "y\030\003 \001(\010\022\024\n\014puzzle_title\030\004 \001(\t\022\030\n\020author_"
+    "player_id\030\005 \001(\004\022\023\n\013author_name\030\006 \001(\t\022!\n\004"
+    "spec\030\007 \001(\0132\023.TacticalPuzzleSpec*\206\001\n\020eBat"
+    "tleActorType\022\032\n\026BATTLE_ACTOR_TYPE_NONE\020\000"
+    "\022\034\n\030BATTLE_ACTOR_TYPE_PLAYER\020\001\022\035\n\031BATTLE"
+    "_ACTOR_TYPE_MONSTER\020\002\022\031\n\025BATTLE_ACTOR_TY"
+    "PE_PET\020\003*\377\001\n\021eBattleActionType\022\026\n\022BATTLE"
+    "_ACTION_NONE\020\000\022\030\n\024BATTLE_ACTION_ATTACK\020\001"
+    "\022\027\n\023BATTLE_ACTION_SKILL\020\002\022\030\n\024BATTLE_ACTI"
+    "ON_DEFEND\020\003\022\026\n\022BATTLE_ACTION_ITEM\020\004\022\026\n\022B"
+    "ATTLE_ACTION_FLEE\020\005\022\031\n\025BATTLE_ACTION_CAP"
+    "TURE\020\006\022\034\n\030BATTLE_ACTION_RECALL_PET\020\007\022\034\n\030"
+    "BATTLE_ACTION_SUMMON_PET\020\010*\235\005\n\020eBattleEv"
+    "entType\022\025\n\021BATTLE_EVENT_NONE\020\000\022\027\n\023BATTLE"
+    "_EVENT_ATTACK\020\001\022\026\n\022BATTLE_EVENT_SKILL\020\002\022"
+    "\027\n\023BATTLE_EVENT_DAMAGE\020\003\022\025\n\021BATTLE_EVENT"
+    "_HEAL\020\004\022\031\n\025BATTLE_EVENT_BUFF_ADD\020\005\022\034\n\030BA"
+    "TTLE_EVENT_BUFF_REMOVE\020\006\022\032\n\026BATTLE_EVENT"
+    "_BUFF_TICK\020\007\022\026\n\022BATTLE_EVENT_DEATH\020\010\022\027\n\023"
+    "BATTLE_EVENT_DEFEND\020\t\022\025\n\021BATTLE_EVENT_IT"
+    "EM\020\n\022\025\n\021BATTLE_EVENT_FLEE\020\013\022\025\n\021BATTLE_EV"
+    "ENT_MISS\020\014\022\026\n\022BATTLE_EVENT_BLOCK\020\r\022\025\n\021BA"
+    "TTLE_EVENT_MANA\020\016\022\027\n\023BATTLE_EVENT_RESIST"
+    "\020\017\022\030\n\024BATTLE_EVENT_CAPTURE\020\020\022\027\n\023BATTLE_E"
+    "VENT_REVIVE\020\021\022\033\n\027BATTLE_EVENT_MAX_HEALTH"
+    "\020\022\022\034\n\030BATTLE_EVENT_PET_RETREAT\020\023\022\027\n\023BATT"
+    "LE_EVENT_SHIELD\020\024\022\031\n\025BATTLE_EVENT_ARTIFA"
+    "CT\020\025\022\036\n\032BATTLE_EVENT_BOSS_MECHANIC\020\026\022\037\n\033"
+    "BATTLE_EVENT_WUXING_SYNERGY\020\027\022\033\n\027BATTLE_"
+    "EVENT_SUMMON_PET\020\030*\234\001\n\016eBattleHitKind\022\025\n"
+    "\021BATTLE_HIT_NORMAL\020\000\022\024\n\020BATTLE_HIT_COMBO"
+    "\020\001\022\026\n\022BATTLE_HIT_COUNTER\020\002\022\026\n\022BATTLE_HIT"
+    "_REFLECT\020\003\022\026\n\022BATTLE_HIT_PURSUIT\020\004\022\025\n\021BA"
+    "TTLE_HIT_MIRROR\020\005*\216\001\n\016BattlePingKind\022\033\n\027"
+    "BATTLE_PING_UNSPECIFIED\020\000\022\025\n\021BATTLE_PING"
+    "_FOCUS\020\001\022\027\n\023BATTLE_PING_CONTROL\020\002\022\027\n\023BAT"
+    "TLE_PING_PROTECT\020\003\022\026\n\022BATTLE_PING_DISPEL"
+    "\020\004*\347\001\n\023BattleHighlightKind\022\031\n\025BATTLE_HIG"
+    "HLIGHT_NONE\020\000\022\"\n\036BATTLE_HIGHLIGHT_PRIMAR"
+    "Y_FOCUS\020\001\022%\n!BATTLE_HIGHLIGHT_TACTICAL_C"
+    "ONTROL\020\002\022#\n\037BATTLE_HIGHLIGHT_SAVIOR_SUPP"
+    "ORT\020\003\022\037\n\033BATTLE_HIGHLIGHT_IRON_GUARD\020\004\022$"
+    "\n BATTLE_HIGHLIGHT_CLUTCH_COMEBACK\020\005*\234\001\n"
+    "\016eBattleOutcome\022\032\n\026BATTLE_OUTCOME_ONGOIN"
+    "G\020\000\022\035\n\031BATTLE_OUTCOME_SIDE_A_WIN\020\001\022\035\n\031BA"
+    "TTLE_OUTCOME_SIDE_B_WIN\020\002\022\027\n\023BATTLE_OUTC"
+    "OME_DRAW\020\003\022\027\n\023BATTLE_OUTCOME_VOID\020\004*\247\001\n\023"
+    "eBattleActivityKind\022\035\n\031BATTLE_ACTIVITY_K"
+    "IND_NONE\020\000\022$\n BATTLE_ACTIVITY_KIND_GUILD"
+    "_TRIAL\020\001\022\'\n#BATTLE_ACTIVITY_KIND_FESTIVA"
+    "L_BEAST\020\002\022\"\n\036BATTLE_ACTIVITY_KIND_GUILD_"
+    "WAR\020\003*{\n\023eSpectateVisibility\022#\n\037SPECTATE"
+    "_VISIBILITY_UNSPECIFIED\020\000\022\037\n\033SPECTATE_VI"
+    "SIBILITY_PRIVATE\020\001\022\036\n\032SPECTATE_VISIBILIT"
+    "Y_PUBLIC\020\002*_\n\reSpectateTier\022\030\n\024SPECTATE_"
+    "TIER_DIRECT\020\000\022\027\n\023SPECTATE_TIER_RELAY\020\001\022\033"
+    "\n\027SPECTATE_TIER_BROADCAST\020\002*\322\001\n\030Tourname"
+    "ntLeylineElement\022\"\n\036TOURNAMENT_LEYLINE_U"
+    "NSPECIFIED\020\000\022\034\n\030TOURNAMENT_LEYLINE_METAL"
+    "\020\001\022\033\n\027TOURNAMENT_LEYLINE_WOOD\020\002\022\034\n\030TOURN"
+    "AMENT_LEYLINE_WATER\020\003\022\033\n\027TOURNAMENT_LEYL"
+    "INE_FIRE\020\004\022\034\n\030TOURNAMENT_LEYLINE_EARTH\020\005"
+    "B\010Z\006battleb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto_deps[5] = {
@@ -12416,7 +12488,7 @@ static ::absl::once_flag descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto = {
     false,
     false,
-    17369,
+    17538,
     descriptor_table_protodef_proto_2fbattle_2fbattle_5fdata_2eproto,
     "proto/battle/battle_data.proto",
     &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto_once,
@@ -29852,9 +29924,9 @@ WuxingTowerBattleContext::WuxingTowerBattleContext(
                offsetof(Impl_, run_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, run_id_),
-           offsetof(Impl_, leyline_element_) -
+           offsetof(Impl_, active_resonance_element_) -
                offsetof(Impl_, run_id_) +
-               sizeof(Impl_::leyline_element_));
+               sizeof(Impl_::active_resonance_element_));
 
   // @@protoc_insertion_point(copy_constructor:WuxingTowerBattleContext)
 }
@@ -29874,9 +29946,9 @@ inline void WuxingTowerBattleContext::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, run_id_),
            0,
-           offsetof(Impl_, leyline_element_) -
+           offsetof(Impl_, active_resonance_element_) -
                offsetof(Impl_, run_id_) +
-               sizeof(Impl_::leyline_element_));
+               sizeof(Impl_::active_resonance_element_));
 }
 WuxingTowerBattleContext::~WuxingTowerBattleContext() {
   // @@protoc_insertion_point(destructor:WuxingTowerBattleContext)
@@ -29929,11 +30001,12 @@ PROTOBUF_NOINLINE void WuxingTowerBattleContext::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.active_sigil_ids_.Clear();
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000feU)) {
     ::memset(&_impl_.run_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.leyline_element_) -
-        reinterpret_cast<char*>(&_impl_.run_id_)) + sizeof(_impl_.leyline_element_));
+        reinterpret_cast<char*>(&_impl_.use_free_preset_) -
+        reinterpret_cast<char*>(&_impl_.run_id_)) + sizeof(_impl_.use_free_preset_));
   }
+  _impl_.active_resonance_element_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -30004,6 +30077,42 @@ PROTOBUF_NOINLINE void WuxingTowerBattleContext::Clear() {
     }
   }
 
+  // uint32 realm_version = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_realm_version() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_realm_version(), target);
+    }
+  }
+
+  // uint32 node_kind = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_node_kind() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_node_kind(), target);
+    }
+  }
+
+  // bool use_free_preset = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_use_free_preset() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          8, this_._internal_use_free_preset(), target);
+    }
+  }
+
+  // uint32 active_resonance_element = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_active_resonance_element() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          9, this_._internal_active_resonance_element(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -30029,7 +30138,7 @@ PROTOBUF_NOINLINE void WuxingTowerBattleContext::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // repeated uint32 active_sigil_ids = 5;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size +=
@@ -30065,6 +30174,35 @@ PROTOBUF_NOINLINE void WuxingTowerBattleContext::Clear() {
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_leyline_element());
       }
     }
+    // uint32 realm_version = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_realm_version() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_realm_version());
+      }
+    }
+    // uint32 node_kind = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_node_kind() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_node_kind());
+      }
+    }
+    // bool use_free_preset = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_use_free_preset() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+   {
+    // uint32 active_resonance_element = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_active_resonance_element() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_active_resonance_element());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -30083,7 +30221,7 @@ void WuxingTowerBattleContext::MergeImpl(::google::protobuf::MessageLite& to_msg
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_active_sigil_ids()->MergeFrom(from._internal_active_sigil_ids());
     }
@@ -30107,6 +30245,26 @@ void WuxingTowerBattleContext::MergeImpl(::google::protobuf::MessageLite& to_msg
         _this->_impl_.leyline_element_ = from._impl_.leyline_element_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_realm_version() != 0) {
+        _this->_impl_.realm_version_ = from._impl_.realm_version_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_node_kind() != 0) {
+        _this->_impl_.node_kind_ = from._impl_.node_kind_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_use_free_preset() != 0) {
+        _this->_impl_.use_free_preset_ = from._impl_.use_free_preset_;
+      }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_active_resonance_element() != 0) {
+      _this->_impl_.active_resonance_element_ = from._impl_.active_resonance_element_;
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -30127,8 +30285,8 @@ void WuxingTowerBattleContext::InternalSwap(WuxingTowerBattleContext* PROTOBUF_R
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.active_sigil_ids_.InternalSwap(&other->_impl_.active_sigil_ids_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.leyline_element_)
-      + sizeof(WuxingTowerBattleContext::_impl_.leyline_element_)
+      PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.active_resonance_element_)
+      + sizeof(WuxingTowerBattleContext::_impl_.active_resonance_element_)
       - PROTOBUF_FIELD_OFFSET(WuxingTowerBattleContext, _impl_.run_id_)>(
           reinterpret_cast<char*>(&_impl_.run_id_),
           reinterpret_cast<char*>(&other->_impl_.run_id_));
@@ -30169,9 +30327,9 @@ inline void WuxingTowerSettlementEcho::SharedCtor(::_pb::Arena* PROTOBUF_NULLABL
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, run_id_),
            0,
-           offsetof(Impl_, total_rounds_) -
+           offsetof(Impl_, use_free_preset_) -
                offsetof(Impl_, run_id_) +
-               sizeof(Impl_::total_rounds_));
+               sizeof(Impl_::use_free_preset_));
 }
 WuxingTowerSettlementEcho::~WuxingTowerSettlementEcho() {
   // @@protoc_insertion_point(destructor:WuxingTowerSettlementEcho)
@@ -30221,10 +30379,10 @@ PROTOBUF_NOINLINE void WuxingTowerSettlementEcho::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     ::memset(&_impl_.run_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.total_rounds_) -
-        reinterpret_cast<char*>(&_impl_.run_id_)) + sizeof(_impl_.total_rounds_));
+        reinterpret_cast<char*>(&_impl_.use_free_preset_) -
+        reinterpret_cast<char*>(&_impl_.run_id_)) + sizeof(_impl_.use_free_preset_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -30285,6 +30443,33 @@ PROTOBUF_NOINLINE void WuxingTowerSettlementEcho::Clear() {
     }
   }
 
+  // uint32 realm_version = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_realm_version() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_realm_version(), target);
+    }
+  }
+
+  // uint32 node_kind = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_node_kind() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_node_kind(), target);
+    }
+  }
+
+  // bool use_free_preset = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_use_free_preset() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          7, this_._internal_use_free_preset(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -30310,7 +30495,7 @@ PROTOBUF_NOINLINE void WuxingTowerSettlementEcho::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     // uint64 run_id = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_run_id() != 0) {
@@ -30339,6 +30524,26 @@ PROTOBUF_NOINLINE void WuxingTowerSettlementEcho::Clear() {
             this_._internal_total_rounds());
       }
     }
+    // uint32 realm_version = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_realm_version() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_realm_version());
+      }
+    }
+    // uint32 node_kind = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_node_kind() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_node_kind());
+      }
+    }
+    // bool use_free_preset = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_use_free_preset() != 0) {
+        total_size += 2;
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -30357,7 +30562,7 @@ void WuxingTowerSettlementEcho::MergeImpl(::google::protobuf::MessageLite& to_ms
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_run_id() != 0) {
         _this->_impl_.run_id_ = from._impl_.run_id_;
@@ -30376,6 +30581,21 @@ void WuxingTowerSettlementEcho::MergeImpl(::google::protobuf::MessageLite& to_ms
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_total_rounds() != 0) {
         _this->_impl_.total_rounds_ = from._impl_.total_rounds_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_realm_version() != 0) {
+        _this->_impl_.realm_version_ = from._impl_.realm_version_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_node_kind() != 0) {
+        _this->_impl_.node_kind_ = from._impl_.node_kind_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_use_free_preset() != 0) {
+        _this->_impl_.use_free_preset_ = from._impl_.use_free_preset_;
       }
     }
   }
@@ -30397,8 +30617,8 @@ void WuxingTowerSettlementEcho::InternalSwap(WuxingTowerSettlementEcho* PROTOBUF
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_.total_rounds_)
-      + sizeof(WuxingTowerSettlementEcho::_impl_.total_rounds_)
+      PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_.use_free_preset_)
+      + sizeof(WuxingTowerSettlementEcho::_impl_.use_free_preset_)
       - PROTOBUF_FIELD_OFFSET(WuxingTowerSettlementEcho, _impl_.run_id_)>(
           reinterpret_cast<char*>(&_impl_.run_id_),
           reinterpret_cast<char*>(&other->_impl_.run_id_));

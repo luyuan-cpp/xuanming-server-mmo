@@ -89,6 +89,22 @@ extern const ::google::protobuf::internal::ClassDataFull CatchupSeasonSealRespon
 #else
 extern const CatchupSeasonSealResponseGlobalsTypeInternal CatchupSeasonSealResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class ChooseWuxingRealmBranchRequest;
+struct ChooseWuxingRealmBranchRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ChooseWuxingRealmBranchRequestGlobalsTypeInternal ChooseWuxingRealmBranchRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ChooseWuxingRealmBranchRequest_class_data_;
+#else
+extern const ChooseWuxingRealmBranchRequestGlobalsTypeInternal ChooseWuxingRealmBranchRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ChooseWuxingRealmBranchResponse;
+struct ChooseWuxingRealmBranchResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ChooseWuxingRealmBranchResponseGlobalsTypeInternal ChooseWuxingRealmBranchResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ChooseWuxingRealmBranchResponse_class_data_;
+#else
+extern const ChooseWuxingRealmBranchResponseGlobalsTypeInternal ChooseWuxingRealmBranchResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class DeleteBattleBuildBookmarkRequest;
 struct DeleteBattleBuildBookmarkRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -184,6 +200,22 @@ extern PickWuxingTowerSigilResponseGlobalsTypeInternal PickWuxingTowerSigilRespo
 extern const ::google::protobuf::internal::ClassDataFull PickWuxingTowerSigilResponse_class_data_;
 #else
 extern const PickWuxingTowerSigilResponseGlobalsTypeInternal PickWuxingTowerSigilResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ResolveWuxingRealmEventRequest;
+struct ResolveWuxingRealmEventRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ResolveWuxingRealmEventRequestGlobalsTypeInternal ResolveWuxingRealmEventRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ResolveWuxingRealmEventRequest_class_data_;
+#else
+extern const ResolveWuxingRealmEventRequestGlobalsTypeInternal ResolveWuxingRealmEventRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ResolveWuxingRealmEventResponse;
+struct ResolveWuxingRealmEventResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ResolveWuxingRealmEventResponseGlobalsTypeInternal ResolveWuxingRealmEventResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ResolveWuxingRealmEventResponse_class_data_;
+#else
+extern const ResolveWuxingRealmEventResponseGlobalsTypeInternal ResolveWuxingRealmEventResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class SaveBattleBuildBookmarkRequest;
 struct SaveBattleBuildBookmarkRequestGlobalsTypeInternal;
@@ -463,6 +495,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerLeaderboardEntry final :
     kBestFloorFieldNumber = 4,
     kBestRoundsFieldNumber = 5,
     kFormationIdFieldNumber = 6,
+    kUseFreePresetFieldNumber = 8,
+    kResonanceElementFieldNumber = 9,
   };
   // repeated uint32 sigil_ids = 7;
   [[nodiscard]] int sigil_ids_size()
@@ -549,12 +583,32 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerLeaderboardEntry final :
   void _internal_set_formation_id(::uint32_t value);
 
   public:
+  // bool use_free_preset = 8;
+  void clear_use_free_preset() ;
+  [[nodiscard]] bool use_free_preset() const;
+  void set_use_free_preset(bool value);
+
+  private:
+  bool _internal_use_free_preset() const;
+  void _internal_set_use_free_preset(bool value);
+
+  public:
+  // uint32 resonance_element = 9;
+  void clear_resonance_element() ;
+  [[nodiscard]] ::uint32_t resonance_element() const;
+  void set_resonance_element(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_resonance_element() const;
+  void _internal_set_resonance_element(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:WuxingTowerLeaderboardEntry)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
-                          0, 47,
+      ::google::protobuf::internal::TcParseTable<4, 9,
+                          0, 55,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -590,6 +644,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerLeaderboardEntry final :
     ::uint32_t best_floor_;
     ::uint32_t best_rounds_;
     ::uint32_t formation_id_;
+    bool use_free_preset_;
+    ::uint32_t resonance_element_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -597,10 +653,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerLeaderboardEntry final :
 };
 // -------------------------------------------------------------------
 
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartWuxingTowerRunRequest final : public ::google::protobuf::internal::ZeroFieldsBase
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartWuxingTowerRunRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:StartWuxingTowerRunRequest) */ {
  public:
   inline StartWuxingTowerRunRequest() : StartWuxingTowerRunRequest(nullptr) {}
+  ~StartWuxingTowerRunRequest() PROTOBUF_FINAL;
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
   void operator delete(StartWuxingTowerRunRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
@@ -672,17 +729,50 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartWuxingTowerRunRequest final : 
 
   [[nodiscard]] StartWuxingTowerRunRequest* PROTOBUF_NONNULL
   New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::internal::ZeroFieldsBase::DefaultConstruct<StartWuxingTowerRunRequest>(arena);
+    return ::google::protobuf::Message::DefaultConstruct<StartWuxingTowerRunRequest>(arena);
   }
-  using ::google::protobuf::internal::ZeroFieldsBase::CopyFrom;
-  inline void CopyFrom(const StartWuxingTowerRunRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::CopyImpl(*this, from); }
-  using ::google::protobuf::internal::ZeroFieldsBase::MergeFrom;
-  void MergeFrom(const StartWuxingTowerRunRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::MergeImpl(*this, from); }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const StartWuxingTowerRunRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const StartWuxingTowerRunRequest& from) { StartWuxingTowerRunRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
 
   public:
   [[nodiscard]] bool IsInitialized() const {
     return true;
   }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(StartWuxingTowerRunRequest* PROTOBUF_NONNULL other);
  private:
   template <typename T>
   friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
@@ -710,11 +800,46 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartWuxingTowerRunRequest final : 
   // nested types ----------------------------------------------------
 
   // accessors -------------------------------------------------------
+  enum : int {
+    kUseFreePresetFieldNumber = 1,
+    kCharacterPresetIdFieldNumber = 2,
+    kPetPresetIdFieldNumber = 3,
+  };
+  // bool use_free_preset = 1;
+  void clear_use_free_preset() ;
+  [[nodiscard]] bool use_free_preset() const;
+  void set_use_free_preset(bool value);
+
+  private:
+  bool _internal_use_free_preset() const;
+  void _internal_set_use_free_preset(bool value);
+
+  public:
+  // uint32 character_preset_id = 2;
+  void clear_character_preset_id() ;
+  [[nodiscard]] ::uint32_t character_preset_id() const;
+  void set_character_preset_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_character_preset_id() const;
+  void _internal_set_character_preset_id(::uint32_t value);
+
+  public:
+  // uint32 pet_preset_id = 3;
+  void clear_pet_preset_id() ;
+  [[nodiscard]] ::uint32_t pet_preset_id() const;
+  void set_pet_preset_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_pet_preset_id() const;
+  void _internal_set_pet_preset_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:StartWuxingTowerRunRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<0, 0,
+      ::google::protobuf::internal::TcParseTable<2, 3,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -731,6 +856,24 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartWuxingTowerRunRequest final : 
   friend class ::google::protobuf::Arena::InternalHelper;
   using InternalArenaConstructable_ = void;
   using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const StartWuxingTowerRunRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    bool use_free_preset_;
+    ::uint32_t character_preset_id_;
+    ::uint32_t pet_preset_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
   friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
 };
 // -------------------------------------------------------------------
@@ -791,7 +934,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetRetroHonorTargetRequest final : 
   [[nodiscard]] static const SetRetroHonorTargetRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SetRetroHonorTargetRequest>(&SetRetroHonorTargetRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 28;
+  static constexpr int kIndexInFileMessages = 32;
   friend void swap(SetRetroHonorTargetRequest& a, SetRetroHonorTargetRequest& b) { a.Swap(&b); }
   inline void Swap(SetRetroHonorTargetRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2731,6 +2874,231 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SavedBattleBuildBookmarkView final 
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResolveWuxingRealmEventRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:ResolveWuxingRealmEventRequest) */ {
+ public:
+  inline ResolveWuxingRealmEventRequest() : ResolveWuxingRealmEventRequest(nullptr) {}
+  ~ResolveWuxingRealmEventRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ResolveWuxingRealmEventRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ResolveWuxingRealmEventRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ResolveWuxingRealmEventRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ResolveWuxingRealmEventRequest(const ResolveWuxingRealmEventRequest& from) : ResolveWuxingRealmEventRequest(nullptr, from) {}
+  inline ResolveWuxingRealmEventRequest(ResolveWuxingRealmEventRequest&& from) noexcept : ResolveWuxingRealmEventRequest(nullptr, ::std::move(from)) {}
+  inline ResolveWuxingRealmEventRequest& operator=(const ResolveWuxingRealmEventRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ResolveWuxingRealmEventRequest& operator=(ResolveWuxingRealmEventRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ResolveWuxingRealmEventRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ResolveWuxingRealmEventRequest>(&ResolveWuxingRealmEventRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 20;
+  friend void swap(ResolveWuxingRealmEventRequest& a, ResolveWuxingRealmEventRequest& b) { a.Swap(&b); }
+  inline void Swap(ResolveWuxingRealmEventRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ResolveWuxingRealmEventRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ResolveWuxingRealmEventRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ResolveWuxingRealmEventRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ResolveWuxingRealmEventRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ResolveWuxingRealmEventRequest& from) { ResolveWuxingRealmEventRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ResolveWuxingRealmEventRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "ResolveWuxingRealmEventRequest"; }
+
+  explicit ResolveWuxingRealmEventRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ResolveWuxingRealmEventRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ResolveWuxingRealmEventRequest& from);
+  ResolveWuxingRealmEventRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ResolveWuxingRealmEventRequest&& from) noexcept
+      : ResolveWuxingRealmEventRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kExpectedRunIdFieldNumber = 1,
+    kOptionIndexFieldNumber = 2,
+    kTargetBoonIdFieldNumber = 3,
+  };
+  // uint64 expected_run_id = 1;
+  void clear_expected_run_id() ;
+  [[nodiscard]] ::uint64_t expected_run_id() const;
+  void set_expected_run_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_expected_run_id() const;
+  void _internal_set_expected_run_id(::uint64_t value);
+
+  public:
+  // uint32 option_index = 2;
+  void clear_option_index() ;
+  [[nodiscard]] ::uint32_t option_index() const;
+  void set_option_index(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_option_index() const;
+  void _internal_set_option_index(::uint32_t value);
+
+  public:
+  // uint32 target_boon_id = 3;
+  void clear_target_boon_id() ;
+  [[nodiscard]] ::uint32_t target_boon_id() const;
+  void set_target_boon_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_target_boon_id() const;
+  void _internal_set_target_boon_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:ResolveWuxingRealmEventRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ResolveWuxingRealmEventRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t expected_run_id_;
+    ::uint32_t option_index_;
+    ::uint32_t target_boon_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PickWuxingTowerSigilRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:PickWuxingTowerSigilRequest) */ {
  public:
@@ -3137,7 +3505,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSeasonStateRequest final : publi
   [[nodiscard]] static const GetSeasonStateRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetSeasonStateRequest>(&GetSeasonStateRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 22;
+  static constexpr int kIndexInFileMessages = 26;
   friend void swap(GetSeasonStateRequest& a, GetSeasonStateRequest& b) { a.Swap(&b); }
   inline void Swap(GetSeasonStateRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3477,7 +3845,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipSeasonSealRequest final : publ
   [[nodiscard]] static const EquipSeasonSealRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipSeasonSealRequest>(&EquipSeasonSealRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 24;
+  static constexpr int kIndexInFileMessages = 28;
   friend void swap(EquipSeasonSealRequest& a, EquipSeasonSealRequest& b) { a.Swap(&b); }
   inline void Swap(EquipSeasonSealRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3690,7 +4058,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeleteBattleBuildBookmarkRequest fi
   [[nodiscard]] static const DeleteBattleBuildBookmarkRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DeleteBattleBuildBookmarkRequest>(&DeleteBattleBuildBookmarkRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 20;
+  static constexpr int kIndexInFileMessages = 24;
   friend void swap(DeleteBattleBuildBookmarkRequest& a, DeleteBattleBuildBookmarkRequest& b) { a.Swap(&b); }
   inline void Swap(DeleteBattleBuildBookmarkRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3835,6 +4203,219 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeleteBattleBuildBookmarkRequest fi
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ChooseWuxingRealmBranchRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:ChooseWuxingRealmBranchRequest) */ {
+ public:
+  inline ChooseWuxingRealmBranchRequest() : ChooseWuxingRealmBranchRequest(nullptr) {}
+  ~ChooseWuxingRealmBranchRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ChooseWuxingRealmBranchRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ChooseWuxingRealmBranchRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ChooseWuxingRealmBranchRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ChooseWuxingRealmBranchRequest(const ChooseWuxingRealmBranchRequest& from) : ChooseWuxingRealmBranchRequest(nullptr, from) {}
+  inline ChooseWuxingRealmBranchRequest(ChooseWuxingRealmBranchRequest&& from) noexcept : ChooseWuxingRealmBranchRequest(nullptr, ::std::move(from)) {}
+  inline ChooseWuxingRealmBranchRequest& operator=(const ChooseWuxingRealmBranchRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ChooseWuxingRealmBranchRequest& operator=(ChooseWuxingRealmBranchRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ChooseWuxingRealmBranchRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ChooseWuxingRealmBranchRequest>(&ChooseWuxingRealmBranchRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 18;
+  friend void swap(ChooseWuxingRealmBranchRequest& a, ChooseWuxingRealmBranchRequest& b) { a.Swap(&b); }
+  inline void Swap(ChooseWuxingRealmBranchRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ChooseWuxingRealmBranchRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ChooseWuxingRealmBranchRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ChooseWuxingRealmBranchRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ChooseWuxingRealmBranchRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ChooseWuxingRealmBranchRequest& from) { ChooseWuxingRealmBranchRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ChooseWuxingRealmBranchRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "ChooseWuxingRealmBranchRequest"; }
+
+  explicit ChooseWuxingRealmBranchRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ChooseWuxingRealmBranchRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ChooseWuxingRealmBranchRequest& from);
+  ChooseWuxingRealmBranchRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ChooseWuxingRealmBranchRequest&& from) noexcept
+      : ChooseWuxingRealmBranchRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kExpectedRunIdFieldNumber = 1,
+    kBranchFieldNumber = 2,
+  };
+  // uint64 expected_run_id = 1;
+  void clear_expected_run_id() ;
+  [[nodiscard]] ::uint64_t expected_run_id() const;
+  void set_expected_run_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_expected_run_id() const;
+  void _internal_set_expected_run_id(::uint64_t value);
+
+  public:
+  // uint32 branch = 2;
+  void clear_branch() ;
+  [[nodiscard]] ::uint32_t branch() const;
+  void set_branch(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_branch() const;
+  void _internal_set_branch(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:ChooseWuxingRealmBranchRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ChooseWuxingRealmBranchRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t expected_run_id_;
+    ::uint32_t branch_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CatchupSeasonSealRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:CatchupSeasonSealRequest) */ {
  public:
@@ -3891,7 +4472,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CatchupSeasonSealRequest final : pu
   [[nodiscard]] static const CatchupSeasonSealRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CatchupSeasonSealRequest>(&CatchupSeasonSealRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 26;
+  static constexpr int kIndexInFileMessages = 30;
   friend void swap(CatchupSeasonSealRequest& a, CatchupSeasonSealRequest& b) { a.Swap(&b); }
   inline void Swap(CatchupSeasonSealRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4436,18 +5017,32 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerStateSnapshot final : pu
     kActiveSigilIdsFieldNumber = 9,
     kPendingOfferSigilIdsFieldNumber = 10,
     kWeeklyLeaderboardFieldNumber = 15,
+    kWeeklyLeaderboardPresetFieldNumber = 29,
     kWeekKeyFieldNumber = 1,
-    kRunActiveFieldNumber = 2,
-    kRunIdFieldNumber = 3,
     kCurrentFloorFieldNumber = 4,
+    kRunIdFieldNumber = 3,
     kMaxFloorsFieldNumber = 5,
     kCurrentFloorDungeonIdFieldNumber = 6,
     kCurrentFloorLeylineElementFieldNumber = 7,
     kRunTotalRoundsFieldNumber = 8,
+    kRunActiveFieldNumber = 2,
+    kUseFreePresetFieldNumber = 18,
     kWeeklyClearedMaskFieldNumber = 11,
     kWeeklyBestFloorFieldNumber = 12,
     kWeeklyBestRoundsFieldNumber = 13,
     kRevisionFieldNumber = 14,
+    kRunWeekKeyFieldNumber = 16,
+    kRealmVersionFieldNumber = 17,
+    kCharacterPresetIdFieldNumber = 19,
+    kPetPresetIdFieldNumber = 20,
+    kCurrentNodeKindFieldNumber = 21,
+    kPendingEventKindFieldNumber = 22,
+    kActiveResonanceElementFieldNumber = 23,
+    kRouteChoiceMaskFieldNumber = 24,
+    kBestRoundsSelfFieldNumber = 25,
+    kBestRoundsPresetFieldNumber = 26,
+    kWeeklyBestFloorPresetFieldNumber = 27,
+    kWeeklyBestRoundsPresetFieldNumber = 28,
   };
   // repeated uint32 active_sigil_ids = 9;
   [[nodiscard]] int active_sigil_ids_size()
@@ -4510,6 +5105,27 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerStateSnapshot final : pu
   ::google::protobuf::RepeatedPtrField<::WuxingTowerLeaderboardEntry>* PROTOBUF_NONNULL _internal_mutable_weekly_leaderboard();
 
   public:
+  // repeated .WuxingTowerLeaderboardEntry weekly_leaderboard_preset = 29;
+  [[nodiscard]] int weekly_leaderboard_preset_size()
+      const;
+  private:
+  int _internal_weekly_leaderboard_preset_size() const;
+
+  public:
+  void clear_weekly_leaderboard_preset() ;
+  [[nodiscard]] const ::WuxingTowerLeaderboardEntry& weekly_leaderboard_preset(int index) const;
+  [[nodiscard]] ::WuxingTowerLeaderboardEntry* PROTOBUF_NONNULL mutable_weekly_leaderboard_preset(int index);
+  ::WuxingTowerLeaderboardEntry* PROTOBUF_NONNULL add_weekly_leaderboard_preset();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::WuxingTowerLeaderboardEntry>&
+  weekly_leaderboard_preset() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::WuxingTowerLeaderboardEntry>* PROTOBUF_NONNULL
+  mutable_weekly_leaderboard_preset();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::WuxingTowerLeaderboardEntry>& _internal_weekly_leaderboard_preset() const;
+  ::google::protobuf::RepeatedPtrField<::WuxingTowerLeaderboardEntry>* PROTOBUF_NONNULL _internal_mutable_weekly_leaderboard_preset();
+
+  public:
   // uint32 week_key = 1;
   void clear_week_key() ;
   [[nodiscard]] ::uint32_t week_key() const;
@@ -4520,14 +5136,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerStateSnapshot final : pu
   void _internal_set_week_key(::uint32_t value);
 
   public:
-  // bool run_active = 2;
-  void clear_run_active() ;
-  [[nodiscard]] bool run_active() const;
-  void set_run_active(bool value);
+  // uint32 current_floor = 4;
+  void clear_current_floor() ;
+  [[nodiscard]] ::uint32_t current_floor() const;
+  void set_current_floor(::uint32_t value);
 
   private:
-  bool _internal_run_active() const;
-  void _internal_set_run_active(bool value);
+  ::uint32_t _internal_current_floor() const;
+  void _internal_set_current_floor(::uint32_t value);
 
   public:
   // uint64 run_id = 3;
@@ -4538,16 +5154,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerStateSnapshot final : pu
   private:
   ::uint64_t _internal_run_id() const;
   void _internal_set_run_id(::uint64_t value);
-
-  public:
-  // uint32 current_floor = 4;
-  void clear_current_floor() ;
-  [[nodiscard]] ::uint32_t current_floor() const;
-  void set_current_floor(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_current_floor() const;
-  void _internal_set_current_floor(::uint32_t value);
 
   public:
   // uint32 max_floors = 5;
@@ -4590,6 +5196,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerStateSnapshot final : pu
   void _internal_set_run_total_rounds(::uint32_t value);
 
   public:
+  // bool run_active = 2;
+  void clear_run_active() ;
+  [[nodiscard]] bool run_active() const;
+  void set_run_active(bool value);
+
+  private:
+  bool _internal_run_active() const;
+  void _internal_set_run_active(bool value);
+
+  public:
+  // bool use_free_preset = 18;
+  void clear_use_free_preset() ;
+  [[nodiscard]] bool use_free_preset() const;
+  void set_use_free_preset(bool value);
+
+  private:
+  bool _internal_use_free_preset() const;
+  void _internal_set_use_free_preset(bool value);
+
+  public:
   // uint32 weekly_cleared_mask = 11;
   void clear_weekly_cleared_mask() ;
   [[nodiscard]] ::uint32_t weekly_cleared_mask() const;
@@ -4630,12 +5256,132 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerStateSnapshot final : pu
   void _internal_set_revision(::uint64_t value);
 
   public:
+  // uint32 run_week_key = 16;
+  void clear_run_week_key() ;
+  [[nodiscard]] ::uint32_t run_week_key() const;
+  void set_run_week_key(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_run_week_key() const;
+  void _internal_set_run_week_key(::uint32_t value);
+
+  public:
+  // uint32 realm_version = 17;
+  void clear_realm_version() ;
+  [[nodiscard]] ::uint32_t realm_version() const;
+  void set_realm_version(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_realm_version() const;
+  void _internal_set_realm_version(::uint32_t value);
+
+  public:
+  // uint32 character_preset_id = 19;
+  void clear_character_preset_id() ;
+  [[nodiscard]] ::uint32_t character_preset_id() const;
+  void set_character_preset_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_character_preset_id() const;
+  void _internal_set_character_preset_id(::uint32_t value);
+
+  public:
+  // uint32 pet_preset_id = 20;
+  void clear_pet_preset_id() ;
+  [[nodiscard]] ::uint32_t pet_preset_id() const;
+  void set_pet_preset_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_pet_preset_id() const;
+  void _internal_set_pet_preset_id(::uint32_t value);
+
+  public:
+  // uint32 current_node_kind = 21;
+  void clear_current_node_kind() ;
+  [[nodiscard]] ::uint32_t current_node_kind() const;
+  void set_current_node_kind(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_current_node_kind() const;
+  void _internal_set_current_node_kind(::uint32_t value);
+
+  public:
+  // uint32 pending_event_kind = 22;
+  void clear_pending_event_kind() ;
+  [[nodiscard]] ::uint32_t pending_event_kind() const;
+  void set_pending_event_kind(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_pending_event_kind() const;
+  void _internal_set_pending_event_kind(::uint32_t value);
+
+  public:
+  // uint32 active_resonance_element = 23;
+  void clear_active_resonance_element() ;
+  [[nodiscard]] ::uint32_t active_resonance_element() const;
+  void set_active_resonance_element(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_active_resonance_element() const;
+  void _internal_set_active_resonance_element(::uint32_t value);
+
+  public:
+  // uint32 route_choice_mask = 24;
+  void clear_route_choice_mask() ;
+  [[nodiscard]] ::uint32_t route_choice_mask() const;
+  void set_route_choice_mask(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_route_choice_mask() const;
+  void _internal_set_route_choice_mask(::uint32_t value);
+
+  public:
+  // uint32 best_rounds_self = 25;
+  void clear_best_rounds_self() ;
+  [[nodiscard]] ::uint32_t best_rounds_self() const;
+  void set_best_rounds_self(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_best_rounds_self() const;
+  void _internal_set_best_rounds_self(::uint32_t value);
+
+  public:
+  // uint32 best_rounds_preset = 26;
+  void clear_best_rounds_preset() ;
+  [[nodiscard]] ::uint32_t best_rounds_preset() const;
+  void set_best_rounds_preset(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_best_rounds_preset() const;
+  void _internal_set_best_rounds_preset(::uint32_t value);
+
+  public:
+  // uint32 weekly_best_floor_preset = 27;
+  void clear_weekly_best_floor_preset() ;
+  [[nodiscard]] ::uint32_t weekly_best_floor_preset() const;
+  void set_weekly_best_floor_preset(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_weekly_best_floor_preset() const;
+  void _internal_set_weekly_best_floor_preset(::uint32_t value);
+
+  public:
+  // uint32 weekly_best_rounds_preset = 28;
+  void clear_weekly_best_rounds_preset() ;
+  [[nodiscard]] ::uint32_t weekly_best_rounds_preset() const;
+  void set_weekly_best_rounds_preset(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_weekly_best_rounds_preset() const;
+  void _internal_set_weekly_best_rounds_preset(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:WuxingTowerStateSnapshot)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 15,
-                          1, 0,
+      ::google::protobuf::internal::TcParseTable<5, 29,
+                          2, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -4668,18 +5414,32 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerStateSnapshot final : pu
     ::google::protobuf::RepeatedField<::uint32_t> pending_offer_sigil_ids_;
     ::google::protobuf::internal::CachedSize _pending_offer_sigil_ids_cached_byte_size_;
     ::google::protobuf::RepeatedPtrField< ::WuxingTowerLeaderboardEntry > weekly_leaderboard_;
+    ::google::protobuf::RepeatedPtrField< ::WuxingTowerLeaderboardEntry > weekly_leaderboard_preset_;
     ::uint32_t week_key_;
-    bool run_active_;
-    ::uint64_t run_id_;
     ::uint32_t current_floor_;
+    ::uint64_t run_id_;
     ::uint32_t max_floors_;
     ::uint32_t current_floor_dungeon_id_;
     ::uint32_t current_floor_leyline_element_;
     ::uint32_t run_total_rounds_;
+    bool run_active_;
+    bool use_free_preset_;
     ::uint32_t weekly_cleared_mask_;
     ::uint32_t weekly_best_floor_;
     ::uint32_t weekly_best_rounds_;
     ::uint64_t revision_;
+    ::uint32_t run_week_key_;
+    ::uint32_t realm_version_;
+    ::uint32_t character_preset_id_;
+    ::uint32_t pet_preset_id_;
+    ::uint32_t current_node_kind_;
+    ::uint32_t pending_event_kind_;
+    ::uint32_t active_resonance_element_;
+    ::uint32_t route_choice_mask_;
+    ::uint32_t best_rounds_self_;
+    ::uint32_t best_rounds_preset_;
+    ::uint32_t weekly_best_floor_preset_;
+    ::uint32_t weekly_best_rounds_preset_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5470,7 +6230,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveBattleBuildBookmarkResponse fin
   [[nodiscard]] static const SaveBattleBuildBookmarkResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SaveBattleBuildBookmarkResponse>(&SaveBattleBuildBookmarkResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 19;
+  static constexpr int kIndexInFileMessages = 23;
   friend void swap(SaveBattleBuildBookmarkResponse& a, SaveBattleBuildBookmarkResponse& b) { a.Swap(&b); }
   inline void Swap(SaveBattleBuildBookmarkResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5718,7 +6478,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveBattleBuildBookmarkRequest fina
   [[nodiscard]] static const SaveBattleBuildBookmarkRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SaveBattleBuildBookmarkRequest>(&SaveBattleBuildBookmarkRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 22;
   friend void swap(SaveBattleBuildBookmarkRequest& a, SaveBattleBuildBookmarkRequest& b) { a.Swap(&b); }
   inline void Swap(SaveBattleBuildBookmarkRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -5925,7 +6685,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeleteBattleBuildBookmarkResponse f
   [[nodiscard]] static const DeleteBattleBuildBookmarkResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DeleteBattleBuildBookmarkResponse>(&DeleteBattleBuildBookmarkResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 21;
+  static constexpr int kIndexInFileMessages = 25;
   friend void swap(DeleteBattleBuildBookmarkResponse& a, DeleteBattleBuildBookmarkResponse& b) { a.Swap(&b); }
   inline void Swap(DeleteBattleBuildBookmarkResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6380,7 +7140,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetRetroHonorTargetResponse final :
   [[nodiscard]] static const SetRetroHonorTargetResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SetRetroHonorTargetResponse>(&SetRetroHonorTargetResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 29;
+  static constexpr int kIndexInFileMessages = 33;
   friend void swap(SetRetroHonorTargetResponse& a, SetRetroHonorTargetResponse& b) { a.Swap(&b); }
   inline void Swap(SetRetroHonorTargetResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6542,6 +7302,243 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SetRetroHonorTargetResponse final :
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
     ::SeasonStateSnapshot* PROTOBUF_NULLABLE state_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResolveWuxingRealmEventResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:ResolveWuxingRealmEventResponse) */ {
+ public:
+  inline ResolveWuxingRealmEventResponse() : ResolveWuxingRealmEventResponse(nullptr) {}
+  ~ResolveWuxingRealmEventResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ResolveWuxingRealmEventResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ResolveWuxingRealmEventResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ResolveWuxingRealmEventResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ResolveWuxingRealmEventResponse(const ResolveWuxingRealmEventResponse& from) : ResolveWuxingRealmEventResponse(nullptr, from) {}
+  inline ResolveWuxingRealmEventResponse(ResolveWuxingRealmEventResponse&& from) noexcept : ResolveWuxingRealmEventResponse(nullptr, ::std::move(from)) {}
+  inline ResolveWuxingRealmEventResponse& operator=(const ResolveWuxingRealmEventResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ResolveWuxingRealmEventResponse& operator=(ResolveWuxingRealmEventResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ResolveWuxingRealmEventResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ResolveWuxingRealmEventResponse>(&ResolveWuxingRealmEventResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 21;
+  friend void swap(ResolveWuxingRealmEventResponse& a, ResolveWuxingRealmEventResponse& b) { a.Swap(&b); }
+  inline void Swap(ResolveWuxingRealmEventResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ResolveWuxingRealmEventResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ResolveWuxingRealmEventResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ResolveWuxingRealmEventResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ResolveWuxingRealmEventResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ResolveWuxingRealmEventResponse& from) { ResolveWuxingRealmEventResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ResolveWuxingRealmEventResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "ResolveWuxingRealmEventResponse"; }
+
+  explicit ResolveWuxingRealmEventResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ResolveWuxingRealmEventResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ResolveWuxingRealmEventResponse& from);
+  ResolveWuxingRealmEventResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ResolveWuxingRealmEventResponse&& from) noexcept
+      : ResolveWuxingRealmEventResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kStateFieldNumber = 2,
+    kGrantedBoonIdFieldNumber = 3,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .WuxingTowerStateSnapshot state = 2;
+  [[nodiscard]] bool has_state()
+      const;
+  void clear_state() ;
+  [[nodiscard]] const ::WuxingTowerStateSnapshot& state() const;
+  [[nodiscard]] ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE release_state();
+  ::WuxingTowerStateSnapshot* PROTOBUF_NONNULL mutable_state();
+  void set_allocated_state(::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_state(::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE value);
+  ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
+
+  private:
+  const ::WuxingTowerStateSnapshot& _internal_state() const;
+  ::WuxingTowerStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
+
+  public:
+  // uint32 granted_boon_id = 3;
+  void clear_granted_boon_id() ;
+  [[nodiscard]] ::uint32_t granted_boon_id() const;
+  void set_granted_boon_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_granted_boon_id() const;
+  void _internal_set_granted_boon_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:ResolveWuxingRealmEventResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ResolveWuxingRealmEventResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE state_;
+    ::uint32_t granted_boon_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7055,7 +8052,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSeasonStateResponse final : publ
   [[nodiscard]] static const GetSeasonStateResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetSeasonStateResponse>(&GetSeasonStateResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 23;
+  static constexpr int kIndexInFileMessages = 27;
   friend void swap(GetSeasonStateResponse& a, GetSeasonStateResponse& b) { a.Swap(&b); }
   inline void Swap(GetSeasonStateResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7517,7 +8514,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipSeasonSealResponse final : pub
   [[nodiscard]] static const EquipSeasonSealResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipSeasonSealResponse>(&EquipSeasonSealResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 25;
+  static constexpr int kIndexInFileMessages = 29;
   friend void swap(EquipSeasonSealResponse& a, EquipSeasonSealResponse& b) { a.Swap(&b); }
   inline void Swap(EquipSeasonSealResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7686,6 +8683,231 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipSeasonSealResponse final : pub
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ChooseWuxingRealmBranchResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:ChooseWuxingRealmBranchResponse) */ {
+ public:
+  inline ChooseWuxingRealmBranchResponse() : ChooseWuxingRealmBranchResponse(nullptr) {}
+  ~ChooseWuxingRealmBranchResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ChooseWuxingRealmBranchResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ChooseWuxingRealmBranchResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ChooseWuxingRealmBranchResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ChooseWuxingRealmBranchResponse(const ChooseWuxingRealmBranchResponse& from) : ChooseWuxingRealmBranchResponse(nullptr, from) {}
+  inline ChooseWuxingRealmBranchResponse(ChooseWuxingRealmBranchResponse&& from) noexcept : ChooseWuxingRealmBranchResponse(nullptr, ::std::move(from)) {}
+  inline ChooseWuxingRealmBranchResponse& operator=(const ChooseWuxingRealmBranchResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ChooseWuxingRealmBranchResponse& operator=(ChooseWuxingRealmBranchResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ChooseWuxingRealmBranchResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ChooseWuxingRealmBranchResponse>(&ChooseWuxingRealmBranchResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 19;
+  friend void swap(ChooseWuxingRealmBranchResponse& a, ChooseWuxingRealmBranchResponse& b) { a.Swap(&b); }
+  inline void Swap(ChooseWuxingRealmBranchResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ChooseWuxingRealmBranchResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ChooseWuxingRealmBranchResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ChooseWuxingRealmBranchResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ChooseWuxingRealmBranchResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ChooseWuxingRealmBranchResponse& from) { ChooseWuxingRealmBranchResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ChooseWuxingRealmBranchResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "ChooseWuxingRealmBranchResponse"; }
+
+  explicit ChooseWuxingRealmBranchResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ChooseWuxingRealmBranchResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ChooseWuxingRealmBranchResponse& from);
+  ChooseWuxingRealmBranchResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ChooseWuxingRealmBranchResponse&& from) noexcept
+      : ChooseWuxingRealmBranchResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kStateFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .WuxingTowerStateSnapshot state = 2;
+  [[nodiscard]] bool has_state()
+      const;
+  void clear_state() ;
+  [[nodiscard]] const ::WuxingTowerStateSnapshot& state() const;
+  [[nodiscard]] ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE release_state();
+  ::WuxingTowerStateSnapshot* PROTOBUF_NONNULL mutable_state();
+  void set_allocated_state(::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_state(::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE value);
+  ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
+
+  private:
+  const ::WuxingTowerStateSnapshot& _internal_state() const;
+  ::WuxingTowerStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
+
+  public:
+  // @@protoc_insertion_point(class_scope:ChooseWuxingRealmBranchResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ChooseWuxingRealmBranchResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE state_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CatchupSeasonSealResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:CatchupSeasonSealResponse) */ {
  public:
@@ -7742,7 +8964,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CatchupSeasonSealResponse final : p
   [[nodiscard]] static const CatchupSeasonSealResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CatchupSeasonSealResponse>(&CatchupSeasonSealResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 27;
+  static constexpr int kIndexInFileMessages = 31;
   friend void swap(CatchupSeasonSealResponse& a, CatchupSeasonSealResponse& b) { a.Swap(&b); }
   inline void Swap(CatchupSeasonSealResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -8234,6 +9456,14 @@ class SceneSeasonClientPlayer : public ::google::protobuf::Service {
                         const ::SetRetroHonorTargetRequest* PROTOBUF_NONNULL request,
                         ::SetRetroHonorTargetResponse* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void ChooseWuxingRealmBranch(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::ChooseWuxingRealmBranchRequest* PROTOBUF_NONNULL request,
+                        ::ChooseWuxingRealmBranchResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void ResolveWuxingRealmEvent(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::ResolveWuxingRealmEventRequest* PROTOBUF_NONNULL request,
+                        ::ResolveWuxingRealmEventResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
 
   // implements Service ----------------------------------------------
   const ::google::protobuf::ServiceDescriptor* PROTOBUF_NONNULL GetDescriptor() override;
@@ -8309,6 +9539,14 @@ class SceneSeasonClientPlayer_Stub final : public SceneSeasonClientPlayer {
   void SetRetroHonorTarget(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
                         const ::SetRetroHonorTargetRequest* PROTOBUF_NONNULL request,
                         ::SetRetroHonorTargetResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void ChooseWuxingRealmBranch(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::ChooseWuxingRealmBranchRequest* PROTOBUF_NONNULL request,
+                        ::ChooseWuxingRealmBranchResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void ResolveWuxingRealmEvent(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::ResolveWuxingRealmEventRequest* PROTOBUF_NONNULL request,
+                        ::ResolveWuxingRealmEventResponse* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
 
  private:
@@ -12355,6 +13593,54 @@ WuxingTowerLeaderboardEntry::_internal_mutable_sigil_ids() {
   return &_impl_.sigil_ids_;
 }
 
+// bool use_free_preset = 8;
+inline void WuxingTowerLeaderboardEntry::clear_use_free_preset() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.use_free_preset_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline bool WuxingTowerLeaderboardEntry::use_free_preset() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerLeaderboardEntry.use_free_preset)
+  return _internal_use_free_preset();
+}
+inline void WuxingTowerLeaderboardEntry::set_use_free_preset(bool value) {
+  _internal_set_use_free_preset(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:WuxingTowerLeaderboardEntry.use_free_preset)
+}
+inline bool WuxingTowerLeaderboardEntry::_internal_use_free_preset() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.use_free_preset_;
+}
+inline void WuxingTowerLeaderboardEntry::_internal_set_use_free_preset(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.use_free_preset_ = value;
+}
+
+// uint32 resonance_element = 9;
+inline void WuxingTowerLeaderboardEntry::clear_resonance_element() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.resonance_element_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t WuxingTowerLeaderboardEntry::resonance_element() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerLeaderboardEntry.resonance_element)
+  return _internal_resonance_element();
+}
+inline void WuxingTowerLeaderboardEntry::set_resonance_element(::uint32_t value) {
+  _internal_set_resonance_element(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:WuxingTowerLeaderboardEntry.resonance_element)
+}
+inline ::uint32_t WuxingTowerLeaderboardEntry::_internal_resonance_element() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.resonance_element_;
+}
+inline void WuxingTowerLeaderboardEntry::_internal_set_resonance_element(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.resonance_element_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // WuxingTowerStateSnapshot
@@ -12363,7 +13649,7 @@ WuxingTowerLeaderboardEntry::_internal_mutable_sigil_ids() {
 inline void WuxingTowerStateSnapshot::clear_week_key() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.week_key_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t WuxingTowerStateSnapshot::week_key() const {
   // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.week_key)
@@ -12371,7 +13657,7 @@ inline ::uint32_t WuxingTowerStateSnapshot::week_key() const {
 }
 inline void WuxingTowerStateSnapshot::set_week_key(::uint32_t value) {
   _internal_set_week_key(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.week_key)
 }
 inline ::uint32_t WuxingTowerStateSnapshot::_internal_week_key() const {
@@ -12387,7 +13673,7 @@ inline void WuxingTowerStateSnapshot::_internal_set_week_key(::uint32_t value) {
 inline void WuxingTowerStateSnapshot::clear_run_active() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.run_active_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline bool WuxingTowerStateSnapshot::run_active() const {
   // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.run_active)
@@ -12395,7 +13681,7 @@ inline bool WuxingTowerStateSnapshot::run_active() const {
 }
 inline void WuxingTowerStateSnapshot::set_run_active(bool value) {
   _internal_set_run_active(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.run_active)
 }
 inline bool WuxingTowerStateSnapshot::_internal_run_active() const {
@@ -12411,7 +13697,7 @@ inline void WuxingTowerStateSnapshot::_internal_set_run_active(bool value) {
 inline void WuxingTowerStateSnapshot::clear_run_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.run_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint64_t WuxingTowerStateSnapshot::run_id() const {
   // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.run_id)
@@ -12419,7 +13705,7 @@ inline ::uint64_t WuxingTowerStateSnapshot::run_id() const {
 }
 inline void WuxingTowerStateSnapshot::set_run_id(::uint64_t value) {
   _internal_set_run_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.run_id)
 }
 inline ::uint64_t WuxingTowerStateSnapshot::_internal_run_id() const {
@@ -12435,7 +13721,7 @@ inline void WuxingTowerStateSnapshot::_internal_set_run_id(::uint64_t value) {
 inline void WuxingTowerStateSnapshot::clear_current_floor() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.current_floor_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t WuxingTowerStateSnapshot::current_floor() const {
   // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.current_floor)
@@ -12443,7 +13729,7 @@ inline ::uint32_t WuxingTowerStateSnapshot::current_floor() const {
 }
 inline void WuxingTowerStateSnapshot::set_current_floor(::uint32_t value) {
   _internal_set_current_floor(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.current_floor)
 }
 inline ::uint32_t WuxingTowerStateSnapshot::_internal_current_floor() const {
@@ -12657,7 +13943,7 @@ WuxingTowerStateSnapshot::_internal_mutable_pending_offer_sigil_ids() {
 inline void WuxingTowerStateSnapshot::clear_weekly_cleared_mask() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.weekly_cleared_mask_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint32_t WuxingTowerStateSnapshot::weekly_cleared_mask() const {
   // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.weekly_cleared_mask)
@@ -12665,7 +13951,7 @@ inline ::uint32_t WuxingTowerStateSnapshot::weekly_cleared_mask() const {
 }
 inline void WuxingTowerStateSnapshot::set_weekly_cleared_mask(::uint32_t value) {
   _internal_set_weekly_cleared_mask(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.weekly_cleared_mask)
 }
 inline ::uint32_t WuxingTowerStateSnapshot::_internal_weekly_cleared_mask() const {
@@ -12681,7 +13967,7 @@ inline void WuxingTowerStateSnapshot::_internal_set_weekly_cleared_mask(::uint32
 inline void WuxingTowerStateSnapshot::clear_weekly_best_floor() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.weekly_best_floor_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint32_t WuxingTowerStateSnapshot::weekly_best_floor() const {
   // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.weekly_best_floor)
@@ -12689,7 +13975,7 @@ inline ::uint32_t WuxingTowerStateSnapshot::weekly_best_floor() const {
 }
 inline void WuxingTowerStateSnapshot::set_weekly_best_floor(::uint32_t value) {
   _internal_set_weekly_best_floor(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.weekly_best_floor)
 }
 inline ::uint32_t WuxingTowerStateSnapshot::_internal_weekly_best_floor() const {
@@ -12705,7 +13991,7 @@ inline void WuxingTowerStateSnapshot::_internal_set_weekly_best_floor(::uint32_t
 inline void WuxingTowerStateSnapshot::clear_weekly_best_rounds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.weekly_best_rounds_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint32_t WuxingTowerStateSnapshot::weekly_best_rounds() const {
   // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.weekly_best_rounds)
@@ -12713,7 +13999,7 @@ inline ::uint32_t WuxingTowerStateSnapshot::weekly_best_rounds() const {
 }
 inline void WuxingTowerStateSnapshot::set_weekly_best_rounds(::uint32_t value) {
   _internal_set_weekly_best_rounds(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.weekly_best_rounds)
 }
 inline ::uint32_t WuxingTowerStateSnapshot::_internal_weekly_best_rounds() const {
@@ -12729,7 +14015,7 @@ inline void WuxingTowerStateSnapshot::_internal_set_weekly_best_rounds(::uint32_
 inline void WuxingTowerStateSnapshot::clear_revision() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.revision_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint64_t WuxingTowerStateSnapshot::revision() const {
   // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.revision)
@@ -12737,7 +14023,7 @@ inline ::uint64_t WuxingTowerStateSnapshot::revision() const {
 }
 inline void WuxingTowerStateSnapshot::set_revision(::uint64_t value) {
   _internal_set_revision(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.revision)
 }
 inline ::uint64_t WuxingTowerStateSnapshot::_internal_revision() const {
@@ -12802,6 +14088,373 @@ inline ::google::protobuf::RepeatedPtrField<::WuxingTowerLeaderboardEntry>* PROT
 WuxingTowerStateSnapshot::_internal_mutable_weekly_leaderboard() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.weekly_leaderboard_;
+}
+
+// uint32 run_week_key = 16;
+inline void WuxingTowerStateSnapshot::clear_run_week_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.run_week_key_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline ::uint32_t WuxingTowerStateSnapshot::run_week_key() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.run_week_key)
+  return _internal_run_week_key();
+}
+inline void WuxingTowerStateSnapshot::set_run_week_key(::uint32_t value) {
+  _internal_set_run_week_key(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.run_week_key)
+}
+inline ::uint32_t WuxingTowerStateSnapshot::_internal_run_week_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.run_week_key_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_run_week_key(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.run_week_key_ = value;
+}
+
+// uint32 realm_version = 17;
+inline void WuxingTowerStateSnapshot::clear_realm_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.realm_version_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+}
+inline ::uint32_t WuxingTowerStateSnapshot::realm_version() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.realm_version)
+  return _internal_realm_version();
+}
+inline void WuxingTowerStateSnapshot::set_realm_version(::uint32_t value) {
+  _internal_set_realm_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.realm_version)
+}
+inline ::uint32_t WuxingTowerStateSnapshot::_internal_realm_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.realm_version_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_realm_version(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.realm_version_ = value;
+}
+
+// bool use_free_preset = 18;
+inline void WuxingTowerStateSnapshot::clear_use_free_preset() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.use_free_preset_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline bool WuxingTowerStateSnapshot::use_free_preset() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.use_free_preset)
+  return _internal_use_free_preset();
+}
+inline void WuxingTowerStateSnapshot::set_use_free_preset(bool value) {
+  _internal_set_use_free_preset(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.use_free_preset)
+}
+inline bool WuxingTowerStateSnapshot::_internal_use_free_preset() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.use_free_preset_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_use_free_preset(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.use_free_preset_ = value;
+}
+
+// uint32 character_preset_id = 19;
+inline void WuxingTowerStateSnapshot::clear_character_preset_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.character_preset_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+}
+inline ::uint32_t WuxingTowerStateSnapshot::character_preset_id() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.character_preset_id)
+  return _internal_character_preset_id();
+}
+inline void WuxingTowerStateSnapshot::set_character_preset_id(::uint32_t value) {
+  _internal_set_character_preset_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.character_preset_id)
+}
+inline ::uint32_t WuxingTowerStateSnapshot::_internal_character_preset_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.character_preset_id_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_character_preset_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.character_preset_id_ = value;
+}
+
+// uint32 pet_preset_id = 20;
+inline void WuxingTowerStateSnapshot::clear_pet_preset_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_preset_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+}
+inline ::uint32_t WuxingTowerStateSnapshot::pet_preset_id() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.pet_preset_id)
+  return _internal_pet_preset_id();
+}
+inline void WuxingTowerStateSnapshot::set_pet_preset_id(::uint32_t value) {
+  _internal_set_pet_preset_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.pet_preset_id)
+}
+inline ::uint32_t WuxingTowerStateSnapshot::_internal_pet_preset_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pet_preset_id_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_pet_preset_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_preset_id_ = value;
+}
+
+// uint32 current_node_kind = 21;
+inline void WuxingTowerStateSnapshot::clear_current_node_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.current_node_kind_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+}
+inline ::uint32_t WuxingTowerStateSnapshot::current_node_kind() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.current_node_kind)
+  return _internal_current_node_kind();
+}
+inline void WuxingTowerStateSnapshot::set_current_node_kind(::uint32_t value) {
+  _internal_set_current_node_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.current_node_kind)
+}
+inline ::uint32_t WuxingTowerStateSnapshot::_internal_current_node_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.current_node_kind_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_current_node_kind(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.current_node_kind_ = value;
+}
+
+// uint32 pending_event_kind = 22;
+inline void WuxingTowerStateSnapshot::clear_pending_event_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pending_event_kind_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+}
+inline ::uint32_t WuxingTowerStateSnapshot::pending_event_kind() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.pending_event_kind)
+  return _internal_pending_event_kind();
+}
+inline void WuxingTowerStateSnapshot::set_pending_event_kind(::uint32_t value) {
+  _internal_set_pending_event_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.pending_event_kind)
+}
+inline ::uint32_t WuxingTowerStateSnapshot::_internal_pending_event_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pending_event_kind_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_pending_event_kind(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pending_event_kind_ = value;
+}
+
+// uint32 active_resonance_element = 23;
+inline void WuxingTowerStateSnapshot::clear_active_resonance_element() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_resonance_element_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+}
+inline ::uint32_t WuxingTowerStateSnapshot::active_resonance_element() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.active_resonance_element)
+  return _internal_active_resonance_element();
+}
+inline void WuxingTowerStateSnapshot::set_active_resonance_element(::uint32_t value) {
+  _internal_set_active_resonance_element(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.active_resonance_element)
+}
+inline ::uint32_t WuxingTowerStateSnapshot::_internal_active_resonance_element() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.active_resonance_element_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_active_resonance_element(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_resonance_element_ = value;
+}
+
+// uint32 route_choice_mask = 24;
+inline void WuxingTowerStateSnapshot::clear_route_choice_mask() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.route_choice_mask_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
+}
+inline ::uint32_t WuxingTowerStateSnapshot::route_choice_mask() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.route_choice_mask)
+  return _internal_route_choice_mask();
+}
+inline void WuxingTowerStateSnapshot::set_route_choice_mask(::uint32_t value) {
+  _internal_set_route_choice_mask(value);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.route_choice_mask)
+}
+inline ::uint32_t WuxingTowerStateSnapshot::_internal_route_choice_mask() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.route_choice_mask_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_route_choice_mask(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.route_choice_mask_ = value;
+}
+
+// uint32 best_rounds_self = 25;
+inline void WuxingTowerStateSnapshot::clear_best_rounds_self() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.best_rounds_self_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+}
+inline ::uint32_t WuxingTowerStateSnapshot::best_rounds_self() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.best_rounds_self)
+  return _internal_best_rounds_self();
+}
+inline void WuxingTowerStateSnapshot::set_best_rounds_self(::uint32_t value) {
+  _internal_set_best_rounds_self(value);
+  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.best_rounds_self)
+}
+inline ::uint32_t WuxingTowerStateSnapshot::_internal_best_rounds_self() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.best_rounds_self_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_best_rounds_self(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.best_rounds_self_ = value;
+}
+
+// uint32 best_rounds_preset = 26;
+inline void WuxingTowerStateSnapshot::clear_best_rounds_preset() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.best_rounds_preset_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
+}
+inline ::uint32_t WuxingTowerStateSnapshot::best_rounds_preset() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.best_rounds_preset)
+  return _internal_best_rounds_preset();
+}
+inline void WuxingTowerStateSnapshot::set_best_rounds_preset(::uint32_t value) {
+  _internal_set_best_rounds_preset(value);
+  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.best_rounds_preset)
+}
+inline ::uint32_t WuxingTowerStateSnapshot::_internal_best_rounds_preset() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.best_rounds_preset_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_best_rounds_preset(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.best_rounds_preset_ = value;
+}
+
+// uint32 weekly_best_floor_preset = 27;
+inline void WuxingTowerStateSnapshot::clear_weekly_best_floor_preset() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.weekly_best_floor_preset_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
+}
+inline ::uint32_t WuxingTowerStateSnapshot::weekly_best_floor_preset() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.weekly_best_floor_preset)
+  return _internal_weekly_best_floor_preset();
+}
+inline void WuxingTowerStateSnapshot::set_weekly_best_floor_preset(::uint32_t value) {
+  _internal_set_weekly_best_floor_preset(value);
+  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.weekly_best_floor_preset)
+}
+inline ::uint32_t WuxingTowerStateSnapshot::_internal_weekly_best_floor_preset() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.weekly_best_floor_preset_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_weekly_best_floor_preset(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.weekly_best_floor_preset_ = value;
+}
+
+// uint32 weekly_best_rounds_preset = 28;
+inline void WuxingTowerStateSnapshot::clear_weekly_best_rounds_preset() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.weekly_best_rounds_preset_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
+}
+inline ::uint32_t WuxingTowerStateSnapshot::weekly_best_rounds_preset() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.weekly_best_rounds_preset)
+  return _internal_weekly_best_rounds_preset();
+}
+inline void WuxingTowerStateSnapshot::set_weekly_best_rounds_preset(::uint32_t value) {
+  _internal_set_weekly_best_rounds_preset(value);
+  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerStateSnapshot.weekly_best_rounds_preset)
+}
+inline ::uint32_t WuxingTowerStateSnapshot::_internal_weekly_best_rounds_preset() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.weekly_best_rounds_preset_;
+}
+inline void WuxingTowerStateSnapshot::_internal_set_weekly_best_rounds_preset(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.weekly_best_rounds_preset_ = value;
+}
+
+// repeated .WuxingTowerLeaderboardEntry weekly_leaderboard_preset = 29;
+inline int WuxingTowerStateSnapshot::_internal_weekly_leaderboard_preset_size() const {
+  return _internal_weekly_leaderboard_preset().size();
+}
+inline int WuxingTowerStateSnapshot::weekly_leaderboard_preset_size() const {
+  return _internal_weekly_leaderboard_preset_size();
+}
+inline void WuxingTowerStateSnapshot::clear_weekly_leaderboard_preset() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.weekly_leaderboard_preset_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::WuxingTowerLeaderboardEntry& WuxingTowerStateSnapshot::weekly_leaderboard_preset(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:WuxingTowerStateSnapshot.weekly_leaderboard_preset)
+  return _internal_weekly_leaderboard_preset().Get(index);
+}
+inline ::WuxingTowerLeaderboardEntry* PROTOBUF_NONNULL WuxingTowerStateSnapshot::mutable_weekly_leaderboard_preset(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:WuxingTowerStateSnapshot.weekly_leaderboard_preset)
+  return _internal_mutable_weekly_leaderboard_preset()->Mutable(index);
+}
+inline ::WuxingTowerLeaderboardEntry* PROTOBUF_NONNULL WuxingTowerStateSnapshot::add_weekly_leaderboard_preset()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::WuxingTowerLeaderboardEntry* _add =
+      _internal_mutable_weekly_leaderboard_preset()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_add:WuxingTowerStateSnapshot.weekly_leaderboard_preset)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::WuxingTowerLeaderboardEntry>& WuxingTowerStateSnapshot::weekly_leaderboard_preset() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:WuxingTowerStateSnapshot.weekly_leaderboard_preset)
+  return _internal_weekly_leaderboard_preset();
+}
+inline ::google::protobuf::RepeatedPtrField<::WuxingTowerLeaderboardEntry>* PROTOBUF_NONNULL
+WuxingTowerStateSnapshot::mutable_weekly_leaderboard_preset() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_mutable_list:WuxingTowerStateSnapshot.weekly_leaderboard_preset)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_weekly_leaderboard_preset();
+}
+inline const ::google::protobuf::RepeatedPtrField<::WuxingTowerLeaderboardEntry>&
+WuxingTowerStateSnapshot::_internal_weekly_leaderboard_preset() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.weekly_leaderboard_preset_;
+}
+inline ::google::protobuf::RepeatedPtrField<::WuxingTowerLeaderboardEntry>* PROTOBUF_NONNULL
+WuxingTowerStateSnapshot::_internal_mutable_weekly_leaderboard_preset() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.weekly_leaderboard_preset_;
 }
 
 // -------------------------------------------------------------------
@@ -13006,6 +14659,78 @@ inline void GetWuxingTowerStateResponse::set_allocated_state(::WuxingTowerStateS
 // -------------------------------------------------------------------
 
 // StartWuxingTowerRunRequest
+
+// bool use_free_preset = 1;
+inline void StartWuxingTowerRunRequest::clear_use_free_preset() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.use_free_preset_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline bool StartWuxingTowerRunRequest::use_free_preset() const {
+  // @@protoc_insertion_point(field_get:StartWuxingTowerRunRequest.use_free_preset)
+  return _internal_use_free_preset();
+}
+inline void StartWuxingTowerRunRequest::set_use_free_preset(bool value) {
+  _internal_set_use_free_preset(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:StartWuxingTowerRunRequest.use_free_preset)
+}
+inline bool StartWuxingTowerRunRequest::_internal_use_free_preset() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.use_free_preset_;
+}
+inline void StartWuxingTowerRunRequest::_internal_set_use_free_preset(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.use_free_preset_ = value;
+}
+
+// uint32 character_preset_id = 2;
+inline void StartWuxingTowerRunRequest::clear_character_preset_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.character_preset_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t StartWuxingTowerRunRequest::character_preset_id() const {
+  // @@protoc_insertion_point(field_get:StartWuxingTowerRunRequest.character_preset_id)
+  return _internal_character_preset_id();
+}
+inline void StartWuxingTowerRunRequest::set_character_preset_id(::uint32_t value) {
+  _internal_set_character_preset_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:StartWuxingTowerRunRequest.character_preset_id)
+}
+inline ::uint32_t StartWuxingTowerRunRequest::_internal_character_preset_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.character_preset_id_;
+}
+inline void StartWuxingTowerRunRequest::_internal_set_character_preset_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.character_preset_id_ = value;
+}
+
+// uint32 pet_preset_id = 3;
+inline void StartWuxingTowerRunRequest::clear_pet_preset_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_preset_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t StartWuxingTowerRunRequest::pet_preset_id() const {
+  // @@protoc_insertion_point(field_get:StartWuxingTowerRunRequest.pet_preset_id)
+  return _internal_pet_preset_id();
+}
+inline void StartWuxingTowerRunRequest::set_pet_preset_id(::uint32_t value) {
+  _internal_set_pet_preset_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:StartWuxingTowerRunRequest.pet_preset_id)
+}
+inline ::uint32_t StartWuxingTowerRunRequest::_internal_pet_preset_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pet_preset_id_;
+}
+inline void StartWuxingTowerRunRequest::_internal_set_pet_preset_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pet_preset_id_ = value;
+}
 
 // -------------------------------------------------------------------
 
@@ -13670,6 +15395,548 @@ inline void AbandonWuxingTowerRunResponse::set_allocated_state(::WuxingTowerStat
 
   _impl_.state_ = reinterpret_cast<::WuxingTowerStateSnapshot*>(value);
   // @@protoc_insertion_point(field_set_allocated:AbandonWuxingTowerRunResponse.state)
+}
+
+// -------------------------------------------------------------------
+
+// ChooseWuxingRealmBranchRequest
+
+// uint64 expected_run_id = 1;
+inline void ChooseWuxingRealmBranchRequest::clear_expected_run_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_run_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t ChooseWuxingRealmBranchRequest::expected_run_id() const {
+  // @@protoc_insertion_point(field_get:ChooseWuxingRealmBranchRequest.expected_run_id)
+  return _internal_expected_run_id();
+}
+inline void ChooseWuxingRealmBranchRequest::set_expected_run_id(::uint64_t value) {
+  _internal_set_expected_run_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:ChooseWuxingRealmBranchRequest.expected_run_id)
+}
+inline ::uint64_t ChooseWuxingRealmBranchRequest::_internal_expected_run_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expected_run_id_;
+}
+inline void ChooseWuxingRealmBranchRequest::_internal_set_expected_run_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_run_id_ = value;
+}
+
+// uint32 branch = 2;
+inline void ChooseWuxingRealmBranchRequest::clear_branch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.branch_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t ChooseWuxingRealmBranchRequest::branch() const {
+  // @@protoc_insertion_point(field_get:ChooseWuxingRealmBranchRequest.branch)
+  return _internal_branch();
+}
+inline void ChooseWuxingRealmBranchRequest::set_branch(::uint32_t value) {
+  _internal_set_branch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:ChooseWuxingRealmBranchRequest.branch)
+}
+inline ::uint32_t ChooseWuxingRealmBranchRequest::_internal_branch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.branch_;
+}
+inline void ChooseWuxingRealmBranchRequest::_internal_set_branch(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.branch_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ChooseWuxingRealmBranchResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool ChooseWuxingRealmBranchResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& ChooseWuxingRealmBranchResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& ChooseWuxingRealmBranchResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:ChooseWuxingRealmBranchResponse.error_message)
+  return _internal_error_message();
+}
+inline void ChooseWuxingRealmBranchResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:ChooseWuxingRealmBranchResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE ChooseWuxingRealmBranchResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE ChooseWuxingRealmBranchResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:ChooseWuxingRealmBranchResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL ChooseWuxingRealmBranchResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL ChooseWuxingRealmBranchResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:ChooseWuxingRealmBranchResponse.error_message)
+  return _msg;
+}
+inline void ChooseWuxingRealmBranchResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:ChooseWuxingRealmBranchResponse.error_message)
+}
+
+// .WuxingTowerStateSnapshot state = 2;
+inline bool ChooseWuxingRealmBranchResponse::has_state() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.state_ != nullptr);
+  return value;
+}
+inline void ChooseWuxingRealmBranchResponse::clear_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.state_ != nullptr) _impl_.state_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::WuxingTowerStateSnapshot& ChooseWuxingRealmBranchResponse::_internal_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::WuxingTowerStateSnapshot* p = _impl_.state_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::WuxingTowerStateSnapshot>(&::WuxingTowerStateSnapshot_globals_);
+}
+inline const ::WuxingTowerStateSnapshot& ChooseWuxingRealmBranchResponse::state() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:ChooseWuxingRealmBranchResponse.state)
+  return _internal_state();
+}
+inline void ChooseWuxingRealmBranchResponse::unsafe_arena_set_allocated_state(
+    ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.state_);
+  }
+  _impl_.state_ = reinterpret_cast<::WuxingTowerStateSnapshot*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:ChooseWuxingRealmBranchResponse.state)
+}
+inline ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE ChooseWuxingRealmBranchResponse::release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::WuxingTowerStateSnapshot* released = _impl_.state_;
+  _impl_.state_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE ChooseWuxingRealmBranchResponse::unsafe_arena_release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:ChooseWuxingRealmBranchResponse.state)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::WuxingTowerStateSnapshot* temp = _impl_.state_;
+  _impl_.state_ = nullptr;
+  return temp;
+}
+inline ::WuxingTowerStateSnapshot* PROTOBUF_NONNULL ChooseWuxingRealmBranchResponse::_internal_mutable_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.state_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::WuxingTowerStateSnapshot>(GetArena());
+    _impl_.state_ = reinterpret_cast<::WuxingTowerStateSnapshot*>(p);
+  }
+  return _impl_.state_;
+}
+inline ::WuxingTowerStateSnapshot* PROTOBUF_NONNULL ChooseWuxingRealmBranchResponse::mutable_state()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::WuxingTowerStateSnapshot* _msg = _internal_mutable_state();
+  // @@protoc_insertion_point(field_mutable:ChooseWuxingRealmBranchResponse.state)
+  return _msg;
+}
+inline void ChooseWuxingRealmBranchResponse::set_allocated_state(::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.state_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.state_ = reinterpret_cast<::WuxingTowerStateSnapshot*>(value);
+  // @@protoc_insertion_point(field_set_allocated:ChooseWuxingRealmBranchResponse.state)
+}
+
+// -------------------------------------------------------------------
+
+// ResolveWuxingRealmEventRequest
+
+// uint64 expected_run_id = 1;
+inline void ResolveWuxingRealmEventRequest::clear_expected_run_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_run_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t ResolveWuxingRealmEventRequest::expected_run_id() const {
+  // @@protoc_insertion_point(field_get:ResolveWuxingRealmEventRequest.expected_run_id)
+  return _internal_expected_run_id();
+}
+inline void ResolveWuxingRealmEventRequest::set_expected_run_id(::uint64_t value) {
+  _internal_set_expected_run_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:ResolveWuxingRealmEventRequest.expected_run_id)
+}
+inline ::uint64_t ResolveWuxingRealmEventRequest::_internal_expected_run_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expected_run_id_;
+}
+inline void ResolveWuxingRealmEventRequest::_internal_set_expected_run_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_run_id_ = value;
+}
+
+// uint32 option_index = 2;
+inline void ResolveWuxingRealmEventRequest::clear_option_index() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.option_index_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t ResolveWuxingRealmEventRequest::option_index() const {
+  // @@protoc_insertion_point(field_get:ResolveWuxingRealmEventRequest.option_index)
+  return _internal_option_index();
+}
+inline void ResolveWuxingRealmEventRequest::set_option_index(::uint32_t value) {
+  _internal_set_option_index(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:ResolveWuxingRealmEventRequest.option_index)
+}
+inline ::uint32_t ResolveWuxingRealmEventRequest::_internal_option_index() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.option_index_;
+}
+inline void ResolveWuxingRealmEventRequest::_internal_set_option_index(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.option_index_ = value;
+}
+
+// uint32 target_boon_id = 3;
+inline void ResolveWuxingRealmEventRequest::clear_target_boon_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_boon_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t ResolveWuxingRealmEventRequest::target_boon_id() const {
+  // @@protoc_insertion_point(field_get:ResolveWuxingRealmEventRequest.target_boon_id)
+  return _internal_target_boon_id();
+}
+inline void ResolveWuxingRealmEventRequest::set_target_boon_id(::uint32_t value) {
+  _internal_set_target_boon_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:ResolveWuxingRealmEventRequest.target_boon_id)
+}
+inline ::uint32_t ResolveWuxingRealmEventRequest::_internal_target_boon_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_boon_id_;
+}
+inline void ResolveWuxingRealmEventRequest::_internal_set_target_boon_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_boon_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ResolveWuxingRealmEventResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool ResolveWuxingRealmEventResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& ResolveWuxingRealmEventResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& ResolveWuxingRealmEventResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:ResolveWuxingRealmEventResponse.error_message)
+  return _internal_error_message();
+}
+inline void ResolveWuxingRealmEventResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:ResolveWuxingRealmEventResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE ResolveWuxingRealmEventResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE ResolveWuxingRealmEventResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:ResolveWuxingRealmEventResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL ResolveWuxingRealmEventResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL ResolveWuxingRealmEventResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:ResolveWuxingRealmEventResponse.error_message)
+  return _msg;
+}
+inline void ResolveWuxingRealmEventResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:ResolveWuxingRealmEventResponse.error_message)
+}
+
+// .WuxingTowerStateSnapshot state = 2;
+inline bool ResolveWuxingRealmEventResponse::has_state() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.state_ != nullptr);
+  return value;
+}
+inline void ResolveWuxingRealmEventResponse::clear_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.state_ != nullptr) _impl_.state_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::WuxingTowerStateSnapshot& ResolveWuxingRealmEventResponse::_internal_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::WuxingTowerStateSnapshot* p = _impl_.state_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::WuxingTowerStateSnapshot>(&::WuxingTowerStateSnapshot_globals_);
+}
+inline const ::WuxingTowerStateSnapshot& ResolveWuxingRealmEventResponse::state() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:ResolveWuxingRealmEventResponse.state)
+  return _internal_state();
+}
+inline void ResolveWuxingRealmEventResponse::unsafe_arena_set_allocated_state(
+    ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.state_);
+  }
+  _impl_.state_ = reinterpret_cast<::WuxingTowerStateSnapshot*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:ResolveWuxingRealmEventResponse.state)
+}
+inline ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE ResolveWuxingRealmEventResponse::release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::WuxingTowerStateSnapshot* released = _impl_.state_;
+  _impl_.state_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE ResolveWuxingRealmEventResponse::unsafe_arena_release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:ResolveWuxingRealmEventResponse.state)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::WuxingTowerStateSnapshot* temp = _impl_.state_;
+  _impl_.state_ = nullptr;
+  return temp;
+}
+inline ::WuxingTowerStateSnapshot* PROTOBUF_NONNULL ResolveWuxingRealmEventResponse::_internal_mutable_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.state_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::WuxingTowerStateSnapshot>(GetArena());
+    _impl_.state_ = reinterpret_cast<::WuxingTowerStateSnapshot*>(p);
+  }
+  return _impl_.state_;
+}
+inline ::WuxingTowerStateSnapshot* PROTOBUF_NONNULL ResolveWuxingRealmEventResponse::mutable_state()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::WuxingTowerStateSnapshot* _msg = _internal_mutable_state();
+  // @@protoc_insertion_point(field_mutable:ResolveWuxingRealmEventResponse.state)
+  return _msg;
+}
+inline void ResolveWuxingRealmEventResponse::set_allocated_state(::WuxingTowerStateSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.state_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.state_ = reinterpret_cast<::WuxingTowerStateSnapshot*>(value);
+  // @@protoc_insertion_point(field_set_allocated:ResolveWuxingRealmEventResponse.state)
+}
+
+// uint32 granted_boon_id = 3;
+inline void ResolveWuxingRealmEventResponse::clear_granted_boon_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.granted_boon_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t ResolveWuxingRealmEventResponse::granted_boon_id() const {
+  // @@protoc_insertion_point(field_get:ResolveWuxingRealmEventResponse.granted_boon_id)
+  return _internal_granted_boon_id();
+}
+inline void ResolveWuxingRealmEventResponse::set_granted_boon_id(::uint32_t value) {
+  _internal_set_granted_boon_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:ResolveWuxingRealmEventResponse.granted_boon_id)
+}
+inline ::uint32_t ResolveWuxingRealmEventResponse::_internal_granted_boon_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.granted_boon_id_;
+}
+inline void ResolveWuxingRealmEventResponse::_internal_set_granted_boon_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.granted_boon_id_ = value;
 }
 
 // -------------------------------------------------------------------
