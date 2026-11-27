@@ -243,13 +243,19 @@ type fakeAdmin struct {
 	// noPrimaryKey 是这一侧没有主键的表。
 	noPrimaryKey    []string
 	noPrimaryKeyErr error
-	// ttlEnabled 是这一侧 TTL 开着的表。
-	ttlEnabled []string
-	ttlErr     error
+	// ttlEnabled 是这一侧 TTL 开着的表,ttlRunning 是还有 TTL 任务在跑的表。
+	ttlEnabled    []string
+	ttlErr        error
+	ttlRunning    []string
+	ttlRunningErr error
 }
 
 func (a *fakeAdmin) TablesWithTTLEnabled(context.Context, string) ([]string, error) {
 	return a.ttlEnabled, a.ttlErr
+}
+
+func (a *fakeAdmin) TablesWithRunningTTLJob(context.Context, string) ([]string, error) {
+	return a.ttlRunning, a.ttlRunningErr
 }
 
 func (a *fakeAdmin) ServerBackend(context.Context) (string, error) { return a.backend, nil }
@@ -824,6 +830,9 @@ func TestCutoverRefusesBeforeFreezing(t *testing.T) {
 		{"源库有表开着 TTL", func(h *harness) { h.sourceAdmin.ttlEnabled = []string{"chat_send_authority"} }, "chat_send_authority. TTL jobs"},
 		{"目标有表开着 TTL", func(h *harness) { h.targetAdmin.ttlEnabled = []string{"chat_send_authority"} }, "have TTL enabled on the target"},
 		{"读不到 TTL 属性", func(h *harness) { h.sourceAdmin.ttlErr = errors.New("denied") }, "cannot read the TTL attribute of the tables on the source"},
+		// 属性已经关了,但关之前开始的任务还在删行。
+		{"源库还有 TTL 任务在跑", func(h *harness) { h.sourceAdmin.ttlRunning = []string{"chat_send_authority"} }, "a TTL job is still running on these tables of " + testDB + " on the source: chat_send_authority"},
+		{"读不到 TTL 任务状态", func(h *harness) { h.targetAdmin.ttlRunningErr = errors.New("denied") }, "cannot tell whether a TTL job is still running on the target"},
 		{"读不到复制流", func(h *harness) { h.repl.identityErr = errReplicationBroken }, "replication is not ready"},
 		{"映射里没有复制流", func(h *harness) { h.store.records[testDB].Placement.Move.VerifiedFeed = nil }, "run verify again"},
 		{"名册里的账号目标上没有", func(h *harness) {
@@ -1393,6 +1402,40 @@ func TestAuditProblemsExitNonZero(t *testing.T) {
 				t.Fatal("不一致不能记成功")
 			}
 		})
+	}
+}
+
+// audit 拿冻结的源库的当前数据当参照。cutover 之后源库的 TTL 又被打开(或者还有任务在删行)时,先说清楚,不去比:
+// 比出来的不一致分不清是复制丢了还是 TTL 删的。
+func TestAuditRefusesWhileTheFrozenSourceIsStillChanged(t *testing.T) {
+	tests := []struct {
+		name   string
+		change func(h *harness)
+		want   string
+	}{
+		{"源库有表开着 TTL", func(h *harness) { h.sourceAdmin.ttlEnabled = []string{"chat_send_authority"} }, "have TTL enabled on the source: chat_send_authority. TTL jobs delete rows from the frozen source"},
+		{"源库还有 TTL 任务在跑", func(h *harness) { h.sourceAdmin.ttlRunning = []string{"chat_send_authority"} }, "a TTL job is still running"},
+		{"读不到 TTL 属性", func(h *harness) { h.sourceAdmin.ttlErr = errors.New("denied") }, "cannot read the TTL attribute of the tables on the source"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.seedFlipped(false)
+			h.metrics["game:9101"] = 3
+			test.change(h)
+			requireRefused(t, h.m.audit(context.Background()), test.want)
+			if h.log.has("view.source") || h.log.has("view.target") || h.placement().Move.AuditedMs != 0 {
+				t.Fatalf("拒绝时不比对、不记成功: %v", h.log.events)
+			}
+		})
+	}
+	// 目标上的 TTL 不影响 audit:目标读的是翻转之前记下的位置。
+	h := newHarness(t)
+	h.seedFlipped(false)
+	h.metrics["game:9101"] = 3
+	h.targetAdmin.ttlEnabled = []string{"chat_send_authority"}
+	if err := h.m.audit(context.Background()); err != nil {
+		t.Fatalf("目标开着 TTL 不挡 audit: %v", err)
 	}
 }
 

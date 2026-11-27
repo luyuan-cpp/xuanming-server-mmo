@@ -20,14 +20,21 @@ import (
 // 对 login 与全球账号库而言,官方通行证与 Apple / Google 同构:
 //   - 客户端完成 OAuth2 + PKCE 注册/登录后把 Casdoor 签发的 RS256 id_token 交给 /api/login(auth_type="passport");
 //   - 服务端复用 idTokenVerifier 按 Casdoor 的 /.well-known/jwks 验签并核 iss / aud / exp / iat / nbf / sub;
-//   - 额外守住两道自托管 IdP 特有的防线:
-//       1. 令牌总有效期 (exp - iat) 不得超过 passportMaxTokenLifetime(2h):Casdoor 默认 168h,不拦截会把
+//   - 额外守住三道自托管 IdP 特有的防线:
+//       1. 只收身份令牌(tokenType = "id-token")。Casdoor 一次换票同时给出身份令牌、访问令牌、刷新令牌,三枚都是同一把钥匙签的
+//          JWT,iss / aud / sub 相同(v4.27.1 object/token_jwt.go),只有 tokenType 不同。不核这一项,身份令牌被一次性消费之后,
+//          同一次换票拿到的访问令牌还能再登录一次;刷新令牌有效期更长。别的类型按凭证无效拒绝,不算渠道故障:
+//          任何玩家都拿得到自己的访问令牌和刷新令牌,不能让他凭这个刷出故障告警。
+//       2. 令牌总有效期 (exp - iat) 不得超过 passportMaxTokenLifetime(2h):Casdoor 默认 168h,不拦截会把
 //          LoginRedis 一次性防重放键保留 7 天并放大令牌泄露窗口;超限按 ErrProviderUnavailable(配置故障)拒收。
-//       2. 账号标识 passport_<sub> 不含空白且总长度 <= 191 字节(对齐 account_directory 主键上限)。
+//       3. 账号标识 passport_<sub> 不含空白且总长度 <= 191 字节(对齐 account_directory 主键上限)。
 
 const (
 	// PassportAuthType 是客户端在 LoginRequest.auth_type 里送的值,也是指标 label 取值,上线后不改名。
 	PassportAuthType = "passport"
+
+	// passportIDTokenType 是 Casdoor 写在身份令牌里的 tokenType;访问令牌是 "access-token",刷新令牌是 "refresh-token"。
+	passportIDTokenType = "id-token"
 
 	passportAccountPrefix    = "passport_"
 	passportJWKSPath         = "/.well-known/jwks"
@@ -78,7 +85,17 @@ func (p *PassportProvider) Validate(ctx context.Context, identityToken string) (
 	return &AuthResult{Account: account}, nil
 }
 
+// PassportSubject 从账号名取回通行证的 sub;不是通行证账号回 false。账号注销按它找到通行证里的用户(passport_admin.go)。
+func PassportSubject(account string) (string, bool) {
+	sub, ok := strings.CutPrefix(account, passportAccountPrefix)
+	return sub, ok && sub != ""
+}
+
 func validatePassportClaims(claims *idTokenClaims) error {
+	// 先核类型再核有效期:刷新令牌的有效期本来就长,不能让它走到下面的「配置故障」。
+	if claims.TokenType != passportIDTokenType {
+		return fmt.Errorf("%s: token is not an ID token", PassportAuthType)
+	}
 	if strings.IndexFunc(claims.Sub, unicode.IsSpace) >= 0 {
 		return fmt.Errorf("%s: token subject contains whitespace", PassportAuthType)
 	}

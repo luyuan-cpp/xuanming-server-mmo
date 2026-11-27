@@ -2,7 +2,7 @@
 
 本批由 Claude 改代码，**未编译、未运行任何测试**（只对改动文件跑过 `gofmt -l`，无输出）。设计见 [gate 在线身份](../../design/gate-online-identity.md) §9.2，计划见同目录 `docs/handoff/gate-online-identity-simplify-20261105/PLAN.md`（已清理，见 `ccf2840b2`）。
 
-**两批合在一次验证里**：负责人 11-06 要求在上一批（删在线域 login Redis 回退）验收之前就落码。请先按 上一批执行清单（原 `docs/handoff/gate-online-identity-single-source-20261105/CODEX.md`，已清理，见 `ccf2840b2`） 的步骤跑，再跑本文件的步骤；失败时按文末文件清单判断属于哪一批，回执写清。上一批 CODEX.md 里点名的 `original_role_interceptor_test.go`、`identity_test.go` 等已被本批删除或重写，以本批为准。第 3 批（guild 三个读方法删无会话分支，设计 §9.6 第 1 条）见第 7 节，在第 1、2 批之后执行。第 4 批（删 guild 请求体里被忽略的字段、删全服帮会榜，设计 §9.6 第 2、3 条，2026-11-10）见第 8 节，最后执行；它改了 `guild.proto` 的字段，工作区里只有这一份协议，所以第 1 节的生成就已经带上第 4 批的字段删除。设计 §7 的已知边界另有两节：第 9 节是批 1（gate 改 Ed25519 签名），第 10 节是批 2～4 与读路径归属预检（2026-11-12）；第 10 节给 `login.proto` 加了一个方法，同样会被第 1 节的生成带上，但它还要求生成之后跑一次 `go/build.ps1`（见第 10 节第 1 步）。
+**两批合在一次验证里**：负责人 11-06 要求在上一批（删在线域 login Redis 回退）验收之前就落码。请先按 上一批执行清单（原 `docs/handoff/gate-online-identity-single-source-20261105/CODEX.md`，已清理，见 `ccf2840b2`） 的步骤跑，再跑本文件的步骤；失败时按文末文件清单判断属于哪一批，回执写清。上一批 CODEX.md 里点名的 `original_role_interceptor_test.go`、`identity_test.go` 等已被本批删除或重写，以本批为准。第 3 批（guild 三个读方法删无会话分支，设计 §9.6 第 1 条）见第 7 节，在第 1、2 批之后执行。第 4 批（删 guild 请求体里被忽略的字段、删全服帮会榜，设计 §9.6 第 2、3 条，2026-11-10）见第 8 节，最后执行；它改了 `guild.proto` 的字段，工作区里只有这一份协议，所以第 1 节的生成就已经带上第 4 批的字段删除。设计 §7 的已知边界另有两节：第 9 节是批 1（gate 改 Ed25519 签名），第 10 节是批 2～4 与读路径归属预检（2026-11-12）；第 10 节给 `login.proto` 加了一个方法，同样会被第 1 节的生成带上；它的转发方法已手写在 `clientplayerloginserver.go`（`go/build.ps1` 11-21 随 goctl 退役删除，不用跑）。
 
 ## 改了什么
 
@@ -447,7 +447,6 @@ git worktree remove --force $env:TEMP\gate-simplify-red
    git status --short > $env:TEMP\gate-b234-before.txt
    pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-build
    pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run
-   pwsh -NoProfile -ExecutionPolicy Bypass -File go/build.ps1
    Push-Location robot; go mod vendor; Pop-Location
    git status --short > $env:TEMP\gate-b234-after.txt
    rg -n 'RenewSession' go/proto/login go/login/internal/server/clientplayerlogin go/shared/generated/clientrpc proto/message_id.txt
@@ -456,7 +455,7 @@ git worktree remove --force $env:TEMP\gate-simplify-red
 
    通过标准：
    - `go/proto/login` 里有 `RenewSessionRequest` / `RenewSessionResponse` 与 `ClientPlayerLogin_RenewSession_FullMethodName`。
-   - `go/login/internal/server/clientplayerlogin/clientplayerloginserver.go` 里的 `RenewSession` 调 `clientplayerloginlogic.NewRenewSessionLogic(ctx, s.svcCtx)`，`RequestGateMigration` 也接上了（它此前一直缺）。`go/build.ps1` 不能覆盖手写的 `renewsessionlogic.go`：跑完用 `git diff --stat go/login/internal/logic/clientplayerlogin/renewsessionlogic.go` 确认它没被改写；被改写就还原这一个文件并报告。
+   - `go/login/internal/server/clientplayerlogin/clientplayerloginserver.go` 里的 `RenewSession` 调 `clientplayerloginlogic.NewRenewSessionLogic(ctx, s.svcCtx)`，`RequestGateMigration` 也接上了（它此前一直缺）。转发层 11-21 起手写（`go/build.ps1` 随 goctl 退役删除，不用跑），`go/login` 的 `TestGoctlServerWrappersImplementEveryRPC` 核对每个方法都接上了。
    - `go/shared/generated/clientrpc` 里**没有** `RenewSession`（SERVER_ONLY 不进客户端可发起集合）。
    - `cpp/generated` 里有 `ClientPlayerLoginRenewSessionMessageId` 与 `SendClientPlayerLoginRenewSession`。名字不同就以生成物为准报告，gate 的 `client_session_handler.cpp` 与 `login_admission.h` 按 `RequestGateMigration` 的同名规则引用它们。
    - 前后两份 `git status` 的差只应多出 login 协议的生成物、消息号表、login 的 goctl 包装，以及客户端仓的对应生成物。别的差异停下报告。
@@ -534,7 +533,7 @@ git worktree remove --force $env:TEMP\gate-simplify-red
       - 登录域 Redis 里这条连接的 `login_session` 键 3 分钟后还在（`TTL` 为正）。对照：不续租时它 1 分钟就过期。
       - 机器人断线后，`renewed` 不再为它增长；键在 1 分钟内消失或被断线清理删除。
       - 测完把 `SessionExpireMin` 改回去。
-   2. 没跑 `go/build.ps1` 的反例不用专门造；若 gate 日志里 `failed` 持续增长、login 日志有 `Unimplemented`，就是第 1 步的 goctl 包装没生成。
+   2. 漏接转发的反例不用专门造；若 gate 日志里 `failed` 持续增长、login 日志有 `Unimplemented`，就是 `clientplayerloginserver.go` 缺了 `RenewSession` 转发（这时 `TestGoctlServerWrappersImplementEveryRPC` 应该已经红了）。
    3. 归属预检。机器人正常登录后各发一个 match（战报列表）、trade（浏览、我的货架）、guild 请求，全部成功；三个服务的 `online_entry_rejected_total{reason=~"ownership_.*"}` 为 0。trade 在 `AssetOp.Enabled=false` 下也要能启动并服务浏览（角色护栏现在无条件装配，本机启动器已注入 `MMORPG_ROLE_FENCE_SECRET_TRADE`）。
    4. 部署预览（不连集群）：
 
@@ -680,7 +679,7 @@ git worktree remove --force $env:TEMP\gate-simplify-red
   - 11-18 的 Docker 全量重建 `build/verification/docker-rebuild-all-20261118T082435.788540Z/` 里 C++、Go、Java 三段都退出 0，gate 的链接行含 `login_session_renewal.cpp.o`。这一轮失败在之后的运行时核对（gateway 的挂载变了），与本清单无关。
   - 所以编译这一项在 Linux 上有证据；**测试一个都没跑**（Go 单测、`routing_identity_test`、两份 ps1 契约测试、kind 实测）。Windows 的 `msbuild /m:1` 整解也没有证据。Gemini 从第 10 节第 2 步与第 11 节第 2 步往下做即可，第 1 步只需重跑一次生成确认没有差异。
 
-- 回执写到同目录 `codex-results.md`：每步命令、退出码、通过与否；失败附首条错误与日志摘要，并注明属于上一批、第 1～4 批中的哪一批、第 9 节的 §7 批 1（Ed25519 签名），第 10 节的 §7 批 2～4 与读路径归属预检，还是第 11 节的残余收尾。第 11 节不改协议、不改 C++，跟着第 10 节的 Go 与部署脚本步骤一起跑，另有一步 kind 实测。第 9 节不改协议，不需要重新生成；它改了 C++ gate，要整解重编。第 10 节改了 `login.proto`，要先生成并跑 `go/build.ps1`，再整解重编 C++；第 9、10 两节可以合在一次生成与一次整解里验证。
+- 回执写到同目录 `codex-results.md`：每步命令、退出码、通过与否；失败附首条错误与日志摘要，并注明属于上一批、第 1～4 批中的哪一批、第 9 节的 §7 批 1（Ed25519 签名），第 10 节的 §7 批 2～4 与读路径归属预检，还是第 11 节的残余收尾。第 11 节不改协议、不改 C++，跟着第 10 节的 Go 与部署脚本步骤一起跑，另有一步 kind 实测。第 9 节不改协议，不需要重新生成；它改了 C++ gate，要整解重编。第 10 节改了 `login.proto`，要先生成，再整解重编 C++；第 9、10 两节可以合在一次生成与一次整解里验证。
 - 第 1～3 批：C++ 不改，不需要 C++ 编译；客户端不改、不重编；Java 版不适用（设计 §8）。生成步骤若产生 `cpp/generated` 差异，除第 4 批的 `cpp/generated/proto/guild/guild.pb.{h,cc}` 之外，停下报告。（2026-11-11 补注：`proto/guild/guild_db.proto` 加了 `GuildRecord.score_version = 12`，所以 `cpp/generated/proto/guild/guild_db.pb.{h,cc}` 与 `go/proto/guild/guild_db.pb.go` 的差异也是预期的，见 `docs/PROGRESS.md` 2026-11-11「帮会积分写入不再抢全服锁」。）
 - 第 4 批：C++ 手写代码不改，但 guild 的 C++ 生成物会变，要重编 C++；客户端要按新协议重新生成并重编（第 8 节）。Java 版本轮不写代码，只在 Java 仓 `PARITY.md` 记 TODO（设计 §8）。
 

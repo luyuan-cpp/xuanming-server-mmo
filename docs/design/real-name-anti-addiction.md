@@ -1,6 +1,6 @@
 # 实名认证与未成年人防沉迷
 
-> **状态：2026-11-19 负责人定「App 形态也首发，按清单写」，§5 已落码，未生成、未编译、未测试，待 Gemini 验证（命令见 `docs/PROGRESS.md` 同日「实名认证与未成年人防沉迷」落码条目）。** 规则与平台能力的来源见 §10。§8 末尾原先没做的两项都已在 2026-11-19 补落码、未运行：K8s 部署参数，go/payment 的限额闸（§5.6）。2026-11-20 又补了三处原来标为「以后」的：国家接口的全服调用额度（§5.2，原来按副本限速、副本不能超过 10 个）、上报器停机时发完手上的事件（§5.5）、客服重置实名（§5.2 末）；单日充值上限定为单次上限（§5.6）。都未运行。2026-11-20 第二批：上下线上报改成登录域 Redis 里的会话账本（§5.5，11-21 Gemini 分成 16 片），到点断开改由 gate 本地按截止时刻做、login 兜底（§5.4）。2026-11-26 复核发现截止时刻一到清扫就删掉账本条目，login 兜底随之失效；§5.4、§5.5 已按修正后的做法写，代码待改，连同沙箱 mock 与全部验证交 Gemini（[交接单](../handoff/real-name-anti-addiction-handoff-20261126.md)）。
+> **状态：2026-11-19 负责人定「App 形态也首发，按清单写」，§5 已落码，未生成、未编译、未测试，待 Gemini 验证（命令见 `docs/PROGRESS.md` 同日「实名认证与未成年人防沉迷」落码条目）。** 规则与平台能力的来源见 §10。§8 末尾原先没做的两项都已在 2026-11-19 补落码、未运行：K8s 部署参数，go/payment 的限额闸（§5.6）。2026-11-20 又补了三处原来标为「以后」的：国家接口的全服调用额度（§5.2，原来按副本限速、副本不能超过 10 个）、上报器停机时发完手上的事件（§5.5）、客服重置实名（§5.2 末）；单日充值上限定为单次上限（§5.6）。都未运行。2026-11-20 第二批：上下线上报改成登录域 Redis 里的会话账本（§5.5，11-21 Gemini 分成 16 片），到点断开改由 gate 本地按截止时刻做、login 兜底（§5.4）。2026-11-26 复核发现截止时刻一到清扫就删掉账本条目，login 兜底随之失效，同日已改（§5.5「未成年人的租约」）；国家系统的沙箱 mock 也在同日写完（[沙盒手册](../ops/wechat-qq-sandbox-runbook.md) §J）。代码到此没有待写项，全部未编译、未运行，验证交 Gemini（[交接单](../handoff/real-name-anti-addiction-handoff-20261126.md)）。
 
 ## 0. 结论
 
@@ -133,7 +133,7 @@
   - **Renew**（每次 RenewSession）：租约顺延一个登录态寿命，并回截止时刻给兜底用。
   - **End**（Disconnect、LeaveGame、续租发现登录态已经没了、绑定发现连接已断）：删登记，排一条下线。没有登记就什么都不做，所以重放无害。
   - **Sweep**（每个副本每秒逐片扫一遍）：租约到期还没收尾的（gate 进程没了、断线通知丢了、End 出错），补一条下线。发生时刻取租约到期时刻，最多往回填 120 秒，因为国家系统只收 180 秒内的事件。如果所有副本都停过、超过租约的三分之一，先暂停清扫一个租约那么久：那段时间续租也送不进来，活着的连接得先续上，之后还到期的才是真没了。
-  - **未成年人的租约**不超过截止时刻：gate 进程没了的时候，下线按截止时刻补报，不会报成 21:00 之后还在线。租约在截止时刻到期时，清扫补报下线，但**不删登记**，而是改成只带截止时刻、不再上报的条目，再续一个租约。连接还在（gate 没关）时，下一次续租照样拿到截止时刻，login 兜底踢线（§5.4）；断开时 End 删掉它，不再报下线；连接早没了的，再过一个租约由清扫删掉。截止时刻过后，续租不再把租约封顶。**（2026-11-26 复核时发现的缺陷：现在的代码在截止时刻直接删登记，兜底找不到条目，就不踢线了。代码待改，见交接单 §2.1。）**
+  - **未成年人的租约**不超过截止时刻：gate 进程没了的时候，下线按截止时刻补报，不会报成 21:00 之后还在线。租约在截止时刻到期时，清扫补报下线，但**不删登记**，而是改成只带截止时刻、不再上报的条目，再续一个租约。连接还在（gate 没关）时，下一次续租照样拿到截止时刻，login 兜底踢线（§5.4）；断开时 End 删掉它，不再报下线；连接早没了的，再过一个租约由清扫删掉。截止时刻过后，续租不再把租约封顶。只为兜底留着的条目不算会话，清掉它不计入清扫的收尾数。（2026-11-26 修正：原来在截止时刻直接删登记，之后的续租查不到它，兜底就不踢线了。）
 - **上报器**（`reporter.go`）：每个副本一个，每秒一拍。先清扫，再从各片领一批（≤128 条）；领走的 15 秒内别的副本看不见。从全服共用额度（8/s，§5.2「全服调用额度」）里取到名额才发，取不到就放回。发成功的删掉；失败的过 15 秒会被再领一次，所以是至少一次。发生时刻早于 150 秒前的丢弃并计数；发生时刻晚于本机时钟的先留着，免得报出「未来」的时刻。指标：`login_nppa_report_total{result=sent|rejected|dropped_age|send_failed|swept}`。
 - **限流与扩容**：副本加多少都不会超过系统的 10 QPS，全服上限约每秒 1000 条上下线（8 批 × 128 条）。量再大就要联系国家系统管理员调流控（规范备注第 4 条），与副本数无关。
 - **停机与强杀**：事件都在 Redis 里，进程退出（包括 OOM、kill -9）不丢。没发完的，由别的副本或下一次启动接着发，停机不用排空。
@@ -236,7 +236,7 @@ AntiAddiction:
 | tip（1） | `data/tip/Tip.xlsx`（§5.9 八个码，生成物由导表器出） |
 | Go 共用（2） | 新增 `go/shared/antiaddiction/antiaddiction.go` 与测试：pi 解出生日期、年龄段、可玩时段、身份证校验码 |
 | data_service（4） | `internal/store/account_directory_store.go`、`internal/server/account_directory.go` 与两处测试 |
-| login（约 20） | `internal/config/config.go` 与新增的配置门禁和测试；新增 `internal/logic/pkg/nppa/`（客户端、全服调用额度 `quota.go`、会话账本 `ledger.go`、上报器 `reporter.go` 与测试，测试用规范里的加密和签名样例）；`clientplayerlogin/` 的 `loginlogic.go`、`account_directory.go`、`renewsessionlogic.go`、`disconnectlogic.go`，新增 `anti_addiction.go`、`submitrealnamelogic.go` 与测试；`svc/gate_command.go`（踢线原因）、`svc/servicecontext.go`；`pkg/auth/provider.go`、`providers.go`（结果带渠道）；`shared/redisslot/login_keys.go`；`etc/login.yaml`。goctl 包装由 `go/build.ps1` 重生成 |
+| login（约 20） | `internal/config/config.go` 与新增的配置门禁和测试；新增 `internal/logic/pkg/nppa/`（客户端、全服调用额度 `quota.go`、会话账本 `ledger.go`、上报器 `reporter.go` 与测试，测试用规范里的加密和签名样例；另有国家系统那一侧的验签解密 `server.go`，沙箱 mock `cmd/sandbox_mock/nppa.go` 与单测共用）；`clientplayerlogin/` 的 `loginlogic.go`、`account_directory.go`、`renewsessionlogic.go`、`disconnectlogic.go`，新增 `anti_addiction.go`、`submitrealnamelogic.go` 与测试；`svc/gate_command.go`（踢线原因）、`svc/servicecontext.go`；`pkg/auth/provider.go`、`providers.go`（结果带渠道）；`shared/redisslot/login_keys.go`；`etc/login.yaml`。转发层手写（goctl 与 `go/build.ps1` 11-21 已退役），`SubmitRealName`、`ResetAccountRealName` 已接上，由 `TestGoctlServerWrappersImplementEveryRPC` 核对 |
 | C++ gate（约 10） | `cpp/nodes/gate/handler/event/gate_event_handler.cpp`（踢线原因）；2026-11-20 起另有到点断开：新增 `handler/rpc/minor_play_deadline.{h,cpp}` 与 `tests/minor_play_deadline_test.cpp`（登记在 `cpp/tests/routing_identity_test`），改 `login_admission.h`、`client_request_lane.cpp`、`rpc_reply_bridge.cpp`、`client_session_handler.cpp`、`main.cpp`、`cpp/libs/services/gate/session/comp/session_info_comp.h`、`gate.vcxproj(.filters)` |
 | 本仓 Java 网关（约 6） | `/api/real-name` 的 controller、service、`LoginRpcClient`、请求与应答 DTO、测试 |
 | 客户端（约 6） | `GatewayHttpClient.cs`、`GameClient.cs`、新增实名窗与倒计时提示、踢线原因处理、EditMode 测试 |

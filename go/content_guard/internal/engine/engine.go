@@ -144,7 +144,7 @@ func (e *Engine) Check(class SceneClass, text string) Result {
 	}
 	if class != ScenePrivateLabel {
 		allowSpans := snapshot.Matcher.AllowOrigSpans(elems)
-		if contact.ContainsAd(text, elems, func(startOrig, endOrig int32) bool {
+		if contact.ContainsAd(elems, func(startOrig, endOrig int32) bool {
 			return wordlist.OrigCovered(allowSpans, startOrig, endOrig)
 		}) {
 			return Result{Verdict: VerdictReject, Category: wordlist.CategoryAd, Version: snapshot.Version}

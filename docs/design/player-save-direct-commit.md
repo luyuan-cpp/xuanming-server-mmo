@@ -173,7 +173,7 @@ COMMIT
   - 进事务前校验挡掉 kind 非法、payload 超预算、nil payload(见上);
   - `playerstore.Store.VerifySchema` 在启动时核对表和列,缺了拒绝启动(挡住 1146、1054);
   - 超过传输上限(4 MiB)的请求 go/db 收不到,通道在本地回 `RESOURCE_EXHAUSTED`,那会被当成结果未知永远重试。scene 发送前按序列化大小预检,超限就按 `TOO_LARGE` 处理,排到下一轮回调,调用方可能还在自己的栈上;
-  - 存储侧整库不可达时靠熔断快速失败,键是存档库不是方法(2026-11-20,`playerstore/server.go` 的 `enterStore`):每个存档库一个 go-zero 熔断,包住打开与事务,开着时指向这个库的调用不碰库、立即回 `Unavailable`(记 `result="unavailable"`),别的库不受影响;闸门冻结与调用方取消不计失败。zrpc 自带的按方法熔断在 `db.go` 关掉:它不分库,一个库失联且流量占比过三分之一时会把指向健康库的调用一起挡掉(推导见 [存储不可用设计稿](db-task-store-unavailable-deferral.md) 文首);
+  - 存储侧整库不可达时靠熔断快速失败,键是存档库不是方法(2026-11-20,`playerstore/server.go` 的 `enterStore`):每个存档库一个 go-zero 熔断,包住打开与事务,开着时指向这个库的调用不碰库、立即回 `Unavailable`(记 `result="unavailable"`),别的库不受影响;闸门冻结记成功,调用方取消成功、失败都不记。zrpc 自带的按方法熔断在 `db.go` 关掉:它不分库,一个库失联且流量占比过三分之一时会把指向健康库的调用一起挡掉(推导见 [存储不可用设计稿](db-task-store-unavailable-deferral.md) 文首);
   - 退出遇到确定性拒绝就放弃这一笔(§4);停机由 Node 的 drain 看门狗限时,到期把没有结论的玩家号打进 ERROR(`metric=player_store_shutdown_unsettled`)。**运行中的退出遇到结果未知不设单独的预算**:TiDB 故障和确定性 SQL 错误在这里分不清,放弃就是把一次故障升级成回档;实体留着不丢数据,玩家重连还能复用,代价只是这段时间占内存、连续失败时打日志(`metric=player_store_save_retry`)。
 
 ## 3. `LoadAndClaim`

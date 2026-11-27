@@ -28,6 +28,8 @@ type AuthProviderSecrets struct {
 	DouyinMiniGameAppSecret string
 	// Sign in with Apple 私钥的 PEM 原文(注销时签 client_secret 撤销令牌);空 = 没配撤销。格式由 auth.NewAppleRevoker 在启动时解析。
 	ApplePrivateKeyPEM string
+	// 官方通行证(Casdoor)管理接口那个机密应用的 ClientSecret(注销时删通行证里的用户);空 = 没配,只在 dev/test 允许。
+	PassportAdminClientSecret string
 }
 
 // containsUnexpandedPlaceholder 判断值里是否有没被展开的 ${...}。
@@ -141,9 +143,12 @@ func resolveAuthProviders(cfg AuthConfig, relaxed bool, lookup func(string) (str
 		}
 	}
 	if p := cfg.Passport; p != nil {
-		if err := checkPassportProvider(p, relaxed); err != nil {
+		secret, ws, err := resolvePassportProvider(p, relaxed, lookup)
+		if err != nil {
 			return AuthProviderSecrets{}, warnings, err
 		}
+		warnings = append(warnings, ws...)
+		out.PassportAdminClientSecret = secret
 	}
 
 	return out, warnings, nil

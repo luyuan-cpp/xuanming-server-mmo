@@ -198,6 +198,45 @@ func TestLedgerCapsAMinorsLeaseAtThePlayDeadline(t *testing.T) {
 	if len(got) != 1 || got[0].BT != BehaviorLogout || got[0].OT != deadline.Unix() {
 		t.Fatalf("events = %+v, want a logout stamped with the deadline", got)
 	}
+	// 清扫补下线后仍保留截止时刻供 login 兜底踢线:续租继续回截止时刻,之后 End 删掉条目、不再重复报下线。
+	if d, err := l.Renew(ctx, connA); err != nil || !d.Equal(deadline) {
+		t.Fatalf("Renew after deadline sweep = %v, %v; want %v", d, err, deadline)
+	}
+	if err := l.End(ctx, connA); err != nil {
+		t.Fatal(err)
+	}
+	if again := claimAll(t, l); len(again) != 0 {
+		t.Fatalf("End after deadline sweep emitted duplicate logout: %+v", again)
+	}
+	if d, err := l.Renew(ctx, connA); err != nil || !d.IsZero() {
+		t.Fatalf("Renew after End = %v, %v; want zero", d, err)
+	}
+
+	// 另起一条不续租的未成年人会话:到点先补一条下线并保留截止时刻,再过一个租约才彻底清掉且不发第二条事件。
+	afterDeadline := deadline.Add(2 * time.Second)
+	deadline2 := afterDeadline.Add(10 * time.Minute)
+	if err := l.Begin(ctx, connB, "si-minor-2", testPI, deadline2); err != nil {
+		t.Fatal(err)
+	}
+	claimAll(t, l)
+	sweepAt := deadline2.Add(2 * time.Second)
+	if n := runTo(t, l, mr, afterDeadline, sweepAt); n != 1 {
+		t.Fatalf("swept %d at second deadline, want 1", n)
+	}
+	got2 := claimAll(t, l)
+	if len(got2) != 1 || got2[0].SI != "si-minor-2" || got2[0].BT != BehaviorLogout || got2[0].OT != deadline2.Unix() {
+		t.Fatalf("events = %+v, want one logout at deadline2", got2)
+	}
+	// 留下的截止时刻已经不是会话:清掉它不算一条收尾(Sweep 的返回值进上报器的 swept 指标,那里数的是补报的下线)。
+	if n := runTo(t, l, mr, sweepAt, sweepAt.Add(testLease+time.Second)); n != 0 {
+		t.Fatalf("swept %d after the kept deadline's lease expired, want 0: it is not a session any more", n)
+	}
+	if again := claimAll(t, l); len(again) != 0 {
+		t.Fatalf("post-deadline cleanup emitted events: %+v", again)
+	}
+	if d, err := l.Renew(ctx, connB); err != nil || !d.IsZero() {
+		t.Fatalf("Renew after post-deadline cleanup = %v, %v; want zero", d, err)
+	}
 }
 
 // 截止时刻到了连接却还在(gate 没关掉它):下线照报,但截止时刻要留在账本里,login 才能在之后的续租里兜底踢线。
@@ -233,26 +272,6 @@ func TestLedgerKeepsTheDeadlineAfterItPassesForTheLoginBackstop(t *testing.T) {
 	}
 	if got, err := l.Renew(ctx, connA); err != nil || !got.IsZero() {
 		t.Fatalf("Renew after End = %v, %v; want nothing left", got, err)
-	}
-}
-
-// 截止时刻之后一直没有续租(连接早就没了):留下的截止时刻过一个租约就清掉,不产生事件,也不算一条收尾的会话。
-func TestLedgerDropsAKeptDeadlineOneLeaseLater(t *testing.T) {
-	l, mr := newTestLedger(t)
-	ctx := context.Background()
-	deadline := ledgerStart.Add(10 * time.Minute)
-	_ = l.Begin(ctx, connA, "si-minor", testPI, deadline)
-	at := deadline.Add(2 * time.Second)
-	runTo(t, l, mr, ledgerStart, at)
-	claimAll(t, l) // 上线,以及截止时刻补的下线
-	if n := runTo(t, l, mr, at, deadline.Add(testLease+time.Second)); n != 0 {
-		t.Fatalf("swept %d, a kept deadline is not a session any more", n)
-	}
-	if got, err := l.Renew(ctx, connA); err != nil || !got.IsZero() {
-		t.Fatalf("Renew = %v, %v; want the kept deadline gone one lease later", got, err)
-	}
-	if got := claimAll(t, l); len(got) != 0 {
-		t.Fatalf("dropping a kept deadline produced events: %+v", got)
 	}
 }
 

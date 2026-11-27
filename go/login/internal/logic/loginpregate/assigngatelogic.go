@@ -133,7 +133,7 @@ func (l *AssignGateLogic) AssignGate(in *loginpb.AssignGateRequest) (*loginpb.As
 		if capacity > online {
 			budget = capacity - online
 		}
-		reserved, rErr := l.svcCtx.LoginQueue.TryReserveFastPathSlot(l.ctx, in.ZoneId, budget)
+		reserved, rErr := l.svcCtx.LoginQueue.TryReserveFastPathSlot(l.ctx, in.ZoneId, budget, account)
 		if rErr != nil {
 			logx.Errorf("[loginqueue] reserve fast-path slot zone=%d err=%v", in.ZoneId, rErr)
 			// 占位失败(Redis 抖动)不放行快速通道 —— 落到下面入队,fail-closed。

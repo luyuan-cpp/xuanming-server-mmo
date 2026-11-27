@@ -21,6 +21,7 @@ import (
 	"chat/internal/config"
 	"chat/internal/constants"
 	"chat/internal/lifecycle"
+	"chat/internal/logic"
 	"chat/internal/server"
 	"chat/internal/svc"
 
@@ -152,6 +153,12 @@ func runChat(c config.Config) (runErr error) {
 		return err
 	}
 	svcCtx := svc.NewServiceContextWithAdmission(c, writer, root)
+	// 运维口令:没设 = 运维面停用(RetractWorldChat 一律拒绝);设了但太短 = 拒启。
+	adminToken, err := logic.ResolveAdminToken(os.Getenv)
+	if err != nil {
+		return err
+	}
+	svcCtx.AdminToken = adminToken
 
 	// 连接池指标 mmorpg_sql_pool_*{sql_client="chat",pool="primary"}:只有聊天权威库这一个池,抓取时现取 DBStats。
 	// 不放进 NewServiceContext:单测会多次构造它,默认注册表重复注册会失败。

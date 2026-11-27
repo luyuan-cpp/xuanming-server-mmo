@@ -397,7 +397,8 @@ G9 的前置条件是"gate 的 `peerAddress()` 看到的是玩家真实源 IP"�
     loop 刚卡过时不淘汰;
   - `ConnectionAdmissionEviction.*`:真实回环连接,被淘汰的那条关掉,晚建连的不受影响,会话留给断开回调。
 - `client_liveness_test.cpp` 的 `ClientLivenessLoopStall.*` 与 `ClientLivenessSweeper.ReportsALoopStallFromItsOwnSweepCadence`。
-- battle 的 `battle_connection_admission_test.cpp`(判定顺序、扫表挑最老的、按原因计数、BATTLE_* 变量)。
+- battle 的 `battle_connection_admission_test.cpp`(判定顺序、按原因计数、BATTLE_* 变量;未认证池是 `BattleClientEdge` 按 connId 有序的集合,
+  2026-11-20 起不再扫会话表,池的进出与找最老一条由 `battle_connection_alerts_contract.tests.ps1` 核对)。
 - `accept_admission_test.cpp` 的 `AcceptAdmissionPolicy.PreAuthBudgetResolvesFromTheCallersEnvNames`。
 
 ### P0-3 · 修 LogLevel（对应 G5）
@@ -700,7 +701,7 @@ gate 与 battle 直连共用一份，gate 的 `connection_admission.h` 用 using
   外部 L4 LB 的健康检查必须能正确摘掉空 node。
   **(2026-09-29 更正)** 这一条已按集群外入口 D89 落在 external 形态的每序号 Service 上(默认 `Local`,见 §4.2.1);
   生成位置也不再只是 `New-GateServiceYaml`:external 的 gate StatefulSet / 每序号 Service / PDB 在 `tools/scripts/lib/k8s_client_entry.ps1`,
-  `New-GateServiceYaml`(现 `k8s_deploy.ps1:2405`)只剩 podip 单副本的 `gate-entry`。本节其余条目(resources、sysctl、NetworkPolicy)未做。
+  `New-GateServiceYaml`(现 `k8s_deploy.ps1:2405`)只剩 podip 单副本的 `gate-entry`。本节其余条目(resources、sysctl、NetworkPolicy)的现状见本节末尾「2026-11-26 逐条状态」表。
   注意:gate 票据绑 `gate_node_id`,"外部 L4 LB"只能按实例透传,不能把多台 gate 放进一个后端池(`k8s_gate_exposure_guidance.md`)。
   括号里的"或 LB 开 PROXY protocol"目前不可用:gate 不解析 PROXY protocol(`cpp/` 下无实现),LB 单方面开启会在每条连接前多出 PROXY 头、gate 按业务包解析(静态推断,未实测);代理型 LB 下 G9 前置仍不满足(§4.2.1 表)。
 - **safe sysctl**（pod 里 `securityContext.sysctls` 直接写，不用动节点）：

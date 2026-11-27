@@ -882,30 +882,54 @@ func (m *mover) checkProcessesKnowCluster(ctx context.Context, cluster string) e
 	return nil
 }
 
-// requireTTLOff 核两侧这个库的表都没有开着 TTL,也没有 TTL 任务还在跑。TTL 任务是库自己发起的删除,不过闸门:源库冻结之后它照样删行,
+// ttlActivity 说明一侧这个库上有没有不过闸门的 TTL 删除:表属性开着,或者关掉之前开始的任务还在跑(关属性不会让它立刻停)。
+// 没有时回空串。查不成回错误:调用方不能把「不知道」当成「没有」。
+func (m *mover) ttlActivity(ctx context.Context, role string, admin adminSide) (string, error) {
+	tables, err := admin.TablesWithTTLEnabled(ctx, m.o.db)
+	if err != nil {
+		return "", fmt.Errorf("cannot read the TTL attribute of the tables on the %s: %w", role, err)
+	}
+	if len(tables) != 0 {
+		return fmt.Sprintf("these tables of %s have TTL enabled on the %s: %s", m.o.db, role, strings.Join(tables, ", ")), nil
+	}
+	running, err := admin.TablesWithRunningTTLJob(ctx, m.o.db)
+	if err != nil {
+		return "", fmt.Errorf("cannot tell whether a TTL job is still running on the %s: %w", role, err)
+	}
+	if len(running) != 0 {
+		return fmt.Sprintf("a TTL job is still running on these tables of %s on the %s: %s", m.o.db, role, strings.Join(running, ", ")), nil
+	}
+	return "", nil
+}
+
+// requireTTLOff 核两侧这个库都没有 TTL 删除(ttlActivity)。TTL 任务是库自己发起的删除,不过闸门:源库冻结之后它照样删行,
 // 窗口里的静止比对、翻转之后的 audit(读冻结的源库的当前数据)都会因此对不上;目标上开着的话,两边各删各的。
-// 属性关掉之后已经开始的任务不会立刻停,所以两样都核。目标的 TTL 在 audit 通过之后由运维打开(手册 §4 第 8 步)。
+// 目标的 TTL 在 audit 通过之后由运维打开(手册 §4 第 8 步)。
 func (m *mover) requireTTLOff(ctx context.Context) error {
 	for _, side := range []struct {
 		role  string
 		admin adminSide
 	}{{roleSource, m.sourceAdmin}, {roleTarget, m.targetAdmin}} {
-		tables, err := side.admin.TablesWithTTLEnabled(ctx, m.o.db)
+		activity, err := m.ttlActivity(ctx, side.role, side.admin)
 		if err != nil {
-			return refusedf("cannot read the TTL attribute of the tables on the %s, nothing was changed: %v", side.role, err)
+			return refusedf("%v. Nothing was changed", err)
 		}
-		if len(tables) != 0 {
-			return refusedf("these tables of %s have TTL enabled on the %s: %s. TTL jobs delete rows without passing the gate, so the frozen source and the target would stop matching (the comparison inside the window, and audit afterwards). Nothing was changed: run ALTER TABLE ... TTL_ENABLE='OFF' on each, wait until no TTL job is running on them, then re-run cutover, see docs/ops/db-move-runbook.md §4 step 5",
-				m.o.db, side.role, strings.Join(tables, ", "))
+		if activity != "" {
+			return refusedf("%s. TTL jobs delete rows without passing the gate, so the frozen source and the target would stop matching (the comparison inside the window, and audit afterwards). Nothing was changed: run ALTER TABLE ... TTL_ENABLE='OFF' on each table, wait until no TTL job is running (current_job_id in mysql.tidb_ttl_table_status becomes NULL), then re-run cutover, see docs/ops/db-move-runbook.md §4 step 5", activity)
 		}
-		running, err := side.admin.TablesWithRunningTTLJob(ctx, m.o.db)
-		if err != nil {
-			return refusedf("cannot tell whether a TTL job is still running on the %s, nothing was changed: %v", side.role, err)
-		}
-		if len(running) != 0 {
-			return refusedf("a TTL job is still running on these tables of %s on the %s: %s. Turning TTL off does not stop a job that already started, and it deletes rows without passing the gate. Nothing was changed: wait until it ends (current_job_id in mysql.tidb_ttl_table_status becomes NULL), then re-run cutover, see docs/ops/db-move-runbook.md §4 step 5",
-				m.o.db, side.role, strings.Join(running, ", "))
-		}
+	}
+	return nil
+}
+
+// requireFrozenSourceUntouched 在 audit 比对之前核源库还是翻转那一刻的样子。audit 拿冻结的源库的当前数据当参照,cutover 之前核过 TTL 已关;
+// 之后又被打开的话,TTL 任务删掉的过期行会被算成两边不一致,分不清是复制丢了还是它删的。
+func (m *mover) requireFrozenSourceUntouched(ctx context.Context) error {
+	activity, err := m.ttlActivity(ctx, roleSource, m.sourceAdmin)
+	if err != nil {
+		return refusedf("%v. audit compares against the frozen source and has to know that nothing else changes it", err)
+	}
+	if activity != "" {
+		return refusedf("%s. TTL jobs delete rows from the frozen source without passing the gate, so a difference found now could not tell replication loss from TTL deletions. Turn TTL off on these tables, wait until no TTL job is running, then re-run audit. If rows were already deleted the audit will still report these tables, with fewer rows on the source: see docs/ops/db-move-runbook.md §8", activity)
 	}
 	return nil
 }
@@ -1329,6 +1353,9 @@ func (m *mover) audit(ctx context.Context) error {
 	}
 	move := rec.Placement.Move
 	if err := m.checkEndpoints(move.SourceCluster, move.TargetCluster); err != nil {
+		return err
+	}
+	if err := m.requireFrozenSourceUntouched(ctx); err != nil {
 		return err
 	}
 	var problems []string

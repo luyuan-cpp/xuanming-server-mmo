@@ -104,10 +104,11 @@ ACTIVE(0) ──申请:重新认证 + 预检通过──▶ PENDING(1) ──冷
 
 1. data_service `ClaimAccountDeletions(limit=8)`:逐片扫 `deletion_state IN (1,2) AND deletion_execute_after_ms <= now`,逐行条件更新 `SET deletion_state=2, deletion_lease_until_ms=now+120s WHERE … AND deletion_lease_until_ms <= now`,回改成的账号。1 → 2 之后不可撤销。
 2. 对每个认领到的账号:`RevokeAll`;读角色(`Read(create=false)`),逐个下线(§7.2:踢 gate 并按正常登出结束会话)、再 `RemoveAccountRoles(account, [{player_id, owner_revision}])`(一次一名,修订号取自 `Lookup`)。删角回挂起(`ErrConflict`,多半是持有节点还在存盘释放)或可重试的,这一轮跳过,下一轮再来。
-3. 全部删完之后 data_service `FinishAccountDeletion`:先用现有的 `reapRefs` 清掉已能证明陈旧的 ref;再在账号分片一个事务里锁账号行,要求状态是 2 而且一条 ref 都不剩(在途的建角 / 过户 PENDING ref 等它们自己结束,后台 5 分钟内会收),写回执、删行。没删完回「未完成」,下一轮再来;行已不在回完成(幂等)。
-4. 状态 2 停留超过 24 小时(预检之后才出现的挂起、ref 被标保留待人工等)由 gauge `data_service_account_deletion_overdue` 告警,运维按挂起原因处理。
+3. 官方通行证账号(`passport_<sub>`,2026-11-26):角色全部删完之后、收尾之前,login 调 Casdoor 的管理接口删掉通行证里的这名用户(邮箱、手机号、口令哈希都在那边)。排在删账号行之前:账号行还在「执行中」就是待办记录,这一步没成下一轮再来;删除可以重做(用户已不在算成功)。细节见 [官方通行证](official-passport-registration.md) §3.5。别的渠道跳过这一步。
+4. 全部删完之后 data_service `FinishAccountDeletion`:先用现有的 `reapRefs` 清掉已能证明陈旧的 ref;再在账号分片一个事务里锁账号行,要求状态是 2 而且一条 ref 都不剩(在途的建角 / 过户 PENDING ref 等它们自己结束,后台 5 分钟内会收),写回执、删行。没删完回「未完成」,下一轮再来;行已不在回完成(幂等)。
+5. 状态 2 停留超过 24 小时(预检之后才出现的挂起、ref 被标保留待人工、通行证用户一直删不掉等)由 gauge `data_service_account_deletion_overdue` 告警,运维按挂起原因处理。
 
-回执 `account_deletion_receipt` 在同一账号分片,主键 `account_digest` = SHA-256(账号),列 `requested_ms`、`deleted_ms`、`roles_removed`、`source`(1 本人、2 运维)。这是合规留档,只存摘要、不存原账号。同一个人以后再用同一渠道登录时,目录建新行,data_service 顺带读一次回执,`/api/login` 回 `previous_account_deleted_at`,客户端提示一次「你之前的账号已于 X 注销完成,现在是新账号」。我们没有用户邮箱,这是 Apple「删完给确认」唯一的 App 内渠道。
+回执 `account_deletion_receipt` 在同一账号分片,主键 `account_digest` = SHA-256(账号),列 `requested_ms`、`deleted_ms`、`roles_removed`、`source`(1 本人、2 运维)。这是合规留档,只存摘要、不存原账号。同一个人以后再用同一渠道登录时,目录建新行,data_service 顺带读一次回执,`/api/login` 回 `previous_account_deleted_at`,客户端提示一次「你之前的账号已于 X 注销完成,现在是新账号」。渠道账号我们没有用户邮箱,这是 Apple「删完给确认」唯一的 App 内渠道。官方通行证账号不会出现这条提示:注销时通行证里的用户一并删掉,同一个人重新注册拿到的是新 `sub`,账号串不同;它的确认只有申请时显示的完成时刻。
 
 ### 4.6 运维入口(Google Play 要求的网页入口)
 
@@ -155,6 +156,7 @@ ACTIVE(0) ──申请:重新认证 + 预检通过──▶ PENDING(1) ──冷
 | 服务 / 库 | 删除 | 保留(去标识)与理由 |
 |---|---|---|
 | login | 令牌家族、登录态、设备集(`RevokeAll`、下线、TTL);会话记录(`player_locator.MarkOffline`,§7.2) | 口令凭据 `user_accounts`:口令账号由运维开通,App 内不能注册,login 只读这张表;要删走运维工单 |
+| 官方通行证(Casdoor,只对 `passport_` 账号) | 通行证里的用户整行:邮箱、手机号、口令哈希、口令历史、第三方绑定;它在通行证的令牌与会话同时作废(§4.5 第 3 步,[官方通行证](official-passport-registration.md) §3.5) | Casdoor 的 `verification_record`(发过的验证码,含收件地址)与 `record`(接口审计日志)不随用户删除,按隐私政策写明的保留期定期清理(通行证生产清单) |
 | data_service 目录 | 账号行(§4.5)、全部 ref;角色行变墓碑(`account` 置空,`player_id` 永不复用);名字登记(现有收尾) | 墓碑行;`player_route`(路由与「区里建过多少角色」的计数要它);回执(只有摘要) |
 | data_service 存档库 | 这名玩家的全部 `player_store` 行(含写权行) | — |
 | data_service 流水库 | — | `player_snapshot`(存档快照,审计保留期缺省 30 天)、`transaction_log`(缺省 180 天)由现有的 `RunAuditRetention` 按期删;`gm_recall_*`、`rollback_audit*`、`player_debt`:回收审计。都是防欺诈、回档举证用,只有 `player_id`,账号已无法还原;隐私政策写明保留期 |

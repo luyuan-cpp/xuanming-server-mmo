@@ -51,7 +51,7 @@ const (
 	DefaultDividendIntervalSec     uint32 = 3600
 	DefaultDividendGuildWeeklyCap  uint32 = 24
 	DefaultDividendPlayerWeeklyCap uint32 = 12
-	DefaultDividendMinMerit        uint64 = 30
+	DefaultDividendMinMerit        uint64 = 15
 	DefaultGoldLeylineBps          uint32 = 15000
 	DefaultRivalryBonusBps         uint32 = 2000
 	DefaultFeudBonusBps            uint32 = 2500 // 2 小时宿敌约战收益 +25%（替代宿敌 +20%，不叠加）

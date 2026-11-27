@@ -93,6 +93,7 @@ func main() {
 	log.Printf("  /mgplatform/api/apps/jscode2session (Douyin mini game) — code 'EXPIRED' returns an error response")
 	log.Printf("  /auth/keys, /oauth2/v3/certs, /.well-known/jwks (Apple / Google / Passport signing keys)")
 	log.Printf("  /mock/apple/id_token, /mock/google/id_token, /mock/passport/id_token?user=<seed>&aud=<ClientId>[&iss=<Issuer>] — mint an identity token; user 'EXPIRED' mints an expired one")
+	log.Printf("  /api/get-user, /api/delete-user (passport user admin API, HTTP Basic) — GET /mock/passport/deleted_users lists the users removed by account deletion; /mock/passport/id_token user 'ACCESS_TOKEN' / 'REFRESH_TOKEN' mints the token types login must reject")
 	log.Printf("  /idcard/authentication/check, /idcard/authentication/query, /behavior/collection/loginout (NPPA real-name system) — GET /mock/nppa/behaviors lists the accepted logins / logouts")
 
 	srv := &http.Server{
@@ -124,6 +125,11 @@ func newMux() *http.ServeMux {
 	mux.HandleFunc("/mock/apple/id_token", issuer.mintHandler(sandboxAppleIssuer, sandboxAppleTokenTTL, "apple-sub"))
 	mux.HandleFunc("/mock/google/id_token", issuer.mintHandler(sandboxGoogleIssuer, sandboxGoogleTokenTTL, "google-sub"))
 	mux.HandleFunc("/mock/passport/id_token", issuer.passportMintHandler())
+	// 官方通行证的用户管理接口(账号注销时删通行证里的用户,passport.go)。
+	passportAdmin := newPassportAdminStub()
+	mux.HandleFunc("/api/get-user", passportAdmin.handleGetUser)
+	mux.HandleFunc("/api/delete-user", passportAdmin.handleDeleteUser)
+	mux.HandleFunc("/mock/passport/deleted_users", passportAdmin.handleDeletedUsers)
 	// Apple 的换票与撤销(账号注销用,apple_revoke.go)。
 	apple := newAppleTokenStub()
 	mux.HandleFunc("/auth/token", apple.handleToken)

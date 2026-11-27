@@ -89,6 +89,7 @@ type AccountRealNameStore interface {
 type ChannelIdentityStore interface {
 	UpsertChannelIdentity(ctx context.Context, account, channel, openID string) error
 	ChannelIdentityOfPlayer(ctx context.Context, player uint64) (*dspb.GetPlayerChannelIdentityResponse, error)
+	ChannelIdentityOfAccount(ctx context.Context, account string) (*dspb.GetPlayerChannelIdentityResponse, error)
 }
 
 // AccountDeletionStore 是账号注销在目录上的动作与读(docs/design/account-deletion.md §4、§5.1)。*store.AccountDirectoryStore 满足它。

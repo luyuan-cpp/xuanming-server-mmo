@@ -1656,8 +1656,10 @@ C++ 用例在 `cpp/tests/cross_zone_test/cross_zone_test.cpp` 末尾与 `cpp/tes
   记下的实例找 gate,找不到不退回按 node_id;实例未知(旧实体、托管落点建出的实体)时仍按 node_id,与改动前相同。
 - **托管落点不带实例**:已落码(2026-11-26,未生成、未编译、未测试),见 §14.8。托管落点事件带上 location 为断开那次登录记下的实例,
   目标节点记进登录身份。
-- **双方都没有登录代次**:会话号相同、实例不同、代次都为 0 时按判定表走 `kAdmitLegacy`(后到者胜)。只有旧版 login 不铸代次时才会出现,
-  login 全量铸造后不可达。
+- **双方都没有登录代次**:会话号相同、实例不同、代次都为 0 时判定表走 `kAdmitLegacy`(后到者胜)。生产上走不到(2026-11-26 核实):
+  gate 转来的入场在角色登记前对代次 0 一律拒绝(`RoleAdmissionSystem::RequestEnter`),托管落点对代次 0 整条丢弃
+  (`PlayerLifecycleSystem::HostedPlacementContext`),所以本节点上不会建出代次 0 的身份;剩下的 `UpdateSessionDetail` 按代次 0 过栅栏,
+  与有代次的身份不是同一会话时判 `kRejectUnversioned`。不再登记为残余。
 - **Java 版**:Java 网关不走 RPC0 握手,会话与归属模型不同(§9);是否有同类窗口待核实,已在 Java 仓 `PARITY.md` 登记待做。
 
 ### 14.7 回推与自发请求按会话所在的 gate 进程找 gate(2026-11-20 落码,未编译、未测试)
@@ -1732,8 +1734,10 @@ node_id 投给同一 node_id 上的另一个进程;实例未知时按会话号�
 - 跟着改:`identityIsHostedLogin` 改成逐项比会话号与代次。托管归位不带 gate,原来的整结构相等在 location 记了实例之后会恒假,
   持有节点就永远收不到释放。`enterHolderReleaseRequester` 的 covered 身份多带实例,RPC 只发会话号与代次。
 - 不变:离场表(b)以代次为主,`LeaveSceneRequest` 不带实例;路由与重定向的 `target_instance_id` 照旧取请求的 `gate_instance_id`。
-- 不做:源节点上托管角色的改派待确认条目仍不带实例(票据的实例号会进 EnterScene,托管请求必须为空;要补得把实例另记进断线保留组件)。
-  经 SM 的迟到请求先被本节拦下;不经 SM 的 gate 补发要求另一个进程在同号上持有同一玩家更早的登录,并恰好落在条目存续的那几秒里,不另做。
+- 源节点上托管角色的改派待确认条目也记实例(2026-11-26 同日补):实体销毁之后本节点只剩条目记着他,不经 SM 的 gate 补发
+  (另一个进程同号、更早的登录)原来会按会话号判成同一会话、被放行并结清条目。派发时已按登录身份组件核对过票据身份,实例就取
+  那一份,记进 `Registration::gateInstanceId`(只作入场栅栏的身份,托管条目不推送);票据自己的实例号仍为空,因为它会进 EnterScene,
+  托管落点不带 gate。重发托管改派沿用已登记的条目,不重新登记。
 
 **测试**(新增与改写,未运行):
 
@@ -1745,6 +1749,8 @@ node_id 投给同一 node_id 上的另一个进程;实例未知时按会话号�
 | `TestIdentityIsHostedLogin`、`TestIdentityStrictlyNewer` 各加一行 | 记了实例的 location 照样认得出托管登录;同号跨进程的新登录照样请持有节点释放 |
 | `HostedPlacementEcs.ContextCarriesTheLostLoginAndNoNotifiableSession`(改) | 实例随上下文;实例为空不算字段不全 |
 | `HostedPlacementReentry.HostedPlacementRecordsTheGateInstanceSoALateEnterFromAnotherProcessIsRejected` | 托管入场后登录身份记下实例;另一进程同号、更早的入场被拒、实体不动 |
+| `RelocateConfirmEcs.HostedEntryRejectsALateEnterFromAnotherGateProcessWithTheSameSessionId`(复现) | 托管条目记下断开那次登录的实例;另一进程同号、更早的入场被拒,条目不被结清 |
+| `RelocateConfirmEcs.HostedCharacterIsRelocatedThroughTheConfirmTableAndNeverPushed`(改) | 条目的实例由「为空」改为断开那次登录的实例(夹具 `MakeHostedResident` 的登录身份带上实例) |
 
 同步改的既有用例:`placement_identity_test.go` 两张判定表改用表内 (会话号, 代次) 简写类型(行不动);`enter_holder_release_test.go`、
 `leave_release_test.go` 的两值字面量补第三项,进场路径的 covered 与落点后的 location 身份带请求的 `gate-b-uuid`;
@@ -1757,6 +1763,7 @@ node_id 投给同一 node_id 上的另一个进程;实例未知时按会话号�
 | M10 `routeHostedPlayerToScene` 不填 `GateInstanceId` | `TestEnterScene_HostedPlacementCarriesTheGateInstanceRecordedForTheLostLogin` 的事件断言 |
 | M11 `HostedPlacementContext` 不抄实例 | `ContextCarriesTheLostLoginAndNoNotifiableSession` 的实例断言 |
 | M12 `identityIsHostedLogin` 改回整结构相等 | `TestIdentityIsHostedLogin` 的 `hosted login recorded with its gate instance` |
+| M13 托管条目的 `registration.gateInstanceId` 改回 `ticket.gateInstanceId`(恒空) | `HostedEntryRejectsALateEnterFromAnotherGateProcessWithTheSameSessionId`、`HostedCharacterIsRelocatedThroughTheConfirmTableAndNeverPushed` 的实例断言 |
 
 **发布与兼容。** 项目未上线、location 可清;新字段对旧读者是未知字段(proto3 原样跳过)。旧格式 location(没有实例)按「实例未知」比较,
 同会话下一次带实例的放行补上。scene 与 scene_manager 同批发布;Java 版只登记(AGENTS §12)。
@@ -1764,5 +1771,5 @@ node_id 投给同一 node_id 上的另一个进程;实例未知时按会话号�
 **文件。** `proto/scene_manager/storage.proto`、`proto/common/event/player_placement_event.proto`(要跑协议生成);
 `go/scene_manager/internal/logic/{placement_identity.go,changesceneutil.go,enter_hosted_placement.go,enterscenelogic.go,enter_holder_release.go}`
 与同目录 `{placement_identity_test.go,enterscene_identity_test.go,enter_hosted_placement_test.go,enter_holder_release_test.go,leave_release_test.go}`;
-`cpp/libs/services/scene/player/system/{player_lifecycle.h,player_lifecycle.cpp}`、`cpp/nodes/scene/handler/event/player_placement_event_handler.cpp`(守护段)、
+`cpp/libs/services/scene/player/system/{player_lifecycle.h,player_lifecycle.cpp,relocate_confirm.h}`、`cpp/nodes/scene/handler/event/player_placement_event_handler.cpp`(守护段)、
 `cpp/tests/cross_zone_test/cross_zone_test.cpp`。不新增 `.cpp`,不新起线程。

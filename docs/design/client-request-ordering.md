@@ -643,7 +643,7 @@ go-zero 超时拦截器用 `context.WithTimeout` 派生 ctx 交给 handler,超�
 
 工作目录:仓库根 `D:\luyuan\xuanming-server-mmo-cpp`。按顺序执行,任何一步红了就停,保留失败日志摘要。
 
-1. **proto 重生成(批次 C、E2):** 按 AGENTS §4 执行 `cd go && build.bat`(脚本结尾有 `pause`,非交互执行时用等价的 `go/build.ps1`)。期望:`go/proto/common/base/session.pb.go` 与 C++ 的 `session.pb.*` 更新,其余生成物无差异。
+1. **proto 重生成(批次 C、E2):** 按 AGENTS §4 执行 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`(旧的 `go/build.bat` / `go/build.ps1` 只包 goctl、不产 pb,11-21 已删)。期望:`go/proto/common/base/session.pb.go` 与 C++ 的 `session.pb.*` 更新,其余生成物无差异。
 2. **C++(批次 C):** `msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`,**必须串行 `/m:1`**,通过标准是 0 error。SessionDetails 变了,所有节点都要重编。`router_lane_test` 照 `cpp/nodes/gate/tests/gate_security_test.cpp` 的方式独立编译运行,全绿;2026-10-15 起 `router_lane.h` 的在途索引改为引用 `cpp/libs/engine/core/utils/data_structures/inflight_index.h`(仍只依赖 STL),include 路径要多加 `-I cpp/libs/engine/core`,以 `router_lane_test.cpp` 文件头的命令为准。覆盖:满额拒绝;lane 内 FIFO;同时只有 1 条在途;Complete 恰好一次、旧 seq 被忽略;排队超时不发出;同步失败时 Pump 循环会终止;断线返回在途 seq;过期堆惰性删除;重定向之后拒绝新请求。「session_id 复用时按会话代次丢弃迟到完成」在装配层 `FindLiveSession`(依赖 `tlsSessionManager`),独立单测碰不到,靠代码审阅与冒烟覆盖(2026-10-15 评审订正:此处原先误列为单测覆盖项)。
 3. **Go:** 分别在 `go/match`、`go/login`(以及 E2 时的 `go/guild`)目录执行 `go build ./... && go vet ./... && go test ./... -count=1`,全绿。login 栅栏用 miniredis 跑 §6.2 列出的用例;match 用例覆盖 ctx 取消后不再建票。
 4. **部署门禁(批次 A):** `pwsh -NoProfile -Command "Invoke-Pester -Path tools/scripts/tests/k8s_deploy_contract.tests.ps1 -Output Detailed"`。期望新增的 I1 用例通过,并且反例(login Timeout 配成 10000)被拒。

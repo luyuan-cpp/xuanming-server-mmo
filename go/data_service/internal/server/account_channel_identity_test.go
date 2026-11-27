@@ -20,6 +20,9 @@ type fakeChannelIdentities struct {
 	lastOID string
 	reply   *dspb.GetPlayerChannelIdentityResponse
 	err     error
+	// 最近一次读是按哪个角色 / 哪个账号查的。
+	byPlayer  uint64
+	byAccount string
 }
 
 func (f *fakeChannelIdentities) UpsertChannelIdentity(_ context.Context, account, channel, openID string) error {
@@ -30,7 +33,17 @@ func (f *fakeChannelIdentities) UpsertChannelIdentity(_ context.Context, account
 	return f.err
 }
 
-func (f *fakeChannelIdentities) ChannelIdentityOfPlayer(_ context.Context, _ uint64) (*dspb.GetPlayerChannelIdentityResponse, error) {
+func (f *fakeChannelIdentities) ChannelIdentityOfPlayer(_ context.Context, player uint64) (*dspb.GetPlayerChannelIdentityResponse, error) {
+	f.byPlayer, f.byAccount = player, ""
+	return f.read()
+}
+
+func (f *fakeChannelIdentities) ChannelIdentityOfAccount(_ context.Context, account string) (*dspb.GetPlayerChannelIdentityResponse, error) {
+	f.byPlayer, f.byAccount = 0, account
+	return f.read()
+}
+
+func (f *fakeChannelIdentities) read() (*dspb.GetPlayerChannelIdentityResponse, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -74,6 +87,23 @@ func TestUpsertAccountChannelIdentityRequiresLoginProof(t *testing.T) {
 	}
 	if ci.upserts != 1 || ci.lastAcc != "wx_u1" || ci.lastCh != "wechat_minigame" || ci.lastOID != "oid_1" {
 		t.Fatalf("unexpected recorded identity: %+v", ci)
+	}
+}
+
+// 建角送检时角色还没发号:player_id 为 0 时按账号查。两个都给时以 player_id 为准。
+func TestGetPlayerChannelIdentityLooksUpByAccountWhenThereIsNoPlayer(t *testing.T) {
+	ci := &fakeChannelIdentities{
+		reply: &dspb.GetPlayerChannelIdentityResponse{Found: true, Account: "wx_u1", Channel: "wechat_minigame", OpenId: "oid_1"},
+	}
+	srv := channelIdentityServer(t, ci)
+
+	out, err := srv.GetPlayerChannelIdentity(context.Background(), &dspb.GetPlayerChannelIdentityRequest{Account: "wx_u1"})
+	if err != nil || out.GetOpenId() != "oid_1" || ci.byAccount != "wx_u1" || ci.byPlayer != 0 {
+		t.Fatalf("lookup by account: out=%v err=%v byPlayer=%d byAccount=%q", out, err, ci.byPlayer, ci.byAccount)
+	}
+	_, err = srv.GetPlayerChannelIdentity(context.Background(), &dspb.GetPlayerChannelIdentityRequest{PlayerId: 42, Account: "wx_other"})
+	if err != nil || ci.byPlayer != 42 || ci.byAccount != "" {
+		t.Fatalf("player_id must win over account: err=%v byPlayer=%d byAccount=%q", err, ci.byPlayer, ci.byAccount)
 	}
 }
 

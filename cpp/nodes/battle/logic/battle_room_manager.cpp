@@ -405,7 +405,7 @@ void BattleRoomManager::RegisterTableProvider(
     {
         return;
     }
-    const auto now = std::chrono::steady_clock::now();
+    const auto now = ProviderNow();
     ReapRetiredProviders(now);
 
     // 换新现役 provider 之前,把旧现役放进保留表 10 分钟,覆盖切换窗口里尚未切换的 scene。
@@ -413,12 +413,12 @@ void BattleRoomManager::RegisterTableProvider(
         activeTableFingerprint != fingerprint)
     {
         providersByFingerprint[activeTableFingerprint] =
-            RetainedProvider{dataProvider, now + std::chrono::minutes(10)};
+            RetainedProvider{dataProvider, now + kTableProviderRetention};
     }
     if (!fingerprint.empty())
     {
         providersByFingerprint[fingerprint] =
-            RetainedProvider{provider, now + std::chrono::minutes(10)};
+            RetainedProvider{provider, now + kTableProviderRetention};
     }
     if (makeActive)
     {
@@ -446,7 +446,7 @@ std::shared_ptr<turnbattle::BattleDataProvider> BattleRoomManager::ResolveProvid
     const ::CreateBattleRequest &request,
     std::string &matchedFingerprint)
 {
-    ReapRetiredProviders(std::chrono::steady_clock::now());
+    ReapRetiredProviders(ProviderNow());
 
     // 确定请求侧携带的期望指纹(优先 request.table_fingerprint,否则取首个非空玩家快照指纹)。
     std::string requested = request.table_fingerprint();

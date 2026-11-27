@@ -142,7 +142,7 @@ gate 日志:VerifyGateToken 突然出现大量 token 过期 / 玩家被踢
 **根因**:在途占位没有覆盖「票已交出、gate 还没上报」这一段:这个人既不在在途里,也还不在 gate 的在线数里,下一拍又放一批。G4b-G 之前取走即撤占位,就是这一段(设计稿 §5「在途占位的生命周期」Q2)。
 **判读**:G4b-G 起在途占位是 `admitted:zset:{q:<id>}` ZSET,成员分数是到期 Unix 毫秒。排队领票后仍保留 `handoffGrace`(当前 20s,2026-10-15 起;此前 15s),覆盖客户端连 gate 到在线人数上报的窗口;不再在领票时 SREM。旧键 `admitted:zone:{id}` 不再读写,不能用它判断当前容量。
 **排查**:
-- 看成员:`redis-cli -c ZRANGE 'admitted:zset:{q:1}' 0 -1 WITHSCORES`。分数是占位到期的 Unix 毫秒。`fast:` 开头的是快速通道占位;`reconnect:<player_id>` 是免排队重连的占位(2026-11-20 起,同一个人只占一个);其余是排队放行的 queueId(账号的条目以 `a-` 开头,匿名的是 UUID)。
+- 看成员:`redis-cli -c ZRANGE 'admitted:zset:{q:1}' 0 -1 WITHSCORES`。分数是占位到期的 Unix 毫秒。`a-` 开头的是账号的条目号:排队放行与带账号的快速通道占位都用它,一个账号在途只占一枚(2026-11-26 起,分不出是哪条路来的,看 `login_queue_assign_total` 的 outcome);`reconnect:<player_id>` 是免排队重连的占位(2026-11-20 起,同一个人只占一个);`fast:<uuid>` 只剩匿名分配的快速通道占位;裸 UUID 是匿名排队放行的条目。
 - 只读统计未到期成员:先用 `redis-cli TIME` 取 Redis 当前 Unix 毫秒,再 `redis-cli -c ZCOUNT 'admitted:zset:{q:1}' '(<当前毫秒>' +inf`。裸 `ZCARD` 可能包含尚未被下一次容量查询清掉的过期成员。
 - 对照 `login_queue_admitted_inflight`、gate 在线数与 `login_queue_capacity`;在途数还包含 fast-path 的 `fast:<uuid>` 成员,没有固定的 `<50` 正常阈值:稳态约等于交票速率 × 20s(加上等轮询的放行数;2026-10-15 之前是 × 15s)。长时间顶在 `capacity − online` 而 gate 人数不涨 = 客户端拿了放行没去连 gate。
 - 超发时检查占位键是否被删 / 淘汰、过早到期、login 与 Redis 的时钟偏差以及旧二进制是否仍在运行。占位偏高通常会压低放行量,不能直接归因为超发。

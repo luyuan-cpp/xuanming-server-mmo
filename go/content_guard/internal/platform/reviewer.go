@@ -1,9 +1,9 @@
 // Package platform 实现内容安全服务的外部平台审核层(docs/design/rename-and-content-safety.md §6.5)。
 //
-// 按玩家渠道路由:
-//   - 微信小游戏(channel=wechat_minigame / account 前缀 "wx_"):调用微信 msgSecCheck v2(需 AppID + Secret + openid);
-//   - 抖音小游戏(channel=douyin_minigame / account 前缀 "dy_"):调用抖音 antidirt(需 AppID + Secret);
-//   - 其余渠道或未配置凭据:直接回 OutcomeSkip,仅走本地词库层。
+// 按玩家最近一次登录的渠道路由(渠道与 openid 都从目录查,见 providerFromIdentity):
+//   - 微信小游戏(channel=wechat_minigame):调用微信 msgSecCheck v2(需 AppID + Secret + 本小游戏下的 openid);
+//   - 抖音小游戏(channel=douyin_minigame):调用抖音 antidirt(需 AppID + Secret);
+//   - 其余渠道(含 App 端的微信登录)或未配置凭据:直接回 OutcomeSkip,仅走本地词库层。
 //
 // 失败口径(§6.5):
 //   - 名字与公告类场景:同步调用(默认 1500ms);外部不可用回 OutcomeUnavailable,由调用方拒绝并提示稍后重试;
@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 	"sync"
 	"time"
 
@@ -55,7 +54,7 @@ type ReviewResult struct {
 	Provider string
 }
 
-// Identity 描述玩家登录渠道与平台用户标识,从 account 前缀解析或由 data_service 查询。
+// Identity 描述玩家最近一次登录的渠道与平台用户标识,由 data_service 的账号目录给出。
 type Identity struct {
 	Channel string
 	OpenID  string
@@ -74,44 +73,44 @@ type Adapter interface {
 	Check(ctx context.Context, scene cgpb.TextScene, openID, text string) ReviewResult
 }
 
-// IdentityLookup 根据 player_id 查询玩家渠道与 openid。
+// IdentityLookup 查填写者的渠道与 openid:有 player_id 按角色查;player_id 为 0 时按账号查(建角时角色还没发号)。
 type IdentityLookup interface {
-	LookupIdentity(ctx context.Context, playerID uint64) (Identity, error)
+	LookupIdentity(ctx context.Context, playerID uint64, account string) (Identity, error)
 }
 
 // IdentityLookupFunc 函数适配器。
-type IdentityLookupFunc func(ctx context.Context, playerID uint64) (Identity, error)
+type IdentityLookupFunc func(ctx context.Context, playerID uint64, account string) (Identity, error)
 
-func (f IdentityLookupFunc) LookupIdentity(ctx context.Context, playerID uint64) (Identity, error) {
-	return f(ctx, playerID)
+func (f IdentityLookupFunc) LookupIdentity(ctx context.Context, playerID uint64, account string) (Identity, error) {
+	return f(ctx, playerID, account)
 }
 
-// ParseChannelAccount 从登录系统写入的账号名解析渠道和 openid。
-func ParseChannelAccount(account string) (provider, openID string) {
-	switch {
-	case strings.HasPrefix(account, "wx_") && len(account) > 3:
-		return ProviderWeChat, account[3:]
-	case strings.HasPrefix(account, "dy_") && len(account) > 3:
-		return ProviderDouyin, account[3:]
-	default:
-		return "", ""
-	}
-}
+// 渠道名是 login 记进目录的 auth_type(go/login/internal/logic/pkg/auth/minigame_providers.go)。
+const (
+	channelWeChatMiniGame = "wechat_minigame"
+	channelDouyinMiniGame = "douyin_minigame"
+)
 
+// providerFromIdentity 按最近一次登录的渠道选平台,只认两个小游戏渠道,用户标识只用目录里记的那个。
+//
+// 微信的审核接口要的是「本小游戏 AppID 下的 openid」。账号名(wx_ 加后缀)的后缀是 unionid;App 端的微信登录
+// (channel=wechat)记下的 openid 属于 App 那个 AppID。拿这两个去调,平台都按 openid 无效拒掉,而名字类场景对平台不可用的
+// 口径是拒绝:这些玩家会一直起不了名、建不了角。所以不从账号名猜,也不认 App 渠道。
+// App 渠道走哪家第三方还没定(设计 §6.5),定之前只走本地词库。
 func providerFromIdentity(id Identity) (provider, openID string) {
-	switch strings.ToLower(strings.TrimSpace(id.Channel)) {
-	case "wechat", "wechat_minigame":
+	switch id.Channel {
+	case channelWeChatMiniGame:
 		return ProviderWeChat, id.OpenID
-	case "douyin", "douyin_minigame":
+	case channelDouyinMiniGame:
 		return ProviderDouyin, id.OpenID
 	}
-	if p, oid := ParseChannelAccount(id.Account); p != "" {
-		if id.OpenID != "" {
-			oid = id.OpenID
-		}
-		return p, oid
-	}
 	return "", ""
+}
+
+// identityKey:有 player_id 时只按它;account 只在 player_id 为 0 时填。
+type identityKey struct {
+	playerID uint64
+	account  string
 }
 
 type identityEntry struct {
@@ -124,7 +123,7 @@ type identityCache struct {
 	timeout time.Duration
 	lookup  IdentityLookup
 	mu      sync.Mutex
-	entries map[uint64]identityEntry
+	entries map[identityKey]identityEntry
 }
 
 func newIdentityCache(lookup IdentityLookup, ttl, timeout time.Duration) *identityCache {
@@ -138,17 +137,21 @@ func newIdentityCache(lookup IdentityLookup, ttl, timeout time.Duration) *identi
 		ttl:     ttl,
 		timeout: timeout,
 		lookup:  lookup,
-		entries: make(map[uint64]identityEntry),
+		entries: make(map[identityKey]identityEntry),
 	}
 }
 
-func (c *identityCache) get(ctx context.Context, playerID uint64) (Identity, error) {
-	if c == nil || c.lookup == nil || playerID == 0 {
+func (c *identityCache) get(ctx context.Context, playerID uint64, account string) (Identity, error) {
+	if c == nil || c.lookup == nil || (playerID == 0 && account == "") {
 		return Identity{}, nil
+	}
+	key := identityKey{playerID: playerID}
+	if playerID == 0 {
+		key.account = account
 	}
 	now := time.Now()
 	c.mu.Lock()
-	if ent, ok := c.entries[playerID]; ok && now.Before(ent.expiry) {
+	if ent, ok := c.entries[key]; ok && now.Before(ent.expiry) {
 		c.mu.Unlock()
 		return ent.id, nil
 	}
@@ -156,7 +159,7 @@ func (c *identityCache) get(ctx context.Context, playerID uint64) (Identity, err
 
 	callCtx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
-	id, err := c.lookup.LookupIdentity(callCtx, playerID)
+	id, err := c.lookup.LookupIdentity(callCtx, key.playerID, key.account)
 	if err != nil {
 		return Identity{}, err
 	}
@@ -165,7 +168,7 @@ func (c *identityCache) get(ctx context.Context, playerID uint64) (Identity, err
 		if len(c.entries) >= identityCacheMaxSize {
 			clear(c.entries)
 		}
-		c.entries[playerID] = identityEntry{id: id, expiry: now.Add(c.ttl)}
+		c.entries[key] = identityEntry{id: id, expiry: now.Add(c.ttl)}
 		c.mu.Unlock()
 	}
 	return id, nil
@@ -301,30 +304,25 @@ func (r *Router) ReviewSync(ctx context.Context, scene cgpb.TextScene, playerID 
 	return adapter.Check(callCtx, scene, openID, text)
 }
 
+// resolveAdapter 选出审这位填写者的平台和要带给平台的用户标识;返回 nil 适配器 = 这位填写者不走平台审核。
 func (r *Router) resolveAdapter(ctx context.Context, playerID uint64, account string) (Adapter, string, error) {
-	if account != "" {
-		if p, oid := ParseChannelAccount(account); p != "" {
-			if a := r.adapters[p]; a != nil {
-				return a, oid, nil
-			}
-			return nil, "", nil
-		}
-	}
-	if playerID != 0 && r.identities != nil {
-		id, err := r.identities.get(ctx, playerID)
-		if err != nil {
-			return nil, "", err
-		}
-		p, oid := providerFromIdentity(id)
-		if p != "" {
-			return r.adapters[p], oid, nil
-		}
-		return nil, "", nil
-	}
 	if playerID == 0 && account == "" {
+		// 没有填写者的系统文本:只有不需要用户标识的平台能审。
 		if dy, ok := r.adapters[ProviderDouyin]; ok {
 			return dy, "", nil
 		}
+		return nil, "", nil
+	}
+	if r.identities == nil {
+		return nil, "", nil
+	}
+	id, err := r.identities.get(ctx, playerID, account)
+	if err != nil {
+		return nil, "", err
+	}
+	provider, openID := providerFromIdentity(id)
+	if adapter, ok := r.adapters[provider]; ok {
+		return adapter, openID, nil
 	}
 	return nil, "", nil
 }

@@ -267,10 +267,10 @@
 
 | # | 严重度 | 问题 | 处置 |
 |---|---|---|---|
-| 16 | low(不丢数据;只有带 TTL 的表,现在是 `mmorpg_chat.chat_send_authority`) | TiDB 的 TTL 任务是库自己发起的删除,不过闸门。源库的 TTL 不关,翻转之后它接着删冻结的源库里的过期行:`audit` 读的是源库的当前数据,必然报不一致,冻结的源库也不再是翻转那一刻的原样;撞上冻结窗口里的比对则回滚并清掉 verify 记录 | `cutover` 冻结之前核两侧这个库的表都关着 TTL,开着就拒绝并点名;手册写明在源集群逐表关掉,audit 通过之后在目标打开 |
-| 17 | high(前提同第 11 条,再加 TiCDC 正在换 owner 或滚动升级) | 第 11 条把「TiCDC 说没有这个 changefeed」当成已撤掉。TiCDC 查 changefeed 答的是 owner 内存里的那一份,owner 刚接任、各节点版本不一致时,还在的 changefeed 它也这样答 | 先核 TiCDC 健康(`/api/v2/health`)再问,不健康按查不成拒绝 |
+| 16 | low(不丢数据;只有带 TTL 的表,现在是 `mmorpg_chat.chat_send_authority`) | TiDB 的 TTL 任务是库自己发起的删除,不过闸门。源库的 TTL 不关,翻转之后它接着删冻结的源库里的过期行:`audit` 读的是源库的当前数据,必然报不一致,冻结的源库也不再是翻转那一刻的原样;撞上冻结窗口里的比对则回滚并清掉 verify 记录 | `cutover` 冻结之前核两侧这个库的表都关着 TTL,开着就拒绝并点名;关掉之前开始的任务还在跑也拒绝(11-26 补,读 `mysql.tidb_ttl_table_status`);`audit` 比对之前按同一个判据再核一次源库(11-26 补),之后又被打开就拒绝并说明,不报成数据不一致。手册写明在源集群逐表关掉,audit 通过之后在目标打开 |
+| 17 | high(前提同第 11 条,再加 TiCDC 正在换 owner 或滚动升级) | 第 11 条把「TiCDC 说没有这个 changefeed」当成已撤掉。TiCDC 查 changefeed 答的是 owner 内存里的那一份,owner 刚接任、各节点版本不一致时,还在的 changefeed 它也这样答 | 先核 TiCDC 健康(`/api/v2/health`)再问,不健康按查不成拒绝;「没有」要隔 3 秒确认两轮都这样答才算撤掉(11-26 补) |
 
-没核到的:TiCDC 的应答(本机没有镜像,只从 tiflow `release-8.5` 的源码核到 `ErrChangeFeedNotExists` 属于按 400 回的那一组)。第 17 条依据的是对 tiflow owner 实现的记忆,判断错了的后果是 cleanup 多问一次或者一直拒绝,不会多删;搬库手册 §10 列了用真实 TiCDC 核的办法。
+TiCDC 这两条 11-26 对着 tiflow `release-8.5` 的源码核过,属实:owner 的 `Tick` 先答查询、再判版本一致、最后才把 changefeed 装进内存;查不到回 `ErrChangeFeedNotExists`(HTTP 400);健康接口在 owner 没 tick 过或版本不一致时回 500。健康检查和查询之间正好换 owner 的窗口,由第 17 条的两轮确认关掉。没核到的:真实 TiCDC 上的实际应答(本机没有镜像),以及新架构的 TiCDC(`pingcap/ticdc`,另一份代码);搬库手册 §10 列了核法。
 
 ### 6.7 2026-11-20 逻辑库故障隔离(data_service 熔断)
 

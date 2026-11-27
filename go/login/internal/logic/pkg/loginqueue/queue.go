@@ -1302,21 +1302,23 @@ func (q *Queue) AdmittedCount(ctx context.Context, zoneID uint32) (uint32, error
 	return uint32(n), nil
 }
 
-// reserveFastPathSlotScript 原子占位:先清掉已到期的占位,未到期的不足 budget 才记一枚
-// 一次性占位成员。budget = cap - online,即「在当前在线数之上还允许多少在途准入」。
+// reserveFastPathSlotScript 原子占位:先清掉已到期的占位,未到期的不足 budget 才记一枚占位成员。
+// budget = cap - online,即「在当前在线数之上还允许多少在途准入」。
 // 清理、判定、占位在同一段脚本里,并发的快速通道调用彼此可见,不会各读同一个 free>0
 // 快照后全部旁路队列签票。
+//
+// 成员已经在(同一个账号再次请求,见 TryReserveFastPathSlot)时不看 budget:它没有多占名额,只是把到期时刻往后推。
 //
 // 占位之后的整键续期与 admittedHoldScript 相同:先 ZADD,剩余 PTTL < W 才 PEXPIRE W(只增不减,
 // 两个陷阱见 admittedKeyTTL)。
 //
 //	KEYS[1] = admittedZSetKey(zone)
-//	ARGV[1] = now_ms   ARGV[2] = budget   ARGV[3] = member(fast:<uuid>)
+//	ARGV[1] = now_ms   ARGV[2] = budget   ARGV[3] = member(账号的条目号,匿名是 fast:<uuid>)
 //	ARGV[4] = 占位到期毫秒   ARGV[5] = W 毫秒(整键 TTL 下限,只做垃圾回收)
 //	返回 1 = 占到,0 = 已满
 var reserveFastPathSlotScript = redis.NewScript(`
 redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[1])
-if redis.call('ZCARD', KEYS[1]) >= tonumber(ARGV[2]) then return 0 end
+if not redis.call('ZSCORE', KEYS[1], ARGV[3]) and redis.call('ZCARD', KEYS[1]) >= tonumber(ARGV[2]) then return 0 end
 redis.call('ZADD', KEYS[1], ARGV[4], ARGV[3])
 if redis.call('PTTL', KEYS[1]) < tonumber(ARGV[5]) then
 	redis.call('PEXPIRE', KEYS[1], ARGV[5])
@@ -1328,12 +1330,20 @@ return 1
 // 返回 true 表示占用成功(调用方可直接签发 gate token);false 表示已满(应入队)。
 // 快速通道当场交票,等同排队路径的「已取走」,所以占位只留 handoffGrace,不是 AdmitTTL;
 // 之后它按自己的分数到期,不需要、也没有回收步骤。
-func (q *Queue) TryReserveFastPathSlot(ctx context.Context, zoneID uint32, budget uint32) (bool, error) {
+//
+// 一个账号在途只占一个名额(2026-11-26 起):带账号的占位成员就是这个账号的排队条目号(queueIDForAccount),
+// 与它排队放行时的占位是同一个成员。此前每次调用都记一枚新的 fast:<uuid>:同一个账号反复请求(换几个出口 IP 绕开
+// 网关的冷却)就能把快满的区剩下的在途名额全部占住,别人只能去排队。account 为空串(匿名分配)没有可认的身份,
+// 仍是每次一枚 fast:<uuid>。
+func (q *Queue) TryReserveFastPathSlot(ctx context.Context, zoneID uint32, budget uint32, account string) (bool, error) {
 	if budget == 0 {
 		return false, nil
 	}
 	now := q.now()
 	member := "fast:" + uuid.NewString()
+	if account != "" {
+		member = queueIDForAccount(q.hmacSecret, zoneID, account)
+	}
 	res, err := reserveFastPathSlotScript.Run(
 		ctx, q.rdb,
 		[]string{admittedZSetKey(zoneID)},

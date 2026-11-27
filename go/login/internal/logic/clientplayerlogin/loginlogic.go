@@ -427,7 +427,8 @@ func (l *LoginLogic) recordChannelIdentity(account, channel, openID string) {
 		return
 	}
 	if err := updater.UpsertChannelIdentity(l.ctx, account, channel, openID); err != nil {
-		logx.WithContext(l.ctx).Infof("[channel-identity] upsert skipped for account=%s channel=%s: %v", account, channel, err)
+		// 记不上的后果是这个账号的名字和发言只过本地词库、不送平台审核,直到下次登录记上为止:按错误记,不是提示。
+		logx.WithContext(l.ctx).Errorf("[channel-identity] Upsert failed for account=%s channel=%s; platform content review is skipped for this account until a later login records it: %v", account, channel, err)
 	}
 }
 

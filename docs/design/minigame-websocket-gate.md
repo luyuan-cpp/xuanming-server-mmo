@@ -200,7 +200,7 @@ gate 和 battle 的客户端端口同时接受两种连接:首字节是 `G` 的�
 
 具体命令在 `docs/PROGRESS.md` 的同名条目里。要点:
 
-1. 协议生成:proto 改动后按 AGENTS.md §4 用默认配置生成(这一批有客户端任务授权,要写客户端仓),再跑 `go/build.ps1` 修 login 包装。没生成之前 C++、Go、客户端都编不过。
+1. 协议生成:proto 改动后按 AGENTS.md §4 用默认配置生成(这一批有客户端任务授权,要写客户端仓)。login 转发层是手写的(`go/build.ps1` 11-21 随 goctl 退役删除),由 `go/login` 的 `TestGoctlServerWrappersImplementEveryRPC` 核对。没生成之前 C++、Go、客户端都编不过。
 2. C++:先编 core 库再编测试工程(`run_cpp_tests -Build` 不重编库),串行 `/m:1`。
    - `cpp/nodes/gate/tests/websocket_entry_test.cpp`(编进 `routing_identity_test`):RFC 6455 的握手示例(Accept 值)、升级请求的接受与各种拒绝(含版本不符回 426)、帧头三种长度形式;回环连接上的收发、握手与帧被切在任意位置、分片中间夹 Ping、一条消息装多个客户端帧、Close 之前的数据先交付、八种违规帧各自的关闭码、不是升级请求的 `GET` 回 400、原始 TCP 不受影响。
    - `cpp/tests/client_endpoint_test`:基地址的解析与拒绝、IPv4 判定、地址拼接。

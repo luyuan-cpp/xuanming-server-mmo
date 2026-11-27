@@ -152,7 +152,13 @@ type ticdcReplication struct {
 	client          *http.Client
 	source, target  *sql.DB
 	schema          string
+	// recheckDelay 是 StillExists 两次确认之间等多久,0 取 feedGoneRecheckDelay。只有单测会设它。
+	recheckDelay time.Duration
 }
+
+// feedGoneRecheckDelay:TiCDC 答「没有这个 changefeed」之后隔这么久再确认一次,见 StillExists。
+// 比 owner 接任之后把 changefeed 装进内存要的时间(一次 tick,缺省 50 毫秒量级)宽得多。
+const feedGoneRecheckDelay = 3 * time.Second
 
 // readTargetCreated 取目标库闸门表的建表时间,见 dbplacement.FeedIdentity。
 func readTargetCreated(ctx context.Context, target *sql.DB, schema string) (string, error) {
@@ -185,7 +191,7 @@ type changefeedDetail struct {
 // syncPointConfig 是 config 里 verify 要读的两项。
 type syncPointConfig struct {
 	EnableSyncPoint *bool `json:"enable_sync_point"`
-	// 版本之间形状不同:新版是 "30s" 这样的字符串,旧版是纳秒整数。
+	// 两种形状都收:tiflow release-8.5 的 JSONDuration 序列化成纳秒整数(源码核过),它自己反序列化时也收 "30s" 这样的字符串。
 	SyncPointInterval json.RawMessage `json:"sync_point_interval"`
 }
 
@@ -340,11 +346,29 @@ func (r *ticdcReplication) requireHealthy(ctx context.Context) error {
 
 // StillExists 见 feedPresence。只认 TiCDC 明确的回答:查到了就是还在,不看状态(暂停、出错的 changefeed 一恢复就接着复制);
 // 回「没有这个 changefeed」的错误码才是撤掉了。别的回答都算查不成,包括光秃秃的 404:地址写错碰到别的 HTTP 服务也是 404。
+//
+// 「没有」要隔一会儿再确认一次才算数。健康检查和查询是两次请求,中间正好换了 owner 的话,新 owner 还没把 changefeed 装进内存,
+// 对还在的 changefeed 也答「没有」。隔开几秒再问,它要么已经装好(这次答「还在」),要么还不健康(这次按查不成拒绝)。
 func (r *ticdcReplication) StillExists(ctx context.Context, feed dbplacement.FeedIdentity) (bool, string, error) {
 	if feed.Changefeed != r.changefeed {
 		return false, "", refusedf("-sync names changefeed %s, but this move verified changefeed %q: pass the -sync that cutover used", r.changefeed, feed.Changefeed)
 	}
-	// 先问健康再问 changefeed,顺序不能反:要的是 owner 的视图完整之后给出的回答。
+	exists, detail, err := r.askOwner(ctx)
+	if err != nil || exists {
+		return exists, detail, err
+	}
+	delay := r.recheckDelay
+	if delay == 0 {
+		delay = feedGoneRecheckDelay
+	}
+	if err := sleepContext(ctx, delay); err != nil {
+		return false, "", err
+	}
+	return r.askOwner(ctx)
+}
+
+// askOwner 问一轮:先问健康再问 changefeed,顺序不能反,要的是 owner 的视图完整之后给出的回答。
+func (r *ticdcReplication) askOwner(ctx context.Context) (bool, string, error) {
 	if err := r.requireHealthy(ctx); err != nil {
 		return false, "", err
 	}

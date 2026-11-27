@@ -20,6 +20,11 @@ const (
 	defaultWeChatBaseURL     = "https://api.weixin.qq.com"
 	wechatTokenRefreshMargin = 5 * time.Minute
 	maxPlatformRespBytes     = 64 * 1024
+
+	// wechatErrRiskyContent:平台用错误码回「内容违规」(旧版接口的做法;新版走 result.suggest)。
+	wechatErrRiskyContent = 87014
+	// wechatErrUserNotRecentlyActive:这名用户近两小时没有访问过小游戏,平台不审他发的内容。
+	wechatErrUserNotRecentlyActive = 61010
 )
 
 // WeChatAdapter 封装微信小游戏内容安全接口 msgSecCheck v2。
@@ -222,6 +227,15 @@ func (w *WeChatAdapter) Check(ctx context.Context, scene cgpb.TextScene, openID,
 			if out.ErrCode == 40001 || out.ErrCode == 40014 || out.ErrCode == 42001 {
 				w.invalidateToken(token)
 				continue
+			}
+			switch out.ErrCode {
+			case wechatErrRiskyContent:
+				// 「平台说违规」不能当成「平台没答复」:世界频道对没答复的口径是先放行。
+				return ReviewResult{Outcome: OutcomeReject, Category: cgpb.TextCategory_TEXT_CATEGORY_OTHER, Provider: ProviderWeChat}
+			case wechatErrUserNotRecentlyActive:
+				// 不是故障,重试也不会变:和没有 openid 一样只走本地词库。当成不可用的话,连续在线超过两小时的玩家
+				// 会一直改不了名、建不了帮、发不了公告(这几类对不可用的口径是拒绝)。
+				return ReviewResult{Outcome: OutcomeSkip, Provider: ProviderWeChat}
 			}
 			logx.Errorf("[content_guard/wechat] msg_sec_check errcode=%d errmsg=%s", out.ErrCode, out.ErrMsg)
 			return ReviewResult{Outcome: OutcomeUnavailable, Provider: ProviderWeChat}

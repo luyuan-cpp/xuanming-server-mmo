@@ -28,6 +28,7 @@ const (
 func (s *ServiceContext) initAccountDeletion(client *accountdirectory.Client) {
 	s.AccountDeletions = client
 	s.AccountDeletion = &accountdeletion.Service{Dir: client, Sessions: deletionSessions{s}}
+	s.initPassportUserDeletion()
 	a := config.AppConfig.AuthProviders.Apple
 	key := activeSecrets().AuthProviders.ApplePrivateKeyPEM
 	if a == nil || key == "" {
@@ -39,6 +40,26 @@ func (s *ServiceContext) initAccountDeletion(client *accountdirectory.Client) {
 	}
 	s.AccountDeletion.Apple = revoker
 	logx.Infof("[account-deletion] Sign in with Apple token revocation enabled (team_id=%s key_id=%s)", a.TeamId, a.KeyId)
+}
+
+// initPassportUserDeletion 给注销接上「删官方通行证里的用户」(docs/design/official-passport-registration.md §3.5)。
+// 管理凭据由 ResolveSecrets 校验并解析:生产配了通行证登录就一定有;dev/test 可以没有,那时通行证账号注销后通行证里的用户留着。
+func (s *ServiceContext) initPassportUserDeletion() {
+	p := config.AppConfig.AuthProviders.Passport
+	if p == nil {
+		return
+	}
+	secret := activeSecrets().AuthProviders.PassportAdminClientSecret
+	if secret == "" {
+		logx.Error("[account-deletion] AuthProviders.Passport has no admin client: passport users are NOT deleted on account deletion (dev/test only)")
+		return
+	}
+	deleter, err := auth.NewPassportUserDeleter(p.Issuer, p.Endpoint, p.AdminClientId, secret, nil)
+	if err != nil {
+		panic(fmt.Errorf("AuthProviders.Passport admin client rejected; refusing to start: %w", err))
+	}
+	s.AccountDeletion.Passport = deleter
+	logx.Infof("[account-deletion] passport user deletion enabled (admin_client_id=%s)", p.AdminClientId)
 }
 
 // deletionSessions 把 login 的令牌与踢线接给 accountdeletion.Sessions。

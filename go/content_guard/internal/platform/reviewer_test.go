@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -21,6 +22,7 @@ func TestWeChatAdapterTokenCacheRetryAndVerdicts(t *testing.T) {
 	suggest := "pass"
 	label := 100
 	expireFirstCheck := false
+	forceErrcode := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/cgi-bin/stable_token":
@@ -41,6 +43,10 @@ func TestWeChatAdapterTokenCacheRetryAndVerdicts(t *testing.T) {
 			c := checkCalls.Add(1)
 			if expireFirstCheck && c == 1 {
 				_ = json.NewEncoder(w).Encode(map[string]any{"errcode": 40001, "errmsg": "invalid token"})
+				return
+			}
+			if forceErrcode != 0 {
+				_ = json.NewEncoder(w).Encode(map[string]any{"errcode": forceErrcode, "errmsg": "forced"})
 				return
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -75,6 +81,15 @@ func TestWeChatAdapterTokenCacheRetryAndVerdicts(t *testing.T) {
 	res = adapter.Check(context.Background(), cgpb.TextScene_TEXT_SCENE_ROLE_NAME, "oid-1", "正常发言")
 	if res.Outcome != OutcomePass || tokenCalls.Load() != 2 || checkCalls.Load() != 2 {
 		t.Fatalf("token refresh retry failed: res=%+v tokenCalls=%d checkCalls=%d", res, tokenCalls.Load(), checkCalls.Load())
+	}
+
+	// 平台用错误码答复的三种情况:内容违规按违规算;用户近两小时没访问过小游戏不是故障,只走本地层;其余错误码按不可用算。
+	expireFirstCheck = false
+	for code, want := range map[int]Outcome{87014: OutcomeReject, 61010: OutcomeSkip, 45009: OutcomeUnavailable} {
+		forceErrcode = code
+		if res = adapter.Check(context.Background(), cgpb.TextScene_TEXT_SCENE_ROLE_NAME, "oid-1", "正常发言"); res.Outcome != want {
+			t.Fatalf("errcode %d: got %+v, want outcome %d", code, res, want)
+		}
 	}
 }
 
@@ -146,10 +161,22 @@ type fakeAdapter struct {
 	provider string
 	delay    time.Duration
 	res      ReviewResult
+
+	mu      sync.Mutex
+	openIDs []string // 每次调用收到的用户标识
+}
+
+func (f *fakeAdapter) seenOpenIDs() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.openIDs...)
 }
 
 func (f *fakeAdapter) Provider() string { return f.provider }
-func (f *fakeAdapter) Check(ctx context.Context, _ cgpb.TextScene, _, _ string) ReviewResult {
+func (f *fakeAdapter) Check(ctx context.Context, _ cgpb.TextScene, openID, _ string) ReviewResult {
+	f.mu.Lock()
+	f.openIDs = append(f.openIDs, openID)
+	f.mu.Unlock()
 	if f.delay > 0 {
 		select {
 		case <-time.After(f.delay):
@@ -162,6 +189,51 @@ func (f *fakeAdapter) Check(ctx context.Context, _ cgpb.TextScene, _, _ string) 
 	return out
 }
 
+// 带给平台的用户标识只从目录取:账号名的后缀是 unionid 不是 openid;App 端微信登录(channel=wechat)记下的 openid 属于另一个 AppID,
+// 这两种都不能送小游戏的审核接口(平台会按 openid 无效拒掉,名字类场景就成了永远起不了名)。
+func TestRouterTakesTheOpenIDFromTheDirectoryOnly(t *testing.T) {
+	wechat := &fakeAdapter{provider: ProviderWeChat, res: ReviewResult{Outcome: OutcomePass}}
+	identities := map[string]Identity{
+		"wx_union_mini": {Channel: "wechat_minigame", OpenID: "mini-openid", Account: "wx_union_mini"},
+		"wx_union_app":  {Channel: "wechat", OpenID: "app-openid", Account: "wx_union_app"},
+		"wx_union_none": {Account: "wx_union_none"},
+	}
+	var askedPlayers []uint64
+	router := NewRouter(RouterOptions{
+		Lookup: IdentityLookupFunc(func(_ context.Context, playerID uint64, account string) (Identity, error) {
+			if playerID != 0 {
+				askedPlayers = append(askedPlayers, playerID)
+				return identities["wx_union_mini"], nil
+			}
+			return identities[account], nil
+		}),
+		Adapters: []Adapter{wechat},
+	})
+	review := func(playerID uint64, account string) ReviewResult {
+		return router.Review(context.Background(), cgpb.TextScene_TEXT_SCENE_ROLE_NAME, playerID, account, "青云客", false)
+	}
+	// 建角:没有 player_id,按账号到目录查;送给平台的是目录里的 openid,不是账号名的后缀。
+	if res := review(0, "wx_union_mini"); res.Outcome != OutcomePass {
+		t.Fatalf("mini game account got %+v", res)
+	}
+	// App 端微信登录的账号、没有渠道身份的账号:不送小游戏的审核接口,只走本地层。
+	for _, account := range []string{"wx_union_app", "wx_union_none"} {
+		if res := review(0, account); res.Outcome != OutcomeSkip {
+			t.Fatalf("account %s must skip the mini game reviewer, got %+v", account, res)
+		}
+	}
+	// 有 player_id 时以它为准,请求里带着别的账号名也不看。
+	if res := review(7, "wx_union_app"); res.Outcome != OutcomePass {
+		t.Fatalf("player lookup got %+v", res)
+	}
+	if got := wechat.seenOpenIDs(); len(got) != 2 || got[0] != "mini-openid" || got[1] != "mini-openid" {
+		t.Fatalf("the reviewer must only ever see the open id recorded in the directory, got %v", got)
+	}
+	if len(askedPlayers) != 1 || askedPlayers[0] != 7 {
+		t.Fatalf("expected exactly one lookup by player 7, got %v", askedPlayers)
+	}
+}
+
 func TestRouterScenePoliciesLookupCacheAndPendingAsyncSync(t *testing.T) {
 	var lookupCalls atomic.Int32
 	slowReject := &fakeAdapter{
@@ -170,7 +242,7 @@ func TestRouterScenePoliciesLookupCacheAndPendingAsyncSync(t *testing.T) {
 		res:      ReviewResult{Outcome: OutcomeReject, Category: cgpb.TextCategory_TEXT_CATEGORY_AD},
 	}
 	router := NewRouter(RouterOptions{
-		Lookup: IdentityLookupFunc(func(_ context.Context, id uint64) (Identity, error) {
+		Lookup: IdentityLookupFunc(func(_ context.Context, id uint64, _ string) (Identity, error) {
 			lookupCalls.Add(1)
 			if id == 99 {
 				return Identity{}, errors.New("db down")
@@ -188,9 +260,9 @@ func TestRouterScenePoliciesLookupCacheAndPendingAsyncSync(t *testing.T) {
 	if res := router.Review(context.Background(), cgpb.TextScene_TEXT_SCENE_PRIVATE_LABEL, 1, "", "方案1", false); res.Outcome != OutcomeSkip {
 		t.Fatalf("private label got %+v", res)
 	}
-	// 名字类直传 account 时无需 player_id(建角场景)也能路由到微信。
-	if res := router.Review(context.Background(), cgpb.TextScene_TEXT_SCENE_ROLE_NAME, 0, "wx_direct_oid", "广告名", false); res.Outcome != OutcomeReject {
-		t.Fatalf("direct account role name got %+v", res)
+	// 建角场景没有 player_id:按账号到目录查渠道身份,照样路由到微信。
+	if res := router.Review(context.Background(), cgpb.TextScene_TEXT_SCENE_ROLE_NAME, 0, "wx_some_union", "广告名", false); res.Outcome != OutcomeReject {
+		t.Fatalf("account-only role name got %+v", res)
 	}
 	// 名字类同步等待并返回拒绝,且第二次命中本地身份缓存不重复查目录。
 	if res := router.Review(context.Background(), cgpb.TextScene_TEXT_SCENE_ROLE_NAME, 1, "", "广告名", false); res.Outcome != OutcomeReject {
@@ -199,8 +271,8 @@ func TestRouterScenePoliciesLookupCacheAndPendingAsyncSync(t *testing.T) {
 	if res := router.Review(context.Background(), cgpb.TextScene_TEXT_SCENE_ROLE_NAME, 1, "", "广告名", false); res.Outcome != OutcomeReject {
 		t.Fatalf("cached role name got %+v", res)
 	}
-	if got := lookupCalls.Load(); got != 1 {
-		t.Fatalf("expected 1 lookup due to cache, got %d", got)
+	if got := lookupCalls.Load(); got != 2 {
+		t.Fatalf("expected 2 lookups (one by account, one by player, the repeat served from cache), got %d", got)
 	}
 	// 名字类查不到渠道账号按不可用 fail-closed。
 	if res := router.Review(context.Background(), cgpb.TextScene_TEXT_SCENE_ROLE_NAME, 99, "", "正常名", false); res.Outcome != OutcomeUnavailable {

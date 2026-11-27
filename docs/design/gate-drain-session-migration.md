@@ -509,7 +509,7 @@ Java 要实现同一组行为：排空时按限速推 124，选角界面的连�
 
 命令、顺序与通过标准在 `docs/PROGRESS.md` 2026-11-12「gate 排空迁移收尾批续」条目。要点：
 
-- login 的 goctl 包装已重生入库（主工作区 `clientplayerloginserver.go` 有 `RequestGateMigration`），不用再跑 `go/build.ps1`。以后给 `login.proto` 的服务加方法时才要重跑（§18.3），不然新方法一律 UNIMPLEMENTED。
+- login 的 goctl 包装已重生入库（主工作区 `clientplayerloginserver.go` 有 `RequestGateMigration`），不用再跑 `go/build.ps1`。11-21 起 goctl 与 `go/build.ps1` 退役、转发层改为手写：以后给 `login.proto` 的服务加方法，要在对应 `*server.go` 手补转发（§18.3），漏了新方法一律 UNIMPLEMENTED，`go/login` 的 `TestGoctlServerWrappersImplementEveryRPC` 会红。
 - 改了 scene 库与 gate：先整解 `msbuild /m:1`，再跑 `routing_identity_test`、`cross_zone_test`、`aoi_delivery_test`（`run_cpp_tests.ps1 -Build` 不重编库）。
 - robot 先 `go mod vendor`（新引用 `shared/gatepick`）。
 - 排空脚本的契约用例里，gate 标记键形归「Redis 上 Cluster 第 4 批」同日在改，那几条红时先分清是哪一批的。

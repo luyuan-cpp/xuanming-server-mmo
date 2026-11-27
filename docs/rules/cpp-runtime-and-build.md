@@ -83,7 +83,7 @@
 - **C++ 代码检查（Lint）**：配合 `cpp\.clang-tidy` 使用 `clang-tidy`（示例：`clang-tidy <file.cpp> --config-file=cpp\.clang-tidy`）
 
 ### Go（微服务）
-- **协议重生成**：在仓库根按 [proto-and-tables.md](proto-and-tables.md) 运行 `dev_tools.ps1 -Command proto-gen-run`；不写客户端仓时使用 `proto_gen.no-unity.yaml`。`cd go && build.bat` 仅处理 db/login 包装与导入修正。
+- **协议重生成**：在仓库根按 [proto-and-tables.md](proto-and-tables.md) 运行 `dev_tools.ps1 -Command proto-gen-run`；不写客户端仓时使用 `proto_gen.no-unity.yaml`。db / login 的 gRPC 转发层手写，没有单独的 Go 包装生成步骤（goctl 与 `go/build.bat` 2026-11-21 已退役）。
 - **运行 login 服务**：`cd go\login && go run login.go`
 - **运行全部 login 测试**：`cd go\login && go test ./...`
 - **运行单个 Go 测试**：`cd go\login && go test ./internal/logic/pkg/sessionmanager -run '^TestMintLoginGeneration_KeyName$'`

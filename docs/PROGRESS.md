@@ -5988,3 +5988,198 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
 
 - 写上一条的中途,工作区被批量提交了一次(`a1285cb8a`):新用例 `TestLogicalDBConnectGateDoesNotCountCancellationAsSuccess` 已随它进了 HEAD,而 `go/data_service/internal/svc/db_breaker.go` 的修复是之后才写的,仍在工作区未提交。
 - 所以只按 HEAD(不带工作区)跑这条用例会红,报 `never opened`;带上工作区的 `db_breaker.go` 才是配套的。验证请在主工作区跑;下次提交把 `db_breaker.go` 带上。
+
+## 2026-11-26 Claude:托管角色的改派待确认条目也记 gate 实例(补同日「location 记 gate 实例、托管落点带实例」那条写的「不做」;未编译、未测试;Java 不另登记)
+
+- **起因**:那一条把「源节点上托管角色的改派条目不带实例」列为不做。负责人口径是查出的问题现在修:实体销毁后本节点只剩条目记着他,不经 scene_manager 的 gate 补发(同一 node_id 上另一个进程同号、更早的登录)会按会话号判成同一会话、被放行并结清条目。
+- **做了什么**(main 工作区,未提交):`player_lifecycle.cpp` 派发托管票据时已按登录身份组件核对票据身份,实例就取那一份记进 `Registration::gateInstanceId`(只作入场栅栏的身份,托管条目不推送);票据自己的实例号仍为空,因为它会进 EnterScene,托管落点不带 gate。`relocate_confirm.h` 两处注释同步。重发沿用已登记的条目,不重新登记(核过 `TrackRelocateDispatch` 不碰实例)。设计稿 `scene-enter-chain-residuals.md` §14.8 的「不做」改成已落码,补用例行与变异 M13。
+- **用例(未运行)**:`cross_zone_test.cpp` 新增 `RelocateConfirmEcs.HostedEntryRejectsALateEnterFromAnotherGateProcessWithTheSameSessionId`(复现);夹具 `MakeHostedResident` 的登录身份带上实例,`HostedCharacterIsRelocatedThroughTheConfirmTableAndNeverPushed` 的「实例为空」断言改为等于那个实例。
+- **预检**:`python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`,13 tests OK。
+- **给 Gemini 的验证**:并进同日「location 记 gate 实例、托管落点带实例」那条的第 3、4 步一起跑(scene 库改了,先整解);单跑过滤加 `RelocateConfirmEcs.*`。变异 M13:托管条目的 `registration.gateInstanceId` 改回 `ticket.gateInstanceId`,期望上面两条用例的实例断言变红。
+- **Java 版**:同日那条 PARITY 登记已覆盖(按「会话 = (网关实例, 会话号)」核对托管落点与改派),不另加行。
+
+## 2026-11-26 Claude:go/db 按存档库熔断:调用方取消不再记成成功,与 data_service 同一口径(一处代码 + 一条用例,未编译、未运行,待 Gemini;Java 不涉及)
+
+- **起因**:本日 data_service 那条「调用方取消不再记成成功」把同一条规则在建连熔断上改掉了,并写明 go/db 不用改(scene 的截止 14 秒长于 go/db 的方法时限 12 秒,先到的总是服务端的超时)。那个理由成立,但它让规则的正确性靠时限配置撑着;scene 节点崩溃或重启时在途的存盘仍会以取消收场,被记成成功。`enterStore` 是本会话写的,改成同一口径,两处不再各说各的。
+- **改动**(main 工作区,未提交):
+  - `go/db/internal/playerstore/server.go` 的 `enterStore`:成功与闸门冻结记成功;调用方取消时不结算(成功、失败都不记);其余记失败。
+  - `go/db/internal/playerstore/server_test.go`:新增 `TestServer_CancelledCallsDoNotKeepTheStoreBreakerClosed`(每 3 次挂断夹 1 次真实失败,熔断必须打开;按旧写法 400 次调用全部走到库)。挂断在假的开库回调里触发,因为验签在入口就会拒掉已取消的请求。
+  - 文档:`docs/design/db-task-store-unavailable-deferral.md` 文首、`docs/design/player-save-direct-commit.md` §2 各改一句。
+- **给 Gemini 的验证**(并入本日「go/db 与 data_service 两处『熔断按后端隔离』复核」那一条的 go/db 部分,命令不变):`go test -count=1 -v -run 'TestServer_' ./internal/playerstore/` 里现在是九条,多出的这一条要 PASS;`-count=3` 那一轮也全过。可选的反向确认:把取消分支临时改回 `promise.Accept()`,新用例应当失败。
+- **Java 版(AGENTS §12)**:不涉及,不加 PARITY 行。
+
+## 2026-11-26 Claude:gate 准入 P1-5——C++ 节点主容器配 resources.requests(五套模板一张表,只配 requests 不配 limits;未运行,待 Gemini 验证;Java 0.1.0-SNAPSHOT 不涉及)
+
+- **起因**:负责人要求没做完的当场做。gate 准入设计 P1-5 的 `resources.requests` 原已交接 Gemini(交接单 gate-admission-remaining-handoff-20261126.md 第 1 节),核对时还没人动代码。
+  与「gate 准入设计 P1-1~P1-4 核对并补完」会话分工:本条做 P1-5;P2-3 第 3 条(断线重连优先)经它核对 login 早已实现,不用写代码,它已更正文档。
+- **口径**(取值照交接单,理由写进 `k8s_deploy.ps1` 的 `Get-CppNodeResourceRequests` 注释与设计稿 P1-5 表):
+  - staging / prod:gate、battle 主容器 cpu `1`、memory `512Mi`;scene cpu `1`、memory `1Gi`。dev:cpu `100m`,memory `128Mi`(scene `256Mi`)。
+  - 只配 requests:cpu 不配 limit(CFS 限流会把单线程 loop 的 tick 打出毛刺);memory 不配 limit(要先按设计稿 §9.5 实测「连接上限 × 每连接高水位」)。
+  - 交接单原写「QoS 是 BestEffort」不准确:开着日志 sidecar 时 Pod 已是 Burstable(sidecar 带 requests),但 kubelet 按容器算 `oom_score_adj`,主容器没有 request 时是 999,内存紧张时仍最先被杀。设计稿已改准确。
+- **代码**:
+  - `tools/scripts/k8s_deploy.ps1`:新增 `Get-CppNodeResourceRequests`(按角色 gate / battle / scene 与 `-ReleaseProfile` 分档;认不出的角色在参数绑定处拒,新 C++ 工作负载必须先在表里定值)。
+    `New-NodeDeploymentYaml`(scene 的各个池按 scene 取)、`New-SceneFleetYaml` 在主容器 `imagePullPolicy` 之后写 resources 段;`New-CppNodePodCommon` 按 `-Role` 传给 lib。
+  - `tools/scripts/lib/k8s_client_entry.ps1`:`New-ClientEntryPodCommon` 新增 `-ResourceRequests`;新增 `Get-ClientEntryResourcesYaml`(渲染与形状校验只这一份,脚本自己的两个模板也调它);gate StatefulSet、battle Fleet、battle hostPort 三个模板接上。
+  - 金丝雀 battle 池先按 battle 渲染再改名,同样带 requests。
+- **测试**(新增,未运行):
+  - `tools/scripts/tests/k8s_client_entry_contract.tests.ps1`:新增「库:主容器 resources.requests」一条(三个生成器给了才写、紧跟 imagePullPolicy、除这一段外逐字不变、没有 limits、五种坏形状渲染时 throw)。
+  - `tools/scripts/tests/k8s_deploy_contract.tests.ps1`:新增两条——分档表按 AST 取出直接调(三档 × 三个角色、认不出的角色拒);六次已有 DryRun(dev 五套模板 + staging zone-up)里每个 C++ 主容器都按本角色那一档写、段里只有 requests。没有新增 DryRun。
+  - 静态检查(不是测试证据):改过的 4 个 ps1 PowerShell 解析 0 错误。
+- **文档**:`docs/design/gate-connection-admission-control.md`(G11 现状、P1-5 第一条的说法、P1-5 表 `resources.requests` 一行)、`deploy/k8s/README.md`(容量基线加 C++ 主容器 requests)。
+  交接单 `docs/handoff/gate-admission-remaining-handoff-20261126.md` 两项都已了结,按约定整份删除(原文在 git 历史里),`docs/README.md` 去掉它的索引行。
+- **交 Gemini**(没有 proto、C++ 改动;前一步红就停下归因;在工作区跑):
+  1. 仓库根,都应全过、退出 0:
+     - `pwsh -NoProfile -File tools/scripts/tests/k8s_client_entry_contract.tests.ps1`
+     - `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`
+     - `pwsh -NoProfile -File tools/scripts/tests/id_issuer_deploy_contract.tests.ps1`(它按文本检查 `New-NodeDeploymentYaml` / `New-SceneFleetYaml`,确认不受影响)
+  2. 有 kind 集群时:dev 档 zone-up 与 infra-up 之后 `kubectl get pod -o jsonpath='{.status.qosClass}'` 是 `Burstable`,
+     `kubectl get pod <gate Pod> -o jsonpath='{.spec.containers[0].resources}'` 只有 requests;没有 kind 集群就跳过并报告「未上集群验证」。
+  3. 失败时保留失败用例的完整输出与 DryRun stderr 前 40 行。不改断言,不跳过用例。
+- **剩余风险**:取值是估计(memory 尤其是 scene 的 1Gi),压测后按 `process_resident_memory` 调这张表;改值会改 Pod 模板(gate Deployment 滚动、battle Fleet 换代、external gate 是 OnDelete 要逐台排空)。
+- **Java 版(AGENTS §12)**:不涉及。部署清单是本仓的,不是客户端契约。
+- **未提交,未运行。**
+
+## 2026-11-26 Claude:删掉悬空的 go/build.bat,改正规则与交接单里「跑 go/build.ps1」的旧步骤(只改文档与一个脚本,未运行)
+
+- **问题**:`5f5062f38`(11-21)随 goctl 退役删了 `go/build.ps1`,`go/build.bat` 还在、一运行就因找不到 `build.ps1` 报错;规则(`docs/rules/proto-and-tables.md`、`cpp-runtime-and-build.md`、`go/AGENTS.md`、`proto/AGENTS.md`)和四份交 Gemini 的交接单仍要求生成后跑它。核过现状:db / login 的 `internal/server/*/*server.go` 转发层已改为手写,`RequestAccountDeletion`、`CancelAccountDeletion`、`ScheduleAccountDeletion`、`SubmitRealName`、`ResetAccountRealName`、`RequestGateMigration`、`RenewSession` 都已接上,由 `go/login` 的 `TestGoctlServerWrappersImplementEveryRPC` 逐个核对。
+- **改动**:删 `go/build.bat`(没有脚本引用);四份规则改成「转发层手写,加 RPC 时手补转发方法」;账号注销、小游戏 WebSocket、第三方登录与实名、Gate 在线身份 CODEX.md 四份交接单删掉这一步并写明原因;`gate-online-identity.md`、`gate-drain-session-migration.md`、`real-name-anti-addiction.md`、`minigame-websocket-gate.md`、`client-request-ordering.md` 里面向以后的说法同步改。带日期的历史验证记录(gate 排空 §19、帮会二期 07 号的验证计划)和 PROGRESS 旧条目没动。
+- **未验证**:没有运行任何构建或测试。
+- **Java 版**:不涉及。
+- **提交情况**:在 main 工作区,未提交。
+
+## 2026-11-26 Claude:实名与防沉迷：修账本截止时刻缺陷、写国家系统沙箱 mock(未编译、未运行,验证交 Gemini;Java 0.1.0-SNAPSHOT 待做)
+
+模型 Fable 5.2。接上面同日「实名与防沉迷第二批补记、复核出一处缺陷」那一条:那里交给 Gemini 的两项代码,负责人改让本会话写完。到此这条线没有待写的代码。
+
+- **缺陷修复**(`go/login/internal/logic/pkg/nppa/ledger.go` 的两段 Lua):
+  - 原来未成年人的租约封顶在截止时刻,上报器每秒清扫,截止一到就把账本条目整条删掉;之后续租查不到它,login 的兜底踢线不触发,gate 本地没关掉的未成年人会一直在线。
+  - `lease_end` 改成只在截止时刻还没到时封顶。清扫遇到租约正好在截止时刻到期的条目:要上报的照样补一条下线,登记改写成只带截止时刻的条目并续一个租约。连接还在,下一次续租仍拿到截止时刻、照常踢;断开时 End 删掉、不报第二条下线;一直没有续租的过一个租约清掉。
+  - 清扫的返回值只数收尾的会话,只为兜底留着的条目被清掉时不计数。
+- **回归用例**:`ledger_test.go` 的 `TestLedgerCapsAMinorsLeaseAtThePlayDeadline`(补截止之后的断言)、`TestLedgerKeepsTheDeadlineAfterItPassesForTheLoginBackstop`(新增)、`TestLedgerDeadlineOnlySessionEmitsNothing`(加一条断言);`clientplayerlogin/anti_addiction_login_test.go` 的 `TestRenewSessionKicksAMinorTheGateFailedToClose` 续租前先清扫,没修之前是红的。
+- **沙箱 mock**:
+  - `go/login/internal/logic/pkg/nppa/server.go`(新增 `ReadRequest`、`ErrBadSignature`),`client.go` 抽出 `newGCM`,`client_test.go` 改用 `ReadRequest` 并加 `TestReadRequestRejectsATamperedRequest`。
+  - `go/login/cmd/sandbox_mock/nppa.go`、`nppa_test.go`(新增,5 条用例,真的 `nppa.Client` 打 `newMux()`),`main.go` 登记四条路由。
+  - `deploy/login-stack.linux/login.yaml` 加 `AntiAddiction` 段(缺省 `Enabled: false`),`deploy/docker-compose.login-stack.yml` 给 login 照传 `MMORPG_LOGIN_NPPA_SECRET_KEY`;`docs/ops/wechat-qq-sandbox-runbook.md` 加 §J。
+- **与别的执行者交叠**:同一晚有执行者照交接单旧版,往 `TestLedgerCapsAMinorsLeaseAtThePlayDeadline` 补了一段。已保留;其中「清掉留下的截止时刻算 1 条收尾」按上面的口径改成 0,并删掉本会话重复的一条用例。本会话的 Go 改动被别的会话的批量提交 a1285cb8a 带进了 HEAD,`ledger_test.go`、两份 yaml 与文档仍在工作区。
+- **文档**:设计稿状态行、§5.5、§8;交接单 `docs/handoff/real-name-anti-addiction-handoff-20261126.md` 改成只剩验证,总入口 §0、§3.2 同步。
+- **验证**:命令、逐条用例名与冒烟步骤在交接单 §3。只跑过 `gofmt -l`(空)。账本的 Lua 没有运行过:第一次跑留意 miniredis 脚本里的 `TIME`,以及清扫里分数与截止毫秒的相等比较。
+- **Java**:`NppaLedger.java` 是照搬的脚本,同样的缺陷,已在 Java 仓 `PARITY.md` 2026-11-26 一节登记待做,没写 Java 代码。
+
+## 2026-11-26 Claude：数据覆写审计 r2 核对收尾——代码已全部写完，补出交 Gemini 的验证交接单，改正审计文档里过时的「仍开着」（只改文档）
+
+- 核对结论：r2 这条线的代码、测试和文档都已写完，只剩验证。11-19 交负责人定的两项（修复身份、排空框架首次接纳先提交起点），以及 11-20 S、T、U 评审列的 10 条可选项都已落码。审计 §1 写的「仍开着」两项其实已由别的会话落码：全球终局收尾批 B5 给 ABORT 加了硬上限，最晚约在截止 + 14.2 分钟；全服匹配第四批让评级停写不再卡住消费。§1 与 §5.0 已改正。
+- 新增 `docs/handoff/data-overwrite-audit-r2-handoff-20261126.md`。11-20 瘦身后，十月到 11-18 的条目只在 `git show ccf2840b2:docs/PROGRESS.md` 里。交接单按标题列出本线全部待验条目，排好顺序（生成 → 构建 → Go / C++ / Java 测试 → 部署契约 → 演练与冒烟），写明不在本单的项和已定案的行为；遇到要改代码的情况，保留首错原文交回 Claude。审计 §1「验证现状」改为指向这份交接单。
+- `docs/README.md` 用 `gen_docs_index.py` 补了交接单一行，同时同步了实名防沉迷交接单的新标题（生成器按文件标题取说明，没有删条目）。
+- 换视角查找第 4 轮在会话「数据覆写审计 r2 换视角查找第 4 轮」里进行，结论由它自己写进审计文档与本文件。
+- 验证：只改文档，不涉及编译。Java 不涉及；各批 Java 待做都已登记在 Java 仓 `PARITY.md`（11-06、11-12 两节，以及 11-19 的消费组首次提交起点那一行）。
+
+## 2026-11-26 Claude:数据一致性复查线收尾——搬库预检补「TTL 任务还在跑」,TiCDC 判据对着源码核过,整条线的验证交 Gemini(未编译、未测试;Java 不涉及)
+
+- **起因**:负责人 11-26 再问本线代码做完没有,要求查出来的问题不留到以后。核对结果:本线代码 11-20 已随 `55eae6be3` 全部入库,没有待写的;11-19 条目里自己列的「没做」有一条是真缺口,这次补上。
+- **补的缺口**:`cutover` 的 TTL 预检原来只看表属性。关掉 `TTL_ENABLE` 不会让已经开始的任务停下,刚关就切仍可能撞上冻结窗口里的比对,回滚并清掉 verify 记录。
+  - 现在预检再读 `mysql.tidb_ttl_table_status`:这个库的表还有任务在跑就拒绝(`a TTL job is still running`),两侧都核。新增 `sqlAdmin.TablesWithRunningTTLJob`,`requireTTLOff` 调它。
+  - 判据是 `current_job_id` 非空且属主心跳 `current_job_owner_hb_time` 在 10 分钟之内。不只看 `current_job_id`:关掉 TTL 之后属主节点死掉的任务没有人接手,那一行会一直留着,搬库会被它永远卡住。误判成没在跑时窗口里的比对仍会拦下。
+  - 真库核过(一次性 `pingcap/tidb:v8.5.2`,用完已删):空库回空;抓到过一个真在跑的任务,被点名;伪造的状态行在心跳新鲜时点名,心跳过期、任务结束后回空。空表的任务 2 到 21 秒结束。
+- **TiCDC 判据从「凭记忆」变成「源码核过」**。11-19 没抓到的源码这次读到了(tiflow `release-8.5` 的 owner、状态查询、中间件、健康接口、错误码、v2 模型),和工具的写法逐条对上,细节记在搬库手册 §10:
+  - 查 changefeed 答的是 owner 内存里的表;owner 刚接任或各节点版本不一致时,还在的 changefeed 也答 `ErrChangeFeedNotExists`(HTTP 400)。11-19 加的健康前置挡的正是这两种情况:这时健康接口回 500。
+  - 顺手改正一处注释:`sync_point_interval` 在这个版本是纳秒整数(代码两种形状本来都收,行为没变)。
+  - 仍没核到:真实 TiCDC 上的实际应答(本机没有镜像);changefeed 详情顶层的几个字段名(那段源码被截断);新架构的 TiCDC(`pingcap/ticdc`)。
+- **定案不做**(写进交接单 §3,不再当缺口):`audit` 不复核源库的 TTL 有没有被重新打开(预检之后没有任何步骤让人去开,手册 §8 写了排查办法);MySQL 的定时事件工具不核(本仓不建 event,手册 §2 加第 7 条前置条件);两次请求之间正好换 TiCDC owner 的毫秒级窗口不加防护。
+- **交接**:新 `docs/handoff/data-consistency-review-handoff-20261126.md`,把本线从 11-10 到 11-26 所有没跑过的验证收成一份(原来散在已瘦身掉的 PROGRESS 旧条目里):Go 六组、C++ 两组、真 Redis、promtool、真实 TiCDC 三条 `curl`、演练。已登记 `docs/README.md`(生成器同时带上了别的会话删掉和新增的两份交接)。
+- **提交注意**:工作区在我改到一半时被整体提交过两次,`2d20f6b68` 已带进 `tools/dbmove/{mover.go,side.go}` 的新接口方法,配套的 `mover_test.go`、`integration_test.go` 还在工作区。两个测试文件要一起提交,否则 HEAD 上 `tools/dbmove` 的测试编不过。
+- **Gemini 验证**:按交接单 §2。本条新增的在第 5、6 步:`TestCutoverRefusesBeforeFreezing` 多两条子用例(源库还有 TTL 任务在跑、读不到 TTL 任务状态);`TestITTTLAttributeOnRealDatabases` 后半段要写 `mysql.tidb_ttl_table_status`,测试账号用一次性实例的 root。
+- **Java 版(AGENTS §12)**:不涉及(本仓的搬库运维工具),不加 PARITY 行。
+- **文件**:`tools/dbmove/{mover.go,side.go,replication.go,mover_test.go,integration_test.go}`、`docs/ops/db-move-runbook.md`、`docs/design/{horizontal-scale-logical-db.md,data-consistency-guarantee-map-20261020.md}`、`docs/handoff/data-consistency-review-handoff-20261126.md`、`docs/README.md`。未提交的:两个测试文件、`replication.go` 的注释与全部文档。
+
+### 2026-11-26 Claude:配置表热更补 C++ 单测(15 条),表包管理器与 battle 的旧表保留期改成可注入时钟(未编译、未测试,待 Gemini 验证;Java 不涉及)
+
+- **改了什么**:
+  - `cpp/libs/engine/core/table_bundle/table_bundle_manager.{h,cpp}`:构造函数多一个可选的 `Clock`。`wallUnixMs` 判 `activate_at_ms` 到没到点、给 STATUS 打时间戳;`steadyNow` 判旧表的 10 分钟保留期。留空用系统时钟,`node.cpp` 的调用不用改;准备耗时等指标仍按真实时钟计。**这两个文件已随负责人 11-26 20:40 的批量提交 `2d20f6b68` 入库**,下面其余改动未提交。
+  - `cpp/nodes/battle/logic/battle_room_manager.{h,cpp}`:provider 保留期抽成常量 `kTableProviderRetention`(10 分钟,与表包管理器同值),读时钟改走 `ProviderNow()`,单测可经 `providerClock` 换掉。生产行为不变。
+  - 新增 `cpp/tests/configuration_table_test/table_bundle_manager_test.cpp`(13 条),已登记进 `configuration_table_test.vcxproj` 与 `.filters`。
+  - `cpp/nodes/battle/tests/battle_observer_contract_test.cpp`:
+    - 测试友元类加了按指纹选 provider 的入口和时钟替换;
+    - 新增 2 条用例;
+    - 夹具 `TearDown` 里原来的 `SetDataProvider(nullptr)` 什么都不做(空 provider 直接返回),改成真正清掉已登记的 provider。
+  - 交接单 `docs/handoff/config-table-hot-reload-handoff-20261126.md`:
+    - §3.7 改成只跑不写,列出 15 条用例名;
+    - 按负责人 11-26「逻辑代码方面你去改,Gemini 只负责编译」,把「Gemini 修红」改成「留下首错,交回 Claude」;
+    - 修正 battle 用例所在的工程(`rpc_controller_test`)、预检的输出文案、冒烟造包的做法。
+  - 设计稿状态行同步;文档索引重新生成。
+- **测试怎么做的**:
+  - 把真表拷进临时目录当表包,往一张表的 json 末尾补换行(或换成空表、坏 JSON),清单同步改。不碰仓库里的文件。
+  - 时间全走假时钟加 `PollOnce`,不 sleep。
+  - 每条用例结束重新 `LoadTables()`,还原进程里的全局表。
+- **本会话跑过的**:`python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`,13/13 OK。**没有编译,没有跑任何测试。**
+- **给 Gemini 的验证步骤**(仓库根目录,Debug|x64,MSBuild 串行):
+  1. `msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`,0 error。改了 `core` 库和 battle 节点源码,必须整解,不能只用 `run_cpp_tests.ps1 -Build`。
+  2. `pwsh -File tools/scripts/run_cpp_tests.ps1 -Filter configuration_table -LogDir build/verification/<运行名>/cpp-tests`
+  3. `pwsh -File tools/scripts/run_cpp_tests.ps1 -Filter rpc_controller -LogDir build/verification/<运行名>/cpp-tests`
+  - 通过标准:两个工程 0 failed;交接单 §3.7 列的 15 条新用例都在通过名单里。
+  - 失败时:留下第一条编译错误(文件:行)或失败用例的完整输出,停下,交回 Claude,不改代码。
+  - 其余验证照交接单 §3 的顺序做。
+- **没覆盖的与风险**:
+  - battle 的 warn / enforce 判定模式每个进程只读一次配置,单测切不了。
+  - 这批用例依赖仓里 `generated/tables` 的清单与文件一致,且 `schema_digest` 与编进 `table.lib` 的一致。别的线改了表结构、导了表却没重编 `table.lib` 时,夹具 SetUp 会直接红。
+  - 五批热更代码本身,我只读了表包管理器、生成的整套表接口和 battle 选表这几处,没有逐行审。
+- **Java 版**:不涉及(只加了测试和测试用的时钟注入)。本线整体仍待在 Java 仓 `PARITY.md` 登记待做。
+- **提交情况**:main 工作区。表包管理器两个文件已在 `2d20f6b68`;battle 两个文件、两处测试、工程文件和文档未提交。
+
+## 2026-11-26 Claude:官方通行证审核——只收身份令牌、注销时删通行证用户、初始化数据收紧、iOS 认证会话、K8s 参数(未编译、未运行,验证交 Gemini;Java 待做)
+
+- **起因**:负责人让审核 Gemini 做的官方通行证(Casdoor OIDC,`auth_type=passport`),查出的问题当场修、不留到以后。对照 Casdoor v4.27.1 源码核了一遍,结论与三项定案写在 `docs/design/official-passport-registration.md` §5.4。整体方案(通行证只做认证、公开客户端 + PKCE、服务端验签 + 一次性消费)是标准做法,保留。
+- **同一晚的并行写者**:Gemini 也在自审同一批文件并随整仓提交入库。管理员首启口令(`initAdminPassword`)、端口缺省只绑回环、回调地址探针、客户端等待时限 600s、过期回调忽略是它做的(设计稿 §4 第 9、10 项),我没有重复做。
+- **服务端(go/login)改了什么**:
+  1. **只收身份令牌**。Casdoor 一次换票给身份、访问、刷新三枚 JWT,同一把钥匙签,`iss` / `aud` / `sub` 相同,只有 `tokenType` 不同。原来只核签名与 `iss` / `aud`:身份令牌被一次性消费之后,同批的访问令牌还能再登录一次;刷新令牌(24h)会落进「有效期超限 = 配置故障」,任何玩家都能凭它刷出故障码。现在 `PassportProvider` 要求 `tokenType == "id-token"`,别的按凭证无效拒绝,排在有效期检查之前。
+  2. **注销时删通行证用户**(新文件 `pkg/auth/passport_admin.go`)。通行证账号的邮箱、手机号、口令哈希在我们自己的 Casdoor 里,只删游戏账号不算注销。执行者在角色全部删完之后、删账号行之前,用机密应用凭据调 `GET /api/get-user?userId=<sub>` → `POST /api/delete-user` → 再查一次,查不到才算删掉;用户已不在算成功(可重做);`Unaffected`、删完还查得到(组织开了软删除)、`status=error`、id 对不上都回错误,账号行留着下一轮再来。
+  3. **启动门禁**。`AuthProviders.Passport` 新增 `AdminClientId` / `AdminClientSecretEnv`(内联 `AdminClientSecret` 只在 dev/test 放行)。生产模式配了通行证却没配这组凭据,login 拒绝启动;`AdminClientId` 不能等于客户端的 `ClientId`。dev/test 可以不配,启动告警、注销时记 ERROR。
+  4. sandbox mock:签发接口带 `tokenType`,种子 `ACCESS_TOKEN` / `REFRESH_TOKEN` 签另两种;新增 `/api/get-user`、`/api/delete-user`、`/mock/passport/deleted_users`;linux 登录栈配置补管理凭据。
+- **部署**:`deploy/passport/init_data.json` 注册项 `Email` 由 `No verification` 改回 `Normal`(没挂邮件通道时自助注册发不出验证码,本地用管理接口建测试用户,设计稿 §5.2 第 5 步);新增机密应用 `app-xuanming-server`(`clientId: xuanming-game-server`,密钥首启随机生成,不进仓库)。
+- **K8s 部署参数**:`tools/scripts/k8s_deploy.ps1` 加 `-LoginPassportIssuer` / `-LoginPassportClientId` / `-LoginPassportEndpoint` / `-LoginPassportAdminClientId`,管理密钥走工作负载密钥目录 `login-passport-admin`(环境变量 `MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET`),写法照 Apple 那一组。这一块交给子代理在写,写本条时还没回报,改了哪些落点、契约测试加了什么,另起一条补记。
+- **客户端(mmorpg-client)**:
+  - iOS 新增原生插件 `Assets/Plugins/iOS/MmorpgPassportWebAuth.mm`(`ASWebAuthenticationSession`),在 App 内弹系统认证页,不再 `Application.OpenURL` 跳 Safari(App Store 审核指南 4.0 的常见拒审原因);去掉 iOS 的 URL scheme 登记(构建后处理只剩 Android)。
+  - `PassportOrigin` 只有本机回环允许明文 http,其余必须 https。
+- **文件**:
+  - 本仓:`go/login/internal/logic/pkg/auth/{idtoken.go,passport_provider.go,passport_provider_test.go,passport_admin.go,passport_admin_test.go}`、`go/login/internal/config/{passport_auth.go,passport_auth_test.go,auth_providers.go}`、`go/login/internal/logic/pkg/accountdeletion/{service.go,executor.go,service_test.go}`、`go/login/internal/svc/account_deletion.go`、`go/login/cmd/sandbox_mock/{passport.go,passport_test.go,main.go}`、`deploy/passport/init_data.json`、`deploy/login-stack.linux/login.yaml`、`docs/design/{official-passport-registration.md,account-deletion.md}`(部署脚本与契约测试的文件见补记)。
+  - 客户端仓:`Assets/Plugins/iOS/MmorpgPassportWebAuth.mm`(+ `.meta`)、`Assets/Scripts/Net/{PassportSignIn.cs,PassportOAuthProtocol.cs}`、`Assets/Editor/PassportMobileDeepLinkBuildPostProcess.cs`、`Assets/Tests/EditMode/Net/PassportSignInTests.cs`。
+  - Java 仓:`PARITY.md` 末尾登记一条待做(没改 Java 代码)。
+- **本会话跑过的**(都是只读检查):`gofmt -l -e` 过了全部改过的 Go 文件(一个测试文件按它格式化);`python tools/scripts/gen_docs_index.py --check` 索引不用更新;客户端四个 C# 文件的括号与 `#if` 配对;`init_data.json` 与登录栈 yaml 能解析。**没有编译,没有跑任何测试,没有起容器。**
+- **给 Gemini 的验证步骤**:
+  1. Go 单测(`go/login` 目录):`go test ./internal/config ./internal/logic/pkg/auth ./internal/logic/pkg/accountdeletion ./cmd/sandbox_mock`,再 `go build ./... ` 与 `go vet` 上面四个包。新增 / 改动的用例:
+     - `TestPassportProviderRejectsBadConfigSubjectAndOversizedLifetime`(多了 access token、refresh token with long lifetime、token type missing 三例,都要按凭证无效拒绝);
+     - `TestPassportUserDeleterLooksUpBySubThenDeletesByName`、`TestPassportUserDeleterTreatsMissingUserAsDone`、`TestPassportUserDeleterNeverReportsSuccessWithoutProof`、`TestNewPassportUserDeleterRequiresAllSettings`、`TestPassportSubject`;
+     - `TestResolveAuthProvidersPassportAdminClientPolicy`、`TestResolveSecretsAcceptsPassportInProduction`(原 `…WithoutEnvSecrets` 改名:生产现在必须有管理凭据)、`TestResolveAuthProvidersPassportRejectsBadSections`(多了 8 个管理凭据反例);
+     - `TestExecutorDeletesPassportUserBeforeFinishing`;
+     - `TestPassportUserDeleterAgainstSandboxMock`、`TestPassportProviderAgainstSandboxMock`(多了 access / refresh 两例)、`TestLinuxLoginStackPassportSectionPointsAtSandbox`(多核管理凭据)。
+     - `./internal/svc` 之前被无关的 `plpb.MarkOfflineResponse` 编译错误挡着;能编了就一起跑(`TestPassportProviderFromConfigCarriesIssuerAndClientId`),不能就记下首错。
+  2. 真 Casdoor v4.27.1 容器(下面四点都只按源码读过,没有运行证据,必须实测):
+     - a. `docker compose -f deploy/passport/docker-compose.yml up -d` 之后确认 `app-xuanming-server` 建出来了、`app-xuanming-game` 仍在(`init_data.json` 新增了一个应用,格式不对的话 Casdoor 首启会报错)。
+     - b. 换票拿到的三枚令牌解开 payload:`id_token` 的 `tokenType` 是 `id-token`,`access_token` 是 `access-token`,`refresh_token` 是 `refresh-token`。三枚分别交给 `auth.NewPassportProvider(...).Validate`:只有 `id_token` 通过,另两枚按凭证无效(不是 `ErrProviderUnavailable`)。
+     - c. 删用户:按设计稿 §5.2 第 5、6 步建测试用户、取 `app-xuanming-server` 的 `clientSecret`(这几条 PowerShell 是按 Casdoor 接口写的,没跑过;不对就按实际改,并回写设计稿),再用 `auth.NewPassportUserDeleter(issuer, "", "xuanming-game-server", secret, nil).DeleteUser(ctx, <用户 id>)`:成功后管理员 `GET /api/get-user?owner=xuanming&userId=<id>` 回 `data:null`;对同一个 id 再调一次仍成功;把密钥写错再删另一名用户,应失败且用户还在。
+     - d. 注册项 `Email` 为 `Normal`:不带验证码的 `POST /api/signup` 被拒。
+  3. 完整注销冒烟(linux 登录栈 + sandbox-mock,data_service 的 `AccountDirectory.DeletionCoolingOff` 设 0):`passport` 登录 → 建角 → 申请注销 → 等执行者一轮(30 秒)→ `GET http://sandbox-mock:18090/mock/passport/deleted_users` 里有这个账号的 sub,账号行已删。
+  4. 客户端:`tools/client_compile_check.ps1`;EditMode `PassportSignInTests`(新增 `PassportOrigin_RequiresHttpsExceptOnLoopback`);带 `-define:UNITY_WEBGL`、`UNITY_IOS`、`UNITY_ANDROID`(都不带 `UNITY_EDITOR`)各编一次 `PassportSignIn.cs`,iOS 分支引用了 `[DllImport("__Internal")]` 的两个函数。有 Mac 时导出 Xcode 工程编 `MmorpgPassportWebAuth.mm` 并在真机走一遍登录、取消、注销重新认证。
+  5. K8s 部署参数的契约测试命令见补记条目。
+  - 失败时:留下第一条编译错误(文件:行)或失败用例的完整输出,停下,交回 Claude,不改逻辑。
+- **没覆盖的与风险**:
+  - `get-user` / `delete-user` 的应答形状、`tokenType` 取值、应用凭据在本组织有管理权限,都是读 v4.27.1 源码得出的,没有对真容器跑过(上面第 2 步)。升级 Casdoor 版本前要重核。
+  - iOS 原生插件没有在 Xcode 上编译过,这台机器编不了。
+  - Casdoor 的 `verification_record`、`record` 两张表不随删用户清理,要靠生产的定期清理(设计稿 §5.4 清单第 5 项)。
+  - Android 上应用在浏览器期间被系统回收时本次授权作废(内存里的 `code_verifier` 丢了),玩家要重新点登录;没有做持久化。
+  - 生产清单(管理后台不对公网开放、静态资源自托管、多副本共享会话等)在设计稿 §5.4,仓库里做不了。
+- **Java 版**:`passport` 渠道整条待做,已在 Java 仓 `PARITY.md` 登记(2026-11-26「官方通行证」)。
+- **提交情况**:main 工作区,我没有提交;这些文件可能已被别的会话的整仓提交带进去,以 `git log -1 -- <文件>` 为准。
+  - **2026-11-26 晚增补（Codex 帮会同系返修切图 `69fa0eda9cc` 目视验收与 Unity 实装）**：从图仓远端提交 `69fa0eda9ccd8ec7a25dc994f2d08ff1ed859080` 独立拉取并核验全部 26 份文件 SHA-256（0 不符）、逐张目视审核 2 张预览与 8 张透明无字切片，更新客户端 `Assets/Resources/UI/Ugui/SkillBuildLoadoutV1/` 下 4 张返修 PNG（保留全部既有 Unity `.meta` GUID 与九宫格边距）；补齐 `SkillLoadoutSubPanel.cs` 中 `tab_build_rented` 右侧沙漏（20px）与 `tab_build_locked` 右侧锁（24px）动态文本避让，并在 `SkillPanelPresentationTests.cs` 新增 8 张切片真实 `Resources.Load<Sprite>` 尺寸与边距断言。复测：`client_compile_check.ps1` **816 文件 0 错误**，Unity 6000.6.0f1 batchmode EditMode **71/71 PASS（0 失败、0 跳过）**。
+
+## 2026-11-26 Claude:数据一致性复查线——把上一条「定案不做」里能用代码收掉的两项收掉(未编译、未测试,待 Gemini 验证;Java 不涉及)
+
+- **起因**:负责人再次要求查出来的问题不留、逻辑问题在代码上全部修好。上一条(同日「数据一致性复查线收尾」)里有三项是我自己判为不做的,不是负责人定的。重新看了一遍,其中两项用很少的代码就能收掉,这次改了;第三项仍是手册前置条件。
+- **改动一:`cleanup` 对 TiCDC 的「没有这个 changefeed」隔 3 秒确认两轮。** 健康检查和查询是两次请求,中间正好换 owner 时,新 owner 还没把 changefeed 装进内存,对还在的 changefeed 也答「没有」,接着就会删源库、`DROP DATABASE` 顺着没撤的复制流删掉目标。现在两轮都答「没有」才算撤掉:隔开之后新 owner 要么已经装好(答「还在」),要么还不健康(拒绝)。`ticdcReplication.StillExists` 拆出 `askOwner`,正常撤掉了复制的 `cleanup` 多等 3 秒。
+- **改动二:`audit` 比对之前先核源库没有 TTL 删除。** audit 拿冻结的源库的当前数据当参照;`cutover` 之后源库的 TTL 又被打开的话,它删掉的过期行会被报成两边不一致(手册按数据事故处理),分不清是复制丢了还是它删的。现在这种情况退出码 1 并说明原因,不去比。`requireTTLOff` 的判据抽成 `ttlActivity`,cutover 预检和 audit 共用一份;`audit` 的装配多开一个源库管理员连接(同一个 `DBMOVE_SOURCE_ADMIN_DSN`)。目标上的 TTL 不影响 audit(目标读记下的位置),不核。
+- **仍然不做的一项**:MySQL 的定时事件不过闸门,工具不核。本仓的建表迁移不建 event;event 属于哪个库和它改哪个库的表没有对应关系,按库查只是半截防护,所以留作手册 §2 第 7 条前置条件。
+- **测试**:`TestTicdcStillExists` 加三段(「没有」共 4 次请求;第一轮没有、第二轮还在;第一轮没有、第二轮不健康);新 `TestAuditRefusesWhileTheFrozenSourceIsStillChanged`(源库 TTL 开着、任务在跑、读不到都拒绝且不比对;目标开着不挡)。
+- **文档**:搬库手册(头部、第 9 步、§6 故障表加 audit 一行、§8、§10)、`horizontal-scale-logical-db.md` §8.2、保障地图 §6.6、交接单(状态表、点名用例、§3 去掉已收掉的两项、§4 改成「红了交回 Claude」)。
+- **本线现在的状态**:查出来的问题在代码上没有留着没修的。不靠代码解决的只有两类:负责人定案的系统边界(失租不冻结不疏散;节点同时和 etcd、玩家域 Redis 失联时最多丢 5 秒;进程整体暂停等同崩溃),和上面那条手册前置条件。
+- **提交注意**:`tools/dbmove` 现在有六个未提交文件(`mover.go`、`main.go`、`replication.go` 与三个测试文件),整个目录一起提交。
+- **Gemini 验证**:按 `docs/handoff/data-consistency-review-handoff-20261126.md` §2,本条新增的都在第 5 步。
+- **Java 版(AGENTS §12)**:不涉及,不加 PARITY 行。

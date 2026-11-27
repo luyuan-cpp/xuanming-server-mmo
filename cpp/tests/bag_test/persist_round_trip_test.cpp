@@ -592,6 +592,14 @@ protected:
         battleEconomy->set_week_starts_at_ms(1900000000000ULL);
         battleEconomy->set_battle_silver_this_week(600);
         battleEconomy->set_battle_exp_this_week(1000);
+        battleEconomy->set_silver_rollover_soft_cap(50000);
+        battleEconomy->set_silver_rollover_hard_cap(80000);
+        auto *materialReward = clientRequests.mutable_material_reward();
+        materialReward->set_migrated_to_v2(true);
+        materialReward->set_lifetime_earned(660);
+        materialReward->set_week_starts_at_ms(1814734800000ULL);
+        materialReward->set_earned_this_week(40);
+        materialReward->set_stage2_pool_cap(300);
 
         // 物品数量预留(battle-item-reservation.md):一份战斗预留、一行物品,覆盖三个可携带类型
         // (PlayerItemHoldComp / ItemHold / ItemHoldLine)。加载原样挂上、存盘原样拷回,不做整理,每层的未知字段都要原样留下。

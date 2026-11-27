@@ -3191,13 +3191,17 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
                          << battleId << " currency_type=" << static_cast<uint32_t>(kCurrencyGold)
                          << " amount=" << progressionDelta.silverGain << " player_id=" << playerId
                          << ";currency gain blocked (global or this player), silver skipped in isolated battle";
-                if (creditsLedger && existingLedger != nullptr) {
-                    materialRewardCandidate.mutable_battle_economy()->set_battle_silver_this_week(
-                        existingLedger->battle_economy().battle_silver_this_week());
+                const uint64_t restoredUsed =
+                    (existingLedger != nullptr &&
+                     existingLedger->battle_economy().week_starts_at_ms() ==
+                         materialRewardCandidate.battle_economy().week_starts_at_ms())
+                        ? existingLedger->battle_economy().battle_silver_this_week()
+                        : 0;
+                if (creditsLedger) {
+                    materialRewardCandidate.mutable_battle_economy()->set_battle_silver_this_week(restoredUsed);
                 }
                 progressionDelta.silverGain = 0;
-                progressionDelta.weeklySilverUsedAfter =
-                    existingLedger != nullptr ? existingLedger->battle_economy().battle_silver_this_week() : 0;
+                progressionDelta.weeklySilverUsedAfter = restoredUsed;
             } else {
                 const auto err = CurrencySystem::AddCurrency(
                     player, kCurrencyGold, static_cast<int64_t>(progressionDelta.silverGain), TX_SYSTEM_GRANT, battleId);
@@ -3401,13 +3405,15 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
         for (const auto& [blockedType, blockedAmt] : blockedCurrencies) {
             (void)blockedAmt;
             if (blockedType == kCurrencyGold) {
-                if (existingLedger != nullptr) {
-                    materialRewardCandidate.mutable_battle_economy()->set_battle_silver_this_week(
-                        existingLedger->battle_economy().battle_silver_this_week());
-                }
+                const uint64_t restoredUsed =
+                    (existingLedger != nullptr &&
+                     existingLedger->battle_economy().week_starts_at_ms() ==
+                         materialRewardCandidate.battle_economy().week_starts_at_ms())
+                        ? existingLedger->battle_economy().battle_silver_this_week()
+                        : 0;
+                materialRewardCandidate.mutable_battle_economy()->set_battle_silver_this_week(restoredUsed);
                 progressionDelta.silverGain = 0;
-                progressionDelta.weeklySilverUsedAfter =
-                    existingLedger != nullptr ? existingLedger->battle_economy().battle_silver_this_week() : 0;
+                progressionDelta.weeklySilverUsedAfter = restoredUsed;
             }
         }
         // 此处之后只有无失败的候选发布；额度、周经济账本、赛季印进度、试炼志进度、游历手记进度与货币、背包、收件箱水位同一次存盘。

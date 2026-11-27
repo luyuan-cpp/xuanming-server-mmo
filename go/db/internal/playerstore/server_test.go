@@ -318,3 +318,39 @@ func TestServer_FrozenGateDoesNotOpenTheStoreBreaker(t *testing.T) {
 		t.Fatalf("first call after the freeze: resp=%v err=%v", resp, err)
 	}
 }
+
+// 调用方挂断说明不了库的好坏:被挂断的调用成功、失败都不记。每 3 次挂断夹 1 次真实失败,熔断仍要打开;
+// 把挂断记成成功的话成功占四分之三,熔断永远不开,每次调用都会走到库。
+func TestServer_CancelledCallsDoNotKeepTheStoreBreakerClosed(t *testing.T) {
+	const store = uint32(880004)
+	const rounds = 100
+	opens := 0
+	var hangUp context.CancelFunc // 非 nil 时,这次调用走到库的那一步被调用方挂断
+	server := breakerTestServer(t, func(_ uint32, _ *sql.DB) (*sql.DB, error) {
+		opens++
+		if hangUp != nil {
+			hangUp()
+		}
+		return nil, errors.New("storage down")
+	})
+	call := func(cancelled bool) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		hangUp = nil
+		if cancelled {
+			hangUp = cancel
+		}
+		req := validSave()
+		req.StorageId = store
+		_, _ = server.SavePlayer(ctx, signed(t, methodSavePlayer, req, sceneCaller, testSecret))
+	}
+	for i := 0; i < rounds; i++ {
+		call(true)
+		call(true)
+		call(true)
+		call(false)
+	}
+	if opens >= 4*rounds {
+		t.Fatalf("the failing store was reached on all %d calls: cancelled calls must not count as successes", 4*rounds)
+	}
+}

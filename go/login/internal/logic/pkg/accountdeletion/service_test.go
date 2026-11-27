@@ -15,7 +15,8 @@ import (
 // 本文件钉住 login 一侧的编排(docs/design/account-deletion.md §4.2、§4.4、§4.5),目录、会话、Apple 都是替身:
 //   - Apple 授权码不对在改任何状态之前回「需要重新授权」;提交成功之后才撤销 Apple、吊销令牌、踢线;
 //   - 预检没过、没找到账号不碰登录态;撤销晚了回 2040;毫秒换成秒;
-//   - 执行者:角色全删完才收尾,有一名挂起就整账号等下一轮,已是墓碑、已过户的角色算删完。
+//   - 执行者:角色全删完才收尾,有一名挂起就整账号等下一轮,已是墓碑、已过户的角色算删完;
+//     官方通行证账号在收尾之前先删通行证里的用户,没删掉就不删账号行。
 
 const testAccount = "apple_001234.abcdef"
 
@@ -256,6 +257,69 @@ func TestExecutorAccountAlreadyGoneOrNotDeleting(t *testing.T) {
 	s = &Service{Dir: dir, Sessions: &fakeSessions{}}
 	if got, _ := s.RunOnce(context.Background()); got.Failed != 1 || len(dir.removed) != 0 {
 		t.Fatalf("不是执行中就不删: %+v removed=%v", got, dir.removed)
+	}
+}
+
+type fakePassport struct {
+	err     error
+	deleted []string
+}
+
+func (f *fakePassport) DeleteUser(_ context.Context, sub string) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.deleted = append(f.deleted, sub)
+	return nil
+}
+
+// 官方通行证账号:角色全部删完之后先删通行证里的用户(个人信息在通行证那边),删成了才让目录收尾;
+// 删不成账号行留在「执行中」,下一轮再来。别的渠道的账号不碰通行证。
+func TestExecutorDeletesPassportUserBeforeFinishing(t *testing.T) {
+	const sub = "550e8400-e29b-41d4-a716-446655440000"
+	const passportAccount = "passport_" + sub
+	deleting := func(account string) *fakeDirectory {
+		return &fakeDirectory{claimed: []string{account}, state: dspb.AccountDeletionState_ACCOUNT_DELETION_STATE_DELETING,
+			finishOut: &dspb.FinishAccountDeletionResponse{Done: true}}
+	}
+
+	dir, passport := deleting(passportAccount), &fakePassport{}
+	s := &Service{Dir: dir, Sessions: &fakeSessions{}, Passport: passport}
+	if got, _ := s.RunOnce(context.Background()); got.Finished != 1 || dir.finishCalls != 1 {
+		t.Fatalf("通行证用户删掉之后应收尾: %+v finish=%d", got, dir.finishCalls)
+	}
+	if len(passport.deleted) != 1 || passport.deleted[0] != sub {
+		t.Fatalf("应按账号里的 sub 删通行证用户: %v", passport.deleted)
+	}
+
+	dir, passport = deleting(passportAccount), &fakePassport{err: auth.ErrProviderUnavailable}
+	s = &Service{Dir: dir, Sessions: &fakeSessions{}, Passport: passport}
+	if got, _ := s.RunOnce(context.Background()); got.Failed != 1 || dir.finishCalls != 0 {
+		t.Fatalf("通行证用户没删掉就不能删账号行: %+v finish=%d", got, dir.finishCalls)
+	}
+
+	// 角色还没删完:这一轮不碰通行证。
+	dir, passport = deleting(passportAccount), &fakePassport{}
+	dir.roles = []uint64{11}
+	dir.owners = map[uint64]*dspb.AccountRoleOwnership{11: owner(passportAccount)}
+	dir.removeErr = map[uint64]error{11: accountdirectory.ErrConflict}
+	s = &Service{Dir: dir, Sessions: &fakeSessions{}, Passport: passport}
+	if got, _ := s.RunOnce(context.Background()); got.Waiting != 1 || len(passport.deleted) != 0 {
+		t.Fatalf("角色没删完时不该删通行证用户: %+v deleted=%v", got, passport.deleted)
+	}
+
+	// 别的渠道的账号不碰通行证。
+	dir, passport = deleting(testAccount), &fakePassport{}
+	s = &Service{Dir: dir, Sessions: &fakeSessions{}, Passport: passport}
+	if got, _ := s.RunOnce(context.Background()); got.Finished != 1 || len(passport.deleted) != 0 {
+		t.Fatalf("Apple 账号不该调通行证: %+v deleted=%v", got, passport.deleted)
+	}
+
+	// 没配管理凭据(只有 dev/test 会这样):照常收尾。
+	dir = deleting(passportAccount)
+	s = &Service{Dir: dir, Sessions: &fakeSessions{}}
+	if got, _ := s.RunOnce(context.Background()); got.Finished != 1 {
+		t.Fatalf("没配通行证管理凭据时照常收尾: %+v", got)
 	}
 }
 

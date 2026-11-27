@@ -1,6 +1,6 @@
 # 配置表热更：表包、轨道指针与进程内整批切换（2026-11-20）
 
-> **状态**：**全部 5 批已落码（2026-11-20，随 `f067d01fc` 入库）**。之后别的线已全量导表（manifest 第 2 版），顺带编过 scene / battle，跑过 `scene.exe --validate-tables`；热更这条线自己的单测、预检、本机冒烟与集群端到端都还没跑，C++ 侧缺单测。剩下的验证、补测与登记 11-26 整体交 Gemini，见[交接单](../handoff/config-table-hot-reload-handoff-20261126.md)。独立 Java 仓留到 `PARITY.md` 待做。运维手册见 [docs/ops/table-hot-reload-runbook.md](../ops/table-hot-reload-runbook.md)。
+> **状态**：**全部 5 批已落码（2026-11-20，随 `f067d01fc` 入库）**。之后别的线已全量导表（manifest 第 2 版），顺带编过 scene / battle，跑过 `scene.exe --validate-tables`；热更这条线自己的单测、预检、本机冒烟与集群端到端都还没跑。C++ 侧的单测 11-26 补上了（15 条，未编译），同时把表包管理器与 battle 的旧表保留期换成了可注入的时钟。剩下的编译、测试、冒烟与登记交 Gemini，要改代码的交回 Claude，见[交接单](../handoff/config-table-hot-reload-handoff-20261126.md)。独立 Java 仓留到 `PARITY.md` 待做。运维手册见 [docs/ops/table-hot-reload-runbook.md](../ops/table-hot-reload-runbook.md)。
 > **相关**：[RPC 热关停](rpc-kill-switch.md)（同一种「etcd 事实源 + 管理接口 + 各进程自己生效」的形态）、[发布轨道](release-track-gray-canary.md)（stable / canary 两条轨道）、[混版本持久字段保护](mixed-version-persist-field-protection.md) §13（表行只增不删）、[配置表 API](table-api-reference-zh.md)、[data/AGENTS.md](../../data/AGENTS.md)、[可配置模板](configurable-templates.md) §3.6（「v1 不做热更」和它列的三条前提，本文把这三条都落实）。
 > **核对基线**：HEAD `ccf2840b2` 加 11-20 工作区。同时有多个会话在改，行号会漂，按函数名找。
 > **上线状态**：未上线。没有存量指针，没有存量表包，不需要迁移。

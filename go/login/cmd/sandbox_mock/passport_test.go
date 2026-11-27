@@ -66,6 +66,10 @@ func TestPassportProviderAgainstSandboxMock(t *testing.T) {
 		"wrong aud":   mintSandboxPassportToken(t, base, "alice", "other-client", issuer),
 		"wrong iss":   mintSandboxPassportToken(t, base, "alice", clientID, "https://evil.example.com"),
 		"apple token": mintSandboxIdToken(t, base, "apple", "alice", clientID),
+		// 同一次换票拿到的访问令牌与刷新令牌:同钥、同 iss / aud,只有 tokenType 不同,login 只收身份令牌。
+		// 刷新令牌有效期 24h,也必须按凭证无效拒绝,不能落进「有效期超限 = 配置故障」。
+		"access token":  mintSandboxPassportToken(t, base, "ACCESS_TOKEN", clientID, issuer),
+		"refresh token": mintSandboxPassportToken(t, base, "REFRESH_TOKEN", clientID, issuer),
 	} {
 		_, err := p.Validate(ctx, tok)
 		if err == nil || errors.Is(err, auth.ErrProviderUnavailable) {
@@ -77,6 +81,55 @@ func TestPassportProviderAgainstSandboxMock(t *testing.T) {
 	_, err = p.Validate(ctx, mintSandboxPassportToken(t, base, "OVERSIZED_TTL", clientID, issuer))
 	if !errors.Is(err, auth.ErrProviderUnavailable) {
 		t.Fatalf("OVERSIZED_TTL should return ErrProviderUnavailable, got %v", err)
+	}
+}
+
+func deletedSandboxPassportUsers(t *testing.T, base string) []string {
+	t.Helper()
+	resp, err := http.Get(base + "/mock/passport/deleted_users")
+	if err != nil {
+		t.Fatalf("list deleted passport users: %v", err)
+	}
+	defer resp.Body.Close()
+	var body struct {
+		Deleted []string `json:"deleted"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("list deleted passport users: %v", err)
+	}
+	return body.Deleted
+}
+
+// 账号注销删通行证用户:login 的 PassportUserDeleter 对着 mock 的管理接口走一遍,删掉、重做、凭据不对三种情况。
+func TestPassportUserDeleterAgainstSandboxMock(t *testing.T) {
+	base := newSandbox(t)
+	issuer := "https://passport.sandbox.local"
+	ctx := context.Background()
+	const sub = "passport-sandbox-0123456789ab"
+
+	deleter, err := auth.NewPassportUserDeleter(issuer, base, sandboxPassportAdminClientID, sandboxPassportAdminClientSecret, nil)
+	if err != nil {
+		t.Fatalf("NewPassportUserDeleter: %v", err)
+	}
+	if err := deleter.DeleteUser(ctx, sub); err != nil {
+		t.Fatalf("delete passport user: %v", err)
+	}
+	if err := deleter.DeleteUser(ctx, sub); err != nil {
+		t.Fatalf("deleting a user that is already gone must succeed (the executor retries): %v", err)
+	}
+	if got := deletedSandboxPassportUsers(t, base); len(got) != 1 || got[0] != sub {
+		t.Fatalf("deleted users = %v, want [%s]", got, sub)
+	}
+
+	wrongSecret, err := auth.NewPassportUserDeleter(issuer, base, sandboxPassportAdminClientID, "not-the-secret", nil)
+	if err != nil {
+		t.Fatalf("NewPassportUserDeleter: %v", err)
+	}
+	if err := wrongSecret.DeleteUser(ctx, "passport-sandbox-ba9876543210"); !errors.Is(err, auth.ErrProviderUnavailable) {
+		t.Fatalf("wrong admin credentials must fail as ErrProviderUnavailable, got %v", err)
+	}
+	if got := deletedSandboxPassportUsers(t, base); len(got) != 1 {
+		t.Fatalf("a refused request must not delete anyone: %v", got)
 	}
 }
 
@@ -98,6 +151,10 @@ func TestLinuxLoginStackPassportSectionPointsAtSandbox(t *testing.T) {
 	}
 	if p.Endpoint != probe.AuthProviders.WeChat.Endpoint {
 		t.Fatalf("Passport.Endpoint = %q, want sandbox mock %q", p.Endpoint, probe.AuthProviders.WeChat.Endpoint)
+	}
+	// 管理凭据必须是 mock 认的那一组,否则沙箱里注销时删通行证用户每次都被拒。
+	if p.AdminClientId != sandboxPassportAdminClientID || p.AdminClientSecret != sandboxPassportAdminClientSecret {
+		t.Fatalf("Passport.AdminClientId / AdminClientSecret must match the sandbox mock's admin client")
 	}
 	cfg := &config.Config{}
 	cfg.Mode = "dev"

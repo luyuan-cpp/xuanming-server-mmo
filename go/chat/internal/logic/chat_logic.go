@@ -27,6 +27,7 @@ const (
 	maxRetractReasonSize = 128
 	maxReportDetailSize  = 200
 	asyncRecheckTimeout  = 4 * time.Second
+	asyncRetractTimeout  = 3 * time.Second
 	platformRejectReason = "platform_async_reject"
 )
 
@@ -147,13 +148,16 @@ func (l *ChatLogic) scheduleAsyncWorldPlatformRecheck(msg *chatpb.ChatMessage, r
 			}
 			return
 		}
-		retracted, _, err := sc.Authority.RetractWorld(ctx, senderID, sendTimeMs, platformRejectReason)
+		// 撤回另起一个时限:送检可能已经把上面那个时限耗得差不多了,平台判了违规却因为没时间落库而留着这条消息是最坏的结局。
+		retractCtx, cancelRetract := context.WithTimeout(context.Background(), asyncRetractTimeout)
+		defer cancelRetract()
+		retracted, _, err := sc.Authority.RetractWorld(retractCtx, senderID, sendTimeMs, platformRejectReason)
 		if err != nil {
-			logx.Errorf("[chat] Async world chat retraction failed, sender=%d send_time_ms=%d: %v", senderID, sendTimeMs, err)
+			logx.Errorf("[chat] metric=chat_world_platform_reject_not_retracted sender=%d send_time_ms=%d: %v", senderID, sendTimeMs, err)
 			return
 		}
 		if retracted {
-			sc.PublishWorldRetract(ctx, &chatpb.ChatRetractedNotify{
+			sc.PublishWorldRetract(retractCtx, &chatpb.ChatRetractedNotify{
 				Channel:        chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD,
 				SenderPlayerId: senderID,
 				SendTimeMs:     sendTimeMs,
@@ -192,7 +196,12 @@ func (l *ChatLogic) ReportChat(in *chatpb.ReportChatRequest) (*chatpb.ReportChat
 	return &chatpb.ReportChatResponse{}, nil
 }
 
+// RetractWorldChat 是运维处置入口:先核运维口令(ops_auth.go),口令没配时整个入口停用。
+// 服务自己的异步平台补审不走这里,直接调 Authority.RetractWorld。
 func (l *ChatLogic) RetractWorldChat(in *chatpb.RetractWorldChatRequest) (*chatpb.RetractWorldChatResponse, error) {
+	if err := l.authorizeOps(chatpb.ClientPlayerChat_RetractWorldChat_FullMethodName); err != nil {
+		return nil, err
+	}
 	if in == nil || in.GetSenderPlayerId() == 0 || in.GetSendTimeMs() <= 0 ||
 		len(in.GetReason()) > maxRetractReasonSize || !utf8.ValidString(in.GetReason()) {
 		return &chatpb.RetractWorldChatResponse{ErrorMessage: &base.TipInfoMessage{Id: constants.ErrInvalidParameter}}, nil

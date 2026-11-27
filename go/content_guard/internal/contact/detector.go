@@ -9,7 +9,9 @@ package contact
 
 import (
 	"regexp"
+	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"content_guard/internal/textnorm"
 )
@@ -58,8 +60,12 @@ var channelCues = []cueDef{
 // 这种普通单词)在 hasUnallowedDomain 里判,不写进正则:Go 的正则没有零宽断言,边界字符写进去会被这一个匹配吃掉,
 // 紧挨着的第二个域名就匹配不到了,白名单要比对的范围也会多出前后各一个字。
 // 前面的边界不用判:这一段字符类已经包含全部字母数字,最左匹配必然从这一段的开头起。
-var domainRe = regexp.MustCompile(`(?i)[a-z0-9-]{2,}\.(?:com|cn|net|org|xyz|top|vip|cc|tv|me|gg|io|club|shop|work|site)`)
-var urlSchemeRe = regexp.MustCompile(`(?i)(?:https?://|www\.)[a-z0-9.-]+`)
+//
+// 两条正则都在折叠后的文字上找(见 ContainsAd),折叠已经转成小写,所以不带 (?i)。
+var domainRe = regexp.MustCompile(`[a-z0-9-]{2,}\.(?:com|cn|net|org|xyz|top|vip|cc|tv|me|gg|io|club|shop|work|site)`)
+
+// urlRe 是带协议头或 www. 前缀的网址;第 1 个分组是主机名,白名单只比对这一段。
+var urlRe = regexp.MustCompile(`(?:https?://(?:www\.)?|www\.)([a-z0-9.-]+)`)
 
 // cnDigitMap 把渠道线索词之后常见的汉字数字与语音谐音折回阿拉伯数字。
 var cnDigitMap = map[rune]byte{
@@ -76,14 +82,15 @@ var cnDigitMap = map[rune]byte{
 }
 
 // ContainsAd 报告文本是否包含外链 URL / 域名或变体联系方式引流(支持白名单词覆盖豁免)。
-func ContainsAd(text string, elems []textnorm.Elem, allowCheck func(startOrig, endOrig int32) bool) bool {
-	if text == "" || len(elems) == 0 {
+// elems 是 textnorm.Fold 的结果;allowCheck 收到的是原文的字符下标区间(两端都含),nil = 没有白名单。
+func ContainsAd(elems []textnorm.Elem, allowCheck func(startOrig, endOrig int32) bool) bool {
+	if len(elems) == 0 {
 		return false
 	}
-	if hasUnallowedRegexMatch(urlSchemeRe, text, allowCheck) {
-		return true
-	}
-	if hasUnallowedDomain(text, allowCheck) {
+	// 网址和域名在折叠后的文字上找,不在原文上找:全角字母、全角句点、带圈数字、西里尔同形字写的网址折叠后和半角的一样,
+	// 在原文上找的话切一下全角输入就绕过去了。折叠序列一个元素一个字符,所以折叠串的第 k 个字符就是 elems[k]。
+	folded := foldedString(elems)
+	if hasUnallowedURL(folded, elems, allowCheck) || hasUnallowedDomain(folded, elems, allowCheck) {
 		return true
 	}
 
@@ -106,36 +113,48 @@ func ContainsAd(text string, elems []textnorm.Elem, allowCheck func(startOrig, e
 	return hasCueWithContact(dense, allowCheck)
 }
 
-func hasUnallowedRegexMatch(re *regexp.Regexp, orig string, allowCheck func(int32, int32) bool) bool {
-	locs := re.FindAllStringIndex(orig, -1)
-	if len(locs) == 0 {
+func foldedString(elems []textnorm.Elem) string {
+	var b strings.Builder
+	b.Grow(len(elems))
+	for _, e := range elems {
+		b.WriteRune(e.R)
+	}
+	return b.String()
+}
+
+// allowed 报告折叠串里的字节区间 [from, to) 是否整段落在白名单里。
+func allowed(folded string, elems []textnorm.Elem, from, to int, allowCheck func(int32, int32) bool) bool {
+	if allowCheck == nil {
 		return false
 	}
-	if allowCheck == nil {
-		return true
-	}
-	for _, loc := range locs {
-		startRune := int32(len([]rune(orig[:loc[0]])))
-		endRune := int32(len([]rune(orig[:loc[1]])) - 1)
-		if !allowCheck(startRune, endRune) {
+	first := utf8.RuneCountInString(folded[:from])
+	last := first + utf8.RuneCountInString(folded[from:to]) - 1
+	return allowCheck(elems[first].Orig, elems[last].Orig)
+}
+
+// hasUnallowedURL 报告有没有主机名不在白名单里的网址。白名单只比对主机名:名单里登记 xuanming.com,
+// 带 https:// 或 www. 前缀的写法照样放行,不用把每种前缀再各登记一遍。
+func hasUnallowedURL(folded string, elems []textnorm.Elem, allowCheck func(int32, int32) bool) bool {
+	for _, loc := range urlRe.FindAllStringSubmatchIndex(folded, -1) {
+		from, to := loc[2], loc[3]
+		// 主机名末尾的句点和连字符是句子的标点,不算主机名;去掉之后什么都不剩(「www...」这种笑声)就不是网址。
+		for to > from && (folded[to-1] == '.' || folded[to-1] == '-') {
+			to--
+		}
+		if to > from && !allowed(folded, elems, from, to, allowCheck) {
 			return true
 		}
 	}
 	return false
 }
 
-// hasUnallowedDomain 报告原文里有没有不在白名单里的域名。白名单比对的范围恰好是域名本身(按字符下标,两端都含)。
-func hasUnallowedDomain(orig string, allowCheck func(int32, int32) bool) bool {
-	for _, loc := range domainRe.FindAllStringIndex(orig, -1) {
-		if loc[1] < len(orig) && textnorm.IsASCIIAlnum(rune(orig[loc[1]])) {
+// hasUnallowedDomain 报告有没有不在白名单里的域名。白名单比对的范围恰好是域名本身。
+func hasUnallowedDomain(folded string, elems []textnorm.Elem, allowCheck func(int32, int32) bool) bool {
+	for _, loc := range domainRe.FindAllStringIndex(folded, -1) {
+		if loc[1] < len(folded) && textnorm.IsASCIIAlnum(rune(folded[loc[1]])) {
 			continue
 		}
-		if allowCheck == nil {
-			return true
-		}
-		startRune := int32(len([]rune(orig[:loc[0]])))
-		endRune := int32(len([]rune(orig[:loc[1]])) - 1)
-		if !allowCheck(startRune, endRune) {
+		if !allowed(folded, elems, loc[0], loc[1], allowCheck) {
 			return true
 		}
 	}

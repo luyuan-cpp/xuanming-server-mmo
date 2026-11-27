@@ -1,6 +1,6 @@
 # 官方通行证与账号注册接入设计（Casdoor OIDC）
 
-状态：2026-11-24 已完成服务端 OIDC 接缝、独立 Casdoor 部署栈、Unity 道家 Q 版客户端 UI/PKCE 与移动端深度链接构建后处理，并通过真实 Casdoor v4.27.1 容器 → `go/login` `PassportProvider` 端到端实测验证；待 Claude Code 审核全球账号库收口与生产上线前外部配置。
+状态：2026-11-24 已完成服务端 OIDC 接缝、独立 Casdoor 部署栈、Unity 道家 Q 版客户端 UI/PKCE 与移动端深度链接构建后处理，并通过真实 Casdoor v4.27.1 容器 → `go/login` `PassportProvider` 端到端实测验证。2026-11-26 Claude Code 对照 Casdoor v4.27.1 源码审核，结论与定案见 §5.4；同日落码（未编译、未运行，验证命令见 `docs/PROGRESS.md` 同日「官方通行证审核」条目）：只收身份令牌（§4 第 11 项）、账号注销时删除通行证用户（§3.5）、初始化数据改为注册必须验证邮箱并新增服务端专用应用、K8s 部署参数、iOS 改用系统认证会话（§4 第 14 项）。
 
 关联：[认证提供者框架](./auth-provider-framework.md)、[第三方登录端到端设计](./third-party-login-end-to-end-design.md)、[双 Token 体系](./dual-token-authentication.md)、[账号注销](./account-deletion.md)、[账号角色目录](./account-role-authority.md)。
 
@@ -70,7 +70,8 @@ Java Gateway (gateway_node) ──gRPC──► Go Login (go/login)
   │ 7. auth.Get("passport") → PassportProvider.Validate(ctx, id_token)
   │    a. RS256 + JWKS 验签（GET <Endpoint 或 Issuer>/.well-known/jwks，含缓存与防刷）
   │    b. 校验 iss == Config.Issuer、aud 包含 Config.ClientId、sub 非空且无空白、
-  │       len("passport_" + sub) <= 191、exp/iat/nbf 合法
+  │       len("passport_" + sub) <= 191、exp/iat/nbf 合法、tokenType == "id-token"
+  │       (同一次换票给出的访问令牌 / 刷新令牌同钥同 iss/aud/sub,只有这一项不同,按凭证无效拒绝)
   │    c. 校验令牌生命周期 (exp - iat) <= 2h（防止 Casdoor 误留默认 168h 撑爆 Redis）
   │    d. Redis SET NX 登记 login:idtoken:used:v1:passport:<sha256(token)>（一次性防重放）
   │    e. 解析出账号标识 passport_<sub>，交给全球账号库/账号目录映射并签发游戏双 Token
@@ -93,19 +94,45 @@ AuthProviders:
     # 可选：login 拉取 /.well-known/jwks 的内部基址；留空则直接向 Issuer 拉取。
     # 适用于公网 iss（如 https://passport.example.com）与集群内网拉公钥（如 https://casdoor.internal:8000 或本地 http://sandbox-mock:18090）分离的场景。
     Endpoint: ""
+    # 生产必填：login 调 Casdoor 管理接口用的机密应用（init_data.json 的 app-xuanming-server），账号注销时删除通行证里的用户（§3.5）。
+    # 不能与 ClientId 相同；密钥只写环境变量名，内联的 AdminClientSecret 只在 Mode=dev/test 放行。
+    # 生产模式配了 Passport 却缺这两项，login 拒绝启动；dev/test 可以不配（启动告警，注销后通行证用户留着）。
+    AdminClientId: "xuanming-game-server"
+    AdminClientSecretEnv: "MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET"
 ```
 
 ### 3.3 跨系统联动边界（不产生额外耦合）
-- **全球账号库（Claude Code 审核重点）**：`PassportProvider.Validate` 返回 `&AuthResult{Account: "passport_" + claims.Sub}`，与 `AppleProvider`（`apple_<sub>`）、`GoogleProvider`（`google_<sub>`）完全同型。当全球账号库落地「不可变 `account_id` + `(provider_type, provider_uid)` 绑定表」后，直接按 `provider_type = "passport"`, `provider_uid = claims.Sub` 收口即可。
+- **全球账号库（2026-11-26 定案：不用改）**：`PassportProvider.Validate` 返回 `&AuthResult{Account: "passport_" + claims.Sub}`，与 `AppleProvider`（`apple_<sub>`）、`GoogleProvider`（`google_<sub>`）完全同型。账号目录把账号当不透明串存（上限 191 字节），不解析前缀，`passport_<uuid>` 直接可用；`sub` 是 Casdoor 的用户 id（UUID），玩家在通行证里改用户名、邮箱、手机号都不变，也不会和运维开通的口令账号撞名（口令账号不由玩家自取）。将来若落地「不可变 `account_id` + `(provider_type, provider_uid)` 绑定表」，按 `provider_type = "passport"`、`provider_uid = sub` 收口。
 - **国内实名防沉迷**：`go/login/internal/config/anti_addiction.go` 默认按 fail-closed 规则要求所有不在 `PlatformManagedAuthTypes` 名单里的渠道走游戏方自实名，因此 `passport` 自动受国内实名与防沉迷管辖，无需改动防沉迷代码。
-- **账号注销冷静期（后续对接项）**：7 天冷静期到点删除游戏账号时，参考 `apple_revoke.go` 在 `account_deletion` 执行器中追加可选的 Casdoor 管理接口调用，删除或匿名化对应 `sub` 的用户记录以释放邮箱/手机号（本批不修改 `account_deletion.go`，避免与全球账号库改动碰撞）。
+- **账号注销**：通行证账号的邮箱、手机号、口令哈希存在 Casdoor 里，注销必须连同通行证里的用户一起删，见 §3.5（2026-11-26 落码）。申请注销时的重新认证与其它渠道一样：客户端重新走一次授权拿新的 `id_token`。
 - **指标与日志**：`deprecation.go` 的 `authTypeMetricLabel` 自动识别已注册的 `"passport"` 低基数 label；成功日志用 `maskAccount` 对 `sub` 脱敏，不输出完整 `id_token`。
 
 ### 3.4 独立部署栈（`deploy/passport/`）
 - `deploy/passport/docker-compose.yml`：独立运行官方 `casbin/casdoor:v4.27.1` 与专属 MySQL 8.0（`passport-db`），全部数据库口令通过环境变量必填注入（`${PASSPORT_DB_PASSWORD:?...}`），不把任何密码写入仓库。
 - `deploy/passport/conf/app.conf`：无密钥基础配置（`initDataNewOnly = true` 保证首次初始化后重启不覆盖运行时数据）。
-- `deploy/passport/init_data.json`：预置组织 `xuanming` 与公开 PKCE 应用 `app-xuanming-game`（`clientId: "xuanming-game-client"`、`enableSignUp: true`、`tokenFormat: "JWT-Standard"`、`expireInHours: 1`、不预置内联 `clientSecret`、不在 Casdoor 内重复开启游戏服已有第三方社交渠道）。
-- `go/login/cmd/sandbox_mock/passport.go`：提供离线单测/本地冒烟用的 `GET /.well-known/jwks` 与 `GET /mock/passport/id_token`，无需起 Docker 也可验证整条验签链路。
+- `deploy/passport/init_data.json`：预置组织 `xuanming`（`passwordType: bcrypt`、`enableSoftDeletion: false`——必须保持关闭，开了之后删用户只打标记，见 §3.5）与两个应用：
+  - 公开 PKCE 应用 `app-xuanming-game`（`clientId: "xuanming-game-client"`、`enableSignUp: true`、`tokenFormat: "JWT-Standard"`、`expireInHours: 1`、`grantTypes` 只有 `authorization_code`、不预置内联 `clientSecret`、不在 Casdoor 内重复开启游戏服已有第三方社交渠道）。注册项 `Email` 的 `rule` 是 `Normal`（必须验证邮箱；2026-11-26 由 `No verification` 改回）：没给应用挂邮件通道之前自助注册发不出验证码、注册不了，这是有意的缺省；本地联调用管理接口建测试用户（§5.2）。
+  - 机密应用 `app-xuanming-server`（`clientId: "xuanming-game-server"`，不能登录、没有回调地址）：只给 `go/login` 调管理接口删用户用。Casdoor 让应用凭据在它自己的组织里有管理权限，所以它必须与客户端的公开应用分开；`clientSecret` 不进仓库，首启时由 Casdoor 随机生成，运维从后台取出放进 login 的密钥。
+- `go/login/cmd/sandbox_mock/passport.go`：提供离线单测/本地冒烟用的 `GET /.well-known/jwks`、`GET /mock/passport/id_token`（种子 `ACCESS_TOKEN` / `REFRESH_TOKEN` 签另外两种令牌类型）与管理接口 `GET /api/get-user`、`POST /api/delete-user`（`GET /mock/passport/deleted_users` 查被删的用户），无需起 Docker 也可验证验签与注销删用户两条链路。
+
+### 3.5 账号注销时删除通行证用户（2026-11-26）
+
+**为什么必须做**：Apple、Google、微信的账号，玩家的个人信息在渠道那边，游戏只有一个 `sub`。官方通行证不一样，邮箱、手机号、口令哈希存在我们自己的 Casdoor 库里。只删游戏账号的话个人信息还留着，不算注销（App Store 审核指南 5.1.1(v)、Google Play 账号删除要求、个人信息保护法第四十七条；本仓 `AGENTS.md` §9 的「账号真注销」红线）。
+
+**做法**（`go/login/internal/logic/pkg/auth/passport_admin.go`，执行者 `accountdeletion/executor.go`）：
+
+1. 时机：冷静期满、执行者认领（账号行 1 → 2，不可撤销）之后，**角色全部删完、目录收尾（删账号行）之前**。账号行还在「执行中」就是待办记录：这一步没成，执行者下一轮再来；要是先删了账号行，就再没有东西能让执行者想起这名通行证用户。冷静期内不动通行证，玩家还要靠它登录来撤销注销。
+2. 调用（Casdoor v4.27.1 管理接口，HTTP Basic 带 `AdminClientId` / 密钥；成功与拒绝都回 HTTP 200，看应答体 `status`）：
+   - `GET /api/get-user?userId=<sub>`：按不可变的用户 id 取当前的组织与用户名（用户名可改，每次现查）。`data` 为 `null` = 已经不在，按删完处理。
+   - `POST /api/delete-user {owner, name}`：`data` 为 `"Affected"` 才算删掉（Casdoor 同时作废这名用户的令牌与会话）。
+   - 再 `GET` 一次，查不到才回成功。组织被人开了软删除时第一次删只打标记，这一步会发现并回错误，下一轮再删一次才真删。
+3. 每一步都能重做；失败回错误、账号行留着，由 `data_service_account_deletion_overdue`（状态 2 超过 24 小时）告警。
+4. 凭据写错不会误判成「用户不在」：Casdoor 把认不出的 Basic 凭据当匿名，匿名查到用户会被拒（`status=error`），查不到与真的查不到一样回 `null`。
+5. 没配管理凭据（只有 dev/test 允许）：通行证账号照常注销，通行证用户留着，每次记 ERROR。
+
+**通行证里删不到的残留**：Casdoor 的 `verification_record`（发过的验证码，含收件邮箱 / 手机号）与 `record`（接口审计日志）不随删用户清理，生产要按隐私政策写明的保留期定期清（§5.4 生产清单）。
+
+注销完成后同一个人用同一邮箱重新注册，Casdoor 给的是新 `sub`，游戏里是全新账号；`/api/login` 的「你之前的账号已于 X 注销」提示按账号串摘要匹配，对通行证账号不会出现（旧 `sub` 已不存在）。
 
 ---
 
@@ -123,6 +150,10 @@ AuthProviders:
 | **8. 密钥误入 Git 或未展开 `${VAR}`** | YAML 写 `${CLIENT_ID}`（go-zero 不展开）或把 DB 密码提交进仓库。 | `passport_auth.go` 复用 `containsUnexpandedPlaceholder` 在启动期拒绝 `${...}`；`deploy/passport/` 所有数据库密码均通过 `${VAR:?...}` 运行时环境变量强制注入。 |
 | **9. Casdoor 管理员首启接管** | Casdoor v4.27.1 首启时 `built-in/admin` 无口令，日志提示「在浏览器里设置」，端口暴露期间任何访问者都能抢先设置管理员口令并接管整个通行证。 | `docker-compose.yml` 强制注入 `initAdminPassword: ${PASSPORT_ADMIN_PASSWORD:?...}`，并默认只绑 `127.0.0.1`（`PASSPORT_BIND` 显式放开）；2026-11-26 真容器实测配置口令可登录、默认 `123` 不可登录。 |
 | **10. `redirect_uri` 宽松匹配外泄授权码** | 若 IdP 对回调地址做子串/正则宽松匹配，攻击者可构造带合法回调串的外站地址截走授权码。 | 2026-11-26 真容器实测 v4.27.1 对 10 种变形（外站夹带、前后缀、`.` 通配、子域拼接、`localhost`/其它回环端口）全部拒绝，仅精确的两个回调地址签发授权码；升级 Casdoor 版本时须重跑该探针。 |
+| **11. 访问令牌 / 刷新令牌冒充身份令牌** | Casdoor 一次换票给三枚 JWT（身份、访问、刷新），同一把钥匙签，`iss` / `aud` / `sub` 相同，只有 `tokenType` 不同（v4.27.1 `object/token_jwt.go`、`token_standard_jwt.go`）。只核签名与 `iss` / `aud` 的话：身份令牌被一次性消费之后，同一次换票的访问令牌还能再登录一次；刷新令牌 24 小时有效，还会被「有效期超限」当成配置故障，任何玩家都能凭自己的刷新令牌刷出故障码与告警。 | `PassportProvider` 要求 `tokenType == "id-token"`，别的类型按凭证无效拒绝，并排在有效期检查之前（2026-11-26）；单测与 mock 的 `ACCESS_TOKEN` / `REFRESH_TOKEN` 种子钉住。应用的 `grantTypes` 只有 `authorization_code`，刷新令牌在 Casdoor 的换票接口也用不了。 |
+| **12. 注销后个人信息留在通行证** | 只删游戏账号，Casdoor 里的邮箱、手机号、口令哈希还在：不满足 App Store 5.1.1(v)、Google Play 账号删除要求与个人信息保护法，属于 `AGENTS.md` §9 的「账号真注销」红线。 | 执行者在删账号行之前调 Casdoor 管理接口删用户（§3.5）；生产模式配了通行证却没配管理凭据，login 拒绝启动。 |
+| **13. 删用户「看起来成功」其实没删** | 组织开了软删除时 `delete-user` 只打标记仍回 `Affected`；用户名在查与删之间被改时删不到任何行；管理凭据写错时 Casdoor 不报错而是当匿名处理。 | 删除以「删完再按 id 查不到」为准；回 `Unaffected`、删完还查得到、`status=error`、应答里的 id 对不上都回错误并重试，不当成删完（§3.5）。 |
+| **14. iOS 跳到 Safari 登录被审核拒** | 用 `Application.OpenURL` 把玩家带到 Safari 去登录 / 注册，App Store 审核指南 4.0（设计）下是常见拒审原因；登记到 `Info.plist` 的 URL scheme 还能被别的 App 或网页用来把游戏拉起来。属于 `AGENTS.md` §9「可能导致不过审」的一票否决项。 | iOS 改用系统认证会话 `ASWebAuthenticationSession`（App 内弹出、回调只交给本 App），去掉 URL scheme 登记（2026-11-26，§7.3）；Android 不受这条审核规则约束，仍用系统浏览器。 |
 
 ---
 
@@ -164,6 +195,19 @@ curl.exe -s http://127.0.0.1:8000/.well-known/jwks
 #     Issuer: "http://127.0.0.1:8000"
 #     ClientId: "xuanming-game-client"
 #     Endpoint: "http://127.0.0.1:8000"   # 容器内改为 http://casdoor:8000
+#     AdminClientId: "xuanming-game-server"          # 要验注销删通行证用户时才配这两行
+#     AdminClientSecret: "<第 6 步取到的 clientSecret>"   # 内联明文只在 Mode=dev/test 放行
+
+# 5. 建测试用户。注册项 Email 的规则是 Normal(必须验证邮箱),本地没挂邮件通道时自助注册发不出验证码,
+#    用管理员会话调 add-user 建(管理接口建的用户不走验证码):
+$s = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+$login = @{ application = "app-built-in"; organization = "built-in"; username = "admin"; password = $env:PASSPORT_ADMIN_PASSWORD; type = "login" } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/login -WebSession $s -ContentType application/json -Body $login
+$user = @{ owner = "xuanming"; name = "alice"; displayName = "alice"; password = "<test-password>"; email = "alice@example.com"; signupApplication = "app-xuanming-game" } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/add-user -WebSession $s -ContentType application/json -Body $user
+
+# 6. 取服务端专用应用的密钥(首启时 Casdoor 随机生成,不在仓库里),填进第 4 步或生产的密钥管理:
+(Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/get-application?id=admin/app-xuanming-server" -WebSession $s).data.clientSecret
 ```
 
 ### 5.3 真实 Casdoor 容器端到端验收记录（2026-11-24）
@@ -179,23 +223,46 @@ curl.exe -s http://127.0.0.1:8000/.well-known/jwks
 4. **`go/login` `PassportProvider` 真验签与防重放**：实时拉取 Casdoor JWKS 验签通过并产出 `passport_<uuid>`（日志脱敏为 `passport_4035***10`，不泄露原始令牌），同一枚 `id_token` 二次提交被 `ReplayGuard` 拒绝。
 5. **沙箱与客户端校验**：
    - `deploy/login-stack.linux/login.yaml` 已增补 `AuthProviders.Passport` 沙箱段并通过 `TestLinuxLoginStackPassportSectionPointsAtSandbox` 契约单测；
-   - `mmorpg-client` 已合入道家 Q 版 5 张切图与 `PassportOAuthProtocol.cs` / `PassportSignIn.cs` / `QdaoServerSelectView.Passport.cs` / `Assets/Editor/PassportMobileDeepLinkBuildPostProcess.cs`（iOS `Info.plist` `CFBundleURLTypes` + Android `AndroidManifest.xml` `VIEW/DEFAULT/BROWSABLE` 深度链接注册）。
+   - `mmorpg-client` 已合入道家 Q 版 5 张切图与 `PassportOAuthProtocol.cs` / `PassportSignIn.cs` / `QdaoServerSelectView.Passport.cs` / `Assets/Editor/PassportMobileDeepLinkBuildPostProcess.cs`（iOS `Info.plist` `CFBundleURLTypes` + Android `AndroidManifest.xml` `VIEW/DEFAULT/BROWSABLE` 深度链接注册；2026-11-26 起 iOS 改走 `ASWebAuthenticationSession`，不再登记 URL scheme，见 §7.3）。
 
-### 5.4 交付 Claude Code 审核与上线前生产清单
-1. **全球账号库对接**：确认全球账号库接纳 `auth_type = "passport"` 及 `passport_<sub>`（或改为 `(provider="passport", uid=sub)` 绑定表映射）。
-2. **文件冲突核对**：仅在既有文件 `config.go`、`auth_providers.go`、`auth_init.go`、`cmd/sandbox_mock/main.go`、`deploy/login-stack.linux/login.yaml` 有数行增量，确认与全球账号库分支无冲突。
-3. **上线前生产项（需真实外部凭证/域名/真机）**：
-   - 将 `init_data.json` 中 `Email` 的 `rule` 由本地开发用的 `"No verification"` 切为邮箱/短信验证码校验，并在 Casdoor 后台配置真实 SMTP/短信通道与人机验证（如 Turnstile）；
-   - 设置 HTTPS 生产域名作为 `PASSPORT_ORIGIN` 与 `go/login` `AuthProviders.Passport.Issuer`，在 Casdoor 后台上传 `deploy/passport/theme/` 品牌主题图并按需调整登录页配色；
-   - 确认是否在 `tools/scripts/k8s_deploy.ps1` 增加 `-LoginPassportIssuer` / `-LoginPassportClientId` / `-LoginPassportEndpoint` 渲染参数，以及注销执行器是否补充 Casdoor 用户停用/匿名化钩子；
-   - 在 iOS / Android 真机完成一次 `xuanming://passport/callback` 深度链接冷/热启动回归。
+### 5.4 审核结论、定案与上线前生产清单（2026-11-26）
+
+Claude Code 对照 Casdoor v4.27.1 源码（`object/token_jwt.go`、`token_standard_jwt.go`、`token_oauth.go`、`init.go`、`application_util.go`、`controllers/user.go`、`routers/authz_filter.go`、`authz/authz.go`）审核了服务端、部署栈与客户端。整体方案（通行证只做身份认证、游戏账号库统一收口、公开客户端 + PKCE、服务端验签 + 一次性消费）是标准做法，保留。
+
+**原「待 Claude Code 确认」的三项，定案：**
+
+| 项 | 定案 |
+|---|---|
+| 全球账号库是否接纳 `passport_<sub>` | 接纳，不用改（§3.3）。 |
+| 注销执行器是否加 Casdoor 删除钩子 | 必须加，已落码（§3.5）。不是可选项：通行证里存着我们自己收的个人信息。选「删除」不选「停用 / 匿名化」：停用后邮箱仍被占用、信息仍在，都不算注销。 |
+| `k8s_deploy.ps1` 是否加通行证参数 | 加，已落码：`-LoginPassportIssuer` / `-LoginPassportClientId` / `-LoginPassportEndpoint` / `-LoginPassportAdminClientId`，管理密钥走工作负载密钥目录 `login-passport-admin`（环境变量 `MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET`），写法同 Apple 那一组。 |
+
+**审核查出并已修的问题：** §4 第 9～14 项（第 9、10 项与客户端回调过期处理、等待时限 180s → 600s 由并行的会话同日修掉；第 11～14 项本次落码），以及初始化数据缺省不验证邮箱（改为 `Normal`，§3.4）。
+
+**源码核对过、不用改的：** 回调地址匹配（§4 第 10 项，实测为准）；授权码一次性、PKCE 校验通过才接受空 `client_secret`；应用 `grantTypes` 在换票接口与隐式流程都生效（口令直换、隐式、刷新都被挡）；组织缺省 `isProfilePublic=false`、`masterPassword` 为空；签名证书首启时生成，该版本的仓库里没有固定私钥文件；口令连错 5 次冻结 15 分钟（Casdoor 缺省）；LDAP 监听在不配端口时不启动。
+
+**上线前生产清单**（都要真实域名、外部凭据或真机，仓库里做不了）：
+
+1. **管理后台不对公网开放。** Casdoor 的玩家页面与管理后台是同一个端口。生产入口（Ingress / 反向代理）只放行玩家要用的路径（授权、登录、注册、找回密码页面及它们调用的接口、`/.well-known/*`、静态资源），管理页面与其余 `/api/*` 只走内网或跳板机；`built-in/admin` 的口令经密钥管理注入 `initAdminPassword`，首启之后在后台改掉并开两步验证。管理员能导出签名私钥，等于能冒充任何玩家登录。
+2. **换票与取公钥全程 HTTPS。** `PASSPORT_ORIGIN`、`AuthProviders.Passport.Issuer`、客户端 `PassportOrigin` 是同一个 `https://` 域名；`runmode` 设 `prod`。
+3. **注册防滥用。** 在后台给 `app-xuanming-game` 挂邮件（或短信）通道与人机验证；注册项 `Email` 保持 `Normal`。注册页要展示并勾选《用户协议》《隐私政策》（注册项加 `Agreement` 并填应用的条款地址）。
+4. **取出 `app-xuanming-server` 的密钥**放进 login 的密钥（§5.2 第 6 步的接口，或后台应用页），不进仓库、不进 ConfigMap。
+5. **组织 `xuanming` 的软删除保持关闭**；`verification_record`、`record` 两张表按隐私政策的保留期定期清理（§3.5）。
+6. **静态资源自托管。** `staticBaseUrl` 不配时登录页的图标、默认头像从 `cdn.casbin.org` 取，国内访问不稳，也等于把玩家 IP 给了第三方；指到自己的 CDN，并在后台上传 `deploy/passport/theme/` 的品牌图。
+7. **只暴露 8000。** Casdoor 进程还会在容器里起一个 RADIUS 的 UDP 监听（不配端口时是随机端口，代码里关不掉），组织没开 RADIUS 时不认证任何人；K8s 用 NetworkPolicy 只放行 8000。
+8. **多副本要共享会话。** `redisEndpoint` 不配时会话在进程内，Casdoor 只能单副本；要高可用先配 Redis，再加副本。
+9. **真机回归。** iOS / Android 各走一遍登录、注册、注销重新认证，含应用被系统回收后从回调冷启动的情况（冷启动时内存里的 `code_verifier` 已丢，本次授权作废，玩家重新点登录）。
+10. **升级 Casdoor 之前**重跑：回调地址探针（§4 第 10 项）、三种令牌的 `tokenType` 取值、`get-user` / `delete-user` 的应答形状（§3.5 依赖这些，都是 v4.27.1 的行为）。
 
 ---
 
-## 6. 后续演进（不在本批范围）
-1. **账号注销联动**：在 `account_deletion` 终局执行器中增加可选 `PassportDeleter` 接口，冷静期满删除游戏账号后异步调用 Casdoor API 删除或匿名化对应 `sub`，释放原邮箱/手机号。
-2. **邮件 / 短信发码通道配置**：上线前在 Casdoor 后台配置真实 SMTP（如 AWS SES / 阿里云邮件推送）或短信通道及人机验证（如 Cloudflare Turnstile / 滑块），不在仓库写入任何供应商密钥。
-3. **生产 K8s 部署清单**：将 Casdoor 迁移至受管 K8s Deployment + 独立 TiDB/MySQL 库与 HTTPS Ingress。
+## 6. 不在仓库里做的事
+
+账号注销联动已做（§3.5），login 的 K8s 部署参数已做（§5.4）。剩下的都是生产环境的事，按 §5.4 的清单办：
+
+1. **邮件 / 短信发码通道与人机验证**：在 Casdoor 后台配，供应商密钥不进仓库。
+2. **Casdoor 自身的生产部署**：`deploy/passport/` 是本机沙盒（端口缺省只绑回环）。生产把 Casdoor 放进受管的 K8s Deployment + 独立库 + HTTPS Ingress，初始化数据以本目录的 `init_data.json` 为底、换掉回调域名之外不改安全相关的项。
+3. **Java 版服务端**：`passport` 渠道、令牌类型校验与注销删通行证用户都只在本仓（Go）实现，Java 仓 `PARITY.md` 登记待做。
 
 ---
 
@@ -236,12 +303,14 @@ curl.exe -s http://127.0.0.1:8000/.well-known/jwks
    - **PKCE 工具（纯 C# 标准库 `System.Security.Cryptography`，不引入外部 Unity 插件）**：
      - 生成 32 字节随机 `code_verifier`（Base64URL 无填充）与 `code_challenge = Base64Url(SHA256(ASCII(code_verifier)))`；
      - 生成 16 字节随机 `state`；
-     - 构造授权 URL 并在桌面/编辑器通过 `Application.OpenURL(url)` 打开系统浏览器，同时在本机 `127.0.0.1:18765` 启动临时单次 `HttpListener`（设 180 秒超时、支持取消、绑定 `127.0.0.1` 绝不监听 `0.0.0.0`），收到回调后：
+     - 构造授权 URL 并在桌面/编辑器通过 `Application.OpenURL(url)` 打开系统浏览器，同时在本机 `127.0.0.1:18765` 启动临时 `HttpListener`（600 秒超时——注册要等邮件 / 短信验证码、支持取消、绑定 `127.0.0.1` 绝不监听 `0.0.0.0`；`state` 对不上的请求回「授权页已过期」并继续监听，不让旧标签页或本机别的页面打断本次授权），收到回调后：
        1. 校验 `state` 严格相等（不等即按失败拒收）；
        2. 回显简短的“登录已完成，请返回游戏”HTML 并立即关闭监听；
        3. 用 `UnityWebRequest.Post` 调 `<PassportOrigin>/api/login/oauth/access_token` 换取 `id_token`；
        4. 清理内存中的 `code_verifier` / `state` / `code`，回调 `PlatformSignInResult.Success(idToken, null)`。
-     - 移动端（iOS/Android）若本批未接原生 `ASWebAuthenticationSession` / Chrome Custom Tabs，先按 `Application.deepLinkActivated` 接 `xuanming://passport/callback` 并在未配置时回 `ErrorUnsupported`，同时明确在交付说明中标注移动端深度链接未真机验证。
+     - iOS（2026-11-26）：原生插件 `Assets/Plugins/iOS/MmorpgPassportWebAuth.mm` 用 `ASWebAuthenticationSession` 在 App 内弹系统认证页，回调地址由系统直接交回发起会话的 App，再走与桌面相同的 `state` 校验与换票。不用 `Application.OpenURL` 跳 Safari：App Store 审核指南 4.0 会拒掉「把用户带到 Safari 登录 / 注册」的做法；也因此不需要在 `Info.plist` 登记 URL scheme（别的 App 截不到回调，App 留在前台也不会丢 `code_verifier`）。未在真机 / Xcode 上编译运行过。
+     - Android：系统浏览器 + `Application.deepLinkActivated` 接 `xuanming://passport/callback`（构建后处理给主 Activity 加 intent-filter）；别的 App 抢注同名 scheme 拿到的授权码没有 `code_verifier` 换不了票（PKCE）。应用在浏览器期间被系统回收时本次授权作废，玩家重新点登录。未真机验证。
+     - 通行证地址（`PassportOrigin`）只有本机回环允许明文 `http`，其余一律要 `https`（授权码、`code_verifier` 与令牌都经它走）。
 4. **`Assets/Scripts/UI/Ugui/QdaoServerSelectView.Visuals.cs` + `QdaoServerSelectView.cs` + `QdaoServerSelectView.LoginUtilities.cs`**
    - **UI 控件布局**（严格遵循现有 `BuildRefreshCredentialPanel()` 风格与生产 prefab 烘焙纪律）：
      - 在 `_credentialPanel` 账号弹窗中增加「官方账号登录 / 注册」按钮 `_passportSignInButton`（建议复用现有 `BuildChannelSignInButton` 或 `ArtButton(..., "clean_tab", ...)` 样式，摆放在账号密码输入区域下方 / 渠道登录位，避免与 `_appleSignInButton` / `_googleSignInButton` 重叠——例如桌面端无 Apple/Google 按钮时直接占 `y=900`，移动端与 Apple/Google 上下错开或横排并列）。

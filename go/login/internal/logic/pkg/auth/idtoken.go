@@ -116,6 +116,9 @@ type idTokenClaims struct {
 	Exp json.Number     `json:"exp"`
 	Iat json.Number     `json:"iat"`
 	Nbf json.Number     `json:"nbf"`
+	// TokenType 只有官方通行证(Casdoor)的令牌带:它的身份令牌、访问令牌、刷新令牌同一把钥匙签、iss / aud / sub 相同,
+	// 只靠这一项区分(passport_provider.go 核对)。Apple / Google 的令牌没有这一项。
+	TokenType string `json:"tokenType"`
 }
 
 // verify 校验令牌,返回 sub(渠道内稳定的用户标识)。

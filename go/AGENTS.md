@@ -33,7 +33,6 @@
 ## COMMANDS
 ```bash
 pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml # 仓库根：共享绑定重生成
-cd go && build.bat                                    # 仅 db/login 的 goctl 包装、导入修正与临时产物清理
 cd go && test.bat                                     # L1 隔离测试子集，范围见 test.ps1 的 L1Suites
 cd go && test.bat -Verbose -Race                      # 同一子集，增加详细输出与竞态检测
 cd go\login && go run login.go
@@ -47,7 +46,7 @@ cd go\db && go build ./cmd/data_stress ./cmd/verifier # build L2 stress tools
 ```
 
 ## NOTES
-- `build.bat` 仅转调 `build.ps1`；完整 `.pb.go` 重生成由 protogen 完成，流程见根 `AGENTS.md` §4。
+- 完整 `.pb.go` 重生成由 protogen 完成，流程见根 `AGENTS.md` §4。db / login 的 `internal/server/*/*server.go` 转发层是手写的（goctl 与 `build.bat` / `build.ps1` 2026-11-21 退役）：加 RPC 时手补转发方法，login 由 `login/goctl_wrappers_test.go` 核对每个方法都接上。
 - `test.bat` / `test.ps1` 执行不依赖真实 Kafka/MySQL/Redis 的 L1 子集，使用 miniredis 与进程内替身。当前覆盖 db 的 `internal/playerstore`、`internal/logic/pkg/proto_sql`、`internal/config`、`cmd/migrate`，以及 shared 的 `placement`；完整清单以 `test.ps1` 的 `L1Suites` 为准，不代表所有服务测试。
 - login、data_service、scene_manager 均采用 go-zero 服务装配并各自管理注册生命周期。
 - **Scene manager**: C++ scene nodes register in etcd; LoadReporter mirrors type/load into Redis. World channel moves use `RebalanceWorldChannelsForZone` (planner `PlanWorldChannelRebalance`). Before changing that path, run `cd go\scene_manager && go test ./internal/logic/ -run TestIntegration_ -count=1` and extend `integration_test.go` if you add new invariants.

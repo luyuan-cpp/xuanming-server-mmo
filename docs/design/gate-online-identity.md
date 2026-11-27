@@ -368,7 +368,7 @@ nonce 签进了 canonical，同一进程内截获的签名头不论原样重放�
 - **失败时的后果**：续租失败不影响在线玩家的任何请求。连续失败超过一个寿命时登录态过期，这段时间里这条连接不计入设备数；故障恢复后，已在游戏里的连接由下一次续租重建并重新计数，还在选角的连接要重新登录（§7.3）。
 - **水平扩展**：每个 gate 只续自己的连接，gate 之间没有共享状态；login 无状态，任何副本都能受理。负载估算见 §6。
 - **观测**：login 的 `loginsession_renew_total{result}`；gate 每分钟一行 `[LoginRenewal] summary`，断线通知另有 `gate_login_disconnect_pending` 与 `gate_login_disconnect_total{result}`（§5）。
-- **与发布的关系**：login 的 goctl 包装（`clientplayerloginserver.go`）是生成物。协议生成之后要再跑 `go/build.ps1` 把 `RenewSession` 接到 `renewsessionlogic.go`，否则 login 回 `Unimplemented`，gate 每 30 秒重试、登录态照旧按寿命过期。项目未上线，gate 与 login 同批上线，不留混跑窗口。
+- **与发布的关系**：login 的服务端转发层（`clientplayerloginserver.go`）11-21 起手写（goctl 与 `go/build.ps1` 已退役），`RenewSession` 已转发到 `renewsessionlogic.go`。漏接时 login 回 `Unimplemented`，gate 每 30 秒重试、登录态照旧按寿命过期；`go/login` 的 `TestGoctlServerWrappersImplementEveryRPC` 专门拦这种漏接。项目未上线，gate 与 login 同批上线，不留混跑窗口。
 
 ### 10.5 §7.2 不改的理由
 

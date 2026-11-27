@@ -1,4 +1,4 @@
-# 配置表热更：验证、补测与收尾交接（2026-11-26，交 Gemini）
+# 配置表热更：验证与收尾交接（2026-11-26，交 Gemini）
 
 ## 0. 现状
 
@@ -21,13 +21,13 @@
   - gate、battle 与 6 个 Go 服务的 `--validate-tables`。
   - 本机热更冒烟。
   - 集群端到端。
-- **缺测试**：C++ 这一侧一条单测都没有。缺的是：
-  - `TableBundleManager`；
-  - 清单与指针解析；
-  - `ExcelExpression::Evaluate`；
-  - battle 按指纹选表、房间持有旧表。
+- **C++ 单测 11-26 已由 Claude 补上，还没编译**（§3.7）：
+  - 覆盖表包管理器、清单与指针解析、表达式只读求值、battle 按指纹选表与旧表保留。
+  - 为了能测，表包管理器和 battle 的旧表保留期都换成了可注入的时钟，缺省仍是系统时钟。
 - **缺登记**：Java 仓 `PARITY.md` 还没有本线这一行。
-- **授权**：负责人 11-20 原话「你出交接细节 我让gemini 去做……让他做完所有」。本单列的验证、补测、修红、登记都由 Gemini 做完，不用逐项再问；§2 列的情形除外。
+- **分工**（负责人 11-26 定：「逻辑代码方面你去改，Gemini 只负责编译」）：
+  - 本单由 Gemini 跑生成、编译、测试、冒烟，并登记结果。
+  - 跑出来要改代码的，留下第一条错误原文停下，交回 Claude 改。只有负责人明说让 Gemini 接手写代码时例外。
 
 ## 1. 规矩
 
@@ -35,7 +35,7 @@
   - `AGENTS.md`，以及 `docs/rules/` 里的 `ai-workflow.md`、`cpp-runtime-and-build.md`、`proto-and-tables.md`；
   - 设计稿全文；
   - `data/AGENTS.md`。
-- **模型档位**：编译、生成、跑测试、冒烟用 `Carbon Medium`；改代码（包括补单测、修红）切到 `Gemini 4 Neon Extra`，切之前把第一条错误原文存下来。
+- **模型档位**：编译、生成、跑测试、冒烟用 `Carbon Medium`。本单不需要 Gemini 改代码。
 - **工作区**：只在 main 工作区做，不开分支，不 `git push`、不 `git tag`。只有负责人要求时才 commit，而且只提交本线的改动。工作区里有大量别的线没提交的文件：不要 `git add -A`，不要 `git reset` / `git checkout --`。
 - **导表**（本线最容易误伤别人的地方）：
   - **产物已经是第 2 版，本线不需要再全量导表。** 11-26 核对时，别的线还有一批没提交的 xlsx 和产物：`GuildActivity`、`GuildDonate`、`GuildLevel`、`GuildShop`、`GuildWarMilestone`、`GuildWarRule`、`RewardedAdSlot`、`TournamentRule`、`Tip`，外加两份 schema。全量导表会把它们一起带进产物和 manifest。
@@ -55,21 +55,22 @@
   - 新 `.cpp` 只登记 `.vcxproj` / `.filters`，不手改 `CMakeLists.txt`。
 - 日志英文；注释、文档、提交说明用中文。
 - **失败时**：
-  - 留下第一条错误原文（文件:行）。
-  - 修根因。不注释断言、不放宽断言、不跳测试、不连续自动重试。
-  - 根因在别的线正在改的文件里时，先 `git diff` 分清是谁的改动；不是本线的就只记录、不修。
+  - 留下第一条错误原文（文件:行），或者失败用例的完整输出，这一步就停在这里。
+  - 不自己改代码：把原文和复现命令写进 PROGRESS，交回 Claude。不注释断言、不放宽断言、不跳测试、不连续自动重试。
+  - 先 `git diff` 分清出错的文件是谁在改；属于别的线的，同样只记录。
+  - 和这一步无关的后续步骤可以接着跑，比如 Go 红了不妨碍跑 Java 和契约测试。结果里写明哪些是在红的基础上跑的。
 
 ## 2. 什么时候停下来问负责人
 
-- 修红要推翻设计稿里定下的事：
+- 要往 kind 以外的集群部署。
+- 要动客户端仓。
+- 要全量导表，或者要改 `generated/` 下的产物。
+- 交回 Claude 的问题里，有需要推翻设计稿定案的，一并报给负责人。定案是这五条：
   - 指针只按轨道分；
   - 表缺省不可热更；
   - 战斗每局绑定一套表；
   - 由 sidecar 分发；
   - S3 不用第三方库。
-- 要新增第三方依赖。
-- 要改客户端仓，或者改客户端看得到的协议。
-- 要往 kind 以外的集群部署。
 
 ## 3. 按顺序做
 
@@ -150,49 +151,50 @@ pwsh -File tools/scripts/run_cpp_tests.ps1 -LogDir build/verification/<运行名
 通过标准：
 
 - 整解 0 error，`gate.exe`、`scene.exe`、`battle.exe` 与全部测试工程都编出来。
-- 测试全量 0 failed。确认 `configuration_table_test`、`turn_battle_engine_test`、`message_limiter_test`、`bag_test` 和 battle 节点的测试工程都在跑的名单里。
+- 测试全量 0 failed。确认 `configuration_table_test`、`turn_battle_engine_test`、`message_limiter_test`、`bag_test`、`rpc_controller_test` 都在跑的名单里。battle 节点的用例编在 `rpc_controller_test` 里，没有单独的工程。
 
-### 3.7 补 C++ 单测（改代码，切高档模型）
+### 3.7 新补的 C++ 单测（代码已写，只跑）
 
-以下用例都要确定、可重复：
+11-26 由 Claude 写好，未编译。§3.6 的整解会把它们编进去；这里单独点名，方便核对新用例确实跑了。
 
-- 不 sleep，不依赖真实时间；
-- 每条用例用自己的临时目录，用完删掉；
-- 时间推进用 `TableBundleManager::PollOnce(nowMs)`；
-- 起 `EventLoop` 的写法参照 `cpp/tests/rpc_controller_test/rpc_channel_loopback_test.cpp`。
+```powershell
+pwsh -File tools/scripts/run_cpp_tests.ps1 -Filter configuration_table -LogDir build/verification/<运行名>/cpp-tests
+pwsh -File tools/scripts/run_cpp_tests.ps1 -Filter rpc_controller -LogDir build/verification/<运行名>/cpp-tests
+```
 
-**`cpp/tests/configuration_table_test/table_bundle_manager_test.cpp`**（新文件，登记进同目录的 `.vcxproj` 与 `.filters`）：
+**`cpp/tests/configuration_table_test/table_bundle_manager_test.cpp`**（新文件，已登记进工程），共 13 条。前 12 条里除第 4 条外都属于 `TableBundleManagerTest`：
 
-1. `VerifyTableDirManifest`：
-   - 完好的目录能通过；
-   - 改掉某个文件的一个字节就失败，错误里带文件名；
-   - `schema_digest` 不同失败；
-   - `schema_version = 1` 失败。
-2. `ReadPointerLine`：
-   - 文件里没有这条线：返回 true，结果为空；
-   - JSON 写坏了：返回 false；
-   - `current`、`next`、`activate_at_ms`、`immediate` 都读对。
-3. `DiffChangedTables`：只列出 sha256 变了的表，结果排好序；json、binary 两种口径各一条。
-4. 管理器，只改了可热更的表，并且带 `immediate`：`PollOnce` 之后把分片跑完，现役那一套表的 `content_digest` 换成新包，`STATUS.json` 写 loaded，`table_reload_total{result="committed"}` 加 1。
-5. 改到了不可热更的表：不切换，`STATUS.json` 写 needs_restart。指针不变时再 `PollOnce`，不会重试。
-6. `Validate` 钩子返回 false：不切换，状态是 rejected，原因写进 `STATUS.json`。
-7. `activate_at` 在将来：用早于它的时刻 `PollOnce` 只到 prepared；用晚于它的时刻再调一次才提交。
-8. 退役：
-   - 提交之后，外部还持有的旧 `TableSet` 照样能读；
-   - 没人持有、过了 10 分钟就被回收，`table_sets_retained` 回到 0。
-   - 回收现在读的是真实的 `steady_clock`，这条测不了。做法：给回收加一个能注入的单调时钟（缺省 `steady_clock::now`，用 `std::function` 成员，不用裸指针），单测里注入假时钟，不要 sleep。
+| 用例 | 验什么 |
+|---|---|
+| `ManifestVerificationAcceptsShippedTablesAndRejectsOtherSchema` | 仓里导出的表能过清单核对；`schema_digest` 不同被拒 |
+| `ManifestVerificationRejectsTamperedFileAndOldManifestVersion` | 文件被改过被拒；第 1 版清单被拒 |
+| `PointerLineIsReadPerSchemaLine` | 指针按 schema 线读；没有本线返回空；JSON 写坏报错 |
+| `TableBundleManifestDiffTest.ListsChangedAddedAndRemovedTablesSortedForTheActiveFormat` | 逐表差异：改、增、删都列出并排好序，json / binary 各算各的 |
+| `StartupLoadsTheBundleThePointerNames` | 启动时按指针加载那一包 |
+| `HotReloadableChangeIsPreparedInSlicesThenCommittedWhole` | 准备期间现役表不动；提交后各表读到新包，旧的一套还能读 |
+| `StructuralTableChangeNeedsRestartAndIsNotRetried` | 改到不可热更的表：needs_restart，不重试 |
+| `ValidationRunsOnStagedTablesAndRejectionKeepsCurrentOnes` | 校验钩子读到的是暂存的新包；拒绝后现役表原样 |
+| `UnparsableTableRejectsTheBundle` | 有一张表解析失败：整包拒绝 |
+| `ScheduledBundleWaitsPreparedUntilActivateAt` | 没到点只准备；差 1 毫秒不提交；到点提交 |
+| `WithdrawnNextDropsThePreparedBundle` | 到点前撤掉 next：到点也不切 |
+| `RetiredSetIsReleasedAfterTheRetentionWindow` | 旧表 10 分钟后管理器放手；外面还拿着的照样能读 |
+| `TableExpressionEvaluateTest.ConstEvaluateTakesParamsPerCallAndLeavesTheStatefulPathAlone` | 表达式只读求值按次传参，不影响旧的两步路径 |
 
-**表达式**（放进同一个测试工程）：同一个 `ExcelExpression` 用 const 引用调 `Evaluate`，传不同参数得到不同结果，而且不影响旧的 `SetParam` / `Value` 那条路。
+**`cpp/nodes/battle/tests/battle_observer_contract_test.cpp`**（编在 `rpc_controller_test` 里），新增 2 条，都属于 `BattleObserverContract`：
 
-**battle**（`cpp/nodes/battle/tests/` 下新建 `battle_table_provider_pool_test.cpp`，登记进 battle 测试工程）：
+| 用例 | 验什么 |
+|---|---|
+| `TableProviderIsChosenByTheFingerprintTheRequestCarries` | 按请求或玩家快照带的指纹选那一套表；没带或找不到就用现役的 |
+| `RetiredTableProviderLeavesThePoolAfterRetentionButItsRoomKeepsIt` | 旧的一套 10 分钟后移出保留表；已开的房间仍拿着它，清房才放 |
 
-1. 两套 provider 按指纹登记（`BattleRoomManager::RegisterTableProvider`）：带旧指纹开局绑到旧那套，带新指纹开局绑到新那套。
-2. 对局中途提交了新表：这一局继续用开局时那一套，打完才放手。
-3. 找不到指纹：按 `FingerprintMode` 走，warn 用现役那套，enforce 拒绝开局。
+通过标准：这 15 条全过，两个工程的老用例不回归。
 
-`ResolveProviderForRequest` 是私有的，从公开的建房入口去测，不要为了测试把它改成 public。
+没覆盖的：battle 的 warn / enforce 判定模式每个进程只读一次配置，单测里切不了。
 
-写完先跑 `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`，再整解、跑这两个测试工程。通过标准：新用例全过，老用例不回归。
+这批用例依赖两件事，红了先看是不是它们变了：
+
+- `MessageLimiter` 在可热更名单里，`World` 不在。
+- 仓里 `generated/tables` 的清单和文件对得上，而且它的 `schema_digest` 和编进 `table.lib` 的一致。别的线刚改了表结构、导了表却没重编 `table.lib` 时，夹具的 SetUp 会直接失败。
 
 ### 3.8 预检 `--validate-tables`
 
@@ -202,7 +204,10 @@ foreach ($n in 'scene','gate','battle') { & "bin/$n.exe" --validate-tables gener
 
 Go 的 6 个读表服务（match、guild、login、scene_manager、mail、rank）：先编出二进制，在各自目录下运行 `<服务>.exe -validate-tables ../../generated/tables`。
 
-通过标准：9 个进程的退出码全是 0。C++ 失败时 stderr 打 `table validation failed (manifest|parse|hook)`；Go 成功时打 `[TableBundle] validate-tables OK`，带上和 §3.2 一样的 `schema_digest`。
+通过标准：9 个进程的退出码全是 0，输出里的 `schema_digest` 和 §3.2 的一样。
+
+- C++ 成功打 `table validation passed`，失败在 stderr 打 `table validation failed (manifest|parse|hook)`。
+- Go 成功打 `[TableBundle] validate-tables OK`。
 
 ### 3.9 本机热更冒烟（不需要 etcd 和对象存储）
 
@@ -218,14 +223,13 @@ Go 的 6 个读表服务（match、guild、login、scene_manager、mail、rank�
 3. 做一份**只改了可热更表**的包，不碰仓库里的 xlsx：
    - 把 `generated/tables` 拷到 `%TEMP%`。
    - 改 `messagelimiter.json` 里一行的数值。节点按 `bin/etc/base_deploy_config.yaml` 的 `table_data_format` 加载，是 json 就改 json。
-   - 在 manifest 里重算这个文件的 `size` / `sha256`。
-   - 用 `tools/data_table_exporter/core/manifest.py` 的 `_content_digest` 重算 `content_digest`。这个一次性脚本放 `%TEMP%`，不进仓库。
+   - 在这个临时目录的 `manifest.json` 里，把这个文件的 `size` / `sha256` 改成现状，再把 `content_digest` 换成一个新的 64 位小写十六进制值（比如对旧值再做一次 sha256）。进程只拿它当这包表的名字，不会重算。改清单的一次性脚本也放 `%TEMP%`，不进仓库。
    - 发出去：`pwsh -File tools/scripts/dev_tools.ps1 -Command tables-reload-local -TableSource <那个临时目录>`。
 
    通过标准：4 秒内 C++ 进程打出 `Table hot-reload committed`、Go 服务打出 `[TableBundle] reload committed`；`run/table_status/STATUS.json` 显示新摘要、状态 loaded；`table_reload_total{result="committed"}` 加 1；gate 的限流按新值生效。
 4. 同样的办法再做两份包：
    - 改一张不可热更的表（例如 `world.json`）：期望打出 needs_restart，进程不切换。
-   - 把 `MysteryMerchantRule` 改成校验不过的值：期望 rejected，原因写进 `STATUS.json`，进程不切换。
+   - 把 `MysteryMerchantRule` 改成校验不过的值：期望 scene 打出 rejected，原因写进它的 `STATUS.json`，scene 不切换。gate、battle 不校验这张表，会照常切过去，这正是「到点后被拒」时部分进程新、部分进程旧的样子。验完再发一次好的包，让各进程回到同一版。
 5. 有 robot 的话，另开一局回合制战斗，在打的过程中发一次第 3 步的包。核对这一局照常打完，结算没有指纹报错。
 
 ### 3.10 kind 上端到端（只在 dev 集群）
@@ -245,11 +249,11 @@ S3 签名是自己写的 SigV4，**第一次连真的 S3 兼容存储就在这�
 ### 3.11 收尾
 
 - 在 `docs/PROGRESS.md` **文末追加**一条，不改旧条目。
-  - 标题：「2026-11-xx Gemini:配置表热更验证、补测与收尾」。
+  - 标题：「2026-11-xx Gemini:配置表热更验证与收尾」。
   - 逐节写出命令、通过数和失败原文摘要；没跑的写原因。
   - 不贴大段原始输出，日志留在 `build/verification/<运行名>/`。
 - 把设计稿第 3 行的状态改成实际的验证结果，直接改正文。
-- 在 Java 仓 `PARITY.md` 登记一行待做：本仓提交 `f067d01fc`，加上这次修红的提交（如果有）。只登记，不写 Java 代码。
+- 在 Java 仓 `PARITY.md` 登记一行待做。本仓提交写 `f067d01fc`（五批）和 `2d20f6b68`（表包管理器的可注入时钟），外加 §3.7 那批单测入库后的提交。只登记，不写 Java 代码。
 - 改了或新增了文档，跑 `python tools/scripts/gen_docs_index.py`。
 - 要提交就等负责人发话，只提交本线的文件。
 

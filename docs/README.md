@@ -540,12 +540,13 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [account-deletion-handoff-20261120.md](handoff/account-deletion-handoff-20261120.md) — 账号注销与 Apple / Google 登录:剩余代码与全部验证交接(2026-11-20,交 Gemini)
 - [battle-report-replay-client.md](handoff/battle-report-replay-client.md) — 交接:战报回放的客户端细节(2026-11-06)
 - [battle-script-review-retention-handoff-20261126.md](handoff/battle-script-review-retention-handoff-20261126.md) — 剧本审核流水保留期清理与 match 保留期告警:全部验证交接(2026-11-26,交 Gemini)
-- [config-table-hot-reload-handoff-20261126.md](handoff/config-table-hot-reload-handoff-20261126.md) — 配置表热更：验证、补测与收尾交接（2026-11-26，交 Gemini）
-- [gate-admission-remaining-handoff-20261126.md](handoff/gate-admission-remaining-handoff-20261126.md) — gate 连接准入:P1-5 `resources.requests` 的落码规格(2026-11-26)
+- [config-table-hot-reload-handoff-20261126.md](handoff/config-table-hot-reload-handoff-20261126.md) — 配置表热更：验证与收尾交接（2026-11-26，交 Gemini）
+- [data-consistency-review-handoff-20261126.md](handoff/data-consistency-review-handoff-20261126.md) — 数据一致性复查线:交 Gemini 验证(2026-11-26)
+- [data-overwrite-audit-r2-handoff-20261126.md](handoff/data-overwrite-audit-r2-handoff-20261126.md) — 数据覆写审计第二轮（r2）验证交接（2026-11-26，交 Gemini）
 - [login-queue-verification-handoff-20261126.md](handoff/login-queue-verification-handoff-20261126.md) — 登录排队:验证与开闸交接(2026-11-26,交 Gemini)
 - [minigame-websocket-handoff-20261120.md](handoff/minigame-websocket-handoff-20261120.md) — 小游戏 WebSocket 入口:待验证项交接(2026-11-20 起交 Gemini,2026-11-26 按当前仓库校正)
 - [payment-integration-handoff-20261120.md](handoff/payment-integration-handoff-20261120.md) — 真钱支付接入:剩余事项(2026-11-26 更新,交 Gemini 与负责人)
-- [real-name-anti-addiction-handoff-20261126.md](handoff/real-name-anti-addiction-handoff-20261126.md) — 实名认证与防沉迷：剩余代码与全部验证交 Gemini（2026-11-26）
+- [real-name-anti-addiction-handoff-20261126.md](handoff/real-name-anti-addiction-handoff-20261126.md) — 实名认证与防沉迷：代码已写完，全部验证交 Gemini（2026-11-26）
 - [redis-cluster-all-domains-handoff-20261126.md](handoff/redis-cluster-all-domains-handoff-20261126.md) — 全部 Redis 上 Cluster(缺口第 34 条)验证交接(2026-11-26,交 Gemini)
 - [server-code-completion-20261120.md](handoff/server-code-completion-20261120.md) — 服务器代码完成度核对与决定(2026-11-20)
 - [server-gap-audit-20261101.md](handoff/server-gap-audit-20261101.md) — 服务器代码缺口清单(2026-11-01)

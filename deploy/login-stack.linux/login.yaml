@@ -204,10 +204,15 @@ AuthProviders:
     Endpoint: "http://sandbox-mock:18090"
   # 官方通行证(Casdoor OIDC,auth_type: passport)。离线栈指向 sandbox-mock;连真实 Casdoor 时改为
   # Issuer/Endpoint 指向 deploy/passport 的 http://host.docker.internal:8000(或生产 https://passport.<domain>)。
+  # AdminClientId / AdminClientSecret 是注销时删通行证用户用的机密应用凭据,取 sandbox-mock 认的那一组
+  # (go/login/cmd/sandbox_mock/passport.go;内联明文只因为 Mode=dev,生产只认 AdminClientSecretEnv)。
+  # 注销执行后 GET http://sandbox-mock:18090/mock/passport/deleted_users 能看到被删的 sub。
   Passport:
     Issuer: "http://sandbox-mock:18090"
     ClientId: "xuanming-game-client"
     Endpoint: "http://sandbox-mock:18090"
+    AdminClientId: "xuanming-game-server"
+    AdminClientSecret: "sandbox_secret_keep_it_local"
 
 # 实名认证与未成年人防沉迷(docs/design/real-name-anti-addiction.md §5.8)。三个地址指向 sandbox-mock 里的国家系统 mock
 # (go/login/cmd/sandbox_mock/nppa.go),路径与真系统相同;cmd/sandbox_mock/nppa_test.go 钉住这一段。

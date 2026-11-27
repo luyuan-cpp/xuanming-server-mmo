@@ -49,38 +49,40 @@ func (s *AccountDirectoryStore) ChannelIdentityOfPlayer(ctx context.Context, pla
 		return nil, err
 	}
 
-	out := &dspb.GetPlayerChannelIdentityResponse{
-		Found:   true,
-		Account: owned.Account,
+	out, err := s.ChannelIdentityOfAccount(ctx, owned.Account)
+	if err != nil {
+		return nil, err
 	}
-	shard := s.shards.forAccount(owned.Account)
+	displays, err := s.ReadPlayerDisplays(ctx, []uint64{player})
+	if err != nil {
+		// 等级读失败整次按没读成回(服务端回 Retry):聊天按等级判世界频道门槛,拿一个 0 级回去会把人挡在外面。
+		return nil, err
+	}
+	if d := displays[player]; d != nil {
+		out.PlayerLevel = d.GetLevel()
+	}
+	return out, nil
+}
 
-	var createdMs uint64
-	err = shard.QueryRowContext(ctx,
+// ChannelIdentityOfAccount 按账号返回渠道身份与账号创建时刻,不回角色等级。建角送检时角色还没发号,只能按账号查。
+// 账号没有渠道身份(口令登录,或还没用第三方渠道登录过)时 channel、open_id 为空,不报错。
+func (s *AccountDirectoryStore) ChannelIdentityOfAccount(ctx context.Context, account string) (*dspb.GetPlayerChannelIdentityResponse, error) {
+	if !accountdirectory.ValidAccount(account) {
+		return nil, accountdirectory.ErrInvalid
+	}
+	out := &dspb.GetPlayerChannelIdentityResponse{Found: true, Account: account}
+	shard := s.shards.forAccount(account)
+	err := shard.QueryRowContext(ctx,
 		"SELECT created_ms FROM "+AccountDirectoryTableName+" WHERE account=?",
-		[]byte(owned.Account)).Scan(&createdMs)
+		[]byte(account)).Scan(&out.AccountCreatedMs)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
-	out.AccountCreatedMs = createdMs
-
-	var channel, openID string
 	err = shard.QueryRowContext(ctx,
 		"SELECT channel,open_id FROM "+AccountChannelIdentityTableName+" WHERE account=?",
-		[]byte(owned.Account)).Scan(&channel, &openID)
+		[]byte(account)).Scan(&out.Channel, &out.OpenId)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
-	}
-	out.Channel = channel
-	out.OpenId = openID
-
-	if displays, dispErr := s.ReadPlayerDisplays(ctx, []uint64{player}); dispErr == nil {
-		if d := displays[player]; d != nil {
-			out.PlayerLevel = d.GetLevel()
-		}
-	} else {
-		// 等级读失败整次按没读成回(服务端回 Retry):聊天按等级判世界频道门槛,拿一个 0 级回去会把人挡在外面。
-		return nil, dispErr
 	}
 	return out, nil
 }

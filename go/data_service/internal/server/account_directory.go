@@ -299,15 +299,22 @@ func (s *DataServiceServer) UpsertAccountChannelIdentity(ctx context.Context, in
 	return &emptypb.Empty{}, nil
 }
 
-// GetPlayerChannelIdentity 按 player_id 查所属账号的渠道身份、建号时刻与角色等级(content_guard / chat 用,只读)。
+// GetPlayerChannelIdentity 查渠道身份、建号时刻与角色等级(content_guard / chat 用,只读)。给了 player_id 按角色查;
+// player_id 为 0 时按 account 查(建角送检时角色还没发号),不回角色等级。
 func (s *DataServiceServer) GetPlayerChannelIdentity(ctx context.Context, in *dspb.GetPlayerChannelIdentityRequest) (*dspb.GetPlayerChannelIdentityResponse, error) {
 	if s.svcCtx.ChannelIdentities == nil {
 		return nil, status.Error(codes.Unavailable, "channel identity store not configured")
 	}
-	if in.GetPlayerId() == 0 {
-		return nil, status.Error(codes.InvalidArgument, "player_id required")
+	if in.GetPlayerId() == 0 && in.GetAccount() == "" {
+		return nil, status.Error(codes.InvalidArgument, "player_id or account required")
 	}
-	out, err := s.svcCtx.ChannelIdentities.ChannelIdentityOfPlayer(ctx, in.GetPlayerId())
+	var out *dspb.GetPlayerChannelIdentityResponse
+	var err error
+	if in.GetPlayerId() != 0 {
+		out, err = s.svcCtx.ChannelIdentities.ChannelIdentityOfPlayer(ctx, in.GetPlayerId())
+	} else {
+		out, err = s.svcCtx.ChannelIdentities.ChannelIdentityOfAccount(ctx, in.GetAccount())
+	}
 	if err != nil {
 		if ctx.Err() != nil || errors.Is(err, accountdirectory.ErrUnavailable) {
 			return &dspb.GetPlayerChannelIdentityResponse{Retry: true}, nil

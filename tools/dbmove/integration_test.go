@@ -652,7 +652,70 @@ func TestITTTLAttributeOnRealDatabases(t *testing.T) {
 		t.Fatalf("源库有表开着 TTL,冻结之前就要拒绝: %v", err)
 	}
 	source.exec(ctx, t, "ALTER TABLE {db}.it_expiring TTL_ENABLE='OFF'")
+	if tables, err := admin.TablesWithTTLEnabled(ctx, source.schema); err != nil || len(tables) != 0 {
+		t.Fatalf("关掉之后不再点名: %v %v", tables, err)
+	}
+	running := func() string {
+		t.Helper()
+		tables, err := admin.TablesWithRunningTTLJob(ctx, source.schema)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return strings.Join(tables, ",")
+	}
+	// TTL 开着的那一会儿 TiDB 可能已经给 it_expiring 起了一个真任务(空表几秒到二十秒结束),等它结束再核放行。
+	waitIdle := func() {
+		t.Helper()
+		for running() != "" {
+			if err := sleepContext(ctx, 500*time.Millisecond); err != nil {
+				t.Fatalf("TTL 任务一直没结束: %s", running())
+			}
+		}
+	}
+	waitIdle()
 	if err := m.requireTTLOff(ctx); err != nil {
-		t.Fatalf("关掉之后放行: %v", err)
+		t.Fatalf("属性关了、任务也结束了,放行: %v", err)
+	}
+
+	// 「还有任务在跑」:真任务几秒就结束,抓不稳,所以在一张从没开过 TTL 的表上造它的状态行(TiDB 不会去管这张表)。
+	// 要求测试账号能写 mysql.tidb_ttl_table_status;一次性实例上的 root 可以。
+	source.exec(ctx, t, "CREATE TABLE {db}.it_idle(id BIGINT PRIMARY KEY,created_at DATETIME NOT NULL) TTL=created_at + INTERVAL 30 DAY TTL_ENABLE='OFF'")
+	var tableID int64
+	if err := source.admin.QueryRowContext(ctx, "SELECT tidb_table_id FROM information_schema.tables WHERE table_schema=? AND table_name='it_idle'", source.schema).Scan(&tableID); err != nil {
+		t.Fatal(err)
+	}
+	// setJob 把这张表的状态行写成「任务 jobID 的属主在 heartbeatAgo 秒之前刷新过心跳」;jobID 为空表示没有任务。
+	setJob := func(jobID string, heartbeatAgo int) {
+		t.Helper()
+		job := sql.NullString{String: jobID, Valid: jobID != ""}
+		statement := fmt.Sprintf("REPLACE INTO mysql.tidb_ttl_table_status(table_id,parent_table_id,current_job_id,current_job_owner_hb_time) VALUES(?,?,?,NOW() - INTERVAL %d SECOND)", heartbeatAgo)
+		if _, err := source.admin.ExecContext(ctx, statement, tableID, tableID, job); err != nil {
+			t.Fatalf("write the TTL status row (the test account needs write access to mysql.tidb_ttl_table_status): %v", err)
+		}
+	}
+	t.Cleanup(func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), itTimeout)
+		defer cancel()
+		_, _ = source.admin.ExecContext(cleanup, "DELETE FROM mysql.tidb_ttl_table_status WHERE table_id=?", tableID)
+	})
+	setJob("dbmove-it", 0)
+	if got := running(); !strings.Contains(got, "it_idle") {
+		t.Fatalf("有任务、心跳是新的,要点名这张表: %q", got)
+	}
+	if err := m.requireTTLOff(ctx); !errors.Is(err, errRefused) || !strings.Contains(err.Error(), "a TTL job is still running") || !strings.Contains(err.Error(), "it_idle") {
+		t.Fatalf("还有任务在跑,冻结之前就要拒绝: %v", err)
+	}
+	// 属主节点死掉的任务没有人接手,状态行一直留着:心跳过期就不算在跑,不能把搬库永远卡住。
+	setJob("dbmove-it", int(ttlJobAliveWithin.Seconds())+60)
+	if got := running(); strings.Contains(got, "it_idle") {
+		t.Fatalf("心跳过期的任务不算在跑: %q", got)
+	}
+	setJob("", 0)
+	if got := running(); strings.Contains(got, "it_idle") {
+		t.Fatalf("任务结束之后不再点名: %q", got)
+	}
+	waitIdle()
+	if err := m.requireTTLOff(ctx); err != nil {
+		t.Fatalf("没有任务之后放行: %v", err)
 	}
 }

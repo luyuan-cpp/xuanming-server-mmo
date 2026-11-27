@@ -16,7 +16,7 @@ struct PlayerLoginIdentityComp
 {
 	SessionId sessionId{kInvalidSessionId};
 	uint64_t loginGeneration{0};
-	// 这条会话所在的 gate 进程(gate 的 node_uuid,取自放行那次入场所走入站连接的握手身份);空 = 未知
-	// (托管落点等不经 gate 连接的入场)。会话号相同而实例不同的是另一个进程上的另一条会话。
+	// 这条会话所在的 gate 进程(gate 的 node_uuid:gate 转来的入场取入站连接的握手身份,托管落点取 location 为断开那次登录
+	// 记下的实例);空 = 未知(location 没记实例的托管落点)。会话号相同而实例不同的是另一个进程上的另一条会话。
 	std::string gateInstanceId;
 };

@@ -264,6 +264,8 @@ func TestTicdcStillExists(t *testing.T) {
 	code := http.StatusOK
 	health := http.StatusOK
 	requests := 0
+	// afterFirstLookup 在第一次查 changefeed 答完之后跑一次,用例拿它模拟「两轮确认之间 TiCDC 的回答变了」。
+	var afterFirstLookup func()
 	respond := func(newCode int, newBody string) {
 		mu.Lock()
 		defer mu.Unlock()
@@ -285,15 +287,27 @@ func TestTicdcStillExists(t *testing.T) {
 		case "/api/v2/changefeeds/feed-1":
 			w.WriteHeader(code)
 			_, _ = w.Write([]byte(body))
+			if afterFirstLookup != nil {
+				change := afterFirstLookup
+				afterFirstLookup = nil
+				change()
+			}
 		default:
 			t.Errorf("路径: %s", r.URL.Path)
 		}
 	}))
 	defer server.Close()
-	// cleanup 只连 TiCDC,两侧的库都不连。
-	repl := &ticdcReplication{api: server.URL, changefeed: "feed-1", client: server.Client()}
+	// cleanup 只连 TiCDC,两侧的库都不连。两轮确认之间的等待压到 1 毫秒。
+	repl := &ticdcReplication{api: server.URL, changefeed: "feed-1", client: server.Client(), recheckDelay: time.Millisecond}
 	ctx := context.Background()
 	feed := testFeed
+	const notExists = `{"error_msg":"changefeed not exists","error_code":"CDC:ErrChangeFeedNotExists"}`
+	const stillNormal = `{"id":"feed-1","state":"normal","checkpoint_ts":7}`
+	requestCount := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return requests
+	}
 
 	// 在跑、暂停(stopped)、出错都算还在:它一恢复就接着复制,源库上的 DROP DATABASE 会跟着过去。
 	for _, state := range []string{"normal", "warning", "stopped", "failed", "error", "finished", "removed"} {
@@ -303,11 +317,31 @@ func TestTicdcStillExists(t *testing.T) {
 			t.Fatalf("%s 的 changefeed 算还在: %v %q %v", state, exists, detail, err)
 		}
 	}
-	// TiCDC 对不存在的 changefeed 回 400 加错误码:这才是撤掉了。
-	respond(http.StatusBadRequest, `{"error_msg":"changefeed not exists","error_code":"CDC:ErrChangeFeedNotExists"}`)
+	// TiCDC 对不存在的 changefeed 回 400 加错误码:这才是撤掉了。要问两轮(每轮先健康、再 changefeed),两轮都答没有才算数。
+	respond(http.StatusBadRequest, notExists)
+	asked := requestCount()
 	if exists, _, err := repl.StillExists(ctx, feed); err != nil || exists {
 		t.Fatalf("明确回答没有才算撤掉: %v %v", exists, err)
 	}
+	if got := requestCount() - asked; got != 4 {
+		t.Fatalf("「没有」要确认两轮,共 4 次请求: %d", got)
+	}
+	// 第一轮正好撞上换 owner:新 owner 还没把 changefeed 装进内存,答「没有」;第二轮它装好了,答「还在」。不能算撤掉。
+	mu.Lock()
+	afterFirstLookup = func() { code, body = http.StatusOK, stillNormal }
+	mu.Unlock()
+	if exists, detail, err := repl.StillExists(ctx, feed); err != nil || !exists || !strings.Contains(detail, "still exists") {
+		t.Fatalf("第二轮答还在,就是还在: %v %q %v", exists, detail, err)
+	}
+	// 第一轮答「没有」,第二轮 TiCDC 不健康了:查不成。
+	respond(http.StatusBadRequest, notExists)
+	mu.Lock()
+	afterFirstLookup = func() { health = http.StatusInternalServerError }
+	mu.Unlock()
+	if exists, _, err := repl.StillExists(ctx, feed); err == nil || exists || !strings.Contains(err.Error(), "does not report healthy") {
+		t.Fatalf("第二轮不健康不能算撤掉: %v %v", exists, err)
+	}
+	setHealth(http.StatusOK)
 	// TiCDC 不健康时(owner 刚接任、版本不一致)它对还在的 changefeed 也答「没有」:这时的「没有」不算数,查不成。
 	setHealth(http.StatusInternalServerError)
 	if exists, _, err := repl.StillExists(ctx, feed); err == nil || exists || errors.Is(err, errRefused) || !strings.Contains(err.Error(), "does not report healthy") {

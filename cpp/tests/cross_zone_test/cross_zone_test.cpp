@@ -10985,16 +10985,18 @@ TEST(HostedPlacementRetry, OnlyAPlacementStillPointingHereIsRetried)
 namespace
 {
 constexpr uint64_t kHostedLostGeneration = 1760400000500;
+constexpr std::string_view kHostedLostGate = "gate-process-of-the-hosted-login";
 
 // 一名离线托管中的角色(断线保留 + 挂机月卡已确认),站在 kRelocateSourceScene 里,缓存 owner_epoch 5,登录身份是
-// (kSessionAtExit, kHostedLostGeneration)。调用方先构造 PlayerStoreDirectFixture(退出要提交 SQL release),本函数之后
-// 再 MarkPersisted / SeedCurrentPlayerStore(进保留改过会话快照)。
+// (kSessionAtExit, kHostedLostGeneration, kHostedLostGate)。调用方先构造 PlayerStoreDirectFixture(退出要提交 SQL release),
+// 本函数之后再 MarkPersisted / SeedCurrentPlayerStore(进保留改过会话快照)。
 void MakeHostedResident(entt::entity &player, SceneEntity &scene)
 {
     player = MakeOnlinePlayer(kSessionAtExit);
     auto &identity = tlsEcs.actorRegistry.emplace<PlayerLoginIdentityComp>(player);
     identity.sessionId = kSessionAtExit;
     identity.loginGeneration = kHostedLostGeneration;
+    identity.gateInstanceId = std::string(kHostedLostGate);
     tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 5;
     tlsEcs.actorRegistry.emplace<PlayerRoleAdmissionComp>(player, kFixtureAdmissionGeneration, kFixtureOwnerRevision);
     scene = PlaceInScene(player, kRelocateSourceScene);
@@ -11057,7 +11059,8 @@ TEST(RelocateConfirmEcs, HostedCharacterIsRelocatedThroughTheConfirmTableAndNeve
     EXPECT_EQ(entry->sessionId, kSessionAtExit) << "断开那次登录的会话号,只作身份";
     EXPECT_EQ(entry->loginGeneration, kHostedLostGeneration);
     EXPECT_EQ(entry->gateNodeId, 0u) << "没有 gate";
-    EXPECT_TRUE(entry->gateInstanceId.empty());
+    EXPECT_EQ(entry->gateInstanceId, kHostedLostGate)
+        << "变异红:断开那次登录所在的 gate 进程记进条目,只作入场栅栏的身份(scene-enter-chain-residuals.md §14.8)";
     EXPECT_EQ(entry->target.sceneId, kRelocateSourceScene) << "去向提示:原频道";
     EXPECT_EQ(entry->ownerRevision, kFixtureOwnerRevision) << "重发要带回的归属修订";
     EXPECT_EQ(entry->sourceSceneId, kRelocateSourceScene);
@@ -11084,6 +11087,27 @@ TEST(RelocateConfirmEcs, HostedCharacterIsRelocatedThroughTheConfirmTableAndNeve
     ExpectRelocateStats(RelocateStats(), expected);
 
     DrainRelocateConfirms();
+}
+
+TEST(RelocateConfirmEcs, HostedEntryRejectsALateEnterFromAnotherGateProcessWithTheSameSessionId)
+{
+    // scene-enter-chain-residuals.md §14.8:托管角色的实体销毁之后,本节点只剩托管条目记着他。条目原来不带实例,同一 node_id 上
+    // 另一个 gate 进程同号、更早的一次登录迟到的入场(gate 补发不经 scene_manager)按会话号判成同一会话、被放行并结清条目。
+    ASSERT_NO_FATAL_FAILURE(DrainRelocateConfirms());
+    ASSERT_NO_FATAL_FAILURE(RegisterNotSentHostedRelocate());
+    const auto entry = PlayerLifecycleSystem::PeekRelocateConfirm(kExitPlayerId);
+    ASSERT_TRUE(entry.has_value());
+
+    PlayerEnterContext late = FenceEnter(kSessionAtExit, kHostedLostGeneration - 1, LOGIN_RECONNECT);
+    late.gateInstanceId = "gate-process-reusing-the-session-id";
+    EXPECT_EQ(EnterGameNode(late), PlayerLifecycleSystem::EnterGameNodeOutcome::kRejected)
+        << "变异红:另一个 gate 进程上同号、更早的登录不是托管的那一次";
+    const auto kept = PlayerLifecycleSystem::PeekRelocateConfirm(kExitPlayerId);
+    ASSERT_TRUE(kept.has_value()) << "条目没有被误结清";
+    EXPECT_EQ(kept->seq, entry->seq);
+    EXPECT_EQ(PendingEnter(), nullptr) << "被拒的入场不登记待入场上下文";
+
+    ASSERT_NO_FATAL_FAILURE(ResetFenceHost());
 }
 
 TEST(RelocateConfirmEcs, HostedTicketIsVoidedWhenTheLoginIdentityChanged)

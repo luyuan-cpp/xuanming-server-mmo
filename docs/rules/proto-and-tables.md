@@ -13,7 +13,7 @@
 1. proto 源契约在 `proto/`。在仓库根目录执行：
    - 生成器源码变化或尚无工具时：`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-build`
    - 常规重生成：`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`
-   - 共享 Go 绑定写入 `go/proto/`。仅需重生成 db/login 的 go-zero 包装与修正导入时才执行 `cd go && build.bat`，它不能代替完整 proto 生成。
+   - 共享 Go 绑定写入 `go/proto/`。db / login 的 gRPC 服务端转发层（`internal/server/*/*server.go`）是手写的，goctl 与 `go/build.bat` / `go/build.ps1` 2026-11-21 起退役：给这两个服务加 RPC 时在对应 `*server.go` 手补转发方法，login 漏接由 `go/login` 的 `TestGoctlServerWrappersImplementEveryRPC` 拦下。
    - 默认生成配置会写同级客户端仓；不需要写客户端仓时使用 `-ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`。
 2. **同级客户端同步（改动客户端可见 `.proto`、`Tip.xlsx`、配置表，或默认配置写入了 `../mmorpg-client/Assets/Scripts/Net/Generated/Rpc/` 时必做）**：切到同级 `mmorpg-client` 运行 `.\gen.bat client`（或在客户端直接运行 `.\gen.bat` 一键串联服务端 `export` + `proto-gen` + 客户端同步），依次完成：
    - `pwsh -File tools/sync_tables.ps1`（同步二进制配置表 `Assets/StreamingAssets/Tables/*.pb` 及 `Table/Generated`、`Net/Generated/Rpc` 的 `.meta`）

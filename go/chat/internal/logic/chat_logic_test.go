@@ -15,6 +15,9 @@ import (
 	base "proto/common/base"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 )
@@ -299,14 +302,69 @@ func TestReportChatValidationAndRelays(t *testing.T) {
 	require.Equal(t, 1, spy.reports)
 }
 
+const opsToken = "ops-token-0123456789"
+
+// opsContext 是带着运维口令的内部调用。
+func opsContext(token string) context.Context {
+	return metadata.NewIncomingContext(context.Background(), metadata.Pairs(AdminTokenMetadataKey, token))
+}
+
+// 撤回是处置动作:口令没配时整个入口停用,口令不对或没带一律拒绝,都不碰库、不广播。
+func TestRetractWorldChatRequiresTheOpsToken(t *testing.T) {
+	request := &chatpb.RetractWorldChatRequest{SenderPlayerId: playerB, SendTimeMs: 999, Reason: "gm"}
+	for name, tc := range map[string]struct {
+		configured string
+		ctx        context.Context
+	}{
+		"ops surface disabled": {configured: "", ctx: opsContext(opsToken)},
+		"no token":             {configured: opsToken, ctx: context.Background()},
+		"wrong token":          {configured: opsToken, ctx: opsContext(opsToken + "x")},
+		"empty token":          {configured: opsToken, ctx: opsContext("")},
+	} {
+		t.Run(name, func(t *testing.T) {
+			sc, spy := fixture()
+			pusher := &pushSpy{}
+			sc.WorldPush = pusher
+			sc.AdminToken = tc.configured
+			resp, err := NewChatLogic(tc.ctx, sc).RetractWorldChat(request)
+			require.Nil(t, resp)
+			require.Equal(t, codes.PermissionDenied, status.Code(err))
+			require.NotContains(t, err.Error(), opsToken)
+			require.Zero(t, spy.retracts)
+			require.Empty(t, pusher.retracted)
+		})
+	}
+}
+
+func TestResolveAdminToken(t *testing.T) {
+	env := func(value string) func(string) string {
+		return func(key string) string {
+			if key == AdminTokenEnv {
+				return value
+			}
+			return ""
+		}
+	}
+	token, err := ResolveAdminToken(env(""))
+	require.NoError(t, err)
+	require.Empty(t, token)
+	token, err = ResolveAdminToken(env(opsToken))
+	require.NoError(t, err)
+	require.Equal(t, opsToken, token)
+	_, err = ResolveAdminToken(env("short"))
+	require.Error(t, err)
+	require.NotContains(t, err.Error(), "short")
+}
+
 func TestRetractWorldChatPublishesOnlyWhenRetracted(t *testing.T) {
 	sc, spy := fixture()
 	pusher := &pushSpy{}
 	sc.WorldPush = pusher
+	sc.AdminToken = opsToken
 	spy.retract = func(_ context.Context, sender uint64, ms int64, reason string) (bool, uint32, error) {
 		return false, 0, nil // 幂等重复撤回
 	}
-	resp, err := NewChatLogic(context.Background(), sc).RetractWorldChat(&chatpb.RetractWorldChatRequest{
+	resp, err := NewChatLogic(opsContext(opsToken), sc).RetractWorldChat(&chatpb.RetractWorldChatRequest{
 		SenderPlayerId: playerB,
 		SendTimeMs:     999,
 		Reason:         "gm",
@@ -319,7 +377,7 @@ func TestRetractWorldChatPublishesOnlyWhenRetracted(t *testing.T) {
 	spy.retract = func(_ context.Context, sender uint64, ms int64, reason string) (bool, uint32, error) {
 		return true, 0, nil
 	}
-	resp, err = NewChatLogic(context.Background(), sc).RetractWorldChat(&chatpb.RetractWorldChatRequest{
+	resp, err = NewChatLogic(opsContext(opsToken), sc).RetractWorldChat(&chatpb.RetractWorldChatRequest{
 		SenderPlayerId: playerB,
 		SendTimeMs:     999,
 		Reason:         "gm",

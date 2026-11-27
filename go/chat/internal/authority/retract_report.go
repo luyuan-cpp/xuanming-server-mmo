@@ -20,8 +20,11 @@ const (
 	profileCacheMaxEntries = 1 << 16
 	maxRepeatScanRows      = 64
 	minSpamNormalizedRunes = 4
-	maxRetractReasonBytes  = 128
-	maxReportDetailBytes   = 200
+	// crossSenderMinRunes 是「多个号发同一段内容」这条规则起算的长度(归一化后的字符数)。聊天服务全服一份,
+	// 「哈哈哈哈」「有人组队吗」这类短句一分钟里有三个人说得一模一样是常态,不是刷屏;多号群发的广告要写卖点和去处,短不了。
+	crossSenderMinRunes   = 10
+	maxRetractReasonBytes = 128
+	maxReportDetailBytes  = 200
 )
 
 // PlayerProfile 是防刷/等级门槛所需的玩家基础档案(由 data_service 提供并带短 TTL 缓存)。
@@ -117,7 +120,8 @@ func (s *Store) loadPlayerProfile(ctx context.Context, actor uint64, peer uint64
 }
 
 // normalizeSpamHash 忽略空白、标点、全角/小写差异计算归一化内容摘要(用于跨副本重复刷屏判定)。
-func normalizeSpamHash(content string) ([32]byte, bool) {
+// 第二个返回值是归一化后的字符数;不足 minSpamNormalizedRunes 时第三个返回值为 false,不参与判定。
+func normalizeSpamHash(content string) ([32]byte, int, bool) {
 	var buf bytes.Buffer
 	runes := 0
 	for _, r := range content {
@@ -137,16 +141,20 @@ func normalizeSpamHash(content string) ([32]byte, bool) {
 		runes++
 	}
 	if runes < minSpamNormalizedRunes {
-		return [32]byte{}, false
+		return [32]byte{}, runes, false
 	}
-	return sha256.Sum256(buf.Bytes()), true
+	return sha256.Sum256(buf.Bytes()), runes, true
 }
 
+// checkAndRecordRepeatSpam 判世界频道的重复刷屏并记下这一条。只由世界频道调用:私聊里各说各的「在吗」「谢谢」不是刷屏,
+// 新号群发私聊由 checkAndRecordPrivateTarget 的人数上限管。
+//   - 同一个人在时间窗里重复发同一段内容,到 DuplicateSpamMaxPerSender 次后拒绝;
+//   - 另有 DuplicateSpamMaxSenders 个人在时间窗里发过同一段内容时拒绝,只对 crossSenderMinRunes 以上的内容生效。
 func (s *Store) checkAndRecordRepeatSpam(ctx context.Context, tx *sql.Tx, actor, now uint64, content string) (uint32, error) {
 	if s.rules.DuplicateSpamWindowMs <= 0 || (s.rules.DuplicateSpamMaxSenders <= 0 && s.rules.DuplicateSpamMaxPerSender <= 0) {
 		return 0, nil
 	}
-	hash, ok := normalizeSpamHash(content)
+	hash, runes, ok := normalizeSpamHash(content)
 	if !ok {
 		return 0, nil
 	}
@@ -179,7 +187,7 @@ func (s *Store) checkAndRecordRepeatSpam(ctx context.Context, tx *sql.Tx, actor,
 	if err = rows.Err(); err != nil {
 		return 0, err
 	}
-	if s.rules.DuplicateSpamMaxSenders > 0 && len(others) >= s.rules.DuplicateSpamMaxSenders {
+	if runes >= crossSenderMinRunes && s.rules.DuplicateSpamMaxSenders > 0 && len(others) >= s.rules.DuplicateSpamMaxSenders {
 		return constants.ErrDuplicateSpam, nil
 	}
 	if s.rules.DuplicateSpamMaxPerSender > 0 && selfCount >= s.rules.DuplicateSpamMaxPerSender {

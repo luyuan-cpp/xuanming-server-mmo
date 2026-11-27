@@ -2,6 +2,7 @@ package authority
 
 import (
 	"context"
+	"database/sql"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -14,14 +15,16 @@ import (
 )
 
 func TestNormalizeSpamHashFoldsPunctAndWidthAndSkipsShortText(t *testing.T) {
-	h1, ok1 := normalizeSpamHash("加 微 信：A B １２３！")
-	h2, ok2 := normalizeSpamHash("加微信 ab123")
+	h1, n1, ok1 := normalizeSpamHash("加 微 信：A B １２３！")
+	h2, n2, ok2 := normalizeSpamHash("加微信 ab123")
 	require.True(t, ok1)
 	require.True(t, ok2)
 	require.Equal(t, h1, h2, "分隔符、标点、全半角与大小写变换后应命中同一刷屏摘要")
+	require.Equal(t, 8, n1, "归一化后的字符数不含分隔符与标点")
+	require.Equal(t, n1, n2)
 
-	_, okShort := normalizeSpamHash("6 6 6")
-	require.False(t, okShort, "不足 4 个有效字符的短语(如 +1 / 666)不计入跨账号重复刷屏")
+	_, _, okShort := normalizeSpamHash("6 6 6")
+	require.False(t, okShort, "不足 4 个有效字符的短语(如 +1 / 666)不计入重复刷屏")
 }
 
 func TestUtcDayYMDAndFilterRetractedRows(t *testing.T) {
@@ -89,6 +92,13 @@ func TestAntiSpamRetractAndReportTiDB(t *testing.T) {
 		return profiles[id], nil
 	})))
 	require.NoError(t, err)
+	// 时间接缝:每取一次时间前进 1.5 秒。新号判定、每秒限流、重复刷屏的时间窗都按这个时间算(档案里的建号时间也是按它写的),
+	// 用库的真实时间的话「新号」早就不是新号了;每条消息落在不同的秒里,不撞每秒限流,同一个人的两条相同内容也不会落在同一毫秒。
+	clockMs := nowMs
+	store.clock = func(context.Context, *sql.Tx) (uint64, error) {
+		clockMs += 1500
+		return clockMs, nil
+	}
 
 	// 1. 世界频道等级门槛。
 	res, err := store.Send(original(t, 11), &chatpb.SendChatRequest{
@@ -125,22 +135,54 @@ func TestAntiSpamRetractAndReportTiDB(t *testing.T) {
 	// 3. 多账号跨副本重复刷屏(同一归一化内容 2 个发送者放行,第 3 个发送者拒绝)。
 	firstWorld, err := store.Send(original(t, 12), &chatpb.SendChatRequest{
 		RequestId: "spam-12",
-		Message:   &chatpb.ChatMessage{Channel: chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD, Content: "限时特惠代练加群"},
+		Message:   &chatpb.ChatMessage{Channel: chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD, Content: "限时特惠代练加群先到先得"},
 	})
 	require.NoError(t, err)
 	require.Zero(t, firstWorld.Tip)
 	secondWorld, err := store.Send(original(t, 13), &chatpb.SendChatRequest{
 		RequestId: "spam-13",
-		Message:   &chatpb.ChatMessage{Channel: chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD, Content: "限 时 特 惠 代 练 加 群!"},
+		Message:   &chatpb.ChatMessage{Channel: chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD, Content: "限 时 特 惠 代 练 加 群,先 到 先 得!"},
 	})
 	require.NoError(t, err)
 	require.Zero(t, secondWorld.Tip)
 	thirdWorld, err := store.Send(original(t, 14), &chatpb.SendChatRequest{
 		RequestId: "spam-14",
-		Message:   &chatpb.ChatMessage{Channel: chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD, Content: "限时特惠代练加群"},
+		Message:   &chatpb.ChatMessage{Channel: chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD, Content: "限时特惠代练加群先到先得"},
 	})
 	require.NoError(t, err)
 	require.Equal(t, constants.ErrDuplicateSpam, thirdWorld.Tip)
+
+	// 3b. 短句不按人数判:已经有两个人说过「哈哈哈哈哈」,第三个人照样能说。
+	for i, sender := range []uint64{12, 13, 14} {
+		short, sendErr := store.Send(original(t, sender), &chatpb.SendChatRequest{
+			RequestId: "short-" + string(rune('a'+i)),
+			Message:   &chatpb.ChatMessage{Channel: chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD, Content: "哈哈哈哈哈"},
+		})
+		require.NoError(t, sendErr)
+		require.Zero(t, short.Tip, "a short phrase from a third sender must not be rejected")
+	}
+	// 3c. 同一个人重复发同一段内容:前两条放行,第三条拒绝(短句也算)。
+	second, err := store.Send(original(t, 13), &chatpb.SendChatRequest{
+		RequestId: "short-again-1",
+		Message:   &chatpb.ChatMessage{Channel: chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD, Content: "哈哈哈哈哈!"},
+	})
+	require.NoError(t, err)
+	require.Zero(t, second.Tip)
+	third, err := store.Send(original(t, 13), &chatpb.SendChatRequest{
+		RequestId: "short-again-2",
+		Message:   &chatpb.ChatMessage{Channel: chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD, Content: "哈哈哈哈哈"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, constants.ErrDuplicateSpam, third.Tip)
+	// 3d. 私聊不判重复:同一句话发三遍、别人也说过,都不拦(13、14 是老号,不受私聊人数上限约束)。
+	for i := 0; i < 3; i++ {
+		private, sendErr := store.Send(original(t, 13), &chatpb.SendChatRequest{
+			RequestId: "priv-same-" + string(rune('a'+i)),
+			Message:   &chatpb.ChatMessage{Channel: chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_PRIVATE, TargetPlayerId: 14, Content: "限时特惠代练加群先到先得"},
+		})
+		require.NoError(t, sendErr)
+		require.Zero(t, private.Tip, "private chat is not subject to the duplicate-content rule")
+	}
 
 	// 4. 举报已发送的世界消息并幂等重入。
 	reportTip, err := store.ReportMessage(original(t, 13), &chatpb.ReportChatRequest{

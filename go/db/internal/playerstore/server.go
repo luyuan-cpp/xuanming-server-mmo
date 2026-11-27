@@ -96,18 +96,22 @@ func storeBreakerName(storageID uint32) string {
 // docs/design/db-task-store-unavailable-deferral.md 文首 2026-11-20)。
 //
 // 放行时返回 settle,调用方拿到这次调用的结局之后必须调一次;熔断开着时返回 breaker.ErrServiceUnavailable,这次调用不碰库。
-// 不算这个库的失败:闸门冻结(搬库窗口,库没有坏)、调用方自己取消。
+// 闸门冻结(搬库窗口)记成功:闸门答了话,库没有坏。调用方自己取消时成功、失败都不记:挂断说明不了库的好坏,
+// 记成成功会在库失联时顶着熔断不让它打开(与 data_service 的建连熔断同一口径,internal/svc/db_breaker.go)。
 func enterStore(ctx context.Context, storageID uint32) (settle func(outcome error), err error) {
 	promise, err := breaker.GetBreaker(storeBreakerName(storageID)).Allow()
 	if err != nil {
 		return nil, err
 	}
 	return func(outcome error) {
-		if outcome == nil || errors.Is(outcome, authoritysql.ErrWriterFrozen) || errors.Is(ctx.Err(), context.Canceled) {
+		switch {
+		case outcome == nil || errors.Is(outcome, authoritysql.ErrWriterFrozen):
 			promise.Accept()
-			return
+		case errors.Is(ctx.Err(), context.Canceled):
+			// 不结算:go-zero 的 promise 不占名额,丢掉它就是这一次不进统计。
+		default:
+			promise.Reject(outcome.Error())
 		}
-		promise.Reject(outcome.Error())
 	}, nil
 }
 

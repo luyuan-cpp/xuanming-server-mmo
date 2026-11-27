@@ -46,6 +46,11 @@ type AppleRevoker interface {
 	Revoke(ctx context.Context, grant auth.AppleGrant) error
 }
 
+// PassportUsers 删除官方通行证(Casdoor)里的用户(*auth.PassportUserDeleter)。用户已经不在也算成功,可以重复调。
+type PassportUsers interface {
+	DeleteUser(ctx context.Context, sub string) error
+}
+
 // 申请来源,与 data_service 的 store.DeletionSourceUser / DeletionSourceAdmin 同值。
 const (
 	SourceUser  uint32 = 1
@@ -62,10 +67,13 @@ var requestTotal = metric.NewCounterVec(&metric.CounterVecOpts{
 })
 
 // Service 编排申请、撤销与执行。Apple 为 nil 表示没配撤销:Apple 账号照常注销,客户端提示玩家到 Apple 设置里手动移除。
+// Passport 为 nil 表示没配通行证的管理凭据(生产配了通行证登录就必须配,见 config.resolvePassportProvider;只有 dev/test 会是 nil):
+// 通行证账号照常注销,通行证里的用户留着,每次都记 ERROR。
 type Service struct {
 	Dir      Directory
 	Sessions Sessions
 	Apple    AppleRevoker
+	Passport PassportUsers
 }
 
 // Request 申请注销(§4.2)。account 已由调用方用新取的凭据认证过;isApple 时 appleCode 是这次重新授权拿到的授权码。

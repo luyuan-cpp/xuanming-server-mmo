@@ -47,7 +47,7 @@
           "visible": true,
           "required": true,
           "prompted": false,
-          "rule": "No verification"
+          "rule": "Normal"
         },
         {
           "name": "Password",
@@ -64,6 +64,22 @@
           "rule": "None"
         }
       ]
+    },
+    {
+      "owner": "admin",
+      "name": "app-xuanming-server",
+      "displayName": "Xuanming Game Server",
+      "organization": "xuanming",
+      "clientId": "xuanming-game-server",
+      "cert": "cert-built-in",
+      "enablePassword": false,
+      "enableSignUp": false,
+      "enableSigninSession": false,
+      "enableCodeSignin": false,
+      "grantTypes": [
+        "client_credentials"
+      ],
+      "redirectUris": []
     }
   ]
 }

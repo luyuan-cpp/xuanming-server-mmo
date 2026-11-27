@@ -99,8 +99,8 @@ func main() {
 	if c.HasDataServiceRpc() {
 		dsCli := zrpc.MustNewClient(dsclient.Conf(c.DataServiceRpc))
 		dsRPC := dspb.NewDataServiceClient(dsCli.Conn())
-		lookup = platform.IdentityLookupFunc(func(callCtx context.Context, playerID uint64) (platform.Identity, error) {
-			resp, rpcErr := dsRPC.GetPlayerChannelIdentity(callCtx, &dspb.GetPlayerChannelIdentityRequest{PlayerId: playerID})
+		lookup = platform.IdentityLookupFunc(func(callCtx context.Context, playerID uint64, account string) (platform.Identity, error) {
+			resp, rpcErr := dsRPC.GetPlayerChannelIdentity(callCtx, &dspb.GetPlayerChannelIdentityRequest{PlayerId: playerID, Account: account})
 			if rpcErr != nil {
 				return platform.Identity{}, rpcErr
 			}

@@ -62,10 +62,11 @@
 ```
 pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-build
 pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run
-pwsh -File go/build.ps1
 cd D:\luyuan\mmorpg-client
 .\gen.bat client
 ```
+
+原来生成后跑 `go/build.ps1` 的一步作废:该脚本 11-21 随 goctl 退役删除,login 转发层是手写的,由 `go/login` 的 `TestGoctlServerWrappersImplementEveryRPC` 核对。
 
 `gen.bat client` 依次跑 `tools/sync_tables.ps1`、`tools/gen_proto.ps1`、`tools/gen_messageids.ps1`、`tools/client_compile_check.ps1`。
 

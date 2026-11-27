@@ -555,7 +555,7 @@ func TestTryReserveFastPathSlot_BudgetAndPerMemberExpiry(t *testing.T) {
 	ctx := context.Background()
 	reserve := func(budget uint32) bool {
 		t.Helper()
-		ok, err := q.TryReserveFastPathSlot(ctx, 1, budget)
+		ok, err := q.TryReserveFastPathSlot(ctx, 1, budget, "")
 		if err != nil {
 			t.Fatalf("reserve(budget=%d): %v", budget, err)
 		}
@@ -628,7 +628,7 @@ func TestFastPath_SustainedLoginsDoNotStarveBudget(t *testing.T) {
 			t.Fatalf("sec=%d: free hit 0 with %d online of %d (admitted=%d): connected players are double-counted",
 				sec, online, capacity, admitted)
 		}
-		ok, err := q.TryReserveFastPathSlot(ctx, 1, capacity-online)
+		ok, err := q.TryReserveFastPathSlot(ctx, 1, capacity-online, "")
 		if err != nil || !ok {
 			t.Fatalf("sec=%d: fast-path reservation refused (ok=%v err=%v) with %d online of %d",
 				sec, ok, err, online, capacity)
@@ -761,7 +761,7 @@ func TestTryReserveFastPathSlot_ConcurrentNeverExceedsBudget(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			ok, err := q.TryReserveFastPathSlot(ctx, 1, budget)
+			ok, err := q.TryReserveFastPathSlot(ctx, 1, budget, "")
 			if err != nil {
 				errs <- err
 				return
@@ -790,7 +790,7 @@ func TestLegacyAdmittedSetKey_NeverWritten(t *testing.T) {
 	ctx := context.Background()
 	prov := oneGateProvider(10, 0)
 
-	if ok, err := q.TryReserveFastPathSlot(ctx, 1, 10); err != nil || !ok {
+	if ok, err := q.TryReserveFastPathSlot(ctx, 1, 10, ""); err != nil || !ok {
 		t.Fatalf("reserve = (%v, %v), want (true, nil)", ok, err)
 	}
 	res, err := q.Enqueue(ctx, 1, "alice", "dev1")
@@ -839,11 +839,11 @@ func TestAdmittedAccounting_RedisDown_FailsClosed(t *testing.T) {
 	if free, _, _, _, err := FreeSlots(ctx, prov, q, 1, 1.5); err == nil || free != 0 {
 		t.Fatalf("FreeSlots = (free=%d, err=%v), want (0, error): no accounting, no admission", free, err)
 	}
-	if ok, err := q.TryReserveFastPathSlot(ctx, 1, 5); err == nil || ok {
+	if ok, err := q.TryReserveFastPathSlot(ctx, 1, 5, ""); err == nil || ok {
 		t.Fatalf("TryReserveFastPathSlot = (%v, %v), want (false, error)", ok, err)
 	}
 	// budget 0 不碰 Redis:Redis 挂着也不报错。
-	if ok, err := q.TryReserveFastPathSlot(ctx, 1, 0); err != nil || ok {
+	if ok, err := q.TryReserveFastPathSlot(ctx, 1, 0, ""); err != nil || ok {
 		t.Fatalf("TryReserveFastPathSlot(budget=0) = (%v, %v), want (false, nil)", ok, err)
 	}
 }
@@ -876,7 +876,7 @@ func TestConsume_PlaceholderWriteFailureDoesNotFailAdmit(t *testing.T) {
 	if _, err := q.AdmittedCount(ctx, 1); err == nil {
 		t.Fatal("AdmittedCount must fail on a wrong-type key")
 	}
-	if ok, err := q.TryReserveFastPathSlot(ctx, 1, 5); err == nil || ok {
+	if ok, err := q.TryReserveFastPathSlot(ctx, 1, 5, ""); err == nil || ok {
 		t.Fatalf("TryReserveFastPathSlot = (%v, %v), want (false, error)", ok, err)
 	}
 }
@@ -1026,7 +1026,7 @@ func TestAdmittedKeyTTL_SmallerWindowNeverShortensIt(t *testing.T) {
 	}
 	reserve := func(q *Queue) {
 		t.Helper()
-		if ok, err := q.TryReserveFastPathSlot(ctx, 1, 100); err != nil || !ok {
+		if ok, err := q.TryReserveFastPathSlot(ctx, 1, 100, ""); err != nil || !ok {
 			t.Fatalf("reserve = (%v, %v), want (true, nil)", ok, err)
 		}
 	}
@@ -1103,7 +1103,7 @@ func TestAdmittedKey_EveryWritePathSetsTTLWhenMissing(t *testing.T) {
 		{"fast path", func(t *testing.T, q *Queue, shape func()) {
 			t.Helper()
 			shape()
-			if ok, err := q.TryReserveFastPathSlot(ctx, 1, 10); err != nil || !ok {
+			if ok, err := q.TryReserveFastPathSlot(ctx, 1, 10, ""); err != nil || !ok {
 				t.Fatalf("reserve = (%v, %v), want (true, nil)", ok, err)
 			}
 		}},
@@ -2959,7 +2959,7 @@ func TestPopAdmit_BudgetSharesFastPathPlaceholdersAndSkipsExpired(t *testing.T) 
 	enqueueN(t, q, rdb, 4)
 	const budget = 3
 
-	if ok, err := q.TryReserveFastPathSlot(ctx, 1, budget); err != nil || !ok {
+	if ok, err := q.TryReserveFastPathSlot(ctx, 1, budget, ""); err != nil || !ok {
 		t.Fatalf("reserve = (%v, %v), want (true, nil)", ok, err)
 	}
 	if err := rdb.ZAdd(ctx, admittedZSetKey(1), redis.Z{Score: float64(clk.Now().UnixMilli()), Member: "expires-now"}).Err(); err != nil {
@@ -3287,10 +3287,48 @@ func TestHoldReconnectSlot_OnePlaceholderPerPlayer(t *testing.T) {
 		t.Fatalf("hold another player: %v", err)
 	}
 	mustInflight(2, "two players")
-	if ok, err := q.TryReserveFastPathSlot(ctx, 1, 2); err != nil || ok {
+	if ok, err := q.TryReserveFastPathSlot(ctx, 1, 2, ""); err != nil || ok {
 		t.Fatalf("fast path with a budget of 2 = (%v, %v), want (false, nil): both seats are held by reconnects", ok, err)
 	}
 
 	clk.Advance(q.handoffGrace)
 	mustInflight(0, "after handoffGrace")
+}
+
+// 快速通道一个账号在途只占一个名额(2026-11-26):同一个账号反复占位,成员只有一枚、就是它的排队条目号,
+// 到期时刻跟着最后一次走;名额已满时它照样能续上自己那一枚,别的账号占不到。
+// 修复前红:同一个账号占三次就占掉三个名额(每次一枚 fast:<uuid>),后面的账号被挤去排队。
+func TestTryReserveFastPathSlot_OneSlotPerAccount(t *testing.T) {
+	q, rdb, clk := newClockedQueue(t)
+	ctx := context.Background()
+
+	for range 3 {
+		if ok, err := q.TryReserveFastPathSlot(ctx, 1, 2, "alice"); err != nil || !ok {
+			t.Fatalf("alice reserve = (%v, %v), want (true, nil)", ok, err)
+		}
+		clk.Advance(time.Second)
+	}
+	members, err := rdb.ZRangeWithScores(ctx, admittedZSetKey(1), 0, -1).Result()
+	if err != nil || len(members) != 1 {
+		t.Fatalf("placeholders = %v err=%v, want exactly one for alice", members, err)
+	}
+	wantMember := queueIDForAccount(q.hmacSecret, 1, "alice")
+	// 最后一次占位在一秒之前(循环末尾又拨了一秒)。
+	wantScore := float64(clk.Now().Add(-time.Second).Add(q.handoffGrace).UnixMilli())
+	if members[0].Member != wantMember || members[0].Score != wantScore {
+		t.Fatalf("placeholder = %+v, want member %q expiring at %.0f (last reserve + handoffGrace)", members[0], wantMember, wantScore)
+	}
+
+	if ok, err := q.TryReserveFastPathSlot(ctx, 1, 2, "bob"); err != nil || !ok {
+		t.Fatalf("bob reserve with one seat left = (%v, %v), want (true, nil)", ok, err)
+	}
+	if ok, err := q.TryReserveFastPathSlot(ctx, 1, 2, "carol"); err != nil || ok {
+		t.Fatalf("carol reserve with both seats taken = (%v, %v), want (false, nil)", ok, err)
+	}
+	if ok, err := q.TryReserveFastPathSlot(ctx, 1, 2, "alice"); err != nil || !ok {
+		t.Fatalf("alice renewing her own seat while the zone is full = (%v, %v), want (true, nil)", ok, err)
+	}
+	if n, err := q.AdmittedCount(ctx, 1); err != nil || n != 2 {
+		t.Fatalf("in-flight count = %d err=%v, want 2", n, err)
+	}
 }

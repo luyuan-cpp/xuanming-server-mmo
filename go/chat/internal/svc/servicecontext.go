@@ -53,6 +53,9 @@ type ServiceContext struct {
 	stopErr       error
 	stopOnce      sync.Once
 
+	// AdminToken 是运维口令(logic.ResolveAdminToken 在启动时读入);空 = 运维面停用,RetractWorldChat 一律拒绝。
+	AdminToken string
+
 	// WorldPush 是世界频道推送(world_push.go);Kafka.Brokers 为空时为 nil,不推。kafkaWriter 是它要在停机时关闭的连接。
 	WorldPush   WorldPusher
 	kafkaWriter *kafkago.Writer

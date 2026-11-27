@@ -179,7 +179,7 @@ func (c *Client) Enabled() bool { return c != nil && c.rpc != nil }
 
 type accountCtxKey struct{}
 
-// WithAccount 在 ctx 上附带玩家的渠道账号(如 wx_<openid> / dy_<openid>),供 content_guard 路由外部平台审核接口。
+// WithAccount 在 ctx 上附带填写者的账号名。只在没有 player_id 时用(建角时角色还没发号):内容安全服务按它到目录查渠道身份。
 func WithAccount(ctx context.Context, account string) context.Context {
 	if account == "" {
 		return ctx

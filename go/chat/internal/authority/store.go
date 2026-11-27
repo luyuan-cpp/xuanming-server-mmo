@@ -392,10 +392,12 @@ func (s *Store) Send(ctx context.Context, in *chatpb.SendChatRequest) (SendResul
 	} else if privTip != 0 {
 		return txRejectOrReplay(privTip, false)
 	}
-	if spamTip, spamErr := s.checkAndRecordRepeatSpam(ctx, tx, actor, now, rawTrimmed); spamErr != nil {
-		return SendResult{}, spamErr
-	} else if spamTip != 0 {
-		return txRejectOrReplay(spamTip, false)
+	if peer == 0 {
+		if spamTip, spamErr := s.checkAndRecordRepeatSpam(ctx, tx, actor, now, rawTrimmed); spamErr != nil {
+			return SendResult{}, spamErr
+		} else if spamTip != 0 {
+			return txRejectOrReplay(spamTip, false)
+		}
 	}
 	var payload []byte
 	message := &chatpb.ChatMessage{SenderPlayerId: actor, TargetPlayerId: peer, Channel: in.Message.Channel, Content: content, SendTimeMs: int64(now)}

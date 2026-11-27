@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"login/internal/logic/pkg/auth"
 	dspb "proto/data_service"
 	"shared/accountdirectory"
 	"shared/generated/pb/table"
@@ -14,7 +15,8 @@ import (
 
 // 执行者(docs/design/account-deletion.md §4.5):每个 login 副本一个后台循环,每轮向 data_service 认领到期账号(冷静期满,
 // 或租约过期的执行中),对每个账号:吊销令牌 → 读角色 → 逐名踢线并走现有的删角(RemoveAccountRoles,两阶段、可重放)
-// → 角色全删完让目录收尾(删账号行、写回执)。哪一步没成就留到下一轮,不补偿:认领之后状态已不可撤销,只会前滚。
+// → 角色全删完,官方通行证账号先删掉通行证里的用户 → 让目录收尾(删账号行、写回执)。
+// 哪一步没成就留到下一轮,不补偿:认领之后状态已不可撤销,只会前滚。
 //
 // 删角回挂起(ErrConflict)多半是角色还在场景里(踢线后按正常登出收尾,持有节点存盘释放要几秒)或在途的资产指令、组队、观战,
 // 会自己结束;一直结束不了由 data_service 的逾期 gauge 告警,运维按日志里的角色号处理。帮主不挡执行:删角收尾自动让位或解散。
@@ -97,6 +99,9 @@ func (s *Service) execute(ctx context.Context, account string) stepResult {
 	if pending {
 		return stepWaiting
 	}
+	if !s.deletePassportUser(ctx, account) {
+		return stepFailed
+	}
 	fin, err := s.Dir.FinishDeletion(ctx, account)
 	if err != nil {
 		logx.WithContext(ctx).Errorf("[account-deletion] executor finish failed: account=%s err=%v", masked, err)
@@ -108,6 +113,27 @@ func (s *Service) execute(ctx context.Context, account string) stepResult {
 	}
 	logx.WithContext(ctx).Infof("[account-deletion] account deleted: account=%s", masked)
 	return stepFinished
+}
+
+// deletePassportUser 删掉官方通行证里的用户(邮箱、手机号、口令哈希都在通行证那边),回能不能接着收尾。不是通行证账号直接回 true。
+//
+// 排在角色全部删完之后、目录收尾(删账号行)之前:账号行还在「执行中」,这一步没成,下一轮认领会再来;
+// 要是先删了账号行,就再没有记录能让执行者想起这名通行证用户,个人信息会一直留着。删除可以重做(用户已不在算成功),
+// 所以收尾因为 ref 没清完而多等几轮时,每轮多问一次通行证也没有副作用。
+func (s *Service) deletePassportUser(ctx context.Context, account string) bool {
+	sub, isPassport := auth.PassportSubject(account)
+	if !isPassport {
+		return true
+	}
+	if s.Passport == nil {
+		logx.WithContext(ctx).Errorf("[account-deletion] passport user NOT deleted, no admin client configured (dev/test only): account=%s", MaskAccount(account))
+		return true
+	}
+	if err := s.Passport.DeleteUser(ctx, sub); err != nil {
+		logx.WithContext(ctx).Errorf("[account-deletion] executor delete passport user failed, retried next round: account=%s err=%v", MaskAccount(account), err)
+		return false
+	}
+	return true
 }
 
 // removeRole 踢线并删一名角色,回这名角色是否已经删掉。

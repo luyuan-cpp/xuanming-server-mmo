@@ -479,6 +479,15 @@ private:
         const ::CreateBattleRequest &request,
         std::string &matchedFingerprint);
     void ReapRetiredProviders(std::chrono::steady_clock::time_point now);
+    // 退下来的 provider 再留多久。与 table_bundle::TableBundleManager::kRetainDuration 同值:
+    // 两边留的是同一批旧表,保留期要一起改(docs/design/config-table-hot-reload.md §8.4)。
+    static constexpr std::chrono::minutes kTableProviderRetention{10};
+    // 保留期用的单调时钟。providerClock 为空 = steady_clock;只有单测经 BattleRoomManagerTestAccess 换,不等真实的 10 分钟。
+    std::chrono::steady_clock::time_point ProviderNow() const
+    {
+        return providerClock ? providerClock() : std::chrono::steady_clock::now();
+    }
+    std::function<std::chrono::steady_clock::time_point()> providerClock;
 
     std::shared_ptr<turnbattle::BattleDataProvider> dataProvider;
     std::string activeTableFingerprint;

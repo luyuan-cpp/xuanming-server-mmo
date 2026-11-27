@@ -8,7 +8,7 @@
 - 11-27 额度重置后，原来的 Claude 会话又在跑，并各自更新了自己的交接单。所以：
   - 动手前先看各交接单的最新状态，以及 `docs/PROGRESS.md` 文末的新条目。
   - 同一项只留一个写者。
-  - 本单 §3.2 的两项已去问实名会话由谁来做。11-26 实名会话的答复：设计稿正文它已改完；它复核时另发现一处缺陷；缺陷修复与沙箱 mock 交 Gemini，细节写在 [real-name-anti-addiction-handoff-20261126.md](real-name-anti-addiction-handoff-20261126.md)。本单 §3.2 已据此改写。
+  - 本单 §3.2 的两项已去问实名会话由谁来做。11-26 实名会话的答复：设计稿正文它已改完；它复核时另发现一处缺陷；细节写在 [real-name-anti-addiction-handoff-20261126.md](real-name-anti-addiction-handoff-20261126.md)。11-26 晚实名会话换回 Fable 5.2 后，把缺陷修复与沙箱 mock 也写完了：本单 §3.2 没有待写项，实名这条线只剩验证，不要再写一遍。
   - 改代码按 AGENTS §10.3 用 Gemini 4 Neon Extra；11-27 时这几个 Claude 会话都跑在 Opus 5.5 上，不满足 §10.3。
 - 四条线与各自的交接单：
 
@@ -120,8 +120,8 @@
 细节以 [real-name-anti-addiction-handoff-20261126.md](real-name-anti-addiction-handoff-20261126.md)（下称「实名细节单」）为准，这里只列项。下面第 2 项原来的写法保留作对照，已全部吸收进实名细节单 §2.2，两处有出入时按实名细节单做。
 
 1. **改正设计稿正文：已做。** 11-26 实名会话已按现在的代码重写 §5.3–§5.5 与 §8。原来这里写的「会话收尾时 GETDEL 失败、丢一条下线上报是定案」已过时：现在没有 GETDEL 了，End 失败时由账本清扫补下线。旧键名 `login_anti_addiction` 的残留仍要 grep 一遍。
-1a. **缺陷修复**：截止时刻一到，清扫就删掉账本条目，login 的兜底踢线随之失效。改法与回归用例见实名细节单 §2.1。
-2. **国家系统沙箱 mock**（实名会话原计划的下一步，还没写）
+1a. **缺陷修复：已做**（11-26 晚，实名会话）。原来截止时刻一到，清扫就删掉账本条目，login 的兜底踢线随之失效。改动与回归用例见实名细节单 §2.1。
+2. **国家系统沙箱 mock：已写**（11-26 晚，实名会话）。下面是原来的要求，留作对照；实现与它的两处出入见实名细节单 §2.2。
    - 位置：在 `go/login/cmd/sandbox_mock` 加三个接口，路径与 `nppa.DefaultCheckURL`、`DefaultQueryURL`、`DefaultLoginoutURL` 相同。报文格式以 `go/login/internal/logic/pkg/nppa/client.go` 为准：报文体用 secretKey 做 AES-128-GCM 再 Base64，请求头签名见 `sign`。
    - 校验：核请求头签名并解开报文；签名错或解不开时，回规范里的错误码。secretKey 只用开发值。
    - 实名结果：
@@ -171,12 +171,12 @@
 
 ## 4. 四条线一遍跑完的顺序
 
-0. **先写完代码**：本单 §3.2；账号注销交接 §3 第 8 步（Google 按钮文案改官方「使用 Google 账号登录」、核实四张品牌图是官方原件）；WebSocket 交接里写着「还要写」的项（如果有）。
+0. **先写完代码（已全部完成，2026-11-26）**：本单 §3.2 已由实名会话（Fable 5.2）写完；剧本审核流水搬库冻结不计失败已由 Claude（Fable 5.2）写完；账号注销交接 §3 第 8 步（Google 按钮文案改官方「使用 Google 账号登录」+ 放宽文本框、核实并替换四张官方品牌原件及来源说明与单测）已由 Gemini 4 Neon Extra 写完于客户端仓工作区；WebSocket 交接无待写代码。现在可直接切 `Carbon Medium` 从第 1 步开始执行（第 9 步客户端测试前需先关掉 Unity 重烘 `QdaoServerSelect.prefab`）。
 1. **清场**：按 `docs/rules/stress-testing.md` 清 MySQL / TiDB、Redis（`pwsh -File tools/scripts/dev_tools.ps1 -Command redis-wipe-local -ConfirmWipeAllRedis`）、etcd、Kafka offset。账号目录与注销加了列和表，旧库一定要清。
 2. **生成**（仓库根）
    - `dev.bat gen`：导表，给实名与注销新加的 tip 码发号。
    - `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`：用默认配置，连客户端仓一起写，这几条线都有客户端改动。
-   - `pwsh -File go/build.ps1`：重生成 login 的 goctl 包装。
+   - 不用再跑 `go/build.ps1`（11-21 随 goctl 退役删除）：login 转发层是手写的，实名与注销新加的方法（`SubmitRealName`、`ResetAccountRealName`、`RequestAccountDeletion` 等）已在 `go/login/internal/server/`，由 `go/login` 的 `TestGoctlServerWrappersImplementEveryRPC` 核对。
    - 客户端仓 `tools/gen_proto.ps1`、`tools/gen_messageids.ps1`（AGENTS §4）。
 3. **静态检查**
    - `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`、`python tools/scripts/tests/test_cpp_thread_sources.py`、`python tools/scripts/check_log_text_english.py`。

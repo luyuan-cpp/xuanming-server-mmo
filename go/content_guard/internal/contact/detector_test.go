@@ -20,7 +20,7 @@ func TestContainsAdCatchesObfuscatedContactsAndURLs(t *testing.T) {
 	}
 	for _, s := range ads {
 		elems, _ := textnorm.Fold(s)
-		if !ContainsAd(s, elems, nil) {
+		if !ContainsAd(elems, nil) {
 			t.Errorf("expected ad detection for %q", s)
 		}
 	}
@@ -35,12 +35,12 @@ func TestContainsAdCatchesObfuscatedContactsAndURLs(t *testing.T) {
 	}
 	for _, s := range clean[:4] {
 		elems, _ := textnorm.Fold(s)
-		if ContainsAd(s, elems, nil) {
+		if ContainsAd(elems, nil) {
 			t.Errorf("unexpected ad detection for clean message %q", s)
 		}
 	}
 	elems, _ := textnorm.Fold(clean[5])
-	if ContainsAd(clean[5], elems, nil) {
+	if ContainsAd(elems, nil) {
 		t.Errorf("unexpected ad detection for %q", clean[5])
 	}
 }
@@ -49,7 +49,7 @@ func TestContainsAdCatchesObfuscatedContactsAndURLs(t *testing.T) {
 func TestDomainDetectionUsesTheExactSpanAndSeesAdjacentDomains(t *testing.T) {
 	contains := func(text string, allow func(start, end int32) bool) bool {
 		elems, _ := textnorm.Fold(text)
-		return ContainsAd(text, elems, allow)
+		return ContainsAd(elems, allow)
 	}
 	// 「官网」占下标 0、1,域名 xuanming.com 占 2..13。
 	official := "官网xuanming.com欢迎"
@@ -77,10 +77,41 @@ func TestDomainDetectionUsesTheExactSpanAndSeesAdjacentDomains(t *testing.T) {
 	}
 }
 
+// 全角字母、全角句点写的网址和半角的是同一个判法:识别在折叠后的文字上做。
+func TestFullWidthURLsAndDomainsAreDetected(t *testing.T) {
+	for _, ad := range []string{"来ａｂｃ．ｃｏｍ买金", "ｈｔｔｐｓ：／／ｘｙ．ｔｏｐ", "ＷＷＷ．ｓｈｏｐ８８．ｃｎ"} {
+		elems, _ := textnorm.Fold(ad)
+		if !ContainsAd(elems, nil) {
+			t.Errorf("a full-width URL or domain must be detected: %q", ad)
+		}
+	}
+}
+
+// 白名单只比对网址的主机名:登记了 xuanming.com,带 https://、www. 前缀和路径的写法照样放行;
+// 把它当前缀接上别的域名的不放行;「www...」这种笑声不是网址。
+func TestURLAllowListComparesOnlyTheHost(t *testing.T) {
+	// 「官网 https://www.」占下标 0..14,xuanming.com 占 15..26。
+	official := "官网 https://www.xuanming.com/pay"
+	elems, _ := textnorm.Fold(official)
+	if ContainsAd(elems, func(start, end int32) bool { return start == 15 && end == 26 }) {
+		t.Fatal("an allowed host must stay allowed behind a scheme, a www. prefix and a path")
+	}
+	// xuanming.com 占 8..19,整个主机名 xuanming.com.evil.top 占 8..28。
+	spoof := "https://xuanming.com.evil.top"
+	elems, _ = textnorm.Fold(spoof)
+	if !ContainsAd(elems, func(start, end int32) bool { return start == 8 && end == 19 }) {
+		t.Fatal("an allowed host used as a prefix of another domain must still be detected")
+	}
+	elems, _ = textnorm.Fold("笑死www...")
+	if ContainsAd(elems, nil) {
+		t.Fatal("www followed only by dots is laughter, not a URL")
+	}
+}
+
 func TestContainsAdRespectsAllowListCallback(t *testing.T) {
 	msg := "官网 https://safe.example.com"
 	elems, _ := textnorm.Fold(msg)
-	blocked := ContainsAd(msg, elems, func(_, _ int32) bool { return true })
+	blocked := ContainsAd(elems, func(_, _ int32) bool { return true })
 	if blocked {
 		t.Fatal("allowlist callback returning true must suppress ad rejection")
 	}

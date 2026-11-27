@@ -91,6 +91,7 @@ public:
         manager.sqlOutcomeRoute = nullptr;
         manager.sqlOutcomeSendsPerPump = BattleRoomManager::kSqlOutcomeSendsPerPump;
         manager.creationClock = nullptr;
+        manager.providerClock = nullptr;
     }
     // 观战通道心跳的一拍,时刻由用例给(生产由每秒一拍的定时器传真实时刻)。
     static void PumpSpectateKeepalive(const std::chrono::steady_clock::time_point now, const uint64_t nowMs) {
@@ -134,6 +135,29 @@ public:
     // nullptr = 复位成生产实现;EraseAllRooms 复位。
     static void SetCreationClock(std::function<uint64_t()> clock) {
         BattleRoomManager::Instance().creationClock = std::move(clock);
+    }
+
+    // ---- 按战斗表指纹选 provider(docs/design/config-table-hot-reload.md §8.4)----
+    static constexpr std::chrono::minutes kTableProviderRetention = BattleRoomManager::kTableProviderRetention;
+    // 建房时走的那一步:按请求带的指纹在现役与保留的 provider 里选,matched 是选中那一套的指纹。顺带回收过期的保留项。
+    static std::shared_ptr<turnbattle::BattleDataProvider> ResolveProvider(const CreateBattleRequest& request, std::string& matched) {
+        return BattleRoomManager::Instance().ResolveProviderForRequest(request, matched);
+    }
+    // 换掉保留期用的单调时钟,不等真实的 10 分钟。nullptr = 复位成 steady_clock;EraseAllRooms 复位。
+    static void SetProviderClock(std::function<std::chrono::steady_clock::time_point()> clock) {
+        BattleRoomManager::Instance().providerClock = std::move(clock);
+    }
+    // 管理器手上(现役或保留)还有没有这个指纹的 provider。房间自己拿着的不算。
+    static bool HoldsProvider(const std::string& fingerprint) {
+        return BattleRoomManager::Instance().providersByFingerprint.contains(fingerprint);
+    }
+    // 把登记过的 provider 全部放掉(现役与保留的)。管理器是进程级单例,夹具 TearDown 调它,不把本用例的 provider 带给后面的用例;
+    // 已建好的房间各自拿着自己的那一套,不受影响。
+    static void ResetTableProviders() {
+        auto& manager = BattleRoomManager::Instance();
+        manager.providersByFingerprint.clear();
+        manager.activeTableFingerprint.clear();
+        manager.dataProvider.reset();
     }
 };
 
@@ -482,7 +506,8 @@ protected:
         }
         manager().SetObserverSeatQuota(kFixtureObserverSeatQuota);
         manager().SetSpectateFrameSink(nullptr);
-        manager().SetDataProvider(nullptr);
+        // SetDataProvider(nullptr) 不做任何事(空 provider 直接返回),放不掉已登记的那一套,这里直接清。
+        BattleRoomManagerTestAccess::ResetTableProviders();
         loop.reset();
         gNodeConfigManager = savedGlobal;
         tlsNodeConfigManager = savedThread;
@@ -2373,4 +2398,82 @@ TEST_F(BattleObserverContract, SupportSourcesArePrivateForOwnerAndRemovedFromObs
     EXPECT_FALSE(self.actors(1).has_support_effects()); EXPECT_FALSE(self.actors(2).has_support_effects());
     auto observer = original; BattleRoomManagerTestAccess::RedactSupport(observer, 0);
     for (const auto& actor : observer.actors()) EXPECT_FALSE(actor.has_support_effects());
+}
+
+// ---- 按战斗表指纹选 provider(docs/design/config-table-hot-reload.md §8.4)----
+// 指纹用自造的字符串:这里只验「按指纹找哪一套」和保留期,不关心表里有什么。
+// warn / enforce 的判定模式每个进程只读一次配置,单测里切不了,不在这里覆盖。
+
+TEST_F(BattleObserverContract, TableProviderIsChosenByTheFingerprintTheRequestCarries) {
+    const std::shared_ptr<turnbattle::BattleDataProvider> older = std::make_shared<turnbattle::TableBattleDataProvider>();
+    const std::shared_ptr<turnbattle::BattleDataProvider> newer = std::make_shared<turnbattle::TableBattleDataProvider>();
+    manager().RegisterTableProvider("fp-older", older);
+    manager().RegisterTableProvider("fp-newer", newer); // 相当于热更提交:fp-older 退下来,进保留表
+
+    CreateBattleRequest request;
+    std::string matched;
+
+    request.set_table_fingerprint("fp-older"); // 还没切过来的 scene 带的是旧指纹
+    EXPECT_EQ(older, BattleRoomManagerTestAccess::ResolveProvider(request, matched));
+    EXPECT_EQ("fp-older", matched);
+
+    request.set_table_fingerprint("fp-newer");
+    EXPECT_EQ(newer, BattleRoomManagerTestAccess::ResolveProvider(request, matched));
+    EXPECT_EQ("fp-newer", matched);
+
+    // 请求本身没带:取第一个带了指纹的玩家快照
+    request.clear_table_fingerprint();
+    request.add_players();
+    request.add_players()->set_table_fingerprint("fp-older");
+    EXPECT_EQ(older, BattleRoomManagerTestAccess::ResolveProvider(request, matched));
+    EXPECT_EQ("fp-older", matched);
+
+    // 谁都没带:用现役的
+    request.clear_players();
+    EXPECT_EQ(newer, BattleRoomManagerTestAccess::ResolveProvider(request, matched));
+    EXPECT_EQ("fp-newer", matched);
+
+    // 带了一个本节点没有的指纹:退回现役的,matched 报现役指纹,不一致留给后面的 warn / enforce 判定
+    request.set_table_fingerprint("fp-unknown");
+    EXPECT_EQ(newer, BattleRoomManagerTestAccess::ResolveProvider(request, matched));
+    EXPECT_EQ("fp-newer", matched);
+}
+
+TEST_F(BattleObserverContract, RetiredTableProviderLeavesThePoolAfterRetentionButItsRoomKeepsIt) {
+    const auto now = std::make_shared<std::chrono::steady_clock::time_point>();
+    BattleRoomManagerTestAccess::SetProviderClock([now] { return *now; });
+
+    std::shared_ptr<turnbattle::BattleDataProvider> older = std::make_shared<turnbattle::TableBattleDataProvider>();
+    const std::weak_ptr<turnbattle::BattleDataProvider> olderAlive = older;
+    manager().RegisterTableProvider("fp-older", older);
+    manager().RegisterTableProvider("fp-newer", std::make_shared<turnbattle::TableBattleDataProvider>());
+    older.reset(); // 之后只有管理器的保留表和下面那间房拿着它
+
+    // 切换窗口里,还没切过来的 scene 带着旧指纹开了一局
+    auto creation = OriginalCreation();
+    creation.set_table_fingerprint("fp-older");
+    CreateBattleResponse created;
+    manager().HandleCreateBattle(creation, created);
+    ASSERT_EQ(0u, created.error_message().id());
+
+    CreateBattleRequest probe;
+    probe.set_table_fingerprint("fp-older");
+    std::string matched;
+
+    *now += BattleRoomManagerTestAccess::kTableProviderRetention - std::chrono::milliseconds(1);
+    BattleRoomManagerTestAccess::ResolveProvider(probe, matched);
+    EXPECT_EQ("fp-older", matched) << "差 1 毫秒不到期,保留表里还找得到";
+    EXPECT_TRUE(BattleRoomManagerTestAccess::HoldsProvider("fp-older"));
+
+    // 到期:保留表放手,之后带旧指纹的请求只能退回现役那一套
+    *now += std::chrono::milliseconds(1);
+    BattleRoomManagerTestAccess::ResolveProvider(probe, matched);
+    EXPECT_EQ("fp-newer", matched);
+    EXPECT_FALSE(BattleRoomManagerTestAccess::HoldsProvider("fp-older"));
+    EXPECT_TRUE(BattleRoomManagerTestAccess::HoldsProvider("fp-newer")) << "现役的不受保留期限制";
+
+    // 那一局还在打:房间自己拿着开局时的那一套,清房才放
+    EXPECT_FALSE(olderAlive.expired());
+    BattleRoomManagerTestAccess::EraseAllRooms();
+    EXPECT_TRUE(olderAlive.expired());
 }

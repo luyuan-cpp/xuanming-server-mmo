@@ -33,11 +33,12 @@ func TestPassportProviderValidatesTokenAndUsesWellKnownJWKS(t *testing.T) {
 			p := NewPassportProvider(testPassportIssuer, testPassportClientID, tc.endpoint, cli)
 			now := time.Now().Unix()
 			claims := map[string]any{
-				"iss": testPassportIssuer,
-				"aud": []string{testPassportClientID},
-				"sub": "550e8400-e29b-41d4-a716-446655440000",
-				"iat": now,
-				"exp": now + int64(time.Hour/time.Second),
+				"iss":       testPassportIssuer,
+				"aud":       []string{testPassportClientID},
+				"sub":       "550e8400-e29b-41d4-a716-446655440000",
+				"iat":       now,
+				"exp":       now + int64(time.Hour/time.Second),
+				"tokenType": "id-token",
 			}
 			res, err := p.Validate(context.Background(), signTestIdToken(t, testRSAKey1(), "cert-built-in", claims))
 			if err != nil {
@@ -71,23 +72,37 @@ func TestPassportProviderRejectsBadConfigSubjectAndOversizedLifetime(t *testing.
 	invalidCases := map[string]map[string]any{
 		"wrong issuer": {
 			"iss": "https://other.example.com", "aud": testPassportClientID, "sub": "u1",
-			"iat": now, "exp": now + 3600,
+			"iat": now, "exp": now + 3600, "tokenType": "id-token",
 		},
 		"wrong audience": {
 			"iss": testPassportIssuer, "aud": "other-client", "sub": "u1",
-			"iat": now, "exp": now + 3600,
+			"iat": now, "exp": now + 3600, "tokenType": "id-token",
 		},
 		"subject with whitespace": {
 			"iss": testPassportIssuer, "aud": testPassportClientID, "sub": "bad sub",
-			"iat": now, "exp": now + 3600,
+			"iat": now, "exp": now + 3600, "tokenType": "id-token",
 		},
 		"subject exceeds account max bytes": {
 			"iss": testPassportIssuer, "aud": testPassportClientID, "sub": strings.Repeat("a", 190),
-			"iat": now, "exp": now + 3600,
+			"iat": now, "exp": now + 3600, "tokenType": "id-token",
 		},
 		"exp equals iat": {
 			"iss": testPassportIssuer, "aud": testPassportClientID, "sub": "u1",
-			"iat": now, "exp": now,
+			"iat": now, "exp": now, "tokenType": "id-token",
+		},
+		// Casdoor 一次换票给三枚同钥、同 iss / aud / sub 的 JWT,只有身份令牌能登录。访问令牌与刷新令牌任何玩家都拿得到,
+		// 必须按凭证无效拒绝,不能算渠道故障;刷新令牌有效期 24h,要在「有效期超限 = 配置故障」之前就被类型挡下。
+		"access token": {
+			"iss": testPassportIssuer, "aud": testPassportClientID, "sub": "u1",
+			"iat": now, "exp": now + 3600, "tokenType": "access-token",
+		},
+		"refresh token with long lifetime": {
+			"iss": testPassportIssuer, "aud": testPassportClientID, "sub": "u1",
+			"iat": now, "exp": now + int64(24*time.Hour/time.Second), "tokenType": "refresh-token",
+		},
+		"token type missing": {
+			"iss": testPassportIssuer, "aud": testPassportClientID, "sub": "u1",
+			"iat": now, "exp": now + 3600,
 		},
 	}
 	for name, claims := range invalidCases {
@@ -97,11 +112,12 @@ func TestPassportProviderRejectsBadConfigSubjectAndOversizedLifetime(t *testing.
 
 	// Casdoor 默认 expireInHours=168 必须被识别为渠道配置故障(ErrProviderUnavailable),不让 7 天防重放键塞满 Redis。
 	oversized := map[string]any{
-		"iss": testPassportIssuer,
-		"aud": testPassportClientID,
-		"sub": "550e8400-e29b-41d4-a716-446655440000",
-		"iat": now,
-		"exp": now + int64(168*time.Hour/time.Second),
+		"iss":       testPassportIssuer,
+		"aud":       testPassportClientID,
+		"sub":       "550e8400-e29b-41d4-a716-446655440000",
+		"iat":       now,
+		"exp":       now + int64(168*time.Hour/time.Second),
+		"tokenType": "id-token",
 	}
 	_, err := p.Validate(context.Background(), signTestIdToken(t, testRSAKey1(), "cert-built-in", oversized))
 	requireProviderUnavailable(t, err, "oversized token lifetime")
@@ -118,11 +134,12 @@ func TestPassportProviderConsumesEachTokenOnce(t *testing.T) {
 
 	now := time.Now().Unix()
 	claims := map[string]any{
-		"iss": testPassportIssuer,
-		"aud": testPassportClientID,
-		"sub": "550e8400-e29b-41d4-a716-446655440000",
-		"iat": now,
-		"exp": now + 600,
+		"iss":       testPassportIssuer,
+		"aud":       testPassportClientID,
+		"sub":       "550e8400-e29b-41d4-a716-446655440000",
+		"iat":       now,
+		"exp":       now + 600,
+		"tokenType": "id-token",
 	}
 	tok := signTestIdToken(t, testRSAKey1(), "cert-built-in", claims)
 

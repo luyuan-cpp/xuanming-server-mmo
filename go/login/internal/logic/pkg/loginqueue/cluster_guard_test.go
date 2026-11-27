@@ -116,7 +116,7 @@ func TestQueueFlow_PassesTheControlClusterGuard(t *testing.T) {
 			t.Fatalf("poll while queueing = (%+v, %v), want QUEUEING total=%d", st, err, players)
 		}
 	}
-	if ok, err := q.TryReserveFastPathSlot(ctx, zone, 100); err != nil || !ok {
+	if ok, err := q.TryReserveFastPathSlot(ctx, zone, 100, ""); err != nil || !ok {
 		t.Fatalf("TryReserveFastPathSlot = (%v, %v), want (true, nil)", ok, err)
 	}
 	if n, err := q.PopAdmit(ctx, zone, players, noBudgetLimit, pickZone1Gate); err != nil || n != players {

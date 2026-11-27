@@ -564,6 +564,10 @@ func wire(ctx context.Context, o options, getenv func(string) string, out, errOu
 		if err := addrOf(&m.o.sourceAdminAddr, envSourceAdminDSN); err != nil {
 			return fail(err)
 		}
+		// 比对之前要核冻结的源库没有被 TTL 任务动过,用的还是源库的管理员连接串。
+		if m.sourceAdmin, err = adminSideFrom(openAdminFrom(envSourceAdminDSN)); err != nil {
+			return fail(err)
+		}
 		targetDSN := getenv(envTargetAdminDSN)
 		if backend == authoritysql.BackendMySQL {
 			if targetDSN = getenv(envAuditTargetDSN); targetDSN == "" {
