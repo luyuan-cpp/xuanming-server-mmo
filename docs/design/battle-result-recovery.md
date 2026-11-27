@@ -200,7 +200,7 @@ service SceneBattleResultClientPlayer {
 
 ## 8. 日志与可观测性
 
-scene 进程没有 Prometheus 端点,计数从结构化日志提取。player_id 只是日志字段,不进任何指标 label。
+下表六个 `metric=` 日志 2026-11-27 起同一处计数,经 scene 的 Prometheus 出口导出为 `scene_battle_result_events_total{event}`(event ∈ recorded / published / duplicate / lines_truncated / record_missing / history_missing,`PlayerBattleSystem::WriteBattleSettlementMetrics`,每项以 0 起步)。原文写「scene 进程没有 Prometheus 端点,计数从结构化日志提取」,那是更早的状况。player_id 只是日志字段,不进任何指标 label。record_missing 与 history_missing 是缺陷信号,恒为 0;不另加告警:出现时同一局的结算或查询已经回了错误,看日志按 player_id 查。
 
 | 日志 | 级别 | 何时 |
 |---|---|---|

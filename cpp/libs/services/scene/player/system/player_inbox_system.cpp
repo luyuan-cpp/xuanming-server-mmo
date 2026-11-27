@@ -1,6 +1,7 @@
 #include "player/system/player_inbox_system.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstddef>
 #include <cstdlib>
@@ -14,6 +15,7 @@
 
 #include <node_config_manager.h>
 #include "battle/system/player_battle.h"
+#include "engine/core/metrics/metrics_registry.h"
 #include "engine/core/type_define/player_guid_comp.h"
 #include "core/network/grpc_client_call.h"          // kGrpcStatusUnimplemented
 #include "core/security/service_call_auth.h"
@@ -44,8 +46,10 @@
 
 namespace
 {
+	using player_inbox_rules::ConsumerEvent;
 	using player_inbox_rules::Durability;
 	using player_inbox_rules::ItemAction;
+	using player_inbox_rules::LeaveAckResult;
 
 	// 在途请求的兜底期限 = 该类节点的 gRPC deadline + 5s(上游比下游宽,grpc-muduo-transport.md §16.3)。
 	// 生成的客户端保证每次调用在 deadline 内以应答或失败之一收场,正常走不到这里;它只防"完成通知永远不来"。
@@ -169,13 +173,31 @@ namespace
 	thread_local uint64_t tlsCorrelationSeq = 0;
 	// 注册表自检失败 = 本节点停用消费(PlayerInboxSystem::Initialize)。
 	thread_local bool tlsRegistryBroken = false;
-	// 自检失败的原因与下一次补打 ERROR 的时刻(单调时钟)。只在启动时打一次的话,[10m] 窗口的日志告警亮 10 分钟
-	// 就自己灭了,而本节点上所有在线玩家的处置一直不执行(评审 F3);Tick 按 kNodeStuckRelogIntervalMs 补打同一行。
+	// 自检失败的原因与下一次补打 ERROR 的时刻(单调时钟)。告警读 scene_player_inbox_registry_broken(WriteMetrics);
+	// 只在启动时打一次的话,10 分钟窗口里按日志就查不到这个一直停着的节点(评审 F3),所以 Tick 按
+	// kNodeStuckRelogIntervalMs 补打同一行。
 	thread_local std::string tlsRegistryBrokenDetail;
 	thread_local uint64_t tlsNextRegistryBrokenLogMs = 0;
 	// 消费开关关闭时下一次补打 WARN 的时刻(单调时钟,评审 H1)。0 = 未排期:开关开着,或还没打过首条;
 	// 开关一关,下一个 Tick 立即打首条。同一份节拍与 registry_broken 共用(TakeNodeRelogTurn)。
 	thread_local uint64_t tlsNextConsumerDisabledLogMs = 0;
+
+	// 一次性事件的本线程累计,由 PlayerInboxSystem::WriteMetrics 导出(2026-11-27 起,原来只有日志)。每一项都紧跟在同名
+	// metric= 日志之后自增,口径就是日志行数;日志照打,它们带 player_id 供排查。采集回调跑在 scene 主 loop 上,
+	// 与写计数同一线程,所以是普通整数。下标就是名表下标(player_inbox_rules.h / player_inbox_runtime_comp.h)。
+	thread_local std::array<uint64_t, static_cast<std::size_t>(ConsumerEvent::kCount)> tlsConsumerEventCounts{};
+	thread_local std::array<uint64_t, static_cast<std::size_t>(PlayerInboxDeferReason::kCount)> tlsDeferralStartCounts{};
+	thread_local std::array<uint64_t, static_cast<std::size_t>(LeaveAckResult::kCount)> tlsLeaveAckCounts{};
+
+	template <typename Key, std::size_t N>
+	void IncrementCount(std::array<uint64_t, N> &counts, Key key)
+	{
+		const auto index = static_cast<std::size_t>(key);
+		if (index < N)
+		{
+			++counts[index];
+		}
+	}
 
 	bool IsBattleDomain(const PlayerInboxDomainState& state)
 	{
@@ -217,17 +239,18 @@ namespace
 		return tlsRandom.Rand<uint32_t>(0, player_inbox_rules::kJitterPermilleMax);
 	}
 
-	// metric= 标记供日志告警(评审 L13):本节点上所有在线玩家的处置都不执行,表面上与离线无异。
+	// metric= 标记(评审 L13):本节点上所有在线玩家的处置都不执行,表面上与离线无异。告警读 WriteMetrics 导出的
+	// scene_player_inbox_registry_broken;这一行带 detail=,值班据此看是哪一项自检不过。
 	void LogRegistryBroken()
 	{
 		LOG_ERROR << "[PlayerInbox] metric=inbox_registry_broken detail=" << tlsRegistryBrokenDetail
 				  << "; registry self-check failed, inbox consumption disabled on this node";
 	}
 
-	// metric= 标记供日志告警(评审 H1):开关关着时,收件箱服务照常收单(入箱回 created=true),本节点却一条都不执行;
+	// metric= 标记(评审 H1):开关关着时,收件箱服务照常收单(入箱回 created=true),本节点却一条都不执行;
 	// 条目停在 PENDING、delivery_count 为 0,服务端没有任何告警看得到。例行发布曾因开关不粘滞把它静默关掉。
-	// 启动时打一条,之后 Tick 按 kNodeStuckRelogIntervalMs 补打同一行。键名 metric=inbox_consumer_disabled 是
-	// 告警固定查询的契约,不要改。
+	// 启动时打一条,之后 Tick 按 kNodeStuckRelogIntervalMs 补打同一行。告警读 WriteMetrics 导出的
+	// scene_player_inbox_consumer_enabled;键名 metric=inbox_consumer_disabled 是 runbook 按原文检索的契约,不要改。
 	void LogConsumerDisabled()
 	{
 		LOG_WARN << "[PlayerInbox] metric=inbox_consumer_disabled consumer_enabled=0"
@@ -239,7 +262,7 @@ namespace
 
 	// 节点级停用的补打节拍,registry_broken 与 consumer_disabled 共用(评审 F3、H1)。这类停用没有逐玩家的退避可数,
 	// 只能按时间补打。nextLogMs 是下一条的时刻(单调时钟),0 = 未排期,立即到点。到点时返回 true,并把下一条
-	// 排到 kNodeStuckRelogIntervalMs 之后;该间隔由 player_inbox_rules 的 static_assert 钉在 [10m] 告警窗口之内。
+	// 排到 kNodeStuckRelogIntervalMs 之后;该间隔由 player_inbox_rules 的 static_assert 钉在 10 分钟窗口之内。
 	bool TakeNodeRelogTurn(uint64_t &nextLogMs, uint64_t nowMs)
 	{
 		if (nextLogMs != 0 && nowMs < nextLogMs)
@@ -373,8 +396,8 @@ namespace
 	// 记下延后原因并在 delayMs 之后续做。同一原因连续出现只在第一次打 INFO,免得收件箱不可用时
 	// 每个在线玩家每分钟各刷一行(DEBUG 仍逐次记)。
 	// 不会自愈的原因另打 WARN:首次一次,之后按 failStreak 每 kStuckWarnEveryFailures 次一次(封顶后最多约 8 分钟),
-	// 节拍落在 scene 日志告警的 [10m] 窗口之内,玩家在线期间告警一直亮着、不会反复自愈(推导见
-	// player_inbox_rules::kSceneLogAlertWindowMs,评审 L13、F3)。只影响日志,不改 failStreak 与退避。
+	// 节拍落在 10 分钟窗口之内,玩家在线期间按 player_id 搜日志总查得到(推导见 player_inbox_rules::kSceneLogAlertWindowMs,
+	// 评审 L13、F3;告警读 scene_player_inbox_ledger_invalid_players)。只影响日志,不改 failStreak 与退避。
 	void ScheduleRetry(PlayerInboxDomainState &state, uint64_t playerId, PlayerInboxDeferReason reason,
 					   uint64_t delayMs, uint64_t nowMs)
 	{
@@ -385,6 +408,7 @@ namespace
 			LOG_INFO << "[PlayerInbox] metric=inbox_deferred reason=" << PlayerInboxDeferReasonName(reason)
 					 << " player_id=" << playerId << " domain=" << state.domain
 					 << " phase=" << PlayerInboxPhaseName(state.phase) << " retry_in_ms=" << delayMs;
+			IncrementCount(tlsDeferralStartCounts, reason);
 		}
 		else
 		{
@@ -721,6 +745,7 @@ namespace
 				 << " first_seq=" << state.pendingItems.front().seq() << " last_seq=" << state.pendingItems.back().seq()
 				 << "; delivered entries without a decision are dropped and stay delivered-but-unacknowledged"
 				 << " until they are fetched again";
+		IncrementCount(tlsLeaveAckCounts, LeaveAckResult::kDeliveredUndecided);
 	}
 
 	// 丢掉本地缓存的条目,改为下次重新拉取(评审 L1;落地钩子里的归属变化同理,评审 L2)。
@@ -806,6 +831,7 @@ namespace
 				 << " first_seq=" << state.pendingItems.front().seq()
 				 << " last_seq=" << state.pendingItems[queued - 1].seq()
 				 << "; entries already decided in the ledger are acknowledged instead of being dropped";
+		IncrementCount(tlsLeaveAckCounts, LeaveAckResult::kDecidedPrefixQueued);
 		if (!IsBattleDomain(state)) state.pendingItems.erase(state.pendingItems.begin(),
 								 state.pendingItems.begin() + static_cast<std::ptrdiff_t>(queued));
 	}
@@ -893,6 +919,7 @@ namespace
 				LOG_ERROR << "[PlayerInbox] metric=inbox_replay_mismatch player_id=" << playerId << " domain=" << state.domain
 						  << " seq=" << seq << " delivered_request_id=" << requestId << " delivered_msg_type=" << msgType
 						  << " ledger_request_id=" << replayed.request_id() << " ledger_msg_type=" << replayed.msg_type();
+				IncrementCount(tlsConsumerEventCounts, ConsumerEvent::kReplayMismatch);
 				// 什么都不确认(设计 §7.6):本批已记账的前缀照常随存盘落地(效果与账本同一次落盘),但**不会**被之后的
 				// 会话自动补确认 —— 这条 MISMATCH 行还是 PENDING,每次落地都会排在那些前缀之后再投一遍、再次停用。
 				// 解卡靠服务端 VoidItem 的强制模式(FORCE_MISMATCH):服务端读该玩家已落盘的账本,自证环里同 seq 是另一个
@@ -925,6 +952,7 @@ namespace
 				LOG_ERROR << "[PlayerInbox] metric=inbox_unknown_type player_id=" << playerId << " domain=" << state.domain
 						  << " seq=" << seq << " directive=" << static_cast<int>(directive) << " request_id=" << requestId
 						  << " action=" << player_inbox_rules::ItemActionName(action);
+				IncrementCount(tlsConsumerEventCounts, ConsumerEvent::kUnknownType);
 				Halt(state, playerId, PlayerInboxHaltReason::kUnknownType,
 					 "directive=" + std::to_string(static_cast<int>(directive)));
 				AfterBatchDecided(player, playerId, state, recorded, nowMs);
@@ -940,6 +968,7 @@ namespace
 					LOG_ERROR << "[PlayerInbox] metric=inbox_unknown_type player_id=" << playerId
 							  << " domain=" << state.domain << " seq=" << seq << " msg_type=" << msgType
 							  << " request_id=" << requestId;
+					IncrementCount(tlsConsumerEventCounts, ConsumerEvent::kUnknownType);
 					Halt(state, playerId, PlayerInboxHaltReason::kUnknownType, "msg_type=" + std::to_string(msgType));
 					AfterBatchDecided(player, playerId, state, recorded, nowMs);
 					return;
@@ -957,6 +986,7 @@ namespace
 							 << " request_id=" << requestId << " player_id=" << playerId
 							 << "; the same battle is already APPLIED under an earlier seq in the recent ring,"
 							 << " recording APPLIED for the new seq without executing it again";
+					IncrementCount(tlsConsumerEventCounts, ConsumerEvent::kBattleDuplicateRequest);
 				}
 				// 载荷带本二进制不认识的字段(更新版本的生产者写的):照常执行会丢掉新字段的语义、还记成 APPLIED。
 				// 与执行器报版本错位同口径,不调执行器(混版本持久字段保护设计 §12「载荷新字段」,2026-11-11)。
@@ -991,7 +1021,7 @@ namespace
 					// 不走下面 DEFER 的本地续做:这类错位可能在会话内消失(例如那笔带新字段的欠款被删除;自动扣还不会删它),
 					// 按本地旧副本续做看不到服务端之后挂的 VOID,会把已作废的处置执行掉并报 APPLIED(评审 L1)。
 					// 这一行留在服务端 PENDING,实体重建后重拉(退出完成后再登录,或换节点);退出保留期内重登会复用实体,不重拉:已作废就记 SKIPPED,落到新版本节点就正常执行。
-					// 告警走 Halt 打的 metric=inbox_halted reason=version_skew;这一行只补条目上下文。
+					// 告警读停用的 gauge(reason=version_skew),Halt 另打 metric=inbox_halted;这一行只补条目上下文。
 					LOG_ERROR << "[PlayerInbox] Executor reported version skew player_id=" << playerId
 							  << " domain=" << state.domain << " seq=" << seq
 							  << " type=" << player_inbox_registry::TypeName(msgType) << " request_id=" << requestId
@@ -1188,6 +1218,11 @@ namespace
 
 void PlayerInboxSystem::Initialize()
 {
+	// 先登记采集回调(出口由 MMORPG_METRICS_PORT 打开):下面开关关着时会提前返回,而开关状态本身就是要导出的信号。
+	if (!GlobalMetricsRegistry().Register("scene_player_inbox", &PlayerInboxSystem::WriteMetrics))
+	{
+		LOG_ERROR << "[Metrics] collector scene_player_inbox is already registered";
+	}
 	tlsRegistryBrokenDetail = player_inbox_registry::SelfCheck();
 	tlsRegistryBroken = !tlsRegistryBrokenDetail.empty();
 	if (tlsRegistryBroken)
@@ -1374,6 +1409,7 @@ void PlayerInboxSystem::OnPlayerLeaving(entt::entity player)
 					 << " domain=" << state.domain << " corr=" << state.correlationId
 					 << "; the reply will be discarded, entries it delivered stay delivered-but-unacknowledged"
 					 << " until the player next lands";
+			IncrementCount(tlsLeaveAckCounts, LeaveAckResult::kFetchInflight);
 			continue;
 		}
 		if (state.phase == PlayerInboxPhase::kApplying)
@@ -1395,6 +1431,7 @@ void PlayerInboxSystem::OnPlayerLeaving(entt::entity player)
 					 << " decisions=" << state.ackQueue.size()
 					 << "; if this Ack fails after the entity is gone, these entries stay delivered-but-unacknowledged"
 					 << " until the player next lands";
+			IncrementCount(tlsLeaveAckCounts, LeaveAckResult::kAckInflight);
 			continue;
 		}
 		if (state.phase == PlayerInboxPhase::kApplying)
@@ -1416,6 +1453,7 @@ void PlayerInboxSystem::OnPlayerLeaving(entt::entity player)
 			LOG_INFO << "[PlayerInbox] metric=inbox_leave_ack result=not_durable player_id=" << playerId
 					 << " domain=" << state.domain << " decisions=" << state.ackQueue.size()
 					 << "; the entries stay delivered-but-unacknowledged until the player next lands";
+			IncrementCount(tlsLeaveAckCounts, LeaveAckResult::kNotDurable);
 			continue;
 		}
 		// 离开是最后一次机会,不看 Ack 退避(nextAckMs)。owner_epoch 此刻仍是本节点的当前值,服务端应判 MATCH;
@@ -1427,6 +1465,7 @@ void PlayerInboxSystem::OnPlayerLeaving(entt::entity player)
 		LOG_INFO << "[PlayerInbox] metric=inbox_leave_ack result=" << (sent ? "sent" : "not_sent")
 				 << " player_id=" << playerId << " domain=" << state.domain << " decisions=" << state.ackQueue.size()
 				 << " corr=" << state.correlationId << "; best effort, the reply is not awaited";
+		IncrementCount(tlsLeaveAckCounts, sent ? LeaveAckResult::kSent : LeaveAckResult::kNotSent);
 	}
 }
 
@@ -1478,7 +1517,7 @@ void PlayerInboxSystem::Tick()
 
 	if (tlsRegistryBroken && TakeNodeRelogTurn(tlsNextRegistryBrokenLogMs, nowMs))
 	{
-		// 节点级停用不会自愈(要换二进制):按固定间隔补打,让 [10m] 窗口的告警在进程存活期间一直亮着(评审 F3)。
+		// 节点级停用不会自愈(要换二进制):按固定间隔补打,进程存活期间 10 分钟窗口里总能搜到这一行(评审 F3)。
 		LogRegistryBroken();
 	}
 	// 开关关着也是节点级、不会自愈的停用(要改配置重启),同一节拍补打(评审 H1)。开关开着时清掉排期:
@@ -1501,8 +1540,9 @@ void PlayerInboxSystem::Tick()
 	{
 		for (auto &state : runtime.domains)
 		{
-			// 停用对当前实体一直有效:按节拍补打同一个 metric=inbox_halted,[10m] 日志告警在实体存活期间一直亮着。
-			// 停用那一刻 Halt 已打过 ERROR(带 detail),这里只排期或补打,不改任何状态。
+			// 停用对当前实体一直有效:按节拍补打同一个 metric=inbox_halted,实体存活期间 10 分钟窗口里总能按 player_id
+			// 搜到它(告警读 scene_player_inbox_halted_player_domains)。停用那一刻 Halt 已打过 ERROR(带 detail),
+			// 这里只排期或补打,不改任何状态。
 			if (state.halted)
 			{
 				if (state.nextHaltRelogMs == 0)
@@ -1650,6 +1690,7 @@ void PlayerInboxSystem::OnFetchReply(uint64_t playerId, uint32_t domain, uint64_
 	{
 		LOG_ERROR << "[PlayerInbox] metric=inbox_stale_owner op=fetch player_id=" << playerId << " domain=" << domain
 				  << " sent_epoch=" << state->sentEpoch;
+		IncrementCount(tlsConsumerEventCounts, ConsumerEvent::kStaleOwner);
 		ScheduleRetry(*state, playerId, PlayerInboxDeferReason::kStaleOwner, player_inbox_rules::kStaleOwnerBackoffMs,
 					  nowMs);
 		return;
@@ -1811,6 +1852,7 @@ void PlayerInboxSystem::OnAckReply(uint64_t playerId, uint32_t domain, uint64_t 
 			// 这些结局都已落盘(Ack 只在 durable 之后发),实体下次在本节点新建时会按账本回放、重新确认。
 			LOG_ERROR << "[PlayerInbox] metric=inbox_ack_anomaly player_id=" << playerId << " domain=" << domain
 					  << " detail=tip=" << tip << " decisions=" << state->ackQueue.size();
+			IncrementCount(tlsConsumerEventCounts, ConsumerEvent::kAckAnomaly);
 			state->ackQueue.clear();
 			Halt(*state, playerId, PlayerInboxHaltReason::kAckAnomaly, "op=ack tip=" + std::to_string(tip));
 			FinishRound(*state, nowMs);
@@ -1860,6 +1902,7 @@ void PlayerInboxSystem::OnAckReply(uint64_t playerId, uint32_t domain, uint64_t 
 	{
 		LOG_ERROR << "[PlayerInbox] metric=inbox_ack_anomaly player_id=" << playerId << " domain=" << domain
 				  << " detail=" << anomaly;
+		IncrementCount(tlsConsumerEventCounts, ConsumerEvent::kAckAnomaly);
 		state->ackQueue.clear();
 		Halt(*state, playerId, PlayerInboxHaltReason::kAckAnomaly, anomaly);
 		FinishRound(*state, nowMs);
@@ -1905,6 +1948,101 @@ void PlayerInboxSystem::OnAckFailed(uint64_t playerId, uint32_t domain, uint64_t
 	state->nextAckMs = nowMs + player_inbox_rules::BackoffMs(state->ackFailStreak, JitterPermille());
 	LOG_WARN << "[PlayerInbox] Ack failed (result unknown; will resend) player_id=" << playerId << " domain=" << domain
 			 << " code=" << grpcCode << " detail=" << detail << " streak=" << state->ackFailStreak;
+}
+
+// ── 指标 ────────────────────────────────────────────────────────────────────
+
+// 状态类信号(问题还在就一直补打日志的那几项)抓取时现算成 gauge,告警看「现在怎样」,不靠日志行数或计数增量;
+// 一次性事件导出计数。名表下标 0 的 none 不是原因,不导出(docs/design/player-inbox-service.md §9.4.1)。
+void PlayerInboxSystem::WriteMetrics(prometheus_text::Writer &writer)
+{
+	auto &registry = tlsEcs.actorRegistry;
+
+	writer.BeginFamily("scene_player_inbox_consumer_enabled",
+					   "1 when the player_inbox.consumer_enabled config switch of this scene node is on, 0 when it is off: the "
+					   "inbox service keeps accepting items while this node executes none of them (same switch as the "
+					   "metric=inbox_consumer_disabled log line). A failed registry self-check is exported separately as "
+					   "scene_player_inbox_registry_broken.",
+					   prometheus_text::MetricType::kGauge);
+	writer.Sample({}, ConfiguredConsumerEnabled() ? 1U : 0U);
+	writer.BeginFamily("scene_player_inbox_registry_broken",
+					   "1 when the inbox executor registry self-check failed at startup, so inbox consumption stays disabled on "
+					   "this scene node until it runs a fixed build (the metric=inbox_registry_broken log line names the failed "
+					   "check in detail=).",
+					   prometheus_text::MetricType::kGauge);
+	writer.Sample({}, tlsRegistryBroken ? 1U : 0U);
+
+	// 停用对当前实体一直有效,实体销毁才消失:按停用原因数此刻停着的 (玩家, 域)。
+	std::array<uint64_t, static_cast<std::size_t>(PlayerInboxHaltReason::kCount)> halted{};
+	for (const auto &[entity, runtime] : registry.view<PlayerInboxRuntimeComp>().each())
+	{
+		(void)entity;
+		for (const auto &state : runtime.domains)
+		{
+			if (state.halted)
+			{
+				IncrementCount(halted, state.haltReason);
+			}
+		}
+	}
+	writer.BeginFamily("scene_player_inbox_halted_player_domains",
+					   "(player, domain) pairs on this scene node whose inbox domain is halted right now, by halt reason. A halt "
+					   "lasts until the player entity is recreated on a node; the metric=inbox_halted log lines name the player.",
+					   prometheus_text::MetricType::kGauge);
+	for (std::size_t i = 1; i < halted.size(); ++i)
+	{
+		writer.Sample({{"reason", kPlayerInboxHaltReasonNames[i]}}, halted[i]);
+	}
+
+	// 前置闸判 kLedgerInvalid 的两种情形(CheckApplyGate):加载判坏挂了标签(不论消费开关),或已落地却缺持久账本组件。
+	uint64_t ledgerInvalidPlayers = 0;
+	for (const auto entity : registry.view<PlayerInboxLedgerInvalidComp>())
+	{
+		(void)entity;
+		++ledgerInvalidPlayers;
+	}
+	for (const auto entity :
+		 registry.view<PlayerInboxRuntimeComp>(entt::exclude<PlayerInboxLedgerComp, PlayerInboxLedgerInvalidComp>))
+	{
+		(void)entity;
+		++ledgerInvalidPlayers;
+	}
+	writer.BeginFamily("scene_player_inbox_ledger_invalid_players",
+					   "Players on this scene node whose inbox is held back right now because their inbox ledger is invalid: it "
+					   "failed validation at load (metric=inbox_ledger_invalid source=loader) or a landed player lacks the ledger "
+					   "component. It does not heal by itself; never rebuild the ledger from empty.",
+					   prometheus_text::MetricType::kGauge);
+	writer.Sample({}, ledgerInvalidPlayers);
+
+	writer.BeginFamily("scene_player_inbox_events_total",
+					   "One-off inbox consumer events on this scene node since process start, by event, one per "
+					   "metric=inbox_<event> log line naming the player: unknown_type, replay_mismatch and ack_anomaly halt the "
+					   "domain; battle_duplicate_request is the same battle redelivered under a new seq and recorded APPLIED "
+					   "without executing it again; stale_owner is a Fetch fenced off as STALE.",
+					   prometheus_text::MetricType::kCounter);
+	for (std::size_t i = 0; i < tlsConsumerEventCounts.size(); ++i)
+	{
+		writer.Sample({{"event", player_inbox_rules::kConsumerEventNames[i]}}, tlsConsumerEventCounts[i]);
+	}
+	writer.BeginFamily("scene_player_inbox_deferral_starts_total",
+					   "Times an inbox domain of a player on this scene node started deferring for this reason since process "
+					   "start (the defer reason changed; repeats of the same reason are not counted), one per "
+					   "metric=inbox_deferred log line. disabled stays 0: with the consumer switch off nothing is scheduled.",
+					   prometheus_text::MetricType::kCounter);
+	for (std::size_t i = 1; i < tlsDeferralStartCounts.size(); ++i)
+	{
+		writer.Sample({{"reason", kPlayerInboxDeferReasonNames[i]}}, tlsDeferralStartCounts[i]);
+	}
+	writer.BeginFamily("scene_player_inbox_leave_ack_total",
+					   "Results of the best-effort Ack when a player leaves this scene node since process start, by result, one "
+					   "per metric=inbox_leave_ack log line. sent and decided_prefix_queued are not residues; the others "
+					   "(ack_inflight only if that Ack later fails) leave entries delivered but unacknowledged until the player "
+					   "lands again.",
+					   prometheus_text::MetricType::kCounter);
+	for (std::size_t i = 0; i < tlsLeaveAckCounts.size(); ++i)
+	{
+		writer.Sample({{"result", player_inbox_rules::kLeaveAckResultNames[i]}}, tlsLeaveAckCounts[i]);
+	}
 }
 
 // ── 测试注入点 ──────────────────────────────────────────────────────────────

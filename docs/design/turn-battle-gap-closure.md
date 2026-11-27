@@ -627,8 +627,9 @@ scene 侧客户端在 `battle_terminal_query.{h,cpp}`:随机挑一个就绪的 m
 - warning:PromQL 规则 `SceneBattleFreezeHoldCapReached`(`deploy/k8s/battle-settlement-alerts.yaml`,`event="cap_reached"` 的 10 分钟增量 > 0)
   —— 续冻到上限结算仍没到,按日志 `metric=battle_freeze_hold_cap_reached` 里的 battle_id 查 match 的 `match_battle_settlement_source` 与收件箱条目;
   2026-11-27 前这是一条 LogQL 值班固定查询,信号导出成指标后改成 PromQL,查询从 `asset-channel-alerts.yaml` 头注释删掉;
-- warning:`count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_terminal_query_unknown" [10m]) > 20`
-  —— scene 查不到 match 终局(密钥、发现或 match 不可用),续冻会一直拖到上限。
+- warning:PromQL 规则 `SceneBattleTerminalQueryUnknown`(同一文件,`scene_battle_terminal_query_unknown_total` 的 10 分钟增量 > 20,
+  计数与日志 `metric=battle_terminal_query_unknown` 同一处,`battle_terminal_query::UnknownAnswers`)
+  —— scene 查不到 match 终局(密钥、发现或 match 不可用),续冻会一直拖到上限;2026-11-27 前同样是 LogQL 值班查询,已删。
 
 上面两条在 scene 一侧,都是结算已经晚了才报。积压源头在 match 的终局发件箱,另有两条 Prometheus 规则
 `deploy/k8s/match-outcome-outbox-alerts.yaml`(2026-11-06),在玩家到续冻上限之前报出。两条都看
@@ -668,8 +669,8 @@ scene 侧客户端在 `battle_terminal_query.{h,cpp}`:随机挑一个就绪的 m
 - **离线超过续冻上限才重登**:锁已过期,不再重建冻结;道具预留随存档在盘上,重登后照样押着,由 reaper 的预留复核按 SQL 终局收尾
   (2026-11-10),结算晚到仍从预留里扣。
 - **开销。** 每个续冻中的玩家每 30 秒一次主键只读查询,正常运行为 0。
-- 续冻到上限已有 PromQL 告警(`SceneBattleFreezeHoldCapReached`,2026-11-27)。`battle_terminal_query_unknown` 还只在结构化日志里,
-  只有 `deploy/k8s/asset-channel-alerts.yaml` 头注释的值班固定查询,Loki ruler 还没接线(上线批 BK8s),接线之前不会自动告警。
+- 续冻到上限、终局查询未知都已是 PromQL 告警(`SceneBattleFreezeHoldCapReached`、`SceneBattleTerminalQueryUnknown`,2026-11-27);
+  原来只有 `deploy/k8s/asset-channel-alerts.yaml` 头注释的值班固定查询,Loki ruler 一直没接线,不会自动告警。
   match 一侧的发件箱积压已有 PromQL 规则(`deploy/k8s/match-outcome-outbox-alerts.yaml`,见上面「指标」段)。
 
 **2026-11-10 复核:上限之后这一段怎么堵(负责人当日拍板方案 A,已落码,未编译,待 Gemini;

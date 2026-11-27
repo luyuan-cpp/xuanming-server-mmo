@@ -175,7 +175,7 @@ Q3 / Q4 需要一个本地 Redis。`MMORPG_TEST_REDIS_ADDR` 是新开关(04 §4.
 `db_owner_epoch_guard_total` 是 CounterVec,`legacy_zero` 序列要等第一次发生才出现,`increase` 对"从无到 1"只有一个样本、恰好漏掉第一次(92-handoff §8.1 踩过),
 所以这条用**绝对值**判定 —— 代价是进程重启前一直处于告警态,对"应当恒为 0"的门禁不变量正合适。**不**在本批改 go/db 去预置。
 
-**scene 侧只能靠日志**(scene 的计数不进 Prometheus,`dirty_save_stats` 以日志为指标源)。仓库里 Loki 虽配了 `ruler`,但规则目录没有挂载、也没有 `alertmanager_url`,
+**scene 侧原来只能靠日志**(当时 scene 的计数不进 Prometheus,`dirty_save_stats` 以日志为指标源;2026-11-27 订正:scene 早有 Prometheus 出口,`dirty_save_stats` 已导出为 `scene_player_save_events_total`,下面第一条导出为 `scene_asset_op_owner_epoch_unknown_total` 并有 PromQL 告警 `SceneAssetOpOwnerEpochUnknown`,第二条读的计数已随 Redis 存档路径删除,第三条导出为 `scene_exit_persist_events_total{event="exit_save_outran_lease"}`,现状见 `docs/ops/cross-zone-failure-test-runbook.md` §9)。仓库里 Loki 虽配了 `ruler`,但规则目录没有挂载、也没有 `alertmanager_url`,
 **目前不存在能生效的日志告警通路**。本批不造一份"配了也不生效"的规则文件,而是把以下 LogQL 写进 runbook,作为值班的固定查询;ruler 接线列入 BK8s(90 清单 G-05):
 
 - `sum(count_over_time({service="scene"} |= "[AssetOp] blocked: owner_epoch unknown" [10m])) > 0` —— 资产操作因 epoch = 0 被挡;

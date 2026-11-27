@@ -6,6 +6,11 @@
 #   scene_currency_clawback_version_skew_total   counter,没有标签。补缴扣还(CurrencySystem::AddCurrency)遇到带着更新版本字段的欠款,
 #                                                按冻结处理、不扣还也不删除、收入全额入账的次数;与逐次的
 #                                                `metric=persist_version_skew where=currency_clawback` WARN 同一时刻、同一口径。
+#   scene_asset_op_version_skew_total{where}     counter(2026-11-27 起,cpp/libs/services/scene/player/system/asset_op_system.cpp 的
+#                                                PlayerAssetOpSystem::WriteMetrics)。资产通道遇到本版本解释不了的东西、回 RETRY + 1006
+#                                                (kFeatureUnavailable)、不记账的次数,where 与日志 metric=persist_version_skew where=asset_* 同名:
+#                                                asset_debit / asset_recall_debt / asset_recall / asset_request / asset_currency / asset_config。
+#                                                原来是 asset-channel-alerts.yaml 头注释里的 LogQL 值班查询,导出后改到这里。
 # 进程启动时以 0 导出,第一次被抓取之后的增长 increase() 都抓得到。但回滚出来的旧 Pod 可能在第一次被抓取之前就遇到了这种欠款,
 # 首个样本已经不是 0,increase() 看不到这一跳:规则另带一支「新序列」(X unless X offset 10m,与 login-alerts.yaml 同一写法,2026-11-26)。
 # instance = 被抓取的 scene Pod。
@@ -22,9 +27,12 @@
 #     所以「出现就报」(for: 0m),不依赖基线。级别 warning:不丢数据,这段时间这名玩家这一币种的补缴暂停、收入全额到账,
 #     欠款与新字段原样保留,落到新版本节点后按新口径收。
 #   - 按 namespace 聚合(一个 zone 一个 namespace)。
-#   - 版本错位的其余 where(asset_debit / asset_currency / asset_request / asset_config / asset_recall / inbox_payload / inbox_currency /
-#     battle_item / battle_pet 等)还只在 scene 日志里,值班固定查询见 asset-channel-alerts.yaml 与 player-inbox-alerts.yaml 文件头;
-#     哪个导出成指标了,就在本文件的组里加规则。
+#   - 资产通道的六个 where 2026-11-27 起导出(上面 scene_asset_op_version_skew_total),规则 SceneAssetOpVersionSkew:滚动发布或热更期间属预期,
+#     按 where 分组报,10 分钟里出现就报(warning)。其余 where(inbox_payload / inbox_currency / battle_item / battle_pet 等)还只在 scene 日志里,
+#     值班固定查询见 player-inbox-alerts.yaml 文件头;哪个导出成指标了,就在本文件的组里加规则。
+#   - 持久 schema 世代倒退被拒写(scene_persist_schema_regression_rejected_total)不在这里加规则:同一事件 go/db 侧已经有
+#     DbPlayerStoreSchemaMismatch(player-store-alerts.yaml,result 含 SAVE_PLAYER_SCHEMA_REGRESSED),再加一条只会同一件事报两遍;
+#     scene 侧的计数用来看是哪台 scene,查询见 deploy/k8s/README.md「玩家持久 schema 世代」。
 #
 # Severity conventions(与 scene-manager-alerts.yaml 相同):
 #   critical = pager, someone wakes up
@@ -64,4 +72,27 @@ spec:
               从 scene 日志 `metric=persist_version_skew where=currency_clawback` 拿 player_id 与 currency_type,
               再看是哪台 scene 打的:它的版本不认识这笔欠款的新字段。把它滚动到认识这些字段的版本(或停止回滚),之后的入账照新口径扣还。
               发布已全量仍在出现,查是谁在旧版本还在跑时就写了带新字段的欠款(发布次序违规,设计 §13 第 7 条)。不要人工删改欠款。
+            runbook_url: docs/design/mixed-version-persist-field-protection.md
+
+        # 资产通道遇到本版本解释不了的东西,回 RETRY + 1006、不记账(Go 行上表现为 PENDING、last_reason=1006)。
+        - alert: SceneAssetOpVersionSkew
+          expr: |
+            sum by (namespace, where) (increase(scene_asset_op_version_skew_total[10m])) > 0
+            or
+            sum by (namespace, where) (
+              scene_asset_op_version_skew_total
+              unless scene_asset_op_version_skew_total offset 10m
+            ) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 scene 资产通道遇到本版本解释不了的请求({{ $labels.where }})"
+            description: >-
+              过去 10 分钟约 {{ $value | printf "%.0f" }} 次,这些请求回 RETRY、不记账,对侧稍后重投同一 seq,不丢。asset_debit = 按数量扣出只有算上
+              带更新版本字段的物品才够;asset_currency = 包里的币种本版本不认识;asset_request = 请求带本版本不认识的字段(日志行带 field=);
+              asset_config = 物品 / 宝宝配置号不在本节点的表里(更新版本或尚未热更到本节点);asset_recall / asset_recall_debt = 回收路径同理。
+              滚动发布或热更期间属预期,走完自然收口;发布已走完仍持续 → 查是否有 scene 停在旧版本、被回滚,或这个节点的配置没有热更到。
+              scene 日志 metric=persist_version_skew where=asset_* 给出 player_id 与 seq。不要人工终结这类行:入账没有 Abort 栅栏,人工终结会在流上
+              留下永久的洞(04 §4.38);聚宝斋托管卡在这里时,卖家可以撤单收口。
             runbook_url: docs/design/mixed-version-persist-field-protection.md

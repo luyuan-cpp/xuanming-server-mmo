@@ -197,6 +197,9 @@ public:
         uint64_t fingerprintContinued = 0;                   // metric=battle_table_fingerprint_mismatch(warn,照常开局)
         uint64_t observerSeatsReclaimedConnectTimeout = 0;   // metric=battle_observer_seat_reclaimed cause=connect_timeout
         uint64_t observerSeatsReclaimedReconnectTimeout = 0; // metric=battle_observer_seat_reclaimed cause=reconnect_timeout
+        uint64_t settlementSourceInvalid = 0;                // metric=battle_settlement_source_invalid(终局原件冻结失败,终局保持未知)
+        uint64_t settlementSourceMissing = 0;                // metric=battle_settlement_source_missing(个人结算条数与参战者对不上)
+        uint64_t settlementSourceMemberMismatch = 0;         // metric=battle_settlement_source_member_mismatch(个人结算不是这批参战者的)
     };
 
     // 本节点的房间与事件计数写成 Prometheus 指标(2026-11-27 起导出,原来只有采样日志与滞留提醒行):
@@ -207,8 +210,11 @@ public:
     //   battle_observer_seats_reclaimed_total{cause}      counter,观众席到期回收:connect_timeout / reconnect_timeout
     //   battle_spectate_frames_not_sent_total             counter,观战中继 / 广播帧没交给 Kafka 生产者
     //                                                     (SpectateFramePublisher::SendFailures;入队后投递失败的归 cpp_node_kafka_producer_*)
+    //   battle_settlement_source_failures_total{kind}     counter,个人结算原件出错:invalid / missing / member_mismatch
+    //   battle_sql_outcome_signing_key_ready              gauge,终局提交密钥此刻是否可用(1 / 0;0 = 本节点终局协议停用,
+    //                                                     抓取时按 MMORPG_MATCH_OUTCOME_SECRET_BATTLE 现判,与 OutcomeSigningKeyReady 同一判据)
     // 每项进程一启动就以 0 导出;标签只有封闭的枚举,battle_id / player_id / observer 只在日志里(AGENTS.md §9)。只在 loop 线程调用。
-    // 滞留房间的告警在 deploy/k8s/battle-settlement-alerts.yaml(BattleSqlOutcomeRoomsStuck)。
+    // 滞留房间、终局密钥缺失、个人结算原件出错的告警在 deploy/k8s/battle-settlement-alerts.yaml。
     void CollectMetrics(prometheus_text::Writer &writer) const;
     // battle 启动时调一次(main.cpp),把 CollectMetrics 登记进进程的指标注册表;回调只绑 WeakSelf()(AGENTS.md §11.7)。
     // 重复登记只打一行 ERROR。
@@ -620,8 +626,11 @@ private:
     void OnSqlOutcomeAbort(BattleRoom &room);
     // 把房间移出待提交集合并删房,集合空了就停重放定时器。
     void RetireSqlOutcomeRoom(uint64_t battleId);
-    // 与正式请求签名相同的密钥就绪门；只在本节点生命周期首次缺失时报警。
+    // 与正式请求签名相同的密钥就绪门；只在本节点生命周期首次缺失时打一行 ERROR。持续缺失靠
+    // battle_sql_outcome_signing_key_ready(CollectMetrics 现判)告警:只打一次的日志过了查询窗口就没有信号了。
     bool OutcomeSigningKeyReady(std::string_view secret);
+    // 判据本身(去掉首尾空白后至少 32 字节),OutcomeSigningKeyReady 与 CollectMetrics 共用。
+    static bool OutcomeSigningKeyUsable(std::string_view secret);
 
     void BroadcastTurnResult(const BattleRoom &room, const ::TurnResultS2C &result);
 

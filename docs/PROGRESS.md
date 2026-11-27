@@ -8412,3 +8412,43 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
 - **改了什么**:客户端 `Assets/Scripts/UI/Ugui/Jubaozhai/CommerceWindow.cs` 的订单种类名:材料成交(kind 4)显式列出,求购单(kind 7)显示「悬赏求书」,其余不认识的种类显示「交易单」(原先一律显示「材料成交」)。五项补在设计稿 §11.2「批 B 落码记录」。
 - **核对**:三个仓(服务端、客户端、Java)都只有 main、没有 stash;服务端三个分离头验证快照 11-26 已核过,改动都已在 main 或是被取代的旧方案,不合并。批 B 的服务端与客户端改动已随负责人快照提交 `3e9b92cd6` / `ed24a13e` 及之后两次提交进 main。
 - **给 Gemini 补一步**:`robot/` 下重跑 `go mod vendor` 再 `go build -mod=vendor ./...`(设计稿 §11.2 末第 5 条);其余顺序不变。
+
+## 2026-11-27 Claude:审阅 Gemini 五仓 Actor 隔离改造(只读审阅,未改代码、未运行)
+
+- **对象**:Pandora `7f4514f7`、本仓 `5fe504e65`、Python `45fe6c7` / `0811a1f`、Java `87f79f19`、Unity `5bb30c91`;结论全文在 [design/actor-isolation-review-20261127.md](design/actor-isolation-review-20261127.md)。
+- **必须改(都在 Pandora Go)**:① PresenceHub 邮箱 goroutine 同时做同步 Kafka 推送,堆满 4096 条后静默丢订阅、退订与状态变更,旧加锁版本不丢,建议回退;② ds / hub allocator 新加的在途上限 64 会在 locator 变慢时丢 BATTLE 位置续期,建议删上限。
+- **本仓 C++**:Kafka 回调按值捕获、表达式改走快照求值都核对等价;每次求值新建 exprtk 解析器,留作压测观察项。
+- **待负责人定**:上面两条怎么改;`player_battle.cpp` 直接 `Swap` 他系统组件与 `da97bfb11` 新规则字面冲突,规则补例外还是代码走窄接口;Python 宗师口碑待回账在内存,停机会丢,要不要做成不丢。
+
+
+## 2026-11-27 Gemini（Gemini 4 Neon Extra）：完成 11-06 `battle-handoff` 真实三节点 PD + TiKV + TiDB v8.5.2（`--store=tikv`）全量补验（0 FAIL / 0 SKIP，Java 不涉及）
+
+- **环境与拓扑**：启动前宿主空闲物理内存 7.389 GiB（低于 11-06 旧 8 GiB 门槛 0.61 GiB，高于三节点 5.5 GiB 总硬上限与 11-20 同款 4 GiB 实测基线）；使用本机已缓存镜像（`--pull=never`）起全新隔离三节点 `pingcap/pd:v8.5.2`（512 MiB / 0.5 CPU）+ `pingcap/tikv:v8.5.2`（4 GiB / 2 CPU，`storage.block-cache.capacity="256MB"`）+ `pingcap/tidb:v8.5.2`（`--store=tikv --path=pd:2379`，1 GiB / 2 CPU，仅绑定 `127.0.0.1:24416`，独立网段 `10.254.250.0/24`），每阶段经 `tools/scripts/sql_fixture_env.ps1` 建独立私有收据目录，`MATCH_IT_REQUIRE_TIDB=1`。全程三节点零 OOM、零重启（峰值 PD 175 MiB / TiDB 299.6 MiB / TiKV 2.214 GiB，宿主剩余 ≥ 4.04 GiB）。
+- **验证证据（`build/verification/battle-handoff-20261127-tidb-3node/`，全部 exit 0，0 FAIL / 0 SKIP）**：
+  1. **阶段 1（原失败单例）**：`TestFormationExitTiDBUnlaunchedFormationReleasesWithoutTargetBattle` → **1/1 PASS**（20.01s，`stage1-singleton-summary.json`，JSONL SHA `639fb2b0…`）。
+  2. **阶段 2（原 35 项，当前 HEAD 同正则 37 项）**：`^(TestOutcomeTiDB|TestReadyTiDB|TestTerminalTiDB|TestStartedFormationTiDB|TestFormationExitTiDB|TestCompletionTiDB)` → **顶层 37/37 PASS、子例 24/24 PASS**（1532.87s，`stage2-37-suite-summary.json`，JSONL SHA `51b56954…`）。
+  3. **阶段 3（原定额外夹具回归）**：`TestAuthorityTiDBImmutableIntentAndFailedQueueKeepsWait` → **顶层 1/1 PASS、子例 1/1 PASS**（52.49s，`stage3-fixture-regression-summary.json`，JSONL SHA `fa8c2177…`）。
+  4. **D-14 主键修复三节点补验**：`TestRankedTiDBFeaturedBuildUpsertAndReadback` → **1/1 PASS**（28.13s，`stage4-featured-build-3node-summary.json`，JSONL SHA `f0150eb9…`）。
+- **清理与边界**：按 TiDB → TiKV → PD 顺序优雅停止并移除本任务容器、卷与网络，核对零容器/卷/网络/24416 端口残留；未触碰同机其他容器与工作区代码；未重跑 11-06 已通过的 C++ / 13 条 Linux `-race` / 5 条真实 Redis；未执行 `git commit` / `git push`。
+
+## 2026-11-27 Claude:C++ 指标导出第二轮——只写成 LogQL 的告警信号全部导出并逐条改 PromQL(两批,未编译、未测试,待 Gemini 验证;Java 不涉及)
+
+- **起因**:负责人要求「查出来的问题现在就修,不等以后」。上一轮之后还有一批告警只写成 LogQL 值班固定查询(`asset-channel-alerts.yaml` 头注释 11 条、`cross-zone-failure-test-runbook.md` §9 3 条),Loki ruler 一直没接线,这些查询从没自动响过;另有几处设计稿仍写「scene / battle 没有 Prometheus 端点」。
+- **判断原则**(写进 `docs/design/infra-reconnect-overview.md` §1.8):口径相同或更全的就导出 + 改 PromQL + 删原 LogQL;状态用抓取时现判的 gauge,不用「第一次打一行」的日志;计数比日志更全时按计数(日志限频会让按行数的查询时亮时灭);改不成的保留并写原因(停机那一刻才打的信号抓不到;另一侧已有告警的不重复加)。
+- **批 C1(战斗结算,23 个文件)**:
+  - battle:`battle_room_manager.{h,cpp}` 的 `EventCounters` 加结算原件三类,`CollectMetrics` 导出 `battle_settlement_source_failures_total{kind}` 与 gauge `battle_sql_outcome_signing_key_ready`(判据抽成 `OutcomeSigningKeyUsable`,与就绪门共用;原日志只在第一次缺失时打一行,10 分钟后查询就灭了);
+  - scene:`player_battle.{h,cpp}` 新增 `WriteBattleSettlementMetrics`(近期战斗结果六类 `scene_battle_result_events_total{event}`、物品号段不够 `scene_battle_settlement_item_guid_shortage_total{top_up}`、终局查询未知 `scene_battle_terminal_query_unknown_total`,后者计数在 `battle_terminal_query.{h,cpp}` 的 `UnknownAnswers`);`player_mail_outbox.{h,cpp}` 的 `WriteMetrics` 导出 `scene_mail_outbox_stuck_total{reason}`(每一次失败的尝试都计,不跟日志的「第 1 次与每 8 次」);`cpp/nodes/scene/main.cpp` 登记;
+  - 告警:`deploy/k8s/battle-settlement-alerts.yaml` 改为两组 9 条(`battle.settlement`:滞留房间 / 密钥缺失 / 结算原件出错,critical;`scene.battle-settlement`:原三条 + 终局查询未知(>20/10m)/ 物品号段不够 / 邮件寄不出去,warning);`asset-channel-alerts.yaml` 头注释只剩停机时才打的 `battle_sql_outcome_unflushed_at_shutdown`(进程随即退出,抓不到计数);`k8s_deploy_contract.tests.ps1` 的 LogQL 条数下限 6 → 1;契约测试 `battle_settlement_alerts_contract.tests.ps1` 重写(三处源码、标签名表、每处日志都有计数、新序列一支、文件头不再保留已转换的查询);
+  - 单测:`BattleObserverContract.RoomAndEventCountersAreExportedAsMetrics` 补新族;`BattleFreezeHoldMetrics.SettlementAndRecentResultCountersAreExported`;`MailOutboxPlayerTest.SignatureRejectionKeepsTheEntryOnTheRejectedSchedule` 补计数增量;
+  - 文档:`deploy/k8s/README.md`「战斗结算收尾告警」、`turn-battle-gap-closure.md` §11、`battle-overflow-mail.md`(含计数与日志口径的有意差别)、`battle-result-recovery.md` §8、`landing-recovery-sync-digest.md`、`infra-reconnect-overview.md` §1.8。
+- **批 C2(资产通道与归属,18 个文件;scene main、README、asset-channel 头注释、§1.8 与本文件和 C1 重复计)**:
+  - `asset_op_system.{h,cpp}` 的 `WriteMetrics`:`scene_asset_op_version_skew_total{where}`(六个 where 与日志同名)、`scene_asset_op_owner_epoch_unknown_total`;`player_lifecycle.{h,cpp}` 的 `exit_persist_stats` 加 `exit_save_outran_lease`(追加在 `[ExitPersist]` 行尾,原有 key 位置不变);
+  - 告警:`persist-version-skew-alerts.yaml` 加 `SceneAssetOpVersionSkew`;`owner-epoch-alerts.yaml` 加组 `owner-epoch.scene`(`SceneAssetOpOwnerEpochUnknown`);持久 schema 倒退拒写不加 scene 侧告警(go/db 的 `DbPlayerStoreSchemaMismatch` 已报同一事件),README 的 LogQL 改成定位用的 PromQL;`data-service-audit-alerts.yaml` 头注释改正(Kafka 生产失败已由 `CppNodeKafkaProduceFailing` 覆盖,日志查询只用来确认是快照这一路);契约测试 `persist_version_skew_alerts_contract.tests.ps1` 扩到三条规则、两份文件;
+  - 单测:`AssetOpSystemTest.OwnerEpochZeroRetryNotRecorded` 与 `CreditWithItemConfigUnknownToThisNodeRetriesWithoutRecording` 补计数增量;`PlayerOwnershipMetrics.ExitHoldFenceAndSchemaCountersAreExportedUnderTheSummaryLineKeys` 补新 key;
+  - 文档:`cross-zone-failure-test-runbook.md` §9(三条 LogQL 逐条处置,其中「存档 epoch 为 0」那条读的计数已随 Redis 存档路径删除)、`guild-phase2/08-save-owner-fence.md`、`mixed-version-persist-field-protection.md` 三处表格行。
+- **本地已核**:`test_cpp_no_raw_pointer_member.py`、`test_cpp_async_callback_capture.py`、`check_log_text_english.py` 通过;契约测试的关键断言按 grep 在现文件上核过(指标族、告警名唯一、组名)。
+- **Gemini 验证**(失败保留第一条编译错误与 gtest 完整输出,不改断言,不连续重试):
+  1. `msbuild game.sln /m:1`(改了 scene / battle 库),再 `run_cpp_tests -Build -Filter bag_test`、`currency_test`、`cross_zone_test`、`rpc_controller_test`:新断言 PASS,`BattleFreezeHold*`、`MailOutbox*`、`AssetOpSystemTest.*`、`PlayerOwnershipMetrics.*`、`BattleObserverContract.*` 照旧全绿;Linux 构建(`build_linux.sh`,没有新增 .cpp);
+  2. `pwsh -NoProfile -File` 跑 `battle_settlement_alerts_contract.tests.ps1`、`persist_version_skew_alerts_contract.tests.ps1`、`k8s_deploy_contract.tests.ps1`(「LogQL 契约」)、`assetop_work_shard_alerts_contract.tests.ps1`、`loop_liveness_alerts_contract.tests.ps1`;把四份告警文件的 `spec` 抽成普通规则文件后 `promtool check rules`;
+  3. 冒烟(调试栈,设 `MMORPG_METRICS_PORT`):`curl -s http://127.0.0.1:<端口>/metrics | grep -E 'battle_(settlement_source|sql_outcome_signing)|scene_(battle_result|battle_settlement_item_guid|battle_terminal_query|mail_outbox_stuck|asset_op_)|exit_save_outran_lease'`:每族都在、以 0 起步(没配 `MMORPG_MATCH_OUTCOME_SECRET_BATTLE` 的 battle 上 `battle_sql_outcome_signing_key_ready` 为 0);`[ExitPersist]` 行比改动前只在行尾多一个 key。
+- **同批另两块交给了子会话代理**(收件箱 9 条 LogQL;组队跟随 / Redis 集群客户端 / gRPC 服务端计数),结果核对后另记一条。

@@ -534,9 +534,14 @@ void BattleRoomManager::EraseRoom(const uint64_t battleId)
     rooms.Erase(battleId);
 }
 
+bool BattleRoomManager::OutcomeSigningKeyUsable(std::string_view secret)
+{
+    return token_security::TrimAscii(secret).size() >= 32;
+}
+
 bool BattleRoomManager::OutcomeSigningKeyReady(std::string_view secret)
 {
-    if (token_security::TrimAscii(secret).size() >= 32) return true;
+    if (OutcomeSigningKeyUsable(secret)) return true;
     if (!outcomeKeyUnavailableLogged) {
         outcomeKeyUnavailableLogged = true;
         LOG_ERROR << "metric=battle_sql_outcome_key_unavailable protocol_version=1 disabled=1";
@@ -1906,7 +1911,10 @@ contracts::kafka::BattleResultEvent BattleRoomManager::BuildResult(const BattleR
     }
     turnbattle::FillBattleResultActivityFields(room.activityContext, std::move(fled), std::move(dead), event);
     if (!turnbattle::FreezeBattleSettlementSource(event, std::move(settlements)))
+    {
+        ++eventCounters.settlementSourceInvalid;
         LOG_ERROR << "metric=battle_settlement_source_invalid;terminal remains unknown";
+    }
     return event;
 }
 
@@ -2150,12 +2158,14 @@ bool BattleRoomManager::FinishBattle(BattleRoom &room)
     for (const auto& settlement : result.settlements()) settled.insert(settlement.player_id());
     if (settled.size() != room.routingByPlayer.size())
     {
+        ++eventCounters.settlementSourceMissing;
         LOG_ERROR << "metric=battle_settlement_source_missing;no terminal dispatched";
         return false;
     }
     for (const auto& [playerId, routing] : room.routingByPlayer)
         if (!settled.contains(playerId))
         {
+            ++eventCounters.settlementSourceMemberMismatch;
             LOG_ERROR << "metric=battle_settlement_source_member_mismatch;no terminal dispatched";
             return false;
         }
@@ -3161,6 +3171,20 @@ void BattleRoomManager::CollectMetrics(prometheus_text::Writer &writer) const
                        "frame carries the full state).",
                        MetricType::kCounter);
     writer.Sample({}, spectateFramePublisher.SendFailures());
+    writer.BeginFamily("battle_settlement_source_failures_total",
+                       "Battle results whose personal settlement source could not be frozen (invalid: the terminal stays unknown) "
+                       "or did not match the participants (missing / member_mismatch: no terminal is dispatched).",
+                       MetricType::kCounter);
+    writer.Sample({{"kind", "invalid"}}, eventCounters.settlementSourceInvalid);
+    writer.Sample({{"kind", "missing"}}, eventCounters.settlementSourceMissing);
+    writer.Sample({{"kind", "member_mismatch"}}, eventCounters.settlementSourceMemberMismatch);
+    // 环境变量在进程内只读,抓取时现判即可;与 OutcomeSigningKeyReady 不同,这里不打日志。
+    const char *outcomeSecret = std::getenv("MMORPG_MATCH_OUTCOME_SECRET_BATTLE");
+    writer.BeginFamily("battle_sql_outcome_signing_key_ready",
+                       "1 when this node has a usable outcome signing key (MMORPG_MATCH_OUTCOME_SECRET_BATTLE, at least 32 bytes); "
+                       "0 means the outcome protocol is disabled on this node and no battle result can be committed.",
+                       MetricType::kGauge);
+    writer.Sample({}, OutcomeSigningKeyUsable(outcomeSecret != nullptr ? outcomeSecret : "") ? 1 : 0);
 }
 
 void BattleRoomManager::RegisterMetrics()

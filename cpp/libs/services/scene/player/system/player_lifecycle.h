@@ -585,8 +585,11 @@ namespace travel_handoff_stats
 //   exit_client_msg_rejected 退出中的实体收到 ExitGame 以外的客户端消息,被丢弃(已回 tip 的与只丢弃的都计)
 //   exit_deposed_on_reentry 进场路由命中本节点上的旧实体(退出中,或不在交接中的活实体),且 owner_epoch 显示
 //                          中间有别的持有者(player_exit::IsDeposedOnReentry),不存盘销毁后从盘上重载。非 0 = 有退出
-//                          曾被保留到租约之后(看 exit_resave_capped / save outran reconnect lease),或本节点上
+//                          曾被保留到租约之后(看 exit_resave_capped / exit_save_outran_lease),或本节点上
 //                          留着没退出的僵尸实体(意图缺失分支保留的实体 / gate 崩溃没代发 ExitGame)
+//   exit_save_outran_lease  退出存盘超过 30 秒重连租约才落地的退出次数(每次退出至多一次,与
+//                          "save outran reconnect lease" WARN 同一处,2026-11-27 追加在行尾)。owner_epoch 非 0 时不再意味着
+//                          覆盖(旧存盘被守卫拒掉),只作辅助信号:持续增长说明退出存盘慢,先看存盘耗时(scene_player_save_*)
 namespace exit_persist_stats
 {
 	struct Counters
@@ -599,6 +602,7 @@ namespace exit_persist_stats
 		std::atomic<uint64_t> fastpathDeferred{0};
 		std::atomic<uint64_t> clientMsgRejected{0};
 		std::atomic<uint64_t> deposedOnReentry{0};
+		std::atomic<uint64_t> saveOutranLease{0};
 	};
 
 	inline Counters& Get()
@@ -619,6 +623,7 @@ namespace exit_persist_stats
 		uint64_t fastpathDeferred{0};
 		uint64_t clientMsgRejected{0};
 		uint64_t deposedOnReentry{0};
+		uint64_t saveOutranLease{0};
 
 		bool operator==(const Snapshot&) const = default;
 	};
@@ -635,6 +640,7 @@ namespace exit_persist_stats
 		snapshot.fastpathDeferred = counters.fastpathDeferred.load(std::memory_order_relaxed);
 		snapshot.clientMsgRejected = counters.clientMsgRejected.load(std::memory_order_relaxed);
 		snapshot.deposedOnReentry = counters.deposedOnReentry.load(std::memory_order_relaxed);
+		snapshot.saveOutranLease = counters.saveOutranLease.load(std::memory_order_relaxed);
 		return snapshot;
 	}
 } // namespace exit_persist_stats

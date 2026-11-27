@@ -460,7 +460,7 @@ go/db 仍然要求自己「不比对方旧」。原因不在字段，在它和 s
 | 信号 | 来源 | 处置 |
 |---|---|---|
 | `DbPlayerStoreSchemaMismatch` | go/db 指标 `db_player_store_requests_total{result=~".*SCHEMA.*"}`，规则在 `deploy/k8s/player-store-alerts.yaml` | `TOO_NEW`：把 go/db 升到不低于 scene 与存档世代的版本，或把滚动发布走完。`REGRESSED`：有写方带着数据行却没带回加载到的世代，按 scene 日志定位玩家与写方 |
-| `metric=persist_schema_regression where=player_store` | scene 的 ERROR 日志（LogQL 固定查询，Loki ruler 未接线） | 同上 `REGRESSED` |
+| `metric=persist_schema_regression where=player_store` | scene 的 ERROR 日志（带玩家号与 key）；2026-11-27 起同一处计数导出为 `scene_persist_schema_regression_rejected_total`，告警仍是 go/db 侧那条 | 同上 `REGRESSED` |
 | `metric=persist_version_skew`、`SceneCurrencyClawbackVersionSkew` | scene 日志与 `deploy/k8s/persist-version-skew-alerts.yaml`：守卫命中（§4.4、§12 载荷行） | 混版本窗口里预期会有；全量之后还有，按 `where` 定位 |
 | `metric=player_store_claim_carried` | scene 的 INFO 日志：认领到本二进制不认识的内容（全进程第一次和此后每 1000 次打一条） | 混版本窗口里预期会有，只作确认用 |
 
@@ -901,7 +901,7 @@ go/db 仍然要求自己「不比对方旧」。原因不在字段，在它和 s
 | 不采纳"证实提交后改用输出世代"（接手会话裁决） | `ARGV[9]` 永远是真实加载世代 | 它要防的"别的写方插在同一实体两次写入之间"在生产中不可达（§5.2"前提"一行），却会把首存状态与回包依赖带回 C++ |
 | 恢复工具清令牌（接手会话复核，可选加固） | `save_barrier_restore` 写入时 `HDEL schema_writer schema_regressed` | 以 SQL 为准之后任何写方都要重新比较；合规流程里没有在线写方，结果不变 |
 | 恢复工具 `schema_gen` 改为两行最小值、覆盖旧值（2026-10-22，§13 第 8 条） | `restoredSchemaGen` = max(1, 两行戳最小值)；Lua 不保留更高的旧值，旧值损坏也覆盖 | 与 C3 / C4 的"加载世代 = 两表戳最小值"同口径：恢复后冷加载出的数据正好等于记录值，第一次加载与存盘不会被误判倒退；取最大值会让恢复（倒退的处置手段）本身在 enforce 下把玩家锁死 |
-| 观测 | 逐次 ERROR 日志带 `metric=persist_schema_regression`，30 秒汇总 `[PersistSchema]`；LogQL 写成值班固定查询，**不宣称告警已配** | Loki ruler 未接线（归上线批 BK8s），与 `[OwnerEpoch]` 同一先例 |
+| 观测 | 逐次 ERROR 日志带 `metric=persist_schema_regression`，30 秒汇总 `[PersistSchema]`；2026-11-27 起汇总的计数另导出为 `scene_persist_schema_regression_rejected_total`（`player_ownership_metrics.cpp`） | 原来的 LogQL 值班查询在 Loki ruler 未接线时不会自己响。不另加 scene 侧告警：同一事件 go/db 侧已有 `DbPlayerStoreSchemaMismatch`，再加一条只会报两遍；scene 计数用来定位是哪台 scene |
 
 ### v0.7（第 3a′ / 第 5 批落码与对抗复核，2026-10-19）
 
@@ -929,7 +929,7 @@ go/db 仍然要求自己「不比对方旧」。原因不在字段，在它和 s
 | 聚宝斋托管阶段撤单（10-30） | 卖家对寄售、材料订单、拍卖在托管阶段也可撤单，复用 `ExpireCommerceEscrowDebitsTx` → Abort | 攻击：材料订单托管腿没有截止，6a 把终态拒绝改成 RETRY 之后没有任何出口 |
 | `HasAll` 删除（10-30） | 没有调用方，bool 会把版本错位并进"不足" | 留着是陷阱：新调用方用它就回到记终态的老路 |
 | 新币种（§12） | 取值表唯一来源 `currency_type.proto`；Go 各入口按同源表校验；scene 收件箱回 `kVersionSkew`、资产通道第 8b 步回 RETRY | 旧 scene 以前分不出"新币种"和"写错的币种"，只能记终态；Go 入口拦住写错的值之后，不认识的值只可能来自更新版本 |
-| 日志关键字 | 统一为 `metric=persist_version_skew where=asset_debit / asset_currency / equip_enhance / equip_inlay / inbox_currency` | 规格原写三个不同关键字；一条 LogQL 抓不全同一类事件 |
+| 日志关键字 | 统一为 `metric=persist_version_skew where=asset_debit / asset_currency / equip_enhance / equip_inlay / inbox_currency` | 规格原写三个不同关键字；一条 LogQL 抓不全同一类事件。2026-11-27 起资产通道的六个 where 另导出为 `scene_asset_op_version_skew_total{where}`，告警 `SceneAssetOpVersionSkew`（`deploy/k8s/persist-version-skew-alerts.yaml`），原 LogQL 值班查询已删 |
 | 未采纳 / 改为待拍板 | 越界包类型的携带记录不参与数量判定（只在将来新包类型参与资产扣出时触发，列入 R5 评审）；`GetTotalItemCount` 改名（约 100 处测试调用，注释已写明新语义）；GM 新币种透明执行、新币种启用开关、新物品 / 宝宝表行改判（§13 第 10 条）；收件箱版本错位停用的周期补打与 PoisonSuspect 指引（相关文件当时正被别的会话改，记为交接 §14 待办） | 都不影响数据一致性；要么需要负责人先定规则，要么改动面与在途工作冲突 |
 
 ### v0.9（§12.1 持久值域落码：D1–D6 与等级上限，2026-10-23～30）

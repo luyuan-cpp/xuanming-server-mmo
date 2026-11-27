@@ -1,12 +1,17 @@
 #include "team_follow_system.h"
 
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <optional>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "muduo/base/Logging.h"
 
+#include "engine/core/metrics/metrics_registry.h"
 #include "actor/actor_net_id.h"
 #include "actor/action_state/constants/actor_state.h"
 #include "actor/action_state/system/actor_action_state.h"
@@ -51,6 +56,60 @@ namespace
 	// 队长一 tick 挪了这么远(米)就不是走过去的(被瞬移、被裁决拉回到远处):轨迹从新位置重来。
 	// 正常行走一 tick 不到 0.5,一次上报纠正至多两三米。
 	constexpr double kTeamFollowMaxLeaderJump = 4.0;
+
+	// ---- 事件计数(team_follow_stats 的说明;WriteMetrics 导出) ----
+	// 名字表就是指标的标签取值。skipped / recheck 的取值与各处日志里 reason= 的字面量逐字相同,
+	// 新增取值时枚举、名字表与日志三处一起改(static_assert 管前两处等长,单测钉住取值)。
+	constexpr std::string_view kSkipReasonNames[] = {
+		"in_battle", "ownership_in_flight", "scene_change_in_flight", "redis_error",
+		"battle_lock", "cross_zone", "session_not_live", "formation_full"};
+	static_assert(std::size(kSkipReasonNames) == static_cast<std::size_t>(team_follow_stats::SkipReason::kCount));
+	constexpr std::string_view kRecheckReasonNames[] = {"hosting_heartbeat", "leader_settled"};
+	static_assert(std::size(kRecheckReasonNames) == static_cast<std::size_t>(team_follow_stats::RecheckReason::kCount));
+	constexpr std::string_view kIntentChangeNames[] = {"client_follow", "client_leave", "offline_hosting"};
+	static_assert(std::size(kIntentChangeNames) == static_cast<std::size_t>(team_follow_stats::IntentChange::kCount));
+
+	// 接到队长身后时怎么落位(PlaceMember 的三条路);名字即日志里的 placement= 与指标的 placement 标签。
+	enum class AttachPlacement : uint8_t
+	{
+		kSnap,     // 已站在队长走过的路上,原地接上
+		kWalk,     // 寻路走到队尾
+		kTeleport, // 直接放进槽位
+		kCount,
+	};
+	constexpr std::string_view kPlacementNames[] = {"snap", "walk", "teleport"};
+	static_assert(std::size(kPlacementNames) == static_cast<std::size_t>(AttachPlacement::kCount));
+
+	// 进程启动以来的累计(本线程 = scene 逻辑线程)。停止原因按 TeamFollowStopReason 的值作下标。
+	struct TeamFollowCounters
+	{
+		std::array<uint64_t, static_cast<std::size_t>(team_follow_stats::SkipReason::kCount)> skipped{};
+		std::array<uint64_t, static_cast<std::size_t>(team_follow_stats::RecheckReason::kCount)> rechecks{};
+		std::array<uint64_t, static_cast<std::size_t>(team_follow_stats::IntentChange::kCount)> intents{};
+		std::array<uint64_t, static_cast<std::size_t>(AttachPlacement::kCount)> attached{};
+		std::array<uint64_t, TeamFollowStopReason_ARRAYSIZE> detached{};
+		std::array<uint64_t, TeamFollowStopReason_ARRAYSIZE> dissolved{};
+		uint64_t placedFellBehind{0};
+		uint64_t restarted{0};
+		uint64_t awaitLeaderExpired{0};
+	};
+	thread_local TeamFollowCounters tlsTeamFollowCounters;
+
+	template <std::size_t N, typename Enum>
+	void Bump(std::array<uint64_t, N> &slots, Enum value)
+	{
+		const auto index = static_cast<std::size_t>(value);
+		if (index < N)
+		{
+			++slots[index];
+		}
+	}
+
+	// 不在枚举里的停止原因(只可能来自越界的强转)记到 UNSPECIFIED,那一项正常恒为 0。
+	void BumpStopReason(std::array<uint64_t, TeamFollowStopReason_ARRAYSIZE> &slots, TeamFollowStopReason reason)
+	{
+		Bump(slots, TeamFollowStopReason_IsValid(reason) ? reason : TEAM_FOLLOW_STOP_REASON_UNSPECIFIED);
+	}
 
 	FollowPoint ToFollowPoint(const Vector3& v)
 	{
@@ -322,6 +381,7 @@ namespace
 		// 瞬移落位等待只对客户端上报有意义;驱动期间上报全被丢弃,恢复上报时以当前位置为准。
 		MovementSystem::CancelTeleportSettle(follower);
 		SendFollowState(follower, false, entt::null, 0, reason);
+		BumpStopReason(tlsTeamFollowCounters.detached, reason);
 		LOG_INFO << "[TeamFollow] metric=team_follow_detached reason=" << TeamFollowStopReason_Name(reason)
 				 << " player_id=" << GuidOf(follower);
 	}
@@ -350,6 +410,7 @@ namespace
 				ReleaseFollower(follower, reason);
 			}
 		}
+		BumpStopReason(tlsTeamFollowCounters.dissolved, reason);
 		LOG_INFO << "[TeamFollow] metric=team_follow_dissolved reason=" << TeamFollowStopReason_Name(reason)
 				 << " leader_id=" << GuidOf(leader) << " members=" << members.size();
 	}
@@ -467,8 +528,7 @@ namespace
 		TeamFollowMember member;
 		member.playerId = followerId;
 		member.joinSeq = joinSeq;
-		const char* placement = "snap";
-		bool teleport = false;
+		AttachPlacement placement = AttachPlacement::kSnap;
 		FollowPoint teleportTarget{};
 		if (const auto odo = formation.Trail().NearestOdo(position, kTeamFollowSnapToTrailRadius))
 		{
@@ -479,7 +539,7 @@ namespace
 		{
 			// 2. 走过去:到队尾的那段路已接在轨迹尾部,自己就站在新的尾部。
 			member.cursorOdo = formation.Trail().TailOdo();
-			placement = "walk";
+			placement = AttachPlacement::kWalk;
 		}
 		else
 		{
@@ -488,8 +548,7 @@ namespace
 			double appliedLateral = 0.0;
 			teleportTarget = formation.SlotPosition(rank, MakeWalkableCheck(leader), &appliedLateral);
 			member.lateralOffset = appliedLateral;
-			placement = "teleport";
-			teleport = true;
+			placement = AttachPlacement::kTeleport;
 		}
 		formation.Add(member);
 
@@ -507,7 +566,7 @@ namespace
 		next.leader = leader;
 		next.leaderPlayerId = GuidOf(leader);
 		auto& driven = registry.emplace_or_replace<TeamFollowerComp>(follower, next);
-		if (teleport)
+		if (placement == AttachPlacement::kTeleport)
 		{
 			if (!TeleportIntoSlot(follower, driven, leader, teleportTarget))
 			{
@@ -520,7 +579,9 @@ namespace
 
 		const auto finalRank = formation.RankOf(followerId).value_or(rank);
 		SendFollowState(follower, true, leader, static_cast<uint32_t>(finalRank + 1), TEAM_FOLLOW_STOP_REASON_UNSPECIFIED);
-		LOG_INFO << "[TeamFollow] metric=team_follow_attached placement=" << placement << " player_id=" << followerId
+		Bump(tlsTeamFollowCounters.attached, placement);
+		LOG_INFO << "[TeamFollow] metric=team_follow_attached placement="
+				 << std::string(kPlacementNames[static_cast<std::size_t>(placement)]) << " player_id=" << followerId
 				 << " leader_id=" << GuidOf(leader) << " slot=" << (finalRank + 1)
 				 << " trail_points=" << formation.Trail().PointCount();
 		return true;
@@ -560,6 +621,7 @@ namespace
 				FollowHorizontalDistance(ToFollowPoint(transform->location()), leaderPosition) <= kTeamFollowMaxApproachPath * 0.5;
 			PlaceMember(leader, comp, follower, withinWalkDistance);
 		}
+		++tlsTeamFollowCounters.restarted;
 		LOG_INFO << "[TeamFollow] metric=team_follow_restarted leader_id=" << GuidOf(leader)
 				 << " members=" << members.size();
 	}
@@ -685,6 +747,7 @@ void TeamFollowSystem::Update(const double deltaSeconds)
 			}
 			if (step.placed)
 			{
+				++tlsTeamFollowCounters.placedFellBehind;
 				LOG_INFO << "[TeamFollow] metric=team_follow_placed reason=fell_behind player_id=" << step.playerId
 						 << " leader_id=" << GuidOf(leader);
 				if (!TeleportIntoSlot(follower, *driven, leader, step.position))
@@ -835,6 +898,7 @@ bool TeamFollowSystem::TryAttach(entt::entity follower, entt::entity leader, con
 	}
 	if (comp->formation.Members().size() >= kTeamFollowMaxMembers)
 	{
+		team_follow_stats::CountSkipped(team_follow_stats::SkipReason::kFormationFull);
 		LOG_WARN << "[TeamFollow] metric=team_follow_skipped reason=formation_full player_id=" << followerId
 				 << " leader_id=" << leaderId;
 		return false;
@@ -885,6 +949,7 @@ const std::vector<entt::entity>& TeamFollowSystem::TakeFollowersWithSettledLeade
 	}
 	for (const auto follower : expired)
 	{
+		++tlsTeamFollowCounters.awaitLeaderExpired;
 		LOG_INFO << "[TeamFollow] metric=team_follow_await_leader_expired player_id=" << GuidOf(follower)
 				 << " leader_id=" << registry.get<TeamFollowAwaitLeaderComp>(follower).leaderPlayerId;
 		registry.remove<TeamFollowAwaitLeaderComp>(follower);
@@ -982,4 +1047,79 @@ void TeamFollowSystem::OnNotLeader(entt::entity player)
 		return;
 	}
 	DissolveFormation(player, TEAM_FOLLOW_STOP_REASON_LEADER_CHANGED);
+}
+
+void team_follow_stats::CountSkipped(SkipReason reason)
+{
+	Bump(tlsTeamFollowCounters.skipped, reason);
+}
+
+void team_follow_stats::CountRecheck(RecheckReason reason)
+{
+	Bump(tlsTeamFollowCounters.rechecks, reason);
+}
+
+void team_follow_stats::CountIntentChange(IntentChange change)
+{
+	Bump(tlsTeamFollowCounters.intents, change);
+}
+
+void TeamFollowSystem::WriteMetrics(prometheus_text::Writer &writer)
+{
+	using prometheus_text::MetricType;
+	const auto &counters = tlsTeamFollowCounters;
+	writer.BeginFamily("scene_team_follow_events_total",
+					   "Team follow events on this scene node since process start, one per metric=team_follow_* log line: "
+					   "skipped (a follow check stopped), recheck (a follow check rerun for a member not yet behind the leader), "
+					   "intent (follow intent set or cleared: client_follow, client_leave, offline_hosting), "
+					   "detached (a member stopped being driven) and dissolved (a leader's formation was dissolved), both with "
+					   "the TeamFollowStopReason name sent to the client, placed (reason=fell_behind: put into the slot after "
+					   "falling too far behind), restarted (the leader jumped and the formation restarted) and "
+					   "await_leader_expired (gave up waiting for a leader who left this node); the last two have no reason. "
+					   "Attaches are counted by placement in scene_team_follow_attached_total.",
+					   MetricType::kCounter);
+	for (std::size_t i = 0; i < counters.skipped.size(); ++i)
+	{
+		writer.Sample({{"event", "skipped"}, {"reason", kSkipReasonNames[i]}}, counters.skipped[i]);
+	}
+	for (std::size_t i = 0; i < counters.rechecks.size(); ++i)
+	{
+		writer.Sample({{"event", "recheck"}, {"reason", kRecheckReasonNames[i]}}, counters.rechecks[i]);
+	}
+	for (std::size_t i = 0; i < counters.intents.size(); ++i)
+	{
+		writer.Sample({{"event", "intent"}, {"reason", kIntentChangeNames[i]}}, counters.intents[i]);
+	}
+	// 停止原因取 proto 枚举的全部取值(含 UNSPECIFIED,它正常恒为 0),proto 新增取值时这里自动跟上。
+	for (int value = TeamFollowStopReason_MIN; value <= TeamFollowStopReason_MAX; ++value)
+	{
+		if (!TeamFollowStopReason_IsValid(value))
+		{
+			continue;
+		}
+		const std::string &name = TeamFollowStopReason_Name(static_cast<TeamFollowStopReason>(value));
+		writer.Sample({{"event", "detached"}, {"reason", name}}, counters.detached[static_cast<std::size_t>(value)]);
+		writer.Sample({{"event", "dissolved"}, {"reason", name}}, counters.dissolved[static_cast<std::size_t>(value)]);
+	}
+	writer.Sample({{"event", "placed"}, {"reason", "fell_behind"}}, counters.placedFellBehind);
+	writer.Sample({{"event", "restarted"}}, counters.restarted);
+	writer.Sample({{"event", "await_leader_expired"}}, counters.awaitLeaderExpired);
+
+	writer.BeginFamily("scene_team_follow_attached_total",
+					   "Members attached behind their leader on this scene node since process start, by placement: snap (already "
+					   "on the leader's trail), walk (walked to the tail along a found path), teleport (put straight into the slot). "
+					   "Same events as the metric=team_follow_attached log lines.",
+					   MetricType::kCounter);
+	for (std::size_t i = 0; i < counters.attached.size(); ++i)
+	{
+		writer.Sample({{"placement", kPlacementNames[i]}}, counters.attached[i]);
+	}
+}
+
+void TeamFollowSystem::RegisterMetrics()
+{
+	if (!GlobalMetricsRegistry().Register("scene_team_follow", &TeamFollowSystem::WriteMetrics))
+	{
+		LOG_ERROR << "[Metrics] collector scene_team_follow is already registered";
+	}
 }

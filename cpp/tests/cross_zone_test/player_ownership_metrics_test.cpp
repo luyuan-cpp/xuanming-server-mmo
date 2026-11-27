@@ -179,6 +179,9 @@ TEST(PlayerOwnershipMetrics, ExitHoldFenceAndSchemaCountersAreExportedUnderTheSu
 	const auto event = [](std::string_view family, std::string_view key)
 	{ return std::string(family) + "{event=\"" + std::string(key) + "\"}"; };
 	EXPECT_EQ(SampleValue(text, event("scene_exit_persist_events_total", "exit_resave")), exit_persist_stats::Read().resave);
+	// 2026-11-27 追加在 [ExitPersist] 行尾的 key:退出存盘超过重连租约才落地(原来只有 "save outran reconnect lease" WARN)。
+	EXPECT_EQ(SampleValue(text, event("scene_exit_persist_events_total", "exit_save_outran_lease")),
+			  exit_persist_stats::Read().saveOutranLease);
 	EXPECT_EQ(SampleValue(text, event("scene_exit_release_events_total", "written")), exit_release_stats::Read().written);
 	EXPECT_EQ(SampleValue(text, event("scene_relocate_confirm_events_total", "hosted_resent")),
 			  relocate_confirm_stats::Read().hostedResent);

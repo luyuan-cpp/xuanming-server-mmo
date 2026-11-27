@@ -9,6 +9,7 @@
 
 #include <gtest/gtest.h>
 #include <google/protobuf/unknown_field_set.h>
+#include "engine/core/metrics/prometheus_text.h"
 #include "engine/core/type_define/player_guid_comp.h"
 
 #include <cstdint>
@@ -843,8 +844,16 @@ TEST_F(AssetOpSystemTest, CreditWithItemConfigUnknownToThisNodeRetriesWithoutRec
 	auto* item = request.mutable_bundle()->add_items();
 	item->set_config_id(999999999); // 本节点 Item 表里没有
 	item->set_count(1);
+	// 2026-11-27 起同一处计 scene_asset_op_version_skew_total{where="asset_config"};其余 where 也都以当前值导出。
+	for (const char* where : {"asset_debit", "asset_recall_debt", "asset_recall", "asset_request", "asset_currency", "asset_config"})
+	{
+		EXPECT_NE(AssetOpMetricSample(std::string("scene_asset_op_version_skew_total{where=\"") + where + "\"}"), UINT64_MAX) << where;
+	}
+	const std::string configSkew = "scene_asset_op_version_skew_total{where=\"asset_config\"}";
+	const uint64_t configSkewBefore = AssetOpMetricSample(configSkew);
 
 	const auto response = CallCredit(request);
+	EXPECT_EQ(AssetOpMetricSample(configSkew), configSkewBefore + 1);
 	EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, response.outcome()) << "版本错位不得记终态";
 	EXPECT_EQ(static_cast<uint32_t>(kFeatureUnavailable), response.reason().id());
 	EXPECT_EQ(nullptr, Ledger(ASSET_OP_STREAM_GUILD_CREDIT)) << "RETRY 不记账";
@@ -1308,13 +1317,29 @@ TEST_F(AssetOpSystemTest, AbortDurableAfterSave)
 // 抹掉,而 Go 已据 durable 终结 —— 帮会记了资金,玩家侧的扣款却没了(04 K1)。所以改动类 RPC
 // 在无围栏的实体上一律 RETRY、不记账、不触发存盘。
 
+// PlayerAssetOpSystem::WriteMetrics 此刻输出里一条样本的值,没有这一条返回 UINT64_MAX。样本行在行首,
+// # HELP 行里也出现无标签的族名,所以按 "\n族名 " 找。
+uint64_t AssetOpMetricSample(const std::string& series)
+{
+	prometheus_text::Writer writer;
+	PlayerAssetOpSystem::WriteMetrics(writer);
+	EXPECT_EQ(writer.DroppedSamples(), 0u);
+	const std::string& text = writer.Text();
+	const auto at = text.find("\n" + series + " ");
+	return at == std::string::npos ? UINT64_MAX : std::stoull(text.substr(at + series.size() + 2));
+}
+
 // E1:epoch == 0 时 Debit / Credit / AbortDebit 都不记账。
+// 2026-11-27 起每一次这样被挡都计 scene_asset_op_owner_epoch_unknown_total(告警 SceneAssetOpOwnerEpochUnknown 读它)。
 TEST_F(AssetOpSystemTest, OwnerEpochZeroRetryNotRecorded)
 {
 	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
 	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player).epoch = 0;
+	const uint64_t blockedBefore = AssetOpMetricSample("scene_asset_op_owner_epoch_unknown_total");
+	ASSERT_NE(blockedBefore, UINT64_MAX);
 
 	const auto debit = CallDebit(1, 30);
+	EXPECT_EQ(AssetOpMetricSample("scene_asset_op_owner_epoch_unknown_total"), blockedBefore + 1);
 	EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, debit.outcome());
 	EXPECT_EQ(static_cast<uint32_t>(kAssetFrozen), debit.reason().id())
 		<< "对玩家是\"角色迁移中,稍后自动重试\";kAssetBlocked 是货币封禁的文案";

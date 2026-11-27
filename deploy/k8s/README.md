@@ -1605,20 +1605,26 @@ payment 与 rank 同形:全局池服务(`$GoSvcCatalogue.payment`,`Global = $tru
   ```
   1 条:`SceneCurrencyClawbackVersionSkew`(warning,10 分钟里出现就报;健康时恒 0,非 0 = 有 scene 停在旧版本、被回滚,或发布次序被打破,
   处置写在规则的 description 里)。指标名由 `tools/scripts/tests/persist_version_skew_alerts_contract.tests.ps1` 对照 C++ 源码钉住。
-- 没有新开关、没有新部署参数。版本错位的其余 `where` 还只在 scene 日志里(值班查询见 `asset-channel-alerts.yaml`、`player-inbox-alerts.yaml` 文件头)。
+- 2026-11-27 加第 2 条 `SceneAssetOpVersionSkew`:资产通道的六个 `where`(asset_debit / asset_recall_debt / asset_recall / asset_request /
+  asset_currency / asset_config)导出为 `scene_asset_op_version_skew_total{where}`(`asset_op_system.cpp`),原来是 `asset-channel-alerts.yaml`
+  文件头的 LogQL 值班查询。同批 `owner-epoch-alerts.yaml` 加组 `owner-epoch.scene`(`SceneAssetOpOwnerEpochUnknown`,资产操作因 owner_epoch
+  未铸造被挡)。两条都由 `tools/scripts/tests/persist_version_skew_alerts_contract.tests.ps1` 钉住。
+- 没有新开关、没有新部署参数。版本错位的其余 `where`(inbox_* / battle_item / battle_pet 等)还只在 scene 日志里(值班查询见 `player-inbox-alerts.yaml` 文件头)。
 
 ## 战斗结算收尾告警(2026-11-27,原 LogQL 值班查询改 PromQL;未编译、未在集群上验证)
 
-- battle 的 SQL 终局滞留房间与 scene 的冻结 reaper 事件原来只在结构化日志里,`asset-channel-alerts.yaml` 文件头为它们写了四条 LogQL 值班查询,
-  Loki ruler 没接线、不会自己响。现在两边都经 C++ 节点的 Prometheus 出口导出(`battle_sql_outcome_stuck_rooms` / `battle_rooms`、
-  `scene_battle_freeze_events_total{event}`,启动即以 0 导出),四条查询改成 PromQL 规则,从 `asset-channel-alerts.yaml` 文件头删掉;日志行保留,按局排查仍看它们。
+- battle 与 scene 的结算类信号原来只在结构化日志里,`asset-channel-alerts.yaml` 文件头为它们写了十一条 LogQL 值班查询,Loki ruler 没接线、
+  不会自己响。现在都经 C++ 节点的 Prometheus 出口导出(启动即以 0 导出),十条改成 PromQL 规则并从文件头删掉;日志行保留,按局排查仍看它们。
+  只剩 `battle_sql_outcome_unflushed_at_shutdown`:它在进程退出前那一刻才打,之后抓取等不到计数,留在日志查询里。
 - **告警**:`deploy/k8s/battle-settlement-alerts.yaml`(PrometheusRule,同法安装;`-CppMetricsPort` 传 0 时没有出口,这组告警永远不响):
   ```
   kubectl apply -n observability -f deploy/k8s/battle-settlement-alerts.yaml
   ```
-  4 条:`BattleSqlOutcomeRoomsStuck`(critical,按 instance 报,处置三步写在 description 里)、`SceneBattleFreezeHoldCapReached` /
-  `SceneBattleItemHoldOverdue` / `SceneJianghuDuelFeeOverdue`(warning,出现就报)。指标名与 event 取值由
-  `tools/scripts/tests/battle_settlement_alerts_contract.tests.ps1` 对照 C++ 源码钉住。
+  9 条。battle 组 `battle.settlement`:`BattleSqlOutcomeRoomsStuck`(按 instance 报,处置三步写在 description 里)、
+  `BattleSqlOutcomeSigningKeyMissing`(gauge 现判;原来的日志只在第一次缺失时打一行,10 分钟后查询就灭了)、`BattleSettlementSourceFailed`,都是 critical。
+  scene 组 `scene.battle-settlement`:续冻到上限、道具预留超期、普通生死状待退银两超期、终局查询未知(10 分钟超过 20 次)、物品号段不够、
+  战斗掉落邮件寄不出去,都是 warning。资产通道的版本错位改到 `persist-version-skew-alerts.yaml`(下一节)。
+  指标名与标签取值由 `tools/scripts/tests/battle_settlement_alerts_contract.tests.ps1` 对照 C++ 源码钉住。
 - 没有新开关、没有新部署参数。同一批导出的其余业务计数(scene 退出收尾 / 栅栏 / 离线托管,battle 事件,gate 两条 lane 与进场补发)
   本轮不加告警,清单见 `docs/design/infra-reconnect-overview.md` §1.8。
 
@@ -2918,10 +2924,13 @@ scene 通过 gRPC 直接调 go/db,在 TiDB 的 `player_store` 表上提交玩家
 | 库里世代高于 scene 的世代 | 照常认领(2026-11-12 起) | 不用处置。旧版 scene 原样带回不认识的内容:行里的顶层字段由存盘状态机按行保管,更新版本才有的行不读不写。日志 `metric=player_store_claim_carried`(INFO,全进程第一次和此后每 1000 次一条)只作确认。scene 因此可以回滚,金丝雀 zone 的玩家可以去还没升级的 zone |
 
 - **发布顺序**(每次升世代):go/db 全部 zone → scene(可按 zone 金丝雀)。`player_store` 表结构变了才需要先跑 `cmd/migrate -command up`。顺序错了只会重试 / 进场失败,不丢已提交的数据:2026-11-10 起,go/db 遇到不认识的行种也回 `SCHEMA_TOO_NEW`,见数据覆写审计 r2-ps#11。但窗口期内新 scene 进不了人,在线进度只在 scene 内存里,所以仍要守这个顺序。2026-11-12 起 `zone-up` 在 scene 之前先发本 zone 的 go/db(写者回收 CronJob 跟着提前),staging / prod 恒等它滚完再发 scene,dev 只在 `-WaitReady` 下等。scene 只连本 zone 的 go/db,所以逐 zone 跑 `zone-up` 满足本 zone 内的顺序;但玩家会带着新世代的存档跨 zone,要先把全部 zone 的 go/db 升上去再发任何一个 zone 的 scene,否则已升级 zone 的玩家在别的 zone 升级 go/db 之前进不了那些 zone(不丢数据)。升世代的版本分两步:先对每个 zone 跑 `zone-up -ZoneId <z> -NodeImage <线上版本的节点镜像> -GoSvcTag <本版本 tag>`(显式 `-GoSvcTag` 不跟随 `-NodeImage`,只换 Go 服务),全部滚完再逐 zone 跑 `zone-up -ZoneId <z> -NodeImage <本版本节点镜像>`(`docs/ops/release-checklist.md` §2.1 ⑦)。login 不读玩家存档,不参与。
-- **观测**:`db_player_store_requests_total{result=~".*SCHEMA.*"}`,告警 `DbPlayerStoreSchemaMismatch`(`deploy/k8s/player-store-alerts.yaml`,与 `owner-epoch-alerts.yaml` 同法安装)。scene 计数不进 Prometheus,Loki ruler 未接线(同 `owner-epoch-alerts.yaml` 头注释),值班固定查询:
-  ```logql
-  sum by (namespace) (count_over_time({job="cpp_nodes", service="scene"} |= "metric=persist_schema_regression" [10m]))
+- **观测**:`db_player_store_requests_total{result=~".*SCHEMA.*"}`,告警 `DbPlayerStoreSchemaMismatch`(`deploy/k8s/player-store-alerts.yaml`,与 `owner-epoch-alerts.yaml` 同法安装)。
+  scene 侧同一事件 2026-11-27 起导出为 `scene_persist_schema_regression_rejected_total`(`player_ownership_metrics.cpp`),不另加告警:
+  go/db 那条已经报这件事,再加只会报两遍。scene 的计数用来看是哪台 scene,PromQL:
+  ```promql
+  sum by (namespace, instance) (increase(scene_persist_schema_regression_rejected_total[10m])) > 0
   ```
+  具体是哪名玩家、哪个 key 看 scene 日志 `metric=persist_schema_regression`。
 
 ## player_locator 会话对账告警(PrometheusRule,手工 apply;2026-10-18 登记,未在集群上 apply 过)
 

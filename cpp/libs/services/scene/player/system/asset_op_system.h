@@ -32,6 +32,11 @@
 #include "proto/common/asset/asset_op.pb.h"
 #include "proto/common/rollback/transaction_log.pb.h"
 
+namespace prometheus_text
+{
+	class Writer;
+}
+
 // ── 运行时组件(纯内存,不入库,不序列化)──────────────────────────────────────
 
 // 上一次为"确认 durable"而请求存盘的墙钟毫秒。用于给重查限频:已见但尚未 durable 的
@@ -90,4 +95,14 @@ public:
 	// 单测冻结时间后,限频与 300s 偏差窗才是确定性的(AGENTS §11.4:不依赖真实墙钟)。
 	using NowMsFn = int64_t (*)();
 	static void SetNowFnForTest(NowMsFn fn);
+
+	// 资产通道的进程计数写成 Prometheus 指标(2026-11-27 起导出,原来只有日志;每项以 0 起步,不带玩家号):
+	//   scene_asset_op_version_skew_total{where}   本版本解释不了而回 RETRY + kFeatureUnavailable 的请求,
+	//                                              where 与日志 metric=persist_version_skew where=asset_* 同名
+	//                                              (告警 SceneAssetOpVersionSkew,deploy/k8s/persist-version-skew-alerts.yaml)
+	//   scene_asset_op_owner_epoch_unknown_total   归属未铸造(owner_epoch == 0)而回 RETRY + kAssetFrozen 的请求
+	//                                              (告警 SceneAssetOpOwnerEpochUnknown,deploy/k8s/owner-epoch-alerts.yaml)
+	static void WriteMetrics(prometheus_text::Writer& writer);
+	// scene 启动时调一次;重复登记只打一行 ERROR。
+	static void RegisterMetrics();
 };

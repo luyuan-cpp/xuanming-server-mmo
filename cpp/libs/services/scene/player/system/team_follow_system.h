@@ -26,10 +26,59 @@
 #include "player/system/team_follow_formation.h"
 #include "proto/scene/player_movement.pb.h" // TeamFollowStopReason:停止驱动的原因,会发给客户端
 
+namespace prometheus_text
+{
+class Writer;
+} // namespace prometheus_text
+
 // 队长离开本节点后,原随从最多等这么久(帧)看队长的去留(TeamFollowAwaitLeaderComp)。要盖住一次交接最长的冻结
 // (travel_freeze_cap::kFreezeCap 70 秒,超过就由冻结上限收口)和退出存盘的落地,取 90 秒;等满还没结论就放弃,
 // 之后靠别的信号(队长回到本节点的扇出、客户端重新声明、战斗结束)再接上。
 inline constexpr uint32_t kTeamFollowAwaitLeaderFrames = 90 * kTargetFPS;
+
+// 组队跟随的事件计数(docs/design/team-follow-server-trail.md §10,2026-11-27 起导出)。各处 metric=team_follow_* 日志
+// 每打一行计一次,与日志级别无关(recheck reason=hosting_heartbeat 只打 DEBUG,照样计)。跟随只在 scene 逻辑线程上发生,
+// /metrics 的采集回调也在这个 loop 上,所以是本线程计数、不用原子。导出见 TeamFollowSystem::WriteMetrics。
+// 这里只放 PlayerTeamSystem 那边也要计的三类;其余事件(接上、摘下、解散、落后放置、队形重建、等队长超时)
+// 只发生在 team_follow_system.cpp 里,在那里计。
+namespace team_follow_stats
+{
+	// metric=team_follow_skipped reason=<取值>:这一次跟随检查在这一步停下。标签取值与日志里的字面量逐字相同。
+	enum class SkipReason : uint8_t
+	{
+		kInBattle,            // in_battle:本人在战斗中
+		kOwnershipInFlight,   // ownership_in_flight:本人的归属交接在途
+		kSceneChangeInFlight, // scene_change_in_flight:本人已有一条普通 EnterScene 在途
+		kRedisError,          // redis_error:战斗锁或队长位置没读成
+		kBattleLock,          // battle_lock:本人的战斗锁还在
+		kCrossZone,           // cross_zone:队长在别的 zone
+		kSessionNotLive,      // session_not_live:要换场景,但会话已断、又不在离线托管中
+		kFormationFull,       // formation_full:队长的队形已满
+		kCount,
+	};
+
+	// metric=team_follow_recheck reason=<取值>:替还没接到队长身后的队员再走一遍跟随检查。
+	enum class RecheckReason : uint8_t
+	{
+		kHostingHeartbeat, // hosting_heartbeat:离线托管中的兜底重试
+		kLeaderSettled,    // leader_settled:原队长离开本节点,去留有了结论
+		kCount,
+	};
+
+	// metric=team_follow_intent 的三种来源。日志里写成 follow=1、follow=0、follow=1 source=offline_hosting,
+	// 指标标签取值依次是 client_follow、client_leave、offline_hosting。
+	enum class IntentChange : uint8_t
+	{
+		kClientFollow,   // 客户端声明跟随
+		kClientLeave,    // 客户端暂离
+		kOfflineHosting, // 离线托管开始,服务器替他开启跟随
+		kCount,
+	};
+
+	void CountSkipped(SkipReason reason);
+	void CountRecheck(RecheckReason reason);
+	void CountIntentChange(IntentChange change);
+} // namespace team_follow_stats
 
 class TeamFollowSystem
 {
@@ -83,4 +132,15 @@ public:
 	static void OnBecameLeader(entt::entity player);
 	// 读到自己不是队长:还挂着队形(刚把队长转出去)就解散,原来的队员会在各自的刷新里接到新队长身后。
 	static void OnNotLeader(entt::entity player);
+
+	// 把本线程的跟随事件计数写成两族指标(2026-11-27 起,原来只有 metric=team_follow_* 日志;
+	// docs/design/team-follow-server-trail.md §10):
+	//   scene_team_follow_events_total{event,reason}  skipped / recheck / intent / detached / dissolved / placed 带 reason,
+	//                                                 restarted / await_leader_expired 没有 reason;
+	//   scene_team_follow_attached_total{placement}  placement 取 snap / walk / teleport。
+	// detached / dissolved 的 reason 是 TeamFollowStopReason 的枚举名,与日志同一个字符串。每个取值进程一启动就以 0 导出。
+	// 只能在 scene 逻辑线程上调用(读本线程计数)。
+	static void WriteMetrics(prometheus_text::Writer &writer);
+	// 登记进 GlobalMetricsRegistry(采集器名 scene_team_follow)。scene 启动时调一次;重复调用不会重复登记,只打一行 ERROR。
+	static void RegisterMetrics();
 };

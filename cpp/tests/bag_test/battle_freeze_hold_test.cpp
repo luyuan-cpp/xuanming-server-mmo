@@ -1373,4 +1373,28 @@ TEST(BattleFreezeHoldMetrics, EveryEventIsExportedUnderItsPinnedName)
     }
 }
 
+// 结算与近期战斗结果的计数(WriteBattleSettlementMetrics,2026-11-27 起):每一族、每个标签取值都以当前值导出(没发生过的为 0)。
+// 名字是告警与看板的契约(deploy/k8s/battle-settlement-alerts.yaml,battle_settlement_alerts_contract.tests.ps1 对照源码钉住)。
+TEST(BattleFreezeHoldMetrics, SettlementAndRecentResultCountersAreExported)
+{
+    prometheus_text::Writer writer;
+    PlayerBattleSystem::WriteBattleSettlementMetrics(writer);
+    EXPECT_EQ(writer.DroppedSamples(), 0u);
+    const std::string& text = writer.Text();
+    for (const char* event : {"recorded", "published", "duplicate", "lines_truncated", "record_missing", "history_missing"})
+    {
+        EXPECT_NE(text.find(std::string("\nscene_battle_result_events_total{event=\"") + event + "\"} "), std::string::npos)
+            << event << " in:\n" << text;
+    }
+    for (const char* topUp : {"requested", "cannot_help"})
+    {
+        EXPECT_NE(text.find(std::string("\nscene_battle_settlement_item_guid_shortage_total{top_up=\"") + topUp + "\"} "),
+                  std::string::npos)
+            << topUp << " in:\n" << text;
+    }
+    EXPECT_NE(text.find("\nscene_battle_terminal_query_unknown_total " + std::to_string(battle_terminal_query::UnknownAnswers()) + "\n"),
+              std::string::npos)
+        << text;
+}
+
 } // namespace

@@ -1,5 +1,6 @@
 #include "battle_terminal_query.h"
 
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdlib>
@@ -25,6 +26,13 @@ namespace battle_terminal_query
 
 	namespace
 	{
+		// 回答归为 kUnknown 的累计(UnknownAnswers 读)。
+		std::atomic<uint64_t>& UnknownAnswerCounter()
+		{
+			static std::atomic<uint64_t> counter{0};
+			return counter;
+		}
+
 		// 就绪的 match 节点里随机挑一个。任一副本读的都是同一份 SQL 终局;随机而不是按局号固定:
 		// 某个副本卡住时,下一拍的查询大概率换到别的副本上。
 		entt::entity PickReadyMatchNode(entt::registry& registry)
@@ -127,6 +135,7 @@ namespace battle_terminal_query
 					ClassifyReply(outcome.ok(), reply, digest, SceneSecret(), TimeSystem::NowMillisecondsUTC());
 				if (answer == TerminalAnswer::kUnknown)
 				{
+					UnknownAnswerCounter().fetch_add(1, std::memory_order_relaxed);
 					LOG_WARN << "[PlayerBattle] metric=battle_terminal_query_unknown battle_id=" << battleId
 							 << " code=" << outcome.code << " reply_present=" << (reply != nullptr)
 							 << " retry=" << (reply != nullptr && reply->retry()) << " message=" << outcome.message;
@@ -135,5 +144,10 @@ namespace battle_terminal_query
 			},
 			options);
 		return true;
+	}
+
+	uint64_t UnknownAnswers()
+	{
+		return UnknownAnswerCounter().load(std::memory_order_relaxed);
 	}
 } // namespace battle_terminal_query

@@ -664,6 +664,7 @@ namespace
 		emit("exit_fastpath_deferred", stats.fastpathDeferred);
 		emit("exit_client_msg_rejected", stats.clientMsgRejected);
 		emit("exit_deposed_on_reentry", stats.deposedOnReentry);
+		emit("exit_save_outran_lease", stats.saveOutranLease); // 2026-11-27 追加在行尾,原有 key 的位置不变
 	}
 
 	// [ExitRelease] 行:key=value 平铺,key 取自 exit_release_mark 的两张名表与固定项。
@@ -2627,6 +2628,7 @@ void PlayerLifecycleSystem::HandlePlayerAsyncSaved(Guid playerId, PlayerAllData 
 				{
 					warnIntent->leaseOverrunWarned = true;
 				}
+				exit_persist_stats::Inc(exit_persist_stats::Get().saveOutranLease);
 				LOG_WARN << "HandlePlayerAsyncSaved: save outran reconnect lease for player "
 						 << playerId << " — elapsed_ms=" << elapsedMs
 						 << " lease_ms=" << kReconnectLeaseMs

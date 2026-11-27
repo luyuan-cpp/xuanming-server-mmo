@@ -19,9 +19,14 @@
 # 已导出 scene_owner_epoch_events_total{event}(含旧持有者被拒 stale_owner_write_rejected)、
 # scene_travel_handoff_*、scene_player_store_save_refused_total{result}
 # (cpp/libs/services/scene/player/system/player_ownership_metrics.{h,cpp}),本文件暂未给它们写规则。
-# 其余信号(资产操作因 epoch = 0 被挡、"save outran reconnect lease" 等 metric=... 日志行)仍只存在于 scene 日志,
-# 而仓库里 Loki 的 ruler 目前没有挂载规则目录、也没有 alertmanager_url,不存在能生效的日志告警通路。
-# 这几条 LogQL 写在 docs/ops/cross-zone-failure-test-runbook.md,作为值班固定查询;ruler 接线归上线批 BK8s。
+# 原来只在 scene 日志里的两个信号 2026-11-27 起也导出了(Loki ruler 没挂规则目录、也没有 alertmanager_url,
+# docs/ops/cross-zone-failure-test-runbook.md 里那几条 LogQL 值班查询不会自己响):
+#   - 资产操作因 owner_epoch = 0 被挡 → scene_asset_op_owner_epoch_unknown_total(asset_op_system.cpp),规则见下面
+#     owner-epoch.scene 组的 SceneAssetOpOwnerEpochUnknown;
+#   - "save outran reconnect lease" → scene_exit_persist_events_total{event="exit_save_outran_lease"}(player_lifecycle.cpp)。
+#     owner_epoch 非 0 时它不再意味着覆盖(旧存盘被守卫拒掉),只作辅助信号,不写规则,看板查询见 runbook §9。
+# 「有 owner_epoch = 0 的存盘」那条查询读的 owner_epoch_unknown 计数已随 Redis 存档路径删除,runbook 里删掉了,go/db 侧对应的是
+# DbOwnerEpochLegacyZero。
 #
 # Severity conventions(与 scene-manager-alerts.yaml 相同):
 #   critical = pager, someone wakes up
@@ -84,3 +89,29 @@ spec:
               这时对照 scene_manager 的 Kafka 投递失败,Redis 本身未必有问题。
               site=handout(同一文档 §4.3.5)没有回执:不铸造就要下发的 epoch 没有已确认位点,当场确认又没成,这次进场回可重试错误、
               不下发 epoch。它说明此前有铸造没走完(scene_manager 中途退出、回滚没做成)或位点写丢了,而此刻 Redis 又确认不了落盘。
+
+    # scene 侧的归属信号(2026-11-27 起导出;原来是 docs/ops/cross-zone-failure-test-runbook.md 里的 LogQL 值班查询)。
+    - name: owner-epoch.scene
+      interval: 30s
+      rules:
+        # 资产通道在归属未铸造(owner_epoch == 0 或组件缺失)的实体上一律回 RETRY + kAssetFrozen、不记账:这种实体的存盘没有围栏,
+        # 记下的结局可能被旧节点晚到的退出存盘抹掉(帮会资产通道的 K1)。
+        - alert: SceneAssetOpOwnerEpochUnknown
+          expr: |
+            sum by (namespace) (increase(scene_asset_op_owner_epoch_unknown_total[10m])) > 0
+            or
+            sum by (namespace) (
+              scene_asset_op_owner_epoch_unknown_total
+              unless scene_asset_op_owner_epoch_unknown_total offset 10m
+            ) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 scene 有资产操作因 owner_epoch 未铸造被挡"
+            description: >-
+              过去 10 分钟约 {{ $value | printf "%.0f" }} 次。这些请求回 RETRY,对侧稍后重投,不丢;但只要实体一直没有归属围栏就一直被挡。
+              玩家进场时 scene_manager 必铸 owner_epoch,正常恒为 0:非 0 说明有进场路径没带 owner_epoch(混版本的旧 scene_manager、
+              GM 或工具直接建的实体)。scene 日志 "[AssetOp] blocked: owner_epoch unknown" 给出 player_id、stream、seq 与 epoch_comp
+              (missing / zero),对照 scene_manager 的 owner_epoch 铸造日志与本文件 owner-epoch.mint 组。
+            runbook_url: docs/ops/cross-zone-failure-test-runbook.md

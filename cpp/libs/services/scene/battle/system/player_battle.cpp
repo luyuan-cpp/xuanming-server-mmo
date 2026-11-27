@@ -228,6 +228,37 @@ namespace
 		}
 	}
 
+	// 近期战斗结果(docs/design/battle-result-recovery.md §8)的事件累计,每项与一条同名结构化日志同一处计数,
+	// WriteBattleSettlementMetrics 导出为 scene_battle_result_events_total{event}。写只在 scene loop 线程,relaxed 原子。
+	// 新增只追加在 kCount 之前并同步名表。
+	enum class RecentResultEvent : uint8_t
+	{
+		kRecorded,       // metric=battle_result_recorded
+		kPublished,      // metric=battle_result_published
+		kDuplicate,      // metric=battle_result_duplicate
+		kLinesTruncated, // metric=battle_result_lines_truncated
+		kRecordMissing,  // metric=battle_result_record_missing
+		kHistoryMissing, // metric=battle_result_history_missing(op=void_settlement / query / ack)
+
+		kCount
+	};
+	inline constexpr const char* kRecentResultEventNames[] = {
+		"recorded", "published", "duplicate", "lines_truncated", "record_missing", "history_missing",
+	};
+	static_assert(std::size(kRecentResultEventNames) == static_cast<std::size_t>(RecentResultEvent::kCount),
+				  "kRecentResultEventNames 与 RecentResultEvent 逐项对应");
+	std::array<std::atomic<uint64_t>, static_cast<std::size_t>(RecentResultEvent::kCount)> gRecentResultEvents{};
+
+	void CountRecentResultEvent(const RecentResultEvent event)
+	{
+		gRecentResultEvents[static_cast<std::size_t>(event)].fetch_add(1, std::memory_order_relaxed);
+	}
+
+	// 结算因物品号段不够、整笔延后(metric=battle_settlement_item_guid_shortage),WriteBattleSettlementMetrics 导出:
+	// requested = 已主动续段,新段落地就自己恢复;cannot_help = 号段停用 / 停机,或这一批比单段上限还多,续段帮不上忙,要人看配置。
+	std::atomic<uint64_t> gItemGuidShortageRequested{0};
+	std::atomic<uint64_t> gItemGuidShortageCannotHelp{0};
+
 	// 一次 SQL 终局查询走到哪一步(SendTrackedTerminalQuery 的结论)。底层类型按枚举项个数选;kCount 恒为最后一项。
 	enum class TerminalQueryStep : uint8_t
 	{
@@ -1015,6 +1046,7 @@ namespace
 		const auto topUp = segment.RequestTopUp(needed);
 		if (topUp == GuidSegmentClient::TopUpOutcome::kFetching || topUp == GuidSegmentClient::TopUpOutcome::kEnough)
 		{
+			gItemGuidShortageRequested.fetch_add(1, std::memory_order_relaxed);
 			LOG_WARN << "[PlayerBattle] metric=battle_settlement_item_guid_shortage player_id=" << playerId
 					 << " battle_id=" << battleId << " needed=" << needed << " available=" << available
 					 << " top_up=" << TopUpOutcomeName(topUp)
@@ -1024,6 +1056,7 @@ namespace
 		{
 			// 号段停用 / 停机(kUnavailable),或者这一批比一段最多能给的号还多(kExceedsMaxStep):续段帮不上忙,
 			// 要人看配置(IdSegments 的 Enabled / MaxStep)。结算不能拒收,照样整笔 DEFER。
+			gItemGuidShortageCannotHelp.fetch_add(1, std::memory_order_relaxed);
 			LOG_ERROR << "[PlayerBattle] metric=battle_settlement_item_guid_shortage player_id=" << playerId
 					  << " battle_id=" << battleId << " needed=" << needed << " available=" << available
 					  << " max_step=" << segment.GetOptions().maxStep << " top_up=" << TopUpOutcomeName(topUp)
@@ -2663,6 +2696,7 @@ void RecordBattleResult(entt::entity player, const uint64_t playerId, const ::Ba
     if (history == nullptr)
     {
         // 只可能是缺陷:效果之前核对过它在场,效果路径不摘持久组件。奖励已入账、不能回头;这一局重登后看不到结果。
+        CountRecentResultEvent(RecentResultEvent::kRecordMissing);
         LOG_ERROR << "[PlayerBattle] metric=battle_result_record_missing player_id=" << playerId << " battle_id=" << battleId
                   << ";persisted PlayerBattleResultComp vanished after the preflight, result not recorded (rewards already applied)";
         return;
@@ -2741,6 +2775,7 @@ void RecordBattleResult(entt::entity player, const uint64_t playerId, const ::Ba
         break;
     case battle_result::RecordOutcome::kDuplicateBattle:
         // 同一局的结算按收件箱账本只执行一次,走到这里只可能是上游缺陷:保留第一条,不写第二条。
+        CountRecentResultEvent(RecentResultEvent::kDuplicate);
         LOG_WARN << "[PlayerBattle] metric=battle_result_duplicate player_id=" << playerId << " battle_id=" << battleId
                  << ";this battle already has a result record, keeping the first one";
         return;
@@ -2758,10 +2793,12 @@ void RecordBattleResult(entt::entity player, const uint64_t playerId, const ::Ba
     awaiting.push_back(battleId);
     if (truncated)
     {
+        CountRecentResultEvent(RecentResultEvent::kLinesTruncated);
         LOG_WARN << "[PlayerBattle] metric=battle_result_lines_truncated player_id=" << playerId << " battle_id=" << battleId
                  << " max_lines=" << battle_result::kMaxItemLinesPerList
                  << ";item lines above the per-list limit are left out of the result record (rewards unaffected)";
     }
+    CountRecentResultEvent(RecentResultEvent::kRecorded);
     LOG_INFO << "[PlayerBattle] metric=battle_result_recorded player_id=" << playerId << " battle_id=" << battleId
              << " result_seq=" << history->last_result_seq() << " currencies=" << currencyLines
              << " items_gained=" << gainedLines << " items_consumed=" << consumedLines
@@ -2779,6 +2816,7 @@ void PublishBattleResult(entt::entity player, const uint64_t battleId)
     if (it == ids.end()) return;
     ids.erase(it);
     if (ids.empty()) tlsEcs.actorRegistry.remove<BattleResultAwaitingCommitComp>(player);
+    CountRecentResultEvent(RecentResultEvent::kPublished);
     LOG_INFO << "[PlayerBattle] metric=battle_result_published player_id=" << tlsEcs.GetPlayerId(player)
              << " battle_id=" << battleId;
 }
@@ -2834,6 +2872,7 @@ PlayerInboxExecResult ApplyVoidSettlement(entt::entity player, const ::BattleSet
     // 近期结果是持久数据,只由加载创建;缺了是加载不变量被破坏。结果写不进去就整笔延后,与普通结算的前置核对同一口径。
     if (!tlsEcs.actorRegistry.all_of<PlayerBattleResultComp>(player))
     {
+        CountRecentResultEvent(RecentResultEvent::kHistoryMissing);
         LOG_ERROR << "[PlayerBattle] metric=battle_result_history_missing player_id=" << playerId << " battle_id=" << battleId
                   << " op=void_settlement;persisted PlayerBattleResultComp missing (load invariant broken), void settlement deferred";
         return {PlayerInboxExecKind::kDefer, 0};
@@ -2936,6 +2975,7 @@ uint32_t PlayerBattleSystem::GetRecentBattleResults(entt::entity player, ::GetRe
     if (history == nullptr)
     {
         // 持久组件只由加载创建;缺了是加载不变量被破坏,不补空列表冒充「没有结果」(ECS 组件访问规则)。
+        CountRecentResultEvent(RecentResultEvent::kHistoryMissing);
         LOG_ERROR << "[PlayerBattle] metric=battle_result_history_missing player_id=" << playerId << " op=query"
                   << ";persisted PlayerBattleResultComp missing (load invariant broken)";
         return kServiceUnavailable;
@@ -2974,6 +3014,7 @@ uint32_t PlayerBattleSystem::AckBattleResults(entt::entity player, const ::AckBa
     auto* history = tlsEcs.actorRegistry.try_get<PlayerBattleResultComp>(player);
     if (history == nullptr)
     {
+        CountRecentResultEvent(RecentResultEvent::kHistoryMissing);
         LOG_ERROR << "[PlayerBattle] metric=battle_result_history_missing player_id=" << playerId << " op=ack"
                   << ";persisted PlayerBattleResultComp missing (load invariant broken)";
         return kServiceUnavailable;
@@ -4162,11 +4203,40 @@ void PlayerBattleSystem::WriteBattleFreezeMetrics(prometheus_text::Writer& write
 	}
 }
 
+void PlayerBattleSystem::WriteBattleSettlementMetrics(prometheus_text::Writer& writer)
+{
+	writer.BeginFamily("scene_battle_result_events_total",
+					   "Recent battle result events on this scene node since process start, by event (each one is also a "
+					   "metric=battle_result_* log line naming the player and the battle): recorded, published, duplicate, "
+					   "lines_truncated, record_missing and history_missing (the last two are defects).",
+					   prometheus_text::MetricType::kCounter);
+	for (std::size_t i = 0; i < gRecentResultEvents.size(); ++i)
+	{
+		writer.Sample({{"event", kRecentResultEventNames[i]}}, gRecentResultEvents[i].load(std::memory_order_relaxed));
+	}
+	writer.BeginFamily("scene_battle_settlement_item_guid_shortage_total",
+					   "Battle settlements deferred because the item guid segment could not cover the drops: requested (a top-up "
+					   "is on its way and the settlement resumes when it lands) or cannot_help (segments disabled, or the batch "
+					   "is larger than one segment; check the IdSegments config).",
+					   prometheus_text::MetricType::kCounter);
+	writer.Sample({{"top_up", "requested"}}, gItemGuidShortageRequested.load(std::memory_order_relaxed));
+	writer.Sample({{"top_up", "cannot_help"}}, gItemGuidShortageCannotHelp.load(std::memory_order_relaxed));
+	writer.BeginFamily("scene_battle_terminal_query_unknown_total",
+					   "SQL terminal queries to match whose answer was unknown (call failed, reply unverifiable or retry); "
+					   "the freeze is then held as unknown, up to the hold cap.",
+					   prometheus_text::MetricType::kCounter);
+	writer.Sample({}, battle_terminal_query::UnknownAnswers());
+}
+
 void PlayerBattleSystem::RegisterMetrics()
 {
 	if (!GlobalMetricsRegistry().Register("scene_battle_freeze", &PlayerBattleSystem::WriteBattleFreezeMetrics))
 	{
 		LOG_ERROR << "[Metrics] collector scene_battle_freeze is already registered";
+	}
+	if (!GlobalMetricsRegistry().Register("scene_battle_settlement", &PlayerBattleSystem::WriteBattleSettlementMetrics))
+	{
+		LOG_ERROR << "[Metrics] collector scene_battle_settlement is already registered";
 	}
 }
 

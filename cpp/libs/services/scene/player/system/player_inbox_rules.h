@@ -12,12 +12,15 @@
 //   4) 从存档读出来的账本是否自洽(损坏就 fail-closed,由调用方挂标签停用该玩家的收件箱);
 //   5) 一次落地算不算"新落地";
 //   6) 退避(含只读 SQL 确认探测的退避)与在线兜底的时长(抖动由调用方以参数传入,本文件不取随机数),
-//      以及卡住时周期性告警的节拍。
+//      以及卡住时周期性补打日志的节拍;
+//   7) scene 侧导出的指标用到的 label 名表(只有常量,计数本身在 PlayerInboxSystem 里)。
 //
 // 线程模型:纯函数,状态全在入参里,由调用方(scene loop 线程)保证独占访问。
 // 单测:cpp/tests/currency_test/player_inbox_rules_test.cpp。
 
+#include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <string>
 
 #include "proto/common/component/player_inbox_ledger_comp.pb.h"
@@ -44,10 +47,11 @@ namespace player_inbox_rules
 	constexpr uint64_t kSnapshotRecheckMs = 1000;
 	constexpr uint32_t kJitterPermilleMax = 1000;        // 抖动参数取值 [0, 1000]
 	constexpr uint32_t kPeriodicJitterPercent = 20;      // 在线兜底 ±20%
-	// 卡住时周期性告警的节拍(评审 L13、F3)。仓库现有的 scene 日志告警一律写成
-	// count_over_time({app=~"scene.*"} |= "metric=..." [10m]) > 0(deploy/k8s/player-inbox-alerts.yaml)。
-	// 问题还在时,相邻两条告警行的间隔必须落在这个窗口之内;间隔更长,告警就会"亮 10 分钟、灭几十分钟"地
-	// 反复自愈,值班容易当成已经好了,而这名玩家的处置其实一直没执行。改告警窗口或下面的节拍时两边一起改,
+	// 卡住时周期性补打日志的节拍(评审 L13、F3)。原先 scene 的这几条告警是按 [10m] 数日志行的 LogQL;2026-11-27 起改读
+	// scene 导出的指标(PlayerInboxSystem::WriteMetrics,deploy/k8s/player-inbox-alerts.yaml 的 scene.player-inbox 组):
+	// 停用、账本无效、节点级停用都是抓取时现算的 gauge,不再靠日志行数(docs/design/player-inbox-service.md §9.4.1)。
+	// 补打照旧保留:日志带 player_id,值班在告警的 10 分钟窗口里搜 scene 日志,每个还卡着的玩家 / 节点总能搜到一行。
+	// 所以推导不变 —— 问题还在时,相邻两条的间隔必须落在这个窗口之内。改窗口或下面的节拍时两边一起改,
 	// static_assert 与 player_inbox_rules_test 守住这条推导。
 	constexpr uint64_t kSceneLogAlertWindowMs = 10ULL * 60ULL * 1000ULL;
 	// 节拍之外留给 tick 粒度(1 秒一次)与单 tick 检查预算(kTickCheckBudget)造成的顺延的余量。
@@ -186,4 +190,41 @@ namespace player_inbox_rules
 	// 不会自愈的延后原因是否到了再打一次 WARN 的时候:failStreak 为 kStuckWarnEveryFailures 的正整数倍。
 	// "首次"由调用方按延后原因是否刚变化判定,不归这里管;本函数不改 failStreak,也不影响退避。
 	bool IsStuckWarnDue(uint32_t failStreak);
+
+	// ── 指标的 label 名表(PlayerInboxSystem::WriteMetrics,2026-11-27)───────────────────────
+	// 取值就是同名 metric= 日志里的键名 / result= 值:日志文本不变,计数与日志在同一处自增,口径就是日志行数。
+	// 告警规则与它的契约测试按名字读,改名要同步 deploy/k8s/player-inbox-alerts.yaml。
+	// 最后一项固定为 kCount,同时用作名字表长度(AGENTS §11.2)。
+
+	// scene 消费端的一次性事件(label event),各对应一处或几处 metric=inbox_<event> 日志。
+	enum class ConsumerEvent : uint8_t
+	{
+		kUnknownType,            // 不认识的类型或指令:停在这一条、停用该域(§8 #13)
+		kReplayMismatch,         // 重复投递与账本里的同一 seq 对不上(IB-9):什么都不确认、停用该域
+		kAckAnomaly,             // Ack 回包逐条结果异常,或整次回 kInvalidParameter:停用该域
+		kBattleDuplicateRequest, // 战斗结算域同一局换了新 seq 重投:只记 APPLIED、不再执行(HasRecentAppliedBattleSettlement)
+		kStaleOwner,             // Fetch 被围栏判 STALE:本节点已不是 owner,固定退避后重拉
+		kCount
+	};
+	inline constexpr const char *kConsumerEventNames[] = {"unknown_type", "replay_mismatch", "ack_anomaly",
+														  "battle_duplicate_request", "stale_owner"};
+	static_assert(std::size(kConsumerEventNames) == static_cast<std::size_t>(ConsumerEvent::kCount),
+				  "消费端事件名表与 ConsumerEvent 脱节");
+
+	// 玩家离开本节点时补发 Ack 的结局(label result),对应 metric=inbox_leave_ack result=<值>(设计 §7.7,评审 M4、LC-2、LC-3)。
+	enum class LeaveAckResult : uint8_t
+	{
+		kSent,                // 补发了,不等回包
+		kNotSent,             // 补发没发出去(例如没有可用的收件箱节点)
+		kNotDurable,          // 结局还没落盘,不能确认(IB-3)
+		kFetchInflight,       // 离开时 Fetch 在途:回包到达时实体已销毁,被丢弃
+		kAckInflight,         // 离开时这批的 Ack 已在途
+		kDeliveredUndecided,  // 已投递、还没定结局的本地条目随退出丢掉
+		kDecidedPrefixQueued, // 不是残留:退出期批首账本里已有结局的条目先入确认队列
+		kCount
+	};
+	inline constexpr const char *kLeaveAckResultNames[] = {"sent", "not_sent", "not_durable", "fetch_inflight",
+														   "ack_inflight", "delivered_undecided", "decided_prefix_queued"};
+	static_assert(std::size(kLeaveAckResultNames) == static_cast<std::size_t>(LeaveAckResult::kCount),
+				  "离开补确认结局名表与 LeaveAckResult 脱节");
 } // namespace player_inbox_rules

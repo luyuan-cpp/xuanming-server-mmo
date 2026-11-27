@@ -944,7 +944,7 @@ dbTask.set_save_seq(ownerEpoch == 0 ? 0 : saveSeq)   // 两张子表共用同一
 - **只在 `dual` 生效**：§4.4 的结局分类与死信、§5.1 的计数器探测、§5.2（另需 `EpochOverride`）、§5.3、§6.6 的资产证据发布。v0.3 这里写的「§4.2 盖章只在 `dual`」与 §4.2 矛盾，以 §4.2 为准（两种模式都盖，`legacy` 盖 `(0,0)`）。
 - 观察项：
   - `db_task_deferred_total{reason="store_open_failed"}` 保持 0，日志里没有 `failed the read-only schema gate`（落点库漏迁，§3.2）。
-  - **class-3 观察窗**（Redis 守卫在 `legacy` 下照跑、照计数）：该 zone 各 go/db Pod 的 `db_owner_epoch_guard_total{outcome="legacy_zero"}` 不增长；同期 scene 日志里 `[OwnerEpoch]` 行的 `owner_epoch_unknown` 不增长（它是进程累计值、每 30 秒打一行 WARN，不是 Prometheus 指标，所以写「不增长」，不写「为 0」）。
+  - **class-3 观察窗**（Redis 守卫在 `legacy` 下照跑、照计数）：该 zone 各 go/db Pod 的 `db_owner_epoch_guard_total{outcome="legacy_zero"}` 不增长；同期 scene 日志里 `[OwnerEpoch]` 行的 `owner_epoch_unknown` 不增长（它是进程累计值、每 30 秒打一行 WARN，不是 Prometheus 指标，所以写「不增长」，不写「为 0」）。（2026-11-27 订正：`owner_epoch_unknown` 已随 Redis 存档路径删除，玩家数据只存 TiDB 之后这一项观察不再适用；`[OwnerEpoch]` 剩下的两项导出为 `scene_owner_epoch_events_total{event}`。）
 - 这一步是为了把「换二进制」和「换语义」分开。
 
 ### 8.3 Stage 1b：逐 zone 切 `dual`

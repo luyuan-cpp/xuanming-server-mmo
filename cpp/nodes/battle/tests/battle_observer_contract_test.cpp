@@ -953,9 +953,15 @@ TEST_F(BattleObserverContract, RoomAndEventCountersAreExportedAsMetrics) {
              std::string("battle_observer_seats_reclaimed_total{cause=\"connect_timeout\"}"),
              std::string("battle_observer_seats_reclaimed_total{cause=\"reconnect_timeout\"}"),
              std::string("battle_spectate_frames_not_sent_total"),
+             std::string("battle_settlement_source_failures_total{kind=\"invalid\"}"),
+             std::string("battle_settlement_source_failures_total{kind=\"missing\"}"),
+             std::string("battle_settlement_source_failures_total{kind=\"member_mismatch\"}"),
          }) {
         EXPECT_NE(BattleMetricSample(series), UINT64_MAX) << series;
     }
+    // 密钥就绪与否由环境变量现判:只取 0 / 1,用例环境里配没配都合法。
+    const uint64_t keyReady = BattleMetricSample("battle_sql_outcome_signing_key_ready");
+    EXPECT_TRUE(keyReady == 0 || keyReady == 1) << keyReady;
 }
 
 // 登记后一直没建直连的席位:连接宽限内保持 ACTIVE(补签不延长宽限),宽限后被回收为 ABSENT;

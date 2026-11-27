@@ -19,52 +19,22 @@
 # assetop_pending_oldest_age_seconds 永久推高(停放档 30 分钟一次、180 天后才放弃),
 # 按 04 §4.38 的原规则会常响。按类拆分的 gauge 由每日对账(Auditor,leader 副本)刷新。
 #
-# scene / battle 等 C++ 节点有 Prometheus 出口(环境变量 MMORPG_METRICS_PORT,k8s_deploy.ps1 -CppMetricsPort 缺省 9400),
-# scene 已导出 scene_travel_handoff_*、scene_owner_epoch_events_total{event}、scene_player_store_save_refused_total{result}
-# (cpp/libs/services/scene/player/system/player_ownership_metrics.{h,cpp})。但下面这些结算类信号目前没有导出,
-# 仍只存在于结构化日志(metric=...),而 Loki ruler 目前没有挂载规则目录、也没有 alertmanager_url。
-# 下列 LogQL 先作为值班固定查询,ruler 接线(上线批 BK8s)之后转为规则;哪个信号导出成指标了,就把它的查询改成 PromQL 规则。
-# 已改的(2026-11-27):battle 的 metric=battle_personal_settlement_staging_exhausted_rooms(滞留房间)与 scene 的
-# metric=battle_freeze_hold_cap_reached / battle_item_hold_overdue / jianghu_duel_fee_overdue 导出成了指标,告警在
-# deploy/k8s/battle-settlement-alerts.yaml(处置说明随之搬过去),这里不再列,免得 ruler 接线之后同一件事报两遍。
+# scene / battle 等 C++ 节点有 Prometheus 出口(环境变量 MMORPG_METRICS_PORT,k8s_deploy.ps1 -CppMetricsPort 缺省 9400)。
+# 结算类信号原来只在结构化日志里(metric=...),这里写过十一条 LogQL 值班固定查询;Loki ruler 一直没接线(没挂规则目录、也没有
+# alertmanager_url),那些查询不会自己响。规则是「哪个信号导出成指标了,就把它的查询改成 PromQL 规则」,2026-11-27 改了十条,
+# 这里不再列,免得 ruler 接线之后同一件事报两遍(处置说明随规则搬过去):
+#   - battle 的滞留房间、终局提交密钥缺失、个人结算原件出错,scene 的续冻到上限、道具预留与待退银两超期、终局查询未知、
+#     物品号段不够、战斗掉落邮件寄不出去 → deploy/k8s/battle-settlement-alerts.yaml;
+#   - 资产通道的版本错位(metric=persist_version_skew where=asset_*)→ deploy/k8s/persist-version-skew-alerts.yaml 的 SceneAssetOpVersionSkew。
+# 只剩下面一条:它在进程退出前那一刻才打,之后进程就不在了,抓取等不到计数,改不成 PromQL,只能留在日志查询里。
 # 流选择器与 player-inbox-alerts.yaml 同一写法:C++ 业务日志由每个 Pod 的 Alloy sidecar 读文件送 Loki
 # (k8s_deploy.ps1 Get-CppLogSidecarConfigAlloy),流标签只有 env / namespace / pod / zone / service / job / lang / level,
 # **没有 app**:写成 {app="battle"} 的查询匹配不到任何流,恒为空。battle 写 {job="cpp_nodes", service="battle"}
-# (三种 battle 编排都挂同一个 sidecar,全局池的 zone 是 "global"),scene 写 {job="cpp_nodes", service="scene"};
-# service 取自日志文件名前缀(NodeTypeToShortName)。本机观测台(deploy/observability/alloy/config.alloy)同一写法可用。
+# (三种 battle 编排都挂同一个 sidecar,全局池的 zone 是 "global");service 取自日志文件名前缀(NodeTypeToShortName)。
+# 本机观测台(deploy/observability/alloy/config.alloy)同一写法可用。
 # 契约测试 k8s_deploy_contract.tests.ps1「LogQL 契约」逐条核对下面用到的标签都在 sidecar 配置里。
-#   critical: count_over_time({job="cpp_nodes", service="battle"} |= "metric=battle_sql_outcome_key_unavailable" [10m]) > 0
-#             没有终局提交密钥(MMORPG_MATCH_OUTCOME_SECRET_BATTLE),这个节点的终局协议停用,对局结果提交不了。
-#   critical: count_over_time({job="cpp_nodes", service="battle"} |~ "metric=battle_settlement_source_(invalid|missing|member_mismatch)" [10m]) > 0
-#             个人结算原件生成失败或与成员对不上:source_invalid 时终局保持未知;missing / member_mismatch 时不派发终局。正文没有玩家明细,按时间对 match 库。
 #   warning : count_over_time({job="cpp_nodes", service="battle"} |= "metric=battle_sql_outcome_unflushed_at_shutdown" [10m]) > 0
 #             节点停机时还有没落定的终局,逐局一行。出站通道已关,由 match 凭持久原件裁决;按 battle_id 核对 match_battle_completion。
-#   warning : count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_settlement_item_guid_shortage" [10m]) > 0
-#             物品号段不够发这局的掉落,整份结算延后到号段够用(不丢);预检判出不足时已主动续段(GuidSegmentClient::RequestTopUp),
-#             持续出现查发号器与 data_service。
-#   warning : count_over_time({job="cpp_nodes", service="scene"} |= "metric=mail_outbox_stuck" [10m]) > 0
-#             (2026-11-12)人物背包与临时格都放不下的战斗掉落改投邮件(docs/design/battle-overflow-mail.md):这批物品记在玩家存档的
-#             待寄队列里,由 scene 以 battle 身份寄出。这一行是重试不会变的失败:没配发件密钥、本地签名失败、条目形状不合法、验签被拒（两边密钥不同或时钟相差超过 5 分钟，`reason=signature_rejected`）,
-#             或邮件判附件无效 / 请求冲突 / 参数错。物品没有丢,仍在队列里按退避重试,但不会自己好。
-#             正文有 player_id、request_id 与 reason;处置见 docs/ops/player-inbox-runbook.md §6.1「待寄邮件」。
-#             邮箱满、邮件不可达、结果未知是会自己好的失败,只打 metric=mail_outbox_send_failed(WARN),不进这条查询。
-#   warning : count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_terminal_query_unknown" [10m]) > 20
-#             scene 查不到 match 的终局(MatchInternal.GetBattleTerminalDecision:没发出去、传输失败、回包验签不过、带内 retry),
-#             按「结果未知」续冻,会一直拖到续冻上限。查 scene 的场景密钥与 match 是否同源、scene 能否发现并连上 match、match 是否可用;
-#             偶发属正常(在途超时也计)。阈值 20 / 10 分钟已定(2026-11-12),压测出基线后可调:
-#             依据是 scene 对每个冻结中的玩家约每 30 秒核对一次终局,10 分钟窗口下 20 行约等于一个 match 或链路持续不可用时至少 2~3 个玩家的整窗查询失败,
-#             单次在途超时或一次 match 滚动重启(通常 < 1 分钟,只产出个位数行)不会越线;越线说明查询链路持续不通,续冻会一路拖到上限。
-#   warning : count_over_time({job="cpp_nodes", service="scene"} |= "[AssetOp]" |= "metric=persist_version_skew" [10m]) > 0
-#             (2026-10-30,混版本持久字段保护第 6 批)资产通道遇到本版本解释不了的东西,回 RETRY + reason 1006
-#             (kFeatureUnavailable)、不记账:where=asset_debit 是按数量扣出只有算上带更新版本字段的物品才够,
-#             where=asset_currency 是包里的币种本版本不认识;2026-11-11 起另有 where=asset_request(请求带本版本
-#             不认识的字段,行里带 field=<消息#字段号>)与 where=asset_config(物品 / 宝宝配置号不在本节点的 Item / Pet
-#             表里,带 table / config_id;表行只增不删,只可能是更新版本或尚未热更到本节点的行)。
-#             Go 行上表现为 PENDING、last_reason=1006。
-#             滚动发布或热更期间属预期,升级 / 热更走完自然收口;发布已走完仍持续 → 查是否有 scene 停在旧版本、被回滚,
-#             或(asset_config)这个节点的配置没有热更到。
-#             不要人工终结这类行:入账没有 Abort 栅栏,人工终结还会在流上留下永久的洞(04 §4.38)。聚宝斋托管卡在这里时,
-#             卖家可以撤单收口。
 #
 # Severity conventions(与 scene-manager-alerts.yaml 相同):
 #   critical = pager, someone wakes up

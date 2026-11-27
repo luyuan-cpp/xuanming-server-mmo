@@ -252,7 +252,13 @@ public:
 	// 同一份计数写成 scene_battle_freeze_events_total{event}(event 取 battle_freeze_hold::kFreezeHoldEventNames),
 	// 每项进程一启动就以 0 导出。只读原子,不碰 ECS。告警在 deploy/k8s/battle-settlement-alerts.yaml。
 	static void WriteBattleFreezeMetrics(prometheus_text::Writer& writer);
-	// scene 启动时调一次,把 WriteBattleFreezeMetrics 登记进进程的指标注册表;重复登记只打一行 ERROR。
+	// 结算与近期战斗结果的计数(2026-11-27 起导出,原来只有同名结构化日志):
+	//   scene_battle_result_events_total{event}                 近期战斗结果的写入 / 公开 / 重复 / 截断 / 组件缺失
+	//   scene_battle_settlement_item_guid_shortage_total{top_up} 物品号段不够、整笔延后:requested / cannot_help
+	//   scene_battle_terminal_query_unknown_total               向 match 查 SQL 终局回答未知(battle_terminal_query::UnknownAnswers)
+	// 每项进程一启动就以 0 导出;只读原子,不碰 ECS。告警在 deploy/k8s/battle-settlement-alerts.yaml。
+	static void WriteBattleSettlementMetrics(prometheus_text::Writer& writer);
+	// scene 启动时调一次,把上面两个写指标的函数登记进进程的指标注册表;重复登记只打一行 ERROR。
 	static void RegisterMetrics();
 
 	// 条件删锁命令的发送注入点。生产恒为空:走 tlsPlayerRedis 发条件删锁脚本。

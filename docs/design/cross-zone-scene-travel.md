@@ -471,7 +471,7 @@ C++ MSBuild 必须串行 `/m:1 /nr:false`;这批代码从未编译,失败时先�
 1. **同 zone 仍是哑连接**:同 zone 路由失败 + 回滚 `redis_error`、scene_manager 在铸造后写 Kafka 前崩溃,源端判"已放行"后只销毁不踢(同 zone 不踢是有意的,理由见上),gate 会话仍绑在源节点,玩家要等客户端自己断线重登。带标记的同 zone 铸造重放已能识别;不带标记的铸造重放仍回 19(login 发起的落点由 §12.5.5 的 3023 出口收口)。可选修法:gate 只接受会话当前绑定节点发来的 34(改 gate 手写段);或新增"路由失败且回滚失败"错误码。
 2. **gate-cmd 消费滞后 >30s 时,迟到成功的传送会被踢回选服**:踢线走 scene→gate TCP 直达,先于 Kafka 上的 124 到达;数据不受影响,玩家多重登一次。K8s 下 zrpc 默认 2s 让"迟到"从"应答丢失"扩大到"任何超过 2s 的第一条腿",所以配 `Timeout` 列为上线前置(§12.2)。*(2026-09-28 已配 8000,见 §12.2)*
 3. **无视 34 的客户端仍挂着**:scene 没有强制 gate 断开的 RPC。主触发形态下玩家要先冻满 30s 才会被踢。
-4. **C++ 计数只进 `[TravelHandoff]` 汇总行**(30s、有变化才打),不进 Prometheus,`stress_summarize.ps1` 不解析(§10.3 / runbook G1)。
+4. **C++ 计数只进 `[TravelHandoff]` 汇总行**(30s、有变化才打),不进 Prometheus,`stress_summarize.ps1` 不解析(§10.3 / runbook G1)。*2026-11-27 订正:10-24 起已导出为 `scene_travel_handoff_*`(`player_ownership_metrics.cpp`,与汇总行共用 `kFields`),runbook G1 已补;`stress_summarize.ps1` 仍不解析。*
 5. ~~铸造重放识别无指标~~ 已补:计数 `enter_scene_mint_replay_recognized_total` + 日志 `[MintReplay]`(见上文"指标")。
 6. **重放误判**:凭同一份标记、同一秒、同一目标的两个并发请求(只有上游重复提交才会出现)会都被判成功,归属终态正确,代价是旧场景人数多扣一次、重定向 / 路由多发一条(客户端与 gate 对重复 124 去重)。非铸造回滚的第二次执行记为 `superseded` 返回 false,首发若其实已执行则人数不还,是有意的保守取舍。
 7. **回滚晚于源端裁决**:单个回滚 EVAL 在 go-redis 重试下最坏约 4×(Dial 5s + 读写 3s)+ 退避,可超过 30s;已发到 Redis 的 EVAL 在客户端放弃后仍可能执行。location 会指回已无实体的源节点,重登可能被 18 挡住;"断线租约到期后 LeaveScene 清掉 location 自愈"**只在玩家离线满 30s、期间不重进时成立**(30s 内重进一律 ShortReconnect 并撤销租约),挂到 GO-3 / CL-5 名下,根因修复见 §12.6。*2026-10-01 批注:GO-2(§13.7)起:凭标记铸造的迟到回滚,会因源端已原子删掉本族标记而返回 `marker_gone`、一个字节都不动,不再把 location 指回没有实体的源节点;location 停在从未载入的目标(或等待落点)上,活性问题仍在,只是换了形态。不凭标记的铸造没有这层保护,本条对它仍成立。*
@@ -1203,7 +1203,7 @@ C-5(客户端收到 34 是否一定断线)已由 §12.5.4 解除。
 - ~~**SET 回调 ERROR 分支的代际问题**(复审发现,既有代码):它只在 `requestedAtMs` 相等时清 `markEpoch`,但随后的 `AbortTravelHandoff(playerId, "handoff mark write failed")` 不校验代际。上限销毁后,若玩家在同节点重登并发起新一代交接,旧 SET 迟到的 ERROR 会把新一代解冻并登记撤回,违反 I2 / I3。上限让这个前提变得可达,交 GO-2 判定表的属主定(§13.7)。~~ **已由 GO-2 落码修复**(2026-09-29,`a812187e8`,未编译):SET 回调收到 ERROR 时改调 `HandleTravelMarkWriteRejected(playerId, requestedAtMs, err)`。它先查交接组件,不在或 `requestedAtMs` 不等,就打 WARN(`… that handoff generation is no longer in flight … ignoring the late reply`)直接返回;只有同一代交接才清 `markEpoch` 并 Abort。
 - **`RequestTravelEnterScene` 的会话判断仍比 `HasLiveGateSession` 弱**(既有):会话 id 有效、但 SessionMap 已不映射到本玩家时,照样发 EnterScene。
 - **计数双计**:enter_scene 阶段的晚发闸先计 `dispatch_window_closed` 再调 Conclude;Conclude 若推迟,之后还会被上限扫描再计一次 `freeze_cap_reached`。按推理不可达。
-- robot 的 60s 预算覆盖不到上限分支;C++ 计数只进汇总行,不进 Prometheus(runbook G1)。
+- robot 的 60s 预算覆盖不到上限分支;C++ 计数只进汇总行,不进 Prometheus(runbook G1)。*2026-11-27 订正:交接计数 10-24 起已导出为 `scene_travel_handoff_*`(runbook G1 已补);退出收尾的 `[ExitPersist]` / `[ExitRelease]` / `[RelocateConfirm]` 11-27 起也导出(`scene_exit_*`、`scene_relocate_confirm_events_total`)。*
 - ~~`cpp/nodes/scene/main.cpp` 里"冻结的超时恢复由它自己的应答看门狗负责"的注释已过时,待 CPP-3 那一步顺手改。~~ **已改**(2026-10-09,随 CPP-3 的审查修正提交,只改注释:收口由存盘 / 应答看门狗与 70s 冻结硬上限负责)。
 
 ### 13.3 CPP-2 gate 侧进场转发补发(未编译)

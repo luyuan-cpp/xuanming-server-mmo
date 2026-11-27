@@ -50,4 +50,10 @@ namespace battle_terminal_query
 	battle_freeze_hold::TerminalAnswer ClassifyReply(bool callOk, const match::GetBattleTerminalDecisionResponse* reply,
 													  std::string_view expectedDigest, std::string_view secret,
 													  uint64_t nowMs);
+
+	// 已发出的查询里回答归为 kUnknown 的累计次数(进程启动以来;relaxed 原子,只在 loop 线程写)。与
+	// metric=battle_terminal_query_unknown 那一行同一处计数,由 PlayerBattleSystem::WriteBattleFreezeMetrics 导出为
+	// scene_battle_terminal_query_unknown_total(告警 SceneBattleTerminalQueryUnknown,deploy/k8s/battle-settlement-alerts.yaml)。
+	// 没发出去的那几种(Send 返回 false)不在这里:调用方另按 kUnknown 处置,原因在 Send 的日志里。
+	uint64_t UnknownAnswers();
 } // namespace battle_terminal_query

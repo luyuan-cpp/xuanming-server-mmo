@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#include "engine/core/metrics/prometheus_text.h"
 #include "engine/core/type_define/player_guid_comp.h"
 #include "engine/core/type_define/type_define.h"
 #include "modules/bag/bag_service.h"
@@ -521,11 +522,29 @@ TEST_F(MailOutboxPlayerTest, OnlyDurableEntriesAreSentOneAtATimeAndDeliveryRemov
 	EXPECT_EQ(2u, sends.size());
 }
 
+// scene_mail_outbox_stuck_total{reason} 此刻的值(没有这一条返回 UINT64_MAX)。样本行在行首,按 "\n族名{…} " 找。
+uint64_t StuckSendSample(const std::string &reason)
+{
+	prometheus_text::Writer writer;
+	PlayerMailOutboxSystem::WriteMetrics(writer);
+	EXPECT_EQ(writer.DroppedSamples(), 0u);
+	const std::string series = "scene_mail_outbox_stuck_total{reason=\"" + reason + "\"}";
+	const std::string &text = writer.Text();
+	const auto at = text.find("\n" + series + " ");
+	return at == std::string::npos ? UINT64_MAX : std::stoull(text.substr(at + series.size() + 2));
+}
+
 // 验签被拒(两边密钥不同,或时钟相差超过 5 分钟):邮件没写,重试不会自己变好。留着条目,按拒收的 30 秒起退避,不当成结果未知的 1 秒。
+// 2026-11-27 起每次这种失败都计一次 scene_mail_outbox_stuck_total{reason="signature_rejected"}(告警 SceneMailOutboxStuck 读它)。
 TEST_F(MailOutboxPlayerTest, SignatureRejectionKeepsTheEntryOnTheRejectedSchedule)
 {
 	const auto requestId = QueueEntry({{kPotion, 1}});
 	durable.insert(requestId);
+	for (const char *reason : {"no_secret", "invalid_entry", "sign_failed", "signature_rejected", "mail_rejected"})
+	{
+		EXPECT_NE(StuckSendSample(reason), UINT64_MAX) << "每个原因都以当前值导出: " << reason;
+	}
+	const uint64_t stuckBefore = StuckSendSample("signature_rejected");
 
 	Tick(10'000);
 	ASSERT_EQ(1u, sends.size());
@@ -533,6 +552,7 @@ TEST_F(MailOutboxPlayerTest, SignatureRejectionKeepsTheEntryOnTheRejectedSchedul
 	rejected.signatureRejected = true;
 	sends[0].done(rejected);
 	EXPECT_EQ(1, Outbox().entries_size()) << "没寄到就留着";
+	EXPECT_EQ(StuckSendSample("signature_rejected"), stuckBefore + 1);
 	Tick(10'000 + 1'000);
 	EXPECT_EQ(1u, sends.size()) << "不走结果未知的 1 秒";
 	Tick(10'000 + 30'000);

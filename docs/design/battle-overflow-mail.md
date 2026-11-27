@@ -117,11 +117,9 @@ mail 是弱依赖：不进 scene 的启动闸，发现不到只让条目按退�
 | `metric=mail_outbox_request_id_shortage` | WARN | 请求号暂时取不到 |
 | `metric=mail_outbox_invalid` | ERROR | 加载时发现条目不合法；原样携带、照样尝试寄 |
 
-值班固定查询（已写进 `deploy/k8s/asset-channel-alerts.yaml` 头注释，Loki ruler 接线之后转成规则）：
+告警（2026-11-27 起）：重试不会自己好的失败按原因计数，导出为 `scene_mail_outbox_stuck_total{reason}`（`PlayerMailOutboxSystem::WriteMetrics`，reason ∈ no_secret / invalid_entry / sign_failed / signature_rejected / mail_rejected），PromQL 规则 `SceneMailOutboxStuck`（`deploy/k8s/battle-settlement-alerts.yaml`，10 分钟增量 > 0 就报，warning）。原来是 `asset-channel-alerts.yaml` 头注释里的 LogQL 值班查询，Loki ruler 一直没接线、不会自己响，已删。
 
-```
-count_over_time({job="cpp_nodes", service="scene"} |= "metric=mail_outbox_stuck" [10m]) > 0
-```
+计数与日志口径的一处差别（有意的）：「本地没发出去」那几种的日志只在第 1 次与每 8 次失败打，计数却是每一次失败的尝试都计。失败按最长 5 分钟一次重试，这样问题还在时 10 分钟窗口里的增量一定大于 0，告警不会因为日志限频而时亮时灭（按日志行数的原查询在封顶之后会每 40 分钟才亮一次）。
 
 ## 10. 代价与残余
 

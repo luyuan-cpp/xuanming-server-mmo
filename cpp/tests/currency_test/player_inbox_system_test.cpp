@@ -20,14 +20,18 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <iterator>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <google/protobuf/unknown_field_set.h>
 #include <node_config_manager.h>
 
+#include "engine/core/metrics/prometheus_text.h" // WriteMetrics 的抓取页(2026-11-27)
 #include "engine/core/type_define/player_guid_comp.h"
 #include "core/network/grpc_client_call.h" // kGrpcStatusUnavailable
 #include "modules/currency/comp/player_currency_comp.h"
@@ -2327,4 +2331,202 @@ TEST_F(PlayerInboxSystemTest, BattleDomainBelowWatermarkWithoutReceiptNeverClaim
         FetchReplyFor(fetch, {MakeItem(10, player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT, 271, "unread")}));
     EXPECT_TRUE(g_sentAcks.empty());
     EXPECT_EQ(before, tlsEcs.actorRegistry.get<PlayerInboxLedgerComp>(player).SerializeAsString());
+}
+
+// ── 指标(2026-11-27,PlayerInboxSystem::WriteMetrics;docs/design/player-inbox-service.md §9.4.1)──────────────
+// 原来只进日志的收件箱信号经 scene 的 /metrics 导出,告警在 deploy/k8s/player-inbox-alerts.yaml 的 scene.player-inbox 组。
+// 计数是本线程累计、跨用例一直增长:一律比增量,不假设绝对值。gauge 抓取时现算,比用例开始时的基线。
+
+namespace
+{
+	constexpr uint64_t kSampleMissing = std::numeric_limits<uint64_t>::max();
+
+	// 一次抓取的整页文本。
+	std::string ScrapeInboxMetrics()
+	{
+		prometheus_text::Writer writer;
+		PlayerInboxSystem::WriteMetrics(writer);
+		EXPECT_EQ(0u, writer.DroppedSamples());
+		return writer.Text();
+	}
+
+	// 一条样本此刻的值;没有这条样本返回 kSampleMissing。样本行在行首,# HELP 行里也会出现族名,按 "\n<序列> " 找。
+	uint64_t InboxSample(const std::string &series)
+	{
+		const std::string text = ScrapeInboxMetrics();
+		const auto at = text.find("\n" + series + " ");
+		return at == std::string::npos ? kSampleMissing : std::stoull(text.substr(at + series.size() + 2));
+	}
+
+	std::string LabeledSeries(std::string_view family, std::string_view label, std::string_view value)
+	{
+		return std::string(family) + "{" + std::string(label) + "=\"" + std::string(value) + "\"}";
+	}
+
+	// 一个计数取值,与它对应的那一种日志行(抓到的行里同时含有全部片段)。
+	struct CounterLogProbe
+	{
+		std::string series;
+		std::vector<std::string> logFragments;
+		uint64_t before{0};
+	};
+
+	// 三个计数族的全部取值(none 不是原因,不导出)。片段末尾带空格:日志里键值后面紧跟空格,一个取值是另一个的前缀时也不会串。
+	std::vector<CounterLogProbe> AllCounterLogProbes()
+	{
+		std::vector<CounterLogProbe> probes;
+		for (const std::string_view event : rules::kConsumerEventNames)
+		{
+			probes.push_back({LabeledSeries("scene_player_inbox_events_total", "event", event),
+							  {"[PlayerInbox]", "metric=inbox_" + std::string(event) + " "}});
+		}
+		for (std::size_t i = 1; i < std::size(kPlayerInboxDeferReasonNames); ++i)
+		{
+			const std::string reason(kPlayerInboxDeferReasonNames[i]);
+			probes.push_back({LabeledSeries("scene_player_inbox_deferral_starts_total", "reason", reason),
+							  {"metric=inbox_deferred", "reason=" + reason + " "}});
+		}
+		for (const std::string_view result : rules::kLeaveAckResultNames)
+		{
+			probes.push_back({LabeledSeries("scene_player_inbox_leave_ack_total", "result", result),
+							  {"metric=inbox_leave_ack", "result=" + std::string(result) + " "}});
+		}
+		return probes;
+	}
+} // namespace
+
+// 族与标签取值钉死(告警按名字读,契约测试另对照源码)。每个封闭名表的取值都以当前值导出,没发生过的也有样本;
+// 名表下标 0 的 none 不是原因,不导出。
+TEST_F(PlayerInboxSystemTest, MetricsExportEveryClosedLabelValue)
+{
+	const std::vector<std::string_view> events(std::begin(rules::kConsumerEventNames), std::end(rules::kConsumerEventNames));
+	EXPECT_EQ((std::vector<std::string_view>{"unknown_type", "replay_mismatch", "ack_anomaly", "battle_duplicate_request",
+											  "stale_owner"}),
+			  events);
+	const std::vector<std::string_view> leaveAcks(std::begin(rules::kLeaveAckResultNames), std::end(rules::kLeaveAckResultNames));
+	EXPECT_EQ((std::vector<std::string_view>{"sent", "not_sent", "not_durable", "fetch_inflight", "ack_inflight",
+											  "delivered_undecided", "decided_prefix_queued"}),
+			  leaveAcks);
+
+	const std::string text = ScrapeInboxMetrics();
+	for (const std::string_view family :
+		 {"scene_player_inbox_consumer_enabled gauge", "scene_player_inbox_registry_broken gauge",
+		  "scene_player_inbox_halted_player_domains gauge", "scene_player_inbox_ledger_invalid_players gauge",
+		  "scene_player_inbox_events_total counter", "scene_player_inbox_deferral_starts_total counter",
+		  "scene_player_inbox_leave_ack_total counter"})
+	{
+		EXPECT_NE(std::string::npos, text.find("# TYPE " + std::string(family) + "\n")) << family << " in:\n" << text;
+	}
+	for (const auto &probe : AllCounterLogProbes())
+	{
+		EXPECT_NE(kSampleMissing, InboxSample(probe.series)) << probe.series << " in:\n" << text;
+	}
+	for (std::size_t i = 1; i < std::size(kPlayerInboxHaltReasonNames); ++i)
+	{
+		const auto series = LabeledSeries("scene_player_inbox_halted_player_domains", "reason", kPlayerInboxHaltReasonNames[i]);
+		EXPECT_NE(kSampleMissing, InboxSample(series)) << series << " in:\n" << text;
+	}
+	EXPECT_EQ(std::string::npos, text.find("=\"none\"")) << "none 不是原因,不导出";
+}
+
+// gauge 抓取时现算,跟着此刻的状态走:开关跟配置;停用的 (玩家, 域) 与账本无效的玩家跟着实体,实体销毁即回落。
+// 停用那一下的事件计数与它的日志行一一对应。
+TEST_F(PlayerInboxSystemTest, MetricsGaugesFollowTheCurrentState)
+{
+	ASSERT_EQ(std::string{}, player_inbox_registry::SelfCheck());
+	EXPECT_EQ(0u, InboxSample("scene_player_inbox_registry_broken")) << "自检通过,本线程没有被判坏";
+	EXPECT_EQ(1u, InboxSample("scene_player_inbox_consumer_enabled"));
+	PlayerInboxSystem::SetConsumerConfigForTest(true, false, 0);
+	EXPECT_EQ(0u, InboxSample("scene_player_inbox_consumer_enabled")) << "开关读的是此刻的配置";
+	PlayerInboxSystem::SetConsumerConfigForTest(true, true, 0);
+	EXPECT_EQ(1u, InboxSample("scene_player_inbox_consumer_enabled"));
+
+	const std::string halted = LabeledSeries("scene_player_inbox_halted_player_domains", "reason", "unknown_type");
+	const std::string unknownType = LabeledSeries("scene_player_inbox_events_total", "event", "unknown_type");
+	const std::string ledgerInvalid = "scene_player_inbox_ledger_invalid_players";
+	const uint64_t haltedBefore = InboxSample(halted);
+	const uint64_t unknownTypeBefore = InboxSample(unknownType);
+	const uint64_t ledgerInvalidBefore = InboxSample(ledgerInvalid);
+	ASSERT_NE(kSampleMissing, haltedBefore);
+	ASSERT_NE(kSampleMissing, unknownTypeBefore);
+	ASSERT_NE(kSampleMissing, ledgerInvalidBefore);
+
+	player_inbox::FetchPlayerInboxRequest fetch;
+	ASSERT_NO_FATAL_FAILURE(LandAndFetch(player, fetch));
+	ScopedLogCapture capture;
+	PlayerInboxSystem::OnFetchReply(
+		fetch.player_id(), static_cast<uint32_t>(fetch.domain()), fetch.correlation_id(),
+		FetchReplyFor(fetch, {MakeItem(10, kUnknownType, 1001, "opaque")}));
+	ASSERT_NE(nullptr, GmState(player));
+	ASSERT_TRUE(GmState(player)->halted);
+	EXPECT_EQ(haltedBefore + 1, InboxSample(halted));
+	EXPECT_EQ(1u, CapturedLinesWith({"metric=inbox_unknown_type "}));
+	EXPECT_EQ(unknownTypeBefore + 1, InboxSample(unknownType)) << "一行日志一次计数";
+	PlayerInboxSystem::Tick();
+	EXPECT_EQ(haltedBefore + 1, InboxSample(halted)) << "停用对当前实体一直有效,抓几次都在";
+
+	// 账本无效的两种情形与前置闸同口径:加载判坏挂的标签;已落地却缺账本组件。同一名玩家两种都占着只算一次。
+	tlsEcs.actorRegistry.emplace<PlayerInboxLedgerInvalidComp>(player);
+	EXPECT_EQ(ledgerInvalidBefore + 1, InboxSample(ledgerInvalid));
+	tlsEcs.actorRegistry.remove<PlayerInboxLedgerComp>(player);
+	EXPECT_EQ(ledgerInvalidBefore + 1, InboxSample(ledgerInvalid)) << "两种情形同时占着,只算一名玩家";
+	tlsEcs.actorRegistry.remove<PlayerInboxLedgerInvalidComp>(player);
+	EXPECT_EQ(ledgerInvalidBefore + 1, InboxSample(ledgerInvalid)) << "已落地却缺账本组件:前置闸同样判账本无效";
+
+	DestroyPlayer(player);
+	EXPECT_EQ(haltedBefore, InboxSample(halted)) << "停用跟着实体走,实体销毁即回落";
+	EXPECT_EQ(ledgerInvalidBefore, InboxSample(ledgerInvalid));
+	EXPECT_EQ(unknownTypeBefore + 1, InboxSample(unknownType)) << "计数只增不减";
+}
+
+// 计数与同名日志在同一处自增:每个取值的增量都等于这段时间里抓到的同名日志行数(原来的 LogQL 数的就是这些行)。
+// 这一段走过:没有可用节点而延后(每个消费域一行)、同一原因再延后(只记 DEBUG,不计)、围栏判 STALE、离开时 Fetch 在途。
+TEST_F(PlayerInboxSystemTest, MetricsCountersMatchTheirLogLines)
+{
+	auto probes = AllCounterLogProbes();
+	for (auto &probe : probes)
+	{
+		probe.before = InboxSample(probe.series);
+		ASSERT_NE(kSampleMissing, probe.before) << probe.series;
+	}
+	ScopedLogCapture capture;
+
+	g_fetchSendOk = false;
+	PlayerInboxSystem::OnPlayerLanded(player);
+	PlayerInboxSystem::Tick();
+	Advance(PastBackoff(1));
+	PlayerInboxSystem::Tick();
+	g_fetchSendOk = true;
+	Advance(PastBackoff(2));
+	PlayerInboxSystem::Tick();
+	ASSERT_EQ(1u, g_sentFetches.size());
+	const auto fenced = g_sentFetches.back();
+	PlayerInboxSystem::OnFetchReply(fenced.player_id(), static_cast<uint32_t>(fenced.domain()), fenced.correlation_id(),
+									FetchReplyFor(fenced, {}, false, player_inbox::PLAYER_INBOX_FENCE_STALE));
+	Advance(rules::kStaleOwnerBackoffMs);
+	PlayerInboxSystem::Tick();
+	ASSERT_EQ(2u, g_sentFetches.size()) << "STALE 退避到点后重拉";
+	PlayerInboxSystem::OnPlayerLeaving(player); // 重拉还在途:离开时留一行 fetch_inflight
+
+	for (const auto &probe : probes)
+	{
+		EXPECT_EQ(CapturedLinesWith(probe.logFragments), InboxSample(probe.series) - probe.before) << probe.series;
+	}
+	const auto delta = [&probes](const std::string &series)
+	{
+		for (const auto &probe : probes)
+		{
+			if (probe.series == series)
+			{
+				return InboxSample(series) - probe.before;
+			}
+		}
+		return kSampleMissing;
+	};
+	EXPECT_EQ(player_inbox_registry::ConsumerDomains().size(),
+			  delta(LabeledSeries("scene_player_inbox_deferral_starts_total", "reason", "no_node")))
+		<< "每个消费域首次延后各计一次,同一原因再延后不计";
+	EXPECT_EQ(1u, delta(LabeledSeries("scene_player_inbox_events_total", "event", "stale_owner")));
+	EXPECT_EQ(1u, delta(LabeledSeries("scene_player_inbox_deferral_starts_total", "reason", "stale_owner")));
+	EXPECT_EQ(1u, delta(LabeledSeries("scene_player_inbox_leave_ack_total", "result", "fetch_inflight")));
 }

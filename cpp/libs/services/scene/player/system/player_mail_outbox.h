@@ -31,6 +31,11 @@
 #include "entt/src/entt/entity/entity.hpp"
 #include "mail_outbox_rules.h"
 
+namespace prometheus_text
+{
+	class Writer;
+}
+
 namespace mailpb
 {
 	class SendMailRequest;
@@ -145,4 +150,11 @@ public:
 	};
 	// 换掉依赖:没填的成员用生产实现补齐,传 {} 即全部恢复生产实现。生产代码不调用。
 	static void SetDependenciesForTest(Dependencies dependencies);
+
+	// 重试不会自己好的寄送失败按原因导出为 scene_mail_outbox_stuck_total{reason}(2026-11-27 起,原来只有
+	// metric=mail_outbox_stuck 日志;reason ∈ no_secret / invalid_entry / sign_failed / signature_rejected / mail_rejected,
+	// 每项以 0 起步)。每一次失败的尝试都计,不跟日志限频。告警 SceneMailOutboxStuck 在 deploy/k8s/battle-settlement-alerts.yaml。
+	static void WriteMetrics(prometheus_text::Writer& writer);
+	// scene 启动时调一次;重复登记只打一行 ERROR。
+	static void RegisterMetrics();
 };

@@ -181,7 +181,7 @@ kubectl -n <namespace> run nofile-probe --rm -i --restart=Never --image=<节点�
 **运维豁免开关 `NODE_OPEN_FILE_LIMIT_MODE`**:
 
 - 取值 `enforce`(缺省;未设置、空串同)与 `warn`,只认小写。其他值一律按 `enforce` 处理,并打一行 `[open_file_limit] WARN invalid NODE_OPEN_FILE_LIMIT_MODE='...', falling back to enforce`——拼错开关不会意外放行。
-- `warn`:不够也继续启动,stdout 与日志各打一行 `[open_file_limit] WARN exemption active (NODE_OPEN_FILE_LIMIT_MODE=warn): role=... soft=... required=... shortfall=...`。该节点能承载的连接数以实际软限为准,超出的连接在 accept 时 EMFILE(G7 / G8 那一串),所以只用于应急,不是常态配置。C++ 节点没有指标出口,豁免只能从这行日志查到。
+- `warn`:不够也继续启动,stdout 与日志各打一行 `[open_file_limit] WARN exemption active (NODE_OPEN_FILE_LIMIT_MODE=warn): role=... soft=... required=... shortfall=...`。该节点能承载的连接数以实际软限为准,超出的连接在 accept 时 EMFILE(G7 / G8 那一串),所以只用于应急,不是常态配置。豁免是否生效另由节点的 Prometheus 出口导出为 `cpp_node_open_file_limit_exempted`(1 = 带豁免运行),带豁免运行超过 1 小时由 `CppNodeOpenFileLimitExempted` 告警(2026-11-27 订正:原文写「C++ 节点没有指标出口,豁免只能从这行日志查到」,11-12 加了出口之后已不成立)。
   - **2026-10-18 更正(上一条把 warn 的后果说轻了)**:gate 的准入闸门在 accept 拿到 fd **之后**才判(`client_message_processor.cpp` 按 `GateMaxConnections` 计数后 forceClose),准入上限没调时,客户端连接会先把整个 fd 表吃满。此后凡是要新 fd 的路径都会 EMFILE:节点间断线重连(scene / scene_manager)、Redis / Kafka 重连、etcd 通道重连(租约续不上就过期,gate 被摘除,玩家全掉);muduo 异步日志按大小或按天滚动时 `FileUtil::AppendFile` 的 fopen 失败,Debug 下 assert 直接 abort,Release 下接着对空指针 setbuffer 段错误(`third_party/muduo-linux/muduo/base/FileUtil.cc`)。也就是说,warn 是把「启动时拒启」换成「运行到某个时刻被摘除或崩溃」,不只是新连接被拒。操作口径:
     - **gate / battle 的应急首选是调低准入上限,不需要豁免**:把 `GateMaxConnections` / `BattleMaxConnections` 调到 ≤ 实际软限 − 4096(经 ConfigMap 下发)并加台数补容量,此时需求 ≤ 软限,检查本身就通过,`verdict=ok`;
     - 不调上限、只开 warn:后果如上,只能作为「必须先起服、几小时内改硬限」的短时手段,并盯日志里的 `EMFILE` / `Too many open files` 与 etcd 摘除;

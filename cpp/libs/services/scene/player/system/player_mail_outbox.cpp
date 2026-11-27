@@ -1,8 +1,11 @@
 #include "player/system/player_mail_outbox.h"
 
+#include <array>
+#include <atomic>
 #include <cstdlib>
 #include <iterator>
 #include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -14,6 +17,7 @@
 #include "core/network/grpc_client_call.h"
 #include "core/security/service_call_auth.h"
 #include "core/security/token_security.h"
+#include "engine/core/metrics/metrics_registry.h"
 #include "grpc_client/mail/mail_admin_grpc_client.h"
 #include "modules/id_segment/guid_segment_registry.h"
 #include "node/system/grpc_call_deadline.h"
@@ -54,6 +58,48 @@ namespace
 	constexpr const char* kSendVerdictNames[] = {"delivered", "rejected", "unknown", "terminal_drop"};
 	static_assert(std::size(kSendVerdictNames) == static_cast<std::size_t>(SendVerdict::kCount),
 				  "kSendVerdictNames 与 SendVerdict 逐项对应");
+
+	// 重试不会自己好的寄送失败(metric=mail_outbox_stuck 那一类),按原因累计,WriteMetrics 导出为
+	// scene_mail_outbox_stuck_total{reason}。每一次失败的尝试都计,不跟日志的「第 1 次与每 8 次」节拍:失败按最长 5 分钟一次
+	// 重试,所以问题还在时 10 分钟窗口里的增量一定大于 0,告警不会因为日志限频而时亮时灭。只在 scene loop 线程写。
+	enum class StuckReason : uint8_t
+	{
+		kNoSecret,          // 没配发件密钥(SendStart::kNoSecret)
+		kInvalidEntry,      // 条目形状不合法(SendStart::kInvalidEntry)
+		kSignFailed,        // 本地签名失败(SendStart::kSignFailed)
+		kSignatureRejected, // 邮件验签不过:两边密钥不同或时钟相差超过 5 分钟
+		kMailRejected,      // 邮件判附件无效 / 请求冲突 / 参数错(NeedsManualFollowUp)
+
+		kCount
+	};
+	constexpr const char* kStuckReasonNames[] = {"no_secret", "invalid_entry", "sign_failed", "signature_rejected", "mail_rejected"};
+	static_assert(std::size(kStuckReasonNames) == static_cast<std::size_t>(StuckReason::kCount),
+				  "kStuckReasonNames 与 StuckReason 逐项对应");
+	std::array<std::atomic<uint64_t>, static_cast<std::size_t>(StuckReason::kCount)> gStuckSends{};
+
+	void CountStuckSend(const StuckReason reason)
+	{
+		gStuckSends[static_cast<std::size_t>(reason)].fetch_add(1, std::memory_order_relaxed);
+	}
+
+	// 本地没发出去的那几种里,哪些重试不会自己好(没有就绪 mail 节点是短暂的,不算)。
+	std::optional<StuckReason> StuckReasonOf(const SendStart started)
+	{
+		switch (started)
+		{
+		case SendStart::kNoSecret:
+			return StuckReason::kNoSecret;
+		case SendStart::kInvalidEntry:
+			return StuckReason::kInvalidEntry;
+		case SendStart::kSignFailed:
+			return StuckReason::kSignFailed;
+		case SendStart::kSent:
+		case SendStart::kNoReadyNode:
+		case SendStart::kCount:
+			break;
+		}
+		return std::nullopt;
+	}
 
 	// 寄送的按需状态(只在内存,docs/design/ecs-component-access-rules.md「按需状态」):至多一封在途,失败退避。
 	// Tick 第一次处理这名玩家的待寄条目(寄送或请求存盘)时建;待寄队列寄空时摘;实体销毁自然清理。只由本文件读写。
@@ -236,6 +282,10 @@ namespace
 			return;
 		}
 		RecordFailure(state, /*rejected=*/false, nowMs);
+		if (const auto stuck = StuckReasonOf(started))
+		{
+			CountStuckSend(*stuck);
+		}
 		if (!mail_outbox_rules::IsFailureLogDue(state.failStreak))
 		{
 			return;
@@ -549,7 +599,8 @@ void PlayerMailOutboxSystem::OnSendDone(const uint64_t playerId, const uint64_t 
 		if (verdict == SendVerdict::kRejected && (outcome.signatureRejected || mail_outbox_rules::NeedsManualFollowUp(outcome.tipId)))
 		{
 			// 每次都打,不走下面「第 1 次与每 8 次」的节拍:这类拒收按 30 秒起、封顶 5 分钟的间隔重试,一条卡住的条目
-			// 至多 5 分钟一行,值班查询 metric=mail_outbox_stuck 的 [10m] 窗口里始终看得到。限频的话封顶后 40 分钟才一行。
+			// 至多 5 分钟一行,排查时按 player_id / request_id 找得到。告警读同一处的计数(scene_mail_outbox_stuck_total)。
+			CountStuckSend(outcome.signatureRejected ? StuckReason::kSignatureRejected : StuckReason::kMailRejected);
 			LOG_ERROR << "[MailOutbox] metric=mail_outbox_stuck player_id=" << playerId << " request_id=" << requestId
 					  << " reason=" << (outcome.signatureRejected ? "signature_rejected" : "mail_rejected")
 						  << " tip=" << outcome.tipId << " fail_streak=" << state->failStreak
@@ -613,4 +664,25 @@ void PlayerMailOutboxSystem::OnSendDone(const uint64_t playerId, const uint64_t 
 void PlayerMailOutboxSystem::SetDependenciesForTest(Dependencies dependencies)
 {
 	Deps() = WithDefaults(std::move(dependencies));
+}
+
+void PlayerMailOutboxSystem::WriteMetrics(prometheus_text::Writer& writer)
+{
+	writer.BeginFamily("scene_mail_outbox_stuck_total",
+					   "Battle overflow mail send attempts on this scene node since process start that failed in a way retrying "
+					   "will not fix, by reason (same events as the metric=mail_outbox_stuck log lines, counted on every attempt); "
+					   "the items stay owed in the player's outbox and are retried with backoff.",
+					   prometheus_text::MetricType::kCounter);
+	for (std::size_t i = 0; i < gStuckSends.size(); ++i)
+	{
+		writer.Sample({{"reason", kStuckReasonNames[i]}}, gStuckSends[i].load(std::memory_order_relaxed));
+	}
+}
+
+void PlayerMailOutboxSystem::RegisterMetrics()
+{
+	if (!GlobalMetricsRegistry().Register("scene_mail_outbox", &PlayerMailOutboxSystem::WriteMetrics))
+	{
+		LOG_ERROR << "[Metrics] collector scene_mail_outbox is already registered";
+	}
 }

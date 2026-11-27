@@ -3390,9 +3390,11 @@ Test-Case 'LogQL 契约:告警文件里 C++ 侧的固定查询只用 C++ 日志 
 
     # 固定查询一律带行过滤,所以选择器 = 后面紧跟 |= / |~ 的 {...}。PromQL 不用 |,文件头说明里举的反例后面也不跟 |,都不会被抽到。
     # MinSelectors 是各文件当前的条数:少了说明写法变了、本用例抽不到,先查是不是漏核。
+    # 2026-11-27:asset-channel 的十条信号导出成指标、改成 PromQL 规则(battle-settlement-alerts.yaml / persist-version-skew-alerts.yaml),
+    # 只剩停机时才打的 battle_sql_outcome_unflushed_at_shutdown 一条(进程随即退出,抓取等不到计数)。
     $alertFiles = @(
         @{ Path = 'deploy/k8s/player-inbox-alerts.yaml'; MinSelectors = 9; Prefix = '^job="cpp_nodes", service="scene"' },
-        @{ Path = 'deploy/k8s/asset-channel-alerts.yaml'; MinSelectors = 6; Prefix = '^job="cpp_nodes", service="(scene|battle)"' },
+        @{ Path = 'deploy/k8s/asset-channel-alerts.yaml'; MinSelectors = 1; Prefix = '^job="cpp_nodes", service="(scene|battle)"' },
         @{ Path = 'deploy/k8s/data-service-audit-alerts.yaml'; MinSelectors = 1; Prefix = '^job="cpp_nodes", service="scene"' }
     )
     foreach ($file in $alertFiles) {

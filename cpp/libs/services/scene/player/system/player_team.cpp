@@ -199,20 +199,26 @@ namespace
 		return it != sessions.end() && it->second == playerId;
 	}
 
+	// 跳过计数(team_follow_stats)与下面每行日志一一对应;日志里的 reason= 字面量就是指标的 reason 标签取值。
+	using team_follow_stats::SkipReason;
+
 	bool CanFollow(entt::entity player, uint64_t playerId)
 	{
 		if (PlayerBattleSystem::IsInBattle(player))
 		{
+			team_follow_stats::CountSkipped(SkipReason::kInBattle);
 			LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=in_battle player_id=" << playerId;
 			return false;
 		}
 		if (IsOwnershipInFlight(player))
 		{
+			team_follow_stats::CountSkipped(SkipReason::kOwnershipInFlight);
 			LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=ownership_in_flight player_id=" << playerId;
 			return false;
 		}
 		if (IsSceneChangeInFlight(player))
 		{
+			team_follow_stats::CountSkipped(SkipReason::kSceneChangeInFlight);
 			LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=scene_change_in_flight player_id=" << playerId;
 			return false;
 		}
@@ -431,6 +437,8 @@ void PlayerTeamSystem::OnClientFollowRequest(entt::entity player, bool follow)
 	{
 		return;
 	}
+	team_follow_stats::CountIntentChange(follow ? team_follow_stats::IntentChange::kClientFollow
+												: team_follow_stats::IntentChange::kClientLeave);
 	LOG_INFO << "[PlayerTeam] metric=team_follow_intent follow=" << follow << " player_id=" << GuidOf(player);
 	TeamFollowSystem::SetFollowIntent(player, follow);
 	if (!follow)
@@ -458,6 +466,7 @@ void PlayerTeamSystem::OnOfflineHostingStarted(entt::entity player)
 	//   1. team == nullptr:跨节点托管落点刚建出实体,EnterScene 里的 ReadMembership 还没回包,
 	//      先挂意图才能在回包到达时立即接到队长身后(否则 Probe 先于 ReadMembership 完成会永久丢意图);
 	//   2. team->team_id() != 0:已在队里(含当前是队长 —— 若托管期间队长被惰性转让,刷新到达后立即跟上新队长)。
+	team_follow_stats::CountIntentChange(team_follow_stats::IntentChange::kOfflineHosting);
 	LOG_INFO << "[PlayerTeam] metric=team_follow_intent follow=1 source=offline_hosting player_id=" << GuidOf(player);
 	TeamFollowSystem::SetFollowIntent(player, true);
 	if (TeamFollowSystem::IsDriven(player))
@@ -499,6 +508,8 @@ void PlayerTeamSystem::OnOfflineHostingHeartbeat(entt::entity player)
 		return;
 	}
 	// 战斗、交接、换图在途由跟随链自己的守卫挡(CanFollow),这里不重复判。只记 DEBUG:没接上的托管队员每个周期都会走到这里。
+	// 计数不受日志级别影响:一直没接上的托管队员在指标里看得见。
+	team_follow_stats::CountRecheck(team_follow_stats::RecheckReason::kHostingHeartbeat);
 	LOG_DEBUG << "[PlayerTeam] metric=team_follow_recheck reason=hosting_heartbeat player_id=" << GuidOf(player);
 	RefreshAndFollow(player);
 }
@@ -513,6 +524,7 @@ void PlayerTeamSystem::FollowAfterLeaderSettled()
 	// 取走的是一份复用缓冲的引用;RefreshAndFollow 只发异步读,不会在本循环里回到 TakeFollowersWithSettledLeader。
 	for (const auto follower : TeamFollowSystem::TakeFollowersWithSettledLeader())
 	{
+		team_follow_stats::CountRecheck(team_follow_stats::RecheckReason::kLeaderSettled);
 		LOG_INFO << "[PlayerTeam] metric=team_follow_recheck reason=leader_settled player_id=" << GuidOf(follower);
 		RefreshAndFollow(follower);
 	}
@@ -655,11 +667,13 @@ cobalt::task<void> PlayerTeamFollowScope::State::FollowLeaderAsync(std::shared_p
 	}
 	if (lock->status == GetStatus::kError || lock->status == GetStatus::kRejected || lock->status == GetStatus::kNoReply)
 	{
+		team_follow_stats::CountSkipped(SkipReason::kRedisError);
 		LOG_WARN << "[PlayerTeam] metric=team_follow_skipped reason=redis_error player_id=" << playerId;
 		co_return;
 	}
 	if (lock->status != GetStatus::kNil)
 	{
+		team_follow_stats::CountSkipped(SkipReason::kBattleLock);
 		LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=battle_lock player_id=" << playerId;
 		co_return;
 	}
@@ -676,6 +690,7 @@ cobalt::task<void> PlayerTeamFollowScope::State::FollowLeaderAsync(std::shared_p
 	}
 	if (location->status == GetStatus::kRejected || location->status == GetStatus::kNoReply)
 	{
+		team_follow_stats::CountSkipped(SkipReason::kRedisError);
 		LOG_WARN << "[PlayerTeam] metric=team_follow_skipped reason=redis_error player_id=" << playerId;
 		co_return;
 	}
@@ -691,6 +706,7 @@ cobalt::task<void> PlayerTeamFollowScope::State::FollowLeaderAsync(std::shared_p
 	}
 	if (leaderLocation.zone_id() != GetZoneId())
 	{
+		team_follow_stats::CountSkipped(SkipReason::kCrossZone);
 		LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=cross_zone player_id=" << playerId
 				 << " leader_id=" << leaderId << " leader_zone_id=" << leaderLocation.zone_id();
 		co_return;
@@ -724,6 +740,7 @@ cobalt::task<void> PlayerTeamFollowScope::State::FollowLeaderAsync(std::shared_p
 	}
 	if (!liveSession && !hostedIdentity)
 	{
+		team_follow_stats::CountSkipped(SkipReason::kSessionNotLive);
 		LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=session_not_live player_id=" << playerId
 				 << " leader_scene_id=" << leaderSceneId;
 		co_return;

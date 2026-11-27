@@ -19,8 +19,10 @@
 # 所有实例消费同一个消费组,lag / lag_max_partition / retention_gap 是 broker 视角的组级数值,每个实例报同一个数,一律取 max。
 # 例外:某个实例探针失败时它的 gauge 保留上一次的值(陈值),照样参与 max —— 由按实例触发的 DataServiceAuditLagProbeBlind 点名。
 #
-# C++ 生产端的发送失败(快照超过约 1MB 在 produce() 本地被拒、broker 不可达)不在 Prometheus:scene 没有指标端点。
-# 值班固定查询(Loki):{job="cpp_nodes", service="scene"} |= "[SnapshotSystem] Kafka send failed"。
+# C++ 生产端的发送失败(快照超过约 1MB 在 produce() 本地被拒、broker 不可达)由节点的 Prometheus 出口按进程计数
+# (cpp_node_kafka_producer_failures_total{reason=delivery_failed|produce_rejected},2026-11-27 起),告警 CppNodeKafkaProduceFailing
+# (deploy/k8s/cpp-node-dependency-alerts.yaml)。那个计数不分 topic,确认是不是快照这一路用下面的日志查询(定位用,不是告警):
+# {job="cpp_nodes", service="scene"} |= "[SnapshotSystem] Kafka send failed"。
 # C++ 日志流没有 app 标签,写成 {app="scene"} 恒为空;选择器写法见 player-inbox-alerts.yaml,
 # 契约测试 k8s_deploy_contract.tests.ps1「LogQL 契约」核对这一条。
 #

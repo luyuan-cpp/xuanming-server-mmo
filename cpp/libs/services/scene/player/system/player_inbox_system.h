@@ -64,15 +64,38 @@ namespace player_inbox
 	class AckPlayerInboxResponse;
 } // namespace player_inbox
 
+namespace prometheus_text
+{
+	class Writer;
+} // namespace prometheus_text
+
 class PlayerInboxSystem
 {
 public:
 	// Tick 的周期(秒)。scene main 用它注册定时器。
 	static constexpr double kTickIntervalSec = 1.0;
 
-	// 启动时调一次(Node 构造之后、配置已加载):注册表自检,失败则本节点停用消费(不阻断启动,IB-7),
-	// 并打一行生效配置。配置开关关着时这一行是 WARN `metric=inbox_consumer_disabled`(评审 H1),之后由 Tick 补打。
+	// 启动时调一次(Node 构造之后、配置已加载):先把 WriteMetrics 登记进进程的指标注册表,再做注册表自检,
+	// 失败则本节点停用消费(不阻断启动,IB-7),并打一行生效配置。配置开关关着时这一行是 WARN
+	// `metric=inbox_consumer_disabled`(评审 H1),之后由 Tick 补打。重复调用(只有单测这样做)不会重复登记:
+	// 注册表按名字拒绝,打一行 ERROR。
 	static void Initialize();
+
+	// ── 指标(2026-11-27,docs/design/player-inbox-service.md §9.4.1)──
+	// 把原来只进日志的收件箱信号写进一次 /metrics 抓取(engine/core/metrics,出口由 MMORPG_METRICS_PORT 打开)。
+	// 采集回调跑在 scene 主 loop 上,与写计数、读 tlsEcs 是同一个线程;只读,不改任何状态。日志行照打不变
+	// (带 player_id 供排查),指标只是第二个读者。标签全部取封闭名表,玩家号不进指标;进程启动即以 0 导出,
+	// 没发生过的取值也有样本。导出的族:
+	//   scene_player_inbox_consumer_enabled               gauge,配置开关 player_inbox.consumer_enabled(1 开 / 0 关)
+	//   scene_player_inbox_registry_broken                gauge,注册表自检失败、本节点停用消费时为 1
+	//   scene_player_inbox_halted_player_domains{reason}  gauge,此刻停用的 (玩家, 域) 数,reason 取 kPlayerInboxHaltReasonNames(不含 none)
+	//   scene_player_inbox_ledger_invalid_players         gauge,此刻收件箱因账本无效停着的玩家数(加载判坏挂了标签,或已落地却缺账本组件)
+	//   scene_player_inbox_events_total{event}            counter,event 取 player_inbox_rules::kConsumerEventNames
+	//   scene_player_inbox_deferral_starts_total{reason}  counter,延后原因变成 reason 的次数(即 metric=inbox_deferred 的行数),
+	//                                                     reason 取 kPlayerInboxDeferReasonNames(不含 none)
+	//   scene_player_inbox_leave_ack_total{result}        counter,result 取 player_inbox_rules::kLeaveAckResultNames
+	// 告警在 deploy/k8s/player-inbox-alerts.yaml 的 scene.player-inbox 组。
+	static void WriteMetrics(prometheus_text::Writer &writer);
 
 	// ── 触发入口 ──
 	static void OnPlayerLanded(entt::entity player);

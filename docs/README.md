@@ -464,6 +464,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 
 #### 未分类
 
+- [actor-isolation-review-20261127.md](design/actor-isolation-review-20261127.md) — Actor 隔离改造（2026-11-27 Gemini 批次）审阅结论
 - [cpp-node-fd-exhaustion-handling.md](design/cpp-node-fd-exhaustion-handling.md) — C++ 节点文件描述符耗尽的处置：启动门槛、用量告警、accept 降级与崩溃原因可见 (2026-11-26)
 - [craft-proxy-offline-and-support-enhance.md](design/craft-proxy-offline-and-support-enhance.md) — 跨节点/离线名匠代打与控辅强化公平受益设计
 - [craft-proxy-reputation-digest-and-hot-ranking.md](design/craft-proxy-reputation-digest-and-hot-ranking.md) — 离线名匠口碑雅号异步回账、营业战报与西市极品热榜设计方案

@@ -220,9 +220,10 @@ void PlayerDatabaseMessageFieldsUnmarshal(entt::entity player, const player_data
 	// 不改写原数据 —— 拿坏账本继续记账会让不幂等的挂欠款被重复执行(设计 §8 #19)。
 	auto& inboxLedger = tlsEcs.actorRegistry.emplace<PlayerInboxLedgerComp>(player, message.inbox_ledger());
 	if (auto err = player_inbox_rules::ValidateLedger(inboxLedger); !err.empty()) {
-		// metric= 标记供日志告警(评审 L13):这名玩家的处置会一直不执行,而表面上与离线无异。这一行每次加载只打一次,
-		// 告警靠前置闸按同一标记周期性补打的 WARN(source=apply_gate)持续亮着,节拍对齐 [10m] 窗口
-		// (player_inbox_rules::kStuckWarnEveryFailures,评审 F3)。修复时不要清空账本重建:那会让已执行过的处置再执行一次。
+		// metric= 标记(评审 L13):这名玩家的处置会一直不执行,而表面上与离线无异。这一行每次加载只打一次,带 reason=。
+		// 告警不数日志:下面挂的标签在实体存活期间一直在,PlayerInboxSystem::WriteMetrics 抓取时按它现算
+		// scene_player_inbox_ledger_invalid_players(2026-11-27 起);在线期间前置闸另按节拍补打 WARN(source=apply_gate)供按人排查。
+		// 修复时不要清空账本重建:那会让已执行过的处置再执行一次。
 		LOG_ERROR << "[PlayerInbox] metric=inbox_ledger_invalid source=loader player_id=" << message.player_id()
 				  << " reason=" << err << "; ledger corrupted, inbox consumption disabled for this player";
 		tlsEcs.actorRegistry.emplace_or_replace<PlayerInboxLedgerInvalidComp>(player);

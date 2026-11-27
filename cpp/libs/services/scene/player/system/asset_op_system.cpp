@@ -1,6 +1,7 @@
 #include "player/system/asset_op_system.h"
 
 #include <array>
+#include <atomic>
 #include <iterator>
 #include <limits>
 #include <optional>
@@ -14,6 +15,7 @@
 #include "muduo/base/Logging.h"
 
 #include "battle/system/player_battle.h"
+#include "engine/core/metrics/metrics_registry.h"
 #include "engine/core/time/system/time.h"
 #include "engine/core/utils/proto/unknown_field_carry.h"
 #include "modules/bag/bag_service.h"
@@ -46,6 +48,35 @@
 
 namespace
 {
+// ── 进程计数(2026-11-27 起导出,原来只有日志)──────────────────────────────────────
+// 每项与一条同名日志同一处计数,AssetOpSystem::WriteMetrics 导出;日志带 player_id / seq 供排查,指标不带。
+// 写只在 scene loop 线程,relaxed 原子。新增只追加在 kCount 之前并同步名表(告警按名字读)。
+
+// 资产通道遇到本版本解释不了的东西、回 RETRY + kFeatureUnavailable(metric=persist_version_skew where=…)。
+enum class VersionSkewWhere : uint8_t
+{
+	kDebit,      // where=asset_debit:按数量扣出,只有算上带更新版本字段的物品才够
+	kRecallDebt, // where=asset_recall_debt
+	kRecall,     // where=asset_recall
+	kRequest,    // where=asset_request:请求带本版本不认识的字段
+	kCurrency,   // where=asset_currency:包里的币种本版本不认识
+	kConfig,     // where=asset_config:物品 / 宝宝配置号不在本节点的表里(更新版本或尚未热更)
+	kCount
+};
+constexpr const char* kVersionSkewWhereNames[] = {"asset_debit", "asset_recall_debt", "asset_recall",
+												  "asset_request", "asset_currency",    "asset_config"};
+static_assert(std::size(kVersionSkewWhereNames) == static_cast<std::size_t>(VersionSkewWhere::kCount),
+			  "kVersionSkewWhereNames 与 VersionSkewWhere 逐项对应");
+std::array<std::atomic<uint64_t>, static_cast<std::size_t>(VersionSkewWhere::kCount)> gVersionSkew{};
+
+void CountVersionSkew(const VersionSkewWhere where)
+{
+	gVersionSkew[static_cast<std::size_t>(where)].fetch_add(1, std::memory_order_relaxed);
+}
+
+// 归属未铸造(owner_epoch == 0 或组件缺失)而回 RETRY + kAssetFrozen 的请求(日志 "[AssetOp] blocked: owner_epoch unknown")。
+std::atomic<uint64_t> gBlockedOwnerEpochUnknown{0};
+
 // ── RPC ─────────────────────────────────────────────────────────────────────
 
 // 三个入口的差别只有:允许的流方向、是否校验 tx 白名单、应用段做什么。
@@ -841,6 +872,7 @@ void ApplyDebit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const 
 	}
 	if (quantityVersionSkew)
 	{
+		CountVersionSkew(VersionSkewWhere::kDebit);
 		LOG_WARN << "[AssetOp] metric=persist_version_skew where=asset_debit player_id=" << request.player_id()
 				 << " seq=" << request.seq() << " correlation_id=" << request.correlation_id()
 				 << "; items carrying newer-version fields are not debited by quantity, answering RETRY";
@@ -986,6 +1018,7 @@ void ApplyCurrencyRecall(entt::entity player, PlayerAssetOpLedgerComp& ledgerCom
 	// 挂不上欠款的情况要判在扣钱之前。欠款带新版本字段是版本错位,不是确定性失败:回 RETRY、不记账,等玩家落到认识这些字段的节点。
 	if (debt > 0 && CurrencySystem::DebtCarriesUnknownFields(player, type))
 	{
+		CountVersionSkew(VersionSkewWhere::kRecallDebt);
 		LOG_WARN << "[AssetOp] metric=persist_version_skew where=asset_recall_debt player_id=" << request.player_id()
 				 << " seq=" << request.seq() << " currency_type=" << currency.currency_type()
 				 << "; existing debt carries fields unknown to this version, answering RETRY";
@@ -1143,6 +1176,7 @@ void ApplyItemRecall(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, c
 	}
 	if (countable < requested && uncountable)
 	{
+		CountVersionSkew(VersionSkewWhere::kRecall);
 		LOG_WARN << "[AssetOp] metric=persist_version_skew where=asset_recall player_id=" << request.player_id()
 				 << " seq=" << request.seq() << " correlation_id=" << request.correlation_id()
 				 << " config_id=" << configId << "; items carrying newer-version fields are not recalled, answering RETRY";
@@ -1635,6 +1669,7 @@ void Decide(AssetOpRpc rpc, const ::AssetOpRequest& request, ::AssetOpResponse& 
 		// 不用 kAssetBlocked,那是货币封禁的文案。区分靠下面这行日志的固定关键字(告警按它计数,
 		// 08-save-owner-fence.md §8.2.4)。WARN 而非 ERROR:兼容窗口内这是预期状态,该响的是它在共享环境出现。
 		const auto* ownerEpoch = tlsEcs.actorRegistry.try_get<PlayerOwnerEpochComp>(player);
+		gBlockedOwnerEpochUnknown.fetch_add(1, std::memory_order_relaxed);
 		LOG_WARN << "[AssetOp] blocked: owner_epoch unknown rpc=" << RpcName(rpc)
 				 << " player_id=" << request.player_id() << " stream=" << static_cast<int>(request.stream())
 				 << " seq=" << request.seq()
@@ -1710,6 +1745,7 @@ void Decide(AssetOpRpc rpc, const ::AssetOpRequest& request, ::AssetOpResponse& 
 	//     或尚未热更到本节点的行。之后的应用段因此可以假定每个配置号都查得到行。
 	if (std::string newerField; unknown_field_carry::TreeCarriesNewerVersionFields(request, &newerField))
 	{
+		CountVersionSkew(VersionSkewWhere::kRequest);
 		LOG_WARN << "[AssetOp] metric=persist_version_skew where=asset_request rpc=" << RpcName(rpc)
 				 << " player_id=" << request.player_id() << " stream=" << static_cast<int>(request.stream())
 				 << " seq=" << request.seq() << " field=" << newerField
@@ -1719,6 +1755,7 @@ void Decide(AssetOpRpc rpc, const ::AssetOpRequest& request, ::AssetOpResponse& 
 	}
 	if (const auto* unknown = FindCurrencyUnknownToThisVersion(request.bundle()); unknown != nullptr)
 	{
+		CountVersionSkew(VersionSkewWhere::kCurrency);
 		LOG_WARN << "[AssetOp] metric=persist_version_skew where=asset_currency rpc=" << RpcName(rpc)
 				 << " player_id=" << request.player_id() << " stream=" << static_cast<int>(request.stream())
 				 << " seq=" << request.seq() << " currency_type=" << unknown->currency_type()
@@ -1728,6 +1765,7 @@ void Decide(AssetOpRpc rpc, const ::AssetOpRequest& request, ::AssetOpResponse& 
 	}
 	if (const auto unknownConfig = FindConfigUnknownToThisVersion(request.bundle()); unknownConfig.has_value())
 	{
+		CountVersionSkew(VersionSkewWhere::kConfig);
 		LOG_WARN << "[AssetOp] metric=persist_version_skew where=asset_config rpc=" << RpcName(rpc)
 				 << " player_id=" << request.player_id() << " stream=" << static_cast<int>(request.stream())
 				 << " seq=" << request.seq() << " table=" << unknownConfig->table << " config_id=" << unknownConfig->id
@@ -1866,4 +1904,30 @@ void PlayerAssetOpSystem::SetSecretLookupForTest(AssetOpSecretLookup fn)
 void PlayerAssetOpSystem::SetNowFnForTest(NowMsFn fn)
 {
 	g_nowMsFn = (fn == nullptr) ? &DefaultNowMs : fn;
+}
+
+void PlayerAssetOpSystem::WriteMetrics(prometheus_text::Writer& writer)
+{
+	writer.BeginFamily("scene_asset_op_version_skew_total",
+					   "Asset channel requests on this scene node since process start answered RETRY with kFeatureUnavailable "
+					   "because this version cannot interpret them, by where (same as the metric=persist_version_skew "
+					   "where=asset_* log lines); expected only while a rollout or hot reload is in progress.",
+					   prometheus_text::MetricType::kCounter);
+	for (std::size_t i = 0; i < gVersionSkew.size(); ++i)
+	{
+		writer.Sample({{"where", kVersionSkewWhereNames[i]}}, gVersionSkew[i].load(std::memory_order_relaxed));
+	}
+	writer.BeginFamily("scene_asset_op_owner_epoch_unknown_total",
+					   "Asset channel requests on this scene node since process start answered RETRY because the player's "
+					   "ownership epoch was never minted (owner_epoch 0 or missing); should stay 0.",
+					   prometheus_text::MetricType::kCounter);
+	writer.Sample({}, gBlockedOwnerEpochUnknown.load(std::memory_order_relaxed));
+}
+
+void PlayerAssetOpSystem::RegisterMetrics()
+{
+	if (!GlobalMetricsRegistry().Register("scene_asset_op", &PlayerAssetOpSystem::WriteMetrics))
+	{
+		LOG_ERROR << "[Metrics] collector scene_asset_op is already registered";
+	}
 }

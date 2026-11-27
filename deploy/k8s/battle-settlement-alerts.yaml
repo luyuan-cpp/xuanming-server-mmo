@@ -1,30 +1,38 @@
-# 战斗结算收尾的告警:battle 节点上 SQL 终局迟迟没有决定的房间,scene 节点上冻结到期续冻到上限、道具预留与普通生死状待退银两超期。
+# 战斗结算收尾的告警。battle 节点:SQL 终局迟迟没有决定的房间、终局提交密钥缺失、个人结算原件出错;scene 节点:冻结到期续冻到上限、
+# 道具预留与普通生死状待退银两超期、向 match 查终局持续未知、物品号段不够发掉落、战斗掉落改投邮件寄不出去。
 #
-# 2026-11-27 起由原来的 LogQL 值班固定查询改成 PromQL 规则(deploy/k8s/asset-channel-alerts.yaml 文件头原有的四条:
-# battle_personal_settlement_staging_exhausted_rooms / battle_freeze_hold_cap_reached / battle_item_hold_overdue /
-# jianghu_duel_fee_overdue)。原因:那四个信号已经导出成指标,而 Loki ruler 还没接线,固定查询不会自己响;
-# 改成 PromQL 就由 Prometheus 直接评估。日志行保留不动:它们带 battle_id / player_id,是按局排查的入口(下面各条 description 写了怎么查),
-# 但不再各自作为告警。
+# 2026-11-27 起由原来的 LogQL 值班固定查询改成 PromQL 规则(deploy/k8s/asset-channel-alerts.yaml 文件头原有的九条)。原因:那些信号已经
+# 导出成指标,而 Loki ruler 还没接线,固定查询不会自己响;改成 PromQL 就由 Prometheus 直接评估。日志行保留不动:它们带 battle_id /
+# player_id,是按局排查的入口(下面各条 description 写了怎么查),但不再各自作为告警。没改的只有
+# metric=battle_sql_outcome_unflushed_at_shutdown:它在进程退出前那一刻才打,之后进程就不在了,抓取等不到计数,只能留在日志查询里。
 #
 # 指标由 C++ 节点的 Prometheus 出口导出(环境变量 MMORPG_METRICS_PORT,k8s_deploy.ps1 -CppMetricsPort 缺省 9400,
 # 抓取注解随 Pod 模板渲染;battle 的 Agones Fleet 与 hostPort Deployment 两种形态都开):
-#   battle_sql_outcome_stuck_rooms          gauge,battle 节点上 SQL 终局迟迟没有决定的房间(抓取时按房间表现数,与 60s 一行的
-#                                           metric=battle_personal_settlement_staging_exhausted_rooms 的 sql_unconfirmed 同一判据);
-#                                           定义在 cpp/nodes/battle/logic/battle_room_manager.cpp 的 BattleRoomManager::CollectMetrics。
-#                                           同一采集回调另导出 battle_rooms(本节点房间总数,即提醒行的 node_rooms)
-#   scene_battle_freeze_events_total{event} counter,scene 节点上冻结 reaper 的事件,event 取 battle_freeze_hold::kFreezeHoldEventNames
-#                                           (cpp/libs/services/scene/battle/system/battle_freeze_hold_rules.h);每次计数与一条同名结构化日志同一处,
-#                                           定义在 cpp/libs/services/scene/battle/system/player_battle.cpp 的 WriteBattleFreezeMetrics
+#   battle 侧(cpp/nodes/battle/logic/battle_room_manager.cpp 的 BattleRoomManager::CollectMetrics):
+#     battle_sql_outcome_stuck_rooms               gauge,SQL 终局迟迟没有决定的房间(抓取时按房间表现数,与 60s 一行的
+#                                                  metric=battle_personal_settlement_staging_exhausted_rooms 的 sql_unconfirmed 同一判据);
+#                                                  同一采集回调另导出 battle_rooms(本节点房间总数,即提醒行的 node_rooms)
+#     battle_sql_outcome_signing_key_ready         gauge,终局提交密钥此刻是否可用(抓取时现判)。原来的日志只在第一次缺失时打一行,
+#                                                  10 分钟后 LogQL 就灭了,而密钥一直缺着;gauge 才反映「一直缺」
+#     battle_settlement_source_failures_total{kind} counter,kind ∈ invalid / missing / member_mismatch
+#   scene 侧(cpp/libs/services/scene/battle/system/player_battle.cpp 的 WriteBattleFreezeMetrics / WriteBattleSettlementMetrics,
+#   cpp/libs/services/scene/player/system/player_mail_outbox.cpp 的 PlayerMailOutboxSystem::WriteMetrics):
+#     scene_battle_freeze_events_total{event}      冻结 reaper 的事件,event 取 battle_freeze_hold::kFreezeHoldEventNames
+#     scene_battle_terminal_query_unknown_total    向 match 查 SQL 终局回答未知(battle_terminal_query::UnknownAnswers)
+#     scene_battle_settlement_item_guid_shortage_total{top_up}  物品号段不够、整笔延后,top_up ∈ requested / cannot_help
+#     scene_mail_outbox_stuck_total{reason}        重试不会自己好的寄送失败,每次失败的尝试都计(不跟日志限频)
 # 计数进程一启动就以 0 导出。但新起的 scene 可能在第一次被抓取之前就计了数(例如玩家加载时带着早已超期的预留,reaper 第一拍就报),
-# 首个样本已经不是 0,increase() 看不到这一跳:scene 组的规则另带一支「新序列」(X unless X offset 10m,与
+# 首个样本已经不是 0,increase() 看不到这一跳:计数类规则另带一支「新序列」(X unless X offset 10m,与
 # persist-version-skew-alerts.yaml 同一写法)。
-# 规则引用的指标名与 event 取值由 tools/scripts/tests/battle_settlement_alerts_contract.tests.ps1 对照 C++ 源码钉住。
+# 规则引用的指标名与标签取值由 tools/scripts/tests/battle_settlement_alerts_contract.tests.ps1 对照 C++ 源码钉住。
 #
 # Install as a PrometheusRule CR (kube-prometheus stack),与其余告警文件同法:
 #   kubectl apply -n observability -f deploy/k8s/battle-settlement-alerts.yaml
 #
 # 口径(2026-11-27 定,不等压测):
-#   - 四个信号健康时都恒为 0,出现就报,不依赖基线;阈值与级别沿用原来的值班查询(stuck rooms critical,其余 warning)。
+#   - 阈值与级别沿用原来的值班查询:滞留房间、终局密钥缺失、结算原件出错 critical,其余 warning;终局查询未知沿用
+#     「10 分钟超过 20 次」(scene 对每个冻结中的玩家约每 30 秒核对一次终局,20 次约等于 match 或链路持续不通时至少 2~3 个玩家的整窗失败,
+#     单次在途超时或一次 match 滚动重启只产出个位数),其余健康时恒为 0,出现就报。
 #   - battle 是全服一个池,按 (namespace, instance) 报:instance 就是要处置的那台 GameServer。
 #   - scene 按 namespace 聚合(一个 zone 一个 namespace);具体是哪名玩家、哪一局看同名日志。
 #
@@ -43,7 +51,7 @@ metadata:
     role: alert-rules
 spec:
   groups:
-    - name: battle.settlement-rooms
+    - name: battle.settlement
       interval: 30s
       rules:
         # SQL 终局迟迟没有决定的房间(原件无效、或越过了快速重放跨度)留在节点上,节点不会自然排空。
@@ -68,7 +76,43 @@ spec:
               非 Agones 的 Deployment 形态没有排空标签,只能择低峰删 Pod,并接受同节点在打的房间被作废。
             runbook_url: docs/design/cross-zone-matchmaking.md
 
-    - name: scene.battle-freeze
+        # 没有终局提交密钥(MMORPG_MATCH_OUTCOME_SECRET_BATTLE 缺失或短于 32 字节):这台 battle 的终局协议停用,对局结果提交不了。
+        - alert: BattleSqlOutcomeSigningKeyMissing
+          expr: |
+            min by (namespace, instance) (battle_sql_outcome_signing_key_ready) == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }} 的 battle {{ $labels.instance }} 没有可用的终局提交密钥,终局协议停用"
+            description: >-
+              这台 battle 拒绝新建房间(CreateBattle 回 kFeatureUnavailable,QueryBattleCreation 报 supported_outcome_protocol_version=0);
+              已在打的房间打完之后提交不了终局,由 match 在权威截止后裁决。核对 Pod 的环境变量 MMORPG_MATCH_OUTCOME_SECRET_BATTLE(来自 Secret,去掉首尾空白后
+              至少 32 字节,与 match 的 OutcomeSecrets.battle 同值),改好之后滚动这台 battle。日志里第一次缺失时有一行
+              metric=battle_sql_outcome_key_unavailable。
+            runbook_url: docs/design/cross-zone-matchmaking.md
+
+        # 个人结算原件生成失败(invalid:终局保持未知)或与参战者对不上(missing / member_mismatch:不派发终局)。
+        - alert: BattleSettlementSourceFailed
+          expr: |
+            sum by (namespace, instance, kind) (increase(battle_settlement_source_failures_total[10m])) > 0
+            or
+            sum by (namespace, instance, kind) (
+              battle_settlement_source_failures_total
+              unless battle_settlement_source_failures_total offset 10m
+            ) > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }} 的 battle {{ $labels.instance }} 个人结算原件出错({{ $labels.kind }})"
+            description: >-
+              过去 10 分钟约 {{ $value | printf "%.0f" }} 局。invalid = 终局原件冻结失败,这一局的终局保持未知,由 match 凭持久原件裁决;
+              missing / member_mismatch = 个人结算与参战者对不上,不派发终局(battle 的缺陷)。日志 metric=battle_settlement_source_* 没有玩家明细,
+              按时间对 match 库的 match_battle_completion 与 match_battle_settlement_source。
+            runbook_url: docs/design/cross-zone-matchmaking.md
+
+    - name: scene.battle-settlement
       interval: 30s
       rules:
         # FIGHTING 冻结到期查 SQL 终局后续冻,续到上限(到期 + 15 分钟)仍没应用就照常解冻(只放开人,道具预留留着)。
@@ -130,3 +174,60 @@ spec:
               终局未定、match 不可用时一直留着(钱不丢,只是晚退),这段时间这名玩家开不了新的普通战书(金帖档不受影响)。
               scene 日志 metric=jianghu_duel_fee_overdue 给出 player_id 与 battle_id,按 battle_id 核对 match_battle_completion。
             runbook_url: docs/planning/battle-jianghu-grudge-duel-phase1-implementation-plan.md
+
+        # scene 向 match 查 SQL 终局持续查不到(没发出去之外的:传输失败、回包验签不过、带内 retry),续冻会一直拖到上限。
+        - alert: SceneBattleTerminalQueryUnknown
+          expr: |
+            sum by (namespace) (increase(scene_battle_terminal_query_unknown_total[10m])) > 20
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 scene 10 分钟里有 {{ $value | printf \"%.0f\" }} 次查不到 match 的战斗终局"
+            description: >-
+              查不到就按「结果未知」续冻,会一直拖到续冻上限(到期 + 15 分钟)。查 scene 的 MMORPG_ACCOUNT_DIRECTORY_SECRET_SCENE 与 match 是否同源、
+              scene 能否发现并连上 match、match 是否可用;偶发属正常(在途超时也计)。scene 日志 metric=battle_terminal_query_unknown 带 battle_id
+              与 gRPC 状态码。阈值 20 / 10 分钟已定(2026-11-12),压测出基线后可调。
+            runbook_url: docs/design/turn-battle-gap-closure.md
+
+        # 物品号段不够发这局的掉落,整份结算延后到号段够用(不丢)。requested = 已主动续段;cannot_help = 续段帮不上忙,要人看配置。
+        - alert: SceneBattleSettlementItemGuidShortage
+          expr: |
+            sum by (namespace, top_up) (increase(scene_battle_settlement_item_guid_shortage_total[10m])) > 0
+            or
+            sum by (namespace, top_up) (
+              scene_battle_settlement_item_guid_shortage_total
+              unless scene_battle_settlement_item_guid_shortage_total offset 10m
+            ) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 scene 有战斗结算因物品号段不够而延后({{ $labels.top_up }})"
+            description: >-
+              过去 10 分钟约 {{ $value | printf "%.0f" }} 次,结算不丢,号段够用后照常应用。requested:预检已主动续段,持续出现查发号器与
+              data_service(AllocateIdSegment)。cannot_help:号段停用 / 停机,或这一批比单段上限还多,核对 IdSegments 的 Enabled / MaxStep。
+              scene 日志 metric=battle_settlement_item_guid_shortage 给出 player_id、battle_id 与 needed / available。
+            runbook_url: docs/design/turn-battle-gap-closure.md
+
+        # 战斗掉落改投邮件寄不出去,而且重试不会自己好(没配发件密钥、本地签名失败、条目形状不合法、邮件验签被拒或判请求无效)。
+        - alert: SceneMailOutboxStuck
+          expr: |
+            sum by (namespace, reason) (increase(scene_mail_outbox_stuck_total[10m])) > 0
+            or
+            sum by (namespace, reason) (
+              scene_mail_outbox_stuck_total
+              unless scene_mail_outbox_stuck_total offset 10m
+            ) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} 的 scene 有战斗掉落邮件寄不出去({{ $labels.reason }})"
+            description: >-
+              过去 10 分钟约 {{ $value | printf "%.0f" }} 次失败的尝试。物品没有丢,仍在玩家存档的待寄队列里按退避重试(最长 5 分钟一次),
+              但不会自己好:no_secret = 没配 MAIL_PRODUCER_SECRET_BATTLE;sign_failed = 本地签名失败;invalid_entry = 条目形状不合法;
+              signature_rejected = 两边密钥不同或时钟相差超过 5 分钟;mail_rejected = 邮件判附件无效 / 请求冲突 / 参数错。
+              scene 日志 metric=mail_outbox_stuck 给出 player_id 与 request_id;处置见 docs/ops/player-inbox-runbook.md §6.1「待寄邮件」。
+              邮箱满、邮件不可达、结果未知是会自己好的失败,只打 metric=mail_outbox_send_failed,不计在这里。
+            runbook_url: docs/ops/player-inbox-runbook.md

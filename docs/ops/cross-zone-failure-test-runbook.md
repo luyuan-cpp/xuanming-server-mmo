@@ -1372,18 +1372,19 @@ B3 各栏(v2.6):v2.5 那条"SKIP(HEAD 含 GO-2,原步骤前提不成立)"的口�
 区分方法:看被拒的那个 scene 节点上,该玩家在被拒之前是否已进入退出链 —— 同一 player_id 的 `HandleExitGameNode: Player <P> is exiting the scene node` 早于被拒那一行 `HandlePlayerSaveRejected: owner_epoch CAS rejected save for player <P>`(退出链上没有含 `UnregisterPlayer` 字样的日志,别按它搜)。Z1 僵尸被拒后自清也归入这一类,判定相同。
 是 → K1 被拦下,记录即可;否 → 按"曾经双主"处理。
 
-**scene 侧只能靠日志的三条查询**(scene 的计数不进 Prometheus;Loki 的 ruler 目前没有挂载规则目录、也没有 `alertmanager_url`,
-所以这三条是值班固定查询,不是自动告警;ruler 接线归上线批 BK8s):
+**scene 侧的三条信号**(2026-11-27 订正:原来写着「scene 的计数不进 Prometheus」,这三条是 LogQL 值班固定查询;Loki ruler 一直没挂规则目录、
+也没有 `alertmanager_url`,它们从没自动告警过。现在逐条处理如下):
 
-```logql
-# 资产操作因 owner_epoch = 0 被挡(资产通道在无围栏的实体上一律回 RETRY)
-sum(count_over_time({service="scene"} |= "[AssetOp] blocked: owner_epoch unknown" [10m])) > 0
+- 资产操作因 owner_epoch = 0 被挡(资产通道在无围栏的实体上一律回 RETRY):导出为 `scene_asset_op_owner_epoch_unknown_total`
+  (`asset_op_system.cpp`),PromQL 告警 `SceneAssetOpOwnerEpochUnknown`(`deploy/k8s/owner-epoch-alerts.yaml` 的 `owner-epoch.scene` 组,
+  warning,10 分钟里出现就报)。按玩家排查仍看日志 `[AssetOp] blocked: owner_epoch unknown`。
+- 有 owner_epoch = 0 的存盘:这条查询读的 `[OwnerEpoch] owner_epoch_unknown` 计数已随 Redis 存档路径删除(玩家数据只存 TiDB),
+  查询恒为空,删掉;go/db 侧对应的是 `DbOwnerEpochLegacyZero`。
+- 退出存盘超过重连租约才落地(epoch 非 0 时不再意味着覆盖,保留作辅助信号):导出为
+  `scene_exit_persist_events_total{event="exit_save_outran_lease"}`(`[ExitPersist]` 行的最后一个 key),不做告警,看板查询:
 
-# 有 owner_epoch = 0 的存盘(兼容窗口仍在;共享 / 预发环境开启帮会资产操作时必须恒为 0)
-sum(count_over_time({service="scene"} |= "[OwnerEpoch]" |~ "owner_epoch_unknown=[1-9]" [10m])) > 0
-
-# 退出存盘超过重连租约才落地(epoch 非 0 时不再意味着覆盖,保留作辅助信号)
-sum(count_over_time({service="scene"} |= "save outran reconnect lease" [10m])) > 0
+```promql
+sum by (namespace) (increase(scene_exit_persist_events_total{event="exit_save_outran_lease"}[10m]))
 ```
 
 Go 侧的两条(`DbStaleOwnerWriteRejected`、`DbOwnerEpochLegacyZero`)是可部署的 PrometheusRule,见 `deploy/k8s/owner-epoch-alerts.yaml`。
