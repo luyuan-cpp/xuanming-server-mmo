@@ -17,6 +17,29 @@ pnpm --dir build/gm-admin-upstream/jeecgboot-vue3 install --frozen-lockfile --fe
 
 准备脚本校验上游 v3.9.6 的固定提交，生成自己的协议描述并复制扩展。第三方源码、依赖、数据库初始化 SQL、运行日志和本机凭据都在 Git 忽略的 `build/` 下；不手动修改游戏的生成代码。再次准备会覆盖自有扩展对应的上游文件，应在 `java/gm_admin` 修改。
 
+## K8s 镜像
+
+K8s 用一个镜像 `mmorpg-gm-admin`（`deploy/k8s/Dockerfile.gm-admin`），只打包宿主机先构建好的后端 jar 与前端 dist，不在 Docker 里编译：仓库没有钉 digest 的 node 镜像，前端只能在宿主机构建，后端与它用同一套产物来源。在仓库根目录依次执行：
+
+```powershell
+python java/gm_admin/prepare.py
+mvn -s build/gm-admin-runtime/maven-settings.xml -f build/gm-admin-upstream/jeecg-boot/pom.xml -pl jeecg-module-system/jeecg-system-start -am '-Dmaven.compiler.proc=full' -DskipTests package
+pnpm --dir build/gm-admin-upstream/jeecgboot-vue3 install --frozen-lockfile --fetch-timeout=300000
+pnpm --dir build/gm-admin-upstream/jeecgboot-vue3 exec cross-env NODE_ENV=production NODE_OPTIONS=--max-old-space-size=8192 vite build --mode gmk8s
+pnpm --dir build/gm-admin-upstream/jeecgboot-vue3 exec cross-env npm_lifecycle_script=NODE_ENV=gmk8s esno ./build/script/postBuild.ts
+pwsh -File tools/scripts/java_svc_image.ps1 -Command build -Registry <registry> -LinuxProtocDir <已批准目录> -LinuxProtocSha256 <SHA256>
+```
+
+- 前端用 `gmk8s` 模式（准备脚本写的 `.env.gmk8s`）：浏览器只访问 nginx，接口与后端地址都是同源的 `/jeecgboot`。本机的 `.env.gm` 指向 `127.0.0.1:18090`，不能进镜像。
+- `vite build` 要带 `NODE_ENV=production`：Vite 只把这个值当生产构建；上游 `build:docker` 那种 `NODE_ENV=<模式>` 打出的是开发态，暗色主题等只在生产态走的分支会不对。
+- 生产页面从 `dist/_app.config.js` 读接口地址，它由上游 `build/script/postBuild.ts` 生成，按 `npm_lifecycle_script` 里的 `NODE_ENV=<模式>` 选 `.env.<模式>`（`build/utils.ts` 的 `getConfFiles`）；不在 npm 脚本里跑时缺省读 `.env.production`，变量名与地址都不对，页面白屏，所以最后一条显式给出。上游的 `copyChat.ts`（AI 聊天脚本）GM 用不上，不跑。
+- `java_svc_image.ps1 -Command build` 一次构建目录表里的全部 Java 镜像，Linux protoc 两个参数照旧必填。构建任何镜像之前先核对 gm-admin 的产物：jar 与 `dist/index.html` 都在，分别晚于 `src/main`、`frontend/src` 下全部文件与 `prepare.py`；协议描述 `gm-contracts.pb`（上游资源目录里那份）晚于 `proto/` 下每个 `.proto`、jar 晚于协议描述（改了协议没重跑 `prepare.py`，后台会按旧字段号编请求）；`dist/_app.config.js` 的接口地址是同源 `/jeecgboot`；不满足就拒绝并给出上面的命令。
+
+同一 Pod 的两个容器都用这个镜像（清单 `deploy/k8s/manifests/java-svc/gm-admin.yaml`），都以 uid/gid 10001 运行，根文件系统只读，可写的只有清单挂的 emptyDir `/tmp` 与 `/app/uploads`：
+
+- 后端：镜像入口 `java -XX:MaxRAMPercentage=60 -jar /app/gm-admin.jar`，Spring 参数（profile 等）由清单 args 传；听 18090，context-path `/jeecg-boot`；上传目录 `GM_UPLOAD_PATH` 缺省 `/app/uploads`。
+- 前端：清单把 command 换成 `nginx -c /etc/nginx/gm-admin.conf -g "daemon off;"`；听 3101，发 `/app/web`（dist 原样，单页应用回落 `index.html`），`/jeecgboot/` 反代 `127.0.0.1:18090/jeecg-boot/`（与本机 `VITE_PROXY` 同一映射），`/healthz` 直接回 200 给探针，后端 actuator 不给浏览器。配置在 `deploy/k8s/gm-admin-nginx.conf`。
+
 ## 本机运行
 
 日常和游戏一起启动，在仓库根目录执行：
@@ -81,7 +104,7 @@ python java/gm_admin/run_local.py status
 - 币种来自游戏协议目录；等级为 1–85，直接 GM 发物最多 99 个。金额和玩家 ID 使用十进制字符串。
 - 审计列表支持按玩家 ID 与状态筛选及分页（`page` / `pageSize`），核对弹窗支持按命令 ID 精确刷新原命令状态并查看完整 `gm_command_audit` 状态变更轨迹（`/gm/mail/commands/{id}`、`/gm/system-mail/commands/{id}`、`/gm/mail-campaigns/commands/{id}`、`/gm/player-commands/{id}` 及各自 `/audit`）。
 
-生产部署另行配置域名、HTTPS、服务间 TLS、`GM_HTTP_ADDRESS` 与 `GM_REDIS_HOST`（支持优雅停机与 `/actuator/health/liveness`、`/actuator/health/readiness` K8s 探针）；水平扩展场景节点时，除静态映射 `GM_SCENE_TARGETS_JSON`（支持 `"<zoneId>/<nodeId>"` 与 `"<nodeId>"`）外，还可配置 `GM_SCENE_ETCD_URL`（仅允许 HTTPS 或本机回环 HTTP）按 `(zoneId, nodeId)` 动态发现 etcd `SceneNodeService.rpc/` 下的场景 `grpcEndpoint`；多副本 GM 管理后端支持并发安全启动迁移（`gm_install` 版本 1–6，含查询/审计复合索引与系统邮件独立权限）。
+生产按 K8s 部署（`deploy/k8s/README.md`「GM 后台 gm-admin」）：只走 OIDC、只在集群内可达；明文 gRPC / HTTP 只许回环地址与集群内 Service 名（`<service>.<namespace>.svc[.cluster.local]`，集群内服务之间本来是明文，保护靠 NetworkPolicy 与各调用方密钥），别的地址要 HTTPS / TLS（支持优雅停机与 `/actuator/health/liveness`、`/actuator/health/readiness` K8s 探针）；水平扩展场景节点时，除静态映射 `GM_SCENE_TARGETS_JSON`（支持 `"<zoneId>/<nodeId>"` 与 `"<nodeId>"`）外，还可配置 `GM_SCENE_ETCD_URL`（仅允许 HTTPS 或本机回环 HTTP）按 `(zoneId, nodeId)` 动态发现 etcd `SceneNodeService.rpc/` 下的场景 `grpcEndpoint`；多副本 GM 管理后端支持并发安全启动迁移（`gm_install` 版本 1–6，含查询/审计复合索引与系统邮件独立权限）。
 
 ## Scene 部署与通道状态
 

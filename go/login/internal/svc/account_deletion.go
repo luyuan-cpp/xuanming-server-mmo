@@ -2,6 +2,7 @@ package svc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -92,6 +93,9 @@ func (s *ServiceContext) KickAccountPlayers(ctx context.Context, account string,
 		return nil
 	}
 	roles, err := s.AccountDirectory.Read(ctx, account, false)
+	if errors.Is(err, accountdirectory.ErrMissing) {
+		return nil // 从没进过游戏(没有账号行):没有角色可踢,不算踢线失败(后台封禁、删除垃圾注册号时常见)
+	}
 	if err != nil {
 		return fmt.Errorf("read roles of %s: %w", account, err)
 	}

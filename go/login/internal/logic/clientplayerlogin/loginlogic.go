@@ -405,6 +405,9 @@ func authFailureTip(err error) uint32 {
 	if errors.Is(err, auth.ErrProviderUnavailable) {
 		return uint32(table.LoginError_kLoginAuthProviderUnavailable)
 	}
+	if errors.Is(err, errPassportSessionRefused) {
+		return uint32(table.LoginError_kLoginPassportCredentialChanged)
+	}
 	return uint32(table.LoginError_kLoginAccountNotFound)
 }
 

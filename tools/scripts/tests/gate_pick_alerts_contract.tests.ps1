@@ -288,12 +288,12 @@ Test-Case 'login-alerts.yaml:login.role-list 组只有 LoginRoleListHomeZoneFall
     Assert-Equal -Expected 1 -Actual (@($all | Where-Object { $_ -ceq 'LoginRoleListHomeZoneFallbackSustained' })).Count -Because '告警名不重名'
 }
 
-Test-Case 'login-alerts.yaml:login.passport-session 组只有 LoginPassportSessionCheckFailing,引用的计数由 passportsession 注册,result 取值是源码里的常量' {
+Test-Case 'login-alerts.yaml:login.passport-session 组只有 CheckFailing 与 MassRevocation,引用的计数由 passportsession 注册,result 取值是源码里的常量' {
     $group = Get-AlertGroupText -Text $script:LoginAlerts -Group 'login.passport-session'
     Assert-Match -Text $group -Pattern '(?m)^      interval:[ ]*30s[ ]*$' -Because '评估间隔'
     $rules = @(Get-AlertRules -GroupText $group)
-    Assert-Equal -Expected 'LoginPassportSessionCheckFailing' -Actual ((@($rules | ForEach-Object { $_.Name }) | Sort-Object) -join ',') -Because '规则名单钉死'
-    $rule = $rules[0]
+    Assert-Equal -Expected 'LoginPassportSessionCheckFailing,LoginPassportSessionMassRevocation' -Actual ((@($rules | ForEach-Object { $_.Name }) | Sort-Object) -join ',') -Because '规则名单钉死'
+    $rule = @($rules | Where-Object { $_.Name -ceq 'LoginPassportSessionCheckFailing' })[0]
     Assert-Match -Text $rule.Body -Pattern '(?m)^            severity:[ ]*warning[ ]*$' -Because '登录照常,只是改密 / 封禁踢不掉游戏登录'
     foreach ($field in @('summary', 'description', 'runbook_url')) {
         Assert-Match -Text $rule.Body -Pattern ('(?m)^            {0}:' -f $field) -Because "要有 $field"
@@ -306,10 +306,23 @@ Test-Case 'login-alerts.yaml:login.passport-session 组只有 LoginPassportSessi
     Assert-Match -Text $source -Pattern 'Namespace:\s*"login",\s*Subsystem:\s*"passport",\s*Name:\s*"session_check_total",' -Because '计数由 passportsession 注册(改名后告警静默失效)'
     Assert-Match -Text $source -Pattern '(?m)^\s*resultError\s+=\s*"error"' -Because 'result="error" 是源码里核对不了时记的取值'
 
+    # 成批误吊销(Endpoint 指到别的通行证时查谁都查不到):按「查不到」的次数报 critical。
+    $mass = @($rules | Where-Object { $_.Name -ceq 'LoginPassportSessionMassRevocation' })[0]
+    Assert-Match -Text $mass.Body -Pattern '(?m)^            severity:[ ]*critical[ ]*$' -Because '玩家正被成批踢下线'
+    Assert-Match -Text $mass.Body -Pattern '(?m)^          for:[ ]*5m[ ]*$' -Because '持续 5 分钟才报'
+    foreach ($field in @('summary', 'description', 'runbook_url')) {
+        Assert-Match -Text $mass.Body -Pattern ('(?m)^            {0}:' -f $field) -Because "要有 $field"
+    }
+    Assert-Match -Text (Get-RuleExpr -Body $mass.Body) -Pattern 'increase\(login_passport_session_check_total\{result="user_gone"\}\[10m\]\)\) > 20' -Because '10 分钟 20 次以上判查不到'
+    $authSource = Read-RepoText -RelativePath 'go/login/internal/logic/pkg/auth/passport_admin.go'
+    Assert-Match -Text $authSource -Pattern '(?m)PassportSessionUserGone\s+=\s*"user_gone"' -Because 'result="user_gone" 是源码里判查不到时记的取值'
+
     $all = @(Get-ChildItem -LiteralPath (Join-Path $script:RepoRoot 'deploy/k8s') -Filter '*-alerts.yaml' -File | ForEach-Object {
             ([IO.File]::ReadAllText($_.FullName)) -replace "`r`n", "`n"
         } | ForEach-Object { [regex]::Matches($_, '(?m)^\s+- alert:[ ]*(\S+)[ ]*$') } | ForEach-Object { $_.Groups[1].Value })
-    Assert-Equal -Expected 1 -Actual (@($all | Where-Object { $_ -ceq 'LoginPassportSessionCheckFailing' })).Count -Because '告警名不重名'
+    foreach ($name in @('LoginPassportSessionCheckFailing', 'LoginPassportSessionMassRevocation')) {
+        Assert-Equal -Expected 1 -Actual (@($all | Where-Object { $_ -ceq $name })).Count -Because "告警名 $name 不重名"
+    }
 }
 
 exit (Complete-TestRun -SuiteName 'gate_pick_alerts_contract')

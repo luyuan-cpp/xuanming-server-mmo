@@ -8,17 +8,23 @@ import (
 	"sync"
 
 	"shared/drainproof"
+	"shared/kafkautil"
 	"shared/tracing/saramatrace"
 
 	"github.com/IBM/sarama"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
+type syncMessageSender interface {
+	SendMessage(msg *sarama.ProducerMessage) (partition int32, offset int64, err error)
+	Close() error
+}
+
 // CommandProducer 发控制面命令(gate-cmd、scene-cmd)。login 只生产不消费,这是它唯一的 Kafka 写路径。
 //
 // topic 与分区号是一对不可分的东西(见 shared/kafkacmd):调用方必须由 kafkacmd 一次性把两者算出来再传进来。
 type CommandProducer struct {
-	producer  sarama.SyncProducer
+	producer  syncMessageSender
 	stateMu   sync.Mutex
 	sends     *drainproof.Session
 	closeOnce sync.Once
@@ -27,9 +33,7 @@ type CommandProducer struct {
 	draining  bool
 }
 
-// NewCommandProducer 建同步生产者。分区器是 NewCommandAwarePartitioner:命令必须落在 node_id % P 算出来的那一个分区上,
-// sarama 默认的哈希分区器会覆盖 ProducerMessage.Partition。
-func NewCommandProducer(cfg config.KafkaConfig) (*CommandProducer, error) {
+func buildCommandProducerSaramaConfig(cfg config.KafkaConfig) (*sarama.Config, error) {
 	saramaCfg := sarama.NewConfig()
 	saramaCfg.Metadata.AllowAutoTopicCreation = false
 	saramaCfg.Version = sarama.V3_6_0_0
@@ -43,11 +47,38 @@ func NewCommandProducer(cfg config.KafkaConfig) (*CommandProducer, error) {
 	if err := saramaCfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid Kafka config: %w", err)
 	}
+	return saramaCfg, nil
+}
+
+// NewCommandProducer 建同步生产者。分区器是 NewCommandAwarePartitioner:命令必须落在 node_id % P 算出来的那一个分区上,
+// sarama 默认的哈希分区器会覆盖 ProducerMessage.Partition。
+func NewCommandProducer(cfg config.KafkaConfig) (*CommandProducer, error) {
+	saramaCfg, err := buildCommandProducerSaramaConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
 	producer, err := sarama.NewSyncProducer(cfg.Brokers, saramaCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Kafka producer: %w", err)
 	}
 	return &CommandProducer{producer: producer, sends: drainproof.New()}, nil
+}
+
+// NewLazyCommandProducer 构造按需拨号的命令生产者（移植自 xuanming-server/pkg/kafkax.LazyProducer）：
+// 构造期仅校验配置不做网络拨号，避免启动期 Kafka 瞬时抖动阻断装配；首次发送按需拨号并在恢复后自动自愈。
+func NewLazyCommandProducer(cfg config.KafkaConfig) (*CommandProducer, error) {
+	saramaCfg, err := buildCommandProducerSaramaConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	brokers := append([]string(nil), cfg.Brokers...)
+	lazy, err := kafkautil.NewLazySyncProducer(func() (sarama.SyncProducer, error) {
+		return sarama.NewSyncProducer(brokers, saramaCfg)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &CommandProducer{producer: lazy, sends: drainproof.New()}, nil
 }
 
 // SendToTopicPartition 把一条命令发到显式的 (topic, partition),不带链路追踪头。

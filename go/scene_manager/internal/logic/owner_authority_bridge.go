@@ -4,13 +4,41 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/zeromicro/go-zero/core/logx"
 
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
+	"shared/logwindow"
 	"shared/ownerauthority"
 )
+
+const ownerAuthorityShadowLogWindowMs int64 = 5000
+
+var ownerAuthorityShadowLogWindow logwindow.Window
+
+func logOwnerAuthorityFailure(logger logx.Logger, enforce bool, format string, args ...any) {
+	if logger == nil {
+		return
+	}
+	if enforce {
+		logger.Errorf(format, args...)
+		return
+	}
+	if ok, streak := ownerAuthorityShadowLogWindow.Admit(time.Now().UnixMilli(), ownerAuthorityShadowLogWindowMs); ok {
+		logger.Errorf(format+" shadow_error_streak=%d", append(args, streak)...)
+	}
+}
+
+func noteOwnerAuthoritySuccess(logger logx.Logger, enforce bool) {
+	if enforce {
+		return
+	}
+	if failed, _ := ownerAuthorityShadowLogWindow.Recovered(); failed > 0 && logger != nil {
+		logger.Infof("[OwnerAuthority] shadow path recovered after failed_total=%d", failed)
+	}
+}
 
 func ownerAuthorityMode(svcCtx *svc.ServiceContext) string {
 	if svcCtx == nil || svcCtx.OwnerAuthority == nil {
@@ -74,10 +102,8 @@ func syncOwnerAuthorityEnter(
 	cur, found, err := svcCtx.OwnerAuthority.Query(ctx, playerID)
 	if err != nil {
 		metrics.ObserveOwnerAuthorityOp(mode, "enter", "query_error")
-		if logger != nil {
-			logger.Errorf("[OwnerAuthority] enter query failed mode=%s player=%d scene=%d node=%s err=%v",
-				mode, playerID, sceneID, nodeID, err)
-		}
+		logOwnerAuthorityFailure(logger, enforce, "[OwnerAuthority] enter query failed mode=%s player=%d scene=%d node=%s err=%v",
+			mode, playerID, sceneID, nodeID, err)
 		if enforce {
 			return ownerauthority.OwnerRecord{}, err
 		}
@@ -100,10 +126,8 @@ func syncOwnerAuthorityEnter(
 	if err != nil {
 		res := classifyOwnerAuthorityErr(err)
 		metrics.ObserveOwnerAuthorityOp(mode, "enter", res)
-		if logger != nil {
-			logger.Errorf("[OwnerAuthority] begin transition failed mode=%s player=%d scene=%d node=%s result=%s err=%v",
-				mode, playerID, sceneID, nodeID, res, err)
-		}
+		logOwnerAuthorityFailure(logger, enforce, "[OwnerAuthority] begin transition failed mode=%s player=%d scene=%d node=%s result=%s err=%v",
+			mode, playerID, sceneID, nodeID, res, err)
 		if enforce {
 			return ownerauthority.OwnerRecord{}, err
 		}
@@ -119,16 +143,15 @@ func syncOwnerAuthorityEnter(
 	if err != nil {
 		res := classifyOwnerAuthorityErr(err)
 		metrics.ObserveOwnerAuthorityOp(mode, "enter", res)
-		if logger != nil {
-			logger.Errorf("[OwnerAuthority] admit failed mode=%s player=%d epoch=%d scene=%d node=%s result=%s err=%v",
-				mode, playerID, rec.OwnerEpoch, sceneID, nodeID, res, err)
-		}
+		logOwnerAuthorityFailure(logger, enforce, "[OwnerAuthority] admit failed mode=%s player=%d epoch=%d scene=%d node=%s result=%s err=%v",
+			mode, playerID, rec.OwnerEpoch, sceneID, nodeID, res, err)
 		if enforce {
 			return ownerauthority.OwnerRecord{}, err
 		}
 		return ownerauthority.OwnerRecord{}, nil
 	}
 
+	noteOwnerAuthoritySuccess(logger, enforce)
 	metrics.ObserveOwnerAuthorityOp(mode, "enter", "ok")
 	return admitted, nil
 }
@@ -182,20 +205,20 @@ func syncOwnerAuthorityLeave(
 	cur, found, err := svcCtx.OwnerAuthority.Query(ctx, playerID)
 	if err != nil {
 		metrics.ObserveOwnerAuthorityOp(mode, "leave", "query_error")
-		if logger != nil {
-			logger.Errorf("[OwnerAuthority] leave query failed mode=%s player=%d scene=%d err=%v",
-				mode, playerID, sceneID, err)
-		}
+		logOwnerAuthorityFailure(logger, enforce, "[OwnerAuthority] leave query failed mode=%s player=%d scene=%d err=%v",
+			mode, playerID, sceneID, err)
 		if enforce {
 			return err
 		}
 		return nil
 	}
 	if !found || cur.Phase == ownerauthority.PhaseNone {
+		noteOwnerAuthoritySuccess(logger, enforce)
 		metrics.ObserveOwnerAuthorityOp(mode, "leave", "noop")
 		return nil
 	}
 	if nodeID != "" && !cur.Target.Equal(ownerAuthorityTarget(nodeID, sceneID, zoneID)) {
+		noteOwnerAuthoritySuccess(logger, enforce)
 		metrics.ObserveOwnerAuthorityOp(mode, "leave", "target_changed")
 		return nil
 	}
@@ -207,15 +230,14 @@ func syncOwnerAuthorityLeave(
 	})
 	if err != nil {
 		metrics.ObserveOwnerAuthorityOp(mode, "leave", "error")
-		if logger != nil {
-			logger.Errorf("[OwnerAuthority] release failed mode=%s player=%d epoch=%d err=%v",
-				mode, playerID, cur.OwnerEpoch, err)
-		}
+		logOwnerAuthorityFailure(logger, enforce, "[OwnerAuthority] release failed mode=%s player=%d epoch=%d err=%v",
+			mode, playerID, cur.OwnerEpoch, err)
 		if enforce {
 			return err
 		}
 		return nil
 	}
+	noteOwnerAuthoritySuccess(logger, enforce)
 	if released {
 		metrics.ObserveOwnerAuthorityOp(mode, "leave", "ok")
 	} else {

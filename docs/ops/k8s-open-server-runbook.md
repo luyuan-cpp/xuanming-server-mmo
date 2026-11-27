@@ -95,9 +95,13 @@
   | key | 环境变量 | 放在哪 | 谁用 |
   |---|---|---|---|
   | `asset-data-service` | `MMORPG_ASSET_OP_SECRET_DATA_SERVICE` | 每个 zone namespace | GM 批量回收的资产指令签名,data-service 签、scene 验,两边同值。`optional: true`:`-AssetOps off` 时用不到;`-AssetOps on` 时 data-service 缺它拒启 |
-  | `login-admin-token` | `MMORPG_LOGIN_ADMIN_TOKEN` | 每个 zone namespace | `LoginAdmin` 的运维口令(`x-admin-token`),至少 16 字节。`optional: true`:没有这个 key 时运维面整体停用 |
   | `match-internal-guild` | `MMORPG_MATCH_INTERNAL_SECRET_GUILD` | infra namespace | guild 和 match 同值:开局、占用、读终局都验它 |
   | `mail-producer-match` | `MAIL_PRODUCER_SECRET_MATCH` | infra namespace | 2026-11-26 起:match 签、mail 验,群仙问道赛领奖邮件([season-team-tournament-v1.md](../planning/season-team-tournament-v1.md) 第七节)。两边都 `optional: false`,缺键 mail 与 match 都起不来;只在 infra 用,所以不进上面的托管键表 |
+
+- **管理入口的口令与密钥走部署输入,不预置在这里**(2026-11-27,双人复核批 7):`LoginAdmin` 的运维口令 `MMORPG_LOGIN_ADMIN_TOKEN`、data-service 的运维口令、
+  trade / match 的人工处置密钥、gateway 的机器口令、GM 后台的 OIDC 客户端密钥,都由部署机设同名环境变量,经工作负载密钥目录注入(只给 GM 后台与资源服务本身)。
+  login 以前读本 Secret 的 `login-admin-token` 键,已改;集群里残留的这个键没有读者,可以删。GM 后台还要运维预置 infra namespace 的 Secret `gm-admin-runtime`
+  (管理库与 Redis 的连接信息),它同样复用本 Secret 的 `mail-producer-admin` / `rank-producer-admin`。清单与做法见 `deploy/k8s/README.md`「GM 后台 gm-admin」。
 
 - 参与者经 infra namespace 的 K8s Service 直连(`guild.<infra>:50300`、`trade.<infra>:50800`、`mail.<infra>:50900`、`match.<infra>:50500`、`player-inbox.<infra>:50950`、`friend.<infra>:50400`),`k8s_deploy.ps1` 按 `-InfraNamespace` 渲染。`-NetworkPolicies on` 时 guild、match 的放行名单已含 data-service。任何一个参与者不可达,过户和删角一律拒绝,其余功能不受影响。
 - 告警装 `deploy/k8s/logical-db-alerts.yaml`,安装方式和抓取前提写在文件头。闸门冻结时长没有指标,要查库。

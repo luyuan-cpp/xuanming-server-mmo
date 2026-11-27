@@ -43,9 +43,10 @@
 2. `go test ./internal/logic/pkg/token/ ./internal/logic/pkg/auth/ ./internal/logic/pkg/passportsession/ ./internal/logic/clientplayerlogin/ ./internal/logic/loginpregate/ ./internal/rpclogging/ ./internal/svc/ ./internal/config/ ./cmd/sandbox_mock/ . -count=1 -v`，逐个点名看到通过：
    - token：`TestIdentityIssuedAtSurvivesRotation`、`TestRevokeIssuedBeforeKeepsLaterLogins`；
    - auth：`TestPassportAdminLookupUserAndSessionVerdict`、`TestPassportAdminLookupUserByName`、`TestPassportAdminDeleteUser*`、`TestNewPassportAdminRequiresAllSettings`、`TestPassportSubject`，以及 `passport_provider_test.go` 的全部；
-   - passportsession：`TestCheckLoginRefusesIdentityTokensFromBeforeThePasswordChange`、`TestCheckLoginAfterThePasswordChangeRevokesOnlyEarlierSessions`、`TestBannedOrDeletedUsersLoseEverySession`、`TestPassportOutagesLetLoginsAndRefreshesThrough`、`TestCheckRefresh`、`TestNilEnforcerLetsEverythingThrough`、`TestHandleEventChecksTheNamedUsersAgainstThePassport`、`TestHandleEventRevokesEverythingForBannedUsers`；
+   - passportsession：`TestCheckLoginRefusesIdentityTokensFromBeforeThePasswordChange`、`TestCheckLoginAfterThePasswordChangeRevokesOnlyEarlierSessions`、`TestBannedOrDeletedUsersLoseEverySession`、`TestPassportOutagesLetLoginsAndRefreshesThrough`、`TestCheckRefresh`、`TestNilEnforcerLetsEverythingThrough`、`TestHandleEventChecksTheNamedUsersAgainstThePassport`、`TestHandleEventRevokesEverythingForBannedUsers`、`TestHandleEventSkipsAppPseudoUsers`（11-27 补：应用凭据发起的回调不报错）、`TestKickRunsInTheBackground`（11-27 补：踢线在后台、登录不等它）；
    - clientplayerlogin：`TestRefreshRevokesPassportSessionsLoggedInBeforePasswordChange`、`TestRefreshRenewsPassportSessionsLoggedInAfterPasswordChange`、`TestRefreshRenewsWhenPassportIsUnreachable`、`TestRefreshDoesNotAskPassportForOtherLogins`；
-   - rpclogging：`config_test.go` 全部（屏蔽名单 7 个方法）；
+   - rpclogging：`config_test.go` 全部（屏蔽名单 7 个方法；11-27 补了回调请求体按 base64 出现在日志里也算泄漏）；
+   - clientplayerlogin 的 `TestAuthFailureTip`（11-27 补：重新认证被通行证核对拒绝时回 2059）；
    - sandbox_mock：`TestPassportAdminCheckSessionAgainstSandboxMock`、`TestPassportAdmin*AgainstSandboxMock`、`TestPassportProviderAgainstSandboxMock`；
    - 包根：`TestGoctlServerWrappersImplementEveryRPC`（`goctl_wrappers_test.go`，查 `HandlePassportEvent` 的手写转发）。
 3. 并发：`go test ./internal/logic/pkg/passportsession/ ./internal/logic/pkg/token/ -race -count=3`。
@@ -57,13 +58,13 @@
 
 ### 3.3 网关（仓库根）
 
-1. 定向：`mvn -B -f java/pom.xml -pl gateway_node -am test "-Dtest=PassportEventControllerTest,LoginRpcClientPassportEventCodecTest,LoginRpcClientParseTest" -Dsurefire.failIfNoSpecifiedTests=false`。
+1. 定向（`PassportEventControllerTest` 11-27 改成按 `HttpServletRequest` 读请求体，新增 `readsNothingBeforeTheSecretChecksOut`）：`mvn -B -f java/pom.xml -pl gateway_node -am test "-Dtest=PassportEventControllerTest,LoginRpcClientPassportEventCodecTest,LoginRpcClientParseTest" -Dsurefire.failIfNoSpecifiedTests=false`。
 2. 全量：`mvn -B -f java/pom.xml -pl gateway_node -am test`。
 
 ### 3.4 部署契约与脚本（仓库根）
 
 1. `pwsh -NoProfile -File tools/scripts/tests/passport_k8s_contract.tests.ps1`（白名单、集群内入口、镜像摘要、初始化数据缺省、渲染脚本）。
-2. `pwsh -NoProfile -File tools/scripts/tests/gate_pick_alerts_contract.tests.ps1`（`login.passport-session` 告警组那一条）。
+2. `pwsh -NoProfile -File tools/scripts/tests/gate_pick_alerts_contract.tests.ps1`（`login.passport-session` 告警组那一条：11-27 起组里两条规则，`LoginPassportSessionCheckFailing` 与 `LoginPassportSessionMassRevocation`）。
 3. `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`（`gateway-passport-webhook` 密钥条目与「没设环境变量不注入」那一条）。
 4. 语法：对 `deploy/k8s/passport/render-init-data.ps1`、`tools/scripts/k8s_deploy.ps1`、客户端 `tools/build_client.ps1` 跑 `[System.Management.Automation.Language.Parser]::ParseFile(<路径>, [ref]$null, [ref]$errors)`，`$errors` 应为空。
 5. nginx 配置能被 nginx 自己认（`public-entry.yaml` 的 ConfigMap 第一段）：

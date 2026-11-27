@@ -85,7 +85,8 @@ $SecretSpecs = [ordered]@{
     'commerce-gateway'  = @{ Env = 'MMORPG_COMMERCE_GATEWAY_SECRET'; Value = 'contract-mall-gateway-role-secret-0000000001'; Consumers = @('mall', 'trade') }
     'commerce-payment'  = @{ Env = 'MMORPG_COMMERCE_PAYMENT_SECRET'; Value = 'contract-mall-payment-role-secret-0000000002'; Consumers = @('mall', 'payment') }
     'commerce-delivery' = @{ Env = 'MMORPG_COMMERCE_DELIVERY_SECRET'; Value = 'contract-mall-delivery-role-secret-000000003'; Consumers = @('mall', 'trade') }
-    'commerce-admin'    = @{ Env = 'MMORPG_COMMERCE_ADMIN_SECRET'; Value = 'contract-mall-admin-role-secret-00000000004'; Consumers = @('mall') }
+    # admin 角色另有一个消费者 GM 后台(本套不部署它,用例在 k8s_gm_admin_deploy_contract.tests.ps1)。
+    'commerce-admin'    = @{ Env = 'MMORPG_COMMERCE_ADMIN_SECRET'; Value = 'contract-mall-admin-role-secret-00000000004'; Consumers = @('mall', 'gm-admin') }
     'payment-devpay'    = @{ Env = 'MMORPG_PAYMENT_DEVPAY_SECRET'; Value = 'contract-payment-devpay-secret-000000000005'; Consumers = @('payment') }
 }
 
@@ -736,7 +737,7 @@ Test-Case '准入策略(-NetworkPolicies on):payment 的 gRPC 口只放行路由
 
     $mallPolicy = Get-AllowListShape -Block (Select-CommerceDocument -Output $devOut -Kind 'NetworkPolicy' -Name 'mall-grpc-allowlist')
     Assert-Equal -Expected 'mall' -Actual ($mallPolicy.TargetApps -join ',') -Because '策略只选中商城'
-    Assert-Equal -Expected 'trade,payment,trade-canary' -Actual ($mallPolicy.AllowedApps -join ',') -Because '商城的调用方只有 trade(含它的金丝雀副本)与 payment'
+    Assert-Equal -Expected 'trade,payment,gm-admin,trade-canary' -Actual ($mallPolicy.AllowedApps -join ',') -Because '商城的调用方只有 trade(含它的金丝雀副本)、payment 与 GM 后台(/internal/admin/*,双人复核批 7)'
     Assert-Equal -Expected ([int]$MallPort) -Actual $mallPolicy.GuardedPort -Because '受保护的是内部 HTTP 口'
     Assert-Equal -Expected '18121' -Actual ($mallPolicy.OpenPorts -join ',') -Because '商城管理口 18121 对集群内探针与 Prometheus 抓取开放'
 

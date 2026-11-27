@@ -49,6 +49,8 @@
 
 ## 上线前还要人办的
 
+下面各项与手机回调改名、协议正文、预发走查、Java 版一起登记在 [docs/notes/todo_zh.md](../../../docs/notes/todo_zh.md) 第 296 条,办完一项在那里勾掉。
+
 - 后台给 `app-xuanming-game` 挂邮件(或短信)发码通道;把图片验证码换成行为验证码(规则保持 `Always`)。
 - 静态资源自托管:`staticBaseUrl` 不配时登录页的图标、默认头像从 `cdn.casbin.org` 取;配成自己的 CDN,并在后台上传 `deploy/passport/theme/` 的品牌图。
 - 要多副本:先配 `redisEndpoint`(共享会话),再把 `casdoor.yaml` 的 `replicas` 调大、`strategy` 改回滚动。
@@ -57,4 +59,5 @@
 
 ## 运维注意
 
+- 每个环境的通行证库各自首启初始化,不要从别的环境拷库:`app-xuanming-server` 的密钥(第 5 步)由首启随机生成,环境之间不同,login 的 `Endpoint` 指错时那边不认凭据、只会按故障放行;拷了库再指错,那边查谁都查不到,玩家会被成批吊销踢下线(告警 `LoginPassportSessionMassRevocation`,设计稿 §3.6)。
 - 后台不要打开游戏应用的「自动登录」(`enableAutoSignin`),公网入口也不要去掉静默登录参数的拦截:手机与桌面的回调地址别的程序也能注册,这两道保证玩家每次都要在通行证页面上自己点一下才签发授权码(设计稿 §3.8、§3.10)。

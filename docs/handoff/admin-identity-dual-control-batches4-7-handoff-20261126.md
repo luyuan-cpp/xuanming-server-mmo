@@ -64,6 +64,16 @@
 
 ### 批 7 剩余(2026-11-26 晚登记,交新会话)
 
+**2026-11-27 进度**:第 1 项(后台上 K8s 及各管理入口的密钥接线、准入、应急开关守卫、契约测试)与第 3 项(文档、PROGRESS)已落码,未运行;做法与取舍在设计稿 §11.4,命令在 PROGRESS 标题带「双人复核·批 7 剩余」的条目。
+第 2 项定为这次不做(2026-11-27):本机 Docker 调试栈里没有 trade 容器,下面写的「本机 trade 的 `go/trade/etc/trade.yaml`」前提不成立。理由(详见设计稿 §11.4 末节):
+1. trade 只在宿主机 `start_game.ps1` 那套里跑,和后台连的 Docker 世界不是同一套库,后台直连它会把两个世界的数据混在一个页面上;
+2. 另起独立 trade 节点(照 `mail-*`)还要合同引擎(`AssetOp.Enabled`)与资产通道的上下游,单起一个没有可处置的合同,验不出东西;
+3. 交易这条路靠 trade 的 `TestManualContractOps*`、真库 `TestRealDBManual*`、后台 `GameTradeAdmin` 的回环 gRPC 用例,以及 K8s 部署后的集群冒烟;
+4. `run_local.py` 维持现状,`GM_TRADE_*` 一律不放行;
+5. 以后要本机全链路联调时走独立 trade 节点,同时起资产通道的依赖。
+
+批 7 到此没有待写的代码。下面原文保留作当时的清单。
+
 已做:`deploy/k8s/dual-control-alerts.yaml`(8 条「不带批准记录被接受」告警,trade 的叫 `TradeManualResolutionUnapprovedExecute`)与 `tools/scripts/tests/dual_control_alerts_contract.tests.ps1`。
 
 没做的(按这个顺序):

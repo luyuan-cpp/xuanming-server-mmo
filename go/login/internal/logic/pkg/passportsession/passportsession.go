@@ -18,11 +18,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"login/internal/logic/pkg/auth"
 	"login/internal/logic/pkg/token"
 	"shared/generated/pb/table"
+	"shared/safego"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/metric"
@@ -32,8 +34,10 @@ const (
 	// lookupTimeout 是问一次通行证的时限。管理接口在集群内网,正常十几毫秒就回;超过它按核对不了处理,
 	// 不把登录、刷新拖到 RPC 超时(login 缺省 4s)。
 	lookupTimeout = time.Second
-	// kickTimeout 是踢线(读角色列表、查会话、发 gate 命令)的时限。与请求的取消脱钩:客户端放弃等待不该让踢线半途而废。
+	// kickTimeout 是踢线(读角色列表、查会话、发 gate 命令)的时限。踢线在后台跑、与请求的取消脱钩:客户端放弃等待不该让踢线半途而废。
 	kickTimeout = 5 * time.Second
+	// kickPoint 是后台踢线的 safego 点位名(panic 计数的 label)。
+	kickPoint = "login.passport_session_kick"
 	// maxEventBytes 是通行证回调请求体的上限(网关先按同一上限截住)。Casdoor 的回调是一条记录加一名用户,远小于它。
 	maxEventBytes = 64 << 10
 	// maxEventUsers 是一次回调最多核对几名用户:回调里能点到的人只有操作人、目标用户与请求体里的那一个。
@@ -83,6 +87,8 @@ type Enforcer struct {
 	admin   *auth.PassportAdmin
 	tokens  Tokens
 	players Players // nil = 不踢线(单测替身)
+	// goKick 在后台跑踢线,缺省 safego.Go;单测换成同步执行,好断言踢没踢。
+	goKick func(point string, fn func())
 }
 
 // New 构造 Enforcer。admin 为 nil 时回 nil(不核对)。
@@ -90,7 +96,7 @@ func New(admin *auth.PassportAdmin, tokens Tokens, players Players) *Enforcer {
 	if admin == nil {
 		return nil
 	}
-	return &Enforcer{admin: admin, tokens: tokens, players: players}
+	return &Enforcer{admin: admin, tokens: tokens, players: players, goKick: safego.Go}
 }
 
 // CheckLogin 在通行证登录签发令牌之前调,回 0 = 放行,否则是拒绝这次登录的 tip。issuedAt 是这次身份令牌的签发时刻。
@@ -237,7 +243,10 @@ func eventUsers(payload []byte) ([]userRef, error) {
 	}
 	var refs []userRef
 	add := func(u casdoorUserRef) {
-		if u.Owner == builtInOrganization || len(refs) >= maxEventUsers {
+		// 名字里带 "/" 的是 Casdoor 的应用伪用户(应用凭据发起的操作记成「app/<应用名>」,本项目注销时删通行证用户就是),
+		// 不是玩家,也查不到:拿它去查,v4.27.1 的 GetOwnerFromId 遇到三段的 id 直接 panic,整条回调会一直被重投。
+		if u.Owner == builtInOrganization || strings.Contains(u.Owner, "/") || strings.Contains(u.Name, "/") ||
+			len(refs) >= maxEventUsers {
 			return
 		}
 		switch {
@@ -293,16 +302,21 @@ func (e *Enforcer) settle(ctx context.Context, phase, account string, status aut
 	return revoked, nil
 }
 
+// kick 在后台把账号名下在线的角色踢下线。令牌已经吊销(决定性的那一步),踢线只是让已连着的会话立刻断开;
+// 同步做会把这次请求拖过 login 的 RPC 时限(4s):登录时身份令牌已被一次性消费,超时了玩家得重走一遍通行证授权。
 func (e *Enforcer) kick(ctx context.Context, phase, account string) {
 	if e.players == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), kickTimeout)
-	defer cancel()
-	if err := e.players.KickAccountPlayers(ctx, account, uint32(table.LoginError_kLoginPassportCredentialChanged)); err != nil {
-		checkTotal.Inc(phase, resultKickFailed)
-		logx.WithContext(ctx).Errorf("[passport] kicking online players failed (tokens are revoked, the connections stay until they drop): account=%s: %v", account, err)
-	}
+	detached := context.WithoutCancel(ctx)
+	e.goKick(kickPoint, func() {
+		ctx, cancel := context.WithTimeout(detached, kickTimeout)
+		defer cancel()
+		if err := e.players.KickAccountPlayers(ctx, account, uint32(table.LoginError_kLoginPassportCredentialChanged)); err != nil {
+			checkTotal.Inc(phase, resultKickFailed)
+			logx.WithContext(ctx).Errorf("[passport] kicking online players failed (tokens are revoked, the connections stay until they drop): account=%s: %v", account, err)
+		}
+	})
 }
 
 func (e *Enforcer) lookup(ctx context.Context, sub string) (auth.PassportUserStatus, error) {

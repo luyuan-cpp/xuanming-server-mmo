@@ -461,6 +461,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [cpp-node-fd-exhaustion-handling.md](design/cpp-node-fd-exhaustion-handling.md) — C++ 节点文件描述符耗尽的处置：启动门槛、用量告警、accept 降级与崩溃原因可见 (2026-11-26)
 - [craft-proxy-offline-and-support-enhance.md](design/craft-proxy-offline-and-support-enhance.md) — 跨节点/离线名匠代打与控辅强化公平受益设计
 - [craft-proxy-reputation-digest-and-hot-ranking.md](design/craft-proxy-reputation-digest-and-hot-ranking.md) — 离线名匠口碑雅号异步回账、营业战报与西市极品热榜设计方案
+- [cross-repo-port-batch4-20261127.md](design/cross-repo-port-batch4-20261127.md) — 双仓双向方案对比与移植设计 Batch 4（`xuanming-server` ↔ `xuanming-server-mmo-cpp`）
 - [data-service-startup-isolation.md](design/data-service-startup-isolation.md) — data_service 启动期故障隔离:一个 SQL 集群连不上时照样启动
 - [merged-zone-etcd-copy.md](design/merged-zone-etcd-copy.md) — 合服映射的 etcd 副本:目录第 0 片失联时 data_service 照样启动
 - [ranked-play-production-architecture.md](design/ranked-play-production-architecture.md) — 《论剑 / 人宠会武》生产级强一致性与水平扩展架构设计
@@ -554,8 +555,10 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [config-table-hot-reload-handoff-20261126.md](handoff/config-table-hot-reload-handoff-20261126.md) — 配置表热更：验证与收尾交接（2026-11-26，交 Gemini）
 - [data-consistency-review-handoff-20261126.md](handoff/data-consistency-review-handoff-20261126.md) — 数据一致性复查线:交 Gemini 验证(2026-11-26)
 - [data-overwrite-audit-r2-handoff-20261126.md](handoff/data-overwrite-audit-r2-handoff-20261126.md) — 数据覆写审计第二轮（r2）验证交接（2026-11-26，交 Gemini）
+- [data-overwrite-audit-r2-remaining-handoff-20261127.md](handoff/data-overwrite-audit-r2-remaining-handoff-20261127.md) — 数据覆写审计 r2：剩余工作总清单（2026-11-27 换电脑接手，做完即删）
 - [data-overwrite-audit-r2-round4-handoff-20261126.md](handoff/data-overwrite-audit-r2-round4-handoff-20261126.md) — 数据覆写审计 r2·换视角查找第 4 轮：复核与修复交接（2026-11-26，交 Gemini）
 - [login-queue-verification-handoff-20261126.md](handoff/login-queue-verification-handoff-20261126.md) — 登录排队:验证与开闸交接(2026-11-26,交 Gemini)
+- [merged-zone-etcd-copy-handoff-20261127.md](handoff/merged-zone-etcd-copy-handoff-20261127.md) — 合服映射的 etcd 副本:换电脑接手交接(2026-11-27)
 - [minigame-websocket-handoff-20261120.md](handoff/minigame-websocket-handoff-20261120.md) — 小游戏 WebSocket 入口:待验证项交接(2026-11-20 起交 Gemini,2026-11-26 按当前仓库校正)
 - [passport-hardening-handoff-20261126.md](handoff/passport-hardening-handoff-20261126.md) — 官方通行证加固：验证交接（2026-11-26，交 Gemini；代码已改完，Gemini 只验证）
 - [payment-integration-handoff-20261120.md](handoff/payment-integration-handoff-20261120.md) — 真钱支付接入:剩余事项(2026-11-26 更新,交 Gemini 与负责人)

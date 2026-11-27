@@ -1,7 +1,8 @@
 # 合服映射的 etcd 副本:目录第 0 片失联时 data_service 照样启动
 
 > **状态(2026-11-27,Claude Code)**:设计定稿,两批都已落码,**未编译、未运行**。验证命令见 `docs/PROGRESS.md` 2026-11-27 的两条:「合服映射的 etcd 副本」(第一批:data_service 读侧)、「合服映射的 etcd 副本第二批」(合服工具提交后发布、审计比对副本、共享包)。第二批按 PROGRESS 那一条的命令跑就覆盖第一批。
-> **提交情况**:别的会话的快照提交 `24c13a311` 带进了第一批写到一半的 `route_store.go` 和本稿初稿,其余文件在工作区未提交;在它们一起提交之前 HEAD 上 `go/data_service` 编不过(PROGRESS 两条的「提交情况」)。
+> **提交情况**:两批的代码都已随负责人的快照提交 `bcea63be6`、`6b4ae7852` 进 main。`tools/merge_zone` 要先 `go mod tidy` 才编得过:go.mod 缺 etcd 的间接依赖,go.sum 已先并入 `go/shared/go.sum`。
+> **待办与换电脑接手**:见[交接单](../handoff/merged-zone-etcd-copy-handoff-20261127.md),包括 Gemini 验证、第二批独立复核、多实例演练,以及定案清单。
 > **来源**:[启动期故障隔离](data-service-startup-isolation.md) §10 的最后一个启动硬依赖:合服映射 `zone_merged_into` 只在目录第 0 片。
 > **证据口径**:静态阅读本仓代码(`go/data_service`、`go/shared/placement`、`go/shared/mergedzone`、`go/shared/dbplacement`、`tools/merge_zone`、`tools/scripts`、`deploy`),没有运行证据。
 > **Java 版(AGENTS §12)**:不涉及。Java 版没有 data_service,归属区是单库列,没有映射副本,不加 PARITY 行。
@@ -26,7 +27,7 @@
 8. **取舍**(§6):
    - 合服生效多了一个前提:etcd 可达。etcd 本来就是 data_service 的启动硬依赖(节点注册失败即拒启);合服工具真写也要 `-etcd-hosts`,手册前置条件加 etcd 健康。
    - PITR、清库、库重建之后要**先停掉全部 data_service,再删副本键,再起**;etcd 从快照恢复之后删副本键(data_service 不用停)。不删的话 data_service 拒启并在错误里点名这个键(有意的 fail-closed)。
-9. **文件**:第一批 24 个(§8.1),第二批 31 个(§8.2,其中 21 个第一批改过,另有 4 个只是 gofmt);各自不到 30 或是负责人点名「现在修」的那两项。
+9. **文件**:第一批 24 个(§8.1),第二批 32 个(§8.2,其中 21 个第一批改过,另有 4 个只是 gofmt);各自不到 30 或是负责人点名「现在修」的那两项。
 
 ## 1. 需求分析
 
@@ -257,7 +258,7 @@ C++ 不读映射。Java 没有这张表。
 脚本(1):`tools/scripts/currency_crash_window.ps1`。
 文档(12):本稿(新)、`data-service-startup-isolation.md`、`horizontal-scale-logical-db.md`、`data-service-breaker-per-logical-db.md`、`player-data-tidb-scaling-plan.md`,开服、合服、PITR、etcd、搬库五份手册,`docs/PROGRESS.md`,`docs/README.md`(索引行由别的会话跑 `gen_docs_index.py` 时带上)。
 
-### 8.2 第二批:共享规则、合服工具发布与审计、键改按第 0 片库名(31 个)
+### 8.2 第二批:共享规则、合服工具发布与审计、键改按第 0 片库名(32 个)
 
 负责人 11-27 要求「查出的问题以后修的现在修」,第一批留下的两项(工具也发布、审计比对副本)在这一批做掉。
 
@@ -274,30 +275,31 @@ data_service(10):
 8. `etc/data_service.yaml`(注释)。
 9~12. 只做 gofmt(查出来的老问题,这次一起修):`internal/svc/directory_events.go`、`internal/logic/recall_review_handled_test.go`、`internal/store/audit_retention_test.go`、`internal/store/schema.go`。
 
-合服工具(6):
+合服工具(7):
 13. `tools/merge_zone/main.go`:`-etcd-hosts`、`openCopiesFor`。
 14. `tools/merge_zone/merge.go`:`publishCommitted`、`auditCopy`、`execute` 多一个副本参数。
 15. `tools/merge_zone/route_store.go`:`Committed`、记下第 0 片库名。
 16. `tools/merge_zone/merge_test.go`。
 17. `tools/merge_zone/merge_integration_test.go`:真库上核对发布的版本等于历史行数。
-18. `tools/merge_zone/go.mod`:加 etcd 客户端(`go mod tidy` 补 go.sum)。
+18. `tools/merge_zone/go.mod`:加 etcd 客户端;它的间接依赖由 `go mod tidy` 补。
+19. `tools/merge_zone/go.sum`:先并入 `go/shared/go.sum` 的全部行(同一模块同一版本的校验和两边逐字相同,合并时核过没有冲突),`go mod tidy` 离线就能补齐、并删掉用不到的行,不用连 sum.golang.org。
 
 脚本与部署(5):
-19. `tools/scripts/dev_tools.ps1`:`-MergeZoneEtcdHosts`。
-20. `tools/scripts/tests/dev_tools_merge_zone_contract.tests.ps1`。
-21. `tools/scripts/currency_crash_window.ps1`:副本键按第 0 片库名。
-22. `deploy/k8s/data-service-route-alerts.yaml`(说明)。
-23. `deploy/k8s/README.md`(合服权限那一条)。
+20. `tools/scripts/dev_tools.ps1`:`-MergeZoneEtcdHosts`。
+21. `tools/scripts/tests/dev_tools_merge_zone_contract.tests.ps1`。
+22. `tools/scripts/currency_crash_window.ps1`:副本键按第 0 片库名。
+23. `deploy/k8s/data-service-route-alerts.yaml`(说明)。
+24. `deploy/k8s/README.md`(合服权限那一条)。
 
 文档(8):
-24. 本稿。
-25. `docs/ops/merge-zone-runbook.md`。
-26. `docs/ops/k8s-open-server-runbook.md`。
-27. `docs/ops/mysql-backup-pitr-runbook.md`。
-28. `docs/ops/etcd-maintenance-runbook.md`。
-29. `docs/design/data-service-startup-isolation.md`。
-30. `tools/README.md`(merge_zone 那一行)。
-31. `docs/PROGRESS.md`。
+25. 本稿。
+26. `docs/ops/merge-zone-runbook.md`。
+27. `docs/ops/k8s-open-server-runbook.md`。
+28. `docs/ops/mysql-backup-pitr-runbook.md`。
+29. `docs/ops/etcd-maintenance-runbook.md`。
+30. `docs/design/data-service-startup-isolation.md`。
+31. `tools/README.md`(merge_zone 那一行)。
+32. `docs/PROGRESS.md`。
 
 不涉及:proto、生成产物、表结构、授权渲染、C++、Java、guild / trade / match。
 
@@ -353,4 +355,13 @@ data_service(10):
 
 ### 12.2 第二批
 
-见 PROGRESS 2026-11-27「合服映射的 etcd 副本第二批」的「复核」一项。
+没有派独立复核子代理:收尾时全部模型的周额度已用 85%,过了负责人定的 80% 线。只做了自查,逐条对着代码核过:
+
+- 真写在连库之前要求 `-etcd-hosts`,`execute` 自己还拦一道;
+- 只在提交之后发布,先读副本、后读第 0 片,判定调共享的 `Decide`;
+- 提交之后的任何失败都报退出码 2,文案写明映射已提交;
+- 幂等重跑、没东西可删也发布,所以重跑就是补发布;
+- 审计只读副本、从不写;
+- DSN 不带库名在连库前就拒绝,键不会落到空库名上。
+
+额度重置(12-03)之后要复核的话,只拿代码和需求给子代理,别给本稿的论证。

@@ -5,12 +5,14 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
 	"login/internal/logic/pkg/auth"
 	"login/internal/logic/pkg/token"
 	"shared/generated/pb/table"
+	"shared/safego"
 )
 
 // 钉住 Enforcer 的口径(docs/design/official-passport-registration.md §3.6):
@@ -52,7 +54,7 @@ func (f *fakePlayers) KickAccountPlayers(_ context.Context, account string, reas
 }
 
 // newEnforcer 起一个只回 getUser 原文的 Casdoor get-user 桩;status 非 0 时直接回这个 HTTP 状态码。
-func newEnforcer(t *testing.T, status int, getUser string, tokens *fakeTokens, players *fakePlayers) *Enforcer {
+func newEnforcer(t *testing.T, status int, getUser string, tokens *fakeTokens, players Players) *Enforcer {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		if status != 0 {
@@ -66,7 +68,9 @@ func newEnforcer(t *testing.T, status int, getUser string, tokens *fakeTokens, p
 	if err != nil {
 		t.Fatalf("NewPassportAdmin: %v", err)
 	}
-	return New(admin, tokens, players)
+	e := New(admin, tokens, players)
+	e.goKick = func(_ string, fn func()) { fn() } // 踢线同步跑,断言踢没踢
+	return e
 }
 
 func userChangedPasswordAt(changedAt int64) string {
@@ -235,6 +239,78 @@ func TestHandleEventChecksTheNamedUsersAgainstThePassport(t *testing.T) {
 	if _, err := newEnforcer(t, http.StatusBadGateway, "", &fakeTokens{}, &fakePlayers{}).HandleEvent(context.Background(), []byte(setPassword)); err == nil ||
 		errors.Is(err, ErrBadEvent) {
 		t.Fatalf("passport down: want a retryable error, got %v", err)
+	}
+}
+
+// 应用凭据发起的操作(本项目注销时用服务端应用的凭据删通行证用户):记录里的操作人是 Casdoor 的应用伪用户
+// 「app/<应用名>」,不能拿去查(v4.27.1 遇到三段的 id 直接 panic,整条回调一直被重投);被删的玩家按名字已查不到,
+// 不吊销、不报错,通行证不重投。
+func TestHandleEventSkipsAppPseudoUsers(t *testing.T) {
+	var mu sync.Mutex
+	var asked []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		asked = append(asked, r.URL.Query().Get("id"))
+		mu.Unlock()
+		_, _ = w.Write([]byte(`{"status":"ok","msg":"","data":null}`))
+	}))
+	t.Cleanup(srv.Close)
+	admin, err := auth.NewPassportAdmin("https://passport.example.com", srv.URL, "xuanming-game-server", "test-admin-secret", srv.Client())
+	if err != nil {
+		t.Fatalf("NewPassportAdmin: %v", err)
+	}
+	tokens, players := &fakeTokens{}, &fakePlayers{}
+	e := New(admin, tokens, players)
+	e.goKick = func(_ string, fn func()) { fn() }
+
+	deleteByApp := `{"organization":"xuanming","user":"app/app-xuanming-server","action":"delete-user",` +
+		`"object":"{\"owner\":\"xuanming\",\"name\":\"alice\"}"}`
+	if n, err := e.HandleEvent(context.Background(), []byte(deleteByApp)); err != nil || n != 0 {
+		t.Fatalf("delete-user by the server app: (%d, %v), want nothing checked and no error", n, err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(asked) != 1 || asked[0] != "xuanming/alice" {
+		t.Fatalf("only the deleted player may be looked up, asked=%v", asked)
+	}
+	if len(tokens.revokedAll)+len(tokens.revokedBefore)+len(players.kicked) != 0 {
+		t.Fatalf("a user gone by name cannot be resolved: all=%v before=%v kicked=%v", tokens.revokedAll, tokens.revokedBefore, players.kicked)
+	}
+}
+
+// blockingPlayers 的踢线一直卡到 release 关掉,踢完关 done。
+type blockingPlayers struct {
+	release chan struct{}
+	done    chan struct{}
+}
+
+func (b *blockingPlayers) KickAccountPlayers(context.Context, string, uint32) error {
+	<-b.release
+	close(b.done)
+	return nil
+}
+
+// 踢线在后台跑:登录不等它(同步踢线会把登录拖过 login 的 RPC 时限,而身份令牌已被一次性消费),踢线照样跑完。
+func TestKickRunsInTheBackground(t *testing.T) {
+	players := &blockingPlayers{release: make(chan struct{}), done: make(chan struct{})}
+	e := newEnforcer(t, 0, userChangedPasswordAt(changedAt), &fakeTokens{revokeCount: 1}, players)
+	e.goKick = safego.Go // 生产的后台执行
+
+	returned := make(chan uint32, 1)
+	go func() { returned <- e.CheckLogin(context.Background(), testAccount, changedAt+60) }()
+	select {
+	case tip := <-returned:
+		if tip != 0 {
+			t.Fatalf("a login after the change must pass, got tip %d", tip)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("CheckLogin must not wait for the kick")
+	}
+	close(players.release)
+	select {
+	case <-players.done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the background kick must still run")
 	}
 }
 

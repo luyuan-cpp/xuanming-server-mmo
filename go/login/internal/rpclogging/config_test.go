@@ -2,6 +2,7 @@ package rpclogging
 
 import (
 	"context"
+	"encoding/base64"
 	"net"
 	"os"
 	"os/exec"
@@ -144,6 +145,10 @@ func runStatInterceptorProbe(t *testing.T) {
 	logs := output.String()
 	if strings.Contains(logs, sentinel) {
 		t.Fatal("认证请求体出现在实际 Stat 日志中")
+	}
+	// bytes 字段(HandlePassportEvent 的 payload)经 json.Marshal 记成 base64,原文查不到也不等于没记。
+	if strings.Contains(logs, base64.StdEncoding.EncodeToString([]byte(sentinel))) {
+		t.Fatal("通行证回调请求体(base64)出现在实际 Stat 日志中")
 	}
 	for _, method := range []string{
 		loginpb.ClientPlayerLogin_Login_FullMethodName,

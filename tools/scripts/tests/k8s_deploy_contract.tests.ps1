@@ -118,7 +118,7 @@ $WorkloadSecretSpecs = [ordered]@{
     'commerce-gateway'  = @{ Env = 'MMORPG_COMMERCE_GATEWAY_SECRET'; Key = 'secret'; Consumers = @('mall', 'trade') }
     'commerce-payment'  = @{ Env = 'MMORPG_COMMERCE_PAYMENT_SECRET'; Key = 'secret'; Consumers = @('mall', 'payment') }
     'commerce-delivery' = @{ Env = 'MMORPG_COMMERCE_DELIVERY_SECRET'; Key = 'secret'; Consumers = @('mall', 'trade') }
-    'commerce-admin'    = @{ Env = 'MMORPG_COMMERCE_ADMIN_SECRET'; Key = 'secret'; Consumers = @('mall') }
+    'commerce-admin'    = @{ Env = 'MMORPG_COMMERCE_ADMIN_SECRET'; Key = 'secret'; Consumers = @('mall', 'gm-admin') }
     'payment-devpay'    = @{ Env = 'MMORPG_PAYMENT_DEVPAY_SECRET'; Key = 'secret'; Consumers = @('payment') }
     'login-queue-token' = @{ Env = 'MMORPG_LOGIN_QUEUE_TOKEN_SECRET'; Key = 'secret'; Consumers = @('login') }
     'login-wechat-minigame' =@{ Env = 'MMORPG_LOGIN_WECHAT_MINIGAME_APP_SECRET'; Key = 'secret'; Consumers = @('login') }
@@ -131,6 +131,14 @@ $WorkloadSecretSpecs = [ordered]@{
     # content-guard 外部平台审核的两把 AppSecret(infra namespace;用例在本文件末尾「content-guard 外部平台审核」一节)。
     'content-guard-wechat'  = @{ Env = 'MMORPG_CONTENT_GUARD_WECHAT_APP_SECRET'; Key = 'secret'; Consumers = @('content-guard') }
     'content-guard-douyin'  = @{ Env = 'MMORPG_CONTENT_GUARD_DOUYIN_APP_SECRET'; Key = 'secret'; Consumers = @('content-guard') }
+    # GM 后台与各资源服务管理入口(双人复核批 7,docs/design/admin-identity-and-dual-control.md §11.4;用例在 k8s_gm_admin_deploy_contract.tests.ps1)。
+    # 每把只给后台与资源服务本身;全部可空,本文件的基线与 prod 运行都不注入它们。
+    'gm-admin-oidc'             = @{ Env = 'MMORPG_GM_OIDC_CLIENT_SECRET'; Key = 'client-secret'; Consumers = @('gm-admin') }
+    'trade-manual-resolution'   = @{ Env = 'MMORPG_TRADE_MANUAL_RESOLUTION_SECRET'; Key = 'secret'; Consumers = @('trade', 'gm-admin') }
+    'match-manual-resolution'   = @{ Env = 'MMORPG_MATCH_MANUAL_RESOLUTION_SECRET'; Key = 'secret'; Consumers = @('match', 'gm-admin') }
+    'data-service-admin-token'  = @{ Env = 'MMORPG_DATA_SERVICE_ADMIN_TOKEN'; Key = 'token'; Consumers = @('data-service', 'gm-admin') }
+    'login-admin-token'         = @{ Env = 'MMORPG_LOGIN_ADMIN_TOKEN'; Key = 'token'; Consumers = @('login', 'gm-admin') }
+    'gateway-admin-machine-key' = @{ Env = 'MMORPG_GATEWAY_ADMIN_MACHINE_KEY'; Key = 'key'; Consumers = @('gateway') }
 }
 
 # C++ 节点角色读的工作负载密钥,按契约表顺序(= 目录表顺序 = Pod 模板上指纹的先后,见 k8s_deploy.ps1 的 New-CppPodAnnotationBlock)。
@@ -6647,15 +6655,15 @@ Test-Case 'infra-up -AssetOps on:guild / trade 各自只拿自己那把密钥、
         # 名单后面固定补上能起金丝雀的调用方的 <app>-canary(发布轨道设计 §5.3,Get-ReleaseTrackAppLabels)。
         @{ Name = 'guild-grpc-allowlist'; Svc = 'guild'; Allowed = 'client-rpc-router,data-service,mail,match,client-rpc-router-canary,mail-canary,match-canary'; Port = 50300 }
         # battle 提交战斗结果(MatchInternal.CommitBattleOutcome);金丝雀 battle 池是 app: battle-canary。
-        @{ Name = 'match-grpc-allowlist'; Svc = 'match'; Allowed = 'client-rpc-router,guild,gate,data-service,scene,scene-world,scene-instance,battle,client-rpc-router-canary,guild-canary,battle-canary'; Port = 50500 }
+        @{ Name = 'match-grpc-allowlist'; Svc = 'match'; Allowed = 'client-rpc-router,guild,gate,data-service,scene,scene-world,scene-instance,battle,gm-admin,client-rpc-router-canary,guild-canary,battle-canary'; Port = 50500 }
         # 其余收玩家会话身份的全局服务(docs/design/gate-online-identity.md §10.2)。friend / trade / mail 是角色护栏参与者,协调者 data-service 要进得来;
         # rank 给 mail 发榜单奖励,match 给 mail 投群仙问道赛领奖邮件,scene 在战斗掉落放不下时改投邮件;match 结算后向 rank 上报评分。
         # match 拨 friend(下战书前查拉黑与好友)、chat(全服系统播报)、guild(纯帮会对阵的帮派归属):江湖生死状一期,2026-11-26 补。
         @{ Name = 'chat-grpc-allowlist'; Svc = 'chat'; Allowed = 'client-rpc-router,match,client-rpc-router-canary,match-canary'; Port = 50700 }
         @{ Name = 'friend-grpc-allowlist'; Svc = 'friend'; Allowed = 'client-rpc-router,data-service,match,client-rpc-router-canary,match-canary'; Port = 50400 }
-        @{ Name = 'trade-grpc-allowlist'; Svc = 'trade'; Allowed = 'client-rpc-router,data-service,client-rpc-router-canary'; Port = 50800 }
-        @{ Name = 'mail-grpc-allowlist'; Svc = 'mail'; Allowed = 'client-rpc-router,data-service,rank,match,scene,scene-world,scene-instance,client-rpc-router-canary,rank-canary,match-canary'; Port = 50900 }
-        @{ Name = 'rank-grpc-allowlist'; Svc = 'rank'; Allowed = 'client-rpc-router,match,client-rpc-router-canary,match-canary'; Port = 51100 }
+        @{ Name = 'trade-grpc-allowlist'; Svc = 'trade'; Allowed = 'client-rpc-router,data-service,gm-admin,client-rpc-router-canary'; Port = 50800 }
+        @{ Name = 'mail-grpc-allowlist'; Svc = 'mail'; Allowed = 'client-rpc-router,data-service,rank,match,scene,scene-world,scene-instance,gm-admin,client-rpc-router-canary,rank-canary,match-canary'; Port = 50900 }
+        @{ Name = 'rank-grpc-allowlist'; Svc = 'rank'; Allowed = 'client-rpc-router,match,gm-admin,client-rpc-router-canary,match-canary'; Port = 51100 }
         # payment 只收客户端请求(gate → 路由服)。渠道回调口与指标口算「清单里声明的其它端口」,对所有来源开放:回调来自集群外的负载均衡。
         # 它不提供金丝雀副本(不在 $script:CanaryReadyGoSvcs 里),策略只选中它自己。
         @{ Name = 'payment-grpc-allowlist'; Svc = 'payment'; Allowed = 'client-rpc-router,client-rpc-router-canary'; Port = 51200; NoCanary = $true }
@@ -6765,7 +6773,7 @@ Test-Case 'login 的 gRPC 口准入(zone namespace):只放行 gate、路由服�
     Assert-True -Condition ($null -ne $policy) -Because '打开时 zone 里要有 login-grpc-allowlist'
     $shape = Get-GrpcAllowListShape -Block $policy
     Assert-Equal -Expected 'login' -Actual ($shape.TargetApps -join ',') -Because 'login 按 zone 部署,没有金丝雀副本'
-    Assert-Equal -Expected 'gate,client-rpc-router,gateway,client-rpc-router-canary' -Actual ($shape.AllowedApps -join ',') -Because 'login 的 gRPC 调用方名单;增删要同时改这里'
+    Assert-Equal -Expected 'gate,client-rpc-router,gateway,gm-admin,client-rpc-router-canary' -Actual ($shape.AllowedApps -join ',') -Because 'login 的 gRPC 调用方名单;增删要同时改这里'
     Assert-Equal -Expected 50000 -Actual $shape.GrpcPort -Because 'gRPC 口取 $GoSvcCatalogue 的 Port'
     $manifest = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'deploy/k8s/manifests/go-svc/login.yaml'))
     $declared = @(Get-ManifestContainerPorts -ManifestContent $manifest | Where-Object { $_ -ne 50000 })
@@ -6833,7 +6841,7 @@ Test-Case 'gRPC 准入名单里的每个 app 标签都对应一个真实工作�
     # C++ 节点的清单由生成器渲染,没有静态 manifest;battle 的 Pod 标签在 lib/k8s_client_entry.ps1 的模板里,下面单独核对。
     $knownCpp = @('gate', 'battle', 'scene', 'scene-world', 'scene-instance')
     # Java 网关的清单在 java-svc 目录。
-    $javaSvc = @('gateway', 'mall')
+    $javaSvc = @('gateway', 'mall', 'gm-admin')
     $deployScript = [IO.File]::ReadAllText((Join-Path (Get-ToolsScriptsDir) 'k8s_deploy.ps1'))
     $tableText = [regex]::Match($deployScript, '(?s)\$script:GrpcAllowLists = \[ordered\]@\{(?<t>.*?)\r?\n\}').Groups['t'].Value
     Assert-True -Condition ($tableText.Length -gt 0) -Because '夹具前提:找得到 $script:GrpcAllowLists'

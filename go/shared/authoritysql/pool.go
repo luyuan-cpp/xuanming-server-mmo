@@ -84,6 +84,7 @@ type OpenOption func(*openOptions)
 type openOptions struct {
 	placement   PlacementResolver
 	connectGate ConnectGate
+	strictTLS   StrictTLSConfig
 }
 
 // WithPlacement 让连接池按映射拨号:DSN 里的地址不用,其余连接参数不变。*sql.DB 句柄全程不变,业务代码不用改。
@@ -435,7 +436,15 @@ func newPool(dsn, expectedDatabase string, backend Backend, maxOpen int, ioTimeo
 	parsed.Timeout = time.Second
 	parsed.ReadTimeout = ioTimeout
 	parsed.WriteTimeout = ioTimeout
+	if opts.placement != nil && (opts.strictTLS.CAFile != "" || opts.strictTLS.ServerName != "") {
+		return nil, "", fmt.Errorf("%w: WithStrictTLS cannot be combined with dynamic WithPlacement", ErrUnsafeTLSConfig)
+	}
+	cleanupTLS, err := applyStrictTLS(parsed, opts.strictTLS, false)
+	if err != nil {
+		return nil, "", err
+	}
 	inner, err := mysql.NewConnector(parsed)
+	cleanupTLS()
 	if err != nil {
 		return nil, "", errors.New("权威SQL连接器无效")
 	}

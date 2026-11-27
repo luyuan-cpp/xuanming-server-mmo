@@ -5,6 +5,8 @@
 > - 会话「交接单里的代码改动清零与方案入档」：§2 修复身份三项，§3 snowflake LegacyPrefix 整删，§4 第 1 条（人工终结见证比 attempts），§5 文档。
 > - **Gemini 不要改这几节的代码**；第 6 节已修五批的验证照旧交 Gemini，只跑，要改代码时保留首错原文停下、交回 Claude。下面「交 Gemini」一段保留作对照。
 
+> **11-27 总状态**：第 1~5 节的代码除一处外都已写完（未生成、未编译）。**还要写代码的有两处**：第 8 节（选角页回选上限的用例），以及第 4 节第 1 条剩下的 guild 人工终结条件写 SQL（与 r2 第 4 轮交接单 `data-overwrite-audit-r2-round4-handoff-20261126.md` §0a 第 2.2 步是同一件事，在那边做，别做两遍）。其余只交 Gemini 按各条 PROGRESS 的命令验证。换电脑后从总入口 `docs/handoff/README.md` 开始：先做第 4 轮交接单 §0a（它的第 6 步指回本单第 8 节）；第 8 节不依赖第 4 轮的代码，在 §0a 第 5 步（第 5 轮审计）之前做完即可。
+
 接 `docs/PROGRESS.md` 2026-11-26「收 11-19 六条「评审修正·」下的「建议，没做」」。那一条做完了五批，下面是没做的。
 
 **交 Gemini（11-26 晚定）**：Claude 的 Fable 周额度当晚用完（100%，12-03 重置），负责人随后把会话切到 Opus 5.5；按 AGENTS §10.3，低档模型不改逻辑代码。负责人的口径是「量不够的时候交接给 gemini 去做」，所以本单各项全部交 Gemini：
@@ -52,6 +54,8 @@
 
 ## 2. 修复身份
 
+> **状态（11-27 核对）**：已由会话「交接单里的代码改动清零与方案入档」写完，未编译，见 PROGRESS 2026-11-26「两份新交接单的代码改由 Claude 写」。不要重写，只按那一条的命令交 Gemini 验证。
+
 > **2026-11-26 晚：代码已改完，Gemini 只验证**（会话「交接单里的代码改动清零与方案入档」，Opus 5.5，未编译）。设计记录在 `docs/design/data-consistency-guarantee-map-20261020.md` §6.8，列级定案在 `docs/design/tidb-phase1-and-launch-readiness.md` §2.6。
 > - dbmove：设了 `MMORPG_SQL_REPAIR_PRINCIPAL` 时 `plan` 核修复账号在目标上存在，`cutover` 冻结之前比它在这个库上的授权；**都只打 WARNING、不拦搬库**（`tools/dbmove/mover.go` 的 `reportRepairPrincipal`、`side.go` 的 `hasGrantsOn`、`main.go` 的环境变量）。验证：`cd tools/dbmove && gofmt -l . && go vet ./... && go test -count=1 ./...`，新用例 `TestPlanWarnsWhenRepairPrincipalIsMissingOnTargetButGoesOn`、`TestPlanSkipsRepairPrincipalWithoutGrantsOnThisDatabase`、`TestPlanNotesWhenRepairPrincipalIsUnset`、`TestCutoverWarnsOnMissingRepairGrantsButStillFlips`、`TestCutoverIsQuietWhenRepairGrantsMatch` 都要 PASS。
 > - 开片 / 开库后的提醒：go/db `cmd/migrate -command up` 在这次建了表时打一行 `Reminder: repair principal grants are table-level …`；data_service `-migrate` 每次都打（它不回报建了什么）。**不做成自动执行**：GRANT 要管理员账号，部署与迁移都不经手数据库管理口令。验证：`cd go/db && go build ./cmd/migrate && go vet ./cmd/migrate`，`cd go/data_service && go build . && go vet .`（`data_service.go` 顺带改正了 HEAD 里一处 import 顺序，`gofmt -l` 应无输出）。
@@ -62,6 +66,8 @@
 - **列级收紧**：TiDB 的列级权限行为没在真库核过，先核再定。核法：建一张表，`GRANT UPDATE(col_a) ON …`，用该账号改 `col_b` 应被 1143 拒绝。
 
 ## 3. snowflake 的 LegacyPrefix 兼容层整批删
+
+> **状态（11-27 核对）**：已由会话「交接单里的代码改动清零与方案入档」写完，未编译，见 PROGRESS 2026-11-26「两份新交接单的代码改由 Claude 写」。不要重写，只按那一条的命令交 Gemini 验证。
 
 > **2026-11-26 晚：代码已改完，Gemini 只验证**（Opus 5.5 子代理写、本会话复核 Txn 比较条件：只删了旧 id 键那一条）。7 个 Go 文件随别的会话的提交 `76e2b59bb` 入库；设计稿 `snowflake-id-allocation.md`、`node-id-overhaul-plan-20260908.md`、`node-id-overhaul-qa-20260908.md` 在工作区。验证：`cd go/shared && go vet ./snowflakealloc/... && go vet -tags=integration ./snowflakealloc/... && go test ./snowflakealloc/ -count=1 -v`；起 etcd（`docker compose -f deploy/docker-compose.yml up -d etcd`）后 `go test -tags=integration ./snowflakealloc/ -count=1 -v -timeout 15m`，输出里不得有 etcd 不可达的 SKIP；`cd ../scene_manager && go build ./... && go vet ./...`。Java 不适用。
 
@@ -77,7 +83,7 @@
 
 ## 4. 早期各批没人认领的 4 条（「数据覆写审计 R2 交接」会话 11-26 清点）
 
-> **状态（11-26 晚）**：第 2 条已落码（未编译），第 3 条复核后不改代码，第 4 条 11-12 已收，见 r2 审计文档 §6 各条后面的状态；第 1 条归另一会话。
+> **状态（11-26 晚）**：第 2 条已落码（未编译），第 3 条复核后不改代码，第 4 条 11-12 已收，见 r2 审计文档 §6 各条后面的状态；第 1 条由会话「交接单里的代码改动清零与方案入档」改完 shared 见证与两个 `assetopfix`（未编译，见 PROGRESS 2026-11-26「两份新交接单的代码改由 Claude 写」），**guild 的条件写 SQL 还没补**，在 r2 第 4 轮交接单 §0a 第 2.2 步做。
 
 每条的出处、现象和已核过的代码位置，在 `docs/design/data-overwrite-rollback-audit-r2-20261019.md` §6「2026-11-26 清点」。先逐条复核，成立再改；修完在那一段每条后面标状态，在 §1「仍开着」里划掉，PROGRESS 写命令。
 
@@ -89,6 +95,8 @@
 第 3、4 条的现行判据在 `go/data_service/internal/store/account_role_ref.go`（`reapRef`、`committedEvidence`）与 `create_residual*.go`，设计记录写进 `guild-phase2/03-names.md` §3.4a 与 `horizontal-scale-logical-db.md`「标了保留的建角 ref」一段，手册同步 `docs/ops/mysql-backup-pitr-runbook.md` §4.1a。
 
 ## 5. 顺带看到、没动的
+
+> **状态（11-27 核对）**：已由会话「交接单里的代码改动清零与方案入档」写完，未编译，见 PROGRESS 2026-11-26「两份新交接单的代码改由 Claude 写」。不要重写，只按那一条的命令交 Gemini 验证。
 
 > **2026-11-26 晚：第一条已改**（只改文档）：`kafka-topic-retention-strategy.md` 里 DBTask 与 `db_task_zone_*` 的行、表与段落按「2026-10-30 已退役」改正文。第二条是别的会话的文件，照旧不碰（`data_service.go` 的 import 顺序随本会话 §2 的改动一起改了）。
 

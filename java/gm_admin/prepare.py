@@ -184,6 +184,21 @@ VITE_GLOB_API_URL=/jeecgboot
 VITE_GLOB_API_URL_PREFIX=
 VITE_GLOB_ICONIFY_USE_TYPE=online
 ''', encoding="utf-8")
+    # K8s 镜像的前端生产构建(vite build --mode gmk8s,见 README「K8s 镜像」):浏览器只访问同 Pod 的 nginx,接口与后端地址
+    # 都取同源相对路径;上游 useGlobSetting 会给不带协议的 DOMAIN_URL 补上当前页面的 origin。开发服务器的端口与代理不写。
+    (frontend / ".env.gmk8s").write_text('''VITE_GLOB_APP_TITLE=玄冥游戏管理
+VITE_GLOB_APP_SHORT_NAME=Xuanming_GM
+VITE_GLOB_APP_OPEN_SSO=false
+VITE_GLOB_APP_OPEN_QIANKUN=false
+VITE_USE_MOCK=false
+VITE_PUBLIC_PATH=/
+VITE_BUILD_COMPRESS=none
+VITE_BUILD_COMPRESS_DELETE_ORIGIN_FILE=false
+VITE_GLOB_DOMAIN_URL=/jeecgboot
+VITE_GLOB_API_URL=/jeecgboot
+VITE_GLOB_API_URL_PREFIX=
+VITE_GLOB_ICONIFY_USE_TYPE=online
+''', encoding="utf-8")
     patch_icon_lock(frontend)
     RUNTIME.mkdir(parents=True, exist_ok=True)
     (RUNTIME / "maven-settings.xml").write_text('''<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0">

@@ -235,5 +235,19 @@ spec:
               连续 10 分钟,一半以上的通行证核对(登录、刷新、通行证回调)都没能问到通行证,登录与刷新只能照常放行。玩家登录不受影响,但在通行证里改密、
               被封、被删的账号,游戏令牌还在续期(盗号者踢不掉)。查 login 的 AuthProviders.Passport.Endpoint 是否指向
               通行证的内网入口、管理凭据(AdminClientId 与 login-passport-admin 密钥)是否与通行证后台一致、通行证是否在线;
-              login 日志搜 "passport] session check failed"。
+              login 日志搜 "[passport]" 的 ERROR(登录时 "login check failed"、刷新时 "session check failed"、回调 "webhook handling failed")。
+            runbook_url: docs/design/official-passport-registration.md
+        - alert: LoginPassportSessionMassRevocation
+          expr: |
+            sum by (namespace) (increase(login_passport_session_check_total{result="user_gone"}[10m])) > 20
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }} 的 login 在成批吊销「通行证里查不到」的账号并踢下线"
+            description: >-
+              10 分钟内 20 次以上判「通行证里查不到这名用户」,整号吊销并踢下线。通行证后台成批删用户之外,最可能是
+              AuthProviders.Passport.Endpoint 指到了另一套接受我们管理凭据的通行证(例如从别的环境拷了库):那边查谁都查不到,
+              玩家每刷新一次就被踢一个。立刻核对 Endpoint 指向本环境通行证的内网入口;各环境的 app-xuanming-server 密钥
+              应各自首启生成、不要拷库。被误吊销的玩家重新登录即可(通行证里的账号没动)。
             runbook_url: docs/design/official-passport-registration.md

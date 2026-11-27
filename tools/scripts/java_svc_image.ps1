@@ -11,6 +11,9 @@
     Dockerfile.java-svc 的 build context 必须是R仓库根目录，包含java reactor及正式proto源。
     (多阶段:temurin JDK + maven 打包 → temurin JRE alpine 运行)。
 
+    gm-admin(java/gm_admin,JeecgBoot 扩展)例外:用 deploy/k8s/Dockerfile.gm-admin 只打包宿主机先构建好的
+    后端 jar 与前端 dist(两个具名 build context),构建前核对产物;步骤见 java/gm_admin/README.md「K8s 镜像」。
+
     dev_tools.ps1 的 java-svc-build-image / java-svc-push-image / build-images
     三条命令都调到这里(以前脚本根本不存在,dev 一键出镜像走到 Java 这步就炸)。
 
@@ -57,6 +60,10 @@ $ScriptDir  = $PSScriptRoot
 $RepoRoot   = (Resolve-Path (Split-Path -Parent (Split-Path -Parent $ScriptDir))).Path
 $JavaRoot   = Join-Path $RepoRoot "java"
 $Dockerfile = Join-Path $RepoRoot "deploy" "k8s" "Dockerfile.java-svc"
+# gm-admin 的 Dockerfile 与两份宿主机产物所在目录(具名 build context gm-admin-backend / gm-admin-web)。
+$GmAdminDockerfile = Join-Path $RepoRoot "deploy" "k8s" "Dockerfile.gm-admin"
+$GmAdminBackendDir = Join-Path $RepoRoot "build" "gm-admin-upstream" "jeecg-boot" "jeecg-module-system" "jeecg-system-start" "target"
+$GmAdminWebDir     = Join-Path $RepoRoot "build" "gm-admin-upstream" "jeecgboot-vue3" "dist"
 
 . (Join-Path $ScriptDir "lib" "release_common.ps1")
 
@@ -108,6 +115,9 @@ $Catalogue = [ordered]@{
     # 官方商城 mall(java/mall_game):与 k8s_deploy.ps1 $JavaSvcCatalogue 的 mall 条目配对(ImageName 必须一致)。
     # 同一个 reactor,`-pl mall_game -am` 连 authority_jdbc 一起构建;镜像入口与 gateway 相同(Dockerfile.java-svc)。
     mall    = @{ Dir = "mall_game";    ImageName = "mmorpg-mall" }
+    # GM 后台 gm-admin(java/gm_admin):与 k8s_deploy.ps1 $JavaSvcCatalogue 的 gm-admin 条目配对(ImageName 必须一致)。
+    # 不在 java reactor 里:Invoke-Build 转给 Invoke-GmAdminBuild,打包宿主机先构建好的 jar 与前端 dist。
+    'gm-admin' = @{ Dir = "gm_admin"; ImageName = "mmorpg-gm-admin" }
 }
 
 function Get-ImageFullName {
@@ -128,11 +138,14 @@ function Invoke-Build {
     if((Get-FileHash -LiteralPath $toolFiles[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant() -cne $LinuxProtocSha256){throw 'Linux protoc原件SHA不符'}
     $toolStream=[IO.File]::OpenRead($toolFiles[0].FullName)
     try{$magic=[byte[]]::new(4);if($toolStream.Read($magic,0,4) -ne 4 -or [Convert]::ToHexString($magic) -cne '7F454C46'){throw 'Linux protoc必须为已批准ELF原件，不能传入PE或脚本'}}finally{$toolStream.Dispose()}
+    # gm-admin 的宿主机产物在构建任何镜像之前核对:不对就整体拒绝,不白跑前面的 Java 镜像。
+    if ($Catalogue.Contains('gm-admin')) { Assert-GmAdminArtifacts }
     foreach ($kv in $Catalogue.GetEnumerator()) {
         $svc  = $kv.Key
         $info = $kv.Value
         $context = $RepoRoot
         $fullImage = Get-ImageFullName -ImageName $info.ImageName
+        if ($svc -eq 'gm-admin') { Invoke-GmAdminBuild -FullImage $fullImage -ImageName $info.ImageName; continue }
 
         if (-not (Test-Path (Join-Path (Join-Path $JavaRoot $info.Dir) "pom.xml")) -or -not (Test-Path (Join-Path $JavaRoot "pom.xml")) -or -not (Test-Path (Join-Path $RepoRoot 'proto/common/database/rollback_database_table.proto'))) {
             throw "Java 服务 $svc 的 build context 里没有 pom.xml:$context"
@@ -169,6 +182,89 @@ function Invoke-Build {
             Write-Host "  [ok] $fullImage" -ForegroundColor Green
         }
     }
+}
+
+# gm-admin 构建前 fail-closed 核对宿主机产物:jar 与 dist/index.html 都在、分别晚于各自源码与 prepare.py,
+# 协议描述晚于 proto/、jar 晚于协议描述,dist/_app.config.js 是 gmk8s 模式的同源取值(缺了或取了别的模式,页面白屏或连错地址)。
+function Assert-GmAdminArtifacts {
+    $module = Join-Path $JavaRoot "gm_admin"
+    $prepare = Get-Item -LiteralPath (Join-Path $module "prepare.py")
+    $rebuild = @(
+        "按 java/gm_admin/README.md「K8s 镜像」在仓库根目录重新构建:",
+        "  python java/gm_admin/prepare.py",
+        "  mvn -s build/gm-admin-runtime/maven-settings.xml -f build/gm-admin-upstream/jeecg-boot/pom.xml -pl jeecg-module-system/jeecg-system-start -am '-Dmaven.compiler.proc=full' -DskipTests package",
+        "  pnpm --dir build/gm-admin-upstream/jeecgboot-vue3 install --frozen-lockfile --fetch-timeout=300000",
+        "  pnpm --dir build/gm-admin-upstream/jeecgboot-vue3 exec cross-env NODE_ENV=production NODE_OPTIONS=--max-old-space-size=8192 vite build --mode gmk8s",
+        "  pnpm --dir build/gm-admin-upstream/jeecgboot-vue3 exec cross-env npm_lifecycle_script=NODE_ENV=gmk8s esno ./build/script/postBuild.ts"
+    ) -join "`n"
+    foreach ($artifact in @(
+            @{ Path = (Join-Path $GmAdminBackendDir "jeecg-system-start-3.9.6.jar"); Sources = (Join-Path $module "src" "main") }
+            @{ Path = (Join-Path $GmAdminWebDir "index.html"); Sources = (Join-Path $module "frontend" "src") }
+        )) {
+        if (-not (Test-Path -LiteralPath $artifact.Path -PathType Leaf)) {
+            throw "gm-admin 产物不存在:$($artifact.Path)`n$rebuild"
+        }
+        $builtAt = (Get-Item -LiteralPath $artifact.Path).LastWriteTimeUtc
+        $newest = @(Get-ChildItem -LiteralPath $artifact.Sources -Recurse -File -Force) + $prepare | Sort-Object LastWriteTimeUtc | Select-Object -Last 1
+        if ($builtAt -le $newest.LastWriteTimeUtc) {
+            throw "gm-admin 产物比源码旧:$($artifact.Path) 不晚于 $($newest.FullName)`n$rebuild"
+        }
+    }
+    # 协议描述:jar 内嵌的 gm-contracts.pb 是 prepare.py 那一刻按 proto/ 生成、拷进上游资源目录的。只核 jar 比后台源码新拦不住
+    # 「改了管理协议(批准记录、交易 / 邮件 / 账号类请求)却没重跑 prepare.py」:后台会按旧字段号编请求,下游拒绝或读错字段。
+    # 所以再核两条:描述比 proto/ 下每个 .proto 都新(任何协议改动都要重跑 prepare.py),jar 比描述新(jar 内嵌的就是这一份)。
+    $descriptor = Join-Path $RepoRoot "build" "gm-admin-upstream" "jeecg-boot" "jeecg-module-system" "jeecg-system-start" "src" "main" "resources" "gm-contracts.pb"
+    if (-not (Test-Path -LiteralPath $descriptor -PathType Leaf)) {
+        throw "gm-admin 协议描述不存在:$descriptor(prepare.py 生成并拷进上游资源目录)`n$rebuild"
+    }
+    $descriptorAt = (Get-Item -LiteralPath $descriptor).LastWriteTimeUtc
+    $newestProto = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot "proto") -Recurse -File -Filter "*.proto" -Force) | Sort-Object LastWriteTimeUtc | Select-Object -Last 1
+    if ($null -ne $newestProto -and $descriptorAt -le $newestProto.LastWriteTimeUtc) {
+        throw "gm-admin 协议描述比协议源码旧:$descriptor 不晚于 $($newestProto.FullName)`n$rebuild"
+    }
+    if ((Get-Item -LiteralPath (Join-Path $GmAdminBackendDir "jeecg-system-start-3.9.6.jar")).LastWriteTimeUtc -le $descriptorAt) {
+        throw "gm-admin 后端 jar 比协议描述旧:jar 里内嵌的还是上一份描述`n$rebuild"
+    }
+    $appConfig = Join-Path $GmAdminWebDir "_app.config.js"
+    $appConfigText = if (Test-Path -LiteralPath $appConfig -PathType Leaf) { [IO.File]::ReadAllText($appConfig) } else { "" }
+    if (-not $appConfigText.Contains('"VITE_GLOB_API_URL":"/jeecgboot"') -or -not $appConfigText.Contains('"VITE_GLOB_DOMAIN_URL":"/jeecgboot"')) {
+        throw "gm-admin 前端不是 gmk8s 模式的产物:$appConfig 缺失或接口地址不是同源 /jeecgboot(本机 .env.gm 与上游 .env.production 的取值都不能进镜像)。`n$rebuild"
+    }
+}
+
+# gm-admin:自己的 Dockerfile + 两个具名 context(jar 所在目录、dist 目录),主 context 是仓库根(只取 nginx 配置)。
+function Invoke-GmAdminBuild {
+    param(
+        [Parameter(Mandatory = $true)][string]$FullImage,
+        [Parameter(Mandatory = $true)][string]$ImageName
+    )
+    if (-not (Test-Path $GmAdminDockerfile)) {
+        throw "Dockerfile not found: $GmAdminDockerfile"
+    }
+    Write-Host "[build] gm-admin -> $FullImage" -ForegroundColor Cyan
+    # revision label 与其它 Java 镜像同口径在命令行再传一次:publish_images.ps1 按它核对镜像 == 当前 commit。
+    $buildArgs = @(
+        "build",
+        "-f", $GmAdminDockerfile,
+        "--build-context", "gm-admin-backend=$GmAdminBackendDir",
+        "--build-context", "gm-admin-web=$GmAdminWebDir",
+        "--build-arg", "BUILD_VERSION=$BuildVersion",
+        "--build-arg", "BUILD_COMMIT=$BuildCommit",
+        "--build-arg", "BUILD_TIME=$BuildTime",
+        "--build-arg", "IMAGE_TITLE=$ImageName",
+        "--label", "org.opencontainers.image.revision=$BuildCommit",
+        "-t", $FullImage,
+        $RepoRoot
+    )
+    if ($DryRun) {
+        Write-Host "  [dry-run] docker $($buildArgs -join ' ')" -ForegroundColor DarkGray
+        return
+    }
+    & (Resolve-ReleaseDockerCommand) @buildArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "Docker build failed for gm-admin"
+    }
+    Write-Host "  [ok] $FullImage" -ForegroundColor Green
 }
 
 function Invoke-Push {

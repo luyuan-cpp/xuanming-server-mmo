@@ -1,0 +1,69 @@
+# ────────────────────────────────────────────────────────────────
+# GM 后台(java/gm_admin,JeecgBoot v3.9.6 扩展)的 K8s 镜像 mmorpg-gm-admin:只打包,不在 Docker 里编译。
+#
+# 后端 jar 与前端 dist 是宿主机按 java/gm_admin/README.md「K8s 镜像」先构建好的产物,以两个具名 build context
+# 交进来(根 .dockerignore 排除了 build/,也只能这样进来)。理由:仓库里没有钉 digest 的 node 镜像,前端只能在
+# 宿主机构建,后端与它保持同一套产物来源。tools/scripts/java_svc_image.ps1 构建前核对两份产物都在、比源码新、
+# 前端是 gmk8s 模式(同源 /jeecgboot)。
+#
+# 同一 Pod 的两个容器都用这个镜像(deploy/k8s/manifests/java-svc/gm-admin.yaml):
+#   - 后端:镜像 ENTRYPOINT(java -jar /app/gm-admin.jar),听 18090;Spring 参数由清单 args 传,这里不写死 profile。
+#   - 前端:清单把 command 覆盖成 ["nginx", "-c", "/etc/nginx/gm-admin.conf", "-g", "daemon off;"],听 3101,
+#     发 /app/web(dist 原样),/jeecgboot/ 反代同 Pod 后端(deploy/k8s/gm-admin-nginx.conf)。
+# 根文件系统按只读设计,可写的只有清单挂的 emptyDir:/tmp(nginx 的 pid 与各类 temp path、JVM tmpdir)与 /app/uploads。
+# 不设 STOPSIGNAL:它对两个容器同时生效,nginx 优雅退出用的 SIGQUIT 对 JVM 只是打印线程栈。
+#
+# Usage(日常走 tools/scripts/java_svc_image.ps1 -Command build,它核对产物并传下面的版本 build-arg 与 revision label):
+#   docker build -f deploy/k8s/Dockerfile.gm-admin \
+#     --build-context gm-admin-backend=build/gm-admin-upstream/jeecg-boot/jeecg-module-system/jeecg-system-start/target \
+#     --build-context gm-admin-web=build/gm-admin-upstream/jeecgboot-vue3/dist \
+#     --build-arg BUILD_VERSION=<版本> --build-arg BUILD_COMMIT=<12位sha> \
+#     --build-arg BUILD_TIME=<UTC yyyy-MM-ddTHH:mm:ssZ> -t mmorpg-gm-admin:<tag> .
+# ────────────────────────────────────────────────────────────────
+
+# 具名 context 的占位 stage(与 Dockerfile.go-svc.prebuilt 同一写法):漏传 --build-context 时 COPY 报 not found,不会去拉同名镜像。
+FROM scratch AS gm-admin-backend
+FROM scratch AS gm-admin-web
+
+# 与 Dockerfile.java-svc 运行阶段同一 digest(查得与更新方法、Java 23 非 LTS 的风险见那边);本机跑后台用的也是 JDK 23。
+FROM eclipse-temurin:23.0.2_7-jre-alpine@sha256:88593498863c64b43be16e8357a3c70ea475fc20a93bf1e07f4609213a357c87
+
+# 非 root 运行(uid/gid 10001,与 Go / C++ / Java 镜像同一约定);nginx 也以它运行,不用包里自带的 nginx 用户。
+RUN apk add --no-cache ca-certificates tzdata nginx \
+    && addgroup -S -g 10001 mmorpg \
+    && adduser -S -D -H -h /app -s /sbin/nologin -u 10001 -G mmorpg mmorpg
+
+# 工作目录即 JVM 的 user.dir。上游 CodeTemplateInitListener 启动后往 ./config/jeecg 拷代码生成模板,只读根(清单把
+# ConfigMap 只读挂在 /app/config)下会打一次被它自己吞掉的异常栈,不影响启动;GM 不用在线代码生成。
+WORKDIR /app
+
+COPY --from=gm-admin-backend jeecg-system-start-3.9.6.jar /app/gm-admin.jar
+COPY --from=gm-admin-web / /app/web/
+COPY deploy/k8s/gm-admin-nginx.conf /etc/nginx/gm-admin.conf
+
+# application-gm.yml 的 jeecg.path.upload / webapp 都取它,指到清单挂的 emptyDir;清单或外挂配置可以覆盖。
+ENV GM_UPLOAD_PATH=/app/uploads
+
+EXPOSE 3101 18090
+
+# 版本戳 ARG 放在末尾,只让下面几层随 commit 失效。title 由构建脚本按目录表的镜像名传入。
+ARG BUILD_VERSION=unknown
+ARG BUILD_COMMIT=unknown
+ARG BUILD_TIME=unknown
+ARG IMAGE_TITLE=mmorpg-gm-admin
+
+LABEL org.opencontainers.image.version="${BUILD_VERSION}" \
+      org.opencontainers.image.revision="${BUILD_COMMIT}" \
+      org.opencontainers.image.created="${BUILD_TIME}" \
+      org.opencontainers.image.source="https://github.com/luyuan-cpp/xuanming-server-mmo" \
+      org.opencontainers.image.title="${IMAGE_TITLE}"
+
+# 一行一个键,与 Dockerfile.java-svc 同格式:`kubectl exec <pod> -c gm-admin -- cat /app/BUILD_INFO`。
+RUN printf 'version=%s\ncommit=%s\nbuilt_at=%s\n' \
+      "${BUILD_VERSION}" "${BUILD_COMMIT}" "${BUILD_TIME}" > /app/BUILD_INFO
+
+USER 10001:10001
+
+# 堆上限取容器内存的 60%:JeecgBoot 类多,元空间、线程栈与 gRPC 的直接内存要留够(2Gi 上限时约 800Mi),否则先被 OOMKilled。
+# Spring 参数由清单 args 接在后面。前端容器由清单 command 整体替换掉这一行。
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=60", "-jar", "/app/gm-admin.jar"]

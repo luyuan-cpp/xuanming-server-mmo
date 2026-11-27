@@ -1515,7 +1515,7 @@ payment 与 rank 同形:全局池服务(`$GoSvcCatalogue.payment`,`Global = $tru
   | `MMORPG_COMMERCE_GATEWAY_SECRET` | `commerce-gateway` | mall、trade |
   | `MMORPG_COMMERCE_PAYMENT_SECRET` | `commerce-payment` | mall、payment |
   | `MMORPG_COMMERCE_DELIVERY_SECRET` | `commerce-delivery` | mall、trade |
-  | `MMORPG_COMMERCE_ADMIN_SECRET` | `commerce-admin` | mall |
+  | `MMORPG_COMMERCE_ADMIN_SECRET` | `commerce-admin` | mall、gm-admin(GM 后台的运营处置页,见下一节) |
 
   - dev 档没注入时用公开回落值,照样经 Secret 注入;staging / prod 必须注入,注入回落值同样拒绝。
   - 形状各档位都查:至少 32 字节;不含空白、双引号、反斜杠、控制字符和 `${`;几把互不相同。报错只点变量名。
@@ -1524,10 +1524,60 @@ payment 与 rank 同形:全局池服务(`$GoSvcCatalogue.payment`,`Global = $tru
 - **trade 与 payment 怎么找到商城**:trade 的 `Mall.URL` 与 payment 的 `Payment.Mall.BaseURL` 都由脚本写成 `http://mall.<infra>:18120`。trade 只有资产通道开着(`-AssetOps on`)时才连商城。
   本次没部署商城(没给 `-JavaSvcRegistry`)时这个地址照写;商城不在,调用会失败。
 - **允许的支付渠道**:模板的 `commerce.allowed-payment-channels` 取同一次渲染里 payment 开着的渠道,不各写一份。改了支付渠道要重新 `infra-up`,并把商城各槽位的运行配置同步改掉。
-- **准入**:`-NetworkPolicies on` 时 18120 只放行 `trade` 与 `payment`。策略名是 `mall-grpc-allowlist`:沿用 `-grpc-allowlist` 后缀,`k8s_netpol_probe.ps1` 按这个后缀找策略,商城这一份也会被实测。
+- **准入**:`-NetworkPolicies on` 时 18120 只放行 `trade`、`payment` 与 GM 后台 `gm-admin`(`/internal/admin/*`,2026-11-27 双人复核批 7)。策略名是 `mall-grpc-allowlist`:沿用 `-grpc-allowlist` 后缀,`k8s_netpol_probe.ps1` 按这个后缀找策略,商城这一份也会被实测。
 - **连接数**:Hikari 池上限 16(写在 `DatabaseConfiguration.poolConfig`,没有配置项)× 2 副本计入 MySQL 连接总账(`MallReplicas` / `MallMaxPool`)。和 gateway 一样,本次部不部署都计入。
 - **镜像**:`mmorpg-mall`,`java_svc_image.ps1` 与 gateway 一起构建。
 - **验证(交 Gemini,未运行)**:同上一节。
+
+## GM 后台 gm-admin:全局 Java 服务,只在集群内,只走 OIDC(2026-11-27,docs/design/admin-identity-and-dual-control.md §11.4;未运行,待 Gemini 验证)
+
+后台(`java/gm_admin`,JeecgBoot 扩展)在 infra namespace 部署一份。管理员只面对它:高风险命令经它的流水由第二个人批准后才下发,
+各资源服务的管理口令与密钥只挂给它和资源服务本身。
+
+- **什么时候部署**:部署全局 Go 与 Java 服务的 `infra-up` / `all-up`(同商城的条件)再给 `-GmAdminOidcIssuer`、`-GmAdminOidcClientId`、
+  `-GmAdminOidcRedirectUri`、`-GmAdminOidcRoleMapping` 四项(要一起给;别的命令给了在写操作之前拒绝)。不给 = 不部署,已部署的不删。
+  进程与商城同一步、排在它之后(`Apply-GmAdminWorkload`)。
+- **工作负载**:`manifests/java-svc/gm-admin.yaml` = Service `gm-admin`(ClusterIP,只暴露前端 3101)+ Deployment(1 副本,多副本安全)。一个镜像两个容器:
+  后端 JeecgBoot 听 18090,前端 nginx 听 3101、发静态页并把 `/jeecgboot/` 反代到同 Pod 的后端。根文件系统只读,不挂 ServiceAccount 令牌。
+- **怎么打开**:不建 Ingress。`kubectl -n <infra> port-forward svc/gm-admin 3101:3101`,浏览器开 `http://127.0.0.1:3101/`。
+  `-GmAdminOidcRedirectUri` 填 `http://127.0.0.1:3101/login` 并在身份提供方登记同一个值(后台只许回环地址走明文回调)。
+  要给运营配内部入口时自己加,回调地址换成那个 https 地址。
+- **登录**:配置模板写 `gm.identity.mode: oidc`,原生口令登录与原生 `/sys/**` 管理页关闭,双人复核恒开。角色映射的值只能是
+  `admin`、`gm_operator`、`gm_approver`、`gm_auditor`(后台迁移 7 建的标准角色);发行方必须是 https。
+- **运维预置的 Secret `gm-admin-runtime`(infra namespace)**:后台独立的管理库(`gm_admin`,JeecgBoot 上游表结构:`java/gm_admin/prepare.py` 产出的
+  `build/gm-admin-runtime/sql/001-jeecg.sql`,首次部署前由运维导入)与独立的单机 Redis。键:`jdbc-url`、`db-user`、`db-password`、`redis-host`、
+  `redis-port`、`redis-password`。部署脚本在任何写操作之前核对它在、键齐,不读值、不建、不删(部署脚本不经手任何数据库口令)。改了要 `kubectl rollout restart deployment/gm-admin`。
+- **密钥**(全部只给后台与资源服务本身,契约测试钉住;没设的那一路不可用,资源服务那一侧的入口保持关闭):
+
+  | 部署输入(环境变量) | Secret(工作负载密钥目录) | 读它的工作负载 | 资源服务那一侧 |
+  |---|---|---|---|
+  | `MMORPG_GM_OIDC_CLIENT_SECRET` | `gm-admin-oidc` | gm-admin | 身份提供方的机密客户端;部署后台就必须给 |
+  | `MMORPG_TRADE_MANUAL_RESOLUTION_SECRET` | `trade-manual-resolution` | trade、gm-admin | trade 配置写 `Commerce.ManualResolutionSecretEnv` 与环境名 `<档位>-global` |
+  | `MMORPG_MATCH_MANUAL_RESOLUTION_SECRET` | `match-manual-resolution` | match、gm-admin | match 配置写 `GlobalMatch.ManualResolutionSecretEnv` 与环境名 `<档位>-global` |
+  | `MMORPG_DATA_SERVICE_ADMIN_TOKEN` | `data-service-admin-token` | data-service、gm-admin | data-service 配置写 `AdminTokenEnv`(回收五个入口与名字释放的运维路径) |
+  | `MMORPG_LOGIN_ADMIN_TOKEN` | `login-admin-token` | login、gm-admin | login 直接读这个变量(以前读 `domain-service-secrets` 的同名键,已改) |
+  | `MMORPG_GATEWAY_ADMIN_MACHINE_KEY` | `gateway-admin-machine-key` | gateway | gateway 配置写 `admin.machine-key`;只给配置表发布命令行 table-bundle(运维机上 `MMORPG_ADMIN_KEY` 填它、带 `-operator table-bundle`) |
+  | `MMORPG_COMMERCE_ADMIN_SECRET` | `commerce-admin` | mall、gm-admin | 见上一节 |
+
+  - 另外三把沿用已有的 Secret:网关管理口令 `MMORPG_GATEWAY_ADMIN_API_KEY`(脚本在 infra namespace 另建同名 `gateway-admin-api-key` 给后台)、
+    收件箱运维口令 `MMORPG_PLAYER_INBOX_ADMIN_TOKEN`(与 player-inbox 共用 `player-inbox-admin-token`)、邮件 / 榜单的 admin 生产者密钥
+    (清单直接引用运维预置的 `domain-service-secrets` 的 `mail-producer-admin` / `rank-producer-admin`)。
+  - 形状各档位都查:至少 32 字节(OIDC 客户端密钥 16 字节);不含空白、双引号、反斜杠、控制字符和 `${`;各入口之间、与别的密钥互不相同。报错只点变量名。
+  - **同一把要在 `infra-up` 与 `zone-up` 之间保持同值**(后台在 infra,login、data-service、gateway 在 zone):值不同时那一路一律被拒,不会改错数据。
+- **下游地址**:配置模板写集群内 Service 名、明文(`<服务>.<命名空间>.svc:<端口>`;集群内服务之间本来就是明文,后台只许回环与这种名字走明文)。
+  login、gateway、data-service、player-locator 指向 data-service 已就绪的那个 zone:它们的管理入口操作的都是全服数据。场景玩家命令只限 dev / test 服,集群里不开。
+- **准入**:`-NetworkPolicies on` 时,后台调到的 login、trade、mail、rank、match、mall 的准入名单都放行 `gm-admin`;后台自己另有策略 `gm-admin-ingress-deny`,
+  拒绝其它 Pod 连它(port-forward 与 kubelet 探针不受影响)。关掉时删掉这份策略。
+- **应急开关**:staging / prod 在任何写操作之前拒绝把双人复核的应急开关提交成 true(mail / rank / login / data_service / player_inbox 的 `AdminAllowUnapproved`、
+  trade / match 的 `ManualResolutionAllowUnapproved`、商城的 `commerce.admin-allow-unapproved`;`Assert-DualControlEmergencySwitchesOff`)。告警见 `deploy/k8s/dual-control-alerts.yaml`。
+- **镜像**:`mmorpg-gm-admin`,`java_svc_image.ps1` 打包宿主机上先构建好的后端 jar 与前端静态页(`deploy/k8s/Dockerfile.gm-admin`;构建顺序见 `java/gm_admin/README.md`「K8s 镜像」)。
+  打包前核对产物比源码新,没构建或构建旧了直接失败;所以 `publish_images.ps1` 与 `dev_tools.ps1 build-images` 现在要求宿主机先把后台产物构建好。
+  也核协议:jar 里内嵌的协议描述(`gm-contracts.pb`)来自 `prepare.py` 那一刻的 `proto/`,描述要比 `proto/` 下每个 `.proto` 都新、jar 要比描述新,否则拒绝打包。改了任何协议都要重跑 `prepare.py` 再构建。
+- **只读根文件系统上的几处可写目录**:配置模板只读挂在 `/app/k8s-config`;`/app/config` 是一块 64Mi 的临时卷,上游的代码模板初始化(`CodeTemplateInitListener`)
+  启动时往「工作目录/config」拷内嵌模板(在线代码生成在 prod 档与 oidc 模式下都用不到,只是不让它每次启动打异常栈);`/tmp` 与 `/app/uploads` 同样是有上限的临时卷;日志只打控制台。
+  后端用 JeecgBoot 的 `prod` 档(本机开发用 `dev` 档),第一次在集群里起要看一遍后台日志。
+- **来源地址**:前端 nginx 用自己看到的对端覆盖 `X-Forwarded-For` / `X-Real-IP`(不追加),浏览器自带的头伪造不了后台日志与审计里的来源地址。以后加内部入口时改成只信那个入口给的头。
+- **验证(交 Gemini,未运行)**:`pwsh -NoProfile -File tools/scripts/tests/k8s_gm_admin_deploy_contract.tests.ps1`,以及 `k8s_deploy_contract.tests.ps1`、`k8s_mall_payment_deploy_contract.tests.ps1`。
 
 ## scene 节点场景归属对账告警(2026-11-10,缺口清单第 33 条;未编译、未在集群上验证)
 

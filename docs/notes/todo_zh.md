@@ -267,3 +267,12 @@
     - [ ] 客户端换场景改为目标图整张加载完再切，删掉按视野分片（九宫格）的加载。负责人 2026-11-10 定等新地图做完再改，在此之前客户端不动。
     - [ ] 方案全文在客户端仓 `Docs/QdaoMapDeliveries20261102.md` 末节「整图加载方案」（出图规格、加载流程、删除清单、预算守护、跨仓影响）。文中「9 图 15 套」等数字是 11-11 的盘点，开工时按当时的 catalog 重新核对；先确认每套外观单边 ≤4096，新主城、八仙岛、东海渔村按 sceneId 1/2/3 交付。
     - [ ] 协议不变，两版服务器只跟导航数据：本仓 `tools/navmesh_baker/sync_festival_maps.py` 换成新交接文件的 SHA 与计数，按新 walkmask 重烘 `data/scene_nav_bin/current_maps`；Java 仓按同一批 walkmask 更新 `config-data/navmesh/current_maps`。
+296. **TODO（上线前，由负责人 / 法务 / 运维办）官方通行证上线前待办**（2026-11-27 登记；代码都已写完，设计见 `docs/design/official-passport-registration.md` §3.6~§3.10，部署见 `deploy/k8s/passport/README.md`）：
+    - [ ] **手机回调改名（等安卓包名 / iOS Bundle ID 定）**：现在是 `xuanming://passport/callback`。RFC 8252 §7.1 要求用反向域名形式（如 `com.<公司>.<游戏>:/passport/callback`），只为不和别的 App 撞名，与安全无关。包名定了之后同批改客户端 `ClientSettings.DefaultMobilePassportRedirectUri`、`deploy/passport/init_data.json` 的 `redirectUris` 与 `tools/scripts/tests/passport_k8s_contract.tests.ps1`（设计稿 §3.8 第 3 条）。
+    - [ ] **《用户协议》《隐私政策》正文与地址（法务出）**：出正式包时传给客户端仓 `tools/build_client.ps1 -TermsUrl … -PrivacyUrl …`，部署通行证时传给 `deploy/k8s/passport/render-init-data.ps1`；以后协议改版，把客户端 `PrivacyConsent.CurrentVersion` 加一（设计稿 §3.9）。
+    - [ ] **域名与证书**：填 `deploy/k8s/passport/public-entry.yaml` 两个 Ingress 的 `ingressClassName`、域名与证书 Secret，`networkpolicy.yaml` 的 Ingress 控制器 namespace；客户端正式包传 `-GatewayUrl … -PassportOrigin …`。
+    - [ ] **发码通道与行为验证码**：Casdoor 后台给 `app-xuanming-game` 挂邮件（或短信）发码通道，图片验证码换成行为验证码（规则保持 `Always`）；供应商密钥不进仓库。
+    - [ ] **README「上线前还要人办的」其余各项**：静态资源自托管（`staticBaseUrl`）、要多副本先配 `redisEndpoint`、库备份加密（`cert` 表里有签名私钥）。
+    - [ ] **预发环境走一遍**：按 README 第 7 步走注册、登录、找回密码、桌面 / 安卓 / iOS 各一次「官方账号登录」（安卓多试几台国产机与自带浏览器）、改密后被踢下线、授权地址加 `&prompt=none` 回 403；页面缺接口就补进白名单与契约测试。
+    - [ ] **验证（交 Gemini）**：按 `docs/handoff/passport-hardening-handoff-20261126.md` 跑生成、编译、单测、契约测试与冒烟；红了保留首错交回 Claude。
+    - [ ] **Java 版服务端**：通行证渠道、注销删通行证用户、登录 / 刷新 / 重新认证前的核对与踢线、通行证回调入口，全部只在 Java 仓 `PARITY.md`「2026-11-26 官方通行证」条目登记待做，未写代码；客户端与部署清单两版共用。

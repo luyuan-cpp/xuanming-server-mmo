@@ -12,7 +12,7 @@
 #   - gm-admin:JeecgBoot 后端,听 18090(context-path /jeecg-boot),只经同 Pod 的 nginx 被浏览器访问;
 #   - gm-admin-web:nginx,听 3101,发前端静态页,/jeecgboot/ 反代到 127.0.0.1:18090/jeecg-boot/(deploy/k8s/gm-admin-nginx.conf)。
 #
-# 配置:ConfigMap java-svc-gm-admin-config 的 application-k8s.yaml(k8s_deploy.ps1 New-GmAdminConfigMapYaml 生成),
+# 配置:ConfigMap java-svc-gm-admin-config 的 application-k8s.yaml(k8s_deploy.ps1 New-GmAdminConfigMapYaml 生成),挂在 /app/k8s-config,
 # 以 profile k8s 盖在 jar 内的 application-gm.yml 之上;密钥只写成对容器环境变量的引用。
 # 密钥:
 #   - 管理库与 Redis 的连接信息由运维预置在 Secret gm-admin-runtime(键见下面 env),部署脚本只核对键、不读值;
@@ -71,7 +71,8 @@ spec:
           imagePullPolicy: PLACEHOLDER_PULL_POLICY
           args:
             - --spring.profiles.active=prod,gm,k8s
-            - --spring.config.additional-location=file:/app/config/
+            # 配置模板挂在 /app/k8s-config,不挂 /app/config:上游启动时往「工作目录/config」拷代码生成模板,那里要可写(见下面 app-config 卷)。
+            - --spring.config.additional-location=file:/app/k8s-config/
           ports:
             - containerPort: 18090
               name: backend
@@ -104,8 +105,10 @@ spec:
                 secretKeyRef: {name: domain-service-secrets, key: rank-producer-admin, optional: false}
           volumeMounts:
             - name: svc-config
-              mountPath: /app/config
+              mountPath: /app/k8s-config
               readOnly: true
+            - name: app-config
+              mountPath: /app/config
             - name: backend-tmp
               mountPath: /tmp
             - name: uploads
@@ -147,7 +150,8 @@ spec:
         - name: gm-admin-web
           image: PLACEHOLDER_IMAGE
           imagePullPolicy: PLACEHOLDER_PULL_POLICY
-          command: ["nginx", "-c", "/etc/nginx/gm-admin.conf", "-g", "daemon off;"]
+          # -e:启动时先打开的错误日志也指到 stderr(编译进 nginx 的缺省路径在只读根上打不开,会多一行 alert)。
+          command: ["nginx", "-e", "/dev/stderr", "-c", "/etc/nginx/gm-admin.conf", "-g", "daemon off;"]
           ports:
             - containerPort: 3101
               name: web
@@ -169,6 +173,11 @@ spec:
               path: /healthz
               port: 3101
             periodSeconds: 20
+          # nginx 收到 SIGTERM 是立即退出:先等 5 秒,再让它处理完手上的请求(quit)后退出。
+          lifecycle:
+            preStop:
+              exec:
+                command: [sh, -c, "sleep 5 && nginx -e /dev/stderr -c /etc/nginx/gm-admin.conf -s quit"]
           resources:
             requests:
               cpu: 50m
@@ -180,6 +189,11 @@ spec:
         - name: svc-config
           configMap:
             name: java-svc-gm-admin-config
+        # 上游 CodeTemplateInitListener 在 jar 启动时把内嵌的代码生成模板(classpath jeecg/code-template-online,几 MB)拷到「工作目录/config」,
+        # 根文件系统只读时每次启动打一次异常栈。给它一块小的可写卷;在线代码生成在 prod 档与 oidc 模式下都用不到,写进去的只是这份模板。
+        - name: app-config
+          emptyDir:
+            sizeLimit: 64Mi
         # 上限 = JVM 临时文件与 Tomcat 工作目录;后台日志只打控制台(logging.config 指向 logback-console.xml),不往这里写。
         - name: backend-tmp
           emptyDir:

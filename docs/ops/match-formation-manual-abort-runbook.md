@@ -81,8 +81,8 @@
 
 入口缺省关闭。开启步骤：
 
-1. 生成一把至少 32 字节的随机密钥，放进 K8s Secret。它与观战运营的 `MMORPG_MATCH_OPS_CALLER_SECRET` 分开，不得共用；
-2. match 配置写 `GlobalMatch.ManualResolutionSecretEnv: MMORPG_MATCH_FORMATION_FIX_SECRET` 与 `GlobalMatch.ManualResolutionEnvironment: <本部署的环境名>`（1~64 个 ASCII 字母、数字或 `.` `_` `-`，例如 `prod-global`、`staging-global`，每个环境不同），Pod 注入同名环境变量，滚动重启 match。环境名就是工具 `-expect-target` 要填的值，也写进工单；
+1. 生成一把至少 32 字节的随机密钥。它与观战运营的 `MMORPG_MATCH_OPS_CALLER_SECRET` 分开，不得共用；
+2. K8s 上:部署机设环境变量 `MMORPG_MATCH_MANUAL_RESOLUTION_SECRET` 再跑 `infra-up`。部署脚本把它建成 Secret `match-manual-resolution`(只给 match 与 GM 后台),match 配置写 `GlobalMatch.ManualResolutionSecretEnv: MMORPG_MATCH_MANUAL_RESOLUTION_SECRET` 与环境名 `<档位>-global`(`dev-global` / `staging-global` / `prod-global`),Pod 带指纹自动滚动(`deploy/k8s/README.md`「GM 后台 gm-admin」;服务 yaml 不许自己写这两项)。本机:match 配置自己写这两项(环境名 1~64 个 ASCII 字母、数字或 `.` `_` `-`,每个环境不同),进程注入同名变量后重启。环境名就是工具 `-expect-target` 要填的值，也写进工单；
 3. 启动日志里没有 `Stranded formation manual resolution disabled` 即已开启。变量缺失、密钥不足 32 字节、或没写有效的环境名时会打这行 ERROR，入口保持关闭，不影响服务。
 
 处置完成后撤掉环境变量（或配置项）再滚动重启，入口回到关闭。工具只认 serviceauth 调用方 `ops-formation`，带客户端会话的调用一律拒绝；签名时间戳窗口为 5 分钟，运行工具的机器时钟要准。

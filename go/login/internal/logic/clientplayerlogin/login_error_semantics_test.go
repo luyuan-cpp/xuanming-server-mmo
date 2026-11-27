@@ -199,6 +199,7 @@ func TestAuthFailureTip(t *testing.T) {
 		{name: "invalid credentials", err: auth.ErrInvalidCredentials, want: table.LoginError_kLoginAccountNotFound},
 		{name: "password disabled", err: auth.ErrPasswordAuthDisabled, want: table.LoginError_kLoginAccountNotFound},
 		{name: "unknown auth type", err: errors.New("unknown auth type: foo"), want: table.LoginError_kLoginAccountNotFound},
+		{name: "passport session refused", err: errPassportSessionRefused, want: table.LoginError_kLoginPassportCredentialChanged},
 	}
 	for _, tc := range cases {
 		if got := authFailureTip(tc.err); got != uint32(tc.want) {

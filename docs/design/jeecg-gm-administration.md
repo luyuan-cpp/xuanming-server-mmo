@@ -34,7 +34,7 @@
 
 ## 部署与验证
 
-管理前后端、MySQL/Redis 独立启动，初始仅绑定本机 loopback。启动材料不使用上游示例口令；管理员口令与基础设施口令随机生成到忽略目录，启动时从环境注入。连接现有本机服务使用明确的 loopback 端口；非本机 gRPC 采用 TLS。
+管理前后端、MySQL/Redis 独立启动，初始仅绑定本机 loopback。启动材料不使用上游示例口令；管理员口令与基础设施口令随机生成到忽略目录，启动时从环境注入。连接现有本机服务使用明确的 loopback 端口；集群里连各服务用集群内 Service 名（`<service>.<namespace>.svc[.cluster.local]`），与集群内其它服务之间一样走明文、靠 NetworkPolicy 与各调用方密钥保护；其余地址一律要 TLS（2026-11-27，`docs/design/admin-identity-and-dual-control.md` §11.4）。
 
 日常入口统一为 `python -X utf8 -B tools/scripts/start_docker_debug.py --execute`：游戏就绪后恢复原 GM 数据库、Redis、读取桥，再启动 Java 与网页并验收 HTTP。缺省模式仍只读预检；不下载、重建、迁移、重置口令或替换持久卷。已健康运行的组件只检查；任一 GM 阶段失败时整体失败且保留已启动服务。读取桥只接受原封印身份及严格证明的 Docker 空 DNS 表示差异，刷新动态启动状态前保留原回执；不能借此为不同容器或代码重新签发证明。
 

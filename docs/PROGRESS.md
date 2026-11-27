@@ -7978,3 +7978,234 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
 - 本会话(开服线 / B0-4 后续项)与它派出的会话都直接在 `D:\luyuan\xuanming-server-mmo-cpp` 的 main 工作区里改,没开分支、没开 worktree。本线的代码、设计稿、手册、规范与 PROGRESS 条目都已随批量提交进 main(核对时 HEAD 为 `bcea63be6`,与 `origin/main` 相同)。
 - 方法沿用 11-26「已删 / 已归档会话留在 git 里的残留逐项核对」,只看那之后的新增:本地分支只有 main;没有 stash;`.claude/worktrees` 为空;桌面端存储记录里会话 worktree 0 个(归档后保留的也是 0 个);HEAD 引用日志里不在 main 的仍只有 11-26 核对过的 5 个变基 / amend 前旧版本;悬空提交仍是 36 个,最新的就是这 5 个;`refs/archive/*`、`refs/codex/*` 没有新增。
 - 结论:已删会话没有在 main 之外留下改动,没有要合并的。
+
+
+## 2026-11-26 观战分级扩容四端 P0/P1/P2 审计与修复闭环（Unity / Go / C++ / Java）
+
+- **背景与环境复核**：复核 `docs/handoff/spectate-tiered-fanout-followup-20261121.md` 两项环境受限待做（目标生产机混跑压测 p99、独立 Java 仓 13 进程全栈 LOBBY 冒烟）。当前共享开发宿主机仅剩约 `5.2 GB` 可用内存且与其他并行会话共用工作区（含 `game-match`/`game-battle-engine` 在途 `puzzle/` WIP），仍无法安全拉起目标硬件压测或 13 进程 Java 全栈切片，已在交接单补充具体受阻说明；同步校准 `docs/design/battle-spectate-tiered-fanout.md` §15.10 中 `manual_hold_25s` 表述（24s 手动窗冒烟验证端到端流转，超过 30s 空闲靠 10s 冻结心跳防误判由 C++ 单测严格证明）。
+- **四端全链路审计并修复全部确认缺陷（1 P0 / 8 P1 / 10 P2）**：
+  - **Unity 客户端（`mmorpg-client`）**：
+    - P0：`BattleUiRoot` 在 `CloseSpectate()` / `OnDisable()` 补调 `AckEnd()` 防止 `Ended` 相位卡死，`StartReplay()` 仅在 `Requesting`/`Watching` 时调 `StopWatch()` 避免误弹错误提示；
+    - P1：`OpenBattle()` 进入己方战斗前对 LOBBY `Requesting`/`Watching` 主动发 `UnsubscribeSpectate(352)` 落实软互斥；`GameClient.Reconnect.cs` 与 `GameClient.cs` 断线重连/跨区重定向当 `BattleLink.Role == Observer` 时不再传观战 `battleId` 给 `HandleReconnectHint`，杜绝僵尸观众直连；
+    - P2：`BattleScreen` 对 LOBBY `observer_count == 0` 展示 `"观战中"` 而非 `"观众 0 人"`；`SpectateClient.HandleSpectateTurnResult` 支持 `ev.BattleId == 0` 回落 `ev.State.BattleId` 并丢弃 `ev.RoundIndex < State.RoundIndex` 的旧回合重叠帧。
+    - 验证：`client_compile_check.ps1` **819/819 0 错误**；离线 NUnit `SpectateClientStateMachineTests` **34/34 PASS**。
+  - **Go 匹配与压测机器人（`xuanming-server-mmo-cpp`）**：
+    - P1：`go/match/internal/logic/spectate_visibility.go` 修复 `spectateVisibilityForBattle` 非 NONE 活动直接早退 `PRIVATE` 遮蔽帮战 `GUILD_WAR → PUBLIC` 的问题（委派 `spectateVisibilityFor`，仍保持其余活动 fail-closed 且防自定义规则覆盖活动局）；
+    - P2：`gather.go` 锦标赛正式局改调 `markSpectateFeatured` 同写标记键与索引（使自动升 L2 生效）；`spectate_tier.go` 先 `raiseSpectateTier(..., BROADCAST)` 再 `recordBroadcastQuota` 封堵并发升档失败误退胜者配额竞态；`robot/battle_smoke_scenario.go` 对非 `VOID` 终局补硬断言 `specEndReason == SPECTATE_END_BATTLE_FINISHED`。
+    - 验证：`gofmt -l` 0 差异、`go vet` 0 错、`go/match` 观战全套测试 PASS（`5.339s`）、`robot` `TestBattleLobbySpectate` PASS（`3.456s`）。
+  - **C++ battle / gate（`xuanming-server-mmo-cpp`）**：
+    - P1：`battle_room_manager.{h,cpp}` 的 `BeginRoomShutdown` 传 `immediate=true` 同步调 `conn->shutdown(); conn->forceCloseWithDelay(1.0);`，使 `connected()` 在 `main.cpp` 同步 `DisconnectAll()` 前已为 `false`，避免 `forceClose()` 抢断并吞掉 L0 观众的 166 `SOURCE_LOST`；
+    - P1：`gate_spectate_hub.{h,cpp}` 在 `Entry` 追踪 `cachedPrepActive`（检测 `SpectateStateS2C.state.prep_state.active` 由 `true→false`），战前明牌变阵亮牌（`FinalizeBattlePrep`）时向全体已在看订阅者扇出亮牌 161，同时保持常规心跳静默；
+    - P2：`battle_room_manager.cpp` 的 `PruneSpectatorOperations` 过期即擦除 `!cancelled` 项并在 `EraseRoom` 兜底收尾 `observerOperations`，杜绝异常删房/时钟回拨导致操作表永久泄漏；`gate_push_delivery.cpp` 以 `BoundPlayerIdOf` 将 `LeaveGame` 后（`sceneRouteResetPending && authenticatedAccount.empty()`）的选角态会话视为未绑定，拦截全服广播与旧角色迟到定向推送（保留 `targetPlayerId == 0` 放行）。
+    - 验证：`test_cpp_no_raw_pointer_member.py` **13/13 OK**、`check_log_text_english.py` **PASS**；串行 MSBuild（`/m:1 /nr:false /p:CL_MPCount=1`）编译 `gate.exe`、`lib/gate.lib`、`rpc_controller_test.exe`、`routing_identity_test.exe` 全绿，`rpc_controller_test`（`BattleObserverContract.*:BattleSpectateRelay.*`）**64/64 PASS**，`routing_identity_test`（`Spectate*:GatePush*`）**82/82 PASS（exit 0）**。
+  - **Java 独立服务端（`xuanming-server-mmo`，详情同步见 `PARITY.md`）**：
+    - 修复 5 项（停机排空 `COMPLETE` 漏发决胜回合 158、`SpectateHub` 变阵亮牌 `STATE` 不推已在看会话、`GlobalWatchService` 预算不足先占坑并把瞬态 16004 持久化进回执、LOBBY 重放未先查 Redis 档位直打 battle RPC、`RedissonSpectateTierStore` 非数字脏值抛裸 `NumberFormatException`）；另核实 `CustomDuelRules` 透传属 `PARITY.md` 已登记的模块 C「Java 待做」而非观战回归缺陷。
+    - 验证：`game-battle` `SpectateRelayRoomTest` **14/14 PASS**、`game-gate` `SpectateHubTest` **38/38 PASS**（Maven）；`game-match`（`GlobalWatchServiceTest` / `SpectateRulesTest` / `WatchBattleLobbyTest` / `SpectateVisibilityPolicyTest`）隔离套件 **89/89 PASS**（总计 **141/141 PASS**）。
+
+## 2026-11-27 Claude:合服映射的 etcd 副本第二批——合服工具提交后发布副本、审计比对副本、规则抽成共享包;两批的验证以本条为准(未编译、未运行,待 Gemini;Java 不涉及)
+
+- **为什么**:负责人要求「查出的问题以后修的现在修」,第一批留下的两项后续这一批都做了:
+  - 合服工具不发布副本时,读不到第 0 片的 data_service 要等某个读得到的副本下一拍替它发布;全都读不到时,第 0 片恢复之前一直看不到新合服;
+  - 审计看不到副本。
+  设计稿 [merged-zone-etcd-copy.md](design/merged-zone-etcd-copy.md) 的 §4.5、§5.3、§8.2 已按两批改写。
+- **做法**:
+  - 新建共享包 `go/shared/mergedzonecopy`,放这几样:
+    - 副本键与映射类型;
+    - 读第 0 片的那条 SQL(`ReadSQL` / `Read`);
+    - 编码与发布判定(`Decide`);
+    - 按 ModRevision CAS 的 etcd 读写。
+    data_service 与合服工具只调这一份,版本算法和判定不会各算各的。
+  - 合服工具真写(merge / unmerge)必须带 `-etcd-hosts`。没带就在连库之前拒绝(退出码 1),`execute` 自己还再兜一道。
+  - 提交之后发布:
+    - 先读副本、再读第 0 片(`Committed`),按 `Decide` 做 CAS;撞上别的写者就重读,最多 3 轮。
+    - 幂等重跑、「没东西可删」也发布,所以重跑同一条命令就能补上上次没发布成的。
+    - 提交之后的任何失败都报退出码 2,文案写明「the mapping is committed」。
+  - 审计带了 `-etcd-hosts` 就比对副本,从不写副本:
+    - 副本缺席或落后:只提示,照常退出;
+    - 对不上(第 0 片落后于副本、同版本内容不同、世代不同):按拒绝退出,退出码 1。
+  - 副本键改按目录第 0 片的库名,写成 `/mmorpg/merged_zone_copy/<第 0 片库名>`:
+    - data_service 用 `dirshard.DirectoryDBName(SnapshotMySQL.DBName, 0, K)` 算,工具取 DSN 里的库名;
+    - K=1 时是基名,K>1 时是 `<基名>_00`,两边是同一个键;
+    - DSN 不带库名的,在连库之前就拒绝。
+  - 脚本与手册:
+    - `dev_tools.ps1` 加了 `-MergeZoneEtcdHosts` 转发,清库脚本按新键删;
+    - 合服手册的命令都带上 etcd 地址,§5 加了「已提交未发布」等四行处置;
+    - PITR 手册改成先删副本键再审计,否则审计会因为副本领先而拒绝。
+  - 顺手修了 data_service 里 4 个 gofmt 不齐的老文件(只动空白):`directory_events.go`、`recall_review_handled_test.go`、`audit_retention_test.go`、`schema.go`。
+  - 结果:读不到第 0 片的副本也在 2 个刷新周期内看到合服,和读得到的一样(设计稿 §5.3)。
+- **更正第一批条目**(那条已入库,按只追加的规矩不改原文):
+  - 副本键是 `<第 0 片库名>`,不是 `<SnapshotMySQL.DBName>`;
+  - 「合服工具一行没改」已不成立;
+  - `TestMergedZoneCopyCodec`、`TestEtcdMergedZoneCopiesAgainstRealEtcd`(`DATA_SERVICE_IT_ETCD`)挪进了共享包,改叫 `TestCodec`、`TestEtcdCopiesAgainstRealEtcd`(`MERGEDZONECOPY_IT_ETCD`);
+  - 反向确认第 2 条删的那一支现在在 `mergedzonecopy.Decide` 里;
+  - 「HEAD 编不过」那段作废,见本条「提交情况」;
+  - 第一批的命令作废,两批一起按本条跑。
+- **文件**:第二批 32 个,清单在设计稿 §8.2。
+- **已跑的只读检查**:
+  - 两批全部 Go 文件 `gofmt -l` 都没有输出;
+  - 三个改过的 ps1 用 `Parser::ParseFile` 解析,错误数都是 0;
+  - 自查结论见设计稿 §12.2。第二批没派独立复核子代理:全部模型的周额度已用 85%,过了 80% 线。
+- **给 Gemini 的验证**:
+  - 低档模型即可。环境:`$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`。
+  - 失败时保留编译错误全文、失败用例名与断言原文,不改断言,不连续重试;要改代码就停下,交回 Claude。
+  - 先跑同日「data_service 启动期故障隔离」批 1、批 2、第二轮三条的命令(`servicecontext.go` 重叠),再在仓库根目录按顺序跑:
+  ```
+  cd go/shared
+  go vet ./mergedzonecopy/
+  go test -count=1 -v ./mergedzonecopy/
+  $env:MERGEDZONECOPY_IT_ETCD='127.0.0.1:2379'; go test -count=1 -v -run 'TestEtcdCopiesAgainstRealEtcd' ./mergedzonecopy/
+  cd ../data_service
+  go build ./...
+  go vet ./internal/store/... ./internal/svc/...
+  go test -count=1 ./internal/store/... ./internal/svc/... ./internal/server/...
+  go test -count=1 -v -run 'TestMergedZone|TestLoadMergedZoneCache|TestNewMergedZoneCacheNeedsTheRouteStoreAndTheEtcdCopy' ./internal/svc/
+  go test -count=1 -v -run 'TestRouteReadQueriesShapes' ./internal/store/
+  go test -count=3 -race -run 'TestMergedZone|TestLoadMergedZoneCache' ./internal/svc/
+  $env:ACCOUNT_DIRECTORY_TEST_DSN='<TiDB 测试账号 DSN>'; $env:ACCOUNT_DIRECTORY_REQUIRE_TIDB='1'; go test -count=1 -v -run 'TestTiDBShardedRouteStore' ./internal/store/
+  cd ../../tools/merge_zone
+  go mod tidy
+  go build ./...
+  go vet ./...
+  go test -count=1 -v ./...
+  go test -count=3 -race ./...
+  $env:MERGE_ZONE_IT_REQUIRE='1'; $env:MERGE_ZONE_IT_DSN='<账号:口令@tcp(127.0.0.1:端口)/>'   # 无库名无参数,数字 loopback
+  $env:MMORPG_SQL_BACKEND='tidb'; go test -tags merge_integration -count=1 -v ./...
+  $env:MMORPG_SQL_BACKEND='mysql'; go test -tags merge_integration -count=1 -v ./...          # 先把 DSN 换成 MySQL 实例
+  cd ../..
+  python -c "import yaml; list(yaml.safe_load_all(open('deploy/k8s/data-service-route-alerts.yaml', encoding='utf-8'))); yaml.safe_load(open('go/data_service/etc/data_service.yaml', encoding='utf-8'))"
+  pwsh -NoProfile -File tools/scripts/tests/dev_tools_merge_zone_contract.tests.ps1
+  pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
+  ```
+- **通过标准**:
+  - `go mod tidy`:
+    - 不报错、不联网;
+    - go.mod 只多出 etcd 依赖链的 `// indirect` 行;go.sum 只删行(它先并入了 `go/shared/go.sum`,是个超集);要是新增了行,照实记下是哪几行;
+    - 两份结果都要入库。
+  - build、vet 没有错误,测试全部通过,`-race` 不报竞争,YAML 解析不报错,两份契约测试全绿。
+  - 第二批新用例 PASS:
+    - 共享包:`TestDecide`、`TestCodec`、`TestEtcdCopiesCompareAndPut`、`TestEtcdCopiesAgainstRealEtcd`;
+    - 合服工具:`TestRealWritesPublishTheCommittedMapping`、`TestPublishFailureAfterCommitIsNotARefusalAndARerunRepairs`、`TestPublishRefusesACopyThatDisagreesWithShardZero`、`TestPublishRetriesWhenAnotherWriterWins`、`TestRealWritesNeedTheEtcdCopy`、`TestRunAudit_ComparesTheEtcdCopy`。
+  - 改过的用例照旧 PASS:
+    - 合服工具的 `TestParseOptions`、`TestRun_NeverEchoesTheDSN`,真库的 `TestIT_MergeWritesOneRowWithAuditColumns`;
+    - 第一批条目「通过标准」里列的 data_service 用例,其中两个改了名、挪进了共享包,见上面「更正」。
+  - 真环境用例:
+    - 设了 `MERGEDZONECOPY_IT_ETCD` 就必须 PASS;本机没有 etcd 就不设,如实报未运行;
+    - `TestTiDBShardedRouteStore` 和 `-tags merge_integration` 两档,在 `*_REQUIRE*=1` 下 SKIP 算失败;没有库就如实报未运行。
+- **可选的反向确认**(各改一处,跑完改回,改回后都恢复通过):
+  - 删掉 `tools/merge_zone/merge.go` 里 `execute` 开头 `o.writes() && copies == nil` 那道拦截,`TestRealWritesNeedTheEtcdCopy` 应当变红;
+  - 让 `auditCopy` 一进来就 `return nil`,`TestRunAudit_ComparesTheEtcdCopy` 应当变红;
+  - 删掉 `publishCommitted` 里 `if !publish { … return nil }` 那一段,`TestRealWritesPublishTheCommittedMapping` 应当变红(幂等重跑会多写一次);
+  - 删掉 `go/shared/mergedzonecopy/copy.go` 里 `Decide` 的 `published.Version > truth.Version` 那一支,`TestRunAudit_ComparesTheEtcdCopy` 的「领先」应当变红;
+  - 第一批条目反向确认的第 1、3、4 条照旧有效。
+- **没有单测覆盖的**:多实例下第 0 片失联时新 Pod 从副本起,以及合服工具提交之后读不到第 0 片的 Pod 跟上。场景在合服手册 §11「第 0 片失联与 etcd 副本」,要两个 SQL 实例、目录 K>1;单实例调试栈做不了,没跑就如实报未运行。
+- **运维变化**(都已写进手册):
+  - 真合服、真撤销要带 `-MergeZoneEtcdHosts`,K8s 上先 port-forward 到 infra 的 etcd(合服手册 §3);
+  - 退出码 2 现在也可能是「映射已提交、副本没发布」,按文案重跑同一条命令即可补发布(手册 §5);
+  - 审计带上 etcd 地址就比对副本;
+  - PITR 之后先删副本键,再审计。
+- **提交情况**(本会话没有提交):
+  - 负责人的快照提交 `bcea63be6`(11-27 00:54)和 `6b4ae7852`(01:17)已把两批的全部文件带进 main,第一批条目说的「HEAD 编不过」已不成立。
+  - 两批在工作区只剩三份文档没提交:本条、设计稿(状态行与 §0、§8.2、§12.2)、交接单。
+  - `tools/merge_zone/go.mod` 在 HEAD 上还缺 etcd 的间接依赖,`go mod tidy` 之前这个模块编不过。tidy 是 Gemini 在这个模块的第一步,结果要入库。
+- **换电脑接手**:负责人要换电脑。待办、新电脑上的 Go 环境与一次性真库准备、执行顺序和定案都在[交接单](handoff/merged-zone-etcd-copy-handoff-20261127.md)。新电脑的模块缓存是空的,第一次跑不要设 `GOPROXY=off`。
+- **Java 版(AGENTS §12)**:不涉及(Java 版没有 data_service、合服工具与映射副本),不加 PARITY 行。
+
+## 2026-11-27 Claude:官方通行证加固复查——安卓撤回 App Links、公网入口拦静默登录参数、网关回调先验密钥再读请求体、同意隐私政策前不读设备标识(未编译、未运行,验证交 Gemini;按负责人指示用 Opus 5.5 写)
+
+负责人要求把上一条(11-26「官方通行证加固四批」)再查一遍、查出的问题现在修。四批的代码已被快照提交 24c13a311(服务端)、10036c98(客户端)收进 main;本条的改动在 main 工作区未提交。设计稿 `docs/design/official-passport-registration.md` §3.7、§3.8 第 3 条、§3.10 第 2 条与第 8 条、§4 第 18 行、§6、§8.3 第 4 条已按本条改写;交接单 `docs/handoff/passport-hardening-handoff-20261126.md` 同步改了客户端与入口的核对步骤。
+
+- **安卓撤回 App Links,手机回调仍是自定义协议头 + PKCE**:
+  - 原因:国内多数安卓手机没有谷歌服务,`assetlinks.json` 核对不一定成功,不成功时回调在浏览器里打开成网页,游戏收不到授权码、登录直接失败;即便核对成功,浏览器在没有点击的自动跳转上也不把链接交给 App(AppAuth-Android 的已知问题),各家浏览器表现也不一。只在部分手机上能用的登录,比协议头的残余风险更糟。
+  - 删掉的:客户端 `PassportOAuthProtocol.AppLinkRedirectUri` 与它的用例、构建后处理的 `autoVerify` 过滤器(改回开发包、正式包都登记 `xuanming://passport/callback`)、`ClientSettings.DefaultPassportRedirectUriFor`(改成常量 `DefaultPlatformPassportRedirectUri`);服务端公网入口的 `assetlinks.json`、回调兜底页与它们的挂载、`render-init-data.ps1` 加 App Links 回调那两行、README 的签名指纹步骤。
+- **公网入口拦静默登录参数(新,§3.10 第 2 条)**:读 Casdoor v4.27.1 前端源码(`web/src/pages/auth/LoginPage.tsx`)发现,浏览器里已有通行证会话时,授权地址带 `prompt=none` 或 `silentSignin` 就不经玩家点击直接签发授权码;授权地址谁都能拼,恶意 App(安卓 / iOS 注册同名协议头)或本机恶意程序(占桌面回调端口)就能悄悄拿到玩家的登录。
+  - nginx `map $args $passport_silent_signin`:参数名是 `prompt` / `silentSignin`(不分大小写)或参数名里有百分号(前端解码参数名,`%70rompt` 就是 `prompt`)的页面请求一律 403;查所有页面而不只授权页(前端路由不分大小写、不认末尾斜杠)。
+  - 签发授权码只走 `POST /api/login`(后端没有服务端授权页路由),白名单只收 POST,所以拦页面就够。
+  - 初始化数据显式写 `enableAutoSignin: false`(第三个自动签发入口),契约测试钉住;README 加「运维注意」:后台不要打开自动登录、不要去掉这道拦截。
+  - 契约测试新用例按样例核对两条规则(九种要拦的写法、客户端授权地址放行),并钉住回调地址只有桌面五个端口与手机协议头。
+- **网关回调入口先验密钥再读请求体**:原来 `@RequestBody byte[]` 在进方法之前就把整个请求体读进内存,64 KiB 上限读完才判,集群内谁都能不带密钥用一个大请求撑爆网关。改为收 `HttpServletRequest`,密钥对了才读、最多读 64 KiB + 1 字节,声明长度超限的直接 400;用例改用 `MockHttpServletRequest`,新增「密钥不对时一个字节都不读」。
+- **同意《隐私政策》之前不读设备标识**:`SessionModel.DeviceId` 原来是构造时读 `SystemInfo.deviceUniqueIdentifier` 的只读字段,`SessionModel` 在启动时就建好,安卓上等于同意弹窗之前就读了 Android ID(国内应用商店的合规检测会查)。改成第一次用到(进区)才读。
+- **协议头名字**:RFC 8252 §7.1 要求反向域名,只为不撞名、与安全无关;包名 / Bundle ID 没定,沿用 `xuanming://`,定了之后同批改(README「上线前还要人办的」)。
+- **Go 代码独立复查(子代理只读复查,没跑编译)**:签名、导入、接口实现、Lua 下标与键的 hash tag、时间单位、刷新先后、Casdoor 字段名都核对成立,没有编译错误。查出七条,都改了:
+  1. 应用凭据发起的操作(本项目注销时删通行证用户)记成应用伪用户 `app/app-xuanming-server`,拿它去查,Casdoor 的 `GetOwnerFromId` 遇到三段 id 直接 panic → 整条回调回 503 → 通行证按 10 次指数退避重投约 8.5 小时、计 error、可能误报告警。`eventUsers` 跳过名字带 `/` 的引用;新用例 `TestHandleEventSkipsAppPseudoUsers`。
+  2. 从没进过游戏的账号被封 / 被删时,读角色目录回 `ErrMissing`,原来记成踢线失败 + ERROR;改为没有角色可踢、不算失败。
+  3. 踢线原来同步做、时限 5 秒,大于 login 的 RPC 时限 4 秒:player_locator 或 Kafka 变慢时登录超时,而身份令牌已一次性消费,玩家得重走授权。改为吊销之后在后台踢(`safego.Go`,`Enforcer.goKick`,单测换同步);新用例 `TestKickRunsInTheBackground`。
+  4. 申请注销的重新认证原来不过通行证核对:改密之前签的、被封之前拿到的身份令牌(2 小时内)登录会被拒,却能直接发起注销。`ResolveLoginAccount` 对通行证账号也调 `CheckLogin`,拒绝回 2059(`errPassportSessionRefused` → `authFailureTip`);`TestAuthFailureTip` 补一行。
+  5. 日志屏蔽用例对 `bytes` 字段形同虚设:go-zero 按 `json.Marshal` 记请求体,`[]byte` 成了 base64,原文查不到不等于没记。用例再查 base64。
+  6. `Endpoint` 指到另一套接受同一组凭据的通行证(拷了库)时,查谁都查不到 → 成批误吊销踢线;设计稿原来写「指错了每次核对都按故障放行」不完整。改正设计稿 §3.6,新增 critical 告警 `LoginPassportSessionMassRevocation`(10 分钟 20 次以上判查不到、持续 5 分钟),契约测试钉住;README「运维注意」写明各环境不拷库。没做熔断:要拷库才会发生,门槛也定不准。
+  7. `LoginPassportSessionCheckFailing` 的描述只给了刷新时的日志关键字,改成列出登录、刷新、回调三处。
+  - 子代理没核对到的:Casdoor 其他改口令路径(LDAP、同步器等)是否更新 `lastChangePasswordTime`;真 Redis Cluster 与 7.2 / 8.x 下的运行行为。
+- **Java 独立仓**:只登记待做,不写代码。`PARITY.md` 通行证条目第 5 条补「申请注销的重新认证也过核对」「踢线放后台、没有账号行不算失败」,第 6 条补「跳过名字带 `/` 的应用伪用户」;客户端、部署清单与网关入口两版共用,不加行。
+
+## 2026-11-27 Claude：换电脑前把全部交接单收进总入口 `docs/handoff/README.md`，并核出旧电脑上没推送的东西（只改文档）
+
+- **起因**：负责人要换电脑，旧电脑回收；想在新电脑上只说一句「继续做完 handoff」。
+- **改了什么**：
+  - 新增 `docs/handoff/README.md`：开工核对、最容易做错的规矩、要写代码的 5 项（按顺序）、只交 Gemini 跑的清单、等负责人定的、不是代码或只留档的。文档索引脚本不收各目录的 README，索引不用改（`gen_docs_index.py --check` 仍是最新）。
+  - `review-suggestions-remaining-handoff-20261126.md`：开头加总状态；§2、§3、§5 标「已由另一会话写完」；§4 第 1 条改正：shared 见证与两个 `assetopfix` 改完了，guild 的条件写 SQL 还没补（上一版误标成写完），在第 4 轮单 §0a 第 2.2 步做。
+  - `data-overwrite-audit-r2-round4-handoff-20261126.md` §0a：开头加一行指向总入口，末尾加第 6 步，指回上面那份的 §8。
+- **旧电脑上只在本机的**（11-27 核对，换机前由负责人处理）：
+  - 独立 Go 仓 `xuanming-server` 的 main 比 GitHub 多 21 个提交（最新 `70cb3952`），从没推送；
+  - 子模块 `third_party/ue5navmesh` 检出的 `4c6b821` 不在任何分支上、没推送，本仓 HEAD 记的是 `aacf2f82`；
+  - 本仓、客户端仓、Java 仓都有别的会话的未提交改动；
+  - Claude 本机记忆（137 个文件）不在仓库里。
+- 只跑了只读的 git 命令与 `gen_docs_index.py --check`，没有编译、测试。Java 不涉及。
+
+## 2026-11-27 Claude:后台管理员身份与双人复核·批 7 剩余——后台上 K8s、各管理入口的密钥接线、准入与应急开关守卫(未编译、未运行,待 Gemini 验证;本机到 trade 的转发没做;Java 只登记)
+
+做法与取舍在 `docs/design/admin-identity-and-dual-control.md` §11.4,部署说明在 `deploy/k8s/README.md`「GM 后台 gm-admin」。负责人此前在本线同意用 Opus 5.5 写(Fable 额度已用完)。
+
+- **后台上 K8s**:
+  - 清单 `deploy/k8s/manifests/java-svc/gm-admin.yaml`:Service(ClusterIP,只暴露前端 3101,不建 Ingress)+ Deployment(后端 JeecgBoot 18090 + 前端 nginx 3101 两个容器,同一个镜像;根文件系统只读、不挂 ServiceAccount 令牌)。管理库与 Redis 来自运维预置的 Secret `gm-admin-runtime`(六个键),部署脚本只核键。
+  - `tools/scripts/k8s_deploy.ps1`:新参数 `-GmAdminOidcIssuer / -GmAdminOidcClientId / -GmAdminOidcRedirectUri / -GmAdminOidcRoleMapping`(四项一起给,只用于部署全局 Go 与 Java 服务的 infra-up / all-up);`Apply-GmAdminWorkload` 排在商城之后,配置模板 `java-svc-gm-admin-config`(`application-k8s.yaml`,`gm.identity.mode: oidc`,下游写集群内 Service 名)、密钥注入与指纹、后台自己的入站策略 `gm-admin-ingress-deny`;写前门禁 `Assert-GmAdminDeployPreflight`。
+  - 镜像(子任务):`deploy/k8s/Dockerfile.gm-admin`(只打包宿主机先构建好的 jar 与前端静态页,两个具名 build context;堆上限 60%)、`deploy/k8s/gm-admin-nginx.conf`(3101、单页回落、`/jeecgboot/` 反代、`/healthz`、挡 actuator 与带 `;` 的路径、WebSocket 透传、`index.html` 不缓存)、`tools/scripts/java_svc_image.ps1` 的 gm-admin 条目与产物核对(jar / dist 比源码新、`_app.config.js` 是同源取值);`java/gm_admin/prepare.py` 另写 `.env.gmk8s`;`java/gm_admin/README.md`「K8s 镜像」写构建顺序(前端要两条命令:生产构建 + postBuild 生成 `_app.config.js`,缘由写在那里)。
+  - **影响**:`publish_images.ps1` 与 `dev_tools.ps1 build-images` 构建 Java 镜像时现在要求宿主机先构建好后台产物,否则直接失败。产物核对不看 `proto/`:改了后台用到的管理协议要重跑 `prepare.py` 再构建。
+  - 后台 Java:明文 gRPC / HTTP 在回环之外再放行恰好两种形状的集群 Service 名(`GameServices.isLoopbackOrClusterServiceHost`,商城与网关地址校验共用);`logback-console.xml` 让 K8s 上只打控制台日志。
+- **各管理入口的密钥**(工作负载密钥目录新增六把,每把只给后台与资源服务本身,全部可空):`gm-admin-oidc`、`trade-manual-resolution`、`match-manual-resolution`、`data-service-admin-token`、`login-admin-token`、`gateway-admin-machine-key`;`commerce-admin` 的消费者加后台。资源服务配置只在注入时写变量名(trade `Commerce.ManualResolutionSecretEnv` + 环境名 `<档位>-global`、match `GlobalMatch.ManualResolutionSecretEnv` 同、data-service `AdminTokenEnv`、gateway `admin.machine-key`)。login 的运维口令不再读 `domain-service-secrets` 的 `login-admin-token`(清单那条删了)。
+  - data_service(子任务,已随别的会话的快照提交 `6b4ae7852` 进 main):`AdminTokenEnv` + `ResolveAdminToken`,常驻启动时由 `secretenv` 填,变量缺失即拒启,口令至少 16 字节。
+- **准入**:login、trade、mail、rank、match、mall 的准入名单加 `gm-admin`。
+- **应急开关守卫**:`Assert-DualControlEmergencySwitchesOff`,staging / prod 在任何写操作之前拒绝把 `AdminAllowUnapproved` / `ManualResolutionAllowUnapproved` / 商城 `commerce.admin-allow-unapproved` 提交成 true。
+- **契约测试**:新增 `tools/scripts/tests/k8s_gm_admin_deploy_contract.tests.ps1`;`k8s_deploy_contract.tests.ps1`(密钥目录表、五条准入名单、`$javaSvc`)与 `k8s_mall_payment_deploy_contract.tests.ps1`(commerce-admin 消费者、商城准入名单)同步。
+- **没做**:本机后台到 trade 的转发(交接单 §5 第 2 项)。本机 Docker 调试栈 `deploy/debug/compose.game.yml` 里没有 trade 容器,交接单写的前提不成立;做法(另起独立 trade 节点,或不做)已报父会话待定,`run_local.py` 照旧不放行 `GM_TRADE_*`。
+- **文档**:设计稿 §5.6、§6 第 3 条、§8 批 7 状态格、§11.2、§11.4、§11.5;`deploy/k8s/README.md`(商城一节与新增「GM 后台 gm-admin」);`docs/ops/k8s-open-server-runbook.md`、`trade-commerce-quarantine-runbook.md`、`match-formation-manual-abort-runbook.md`、`docs/design/account-role-authority.md`;交接单 §5;`docs/design/jeecg-gm-administration.md` 与 `java/gm_admin/README.md` 里「非本机 gRPC 采用 TLS」的旧说法;`java/gm_admin/src/main/resources/application-gm.yml` 注释。
+- **Java 独立仓**:`PARITY.md` 11-26「后台管理员身份(OIDC)与高风险动作双人复核」一条补主仓第 12~14 条与 Java 待做第 7、8 条,没改 Java 代码。
+- **只读检查**:`k8s_deploy.ps1` 与三份契约测试 `Parser::ParseFile` 无语法错误;`python tools/scripts/gen_docs_index.py --check` 通过;子任务对 data_service 三个文件跑过 `gofmt -l`(干净)。
+
+**交 Gemini 验证**(仓库根目录,PowerShell 7;按顺序,失败保留第一条报错原文停下):
+
+1. 部署契约测试(只 DryRun,不连集群):
+   ```powershell
+   pwsh -NoProfile -File tools/scripts/tests/k8s_gm_admin_deploy_contract.tests.ps1
+   pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
+   pwsh -NoProfile -File tools/scripts/tests/k8s_mall_payment_deploy_contract.tests.ps1
+   pwsh -NoProfile -File tools/scripts/tests/dual_control_alerts_contract.tests.ps1
+   pwsh -NoProfile -File tools/scripts/tests/k8s_migrate_gate.tests.ps1
+   pwsh -NoProfile -File tools/scripts/tests/logical_db_deploy_contract.tests.ps1
+   ```
+   通过标准:全部退出码 0。新文件红了先看是不是夹具写错(缩进、DryRun 输出形状),再看部署脚本。
+2. data_service:`Push-Location go/data_service; go build ./...; go test ./internal/config/...; Pop-Location`(新用例 `TestResolveAdminTokenAccepts`、`TestResolveAdminTokenRejects`,`TestShippedYamlLoads` 加了一条)。
+3. 后台扩展单测:`mvn -f java/gm_admin/pom.xml -DskipTests=false test`(新用例 `GameServicesTest.plaintextIsAllowedOnlyForLoopbackOrClusterServiceNames`、`GameMallAdminTest.plainHttpIsAllowedOnlyForLoopbackOrClusterServiceNames`、`GmGatewayAdminTest.plainHttpGatewayIsAllowedOnlyForLoopbackOrClusterServiceNames`)。
+4. 镜像(可选,要 Docker 与宿主机 JDK / Maven / Node / pnpm):按 `java/gm_admin/README.md`「K8s 镜像」的五条命令构建产物,再 `pwsh -File tools/scripts/java_svc_image.ps1 -Command build -DryRun -LinuxProtocDir <已批准目录> -LinuxProtocSha256 <SHA256>` 核对 gm-admin 那条 docker 命令;真构建去掉 `-DryRun`,之后 `docker run --rm --entrypoint nginx <镜像> -t -c /etc/nginx/gm-admin.conf` 核 nginx 配置(子任务没跑过 `nginx -t`,假定 Alpine 的 nginx 带 uwsgi / scgi 模块)。
+5. 上集群之前(不在本次验证范围):身份提供方登记回调 `http://127.0.0.1:3101/login`,运维建 `gm-admin-runtime` 并导入管理库表结构;JeecgBoot 的 `prod` 档与本机用的 `dev` 档不同,第一次起要看后台日志。
+
+## 2026-11-27 Claude:双人复核批 7 剩余·补充——本机后台到 trade 的转发定为这次不做(只改文档)
+
+接上一条「后台管理员身份与双人复核·批 7 剩余」。父会话定 B:交接单 §5 第 2 项不做,K8s 部分照做(已落码,验证命令见上一条)。
+
+- 理由:本机调试栈 `xuanming-debug-current` 里没有 trade,trade 只在宿主机 `start_game.ps1` 那套里跑,和后台连的 Docker 世界不是同一套库;另起独立 trade 节点还要合同引擎(`AssetOp.Enabled`)与资产通道上下游,单起一个没有可处置的合同,验不出东西。交易这条路靠 trade 的 `TestManualContractOps*`、真库 `TestRealDBManual*`、后台 `GameTradeAdmin` 的回环 gRPC 用例与 K8s 部署后的集群冒烟。
+- `java/gm_admin/run_local.py` 维持现状,`GM_TRADE_*` 一律不放行;以后要本机全链路联调时走独立 trade 节点,同时起资产通道的依赖。
+- 改了设计稿 §5.6、§8 批 7 状态格、§11.4 末节与交接单 §5。批 7 到此没有待写的代码,只剩 Gemini 验证。
+
+## 2026-11-27 Claude:官方通行证上线前待办登记成 todo(只改文档)
+
+负责人要求把「需要负责人定或运维去办」的几项做成 todo:登记在 `docs/notes/todo_zh.md` 第 296 条(手机回调改名等包名、协议正文与地址、域名证书、发码通道与行为验证码、README 其余上线前项、预发走查、Gemini 验证、Java 版),`deploy/k8s/passport/README.md`「上线前还要人办的」与设计稿 §6 改为指向它。没有改代码。
+
+## 2026-11-27 Claude:双人复核批 7 剩余·收口——三处原记为残余的问题现在修掉(未运行,待 Gemini 验证)
+
+接上两条「批 7 剩余」与「批 7 剩余·补充」。负责人要求查出的问题不留到以后,当场修;做法写进设计稿 §11.4 与 §11.5 第 14、15 条。
+
+- **镜像核对漏看协议**(`tools/scripts/java_svc_image.ps1` `Assert-GmAdminArtifacts`):jar 内嵌的 `gm-contracts.pb` 是 `prepare.py` 按 `proto/` 生成的,原先只核 jar 比后台源码新,「改了管理协议却没重跑 prepare.py」会把旧协议打进镜像。现在要求上游资源目录里的描述比 `proto/` 下每个 `.proto` 都新、jar 比描述新,否则拒绝打包并给出重建命令。上一条「影响」里「产物核对不看 proto/」以本条为准。
+- **来源地址可伪造**(`deploy/k8s/gm-admin-nginx.conf`):`X-Forwarded-For` 由追加改为用 nginx 看到的对端覆盖,另写 `X-Real-IP`;上游取它的第一个地址进日志与审计,追加写法下浏览器自带一个头就能伪造。
+- **只读根上每次启动一条异常栈**(`deploy/k8s/manifests/java-svc/gm-admin.yaml`):上游 `CodeTemplateInitListener` 往「工作目录/config」拷代码生成模板。配置模板改挂 `/app/k8s-config`(启动参数 `--spring.config.additional-location=file:/app/k8s-config/`),`/app/config` 给一块 64Mi 的临时卷。
+- 契约测试 `k8s_gm_admin_deploy_contract.tests.ps1` 补了挂载与启动参数的断言;`deploy/k8s/README.md`「GM 后台 gm-admin」与 `java/gm_admin/README.md` 同步。
+- 核对过:本仓只有 `main` 一个分支、没有 stash;`build/`、`run/` 下的三个工作树是构建与验证快照(分离 HEAD),不是工作分支。本线的改动都在 `D:/luyuan/xuanming-server-mmo-cpp` 的 main 工作区,一部分已被别的会话的快照提交 `6b4ae7852` 带进 main。
+- 验证命令同「批 7 剩余」那条;第 4 步构建镜像时会多核这两条协议的时间先后。

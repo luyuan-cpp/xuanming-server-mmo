@@ -36,6 +36,7 @@ import (
 	scenepb "proto/scene"
 	"shared/kafkautil"
 	"shared/safego"
+	"shared/tracing"
 )
 
 // guildPushBudget 是**一整批**推送的预算(读会话 MGET + 按网关分组写 Kafka)。
@@ -128,8 +129,8 @@ func NewGuildNotifier(w *kafkago.Writer, b kafkautil.GateCommandBuilder, session
 }
 
 func (n *KafkaGuildNotifier) Notify(ctx context.Context, change *pb.GuildChangedS2C, recipients []uint64) {
-	// 起协程之前就去掉取消:请求马上就要返回,协程里只要它的值(纪律 4)。
-	detached := context.WithoutCancel(ctx)
+	// 起协程之前按白名单脱离请求上下文（仅保留 OTel trace/baggage，剥离入站 gRPC metadata 与取消信号）。
+	detached := tracing.Detach(ctx)
 	ids := uniqueNonZero(recipients)
 	if len(ids) == 0 {
 		return
@@ -207,7 +208,7 @@ func (n *KafkaGuildNotifier) NotifyWarAlert(ctx context.Context, alert *pb.Guild
 	if n == nil || alert == nil {
 		return
 	}
-	detached := context.WithoutCancel(ctx)
+	detached := tracing.Detach(ctx)
 	ids := uniqueNonZero(recipients)
 	if len(ids) == 0 {
 		return

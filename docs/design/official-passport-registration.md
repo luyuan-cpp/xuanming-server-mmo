@@ -143,11 +143,12 @@ AuthProviders:
 
 1. 登录时把身份令牌的 `iat`（通行证的时钟）写进游戏令牌载荷 `TokenData.IdentityIssuedAt`（`AuthResult.IdentityIssuedAt` → `LoginLogic.issueTokens` → `token.Manager.Issue`），同一家族轮换时原样带下去（`token.go` 的 `rotate`）。
 2. 查通行证：`PassportAdmin.LookupUser`（`GET /api/get-user?userId=<sub>`）回这名用户此刻的状态（被删 / 被标记删除、被封、最近一次改密时刻）；`PassportUserStatus.SessionVerdict(iat)` 是纯判定：被删记 `user_gone`，被封记 `user_forbidden`，改密时刻不早于这次登录的 `iat` 记 `password_changed`，其余照常。
-3. 落到令牌上（`pkg/passportsession` 的 `settle`，三个入口共用）：被删、被封吊销账号的全部令牌（`RevokeAll`）；改过密码只吊销身份令牌签发时刻不晚于改密时刻的家族（`token.Manager.RevokeIssuedBefore`，一段 Lua 按载荷筛、一次原子提交），改密之后重新登录的设备不受影响。吊销了东西就把账号名下在线的角色踢下线（`svc.KickAccountPlayers`：读角色目录、按会话踢 gate 并按正常登出收尾，同注销申请时的踢线），客户端收到新提示码 `kLoginPassportCredentialChanged`「账号在官方通行证修改了密码或已被停用，请重新登录」，不自动重连。每次吊销都在 `settle` 里记一行 INFO `[passport] sessions revoked: phase=… account=…`（安全审计：登录时顺带吊销旧会话的那一种，别处没有日志）。
+3. 落到令牌上（`pkg/passportsession` 的 `settle`，三个入口共用）：被删、被封吊销账号的全部令牌（`RevokeAll`）；改过密码只吊销身份令牌签发时刻不晚于改密时刻的家族（`token.Manager.RevokeIssuedBefore`，一段 Lua 按载荷筛、一次原子提交），改密之后重新登录的设备不受影响。吊销了东西就把账号名下在线的角色踢下线（`svc.KickAccountPlayers`：读角色目录、按会话踢 gate 并按正常登出收尾，同注销申请时的踢线）。踢线在后台跑（`safego.Go`，时限 5 秒，与请求脱钩）：令牌吊销是决定性的那一步，同步踢线会把这次请求拖过 login 的 RPC 时限（4 秒），登录时身份令牌已被一次性消费，超时了玩家得重走一遍授权；从没进过游戏的账号（目录里没有账号行）没有角色可踢，不算踢线失败。被踢的客户端收到新提示码 `kLoginPassportCredentialChanged`「账号在官方通行证修改了密码或已被停用，请重新登录」，不自动重连。每次吊销都在 `settle` 里记一行 INFO `[passport] sessions revoked: phase=… account=…`（安全审计：登录时顺带吊销旧会话的那一种，别处没有日志）。
 4. 三个入口：
    - **登录时**（`passportsession.CheckLogin`，`loginlogic.go` 认证之后、签发令牌之前）：身份令牌签发在改密之前（被截获、还没用过的旧令牌）、用户被封被删，拒绝这次登录（回新提示码，网关回 401，客户端说清原因）。不论放不放行，改密之前的旧登录都在这里吊销：玩家改完密码回来登录，盗号者的会话当场失效、在线的被踢下线。
    - **刷新时**（`passportsession.CheckRefresh`，轮换之前）：这一家族的登录早于改密、用户被封被删，不续期，吊销并踢线；回与令牌失效相同的 `kLoginAccountNotFound`，客户端照常重登。
    - **通行证回调时**（§3.7）：改密、改资料、删用户的那一刻就处理，不用等玩家登录或刷新。
+   - **重新认证时**（申请注销，`ResolveLoginAccount`）：与登录同一道核对，登录会被拒的身份令牌拿去申请注销同样拒（回 2059，客户端按「凭证已失效」请玩家重新授权），免得一枚截获的旧令牌拿去发起注销。
 5. 这和 Firebase 的 `tokensValidAfterTime`、Microsoft Graph 的 `signInSessionsValidFromDateTime` 是同一个思路：会话带着自己的认证时刻，拿它和用户的「此后才有效」时刻比。
 
 **为什么这样定：**
@@ -163,9 +164,11 @@ AuthProviders:
 **故障与代价：**
 
 - 通行证或网络出故障、应答认不出：登录、刷新照常放行，计 `login_passport_session_check_total{phase,result="error"}` 并记 ERROR，不让通行证故障把在线玩家都踢下线。持续出错说明改密已经踢不掉人：`deploy/k8s/login-alerts.yaml` 的 `LoginPassportSessionCheckFailing`（10 分钟内一半以上的核对失败，持续 10 分钟）报 warning，`tools/scripts/tests/gate_pick_alerts_contract.tests.ps1` 钉住指标名与取值。
-- 通行证账号每次登录、每次刷新（约 2 小时一次）多一次内网调用，时限 1 秒（`lookupTimeout`，login 的 RPC 超时缺省 4 秒）；登录时还多一次 Lua（扫旧家族）。踢线最多 5 秒，与请求的取消脱钩。
+- 通行证账号每次登录、每次刷新（约 2 小时一次）多一次内网调用，时限 1 秒（`lookupTimeout`，login 的 RPC 超时缺省 4 秒）；登录时还多一次 Lua（扫旧家族）。踢线在后台跑，最多 5 秒，不占请求时间。
 - 没配管理凭据（只有 dev/test 允许）时不核对，启动时记 ERROR。生产模式配了通行证就必须配管理凭据（§3.2）。
-- 管理接口走 `Endpoint`，生产必须指向集群内入口（§3.10）。指错了，每次核对都按故障放行，只在上面的告警里看得到。
+- 管理接口走 `Endpoint`，生产必须指向集群内入口（§3.10）。指错了分两种：
+  - 连不上，或那边不认我们的管理凭据（各环境的服务端应用 `app-xuanming-server` 密钥由各自的 Casdoor 首启随机生成）：每次核对都按故障放行，只在 `LoginPassportSessionCheckFailing` 里看得到。
+  - 指到另一套接受同一组凭据的通行证（从别的环境拷了库）：那边查谁都查不到，玩家每刷新一次就被整号吊销、踢下线一个。`LoginPassportSessionMassRevocation`（10 分钟内 20 次以上判查不到，持续 5 分钟）报 critical。被误吊销的玩家重新登录即可（通行证里的账号没动）。没做熔断：要拷库才会发生，概率低，熔断的门槛也定不准；靠告警与「各环境密钥各自生成、不拷库」（`deploy/k8s/passport/README.md`）。
 - 这个字段加上之前签的通行证令牌 `IdentityIssuedAt` 为 0，按最早算：玩家改过密码的话要重新登录一次。项目未上线，不受影响。
 
 **仍然做不到的：**
@@ -177,12 +180,12 @@ AuthProviders:
 
 **链路**：Casdoor 回调（webhook）→ 网关 `POST /internal/passport/events`（`PassportEventController`）→ login `LoginPreGate.HandlePassportEvent` → `passportsession.HandleEvent` → 同 §3.6 的 `settle`。
 
-1. **回调只用来找人，不信内容。** 回调体是 Casdoor 的一条操作记录（`object/record.go` 的 `Record`，`isUserExtended` 时多一个 `extendedUser`）。login 从里面取出用户 id 或「组织/用户名」：改密（`set-password`）时记录的组织与用户就是目标用户；后台改资料（`update-user`）时记录的是操作人，目标在请求体原文 `object` 里；管理组织 `built-in` 的人一律不核对，一次最多 4 个。然后逐个现查通行证（`LookupUser` / `LookupUserByName`），按查到的状态处理。回调是伪造、重复、乱序的都无所谓：只会多查几次通行证，改不了任何人的状态。所以不需要签名，固定请求头密钥只是挡掉随手的请求。
+1. **回调只用来找人，不信内容。** 回调体是 Casdoor 的一条操作记录（`object/record.go` 的 `Record`，`isUserExtended` 时多一个 `extendedUser`）。login 从里面取出用户 id 或「组织/用户名」：改密（`set-password`）时记录的组织与用户就是目标用户；后台改资料（`update-user`）时记录的是操作人，目标在请求体原文 `object` 里；管理组织 `built-in` 的人一律不核对；名字里带 `/` 的也不核对：那是 Casdoor 的应用伪用户（应用凭据发起的操作记成 `app/<应用名>`，本项目注销时用服务端应用的凭据删通行证用户就是），拿它去查，v4.27.1 的 `GetOwnerFromId` 遇到三段的 id 直接 panic，整条回调会一直被重投；一次最多 4 个。然后逐个现查通行证（`LookupUser` / `LookupUserByName`），按查到的状态处理。回调是伪造、重复、乱序的都无所谓：只会多查几次通行证，改不了任何人的状态。所以不需要签名，固定请求头密钥只是挡掉随手的请求。
 2. **网关**：请求头 `X-Passport-Webhook-Secret` 按 SHA-256 摘要常量时间比较 `passport.webhook-secret`（至少 32 字节；没配就回 404，入口关着）；密钥核对过才读请求体，最多读 64 KiB + 1 字节（不用 `@RequestBody`：它先把整个请求体读进内存，集群内谁都能用一个大请求撑爆网关）；原样转给 login。状态码给 Casdoor 的重投用：200 处理完；400 请求体不对，不必重投；401 密钥不对；503 login 暂时处理不了。网关的 Ingress 只路由 `/api`，这个入口公网够不着。
 3. **login**：令牌存在全地域共用的登录域，任一 login 都能处理，网关不按区选路、可以重试。核对不了或吊销失败回 `Unavailable`（网关 503，Casdoor 按 `maxRetries: 10`、指数退避重投）；格式不对回 `InvalidArgument`。请求体带玩家邮箱、手机号，`HandlePassportEvent` 进了请求体日志屏蔽名单（`internal/rpclogging`）。
 4. **Casdoor 侧**（`deploy/passport/init_data.json` 的 `webhooks`）：回调挂在 `built-in` 组织下、`singleOrgOnly: false`。原因是 v4.27.1 只让 `built-in` 的回调连内网地址（`object/webhook_util.go` 的 `sendWebhook`：别的组织的回调走「只许公网」的 HTTP 客户端，防组织管理员拿回调探内网）。事件是 `set-password`、`update-user`、`delete-user`。仓库里缺省关着（`isEnabled: false`、地址与密钥是占位）；生产由 `deploy/k8s/passport/render-init-data.ps1` 填地址与密钥并打开。
 5. **部署**：网关的密钥经 `k8s_deploy.ps1` 工作负载密钥目录 `gateway-passport-webhook` 注入（部署机设 `MMORPG_GATEWAY_PASSPORT_WEBHOOK_SECRET` 才注入，没设就不注入、入口关着），与 Casdoor 回调请求头是同一个值。
-6. **删用户**：通行证里删掉用户之后，回调只剩组织与用户名，已经查不到这是谁（`sub` 随用户一起没了），这一条按 `ignored` 计；这个人的游戏令牌在下一次刷新或登录时按 `user_gone` 吊销（§3.6）。
+6. **删用户**：后台控制台删用户时，请求体里是整个用户（带用户 id），按 `user_gone` 整号吊销并踢线。只剩组织与用户名时（本项目注销用应用凭据删，请求体只有 owner / name）已经查不到这是谁（`sub` 随用户一起没了），这一条按 `ignored` 计：这时游戏账号本身正被注销流程删掉，令牌早已吊销；别的情形下，这个人的游戏令牌在下一次刷新或登录时按 `user_gone` 吊销（§3.6）。
 
 ### 3.8 客户端加固：正式包锁地址、桌面多端口回调、手机回调（2026-11-26，11-27 改定安卓不用 App Links）
 
@@ -355,7 +358,7 @@ Claude Code 对照 Casdoor v4.27.1 源码（`object/token_jwt.go`、`token_stand
 
 ## 6. 不在仓库里做的事
 
-代码与部署清单都在仓库里（§3.5~§3.10）。剩下的要真实域名、外部凭据、法务或真机，按 `deploy/k8s/passport/README.md` 办：
+代码与部署清单都在仓库里（§3.5~§3.10）。剩下的要真实域名、外部凭据、法务或真机，按 `deploy/k8s/passport/README.md` 办，逐项登记在 `docs/notes/todo_zh.md` 第 296 条：
 
 1. **邮件 / 短信发码通道、行为验证码**：在 Casdoor 后台配，供应商密钥不进仓库。
 2. **《用户协议》《隐私政策》正文与页面**：法务出，地址填进客户端正式包与 `render-init-data.ps1`。

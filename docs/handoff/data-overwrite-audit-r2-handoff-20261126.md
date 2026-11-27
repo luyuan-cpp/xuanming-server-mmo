@@ -2,10 +2,10 @@
 
 审计文档：[data-overwrite-rollback-audit-r2-20261019.md](../design/data-overwrite-rollback-audit-r2-20261019.md)。逐条最终状态以 §5.0 为准，各批收口记在 §6。
 
-**2026-11-26 晚更正：代码还没修完。** 剩下三处：
-- 第 4 轮查找的 17 条（3 high、6 medium、8 low）：见 `docs/handoff/data-overwrite-audit-r2-round4-handoff-20261126.md`。批 V/W/X 由 Opus 5.5 子代理在改，要先经 Gemini 4 Neon Extra 复核；其余各条的去向以那份交接单为准。
-- 11-19 评审剩下的建议：负责人改定由 Claude 用 Opus 5.5 写，进度见 `docs/handoff/review-suggestions-remaining-handoff-20261126.md`。
-- 早期各批的 4 条遗留：第 2~4 条已收口（未编译），第 1 条在「交接单里的代码改动清零与方案入档」会话里做；状态标在审计 §6「2026-11-26 清点」各条后面。
+**代码还没修完（2026-11-27 更新）。** 剩下的全部写进了 `docs/handoff/data-overwrite-audit-r2-round4-handoff-20261126.md` §0a，换电脑后由 Claude Code 照它复核和写代码，Gemini 只跑：
+- 第 4 轮：查找报的 17 条，加修复时新发现的 5 条。批 V/W/X 与 §7.4 已落码，还要复核；悬赏求书的批 C、批 B 与其余各点还要写。
+- 11-19 评审剩下的建议：只剩 `docs/handoff/review-suggestions-remaining-handoff-20261126.md` 的第 8 节（客户端用例）要写，见 §0a 第 6 步。
+- 早期各批的 4 条遗留：第 2~4 条已收口（未编译）；第 1 条只剩 guild 条件写补比 `attempts`，就是 §0a 第 2.2 步。状态标在审计 §6「2026-11-26 清点」各条后面。
 
 下表的条目可以先验，但这三处修完会新增 PROGRESS 条目，受影响的模块要重跑。最省事的是等审计 §1「仍开着」清空之后，再整体跑一遍。
 

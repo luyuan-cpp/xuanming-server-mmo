@@ -2055,6 +2055,10 @@ function Initialize-InjectedSecrets {
 			@{ Env = 'MMORPG_LOGIN_DEV_PASSWORD_SHARED_SECRET'; Value = $script:LoginDevPasswordSecret }
 			@{ Env = 'MMORPG_BATTLE_TOKEN_SECRET'; Value = [System.Environment]::GetEnvironmentVariable('MMORPG_BATTLE_TOKEN_SECRET') }
 		)
+		# 各管理入口的口令 / 密钥(Resolve-AdminEntrySecrets,上面已解析):同样不得与资产签名密钥相同。
+		foreach ($adminEntryName in $script:AdminEntrySecrets.Keys) {
+			$otherSecrets += @{ Env = $script:WorkloadSecretCatalog[$adminEntryName].Env; Value = [string]$script:AdminEntrySecrets[$adminEntryName] }
+		}
 		foreach ($caller in $script:AssetOpCallers.Keys) {
 			foreach ($other in $otherSecrets) {
 				if (-not [string]::IsNullOrEmpty($other.Value) -and $script:AssetOpSecrets[$caller] -ceq $other.Value) {
@@ -6234,6 +6238,9 @@ $JavaSvcCatalogue = @{
 	# infra-up / all-up 带 -JavaSvcRegistry 且同时部署全局 Go 服务时由 Apply-MallPrepare / Apply-MallWorkload 部署(Test-GlobalJavaSvcDeployed)。
 	# 端口 18120 与 jar 内 application.yaml 的 server.port 缺省值、Get-MallServiceUrl 一致;ImageName 与 java_svc_image.ps1 的 mall 条目一致。
 	mall    = @{ ConfigMap = "java-svc-mall-config";    Manifest = "mall.yaml";    HttpPort = 18120; GrpcPort = 0;   ImageName = "mmorpg-mall"; Global = $true }
+	# GM 后台 gm-admin(java/gm_admin):全局服务,infra namespace 一份;给了 -GmAdminOidcIssuer 才部署(Test-GmAdminDeployed,Apply-GmAdminWorkload)。
+	# HttpPort 是前端 nginx 的端口(Service 只暴露它),后端 18090 只在 Pod 内;ImageName 与 java_svc_image.ps1 的 gm-admin 条目一致。
+	'gm-admin' = @{ ConfigMap = "java-svc-gm-admin-config"; Manifest = "gm-admin.yaml"; HttpPort = 3101; GrpcPort = 0; ImageName = "mmorpg-gm-admin"; Global = $true }
 }
 
 # 目录里随 zone 部署的 Java 服务名,按名字排序(理由见 Get-GlobalGoSvcNames)。Global = $true 的全局服务(目前只有 mall)不在其中。
@@ -12525,6 +12532,13 @@ function New-GoSvcConfigMapYaml {
 	$dsStoragePoolMaxIdleConn = ''
 	$dsStoragePoolConnMaxIdleSeconds = ''
 	$dsRoleFenceBlock = ''
+	# 运维口令(回收五个入口与 ReleasePlayerName 的运维路径,x-admin-token;docs/design/admin-identity-and-dual-control.md §11.4):注入了
+	# (工作负载密钥目录 data-service-admin-token)才写变量名,data_service 常驻启动时从这个变量填 AdminToken;不写 = 这些入口停用。
+	# 生成器不读目录表,判的是解析出来的值。
+	$dsAdminTokenLine = '# AdminTokenEnv 不写:本次没注入 MMORPG_DATA_SERVICE_ADMIN_TOKEN,运维入口停用。'
+	if ($script:AdminEntrySecrets -is [System.Collections.IDictionary] -and -not [string]::IsNullOrEmpty([string]$script:AdminEntrySecrets['data-service-admin-token'])) {
+		$dsAdminTokenLine = 'AdminTokenEnv: MMORPG_DATA_SERVICE_ADMIN_TOKEN'
+	}
 	if ($SvcName -eq 'data-service') {
 		$dsPoolMirror = Get-MysqlPoolMirror -Target 'data-service'
 		$dsLogicalShards = Resolve-DirectoryLogicalShards
@@ -12620,6 +12634,15 @@ function New-GoSvcConfigMapYaml {
 			throw 'go/match/etc/match_service.yaml must not set GlobalMatch.BattlePodNamespace: the deploy script derives it from the namespace it deploys battle into.'
 		}
 		$matchGlobalBlock = $matchGlobalBlock.TrimEnd() + "`n  BattlePodNamespace: ${InfraNamespace}"
+		# 滞留阵容人工处置(MatchInternal.ResolveStrandedFormation,调用方 ops-formation;docs/design/admin-identity-and-dual-control.md §11.4):
+		# 注入了密钥(工作负载密钥目录 match-manual-resolution)才写变量名与环境名(<档位>-global,与 trade 那段同一写法);不写 = 入口关闭。
+		# 服务 yaml 不许自己写这两个键:只有部署知道这次注没注入密钥,写了变量名却没注入 match 会拒启。
+		if ($matchGlobalBlock -match '(?m)^  ManualResolution(SecretEnv|Environment):') {
+			throw 'go/match/etc/match_service.yaml must not set GlobalMatch.ManualResolutionSecretEnv or GlobalMatch.ManualResolutionEnvironment: the deploy script writes them when the manual resolution secret is injected.'
+		}
+		if ($script:AdminEntrySecrets -is [System.Collections.IDictionary] -and -not [string]::IsNullOrEmpty([string]$script:AdminEntrySecrets['match-manual-resolution'])) {
+			$matchGlobalBlock = $matchGlobalBlock.TrimEnd() + "`n  ManualResolutionSecretEnv: MMORPG_MATCH_MANUAL_RESOLUTION_SECRET`n  ManualResolutionEnvironment: $ReleaseProfile-global"
+		}
 		$matchGlobalBlock = $matchGlobalBlock.TrimEnd() + "`n" + $dbPlacementNested
 		$matchRatingBlock = (@('RatingEnabled','ResultTopic','ResultTopicPartitions','ResultConsumerGroup','RatingToleranceBase',
 			'RatingToleranceStepSeconds','RatingToleranceStepDelta','RatingToleranceMax','RatingToleranceMaxWaitSeconds',
@@ -12803,6 +12826,21 @@ function New-GoSvcConfigMapYaml {
 		$tradeSql = Get-TradeSqlSettings -Profile $ReleaseProfile -TiDBHost $TradeTiDBHost -DevelopmentHost "mysql.${InfraNamespace}:3306" -Backend $DatabaseBackend
 		$tradeAssetOpBlock = Get-AuthoritativeYamlBlock -RelativePath $tradeYaml -Key 'AssetOp'
 		$tradeCommerceBlock = Get-AuthoritativeYamlBlock -RelativePath $tradeYaml -Key 'Commerce'
+		# 人工处置入口(TradeAdmin,调用方 ops-commerce;docs/design/admin-identity-and-dual-control.md §5.6、§11.4):注入了密钥(工作负载密钥目录
+		# trade-manual-resolution)才写变量名与环境名,否则保持服务 yaml 的空串(入口关闭)。环境名按档位(<档位>-global,与 match 那段同一写法),
+		# 发起人逐字填它防连错环境。两行在服务 yaml 里必须各恰好一行,不猜。生成器不读目录表,判的是解析出来的值。
+		if ($script:AdminEntrySecrets -is [System.Collections.IDictionary] -and -not [string]::IsNullOrEmpty([string]$script:AdminEntrySecrets['trade-manual-resolution'])) {
+			foreach ($tradeManualLine in @(
+					@{ Key = 'ManualResolutionSecretEnv'; Value = 'MMORPG_TRADE_MANUAL_RESOLUTION_SECRET' }
+					@{ Key = 'ManualResolutionEnvironment'; Value = "$ReleaseProfile-global" }
+				)) {
+				$tradeManualPattern = '(?m)^  ' + $tradeManualLine.Key + ':[^\r\n]*'
+				if ([regex]::Matches($tradeCommerceBlock, $tradeManualPattern).Count -ne 1) {
+					throw "go/trade/etc/trade.yaml must have exactly one Commerce.$($tradeManualLine.Key) line; cannot open the manual resolution entry. Nothing was written."
+				}
+				$tradeCommerceBlock = [regex]::Replace($tradeCommerceBlock, $tradeManualPattern, ('  ' + $tradeManualLine.Key + ': ' + $tradeManualLine.Value))
+			}
+		}
 		# 官方商城在集群内(infra namespace 的 Service mall):URL 指向它;gateway、delivery 两把调用密钥只写变量名,值经工作负载密钥目录
 		# (commerce-gateway / commerce-delivery)注入。其余照服务 yaml 的 Mall 段;这三个键少了或重复就拒绝,不猜。资产通道关着时 trade 不连商城。
 		$tradeMallBlock = Get-AuthoritativeYamlBlock -RelativePath $tradeYaml -Key 'Mall'
@@ -13416,6 +13454,8 @@ Directory:
     ConnMaxIdleSeconds: ${dsStoragePoolConnMaxIdleSeconds}
 # 角色护栏的参与者(设计 §3.5):过户、删角之前要它们全部冻结。密钥 MMORPG_ROLE_FENCE_SECRET_COORDINATOR 经 manifests/go-svc/data-service.yaml 注入。
 ${dsRoleFenceBlock}
+# 运维口令(x-admin-token):只写变量名,值经 Secret data-service-admin-token 注入(k8s_deploy.ps1 工作负载密钥目录)。
+${dsAdminTokenLine}
 # GM 批量回收(docs/design/exploit_loss_prevention_zh.md):跟 -AssetOps 走,和 trade、guild 同一个开关。开了之后缺签名密钥 asset-data-service 就拒启。
 # 一批最多一万行,默认 2 秒的 RPC 预算不够冻结计划。
 MethodTimeouts:
@@ -16412,9 +16452,13 @@ function Apply-GlobalGoSvcWorkloads {
 	Apply-GlobalGoSvcCanaries -SvcNames $svcNames
 	# 官方商城(全局 Java 服务)的进程排在全局 Go 服务之后:它出问题(名册没定、业务表没装)不挡住别的全局服务。本次不部署它时是空操作。
 	Apply-MallWorkload
+	# GM 后台排在商城之后:它调的下游(trade、mail、商城等)都已经起了;zone 级下游(login、gateway、data-service、player-locator)
+	# 指向 data-service 已就绪的这个 zone。本次不部署它时是空操作。
+	Apply-GmAdminWorkload -ZoneNamespace $DataServiceNamespace
 	if ($WaitReady) {
 		Wait-ForGlobalGoSvcReady -SvcNames $svcNames
 		if (Test-GlobalJavaSvcDeployed) { Wait-ForDeploymentReady -Namespace $InfraNamespace -DeploymentName 'mall' }
+		if (Test-GmAdminDeployed) { Wait-ForDeploymentReady -Namespace $InfraNamespace -DeploymentName 'gm-admin' }
 	}
 }
 
@@ -16603,6 +16647,12 @@ function New-JavaSvcConfigMapYaml {
 	# @Value("${admin.api-key}") 解析不了嵌套占位符,gateway 拒启(fail-closed)。拼成 PowerShell 变量再嵌进下面的
 	# 双引号 here-string,既不用转义 $,env 名也只有一处真相。
 	$gatewayAdminApiKeyRef = '${' + $script:GatewayAdminApiKeyEnv + '}'
+	# 机器口令 admin.machine-key(批 6,只给 table-bundle;工作负载密钥目录 gateway-admin-machine-key):注入了才写对同名变量的引用,
+	# 不写 = 落回 jar 内的空串,没有机器口令这条路。生成器不读目录表(契约测试按 AST 单独抽它跑),判的是解析出来的值。
+	$gatewayAdminMachineKeyLine = ''
+	if ($script:AdminEntrySecrets -is [System.Collections.IDictionary] -and -not [string]::IsNullOrEmpty([string]$script:AdminEntrySecrets['gateway-admin-machine-key'])) {
+		$gatewayAdminMachineKeyLine = "`n" + '  machine-key: "${MMORPG_GATEWAY_ADMIN_MACHINE_KEY}"'
+	}
 	# gateway 的 Hikari 连接池大小(G2b):从 java/gateway_node/src/main/resources/application.yaml 镜像并核过
 	# (Get-MysqlPoolMirror);MySQL 连接总账读的是同一个 maximum-pool-size。挂载的 /app/config/application.yaml 与 jar 内那份
 	# 按属性合并(Spring Boot 默认加载 ./config/,外部事实,未核实),不镜像时 jar 内的值也生效 —— 镜像是为了让集群值
@@ -16723,7 +16773,7 @@ gateway:
   home-zone-ids:
     - ${CurrentZoneId}
 admin:
-  api-key: "${gatewayAdminApiKeyRef}"
+  api-key: "${gatewayAdminApiKeyRef}"${gatewayAdminMachineKeyLine}
 # 物理连接的核对档位跟着 -DatabaseBackend 走(Resolve-GatewaySqlMode):tidb 档核对真实 TiDB,mysql 档核对可写的 MySQL 主库;
 # 两档都是 run-mode prod,require-tidb 只对 tidb 档有意义。
 mmorpg:
@@ -16868,7 +16918,7 @@ function Get-MallServiceUrl {
 	return "http://mall.${InfraNamespace}:18120"
 }
 
-# 本次是否部署全局 Java 服务(目前只有官方商城 mall):给了 -JavaSvcRegistry、不带 -SkipJavaSvc,并且同一次也部署全局 Go 服务
+# 本次是否部署全局 Java 服务(官方商城 mall;GM 后台 gm-admin 另要 -GmAdminOidcIssuer,见 Test-GmAdminDeployed):给了 -JavaSvcRegistry、不带 -SkipJavaSvc,并且同一次也部署全局 Go 服务
 # (infra-up,或不带 -SkipInfra 的 all-up)。要求同时部署全局 Go 服务,是因为商城只给 trade、payment 用:
 # 它的允许支付渠道取自同一次渲染的 payment 配置,进程也和全局写者同一步起(Apply-GlobalGoSvcWorkloads)。
 function Test-GlobalJavaSvcDeployed {
@@ -17392,6 +17442,382 @@ function Assert-CommerceDeployPreflight {
 		# 闸门表 Job 的目录条目(schema Secret、registrar 镜像)先核:只渲染不写,真正 apply 在 Apply-MallPrepare 里再渲染一次。
 		$null = New-MallSchemaJobManifest
 		Write-Host "Mall: database=mmorpg_mall backend=$($mallSql.Backend) run_mode=$($mallSql.RunMode) require_tidb=$($mallSql.RequireTidb) allowed_payment_channels=$channelText"
+	}
+}
+
+# ─────────────────────────────────────────────────────────────────
+# GM 后台 gm-admin(java/gm_admin;docs/design/admin-identity-and-dual-control.md §11.4;部署说明见 deploy/k8s/README.md「GM 后台 gm-admin」)
+# ─────────────────────────────────────────────────────────────────
+
+# 运维预置的后台运行 Secret(infra namespace):管理库与 Redis 的连接信息。本脚本只核对键,不读值、不建、不删。
+$script:GmAdminRuntimeSecretName = 'gm-admin-runtime'
+$script:GmAdminRuntimeSecretKeys = @('jdbc-url', 'db-user', 'db-password', 'redis-host', 'redis-port', 'redis-password')
+# 后台的入站准入策略名(-NetworkPolicies on,New-GmAdminIngressNetworkPolicyYaml)。
+$script:GmAdminIngressPolicyName = 'gm-admin-ingress-deny'
+# 后台的 OIDC 设置里可以映射到的角色编码:迁移 7 建的三个标准角色与全权的 admin(oidc 模式下原生角色管理页关着,没有别的角色)。
+$script:GmAdminRoleCodes = @('admin', 'gm_operator', 'gm_approver', 'gm_auditor')
+
+# 本次是否部署 GM 后台:全局 Java 服务要部署(Test-GlobalJavaSvcDeployed,与商城同一组开关),并且给了 -GmAdminOidcIssuer。
+function Test-GmAdminDeployed {
+	return ((Test-GlobalJavaSvcDeployed) -and -not [string]::IsNullOrWhiteSpace($GmAdminOidcIssuer))
+}
+
+<#
+.SYNOPSIS
+	解析 GM 后台与各资源服务管理入口的口令 / 密钥(工作负载密钥目录末尾几把),返回 [ordered] 目录名 → 值;没设的不返回。不合格一律 throw。
+
+.DESCRIPTION
+	-Wanted 是本次有消费者要部署的目录名,其余的不读:不部署 login 的 infra-up 不因 login 口令不合格被拦下。没设 = 那个入口保持关闭
+	(同 MMORPG_PLAYER_INBOX_ADMIN_TOKEN),不阻断部署。设了就校验,各档位一样(dev 档 Resolve-InjectedSecret 不查长度,这里再查):
+	  - 至少 32 字节:trade、match 的 serviceauth 对短密钥拒绝构造,gateway 的机器口令要求 32 字节,login 与 data-service 的运维口令按同一下限;
+	  - 不含空白、双引号、反斜杠、控制字符:几方各读各的,对首尾空白的处理不一样;
+	  - 不含 "${":后台与 gateway 经 Spring 占位读它们,Spring 会把值里的占位再解析一遍(同 Assert-SpringPlaceholderSafe)。
+	几把之间、与 -OtherSecrets 里任何一把相同都拒绝:一个入口的口令泄露不该牵连另一个;gateway 也拒绝机器口令与 admin.api-key 相同。
+	纯函数(只读环境变量),契约测试按 AST 抽出直接调。报错只点环境变量名,不回显值。
+#>
+function Resolve-AdminEntrySecrets {
+	param(
+		[Parameter(Mandatory = $true)][ValidateSet('dev', 'staging', 'prod')][string]$ReleaseProfile,
+		[Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$Wanted,
+		[Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$OtherSecrets
+	)
+
+	$specs = [ordered]@{
+		'trade-manual-resolution'   = @{ Env = 'MMORPG_TRADE_MANUAL_RESOLUTION_SECRET'; Purpose = 'trade 人工处置入口(调用方 ops-commerce)的 serviceauth 密钥' }
+		'match-manual-resolution'   = @{ Env = 'MMORPG_MATCH_MANUAL_RESOLUTION_SECRET'; Purpose = 'match 滞留阵容人工处置(调用方 ops-formation)的 serviceauth 密钥' }
+		'data-service-admin-token'  = @{ Env = 'MMORPG_DATA_SERVICE_ADMIN_TOKEN'; Purpose = 'data_service 运维口令(AdminToken / x-admin-token)' }
+		'login-admin-token'         = @{ Env = 'MMORPG_LOGIN_ADMIN_TOKEN'; Purpose = 'login 运维口令(LoginAdmin / x-admin-token)' }
+		'gateway-admin-machine-key' = @{ Env = 'MMORPG_GATEWAY_ADMIN_MACHINE_KEY'; Purpose = 'gateway 机器口令(admin.machine-key,只给 table-bundle)' }
+	}
+	$resolved = [ordered]@{}
+	foreach ($name in $specs.Keys) {
+		if ($Wanted -notcontains $name) { continue }
+		$envName = $specs[$name].Env
+		if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($envName))) { continue }
+		$value = Resolve-InjectedSecret -EnvName $envName -DevFallback '' -ReleaseProfile $ReleaseProfile -Purpose $specs[$name].Purpose -MinLength 32
+		if ([System.Text.Encoding]::UTF8.GetByteCount($value) -lt 32 -or $value -match '["\\\s\p{Cc}]' -or $value.Contains('${')) {
+			throw ($envName + ' must be at least 32 bytes and must not contain whitespace, double quotes, backslashes, control characters or "${" (the value is not shown). Nothing was written.')
+		}
+		$resolved[$name] = $value
+	}
+	$candidates = @(foreach ($name in $resolved.Keys) { [pscustomobject]@{ Env = $specs[$name].Env; Value = [string]$resolved[$name] } })
+	$others = @(foreach ($other in @($OtherSecrets)) {
+			if ($null -ne $other -and -not [string]::IsNullOrEmpty([string]$other.Value)) { [pscustomobject]@{ Env = [string]$other.Env; Value = [string]$other.Value } }
+		})
+	for ($i = 0; $i -lt $candidates.Count; $i++) {
+		foreach ($other in (@($candidates | Select-Object -Skip ($i + 1)) + $others)) {
+			if ($candidates[$i].Value -ceq $other.Value) {
+				throw "$($candidates[$i].Env) must differ from $($other.Env): each admin entry has its own secret, so one leak does not open another (the values are not shown). Nothing was written."
+			}
+		}
+	}
+	return $resolved
+}
+
+<#
+.SYNOPSIS
+	-GmAdminOidc* 四项的形状核对,返回 @{ Issuer; ClientId; RedirectUri; RoleMapping(压成一行的 JSON); GroupCount }。不合格一律 throw。
+
+.DESCRIPTION
+	后台启动时自己还会再核一遍(GmOidcProvider / GmOidcLogin),这里先挡住让 Pod 起不来或谁都登不进去的取值,早于任何写操作:
+	  - 发行方:https,不带用户信息、查询串与片段(后台按发现文档逐字比 iss);
+	  - 回调地址:https,或回环地址的 http(经 kubectl port-forward 打开前端时),不带用户信息、查询串与片段;要与身份提供方登记的逐字相同;
+	  - 客户端号:1~255 个可见 ASCII,不含引号、反斜杠;
+	  - 角色映射:非空 JSON 对象,键是分组名,值只能是 $script:GmAdminRoleCodes 里的角色编码。
+	四项都不许含 "${":它们写进后台的配置模板,Spring 会把 "${...}" 当占位解析。
+#>
+function Get-GmAdminOidcSettings {
+	foreach ($pair in @(@('-GmAdminOidcIssuer', [string]$GmAdminOidcIssuer), @('-GmAdminOidcClientId', [string]$GmAdminOidcClientId),
+			@('-GmAdminOidcRedirectUri', [string]$GmAdminOidcRedirectUri), @('-GmAdminOidcRoleMapping', [string]$GmAdminOidcRoleMapping))) {
+		if ($pair[1].Contains('${')) { throw ($pair[0] + ' must not contain "${": it is written into the GM admin config, where Spring would resolve it as a placeholder. Nothing was written.') }
+	}
+	$issuer = [string]$GmAdminOidcIssuer
+	$issuerUri = $null
+	if (-not [Uri]::TryCreate($issuer, [UriKind]::Absolute, [ref]$issuerUri) -or $issuerUri.Scheme -cne 'https' -or
+		$issuerUri.UserInfo -or $issuerUri.Query -or $issuerUri.Fragment -or $issuer -match '["''\s]') {
+		throw '-GmAdminOidcIssuer must be an https URL without user info, query or fragment (the GM admin compares it with the issuer of the discovery document byte for byte). Nothing was written.'
+	}
+	$redirect = [string]$GmAdminOidcRedirectUri
+	$redirectUri = $null
+	if (-not [Uri]::TryCreate($redirect, [UriKind]::Absolute, [ref]$redirectUri) -or $redirectUri.UserInfo -or $redirectUri.Query -or $redirectUri.Fragment -or
+		$redirect -match '["''\s]' -or -not ($redirectUri.Scheme -ceq 'https' -or ($redirectUri.Scheme -ceq 'http' -and @('127.0.0.1', 'localhost', '[::1]') -contains $redirectUri.Host))) {
+		throw '-GmAdminOidcRedirectUri must be https, or http on a loopback address when the GM admin is opened through kubectl port-forward (for example http://127.0.0.1:3101/login), without user info, query or fragment. Nothing was written.'
+	}
+	$clientId = [string]$GmAdminOidcClientId
+	if ($clientId -cnotmatch '^[\x21\x23-\x26\x28-\x5B\x5D-\x7E]{1,255}$') {
+		throw '-GmAdminOidcClientId must be 1 to 255 visible ASCII characters without quotes or backslashes. Nothing was written.'
+	}
+	try { $mapping = ([string]$GmAdminOidcRoleMapping) | ConvertFrom-Json -AsHashtable -ErrorAction Stop }
+	catch { throw "-GmAdminOidcRoleMapping is not valid JSON: $($_.Exception.Message). Nothing was written." }
+	if ($mapping -isnot [System.Collections.IDictionary] -or $mapping.Count -eq 0) {
+		throw '-GmAdminOidcRoleMapping must be a non-empty JSON object that maps identity provider groups to GM admin role codes. Nothing was written.'
+	}
+	foreach ($group in @($mapping.Keys)) {
+		if ([string]::IsNullOrWhiteSpace([string]$group) -or $mapping[$group] -isnot [string] -or $script:GmAdminRoleCodes -cnotcontains $mapping[$group]) {
+			throw "-GmAdminOidcRoleMapping maps every group to one of the GM admin role codes $($script:GmAdminRoleCodes -join ', '). Nothing was written."
+		}
+	}
+	# 按分组名排序再压成一行:哈希表的枚举顺序跨进程不固定,不排序时同一份输入每次渲染出的配置模板不同,配置指纹一变 Pod 就白滚一次。
+	$sortedMapping = [ordered]@{}
+	foreach ($group in @($mapping.Keys | Sort-Object -CaseSensitive)) { $sortedMapping[[string]$group] = $mapping[$group] }
+	return [pscustomobject]@{
+		Issuer      = $issuer
+		ClientId    = $clientId
+		RedirectUri = $redirect
+		RoleMapping = ($sortedMapping | ConvertTo-Json -Compress)
+		GroupCount  = $sortedMapping.Count
+	}
+}
+
+<#
+.SYNOPSIS
+	GM 后台的写前核对(写路径入口,早于密钥解析与任何写操作):参数组合、四项 OIDC 设置、运维预置的 Secret gm-admin-runtime 在且键齐。
+
+.DESCRIPTION
+	本次不给 -GmAdminOidc* 时什么都不查。给了就要求:同时部署全局 Go 与 Java 服务(后台与商城同在 infra namespace、同一步起);四项一起给。
+	Secret 只查键名与 base64 长度(做法同 Assert-PaymentChannelSecrets),不读值:管理库与 Redis 的口令归运维,部署脚本不经手任何数据库口令。
+	DryRun 不连集群,只打一行将要核对什么。kubectl 失败直接 throw:查不到不等于在。
+#>
+function Assert-GmAdminDeployPreflight {
+	$given = @(@($GmAdminOidcIssuer, $GmAdminOidcClientId, $GmAdminOidcRedirectUri, $GmAdminOidcRoleMapping) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+	if ($given.Count -eq 0) { return }
+	if (-not (Test-GlobalJavaSvcDeployed)) {
+		throw '-GmAdminOidc* only apply when the global Go and Java services are deployed (infra-up, or all-up without -SkipInfra; with -GoSvcRegistry and -JavaSvcRegistry, without -SkipGoSvc and -SkipJavaSvc): the GM admin lives in the infra namespace and starts in the same step as the mall. Nothing was written.'
+	}
+	if ($given.Count -ne 4) {
+		throw '-GmAdminOidcIssuer, -GmAdminOidcClientId, -GmAdminOidcRedirectUri and -GmAdminOidcRoleMapping must be given together. Nothing was written.'
+	}
+	$oidc = Get-GmAdminOidcSettings
+	Write-Host "GM admin: identity=oidc issuer=$($oidc.Issuer) redirect=$($oidc.RedirectUri) role_groups=$($oidc.GroupCount) runtime_secret=$script:GmAdminRuntimeSecretName"
+	$name = $script:GmAdminRuntimeSecretName
+	if ($DryRun) {
+		Write-Host "[dry-run] would check that Secret $name in namespace $InfraNamespace has the non-empty keys $($script:GmAdminRuntimeSecretKeys -join ', ') (GM admin database and Redis; the values are not read)"
+		return
+	}
+	$allArgs = @()
+	$allArgs += Build-KubectlBaseArgs
+	$allArgs += @('get', 'secret', $name, '-n', $InfraNamespace, '--ignore-not-found', '-o', 'go-template=found;{{range $k, $v := .data}}{{$k}}={{len $v}};{{end}}')
+	$out = & kubectl @allArgs
+	$exitCode = $LASTEXITCODE
+	if ($exitCode -ne 0) {
+		throw "Cannot read Secret $name in namespace $InfraNamespace (GM admin database and Redis): kubectl exit code $exitCode. Nothing was written."
+	}
+	$tokens = @(([string]($out | Out-String)).Trim() -split ';' | Where-Object { $_ -ne '' })
+	if ($tokens.Count -eq 0 -or $tokens[0] -cne 'found') {
+		throw "Secret $name does not exist in namespace ${InfraNamespace}. Provision it first with the keys $($script:GmAdminRuntimeSecretKeys -join ', ') (deploy/k8s/README.md, section GM admin). Nothing was written."
+	}
+	$present = @{}
+	foreach ($token in @($tokens | Select-Object -Skip 1)) {
+		if ($token -cmatch '^(?<key>[^=]+)=(?<length>\d+)$' -and [int]$Matches['length'] -gt 0) { $present[$Matches['key']] = $true }
+	}
+	$missing = @($script:GmAdminRuntimeSecretKeys | Where-Object { -not $present.ContainsKey($_) })
+	if ($missing.Count -gt 0) {
+		throw "Secret $name in namespace $InfraNamespace has no non-empty key for $($missing -join ', '). The GM admin reads its database and Redis settings from them and does not start without them. Nothing was written."
+	}
+}
+
+<#
+.SYNOPSIS
+	双人复核的应急开关(不带批准记录也受理)在非 dev 档必须是关的:写路径入口、任何写操作之前核对会进集群的配置来源。
+
+.DESCRIPTION
+	几个 Go 服务的 ConfigMap 由服务 yaml 整份复制(mail、rank)或照抄段落(match 的 GlobalMatch、trade 的 Commerce)再替换,有人把开关提交成
+	true 就会原样上集群;商城的开关取 jar 内 application.yaml 的缺省值(清单不设这个环境变量)。这里在 staging / prod 拒绝任何一处不是 false:
+	  - go/{mail,rank,login,data_service,player_inbox,match,trade}/etc/*.yaml 里非注释行的 AdminAllowUnapproved / ManualResolutionAllowUnapproved;
+	  - java/mall_game 的 commerce.admin-allow-unapproved 缺省值,以及商城清单里对 COMMERCE_ADMIN_ALLOW_UNAPPROVED 的任何设置。
+	dev 档放行(本机与开发集群一个人能跑通,设计稿 §5.7);打开期间每一次受理都有 ERROR 与计数,告警在 deploy/k8s/dual-control-alerts.yaml。
+#>
+function Assert-DualControlEmergencySwitchesOff {
+	if ($ReleaseProfile -eq 'dev') { return }
+	$sources = @('go/mail/etc/mail.yaml', 'go/rank/etc/rank.yaml', 'go/login/etc/login.yaml', 'go/data_service/etc/data_service.yaml',
+		'go/player_inbox/etc/player_inbox.yaml', 'go/match/etc/match_service.yaml', 'go/trade/etc/trade.yaml')
+	foreach ($relativePath in $sources) {
+		$text = [System.IO.File]::ReadAllText((Join-Path $RepoRoot $relativePath))
+		foreach ($hit in [regex]::Matches($text, '(?m)^[ \t]*(?<key>AdminAllowUnapproved|ManualResolutionAllowUnapproved)[ \t]*:[ \t]*(?<value>[^#\r\n]*)')) {
+			$value = $hit.Groups['value'].Value.Trim().Trim('"', "'")
+			if ($value -ne '' -and $value -ine 'false') {
+				throw "$relativePath sets $($hit.Groups['key'].Value) to '$value'. The dual-control emergency switch accepts admin commands without an approval record; it is for local development only and is refused in ReleaseProfile=$ReleaseProfile (docs/design/admin-identity-and-dual-control.md section 5.7). Nothing was written."
+			}
+		}
+	}
+	$mallJar = [System.IO.File]::ReadAllText((Join-Path $RepoRoot 'java/mall_game/src/main/resources/application.yaml'))
+	if ($mallJar -cnotmatch '(?m)^  admin-allow-unapproved: \$\{COMMERCE_ADMIN_ALLOW_UNAPPROVED:false\}[ \t]*\r?$') {
+		throw "java/mall_game/src/main/resources/application.yaml must keep commerce.admin-allow-unapproved at `${COMMERCE_ADMIN_ALLOW_UNAPPROVED:false}; the mall emergency switch is refused in ReleaseProfile=$ReleaseProfile. Nothing was written."
+	}
+	$mallManifest = [System.IO.File]::ReadAllText((Join-Path $JavaSvcManifestsDir $JavaSvcCatalogue['mall'].Manifest))
+	if ($mallManifest.Contains('COMMERCE_ADMIN_ALLOW_UNAPPROVED')) {
+		throw "The mall manifest sets COMMERCE_ADMIN_ALLOW_UNAPPROVED; the mall emergency switch is refused in ReleaseProfile=$ReleaseProfile. Nothing was written."
+	}
+}
+
+<#
+.SYNOPSIS
+	GM 后台在 K8s 上的运行配置(ConfigMap java-svc-gm-admin-config,键 application-k8s.yaml)。只渲染,不写集群。
+
+.DESCRIPTION
+	以 profile k8s 盖在 jar 内的 application-gm.yml 之上(清单的启动参数 --spring.profiles.active=prod,gm,k8s),只写集群里不一样的键:
+	  - 监听 0.0.0.0:18090(浏览器只经同 Pod 的 nginx 访问);日志只打控制台(logback-console.xml);上传落本地临时卷,不用 prod 档的 alioss;
+	  - gm.identity.mode=oidc 与四项 OIDC 设置;客户端密钥只写对容器环境变量的引用(工作负载密钥目录 gm-admin-oidc);
+	  - 各下游写集群内 Service 名(<service>.<namespace>.svc)、明文:集群内服务之间都是明文,保护靠 NetworkPolicy 名单与各调用方的密钥
+	    (后台只许回环与这种 Service 名走明文,GameServices.isLoopbackOrClusterServiceHost)。zone 级的 login、gateway、data-service、
+	    player-locator 指向 -ZoneNamespace(data-service 已就绪的那个 zone):它们的管理入口操作的都是全服数据(账号目录、区服目录、全局池),
+	    经哪个 zone 进来结果相同;
+	  - 每一路的口令 / 密钥只写对容器环境变量的引用。本次没注入的那一路整行不写(落回 jar 内的空串 = 那一路不可用,不是免鉴权)。
+	生成器不读目录表(契约测试按 AST 单独抽它跑),判的是解析出来的值;变量名字面量与目录表一致由契约测试核对。
+#>
+function New-GmAdminConfigMapYaml {
+	param([Parameter(Mandatory = $true)][string]$ZoneNamespace)
+
+	$oidc = Get-GmAdminOidcSettings
+	# 商城的 admin 主体:取商城 jar 内 application.yaml 的缺省值(商城配置模板不改它),两边一处真相。
+	$mallJar = [System.IO.File]::ReadAllText((Join-Path $RepoRoot 'java/mall_game/src/main/resources/application.yaml'))
+	$mallSubject = [regex]::Match($mallJar, '(?m)^  admin-subject: \$\{COMMERCE_ADMIN_SUBJECT:(?<s>[A-Za-z0-9._-]+)\}[ \t]*\r?$')
+	if (-not $mallSubject.Success) {
+		throw 'java/mall_game/src/main/resources/application.yaml must keep commerce.admin-subject as ${COMMERCE_ADMIN_SUBJECT:<subject>}: the GM admin signs as that subject. Nothing was written.'
+	}
+	$infraSvc = ".$InfraNamespace.svc"
+	$zoneSvc = ".$ZoneNamespace.svc"
+	$injected = @{}
+	foreach ($name in @('trade-manual-resolution', 'match-manual-resolution', 'data-service-admin-token', 'login-admin-token')) {
+		$injected[$name] = ($script:AdminEntrySecrets -is [System.Collections.IDictionary] -and -not [string]::IsNullOrEmpty([string]$script:AdminEntrySecrets[$name]))
+	}
+	# 引用写成单引号拼接,不让 PowerShell 展开 $。
+	$game = @(
+		'    plaintext: true'
+		"    gateway-url: http://gateway${zoneSvc}:$($JavaSvcCatalogue['gateway'].HttpPort)"
+		('    gateway-admin-key: "${MMORPG_GATEWAY_ADMIN_API_KEY}"')
+		"    data-target: data-service${zoneSvc}:$($GoSvcCatalogue['data-service'].Port)"
+		"    locator-target: player-locator${zoneSvc}:$($GoSvcCatalogue['player-locator'].Port)"
+		"    mail-target: mail${infraSvc}:$($GoSvcCatalogue['mail'].Port)"
+		('    mail-admin-secret: "${MAIL_PRODUCER_SECRET_ADMIN}"')
+		"    trade-target: trade${infraSvc}:$($GoSvcCatalogue['trade'].Port)"
+		$(if ($injected['trade-manual-resolution']) { '    trade-admin-secret: "${MMORPG_TRADE_MANUAL_RESOLUTION_SECRET}"' })
+		"    mall-url: http://mall${infraSvc}:$($JavaSvcCatalogue['mall'].HttpPort)"
+		('    mall-admin-secret: "${MMORPG_COMMERCE_ADMIN_SECRET}"')
+		"    mall-admin-subject: $($mallSubject.Groups['s'].Value)"
+		"    login-target: login${zoneSvc}:$($GoSvcCatalogue['login'].Port)"
+		$(if ($injected['login-admin-token']) { '    login-admin-token: "${MMORPG_LOGIN_ADMIN_TOKEN}"' })
+		$(if ($injected['data-service-admin-token']) { '    data-admin-token: "${MMORPG_DATA_SERVICE_ADMIN_TOKEN}"' })
+		"    inbox-target: player-inbox${infraSvc}:$($GoSvcCatalogue['player-inbox'].Port)"
+		$(if (-not [string]::IsNullOrEmpty($script:PlayerInboxAdminToken)) { '    inbox-admin-token: "${MMORPG_PLAYER_INBOX_ADMIN_TOKEN}"' })
+		"    rank-target: rank${infraSvc}:$($GoSvcCatalogue['rank'].Port)"
+		('    rank-admin-secret: "${RANK_PRODUCER_SECRET_ADMIN}"')
+		"    match-target: match${infraSvc}:$($GoSvcCatalogue['match'].Port)"
+		$(if ($injected['match-manual-resolution']) { '    match-formation-secret: "${MMORPG_MATCH_MANUAL_RESOLUTION_SECRET}"' })
+	) | Where-Object { $null -ne $_ }
+	$roleMapping = $oidc.RoleMapping.Replace("'", "''")
+	$config = @(
+		'# GM 后台在 K8s 上的运行配置,由 k8s_deploy.ps1 的 New-GmAdminConfigMapYaml 生成,以 profile k8s 盖在 jar 内的 application-gm.yml 之上。'
+		'# 口令与密钥只写对容器环境变量的引用,值经 Secret 注入;没注入的那一路整行不写(那一路不可用)。'
+		'server:'
+		'  address: 0.0.0.0'
+		'  port: 18090'
+		'logging:'
+		'  config: classpath:logback-console.xml'
+		'jeecg:'
+		'  uploadType: local'
+		'  path:'
+		'    upload: /app/uploads'
+		'    webapp: /app/uploads'
+		'gm:'
+		'  identity:'
+		'    mode: oidc'
+		'  oidc:'
+		"    issuer: `"$($oidc.Issuer)`""
+		"    client-id: `"$($oidc.ClientId)`""
+		('    client-secret: "${MMORPG_GM_OIDC_CLIENT_SECRET}"')
+		"    redirect-uri: `"$($oidc.RedirectUri)`""
+		"    role-mapping: '$roleMapping'"
+		'  game:'
+	) + $game
+	return @"
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: $($JavaSvcCatalogue['gm-admin'].ConfigMap)
+  labels:
+    app: gm-admin
+    tier: java-svc
+data:
+  application-k8s.yaml: |
+$(($config | ForEach-Object { "    $_" }) -join "`n")
+"@
+}
+
+# GM 后台的入站准入(-NetworkPolicies on):选中 gm-admin 的 Pod、不列任何 ingress 规则 = 拒绝其它 Pod 连它的全部端口。
+# 管理员经 kubectl port-forward 进来(kubelet 在 Pod 自己的网络命名空间里连,不经策略),kubelet 探针同样不受影响。
+# 后台持有全部管理口令与密钥,集群里任何一个被攻破的 Pod 都不该能直接摸到它的接口(JeecgBoot 历史漏洞多,设计稿 §6 第 2 条)。
+function New-GmAdminIngressNetworkPolicyYaml {
+	return @"
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: $($script:GmAdminIngressPolicyName)
+  labels:
+    mmorpg.io/managed-by: k8s_deploy.ps1
+spec:
+  podSelector:
+    matchLabels:
+      app: gm-admin
+  policyTypes:
+    - Ingress
+"@
+}
+
+<#
+.SYNOPSIS
+	全局服务第二步里 GM 后台的部分(Apply-GlobalGoSvcWorkloads 调用,排在商城之后):配置模板、密钥、入站准入、Deployment 与 Service。
+
+.DESCRIPTION
+	先全部在本地渲染完再写集群。写顺序:Secret → ConfigMap → 准入策略 → Deployment / Service(secretKeyRef 不是 optional,Secret 先落地)。
+	密钥三种来源:工作负载密钥目录里消费者含 gm-admin 的几把(Add-WorkloadSecretsToManifest);网关管理口令与 gateway 同值,gateway 那份在 zone
+	namespace,这里在 infra namespace 另建同名一份;收件箱运维口令与 player-inbox 共用同 namespace 的 Secret(注入了才挂)。邮件、榜单两把
+	admin 生产者密钥由清单直接引用运维预置的 domain-service-secrets。Pod 模板带每把密钥与配置模板的指纹,换任何一样都会滚动。
+	本次不部署后台时什么都不做;-NetworkPolicies off 时删掉以前留下的入站策略。
+#>
+function Apply-GmAdminWorkload {
+	param([Parameter(Mandatory = $true)][string]$ZoneNamespace)
+
+	if (-not (Test-GmAdminDeployed)) { return }
+	$svcName = 'gm-admin'
+	$info = $JavaSvcCatalogue[$svcName]
+	$svcImage = "$JavaSvcRegistry/$($info.ImageName):$JavaSvcTag"
+	$svcPullPolicy = Resolve-ImagePullPolicy -ImageRef $svcImage
+	$configMapYaml = New-GmAdminConfigMapYaml -ZoneNamespace $ZoneNamespace
+	$manifestContent = [System.IO.File]::ReadAllText((Join-Path $JavaSvcManifestsDir $info.Manifest))
+	$manifestContent = $manifestContent.Replace('PLACEHOLDER_IMAGE', $svcImage).Replace('PLACEHOLDER_PULL_POLICY', $svcPullPolicy)
+	# 配置模板只在启动时读:只改 ConfigMap(OIDC 设置、下游地址)时 Pod 模板不变、apply 是 no-op,指纹让它自动滚动。
+	$manifestContent = Add-PodTemplateAnnotationEntry -SvcName $svcName -ManifestContent $manifestContent `
+		-Key 'mmorpg.io/gm-admin-config-hash' -Value (Get-InjectedSecretFingerprint -SecretName 'gm-admin/config' -Value $configMapYaml)
+	$manifestContent = Add-WorkloadSecretsToManifest -SvcName $svcName -ManifestContent $manifestContent
+	$manifestContent = Add-GoSvcSecretEnv -SvcName $svcName -ManifestContent $manifestContent `
+		-EnvName 'MMORPG_GATEWAY_ADMIN_API_KEY' -SecretName $script:GatewayAdminApiKeySecretName -SecretKey $script:GatewayAdminApiKeySecretKey
+	$manifestContent = Add-PodTemplateAnnotationEntry -SvcName $svcName -ManifestContent $manifestContent `
+		-Key $script:GatewayAdminApiKeyHashAnnotation -Value (Get-InjectedSecretFingerprint -SecretName $script:GatewayAdminApiKeySecretName -Value $script:GatewayAdminApiKey)
+	if (-not [string]::IsNullOrEmpty($script:PlayerInboxAdminToken)) {
+		$manifestContent = Add-GoSvcSecretEnv -SvcName $svcName -ManifestContent $manifestContent `
+			-EnvName 'MMORPG_PLAYER_INBOX_ADMIN_TOKEN' -SecretName $script:PlayerInboxAdminTokenSecretName -SecretKey $script:PlayerInboxAdminTokenSecretKey
+		$manifestContent = Add-PodTemplateAnnotationEntry -SvcName $svcName -ManifestContent $manifestContent `
+			-Key 'mmorpg.io/player-inbox-admin-token-hash' -Value (Get-InjectedSecretFingerprint -SecretName $script:PlayerInboxAdminTokenSecretName -Value $script:PlayerInboxAdminToken)
+	}
+	$leftover = [regex]::Matches($manifestContent, 'PLACEHOLDER_[A-Z_]+') | ForEach-Object { $_.Value } | Sort-Object -Unique
+	if ($leftover.Count -gt 0) {
+		throw "gm-admin.yaml has unreplaced placeholders: $($leftover -join ', '). Nothing was written for the GM admin."
+	}
+	$policyYaml = if ($script:NetworkPoliciesOn) { New-GmAdminIngressNetworkPolicyYaml } else { $null }
+
+	Sync-WorkloadSecrets -Namespace $InfraNamespace -Consumer $svcName
+	Apply-InjectedSecret -Namespace $InfraNamespace -Name $script:GatewayAdminApiKeySecretName -Key $script:GatewayAdminApiKeySecretKey `
+		-Value $script:GatewayAdminApiKey -AppLabel $svcName
+	Invoke-KubectlWithInputFile -Args @("apply", "-n", $InfraNamespace) -InputContent $configMapYaml
+	if ($null -ne $policyYaml) {
+		Invoke-KubectlWithInputFile -Args @("apply", "-n", $InfraNamespace) -InputContent $policyYaml
+	}
+	Invoke-KubectlWithInputFile -Args @("apply", "-n", $InfraNamespace) -InputContent $manifestContent
+	Write-Host "  [applied] $svcName -> $svcImage (web=$($info.HttpPort) zone_targets=$ZoneNamespace identity=oidc pullPolicy=$svcPullPolicy)"
+	if (-not $script:NetworkPoliciesOn) {
+		# 准入策略关着:删掉以前开着时留下的同名策略(删策略只会放开流量,不断流)。
+		Invoke-Kubectl -Args @("delete", "networkpolicy", $script:GmAdminIngressPolicyName, "-n", $InfraNamespace, "--ignore-not-found")
 	}
 }
 
@@ -18891,6 +19317,11 @@ if ($Command -in @("zone-up", "all-up", "infra-up")) {
 	Assert-LogicalDbPreflight
 	# 官方商城与支付:-PaymentConfigPath 读不了或写得不对、开了渠道却缺运维预置的密钥 Secret、商城的库档位或目录条目不合格,在这里拒绝。
 	Assert-CommerceDeployPreflight
+	# GM 后台(-GmAdminOidc*):参数组合与形状、运维预置的 Secret gm-admin-runtime 在且键齐(只读 kubectl;DryRun 不查集群)。排在密钥解析之前:
+	# 报的是参数或运维预置的原因,而不是「缺 MMORPG_GM_OIDC_CLIENT_SECRET」。
+	Assert-GmAdminDeployPreflight
+	# 双人复核的应急开关:staging / prod 拒绝任何一处会进集群的配置把它提交成 true(docs/design/admin-identity-and-dual-control.md §5.7)。
+	Assert-DualControlEmergencySwitchesOff
 	# 集群内 Loki:-LokiReplicas 不是 1 / 3、3 副本缺对象存储参数、夹具用在非 dev,或本次根本不部署集群内 Loki 却给了这些参数,在这里拒绝。
 	Assert-LokiDeployPreflight
 	# 配置表热更分发 sidecar 参数组合校验(非 dev 禁止夹具,未开表包模式禁止单独传附加参数)。

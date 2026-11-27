@@ -143,8 +143,8 @@ cd go/trade && go run ./cmd/assetopfix -f etc/trade.yaml resolve -op <op_id> -as
 
 **开启入口**（缺省关闭，与 match 的 `formationfix` 同一做法）：
 
-1. 生成一把至少 32 字节的随机密钥，放进 K8s Secret，不与别的调用方共用；
-2. trade 配置写 `Commerce.ManualResolutionSecretEnv: MMORPG_TRADE_COMMERCE_FIX_SECRET` 与 `Commerce.ManualResolutionEnvironment: <本部署的环境名>`（1~64 个 ASCII 字母、数字或 `.` `_` `-`，例如 `prod-global`，每个环境不同）。Pod 注入同名环境变量，滚动重启 trade。环境名就是工具 `-expect-target` 要填的值，写进工单；
+1. 生成一把至少 32 字节的随机密钥，不与别的调用方共用；
+2. K8s 上:部署机设环境变量 `MMORPG_TRADE_MANUAL_RESOLUTION_SECRET` 再跑 `infra-up`。部署脚本把它建成 Secret `trade-manual-resolution`(只给 trade 与 GM 后台),trade 配置写 `Commerce.ManualResolutionSecretEnv: MMORPG_TRADE_MANUAL_RESOLUTION_SECRET` 与环境名 `<档位>-global`(`dev-global` / `staging-global` / `prod-global`),Pod 带指纹自动滚动(`deploy/k8s/README.md`「GM 后台 gm-admin」)。本机:trade 配置自己写这两项(环境名 1~64 个 ASCII 字母、数字或 `.` `_` `-`,每个环境不同),进程注入同名变量后重启。环境名就是工具 `-expect-target` 要填的值，写进工单；
 3. 启动日志里没有 `Manual contract resolution disabled` 即已开启。变量缺失、密钥不足 32 字节、环境名不合规、资产通道没开时会打这行 ERROR，入口保持关闭，不影响服务；
 4. 处置完成后撤掉环境变量（或配置项）再滚动重启，入口回到关闭。
 

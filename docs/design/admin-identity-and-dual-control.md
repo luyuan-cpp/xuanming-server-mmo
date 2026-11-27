@@ -160,7 +160,7 @@ func Require(approval *basepb.AdminApproval, operator string) error
 - EXECUTE 在配置为开时必须带批准记录,且 `approval.proposer` 等于请求的 `operator`。SHOW 与 DRY_RUN 不要求。
 - **幂等**:先看留痕里有没有同一个 `approval_id`,有就回「已执行」和那条留痕(回包 `already_executed=true`),不再比较版本。这一步**排在版本比较之前**,而且锁外读、锁内各做一次:执行成功后版本已经加一,结果未知的重放若先比版本,只会得到「版本已变」,看不出是不是自己做的;锁外读之后、加锁之前,同一个批准号的另一次请求也可能刚提交。留痕只追加,看到就是已提交,所以锁外看到也能直接回。带同一个批准号的 DRY_RUN 同样报「已执行」,批准人据此知道不用再批。
 - **放行的结果怎么记**:trade 回 OK(含重放)→ 流水记 `EXECUTED`;拒绝、合同不存在、版本已变 → `REJECTED`(要重新发起);读库失败(`RETRY`)、提交结果未知(gRPC `UNAVAILABLE`)、超时或断连 → `UNKNOWN`,可在原申请上「沿用原申请重试」,批准记录原样复用、请求摘要不变,trade 按批准号判重。交易人工处置因此与邮件一样属于「可重试」的命令;在线玩家的直接 GM 下游没有判重,仍然不能重试。
-- **调用方与密钥**:后台以 `ops-commerce` 调用方签名(与 `commercefix` 同一个调用方,trade 只认它),密钥 `GM_TRADE_ADMIN_SECRET` 与 trade 的 `Commerce.ManualResolutionSecretEnv` 同值,只挂给后台工作负载。本机后台到 trade 还没有经过验收的转发,`run_local.py` 不放行这两个变量,交易页只读不可用(批 7 补本机转发)。
+- **调用方与密钥**:后台以 `ops-commerce` 调用方签名(与 `commercefix` 同一个调用方,trade 只认它),密钥与 trade 的 `Commerce.ManualResolutionSecretEnv` 指名的同值,只挂给后台工作负载(K8s 上是工作负载密钥目录 `trade-manual-resolution`,§11.4)。本机调试栈里没有 trade,本机转发定为不做,`run_local.py` 不放行 `GM_TRADE_TARGET` / `GM_TRADE_ADMIN_SECRET`,交易页在本机只读不可用(§11.4 末节)。
 - **不带批准记录的应急出口**:trade 配置 `Commerce.ManualResolutionAllowUnapproved`(缺省 false)。打开时启动打一行 ERROR;之后每一次不带记录的 EXECUTE 都打 ERROR 并计入 `trade_manual_resolution_unapproved_execute_total`(批 7 据此加告警)。打开是一次走部署流程的配置变更,本身有记录。
 - **两人以外的信息不下传**:批准记录只有批准号、发起人、批准人、批准时刻;角色与权限不下传(§5.4)。trade 的留痕 `TradeCommerceManualAction` 加 `approval_id`、`approver` 两个字段;发起人就是原有的 `operator`,不重复存。
 - 后台新增「交易人工处置」页:列表(`ListManualContracts`)→ 详情(SHOW)→ 发起人选动作、填参数、原因和环境名,后台先跑一次 DRY_RUN,通过才冻结成草稿 → 批准人看到冻结的参数和当场重跑的 DRY_RUN 结果 → 批准后 EXECUTE。执行的结果由「合同在版本 V 的状态 + 动作 + 参数」决定,版本一变 EXECUTE 就拒绝,所以批准人看到的就是会执行的。
@@ -195,7 +195,7 @@ func Require(approval *basepb.AdminApproval, operator string) error
 |---|---|---|---|
 | 1 | 一人两号,自己批自己 | 生产只有 OIDC 登录;操作人就是身份提供方的主体,本地无法改绑;原生账号在 `oidc` 模式下登不进来 | 一个人在身份提供方有两个账号:归身份提供方的账号治理 |
 | 2 | 后台进程被攻破(漏洞利用、直接改管理库) | `oidc` 模式关掉全部原生 `/sys/**` 管理页;后台不对公网开放;上游版本钉死并跟进补丁;资源服务侧留痕与告警独立于后台 | **能伪造两个人。**这是做法 A 明知的边界,升级路径是做法 C(§4) |
-| 3 | 管理调用方密钥泄漏,绕过后台直接调资源服务 | 密钥只挂给后台工作负载;各服务密钥互不相同;NetworkPolicy 只放行后台访问管理端口 | 能读 K8s Secret 的人本来就能直接动库,由集群权限管 |
+| 3 | 管理调用方密钥泄漏,绕过后台直接调资源服务 | 密钥只挂给后台工作负载;各服务密钥互不相同;NetworkPolicy 只放行后台访问管理端口 | 能读 K8s Secret 的人本来就能直接动库,由集群权限管;集群内服务之间是明文,`x-admin-token` 与网关 `X-Admin-Key` 原样过网(HMAC 签名的几路不露密钥),能在节点上抓包的人拿得到,与能读 Secret 同一个边界,要防就上服务网格 mTLS(§11.4) |
 | 4 | 发起之后、批准之前换载荷 | 草稿创建后不可改,没有编辑接口;批准只接受草稿号;批准人看到的载荷由服务端从库里读出 | 无 |
 | 5 | 重放 | `ServiceCallAuth` 的 5 分钟时间窗;批准号在资源服务侧幂等 | 无 |
 | 6 | 批准时情况已经变了 | 申请 24 小时过期;trade 的 `expect_version`;邮件的 `expireMs` | 无 |
@@ -230,7 +230,7 @@ func Require(approval *basepb.AdminApproval, operator string) error
 | 4 | 商城人工单与 SKU 管理迁进后台;`mall_game` 加发起人 / 批准人与核对;把漏掉的收入争议接上;删网关的商城代理与 `/mall-admin` 页 | 25 | 退款、没收、改价都过双人 | 11-26 落码,未编译(做法见 §11.1) |
 | 5 | mail 请求带批准记录并落库;回收、收件箱处置、账号类(注销、摘角色、重置实名)、rank 两个删除、match 滞留阵容接入后台 | 35~40 | 甲级动作全部接入 | 11-26 落码,未生成未编译(§11.2) |
 | 6 | 网关 `/admin/**` 收口:操作人由后台填、各控制器补留痕、配置表发布用单独的机器口令、公网入口不再路由 `/admin` | 18 | 乙级动作有个人身份 | 11-26 落码,未编译(§11.3) |
-| 7 | 后台上 K8s:清单、密钥、契约测试、告警(不带批准记录的 EXECUTE、应急开关被关) | 10~12 | 可以按生产方式部署(含本机后台到 trade 的转发) | 告警与契约测试 11-26 落码未运行;K8s 清单与本机转发见 §11.4 |
+| 7 | 后台上 K8s:清单、密钥、契约测试、告警(不带批准记录的 EXECUTE、应急开关被关) | 10~12 | 可以按生产方式部署(含本机后台到 trade 的转发) | 告警 11-26、K8s 部署与密钥接线 11-27 落码,未运行;本机到 trade 的转发定为这次不做(调试栈里没有 trade,理由见 §11.4 末节) |
 
 合计约 145~155 个文件。**批 1~3 共约 56 个,超过 30,需要负责人批准后再动手**(AGENTS §10.2)。建议先批 1~3:做完之后任务点名的这一条就闭环了,4~7 可以看完效果再定。
 
@@ -285,7 +285,7 @@ func Require(approval *basepb.AdminApproval, operator string) error
 - **原因按字节限长**:下游里最严的是 191 字节(match、trade),发起时就按 UTF-8 191 字节挡住(约 63 个汉字),不等到批准时才被下游拒绝。
 - 收件箱作废的 `reason` 是作废原因枚举,申请原因写进 `note`(强制模式必填,进审计)。
 - 下游的调用方证明:login、player_inbox、data_service 回收认共享口令 `x-admin-token`,rank(调用方 admin)与 match(调用方 `ops-formation`,不是交接单写的 `ops`)认 ServiceCallAuth。口令与密钥只挂给后台工作负载(§6 第 3 条)。
-- 当场发现的:data_service 的 `AdminToken` 在 K8s 配置模板里没有渲染,回收五个入口在集群里目前是关的;接线随批 7 的清单另做。
+- 当场发现的:data_service 的 `AdminToken` 在 K8s 配置模板里没有渲染,回收五个入口在集群里是关的。批 7 已接上(`AdminTokenEnv` + 工作负载密钥目录 `data-service-admin-token`,§11.4)。
 - **各服务落码时定下的做法**(子任务回报后逐条核过):
   - **核对函数收紧**:`RequireForRequest` 起初把空操作人当成「请求没有操作人字段」,有操作人字段的请求带空操作人会先被当成已核过、再被业务校验拒掉(收件箱会先打一行「已核过」)。改成严格比对:请求里确实没有操作人字段的 mail、rank 显式传 `approval.GetProposer()`。
   - **回收的「登记已人工处置」(`RegisterRecallReviewHandled`)也按甲级**:登记之后这些流水永久按已消费处理、以后的回收都跳过,属于「做完撤不回」;§3 的清单原来漏了它。请求加 `approval = 10`,核「发起人就是操作人」,进运营处置目录(重放回「早已登记」,可以重试)。
@@ -304,7 +304,43 @@ func Require(approval *basepb.AdminApproval, operator string) error
 ### 11.4 批 7:告警、K8s 清单与本机转发
 
 - 告警:`deploy/k8s/dual-control-alerts.yaml`,每个资源服务一条「不带批准记录而被接受」的规则(trade 是 `TradeManualResolutionUnapprovedExecute`,与 trade 配置注释一致),5 分钟内有增长就响;契约测试 `tools/scripts/tests/dual_control_alerts_contract.tests.ps1` 钉住规则名单、指标名来自代码。集群里这些计数应当恒为 0。
-- 后台上 K8s(Deployment、Service、只许后台访问各服务管理端口的 NetworkPolicy、Secret 键、`gm.identity.mode=oidc`)与本机 `rpc-bridge` 到 trade 的转发:状态见 PROGRESS 批 7 条目。本机转发要同时改 `rpc-bridge.py` 的就绪回执、`gm_scene_promotion.READ_TARGETS` 与本机 trade 的管理入口配置,三处一起验收后 `run_local.py` 才放行 `GM_TRADE_*`。
+
+#### 后台上 K8s(2026-11-27 落码,未运行)
+
+部署说明在 `deploy/k8s/README.md`「GM 后台 gm-admin」,契约测试 `tools/scripts/tests/k8s_gm_admin_deploy_contract.tests.ps1`。
+
+- **放在哪**:infra namespace 一份,与商城同一步、排在它之后(`Apply-GmAdminWorkload`)。部署全局 Go 与 Java 服务并给了 `-GmAdminOidcIssuer` 等四项 OIDC 设置才部署;别的命令给了在写之前拒绝。后台不是游戏的 SQL 写者(管理库独立),所以是 Deployment,不进写者名册。
+- **一个镜像、两个容器**:后端 JeecgBoot(18090)与前端 nginx(3101,发静态页、把 `/jeecgboot/` 反代到同 Pod 的后端)。Service 只暴露 3101、ClusterIP、不建 Ingress;管理员经 `kubectl port-forward` 打开,回调地址填 `http://127.0.0.1:3101/login`(后台只许回环地址走明文回调,§5.2)。
+  - 为什么用 nginx 而不让后端发静态页:JeecgBoot 官方的部署形态就是前端 nginx + 后端,单页应用的路由回落与 `/jeecgboot` → `/jeecg-boot` 的前缀映射都在 nginx 一处;后端发静态页要改上游的 Shiro 放行表与前端的基础路径。
+  - 为什么镜像只打包、不在 Docker 里编译:仓库里没有钉 digest 的 node 镜像,前端只能在宿主机构建;后端与它保持同一套产物来源(`java/gm_admin/README.md`「K8s 镜像」)。打包脚本核对产物比源码新,旧产物拒绝打包。
+  - 也核协议:jar 内嵌的协议描述 `gm-contracts.pb` 是 `prepare.py` 那一刻按 `proto/` 生成的。只核 jar 比后台源码新,拦不住「改了管理协议却没重跑 `prepare.py`」——后台会按旧字段号编请求(比如没有批准记录字段),下游拒绝或读错字段。所以要求描述比 `proto/` 下每个 `.proto` 都新、jar 比描述新;代价是任何协议改动都要重建后台,换来的是镜像里的协议一定是当前的。
+  - 只读根文件系统上只留几块有上限的临时卷:`/tmp`、`/app/uploads`,以及 `/app/config`——上游 `CodeTemplateInitListener` 在 jar 启动时往「工作目录/config」拷内嵌的代码生成模板,只读时每次启动打一次异常栈;配置模板因此改挂 `/app/k8s-config`,不和它抢目录。
+  - 前端 nginx 用自己看到的对端覆盖 `X-Forwarded-For` / `X-Real-IP`,不追加:上游取 `X-Forwarded-For` 的第一个地址进日志与审计,追加写法下浏览器自带一个头就能伪造来源。前面没有可信代理(经 port-forward 进来);以后加内部入口时改成只信那个入口给的头。
+  - profile `prod,gm,k8s`:用上游 prod 档(关掉在线开发与接口文档),k8s 档写在部署脚本渲染的 `application-k8s.yaml` 里,把 prod 档的上传方式 alioss 改回本地、日志只打控制台(`logback-console.xml`,上游那份往 `../logs` 写文件,根文件系统只读)。
+- **管理库与 Redis**:运维预置 Secret `gm-admin-runtime`(六个键),部署脚本只核对键、不读值,与「部署脚本不经手任何数据库口令」同一条规矩。管理库的上游表结构(`prepare.py` 产出的 `001-jeecg.sql`)首次部署前由运维导入;`oidc` 模式不需要初始口令。
+- **集群内明文**:后台原来只许回环地址走明文 gRPC / HTTP(`GameServices.createChannel`、商城与网关的地址校验),放进集群一个下游都连不上。集群里服务之间本来都是明文,保护靠 NetworkPolicy 名单与各调用方的密钥,没有服务间 TLS。定案:在回环之外再放行恰好两种形状的集群 Service 名 `<服务>.<命名空间>.svc` 与 `.svc.cluster.local`(规则只写一处 `GameServices.isLoopbackOrClusterServiceHost`),其余照旧拒绝;发行方与场景发现的 etcd 地址规则不放宽。残余写进 §6 第 3 条。
+- **下游与 zone**:login、gateway、data-service、player-locator 按 zone 部署,后台指向 data-service 已就绪的那个 zone:它们的管理入口操作的都是全服数据(账号目录、区服目录、全局池)。场景玩家命令只限 dev / test 服,集群里不开。
+- **密钥**(全部只给后台与资源服务本身,§6 第 3 条;契约测试按目录表与全部清单钉住消费者):
+  - 新进工作负载密钥目录:OIDC 客户端密钥 `gm-admin-oidc`;trade / match 人工处置 `trade-manual-resolution`、`match-manual-resolution`;data-service、login 运维口令 `data-service-admin-token`、`login-admin-token`;gateway 机器口令 `gateway-admin-machine-key`。商城 admin 角色 `commerce-admin` 的消费者加上后台。
+  - 沿用已有的:网关管理口令(脚本在 infra namespace 另建同名 Secret 给后台)、收件箱运维口令(同 namespace 共用)、邮件 / 榜单 admin 生产者密钥(清单直接引用运维预置的 `domain-service-secrets`,与资源服务读同一把)。
+  - 全部可空:没设 = 不建 Secret、不注入,资源服务那一侧的入口保持关闭,后台那一路不可用。资源服务的配置**只在注入时**写变量名:data_service 与 match 对「指名了变量却没有值」拒启,trade 的两项不注入时保持服务 yaml 的空串。环境名按档位写 `<档位>-global`,发起人逐字填它防连错环境。
+  - 形状各档位都查:至少 32 字节(OIDC 客户端密钥 16);不含空白、引号、反斜杠、控制字符与 `${`(后台与 gateway 经 Spring 占位读,值里的占位会被再解析一遍;首尾空白还会让后台去掉、资源服务不去,永远对不上);各入口之间、与已有密钥互不相同。
+  - login 的运维口令以前读 `domain-service-secrets` 的 `login-admin-token`(zone namespace,运维预置),后台在 infra namespace 引用不到,改走部署输入;清单里那条引用删掉。
+  - 同一把在 `infra-up`(后台、trade、match)与 `zone-up`(login、data-service、gateway)之间要保持同值;不同值的后果是那一路一律被拒,不会改错数据,所以不另做跨命令核对。
+  - Pod 模板带每把密钥与配置模板的指纹:换密钥、改 OIDC 设置或下游地址都会自动滚动。
+- **准入**:后台调到的 login、trade、mail、rank、match、mall 的准入名单加 `gm-admin`。管理入口与业务方法共用一个口,准入只能按来源放行,方法级的拒绝靠各自的调用方证明。后台自己另有一份策略 `gm-admin-ingress-deny`:选中后台、不列任何 ingress 规则,拒绝其它 Pod 连它;port-forward 与 kubelet 探针不受影响。理由:后台持有全部管理口令,JeecgBoot 历史漏洞多(§6 第 2 条),集群里任何一个被攻破的 Pod 都不该能直接摸到它的接口。
+- **应急开关的部署守卫**:mail / rank 的 ConfigMap 由服务 yaml 整份复制,trade 的 Commerce 段、match 的 GlobalMatch 段照抄,有人把应急开关提交成 true 会原样上集群。staging / prod 在任何写操作之前核对这几份来源与商城 jar 的缺省值、商城清单(`Assert-DualControlEmergencySwitchesOff`),任何一处不是 false 就拒绝;dev 放行。
+- **当场发现、已处理的**:data_service 的 `AdminToken` 以前只能写字面量,K8s 里回收入口一直是关的;子任务给它加了 `AdminTokenEnv`(常驻启动时由 `secretenv` 填,与 player_inbox 不同的是变量缺失即拒启),部署脚本只在注入时写这个键。
+
+#### 本机后台到 trade 的转发:这次不做(2026-11-27 定案)
+
+交接单假设本机 Docker 调试栈(`deploy/debug/compose.game.yml`,项目 `xuanming-debug-current`)里有 trade 容器,实际没有。`rpc-bridge` 的第三路要先有一个在调试网络里的 trade,所以这一项不做。理由:
+
+1. **两个世界不混**:trade 只在宿主机 `start_game.ps1` 那套里跑,和后台连的 Docker 世界不是同一套库。后台直连宿主机的 trade,一个页面上就会混着两个世界的数据。
+2. **单起一个 trade 验不出东西**:照「独立 mail 节点」的先例(`deploy/gm-admin/mail-*`)另起独立 trade 节点,不只是起一个进程。trade 的人工处置入口要求合同引擎开着(`AssetOp.Enabled`),还要资产通道的上下游;单起一个也没有可处置的合同。代价远大于交接单估的 3 个文件,收益是零。
+3. **交易这条路现在靠这些验**:trade 的 `TestManualContractOps*`、真库的 `TestRealDBManual*`、后台 `GameTradeAdmin` 的回环 gRPC 用例;集群里在 K8s 部署之后冒烟。
+4. **`run_local.py` 维持现状**:`GM_TRADE_TARGET` / `GM_TRADE_ADMIN_SECRET` 一律不放行,交易人工处置页在本机只读不可用。
+5. **以后要本机全链路联调时**,走「独立 trade 节点」那条路(照 `mail-*`,不改 `compose.game.yml`,免得作废现有 Scene 提升回执),并且同时起资产通道的依赖(合同引擎 `AssetOp.Enabled`、scene 侧验签、商城等上下游),否则同样没有可处置的合同。
 
 ### 11.5 负责人没想到、这次定下的做法
 
@@ -316,3 +352,10 @@ func Require(approval *basepb.AdminApproval, operator string) error
 6. 原因在发起时按下游最严的字节上限挡住(§11.2)。
 7. 落码时补上清单漏掉的甲级动作:回收的「登记已人工处置」做完撤不回,同样要第二个人批准(§11.2)。
 8. rank 的后台删除原来对系统开的榜一律被拒,放开成「经批准可删任意榜上的单个条目、整代隐藏仍只许开榜方」(§11.2)。
+9. 后台在集群里只多放行一种明文目标:恰好两种形状的集群 Service 名,规则一处;发行方与场景发现地址不放宽(§11.4)。
+10. 后台自己加一份「谁都不放行」的入站策略,只经 port-forward 打开,回调地址用回环地址,不建 Ingress 也能走 OIDC(§11.4)。
+11. 应急开关在部署侧再拦一道:staging / prod 拒绝任何一处会进集群的配置把它提交成 true(§11.4)。
+12. 资源服务的密钥变量名只在真注入时才写进配置:data_service、match 对「指名了却没值」拒启,不写就是入口关闭,不会因为少设一个变量把服务拖垮(§11.4)。
+13. login 的运维口令从运维预置的 zone 级键改走部署输入,后台与 login 读同一把;本来要在两个 namespace 各手工维护一份(§11.4)。
+14. 后台镜像打包前连协议描述一起核:描述比 `proto/` 新、jar 比描述新,杜绝「镜像里是旧协议」(§11.4)。
+15. 后台前面的 nginx 覆盖来源地址头而不是追加,审计里的来源地址伪造不了(§11.4)。

@@ -169,7 +169,7 @@ Java 版按自己的 SQL owner 与最终存盘模型实现。旧 OPEN 只有准�
 
 **名字跟着墓碑释放**(2026-11-06 改,未编译):这个入口本身不碰名字。目录写完墓碑之后的收尾在玩家片核过角色行确是墓碑,再删这名角色登记的名字(不看预留还是已绑定);输入里在役角色的 id 走不到这一步,不会误放。收尾失败时 `account_role_removal` 那一行留着,后台 `ResumeRemovals` 接着放。`ReleasePlayerName` 对已绑定的名字一律拒绝,不再是删角之后释放名字的入口。状态机见 `guild-phase2/03-names.md` §3.4a。
 
-**鉴权**:`x-admin-token`,值是环境变量 `MMORPG_LOGIN_ADMIN_TOKEN`(Secret `domain-service-secrets` 的 `login-admin-token`),至少 16 字节。没配就停用。login 的 gRPC 端口对外接受未鉴权调用,身份闸门只校验带了身份声明的调用,所以 `LoginAdmin` 单独加一道拦截器,所有方法都过。操作人、理由、对端地址只进日志,目录的删角没有审计表。
+**鉴权**:`x-admin-token`,值是环境变量 `MMORPG_LOGIN_ADMIN_TOKEN`(K8s 上走部署输入、经工作负载密钥目录的 Secret `login-admin-token` 注入,只给 login 与 GM 后台;`deploy/k8s/README.md`「GM 后台 gm-admin」),至少 16 字节。没配就停用。login 的 gRPC 端口对外接受未鉴权调用,身份闸门只校验带了身份声明的调用,所以 `LoginAdmin` 单独加一道拦截器,所有方法都过。操作人、理由、对端地址只进日志,目录的删角没有审计表。
 
 ```bash
 grpcurl -H "x-admin-token: $TOKEN" -d '{"player_ids":[1001],"operator":"张三","reason":"工单 123","dry_run":true}' $LOGIN loginpb.LoginAdmin/RemovePlayersFromAccounts
