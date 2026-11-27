@@ -150,4 +150,15 @@ const (
 	ErrTournamentPredictionClosed        = uint32(table.MatchError_kMatchTournamentPredictionClosed)
 	ErrTournamentPredictionTargetInvalid = uint32(table.MatchError_kMatchTournamentPredictionTargetInvalid)
 	ErrTournamentWarmupUnavailable       = uint32(table.MatchError_kMatchTournamentWarmupUnavailable)
+
+	// ---- 万象残局坊 V1（UGC 回合解谜工坊，docs/planning/tactical-puzzle-workshop-v1.md）----
+	ErrPuzzleNotFound               = uint32(table.MatchError_kMatchPuzzleNotFound)
+	ErrPuzzleNotOwner               = uint32(table.MatchError_kMatchPuzzleNotOwner)
+	ErrPuzzleLimitReached           = uint32(table.MatchError_kMatchPuzzleLimitReached)
+	ErrPuzzleSpecInvalid            = uint32(table.MatchError_kMatchPuzzleSpecInvalid)
+	ErrPuzzleTextRejected           = uint32(table.MatchError_kMatchPuzzleTextRejected)
+	ErrPuzzleNotPublished           = uint32(table.MatchError_kMatchPuzzleNotPublished)
+	ErrPuzzleCannotLikeOwn          = uint32(table.MatchError_kMatchPuzzleCannotLikeOwn)
+	ErrPuzzleClearRequiredToLike    = uint32(table.MatchError_kMatchPuzzleClearRequiredToLike)
+	ErrPuzzleSolutionReplayNotFound = uint32(table.MatchError_kMatchPuzzleSolutionReplayNotFound)
 )

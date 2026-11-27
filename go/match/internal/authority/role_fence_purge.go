@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 )
 
 // rolePurgeDeletes 是删角收尾按玩家整删的行,都是他一个人的,别的玩家没有指向它们的引用。
@@ -18,6 +19,10 @@ var rolePurgeDeletes = []struct{ table, query string }{
 	{"match_spectator_intent", "DELETE FROM match_spectator_intent WHERE player_id=? AND state=5"},
 	{"match_join_intent", "DELETE FROM match_join_intent WHERE player_id=? AND state IN (2,3)"},
 	{"team_action_receipt", "DELETE FROM team_action_receipt WHERE actor_id=?"},
+	{"match_ranked_player_prefs", "DELETE FROM match_ranked_player_prefs WHERE player_id=?"},
+	{"match_ranked_player_season", "DELETE FROM match_ranked_player_season WHERE player_id=?"},
+	{"match_ranked_reward", "DELETE FROM match_ranked_reward WHERE player_id=?"},
+	{"match_ranked_battle", "DELETE FROM match_ranked_battle WHERE player_id=?"},
 }
 
 // RoleFencePurge 是 match(含组队)的删角收尾清理(docs/design/account-deletion.md §6.2),在 PurgeRemovedRole 的事务里跑:
@@ -37,12 +42,19 @@ func RoleFencePurge(ctx context.Context, tx *sql.Tx, player uint64) error {
 	if err = purgeTrialChallengeCardsTx(ctx, tx, player, released); err != nil {
 		return fmt.Errorf("purge match_trial_challenge_card of removed player %d: %w", player, err)
 	}
+	if err = purgeTacticalPuzzlesTx(ctx, tx, player, released); err != nil {
+		return fmt.Errorf("purge match_tactical_puzzle of removed player %d: %w", player, err)
+	}
 	if err = releaseBattleReportsTx(ctx, tx, released); err != nil {
 		return fmt.Errorf("release battle reports of removed player %d: %w", player, err)
 	}
 	// 先记待摘榜再删评分行:评分行在,榜上就可能有他。
 	if err = queueRankRemovalsTx(ctx, tx, player); err != nil {
 		return fmt.Errorf("queue rank removals of removed player %d: %w", player, err)
+	}
+	// 先按已参与赛季主键前缀清理宿敌账本（并匿名化对端镜像行昵称）及问道名局展示昵称，再整删该玩家的论剑个人表行。
+	if err = purgeRankedSocialAndFeaturedTx(ctx, tx, player); err != nil {
+		return fmt.Errorf("purge ranked social rows of removed player %d: %w", player, err)
 	}
 	for _, purge := range rolePurgeDeletes {
 		if _, err = tx.ExecContext(ctx, purge.query, player); err != nil {
@@ -165,4 +177,83 @@ func purgeBattleReportListTx(ctx context.Context, tx *sql.Tx, player uint64) (ma
 		}
 	}
 	return released, nil
+}
+
+// purgeRankedSocialAndFeaturedTx 清理被删角色在各论剑赛季的宿敌账本并去标识化公开展示昵称：
+// 利用宿敌关系的对称性（若存在 (season, P, O) 则必存在主键 (season, O, P)），先按主键前缀
+// (season_id, player_id) 扫出本人宿敌对手列表，再按精确主键 (season_id, opp_id, player_id) 逐行清空对端展示名，
+// 零全表扫描、不新增二级索引、也不破坏对手自己的历史交手胜负统计；同时清空该角色在问道名局汇总表中的代表展示名。
+func purgeRankedSocialAndFeaturedTx(ctx context.Context, tx *sql.Tx, player uint64) error {
+	seasonSet := make(map[uint32]struct{})
+	for _, query := range []struct {
+		sql  string
+		args []any
+	}{
+		{"SELECT season_id FROM match_ranked_player_season WHERE player_id=?", []any{player}},
+		{"SELECT season_id FROM match_ranked_season", nil},
+	} {
+		rows, err := tx.QueryContext(ctx, query.sql, query.args...)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var sid uint32
+			if scanErr := rows.Scan(&sid); scanErr != nil {
+				rows.Close()
+				return scanErr
+			}
+			if sid != 0 {
+				seasonSet[sid] = struct{}{}
+			}
+		}
+		if err = errors.Join(rows.Err(), rows.Close()); err != nil {
+			return err
+		}
+	}
+	seasons := make([]uint32, 0, len(seasonSet))
+	for sid := range seasonSet {
+		seasons = append(seasons, sid)
+	}
+	sort.Slice(seasons, func(i, j int) bool { return seasons[i] < seasons[j] })
+
+	for _, seasonID := range seasons {
+		if _, err := tx.ExecContext(ctx,
+			"UPDATE match_ranked_featured_build SET featured_player_name='' WHERE season_id=? AND featured_player_id=?",
+			seasonID, player); err != nil {
+			return err
+		}
+		oppRows, err := tx.QueryContext(ctx,
+			"SELECT opponent_id FROM match_ranked_rivalry WHERE season_id=? AND player_id=? ORDER BY opponent_id",
+			seasonID, player)
+		if err != nil {
+			return err
+		}
+		var opponents []uint64
+		for oppRows.Next() {
+			var oppID uint64
+			if scanErr := oppRows.Scan(&oppID); scanErr != nil {
+				oppRows.Close()
+				return scanErr
+			}
+			opponents = append(opponents, oppID)
+		}
+		if err = errors.Join(oppRows.Err(), oppRows.Close()); err != nil {
+			return err
+		}
+		for _, oppID := range opponents {
+			if _, err = tx.ExecContext(ctx,
+				"UPDATE match_ranked_rivalry SET opponent_name='' WHERE season_id=? AND player_id=? AND opponent_id=?",
+				seasonID, oppID, player); err != nil {
+				return err
+			}
+		}
+		if len(opponents) > 0 {
+			if _, err = tx.ExecContext(ctx,
+				"DELETE FROM match_ranked_rivalry WHERE season_id=? AND player_id=?",
+				seasonID, player); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

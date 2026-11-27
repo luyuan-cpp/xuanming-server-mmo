@@ -269,7 +269,7 @@ engine 侧的追踪实现在 `cpp/libs/engine/core/network/grpc_trace_hooks.{h,c
   - 没选「只产出、不消费」的配置：`management.tracing.propagation.consume` 默认消费 W3C、B3、B3 多头三种，配成空列表是否真能清空要看配置绑定的细节，配错了是静默放行；过滤器的行为由单测直接钉住。
   - 远程 baggage 字段（`management.tracing.baggage.remote-fields`）按字段名原样作为请求头传播，观测层同样会接收。过滤器在构造时从这个配置项读出字段名（逗号分隔与 YAML 列表两种写法都认），与上面几种传播头一起藏，配了新字段不用改代码（2026-11-12）。
 - **定时任务**：Spring Boot 3.2 起会给每次 `@Scheduled` 执行开一个观测，所以区域探测、login 节点发现每跑一次各有一条新 trace。这和 §3.3「后台任务不挂 trace」的本意不冲突：那条防的是挂上别的请求的 trace，每次新开的根不会挂错。
-- **网关调商城后台**（2026-11-12）：`MallAdminClient` 用 JDK 自带的 `HttpClient`，不经 Spring 的观测。现在按 Micrometer 的发送端约定开一个 `mall.admin.client` 观测：`RequestReplySenderContext` 的载体是请求构造器 `HttpRequest.Builder`，Spring Boot 的追踪处理器在观测开始时开 client span，并经载体写入 `traceparent`，之后才 `build()` 发出。`command` 只有 5 个固定值，做低基数标签；失败记进观测再按原语义抛出。签名不覆盖传播头，验签不受影响。
+- **商城管理调用**:2026-11-12 网关的 `MallAdminClient` 曾按 Micrometer 发送端约定开 `mall.admin.client` 观测并写 `traceparent`。2026-11-26 双人复核批 4 把商城管理入口迁进后台(`java/gm_admin` 的 `GameMallAdmin`),网关的代理连同这个观测一起删了。后台没有接分布式追踪,所以后台到商城这一跳不带 `traceparent`,商城侧从收到请求开始一条新 trace;对账靠批准号(就是商城的请求号)与两边的结构化日志。商城入站的追踪(`MallTracingHttpTest`)不变。
 
 第 6 批之后补上的（2026-11-12）：
 
@@ -520,7 +520,7 @@ engine 侧的追踪实现在 `cpp/libs/engine/core/network/grpc_trace_hooks.{h,c
   - 在调用方的 span 里经静态通道调 RefreshToken、经动态通道调 Login，两次都带调用方的 trace，parent-id 是 client span 而不是调用方的 span；
   - span 里打的一行 JSON 日志带同一个 `traceId` 和 `spanId`。
 - `grpc/LoginRpcClientRetryTest` 改为传 `ObservationRegistry.NOOP`，重试语义不变。
-- `service/MallAdminClientTest` 加 1 条（2026-11-12）：用只做注入那一步的发送端处理器，核对观测写入的 `traceparent` 随请求上线、签名照常可验；NOOP 注册表下不带这个头。夹具与 `controller/MallAdminControllerTest` 的构造改为传注册表，其余用例的语义不变。
+- `service/MallAdminClientTest` 与 `controller/MallAdminControllerTest`(2026-11-12 加的观测用例)随网关商城代理在 2026-11-26 删除,见上面「商城管理调用」。
 - mall_game 的 `MallTracingHttpTest` 1 条（2026-11-12）：起完整上下文（H2），带 HMAC 签名和 `traceparent` 调一个只在用例里注册的探针接口；探针回的当前 traceId，以及它打的那行 logstash 日志里的 `traceId`，都等于调用方的。mall_game 新加的两个依赖（Spring Boot 3.5.16 的 actuator、对应版本的 `micrometer-tracing-bridge-otel`）要从 Maven 仓库拉取。R 双区夹具会改写商城 `application.yaml` 里的数据源等键，新加的是两个顶层块、原有键路径没变；`tools/scripts/tests/sql_boot_catalog_java.tests.ps1` 拿真实配置走这条改写，跑一遍确认照常。
 - config_node 没有测试工程，靠冒烟：带 `traceparent` 调 `POST /api/reload`，它打的那行 `Tables reloaded` 日志带同一个 `traceId`。
 - 阶段三（2026-11-19）：`GatewayTracingIntegrationTest`、`MallTracingHttpTest` 加 `management.otlp.tracing.export.enabled=false`，起完整上下文时不往本机 4318 发；原有断言不变。三个服务新加的 `opentelemetry-exporter-otlp` 要从 Maven 仓库拉取。

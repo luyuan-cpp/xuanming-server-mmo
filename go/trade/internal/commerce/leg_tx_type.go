@@ -36,6 +36,7 @@ func legTxType(l *tradepb.TradeCommerceLeg) uint32 {
 //   - seller_return、buyer_return、bid_return:撤单、过期、托管不成、竞价退款、交付被拒整单退回时由 plan / planRmb 建;
 //   - buyer_surplus:撮合按卖价成交时,把买单按自己限价多冻的差价退给买家(market.go);
 //   - "<扣出腿>/refund":人工整单退回给每条已扣出的腿加的(manual.go 的 ManualRefund);
+//   - seller_return_<揭榜序号>:求购单揭榜交上的书不符合条款,原样退给揭榜人(wanted_skill_book.go);
 //   - 以上几种被人工补发后带的 "#k" 后缀(manual.go 的 reissueRole)。
 //
 // 交付腿是 seller_receive、buyer_receive、rmb_buyer_credit、official_credit、official_regrant_<修订号> 及其补发。新增退回腿时要在这里登记,
@@ -46,5 +47,5 @@ func isReturnLeg(role string) bool {
 	case "seller_return", "buyer_return", "bid_return", "buyer_surplus":
 		return true
 	}
-	return strings.HasSuffix(base, "/refund")
+	return strings.HasSuffix(base, "/refund") || strings.HasPrefix(base, wantedReturnPrefix)
 }

@@ -459,6 +459,21 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	sc.Authority = store
 	store.SwapRankedCatalog(sc.ActiveRanked())
 	store.SwapTournamentCatalog(sc.ActiveTournament())
+	if sc.DataServiceClient != nil {
+		dsClient := sc.DataServiceClient
+		store.BindRankedNameLookup(func(lookupCtx context.Context, playerID uint64) string {
+			if playerID == 0 {
+				return ""
+			}
+			callCtx, cancelLookup := context.WithTimeout(lookupCtx, 2*time.Second)
+			defer cancelLookup()
+			resp, lookupErr := dsClient.BatchGetPlayerName(callCtx, &dspb.BatchGetPlayerNameRequest{PlayerIds: []uint64{playerID}})
+			if lookupErr != nil || resp == nil {
+				return ""
+			}
+			return resp.GetNames()[playerID]
+		})
+	}
 	schedule := scope.Schedule{
 		GroupAfterMs:  uint64(c.GlobalMatch.ScopeGroupAfterSeconds) * 1000,
 		GlobalAfterMs: uint64(c.GlobalMatch.ScopeGlobalAfterSeconds) * 1000,

@@ -502,7 +502,8 @@ func runResolve(ctx context.Context, deps toolDeps, o resolveOptions, stdout, st
 	// 「从未应用」的安静是拿本机的钟判的,先等满观察窗口再复核;applied / rejected 有账本里的收据作证,不用等。
 	refusal := ""
 	if v == assetop.ManualVerdictNeverApplied {
-		refusal, err = observeQuiet(ctx, deps, row, witness, stderr)
+		// 复核通过时换成第二次读到的见证:跨窗口允许 attempts 变(只领没发的重排),条件写紧跟着这次读(assetop.LeaseAndSendUnchanged)。
+		witness, refusal, err = observeQuiet(ctx, deps, row, witness, stderr)
 	}
 	finalized := false
 	if err == nil && refusal == "" {
@@ -543,27 +544,29 @@ func runResolve(ctx context.Context, deps toolDeps, o resolveOptions, stdout, st
 // observeQuiet 是按「从未应用」终结之前的观察窗口(为什么要等、为什么等这么久就够,见 assetop.ManualObserveWindow):
 // 在本机单调时钟上等满窗口,再读一次行与已提交账本。行仍是 PENDING、见证对得上、账本重判仍是 never_applied,回 ("", nil);
 // 否则回不终结的原因。err 是等待被打断或重读失败,同样什么都没改。
-func observeQuiet(ctx context.Context, deps toolDeps, row *tradepb.TradeAssetOpRecord, witness assetop.QuietWitness, stderr io.Writer) (string, error) {
+func observeQuiet(ctx context.Context, deps toolDeps, row *tradepb.TradeAssetOpRecord, witness assetop.QuietWitness, stderr io.Writer) (assetop.QuietWitness, string, error) {
 	fmt.Fprintf(stderr, "Evidence is never_applied, judged against this machine's clock; waiting %v on the local monotonic clock, then re-reading "+
 		"the row and the committed ledger (a delivery in flight when the evidence was read settles within its lease, whatever the clocks say)\n", deps.observeWindow)
 	if err := deps.sleep(ctx, deps.observeWindow); err != nil {
-		return "", fmt.Errorf("observation window interrupted, no changes made: %w", err)
+		return witness, "", fmt.Errorf("observation window interrupted, no changes made: %w", err)
 	}
+	// 先读行、后读账本:读账本时还在途的投递,它的领取在读行时就已改了租约。
 	again, found, err := deps.store.GetOp(ctx, row.GetOpId())
 	if err != nil {
-		return "", fmt.Errorf("re-read the row after the observation window, no changes made: %w", err)
+		return witness, "", fmt.Errorf("re-read the row after the observation window, no changes made: %w", err)
 	}
-	if !found || again.GetStatus() != tradepb.TradeAssetOpStatus_TRADE_ASSET_OP_STATUS_PENDING || !witness.Matches(manualRowOf(again, assetop.Op{})) {
-		return "the row was claimed, rescheduled or finalized during the observation window", nil
+	againRow := manualRowOf(again, assetop.Op{})
+	if !found || again.GetStatus() != tradepb.TradeAssetOpStatus_TRADE_ASSET_OP_STATUS_PENDING || !witness.LeaseAndSendUnchanged(againRow) {
+		return witness, "the row was claimed, sent or finalized during the observation window", nil
 	}
 	snapshot, err := deps.ledger.ReadStoreLedger(ctx, again.GetPlayerId())
 	if err != nil {
-		return "", fmt.Errorf("re-read the committed asset ledger of player_id=%d after the observation window, no changes made: %w", again.GetPlayerId(), err)
+		return witness, "", fmt.Errorf("re-read the committed asset ledger of player_id=%d after the observation window, no changes made: %w", again.GetPlayerId(), err)
 	}
 	if v, detail := judge(snapshot, again, uint64(time.Now().UnixMilli()), deps.quietGap); v != assetop.ManualVerdictNeverApplied {
-		return "the evidence is no longer never_applied after the observation window: " + assetop.DescribeManualEvidence(v, detail), nil
+		return witness, "the evidence is no longer never_applied after the observation window: " + assetop.DescribeManualEvidence(v, detail), nil
 	}
-	return "", nil
+	return againRow.Witness(), "", nil
 }
 
 // checkResolvable 是 resolve 的行级前置条件。force 只跳过"反复 UNKNOWN"这一条;证据另由 judge 判。

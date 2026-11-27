@@ -47,6 +47,12 @@ type config struct {
 	// MailMaxPersonalMailTtlDays 必须与 mail 的 Mail.MaxPersonalMailTtlDays 同值:rank 读不到邮件配置,只能显式写一份
 	// (两份源配置由 config_test.go 核对)。封榜写出的奖励邮件过期时刻 = 封榜 + min(30 天, 本值)。
 	MailMaxPersonalMailTtlDays uint32 `json:"MailMaxPersonalMailTtlDays"`
+
+	// AdminAllowUnapproved:为 true 时接受调用方 admin 不带双人复核批准记录的 RemoveRankEntry / DeleteRankGeneration
+	// (docs/design/admin-identity-and-dual-control.md §5.7)。只给本机开发:缺省 false,admin 的删除必须带后台签发的批准记录,
+	// 且 request_id 就是批准号;match 等其它调用方不受影响。打开时启动打一行 ERROR,之后每一条不带记录的删除都打 ERROR
+	// 并计入 rank_admin_unapproved_command_total(告警 RankAdminCommandUnapproved)。
+	AdminAllowUnapproved bool `json:",optional"`
 }
 
 // Validate 在加载配置(conf.MustLoad)与 run 入口各核一次;奖励邮件有效期越出邮件允许的范围就拒启,
@@ -236,7 +242,7 @@ func run(c config, migrate bool) (runErr error) {
 	if err = repo.ConfigureRewardMailWindow(rewardWindow); err != nil {
 		return err
 	}
-	handler := server.New(repo, auth, ids.Data)
+	handler := server.New(repo, auth, ids.Data, c.AdminAllowUnapproved)
 	// K8s 上 MailRpc 是 mail 的 Service 地址,整条连接落在一个 Pod 上:keepalive 让对端整机消失后的半开连接
 	// 在一次调用后 20 秒内断开重连(shared/grpckeepalive)。
 	mailRPC, err := zrpc.NewClient(c.MailRpc, zrpc.WithDialOption(grpckeepalive.DialOption()))

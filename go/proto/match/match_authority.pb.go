@@ -1478,9 +1478,11 @@ type MatchFormationRecord struct {
 	// 天墉生死状在成局提交点冻结的 JianghuDuelBattleContext 字节载荷（非生死状为空）。
 	JianghuDuelContext []byte `protobuf:"bytes,29,opt,name=jianghu_duel_context,json=jianghuDuelContext,proto3" json:"jianghu_duel_context,omitempty"`
 	// 五行试炼志 V3 自选试炼誓约位图（bit0..3，非试炼誓约局为 0）。
-	TrialVowMask  uint32 `protobuf:"varint,30,opt,name=trial_vow_mask,json=trialVowMask,proto3" json:"trial_vow_mask,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	TrialVowMask uint32 `protobuf:"varint,30,opt,name=trial_vow_mask,json=trialVowMask,proto3" json:"trial_vow_mask,omitempty"`
+	// 万象残局坊在成局提交点冻结的 TacticalPuzzleBattleContext 字节载荷（非残局坊为空）。
+	TacticalPuzzleContext []byte `protobuf:"bytes,31,opt,name=tactical_puzzle_context,json=tacticalPuzzleContext,proto3" json:"tactical_puzzle_context,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *MatchFormationRecord) Reset() {
@@ -1721,6 +1723,13 @@ func (x *MatchFormationRecord) GetTrialVowMask() uint32 {
 		return x.TrialVowMask
 	}
 	return 0
+}
+
+func (x *MatchFormationRecord) GetTacticalPuzzleContext() []byte {
+	if x != nil {
+		return x.TacticalPuzzleContext
+	}
+	return nil
 }
 
 type MatchPreparedEndpoint struct {
@@ -2472,8 +2481,12 @@ type MatchManualResolutionRecord struct {
 	TicketsBefore       []*MatchAuthorityTicketRecord `protobuf:"bytes,10,rep,name=tickets_before,json=ticketsBefore,proto3" json:"tickets_before,omitempty"`
 	EffectiveDeadlineMs uint64                        `protobuf:"varint,11,opt,name=effective_deadline_ms,json=effectiveDeadlineMs,proto3" json:"effective_deadline_ms,omitempty"` // max(成局截止, 原件截止, 原件准入期限)
 	ReplicaInstance     string                        `protobuf:"bytes,12,opt,name=replica_instance,json=replicaInstance,proto3" json:"replica_instance,omitempty"`                // 执行这次处置的 match 副本（主机名）
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// 后台双人复核的批准号与批准人(2026-11-26,docs/design/admin-identity-and-dual-control.md §5.8);发起人就是 operator_name,不重复存。
+	// 只有部署打开 GlobalMatch.ManualResolutionAllowUnapproved 时才会是空串。
+	ApprovalId    string `protobuf:"bytes,13,opt,name=approval_id,json=approvalId,proto3" json:"approval_id,omitempty"`
+	Approver      string `protobuf:"bytes,14,opt,name=approver,proto3" json:"approver,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MatchManualResolutionRecord) Reset() {
@@ -2586,6 +2599,20 @@ func (x *MatchManualResolutionRecord) GetEffectiveDeadlineMs() uint64 {
 func (x *MatchManualResolutionRecord) GetReplicaInstance() string {
 	if x != nil {
 		return x.ReplicaInstance
+	}
+	return ""
+}
+
+func (x *MatchManualResolutionRecord) GetApprovalId() string {
+	if x != nil {
+		return x.ApprovalId
+	}
+	return ""
+}
+
+func (x *MatchManualResolutionRecord) GetApprover() string {
+	if x != nil {
+		return x.Approver
 	}
 	return ""
 }
@@ -5975,6 +6002,62 @@ func (x *MatchGrudgeLogRecord) GetFinishedMs() uint64 {
 	return 0
 }
 
+// 个人恩怨录的入账闸门:一局一行,记「这一局已经入过恩怨录」(jianghu_grudge.go 的 ApplyJianghuDuelBattleResult)。
+// 去重键不能放在 match_grudge_log 里:那张表每对宿敌只留最近 20 条、每人只留最近 50 位宿敌,主键还带处理时刻取的 owner_revision,
+// 被裁掉或过户之后重投的旧结果查不到行,会把胜负与连胜再算一遍、再发一遍播报(数据覆写审计 r2 第 4 轮 r2-jh#3)。
+// 本表不裁剪、不按玩家删(删角也保留,同 match_rating_applied):删了重放会给对手再算一次。
+type MatchGrudgeAppliedRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BattleId      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	AppliedMs     uint64                 `protobuf:"varint,2,opt,name=applied_ms,json=appliedMs,proto3" json:"applied_ms,omitempty"` // 入账时刻(库时钟),只供排查与日后按保留期清理
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MatchGrudgeAppliedRecord) Reset() {
+	*x = MatchGrudgeAppliedRecord{}
+	mi := &file_proto_match_match_authority_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MatchGrudgeAppliedRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MatchGrudgeAppliedRecord) ProtoMessage() {}
+
+func (x *MatchGrudgeAppliedRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_authority_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MatchGrudgeAppliedRecord.ProtoReflect.Descriptor instead.
+func (*MatchGrudgeAppliedRecord) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *MatchGrudgeAppliedRecord) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *MatchGrudgeAppliedRecord) GetAppliedMs() uint64 {
+	if x != nil {
+		return x.AppliedMs
+	}
+	return 0
+}
+
 // 五行试炼志 V3：好友约战帖权威存储（最多每人 10 张，14 天有效，与 match_battle_report.ref_count 联动钉住录像）。
 type MatchTrialChallengeCardRecord struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
@@ -5993,7 +6076,7 @@ type MatchTrialChallengeCardRecord struct {
 
 func (x *MatchTrialChallengeCardRecord) Reset() {
 	*x = MatchTrialChallengeCardRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[49]
+	mi := &file_proto_match_match_authority_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6005,7 +6088,7 @@ func (x *MatchTrialChallengeCardRecord) String() string {
 func (*MatchTrialChallengeCardRecord) ProtoMessage() {}
 
 func (x *MatchTrialChallengeCardRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[49]
+	mi := &file_proto_match_match_authority_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6018,7 +6101,7 @@ func (x *MatchTrialChallengeCardRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchTrialChallengeCardRecord.ProtoReflect.Descriptor instead.
 func (*MatchTrialChallengeCardRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{49}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *MatchTrialChallengeCardRecord) GetCardId() uint64 {
@@ -6082,6 +6165,288 @@ func (x *MatchTrialChallengeCardRecord) GetCardView() []byte {
 		return x.CardView
 	}
 	return nil
+}
+
+// 万象残局坊（UGC 回合解谜工坊 V1）：玩家自创残局主表（每人最多 10 题，编辑已发布题递增 spec_revision 并退回草稿重新自证）。
+type MatchTacticalPuzzleRecord struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	PuzzleId         uint64                 `protobuf:"varint,1,opt,name=puzzle_id,json=puzzleId,proto3" json:"puzzle_id,omitempty"`
+	AuthorPlayerId   uint64                 `protobuf:"varint,2,opt,name=author_player_id,json=authorPlayerId,proto3" json:"author_player_id,omitempty"`
+	AuthorName       string                 `protobuf:"bytes,3,opt,name=author_name,json=authorName,proto3" json:"author_name,omitempty"`
+	State            uint32                 `protobuf:"varint,4,opt,name=state,proto3" json:"state,omitempty"`                                                  // 1=DRAFT 待自证, 2=PUBLISHED 已发布
+	SpecRevision     uint32                 `protobuf:"varint,5,opt,name=spec_revision,json=specRevision,proto3" json:"spec_revision,omitempty"`                // 题面修订号（从 1 递增）
+	Title            string                 `protobuf:"bytes,6,opt,name=title,proto3" json:"title,omitempty"`                                                   // 4..20 字符（已过 ContentGuard）
+	HintText         string                 `protobuf:"bytes,7,opt,name=hint_text,json=hintText,proto3" json:"hint_text,omitempty"`                             // 0..40 字符破局思路提示（已过 ContentGuard）
+	TagMask          uint32                 `protobuf:"varint,8,opt,name=tag_mask,json=tagMask,proto3" json:"tag_mask,omitempty"`                               // bit0破盾 bit1控场 bit2驱散 bit3反杀 bit4极限回合 bit5残血翻盘
+	SpecPayload      []byte                 `protobuf:"bytes,9,opt,name=spec_payload,json=specPayload,proto3" json:"spec_payload,omitempty"`                    // 确定性序列化 battle.TacticalPuzzleSpec
+	VerifiedBattleId uint64                 `protobuf:"varint,10,opt,name=verified_battle_id,json=verifiedBattleId,proto3" json:"verified_battle_id,omitempty"` // 作者自证通关并钉住的标准解回放 battle_id（DRAFT 为 0）
+	AuthorBestRounds uint32                 `protobuf:"varint,11,opt,name=author_best_rounds,json=authorBestRounds,proto3" json:"author_best_rounds,omitempty"` // 作者自证通关回合数
+	AttemptCount     uint32                 `protobuf:"varint,12,opt,name=attempt_count,json=attemptCount,proto3" json:"attempt_count,omitempty"`               // 全服累计挑战人次
+	ClearCount       uint32                 `protobuf:"varint,13,opt,name=clear_count,json=clearCount,proto3" json:"clear_count,omitempty"`                     // 全服累计独立通关人数
+	GlobalBestRounds uint32                 `protobuf:"varint,14,opt,name=global_best_rounds,json=globalBestRounds,proto3" json:"global_best_rounds,omitempty"` // 全服最少通关回合数
+	LikeCount        uint32                 `protobuf:"varint,15,opt,name=like_count,json=likeCount,proto3" json:"like_count,omitempty"`                        // 全服点赞数（仅通关非作者可赞）
+	CreatedMs        uint64                 `protobuf:"varint,16,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	PublishedMs      uint64                 `protobuf:"varint,17,opt,name=published_ms,json=publishedMs,proto3" json:"published_ms,omitempty"`
+	UpdatedMs        uint64                 `protobuf:"varint,18,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *MatchTacticalPuzzleRecord) Reset() {
+	*x = MatchTacticalPuzzleRecord{}
+	mi := &file_proto_match_match_authority_proto_msgTypes[51]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MatchTacticalPuzzleRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MatchTacticalPuzzleRecord) ProtoMessage() {}
+
+func (x *MatchTacticalPuzzleRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_authority_proto_msgTypes[51]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MatchTacticalPuzzleRecord.ProtoReflect.Descriptor instead.
+func (*MatchTacticalPuzzleRecord) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{51}
+}
+
+func (x *MatchTacticalPuzzleRecord) GetPuzzleId() uint64 {
+	if x != nil {
+		return x.PuzzleId
+	}
+	return 0
+}
+
+func (x *MatchTacticalPuzzleRecord) GetAuthorPlayerId() uint64 {
+	if x != nil {
+		return x.AuthorPlayerId
+	}
+	return 0
+}
+
+func (x *MatchTacticalPuzzleRecord) GetAuthorName() string {
+	if x != nil {
+		return x.AuthorName
+	}
+	return ""
+}
+
+func (x *MatchTacticalPuzzleRecord) GetState() uint32 {
+	if x != nil {
+		return x.State
+	}
+	return 0
+}
+
+func (x *MatchTacticalPuzzleRecord) GetSpecRevision() uint32 {
+	if x != nil {
+		return x.SpecRevision
+	}
+	return 0
+}
+
+func (x *MatchTacticalPuzzleRecord) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *MatchTacticalPuzzleRecord) GetHintText() string {
+	if x != nil {
+		return x.HintText
+	}
+	return ""
+}
+
+func (x *MatchTacticalPuzzleRecord) GetTagMask() uint32 {
+	if x != nil {
+		return x.TagMask
+	}
+	return 0
+}
+
+func (x *MatchTacticalPuzzleRecord) GetSpecPayload() []byte {
+	if x != nil {
+		return x.SpecPayload
+	}
+	return nil
+}
+
+func (x *MatchTacticalPuzzleRecord) GetVerifiedBattleId() uint64 {
+	if x != nil {
+		return x.VerifiedBattleId
+	}
+	return 0
+}
+
+func (x *MatchTacticalPuzzleRecord) GetAuthorBestRounds() uint32 {
+	if x != nil {
+		return x.AuthorBestRounds
+	}
+	return 0
+}
+
+func (x *MatchTacticalPuzzleRecord) GetAttemptCount() uint32 {
+	if x != nil {
+		return x.AttemptCount
+	}
+	return 0
+}
+
+func (x *MatchTacticalPuzzleRecord) GetClearCount() uint32 {
+	if x != nil {
+		return x.ClearCount
+	}
+	return 0
+}
+
+func (x *MatchTacticalPuzzleRecord) GetGlobalBestRounds() uint32 {
+	if x != nil {
+		return x.GlobalBestRounds
+	}
+	return 0
+}
+
+func (x *MatchTacticalPuzzleRecord) GetLikeCount() uint32 {
+	if x != nil {
+		return x.LikeCount
+	}
+	return 0
+}
+
+func (x *MatchTacticalPuzzleRecord) GetCreatedMs() uint64 {
+	if x != nil {
+		return x.CreatedMs
+	}
+	return 0
+}
+
+func (x *MatchTacticalPuzzleRecord) GetPublishedMs() uint64 {
+	if x != nil {
+		return x.PublishedMs
+	}
+	return 0
+}
+
+func (x *MatchTacticalPuzzleRecord) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
+// 万象残局坊：玩家单题挑战 / 通关 / 最少回合 / 点赞记录表（合并 1 表防多表膨胀）。
+type MatchTacticalPuzzleClearRecord struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	PuzzleId       uint64                 `protobuf:"varint,1,opt,name=puzzle_id,json=puzzleId,proto3" json:"puzzle_id,omitempty"`
+	PlayerId       uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Attempts       uint32                 `protobuf:"varint,3,opt,name=attempts,proto3" json:"attempts,omitempty"`
+	Cleared        bool                   `protobuf:"varint,4,opt,name=cleared,proto3" json:"cleared,omitempty"`
+	BestRounds     uint32                 `protobuf:"varint,5,opt,name=best_rounds,json=bestRounds,proto3" json:"best_rounds,omitempty"` // 0=未通关
+	Liked          bool                   `protobuf:"varint,6,opt,name=liked,proto3" json:"liked,omitempty"`
+	FirstClearedMs uint64                 `protobuf:"varint,7,opt,name=first_cleared_ms,json=firstClearedMs,proto3" json:"first_cleared_ms,omitempty"`
+	UpdatedMs      uint64                 `protobuf:"varint,8,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *MatchTacticalPuzzleClearRecord) Reset() {
+	*x = MatchTacticalPuzzleClearRecord{}
+	mi := &file_proto_match_match_authority_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MatchTacticalPuzzleClearRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MatchTacticalPuzzleClearRecord) ProtoMessage() {}
+
+func (x *MatchTacticalPuzzleClearRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_match_match_authority_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MatchTacticalPuzzleClearRecord.ProtoReflect.Descriptor instead.
+func (*MatchTacticalPuzzleClearRecord) Descriptor() ([]byte, []int) {
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *MatchTacticalPuzzleClearRecord) GetPuzzleId() uint64 {
+	if x != nil {
+		return x.PuzzleId
+	}
+	return 0
+}
+
+func (x *MatchTacticalPuzzleClearRecord) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *MatchTacticalPuzzleClearRecord) GetAttempts() uint32 {
+	if x != nil {
+		return x.Attempts
+	}
+	return 0
+}
+
+func (x *MatchTacticalPuzzleClearRecord) GetCleared() bool {
+	if x != nil {
+		return x.Cleared
+	}
+	return false
+}
+
+func (x *MatchTacticalPuzzleClearRecord) GetBestRounds() uint32 {
+	if x != nil {
+		return x.BestRounds
+	}
+	return 0
+}
+
+func (x *MatchTacticalPuzzleClearRecord) GetLiked() bool {
+	if x != nil {
+		return x.Liked
+	}
+	return false
+}
+
+func (x *MatchTacticalPuzzleClearRecord) GetFirstClearedMs() uint64 {
+	if x != nil {
+		return x.FirstClearedMs
+	}
+	return 0
+}
+
+func (x *MatchTacticalPuzzleClearRecord) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
 }
 
 var File_proto_match_match_authority_proto protoreflect.FileDescriptor
@@ -6231,8 +6596,7 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\x06ticket\x18\x02 \x01(\tR\x06ticket\x12\x1d\n" +
 	"\n" +
 	"team_index\x18\x03 \x01(\rR\tteamIndex\x12\x18\n" +
-	"\acaptain\x18\x04 \x01(\bR\acaptain\"\xf1\n" +
-	"\n" +
+	"\acaptain\x18\x04 \x01(\bR\acaptain\"\xa9\v\n" +
 	"\x14MatchFormationRecord\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12!\n" +
 	"\foperation_id\x18\x02 \x01(\tR\voperationId\x12\x14\n" +
@@ -6266,7 +6630,8 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\x11custom_duel_rules\x18\x1b \x01(\fR\x0fcustomDuelRules\x12&\n" +
 	"\x0fis_wuxing_tower\x18\x1c \x01(\bR\risWuxingTower\x120\n" +
 	"\x14jianghu_duel_context\x18\x1d \x01(\fR\x12jianghuDuelContext\x12$\n" +
-	"\x0etrial_vow_mask\x18\x1e \x01(\rR\ftrialVowMask:Y\x8a\x92\xf4\x01\x0fmatch_formation\x92\x92\xf4\x01\tbattle_idڒ\xf4\x012state,retry_at_ms;ranked_season_id,state,battle_id\"P\n" +
+	"\x0etrial_vow_mask\x18\x1e \x01(\rR\ftrialVowMask\x126\n" +
+	"\x17tactical_puzzle_context\x18\x1f \x01(\fR\x15tacticalPuzzleContext:Y\x8a\x92\xf4\x01\x0fmatch_formation\x92\x92\xf4\x01\tbattle_idڒ\xf4\x012state,retry_at_ms;ranked_season_id,state,battle_id\"P\n" +
 	"\x15MatchPreparedEndpoint\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1a\n" +
 	"\bendpoint\x18\x02 \x01(\tR\bendpoint\"\xec\x01\n" +
@@ -6340,7 +6705,7 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	" \x01(\rR\n" +
 	"inboxState\x12%\n" +
 	"\x0edispatch_state\x18\v \x01(\rR\rdispatchState\x12\"\n" +
-	"\rnext_retry_ms\x18\f \x01(\x04R\vnextRetryMs:p\x8a\x92\xf4\x01\x1ematch_battle_settlement_source\x92\x92\xf4\x01\x13battle_id,player_idڒ\xf4\x010dispatch_state,next_retry_ms,battle_id,player_id\"\xf1\x04\n" +
+	"\rnext_retry_ms\x18\f \x01(\x04R\vnextRetryMs:p\x8a\x92\xf4\x01\x1ematch_battle_settlement_source\x92\x92\xf4\x01\x13battle_id,player_idڒ\xf4\x010dispatch_state,next_retry_ms,battle_id,player_id\"\xae\x05\n" +
 	"\x1bMatchManualResolutionRecord\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x124\n" +
 	"\x06action\x18\x02 \x01(\x0e2\x1c.match.StrandedFormationModeR\x06action\x12F\n" +
@@ -6355,7 +6720,10 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\x0etickets_before\x18\n" +
 	" \x03(\v2!.match.MatchAuthorityTicketRecordR\rticketsBefore\x122\n" +
 	"\x15effective_deadline_ms\x18\v \x01(\x04R\x13effectiveDeadlineMs\x12)\n" +
-	"\x10replica_instance\x18\f \x01(\tR\x0freplicaInstance:*\x8a\x92\xf4\x01\x17match_manual_resolution\x92\x92\xf4\x01\tbattle_id\"\xa8\x02\n" +
+	"\x10replica_instance\x18\f \x01(\tR\x0freplicaInstance\x12\x1f\n" +
+	"\vapproval_id\x18\r \x01(\tR\n" +
+	"approvalId\x12\x1a\n" +
+	"\bapprover\x18\x0e \x01(\tR\bapprover:*\x8a\x92\xf4\x01\x17match_manual_resolution\x92\x92\xf4\x01\tbattle_id\"\xa8\x02\n" +
 	"\x17MatchBattleReportRecord\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1d\n" +
 	"\n" +
@@ -6758,7 +7126,11 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\twrit_tier\x18\a \x01(\rR\bwritTier\x12\x1b\n" +
 	"\tteam_size\x18\b \x01(\rR\bteamSize\x12\x1f\n" +
 	"\vfinished_ms\x18\t \x01(\x04R\n" +
-	"finishedMs:\x92\x01\x8a\x92\xf4\x01\x10match_grudge_log\x92\x92\xf4\x011player_id,owner_revision,peer_player_id,battle_idڒ\xf4\x013player_id,owner_revision,peer_player_id,finished_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xb6\x03\n" +
+	"finishedMs:\x92\x01\x8a\x92\xf4\x01\x10match_grudge_log\x92\x92\xf4\x011player_id,owner_revision,peer_player_id,battle_idڒ\xf4\x013player_id,owner_revision,peer_player_id,finished_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x7f\n" +
+	"\x18MatchGrudgeAppliedRecord\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1d\n" +
+	"\n" +
+	"applied_ms\x18\x02 \x01(\x04R\tappliedMs:'\x8a\x92\xf4\x01\x14match_grudge_applied\x92\x92\xf4\x01\tbattle_id\"\xb6\x03\n" +
 	"\x1dMatchTrialChallengeCardRecord\x12\x17\n" +
 	"\acard_id\x18\x01 \x01(\x04R\x06cardId\x12&\n" +
 	"\x0fowner_player_id\x18\x02 \x01(\x04R\rownerPlayerId\x12\x1b\n" +
@@ -6770,7 +7142,43 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"created_ms\x18\a \x01(\x04R\tcreatedMs\x12\x1d\n" +
 	"\n" +
 	"expires_ms\x18\b \x01(\x04R\texpiresMs\x12\x1b\n" +
-	"\tcard_view\x18\t \x01(\fR\bcardView:t\x8a\x92\xf4\x01\x1amatch_trial_challenge_card\x92\x92\xf4\x01\acard_idڒ\xf4\x015owner_player_id,created_ms,card_id;expires_ms,card_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04*\xcc\x03\n" +
+	"\tcard_view\x18\t \x01(\fR\bcardView:t\x8a\x92\xf4\x01\x1amatch_trial_challenge_card\x92\x92\xf4\x01\acard_idڒ\xf4\x015owner_player_id,created_ms,card_id;expires_ms,card_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xa7\x06\n" +
+	"\x19MatchTacticalPuzzleRecord\x12\x1b\n" +
+	"\tpuzzle_id\x18\x01 \x01(\x04R\bpuzzleId\x12(\n" +
+	"\x10author_player_id\x18\x02 \x01(\x04R\x0eauthorPlayerId\x12\x1f\n" +
+	"\vauthor_name\x18\x03 \x01(\tR\n" +
+	"authorName\x12\x14\n" +
+	"\x05state\x18\x04 \x01(\rR\x05state\x12#\n" +
+	"\rspec_revision\x18\x05 \x01(\rR\fspecRevision\x12\x14\n" +
+	"\x05title\x18\x06 \x01(\tR\x05title\x12\x1b\n" +
+	"\thint_text\x18\a \x01(\tR\bhintText\x12\x19\n" +
+	"\btag_mask\x18\b \x01(\rR\atagMask\x12!\n" +
+	"\fspec_payload\x18\t \x01(\fR\vspecPayload\x12,\n" +
+	"\x12verified_battle_id\x18\n" +
+	" \x01(\x04R\x10verifiedBattleId\x12,\n" +
+	"\x12author_best_rounds\x18\v \x01(\rR\x10authorBestRounds\x12#\n" +
+	"\rattempt_count\x18\f \x01(\rR\fattemptCount\x12\x1f\n" +
+	"\vclear_count\x18\r \x01(\rR\n" +
+	"clearCount\x12,\n" +
+	"\x12global_best_rounds\x18\x0e \x01(\rR\x10globalBestRounds\x12\x1d\n" +
+	"\n" +
+	"like_count\x18\x0f \x01(\rR\tlikeCount\x12\x1d\n" +
+	"\n" +
+	"created_ms\x18\x10 \x01(\x04R\tcreatedMs\x12!\n" +
+	"\fpublished_ms\x18\x11 \x01(\x04R\vpublishedMs\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\x12 \x01(\x04R\tupdatedMs:\xa5\x01\x8a\x92\xf4\x01\x15match_tactical_puzzle\x92\x92\xf4\x01\tpuzzle_idڒ\xf4\x01iauthor_player_id,updated_ms,puzzle_id;state,like_count,clear_count,puzzle_id;state,published_ms,puzzle_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x84\x03\n" +
+	"\x1eMatchTacticalPuzzleClearRecord\x12\x1b\n" +
+	"\tpuzzle_id\x18\x01 \x01(\x04R\bpuzzleId\x12\x1b\n" +
+	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x1a\n" +
+	"\battempts\x18\x03 \x01(\rR\battempts\x12\x18\n" +
+	"\acleared\x18\x04 \x01(\bR\acleared\x12\x1f\n" +
+	"\vbest_rounds\x18\x05 \x01(\rR\n" +
+	"bestRounds\x12\x14\n" +
+	"\x05liked\x18\x06 \x01(\bR\x05liked\x12(\n" +
+	"\x10first_cleared_ms\x18\a \x01(\x04R\x0efirstClearedMs\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\b \x01(\x04R\tupdatedMs:r\x8a\x92\xf4\x01\x1bmatch_tactical_puzzle_clear\x92\x92\xf4\x01\x13puzzle_id,player_idڒ\xf4\x01&player_id,cleared,updated_ms,puzzle_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04*\xcc\x03\n" +
 	"\x1fMatchBattleCompletionSourceKind\x12.\n" +
 	"*MATCH_BATTLE_COMPLETION_SOURCE_UNSPECIFIED\x10\x00\x12(\n" +
 	"$MATCH_BATTLE_COMPLETION_SOURCE_KAFKA\x10\x01\x12-\n" +
@@ -6794,7 +7202,7 @@ func file_proto_match_match_authority_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_match_match_authority_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_match_match_authority_proto_msgTypes = make([]protoimpl.MessageInfo, 50)
+var file_proto_match_match_authority_proto_msgTypes = make([]protoimpl.MessageInfo, 53)
 var file_proto_match_match_authority_proto_goTypes = []any{
 	(MatchBattleCompletionSourceKind)(0),       // 0: match.MatchBattleCompletionSourceKind
 	(*MatchNetworkProfile)(nil),                // 1: match.MatchNetworkProfile
@@ -6846,23 +7254,26 @@ var file_proto_match_match_authority_proto_goTypes = []any{
 	(*MatchJianghuDuelCooldownRecord)(nil),     // 47: match.MatchJianghuDuelCooldownRecord
 	(*MatchGrudgeRelationRecord)(nil),          // 48: match.MatchGrudgeRelationRecord
 	(*MatchGrudgeLogRecord)(nil),               // 49: match.MatchGrudgeLogRecord
-	(*MatchTrialChallengeCardRecord)(nil),      // 50: match.MatchTrialChallengeCardRecord
-	(*NetworkProbeReceipt)(nil),                // 51: match.NetworkProbeReceipt
-	(BattleOutcomeDecision)(0),                 // 52: match.BattleOutcomeDecision
-	(StrandedFormationMode)(0),                 // 53: match.StrandedFormationMode
-	(StrandedFormationClass)(0),                // 54: match.StrandedFormationClass
+	(*MatchGrudgeAppliedRecord)(nil),           // 50: match.MatchGrudgeAppliedRecord
+	(*MatchTrialChallengeCardRecord)(nil),      // 51: match.MatchTrialChallengeCardRecord
+	(*MatchTacticalPuzzleRecord)(nil),          // 52: match.MatchTacticalPuzzleRecord
+	(*MatchTacticalPuzzleClearRecord)(nil),     // 53: match.MatchTacticalPuzzleClearRecord
+	(*NetworkProbeReceipt)(nil),                // 54: match.NetworkProbeReceipt
+	(BattleOutcomeDecision)(0),                 // 55: match.BattleOutcomeDecision
+	(StrandedFormationMode)(0),                 // 56: match.StrandedFormationMode
+	(StrandedFormationClass)(0),                // 57: match.StrandedFormationClass
 }
 var file_proto_match_match_authority_proto_depIdxs = []int32{
-	51, // 0: match.MatchNetworkProfile.receipts:type_name -> match.NetworkProbeReceipt
+	54, // 0: match.MatchNetworkProfile.receipts:type_name -> match.NetworkProbeReceipt
 	2,  // 1: match.MatchDirectIntentRecord.spectator_exits:type_name -> match.MatchSpectatorRecord
 	14, // 2: match.MatchDirectStartOriginal.formation:type_name -> match.MatchFormationRecord
 	6,  // 3: match.MatchDirectStartOriginal.tickets:type_name -> match.MatchAuthorityTicketRecord
 	13, // 4: match.MatchFormationRecord.members:type_name -> match.MatchFormationMember
 	15, // 5: match.MatchFormationRecord.prepared:type_name -> match.MatchPreparedEndpoint
-	52, // 6: match.MatchBattleCompletionRecord.decision:type_name -> match.BattleOutcomeDecision
+	55, // 6: match.MatchBattleCompletionRecord.decision:type_name -> match.BattleOutcomeDecision
 	0,  // 7: match.MatchBattleCompletionRecord.source_kind:type_name -> match.MatchBattleCompletionSourceKind
-	53, // 8: match.MatchManualResolutionRecord.action:type_name -> match.StrandedFormationMode
-	54, // 9: match.MatchManualResolutionRecord.formation_class:type_name -> match.StrandedFormationClass
+	56, // 8: match.MatchManualResolutionRecord.action:type_name -> match.StrandedFormationMode
+	57, // 9: match.MatchManualResolutionRecord.formation_class:type_name -> match.StrandedFormationClass
 	6,  // 10: match.MatchManualResolutionRecord.tickets_before:type_name -> match.MatchAuthorityTicketRecord
 	39, // 11: match.MatchTournamentChampionMembersBlob.members:type_name -> match.MatchTournamentMemberRecord
 	12, // [12:12] is the sub-list for method output_type
@@ -6885,7 +7296,7 @@ func file_proto_match_match_authority_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_match_match_authority_proto_rawDesc), len(file_proto_match_match_authority_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   50,
+			NumMessages:   53,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

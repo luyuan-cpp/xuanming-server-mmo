@@ -86,6 +86,10 @@ message BattleStateS2C {
   repeated uint32 team_a_banned_skill_ids = 40;        // A 队（team_index=0）最终生效的禁用技能（0..3 个）
   repeated uint32 team_b_banned_skill_ids = 41;        // B 队（team_index=1）最终生效的禁用技能（0..3 个）
   uint32 trial_vow_mask = 42;                          // 五行试炼志 V3：本局生效的自选限制誓约位掩码（0=无，1..15）
+  TacticalPuzzleBattleContext tactical_puzzle_context = 43; // 万象残局坊冻结上下文（供局内残局抬头、剩余回合倒计时与自证标识展示）
+  uint32 team_a_protected_skill_id = 44;               // 战前禁选 V2：A 队（team_index=0）最终生效的护招技能 ID（0=未选；观战/重连/回放全可见）
+  uint32 team_b_protected_skill_id = 45;               // 战前禁选 V2：B 队（team_index=1）最终生效的护招技能 ID（0=未选；观战/重连/回放全可见）
+  repeated uint32 countered_ban_skill_ids = 46;        // 战前禁选 V2：被对方护招「破禁化解」而恢复可用的技能 ID（升序去重，与 banned_skill_ids 互斥）
 }
 
 message BattleStartS2C {
@@ -244,6 +248,8 @@ message UpdateBattlePrepRequest {
   bool ready = 4;              // true = 锁定本场出战方案（锁定后不可再改；全员锁定立即开打）
   bool update_banned_skills = 5;        // true = 用下方 banned_skill_ids 原子替换本人禁用提名（允许空列表=清空）；false = 保持不变
   repeated uint32 banned_skill_ids = 6; // 本人有序禁招提名列表（0..3，去重，须全部在白名单内）
+  bool update_protected_skill = 7;      // 战前禁选 V2：true = 用下方 protected_skill_id 原子替换本人护招提名（0=清空）；false = 保持不变
+  uint32 protected_skill_id = 8;        // 战前禁选 V2：本人提名的本局护招技能 ID（0=清空；非 0 须在白名单内且不得与本人最终禁招列表冲突）
 }
 
 message UpdateBattlePrepResponse {

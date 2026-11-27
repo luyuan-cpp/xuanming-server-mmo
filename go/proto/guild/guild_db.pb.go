@@ -2958,7 +2958,9 @@ func (x *GuildWarPlayerStateRecord) GetUpdatedMs() uint64 {
 
 // 锁序位置 17:江湖追杀令托管与生命周期。
 // 第 4 个索引 (status,expires_at_ms) 给到期收尾按到期时刻翻页扫 ACTIVE 行(war_repo.go ListDueBounties;
-// 前三个索引都不以 status 开头,跨区扫不动)。schemamigrate 不给已存在的表补建索引,本地库要重建这张表。
+// 前三个索引都不以 status 开头,跨区扫不动),也给终态旧行的保留期清理按到期时刻取候选(PurgeTerminalBounties,r2-gw#7)。
+// 第 5 个索引 (escrow_op_id) 给预扣指令终结按指令号找追杀令(asset_store.go 的 BOUNTY_ESCROW 分支),否则每次终结都全表扫(r2-gw#7)。
+// schemamigrate 不给已存在的表补建索引,本地库要重建这张表。
 type GuildWarBountyRecord struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
 	BountyId              uint64                 `protobuf:"varint,1,opt,name=bounty_id,json=bountyId,proto3" json:"bounty_id,omitempty"` // 发号器永久 ID
@@ -3860,6 +3862,189 @@ func (x *GuildWarFeudRecord) GetUpdatedMs() uint64 {
 	return 0
 }
 
+// 锁序位置 23:帮派恩怨墙的入账闸门,一局一行,记「这一局已经入过两帮的恩怨墙」(jianghu_grudge_repo.go)。
+// 去重键不能放在 guild_jianghu_grudge_record 里:那张表每帮只留最近 20 场,被裁掉之后重投的旧结果查不到行,
+// 两帮胜负会再算一遍(数据覆写审计 r2 第 4 轮 r2-jh#3)。本表不裁剪,帮会解散也不删:删了重放会给对手帮再算一次。
+// 入账事务在写完位置 20、21 之后最后插本表(单调追加在全序末尾,不回头取靠前的表)。
+type GuildJianghuGrudgeAppliedRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BattleId      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	AppliedMs     uint64                 `protobuf:"varint,2,opt,name=applied_ms,json=appliedMs,proto3" json:"applied_ms,omitempty"` // 入账时刻(库时钟),只供排查与日后按保留期清理
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GuildJianghuGrudgeAppliedRecord) Reset() {
+	*x = GuildJianghuGrudgeAppliedRecord{}
+	mi := &file_proto_guild_guild_db_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildJianghuGrudgeAppliedRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildJianghuGrudgeAppliedRecord) ProtoMessage() {}
+
+func (x *GuildJianghuGrudgeAppliedRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_db_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildJianghuGrudgeAppliedRecord.ProtoReflect.Descriptor instead.
+func (*GuildJianghuGrudgeAppliedRecord) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *GuildJianghuGrudgeAppliedRecord) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *GuildJianghuGrudgeAppliedRecord) GetAppliedMs() uint64 {
+	if x != nil {
+		return x.AppliedMs
+	}
+	return 0
+}
+
+// 锁序位置 24(全序末尾):帮战入账的待入账行(数据覆写审计 r2 第 4 轮 r2-gw#5 / #6;设计见
+// docs/planning/guild-play-v2-implementation-plan.md 末节)。帮战结算(war_repo.go SettleWarBattle)与追杀令到期收尾(ExpireBounty)
+// 给某人插 GUILD_CREDIT 指令时,两种情况不插指令、改在同一事务里记本表一行,不挡同局其他人:
+//   - 他本流未决指令已满(assetop.ErrTooManyPending:16 条或跨度 512);
+//   - 他的角色护栏副本冻结中(过户投票、寄售中、删角投票):冻结期间不给他插任何资产指令。
+//
+// 已删除(墓碑)的角色不记本表,这一笔直接放弃。
+// 转换(war_credit_owed.go ConvertWarCreditOwed,挂在待入队物品循环上):锁他的护栏副本 → 墓碑就删本行放弃 → 仍冻结就留着 →
+// 分 seq(仍满就留着)→ 插 guild_asset_op(op_id 就是本行的 op_id,不另发号,同一笔不会入账两次)→ 点删本行,同一事务。
+// 有本行就挡他的过户与删角冻结(role_fence_pending.go),与 guild_trial_reward_owed 同一口径。
+// idx_guild_war_credit_owed_0 (created_ms):循环按先来后到翻页。
+type GuildWarCreditOwedRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	OpId          uint64                 `protobuf:"varint,2,opt,name=op_id,json=opId,proto3" json:"op_id,omitempty"`                // 事务前预发的指令号;转换时原样用作 guild_asset_op.op_id(幂等键)
+	GuildId       uint64                 `protobuf:"varint,3,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`       // 转入指令行的 guild_id(审计)
+	Kind          uint32                 `protobuf:"varint,4,opt,name=kind,proto3" json:"kind,omitempty"`                            // 转入指令行的 GuildAssetOpKind:WAR_REWARD / BOUNTY_PAYOUT
+	TxType        uint32                 `protobuf:"varint,5,opt,name=tx_type,json=txType,proto3" json:"tx_type,omitempty"`          // 转入指令行的 rollback TransactionType:TX_GUILD_WAR_REWARD / TX_GUILD_BOUNTY_PAYOUT
+	RefId         uint32                 `protobuf:"varint,6,opt,name=ref_id,json=refId,proto3" json:"ref_id,omitempty"`             // 转入指令行的 ref_id(灵脉号 / 追杀令档位)
+	PeriodKey     uint32                 `protobuf:"varint,7,opt,name=period_key,json=periodKey,proto3" json:"period_key,omitempty"` // 转入指令行的 period_key
+	Payload       []byte                 `protobuf:"bytes,8,opt,name=payload,proto3" json:"payload,omitempty"`                       // AssetBundle 序列化字节,原样转入指令行
+	SourceId      uint64                 `protobuf:"varint,9,opt,name=source_id,json=sourceId,proto3" json:"source_id,omitempty"`    // 来源:帮战结算记 battle_id,到期收尾记 bounty_id(审计)
+	CreatedMs     uint64                 `protobuf:"varint,10,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GuildWarCreditOwedRecord) Reset() {
+	*x = GuildWarCreditOwedRecord{}
+	mi := &file_proto_guild_guild_db_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildWarCreditOwedRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildWarCreditOwedRecord) ProtoMessage() {}
+
+func (x *GuildWarCreditOwedRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_db_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildWarCreditOwedRecord.ProtoReflect.Descriptor instead.
+func (*GuildWarCreditOwedRecord) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *GuildWarCreditOwedRecord) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *GuildWarCreditOwedRecord) GetOpId() uint64 {
+	if x != nil {
+		return x.OpId
+	}
+	return 0
+}
+
+func (x *GuildWarCreditOwedRecord) GetGuildId() uint64 {
+	if x != nil {
+		return x.GuildId
+	}
+	return 0
+}
+
+func (x *GuildWarCreditOwedRecord) GetKind() uint32 {
+	if x != nil {
+		return x.Kind
+	}
+	return 0
+}
+
+func (x *GuildWarCreditOwedRecord) GetTxType() uint32 {
+	if x != nil {
+		return x.TxType
+	}
+	return 0
+}
+
+func (x *GuildWarCreditOwedRecord) GetRefId() uint32 {
+	if x != nil {
+		return x.RefId
+	}
+	return 0
+}
+
+func (x *GuildWarCreditOwedRecord) GetPeriodKey() uint32 {
+	if x != nil {
+		return x.PeriodKey
+	}
+	return 0
+}
+
+func (x *GuildWarCreditOwedRecord) GetPayload() []byte {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *GuildWarCreditOwedRecord) GetSourceId() uint64 {
+	if x != nil {
+		return x.SourceId
+	}
+	return 0
+}
+
+func (x *GuildWarCreditOwedRecord) GetCreatedMs() uint64 {
+	if x != nil {
+		return x.CreatedMs
+	}
+	return 0
+}
+
 var File_proto_guild_guild_db_proto protoreflect.FileDescriptor
 
 const file_proto_guild_guild_db_proto_rawDesc = "" +
@@ -4164,7 +4349,7 @@ const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"\x18last_garrison_refresh_ms\x18\x0f \x01(\x04R\x15lastGarrisonRefreshMs\x12\"\n" +
 	"\rlast_track_ms\x18\x10 \x01(\x04R\vlastTrackMs\x12\x1d\n" +
 	"\n" +
-	"updated_ms\x18\x11 \x01(\x04R\tupdatedMs:S\x8a\x92\xf4\x01\x16guild_war_player_state\x92\x92\xf4\x01\tplayer_idڒ\xf4\x01\x16zone_id,open_challenge\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xc4\x06\n" +
+	"updated_ms\x18\x11 \x01(\x04R\tupdatedMs:S\x8a\x92\xf4\x01\x16guild_war_player_state\x92\x92\xf4\x01\tplayer_idڒ\xf4\x01\x16zone_id,open_challenge\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xd1\x06\n" +
 	"\x14GuildWarBountyRecord\x12\x1b\n" +
 	"\tbounty_id\x18\x01 \x01(\x04R\bbountyId\x12\x17\n" +
 	"\azone_id\x18\x02 \x01(\rR\x06zoneId\x12(\n" +
@@ -4185,7 +4370,7 @@ const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"\rcreated_at_ms\x18\x0f \x01(\x04R\vcreatedAtMs\x12\"\n" +
 	"\rexpires_at_ms\x18\x10 \x01(\x04R\vexpiresAtMs\x12$\n" +
 	"\x0eresolved_at_ms\x18\x11 \x01(\x04R\fresolvedAtMs\x12,\n" +
-	"\x12escrow_guild_funds\x18\x12 \x01(\x04R\x10escrowGuildFunds:\x97\x01\x8a\x92\xf4\x01\x10guild_war_bounty\x92\x92\xf4\x01\tbounty_idڒ\xf4\x01`target_player_id,status;issuer_guild_id,status;zone_id,status,expires_at_ms;status,expires_at_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x94\t\n" +
+	"\x12escrow_guild_funds\x18\x12 \x01(\x04R\x10escrowGuildFunds:\xa4\x01\x8a\x92\xf4\x01\x10guild_war_bounty\x92\x92\xf4\x01\tbounty_idڒ\xf4\x01mtarget_player_id,status;issuer_guild_id,status;zone_id,status,expires_at_ms;status,expires_at_ms;escrow_op_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x94\t\n" +
 	"\x14GuildWarBattleRecord\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x17\n" +
 	"\azone_id\x18\x02 \x01(\rR\x06zoneId\x12&\n" +
@@ -4269,7 +4454,26 @@ const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"ends_at_ms\x18\x0f \x01(\x04R\bendsAtMs\x12&\n" +
 	"\x0fwinner_guild_id\x18\x10 \x01(\x04R\rwinnerGuildId\x12\x1d\n" +
 	"\n" +
-	"updated_ms\x18\x11 \x01(\x04R\tupdatedMs:\x88\x01\x8a\x92\xf4\x01\x0eguild_war_feud\x92\x92\xf4\x01\afeud_idڒ\xf4\x01Uzone_id,status,ends_at_ms;issuer_guild_id,created_at_ms;target_guild_id,created_at_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04*\x98\x02\n" +
+	"updated_ms\x18\x11 \x01(\x04R\tupdatedMs:\x88\x01\x8a\x92\xf4\x01\x0eguild_war_feud\x92\x92\xf4\x01\afeud_idڒ\xf4\x01Uzone_id,status,ends_at_ms;issuer_guild_id,created_at_ms;target_guild_id,created_at_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x9d\x01\n" +
+	"\x1fGuildJianghuGrudgeAppliedRecord\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1d\n" +
+	"\n" +
+	"applied_ms\x18\x02 \x01(\x04R\tappliedMs:>\x8a\x92\xf4\x01\x1cguild_jianghu_grudge_applied\x92\x92\xf4\x01\tbattle_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xee\x02\n" +
+	"\x18GuildWarCreditOwedRecord\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x13\n" +
+	"\x05op_id\x18\x02 \x01(\x04R\x04opId\x12\x19\n" +
+	"\bguild_id\x18\x03 \x01(\x04R\aguildId\x12\x12\n" +
+	"\x04kind\x18\x04 \x01(\rR\x04kind\x12\x17\n" +
+	"\atx_type\x18\x05 \x01(\rR\x06txType\x12\x15\n" +
+	"\x06ref_id\x18\x06 \x01(\rR\x05refId\x12\x1d\n" +
+	"\n" +
+	"period_key\x18\a \x01(\rR\tperiodKey\x12\x18\n" +
+	"\apayload\x18\b \x01(\fR\apayload\x12\x1b\n" +
+	"\tsource_id\x18\t \x01(\x04R\bsourceId\x12\x1d\n" +
+	"\n" +
+	"created_ms\x18\n" +
+	" \x01(\x04R\tcreatedMs:L\x8a\x92\xf4\x01\x15guild_war_credit_owed\x92\x92\xf4\x01\x0fplayer_id,op_idڒ\xf4\x01\n" +
+	"created_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04*\x98\x02\n" +
 	"\x12GuildAssetOpStatus\x12%\n" +
 	"!GUILD_ASSET_OP_STATUS_UNSPECIFIED\x10\x00\x12!\n" +
 	"\x1dGUILD_ASSET_OP_STATUS_PENDING\x10\x01\x12!\n" +
@@ -4319,44 +4523,46 @@ func file_proto_guild_guild_db_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_guild_guild_db_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_proto_guild_guild_db_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
+var file_proto_guild_guild_db_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
 var file_proto_guild_guild_db_proto_goTypes = []any{
-	(GuildAssetOpStatus)(0),                // 0: guildpb.GuildAssetOpStatus
-	(GuildAssetOpKind)(0),                  // 1: guildpb.GuildAssetOpKind
-	(GuildDailyCounterKind)(0),             // 2: guildpb.GuildDailyCounterKind
-	(GuildTrialBattleState)(0),             // 3: guildpb.GuildTrialBattleState
-	(GuildTrialSettleResult)(0),            // 4: guildpb.GuildTrialSettleResult
-	(*GuildRecord)(nil),                    // 5: guildpb.GuildRecord
-	(*GuildPlayerStateRecord)(nil),         // 6: guildpb.GuildPlayerStateRecord
-	(*GuildMemberRecord)(nil),              // 7: guildpb.GuildMemberRecord
-	(*GuildApplicationRecord)(nil),         // 8: guildpb.GuildApplicationRecord
-	(*GuildPlayerOpSeqRecord)(nil),         // 9: guildpb.GuildPlayerOpSeqRecord
-	(*GuildAssetOpRecord)(nil),             // 10: guildpb.GuildAssetOpRecord
-	(*GuildDailyCounterRecord)(nil),        // 11: guildpb.GuildDailyCounterRecord
-	(*GuildActivityProgressRecord)(nil),    // 12: guildpb.GuildActivityProgressRecord
-	(*GuildTrialBattleRecord)(nil),         // 13: guildpb.GuildTrialBattleRecord
-	(*GuildTrialRoleIdentity)(nil),         // 14: guildpb.GuildTrialRoleIdentity
-	(*GuildTrialLobbyConsent)(nil),         // 15: guildpb.GuildTrialLobbyConsent
-	(*GuildTrialLobbyOriginal)(nil),        // 16: guildpb.GuildTrialLobbyOriginal
-	(*GuildTrialLobbyConsents)(nil),        // 17: guildpb.GuildTrialLobbyConsents
-	(*GuildTrialLobbyRecord)(nil),          // 18: guildpb.GuildTrialLobbyRecord
-	(*GuildTrialLobbySlotRecord)(nil),      // 19: guildpb.GuildTrialLobbySlotRecord
-	(*GuildTrialLaunchOriginal)(nil),       // 20: guildpb.GuildTrialLaunchOriginal
-	(*GuildTrialLaunchRecord)(nil),         // 21: guildpb.GuildTrialLaunchRecord
-	(*GuildTrialLaunchRoleRecord)(nil),     // 22: guildpb.GuildTrialLaunchRoleRecord
-	(*GuildTrialRewardOwedRecord)(nil),     // 23: guildpb.GuildTrialRewardOwedRecord
-	(*GuildClientRequestRecord)(nil),       // 24: guildpb.GuildClientRequestRecord
-	(*GuildNameHoldRecord)(nil),            // 25: guildpb.GuildNameHoldRecord
-	(*GuildWarLeylineRecord)(nil),          // 26: guildpb.GuildWarLeylineRecord
-	(*GuildWarGarrisonRecord)(nil),         // 27: guildpb.GuildWarGarrisonRecord
-	(*GuildWarWeeklyProgressRecord)(nil),   // 28: guildpb.GuildWarWeeklyProgressRecord
-	(*GuildWarPlayerStateRecord)(nil),      // 29: guildpb.GuildWarPlayerStateRecord
-	(*GuildWarBountyRecord)(nil),           // 30: guildpb.GuildWarBountyRecord
-	(*GuildWarBattleRecord)(nil),           // 31: guildpb.GuildWarBattleRecord
-	(*GuildWarRivalryRecord)(nil),          // 32: guildpb.GuildWarRivalryRecord
-	(*GuildJianghuRivalSummaryRecord)(nil), // 33: guildpb.GuildJianghuRivalSummaryRecord
-	(*GuildJianghuGrudgeRecord)(nil),       // 34: guildpb.GuildJianghuGrudgeRecord
-	(*GuildWarFeudRecord)(nil),             // 35: guildpb.GuildWarFeudRecord
+	(GuildAssetOpStatus)(0),                 // 0: guildpb.GuildAssetOpStatus
+	(GuildAssetOpKind)(0),                   // 1: guildpb.GuildAssetOpKind
+	(GuildDailyCounterKind)(0),              // 2: guildpb.GuildDailyCounterKind
+	(GuildTrialBattleState)(0),              // 3: guildpb.GuildTrialBattleState
+	(GuildTrialSettleResult)(0),             // 4: guildpb.GuildTrialSettleResult
+	(*GuildRecord)(nil),                     // 5: guildpb.GuildRecord
+	(*GuildPlayerStateRecord)(nil),          // 6: guildpb.GuildPlayerStateRecord
+	(*GuildMemberRecord)(nil),               // 7: guildpb.GuildMemberRecord
+	(*GuildApplicationRecord)(nil),          // 8: guildpb.GuildApplicationRecord
+	(*GuildPlayerOpSeqRecord)(nil),          // 9: guildpb.GuildPlayerOpSeqRecord
+	(*GuildAssetOpRecord)(nil),              // 10: guildpb.GuildAssetOpRecord
+	(*GuildDailyCounterRecord)(nil),         // 11: guildpb.GuildDailyCounterRecord
+	(*GuildActivityProgressRecord)(nil),     // 12: guildpb.GuildActivityProgressRecord
+	(*GuildTrialBattleRecord)(nil),          // 13: guildpb.GuildTrialBattleRecord
+	(*GuildTrialRoleIdentity)(nil),          // 14: guildpb.GuildTrialRoleIdentity
+	(*GuildTrialLobbyConsent)(nil),          // 15: guildpb.GuildTrialLobbyConsent
+	(*GuildTrialLobbyOriginal)(nil),         // 16: guildpb.GuildTrialLobbyOriginal
+	(*GuildTrialLobbyConsents)(nil),         // 17: guildpb.GuildTrialLobbyConsents
+	(*GuildTrialLobbyRecord)(nil),           // 18: guildpb.GuildTrialLobbyRecord
+	(*GuildTrialLobbySlotRecord)(nil),       // 19: guildpb.GuildTrialLobbySlotRecord
+	(*GuildTrialLaunchOriginal)(nil),        // 20: guildpb.GuildTrialLaunchOriginal
+	(*GuildTrialLaunchRecord)(nil),          // 21: guildpb.GuildTrialLaunchRecord
+	(*GuildTrialLaunchRoleRecord)(nil),      // 22: guildpb.GuildTrialLaunchRoleRecord
+	(*GuildTrialRewardOwedRecord)(nil),      // 23: guildpb.GuildTrialRewardOwedRecord
+	(*GuildClientRequestRecord)(nil),        // 24: guildpb.GuildClientRequestRecord
+	(*GuildNameHoldRecord)(nil),             // 25: guildpb.GuildNameHoldRecord
+	(*GuildWarLeylineRecord)(nil),           // 26: guildpb.GuildWarLeylineRecord
+	(*GuildWarGarrisonRecord)(nil),          // 27: guildpb.GuildWarGarrisonRecord
+	(*GuildWarWeeklyProgressRecord)(nil),    // 28: guildpb.GuildWarWeeklyProgressRecord
+	(*GuildWarPlayerStateRecord)(nil),       // 29: guildpb.GuildWarPlayerStateRecord
+	(*GuildWarBountyRecord)(nil),            // 30: guildpb.GuildWarBountyRecord
+	(*GuildWarBattleRecord)(nil),            // 31: guildpb.GuildWarBattleRecord
+	(*GuildWarRivalryRecord)(nil),           // 32: guildpb.GuildWarRivalryRecord
+	(*GuildJianghuRivalSummaryRecord)(nil),  // 33: guildpb.GuildJianghuRivalSummaryRecord
+	(*GuildJianghuGrudgeRecord)(nil),        // 34: guildpb.GuildJianghuGrudgeRecord
+	(*GuildWarFeudRecord)(nil),              // 35: guildpb.GuildWarFeudRecord
+	(*GuildJianghuGrudgeAppliedRecord)(nil), // 36: guildpb.GuildJianghuGrudgeAppliedRecord
+	(*GuildWarCreditOwedRecord)(nil),        // 37: guildpb.GuildWarCreditOwedRecord
 }
 var file_proto_guild_guild_db_proto_depIdxs = []int32{
 	1,  // 0: guildpb.GuildAssetOpRecord.kind:type_name -> guildpb.GuildAssetOpKind
@@ -4386,7 +4592,7 @@ func file_proto_guild_guild_db_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_guild_guild_db_proto_rawDesc), len(file_proto_guild_guild_db_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   31,
+			NumMessages:   33,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

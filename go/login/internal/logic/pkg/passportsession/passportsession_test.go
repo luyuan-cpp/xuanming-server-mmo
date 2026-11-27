@@ -188,3 +188,64 @@ func TestNilEnforcerLetsEverythingThrough(t *testing.T) {
 		t.Fatal("a nil enforcer (no admin credentials, dev/test only) must let logins and refreshes through")
 	}
 }
+
+// 通行证回调(HandleEvent,§3.7):只拿回调找人,按通行证此刻的状态处理;管理组织的人不核对;格式不对回 ErrBadEvent;
+// 查不了回错误(让通行证重投)。
+func TestHandleEventChecksTheNamedUsersAgainstThePassport(t *testing.T) {
+	user := userChangedPasswordAt(changedAt)
+
+	// 改密:记录的目标用户与扩展用户都是玩家本人(同一个人只核对一次)。
+	tokens, players := &fakeTokens{revokeCount: 1}, &fakePlayers{}
+	e := newEnforcer(t, 0, user, tokens, players)
+	setPassword := `{"organization":"xuanming","user":"alice","action":"set-password","object":"",` +
+		`"extendedUser":{"owner":"xuanming","name":"alice","id":"` + testSub + `"}}`
+	if n, err := e.HandleEvent(context.Background(), []byte(setPassword)); err != nil || n != 1 {
+		t.Fatalf("set-password event: (%d, %v), want one user checked", n, err)
+	}
+	if len(tokens.revokedBefore) != 1 || tokens.revokedBefore[0] != changedAt || len(players.kicked) != 1 || players.kicked[0] != testAccount {
+		t.Fatalf("the change must revoke earlier sessions and kick: before=%v kicked=%v", tokens.revokedBefore, players.kicked)
+	}
+
+	// 管理员在后台改资料:操作人在管理组织里,不核对;目标用户在请求体里。
+	tokens2 := &fakeTokens{}
+	byAdmin := `{"organization":"built-in","user":"admin","action":"update-user",` +
+		`"object":"{\"owner\":\"xuanming\",\"name\":\"alice\",\"id\":\"` + testSub + `\"}",` +
+		`"extendedUser":{"owner":"built-in","name":"admin","id":"admin-id"}}`
+	if n, err := newEnforcer(t, 0, user, tokens2, &fakePlayers{}).HandleEvent(context.Background(), []byte(byAdmin)); err != nil || n != 1 ||
+		len(tokens2.revokedBefore) != 1 {
+		t.Fatalf("admin update-user: (%d, %v) revoked=%v, want the target user checked", n, err, tokens2.revokedBefore)
+	}
+
+	// 只点到管理组织的人:什么都不查、不吊销。
+	tokens3 := &fakeTokens{}
+	adminOnly := `{"organization":"built-in","user":"admin","action":"set-password","object":""}`
+	if n, err := newEnforcer(t, http.StatusInternalServerError, "", tokens3, &fakePlayers{}).HandleEvent(context.Background(), []byte(adminOnly)); err != nil || n != 0 ||
+		len(tokens3.revokedAll)+len(tokens3.revokedBefore) != 0 {
+		t.Fatalf("built-in users only: (%d, %v)", n, err)
+	}
+
+	// 格式不对:回 ErrBadEvent(网关回 400,不重投)。
+	for name, payload := range map[string]string{"empty": "", "not json": "x", "too large": string(make([]byte, maxEventBytes+1))} {
+		if _, err := e.HandleEvent(context.Background(), []byte(payload)); !errors.Is(err, ErrBadEvent) {
+			t.Errorf("%s: want ErrBadEvent, got %v", name, err)
+		}
+	}
+
+	// 通行证查不了:回错误,让通行证重投。
+	if _, err := newEnforcer(t, http.StatusBadGateway, "", &fakeTokens{}, &fakePlayers{}).HandleEvent(context.Background(), []byte(setPassword)); err == nil ||
+		errors.Is(err, ErrBadEvent) {
+		t.Fatalf("passport down: want a retryable error, got %v", err)
+	}
+}
+
+func TestHandleEventRevokesEverythingForBannedUsers(t *testing.T) {
+	tokens, players := &fakeTokens{}, &fakePlayers{}
+	banned := `{"owner":"xuanming","name":"alice","id":"` + testSub + `","isForbidden":true}`
+	event := `{"organization":"xuanming","user":"alice","object":"","extendedUser":{"owner":"xuanming","name":"alice","id":"` + testSub + `"}}`
+	if n, err := newEnforcer(t, 0, banned, tokens, players).HandleEvent(context.Background(), []byte(event)); err != nil || n != 1 {
+		t.Fatalf("ban event: (%d, %v)", n, err)
+	}
+	if len(tokens.revokedAll) != 1 || tokens.revokedAll[0] != testAccount || len(players.kicked) != 1 {
+		t.Fatalf("a ban must revoke every session and kick: all=%v kicked=%v", tokens.revokedAll, players.kicked)
+	}
+}

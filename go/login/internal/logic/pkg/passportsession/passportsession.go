@@ -15,6 +15,9 @@ package passportsession
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"time"
 
 	"login/internal/logic/pkg/auth"
@@ -31,6 +34,12 @@ const (
 	lookupTimeout = time.Second
 	// kickTimeout 是踢线(读角色列表、查会话、发 gate 命令)的时限。与请求的取消脱钩:客户端放弃等待不该让踢线半途而废。
 	kickTimeout = 5 * time.Second
+	// maxEventBytes 是通行证回调请求体的上限(网关先按同一上限截住)。Casdoor 的回调是一条记录加一名用户,远小于它。
+	maxEventBytes = 64 << 10
+	// maxEventUsers 是一次回调最多核对几名用户:回调里能点到的人只有操作人、目标用户与请求体里的那一个。
+	maxEventUsers = 4
+	// builtInOrganization 是 Casdoor 的管理组织,玩家不在里面;回调点到它的用户(管理员自己)不核对。
+	builtInOrganization = "built-in"
 )
 
 // 指标 label。phase 是入口,result 是结论(auth.PassportSession* 的取值之外再加下面几个),上线后不改名。
@@ -97,7 +106,7 @@ func (e *Enforcer) CheckLogin(ctx context.Context, account string, issuedAt int6
 		logx.WithContext(ctx).Errorf("[passport] login check failed, letting the login through: account=%s: %v", account, err)
 		return 0
 	}
-	if err := e.settle(ctx, phaseLogin, account, status); err != nil {
+	if _, err := e.settle(ctx, phaseLogin, account, status); err != nil {
 		// 旧登录没吊销掉:它们各自下一次刷新时还会被判出来,这次登录本身不受影响。
 		checkTotal.Inc(phaseLogin, resultRevokeFailed)
 		logx.WithContext(ctx).Errorf("[passport] revoking earlier sessions at login failed: account=%s: %v", account, err)
@@ -135,7 +144,7 @@ func (e *Enforcer) CheckRefresh(ctx context.Context, data *token.TokenData) bool
 		checkTotal.Inc(phaseRefresh, resultValid)
 		return false
 	}
-	if err := e.settle(ctx, phaseRefresh, data.Account, status); err != nil {
+	if _, err := e.settle(ctx, phaseRefresh, data.Account, status); err != nil {
 		checkTotal.Inc(phaseRefresh, resultRevokeFailed)
 		logx.WithContext(ctx).Errorf("[passport] revoking sessions failed, refresh refused: account=%s reason=%s: %v", data.Account, verdict, err)
 		return true
@@ -145,27 +154,143 @@ func (e *Enforcer) CheckRefresh(ctx context.Context, data *token.TokenData) bool
 	return true
 }
 
+// HandleEvent 处理一条通行证回调(§3.7),回核对了几名用户。回调只用来找人:从记录的操作人 / 目标用户、扩展用户与请求体里
+// 取出用户 id 或「组织/用户名」,逐个现查通行证,按查到的状态吊销并踢线(同 settle)。回调内容是伪造的也只会多查几次,
+// 改不了任何人的状态。核对不了或吊销失败回错误(通行证会重投);回调格式不对回错误但不该重投(ErrBadEvent)。
+func (e *Enforcer) HandleEvent(ctx context.Context, payload []byte) (int, error) {
+	if e == nil {
+		return 0, errors.New("passport admin client is not configured")
+	}
+	users, err := eventUsers(payload)
+	if err != nil {
+		checkTotal.Inc(phaseEvent, resultIgnored)
+		return 0, err
+	}
+	checked := 0
+	seen := map[string]bool{}
+	for _, ref := range users {
+		status, err := e.lookupRef(ctx, ref)
+		if err != nil {
+			checkTotal.Inc(phaseEvent, resultError)
+			return checked, err
+		}
+		if status.Sub == "" || seen[status.Sub] {
+			continue // 只给了名字而用户已删(找不到是谁),或同一个人点了两次
+		}
+		seen[status.Sub] = true
+		account := auth.PassportAccount(status.Sub)
+		revoked, err := e.settle(ctx, phaseEvent, account, status)
+		if err != nil {
+			checkTotal.Inc(phaseEvent, resultRevokeFailed)
+			return checked, fmt.Errorf("revoke sessions of %s: %w", account, err)
+		}
+		checked++
+		result := resultValid
+		switch {
+		case status.Gone:
+			result = auth.PassportSessionUserGone
+		case status.Forbidden:
+			result = auth.PassportSessionUserForbidden
+		case revoked:
+			result = auth.PassportSessionPasswordChanged
+		}
+		checkTotal.Inc(phaseEvent, result)
+	}
+	if checked == 0 {
+		checkTotal.Inc(phaseEvent, resultIgnored)
+	}
+	return checked, nil
+}
+
+// ErrBadEvent:回调请求体不是 Casdoor 的记录格式(或超长)。网关回 400,通行证不必重投。
+var ErrBadEvent = errors.New("passport webhook payload is not a Casdoor record")
+
+// userRef 是回调里点到的一名用户:要么有用户 id,要么只有「组织/用户名」。
+type userRef struct {
+	sub         string
+	owner, name string
+}
+
+// casdoorEvent 是 Casdoor 回调请求体里用到的几项(object/record.go 的 Record,Webhook.isUserExtended 时多一个 extendedUser)。
+// 改密(set-password)时 organization / user 是目标用户;改资料(update-user)时是操作人,目标用户在 object(请求体原文)里。
+type casdoorEvent struct {
+	Organization string          `json:"organization"`
+	User         string          `json:"user"`
+	Object       string          `json:"object"`
+	ExtendedUser *casdoorUserRef `json:"extendedUser"`
+}
+
+type casdoorUserRef struct {
+	Owner string `json:"owner"`
+	Name  string `json:"name"`
+	Id    string `json:"id"`
+}
+
+// eventUsers 从回调里取出要核对的用户,管理组织(built-in)的不要,最多 maxEventUsers 个。
+func eventUsers(payload []byte) ([]userRef, error) {
+	if len(payload) == 0 || len(payload) > maxEventBytes {
+		return nil, ErrBadEvent
+	}
+	var event casdoorEvent
+	if err := json.Unmarshal(payload, &event); err != nil {
+		return nil, ErrBadEvent
+	}
+	var refs []userRef
+	add := func(u casdoorUserRef) {
+		if u.Owner == builtInOrganization || len(refs) >= maxEventUsers {
+			return
+		}
+		switch {
+		case u.Id != "":
+			refs = append(refs, userRef{sub: u.Id})
+		case u.Owner != "" && u.Name != "":
+			refs = append(refs, userRef{owner: u.Owner, name: u.Name})
+		}
+	}
+	if event.ExtendedUser != nil {
+		add(*event.ExtendedUser)
+	}
+	add(casdoorUserRef{Owner: event.Organization, Name: event.User})
+	var object casdoorUserRef
+	if event.Object != "" && json.Unmarshal([]byte(event.Object), &object) == nil {
+		add(object)
+	}
+	return refs, nil
+}
+
+func (e *Enforcer) lookupRef(ctx context.Context, ref userRef) (auth.PassportUserStatus, error) {
+	ctx, cancel := context.WithTimeout(ctx, lookupTimeout)
+	defer cancel()
+	if ref.sub != "" {
+		return e.admin.LookupUser(ctx, ref.sub)
+	}
+	return e.admin.LookupUserByName(ctx, ref.owner, ref.name)
+}
+
 // settle 把一名用户的当前状态落到游戏令牌上:被删、被封吊销全部;改过密码只吊销身份令牌签发时刻不晚于改密时刻的家族。
-// 吊销了东西就踢线。回吊销的错误;踢线失败只计数。
-func (e *Enforcer) settle(ctx context.Context, phase, account string, status auth.PassportUserStatus) error {
+// 吊销了东西就踢线。回有没有吊销(被删、被封一律算吊销了)和吊销的错误;踢线失败只计数。
+func (e *Enforcer) settle(ctx context.Context, phase, account string, status auth.PassportUserStatus) (bool, error) {
 	revoked := false
 	switch {
 	case status.Gone || status.Forbidden:
 		if err := e.tokens.RevokeAll(ctx, account); err != nil {
-			return err
+			return false, err
 		}
 		revoked = true
 	case status.PasswordChangedAt > 0:
 		n, err := e.tokens.RevokeIssuedBefore(ctx, account, status.PasswordChangedAt)
 		if err != nil {
-			return err
+			return false, err
 		}
 		revoked = n > 0
 	}
 	if revoked {
+		// 安全审计:三个入口的吊销都记在这一行(登录时顺带吊销旧会话的那一种,别处没有日志)。
+		logx.WithContext(ctx).Infof("[passport] sessions revoked: phase=%s account=%s gone=%t forbidden=%t password_changed_at=%d",
+			phase, account, status.Gone, status.Forbidden, status.PasswordChangedAt)
 		e.kick(ctx, phase, account)
 	}
-	return nil
+	return revoked, nil
 }
 
 func (e *Enforcer) kick(ctx context.Context, phase, account string) {

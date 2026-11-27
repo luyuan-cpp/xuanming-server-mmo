@@ -63,8 +63,9 @@ func (r *Repo) createCampaign(ctx context.Context, caller string, kind mailpb.Ma
 		if e := checkSharedMailCapacity(ctx, tx, in.GuildId, now, r.limits.Defaults()); e != nil {
 			return e
 		}
-		// kind=0仅保留全频道共享的发件幂等键；可见查询明确排除它。
-		if _, e := tx.ExecContext(ctx, "INSERT INTO mail_message ("+messageColumns+") VALUES (?,0,?,0,?,?,?,?,?,?,?,?,?,?)", id, in.GuildId, in.SenderKind, in.RequestId, digest, in.Title, in.Body, payload, now, expire, in.CampaignId, in.ManifestGeneration); e != nil {
+		// kind=0仅保留全频道共享的发件幂等键；可见查询明确排除它。批准记录落在消息行与活动行两处(approvalColumns)。
+		approval := in.GetApproval()
+		if _, e := tx.ExecContext(ctx, "INSERT INTO mail_message ("+messageColumns+","+approvalColumns+") VALUES (?,0,?,0,?,?,?,?,?,?,?,?,?,?,?,?,?)", id, in.GuildId, in.SenderKind, in.RequestId, digest, in.Title, in.Body, payload, now, expire, in.CampaignId, in.ManifestGeneration, approval.GetApprovalId(), approval.GetProposer(), approval.GetApprover()); e != nil {
 			if !isDuplicateKey(e) {
 				return e
 			}
@@ -79,7 +80,7 @@ func (r *Repo) createCampaign(ctx context.Context, caller string, kind mailpb.Ma
 			return nil
 		}
 		// 消息行已经插成,活动行再撞键只可能是 (sender,campaign,generation) 被别的请求占了:整笔回滚,不留下孤儿消息行。
-		if _, e := tx.ExecContext(ctx, "INSERT INTO mail_campaign ("+campaignColumns+") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,0,?,?)", in.SenderKind, in.CampaignId, in.ManifestGeneration, id, in.RequestId, caller, digest, in.Title, in.Body, payload, expire, in.ExpectedRecipientCount, in.ExpectedShardCount, in.ManifestHash, now, uint32(kind), in.GuildId); e != nil {
+		if _, e := tx.ExecContext(ctx, "INSERT INTO mail_campaign ("+campaignColumns+","+approvalColumns+") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,0,?,?,?,?,?)", in.SenderKind, in.CampaignId, in.ManifestGeneration, id, in.RequestId, caller, digest, in.Title, in.Body, payload, expire, in.ExpectedRecipientCount, in.ExpectedShardCount, in.ManifestHash, now, uint32(kind), in.GuildId, approval.GetApprovalId(), approval.GetProposer(), approval.GetApprover()); e != nil {
 			if isDuplicateKey(e) {
 				return ErrConflict
 			}
@@ -169,6 +170,7 @@ func (r *Repo) Import(ctx context.Context, caller string, in *mailpb.ImportMailR
 	})
 	return result, err
 }
+
 // insertCampaignRecipients 用一条多行 INSERT 写入一片收件人(一片至多 1000 人,ShardHash 已去重)。收件人主键含 player_id:
 // 任何一人已在别的片里,整条语句以 1062 失败、什么都不写,调用方整笔回滚 —— 与以前逐人先查后插「有人重复就整片冲突」同口径,
 // 往返从每片 2×人数 次降到 1 次(缺口清单第 27 条)。调用方持活动行锁。

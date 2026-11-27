@@ -71,6 +71,14 @@ func TestSpectateVisibilityPolicy(t *testing.T) {
 			require.Equal(t, c.want, spectateVisibilityFor(c.mode, c.activity))
 		})
 	}
+	// 帮战经生产入口 spectateVisibilityForRankedBattle / spectateVisibilityForBattle 也必须保持 PUBLIC,
+	// 不能被活动局统一私密分支短路掉;非帮战活动局即使带切磋公开开关仍保持 PRIVATE。
+	guildWar := &battlepb.BattleActivityContext{Kind: battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_GUILD_WAR}
+	require.Equal(t, visPublic, spectateVisibilityForBattle(matchpb.MatchMode_MATCH_MODE_GUILD_WAR_PVP, guildWar, nil))
+	require.Equal(t, visPublic, spectateVisibilityForRankedBattle(matchpb.MatchMode_MATCH_MODE_GUILD_WAR_PVP, guildWar, nil, nil))
+	require.Equal(t, visPublic, spectateVisibilityForRankedBattle(matchpb.MatchMode_MATCH_MODE_GUILD_WAR_SIEGE, guildWar, nil, nil))
+	require.Equal(t, visPrivate, spectateVisibilityForRankedBattle(
+		matchpb.MatchMode_MATCH_MODE_PVP_CHALLENGE, guildTrial, &battlepb.CustomDuelRules{AllowPublicSpectate: true}, nil))
 }
 
 // 每个 MatchMode 枚举值都必须在显式决策表里、且明确判为 PUBLIC 或 PRIVATE:proto 新增模式而

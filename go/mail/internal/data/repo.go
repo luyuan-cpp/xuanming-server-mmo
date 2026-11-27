@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 	"unicode/utf8"
 
@@ -58,7 +59,25 @@ func New(db *sql.DB, mailIDs, opIDs NextID, exists func(uint32) bool, guilds Gui
 	return &Repo{db: db, mailIDs: mailIDs, opIDs: opIDs, exists: exists, guilds: guilds, now: time.Now, seq: seq}
 }
 func Tables() []proto.Message {
-	return []proto.Message{&mailpb.MailRecord{}, &mailpb.MailBoxRecord{}, &mailpb.MailStateRecord{}, &mailpb.MailPlayerOpSeqRecord{}, &mailpb.MailAssetOpRecord{}, &mailpb.MailCampaignRecord{}, &mailpb.MailCampaignShardRecord{}, &mailpb.MailCampaignRecipientRecord{}}
+	return []proto.Message{&mailpb.MailRecord{}, &mailpb.MailBoxRecord{}, &mailpb.MailStateRecord{}, &mailpb.MailPlayerOpSeqRecord{}, &mailpb.MailAssetOpRecord{}, &mailpb.MailCampaignRecord{}, &mailpb.MailCampaignShardRecord{}, &mailpb.MailCampaignRecipientRecord{}, &mailpb.MailRequestReceiptRecord{}}
+}
+
+// rowQuerier 是 *sql.DB 与 *sql.Tx 共有的单行读。
+type rowQuerier interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+// priorReceipt 按发件判重收据找同一请求首次建的那封(邮件行可能已被过期清理删掉)。没有收据回 (nil, nil)。
+func priorReceipt(ctx context.Context, q rowQuerier, senderKind uint32, requestID uint64) (*mailpb.MailRequestReceiptRecord, error) {
+	receipt := &mailpb.MailRequestReceiptRecord{SenderKind: senderKind, RequestId: requestID}
+	err := q.QueryRowContext(ctx, "SELECT mail_id,request_hash,kind FROM mail_request_receipt WHERE sender_kind=? AND request_id=?", senderKind, requestID).Scan(&receipt.MailId, &receipt.RequestHash, &receipt.Kind)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return receipt, nil
 }
 func (r *Repo) tx(ctx context.Context, fn func(*sql.Tx) error) error {
 	return r.runGuarded(ctx, func() error { return r.txRetry(ctx, fn) })
@@ -77,6 +96,10 @@ func (r *Repo) txRetry(ctx context.Context, fn func(*sql.Tx) error) error {
 }
 
 const messageColumns = "mail_id,owner_player_id,guild_id,kind,sender_kind,request_id,request_hash,title,body,attachments,sent_ms,expire_ms,campaign_id,manifest_generation"
+
+// approvalColumns 是邮件行与活动行上的双人复核留痕(docs/design/admin-identity-and-dual-control.md §5.8):
+// 建行时写发件请求带的批准记录,不带时写空串。只写不读,所以不进 messageColumns / campaignColumns 与扫描。
+const approvalColumns = "approval_id,proposer,approver"
 
 type scanner interface{ Scan(...any) error }
 
@@ -132,7 +155,16 @@ func (r *Repo) Send(ctx context.Context, caller string, kind mailpb.MailKind, in
 	if err != nil {
 		return nil, err
 	}
-	// 先判重：曾成功的请求不会因收件箱已满、配置变化、时间过期而被改判。
+	// 先判重：曾成功的请求不会因收件箱已满、配置变化、时间过期而被改判。先看收据:邮件行被过期清理删掉之后它还在,
+	// 同一请求再来回原 mail_id(r2-craft#3);再看邮件行(活动邮件的占位行、收据上线之前建的邮件)。
+	if receipt, e := priorReceipt(ctx, r.db, in.SenderKind, in.RequestId); e != nil {
+		return nil, e
+	} else if receipt != nil {
+		if receipt.RequestHash != digest || receipt.Kind != uint32(kind) {
+			return nil, ErrConflict
+		}
+		return &mailpb.SendMailResponse{MailId: receipt.MailId, Duplicated: true}, nil
+	}
 	old, err := scanMessage(r.db.QueryRowContext(ctx, "SELECT "+messageColumns+" FROM mail_message WHERE sender_kind=? AND request_id=?", in.SenderKind, in.RequestId))
 	if err == nil {
 		actualKind := old.Kind
@@ -221,8 +253,18 @@ func (r *Repo) Send(ctx context.Context, caller string, kind mailpb.MailKind, in
 				return err
 			}
 		}
-		// 同一请求已有邮件时回原 mail_id;不同请求占了这个键回 ErrConflict。
+		// 同一请求已有邮件时回原 mail_id;不同请求占了这个键回 ErrConflict。收据在前,同 Send 开头的判重。
 		replay := func() (bool, error) {
+			if receipt, e := priorReceipt(ctx, tx, in.SenderKind, in.RequestId); e != nil {
+				return false, e
+			} else if receipt != nil {
+				if receipt.RequestHash != digest || receipt.Kind != uint32(kind) {
+					return false, ErrConflict
+				}
+				result.MailId = receipt.MailId
+				result.Duplicated = true
+				return true, nil
+			}
 			previous, e := scanMessage(tx.QueryRowContext(ctx, "SELECT "+messageColumns+" FROM mail_message WHERE sender_kind=? AND request_id=?", in.SenderKind, in.RequestId))
 			if errors.Is(e, ErrNotFound) {
 				return false, nil
@@ -254,11 +296,12 @@ func (r *Repo) Send(ctx context.Context, caller string, kind mailpb.MailKind, in
 				return e
 			}
 		}
-		if _, e := tx.ExecContext(ctx, "INSERT INTO mail_message ("+messageColumns+") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0,0)", id, in.RecipientPlayerId, in.GuildId, uint32(kind), in.SenderKind, in.RequestId, digest, in.Title, in.Body, payload, now, expire); e != nil {
+		// 收据先于邮件行写:它的主键是同一请求并发首发的裁决点。撞键 = 别的事务已建了这一封,转读赢家已提交的行;
+		// 读不到说明撞的是别的键,按冲突回。这时本事务还什么都没写。
+		if _, e := tx.ExecContext(ctx, "INSERT INTO mail_request_receipt (sender_kind,request_id,mail_id,request_hash,kind,created_ms) VALUES (?,?,?,?,?,?)", in.SenderKind, in.RequestId, id, digest, uint32(kind), now); e != nil {
 			if !isDuplicateKey(e) {
 				return e
 			}
-			// 并发首发同一请求:唯一键裁决,转读赢家已提交的行。读不到说明撞的是别的键,按冲突回。
 			replayed, re := replay()
 			if re != nil {
 				return re
@@ -267,6 +310,15 @@ func (r *Repo) Send(ctx context.Context, caller string, kind mailpb.MailKind, in
 				return ErrConflict
 			}
 			return nil
+		}
+		approval := in.GetApproval()
+		if _, e := tx.ExecContext(ctx, "INSERT INTO mail_message ("+messageColumns+","+approvalColumns+") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0,0,?,?,?)", id, in.RecipientPlayerId, in.GuildId, uint32(kind), in.SenderKind, in.RequestId, digest, in.Title, in.Body, payload, now, expire, approval.GetApprovalId(), approval.GetProposer(), approval.GetApprover()); e != nil {
+			if !isDuplicateKey(e) {
+				return e
+			}
+			// 收据刚由本事务写下,邮件行却撞了唯一键:只可能是收据上线之前建的、没有收据的旧邮件被并发写入。整笔回滚
+			// (连同这条收据),不在这一笔里答复;发件方按故障重试,下一次 replay 读到那封旧邮件。
+			return fmt.Errorf("邮件行唯一键已被占用却没有收据: sender_kind=%d request_id=%d", in.SenderKind, in.RequestId)
 		}
 		if in.RecipientPlayerId != 0 {
 			state := uint32(mailpb.MailClaimState_MAIL_CLAIM_NONE)

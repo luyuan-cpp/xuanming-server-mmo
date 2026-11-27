@@ -227,10 +227,10 @@ func Require(approval *basepb.AdminApproval, operator string) error
 | **1** | OIDC 登录:`GmOidcLogin`、ID Token 校验、两种模式与启动检查、会话上限、角色映射、登录页补丁(`prepare.py`)、回调页、单测 | 16 | 后台能用外部身份登录;生产模式下原生管理页关闭 | 11-26 落码,未编译 |
 | **2** | 流水改两段式:两列、规则、驳回、过期;三个现有页面加「待我批准」与驳回;单测 | 11(另有 6 个与批 1 是同一文件) | 邮件、活动发奖、玩家 GM 都要第二人批准 | 11-26 落码,未编译 |
 | **3** | `AdminApproval` 协议、`go/shared/dualcontrol`、trade 接入与按批准号幂等、后台「交易人工处置」页、运维手册、Java 仓 `PARITY.md` 登记待做 | 29 | **交接 §3.2 这一条闭环** | 11-26 落码,未生成未编译 |
-| 4 | 商城人工单与 SKU 管理迁进后台;`mall_game` 加发起人 / 批准人与核对;把漏掉的收入争议接上;删网关的商城代理与 `/mall-admin` 页 | 25 | 退款、没收、改价都过双人 | 待做 |
-| 5 | mail 请求带批准记录并落库;回收、收件箱处置、账号类(注销、摘角色、重置实名)接入后台 | 35~40 | 甲级动作全部接入 | 待做 |
-| 6 | 网关 `/admin/**` 收口:操作人由后台填、各控制器补留痕、配置表发布用单独的机器口令、公网入口不再路由 `/admin` | 18 | 乙级动作有个人身份 | 待做 |
-| 7 | 后台上 K8s:清单、密钥、契约测试、告警(不带批准记录的 EXECUTE、应急开关被关) | 10~12 | 可以按生产方式部署(含本机后台到 trade 的转发) | 待做 |
+| 4 | 商城人工单与 SKU 管理迁进后台;`mall_game` 加发起人 / 批准人与核对;把漏掉的收入争议接上;删网关的商城代理与 `/mall-admin` 页 | 25 | 退款、没收、改价都过双人 | 11-26 落码,未编译(做法见 §11.1) |
+| 5 | mail 请求带批准记录并落库;回收、收件箱处置、账号类(注销、摘角色、重置实名)、rank 两个删除、match 滞留阵容接入后台 | 35~40 | 甲级动作全部接入 | 11-26 落码,未生成未编译(§11.2) |
+| 6 | 网关 `/admin/**` 收口:操作人由后台填、各控制器补留痕、配置表发布用单独的机器口令、公网入口不再路由 `/admin` | 18 | 乙级动作有个人身份 | 11-26 落码,未编译(§11.3) |
+| 7 | 后台上 K8s:清单、密钥、契约测试、告警(不带批准记录的 EXECUTE、应急开关被关) | 10~12 | 可以按生产方式部署(含本机后台到 trade 的转发) | 告警与契约测试 11-26 落码未运行;K8s 清单与本机转发见 §11.4 |
 
 合计约 145~155 个文件。**批 1~3 共约 56 个,超过 30,需要负责人批准后再动手**(AGENTS §10.2)。建议先批 1~3:做完之后任务点名的这一条就闭环了,4~7 可以看完效果再定。
 
@@ -251,6 +251,59 @@ func Require(approval *basepb.AdminApproval, operator string) error
 
 ## 10. 需要负责人定的
 
-1. 是否批准按批落码,先做批 1~3(约 56 个文件)。
+1. 是否批准按批落码,先做批 1~3(约 56 个文件)。**已定**:负责人 11-26 在原会话说「7 批全做」(父会话转来的话只批了 1~3,两处不一致,按负责人原话做,已在 PROGRESS 报告)。
 2. 后台新增依赖 `com.nimbusds:nimbus-jose-jwt` 是否同意(§5.2)。
 3. 生产用哪家身份提供方(外部资源,不卡代码;开发环境用 `native` 模式)。
+
+## 11. 批 4~7 落码记录(2026-11-26)
+
+批 1~3 的落法见 `docs/PROGRESS.md` 标题带「后台管理员身份与双人复核·批」的三条;本节记批 4~7 的做法、取舍与当场发现的问题。全部未编译、未运行,验证交 Gemini,命令在 PROGRESS 对应条目里。
+
+### 11.1 批 4:商城人工单与 SKU 迁进后台
+
+- **一个通用的「运营处置」类别 `OPS`,不按命令各建一类。**流水里只加一个类别,冻结 `{target, command, body, retryable}`,流水再补顶层 `requestId`(就是流水号,也就是批准号)。下游与命令的白名单只在 `GmOpsController.COMMANDS` 一处:发起人能填的字段、服务端填的字段(操作人、原因、冻结时刻、固定模式)、请求号字段、能否沿用原申请重试、有没有预览。
+  - 为什么:批 4 的 7 条商城命令加批 5 的 12 条 gRPC 命令,按「一类一套」要抄 19 遍校验、列表、驳回与页面;规则还是那一条「凡是进流水的写命令都要第二个人批准」。
+  - 权限按下游分:`gm:<target>:read / prepare / approve`(迁移 9 建商城的,迁移 10 建其余五个);标准角色照迁移 8 的分法。
+- **商城侧的核对是「请求号就是批准号」**:商城请求里没有操作人字段,与 trade 的「发起人就是请求里的操作人」对应的约束换成这一条,一次批准只能执行一次,商城按 (主体, 请求号) 的既有判重自然做到。这条后来抽成 `go/shared/dualcontrol.RequireForRequest`,批 5 的 mail、rank、回收批次、收件箱处罚共用。
+- 商城 `commerce_admin_command` 加 `proposer` / `approver` 两列,与处置同一事务落库;请求摘要覆盖整份请求(含批准记录),重试原样复用、摘要不变。合同戳换成 `mall-game-official-sku-v5-admin-approval`(项目未上线,清库重装)。开关 `commerce.admin-allow-unapproved` 只给本机开发,打开时启动和每次放行都打 ERROR 并计入 `mall_admin_unapproved_command_total`;带了记录就必须合格,开关开着也一样。
+- 后台的商城客户端 `GameMallAdmin`:签名照商城 HMAC v1;确定的拒绝(400/401/403/404/409/413)记 REJECTED,其余一律记结果未知(商城判重,用原申请重试安全)。地址只收 HTTPS 或回环 HTTP,与后台访问网关同一条规则。
+- 删掉网关的 `MallAdminController` / `MallAdminClient` / `MallAdminProperties`、`mall-admin.{html,js,css}` 与两份测试、`mall-admin.*` 配置键,以及本机 SQL 启动目录(`sql_boot_catalog_local.ps1`)里网关计划的 `mallAdminUrl` 字段。
+- 当场发现的:
+  - 收入争议接口从前只有商城有、网关不转,页面调不到;现在随目录接上。
+  - 同晚「数据覆写审计 r2 第 4 轮」给寄售人工单新增了 `RETRY_DELIVERY`,加在了要删的网关页面上;已搬进后台运营处置页的选项。
+  - 后台没有接分布式追踪,后台到商城这一跳不带 `traceparent`,对账靠批准号(`docs/design/distributed-tracing.md` 已改)。
+
+### 11.2 批 5:邮件、回收、收件箱、账号类、榜单、滞留阵容
+
+- **邮件不改任何方法签名**:流水在放行时把批准记录放进交给发送方的冻结请求(`SendMailRequest.approval`;活动邮件放在建活动的那份请求里),`GameServices` 原样转成协议。草稿里不许自带 `approval`(冻结字段名单加了它)。
+  - mail 按调用方要求:缺省只有 `admin`(后台与 `mailadmin`)要求带,系统生产方(rank 奖励、battle 掉落、match 赛事)不要求;带了就必须合格。导入名单与封存活动不要求:它们只能往已经批准创建的活动里按冻结的名单摘要导入与封存。
+  - **部署顺序**:mail 的 `validateContent` 拒绝未知字段,所以 mail 要先于后台升级,否则后台带批准记录的发信会被旧 mail 拒绝。
+- **账号类协议拆文件**:`LoginAdmin` 与只给它用的消息搬到 `proto/login/login_admin.proto`(同包、字段号不变,消息号按服务名+方法名取,也不变)。原因:`login.proto` 有客户端可见服务,客户端按 import 闭包生成,往里 import `admin_approval.proto` 会把批准记录带进 Unity。客户端可见的 `login.proto` 少了这几条服务端消息,要按 AGENTS §4 跑客户端三步脚本。
+- **rank 只对调用方 `admin` 要求批准记录**:match 删除角色时会以 `match` 自动调 `RemoveRankEntry`,一刀切会让清理停摆。
+- **能否重试按命令冻结**(`retryable` 随申请冻结,不随目录以后的改动漂移):下游按批准号判重或者重放天然收敛的命令可以沿用原申请重试;重放会被当成「已是终态」拒绝的两条——收件箱强制作废、滞留阵容终结——不能重试,未知结果停在 UNKNOWN,要人去下游核对后再决定是否重新发起。否则重试回来的「已是终态」会把一条其实已执行的命令记成 REJECTED。
+- **预览不进流水**:回收批次与滞留阵容要先演练拿计划摘要(`expected_plan_digest` / `expect_digest`),摘要随申请冻结,批准时下游按它做比较,批准人看到的就是会执行的(与 trade 的版本比较同一思路)。预览只要查看权限。
+- **原因按字节限长**:下游里最严的是 191 字节(match、trade),发起时就按 UTF-8 191 字节挡住(约 63 个汉字),不等到批准时才被下游拒绝。
+- 收件箱作废的 `reason` 是作废原因枚举,申请原因写进 `note`(强制模式必填,进审计)。
+- 下游的调用方证明:login、player_inbox、data_service 回收认共享口令 `x-admin-token`,rank(调用方 admin)与 match(调用方 `ops-formation`,不是交接单写的 `ops`)认 ServiceCallAuth。口令与密钥只挂给后台工作负载(§6 第 3 条)。
+- 当场发现的:data_service 的 `AdminToken` 在 K8s 配置模板里没有渲染,回收五个入口在集群里目前是关的;接线随批 7 的清单另做。
+
+### 11.3 批 6:网关 `/admin/**` 收口
+
+- **规则收在口令闸 `AdminApiKeyFilter` 一处,不在各控制器里各写一遍**:写操作(POST / PUT / PATCH / DELETE)必须带且只带一个合规的 `X-Admin-Operator`(与身份提供方主体同一字符集),否则 400;每次写操作在响应之后打一行 `AUDIT gateway admin write`(方法、路径、状态、操作人、口令种类、来源地址)。新加的管理控制器不会漏;热关停与配置表两个控制器原有的业务细节 AUDIT 行照旧。
+- **机器口令** `admin.machine-key`:只能访问 `/admin/tables/**`(规范化路径与原始 URI 都要落在下面,不带 `..`),操作人必须是 `table-bundle`;人用的口令不能冒用 `table-bundle`。不配就没有这条路;两把口令相同或机器口令短于 32 字节拒绝启动。`table-bundle` 命令行用机器口令时带 `-operator table-bundle`(或 `MMORPG_ADMIN_OPERATOR=table-bundle`);命令行本身这次没改,它正被配置表热更那条线改着。
+- **人用入口在后台**:`POST /gm/gateway/admin` 只转发白名单里的方法与路径(区服、白名单、公告、热关停),网关口令留在服务端,`X-Admin-Operator` 取登录会话;权限 `gm:gateway:write`(乙级,单人可做,给发起人与批准人两个标准角色)。页面是控制台里的「网关管理」卡片。
+- 公网入口:`k8s_client_entry.ps1` 生成的 gateway Ingress 只路由 `/api`,契约测试已经钉着(`k8s_client_entry_contract.tests.ps1` 的 D91 两条),这次只核对、没改。
+
+### 11.4 批 7:告警、K8s 清单与本机转发
+
+- 告警:`deploy/k8s/dual-control-alerts.yaml`,每个资源服务一条「不带批准记录而被接受」的规则(trade 是 `TradeManualResolutionUnapprovedExecute`,与 trade 配置注释一致),5 分钟内有增长就响;契约测试 `tools/scripts/tests/dual_control_alerts_contract.tests.ps1` 钉住规则名单、指标名来自代码。集群里这些计数应当恒为 0。
+- 后台上 K8s(Deployment、Service、只许后台访问各服务管理端口的 NetworkPolicy、Secret 键、`gm.identity.mode=oidc`)与本机 `rpc-bridge` 到 trade 的转发:状态见 PROGRESS 批 7 条目。本机转发要同时改 `rpc-bridge.py` 的就绪回执、`gm_scene_promotion.READ_TARGETS` 与本机 trade 的管理入口配置,三处一起验收后 `run_local.py` 才放行 `GM_TRADE_*`。
+
+### 11.5 负责人没想到、这次定下的做法
+
+1. 带请求号的下游用「请求号就是批准号」代替「发起人就是操作人」(§11.1),一次批准只执行一次由下游已有的判重保证,不加新表。
+2. 运营处置一个类别 + 一张目录(§11.1),规则、白名单、权限、重试性都在一处。
+3. 能否重试随申请冻结(§11.2),重放会被判成终态的命令宁可停在 UNKNOWN 也不记错成 REJECTED。
+4. 邮件经冻结请求带批准记录,不改发送方签名(§11.2)。
+5. 网关的操作人与留痕收在口令闸一处,机器口令限定路径并固定操作人名(§11.3)。
+6. 原因在发起时按下游最严的字节上限挡住(§11.2)。

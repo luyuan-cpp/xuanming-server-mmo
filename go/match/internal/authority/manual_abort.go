@@ -407,6 +407,10 @@ type ManualAbortRequest struct {
 	Reason       string
 	Replica      string // 执行副本(主机名),只进审计行
 	Execute      bool   // false = 锁内复核后整段回滚(DRY_RUN)
+	// ApprovalID、Approver:后台双人复核的批准号与批准人(入口已用 shared/dualcontrol 核对过,发起人就是 Operator),
+	// 写进审计行;只有部署打开 GlobalMatch.ManualResolutionAllowUnapproved 时才会为空。
+	ApprovalID string
+	Approver   string
 }
 
 // ManualAbortFormation 在锁内复核后写人工 ABORT。锁序与 COMPLETE、截止 ABORT、帮会取消同一入口 terminalFormation;
@@ -459,7 +463,7 @@ func (s *Store) ManualAbortFormation(ctx context.Context, req ManualAbortRequest
 	if !req.Execute {
 		return view, stamp, nil
 	}
-	if err = commitAbortTx(ctx, tx, f, stamp, pb.MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MANUAL_ABORT); err != nil {
+	if err = s.commitAbortTx(ctx, tx, f, stamp, pb.MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MANUAL_ABORT); err != nil {
 		return view, stamp, err
 	}
 	if err = insertManualResolution(ctx, tx, f, originals, a, digest, req, stamp); err != nil {
@@ -506,8 +510,8 @@ func insertManualResolution(ctx context.Context, tx *sql.Tx, f *pb.MatchFormatio
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, "INSERT INTO match_manual_resolution(battle_id,action,formation_class,failed_check,operator_name,reason,resolved_ms,formation_digest_before,formation_before,tickets_before,effective_deadline_ms,replica_instance) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+	_, err = tx.ExecContext(ctx, "INSERT INTO match_manual_resolution(battle_id,action,formation_class,failed_check,operator_name,reason,resolved_ms,formation_digest_before,formation_before,tickets_before,effective_deadline_ms,replica_instance,approval_id,approver) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
 		f.BattleId, uint32(pb.StrandedFormationMode_STRANDED_FORMATION_MODE_ABORT), uint32(a.class), a.failedCheck, req.Operator, req.Reason,
-		stamp, digest, formationBefore, ticketsBefore, a.effectiveDeadlineMs, req.Replica)
+		stamp, digest, formationBefore, ticketsBefore, a.effectiveDeadlineMs, req.Replica, req.ApprovalID, req.Approver)
 	return err
 }

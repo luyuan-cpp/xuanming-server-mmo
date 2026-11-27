@@ -158,3 +158,15 @@ constexpr uint32_t ClientPlayerJubaozhaiGetMarketReferencePriceIndex = 37;
 constexpr uint32_t ClientPlayerJubaozhaiGetPlayerTradeQuotaMessageId = 484;
 constexpr uint32_t ClientPlayerJubaozhaiGetPlayerTradeQuotaIndex = 38;
 #define ClientPlayerJubaozhaiGetPlayerTradeQuotaMethod  ::ClientPlayerJubaozhai_Stub::descriptor()->method(38)
+
+constexpr uint32_t ClientPlayerJubaozhaiCreateWantedSkillBookOrderMessageId = 582;
+constexpr uint32_t ClientPlayerJubaozhaiCreateWantedSkillBookOrderIndex = 39;
+#define ClientPlayerJubaozhaiCreateWantedSkillBookOrderMethod  ::ClientPlayerJubaozhai_Stub::descriptor()->method(39)
+
+constexpr uint32_t ClientPlayerJubaozhaiFulfillWantedSkillBookOrderMessageId = 583;
+constexpr uint32_t ClientPlayerJubaozhaiFulfillWantedSkillBookOrderIndex = 40;
+#define ClientPlayerJubaozhaiFulfillWantedSkillBookOrderMethod  ::ClientPlayerJubaozhai_Stub::descriptor()->method(40)
+
+constexpr uint32_t ClientPlayerJubaozhaiListWantedSkillBookOrdersMessageId = 584;
+constexpr uint32_t ClientPlayerJubaozhaiListWantedSkillBookOrdersIndex = 41;
+#define ClientPlayerJubaozhaiListWantedSkillBookOrdersMethod  ::ClientPlayerJubaozhai_Stub::descriptor()->method(41)

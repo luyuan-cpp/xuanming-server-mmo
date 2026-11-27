@@ -75,6 +75,10 @@ var defaultRegistry = map[string]map[string]tableEntry{
 		"chat_report":               {Class: classSwept, PendingWhere: "accepted_at < NOW()"},
 		"chat_repeat_event":         {Class: classSwept},
 		"chat_private_daily_target": {Class: classSwept},
+		// 世界频道平台补审的待办、认领与结局:只追加,TTL 同原件。
+		"chat_platform_recheck":       {Class: classSwept},
+		"chat_platform_recheck_claim": {Class: classSwept},
+		"chat_platform_recheck_done":  {Class: classSwept},
 	},
 	"mmorpg_friend": {
 		"friend":         {Class: classBounded},

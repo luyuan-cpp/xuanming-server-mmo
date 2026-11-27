@@ -29,12 +29,15 @@ const (
 )
 
 // RemovePlayersFromAccountsReq 是一次摘孤儿。Operator、Reason 只进日志,谁在什么时候摘了谁要查得到。
+// ApprovalID、Approver 是后台双人复核的批准号与批准人(拦截器已核对过,发起人就是 Operator),同样只进日志;dry_run 可以为空。
 type RemovePlayersFromAccountsReq struct {
-	PlayerIDs []uint64
-	Operator  string
-	Reason    string
-	DryRun    bool
-	PeerAddr  string
+	PlayerIDs  []uint64
+	Operator   string
+	Reason     string
+	DryRun     bool
+	PeerAddr   string
+	ApprovalID string
+	Approver   string
 }
 
 // RemovePlayerResult 是一名角色的结局。
@@ -80,7 +83,7 @@ func validText(text string, maxBytes int) bool {
 // 名字这里不碰:墓碑提交之后由 data_service 的删角收尾释放(核过角色行确是墓碑才删,guild-phase2/03-names.md §3.4a),
 // 在役角色的名字到不了那一步。
 //
-// 重跑幂等:删过的回 NOT_FOUND。鉴权在拦截器(x-admin-token),本函数不判。
+// 重跑幂等:删过的回 NOT_FOUND。鉴权与双人复核都在拦截器(x-admin-token、server/loginadmin/admin_approval.go),本函数不判。
 func RemovePlayersFromAccounts(ctx context.Context, sc *svc.ServiceContext, req *RemovePlayersFromAccountsReq) (*RemovePlayersFromAccountsResp, error) {
 	out := &RemovePlayersFromAccountsResp{}
 	if sc.AccountDirectory == nil || sc.DataServiceClient == nil {
@@ -101,8 +104,8 @@ func RemovePlayersFromAccounts(ctx context.Context, sc *svc.ServiceContext, req 
 		}
 		outcome := removeOrphan(ctx, sc, req, player)
 		out.record(player, outcome)
-		logx.WithContext(ctx).Infof("[LoginAdmin] RemovePlayersFromAccounts player=%d outcome=%s dry_run=%t operator=%q reason=%q peer=%s",
-			player, outcome, req.DryRun, req.Operator, req.Reason, req.PeerAddr)
+		logx.WithContext(ctx).Infof("[LoginAdmin] RemovePlayersFromAccounts player=%d outcome=%s dry_run=%t operator=%q approval_id=%q approver=%q reason=%q peer=%s",
+			player, outcome, req.DryRun, req.Operator, req.ApprovalID, req.Approver, req.Reason, req.PeerAddr)
 	}
 	return out, nil
 }

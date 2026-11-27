@@ -16,6 +16,7 @@ import (
 	"data_service/internal/svc"
 
 	assetpb "proto/common/asset"
+	base "proto/common/base"
 	dbpb "proto/common/database"
 	dspb "proto/data_service"
 	"shared/assetop"
@@ -49,6 +50,9 @@ type BatchRecallReq struct {
 	ExpectedPlanDigest string
 	// PeerAddr 是调用方对端地址,进批次行。
 	PeerAddr string
+	// Approval 是入口已核过的双人复核批准记录(执行时批准号就是 RequestID),只进留痕(approvalTrail);
+	// nil = 演练没带,或 AdminAllowUnapproved 打开时不带记录受理。
+	Approval *base.AdminApproval
 }
 
 type RecallResult struct {
@@ -122,6 +126,18 @@ func validRecallText(text string, maxRunes int) bool {
 	return text != "" && utf8.ValidString(text) && utf8.RuneCountInString(text) <= maxRunes
 }
 
+// approvalTrail 是写进回收留痕的双人复核批准记录:批准号与批准人,写法同 trade 的 [CommerceManual] 行。
+// gm_recall_batch 与 rollback_audit_log 都没有专门的列,记在审计行与批次的理由文本里(withApprovalTrail)和日志行里;
+// 发起人就是 operator,不重复记。不带记录受理(AdminAllowUnapproved)时两项是空串,一眼看得出来。
+func approvalTrail(approval *base.AdminApproval) string {
+	return fmt.Sprintf("approval_id=%q approver=%q", approval.GetApprovalId(), approval.GetApprover())
+}
+
+// withApprovalTrail 把批准记录接在理由文本后面。只用于落库的理由(批次行、受理 / 结束 / 取消审计行),入参校验仍按原理由。
+func withApprovalTrail(reason string, approval *base.AdminApproval) string {
+	return reason + " [" + approvalTrail(approval) + "]"
+}
+
 func (r *BatchRecallReq) filter() recallFilter {
 	return recallFilter{Kind: r.Kind, PlayerIDs: r.PlayerIDs, ItemConfigID: r.ItemConfigID, CurrencyType: r.CurrencyType,
 		TimeStart: r.TimeStart, TimeEnd: r.TimeEnd, TxTypes: r.TxTypes}
@@ -169,8 +185,8 @@ func BatchRecallItems(ctx context.Context, svcCtx *svc.ServiceContext, req *Batc
 			fmt.Errorf("batch recall audit store is unavailable")
 	}
 
-	logx.Infof("[BatchRecall] operator=%s reason=%s kind=%d item_config=%d currency_type=%d dry_run=%v request_id=%d",
-		req.Operator, req.Reason, req.Kind, req.ItemConfigID, req.CurrencyType, req.DryRun, req.RequestID)
+	logx.Infof("[BatchRecall] operator=%s reason=%s kind=%d item_config=%d currency_type=%d dry_run=%v request_id=%d %s",
+		req.Operator, req.Reason, req.Kind, req.ItemConfigID, req.CurrencyType, req.DryRun, req.RequestID, approvalTrail(req.Approval))
 
 	filter := req.filter()
 	// 重放先看批次:计划已经冻结,不再重查流水,流水变了也不影响。
@@ -357,8 +373,8 @@ func rejectTruncatedRecall(ctx context.Context, svcCtx *svc.ServiceContext, req 
 			TargetTime:      req.TimeStart,
 			PlayersAffected: 0,
 			PlayersFailed:   resp.TotalFailed,
-			Reason: fmt.Sprintf("batch_recall REJECTED (TRUNCATED): %s (candidate_total=%d returned=%d limit=%d item=%d currency=%d)",
-				req.Reason, candidateTotal, returned, batchRecallQueryLimit, req.ItemConfigID, req.CurrencyType),
+			Reason: fmt.Sprintf("batch_recall REJECTED (TRUNCATED): %s (candidate_total=%d returned=%d limit=%d item=%d currency=%d %s)",
+				req.Reason, candidateTotal, returned, batchRecallQueryLimit, req.ItemConfigID, req.CurrencyType, approvalTrail(req.Approval)),
 			Operator:  req.Operator,
 			CreatedAt: uint64(time.Now().Unix()),
 		}); err != nil {
@@ -376,8 +392,8 @@ func auditRecallRejection(ctx context.Context, svcCtx *svc.ServiceContext, req *
 	if err := svcCtx.SnapshotStore.InsertAuditLog(ctx, &store.AuditLogRow{
 		RollbackType: recallAuditType,
 		TargetTime:   req.TimeStart,
-		Reason: fmt.Sprintf("batch_recall REJECTED (%s): %s (request_id=%d item=%d currency=%d)",
-			verdict, req.Reason, req.RequestID, req.ItemConfigID, req.CurrencyType),
+		Reason: fmt.Sprintf("batch_recall REJECTED (%s): %s (request_id=%d item=%d currency=%d %s)",
+			verdict, req.Reason, req.RequestID, req.ItemConfigID, req.CurrencyType, approvalTrail(req.Approval)),
 		Operator:  req.Operator,
 		CreatedAt: uint64(time.Now().Unix()),
 	}); err != nil {
@@ -451,10 +467,11 @@ func freezeRecallPlan(ctx context.Context, svcCtx *svc.ServiceContext, req *Batc
 		ops = append(ops, &store.RecallOpPlan{OpID: opID, PlayerID: op.PlayerID, Kind: uint32(req.Kind), CurrencyType: op.CurrencyType,
 			ItemConfigID: op.ItemConfigID, Requested: op.Requested, Payload: payload, SourceTxIDs: op.SourceTxIDs})
 	}
+	// 批次理由带上批准记录:批次行与受理、结束两条审计行都由它写出(store.CreateBatch、auditFinished)。
 	batch := &store.RecallBatchRow{
 		RequestID: req.RequestID, RequestDigest: req.filter().digest(), PlanDigest: plan.Digest,
 		Kind: uint32(req.Kind), ItemConfigID: req.ItemConfigID, CurrencyType: req.CurrencyType,
-		TimeStart: req.TimeStart, TimeEnd: req.TimeEnd, Operator: req.Operator, Reason: req.Reason, PeerAddr: req.PeerAddr,
+		TimeStart: req.TimeStart, TimeEnd: req.TimeEnd, Operator: req.Operator, Reason: withApprovalTrail(req.Reason, req.Approval), PeerAddr: req.PeerAddr,
 		PlayerCount: plan.PlayerCount, OpCount: uint32(len(ops)), SourceRows: plan.SourceRows, AmountRequested: plan.AmountRequested,
 	}
 	err := svcCtx.Recall.CreateBatch(ctx, batch, ops, uint64(time.Now().UnixMilli()))
@@ -473,8 +490,8 @@ func freezeRecallPlan(ctx context.Context, svcCtx *svc.ServiceContext, req *Batc
 	case err != nil:
 		return &BatchRecallResp{ErrorCode: constants.ErrCodeSnapshotDBError}, fmt.Errorf("freeze recall plan: %w", err)
 	}
-	logx.Infof("[BatchRecall] plan frozen request_id=%d players=%d ops=%d sources=%d operator=%s peer=%s",
-		req.RequestID, plan.PlayerCount, len(ops), plan.SourceRows, req.Operator, req.PeerAddr)
+	logx.Infof("[BatchRecall] plan frozen request_id=%d players=%d ops=%d sources=%d operator=%s peer=%s %s",
+		req.RequestID, plan.PlayerCount, len(ops), plan.SourceRows, req.Operator, req.PeerAddr, approvalTrail(req.Approval))
 	stored, err := svcCtx.Recall.ReadBatch(ctx, req.RequestID)
 	if err == nil {
 		var resp *BatchRecallResp
@@ -567,21 +584,23 @@ func GetRecallBatch(ctx context.Context, svcCtx *svc.ServiceContext, requestID u
 }
 
 // CancelRecallBatch 取消一批,幂等。只拦还没生效的行,回的是取消之后的现状。
-func CancelRecallBatch(ctx context.Context, svcCtx *svc.ServiceContext, requestID uint64, operator, reason, peerAddr string) (*BatchRecallResp, error) {
+// approval 是入口已核过的双人复核批准记录(nil = AdminAllowUnapproved 打开时不带记录受理),进取消审计行的理由与日志行。
+func CancelRecallBatch(ctx context.Context, svcCtx *svc.ServiceContext, requestID uint64, operator, reason, peerAddr string,
+	approval *base.AdminApproval) (*BatchRecallResp, error) {
 	if requestID == 0 || !validRecallText(operator, recallOperatorMaxRunes) || !validRecallText(reason, recallReasonMaxRunes) {
 		return &BatchRecallResp{ErrorCode: constants.ErrCodeInvalidRequest}, nil
 	}
 	if svcCtx == nil || svcCtx.Recall == nil {
 		return &BatchRecallResp{ErrorCode: constants.ErrCodeSnapshotDBError}, nil
 	}
-	err := svcCtx.Recall.CancelBatch(ctx, requestID, operator, reason, uint64(time.Now().UnixMilli()))
+	err := svcCtx.Recall.CancelBatch(ctx, requestID, operator, withApprovalTrail(reason, approval), uint64(time.Now().UnixMilli()))
 	if errors.Is(err, store.ErrRecallBatchNotFound) {
 		return &BatchRecallResp{ErrorCode: constants.ErrCodeRecallNotFound, RequestID: requestID}, nil
 	}
 	if err != nil {
 		return &BatchRecallResp{ErrorCode: constants.ErrCodeSnapshotDBError}, fmt.Errorf("cancel recall batch: %w", err)
 	}
-	logx.Infof("[BatchRecall] batch cancelled request_id=%d operator=%s peer=%s reason=%s", requestID, operator, peerAddr, reason)
+	logx.Infof("[BatchRecall] batch cancelled request_id=%d operator=%s peer=%s reason=%s %s", requestID, operator, peerAddr, reason, approvalTrail(approval))
 	return GetRecallBatch(ctx, svcCtx, requestID)
 }
 
@@ -657,8 +676,12 @@ func recallEvidenceOf(v assetop.ManualVerdict, detail string) string {
 //  3. 判证据(assetop.JudgeManual,安静间隔 assetop.ManualQuietGap(svc.RecallLeaseDuration())),按 recallManualAllows 放行;
 //  4. 带读行时的租约、发送时刻与 attempts 终结(store.RecallStore.ResolveManuallyIfQuiet,与重投循环同一个 settle)。
 //     读证据之后这一行被领过、排过或已终结,终结落空,回 ErrCodeRecallOpChanged,重新调用即重新读证据。
-func ResolveRecallOp(ctx context.Context, svcCtx *svc.ServiceContext, opID uint64, final uint32, operator, reason string) (RecallResolveResult, error) {
-	return resolveRecallOp(ctx, svcCtx, opID, final, operator, reason, time.Now)
+//
+// approval 是入口已核过的双人复核批准记录(nil = AdminAllowUnapproved 打开时不带记录受理),只进 [RecallOpManual] 审计行:
+// 人工终结的理由经 assetop.ResolveManually 落库,有 191 字上限,不往里接。
+func ResolveRecallOp(ctx context.Context, svcCtx *svc.ServiceContext, opID uint64, final uint32, operator, reason string,
+	approval *base.AdminApproval) (RecallResolveResult, error) {
+	return resolveRecallOp(ctx, svcCtx, opID, final, operator, reason, approval, time.Now)
 }
 
 // resolveRecallOp 是 ResolveRecallOp 的实现,时钟显式传入:判「安静」与终结时刻用同一个。
@@ -668,7 +691,8 @@ func ResolveRecallOp(ctx context.Context, svcCtx *svc.ServiceContext, opID uint6
 // last_send_ms 的重投副本也是 data_service,同一套核对,钟差远小于 30 分钟的安静间隔;RPC 里也不能挂几分钟。
 // 读证据之后的领取与重排由 settle 比见证三列挡住。边界:clockcheck 读不到参照、或开了 warn 应急开关时只告警照常启动,
 // 那台副本的钟就没核过,与 assetopfix 加观察窗口之前是同一个残余,靠时钟告警发现。
-func resolveRecallOp(ctx context.Context, svcCtx *svc.ServiceContext, opID uint64, final uint32, operator, reason string, now func() time.Time) (RecallResolveResult, error) {
+func resolveRecallOp(ctx context.Context, svcCtx *svc.ServiceContext, opID uint64, final uint32, operator, reason string,
+	approval *base.AdminApproval, now func() time.Time) (RecallResolveResult, error) {
 	if opID == 0 || !validRecallText(operator, recallOperatorMaxRunes) || !validRecallText(reason, recallReasonMaxRunes) {
 		return RecallResolveResult{ErrorCode: constants.ErrCodeInvalidRequest}, nil
 	}
@@ -705,7 +729,7 @@ func resolveRecallOp(ctx context.Context, svcCtx *svc.ServiceContext, opID uint6
 	result := RecallResolveResult{Status: row.Status, Evidence: recallEvidenceOf(verdict, detail)}
 	if !recallManualAllows(verdict, status) {
 		result.ErrorCode = constants.ErrCodeRecallEvidenceRefused
-		auditRecallManual(row, final, operator, reason, verdict, result)
+		auditRecallManual(row, final, operator, reason, approval, verdict, result)
 		return result, nil
 	}
 
@@ -719,7 +743,7 @@ func resolveRecallOp(ctx context.Context, svcCtx *svc.ServiceContext, opID uint6
 	default:
 		result.ErrorCode, result.Resolved, result.Status = constants.ErrCodeOK, true, final
 	}
-	auditRecallManual(row, final, operator, reason, verdict, result)
+	auditRecallManual(row, final, operator, reason, approval, verdict, result)
 	return result, err
 }
 
@@ -743,11 +767,13 @@ func (q recallQuietResolver) ResolveManually(ctx context.Context, r assetop.Manu
 	return q.recall.ResolveManuallyIfQuiet(ctx, r, q.witness, nowMs)
 }
 
-// auditRecallManual 打人工终结的审计行:放行、拒绝、落空都打(ERROR 级,确保进日志检索),带操作人、证据结论与来源。
-// 操作人和理由按 %q 打:带换行就能伪造出第二条审计行。
-func auditRecallManual(row store.RecallOpState, final uint32, operator, reason string, verdict assetop.ManualVerdict, result RecallResolveResult) {
-	logx.Errorf("[RecallOpManual] operator=%q op_id=%d player_id=%d seq=%d final=%s reason=%q evidence=%s evidence_source=player_store resolved=%v error_code=%d",
-		operator, row.Op.OpID, row.Op.PlayerID, row.Op.Seq, store.RecallStatusLabel(final), reason, verdict, result.Resolved, result.ErrorCode)
+// auditRecallManual 打人工终结的审计行:放行、拒绝、落空都打(ERROR 级,确保进日志检索),带操作人、双人复核的批准号与批准人、
+// 证据结论与来源。操作人和理由按 %q 打:带换行就能伪造出第二条审计行。
+func auditRecallManual(row store.RecallOpState, final uint32, operator, reason string, approval *base.AdminApproval,
+	verdict assetop.ManualVerdict, result RecallResolveResult) {
+	logx.Errorf("[RecallOpManual] operator=%q %s op_id=%d player_id=%d seq=%d final=%s reason=%q evidence=%s evidence_source=player_store resolved=%v error_code=%d",
+		operator, approvalTrail(approval), row.Op.OpID, row.Op.PlayerID, row.Op.Seq, store.RecallStatusLabel(final), reason, verdict,
+		result.Resolved, result.ErrorCode)
 }
 
 // ── QueryTransactionLog ────────────────────────────────────────

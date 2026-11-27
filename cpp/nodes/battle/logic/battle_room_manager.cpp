@@ -1527,7 +1527,8 @@ void BattleRoomManager::HandleUpdateBattlePrep(const ::SessionDetails &sessionDe
                                                request.banned_skill_ids().end());
     const uint32_t err = room->engine.UpdateBattlePrep(
         playerId, request.selected_seal_id(), request.selected_pet_id(), request.ready(), &selfPrep,
-        request.update_banned_skills(), bannedSkillIds);
+        request.update_banned_skills(), bannedSkillIds,
+        request.update_protected_skill(), request.protected_skill_id());
     if (err != 0)
     {
         response.mutable_error_message()->set_id(err);

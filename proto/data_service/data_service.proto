@@ -12,6 +12,8 @@ import "proto/common/component/player_inbox_ledger_comp.proto";
 import "proto/common/component/player_item_gain_block_comp.proto";
 import "proto/common/base/user_accounts.proto";
 import "proto/common/base/service_call_auth.proto";
+// 甲级回收入口的双人复核批准记录(docs/design/admin-identity-and-dual-control.md §5.4);只给服务端内部管理协议用。
+import "proto/common/base/admin_approval.proto";
 import "proto/common/base/role_admission.proto";
 import "proto/role_fence/role_fence.proto";
 
@@ -547,6 +549,9 @@ message BatchRecallItemsRequest {
   RecallKind recall_kind = 10;         // 必填
   uint64 request_id = 11;              // dry_run=false 必填。运维工具按工单生成一次,重试原样带回
   string expected_plan_digest = 12;    // dry_run=false 必填。预览回的 plan_digest,重算不相等就拒绝
+  // dry_run=false 必填:后台的双人复核批准记录,发起人 = operator,批准号 = request_id 的十进制文本(批准号即幂等键)。
+  // dry_run=true 不要求;带了就照样核两人不同、发起人 = operator。只有 data_service 打开 AdminAllowUnapproved(本机开发)才接受不带。
+  common.base.AdminApproval approval = 13;
 }
 
 // 一行回收指令的现状。预览时只有 player_id、资产、amount。
@@ -618,6 +623,7 @@ message CancelRecallBatchRequest {
   uint64 request_id = 1;
   string operator = 2;                 // 必填,≤ 64 字
   string reason = 3;                   // 必填,≤ 191 字
+  common.base.AdminApproval approval = 4;  // 必填:双人复核批准记录,发起人 = operator;批准号与批准人进取消审计行
 }
 
 // 人工终结一行卡死的指令(scene 反复回 UNKNOWN,或一直投不出去)。证据只认这名玩家已提交的资产账本(player_store),
@@ -627,6 +633,7 @@ message ResolveRecallOpRequest {
   uint32 final_status = 2;             // GmRecallOpStatus:只收 REJECTED、ABORTED、PARTIAL;收不收看证据(error_code 39)
   string operator = 3;                 // 必填,≤ 64 字
   string reason = 4;                   // 必填,≤ 191 字
+  common.base.AdminApproval approval = 5;  // 必填:双人复核批准记录,发起人 = operator;批准号与批准人进 [RecallOpManual] 审计行
 }
 
 // error_code:0 且 resolved = 终结了;0 且未 resolved = 这一行已不是 PENDING,现状见 status;39 = 证据不支持所选结局;
@@ -652,6 +659,9 @@ message RegisterRecallReviewHandledRequest {
   RecallReviewReason review_reason = 7;    // 预览里这条指令的原因
   string operator = 8;                     // 必填,≤ 64 字
   string reason = 9;                       // 必填,≤ 191 字:工单号与处置方式(例如 GmSanctionPlayer 挂了多少欠款)
+  // 双人复核批准记录(docs/design/admin-identity-and-dual-control.md §11.2):登记之后这些流水永久按已消费处理、以后的回收都跳过它们,
+  // 做完撤不回,按甲级要求另一人批准;发起人就是 operator。
+  common.base.AdminApproval approval = 10;
 }
 
 // error_code:0 且 registered = 本次登记;0 且未 registered = 这条指令早已登记过,什么都没改;

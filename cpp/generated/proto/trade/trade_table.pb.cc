@@ -43,6 +43,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto, /* tracker*/ nullptr,},
         // ::trade::TradeCommerceWorkflow
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto, /* tracker*/ nullptr,},
+        // ::trade::TradeWantedSkillBookTerms
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto, /* tracker*/ nullptr,},
         // ::trade::TradeCommerceQuarantine
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto, /* tracker*/ nullptr,},
         // ::trade::TradeCommerceManualAction
@@ -67,6 +69,189 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
 }  // namespace
 #endif
 namespace trade {
+class TradeWantedSkillBookTerms::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<TradeWantedSkillBookTerms>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(TradeWantedSkillBookTerms, _impl_._has_bits_);
+};
+
+constexpr TradeWantedSkillBookTerms::ParseTableT_ TradeWantedSkillBookTerms::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(TradeWantedSkillBookTerms, _impl_._has_bits_),
+      0, // no _extensions_
+      6, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967232,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      6,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::trade::TradeWantedSkillBookTerms>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 skill_table_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TradeWantedSkillBookTerms, _impl_.skill_table_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(TradeWantedSkillBookTerms, _impl_.skill_table_id_)}},
+      // uint32 scroll_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TradeWantedSkillBookTerms, _impl_.scroll_id_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(TradeWantedSkillBookTerms, _impl_.scroll_id_)}},
+      // bool require_master_signature = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(TradeWantedSkillBookTerms, _impl_.require_master_signature_), 5>(),
+       {24, 5, 0,
+        PROTOBUF_FIELD_OFFSET(TradeWantedSkillBookTerms, _impl_.require_master_signature_)}},
+      // uint64 reward_gold = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeWantedSkillBookTerms, _impl_.reward_gold_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(TradeWantedSkillBookTerms, _impl_.reward_gold_)}},
+      // uint64 seller_net_gold = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeWantedSkillBookTerms, _impl_.seller_net_gold_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(TradeWantedSkillBookTerms, _impl_.seller_net_gold_)}},
+      // string poster_name = 6;
+      {::_pbi::TcParser::FastUS1,
+       {50, 0, 0,
+        PROTOBUF_FIELD_OFFSET(TradeWantedSkillBookTerms, _impl_.poster_name_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 skill_table_id = 1;
+      {PROTOBUF_FIELD_OFFSET(TradeWantedSkillBookTerms, _impl_.skill_table_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 scroll_id = 2;
+      {PROTOBUF_FIELD_OFFSET(TradeWantedSkillBookTerms, _impl_.scroll_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bool require_master_signature = 3;
+      {PROTOBUF_FIELD_OFFSET(TradeWantedSkillBookTerms, _impl_.require_master_signature_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint64 reward_gold = 4;
+      {PROTOBUF_FIELD_OFFSET(TradeWantedSkillBookTerms, _impl_.reward_gold_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 seller_net_gold = 5;
+      {PROTOBUF_FIELD_OFFSET(TradeWantedSkillBookTerms, _impl_.seller_net_gold_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string poster_name = 6;
+      {PROTOBUF_FIELD_OFFSET(TradeWantedSkillBookTerms, _impl_.poster_name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\37\0\0\0\0\0\13\0"
+      "trade.TradeWantedSkillBookTerms"
+      "poster_name"
+    }},
+  };
+}
+
+
+inline constexpr TradeWantedSkillBookTerms::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        poster_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        skill_table_id_{0u},
+        scroll_id_{0u},
+        reward_gold_{::uint64_t{0u}},
+        seller_net_gold_{::uint64_t{0u}},
+        require_master_signature_{false} {}
+
+template <typename>
+constexpr TradeWantedSkillBookTerms::TradeWantedSkillBookTerms(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL TradeWantedSkillBookTerms::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) TradeWantedSkillBookTerms(arena);
+}
+constexpr auto TradeWantedSkillBookTerms::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(TradeWantedSkillBookTerms), alignof(TradeWantedSkillBookTerms));
+}
+constexpr auto TradeWantedSkillBookTerms::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &TradeWantedSkillBookTerms::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<TradeWantedSkillBookTerms>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &TradeWantedSkillBookTerms::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<TradeWantedSkillBookTerms>(), &TradeWantedSkillBookTerms::ByteSizeLong,
+              &TradeWantedSkillBookTerms::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(TradeWantedSkillBookTerms, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[7],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct TradeWantedSkillBookTermsGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr TradeWantedSkillBookTermsGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 TradeWantedSkillBookTerms_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(TradeWantedSkillBookTerms::InternalGenerateClassData_(
+            _default, &TradeWantedSkillBookTerms_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<TradeWantedSkillBookTerms>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~TradeWantedSkillBookTermsGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) TradeWantedSkillBookTerms _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<TradeWantedSkillBookTerms>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(TradeWantedSkillBookTermsGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST TradeWantedSkillBookTermsGlobalsTypeInternal TradeWantedSkillBookTerms_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* TradeWantedSkillBookTerms_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return TradeWantedSkillBookTerms_globals_.GetClassData();
+#else
+  return TradeWantedSkillBookTerms_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class TradeSellerViolationRecord::_Internal {
  public:
   using HasBits = decltype(::std::declval<TradeSellerViolationRecord>()._impl_._has_bits_);
@@ -220,7 +405,7 @@ constexpr auto TradeSellerViolationRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[16],
+      &file_reflection_data[17],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto,
@@ -459,7 +644,7 @@ constexpr auto TradeSellerReviewRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[15],
+      &file_reflection_data[16],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto,
@@ -774,7 +959,7 @@ constexpr auto TradeSellerCreditRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[13],
+      &file_reflection_data[14],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto,
@@ -951,7 +1136,7 @@ constexpr auto TradeSellerCompletedOrderRecord::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[14],
+      &file_reflection_data[15],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto,
@@ -1104,7 +1289,7 @@ constexpr auto TradeRoleIdentity::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[10],
+      &file_reflection_data[11],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto,
@@ -2219,7 +2404,7 @@ constexpr auto TradeCommerceQuarantine::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[7],
+      &file_reflection_data[8],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto,
@@ -3013,7 +3198,7 @@ constexpr auto TradeRmbConsignmentWorkflow::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[11],
+      &file_reflection_data[12],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto,
@@ -3172,7 +3357,7 @@ constexpr auto TradeCommercePartialPart::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[9],
+      &file_reflection_data[10],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto,
@@ -3395,7 +3580,7 @@ constexpr auto TradeCommerceLeg::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[12],
+      &file_reflection_data[13],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto,
@@ -3729,7 +3914,7 @@ constexpr auto TradeCommerceManualAction::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[8],
+      &file_reflection_data[9],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto,
@@ -3792,12 +3977,12 @@ constexpr TradeCommerceWorkflow::ParseTableT_ TradeCommerceWorkflow::InternalGen
     {
       PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_._has_bits_),
       0, // no _extensions_
-      27, 248,  // max_field_number, fast_idx_mask
+      28, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4160749568,  // skipmap
+      4026531840,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      27,  // num_field_entries
-      9,  // num_aux_entries
+      28,  // num_field_entries
+      10,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -3816,16 +4001,16 @@ constexpr TradeCommerceWorkflow::ParseTableT_ TradeCommerceWorkflow::InternalGen
        {18, 6, 1,
         PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.buyer_assets_)}},
       // bool seller_confirmed = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(TradeCommerceWorkflow, _impl_.seller_confirmed_), 15>(),
-       {24, 15, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(TradeCommerceWorkflow, _impl_.seller_confirmed_), 16>(),
+       {24, 16, 0,
         PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.seller_confirmed_)}},
       // bool buyer_confirmed = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(TradeCommerceWorkflow, _impl_.buyer_confirmed_), 16>(),
-       {32, 16, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(TradeCommerceWorkflow, _impl_.buyer_confirmed_), 17>(),
+       {32, 17, 0,
         PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.buyer_confirmed_)}},
       // bool cancel_requested = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(TradeCommerceWorkflow, _impl_.cancel_requested_), 17>(),
-       {40, 17, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(TradeCommerceWorkflow, _impl_.cancel_requested_), 18>(),
+       {40, 18, 0,
         PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.cancel_requested_)}},
       // repeated .trade.TradeCommerceLeg legs = 6;
       {::_pbi::TcParser::FastMtR1,
@@ -3836,40 +4021,40 @@ constexpr TradeCommerceWorkflow::ParseTableT_ TradeCommerceWorkflow::InternalGen
        {58, 2, 0,
         PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.stage_)}},
       // uint64 minimum_increment = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeCommerceWorkflow, _impl_.minimum_increment_), 12>(),
-       {64, 12, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeCommerceWorkflow, _impl_.minimum_increment_), 13>(),
+       {64, 13, 0,
         PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.minimum_increment_)}},
       // uint64 highest_bid = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeCommerceWorkflow, _impl_.highest_bid_), 13>(),
-       {72, 13, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeCommerceWorkflow, _impl_.highest_bid_), 14>(),
+       {72, 14, 0,
         PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.highest_bid_)}},
       // uint64 highest_bidder = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeCommerceWorkflow, _impl_.highest_bidder_), 14>(),
-       {80, 14, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeCommerceWorkflow, _impl_.highest_bidder_), 15>(),
+       {80, 15, 0,
         PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.highest_bidder_)}},
       // uint64 winning_bid_id = 11;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeCommerceWorkflow, _impl_.winning_bid_id_), 20>(),
-       {88, 20, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeCommerceWorkflow, _impl_.winning_bid_id_), 21>(),
+       {88, 21, 0,
         PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.winning_bid_id_)}},
       // uint64 parent_id = 12;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeCommerceWorkflow, _impl_.parent_id_), 21>(),
-       {96, 21, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeCommerceWorkflow, _impl_.parent_id_), 22>(),
+       {96, 22, 0,
         PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.parent_id_)}},
       // uint64 quantity_reserved = 13;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeCommerceWorkflow, _impl_.quantity_reserved_), 22>(),
-       {104, 22, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeCommerceWorkflow, _impl_.quantity_reserved_), 23>(),
+       {104, 23, 0,
         PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.quantity_reserved_)}},
       // string external_order_sn = 14;
       {::_pbi::TcParser::FastUS1,
        {114, 3, 0,
         PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.external_order_sn_)}},
       // uint64 sku_id = 15;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeCommerceWorkflow, _impl_.sku_id_), 23>(),
-       {120, 23, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeCommerceWorkflow, _impl_.sku_id_), 24>(),
+       {120, 24, 0,
         PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.sku_id_)}},
       // uint32 sku_quantity = 16;
       {::_pbi::TcParser::FastV32S2,
-       {384, 19, 0,
+       {384, 20, 0,
         PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.sku_quantity_)}},
       // .AssetBundle official_bundle = 17;
       {::_pbi::TcParser::FastMtS2,
@@ -3881,7 +4066,7 @@ constexpr TradeCommerceWorkflow::ParseTableT_ TradeCommerceWorkflow::InternalGen
         PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.external_currency_)}},
       // uint64 external_amount = 19;
       {::_pbi::TcParser::FastV64S2,
-       {408, 24, 0,
+       {408, 25, 0,
         PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.external_amount_)}},
       // .trade.TradeRmbConsignmentWorkflow rmb = 20;
       {::_pbi::TcParser::FastMtS2,
@@ -3905,17 +4090,20 @@ constexpr TradeCommerceWorkflow::ParseTableT_ TradeCommerceWorkflow::InternalGen
         PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.manual_actions_)}},
       // uint32 payment_revision = 25;
       {::_pbi::TcParser::FastV32S2,
-       {456, 26, 0,
+       {456, 27, 0,
         PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.payment_revision_)}},
       // bool payment_revoked = 26;
       {::_pbi::TcParser::FastV8S2,
-       {464, 18, 0,
+       {464, 19, 0,
         PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.payment_revoked_)}},
       // uint64 designated_buyer_player_id = 27;
       {::_pbi::TcParser::FastV64S2,
-       {472, 25, 0,
+       {472, 26, 0,
         PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.designated_buyer_player_id_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // .trade.TradeWantedSkillBookTerms wanted_skill_book = 28;
+      {::_pbi::TcParser::FastMtS2,
+       {482, 12, 9,
+        PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.wanted_skill_book_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -3927,39 +4115,39 @@ constexpr TradeCommerceWorkflow::ParseTableT_ TradeCommerceWorkflow::InternalGen
       // .trade.TradeAssetSelection buyer_assets = 2;
       {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.buyer_assets_), _Internal::kHasBitsOffset + 6, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // bool seller_confirmed = 3;
-      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.seller_confirmed_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.seller_confirmed_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // bool buyer_confirmed = 4;
-      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.buyer_confirmed_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.buyer_confirmed_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // bool cancel_requested = 5;
-      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.cancel_requested_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.cancel_requested_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // repeated .trade.TradeCommerceLeg legs = 6;
       {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.legs_), _Internal::kHasBitsOffset + 0, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // string stage = 7;
       {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.stage_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 minimum_increment = 8;
-      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.minimum_increment_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.minimum_increment_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 highest_bid = 9;
-      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.highest_bid_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.highest_bid_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 highest_bidder = 10;
-      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.highest_bidder_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.highest_bidder_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 winning_bid_id = 11;
-      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.winning_bid_id_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.winning_bid_id_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 parent_id = 12;
-      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.parent_id_), _Internal::kHasBitsOffset + 21, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.parent_id_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 quantity_reserved = 13;
-      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.quantity_reserved_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.quantity_reserved_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string external_order_sn = 14;
       {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.external_order_sn_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 sku_id = 15;
-      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.sku_id_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.sku_id_), _Internal::kHasBitsOffset + 24, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 sku_quantity = 16;
-      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.sku_quantity_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.sku_quantity_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .AssetBundle official_bundle = 17;
       {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.official_bundle_), _Internal::kHasBitsOffset + 7, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // string external_currency = 18;
       {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.external_currency_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 external_amount = 19;
-      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.external_amount_), _Internal::kHasBitsOffset + 24, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.external_amount_), _Internal::kHasBitsOffset + 25, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .trade.TradeRmbConsignmentWorkflow rmb = 20;
       {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.rmb_), _Internal::kHasBitsOffset + 8, 4, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .trade.TradeRoleIdentity seller_identity = 21;
@@ -3971,11 +4159,13 @@ constexpr TradeCommerceWorkflow::ParseTableT_ TradeCommerceWorkflow::InternalGen
       // repeated .trade.TradeCommerceManualAction manual_actions = 24;
       {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.manual_actions_), _Internal::kHasBitsOffset + 1, 8, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint32 payment_revision = 25;
-      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.payment_revision_), _Internal::kHasBitsOffset + 26, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.payment_revision_), _Internal::kHasBitsOffset + 27, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // bool payment_revoked = 26;
-      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.payment_revoked_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.payment_revoked_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // uint64 designated_buyer_player_id = 27;
-      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.designated_buyer_player_id_), _Internal::kHasBitsOffset + 25, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.designated_buyer_player_id_), _Internal::kHasBitsOffset + 26, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .trade.TradeWantedSkillBookTerms wanted_skill_book = 28;
+      {PROTOBUF_FIELD_OFFSET(TradeCommerceWorkflow, _impl_.wanted_skill_book_), _Internal::kHasBitsOffset + 12, 9, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -4023,6 +4213,11 @@ constexpr TradeCommerceWorkflow::ParseTableT_ TradeCommerceWorkflow::InternalGen
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::trade::TradeCommerceManualAction_globals_},
         #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::trade::TradeWantedSkillBookTerms>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::trade::TradeWantedSkillBookTerms_globals_},
+        #endif
     }},
     {{
       "\33\0\0\0\0\0\0\5\0\0\0\0\0\0\21\0\0\0\21\0\0\0\0\0\0\0\0\0\0\0\0\0"
@@ -4065,6 +4260,7 @@ inline constexpr TradeCommerceWorkflow::Impl_::Impl_(
         seller_identity_{nullptr},
         buyer_identity_{nullptr},
         quarantine_{nullptr},
+        wanted_skill_book_{nullptr},
         minimum_increment_{::uint64_t{0u}},
         highest_bid_{::uint64_t{0u}},
         highest_bidder_{::uint64_t{0u}},
@@ -4355,7 +4551,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceWorkflow, _impl_._has_bits_),
-        30, // hasbit index offset
+        31, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceWorkflow, _impl_.seller_assets_),
         PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceWorkflow, _impl_.buyer_assets_),
         PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceWorkflow, _impl_.seller_confirmed_),
@@ -4383,33 +4579,50 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceWorkflow, _impl_.payment_revision_),
         PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceWorkflow, _impl_.payment_revoked_),
         PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceWorkflow, _impl_.designated_buyer_player_id_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceWorkflow, _impl_.wanted_skill_book_),
         5,
         6,
-        15,
         16,
         17,
+        18,
         0,
         2,
-        12,
         13,
         14,
-        20,
+        15,
         21,
         22,
-        3,
         23,
-        19,
+        3,
+        24,
+        20,
         7,
         4,
-        24,
+        25,
         8,
         9,
         10,
         11,
         1,
+        27,
+        19,
         26,
-        18,
-        25,
+        12,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::trade::TradeWantedSkillBookTerms, _impl_._has_bits_),
+        9, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::trade::TradeWantedSkillBookTerms, _impl_.skill_table_id_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeWantedSkillBookTerms, _impl_.scroll_id_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeWantedSkillBookTerms, _impl_.require_master_signature_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeWantedSkillBookTerms, _impl_.reward_gold_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeWantedSkillBookTerms, _impl_.seller_net_gold_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeWantedSkillBookTerms, _impl_.poster_name_),
+        1,
+        2,
+        5,
+        3,
+        4,
+        0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::trade::TradeCommerceQuarantine, _impl_._has_bits_),
         8, // hasbit index offset
@@ -4653,16 +4866,17 @@ static const ::_pbi::MigrationSchema
         {120, sizeof(::trade::TradeCommerceRecord)},
         {167, sizeof(::trade::TradeCommerceGuardRecord)},
         {172, sizeof(::trade::TradeCommerceWorkflow)},
-        {229, sizeof(::trade::TradeCommerceQuarantine)},
-        {242, sizeof(::trade::TradeCommerceManualAction)},
-        {281, sizeof(::trade::TradeCommercePartialPart)},
-        {288, sizeof(::trade::TradeRoleIdentity)},
-        {295, sizeof(::trade::TradeRmbConsignmentWorkflow)},
-        {334, sizeof(::trade::TradeCommerceLeg)},
-        {355, sizeof(::trade::TradeSellerCreditRecord)},
-        {402, sizeof(::trade::TradeSellerCompletedOrderRecord)},
-        {415, sizeof(::trade::TradeSellerReviewRecord)},
-        {442, sizeof(::trade::TradeSellerViolationRecord)},
+        {231, sizeof(::trade::TradeWantedSkillBookTerms)},
+        {246, sizeof(::trade::TradeCommerceQuarantine)},
+        {259, sizeof(::trade::TradeCommerceManualAction)},
+        {298, sizeof(::trade::TradeCommercePartialPart)},
+        {305, sizeof(::trade::TradeRoleIdentity)},
+        {312, sizeof(::trade::TradeRmbConsignmentWorkflow)},
+        {351, sizeof(::trade::TradeCommerceLeg)},
+        {372, sizeof(::trade::TradeSellerCreditRecord)},
+        {419, sizeof(::trade::TradeSellerCompletedOrderRecord)},
+        {432, sizeof(::trade::TradeSellerReviewRecord)},
+        {459, sizeof(::trade::TradeSellerViolationRecord)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -4673,6 +4887,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::trade::TradeCommerceRecord_globals_,
         &::trade::TradeCommerceGuardRecord_globals_,
         &::trade::TradeCommerceWorkflow_globals_,
+        &::trade::TradeWantedSkillBookTerms_globals_,
         &::trade::TradeCommerceQuarantine_globals_,
         &::trade::TradeCommerceManualAction_globals_,
         &::trade::TradeCommercePartialPart_globals_,
@@ -4755,7 +4970,7 @@ const char descriptor_table_protodef_proto_2ftrade_2ftrade_5ftable_2eproto[] ABS
     "arent_id,status;counterparty_id,status\342\222"
     "\364\001\013request_key\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"T\n\030TradeCo"
     "mmerceGuardRecord\022\020\n\010guard_id\030\001 \001(\004:&\212\222\364"
-    "\001\024trade_commerce_guard\222\222\364\001\010guard_id\"\204\007\n\025"
+    "\001\024trade_commerce_guard\222\222\364\001\010guard_id\"\301\007\n\025"
     "TradeCommerceWorkflow\0221\n\rseller_assets\030\001"
     " \001(\0132\032.trade.TradeAssetSelection\0220\n\014buye"
     "r_assets\030\002 \001(\0132\032.trade.TradeAssetSelecti"
@@ -4778,107 +4993,113 @@ const char descriptor_table_protodef_proto_2ftrade_2ftrade_5ftable_2eproto[] ABS
     "ual_actions\030\030 \003(\0132 .trade.TradeCommerceM"
     "anualAction\022\030\n\020payment_revision\030\031 \001(\r\022\027\n"
     "\017payment_revoked\030\032 \001(\010\022\"\n\032designated_buy"
-    "er_player_id\030\033 \001(\004\"g\n\027TradeCommerceQuara"
-    "ntine\022\r\n\005stage\030\001 \001(\t\022\016\n\006status\030\002 \001(\r\022\016\n\006"
-    "reason\030\003 \001(\t\022\016\n\006detail\030\004 \001(\t\022\r\n\005at_ms\030\005 "
-    "\001(\004\"\211\004\n\031TradeCommerceManualAction\022\016\n\006act"
-    "ion\030\001 \001(\t\022\020\n\010operator\030\002 \001(\t\022\016\n\006reason\030\003 "
-    "\001(\t\022\r\n\005at_ms\030\004 \001(\004\022\026\n\016version_before\030\005 \001"
-    "(\004\0222\n\nquarantine\030\006 \001(\0132\036.trade.TradeComm"
-    "erceQuarantine\022\020\n\010new_legs\030\007 \003(\t\022\027\n\017supe"
-    "rseded_legs\030\010 \003(\t\022\r\n\005party\030\t \001(\t\022\026\n\016from"
-    "_player_id\030\n \001(\004\022\024\n\014to_player_id\030\013 \001(\004\0221"
-    "\n\017identity_before\030\014 \001(\0132\030.trade.TradeRol"
-    "eIdentity\0220\n\016identity_after\030\r \001(\0132\030.trad"
-    "e.TradeRoleIdentity\022\027\n\017retargeted_legs\030\016"
-    " \003(\t\022\032\n\022linked_commerce_id\030\017 \001(\004\0226\n\rpart"
-    "ial_parts\030\020 \003(\0132\037.trade.TradeCommercePar"
-    "tialPart\022\023\n\013approval_id\030\021 \001(\t\022\020\n\010approve"
-    "r\030\022 \001(\t\"F\n\030TradeCommercePartialPart\022\013\n\003l"
-    "eg\030\001 \001(\t\022\035\n\007missing\030\002 \001(\0132\014.AssetBundle\""
-    "<\n\021TradeRoleIdentity\022\017\n\007account\030\001 \001(\t\022\026\n"
-    "\016owner_revision\030\002 \001(\004\"\365\003\n\033TradeRmbConsig"
-    "nmentWorkflow\022\026\n\016seller_account\030\001 \001(\t\022\035\n"
-    "\025seller_owner_revision\030\002 \001(\004\022\033\n\023characte"
-    "r_player_id\030\003 \001(\004\022\r\n\005title\030\004 \001(\t\022\022\n\nasse"
-    "t_kind\030\005 \001(\t\022\030\n\020escrow_reference\030\006 \001(\t\022\024"
-    "\n\014escrow_proof\030\007 \001(\t\022\025\n\rbuyer_account\030\010 "
-    "\001(\t\022\025\n\rmall_order_id\030\t \001(\t\022\026\n\016transfer_t"
-    "x_id\030\n \001(\004\022\026\n\016freeze_receipt\030\013 \001(\014\022\023\n\013ma"
-    "rket_zone\030\014 \001(\r\022\021\n\tprice_fen\030\r \001(\004\022\031\n\021cl"
-    "ient_request_id\030\016 \001(\t\0225\n\022registered_list"
-    "ing\030\017 \001(\0132\031.trade.RmbConsignmentView\022\027\n\017"
-    "delivery_digest\030\020 \001(\014\022\034\n\024buyer_owner_rev"
-    "ision\030\021 \001(\004\022 \n\030designated_buyer_account\030"
-    "\022 \001(\t\"\323\001\n\020TradeCommerceLeg\022\014\n\004role\030\001 \001(\t"
-    "\022\021\n\tplayer_id\030\002 \001(\004\022\016\n\006stream\030\003 \001(\r\022\034\n\006b"
-    "undle\030\004 \001(\0132\014.AssetBundle\022\r\n\005op_id\030\005 \001(\004"
-    "\022 \n\010snapshot\030\006 \001(\0132\016.AssetSnapshot\022\017\n\007ou"
-    "tcome\030\007 \001(\r\022\025\n\rsuperseded_by\030\010 \001(\t\022\027\n\017es"
-    "crow_owner_id\030\t \001(\004\"\226\005\n\027TradeSellerCredi"
-    "tRecord\022\030\n\020seller_player_id\030\001 \001(\004\022\026\n\016own"
-    "er_revision\030\002 \001(\004\022\025\n\rowner_account\030\003 \001(\t"
-    "\022\031\n\021ownership_changed\030\004 \001(\010\022\037\n\027ownership"
-    "_changed_at_ms\030\005 \001(\004\022\033\n\023epoch_started_at"
-    "_ms\030\006 \001(\004\022\030\n\020completed_orders\030\007 \001(\004\022\030\n\020p"
-    "ositive_reviews\030\010 \001(\004\022\027\n\017neutral_reviews"
-    "\030\t \001(\004\022\030\n\020negative_reviews\030\n \001(\004\022\027\n\017viol"
-    "ation_count\030\013 \001(\004\022\032\n\022env_credit_cleared\030"
-    "\014 \001(\010\022\027\n\017env_reset_count\030\r \001(\004\022\036\n\026last_e"
-    "nv_changed_at_ms\030\016 \001(\004\022\017\n\007last_ip\030\017 \001(\t\022"
-    "\026\n\016last_device_id\030\020 \001(\t\022\032\n\022known_devices"
-    "_json\030\021 \001(\t\022\024\n\014credit_score\030\022 \001(\r\022\032\n\022sta"
-    "r_rating_tenths\030\023 \001(\r\022\031\n\021positive_rate_b"
-    "ps\030\024 \001(\r\022\021\n\trisk_tier\030\025 \001(\t\022\022\n\nupdated_m"
-    "s\030\026 \001(\004:K\212\222\364\001\023trade_seller_credit\222\222\364\001\037se"
-    "ller_player_id,owner_revision\250\223\364\001\001\260\223\364\001\004\270"
-    "\223\364\001\004\"\375\001\n\037TradeSellerCompletedOrderRecord"
-    "\022\021\n\trecord_id\030\001 \001(\004\022\020\n\010order_id\030\002 \001(\t\022\030\n"
-    "\020seller_player_id\030\003 \001(\004\022\026\n\016owner_revisio"
-    "n\030\004 \001(\004\022\022\n\ncreated_ms\030\005 \001(\004:o\212\222\364\001\034trade_"
-    "seller_completed_order\222\222\364\001\trecord_id\332\222\364\001"
-    "\037seller_player_id,owner_revision\342\222\364\001\010ord"
-    "er_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\234\003\n\027TradeSellerRevi"
-    "ewRecord\022\021\n\treview_id\030\001 \001(\004\022\020\n\010order_id\030"
-    "\002 \001(\t\022\030\n\020seller_player_id\030\003 \001(\004\022\035\n\025selle"
-    "r_owner_revision\030\004 \001(\004\022\027\n\017buyer_player_i"
-    "d\030\005 \001(\004\022\025\n\rbuyer_account\030\006 \001(\t\022\020\n\010buyer_"
-    "ip\030\007 \001(\t\022\027\n\017buyer_device_id\030\010 \001(\t\022\016\n\006rat"
-    "ing\030\t \001(\r\022\031\n\021counted_for_score\030\n \001(\010\022\017\n\007"
-    "comment\030\013 \001(\t\022\022\n\ncreated_ms\030\014 \001(\004:x\212\222\364\001\023"
-    "trade_seller_review\222\222\364\001\treview_id\332\222\364\0011se"
-    "ller_player_id,seller_owner_revision,cre"
-    "ated_ms\342\222\364\001\010order_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\277\002\n\032"
-    "TradeSellerViolationRecord\022\024\n\014violation_"
-    "id\030\001 \001(\004\022\017\n\007case_id\030\002 \001(\t\022\020\n\010order_id\030\003 "
-    "\001(\t\022\030\n\020seller_player_id\030\004 \001(\004\022\035\n\025seller_"
-    "owner_revision\030\005 \001(\004\022\026\n\016seller_account\030\006"
-    " \001(\t\022\016\n\006reason\030\007 \001(\t\022\023\n\013recorded_ms\030\010 \001("
-    "\004:r\212\222\364\001\026trade_seller_violation\222\222\364\001\014viola"
-    "tion_id\332\222\364\001&seller_player_id,seller_owne"
-    "r_revision\342\222\364\001\007case_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004*\373\001"
-    "\n\rListingStatus\022\036\n\032LISTING_STATUS_UNSPEC"
-    "IFIED\020\000\022\034\n\030LISTING_STATUS_ESCROWING\020\001\022\031\n"
-    "\025LISTING_STATUS_LISTED\020\002\022\031\n\025LISTING_STAT"
-    "US_LOCKED\020\003\022\027\n\023LISTING_STATUS_SOLD\020\004\022\034\n\030"
-    "LISTING_STATUS_RETURNING\020\005\022\033\n\027LISTING_ST"
-    "ATUS_RETURNED\020\006\022\"\n\036LISTING_STATUS_ESCROW"
-    "_REJECTED\020\007*\254\001\n\020TradeAssetOpKind\022#\n\037TRAD"
-    "E_ASSET_OP_KIND_UNSPECIFIED\020\000\022$\n TRADE_A"
-    "SSET_OP_KIND_ESCROW_DEBIT\020\001\022&\n\"TRADE_ASS"
-    "ET_OP_KIND_DELIVER_CREDIT\020\002\022%\n!TRADE_ASS"
-    "ET_OP_KIND_RETURN_CREDIT\020\003*\230\002\n\022TradeAsse"
-    "tOpStatus\022%\n!TRADE_ASSET_OP_STATUS_UNSPE"
-    "CIFIED\020\000\022!\n\035TRADE_ASSET_OP_STATUS_PENDIN"
-    "G\020\001\022!\n\035TRADE_ASSET_OP_STATUS_APPLIED\020\002\022\""
-    "\n\036TRADE_ASSET_OP_STATUS_REJECTED\020\003\022!\n\035TR"
-    "ADE_ASSET_OP_STATUS_ABORTED\020\004\022)\n%TRADE_A"
-    "SSET_OP_STATUS_APPLIED_PARTIAL\020\005\022#\n\037TRAD"
-    "E_ASSET_OP_STATUS_ABANDONED\020\006*\206\001\n\023TradeA"
-    "ssetOpRefKind\022\'\n#TRADE_ASSET_OP_REF_KIND"
-    "_UNSPECIFIED\020\000\022#\n\037TRADE_ASSET_OP_REF_KIN"
-    "D_LISTING\020\001\022!\n\035TRADE_ASSET_OP_REF_KIND_O"
-    "RDER\020\002B\007Z\005tradeb\006proto3"
+    "er_player_id\030\033 \001(\004\022;\n\021wanted_skill_book\030"
+    "\034 \001(\0132 .trade.TradeWantedSkillBookTerms\""
+    "\253\001\n\031TradeWantedSkillBookTerms\022\026\n\016skill_t"
+    "able_id\030\001 \001(\r\022\021\n\tscroll_id\030\002 \001(\r\022 \n\030requ"
+    "ire_master_signature\030\003 \001(\010\022\023\n\013reward_gol"
+    "d\030\004 \001(\004\022\027\n\017seller_net_gold\030\005 \001(\004\022\023\n\013post"
+    "er_name\030\006 \001(\t\"g\n\027TradeCommerceQuarantine"
+    "\022\r\n\005stage\030\001 \001(\t\022\016\n\006status\030\002 \001(\r\022\016\n\006reaso"
+    "n\030\003 \001(\t\022\016\n\006detail\030\004 \001(\t\022\r\n\005at_ms\030\005 \001(\004\"\211"
+    "\004\n\031TradeCommerceManualAction\022\016\n\006action\030\001"
+    " \001(\t\022\020\n\010operator\030\002 \001(\t\022\016\n\006reason\030\003 \001(\t\022\r"
+    "\n\005at_ms\030\004 \001(\004\022\026\n\016version_before\030\005 \001(\004\0222\n"
+    "\nquarantine\030\006 \001(\0132\036.trade.TradeCommerceQ"
+    "uarantine\022\020\n\010new_legs\030\007 \003(\t\022\027\n\017supersede"
+    "d_legs\030\010 \003(\t\022\r\n\005party\030\t \001(\t\022\026\n\016from_play"
+    "er_id\030\n \001(\004\022\024\n\014to_player_id\030\013 \001(\004\0221\n\017ide"
+    "ntity_before\030\014 \001(\0132\030.trade.TradeRoleIden"
+    "tity\0220\n\016identity_after\030\r \001(\0132\030.trade.Tra"
+    "deRoleIdentity\022\027\n\017retargeted_legs\030\016 \003(\t\022"
+    "\032\n\022linked_commerce_id\030\017 \001(\004\0226\n\rpartial_p"
+    "arts\030\020 \003(\0132\037.trade.TradeCommercePartialP"
+    "art\022\023\n\013approval_id\030\021 \001(\t\022\020\n\010approver\030\022 \001"
+    "(\t\"F\n\030TradeCommercePartialPart\022\013\n\003leg\030\001 "
+    "\001(\t\022\035\n\007missing\030\002 \001(\0132\014.AssetBundle\"<\n\021Tr"
+    "adeRoleIdentity\022\017\n\007account\030\001 \001(\t\022\026\n\016owne"
+    "r_revision\030\002 \001(\004\"\365\003\n\033TradeRmbConsignment"
+    "Workflow\022\026\n\016seller_account\030\001 \001(\t\022\035\n\025sell"
+    "er_owner_revision\030\002 \001(\004\022\033\n\023character_pla"
+    "yer_id\030\003 \001(\004\022\r\n\005title\030\004 \001(\t\022\022\n\nasset_kin"
+    "d\030\005 \001(\t\022\030\n\020escrow_reference\030\006 \001(\t\022\024\n\014esc"
+    "row_proof\030\007 \001(\t\022\025\n\rbuyer_account\030\010 \001(\t\022\025"
+    "\n\rmall_order_id\030\t \001(\t\022\026\n\016transfer_tx_id\030"
+    "\n \001(\004\022\026\n\016freeze_receipt\030\013 \001(\014\022\023\n\013market_"
+    "zone\030\014 \001(\r\022\021\n\tprice_fen\030\r \001(\004\022\031\n\021client_"
+    "request_id\030\016 \001(\t\0225\n\022registered_listing\030\017"
+    " \001(\0132\031.trade.RmbConsignmentView\022\027\n\017deliv"
+    "ery_digest\030\020 \001(\014\022\034\n\024buyer_owner_revision"
+    "\030\021 \001(\004\022 \n\030designated_buyer_account\030\022 \001(\t"
+    "\"\323\001\n\020TradeCommerceLeg\022\014\n\004role\030\001 \001(\t\022\021\n\tp"
+    "layer_id\030\002 \001(\004\022\016\n\006stream\030\003 \001(\r\022\034\n\006bundle"
+    "\030\004 \001(\0132\014.AssetBundle\022\r\n\005op_id\030\005 \001(\004\022 \n\010s"
+    "napshot\030\006 \001(\0132\016.AssetSnapshot\022\017\n\007outcome"
+    "\030\007 \001(\r\022\025\n\rsuperseded_by\030\010 \001(\t\022\027\n\017escrow_"
+    "owner_id\030\t \001(\004\"\226\005\n\027TradeSellerCreditReco"
+    "rd\022\030\n\020seller_player_id\030\001 \001(\004\022\026\n\016owner_re"
+    "vision\030\002 \001(\004\022\025\n\rowner_account\030\003 \001(\t\022\031\n\021o"
+    "wnership_changed\030\004 \001(\010\022\037\n\027ownership_chan"
+    "ged_at_ms\030\005 \001(\004\022\033\n\023epoch_started_at_ms\030\006"
+    " \001(\004\022\030\n\020completed_orders\030\007 \001(\004\022\030\n\020positi"
+    "ve_reviews\030\010 \001(\004\022\027\n\017neutral_reviews\030\t \001("
+    "\004\022\030\n\020negative_reviews\030\n \001(\004\022\027\n\017violation"
+    "_count\030\013 \001(\004\022\032\n\022env_credit_cleared\030\014 \001(\010"
+    "\022\027\n\017env_reset_count\030\r \001(\004\022\036\n\026last_env_ch"
+    "anged_at_ms\030\016 \001(\004\022\017\n\007last_ip\030\017 \001(\t\022\026\n\016la"
+    "st_device_id\030\020 \001(\t\022\032\n\022known_devices_json"
+    "\030\021 \001(\t\022\024\n\014credit_score\030\022 \001(\r\022\032\n\022star_rat"
+    "ing_tenths\030\023 \001(\r\022\031\n\021positive_rate_bps\030\024 "
+    "\001(\r\022\021\n\trisk_tier\030\025 \001(\t\022\022\n\nupdated_ms\030\026 \001"
+    "(\004:K\212\222\364\001\023trade_seller_credit\222\222\364\001\037seller_"
+    "player_id,owner_revision\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\""
+    "\375\001\n\037TradeSellerCompletedOrderRecord\022\021\n\tr"
+    "ecord_id\030\001 \001(\004\022\020\n\010order_id\030\002 \001(\t\022\030\n\020sell"
+    "er_player_id\030\003 \001(\004\022\026\n\016owner_revision\030\004 \001"
+    "(\004\022\022\n\ncreated_ms\030\005 \001(\004:o\212\222\364\001\034trade_selle"
+    "r_completed_order\222\222\364\001\trecord_id\332\222\364\001\037sell"
+    "er_player_id,owner_revision\342\222\364\001\010order_id"
+    "\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\234\003\n\027TradeSellerReviewRec"
+    "ord\022\021\n\treview_id\030\001 \001(\004\022\020\n\010order_id\030\002 \001(\t"
+    "\022\030\n\020seller_player_id\030\003 \001(\004\022\035\n\025seller_own"
+    "er_revision\030\004 \001(\004\022\027\n\017buyer_player_id\030\005 \001"
+    "(\004\022\025\n\rbuyer_account\030\006 \001(\t\022\020\n\010buyer_ip\030\007 "
+    "\001(\t\022\027\n\017buyer_device_id\030\010 \001(\t\022\016\n\006rating\030\t"
+    " \001(\r\022\031\n\021counted_for_score\030\n \001(\010\022\017\n\007comme"
+    "nt\030\013 \001(\t\022\022\n\ncreated_ms\030\014 \001(\004:x\212\222\364\001\023trade"
+    "_seller_review\222\222\364\001\treview_id\332\222\364\0011seller_"
+    "player_id,seller_owner_revision,created_"
+    "ms\342\222\364\001\010order_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\277\002\n\032Trade"
+    "SellerViolationRecord\022\024\n\014violation_id\030\001 "
+    "\001(\004\022\017\n\007case_id\030\002 \001(\t\022\020\n\010order_id\030\003 \001(\t\022\030"
+    "\n\020seller_player_id\030\004 \001(\004\022\035\n\025seller_owner"
+    "_revision\030\005 \001(\004\022\026\n\016seller_account\030\006 \001(\t\022"
+    "\016\n\006reason\030\007 \001(\t\022\023\n\013recorded_ms\030\010 \001(\004:r\212\222"
+    "\364\001\026trade_seller_violation\222\222\364\001\014violation_"
+    "id\332\222\364\001&seller_player_id,seller_owner_rev"
+    "ision\342\222\364\001\007case_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004*\373\001\n\rLis"
+    "tingStatus\022\036\n\032LISTING_STATUS_UNSPECIFIED"
+    "\020\000\022\034\n\030LISTING_STATUS_ESCROWING\020\001\022\031\n\025LIST"
+    "ING_STATUS_LISTED\020\002\022\031\n\025LISTING_STATUS_LO"
+    "CKED\020\003\022\027\n\023LISTING_STATUS_SOLD\020\004\022\034\n\030LISTI"
+    "NG_STATUS_RETURNING\020\005\022\033\n\027LISTING_STATUS_"
+    "RETURNED\020\006\022\"\n\036LISTING_STATUS_ESCROW_REJE"
+    "CTED\020\007*\254\001\n\020TradeAssetOpKind\022#\n\037TRADE_ASS"
+    "ET_OP_KIND_UNSPECIFIED\020\000\022$\n TRADE_ASSET_"
+    "OP_KIND_ESCROW_DEBIT\020\001\022&\n\"TRADE_ASSET_OP"
+    "_KIND_DELIVER_CREDIT\020\002\022%\n!TRADE_ASSET_OP"
+    "_KIND_RETURN_CREDIT\020\003*\230\002\n\022TradeAssetOpSt"
+    "atus\022%\n!TRADE_ASSET_OP_STATUS_UNSPECIFIE"
+    "D\020\000\022!\n\035TRADE_ASSET_OP_STATUS_PENDING\020\001\022!"
+    "\n\035TRADE_ASSET_OP_STATUS_APPLIED\020\002\022\"\n\036TRA"
+    "DE_ASSET_OP_STATUS_REJECTED\020\003\022!\n\035TRADE_A"
+    "SSET_OP_STATUS_ABORTED\020\004\022)\n%TRADE_ASSET_"
+    "OP_STATUS_APPLIED_PARTIAL\020\005\022#\n\037TRADE_ASS"
+    "ET_OP_STATUS_ABANDONED\020\006*\206\001\n\023TradeAssetO"
+    "pRefKind\022\'\n#TRADE_ASSET_OP_REF_KIND_UNSP"
+    "ECIFIED\020\000\022#\n\037TRADE_ASSET_OP_REF_KIND_LIS"
+    "TING\020\001\022!\n\035TRADE_ASSET_OP_REF_KIND_ORDER\020"
+    "\002B\007Z\005tradeb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto_deps[4] = {
@@ -4891,13 +5112,13 @@ static ::absl::once_flag descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto_
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto = {
     false,
     false,
-    7703,
+    7938,
     descriptor_table_protodef_proto_2ftrade_2ftrade_5ftable_2eproto,
     "proto/trade/trade_table.proto",
     &descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto_once,
     descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto_deps,
     4,
-    17,
+    18,
     schemas,
     file_message_globals,
     TableStruct_proto_2ftrade_2ftrade_5ftable_2eproto::offsets,
@@ -8001,6 +8222,9 @@ TradeCommerceWorkflow::TradeCommerceWorkflow(
   _impl_.quarantine_ = (CheckHasBit(cached_has_bits, 0x00000800U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.quarantine_)
                 : nullptr;
+  _impl_.wanted_skill_book_ = (CheckHasBit(cached_has_bits, 0x00001000U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.wanted_skill_book_)
+                : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, minimum_increment_),
            reinterpret_cast<const char*>(&from._impl_) +
@@ -8059,6 +8283,7 @@ inline void TradeCommerceWorkflow::SharedDtor(MessageLite& self) {
   delete this_._impl_.seller_identity_;
   delete this_._impl_.buyer_identity_;
   delete this_._impl_.quarantine_;
+  delete this_._impl_.wanted_skill_book_;
   this_._impl_.~Impl_();
 }
 
@@ -8125,7 +8350,7 @@ PROTOBUF_NOINLINE void TradeCommerceWorkflow::Clear() {
       _impl_.official_bundle_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       ABSL_DCHECK(_impl_.rmb_ != nullptr);
       _impl_.rmb_->Clear();
@@ -8142,21 +8367,25 @@ PROTOBUF_NOINLINE void TradeCommerceWorkflow::Clear() {
       ABSL_DCHECK(_impl_.quarantine_ != nullptr);
       _impl_.quarantine_->Clear();
     }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      ABSL_DCHECK(_impl_.wanted_skill_book_ != nullptr);
+      _impl_.wanted_skill_book_->Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000f000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000e000U)) {
     ::memset(&_impl_.minimum_increment_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.seller_confirmed_) -
-        reinterpret_cast<char*>(&_impl_.minimum_increment_)) + sizeof(_impl_.seller_confirmed_));
+        reinterpret_cast<char*>(&_impl_.highest_bidder_) -
+        reinterpret_cast<char*>(&_impl_.minimum_increment_)) + sizeof(_impl_.highest_bidder_));
   }
   if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
-    ::memset(&_impl_.buyer_confirmed_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.sku_id_) -
-        reinterpret_cast<char*>(&_impl_.buyer_confirmed_)) + sizeof(_impl_.sku_id_));
+    ::memset(&_impl_.seller_confirmed_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.quantity_reserved_) -
+        reinterpret_cast<char*>(&_impl_.seller_confirmed_)) + sizeof(_impl_.quantity_reserved_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x07000000U)) {
-    ::memset(&_impl_.external_amount_, 0, static_cast<::size_t>(
+  if (BatchCheckHasBit(cached_has_bits, 0x0f000000U)) {
+    ::memset(&_impl_.sku_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.payment_revision_) -
-        reinterpret_cast<char*>(&_impl_.external_amount_)) + sizeof(_impl_.payment_revision_));
+        reinterpret_cast<char*>(&_impl_.sku_id_)) + sizeof(_impl_.payment_revision_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -8196,7 +8425,7 @@ PROTOBUF_NOINLINE void TradeCommerceWorkflow::Clear() {
   }
 
   // bool seller_confirmed = 3;
-  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
     if (this_._internal_seller_confirmed() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -8205,7 +8434,7 @@ PROTOBUF_NOINLINE void TradeCommerceWorkflow::Clear() {
   }
 
   // bool buyer_confirmed = 4;
-  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
     if (this_._internal_buyer_confirmed() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -8214,7 +8443,7 @@ PROTOBUF_NOINLINE void TradeCommerceWorkflow::Clear() {
   }
 
   // bool cancel_requested = 5;
-  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
     if (this_._internal_cancel_requested() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -8246,7 +8475,7 @@ PROTOBUF_NOINLINE void TradeCommerceWorkflow::Clear() {
   }
 
   // uint64 minimum_increment = 8;
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_minimum_increment() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -8255,7 +8484,7 @@ PROTOBUF_NOINLINE void TradeCommerceWorkflow::Clear() {
   }
 
   // uint64 highest_bid = 9;
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_highest_bid() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -8264,7 +8493,7 @@ PROTOBUF_NOINLINE void TradeCommerceWorkflow::Clear() {
   }
 
   // uint64 highest_bidder = 10;
-  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
     if (this_._internal_highest_bidder() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -8273,7 +8502,7 @@ PROTOBUF_NOINLINE void TradeCommerceWorkflow::Clear() {
   }
 
   // uint64 winning_bid_id = 11;
-  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
     if (this_._internal_winning_bid_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -8282,7 +8511,7 @@ PROTOBUF_NOINLINE void TradeCommerceWorkflow::Clear() {
   }
 
   // uint64 parent_id = 12;
-  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00400000U)) {
     if (this_._internal_parent_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -8291,7 +8520,7 @@ PROTOBUF_NOINLINE void TradeCommerceWorkflow::Clear() {
   }
 
   // uint64 quantity_reserved = 13;
-  if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00800000U)) {
     if (this_._internal_quantity_reserved() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -8310,7 +8539,7 @@ PROTOBUF_NOINLINE void TradeCommerceWorkflow::Clear() {
   }
 
   // uint64 sku_id = 15;
-  if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
     if (this_._internal_sku_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -8319,7 +8548,7 @@ PROTOBUF_NOINLINE void TradeCommerceWorkflow::Clear() {
   }
 
   // uint32 sku_quantity = 16;
-  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
     if (this_._internal_sku_quantity() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -8345,7 +8574,7 @@ PROTOBUF_NOINLINE void TradeCommerceWorkflow::Clear() {
   }
 
   // uint64 external_amount = 19;
-  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+  if (CheckHasBit(cached_has_bits, 0x02000000U)) {
     if (this_._internal_external_amount() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -8395,7 +8624,7 @@ PROTOBUF_NOINLINE void TradeCommerceWorkflow::Clear() {
   }
 
   // uint32 payment_revision = 25;
-  if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+  if (CheckHasBit(cached_has_bits, 0x08000000U)) {
     if (this_._internal_payment_revision() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -8404,7 +8633,7 @@ PROTOBUF_NOINLINE void TradeCommerceWorkflow::Clear() {
   }
 
   // bool payment_revoked = 26;
-  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
     if (this_._internal_payment_revoked() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -8413,12 +8642,19 @@ PROTOBUF_NOINLINE void TradeCommerceWorkflow::Clear() {
   }
 
   // uint64 designated_buyer_player_id = 27;
-  if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+  if (CheckHasBit(cached_has_bits, 0x04000000U)) {
     if (this_._internal_designated_buyer_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           27, this_._internal_designated_buyer_player_id(), target);
     }
+  }
+
+  // .trade.TradeWantedSkillBookTerms wanted_skill_book = 28;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        28, *this_._impl_.wanted_skill_book_, this_._impl_.wanted_skill_book_->GetCachedSize(), target,
+        stream);
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -8519,106 +8755,111 @@ PROTOBUF_NOINLINE void TradeCommerceWorkflow::Clear() {
       total_size += 2 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.quarantine_);
     }
-    // uint64 minimum_increment = 8;
+    // .trade.TradeWantedSkillBookTerms wanted_skill_book = 28;
     if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      total_size += 2 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.wanted_skill_book_);
+    }
+    // uint64 minimum_increment = 8;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_minimum_increment() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_minimum_increment());
       }
     }
     // uint64 highest_bid = 9;
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_highest_bid() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_highest_bid());
       }
     }
     // uint64 highest_bidder = 10;
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (this_._internal_highest_bidder() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_highest_bidder());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     // bool seller_confirmed = 3;
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_seller_confirmed() != 0) {
         total_size += 2;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     // bool buyer_confirmed = 4;
-    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (this_._internal_buyer_confirmed() != 0) {
         total_size += 2;
       }
     }
     // bool cancel_requested = 5;
-    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
       if (this_._internal_cancel_requested() != 0) {
         total_size += 2;
       }
     }
     // bool payment_revoked = 26;
-    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
       if (this_._internal_payment_revoked() != 0) {
         total_size += 3;
       }
     }
     // uint32 sku_quantity = 16;
-    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
       if (this_._internal_sku_quantity() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_sku_quantity());
       }
     }
     // uint64 winning_bid_id = 11;
-    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
       if (this_._internal_winning_bid_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_winning_bid_id());
       }
     }
     // uint64 parent_id = 12;
-    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
       if (this_._internal_parent_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_parent_id());
       }
     }
     // uint64 quantity_reserved = 13;
-    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
       if (this_._internal_quantity_reserved() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_quantity_reserved());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0f000000U)) {
     // uint64 sku_id = 15;
-    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
       if (this_._internal_sku_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_sku_id());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x07000000U)) {
     // uint64 external_amount = 19;
-    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
       if (this_._internal_external_amount() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
                                         this_._internal_external_amount());
       }
     }
     // uint64 designated_buyer_player_id = 27;
-    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
       if (this_._internal_designated_buyer_player_id() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
                                         this_._internal_designated_buyer_player_id());
       }
     }
     // uint32 payment_revision = 25;
-    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x08000000U)) {
       if (this_._internal_payment_revision() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_payment_revision());
@@ -8740,80 +8981,88 @@ void TradeCommerceWorkflow::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      ABSL_DCHECK(from._impl_.wanted_skill_book_ != nullptr);
+      if (_this->_impl_.wanted_skill_book_ == nullptr) {
+        _this->_impl_.wanted_skill_book_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.wanted_skill_book_);
+      } else {
+        _this->_impl_.wanted_skill_book_->MergeFrom(*from._impl_.wanted_skill_book_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (from._internal_minimum_increment() != 0) {
         _this->_impl_.minimum_increment_ = from._impl_.minimum_increment_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_highest_bid() != 0) {
         _this->_impl_.highest_bid_ = from._impl_.highest_bid_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (from._internal_highest_bidder() != 0) {
         _this->_impl_.highest_bidder_ = from._impl_.highest_bidder_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
-      if (from._internal_seller_confirmed() != 0) {
-        _this->_impl_.seller_confirmed_ = from._impl_.seller_confirmed_;
       }
     }
   }
   if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (from._internal_seller_confirmed() != 0) {
+        _this->_impl_.seller_confirmed_ = from._impl_.seller_confirmed_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (from._internal_buyer_confirmed() != 0) {
         _this->_impl_.buyer_confirmed_ = from._impl_.buyer_confirmed_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
       if (from._internal_cancel_requested() != 0) {
         _this->_impl_.cancel_requested_ = from._impl_.cancel_requested_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
       if (from._internal_payment_revoked() != 0) {
         _this->_impl_.payment_revoked_ = from._impl_.payment_revoked_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
       if (from._internal_sku_quantity() != 0) {
         _this->_impl_.sku_quantity_ = from._impl_.sku_quantity_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
       if (from._internal_winning_bid_id() != 0) {
         _this->_impl_.winning_bid_id_ = from._impl_.winning_bid_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
       if (from._internal_parent_id() != 0) {
         _this->_impl_.parent_id_ = from._impl_.parent_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00400000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
       if (from._internal_quantity_reserved() != 0) {
         _this->_impl_.quantity_reserved_ = from._impl_.quantity_reserved_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0f000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
       if (from._internal_sku_id() != 0) {
         _this->_impl_.sku_id_ = from._impl_.sku_id_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x07000000U)) {
-    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
       if (from._internal_external_amount() != 0) {
         _this->_impl_.external_amount_ = from._impl_.external_amount_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x02000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
       if (from._internal_designated_buyer_player_id() != 0) {
         _this->_impl_.designated_buyer_player_id_ = from._impl_.designated_buyer_player_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x04000000U)) {
+    if (CheckHasBit(cached_has_bits, 0x08000000U)) {
       if (from._internal_payment_revision() != 0) {
         _this->_impl_.payment_revision_ = from._impl_.payment_revision_;
       }
@@ -8852,6 +9101,351 @@ void TradeCommerceWorkflow::InternalSwap(TradeCommerceWorkflow* PROTOBUF_RESTRIC
 }
 
 ::google::protobuf::Metadata TradeCommerceWorkflow::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+TradeWantedSkillBookTerms::TradeWantedSkillBookTerms(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, TradeWantedSkillBookTerms_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:trade.TradeWantedSkillBookTerms)
+}
+PROTOBUF_NDEBUG_INLINE TradeWantedSkillBookTerms::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::trade::TradeWantedSkillBookTerms& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        poster_name_(arena, from.poster_name_) {}
+
+TradeWantedSkillBookTerms::TradeWantedSkillBookTerms(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const TradeWantedSkillBookTerms& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, TradeWantedSkillBookTerms_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  TradeWantedSkillBookTerms* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, skill_table_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, skill_table_id_),
+           offsetof(Impl_, require_master_signature_) -
+               offsetof(Impl_, skill_table_id_) +
+               sizeof(Impl_::require_master_signature_));
+
+  // @@protoc_insertion_point(copy_constructor:trade.TradeWantedSkillBookTerms)
+}
+PROTOBUF_NDEBUG_INLINE TradeWantedSkillBookTerms::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        poster_name_(arena) {}
+
+inline void TradeWantedSkillBookTerms::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, skill_table_id_),
+           0,
+           offsetof(Impl_, require_master_signature_) -
+               offsetof(Impl_, skill_table_id_) +
+               sizeof(Impl_::require_master_signature_));
+}
+TradeWantedSkillBookTerms::~TradeWantedSkillBookTerms() {
+  // @@protoc_insertion_point(destructor:trade.TradeWantedSkillBookTerms)
+  SharedDtor(*this);
+}
+inline void TradeWantedSkillBookTerms::SharedDtor(MessageLite& self) {
+  TradeWantedSkillBookTerms& this_ = static_cast<TradeWantedSkillBookTerms&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.poster_name_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull TradeWantedSkillBookTerms_class_data_ =
+        TradeWantedSkillBookTerms::InternalGenerateClassData_(TradeWantedSkillBookTerms_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+TradeWantedSkillBookTerms::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&TradeWantedSkillBookTerms_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(TradeWantedSkillBookTerms_class_data_.tc_table);
+  return TradeWantedSkillBookTerms_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+TradeWantedSkillBookTerms::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&TradeWantedSkillBookTerms_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&TradeWantedSkillBookTerms_globals_));
+  return TradeWantedSkillBookTerms_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const TradeWantedSkillBookTerms::ParseTableT_
+    TradeWantedSkillBookTerms::_table_ =
+        TradeWantedSkillBookTerms::InternalGenerateParseTable_(TradeWantedSkillBookTerms_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void TradeWantedSkillBookTerms::Clear() {
+// @@protoc_insertion_point(message_clear_start:trade.TradeWantedSkillBookTerms)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.poster_name_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003eU)) {
+    ::memset(&_impl_.skill_table_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.require_master_signature_) -
+        reinterpret_cast<char*>(&_impl_.skill_table_id_)) + sizeof(_impl_.require_master_signature_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL TradeWantedSkillBookTerms::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const TradeWantedSkillBookTerms& this_ = static_cast<const TradeWantedSkillBookTerms&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL TradeWantedSkillBookTerms::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const TradeWantedSkillBookTerms& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:trade.TradeWantedSkillBookTerms)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 skill_table_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_skill_table_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_skill_table_id(), target);
+    }
+  }
+
+  // uint32 scroll_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_scroll_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_scroll_id(), target);
+    }
+  }
+
+  // bool require_master_signature = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_require_master_signature() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          3, this_._internal_require_master_signature(), target);
+    }
+  }
+
+  // uint64 reward_gold = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_reward_gold() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_reward_gold(), target);
+    }
+  }
+
+  // uint64 seller_net_gold = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_seller_net_gold() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_seller_net_gold(), target);
+    }
+  }
+
+  // string poster_name = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_poster_name().empty()) {
+      const ::std::string& _s = this_._internal_poster_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "trade.TradeWantedSkillBookTerms.poster_name");
+      target = stream->WriteStringMaybeAliased(6, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:trade.TradeWantedSkillBookTerms)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t TradeWantedSkillBookTerms::ByteSizeLong(const MessageLite& base) {
+  const TradeWantedSkillBookTerms& this_ = static_cast<const TradeWantedSkillBookTerms&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t TradeWantedSkillBookTerms::ByteSizeLong() const {
+  const TradeWantedSkillBookTerms& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:trade.TradeWantedSkillBookTerms)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    // string poster_name = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_poster_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_poster_name());
+      }
+    }
+    // uint32 skill_table_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_skill_table_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_skill_table_id());
+      }
+    }
+    // uint32 scroll_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_scroll_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_scroll_id());
+      }
+    }
+    // uint64 reward_gold = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_reward_gold() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_reward_gold());
+      }
+    }
+    // uint64 seller_net_gold = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_seller_net_gold() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_seller_net_gold());
+      }
+    }
+    // bool require_master_signature = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_require_master_signature() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void TradeWantedSkillBookTerms::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<TradeWantedSkillBookTerms*>(&to_msg);
+  auto& from = static_cast<const TradeWantedSkillBookTerms&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:trade.TradeWantedSkillBookTerms)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_poster_name().empty()) {
+        _this->_internal_set_poster_name(from._internal_poster_name());
+      } else {
+        if (_this->_impl_.poster_name_.IsDefault()) {
+          _this->_internal_set_poster_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_skill_table_id() != 0) {
+        _this->_impl_.skill_table_id_ = from._impl_.skill_table_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_scroll_id() != 0) {
+        _this->_impl_.scroll_id_ = from._impl_.scroll_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_reward_gold() != 0) {
+        _this->_impl_.reward_gold_ = from._impl_.reward_gold_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_seller_net_gold() != 0) {
+        _this->_impl_.seller_net_gold_ = from._impl_.seller_net_gold_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_require_master_signature() != 0) {
+        _this->_impl_.require_master_signature_ = from._impl_.require_master_signature_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void TradeWantedSkillBookTerms::CopyFrom(const TradeWantedSkillBookTerms& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:trade.TradeWantedSkillBookTerms)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void TradeWantedSkillBookTerms::InternalSwap(TradeWantedSkillBookTerms* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.poster_name_, &other->_impl_.poster_name_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(TradeWantedSkillBookTerms, _impl_.require_master_signature_)
+      + sizeof(TradeWantedSkillBookTerms::_impl_.require_master_signature_)
+      - PROTOBUF_FIELD_OFFSET(TradeWantedSkillBookTerms, _impl_.skill_table_id_)>(
+          reinterpret_cast<char*>(&_impl_.skill_table_id_),
+          reinterpret_cast<char*>(&other->_impl_.skill_table_id_));
+}
+
+::google::protobuf::Metadata TradeWantedSkillBookTerms::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================

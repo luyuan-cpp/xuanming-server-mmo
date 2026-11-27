@@ -63,6 +63,10 @@ message PlayerLeaseExpiredEvent {
   uint64 scene_id = 4;
   string gate_id = 5;
   string gate_instance_id = 6;
+  // 到期的那条会话记录的会话代次(PlayerSession.session_incarnation)。gate 只在与本地会话的代次相同时才收掉连接,
+  // 任一边为 0 不比较(session_identity_fence.h LeaseExpiryTargetsThisSession):同一 gate 进程里会话号回绕、同一玩家落回
+  // 同号时，迟到的旧到期不能踢掉新连接。
+  uint64 session_incarnation = 7;
 }
 
 // Sent by Login/player_locator to bind a session to Gate.

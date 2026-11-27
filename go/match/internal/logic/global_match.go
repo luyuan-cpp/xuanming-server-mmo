@@ -175,6 +175,8 @@ type directOptions struct {
 	trialVowMask uint32
 	// jianghuDuelContext 非空:天墉生死状一期开局冻结上下文，原样写入 CreateBattleRequest。
 	jianghuDuelContext *battlepb.JianghuDuelBattleContext
+	// tacticalPuzzleContext 非空:万象残局坊开局冻结上下文，原样写入 CreateBattleRequest。
+	tacticalPuzzleContext *battlepb.TacticalPuzzleBattleContext
 }
 
 func reserveGlobalDirect(ctx context.Context, s *svc.ServiceContext, key *pb.MatchDirectIntentRecord, payload []byte, mode pb.MatchMode, config uint32, members []uint64, opts directOptions) (*pb.MatchFormationRecord, error) {
@@ -286,6 +288,12 @@ func buildGlobalDirect(ctx context.Context, s *svc.ServiceContext, mode pb.Match
 	f.TrialVowMask = opts.trialVowMask
 	if opts.jianghuDuelContext != nil {
 		f.JianghuDuelContext, e = proto.MarshalOptions{Deterministic: true}.Marshal(opts.jianghuDuelContext)
+		if e != nil {
+			return nil, nil, e
+		}
+	}
+	if opts.tacticalPuzzleContext != nil {
+		f.TacticalPuzzleContext, e = proto.MarshalOptions{Deterministic: true}.Marshal(opts.tacticalPuzzleContext)
 		if e != nil {
 			return nil, nil, e
 		}

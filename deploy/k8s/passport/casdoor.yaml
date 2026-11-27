@@ -1,0 +1,132 @@
+# 官方通行证(Casdoor)的生产部署:Namespace、Deployment、集群内 Service。
+# 设计与取舍见 docs/design/official-passport-registration.md §3.10,安装顺序见同目录 README.md。
+#
+# 要点:
+#   - 镜像按摘要固定,与 deploy/passport/docker-compose.yml 同一个(passport_k8s_contract.tests.ps1 核对两处一致)。
+#   - 数据库连接串、管理员初始口令、初始化数据都从 Secret 读,不进 ConfigMap、不进仓库;初始化数据由 render-init-data.ps1
+#     按仓库里的 deploy/passport/init_data.json 填上本环境的域名、回调与协议地址后写成 Secret passport-init-data。
+#   - 只有一个副本:Casdoor 的登录会话默认在进程内。要多副本先配 redisEndpoint(共享会话),再改 replicas。
+#   - 只暴露 8000;公网只经过 public-entry.yaml 的白名单代理进来,集群内只放行代理与 login(networkpolicy.yaml)。
+#   - 口令哈希是 argon2id(每次校验约 64 MiB 内存):内存上限按「同时校验 20 次」留量,公网入口对登录 / 注册限速。
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: passport
+  labels:
+    mmorpg.io/component: passport
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: casdoor
+  namespace: passport
+  labels:
+    app: casdoor
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # 单副本、会话在进程内:滚动时两个版本不同时在线
+  selector:
+    matchLabels:
+      app: casdoor
+  template:
+    metadata:
+      labels:
+        app: casdoor
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: casdoor
+          image: casbin/casdoor:v4.27.1@sha256:a0499a9e1bc0c089af79f19b16b866432bc9519a495e286ac7c558181c302b2a
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: RUNNING_IN_DOCKER
+              value: "true"
+            - name: runmode
+              value: prod
+            - name: driverName
+              value: mysql
+            - name: dbName
+              value: casdoor
+            # 连接串形如 casdoor:<口令>@tcp(<库主机>:3306)/,由运维建 Secret passport-db(键 dsn)。
+            - name: dataSourceName
+              valueFrom:
+                secretKeyRef:
+                  name: passport-db
+                  key: dsn
+            # 首启写进 built-in/admin 的口令;首启之后在后台改掉并开两步验证(设计稿 §5.4 第 1 条)。
+            - name: initAdminPassword
+              valueFrom:
+                secretKeyRef:
+                  name: passport-admin
+                  key: password
+            # 签发方地址:令牌的 iss,与 login 的 AuthProviders.Passport.Issuer、客户端的 PassportOrigin 是同一个 https 域名。
+            - name: origin
+              valueFrom:
+                configMapKeyRef:
+                  name: passport-settings
+                  key: origin
+            - name: initDataFile
+              value: /init/init_data.json
+            - name: initDataNewOnly
+              value: "true"
+          volumeMounts:
+            - name: app-conf
+              mountPath: /conf/app.conf
+              subPath: app.conf
+              readOnly: true
+            - name: init-data
+              mountPath: /init
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        # 仓库里的 deploy/passport/conf/app.conf(无密钥),README 第 2 步建。
+        - name: app-conf
+          configMap:
+            name: passport-app-conf
+        # render-init-data.ps1 生成的 Secret(带回调密钥),README 第 3 步建。
+        - name: init-data
+          secret:
+            secretName: passport-init-data
+---
+# 集群内入口:公网代理(public-entry.yaml)与 login 的管理接口调用(AuthProviders.Passport.Endpoint)都走它。
+apiVersion: v1
+kind: Service
+metadata:
+  name: casdoor
+  namespace: passport
+  labels:
+    app: casdoor
+spec:
+  selector:
+    app: casdoor
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP

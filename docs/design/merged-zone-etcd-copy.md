@@ -1,0 +1,282 @@
+# 合服映射的 etcd 副本:目录第 0 片失联时 data_service 照样启动
+
+> **状态(2026-11-27,Claude Code)**:设计定稿,已落码,**未编译、未运行**。验证命令见 `docs/PROGRESS.md` 2026-11-27「合服映射的 etcd 副本」。
+> **来源**:[启动期故障隔离](data-service-startup-isolation.md) §10 的最后一个启动硬依赖:合服映射 `zone_merged_into` 只在目录第 0 片。
+> **证据口径**:静态阅读本仓代码(`go/data_service`、`go/shared/placement`、`go/shared/mergedzone`、`go/shared/dbplacement`、`tools/merge_zone`、`tools/scripts`、`deploy`),没有运行证据。
+> **Java 版(AGENTS §12)**:不涉及。Java 版没有 data_service,归属区是单库列,没有映射副本,不加 PARITY 行。
+
+## 0. 结论
+
+1. **推荐方案 D**(§3):目录第 0 片仍是合服映射唯一的真源;data_service 每读到一个新版本,**先把它发布进 etcd 的副本,再拿来回答**;读不到第 0 片时按副本回答。新起的副本读不到第 0 片就从副本起。
+2. **写路径一个字没改**:合服工具 `tools/merge_zone`、锁、判定、`zone_merge_history`、操作员授权、PITR 语义全部照旧,所以「合服映射的强一致保证不变」是字面意义上的不变。改动全在 data_service 的读侧。
+3. **版本号是白拿的**:合服工具每改一次映射,都在同一个事务里给 `zone_merge_history` 追加恰好一行,历史只增不改(操作员只有 SELECT、INSERT)。所以**历史的行数就是映射的版本号**,一条语句连映射一起读出来就是同一个快照。不加列、不改 proto、不改工具。
+4. **副本是全体副本回答过的最高版本**(先发布后使用,§5)。所以一个读不到第 0 片的新副本从副本起,不会比任何在跑的副本旧;每个副本回答的版本只增不减。
+5. **顺带得到的保护**(负责人没要求、今天没有的):第 0 片的版本比副本小(PITR、清表、主从切换丢了提交)→ 拒绝,今天会悄悄退回旧映射;有人绕过工具手改 `zone_merged_into`(不留历史)→ 同版本内容不同 → 拒绝,今天会被直接采用。
+6. **取舍**(§6):
+   - 合服生效多了一个前提:etcd 可达。etcd 本来就是 data_service 的启动硬依赖(节点注册失败即拒启),合服手册前置条件加一条 etcd 健康。
+   - 读不到第 0 片的副本,新合服最多晚一个周期:要等一个读得到第 0 片的副本先发布。读得到第 0 片的副本仍是 2 个周期,读不到的是 3 个周期;今天这种副本永远拿不到新映射。合服手册前置条件加「data_service 全部就绪」,合服时就不会有走副本的副本。
+   - PITR、etcd 从快照恢复、清库脚本之后要删副本键;不删的话 data_service 拒启并在错误里点名这个键(有意的 fail-closed)。
+7. **文件**:24 个(§8),不到 30。代码 11 个(2 个新建),脚本 1 个,文档 12 个(1 个新建)。
+
+## 1. 需求分析
+
+| 要求 | 来源 | 本稿 |
+|---|---|---|
+| 第 0 片所在集群失联时,新起的 data_service 副本能启动、服务健康库 | 任务 | §4:读不到第 0 片时从 etcd 副本起 |
+| 合服映射的强一致保证不变 | 任务 | 写路径不改;读侧的不变量见 §5 |
+| 合服之后「两个周期内全部生效」不能破 | 任务 | 读得到第 0 片的副本照旧 2 个周期;读不到的从「永不」变成 3 个周期(§5.3) |
+| 拿不准时保持拒启,不为了能启动跳过核对 | 任务 | 副本与第 0 片对不上一律拒绝(§4.3);副本缺席、etcd 读不到都拒启 |
+| 不丢数据、强一致、性能高、可水平扩展、代码易懂 | 负责人 | 每拍多一次 etcd 读;不依赖任何一个 SQL 片 |
+| 游戏未上线,不写旧数据迁移或兼容 | 任务 | 副本键第一次读到第 0 片时自动建 |
+
+**现在怎么读映射**:data_service 的 `placement.MergedZoneCache` 启动时读一次第 0 片(`RouteStore.ListMergedInto`),之后每 `RouteStore.MergedZoneRefreshSec`(默认 5 秒)重读,失败保留旧值。读不到就拒启(`MergedZonesUnassembled`)。guild、trade、match 每 5 秒调 data_service 的 `GetMergedZones`(`shared/mergedzone`),不连目录。所以只要 data_service 起得来,它们就拿得到。
+
+## 2. 影响面(`zone_merged_into` 全仓 63 个文件命中)
+
+| 类 | 文件 | 方案 D 动不动 |
+|---|---|---|
+| 唯一的写者 | `tools/merge_zone/{main,merge,route_store}.go` 及测试 | 不动 |
+| 唯一的 SQL 读者 | `go/data_service/internal/store/route_store.go`(`ListMergedInto`)、`internal/svc/servicecontext.go`(缓存装配) | 改 |
+| 表结构 | `internal/store/schema.go`、`proto/common/database/rollback_database_table.proto` 及各语言生成物 | 不动 |
+| 授权 | `tools/scripts/maintenance_drain.ps1`(`MERGE_ZONE_GRANT`)、`deploy/sql/authority_operator_role.sql`、三个授权契约用例 | 不动;开服手册补运行账号读历史表(§6 V5) |
+| 清库脚本 | `tools/scripts/currency_crash_window.ps1`、`stress_round19.ps1` | 前者同时删副本键;后者本来清全部 etcd |
+| 合服命令包装 | `tools/scripts/dev_tools.ps1` 及契约用例 | 不动 |
+| 经 RPC 读的 | `go/shared/mergedzone`、guild、trade、match、`proto/data_service` | 不动 |
+| 只在注释或文档里提到 | config、metrics、error_codes、server、`k8s_deploy.ps1`、`deploy/k8s/README.md`、`data_consistency_check`、各设计稿与手册 | 不准确的改(§8) |
+
+C++ 不读映射。Java 没有这张表。
+
+## 3. 方案对比
+
+| | A 每片一份带版本的映射 | B 整体搬进 etcd | C 从在跑的同伴取快照 | **D 第 0 片为真源,etcd 放先发布后使用的副本** |
+|---|---|---|---|---|
+| 第 0 片失联时新副本能起 | 能(任何一片可读、没有在途合服) | 能 | 只在还有同伴在跑时 | 能(etcd 有副本) |
+| 全部副本一起重启(发布、集群级故障) | 能 | 能 | **不能** | 能 |
+| 写一半失败 | 要两阶段提交才不分叉 | 单键 CAS,原子 | 不涉及 | 不涉及:写路径不改 |
+| 历史与映射同事务、只增不改、库侧 `CURRENT_USER()` | 保留(历史只在第 0 片) | 历史进 etcd 就失去库侧授权和身份(本部署 etcd 没开鉴权);留在 SQL 就跨存储、做不成原子 | 保留 | 保留 |
+| PITR 后映射与历史仍成对 | 保留 | 改变:SQL 回档不再带回映射 | 保留 | 保留;副本键要删 |
+| 合服工具 | 重写:开 K 个片、准备 / 提交 / 补齐、恢复 | 重写成 etcd | 不动 | 不动 |
+| 运维变化 | 合服要全部目录片可达;每片授权 | 合服要能连 etcd;删表、改授权、改脚本 | 无 | PITR / etcd 恢复后删副本键 |
+| 文件数 | 约 35~40,含 proto | 约 45 以上,含 proto 与生成物 | 约 10 | 24,不含 proto |
+| 结论 | 不选 | 不选(记为后续选项) | 不选 | **选** |
+
+### 3.1 A:每个目录片一份带版本的映射
+
+合服工具写全部 K 片,读方取可读片里的最大版本。
+
+- **写到一半就分叉**:工具在第 0 片写成 v7 后崩溃,第 3 片还是 v6。只读得到第 3 片的副本会按 v6 回答,而别的副本按 v7;一个按 v7 回答过的副本重启后读到 v6,还会退回去。所以不能「写全部、读最大」了事。
+- **要强一致只能两阶段**:先在每一片记「待提交 v7」,再在第 0 片提交(提交点),最后逐片标已提交;读方取已提交的最大版本,任何一片有比它大的待提交就拒绝。这样读到任何一片都能判断,第 0 片失联也能起。代价:
+  - 合服时 K 片必须全部可达;
+  - 工具要按 db_placement 解析每一片的集群、同时持 K 个连接;
+  - 每次运行都要先按第 0 片补齐、清掉没提交的待提交标记,这些都在第 0 片的锁里做;
+  - 每一片多一张表、多一套授权,proto、清库脚本、契约用例都要改。
+  这是为一张百来行的表手写一个跨 K 个库的分布式提交协议。
+- **用多数派也不行**:两个并发的工具可能各在不相交的少数片上写出同号不同内容的版本,读多数派时取到哪个看运气;要靠回写(ABD)解决,而回写可能让一次已经报成功的合服被后写的覆盖掉。
+- 不选:复杂度和出错面都和收益不成比例,不符合「代码易懂」。
+
+### 3.2 B:像 db_placement 那样整体放进 etcd
+
+一个键存整张映射,合服工具按 ModRevision 做 CAS,读方读 etcd。
+
+- **一致性本身最简单**:etcd 线性一致,单键 CAS 就是原子提交,版本就是 ModRevision。etcd 也已经是 data_service 的启动硬依赖,不多依赖。
+- **etcd 与 SQL 之间**:映射只引用区号,没有任何 SQL 事务把它和别的表放在一起读(唯一的读者是 data_service 的缓存),所以把它搬出 SQL 不会让业务数据不一致。但有三处改了语义:
+  1. **历史**:放进 etcd(和映射同一个 Txn)能保住原子性,却丢了两样 11-11 特意做的东西:操作员账号改不了、删不了历史(本部署 etcd 没开鉴权,`dbplacement.Dial` 和 data_service 的 etcd 客户端都只给地址),以及库侧的 `CURRENT_USER()` 与库时钟(工具只能自报)。留在 SQL,映射和历史就是跨存储的两次写,做不成原子,要再写一套补记、对账的逻辑。
+  2. **PITR**:今天整体回档时映射和历史随目录回到同一个 T、仍然成对(PITR 手册 §4.0 第 4 步靠这一点);搬进 etcd 之后 SQL 回档不再带回映射。业务上不致命(映射只放宽同区判定、不决定资产,任意「回档时刻的数据 + 现在的映射」都是合法操作序列能到达的状态),但手册口径要改。
+  3. **迁移与回滚**:未上线,不用搬数据;但要删两张表、两个 proto message 及各语言生成物、授权与契约用例、清库脚本,工具整个重写成 etcd,运维合服要能连 etcd。回滚只能 revert;上线之后再回 SQL 要写一次 etcd → SQL 的拷贝。
+- 不选:改动最大,而且为了一个只关于「启动」的需求,倒退了历史的可信度和 PITR 的成对语义。**记为后续选项**:等控制面 etcd 开了鉴权,历史可以带着可核验的身份一起搬过去,那时 B 是自然的终态。
+
+### 3.3 C:从在跑的同伴副本取快照
+
+新副本读不到第 0 片时,调一个在跑的 data_service 的 `GetMergedZones`。
+
+- 全部副本一起重启时没有同伴(滚动发布换完最后一个、集群级故障、从 0 扩容),解决不了。
+- 同伴的刷新相位不同,可能一个已经是 v7、一个还是 v6,新副本分不清谁旧;同伴自己读不到第 0 片时也在用旧值。
+- data_service 依赖 data_service,发现路径成环。
+- 不选。但它的思路是对的:新副本只要「不比在跑的旧」就是一致的。D 把这一点落到 etcd 里,全部重启也还在。
+
+### 3.4 D:第 0 片为真源,etcd 里放先发布后使用的副本(推荐)
+
+设计在 §4,一致性论证在 §5。选它的理由:
+- 只改读侧,写路径的锁、判定、历史、授权、PITR 一项不动;
+- 版本号来自已有的只增历史,不改表、不改 proto、不改工具;
+- 副本是「全体副本回答过的最高版本」,读不到第 0 片的副本从它起不会比在跑的旧,这正是 C 想要、却做不到全部重启的那一点;
+- 顺带探测第 0 片回档、丢提交和手改映射;
+- 24 个文件,读侧的规则集中在一个文件里,可以逐条单测。
+
+## 4. 方案 D 的设计
+
+### 4.1 数据
+
+- **真源**(不变):目录第 0 片的 `zone_merged_into`、`zone_merge_history`、`route_meta`。
+- **一次一致读**(`RouteStore.ReadMergedZoneMapping`,R14):一条语句读出 `route_meta.generation`(库世代)、`zone_merge_history` 的行数(版本)和全部映射行。一条语句在 MySQL 上共用一个读视图(RC 下按语句取),在 TiDB 上共用语句的时间戳,所以三样是同一个快照;合服工具的映射与历史同一个事务提交,要么都看到,要么都看不到。
+  - **世代**:迁移种 `route_meta` 时随机生成,之后不改;PITR、搬库都带着它走,只有库重建才会变。它用来认出「副本是另一个库的」。
+  - **版本**:每次映射变化恰好追加一行历史,历史只增不改,所以同一个版本只对应一份映射。
+- **副本**:etcd 键 `/mmorpg/merged_zone_copy/<目录基名>`(`SnapshotMySQL.DBName`,K8s 是 `mmorpg_global`,dev 是 `testdb`),值是 JSON `{"generation":..., "version":N, "merges":[{"src":S,"dst":D},...]}`,按源区升序。键带目录基名,两个部署误用同一套 etcd 时不撞键。
+- **etcd**:data_service 自己 `Etcd.Hosts` 那一套,就是节点注册用的那一套(K8s 上和 db_placement 是同一套 `etcd.<infra>:2379`)。节点注册失败本来就拒启,所以不多一个启动依赖。
+- **写副本的只有 data_service**,按 ModRevision 做 CAS。合服工具不碰 etcd。
+
+### 4.2 每一拍怎么读(启动时一次,之后每个刷新周期一次)
+
+1. **先读副本,再读第 0 片。** 副本里只有第 0 片已经提交过的版本,先读它,后读到的第 0 片就不会比它旧,除非第 0 片真的回档了。反过来读,一次合服夹在两次读之间就会误判成「第 0 片落后于副本」。
+2. 副本读不到(etcd 故障、值坏了):这一拍失败。
+3. 第 0 片读到了:按 §4.3 的表核对。要发布的,按读副本时的 ModRevision 做 CAS;CAS 没成立(别的副本刚发布过)就从第 1 步重来,最多 3 次。发布成功或不用发布,才用第 0 片的映射回答。
+4. 第 0 片读不到(连不上、池关着、这一代缺它的写资格、超时、权限不够):按 §4.3 的表决定用不用副本。
+
+「这一拍失败」在启动时就是拒启;运行中是这一次刷新失败、保留旧映射、计 `data_service_merged_zone_refresh_total{result="error"}`。
+
+### 4.3 判定表
+
+| 第 0 片 | 副本 | 结局 |
+|---|---|---|
+| 读到 T,映射解析不通(成环、超长) | 任意 | 失败,不发布 |
+| 读到 T | 没有 | 发布 T(键必须不存在),用 T |
+| 读到 T | 世代不同 | 发布 T(覆盖),用 T。只有库重建过才会这样 |
+| 读到 T | 版本 < T | 发布 T,用 T |
+| 读到 T | 版本 = T,内容相同 | 不写,用 T |
+| 读到 T | 版本 = T,内容不同 | 失败:有人绕过工具改了映射(不留历史),或副本被改过 |
+| 读到 T | 版本 > T | 失败:第 0 片回档了、清过表,或丢了已提交的合服。错误里点名副本键 |
+| 读不到 | 没有 | 失败 |
+| 读不到 | 有,这个进程还没回答过 | 用副本(启动),打一行 ERROR |
+| 读不到 | 世代与已回答的不同 | 失败 |
+| 读不到 | 版本 > 已回答 | 用副本 |
+| 读不到 | 版本 < 已回答 | 失败:etcd 被回档了 |
+| 读不到 | 版本 = 已回答 | 失败(照旧回答已有的),计一次刷新失败 |
+
+「已回答」指这个进程上一次交给缓存的那一份(只记世代和版本)。发布之前先用 `placement.NewMergedZones` 校验,和缓存同一规则,所以交出去的缓存一定收下,「已回答」与缓存一致。
+
+读不到第 0 片又照旧回答时记成失败,是为了让 `DataServiceMergedZoneRefreshFailing` 照常响:这个副本确认不了真源。只有「副本里有更新的版本」那一拍算成功,失败为主的窗口里告警不会因此消失。
+
+### 4.4 启动的结局
+
+| 情形 | 现在 | 之后 |
+|---|---|---|
+| 第 0 片连不上,或这一代缺它的写资格 | 拒启(缺写资格的以 78 退出、重建) | 从副本起;那几个池照旧关着,`/readyz` 不就绪 |
+| 第 0 片读不到,etcd 里还没有副本(全新环境第一次起服就失联) | 拒启 | 拒启 |
+| 第 0 片读得到,比副本旧 / 同版本内容不同 | 照第 0 片起 | 拒启 |
+| etcd 读不到 | 节点注册失败,拒启 | 拒启 |
+
+## 5. 一致性论证
+
+### 5.1 两个不变量
+
+- **I1(副本是上界)**:同一个世代里,任何副本回答过的版本都不超过副本键的版本。
+  - 读第 0 片的路径:只有副本已经 ≥ T(相等,或者刚 CAS 发布成功)才用 T;
+  - 读副本的路径:回答的就是副本本身;
+  - 副本键只会被改大:发布要求 T 比它新,或者键不存在、世代不同。
+- **I2(副本内容等于真源的对应版本)**:发布的只有一条语句读出的 T;同一个版本只对应一份映射。
+
+### 5.2 推出来的保证
+
+1. **新副本不比在跑的旧**:读不到第 0 片的新副本从副本起,由 I1,不比任何在跑的副本回答的版本旧;读得到第 0 片的,T ≥ 副本,否则拒启。
+2. **每个副本回答的版本只增不减**:读第 0 片时 T ≥ 副本 ≥ 已回答;读副本时只接受更大的版本。
+3. **同一个版本处处一样**:由 I2,读第 0 片和读副本的两个副本在同一个版本上回答同一份映射。
+4. **滞后窗口和今天一样**:在跑的副本各自按自己的相位刷新,相邻两个副本最多差一个周期;这和今天两个副本相位不同时完全一样。
+
+### 5.3 两个周期还成立吗
+
+合服工具在 t0 提交:
+- 读得到第 0 片的副本:t0 之后一个周期内读到、发布、回答。guild、trade、match 再一个周期,共 2 个周期。**不变**。
+- 读不到第 0 片的副本:要等第一个读得到第 0 片的副本发布(一个周期内),自己再刷新一次(又一个周期),所以 2 个周期;guild、trade、match 经它再一个周期,共 3 个周期。今天这种副本(运行中和第 0 片断开的)永远拿不到新映射。
+- 没有任何副本读得到第 0 片:谁都不回答新版本,全体停在旧版本上,一致;第 0 片恢复后一个周期内补上。今天同样如此。
+
+所以「两个周期」对今天成立的情形照样成立,对今天不成立的情形从「永不」变成 3 个周期。合服手册前置条件加「data_service 全部就绪」:读不到第 0 片的副本一定不就绪(池关着或缺写资格,[启动期故障隔离](data-service-startup-isolation.md) §6.1、§7.1),于是合服时不会有走副本的副本。要让副本路径也是 2 个周期,可以让合服工具提交之后自己发布副本(§10),本批不做。
+
+### 5.4 和写路径的关系
+
+写路径没改。合服的提交点仍是 `tools/merge_zone` 那个事务;判定仍在 `route_meta` 的行锁里;历史仍和映射同事务。data_service 只是在读到一个已提交的版本之后多写一份副本,副本不参与任何判定。
+
+## 6. 漏洞分析
+
+| # | 情形 | 会发生什么 | 处理 |
+|---|---|---|---|
+| V1 | 整体 PITR,第 0 片回到 T | 第 0 片版本比副本小,data_service 拒启,错误点名副本键 | PITR 手册 §4.0 加一步:起服之前删副本键 |
+| V2 | etcd 从快照恢复 | 副本版本回退。在跑的副本发现「副本落后于已回答」、刷新失败;读不到第 0 片的新副本会按回退的版本起 | etcd 手册 §7a 加一步:恢复之后删副本键,读不到第 0 片的新副本于是拒启 |
+| V3 | 清库脚本截断历史表 | 同 V1 | `currency_crash_window.ps1` 同时删副本键;`stress_round19.ps1` 本来清全部 etcd |
+| V4 | 绕过工具手改 `zone_merged_into` | 同版本内容不同,拒绝。今天会被直接采用 | 合服手册 §5:用工具撤销再合(版本加 2) |
+| V5 | K8s 上运行账号没有 `zone_merge_history` 的 SELECT | 读第 0 片报 1142,走副本;全新环境没有副本就拒启,错误原文是 1142 | 开服手册 §1:第 0 片的计划把 `zone_merged_into`、`zone_merge_history` 列成 SELECT。本机启动按表全授,不受影响 |
+| V6 | etcd 没开鉴权,副本可被任意改写 | 读得到第 0 片的副本发现「副本领先 / 内容不同」并拒绝;读不到第 0 片的副本会照着回答 | 和 db_placement、节点注册、热关停同一信任边界,记为残余(§10) |
+| V7 | 两个部署共用一套 etcd | 键带目录基名;基名也一样时两个库世代不同,读得到第 0 片的副本按世代互相覆盖,读不到的拒绝(世代与已回答不同),启动时则可能用了对方的副本 | 共用 etcd 本来就是错误部署(节点注册也会串)。记为残余 |
+| V8 | 多个副本同时发布 | CAS 按 ModRevision,输的重读重判,最多 3 次 | — |
+| V9 | 发布的结局未知(etcd 超时) | 这一拍失败、不采用;下一拍重读,落地了就是「版本相同、内容相同」 | — |
+| V10 | 第 0 片读得到但很慢 | 3 秒时限内读不完按读不到处理,走副本 | — |
+| V11 | 缓存拒收一份映射 | 发布前同一规则先校验,坏映射既不发布也不交给缓存 | — |
+| V12 | 副本路径上新合服晚一个周期 | §5.3 | 合服手册前置条件「data_service 全部就绪」 |
+| V13 | etcd 故障期间合服 | data_service 发布不了,就不采用新版本:合服在 etcd 恢复之前不生效 | 合服手册前置条件「etcd 健康」 |
+
+## 7. 运维变化
+
+- **开服手册 §1**:目录第 0 片的计划给 data_service 运行账号列 `zone_merged_into`、`zone_merge_history` 的 SELECT。§9「某个 SQL 集群失联」:第 0 片失联时新 Pod 从副本起,例外只剩「etcd 里还没有副本」和「全新空环境的空环境判据读不全」。
+- **合服手册**:§1 三个完成条件写清副本路径的 3 个周期;§3 前置条件加 etcd 健康、data_service 全部就绪;§4 第 4 步判据加副本的 version 等于审计里 `merge history` 的条数;§5 加三行故障处置。
+- **PITR 手册 §4.0**:起服之前删副本键。
+- **etcd 手册 §7a**:从快照恢复之后删副本键。
+- **搬库手册 §1**:第 0 片不必再留在主集群。
+- 看副本:`kubectl -n <infra> exec etcd-0 -- etcdctl get /mmorpg/merged_zone_copy/<目录基名>`;删副本:同一处 `etcdctl del`。删副本等于声明「以第 0 片为准」,下一个读得到第 0 片的副本会重新发布。
+
+## 8. 执行步骤与文件清单(24 个)
+
+1. store:`ListMergedInto` / `MergedIntoRow` 换成 `ReadMergedZoneMapping` / `MergedZoneMapping`(R14 一条语句读世代、版本、映射)。
+2. svc:新文件 `merged_zone_copy.go`,写副本的编解码、etcd 读写和 §4.2 的读法;`servicecontext.go` 装配(etcd 客户端随 `upstreamClosers` 关)。
+3. 测试:判定表逐行、发布冲突重试、启动从副本起、编解码;真 etcd 上的 CAS 形状(`DATA_SERVICE_IT_ETCD` 设了才跑)。
+4. 告警说明、配置注释、清库脚本。
+5. 文档同步与 PROGRESS。
+
+代码(11):
+1. `go/data_service/internal/store/route_store.go`
+2. `go/data_service/internal/store/route_store_contract_test.go`
+3. `go/data_service/internal/store/route_store_test.go`
+4. `go/data_service/internal/store/account_directory_shard_tidb_test.go`
+5. `go/data_service/internal/svc/merged_zone_copy.go`(新)
+6. `go/data_service/internal/svc/merged_zone_copy_test.go`(新)
+7. `go/data_service/internal/svc/merged_zones_test.go`
+8. `go/data_service/internal/svc/servicecontext.go`
+9. `go/data_service/internal/config/config.go`(只改注释)
+10. `go/data_service/etc/data_service.yaml`(只改注释)
+11. `deploy/k8s/data-service-route-alerts.yaml`(告警说明)
+
+脚本(1):
+12. `tools/scripts/currency_crash_window.ps1`
+
+文档(12):
+13. `docs/design/merged-zone-etcd-copy.md`(本稿,新)
+14. `docs/design/data-service-startup-isolation.md`
+15. `docs/design/horizontal-scale-logical-db.md`
+16. `docs/design/data-service-breaker-per-logical-db.md`
+17. `docs/design/player-data-tidb-scaling-plan.md`(§7.1 启动行为那两句)
+18. `docs/ops/k8s-open-server-runbook.md`
+19. `docs/ops/merge-zone-runbook.md`
+20. `docs/ops/mysql-backup-pitr-runbook.md`
+21. `docs/ops/etcd-maintenance-runbook.md`
+22. `docs/ops/db-move-runbook.md`
+23. `docs/PROGRESS.md`
+24. `docs/README.md`(跑 `gen_docs_index.py` 加本稿的索引行)
+
+不涉及:proto、生成产物、表结构、合服工具、`dev_tools.ps1`、授权渲染、C++、Java、guild / trade / match。
+
+## 9. 单测与验证
+
+- `internal/svc`(`merged_zone_copy_test.go`):
+  - `TestMergedZoneSourcePublishesBeforeAnswering`:没有副本时先建再回答;版本相同不再写;版本变大按读到的 ModRevision 覆盖。
+  - `TestMergedZoneSourceRefusesWhenShardZeroDisagreesWithTheCopy`:第 0 片落后于副本(错误点名副本键)、同版本内容不同,都失败且不写。
+  - `TestMergedZoneSourceRepublishesForARecreatedDirectory`:世代不同就覆盖。
+  - `TestMergedZoneSourceStartsFromTheCopyWhenShardZeroIsUnreadable`:启动用副本;之后同版本失败并带出第 0 片的错误;更新的版本采用;更旧的、世代不同的失败;副本缺席失败。
+  - `TestMergedZoneSourceRetriesAPublishRace`:CAS 输一次之后重读、发现别人已发布同一版本就不再写;一直输则失败。
+  - `TestMergedZoneSourceNeverPublishesABrokenMapping`、`TestMergedZoneSourceFailsWithoutTheCopy`(etcd 读不到时即使第 0 片读得到也失败)。
+  - `TestMergedZoneCopyCodec`:往返;拒绝空世代、区号 0、重复源区、坏 JSON。
+  - `TestEtcdMergedZoneCopiesAgainstRealEtcd`:`DATA_SERVICE_IT_ETCD` 设了才跑,钉住「键不存在时 revision 0 成立、旧 revision 冲突」。
+  - `merged_zones_test.go` 原有三个用例改成新装配。
+- `internal/store`:`TestRouteReadQueriesShapes` 改测 R14(有映射、空映射的 NULL 行、`route_meta` 缺行、半边 NULL);TiDB 用例改读 `ReadMergedZoneMapping`。
+- 冒烟(可选,kind,两个 SQL 实例,目录 K > 1):停掉放第 0 片的实例,删一个 data-service Pod,新 Pod 起来、日志有 `starting from the etcd copy`、`READY 0/1`;另一个实例上的账号照常登录。恢复实例,删这个 Pod,新 Pod 就绪。单实例调试栈做不了。
+
+## 10. 残余与后续
+
+- **副本路径的合服生效是 3 个周期**(§5.3)。要 2 个周期,可让合服工具提交之后自己 CAS 发布副本:工具要加 etcd 地址参数和 etcd 依赖,`dev_tools.ps1` 与契约用例跟着改,约 8 个文件。有了前置条件「data_service 全部就绪」,实际合服时用不上,本批不做。
+- **etcd 没开鉴权**(V6、V7):副本和 db_placement、节点注册、热关停一样,信任整个集群网络。开 etcd 鉴权是全控制面的事,另行评估;开了之后 §3.2 的 B 可以作为终态重新考虑。
+- **合服审计不显示副本**:`merge_zone -mode audit` 只读 SQL。核对副本用 `etcdctl get`,`version` 应等于审计里 `merge history` 的条数(合服手册 §4)。要让审计直接比对,同样要给工具加 etcd 访问,和第一条一起做。
+
+## 11. 这次值得复用的做法
+
+- **把已有的只增日志当版本号**:每次变化都在同一个事务里恰好追加一行、只增不改的表,它的行数就是一个免费的单调版本。和数据一条语句读出来,就是同一个快照。
+- **先发布后使用的副本是全体回答过的上界**:每个读者把自己要用的版本先 CAS 进共享副本再用,副本就成了「已经有人用过的最高版本」;新读者从它起不会比任何人旧。比「问一个在跑的同伴」强在全部重启也还在。
+- **先读副本后读真源**:副本只含真源已提交的版本,这个顺序下「真源落后于副本」只可能是真源回档,不会是两次读的先后造成的误报。
+- **副本顺带当真源的回档探测器**:真源版本比副本小,或同版本内容不同,一律拒绝。今天这两种都会被悄悄接受。
+- **只改读侧**:写路径的锁、判定、历史、授权一项不动,「一致性保证不变」就不需要另外论证。

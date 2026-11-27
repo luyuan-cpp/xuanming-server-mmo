@@ -45,6 +45,10 @@
       ],
       "redirectUris": [
         "http://127.0.0.1:18765/passport/callback",
+        "http://127.0.0.1:18766/passport/callback",
+        "http://127.0.0.1:18767/passport/callback",
+        "http://127.0.0.1:18768/passport/callback",
+        "http://127.0.0.1:18769/passport/callback",
         "xuanming://passport/callback"
       ],
       "providers": [
@@ -86,8 +90,17 @@
           "required": true,
           "prompted": false,
           "rule": "None"
+        },
+        {
+          "name": "Agreement",
+          "visible": true,
+          "required": true,
+          "prompted": false,
+          "rule": "None"
         }
-      ]
+      ],
+      "termsOfUse": "",
+      "privacyPolicy": ""
     },
     {
       "owner": "admin",
@@ -104,6 +117,33 @@
         "client_credentials"
       ],
       "redirectUris": []
+    }
+  ],
+  "webhooks": [
+    {
+      "owner": "admin",
+      "name": "webhook-xuanming-game-sessions",
+      "organization": "built-in",
+      "url": "http://gateway-node:8081/internal/passport/events",
+      "method": "POST",
+      "contentType": "application/json",
+      "headers": [
+        {
+          "name": "X-Passport-Webhook-Secret",
+          "value": "REPLACE_WITH_PASSPORT_WEBHOOK_SECRET"
+        }
+      ],
+      "events": [
+        "set-password",
+        "update-user",
+        "delete-user"
+      ],
+      "isUserExtended": true,
+      "singleOrgOnly": false,
+      "isEnabled": false,
+      "maxRetries": 10,
+      "retryInterval": 30,
+      "useExponentialBackoff": true
     }
   ]
 }

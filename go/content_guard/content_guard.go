@@ -132,7 +132,7 @@ func main() {
 			}, nil
 		})
 	}
-	reviewer, err := buildPlatformRouter(c.Platform, lookup)
+	reviewer, err := buildPlatformRouter(c.Platform, lookup, platform.NewEtcdTokenStore(etcdCli, platform.DouyinTokenKey))
 	if err != nil {
 		panic("content_guard platform reviewer: " + err.Error())
 	}
@@ -302,7 +302,8 @@ func advertisedHost(listenHost string) string {
 }
 
 // buildPlatformRouter 根据可选 Platform 配置组装外部平台审核路由器;未配置任何渠道时返回 nil(仅运行本地词库层)。
-func buildPlatformRouter(cfg config.PlatformConfig, lookup platform.IdentityLookup) (platform.Reviewer, error) {
+// douyinTokens 是抖音调用凭据的共用处(各副本共用一份,platform/token_store.go);微信用稳定版接口,不需要。
+func buildPlatformRouter(cfg config.PlatformConfig, lookup platform.IdentityLookup, douyinTokens platform.TokenStore) (platform.Reviewer, error) {
 	var adapters []platform.Adapter
 	if cfg.WeChat.AppID != "" {
 		secret := strings.TrimSpace(os.Getenv(cfg.WeChat.AppSecretEnv))
@@ -316,7 +317,7 @@ func buildPlatformRouter(cfg config.PlatformConfig, lookup platform.IdentityLook
 		if secret == "" {
 			return nil, fmt.Errorf("missing environment variable %s for Platform.Douyin", cfg.Douyin.AppSecretEnv)
 		}
-		adapters = append(adapters, platform.NewDouyinAdapter(cfg.Douyin.AppID, secret, cfg.Douyin.BaseURL, nil))
+		adapters = append(adapters, platform.NewDouyinAdapter(cfg.Douyin.AppID, secret, cfg.Douyin.BaseURL, nil).WithSharedToken(douyinTokens))
 	}
 	if len(adapters) == 0 {
 		return nil, nil

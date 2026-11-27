@@ -3575,6 +3575,279 @@ void SendClientPlayerJubaozhaiGetPlayerTradeQuotaErased(entt::registry& registry
         [done = std::move(done)](const GrpcCallOutcome& outcome, const ::trade::GetPlayerTradeQuotaResponse* reply) { done(outcome, reply); });
 }
 #pragma endregion
+#pragma region ClientPlayerJubaozhaiCreateWantedSkillBookOrder
+namespace {
+void QueueLocalClientPlayerJubaozhaiCreateWantedSkillBookOrderFailure(GrpcDone<::trade::WantedSkillBookOrderResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCreateWantedSkillBookOrderGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartClientPlayerJubaozhaiCreateWantedSkillBookOrderCall(entt::registry& registry, entt::entity nodeEntity, const ::trade::CreateWantedSkillBookOrderRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::trade::WantedSkillBookOrderResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC ClientPlayerJubaozhai.CreateWantedSkillBookOrder requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kClientPlayerJubaozhaiCreateWantedSkillBookOrderGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalClientPlayerJubaozhaiCreateWantedSkillBookOrderFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalClientPlayerJubaozhaiCreateWantedSkillBookOrderFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::trade::WantedSkillBookOrderResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the ClientPlayerJubaozhai.CreateWantedSkillBookOrder response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendClientPlayerJubaozhaiCreateWantedSkillBookOrder(entt::registry& registry, entt::entity nodeEntity, const ::trade::CreateWantedSkillBookOrderRequest& request,
+                                            GrpcDone<::trade::WantedSkillBookOrderResponse> done, const GrpcCallOptions& options) {
+    StartClientPlayerJubaozhaiCreateWantedSkillBookOrderCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendClientPlayerJubaozhaiCreateWantedSkillBookOrderErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC ClientPlayerJubaozhai.CreateWantedSkillBookOrder requires a done callback";
+    }
+    if (message.GetDescriptor() != ::trade::CreateWantedSkillBookOrderRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC ClientPlayerJubaozhai.CreateWantedSkillBookOrder: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCreateWantedSkillBookOrderGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::trade::CreateWantedSkillBookOrderRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC ClientPlayerJubaozhai.CreateWantedSkillBookOrder: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiCreateWantedSkillBookOrderGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartClientPlayerJubaozhaiCreateWantedSkillBookOrderCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::trade::WantedSkillBookOrderResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region ClientPlayerJubaozhaiFulfillWantedSkillBookOrder
+namespace {
+void QueueLocalClientPlayerJubaozhaiFulfillWantedSkillBookOrderFailure(GrpcDone<::trade::WantedSkillBookOrderResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiFulfillWantedSkillBookOrderGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartClientPlayerJubaozhaiFulfillWantedSkillBookOrderCall(entt::registry& registry, entt::entity nodeEntity, const ::trade::FulfillWantedSkillBookOrderRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::trade::WantedSkillBookOrderResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC ClientPlayerJubaozhai.FulfillWantedSkillBookOrder requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kClientPlayerJubaozhaiFulfillWantedSkillBookOrderGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalClientPlayerJubaozhaiFulfillWantedSkillBookOrderFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalClientPlayerJubaozhaiFulfillWantedSkillBookOrderFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::trade::WantedSkillBookOrderResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the ClientPlayerJubaozhai.FulfillWantedSkillBookOrder response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendClientPlayerJubaozhaiFulfillWantedSkillBookOrder(entt::registry& registry, entt::entity nodeEntity, const ::trade::FulfillWantedSkillBookOrderRequest& request,
+                                            GrpcDone<::trade::WantedSkillBookOrderResponse> done, const GrpcCallOptions& options) {
+    StartClientPlayerJubaozhaiFulfillWantedSkillBookOrderCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendClientPlayerJubaozhaiFulfillWantedSkillBookOrderErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC ClientPlayerJubaozhai.FulfillWantedSkillBookOrder requires a done callback";
+    }
+    if (message.GetDescriptor() != ::trade::FulfillWantedSkillBookOrderRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC ClientPlayerJubaozhai.FulfillWantedSkillBookOrder: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiFulfillWantedSkillBookOrderGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::trade::FulfillWantedSkillBookOrderRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC ClientPlayerJubaozhai.FulfillWantedSkillBookOrder: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiFulfillWantedSkillBookOrderGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartClientPlayerJubaozhaiFulfillWantedSkillBookOrderCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::trade::WantedSkillBookOrderResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region ClientPlayerJubaozhaiListWantedSkillBookOrders
+namespace {
+void QueueLocalClientPlayerJubaozhaiListWantedSkillBookOrdersFailure(GrpcDone<::trade::ListWantedSkillBookOrdersResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiListWantedSkillBookOrdersGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartClientPlayerJubaozhaiListWantedSkillBookOrdersCall(entt::registry& registry, entt::entity nodeEntity, const ::trade::ListWantedSkillBookOrdersRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::trade::ListWantedSkillBookOrdersResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC ClientPlayerJubaozhai.ListWantedSkillBookOrders requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kClientPlayerJubaozhaiListWantedSkillBookOrdersGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalClientPlayerJubaozhaiListWantedSkillBookOrdersFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalClientPlayerJubaozhaiListWantedSkillBookOrdersFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::trade::ListWantedSkillBookOrdersResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the ClientPlayerJubaozhai.ListWantedSkillBookOrders response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendClientPlayerJubaozhaiListWantedSkillBookOrders(entt::registry& registry, entt::entity nodeEntity, const ::trade::ListWantedSkillBookOrdersRequest& request,
+                                            GrpcDone<::trade::ListWantedSkillBookOrdersResponse> done, const GrpcCallOptions& options) {
+    StartClientPlayerJubaozhaiListWantedSkillBookOrdersCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendClientPlayerJubaozhaiListWantedSkillBookOrdersErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC ClientPlayerJubaozhai.ListWantedSkillBookOrders requires a done callback";
+    }
+    if (message.GetDescriptor() != ::trade::ListWantedSkillBookOrdersRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC ClientPlayerJubaozhai.ListWantedSkillBookOrders: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiListWantedSkillBookOrdersGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::trade::ListWantedSkillBookOrdersRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC ClientPlayerJubaozhai.ListWantedSkillBookOrders: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kClientPlayerJubaozhaiListWantedSkillBookOrdersGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartClientPlayerJubaozhaiListWantedSkillBookOrdersCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::trade::ListWantedSkillBookOrdersResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
 
 void SetJubaozhaiCallDeadline(std::chrono::milliseconds deadline) {
     callDeadlineMs.store(static_cast<uint32_t>(deadline.count()), std::memory_order_relaxed);

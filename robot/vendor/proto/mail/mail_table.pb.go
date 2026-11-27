@@ -97,8 +97,14 @@ type MailRecord struct {
 	ExpireMs           uint64                 `protobuf:"varint,12,opt,name=expire_ms,json=expireMs,proto3" json:"expire_ms,omitempty"`
 	CampaignId         uint64                 `protobuf:"varint,13,opt,name=campaign_id,json=campaignId,proto3" json:"campaign_id,omitempty"`
 	ManifestGeneration uint64                 `protobuf:"varint,14,opt,name=manifest_generation,json=manifestGeneration,proto3" json:"manifest_generation,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// 双人复核留痕(docs/design/admin-identity-and-dual-control.md §5.8):发件请求带的批准记录原样落在这一行,不带时为空串。
+	// 活动邮件的这一行建活动时写入,seal 之后就是可见的那封。只写不读。非活动邮件行到期后会被清理(注销清角色时也删),
+	// 留痕随之没有,长期的在后台流水;活动邮件行与 mail_campaign 不被清理。
+	ApprovalId    string `protobuf:"bytes,15,opt,name=approval_id,json=approvalId,proto3" json:"approval_id,omitempty"`
+	Proposer      string `protobuf:"bytes,16,opt,name=proposer,proto3" json:"proposer,omitempty"` // 发起人:身份提供方的主体(不是调用方服务名)
+	Approver      string `protobuf:"bytes,17,opt,name=approver,proto3" json:"approver,omitempty"` // 批准人:与 proposer 不同
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MailRecord) Reset() {
@@ -229,6 +235,114 @@ func (x *MailRecord) GetManifestGeneration() uint64 {
 	return 0
 }
 
+func (x *MailRecord) GetApprovalId() string {
+	if x != nil {
+		return x.ApprovalId
+	}
+	return ""
+}
+
+func (x *MailRecord) GetProposer() string {
+	if x != nil {
+		return x.Proposer
+	}
+	return ""
+}
+
+func (x *MailRecord) GetApprover() string {
+	if x != nil {
+		return x.Approver
+	}
+	return ""
+}
+
+// 发件判重收据(docs/design/mail-system.md §2.4):非活动邮件(定向、无附件的系统 / 帮会邮件)首次建信时与邮件行同事务写入,
+// 过期清理不删它。邮件行被清理之后同一 (sender_kind, request_id) 再来,仍按收据回原 mail_id、不再建第二封,
+// 所以发件方(scene 待寄邮件、rank、trade、match)重试多久都不会重复发物。活动邮件的判重在 mail_campaign,清理不碰。
+type MailRequestReceiptRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SenderKind    uint32                 `protobuf:"varint,1,opt,name=sender_kind,json=senderKind,proto3" json:"sender_kind,omitempty"`
+	RequestId     uint64                 `protobuf:"varint,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	MailId        uint64                 `protobuf:"varint,3,opt,name=mail_id,json=mailId,proto3" json:"mail_id,omitempty"`               // 首次建的那封;邮件行可能已被清理
+	RequestHash   string                 `protobuf:"bytes,4,opt,name=request_hash,json=requestHash,proto3" json:"request_hash,omitempty"` // 首次请求的摘要(serviceauth.Digest),同键不同摘要回冲突
+	Kind          uint32                 `protobuf:"varint,5,opt,name=kind,proto3" json:"kind,omitempty"`                                 // MailKind
+	CreatedMs     uint64                 `protobuf:"varint,6,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MailRequestReceiptRecord) Reset() {
+	*x = MailRequestReceiptRecord{}
+	mi := &file_proto_mail_mail_table_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MailRequestReceiptRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MailRequestReceiptRecord) ProtoMessage() {}
+
+func (x *MailRequestReceiptRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_mail_mail_table_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MailRequestReceiptRecord.ProtoReflect.Descriptor instead.
+func (*MailRequestReceiptRecord) Descriptor() ([]byte, []int) {
+	return file_proto_mail_mail_table_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *MailRequestReceiptRecord) GetSenderKind() uint32 {
+	if x != nil {
+		return x.SenderKind
+	}
+	return 0
+}
+
+func (x *MailRequestReceiptRecord) GetRequestId() uint64 {
+	if x != nil {
+		return x.RequestId
+	}
+	return 0
+}
+
+func (x *MailRequestReceiptRecord) GetMailId() uint64 {
+	if x != nil {
+		return x.MailId
+	}
+	return 0
+}
+
+func (x *MailRequestReceiptRecord) GetRequestHash() string {
+	if x != nil {
+		return x.RequestHash
+	}
+	return ""
+}
+
+func (x *MailRequestReceiptRecord) GetKind() uint32 {
+	if x != nil {
+		return x.Kind
+	}
+	return 0
+}
+
+func (x *MailRequestReceiptRecord) GetCreatedMs() uint64 {
+	if x != nil {
+		return x.CreatedMs
+	}
+	return 0
+}
+
 // 有附件的系统邮件只在名单完整seal的同事务插入mail_message；导入中的活动不可见。
 type MailCampaignRecord struct {
 	state                  protoimpl.MessageState `protogen:"open.v1"`
@@ -251,13 +365,18 @@ type MailCampaignRecord struct {
 	SealedMs               uint64                 `protobuf:"varint,17,opt,name=sealed_ms,json=sealedMs,proto3" json:"sealed_ms,omitempty"`
 	Kind                   uint32                 `protobuf:"varint,18,opt,name=kind,proto3" json:"kind,omitempty"`
 	GuildId                uint64                 `protobuf:"varint,19,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	// 双人复核留痕(docs/design/admin-identity-and-dual-control.md §5.8):建活动那份请求带的批准记录,不带时为空串。只写不读。
+	// producer 是调用方服务名(admin),proposer 是提出这条命令的人,两者不是一回事。
+	ApprovalId    string `protobuf:"bytes,20,opt,name=approval_id,json=approvalId,proto3" json:"approval_id,omitempty"`
+	Proposer      string `protobuf:"bytes,21,opt,name=proposer,proto3" json:"proposer,omitempty"` // 发起人:身份提供方的主体
+	Approver      string `protobuf:"bytes,22,opt,name=approver,proto3" json:"approver,omitempty"` // 批准人:与 proposer 不同
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MailCampaignRecord) Reset() {
 	*x = MailCampaignRecord{}
-	mi := &file_proto_mail_mail_table_proto_msgTypes[1]
+	mi := &file_proto_mail_mail_table_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -269,7 +388,7 @@ func (x *MailCampaignRecord) String() string {
 func (*MailCampaignRecord) ProtoMessage() {}
 
 func (x *MailCampaignRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_mail_mail_table_proto_msgTypes[1]
+	mi := &file_proto_mail_mail_table_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -282,7 +401,7 @@ func (x *MailCampaignRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MailCampaignRecord.ProtoReflect.Descriptor instead.
 func (*MailCampaignRecord) Descriptor() ([]byte, []int) {
-	return file_proto_mail_mail_table_proto_rawDescGZIP(), []int{1}
+	return file_proto_mail_mail_table_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *MailCampaignRecord) GetSenderKind() uint32 {
@@ -418,6 +537,27 @@ func (x *MailCampaignRecord) GetGuildId() uint64 {
 	return 0
 }
 
+func (x *MailCampaignRecord) GetApprovalId() string {
+	if x != nil {
+		return x.ApprovalId
+	}
+	return ""
+}
+
+func (x *MailCampaignRecord) GetProposer() string {
+	if x != nil {
+		return x.Proposer
+	}
+	return ""
+}
+
+func (x *MailCampaignRecord) GetApprover() string {
+	if x != nil {
+		return x.Approver
+	}
+	return ""
+}
+
 type MailCampaignShardRecord struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
 	SenderKind         uint32                 `protobuf:"varint,1,opt,name=sender_kind,json=senderKind,proto3" json:"sender_kind,omitempty"`
@@ -432,7 +572,7 @@ type MailCampaignShardRecord struct {
 
 func (x *MailCampaignShardRecord) Reset() {
 	*x = MailCampaignShardRecord{}
-	mi := &file_proto_mail_mail_table_proto_msgTypes[2]
+	mi := &file_proto_mail_mail_table_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -444,7 +584,7 @@ func (x *MailCampaignShardRecord) String() string {
 func (*MailCampaignShardRecord) ProtoMessage() {}
 
 func (x *MailCampaignShardRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_mail_mail_table_proto_msgTypes[2]
+	mi := &file_proto_mail_mail_table_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -457,7 +597,7 @@ func (x *MailCampaignShardRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MailCampaignShardRecord.ProtoReflect.Descriptor instead.
 func (*MailCampaignShardRecord) Descriptor() ([]byte, []int) {
-	return file_proto_mail_mail_table_proto_rawDescGZIP(), []int{2}
+	return file_proto_mail_mail_table_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *MailCampaignShardRecord) GetSenderKind() uint32 {
@@ -515,7 +655,7 @@ type MailCampaignRecipientRecord struct {
 
 func (x *MailCampaignRecipientRecord) Reset() {
 	*x = MailCampaignRecipientRecord{}
-	mi := &file_proto_mail_mail_table_proto_msgTypes[3]
+	mi := &file_proto_mail_mail_table_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -527,7 +667,7 @@ func (x *MailCampaignRecipientRecord) String() string {
 func (*MailCampaignRecipientRecord) ProtoMessage() {}
 
 func (x *MailCampaignRecipientRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_mail_mail_table_proto_msgTypes[3]
+	mi := &file_proto_mail_mail_table_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -540,7 +680,7 @@ func (x *MailCampaignRecipientRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MailCampaignRecipientRecord.ProtoReflect.Descriptor instead.
 func (*MailCampaignRecipientRecord) Descriptor() ([]byte, []int) {
-	return file_proto_mail_mail_table_proto_rawDescGZIP(), []int{3}
+	return file_proto_mail_mail_table_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *MailCampaignRecipientRecord) GetSenderKind() uint32 {
@@ -588,7 +728,7 @@ type MailBoxRecord struct {
 
 func (x *MailBoxRecord) Reset() {
 	*x = MailBoxRecord{}
-	mi := &file_proto_mail_mail_table_proto_msgTypes[4]
+	mi := &file_proto_mail_mail_table_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -600,7 +740,7 @@ func (x *MailBoxRecord) String() string {
 func (*MailBoxRecord) ProtoMessage() {}
 
 func (x *MailBoxRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_mail_mail_table_proto_msgTypes[4]
+	mi := &file_proto_mail_mail_table_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -613,7 +753,7 @@ func (x *MailBoxRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MailBoxRecord.ProtoReflect.Descriptor instead.
 func (*MailBoxRecord) Descriptor() ([]byte, []int) {
-	return file_proto_mail_mail_table_proto_rawDescGZIP(), []int{4}
+	return file_proto_mail_mail_table_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *MailBoxRecord) GetPlayerId() uint64 {
@@ -648,7 +788,7 @@ type MailStateRecord struct {
 
 func (x *MailStateRecord) Reset() {
 	*x = MailStateRecord{}
-	mi := &file_proto_mail_mail_table_proto_msgTypes[5]
+	mi := &file_proto_mail_mail_table_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -660,7 +800,7 @@ func (x *MailStateRecord) String() string {
 func (*MailStateRecord) ProtoMessage() {}
 
 func (x *MailStateRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_mail_mail_table_proto_msgTypes[5]
+	mi := &file_proto_mail_mail_table_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -673,7 +813,7 @@ func (x *MailStateRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MailStateRecord.ProtoReflect.Descriptor instead.
 func (*MailStateRecord) Descriptor() ([]byte, []int) {
-	return file_proto_mail_mail_table_proto_rawDescGZIP(), []int{5}
+	return file_proto_mail_mail_table_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *MailStateRecord) GetPlayerId() uint64 {
@@ -752,7 +892,7 @@ type MailPlayerOpSeqRecord struct {
 
 func (x *MailPlayerOpSeqRecord) Reset() {
 	*x = MailPlayerOpSeqRecord{}
-	mi := &file_proto_mail_mail_table_proto_msgTypes[6]
+	mi := &file_proto_mail_mail_table_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -764,7 +904,7 @@ func (x *MailPlayerOpSeqRecord) String() string {
 func (*MailPlayerOpSeqRecord) ProtoMessage() {}
 
 func (x *MailPlayerOpSeqRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_mail_mail_table_proto_msgTypes[6]
+	mi := &file_proto_mail_mail_table_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -777,7 +917,7 @@ func (x *MailPlayerOpSeqRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MailPlayerOpSeqRecord.ProtoReflect.Descriptor instead.
 func (*MailPlayerOpSeqRecord) Descriptor() ([]byte, []int) {
-	return file_proto_mail_mail_table_proto_rawDescGZIP(), []int{6}
+	return file_proto_mail_mail_table_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *MailPlayerOpSeqRecord) GetPlayerId() uint64 {
@@ -846,7 +986,7 @@ type MailAssetOpRecord struct {
 
 func (x *MailAssetOpRecord) Reset() {
 	*x = MailAssetOpRecord{}
-	mi := &file_proto_mail_mail_table_proto_msgTypes[7]
+	mi := &file_proto_mail_mail_table_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -858,7 +998,7 @@ func (x *MailAssetOpRecord) String() string {
 func (*MailAssetOpRecord) ProtoMessage() {}
 
 func (x *MailAssetOpRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_mail_mail_table_proto_msgTypes[7]
+	mi := &file_proto_mail_mail_table_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -871,7 +1011,7 @@ func (x *MailAssetOpRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MailAssetOpRecord.ProtoReflect.Descriptor instead.
 func (*MailAssetOpRecord) Descriptor() ([]byte, []int) {
-	return file_proto_mail_mail_table_proto_rawDescGZIP(), []int{7}
+	return file_proto_mail_mail_table_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *MailAssetOpRecord) GetOpId() uint64 {
@@ -1039,7 +1179,7 @@ var File_proto_mail_mail_table_proto protoreflect.FileDescriptor
 
 const file_proto_mail_mail_table_proto_rawDesc = "" +
 	"\n" +
-	"\x1bproto/mail/mail_table.proto\x12\x06mailpb\x1a\x1bproto/db/proto_option.proto\"\xb9\x04\n" +
+	"\x1bproto/mail/mail_table.proto\x12\x06mailpb\x1a\x1bproto/db/proto_option.proto\"\x92\x05\n" +
 	"\n" +
 	"MailRecord\x12\x17\n" +
 	"\amail_id\x18\x01 \x01(\x04R\x06mailId\x12&\n" +
@@ -1059,7 +1199,21 @@ const file_proto_mail_mail_table_proto_rawDesc = "" +
 	"\texpire_ms\x18\f \x01(\x04R\bexpireMs\x12\x1f\n" +
 	"\vcampaign_id\x18\r \x01(\x04R\n" +
 	"campaignId\x12/\n" +
-	"\x13manifest_generation\x18\x0e \x01(\x04R\x12manifestGeneration:\x83\x01\x8a\x92\xf4\x01\fmail_message\x92\x92\xf4\x01\amail_idڒ\xf4\x017owner_player_id,mail_id;kind,expire_ms;guild_id,mail_id\xe2\x92\xf4\x01\x16sender_kind,request_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xe4\x05\n" +
+	"\x13manifest_generation\x18\x0e \x01(\x04R\x12manifestGeneration\x12\x1f\n" +
+	"\vapproval_id\x18\x0f \x01(\tR\n" +
+	"approvalId\x12\x1a\n" +
+	"\bproposer\x18\x10 \x01(\tR\bproposer\x12\x1a\n" +
+	"\bapprover\x18\x11 \x01(\tR\bapprover:\x83\x01\x8a\x92\xf4\x01\fmail_message\x92\x92\xf4\x01\amail_idڒ\xf4\x017owner_player_id,mail_id;kind,expire_ms;guild_id,mail_id\xe2\x92\xf4\x01\x16sender_kind,request_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xff\x01\n" +
+	"\x18MailRequestReceiptRecord\x12\x1f\n" +
+	"\vsender_kind\x18\x01 \x01(\rR\n" +
+	"senderKind\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x02 \x01(\x04R\trequestId\x12\x17\n" +
+	"\amail_id\x18\x03 \x01(\x04R\x06mailId\x12!\n" +
+	"\frequest_hash\x18\x04 \x01(\tR\vrequestHash\x12\x12\n" +
+	"\x04kind\x18\x05 \x01(\rR\x04kind\x12\x1d\n" +
+	"\n" +
+	"created_ms\x18\x06 \x01(\x04R\tcreatedMs:4\x8a\x92\xf4\x01\x14mail_request_receipt\x92\x92\xf4\x01\x16sender_kind,request_id\"\xbd\x06\n" +
 	"\x12MailCampaignRecord\x12\x1f\n" +
 	"\vsender_kind\x18\x01 \x01(\rR\n" +
 	"senderKind\x12\x1f\n" +
@@ -1084,7 +1238,11 @@ const file_proto_mail_mail_table_proto_rawDesc = "" +
 	"created_ms\x18\x10 \x01(\x04R\tcreatedMs\x12\x1b\n" +
 	"\tsealed_ms\x18\x11 \x01(\x04R\bsealedMs\x12\x12\n" +
 	"\x04kind\x18\x12 \x01(\rR\x04kind\x12\x19\n" +
-	"\bguild_id\x18\x13 \x01(\x04R\aguildId:i\x8a\x92\xf4\x01\rmail_campaign\x92\x92\xf4\x01+sender_kind,campaign_id,manifest_generationڒ\xf4\x01\amail_id\xe2\x92\xf4\x01\x16sender_kind,request_id\"\xcb\x02\n" +
+	"\bguild_id\x18\x13 \x01(\x04R\aguildId\x12\x1f\n" +
+	"\vapproval_id\x18\x14 \x01(\tR\n" +
+	"approvalId\x12\x1a\n" +
+	"\bproposer\x18\x15 \x01(\tR\bproposer\x12\x1a\n" +
+	"\bapprover\x18\x16 \x01(\tR\bapprover:i\x8a\x92\xf4\x01\rmail_campaign\x92\x92\xf4\x01+sender_kind,campaign_id,manifest_generationڒ\xf4\x01\amail_id\xe2\x92\xf4\x01\x16sender_kind,request_id\"\xcb\x02\n" +
 	"\x17MailCampaignShardRecord\x12\x1f\n" +
 	"\vsender_kind\x18\x01 \x01(\rR\n" +
 	"senderKind\x12\x1f\n" +
@@ -1183,17 +1341,18 @@ func file_proto_mail_mail_table_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_mail_mail_table_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_mail_mail_table_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_proto_mail_mail_table_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_proto_mail_mail_table_proto_goTypes = []any{
 	(MailAssetOpStatus)(0),              // 0: mailpb.MailAssetOpStatus
 	(*MailRecord)(nil),                  // 1: mailpb.MailRecord
-	(*MailCampaignRecord)(nil),          // 2: mailpb.MailCampaignRecord
-	(*MailCampaignShardRecord)(nil),     // 3: mailpb.MailCampaignShardRecord
-	(*MailCampaignRecipientRecord)(nil), // 4: mailpb.MailCampaignRecipientRecord
-	(*MailBoxRecord)(nil),               // 5: mailpb.MailBoxRecord
-	(*MailStateRecord)(nil),             // 6: mailpb.MailStateRecord
-	(*MailPlayerOpSeqRecord)(nil),       // 7: mailpb.MailPlayerOpSeqRecord
-	(*MailAssetOpRecord)(nil),           // 8: mailpb.MailAssetOpRecord
+	(*MailRequestReceiptRecord)(nil),    // 2: mailpb.MailRequestReceiptRecord
+	(*MailCampaignRecord)(nil),          // 3: mailpb.MailCampaignRecord
+	(*MailCampaignShardRecord)(nil),     // 4: mailpb.MailCampaignShardRecord
+	(*MailCampaignRecipientRecord)(nil), // 5: mailpb.MailCampaignRecipientRecord
+	(*MailBoxRecord)(nil),               // 6: mailpb.MailBoxRecord
+	(*MailStateRecord)(nil),             // 7: mailpb.MailStateRecord
+	(*MailPlayerOpSeqRecord)(nil),       // 8: mailpb.MailPlayerOpSeqRecord
+	(*MailAssetOpRecord)(nil),           // 9: mailpb.MailAssetOpRecord
 }
 var file_proto_mail_mail_table_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -1214,7 +1373,7 @@ func file_proto_mail_mail_table_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_mail_mail_table_proto_rawDesc), len(file_proto_mail_mail_table_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   8,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

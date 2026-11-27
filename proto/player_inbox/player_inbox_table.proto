@@ -112,4 +112,8 @@ message player_inbox_audit {
   bytes content_sha256 = 13;          // 取自条目行:sha256(msg_type ‖ issued_at_ms ‖ payload),可对 14 复算核对
   bytes payload = 14;                 // 条目载荷原样:入箱时按 payload_message 确定性序列化的字节(v1 GM 类型 ≤ 1KiB)
   uint32 void_reason = 15;            // PlayerInboxVoidReason:VOID / FORCE_VOID 行为本次请求的原因,SANCTION 行为 0
+  // 双人复核批准记录(docs/design/admin-identity-and-dual-control.md §5.8):发起人就是 operator,不重复存。
+  // 两列都为空 = 不带批准记录受理(只在 PlayerInbox.AdminAllowUnapproved 打开时发生)。
+  string approval_id = 16;            // 后台流水号;SANCTION 行等于条目的 request_id
+  string approver = 17;               // 批准人:身份提供方的主体,与 operator 不同
 }

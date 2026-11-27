@@ -1754,13 +1754,9 @@ func (l *GuildLogic) InspectFieldWarTargets(ctx context.Context, req *pb.Inspect
 			streak = st.GetStreakCount()
 		}
 		bid := l.readBattleLockID(ctx, pid)
-		var bID, bSilver uint64
-		var bTier pb.GuildWarBountyTier
-		if activeB, _ := l.war.Repo.ActiveBountyByTarget(ctx, pid, nowMs); activeB != nil {
-			bID = activeB.GetBountyId()
-			bSilver = activeB.GetEscrowSilver()
-			bTier = pb.GuildWarBountyTier(activeB.GetTier())
-		}
+		// 只露查看者有资格接的单(r2-gw#8):仅发单帮可见的追杀令,别帮看到的号、赏金与档位一律为空。
+		activeB, _ := l.war.Repo.ActiveBountyByTarget(ctx, pid, nowMs)
+		bID, bSilver, bTier := fieldTargetBounty(activeB, zoneID, guildID, nowMs)
 		canAttack := tgid != 0 && tgid != guildID && !peace && nowMs >= protectUntil && bid == 0 && (myState == nil || myState.GetPeaceMode() == 0)
 		out = append(out, &pb.FieldWarTargetBrief{
 			PlayerId:                 pid,
@@ -2329,9 +2325,24 @@ func (l *GuildLogic) settleGuildWarResultOnce(ctx context.Context, ev *kafkapb.B
 	if err != nil {
 		return err
 	}
-	if settleOut.BountyHeldRecipientID != 0 {
+	switch settleOut.BountyHeldReason {
+	case data.BountyHeldDailyLimit:
 		logx.WithContext(ctx).Infof("[GuildWar] bounty %d kept active: reward recipient %d reached the daily bounty payout limit, battle %d settled without moving the escrow",
 			gw.GetBountyId(), settleOut.BountyHeldRecipientID, battleID)
+	case data.BountyHeldRecipientRemoved:
+		logx.WithContext(ctx).Infof("[GuildWar] bounty %d kept active: reward recipient %d has been removed, battle %d settled without moving the escrow",
+			gw.GetBountyId(), settleOut.BountyHeldRecipientID, battleID)
+	}
+	// 入账分流(r2-gw#5 / #6):一个人收不了只影响他自己那一笔,本局其余照常落定。player_id 只进日志,不进指标 label。
+	for _, owed := range settleOut.OwedCredits {
+		logx.WithContext(ctx).Infof("[GuildWar] battle %d: credit op %d of player %d deferred to the owed queue (credit window full or role fence frozen)",
+			battleID, owed.OpID, owed.PlayerID)
+	}
+	if len(settleOut.FencedPlayers) > 0 {
+		logx.WithContext(ctx).Infof("[GuildWar] battle %d: role fence frozen for players %v, their asset credits wait in the owed queue", battleID, settleOut.FencedPlayers)
+	}
+	if len(settleOut.RemovedPlayers) > 0 {
+		logx.WithContext(ctx).Errorf("[GuildWar] battle %d: players %v have been removed, nothing of this battle is written for them", battleID, settleOut.RemovedPlayers)
 	}
 	if settleOut.BountyIssuerGuildGone {
 		logx.WithContext(ctx).Errorf("[GuildWar] bounty %d torn but its issuer guild no longer exists; the issuer half of the public-funds stake is not refunded (battle %d)",
@@ -2481,6 +2492,14 @@ func (l *GuildLogic) expireDueGuildWarBounties(ctx context.Context, after data.B
 				logx.Errorf("[GuildWar] bounty %d expired but its issuer guild %d no longer exists; the public-funds stake is not refunded",
 					b.GetBountyId(), b.GetIssuerGuildId())
 			}
+			if res.RefundOwed {
+				logx.Infof("[GuildWar] bounty %d expired; the silver refund to issuer %d waits in the owed queue (credit window full or role fence frozen)",
+					b.GetBountyId(), b.GetIssuerPlayerId())
+			}
+			if res.RefundAbandoned {
+				logx.Errorf("[GuildWar] bounty %d expired but issuer %d has been removed; the silver refund is abandoned",
+					b.GetBountyId(), b.GetIssuerPlayerId())
+			}
 		}
 		next = data.BountyExpiryCursor{ExpiresAtMs: b.GetExpiresAtMs(), BountyID: b.GetBountyId()}
 	}
@@ -2491,6 +2510,124 @@ func (l *GuildLogic) expireDueGuildWarBounties(ctx context.Context, after data.B
 		logx.Infof("[GuildWar] bounty expiry round: scanned=%d expired=%d skipped=%d failed=%d", stats.scanned, stats.expired, stats.skipped, stats.failed)
 	}
 	return next, stats
+}
+
+// ── 终态追杀令的保留期清理(r2-gw#7) ──────────────────────────────────────────
+
+const (
+	// warBountyTerminalRetention:终态追杀令(结单、撕单、到期退回、扣款作废)到期之后再留多久才删。
+	// 取 30 天:远长于结果消息可能被重投的窗口(match-results 保留 7 天,死信修好后重放)—— 何况重投时这一行是终态还是已删,
+	// 结算的结论都一样(都不动追杀令);并与资产指令终态行的缺省保留期(AssetOp.TerminalRetentionDays = 30)对齐,
+	// 预扣 / 领赏 / 退款指令还查得到的时候,对应的追杀令行也还在,对账两头都有据。
+	warBountyTerminalRetention = 30 * 24 * time.Hour
+	// warBountyPurgeBatch:一轮最多删多少行(与到期收尾同一节拍,约每分钟一轮;没删完的下一轮接着删)。
+	warBountyPurgeBatch = 200
+)
+
+// purgeTerminalGuildWarBounties 删一批到期已超保留期的终态追杀令。只是清理:失败只记日志,不 Hold 排空(没删的行原样留着,
+// 下一轮再删;删一行是自动提交的单行语句,重做无害)。
+func (l *GuildLogic) purgeTerminalGuildWarBounties(ctx context.Context) {
+	if l.war == nil || l.war.Repo == nil {
+		return
+	}
+	nowMs := uint64(l.warNow().UnixMilli())
+	retentionMs := uint64(warBountyTerminalRetention.Milliseconds())
+	if nowMs <= retentionMs {
+		return
+	}
+	deleted, err := l.war.Repo.PurgeTerminalBounties(ctx, nowMs-retentionMs, warBountyPurgeBatch)
+	if err != nil {
+		if ctx.Err() == nil {
+			logx.Errorf("[GuildWar] purge terminal bounties failed after deleting %d, will retry next round: %v", deleted, err)
+		}
+		return
+	}
+	if deleted > 0 {
+		logx.Infof("[GuildWar] purged %d terminal bounties that expired before %d", deleted, nowMs-retentionMs)
+	}
+}
+
+// ── 帮战待入账行转换(r2-gw#5 / #6) ──────────────────────────────────────────
+
+// warCreditOwedStats 是一轮帮战待入账行转换的小结(日志与单测用)。failed 不含「写闸门冻结」(确定没写,下一轮再来)。
+type warCreditOwedStats struct {
+	scanned, converted, stillFull, frozen, abandoned, gone, failed int
+}
+
+// convertWarCreditOwed 跑一轮帮战待入账行转换:从游标处翻页读 guild_war_credit_owed,逐行转成资产指令
+// (data.WarRepo.ConvertWarCreditOwed:护栏副本 → 分 seq → 插指令 → 删行,同一事务;指令号就是行里预发的那个)。
+// 与历练的待入队物品循环同一套规矩(trial_background.go owedRewardLoop):每个副本都跑、靠事务里的行锁而不是互斥保证只转一次;
+// 一轮至多看 owedMaxRowsPerRound 行,看不完下一轮从游标接着看,读到表尾回到表头;某人本轮已判仍满 / 仍冻结,他名下其余行本轮不再试。
+// 仍满、仍冻结都是确定的「什么都没写」,不算失败(不 Hold 排空):寄售中的角色可能冻好几天,算失败的话排空就永远证明不了。
+func (l *GuildLogic) convertWarCreditOwed(ctx context.Context, after data.WarCreditOwedCursor) (data.WarCreditOwedCursor, warCreditOwedStats) {
+	next := after
+	var stats warCreditOwedStats
+	if l.war == nil || l.war.Repo == nil {
+		return next, stats
+	}
+	nowMs := uint64(l.warNow().UnixMilli())
+	waiting := make(map[uint64]struct{})
+	for stats.scanned < owedMaxRowsPerRound {
+		if ctx.Err() != nil {
+			return next, stats
+		}
+		page, err := l.war.Repo.ListWarCreditOwed(ctx, next, owedPageSize)
+		if err != nil {
+			if ctx.Err() == nil {
+				stats.failed++
+				logx.Errorf("[GuildWar] list owed war credits failed, round ends: %v", err)
+			}
+			return next, stats
+		}
+		for _, owed := range page {
+			if ctx.Err() != nil {
+				return next, stats
+			}
+			stats.scanned++
+			if _, skip := waiting[owed.PlayerID]; !skip {
+				status, err := l.war.Repo.ConvertWarCreditOwed(ctx, owed, nowMs)
+				switch {
+				case err != nil:
+					if ctx.Err() == nil && !authoritysql.IsWriterFrozen(err) {
+						stats.failed++
+					}
+					logx.Errorf("[GuildWar] convert owed war credit op %d of player %d failed, will retry on a later round: %v", owed.OpID, owed.PlayerID, err)
+				case status == data.WarOwedConverted:
+					stats.converted++
+				case status == data.WarOwedStillFull:
+					stats.stillFull++
+					waiting[owed.PlayerID] = struct{}{}
+				case status == data.WarOwedFrozen:
+					stats.frozen++
+					waiting[owed.PlayerID] = struct{}{}
+				case status == data.WarOwedAbandoned:
+					stats.abandoned++
+					logx.Errorf("[GuildWar] owed war credit op %d (source %d) abandoned: player %d has been removed", owed.OpID, owed.SourceID, owed.PlayerID)
+				case status == data.WarOwedGone:
+					stats.gone++
+				}
+			}
+			next = owed.Cursor()
+		}
+		if len(page) < owedPageSize {
+			next = data.WarCreditOwedCursor{}
+			break
+		}
+	}
+	if stats.converted > 0 || stats.abandoned > 0 || stats.failed > 0 {
+		logx.Infof("[GuildWar] owed war credit round: scanned=%d converted=%d still_full=%d frozen=%d abandoned=%d gone=%d failed=%d",
+			stats.scanned, stats.converted, stats.stillFull, stats.frozen, stats.abandoned, stats.gone, stats.failed)
+	}
+	return next, stats
+}
+
+// fieldTargetBounty 是野外点选面板上能给这名查看者看的追杀令(r2-gw#8):与追杀榜(ListActiveBounties)、开战挂钩、追踪同一口径
+// (war.BountyHuntable:同区、ACTIVE 未过期、全区江湖榜或本帮发的单)。仅发单帮可见的单对别帮一律当没有,号、赏金、档位都不露。
+func fieldTargetBounty(b *pb.GuildWarBountyRecord, zoneID uint32, viewerGuildID, nowMs uint64) (bountyID, rewardSilver uint64, tier pb.GuildWarBountyTier) {
+	if !war.BountyHuntable(b, zoneID, viewerGuildID, nowMs) {
+		return 0, 0, pb.GuildWarBountyTier_GUILD_WAR_BOUNTY_TIER_UNSPECIFIED
+	}
+	return b.GetBountyId(), b.GetEscrowSilver(), pb.GuildWarBountyTier(b.GetTier())
 }
 
 func containsU64(slice []uint64, target uint64) bool {

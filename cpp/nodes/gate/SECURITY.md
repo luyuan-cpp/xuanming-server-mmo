@@ -246,7 +246,7 @@ gate 启动会打两条 `[gate_version]` 单行记录(直写 stdout,不受 `LogL
 关源、总量、未验签预算、新建速率;被拒的连接当场以 RST 关闭,gate 不为它建任何对象,内核不留 TIME_WAIT,也不会有断开回调。
 新建速率是一个全局令牌桶:缺省桶深等于连接上限、持续速率是上限的 1%/秒(下限 100),
 用 `GATE_ACCEPT_RATE_PER_SECOND` / `GATE_ACCEPT_BURST` 覆盖,写错拒绝启动。
-连接回调里原来那道总量判定(分配 session id / `SessionInfo` 之前)留作第二道;走到它的连接直接关闭,
+连接回调里原来那道总量判定(登记未验签记录之前)留作第二道;走到它的连接直接关闭,
 不向 Login 发送断线 RPC。拒绝日志每 1024 条汇总一次,无会话的断开回调不逐条写日志。
 接纳、拒绝(按原因)、未验签连接数与握手耗时都有指标,见设计文档 P1-4 与运维手册 §3.2。
 
@@ -270,9 +270,14 @@ gate 启动会打两条 `[gate_version]` 单行记录(直写 stdout,不受 `LogL
 
 **(2026-11-19,未编译)未认证连接有了独立预算**(设计文档 P0-2):未认证连接最多占到上限的 10%,突发也占不满全部槽位,
 已验签的会话总有九成位置。未认证连接过了上限的 5% 就算承压:建连满 3 秒还没验签的最老一条给新连接让位
-(经会话里的 weak 连接 `forceClose`,会话由断开回调删);池里全是刚建的连接时,新连接按 sshd `MaxStartups` 的方式按概率拒,
+(先摘它的未验签记录,再经记录里的 weak 连接 `forceClose`);池里全是刚建的连接时,新连接按 sshd `MaxStartups` 的方式按概率拒,
 到预算全拒(`gate_rejected_total{reason="preauth_early_drop|preauth_budget"}`,淘汰记在 `gate_preauth_evicted_total`)。
 正常客户端毫秒级验签,不会被淘汰;gate 自己的 loop 刚卡过时也不淘汰(验签请求可能还在接收缓冲里没读)。
+
+**(2026-11-26,未编译)票据先行**(设计文档 P2-4):验签成功之前 gate 不发 session id、不建 `SessionInfo`,一条连接只有
+一条未验签记录(weak 连接、建连时刻、代次),会话表与发号器都挡在票据之后。总量上限按「会话数 + 未验签连接数」判;
+未验签连接断开只摘记录,不通知 login / scene;握手期限与承压淘汰都按这张按建连先后有序的表做,关之前先摘记录。
+etcd 上报的人数只数验签过的会话。battle 直连同一做法:握手或探测授权验过之前不建 `DirectSession`。
 预算、起点与可淘汰年龄可用 `GATE_PREAUTH_BUDGET` / `GATE_PREAUTH_EARLY_DROP_START` / `GATE_PREAUTH_EVICTABLE_AGE_MS` 覆盖,写错拒启。
 
 **(2026-11-19,未编译)按来源前缀限速**(设计文档 P2-2):缺省关闭,设了 `GATE_SOURCE_RATE_PER_SECOND` 才开,开了也只在承压时生效

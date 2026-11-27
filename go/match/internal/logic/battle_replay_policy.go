@@ -22,8 +22,9 @@ func recordReplayFor(enabled bool, mode matchpb.MatchMode) bool {
 }
 
 // recordReplayForBattle 是建房期「这局录不录回放」的最终入口：在既有 PVP 基线之上，
-// 仅对五行试炼志有格 PVE（PVE_SOLO/PVE_TEAM 且 trialCtx.JournalEntryId != 0）受控开启录制。
-func recordReplayForBattle(enabled bool, mode matchpb.MatchMode, trialCtx *battlepb.TrialBattleContext) bool {
+// 仅对五行试炼志有格 PVE（PVE_SOLO/PVE_TEAM 且 trialCtx.JournalEntryId != 0）以及
+// 万象残局坊作者自证验题局（PVE_SOLO 且 puzzleCtx.IsAuthorVerify == true）受控开启录制。
+func recordReplayForBattle(enabled bool, mode matchpb.MatchMode, trialCtx *battlepb.TrialBattleContext, puzzleCtx ...*battlepb.TacticalPuzzleBattleContext) bool {
 	if !enabled {
 		return false
 	}
@@ -32,6 +33,10 @@ func recordReplayForBattle(enabled bool, mode matchpb.MatchMode, trialCtx *battl
 	}
 	if (mode == matchpb.MatchMode_MATCH_MODE_PVE_SOLO || mode == matchpb.MatchMode_MATCH_MODE_PVE_TEAM) &&
 		trialCtx != nil && trialCtx.GetJournalEntryId() != 0 {
+		return true
+	}
+	if mode == matchpb.MatchMode_MATCH_MODE_PVE_SOLO && len(puzzleCtx) > 0 &&
+		puzzleCtx[0] != nil && puzzleCtx[0].GetIsAuthorVerify() {
 		return true
 	}
 	return false

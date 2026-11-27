@@ -15,6 +15,7 @@
 #include "proto/guild/guild.pb.h"
 #include "proto/guild/guild_internal.pb.h"
 #include "proto/login/login.pb.h"
+#include "proto/login/login_admin.pb.h"
 #include "proto/mail/mail.pb.h"
 #include "proto/mail/mail_admin.pb.h"
 #include "proto/match/match_internal.pb.h"
@@ -70,6 +71,7 @@
 #include "rpc/service_metadata/guild_service_metadata.h"
 #include "rpc/service_metadata/guild_internal_service_metadata.h"
 #include "rpc/service_metadata/login_service_metadata.h"
+#include "rpc/service_metadata/login_admin_service_metadata.h"
 #include "rpc/service_metadata/mail_service_metadata.h"
 #include "rpc/service_metadata/mail_admin_service_metadata.h"
 #include "rpc/service_metadata/match_internal_service_metadata.h"
@@ -286,6 +288,7 @@ namespace loginpb{void SendLoginPreGateGetZoneRoleCountErased(entt::registry& , 
 namespace loginpb{void SendLoginPreGateSubmitRealNameErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace loginpb{void SendLoginPreGateRequestAccountDeletionErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace loginpb{void SendLoginPreGateCancelAccountDeletionErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace loginpb{void SendLoginPreGateHandlePassportEventErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace loginpb{void SendLoginAdminRemovePlayersFromAccountsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace loginpb{void SendLoginAdminScheduleAccountDeletionErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace loginpb{void SendLoginAdminResetAccountRealNameErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -364,6 +367,13 @@ namespace match{void SendMatchServiceNotifyJianghuDuelStatusErased(entt::registr
 namespace match{void SendMatchServiceCreateTrialChallengeCardErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceGetTrialChallengeCardErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace match{void SendMatchServiceGetSharedTrialReplayErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceListTacticalPuzzlesErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceGetTacticalPuzzleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceSaveTacticalPuzzleDraftErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceDeleteTacticalPuzzleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceStartTacticalPuzzleBattleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceLikeTacticalPuzzleErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace match{void SendMatchServiceGetTacticalPuzzleSolutionReplayErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace paymentpb{void SendClientPlayerPaymentListPayChannelsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace paymentpb{void SendClientPlayerPaymentCreatePayIntentErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace paymentpb{void SendClientPlayerPaymentGetPayIntentErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -469,6 +479,9 @@ namespace trade{void SendClientPlayerJubaozhaiGetSellerCreditErased(entt::regist
 namespace trade{void SendClientPlayerJubaozhaiSubmitSellerReviewErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace trade{void SendClientPlayerJubaozhaiGetMarketReferencePriceErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace trade{void SendClientPlayerJubaozhaiGetPlayerTradeQuotaErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace trade{void SendClientPlayerJubaozhaiCreateWantedSkillBookOrderErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace trade{void SendClientPlayerJubaozhaiFulfillWantedSkillBookOrderErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace trade{void SendClientPlayerJubaozhaiListWantedSkillBookOrdersErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace trade{void SendTradeAdminSeedListingErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace trade{void SendTradeAdminListManualContractsErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace trade{void SendTradeAdminResolveManualContractErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -478,7 +491,7 @@ namespace trade{void SendTradeAdminRecordSellerViolationErased(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 574,
+static_assert(kMaxRpcMethodCount == 585,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -1395,6 +1408,11 @@ void InitMessageInfo()
         std::make_unique<::loginpb::CancelAccountDeletionRequest>(),
         std::make_unique<::loginpb::AccountDeletionResponse>(),
         1, common::base::eNodeType::LoginNodeService, loginpb::SendLoginPreGateCancelAccountDeletionErased, "/loginpb.LoginPreGate/CancelAccountDeletion"};
+    gRpcMethodRegistry[LoginPreGateHandlePassportEventMessageId] = RpcMethodMeta{
+        "LoginPreGate", "HandlePassportEvent",
+        std::make_unique<::loginpb::PassportEventRequest>(),
+        std::make_unique<::loginpb::PassportEventResponse>(),
+        1, common::base::eNodeType::LoginNodeService, loginpb::SendLoginPreGateHandlePassportEventErased, "/loginpb.LoginPreGate/HandlePassportEvent"};
 
     // --- LoginAdmin ---
     gRpcMethodRegistry[LoginAdminRemovePlayersFromAccountsMessageId] = RpcMethodMeta{
@@ -1795,6 +1813,41 @@ void InitMessageInfo()
         std::make_unique<::match::GetSharedTrialReplayRequest>(),
         std::make_unique<::match::GetSharedTrialReplayResponse>(),
         1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceGetSharedTrialReplayErased, "/match.MatchService/GetSharedTrialReplay"};
+    gRpcMethodRegistry[MatchServiceListTacticalPuzzlesMessageId] = RpcMethodMeta{
+        "MatchService", "ListTacticalPuzzles",
+        std::make_unique<::match::ListTacticalPuzzlesRequest>(),
+        std::make_unique<::match::ListTacticalPuzzlesResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceListTacticalPuzzlesErased, "/match.MatchService/ListTacticalPuzzles"};
+    gRpcMethodRegistry[MatchServiceGetTacticalPuzzleMessageId] = RpcMethodMeta{
+        "MatchService", "GetTacticalPuzzle",
+        std::make_unique<::match::GetTacticalPuzzleRequest>(),
+        std::make_unique<::match::GetTacticalPuzzleResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceGetTacticalPuzzleErased, "/match.MatchService/GetTacticalPuzzle"};
+    gRpcMethodRegistry[MatchServiceSaveTacticalPuzzleDraftMessageId] = RpcMethodMeta{
+        "MatchService", "SaveTacticalPuzzleDraft",
+        std::make_unique<::match::SaveTacticalPuzzleDraftRequest>(),
+        std::make_unique<::match::SaveTacticalPuzzleDraftResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceSaveTacticalPuzzleDraftErased, "/match.MatchService/SaveTacticalPuzzleDraft"};
+    gRpcMethodRegistry[MatchServiceDeleteTacticalPuzzleMessageId] = RpcMethodMeta{
+        "MatchService", "DeleteTacticalPuzzle",
+        std::make_unique<::match::DeleteTacticalPuzzleRequest>(),
+        std::make_unique<::match::DeleteTacticalPuzzleResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceDeleteTacticalPuzzleErased, "/match.MatchService/DeleteTacticalPuzzle"};
+    gRpcMethodRegistry[MatchServiceStartTacticalPuzzleBattleMessageId] = RpcMethodMeta{
+        "MatchService", "StartTacticalPuzzleBattle",
+        std::make_unique<::match::StartTacticalPuzzleBattleRequest>(),
+        std::make_unique<::match::StartTacticalPuzzleBattleResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceStartTacticalPuzzleBattleErased, "/match.MatchService/StartTacticalPuzzleBattle"};
+    gRpcMethodRegistry[MatchServiceLikeTacticalPuzzleMessageId] = RpcMethodMeta{
+        "MatchService", "LikeTacticalPuzzle",
+        std::make_unique<::match::LikeTacticalPuzzleRequest>(),
+        std::make_unique<::match::LikeTacticalPuzzleResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceLikeTacticalPuzzleErased, "/match.MatchService/LikeTacticalPuzzle"};
+    gRpcMethodRegistry[MatchServiceGetTacticalPuzzleSolutionReplayMessageId] = RpcMethodMeta{
+        "MatchService", "GetTacticalPuzzleSolutionReplay",
+        std::make_unique<::match::GetTacticalPuzzleSolutionReplayRequest>(),
+        std::make_unique<::match::GetTacticalPuzzleSolutionReplayResponse>(),
+        1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceGetTacticalPuzzleSolutionReplayErased, "/match.MatchService/GetTacticalPuzzleSolutionReplay"};
 
     // --- ClientPlayerPayment ---
     gRpcMethodRegistry[ClientPlayerPaymentListPayChannelsMessageId] = RpcMethodMeta{
@@ -3257,6 +3310,21 @@ void InitMessageInfo()
         std::make_unique<::trade::GetPlayerTradeQuotaRequest>(),
         std::make_unique<::trade::GetPlayerTradeQuotaResponse>(),
         1, common::base::eNodeType::TradeNodeService, trade::SendClientPlayerJubaozhaiGetPlayerTradeQuotaErased, "/trade.ClientPlayerJubaozhai/GetPlayerTradeQuota"};
+    gRpcMethodRegistry[ClientPlayerJubaozhaiCreateWantedSkillBookOrderMessageId] = RpcMethodMeta{
+        "ClientPlayerJubaozhai", "CreateWantedSkillBookOrder",
+        std::make_unique<::trade::CreateWantedSkillBookOrderRequest>(),
+        std::make_unique<::trade::WantedSkillBookOrderResponse>(),
+        1, common::base::eNodeType::TradeNodeService, trade::SendClientPlayerJubaozhaiCreateWantedSkillBookOrderErased, "/trade.ClientPlayerJubaozhai/CreateWantedSkillBookOrder"};
+    gRpcMethodRegistry[ClientPlayerJubaozhaiFulfillWantedSkillBookOrderMessageId] = RpcMethodMeta{
+        "ClientPlayerJubaozhai", "FulfillWantedSkillBookOrder",
+        std::make_unique<::trade::FulfillWantedSkillBookOrderRequest>(),
+        std::make_unique<::trade::WantedSkillBookOrderResponse>(),
+        1, common::base::eNodeType::TradeNodeService, trade::SendClientPlayerJubaozhaiFulfillWantedSkillBookOrderErased, "/trade.ClientPlayerJubaozhai/FulfillWantedSkillBookOrder"};
+    gRpcMethodRegistry[ClientPlayerJubaozhaiListWantedSkillBookOrdersMessageId] = RpcMethodMeta{
+        "ClientPlayerJubaozhai", "ListWantedSkillBookOrders",
+        std::make_unique<::trade::ListWantedSkillBookOrdersRequest>(),
+        std::make_unique<::trade::ListWantedSkillBookOrdersResponse>(),
+        1, common::base::eNodeType::TradeNodeService, trade::SendClientPlayerJubaozhaiListWantedSkillBookOrdersErased, "/trade.ClientPlayerJubaozhai/ListWantedSkillBookOrders"};
 
     // --- TradeAdmin ---
     gRpcMethodRegistry[TradeAdminSeedListingMessageId] = RpcMethodMeta{
@@ -3408,6 +3476,13 @@ bool IsClientMessageId(uint32_t messageId)
 	case MatchServiceCreateTrialChallengeCardMessageId:
 	case MatchServiceGetTrialChallengeCardMessageId:
 	case MatchServiceGetSharedTrialReplayMessageId:
+	case MatchServiceListTacticalPuzzlesMessageId:
+	case MatchServiceGetTacticalPuzzleMessageId:
+	case MatchServiceSaveTacticalPuzzleDraftMessageId:
+	case MatchServiceDeleteTacticalPuzzleMessageId:
+	case MatchServiceStartTacticalPuzzleBattleMessageId:
+	case MatchServiceLikeTacticalPuzzleMessageId:
+	case MatchServiceGetTacticalPuzzleSolutionReplayMessageId:
 	case ClientPlayerPaymentListPayChannelsMessageId:
 	case ClientPlayerPaymentCreatePayIntentMessageId:
 	case ClientPlayerPaymentGetPayIntentMessageId:
@@ -3594,6 +3669,9 @@ bool IsClientMessageId(uint32_t messageId)
 	case ClientPlayerJubaozhaiSubmitSellerReviewMessageId:
 	case ClientPlayerJubaozhaiGetMarketReferencePriceMessageId:
 	case ClientPlayerJubaozhaiGetPlayerTradeQuotaMessageId:
+	case ClientPlayerJubaozhaiCreateWantedSkillBookOrderMessageId:
+	case ClientPlayerJubaozhaiFulfillWantedSkillBookOrderMessageId:
+	case ClientPlayerJubaozhaiListWantedSkillBookOrdersMessageId:
 		return true;
 	default:
 		return false;

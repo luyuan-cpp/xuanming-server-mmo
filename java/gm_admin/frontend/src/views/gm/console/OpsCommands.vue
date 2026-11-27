@@ -42,7 +42,18 @@
         </a-form-item>
       </a-form>
       <a-alert v-if="proposeError" type="warning" show-icon :message="proposeError" />
-      <a-button type="primary" :loading="proposing" :disabled="busy || !selected" @click="propose">提交申请</a-button>
+      <a-space>
+        <a-button
+          v-if="selected?.preview"
+          :loading="previewing"
+          :disabled="busy || !hasPermission(`gm:${selected.target}:read`)"
+          @click="preview"
+        >
+          演练（不进流水）
+        </a-button>
+        <a-button type="primary" :loading="proposing" :disabled="busy || !selected" @click="propose">提交申请</a-button>
+      </a-space>
+      <pre v-if="previewResult" class="ops-json ops-space">{{ pretty(previewResult) }}</pre>
     </template>
 
     <template v-if="hasPermission('gm:audit:read')">
@@ -111,6 +122,7 @@
     listMallSkus,
     listOpsCommands,
     prepareOps,
+    previewOps,
     sendOps,
     type OpsCommand,
     type OpsStatus,
@@ -132,6 +144,8 @@
   const form = reactive({ key: undefined as string | undefined, values: {} as Record<string, string>, reason: '', clientRequestId: newClientRequestId() });
   const proposing = ref(false);
   const proposeError = ref('');
+  const previewing = ref(false);
+  const previewResult = ref<unknown>();
 
   const reviewOpen = ref(false);
   const reviewed = ref<OpsCommand>();
@@ -140,7 +154,7 @@
   const reviewError = ref('');
   const auditTrail = ref<GmAuditEntry[]>([]);
 
-  const busy = computed(() => proposing.value || releasing.value);
+  const busy = computed(() => proposing.value || releasing.value || previewing.value);
   watch(busy, (value) => emit('busy-change', value));
 
   const commandColumns = [
@@ -196,6 +210,29 @@
   function resetFields() {
     form.values = {};
     proposeError.value = '';
+    previewResult.value = undefined;
+  }
+
+  /** 演练:用当前表单直接调下游的预览模式,发起前拿到计划摘要(回收、滞留阵容)或试算结果。 */
+  async function preview() {
+    const spec = selected.value;
+    if (!spec?.preview || previewing.value) return;
+    proposeError.value = '';
+    let body: Record<string, unknown>;
+    try {
+      body = buildBody(false);
+    } catch (error) {
+      proposeError.value = (error as Error).message;
+      return;
+    }
+    previewing.value = true;
+    try {
+      previewResult.value = await previewOps(spec.target as OpsTarget, spec.command, body);
+    } catch (error) {
+      proposeError.value = errorText(error);
+    } finally {
+      previewing.value = false;
+    }
   }
 
   async function loadStatus() {
@@ -241,13 +278,13 @@
     await loadCommands();
   }
 
-  /** 按字段类型把表单值转成下游要的形状;空的可选字段不提交。 */
-  function buildBody(): Record<string, unknown> {
+  /** 按字段类型把表单值转成下游要的形状;空的可选字段不提交。演练时不强求执行才需要的字段(如计划摘要)。 */
+  function buildBody(strict = true): Record<string, unknown> {
     const body: Record<string, unknown> = {};
     for (const field of selected.value?.fields || []) {
       const raw = (form.values[field.name] ?? '').trim();
       if (!raw) {
-        if (field.required) throw new Error(`请填写「${field.label}」`);
+        if (field.required && (strict || !/Digest$/.test(field.name))) throw new Error(`请填写「${field.label}」`);
         continue;
       }
       if (field.kind === 'integer') {

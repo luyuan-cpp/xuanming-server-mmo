@@ -246,6 +246,18 @@ message TradeCommerceWorkflow {
   bool payment_revoked = 26;
   // 官方指定买家定向寄售单的目标角色 ID（0 = 公开单，非 0 时仅允许该角色购买）。
   uint64 designated_buyer_player_id = 27;
+  // 悬赏求书求购单(kind 7)的条款,建单时写定、之后不改(docs/design/skill-book-wanted-order-trade-escrow.md §3.1)。
+  TradeWantedSkillBookTerms wanted_skill_book = 28;
+}
+
+// 求购单条款。揭榜的快照核对、悬赏榜展示与交付金额都只读它。
+message TradeWantedSkillBookTerms {
+  uint32 skill_table_id = 1;           // 求购的常规永久技能
+  uint32 scroll_id = 2;                // 所属卷宗(展示与筛选)
+  bool require_master_signature = 3;   // 只收带宗师署名的封卷道籍
+  uint64 reward_gold = 4;              // 托管的悬赏银两(100..50000,流通银两)
+  uint64 seller_net_gold = 5;          // 税后交给揭榜人的银两 = reward - ceil(reward*500/10000),建单时算定
+  string poster_name = 6;              // 发榜时的角色名快照(展示)
 }
 
 // 合同转人工的记录。stage、status 是转人工之前的值;reason 是类别(commerce 包的 manualReason* 常量);

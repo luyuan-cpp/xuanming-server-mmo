@@ -1,14 +1,16 @@
-// gate 客户端连接准入(handler/rpc/connection_admission.h,docs/design/gate-connection-admission-control.md P0-2、P1-1 ~ P1-4)。
+// gate 客户端连接准入(handler/rpc/connection_admission.h,docs/design/gate-connection-admission-control.md P0-2、P1-1 ~ P1-4、P2-4)。
 //
-// 不进 gate.vcxproj,登记在 cpp/tests/routing_identity_test/routing_identity_test.vcxproj。分两组:
+// 不进 gate.vcxproj,登记在 cpp/tests/routing_identity_test/routing_identity_test.vcxproj。分三组:
 //   - 纯逻辑:拒绝原因、session id 空间的硬上限、GATE_* 环境变量、未验签预算(缺省值的推导、承压时先淘汰后早拒、
 //     早拒概率的线性曲线)、判定顺序。时刻与随机数全部注入,整数时长,边界值精确。
 //     与 battle 直连共用的速率闸(GCRA)、缺省速率推导、环境变量解析与握手直方图在 core 的 network/accept_admission.h,
 //     由 cpp/tests/rpc_controller_test/accept_admission_test.cpp 测;
-//   - 装配:AdmitConnection 按原因计数,未验签占位随验签 / 会话销毁归还,承压时按建连先后淘汰最老的未验签会话
-//     (跳过已验签与会话号被复用的),指标页的样本行。会话表用进程里的 tlsSessionManager(来自 gate.lib),
-//     每个用例前后清空;计数是 thread_local,SetUp 里 ResetForTesting。淘汰真的关掉了连接、又没有同步删会话,
-//     用一对真实的回环连接测(loopback_connection.h)。
+//   - 装配(ConnectionAdmission.*):AdmitConnection 按原因计数,总量按 会话数 + 未验签连接数 判,承压时淘汰未验签表的表头
+//     (最老的一条;验签过的已离开这张表)。会话表与未验签表用进程里的 tlsSessionManager(来自 gate.lib),每个用例前后清空;
+//     计数是 thread_local,SetUp 里 ResetForTesting。凑池子的未验签记录不带连接;
+//   - 票据先行(PreAuthConnectionLifecycle.*,设计稿 P2-4):用真实的回环连接(loopback_connection.h)走建连、验签成功、
+//     断开三步:验签前不建会话、验签成功才发号、未验签断开不留会话、票据被占时不建会话、dev 免验签建连即建会话、
+//     发号的回绕与碰撞检查、指标页的样本行、淘汰真的关掉了那一条连接。
 // 「准入回调在 accept 之后、TcpConnection 建出来之前执行,被拒的连接收到 RST」是 muduo 那一层的行为,
 // 由 cpp/tests/rpc_controller_test/acceptor_admission_test.cpp 用真实回环连接测;main.cpp 把两者接起来的那几行靠冒烟。
 
@@ -22,8 +24,10 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "handler/rpc/client_heartbeat.h"
+#include "handler/rpc/client_request_lane.h"
 #include "handler/rpc/connection_admission.h"
 #include "loopback_connection.h"
 #include "metrics/prometheus_text.h"
@@ -74,10 +78,6 @@ std::optional<SteadyTime::duration> Age(const SteadyTime::duration age)
 
 // 缺省的可淘汰年龄(accept_admission.h)。
 constexpr auto kMinEvictableAge = kDefaultMinEvictableAge;
-
-// 本文件里会话的代次从这里起。存活扫描的检查点堆是线程局部的,别的用例留下的检查点按 (session_id, 代次) 找会话,
-// 代次错开就碰不到这里的会话。
-constexpr uint64_t kIncarnationBase = 0x7E57'0000'0000ULL;
 
 // 让存活扫描在 now 打一拍、且这一拍不迟到:LoopRecentlyStalled(now) 为假,淘汰只看年龄。扫描的节拍也是线程局部的,
 // 别的用例留下的上一拍可能隔得很远,所以先在一个节拍之前补一拍。
@@ -228,14 +228,14 @@ TEST(ConnectionAdmissionPolicy, DegenerateBudgetWithoutAnEarlyDropBandStillRejec
 TEST(ConnectionAdmissionPolicy, DecideChecksSourceThenCapacityThenPerSourceThenPreAuthThenRate)
 {
 	AcceptRateGate gate(RateLimit{10, 1});
-	const AdmissionState open{.sourceClosed = false, .currentSessions = 9, .maxConnections = 10};
+	const AdmissionState open{.sourceClosed = false, .currentConnections = 9, .maxConnections = 10};
 	AdmissionState closed = open;
 	closed.sourceClosed = true;
 	AdmissionState full = open;
-	full.currentSessions = 10;
+	full.currentConnections = 10;
 	full.sourceOverRate = true; // 满员排在来源之前
 	AdmissionState overFull = open;
-	overFull.currentSessions = 11;
+	overFull.currentConnections = 11;
 	// 未验签池到了预算,里面全是刚建的连接:没有可以让位的。
 	AdmissionState youngPool = open;
 	youngPool.unauthenticated = 20;
@@ -261,7 +261,7 @@ TEST(ConnectionAdmissionPolicy, DecideChecksSourceThenCapacityThenPerSourceThenP
 TEST(ConnectionAdmissionPolicy, EvictionIsRequestedOnlyWhenTheConnectionIsAdmitted)
 {
 	AcceptRateGate gate(RateLimit{10, 1});
-	AdmissionState oldPool{.sourceClosed = false, .currentSessions = 9, .maxConnections = 10};
+	AdmissionState oldPool{.sourceClosed = false, .currentConnections = 9, .maxConnections = 10};
 	oldPool.unauthenticated = 20;
 	oldPool.oldestUnauthenticatedAge = seconds(5);
 	oldPool.preAuthBudget = PreAuthBudget{10, 20};
@@ -326,65 +326,67 @@ class ConnectionAdmission : public ::testing::Test
 protected:
 	void SetUp() override
 	{
-		tlsSessionManager.sessions().clear();
+		ClearTables();
 		ResetForTesting();
-		baselineUnauthenticated = UnauthenticatedConnections();
 	}
 	void TearDown() override
 	{
-		tlsSessionManager.sessions().clear();
+		ClearTables();
 		ResetForTesting();
 	}
 
-	// 本用例新增的未验签连接数(别的用例不会留下占位,基线正常是 0;取差值只为不依赖这一点)。
-	uint64_t Unauthenticated() const { return UnauthenticatedConnections() - baselineUnauthenticated; }
+	static void ClearTables()
+	{
+		tlsSessionManager.sessions().clear();
+		tlsSessionManager.preAuthConnections().clear();
+	}
+
+	static uint64_t Unauthenticated() { return UnauthenticatedConnections(); }
 
 	static SessionInfo &AddSession(const SessionId id) { return tlsSessionManager.sessions()[id]; }
 
-	// 同 HandleConnectionEstablished:插入会话、领未验签占位、进淘汰索引。会话代次取 kIncarnationBase + 会话号(各不相同),
-	// 生产上它来自 gate_lane::NextIncarnation();conn 给了就挂上(真实回环连接的服务端那一头)。
-	static SessionInfo &OpenUnverified(const SessionId id, const SteadyTime openedAt,
-									   const muduo::net::TcpConnectionPtr &conn = nullptr)
+	// 往未验签表放一条记录,同 OpenPreAuthConnection 的形状:键是 gate_lane::NextIncarnation()(单调递增,先放的就是表头)。
+	// 不带连接,给大批量凑池子用;要真实连接的用例走 OpenPreAuthConnection(见下面带回环连接的夹具)。返回它的键。
+	static uint64_t OpenUnverified(const SteadyTime connectedAt)
 	{
-		SessionInfo &session = AddSession(id);
-		session.incarnation = kIncarnationBase + id;
-		session.conn = conn;
-		OnSessionOpened(id, session, openedAt);
-		return session;
+		const uint64_t key = gate_lane::NextIncarnation();
+		tlsSessionManager.preAuthConnections().emplace(key, PreAuthConnection{.connectedAt = connectedAt});
+		return key;
 	}
 
-	// 会话号 [firstId, lastId] 各开一条未验签会话,都在 openedAt 建连。
-	static void OpenUnverifiedRange(const SessionId firstId, const SessionId lastId, const SteadyTime openedAt)
+	// 连着放 count 条,都在 connectedAt 建连。
+	static void OpenUnverifiedMany(const uint64_t count, const SteadyTime connectedAt)
 	{
-		for (SessionId id = firstId; id <= lastId; ++id)
+		for (uint64_t i = 0; i < count; ++i)
 		{
-			OpenUnverified(id, openedAt);
+			OpenUnverified(connectedAt);
 		}
 	}
 
+	static bool StillUnverified(const uint64_t key) { return tlsSessionManager.preAuthConnections().contains(key); }
+
 	// 准入回调只把对端地址写进采样日志,取值与判定无关。
 	const muduo::net::InetAddress peer{static_cast<uint16_t>(40000)};
-
-private:
-	uint64_t baselineUnauthenticated{0};
 };
 
+// 总量判据是 会话数 + 未验签连接数:验签之前的连接没有会话,照样占名额。
 TEST_F(ConnectionAdmission, AdmitsBelowTheCapAndRejectsAtIt)
 {
 	Configure(2, RateLimit{1000, 1000});
 	EXPECT_TRUE(AdmitConnection(peer, kT0));
 	AddSession(1);
 	EXPECT_TRUE(AdmitConnection(peer, kT0));
-	AddSession(2);
+	const uint64_t unverified = OpenUnverified(kT0);
 
-	EXPECT_FALSE(AdmitConnection(peer, kT0));
+	EXPECT_FALSE(AdmitConnection(peer, kT0)) << "一条会话加一条未验签连接,到上限 2";
 	EXPECT_FALSE(AdmitConnection(peer, kT0));
 	EXPECT_EQ(Rejected(RejectReason::kCapacity), 2u);
 	EXPECT_EQ(Rejected(RejectReason::kAcceptRate), 0u);
 
-	// 走掉一条连接,位置立刻腾出来。
-	tlsSessionManager.sessions().erase(1);
+	// 走掉一条未验签连接,位置立刻腾出来。
+	tlsSessionManager.preAuthConnections().erase(unverified);
 	EXPECT_TRUE(AdmitConnection(peer, kT0));
+	EXPECT_EQ(tlsSessionManager.ClientConnectionCount(), 1u);
 }
 
 // dev / test 把上限配成 0:准入闸按 session id 空间放行,不会把 0 当成「一条都不接」。
@@ -442,77 +444,6 @@ TEST_F(ConnectionAdmission, PostAcceptRejectionsAreCountedByReason)
 	EXPECT_EQ(Rejected(RejectReason::kNoTokenSecret), 2u);
 }
 
-TEST_F(ConnectionAdmission, UnverifiedSessionHoldsASlotUntilItVerifies)
-{
-	SessionInfo &session = AddSession(1);
-	OnSessionOpened(1, session, kT0);
-	EXPECT_EQ(GetCounters().accepted, 1u);
-	EXPECT_EQ(Unauthenticated(), 1u);
-	ASSERT_TRUE(session.preAuthSlot);
-
-	OnSessionVerified(session, kT0 + milliseconds(40));
-	EXPECT_EQ(Unauthenticated(), 0u);
-	EXPECT_FALSE(session.preAuthSlot);
-	EXPECT_EQ(GetCounters().handshakes, 1u);
-
-	// 已验证会话重发验签:没有占位,不重复计。
-	OnSessionVerified(session, kT0 + seconds(5));
-	EXPECT_EQ(Unauthenticated(), 0u);
-	EXPECT_EQ(GetCounters().handshakes, 1u);
-}
-
-// dev 免验签的会话建连即已验证:计接纳,不占未验签位,也不进握手直方图。
-TEST_F(ConnectionAdmission, SessionVerifiedAtConnectHoldsNoSlot)
-{
-	SessionInfo &session = AddSession(1);
-	session.verified = true;
-	OnSessionOpened(1, session, kT0);
-	EXPECT_EQ(GetCounters().accepted, 1u);
-	EXPECT_EQ(Unauthenticated(), 0u);
-	OnSessionVerified(session, kT0);
-	EXPECT_EQ(GetCounters().handshakes, 0u);
-}
-
-// 没验签就断开:会话从表里删掉,占位随之归还,不需要任何出口手写减一。
-TEST_F(ConnectionAdmission, ErasingAnUnverifiedSessionReturnsItsSlot)
-{
-	OnSessionOpened(1, AddSession(1), kT0);
-	OnSessionOpened(2, AddSession(2), kT0);
-	OnSessionOpened(3, AddSession(3), kT0);
-	EXPECT_EQ(Unauthenticated(), 3u);
-
-	tlsSessionManager.sessions().erase(2);
-	EXPECT_EQ(Unauthenticated(), 2u);
-	tlsSessionManager.sessions().clear();
-	EXPECT_EQ(Unauthenticated(), 0u);
-	EXPECT_EQ(GetCounters().handshakes, 0u) << "没验签的连接不进握手直方图";
-}
-
-// 占位放在 shared_ptr 里(会话按值拷贝时共享同一个占位):最后一份引用销毁才归还,不会减两次。
-TEST_F(ConnectionAdmission, SharedSlotIsReturnedOnceWhenTheLastOwnerGoes)
-{
-	SessionInfo &session = AddSession(1);
-	OnSessionOpened(1, session, kT0);
-	{
-		const std::shared_ptr<PreAuthSlot> other = session.preAuthSlot;
-		EXPECT_EQ(Unauthenticated(), 1u);
-		tlsSessionManager.sessions().erase(1);
-		EXPECT_EQ(Unauthenticated(), 1u) << "另一份引用还活着";
-	}
-	EXPECT_EQ(Unauthenticated(), 0u);
-}
-
-// ResetForTesting 清计数与配置,但不动仍被会话持有的占位。
-TEST_F(ConnectionAdmission, ResetKeepsLiveSlotsCounted)
-{
-	OnSessionOpened(1, AddSession(1), kT0);
-	ResetForTesting();
-	EXPECT_EQ(GetCounters().accepted, 0u);
-	EXPECT_EQ(Unauthenticated(), 1u);
-	tlsSessionManager.sessions().clear();
-	EXPECT_EQ(Unauthenticated(), 0u);
-}
-
 // Configure 按上限推导未验签预算。
 TEST_F(ConnectionAdmission, ConfigureDerivesThePreAuthBudgetFromTheCap)
 {
@@ -522,59 +453,54 @@ TEST_F(ConnectionAdmission, ConfigureDerivesThePreAuthBudgetFromTheCap)
 	EXPECT_EQ(CurrentPreAuthBudget(), DefaultPreAuthBudget(EffectiveMaxConnections(0)));
 }
 
-// 池到起点之后,最老的一条未验签连接建连满 3 秒就给新连接让位:收回它的占位、计一次淘汰;会话留给断开回调删。
+// 池到起点之后,最老的一条未验签连接建连满 3 秒就给新连接让位:摘掉它的记录、计一次淘汰。从头到尾没有会话。
 TEST_F(ConnectionAdmission, UnderPressureTheOldestUnverifiedConnectionMakesRoom)
 {
 	Configure(10000, RateLimit{1'000'000, 1'000'000});
 	const PreAuthBudget budget = CurrentPreAuthBudget();
 	ASSERT_EQ(budget, (PreAuthBudget{500, 1000}));
-	SessionInfo &oldest = OpenUnverified(1, kT0);
-	OpenUnverifiedRange(2, budget.earlyDropStart, kT0 + seconds(1));
+	const uint64_t oldest = OpenUnverified(kT0);
+	const uint64_t next = OpenUnverified(kT0 + seconds(1));
+	OpenUnverifiedMany(budget.earlyDropStart - 2, kT0 + seconds(1));
 	ASSERT_EQ(Unauthenticated(), budget.earlyDropStart);
 
 	// 最老的一条还差 1ms 满 3 秒:不淘汰;池恰好在起点,早拒概率 0,放行。
 	MarkLoopHealthy(kT0 + kMinEvictableAge - milliseconds(1));
 	EXPECT_TRUE(AdmitConnection(peer, kT0 + kMinEvictableAge - milliseconds(1)));
 	EXPECT_EQ(GetCounters().preAuthEvicted, 0u);
-	ASSERT_TRUE(oldest.preAuthSlot);
+	ASSERT_TRUE(StillUnverified(oldest));
 
 	MarkLoopHealthy(kT0 + kMinEvictableAge);
 	EXPECT_TRUE(AdmitConnection(peer, kT0 + kMinEvictableAge));
 	EXPECT_EQ(GetCounters().preAuthEvicted, 1u);
-	EXPECT_FALSE(oldest.preAuthSlot) << "被淘汰的连接这一刻起不再占未验签池";
+	EXPECT_FALSE(StillUnverified(oldest)) << "被淘汰的连接这一刻起不再占未验签池";
 	EXPECT_EQ(Unauthenticated(), budget.earlyDropStart - 1);
-	EXPECT_TRUE(tlsSessionManager.sessions().contains(1)) << "不在准入回调里删会话,留给断开回调";
+	EXPECT_TRUE(tlsSessionManager.sessions().empty()) << "未验签连接从头到尾没有会话";
 
 	// 池回到起点以下:不再淘汰,下一条最老的(晚 1 秒建连)原样留着。
 	EXPECT_TRUE(AdmitConnection(peer, kT0 + seconds(5)));
 	EXPECT_EQ(GetCounters().preAuthEvicted, 1u);
-	EXPECT_TRUE(tlsSessionManager.sessions().at(2).preAuthSlot);
+	EXPECT_TRUE(StillUnverified(next));
 	EXPECT_EQ(Rejected(RejectReason::kPreAuthBudget) + Rejected(RejectReason::kPreAuthEarlyDrop), 0u);
 }
 
-// 淘汰按 (session_id, 会话代次) 核对:验签过的、断开后会话号被新连接复用的,都不会被当成最老的那一条。
-TEST_F(ConnectionAdmission, EvictionPassesOverVerifiedAndReplacedSessions)
+// 验签成功的连接离开了未验签表,不会被淘汰:淘汰的是仍未验签里最老的那一条。
+TEST_F(ConnectionAdmission, EvictionTakesTheOldestConnectionStillUnverified)
 {
 	Configure(10000, RateLimit{1'000'000, 1'000'000});
 	const PreAuthBudget budget = CurrentPreAuthBudget();
-	SessionInfo &verifiedLater = OpenUnverified(1, kT0); // 最早建连,后来验签了
-	OpenUnverified(2, kT0);                              // 断开了,会话号随后被新连接复用
-	SessionInfo &oldestUnverified = OpenUnverified(3, kT0 + seconds(1));
-	OpenUnverifiedRange(4, budget.earlyDropStart + 1, kT0 + seconds(2));
-	verifiedLater.verified = true; // 同 DispatchTokenVerify:先置已验证,再在成功回包里归还占位
-	OnSessionVerified(verifiedLater, kT0 + milliseconds(10));
-	tlsSessionManager.sessions().erase(2);
-	SessionInfo &reused = AddSession(2);
-	reused.incarnation = kIncarnationBase + 1'000'000; // 新连接,新代次
-	OnSessionOpened(2, reused, kT0 + seconds(2));
+	const uint64_t verifiedLater = OpenUnverified(kT0); // 最早建连,后来验签了
+	const uint64_t oldestUnverified = OpenUnverified(kT0 + seconds(1));
+	OpenUnverifiedMany(budget.earlyDropStart - 1, kT0 + seconds(2));
+	tlsSessionManager.preAuthConnections().erase(verifiedLater); // 同 OpenVerifiedSession:验签成功时摘记录、建会话
+	AddSession(1);
 	ASSERT_EQ(Unauthenticated(), budget.earlyDropStart);
 
 	MarkLoopHealthy(kT0 + seconds(4));
 	EXPECT_TRUE(AdmitConnection(peer, kT0 + seconds(4)));
 	EXPECT_EQ(GetCounters().preAuthEvicted, 1u);
-	EXPECT_FALSE(oldestUnverified.preAuthSlot) << "被淘汰的是仍未验签里最老的那一条";
-	EXPECT_TRUE(verifiedLater.verified);
-	EXPECT_TRUE(reused.preAuthSlot) << "会话号被复用的新连接不会被旧条目误杀";
+	EXPECT_FALSE(StillUnverified(oldestUnverified)) << "被淘汰的是仍未验签里最老的那一条";
+	EXPECT_TRUE(tlsSessionManager.sessions().contains(1)) << "已验签的会话不受影响";
 }
 
 // 池里全是刚建的连接:到预算一律拒,不消耗速率名额;等最老的满 3 秒再淘汰放行,用的正是留下来的名额。
@@ -582,7 +508,7 @@ TEST_F(ConnectionAdmission, AFullPoolOfYoungConnectionsIsRejectedWithoutBurningR
 {
 	Configure(10000, RateLimit{1, 1}); // 速率闸只有一个名额
 	const PreAuthBudget budget = CurrentPreAuthBudget();
-	OpenUnverifiedRange(1, budget.full, kT0);
+	OpenUnverifiedMany(budget.full, kT0);
 	for (int i = 0; i < 100; ++i)
 	{
 		EXPECT_FALSE(AdmitConnection(peer, kT0 + seconds(1)));
@@ -604,7 +530,7 @@ TEST_F(ConnectionAdmission, AFullPoolOfYoungConnectionsIsRejectedWithoutBurningR
 TEST_F(ConnectionAdmission, EarlyDropUsesTheInjectedRandomSource)
 {
 	Configure(10000, RateLimit{1'000'000, 1'000'000});
-	OpenUnverifiedRange(1, 750, kT0);
+	OpenUnverifiedMany(750, kT0);
 	SetEarlyDropRandomForTesting(&FixedDraw);
 	gDraw = 249;
 	EXPECT_FALSE(AdmitConnection(peer, kT0 + seconds(1)));
@@ -627,7 +553,7 @@ TEST_F(ConnectionAdmission, NoEvictionRightAfterTheLoopStalled)
 {
 	Configure(10000, RateLimit{1'000'000, 1'000'000});
 	const PreAuthBudget budget = CurrentPreAuthBudget();
-	OpenUnverifiedRange(1, budget.full, kT0);
+	OpenUnverifiedMany(budget.full, kT0);
 
 	// 上一拍在 kT0 + 1s,之后 loop 卡了 4 秒:存活扫描的节拍还没轮到,准入回调先跑。
 	MarkLoopHealthy(kT0 + seconds(1));
@@ -660,7 +586,7 @@ TEST_F(ConnectionAdmission, PerSourceLimitingAppliesOnlyUnderPressure)
 	EXPECT_EQ(Rejected(RejectReason::kSourceRate), 0u);
 
 	// 池到起点(全是刚建的连接,不淘汰):承压。
-	OpenUnverifiedRange(1, CurrentPreAuthBudget().earlyDropStart, kT0);
+	OpenUnverifiedMany(CurrentPreAuthBudget().earlyDropStart, kT0);
 	MarkLoopHealthy(kT0);
 	EXPECT_TRUE(AdmitConnection(first, kT0));
 	EXPECT_TRUE(AdmitConnection(muduo::net::InetAddress("203.0.113.200", 40000), kT0));
@@ -676,7 +602,7 @@ TEST_F(ConnectionAdmission, PerSourceLimitingAppliesOnlyUnderPressure)
 TEST_F(ConnectionAdmission, PerSourceLimitingSkipsNonPublicSources)
 {
 	Configure(10000, RateLimit{1'000'000, 1'000'000}, DefaultPreAuthBudget(10000), RateLimit{1, 1});
-	OpenUnverifiedRange(1, CurrentPreAuthBudget().earlyDropStart, kT0);
+	OpenUnverifiedMany(CurrentPreAuthBudget().earlyDropStart, kT0);
 	MarkLoopHealthy(kT0);
 	const muduo::net::InetAddress edgeProxy("10.244.1.17", 40000);
 	for (int i = 0; i < 20; ++i)
@@ -709,24 +635,226 @@ TEST_F(ConnectionAdmission, AGlobalRateRejectionEngagesPerSourceLimitingForOneHa
 	EXPECT_EQ(Rejected(RejectReason::kSourceRate), 1u);
 }
 
-// 计数原样写进 /metrics:标签只有封闭的 reason,不带对端地址、会话号与玩家号(AGENTS.md §9)。
-TEST_F(ConnectionAdmission, CountersAreExportedAsPrometheusMetrics)
+// ---------------------------------------------------------------------------
+// 票据先行(设计稿 P2-4):用真实的回环连接走 OpenPreAuthConnection / OpenVerifiedSession / ForgetPreAuthConnection。
+// 这几个函数要读写连接上下文,所以要真实的 TcpConnection。回环服务端没装 gate 的连接回调,断开不会自己摘记录或删会话,
+// 用例按 HandleConnectionDisconnection 的第一步直接调 ForgetPreAuthConnection。
+// ---------------------------------------------------------------------------
+
+class PreAuthConnectionLifecycle : public ConnectionAdmission
+{
+protected:
+	void SetUp() override
+	{
+		ConnectionAdmission::SetUp();
+		loop = std::make_unique<muduo::net::EventLoop>();
+	}
+	void TearDown() override
+	{
+		ClearTables();
+		connections.clear(); // 拆连接要驱动 loop,必须先于 loop 析构
+		loop.reset();
+		ConnectionAdmission::TearDown();
+	}
+
+	// 建一条回环连接,返回服务端那一头(调用方不要长期持有:强引用不放手,拆除时客户端等不到 EOF)。
+	muduo::net::TcpConnectionPtr Connect(const std::string &name)
+	{
+		auto connection = std::make_unique<gate_test::LoopbackConnection>(*loop);
+		EXPECT_TRUE(connection->Open(name));
+		connections.push_back(std::move(connection));
+		return connections.back()->ServerSide();
+	}
+
+	gate_test::LoopbackConnection &Connection(const size_t index) { return *connections.at(index); }
+
+	static SessionId LastIssuedId() { return tlsSessionManager.session_id_gen().LastId(); }
+
+	std::unique_ptr<muduo::net::EventLoop> loop;
+	std::vector<std::unique_ptr<gate_test::LoopbackConnection>> connections;
+};
+
+// 验签前不建会话:建连只登记一条未验签记录(weak 连接、建连时刻,键是代次),连接上下文是它的键;不发号、会话表不动。
+TEST_F(PreAuthConnectionLifecycle, OpeningAConnectionCreatesNoSessionAndIssuesNoSessionId)
+{
+	const auto conn = Connect("preauth_open");
+	ASSERT_TRUE(conn);
+	const SessionId lastIdBefore = LastIssuedId();
+
+	OpenPreAuthConnection(conn, kT0);
+
+	EXPECT_TRUE(tlsSessionManager.sessions().empty()) << "验签前不建会话";
+	EXPECT_EQ(LastIssuedId(), lastIdBefore) << "验签前不发 session_id";
+	const std::optional<uint64_t> key = PreAuthIncarnationOf(conn);
+	ASSERT_TRUE(key.has_value()) << "连接上下文是未验签记录的键";
+	const auto &table = tlsSessionManager.preAuthConnections();
+	ASSERT_EQ(table.size(), 1u);
+	const auto it = table.find(*key);
+	ASSERT_NE(it, table.end());
+	EXPECT_EQ(it->second.conn.lock(), conn);
+	EXPECT_EQ(it->second.connectedAt, kT0);
+	EXPECT_EQ(Unauthenticated(), 1u);
+	EXPECT_EQ(tlsSessionManager.ClientConnectionCount(), 1u) << "未验签连接照样算进连接数";
+	EXPECT_EQ(GetCounters().accepted, 1u);
+	EXPECT_FALSE(IsVerifiedConnection(conn));
+	EXPECT_EQ(boost::any_cast<SessionId>(&conn->getContext()), nullptr) << "上下文里没有会话号";
+}
+
+// 验签成功才发号:这时才发 session_id、建会话(已验签、weak 连接、ticketKey),会话沿用未验签记录的代次;
+// 记录随之摘掉,握手耗时进直方图。号与上下文都换过来之后,这条连接按已验签算。
+TEST_F(PreAuthConnectionLifecycle, VerifyingIssuesTheSessionIdAndOpensTheSession)
+{
+	const auto conn = Connect("preauth_verify");
+	ASSERT_TRUE(conn);
+	OpenPreAuthConnection(conn, kT0);
+	const uint64_t incarnation = *PreAuthIncarnationOf(conn);
+	const SessionId lastIdBefore = LastIssuedId();
+	// 票据占位表是线程局部的、不随用例清空(别的用例留下的占位按「持有者已不在」由新连接接手),只看增量。
+	const std::size_t ticketHoldersBefore = tlsSessionManager.TicketHolderCount();
+
+	const std::optional<SessionId> sessionId = OpenVerifiedSession(conn, "ticket-signature", kT0 + milliseconds(40));
+
+	ASSERT_TRUE(sessionId.has_value());
+	EXPECT_NE(*sessionId, kInvalidSessionId);
+	EXPECT_NE(LastIssuedId(), lastIdBefore) << "验签成功时才发号";
+	EXPECT_EQ(*sessionId, LastIssuedId());
+	ASSERT_EQ(tlsSessionManager.sessions().size(), 1u);
+	const SessionInfo &session = tlsSessionManager.sessions().at(*sessionId);
+	EXPECT_TRUE(session.verified);
+	EXPECT_EQ(session.conn.lock(), conn);
+	EXPECT_EQ(session.incarnation, incarnation) << "会话沿用建连时给的代次";
+	EXPECT_EQ(session.ticketKey, "ticket-signature");
+	EXPECT_EQ(tlsSessionManager.TicketHolderCount(), ticketHoldersBefore + 1) << "票据随会话一起占位";
+	EXPECT_TRUE(tlsSessionManager.preAuthConnections().empty()) << "未验签记录随之摘掉";
+	EXPECT_FALSE(PreAuthIncarnationOf(conn).has_value());
+	ASSERT_NE(boost::any_cast<SessionId>(&conn->getContext()), nullptr);
+	EXPECT_EQ(boost::any_cast<SessionId>(conn->getContext()), *sessionId);
+	EXPECT_TRUE(IsVerifiedConnection(conn));
+	EXPECT_EQ(GetCounters().handshakes, 1u);
+	EXPECT_EQ(GetCounters().accepted, 1u) << "接纳在建连时计过一次,验签不重复计";
+	EXPECT_EQ(tlsSessionManager.ClientConnectionCount(), 1u);
+
+	// 已经有会话的连接不再走未验签那一步。
+	EXPECT_FALSE(ForgetPreAuthConnection(conn));
+	EXPECT_TRUE(tlsSessionManager.sessions().contains(*sessionId));
+}
+
+// 未验签断开不留会话:断开回调的第一步摘掉记录并告诉调用方「到此为止」(不通知 login / scene);会话表与发号器都没动过。
+TEST_F(PreAuthConnectionLifecycle, DisconnectingBeforeVerifyLeavesNoSession)
+{
+	const auto conn = Connect("preauth_disconnect");
+	ASSERT_TRUE(conn);
+	const SessionId lastIdBefore = LastIssuedId();
+	OpenPreAuthConnection(conn, kT0);
+
+	EXPECT_TRUE(ForgetPreAuthConnection(conn)) << "调用方随即返回";
+	EXPECT_TRUE(tlsSessionManager.preAuthConnections().empty());
+	EXPECT_TRUE(tlsSessionManager.sessions().empty());
+	EXPECT_EQ(LastIssuedId(), lastIdBefore);
+	EXPECT_EQ(Unauthenticated(), 0u);
+	EXPECT_EQ(GetCounters().handshakes, 0u) << "没验签的连接不进握手直方图";
+
+	// 记录已被淘汰或握手超时摘掉的连接,断开时同样只到这一步。
+	EXPECT_TRUE(ForgetPreAuthConnection(conn));
+	// 准入时被拒的连接(上下文是 kInvalidSessionId)不归这里管,由断开回调后面的早退处理。
+	conn->setContext(kInvalidSessionId);
+	EXPECT_FALSE(ForgetPreAuthConnection(conn));
+}
+
+// 一张票同一时刻只开一条连接:票已被另一条活着的连接占着时不建会话,未验签记录原样留着(调用方按 token_in_use 关连接,
+// 断开回调再摘);号只是跳过一个,没留下任何状态。
+TEST_F(PreAuthConnectionLifecycle, TicketInUseOpensNoSessionAndKeepsTheRecord)
+{
+	const auto holder = Connect("preauth_ticket_holder");
+	const auto second = Connect("preauth_ticket_second");
+	ASSERT_TRUE(holder && second);
+	OpenPreAuthConnection(holder, kT0);
+	OpenPreAuthConnection(second, kT0);
+	ASSERT_TRUE(OpenVerifiedSession(holder, "same-ticket", kT0 + milliseconds(10)).has_value());
+
+	EXPECT_FALSE(OpenVerifiedSession(second, "same-ticket", kT0 + milliseconds(20)).has_value());
+	EXPECT_EQ(tlsSessionManager.sessions().size(), 1u) << "被拒的那条没有会话";
+	EXPECT_TRUE(PreAuthIncarnationOf(second).has_value());
+	EXPECT_EQ(tlsSessionManager.preAuthConnections().size(), 1u) << "未验签记录留给断开回调摘";
+	EXPECT_FALSE(IsVerifiedConnection(second));
+	EXPECT_EQ(GetCounters().handshakes, 1u);
+
+	// 换一张票就照常建会话。
+	EXPECT_TRUE(OpenVerifiedSession(second, "another-ticket", kT0 + milliseconds(30)).has_value());
+	EXPECT_EQ(tlsSessionManager.sessions().size(), 2u);
+}
+
+// dev 免验签仍然建连即建会话:不进未验签表,建出来就是已验签;计一次接纳,不进握手直方图。
+TEST_F(PreAuthConnectionLifecycle, DevBypassOpensTheSessionAtConnect)
+{
+	const auto conn = Connect("preauth_dev_bypass");
+	ASSERT_TRUE(conn);
+	const std::size_t ticketHoldersBefore = tlsSessionManager.TicketHolderCount();
+
+	const std::optional<SessionId> sessionId = OpenVerifiedSession(conn, std::string{}, kT0);
+
+	ASSERT_TRUE(sessionId.has_value());
+	EXPECT_TRUE(tlsSessionManager.preAuthConnections().empty());
+	const SessionInfo &session = tlsSessionManager.sessions().at(*sessionId);
+	EXPECT_TRUE(session.verified);
+	EXPECT_NE(session.incarnation, 0u) << "代次现分配";
+	EXPECT_TRUE(session.ticketKey.empty());
+	EXPECT_EQ(tlsSessionManager.TicketHolderCount(), ticketHoldersBefore) << "没有票据,不占位";
+	EXPECT_TRUE(IsVerifiedConnection(conn));
+	EXPECT_EQ(GetCounters().accepted, 1u);
+	EXPECT_EQ(GetCounters().handshakes, 0u);
+}
+
+// 发号挪到验签成功时,回绕与碰撞检查照旧:跳过仍在用的号;node_id = 32767 时跳过保留哨兵 kInvalidSessionId,回绕到序号 0。
+TEST_F(PreAuthConnectionLifecycle, IssuedIdsSkipIdsInUseAndTheReservedSentinel)
+{
+	SessionIdGenerator &generator = tlsSessionManager.session_id_gen();
+	const uint32_t previousNodeId = generator.node_id_prefix() >> kSessionSequenceBits;
+
+	// 接下来的两个号已被会话占着:跳过它们。期望值用发号器的一份副本算(含回绕),不依赖它此刻停在哪。
+	SessionIdGenerator mirror = generator;
+	AddSession(mirror.Generate());
+	AddSession(mirror.Generate());
+	const SessionId expectedAfterCollisions = mirror.Generate();
+	const auto first = Connect("preauth_issue_collision");
+	OpenPreAuthConnection(first, kT0);
+	const std::optional<SessionId> collided = OpenVerifiedSession(first, std::string{}, kT0);
+	EXPECT_EQ(collided, std::optional<SessionId>(expectedAfterCollisions));
+
+	// node_id = 32767、序号停在 131070:下一个号恰好是 UINT32_MAX(kInvalidSessionId),必须跳过,回绕到序号 0。
+	generator.set_node_id(SessionIdGenerator::kMaxNodeId);
+	while ((generator.LastId() & SessionIdGenerator::kSeqMask) != SessionIdGenerator::kSeqMask - 1)
+	{
+		(void)generator.Generate();
+	}
+	const auto second = Connect("preauth_issue_sentinel");
+	OpenPreAuthConnection(second, kT0);
+	const std::optional<SessionId> wrapped = OpenVerifiedSession(second, std::string{}, kT0);
+	EXPECT_EQ(wrapped, std::optional<SessionId>(SessionIdGenerator::kMaxNodeId << kSessionSequenceBits));
+	EXPECT_FALSE(tlsSessionManager.sessions().contains(kInvalidSessionId));
+
+	generator.set_node_id(previousNodeId); // 发号器是线程局部的,别的用例看到的仍是原来的 node 段
+}
+
+// 计数原样写进 /metrics:连接数是会话加未验签;标签只有封闭的 reason,不带对端地址、会话号与玩家号(AGENTS.md §9)。
+TEST_F(PreAuthConnectionLifecycle, CountersAreExportedAsPrometheusMetrics)
 {
 	const uint64_t reapedBefore = gate_client_heartbeat::GetCounters().handshakeTimeouts;
 	Configure(3, RateLimit{50, 60});
 
 	// 三条接纳:一条 40ms 验签,一条 2.5s 验签,一条还没验签。
-	ASSERT_TRUE(AdmitConnection(peer, kT0));
-	SessionInfo &fast = AddSession(1);
-	OnSessionOpened(1, fast, kT0);
-	ASSERT_TRUE(AdmitConnection(peer, kT0));
-	SessionInfo &slow = AddSession(2);
-	OnSessionOpened(2, slow, kT0);
-	ASSERT_TRUE(AdmitConnection(peer, kT0));
-	OnSessionOpened(3, AddSession(3), kT0);
-	OnSessionVerified(fast, kT0 + milliseconds(40));
-	OnSessionVerified(slow, kT0 + milliseconds(2500));
-	// 满员之后两条被拒;关源之后再一条。
+	std::vector<muduo::net::TcpConnectionPtr> conns;
+	for (int i = 0; i < 3; ++i)
+	{
+		ASSERT_TRUE(AdmitConnection(peer, kT0));
+		conns.push_back(Connect("preauth_metrics_" + std::to_string(i)));
+		ASSERT_TRUE(conns.back());
+		OpenPreAuthConnection(conns.back(), kT0);
+	}
+	ASSERT_TRUE(OpenVerifiedSession(conns[0], "metrics-ticket-0", kT0 + milliseconds(40)).has_value());
+	ASSERT_TRUE(OpenVerifiedSession(conns[1], "metrics-ticket-1", kT0 + milliseconds(2500)).has_value());
+	conns.clear(); // 不长期持有服务端连接的强引用
+	// 满员(两条会话加一条未验签)之后两条被拒;关源之后再一条。
 	EXPECT_FALSE(AdmitConnection(peer, kT0));
 	EXPECT_FALSE(AdmitConnection(peer, kT0));
 	CloseSource();
@@ -782,52 +910,36 @@ TEST_F(ConnectionAdmission, CountersAreExportedAsPrometheusMetrics)
 	EXPECT_EQ(text.find("player_id"), std::string::npos);
 }
 
-// 淘汰经会话里的 weak 连接 forceClose:被淘汰的那条真实连接关掉,另一条晚建连的未验签连接不受影响;
-// 准入回调返回时会话还在表里(由断开回调删,这里的回环服务端没装 gate 的断开回调,所以会话一直留着)。
-class ConnectionAdmissionEviction : public ConnectionAdmission
-{
-protected:
-	void SetUp() override
-	{
-		ConnectionAdmission::SetUp();
-		loop = std::make_unique<muduo::net::EventLoop>();
-	}
-	void TearDown() override
-	{
-		tlsSessionManager.sessions().clear();
-		victim.reset(); // 拆连接要驱动 loop,必须先于 loop_ 析构
-		bystander.reset();
-		loop.reset();
-		ConnectionAdmission::TearDown();
-	}
-
-	std::unique_ptr<muduo::net::EventLoop> loop;
-	std::unique_ptr<gate_test::LoopbackConnection> victim;
-	std::unique_ptr<gate_test::LoopbackConnection> bystander;
-};
-
-TEST_F(ConnectionAdmissionEviction, EvictionClosesTheVictimsConnectionAndLeavesItsSessionToTheDisconnectCallback)
+// 淘汰经记录里的 weak 连接 forceClose:被淘汰的那条真实连接关掉、记录当场摘掉,另一条晚建连的未验签连接不受影响。
+// 两条都从没有会话;回环服务端没装 gate 的断开回调,断开回调那一步(找不到记录,什么都不做)由上面的用例覆盖。
+TEST_F(PreAuthConnectionLifecycle, EvictionClosesTheOldestUnverifiedConnection)
 {
 	Configure(10000, RateLimit{1'000'000, 1'000'000});
-	victim = std::make_unique<gate_test::LoopbackConnection>(*loop);
-	ASSERT_TRUE(victim->Open("preauth_victim"));
-	bystander = std::make_unique<gate_test::LoopbackConnection>(*loop);
-	ASSERT_TRUE(bystander->Open("preauth_bystander"));
+	auto victim = Connect("preauth_victim");
+	auto bystander = Connect("preauth_bystander");
+	ASSERT_TRUE(victim && bystander);
 
-	// 最老的未验签连接是 victim;bystander 晚 1 秒建连、同样未验签;其余凑到起点的会话不带连接。
-	OpenUnverified(1, kT0, victim->ServerSide());
-	OpenUnverified(2, kT0 + seconds(1), bystander->ServerSide());
-	OpenUnverifiedRange(3, CurrentPreAuthBudget().earlyDropStart, kT0 + seconds(1));
+	// 最老的未验签连接是 victim;bystander 晚 1 秒建连、同样未验签;其余凑到起点的记录不带连接。
+	OpenPreAuthConnection(victim, kT0);
+	OpenPreAuthConnection(bystander, kT0 + seconds(1));
+	OpenUnverifiedMany(CurrentPreAuthBudget().earlyDropStart - 2, kT0 + seconds(1));
+	const uint64_t victimKey = *PreAuthIncarnationOf(victim);
+	const uint64_t bystanderKey = *PreAuthIncarnationOf(bystander);
+	// 不长期持有服务端连接的强引用:连接要析构才关 fd,强引用留着,客户端那头等不到断开。
+	victim.reset();
+	bystander.reset();
 
 	MarkLoopHealthy(kT0 + kMinEvictableAge);
 	EXPECT_TRUE(AdmitConnection(peer, kT0 + kMinEvictableAge));
 	EXPECT_EQ(GetCounters().preAuthEvicted, 1u);
-	EXPECT_FALSE(victim->ServerSideConnected()) << "forceClose 已把连接置成关闭中";
-	EXPECT_TRUE(tlsSessionManager.sessions().contains(1)) << "准入回调里不删会话";
-	EXPECT_TRUE(bystander->ServerSideConnected());
+	EXPECT_FALSE(Connection(0).ServerSideConnected()) << "forceClose 已把连接置成关闭中";
+	EXPECT_FALSE(StillUnverified(victimKey)) << "记录当场摘掉";
+	EXPECT_TRUE(StillUnverified(bystanderKey));
+	EXPECT_TRUE(Connection(1).ServerSideConnected());
+	EXPECT_TRUE(tlsSessionManager.sessions().empty());
 
-	ASSERT_TRUE(gate_test::DriveLoopUntil(*loop, [this] { return victim->BothSidesDown(); }));
-	EXPECT_TRUE(bystander->ServerSideConnected()) << "只关最老的那一条";
+	ASSERT_TRUE(gate_test::DriveLoopUntil(*loop, [this] { return Connection(0).BothSidesDown(); }));
+	EXPECT_TRUE(Connection(1).ServerSideConnected()) << "只关最老的那一条";
 }
 
 } // namespace

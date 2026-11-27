@@ -123,7 +123,7 @@ RETIRE 排在 REGISTER 之后,是为了让带 `expected_catalog_revision` 的 RE
 |---|---|
 | 预检时冻结或资格不符 | 什么都没写,不留启动记录;init 退出,原地重试 |
 | 有的库连不上(2026-11-27,[启动期故障隔离](data-service-startup-isolation.md) §7) | 并发探测、两轮(中间停 2 秒)都连不上的库这一代不注册:boot_seq 不算它、启动记录里没有它、grant 集合里也没有它,init 日志每个库一行 `skipped=<库>`;别的库照常注册。被跳过的库上,上一代原样 ACTIVE(进程已经不在),下一代注册时在换代事务里退休它。init 重跑时这一代仍只有原来那些库。一个都连不上就什么都不写,init 原地重试(只写一个库的服务只有这一种结局) |
-| 缺写资格的 Pod(上一行的结果) | 只有写多个逻辑库的 data-service、db 会遇到:缺的库这一代一直关着,`/readyz` 不就绪,告警 `SqlWriterGrantsIncomplete`。集群恢复之后重建这个 Pod,新的一代在全部库注册 |
+| 缺写资格的 Pod(上一行的结果) | 只有写多个逻辑库的 data-service、db 会遇到:缺的库这一代一直关着,`/readyz` 不就绪,告警 `SqlWriterGrantsIncomplete`。集群恢复之后重建这个 Pod,新的一代在全部库注册。缺的是 data-service 的目录片时,启动自检过不了,以 78 退出,由 `sql-writer-pod-reaper` 约每分钟重建一次,直到集群恢复;每次重建都在连得上的库上换一代,每库多约 2 KB 收据([启动期故障隔离](data-service-startup-isolation.md) §7.5) |
 | 提交时冻结 | 事务回滚,确定没写;启动记录留着,重跑时重发同一请求 |
 | 部分库已注册,init 重跑 | 已注册的查到收据,没注册的接着注册,还是同一个身份 |
 | 部分库已注册,Pod 没了 | 同序号新 Pod 换代,已注册的那几份由新一代在换代事务里退休,不用人工 |

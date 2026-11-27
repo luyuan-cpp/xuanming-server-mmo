@@ -177,11 +177,13 @@ func nativeStoreFixture(t *testing.T, withGlobal bool, configured ...Rules) (*St
 	require.True(t, retention, "chat_send_authority 必须带开着的 TTL 属性")
 	// 核对完就关掉:用例用假时钟写 1970 年的行,对 TTL 来说一建表就过期,而 TTL 任务几秒内就可能调度到新表,
 	// 行在断言之前被删掉会让用例偶发失败。保留期属性本身已在上面核对过。
-	for _, tbl := range []string{"chat_send_authority", "chat_world_retraction", "chat_report", "chat_repeat_event", "chat_private_daily_target"} {
+	for _, tbl := range []string{"chat_send_authority", "chat_world_retraction", "chat_report", "chat_repeat_event", "chat_private_daily_target",
+		"chat_platform_recheck", "chat_platform_recheck_claim", "chat_platform_recheck_done"} {
 		_, err = db.ExecContext(ctx, "ALTER TABLE "+tbl+" TTL_ENABLE='OFF'")
 		require.NoError(t, err)
 	}
-	require.NoError(t, fixture.GrantTables(ctx, name, "chat_send_authority", "chat_policy", "chat_world_retraction", "chat_report", "chat_repeat_event", "chat_private_daily_target"))
+	require.NoError(t, fixture.GrantTables(ctx, name, "chat_send_authority", "chat_policy", "chat_world_retraction", "chat_report", "chat_repeat_event", "chat_private_daily_target",
+		"chat_platform_recheck", "chat_platform_recheck_claim", "chat_platform_recheck_done"))
 	runtimeDB, err := fixture.Open(ctx, name, 8)
 	require.NoError(t, err)
 	rules := fixtureRules()

@@ -38,10 +38,26 @@ func requireMatchPurged(t *testing.T, s *Store, removed, other uint64) {
 		"SELECT COUNT(*) FROM match_player_battle_report WHERE player_id=?",
 		"SELECT COUNT(*) FROM match_battle_script WHERE owner_player_id=?",
 		"SELECT COUNT(*) FROM match_battle_script_loadout WHERE player_id=?",
+		"SELECT COUNT(*) FROM match_ranked_player_prefs WHERE player_id=?",
+		"SELECT COUNT(*) FROM match_ranked_player_season WHERE player_id=?",
+		"SELECT COUNT(*) FROM match_ranked_reward WHERE player_id=?",
+		"SELECT COUNT(*) FROM match_ranked_battle WHERE player_id=?",
+		"SELECT COUNT(*) FROM match_ranked_rivalry WHERE player_id=?",
 	} {
 		require.Zero(t, countRows(t, s, query, removed), query)
 		require.Equal(t, 1, countRows(t, s, query, other), "别人的行不动: %s", query)
 	}
+	var mirrorOppName string
+	require.NoError(t, s.DB.QueryRowContext(context.Background(),
+		"SELECT opponent_name FROM match_ranked_rivalry WHERE season_id=1 AND player_id=? AND opponent_id=?", other, removed).Scan(&mirrorOppName))
+	require.Empty(t, mirrorOppName, "对手宿敌账本保留交手统计但清空已删角色昵称")
+	var removedFeaturedName, otherFeaturedName string
+	require.NoError(t, s.DB.QueryRowContext(context.Background(),
+		"SELECT featured_player_name FROM match_ranked_featured_build WHERE season_id=1 AND build_key='101:3:1001'").Scan(&removedFeaturedName))
+	require.Empty(t, removedFeaturedName, "问道名局汇总表匿名化已删角色昵称")
+	require.NoError(t, s.DB.QueryRowContext(context.Background(),
+		"SELECT featured_player_name FROM match_ranked_featured_build WHERE season_id=1 AND build_key='102:4:2002'").Scan(&otherFeaturedName))
+	require.Equal(t, "在役名家", otherFeaturedName, "其他角色的问道名局昵称不动")
 	require.Zero(t, countRows(t, s, "SELECT COUNT(*) FROM match_spectator_intent WHERE player_id=? AND state=5", removed))
 	require.Zero(t, countRows(t, s, "SELECT COUNT(*) FROM match_role_occupancy WHERE player_id=?", removed), "到期的占用删掉")
 	require.Equal(t, 1, countRows(t, s, "SELECT COUNT(*) FROM match_role_occupancy WHERE player_id=?", other))
@@ -70,7 +86,16 @@ func TestPurgeTiDBRemovedRoleDeletesPersonalRowsAndReleasesReports(t *testing.T)
 		insertPendingFixture(t, s, "match_player_battle_report", &pb.MatchPlayerBattleReportRecord{PlayerId: player, CreatedMs: 1, BattleId: 901})
 		insertPendingFixture(t, s, "match_battle_script", &pb.MatchBattleScriptRecord{ScriptId: 800 + player, OwnerPlayerId: player, Revision: 1, ApprovedRevision: 1})
 		insertPendingFixture(t, s, "match_battle_script_loadout", &pb.MatchBattleScriptLoadoutRecord{PlayerId: player, MatchMode: 1, Origin: 2, PlayerScriptId: 800 + player})
+		insertPendingFixture(t, s, "match_ranked_player_prefs", &pb.MatchRankedPlayerPrefsRecord{PlayerId: player, CharacterPresetId: 101, PetPresetId: 203, RuleVersion: 2})
+		insertPendingFixture(t, s, "match_ranked_player_season", &pb.MatchRankedPlayerSeasonRecord{SeasonId: 1, PlayerId: player, Qualified: true, RatingCenti: 162000})
+		insertPendingFixture(t, s, "match_ranked_reward", &pb.MatchRankedRewardRecord{PlayerId: player, SeasonId: 1, RewardKind: 1, ItemCode: "s1_avatar_pattern"})
+		insertPendingFixture(t, s, "match_ranked_battle", &pb.MatchRankedBattleRecord{BattleId: 901, PlayerId: player, SeasonId: 1, SettledAtMs: 100})
 	}
+	insertPendingFixture(t, s, "match_ranked_season", &pb.MatchRankedSeasonRecord{SeasonId: 1, SeasonKey: "s1", SeasonName: "第一赛季", State: 1})
+	insertPendingFixture(t, s, "match_ranked_rivalry", &pb.MatchRankedRivalryRecord{SeasonId: 1, PlayerId: removed, OpponentId: other, OpponentName: "在役名家", Wins: 1, Losses: 2})
+	insertPendingFixture(t, s, "match_ranked_rivalry", &pb.MatchRankedRivalryRecord{SeasonId: 1, PlayerId: other, OpponentId: removed, OpponentName: "注销角色", Wins: 2, Losses: 1})
+	insertPendingFixture(t, s, "match_ranked_featured_build", &pb.MatchRankedFeaturedBuildRecord{SeasonId: 1, BuildKey: "101:3:1001", FeaturedBattleId: 901, FeaturedPlayerId: removed, FeaturedPlayerName: "注销角色", Appearances: 4, Wins: 3})
+	insertPendingFixture(t, s, "match_ranked_featured_build", &pb.MatchRankedFeaturedBuildRecord{SeasonId: 1, BuildKey: "102:4:2002", FeaturedBattleId: 903, FeaturedPlayerId: other, FeaturedPlayerName: "在役名家", Appearances: 5, Wins: 4})
 	// 他有两份剧本;一份审过,审核流水留着。
 	insertPendingFixture(t, s, "match_battle_script", &pb.MatchBattleScriptRecord{ScriptId: 850, OwnerPlayerId: removed, Revision: 2})
 	insertPendingFixture(t, s, "match_battle_script_review", &pb.MatchBattleScriptReviewRecord{ScriptId: 800 + removed, Revision: 1, OwnerPlayerId: removed, Approved: true, Reviewer: "gm"})

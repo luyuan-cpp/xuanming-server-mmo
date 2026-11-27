@@ -96,7 +96,7 @@ func (s *Store) abortRejectedOriginalLocked(ctx context.Context, tx *sql.Tx, f *
 	if !terminalAbortDue(r.DeadlineMs, stamp) {
 		return 0, rejectErr
 	}
-	if err = commitAbortTx(ctx, tx, f, stamp, pb.MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MATCH_REJECTED_ORIGINAL_ABORT); err != nil {
+	if err = s.commitAbortTx(ctx, tx, f, stamp, pb.MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MATCH_REJECTED_ORIGINAL_ABORT); err != nil {
 		return 0, err
 	}
 	if err = tx.Commit(); err != nil {

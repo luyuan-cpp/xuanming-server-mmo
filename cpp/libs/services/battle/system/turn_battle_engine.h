@@ -31,6 +31,7 @@
 #include "data/battle_data_provider.h"
 #include "system/class_skill_rules.h"
 #include "system/dungeon_monster_ai.h"
+#include "system/tactical_puzzle_rules.h"
 
 namespace turnbattle {
 
@@ -120,6 +121,7 @@ public:
             : TOURNAMENT_LEYLINE_UNSPECIFIED;
     }
     bool IsWuxingTowerBattle() const { return hasTowerContext; }
+    bool IsTacticalPuzzleWorkshopBattle() const { return hasTacticalPuzzleContext; }
     bool HasCustomDuelPolarity() const {
         return hasCustomDuelRules && customDuelRules.enable_polarity_rotation();
     }
@@ -187,7 +189,9 @@ public:
     uint32_t UpdateBattlePrep(uint64_t playerId, uint32_t selectedSealId, uint64_t selectedPetId,
                               bool ready, BattlePrepState* outPrepState = nullptr,
                               bool updateBannedSkills = false,
-                              const std::vector<uint32_t>& bannedSkillIds = {});
+                              const std::vector<uint32_t>& bannedSkillIds = {},
+                              bool updateProtectedSkill = false,
+                              uint32_t protectedSkillId = 0u);
     bool FinalizePrepPhase();
     void FillPrepStateForViewer(BattleStateS2C& state, uint64_t viewerPlayerId, uint64_t deadlineMs) const;
     // 论剑 V4 队内一键战术标点：每名玩家每回合（含变阵期独立计 1 轮）至多 2 次，仅同队可见。
@@ -732,6 +736,9 @@ private:
     std::array<bool, 2> teamDealtMagicDirectDamage{false, false};
     std::set<uint64_t> shieldBreakPlayers;
     std::set<uint64_t> antiControlOrSeasonSkillPlayers;
+    // 五行试炼志 V4：当季免费赛季技施放与 R1..R8 技印共鸣位掩码事实
+    std::set<uint64_t> castSeasonSkillPlayers;
+    std::unordered_map<uint64_t, uint32_t> seasonResonanceMaskByPlayer;
     // 五行试炼志 V3：自选誓约与卷四三境明雷局内事实
     uint32_t trialVowMask = 0;
     bool bossWindHitUnprotectedDeath = false;
@@ -812,18 +819,24 @@ private:
         std::vector<SeasonSealEffect> availableSeals;
         std::vector<BattlePetSnapshot> availablePets;
         std::vector<uint32_t> nominatedBanSkillIds;
+        uint32_t nominatedProtectSkillId = 0;
     };
     bool prepActive = false;
     uint32_t prepSkillBanSlotsPerTeam = 0;
+    uint32_t prepSkillProtectSlotsPerTeam = 0;
     std::vector<uint32_t> banCandidateSkillIds;
     std::set<uint32_t> banCandidateSkillSet;
     std::vector<uint32_t> teamABannedSkillIds;
     std::vector<uint32_t> teamBBannedSkillIds;
+    uint32_t teamAProtectedSkillId = 0;
+    uint32_t teamBProtectedSkillId = 0;
+    std::vector<uint32_t> counteredBanSkillIds;
     std::vector<uint32_t> bannedSkillIds;
     std::set<uint32_t> bannedSkillSet;
     uint64_t nextPetActorIndex = 0;
     std::map<uint64_t, PrepPlayerOptions> prepOptionsByPlayer;
     std::vector<uint32_t> AggregateTeamBans(uint32_t teamIndex) const;
+    uint32_t AggregateTeamProtect(uint32_t teamIndex) const;
     // 论剑 V5 临阵唤灵状态：validatedPetsByPlayer 冻结开局合规全量宠，standbyPetPoolByPlayer 冻结开打后剩余可唤宠。
     std::map<uint64_t, std::vector<BattlePetSnapshot>> validatedPetsByPlayer;
     std::map<uint64_t, std::vector<BattlePetSnapshot>> standbyPetPoolByPlayer;
@@ -876,6 +889,11 @@ private:
     TowerSigilAggregate towerSigilTotals;
     bool hasCustomDuelRules = false;
     ::CustomDuelRules customDuelRules;
+    bool hasTacticalPuzzleContext = false;
+    ::TacticalPuzzleBattleContext tacticalPuzzleContext;
+    void ApplyTacticalPuzzleSetup();
+    void AttachTacticalPuzzleInitialBuff(BattleActorState& target, uint32_t buffTableId, uint64_t casterId,
+                                         uint64_t shieldCapacity, uint64_t periodicDamage);
     bool wuxingSynergyActiveThisRound = false;
     std::set<uint64_t> wuxingSynergyActorIds;
     uint32_t activeSeasonWeeklyAffixId = 0; // 赛季全员对称周环境词缀（开局由全体快照一致冻结，0=无/禁用）

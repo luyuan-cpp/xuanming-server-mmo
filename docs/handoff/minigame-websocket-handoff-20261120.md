@@ -9,15 +9,14 @@
   - 节点自报 `client_ws_url`,随登录分配、排队、msg 124、战斗分配、测速目标下发。
   - Unity 客户端加了 WebSocket 传输与小游戏登录。
   - robot 可以走 WebSocket(`transport.kind: websocket`)。
-- **代码已全部写完并已提交,一条都没验证过**:
+- **代码已全部写完并已提交;2026-11-26 Gemini 按 §3.0–3.8 跑过,本线用例全过**(`docs/PROGRESS.md` 2026-11-26「Gemini:小游戏 WebSocket 验证」,日志在 `build/verification/minigame-ws-20261126/`):
   - 服务端在 `9824368eb`、`55eae6be3`、`c441ce75e`、`b6a08148c` 等批量提交里;客户端 `D:\luyuan\mmorpg-client` 在 `02e0ec54`;Java 仓 `PARITY.md` 的待做登记也已提交。
-  - 之后的批量提交里协议已被别的会话重新生成过(生成代码里已有 `client_ws_url`、`ws_url`、`target_ws_url` 等字段),但没有任何一次运行跑过本线的用例:`docs/PROGRESS.md` 里没有本线的验证条目。
-  - 本线自己只做过静态检查:PowerShell 语法解析、`gofmt -l`、C++ 裸指针成员预检。
+  - 没跑成或没跑的:3.8 的 `battle_smoke`(WebSocket 与 TCP 两轮都没跑成:`match -migrate` 被别的会话改的 `proto/match/match_authority.proto` 触发 D-14 拒迁,本线没改它);3.9 kind 经边缘(本机没装 kind);3.7 末尾只在小游戏里编译的分支(本机没装 WebGL 构建支持);3.4 的 `-race`(本机没有 cgo)。
 - **2026-11-26 按当前 HEAD 复核过,没有要补的代码**:
   - 客户端这几天新加的代码里没有绕过 `ClientTransport` 直接建连的,也没有小游戏里会卡死的写法(`Task.Run`、`Task.Delay`、线程池等);新文件按客户端仓 `AGENTS.md`「小游戏(WebGL)兼容约束」写。
   - 服务端所有带客户端地址的下发消息都带着对应的 WebSocket 地址字段。
   - robot 没有新的裸 TCP 拨号;gate / battle 的客户端口仍是 18000 / 20000,与 ws-edge 的转发目标一致。
-- **剩下的全是执行**:协议生成、编译、单测、契约测试、冒烟。**代码已改完,Gemini 只验证**:跑红要改代码(含测试代码、部署脚本)时,保留首错原文与复现命令停下,交回 Claude 改(负责人 2026-11-26 定:逻辑代码由 Claude 改,Gemini 只负责生成、编译、测试、冒烟)。
+- **剩下的只有执行**:别的会话的 match 迁移问题解决后补跑 3.8 的 `battle_smoke`(WebSocket 与 TCP 各一遍);有 kind 环境时跑 3.9;以后改到本线的代码,按 §3 对应小节重跑。**代码已改完,Gemini 只验证**:跑红要改代码(含测试代码、部署脚本)时,保留首错原文与复现命令停下,交回 Claude 改(负责人 2026-11-26 定:逻辑代码由 Claude 改,Gemini 只负责生成、编译、测试、冒烟)。
 
 ## 1. 开工前必读与规矩
 
@@ -146,7 +145,7 @@ python tools/scripts/check_log_text_english.py
 
 ### 3.6 边缘 nginx 配置的静态检查(需要本机 docker,不连集群)
 
-`geo` 以路径里捕获的地址为键、`map` 取 /24,这两处写法都没有实跑过。2026-11-26 Claude 按 nginx 源码语义静态核对,结论是成立(理由在设计稿 W8「两处少见写法为什么成立」),所以这一步预期直接通过;它十秒钟就能定下来:
+`geo` 以路径里捕获的地址为键、`map` 取 /24,这两处写法 2026-11-26 Claude 按 nginx 源码语义静态核对成立(理由在设计稿 W8「两处少见写法为什么成立」),同日 Gemini 实跑通过(两份 `nginx -t` 都过,实起后 403 / 429 按预期)。以后改 `New-WsEdgeYaml` 的模板照样跑这一步:
 
 ```powershell
 . tools/scripts/lib/k8s_client_entry.ps1

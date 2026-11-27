@@ -415,6 +415,62 @@ void SendMatchServiceGetSharedTrialReplay(entt::registry& registry, entt::entity
 // 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
 void SendMatchServiceGetSharedTrialReplayErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
 #pragma endregion
+#pragma region MatchServiceListTacticalPuzzles
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceListTacticalPuzzlesGrpcPath = "/match.MatchService/ListTacticalPuzzles";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceListTacticalPuzzles(entt::registry& registry, entt::entity nodeEntity, const ::match::ListTacticalPuzzlesRequest& request, GrpcDone<::match::ListTacticalPuzzlesResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceListTacticalPuzzlesErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchServiceGetTacticalPuzzle
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceGetTacticalPuzzleGrpcPath = "/match.MatchService/GetTacticalPuzzle";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceGetTacticalPuzzle(entt::registry& registry, entt::entity nodeEntity, const ::match::GetTacticalPuzzleRequest& request, GrpcDone<::match::GetTacticalPuzzleResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceGetTacticalPuzzleErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchServiceSaveTacticalPuzzleDraft
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceSaveTacticalPuzzleDraftGrpcPath = "/match.MatchService/SaveTacticalPuzzleDraft";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceSaveTacticalPuzzleDraft(entt::registry& registry, entt::entity nodeEntity, const ::match::SaveTacticalPuzzleDraftRequest& request, GrpcDone<::match::SaveTacticalPuzzleDraftResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceSaveTacticalPuzzleDraftErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchServiceDeleteTacticalPuzzle
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceDeleteTacticalPuzzleGrpcPath = "/match.MatchService/DeleteTacticalPuzzle";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceDeleteTacticalPuzzle(entt::registry& registry, entt::entity nodeEntity, const ::match::DeleteTacticalPuzzleRequest& request, GrpcDone<::match::DeleteTacticalPuzzleResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceDeleteTacticalPuzzleErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchServiceStartTacticalPuzzleBattle
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceStartTacticalPuzzleBattleGrpcPath = "/match.MatchService/StartTacticalPuzzleBattle";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceStartTacticalPuzzleBattle(entt::registry& registry, entt::entity nodeEntity, const ::match::StartTacticalPuzzleBattleRequest& request, GrpcDone<::match::StartTacticalPuzzleBattleResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceStartTacticalPuzzleBattleErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchServiceLikeTacticalPuzzle
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceLikeTacticalPuzzleGrpcPath = "/match.MatchService/LikeTacticalPuzzle";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceLikeTacticalPuzzle(entt::registry& registry, entt::entity nodeEntity, const ::match::LikeTacticalPuzzleRequest& request, GrpcDone<::match::LikeTacticalPuzzleResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceLikeTacticalPuzzleErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region MatchServiceGetTacticalPuzzleSolutionReplay
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kMatchServiceGetTacticalPuzzleSolutionReplayGrpcPath = "/match.MatchService/GetTacticalPuzzleSolutionReplay";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendMatchServiceGetTacticalPuzzleSolutionReplay(entt::registry& registry, entt::entity nodeEntity, const ::match::GetTacticalPuzzleSolutionReplayRequest& request, GrpcDone<::match::GetTacticalPuzzleSolutionReplayResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendMatchServiceGetTacticalPuzzleSolutionReplayErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
 // 本文件所有 unary 调用此后使用的 deadline;启动时按目标节点类型设置。
 void SetMatchServiceCallDeadline(std::chrono::milliseconds deadline);
 

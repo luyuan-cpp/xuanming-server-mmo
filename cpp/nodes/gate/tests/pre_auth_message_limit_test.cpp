@@ -6,11 +6,14 @@
 //   * 未验签的连接声明一个超过上限的帧:看到长度头就按 kInvalidLength 拒,不等整帧到齐;
 //   * 已验签的连接、以及没设上限的 codec:同样的长度头照常等后面的字节;
 //   * 验签请求本身远小于上限,未验签的连接照常收得到;
-//   * gate 的判据 IsVerifiedConnection 跟着会话表走。
+//   * gate 的判据 IsVerifiedConnection 跟着未验签表与会话表走(票据先行,准入设计 P2-4):只有一条未验签记录的连接不算,
+//     验签成功建了会话之后才算。
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -83,8 +86,13 @@ protected:
 	{
 		ASSERT_TRUE(connection_.Open("pre_auth_message_limit"));
 		tlsSessionManager.sessions().clear();
+		tlsSessionManager.preAuthConnections().clear();
 	}
-	void TearDown() override { tlsSessionManager.sessions().clear(); }
+	void TearDown() override
+	{
+		tlsSessionManager.sessions().clear();
+		tlsSessionManager.preAuthConnections().clear();
+	}
 
 	muduo::net::TcpConnectionPtr ServerSide() const { return connection_.ServerSide(); }
 
@@ -153,7 +161,7 @@ TEST_F(PreAuthMessageLimit, HandshakeRequestFitsWellUnderTheLimit)
 	EXPECT_EQ(probe_->messages, 1);
 }
 
-TEST_F(PreAuthMessageLimit, GateVerdictFollowsTheSessionTable)
+TEST_F(PreAuthMessageLimit, GateVerdictFollowsThePreAuthTableAndTheSessionTable)
 {
 	const auto conn = ServerSide();
 	ASSERT_TRUE(conn);
@@ -162,15 +170,23 @@ TEST_F(PreAuthMessageLimit, GateVerdictFollowsTheSessionTable)
 	conn->setContext(kInvalidSessionId);
 	EXPECT_FALSE(gate_connection_admission::IsVerifiedConnection(conn)) << "refused at connect";
 
-	constexpr SessionId kSessionId = 7;
-	conn->setContext(kSessionId);
-	EXPECT_FALSE(gate_connection_admission::IsVerifiedConnection(conn)) << "context without a session";
+	// 生产的建连路径:只登记一条未验签记录,上下文是它的键,没有会话。
+	const auto connectedAt = std::chrono::steady_clock::now();
+	gate_connection_admission::OpenPreAuthConnection(conn, connectedAt);
+	EXPECT_TRUE(tlsSessionManager.sessions().empty());
+	EXPECT_FALSE(gate_connection_admission::IsVerifiedConnection(conn)) << "only an unauthenticated record";
 
-	tlsSessionManager.sessions()[kSessionId].verified = false;
-	EXPECT_FALSE(gate_connection_admission::IsVerifiedConnection(conn));
-
-	tlsSessionManager.sessions()[kSessionId].verified = true;
+	// 验签成功:这时才建会话,上下文换成会话号。
+	const std::optional<SessionId> sessionId =
+		gate_connection_admission::OpenVerifiedSession(conn, std::string{}, connectedAt + std::chrono::milliseconds(5));
+	ASSERT_TRUE(sessionId.has_value());
 	EXPECT_TRUE(gate_connection_admission::IsVerifiedConnection(conn));
+
+	// 上下文里的会话号没有会话(会话已删)、或会话没标已验签(纵深防御):都不算。
+	tlsSessionManager.sessions().at(*sessionId).verified = false;
+	EXPECT_FALSE(gate_connection_admission::IsVerifiedConnection(conn));
+	tlsSessionManager.sessions().erase(*sessionId);
+	EXPECT_FALSE(gate_connection_admission::IsVerifiedConnection(conn)) << "context without a session";
 
 	// 拆除前把上下文清掉:断开回调不归本用例管,别让夹具的连接带着会话号走。
 	conn->setContext(boost::any());

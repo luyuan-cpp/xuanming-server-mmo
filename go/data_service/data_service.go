@@ -319,9 +319,21 @@ func main() {
 	if err := runDataService(c); err != nil {
 		fmt.Fprintf(os.Stderr, "data_service: %v\n", err)
 		_ = logx.Close()
+		if errors.Is(err, errRebuildPod) {
+			os.Exit(exitRebuildPod)
+		}
 		os.Exit(1)
 	}
 }
+
+// exitRebuildPod 是「这个 Pod 原地重启也起不来,要删掉重建」的退出码,与入口脚本「写资格已消费」用的同一个:
+// sql-writer-pod-reaper 删掉主容器以它退出的写者 Pod,StatefulSet 按同一序号重建,init 重新注册
+// (docs/design/data-service-startup-isolation.md §7.5)。
+const exitRebuildPod = 78
+
+// errRebuildPod 标记启动失败要靠重建 Pod 才能好:这一代缺某个目录片的写资格(写者注册时它连不上),启动自检读不了它;
+// init 不随容器重启重跑,原地重启拿到的还是这一份写资格,永远过不了。重建之后注册器再试,连上了就补齐。
+var errRebuildPod = errors.New("this boot has no writer grant for a directory shard that startup must read; exiting so that the pod is rebuilt and the writer registers again")
 
 func runDataService(c config.Config) (runErr error) {
 	runtime, root, relay, err := serverbase.LoadPublicationRuntime(*maintenancePlan, *maintenanceDir, *maintenanceSHA)
@@ -339,14 +351,23 @@ func runDataService(c config.Config) (runErr error) {
 		relay.CloseAdmission()
 		return svcCtx.CloseAndReport()
 	}
+	// 启动自检没过、而这一代又缺目录片的写资格时,原地重启永远过不了:以 exitRebuildPod 退出,让 Pod 重建、重新注册。
+	refuse := func(err error) error {
+		if svcCtx.MissingDirectoryShardGrants() {
+			return errors.Join(errRebuildPod, err)
+		}
+		return err
+	}
 	if missing := svcCtx.MissingStores(); c.Store.Required && len(missing) > 0 {
-		return errors.Join(fmt.Errorf("Store.Required=true，依赖未就绪: %v", missing), cleanupUnstarted())
+		return refuse(errors.Join(fmt.Errorf("Store.Required=true，依赖未就绪: %v", missing), cleanupUnstarted()))
 	}
 	if err := svcCtx.MergedZonesUnassembled(); err != nil {
-		return errors.Join(err, cleanupUnstarted())
+		return refuse(errors.Join(err, cleanupUnstarted()))
 	}
 	// 定时重读合服映射;CloseAndReport 里停。上面的自检没过时不起,也就不用单独收回。
 	svcCtx.MergedZones.Start()
+	// 启动时连不上的目录片、流水库后台重核,集群恢复之后自己打开;CloseAndReport 里停。
+	svcCtx.StartLazyPoolRetry()
 	// 删角的后台收尾走 RELAY 门禁,closeRelay 排空之前停。
 	svcCtx.StartRoleRemovalResumer()
 	// GM 回收的派发和重投同样走 RELAY 门禁。

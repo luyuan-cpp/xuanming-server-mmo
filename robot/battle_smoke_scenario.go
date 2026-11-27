@@ -297,6 +297,11 @@ func RunBattleSmoke(cfg *config.Config) {
 	if aRes.turns < 1 {
 		fail("a-turn-count", "fighter saw %d turn results, expected >= 1", aRes.turns)
 	}
+	if battle.EBattleOutcome(aRes.outcome) != battle.EBattleOutcome_BATTLE_OUTCOME_VOID &&
+		battle.ESpectateEndReason(specEndReason) != battle.ESpectateEndReason_SPECTATE_END_BATTLE_FINISHED {
+		fail("b-spectate-end-reason", "fighter finished with %s but spectator ended with %s",
+			battle.EBattleOutcome(aRes.outcome).String(), battle.ESpectateEndReason(specEndReason).String())
+	}
 
 	// ---- 全部断言通过 ----
 	zap.L().Info(fmt.Sprintf("BATTLE_SMOKE_OK battle_id=%d a_turns=%d b_spectate_turns=%d a_direct_turns=%d b_direct_spectate_turns=%d",

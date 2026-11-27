@@ -20,6 +20,7 @@ import (
 	assetpb "proto/common/asset"
 	rollbackpb "proto/common/rollback"
 	pb "proto/guild"
+	"shared/assetop"
 	"shared/currencytype"
 	"shared/gameday"
 
@@ -374,4 +375,226 @@ func TestSettleWarBattle_StaleLeylineSnapshotConflicts(t *testing.T) {
 	require.NoError(t, err)
 	cur, _ = war.FindLeylineBasis(rows, 1, warTestHunterGuild)
 	assert.Equal(t, d.HPAfter, cur.GetBannerHp())
+}
+
+// ── 入账分流与终态清理(r2-gw#5 / #7) ───────────────────────────────────────────
+
+// warFillCreditWindow 给 player 的 GUILD_CREDIT 流塞满 16 条未决兑换指令,返回纪元(与 activity_repo_integration_test.go 的
+// actFillCreditWindow 同一写法;那个文件带 integration 构建标签,这里不能直接调)。
+func warFillCreditWindow(t *testing.T, f warFixture, playerID, opBase uint64) uint64 {
+	t.Helper()
+	epoch := testNowMs - 100_000
+	maxPending := uint64(assetop.DefaultLimits.MaxPending)
+	mustExec(t, f.ctx, f.db,
+		"INSERT INTO guild_player_op_seq (player_id, stream, next_seq, epoch, updated_ms) VALUES (?, ?, ?, ?, ?)",
+		playerID, uint32(assetpb.AssetOpStream_ASSET_OP_STREAM_GUILD_CREDIT), maxPending+1, epoch, testNowMs)
+	for i := range maxPending {
+		econInsertOp(t, f.econFixture, econShopRecord(t, opBase+i, playerID, epoch, i+1))
+	}
+	return epoch
+}
+
+// warFreeCreditWindow 把 warFillCreditWindow 塞进去的兑换指令全部记成已到账,腾出空位。
+func warFreeCreditWindow(t *testing.T, f warFixture, playerID uint64) {
+	t.Helper()
+	mustExec(t, f.ctx, f.db, "UPDATE guild_asset_op SET status=? WHERE player_id=? AND kind=?",
+		int32(pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_APPLIED), playerID, int32(pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_SHOP))
+}
+
+// warAllOwed 按循环的翻页方式(每页 2 行)读完全部待入账行。
+func warAllOwed(t *testing.T, f warFixture) []WarCreditOwed {
+	t.Helper()
+	var all []WarCreditOwed
+	var cursor WarCreditOwedCursor
+	for {
+		page, err := f.war.ListWarCreditOwed(f.ctx, cursor, 2)
+		require.NoError(t, err)
+		all = append(all, page...)
+		if len(page) < 2 {
+			return all
+		}
+		cursor = page[len(page)-1].Cursor()
+	}
+}
+
+// warRewardInput 造一局只带战后奖励的野外直打:attacker 胜,两人各有一条银两指令(attacker 1000、defender 2000)。
+func warRewardInput(t *testing.T, battleID, attacker, defender, attackerOp, defenderOp uint64) SettleWarBattleInput {
+	t.Helper()
+	in := warHuntInput(battleID, attacker, defender, true)
+	in.Record.WarBattleKind = uint32(pb.GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_FIELD_ROAD)
+	in.Record.BountyId, in.BountyID, in.BountyFacts = 0, 0, war.BountyFacts{}
+	for i, opID := range []uint64{attackerOp, defenderOp} {
+		bundle, err := warSilverBundle(uint64(1000 * (i + 1)))
+		require.NoError(t, err)
+		in.PlayerCredits[i].OpID, in.PlayerCredits[i].CreditBundle = opID, bundle
+	}
+	return in
+}
+
+// r2-gw#5:一名参战者本流未决已满(16 条)不挡整局 —— 对局落定、另一人照常入账;他那一笔不插指令、seq 不前进,原样记进待入账表。
+// Kafka 重投被幂等闸门挡住,不多记;窗口仍满时转换什么都不写;腾出空位后转成恰好一条指令(op_id 就是预发的那个,第 17 个 seq);
+// 别的副本拿同一行再转,行已不在,什么都不写、不烧 seq。
+func TestSettleWarBattle_FullCreditWindowDefersOnlyThatPlayer(t *testing.T) {
+	f := openWarFixture(t)
+	const (
+		battleID   uint64 = 5101
+		hunterOp   uint64 = 880101
+		targetOp   uint64 = 880102
+		fillOpBase uint64 = 880200
+	)
+	epoch := warFillCreditWindow(t, f, warTestHunter, fillOpBase)
+	maxPending := uint64(assetop.DefaultLimits.MaxPending)
+	in := warRewardInput(t, battleID, warTestHunter, warTestTarget, hunterOp, targetOp)
+
+	out, err := f.war.SettleWarBattle(f.ctx, in)
+	require.NoError(t, err, "一个人的积压不挡同局其他人的结算")
+	assert.Equal(t, 1, warBattleRows(t, f, battleID))
+	require.Len(t, out.CreatedOps, 1)
+	assert.Equal(t, targetOp, out.CreatedOps[0].OpID, "另一名参战者照常入账")
+	assert.False(t, econOpExists(t, f.econFixture, hunterOp), "未决已满者不插指令行")
+	assert.Equal(t, maxPending+1, econNextSeq(t, f.econFixture, warTestHunter, assetpb.AssetOpStream_ASSET_OP_STREAM_GUILD_CREDIT), "seq 不前进")
+	want := WarCreditOwed{
+		PlayerID: warTestHunter, OpID: hunterOp, GuildID: warTestHunterGuild,
+		Kind: pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_WAR_REWARD, TxType: rollbackpb.TransactionType_TX_GUILD_WAR_REWARD,
+		PeriodKey: warTestWeekKey, Payload: in.PlayerCredits[0].CreditBundle, SourceID: battleID, CreatedMs: testNowMs,
+	}
+	assert.Equal(t, []WarCreditOwed{want}, out.OwedCredits)
+	owed := warAllOwed(t, f)
+	require.Equal(t, []WarCreditOwed{want}, owed, "与结算同一事务落库")
+
+	_, err = f.war.SettleWarBattle(f.ctx, in)
+	require.ErrorIs(t, err, ErrWarBattleAlreadyDone)
+	assert.Len(t, warAllOwed(t, f), 1, "重投不多记")
+
+	later := testNowMs + 10_000
+	status, err := f.war.ConvertWarCreditOwed(f.ctx, owed[0], later)
+	require.NoError(t, err)
+	assert.Equal(t, WarOwedStillFull, status)
+	assert.False(t, econOpExists(t, f.econFixture, hunterOp))
+	assert.Len(t, warAllOwed(t, f), 1)
+
+	warFreeCreditWindow(t, f, warTestHunter)
+	status, err = f.war.ConvertWarCreditOwed(f.ctx, owed[0], later)
+	require.NoError(t, err)
+	assert.Equal(t, WarOwedConverted, status)
+	rec := econRecord(t, f.econFixture, hunterOp)
+	assert.Equal(t, warTestHunter, rec.GetPlayerId())
+	assert.Equal(t, warTestHunterGuild, rec.GetGuildId())
+	assert.Equal(t, pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_WAR_REWARD, rec.GetKind())
+	assert.Equal(t, uint32(rollbackpb.TransactionType_TX_GUILD_WAR_REWARD), rec.GetTxType())
+	assert.Equal(t, pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_PENDING, rec.GetStatus())
+	assert.Equal(t, maxPending+1, rec.GetSeq(), "第 17 个 seq")
+	assert.Equal(t, epoch, rec.GetStreamEpoch())
+	assert.Equal(t, warTestWeekKey, rec.GetPeriodKey())
+	assert.Equal(t, in.PlayerCredits[0].CreditBundle, rec.GetPayload(), "奖励包原样转入")
+	assert.Zero(t, rec.GetLeaseUntilMs(), "不持租约")
+	assert.Equal(t, later, rec.GetNextAttemptMs(), "重投循环立刻可领")
+	assert.Empty(t, warAllOwed(t, f), "转换与删待入账行在同一事务里")
+
+	status, err = f.war.ConvertWarCreditOwed(f.ctx, owed[0], later+1)
+	require.NoError(t, err)
+	assert.Equal(t, WarOwedGone, status)
+	assert.Equal(t, maxPending+2, econNextSeq(t, f.econFixture, warTestHunter, assetpb.AssetOpStream_ASSET_OP_STREAM_GUILD_CREDIT), "回滚的转换不烧 seq")
+}
+
+// r2-gw#5:追杀令的领赏人本流未决已满时照样结单 —— 赏金记进待入账行、当日领赏次数照占(钱只是晚到),腾出空位后恰好补发一次。
+func TestSettleWarBattle_BountyPayoutOwedWhenHunterWindowIsFull(t *testing.T) {
+	f := openWarFixture(t)
+	warSeedBounty(t, f, warActiveSilverBounty())
+	warFillCreditWindow(t, f, warTestHunter, 880600)
+
+	out, err := f.war.SettleWarBattle(f.ctx, warHuntInput(5102, warTestHunter, warTestTarget, true))
+	require.NoError(t, err)
+	assert.Equal(t, war.BountyTagHunted, out.BountyTag)
+	assert.Equal(t, uint32(pb.GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_COMPLETED), warBounty(t, f).GetStatus())
+	assert.False(t, econOpExists(t, f.econFixture, warTestRewardOp))
+	used, _ := econCounterUsed(t, f.econFixture, warTestHunter, pb.GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_WAR_BOUNTY_PAYOUT, bountyPayoutCounterRefID, econDayKey)
+	assert.Equal(t, uint32(1), used, "领赏记进待入账行也占次数")
+	owed := warAllOwed(t, f)
+	require.Len(t, owed, 1)
+	assert.Equal(t, warTestRewardOp, owed[0].OpID)
+	assert.Equal(t, pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_BOUNTY_PAYOUT, owed[0].Kind)
+	assert.Equal(t, rollbackpb.TransactionType_TX_GUILD_BOUNTY_PAYOUT, owed[0].TxType)
+
+	warFreeCreditWindow(t, f, warTestHunter)
+	status, err := f.war.ConvertWarCreditOwed(f.ctx, owed[0], testNowMs+10_000)
+	require.NoError(t, err)
+	assert.Equal(t, WarOwedConverted, status)
+	to, silver := warOpSilver(t, f, warTestRewardOp)
+	assert.Equal(t, warTestHunter, to)
+	assert.Equal(t, uint64(4501), silver)
+	assert.Empty(t, warAllOwed(t, f))
+}
+
+// r2-gw#5:到期收尾时发布者本流未决已满 —— 追杀令照样置 EXPIRED,退款记进待入账行(不再每轮失败重扫);再收一次不多记;
+// 腾出空位后恰好补发一次。
+func TestExpireBounty_FullIssuerWindowExpiresAndOwesTheRefund(t *testing.T) {
+	f := openWarFixture(t)
+	b := warActiveSilverBounty()
+	b.ExpiresAtMs = testNowMs - 1
+	warSeedBounty(t, f, b)
+	warFillCreditWindow(t, f, warTestIssuer, 880300)
+	bundle, err := warSilverBundle(4501)
+	require.NoError(t, err)
+
+	res, err := f.war.ExpireBounty(f.ctx, ExpireBountyInput{Bounty: b, RefundOpID: warTestRefundOp, RefundBundle: bundle, NowMs: testNowMs})
+	require.NoError(t, err)
+	assert.True(t, res.Expired, "发布者未决已满不挡到期")
+	assert.True(t, res.RefundOwed)
+	assert.False(t, res.HasOp)
+	assert.False(t, econOpExists(t, f.econFixture, warTestRefundOp))
+	assert.Equal(t, uint32(pb.GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_EXPIRED), warBounty(t, f).GetStatus())
+	owed := warAllOwed(t, f)
+	require.Len(t, owed, 1)
+	assert.Equal(t, warTestIssuer, owed[0].PlayerID)
+	assert.Equal(t, warTestRefundOp, owed[0].OpID)
+	assert.Equal(t, warTestBounty, owed[0].SourceID)
+
+	res, err = f.war.ExpireBounty(f.ctx, ExpireBountyInput{Bounty: b, RefundOpID: warTestRefundOp + 1, RefundBundle: bundle, NowMs: testNowMs})
+	require.NoError(t, err)
+	assert.False(t, res.Expired)
+	assert.Len(t, warAllOwed(t, f), 1, "已收尾的单不多记")
+
+	warFreeCreditWindow(t, f, warTestIssuer)
+	status, err := f.war.ConvertWarCreditOwed(f.ctx, owed[0], testNowMs+10_000)
+	require.NoError(t, err)
+	assert.Equal(t, WarOwedConverted, status)
+	to, silver := warOpSilver(t, f, warTestRefundOp)
+	assert.Equal(t, warTestIssuer, to)
+	assert.Equal(t, uint64(4501), silver)
+	assert.False(t, econOpExists(t, f.econFixture, warTestRefundOp+1))
+}
+
+// r2-gw#7:保留期清理只删到期已超保留期的终态行(结单 / 撕单 / 到期退回 / 扣款作废),每轮有上限;
+// ACTIVE、扣款还没终结的,以及还在保留期内的终态行一律不动。
+func TestPurgeTerminalBounties_DeletesOnlyOldTerminalRows(t *testing.T) {
+	f := openWarFixture(t)
+	const cutoff = testNowMs
+	seed := func(id uint64, status pb.GuildWarBountyStatus, expiresAtMs uint64) {
+		b := warActiveSilverBounty()
+		b.BountyId, b.TargetPlayerId, b.Status, b.ExpiresAtMs = id, id, uint32(status), expiresAtMs
+		warSeedBounty(t, f, b)
+	}
+	seed(1, pb.GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_COMPLETED, cutoff-1)
+	seed(2, pb.GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_TORN_BY_TARGET, cutoff-1)
+	seed(3, pb.GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_EXPIRED, cutoff-1)
+	seed(4, pb.GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_ESCROW_FAILED, cutoff-1)
+	seed(5, pb.GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_ACTIVE, cutoff-1)
+	seed(6, pb.GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_ESCROW_PENDING, cutoff-1)
+	seed(7, pb.GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_COMPLETED, cutoff)
+
+	n, err := f.war.PurgeTerminalBounties(f.ctx, cutoff, 3)
+	require.NoError(t, err)
+	assert.Equal(t, 3, n, "每轮有上限")
+	n, err = f.war.PurgeTerminalBounties(f.ctx, cutoff, 100)
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
+	n, err = f.war.PurgeTerminalBounties(f.ctx, cutoff, 100)
+	require.NoError(t, err)
+	assert.Zero(t, n)
+	for id := uint64(1); id <= 7; id++ {
+		b, err := f.war.GetBounty(f.ctx, id)
+		require.NoError(t, err)
+		assert.Equal(t, id >= 5, b != nil, "bounty %d", id)
+	}
 }

@@ -71,9 +71,6 @@ type SendResult struct {
 	// Message 是本次首次提交的显示原件(与历史里那一份逐字相同),只在这次请求真正写入了新的一行时非 nil;
 	// 重放、限流都为 nil。世界频道推送只推它,重放不再推第二次(docs/design/chat-world-channel-fanout.md §4)。
 	Message *chatpb.ChatMessage
-	// PendingPlatformReview 表示内容安全层对本次世界消息走了短超时先放行,调用方需异步调用 CheckPlatformText 复检并在违时撤回。
-	PendingPlatformReview bool
-	PlatformReviewContent string
 }
 
 // Service是真实调用面与独立逻辑测试的同一接缝；nil依赖拒绝，不存在Redis授权回落。
@@ -83,6 +80,9 @@ type Service interface {
 	RetractWorld(context.Context, uint64, int64, string) (bool, uint32, error)
 	ReportMessage(context.Context, *chatpb.ReportChatRequest) (uint32, error)
 	PublishSystemWorldNotice(context.Context, *chatpb.PublishSystemWorldNoticeRequest) (SendResult, error)
+	// 世界频道平台补审的待办(platform_recheck.go)。待办本身由 Send 在发送事务里写。
+	ClaimPlatformRechecks(context.Context, int) ([]PlatformRecheckTask, error)
+	FinishPlatformRecheck(context.Context, uint64, int64, RecheckOutcome) error
 }
 
 type Store struct {
@@ -416,6 +416,12 @@ func (s *Store) Send(ctx context.Context, in *chatpb.SendChatRequest) (SendResul
 		}
 		return replay(r)
 	}
+	// 平台在先行时限里没答复的世界消息:待补审和消息原件同一个事务写,消息落了库待办就在(platform_recheck.go)。
+	if peer == 0 && pendingPlatform {
+		if err = enqueuePlatformRecheck(ctx, tx, actor, now); err != nil {
+			return SendResult{}, err
+		}
+	}
 	// SQL提交是唯一可见写入；未知提交结果保留原ID由调用者重放，不在本函数换ID重试。
 	if err = tx.Commit(); err != nil {
 		return SendResult{}, err
@@ -424,12 +430,7 @@ func (s *Store) Send(ctx context.Context, in *chatpb.SendChatRequest) (SendResul
 		// 本副本上的下一次世界频道拉取必须看得到这条(读己之写);别的副本最多滞后 WorldHistoryCacheMs。
 		s.world.invalidate()
 	}
-	out := SendResult{Message: message}
-	if peer == 0 && pendingPlatform {
-		out.PendingPlatformReview = true
-		out.PlatformReviewContent = rawTrimmed
-	}
-	return out, nil
+	return SendResult{Message: message}, nil
 }
 
 // worldCooldownActive 报告这名玩家是否还在世界频道的发言间隔里:最近 cooldownMs 毫秒内已有一条被接受的世界频道消息。

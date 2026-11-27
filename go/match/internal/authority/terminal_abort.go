@@ -34,7 +34,7 @@ const (
 // 调用方必须已持全部原 P 与 formation 行锁,并已在锁内确认 match_battle_completion 没有这一局的行;提交由调用方做,
 // 提交成功后再 observeTerminalAbort。
 // 所有 ABORT 入口(截止裁决、帮会取消、提前裁决、原件不合格、执行进程失效、人工处置)都只走这里,不另写释放 SQL(2026-11-05)。
-func commitAbortTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRecord, stamp uint64, source pb.MatchBattleCompletionSourceKind) error {
+func (s *Store) commitAbortTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRecord, stamp uint64, source pb.MatchBattleCompletionSourceKind) error {
 	_, err := tx.ExecContext(ctx, "INSERT INTO match_battle_completion(battle_id,raw_payload,payload_digest,format_version,archived_ms,source_topic,source_partition,source_offset,decision,source_kind,placement_operation_id,target_instance_id,outcome_protocol_version,result_published,next_retry_ms) VALUES(?,?,?,0,?,'',0,0,?,?,?,?,1,1,0)", f.BattleId, []byte{}, []byte{}, stamp, uint32(pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT), uint32(source), f.OperationId, f.TargetInstanceId)
 	if err != nil {
 		return err
@@ -50,7 +50,7 @@ func commitAbortTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRecord, 
 	if err = writeVoidSettlementSourcesTx(ctx, tx, f, stamp); err != nil {
 		return err
 	}
-	return writeVoidRankedBattlesTx(ctx, tx, f, stamp)
+	return s.writeVoidRankedBattlesTx(ctx, tx, f, stamp)
 }
 
 // observeTerminalAbort 在 ABORT 事务提交成功之后调用:计一次低基数计数,打一行带 battle_id 的 INFO,
@@ -444,7 +444,7 @@ func (s *Store) AbortWithoutRoom(ctx context.Context, work *pb.MatchFormationRec
 	if !CreateAdmissionClosed(r.AdmitBeforeMs, proof.ObservedAfterMs) || !CreateAdmissionClosed(r.AdmitBeforeMs, stamp) {
 		return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, nil
 	}
-	if err = commitAbortTx(ctx, tx, f, stamp, pb.MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MATCH_NO_ROOM_ABORT); err != nil {
+	if err = s.commitAbortTx(ctx, tx, f, stamp, pb.MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MATCH_NO_ROOM_ABORT); err != nil {
 		return 0, err
 	}
 	if err = tx.Commit(); err != nil {

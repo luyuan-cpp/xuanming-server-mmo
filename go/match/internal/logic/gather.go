@@ -11,6 +11,7 @@ import (
 	"match/internal/authority"
 	"match/internal/discovery"
 	"match/internal/metrics"
+	"match/internal/puzzle"
 	"match/internal/svc"
 
 	battlepb "proto/battle"
@@ -164,6 +165,14 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 			return fail("internal", 0)
 		}
 	}
+	var tacticalPuzzleCtx *battlepb.TacticalPuzzleBattleContext
+	if len(f.TacticalPuzzleContext) > 0 {
+		tacticalPuzzleCtx = &battlepb.TacticalPuzzleBattleContext{}
+		if err := proto.Unmarshal(f.TacticalPuzzleContext, tacticalPuzzleCtx); err != nil {
+			logx.Errorf("[gather] Invalid frozen tactical puzzle context battle=%d: %v", battleId, err)
+			return fail("internal", 0)
+		}
+	}
 
 	var tournamentCaptains map[uint64]bool
 	if tournamentCtx != nil && svcCtx.Authority != nil {
@@ -247,11 +256,17 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 		return fail("fingerprint_mismatch", offender)
 	}
 
-	// seed 用 crypto/rand 生成 uint64(引擎确定性 RNG 的种子)。
-	seed, err := randomSeed()
-	if err != nil {
-		logx.Errorf("[gather] Failed to generate random seed battle=%d: %v", battleId, err)
-		return fail("internal", 0)
+	// seed 用 crypto/rand 生成 uint64(引擎确定性 RNG 的种子)；万象残局坊按 (puzzle_id, spec_revision) 派生固定种子，确保所有破局者盘面一致。
+	var seed uint64
+	if tacticalPuzzleCtx != nil && tacticalPuzzleCtx.GetPuzzleId() != 0 {
+		seed = puzzle.DeterministicSeed(tacticalPuzzleCtx.GetPuzzleId(), tacticalPuzzleCtx.GetSpecRevision())
+	} else {
+		var seedErr error
+		seed, seedErr = randomSeed()
+		if seedErr != nil {
+			logx.Errorf("[gather] Failed to generate random seed battle=%d: %v", battleId, seedErr)
+			return fail("internal", 0)
+		}
 	}
 	snapshots := make([]*battlepb.BattlePlayerSnapshot, 0, len(prepared))
 	for _, p := range prepared {
@@ -307,19 +322,20 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 		TableFingerprint:       tableFingerprint,
 		ActivityContext:        activityContext,
 		SpectateVisibility:     spectateVisibilityForRankedBattle(mode, activityContext, customDuelRules, rankedCtx),
-		RecordReplay:           recordReplayForBattle(svcCtx.Config.BattleReport.Enabled, mode, trialCtx),
+		RecordReplay:           recordReplayForBattle(svcCtx.Config.BattleReport.Enabled, mode, trialCtx, tacticalPuzzleCtx),
 		RequiredPhysicalRegion: f.PhysicalRegion,
 		PlacementOperationId:   f.OperationId,
 		TargetInstanceId:       f.TargetInstanceId,
 		AdmitBeforeMs:          prepareDeadlineMs,
 		OutcomeProtocolVersion: 1,
 		// 每一方的战斗剧本按值冻结进原件(battle-script.md §5.2);论剑排位自动战斗只用预设内技能,不带玩家自定义剧本。
-		TeamScripts:        teamScripts,
-		RankedContext:      rankedCtx,
-		TrialContext:       trialCtx,
-		TournamentContext:  tournamentCtx,
-		CustomDuelRules:    customDuelRules,
-		JianghuDuelContext: jianghuCtx,
+		TeamScripts:           teamScripts,
+		RankedContext:         rankedCtx,
+		TrialContext:          trialCtx,
+		TournamentContext:     tournamentCtx,
+		CustomDuelRules:       customDuelRules,
+		JianghuDuelContext:    jianghuCtx,
+		TacticalPuzzleContext: tacticalPuzzleCtx,
 	}
 	// 先证明原UUID支持SQL终局门禁；不支持的节点会忽略Create新字段，因此不能直接试发。
 	capctx, capcancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -393,14 +409,17 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 
 	// 公开这场战斗:入活跃集合(best-effort;补签与按 battle_id 观战都读成局原件,不靠这一步)。
 	addSpectateActive(svcCtx, battleId, createdAtMs, createReq.GetSpectateVisibility())
+	if mode == matchpb.MatchMode_MATCH_MODE_PVP_TEAM {
+		addSpectateRanked(svcCtx, battleId, createdAtMs, createReq.GetSpectateVisibility(), rankedCtx)
+	}
 	if jianghuCtx != nil {
 		publishJianghuDuelStartNotice(svcCtx, battleId, jianghuCtx)
 	}
 	if matchpb.MatchMode(f.Mode) == matchpb.MatchMode_MATCH_MODE_SEASON_TOURNAMENT {
 		if svcCtx.MatchRedis != nil && (tournamentCtx == nil || !tournamentCtx.GetIsWarmup()) {
-			// 全服赛季战队锦标赛正式局自动写入精选观战索引,优先置顶列表并触发 L2 广播(best-effort;排除热身局)。
+			// 全服赛季战队锦标赛正式局同时写标记键与精选索引(复用 markSpectateFeatured),列表置顶且 spectatePromoteDue 可触发升 L2。
 			featuredCtx, featuredCancel := context.WithTimeout(context.Background(), spectateRedisOpTimeout)
-			_ = spectateFeaturedIndex.add(featuredCtx, svcCtx.MatchRedis, battleId, int64(f.DeadlineMs))
+			_ = markSpectateFeatured(featuredCtx, svcCtx, battleId)
 			featuredCancel()
 		}
 		if tournamentCtx != nil && tournamentCtx.GetSeasonId() != 0 && svcCtx.Authority != nil {
@@ -801,21 +820,4 @@ func teamIndexFor(mode matchpb.MatchMode, memberIndex int, required int) uint32 
 	case matchpb.MatchMode_MATCH_MODE_1V1, matchpb.MatchMode_MATCH_MODE_PVP_CHALLENGE:
 		return uint32(memberIndex)
 	case matchpb.MatchMode_MATCH_MODE_5V5, matchpb.MatchMode_MATCH_MODE_POLARITY_5V5, matchpb.MatchMode_MATCH_MODE_SEASON_TOURNAMENT:
-		if required > 0 && memberIndex >= required/2 {
-			return 1
-		}
-		return 0
-	default:
-		return 0
-	}
-}
-
-// randomSeed 用 crypto/rand 生成引擎种子(设计文档 §5.4;引擎内所有随机
-// 只走该种子驱动的确定性 RNG,宪法新增不变量 #5)。
-func randomSeed() (uint64, error) {
-	var buf [8]byte
-	if _, err := cryptorand.Read(buf[:]); err != nil {
-		return 0, err
-	}
-	return binary.LittleEndian.Uint64(buf[:]), nil
-}
+		if require

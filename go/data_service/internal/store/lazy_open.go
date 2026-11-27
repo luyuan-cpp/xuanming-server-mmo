@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -20,6 +21,10 @@ import (
 
 // lazyOpenBackoff 是打开失败后的冷却:期间直接回上次的错误,坏库不拖住每一个请求。
 const lazyOpenBackoff = 10 * time.Second
+
+// LazyPoolRetryInterval 是常驻进程后台重核关着的池的间隔(LazyPools.RetryClosed)。比冷却长一半:失败的时刻记在核对做完时、比那一拍晚,
+// 间隔与冷却同长的话每一拍都还差一点没出冷却,实际两拍才核一次。多出的 5 秒盖得住拨号超时;核对慢过 5 秒时跳过一拍。
+const LazyPoolRetryInterval = lazyOpenBackoff + lazyOpenBackoff/2
 
 // openOnce 是「第一次用到才打开」的唯一一份规则,存档库连接池(PlayerStorePools)和目录、流水库各池的首次核对(lazyPool)共用:
 //   - 成功一次之后常驻,不再调 open;
@@ -123,7 +128,9 @@ func (d closedDriver) Open(string) (driver.Conn, error) { return nil, d.err }
 //   - 连不上(authoritysql.ErrUnreachable):不算失败。这个池保持关闭,用到时再核对(openOnce 的冷却),别的库照常;
 //   - 连上了而核对不过(片号对不上、表形状不对、会话不符):回错误,调用方拒启。这是确定的部署错误,
 //     带着它启动,滚动发布会把好副本一个个换成坏的。
-func lazyPool(name string, now func() time.Time, verify func() error, handle func(authoritysql.ConnectGate) (*sql.DB, error)) (*sql.DB, error) {
+//
+// registry 非空时把这个池登记进去:后台定期重核还关着的池(LazyPools.RetryClosed),就绪判定看它(LazyPools.Closed)。
+func lazyPool(name string, now func() time.Time, verify func() error, handle func(authoritysql.ConnectGate) (*sql.DB, error), registry *LazyPools) (*sql.DB, error) {
 	verified := newOpenOnce[struct{}]("logical database "+name, now)
 	ensure := func() error {
 		_, err := verified.get(func() (struct{}, error) { return struct{}{}, verify() })
@@ -138,7 +145,64 @@ func lazyPool(name string, now func() time.Time, verify func() error, handle fun
 			_ = db.Close()
 			return nil, err
 		}
-		logx.Errorf("[lazy-open] logical database %s is unreachable at startup: it stays closed and is verified again when it is first used", name)
+		logx.Errorf("[lazy-open] logical database %s is unreachable at startup: it stays closed and is verified again when it is first used or retried in the background", name)
 	}
+	registry.add(lazyPoolEntry{name: name, ensure: ensure, opened: func() bool {
+		_, ok := verified.loaded()
+		return ok
+	}})
 	return db, nil
+}
+
+// LazyPools 是常驻进程里按需核对的池(lazyPool)的名单。启动时连不上的池留在这里,
+// 后台每隔一段时间把还关着的重核一次(RetryClosed),就绪判定看 Closed:有池还关着就不算就绪,恢复之后自己变回就绪
+// (docs/design/data-service-startup-isolation.md §6.1)。nil 接收者什么都不记。并发安全。
+type LazyPools struct {
+	mu    sync.Mutex
+	pools []lazyPoolEntry
+}
+
+type lazyPoolEntry struct {
+	name   string
+	ensure func() error
+	opened func() bool
+}
+
+func (s *LazyPools) add(entry lazyPoolEntry) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pools = append(s.pools, entry)
+}
+
+func (s *LazyPools) closedEntries() []lazyPoolEntry {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	entries := slices.Clone(s.pools)
+	s.mu.Unlock()
+	return slices.DeleteFunc(entries, func(entry lazyPoolEntry) bool { return entry.opened() })
+}
+
+// Closed 返回还没核对通过的逻辑库,升序、去重(一个目录片有三个池)。
+func (s *LazyPools) Closed() []string {
+	var names []string
+	for _, entry := range s.closedEntries() {
+		names = append(names, entry.name)
+	}
+	slices.Sort(names)
+	return slices.Compact(names)
+}
+
+// RetryClosed 把还关着的池各重核一次,最多 shardFanOut 个同时。冷却期内的直接拿上次的错误,不建连;
+// 所以每个关着的池每个冷却期最多拨一次号。失败只由 openOnce 记日志。
+func (s *LazyPools) RetryClosed() {
+	closed := s.closedEntries()
+	_ = runParallel(len(closed), shardFanOut, func(i int) error {
+		_ = closed[i].ensure()
+		return nil
+	})
 }

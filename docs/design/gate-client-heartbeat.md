@@ -87,10 +87,10 @@ message ClientHeartbeatResponse { uint64 seq = 1; }  // gate → 客户端,回�
 ### 5.1 一条连接的三道期限
 
 ```
-建连 ──ExpectHandshake──▶ 握手检查点:建连 + 10s
-  │                         到期时仍未验签 → forceClose(handshake_timeouts)
+建连 ──OpenPreAuthConnection──▶ 未验签表里一条记录(没有会话):建连 + 10s 时还在表里
+  │                               → 扫描摘掉记录、forceClose(handshake_timeouts)
   ▼
-验签成功的回包 ──OnTokenVerified──▶ 通告 10000 / 30000,开始跟踪;空闲检查点:回包时刻 + 30s
+验签成功(这时才发号建会话)的回包 ──OnTokenVerified──▶ 通告 10000 / 30000,开始跟踪;空闲检查点:回包时刻 + 30s
   │                                  到期时距上一帧不足 30s → 按「上一帧 + 30s」重新登记
   │                                  已满 30s → forceClose(idle_closed)
   │                                  同时登记登录检查点:回包时刻 + 60s
@@ -101,7 +101,9 @@ message ClientHeartbeatResponse { uint64 seq = 1; }  // gate → 客户端,回�
 
 - **登录期限按「距验签的时长 + 仍未登录成功」判**(2026-11-26 加),与握手期限同一个道理:按「距上一次活动」算,只发心跳的连接就能永远挂着。只看 `loginSucceeded`,不看 `loginStarted`:发一条注定失败的 Login 不能让它作废。同一张票同一时刻也只能开一条连接(`SessionManager::ClaimTicket`,见[登录排队](./login-queue-2026-05.md) §5「一张票只开一条连接」),两道合起来,一个账号占着的连接数受 login 的设备数上限约束。
 
-- **握手期限按「距建连的时长 + 仍未验签」判**,期间收到过字节也不续期。按「距上一次活动」算的话,对端每隔几秒发一个字节就能永远占着槽位,这是这道防线被静默绕过的头号方式(准入控制文档 P0-2)。登记点在 `HandleConnectionEstablished` 插入会话之后;dev 免验签的会话建连即已验证,不登记。
+- **握手期限按「距建连的时长 + 仍未验签」判**,期间收到过字节也不续期。按「距上一次活动」算的话,对端每隔几秒发一个字节就能永远占着槽位,这是这道防线被静默绕过的头号方式(准入控制文档 P0-2)。
+  2026-11-26 起(准入控制文档 P2-4 票据先行)验签之前没有会话:`HandleConnectionEstablished` 只往未验签表(`SessionManager::preAuthConnections()`)登记一条记录,
+  表按建连先后有序,扫描从表头起摘掉建连满 10s 的再关,不再在检查点堆里登记握手检查点。dev 免验签的连接建连即建会话,不在表里。
 - **空闲超时从验签成功的回包起算**。三条成功路径都调 `OnTokenVerified`:正常验签、已验证会话重发验签、dev 免验签。重复调用只填参数,不重复登记。
 - dev 免验签模式下,客户端如果没发验签请求就直接发心跳,第一条心跳开始跟踪(§5.2 第 5 步);既不验签也不发心跳的连接,gate 从没通告过参数,不跟踪。生产模式(prod 空密钥拒启)没有这条路径。
 
@@ -109,15 +111,15 @@ message ClientHeartbeatResponse { uint64 seq = 1; }  // gate → 客户端,回�
 
 `gate_client_heartbeat::OnHeartbeatRequest`(`cpp/nodes/gate/handler/rpc/client_heartbeat.cpp`),按顺序:
 
-1. 按连接上下文的 session_id 找会话。找不到:`forceClose`。与 `ClientRequest` 找不到会话的处置相同。
-2. 记一次「收到一帧」(§5.3)。
-3. 会话未验签:`forceClose`,计 `before_verify`。与验签前发 `ClientRequest` 的处置相同。
+1. 连接还没验签(上下文是未验签记录的键,没有会话,2026-11-26 起):`forceClose`,计 `before_verify`。与验签前发 `ClientRequest` 的处置相同。
+2. 按连接上下文的 session_id 找会话。找不到:`forceClose`。与 `ClientRequest` 找不到会话的处置相同。
+3. 记一次「收到一帧」(§5.3)。会话未验签(会话只在验签成功之后建,走不到,留作纵深防御):同第 1 步。
 4. 本窗口已回满 3 条:不回,计一次非法包,计 `excess`;非法包到阈值(`GATE_ILLEGAL_PACKET_THRESHOLD`,缺省 50)时 `forceClose`。
 5. 其余:回 `ClientHeartbeatResponse{seq}`,计 `answered`。这条连接如果还没在跟踪(只有 §5.1 末段那条 dev 路径),从这一条起跟踪。
 
 ### 5.3 任何一帧都算活着
 
-三个收包入口都在找到会话之后记一次「收到一帧」:`DispatchTokenVerify`、`DispatchClientRpcMessage`、心跳。被拒绝的帧也算,因为它同样证明对端活着;被拒的帧另有非法包计数管着。
+三个收包入口都在找到会话之后记一次「收到一帧」:`DispatchTokenVerify`、`DispatchClientRpcMessage`、心跳。还没验签的连接没有会话,也就不记(验签之前本来不跟踪)。被拒绝的帧也算,因为它同样证明对端活着;被拒的帧另有非法包计数管着。
 
 - **按完整的帧算,不按字节算**。节点链路按字节算(§21.5),因为对端是自己人。公网端口按字节算的话,对端每隔几秒发一个字节、永远凑不成一帧,就能让连接一直不被判死。完整的帧要过 codec 的长度、校验和与类型检查。客户端合法帧都很小(`ClientRequest` 不超过 1KB),慢网络上也是瞬间收完。
 - **还没开始跟踪的连接(验签之前)不读时钟**。跟踪中的连接每帧读一次 `steady_clock`(约 20ns),相对每帧的解码与转发开销可以忽略。
@@ -126,14 +128,16 @@ message ClientHeartbeatResponse { uint64 seq = 1; }  // gate → 客户端,回�
 
 主 loop 上一个 1 秒的定时器(`GateRuntimeContext::clientLivenessSweepTimer`)驱动 `SweepLiveness(now)`。
 
-- **数据结构**:一个按到期时刻排序的小根堆,检查点是 `(到期时刻, session_id, 会话代次, 种类)`。一条连接至多同时有两个:握手检查点(验签之后作废)与空闲检查点(跟踪之后恰好一个)。
+- **数据结构**:一个按到期时刻排序的小根堆,检查点是 `(到期时刻, session_id, 会话代次, 种类)`,只管已验签的会话:一条连接至多同时有两个,空闲检查点(跟踪之后恰好一个)与登录检查点(验签时登记一次)。
   - 到期时取出,核对会话还在、代次相同;否则丢弃。会话关闭时不用摘检查点,到期时自然丢掉;session_id 被新连接复用时,代次对不上,也丢掉。
-  - 握手检查点:已验签就丢弃;仍未验签就关。
   - 空闲检查点:距上一帧不足 30 秒,活着,按「上一帧 + 30 秒」重新登记;已满 30 秒,关。
-- **开销**:收包路径只写一个时刻,不碰堆;每条跟踪中的连接每 30 秒左右被检查一次,外加建连时一个握手检查点。2 万条连接每秒约 700 次查表。不按秒全量遍历会话表:2 万个会话结构遍历一次是毫秒级,gate 唯一的 loop 每秒卡一下不划算。
-- **本端卡顿不怪对端**,同节点链路 §21.5。本次扫描距上次超过 2 秒,说明 gate 的 loop 卡过,客户端的帧(包括验签请求)可能还在接收缓冲里没读。这一轮两道期限都不关,改约 1 秒后的下一轮再判(`deferred`)。
+  - 登录检查点:已登录成功过就丢弃;否则关。
+- **握手期限不在堆里**(2026-11-26,准入控制文档 P2-4):验签之前的连接只在未验签表里,键是建连时单调分配的代次,表按建连先后有序。同一次扫描接着从表头起
+  摘掉建连满 10 秒的记录再关,碰到第一条没满的就停(`CloseExpiredHandshakes`)。2026-11-26 之前每条连接在堆里有一个握手检查点,验签之后作废。
+- **开销**:收包路径只写一个时刻,不碰堆;每条跟踪中的连接每 30 秒左右被检查一次;未验签表每轮只碰到期的那几条。2 万条连接每秒约 700 次查表。不按秒全量遍历会话表:2 万个会话结构遍历一次是毫秒级,gate 唯一的 loop 每秒卡一下不划算。
+- **本端卡顿不怪对端**,同节点链路 §21.5。本次扫描距上次超过 2 秒,说明 gate 的 loop 卡过,客户端的帧(包括验签请求)可能还在接收缓冲里没读。这一轮各道期限都不关,改约 1 秒后的下一轮再判(`deferred`,握手期限那一侧计的是这一轮到期没关的未验签记录数)。
 - **关闭只做一件事**:`forceClose()`。
-  - 之后由 muduo 的断开回调进 `HandleConnectionDisconnection`:向 scene 代发 `ExitGame(DISCONNECTED)`(断线保留),向 login 发断线通知(断线租约),清路由 lane 与观战订阅,删会话。没验签的会话没有角色、没向 login 发过登录,断开回调只删会话。
+  - 之后由 muduo 的断开回调进 `HandleConnectionDisconnection`:向 scene 代发 `ExitGame(DISCONNECTED)`(断线保留),向 login 发断线通知(断线租约),清路由 lane 与观战订阅,删会话。没验签的连接没有会话、没向 login 发过登录,断开回调第一步摘掉未验签记录(握手超时关的已经摘过)就返回。
   - 不重放、不补发、不遍历玩家。
   - 关闭后检查点不再登记,同一条连接不会被关第二次。
 
@@ -152,12 +156,12 @@ message ClientHeartbeatResponse { uint64 seq = 1; }  // gate → 客户端,回�
 
 ### 5.6 代码结构
 
-- 纯逻辑 `cpp/libs/engine/core/network/client_liveness.h`(命名空间 `client_liveness`;2026-11-10 从 gate 的 `session/comp/` 挪到 core,battle 直连共用):参数 `ClientLivenessPolicy` 与 `static_assert`、每会话状态 `ClientLiveness`、心跳准入 `AdmitHeartbeat`、判死 `JudgeIdle`、检查点堆与扫描 `LivenessSweeper`(gate 用),以及每连接定时器的判定 `DecideIdleCheck`(battle 直连用,§14)。只依赖 STL,不读时钟,时刻由调用方传入;验签与否取自各自会话的 `verified`,不另存一份。
-- 装配 `cpp/nodes/gate/handler/rpc/client_heartbeat.{h,cpp}`:`ExpectHandshake`、`OnTokenVerified`、收心跳、`SweepLiveness`、计数与日志。状态是 gate loop 线程上的 thread_local,与路由 lane 同一做法;定时器回调不捕获任何对象(AGENTS §11.7)。
+- 纯逻辑 `cpp/libs/engine/core/network/client_liveness.h`(命名空间 `client_liveness`;2026-11-10 从 gate 的 `session/comp/` 挪到 core,battle 直连共用):参数 `ClientLivenessPolicy` 与 `static_assert`、每会话状态 `ClientLiveness`、心跳准入 `AdmitHeartbeat`、判死 `JudgeIdle`、检查点堆与扫描 `LivenessSweeper`(gate 用,2026-11-26 起只有空闲与登录两种检查点),以及每连接定时器的判定 `DecideIdleCheck`(battle 直连用,§14)。只依赖 STL,不读时钟,时刻由调用方传入;验签与否取自各自会话的 `verified`,不另存一份。
+- 装配 `cpp/nodes/gate/handler/rpc/client_heartbeat.{h,cpp}`:`OnTokenVerified`、收心跳、`SweepLiveness`(含扫未验签表的握手期限 `CloseExpiredHandshakes`)、计数与日志。状态是 gate loop 线程上的 thread_local,与路由 lane 同一做法;定时器回调不捕获任何对象(AGENTS §11.7)。
 - 接线:
   - `SessionInfo::liveness`;
   - `GateClientSessionHandler` 构造时注册心跳回调;
-  - `HandleConnectionEstablished` 登记握手期限;
+  - `HandleConnectionEstablished` 登记未验签记录(`gate_connection_admission::OpenPreAuthConnection`,握手期限从这张表扫);
   - `DispatchTokenVerify` / `DispatchClientRpcMessage` 记「收到一帧」,验签成功回包调 `OnTokenVerified`;
   - `main.cpp` 装 1 秒扫描定时器,维护停中继与拆除时取消。
 
@@ -341,7 +345,8 @@ Java `game-gate` 完整 362 项通过，`game-robot` 完整 695 项中 692 项�
 - **关闭之后不加任何战斗逻辑**:照常走 `HandleClosed → DetachDirectConnection`。
   - 参战者:回合按 25s 超时自动出手(`kActionTimeoutMs`);客户端恢复后凭票重连,再 `GetBattleState` 补拉全量。
   - 观众:进既有的席位重连宽限,到期回收席位。
-- **为什么不用 gate 的检查点堆**:battle 直连面本来就是每会话一个 `TimerTaskComp`(握手期限),连接数以 `battle_max_connections` 为界;定时器回调只持 weak 自己与 connId,不持连接(AGENTS §11.7)。gate 用堆,是因为 2 万连接时既不该每秒遍历会话表,也不该起 2 万个定时器。两边的判定是同一份纯函数。
+- **为什么不用 gate 的检查点堆**:battle 直连面每条握手成功的直连一个 `TimerTaskComp`(空闲检查),连接数以 `battle_max_connections` 为界;定时器回调只持 weak 自己与 connId,不持连接(AGENTS §11.7)。gate 用堆,是因为 2 万连接时既不该每秒遍历会话表,也不该起 2 万个定时器。两边的判定是同一份纯函数。
+- **握手期限**(2026-11-26,准入控制文档 P2-4 票据先行):握手之前的直连只有未认证池里的一条记录,没有 `DirectSession`;`Install` 起的 1 秒节拍从池头摘掉建连满 10s 的再关(这一拍迟到就不关),与 gate 扫未验签表同一做法。2026-11-26 之前是每条直连一个 `runAfter` 握手定时器。出示了探测授权的探测连接从不握手,授权验过时才建会话,另有一个按「建连 + 10s」武装的探测期限定时器。
 - **参数**:共用 `client_liveness::kClientLiveness`。`kHandshakeTimeoutSec` 改为从 `handshakeTimeout` 派生,值不变,仍是 10s。
 
 ### 14.3 兼容

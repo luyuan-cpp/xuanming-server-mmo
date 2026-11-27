@@ -94,10 +94,10 @@ uint64_t CloseExpiredHandshakes(const SteadyTime now, const bool late)
 		}
 		const auto conn = it->second.conn.lock();
 		it = preAuthConnections.erase(it);
-		++tlsCounters.handshakeTimeouts;
-		LogUnauthenticatedSampled("handshake_timeout", tlsCounters.handshakeTimeouts);
 		if (conn)
 		{
+			++tlsCounters.handshakeTimeouts;
+			LogUnauthenticatedSampled("handshake_timeout", tlsCounters.handshakeTimeouts);
 			conn->forceClose(); // 排队关闭,不会在这个循环里同步走断开回调
 		}
 	}

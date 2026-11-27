@@ -29,14 +29,17 @@ func NewRemovePlayersFromAccountsLogic(ctx context.Context, svcCtx *svc.ServiceC
 	}
 }
 
-// RemovePlayersFromAccounts 摘孤儿角色,判定和结局语义见 admin.RemovePlayersFromAccounts。鉴权在拦截器(x-admin-token)。
+// RemovePlayersFromAccounts 摘孤儿角色,判定和结局语义见 admin.RemovePlayersFromAccounts。
+// 鉴权与双人复核在拦截器(x-admin-token、admin_approval.go)。
 func (l *RemovePlayersFromAccountsLogic) RemovePlayersFromAccounts(in *login.RemovePlayersFromAccountsRequest) (*login.RemovePlayersFromAccountsResponse, error) {
 	out, err := admin.RemovePlayersFromAccounts(l.ctx, l.svcCtx, &admin.RemovePlayersFromAccountsReq{
-		PlayerIDs: in.GetPlayerIds(),
-		Operator:  in.GetOperator(),
-		Reason:    in.GetReason(),
-		DryRun:    in.GetDryRun(),
-		PeerAddr:  peerAddrOf(l.ctx),
+		PlayerIDs:  in.GetPlayerIds(),
+		Operator:   in.GetOperator(),
+		Reason:     in.GetReason(),
+		DryRun:     in.GetDryRun(),
+		PeerAddr:   peerAddrOf(l.ctx),
+		ApprovalID: in.GetApproval().GetApprovalId(),
+		Approver:   in.GetApproval().GetApprover(),
 	})
 	switch {
 	case errors.Is(err, accountdirectory.ErrInvalid):

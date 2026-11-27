@@ -11,6 +11,8 @@
       - reason 取值都在 battle_connection_admission.h 的 kRejectReasonNames 里,与 gate 同义的取值写法相同;
       - 直连面确实把准入回调装到了 TcpServer 上(只绑 weak)、登记了指标,建连 / 握手 / 握手超时 / 纵深防御分支都计了数,
         未认证连接数不把出示过探测授权的连接算进去;
+      - 票据先行(准入设计 P2-4):握手之前只有未认证记录、不建 DirectSession,握手成功或探测授权验过才建;
+        握手期限由 1 秒节拍从池头扫;
       - battle 的 main.cpp 启动时配了速率闸参数(写错拒启)、关源时同步关了准入闸;
       - 指标标签只有 reason 与 result:对端地址、房间号、玩家号不进指标(AGENTS.md §9);
       - PrometheusRule 形状、规则名单、每条规则的 severity / summary / description / runbook_url / for;
@@ -142,21 +144,28 @@ Test-Case '直连面:准入回调装在 TcpServer 上且只绑 weak,指标已登
     Assert-Match -Text $install -Pattern 'server\.setConnectionCallback\(' -Because '连接回调与准入回调在同一处装上'
     Assert-Match -Text $install -Pattern '(?m)^\s*RegisterMetrics\(\);$' -Because '不登记采集回调,这些序列根本不存在'
     Assert-Match -Text $script:EdgeSource -Pattern 'GlobalMetricsRegistry\(\)\.Register\(\s*"battle_connection_admission", \[weak\]' -Because '采集回调也只绑 weak 自己'
-    Assert-Match -Text $script:EdgeSource -Pattern '(?s)sessions\.try_emplace\(connId\);.{0,400}?admission\.NoteAccepted\(\);' -Because '会话插入之后立刻计接纳'
-    Assert-Match -Text $script:EdgeSource -Pattern 'admission\.NoteHandshake\(session->openedAt, std::chrono::steady_clock::now\(\)\);' -Because '票据握手成功时记握手耗时'
-    Assert-Match -Text $script:EdgeSource -Pattern '(?s)self->admission\.NoteHandshakeTimeout\(\);\s*LogRejectionSampled\("handshake_timeout", c\);\s*c->forceClose\(\);' `
-        -Because 'battle_preauth_reaped_total 与握手期限的关闭是同一处'
+    Assert-Match -Text $script:EdgeSource -Pattern '(?s)unauthenticated\.emplace\(connId, UnauthenticatedConnection\{\.conn = conn, \.openedAt = std::chrono::steady_clock::now\(\)\}\);\s*admission\.NoteAccepted\(\);' `
+        -Because '建连只登记一条未认证记录,随即计接纳'
+    Assert-Match -Text $script:EdgeSource -Pattern 'admission\.NoteHandshake\(record->second\.openedAt, std::chrono::steady_clock::now\(\)\);' -Because '票据握手成功时记握手耗时'
+    Assert-Match -Text $script:EdgeSource -Pattern '(?s)it = unauthenticated\.erase\(it\);\s*if \(conn\)\s*\{\s*admission\.NoteHandshakeTimeout\(\);\s*LogRejectionSampled\("handshake_timeout", conn\);\s*conn->forceClose\(\);' `
+        -Because 'battle_preauth_reaped_total 与握手期限的关闭是同一处:先摘记录再关'
+    Assert-Match -Text $script:EdgeSource -Pattern '(?s)self->admission\.NoteHandshakeTimeout\(\);\s*LogRejectionSampled\("handshake_timeout",c\);\s*c->forceClose\(\);' `
+        -Because '探测连接从不握手,满握手期限还没探完同样计进 battle_preauth_reaped_total'
     foreach ($reason in @('kCapacity', 'kNoTokenSecret')) {
         Assert-Match -Text $script:EdgeSource -Pattern ('admission\.NoteRejectedAfterAccept\(battle_connection_admission::RejectReason::{0}\);' -f $reason) `
             -Because "连接回调里的 $reason 分支要计进 battle_rejected_total"
     }
-    Assert-Match -Text $script:EdgeSource -Pattern '(?s)s->probeGrant=std::move\(grant\);.{0,300}?unauthenticated\.erase\(s->connId\);' `
-        -Because '出示过探测授权的连接出未认证池,否则每台的 BattleUnauthenticatedConnectionsHigh 随探测量误报'
+    Assert-Match -Text $script:EdgeSource -Pattern '(?s)unauthenticated\.erase\(record\);\s*DirectSession& s=sessions\[connId\];.{0,200}?s\.probeGrant=std::move\(grant\);' `
+        -Because '出示过探测授权的连接出未认证池、这时才建会话;不出池的话每台的 BattleUnauthenticatedConnectionsHigh 随探测量误报'
 }
 
-Test-Case '直连面的未认证池:按 connId 有序的集合,accept 时 O(1) 不扫会话表,五处进出池,loop 刚卡过不淘汰,淘汰先出池再经 weak 连接 forceClose' {
-    Assert-Match -Text $script:EdgeHeader -Pattern '(?m)^\s*std::set<uint64_t> unauthenticated;$' -Because 'connId 单调递增,有序集合即建连先后,begin() 就是最老的'
+Test-Case '直连面的未认证池:按 connId 有序的记录表,握手前不建会话,accept 时 O(1) 不扫会话表,六处进出池,loop 刚卡过不淘汰也不收割,淘汰先摘记录再经 weak 连接 forceClose' {
+    Assert-Match -Text $script:EdgeHeader -Pattern '(?m)^\s*std::map<uint64_t, UnauthenticatedConnection> unauthenticated;$' -Because 'connId 单调递增,有序即建连先后,begin() 就是最老的;握手之前只有这一条记录'
     Assert-Match -Text $script:EdgeHeader -Pattern 'size_t UnauthenticatedConnectionCount\(\) const \{ return unauthenticated\.size\(\); \}' -Because '指标与判定读同一个数'
+    Assert-Match -Text $script:EdgeHeader -Pattern 'size_t ConnectionCount\(\) const \{ return sessions\.size\(\) \+ unauthenticated\.size\(\); \}' -Because '直连数 = 会话 + 未认证,总量闸与停机排空都按它'
+    $established = Get-FunctionBody -Text $script:EdgeSource -SignaturePattern 'void BattleClientEdge::HandleEstablished\(const muduo::net::TcpConnectionPtr &conn\)'
+    Assert-NotMatch -Text $established -Pattern 'sessions\.try_emplace|sessions\[|RunAfter\(' -Because '握手之前不建 DirectSession,也不按连接起定时器(票据先行)'
+    Assert-Match -Text $established -Pattern 'if \(ConnectionCount\(\) >= EffectiveMaxConnections\(\)\)' -Because '第二道总量闸按 会话 + 未认证 判'
     $admit = Get-FunctionBody -Text $script:EdgeSource -SignaturePattern 'bool BattleClientEdge::AdmitConnection\(const muduo::net::InetAddress &peer,\n\s+const battle_connection_admission::SteadyTime now\)'
     Assert-NotMatch -Text $admit -Pattern 'for \([^)]*:\s*sessions\)' -Because '准入回调排在速率闸之前,被拒的洪水也要走它:不能每次 accept 扫一遍会话表'
     Assert-Match -Text $admit -Pattern 'const uint64_t unauthenticated = this->unauthenticated\.size\(\);' -Because '池大小 O(1)'
@@ -165,14 +174,19 @@ Test-Case '直连面的未认证池:按 connId 有序的集合,accept 时 O(1) �
     $oldest = Get-FunctionBody -Text $script:EdgeSource -SignaturePattern 'std::optional<uint64_t> BattleClientEdge::OldestConnectedUnauthenticated\(\n\s+const battle_connection_admission::SteadyTime now\) const'
     Assert-NotMatch -Text $oldest -Pattern 'steady_clock::now\(\)' -Because '半关闭连接是否逾期与随后算年龄必须用同一个时刻,两处各取一次时钟会在临界点上得出相反的结论'
     Assert-Match -Text $admit -Pattern 'EvictUnauthenticated\(\*oldestConnId, now\);' -Because '判定要求淘汰时淘汰找出来的最老一条'
-    Assert-Match -Text $script:EdgeSource -Pattern '(?s)session\.openedAt = std::chrono::steady_clock::now\(\);.{0,300}?unauthenticated\.insert\(connId\);' -Because '建连即进池'
-    Assert-Match -Text $script:EdgeSource -Pattern '(?s)session->verified = true;\s*unauthenticated\.erase\(session->connId\);' -Because '票据握手成功出池'
-    Assert-Match -Text $script:EdgeSource -Pattern '(?s)unauthenticated\.erase\(connId\);\s*sessions\.erase\(it\);' -Because '断开时与会话一起出池(HandleClosed 是会话表唯一的删除点)'
+    Assert-Match -Text $admit -Pattern 'admission\.Admit\(peer, ConnectionCount\(\), EffectiveMaxConnections\(\), unauthenticated, oldestAge, now\)' -Because '准入回调的总量按 会话 + 未认证 判'
+    Assert-Match -Text $script:EdgeSource -Pattern '(?s)unauthenticated\.erase\(record\);\s*\}\s*DirectSession &session = sessions\[connId\];\s*session\.connId = connId;\s*session\.conn = conn;\s*session\.verified = true;' `
+        -Because '票据握手成功出池,这时才建会话'
+    Assert-Match -Text $script:EdgeSource -Pattern '(?s)if \(unauthenticated\.erase\(connId\) > 0\)\s*\{\s*return;\s*\}' -Because '没握手就断开只摘未认证记录,没有会话要解绑'
     $evict = Get-FunctionBody -Text $script:EdgeSource -SignaturePattern 'void BattleClientEdge::EvictUnauthenticated\(const uint64_t connId, const battle_connection_admission::SteadyTime now\)'
-    Assert-Match -Text $evict -Pattern '(?s)it->second\.conn\.lock\(\);.*?unauthenticated\.erase\(connId\);.*?admission\.NotePreAuthEvicted\(\);.*?conn->forceClose\(\);' -Because '先出池(这一刻起不再算在池里),再经会话里的 weak 连接 forceClose 并计一次淘汰'
-    Assert-NotMatch -Text $evict -Pattern 'sessions\.erase' -Because '不在准入回调里删会话,留给 HandleClosed'
+    Assert-Match -Text $evict -Pattern '(?s)it->second\.conn\.lock\(\);.*?unauthenticated\.erase\(it\);.*?admission\.NotePreAuthEvicted\(\);.*?conn->forceClose\(\);' -Because '先摘记录(这一刻起不再算在池里),再经记录里的 weak 连接 forceClose 并计一次淘汰'
+    Assert-NotMatch -Text $evict -Pattern 'sessions\.erase' -Because '不在准入回调里删会话;未认证直连本来就没有会话'
+    $sweep = Get-FunctionBody -Text $script:EdgeSource -SignaturePattern 'void BattleClientEdge::CloseExpiredHandshakes\(const client_liveness::SteadyTime now, const bool late\)'
+    Assert-Match -Text $sweep -Pattern '(?s)if \(late\)\s*\{\s*return;' -Because '本端 loop 卡过的那一拍不收割(握手包可能还在接收缓冲里没读)'
+    Assert-Match -Text $sweep -Pattern 'while \(it != unauthenticated\.end\(\) && now - it->second\.openedAt >= handshakeTimeout\)' -Because '从池头扫,碰到第一条没满期限的就停'
     $install = Get-FunctionBody -Text $script:EdgeSource -SignaturePattern 'void BattleClientEdge::Install\(muduo::net::TcpServer &server\)'
-    Assert-Match -Text $install -Pattern '(?s)loopStallTimer\.RunEvery\(tickSeconds, \[weak\].{0,200}?self->loopStall\.Tick\(' -Because 'loop 卡顿的节拍由 1 秒定时器打,只绑 weak 自己'
+    Assert-Match -Text $install -Pattern '(?s)loopStallTimer\.RunEvery\(tickSeconds, \[weak\].{0,300}?const bool late = self->loopStall\.Tick\(now\);\s*self->CloseExpiredHandshakes\(now, late\);' `
+        -Because 'loop 卡顿的节拍由 1 秒定时器打,只绑 weak 自己;同一拍扫握手期限'
 }
 
 Test-Case '按来源限速:缺省关闭,只在承压时、只对公网来源问前缀的桶,放行之后才记账' {

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 
 	base "proto/common/base"
 )
@@ -49,6 +50,22 @@ func Require(approval *base.AdminApproval, operator string) error {
 		return fmt.Errorf("%w: proposer and approver are the same person", ErrInvalid)
 	case approval.GetProposer() != operator:
 		return fmt.Errorf("%w: proposer differs from the request operator", ErrInvalid)
+	}
+	return nil
+}
+
+// RequireForRequest 给带请求号的下游用(mail、rank、data_service 回收、player_inbox 处置):先按 Require 核批准记录,
+// 再核请求号就是批准号。后台流水号同时是下游的幂等键,这一条让「一次批准只执行一次」由下游自己的判重保证,
+// 换个请求号重放同一份批准记录会被拒绝。
+//
+// operator 照 Require 严格比对,空串不会被当成「请求没有操作人字段」:有操作人字段的请求带空操作人,在这里就被拒。
+// 请求里确实没有操作人字段的(mail、rank)显式传 approval.GetProposer(),两人记在批准记录里。
+func RequireForRequest(approval *base.AdminApproval, operator string, requestID uint64) error {
+	if err := Require(approval, operator); err != nil {
+		return err
+	}
+	if approval.GetApprovalId() != strconv.FormatUint(requestID, 10) {
+		return fmt.Errorf("%w: request_id must be the approval id", ErrInvalid)
 	}
 	return nil
 }

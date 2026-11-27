@@ -736,12 +736,12 @@ constexpr SendMailRequest::ParseTableT_ SendMailRequest::InternalGenerateParseTa
     {
       PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_._has_bits_),
       0, // no _extensions_
-      14, 120,  // max_field_number, fast_idx_mask
+      15, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294950912,  // skipmap
+      4294934528,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      14,  // num_field_entries
-      2,  // num_aux_entries
+      15,  // num_field_entries
+      3,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -752,20 +752,20 @@ constexpr SendMailRequest::ParseTableT_ SendMailRequest::InternalGenerateParseTa
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint32 sender_kind = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SendMailRequest, _impl_.sender_kind_), 8>(),
-       {8, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SendMailRequest, _impl_.sender_kind_), 9>(),
+       {8, 9, 0,
         PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.sender_kind_)}},
       // uint64 request_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SendMailRequest, _impl_.request_id_), 5>(),
-       {16, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SendMailRequest, _impl_.request_id_), 6>(),
+       {16, 6, 0,
         PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.request_id_)}},
       // uint64 recipient_player_id = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SendMailRequest, _impl_.recipient_player_id_), 6>(),
-       {24, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SendMailRequest, _impl_.recipient_player_id_), 7>(),
+       {24, 7, 0,
         PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.recipient_player_id_)}},
       // uint64 guild_id = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SendMailRequest, _impl_.guild_id_), 7>(),
-       {32, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SendMailRequest, _impl_.guild_id_), 8>(),
+       {32, 8, 0,
         PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.guild_id_)}},
       // string title = 5;
       {::_pbi::TcParser::FastUS1,
@@ -780,45 +780,48 @@ constexpr SendMailRequest::ParseTableT_ SendMailRequest::InternalGenerateParseTa
        {58, 3, 0,
         PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.attachments_)}},
       // uint64 expire_ms = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SendMailRequest, _impl_.expire_ms_), 10>(),
-       {64, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SendMailRequest, _impl_.expire_ms_), 11>(),
+       {64, 11, 0,
         PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.expire_ms_)}},
       // .common.base.ServiceCallAuth auth = 9;
       {::_pbi::TcParser::FastMtS1,
        {74, 4, 1,
         PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.auth_)}},
       // uint64 campaign_id = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SendMailRequest, _impl_.campaign_id_), 11>(),
-       {80, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SendMailRequest, _impl_.campaign_id_), 12>(),
+       {80, 12, 0,
         PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.campaign_id_)}},
       // uint64 manifest_generation = 11;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SendMailRequest, _impl_.manifest_generation_), 12>(),
-       {88, 12, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SendMailRequest, _impl_.manifest_generation_), 13>(),
+       {88, 13, 0,
         PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.manifest_generation_)}},
       // uint64 expected_recipient_count = 12;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SendMailRequest, _impl_.expected_recipient_count_), 13>(),
-       {96, 13, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SendMailRequest, _impl_.expected_recipient_count_), 14>(),
+       {96, 14, 0,
         PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.expected_recipient_count_)}},
       // uint32 expected_shard_count = 13;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SendMailRequest, _impl_.expected_shard_count_), 9>(),
-       {104, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SendMailRequest, _impl_.expected_shard_count_), 10>(),
+       {104, 10, 0,
         PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.expected_shard_count_)}},
       // string manifest_hash = 14;
       {::_pbi::TcParser::FastUS1,
        {114, 2, 0,
         PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.manifest_hash_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // .common.base.AdminApproval approval = 15;
+      {::_pbi::TcParser::FastMtS1,
+       {122, 5, 2,
+        PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.approval_)}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 sender_kind = 1;
-      {PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.sender_kind_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.sender_kind_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 request_id = 2;
-      {PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.request_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.request_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 recipient_player_id = 3;
-      {PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.recipient_player_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.recipient_player_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 guild_id = 4;
-      {PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.guild_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.guild_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string title = 5;
       {PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.title_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string body = 6;
@@ -826,19 +829,21 @@ constexpr SendMailRequest::ParseTableT_ SendMailRequest::InternalGenerateParseTa
       // .mailpb.MailAttachments attachments = 7;
       {PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.attachments_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint64 expire_ms = 8;
-      {PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.expire_ms_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.expire_ms_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .common.base.ServiceCallAuth auth = 9;
       {PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.auth_), _Internal::kHasBitsOffset + 4, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint64 campaign_id = 10;
-      {PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.campaign_id_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.campaign_id_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 manifest_generation = 11;
-      {PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.manifest_generation_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.manifest_generation_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 expected_recipient_count = 12;
-      {PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.expected_recipient_count_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.expected_recipient_count_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 expected_shard_count = 13;
-      {PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.expected_shard_count_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.expected_shard_count_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string manifest_hash = 14;
       {PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.manifest_hash_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // .common.base.AdminApproval approval = 15;
+      {PROTOBUF_FIELD_OFFSET(SendMailRequest, _impl_.approval_), _Internal::kHasBitsOffset + 5, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -850,6 +855,11 @@ constexpr SendMailRequest::ParseTableT_ SendMailRequest::InternalGenerateParseTa
         {::_pbi::TcParser::GetTable<::common::base::ServiceCallAuth>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::common::base::ServiceCallAuth_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::common::base::AdminApproval>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::common::base::AdminApproval_globals_},
         #endif
     }},
     {{
@@ -878,6 +888,7 @@ inline constexpr SendMailRequest::Impl_::Impl_(
             ::_pbi::ConstantInitialized()),
         attachments_{nullptr},
         auth_{nullptr},
+        approval_{nullptr},
         request_id_{::uint64_t{0u}},
         recipient_player_id_{::uint64_t{0u}},
         guild_id_{::uint64_t{0u}},
@@ -990,7 +1001,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::mailpb::SendMailRequest, _impl_._has_bits_),
-        17, // hasbit index offset
+        18, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::mailpb::SendMailRequest, _impl_.sender_kind_),
         PROTOBUF_FIELD_OFFSET(::mailpb::SendMailRequest, _impl_.request_id_),
         PROTOBUF_FIELD_OFFSET(::mailpb::SendMailRequest, _impl_.recipient_player_id_),
@@ -1005,20 +1016,22 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::mailpb::SendMailRequest, _impl_.expected_recipient_count_),
         PROTOBUF_FIELD_OFFSET(::mailpb::SendMailRequest, _impl_.expected_shard_count_),
         PROTOBUF_FIELD_OFFSET(::mailpb::SendMailRequest, _impl_.manifest_hash_),
-        8,
-        5,
+        PROTOBUF_FIELD_OFFSET(::mailpb::SendMailRequest, _impl_.approval_),
+        9,
         6,
         7,
+        8,
         0,
         1,
         3,
-        10,
-        4,
         11,
+        4,
         12,
         13,
-        9,
+        14,
+        10,
         2,
+        5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::mailpb::SendMailResponse, _impl_._has_bits_),
         6, // hasbit index offset
@@ -1068,10 +1081,10 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::mailpb::SendMailRequest)},
-        {31, sizeof(::mailpb::SendMailResponse)},
-        {40, sizeof(::mailpb::ImportMailRecipientsRequest)},
-        {55, sizeof(::mailpb::ImportMailRecipientsResponse)},
-        {64, sizeof(::mailpb::SealMailCampaignRequest)},
+        {33, sizeof(::mailpb::SendMailResponse)},
+        {42, sizeof(::mailpb::ImportMailRecipientsRequest)},
+        {57, sizeof(::mailpb::ImportMailRecipientsResponse)},
+        {66, sizeof(::mailpb::SealMailCampaignRequest)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1085,8 +1098,9 @@ const char descriptor_table_protodef_proto_2fmail_2fmail_5fadmin_2eproto[] ABSL_
     protodesc_cold) = {
     "\n\033proto/mail/mail_admin.proto\022\006mailpb\032\033p"
     "roto/common/base/tip.proto\032)proto/common"
-    "/base/service_call_auth.proto\032\025proto/mai"
-    "l/mail.proto\"\374\002\n\017SendMailRequest\022\023\n\013send"
+    "/base/service_call_auth.proto\032&proto/com"
+    "mon/base/admin_approval.proto\032\025proto/mai"
+    "l/mail.proto\"\252\003\n\017SendMailRequest\022\023\n\013send"
     "er_kind\030\001 \001(\r\022\022\n\nrequest_id\030\002 \001(\004\022\033\n\023rec"
     "ipient_player_id\030\003 \001(\004\022\020\n\010guild_id\030\004 \001(\004"
     "\022\r\n\005title\030\005 \001(\t\022\014\n\004body\030\006 \001(\t\022,\n\013attachm"
@@ -1095,35 +1109,37 @@ const char descriptor_table_protodef_proto_2fmail_2fmail_5fadmin_2eproto[] ABSL_
     "se.ServiceCallAuth\022\023\n\013campaign_id\030\n \001(\004\022"
     "\033\n\023manifest_generation\030\013 \001(\004\022 \n\030expected"
     "_recipient_count\030\014 \001(\004\022\034\n\024expected_shard"
-    "_count\030\r \001(\r\022\025\n\rmanifest_hash\030\016 \001(\t\"_\n\020S"
-    "endMailResponse\022&\n\rerror_message\030\001 \001(\0132\017"
-    ".TipInfoMessage\022\017\n\007mail_id\030\002 \001(\004\022\022\n\ndupl"
-    "icated\030\003 \001(\010\"\271\001\n\033ImportMailRecipientsReq"
-    "uest\022\023\n\013sender_kind\030\001 \001(\r\022\023\n\013campaign_id"
-    "\030\002 \001(\004\022\033\n\023manifest_generation\030\003 \001(\004\022\023\n\013s"
-    "hard_index\030\004 \001(\r\022\022\n\nplayer_ids\030\005 \003(\004\022*\n\004"
-    "auth\030\006 \001(\0132\034.common.base.ServiceCallAuth"
-    "\"r\n\034ImportMailRecipientsResponse\022&\n\rerro"
-    "r_message\030\001 \001(\0132\017.TipInfoMessage\022\026\n\016impo"
-    "rted_count\030\002 \001(\004\022\022\n\nduplicated\030\003 \001(\010\"\214\001\n"
-    "\027SealMailCampaignRequest\022\023\n\013sender_kind\030"
-    "\001 \001(\r\022\023\n\013campaign_id\030\002 \001(\004\022\033\n\023manifest_g"
-    "eneration\030\003 \001(\004\022*\n\004auth\030\004 \001(\0132\034.common.b"
-    "ase.ServiceCallAuth2\215\003\n\tMailAdmin\022E\n\020Sen"
-    "dPersonalMail\022\027.mailpb.SendMailRequest\032\030"
-    ".mailpb.SendMailResponse\022C\n\016SendSystemMa"
-    "il\022\027.mailpb.SendMailRequest\032\030.mailpb.Sen"
-    "dMailResponse\022B\n\rSendGuildMail\022\027.mailpb."
-    "SendMailRequest\032\030.mailpb.SendMailRespons"
-    "e\022a\n\024ImportMailRecipients\022#.mailpb.Impor"
-    "tMailRecipientsRequest\032$.mailpb.ImportMa"
-    "ilRecipientsResponse\022M\n\020SealMailCampaign"
-    "\022\037.mailpb.SealMailCampaignRequest\032\030.mail"
-    "pb.SendMailResponseB\021Z\017mail/proto/mailb\006"
-    "proto3"
+    "_count\030\r \001(\r\022\025\n\rmanifest_hash\030\016 \001(\t\022,\n\010a"
+    "pproval\030\017 \001(\0132\032.common.base.AdminApprova"
+    "l\"_\n\020SendMailResponse\022&\n\rerror_message\030\001"
+    " \001(\0132\017.TipInfoMessage\022\017\n\007mail_id\030\002 \001(\004\022\022"
+    "\n\nduplicated\030\003 \001(\010\"\271\001\n\033ImportMailRecipie"
+    "ntsRequest\022\023\n\013sender_kind\030\001 \001(\r\022\023\n\013campa"
+    "ign_id\030\002 \001(\004\022\033\n\023manifest_generation\030\003 \001("
+    "\004\022\023\n\013shard_index\030\004 \001(\r\022\022\n\nplayer_ids\030\005 \003"
+    "(\004\022*\n\004auth\030\006 \001(\0132\034.common.base.ServiceCa"
+    "llAuth\"r\n\034ImportMailRecipientsResponse\022&"
+    "\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022\026"
+    "\n\016imported_count\030\002 \001(\004\022\022\n\nduplicated\030\003 \001"
+    "(\010\"\214\001\n\027SealMailCampaignRequest\022\023\n\013sender"
+    "_kind\030\001 \001(\r\022\023\n\013campaign_id\030\002 \001(\004\022\033\n\023mani"
+    "fest_generation\030\003 \001(\004\022*\n\004auth\030\004 \001(\0132\034.co"
+    "mmon.base.ServiceCallAuth2\215\003\n\tMailAdmin\022"
+    "E\n\020SendPersonalMail\022\027.mailpb.SendMailReq"
+    "uest\032\030.mailpb.SendMailResponse\022C\n\016SendSy"
+    "stemMail\022\027.mailpb.SendMailRequest\032\030.mail"
+    "pb.SendMailResponse\022B\n\rSendGuildMail\022\027.m"
+    "ailpb.SendMailRequest\032\030.mailpb.SendMailR"
+    "esponse\022a\n\024ImportMailRecipients\022#.mailpb"
+    ".ImportMailRecipientsRequest\032$.mailpb.Im"
+    "portMailRecipientsResponse\022M\n\020SealMailCa"
+    "mpaign\022\037.mailpb.SealMailCampaignRequest\032"
+    "\030.mailpb.SendMailResponseB\021Z\017mail/proto/"
+    "mailb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
-    descriptor_table_proto_2fmail_2fmail_5fadmin_2eproto_deps[3] = {
+    descriptor_table_proto_2fmail_2fmail_5fadmin_2eproto_deps[4] = {
+        &::descriptor_table_proto_2fcommon_2fbase_2fadmin_5fapproval_2eproto,
         &::descriptor_table_proto_2fcommon_2fbase_2fservice_5fcall_5fauth_2eproto,
         &::descriptor_table_proto_2fcommon_2fbase_2ftip_2eproto,
         &::descriptor_table_proto_2fmail_2fmail_2eproto,
@@ -1132,12 +1148,12 @@ static ::absl::once_flag descriptor_table_proto_2fmail_2fmail_5fadmin_2eproto_on
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fmail_2fmail_5fadmin_2eproto = {
     false,
     false,
-    1486,
+    1572,
     descriptor_table_protodef_proto_2fmail_2fmail_5fadmin_2eproto,
     "proto/mail/mail_admin.proto",
     &descriptor_table_proto_2fmail_2fmail_5fadmin_2eproto_once,
     descriptor_table_proto_2fmail_2fmail_5fadmin_2eproto_deps,
-    3,
+    4,
     5,
     schemas,
     file_message_globals,
@@ -1157,6 +1173,11 @@ void SendMailRequest::clear_auth() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.auth_ != nullptr) _impl_.auth_->Clear();
   ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+void SendMailRequest::clear_approval() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.approval_ != nullptr) _impl_.approval_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 SendMailRequest::SendMailRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
@@ -1197,6 +1218,9 @@ SendMailRequest::SendMailRequest(
                 : nullptr;
   _impl_.auth_ = (CheckHasBit(cached_has_bits, 0x00000010U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_)
+                : nullptr;
+  _impl_.approval_ = (CheckHasBit(cached_has_bits, 0x00000020U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.approval_)
                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, request_id_),
@@ -1241,6 +1265,7 @@ inline void SendMailRequest::SharedDtor(MessageLite& self) {
   this_._impl_.manifest_hash_.Destroy();
   delete this_._impl_.attachments_;
   delete this_._impl_.auth_;
+  delete this_._impl_.approval_;
   this_._impl_.~Impl_();
 }
 
@@ -1278,7 +1303,7 @@ PROTOBUF_NOINLINE void SendMailRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.title_.ClearNonDefaultToEmpty();
     }
@@ -1296,16 +1321,20 @@ PROTOBUF_NOINLINE void SendMailRequest::Clear() {
       ABSL_DCHECK(_impl_.auth_ != nullptr);
       _impl_.auth_->Clear();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      ABSL_DCHECK(_impl_.approval_ != nullptr);
+      _impl_.approval_->Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000e0U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000c0U)) {
     ::memset(&_impl_.request_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.guild_id_) -
-        reinterpret_cast<char*>(&_impl_.request_id_)) + sizeof(_impl_.guild_id_));
+        reinterpret_cast<char*>(&_impl_.recipient_player_id_) -
+        reinterpret_cast<char*>(&_impl_.request_id_)) + sizeof(_impl_.recipient_player_id_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
-    ::memset(&_impl_.sender_kind_, 0, static_cast<::size_t>(
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+    ::memset(&_impl_.guild_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.expected_recipient_count_) -
-        reinterpret_cast<char*>(&_impl_.sender_kind_)) + sizeof(_impl_.expected_recipient_count_));
+        reinterpret_cast<char*>(&_impl_.guild_id_)) + sizeof(_impl_.expected_recipient_count_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1331,7 +1360,7 @@ PROTOBUF_NOINLINE void SendMailRequest::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 sender_kind = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_sender_kind() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1340,7 +1369,7 @@ PROTOBUF_NOINLINE void SendMailRequest::Clear() {
   }
 
   // uint64 request_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_request_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1349,7 +1378,7 @@ PROTOBUF_NOINLINE void SendMailRequest::Clear() {
   }
 
   // uint64 recipient_player_id = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_recipient_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1358,7 +1387,7 @@ PROTOBUF_NOINLINE void SendMailRequest::Clear() {
   }
 
   // uint64 guild_id = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_guild_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1394,7 +1423,7 @@ PROTOBUF_NOINLINE void SendMailRequest::Clear() {
   }
 
   // uint64 expire_ms = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_expire_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1410,7 +1439,7 @@ PROTOBUF_NOINLINE void SendMailRequest::Clear() {
   }
 
   // uint64 campaign_id = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_campaign_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1419,7 +1448,7 @@ PROTOBUF_NOINLINE void SendMailRequest::Clear() {
   }
 
   // uint64 manifest_generation = 11;
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_manifest_generation() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1428,7 +1457,7 @@ PROTOBUF_NOINLINE void SendMailRequest::Clear() {
   }
 
   // uint64 expected_recipient_count = 12;
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_expected_recipient_count() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1437,7 +1466,7 @@ PROTOBUF_NOINLINE void SendMailRequest::Clear() {
   }
 
   // uint32 expected_shard_count = 13;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_expected_shard_count() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -1453,6 +1482,13 @@ PROTOBUF_NOINLINE void SendMailRequest::Clear() {
           _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "mailpb.SendMailRequest.manifest_hash");
       target = stream->WriteStringMaybeAliased(14, _s, target);
     }
+  }
+
+  // .common.base.AdminApproval approval = 15;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        15, *this_._impl_.approval_, this_._impl_.approval_->GetCachedSize(), target,
+        stream);
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -1512,66 +1548,71 @@ PROTOBUF_NOINLINE void SendMailRequest::Clear() {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.auth_);
     }
-    // uint64 request_id = 2;
+    // .common.base.AdminApproval approval = 15;
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.approval_);
+    }
+    // uint64 request_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_request_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_request_id());
       }
     }
     // uint64 recipient_player_id = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_recipient_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_recipient_player_id());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
     // uint64 guild_id = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_guild_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_guild_id());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     // uint32 sender_kind = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_sender_kind() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_sender_kind());
       }
     }
     // uint32 expected_shard_count = 13;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_expected_shard_count() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_expected_shard_count());
       }
     }
     // uint64 expire_ms = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_expire_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_expire_ms());
       }
     }
     // uint64 campaign_id = 10;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_campaign_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_campaign_id());
       }
     }
     // uint64 manifest_generation = 11;
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_manifest_generation() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_manifest_generation());
       }
     }
     // uint64 expected_recipient_count = 12;
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_expected_recipient_count() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_expected_recipient_count());
@@ -1641,48 +1682,56 @@ void SendMailRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      ABSL_DCHECK(from._impl_.approval_ != nullptr);
+      if (_this->_impl_.approval_ == nullptr) {
+        _this->_impl_.approval_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.approval_);
+      } else {
+        _this->_impl_.approval_->MergeFrom(*from._impl_.approval_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_request_id() != 0) {
         _this->_impl_.request_id_ = from._impl_.request_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_recipient_player_id() != 0) {
         _this->_impl_.recipient_player_id_ = from._impl_.recipient_player_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_guild_id() != 0) {
         _this->_impl_.guild_id_ = from._impl_.guild_id_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_sender_kind() != 0) {
         _this->_impl_.sender_kind_ = from._impl_.sender_kind_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_expected_shard_count() != 0) {
         _this->_impl_.expected_shard_count_ = from._impl_.expected_shard_count_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_expire_ms() != 0) {
         _this->_impl_.expire_ms_ = from._impl_.expire_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_campaign_id() != 0) {
         _this->_impl_.campaign_id_ = from._impl_.campaign_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (from._internal_manifest_generation() != 0) {
         _this->_impl_.manifest_generation_ = from._impl_.manifest_generation_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_expected_recipient_count() != 0) {
         _this->_impl_.expected_recipient_count_ = from._impl_.expected_recipient_count_;
       }

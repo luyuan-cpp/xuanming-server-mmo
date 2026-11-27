@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"time"
 
 	"match/internal/config"
 	"match/internal/scope"
@@ -72,12 +73,23 @@ type PlayModeRow struct {
 	AllowedTeamSizes []uint32
 }
 
+// SeasonRuleRow 是 SeasonRule 表里匹配动态解析卷三当季试炼格用得到的部分（与 C++ seasonrules::ResolveActiveSeason 同口径）。
+type SeasonRuleRow struct {
+	Id                uint32
+	StartsAtMs        uint64
+	EndsAtMs          uint64
+	Enabled           bool
+	CycleOrder        uint32
+	CycleDurationDays uint32
+}
+
 // Rows 是建目录的全部输入。生产由 Load 从导表产物读出，单测直接构造。
 type Rows struct {
 	Dungeons     []DungeonRow
 	PlayModes    []PlayModeRow
 	ZoneGroups   []scope.Range
 	TrialEntries []TrialJournalEntryRow
+	SeasonRules  []SeasonRuleRow
 }
 
 // Pool 是一个匹配池：同一池里的票才可能进同一局。TeamSize 与票据 team_size 同口径：
@@ -104,13 +116,15 @@ type templateKey struct {
 // Catalog 是编译后的只读目录。nil 目录只出现在手工构造 ServiceContext 的单测里：
 // 此时没有白名单与大区，期限取默认值；生产启动时目录缺失会直接拒绝启动。
 type Catalog struct {
-	maxSize        map[templateKey]uint32          // 只含 enabled 的入口
-	allowedSizes   map[templateKey]map[uint32]bool // 非空时仅开放列明的人数档（冷启动挡位开关）
-	dungeons       map[uint32]DungeonRow
-	trialContexts  map[uint32]*battlepb.TrialBattleContext // Dungeon.id → 冻结试炼志上下文（卷一/卷二/护卫救援/物法易势）
-	rankedTrialCtx *battlepb.TrialBattleContext            // 正式人宠会武（PVP_TEAM）赛季试炼上下文
-	zones          *scope.Directory
-	pools          []Pool
+	maxSize               map[templateKey]uint32                        // 只含 enabled 的入口
+	allowedSizes          map[templateKey]map[uint32]bool               // 非空时仅开放列明的人数档（冷启动挡位开关）
+	dungeons              map[uint32]DungeonRow
+	trialContexts         map[uint32]*battlepb.TrialBattleContext       // 永久卷 Dungeon.id → 冻结试炼志上下文（卷一/卷二/卷四）
+	seasonalTrialContexts map[uint32]map[uint32]*battlepb.TrialBattleContext // 卷三按 season_id → Dungeon.id → 冻结试炼志上下文（护卫救援/物法易势）
+	rankedTrialBySeason   map[uint32]*battlepb.TrialBattleContext       // 卷三按 season_id → 正式人宠会武（PVP_TEAM）试炼上下文
+	seasonRules           []SeasonRuleRow                               // SeasonRule 排期（用于按时刻解析当季 season_id）
+	zones                 *scope.Directory
+	pools                 []Pool
 }
 
 // Load 从导表产物目录读匹配目录依赖的配置表并建目录。
@@ -130,12 +144,16 @@ func Load(tableDir string) (*Catalog, error) {
 	if err := table.TrialJournalEntryTableManagerInstance.Load(tableDir, false); err != nil {
 		return nil, fmt.Errorf("catalog: 读取 TrialJournalEntry 表失败: %w", err)
 	}
+	if err := table.SeasonRuleTableManagerInstance.Load(tableDir, false); err != nil {
+		return nil, fmt.Errorf("catalog: 读取 SeasonRule 表失败: %w", err)
+	}
 	return buildFromManagers(
 		table.DungeonTableManagerInstance,
 		table.PlayModeTableManagerInstance,
 		table.ZoneGroupTableManagerInstance,
 		table.MonsterTableManagerInstance,
 		table.TrialJournalEntryTableManagerInstance,
+		table.SeasonRuleTableManagerInstance,
 	)
 }
 
@@ -144,7 +162,7 @@ func BuildFromTableSet(ts *table.TableSet) (*Catalog, error) {
 	if ts == nil || ts.Dungeon == nil || ts.PlayMode == nil || ts.ZoneGroup == nil {
 		return nil, errors.New("catalog: TableSet missing Dungeon/PlayMode/ZoneGroup tables")
 	}
-	return buildFromManagers(ts.Dungeon, ts.PlayMode, ts.ZoneGroup, ts.Monster, ts.TrialJournalEntry)
+	return buildFromManagers(ts.Dungeon, ts.PlayMode, ts.ZoneGroup, ts.Monster, ts.TrialJournalEntry, ts.SeasonRule)
 }
 
 func buildFromManagers(
@@ -153,6 +171,7 @@ func buildFromManagers(
 	zoneGroups *table.ZoneGroupTableManager,
 	monsters *table.MonsterTableManager,
 	trialEntries *table.TrialJournalEntryTableManager,
+	seasonRules *table.SeasonRuleTableManager,
 ) (*Catalog, error) {
 	var rows Rows
 	for _, row := range dungeons.FindAll() {
@@ -212,16 +231,31 @@ func buildFromManagers(
 			})
 		}
 	}
+	if seasonRules != nil {
+		for _, row := range seasonRules.FindAll() {
+			rows.SeasonRules = append(rows.SeasonRules, SeasonRuleRow{
+				Id:                row.GetId(),
+				StartsAtMs:        row.GetStartsAtMs(),
+				EndsAtMs:          row.GetEndsAtMs(),
+				Enabled:           row.GetEnabled(),
+				CycleOrder:        row.GetCycleOrder(),
+				CycleDurationDays: row.GetCycleDurationDays(),
+			})
+		}
+	}
 	return New(rows)
 }
 
 // New 校验并编译目录。任何一行不合法都整体拒绝，不部分开放。
 func New(rows Rows) (*Catalog, error) {
 	c := &Catalog{
-		maxSize:       map[templateKey]uint32{},
-		allowedSizes:  map[templateKey]map[uint32]bool{},
-		dungeons:      map[uint32]DungeonRow{},
-		trialContexts: map[uint32]*battlepb.TrialBattleContext{},
+		maxSize:               map[templateKey]uint32{},
+		allowedSizes:          map[templateKey]map[uint32]bool{},
+		dungeons:              map[uint32]DungeonRow{},
+		trialContexts:         map[uint32]*battlepb.TrialBattleContext{},
+		seasonalTrialContexts: map[uint32]map[uint32]*battlepb.TrialBattleContext{},
+		rankedTrialBySeason:   map[uint32]*battlepb.TrialBattleContext{},
+		seasonRules:           append([]SeasonRuleRow(nil), rows.SeasonRules...),
 	}
 	for _, d := range rows.Dungeons {
 		if _, dup := c.dungeons[d.Id]; dup || d.Id == 0 {
@@ -229,12 +263,13 @@ func New(rows Rows) (*Catalog, error) {
 		}
 		c.dungeons[d.Id] = d
 	}
-	trialContexts, rankedTrialCtx, err := buildTrialContexts(c.dungeons, rows.TrialEntries)
+	trialContexts, seasonalTrialContexts, rankedTrialBySeason, err := buildTrialContexts(c.dungeons, rows.TrialEntries)
 	if err != nil {
 		return nil, err
 	}
 	c.trialContexts = trialContexts
-	c.rankedTrialCtx = rankedTrialCtx
+	c.seasonalTrialContexts = seasonalTrialContexts
+	c.rankedTrialBySeason = rankedTrialBySeason
 	seen := map[templateKey]uint32{}
 	for _, row := range rows.PlayModes {
 		key := templateKey{mode: row.Mode, configId: row.ConfigId}
@@ -502,6 +537,7 @@ func (c *Catalog) RoundLimit(configId uint32) uint32 {
 }
 
 type trialVariantKey struct {
+	seasonId   uint32
 	sourceKind uint32
 	difficulty uint32
 	variantKey string
@@ -535,52 +571,177 @@ func bossTrialVariant(bossTrialKind uint32) (uint32, string, bool) {
 	}
 }
 
-func buildTrialContexts(dungeons map[uint32]DungeonRow, entries []TrialJournalEntryRow) (map[uint32]*battlepb.TrialBattleContext, *battlepb.TrialBattleContext, error) {
+func buildTrialContexts(
+	dungeons map[uint32]DungeonRow,
+	entries []TrialJournalEntryRow,
+) (map[uint32]*battlepb.TrialBattleContext, map[uint32]map[uint32]*battlepb.TrialBattleContext, map[uint32]*battlepb.TrialBattleContext, error) {
 	byVariant := make(map[trialVariantKey]TrialJournalEntryRow, len(entries))
+	seasons := make(map[uint32]bool)
 	for _, entry := range entries {
 		if !entry.Enabled {
 			continue
 		}
 		if entry.Id == 0 || entry.RuleVersion == 0 {
-			return nil, nil, fmt.Errorf("catalog: TrialJournalEntry 行 id=%d 缺少有效 id 或 rule_version", entry.Id)
+			return nil, nil, nil, fmt.Errorf("catalog: TrialJournalEntry 行 id=%d 缺少有效 id 或 rule_version", entry.Id)
 		}
-		key := trialVariantKey{sourceKind: entry.SourceKind, difficulty: entry.Difficulty, variantKey: entry.VariantKey}
+		key := trialVariantKey{
+			seasonId:   entry.SeasonId,
+			sourceKind: entry.SourceKind,
+			difficulty: entry.Difficulty,
+			variantKey: entry.VariantKey,
+		}
 		if prev, dup := byVariant[key]; dup {
-			return nil, nil, fmt.Errorf("catalog: TrialJournalEntry 行 %d 与 %d 的 (source_kind=%d, difficulty=%d, variant_key=%q) 重复",
-				prev.Id, entry.Id, entry.SourceKind, entry.Difficulty, entry.VariantKey)
+			return nil, nil, nil, fmt.Errorf("catalog: TrialJournalEntry 行 %d 与 %d 的 (season_id=%d, source_kind=%d, difficulty=%d, variant_key=%q) 重复",
+				prev.Id, entry.Id, entry.SeasonId, entry.SourceKind, entry.Difficulty, entry.VariantKey)
 		}
 		byVariant[key] = entry
+		if entry.SeasonId != 0 {
+			seasons[entry.SeasonId] = true
+		}
 	}
-	out := make(map[uint32]*battlepb.TrialBattleContext)
+	permanent := make(map[uint32]*battlepb.TrialBattleContext)
+	seasonal := make(map[uint32]map[uint32]*battlepb.TrialBattleContext)
 	for _, d := range dungeons {
 		sourceKind, variantKey, ok := bossTrialVariant(d.BossTrialKind)
 		if !ok {
 			continue
 		}
-		entry, matched := byVariant[trialVariantKey{sourceKind: sourceKind, difficulty: d.Difficulty, variantKey: variantKey}]
-		if !matched {
+		if entry, matched := byVariant[trialVariantKey{seasonId: 0, sourceKind: sourceKind, difficulty: d.Difficulty, variantKey: variantKey}]; matched {
+			permanent[d.Id] = &battlepb.TrialBattleContext{
+				JournalEntryId:      entry.Id,
+				TrialRuleVersion:    entry.RuleVersion,
+				SeasonId:            0,
+				GuardMonsterTableId: d.GuardMonsterId,
+			}
 			continue
 		}
-		out[d.Id] = &battlepb.TrialBattleContext{
-			JournalEntryId:      entry.Id,
-			TrialRuleVersion:    entry.RuleVersion,
-			SeasonId:            entry.SeasonId,
-			GuardMonsterTableId: d.GuardMonsterId,
+		for sid := range seasons {
+			entry, matched := byVariant[trialVariantKey{seasonId: sid, sourceKind: sourceKind, difficulty: d.Difficulty, variantKey: variantKey}]
+			if !matched {
+				continue
+			}
+			byDungeon := seasonal[sid]
+			if byDungeon == nil {
+				byDungeon = make(map[uint32]*battlepb.TrialBattleContext)
+				seasonal[sid] = byDungeon
+			}
+			byDungeon[d.Id] = &battlepb.TrialBattleContext{
+				JournalEntryId:      entry.Id,
+				TrialRuleVersion:    entry.RuleVersion,
+				SeasonId:            sid,
+				GuardMonsterTableId: d.GuardMonsterId,
+			}
 		}
 	}
-	var rankedCtx *battlepb.TrialBattleContext
-	if entry, ok := byVariant[trialVariantKey{sourceKind: 4, difficulty: 0, variantKey: "ranked_pvp"}]; ok {
-		rankedCtx = &battlepb.TrialBattleContext{
-			JournalEntryId:   entry.Id,
-			TrialRuleVersion: entry.RuleVersion,
-			SeasonId:         entry.SeasonId,
+	rankedBySeason := make(map[uint32]*battlepb.TrialBattleContext)
+	for sid := range seasons {
+		if entry, ok := byVariant[trialVariantKey{seasonId: sid, sourceKind: 4, difficulty: 0, variantKey: "ranked_pvp"}]; ok {
+			rankedBySeason[sid] = &battlepb.TrialBattleContext{
+				JournalEntryId:   entry.Id,
+				TrialRuleVersion: entry.RuleVersion,
+				SeasonId:         sid,
+			}
 		}
 	}
-	return out, rankedCtx, nil
+	return permanent, seasonal, rankedBySeason, nil
+}
+
+const (
+	seasonMinCycleDurationDays = 7
+	seasonMaxCycleDurationDays = 180
+	seasonMsPerDay             = uint64(24 * 3600 * 1000)
+)
+
+// resolveActiveSeason 与 C++ seasonrules::ResolveActiveSeason 同口径：固定单季窗与无限自动循环池双模式确定性解析。
+func resolveActiveSeason(rules []SeasonRuleRow, nowMs uint64) (seasonId uint32, seasonTerm uint32, cycleMode bool) {
+	if len(rules) == 0 {
+		return 0, 0, false
+	}
+	anyCycle := false
+	for _, r := range rules {
+		if r.Id == 0 || (r.EndsAtMs != 0 && r.EndsAtMs <= r.StartsAtMs) {
+			return 0, 0, false
+		}
+		if r.CycleDurationDays != 0 {
+			if r.CycleDurationDays < seasonMinCycleDurationDays || r.CycleDurationDays > seasonMaxCycleDurationDays {
+				return 0, 0, false
+			}
+			anyCycle = true
+		}
+	}
+	if !anyCycle {
+		for i := range rules {
+			if !rules[i].Enabled {
+				continue
+			}
+			for j := i + 1; j < len(rules); j++ {
+				if !rules[j].Enabled {
+					continue
+				}
+				aBeforeB := rules[i].EndsAtMs != 0 && rules[i].EndsAtMs <= rules[j].StartsAtMs
+				bBeforeA := rules[j].EndsAtMs != 0 && rules[j].EndsAtMs <= rules[i].StartsAtMs
+				if !aBeforeB && !bBeforeA {
+					return 0, 0, false
+				}
+			}
+		}
+		for _, r := range rules {
+			if !r.Enabled || nowMs < r.StartsAtMs || (r.EndsAtMs != 0 && nowMs >= r.EndsAtMs) {
+				continue
+			}
+			return r.Id, 1, false
+		}
+		return 0, 0, false
+	}
+	var pool []SeasonRuleRow
+	var sharedDuration uint32
+	for _, r := range rules {
+		if r.CycleOrder == 0 {
+			if r.Enabled || r.CycleDurationDays != 0 {
+				return 0, 0, true
+			}
+			continue
+		}
+		if !r.Enabled || r.CycleDurationDays < seasonMinCycleDurationDays || r.CycleDurationDays > seasonMaxCycleDurationDays {
+			return 0, 0, true
+		}
+		if sharedDuration == 0 {
+			sharedDuration = r.CycleDurationDays
+		} else if sharedDuration != r.CycleDurationDays {
+			return 0, 0, true
+		}
+		pool = append(pool, r)
+	}
+	if len(pool) == 0 {
+		return 0, 0, true
+	}
+	sort.Slice(pool, func(i, j int) bool { return pool[i].CycleOrder < pool[j].CycleOrder })
+	for i, r := range pool {
+		if r.CycleOrder != uint32(i+1) {
+			return 0, 0, true
+		}
+	}
+	anchorMs := pool[0].StartsAtMs
+	if anchorMs == 0 || nowMs < anchorMs {
+		return 0, 0, true
+	}
+	periodMs := uint64(sharedDuration) * seasonMsPerDay
+	elapsed := (nowMs - anchorMs) / periodMs
+	active := pool[elapsed%uint64(len(pool))]
+	return active.Id, uint32(elapsed + 1), true
+}
+
+// ActiveSeasonIdAt 返回指定时刻的活跃主题赛季 ID（与 C++ PlayerSeasonSystem::ActiveSeasonId 同口径）。
+func (c *Catalog) ActiveSeasonIdAt(nowMs uint64) uint32 {
+	if c == nil {
+		return 0
+	}
+	sid, _, _ := resolveActiveSeason(c.seasonRules, nowMs)
+	return sid
 }
 
 // TrialContextFor 返回本局应冻结进 CreateBattleRequest.trial_context 的试炼志上下文。
-// 覆盖：卷一/卷二首领试炼与卷三护卫救援（PVE_SOLO/PVE_TEAM）、卷三物法易势（POLARITY_5V5）与卷三人宠会武（PVP_TEAM）。
+// 覆盖：卷一/卷二/卷四永久首领试炼与卷三当季护卫救援（PVE_SOLO/PVE_TEAM）、卷三当季物法易势（POLARITY_5V5）与卷三当季人宠会武（PVP_TEAM）。
 // 帮会活动战、切磋与未配试炼志格子的普通副本一律返回 nil。
 func (c *Catalog) TrialContextFor(
 	mode matchpb.MatchMode,
@@ -588,29 +749,79 @@ func (c *Catalog) TrialContextFor(
 	activityContext *battlepb.BattleActivityContext,
 	rankedCtx *battlepb.RankedMatchContext,
 ) *battlepb.TrialBattleContext {
+	return c.TrialContextForAt(mode, configId, activityContext, rankedCtx, uint64(time.Now().UnixMilli()))
+}
+
+// TrialContextForAt 按指定 UTC 毫秒时刻解析试炼志上下文（便于跨季与无限循环确定性单测）。
+func (c *Catalog) TrialContextForAt(
+	mode matchpb.MatchMode,
+	configId uint32,
+	activityContext *battlepb.BattleActivityContext,
+	rankedCtx *battlepb.RankedMatchContext,
+	nowMs uint64,
+) *battlepb.TrialBattleContext {
 	if c == nil || activityContext != nil {
 		return nil
 	}
 	switch mode {
 	case matchpb.MatchMode_MATCH_MODE_PVE_SOLO, matchpb.MatchMode_MATCH_MODE_PVE_TEAM, matchpb.MatchMode_MATCH_MODE_POLARITY_5V5:
-		// 仅排斥带正式排位赛季的上下文；免费预设娱乐场（SeasonId==0, UseFreePreset==true）须保留卷三护卫救援(301)/物法易势(302)试炼志上下文。
+		// 仅排斥带正式排位赛季的上下文；免费预设娱乐场（SeasonId==0, UseFreePreset==true）须保留卷三当季护卫救援/物法易势试炼志上下文。
 		if rankedCtx != nil && rankedCtx.GetSeasonId() != 0 {
 			return nil
 		}
-		ctx, ok := c.trialContexts[configId]
-		if !ok || ctx == nil {
+		if ctx, ok := c.trialContexts[configId]; ok && ctx != nil {
+			return proto.Clone(ctx).(*battlepb.TrialBattleContext)
+		}
+		var targetSeason uint32
+		if len(c.seasonRules) > 0 {
+			targetSeason, _, _ = resolveActiveSeason(c.seasonRules, nowMs)
+		} else if len(c.seasonalTrialContexts) == 1 {
+			for sid := range c.seasonalTrialContexts {
+				targetSeason = sid
+			}
+		}
+		if targetSeason == 0 {
 			return nil
 		}
-		return proto.Clone(ctx).(*battlepb.TrialBattleContext)
+		if byDungeon := c.seasonalTrialContexts[targetSeason]; byDungeon != nil {
+			if ctx, ok := byDungeon[configId]; ok && ctx != nil {
+				return proto.Clone(ctx).(*battlepb.TrialBattleContext)
+			}
+		}
+		return nil
 	case matchpb.MatchMode_MATCH_MODE_PVP_TEAM:
-		if c.rankedTrialCtx == nil {
+		if len(c.seasonRules) > 0 {
+			sid, term, cycleMode := resolveActiveSeason(c.seasonRules, nowMs)
+			if sid == 0 {
+				return nil
+			}
+			if rankedCtx != nil && rankedCtx.GetSeasonId() != 0 {
+				if !cycleMode && rankedCtx.GetSeasonId() != sid {
+					return nil
+				}
+				if cycleMode && rankedCtx.GetSeasonId() != sid && rankedCtx.GetSeasonId() != term {
+					return nil
+				}
+			}
+			if ctx := c.rankedTrialBySeason[sid]; ctx != nil {
+				return proto.Clone(ctx).(*battlepb.TrialBattleContext)
+			}
 			return nil
 		}
-		if rankedCtx != nil && rankedCtx.GetSeasonId() != 0 &&
-			c.rankedTrialCtx.GetSeasonId() != 0 && c.rankedTrialCtx.GetSeasonId() != rankedCtx.GetSeasonId() {
+		if rankedCtx != nil && rankedCtx.GetSeasonId() != 0 {
+			if ctx := c.rankedTrialBySeason[rankedCtx.GetSeasonId()]; ctx != nil {
+				return proto.Clone(ctx).(*battlepb.TrialBattleContext)
+			}
 			return nil
 		}
-		return proto.Clone(c.rankedTrialCtx).(*battlepb.TrialBattleContext)
+		if len(c.rankedTrialBySeason) == 1 {
+			for _, ctx := range c.rankedTrialBySeason {
+				if ctx != nil {
+					return proto.Clone(ctx).(*battlepb.TrialBattleContext)
+				}
+			}
+		}
+		return nil
 	default:
 		return nil
 	}

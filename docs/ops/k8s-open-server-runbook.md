@@ -306,9 +306,15 @@ kubectl get svc -n mmorpg-zone-yesterday
 - **某个 SQL 集群失联**(只影响写多个逻辑库的 data-service 和 db;[启动期故障隔离](../design/data-service-startup-isolation.md)):
   - 已经在跑的副本照常服务落在健康集群上的库,落在失联集群上的调用回不可用。
   - 这期间新起的 Pod(被回收重建的、扩出来的、发布换上的)照样起得来。注册器跳过连不上的库(init 日志 `skipped=<库> reason=unreachable`),主容器启动日志打「no writer grant」。这些库这一代一直关着,Pod 照常经 etcd 被发现、服务健康库,但 `/readyz` 不就绪(`READY 0/1`),告警 `SqlWriterGrantsIncomplete`。
-  - 例外:data-service 的目录第 0 片(合服映射在那里)连不上时照旧拒启,反复重启,直到它恢复。
+  - 注册时连得上、主容器启动时才连不上的 data-service Pod(两步之间断的)有写资格,只是那些库的池先关着。`/readyz` 同样不就绪,但不报 `SqlWriterGrantsIncomplete`。后台每 15 秒重核一次,恢复之后自己打开、自己就绪,不用重建。
+  - 例外:data-service 的目录片连不上时新 Pod 起不来(合服映射在第 0 片;全新环境的空环境判据要读全部片)。
+    - 注册器跳过了目录片的:主容器以 78 退出,`sql-writer-pod-reaper` 约每分钟删一次,StatefulSet 按同序号重建,直到它恢复。每次重建都在连得上的库上换一代,每库多约 2 KB 收据。
+    - 有写资格、启动时才连不上的:拒启,原地重启。
+    - 两种都在集群恢复之后自己起来,不用人工删。
   - **故障期间别滚动重启、别发布**:新 Pod 一样缺这些库,发布会停在第一个不就绪的 Pod 上(这是有意的保护)。
-  - **集群恢复之后要重建不就绪的 Pod**:缺写资格的 Pod 不会自己补齐。一次删一个 `kubectl -n <namespace> delete pod <pod>`,等新 Pod 就绪(`/readyz` 200、告警消失)再删下一个。新的一代在全部库注册,并在换代事务里退休被跳过那些库上留着的上一代。
+  - **集群恢复之后要重建缺写资格的 Pod**(告警 `SqlWriterGrantsIncomplete` 点名的那些):它们不会自己补齐。一次删一个 `kubectl -n <namespace> delete pod <pod>`,等新 Pod 就绪(`/readyz` 200、告警消失)再删下一个。新的一代在全部库注册,并在换代事务里退休被跳过那些库上留着的上一代。
+    - 只是池关着的 Pod 不用管,恢复之后几十秒内自己就绪。
+    - 分不清是哪种时读 `/readyz`:先 `kubectl -n <namespace> port-forward pod/<pod> 9260`(db 是 9160),再访问 `http://127.0.0.1:9260/readyz`。503 的正文写明原因:「no writer grant」要重建,「unreachable since startup」等它自己好。
   - 恢复之前就要开排空的,被跳过的库上那一代没有进程,要按上面「没有进程的写者」人工退休,或者先重建 Pod。
   - 只写一个库的服务不受影响:唯一的库连不上就没有写资格,照旧卡在 init。
 - **Job 或 CronJob 起不来**:`sql-writer-pod-reaper` 的镜像拉不到时只是这一分钟没回收,不影响别的 Pod。`sql-writer-slot-retirer-<StatefulSet>` 用 registrar 的镜像,拉不到时这一轮不结束,下一轮再来。看 `kubectl -n <namespace> describe job <job>`。

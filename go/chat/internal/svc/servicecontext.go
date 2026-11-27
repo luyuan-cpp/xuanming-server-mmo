@@ -124,7 +124,8 @@ func (sc *ServiceContext) BindDrainRuntime(runtime *drainproof.Runtime) error {
 	return nil
 }
 
-// 聊天只从同步 RPC 写 SQL；没有 Kafka/Redis 发布 worker。世界频道推送在同一次同步 RPC 里、提交之后写 Kafka(world_push.go),
+// 聊天写 SQL 的只有两处:同步 RPC,以及世界频道平台补审的后台循环(platform_recheck.go)。后者每一次写之前同样进 RootAdmission,
+// 关门之后不再开始新的写;没有 Kafka/Redis 发布 worker。世界频道推送在同一次同步 RPC 里、提交之后写 Kafka(world_push.go),
 // 同样计在 RootAdmission 里。P1 等待该集合后即可封同一 SQL boot。
 func (sc *ServiceContext) CloseSource(ctx context.Context) error {
 	sc.RootAdmission.CloseAdmission()
@@ -265,7 +266,7 @@ func StartMetrics(addr string) func() {
 		return func() {}
 	}
 	registerMetricsOnce.Do(func() {
-		prometheus.MustRegister(sendTotal, pullTotal, worldPushTotal)
+		prometheus.MustRegister(sendTotal, pullTotal, worldPushTotal, platformRecheckTotal)
 		prometheus.MustRegister(authority.MetricCollectors()...)
 	})
 	mux := http.NewServeMux()

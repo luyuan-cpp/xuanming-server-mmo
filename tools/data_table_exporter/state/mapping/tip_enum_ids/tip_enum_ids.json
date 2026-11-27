@@ -245,7 +245,9 @@
         "SkillLoadoutRentStackLimit": 7032,
         "SkillLoadoutRentSlotsInvalid": 7033,
         "SkillLoadoutAttributeInvalid": 7034,
-        "SkillLoadoutAttributeResetRequired": 7035
+        "SkillLoadoutAttributeResetRequired": 7035,
+        "SkillBookshelfFull": 7036,
+        "SkillWantedPosterBookshelfFull": 7037
       }
     },
     "buff_error": {
@@ -457,7 +459,16 @@
         "MatchTournamentEmblemInvalid": 16060,
         "MatchTournamentPredictionClosed": 16061,
         "MatchTournamentPredictionTargetInvalid": 16062,
-        "MatchTournamentWarmupUnavailable": 16063
+        "MatchTournamentWarmupUnavailable": 16063,
+        "MatchPuzzleNotFound": 16064,
+        "MatchPuzzleNotOwner": 16065,
+        "MatchPuzzleLimitReached": 16066,
+        "MatchPuzzleSpecInvalid": 16067,
+        "MatchPuzzleTextRejected": 16068,
+        "MatchPuzzleNotPublished": 16069,
+        "MatchPuzzleCannotLikeOwn": 16070,
+        "MatchPuzzleClearRequiredToLike": 16071,
+        "MatchPuzzleSolutionReplayNotFound": 16072
       }
     },
     "attribute_error": {

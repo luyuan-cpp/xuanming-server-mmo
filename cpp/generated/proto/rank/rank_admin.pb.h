@@ -33,6 +33,7 @@
 #include "google/protobuf/unknown_field_set.h"
 #include "proto/common/base/tip.pb.h"
 #include "proto/common/base/service_call_auth.pb.h"
+#include "proto/common/base/admin_approval.pb.h"
 #include "proto/mail/mail.pb.h"
 #include "proto/rank/rank.pb.h"
 // @@protoc_insertion_point(includes)
@@ -1132,6 +1133,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RemoveRankEntryRequest final : publ
   // accessors -------------------------------------------------------
   enum : int {
     kAuthFieldNumber = 5,
+    kApprovalFieldNumber = 6,
     kBoardIdFieldNumber = 1,
     kGenerationFieldNumber = 2,
     kEntityIdFieldNumber = 3,
@@ -1151,6 +1153,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RemoveRankEntryRequest final : publ
   private:
   const ::common::base::ServiceCallAuth& _internal_auth() const;
   ::common::base::ServiceCallAuth* PROTOBUF_NONNULL _internal_mutable_auth();
+
+  public:
+  // .common.base.AdminApproval approval = 6;
+  [[nodiscard]] bool has_approval()
+      const;
+  void clear_approval() ;
+  [[nodiscard]] const ::common::base::AdminApproval& approval() const;
+  [[nodiscard]] ::common::base::AdminApproval* PROTOBUF_NULLABLE release_approval();
+  ::common::base::AdminApproval* PROTOBUF_NONNULL mutable_approval();
+  void set_allocated_approval(::common::base::AdminApproval* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_approval(::common::base::AdminApproval* PROTOBUF_NULLABLE value);
+  ::common::base::AdminApproval* PROTOBUF_NULLABLE unsafe_arena_release_approval();
+
+  private:
+  const ::common::base::AdminApproval& _internal_approval() const;
+  ::common::base::AdminApproval* PROTOBUF_NONNULL _internal_mutable_approval();
 
   public:
   // uint64 board_id = 1;
@@ -1197,8 +1215,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RemoveRankEntryRequest final : publ
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
-                          1, 0,
+      ::google::protobuf::internal::TcParseTable<3, 6,
+                          2, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1227,6 +1245,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RemoveRankEntryRequest final : publ
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE auth_;
+    ::common::base::AdminApproval* PROTOBUF_NULLABLE approval_;
     ::uint64_t board_id_;
     ::uint64_t generation_;
     ::uint64_t entity_id_;
@@ -4395,7 +4414,7 @@ inline void FreezeRankGenerationResponse::_internal_set_duplicated(bool value) {
 inline void RemoveRankEntryRequest::clear_board_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.board_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint64_t RemoveRankEntryRequest::board_id() const {
   // @@protoc_insertion_point(field_get:rankpb.RemoveRankEntryRequest.board_id)
@@ -4403,7 +4422,7 @@ inline ::uint64_t RemoveRankEntryRequest::board_id() const {
 }
 inline void RemoveRankEntryRequest::set_board_id(::uint64_t value) {
   _internal_set_board_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:rankpb.RemoveRankEntryRequest.board_id)
 }
 inline ::uint64_t RemoveRankEntryRequest::_internal_board_id() const {
@@ -4419,7 +4438,7 @@ inline void RemoveRankEntryRequest::_internal_set_board_id(::uint64_t value) {
 inline void RemoveRankEntryRequest::clear_generation() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.generation_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint64_t RemoveRankEntryRequest::generation() const {
   // @@protoc_insertion_point(field_get:rankpb.RemoveRankEntryRequest.generation)
@@ -4427,7 +4446,7 @@ inline ::uint64_t RemoveRankEntryRequest::generation() const {
 }
 inline void RemoveRankEntryRequest::set_generation(::uint64_t value) {
   _internal_set_generation(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:rankpb.RemoveRankEntryRequest.generation)
 }
 inline ::uint64_t RemoveRankEntryRequest::_internal_generation() const {
@@ -4443,7 +4462,7 @@ inline void RemoveRankEntryRequest::_internal_set_generation(::uint64_t value) {
 inline void RemoveRankEntryRequest::clear_entity_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.entity_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint64_t RemoveRankEntryRequest::entity_id() const {
   // @@protoc_insertion_point(field_get:rankpb.RemoveRankEntryRequest.entity_id)
@@ -4451,7 +4470,7 @@ inline ::uint64_t RemoveRankEntryRequest::entity_id() const {
 }
 inline void RemoveRankEntryRequest::set_entity_id(::uint64_t value) {
   _internal_set_entity_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:rankpb.RemoveRankEntryRequest.entity_id)
 }
 inline ::uint64_t RemoveRankEntryRequest::_internal_entity_id() const {
@@ -4467,7 +4486,7 @@ inline void RemoveRankEntryRequest::_internal_set_entity_id(::uint64_t value) {
 inline void RemoveRankEntryRequest::clear_request_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.request_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t RemoveRankEntryRequest::request_id() const {
   // @@protoc_insertion_point(field_get:rankpb.RemoveRankEntryRequest.request_id)
@@ -4475,7 +4494,7 @@ inline ::uint64_t RemoveRankEntryRequest::request_id() const {
 }
 inline void RemoveRankEntryRequest::set_request_id(::uint64_t value) {
   _internal_set_request_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:rankpb.RemoveRankEntryRequest.request_id)
 }
 inline ::uint64_t RemoveRankEntryRequest::_internal_request_id() const {
@@ -4578,6 +4597,99 @@ inline void RemoveRankEntryRequest::set_allocated_auth(::common::base::ServiceCa
 
   _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(value);
   // @@protoc_insertion_point(field_set_allocated:rankpb.RemoveRankEntryRequest.auth)
+}
+
+// .common.base.AdminApproval approval = 6;
+inline bool RemoveRankEntryRequest::has_approval() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.approval_ != nullptr);
+  return value;
+}
+inline const ::common::base::AdminApproval& RemoveRankEntryRequest::_internal_approval() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::common::base::AdminApproval* p = _impl_.approval_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::common::base::AdminApproval>(&::common::base::AdminApproval_globals_);
+}
+inline const ::common::base::AdminApproval& RemoveRankEntryRequest::approval() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:rankpb.RemoveRankEntryRequest.approval)
+  return _internal_approval();
+}
+inline void RemoveRankEntryRequest::unsafe_arena_set_allocated_approval(
+    ::common::base::AdminApproval* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.approval_);
+  }
+  _impl_.approval_ = reinterpret_cast<::common::base::AdminApproval*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:rankpb.RemoveRankEntryRequest.approval)
+}
+inline ::common::base::AdminApproval* PROTOBUF_NULLABLE RemoveRankEntryRequest::release_approval() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::common::base::AdminApproval* released = _impl_.approval_;
+  _impl_.approval_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::common::base::AdminApproval* PROTOBUF_NULLABLE RemoveRankEntryRequest::unsafe_arena_release_approval() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:rankpb.RemoveRankEntryRequest.approval)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::common::base::AdminApproval* temp = _impl_.approval_;
+  _impl_.approval_ = nullptr;
+  return temp;
+}
+inline ::common::base::AdminApproval* PROTOBUF_NONNULL RemoveRankEntryRequest::_internal_mutable_approval() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.approval_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::common::base::AdminApproval>(GetArena());
+    _impl_.approval_ = reinterpret_cast<::common::base::AdminApproval*>(p);
+  }
+  return _impl_.approval_;
+}
+inline ::common::base::AdminApproval* PROTOBUF_NONNULL RemoveRankEntryRequest::mutable_approval()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::common::base::AdminApproval* _msg = _internal_mutable_approval();
+  // @@protoc_insertion_point(field_mutable:rankpb.RemoveRankEntryRequest.approval)
+  return _msg;
+}
+inline void RemoveRankEntryRequest::set_allocated_approval(::common::base::AdminApproval* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.approval_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.approval_ = reinterpret_cast<::common::base::AdminApproval*>(value);
+  // @@protoc_insertion_point(field_set_allocated:rankpb.RemoveRankEntryRequest.approval)
 }
 
 // -------------------------------------------------------------------

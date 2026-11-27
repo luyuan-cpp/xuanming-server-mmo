@@ -2244,12 +2244,12 @@ constexpr ResolveStrandedFormationRequest::ParseTableT_ ResolveStrandedFormation
     {
       PROTOBUF_FIELD_OFFSET(ResolveStrandedFormationRequest, _impl_._has_bits_),
       0, // no _extensions_
-      7, 56,  // max_field_number, fast_idx_mask
+      8, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967168,  // skipmap
+      4294967040,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      7,  // num_field_entries
-      1,  // num_aux_entries
+      8,  // num_field_entries
+      2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -2258,14 +2258,17 @@ constexpr ResolveStrandedFormationRequest::ParseTableT_ ResolveStrandedFormation
       ::_pbi::TcParser::GetTable<::match::ResolveStrandedFormationRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // .common.base.AdminApproval approval = 8;
+      {::_pbi::TcParser::FastMtS1,
+       {66, 5, 1,
+        PROTOBUF_FIELD_OFFSET(ResolveStrandedFormationRequest, _impl_.approval_)}},
       // uint64 battle_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ResolveStrandedFormationRequest, _impl_.battle_id_), 5>(),
-       {8, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ResolveStrandedFormationRequest, _impl_.battle_id_), 6>(),
+       {8, 6, 0,
         PROTOBUF_FIELD_OFFSET(ResolveStrandedFormationRequest, _impl_.battle_id_)}},
       // .match.StrandedFormationMode mode = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ResolveStrandedFormationRequest, _impl_.mode_), 6>(),
-       {16, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ResolveStrandedFormationRequest, _impl_.mode_), 7>(),
+       {16, 7, 0,
         PROTOBUF_FIELD_OFFSET(ResolveStrandedFormationRequest, _impl_.mode_)}},
       // string expect_digest = 3;
       {::_pbi::TcParser::FastUS1,
@@ -2291,9 +2294,9 @@ constexpr ResolveStrandedFormationRequest::ParseTableT_ ResolveStrandedFormation
       65535, 65535
     }}, {{
       // uint64 battle_id = 1;
-      {PROTOBUF_FIELD_OFFSET(ResolveStrandedFormationRequest, _impl_.battle_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ResolveStrandedFormationRequest, _impl_.battle_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .match.StrandedFormationMode mode = 2;
-      {PROTOBUF_FIELD_OFFSET(ResolveStrandedFormationRequest, _impl_.mode_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(ResolveStrandedFormationRequest, _impl_.mode_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // string expect_digest = 3;
       {PROTOBUF_FIELD_OFFSET(ResolveStrandedFormationRequest, _impl_.expect_digest_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string expect_target = 4;
@@ -2304,6 +2307,8 @@ constexpr ResolveStrandedFormationRequest::ParseTableT_ ResolveStrandedFormation
       {PROTOBUF_FIELD_OFFSET(ResolveStrandedFormationRequest, _impl_.reason_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // .common.base.ServiceCallAuth auth = 7;
       {PROTOBUF_FIELD_OFFSET(ResolveStrandedFormationRequest, _impl_.auth_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .common.base.AdminApproval approval = 8;
+      {PROTOBUF_FIELD_OFFSET(ResolveStrandedFormationRequest, _impl_.approval_), _Internal::kHasBitsOffset + 5, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -2311,9 +2316,14 @@ constexpr ResolveStrandedFormationRequest::ParseTableT_ ResolveStrandedFormation
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::common::base::ServiceCallAuth_globals_},
         #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::common::base::AdminApproval>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::common::base::AdminApproval_globals_},
+        #endif
     }},
     {{
-      "\45\0\0\15\15\15\6\0"
+      "\45\0\0\15\15\15\6\0\0\0\0\0\0\0\0\0"
       "match.ResolveStrandedFormationRequest"
       "expect_digest"
       "expect_target"
@@ -2341,6 +2351,7 @@ inline constexpr ResolveStrandedFormationRequest::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         auth_{nullptr},
+        approval_{nullptr},
         battle_id_{::uint64_t{0u}},
         mode_{static_cast< ::match::StrandedFormationMode >(0)} {}
 
@@ -5747,7 +5758,7 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::match::ResolveStrandedFormationRequest, _impl_._has_bits_),
-        10, // hasbit index offset
+        11, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::match::ResolveStrandedFormationRequest, _impl_.battle_id_),
         PROTOBUF_FIELD_OFFSET(::match::ResolveStrandedFormationRequest, _impl_.mode_),
         PROTOBUF_FIELD_OFFSET(::match::ResolveStrandedFormationRequest, _impl_.expect_digest_),
@@ -5755,13 +5766,15 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::match::ResolveStrandedFormationRequest, _impl_.operator_name_),
         PROTOBUF_FIELD_OFFSET(::match::ResolveStrandedFormationRequest, _impl_.reason_),
         PROTOBUF_FIELD_OFFSET(::match::ResolveStrandedFormationRequest, _impl_.auth_),
-        5,
+        PROTOBUF_FIELD_OFFSET(::match::ResolveStrandedFormationRequest, _impl_.approval_),
         6,
+        7,
         0,
         1,
         2,
         3,
         4,
+        5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::match::ResolveStrandedFormationResponse, _impl_._has_bits_),
         10, // hasbit index offset
@@ -5886,14 +5899,14 @@ static const ::_pbi::MigrationSchema
         {245, sizeof(::match::ListStrandedFormationsRequest)},
         {256, sizeof(::match::ListStrandedFormationsResponse)},
         {271, sizeof(::match::ResolveStrandedFormationRequest)},
-        {288, sizeof(::match::ResolveStrandedFormationResponse)},
-        {305, sizeof(::match::StartGuildWarBattleRequest)},
-        {324, sizeof(::match::StartGuildWarBattleResponse)},
-        {337, sizeof(::match::ListPendingBattleScriptsRequest)},
-        {344, sizeof(::match::PendingBattleScript)},
-        {359, sizeof(::match::ListPendingBattleScriptsResponse)},
-        {366, sizeof(::match::ReviewBattleScriptRequest)},
-        {381, sizeof(::match::ReviewBattleScriptResponse)},
+        {290, sizeof(::match::ResolveStrandedFormationResponse)},
+        {307, sizeof(::match::StartGuildWarBattleRequest)},
+        {326, sizeof(::match::StartGuildWarBattleResponse)},
+        {339, sizeof(::match::ListPendingBattleScriptsRequest)},
+        {346, sizeof(::match::PendingBattleScript)},
+        {361, sizeof(::match::ListPendingBattleScriptsResponse)},
+        {368, sizeof(::match::ReviewBattleScriptRequest)},
+        {383, sizeof(::match::ReviewBattleScriptResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -5935,7 +5948,8 @@ const char descriptor_table_protodef_proto_2fmatch_2fmatch_5finternal_2eproto[] 
     "ttle/battle_data.proto\032 proto/battle/bat"
     "tle_script.proto\032 proto/battle/player_ba"
     "ttle.proto\032)proto/common/base/service_ca"
-    "ll_auth.proto\"\356\001\n\032StartActivityBattleReq"
+    "ll_auth.proto\032&proto/common/base/admin_a"
+    "pproval.proto\"\356\001\n\032StartActivityBattleReq"
     "uest\022\030\n\020battle_config_id\030\001 \001(\r\022\031\n\021member"
     "_player_ids\030\002 \003(\004\0220\n\020activity_context\030\003 "
     "\001(\0132\026.BattleActivityContext\022\022\n\nrequest_i"
@@ -6029,130 +6043,132 @@ const char descriptor_table_protodef_proto_2fmatch_2fmatch_5finternal_2eproto[] 
     "\030\001 \001(\010\022,\n\nformations\030\002 \003(\0132\030.match.Stran"
     "dedFormation\022\030\n\020next_retry_at_ms\030\003 \001(\004\022\026"
     "\n\016next_battle_id\030\004 \001(\004\022\016\n\006now_ms\030\005 \001(\004\022\016"
-    "\n\006target\030\006 \001(\t\"\341\001\n\037ResolveStrandedFormat"
+    "\n\006target\030\006 \001(\t\"\217\002\n\037ResolveStrandedFormat"
     "ionRequest\022\021\n\tbattle_id\030\001 \001(\004\022*\n\004mode\030\002 "
     "\001(\0162\034.match.StrandedFormationMode\022\025\n\rexp"
     "ect_digest\030\003 \001(\t\022\025\n\rexpect_target\030\004 \001(\t\022"
     "\025\n\roperator_name\030\005 \001(\t\022\016\n\006reason\030\006 \001(\t\022*"
     "\n\004auth\030\007 \001(\0132\034.common.base.ServiceCallAu"
-    "th\"\327\001\n ResolveStrandedFormationResponse\022"
-    "0\n\007verdict\030\001 \001(\0162\037.match.StrandedFormati"
-    "onVerdict\022+\n\tformation\030\002 \001(\0132\030.match.Str"
-    "andedFormation\022\016\n\006now_ms\030\003 \001(\004\022\016\n\006target"
-    "\030\004 \001(\t\022\017\n\007replica\030\005 \001(\t\022\017\n\007refusal\030\006 \001(\t"
-    "\022\022\n\naudit_line\030\007 \001(\t\"\254\002\n\032StartGuildWarBa"
-    "ttleRequest\022\030\n\020battle_config_id\030\001 \001(\r\022\022\n"
-    "\nmatch_mode\030\002 \001(\r\022\033\n\023attacker_player_ids"
-    "\030\003 \003(\004\022\033\n\023defender_player_ids\030\004 \003(\004\0224\n\025a"
-    "i_defender_snapshots\030\005 \003(\0132\025.BattlePlaye"
-    "rSnapshot\0220\n\020activity_context\030\006 \001(\0132\026.Ba"
-    "ttleActivityContext\022\022\n\nrequest_id\030\007 \001(\004\022"
-    "*\n\004auth\030\010 \001(\0132\034.common.base.ServiceCallA"
-    "uth\"\256\001\n\033StartGuildWarBattleResponse\022+\n\006r"
-    "eject\030\001 \001(\0162\033.match.ActivityBattleReject"
-    "\022\032\n\022offender_player_id\030\002 \001(\004\022\032\n\022offender"
-    "_battle_id\030\003 \001(\004\022\021\n\tbattle_id\030\004 \001(\004\022\027\n\017f"
-    "ormation_state\030\005 \001(\r\"\\\n\037ListPendingBattl"
-    "eScriptsRequest\022\r\n\005limit\030\001 \001(\r\022*\n\004auth\030\002"
-    " \001(\0132\034.common.base.ServiceCallAuth\"\244\001\n\023P"
-    "endingBattleScript\022\021\n\tscript_id\030\001 \001(\004\022\027\n"
-    "\017owner_player_id\030\002 \001(\004\022\020\n\010revision\030\003 \001(\r"
-    "\022\036\n\007content\030\004 \001(\0132\r.BattleScript\022\024\n\014subm"
-    "itted_ms\030\005 \001(\004\022\031\n\021approved_revision\030\006 \001("
-    "\r\"\200\001\n ListPendingBattleScriptsResponse\022/"
-    "\n\006reject\030\001 \001(\0162\037.match.BattleScriptRevie"
-    "wReject\022+\n\007scripts\030\002 \003(\0132\032.match.Pending"
-    "BattleScript\"\237\001\n\031ReviewBattleScriptReque"
-    "st\022\021\n\tscript_id\030\001 \001(\004\022\020\n\010revision\030\002 \001(\r\022"
-    "\017\n\007approve\030\003 \001(\010\022\020\n\010reviewer\030\004 \001(\t\022\016\n\006re"
-    "ason\030\005 \001(\t\022*\n\004auth\030\006 \001(\0132\034.common.base.S"
-    "erviceCallAuth\"M\n\032ReviewBattleScriptResp"
+    "th\022,\n\010approval\030\010 \001(\0132\032.common.base.Admin"
+    "Approval\"\327\001\n ResolveStrandedFormationRes"
+    "ponse\0220\n\007verdict\030\001 \001(\0162\037.match.StrandedF"
+    "ormationVerdict\022+\n\tformation\030\002 \001(\0132\030.mat"
+    "ch.StrandedFormation\022\016\n\006now_ms\030\003 \001(\004\022\016\n\006"
+    "target\030\004 \001(\t\022\017\n\007replica\030\005 \001(\t\022\017\n\007refusal"
+    "\030\006 \001(\t\022\022\n\naudit_line\030\007 \001(\t\"\254\002\n\032StartGuil"
+    "dWarBattleRequest\022\030\n\020battle_config_id\030\001 "
+    "\001(\r\022\022\n\nmatch_mode\030\002 \001(\r\022\033\n\023attacker_play"
+    "er_ids\030\003 \003(\004\022\033\n\023defender_player_ids\030\004 \003("
+    "\004\0224\n\025ai_defender_snapshots\030\005 \003(\0132\025.Battl"
+    "ePlayerSnapshot\0220\n\020activity_context\030\006 \001("
+    "\0132\026.BattleActivityContext\022\022\n\nrequest_id\030"
+    "\007 \001(\004\022*\n\004auth\030\010 \001(\0132\034.common.base.Servic"
+    "eCallAuth\"\256\001\n\033StartGuildWarBattleRespons"
+    "e\022+\n\006reject\030\001 \001(\0162\033.match.ActivityBattle"
+    "Reject\022\032\n\022offender_player_id\030\002 \001(\004\022\032\n\022of"
+    "fender_battle_id\030\003 \001(\004\022\021\n\tbattle_id\030\004 \001("
+    "\004\022\027\n\017formation_state\030\005 \001(\r\"\\\n\037ListPendin"
+    "gBattleScriptsRequest\022\r\n\005limit\030\001 \001(\r\022*\n\004"
+    "auth\030\002 \001(\0132\034.common.base.ServiceCallAuth"
+    "\"\244\001\n\023PendingBattleScript\022\021\n\tscript_id\030\001 "
+    "\001(\004\022\027\n\017owner_player_id\030\002 \001(\004\022\020\n\010revision"
+    "\030\003 \001(\r\022\036\n\007content\030\004 \001(\0132\r.BattleScript\022\024"
+    "\n\014submitted_ms\030\005 \001(\004\022\031\n\021approved_revisio"
+    "n\030\006 \001(\r\"\200\001\n ListPendingBattleScriptsResp"
     "onse\022/\n\006reject\030\001 \001(\0162\037.match.BattleScrip"
-    "tReviewReject*\271\002\n\024ActivityBattleReject\022\037"
-    "\n\033ACTIVITY_BATTLE_REJECT_NONE\020\000\022+\n\'ACTIV"
-    "ITY_BATTLE_REJECT_INVALID_ARGUMENT\020\001\022)\n%"
-    "ACTIVITY_BATTLE_REJECT_MEMBER_OFFLINE\020\002\022"
-    "+\n\'ACTIVITY_BATTLE_REJECT_MEMBER_IN_BATT"
-    "LE\020\003\022+\n\'ACTIVITY_BATTLE_REJECT_MEMBER_NO"
-    "T_READY\020\004\022#\n\037ACTIVITY_BATTLE_REJECT_INTE"
-    "RNAL\020\005\022)\n%ACTIVITY_BATTLE_REJECT_OUTSIDE"
-    "_WINDOW\020\006*\205\001\n\025BattleOutcomeDecision\022#\n\037B"
-    "ATTLE_OUTCOME_DECISION_UNKNOWN\020\000\022$\n BATT"
-    "LE_OUTCOME_DECISION_COMPLETE\020\001\022!\n\035BATTLE"
-    "_OUTCOME_DECISION_ABORT\020\002*\325\001\n\026SpectateFe"
-    "aturedReject\022!\n\035SPECTATE_FEATURED_REJECT"
-    "_NONE\020\000\022&\n\"SPECTATE_FEATURED_REJECT_NOT_"
-    "FOUND\020\001\022$\n SPECTATE_FEATURED_REJECT_PRIV"
-    "ATE\020\002\022%\n!SPECTATE_FEATURED_REJECT_INTERN"
-    "AL\020\003\022#\n\037SPECTATE_FEATURED_REJECT_DENIED\020"
-    "\004*\302\001\n\024TrialOccupancyReject\022\037\n\033TRIAL_OCCU"
-    "PANCY_REJECT_NONE\020\000\022#\n\037TRIAL_OCCUPANCY_R"
-    "EJECT_OCCUPIED\020\001\022\037\n\033TRIAL_OCCUPANCY_REJE"
-    "CT_ROLE\020\002\022!\n\035TRIAL_OCCUPANCY_REJECT_DENI"
-    "ED\020\003\022 \n\034TRIAL_OCCUPANCY_REJECT_RETRY\020\004*\301"
-    "\001\n\026StrandedFormationClass\022(\n$STRANDED_FO"
-    "RMATION_CLASS_UNSPECIFIED\020\000\022!\n\035STRANDED_"
-    "FORMATION_CLASS_AUTO\020\001\022.\n*STRANDED_FORMA"
-    "TION_CLASS_ORIGINAL_MISMATCH\020\002\022*\n&STRAND"
-    "ED_FORMATION_CLASS_SHAPE_INVALID\020\003*\252\001\n\025S"
-    "trandedFormationMode\022\'\n#STRANDED_FORMATI"
-    "ON_MODE_UNSPECIFIED\020\000\022 \n\034STRANDED_FORMAT"
-    "ION_MODE_SHOW\020\001\022#\n\037STRANDED_FORMATION_MO"
-    "DE_DRY_RUN\020\002\022!\n\035STRANDED_FORMATION_MODE_"
-    "ABORT\020\003*\270\002\n\030StrandedFormationVerdict\022*\n&"
-    "STRANDED_FORMATION_VERDICT_UNSPECIFIED\020\000"
-    "\022\'\n#STRANDED_FORMATION_VERDICT_ELIGIBLE\020"
-    "\001\022&\n\"STRANDED_FORMATION_VERDICT_REFUSED\020"
-    "\002\022&\n\"STRANDED_FORMATION_VERDICT_CHANGED\020"
-    "\003\022\'\n#STRANDED_FORMATION_VERDICT_RESOLVED"
-    "\020\004\022(\n$STRANDED_FORMATION_VERDICT_NOT_FOU"
-    "ND\020\005\022$\n STRANDED_FORMATION_VERDICT_RETRY"
-    "\020\006*\342\001\n\030BattleScriptReviewReject\022$\n BATTL"
-    "E_SCRIPT_REVIEW_REJECT_NONE\020\000\022&\n\"BATTLE_"
-    "SCRIPT_REVIEW_REJECT_DENIED\020\001\022\'\n#BATTLE_"
-    "SCRIPT_REVIEW_REJECT_INVALID\020\002\022%\n!BATTLE"
-    "_SCRIPT_REVIEW_REJECT_STALE\020\003\022(\n$BATTLE_"
-    "SCRIPT_REVIEW_REJECT_INTERNAL\020\0042\232\n\n\rMatc"
-    "hInternal\022\\\n\023StartActivityBattle\022!.match"
-    ".StartActivityBattleRequest\032\".match.Star"
-    "tActivityBattleResponse\022_\n\024CancelActivit"
-    "yBattle\022\".match.CancelActivityBattleRequ"
-    "est\032#.match.CancelActivityBattleResponse"
-    "\022\\\n\023CommitBattleOutcome\022!.match.CommitBa"
-    "ttleOutcomeRequest\032\".match.CommitBattleO"
-    "utcomeResponse\022\\\n\023SetSpectateFeatured\022!."
-    "match.SetSpectateFeaturedRequest\032\".match"
-    ".SetSpectateFeaturedResponse\022b\n\025AcquireT"
-    "rialOccupancy\022#.match.AcquireTrialOccupa"
-    "ncyRequest\032$.match.AcquireTrialOccupancy"
-    "Response\022b\n\025ReleaseTrialOccupancy\022#.matc"
-    "h.ReleaseTrialOccupancyRequest\032$.match.R"
-    "eleaseTrialOccupancyResponse\022\\\n\023GetBattl"
-    "eCompletion\022!.match.GetBattleCompletionR"
-    "equest\032\".match.GetBattleCompletionRespon"
-    "se\022n\n\031GetBattleTerminalDecision\022\'.match."
-    "GetBattleTerminalDecisionRequest\032(.match"
-    ".GetBattleTerminalDecisionResponse\022e\n\026Li"
-    "stStrandedFormations\022$.match.ListStrande"
-    "dFormationsRequest\032%.match.ListStrandedF"
-    "ormationsResponse\022k\n\030ResolveStrandedForm"
-    "ation\022&.match.ResolveStrandedFormationRe"
-    "quest\032\'.match.ResolveStrandedFormationRe"
-    "sponse\022k\n\030ListPendingBattleScripts\022&.mat"
-    "ch.ListPendingBattleScriptsRequest\032\'.mat"
-    "ch.ListPendingBattleScriptsResponse\022Y\n\022R"
-    "eviewBattleScript\022 .match.ReviewBattleSc"
-    "riptRequest\032!.match.ReviewBattleScriptRe"
-    "sponse\022\\\n\023StartGuildWarBattle\022!.match.St"
-    "artGuildWarBattleRequest\032\".match.StartGu"
-    "ildWarBattleResponseB\024Z\013match/match\200\001\000\230\324"
-    "a\025b\006proto3"
+    "tReviewReject\022+\n\007scripts\030\002 \003(\0132\032.match.P"
+    "endingBattleScript\"\237\001\n\031ReviewBattleScrip"
+    "tRequest\022\021\n\tscript_id\030\001 \001(\004\022\020\n\010revision\030"
+    "\002 \001(\r\022\017\n\007approve\030\003 \001(\010\022\020\n\010reviewer\030\004 \001(\t"
+    "\022\016\n\006reason\030\005 \001(\t\022*\n\004auth\030\006 \001(\0132\034.common."
+    "base.ServiceCallAuth\"M\n\032ReviewBattleScri"
+    "ptResponse\022/\n\006reject\030\001 \001(\0162\037.match.Battl"
+    "eScriptReviewReject*\271\002\n\024ActivityBattleRe"
+    "ject\022\037\n\033ACTIVITY_BATTLE_REJECT_NONE\020\000\022+\n"
+    "\'ACTIVITY_BATTLE_REJECT_INVALID_ARGUMENT"
+    "\020\001\022)\n%ACTIVITY_BATTLE_REJECT_MEMBER_OFFL"
+    "INE\020\002\022+\n\'ACTIVITY_BATTLE_REJECT_MEMBER_I"
+    "N_BATTLE\020\003\022+\n\'ACTIVITY_BATTLE_REJECT_MEM"
+    "BER_NOT_READY\020\004\022#\n\037ACTIVITY_BATTLE_REJEC"
+    "T_INTERNAL\020\005\022)\n%ACTIVITY_BATTLE_REJECT_O"
+    "UTSIDE_WINDOW\020\006*\205\001\n\025BattleOutcomeDecisio"
+    "n\022#\n\037BATTLE_OUTCOME_DECISION_UNKNOWN\020\000\022$"
+    "\n BATTLE_OUTCOME_DECISION_COMPLETE\020\001\022!\n\035"
+    "BATTLE_OUTCOME_DECISION_ABORT\020\002*\325\001\n\026Spec"
+    "tateFeaturedReject\022!\n\035SPECTATE_FEATURED_"
+    "REJECT_NONE\020\000\022&\n\"SPECTATE_FEATURED_REJEC"
+    "T_NOT_FOUND\020\001\022$\n SPECTATE_FEATURED_REJEC"
+    "T_PRIVATE\020\002\022%\n!SPECTATE_FEATURED_REJECT_"
+    "INTERNAL\020\003\022#\n\037SPECTATE_FEATURED_REJECT_D"
+    "ENIED\020\004*\302\001\n\024TrialOccupancyReject\022\037\n\033TRIA"
+    "L_OCCUPANCY_REJECT_NONE\020\000\022#\n\037TRIAL_OCCUP"
+    "ANCY_REJECT_OCCUPIED\020\001\022\037\n\033TRIAL_OCCUPANC"
+    "Y_REJECT_ROLE\020\002\022!\n\035TRIAL_OCCUPANCY_REJEC"
+    "T_DENIED\020\003\022 \n\034TRIAL_OCCUPANCY_REJECT_RET"
+    "RY\020\004*\301\001\n\026StrandedFormationClass\022(\n$STRAN"
+    "DED_FORMATION_CLASS_UNSPECIFIED\020\000\022!\n\035STR"
+    "ANDED_FORMATION_CLASS_AUTO\020\001\022.\n*STRANDED"
+    "_FORMATION_CLASS_ORIGINAL_MISMATCH\020\002\022*\n&"
+    "STRANDED_FORMATION_CLASS_SHAPE_INVALID\020\003"
+    "*\252\001\n\025StrandedFormationMode\022\'\n#STRANDED_F"
+    "ORMATION_MODE_UNSPECIFIED\020\000\022 \n\034STRANDED_"
+    "FORMATION_MODE_SHOW\020\001\022#\n\037STRANDED_FORMAT"
+    "ION_MODE_DRY_RUN\020\002\022!\n\035STRANDED_FORMATION"
+    "_MODE_ABORT\020\003*\270\002\n\030StrandedFormationVerdi"
+    "ct\022*\n&STRANDED_FORMATION_VERDICT_UNSPECI"
+    "FIED\020\000\022\'\n#STRANDED_FORMATION_VERDICT_ELI"
+    "GIBLE\020\001\022&\n\"STRANDED_FORMATION_VERDICT_RE"
+    "FUSED\020\002\022&\n\"STRANDED_FORMATION_VERDICT_CH"
+    "ANGED\020\003\022\'\n#STRANDED_FORMATION_VERDICT_RE"
+    "SOLVED\020\004\022(\n$STRANDED_FORMATION_VERDICT_N"
+    "OT_FOUND\020\005\022$\n STRANDED_FORMATION_VERDICT"
+    "_RETRY\020\006*\342\001\n\030BattleScriptReviewReject\022$\n"
+    " BATTLE_SCRIPT_REVIEW_REJECT_NONE\020\000\022&\n\"B"
+    "ATTLE_SCRIPT_REVIEW_REJECT_DENIED\020\001\022\'\n#B"
+    "ATTLE_SCRIPT_REVIEW_REJECT_INVALID\020\002\022%\n!"
+    "BATTLE_SCRIPT_REVIEW_REJECT_STALE\020\003\022(\n$B"
+    "ATTLE_SCRIPT_REVIEW_REJECT_INTERNAL\020\0042\232\n"
+    "\n\rMatchInternal\022\\\n\023StartActivityBattle\022!"
+    ".match.StartActivityBattleRequest\032\".matc"
+    "h.StartActivityBattleResponse\022_\n\024CancelA"
+    "ctivityBattle\022\".match.CancelActivityBatt"
+    "leRequest\032#.match.CancelActivityBattleRe"
+    "sponse\022\\\n\023CommitBattleOutcome\022!.match.Co"
+    "mmitBattleOutcomeRequest\032\".match.CommitB"
+    "attleOutcomeResponse\022\\\n\023SetSpectateFeatu"
+    "red\022!.match.SetSpectateFeaturedRequest\032\""
+    ".match.SetSpectateFeaturedResponse\022b\n\025Ac"
+    "quireTrialOccupancy\022#.match.AcquireTrial"
+    "OccupancyRequest\032$.match.AcquireTrialOcc"
+    "upancyResponse\022b\n\025ReleaseTrialOccupancy\022"
+    "#.match.ReleaseTrialOccupancyRequest\032$.m"
+    "atch.ReleaseTrialOccupancyResponse\022\\\n\023Ge"
+    "tBattleCompletion\022!.match.GetBattleCompl"
+    "etionRequest\032\".match.GetBattleCompletion"
+    "Response\022n\n\031GetBattleTerminalDecision\022\'."
+    "match.GetBattleTerminalDecisionRequest\032("
+    ".match.GetBattleTerminalDecisionResponse"
+    "\022e\n\026ListStrandedFormations\022$.match.ListS"
+    "trandedFormationsRequest\032%.match.ListStr"
+    "andedFormationsResponse\022k\n\030ResolveStrand"
+    "edFormation\022&.match.ResolveStrandedForma"
+    "tionRequest\032\'.match.ResolveStrandedForma"
+    "tionResponse\022k\n\030ListPendingBattleScripts"
+    "\022&.match.ListPendingBattleScriptsRequest"
+    "\032\'.match.ListPendingBattleScriptsRespons"
+    "e\022Y\n\022ReviewBattleScript\022 .match.ReviewBa"
+    "ttleScriptRequest\032!.match.ReviewBattleSc"
+    "riptResponse\022\\\n\023StartGuildWarBattle\022!.ma"
+    "tch.StartGuildWarBattleRequest\032\".match.S"
+    "tartGuildWarBattleResponseB\024Z\013match/matc"
+    "h\200\001\000\230\324a\025b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
-    descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto_deps[5] = {
+    descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto_deps[6] = {
         &::descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto,
         &::descriptor_table_proto_2fbattle_2fbattle_5fscript_2eproto,
         &::descriptor_table_proto_2fbattle_2fplayer_5fbattle_2eproto,
+        &::descriptor_table_proto_2fcommon_2fbase_2fadmin_5fapproval_2eproto,
         &::descriptor_table_proto_2fcommon_2fbase_2fservice_5fcall_5fauth_2eproto,
         &::descriptor_table_proto_2fdb_2fproto_5foption_2eproto,
 };
@@ -6160,12 +6176,12 @@ static ::absl::once_flag descriptor_table_proto_2fmatch_2fmatch_5finternal_2epro
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto = {
     false,
     false,
-    8650,
+    8736,
     descriptor_table_protodef_proto_2fmatch_2fmatch_5finternal_2eproto,
     "proto/match/match_internal.proto",
     &descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto_once,
     descriptor_table_proto_2fmatch_2fmatch_5finternal_2eproto_deps,
-    5,
+    6,
     30,
     schemas,
     file_message_globals,
@@ -13090,6 +13106,11 @@ void ResolveStrandedFormationRequest::clear_auth() {
   if (_impl_.auth_ != nullptr) _impl_.auth_->Clear();
   ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
+void ResolveStrandedFormationRequest::clear_approval() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.approval_ != nullptr) _impl_.approval_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
 ResolveStrandedFormationRequest::ResolveStrandedFormationRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, ResolveStrandedFormationRequest_get_class_data()) {
@@ -13127,6 +13148,9 @@ ResolveStrandedFormationRequest::ResolveStrandedFormationRequest(
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
   _impl_.auth_ = (CheckHasBit(cached_has_bits, 0x00000010U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_)
+                : nullptr;
+  _impl_.approval_ = (CheckHasBit(cached_has_bits, 0x00000020U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.approval_)
                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, battle_id_),
@@ -13172,6 +13196,7 @@ inline void ResolveStrandedFormationRequest::SharedDtor(MessageLite& self) {
   this_._impl_.operator_name_.Destroy();
   this_._impl_.reason_.Destroy();
   delete this_._impl_.auth_;
+  delete this_._impl_.approval_;
   this_._impl_.~Impl_();
 }
 
@@ -13209,7 +13234,7 @@ PROTOBUF_NOINLINE void ResolveStrandedFormationRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.expect_digest_.ClearNonDefaultToEmpty();
     }
@@ -13226,8 +13251,12 @@ PROTOBUF_NOINLINE void ResolveStrandedFormationRequest::Clear() {
       ABSL_DCHECK(_impl_.auth_ != nullptr);
       _impl_.auth_->Clear();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      ABSL_DCHECK(_impl_.approval_ != nullptr);
+      _impl_.approval_->Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000060U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000c0U)) {
     ::memset(&_impl_.battle_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.mode_) -
         reinterpret_cast<char*>(&_impl_.battle_id_)) + sizeof(_impl_.mode_));
@@ -13256,7 +13285,7 @@ PROTOBUF_NOINLINE void ResolveStrandedFormationRequest::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 battle_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_battle_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -13265,7 +13294,7 @@ PROTOBUF_NOINLINE void ResolveStrandedFormationRequest::Clear() {
   }
 
   // .match.StrandedFormationMode mode = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_mode() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -13320,6 +13349,13 @@ PROTOBUF_NOINLINE void ResolveStrandedFormationRequest::Clear() {
         stream);
   }
 
+  // .common.base.AdminApproval approval = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        8, *this_._impl_.approval_, this_._impl_.approval_->GetCachedSize(), target,
+        stream);
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -13345,7 +13381,7 @@ PROTOBUF_NOINLINE void ResolveStrandedFormationRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // string expect_digest = 3;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_expect_digest().empty()) {
@@ -13379,15 +13415,20 @@ PROTOBUF_NOINLINE void ResolveStrandedFormationRequest::Clear() {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.auth_);
     }
-    // uint64 battle_id = 1;
+    // .common.base.AdminApproval approval = 8;
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.approval_);
+    }
+    // uint64 battle_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_battle_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_battle_id());
       }
     }
     // .match.StrandedFormationMode mode = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_mode() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_mode());
@@ -13412,7 +13453,7 @@ void ResolveStrandedFormationRequest::MergeImpl(::google::protobuf::MessageLite&
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_expect_digest().empty()) {
         _this->_internal_set_expect_digest(from._internal_expect_digest());
@@ -13458,11 +13499,19 @@ void ResolveStrandedFormationRequest::MergeImpl(::google::protobuf::MessageLite&
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      ABSL_DCHECK(from._impl_.approval_ != nullptr);
+      if (_this->_impl_.approval_ == nullptr) {
+        _this->_impl_.approval_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.approval_);
+      } else {
+        _this->_impl_.approval_->MergeFrom(*from._impl_.approval_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_battle_id() != 0) {
         _this->_impl_.battle_id_ = from._impl_.battle_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_mode() != 0) {
         _this->_impl_.mode_ = from._impl_.mode_;
       }

@@ -177,7 +177,7 @@ cd tools/data_table_exporter && py -m pytest -q
 | **Class** | `Class.xlsx` | `class_table.proto` | 11 | 9 | 9 | — | — | — | — | — | — | — |
 | **Condition** | `Condition.xlsx` | `condition_table.proto` | 20 | 10 | 29 | — | — | — | — | — | — | — |
 | **Cooldown** | `Cooldown.xlsx` | `cooldown_table.proto` | 2 | 2 | 9 | — | — | — | — | — | — | — |
-| **Dungeon** | `Dungeon.xlsx` | `dungeon_table.proto` | 11 | 9 | 34 | — | — | `scene_id` | `scene_id→BaseScene.id` `monster→Monster.id` | — | — | — |
+| **Dungeon** | `Dungeon.xlsx` | `dungeon_table.proto` | 11 | 9 | 35 | — | — | `scene_id` | `scene_id→BaseScene.id` `monster→Monster.id` | — | — | — |
 | **EquipAffixPool** | `EquipAffixPool.xlsx` | `equipaffixpool_table.proto` | 4 | 4 | 29 | — | — | `pool_id` `attr_id` | `attr_id→EquipAttribute.id` | — | — | — |
 | **EquipAffixQuality** | `EquipAffixQuality.xlsx` | `equipaffixquality_table.proto` | 6 | 6 | 5 | — | — | — | — | — | — | — |
 | **EquipAffixRule** | `EquipAffixRule.xlsx` | `equipaffixrule_table.proto` | 5 | 5 | 1 | — | — | — | — | — | — | — |
@@ -201,7 +201,7 @@ cd tools/data_table_exporter && py -m pytest -q
 | **GuildWarRule** | `GuildWarRule.xlsx` | `guildwarrule_table.proto` | 31 | 31 | 1 | — | — | `battle_config_id` | `battle_config_id→Dungeon.id` | — | — | — |
 | **Item** | `Item.xlsx` | `item_table.proto` | 23 | 18 | 148 | — | — | `affix_rule` `forge_material_id` `artifact_id` | `affix_rule→EquipAffixRule.id` `forge_material_id→Item.id` `artifact_id→EquipArtifact.id` | — | — | `base_attr` |
 | **JianghuRule** | `JianghuRule.xlsx` | `jianghurule_table.proto` | 18 | 18 | 1 | — | — | `gold_writ_item_id` `clear_item_id` | `gold_writ_item_id→Item.id` `clear_item_id→Item.id` | — | — | — |
-| **MessageLimiter** | `MessageLimiter.xlsx` | `messagelimiter_table.proto` | 4 | 4 | 131 | — | — | — | — | — | — | — |
+| **MessageLimiter** | `MessageLimiter.xlsx` | `messagelimiter_table.proto` | 4 | 4 | 138 | — | — | — | — | — | — | — |
 | **Mirror** | `Mirror.xlsx` | `mirror_table.proto` | 3 | 3 | 2 | — | — | `scene_id` `main_scene_id` | `scene_id→BaseScene.id` `main_scene_id→World.id` | — | — | — |
 | **Mission** | `Mission.xlsx` | `mission_table.proto` | 15 | 9 | 17 | — | — | `reward_id` | `reward_id→Reward.id` `condition_id→Condition.id(组)` | `id` | — | — |
 | **Monster** | `Monster.xlsx` | `monster_table.proto` | 19 | 13 | 63 | — | — | `capture_pet_table_id` | `capture_pet_table_id→Pet.id` | — | — | `drop` |
@@ -213,7 +213,7 @@ cd tools/data_table_exporter && py -m pytest -q
 | **PetEntry** | `PetEntry.xlsx` | `petentry_table.proto` | 10 | 10 | 21 | — | — | — | — | — | — | — |
 | **PetRule** | `PetRule.xlsx` | `petrule_table.proto` | 9 | 9 | 1 | — | — | — | — | — | — | — |
 | **PetTier** | `PetTier.xlsx` | `pettier_table.proto` | 9 | 9 | 5 | — | — | — | — | — | — | — |
-| **PlayMode** | `PlayMode.xlsx` | `playmode_table.proto` | 10 | 6 | 49 | — | — | `battle_config_id` | `battle_config_id→Dungeon.id` | — | — | — |
+| **PlayMode** | `PlayMode.xlsx` | `playmode_table.proto` | 10 | 6 | 50 | — | — | `battle_config_id` | `battle_config_id→Dungeon.id` | — | — | — |
 | **PlayerLevelExp** | `PlayerLevelExp.xlsx` | `playerlevelexp_table.proto` | 2 | 2 | 85 | — | — | — | — | — | — | — |
 | **RankedPreset** | `RankedPreset.xlsx` | `rankedpreset_table.proto` | 20 | 15 | 6 | — | — | `pet_table_id` | `pet_table_id→Pet.id` `skill_ids→Skill.id` `pet_entry_ids→PetEntry.id` | — | — | — |
 | **RankedRule** | `RankedRule.xlsx` | `rankedrule_table.proto` | 25 | 25 | 1 | — | — | `battle_config_id` `reference_class_id` | `battle_config_id→Dungeon.id` `reference_class_id→Class.id` | — | — | — |
@@ -234,9 +234,9 @@ cd tools/data_table_exporter && py -m pytest -q
 | **TournamentRule** | `TournamentRule.xlsx` | `tournamentrule_table.proto` | 29 | 29 | 1 | — | — | `battle_config_id` | `battle_config_id→Dungeon.id` | — | — | — |
 | **TravelPassSeason** | `TravelPassSeason.xlsx` | `travelpassseason_table.proto` | 15 | 15 | 1 | — | — | — | — | — | — | — |
 | **TravelPassTier** | `TravelPassTier.xlsx` | `travelpasstier_table.proto` | 14 | 14 | 10 | — | — | `pass_id` | `pass_id→TravelPassSeason.id` | — | — | — |
-| **TrialJournalEntry** | `TrialJournalEntry.xlsx` | `trialjournalentry_table.proto` | 16 | 16 | 15 | — | — | `chapter_id` | — | — | — | — |
-| **TrialJournalMilestone** | `TrialJournalMilestone.xlsx` | `trialjournalmilestone_table.proto` | 17 | 17 | 13 | — | — | `scope_chapter_id` | — | `id` | — | — |
-| **TrialJournalSeal** | `TrialJournalSeal.xlsx` | `trialjournalseal_table.proto` | 8 | 8 | 42 | — | — | `entry_id` | `entry_id→TrialJournalEntry.id` | `id` | — | — |
+| **TrialJournalEntry** | `TrialJournalEntry.xlsx` | `trialjournalentry_table.proto` | 16 | 16 | 42 | — | — | `chapter_id` | — | — | — | — |
+| **TrialJournalMilestone** | `TrialJournalMilestone.xlsx` | `trialjournalmilestone_table.proto` | 17 | 17 | 31 | — | — | `scope_chapter_id` | — | `id` | — | — |
+| **TrialJournalSeal** | `TrialJournalSeal.xlsx` | `trialjournalseal_table.proto` | 8 | 8 | 96 | — | — | `entry_id` | `entry_id→TrialJournalEntry.id` | `id` | — | — |
 | **World** | `World.xlsx` | `world_table.proto` | 2 | 2 | 16 | — | — | `scene_id` | `scene_id→BaseScene.id` | — | — | — |
 | **ZoneGroup** | `ZoneGroup.xlsx` | `zonegroup_table.proto` | 5 | 4 | 2 | — | — | — | — | — | — | — |
 

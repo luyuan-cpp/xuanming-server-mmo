@@ -1,0 +1,132 @@
+# Prometheus alert rules:不带双人复核批准记录而被接受的管理写命令(docs/design/admin-identity-and-dual-control.md §5.7、§11.4)。
+#
+# 来源:2026-11-26,后台管理员身份与双人复核批 7。高风险管理动作由后台(java/gm_admin)发起、另一人批准后才下发,
+#       批准记录在请求体里,各资源服务缺省要求它并用 go/shared/dualcontrol 复查。只有本机开发会显式打开应急开关:
+#         trade        Commerce.ManualResolutionAllowUnapproved
+#         mall_game    commerce.admin-allow-unapproved
+#         mail / login / data_service / player_inbox / rank   各自配置里的 AdminAllowUnapproved
+#         match        GlobalMatch.ManualResolutionAllowUnapproved
+#       开着时每接受一条不带记录的写命令就打一行 ERROR 并给下面的计数加一。集群里这些计数应当恒为 0。
+#
+# 处置:5 分钟内有增长,说明有人打开了应急开关并且真的用了,或者配置被误改。先看是谁改的部署配置(开关是一次走部署流程的配置变更,
+#       本身有记录),再按对应服务的 ERROR 日志(带方法与请求号)逐条核对这些写命令,确认后把开关关回去。
+#
+# Install as a PrometheusRule CR (kube-prometheus stack),与 etcd-alerts.yaml 同法:
+#   kubectl apply -n observability -f deploy/k8s/dual-control-alerts.yaml
+#
+# Scrape prerequisites:各服务的 /metrics 被抓取(与它们各自的告警文件相同)。多数服务启动时就预建值为 0 的序列
+# (第一次接受就能被 increase() 看到);商城与 match 的计数在第一次接受时才出现,那一次 increase() 可能看不到,之后照常。
+#
+# Severity conventions(与 scene-manager-alerts.yaml 相同):
+#   critical = pager, someone wakes up
+#   warning  = next-business-hours channel
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: dual-control-alerts
+  labels:
+    app: admin-dual-control
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: admin.dual-control
+      interval: 30s
+      rules:
+        # 交易人工处置的 EXECUTE 不带批准记录被接受(名字与 go/trade/internal/config/config.go 的注释一致)。
+        - alert: TradeManualResolutionUnapprovedExecute
+          expr: |
+            sum(increase(trade_manual_resolution_unapproved_execute_total[5m])) > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: "交易人工处置有 {{ $value | printf \"%.0f\" }} 条 EXECUTE 没带双人复核批准记录就被执行了"
+            description: >-
+              trade 打开了 Commerce.ManualResolutionAllowUnapproved。查部署配置是谁打开的,按 trade 日志里
+              「EXECUTE accepted without a dual-control approval record」逐条核对合同,确认后关掉开关。
+            runbook_url: docs/ops/trade-commerce-quarantine-runbook.md
+
+        # 商城人工单与 SKU 写命令不带批准记录被接受。
+        - alert: MallAdminCommandUnapproved
+          expr: |
+            sum(increase(mall_admin_unapproved_command_total[5m])) > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: "商城有 {{ $value | printf \"%.0f\" }} 条管理写命令没带双人复核批准记录就被执行了"
+            description: >-
+              mall_game 打开了 commerce.admin-allow-unapproved。按商城日志里「accepted without a dual-control approval record」
+              的路径与请求号核对 commerce_admin_command 里 proposer 为空的行,确认后关掉开关。
+            runbook_url: docs/design/admin-identity-and-dual-control.md
+
+        # 邮件:要求批准记录的调用方(缺省 admin)不带记录发了信。
+        - alert: MailAdminCommandUnapproved
+          expr: |
+            sum(increase(mail_admin_unapproved_command_total[5m])) > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: "邮件有 {{ $value | printf \"%.0f\" }} 封管理邮件没带双人复核批准记录就发出了"
+            description: >-
+              mail 打开了 AdminAllowUnapproved。按 mail 日志核对这些邮件(请求号、收件人、附件),确认后关掉开关。
+            runbook_url: docs/design/admin-identity-and-dual-control.md
+
+        # 账号类(注销、摘角色、重置实名)。
+        - alert: LoginAdminCommandUnapproved
+          expr: |
+            sum(increase(login_admin_unapproved_command_total[5m])) > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: "账号管理有 {{ $value | printf \"%.0f\" }} 条命令没带双人复核批准记录就被执行了"
+            description: >-
+              login 打开了 AdminAllowUnapproved。按 login 日志里的方法与角色核对注销、摘角色、重置实名,确认后关掉开关。
+            runbook_url: docs/design/admin-identity-and-dual-control.md
+
+        # 回收(批次、撤批次、终结回收行)。
+        - alert: DataServiceAdminCommandUnapproved
+          expr: |
+            sum(increase(data_service_admin_unapproved_command_total[5m])) > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: "回收有 {{ $value | printf \"%.0f\" }} 条命令没带双人复核批准记录就被执行了"
+            description: >-
+              data_service 打开了 AdminAllowUnapproved。按 data_service 日志与回收审计核对这些批次,确认后关掉开关。
+            runbook_url: docs/design/admin-identity-and-dual-control.md
+
+        # 收件箱处置(处罚、作废)。
+        - alert: PlayerInboxAdminCommandUnapproved
+          expr: |
+            sum(increase(player_inbox_admin_unapproved_command_total[5m])) > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: "收件箱有 {{ $value | printf \"%.0f\" }} 条处置没带双人复核批准记录就被执行了"
+            description: >-
+              player_inbox 打开了 AdminAllowUnapproved。按 player_inbox 日志与审计核对这些处罚与作废,确认后关掉开关。
+            runbook_url: docs/design/admin-identity-and-dual-control.md
+
+        # 榜单删除(只对调用方 admin 要求;match 自动删除不计)。
+        - alert: RankAdminCommandUnapproved
+          expr: |
+            sum(increase(rank_admin_unapproved_command_total[5m])) > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: "榜单有 {{ $value | printf \"%.0f\" }} 条删除没带双人复核批准记录就被执行了"
+            description: >-
+              rank 打开了 AdminAllowUnapproved。按 rank 日志核对被删的条目与代,确认后关掉开关。
+            runbook_url: docs/design/admin-identity-and-dual-control.md
+
+        # 滞留阵容终结(ABORT)。
+        - alert: MatchAdminCommandUnapproved
+          expr: |
+            sum(increase(match_admin_unapproved_command_total[5m])) > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: "滞留阵容有 {{ $value | printf \"%.0f\" }} 次终结没带双人复核批准记录就被执行了"
+            description: >-
+              match 打开了 GlobalMatch.ManualResolutionAllowUnapproved。按 match 日志与 match_manual_resolution 

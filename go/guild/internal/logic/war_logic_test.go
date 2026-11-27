@@ -146,3 +146,34 @@ func TestGuildWarRPCsFailClosedWithoutSessionOrWarDeps(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, constants.ErrWarNotOpen, respondResp.GetErrorMessage().GetId())
 }
+
+// r2-gw#8:野外点选面板(InspectFieldWarTargets)只露查看者有资格接的单,与追杀榜、开战挂钩、追踪同一口径(war.BountyHuntable):
+// 仅发单帮可见的追杀令对别帮一律为空(号、赏金、档位都不露),发单帮自己与全区江湖榜照常显示;别区、已过期、没有单都为空。
+func TestFieldTargetBountyHidesGuildOnlyBountiesFromOtherGuilds(t *testing.T) {
+	const zone, issuerGuild, otherGuild, nowMs = uint32(7), uint64(9100), uint64(9200), uint64(1_700_000_000_000)
+	guildOnly := &pb.GuildWarBountyRecord{
+		BountyId: 77001, ZoneId: zone, IssuerGuildId: issuerGuild, PublicBoard: 0,
+		Tier: uint32(pb.GuildWarBountyTier_GUILD_WAR_BOUNTY_TIER_NORMAL_SILVER), EscrowSilver: 4500,
+		Status: uint32(pb.GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_ACTIVE), ExpiresAtMs: nowMs + 60_000,
+	}
+	id, silver, tier := fieldTargetBounty(guildOnly, zone, otherGuild, nowMs)
+	require.Zero(t, id, "别帮看不到仅本帮可见的单号")
+	require.Zero(t, silver, "别帮看不到它的赏金")
+	require.Equal(t, pb.GuildWarBountyTier_GUILD_WAR_BOUNTY_TIER_UNSPECIFIED, tier)
+
+	id, silver, tier = fieldTargetBounty(guildOnly, zone, issuerGuild, nowMs)
+	require.Equal(t, uint64(77001), id, "发单帮自己照常显示")
+	require.Equal(t, uint64(4500), silver)
+	require.Equal(t, pb.GuildWarBountyTier_GUILD_WAR_BOUNTY_TIER_NORMAL_SILVER, tier)
+
+	public := proto.Clone(guildOnly).(*pb.GuildWarBountyRecord)
+	public.PublicBoard = 1
+	id, _, _ = fieldTargetBounty(public, zone, otherGuild, nowMs)
+	require.Equal(t, uint64(77001), id, "全区江湖榜谁都看得到")
+	id, _, _ = fieldTargetBounty(public, zone+1, otherGuild, nowMs)
+	require.Zero(t, id, "别区的单不显示")
+	id, _, _ = fieldTargetBounty(public, zone, otherGuild, nowMs+60_000)
+	require.Zero(t, id, "已过期的单不显示")
+	id, _, _ = fieldTargetBounty(nil, zone, otherGuild, nowMs)
+	require.Zero(t, id)
+}

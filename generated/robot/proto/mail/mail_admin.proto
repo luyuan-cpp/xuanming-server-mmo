@@ -3,6 +3,7 @@ package mailpb;
 option go_package = "robot/proto/mail";
 import "proto/common/base/tip.proto";
 import "proto/common/base/service_call_auth.proto";
+import "proto/common/base/admin_approval.proto";
 import "proto/mail/mail.proto";
 
 // 内部发件接口不标客户端服务。每个caller独立密钥和可发频道白名单。
@@ -25,6 +26,10 @@ message SendMailRequest {
   // SHA256("v1\n" + 按shard_index升序拼接 "index:lowercase_sha256:count\n")。
   // shard摘要是去重并按uint64升序的player_id十进制字符串，每个后接\n的SHA256。
   string manifest_hash = 14;
+  // 双人复核批准记录(docs/design/admin-identity-and-dual-control.md §5.4):后台在第二个人批准之后带上,approval_id 就是 request_id。
+  // mail 对配置 ApprovalRequiredCallers 里的调用方(admin 恒在其中)要求它;带了就必须合格,不论调用方。它进请求摘要,
+  // 重试原样复用。系统发件方(rank / guild / battle / match)不带。活动邮件带在建活动的这一份请求里,import / seal 不带。
+  common.base.AdminApproval approval = 15;
 }
 message SendMailResponse { TipInfoMessage error_message = 1; uint64 mail_id = 2; bool duplicated = 3; }
 message ImportMailRecipientsRequest {

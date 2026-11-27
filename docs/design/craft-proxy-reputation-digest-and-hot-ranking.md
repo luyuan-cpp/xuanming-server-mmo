@@ -49,19 +49,44 @@
 - **实时叠加未回账口碑**：
   - `ListCraftProxyStalls` 返回时，对每条共享摊位快照实时叠加其尚未回账的 `pending(o, s, r)`，确保宗师离线时买家下单后刷新西市列表即刻看到口碑与热榜同步增长。
 
-### 2.3 宗师上线/周期回账与防重防丢流程
+### 2.3 宗师上线/周期回账与防重防丢流程(C++ 2026-11-26 起按原子取走,见 §2.5)
 - 触发时机：宗师登录载入存档（`SyncPlayerProxyStall` / `_load_player`）、5 秒共享目录周期同步、以及 `GetSkillCraftingState` 读路径。
-- 回账顺序（严格先持久后扣减 pending）：
-  1. 仅在玩家在线且 `IsPlayerMutable`（非战斗冻结/非退出态）且该玩家无在途 drain 时执行。
-  2. 读取本节点镜像中的 `pending(o, s, r, g, lastBuyer)`；若 `o == 0 && s == 0 && r == 0 && g == 0` 直接跳过。
-  3. 计算回账前已解锁雅号位图 `beforeMask`，累加 `proxy_orders_completed += o`、`supreme_forged_count += s`、`rare_books_crafted_count += r`（饱和加法防溢出），计算回账后位图 `afterMask`，将 `afterMask & ~beforeMask` 按位或入 `unread_proxy_digest_new_titles_mask`。
-  4. 累加 `unread_proxy_digest_orders / supreme / rare / net_gold` 并更新 `unread_proxy_digest_last_buyer`。
-  5. 触发存档持久化；**仅在存档提交（或入盘排程确认）成功后**，从本地 pending 扣除 `(o, s, r, g)` 并向控制面 Redis 发 `HINCRBY -o / -s / -r / -g`，同时把最新口碑与雅号重发至 `craft_proxy_stall:{ctl:<zone>}`。若存盘失败，保留 pending，下次 tick 自动重试，零丢单。
+- 回账顺序（数额以从台账原子取走的为准；本节点镜像只说明「可能有待回账」）：
+  1. 仅在玩家在线且 `IsPlayerMutable`（非战斗冻结/非退出态）、本节点镜像里有他的待回账、且这名宗师没有在途的取走时发起。
+  2. 向控制面 Redis 发一段 Lua 脚本：同一次执行里 `HMGET` 读出 `<M>:o / :s / :r / :g / :b` 再 `HDEL` 删掉，回 5 项数组（缺的字段是 nil，负数按 0 算）。两个节点同时取同一名宗师，只有先执行的一方拿到值。
+  3. 应答回到 loop 后按 `player_id` 重新找实体：取到全 0 → 别处已回过账或镜像过时，什么都不记，镜像这一条作废；宗师已离开本节点或此刻不可改 → 原样 `HINCRBY +` 还回台账，下次再取。
+  4. 计算回账前已解锁雅号位图 `beforeMask`，累加 `proxy_orders_completed += o`、`supreme_forged_count += s`、`rare_books_crafted_count += r`（饱和加法防溢出），计算回账后位图 `afterMask`，将 `afterMask & ~beforeMask` 按位或入 `unread_proxy_digest_new_titles_mask`；累加 `unread_proxy_digest_orders / supreme / rare / net_gold` 并更新 `unread_proxy_digest_last_buyer`。
+  5. 排一次存盘（`SavePlayerForAssetCommit`）；排不上 → 存档回滚到回账前，取走的数额原样还回台账。排上了 → 本节点镜像扣掉取走的部分，并把最新口碑与雅号重发至 `craft_proxy_stall:{ctl:<zone>}`。
+  6. 应答为空（断连，结果未知）→ 什么都不记、只打 WARN：脚本若没执行，数额还在台账里，下次再取；若已执行，这一批展示用的口碑丢失（不涉及银两，见 §2.5「代价与边界」）。
 
 ### 2.4 客户端协议扩展（零破坏、末尾追加）
 - `SkillCraftingStateSnapshot` 追加字段 `24`：`CraftProxyDigestSummary unread_proxy_digest`（含 `orders_completed`、`supreme_forged_count`、`rare_books_crafted_count`、`net_gold_earned`、`last_buyer_name`、`newly_unlocked_title_mask`）。
 - `CraftProxyStallInfo` 追加只读展示字段 `16..18`：`recent_24h_orders`、`recent_24h_supreme`、`hot_rank`。
 - `SceneSkillClientPlayer` 末尾追加天然幂等 RPC：`AckCraftProxyDigest(AckCraftProxyDigestRequest) returns (AckCraftProxyDigestResponse)`（清空未读战报、落盘并返回最新 `state`；已清空时重放直接成功）。
+
+### 2.5 回账以原子取走为准(2026-11-26,数据覆写审计 r2-craft#4,C++ 已落码未编译)
+
+**问题**：原先回账照本节点镜像里的数额记进存档，再向 Redis 发 `HINCRBY -数额`。镜像是每 5 秒 `HGETALL` 整表覆盖的快照，会过时，于是同一批口碑能被记两次：
+- 同节点：`HGETALL` 已发出、应答未到时发生一次回账（`GetSkillCraftingState`、开关摊位、在线宗师收到本节点订单都会触发），应答带回的是回账前的值，覆盖镜像后立刻又回一次；Redis 计数被扣成负数，读取时钳成 0，之后等量的新口碑被吃掉。
+- 跨节点：宗师在节点 A 回完账，5 秒内换到节点 B 并打开工坊，B 的镜像还是 A 回账前的快照，再回一次。
+- 另：Redis 断连时 `HINCRBY -数额` 发不出去，台账里的数额留着，恢复后又被回一次。
+
+只影响口碑单数、极品数、稀世数与营业战报里的银两展示，以及按这些计数解锁的零属性雅号，不涉及银两本身（银两走邮件，见 [跨节点/离线名匠代打](craft-proxy-offline-and-support-enhance.md) §2.2）。
+
+**方案**：按 §2.3 的顺序改成「先原子取走、再入账」。实现在 `player_craft.cpp`：取走脚本 `kTakeProxyReputationLua`、应答解析 `ParseTakenReputation`、入账 `ApplyTakenProxyReputation`、还回 `GiveBackProxyReputation`；在途集合 `tlsProxyReputationTakesInFlight` 保证同一名宗师至多一次在途，入账（含排存盘）期间不重入。台账的三个动作（累加、记最近买家、取走）收成接缝 `PlayerCraftSystem::ProxyReputationLedger`，生产实现是控制集群 Redis，单测经 `SetProxyReputationLedgerForTest` 换成内存实现。用例：`OfflineReputationTitleUnlockDigestAckAndWestMarketHotRankTop3`（存盘排不上时回滚并还回）、`ProxyReputationDrainTakesAtomicallyAndGivesBackWhenMasterLeft`（镜像过时不重复记、应答迟到时宗师已走则还回、再上线只记一次）。
+
+**为什么这样选**：重复记账的根因是「数额来自可能过时的副本，扣减在事后」。把读和删合进 Redis 上的一次脚本执行，数额就只可能被一个节点拿到；镜像退回成「谁可能有待回账」的提示和西市列表的叠加展示，不再参与记账。这是审计原文给的第一种改法，改动只在 scene 一个文件内，台账的键与字段不变，不用改存档结构。
+
+**被否决的做法**：
+- 给每笔待回账发号、存档里记已应用的最大号（审计原文的第二种）：精确一次，但要给 `PlayerCraftComp` 加持久字段并走混版本字段保护流程、Redis 侧改成按号存的列表，而它保护的只是展示计数。
+- 在同节点用「刷新代次」抵消在途应答：只修得了同节点那一条，跨节点的陈旧镜像照样重复。
+- 回账前先 `HGETALL` 一次再按最新值记：读和扣之间仍有窗口，两个节点同时读到同一份值照样各记一次。
+
+**代价与边界**：
+- 回账变成异步：`GetSkillCraftingState` 触发的那次回账，结果要等取走的应答（通常 1 毫秒级）之后才进存档，这一次回包里可能还看不到；在线宗师每 5 秒的刷新与登录时也会回账，所以多数时候打开工坊前已经回完。
+- 取走之后、存档提交之前进程崩溃，这一批口碑丢失（与改动前「排了存盘就扣 Redis」相同）；取走的应答丢了（断连）同样可能丢一批。只影响展示，接受。
+- Redis 断连期间不回账（取不了），断连期间本节点记下而没能写进 Redis 的增量，下一次整表刷新覆盖镜像时消失（改动前就如此）。
+- Java 版 `CraftProxyStallDirectory.drainPendingReputation` 仍是「镜像数额入账 + 事后 `HINCRBY` 负值」，同节点在途刷新有 `localReputationMutationSeq` 兜，跨节点陈旧镜像照样可能重复，登记 Java 仓 `PARITY.md` 待做。
 
 ---
 
@@ -80,8 +105,9 @@
 | 潜在风险 | 缓解防线 |
 |---|---|
 | 多场景节点同时有买家给同一离线宗师下单导致计数覆盖丢单 | 全链路改用 Redis `HINCRBY` 原子增量，禁止整包 `HSET` 覆盖待回账字段 |
-| 宗师回账存盘失败或崩溃导致口碑丢失 | 严格先落盘再扣减 pending（C++ 检查 `Persist` 返回值；Java/Python 在 `commit`/存盘成功回调后扣减），存盘失败则保留 pending 下次重试 |
-| 重复进入界面或刷新导致重复弹出离线战报或重复扣除 pending | `AckCraftProxyDigest` 持久清零 `unread_proxy_digest_*` 且天然幂等；同一宗师 drain 加单飞标记防 5s tick 重入 |
+| 宗师回账存盘失败导致口碑丢失 | C++：先原子取走再入账，排不上存盘就回滚存档、把取走的数额原样还回台账（§2.5）；Java/Python：在 `commit`/存盘成功回调后扣减。取走之后、提交之前崩溃丢这一批展示口碑，接受 |
+| 本节点镜像过时（在途整表刷新、跨节点换线）导致同一批口碑记两次 | C++：回账数额只认 Redis 上一次脚本执行里读出并删除的值，镜像只当提示（§2.5，r2-craft#4）；Java 待做 |
+| 重复进入界面或刷新导致重复弹出离线战报或重复扣除 pending | `AckCraftProxyDigest` 持久清零 `unread_proxy_digest_*` 且天然幂等；同一宗师的取走至多一次在途，入账期间不重入 |
 | Redis 重启/清空导致永久口碑丢失或负值下溢 | 永久累计值存于角色 DB `PlayerCraftComp`；pending 仅作增量中转，读取时钳制 `>= 0` 永不下溢 |
 | 极品数/单数整数溢出 | 全路径饱和加法（`uint32_max` / `uint64_max` 封顶） |
 | 客户端未导入 Codex 新切图时出现白块/报错 | 所有新切图路径均做 `null` 判空并优雅回退现有已过审通用卷轴/印章/按钮控件 |

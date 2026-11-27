@@ -85,4 +85,4 @@ spec:
             severity: warning
           annotations:
             summary: "排行榜邮件奖励转为放弃终态"
-            description: "rank 日志 'mail reward abandoned' 给出 reward_id；查 status=3 的行，按 leaderboard-system.md「2026-11-05 奖励邮件过期写定、放弃终态与人工重投」节先在邮件库按 sender_kind=3、request_id=reward_id 核对：已有同载荷的邮件即已到账，改回待投由工作器判重认领；载荷不同按冲突人工核对；没有邮件时，剩余可领不足 24 小时（通常如此）走 mailadmin 补偿，用新的请求号与过期时刻，否则处理原因后改回待投。"
+            description: "rank 日志 'mail reward abandoned' 给出 reward_id；查 status=3 的行，按 leaderboard-system.md「2026-11-05 奖励邮件过期写定、放弃终态与人工重投」节先在邮件库按 sender_kind=3、request_id=reward_id 核对：已有同载荷的邮件即已到账，改回待投由工作器判重认领；载荷不同按冲突人工核对；没有邮件时，剩余可领不足 24 小时（通常如此）在后台（java/gm_admin）发起补偿个人邮件、由另一名管理员批准后发出（mailadmin 在生产会因不带双人复核批准记录被拒），否则处理原因后改回待投。"

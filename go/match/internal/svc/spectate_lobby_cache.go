@@ -22,6 +22,7 @@ type SpectateIndexMember struct {
 // 多个请求共用同一份,只读,不要改里面的切片。
 type SpectateLobbySnapshot struct {
 	Featured []SpectateIndexMember // 赛事局索引里未到期的成员,后标记的在前
+	Ranked   []SpectateIndexMember // 高段正式排位直播索引,开局晚的在前(防普通 PVE 稀释)
 	Active   []SpectateIndexMember // 活跃集合,开局晚的在前
 }
 
@@ -90,6 +91,7 @@ func (c *SpectateLobbyCache) Forget(member string) {
 	defer c.mu.Unlock()
 	c.snapshot = SpectateLobbySnapshot{
 		Featured: withoutLobbyMember(c.snapshot.Featured, member),
+		Ranked:   withoutLobbyMember(c.snapshot.Ranked, member),
 		Active:   withoutLobbyMember(c.snapshot.Active, member),
 	}
 }

@@ -232,7 +232,33 @@ class GmDualControlJournalTest {
     ObjectNode opsInput() {
         ObjectNode input = mapper.createObjectNode().put("target", "mall").put("command", "manual/orders/resolve");
         input.putObject("body").put("orderId", "MO-1").put("action", "MARK_DELIVERED").put("reason", "工单 88");
-        return input;
+        return input.put("retryable", true);
+    }
+
+    @Test void anOpsCommandFrozenAsNotRetryableStaysUnknownAfterAnUnknownResult() {
+        ObjectNode input = opsInput().put("target", "inbox").put("command", "VoidItem").put("retryable", false);
+        String id = journal.prepareOps("alice", "o-void", "工单 89", input).path("id").asText();
+        ObjectNode unknown = journal.sendOps(id, "bob", (request, approval) -> {
+            throw new GameServices.CallFailure("UNAVAILABLE", "unknown", true, 0);
+        });
+        assertEquals("UNKNOWN", unknown.path("status").asText());
+        // 重放会被下游当成「已是终态」拒绝的命令不能沿用原申请重试:结果要人去下游核对。
+        now.addAndGet(120_000L);
+        http(409, () -> journal.sendOps(id, "carol", (request, approval) -> fail("a non-retryable command must never be resent")));
+    }
+
+    @Test void mailCommandsCarryTheApprovalRecordInTheFrozenRequest() {
+        String id = propose("alice", "k-approval");
+        List<ObjectNode> sent = new ArrayList<>();
+        journal.send(id, "bob", request -> { sent.add(request); return delivered(); });
+        assertEquals(id, sent.get(0).path("approval").path("approvalId").asText());
+        assertEquals(id, sent.get(0).path("requestId").asText());
+        assertEquals("alice", sent.get(0).path("approval").path("proposer").asText());
+        assertEquals("bob", sent.get(0).path("approval").path("approver").asText());
+        // 草稿里不许自带批准记录。
+        ObjectNode forged = mail();
+        forged.putObject("approval").put("approvalId", "1");
+        http(400, () -> journal.prepare("alice", "k-forged", "9007199254740993", "工单", forged));
     }
 
     @Test void opsCommandsFreezeTheRequestIdAndReuseTheApprovalRecordOnRetry() {
@@ -268,7 +294,7 @@ class GmDualControlJournalTest {
     }
 
     @Test void opsDraftsRejectServerFrozenFieldsAndOtherShapes() {
-        for (String frozen : List.of("requestId", "approval", "auth")) {
+        for (String frozen : List.of("approval", "auth")) {
             ObjectNode input = opsInput();
             ((ObjectNode) input.get("body")).put(frozen, "x");
             http(400, () -> journal.prepareOps("alice", "o-" + frozen, "工单", input));

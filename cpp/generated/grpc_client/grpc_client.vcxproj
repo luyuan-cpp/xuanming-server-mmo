@@ -239,4 +239,8 @@
     <ClCompile Include="content_guard\content_guard_grpc_client.cpp" />
     <ClInclude Include="content_guard\content_guard_grpc_client.h" />
   </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="login\login_admin_grpc_client.cpp" />
+    <ClInclude Include="login\login_admin_grpc_client.h" />
+  </ItemGroup>
 </Project>

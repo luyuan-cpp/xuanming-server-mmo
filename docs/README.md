@@ -114,6 +114,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [ranked-play-v3-tactical-prep.md](planning/ranked-play-v3-tactical-prep.md) — 《论剑 / 人宠会武》V3 扩展设计：战前 15 秒明牌变阵（换赛季印 / 换首发宠）
 - [ranked-play-v4-team-tactics-and-highlights.md](planning/ranked-play-v4-team-tactics-and-highlights.md) — 《论剑 / 人宠会武》V4 扩展设计：队内一键战术标点、本局战术复盘徽记与连胜破势
 - [ranked-play-v5-midbattle-summon.md](planning/ranked-play-v5-midbattle-summon.md) — 《论剑 / 人宠会武》V5 扩展设计：临阵唤灵（单局限 1 次替补灵宠召唤 / 临场换宠）
+- [ranked-play-v6-v7-rivalry-builds-live-rematch.md](planning/ranked-play-v6-v7-rivalry-builds-live-rematch.md) — 《论剑 / 人宠会武》V6 & V7 玩法策划与全端闭环设计
 - [season-pvp-lunjian-v1-repaired.md](planning/season-pvp-lunjian-v1-repaired.md) — 《论剑 / 人宠会武》PVP 玩法设计体检、修复方案与 UI 补全清单（V1 修复版）
 - [season-skills-and-seal-design.md](planning/season-skills-and-seal-design.md) — 《五行奇谈》赛季技能与单槽赛季印（方案 A）设计、实现与 UI 交接
 - [season-team-tournament-v1.md](planning/season-team-tournament-v1.md) — 《群仙问道赛》全服赛季战队锦标赛设计方案（V1）
@@ -141,6 +142,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [rewarded-ad-compliance-and-economy-v1.md](planning/rewarded-ad-compliance-and-economy-v1.md) — 《五行奇谈》零拒审激励视频广告与绑定银两（双银两）合规创收策划方案（V1）
 - [tactical-puzzle-workshop-v1.md](planning/tactical-puzzle-workshop-v1.md) — 《五行奇谈》万象残局坊（UGC 玩家自创回合残局工坊）V1 策划与技术设计方案
 - [trial-journal-v3-wild-bosses-vows-replay-share.md](planning/trial-journal-v3-wild-bosses-vows-replay-share.md) — 《五行奇谈》五行试炼志 V3 扩展设计：卷四·三境明雷、试炼誓约与好友约战录像
+- [trial-journal-v4-seasonal-s2-s10.md](planning/trial-journal-v4-seasonal-s2-s10.md) — 《五行奇谈》五行试炼志 V4：卷三·季游奇谈 S2–S10 全十季无缝轮换与技印共鸣解题
 
 #### 成套策划
 
@@ -175,6 +177,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [tactical-puzzle-workshop-v1-ui-handoff.md](planning/ui-handoff/tactical-puzzle-workshop-v1-ui-handoff.md) — 「万象残局坊」玩家自创回合残局工坊 V1 纯功能 UI 作图交接单
 - [trial-journal-v2-ui-handoff.md](planning/ui-handoff/trial-journal-v2-ui-handoff.md) — 《五行试炼志 V2》UI 功能需求与作图清单
 - [trial-journal-v3-ui-handoff.md](planning/ui-handoff/trial-journal-v3-ui-handoff.md) — 《五行试炼志 V3》新增控件（卷四明雷、试炼誓约、好友约战帖）UI 作图交接清单
+- [trial-journal-v4-seasonal-badges-ui-handoff.md](planning/ui-handoff/trial-journal-v4-seasonal-badges-ui-handoff.md) — 《五行试炼志 V4》卷三季游奇谈（S2–S10）专属名片印戳作图交接
 - [wardrobe-cosmetic-vouchers-ui-handoff.md](planning/ui-handoff/wardrobe-cosmetic-vouchers-ui-handoff.md) — 衣柜外观解锁券（灵宠幻化符 / 技能特效卷）UI 纯功能作图交接清单
 - [wardrobe-cosmetics-assets-handoff.md](planning/ui-handoff/wardrobe-cosmetics-assets-handoff.md) — 衣柜外观券、专属技能特效帧条与百宝阁切片纯功能作图交接清单
 - [world-map-habitat-ui-handoff.md](planning/ui-handoff/world-map-habitat-ui-handoff.md) — 大世界野外灵宠栖息地 HUD 浮条 UI 美术作图交接清单
@@ -459,7 +462,10 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [craft-proxy-offline-and-support-enhance.md](design/craft-proxy-offline-and-support-enhance.md) — 跨节点/离线名匠代打与控辅强化公平受益设计
 - [craft-proxy-reputation-digest-and-hot-ranking.md](design/craft-proxy-reputation-digest-and-hot-ranking.md) — 离线名匠口碑雅号异步回账、营业战报与西市极品热榜设计方案
 - [data-service-startup-isolation.md](design/data-service-startup-isolation.md) — data_service 启动期故障隔离:一个 SQL 集群连不上时照样启动
+- [merged-zone-etcd-copy.md](design/merged-zone-etcd-copy.md) — 合服映射的 etcd 副本:目录第 0 片失联时 data_service 照样启动
+- [ranked-play-production-architecture.md](design/ranked-play-production-architecture.md) — 《论剑 / 人宠会武》生产级强一致性与水平扩展架构设计
 - [rewarded-ad-system.md](design/rewarded-ad-system.md) — 激励视频广告与绑定银两（`CURRENCY_TYPE_BIND_GOLD`）全端技术与零拒审工程设计
+- [skill-book-wanted-order-trade-escrow.md](design/skill-book-wanted-order-trade-escrow.md) — 悬赏求书迁 go/trade 托管合同与未学书架上限(数据覆写审计 r2 第 4 轮 craft#1、#2)
 
 #### 成套技术设计
 
@@ -551,6 +557,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [data-overwrite-audit-r2-round4-handoff-20261126.md](handoff/data-overwrite-audit-r2-round4-handoff-20261126.md) — 数据覆写审计 r2·换视角查找第 4 轮：复核与修复交接（2026-11-26，交 Gemini）
 - [login-queue-verification-handoff-20261126.md](handoff/login-queue-verification-handoff-20261126.md) — 登录排队:验证与开闸交接(2026-11-26,交 Gemini)
 - [minigame-websocket-handoff-20261120.md](handoff/minigame-websocket-handoff-20261120.md) — 小游戏 WebSocket 入口:待验证项交接(2026-11-20 起交 Gemini,2026-11-26 按当前仓库校正)
+- [passport-hardening-handoff-20261126.md](handoff/passport-hardening-handoff-20261126.md) — 官方通行证加固：验证交接（2026-11-26，交 Gemini；代码已改完，Gemini 只验证）
 - [payment-integration-handoff-20261120.md](handoff/payment-integration-handoff-20261120.md) — 真钱支付接入:剩余事项(2026-11-26 更新,交 Gemini 与负责人)
 - [real-name-anti-addiction-handoff-20261126.md](handoff/real-name-anti-addiction-handoff-20261126.md) — 实名认证与防沉迷：代码已写完，全部验证交 Gemini（2026-11-26）
 - [redis-cluster-all-domains-handoff-20261126.md](handoff/redis-cluster-all-domains-handoff-20261126.md) — 全部 Redis 上 Cluster(缺口第 34 条)验证交接(2026-11-26,交 Gemini)

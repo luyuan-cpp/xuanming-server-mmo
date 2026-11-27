@@ -2,6 +2,7 @@ package logic
 
 import (
 	"context"
+	"sort"
 	"strconv"
 
 	"match/internal/svc"
@@ -18,11 +19,12 @@ const (
 	maxWatchableListLimit     = 50
 )
 
-// 列表读回源时各取多少条:一个请求最多看 2×limit 条活跃候选(stable 观众在 canary 镜像非空时多读一倍)与 limit 条赛事局。
-// 缓存按上限取一份,各请求截自己要的前缀:全服前 k 一定是全服前 n 的前缀(k ≤ n)。
+// 列表读回源时各取多少条:一个请求最多看 2×limit 条活跃候选(stable 观众在 canary 镜像非空时多读一倍)、
+// limit 条赛事局以及 limit 条高段排位直播局。缓存按上限取一份,各请求截自己要的前缀。
 const (
 	spectateLobbyActiveMax   = 2 * maxWatchableListLimit
 	spectateLobbyFeaturedMax = maxWatchableListLimit
+	spectateLobbyRankedMax   = maxWatchableListLimit
 )
 
 type ListWatchableBattlesLogic struct {
@@ -92,6 +94,57 @@ func (l *ListWatchableBattlesLogic) ListWatchableBattles(in *matchpb.ListWatchab
 			listed[battleId] = true
 		}
 	}
+	// 高段论剑排位直播优先配额(最多占本页一半且不少于 10 席,受 limit 收口):
+	// 从独立的 16 桶高段排位索引读取并按最高分段降序排列,确保全服高频 PVE 对局不会把高段论剑挤出观战列表。
+	if uint32(len(battles)) < limit && len(lobby.Ranked) > 0 {
+		remaining := int(limit) - len(battles)
+		rankedBudget := min(remaining, max(int(limit)/2, 10))
+		rankedCandidates := lobby.Ranked[:min(int(scan), len(lobby.Ranked))]
+		rankedSummaries := make([]*matchpb.BattleWatchSummary, 0, len(rankedCandidates))
+		for _, pair := range rankedCandidates {
+			if err := l.ctx.Err(); err != nil {
+				return nil, err
+			}
+			battleId, err := strconv.ParseUint(pair.Member, 10, 64)
+			if err != nil {
+				l.Errorf("[spectate] Invalid member %q in ranked spectator index; removing", pair.Member)
+				removeSpectateIndexGarbage(l.svcCtx, spectateRankedIndex, pair.Member)
+				continue
+			}
+			if listed[battleId] {
+				continue
+			}
+			if uint64(pair.Score) < staleBefore {
+				removeSpectateBattle(l.svcCtx, battleId)
+				continue
+			}
+			summary := l.watchableSummary(battleId, viewerTrack)
+			if summary == nil {
+				continue
+			}
+			if summary.GetMode() != matchpb.MatchMode_MATCH_MODE_PVP_TEAM || summary.GetRankedTeamSize() == 0 {
+				removeSpectateRankedMember(l.svcCtx, battleId)
+				continue
+			}
+			rankedSummaries = append(rankedSummaries, summary)
+		}
+		sort.Slice(rankedSummaries, func(i, j int) bool {
+			if rankedSummaries[i].GetRankedPeakRatingCenti() != rankedSummaries[j].GetRankedPeakRatingCenti() {
+				return rankedSummaries[i].GetRankedPeakRatingCenti() > rankedSummaries[j].GetRankedPeakRatingCenti()
+			}
+			if rankedSummaries[i].GetCreatedAtMs() != rankedSummaries[j].GetCreatedAtMs() {
+				return rankedSummaries[i].GetCreatedAtMs() > rankedSummaries[j].GetCreatedAtMs()
+			}
+			return rankedSummaries[i].GetBattleId() > rankedSummaries[j].GetBattleId()
+		})
+		if len(rankedSummaries) > rankedBudget {
+			rankedSummaries = rankedSummaries[:rankedBudget]
+		}
+		for _, summary := range rankedSummaries {
+			battles = append(battles, summary)
+			listed[summary.GetBattleId()] = true
+		}
+	}
 	for _, pair := range pairs {
 		if uint32(len(battles)) >= limit {
 			break
@@ -140,9 +193,9 @@ func readSpectateLobby(s *svc.ServiceContext) (svc.SpectateLobbySnapshot, error)
 	return s.SpectateLobby.Load(func() (svc.SpectateLobbySnapshot, error) { return loadSpectateLobby(s) })
 }
 
-// loadSpectateLobby 回源:活跃集合开局最晚的前 spectateLobbyActiveMax 条与赛事局索引未到期的前 spectateLobbyFeaturedMax 条,
-// 各是 16 个桶在一个 pipeline 里读完再合并。活跃集合读失败整个列表失败(不能把故障伪装成「没有可观战的战斗」);
-// 赛事局读失败只记日志,赛事局排序只是展示。回源由同一时刻的多个请求共用,不挂在其中某一个请求的 ctx 上。
+// loadSpectateLobby 回源:活跃集合开局最晚的前 spectateLobbyActiveMax 条、赛事局索引未到期的前 spectateLobbyFeaturedMax 条
+// 与高段排位直播索引前 spectateLobbyRankedMax 条,各是 16 个桶在一个 pipeline 里读完再合并。活跃集合读失败整个列表失败;
+// 赛事局与高段排位索引读失败只记日志,不拖垮普通观战列表。回源由同一时刻的多个请求共用,不挂在其中某一个请求的 ctx 上。
 func loadSpectateLobby(s *svc.ServiceContext) (svc.SpectateLobbySnapshot, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), spectateRedisOpTimeout)
 	defer cancel()
@@ -154,7 +207,11 @@ func loadSpectateLobby(s *svc.ServiceContext) (svc.SpectateLobbySnapshot, error)
 	if err != nil {
 		logx.Errorf("[spectate] Failed to read featured index: %v", err)
 	}
-	return svc.SpectateLobbySnapshot{Featured: featured, Active: active}, nil
+	ranked, err := spectateRankedIndex.top(ctx, s.MatchRedis, spectateLobbyRankedMax)
+	if err != nil {
+		logx.Errorf("[spectate] Failed to read ranked spectator index: %v", err)
+	}
+	return svc.SpectateLobbySnapshot{Featured: featured, Ranked: ranked, Active: active}, nil
 }
 
 // watchableSummary 读一场的摘要;不能列出时返回 nil,并按原因清理索引:成局不存在或终局已落定即残留,这场的观战数据一起删;

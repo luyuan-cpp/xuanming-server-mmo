@@ -1,7 +1,10 @@
 package authority
 
 import (
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 	"match/internal/ranked"
@@ -169,4 +172,139 @@ func TestRankedV6RivalryAndFeaturedBuildHelpers(t *testing.T) {
 
 	emptyKey, _, _ := canonicalBuildKey(0, 0, nil)
 	require.Empty(t, emptyKey)
+}
+
+func TestRankedFeaturedCacheSingleFlightAndSeasonInvalidation(t *testing.T) {
+	nowTime := time.Unix(1_700_000_000, 0)
+	cache := rankedFeaturedCache{nowFn: func() time.Time { return nowTime }}
+
+	var fetches atomic.Int32
+	gate := make(chan struct{})
+	fetch := func(season uint32) ([]*pb.RankedFeaturedBuildView, error) {
+		fetches.Add(1)
+		<-gate
+		return []*pb.RankedFeaturedBuildView{
+			{BuildKey: "101:3:1001", SeasonSealId: 101, FeaturedBattleId: uint64(season) * 100, Wins: 5},
+		}, nil
+	}
+
+	// 8 个并发请求落在同一缓存失效窗口时由 SingleFlight 合并为 1 次回源。
+	var wg sync.WaitGroup
+	results := make([][]*pb.RankedFeaturedBuildView, 8)
+	for i := range results {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			got, err := cache.Load(1, 5, func() ([]*pb.RankedFeaturedBuildView, error) { return fetch(1) })
+			require.NoError(t, err)
+			results[idx] = got
+		}(i)
+	}
+	close(gate)
+	wg.Wait()
+	require.Equal(t, int32(1), fetches.Load(), "并发请求必须由 SingleFlight 合并为 1 次回源")
+	require.Len(t, results[0], 1)
+	// 调用方修改返回切片元素不得污染缓存副本。
+	results[0][0].Wins = 999
+	cached, err := cache.Load(1, 5, func() ([]*pb.RankedFeaturedBuildView, error) {
+		fetches.Add(1)
+		return nil, nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, int32(1), fetches.Load(), "TTL 内命中缓存不回源")
+	require.Equal(t, uint32(5), cached[0].Wins, "缓存深拷贝必须隔离调用方篡改")
+
+	// 切换赛季立即失效重查，不跨季复用旧数据。
+	s2, err := cache.Load(2, 5, func() ([]*pb.RankedFeaturedBuildView, error) {
+		fetches.Add(1)
+		return []*pb.RankedFeaturedBuildView{{BuildKey: "201:4:2002", FeaturedBattleId: 200}}, nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, int32(2), fetches.Load())
+	require.Equal(t, uint64(200), s2[0].FeaturedBattleId)
+
+	// 超过 5 秒 TTL 自动过期刷新；显式 Invalidate 也立即失效。
+	nowTime = nowTime.Add(featuredBuildsCacheTTL)
+	_, err = cache.Load(2, 5, func() ([]*pb.RankedFeaturedBuildView, error) {
+		fetches.Add(1)
+		return []*pb.RankedFeaturedBuildView{{BuildKey: "201:4:2002", FeaturedBattleId: 201}}, nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, int32(3), fetches.Load())
+
+	cache.Invalidate()
+	_, err = cache.Load(2, 5, func() ([]*pb.RankedFeaturedBuildView, error) {
+		fetches.Add(1)
+		return []*pb.RankedFeaturedBuildView{{BuildKey: "201:4:2002", FeaturedBattleId: 202}}, nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, int32(4), fetches.Load())
+}
+
+func TestCollectFeaturedBuildDeltaDeterministicAggregation(t *testing.T) {
+	deltas := make(map[string]*featuredBuildMatchDelta)
+	stWinnerHigh := &battlepb.BattleSettlementData{
+		PlayerDisplayName: "高段甲",
+		FinalSeasonSealId: 101,
+		StarterPetTableId: 3,
+		CoreSkillIds:      []uint32{1002, 1001},
+	}
+	stWinnerTieLowerID := &battlepb.BattleSettlementData{
+		PlayerDisplayName: "同分乙",
+		FinalSeasonSealId: 101,
+		StarterPetTableId: 3,
+		CoreSkillIds:      []uint32{1001, 1002},
+	}
+	stLoser := &battlepb.BattleSettlementData{
+		PlayerDisplayName: "败者丙",
+		FinalSeasonSealId: 101,
+		StarterPetTableId: 3,
+		CoreSkillIds:      []uint32{1001, 1002},
+	}
+	collectFeaturedBuildDelta(deltas, 152000, 200, stWinnerHigh, 175000, true)
+	collectFeaturedBuildDelta(deltas, 152000, 100, stWinnerTieLowerID, 175000, true)
+	collectFeaturedBuildDelta(deltas, 152000, 300, stLoser, 180000, false)
+
+	require.Len(t, deltas, 1, "同局乱序同套配招必须合并为单个 build_key 避免重复加锁")
+	d := deltas["101:3:1001,1002"]
+	require.NotNil(t, d)
+	require.Equal(t, uint32(3), d.appearances)
+	require.Equal(t, uint32(2), d.wins)
+	require.Equal(t, uint32(2), d.highTierWins)
+	require.True(t, d.hasWinner)
+	require.Equal(t, uint64(100), d.bestWinnerPlayerID, "同分胜者按较小 player_id 确定性决胜")
+	require.Equal(t, "同分乙", d.bestWinnerName)
+}
+
+func TestIsEligibleRankedRematchFormation(t *testing.T) {
+	valid := &pb.MatchFormationRecord{
+		BattleId:       9001,
+		Mode:           uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM),
+		RankedSeasonId: 1,
+		State:          4,
+		Members: []*pb.MatchFormationMember{
+			{PlayerId: 101, TeamIndex: 0},
+			{PlayerId: 202, TeamIndex: 1},
+		},
+	}
+	require.True(t, isEligibleRankedRematchFormation(valid, 101, 202))
+	require.True(t, isEligibleRankedRematchFormation(valid, 202, 101))
+	require.False(t, isEligibleRankedRematchFormation(valid, 101, 303), "陌生人不得伪造再战")
+	require.False(t, isEligibleRankedRematchFormation(nil, 101, 202))
+
+	aborted := proto.Clone(valid).(*pb.MatchFormationRecord)
+	aborted.State = 5
+	require.False(t, isEligibleRankedRematchFormation(aborted, 101, 202), "作废局不得发起不服再战")
+
+	unranked := proto.Clone(valid).(*pb.MatchFormationRecord)
+	unranked.RankedSeasonId = 0
+	require.False(t, isEligibleRankedRematchFormation(unranked, 101, 202), "非正式排位不得发起不服再战")
+
+	sameTeam := proto.Clone(valid).(*pb.MatchFormationRecord)
+	sameTeam.Members[1].TeamIndex = 0
+	require.False(t, isEligibleRankedRematchFormation(sameTeam, 101, 202), "同队成员不得发起不服再战")
+
+	team2v2 := proto.Clone(valid).(*pb.MatchFormationRecord)
+	team2v2.Members = append(team2v2.Members, &pb.MatchFormationMember{PlayerId: 303, TeamIndex: 0}, &pb.MatchFormationMember{PlayerId: 404, TeamIndex: 1})
+	require.False(t, isEligibleRankedRematchFormation(team2v2, 101, 202), "非 1V1 不得发起 1V1 不服再战")
 }

@@ -163,6 +163,11 @@
   5. `build\cpp\tests\bag_test.exe --gtest_filter=PlayerJianghuTest.*:BattleSilverFeeReviewTest.*:BattleItemHoldTest.*:BattleItemHoldRules.*:BattleFreezeHold*:PlayerItemGainBlockTest.*:PersistRoundTripTest.*:PlayerFeaturePersistence*` 全绿（新增 `PlayerJianghuTest.SilverWritPendingForAnotherBattleRejectsTheNewPreparationWithoutTouchingTheMarker`、`PlayerJianghuTest.SilverRefundKeepsTheMarkerWhenTheCreditFailsOrThePlayerIsNotMutable`、`PlayerJianghuTest.GainBlockDoesNotStopTheSilverRefund`、`BattleSilverFeeReviewTest.*` 六个；改过 `PlayerJianghuTest.SilverWritDebitAndCancelRefund`、`PlayerJianghuTest.VoidAndZeroRoundRefundPendingSilverFeeOnce`）；再跑完整 `bag_test.exe`，`currency_test.exe` 与 `cross_zone_test.exe` 不回归。
   6. 批 W 与本批都过之后跑 robot 冒烟：普通战书成局、成局失败取消、VOID 三种，核对每局 500 银两恰好扣一次，并恰好退一次或被结算消耗一次。
 - **剩余与取舍**：旧局取消丢失时，玩家要等旧局复核退款（约旧局截止 + 120 秒，match 不可用更久）才能再开普通生死状，金帖不受影响；超期每 10 分钟一行 ERROR `metric=jianghu_duel_fee_overdue`，没加告警规则；资格预检 `CheckJianghuDuelEligibility` 不判旧局未结清，要到备战时才拒；过户仍清待退标记、不退（沿用原策略）；合并复核今天不会真的合并（普通战书局没有道具预留），是防以后两条路互顶；`PrepareBattle` 把复核时刻传给 `CommitPrepareSilverFee` 这一处没有直接单测；`ConsumePendingSilverFee` 若判反方向会少退 500，只有 ERROR 日志。
+- **复核（2026-11-26 晚，会话「交接单里的代码改动清零与方案入档」，Opus 5.5，只读 diff，未编译）：通过，没有要改的。**
+  - 读的是 `git diff 8a6697af0` 的五个源文件与两个未提交测试文件。
+  - 核过的点：退款先入账、成功才清标记，玩家不可改时不动；备战与提交两处都在别的局未结清时拒绝、不覆盖标记；同一 (玩家, 局) 的预留与待退银两只发一次终局查询，ABORT / 没有原件才退，冻结到期那条路（`ResolveExpiredFightingFreeze` 的回答）同样退；作废结算在收件箱同一次存档里退，入账失败标记留着、由复核按 ABORT 重试；`CountsAsGain` 豁免退款；scene 里已经没有读 `skip_jianghu_silver_refund` 的地方。
+  - `python tools/scripts/tests/test_cpp_no_raw_pointer_member.py` 13/13 OK（本会话跑的）。
+  - 剩余与取舍照上一条，不另加。match 侧删邮件退费那一半在批 W 的文件里，随批 W 一起复核。
 
 ### 7.4 修复代理顺带发现、本批没改的（交「交接单里的代码改动清零与方案入档」会话，先复核成立再修）
 
@@ -183,11 +188,41 @@
 - r2-craft#1 悬赏求书**改走 go/trade 托管**，做法见 §3「其余」。
 - **批 V/W/X 之外的 9 条由 Claude（Opus 5.5）写**，不交 Gemini：
   - 包括 r2-mall#1、r2-craft#1 两条 medium，以及 r2-jh#3、r2-craft#2~#4、r2-ops#1、r2-ops#2、r2-oa#1 七条 low。
-  - 由第 4 轮会话在 V/W/X 落完之后接着做，先做两条 medium。
+  - **实际分工（2026-11-26 晚，两个会话确认）**：这 9 条由「交接单里的代码改动清零与方案入档」会话做。它在负责人改定之前，已按两个会话当时的约定派出子代理：r2-mall#1 已完成（未编译），其余 8 条在写，craft#1 先出设计再落码。它写完、复核后把结论、文件和 Gemini 命令填进本节对应的行。第 4 轮会话改做 §7.4 修复代理新发现的 5 条（r2-gw#5～#8、r2-tn#3）。负责人若坚持由第 4 轮会话做这 9 条，那个会话会让子代理停在文件边界，把已改的文件清单交过来。
   - 周额度（全部模型）超过 80% 就停在一批的边界上，把没做的写回本节交 Gemini。
   - Gemini 照常只做生成、编译、测试，并按 §0 先复核 Opus 写的批次。
 - **跑第 5 轮**（`D_ROUNDS[4]` 自由视角三路）：第 4 轮还有新发现，按「连续两轮没有新发现才停」继续。
   - 时机与模型：等第 4 轮的修复（批 V、W、X 与其余各条）落完再开，用最高档模型（12-03 Fable 额度重置后用 Fable 5.2 Max，或现在用 Gemini 4 Neon Extra）。
   - 旧核心机制的网络分区推演并进这一轮一起跑：按「最标准的定」的口径定，负责人没有单独表态。
-  - 去重清单：第 3 轮 104 条、11-19 / 11-20 评审修正 7 条、第 4 轮 17 条，共 128 条。
+  - 去重清单：第 3 轮 104 条、11-19 / 11-20 评审修正 7 条、第 4 轮 17 条、修复代理新发现的 5 条（r2-gw#5～#8、r2-tn#3，见 §7.4），共 133 条。
   - 审计脚本和旧去重清单在旧交接目录，11-20 瘦身时已删，用 `git show ccf2840b2:docs/handoff/data-overwrite-audit-r2-20261019/<文件>` 读。
+
+### 6.1 九条的结论与验证（会话「交接单里的代码改动清零与方案入档」，2026-11-26 晚，Opus 5.5 子代理写、本会话复核；全部未生成、未编译）
+
+大部分代码已被别的会话的快照提交 `a0b3d195e`（22:48）等带进 HEAD；**proto-gen 与导表之前，HEAD 上的 go/match、go/guild、scene 编不过**（新表类型、两条新 tip）。
+
+| 编号 | 结论 | 改了什么 | 设计记录 |
+|---|---|---|---|
+| r2-mall#1 | 成立（门控，缺省不可达） | `java/mall_game` `ManualAdminStore`：RETURN_TO_SELLER 只认付款已撤销；新增 RETRY_DELIVERY（订单 7→1、交付待办回 PENDING，由 trade 重新回执）；网关 `mall-admin.html` 下拉；`rmb_cancel_test.go` 补断言（trade 代码不动） | `jubaozhai-market.md` §16.1；隔离手册 §4.2 / §6 |
+| r2-craft#1 | 成立 | **只交了设计，代码未动**：kind 7 求购单托管，约 45 个文件分 A（trade）→ C（部署）→ B（scene 退役 + 客户端）三批，超 30 个文件，**等负责人批准**；C 批还卡在 trade `AssetOp.Enabled` 全档关闭与 `k8s_deploy.ps1` 正被批 W / §7.4 占用 | `skill-book-wanted-order-trade-escrow.md`（新建）§0～§9 |
+| r2-craft#2 | 成立 | 书架上限 100 本，制书 / 开卷 / 揭榜送书三处副作用前判；Tip.xlsx `//skill_error` 段末加 `SkillBookshelfFull`、`SkillWantedPosterBookshelfFull`（本会话用 `tools/scripts/craft_bookshelf_cap_xlsx_patch.py` 加，幂等，**导表未跑**） | 同上 §10；策划 v2-v5 §2.4 |
+| r2-craft#3 | 成立（只在 `Sweep.Mode=delete` 时可达） | mail 新表 `mail_request_receipt`（判重收据，清理不删），发件先查收据、收据先于邮件行写 | `mail-system.md` §2.4.1 |
+| r2-craft#4 | 成立（只影响口碑展示） | 口碑回账改 Lua 原子取走（HMGET + HDEL）再入账，宗师离开或存盘排不上原样还回 | `craft-proxy-reputation-digest-and-hot-ranking.md` §2.5 |
+| r2-ops#1 | 成立 | `table-bundle rollback` 不加 `-force` 时两个目录必填，并按 `GET /admin/tables` 的生效包与 `-target-digest` 核对 | `config-table-hot-reload.md` §9；手册 §4 |
+| r2-ops#2 | 成立（要写通配规则才触发） | go/db 热关停把 `SavePlayer` 设为受保护方法 | `rpc-kill-switch.md` §8.1 |
+| r2-oa#1 | 成立（缺省不启用） | `Mode=enforce` 启动即拒（fail-closed），shadow 不变；部署配置里没有开 enforce 的地方 | `linearizable-owner-authority.md` §7 |
+| r2-jh#3 | 成立（只影响统计与播报） | 一局一行、不裁剪的入账闸门表：match `match_grudge_applied`、guild `guild_jianghu_grudge_applied`（锁序 23） | `battle-jianghu-grudge-duel-bounty-v1.md` §9 |
+
+**Gemini 验证顺序**（只跑，红了保留首错原文交回 Claude）：
+1. 导表：`dev.bat gen`（会带进别的会话未提交的表改动，开跑前先核 `git status --short data/`）；`skill_error_tip.pb.h` 要有两条新码。
+2. 协议：`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`；`go/proto` 里要有 `MatchGrudgeAppliedRecord`、`GuildJianghuGrudgeAppliedRecord`、`MailRequestReceiptRecord`。
+3. C++：`msbuild` 串行 `/m:1` 依次 `cpp/generated/table/table.vcxproj`、`cpp/generated/proto/proto.vcxproj`、`cpp/libs/services/scene/scene.vcxproj`、`cpp/tests/bag_test/bag_test.vcxproj`，再整解；`bag_test.exe --gtest_filter=PlayerCraftQualityTest.*:EquipCraftQualityRulesTest.*`。
+4. Go（各模块 build / vet / test）：`go/table_sync`（`TestRollbackRequiresBothDirsUnlessForce`、`TestRollbackChecksTheLiveBundleAndTheTarget`、`TestCheckPermanentIDRollbackRejectsDirsThatAreNotTheTwoBundles`）；`go/db`（`TestPlayerStoreKillSwitchKeepsSaveOpenUnderWildcards`）；`go/scene_manager`（`TestInitOwnerAuthority_ConfigValidation`）；`go/match` 真 TiDB（`MATCH_IT_TIDB` + `MATCH_IT_REQUIRE_TIDB=1`，`TestGrudgeLedger_RedeliveryAfterTrimOrTransferStaysDuplicate`）；`go/guild` 真 MySQL（`GUILD_TEST_MYSQL_DSN`，`TestRecordJianghuDuelResultStaysIdempotentAfterRecordTrimmed`、`TestDropListCoversTables`）；`go/mail` 真 TiDB（`MAIL_RANK_TEST_TIDB` + `MAIL_RANK_REQUIRE_TESTS=1`，`TestTiDBResendAfterSweepReturnsOriginalMail`）；`go/trade` 真 TiDB（`COMMERCE_TEST_DSN` + `COMMERCE_REQUIRE_TIDB=1`，`TestTiDBRmbCancelRefusesManualContractAfterPaidDeliveryWentPartial`）。
+5. Java：在 `java/` 下 `mvn -B -pl mall_game -am test "-Dtest=ManualAdminStoreTest" -Dsurefire.failIfNoSpecifiedTests=false`，再全量 `mall_game`、`gateway_node`。
+
+**还没做的**（写回这里，按负责人口径额度过 80% 交 Gemini）：
+- r2-craft#1 落码：等负责人批准约 45 个文件的三批计划。
+- guild 人工终结的条件写补比 `attempts`（r2 早期遗留第 1 条的最后一处）：`go/guild/internal/data/asset_store.go` 约 :259 的 `sqlResolveAssetOpQuiet` 末尾加 `` AND `attempts` = ? ``，约 :739 的 `ResolveManuallyIfQuiet` 实参在 `witness.LastSendMs` 之后加 `witness.Attempts`，同步那两处注释；`go/guild/internal/data/economy_repo_test.go` :1901 的见证字面量必须补 attempts（那条先 Reschedule 过，attempts=1），:1863、:1877 补上保持口径一致，再照 recall 的 `TestRecallStore_ResolveManuallyIfQuiet_MissesWhenOnlyAttemptsMoved` 加一条真库用例。`asset_store.go` 现在被批 V 与 §7.4 占着，交还之后补；补之前第二次读到条件写之间（毫秒级）少一道兜底。
+- 批 V、W 的独立复核：等 §7.4 五条落完、本会话收到通知再做；本会话届时若额度已过 80%，由 Gemini 4 Neon Extra 按 §7.1 / §7.2 与 §7.4 复核（只改错，不扩范围）。批 X 已复核通过（§7.3 末条）。
+- 寄售交付腿部分发放在 trade 侧没有出口（mall#1 残余，补法在 `jubaozhai-market.md` §16.1），要改的 `manual_plan.go` 与双人复核会话的改动冲突，没做。
+- 第 5 轮查找可以顺带看：官方订单的 `CREATE_REFUND` 同样不等 trade kind-1 合同的结局；`applyJianghuDuelResult` 查档案失败按 owner_revision=0 入账、取的是处理时刻的 owner_revision（四条 low 的子代理在禁区文件里看到的，没改）。

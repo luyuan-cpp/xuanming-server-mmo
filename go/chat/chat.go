@@ -268,6 +268,8 @@ func runChat(c config.Config) (runErr error) {
 	shutdown.Unregister = nr.Close
 	nr.KeepAlive()
 	ks.AddInstance(nr.NodeUUID) // 认 instance/<本进程 uuid>/ 下的热关停规则
+	// 世界频道平台补审:和 RPC 同时开始写聊天库,停机准入关门后自己停(svc/platform_recheck.go)。
+	svcCtx.StartPlatformRecheck(ctx)
 
 	var prepared func(context.Context) (*serverbase.PreparedPublication, error)
 	if runtime != nil {

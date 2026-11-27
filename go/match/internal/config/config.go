@@ -261,6 +261,11 @@ type GlobalMatchConf struct {
 	// 同样关闭入口并打 ERROR,不拒启。不用库地址作 target:库名固定 mmorpg_match,各环境的 Host 常是同一个 Service DNS,拦不住连错环境。
 	// 不是提交点规则,不进策略指纹。
 	ManualResolutionEnvironment string `json:",optional"`
+	// ManualResolutionAllowUnapproved:为 true 时接受不带双人复核批准记录的 ABORT(docs/design/admin-identity-and-dual-control.md §5.7)。
+	// 只给本机开发:缺省 false,ABORT 必须带后台(java/gm_admin)签发的批准记录(两人不同、发起人就是 operator_name);SHOW / DRY_RUN 不要求。
+	// 打开时启动打一行 ERROR,之后每一次不带记录的 ABORT 都打 ERROR 并计入 match_admin_unapproved_command_total
+	// (告警 MatchAdminCommandUnapproved)。不是提交点规则,不进策略指纹。
+	ManualResolutionAllowUnapproved bool `json:",optional"`
 	// BattlePodNamespace:battle Pod 所在的 K8s 命名空间(2026-11-11,docs/design/battle-instance-loss-early-abort.md §4.2 E3)。
 	// 非空时,判「原执行进程已不在」多一种证据:这个命名空间里已没有任何 Pod 持有原执行实例的 IP。ServiceAccount 要有该命名空间的
 	// pods list 权限(deploy/k8s/manifests/go-svc/match-battle-pod-reader-rbac.yaml,部署脚本在 battle 跑在 K8s 上时渲染)。

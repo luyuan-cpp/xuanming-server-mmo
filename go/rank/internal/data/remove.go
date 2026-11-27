@@ -10,6 +10,10 @@ import (
 	"shared/serviceauth"
 )
 
+// AdminCaller 是后台(java/gm_admin)在 rank 的调用方名(rank.yaml 的 Producers.admin)。它的删除都经双人复核批准
+// (internal/server.admitApproval),所以可以删任意榜上的单个条目(反作弊处置)。
+const AdminCaller = "admin"
+
 func (r *Repo) Remove(ctx context.Context, caller string, in *rankpb.RemoveRankEntryRequest, hide bool) (err error) {
 	operation := metrics.OperationRemove
 	if hide {
@@ -35,7 +39,11 @@ func (r *Repo) Remove(ctx context.Context, caller string, in *rankpb.RemoveRankE
 		if err != nil {
 			return err
 		}
-		if b.Producer != caller {
+		// 开榜方可以删自己榜上的条目、隐藏自己的整代;后台经双人复核可以删任意榜上的单个条目。整代隐藏仍只许开榜方:
+		// 系统开的榜(match 的段位榜、赛季榜)被整代隐藏之后,开榜方的提交会一直失败,这一步要开榜方自己做。
+		// shortcut: 判重键 (board, generation, request_id) 不含调用方,后台的批准号与 match 摘角色用的玩家号理论上可能撞号
+		// (两边都是 63 位打散值,概率可以忽略);真要杜绝就把调用方并进 rank_mutation 的主键。
+		if b.Producer != caller && (hide || caller != AdminCaller) {
 			return ErrDenied
 		}
 		if b.Generation != in.Generation {

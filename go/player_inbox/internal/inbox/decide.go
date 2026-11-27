@@ -361,9 +361,9 @@ func voidOutcomeOf(action voidAction, state inboxpb.PlayerInboxItemState) voidOu
 
 // auditRowFor 组出要写的一整行审计(评审 L9)。条目终态行 30 天后物理删除、审计行永不删除,所以审计要能独自
 // 回答「做了什么」:
-//   - 身份(player_id / domain / seq)、动作、「谁、为什么」(operator / peer_addr / reason / created_ms)
-//     与 void_reason 取调用方 a;void_reason 取请求的原因而不是条目列 —— 挂指令时条目列是在同一事务里刚改的,
-//     调用方手里的条目快照可能还是旧值;
+//   - 身份(player_id / domain / seq)、动作、「谁、为什么」(operator / peer_addr / reason / created_ms)、
+//     双人复核批准记录(approval_id / approver)与 void_reason 取调用方 a;void_reason 取请求的原因而不是条目列 ——
+//     挂指令时条目列是在同一事务里刚改的,调用方手里的条目快照可能还是旧值;
 //   - msg_type / request_id / issued_at_ms / content_sha256 / payload 一律取自条目行 item,a 里的同名字段被忽略:
 //     条目内容入箱后不再改,只认这一个来源(DRY),审计记下的就是实际投递 / 作废的那一份字节;
 //   - shard 按 player_id 重算(同 InsertAudit 原口径)。
@@ -401,6 +401,8 @@ func auditRowFor(item *inboxpb.PlayerInboxItemRow, a *inboxpb.PlayerInboxAudit) 
 		ContentSha256: digest,
 		Payload:       payload,
 		VoidReason:    a.GetVoidReason(),
+		ApprovalId:    a.GetApprovalId(),
+		Approver:      a.GetApprover(),
 	}, nil
 }
 

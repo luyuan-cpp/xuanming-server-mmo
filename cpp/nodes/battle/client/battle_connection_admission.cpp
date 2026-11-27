@@ -97,7 +97,8 @@ void Admission::CollectMetrics(prometheus_text::Writer &writer, const size_t cur
     const RateLimit &limit = rateGate.Limit();
 
     writer.BeginFamily("battle_connections_current",
-                       "Client direct-connection sessions currently held by this battle node, one per admitted connection.",
+                       "Client direct connections currently held by this battle node: sessions (ticket verified or probing) plus "
+                       "connections that have not authenticated yet. The connection cap applies to this sum.",
                        MetricType::kGauge);
     writer.Sample({}, currentConnections);
 
@@ -113,7 +114,8 @@ void Admission::CollectMetrics(prometheus_text::Writer &writer, const size_t cur
     writer.Sample({}, unauthenticatedConnections);
 
     writer.BeginFamily("battle_accepted_total",
-                       "Direct connections admitted since process start (a session was created). "
+                       "Direct connections admitted since process start (tracked as unauthenticated until the ticket handshake "
+                       "or a network-probe grant). "
                        "rate() of this series is the accept rate.",
                        MetricType::kCounter);
     writer.Sample({}, counters.accepted);

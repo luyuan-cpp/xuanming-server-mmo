@@ -21,57 +21,64 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MatchService_GetNetworkProbePlan_FullMethodName          = "/match.MatchService/GetNetworkProbePlan"
-	MatchService_CommitNetworkProbe_FullMethodName           = "/match.MatchService/CommitNetworkProbe"
-	MatchService_JoinQueue_FullMethodName                    = "/match.MatchService/JoinQueue"
-	MatchService_CancelQueue_FullMethodName                  = "/match.MatchService/CancelQueue"
-	MatchService_GetQueueStatus_FullMethodName               = "/match.MatchService/GetQueueStatus"
-	MatchService_ChallengePlayer_FullMethodName              = "/match.MatchService/ChallengePlayer"
-	MatchService_RespondChallenge_FullMethodName             = "/match.MatchService/RespondChallenge"
-	MatchService_NotifyChallengeInvite_FullMethodName        = "/match.MatchService/NotifyChallengeInvite"
-	MatchService_NotifyChallengeResult_FullMethodName        = "/match.MatchService/NotifyChallengeResult"
-	MatchService_WatchBattle_FullMethodName                  = "/match.MatchService/WatchBattle"
-	MatchService_RequestBattleTicket_FullMethodName          = "/match.MatchService/RequestBattleTicket"
-	MatchService_ListWatchableBattles_FullMethodName         = "/match.MatchService/ListWatchableBattles"
-	MatchService_ListBattleReports_FullMethodName            = "/match.MatchService/ListBattleReports"
-	MatchService_GetBattleReport_FullMethodName              = "/match.MatchService/GetBattleReport"
-	MatchService_ListBattleScripts_FullMethodName            = "/match.MatchService/ListBattleScripts"
-	MatchService_SubmitBattleScript_FullMethodName           = "/match.MatchService/SubmitBattleScript"
-	MatchService_DeleteBattleScript_FullMethodName           = "/match.MatchService/DeleteBattleScript"
-	MatchService_SetBattleScriptLoadout_FullMethodName       = "/match.MatchService/SetBattleScriptLoadout"
-	MatchService_GetRankedProfile_FullMethodName             = "/match.MatchService/GetRankedProfile"
-	MatchService_SaveRankedPreset_FullMethodName             = "/match.MatchService/SaveRankedPreset"
-	MatchService_UpdateRankedCosmetic_FullMethodName         = "/match.MatchService/UpdateRankedCosmetic"
-	MatchService_GetRankedBattleResult_FullMethodName        = "/match.MatchService/GetRankedBattleResult"
-	MatchService_GetTournamentOverview_FullMethodName        = "/match.MatchService/GetTournamentOverview"
-	MatchService_CreateTournamentSquad_FullMethodName        = "/match.MatchService/CreateTournamentSquad"
-	MatchService_InviteTournamentMember_FullMethodName       = "/match.MatchService/InviteTournamentMember"
-	MatchService_RespondTournamentInvite_FullMethodName      = "/match.MatchService/RespondTournamentInvite"
-	MatchService_LeaveTournamentSquad_FullMethodName         = "/match.MatchService/LeaveTournamentSquad"
-	MatchService_UpdateTournamentLineup_FullMethodName       = "/match.MatchService/UpdateTournamentLineup"
-	MatchService_RegisterTournamentSquad_FullMethodName      = "/match.MatchService/RegisterTournamentSquad"
-	MatchService_ListTournamentStandings_FullMethodName      = "/match.MatchService/ListTournamentStandings"
-	MatchService_StartTournamentMatch_FullMethodName         = "/match.MatchService/StartTournamentMatch"
-	MatchService_CheerTournamentSquad_FullMethodName         = "/match.MatchService/CheerTournamentSquad"
-	MatchService_ClaimTournamentReward_FullMethodName        = "/match.MatchService/ClaimTournamentReward"
-	MatchService_SendTournamentSpectateCheer_FullMethodName  = "/match.MatchService/SendTournamentSpectateCheer"
-	MatchService_GetTournamentSpectateCheer_FullMethodName   = "/match.MatchService/GetTournamentSpectateCheer"
-	MatchService_UpdateTournamentSquadEmblem_FullMethodName  = "/match.MatchService/UpdateTournamentSquadEmblem"
-	MatchService_StartTournamentWarmup_FullMethodName        = "/match.MatchService/StartTournamentWarmup"
-	MatchService_PredictTournamentMatch_FullMethodName       = "/match.MatchService/PredictTournamentMatch"
-	MatchService_GetTournamentPredictionBoard_FullMethodName = "/match.MatchService/GetTournamentPredictionBoard"
-	MatchService_BanTournamentLeyline_FullMethodName         = "/match.MatchService/BanTournamentLeyline"
-	MatchService_GetTournamentHighlights_FullMethodName      = "/match.MatchService/GetTournamentHighlights"
-	MatchService_CreateJianghuDuelInvite_FullMethodName      = "/match.MatchService/CreateJianghuDuelInvite"
-	MatchService_ConfirmJianghuDuelMember_FullMethodName     = "/match.MatchService/ConfirmJianghuDuelMember"
-	MatchService_RespondJianghuDuelInvite_FullMethodName     = "/match.MatchService/RespondJianghuDuelInvite"
-	MatchService_ListJianghuGrudges_FullMethodName           = "/match.MatchService/ListJianghuGrudges"
-	MatchService_DismissJianghuGrudge_FullMethodName         = "/match.MatchService/DismissJianghuGrudge"
-	MatchService_NotifyJianghuDuelInvite_FullMethodName      = "/match.MatchService/NotifyJianghuDuelInvite"
-	MatchService_NotifyJianghuDuelStatus_FullMethodName      = "/match.MatchService/NotifyJianghuDuelStatus"
-	MatchService_CreateTrialChallengeCard_FullMethodName     = "/match.MatchService/CreateTrialChallengeCard"
-	MatchService_GetTrialChallengeCard_FullMethodName        = "/match.MatchService/GetTrialChallengeCard"
-	MatchService_GetSharedTrialReplay_FullMethodName         = "/match.MatchService/GetSharedTrialReplay"
+	MatchService_GetNetworkProbePlan_FullMethodName             = "/match.MatchService/GetNetworkProbePlan"
+	MatchService_CommitNetworkProbe_FullMethodName              = "/match.MatchService/CommitNetworkProbe"
+	MatchService_JoinQueue_FullMethodName                       = "/match.MatchService/JoinQueue"
+	MatchService_CancelQueue_FullMethodName                     = "/match.MatchService/CancelQueue"
+	MatchService_GetQueueStatus_FullMethodName                  = "/match.MatchService/GetQueueStatus"
+	MatchService_ChallengePlayer_FullMethodName                 = "/match.MatchService/ChallengePlayer"
+	MatchService_RespondChallenge_FullMethodName                = "/match.MatchService/RespondChallenge"
+	MatchService_NotifyChallengeInvite_FullMethodName           = "/match.MatchService/NotifyChallengeInvite"
+	MatchService_NotifyChallengeResult_FullMethodName           = "/match.MatchService/NotifyChallengeResult"
+	MatchService_WatchBattle_FullMethodName                     = "/match.MatchService/WatchBattle"
+	MatchService_RequestBattleTicket_FullMethodName             = "/match.MatchService/RequestBattleTicket"
+	MatchService_ListWatchableBattles_FullMethodName            = "/match.MatchService/ListWatchableBattles"
+	MatchService_ListBattleReports_FullMethodName               = "/match.MatchService/ListBattleReports"
+	MatchService_GetBattleReport_FullMethodName                 = "/match.MatchService/GetBattleReport"
+	MatchService_ListBattleScripts_FullMethodName               = "/match.MatchService/ListBattleScripts"
+	MatchService_SubmitBattleScript_FullMethodName              = "/match.MatchService/SubmitBattleScript"
+	MatchService_DeleteBattleScript_FullMethodName              = "/match.MatchService/DeleteBattleScript"
+	MatchService_SetBattleScriptLoadout_FullMethodName          = "/match.MatchService/SetBattleScriptLoadout"
+	MatchService_GetRankedProfile_FullMethodName                = "/match.MatchService/GetRankedProfile"
+	MatchService_SaveRankedPreset_FullMethodName                = "/match.MatchService/SaveRankedPreset"
+	MatchService_UpdateRankedCosmetic_FullMethodName            = "/match.MatchService/UpdateRankedCosmetic"
+	MatchService_GetRankedBattleResult_FullMethodName           = "/match.MatchService/GetRankedBattleResult"
+	MatchService_GetTournamentOverview_FullMethodName           = "/match.MatchService/GetTournamentOverview"
+	MatchService_CreateTournamentSquad_FullMethodName           = "/match.MatchService/CreateTournamentSquad"
+	MatchService_InviteTournamentMember_FullMethodName          = "/match.MatchService/InviteTournamentMember"
+	MatchService_RespondTournamentInvite_FullMethodName         = "/match.MatchService/RespondTournamentInvite"
+	MatchService_LeaveTournamentSquad_FullMethodName            = "/match.MatchService/LeaveTournamentSquad"
+	MatchService_UpdateTournamentLineup_FullMethodName          = "/match.MatchService/UpdateTournamentLineup"
+	MatchService_RegisterTournamentSquad_FullMethodName         = "/match.MatchService/RegisterTournamentSquad"
+	MatchService_ListTournamentStandings_FullMethodName         = "/match.MatchService/ListTournamentStandings"
+	MatchService_StartTournamentMatch_FullMethodName            = "/match.MatchService/StartTournamentMatch"
+	MatchService_CheerTournamentSquad_FullMethodName            = "/match.MatchService/CheerTournamentSquad"
+	MatchService_ClaimTournamentReward_FullMethodName           = "/match.MatchService/ClaimTournamentReward"
+	MatchService_SendTournamentSpectateCheer_FullMethodName     = "/match.MatchService/SendTournamentSpectateCheer"
+	MatchService_GetTournamentSpectateCheer_FullMethodName      = "/match.MatchService/GetTournamentSpectateCheer"
+	MatchService_UpdateTournamentSquadEmblem_FullMethodName     = "/match.MatchService/UpdateTournamentSquadEmblem"
+	MatchService_StartTournamentWarmup_FullMethodName           = "/match.MatchService/StartTournamentWarmup"
+	MatchService_PredictTournamentMatch_FullMethodName          = "/match.MatchService/PredictTournamentMatch"
+	MatchService_GetTournamentPredictionBoard_FullMethodName    = "/match.MatchService/GetTournamentPredictionBoard"
+	MatchService_BanTournamentLeyline_FullMethodName            = "/match.MatchService/BanTournamentLeyline"
+	MatchService_GetTournamentHighlights_FullMethodName         = "/match.MatchService/GetTournamentHighlights"
+	MatchService_CreateJianghuDuelInvite_FullMethodName         = "/match.MatchService/CreateJianghuDuelInvite"
+	MatchService_ConfirmJianghuDuelMember_FullMethodName        = "/match.MatchService/ConfirmJianghuDuelMember"
+	MatchService_RespondJianghuDuelInvite_FullMethodName        = "/match.MatchService/RespondJianghuDuelInvite"
+	MatchService_ListJianghuGrudges_FullMethodName              = "/match.MatchService/ListJianghuGrudges"
+	MatchService_DismissJianghuGrudge_FullMethodName            = "/match.MatchService/DismissJianghuGrudge"
+	MatchService_NotifyJianghuDuelInvite_FullMethodName         = "/match.MatchService/NotifyJianghuDuelInvite"
+	MatchService_NotifyJianghuDuelStatus_FullMethodName         = "/match.MatchService/NotifyJianghuDuelStatus"
+	MatchService_CreateTrialChallengeCard_FullMethodName        = "/match.MatchService/CreateTrialChallengeCard"
+	MatchService_GetTrialChallengeCard_FullMethodName           = "/match.MatchService/GetTrialChallengeCard"
+	MatchService_GetSharedTrialReplay_FullMethodName            = "/match.MatchService/GetSharedTrialReplay"
+	MatchService_ListTacticalPuzzles_FullMethodName             = "/match.MatchService/ListTacticalPuzzles"
+	MatchService_GetTacticalPuzzle_FullMethodName               = "/match.MatchService/GetTacticalPuzzle"
+	MatchService_SaveTacticalPuzzleDraft_FullMethodName         = "/match.MatchService/SaveTacticalPuzzleDraft"
+	MatchService_DeleteTacticalPuzzle_FullMethodName            = "/match.MatchService/DeleteTacticalPuzzle"
+	MatchService_StartTacticalPuzzleBattle_FullMethodName       = "/match.MatchService/StartTacticalPuzzleBattle"
+	MatchService_LikeTacticalPuzzle_FullMethodName              = "/match.MatchService/LikeTacticalPuzzle"
+	MatchService_GetTacticalPuzzleSolutionReplay_FullMethodName = "/match.MatchService/GetTacticalPuzzleSolutionReplay"
 )
 
 // MatchServiceClient is the client API for MatchService service.
@@ -165,6 +172,15 @@ type MatchServiceClient interface {
 	CreateTrialChallengeCard(ctx context.Context, in *CreateTrialChallengeCardRequest, opts ...grpc.CallOption) (*CreateTrialChallengeCardResponse, error)
 	GetTrialChallengeCard(ctx context.Context, in *GetTrialChallengeCardRequest, opts ...grpc.CallOption) (*GetTrialChallengeCardResponse, error)
 	GetSharedTrialReplay(ctx context.Context, in *GetSharedTrialReplayRequest, opts ...grpc.CallOption) (*GetSharedTrialReplayResponse, error)
+	// ---- 万象残局坊（UGC 回合解谜工坊 V1，docs/planning/tactical-puzzle-workshop-v1.md）----
+	// 均为只认会话本人；出题文本必经 ContentGuard 拦截；自证通关后钉住标准解回放；0 数值通胀、0 日常打卡。
+	ListTacticalPuzzles(ctx context.Context, in *ListTacticalPuzzlesRequest, opts ...grpc.CallOption) (*ListTacticalPuzzlesResponse, error)
+	GetTacticalPuzzle(ctx context.Context, in *GetTacticalPuzzleRequest, opts ...grpc.CallOption) (*GetTacticalPuzzleResponse, error)
+	SaveTacticalPuzzleDraft(ctx context.Context, in *SaveTacticalPuzzleDraftRequest, opts ...grpc.CallOption) (*SaveTacticalPuzzleDraftResponse, error)
+	DeleteTacticalPuzzle(ctx context.Context, in *DeleteTacticalPuzzleRequest, opts ...grpc.CallOption) (*DeleteTacticalPuzzleResponse, error)
+	StartTacticalPuzzleBattle(ctx context.Context, in *StartTacticalPuzzleBattleRequest, opts ...grpc.CallOption) (*StartTacticalPuzzleBattleResponse, error)
+	LikeTacticalPuzzle(ctx context.Context, in *LikeTacticalPuzzleRequest, opts ...grpc.CallOption) (*LikeTacticalPuzzleResponse, error)
+	GetTacticalPuzzleSolutionReplay(ctx context.Context, in *GetTacticalPuzzleSolutionReplayRequest, opts ...grpc.CallOption) (*GetTacticalPuzzleSolutionReplayResponse, error)
 }
 
 type matchServiceClient struct {
@@ -685,6 +701,76 @@ func (c *matchServiceClient) GetSharedTrialReplay(ctx context.Context, in *GetSh
 	return out, nil
 }
 
+func (c *matchServiceClient) ListTacticalPuzzles(ctx context.Context, in *ListTacticalPuzzlesRequest, opts ...grpc.CallOption) (*ListTacticalPuzzlesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListTacticalPuzzlesResponse)
+	err := c.cc.Invoke(ctx, MatchService_ListTacticalPuzzles_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) GetTacticalPuzzle(ctx context.Context, in *GetTacticalPuzzleRequest, opts ...grpc.CallOption) (*GetTacticalPuzzleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetTacticalPuzzleResponse)
+	err := c.cc.Invoke(ctx, MatchService_GetTacticalPuzzle_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) SaveTacticalPuzzleDraft(ctx context.Context, in *SaveTacticalPuzzleDraftRequest, opts ...grpc.CallOption) (*SaveTacticalPuzzleDraftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SaveTacticalPuzzleDraftResponse)
+	err := c.cc.Invoke(ctx, MatchService_SaveTacticalPuzzleDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) DeleteTacticalPuzzle(ctx context.Context, in *DeleteTacticalPuzzleRequest, opts ...grpc.CallOption) (*DeleteTacticalPuzzleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteTacticalPuzzleResponse)
+	err := c.cc.Invoke(ctx, MatchService_DeleteTacticalPuzzle_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) StartTacticalPuzzleBattle(ctx context.Context, in *StartTacticalPuzzleBattleRequest, opts ...grpc.CallOption) (*StartTacticalPuzzleBattleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StartTacticalPuzzleBattleResponse)
+	err := c.cc.Invoke(ctx, MatchService_StartTacticalPuzzleBattle_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) LikeTacticalPuzzle(ctx context.Context, in *LikeTacticalPuzzleRequest, opts ...grpc.CallOption) (*LikeTacticalPuzzleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LikeTacticalPuzzleResponse)
+	err := c.cc.Invoke(ctx, MatchService_LikeTacticalPuzzle_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) GetTacticalPuzzleSolutionReplay(ctx context.Context, in *GetTacticalPuzzleSolutionReplayRequest, opts ...grpc.CallOption) (*GetTacticalPuzzleSolutionReplayResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetTacticalPuzzleSolutionReplayResponse)
+	err := c.cc.Invoke(ctx, MatchService_GetTacticalPuzzleSolutionReplay_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MatchServiceServer is the server API for MatchService service.
 // All implementations must embed UnimplementedMatchServiceServer
 // for forward compatibility.
@@ -776,6 +862,15 @@ type MatchServiceServer interface {
 	CreateTrialChallengeCard(context.Context, *CreateTrialChallengeCardRequest) (*CreateTrialChallengeCardResponse, error)
 	GetTrialChallengeCard(context.Context, *GetTrialChallengeCardRequest) (*GetTrialChallengeCardResponse, error)
 	GetSharedTrialReplay(context.Context, *GetSharedTrialReplayRequest) (*GetSharedTrialReplayResponse, error)
+	// ---- 万象残局坊（UGC 回合解谜工坊 V1，docs/planning/tactical-puzzle-workshop-v1.md）----
+	// 均为只认会话本人；出题文本必经 ContentGuard 拦截；自证通关后钉住标准解回放；0 数值通胀、0 日常打卡。
+	ListTacticalPuzzles(context.Context, *ListTacticalPuzzlesRequest) (*ListTacticalPuzzlesResponse, error)
+	GetTacticalPuzzle(context.Context, *GetTacticalPuzzleRequest) (*GetTacticalPuzzleResponse, error)
+	SaveTacticalPuzzleDraft(context.Context, *SaveTacticalPuzzleDraftRequest) (*SaveTacticalPuzzleDraftResponse, error)
+	DeleteTacticalPuzzle(context.Context, *DeleteTacticalPuzzleRequest) (*DeleteTacticalPuzzleResponse, error)
+	StartTacticalPuzzleBattle(context.Context, *StartTacticalPuzzleBattleRequest) (*StartTacticalPuzzleBattleResponse, error)
+	LikeTacticalPuzzle(context.Context, *LikeTacticalPuzzleRequest) (*LikeTacticalPuzzleResponse, error)
+	GetTacticalPuzzleSolutionReplay(context.Context, *GetTacticalPuzzleSolutionReplayRequest) (*GetTacticalPuzzleSolutionReplayResponse, error)
 	mustEmbedUnimplementedMatchServiceServer()
 }
 
@@ -938,6 +1033,27 @@ func (UnimplementedMatchServiceServer) GetTrialChallengeCard(context.Context, *G
 }
 func (UnimplementedMatchServiceServer) GetSharedTrialReplay(context.Context, *GetSharedTrialReplayRequest) (*GetSharedTrialReplayResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSharedTrialReplay not implemented")
+}
+func (UnimplementedMatchServiceServer) ListTacticalPuzzles(context.Context, *ListTacticalPuzzlesRequest) (*ListTacticalPuzzlesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListTacticalPuzzles not implemented")
+}
+func (UnimplementedMatchServiceServer) GetTacticalPuzzle(context.Context, *GetTacticalPuzzleRequest) (*GetTacticalPuzzleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetTacticalPuzzle not implemented")
+}
+func (UnimplementedMatchServiceServer) SaveTacticalPuzzleDraft(context.Context, *SaveTacticalPuzzleDraftRequest) (*SaveTacticalPuzzleDraftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveTacticalPuzzleDraft not implemented")
+}
+func (UnimplementedMatchServiceServer) DeleteTacticalPuzzle(context.Context, *DeleteTacticalPuzzleRequest) (*DeleteTacticalPuzzleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteTacticalPuzzle not implemented")
+}
+func (UnimplementedMatchServiceServer) StartTacticalPuzzleBattle(context.Context, *StartTacticalPuzzleBattleRequest) (*StartTacticalPuzzleBattleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StartTacticalPuzzleBattle not implemented")
+}
+func (UnimplementedMatchServiceServer) LikeTacticalPuzzle(context.Context, *LikeTacticalPuzzleRequest) (*LikeTacticalPuzzleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LikeTacticalPuzzle not implemented")
+}
+func (UnimplementedMatchServiceServer) GetTacticalPuzzleSolutionReplay(context.Context, *GetTacticalPuzzleSolutionReplayRequest) (*GetTacticalPuzzleSolutionReplayResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetTacticalPuzzleSolutionReplay not implemented")
 }
 func (UnimplementedMatchServiceServer) mustEmbedUnimplementedMatchServiceServer() {}
 func (UnimplementedMatchServiceServer) testEmbeddedByValue()                      {}
@@ -1878,6 +1994,132 @@ func _MatchService_GetSharedTrialReplay_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MatchService_ListTacticalPuzzles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListTacticalPuzzlesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).ListTacticalPuzzles(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_ListTacticalPuzzles_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).ListTacticalPuzzles(ctx, req.(*ListTacticalPuzzlesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_GetTacticalPuzzle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTacticalPuzzleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).GetTacticalPuzzle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_GetTacticalPuzzle_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).GetTacticalPuzzle(ctx, req.(*GetTacticalPuzzleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_SaveTacticalPuzzleDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveTacticalPuzzleDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).SaveTacticalPuzzleDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_SaveTacticalPuzzleDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).SaveTacticalPuzzleDraft(ctx, req.(*SaveTacticalPuzzleDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_DeleteTacticalPuzzle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteTacticalPuzzleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).DeleteTacticalPuzzle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_DeleteTacticalPuzzle_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).DeleteTacticalPuzzle(ctx, req.(*DeleteTacticalPuzzleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_StartTacticalPuzzleBattle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartTacticalPuzzleBattleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).StartTacticalPuzzleBattle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_StartTacticalPuzzleBattle_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).StartTacticalPuzzleBattle(ctx, req.(*StartTacticalPuzzleBattleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_LikeTacticalPuzzle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LikeTacticalPuzzleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).LikeTacticalPuzzle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_LikeTacticalPuzzle_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).LikeTacticalPuzzle(ctx, req.(*LikeTacticalPuzzleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_GetTacticalPuzzleSolutionReplay_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTacticalPuzzleSolutionReplayRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).GetTacticalPuzzleSolutionReplay(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_GetTacticalPuzzleSolutionReplay_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).GetTacticalPuzzleSolutionReplay(ctx, req.(*GetTacticalPuzzleSolutionReplayRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MatchService_ServiceDesc is the grpc.ServiceDesc for MatchService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2088,6 +2330,34 @@ var MatchService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSharedTrialReplay",
 			Handler:    _MatchService_GetSharedTrialReplay_Handler,
+		},
+		{
+			MethodName: "ListTacticalPuzzles",
+			Handler:    _MatchService_ListTacticalPuzzles_Handler,
+		},
+		{
+			MethodName: "GetTacticalPuzzle",
+			Handler:    _MatchService_GetTacticalPuzzle_Handler,
+		},
+		{
+			MethodName: "SaveTacticalPuzzleDraft",
+			Handler:    _MatchService_SaveTacticalPuzzleDraft_Handler,
+		},
+		{
+			MethodName: "DeleteTacticalPuzzle",
+			Handler:    _MatchService_DeleteTacticalPuzzle_Handler,
+		},
+		{
+			MethodName: "StartTacticalPuzzleBattle",
+			Handler:    _MatchService_StartTacticalPuzzleBattle_Handler,
+		},
+		{
+			MethodName: "LikeTacticalPuzzle",
+			Handler:    _MatchService_LikeTacticalPuzzle_Handler,
+		},
+		{
+			MethodName: "GetTacticalPuzzleSolutionReplay",
+			Handler:    _MatchService_GetTacticalPuzzleSolutionReplay_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

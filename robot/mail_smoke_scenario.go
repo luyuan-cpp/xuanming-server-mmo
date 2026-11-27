@@ -6,7 +6,7 @@ package main
 // (设计 docs/design/mail-system.md §10 ⑦;前置条件写在 etc/mail_smoke.yaml 文件头)。
 //
 //	0. 收件人 R 登 zone_b、旁观者 O 登 zone_a(cross_zone=false 时 R 也登 zone_a);跨区时断言两人 gate 地址不同;
-//	1. gRPC 直连 MailAdmin(不带会话 metadata;metadata 带 x-mail-admin-token / x-operator)发三封:
+//	1. gRPC 直连 MailAdmin(不带会话 metadata;请求内带 admin 的 serviceauth 签名与合成的双人复核批准记录)发三封:
 //	   系统邮件 S、给 R 的无附件定向邮件 P、给 R 的带 1 条货币附件的定向邮件 Q(dev 档才允许附件);
 //	   每封用新的 request_id,expire_ms = now + 15min;S 用同一个请求再发一次,必须 duplicated=true 且 id 相同;
 //	2. R 在 push_timeout_ms 内收到 NotifyMailEvent{NEW_MAIL}——**弱断言**,只打印 push_received,不算失败
@@ -261,6 +261,7 @@ func RunMailSmoke(cfg *config.Config) {
 		Title:    "smoke sys " + nonce,
 		Body:     "mail-smoke system mail " + nonce,
 		ExpireMs: expireMs,
+		Approval: mailSmokeApproval(requestBase),
 	}
 	plainReq := &mailpb.SendMailRequest{
 		SenderKind:        1,
@@ -270,6 +271,7 @@ func RunMailSmoke(cfg *config.Config) {
 		Title:    "smoke plain " + nonce,
 		Body:     "mail-smoke personal mail " + nonce,
 		ExpireMs: expireMs,
+		Approval: mailSmokeApproval(requestBase + 1),
 	}
 	attachReq := &mailpb.SendMailRequest{
 		SenderKind:        1,
@@ -282,6 +284,7 @@ func RunMailSmoke(cfg *config.Config) {
 			{CurrencyType: mailSmokeCurrencyType, Amount: mailSmokeCurrencyAmount},
 		}},
 		ExpireMs: expireMs,
+		Approval: mailSmokeApproval(requestBase + 2),
 	}
 
 	r.resetPushes()
@@ -812,8 +815,10 @@ func mailSmokeAdminContext(_ string) (context.Context, context.CancelFunc) {
 // mailSmokeAdminGrpcHint 把直连 MailAdmin 的 gRPC 错误翻成可读原因(不含令牌值)。
 func mailSmokeAdminGrpcHint(err error) string {
 	switch status.Code(err) {
+	case codes.Unauthenticated:
+		return " (the admin signing secret is missing, shorter than 32 bytes or differs from the one the mail process loaded)"
 	case codes.PermissionDenied:
-		return "(令牌没配、不足 32 字节或与 mail 进程不一致 —— mail 启动横幅 mail_admin=disabled 说明 mail 那边没拿到;或调用带上了会话 metadata)"
+		return " (mail refused the dual-control approval record, or the call carried session metadata)"
 	case codes.Unavailable, codes.DeadlineExceeded:
 		return "(mail 未起或 mail_smoke.admin_addr 不可达)"
 	case codes.Unimplemented:
@@ -837,6 +842,19 @@ func mailSmokeAdminTipHint(tip uint32) string {
 		return "(mail 侧存储 / data_service / 号段故障:检查 mmorpg_mail 迁移、data_service BootstrapTags 含 mail 且 id_segment 有 mail 行)"
 	}
 	return ""
+}
+
+// mailSmokeApproval 给 admin 的发件合成一份双人复核批准记录(docs/design/admin-identity-and-dual-control.md §5.5):
+// mail 缺省要求 admin 的发件带它,批准号就是请求号,所以缺省配置下本机冒烟照样能过。这是本机冒烟工具,不代表有人批准过:
+// 持有 admin 密钥的人本来就能伪造批准记录(设计 §6 第 3 条,防线是密钥只挂给后台工作负载)。
+// 请求对象原样复用来做同键重放,批准时刻随它一起固定,请求摘要不变。
+func mailSmokeApproval(requestID uint64) *base.AdminApproval {
+	return &base.AdminApproval{
+		ApprovalId:   strconv.FormatUint(requestID, 10),
+		Proposer:     "robot-proposer",
+		Approver:     "robot-approver",
+		ApprovedAtMs: uint64(time.Now().UnixMilli()),
+	}
 }
 
 // mailSmokeSendSystem 调 MailAdmin.SendSystemMail,受理且 sys_mail_id 非 0 才返回。

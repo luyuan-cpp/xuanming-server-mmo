@@ -608,12 +608,12 @@ constexpr RemoveRankEntryRequest::ParseTableT_ RemoveRankEntryRequest::InternalG
     {
       PROTOBUF_FIELD_OFFSET(RemoveRankEntryRequest, _impl_._has_bits_),
       0, // no _extensions_
-      5, 56,  // max_field_number, fast_idx_mask
+      6, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967264,  // skipmap
+      4294967232,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      5,  // num_field_entries
-      1,  // num_aux_entries
+      6,  // num_field_entries
+      2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -624,46 +624,56 @@ constexpr RemoveRankEntryRequest::ParseTableT_ RemoveRankEntryRequest::InternalG
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint64 board_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RemoveRankEntryRequest, _impl_.board_id_), 1>(),
-       {8, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RemoveRankEntryRequest, _impl_.board_id_), 2>(),
+       {8, 2, 0,
         PROTOBUF_FIELD_OFFSET(RemoveRankEntryRequest, _impl_.board_id_)}},
       // uint64 generation = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RemoveRankEntryRequest, _impl_.generation_), 2>(),
-       {16, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RemoveRankEntryRequest, _impl_.generation_), 3>(),
+       {16, 3, 0,
         PROTOBUF_FIELD_OFFSET(RemoveRankEntryRequest, _impl_.generation_)}},
       // uint64 entity_id = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RemoveRankEntryRequest, _impl_.entity_id_), 3>(),
-       {24, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RemoveRankEntryRequest, _impl_.entity_id_), 4>(),
+       {24, 4, 0,
         PROTOBUF_FIELD_OFFSET(RemoveRankEntryRequest, _impl_.entity_id_)}},
       // uint64 request_id = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RemoveRankEntryRequest, _impl_.request_id_), 4>(),
-       {32, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RemoveRankEntryRequest, _impl_.request_id_), 5>(),
+       {32, 5, 0,
         PROTOBUF_FIELD_OFFSET(RemoveRankEntryRequest, _impl_.request_id_)}},
       // .common.base.ServiceCallAuth auth = 5;
       {::_pbi::TcParser::FastMtS1,
        {42, 0, 0,
         PROTOBUF_FIELD_OFFSET(RemoveRankEntryRequest, _impl_.auth_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // .common.base.AdminApproval approval = 6;
+      {::_pbi::TcParser::FastMtS1,
+       {50, 1, 1,
+        PROTOBUF_FIELD_OFFSET(RemoveRankEntryRequest, _impl_.approval_)}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 board_id = 1;
-      {PROTOBUF_FIELD_OFFSET(RemoveRankEntryRequest, _impl_.board_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(RemoveRankEntryRequest, _impl_.board_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 generation = 2;
-      {PROTOBUF_FIELD_OFFSET(RemoveRankEntryRequest, _impl_.generation_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(RemoveRankEntryRequest, _impl_.generation_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 entity_id = 3;
-      {PROTOBUF_FIELD_OFFSET(RemoveRankEntryRequest, _impl_.entity_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(RemoveRankEntryRequest, _impl_.entity_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 request_id = 4;
-      {PROTOBUF_FIELD_OFFSET(RemoveRankEntryRequest, _impl_.request_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(RemoveRankEntryRequest, _impl_.request_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .common.base.ServiceCallAuth auth = 5;
       {PROTOBUF_FIELD_OFFSET(RemoveRankEntryRequest, _impl_.auth_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .common.base.AdminApproval approval = 6;
+      {PROTOBUF_FIELD_OFFSET(RemoveRankEntryRequest, _impl_.approval_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
         {::_pbi::TcParser::GetTable<::common::base::ServiceCallAuth>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::common::base::ServiceCallAuth_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::common::base::AdminApproval>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::common::base::AdminApproval_globals_},
         #endif
     }},
     {{
@@ -677,6 +687,7 @@ inline constexpr RemoveRankEntryRequest::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
         auth_{nullptr},
+        approval_{nullptr},
         board_id_{::uint64_t{0u}},
         generation_{::uint64_t{0u}},
         entity_id_{::uint64_t{0u}},
@@ -1926,17 +1937,19 @@ const ::uint32_t
         3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::rankpb::RemoveRankEntryRequest, _impl_._has_bits_),
-        8, // hasbit index offset
+        9, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::rankpb::RemoveRankEntryRequest, _impl_.board_id_),
         PROTOBUF_FIELD_OFFSET(::rankpb::RemoveRankEntryRequest, _impl_.generation_),
         PROTOBUF_FIELD_OFFSET(::rankpb::RemoveRankEntryRequest, _impl_.entity_id_),
         PROTOBUF_FIELD_OFFSET(::rankpb::RemoveRankEntryRequest, _impl_.request_id_),
         PROTOBUF_FIELD_OFFSET(::rankpb::RemoveRankEntryRequest, _impl_.auth_),
-        1,
+        PROTOBUF_FIELD_OFFSET(::rankpb::RemoveRankEntryRequest, _impl_.approval_),
         2,
         3,
         4,
+        5,
         0,
+        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::rankpb::RankAdminResponse, _impl_._has_bits_),
         4, // hasbit index offset
@@ -1955,7 +1968,7 @@ static const ::_pbi::MigrationSchema
         {74, sizeof(::rankpb::FreezeRankGenerationRequest)},
         {93, sizeof(::rankpb::FreezeRankGenerationResponse)},
         {104, sizeof(::rankpb::RemoveRankEntryRequest)},
-        {117, sizeof(::rankpb::RankAdminResponse)},
+        {119, sizeof(::rankpb::RankAdminResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1974,7 +1987,8 @@ const char descriptor_table_protodef_proto_2frank_2frank_5fadmin_2eproto[] ABSL_
     protodesc_cold) = {
     "\n\033proto/rank/rank_admin.proto\022\006rankpb\032\033p"
     "roto/common/base/tip.proto\032)proto/common"
-    "/base/service_call_auth.proto\032\025proto/mai"
+    "/base/service_call_auth.proto\032&proto/com"
+    "mon/base/admin_approval.proto\032\025proto/mai"
     "l/mail.proto\032\025proto/rank/rank.proto\"\273\001\n\031"
     "OpenRankGenerationRequest\022#\n\005board\030\001 \001(\013"
     "2\024.rankpb.RankBoardKey\022\020\n\010producer\030\002 \001(\t"
@@ -2007,30 +2021,33 @@ const char descriptor_table_protodef_proto_2frank_2frank_5fadmin_2eproto[] ABSL_
     "\030\010 \001(\r\"\207\001\n\034FreezeRankGenerationResponse\022"
     "&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022"
     "\025\n\rsettlement_id\030\002 \001(\004\022\024\n\014winner_count\030\003"
-    " \001(\004\022\022\n\nduplicated\030\004 \001(\010\"\221\001\n\026RemoveRankE"
+    " \001(\004\022\022\n\nduplicated\030\004 \001(\010\"\277\001\n\026RemoveRankE"
     "ntryRequest\022\020\n\010board_id\030\001 \001(\004\022\022\n\ngenerat"
     "ion\030\002 \001(\004\022\021\n\tentity_id\030\003 \001(\004\022\022\n\nrequest_"
     "id\030\004 \001(\004\022*\n\004auth\030\005 \001(\0132\034.common.base.Ser"
-    "viceCallAuth\";\n\021RankAdminResponse\022&\n\rerr"
-    "or_message\030\001 \001(\0132\017.TipInfoMessage*|\n\016Ran"
-    "kSubmitMode\022\033\n\027RANK_SUBMIT_UNSPECIFIED\020\000"
-    "\022\035\n\031RANK_SUBMIT_SET_IF_HIGHER\020\001\022\023\n\017RANK_"
-    "SUBMIT_SET\020\002\022\031\n\025RANK_SUBMIT_INCREMENT\020\0032"
-    "\303\003\n\tRankAdmin\022[\n\022OpenRankGeneration\022!.ra"
-    "nkpb.OpenRankGenerationRequest\032\".rankpb."
-    "OpenRankGenerationResponse\022U\n\020SubmitRank"
-    "Scores\022\037.rankpb.SubmitRankScoresRequest\032"
-    " .rankpb.SubmitRankScoresResponse\022a\n\024Fre"
-    "ezeRankGeneration\022#.rankpb.FreezeRankGen"
-    "erationRequest\032$.rankpb.FreezeRankGenera"
-    "tionResponse\022L\n\017RemoveRankEntry\022\036.rankpb"
-    ".RemoveRankEntryRequest\032\031.rankpb.RankAdm"
-    "inResponse\022Q\n\024DeleteRankGeneration\022\036.ran"
-    "kpb.RemoveRankEntryRequest\032\031.rankpb.Rank"
-    "AdminResponseB\021Z\017rank/proto/rankb\006proto3"
+    "viceCallAuth\022,\n\010approval\030\006 \001(\0132\032.common."
+    "base.AdminApproval\";\n\021RankAdminResponse\022"
+    "&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage*"
+    "|\n\016RankSubmitMode\022\033\n\027RANK_SUBMIT_UNSPECI"
+    "FIED\020\000\022\035\n\031RANK_SUBMIT_SET_IF_HIGHER\020\001\022\023\n"
+    "\017RANK_SUBMIT_SET\020\002\022\031\n\025RANK_SUBMIT_INCREM"
+    "ENT\020\0032\303\003\n\tRankAdmin\022[\n\022OpenRankGeneratio"
+    "n\022!.rankpb.OpenRankGenerationRequest\032\".r"
+    "ankpb.OpenRankGenerationResponse\022U\n\020Subm"
+    "itRankScores\022\037.rankpb.SubmitRankScoresRe"
+    "quest\032 .rankpb.SubmitRankScoresResponse\022"
+    "a\n\024FreezeRankGeneration\022#.rankpb.FreezeR"
+    "ankGenerationRequest\032$.rankpb.FreezeRank"
+    "GenerationResponse\022L\n\017RemoveRankEntry\022\036."
+    "rankpb.RemoveRankEntryRequest\032\031.rankpb.R"
+    "ankAdminResponse\022Q\n\024DeleteRankGeneration"
+    "\022\036.rankpb.RemoveRankEntryRequest\032\031.rankp"
+    "b.RankAdminResponseB\021Z\017rank/proto/rankb\006"
+    "proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
-    descriptor_table_proto_2frank_2frank_5fadmin_2eproto_deps[4] = {
+    descriptor_table_proto_2frank_2frank_5fadmin_2eproto_deps[5] = {
+        &::descriptor_table_proto_2fcommon_2fbase_2fadmin_5fapproval_2eproto,
         &::descriptor_table_proto_2fcommon_2fbase_2fservice_5fcall_5fauth_2eproto,
         &::descriptor_table_proto_2fcommon_2fbase_2ftip_2eproto,
         &::descriptor_table_proto_2fmail_2fmail_2eproto,
@@ -2040,12 +2057,12 @@ static ::absl::once_flag descriptor_table_proto_2frank_2frank_5fadmin_2eproto_on
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2frank_2frank_5fadmin_2eproto = {
     false,
     false,
-    2240,
+    2326,
     descriptor_table_protodef_proto_2frank_2frank_5fadmin_2eproto,
     "proto/rank/rank_admin.proto",
     &descriptor_table_proto_2frank_2frank_5fadmin_2eproto_once,
     descriptor_table_proto_2frank_2frank_5fadmin_2eproto_deps,
-    4,
+    5,
     10,
     schemas,
     file_message_globals,
@@ -4705,6 +4722,11 @@ void RemoveRankEntryRequest::clear_auth() {
   if (_impl_.auth_ != nullptr) _impl_.auth_->Clear();
   ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
+void RemoveRankEntryRequest::clear_approval() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.approval_ != nullptr) _impl_.approval_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
 RemoveRankEntryRequest::RemoveRankEntryRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, RemoveRankEntryRequest_get_class_data()) {
@@ -4738,6 +4760,9 @@ RemoveRankEntryRequest::RemoveRankEntryRequest(
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
   _impl_.auth_ = (CheckHasBit(cached_has_bits, 0x00000001U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_)
+                : nullptr;
+  _impl_.approval_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.approval_)
                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, board_id_),
@@ -4775,6 +4800,7 @@ inline void RemoveRankEntryRequest::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   delete this_._impl_.auth_;
+  delete this_._impl_.approval_;
   this_._impl_.~Impl_();
 }
 
@@ -4812,11 +4838,17 @@ PROTOBUF_NOINLINE void RemoveRankEntryRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    ABSL_DCHECK(_impl_.auth_ != nullptr);
-    _impl_.auth_->Clear();
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.auth_ != nullptr);
+      _impl_.auth_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.approval_ != nullptr);
+      _impl_.approval_->Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003cU)) {
     ::memset(&_impl_.board_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.request_id_) -
         reinterpret_cast<char*>(&_impl_.board_id_)) + sizeof(_impl_.request_id_));
@@ -4845,7 +4877,7 @@ PROTOBUF_NOINLINE void RemoveRankEntryRequest::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 board_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_board_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -4854,7 +4886,7 @@ PROTOBUF_NOINLINE void RemoveRankEntryRequest::Clear() {
   }
 
   // uint64 generation = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_generation() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -4863,7 +4895,7 @@ PROTOBUF_NOINLINE void RemoveRankEntryRequest::Clear() {
   }
 
   // uint64 entity_id = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_entity_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -4872,7 +4904,7 @@ PROTOBUF_NOINLINE void RemoveRankEntryRequest::Clear() {
   }
 
   // uint64 request_id = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_request_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -4884,6 +4916,13 @@ PROTOBUF_NOINLINE void RemoveRankEntryRequest::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         5, *this_._impl_.auth_, this_._impl_.auth_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .common.base.AdminApproval approval = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        6, *this_._impl_.approval_, this_._impl_.approval_->GetCachedSize(), target,
         stream);
   }
 
@@ -4912,35 +4951,40 @@ PROTOBUF_NOINLINE void RemoveRankEntryRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     // .common.base.ServiceCallAuth auth = 5;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.auth_);
     }
-    // uint64 board_id = 1;
+    // .common.base.AdminApproval approval = 6;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.approval_);
+    }
+    // uint64 board_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_board_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_board_id());
       }
     }
     // uint64 generation = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_generation() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_generation());
       }
     }
     // uint64 entity_id = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_entity_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_entity_id());
       }
     }
     // uint64 request_id = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_request_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_request_id());
@@ -4965,7 +5009,7 @@ void RemoveRankEntryRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       ABSL_DCHECK(from._impl_.auth_ != nullptr);
       if (_this->_impl_.auth_ == nullptr) {
@@ -4975,21 +5019,29 @@ void RemoveRankEntryRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.approval_ != nullptr);
+      if (_this->_impl_.approval_ == nullptr) {
+        _this->_impl_.approval_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.approval_);
+      } else {
+        _this->_impl_.approval_->MergeFrom(*from._impl_.approval_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_board_id() != 0) {
         _this->_impl_.board_id_ = from._impl_.board_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_generation() != 0) {
         _this->_impl_.generation_ = from._impl_.generation_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_entity_id() != 0) {
         _this->_impl_.entity_id_ = from._impl_.entity_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_request_id() != 0) {
         _this->_impl_.request_id_ = from._impl_.request_id_;
       }

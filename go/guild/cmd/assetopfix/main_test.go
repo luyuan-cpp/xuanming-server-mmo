@@ -295,13 +295,10 @@ func TestRunResolve_NeverAppliedWaitsTheObservationWindowThenFinalizes(t *testin
 	}
 }
 
-// 观察期间这一行被领过、排过或终结了:不终结,退出码 3,打审计行并提示重跑。「只有 attempts 变了」是钟慢的副本
-// 发过请求(last_send_ms 推不动)、结局不明重排(租约清回 0)之后的样子,也是只领没发的本地重排。
-// 终结那条 SQL 还没比 attempts(asset_store.go 待补),这一格只靠这里的复核挡住。
+// 观察期间这一行被领过、发过或终结了:不终结,退出码 3,打审计行并提示重跑。只有 attempts 变了不在这里,见下一条。
 func TestRunResolve_ObservationWindowRefusesWhenTheRowChanged(t *testing.T) {
 	cases := map[string]func(*data.AssetOpRow){
 		"claimed":               func(r *data.AssetOpRow) { r.LeaseUntilMs = uint64(testNow.Add(10 * time.Second).UnixMilli()) },
-		"only attempts moved":   func(r *data.AssetOpRow) { r.Attempts++ },
 		"sent and rescheduled":  func(r *data.AssetOpRow) { r.Attempts++; r.LastSendMs++ },
 		"finalized by the loop": func(r *data.AssetOpRow) { r.Status = pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_APPLIED },
 	}
@@ -322,6 +319,24 @@ func TestRunResolve_ObservationWindowRefusesWhenTheRowChanged(t *testing.T) {
 				t.Fatalf("要打审计行并提示重跑: %s", out)
 			}
 		})
+	}
+}
+
+// 观察期间只有 attempts 变了(只领没发的本地重排,或钟慢的副本发过、结局不明又重排):跨窗口不比它,照样终结,
+// 条件写带第二次读到的见证(attempts 是新的)。guild 的条件写 SQL 还没比 attempts(asset_store.go 待补),
+// 第二次读到条件写之间只靠租约、发送时刻两列兜底;钟慢副本那次发送若被 scene 应用,由下一条用例的账本重判覆盖。
+func TestRunResolve_ObservationWindowToleratesAttemptsOnlyAndUsesTheSecondRead(t *testing.T) {
+	row := stuckRow(t)
+	store := &fakeStore{row: row, resolved: true}
+	d := deps(store, neverAppliedLedger(t, row))
+	d.sleep = (&fakeSleep{during: func() { store.row.Attempts++ }}).sleep
+	var stdout, stderr bytes.Buffer
+	if code := runResolve(context.Background(), d, resolveAs("aborted", assetop.StatusAborted, false), &stdout, &stderr); code != exitOK {
+		t.Fatalf("exit=%d stderr=%s", code, stderr.String())
+	}
+	want := assetop.QuietWitness{LeaseUntilMs: row.LeaseUntilMs, LastSendMs: row.LastSendMs, Attempts: row.Attempts + 1}
+	if len(store.calls) != 1 || store.witness[0] != want {
+		t.Fatalf("calls=%+v witness=%+v want %+v(第二次读到的见证)", store.calls, store.witness, want)
 	}
 }
 

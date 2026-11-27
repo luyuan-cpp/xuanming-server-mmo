@@ -53,7 +53,7 @@ public final class GmCommandJournal {
     private static final long MAIL_LEASE_MS = 60_000L;
     private static final long CAMPAIGN_LEASE_MS = 120_000L;
     private static final List<String> FROZEN_MAIL_FIELDS = List.of("requestId", "request_id", "expireMs", "expire_ms",
-            "auth", "recipient_player_id", "campaignId", "campaign_id", "manifestGeneration", "manifest_generation");
+            "auth", "approval", "recipient_player_id", "campaignId", "campaign_id", "manifestGeneration", "manifest_generation");
     // REJECTED 是游戏服务拒绝执行；DECLINED 是批准人驳回或发起人撤回，命令从未发出。
     private static final Set<String> MAIL_STATUSES = Set.of("DRAFT", "SENDING", "DELIVERED", "REJECTED", "UNKNOWN", "DECLINED");
     private static final Set<String> PLAYER_STATUSES = Set.of("DRAFT", "SENDING", "EXECUTED", "REJECTED", "UNKNOWN", "DECLINED");
@@ -134,8 +134,10 @@ public final class GmCommandJournal {
 
     /**
      * 运营处置(docs/design/admin-identity-and-dual-control.md §8 批 4、批 5):商城人工单与 SKU、账号类、回收、收件箱、榜单、阵容。
-     * input 是 {target, command, body}:下游与命令由 GmOpsController 的目录核过,操作人、原因等服务端字段已由它填进 body。
-     * 流水再补 requestId(就是流水号,也就是批准号)。接入这一类的下游都必须按这个号判重,所以结果未知后可以用原申请重试。
+     * input 是 {target, command, body, retryable}:下游与命令由 GmOpsController 的目录核过,操作人、原因等服务端字段已由它填进 body;
+     * retryable 也由目录给出并随申请冻结:下游按批准号判重或者重放天然收敛的命令,结果未知后可以用原申请重试;
+     * 重放会得到「已是终态」之类拒绝的命令(强制作废收件箱条目、终结滞留阵容)不能重试,未知结果要人去下游核对。
+     * 流水再补 requestId(就是流水号,也就是批准号)。
      */
     public ObjectNode prepareOps(String operator, String clientRequestId, String reason, ObjectNode input) {
         return prepareInternal(operator, clientRequestId, "0", reason, input, "OPS");
@@ -169,10 +171,11 @@ public final class GmCommandJournal {
                 check(!input.has("recipientPlayerId") || playerId.equals(input.path("recipientPlayerId").asText()), "玩家不一致");
             }
         } else if (kind.equals("OPS")) {
-            check(input.size() == 3 && input.path("target").isTextual() && input.path("command").isTextual() && input.get("body") instanceof ObjectNode,
-                    "运营处置格式非法");
-            // 请求号与批准记录由服务端补,草稿里不许出现;调用证明在发送时现签。
-            for (String frozen : List.of("requestId", "approval", "auth"))
+            check(input.size() == 4 && input.path("target").isTextual() && input.path("command").isTextual() && input.get("body") instanceof ObjectNode
+                    && input.path("retryable").isBoolean(), "运营处置格式非法");
+            // 批准记录由服务端在放行时补,调用证明在发送时现签,草稿里不许出现。请求号在顶层冻结,由发送方按目录填进下游的请求号字段
+            // (正文里同名的 requestId 可能是别的含义,如撤回回收批次时的批次号,由目录的字段白名单管)。
+            for (String frozen : List.of("approval", "auth"))
                 check(!input.path("body").has(frozen), "不得覆盖服务端冻结字段");
         } else if (kind.equals("TRADE_MANUAL")) {
             check(input.path("commerceId").isTextual() && input.path("action").isTextual() && input.path("expectVersion").isTextual()
@@ -370,16 +373,28 @@ public final class GmCommandJournal {
         });
     }
 
+    /**
+     * 邮件三类的放行。开了双人复核时,批准记录放进交给发送方的冻结请求(SendMailRequest.approval;活动邮件放在建活动的那份请求里),
+     * mail 对调用方 admin 要求它(docs/design/admin-identity-and-dual-control.md §8 批 5)。它进请求摘要,重试原样复用,摘要不变。
+     */
     public ObjectNode send(String id, String operator, Function<ObjectNode, ObjectNode> sender) {
-        return sendInternal(id, operator, (request, approval) -> sender.apply(request), "MAIL");
+        return sendInternal(id, operator, (request, approval) -> sender.apply(withApproval(request, approval)), "MAIL");
     }
 
     public ObjectNode sendSystemMail(String id, String operator, Function<ObjectNode, ObjectNode> sender) {
-        return sendInternal(id, operator, (request, approval) -> sender.apply(request), "SYSTEM_MAIL");
+        return sendInternal(id, operator, (request, approval) -> sender.apply(withApproval(request, approval)), "SYSTEM_MAIL");
     }
 
     public ObjectNode sendMailCampaign(String id, String operator, Function<ObjectNode, ObjectNode> sender) {
-        return sendInternal(id, operator, (request, approval) -> sender.apply(request), "MAIL_CAMPAIGN");
+        return sendInternal(id, operator, (request, approval) -> {
+            if (approval != null && request.get("mail") instanceof ObjectNode mail) mail.set("approval", approval);
+            return sender.apply(request);
+        }, "MAIL_CAMPAIGN");
+    }
+
+    private static ObjectNode withApproval(ObjectNode request, ObjectNode approval) {
+        if (approval != null) request.set("approval", approval);
+        return request;
     }
 
     public ObjectNode sendPlayerCommand(String id, String operator, Function<ObjectNode, ObjectNode> sender) {
@@ -406,7 +421,8 @@ public final class GmCommandJournal {
         }
         boolean mailKind = isMailKind(kind);
         // 下游按请求号或批准号判重的命令,结果未知后可以用原号重试;在线玩家的直接 GM 没有这样的判重,不能重试。
-        boolean retryable = mailKind || kind.equals("TRADE_MANUAL") || kind.equals("OPS");
+        // 运营处置逐条看申请上冻结的 retryable。
+        boolean kindRetryable = mailKind || kind.equals("TRADE_MANUAL");
         String complete = mailKind ? "DELIVERED" : "EXECUTED";
         long leaseMs = kind.equals("MAIL_CAMPAIGN") ? CAMPAIGN_LEASE_MS : MAIL_LEASE_MS;
         Row claimed = tx.execute(status -> {
@@ -452,6 +468,7 @@ public final class GmCommandJournal {
             }
             args.add(id);
             args.add(current.attempt);
+            boolean retryable = kind.equals("OPS") ? current.fullRequest.path("retryable").asBoolean(false) : kindRetryable;
             String states;
             if (retryable) {
                 states = "(status IN ('DRAFT','UNKNOWN') OR (status='SENDING' AND updated_ms<?))";

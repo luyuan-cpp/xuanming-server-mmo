@@ -35,7 +35,7 @@ func TestProtectCredentialsMergesWithoutChangingMiddlewarePolicy(t *testing.T) {
 		if cfg.Middlewares.Stat != statEnabled || !cfg.Middlewares.Prometheus || cfg.Middlewares.StatConf.SlowThreshold != 27*time.Millisecond {
 			t.Fatal("请求体保护改变了统计、指标或慢调用策略")
 		}
-		if len(cfg.Middlewares.StatConf.IgnoreContentMethods) != 6 {
+		if len(cfg.Middlewares.StatConf.IgnoreContentMethods) != 7 {
 			t.Fatal("请求体保护丢失已有项目或重复追加")
 		}
 	}
@@ -134,6 +134,9 @@ func runStatInterceptorProbe(t *testing.T) {
 	if _, err := pregate.SubmitRealName(ctx, &loginpb.SubmitRealNameRequest{AccessToken: sentinel, Name: sentinel, IdNumber: sentinel}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := pregate.HandlePassportEvent(ctx, &loginpb.PassportEventRequest{Payload: []byte(sentinel)}); err != nil {
+		t.Fatal(err)
+	}
 	const nonSensitiveName = "observable_role_name"
 	if _, err := login.CreatePlayer(ctx, &loginpb.CreatePlayerRequest{Name: nonSensitiveName}); err != nil {
 		t.Fatal(err)
@@ -148,6 +151,7 @@ func runStatInterceptorProbe(t *testing.T) {
 		loginpb.LoginPreGate_AssignGate_FullMethodName,
 		loginpb.LoginPreGate_QueryQueueStatus_FullMethodName,
 		loginpb.LoginPreGate_SubmitRealName_FullMethodName,
+		loginpb.LoginPreGate_HandlePassportEvent_FullMethodName,
 	} {
 		if !strings.Contains(logs, method) {
 			t.Fatalf("敏感方法的慢调用日志丢失: %s", method)
@@ -195,6 +199,9 @@ func (*rpcProbeServer) QueryQueueStatus(context.Context, *loginpb.QueryQueueStat
 }
 func (*rpcProbeServer) SubmitRealName(context.Context, *loginpb.SubmitRealNameRequest) (*loginpb.SubmitRealNameResponse, error) {
 	return &loginpb.SubmitRealNameResponse{}, nil
+}
+func (*rpcProbeServer) HandlePassportEvent(context.Context, *loginpb.PassportEventRequest) (*loginpb.PassportEventResponse, error) {
+	return &loginpb.PassportEventResponse{}, nil
 }
 func (*rpcProbeServer) CreatePlayer(context.Context, *loginpb.CreatePlayerRequest) (*loginpb.CreatePlayerResponse, error) {
 	return &loginpb.CreatePlayerResponse{}, nil

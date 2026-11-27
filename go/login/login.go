@@ -26,8 +26,8 @@ import (
 	"shared/clockcheck"
 	"shared/drainproof"
 	"shared/generated/table"
-	"shared/grpcstats"
 	"shared/grpckeepalive"
+	"shared/grpcstats"
 	"shared/killswitch"
 	"shared/safego"
 	"shared/serverbase"
@@ -414,6 +414,7 @@ func startServer(watchCtx context.Context, cfg config.Config, ctx *svc.ServiceCo
 		interceptors = append(interceptors, ks.UnaryServerInterceptor())
 	}
 	// LoginAdmin 的口令闸门排在身份闸门前面:身份闸门只校验带了身份声明的调用,挡不住运维接口。
+	// 口令之后紧跟双人复核核对(cfg.AdminAllowUnapproved 缺省关):两道都在 handler 之前,拒绝不碰任何下游。
 	adminToken := os.Getenv(loginadminserver.AdminTokenEnv)
 	if adminToken != "" && len(adminToken) < loginadminserver.MinAdminTokenBytes {
 		return fmt.Errorf("%s is shorter than %d bytes", loginadminserver.AdminTokenEnv, loginadminserver.MinAdminTokenBytes)
@@ -424,6 +425,7 @@ func startServer(watchCtx context.Context, cfg config.Config, ctx *svc.ServiceCo
 	}
 	interceptors = append(interceptors,
 		loginadminserver.AdminAuthInterceptor(adminToken),
+		loginadminserver.AdminApprovalInterceptor(cfg.AdminAllowUnapproved),
 		sessionInterceptor,
 		// 请求顶层带 player_id 的方法,handler 与 serverbase 的日志都带上它(docs/design/distributed-tracing.md §6.2)。
 		tracing.PlayerFieldInterceptor(),

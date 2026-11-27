@@ -1,8 +1,10 @@
 package logic
 
 import (
+	"context"
 	"testing"
 
+	"match/internal/svc"
 	battlepb "proto/battle"
 	matchpb "proto/match"
 
@@ -26,6 +28,8 @@ func TestValidateCustomDuelRules(t *testing.T) {
 	require.False(t, validateCustomDuelRules(&battlepb.CustomDuelRules{SkillBanSlotsPerTeam: 4}))
 	require.False(t, validateCustomDuelRules(&battlepb.CustomDuelRules{UseFreePreset: true, SkillBanSlotsPerTeam: 3}),
 		"free preset 4-skill template must reject 3-ban")
+	require.False(t, validateCustomDuelRules(&battlepb.CustomDuelRules{UseFreePreset: true, RematchSourceBattleId: 77001}),
+		"1v1 ranked rematch must use real progression rather than free preset")
 }
 
 func TestSpectateVisibilityForBattleCustomDuelOptIn(t *testing.T) {
@@ -112,4 +116,79 @@ func TestRankedV7LiveSpectateVisibilitySummaryAndRematchTTL(t *testing.T) {
 	require.Equal(t, 60, challengeTTLSecondsFor(60, &battlepb.CustomDuelRules{AllowPublicSpectate: true}))
 	require.Equal(t, 15, challengeTTLSecondsFor(60, &battlepb.CustomDuelRules{RematchSourceBattleId: 77001}))
 	require.Equal(t, 10, challengeTTLSecondsFor(10, &battlepb.CustomDuelRules{RematchSourceBattleId: 77001}))
+}
+
+func TestRankedV7ShardedLiveIndexResistsPveFloodAndCleansUp(t *testing.T) {
+	svcCtx, mr := newTestSvcCtx(t)
+	clock := newFakeClock()
+	svcCtx.SpectateLobby = svc.NewSpectateLobbyCache(clock.Now)
+	formations := stubSpectateFormations(t)
+
+	base := nowMs()
+	seedRanked := func(battleID, createdMs uint64, peakCenti int64, p1, p2 string) {
+		rctx := &battlepb.RankedMatchContext{
+			SeasonId:            1,
+			TeamSize:            1,
+			UseFreePreset:       false,
+			AllowPublicSpectate: true,
+			PeakRatingCenti:     peakCenti,
+		}
+		raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(&battlepb.CreateBattleRequest{
+			BattleId:           battleID,
+			MatchMode:          uint32(matchpb.MatchMode_MATCH_MODE_PVP_TEAM),
+			SpectateVisibility: visPublic,
+			Players: []*battlepb.BattlePlayerSnapshot{
+				{PlayerId: battleID*10 + 1, PlayerName: p1},
+				{PlayerId: battleID*10 + 2, PlayerName: p2},
+			},
+			RankedContext: rctx,
+		})
+		require.NoError(t, err)
+		formations.formations[battleID] = &matchpb.MatchFormationRecord{
+			BattleId:         battleID,
+			State:            4,
+			Mode:             uint32(matchpb.MatchMode_MATCH_MODE_PVP_TEAM),
+			ConfigId:         5,
+			TargetNodeId:     7,
+			TargetInstanceId: testBattle7Instance,
+			TargetEndpoint:   "battle-7",
+			DeadlineMs:       testRelayDeadlineMs,
+			CreatedMs:        createdMs,
+			CreateRequest:    raw,
+		}
+		addSpectateActive(svcCtx, battleID, createdMs, visPublic)
+		addSpectateRanked(svcCtx, battleID, createdMs, visPublic, rctx)
+	}
+
+	// 3 场较早开打的高段排位局（分别落在不同分段与不同 Redis Cluster 槽桶）
+	seedRanked(990001, base-60_000, 162000, "青锋甲", "青锋乙")
+	seedRanked(990002, base-50_000, 188000, "无双甲", "无双乙")
+	seedRanked(990003, base-40_000, 174000, "天枢甲", "天枢乙")
+	// 随后涌入 30 场更新的普通 PVE 副本局，按时间倒序足以把上述排位局彻底挤出通用活跃前 20
+	for i := uint64(0); i < 30; i++ {
+		registerBattle(t, svcCtx, 991000+i, base-30_000+i*500, "PVE路人")
+	}
+
+	resp, err := NewListWatchableBattlesLogic(context.Background(), svcCtx).
+		ListWatchableBattles(&matchpb.ListWatchableBattlesRequest{Limit: 20})
+	require.NoError(t, err)
+	require.Len(t, resp.GetBattles(), 20)
+	// 前 3 位必须是高段排位且按最高分段降序，绝不被 30 场新 PVE 淹没，且无重复 battle_id。
+	require.Equal(t, uint64(990002), resp.GetBattles()[0].GetBattleId())
+	require.Equal(t, uint64(990003), resp.GetBattles()[1].GetBattleId())
+	require.Equal(t, uint64(990001), resp.GetBattles()[2].GetBattleId())
+	seen := make(map[uint64]bool, len(resp.GetBattles()))
+	for _, b := range resp.GetBattles() {
+		require.False(t, seen[b.GetBattleId()], "列表不得出现重复 battle_id=%d", b.GetBattleId())
+		seen[b.GetBattleId()] = true
+	}
+
+	// 终局摘除同时清理通用活跃桶、高段排位桶与本副本缓存。
+	removeSpectateBattle(svcCtx, 990002)
+	require.Equal(t, []string{"990001", "990003"}, spectateIndexMembers(t, mr, spectateRankedIndex))
+
+	// 过期清扫同步清掉高段排位桶里的陈旧成员，防崩溃残留泄漏。
+	require.NoError(t, spectateRankedIndex.add(context.Background(), svcCtx.MatchRedis, 990099, int64(staleCreatedAtMs())))
+	cleanupExpiredSpectateIndex(svcCtx)
+	require.Equal(t, []string{"990001", "990003"}, spectateIndexMembers(t, mr, spectateRankedIndex))
 }

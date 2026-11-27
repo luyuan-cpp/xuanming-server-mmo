@@ -144,7 +144,10 @@ def main():
         "proto/data_service/data_service.proto", "proto/player_locator/player_locator.proto",
         "proto/common/base/currency_type.proto", "proto/scene_manager/scene_node_service.proto",
         # 交易人工处置(GameTradeAdmin);批准记录 common/base/admin_approval.proto 随 --include_imports 带上。
-        "proto/trade/trade_admin.proto")
+        "proto/trade/trade_admin.proto",
+        # 运营处置的 gRPC 下游(GameOpsRpc):账号类、收件箱处置、榜单删除、滞留阵容终结;回收在上面的 data_service.proto 里。
+        "proto/login/login_admin.proto", "proto/player_inbox/player_inbox_admin.proto", "proto/rank/rank_admin.proto",
+        "proto/match/match_internal.proto")
     shutil.copy2(generated / "gm-contracts.pb", start / "src/main/resources/gm-contracts.pb")
     # 原生模块不引入独立测试 POM 的框架版本；只补入所需的传输依赖。
     pom = start / "pom.xml"

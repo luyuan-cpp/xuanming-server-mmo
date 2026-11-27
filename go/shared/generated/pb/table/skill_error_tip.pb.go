@@ -61,6 +61,8 @@ const (
 	SkillError_kSkillLoadoutRentSlotsInvalid        SkillError = 7033
 	SkillError_kSkillLoadoutAttributeInvalid        SkillError = 7034
 	SkillError_kSkillLoadoutAttributeResetRequired  SkillError = 7035
+	SkillError_kSkillBookshelfFull                  SkillError = 7036
+	SkillError_kSkillWantedPosterBookshelfFull      SkillError = 7037
 )
 
 // Enum value maps for SkillError.
@@ -103,6 +105,8 @@ var (
 		7033: "kSkillLoadoutRentSlotsInvalid",
 		7034: "kSkillLoadoutAttributeInvalid",
 		7035: "kSkillLoadoutAttributeResetRequired",
+		7036: "kSkillBookshelfFull",
+		7037: "kSkillWantedPosterBookshelfFull",
 	}
 	SkillError_value = map[string]int32{
 		"kSkill_errorOK":                       0,
@@ -142,6 +146,8 @@ var (
 		"kSkillLoadoutRentSlotsInvalid":        7033,
 		"kSkillLoadoutAttributeInvalid":        7034,
 		"kSkillLoadoutAttributeResetRequired":  7035,
+		"kSkillBookshelfFull":                  7036,
+		"kSkillWantedPosterBookshelfFull":      7037,
 	}
 )
 
@@ -176,7 +182,7 @@ var File_skill_error_tip_proto protoreflect.FileDescriptor
 
 const file_skill_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15skill_error_tip.proto*\x92\t\n" +
+	"\x15skill_error_tip.proto*\xd2\t\n" +
 	"\vskill_error\x12\x12\n" +
 	"\x0ekSkill_errorOK\x10\x00\x12\x1a\n" +
 	"\x15kSkillUnInterruptible\x10\xd86\x12\x1a\n" +
@@ -214,7 +220,9 @@ const file_skill_error_tip_proto_rawDesc = "" +
 	"\x1bkSkillLoadoutRentStackLimit\x10\xf86\x12\"\n" +
 	"\x1dkSkillLoadoutRentSlotsInvalid\x10\xf96\x12\"\n" +
 	"\x1dkSkillLoadoutAttributeInvalid\x10\xfa6\x12(\n" +
-	"#kSkillLoadoutAttributeResetRequired\x10\xfb6B$\n" +
+	"#kSkillLoadoutAttributeResetRequired\x10\xfb6\x12\x18\n" +
+	"\x13kSkillBookshelfFull\x10\xfc6\x12$\n" +
+	"\x1fkSkillWantedPosterBookshelfFull\x10\xfd6B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

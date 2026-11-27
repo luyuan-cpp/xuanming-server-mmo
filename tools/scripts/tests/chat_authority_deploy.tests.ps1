@@ -45,9 +45,9 @@ Test-Case 'Chat业务角色无DDL或聊天记录改删权，迁移角色没有�
     $runtime=ChatSource 'deploy/sql/chat_runtime_role.sql'
     $migration=ChatSource 'deploy/sql/chat_migration_role.sql'
     $grants=@(($runtime-split "`n")|Where-Object {$_-match '^GRANT '})
-    Assert-Equal 6 $grants.Count '逐表具名授权，只有聊天库六张表'
+    Assert-Equal 9 $grants.Count '逐表具名授权，只有聊天库九张表'
     Assert-NotMatch ($grants-join "`n") '`mmorpg_global`' '身份校验走目录RPC，运行角色不碰全局库'
-    foreach($appendOnly in @('chat_send_authority','chat_world_retraction','chat_report','chat_repeat_event','chat_private_daily_target')) {
+    foreach($appendOnly in @('chat_send_authority','chat_world_retraction','chat_report','chat_repeat_event','chat_private_daily_target','chat_platform_recheck','chat_platform_recheck_claim','chat_platform_recheck_done')) {
         Assert-Match $runtime ("GRANT SELECT, INSERT ON ``mmorpg_chat``\.``$appendOnly``") "$appendOnly 原件只允许读和追加"
     }
     Assert-NotMatch ($grants-join "`n") '\b(?:ALL|CREATE|ALTER|DROP|DELETE|INDEX|GRANT OPTION)\b' '常驻账号没有迁移、删除或转授权能力'

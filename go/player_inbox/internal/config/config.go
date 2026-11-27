@@ -129,6 +129,11 @@ type PlayerInboxConf struct {
 	// 变量未设置或为空 = 运维面停用。与字面 AdminToken 二者都非空时拒启:两个来源说不清以哪个为准。
 	AdminTokenEnv string `json:",optional"`
 
+	// AdminAllowUnapproved:为 true 时 GmSanctionPlayer、VoidItem 接受不带双人复核批准记录的请求,只给本机开发
+	// (docs/design/admin-identity-and-dual-control.md §5.5、§5.7)。缺省 false。打开时启动打一行 ERROR,每一次不带记录的受理
+	// 都打 ERROR 并计入 player_inbox_admin_unapproved_command_total;带了记录就必须合格,开关开着也一样。
+	AdminAllowUnapproved bool `json:",optional"`
+
 	// EnqueueTypes:允许入箱的消息类型白名单,写 PlayerInboxMessageType 的枚举名
 	// (如 PLAYER_INBOX_MSG_GM_BLOCK_CURRENCY_GAIN)。**默认空 = 全部停用**,是入箱开关的唯一来源(设计 §3.3);
 	// 不在白名单里的类型回 kPlayerInboxDisabled。上线顺序见设计 §11.7:scene 全部打开消费之后才填它。

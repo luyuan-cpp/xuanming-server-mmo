@@ -6,7 +6,7 @@
 // 判定发生在 muduo Acceptor 的准入回调里:accept 成功之后、TcpConnection 建出来之前。被拒的连接当场以 RST 关闭,
 // battle 不为它建任何对象,内核也不留 TIME_WAIT。判据都不需要知道对端是谁,按顺序:
 //   1. 关源:停机 / 维护关源之后不再接新连接;
-//   2. 总量:直连会话数到上限(battle_max_connections;dev / test 的 0 = BattleClientEdge::kHardMaxConnections);
+//   2. 总量:直连数(会话 + 未认证)到上限(battle_max_connections;dev / test 的 0 = BattleClientEdge::kHardMaxConnections);
 //   3. 按来源限速(缺省关闭,BATTLE_SOURCE_RATE_PER_SECOND 打开;只在承压时、只对公网源地址生效):单个来源前缀超过它的桶就拒;
 //   4. 未验签预算:既没完成票据握手、也没出示探测授权的直连单独一个池,承压时最老的先让位,腾不出位置时按概率早拒、
 //      到预算全拒(规则与 gate 同一份,accept_admission.h 的 PreAuthBudget / DecidePreAuth);
@@ -47,7 +47,7 @@ using accept_admission::UniformBelow;
 // 采样日志里的 reason 也用这几个名字。与 gate 的同名原因同义,告警与看板可以按 reason 并列两个节点。
 enum class RejectReason : uint8_t
 {
-    kCapacity,      // 直连会话数到上限
+    kCapacity,      // 直连数(会话 + 未认证)到上限
     kAcceptRate,    // 新建连接速率超过令牌桶
     kShuttingDown,  // 已关源(停机 / 维护),不再接新连接
     kNoTokenSecret, // prod 下 battle_token_secret 为空(纵深防御,启动门禁已拒启)
@@ -129,7 +129,7 @@ inline bool ResolveSourceRateLimit(const char *rawRate, const char *rawBurst, st
 struct AdmissionState
 {
     bool sourceClosed{false};     // 已关源
-    size_t currentConnections{0}; // 直连会话数。与连接一一对应:建连回调插入,断开回调删除,都在 loop 线程上同步完成
+    size_t currentConnections{0}; // 直连数 = 会话数 + 未认证直连数(票据先行:握手之前没有会话)。都在 loop 线程上同步增删
     size_t maxConnections{0};     // 生效上限(BattleClientEdge::EffectiveMaxConnections)
     uint64_t unauthenticated{0};  // 未认证直连数(没完成票据握手、也没出示探测授权)
     // 其中最老一条已建连多久。没有未认证直连、或此刻不允许淘汰(本端 loop 刚卡过)时为空。
@@ -267,7 +267,7 @@ public:
 
     // 连接建出来之后才发现不能要(连接回调里的第二道总量闸、空密钥兜底):只计数,连接由调用方关。
     void NoteRejectedAfterAccept(RejectReason reason);
-    // 会话建好了:计一次接纳。
+    // 接纳了一条直连(登记了未认证记录):计一次接纳。
     void NoteAccepted();
     // 票据握手成功:耗时进直方图。openedAt 是建连时刻,verifiedAt 是握手成功时刻。
     void NoteHandshake(SteadyTime openedAt, SteadyTime verifiedAt);
@@ -286,7 +286,7 @@ public:
     }
 
     // 把连接类指标写进一次抓取(BattleClientEdge 登记的采集回调在 battle 主 loop 上调用):
-    //   battle_connections_current / battle_connections_max  直连会话数与生效上限;
+    //   battle_connections_current / battle_connections_max  直连数(会话 + 未认证,总量上限按它判)与生效上限;
     //   battle_unauthenticated_connections                   既没完成票据握手、也没出示有效网络探测授权的直连;
     //   battle_accepted_total                                接纳的直连;rate() 就是新建连接速率;
     //   battle_rejected_total{reason}                        被拒的直连,reason 是 RejectReason 的名字;

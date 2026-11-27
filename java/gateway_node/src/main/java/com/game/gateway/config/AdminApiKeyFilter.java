@@ -105,12 +105,16 @@ public class AdminApiKeyFilter implements Filter {
                     machine ? "machine key requests must send X-Admin-Operator: table-bundle" : "write requests need one valid X-Admin-Operator");
             return;
         }
-        chain.doFilter(request, response);
-        if (write) {
-            log.warn("AUDIT gateway admin write method={} path={} status={} operator={} key={} remote={}", httpReq.getMethod(),
-                    normalize((httpReq.getServletPath() == null ? "" : httpReq.getServletPath())
-                            + (httpReq.getPathInfo() == null ? "" : httpReq.getPathInfo())),
-                    httpResp.getStatus(), operator, machine ? "machine" : "admin", request.getRemoteAddr());
+        try {
+            chain.doFilter(request, response);
+        } finally {
+            // 控制器抛出没被处理的异常时也留痕(状态可能还是默认值):写操作的尝试本身就要记下。
+            if (write) {
+                log.warn("AUDIT gateway admin write method={} path={} status={} operator={} key={} remote={}", httpReq.getMethod(),
+                        normalize((httpReq.getServletPath() == null ? "" : httpReq.getServletPath())
+                                + (httpReq.getPathInfo() == null ? "" : httpReq.getPathInfo())),
+                        httpResp.getStatus(), operator, machine ? "machine" : "admin", request.getRemoteAddr());
+            }
         }
     }
 

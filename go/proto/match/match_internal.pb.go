@@ -2106,11 +2106,15 @@ type ResolveStrandedFormationRequest struct {
 	BattleId uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"` // 非 0
 	Mode     StrandedFormationMode  `protobuf:"varint,2,opt,name=mode,proto3,enum=match.StrandedFormationMode" json:"mode,omitempty"`
 	// 下面四项 DRY_RUN / ABORT 必填;SHOW 忽略
-	ExpectDigest  string                `protobuf:"bytes,3,opt,name=expect_digest,json=expectDigest,proto3" json:"expect_digest,omitempty"` // SHOW 回的 formation.digest
-	ExpectTarget  string                `protobuf:"bytes,4,opt,name=expect_target,json=expectTarget,proto3" json:"expect_target,omitempty"` // 工单上写明的环境名(不从 SHOW 照抄),须与服务端的环境名逐字相等,连错环境回 target_mismatch
-	OperatorName  string                `protobuf:"bytes,5,opt,name=operator_name,json=operatorName,proto3" json:"operator_name,omitempty"` // ≤64 字节,不含控制字符
-	Reason        string                `protobuf:"bytes,6,opt,name=reason,proto3" json:"reason,omitempty"`                                 // ≤191 字节,不含控制字符:工单号与核对结论
-	Auth          *base.ServiceCallAuth `protobuf:"bytes,7,opt,name=auth,proto3" json:"auth,omitempty"`
+	ExpectDigest string                `protobuf:"bytes,3,opt,name=expect_digest,json=expectDigest,proto3" json:"expect_digest,omitempty"` // SHOW 回的 formation.digest
+	ExpectTarget string                `protobuf:"bytes,4,opt,name=expect_target,json=expectTarget,proto3" json:"expect_target,omitempty"` // 工单上写明的环境名(不从 SHOW 照抄),须与服务端的环境名逐字相等,连错环境回 target_mismatch
+	OperatorName string                `protobuf:"bytes,5,opt,name=operator_name,json=operatorName,proto3" json:"operator_name,omitempty"` // ≤64 字节,不含控制字符
+	Reason       string                `protobuf:"bytes,6,opt,name=reason,proto3" json:"reason,omitempty"`                                 // ≤191 字节,不含控制字符:工单号与核对结论
+	Auth         *base.ServiceCallAuth `protobuf:"bytes,7,opt,name=auth,proto3" json:"auth,omitempty"`
+	// ABORT 必带(docs/design/admin-identity-and-dual-control.md §5.4):后台双人复核的批准记录,proposer 必须等于 operator_name;
+	// 批准号与批准人随 ABORT 写进 match_manual_resolution。SHOW / DRY_RUN 不要求,带了照样核。
+	// 只有部署显式打开 GlobalMatch.ManualResolutionAllowUnapproved(本机开发)时才接受不带它的 ABORT。不合格回 REFUSED,不碰库。
+	Approval      *base.AdminApproval `protobuf:"bytes,8,opt,name=approval,proto3" json:"approval,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2190,6 +2194,13 @@ func (x *ResolveStrandedFormationRequest) GetReason() string {
 func (x *ResolveStrandedFormationRequest) GetAuth() *base.ServiceCallAuth {
 	if x != nil {
 		return x.Auth
+	}
+	return nil
+}
+
+func (x *ResolveStrandedFormationRequest) GetApproval() *base.AdminApproval {
+	if x != nil {
+		return x.Approval
 	}
 	return nil
 }
@@ -2783,7 +2794,7 @@ var File_proto_match_match_internal_proto protoreflect.FileDescriptor
 
 const file_proto_match_match_internal_proto_rawDesc = "" +
 	"\n" +
-	" proto/match/match_internal.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1eproto/battle/battle_data.proto\x1a proto/battle/battle_script.proto\x1a proto/battle/player_battle.proto\x1a)proto/common/base/service_call_auth.proto\"\xca\x02\n" +
+	" proto/match/match_internal.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1eproto/battle/battle_data.proto\x1a proto/battle/battle_script.proto\x1a proto/battle/player_battle.proto\x1a)proto/common/base/service_call_auth.proto\x1a&proto/common/base/admin_approval.proto\"\xca\x02\n" +
 	"\x1aStartActivityBattleRequest\x12(\n" +
 	"\x10battle_config_id\x18\x01 \x01(\rR\x0ebattleConfigId\x12*\n" +
 	"\x11member_player_ids\x18\x02 \x03(\x04R\x0fmemberPlayerIds\x12A\n" +
@@ -2919,7 +2930,7 @@ const file_proto_match_match_internal_proto_rawDesc = "" +
 	"\x10next_retry_at_ms\x18\x03 \x01(\x04R\rnextRetryAtMs\x12$\n" +
 	"\x0enext_battle_id\x18\x04 \x01(\x04R\fnextBattleId\x12\x15\n" +
 	"\x06now_ms\x18\x05 \x01(\x04R\x05nowMs\x12\x16\n" +
-	"\x06target\x18\x06 \x01(\tR\x06target\"\xa9\x02\n" +
+	"\x06target\x18\x06 \x01(\tR\x06target\"\xe1\x02\n" +
 	"\x1fResolveStrandedFormationRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x120\n" +
 	"\x04mode\x18\x02 \x01(\x0e2\x1c.match.StrandedFormationModeR\x04mode\x12#\n" +
@@ -2927,7 +2938,8 @@ const file_proto_match_match_internal_proto_rawDesc = "" +
 	"\rexpect_target\x18\x04 \x01(\tR\fexpectTarget\x12#\n" +
 	"\roperator_name\x18\x05 \x01(\tR\foperatorName\x12\x16\n" +
 	"\x06reason\x18\x06 \x01(\tR\x06reason\x120\n" +
-	"\x04auth\x18\a \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\x97\x02\n" +
+	"\x04auth\x18\a \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\x126\n" +
+	"\bapproval\x18\b \x01(\v2\x1a.common.base.AdminApprovalR\bapproval\"\x97\x02\n" +
 	" ResolveStrandedFormationResponse\x129\n" +
 	"\averdict\x18\x01 \x01(\x0e2\x1f.match.StrandedFormationVerdictR\averdict\x126\n" +
 	"\tformation\x18\x02 \x01(\v2\x18.match.StrandedFormationR\tformation\x12\x15\n" +
@@ -3097,8 +3109,9 @@ var file_proto_match_match_internal_proto_goTypes = []any{
 	(*base.ServiceCallAuth)(nil),              // 39: common.base.ServiceCallAuth
 	(*battle.BattleReplayEnvelope)(nil),       // 40: BattleReplayEnvelope
 	(battle.ESpectateTier)(0),                 // 41: eSpectateTier
-	(*battle.BattlePlayerSnapshot)(nil),       // 42: BattlePlayerSnapshot
-	(*battle.BattleScript)(nil),               // 43: BattleScript
+	(*base.AdminApproval)(nil),                // 42: common.base.AdminApproval
+	(*battle.BattlePlayerSnapshot)(nil),       // 43: BattlePlayerSnapshot
+	(*battle.BattleScript)(nil),               // 44: BattleScript
 }
 var file_proto_match_match_internal_proto_depIdxs = []int32{
 	38, // 0: match.StartActivityBattleRequest.activity_context:type_name -> BattleActivityContext
@@ -3133,49 +3146,50 @@ var file_proto_match_match_internal_proto_depIdxs = []int32{
 	26, // 29: match.ListStrandedFormationsResponse.formations:type_name -> match.StrandedFormation
 	5,  // 30: match.ResolveStrandedFormationRequest.mode:type_name -> match.StrandedFormationMode
 	39, // 31: match.ResolveStrandedFormationRequest.auth:type_name -> common.base.ServiceCallAuth
-	6,  // 32: match.ResolveStrandedFormationResponse.verdict:type_name -> match.StrandedFormationVerdict
-	26, // 33: match.ResolveStrandedFormationResponse.formation:type_name -> match.StrandedFormation
-	42, // 34: match.StartGuildWarBattleRequest.ai_defender_snapshots:type_name -> BattlePlayerSnapshot
-	38, // 35: match.StartGuildWarBattleRequest.activity_context:type_name -> BattleActivityContext
-	39, // 36: match.StartGuildWarBattleRequest.auth:type_name -> common.base.ServiceCallAuth
-	0,  // 37: match.StartGuildWarBattleResponse.reject:type_name -> match.ActivityBattleReject
-	39, // 38: match.ListPendingBattleScriptsRequest.auth:type_name -> common.base.ServiceCallAuth
-	43, // 39: match.PendingBattleScript.content:type_name -> BattleScript
-	7,  // 40: match.ListPendingBattleScriptsResponse.reject:type_name -> match.BattleScriptReviewReject
-	34, // 41: match.ListPendingBattleScriptsResponse.scripts:type_name -> match.PendingBattleScript
-	39, // 42: match.ReviewBattleScriptRequest.auth:type_name -> common.base.ServiceCallAuth
-	7,  // 43: match.ReviewBattleScriptResponse.reject:type_name -> match.BattleScriptReviewReject
-	8,  // 44: match.MatchInternal.StartActivityBattle:input_type -> match.StartActivityBattleRequest
-	10, // 45: match.MatchInternal.CancelActivityBattle:input_type -> match.CancelActivityBattleRequest
-	12, // 46: match.MatchInternal.CommitBattleOutcome:input_type -> match.CommitBattleOutcomeRequest
-	14, // 47: match.MatchInternal.SetSpectateFeatured:input_type -> match.SetSpectateFeaturedRequest
-	17, // 48: match.MatchInternal.AcquireTrialOccupancy:input_type -> match.AcquireTrialOccupancyRequest
-	19, // 49: match.MatchInternal.ReleaseTrialOccupancy:input_type -> match.ReleaseTrialOccupancyRequest
-	21, // 50: match.MatchInternal.GetBattleCompletion:input_type -> match.GetBattleCompletionRequest
-	23, // 51: match.MatchInternal.GetBattleTerminalDecision:input_type -> match.GetBattleTerminalDecisionRequest
-	27, // 52: match.MatchInternal.ListStrandedFormations:input_type -> match.ListStrandedFormationsRequest
-	29, // 53: match.MatchInternal.ResolveStrandedFormation:input_type -> match.ResolveStrandedFormationRequest
-	33, // 54: match.MatchInternal.ListPendingBattleScripts:input_type -> match.ListPendingBattleScriptsRequest
-	36, // 55: match.MatchInternal.ReviewBattleScript:input_type -> match.ReviewBattleScriptRequest
-	31, // 56: match.MatchInternal.StartGuildWarBattle:input_type -> match.StartGuildWarBattleRequest
-	9,  // 57: match.MatchInternal.StartActivityBattle:output_type -> match.StartActivityBattleResponse
-	11, // 58: match.MatchInternal.CancelActivityBattle:output_type -> match.CancelActivityBattleResponse
-	13, // 59: match.MatchInternal.CommitBattleOutcome:output_type -> match.CommitBattleOutcomeResponse
-	15, // 60: match.MatchInternal.SetSpectateFeatured:output_type -> match.SetSpectateFeaturedResponse
-	18, // 61: match.MatchInternal.AcquireTrialOccupancy:output_type -> match.AcquireTrialOccupancyResponse
-	20, // 62: match.MatchInternal.ReleaseTrialOccupancy:output_type -> match.ReleaseTrialOccupancyResponse
-	22, // 63: match.MatchInternal.GetBattleCompletion:output_type -> match.GetBattleCompletionResponse
-	24, // 64: match.MatchInternal.GetBattleTerminalDecision:output_type -> match.GetBattleTerminalDecisionResponse
-	28, // 65: match.MatchInternal.ListStrandedFormations:output_type -> match.ListStrandedFormationsResponse
-	30, // 66: match.MatchInternal.ResolveStrandedFormation:output_type -> match.ResolveStrandedFormationResponse
-	35, // 67: match.MatchInternal.ListPendingBattleScripts:output_type -> match.ListPendingBattleScriptsResponse
-	37, // 68: match.MatchInternal.ReviewBattleScript:output_type -> match.ReviewBattleScriptResponse
-	32, // 69: match.MatchInternal.StartGuildWarBattle:output_type -> match.StartGuildWarBattleResponse
-	57, // [57:70] is the sub-list for method output_type
-	44, // [44:57] is the sub-list for method input_type
-	44, // [44:44] is the sub-list for extension type_name
-	44, // [44:44] is the sub-list for extension extendee
-	0,  // [0:44] is the sub-list for field type_name
+	42, // 32: match.ResolveStrandedFormationRequest.approval:type_name -> common.base.AdminApproval
+	6,  // 33: match.ResolveStrandedFormationResponse.verdict:type_name -> match.StrandedFormationVerdict
+	26, // 34: match.ResolveStrandedFormationResponse.formation:type_name -> match.StrandedFormation
+	43, // 35: match.StartGuildWarBattleRequest.ai_defender_snapshots:type_name -> BattlePlayerSnapshot
+	38, // 36: match.StartGuildWarBattleRequest.activity_context:type_name -> BattleActivityContext
+	39, // 37: match.StartGuildWarBattleRequest.auth:type_name -> common.base.ServiceCallAuth
+	0,  // 38: match.StartGuildWarBattleResponse.reject:type_name -> match.ActivityBattleReject
+	39, // 39: match.ListPendingBattleScriptsRequest.auth:type_name -> common.base.ServiceCallAuth
+	44, // 40: match.PendingBattleScript.content:type_name -> BattleScript
+	7,  // 41: match.ListPendingBattleScriptsResponse.reject:type_name -> match.BattleScriptReviewReject
+	34, // 42: match.ListPendingBattleScriptsResponse.scripts:type_name -> match.PendingBattleScript
+	39, // 43: match.ReviewBattleScriptRequest.auth:type_name -> common.base.ServiceCallAuth
+	7,  // 44: match.ReviewBattleScriptResponse.reject:type_name -> match.BattleScriptReviewReject
+	8,  // 45: match.MatchInternal.StartActivityBattle:input_type -> match.StartActivityBattleRequest
+	10, // 46: match.MatchInternal.CancelActivityBattle:input_type -> match.CancelActivityBattleRequest
+	12, // 47: match.MatchInternal.CommitBattleOutcome:input_type -> match.CommitBattleOutcomeRequest
+	14, // 48: match.MatchInternal.SetSpectateFeatured:input_type -> match.SetSpectateFeaturedRequest
+	17, // 49: match.MatchInternal.AcquireTrialOccupancy:input_type -> match.AcquireTrialOccupancyRequest
+	19, // 50: match.MatchInternal.ReleaseTrialOccupancy:input_type -> match.ReleaseTrialOccupancyRequest
+	21, // 51: match.MatchInternal.GetBattleCompletion:input_type -> match.GetBattleCompletionRequest
+	23, // 52: match.MatchInternal.GetBattleTerminalDecision:input_type -> match.GetBattleTerminalDecisionRequest
+	27, // 53: match.MatchInternal.ListStrandedFormations:input_type -> match.ListStrandedFormationsRequest
+	29, // 54: match.MatchInternal.ResolveStrandedFormation:input_type -> match.ResolveStrandedFormationRequest
+	33, // 55: match.MatchInternal.ListPendingBattleScripts:input_type -> match.ListPendingBattleScriptsRequest
+	36, // 56: match.MatchInternal.ReviewBattleScript:input_type -> match.ReviewBattleScriptRequest
+	31, // 57: match.MatchInternal.StartGuildWarBattle:input_type -> match.StartGuildWarBattleRequest
+	9,  // 58: match.MatchInternal.StartActivityBattle:output_type -> match.StartActivityBattleResponse
+	11, // 59: match.MatchInternal.CancelActivityBattle:output_type -> match.CancelActivityBattleResponse
+	13, // 60: match.MatchInternal.CommitBattleOutcome:output_type -> match.CommitBattleOutcomeResponse
+	15, // 61: match.MatchInternal.SetSpectateFeatured:output_type -> match.SetSpectateFeaturedResponse
+	18, // 62: match.MatchInternal.AcquireTrialOccupancy:output_type -> match.AcquireTrialOccupancyResponse
+	20, // 63: match.MatchInternal.ReleaseTrialOccupancy:output_type -> match.ReleaseTrialOccupancyResponse
+	22, // 64: match.MatchInternal.GetBattleCompletion:output_type -> match.GetBattleCompletionResponse
+	24, // 65: match.MatchInternal.GetBattleTerminalDecision:output_type -> match.GetBattleTerminalDecisionResponse
+	28, // 66: match.MatchInternal.ListStrandedFormations:output_type -> match.ListStrandedFormationsResponse
+	30, // 67: match.MatchInternal.ResolveStrandedFormation:output_type -> match.ResolveStrandedFormationResponse
+	35, // 68: match.MatchInternal.ListPendingBattleScripts:output_type -> match.ListPendingBattleScriptsResponse
+	37, // 69: match.MatchInternal.ReviewBattleScript:output_type -> match.ReviewBattleScriptResponse
+	32, // 70: match.MatchInternal.StartGuildWarBattle:output_type -> match.StartGuildWarBattleResponse
+	58, // [58:71] is the sub-list for method output_type
+	45, // [45:58] is the sub-list for method input_type
+	45, // [45:45] is the sub-list for extension type_name
+	45, // [45:45] is the sub-list for extension extendee
+	0,  // [0:45] is the sub-list for field type_name
 }
 
 func init() { file_proto_match_match_internal_proto_init() }

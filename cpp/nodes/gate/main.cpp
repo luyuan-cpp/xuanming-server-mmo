@@ -597,10 +597,21 @@ int main(int argc, char *argv[])
                 // 但随后的断线通知没被 login 确认时要靠它重发,排空期间一直跑,拆除前(stopGateTimers)才停。
                 context.drainMigrationTimer.Cancel();
                 auto &sessions = tlsSessionManager.sessions();
-                LOG_INFO << "Disconnecting " << sessions.size() << " client sessions before shutdown...";
+                auto &preAuthConnections = tlsSessionManager.preAuthConnections();
+                LOG_INFO << "Disconnecting " << sessions.size() << " client sessions and " << preAuthConnections.size()
+                         << " unauthenticated connections before shutdown...";
                 for (auto &[sessionId, info] : sessions)
                 {
                     if (const auto conn = info.conn.lock())
+                    {
+                        conn->forceClose();
+                    }
+                }
+                // 还没验签的连接没有会话(票据先行,准入设计 P2-4),一起关。forceClose 是排队关闭,断开回调在之后的轮次摘记录,
+                // 不会在这个循环里改表;它们没向 login 发过登录,不进下面 closingSessions 的等待。
+                for (auto &[incarnation, preAuth] : preAuthConnections)
+                {
+                    if (const auto conn = preAuth.conn.lock())
                     {
                         conn->forceClose();
                     }
@@ -782,6 +793,8 @@ int main(int argc, char *argv[])
                         context.dependencyGate.WaitAndRun(n, requiredDependencies, [&context](Node &n)
                                                                    {
                         // Report player_count to etcd every 10 seconds for load balancing
+                        // 只数会话,即验签过的连接;还没验签的连接不在会话表里,不算人数(准入设计 P2-4),
+                        // 没有票据的洪水因此压不低 login 看到的余量。
                         context.playerCountReportTimer.RunEvery(10.0, [&n] {
                             auto count = static_cast<uint32_t>(tlsSessionManager.sessions().size());
                             n.MutableNodeInfo().set_player_count(count);

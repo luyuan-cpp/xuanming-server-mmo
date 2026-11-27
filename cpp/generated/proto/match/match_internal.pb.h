@@ -36,6 +36,7 @@
 #include "proto/battle/battle_script.pb.h"
 #include "proto/battle/player_battle.pb.h"
 #include "proto/common/base/service_call_auth.pb.h"
+#include "proto/common/base/admin_approval.pb.h"
 // @@protoc_insertion_point(includes)
 
 // Must be included last.
@@ -3985,6 +3986,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResolveStrandedFormationRequest fin
     kOperatorNameFieldNumber = 5,
     kReasonFieldNumber = 6,
     kAuthFieldNumber = 7,
+    kApprovalFieldNumber = 8,
     kBattleIdFieldNumber = 1,
     kModeFieldNumber = 2,
   };
@@ -4064,6 +4066,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResolveStrandedFormationRequest fin
   ::common::base::ServiceCallAuth* PROTOBUF_NONNULL _internal_mutable_auth();
 
   public:
+  // .common.base.AdminApproval approval = 8;
+  [[nodiscard]] bool has_approval()
+      const;
+  void clear_approval() ;
+  [[nodiscard]] const ::common::base::AdminApproval& approval() const;
+  [[nodiscard]] ::common::base::AdminApproval* PROTOBUF_NULLABLE release_approval();
+  ::common::base::AdminApproval* PROTOBUF_NONNULL mutable_approval();
+  void set_allocated_approval(::common::base::AdminApproval* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_approval(::common::base::AdminApproval* PROTOBUF_NULLABLE value);
+  ::common::base::AdminApproval* PROTOBUF_NULLABLE unsafe_arena_release_approval();
+
+  private:
+  const ::common::base::AdminApproval& _internal_approval() const;
+  ::common::base::AdminApproval* PROTOBUF_NONNULL _internal_mutable_approval();
+
+  public:
   // uint64 battle_id = 1;
   void clear_battle_id() ;
   [[nodiscard]] ::uint64_t battle_id() const;
@@ -4088,8 +4106,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResolveStrandedFormationRequest fin
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
-                          1, 91,
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          2, 99,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -4122,6 +4140,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResolveStrandedFormationRequest fin
     ::google::protobuf::internal::ArenaStringPtr operator_name_;
     ::google::protobuf::internal::ArenaStringPtr reason_;
     ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE auth_;
+    ::common::base::AdminApproval* PROTOBUF_NULLABLE approval_;
     ::uint64_t battle_id_;
     int mode_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -12887,7 +12906,7 @@ inline void ListStrandedFormationsResponse::set_allocated_target(::std::string* 
 inline void ResolveStrandedFormationRequest::clear_battle_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint64_t ResolveStrandedFormationRequest::battle_id() const {
   // @@protoc_insertion_point(field_get:match.ResolveStrandedFormationRequest.battle_id)
@@ -12895,7 +12914,7 @@ inline ::uint64_t ResolveStrandedFormationRequest::battle_id() const {
 }
 inline void ResolveStrandedFormationRequest::set_battle_id(::uint64_t value) {
   _internal_set_battle_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:match.ResolveStrandedFormationRequest.battle_id)
 }
 inline ::uint64_t ResolveStrandedFormationRequest::_internal_battle_id() const {
@@ -12911,7 +12930,7 @@ inline void ResolveStrandedFormationRequest::_internal_set_battle_id(::uint64_t 
 inline void ResolveStrandedFormationRequest::clear_mode() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.mode_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::match::StrandedFormationMode ResolveStrandedFormationRequest::mode() const {
   // @@protoc_insertion_point(field_get:match.ResolveStrandedFormationRequest.mode)
@@ -12919,7 +12938,7 @@ inline ::match::StrandedFormationMode ResolveStrandedFormationRequest::mode() co
 }
 inline void ResolveStrandedFormationRequest::set_mode(::match::StrandedFormationMode value) {
   _internal_set_mode(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:match.ResolveStrandedFormationRequest.mode)
 }
 inline ::match::StrandedFormationMode ResolveStrandedFormationRequest::_internal_mode() const {
@@ -13278,6 +13297,99 @@ inline void ResolveStrandedFormationRequest::set_allocated_auth(::common::base::
 
   _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(value);
   // @@protoc_insertion_point(field_set_allocated:match.ResolveStrandedFormationRequest.auth)
+}
+
+// .common.base.AdminApproval approval = 8;
+inline bool ResolveStrandedFormationRequest::has_approval() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000020U);
+  PROTOBUF_ASSUME(!value || _impl_.approval_ != nullptr);
+  return value;
+}
+inline const ::common::base::AdminApproval& ResolveStrandedFormationRequest::_internal_approval() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::common::base::AdminApproval* p = _impl_.approval_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::common::base::AdminApproval>(&::common::base::AdminApproval_globals_);
+}
+inline const ::common::base::AdminApproval& ResolveStrandedFormationRequest::approval() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.ResolveStrandedFormationRequest.approval)
+  return _internal_approval();
+}
+inline void ResolveStrandedFormationRequest::unsafe_arena_set_allocated_approval(
+    ::common::base::AdminApproval* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.approval_);
+  }
+  _impl_.approval_ = reinterpret_cast<::common::base::AdminApproval*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.ResolveStrandedFormationRequest.approval)
+}
+inline ::common::base::AdminApproval* PROTOBUF_NULLABLE ResolveStrandedFormationRequest::release_approval() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::common::base::AdminApproval* released = _impl_.approval_;
+  _impl_.approval_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::common::base::AdminApproval* PROTOBUF_NULLABLE ResolveStrandedFormationRequest::unsafe_arena_release_approval() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.ResolveStrandedFormationRequest.approval)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::common::base::AdminApproval* temp = _impl_.approval_;
+  _impl_.approval_ = nullptr;
+  return temp;
+}
+inline ::common::base::AdminApproval* PROTOBUF_NONNULL ResolveStrandedFormationRequest::_internal_mutable_approval() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.approval_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::common::base::AdminApproval>(GetArena());
+    _impl_.approval_ = reinterpret_cast<::common::base::AdminApproval*>(p);
+  }
+  return _impl_.approval_;
+}
+inline ::common::base::AdminApproval* PROTOBUF_NONNULL ResolveStrandedFormationRequest::mutable_approval()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::common::base::AdminApproval* _msg = _internal_mutable_approval();
+  // @@protoc_insertion_point(field_mutable:match.ResolveStrandedFormationRequest.approval)
+  return _msg;
+}
+inline void ResolveStrandedFormationRequest::set_allocated_approval(::common::base::AdminApproval* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.approval_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+
+  _impl_.approval_ = reinterpret_cast<::common::base::AdminApproval*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.ResolveStrandedFormationRequest.approval)
 }
 
 // -------------------------------------------------------------------

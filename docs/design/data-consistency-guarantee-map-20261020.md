@@ -206,12 +206,13 @@
    - 终结的条件写只比 `lease_until_ms`、`last_send_ms`。钟慢的副本发送时 `last_send_ms = GREATEST(last_send_ms, 它的 now)` 推不动,结局不明的重排又把 `lease_until_ms` 清回 0,行上两列和读证据时一样,条件写照样通过,这一次发送被漏掉。
 2. **方案**:
    - 见证加 `attempts`:`assetop.ManualRow`、`QuietWitness` 各加一列,比对只走 `QuietWitness.Matches` 一处。trade 的 `sqlResolveAssetOpQuiet` 加 `AND attempts = ?`;data_service 回收的 `settle` 在行锁读里多取 `attempts`,用 `Matches` 比。guild 的 SQL(`go/guild/internal/data/asset_store.go` 的 `sqlResolveAssetOpQuiet` 与 `ResolveManuallyIfQuiet` 的实参)当时被另一批改动占着,待补;guild 工具观察窗口里的复核已在 Go 里比 `attempts`,SQL 暂不比只是少一道兜底。
-   - trade、guild 两个工具只在结论是 `never_applied`(唯一依赖 `RowQuiet` 的结论)时,终结之前在本机单调时钟上等满观察窗口 `ManualObserveWindow(租约) = max(1 分钟, 2 × 重投租约)`:trade 租约 10 秒,窗口 1 分钟;guild 按 `AssetOp.LeaseMs`,默认 10 秒即 1 分钟,上限 600 秒即 20 分钟。等完再读一次行与账本:行仍是 PENDING、见证对得上、账本重判仍是 `never_applied` 才终结,条件写照旧带第一次读到的见证;否则退出码 3,打审计行与原因,提示重跑。等待前打一行英文提示(等多久、为什么),等待可被 ctx 取消(被打断退出码 1,不改数据),整条命令的预算从 15 秒放宽到 15 秒加窗口。`applied` / `rejected` 有账本里的收据作证,不等。
+   - trade、guild 两个工具只在结论是 `never_applied`(唯一依赖 `RowQuiet` 的结论)时,终结之前在本机单调时钟上等满观察窗口 `ManualObserveWindow(租约) = max(1 分钟, 2 × 重投租约)`:trade 租约 10 秒,窗口 1 分钟;guild 按 `AssetOp.LeaseMs`,默认 10 秒即 1 分钟,上限 600 秒即 20 分钟。等完再读一次行与账本(先读行、后读账本):行仍是 PENDING、`lease_until_ms` 与 `last_send_ms` 都没变(`QuietWitness.LeaseAndSendUnchanged`,**跨窗口不比 `attempts`**)、账本重判仍是 `never_applied` 才终结,条件写带**第二次读到的**整份见证(含 `attempts`);否则退出码 3,打审计行与原因,提示重跑。等待前打一行英文提示(等多久、为什么),等待可被 ctx 取消(被打断退出码 1,不改数据),整条命令的预算从 15 秒放宽到 15 秒加窗口。`applied` / `rejected` 有账本里的收据作证,不等。
    - data_service 的 `ResolveRecallOp` 只做见证加 `attempts`,不加观察窗口。
    - `RowQuiet` 本身不改,仍是第一道筛选。
 3. **为什么这样选**:
    - 读证据那一刻在途的投递,都落在一个已经领到的租约里,处理预算短于租约,所以至迟在读证据之后一个租约内收尾:成功,行被终结;结局不明,重排(`attempts` 加一、租约清零);进程崩溃,行不变,但 scene 若已应用,要么还持有玩家(账本 `Released=false`,判 none),要么已存盘(账本见过这个 seq,判 applied / rejected,`-as aborted` 不许)。所以两次读之间行没变、账本仍判 `never_applied`,就说明读证据之后没有在途投递。这个结论只用到本机的单调时钟,和任何一台机器的墙钟都无关。两倍租约和一分钟下限,是给收尾那次写库的锁等待与事务重试留的余量。
-   - 观察窗口管的是「读证据那一刻已经在途」;`attempts` 管的是「读证据之后又排过」,包括复核之后到条件写之间、以及 data_service 这条不等的路径。重排每次必给它加一,和时钟无关。
+   - 观察窗口管的是「读证据那一刻已经在途」;`attempts` 管的是最后一次读到条件写之间(毫秒级)又排过,以及 data_service 这条不等的路径。重排每次必给它加一,和时钟无关。
+   - 跨观察窗口为什么不比 `attempts`(2026-11-26 主会话复核子代理的实现后改定):离线玩家的行会被定期领走、本地 NOT_HERE 重排(不发请求),每次 `attempts` 加一;停放档关掉时约每分钟一次,比 `attempts` 的话「从未应用」的行用工具几乎永远终结不了。不比它也不放过发送:第二次读时还在途的投递,它的领取必改 `lease_until_ms`;窗口里已经结束的投递,哪怕是钟慢的副本发的、结局不明又重排了,scene 若已应用,第二次读账本时要么还持有玩家、要么已存盘见过这个 seq,重判都不是 `never_applied`;第二次读之后的领取与重排由条件写里的 `attempts` 挡住。所以条件写改用第二次读到的见证。
    - data_service 的人工终结在它自己进程的 RPC 里做:进程启动跑过 `clockcheck`(偏差 ≤ 30 秒,运行期靠 NTP 与超过 1 秒的节点时钟告警),写这些列的重投副本也是 data_service,钟差远小于 30 分钟的安静间隔;RPC 里也不能挂几分钟。
 4. **被否决的做法**:
    - 只加 `attempts`:挡不住读证据那一刻已经在途的投递。那一次还没重排,`attempts` 没变,条件写照样通过。
@@ -219,10 +220,11 @@
    - 新增「发送计数」列:trade、guild、回收三张表要改结构、写迁移,为一个人工工具不值;`attempts` 已经满足「每次重排必变」。
    - 拿数据库服务器的钟当 now:库的钟同样不在核对范围内,也核不到写下时刻的那几个副本。
 5. **代价与边界**:
-   - 只领没发的重排(玩家不在线,本地 NOT_HERE)也加 `attempts`:读证据之后碰上一次,终结就落空(工具退出码 3,`ResolveRecallOp` 回 40),要重跑。有意如此:宁可让操作员重跑,也不放过一次发送。离线行默认进停放档,约 30 分钟(±20%)才本地重排一次,一分钟的窗口碰上的机会约 1/30。停放档关掉(`OfflineAfterAttempts = 0`)时离线行按退避封顶约 60 秒重排一次,窗口里几乎必然碰上,这类行用工具终结不了,要先打开停放档;guild 把 `AssetOp.LeaseMs` 调大时窗口跟着变长(上限 20 分钟),和停放间隔可比时多数次会落空。
+   - 只领没发的重排(玩家不在线,本地 NOT_HERE)也加 `attempts`:最后一次读到条件写之间(毫秒级)碰上一次,终结就落空(工具退出码 3,`ResolveRecallOp` 回 40),要重跑,概率可以忽略。跨观察窗口不比它,停放档关掉(`OfflineAfterAttempts = 0`、离线行约每 60 秒重排一次)时工具照样能用。
+   - 观察窗口里的复核仍比 `lease_until_ms`:第一次读时行上留着一个已过期、没清掉的旧租约,窗口里又被领过一次、重排清回 0,两次读的租约不同,这一次拒绝;重跑时第一次读到的就是 0,不会再因此落空。
    - 窗口的前提与 `ManualQuietFloor` 相同:一次投递请求的生命期以秒计,不会在网络或 scene 的队列里滞留到窗口之外。
    - 进程被冻结(虚拟机暂停、SIGSTOP)超过租约再恢复的重投副本,不在「处理预算短于租约」的前提之内;这和自动放弃的 `last_send_ms` 契约(`assetop/abandon.go` 文件头)是同一个前提。
-   - guild 的终结 SQL 补上 `attempts` 之前,复核之后到条件写之间(毫秒级)若恰好有一次「钟慢的副本发了请求、结局不明重排」,条件写仍会通过;补上 `AND attempts = ?` 之后关掉。
+   - guild 的终结 SQL 补上 `attempts` 之前,第二次读到条件写之间(毫秒级)若恰好有一次「钟慢的副本发了请求、结局不明重排」,条件写仍会通过;补上 `AND attempts = ?` 之后关掉。
    - guild 工具在等待期间一直占着维护排空的准入(`drainproof` 的 SOURCE 会话),期间开始的排空要等它结束;`tools/scripts/maintenance_drain.ps1` 把它当有限 NORMAL 工具跑时,`normalTool.timeoutSeconds` 要不小于 15 秒加窗口。
    - data_service 一侧:`clockcheck` 读不到参照、或开了 `MMORPG_CLOCK_CHECK_MODE=warn` 时只告警照常启动,那台副本的钟就没核过,与工具加观察窗口之前是同一个残余,靠时钟告警发现。
 

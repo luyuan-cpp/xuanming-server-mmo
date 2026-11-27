@@ -197,6 +197,7 @@ set(SOURCE_FILES
     common/component/player_jianghu_comp.pb.cc
     scene/player_jianghu.pb.cc
     common/base/admin_approval.pb.cc
+    login/login_admin.pb.cc
 )
 
 add_library(proto STATIC ${SOURCE_FILES})

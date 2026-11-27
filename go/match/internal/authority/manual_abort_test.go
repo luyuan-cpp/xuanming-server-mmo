@@ -130,13 +130,18 @@ func TestManualAbortEligibilityTable(t *testing.T) {
 		{why: "宽限还差 1 毫秒", edit: skewed, now: late - 1, class: pb.StrandedFormationClass_STRANDED_FORMATION_CLASS_ORIGINAL_MISMATCH, check: "created_before_formation", refusal: manualRefuseDeadlineNotDue, effective: base.DeadlineMs},
 		{why: "原件截止更晚:房间按原件截止打,有效截止取它", edit: func(_ *pb.MatchFormationRecord, r *battlepb.CreateBattleRequest) { r.DeadlineMs += 1 },
 			now: late, class: pb.StrandedFormationClass_STRANDED_FORMATION_CLASS_ORIGINAL_MISMATCH, check: "deadline_mismatch", refusal: manualRefuseDeadlineNotDue, effective: base.DeadlineMs + 1},
-		{why: "准入期限更晚:取准入期限", edit: func(f *pb.MatchFormationRecord, r *battlepb.CreateBattleRequest) { skewed(f, r); r.AdmitBeforeMs = f.DeadlineMs + 10 },
+		{why: "准入期限更晚:取准入期限", edit: func(f *pb.MatchFormationRecord, r *battlepb.CreateBattleRequest) {
+			skewed(f, r)
+			r.AdmitBeforeMs = f.DeadlineMs + 10
+		},
 			now: late, class: pb.StrandedFormationClass_STRANDED_FORMATION_CLASS_ORIGINAL_MISMATCH, check: "created_before_formation", refusal: manualRefuseDeadlineNotDue, effective: base.DeadlineMs + 10},
 		{why: "battle 明确采用旧协议", edit: func(f *pb.MatchFormationRecord, _ *battlepb.CreateBattleRequest) { f.AdoptedOutcomeObserved = true },
 			now: late, class: pb.StrandedFormationClass_STRANDED_FORMATION_CLASS_SHAPE_INVALID, check: "adopted_legacy", effective: base.DeadlineMs},
 		{why: "预检实例与目标不符", edit: func(f *pb.MatchFormationRecord, _ *battlepb.CreateBattleRequest) { f.PreflightInstanceId = "other" },
 			now: late, class: pb.StrandedFormationClass_STRANDED_FORMATION_CLASS_SHAPE_INVALID, check: "preflight_instance_mismatch", effective: base.DeadlineMs},
-		{why: "operation 为空:原件判据全过却不在到期恢复候选里", edit: func(f *pb.MatchFormationRecord, r *battlepb.CreateBattleRequest) { f.OperationId, r.PlacementOperationId = "", "" },
+		{why: "operation 为空:原件判据全过却不在到期恢复候选里", edit: func(f *pb.MatchFormationRecord, r *battlepb.CreateBattleRequest) {
+			f.OperationId, r.PlacementOperationId = "", ""
+		},
 			now: late, class: pb.StrandedFormationClass_STRANDED_FORMATION_CLASS_SHAPE_INVALID, check: "operation_missing", effective: base.DeadlineMs},
 		{why: "原件不可解码:有效截止只有成局截止", post: func(f *pb.MatchFormationRecord) { f.CreateRequest = []byte{0xff} },
 			now: late, class: pb.StrandedFormationClass_STRANDED_FORMATION_CLASS_ORIGINAL_MISMATCH, check: "create_undecodable", effective: base.DeadlineMs},
@@ -225,11 +230,11 @@ func TestFormationDigestDeterministic(t *testing.T) {
 func TestValidateManualAudit(t *testing.T) {
 	require.NoError(t, ValidateManualAudit("ops-alice", "INC-7:原件早于成局,battle 日志确认房间已删"))
 	for why, c := range map[string][2]string{
-		"没有操作人":   {"  ", "INC-7"},
-		"没有依据":    {"ops", ""},
-		"操作人超长":   {strings.Repeat("o", ManualOperatorMaxBytes+1), "INC-7"},
-		"依据超长":    {"ops", strings.Repeat("r", ManualReasonMaxBytes+1)},
-		"换行伪造日志行": {"ops", "INC-7\n[FormationManual] executed=true"},
+		"没有操作人":    {"  ", "INC-7"},
+		"没有依据":     {"ops", ""},
+		"操作人超长":    {strings.Repeat("o", ManualOperatorMaxBytes+1), "INC-7"},
+		"依据超长":     {"ops", strings.Repeat("r", ManualReasonMaxBytes+1)},
+		"换行伪造日志行":  {"ops", "INC-7\n[FormationManual] executed=true"},
 		"非法 UTF-8": {"ops\xff", "INC-7"},
 	} {
 		require.Error(t, ValidateManualAudit(c[0], c[1]), why)
@@ -292,7 +297,8 @@ func insertArchivedOnly(t *testing.T, s *Store, battleID uint64) {
 }
 
 func manualRequest(battleID uint64, digest string, execute bool) ManualAbortRequest {
-	return ManualAbortRequest{BattleID: battleID, ExpectDigest: digest, Operator: "ops-alice", Reason: "INC-7 original_mismatch confirmed", Replica: "match-0", Execute: execute}
+	return ManualAbortRequest{BattleID: battleID, ExpectDigest: digest, Operator: "ops-alice", Reason: "INC-7 original_mismatch confirmed", Replica: "match-0", Execute: execute,
+		ApprovalID: "900", Approver: "ops-bob"}
 }
 
 func manualRows(t *testing.T, s *Store, battleID uint64) int {
@@ -383,13 +389,15 @@ func TestManualAbortTiDBOriginalMismatchReleasesOnce(t *testing.T) {
 	requireManuallyAborted(t, s, before, tickets)
 	require.Equal(t, manualAborts+1, metrics.GlobalFlowValue("terminal", terminalAbortManual), "提交成功计一次 abort_manual")
 
-	// 审计行:操作人、依据、处置前的成局与全员原票、有效截止、执行副本。
+	// 审计行:操作人、依据、处置前的成局与全员原票、有效截止、执行副本、双人复核的批准号与批准人。
 	var action, class uint32
-	var failed, operator, reason, digestBefore, replica string
+	var failed, operator, reason, digestBefore, replica, approvalID, approver string
 	var resolvedMs, effective uint64
 	var formationBefore, ticketsBefore []byte
-	require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT action,formation_class,failed_check,operator_name,reason,resolved_ms,formation_digest_before,formation_before,tickets_before,effective_deadline_ms,replica_instance FROM match_manual_resolution WHERE battle_id=?", battleID).
-		Scan(&action, &class, &failed, &operator, &reason, &resolvedMs, &digestBefore, &formationBefore, &ticketsBefore, &effective, &replica))
+	require.NoError(t, s.DB.QueryRowContext(ctx, "SELECT action,formation_class,failed_check,operator_name,reason,resolved_ms,formation_digest_before,formation_before,tickets_before,effective_deadline_ms,replica_instance,approval_id,approver FROM match_manual_resolution WHERE battle_id=?", battleID).
+		Scan(&action, &class, &failed, &operator, &reason, &resolvedMs, &digestBefore, &formationBefore, &ticketsBefore, &effective, &replica, &approvalID, &approver))
+	require.Equal(t, "900", approvalID)
+	require.Equal(t, "ops-bob", approver)
 	require.EqualValues(t, pb.StrandedFormationMode_STRANDED_FORMATION_MODE_ABORT, action)
 	require.EqualValues(t, pb.StrandedFormationClass_STRANDED_FORMATION_CLASS_ORIGINAL_MISMATCH, class)
 	require.Equal(t, "created_before_formation", failed)
@@ -647,11 +655,18 @@ func TestStrandedFormationsTiDBListsAllClasses(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	strandedFixture(t, s, 2611, clockSkewed)
-	strandedFixture(t, s, 2612, func(_ uint64, f *pb.MatchFormationRecord, _ *battlepb.CreateBattleRequest) { f.State, f.PreflightInstanceId = 3, "other-instance" })
-	strandedFixture(t, s, 2613, func(stamp uint64, f *pb.MatchFormationRecord, r *battlepb.CreateBattleRequest) { f.State = 4; clockSkewed(stamp, f, r) })
+	strandedFixture(t, s, 2612, func(_ uint64, f *pb.MatchFormationRecord, _ *battlepb.CreateBattleRequest) {
+		f.State, f.PreflightInstanceId = 3, "other-instance"
+	})
+	strandedFixture(t, s, 2613, func(stamp uint64, f *pb.MatchFormationRecord, r *battlepb.CreateBattleRequest) {
+		f.State = 4
+		clockSkewed(stamp, f, r)
+	})
 	strandedFixture(t, s, 2614, nil)
 	// 2026-11-06:已开局(state 4)的 shape_invalid 也要进巡检计数(原先只数 state 2/3)。
-	strandedFixture(t, s, 2615, func(_ uint64, f *pb.MatchFormationRecord, _ *battlepb.CreateBattleRequest) { f.State, f.PreflightInstanceId = 4, "other-instance" })
+	strandedFixture(t, s, 2615, func(_ uint64, f *pb.MatchFormationRecord, _ *battlepb.CreateBattleRequest) {
+		f.State, f.PreflightInstanceId = 4, "other-instance"
+	})
 	insertArchivedOnly(t, s, 2613)
 
 	seen := map[uint64]*pb.StrandedFormation{}
@@ -781,7 +796,9 @@ func TestManualAbortTiDBLegacyProtocolFormationStopsRenewingAndIsResolvable(t *t
 	s := testStore(t)
 	ctx := context.Background()
 	const battleID = 2624
-	tickets := strandedFixture(t, s, battleID, func(_ uint64, f *pb.MatchFormationRecord, _ *battlepb.CreateBattleRequest) { f.OutcomeProtocolVersion = 0 })
+	tickets := strandedFixture(t, s, battleID, func(_ uint64, f *pb.MatchFormationRecord, _ *battlepb.CreateBattleRequest) {
+		f.OutcomeProtocolVersion = 0
+	})
 	before, err := s.Formation(ctx, battleID)
 	require.NoError(t, err)
 	require.False(t, TerminalOutcomeExpected(before), "自动路径不裁决它:scene 照常解冻")

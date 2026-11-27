@@ -134,10 +134,10 @@
 ## 六、执行步骤
 
 - [x] Step 1：完成全仓工作区状态与既有代码深度审计（确认 A0 每日观道已由前置会话彻底清除）。
-- [ ] Step 2：落盘本设计文档并同步关联策划/设计文档与索引。
-- [ ] Step 3：编写并执行 `tools/scripts/anti_chore_v1_xlsx_patch.py`，更新源 proto 与全量导表/生成。
-- [ ] Step 4：落地 C++ 滚存蓄水池/激励视频周池与 Go 帮会周捐献/终身限购，并通过 C++/Go 单测与静态门禁。
-- [ ] Step 5：同步对齐 Java 独立服（含 `0023.schema` 与 `PARITY.md`）并通过 Maven 测试。
-- [ ] Step 6：同步对齐 Python 服务端并通过 `pytest`。
-- [ ] Step 7：同步对齐 Unity 客户端文案/模型并通过编译与 EditMode 验收测试。
-- [ ] Step 8：将真实命令与测试结果追加至 `docs/PROGRESS.md`。
+- [x] Step 2：落盘本设计文档并同步关联策划/设计文档与索引。
+- [x] Step 3：编写并执行 `tools/scripts/anti_chore_v1_xlsx_patch.py`，更新源 proto 与全量导表/生成。
+- [x] Step 4：落地 C++ 滚存蓄水池/激励视频周池与 Go 帮会周捐献/终身限购，并通过 C++/Go 单测与静态门禁。
+- [x] Step 5：同步对齐 Java 独立服（含 `0024.schema` 与 `PARITY.md`）并通过 Maven 测试。
+- [x] Step 6：同步对齐 Python 服务端并通过 `pytest`。
+- [x] Step 7：同步对齐 Unity 客户端文案/模型并通过编译与 EditMode 验收测试。
+- [x] Step 8：将真实命令与测试结果追加至 `docs/PROGRESS.md`。

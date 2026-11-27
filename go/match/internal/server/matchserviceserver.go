@@ -271,3 +271,33 @@ func (s *MatchServiceServer) GetTrialChallengeCard(ctx context.Context, in *matc
 func (s *MatchServiceServer) GetSharedTrialReplay(ctx context.Context, in *matchpb.GetSharedTrialReplayRequest) (*matchpb.GetSharedTrialReplayResponse, error) {
 	return logic.NewTrialChallengeCardLogic(ctx, s.svcCtx).GetSharedTrialReplay(in)
 }
+
+// ---- 万象残局坊 V1（575..581）----
+
+func (s *MatchServiceServer) ListTacticalPuzzles(ctx context.Context, in *matchpb.ListTacticalPuzzlesRequest) (*matchpb.ListTacticalPuzzlesResponse, error) {
+	return logic.NewTacticalPuzzleLogic(ctx, s.svcCtx).ListTacticalPuzzles(in)
+}
+
+func (s *MatchServiceServer) GetTacticalPuzzle(ctx context.Context, in *matchpb.GetTacticalPuzzleRequest) (*matchpb.GetTacticalPuzzleResponse, error) {
+	return logic.NewTacticalPuzzleLogic(ctx, s.svcCtx).GetTacticalPuzzle(in)
+}
+
+func (s *MatchServiceServer) SaveTacticalPuzzleDraft(ctx context.Context, in *matchpb.SaveTacticalPuzzleDraftRequest) (*matchpb.SaveTacticalPuzzleDraftResponse, error) {
+	return logic.NewTacticalPuzzleLogic(ctx, s.svcCtx).SaveTacticalPuzzleDraft(in)
+}
+
+func (s *MatchServiceServer) DeleteTacticalPuzzle(ctx context.Context, in *matchpb.DeleteTacticalPuzzleRequest) (*matchpb.DeleteTacticalPuzzleResponse, error) {
+	return logic.NewTacticalPuzzleLogic(ctx, s.svcCtx).DeleteTacticalPuzzle(in)
+}
+
+func (s *MatchServiceServer) StartTacticalPuzzleBattle(ctx context.Context, in *matchpb.StartTacticalPuzzleBattleRequest) (*matchpb.StartTacticalPuzzleBattleResponse, error) {
+	return logic.NewTacticalPuzzleLogic(ctx, s.svcCtx).StartTacticalPuzzleBattle(in)
+}
+
+func (s *MatchServiceServer) LikeTacticalPuzzle(ctx context.Context, in *matchpb.LikeTacticalPuzzleRequest) (*matchpb.LikeTacticalPuzzleResponse, error) {
+	return logic.NewTacticalPuzzleLogic(ctx, s.svcCtx).LikeTacticalPuzzle(in)
+}
+
+func (s *MatchServiceServer) GetTacticalPuzzleSolutionReplay(ctx context.Context, in *matchpb.GetTacticalPuzzleSolutionReplayRequest) (*matchpb.GetTacticalPuzzleSolutionReplayResponse, error) {
+	return logic.NewTacticalPuzzleLogic(ctx, s.svcCtx).GetTacticalPuzzleSolutionReplay(in)
+}

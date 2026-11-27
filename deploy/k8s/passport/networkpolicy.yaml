@@ -1,0 +1,47 @@
+# 官方通行证的网络隔离(docs/design/official-passport-registration.md §3.10)。
+#
+#   - casdoor:只收 passport-entry 代理来的 8000。Casdoor 进程还会起一个 RADIUS 的 UDP 监听(端口随机、代码里关不掉),
+#     组织没开 RADIUS 时不认证任何人;这条策略让它在集群里也够不着。管理后台、全部 /api/* 只能经代理的白名单进来。
+#   - passport-entry:只收 Ingress 控制器转来的 8080(公网)与 8081(集群内,给 login)。控制器所在 namespace 的标签按集群改。
+#   - 出站不在这里限:Casdoor 要连数据库、发邮件 / 短信、调人机验证与回调网关(§3.7),地址随环境变;要限的话按环境另加。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: casdoor-ingress
+  namespace: passport
+spec:
+  podSelector:
+    matchLabels:
+      app: casdoor
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: passport-entry
+      ports:
+        - protocol: TCP
+          port: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: passport-entry-ingress
+  namespace: passport
+spec:
+  podSelector:
+    matchLabels:
+      app: passport-entry
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: REPLACE_WITH_INGRESS_CONTROLLER_NAMESPACE
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 8081

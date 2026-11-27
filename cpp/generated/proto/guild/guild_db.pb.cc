@@ -91,6 +91,10 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fguild_2fguild_5fdb_2eproto, /* tracker*/ nullptr,},
         // ::guildpb::GuildWarFeudRecord
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fguild_2fguild_5fdb_2eproto, /* tracker*/ nullptr,},
+        // ::guildpb::GuildJianghuGrudgeAppliedRecord
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fguild_2fguild_5fdb_2eproto, /* tracker*/ nullptr,},
+        // ::guildpb::GuildWarCreditOwedRecord
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fguild_2fguild_5fdb_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
@@ -1474,6 +1478,218 @@ const ::_pbi::ClassData* GuildWarFeudRecord_get_class_data() {
   return GuildWarFeudRecord_globals_.GetClassData();
 #else
   return GuildWarFeudRecord_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class GuildWarCreditOwedRecord::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GuildWarCreditOwedRecord>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_._has_bits_);
+};
+
+constexpr GuildWarCreditOwedRecord::ParseTableT_ GuildWarCreditOwedRecord::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_._has_bits_),
+      0, // no _extensions_
+      10, 120,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294966272,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      10,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::guildpb::GuildWarCreditOwedRecord>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 player_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildWarCreditOwedRecord, _impl_.player_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_.player_id_)}},
+      // uint64 op_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildWarCreditOwedRecord, _impl_.op_id_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_.op_id_)}},
+      // uint64 guild_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildWarCreditOwedRecord, _impl_.guild_id_), 3>(),
+       {24, 3, 0,
+        PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_.guild_id_)}},
+      // uint32 kind = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildWarCreditOwedRecord, _impl_.kind_), 4>(),
+       {32, 4, 0,
+        PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_.kind_)}},
+      // uint32 tx_type = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildWarCreditOwedRecord, _impl_.tx_type_), 5>(),
+       {40, 5, 0,
+        PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_.tx_type_)}},
+      // uint32 ref_id = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildWarCreditOwedRecord, _impl_.ref_id_), 6>(),
+       {48, 6, 0,
+        PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_.ref_id_)}},
+      // uint32 period_key = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildWarCreditOwedRecord, _impl_.period_key_), 7>(),
+       {56, 7, 0,
+        PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_.period_key_)}},
+      // bytes payload = 8;
+      {::_pbi::TcParser::FastBS1,
+       {66, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_.payload_)}},
+      // uint64 source_id = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildWarCreditOwedRecord, _impl_.source_id_), 8>(),
+       {72, 8, 0,
+        PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_.source_id_)}},
+      // uint64 created_ms = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildWarCreditOwedRecord, _impl_.created_ms_), 9>(),
+       {80, 9, 0,
+        PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_.created_ms_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 player_id = 1;
+      {PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 op_id = 2;
+      {PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_.op_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 guild_id = 3;
+      {PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_.guild_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 kind = 4;
+      {PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_.kind_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 tx_type = 5;
+      {PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_.tx_type_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 ref_id = 6;
+      {PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_.ref_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 period_key = 7;
+      {PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_.period_key_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bytes payload = 8;
+      {PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_.payload_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+      // uint64 source_id = 9;
+      {PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_.source_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 created_ms = 10;
+      {PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_.created_ms_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr GuildWarCreditOwedRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        payload_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        player_id_{::uint64_t{0u}},
+        op_id_{::uint64_t{0u}},
+        guild_id_{::uint64_t{0u}},
+        kind_{0u},
+        tx_type_{0u},
+        ref_id_{0u},
+        period_key_{0u},
+        source_id_{::uint64_t{0u}},
+        created_ms_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr GuildWarCreditOwedRecord::GuildWarCreditOwedRecord(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GuildWarCreditOwedRecord::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GuildWarCreditOwedRecord(arena);
+}
+constexpr auto GuildWarCreditOwedRecord::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(GuildWarCreditOwedRecord), alignof(GuildWarCreditOwedRecord));
+}
+constexpr auto GuildWarCreditOwedRecord::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GuildWarCreditOwedRecord::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GuildWarCreditOwedRecord>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GuildWarCreditOwedRecord::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GuildWarCreditOwedRecord>(), &GuildWarCreditOwedRecord::ByteSizeLong,
+              &GuildWarCreditOwedRecord::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[32],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fguild_2fguild_5fdb_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GuildWarCreditOwedRecordGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GuildWarCreditOwedRecordGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GuildWarCreditOwedRecord_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GuildWarCreditOwedRecord::InternalGenerateClassData_(
+            _default, &GuildWarCreditOwedRecord_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GuildWarCreditOwedRecord>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GuildWarCreditOwedRecordGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GuildWarCreditOwedRecord _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GuildWarCreditOwedRecord>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecordGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GuildWarCreditOwedRecordGlobalsTypeInternal GuildWarCreditOwedRecord_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GuildWarCreditOwedRecord_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GuildWarCreditOwedRecord_globals_.GetClassData();
+#else
+  return GuildWarCreditOwedRecord_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -4768,6 +4984,154 @@ const ::_pbi::ClassData* GuildJianghuGrudgeRecord_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class GuildJianghuGrudgeAppliedRecord::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<GuildJianghuGrudgeAppliedRecord>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeAppliedRecord, _impl_._has_bits_);
+};
+
+constexpr GuildJianghuGrudgeAppliedRecord::ParseTableT_ GuildJianghuGrudgeAppliedRecord::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeAppliedRecord, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::guildpb::GuildJianghuGrudgeAppliedRecord>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint64 applied_ms = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildJianghuGrudgeAppliedRecord, _impl_.applied_ms_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeAppliedRecord, _impl_.applied_ms_)}},
+      // uint64 battle_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildJianghuGrudgeAppliedRecord, _impl_.battle_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeAppliedRecord, _impl_.battle_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 battle_id = 1;
+      {PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeAppliedRecord, _impl_.battle_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 applied_ms = 2;
+      {PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeAppliedRecord, _impl_.applied_ms_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr GuildJianghuGrudgeAppliedRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        battle_id_{::uint64_t{0u}},
+        applied_ms_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr GuildJianghuGrudgeAppliedRecord::GuildJianghuGrudgeAppliedRecord(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL GuildJianghuGrudgeAppliedRecord::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) GuildJianghuGrudgeAppliedRecord(arena);
+}
+constexpr auto GuildJianghuGrudgeAppliedRecord::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(GuildJianghuGrudgeAppliedRecord), alignof(GuildJianghuGrudgeAppliedRecord));
+}
+constexpr auto GuildJianghuGrudgeAppliedRecord::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &GuildJianghuGrudgeAppliedRecord::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<GuildJianghuGrudgeAppliedRecord>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &GuildJianghuGrudgeAppliedRecord::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<GuildJianghuGrudgeAppliedRecord>(), &GuildJianghuGrudgeAppliedRecord::ByteSizeLong,
+              &GuildJianghuGrudgeAppliedRecord::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeAppliedRecord, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[31],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fguild_2fguild_5fdb_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct GuildJianghuGrudgeAppliedRecordGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr GuildJianghuGrudgeAppliedRecordGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 GuildJianghuGrudgeAppliedRecord_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(GuildJianghuGrudgeAppliedRecord::InternalGenerateClassData_(
+            _default, &GuildJianghuGrudgeAppliedRecord_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<GuildJianghuGrudgeAppliedRecord>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~GuildJianghuGrudgeAppliedRecordGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) GuildJianghuGrudgeAppliedRecord _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<GuildJianghuGrudgeAppliedRecord>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeAppliedRecordGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST GuildJianghuGrudgeAppliedRecordGlobalsTypeInternal GuildJianghuGrudgeAppliedRecord_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* GuildJianghuGrudgeAppliedRecord_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return GuildJianghuGrudgeAppliedRecord_globals_.GetClassData();
+#else
+  return GuildJianghuGrudgeAppliedRecord_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class GuildDailyCounterRecord::_Internal {
  public:
   using HasBits = decltype(::std::declval<GuildDailyCounterRecord>()._impl_._has_bits_);
@@ -7198,6 +7562,36 @@ const ::uint32_t
         14,
         15,
         16,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildJianghuGrudgeAppliedRecord, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildJianghuGrudgeAppliedRecord, _impl_.battle_id_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildJianghuGrudgeAppliedRecord, _impl_.applied_ms_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildWarCreditOwedRecord, _impl_._has_bits_),
+        13, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildWarCreditOwedRecord, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildWarCreditOwedRecord, _impl_.op_id_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildWarCreditOwedRecord, _impl_.guild_id_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildWarCreditOwedRecord, _impl_.kind_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildWarCreditOwedRecord, _impl_.tx_type_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildWarCreditOwedRecord, _impl_.ref_id_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildWarCreditOwedRecord, _impl_.period_key_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildWarCreditOwedRecord, _impl_.payload_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildWarCreditOwedRecord, _impl_.source_id_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildWarCreditOwedRecord, _impl_.created_ms_),
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        0,
+        8,
+        9,
 };
 
 static const ::_pbi::MigrationSchema
@@ -7233,6 +7627,8 @@ static const ::_pbi::MigrationSchema
         {594, sizeof(::guildpb::GuildJianghuRivalSummaryRecord)},
         {611, sizeof(::guildpb::GuildJianghuGrudgeRecord)},
         {636, sizeof(::guildpb::GuildWarFeudRecord)},
+        {673, sizeof(::guildpb::GuildJianghuGrudgeAppliedRecord)},
+        {680, sizeof(::guildpb::GuildWarCreditOwedRecord)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -7267,6 +7663,8 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::guildpb::GuildJianghuRivalSummaryRecord_globals_,
         &::guildpb::GuildJianghuGrudgeRecord_globals_,
         &::guildpb::GuildWarFeudRecord_globals_,
+        &::guildpb::GuildJianghuGrudgeAppliedRecord_globals_,
+        &::guildpb::GuildWarCreditOwedRecord_globals_,
 };
 const char descriptor_table_protodef_proto_2fguild_2fguild_5fdb_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -7448,7 +7846,7 @@ const char descriptor_table_protodef_proto_2fguild_2fguild_5fdb_2eproto[] ABSL_A
     "\001(\004\022\025\n\rlast_track_ms\030\020 \001(\004\022\022\n\nupdated_ms"
     "\030\021 \001(\004:S\212\222\364\001\026guild_war_player_state\222\222\364\001\t"
     "player_id\332\222\364\001\026zone_id,open_challenge\250\223\364\001"
-    "\001\260\223\364\001\004\270\223\364\001\004\"\320\004\n\024GuildWarBountyRecord\022\021\n\t"
+    "\001\260\223\364\001\004\270\223\364\001\004\"\335\004\n\024GuildWarBountyRecord\022\021\n\t"
     "bounty_id\030\001 \001(\004\022\017\n\007zone_id\030\002 \001(\r\022\030\n\020issu"
     "er_player_id\030\003 \001(\004\022\027\n\017issuer_guild_id\030\004 "
     "\001(\004\022\030\n\020target_player_id\030\005 \001(\004\022\027\n\017target_"
@@ -7459,99 +7857,109 @@ const char descriptor_table_protodef_proto_2fguild_2fguild_5fdb_2eproto[] ABSL_A
     "id\030\r \001(\004\022\030\n\020hunter_player_id\030\016 \001(\004\022\025\n\rcr"
     "eated_at_ms\030\017 \001(\004\022\025\n\rexpires_at_ms\030\020 \001(\004"
     "\022\026\n\016resolved_at_ms\030\021 \001(\004\022\032\n\022escrow_guild"
-    "_funds\030\022 \001(\004:\227\001\212\222\364\001\020guild_war_bounty\222\222\364\001"
-    "\tbounty_id\332\222\364\001`target_player_id,status;i"
+    "_funds\030\022 \001(\004:\244\001\212\222\364\001\020guild_war_bounty\222\222\364\001"
+    "\tbounty_id\332\222\364\001mtarget_player_id,status;i"
     "ssuer_guild_id,status;zone_id,status,exp"
-    "ires_at_ms;status,expires_at_ms\250\223\364\001\001\260\223\364\001"
-    "\004\270\223\364\001\004\"\212\006\n\024GuildWarBattleRecord\022\021\n\tbattl"
-    "e_id\030\001 \001(\004\022\017\n\007zone_id\030\002 \001(\r\022\027\n\017war_battl"
-    "e_kind\030\003 \001(\r\022\022\n\nleyline_id\030\004 \001(\r\022\021\n\tboun"
-    "ty_id\030\005 \001(\004\022\031\n\021attacker_guild_id\030\006 \001(\004\022\031"
-    "\n\021defender_guild_id\030\007 \001(\004\022\017\n\007outcome\030\010 \001"
-    "(\r\022\024\n\014total_rounds\030\t \001(\r\022\030\n\020banner_hp_be"
-    "fore\030\n \001(\r\022\027\n\017banner_hp_after\030\013 \001(\r\022\027\n\017b"
-    "anner_shielded\030\014 \001(\r\022\032\n\022bounty_outcome_t"
-    "ag\030\r \001(\r\022\034\n\024jackpot_contribution\030\016 \001(\004\022\026"
-    "\n\016jackpot_silver\030\017 \001(\004\022\030\n\020diminish_perce"
-    "nt\030\020 \001(\r\022\035\n\025attacker_contribution\030\021 \001(\004\022"
-    "\027\n\017attacker_silver\030\022 \001(\004\022\026\n\016attacker_fun"
-    "ds\030\023 \001(\004\022\026\n\016attacker_merit\030\024 \001(\004\022\035\n\025defe"
-    "nder_contribution\030\025 \001(\004\022\027\n\017defender_silv"
-    "er\030\026 \001(\004\022\026\n\016defender_funds\030\027 \001(\004\022\026\n\016defe"
-    "nder_merit\030\030 \001(\004\022\027\n\017summary_payload\030\031 \001("
-    "\014\022\026\n\016finished_at_ms\030\032 \001(\004:x\212\222\364\001\020guild_wa"
-    "r_battle\222\222\364\001\tbattle_id\332\222\364\001Aattacker_guil"
-    "d_id,finished_at_ms;defender_guild_id,fi"
-    "nished_at_ms\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\345\001\n\025GuildWar"
-    "RivalryRecord\022\024\n\014guild_id_low\030\001 \001(\004\022\025\n\rg"
-    "uild_id_high\030\002 \001(\004\022\020\n\010week_key\030\003 \001(\r\022\023\n\013"
-    "clash_count\030\004 \001(\r\022\025\n\rbounty_marked\030\005 \001(\r"
-    "\022\022\n\nupdated_ms\030\006 \001(\004:M\212\222\364\001\021guild_war_riv"
-    "alry\222\222\364\001#guild_id_low,guild_id_high,week"
-    "_key\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\222\002\n\036GuildJianghuRiva"
-    "lSummaryRecord\022\020\n\010guild_id\030\001 \001(\004\022\026\n\016riva"
-    "l_guild_id\030\002 \001(\004\022\030\n\020rival_guild_name\030\003 \001"
-    "(\t\022\014\n\004wins\030\004 \001(\r\022\016\n\006losses\030\005 \001(\r\022\r\n\005draw"
-    "s\030\006 \001(\r\022\026\n\016last_battle_ms\030\007 \001(\004:g\212\222\364\001\033gu"
-    "ild_jianghu_rival_summary\222\222\364\001\027guild_id,r"
-    "ival_guild_id\332\222\364\001\027guild_id,last_battle_m"
-    "s\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\364\002\n\030GuildJianghuGrudgeR"
-    "ecord\022\020\n\010guild_id\030\001 \001(\004\022\021\n\tbattle_id\030\002 \001"
-    "(\004\022\026\n\016rival_guild_id\030\003 \001(\004\022\030\n\020rival_guil"
-    "d_name\030\004 \001(\t\022\031\n\021outcome_for_guild\030\005 \001(\r\022"
-    "\021\n\twrit_tier\030\006 \001(\r\022\021\n\tteam_size\030\007 \001(\r\022\024\n"
-    "\014total_rounds\030\010 \001(\r\022\030\n\020our_captain_name\030"
-    "\t \001(\t\022\032\n\022rival_captain_name\030\n \001(\t\022\023\n\013fin"
-    "ished_ms\030\013 \001(\004:_\212\222\364\001\033guild_jianghu_grudg"
-    "e_record\222\222\364\001\022guild_id,battle_id\332\222\364\001\024guil"
-    "d_id,finished_ms\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\232\004\n\022Guil"
-    "dWarFeudRecord\022\017\n\007feud_id\030\001 \001(\004\022\017\n\007zone_"
-    "id\030\002 \001(\r\022\027\n\017issuer_guild_id\030\003 \001(\004\022\031\n\021iss"
-    "uer_guild_name\030\004 \001(\t\022\027\n\017target_guild_id\030"
-    "\005 \001(\004\022\031\n\021target_guild_name\030\006 \001(\t\022\016\n\006stat"
-    "us\030\007 \001(\r\022\023\n\013issuer_wins\030\010 \001(\r\022\023\n\013target_"
-    "wins\030\t \001(\r\022\024\n\014issuer_merit\030\n \001(\004\022\024\n\014targ"
-    "et_merit\030\013 \001(\004\022\025\n\rcreated_at_ms\030\014 \001(\004\022\032\n"
-    "\022accept_deadline_ms\030\r \001(\004\022\025\n\rstarted_at_"
-    "ms\030\016 \001(\004\022\022\n\nends_at_ms\030\017 \001(\004\022\027\n\017winner_g"
-    "uild_id\030\020 \001(\004\022\022\n\nupdated_ms\030\021 \001(\004:\210\001\212\222\364\001"
-    "\016guild_war_feud\222\222\364\001\007feud_id\332\222\364\001Uzone_id,"
-    "status,ends_at_ms;issuer_guild_id,create"
-    "d_at_ms;target_guild_id,created_at_ms\250\223\364"
-    "\001\001\260\223\364\001\004\270\223\364\001\004*\230\002\n\022GuildAssetOpStatus\022%\n!G"
-    "UILD_ASSET_OP_STATUS_UNSPECIFIED\020\000\022!\n\035GU"
-    "ILD_ASSET_OP_STATUS_PENDING\020\001\022!\n\035GUILD_A"
-    "SSET_OP_STATUS_APPLIED\020\002\022\"\n\036GUILD_ASSET_"
-    "OP_STATUS_REJECTED\020\003\022!\n\035GUILD_ASSET_OP_S"
-    "TATUS_ABORTED\020\004\022)\n%GUILD_ASSET_OP_STATUS"
-    "_APPLIED_PARTIAL\020\005\022#\n\037GUILD_ASSET_OP_STA"
-    "TUS_ABANDONED\020\006*\220\002\n\020GuildAssetOpKind\022#\n\037"
-    "GUILD_ASSET_OP_KIND_UNSPECIFIED\020\000\022\036\n\032GUI"
-    "LD_ASSET_OP_KIND_DONATE\020\001\022\034\n\030GUILD_ASSET"
-    "_OP_KIND_SHOP\020\002\022\'\n#GUILD_ASSET_OP_KIND_A"
-    "CTIVITY_REWARD\020\003\022\"\n\036GUILD_ASSET_OP_KIND_"
-    "WAR_REWARD\020\005\022%\n!GUILD_ASSET_OP_KIND_BOUN"
-    "TY_ESCROW\020\006\022%\n!GUILD_ASSET_OP_KIND_BOUNT"
-    "Y_PAYOUT\020\007*\220\002\n\025GuildDailyCounterKind\022(\n$"
-    "GUILD_DAILY_COUNTER_KIND_UNSPECIFIED\020\000\022#"
-    "\n\037GUILD_DAILY_COUNTER_KIND_DONATE\020\001\022!\n\035G"
-    "UILD_DAILY_COUNTER_KIND_SHOP\020\002\022%\n!GUILD_"
-    "DAILY_COUNTER_KIND_ACTIVITY\020\003\022.\n*GUILD_D"
-    "AILY_COUNTER_KIND_WAR_BOUNTY_PAYOUT\020\004\022.\n"
-    "*GUILD_DAILY_COUNTER_KIND_WAR_PUBLIC_BOU"
-    "NTY\020\005*\263\001\n\025GuildTrialBattleState\022(\n$GUILD"
-    "_TRIAL_BATTLE_STATE_UNSPECIFIED\020\000\022$\n GUI"
-    "LD_TRIAL_BATTLE_STATE_STARTED\020\001\022$\n GUILD"
-    "_TRIAL_BATTLE_STATE_SETTLED\020\002\022$\n GUILD_T"
-    "RIAL_BATTLE_STATE_EXPIRED\020\003*\210\002\n\026GuildTri"
-    "alSettleResult\022)\n%GUILD_TRIAL_SETTLE_RES"
-    "ULT_UNSPECIFIED\020\000\022!\n\035GUILD_TRIAL_SETTLE_"
-    "RESULT_WIN\020\001\022\"\n\036GUILD_TRIAL_SETTLE_RESUL"
-    "T_LOSS\020\002\022(\n$GUILD_TRIAL_SETTLE_RESULT_GU"
-    "ILD_GONE\020\003\022,\n(GUILD_TRIAL_SETTLE_RESULT_"
-    "CONFIG_MISSING\020\004\022$\n GUILD_TRIAL_SETTLE_R"
-    "ESULT_POISON\020\005B\023Z\021guild/proto/guildb\006pro"
-    "to3"
+    "ires_at_ms;status,expires_at_ms;escrow_o"
+    "p_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\212\006\n\024GuildWarBattleRe"
+    "cord\022\021\n\tbattle_id\030\001 \001(\004\022\017\n\007zone_id\030\002 \001(\r"
+    "\022\027\n\017war_battle_kind\030\003 \001(\r\022\022\n\nleyline_id\030"
+    "\004 \001(\r\022\021\n\tbounty_id\030\005 \001(\004\022\031\n\021attacker_gui"
+    "ld_id\030\006 \001(\004\022\031\n\021defender_guild_id\030\007 \001(\004\022\017"
+    "\n\007outcome\030\010 \001(\r\022\024\n\014total_rounds\030\t \001(\r\022\030\n"
+    "\020banner_hp_before\030\n \001(\r\022\027\n\017banner_hp_aft"
+    "er\030\013 \001(\r\022\027\n\017banner_shielded\030\014 \001(\r\022\032\n\022bou"
+    "nty_outcome_tag\030\r \001(\r\022\034\n\024jackpot_contrib"
+    "ution\030\016 \001(\004\022\026\n\016jackpot_silver\030\017 \001(\004\022\030\n\020d"
+    "iminish_percent\030\020 \001(\r\022\035\n\025attacker_contri"
+    "bution\030\021 \001(\004\022\027\n\017attacker_silver\030\022 \001(\004\022\026\n"
+    "\016attacker_funds\030\023 \001(\004\022\026\n\016attacker_merit\030"
+    "\024 \001(\004\022\035\n\025defender_contribution\030\025 \001(\004\022\027\n\017"
+    "defender_silver\030\026 \001(\004\022\026\n\016defender_funds\030"
+    "\027 \001(\004\022\026\n\016defender_merit\030\030 \001(\004\022\027\n\017summary"
+    "_payload\030\031 \001(\014\022\026\n\016finished_at_ms\030\032 \001(\004:x"
+    "\212\222\364\001\020guild_war_battle\222\222\364\001\tbattle_id\332\222\364\001A"
+    "attacker_guild_id,finished_at_ms;defende"
+    "r_guild_id,finished_at_ms\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004"
+    "\"\345\001\n\025GuildWarRivalryRecord\022\024\n\014guild_id_l"
+    "ow\030\001 \001(\004\022\025\n\rguild_id_high\030\002 \001(\004\022\020\n\010week_"
+    "key\030\003 \001(\r\022\023\n\013clash_count\030\004 \001(\r\022\025\n\rbounty"
+    "_marked\030\005 \001(\r\022\022\n\nupdated_ms\030\006 \001(\004:M\212\222\364\001\021"
+    "guild_war_rivalry\222\222\364\001#guild_id_low,guild"
+    "_id_high,week_key\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\222\002\n\036Gui"
+    "ldJianghuRivalSummaryRecord\022\020\n\010guild_id\030"
+    "\001 \001(\004\022\026\n\016rival_guild_id\030\002 \001(\004\022\030\n\020rival_g"
+    "uild_name\030\003 \001(\t\022\014\n\004wins\030\004 \001(\r\022\016\n\006losses\030"
+    "\005 \001(\r\022\r\n\005draws\030\006 \001(\r\022\026\n\016last_battle_ms\030\007"
+    " \001(\004:g\212\222\364\001\033guild_jianghu_rival_summary\222\222"
+    "\364\001\027guild_id,rival_guild_id\332\222\364\001\027guild_id,"
+    "last_battle_ms\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\364\002\n\030GuildJ"
+    "ianghuGrudgeRecord\022\020\n\010guild_id\030\001 \001(\004\022\021\n\t"
+    "battle_id\030\002 \001(\004\022\026\n\016rival_guild_id\030\003 \001(\004\022"
+    "\030\n\020rival_guild_name\030\004 \001(\t\022\031\n\021outcome_for"
+    "_guild\030\005 \001(\r\022\021\n\twrit_tier\030\006 \001(\r\022\021\n\tteam_"
+    "size\030\007 \001(\r\022\024\n\014total_rounds\030\010 \001(\r\022\030\n\020our_"
+    "captain_name\030\t \001(\t\022\032\n\022rival_captain_name"
+    "\030\n \001(\t\022\023\n\013finished_ms\030\013 \001(\004:_\212\222\364\001\033guild_"
+    "jianghu_grudge_record\222\222\364\001\022guild_id,battl"
+    "e_id\332\222\364\001\024guild_id,finished_ms\250\223\364\001\001\260\223\364\001\004\270"
+    "\223\364\001\004\"\232\004\n\022GuildWarFeudRecord\022\017\n\007feud_id\030\001"
+    " \001(\004\022\017\n\007zone_id\030\002 \001(\r\022\027\n\017issuer_guild_id"
+    "\030\003 \001(\004\022\031\n\021issuer_guild_name\030\004 \001(\t\022\027\n\017tar"
+    "get_guild_id\030\005 \001(\004\022\031\n\021target_guild_name\030"
+    "\006 \001(\t\022\016\n\006status\030\007 \001(\r\022\023\n\013issuer_wins\030\010 \001"
+    "(\r\022\023\n\013target_wins\030\t \001(\r\022\024\n\014issuer_merit\030"
+    "\n \001(\004\022\024\n\014target_merit\030\013 \001(\004\022\025\n\rcreated_a"
+    "t_ms\030\014 \001(\004\022\032\n\022accept_deadline_ms\030\r \001(\004\022\025"
+    "\n\rstarted_at_ms\030\016 \001(\004\022\022\n\nends_at_ms\030\017 \001("
+    "\004\022\027\n\017winner_guild_id\030\020 \001(\004\022\022\n\nupdated_ms"
+    "\030\021 \001(\004:\210\001\212\222\364\001\016guild_war_feud\222\222\364\001\007feud_id"
+    "\332\222\364\001Uzone_id,status,ends_at_ms;issuer_gu"
+    "ild_id,created_at_ms;target_guild_id,cre"
+    "ated_at_ms\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\210\001\n\037GuildJiang"
+    "huGrudgeAppliedRecord\022\021\n\tbattle_id\030\001 \001(\004"
+    "\022\022\n\napplied_ms\030\002 \001(\004:>\212\222\364\001\034guild_jianghu"
+    "_grudge_applied\222\222\364\001\tbattle_id\250\223\364\001\001\260\223\364\001\004\270"
+    "\223\364\001\004\"\227\002\n\030GuildWarCreditOwedRecord\022\021\n\tpla"
+    "yer_id\030\001 \001(\004\022\r\n\005op_id\030\002 \001(\004\022\020\n\010guild_id\030"
+    "\003 \001(\004\022\014\n\004kind\030\004 \001(\r\022\017\n\007tx_type\030\005 \001(\r\022\016\n\006"
+    "ref_id\030\006 \001(\r\022\022\n\nperiod_key\030\007 \001(\r\022\017\n\007payl"
+    "oad\030\010 \001(\014\022\021\n\tsource_id\030\t \001(\004\022\022\n\ncreated_"
+    "ms\030\n \001(\004:L\212\222\364\001\025guild_war_credit_owed\222\222\364\001"
+    "\017player_id,op_id\332\222\364\001\ncreated_ms\250\223\364\001\001\260\223\364\001"
+    "\004\270\223\364\001\004*\230\002\n\022GuildAssetOpStatus\022%\n!GUILD_A"
+    "SSET_OP_STATUS_UNSPECIFIED\020\000\022!\n\035GUILD_AS"
+    "SET_OP_STATUS_PENDING\020\001\022!\n\035GUILD_ASSET_O"
+    "P_STATUS_APPLIED\020\002\022\"\n\036GUILD_ASSET_OP_STA"
+    "TUS_REJECTED\020\003\022!\n\035GUILD_ASSET_OP_STATUS_"
+    "ABORTED\020\004\022)\n%GUILD_ASSET_OP_STATUS_APPLI"
+    "ED_PARTIAL\020\005\022#\n\037GUILD_ASSET_OP_STATUS_AB"
+    "ANDONED\020\006*\220\002\n\020GuildAssetOpKind\022#\n\037GUILD_"
+    "ASSET_OP_KIND_UNSPECIFIED\020\000\022\036\n\032GUILD_ASS"
+    "ET_OP_KIND_DONATE\020\001\022\034\n\030GUILD_ASSET_OP_KI"
+    "ND_SHOP\020\002\022\'\n#GUILD_ASSET_OP_KIND_ACTIVIT"
+    "Y_REWARD\020\003\022\"\n\036GUILD_ASSET_OP_KIND_WAR_RE"
+    "WARD\020\005\022%\n!GUILD_ASSET_OP_KIND_BOUNTY_ESC"
+    "ROW\020\006\022%\n!GUILD_ASSET_OP_KIND_BOUNTY_PAYO"
+    "UT\020\007*\220\002\n\025GuildDailyCounterKind\022(\n$GUILD_"
+    "DAILY_COUNTER_KIND_UNSPECIFIED\020\000\022#\n\037GUIL"
+    "D_DAILY_COUNTER_KIND_DONATE\020\001\022!\n\035GUILD_D"
+    "AILY_COUNTER_KIND_SHOP\020\002\022%\n!GUILD_DAILY_"
+    "COUNTER_KIND_ACTIVITY\020\003\022.\n*GUILD_DAILY_C"
+    "OUNTER_KIND_WAR_BOUNTY_PAYOUT\020\004\022.\n*GUILD"
+    "_DAILY_COUNTER_KIND_WAR_PUBLIC_BOUNTY\020\005*"
+    "\263\001\n\025GuildTrialBattleState\022(\n$GUILD_TRIAL"
+    "_BATTLE_STATE_UNSPECIFIED\020\000\022$\n GUILD_TRI"
+    "AL_BATTLE_STATE_STARTED\020\001\022$\n GUILD_TRIAL"
+    "_BATTLE_STATE_SETTLED\020\002\022$\n GUILD_TRIAL_B"
+    "ATTLE_STATE_EXPIRED\020\003*\210\002\n\026GuildTrialSett"
+    "leResult\022)\n%GUILD_TRIAL_SETTLE_RESULT_UN"
+    "SPECIFIED\020\000\022!\n\035GUILD_TRIAL_SETTLE_RESULT"
+    "_WIN\020\001\022\"\n\036GUILD_TRIAL_SETTLE_RESULT_LOSS"
+    "\020\002\022(\n$GUILD_TRIAL_SETTLE_RESULT_GUILD_GO"
+    "NE\020\003\022,\n(GUILD_TRIAL_SETTLE_RESULT_CONFIG"
+    "_MISSING\020\004\022$\n GUILD_TRIAL_SETTLE_RESULT_"
+    "POISON\020\005B\023Z\021guild/proto/guildb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fguild_2fguild_5fdb_2eproto_deps[1] = {
@@ -7561,13 +7969,13 @@ static ::absl::once_flag descriptor_table_proto_2fguild_2fguild_5fdb_2eproto_onc
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fguild_2fguild_5fdb_2eproto = {
     false,
     false,
-    11243,
+    11677,
     descriptor_table_protodef_proto_2fguild_2fguild_5fdb_2eproto,
     "proto/guild/guild_db.proto",
     &descriptor_table_proto_2fguild_2fguild_5fdb_2eproto_once,
     descriptor_table_proto_2fguild_2fguild_5fdb_2eproto_deps,
     1,
-    31,
+    33,
     schemas,
     file_message_globals,
     TableStruct_proto_2fguild_2fguild_5fdb_2eproto::offsets,
@@ -20365,6 +20773,671 @@ void GuildWarFeudRecord::InternalSwap(GuildWarFeudRecord* PROTOBUF_RESTRICT PROT
 }
 
 ::google::protobuf::Metadata GuildWarFeudRecord::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+GuildJianghuGrudgeAppliedRecord::GuildJianghuGrudgeAppliedRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GuildJianghuGrudgeAppliedRecord_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:guildpb.GuildJianghuGrudgeAppliedRecord)
+}
+GuildJianghuGrudgeAppliedRecord::GuildJianghuGrudgeAppliedRecord(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GuildJianghuGrudgeAppliedRecord& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GuildJianghuGrudgeAppliedRecord_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE GuildJianghuGrudgeAppliedRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void GuildJianghuGrudgeAppliedRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, battle_id_),
+           0,
+           offsetof(Impl_, applied_ms_) -
+               offsetof(Impl_, battle_id_) +
+               sizeof(Impl_::applied_ms_));
+}
+GuildJianghuGrudgeAppliedRecord::~GuildJianghuGrudgeAppliedRecord() {
+  // @@protoc_insertion_point(destructor:guildpb.GuildJianghuGrudgeAppliedRecord)
+  SharedDtor(*this);
+}
+inline void GuildJianghuGrudgeAppliedRecord::SharedDtor(MessageLite& self) {
+  GuildJianghuGrudgeAppliedRecord& this_ = static_cast<GuildJianghuGrudgeAppliedRecord&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GuildJianghuGrudgeAppliedRecord_class_data_ =
+        GuildJianghuGrudgeAppliedRecord::InternalGenerateClassData_(GuildJianghuGrudgeAppliedRecord_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GuildJianghuGrudgeAppliedRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GuildJianghuGrudgeAppliedRecord_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GuildJianghuGrudgeAppliedRecord_class_data_.tc_table);
+  return GuildJianghuGrudgeAppliedRecord_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GuildJianghuGrudgeAppliedRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GuildJianghuGrudgeAppliedRecord_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GuildJianghuGrudgeAppliedRecord_globals_));
+  return GuildJianghuGrudgeAppliedRecord_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GuildJianghuGrudgeAppliedRecord::ParseTableT_
+    GuildJianghuGrudgeAppliedRecord::_table_ =
+        GuildJianghuGrudgeAppliedRecord::InternalGenerateParseTable_(GuildJianghuGrudgeAppliedRecord_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GuildJianghuGrudgeAppliedRecord::Clear() {
+// @@protoc_insertion_point(message_clear_start:guildpb.GuildJianghuGrudgeAppliedRecord)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.battle_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.applied_ms_) -
+        reinterpret_cast<char*>(&_impl_.battle_id_)) + sizeof(_impl_.applied_ms_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GuildJianghuGrudgeAppliedRecord::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GuildJianghuGrudgeAppliedRecord& this_ = static_cast<const GuildJianghuGrudgeAppliedRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GuildJianghuGrudgeAppliedRecord::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GuildJianghuGrudgeAppliedRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:guildpb.GuildJianghuGrudgeAppliedRecord)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 battle_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_battle_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_battle_id(), target);
+    }
+  }
+
+  // uint64 applied_ms = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_applied_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_applied_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:guildpb.GuildJianghuGrudgeAppliedRecord)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GuildJianghuGrudgeAppliedRecord::ByteSizeLong(const MessageLite& base) {
+  const GuildJianghuGrudgeAppliedRecord& this_ = static_cast<const GuildJianghuGrudgeAppliedRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GuildJianghuGrudgeAppliedRecord::ByteSizeLong() const {
+  const GuildJianghuGrudgeAppliedRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:guildpb.GuildJianghuGrudgeAppliedRecord)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // uint64 battle_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_battle_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_battle_id());
+      }
+    }
+    // uint64 applied_ms = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_applied_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_applied_ms());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GuildJianghuGrudgeAppliedRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GuildJianghuGrudgeAppliedRecord*>(&to_msg);
+  auto& from = static_cast<const GuildJianghuGrudgeAppliedRecord&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:guildpb.GuildJianghuGrudgeAppliedRecord)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_battle_id() != 0) {
+        _this->_impl_.battle_id_ = from._impl_.battle_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_applied_ms() != 0) {
+        _this->_impl_.applied_ms_ = from._impl_.applied_ms_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GuildJianghuGrudgeAppliedRecord::CopyFrom(const GuildJianghuGrudgeAppliedRecord& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:guildpb.GuildJianghuGrudgeAppliedRecord)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GuildJianghuGrudgeAppliedRecord::InternalSwap(GuildJianghuGrudgeAppliedRecord* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeAppliedRecord, _impl_.applied_ms_)
+      + sizeof(GuildJianghuGrudgeAppliedRecord::_impl_.applied_ms_)
+      - PROTOBUF_FIELD_OFFSET(GuildJianghuGrudgeAppliedRecord, _impl_.battle_id_)>(
+          reinterpret_cast<char*>(&_impl_.battle_id_),
+          reinterpret_cast<char*>(&other->_impl_.battle_id_));
+}
+
+::google::protobuf::Metadata GuildJianghuGrudgeAppliedRecord::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+GuildWarCreditOwedRecord::GuildWarCreditOwedRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GuildWarCreditOwedRecord_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:guildpb.GuildWarCreditOwedRecord)
+}
+PROTOBUF_NDEBUG_INLINE GuildWarCreditOwedRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::guildpb::GuildWarCreditOwedRecord& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        payload_(arena, from.payload_) {}
+
+GuildWarCreditOwedRecord::GuildWarCreditOwedRecord(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const GuildWarCreditOwedRecord& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, GuildWarCreditOwedRecord_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  GuildWarCreditOwedRecord* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, player_id_),
+           offsetof(Impl_, created_ms_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::created_ms_));
+
+  // @@protoc_insertion_point(copy_constructor:guildpb.GuildWarCreditOwedRecord)
+}
+PROTOBUF_NDEBUG_INLINE GuildWarCreditOwedRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        payload_(arena) {}
+
+inline void GuildWarCreditOwedRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           0,
+           offsetof(Impl_, created_ms_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::created_ms_));
+}
+GuildWarCreditOwedRecord::~GuildWarCreditOwedRecord() {
+  // @@protoc_insertion_point(destructor:guildpb.GuildWarCreditOwedRecord)
+  SharedDtor(*this);
+}
+inline void GuildWarCreditOwedRecord::SharedDtor(MessageLite& self) {
+  GuildWarCreditOwedRecord& this_ = static_cast<GuildWarCreditOwedRecord&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.payload_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull GuildWarCreditOwedRecord_class_data_ =
+        GuildWarCreditOwedRecord::InternalGenerateClassData_(GuildWarCreditOwedRecord_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GuildWarCreditOwedRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GuildWarCreditOwedRecord_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(GuildWarCreditOwedRecord_class_data_.tc_table);
+  return GuildWarCreditOwedRecord_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+GuildWarCreditOwedRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&GuildWarCreditOwedRecord_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&GuildWarCreditOwedRecord_globals_));
+  return GuildWarCreditOwedRecord_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GuildWarCreditOwedRecord::ParseTableT_
+    GuildWarCreditOwedRecord::_table_ =
+        GuildWarCreditOwedRecord::InternalGenerateParseTable_(GuildWarCreditOwedRecord_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void GuildWarCreditOwedRecord::Clear() {
+// @@protoc_insertion_point(message_clear_start:guildpb.GuildWarCreditOwedRecord)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.payload_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000feU)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.period_key_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.period_key_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    ::memset(&_impl_.source_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.created_ms_) -
+        reinterpret_cast<char*>(&_impl_.source_id_)) + sizeof(_impl_.created_ms_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL GuildWarCreditOwedRecord::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const GuildWarCreditOwedRecord& this_ = static_cast<const GuildWarCreditOwedRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL GuildWarCreditOwedRecord::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const GuildWarCreditOwedRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:guildpb.GuildWarCreditOwedRecord)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 player_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_player_id(), target);
+    }
+  }
+
+  // uint64 op_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_op_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_op_id(), target);
+    }
+  }
+
+  // uint64 guild_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_guild_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_guild_id(), target);
+    }
+  }
+
+  // uint32 kind = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_kind() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_kind(), target);
+    }
+  }
+
+  // uint32 tx_type = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_tx_type() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_tx_type(), target);
+    }
+  }
+
+  // uint32 ref_id = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_ref_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_ref_id(), target);
+    }
+  }
+
+  // uint32 period_key = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_period_key() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_period_key(), target);
+    }
+  }
+
+  // bytes payload = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_payload().empty()) {
+      const ::std::string& _s = this_._internal_payload();
+      target = stream->WriteBytesMaybeAliased(8, _s, target);
+    }
+  }
+
+  // uint64 source_id = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_source_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          9, this_._internal_source_id(), target);
+    }
+  }
+
+  // uint64 created_ms = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_created_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          10, this_._internal_created_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:guildpb.GuildWarCreditOwedRecord)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t GuildWarCreditOwedRecord::ByteSizeLong(const MessageLite& base) {
+  const GuildWarCreditOwedRecord& this_ = static_cast<const GuildWarCreditOwedRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t GuildWarCreditOwedRecord::ByteSizeLong() const {
+  const GuildWarCreditOwedRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:guildpb.GuildWarCreditOwedRecord)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // bytes payload = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_payload().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
+                                        this_._internal_payload());
+      }
+    }
+    // uint64 player_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // uint64 op_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_op_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_op_id());
+      }
+    }
+    // uint64 guild_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_guild_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_guild_id());
+      }
+    }
+    // uint32 kind = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_kind() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_kind());
+      }
+    }
+    // uint32 tx_type = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_tx_type() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_tx_type());
+      }
+    }
+    // uint32 ref_id = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_ref_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_ref_id());
+      }
+    }
+    // uint32 period_key = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_period_key() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_period_key());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    // uint64 source_id = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_source_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_source_id());
+      }
+    }
+    // uint64 created_ms = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_created_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_created_ms());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void GuildWarCreditOwedRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<GuildWarCreditOwedRecord*>(&to_msg);
+  auto& from = static_cast<const GuildWarCreditOwedRecord&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:guildpb.GuildWarCreditOwedRecord)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_payload().empty()) {
+        _this->_internal_set_payload(from._internal_payload());
+      } else {
+        if (_this->_impl_.payload_.IsDefault()) {
+          _this->_internal_set_payload("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_op_id() != 0) {
+        _this->_impl_.op_id_ = from._impl_.op_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_guild_id() != 0) {
+        _this->_impl_.guild_id_ = from._impl_.guild_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_kind() != 0) {
+        _this->_impl_.kind_ = from._impl_.kind_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_tx_type() != 0) {
+        _this->_impl_.tx_type_ = from._impl_.tx_type_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_ref_id() != 0) {
+        _this->_impl_.ref_id_ = from._impl_.ref_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_period_key() != 0) {
+        _this->_impl_.period_key_ = from._impl_.period_key_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_source_id() != 0) {
+        _this->_impl_.source_id_ = from._impl_.source_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_created_ms() != 0) {
+        _this->_impl_.created_ms_ = from._impl_.created_ms_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void GuildWarCreditOwedRecord::CopyFrom(const GuildWarCreditOwedRecord& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:guildpb.GuildWarCreditOwedRecord)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void GuildWarCreditOwedRecord::InternalSwap(GuildWarCreditOwedRecord* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.payload_, &other->_impl_.payload_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_.created_ms_)
+      + sizeof(GuildWarCreditOwedRecord::_impl_.created_ms_)
+      - PROTOBUF_FIELD_OFFSET(GuildWarCreditOwedRecord, _impl_.player_id_)>(
+          reinterpret_cast<char*>(&_impl_.player_id_),
+          reinterpret_cast<char*>(&other->_impl_.player_id_));
+}
+
+::google::protobuf::Metadata GuildWarCreditOwedRecord::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

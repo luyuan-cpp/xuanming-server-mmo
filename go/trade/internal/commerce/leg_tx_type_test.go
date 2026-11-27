@@ -31,6 +31,9 @@ func TestLegTxType(t *testing.T) {
 		{"buyer_debit/refund#3", 4, ret},
 		{"buyer_surplus", 4, ret},
 		{"buyer_surplus#2", 4, ret},
+		{"seller_debit_2_abcdef", 3, sell}, // 求购单揭榜托管封卷道籍
+		{"seller_return_2", 4, ret},        // 求购单不符的书原样退回
+		{"seller_return_2#1", 4, ret},
 		{"seller_receive", 4, buy},
 		{"buyer_receive", 4, buy},
 		{"buyer_receive#2", 4, buy},

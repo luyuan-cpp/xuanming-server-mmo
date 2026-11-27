@@ -126,6 +126,8 @@ $WorkloadSecretSpecs = [ordered]@{
     'login-apple-signin'    = @{ Env = 'MMORPG_LOGIN_APPLE_SIGNIN_PRIVATE_KEY'; Key = 'private-key'; Consumers = @('login') }
     'login-passport-admin'  = @{ Env = 'MMORPG_LOGIN_PASSPORT_ADMIN_CLIENT_SECRET'; Key = 'client-secret'; Consumers = @('login') }
     'login-nppa'            = @{ Env = 'MMORPG_LOGIN_NPPA_SECRET_KEY'; Key = 'secret'; Consumers = @('login') }
+    # 官方通行证回调入口的共享密钥(可选,docs/design/official-passport-registration.md §3.7;基线用例在本文件末尾)。
+    'gateway-passport-webhook' = @{ Env = 'MMORPG_GATEWAY_PASSPORT_WEBHOOK_SECRET'; Key = 'secret'; Consumers = @('gateway') }
     # content-guard 外部平台审核的两把 AppSecret(infra namespace;用例在本文件末尾「content-guard 外部平台审核」一节)。
     'content-guard-wechat'  = @{ Env = 'MMORPG_CONTENT_GUARD_WECHAT_APP_SECRET'; Key = 'secret'; Consumers = @('content-guard') }
     'content-guard-douyin'  = @{ Env = 'MMORPG_CONTENT_GUARD_DOUYIN_APP_SECRET'; Key = 'secret'; Consumers = @('content-guard') }
@@ -5418,6 +5420,18 @@ Test-Case 'match 发件接线:MailRpc 直连 infra 的 mail Service,发件密钥
     Assert-Equal -Expected $envName -Actual (Get-FlatValue -Flat $mailFlat -KeyPath 'data.mail.yaml.Producers.match') -Because 'mail 认 match 这个调用方,验签取同名变量'
 }
 
+# 江湖生死状一期:match 下战书前查拉黑与好友(friend)、全服系统播报(chat)、纯帮会对阵的帮派归属(guild)。
+# 集群上没有这三个客户端时下战书一律被拒(friend 缺失按 fail-closed),2026-11-26 补。
+Test-Case 'match 的江湖生死状接线:FriendRpc / ChatRpc / GuildRpc 直连 infra 的 Service,超时镜像服务 yaml' {
+    Assert-Equal -Expected 0 -Actual $guildInfraRun.ExitCode -Because "带全局 Go 服务的 infra-up DryRun 必须成功。输出: $($guildInfraRun.Output)"
+    $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $guildInfraRun.Output -Name 'go-svc-match-config')
+    foreach ($client in @(@{ Key = 'FriendRpc'; Endpoint = '[friend.contract-battle-infra:50400]' }, @{ Key = 'ChatRpc'; Endpoint = '[chat.contract-battle-infra:50700]' }, @{ Key = 'GuildRpc'; Endpoint = '[guild.contract-battle-infra:50300]' })) {
+        Assert-Equal -Expected $client.Endpoint -Actual (Get-FlatValue -Flat $flat -KeyPath "data.match_service.yaml.$($client.Key).Endpoints") -Because "$($client.Key) 不写 Etcd.Key(D-13),直连 infra 的 Service;不能把本机 127.0.0.1 搬上集群"
+        Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/match/etc/match_service.yaml' -KeyPath "$($client.Key).Timeout") -Actual (Get-FlatValue -Flat $flat -KeyPath "data.match_service.yaml.$($client.Key).Timeout") -Because "$($client.Key) 的超时镜像服务 yaml"
+        Assert-Equal -Expected 'true' -Actual (Get-FlatValue -Flat $flat -KeyPath "data.match_service.yaml.$($client.Key).NonBlock") -Because '依赖没起不挡 match 启动'
+    }
+}
+
 # ─────────────────────────────────────────────────────────────────
 # 邮件 mail 上 K8s(M1d,docs/design/mail-system.md §7.2 / §12.3,2026-10-16)
 # ─────────────────────────────────────────────────────────────────
@@ -6631,13 +6645,14 @@ Test-Case 'infra-up -AssetOps on:guild / trade 各自只拿自己那把密钥、
     $policies = @(
         # data-service 是协调者(PrepareRoleFreeze、ApplyRoleFence),mail 读玩家所在的帮(GuildRpc)。
         # 名单后面固定补上能起金丝雀的调用方的 <app>-canary(发布轨道设计 §5.3,Get-ReleaseTrackAppLabels)。
-        @{ Name = 'guild-grpc-allowlist'; Svc = 'guild'; Allowed = 'client-rpc-router,data-service,mail,client-rpc-router-canary,mail-canary'; Port = 50300 }
+        @{ Name = 'guild-grpc-allowlist'; Svc = 'guild'; Allowed = 'client-rpc-router,data-service,mail,match,client-rpc-router-canary,mail-canary,match-canary'; Port = 50300 }
         # battle 提交战斗结果(MatchInternal.CommitBattleOutcome);金丝雀 battle 池是 app: battle-canary。
         @{ Name = 'match-grpc-allowlist'; Svc = 'match'; Allowed = 'client-rpc-router,guild,gate,data-service,scene,scene-world,scene-instance,battle,client-rpc-router-canary,guild-canary,battle-canary'; Port = 50500 }
         # 其余收玩家会话身份的全局服务(docs/design/gate-online-identity.md §10.2)。friend / trade / mail 是角色护栏参与者,协调者 data-service 要进得来;
         # rank 给 mail 发榜单奖励,match 给 mail 投群仙问道赛领奖邮件,scene 在战斗掉落放不下时改投邮件;match 结算后向 rank 上报评分。
-        @{ Name = 'chat-grpc-allowlist'; Svc = 'chat'; Allowed = 'client-rpc-router,client-rpc-router-canary'; Port = 50700 }
-        @{ Name = 'friend-grpc-allowlist'; Svc = 'friend'; Allowed = 'client-rpc-router,data-service,client-rpc-router-canary'; Port = 50400 }
+        # match 拨 friend(下战书前查拉黑与好友)、chat(全服系统播报)、guild(纯帮会对阵的帮派归属):江湖生死状一期,2026-11-26 补。
+        @{ Name = 'chat-grpc-allowlist'; Svc = 'chat'; Allowed = 'client-rpc-router,match,client-rpc-router-canary,match-canary'; Port = 50700 }
+        @{ Name = 'friend-grpc-allowlist'; Svc = 'friend'; Allowed = 'client-rpc-router,data-service,match,client-rpc-router-canary,match-canary'; Port = 50400 }
         @{ Name = 'trade-grpc-allowlist'; Svc = 'trade'; Allowed = 'client-rpc-router,data-service,client-rpc-router-canary'; Port = 50800 }
         @{ Name = 'mail-grpc-allowlist'; Svc = 'mail'; Allowed = 'client-rpc-router,data-service,rank,match,scene,scene-world,scene-instance,client-rpc-router-canary,rank-canary,match-canary'; Port = 50900 }
         @{ Name = 'rank-grpc-allowlist'; Svc = 'rank'; Allowed = 'client-rpc-router,match,client-rpc-router-canary,match-canary'; Port = 51100 }
@@ -11052,4 +11067,11 @@ Test-Case 'content-guard 平台审核源码形状:写路径入口在密钥解析
     Assert-Equal -Expected 'content-guard-douyin,content-guard-wechat' -Actual ((@($deleted | Sort-Object)) -join ',') -Because 'Apply-OneGoSvc 删残留的 Secret 名必须是目录表的键(名字不一致就删不到),各一处'
 }
 
+
+Test-Case 'gateway 官方通行证回调密钥没设(基线):不注入 MMORPG_GATEWAY_PASSPORT_WEBHOOK_SECRET、不带指纹,残留的 Secret gateway-passport-webhook 照删(入口回 404,official-passport-registration.md §3.7)' {
+    $doc = Select-WorkloadSecretDoc -Output $devOut -Name 'gateway' -Label 'dev 基线 gateway'
+    Assert-NoWorkloadSecret -Doc $doc -SecretName 'gateway-passport-webhook' -Label 'dev 基线 gateway'
+    Assert-NotMatch -Text $devOut -Pattern '# Secret gateway-passport-webhook ' -Because '没设环境变量就不建 Secret'
+    Assert-Match -Text $devOut -Pattern '(?m)^\[dry-run\] kubectl delete secret gateway-passport-webhook -n \S+ --ignore-not-found\s*$' -Because '不粘滞:上次开过、这次没设,要删掉残留的回调密钥 Secret'
+}
 exit (Complete-TestRun -SuiteName "k8s_deploy contract")

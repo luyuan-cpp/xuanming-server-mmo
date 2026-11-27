@@ -75,6 +75,24 @@ func addSpectateActive(svcCtx *svc.ServiceContext, battleId, createdAtMs uint64,
 	logx.Infof("[spectate] Battle registered for spectating battle=%d", battleId)
 }
 
+// addSpectateRanked 将公开的正式高段论剑排位局写入 16 桶独立索引 spectate:ranked:active:{srk:<k>}。
+// 高段排位局不与全服高频 PVE 共享排序页，避免 3 秒内被普通副本挤出观战列表；同样 best-effort，失败不影响开局。
+func addSpectateRanked(svcCtx *svc.ServiceContext, battleId, createdAtMs uint64, visibility battlepb.ESpectateVisibility, rankedCtx *battlepb.RankedMatchContext) {
+	if svcCtx == nil || svcCtx.MatchRedis == nil || !isSpectatePublic(visibility) {
+		return
+	}
+	if rankedCtx == nil || rankedCtx.GetUseFreePreset() || rankedCtx.GetSeasonId() == 0 || !rankedCtx.GetAllowPublicSpectate() {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), spectateRedisOpTimeout)
+	defer cancel()
+	if err := spectateRankedIndex.add(ctx, svcCtx.MatchRedis, battleId, int64(createdAtMs)); err != nil {
+		logx.Errorf("[spectate] Ranked spectator index ZADD failed battle=%d: %v", battleId, err)
+		return
+	}
+	logx.Infof("[spectate] High-tier ranked battle registered for live spectating battle=%d peak_rating=%d", battleId, rankedCtx.GetPeakRatingCenti())
+}
+
 // loadSpectateBattle 由 SQL 成局组一场战斗的观战记录;不存在或终局已落定(ABORT 关成 5,或 COMPLETE 之后仍是 4,
 // authority.FormationOutcomeDecided)返回 (nil, nil)。截止挂在请求 ctx 上:列表逐条读成局,客户端已取消或超时之后
 // 不能还在占权威库连接(R2-GO 一般-6)。
@@ -162,13 +180,26 @@ func releaseSpectateOnOutcome(svcCtx *svc.ServiceContext, battleId uint64) {
 	}
 }
 
-// removeSpectateActiveMember 只从活跃集合摘掉一场、不碰其余观战键:不该出现在集合里的私密成员走这里。
+// removeSpectateActiveMember 只从活跃集合与高段排位直播索引摘掉一场、不碰其余观战键:不该出现在集合里的私密成员走这里。
 // 本副本的列表缓存同时忘掉它(removeSpectateBattle 也经这里),同一秒里后来的列表请求不再读它、再摘一次。
 func removeSpectateActiveMember(svcCtx *svc.ServiceContext, battleId uint64) {
 	ctx, cancel := context.WithTimeout(context.Background(), spectateRedisOpTimeout)
 	defer cancel()
 	if err := spectateActiveIndex.remove(ctx, svcCtx.MatchRedis, battleId); err != nil {
 		logx.Errorf("[spectate] Spectator index ZREM failed battle=%d: %v", battleId, err)
+	}
+	if err := spectateRankedIndex.remove(ctx, svcCtx.MatchRedis, battleId); err != nil {
+		logx.Errorf("[spectate] Ranked spectator index ZREM failed battle=%d: %v", battleId, err)
+	}
+	svcCtx.SpectateLobby.Forget(strconv.FormatUint(battleId, 10))
+}
+
+// removeSpectateRankedMember 仅从高段排位直播索引摘除误入的非排位成员。
+func removeSpectateRankedMember(svcCtx *svc.ServiceContext, battleId uint64) {
+	ctx, cancel := context.WithTimeout(context.Background(), spectateRedisOpTimeout)
+	defer cancel()
+	if err := spectateRankedIndex.remove(ctx, svcCtx.MatchRedis, battleId); err != nil {
+		logx.Errorf("[spectate] Ranked spectator index ZREM failed battle=%d: %v", battleId, err)
 	}
 	svcCtx.SpectateLobby.Forget(strconv.FormatUint(battleId, 10))
 }
@@ -305,6 +336,11 @@ func cleanupExpiredSpectateIndex(svcCtx *svc.ServiceContext) {
 	}
 	if removed > 0 {
 		logx.Infof("[spectate] Cleaned %d expired spectator index entries", removed)
+	}
+	if rankedRemoved, err := spectateRankedIndex.removeByScore(ctx, svcCtx.MatchRedis, staleBefore); err != nil {
+		logx.Errorf("[spectate] Failed to clean expired ranked spectator index entries: %v", err)
+	} else if rankedRemoved > 0 {
+		logx.Infof("[spectate] Cleaned %d expired ranked spectator index entries", rankedRemoved)
 	}
 	// 赛事局索引成员的 score 是到期毫秒,同一轮顺手清(L2 配额的过期项由抢配额时逐桶清,见 liveBroadcastQuota)。
 	if _, err := spectateFeaturedIndex.removeByScore(ctx, svcCtx.MatchRedis, int64(nowMs())); err != nil {

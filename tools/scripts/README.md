@@ -15,7 +15,7 @@ PowerShell and shell scripts for common development tasks.
 - `instanceKey`：上面的四个固定角色名；`service`为`mall`或`gateway`。
 - `port`：互不重复的显式本机HTTP端口；`database`为该服务的全局逻辑库名，两副本必须相同，Mall与Gateway两库不同。
 - `jarSha256`：本轮R构建的运行包SHA。固定路径为`java/mall_game/target/mall-game-0.1.0-SNAPSHOT.jar`及`java/gateway_node/target/gateway-node-0.0.1-SNAPSHOT.jar`。
-- Gateway额外必填`loginGrpcEndpoints`（如`990017=127.0.0.1:53000,990018=127.0.0.1:54000`，必须取本轮真实Go计划）、`redisEndpoint`、`etcdEndpoint`和`mallAdminUrl`；后两者仅显式`http://127.0.0.1:<端口>`根地址，商城端口必须属于同计划Mall。计划不写口令、DSN或签名密钥。
+- Gateway额外必填`loginGrpcEndpoints`（如`990017=127.0.0.1:53000,990018=127.0.0.1:54000`，必须取本轮真实Go计划）、`redisEndpoint`和`etcdEndpoint`；后者仅显式`http://127.0.0.1:<端口>`根地址。商城管理入口已迁进后台(`java/gm_admin`)，网关计划不再有商城地址。计划不写口令、DSN或签名密钥。
 
 先由 Gemini 在资源槽中构建`go/data_service/cmd/writer_authority`，并在合法Authority测试夹具准备齐备后执行R reactor `mvn -f java/pom.xml -pl gateway_node,mall_game -am clean package`；Gateway需要JDK23及显式已核protoc。保留默认测试，不用`skipTests`。`AuthorityHikariTiDbTest`缺真实NORMAL夹具即失败；Mall真TiDB随机库用例还须逐库NORMAL授权，不能用一份外部grant或root写连接冒充。
 

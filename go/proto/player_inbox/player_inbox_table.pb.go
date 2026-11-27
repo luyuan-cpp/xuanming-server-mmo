@@ -444,6 +444,10 @@ type PlayerInboxAudit struct {
 	ContentSha256 []byte                 `protobuf:"bytes,13,opt,name=content_sha256,json=contentSha256,proto3" json:"content_sha256,omitempty"` // 取自条目行:sha256(msg_type ‖ issued_at_ms ‖ payload),可对 14 复算核对
 	Payload       []byte                 `protobuf:"bytes,14,opt,name=payload,proto3" json:"payload,omitempty"`                                  // 条目载荷原样:入箱时按 payload_message 确定性序列化的字节(v1 GM 类型 ≤ 1KiB)
 	VoidReason    uint32                 `protobuf:"varint,15,opt,name=void_reason,json=voidReason,proto3" json:"void_reason,omitempty"`         // PlayerInboxVoidReason:VOID / FORCE_VOID 行为本次请求的原因,SANCTION 行为 0
+	// 双人复核批准记录(docs/design/admin-identity-and-dual-control.md §5.8):发起人就是 operator,不重复存。
+	// 两列都为空 = 不带批准记录受理(只在 PlayerInbox.AdminAllowUnapproved 打开时发生)。
+	ApprovalId    string `protobuf:"bytes,16,opt,name=approval_id,json=approvalId,proto3" json:"approval_id,omitempty"` // 后台流水号;SANCTION 行等于条目的 request_id
+	Approver      string `protobuf:"bytes,17,opt,name=approver,proto3" json:"approver,omitempty"`                       // 批准人:身份提供方的主体,与 operator 不同
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -583,6 +587,20 @@ func (x *PlayerInboxAudit) GetVoidReason() uint32 {
 	return 0
 }
 
+func (x *PlayerInboxAudit) GetApprovalId() string {
+	if x != nil {
+		return x.ApprovalId
+	}
+	return ""
+}
+
+func (x *PlayerInboxAudit) GetApprover() string {
+	if x != nil {
+		return x.Approver
+	}
+	return ""
+}
+
 var File_proto_player_inbox_player_inbox_table_proto protoreflect.FileDescriptor
 
 const file_proto_player_inbox_player_inbox_table_proto_rawDesc = "" +
@@ -633,7 +651,7 @@ const file_proto_player_inbox_player_inbox_table_proto_rawDesc = "" +
 	"\roperator_name\x18\x16 \x01(\tR\foperatorName\x12\x12\n" +
 	"\x04note\x18\x17 \x01(\tR\x04note\x12#\n" +
 	"\rowner_account\x18\x18 \x01(\tR\fownerAccount\x12%\n" +
-	"\x0eowner_revision\x18\x19 \x01(\x04R\rownerRevision:\xa2\x01\x8a\x92\xf4\x01\x11player_inbox_item\x92\x92\xf4\x01\x1ashard,player_id,domain,seqڒ\xf4\x01,shard,state,updated_ms;shard,player_id,state\xe2\x92\xf4\x01(shard,player_id,producer_kind,request_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x80\x04\n" +
+	"\x0eowner_revision\x18\x19 \x01(\x04R\rownerRevision:\xa2\x01\x8a\x92\xf4\x01\x11player_inbox_item\x92\x92\xf4\x01\x1ashard,player_id,domain,seqڒ\xf4\x01,shard,state,updated_ms;shard,player_id,state\xe2\x92\xf4\x01(shard,player_id,producer_kind,request_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xbd\x04\n" +
 	"\x12player_inbox_audit\x12\x14\n" +
 	"\x05shard\x18\x01 \x01(\rR\x05shard\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x16\n" +
@@ -654,7 +672,10 @@ const file_proto_player_inbox_player_inbox_table_proto_rawDesc = "" +
 	"\x0econtent_sha256\x18\r \x01(\fR\rcontentSha256\x12\x18\n" +
 	"\apayload\x18\x0e \x01(\fR\apayload\x12\x1f\n" +
 	"\vvoid_reason\x18\x0f \x01(\rR\n" +
-	"voidReason:G\x8a\x92\xf4\x01\x12player_inbox_audit\x92\x92\xf4\x01!shard,player_id,domain,seq,action\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04*\x9d\x01\n" +
+	"voidReason\x12\x1f\n" +
+	"\vapproval_id\x18\x10 \x01(\tR\n" +
+	"approvalId\x12\x1a\n" +
+	"\bapprover\x18\x11 \x01(\tR\bapprover:G\x8a\x92\xf4\x01\x12player_inbox_audit\x92\x92\xf4\x01!shard,player_id,domain,seq,action\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04*\x9d\x01\n" +
 	"\x16PlayerInboxAuditAction\x12\"\n" +
 	"\x1ePLAYER_INBOX_AUDIT_UNSPECIFIED\x10\x00\x12\x1f\n" +
 	"\x1bPLAYER_INBOX_AUDIT_SANCTION\x10\x01\x12\x1b\n" +

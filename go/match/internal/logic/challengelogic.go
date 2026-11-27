@@ -34,6 +34,10 @@ func validateCustomDuelRules(rules *battlepb.CustomDuelRules) bool {
 	if rules.GetUseFreePreset() && rules.GetSkillBanSlotsPerTeam() > 0 {
 		return false
 	}
+	// 论剑 V7「不服再战」固定为正式自养 1V1 复仇切磋，不允许混用免费 3x3 预设。
+	if rules.GetRematchSourceBattleId() != 0 && rules.GetUseFreePreset() {
+		return false
+	}
 	return true
 }
 

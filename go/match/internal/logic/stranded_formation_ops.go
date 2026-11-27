@@ -14,8 +14,10 @@ import (
 	"google.golang.org/protobuf/proto"
 	"match/internal/authority"
 	"match/internal/config"
+	"match/internal/metrics"
 	"match/internal/pkg/ctxkeys"
 	pb "proto/match"
+	"shared/dualcontrol"
 	"shared/serviceauth"
 )
 
@@ -24,6 +26,9 @@ import (
 //   - 调用方准入:带会话一律 PermissionDenied;入口没开(GlobalMatch.ManualResolutionSecretEnv 没配或密钥无效)一律 PermissionDenied;
 //     只认 serviceauth 调用方 config.ManualResolutionCaller,签名绑定方法与整个请求;
 //   - DRY_RUN / ABORT 的参数校验与目标环境核对(expect_target 必须与本部署的环境名 GlobalMatch.ManualResolutionEnvironment 逐字相等);
+//   - ABORT 必带后台的双人复核批准记录(shared/dualcontrol 核对两人不同、发起人就是 operator_name),SHOW / DRY_RUN 带了照样核;
+//     只有部署显式打开 GlobalMatch.ManualResolutionAllowUnapproved(本机开发)才接受不带记录的 ABORT,每次都打 ERROR 并计数;
+//     批准号与批准人随 ABORT 写进 match_manual_resolution 与审计行;
 //   - 把 Store 的结论映射成带内 verdict,写审计日志行 [FormationManual]。
 //
 // 为什么写操作不让工具直连 match 库:匹配库只归 match 服务(AGENTS.md §7.6),写资格(authoritysql 写者 boot grant)一个进程只能
@@ -46,6 +51,8 @@ type StrandedFormationOps struct {
 	verifier *serviceauth.Verifier
 	target   string // 本部署的环境名:GlobalMatch.ManualResolutionEnvironment
 	replica  string // 本副本主机名,只进审计
+	// allowUnapproved:GlobalMatch.ManualResolutionAllowUnapproved。缺省 false,ABORT 必须带双人复核批准记录。
+	allowUnapproved bool
 }
 
 // manualResolutionEnvironmentRe 是环境名的字符集:进审计行与工具输出不用转义,也不会被读成别的字段。
@@ -89,7 +96,15 @@ func NewStrandedFormationOpsFromConfig(store *authority.Store, c config.GlobalMa
 		return nil, err
 	}
 	replica, _ := os.Hostname()
-	return NewStrandedFormationOps(store, getenv(name), target, replica)
+	ops, err := NewStrandedFormationOps(store, getenv(name), target, replica)
+	if err != nil {
+		return nil, err
+	}
+	ops.allowUnapproved = c.ManualResolutionAllowUnapproved
+	if ops.allowUnapproved {
+		logx.Errorf("[FormationManual] GlobalMatch.ManualResolutionAllowUnapproved is on: ABORT without a dual-control approval record is accepted; keep it off outside local development")
+	}
+	return ops, nil
 }
 
 // verify 是两个方法共用的调用方准入,拒绝发生在任何读写之前:带会话(客户端来源)、入口关闭(o 为 nil)、验签失败、
@@ -137,6 +152,10 @@ func (o *StrandedFormationOps) ResolveStrandedFormation(ctx context.Context, in 
 	out := &pb.ResolveStrandedFormationResponse{Target: o.target, Replica: o.replica}
 	switch in.GetMode() {
 	case pb.StrandedFormationMode_STRANDED_FORMATION_MODE_SHOW:
+		if refusal := o.admitApproval(ctx, in); refusal != "" {
+			out.Verdict, out.Refusal = pb.StrandedFormationVerdict_STRANDED_FORMATION_VERDICT_REFUSED, refusal
+			return out, nil
+		}
 		formation, stamp, err := o.store.ShowStrandedFormation(ctx, in.GetBattleId())
 		return o.reply(ctx, in.GetBattleId(), out, formation, stamp, err), nil
 	case pb.StrandedFormationMode_STRANDED_FORMATION_MODE_DRY_RUN, pb.StrandedFormationMode_STRANDED_FORMATION_MODE_ABORT:
@@ -159,9 +178,15 @@ func (o *StrandedFormationOps) manualAbort(ctx context.Context, in *pb.ResolveSt
 		o.audit(ctx, in, out)
 		return out, nil
 	}
+	if refusal := o.admitApproval(ctx, in); refusal != "" {
+		out.Verdict, out.Refusal = pb.StrandedFormationVerdict_STRANDED_FORMATION_VERDICT_REFUSED, refusal
+		o.audit(ctx, in, out)
+		return out, nil
+	}
 	formation, stamp, err := o.store.ManualAbortFormation(ctx, authority.ManualAbortRequest{
 		BattleID: in.GetBattleId(), ExpectDigest: in.GetExpectDigest(), Operator: in.GetOperatorName(), Reason: in.GetReason(),
 		Replica: o.replica, Execute: in.GetMode() == pb.StrandedFormationMode_STRANDED_FORMATION_MODE_ABORT,
+		ApprovalID: in.GetApproval().GetApprovalId(), Approver: in.GetApproval().GetApprover(),
 	})
 	if errors.Is(err, authority.ErrManualCommitUnknown) {
 		// 结局未知:回 Unavailable,发布准入据此 Hold 本副本的排空证明;绝不报成功。
@@ -171,6 +196,28 @@ func (o *StrandedFormationOps) manualAbort(ctx context.Context, in *pb.ResolveSt
 	o.reply(ctx, in.GetBattleId(), out, formation, stamp, err)
 	o.audit(ctx, in, out)
 	return out, nil
+}
+
+// admitApproval 核对双人复核批准记录,回非空串就是带内 REFUSED 的原因(不碰库)。不带记录的 ABORT 只在部署显式放开时接受,
+// 每次都打 ERROR 并计数(告警据此触发);带了记录就必须合格,SHOW / DRY_RUN 也一样。与 trade 的 admitApproval 同一口径。
+func (o *StrandedFormationOps) admitApproval(ctx context.Context, in *pb.ResolveStrandedFormationRequest) string {
+	approval := in.GetApproval()
+	if approval == nil {
+		if in.GetMode() != pb.StrandedFormationMode_STRANDED_FORMATION_MODE_ABORT {
+			return ""
+		}
+		if !o.allowUnapproved {
+			return "dual_control_approval_required"
+		}
+		metrics.ObserveAdminUnapprovedCommand()
+		logx.WithContext(ctx).Errorf("[FormationManual] ABORT accepted without a dual-control approval record battle_id=%d operator=%q (GlobalMatch.ManualResolutionAllowUnapproved is on)",
+			in.GetBattleId(), in.GetOperatorName())
+		return ""
+	}
+	if err := dualcontrol.Require(approval, in.GetOperatorName()); err != nil {
+		return "dual_control_approval_invalid: " + err.Error()
+	}
+	return ""
 }
 
 // reply 把 Store 的结论映射成带内 verdict,填进 out 并返回它。
@@ -198,13 +245,15 @@ func (o *StrandedFormationOps) reply(ctx context.Context, battle uint64, out *pb
 // audit 写审计日志行并放进回包,工具原样打印、贴进工单。真正写了 ABORT 打 ERROR(确保进日志检索),其余打 INFO。
 // battle_id 只进正文,不做指标标签。操作人与依据已由 ValidateManualAudit 排除控制字符;两者都是调用方填的自由文本、允许空格,
 // 一律 %q 引起来(2026-11-05 评审补):否则操作人填成 `x executed=true battle_id=1` 就能在 INFO 行里伪造出字段,
-// 按关键字检索日志或贴工单的人会被误导。其余字段都来自服务端。
+// 按关键字检索日志或贴工单的人会被误导。批准号与批准人同样来自请求,也引起来;refusal 可能带双人复核核对的原因文本(含空格),
+// 也引起来(2026-11-26)。其余字段都来自服务端。
 func (o *StrandedFormationOps) audit(ctx context.Context, in *pb.ResolveStrandedFormationRequest, out *pb.ResolveStrandedFormationResponse) {
 	f := out.GetFormation()
 	executed := in.GetMode() == pb.StrandedFormationMode_STRANDED_FORMATION_MODE_ABORT && out.GetVerdict() == pb.StrandedFormationVerdict_STRANDED_FORMATION_VERDICT_ELIGIBLE
-	out.AuditLine = fmt.Sprintf("[FormationManual] operator=%q battle_id=%d mode=%s verdict=%s refusal=%s class=%s failed_check=%s state_before=%d digest_before=%s effective_deadline_ms=%d now_ms=%d target=%s replica=%s reason=%q executed=%t",
+	out.AuditLine = fmt.Sprintf("[FormationManual] operator=%q battle_id=%d mode=%s verdict=%s refusal=%q class=%s failed_check=%s state_before=%d digest_before=%s effective_deadline_ms=%d now_ms=%d target=%s replica=%s approval_id=%q approver=%q reason=%q executed=%t",
 		in.GetOperatorName(), in.GetBattleId(), in.GetMode(), out.GetVerdict(), out.GetRefusal(), f.GetFormationClass(), f.GetFailedCheck(),
-		f.GetState(), f.GetDigest(), f.GetEffectiveDeadlineMs(), out.GetNowMs(), out.GetTarget(), out.GetReplica(), in.GetReason(), executed)
+		f.GetState(), f.GetDigest(), f.GetEffectiveDeadlineMs(), out.GetNowMs(), out.GetTarget(), out.GetReplica(),
+		in.GetApproval().GetApprovalId(), in.GetApproval().GetApprover(), in.GetReason(), executed)
 	if executed {
 		logx.WithContext(ctx).Error(out.AuditLine)
 		return

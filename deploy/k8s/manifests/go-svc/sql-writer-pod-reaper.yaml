@@ -4,7 +4,10 @@
 # 这个 Pod 自己再也起不来,只有删掉:StatefulSet 按同一序号建新 Pod,新 Pod 的 init 在同一槽位上换代(docs/design/writer-roster-exhaustion-20261106.md §5)。
 # 没有它,一次 panic 就永久少一个副本。
 #
-# 判据:带 label mmorpg.io/sql-writer=true 的 Pod,status.containerStatuses 里有容器上一次以退出码 78 退出。写者的入口脚本(各写者清单和 Dockerfile.java-svc)看到消费标记就退出 78,别的退出都不是这个码。
+# 判据:带 label mmorpg.io/sql-writer=true 的 Pod,status.containerStatuses 里有容器上一次以退出码 78 退出。78 只在「原地重启也起不来、要重建」时出现,有两种:
+#   写者的入口脚本(各写者清单和 Dockerfile.java-svc)看到消费标记就退出 78;
+#   data_service 启动自检没过、而这一代缺目录片的写资格(写者注册时它连不上)时退出 78:写资格在 init 里定了,重建之后注册器再试
+#   (docs/design/data-service-startup-isolation.md §7.5)。别的退出都不是这个码。
 #   - 还没写过就退出的进程(依赖没就绪)没有消费标记,容器原地重启接着用这一代的写资格,不删。Java 读的时候就消费,所以 gateway 任何一次重启都是 78。
 #   - containerStatuses 只有主容器,init 不在里面。init 反复失败(闸门冻结、副本数比名册槽位多、启动记录被同序号的另一个 Pod 抢先)这里看不到,这种 Pod 不删;
 #     它们由告警 SqlWriterRegistrarFailing 覆盖。
@@ -119,7 +122,7 @@ spec:
                 # 退出码转成字符串再比:模板里数字的 Go 类型跟 kubectl 版本走(int64 或 float64),和常量直接比类型不符时整个模板报错。
                 - |-
                   --output=go-template={{range .items}}{{if .metadata.deletionTimestamp}}{{else}}{{$pod := .}}{{range .status.containerStatuses}}{{if .lastState}}{{if .lastState.terminated}}{{if eq (printf "%v" .lastState.terminated.exitCode) "78"}}---
-                  # sql-writer-pod-reaper: deleting pod {{$pod.metadata.name}} in namespace {{$pod.metadata.namespace}}: container {{.name}} exited 78, its writer grant is consumed, the StatefulSet recreates this ordinal and the new pod registers the next generation of its slot
+                  # sql-writer-pod-reaper: deleting pod {{$pod.metadata.name}} in namespace {{$pod.metadata.namespace}}: container {{.name}} exited 78 (its writer grant is consumed, or it lacks a writer grant it needs at startup), the StatefulSet recreates this ordinal and the new pod registers the next generation of its slot
                   apiVersion: v1
                   kind: Pod
                   metadata:

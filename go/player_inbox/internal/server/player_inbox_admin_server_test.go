@@ -172,7 +172,7 @@ func newAdminFixture(t *testing.T) *adminFixture {
 		},
 		Now: func() time.Time { return time.UnixMilli(1_800_000_000_000) },
 	}
-	f.server = NewAdminServer(f.store, deps, f.ledgers, f.blocks, adminTestBudget)
+	f.server = NewAdminServer(f.store, deps, f.ledgers, f.blocks, adminTestBudget, false)
 	return f
 }
 
@@ -201,13 +201,14 @@ func TestAdminServerFoldsStoreFaultsInBand(t *testing.T) {
 	if err != nil || look.GetErrorMessage().GetId() != constants.ErrStoreUnavailable {
 		t.Errorf("LookupByRequest = %+v, %v", look, err)
 	}
-	void, err := f.server.VoidItem(ctx, &inboxpb.VoidPlayerInboxItemRequest{PlayerId: 42, Domain: gmDomain, Seq: 3})
+	void, err := f.server.VoidItem(ctx, &inboxpb.VoidPlayerInboxItemRequest{PlayerId: 42, Domain: gmDomain, Seq: 3,
+		Operator: inboxProposer, Approval: inboxApproval("5001", inboxProposer)})
 	if err != nil || void.GetErrorMessage().GetId() != constants.ErrStoreUnavailable {
 		t.Errorf("VoidItem = %+v, %v", void, err)
 	}
 	// 强制模式读账本失败、库故障同样 in-band 回 StoreUnavailable(可重试),回包不带任何证明结论与状态。
 	force, err := f.server.VoidItem(ctx, &inboxpb.VoidPlayerInboxItemRequest{PlayerId: 42, Domain: gmDomain, Seq: 3,
-		Mode: inboxpb.PlayerInboxVoidMode_PLAYER_INBOX_VOID_MODE_FORCE_MISMATCH})
+		Mode: inboxpb.PlayerInboxVoidMode_PLAYER_INBOX_VOID_MODE_FORCE_MISMATCH, Operator: inboxProposer, Approval: inboxApproval("5002", inboxProposer)})
 	if err != nil || force.GetErrorMessage().GetId() != constants.ErrStoreUnavailable ||
 		force.GetForceVerdict() != inboxpb.PlayerInboxForceVoidVerdict_PLAYER_INBOX_FORCE_VOID_UNSPECIFIED ||
 		force.GetState() != inboxpb.PlayerInboxItemState_PLAYER_INBOX_ITEM_UNSPECIFIED {
@@ -239,7 +240,8 @@ func TestAdminVoidRoleNotVerifiedIsNotAFault(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f := newAdminFixture(t)
 			f.store.err = cause
-			void, err := f.server.VoidItem(peerCtx(), &inboxpb.VoidPlayerInboxItemRequest{PlayerId: 42, Domain: gmDomain, Seq: 3})
+			void, err := f.server.VoidItem(peerCtx(), &inboxpb.VoidPlayerInboxItemRequest{PlayerId: 42, Domain: gmDomain, Seq: 3,
+				Operator: inboxProposer, Approval: inboxApproval("5001", inboxProposer)})
 			if err != nil || void.GetErrorMessage().GetId() != constants.ErrStaleOwner {
 				t.Fatalf("VoidItem = %+v, %v", void, err)
 			}
@@ -270,23 +272,24 @@ func TestAdminServerPassesThroughAndWires(t *testing.T) {
 
 	void, err := f.server.VoidItem(ctx, &inboxpb.VoidPlayerInboxItemRequest{
 		PlayerId: 42, Domain: gmDomain, Seq: 3, Reason: inboxpb.PlayerInboxVoidReason_PLAYER_INBOX_VOID_QUARANTINED,
-		Operator: "ops_bob", Note: "poison",
+		Operator: "ops_bob", Note: "poison", Approval: inboxApproval("5001", "ops_bob"),
 	})
 	if err != nil || !void.GetVoidRequested() {
 		t.Errorf("VoidItem = %+v, %v", void, err)
 	}
 	want := inbox.VoidParams{
 		PlayerID: 42, Domain: gmDomain, Seq: 3, Reason: inboxpb.PlayerInboxVoidReason_PLAYER_INBOX_VOID_QUARANTINED,
-		Operator: "ops_bob", Note: "poison", PeerAddr: adminTestPeer,
+		Operator: "ops_bob", Note: "poison", PeerAddr: adminTestPeer, ApprovalID: "5001", Approver: inboxApprover,
 	}
 	if f.store.voidParams != want {
-		t.Errorf("VoidParams = %+v, want %+v(对端地址取自 gRPC peer,进审计;缺省 mode = NORMAL)", f.store.voidParams, want)
+		t.Errorf("VoidParams = %+v, want %+v(对端地址取自 gRPC peer,进审计;批准号与批准人进审计;缺省 mode = NORMAL)", f.store.voidParams, want)
 	}
 
 	// 强制模式:mode 原样交给存储层,账本读取器是装配层那一个(与对账共用);证明结论与终态原样透传。
 	force, err := f.server.VoidItem(ctx, &inboxpb.VoidPlayerInboxItemRequest{
 		PlayerId: 42, Domain: gmDomain, Seq: 4, Reason: inboxpb.PlayerInboxVoidReason_PLAYER_INBOX_VOID_CANCELLED,
 		Operator: "ops_carol", Note: "工单 #11:恢复后旧行", Mode: inboxpb.PlayerInboxVoidMode_PLAYER_INBOX_VOID_MODE_FORCE_MISMATCH,
+		Approval: inboxApproval("5002", "ops_carol"),
 	})
 	if err != nil || force.GetErrorMessage() != nil || force.GetVoidRequested() ||
 		force.GetState() != inboxpb.PlayerInboxItemState_PLAYER_INBOX_ITEM_VOIDED ||
@@ -296,7 +299,7 @@ func TestAdminServerPassesThroughAndWires(t *testing.T) {
 	wantForce := inbox.VoidParams{
 		PlayerID: 42, Domain: gmDomain, Seq: 4, Reason: inboxpb.PlayerInboxVoidReason_PLAYER_INBOX_VOID_CANCELLED,
 		Operator: "ops_carol", Note: "工单 #11:恢复后旧行", PeerAddr: adminTestPeer,
-		Mode: inboxpb.PlayerInboxVoidMode_PLAYER_INBOX_VOID_MODE_FORCE_MISMATCH,
+		Mode: inboxpb.PlayerInboxVoidMode_PLAYER_INBOX_VOID_MODE_FORCE_MISMATCH, ApprovalID: "5002", Approver: inboxApprover,
 	}
 	if f.store.voidParams != wantForce {
 		t.Errorf("VoidParams(FORCE) = %+v, want %+v", f.store.voidParams, wantForce)
@@ -328,7 +331,9 @@ func blockRequest() *inboxpb.GmSanctionPlayerRequest {
 		PlayerId: 42, RequestId: 9001, IssuedAtMs: 1_799_999_999_000,
 		Action:   &inboxpb.GmSanctionPlayerRequest_BlockGain{BlockGain: &inboxpb.GmCurrencyGainPayload{CurrencyType: 2}},
 		Reason:   "工单 #7",
-		Operator: "ops_alice",
+		Operator: inboxProposer,
+		// 批准号就是 request_id(dualcontrol.RequireForRequest)。
+		Approval: inboxApproval("9001", inboxProposer),
 	}
 }
 

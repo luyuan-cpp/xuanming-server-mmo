@@ -85,13 +85,26 @@ func settleBuyerFirstDelivery(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCo
 	if leg(w, "seller_return") != nil || leg(w, "buyer_return") != nil {
 		return errors.New("买家交付腿被拒要整单退回,合同里却已经有退回腿")
 	}
+	refund := proto.Clone(seller.GetBundle()).(*assetpb.AssetBundle)
+	if r.GetKind() == KindWantedSkillBook {
+		// 求购单的卖家所得只是税后 95%,照抄会让发榜人白丢 5%:退回用发榜人托管的原件,即全额悬赏
+		// (skill-book-wanted-order-trade-escrow.md §3.6)。
+		escrow := leg(w, "buyer_debit")
+		if !applied(escrow) {
+			return errors.New("求购单整单退回,发榜人的悬赏托管却没有扣到")
+		}
+		var err error
+		if refund, err = Transfer(escrow.GetBundle(), escrow.GetSnapshot()); err != nil {
+			return err
+		}
+	}
 	buyer.SupersededBy = unwoundBy
 	seller.SupersededBy = unwoundBy
-	// 退回的正是两条交付腿付出的那两份,托管者照抄:货是 buyer_receive 付出的,钱是 seller_receive 付出的。
+	// 退回的正是两条交付腿付出的那两份,托管者照抄:货是 buyer_receive 付出的,钱是 seller_receive 付出的(求购单退托管原件,见上)。
 	addEscrowLeg(w, "seller_return", seller.GetPlayerId(), buyer.GetEscrowOwnerId(), proto.Clone(buyer.GetBundle()).(*assetpb.AssetBundle))
 	if r.GetKind() != 5 {
 		// 拍品(kind 5)不退钱:钱还在赢家的出价合同里,由它看到拍品撤了之后自己退(settleHeldBid)。
-		addEscrowLeg(w, "buyer_return", buyer.GetPlayerId(), seller.GetEscrowOwnerId(), proto.Clone(seller.GetBundle()).(*assetpb.AssetBundle))
+		addEscrowLeg(w, "buyer_return", buyer.GetPlayerId(), seller.GetEscrowOwnerId(), refund)
 	}
 	w.Stage = "return"
 	r.Status = CancelPending

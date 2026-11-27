@@ -5,6 +5,8 @@ option go_package = "player_inbox/player_inbox";
 option cc_generic_services = false;
 
 import "proto/common/base/tip.proto";
+// 甲级处置的双人复核批准记录(docs/design/admin-identity-and-dual-control.md §5.4);只给服务端内部管理协议用。
+import "proto/common/base/admin_approval.proto";
 import "proto/player_inbox/player_inbox.proto";
 
 // 玩家收件箱运维接口(docs/design/player-inbox-service.md §5.2、§1.6)。
@@ -54,6 +56,9 @@ message GmSanctionPlayerRequest {
   }
   string reason = 7;                    // 必填,≤ 256B,UTF-8;进审计
   string operator = 8;                  // 必填,≤ 64B,UTF-8;进审计与条目 operator_name
+  // 必填:后台的双人复核批准记录,发起人 = operator,批准号 = request_id 的十进制文本(批准号即幂等键)。
+  // 不进内容摘要;批准号与批准人进审计行。只有 PlayerInbox.AdminAllowUnapproved(本机开发)打开时才接受不带。
+  common.base.AdminApproval approval = 11;
 }
 
 message GmSanctionPlayerResponse {
@@ -177,6 +182,9 @@ message VoidPlayerInboxItemRequest {
   string operator = 5;                  // 必填,≤ 64B
   string note = 6;                      // ≤ 256B;强制模式必填(进审计 reason,写工单号与依据)
   PlayerInboxVoidMode mode = 7;         // 缺省 NORMAL = 原语义
+  // 必填(两种模式都要):双人复核批准记录,发起人 = operator。本接口没有请求号,批准号只进审计行;
+  // 同一条目同一动作的审计行只记第一次(INSERT IGNORE),之后的批准号只进日志行。
+  common.base.AdminApproval approval = 8;
 }
 
 // 兼容提示:不认识 mode 的旧版服务端会按普通模式处理(已投递只挂指令,回 void_requested=true)。

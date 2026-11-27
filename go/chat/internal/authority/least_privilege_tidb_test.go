@@ -111,16 +111,16 @@ func TestChatTiDBLeastPrivilegeRuntimeContract(t *testing.T) {
 	require.Equal(t, 1, count(t, limited))
 
 	// 必须真实缺表后由有限迁移账号创建；IF NOT EXISTS碰到旧表不能冒充CREATE能力。
-	chatPrivilegeNoError(t, "管理员仅删除本例聊天六表", chatPrivilegeExec(ctx, admin,
-		"DROP TABLE `"+chatSchema+"`.chat_send_authority,`"+chatSchema+"`.chat_policy,`"+chatSchema+"`.chat_world_retraction,`"+chatSchema+"`.chat_report,`"+chatSchema+"`.chat_repeat_event,`"+chatSchema+"`.chat_private_daily_target"))
+	chatPrivilegeNoError(t, "管理员仅删除本例聊天九表", chatPrivilegeExec(ctx, admin,
+		"DROP TABLE `"+chatSchema+"`.chat_send_authority,`"+chatSchema+"`.chat_policy,`"+chatSchema+"`.chat_world_retraction,`"+chatSchema+"`.chat_report,`"+chatSchema+"`.chat_repeat_event,`"+chatSchema+"`.chat_private_daily_target,`"+chatSchema+"`.chat_platform_recheck,`"+chatSchema+"`.chat_platform_recheck_claim,`"+chatSchema+"`.chat_platform_recheck_done"))
 	var tables int
-	chatPrivilegeNoError(t, "核聊天六表确实不存在", admin.QueryRowContext(ctx,
+	chatPrivilegeNoError(t, "核聊天九表确实不存在", admin.QueryRowContext(ctx,
 		"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=? AND table_name IN "+chatTablesInClause, chatSchema).Scan(&tables))
 	require.Zero(t, tables)
-	chatPrivilegeNoError(t, "有限迁移账号真实创建正式六表", Migrate(ctx, migrationDB))
-	chatPrivilegeNoError(t, "核迁移账号创建六表完成", admin.QueryRowContext(ctx,
+	chatPrivilegeNoError(t, "有限迁移账号真实创建正式九表", Migrate(ctx, migrationDB))
+	chatPrivilegeNoError(t, "核迁移账号创建九表完成", admin.QueryRowContext(ctx,
 		"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=? AND table_name IN "+chatTablesInClause, chatSchema).Scan(&tables))
-	require.Equal(t, 6, tables)
+	require.Equal(t, 9, tables)
 	for _, query := range []string{
 		"UPDATE `" + globalSchema + "`.account_role SET owner_revision=owner_revision WHERE player_id=11",
 		"ALTER TABLE `" + globalSchema + "`.account_role ADD COLUMN forbidden_migration_alter INT",

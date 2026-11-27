@@ -206,3 +206,31 @@ constexpr uint32_t MatchServiceGetTrialChallengeCardIndex = 49;
 constexpr uint32_t MatchServiceGetSharedTrialReplayMessageId = 572;
 constexpr uint32_t MatchServiceGetSharedTrialReplayIndex = 50;
 #define MatchServiceGetSharedTrialReplayMethod  ::MatchService_Stub::descriptor()->method(50)
+
+constexpr uint32_t MatchServiceListTacticalPuzzlesMessageId = 575;
+constexpr uint32_t MatchServiceListTacticalPuzzlesIndex = 51;
+#define MatchServiceListTacticalPuzzlesMethod  ::MatchService_Stub::descriptor()->method(51)
+
+constexpr uint32_t MatchServiceGetTacticalPuzzleMessageId = 576;
+constexpr uint32_t MatchServiceGetTacticalPuzzleIndex = 52;
+#define MatchServiceGetTacticalPuzzleMethod  ::MatchService_Stub::descriptor()->method(52)
+
+constexpr uint32_t MatchServiceSaveTacticalPuzzleDraftMessageId = 577;
+constexpr uint32_t MatchServiceSaveTacticalPuzzleDraftIndex = 53;
+#define MatchServiceSaveTacticalPuzzleDraftMethod  ::MatchService_Stub::descriptor()->method(53)
+
+constexpr uint32_t MatchServiceDeleteTacticalPuzzleMessageId = 578;
+constexpr uint32_t MatchServiceDeleteTacticalPuzzleIndex = 54;
+#define MatchServiceDeleteTacticalPuzzleMethod  ::MatchService_Stub::descriptor()->method(54)
+
+constexpr uint32_t MatchServiceStartTacticalPuzzleBattleMessageId = 579;
+constexpr uint32_t MatchServiceStartTacticalPuzzleBattleIndex = 55;
+#define MatchServiceStartTacticalPuzzleBattleMethod  ::MatchService_Stub::descriptor()->method(55)
+
+constexpr uint32_t MatchServiceLikeTacticalPuzzleMessageId = 580;
+constexpr uint32_t MatchServiceLikeTacticalPuzzleIndex = 56;
+#define MatchServiceLikeTacticalPuzzleMethod  ::MatchService_Stub::descriptor()->method(56)
+
+constexpr uint32_t MatchServiceGetTacticalPuzzleSolutionReplayMessageId = 581;
+constexpr uint32_t MatchServiceGetTacticalPuzzleSolutionReplayIndex = 57;
+#define MatchServiceGetTacticalPuzzleSolutionReplayMethod  ::MatchService_Stub::descriptor()->method(57)

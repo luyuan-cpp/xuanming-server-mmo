@@ -28,6 +28,10 @@ GuildRpc:
   NonBlock: true
 Producers:
   admin: MAIL_PRODUCER_SECRET_ADMIN
+# 本机 GM 栈的后台多半跑原生模式、双人复核关着,发出的邮件不带批准记录;只有这份本机配置打开应急开关,
+# 每一封不带记录的管理邮件照样打 ERROR 并计数(docs/design/admin-identity-and-dual-control.md §11.2)。
+# 要在本机验双人复核,就把这一行删掉,后台设 GM_DUAL_CONTROL_ENFORCE=true 并用两个本地账号。
+AdminAllowUnapproved: true
 Log:
   ServiceName: mail
   Mode: console

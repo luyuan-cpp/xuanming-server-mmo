@@ -540,4 +540,8 @@
     <ClCompile Include="common\base\admin_approval.pb.cc" />
     <ClInclude Include="common\base\admin_approval.pb.h" />
   </ItemGroup>
+  <ItemGroup Label="ProtoGeneratorSources">
+    <ClCompile Include="login\login_admin.pb.cc" />
+    <ClInclude Include="login\login_admin.pb.h" />
+  </ItemGroup>
 </Project>

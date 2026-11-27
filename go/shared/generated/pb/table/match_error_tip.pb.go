@@ -87,6 +87,15 @@ const (
 	MatchError_kMatchTournamentPredictionClosed        MatchError = 16061
 	MatchError_kMatchTournamentPredictionTargetInvalid MatchError = 16062
 	MatchError_kMatchTournamentWarmupUnavailable       MatchError = 16063
+	MatchError_kMatchPuzzleNotFound                    MatchError = 16064
+	MatchError_kMatchPuzzleNotOwner                    MatchError = 16065
+	MatchError_kMatchPuzzleLimitReached                MatchError = 16066
+	MatchError_kMatchPuzzleSpecInvalid                 MatchError = 16067
+	MatchError_kMatchPuzzleTextRejected                MatchError = 16068
+	MatchError_kMatchPuzzleNotPublished                MatchError = 16069
+	MatchError_kMatchPuzzleCannotLikeOwn               MatchError = 16070
+	MatchError_kMatchPuzzleClearRequiredToLike         MatchError = 16071
+	MatchError_kMatchPuzzleSolutionReplayNotFound      MatchError = 16072
 )
 
 // Enum value maps for MatchError.
@@ -155,6 +164,15 @@ var (
 		16061: "kMatchTournamentPredictionClosed",
 		16062: "kMatchTournamentPredictionTargetInvalid",
 		16063: "kMatchTournamentWarmupUnavailable",
+		16064: "kMatchPuzzleNotFound",
+		16065: "kMatchPuzzleNotOwner",
+		16066: "kMatchPuzzleLimitReached",
+		16067: "kMatchPuzzleSpecInvalid",
+		16068: "kMatchPuzzleTextRejected",
+		16069: "kMatchPuzzleNotPublished",
+		16070: "kMatchPuzzleCannotLikeOwn",
+		16071: "kMatchPuzzleClearRequiredToLike",
+		16072: "kMatchPuzzleSolutionReplayNotFound",
 	}
 	MatchError_value = map[string]int32{
 		"kMatch_errorOK":                          0,
@@ -220,6 +238,15 @@ var (
 		"kMatchTournamentPredictionClosed":        16061,
 		"kMatchTournamentPredictionTargetInvalid": 16062,
 		"kMatchTournamentWarmupUnavailable":       16063,
+		"kMatchPuzzleNotFound":                    16064,
+		"kMatchPuzzleNotOwner":                    16065,
+		"kMatchPuzzleLimitReached":                16066,
+		"kMatchPuzzleSpecInvalid":                 16067,
+		"kMatchPuzzleTextRejected":                16068,
+		"kMatchPuzzleNotPublished":                16069,
+		"kMatchPuzzleCannotLikeOwn":               16070,
+		"kMatchPuzzleClearRequiredToLike":         16071,
+		"kMatchPuzzleSolutionReplayNotFound":      16072,
 	}
 )
 
@@ -254,7 +281,7 @@ var File_match_error_tip_proto protoreflect.FileDescriptor
 
 const file_match_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15match_error_tip.proto*\xba\x10\n" +
+	"\x15match_error_tip.proto*\xda\x12\n" +
 	"\vmatch_error\x12\x12\n" +
 	"\x0ekMatch_errorOK\x10\x00\x12\x13\n" +
 	"\x0ekMatchInBattle\x10\x80}\x12\x18\n" +
@@ -318,7 +345,16 @@ const file_match_error_tip_proto_rawDesc = "" +
 	"\x1dkMatchTournamentEmblemInvalid\x10\xbc}\x12%\n" +
 	" kMatchTournamentPredictionClosed\x10\xbd}\x12,\n" +
 	"'kMatchTournamentPredictionTargetInvalid\x10\xbe}\x12&\n" +
-	"!kMatchTournamentWarmupUnavailable\x10\xbf}B$\n" +
+	"!kMatchTournamentWarmupUnavailable\x10\xbf}\x12\x19\n" +
+	"\x14kMatchPuzzleNotFound\x10\xc0}\x12\x19\n" +
+	"\x14kMatchPuzzleNotOwner\x10\xc1}\x12\x1d\n" +
+	"\x18kMatchPuzzleLimitReached\x10\xc2}\x12\x1c\n" +
+	"\x17kMatchPuzzleSpecInvalid\x10\xc3}\x12\x1d\n" +
+	"\x18kMatchPuzzleTextRejected\x10\xc4}\x12\x1d\n" +
+	"\x18kMatchPuzzleNotPublished\x10\xc5}\x12\x1e\n" +
+	"\x19kMatchPuzzleCannotLikeOwn\x10\xc6}\x12$\n" +
+	"\x1fkMatchPuzzleClearRequiredToLike\x10\xc7}\x12'\n" +
+	"\"kMatchPuzzleSolutionReplayNotFound\x10\xc8}B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

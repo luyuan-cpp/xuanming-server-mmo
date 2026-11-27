@@ -1834,4 +1834,203 @@ TEST(RankedBattleTest, RivalryPrepRedactionRevengeAndFeaturedBuildSnapshot) {
     EXPECT_EQ(settleB.rematch_opponent_name(), "青云");
 }
 
+TEST(RankedBattleTest, PrepSkillBanV2ProtectCounterAndTeammateEquippedSkills) {
+    auto data = std::make_shared<MemoryBattleDataProvider>();
+    auto& dungeon = data->AddDungeon(5);
+    dungeon.set_id(5);
+    dungeon.set_round_limit(20);
+    dungeon.set_max_team_size(5);
+
+    auto addConfiguredActive = [&](uint32_t id, uint32_t banCat, uint32_t actionTags) {
+        auto& s = data->AddSkill(id);
+        s.add_skill_type(1);
+        s.set_max_rank(5);
+        s.set_battle_model(1);
+        s.set_ability_kind(1);
+        s.set_caster_mask(3);  // 人宠共用方便测灵宠技能提示
+        s.set_target_team(1);
+        s.set_max_targets(5);
+        s.set_action_tags(actionTags);
+        s.set_attack_multiplier(1.0);
+        s.set_ban_pool_category(banCat);
+        auto& b = data->AddBuff(id * 10);
+        b.set_battle_op(1);
+        s.add_effect(id * 10);
+    };
+    addConfiguredActive(10002, 0, 1);   // 豁免
+    addConfiguredActive(10020, 1, 16);  // S1
+    addConfiguredActive(10023, 1, 16);  // S2
+    addConfiguredActive(10038, 1, 16);  // S3
+    addConfiguredActive(10040, 3, 8);   // S4
+    addConfiguredActive(10035, 3, 16);  // S5
+    addConfiguredActive(11006, 4, 8);   // Pet skill A
+    addConfiguredActive(11007, 4, 8);   // Pet skill B
+
+    auto makePet = [](uint64_t petId, uint64_t ownerId, uint32_t skillId) {
+        BattlePetSnapshot p;
+        p.set_pet_id(petId);
+        p.set_pet_table_id(1);
+        p.set_owner_player_id(ownerId);
+        p.set_pet_name("灵宠");
+        p.set_level(30);
+        p.set_max_health(2000);
+        p.set_max_mana(500);
+        p.set_physical_attack(100);
+        p.set_defense(50);
+        p.mutable_base_attributes()->set_health(2000);
+        p.mutable_base_attributes()->set_mana(500);
+        p.mutable_base_attributes()->set_speed(150);
+        p.add_skill_table_ids(skillId);
+        (*p.mutable_skill_ranks())[skillId] = 1;
+        return p;
+    };
+
+    auto makePlayer = [&](CreateBattleRequest& req, uint64_t pid, uint32_t team, bool captain,
+                          std::initializer_list<uint32_t> skills) {
+        auto* p = req.add_players();
+        p->set_player_id(pid);
+        p->set_team_index(team);
+        p->set_is_team_captain(captain);
+        p->set_player_name("道友");
+        p->set_level(30);
+        p->set_active_season_id(1);
+        p->set_max_health(5000);
+        p->mutable_base_attributes()->set_health(5000);
+        p->mutable_base_attributes()->set_mana(2000);
+        p->mutable_base_attributes()->set_speed(200);
+        p->set_physical_attack(500);
+        p->set_defense(100);
+        for (uint32_t sid : skills) {
+            p->add_skill_table_ids(sid);
+            (*p->mutable_skill_ranks())[sid] = 1;
+        }
+        return p;
+    };
+
+    // 场景 1：3V3 队友已带动态刷新 + 护招投票（队长决胜 / 多数胜出）+ 破禁化解恢复可用
+    CreateBattleRequest req;
+    req.set_battle_id(99701);
+    req.set_battle_config_id(5);
+    req.set_match_mode(6);  // MATCH_MODE_PVP_TEAM
+    req.set_seed(701);
+    auto* rctx = req.mutable_ranked_context();
+    rctx->set_season_id(1);
+    rctx->set_season_key("s1");
+    rctx->set_rank_generation(1);
+    rctx->set_rule_version(2);
+    rctx->set_team_size(3);
+    rctx->set_skill_ban_slots_per_team(3);
+
+    makePlayer(req, 101, 0, true, {10002, 10020, 10040});
+    auto* p102 = makePlayer(req, 102, 0, false, {10002, 10023});
+    *p102->add_pets() = makePet(6001, 102, 11006);
+    *p102->add_standby_pets() = makePet(6002, 102, 11007);
+    makePlayer(req, 103, 0, false, {10002, 10035});
+    makePlayer(req, 201, 1, true, {10002, 10020, 10038, 10040});
+
+    TurnBattleEngine engine(data);
+    ASSERT_TRUE(engine.Initialize(req));
+    ASSERT_TRUE(engine.IsInPrepPhase());
+
+    // 1. 视角脱敏与「队友已带」：101 看到 102(10023 + 首发宠11006) 与 103(10035)，绝不含自己独有的 10020/10040 或敌方 10038
+    BattleStateS2C s101;
+    engine.FillPrepStateForViewer(s101, 101, 999);
+    EXPECT_EQ(s101.prep_state().skill_protect_slots_per_team(), 1u);
+    std::vector<uint32_t> equipped101(s101.prep_state().teammate_equipped_skill_ids().begin(),
+                                      s101.prep_state().teammate_equipped_skill_ids().end());
+    EXPECT_EQ(equipped101, (std::vector<uint32_t>{10023u, 10035u, 11006u}));
+
+    // 观众视角：可见槽数，清空护招与队友技能
+    BattleStateS2C obs;
+    engine.FillPrepStateForViewer(obs, 0, 999);
+    EXPECT_EQ(obs.prep_state().skill_protect_slots_per_team(), 1u);
+    EXPECT_EQ(obs.prep_state().team_effective_protected_skill_id(), 0u);
+    EXPECT_EQ(obs.prep_state().teammate_equipped_skill_ids_size(), 0);
+
+    // 102 临场把首发宠换成 6002（携带 11007），101 视角立刻刷新为 11007
+    ASSERT_EQ(engine.UpdateBattlePrep(102, 0, 6002, false), 0u);
+    engine.FillPrepStateForViewer(s101, 101, 999);
+    equipped101.assign(s101.prep_state().teammate_equipped_skill_ids().begin(),
+                       s101.prep_state().teammate_equipped_skill_ids().end());
+    EXPECT_EQ(equipped101, (std::vector<uint32_t>{10023u, 10035u, 11007u}));
+
+    // 2. 合法性校验：非白名单护招拒、与本人禁招同招拒、单次请求原子转移禁→保放行
+    EXPECT_EQ(engine.UpdateBattlePrep(101, 0, 0, false, nullptr, false, {}, true, 10002), kInvalidParameter);
+    ASSERT_EQ(engine.UpdateBattlePrep(101, 0, 0, false, nullptr, true, {10020, 10023, 10038}), 0u);
+    EXPECT_EQ(engine.UpdateBattlePrep(101, 0, 0, false, nullptr, false, {}, true, 10020), kInvalidParameter);
+    // 单次原子操作把 10040 设为护招、保留 [10020,10023,10038] 为禁招
+    BattlePrepState out101;
+    ASSERT_EQ(engine.UpdateBattlePrep(101, 0, 0, false, &out101, false, {}, true, 10040), 0u);
+    EXPECT_EQ(out101.team_effective_protected_skill_id(), 10040u);
+
+    // 102 投护招 10035（与队长 101 平票 1:1 -> 队长 10040 胜出）
+    BattlePrepState out102;
+    ASSERT_EQ(engine.UpdateBattlePrep(102, 0, 0, false, &out102, false, {}, true, 10035), 0u);
+    EXPECT_EQ(out102.team_effective_protected_skill_id(), 10040u);
+
+    // 103 也投护招 10035（2:1 共识胜出 -> 切为 10035）；随后 103 改投 10040 锁定
+    BattlePrepState out103;
+    ASSERT_EQ(engine.UpdateBattlePrep(103, 0, 0, false, &out103, false, {}, true, 10035), 0u);
+    EXPECT_EQ(out103.team_effective_protected_skill_id(), 10035u);
+    ASSERT_EQ(engine.UpdateBattlePrep(103, 0, 0, true, &out103, false, {}, true, 10040), 0u);
+    EXPECT_EQ(out103.team_effective_protected_skill_id(), 10040u);
+    // 锁定后不可改护招
+    EXPECT_EQ(engine.UpdateBattlePrep(103, 0, 0, true, nullptr, false, {}, true, 10035), kFeatureUnavailable);
+
+    // 敌方 201 禁 [10038, 10040, 10035]（与 A 队撞车 10038，并禁了 A 队护招 10040）、护招 10020（反制 A 队禁招 10020）
+    ASSERT_EQ(engine.UpdateBattlePrep(101, 0, 0, true), 0u);
+    ASSERT_EQ(engine.UpdateBattlePrep(102, 0, 0, true), 0u);
+    ASSERT_EQ(engine.UpdateBattlePrep(201, 0, 0, true, nullptr, true, {10038, 10040, 10035}, true, 10020), 0u);
+    ASSERT_TRUE(engine.FinalizePrepPhase());
+
+    const auto state = engine.BuildState();
+    EXPECT_EQ(state.team_a_protected_skill_id(), 10040u);
+    EXPECT_EQ(state.team_b_protected_skill_id(), 10020u);
+    std::vector<uint32_t> countered(state.countered_ban_skill_ids().begin(), state.countered_ban_skill_ids().end());
+    std::vector<uint32_t> banned(state.banned_skill_ids().begin(), state.banned_skill_ids().end());
+    EXPECT_EQ(countered, (std::vector<uint32_t>{10020u, 10040u}));
+    EXPECT_EQ(banned, (std::vector<uint32_t>{10023u, 10035u, 10038u}));
+
+    // 破禁化解的 10020 / 10040 恢复可用；未化解的 10038 仍被禁（kSkillBannedInBattle）
+    BattleAction cast10020;
+    cast10020.set_action_type(BATTLE_ACTION_SKILL);
+    cast10020.set_skill_table_id(10020);
+    cast10020.set_target_actor_id(201);
+    EXPECT_EQ(engine.ValidateAction(101, cast10020), kSuccess);
+
+    BattleAction cast10040;
+    cast10040.set_action_type(BATTLE_ACTION_SKILL);
+    cast10040.set_skill_table_id(10040);
+    cast10040.set_target_actor_id(201);
+    EXPECT_EQ(engine.ValidateAction(101, cast10040), kSuccess);
+
+    BattleAction cast10038;
+    cast10038.set_action_type(BATTLE_ACTION_SKILL);
+    cast10038.set_skill_table_id(10038);
+    cast10038.set_target_actor_id(101);
+    EXPECT_EQ(engine.ValidateAction(201, cast10038), kSkillBannedInBattle);
+
+    // 场景 2：双边同禁 10038 + 仅单边护招 10038（不可化解自己同队禁招，确保 countered 与 banned 严格互斥）
+    CreateBattleRequest req2;
+    req2.set_battle_id(99702);
+    req2.set_battle_config_id(5);
+    req2.set_match_mode(6);
+    req2.set_seed(702);
+    *req2.mutable_ranked_context() = *rctx;
+    makePlayer(req2, 101, 0, true, {10002, 10038});
+    makePlayer(req2, 201, 1, true, {10002, 10038});
+    makePlayer(req2, 202, 1, false, {10002, 10038});
+
+    TurnBattleEngine engine2(data);
+    ASSERT_TRUE(engine2.Initialize(req2));
+    ASSERT_EQ(engine2.UpdateBattlePrep(101, 0, 0, true, nullptr, true, {10038}), 0u);
+    ASSERT_EQ(engine2.UpdateBattlePrep(201, 0, 0, true, nullptr, true, {10038}), 0u);
+    ASSERT_EQ(engine2.UpdateBattlePrep(202, 0, 0, true, nullptr, false, {}, true, 10038), 0u);
+    ASSERT_TRUE(engine2.FinalizePrepPhase());
+
+    const auto state2 = engine2.BuildState();
+    EXPECT_TRUE(engine2.IsSkillBanned(10038));
+    EXPECT_EQ(state2.countered_ban_skill_ids_size(), 0);
+}
+
 }  // namespace

@@ -121,13 +121,16 @@ void BattleClientEdge::Install(muduo::net::TcpServer &server)
                                      muduo::Timestamp ts)
                               { if(auto self=weak.lock()) self->codec.onMessage(conn, buf, ts); });
     RegisterMetrics();
-    // loop 卡顿的节拍(未验签淘汰用):只绑 weak 自己(AGENTS.md §11.7),在主 loop 上跑,不起线程。
+    // loop 卡顿的节拍(未验签淘汰用),同一拍扫未认证直连的握手期限(闸 3):只绑 weak 自己(AGENTS.md §11.7),
+    // 在主 loop 上跑,不起线程。
     const double tickSeconds = std::chrono::duration<double>(client_liveness::kClientLiveness.checkPeriod).count();
     loopStallTimer.RunEvery(tickSeconds, [weak]
                              {
         if (const auto self = weak.lock())
         {
-            self->loopStall.Tick(std::chrono::steady_clock::now());
+            const auto now = std::chrono::steady_clock::now();
+            const bool late = self->loopStall.Tick(now);
+            self->CloseExpiredHandshakes(now, late);
         } });
 }
 
@@ -144,18 +147,19 @@ bool BattleClientEdge::AdmitConnection(const muduo::net::InetAddress &peer,
         oldestConnId = OldestConnectedUnauthenticated(now);
         if (oldestConnId)
         {
-            const auto &session = sessions.at(*oldestConnId);
-            const auto conn = session.conn.lock();
+            const UnauthenticatedConnection &record = this->unauthenticated.at(*oldestConnId);
+            const auto conn = record.conn.lock();
             const std::optional<battle_connection_admission::SteadyTime::duration> halfClosedAge =
-                session.halfClosedAt
-                    ? std::optional<battle_connection_admission::SteadyTime::duration>(now - *session.halfClosedAt)
+                record.halfClosedAt
+                    ? std::optional<battle_connection_admission::SteadyTime::duration>(now - *record.halfClosedAt)
                     : std::nullopt;
             oldestAge = battle_connection_admission::EffectivePreAuthEvictAge(
-                conn && conn->connected(), now - session.openedAt, halfClosedAge, admission.CurrentPreAuthBudget());
+                conn && conn->connected(), now - record.openedAt, halfClosedAge, admission.CurrentPreAuthBudget());
         }
     }
+    // 总量按 会话数 + 未认证直连数 判(票据先行:未认证直连不在 sessions 里,同样占着 fd 与连接对象)。
     const auto verdict =
-        admission.Admit(peer, sessions.size(), EffectiveMaxConnections(), unauthenticated, oldestAge, now);
+        admission.Admit(peer, ConnectionCount(), EffectiveMaxConnections(), unauthenticated, oldestAge, now);
     if (!verdict.rejected)
     {
         if (verdict.sourceUntracked)
@@ -190,14 +194,9 @@ std::optional<uint64_t> BattleClientEdge::OldestConnectedUnauthenticated(
     // now 由 AdmitConnection 给,与它随后算年龄用的是同一个时刻:半关闭连接「是否已逾期」在两处不会得出不同结论。
     const auto &budget = admission.CurrentPreAuthBudget();
     // 通常第一条就是;仍在短宽限期内的半关闭连接跳过,超过宽限期仍留在池内的半关闭连接允许淘汰强关。
-    for (const uint64_t connId : unauthenticated)
+    for (const auto &[connId, record] : unauthenticated)
     {
-        const auto it = sessions.find(connId);
-        if (it == sessions.end())
-        {
-            continue;
-        }
-        const auto conn = it->second.conn.lock();
+        const auto conn = record.conn.lock();
         if (!conn)
         {
             continue;
@@ -207,10 +206,10 @@ std::optional<uint64_t> BattleClientEdge::OldestConnectedUnauthenticated(
             return connId;
         }
         const std::optional<battle_connection_admission::SteadyTime::duration> halfClosedAge =
-            it->second.halfClosedAt
-                ? std::optional<battle_connection_admission::SteadyTime::duration>(now - *it->second.halfClosedAt)
+            record.halfClosedAt
+                ? std::optional<battle_connection_admission::SteadyTime::duration>(now - *record.halfClosedAt)
                 : std::nullopt;
-        if (battle_connection_admission::IsHalfClosedPreAuthEvictable(now - it->second.openedAt, halfClosedAge, budget))
+        if (battle_connection_admission::IsHalfClosedPreAuthEvictable(now - record.openedAt, halfClosedAge, budget))
         {
             return connId;
         }
@@ -218,32 +217,54 @@ std::optional<uint64_t> BattleClientEdge::OldestConnectedUnauthenticated(
     return std::nullopt;
 }
 
+void BattleClientEdge::CloseExpiredHandshakes(const client_liveness::SteadyTime now, const bool late)
+{
+    if (late)
+    {
+        return; // 本端 loop 刚卡过:握手包可能还在接收缓冲里没读,下一拍准时了再判
+    }
+    const auto handshakeTimeout = client_liveness::kClientLiveness.handshakeTimeout;
+    auto it = unauthenticated.begin();
+    while (it != unauthenticated.end() && now - it->second.openedAt >= handshakeTimeout)
+    {
+        const auto conn = it->second.conn.lock();
+        // 先摘记录:这一刻起它不再占未认证池,也不会再被承压淘汰选中;HandleClosed 随后找不到记录,什么都不做。
+        it = unauthenticated.erase(it);
+        if (conn)
+        {
+            admission.NoteHandshakeTimeout();
+            LogRejectionSampled("handshake_timeout", conn);
+            conn->forceClose(); // 排队关闭,不会在这个循环里同步走断开回调
+        }
+    }
+}
+
 void BattleClientEdge::EvictUnauthenticated(const uint64_t connId, const battle_connection_admission::SteadyTime now)
 {
-    const auto it = sessions.find(connId);
-    if (it == sessions.end())
+    const auto it = unauthenticated.find(connId);
+    if (it == unauthenticated.end())
     {
         return;
     }
     const auto conn = it->second.conn.lock();
+    const auto openedAt = it->second.openedAt;
+    // 先摘记录:这一刻起它不再算在池里(与 gate 同一做法),紧接着的下一条 accept 看到的就是腾出位置之后的池。
+    unauthenticated.erase(it);
     if (!conn)
     {
-        unauthenticated.erase(connId);
         return;
     }
-    // 先移出池:这一刻起它不再算在池里(与 gate 先收回占位同一做法),紧接着的下一条 accept 看到的就是腾出位置之后的池。
-    unauthenticated.erase(connId);
     admission.NotePreAuthEvicted();
     // 淘汰的量与只建连不握手的流量同一量级:按原因采样(与其余拒绝同一个限流表)。对端地址只进日志。
     uint64_t total = 0;
     if (SampleRejection("preauth_evicted", total))
     {
         LOG_WARN << "battle evicting the oldest unauthenticated direct connection to admit a new one(sampled): age_ms="
-                 << std::chrono::duration_cast<std::chrono::milliseconds>(now - it->second.openedAt).count()
+                 << std::chrono::duration_cast<std::chrono::milliseconds>(now - openedAt).count()
                  << " latest_conn_id=" << connId << " latest_peer=" << conn->peerAddress().toIpPort()
                  << " evicted_total=" << admission.GetCounters().preAuthEvicted;
     }
-    // forceClose 只把连接置成关闭中、真正的关闭排到之后的 loop 轮次,随后照常走 HandleClosed 删会话;不在准入回调里摘。
+    // forceClose 只把连接置成关闭中、真正的关闭排到之后的 loop 轮次,随后照常走 HandleClosed(找不到记录,什么都不做)。
     // 连接一进关闭中,codec 就不再分发它的帧,被选中之后不会再握手成功。
     conn->forceClose();
 }
@@ -261,7 +282,7 @@ void BattleClientEdge::RegisterMetrics()
             {
                 return;
             }
-            self->admission.CollectMetrics(writer, self->sessions.size(), self->EffectiveMaxConnections(),
+            self->admission.CollectMetrics(writer, self->ConnectionCount(), self->EffectiveMaxConnections(),
                                             self->UnauthenticatedConnectionCount()); });
     if (!registered)
     {
@@ -319,14 +340,23 @@ size_t BattleClientEdge::EffectiveMaxConnections() const
 
 void BattleClientEdge::DisconnectAll(const char *reason)
 {
-    if (sessions.empty())
+    if (ConnectionCount() == 0)
     {
         return;
     }
-    LOG_INFO << "battle all direct connections disconnected: count=" << sessions.size() << " reason=" << reason;
+    LOG_INFO << "battle all direct connections disconnected: count=" << sessions.size()
+             << " unauthenticated=" << unauthenticated.size() << " reason=" << reason;
+    // 还没握手的直连只有未认证记录(票据先行),一起关;记录由 HandleClosed 摘(forceClose 是排队关闭,不会在循环里改表)。
+    for (auto &[connId, record] : unauthenticated)
+    {
+        if (const auto conn = record.conn.lock(); conn && conn->connected())
+        {
+            conn->forceClose();
+        }
+    }
     for (auto &[connId, session] : sessions)
     {
-        session.handshakeTimer.Cancel();
+        session.probeDeadlineTimer.Cancel();
         session.idleTimer.Cancel();
         // BeginRoomShutdown 已对有房间的直连 shutdown()(终局包排空后 FIN)+ 延迟强关;
         // 这些连接 connected()==false,再 forceClose 会立刻关 fd,把还在用户态输出缓冲里
@@ -394,9 +424,9 @@ void BattleClientEdge::HandleEstablished(const muduo::net::TcpConnectionPtr &con
 
     // 闸 1 的第二道:并发上限。第一道在 accept 处(AdmitConnection,被拒的连接不建 TcpConnection、收到 RST);
     // 这里留着,是为了准入回调没装上时(有人改了装配顺序,或单测直接调连接回调)上限仍然成立。第一道装上之后走不到:
-    // accept、准入、建连、插入会话在同一个 loop 回调里同步完成,两处读到的会话数相同,用的也是同一个 EffectiveMaxConnections。
-    // 0 = 关闭运维阈值(仅 dev/test 合法,启动门禁已核过),但硬上限仍在。
-    if (sessions.size() >= EffectiveMaxConnections())
+    // accept、准入、建连、登记在同一个 loop 回调里同步完成,两处读到的直连数(会话 + 未认证)相同,
+    // 用的也是同一个 EffectiveMaxConnections。0 = 关闭运维阈值(仅 dev/test 合法,启动门禁已核过),但硬上限仍在。
+    if (ConnectionCount() >= EffectiveMaxConnections())
     {
         admission.NoteRejectedAfterAccept(battle_connection_admission::RejectReason::kCapacity);
         LogRejectionSampled("capacity", conn);
@@ -419,32 +449,11 @@ void BattleClientEdge::HandleEstablished(const muduo::net::TcpConnectionPtr &con
     conn->setContext(connId);
     conn->setHighWaterMarkCallback(OnDirectConnHighWaterMark, kDirectConnHighWaterMark);
 
-    auto [it, inserted] = sessions.try_emplace(connId);
-    DirectSession &session = it->second;
-    session.connId = connId;
-    session.conn = conn;
-    session.openedAt = std::chrono::steady_clock::now();
+    // 闸 3(票据先行,准入设计 P2-4):握手之前只登记一条未认证记录(weak 连接、建连时刻),不建 DirectSession,
+    // 不起每连接的定时器。到握手成功、出示探测授权(这两处才建会话)、被淘汰、握手超时或断开时出池。
+    // 握手期限由 1 秒节拍从池头扫(CloseExpiredHandshakes),判据是距建连的时长。
+    unauthenticated.emplace(connId, UnauthenticatedConnection{.conn = conn, .openedAt = std::chrono::steady_clock::now()});
     admission.NoteAccepted();
-    // 进未认证池:到握手成功、出示探测授权、被淘汰或断开时出池。
-    unauthenticated.insert(connId);
-
-    // 闸 3:握手期限。回调只持 connId,到期时重查会话;已验证则什么都不做。
-    std::weak_ptr<muduo::net::TcpConnection> weakConn = conn;
-    const auto weakSelf=weak_from_this();
-    session.handshakeTimer.RunAfter(kHandshakeTimeoutSec, [weakSelf, connId, weakConn]
-                                    {
-        const auto self=weakSelf.lock();if(!self)return;
-        const auto found = self->sessions.find(connId);
-        if (found == self->sessions.end() || found->second.verified)
-        {
-            return;
-        }
-        if (const auto c = weakConn.lock(); c)
-        {
-            self->admission.NoteHandshakeTimeout();
-            LogRejectionSampled("handshake_timeout", c);
-            c->forceClose();
-        } });
 
     static uint64_t acceptedCount = 0;
     if ((acceptedCount++ & 0x3FF) == 0)
@@ -452,15 +461,17 @@ void BattleClientEdge::HandleEstablished(const muduo::net::TcpConnectionPtr &con
         LOG_INFO << "battle direct connection accepted(sampled): latest_conn_id=" << connId
                  << " latest_peer=" << conn->peerAddress().toIpPort()
                  << " accepted_total=" << acceptedCount
-                 << " current=" << sessions.size();
+                 << " current=" << ConnectionCount();
     }
 }
 
 void BattleClientEdge::OnProbeStart(const muduo::net::TcpConnectionPtr& conn,
     const std::shared_ptr<match::NetworkProbeStart>& request, muduo::Timestamp)
 {
-    auto* s=FindSession(conn);
-    if(!s||s->verified||s->probeGrant||network_probe::PhysicalRegion()==0){conn->forceClose();return;}
+    // 只有还没握手、也还没出示过授权的直连(只有一条未认证记录)能开始探测;已经有会话的(握手过、或已在探测)一律关。
+    const uint64_t connId=ConnIdOf(conn);
+    const auto record=unauthenticated.find(connId);
+    if(record==unauthenticated.end()||network_probe::PhysicalRegion()==0){conn->forceClose();return;}
     const auto& signedGrant=request->grant();
     match::NetworkProbeGrant grant;
     const auto signature=network_probe::Sign(network_probe::kGrantDomain,signedGrant.payload());
@@ -469,11 +480,30 @@ void BattleClientEdge::OnProbeStart(const muduo::net::TcpConnectionPtr& conn,
        !gNode||grant.physical_region()!=network_probe::PhysicalRegion()||grant.target_node_id()!=gNode->GetNodeInfo().node_id()||
        grant.target_instance_id()!=gNode->GetNodeInfo().node_uuid()||grant.expires_at_ms()<=TimeSystem::NowMillisecondsUTC())
     {conn->forceClose();return;}
-    s->probeGrant=std::move(grant);
-    // 出示了 match 签发、验过签的探测授权:出未认证池。探测连接从不握手,不出池的话每台的未认证数都会随探测量涨,
-    // 和「建连不认证」的流量分不开。
-    unauthenticated.erase(s->connId);
-    SendProbeChallenge(*s,conn);
+    // 出示了 match 签发、验过签的探测授权:这时才建 DirectSession(带探测状态),出未认证池(票据先行,与票据握手同一个时机)。
+    // 探测连接从不握手,不出池的话每台的未认证数都会随探测量涨,和「建连不认证」的流量分不开。
+    const auto openedAt=record->second.openedAt;
+    unauthenticated.erase(record);
+    DirectSession& s=sessions[connId];
+    s.connId=connId;
+    s.conn=conn;
+    s.probeGrant=std::move(grant);
+    // 探测期限与未认证直连同一个时限:从建连算满 kHandshakeTimeoutSec 还没探完就关。回调只持 weak 自己与 connId,
+    // 到期时重查会话(AGENTS.md §11.7),随会话销毁而取消。
+    const double elapsedSeconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-openedAt).count();
+    const auto weakSelf=weak_from_this();
+    s.probeDeadlineTimer.RunAfter(std::max(kHandshakeTimeoutSec-elapsedSeconds,0.0),[weakSelf,connId]
+                                  {
+        const auto self=weakSelf.lock();if(!self)return;
+        const auto found=self->sessions.find(connId);
+        if(found==self->sessions.end()||found->second.verified)return;
+        if(const auto c=found->second.conn.lock();c)
+        {
+            self->admission.NoteHandshakeTimeout();
+            LogRejectionSampled("handshake_timeout",c);
+            c->forceClose();
+        } });
+    SendProbeChallenge(s,conn);
 }
 
 void BattleClientEdge::SendProbeChallenge(DirectSession& s,const muduo::net::TcpConnectionPtr& conn)
@@ -511,13 +541,19 @@ void BattleClientEdge::HandleClosed(const muduo::net::TcpConnectionPtr &conn)
         // 容量 / 密钥闸拒掉的连接从未建立会话
         return;
     }
+    // 没完成票据握手、也没出示探测授权就断开(票据先行):只有一条未认证记录,摘掉就完了,没有会话要解绑。
+    // 被淘汰、握手超时关掉的直连记录已经摘过,两张表都找不到,什么都不做。
+    if (unauthenticated.erase(connId) > 0)
+    {
+        return;
+    }
     const auto it = sessions.find(connId);
     if (it == sessions.end())
     {
         return;
     }
     DirectSession &session = it->second;
-    session.handshakeTimer.Cancel();
+    session.probeDeadlineTimer.Cancel();
     session.idleTimer.Cancel();
     if (session.verified)
     {
@@ -529,8 +565,7 @@ void BattleClientEdge::HandleClosed(const muduo::net::TcpConnectionPtr &conn)
                  << " peer=" << conn->peerAddress().toIpPort()
                  << " remaining=" << (sessions.size() - 1);
     }
-    unauthenticated.erase(connId);
-    sessions.erase(it);
+    sessions.erase(it); // 有会话的直连早已出池(握手成功、探测授权验过时),这里只删会话
 }
 
 // ---- 握手 ----
@@ -560,31 +595,44 @@ void BattleClientEdge::OnTokenVerify(const muduo::net::TcpConnectionPtr &conn,
                                      const std::shared_ptr<::BattleTokenVerifyRequest> &request,
                                      muduo::Timestamp)
 {
-    DirectSession *session = FindSession(conn);
-    if (session == nullptr)
+    // 已经有会话的直连:握手成功过,或出示过探测授权的探测连接。
+    if (DirectSession *existing = FindSession(conn); existing != nullptr)
     {
+        NoteInboundFrame(*existing);
+        if (existing->verified)
+        {
+            // 重复握手幂等:回成功即可,不重新绑定。应答照样带心跳参数;第一次握手时已开始跟踪,这里不重复武装。
+            SendVerifyReply(conn, true, "", existing->battleId);
+            return;
+        }
+        // 探测连接从不握手(它只做探测,探完就关):发来握手包是协议违例,不回包,直接关。
+        LogRejectionSampled("verify_on_probe_connection", conn);
+        conn->forceClose();
+        return;
+    }
+    // 还没握手的直连(票据先行):只有一条未认证记录,没有会话,校验票据时一个业务对象都不建。
+    const uint64_t connId = ConnIdOf(conn);
+    if (!unauthenticated.contains(connId))
+    {
+        // 记录已被承压淘汰、握手超时摘掉的直连正在关,codec 不再分发它的帧;万一走到这里也只关、不答。
         LogRejectionSampled("verify_missing_session", conn);
         conn->forceClose();
         return;
     }
-    NoteInboundFrame(*session);
 
     const auto rejectAndClose = [&](const char *reason, const std::string &clientError)
     {
         LogRejectionSampled(reason, conn);
         SendVerifyReply(conn, false, clientError, 0);
-        // shutdown 立刻切到 kDisconnecting(codec 停止分发),短延迟给应答一个 flush 窗口
-        session->halfClosedAt = std::chrono::steady_clock::now();
+        // shutdown 立刻切到 kDisconnecting(codec 停止分发),短延迟给应答一个 flush 窗口;记下半关闭时刻,
+        // 承压淘汰按它判宽限(OldestConnectedUnauthenticated)。记录由 HandleClosed 摘。
+        if (const auto it = unauthenticated.find(connId); it != unauthenticated.end())
+        {
+            it->second.halfClosedAt = std::chrono::steady_clock::now();
+        }
         conn->shutdown();
         conn->forceCloseWithDelay(0.1);
     };
-
-    if (session->verified)
-    {
-        // 重复握手幂等:回成功即可,不重新绑定。应答照样带心跳参数;第一次握手时已开始跟踪,这里不重复武装。
-        SendVerifyReply(conn, true, "", session->battleId);
-        return;
-    }
 
     const auto &deploy = gNodeConfigManager.GetBaseDeployConfig();
     const auto &secret = deploy.battle_token_secret();
@@ -646,21 +694,26 @@ void BattleClientEdge::OnTokenVerify(const muduo::net::TcpConnectionPtr &conn,
         return;
     }
 
-    session->verified = true;
-    unauthenticated.erase(session->connId);
-    session->battleId = payload.battle_id();
-    session->playerId = payload.player_id();
-    session->role = payload.role();
-    session->spectatorOperation = payload.spectator_operation_id();
-    session->gateSessionId = gateSessionId;
-    IllegalPacketCounter::Reset(session->illegalPacketCount);
-    session->handshakeTimer.Cancel();
-    // 握手耗时(建连到第一次握手成功)进直方图;重复握手在上面已经提前返回,不会再记。
-    admission.NoteHandshake(session->openedAt, std::chrono::steady_clock::now());
+    // 票据握手成功:这时才建 DirectSession(票据先行,准入设计 P2-4),未认证记录随之摘掉;
+    // 握手耗时(建连到第一次握手成功)进直方图,重复握手在上面已经提前返回,不会再记。
+    if (const auto record = unauthenticated.find(connId); record != unauthenticated.end())
+    {
+        admission.NoteHandshake(record->second.openedAt, std::chrono::steady_clock::now());
+        unauthenticated.erase(record);
+    }
+    DirectSession &session = sessions[connId];
+    session.connId = connId;
+    session.conn = conn;
+    session.verified = true;
+    session.battleId = payload.battle_id();
+    session.playerId = payload.player_id();
+    session.role = payload.role();
+    session.spectatorOperation = payload.spectator_operation_id();
+    session.gateSessionId = gateSessionId;
 
     SendVerifyReply(conn, true, "", payload.battle_id());
     // 应答里已通告心跳参数:从这一刻起这条直连按读空闲判死(闸 6)。
-    StartLivenessTracking(*session);
+    StartLivenessTracking(session);
     LOG_INFO << "battle direct connection handshake succeeded: battle_id=" << payload.battle_id()
              << " player_id=" << payload.player_id()
              << " role=" << ::eBattleTicketRole_Name(payload.role())
@@ -708,13 +761,18 @@ void BattleClientEdge::OnClientRequest(const muduo::net::TcpConnectionPtr &conn,
     DirectSession *session = FindSession(conn);
     if (session == nullptr)
     {
+        // 还没握手的直连只有一条未认证记录、没有会话(票据先行):与下面闸 4 同一处置。
+        if (unauthenticated.contains(ConnIdOf(conn)))
+        {
+            LogRejectionSampled("request_before_verify", conn);
+        }
         conn->forceClose();
         return;
     }
     NoteInboundFrame(*session);
     if (!session->verified)
     {
-        // 闸 4:握手前一切业务消息都是不可信来源,直接关(不回应答,别给探测者放大器)
+        // 闸 4:握手前一切业务消息都是不可信来源(出示过探测授权的探测连接同样没握手),直接关(不回应答,别给探测者放大器)
         LogRejectionSampled("request_before_verify", conn);
         conn->forceClose();
         return;
@@ -882,9 +940,10 @@ void BattleClientEdge::OnUnknownMessage(const muduo::net::TcpConnectionPtr &conn
     //(gate client_session_handler.cpp 刚修过同类问题);类型名不进日志,采样行有 peer 够排障。
     (void)message;
     LogRejectionSampled("unknown_message_type", conn);
-    if (DirectSession *session = FindSession(conn); session != nullptr)
+    // 还没握手的直连在未认证池里:记下半关闭时刻,承压淘汰按它判宽限。已有会话的直连不在池里,不用记。
+    if (const auto it = unauthenticated.find(ConnIdOf(conn)); it != unauthenticated.end())
     {
-        session->halfClosedAt = std::chrono::steady_clock::now();
+        it->second.halfClosedAt = std::chrono::steady_clock::now();
     }
     conn->shutdown();
     conn->forceCloseWithDelay(0.1);
@@ -907,7 +966,9 @@ void BattleClientEdge::OnHeartbeat(const muduo::net::TcpConnectionPtr &conn,
     DirectSession *session = FindSession(conn);
     if (session == nullptr)
     {
-        LogRejectionSampled("heartbeat_missing_session", conn);
+        // 还没握手的直连只有一条未认证记录、没有会话(票据先行):与闸 4 同一处置,不回应答。
+        LogRejectionSampled(unauthenticated.contains(ConnIdOf(conn)) ? "heartbeat_before_verify" : "heartbeat_missing_session",
+                            conn);
         conn->forceClose();
         return;
     }

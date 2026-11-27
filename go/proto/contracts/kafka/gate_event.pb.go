@@ -342,8 +342,12 @@ type PlayerLeaseExpiredEvent struct {
 	SceneId        uint64                 `protobuf:"varint,4,opt,name=scene_id,json=sceneId,proto3" json:"scene_id,omitempty"`
 	GateId         string                 `protobuf:"bytes,5,opt,name=gate_id,json=gateId,proto3" json:"gate_id,omitempty"`
 	GateInstanceId string                 `protobuf:"bytes,6,opt,name=gate_instance_id,json=gateInstanceId,proto3" json:"gate_instance_id,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 到期的那条会话记录的会话代次(PlayerSession.session_incarnation)。gate 只在与本地会话的代次相同时才收掉连接,
+	// 任一边为 0 不比较(session_identity_fence.h LeaseExpiryTargetsThisSession):同一 gate 进程里会话号回绕、同一玩家落回
+	// 同号时，迟到的旧到期不能踢掉新连接。
+	SessionIncarnation uint64 `protobuf:"varint,7,opt,name=session_incarnation,json=sessionIncarnation,proto3" json:"session_incarnation,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *PlayerLeaseExpiredEvent) Reset() {
@@ -416,6 +420,13 @@ func (x *PlayerLeaseExpiredEvent) GetGateInstanceId() string {
 		return x.GateInstanceId
 	}
 	return ""
+}
+
+func (x *PlayerLeaseExpiredEvent) GetSessionIncarnation() uint64 {
+	if x != nil {
+		return x.SessionIncarnation
+	}
+	return 0
 }
 
 // Sent by Login/player_locator to bind a session to Gate.
@@ -1092,7 +1103,7 @@ const file_proto_contracts_kafka_gate_event_proto_rawDesc = "" +
 	"session_id\x18\x01 \x01(\rR\tsessionId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x17\n" +
 	"\agate_id\x18\x03 \x01(\tR\x06gateId\x12(\n" +
-	"\x10gate_instance_id\x18\x04 \x01(\tR\x0egateInstanceId\"\xde\x01\n" +
+	"\x10gate_instance_id\x18\x04 \x01(\tR\x0egateInstanceId\"\x8f\x02\n" +
 	"\x17PlayerLeaseExpiredEvent\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1d\n" +
 	"\n" +
@@ -1100,7 +1111,8 @@ const file_proto_contracts_kafka_gate_event_proto_rawDesc = "" +
 	"\rscene_node_id\x18\x03 \x01(\tR\vsceneNodeId\x12\x19\n" +
 	"\bscene_id\x18\x04 \x01(\x04R\asceneId\x12\x17\n" +
 	"\agate_id\x18\x05 \x01(\tR\x06gateId\x12(\n" +
-	"\x10gate_instance_id\x18\x06 \x01(\tR\x0egateInstanceId:\x05\x88\xe6\xd5\x02\x01\"\xda\x02\n" +
+	"\x10gate_instance_id\x18\x06 \x01(\tR\x0egateInstanceId\x12/\n" +
+	"\x13session_incarnation\x18\a \x01(\x04R\x12sessionIncarnation:\x05\x88\xe6\xd5\x02\x01\"\xda\x02\n" +
 	"\x10BindSessionEvent\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\rR\tsessionId\x12\x1b\n" +

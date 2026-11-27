@@ -27,6 +27,10 @@ type VoidParams struct {
 	PeerAddr string
 	// Mode 缺省 NORMAL = 原语义;FORCE_MISMATCH 走 forceVoid(要求 ledgers 非 nil、Note 非空)。
 	Mode inboxpb.PlayerInboxVoidMode
+	// ApprovalID、Approver:双人复核批准记录的批准号与批准人(入口已用 shared/dualcontrol 核对过),只进审计行。
+	// 都为空 = 不带批准记录受理(只在 PlayerInbox.AdminAllowUnapproved 打开时)。
+	ApprovalID string
+	Approver   string
 }
 
 // Void 作废一条条目(设计 §7.9、IB-5)。普通模式:
@@ -149,6 +153,8 @@ func (s *Store) Void(ctx context.Context, p VoidParams, ledgers LedgerReader) (*
 			Reason:     p.Note,
 			CreatedMs:  nowMs,
 			VoidReason: uint32(p.Reason),
+			ApprovalId: p.ApprovalID,
+			Approver:   p.Approver,
 		})
 	})
 	if err != nil {
@@ -271,6 +277,8 @@ func (s *Store) forceVoid(ctx context.Context, p VoidParams, ledgers LedgerReade
 			Reason:     p.Note,
 			CreatedMs:  nowMs,
 			VoidReason: uint32(p.Reason),
+			ApprovalId: p.ApprovalID,
+			Approver:   p.Approver,
 		})
 	})
 	if err != nil {

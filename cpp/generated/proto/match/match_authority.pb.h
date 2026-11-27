@@ -164,6 +164,14 @@ extern const ::google::protobuf::internal::ClassDataFull MatchGlobalPolicyRecord
 #else
 extern const MatchGlobalPolicyRecordGlobalsTypeInternal MatchGlobalPolicyRecord_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class MatchGrudgeAppliedRecord;
+struct MatchGrudgeAppliedRecordGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern MatchGrudgeAppliedRecordGlobalsTypeInternal MatchGrudgeAppliedRecord_globals_;
+extern const ::google::protobuf::internal::ClassDataFull MatchGrudgeAppliedRecord_class_data_;
+#else
+extern const MatchGrudgeAppliedRecordGlobalsTypeInternal MatchGrudgeAppliedRecord_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class MatchGrudgeLogRecord;
 struct MatchGrudgeLogRecordGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -371,6 +379,22 @@ extern MatchSpectatorRecordGlobalsTypeInternal MatchSpectatorRecord_globals_;
 extern const ::google::protobuf::internal::ClassDataFull MatchSpectatorRecord_class_data_;
 #else
 extern const MatchSpectatorRecordGlobalsTypeInternal MatchSpectatorRecord_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class MatchTacticalPuzzleClearRecord;
+struct MatchTacticalPuzzleClearRecordGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern MatchTacticalPuzzleClearRecordGlobalsTypeInternal MatchTacticalPuzzleClearRecord_globals_;
+extern const ::google::protobuf::internal::ClassDataFull MatchTacticalPuzzleClearRecord_class_data_;
+#else
+extern const MatchTacticalPuzzleClearRecordGlobalsTypeInternal MatchTacticalPuzzleClearRecord_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class MatchTacticalPuzzleRecord;
+struct MatchTacticalPuzzleRecordGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern MatchTacticalPuzzleRecordGlobalsTypeInternal MatchTacticalPuzzleRecord_globals_;
+extern const ::google::protobuf::internal::ClassDataFull MatchTacticalPuzzleRecord_class_data_;
+#else
+extern const MatchTacticalPuzzleRecordGlobalsTypeInternal MatchTacticalPuzzleRecord_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class MatchTournamentChampionMembersBlob;
 struct MatchTournamentChampionMembersBlobGlobalsTypeInternal;
@@ -580,7 +604,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchTrialChallengeCardRecord final
   [[nodiscard]] static const MatchTrialChallengeCardRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchTrialChallengeCardRecord>(&MatchTrialChallengeCardRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 49;
+  static constexpr int kIndexInFileMessages = 50;
   friend void swap(MatchTrialChallengeCardRecord& a, MatchTrialChallengeCardRecord& b) { a.Swap(&b); }
   inline void Swap(MatchTrialChallengeCardRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4341,6 +4365,716 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchTournamentCheerRecord final : 
     bool rewarded_;
     ::uint64_t squad_id_;
     ::uint64_t created_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fauthority_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchTacticalPuzzleRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.MatchTacticalPuzzleRecord) */ {
+ public:
+  inline MatchTacticalPuzzleRecord() : MatchTacticalPuzzleRecord(nullptr) {}
+  ~MatchTacticalPuzzleRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(MatchTacticalPuzzleRecord* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(MatchTacticalPuzzleRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr MatchTacticalPuzzleRecord(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline MatchTacticalPuzzleRecord(const MatchTacticalPuzzleRecord& from) : MatchTacticalPuzzleRecord(nullptr, from) {}
+  inline MatchTacticalPuzzleRecord(MatchTacticalPuzzleRecord&& from) noexcept : MatchTacticalPuzzleRecord(nullptr, ::std::move(from)) {}
+  inline MatchTacticalPuzzleRecord& operator=(const MatchTacticalPuzzleRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline MatchTacticalPuzzleRecord& operator=(MatchTacticalPuzzleRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const MatchTacticalPuzzleRecord& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchTacticalPuzzleRecord>(&MatchTacticalPuzzleRecord_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 51;
+  friend void swap(MatchTacticalPuzzleRecord& a, MatchTacticalPuzzleRecord& b) { a.Swap(&b); }
+  inline void Swap(MatchTacticalPuzzleRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(MatchTacticalPuzzleRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] MatchTacticalPuzzleRecord* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<MatchTacticalPuzzleRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const MatchTacticalPuzzleRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const MatchTacticalPuzzleRecord& from) { MatchTacticalPuzzleRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(MatchTacticalPuzzleRecord* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.MatchTacticalPuzzleRecord"; }
+
+  explicit MatchTacticalPuzzleRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  MatchTacticalPuzzleRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MatchTacticalPuzzleRecord& from);
+  MatchTacticalPuzzleRecord(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, MatchTacticalPuzzleRecord&& from) noexcept
+      : MatchTacticalPuzzleRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kAuthorNameFieldNumber = 3,
+    kTitleFieldNumber = 6,
+    kHintTextFieldNumber = 7,
+    kSpecPayloadFieldNumber = 9,
+    kPuzzleIdFieldNumber = 1,
+    kAuthorPlayerIdFieldNumber = 2,
+    kStateFieldNumber = 4,
+    kSpecRevisionFieldNumber = 5,
+    kTagMaskFieldNumber = 8,
+    kAuthorBestRoundsFieldNumber = 11,
+    kVerifiedBattleIdFieldNumber = 10,
+    kAttemptCountFieldNumber = 12,
+    kClearCountFieldNumber = 13,
+    kGlobalBestRoundsFieldNumber = 14,
+    kLikeCountFieldNumber = 15,
+    kCreatedMsFieldNumber = 16,
+    kPublishedMsFieldNumber = 17,
+    kUpdatedMsFieldNumber = 18,
+  };
+  // string author_name = 3;
+  void clear_author_name() ;
+  [[nodiscard]] const ::std::string& author_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_author_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_author_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_author_name();
+  void set_allocated_author_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_author_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_author_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_author_name();
+
+  public:
+  // string title = 6;
+  void clear_title() ;
+  [[nodiscard]] const ::std::string& title() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_title(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_title();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_title();
+  void set_allocated_title(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_title() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_title(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_title();
+
+  public:
+  // string hint_text = 7;
+  void clear_hint_text() ;
+  [[nodiscard]] const ::std::string& hint_text() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_hint_text(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_hint_text();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_hint_text();
+  void set_allocated_hint_text(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_hint_text() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_hint_text(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_hint_text();
+
+  public:
+  // bytes spec_payload = 9;
+  void clear_spec_payload() ;
+  [[nodiscard]] const ::std::string& spec_payload() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_spec_payload(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_spec_payload();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_spec_payload();
+  void set_allocated_spec_payload(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_spec_payload() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_spec_payload(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_spec_payload();
+
+  public:
+  // uint64 puzzle_id = 1;
+  void clear_puzzle_id() ;
+  [[nodiscard]] ::uint64_t puzzle_id() const;
+  void set_puzzle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_puzzle_id() const;
+  void _internal_set_puzzle_id(::uint64_t value);
+
+  public:
+  // uint64 author_player_id = 2;
+  void clear_author_player_id() ;
+  [[nodiscard]] ::uint64_t author_player_id() const;
+  void set_author_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_author_player_id() const;
+  void _internal_set_author_player_id(::uint64_t value);
+
+  public:
+  // uint32 state = 4;
+  void clear_state() ;
+  [[nodiscard]] ::uint32_t state() const;
+  void set_state(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_state() const;
+  void _internal_set_state(::uint32_t value);
+
+  public:
+  // uint32 spec_revision = 5;
+  void clear_spec_revision() ;
+  [[nodiscard]] ::uint32_t spec_revision() const;
+  void set_spec_revision(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_spec_revision() const;
+  void _internal_set_spec_revision(::uint32_t value);
+
+  public:
+  // uint32 tag_mask = 8;
+  void clear_tag_mask() ;
+  [[nodiscard]] ::uint32_t tag_mask() const;
+  void set_tag_mask(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_tag_mask() const;
+  void _internal_set_tag_mask(::uint32_t value);
+
+  public:
+  // uint32 author_best_rounds = 11;
+  void clear_author_best_rounds() ;
+  [[nodiscard]] ::uint32_t author_best_rounds() const;
+  void set_author_best_rounds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_author_best_rounds() const;
+  void _internal_set_author_best_rounds(::uint32_t value);
+
+  public:
+  // uint64 verified_battle_id = 10;
+  void clear_verified_battle_id() ;
+  [[nodiscard]] ::uint64_t verified_battle_id() const;
+  void set_verified_battle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_verified_battle_id() const;
+  void _internal_set_verified_battle_id(::uint64_t value);
+
+  public:
+  // uint32 attempt_count = 12;
+  void clear_attempt_count() ;
+  [[nodiscard]] ::uint32_t attempt_count() const;
+  void set_attempt_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_attempt_count() const;
+  void _internal_set_attempt_count(::uint32_t value);
+
+  public:
+  // uint32 clear_count = 13;
+  void clear_clear_count() ;
+  [[nodiscard]] ::uint32_t clear_count() const;
+  void set_clear_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_clear_count() const;
+  void _internal_set_clear_count(::uint32_t value);
+
+  public:
+  // uint32 global_best_rounds = 14;
+  void clear_global_best_rounds() ;
+  [[nodiscard]] ::uint32_t global_best_rounds() const;
+  void set_global_best_rounds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_global_best_rounds() const;
+  void _internal_set_global_best_rounds(::uint32_t value);
+
+  public:
+  // uint32 like_count = 15;
+  void clear_like_count() ;
+  [[nodiscard]] ::uint32_t like_count() const;
+  void set_like_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_like_count() const;
+  void _internal_set_like_count(::uint32_t value);
+
+  public:
+  // uint64 created_ms = 16;
+  void clear_created_ms() ;
+  [[nodiscard]] ::uint64_t created_ms() const;
+  void set_created_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_created_ms() const;
+  void _internal_set_created_ms(::uint64_t value);
+
+  public:
+  // uint64 published_ms = 17;
+  void clear_published_ms() ;
+  [[nodiscard]] ::uint64_t published_ms() const;
+  void set_published_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_published_ms() const;
+  void _internal_set_published_ms(::uint64_t value);
+
+  public:
+  // uint64 updated_ms = 18;
+  void clear_updated_ms() ;
+  [[nodiscard]] ::uint64_t updated_ms() const;
+  void set_updated_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_updated_ms() const;
+  void _internal_set_updated_ms(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.MatchTacticalPuzzleRecord)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<5, 18,
+                          0, 81,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const MatchTacticalPuzzleRecord& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr author_name_;
+    ::google::protobuf::internal::ArenaStringPtr title_;
+    ::google::protobuf::internal::ArenaStringPtr hint_text_;
+    ::google::protobuf::internal::ArenaStringPtr spec_payload_;
+    ::uint64_t puzzle_id_;
+    ::uint64_t author_player_id_;
+    ::uint32_t state_;
+    ::uint32_t spec_revision_;
+    ::uint32_t tag_mask_;
+    ::uint32_t author_best_rounds_;
+    ::uint64_t verified_battle_id_;
+    ::uint32_t attempt_count_;
+    ::uint32_t clear_count_;
+    ::uint32_t global_best_rounds_;
+    ::uint32_t like_count_;
+    ::uint64_t created_ms_;
+    ::uint64_t published_ms_;
+    ::uint64_t updated_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fauthority_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchTacticalPuzzleClearRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.MatchTacticalPuzzleClearRecord) */ {
+ public:
+  inline MatchTacticalPuzzleClearRecord() : MatchTacticalPuzzleClearRecord(nullptr) {}
+  ~MatchTacticalPuzzleClearRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(MatchTacticalPuzzleClearRecord* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(MatchTacticalPuzzleClearRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr MatchTacticalPuzzleClearRecord(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline MatchTacticalPuzzleClearRecord(const MatchTacticalPuzzleClearRecord& from) : MatchTacticalPuzzleClearRecord(nullptr, from) {}
+  inline MatchTacticalPuzzleClearRecord(MatchTacticalPuzzleClearRecord&& from) noexcept : MatchTacticalPuzzleClearRecord(nullptr, ::std::move(from)) {}
+  inline MatchTacticalPuzzleClearRecord& operator=(const MatchTacticalPuzzleClearRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline MatchTacticalPuzzleClearRecord& operator=(MatchTacticalPuzzleClearRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const MatchTacticalPuzzleClearRecord& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchTacticalPuzzleClearRecord>(&MatchTacticalPuzzleClearRecord_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 52;
+  friend void swap(MatchTacticalPuzzleClearRecord& a, MatchTacticalPuzzleClearRecord& b) { a.Swap(&b); }
+  inline void Swap(MatchTacticalPuzzleClearRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(MatchTacticalPuzzleClearRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] MatchTacticalPuzzleClearRecord* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<MatchTacticalPuzzleClearRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const MatchTacticalPuzzleClearRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const MatchTacticalPuzzleClearRecord& from) { MatchTacticalPuzzleClearRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(MatchTacticalPuzzleClearRecord* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.MatchTacticalPuzzleClearRecord"; }
+
+  explicit MatchTacticalPuzzleClearRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  MatchTacticalPuzzleClearRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MatchTacticalPuzzleClearRecord& from);
+  MatchTacticalPuzzleClearRecord(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, MatchTacticalPuzzleClearRecord&& from) noexcept
+      : MatchTacticalPuzzleClearRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPuzzleIdFieldNumber = 1,
+    kPlayerIdFieldNumber = 2,
+    kAttemptsFieldNumber = 3,
+    kBestRoundsFieldNumber = 5,
+    kFirstClearedMsFieldNumber = 7,
+    kUpdatedMsFieldNumber = 8,
+    kClearedFieldNumber = 4,
+    kLikedFieldNumber = 6,
+  };
+  // uint64 puzzle_id = 1;
+  void clear_puzzle_id() ;
+  [[nodiscard]] ::uint64_t puzzle_id() const;
+  void set_puzzle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_puzzle_id() const;
+  void _internal_set_puzzle_id(::uint64_t value);
+
+  public:
+  // uint64 player_id = 2;
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint32 attempts = 3;
+  void clear_attempts() ;
+  [[nodiscard]] ::uint32_t attempts() const;
+  void set_attempts(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_attempts() const;
+  void _internal_set_attempts(::uint32_t value);
+
+  public:
+  // uint32 best_rounds = 5;
+  void clear_best_rounds() ;
+  [[nodiscard]] ::uint32_t best_rounds() const;
+  void set_best_rounds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_best_rounds() const;
+  void _internal_set_best_rounds(::uint32_t value);
+
+  public:
+  // uint64 first_cleared_ms = 7;
+  void clear_first_cleared_ms() ;
+  [[nodiscard]] ::uint64_t first_cleared_ms() const;
+  void set_first_cleared_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_first_cleared_ms() const;
+  void _internal_set_first_cleared_ms(::uint64_t value);
+
+  public:
+  // uint64 updated_ms = 8;
+  void clear_updated_ms() ;
+  [[nodiscard]] ::uint64_t updated_ms() const;
+  void set_updated_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_updated_ms() const;
+  void _internal_set_updated_ms(::uint64_t value);
+
+  public:
+  // bool cleared = 4;
+  void clear_cleared() ;
+  [[nodiscard]] bool cleared() const;
+  void set_cleared(bool value);
+
+  private:
+  bool _internal_cleared() const;
+  void _internal_set_cleared(bool value);
+
+  public:
+  // bool liked = 6;
+  void clear_liked() ;
+  [[nodiscard]] bool liked() const;
+  void set_liked(bool value);
+
+  private:
+  bool _internal_liked() const;
+  void _internal_set_liked(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.MatchTacticalPuzzleClearRecord)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const MatchTacticalPuzzleClearRecord& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t puzzle_id_;
+    ::uint64_t player_id_;
+    ::uint32_t attempts_;
+    ::uint32_t best_rounds_;
+    ::uint64_t first_cleared_ms_;
+    ::uint64_t updated_ms_;
+    bool cleared_;
+    bool liked_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -11469,6 +12203,219 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchGrudgeLogRecord final : public
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchGrudgeAppliedRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.MatchGrudgeAppliedRecord) */ {
+ public:
+  inline MatchGrudgeAppliedRecord() : MatchGrudgeAppliedRecord(nullptr) {}
+  ~MatchGrudgeAppliedRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(MatchGrudgeAppliedRecord* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(MatchGrudgeAppliedRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr MatchGrudgeAppliedRecord(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline MatchGrudgeAppliedRecord(const MatchGrudgeAppliedRecord& from) : MatchGrudgeAppliedRecord(nullptr, from) {}
+  inline MatchGrudgeAppliedRecord(MatchGrudgeAppliedRecord&& from) noexcept : MatchGrudgeAppliedRecord(nullptr, ::std::move(from)) {}
+  inline MatchGrudgeAppliedRecord& operator=(const MatchGrudgeAppliedRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline MatchGrudgeAppliedRecord& operator=(MatchGrudgeAppliedRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const MatchGrudgeAppliedRecord& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchGrudgeAppliedRecord>(&MatchGrudgeAppliedRecord_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 49;
+  friend void swap(MatchGrudgeAppliedRecord& a, MatchGrudgeAppliedRecord& b) { a.Swap(&b); }
+  inline void Swap(MatchGrudgeAppliedRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(MatchGrudgeAppliedRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] MatchGrudgeAppliedRecord* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<MatchGrudgeAppliedRecord>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const MatchGrudgeAppliedRecord& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const MatchGrudgeAppliedRecord& from) { MatchGrudgeAppliedRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(MatchGrudgeAppliedRecord* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.MatchGrudgeAppliedRecord"; }
+
+  explicit MatchGrudgeAppliedRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  MatchGrudgeAppliedRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MatchGrudgeAppliedRecord& from);
+  MatchGrudgeAppliedRecord(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, MatchGrudgeAppliedRecord&& from) noexcept
+      : MatchGrudgeAppliedRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kBattleIdFieldNumber = 1,
+    kAppliedMsFieldNumber = 2,
+  };
+  // uint64 battle_id = 1;
+  void clear_battle_id() ;
+  [[nodiscard]] ::uint64_t battle_id() const;
+  void set_battle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_battle_id() const;
+  void _internal_set_battle_id(::uint64_t value);
+
+  public:
+  // uint64 applied_ms = 2;
+  void clear_applied_ms() ;
+  [[nodiscard]] ::uint64_t applied_ms() const;
+  void set_applied_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_applied_ms() const;
+  void _internal_set_applied_ms(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.MatchGrudgeAppliedRecord)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const MatchGrudgeAppliedRecord& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t battle_id_;
+    ::uint64_t applied_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fauthority_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchGlobalPolicyRecord final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:match.MatchGlobalPolicyRecord) */ {
  public:
@@ -15032,6 +15979,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchManualResolutionRecord final :
     kFormationDigestBeforeFieldNumber = 8,
     kFormationBeforeFieldNumber = 9,
     kReplicaInstanceFieldNumber = 12,
+    kApprovalIdFieldNumber = 13,
+    kApproverFieldNumber = 14,
     kBattleIdFieldNumber = 1,
     kActionFieldNumber = 2,
     kFormationClassFieldNumber = 3,
@@ -15149,6 +16098,36 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchManualResolutionRecord final :
   ::std::string* PROTOBUF_NONNULL _internal_mutable_replica_instance();
 
   public:
+  // string approval_id = 13;
+  void clear_approval_id() ;
+  [[nodiscard]] const ::std::string& approval_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_approval_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_approval_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_approval_id();
+  void set_allocated_approval_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_approval_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_approval_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_approval_id();
+
+  public:
+  // string approver = 14;
+  void clear_approver() ;
+  [[nodiscard]] const ::std::string& approver() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_approver(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_approver();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_approver();
+  void set_allocated_approver(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_approver() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_approver(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_approver();
+
+  public:
   // uint64 battle_id = 1;
   void clear_battle_id() ;
   [[nodiscard]] ::uint64_t battle_id() const;
@@ -15203,8 +16182,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchManualResolutionRecord final :
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 12,
-                          1, 120,
+      ::google::protobuf::internal::TcParseTable<4, 14,
+                          1, 139,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -15239,6 +16218,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchManualResolutionRecord final :
     ::google::protobuf::internal::ArenaStringPtr formation_digest_before_;
     ::google::protobuf::internal::ArenaStringPtr formation_before_;
     ::google::protobuf::internal::ArenaStringPtr replica_instance_;
+    ::google::protobuf::internal::ArenaStringPtr approval_id_;
+    ::google::protobuf::internal::ArenaStringPtr approver_;
     ::uint64_t battle_id_;
     int action_;
     int formation_class_;
@@ -15412,6 +16393,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchFormationRecord final : public
     kTournamentContextFieldNumber = 26,
     kCustomDuelRulesFieldNumber = 27,
     kJianghuDuelContextFieldNumber = 29,
+    kTacticalPuzzleContextFieldNumber = 31,
     kBattleIdFieldNumber = 1,
     kStateFieldNumber = 3,
     kPhysicalRegionFieldNumber = 4,
@@ -15637,6 +16619,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchFormationRecord final : public
   ::std::string* PROTOBUF_NONNULL _internal_mutable_jianghu_duel_context();
 
   public:
+  // bytes tactical_puzzle_context = 31;
+  void clear_tactical_puzzle_context() ;
+  [[nodiscard]] const ::std::string& tactical_puzzle_context() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_tactical_puzzle_context(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_tactical_puzzle_context();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_tactical_puzzle_context();
+  void set_allocated_tactical_puzzle_context(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_tactical_puzzle_context() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_tactical_puzzle_context(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_tactical_puzzle_context();
+
+  public:
   // uint64 battle_id = 1;
   void clear_battle_id() ;
   [[nodiscard]] ::uint64_t battle_id() const;
@@ -15811,7 +16808,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchFormationRecord final : public
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 30,
+      ::google::protobuf::internal::TcParseTable<5, 31,
                           2, 138,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -15853,6 +16850,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchFormationRecord final : public
     ::google::protobuf::internal::ArenaStringPtr tournament_context_;
     ::google::protobuf::internal::ArenaStringPtr custom_duel_rules_;
     ::google::protobuf::internal::ArenaStringPtr jianghu_duel_context_;
+    ::google::protobuf::internal::ArenaStringPtr tactical_puzzle_context_;
     ::uint64_t battle_id_;
     ::uint32_t state_;
     ::uint32_t physical_region_;
@@ -20895,7 +21893,7 @@ inline void MatchFormationMember::_internal_set_captain(bool value) {
 inline void MatchFormationRecord::clear_battle_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint64_t MatchFormationRecord::battle_id() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.battle_id)
@@ -20903,7 +21901,7 @@ inline ::uint64_t MatchFormationRecord::battle_id() const {
 }
 inline void MatchFormationRecord::set_battle_id(::uint64_t value) {
   _internal_set_battle_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.battle_id)
 }
 inline ::uint64_t MatchFormationRecord::_internal_battle_id() const {
@@ -20983,7 +21981,7 @@ inline void MatchFormationRecord::set_allocated_operation_id(::std::string* PROT
 inline void MatchFormationRecord::clear_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.state_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint32_t MatchFormationRecord::state() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.state)
@@ -20991,7 +21989,7 @@ inline ::uint32_t MatchFormationRecord::state() const {
 }
 inline void MatchFormationRecord::set_state(::uint32_t value) {
   _internal_set_state(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.state)
 }
 inline ::uint32_t MatchFormationRecord::_internal_state() const {
@@ -21007,7 +22005,7 @@ inline void MatchFormationRecord::_internal_set_state(::uint32_t value) {
 inline void MatchFormationRecord::clear_physical_region() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.physical_region_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint32_t MatchFormationRecord::physical_region() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.physical_region)
@@ -21015,7 +22013,7 @@ inline ::uint32_t MatchFormationRecord::physical_region() const {
 }
 inline void MatchFormationRecord::set_physical_region(::uint32_t value) {
   _internal_set_physical_region(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.physical_region)
 }
 inline ::uint32_t MatchFormationRecord::_internal_physical_region() const {
@@ -21031,7 +22029,7 @@ inline void MatchFormationRecord::_internal_set_physical_region(::uint32_t value
 inline void MatchFormationRecord::clear_target_node_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.target_node_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint32_t MatchFormationRecord::target_node_id() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.target_node_id)
@@ -21039,7 +22037,7 @@ inline ::uint32_t MatchFormationRecord::target_node_id() const {
 }
 inline void MatchFormationRecord::set_target_node_id(::uint32_t value) {
   _internal_set_target_node_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.target_node_id)
 }
 inline ::uint32_t MatchFormationRecord::_internal_target_node_id() const {
@@ -21183,7 +22181,7 @@ inline void MatchFormationRecord::set_allocated_target_endpoint(::std::string* P
 inline void MatchFormationRecord::clear_mode() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.mode_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline ::uint32_t MatchFormationRecord::mode() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.mode)
@@ -21191,7 +22189,7 @@ inline ::uint32_t MatchFormationRecord::mode() const {
 }
 inline void MatchFormationRecord::set_mode(::uint32_t value) {
   _internal_set_mode(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.mode)
 }
 inline ::uint32_t MatchFormationRecord::_internal_mode() const {
@@ -21207,7 +22205,7 @@ inline void MatchFormationRecord::_internal_set_mode(::uint32_t value) {
 inline void MatchFormationRecord::clear_config_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.config_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline ::uint32_t MatchFormationRecord::config_id() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.config_id)
@@ -21215,7 +22213,7 @@ inline ::uint32_t MatchFormationRecord::config_id() const {
 }
 inline void MatchFormationRecord::set_config_id(::uint32_t value) {
   _internal_set_config_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.config_id)
 }
 inline ::uint32_t MatchFormationRecord::_internal_config_id() const {
@@ -21350,7 +22348,7 @@ inline void MatchFormationRecord::set_allocated_create_request(::std::string* PR
 inline void MatchFormationRecord::clear_created_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline ::uint64_t MatchFormationRecord::created_ms() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.created_ms)
@@ -21358,7 +22356,7 @@ inline ::uint64_t MatchFormationRecord::created_ms() const {
 }
 inline void MatchFormationRecord::set_created_ms(::uint64_t value) {
   _internal_set_created_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.created_ms)
 }
 inline ::uint64_t MatchFormationRecord::_internal_created_ms() const {
@@ -21374,7 +22372,7 @@ inline void MatchFormationRecord::_internal_set_created_ms(::uint64_t value) {
 inline void MatchFormationRecord::clear_deadline_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.deadline_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline ::uint64_t MatchFormationRecord::deadline_ms() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.deadline_ms)
@@ -21382,7 +22380,7 @@ inline ::uint64_t MatchFormationRecord::deadline_ms() const {
 }
 inline void MatchFormationRecord::set_deadline_ms(::uint64_t value) {
   _internal_set_deadline_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.deadline_ms)
 }
 inline ::uint64_t MatchFormationRecord::_internal_deadline_ms() const {
@@ -21398,7 +22396,7 @@ inline void MatchFormationRecord::_internal_set_deadline_ms(::uint64_t value) {
 inline void MatchFormationRecord::clear_retry_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.retry_at_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
 }
 inline ::uint64_t MatchFormationRecord::retry_at_ms() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.retry_at_ms)
@@ -21406,7 +22404,7 @@ inline ::uint64_t MatchFormationRecord::retry_at_ms() const {
 }
 inline void MatchFormationRecord::set_retry_at_ms(::uint64_t value) {
   _internal_set_retry_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.retry_at_ms)
 }
 inline ::uint64_t MatchFormationRecord::_internal_retry_at_ms() const {
@@ -21486,7 +22484,7 @@ inline void MatchFormationRecord::set_allocated_activity_context(::std::string* 
 inline void MatchFormationRecord::clear_requeue_on_failure() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.requeue_on_failure_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
 }
 inline bool MatchFormationRecord::requeue_on_failure() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.requeue_on_failure)
@@ -21494,7 +22492,7 @@ inline bool MatchFormationRecord::requeue_on_failure() const {
 }
 inline void MatchFormationRecord::set_requeue_on_failure(bool value) {
   _internal_set_requeue_on_failure(value);
-  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.requeue_on_failure)
 }
 inline bool MatchFormationRecord::_internal_requeue_on_failure() const {
@@ -21565,7 +22563,7 @@ MatchFormationRecord::_internal_mutable_prepared() {
 inline void MatchFormationRecord::clear_outcome_protocol_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.outcome_protocol_version_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
 }
 inline ::uint32_t MatchFormationRecord::outcome_protocol_version() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.outcome_protocol_version)
@@ -21573,7 +22571,7 @@ inline ::uint32_t MatchFormationRecord::outcome_protocol_version() const {
 }
 inline void MatchFormationRecord::set_outcome_protocol_version(::uint32_t value) {
   _internal_set_outcome_protocol_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.outcome_protocol_version)
 }
 inline ::uint32_t MatchFormationRecord::_internal_outcome_protocol_version() const {
@@ -21589,7 +22587,7 @@ inline void MatchFormationRecord::_internal_set_outcome_protocol_version(::uint3
 inline void MatchFormationRecord::clear_preflight_supported_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.preflight_supported_version_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
 }
 inline ::uint32_t MatchFormationRecord::preflight_supported_version() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.preflight_supported_version)
@@ -21597,7 +22595,7 @@ inline ::uint32_t MatchFormationRecord::preflight_supported_version() const {
 }
 inline void MatchFormationRecord::set_preflight_supported_version(::uint32_t value) {
   _internal_set_preflight_supported_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.preflight_supported_version)
 }
 inline ::uint32_t MatchFormationRecord::_internal_preflight_supported_version() const {
@@ -21677,7 +22675,7 @@ inline void MatchFormationRecord::set_allocated_preflight_instance_id(::std::str
 inline void MatchFormationRecord::clear_adopted_outcome_protocol_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.adopted_outcome_protocol_version_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
 }
 inline ::uint32_t MatchFormationRecord::adopted_outcome_protocol_version() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.adopted_outcome_protocol_version)
@@ -21685,7 +22683,7 @@ inline ::uint32_t MatchFormationRecord::adopted_outcome_protocol_version() const
 }
 inline void MatchFormationRecord::set_adopted_outcome_protocol_version(::uint32_t value) {
   _internal_set_adopted_outcome_protocol_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.adopted_outcome_protocol_version)
 }
 inline ::uint32_t MatchFormationRecord::_internal_adopted_outcome_protocol_version() const {
@@ -21701,7 +22699,7 @@ inline void MatchFormationRecord::_internal_set_adopted_outcome_protocol_version
 inline void MatchFormationRecord::clear_adopted_outcome_observed() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.adopted_outcome_observed_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
 }
 inline bool MatchFormationRecord::adopted_outcome_observed() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.adopted_outcome_observed)
@@ -21709,7 +22707,7 @@ inline bool MatchFormationRecord::adopted_outcome_observed() const {
 }
 inline void MatchFormationRecord::set_adopted_outcome_observed(bool value) {
   _internal_set_adopted_outcome_observed(value);
-  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.adopted_outcome_observed)
 }
 inline bool MatchFormationRecord::_internal_adopted_outcome_observed() const {
@@ -21853,7 +22851,7 @@ inline void MatchFormationRecord::set_allocated_ranked_context(::std::string* PR
 inline void MatchFormationRecord::clear_ranked_season_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ranked_season_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x20000000U);
 }
 inline ::uint32_t MatchFormationRecord::ranked_season_id() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.ranked_season_id)
@@ -21861,7 +22859,7 @@ inline ::uint32_t MatchFormationRecord::ranked_season_id() const {
 }
 inline void MatchFormationRecord::set_ranked_season_id(::uint32_t value) {
   _internal_set_ranked_season_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x20000000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.ranked_season_id)
 }
 inline ::uint32_t MatchFormationRecord::_internal_ranked_season_id() const {
@@ -22005,7 +23003,7 @@ inline void MatchFormationRecord::set_allocated_custom_duel_rules(::std::string*
 inline void MatchFormationRecord::clear_is_wuxing_tower() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.is_wuxing_tower_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
 }
 inline bool MatchFormationRecord::is_wuxing_tower() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.is_wuxing_tower)
@@ -22013,7 +23011,7 @@ inline bool MatchFormationRecord::is_wuxing_tower() const {
 }
 inline void MatchFormationRecord::set_is_wuxing_tower(bool value) {
   _internal_set_is_wuxing_tower(value);
-  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.is_wuxing_tower)
 }
 inline bool MatchFormationRecord::_internal_is_wuxing_tower() const {
@@ -22093,7 +23091,7 @@ inline void MatchFormationRecord::set_allocated_jianghu_duel_context(::std::stri
 inline void MatchFormationRecord::clear_trial_vow_mask() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.trial_vow_mask_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x20000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x40000000U);
 }
 inline ::uint32_t MatchFormationRecord::trial_vow_mask() const {
   // @@protoc_insertion_point(field_get:match.MatchFormationRecord.trial_vow_mask)
@@ -22101,7 +23099,7 @@ inline ::uint32_t MatchFormationRecord::trial_vow_mask() const {
 }
 inline void MatchFormationRecord::set_trial_vow_mask(::uint32_t value) {
   _internal_set_trial_vow_mask(value);
-  SetHasBit(_impl_._has_bits_[0], 0x20000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x40000000U);
   // @@protoc_insertion_point(field_set:match.MatchFormationRecord.trial_vow_mask)
 }
 inline ::uint32_t MatchFormationRecord::_internal_trial_vow_mask() const {
@@ -22111,6 +23109,70 @@ inline ::uint32_t MatchFormationRecord::_internal_trial_vow_mask() const {
 inline void MatchFormationRecord::_internal_set_trial_vow_mask(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.trial_vow_mask_ = value;
+}
+
+// bytes tactical_puzzle_context = 31;
+inline void MatchFormationRecord::clear_tactical_puzzle_context() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tactical_puzzle_context_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline const ::std::string& MatchFormationRecord::tactical_puzzle_context() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.MatchFormationRecord.tactical_puzzle_context)
+  return _internal_tactical_puzzle_context();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void MatchFormationRecord::set_tactical_puzzle_context(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  _impl_.tactical_puzzle_context_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.MatchFormationRecord.tactical_puzzle_context)
+}
+inline ::std::string* PROTOBUF_NONNULL MatchFormationRecord::mutable_tactical_puzzle_context()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ::std::string* _s = _internal_mutable_tactical_puzzle_context();
+  // @@protoc_insertion_point(field_mutable:match.MatchFormationRecord.tactical_puzzle_context)
+  return _s;
+}
+inline const ::std::string& MatchFormationRecord::_internal_tactical_puzzle_context() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.tactical_puzzle_context_.Get();
+}
+inline void MatchFormationRecord::_internal_set_tactical_puzzle_context(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tactical_puzzle_context_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL MatchFormationRecord::_internal_mutable_tactical_puzzle_context() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.tactical_puzzle_context_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE MatchFormationRecord::release_tactical_puzzle_context() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.MatchFormationRecord.tactical_puzzle_context)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00002000U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  auto* released = _impl_.tactical_puzzle_context_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.tactical_puzzle_context_.Set("", GetArena());
+  }
+  return released;
+}
+inline void MatchFormationRecord::set_allocated_tactical_puzzle_context(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  }
+  _impl_.tactical_puzzle_context_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.tactical_puzzle_context_.IsDefault()) {
+    _impl_.tactical_puzzle_context_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.MatchFormationRecord.tactical_puzzle_context)
 }
 
 // -------------------------------------------------------------------
@@ -23889,7 +24951,7 @@ inline void MatchBattleSettlementSourceRecord::_internal_set_next_retry_ms(::uin
 inline void MatchManualResolutionRecord::clear_battle_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint64_t MatchManualResolutionRecord::battle_id() const {
   // @@protoc_insertion_point(field_get:match.MatchManualResolutionRecord.battle_id)
@@ -23897,7 +24959,7 @@ inline ::uint64_t MatchManualResolutionRecord::battle_id() const {
 }
 inline void MatchManualResolutionRecord::set_battle_id(::uint64_t value) {
   _internal_set_battle_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:match.MatchManualResolutionRecord.battle_id)
 }
 inline ::uint64_t MatchManualResolutionRecord::_internal_battle_id() const {
@@ -23913,7 +24975,7 @@ inline void MatchManualResolutionRecord::_internal_set_battle_id(::uint64_t valu
 inline void MatchManualResolutionRecord::clear_action() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.action_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::match::StrandedFormationMode MatchManualResolutionRecord::action() const {
   // @@protoc_insertion_point(field_get:match.MatchManualResolutionRecord.action)
@@ -23921,7 +24983,7 @@ inline ::match::StrandedFormationMode MatchManualResolutionRecord::action() cons
 }
 inline void MatchManualResolutionRecord::set_action(::match::StrandedFormationMode value) {
   _internal_set_action(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:match.MatchManualResolutionRecord.action)
 }
 inline ::match::StrandedFormationMode MatchManualResolutionRecord::_internal_action() const {
@@ -23937,7 +24999,7 @@ inline void MatchManualResolutionRecord::_internal_set_action(::match::StrandedF
 inline void MatchManualResolutionRecord::clear_formation_class() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.formation_class_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::match::StrandedFormationClass MatchManualResolutionRecord::formation_class() const {
   // @@protoc_insertion_point(field_get:match.MatchManualResolutionRecord.formation_class)
@@ -23945,7 +25007,7 @@ inline ::match::StrandedFormationClass MatchManualResolutionRecord::formation_cl
 }
 inline void MatchManualResolutionRecord::set_formation_class(::match::StrandedFormationClass value) {
   _internal_set_formation_class(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:match.MatchManualResolutionRecord.formation_class)
 }
 inline ::match::StrandedFormationClass MatchManualResolutionRecord::_internal_formation_class() const {
@@ -24153,7 +25215,7 @@ inline void MatchManualResolutionRecord::set_allocated_reason(::std::string* PRO
 inline void MatchManualResolutionRecord::clear_resolved_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.resolved_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint64_t MatchManualResolutionRecord::resolved_ms() const {
   // @@protoc_insertion_point(field_get:match.MatchManualResolutionRecord.resolved_ms)
@@ -24161,7 +25223,7 @@ inline ::uint64_t MatchManualResolutionRecord::resolved_ms() const {
 }
 inline void MatchManualResolutionRecord::set_resolved_ms(::uint64_t value) {
   _internal_set_resolved_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:match.MatchManualResolutionRecord.resolved_ms)
 }
 inline ::uint64_t MatchManualResolutionRecord::_internal_resolved_ms() const {
@@ -24360,7 +25422,7 @@ MatchManualResolutionRecord::_internal_mutable_tickets_before() {
 inline void MatchManualResolutionRecord::clear_effective_deadline_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.effective_deadline_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint64_t MatchManualResolutionRecord::effective_deadline_ms() const {
   // @@protoc_insertion_point(field_get:match.MatchManualResolutionRecord.effective_deadline_ms)
@@ -24368,7 +25430,7 @@ inline ::uint64_t MatchManualResolutionRecord::effective_deadline_ms() const {
 }
 inline void MatchManualResolutionRecord::set_effective_deadline_ms(::uint64_t value) {
   _internal_set_effective_deadline_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:match.MatchManualResolutionRecord.effective_deadline_ms)
 }
 inline ::uint64_t MatchManualResolutionRecord::_internal_effective_deadline_ms() const {
@@ -24442,6 +25504,134 @@ inline void MatchManualResolutionRecord::set_allocated_replica_instance(::std::s
     _impl_.replica_instance_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:match.MatchManualResolutionRecord.replica_instance)
+}
+
+// string approval_id = 13;
+inline void MatchManualResolutionRecord::clear_approval_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.approval_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline const ::std::string& MatchManualResolutionRecord::approval_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.MatchManualResolutionRecord.approval_id)
+  return _internal_approval_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void MatchManualResolutionRecord::set_approval_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  _impl_.approval_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.MatchManualResolutionRecord.approval_id)
+}
+inline ::std::string* PROTOBUF_NONNULL MatchManualResolutionRecord::mutable_approval_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ::std::string* _s = _internal_mutable_approval_id();
+  // @@protoc_insertion_point(field_mutable:match.MatchManualResolutionRecord.approval_id)
+  return _s;
+}
+inline const ::std::string& MatchManualResolutionRecord::_internal_approval_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.approval_id_.Get();
+}
+inline void MatchManualResolutionRecord::_internal_set_approval_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.approval_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL MatchManualResolutionRecord::_internal_mutable_approval_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.approval_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE MatchManualResolutionRecord::release_approval_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.MatchManualResolutionRecord.approval_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000080U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  auto* released = _impl_.approval_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.approval_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void MatchManualResolutionRecord::set_allocated_approval_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  }
+  _impl_.approval_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.approval_id_.IsDefault()) {
+    _impl_.approval_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.MatchManualResolutionRecord.approval_id)
+}
+
+// string approver = 14;
+inline void MatchManualResolutionRecord::clear_approver() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.approver_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline const ::std::string& MatchManualResolutionRecord::approver() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.MatchManualResolutionRecord.approver)
+  return _internal_approver();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void MatchManualResolutionRecord::set_approver(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  _impl_.approver_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.MatchManualResolutionRecord.approver)
+}
+inline ::std::string* PROTOBUF_NONNULL MatchManualResolutionRecord::mutable_approver()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ::std::string* _s = _internal_mutable_approver();
+  // @@protoc_insertion_point(field_mutable:match.MatchManualResolutionRecord.approver)
+  return _s;
+}
+inline const ::std::string& MatchManualResolutionRecord::_internal_approver() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.approver_.Get();
+}
+inline void MatchManualResolutionRecord::_internal_set_approver(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.approver_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL MatchManualResolutionRecord::_internal_mutable_approver() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.approver_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE MatchManualResolutionRecord::release_approver() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.MatchManualResolutionRecord.approver)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000100U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  auto* released = _impl_.approver_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.approver_.Set("", GetArena());
+  }
+  return released;
+}
+inline void MatchManualResolutionRecord::set_allocated_approver(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  }
+  _impl_.approver_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.approver_.IsDefault()) {
+    _impl_.approver_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.MatchManualResolutionRecord.approver)
 }
 
 // -------------------------------------------------------------------
@@ -33669,6 +34859,58 @@ inline void MatchGrudgeLogRecord::_internal_set_finished_ms(::uint64_t value) {
 
 // -------------------------------------------------------------------
 
+// MatchGrudgeAppliedRecord
+
+// uint64 battle_id = 1;
+inline void MatchGrudgeAppliedRecord::clear_battle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t MatchGrudgeAppliedRecord::battle_id() const {
+  // @@protoc_insertion_point(field_get:match.MatchGrudgeAppliedRecord.battle_id)
+  return _internal_battle_id();
+}
+inline void MatchGrudgeAppliedRecord::set_battle_id(::uint64_t value) {
+  _internal_set_battle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:match.MatchGrudgeAppliedRecord.battle_id)
+}
+inline ::uint64_t MatchGrudgeAppliedRecord::_internal_battle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_id_;
+}
+inline void MatchGrudgeAppliedRecord::_internal_set_battle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = value;
+}
+
+// uint64 applied_ms = 2;
+inline void MatchGrudgeAppliedRecord::clear_applied_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.applied_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t MatchGrudgeAppliedRecord::applied_ms() const {
+  // @@protoc_insertion_point(field_get:match.MatchGrudgeAppliedRecord.applied_ms)
+  return _internal_applied_ms();
+}
+inline void MatchGrudgeAppliedRecord::set_applied_ms(::uint64_t value) {
+  _internal_set_applied_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:match.MatchGrudgeAppliedRecord.applied_ms)
+}
+inline ::uint64_t MatchGrudgeAppliedRecord::_internal_applied_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.applied_ms_;
+}
+inline void MatchGrudgeAppliedRecord::_internal_set_applied_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.applied_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
 // MatchTrialChallengeCardRecord
 
 // uint64 card_id = 1;
@@ -33925,6 +35167,798 @@ inline void MatchTrialChallengeCardRecord::set_allocated_card_view(::std::string
     _impl_.card_view_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:match.MatchTrialChallengeCardRecord.card_view)
+}
+
+// -------------------------------------------------------------------
+
+// MatchTacticalPuzzleRecord
+
+// uint64 puzzle_id = 1;
+inline void MatchTacticalPuzzleRecord::clear_puzzle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.puzzle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t MatchTacticalPuzzleRecord::puzzle_id() const {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleRecord.puzzle_id)
+  return _internal_puzzle_id();
+}
+inline void MatchTacticalPuzzleRecord::set_puzzle_id(::uint64_t value) {
+  _internal_set_puzzle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleRecord.puzzle_id)
+}
+inline ::uint64_t MatchTacticalPuzzleRecord::_internal_puzzle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.puzzle_id_;
+}
+inline void MatchTacticalPuzzleRecord::_internal_set_puzzle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.puzzle_id_ = value;
+}
+
+// uint64 author_player_id = 2;
+inline void MatchTacticalPuzzleRecord::clear_author_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.author_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t MatchTacticalPuzzleRecord::author_player_id() const {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleRecord.author_player_id)
+  return _internal_author_player_id();
+}
+inline void MatchTacticalPuzzleRecord::set_author_player_id(::uint64_t value) {
+  _internal_set_author_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleRecord.author_player_id)
+}
+inline ::uint64_t MatchTacticalPuzzleRecord::_internal_author_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.author_player_id_;
+}
+inline void MatchTacticalPuzzleRecord::_internal_set_author_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.author_player_id_ = value;
+}
+
+// string author_name = 3;
+inline void MatchTacticalPuzzleRecord::clear_author_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.author_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& MatchTacticalPuzzleRecord::author_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleRecord.author_name)
+  return _internal_author_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void MatchTacticalPuzzleRecord::set_author_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.author_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleRecord.author_name)
+}
+inline ::std::string* PROTOBUF_NONNULL MatchTacticalPuzzleRecord::mutable_author_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_author_name();
+  // @@protoc_insertion_point(field_mutable:match.MatchTacticalPuzzleRecord.author_name)
+  return _s;
+}
+inline const ::std::string& MatchTacticalPuzzleRecord::_internal_author_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.author_name_.Get();
+}
+inline void MatchTacticalPuzzleRecord::_internal_set_author_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.author_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL MatchTacticalPuzzleRecord::_internal_mutable_author_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.author_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE MatchTacticalPuzzleRecord::release_author_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.MatchTacticalPuzzleRecord.author_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.author_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.author_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void MatchTacticalPuzzleRecord::set_allocated_author_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.author_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.author_name_.IsDefault()) {
+    _impl_.author_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.MatchTacticalPuzzleRecord.author_name)
+}
+
+// uint32 state = 4;
+inline void MatchTacticalPuzzleRecord::clear_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t MatchTacticalPuzzleRecord::state() const {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleRecord.state)
+  return _internal_state();
+}
+inline void MatchTacticalPuzzleRecord::set_state(::uint32_t value) {
+  _internal_set_state(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleRecord.state)
+}
+inline ::uint32_t MatchTacticalPuzzleRecord::_internal_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.state_;
+}
+inline void MatchTacticalPuzzleRecord::_internal_set_state(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_ = value;
+}
+
+// uint32 spec_revision = 5;
+inline void MatchTacticalPuzzleRecord::clear_spec_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spec_revision_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t MatchTacticalPuzzleRecord::spec_revision() const {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleRecord.spec_revision)
+  return _internal_spec_revision();
+}
+inline void MatchTacticalPuzzleRecord::set_spec_revision(::uint32_t value) {
+  _internal_set_spec_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleRecord.spec_revision)
+}
+inline ::uint32_t MatchTacticalPuzzleRecord::_internal_spec_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.spec_revision_;
+}
+inline void MatchTacticalPuzzleRecord::_internal_set_spec_revision(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spec_revision_ = value;
+}
+
+// string title = 6;
+inline void MatchTacticalPuzzleRecord::clear_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.title_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& MatchTacticalPuzzleRecord::title() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleRecord.title)
+  return _internal_title();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void MatchTacticalPuzzleRecord::set_title(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.title_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleRecord.title)
+}
+inline ::std::string* PROTOBUF_NONNULL MatchTacticalPuzzleRecord::mutable_title()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_title();
+  // @@protoc_insertion_point(field_mutable:match.MatchTacticalPuzzleRecord.title)
+  return _s;
+}
+inline const ::std::string& MatchTacticalPuzzleRecord::_internal_title() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.title_.Get();
+}
+inline void MatchTacticalPuzzleRecord::_internal_set_title(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.title_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL MatchTacticalPuzzleRecord::_internal_mutable_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.title_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE MatchTacticalPuzzleRecord::release_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.MatchTacticalPuzzleRecord.title)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.title_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.title_.Set("", GetArena());
+  }
+  return released;
+}
+inline void MatchTacticalPuzzleRecord::set_allocated_title(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.title_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.title_.IsDefault()) {
+    _impl_.title_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.MatchTacticalPuzzleRecord.title)
+}
+
+// string hint_text = 7;
+inline void MatchTacticalPuzzleRecord::clear_hint_text() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hint_text_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& MatchTacticalPuzzleRecord::hint_text() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleRecord.hint_text)
+  return _internal_hint_text();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void MatchTacticalPuzzleRecord::set_hint_text(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.hint_text_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleRecord.hint_text)
+}
+inline ::std::string* PROTOBUF_NONNULL MatchTacticalPuzzleRecord::mutable_hint_text()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_hint_text();
+  // @@protoc_insertion_point(field_mutable:match.MatchTacticalPuzzleRecord.hint_text)
+  return _s;
+}
+inline const ::std::string& MatchTacticalPuzzleRecord::_internal_hint_text() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hint_text_.Get();
+}
+inline void MatchTacticalPuzzleRecord::_internal_set_hint_text(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hint_text_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL MatchTacticalPuzzleRecord::_internal_mutable_hint_text() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.hint_text_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE MatchTacticalPuzzleRecord::release_hint_text() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.MatchTacticalPuzzleRecord.hint_text)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.hint_text_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.hint_text_.Set("", GetArena());
+  }
+  return released;
+}
+inline void MatchTacticalPuzzleRecord::set_allocated_hint_text(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.hint_text_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.hint_text_.IsDefault()) {
+    _impl_.hint_text_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.MatchTacticalPuzzleRecord.hint_text)
+}
+
+// uint32 tag_mask = 8;
+inline void MatchTacticalPuzzleRecord::clear_tag_mask() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tag_mask_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t MatchTacticalPuzzleRecord::tag_mask() const {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleRecord.tag_mask)
+  return _internal_tag_mask();
+}
+inline void MatchTacticalPuzzleRecord::set_tag_mask(::uint32_t value) {
+  _internal_set_tag_mask(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleRecord.tag_mask)
+}
+inline ::uint32_t MatchTacticalPuzzleRecord::_internal_tag_mask() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.tag_mask_;
+}
+inline void MatchTacticalPuzzleRecord::_internal_set_tag_mask(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tag_mask_ = value;
+}
+
+// bytes spec_payload = 9;
+inline void MatchTacticalPuzzleRecord::clear_spec_payload() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spec_payload_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& MatchTacticalPuzzleRecord::spec_payload() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleRecord.spec_payload)
+  return _internal_spec_payload();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void MatchTacticalPuzzleRecord::set_spec_payload(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.spec_payload_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleRecord.spec_payload)
+}
+inline ::std::string* PROTOBUF_NONNULL MatchTacticalPuzzleRecord::mutable_spec_payload()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_spec_payload();
+  // @@protoc_insertion_point(field_mutable:match.MatchTacticalPuzzleRecord.spec_payload)
+  return _s;
+}
+inline const ::std::string& MatchTacticalPuzzleRecord::_internal_spec_payload() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.spec_payload_.Get();
+}
+inline void MatchTacticalPuzzleRecord::_internal_set_spec_payload(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spec_payload_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL MatchTacticalPuzzleRecord::_internal_mutable_spec_payload() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.spec_payload_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE MatchTacticalPuzzleRecord::release_spec_payload() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.MatchTacticalPuzzleRecord.spec_payload)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.spec_payload_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.spec_payload_.Set("", GetArena());
+  }
+  return released;
+}
+inline void MatchTacticalPuzzleRecord::set_allocated_spec_payload(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.spec_payload_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.spec_payload_.IsDefault()) {
+    _impl_.spec_payload_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.MatchTacticalPuzzleRecord.spec_payload)
+}
+
+// uint64 verified_battle_id = 10;
+inline void MatchTacticalPuzzleRecord::clear_verified_battle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.verified_battle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint64_t MatchTacticalPuzzleRecord::verified_battle_id() const {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleRecord.verified_battle_id)
+  return _internal_verified_battle_id();
+}
+inline void MatchTacticalPuzzleRecord::set_verified_battle_id(::uint64_t value) {
+  _internal_set_verified_battle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleRecord.verified_battle_id)
+}
+inline ::uint64_t MatchTacticalPuzzleRecord::_internal_verified_battle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.verified_battle_id_;
+}
+inline void MatchTacticalPuzzleRecord::_internal_set_verified_battle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.verified_battle_id_ = value;
+}
+
+// uint32 author_best_rounds = 11;
+inline void MatchTacticalPuzzleRecord::clear_author_best_rounds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.author_best_rounds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t MatchTacticalPuzzleRecord::author_best_rounds() const {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleRecord.author_best_rounds)
+  return _internal_author_best_rounds();
+}
+inline void MatchTacticalPuzzleRecord::set_author_best_rounds(::uint32_t value) {
+  _internal_set_author_best_rounds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleRecord.author_best_rounds)
+}
+inline ::uint32_t MatchTacticalPuzzleRecord::_internal_author_best_rounds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.author_best_rounds_;
+}
+inline void MatchTacticalPuzzleRecord::_internal_set_author_best_rounds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.author_best_rounds_ = value;
+}
+
+// uint32 attempt_count = 12;
+inline void MatchTacticalPuzzleRecord::clear_attempt_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attempt_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t MatchTacticalPuzzleRecord::attempt_count() const {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleRecord.attempt_count)
+  return _internal_attempt_count();
+}
+inline void MatchTacticalPuzzleRecord::set_attempt_count(::uint32_t value) {
+  _internal_set_attempt_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleRecord.attempt_count)
+}
+inline ::uint32_t MatchTacticalPuzzleRecord::_internal_attempt_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.attempt_count_;
+}
+inline void MatchTacticalPuzzleRecord::_internal_set_attempt_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attempt_count_ = value;
+}
+
+// uint32 clear_count = 13;
+inline void MatchTacticalPuzzleRecord::clear_clear_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.clear_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::uint32_t MatchTacticalPuzzleRecord::clear_count() const {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleRecord.clear_count)
+  return _internal_clear_count();
+}
+inline void MatchTacticalPuzzleRecord::set_clear_count(::uint32_t value) {
+  _internal_set_clear_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleRecord.clear_count)
+}
+inline ::uint32_t MatchTacticalPuzzleRecord::_internal_clear_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.clear_count_;
+}
+inline void MatchTacticalPuzzleRecord::_internal_set_clear_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.clear_count_ = value;
+}
+
+// uint32 global_best_rounds = 14;
+inline void MatchTacticalPuzzleRecord::clear_global_best_rounds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.global_best_rounds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint32_t MatchTacticalPuzzleRecord::global_best_rounds() const {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleRecord.global_best_rounds)
+  return _internal_global_best_rounds();
+}
+inline void MatchTacticalPuzzleRecord::set_global_best_rounds(::uint32_t value) {
+  _internal_set_global_best_rounds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleRecord.global_best_rounds)
+}
+inline ::uint32_t MatchTacticalPuzzleRecord::_internal_global_best_rounds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.global_best_rounds_;
+}
+inline void MatchTacticalPuzzleRecord::_internal_set_global_best_rounds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.global_best_rounds_ = value;
+}
+
+// uint32 like_count = 15;
+inline void MatchTacticalPuzzleRecord::clear_like_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.like_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint32_t MatchTacticalPuzzleRecord::like_count() const {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleRecord.like_count)
+  return _internal_like_count();
+}
+inline void MatchTacticalPuzzleRecord::set_like_count(::uint32_t value) {
+  _internal_set_like_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleRecord.like_count)
+}
+inline ::uint32_t MatchTacticalPuzzleRecord::_internal_like_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.like_count_;
+}
+inline void MatchTacticalPuzzleRecord::_internal_set_like_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.like_count_ = value;
+}
+
+// uint64 created_ms = 16;
+inline void MatchTacticalPuzzleRecord::clear_created_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.created_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint64_t MatchTacticalPuzzleRecord::created_ms() const {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleRecord.created_ms)
+  return _internal_created_ms();
+}
+inline void MatchTacticalPuzzleRecord::set_created_ms(::uint64_t value) {
+  _internal_set_created_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleRecord.created_ms)
+}
+inline ::uint64_t MatchTacticalPuzzleRecord::_internal_created_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.created_ms_;
+}
+inline void MatchTacticalPuzzleRecord::_internal_set_created_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.created_ms_ = value;
+}
+
+// uint64 published_ms = 17;
+inline void MatchTacticalPuzzleRecord::clear_published_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.published_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint64_t MatchTacticalPuzzleRecord::published_ms() const {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleRecord.published_ms)
+  return _internal_published_ms();
+}
+inline void MatchTacticalPuzzleRecord::set_published_ms(::uint64_t value) {
+  _internal_set_published_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleRecord.published_ms)
+}
+inline ::uint64_t MatchTacticalPuzzleRecord::_internal_published_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.published_ms_;
+}
+inline void MatchTacticalPuzzleRecord::_internal_set_published_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.published_ms_ = value;
+}
+
+// uint64 updated_ms = 18;
+inline void MatchTacticalPuzzleRecord::clear_updated_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline ::uint64_t MatchTacticalPuzzleRecord::updated_ms() const {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleRecord.updated_ms)
+  return _internal_updated_ms();
+}
+inline void MatchTacticalPuzzleRecord::set_updated_ms(::uint64_t value) {
+  _internal_set_updated_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleRecord.updated_ms)
+}
+inline ::uint64_t MatchTacticalPuzzleRecord::_internal_updated_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.updated_ms_;
+}
+inline void MatchTacticalPuzzleRecord::_internal_set_updated_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// MatchTacticalPuzzleClearRecord
+
+// uint64 puzzle_id = 1;
+inline void MatchTacticalPuzzleClearRecord::clear_puzzle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.puzzle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t MatchTacticalPuzzleClearRecord::puzzle_id() const {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleClearRecord.puzzle_id)
+  return _internal_puzzle_id();
+}
+inline void MatchTacticalPuzzleClearRecord::set_puzzle_id(::uint64_t value) {
+  _internal_set_puzzle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleClearRecord.puzzle_id)
+}
+inline ::uint64_t MatchTacticalPuzzleClearRecord::_internal_puzzle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.puzzle_id_;
+}
+inline void MatchTacticalPuzzleClearRecord::_internal_set_puzzle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.puzzle_id_ = value;
+}
+
+// uint64 player_id = 2;
+inline void MatchTacticalPuzzleClearRecord::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t MatchTacticalPuzzleClearRecord::player_id() const {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleClearRecord.player_id)
+  return _internal_player_id();
+}
+inline void MatchTacticalPuzzleClearRecord::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleClearRecord.player_id)
+}
+inline ::uint64_t MatchTacticalPuzzleClearRecord::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void MatchTacticalPuzzleClearRecord::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// uint32 attempts = 3;
+inline void MatchTacticalPuzzleClearRecord::clear_attempts() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attempts_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t MatchTacticalPuzzleClearRecord::attempts() const {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleClearRecord.attempts)
+  return _internal_attempts();
+}
+inline void MatchTacticalPuzzleClearRecord::set_attempts(::uint32_t value) {
+  _internal_set_attempts(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleClearRecord.attempts)
+}
+inline ::uint32_t MatchTacticalPuzzleClearRecord::_internal_attempts() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.attempts_;
+}
+inline void MatchTacticalPuzzleClearRecord::_internal_set_attempts(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attempts_ = value;
+}
+
+// bool cleared = 4;
+inline void MatchTacticalPuzzleClearRecord::clear_cleared() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cleared_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline bool MatchTacticalPuzzleClearRecord::cleared() const {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleClearRecord.cleared)
+  return _internal_cleared();
+}
+inline void MatchTacticalPuzzleClearRecord::set_cleared(bool value) {
+  _internal_set_cleared(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleClearRecord.cleared)
+}
+inline bool MatchTacticalPuzzleClearRecord::_internal_cleared() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cleared_;
+}
+inline void MatchTacticalPuzzleClearRecord::_internal_set_cleared(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cleared_ = value;
+}
+
+// uint32 best_rounds = 5;
+inline void MatchTacticalPuzzleClearRecord::clear_best_rounds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.best_rounds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t MatchTacticalPuzzleClearRecord::best_rounds() const {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleClearRecord.best_rounds)
+  return _internal_best_rounds();
+}
+inline void MatchTacticalPuzzleClearRecord::set_best_rounds(::uint32_t value) {
+  _internal_set_best_rounds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleClearRecord.best_rounds)
+}
+inline ::uint32_t MatchTacticalPuzzleClearRecord::_internal_best_rounds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.best_rounds_;
+}
+inline void MatchTacticalPuzzleClearRecord::_internal_set_best_rounds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.best_rounds_ = value;
+}
+
+// bool liked = 6;
+inline void MatchTacticalPuzzleClearRecord::clear_liked() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.liked_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline bool MatchTacticalPuzzleClearRecord::liked() const {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleClearRecord.liked)
+  return _internal_liked();
+}
+inline void MatchTacticalPuzzleClearRecord::set_liked(bool value) {
+  _internal_set_liked(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleClearRecord.liked)
+}
+inline bool MatchTacticalPuzzleClearRecord::_internal_liked() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.liked_;
+}
+inline void MatchTacticalPuzzleClearRecord::_internal_set_liked(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.liked_ = value;
+}
+
+// uint64 first_cleared_ms = 7;
+inline void MatchTacticalPuzzleClearRecord::clear_first_cleared_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.first_cleared_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t MatchTacticalPuzzleClearRecord::first_cleared_ms() const {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleClearRecord.first_cleared_ms)
+  return _internal_first_cleared_ms();
+}
+inline void MatchTacticalPuzzleClearRecord::set_first_cleared_ms(::uint64_t value) {
+  _internal_set_first_cleared_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleClearRecord.first_cleared_ms)
+}
+inline ::uint64_t MatchTacticalPuzzleClearRecord::_internal_first_cleared_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.first_cleared_ms_;
+}
+inline void MatchTacticalPuzzleClearRecord::_internal_set_first_cleared_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.first_cleared_ms_ = value;
+}
+
+// uint64 updated_ms = 8;
+inline void MatchTacticalPuzzleClearRecord::clear_updated_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t MatchTacticalPuzzleClearRecord::updated_ms() const {
+  // @@protoc_insertion_point(field_get:match.MatchTacticalPuzzleClearRecord.updated_ms)
+  return _internal_updated_ms();
+}
+inline void MatchTacticalPuzzleClearRecord::set_updated_ms(::uint64_t value) {
+  _internal_set_updated_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:match.MatchTacticalPuzzleClearRecord.updated_ms)
+}
+inline ::uint64_t MatchTacticalPuzzleClearRecord::_internal_updated_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.updated_ms_;
+}
+inline void MatchTacticalPuzzleClearRecord::_internal_set_updated_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_ms_ = value;
 }
 
 #ifdef __GNUC__

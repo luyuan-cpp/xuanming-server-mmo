@@ -31,7 +31,8 @@ func NewScheduleAccountDeletionLogic(ctx context.Context, svcCtx *svc.ServiceCon
 	}
 }
 
-// ScheduleAccountDeletion 客服代办注销(Google Play 要求的网页入口,docs/design/account-deletion.md §4.6)。鉴权在拦截器(x-admin-token)。
+// ScheduleAccountDeletion 客服代办注销(Google Play 要求的网页入口,docs/design/account-deletion.md §4.6)。
+// 鉴权与双人复核在拦截器(x-admin-token、admin_approval.go)。
 // 按角色找到账号,走与本人申请同一套预检与冷静期,data_service 的回执记 source=2。客服先在系统外核实身份。
 // 这条路拿不到 Apple 授权码,Apple 账号不撤销授权,由客服告诉玩家到 Apple 设置里手动移除(TN3194 的兜底)。
 func (l *ScheduleAccountDeletionLogic) ScheduleAccountDeletion(in *login.ScheduleAccountDeletionRequest) (*login.AccountDeletionResponse, error) {
@@ -48,8 +49,9 @@ func (l *ScheduleAccountDeletionLogic) ScheduleAccountDeletion(in *login.Schedul
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, "account directory lookup failed")
 	}
-	l.Infof("[account-deletion] admin schedule: player=%d account=%s operator=%s reason=%q peer=%s",
-		in.GetPlayerId(), accountdeletion.MaskAccount(owned.GetAccount()), in.GetOperator(), in.GetReason(), peerAddrOf(l.ctx))
+	l.Infof("[account-deletion] admin schedule: player=%d account=%s operator=%s approval_id=%q approver=%q reason=%q peer=%s",
+		in.GetPlayerId(), accountdeletion.MaskAccount(owned.GetAccount()), in.GetOperator(), in.GetApproval().GetApprovalId(),
+		in.GetApproval().GetApprover(), in.GetReason(), peerAddrOf(l.ctx))
 	return l.svcCtx.AccountDeletion.Request(l.ctx, owned.GetAccount(), accountdeletion.SourceAdmin, false, ""), nil
 }
 

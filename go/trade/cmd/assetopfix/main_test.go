@@ -215,14 +215,12 @@ func TestRunResolve_NeverAppliedWaitsTheObservationWindowThenFinalizes(t *testin
 	}
 }
 
-// 观察期间这一行被领过、排过或终结了:不终结,退出码 3,打审计行并提示重跑。「只有 attempts 变了」是钟慢的副本
-// 发过请求(last_send_ms 推不动)、结局不明重排(租约清回 0)之后的样子,也是只领没发的本地重排。
+// 观察期间这一行被领过、发过或终结了:不终结,退出码 3,打审计行并提示重跑。只有 attempts 变了不在这里,见下一条。
 func TestRunResolve_ObservationWindowRefusesWhenTheRowChanged(t *testing.T) {
 	cases := map[string]func(*tradepb.TradeAssetOpRecord){
 		"claimed": func(r *tradepb.TradeAssetOpRecord) {
 			r.LeaseUntilMs = uint64(time.Now().Add(10 * time.Second).UnixMilli())
 		},
-		"only attempts moved":  func(r *tradepb.TradeAssetOpRecord) { r.Attempts++ },
 		"sent and rescheduled": func(r *tradepb.TradeAssetOpRecord) { r.Attempts++; r.LastSendMs++ },
 		"finalized by the loop": func(r *tradepb.TradeAssetOpRecord) {
 			r.Status = tradepb.TradeAssetOpStatus_TRADE_ASSET_OP_STATUS_APPLIED
@@ -249,6 +247,28 @@ func TestRunResolve_ObservationWindowRefusesWhenTheRowChanged(t *testing.T) {
 				t.Fatalf("要打审计行并提示重跑: %s", out)
 			}
 		})
+	}
+}
+
+// 观察期间只有 attempts 变了(只领没发的本地重排,或钟慢的副本发过、结局不明又重排):跨窗口不比它,照样终结,
+// 条件写带第二次读到的见证(attempts 是新的),第二次读之后再有重排就落空(assetop.LeaseAndSendUnchanged)。
+// 钟慢副本那次发送若被 scene 应用,第二次读账本时就不是「从未应用」,由下一条用例覆盖。
+func TestRunResolve_ObservationWindowToleratesAttemptsOnlyAndUsesTheSecondRead(t *testing.T) {
+	row := stuckRow()
+	store := &fakeStore{row: row, resolved: true}
+	d := deps(store, ledgerFor(row, false, false, false, true, nil))
+	d.sleep = (&fakeSleep{during: func() {
+		changed := proto.Clone(store.row).(*tradepb.TradeAssetOpRecord)
+		changed.Attempts++
+		store.row = changed
+	}}).sleep
+	var stdout, stderr bytes.Buffer
+	if code := runResolve(context.Background(), d, abortOptions(), &stdout, &stderr); code != exitOK {
+		t.Fatalf("exit=%d stderr=%s", code, stderr.String())
+	}
+	want := assetop.QuietWitness{LeaseUntilMs: row.GetLeaseUntilMs(), LastSendMs: row.GetLastSendMs(), Attempts: row.GetAttempts() + 1}
+	if len(store.calls) != 1 || store.witnesses[0] != want {
+		t.Fatalf("calls=%+v witnesses=%+v want %+v(第二次读到的见证)", store.calls, store.witnesses, want)
 	}
 }
 

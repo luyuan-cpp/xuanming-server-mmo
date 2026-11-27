@@ -46,8 +46,8 @@ import (
 
 	"shared/buildinfo"
 	"shared/clockcheck"
-	"shared/grpcstats"
 	"shared/grpckeepalive"
+	"shared/grpcstats"
 	"shared/killswitch"
 	"shared/noderegistry"
 	"shared/serverbase"
@@ -261,7 +261,8 @@ func runPlayerInbox(c config.Config) (runErr error) {
 	serverReady := make(chan struct{})
 	s, err := zrpc.NewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		inboxpb.RegisterPlayerInboxServer(grpcServer, server.NewPlayerInboxServer(svcCtx.Store, budget, consumerVerifier, matchProducer))
-		inboxpb.RegisterPlayerInboxAdminServer(grpcServer, server.NewAdminServer(svcCtx.Store, sanction, svcCtx.Ledgers, svcCtx.ItemGainBlocks, budget))
+		inboxpb.RegisterPlayerInboxAdminServer(grpcServer, server.NewAdminServer(svcCtx.Store, sanction, svcCtx.Ledgers, svcCtx.ItemGainBlocks, budget,
+			c.PlayerInbox.AdminAllowUnapproved))
 		// 角色护栏的参与者接口:只有协调者(data_service)调,自带 ServiceCallAuth 鉴权。
 		rfpb.RegisterRoleFenceParticipantServer(grpcServer, participant)
 		if config.IsRelaxedMode(c.Mode) {

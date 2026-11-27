@@ -121,6 +121,7 @@ func TestUpdateAnnouncementAuthorizedRejectsStalePrivilegedCache(t *testing.T) {
 // guildTestDropTables:本服务全部表 + schemamigrate 台账,按**逆锁序**排(tables.go 的 Tables() 倒过来)。
 // 新增表时同步追加(TestDropListCoversTables 守数量);漏了新表,复用 guild_test 库时上一轮的行会残留到下一轮。
 var guildTestDropTables = []string{
+	"guild_war_credit_owed",                                      // 帮战入账的待入账行(位置 24)
 	"guild_jianghu_grudge_applied",                               // 帮派恩怨墙入账闸门(位置 23)
 	"guild_war_feud",                                             // 帮战 V2.5 宿敌约战战书(位置 22)
 	"guild_jianghu_grudge_record", "guild_jianghu_rival_summary", // 江湖生死状帮派恩怨墙两表(20..21 逆序)

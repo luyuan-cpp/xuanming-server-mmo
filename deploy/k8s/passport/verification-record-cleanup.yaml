@@ -1,0 +1,60 @@
+# 定时清理 Casdoor 发过的验证码记录(verification_record:收件邮箱 / 手机号、来源地址、验证码)。
+# Casdoor v4.27.1 没有任何清理这张表的代码;删用户也不会带走它(docs/design/official-passport-registration.md §3.5、§3.10)。
+# 保留 180 天:与组织的 recordRetentionDays(接口审计记录)一致,是《网络安全法》第二十一条「网络日志留存不少于六个月」的下限,
+# 隐私政策里写同一个期限。每天删一次,单次最多 10 万行(积压时下一天接着删)。
+#
+# 账号用一个只有 verification_record 删除权限的库账号:GRANT SELECT, DELETE ON casdoor.verification_record TO 'passport_cleanup'@'%';
+# Secret passport-db-cleanup 的键 host / user / password 由运维建(README 第 1 步)。
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: passport-verification-record-cleanup
+  namespace: passport
+spec:
+  schedule: "30 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 1800
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          containers:
+            - name: cleanup
+              image: mysql:8.0.46@sha256:7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196dfc07d358ae2b
+              command:
+                - sh
+                - -c
+                - >-
+                  mysql --host="$DB_HOST" --user="$DB_USER" --database=casdoor --batch --execute="
+                  DELETE FROM verification_record WHERE time < UNIX_TIMESTAMP() - 180 * 86400 LIMIT 100000;
+                  SELECT ROW_COUNT() AS deleted_rows;"
+              env:
+                - name: DB_HOST
+                  valueFrom:
+                    secretKeyRef:
+                      name: passport-db-cleanup
+                      key: host
+                - name: DB_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: passport-db-cleanup
+                      key: user
+                # mysql 客户端从 MYSQL_PWD 读口令,不出现在进程参数里。
+                - name: MYSQL_PWD
+                  valueFrom:
+                    secretKeyRef:
+                      name: passport-db-cleanup
+                      key: password
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  memory: 256Mi
+              securityContext:
+                allowPrivilegeEscalation: false

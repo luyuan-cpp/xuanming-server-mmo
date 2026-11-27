@@ -111,9 +111,10 @@ func (l *GuildLogic) StartTrialBackground(c TrialBackgroundConf) (stop func(), e
 	launches := newTrialLaunchRecovery(l)
 	var lobbyCursor uint64 // 仅本循环访问；失败也推进，防离线大厅占住队头。
 	var unpreparedCursor uint64
-	// 帮战追杀令到期收尾(r2-gw#2)的游标与轮数,仅本循环访问。
+	// 帮战追杀令到期收尾(r2-gw#2)的游标与轮数、帮战待入账行转换(r2-gw#5 / #6)的游标,仅本循环访问。
 	var bountyCursor data.BountyExpiryCursor
 	bountyEvery, bountyRound := warBountyExpiryEveryRounds(c.OwedInterval), 0
+	var warOwedCursor data.WarCreditOwedCursor
 	var wg sync.WaitGroup
 	wg.Add(2)
 	safego.Go(trialOwedLoopPoint, func() {
@@ -130,6 +131,14 @@ func (l *GuildLogic) StartTrialBackground(c TrialBackgroundConf) (stop func(), e
 				if stats.failed != 0 && c.RelayAdmission != nil {
 					c.RelayAdmission.Hold()
 				}
+				// 终态追杀令过了保留期按批删(r2-gw#7),同一节拍;只是清理,失败不 Hold。
+				l.purgeTerminalGuildWarBounties(ctx)
+			}
+			// 帮战待入账行(r2-gw#5 / #6)与历练待入队物品同一节拍转换:收不了的人那一笔晚到,不跳过。
+			var warOwed warCreditOwedStats
+			warOwedCursor, warOwed = l.convertWarCreditOwed(ctx, warOwedCursor)
+			if warOwed.failed != 0 && c.RelayAdmission != nil {
+				c.RelayAdmission.Hold()
 			}
 			if d.Lobby != nil {
 				budget, cancel := context.WithTimeout(ctx, 2*time.Second)

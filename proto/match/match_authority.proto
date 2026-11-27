@@ -250,6 +250,8 @@ message MatchFormationRecord {
   bytes jianghu_duel_context = 29;
   // 五行试炼志 V3 自选试炼誓约位图（bit0..3，非试炼誓约局为 0）。
   uint32 trial_vow_mask = 30;
+  // 万象残局坊在成局提交点冻结的 TacticalPuzzleBattleContext 字节载荷（非残局坊为空）。
+  bytes tactical_puzzle_context = 31;
 }
 message MatchPreparedEndpoint {
   uint64 player_id = 1;
@@ -397,6 +399,10 @@ message MatchManualResolutionRecord {
   repeated MatchAuthorityTicketRecord tickets_before = 10;
   uint64 effective_deadline_ms = 11;          // max(成局截止, 原件截止, 原件准入期限)
   string replica_instance = 12;               // 执行这次处置的 match 副本（主机名）
+  // 后台双人复核的批准号与批准人(2026-11-26,docs/design/admin-identity-and-dual-control.md §5.8);发起人就是 operator_name,不重复存。
+  // 只有部署打开 GlobalMatch.ManualResolutionAllowUnapproved 时才会是空串。
+  string approval_id = 13;
+  string approver = 14;
 }
 
 // 战报回放正文(docs/design/battle-report-replay.md)。与 match_battle_completion 同一事务写,只写 COMPLETE 的局。
@@ -940,4 +946,52 @@ message MatchTrialChallengeCardRecord {
   uint64 created_ms = 7;
   uint64 expires_ms = 8;
   bytes card_view = 9; // 确定性序列化 TrialChallengeCardView
+}
+
+// 万象残局坊（UGC 回合解谜工坊 V1）：玩家自创残局主表（每人最多 10 题，编辑已发布题递增 spec_revision 并退回草稿重新自证）。
+message MatchTacticalPuzzleRecord {
+  option (OptionTableName) = "match_tactical_puzzle";
+  option (OptionPrimaryKey) = "puzzle_id";
+  option (OptionIndex) = "author_player_id,updated_ms,puzzle_id;state,like_count,clear_count,puzzle_id;state,published_ms,puzzle_id";
+  option (OptionTiDBNonclusteredPK) = true;
+  option (OptionTiDBShardRowIDBits) = 4;
+  option (OptionTiDBPreSplitRegions) = 4;
+
+  uint64 puzzle_id = 1;
+  uint64 author_player_id = 2;
+  string author_name = 3;
+  uint32 state = 4;              // 1=DRAFT 待自证, 2=PUBLISHED 已发布
+  uint32 spec_revision = 5;      // 题面修订号（从 1 递增）
+  string title = 6;              // 4..20 字符（已过 ContentGuard）
+  string hint_text = 7;          // 0..40 字符破局思路提示（已过 ContentGuard）
+  uint32 tag_mask = 8;           // bit0破盾 bit1控场 bit2驱散 bit3反杀 bit4极限回合 bit5残血翻盘
+  bytes spec_payload = 9;        // 确定性序列化 battle.TacticalPuzzleSpec
+  uint64 verified_battle_id = 10;// 作者自证通关并钉住的标准解回放 battle_id（DRAFT 为 0）
+  uint32 author_best_rounds = 11;// 作者自证通关回合数
+  uint32 attempt_count = 12;     // 全服累计挑战人次
+  uint32 clear_count = 13;       // 全服累计独立通关人数
+  uint32 global_best_rounds = 14;// 全服最少通关回合数
+  uint32 like_count = 15;        // 全服点赞数（仅通关非作者可赞）
+  uint64 created_ms = 16;
+  uint64 published_ms = 17;
+  uint64 updated_ms = 18;
+}
+
+// 万象残局坊：玩家单题挑战 / 通关 / 最少回合 / 点赞记录表（合并 1 表防多表膨胀）。
+message MatchTacticalPuzzleClearRecord {
+  option (OptionTableName) = "match_tactical_puzzle_clear";
+  option (OptionPrimaryKey) = "puzzle_id,player_id";
+  option (OptionIndex) = "player_id,cleared,updated_ms,puzzle_id";
+  option (OptionTiDBNonclusteredPK) = true;
+  option (OptionTiDBShardRowIDBits) = 4;
+  option (OptionTiDBPreSplitRegions) = 4;
+
+  uint64 puzzle_id = 1;
+  uint64 player_id = 2;
+  uint32 attempts = 3;
+  bool cleared = 4;
+  uint32 best_rounds = 5;        // 0=未通关
+  bool liked = 6;
+  uint64 first_cleared_ms = 7;
+  uint64 updated_ms = 8;
 }

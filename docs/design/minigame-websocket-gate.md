@@ -1,7 +1,7 @@
 # 小游戏客户端经 WebSocket 连接 gate 与 battle(W1–W11)
 
 - **日期**:2026-11-19。
-- **状态**:代码已全部写完(服务端、部署脚本、客户端、robot),**未生成协议、未编译、未测试、未上集群,待 Gemini 验证**(AGENTS.md §10.1)。本文任何「通过」「生效」都指设计意图,不是运行证据。验证命令在 `docs/PROGRESS.md` 2026-11-19「小游戏 WebSocket 入口」条目,robot 的在同日「robot 加 WebSocket 传输」条目。2026-11-20 的收尾(边缘按来源限速、battle 的 WebSocket 计数、小游戏账号注销的重新认证、robot 去掉回环桥)在 `docs/PROGRESS.md` 2026-11-20「小游戏 WebSocket 收尾」条目。2026-11-20 起全部待验证项交给 Gemini,一遍跑完的顺序见[交接单](../handoff/minigame-websocket-handoff-20261120.md)(2026-11-26 按当前仓库校正过)。
+- **状态**:代码已全部写完并已提交(服务端、部署脚本、客户端、robot)。**2026-11-26 Gemini 按交接单 3.0–3.8 跑过,本线用例全过**(`docs/PROGRESS.md` 2026-11-26「Gemini:小游戏 WebSocket 验证」,日志在 `build/verification/minigame-ws-20261126/`):协议生成,C++ / Go / Java / robot 单测,部署契约,nginx 配置在容器里的 `nginx -t` 与实起后的路径校验、限速,本机冒烟的 WebSocket 一轮(登录进场、心跳空闲、msg 124 换 gate、battle 端口握手)与 TCP 回归。本机冒烟不经边缘,robot 直接用 `ws://` 连 gate / battle。**还没有运行证据的**:`battle_smoke`(两种传输都没跑成,被别的会话改的 match 协议挡住:`match -migrate` 触发 D-14 拒迁);经边缘的端到端,即 wss → ws-edge → gate / battle(交接单 3.9,本机没装 kind);客户端只在小游戏里编译的分支(`UNITY_WEBGL && !UNITY_EDITOR` 与 jslib,等上线前转包);开发者工具与真机联调。本文写到这几处的「通过」「生效」仍是设计意图。验证命令在 `docs/PROGRESS.md` 2026-11-19「小游戏 WebSocket 入口」条目,robot 的在同日「robot 加 WebSocket 传输」条目。2026-11-20 的收尾(边缘按来源限速、battle 的 WebSocket 计数、小游戏账号注销的重新认证、robot 去掉回环桥)在 `docs/PROGRESS.md` 2026-11-20「小游戏 WebSocket 收尾」条目。2026-11-20 起全部待验证项交给 Gemini,一遍跑完的顺序见[交接单](../handoff/minigame-websocket-handoff-20261120.md)(2026-11-26 按当前仓库校正过)。
 - **授权**:改动约 60 个文件,超过 AGENTS.md §10.2 的 30 个文件门槛。负责人 2026-11-19 逐项同意 W1(共用端口)、W7(新增地址字段)、W10(客户端改法),说明 TLS 放在哪按最标准的做法定、Unity 有官方 WebSocket 就用官方的(前提是能上小游戏),确认原生 App 仍然直连之后回复「开始改」。
 - **范围**:让微信、抖音小游戏客户端连上 gate(大厅长连接)和 battle(每局直连、观战直连)。登录侧的小游戏登录已落码(`auth_type` 为 `wechat_minigame` / `douyin_minigame`,见 [第三方登录端到端设计](third-party-login-end-to-end-design.md) §十一),本文只管登录之后的长连接。
 - **决策编号**:本文 W1–W11。地址模型沿用 [集群外客户端入口](k8s-client-entry.md) D76(进程自报客户端可达地址)。
@@ -134,8 +134,8 @@ gate 和 battle 的客户端端口同时接受两种连接:首字节是 `G` 的�
 - 按来源限速(W6):`-WsEdgeSourceRatePerSecond <n>`,缺省 0 = 不限,三条包装链同样透传;只有 infra-up 生成 ws-edge,所以改它要跑 infra-up。关闭时生成的 `nginx.conf` 与没有这个参数时逐字相同(指纹不变,不触发滚动);没给 `-WsEdgeHost` 却给了它,infra-up 在写操作之前拒绝。
 - 给了 `-WsEdgeHost`,gate 的 StatefulSet 与 battle 的 Fleet / hostPort Deployment 就带上 `CLIENT_WS_BASE_URL=wss://<域名>/ws`(经 PodCommon,三个生成器同一处)。
 - 参数不粘滞:线上的 gate / battle 已经在自报 WebSocket 地址,而本次漏传或换了域名时,`Get-GateAddressDrift` / `Get-BattleEntryDrift` 在任何写操作之前拒绝,确认要改加 `-AllowDisruptiveSwitch`。否则之后重建的节点不再自报,落到它上面的小游戏玩家拿不到入口,且不报任何错。留空不会删已有的 ws-edge。
-- 路由:`/ws/<IPv4>/<端口>` 转发到 `http://<IPv4>:<端口>`。IPv4 用 `geo` 限定在 Pod 网段(部署参数),端口用正则限定为 gate 与 battle 的 RpcPort(部署参数,现为 18000 与 20000),不符合的回 403,其余路径 404。`proxy_read_timeout` / `proxy_send_timeout` 120s(大于 gate / battle 自己的空闲超时,谁该断由 gate / battle 说了算),关代理缓冲,带 `X-Forwarded-For`。nginx 收全请求头才连上游,慢速发头的连接停在边缘,到不了 gate。
-- 两处少见写法为什么成立(2026-11-26 按 nginx 源码语义静态核对,**没有实跑 `nginx -t`**,实跑见 §7 第 8 步):
+- 路由:`/ws/<IPv4>/<端口>` 转发到 `http://<IPv4>:<端口>`。IPv4 用 `geo` 限定在 Pod 网段(部署参数),端口用正则限定为 gate 与 battle 的 RpcPort(部署参数,现为 18000 与 20000)。地址不在网段内回 403;端口不在名单里的匹配不上这条 location,与其余路径一样回 404。`proxy_read_timeout` / `proxy_send_timeout` 120s(大于 gate / battle 自己的空闲超时,谁该断由 gate / battle 说了算),关代理缓冲,带 `X-Forwarded-For`。nginx 收全请求头才连上游,慢速发头的连接停在边缘,到不了 gate。
+- 两处少见写法为什么成立(2026-11-26 按 nginx 源码语义静态核对;同日 Gemini 在 `nginx:1.28.0` 容器里实跑确认,结果见 §7 第 8 步):
   - **`geo $ws_target_ip $ws_target_allowed`,键是 location 正则里的命名捕获。** 担心的是 geo 写在 location 前面,解析到它时这个变量还没定义,报 `unknown "ws_target_ip" variable`。不会:geo 的第一个参数可以是任意变量(0.7.27 起),解析时只给变量名登记一个下标;命名捕获在解析 location 正则时登记成变量(`ngx_http_regex_compile` 里的 `ngx_http_add_variable`);「未知变量」是整份配置解析完之后统一查的(`ngx_http_variables_init_vars`),与先后顺序无关。运行期,`if ($ws_target_allowed = 0)` 在 location 匹配之后的 rewrite 阶段才求值,那时捕获已经写进请求的变量表。捕获到的串不是合法地址时(如 `999.1.1.1`,正则只限了数字个数),geo 按 255.255.255.255 查表,落到 `default 0`,回 403。
   - **`map $remote_addr $ws_source_prefix { ~^(?<ws_source_24>\d+\.\d+\.\d+)\.\d+$ $ws_source_24; default $remote_addr; }`。** map 的结果值可以是变量(0.9.0 起),源值正则里的命名捕获可以在结果值里引用,这是文档写明的用法;源值按原样当正则编译,末尾的 `$` 是行尾锚,不做变量展开。IPv6 来源不匹配这条正则,走 `default`,按整个地址限。
   - **限速不消耗非法目标的名额。** `if … return 403` 在 rewrite 阶段就结束请求,`limit_req` 在它之后的 preaccess 阶段才计数。
@@ -214,7 +214,7 @@ gate 和 battle 的客户端端口同时接受两种连接:首字节是 `G` 的�
 5. 部署契约测试:`k8s_client_entry_contract.tests.ps1` 覆盖预检的六种组合、三个生成器的 env 注入、ws-edge 四份清单的内容与参数拒绝、zone-up / infra-up 的 DryRun、三条包装链的透传。
 6. 客户端:EditMode 用例 `WebSocketFramedConnectionTests`(假驱动、可拨时钟);编辑器加 `MMORPG_FORCE_WS` 连本机 gate 联调。微信、抖音开发者工具与真机联调需要开发者账号和转换工具,不在本批。
 7. robot(W11):先 `go mod vendor`(把 `golang.org/x/net/websocket` 与新生成的协议带进 `robot/vendor`),再跑 `robot/pkg` 的用例:传输层(假的回显 WebSocket 服务端:地址选择、一帧一条二进制消息、经 `dial_addr` 的 TLS、必须下发时本地失败、TCP 缺省不变),以及原有的 Call / 心跳 / 重定向用例(它们现在跑在仓内的 `wireConn` 上)。之后拿现有冒烟配置加 `transport.kind: websocket` 各跑一遍,这是本文唯一一条端到端的自动化路径;kind 上再加 `require_advertised` 走边缘。
-8. 边缘配置的静态检查:把 `-DryRun` 渲染出来的 `nginx.conf`(不带与带 `-WsEdgeSourceRatePerSecond` 各一份)放进钉住的 nginx 镜像里跑 `nginx -t`,证书用临时自签的。`geo` 以路径里捕获的地址为键、`map` 取 /24 这两处写法 2026-11-26 按 nginx 源码语义静态核对是成立的(理由在 W8「两处少见写法为什么成立」),但仍没有实跑过;这一步十秒钟就能定下来,不用等 kind。实跑报错时保留 nginx 的原文,交回 Claude 改模板。
+8. 边缘配置的静态检查:把 `-DryRun` 渲染出来的 `nginx.conf`(不带与带 `-WsEdgeSourceRatePerSecond` 各一份)放进钉住的 nginx 镜像里跑 `nginx -t`,证书用临时自签的。`geo` 以路径里捕获的地址为键、`map` 取 /24 这两处写法 2026-11-26 按 nginx 源码语义静态核对是成立的(理由在 W8「两处少见写法为什么成立」),2026-11-26 Gemini 实跑:两份 `nginx -t` 都通过;实起 nginx 后,其他路径与不在名单里的端口回 404,网段外的地址回 403,网段内的按路径转发(本机没有上游,回 504),同一 /24 超速回 429。以后改模板照样跑这一步,报错时保留 nginx 的原文,交回 Claude 改模板。
 
 ## 8. 明确不做
 

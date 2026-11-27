@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/status"
 	"match/internal/authority"
 	"match/internal/config"
+	"match/internal/metrics"
 	"match/internal/pkg/ctxkeys"
 	base "proto/common/base"
 	pb "proto/match"
@@ -68,8 +69,14 @@ func signedResolve(t *testing.T, in *pb.ResolveStrandedFormationRequest, caller,
 	return in
 }
 
+// fixtureApproval 是一份合格的双人复核批准记录:发起人就是 abortRequest 的操作人 ops-alice,批准人是另一个人。
+func fixtureApproval() *base.AdminApproval {
+	return &base.AdminApproval{ApprovalId: "900", Proposer: "ops-alice", Approver: "ops-bob", ApprovedAtMs: 1}
+}
+
 func abortRequest(mode pb.StrandedFormationMode) *pb.ResolveStrandedFormationRequest {
-	return &pb.ResolveStrandedFormationRequest{BattleId: 42, Mode: mode, ExpectDigest: strings.Repeat("ab", 32), ExpectTarget: opsFixtureTarget, OperatorName: "ops-alice", Reason: "INC-7"}
+	return &pb.ResolveStrandedFormationRequest{BattleId: 42, Mode: mode, ExpectDigest: strings.Repeat("ab", 32), ExpectTarget: opsFixtureTarget, OperatorName: "ops-alice", Reason: "INC-7",
+		Approval: fixtureApproval()}
 }
 
 // 带会话、入口关闭、调用方不对、签名绑定的方法不对:一律 PermissionDenied,不碰库。
@@ -185,6 +192,7 @@ func TestStrandedFormationOpsAuditLineQuotesFreeText(t *testing.T) {
 	in := abortRequest(pb.StrandedFormationMode_STRANDED_FORMATION_MODE_DRY_RUN)
 	in.OperatorName = "x executed=true battle_id=1"
 	in.Reason = `INC-7 " executed=true refusal=`
+	in.Approval = nil // 演练不要求批准记录;这样的操作人也不是合法主体,带着记录会在碰库之前被拒
 	require.NoError(t, authority.ValidateManualAudit(in.OperatorName, in.Reason), "前提:两项都是合规输入")
 	out, err := newOpsFixture(t, store).ResolveStrandedFormation(context.Background(), signedResolve(t, in, config.ManualResolutionCaller, method))
 	require.NoError(t, err)
@@ -192,6 +200,103 @@ func TestStrandedFormationOpsAuditLineQuotesFreeText(t *testing.T) {
 	require.Contains(t, line, `operator="x executed=true battle_id=1" battle_id=42 `)
 	require.Contains(t, line, `reason="INC-7 \" executed=true refusal=" executed=false`)
 	require.True(t, strings.HasSuffix(line, " executed=false"), "服务端算出的结论在行尾,不被自由文本顶替: %s", line)
+	require.Len(t, store.aborts, 1, "演练走到了锁内复核")
+}
+
+// ABORT 不带批准记录、发起人不是操作人、发起人自批:带内 REFUSED,不碰库,不算 executed。
+// SHOW / DRY_RUN 带了不合格的记录同样拒绝。
+func TestStrandedFormationOpsAbortRequiresDualControlApproval(t *testing.T) {
+	method := pb.MatchInternal_ResolveStrandedFormation_FullMethodName
+	otherProposer := fixtureApproval()
+	otherProposer.Proposer = "ops-carol"
+	selfApproved := fixtureApproval()
+	selfApproved.Approver = selfApproved.Proposer
+	for name, c := range map[string]struct {
+		mode     pb.StrandedFormationMode
+		approval *base.AdminApproval
+		refusal  string
+	}{
+		"ABORT 不带记录":     {pb.StrandedFormationMode_STRANDED_FORMATION_MODE_ABORT, nil, "dual_control_approval_required"},
+		"ABORT 发起人不是操作人": {pb.StrandedFormationMode_STRANDED_FORMATION_MODE_ABORT, otherProposer, "dual_control_approval_invalid: "},
+		"ABORT 发起人自批":    {pb.StrandedFormationMode_STRANDED_FORMATION_MODE_ABORT, selfApproved, "dual_control_approval_invalid: "},
+		"演练带了不合格的记录":     {pb.StrandedFormationMode_STRANDED_FORMATION_MODE_DRY_RUN, otherProposer, "dual_control_approval_invalid: "},
+		"SHOW 带了不合格的记录":  {pb.StrandedFormationMode_STRANDED_FORMATION_MODE_SHOW, selfApproved, "dual_control_approval_invalid: "},
+	} {
+		t.Run(name, func(t *testing.T) {
+			store := &fakeStrandedStore{view: &pb.StrandedFormation{BattleId: 42}}
+			in := abortRequest(c.mode)
+			in.Approval = c.approval
+			before := metrics.AdminUnapprovedCommandValue()
+			out, err := newOpsFixture(t, store).ResolveStrandedFormation(context.Background(), signedResolve(t, in, config.ManualResolutionCaller, method))
+			require.NoError(t, err)
+			require.Equal(t, pb.StrandedFormationVerdict_STRANDED_FORMATION_VERDICT_REFUSED, out.GetVerdict())
+			require.True(t, strings.HasPrefix(out.GetRefusal(), c.refusal), out.GetRefusal())
+			require.False(t, store.touched(), "批准记录不合格不碰库")
+			require.NotContains(t, out.GetAuditLine(), "executed=true")
+			require.Equal(t, before, metrics.AdminUnapprovedCommandValue(), "拒绝不计入不带记录被接受")
+		})
+	}
+}
+
+// 合格的批准记录放行;批准号与批准人交给 Store 写进 match_manual_resolution,也进审计行。
+func TestStrandedFormationOpsAbortWithApprovalPassesItToTheStore(t *testing.T) {
+	method := pb.MatchInternal_ResolveStrandedFormation_FullMethodName
+	store := &fakeStrandedStore{view: &pb.StrandedFormation{BattleId: 42}}
+	out, err := newOpsFixture(t, store).ResolveStrandedFormation(context.Background(), signedResolve(t, abortRequest(pb.StrandedFormationMode_STRANDED_FORMATION_MODE_ABORT), config.ManualResolutionCaller, method))
+	require.NoError(t, err)
+	require.Equal(t, pb.StrandedFormationVerdict_STRANDED_FORMATION_VERDICT_ELIGIBLE, out.GetVerdict())
+	require.Len(t, store.aborts, 1)
+	require.True(t, store.aborts[0].Execute)
+	require.Equal(t, "900", store.aborts[0].ApprovalID)
+	require.Equal(t, "ops-bob", store.aborts[0].Approver)
+	require.Contains(t, out.GetAuditLine(), `approval_id="900" approver="ops-bob" reason="INC-7" executed=true`)
+}
+
+// SHOW / DRY_RUN 不要求批准记录;只有开关打开才接受不带记录的 ABORT,每次计数,批准号留空。
+func TestStrandedFormationOpsUnapprovedAbortOnlyWhenExplicitlyAllowed(t *testing.T) {
+	method := pb.MatchInternal_ResolveStrandedFormation_FullMethodName
+	withoutApproval := func(mode pb.StrandedFormationMode) *pb.ResolveStrandedFormationRequest {
+		in := abortRequest(mode)
+		in.Approval = nil
+		return signedResolve(t, in, config.ManualResolutionCaller, method)
+	}
+	before := metrics.AdminUnapprovedCommandValue()
+	store := &fakeStrandedStore{view: &pb.StrandedFormation{BattleId: 42}}
+	ops := newOpsFixture(t, store)
+	out, err := ops.ResolveStrandedFormation(context.Background(), withoutApproval(pb.StrandedFormationMode_STRANDED_FORMATION_MODE_SHOW))
+	require.NoError(t, err)
+	require.Equal(t, pb.StrandedFormationVerdict_STRANDED_FORMATION_VERDICT_ELIGIBLE, out.GetVerdict())
+	out, err = ops.ResolveStrandedFormation(context.Background(), withoutApproval(pb.StrandedFormationMode_STRANDED_FORMATION_MODE_DRY_RUN))
+	require.NoError(t, err)
+	require.Equal(t, pb.StrandedFormationVerdict_STRANDED_FORMATION_VERDICT_ELIGIBLE, out.GetVerdict())
+	require.Equal(t, []uint64{42}, store.shows)
+	require.Len(t, store.aborts, 1)
+	require.False(t, store.aborts[0].Execute)
+	require.Equal(t, before, metrics.AdminUnapprovedCommandValue(), "SHOW / DRY_RUN 不计数")
+
+	ops.allowUnapproved = true
+	out, err = ops.ResolveStrandedFormation(context.Background(), withoutApproval(pb.StrandedFormationMode_STRANDED_FORMATION_MODE_ABORT))
+	require.NoError(t, err)
+	require.Equal(t, pb.StrandedFormationVerdict_STRANDED_FORMATION_VERDICT_ELIGIBLE, out.GetVerdict())
+	require.Len(t, store.aborts, 2)
+	require.True(t, store.aborts[1].Execute)
+	require.Empty(t, store.aborts[1].ApprovalID)
+	require.Contains(t, out.GetAuditLine(), `approval_id="" approver=""`)
+	require.Equal(t, before+1, metrics.AdminUnapprovedCommandValue(), "不带记录被接受的 ABORT 计一次")
+}
+
+// 配置项缺省就是要求批准记录。
+func TestStrandedFormationOpsFromConfigRequiresApprovalByDefault(t *testing.T) {
+	store := &authority.Store{}
+	getenv := func(string) string { return opsFixtureSecret }
+	c := config.GlobalMatchConf{ManualResolutionSecretEnv: "FIXTURE_FORMATION_FIX", ManualResolutionEnvironment: opsFixtureTarget}
+	ops, err := NewStrandedFormationOpsFromConfig(store, c, getenv)
+	require.NoError(t, err)
+	require.False(t, ops.allowUnapproved)
+	c.ManualResolutionAllowUnapproved = true
+	ops, err = NewStrandedFormationOpsFromConfig(store, c, getenv)
+	require.NoError(t, err)
+	require.True(t, ops.allowUnapproved)
 }
 
 // 列表:条数越界 InvalidArgument;读失败带内 retry,不回 gRPC 错误(只读查询没有结局未知)。

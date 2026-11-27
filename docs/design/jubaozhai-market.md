@@ -886,7 +886,7 @@ J-O1至J-O4已由负责人明确采用设计默认值且允许配置：公示48�
 
 ### 16.1 寄售人工单：付款仍 PAID 不许退还托管，交付结局由 trade 回执定（数据覆写审计 r2-mall#1，2026-11-26，未编译、未运行）
 
-实现在 `java/mall_game` 的 `ManualAdminStore.resolveConsignment`（`POST /internal/admin/manual/consignments/resolve`），运维页 `java/gateway_node/src/main/resources/mall-admin.html`。门控：`Rmb.Enabled`、`AssetOp.Enabled` 缺省关，商城管理密钥缺省为空，缺省配置下不可达。
+实现在 `java/mall_game` 的 `ManualAdminStore.resolveConsignment`（`POST /internal/admin/manual/consignments/resolve`），人用入口是后台（`java/gm_admin`）的运营处置页，一人发起、另一人批准后才发出（2026-11-26 双人复核批 4 起；原网关 `/mall-admin` 页已删）。门控：`Rmb.Enabled`、`AssetOp.Enabled` 缺省关，商城管理密钥缺省为空，缺省配置下不可达。
 
 **问题**：
 

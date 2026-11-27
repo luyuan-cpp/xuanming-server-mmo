@@ -59,6 +59,14 @@ func (s *authoritySpy) RetractWorld(ctx context.Context, sender uint64, accepted
 	}
 	return true, 0, nil
 }
+
+// 平台补审的待办由 svc 的后台循环处理(svc/platform_recheck_test.go 测它),逻辑层用不到。
+func (s *authoritySpy) ClaimPlatformRechecks(context.Context, int) ([]authority.PlatformRecheckTask, error) {
+	return nil, nil
+}
+func (s *authoritySpy) FinishPlatformRecheck(context.Context, uint64, int64, authority.RecheckOutcome) error {
+	return nil
+}
 func (s *authoritySpy) ReportMessage(ctx context.Context, in *chatpb.ReportChatRequest) (uint32, error) {
 	s.reports++
 	if s.report != nil {

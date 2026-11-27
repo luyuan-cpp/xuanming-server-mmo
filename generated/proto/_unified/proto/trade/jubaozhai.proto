@@ -198,4 +198,8 @@ service ClientPlayerJubaozhai {
   rpc SubmitSellerReview (SubmitSellerReviewRequest) returns (SubmitSellerReviewResponse);
   rpc GetMarketReferencePrice (GetMarketReferencePriceRequest) returns (GetMarketReferencePriceResponse);
   rpc GetPlayerTradeQuota (GetPlayerTradeQuotaRequest) returns (GetPlayerTradeQuotaResponse);
+  // 悬赏求书求购单(kind 7):发榜托管银两、揭榜托管封卷道籍,先书后款由 trade 交付;撤单与查单走上面的通用合同入口。
+  rpc CreateWantedSkillBookOrder (CreateWantedSkillBookOrderRequest) returns (WantedSkillBookOrderResponse);
+  rpc FulfillWantedSkillBookOrder (FulfillWantedSkillBookOrderRequest) returns (WantedSkillBookOrderResponse);
+  rpc ListWantedSkillBookOrders (ListWantedSkillBookOrdersRequest) returns (ListWantedSkillBookOrdersResponse);
 }

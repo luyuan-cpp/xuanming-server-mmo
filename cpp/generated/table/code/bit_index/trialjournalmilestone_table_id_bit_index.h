@@ -17,6 +17,24 @@ const std::unordered_map<uint64_t, uint32_t> TrialJournalMilestoneBitMap{
     { 105, 10 },
     { 401, 11 },
     { 402, 12 },
+    { 3021, 13 },
+    { 3022, 14 },
+    { 3031, 15 },
+    { 3032, 16 },
+    { 3041, 17 },
+    { 3042, 18 },
+    { 3051, 19 },
+    { 3052, 20 },
+    { 3061, 21 },
+    { 3062, 22 },
+    { 3071, 23 },
+    { 3072, 24 },
+    { 3081, 25 },
+    { 3082, 26 },
+    { 3091, 27 },
+    { 3092, 28 },
+    { 3101, 29 },
+    { 3102, 30 },
 };
 
-constexpr uint32_t kTrialJournalMilestoneBitmapCapacity = 13;
+constexpr uint32_t kTrialJournalMilestoneBitmapCapacity = 31;

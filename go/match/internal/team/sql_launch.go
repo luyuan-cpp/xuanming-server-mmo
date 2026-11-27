@@ -259,9 +259,10 @@ func (s *sqlTeamStore) createLaunchOnce(ctx context.Context, snap *Snapshot, cal
 		cat := s.authority.RankedCatalog()
 		rankedRuleVer = cat.RuleVersion()
 		if request.GetRankedRuleVersion() != 0 && request.GetRankedRuleVersion() != rankedRuleVer {
-			return &PinnedResult{Code: ErrRankedPresetInvalid}, nil, nil
+			return &PinnedResult{Code: constants.ErrRankedRuleVersionMismatch}, nil, nil
 		}
-		curSeason, seasonErr := s.authority.EnsureActiveSeason(ctx)
+		// 必须在既有事务 tx 内查询当前赛季，禁止在持有行锁与连接时嵌套 BeginTx 引发连接池死锁。
+		curSeason, seasonErr := s.authority.EnsureActiveSeasonTx(ctx, tx, stamp)
 		if seasonErr != nil {
 			return nil, nil, seasonErr
 		}

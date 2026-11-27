@@ -16,6 +16,11 @@
 //
 // abort 默认只在锁内演练(DRY_RUN,整段回滚),加 -execute 才写库。-expect-target 是工单上写明的环境名
 // (match 配置 GlobalMatch.ManualResolutionEnvironment),不从 show 的输出照抄:连错环境时由服务端回 target_mismatch。
+//
+// 生产写库走后台 java/gm_admin(docs/design/admin-identity-and-dual-control.md §5.7):ABORT 必带后台签发的双人复核批准记录,
+// 本工具不带,所以只用来 list / show / 不带 -execute 的 abort(锁内演练);真正终结由发起人在后台提交、另一人批准。
+// 只有本机开发的 match 打开了 GlobalMatch.ManualResolutionAllowUnapproved,-execute 才会被接受。不给工具加批准人参数:
+// 一个人在命令行里敲两个名字没有意义。
 // 退出码:0 成功;1 执行出错、读库失败或提交结果未知;2 参数不合法、入口未开或签名被拒、前置条件不满足、没有这一局;
 // 3 已被处理或成局已变,本次未改动。
 package main
@@ -66,6 +71,8 @@ const usageText = `formationfix:永久 UNKNOWN 全球成局的人工处置工具
 
 abort 默认只在锁内演练、不写库,加 -execute 才写 ABORT。-expect-digest 填 show 打印的 digest,成局在 show 之后变过就拒绝;
 -expect-target 填工单上写明的环境名(不从 show 照抄),与服务端的环境名不符就拒绝。
+生产写库走后台 java/gm_admin:ABORT 要双人复核批准记录,本工具不带,生产上 -execute 回 dual_control_approval_required;
+只有本机开发的 match 打开 GlobalMatch.ManualResolutionAllowUnapproved 才接受 abort -execute。
 签名密钥从环境变量读(缺省 MMORPG_MATCH_FORMATION_FIX_SECRET,可用 -secret-env 改名)。
 
 退出码:0 成功;1 执行出错 / 提交结果未知;2 参数 / 前置条件不满足;3 已被处理或成局已变,未改动。
@@ -404,6 +411,10 @@ func runAbort(ctx context.Context, client opsClient, o abortOptions, stdout, std
 		return exitOK
 	case pb.StrandedFormationVerdict_STRANDED_FORMATION_VERDICT_REFUSED:
 		fmt.Fprintf(stderr, "Refused, no change: %s\n", resp.GetRefusal())
+		if strings.HasPrefix(resp.GetRefusal(), "dual_control_approval") {
+			fmt.Fprintln(stderr, "In production the abort is written through the GM console (java/gm_admin): proposed by one administrator and "+
+				"approved by another. abort -execute is only accepted by a local match that sets GlobalMatch.ManualResolutionAllowUnapproved.")
+		}
 		return exitRejected
 	case pb.StrandedFormationVerdict_STRANDED_FORMATION_VERDICT_NOT_FOUND:
 		fmt.Fprintf(stderr, "Refused, no change: no formation battle_id=%d on target=%s\n", battle, resp.GetTarget())

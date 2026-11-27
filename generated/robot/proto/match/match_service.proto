@@ -116,6 +116,16 @@ service MatchService {
   rpc CreateTrialChallengeCard(CreateTrialChallengeCardRequest) returns (CreateTrialChallengeCardResponse) {}
   rpc GetTrialChallengeCard(GetTrialChallengeCardRequest) returns (GetTrialChallengeCardResponse) {}
   rpc GetSharedTrialReplay(GetSharedTrialReplayRequest) returns (GetSharedTrialReplayResponse) {}
+
+  // ---- 万象残局坊（UGC 回合解谜工坊 V1，docs/planning/tactical-puzzle-workshop-v1.md）----
+  // 均为只认会话本人；出题文本必经 ContentGuard 拦截；自证通关后钉住标准解回放；0 数值通胀、0 日常打卡。
+  rpc ListTacticalPuzzles(ListTacticalPuzzlesRequest) returns (ListTacticalPuzzlesResponse) {}
+  rpc GetTacticalPuzzle(GetTacticalPuzzleRequest) returns (GetTacticalPuzzleResponse) {}
+  rpc SaveTacticalPuzzleDraft(SaveTacticalPuzzleDraftRequest) returns (SaveTacticalPuzzleDraftResponse) {}
+  rpc DeleteTacticalPuzzle(DeleteTacticalPuzzleRequest) returns (DeleteTacticalPuzzleResponse) {}
+  rpc StartTacticalPuzzleBattle(StartTacticalPuzzleBattleRequest) returns (StartTacticalPuzzleBattleResponse) {}
+  rpc LikeTacticalPuzzle(LikeTacticalPuzzleRequest) returns (LikeTacticalPuzzleResponse) {}
+  rpc GetTacticalPuzzleSolutionReplay(GetTacticalPuzzleSolutionReplayRequest) returns (GetTacticalPuzzleSolutionReplayResponse) {}
 }
 
 // ----- Match mode config -----
@@ -1355,6 +1365,130 @@ message GetSharedTrialReplayRequest {
 }
 
 message GetSharedTrialReplayResponse {
+  TipInfoMessage error_message = 1;
+  BattleReplayEnvelope replay = 2;
+}
+
+// ----- 万象残局坊（UGC 回合解谜工坊 V1，docs/planning/tactical-puzzle-workshop-v1.md）-----
+
+enum TacticalPuzzleState {
+  TACTICAL_PUZZLE_STATE_UNSPECIFIED = 0;
+  TACTICAL_PUZZLE_STATE_DRAFT = 1;     // 草稿待作者自证通关
+  TACTICAL_PUZZLE_STATE_PUBLISHED = 2; // 已自证并全服发布
+}
+
+enum TacticalPuzzleListTab {
+  TACTICAL_PUZZLE_LIST_TAB_UNSPECIFIED = 0;
+  TACTICAL_PUZZLE_LIST_TAB_HOT = 1;         // 精选热门（按点赞/破局热度）
+  TACTICAL_PUZZLE_LIST_TAB_NEWEST = 2;      // 最新出题（按发布时间倒序）
+  TACTICAL_PUZZLE_LIST_TAB_HARDEST = 3;     // 极难残局（有挑战记录且破局率最低）
+  TACTICAL_PUZZLE_LIST_TAB_MY_CREATED = 4;  // 我的出题（含草稿与已发布）
+  TACTICAL_PUZZLE_LIST_TAB_MY_CLEARED = 5;  // 我已破局
+}
+
+message TacticalPuzzleSummaryView {
+  uint64 puzzle_id = 1;
+  uint64 author_player_id = 2;
+  string author_name = 3;
+  TacticalPuzzleState state = 4;
+  uint32 spec_revision = 5;
+  string title = 6;
+  string hint_text = 7;
+  uint32 tag_mask = 8;
+  TacticalPuzzleSpec spec = 9;
+  uint32 author_best_rounds = 10;
+  uint32 attempt_count = 11;
+  uint32 clear_count = 12;
+  uint32 global_best_rounds = 13;
+  uint32 like_count = 14;
+  bool self_cleared = 15;
+  uint32 self_best_rounds = 16;
+  bool self_liked = 17;
+  bool has_solution_replay = 18;
+  uint64 published_ms = 19;
+  uint64 updated_ms = 20;
+}
+
+message TacticalPuzzleProfileView {
+  uint32 published_count = 1;        // 本人已自证发布题数
+  uint32 draft_count = 2;            // 本人草稿题数
+  uint32 total_cleared_count = 3;    // 本人累计破局数
+  uint32 total_likes_received = 4;   // 本人出题累计获赞数
+  uint32 honor_tier = 5;             // 0=无 1=初试棋局 2=妙手破局 3=破局国手 4=奇局宗师（零属性纯展示）
+  string honor_title = 6;            // 当前佩戴/解锁的纯展示称谓
+}
+
+message ListTacticalPuzzlesRequest {
+  TacticalPuzzleListTab tab = 1;
+  uint32 tag_filter_mask = 2;        // 0=不筛选；非 0 时匹配含该任意标签的残局
+  uint32 offset = 3;                 // 分页偏移（默认 0）
+  uint32 limit = 4;                  // 每页条数（1..30，默认 20）
+}
+
+message ListTacticalPuzzlesResponse {
+  TipInfoMessage error_message = 1;
+  repeated TacticalPuzzleSummaryView puzzles = 2;
+  uint32 total_count = 3;
+  TacticalPuzzleProfileView profile = 4;
+}
+
+message GetTacticalPuzzleRequest {
+  uint64 puzzle_id = 1;
+}
+
+message GetTacticalPuzzleResponse {
+  TipInfoMessage error_message = 1;
+  TacticalPuzzleSummaryView puzzle = 2;
+}
+
+message SaveTacticalPuzzleDraftRequest {
+  uint64 puzzle_id = 1;              // 0=新建残局；非 0=编辑本人已有残局（已发布题编辑后重置为草稿）
+  string title = 2;
+  string hint_text = 3;
+  uint32 tag_mask = 4;
+  TacticalPuzzleSpec spec = 5;
+}
+
+message SaveTacticalPuzzleDraftResponse {
+  TipInfoMessage error_message = 1;
+  TacticalPuzzleSummaryView puzzle = 2;
+}
+
+message DeleteTacticalPuzzleRequest {
+  uint64 puzzle_id = 1;
+}
+
+message DeleteTacticalPuzzleResponse {
+  TipInfoMessage error_message = 1;
+}
+
+message StartTacticalPuzzleBattleRequest {
+  uint64 puzzle_id = 1;
+  bool is_author_verify = 2;         // true=作者自证验题（仅作者本人可发起）；false=破局挑战（仅已发布题可发起）
+  string request_id = 3;             // 幂等请求 UUID（可选）
+}
+
+message StartTacticalPuzzleBattleResponse {
+  TipInfoMessage error_message = 1;
+  uint64 battle_id = 2;
+  uint32 spec_revision = 3;
+}
+
+message LikeTacticalPuzzleRequest {
+  uint64 puzzle_id = 1;
+}
+
+message LikeTacticalPuzzleResponse {
+  TipInfoMessage error_message = 1;
+  uint32 like_count = 2;
+  bool self_liked = 3;
+}
+
+message GetTacticalPuzzleSolutionReplayRequest {
+  uint64 puzzle_id = 1;
+}
+
+message GetTacticalPuzzleSolutionReplayResponse {
   TipInfoMessage error_message = 1;
   BattleReplayEnvelope replay = 2;
 }

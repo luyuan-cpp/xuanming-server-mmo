@@ -59,14 +59,6 @@ constexpr uint32_t LoginPreGateCancelAccountDeletionMessageId = 425;
 constexpr uint32_t LoginPreGateCancelAccountDeletionIndex = 5;
 #define LoginPreGateCancelAccountDeletionMethod  ::LoginPreGate_Stub::descriptor()->method(5)
 
-constexpr uint32_t LoginAdminRemovePlayersFromAccountsMessageId = 111;
-constexpr uint32_t LoginAdminRemovePlayersFromAccountsIndex = 0;
-#define LoginAdminRemovePlayersFromAccountsMethod  ::LoginAdmin_Stub::descriptor()->method(0)
-
-constexpr uint32_t LoginAdminScheduleAccountDeletionMessageId = 426;
-constexpr uint32_t LoginAdminScheduleAccountDeletionIndex = 1;
-#define LoginAdminScheduleAccountDeletionMethod  ::LoginAdmin_Stub::descriptor()->method(1)
-
-constexpr uint32_t LoginAdminResetAccountRealNameMessageId = 427;
-constexpr uint32_t LoginAdminResetAccountRealNameIndex = 2;
-#define LoginAdminResetAccountRealNameMethod  ::LoginAdmin_Stub::descriptor()->method(2)
+constexpr uint32_t LoginPreGateHandlePassportEventMessageId = 574;
+constexpr uint32_t LoginPreGateHandlePassportEventIndex = 6;
+#define LoginPreGateHandlePassportEventMethod  ::LoginPreGate_Stub::descriptor()->method(6)

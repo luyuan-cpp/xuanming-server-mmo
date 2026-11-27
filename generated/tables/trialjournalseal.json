@@ -419,6 +419,546 @@
    "id": 4033,
    "seal_slot_kind": 3,
    "title": "赶潮"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 9,
+   "desc": "在玄脉之季护卫救援中击败首领并保住受保护回春护卫",
+   "enabled": true,
+   "entry_id": 3021,
+   "id": 30211,
+   "seal_slot_kind": 3,
+   "title": "护卫保全"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 3,
+   "desc": "玄脉之季护卫救援中本人及本人出战宝宝全程未曾倒地并胜出",
+   "enabled": true,
+   "entry_id": 3021,
+   "id": 30212,
+   "seal_slot_kind": 2,
+   "title": "护卫无损"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 10,
+   "desc": "在玄脉之季物法易势 5V5 中取得 1 场有效胜利",
+   "enabled": true,
+   "entry_id": 3022,
+   "id": 30221,
+   "seal_slot_kind": 1,
+   "title": "易势克敌"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 5,
+   "desc": "玄脉之季物法易势 5V5 中己方物理与法术均造成有效直伤并胜出",
+   "enabled": true,
+   "entry_id": 3022,
+   "id": 30222,
+   "seal_slot_kind": 3,
+   "title": "双势兼济"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 15,
+   "desc": "玄脉之季正式人宠会武合格对局中施放当季免费赛季技（玄脉破军/玄脉天罚/玄脉灵幕/玄脉归元）",
+   "enabled": true,
+   "entry_id": 3023,
+   "id": 30231,
+   "seal_slot_kind": 3,
+   "title": "玄脉试法"
+  },
+  {
+   "condition_param": 51,
+   "condition_type": 16,
+   "desc": "玄脉之季正式人宠会武合格对局中触发当季任意技印共鸣（延易伤/碎盾返蓝/首盾回蓝/急救返蓝）",
+   "enabled": true,
+   "entry_id": 3023,
+   "id": 30232,
+   "seal_slot_kind": 3,
+   "title": "脉印共鸣"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 9,
+   "desc": "在离火之季护卫救援中击败首领并保住受保护回春护卫",
+   "enabled": true,
+   "entry_id": 3031,
+   "id": 30311,
+   "seal_slot_kind": 3,
+   "title": "护卫保全"
+  },
+  {
+   "condition_param": 6,
+   "condition_type": 2,
+   "desc": "离火之季护卫救援中 6 回合内击败首领并保住己方护卫",
+   "enabled": true,
+   "entry_id": 3031,
+   "id": 30312,
+   "seal_slot_kind": 4,
+   "title": "烈焰速援"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 10,
+   "desc": "在离火之季物法易势 5V5 中取得 1 场有效胜利",
+   "enabled": true,
+   "entry_id": 3032,
+   "id": 30321,
+   "seal_slot_kind": 1,
+   "title": "易势克敌"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 5,
+   "desc": "离火之季物法易势 5V5 中己方物理与法术均造成有效直伤并胜出",
+   "enabled": true,
+   "entry_id": 3032,
+   "id": 30322,
+   "seal_slot_kind": 3,
+   "title": "双势燃阵"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 15,
+   "desc": "离火之季正式人宠会武合格对局中施放当季免费赛季技（离火焚阵/炎刃引爆/炽幕护心/薪火回生）",
+   "enabled": true,
+   "entry_id": 3033,
+   "id": 30331,
+   "seal_slot_kind": 3,
+   "title": "离火试法"
+  },
+  {
+   "condition_param": 21,
+   "condition_type": 16,
+   "desc": "离火之季正式人宠会武合格对局中触发当季任意技印共鸣（碎盾返蓝/守印增盾/急救返蓝）",
+   "enabled": true,
+   "entry_id": 3033,
+   "id": 30332,
+   "seal_slot_kind": 3,
+   "title": "炎印共鸣"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 9,
+   "desc": "在青木之季护卫救援中击败首领并保住受保护回春护卫",
+   "enabled": true,
+   "entry_id": 3041,
+   "id": 30411,
+   "seal_slot_kind": 3,
+   "title": "护卫保全"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 3,
+   "desc": "青木之季护卫救援中本人及本人出战宝宝全程未曾倒地并胜出",
+   "enabled": true,
+   "entry_id": 3041,
+   "id": 30412,
+   "seal_slot_kind": 2,
+   "title": "护卫无损"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 10,
+   "desc": "在青木之季物法易势 5V5 中取得 1 场有效胜利",
+   "enabled": true,
+   "entry_id": 3042,
+   "id": 30421,
+   "seal_slot_kind": 1,
+   "title": "易势克敌"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 3,
+   "desc": "青木之季物法易势 5V5 中本人及本人出战宝宝全程未曾倒地并胜出",
+   "enabled": true,
+   "entry_id": 3042,
+   "id": 30422,
+   "seal_slot_kind": 2,
+   "title": "青木守心"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 15,
+   "desc": "青木之季正式人宠会武合格对局中施放当季免费赛季技（青藤缠甲/碧毒蚀脉/枯荣回春/苍木灵盖）",
+   "enabled": true,
+   "entry_id": 3043,
+   "id": 30431,
+   "seal_slot_kind": 3,
+   "title": "青木试法"
+  },
+  {
+   "condition_param": 178,
+   "condition_type": 16,
+   "desc": "青木之季正式人宠会武合格对局中触发当季任意技印共鸣（延破甲/首盾回蓝/急救返蓝/聚息增盾）",
+   "enabled": true,
+   "entry_id": 3043,
+   "id": 30432,
+   "seal_slot_kind": 3,
+   "title": "木印共鸣"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 9,
+   "desc": "在玄水之季护卫救援中击败首领并保住受保护回春护卫",
+   "enabled": true,
+   "entry_id": 3051,
+   "id": 30511,
+   "seal_slot_kind": 3,
+   "title": "护卫保全"
+  },
+  {
+   "condition_param": 6,
+   "condition_type": 2,
+   "desc": "玄水之季护卫救援中 6 回合内击败首领并保住己方护卫",
+   "enabled": true,
+   "entry_id": 3051,
+   "id": 30512,
+   "seal_slot_kind": 4,
+   "title": "急流速援"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 10,
+   "desc": "在玄水之季物法易势 5V5 中取得 1 场有效胜利",
+   "enabled": true,
+   "entry_id": 3052,
+   "id": 30521,
+   "seal_slot_kind": 1,
+   "title": "易势克敌"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 5,
+   "desc": "玄水之季物法易势 5V5 中己方物理与法术均造成有效直伤并胜出",
+   "enabled": true,
+   "entry_id": 3052,
+   "id": 30522,
+   "seal_slot_kind": 3,
+   "title": "双势合流"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 15,
+   "desc": "玄水之季正式人宠会武合格对局中施放当季免费赛季技（寒潮斩浪/冥水覆涛/碧波净尘/潮汐聚灵）",
+   "enabled": true,
+   "entry_id": 3053,
+   "id": 30531,
+   "seal_slot_kind": 3,
+   "title": "玄水试法"
+  },
+  {
+   "condition_param": 75,
+   "condition_type": 16,
+   "desc": "玄水之季正式人宠会武合格对局中触发当季任意技印共鸣（碎盾返蓝/延降攻/守印增疗/聚息省蓝）",
+   "enabled": true,
+   "entry_id": 3053,
+   "id": 30532,
+   "seal_slot_kind": 3,
+   "title": "水印共鸣"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 9,
+   "desc": "在厚土之季护卫救援中击败首领并保住受保护回春护卫",
+   "enabled": true,
+   "entry_id": 3061,
+   "id": 30611,
+   "seal_slot_kind": 3,
+   "title": "护卫保全"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 3,
+   "desc": "厚土之季护卫救援中本人及本人出战宝宝全程未曾倒地并胜出",
+   "enabled": true,
+   "entry_id": 3061,
+   "id": 30612,
+   "seal_slot_kind": 2,
+   "title": "护卫无损"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 10,
+   "desc": "在厚土之季物法易势 5V5 中取得 1 场有效胜利",
+   "enabled": true,
+   "entry_id": 3062,
+   "id": 30621,
+   "seal_slot_kind": 1,
+   "title": "易势克敌"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 3,
+   "desc": "厚土之季物法易势 5V5 中本人及本人出战宝宝全程未曾倒地并胜出",
+   "enabled": true,
+   "entry_id": 3062,
+   "id": 30622,
+   "seal_slot_kind": 2,
+   "title": "铁壁守心"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 15,
+   "desc": "厚土之季正式人宠会武合格对局中施放当季免费赛季技（裂地重击/岩震崩势/山岳承伤/磐石固本）",
+   "enabled": true,
+   "entry_id": 3063,
+   "id": 30631,
+   "seal_slot_kind": 3,
+   "title": "厚土试法"
+  },
+  {
+   "condition_param": 165,
+   "condition_type": 16,
+   "desc": "厚土之季正式人宠会武合格对局中触发当季任意技印共鸣（碎盾返蓝/首盾回蓝/守印增盾/聚息增盾）",
+   "enabled": true,
+   "entry_id": 3063,
+   "id": 30632,
+   "seal_slot_kind": 3,
+   "title": "土印共鸣"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 9,
+   "desc": "在庚金之季护卫救援中击败首领并保住受保护回春护卫",
+   "enabled": true,
+   "entry_id": 3071,
+   "id": 30711,
+   "seal_slot_kind": 3,
+   "title": "护卫保全"
+  },
+  {
+   "condition_param": 6,
+   "condition_type": 2,
+   "desc": "庚金之季护卫救援中 6 回合内击败首领并保住己方护卫",
+   "enabled": true,
+   "entry_id": 3071,
+   "id": 30712,
+   "seal_slot_kind": 4,
+   "title": "断锋速援"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 10,
+   "desc": "在庚金之季物法易势 5V5 中取得 1 场有效胜利",
+   "enabled": true,
+   "entry_id": 3072,
+   "id": 30721,
+   "seal_slot_kind": 1,
+   "title": "易势克敌"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 5,
+   "desc": "庚金之季物法易势 5V5 中己方物理与法术均造成有效直伤并胜出",
+   "enabled": true,
+   "entry_id": 3072,
+   "id": 30722,
+   "seal_slot_kind": 3,
+   "title": "剑气双势"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 15,
+   "desc": "庚金之季正式人宠会武合格对局中施放当季免费赛季技（庚金断锋/剑雨贯阵/金钟镇岳/锐金砺刃）",
+   "enabled": true,
+   "entry_id": 3073,
+   "id": 30731,
+   "seal_slot_kind": 3,
+   "title": "庚金试法"
+  },
+  {
+   "condition_param": 42,
+   "condition_type": 16,
+   "desc": "庚金之季正式人宠会武合格对局中触发当季任意技印共鸣（延破甲/延易伤/首盾回蓝/聚息省蓝）",
+   "enabled": true,
+   "entry_id": 3073,
+   "id": 30732,
+   "seal_slot_kind": 3,
+   "title": "金印共鸣"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 9,
+   "desc": "在太阴之季护卫救援中击败首领并保住受保护回春护卫",
+   "enabled": true,
+   "entry_id": 3081,
+   "id": 30811,
+   "seal_slot_kind": 3,
+   "title": "护卫保全"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 3,
+   "desc": "太阴之季护卫救援中本人及本人出战宝宝全程未曾倒地并胜出",
+   "enabled": true,
+   "entry_id": 3081,
+   "id": 30812,
+   "seal_slot_kind": 2,
+   "title": "护卫无损"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 10,
+   "desc": "在太阴之季物法易势 5V5 中取得 1 场有效胜利",
+   "enabled": true,
+   "entry_id": 3082,
+   "id": 30821,
+   "seal_slot_kind": 1,
+   "title": "易势克敌"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 3,
+   "desc": "太阴之季物法易势 5V5 中本人及本人出战宝宝全程未曾倒地并胜出",
+   "enabled": true,
+   "entry_id": 3082,
+   "id": 30822,
+   "seal_slot_kind": 2,
+   "title": "素月守心"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 15,
+   "desc": "太阴之季正式人宠会武合格对局中施放当季免费赛季技（幽影袭脉/太阴蚀魂/月华抚伤/素月避锋）",
+   "enabled": true,
+   "entry_id": 3083,
+   "id": 30831,
+   "seal_slot_kind": 3,
+   "title": "太阴试法"
+  },
+  {
+   "condition_param": 83,
+   "condition_type": 16,
+   "desc": "太阴之季正式人宠会武合格对局中触发当季任意技印共鸣（延易伤/碎盾返蓝/急救返蓝/守印增疗）",
+   "enabled": true,
+   "entry_id": 3083,
+   "id": 30832,
+   "seal_slot_kind": 3,
+   "title": "月印共鸣"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 9,
+   "desc": "在天雷之季护卫救援中击败首领并保住受保护回春护卫",
+   "enabled": true,
+   "entry_id": 3091,
+   "id": 30911,
+   "seal_slot_kind": 3,
+   "title": "护卫保全"
+  },
+  {
+   "condition_param": 6,
+   "condition_type": 2,
+   "desc": "天雷之季护卫救援中 6 回合内击败首领并保住己方护卫",
+   "enabled": true,
+   "entry_id": 3091,
+   "id": 30912,
+   "seal_slot_kind": 4,
+   "title": "惊雷速援"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 10,
+   "desc": "在天雷之季物法易势 5V5 中取得 1 场有效胜利",
+   "enabled": true,
+   "entry_id": 3092,
+   "id": 30921,
+   "seal_slot_kind": 1,
+   "title": "易势克敌"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 5,
+   "desc": "天雷之季物法易势 5V5 中己方物理与法术均造成有效直伤并胜出",
+   "enabled": true,
+   "entry_id": 3092,
+   "id": 30922,
+   "seal_slot_kind": 3,
+   "title": "雷动双势"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 15,
+   "desc": "天雷之季正式人宠会武合格对局中施放当季免费赛季技（雷枪破盾/九霄神雷/雷罡护体/引雷蓄能）",
+   "enabled": true,
+   "entry_id": 3093,
+   "id": 30931,
+   "seal_slot_kind": 3,
+   "title": "天雷试法"
+  },
+  {
+   "condition_param": 43,
+   "condition_type": 16,
+   "desc": "天雷之季正式人宠会武合格对局中触发当季任意技印共鸣（碎盾返蓝/延降法攻/首盾回蓝/聚息省蓝）",
+   "enabled": true,
+   "entry_id": 3093,
+   "id": 30932,
+   "seal_slot_kind": 3,
+   "title": "雷印共鸣"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 9,
+   "desc": "在混元之季护卫救援中击败首领并保住受保护回春护卫",
+   "enabled": true,
+   "entry_id": 3101,
+   "id": 31011,
+   "seal_slot_kind": 3,
+   "title": "护卫保全"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 3,
+   "desc": "混元之季护卫救援中本人及本人出战宝宝全程未曾倒地并胜出",
+   "enabled": true,
+   "entry_id": 3101,
+   "id": 31012,
+   "seal_slot_kind": 2,
+   "title": "护卫无损"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 10,
+   "desc": "在混元之季物法易势 5V5 中取得 1 场有效胜利",
+   "enabled": true,
+   "entry_id": 3102,
+   "id": 31021,
+   "seal_slot_kind": 1,
+   "title": "易势克敌"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 5,
+   "desc": "混元之季物法易势 5V5 中己方物理与法术均造成有效直伤并胜出",
+   "enabled": true,
+   "entry_id": 3102,
+   "id": 31022,
+   "seal_slot_kind": 3,
+   "title": "两仪双势"
+  },
+  {
+   "condition_param": 0,
+   "condition_type": 15,
+   "desc": "混元之季正式人宠会武合格对局中施放当季免费赛季技（混元一击/太极归虚/两仪灵罩/混元回生）",
+   "enabled": true,
+   "entry_id": 3103,
+   "id": 31031,
+   "seal_slot_kind": 3,
+   "title": "混元试法"
+  },
+  {
+   "condition_param": 23,
+   "condition_type": 16,
+   "desc": "混元之季正式人宠会武合格对局中触发当季任意技印共鸣（碎盾返蓝/延降防/守印增盾/急救返蓝）",
+   "enabled": true,
+   "entry_id": 3103,
+   "id": 31032,
+   "seal_slot_kind": 3,
+   "title": "元印共鸣"
   }
  ]
 }

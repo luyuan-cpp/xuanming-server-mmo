@@ -35,7 +35,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_skill_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\025skill_error_tip.proto*\222\t\n\013skill_error\022"
+    "\n\025skill_error_tip.proto*\322\t\n\013skill_error\022"
     "\022\n\016kSkill_errorOK\020\000\022\032\n\025kSkillUnInterrupt"
     "ible\020\3306\022\032\n\025kSkillInvalidTargetId\020\3316\022\030\n\023k"
     "SkillInvalidTarget\020\3326\022\033\n\026kSkillCooldownN"
@@ -64,15 +64,16 @@ const char descriptor_table_protodef_skill_5ferror_5ftip_2eproto[] ABSL_ATTRIBUT
     "nough\020\3676\022 \n\033kSkillLoadoutRentStackLimit\020"
     "\3706\022\"\n\035kSkillLoadoutRentSlotsInvalid\020\3716\022\""
     "\n\035kSkillLoadoutAttributeInvalid\020\3726\022(\n#kS"
-    "killLoadoutAttributeResetRequired\020\3736B$\n\016"
-    "com.game.tableZ\022generated/pb/tableb\006prot"
-    "o3"
+    "killLoadoutAttributeResetRequired\020\3736\022\030\n\023"
+    "kSkillBookshelfFull\020\3746\022$\n\037kSkillWantedPo"
+    "sterBookshelfFull\020\3756B$\n\016com.game.tableZ\022"
+    "generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_skill_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_skill_5ferror_5ftip_2eproto = {
     false,
     false,
-    1242,
+    1306,
     descriptor_table_protodef_skill_5ferror_5ftip_2eproto,
     "skill_error_tip.proto",
     &descriptor_table_skill_5ferror_5ftip_2eproto_once,
@@ -91,7 +92,7 @@ skill_error_descriptor() {
   return file_level_enum_descriptors_skill_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t skill_error_internal_data_[] = {
-    65536u, 2359296u, 7020u, 7012u, 7028u, 7007u, 7016u, 7024u, 7032u, 7003u, 7010u, 7014u, 7018u, 7022u, 7026u, 7030u, 7034u, 7001u, 7005u, 7009u, 7011u, 7013u, 7015u, 7017u, 7019u, 7021u, 7023u, 7025u, 7027u, 7029u, 7031u, 7033u, 7035u, 7000u, 7002u, 7004u, 7006u, 7008u, };
+    65536u, 2490368u, 7022u, 7014u, 7030u, 7007u, 7018u, 7026u, 7034u, 7003u, 7011u, 7016u, 7020u, 7024u, 7028u, 7032u, 7036u, 7001u, 7005u, 7009u, 7013u, 7015u, 7017u, 7019u, 7021u, 7023u, 7025u, 7027u, 7029u, 7031u, 7033u, 7035u, 7037u, 7000u, 7002u, 7004u, 7006u, 7008u, 7010u, 7012u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

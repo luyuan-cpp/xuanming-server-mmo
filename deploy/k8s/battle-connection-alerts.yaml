@@ -4,7 +4,7 @@
 # 指标由 battle 的 Prometheus 出口导出(环境变量 MMORPG_METRICS_PORT,k8s_deploy.ps1 -CppMetricsPort 缺省 9400,
 # Agones Fleet 与 hostPort Deployment 两种形态都开),定义在 cpp/nodes/battle/client/battle_connection_admission.cpp
 # 的 Admission::CollectMetrics:
-#   - battle_connections_current / battle_connections_max:直连会话数与生效上限(参战者与观众共用 BattleMaxConnections);
+#   - battle_connections_current / battle_connections_max:直连数(会话 + 还没认证的直连,总量上限按它判)与生效上限(参战者与观众共用 BattleMaxConnections);
 #   - battle_unauthenticated_connections:既没完成票据握手、也没出示有效网络探测授权的直连。握手期限是 10 秒,
 #     正常客户端拿到票据后毫秒级握手,这个数「高且不周转」就是有连接占着位置不认证;
 #   - battle_accepted_total:接纳的直连,rate() 就是新建连接速率;

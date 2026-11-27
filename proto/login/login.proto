@@ -334,6 +334,18 @@ service LoginPreGate {
   // 账号注销(docs/design/account-deletion.md §4.2、§4.4),网关 POST /api/account/delete 与 /api/account/delete/cancel 调。
   rpc RequestAccountDeletion (AccountDeletionRequest) returns (AccountDeletionResponse);
   rpc CancelAccountDeletion (CancelAccountDeletionRequest) returns (AccountDeletionResponse);
+  // 官方通行证回调(docs/design/official-passport-registration.md §3.7):网关 POST /internal/passport/events 收到 Casdoor 的回调、
+  // 核过共享密钥之后原样转来。login 只拿回调找人(哪名通行证用户变了),按通行证此刻的状态吊销游戏令牌并踢线,不信回调里写的内容;
+  // 幂等,可以重投。核对不了或吊销失败回 Unavailable,网关回 503,Casdoor 按回调的重投设置再来。
+  rpc HandlePassportEvent (PassportEventRequest) returns (PassportEventResponse);
+}
+
+message PassportEventRequest {
+  bytes payload = 1; // Casdoor 回调的请求体原文(JSON,Record + extendedUser),网关先限 64 KiB
+}
+
+message PassportEventResponse {
+  uint32 checked_users = 1; // 按回调核对了几名用户;0 = 回调里没有要核对的(不是本组织的,或用户已删且只给了名字)
 }
 
 message ZoneRoleCountRequest {
@@ -345,66 +357,5 @@ message ZoneRoleCountResponse {
   uint64 roles = 1; // 按合服之后的最终区算,删角不减;读不到时回 Unavailable,不回 0
 }
 
-// ── Admin-only RPCs (internal, not client-facing) ──────────────
-
-// 孤儿 = 目录里有归属、路由还在、player_store 里没有写权行的角色:进不了场,白占账号的角色名额。
-// 墓碑不可逆,所以证明不了是孤儿的回 NOT_ORPHAN,什么都不改。
-enum RemovePlayerOutcome {
-  REMOVE_PLAYER_UNSPECIFIED = 0;
-  REMOVE_PLAYER_REMOVED = 1;     // 已写墓碑,或 dry_run 时确认可以摘
-  REMOVE_PLAYER_NOT_FOUND = 2;   // 目录里没有,或已经删过了
-  REMOVE_PLAYER_NOT_ORPHAN = 3;  // 有存档,或者路由缺失证明不了
-  REMOVE_PLAYER_CONFLICT = 4;    // 有未结束的业务(资产指令、帮会、组队),或归属变了,或还在线。令牌已清,处理掉再重跑
-  REMOVE_PLAYER_RETRY = 5;       // 这次没做完(读失败、参与者不可达、本次预算用完),同参数重跑。重跑幂等
-}
-
-message RemovePlayerResult {
-  uint64 player_id = 1;
-  RemovePlayerOutcome outcome = 2;
-}
-
-message RemovePlayersFromAccountsRequest {
-  repeated uint64 player_ids = 1; // 候选孤儿,一次最多 100 个
-  string operator = 2;            // 必填,≤ 64 字节
-  string reason = 3;              // 必填,≤ 256 字节
-  bool dry_run = 4;               // true = 只核对,不写墓碑
-}
-
-message RemovePlayersFromAccountsResponse {
-  uint32 removed_count = 1;    // 已写墓碑(dry_run 时是可以摘的个数)
-  uint32 not_found_count = 2;  // 目录里没有,或已经删过了
-  uint32 failed_count = 3;     // CONFLICT + RETRY,看 results
-  uint32 not_orphan_count = 4;
-  repeated RemovePlayerResult results = 5; // 按请求去重后的顺序
-}
-
-// 客服代办注销(Google Play 要求的网页入口,docs/design/account-deletion.md §4.6):按角色找到账号,走与本人申请同一套预检与冷静期。
-// 客服先在系统外核实身份;操作人、理由、对端地址只进日志,data_service 的回执记 source=2。
-message ScheduleAccountDeletionRequest {
-  uint64 player_id = 1;   // 账号下任一角色
-  string operator = 2;    // 必填,≤ 64 字节
-  string reason = 3;      // 必填,≤ 256 字节
-}
-
-// 客服重置实名(docs/design/real-name-anti-addiction.md §5.2 末):玩家填错了身份信息、客服在系统外核实之后,清掉账号上的实名,
-// 玩家下次登录重新提交。player_id 与 account 恰好填一个:填错身份证号的账号可能一个角色都建不了,所以也能按账号找。
-message ResetAccountRealNameRequest {
-  uint64 player_id = 1;   // 账号下任一角色
-  string account = 2;     // 或者直接给账号
-  string operator = 3;    // 必填,≤ 64 字节
-  string reason = 4;      // 必填,≤ 256 字节
-}
-
-message ResetAccountRealNameResponse {
-  TipInfoMessage error_message = 1; // 角色或账号不存在:kLoginAccountNotFound
-  bool had_real_name = 2;           // 重置之前有没有实名;false = 本来就没有(重放也落在这里)
-}
-
-service LoginAdmin {
-  // 摘孤儿角色:走目录的删角流程(data_service.RemoveAccountRoles,全部参与者通过才写墓碑)。
-  // 只给运维工具用,要 x-admin-token;login 没配 AdminToken 就停用。名字由 data_service 在墓碑提交之后释放
-  // (删角收尾,docs/design/guild-phase2/03-names.md §3.4a),这里不用另外调 ReleasePlayerName。
-  rpc RemovePlayersFromAccounts (RemovePlayersFromAccountsRequest) returns (RemovePlayersFromAccountsResponse);
-  rpc ScheduleAccountDeletion (ScheduleAccountDeletionRequest) returns (AccountDeletionResponse);
-  rpc ResetAccountRealName (ResetAccountRealNameRequest) returns (ResetAccountRealNameResponse);
-}
+// 运维面 LoginAdmin 与只给它用的消息在 proto/login/login_admin.proto(2026-11-26 搬出,同包、字段号与消息号不变):
+// 本文件有客户端可见服务,客户端按 import 闭包生成,不能 import 只给服务端的 admin_approval.proto,也不要 import login_admin.proto。

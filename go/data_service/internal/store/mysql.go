@@ -42,6 +42,8 @@ type MySQLConfig struct {
 	// Closed 非空:这一代没有这个库的写资格(写者注册时它连不上),池一条连接都不给,每次都回这个错误。
 	// 只由 ForSchema 在 Lazy 时置上(PermissionFor 回 ErrNoWriterGrant);工具、迁移照旧当场回错误。
 	Closed error
+	// LazyPools 是按需核对的池的名单(Lazy 时用),常驻进程据它后台重核关着的池、判定就绪。nil = 不登记。
+	LazyPools *LazyPools
 }
 
 // ErrNoWriterGrant:这一代没有这个逻辑库的写资格。写者注册跳过当时连不上的库(docs/design/data-service-startup-isolation.md §7),
@@ -187,7 +189,7 @@ func openCheckedPool(cfg MySQLConfig, dsn string, check poolCheck) (*sql.DB, err
 				db.SetMaxOpenConns(maxOpen)
 				db.SetMaxIdleConns(maxIdle)
 				return db, nil
-			})
+			}, cfg.LazyPools)
 	}
 	db, err := openMySQLWithDSN(cfg, dsn)
 	if err != nil {

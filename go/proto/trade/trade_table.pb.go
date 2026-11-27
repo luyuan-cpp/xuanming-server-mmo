@@ -1160,8 +1160,10 @@ type TradeCommerceWorkflow struct {
 	PaymentRevoked  bool   `protobuf:"varint,26,opt,name=payment_revoked,json=paymentRevoked,proto3" json:"payment_revoked,omitempty"`
 	// 官方指定买家定向寄售单的目标角色 ID（0 = 公开单，非 0 时仅允许该角色购买）。
 	DesignatedBuyerPlayerId uint64 `protobuf:"varint,27,opt,name=designated_buyer_player_id,json=designatedBuyerPlayerId,proto3" json:"designated_buyer_player_id,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	// 悬赏求书求购单(kind 7)的条款,建单时写定、之后不改(docs/design/skill-book-wanted-order-trade-escrow.md §3.1)。
+	WantedSkillBook *TradeWantedSkillBookTerms `protobuf:"bytes,28,opt,name=wanted_skill_book,json=wantedSkillBook,proto3" json:"wanted_skill_book,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *TradeCommerceWorkflow) Reset() {
@@ -1383,6 +1385,98 @@ func (x *TradeCommerceWorkflow) GetDesignatedBuyerPlayerId() uint64 {
 	return 0
 }
 
+func (x *TradeCommerceWorkflow) GetWantedSkillBook() *TradeWantedSkillBookTerms {
+	if x != nil {
+		return x.WantedSkillBook
+	}
+	return nil
+}
+
+// 求购单条款。揭榜的快照核对、悬赏榜展示与交付金额都只读它。
+type TradeWantedSkillBookTerms struct {
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	SkillTableId           uint32                 `protobuf:"varint,1,opt,name=skill_table_id,json=skillTableId,proto3" json:"skill_table_id,omitempty"`                               // 求购的常规永久技能
+	ScrollId               uint32                 `protobuf:"varint,2,opt,name=scroll_id,json=scrollId,proto3" json:"scroll_id,omitempty"`                                             // 所属卷宗(展示与筛选)
+	RequireMasterSignature bool                   `protobuf:"varint,3,opt,name=require_master_signature,json=requireMasterSignature,proto3" json:"require_master_signature,omitempty"` // 只收带宗师署名的封卷道籍
+	RewardGold             uint64                 `protobuf:"varint,4,opt,name=reward_gold,json=rewardGold,proto3" json:"reward_gold,omitempty"`                                       // 托管的悬赏银两(100..50000,流通银两)
+	SellerNetGold          uint64                 `protobuf:"varint,5,opt,name=seller_net_gold,json=sellerNetGold,proto3" json:"seller_net_gold,omitempty"`                            // 税后交给揭榜人的银两 = reward - ceil(reward*500/10000),建单时算定
+	PosterName             string                 `protobuf:"bytes,6,opt,name=poster_name,json=posterName,proto3" json:"poster_name,omitempty"`                                        // 发榜时的角色名快照(展示)
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *TradeWantedSkillBookTerms) Reset() {
+	*x = TradeWantedSkillBookTerms{}
+	mi := &file_proto_trade_trade_table_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TradeWantedSkillBookTerms) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TradeWantedSkillBookTerms) ProtoMessage() {}
+
+func (x *TradeWantedSkillBookTerms) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_trade_table_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TradeWantedSkillBookTerms.ProtoReflect.Descriptor instead.
+func (*TradeWantedSkillBookTerms) Descriptor() ([]byte, []int) {
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *TradeWantedSkillBookTerms) GetSkillTableId() uint32 {
+	if x != nil {
+		return x.SkillTableId
+	}
+	return 0
+}
+
+func (x *TradeWantedSkillBookTerms) GetScrollId() uint32 {
+	if x != nil {
+		return x.ScrollId
+	}
+	return 0
+}
+
+func (x *TradeWantedSkillBookTerms) GetRequireMasterSignature() bool {
+	if x != nil {
+		return x.RequireMasterSignature
+	}
+	return false
+}
+
+func (x *TradeWantedSkillBookTerms) GetRewardGold() uint64 {
+	if x != nil {
+		return x.RewardGold
+	}
+	return 0
+}
+
+func (x *TradeWantedSkillBookTerms) GetSellerNetGold() uint64 {
+	if x != nil {
+		return x.SellerNetGold
+	}
+	return 0
+}
+
+func (x *TradeWantedSkillBookTerms) GetPosterName() string {
+	if x != nil {
+		return x.PosterName
+	}
+	return ""
+}
+
 // 合同转人工的记录。stage、status 是转人工之前的值;reason 是类别(commerce 包的 manualReason* 常量);
 // detail 是错误原文,截到 256 字节。
 type TradeCommerceQuarantine struct {
@@ -1398,7 +1492,7 @@ type TradeCommerceQuarantine struct {
 
 func (x *TradeCommerceQuarantine) Reset() {
 	*x = TradeCommerceQuarantine{}
-	mi := &file_proto_trade_trade_table_proto_msgTypes[7]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1410,7 +1504,7 @@ func (x *TradeCommerceQuarantine) String() string {
 func (*TradeCommerceQuarantine) ProtoMessage() {}
 
 func (x *TradeCommerceQuarantine) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_trade_trade_table_proto_msgTypes[7]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1423,7 +1517,7 @@ func (x *TradeCommerceQuarantine) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TradeCommerceQuarantine.ProtoReflect.Descriptor instead.
 func (*TradeCommerceQuarantine) Descriptor() ([]byte, []int) {
-	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{7}
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *TradeCommerceQuarantine) GetStage() string {
@@ -1494,7 +1588,7 @@ type TradeCommerceManualAction struct {
 
 func (x *TradeCommerceManualAction) Reset() {
 	*x = TradeCommerceManualAction{}
-	mi := &file_proto_trade_trade_table_proto_msgTypes[8]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1506,7 +1600,7 @@ func (x *TradeCommerceManualAction) String() string {
 func (*TradeCommerceManualAction) ProtoMessage() {}
 
 func (x *TradeCommerceManualAction) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_trade_trade_table_proto_msgTypes[8]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1519,7 +1613,7 @@ func (x *TradeCommerceManualAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TradeCommerceManualAction.ProtoReflect.Descriptor instead.
 func (*TradeCommerceManualAction) Descriptor() ([]byte, []int) {
-	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{8}
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *TradeCommerceManualAction) GetAction() string {
@@ -1660,7 +1754,7 @@ type TradeCommercePartialPart struct {
 
 func (x *TradeCommercePartialPart) Reset() {
 	*x = TradeCommercePartialPart{}
-	mi := &file_proto_trade_trade_table_proto_msgTypes[9]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1672,7 +1766,7 @@ func (x *TradeCommercePartialPart) String() string {
 func (*TradeCommercePartialPart) ProtoMessage() {}
 
 func (x *TradeCommercePartialPart) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_trade_trade_table_proto_msgTypes[9]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1685,7 +1779,7 @@ func (x *TradeCommercePartialPart) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TradeCommercePartialPart.ProtoReflect.Descriptor instead.
 func (*TradeCommercePartialPart) Descriptor() ([]byte, []int) {
-	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{9}
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *TradeCommercePartialPart) GetLeg() string {
@@ -1713,7 +1807,7 @@ type TradeRoleIdentity struct {
 
 func (x *TradeRoleIdentity) Reset() {
 	*x = TradeRoleIdentity{}
-	mi := &file_proto_trade_trade_table_proto_msgTypes[10]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1725,7 +1819,7 @@ func (x *TradeRoleIdentity) String() string {
 func (*TradeRoleIdentity) ProtoMessage() {}
 
 func (x *TradeRoleIdentity) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_trade_trade_table_proto_msgTypes[10]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1738,7 +1832,7 @@ func (x *TradeRoleIdentity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TradeRoleIdentity.ProtoReflect.Descriptor instead.
 func (*TradeRoleIdentity) Descriptor() ([]byte, []int) {
-	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{10}
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *TradeRoleIdentity) GetAccount() string {
@@ -1784,7 +1878,7 @@ type TradeRmbConsignmentWorkflow struct {
 
 func (x *TradeRmbConsignmentWorkflow) Reset() {
 	*x = TradeRmbConsignmentWorkflow{}
-	mi := &file_proto_trade_trade_table_proto_msgTypes[11]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1796,7 +1890,7 @@ func (x *TradeRmbConsignmentWorkflow) String() string {
 func (*TradeRmbConsignmentWorkflow) ProtoMessage() {}
 
 func (x *TradeRmbConsignmentWorkflow) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_trade_trade_table_proto_msgTypes[11]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1809,7 +1903,7 @@ func (x *TradeRmbConsignmentWorkflow) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TradeRmbConsignmentWorkflow.ProtoReflect.Descriptor instead.
 func (*TradeRmbConsignmentWorkflow) Descriptor() ([]byte, []int) {
-	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{11}
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *TradeRmbConsignmentWorkflow) GetSellerAccount() string {
@@ -1959,7 +2053,7 @@ type TradeCommerceLeg struct {
 
 func (x *TradeCommerceLeg) Reset() {
 	*x = TradeCommerceLeg{}
-	mi := &file_proto_trade_trade_table_proto_msgTypes[12]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1971,7 +2065,7 @@ func (x *TradeCommerceLeg) String() string {
 func (*TradeCommerceLeg) ProtoMessage() {}
 
 func (x *TradeCommerceLeg) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_trade_trade_table_proto_msgTypes[12]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1984,7 +2078,7 @@ func (x *TradeCommerceLeg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TradeCommerceLeg.ProtoReflect.Descriptor instead.
 func (*TradeCommerceLeg) Descriptor() ([]byte, []int) {
-	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{12}
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *TradeCommerceLeg) GetRole() string {
@@ -2080,7 +2174,7 @@ type TradeSellerCreditRecord struct {
 
 func (x *TradeSellerCreditRecord) Reset() {
 	*x = TradeSellerCreditRecord{}
-	mi := &file_proto_trade_trade_table_proto_msgTypes[13]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2092,7 +2186,7 @@ func (x *TradeSellerCreditRecord) String() string {
 func (*TradeSellerCreditRecord) ProtoMessage() {}
 
 func (x *TradeSellerCreditRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_trade_trade_table_proto_msgTypes[13]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2105,7 +2199,7 @@ func (x *TradeSellerCreditRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TradeSellerCreditRecord.ProtoReflect.Descriptor instead.
 func (*TradeSellerCreditRecord) Descriptor() ([]byte, []int) {
-	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{13}
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *TradeSellerCreditRecord) GetSellerPlayerId() uint64 {
@@ -2275,7 +2369,7 @@ type TradeSellerCompletedOrderRecord struct {
 
 func (x *TradeSellerCompletedOrderRecord) Reset() {
 	*x = TradeSellerCompletedOrderRecord{}
-	mi := &file_proto_trade_trade_table_proto_msgTypes[14]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2287,7 +2381,7 @@ func (x *TradeSellerCompletedOrderRecord) String() string {
 func (*TradeSellerCompletedOrderRecord) ProtoMessage() {}
 
 func (x *TradeSellerCompletedOrderRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_trade_trade_table_proto_msgTypes[14]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2300,7 +2394,7 @@ func (x *TradeSellerCompletedOrderRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TradeSellerCompletedOrderRecord.ProtoReflect.Descriptor instead.
 func (*TradeSellerCompletedOrderRecord) Descriptor() ([]byte, []int) {
-	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{14}
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *TradeSellerCompletedOrderRecord) GetRecordId() uint64 {
@@ -2358,7 +2452,7 @@ type TradeSellerReviewRecord struct {
 
 func (x *TradeSellerReviewRecord) Reset() {
 	*x = TradeSellerReviewRecord{}
-	mi := &file_proto_trade_trade_table_proto_msgTypes[15]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2370,7 +2464,7 @@ func (x *TradeSellerReviewRecord) String() string {
 func (*TradeSellerReviewRecord) ProtoMessage() {}
 
 func (x *TradeSellerReviewRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_trade_trade_table_proto_msgTypes[15]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2383,7 +2477,7 @@ func (x *TradeSellerReviewRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TradeSellerReviewRecord.ProtoReflect.Descriptor instead.
 func (*TradeSellerReviewRecord) Descriptor() ([]byte, []int) {
-	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{15}
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *TradeSellerReviewRecord) GetReviewId() uint64 {
@@ -2486,7 +2580,7 @@ type TradeSellerViolationRecord struct {
 
 func (x *TradeSellerViolationRecord) Reset() {
 	*x = TradeSellerViolationRecord{}
-	mi := &file_proto_trade_trade_table_proto_msgTypes[16]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2498,7 +2592,7 @@ func (x *TradeSellerViolationRecord) String() string {
 func (*TradeSellerViolationRecord) ProtoMessage() {}
 
 func (x *TradeSellerViolationRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_trade_trade_table_proto_msgTypes[16]
+	mi := &file_proto_trade_trade_table_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2511,7 +2605,7 @@ func (x *TradeSellerViolationRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TradeSellerViolationRecord.ProtoReflect.Descriptor instead.
 func (*TradeSellerViolationRecord) Descriptor() ([]byte, []int) {
-	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{16}
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *TradeSellerViolationRecord) GetViolationId() uint64 {
@@ -2682,7 +2776,7 @@ const file_proto_trade_trade_table_proto_rawDesc = "" +
 	"\x0fcounterparty_id\x18\x15 \x01(\x04R\x0ecounterpartyId\x12\x17\n" +
 	"\aon_book\x18\x16 \x01(\bR\x06onBook:\x9b\x02\x8a\x92\xf4\x01\x0etrade_commerce\x92\x92\xf4\x01\vcommerce_idڒ\xf4\x01\xd3\x01status,updated_ms; seller_player_id,commerce_id;buyer_player_id,commerce_id;kind,market_id,item_config_id,side,status,on_book,unit_price,commerce_id;kind,status,expires_ms;parent_id,status;counterparty_id,status\xe2\x92\xf4\x01\vrequest_key\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"]\n" +
 	"\x18TradeCommerceGuardRecord\x12\x19\n" +
-	"\bguard_id\x18\x01 \x01(\x04R\aguardId:&\x8a\x92\xf4\x01\x14trade_commerce_guard\x92\x92\xf4\x01\bguard_id\"\x85\n" +
+	"\bguard_id\x18\x01 \x01(\x04R\aguardId:&\x8a\x92\xf4\x01\x14trade_commerce_guard\x92\x92\xf4\x01\bguard_id\"\xd3\n" +
 	"\n" +
 	"\x15TradeCommerceWorkflow\x12?\n" +
 	"\rseller_assets\x18\x01 \x01(\v2\x1a.trade.TradeAssetSelectionR\fsellerAssets\x12=\n" +
@@ -2715,7 +2809,17 @@ const file_proto_trade_trade_table_proto_rawDesc = "" +
 	"\x0emanual_actions\x18\x18 \x03(\v2 .trade.TradeCommerceManualActionR\rmanualActions\x12)\n" +
 	"\x10payment_revision\x18\x19 \x01(\rR\x0fpaymentRevision\x12'\n" +
 	"\x0fpayment_revoked\x18\x1a \x01(\bR\x0epaymentRevoked\x12;\n" +
-	"\x1adesignated_buyer_player_id\x18\x1b \x01(\x04R\x17designatedBuyerPlayerId\"\x8c\x01\n" +
+	"\x1adesignated_buyer_player_id\x18\x1b \x01(\x04R\x17designatedBuyerPlayerId\x12L\n" +
+	"\x11wanted_skill_book\x18\x1c \x01(\v2 .trade.TradeWantedSkillBookTermsR\x0fwantedSkillBook\"\x82\x02\n" +
+	"\x19TradeWantedSkillBookTerms\x12$\n" +
+	"\x0eskill_table_id\x18\x01 \x01(\rR\fskillTableId\x12\x1b\n" +
+	"\tscroll_id\x18\x02 \x01(\rR\bscrollId\x128\n" +
+	"\x18require_master_signature\x18\x03 \x01(\bR\x16requireMasterSignature\x12\x1f\n" +
+	"\vreward_gold\x18\x04 \x01(\x04R\n" +
+	"rewardGold\x12&\n" +
+	"\x0fseller_net_gold\x18\x05 \x01(\x04R\rsellerNetGold\x12\x1f\n" +
+	"\vposter_name\x18\x06 \x01(\tR\n" +
+	"posterName\"\x8c\x01\n" +
 	"\x17TradeCommerceQuarantine\x12\x14\n" +
 	"\x05stage\x18\x01 \x01(\tR\x05stage\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\rR\x06status\x12\x16\n" +
@@ -2881,7 +2985,7 @@ func file_proto_trade_trade_table_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_trade_trade_table_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_proto_trade_trade_table_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_proto_trade_trade_table_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_proto_trade_trade_table_proto_goTypes = []any{
 	(ListingStatus)(0),                      // 0: trade.ListingStatus
 	(TradeAssetOpKind)(0),                   // 1: trade.TradeAssetOpKind
@@ -2894,50 +2998,52 @@ var file_proto_trade_trade_table_proto_goTypes = []any{
 	(*TradeCommerceRecord)(nil),             // 8: trade.TradeCommerceRecord
 	(*TradeCommerceGuardRecord)(nil),        // 9: trade.TradeCommerceGuardRecord
 	(*TradeCommerceWorkflow)(nil),           // 10: trade.TradeCommerceWorkflow
-	(*TradeCommerceQuarantine)(nil),         // 11: trade.TradeCommerceQuarantine
-	(*TradeCommerceManualAction)(nil),       // 12: trade.TradeCommerceManualAction
-	(*TradeCommercePartialPart)(nil),        // 13: trade.TradeCommercePartialPart
-	(*TradeRoleIdentity)(nil),               // 14: trade.TradeRoleIdentity
-	(*TradeRmbConsignmentWorkflow)(nil),     // 15: trade.TradeRmbConsignmentWorkflow
-	(*TradeCommerceLeg)(nil),                // 16: trade.TradeCommerceLeg
-	(*TradeSellerCreditRecord)(nil),         // 17: trade.TradeSellerCreditRecord
-	(*TradeSellerCompletedOrderRecord)(nil), // 18: trade.TradeSellerCompletedOrderRecord
-	(*TradeSellerReviewRecord)(nil),         // 19: trade.TradeSellerReviewRecord
-	(*TradeSellerViolationRecord)(nil),      // 20: trade.TradeSellerViolationRecord
-	(ListingCategory)(0),                    // 21: trade.ListingCategory
-	(*TradeAssetSelection)(nil),             // 22: trade.TradeAssetSelection
-	(*asset.AssetBundle)(nil),               // 23: AssetBundle
-	(*RmbConsignmentView)(nil),              // 24: trade.RmbConsignmentView
-	(*asset.AssetSnapshot)(nil),             // 25: AssetSnapshot
+	(*TradeWantedSkillBookTerms)(nil),       // 11: trade.TradeWantedSkillBookTerms
+	(*TradeCommerceQuarantine)(nil),         // 12: trade.TradeCommerceQuarantine
+	(*TradeCommerceManualAction)(nil),       // 13: trade.TradeCommerceManualAction
+	(*TradeCommercePartialPart)(nil),        // 14: trade.TradeCommercePartialPart
+	(*TradeRoleIdentity)(nil),               // 15: trade.TradeRoleIdentity
+	(*TradeRmbConsignmentWorkflow)(nil),     // 16: trade.TradeRmbConsignmentWorkflow
+	(*TradeCommerceLeg)(nil),                // 17: trade.TradeCommerceLeg
+	(*TradeSellerCreditRecord)(nil),         // 18: trade.TradeSellerCreditRecord
+	(*TradeSellerCompletedOrderRecord)(nil), // 19: trade.TradeSellerCompletedOrderRecord
+	(*TradeSellerReviewRecord)(nil),         // 20: trade.TradeSellerReviewRecord
+	(*TradeSellerViolationRecord)(nil),      // 21: trade.TradeSellerViolationRecord
+	(ListingCategory)(0),                    // 22: trade.ListingCategory
+	(*TradeAssetSelection)(nil),             // 23: trade.TradeAssetSelection
+	(*asset.AssetBundle)(nil),               // 24: AssetBundle
+	(*RmbConsignmentView)(nil),              // 25: trade.RmbConsignmentView
+	(*asset.AssetSnapshot)(nil),             // 26: AssetSnapshot
 }
 var file_proto_trade_trade_table_proto_depIdxs = []int32{
-	21, // 0: trade.TradeListingRecord.category:type_name -> trade.ListingCategory
+	22, // 0: trade.TradeListingRecord.category:type_name -> trade.ListingCategory
 	0,  // 1: trade.TradeListingRecord.status:type_name -> trade.ListingStatus
 	1,  // 2: trade.TradeAssetOpRecord.kind:type_name -> trade.TradeAssetOpKind
 	2,  // 3: trade.TradeAssetOpRecord.status:type_name -> trade.TradeAssetOpStatus
 	3,  // 4: trade.TradeAssetOpRecord.ref_kind:type_name -> trade.TradeAssetOpRefKind
-	22, // 5: trade.TradeCommerceWorkflow.seller_assets:type_name -> trade.TradeAssetSelection
-	22, // 6: trade.TradeCommerceWorkflow.buyer_assets:type_name -> trade.TradeAssetSelection
-	16, // 7: trade.TradeCommerceWorkflow.legs:type_name -> trade.TradeCommerceLeg
-	23, // 8: trade.TradeCommerceWorkflow.official_bundle:type_name -> AssetBundle
-	15, // 9: trade.TradeCommerceWorkflow.rmb:type_name -> trade.TradeRmbConsignmentWorkflow
-	14, // 10: trade.TradeCommerceWorkflow.seller_identity:type_name -> trade.TradeRoleIdentity
-	14, // 11: trade.TradeCommerceWorkflow.buyer_identity:type_name -> trade.TradeRoleIdentity
-	11, // 12: trade.TradeCommerceWorkflow.quarantine:type_name -> trade.TradeCommerceQuarantine
-	12, // 13: trade.TradeCommerceWorkflow.manual_actions:type_name -> trade.TradeCommerceManualAction
-	11, // 14: trade.TradeCommerceManualAction.quarantine:type_name -> trade.TradeCommerceQuarantine
-	14, // 15: trade.TradeCommerceManualAction.identity_before:type_name -> trade.TradeRoleIdentity
-	14, // 16: trade.TradeCommerceManualAction.identity_after:type_name -> trade.TradeRoleIdentity
-	13, // 17: trade.TradeCommerceManualAction.partial_parts:type_name -> trade.TradeCommercePartialPart
-	23, // 18: trade.TradeCommercePartialPart.missing:type_name -> AssetBundle
-	24, // 19: trade.TradeRmbConsignmentWorkflow.registered_listing:type_name -> trade.RmbConsignmentView
-	23, // 20: trade.TradeCommerceLeg.bundle:type_name -> AssetBundle
-	25, // 21: trade.TradeCommerceLeg.snapshot:type_name -> AssetSnapshot
-	22, // [22:22] is the sub-list for method output_type
-	22, // [22:22] is the sub-list for method input_type
-	22, // [22:22] is the sub-list for extension type_name
-	22, // [22:22] is the sub-list for extension extendee
-	0,  // [0:22] is the sub-list for field type_name
+	23, // 5: trade.TradeCommerceWorkflow.seller_assets:type_name -> trade.TradeAssetSelection
+	23, // 6: trade.TradeCommerceWorkflow.buyer_assets:type_name -> trade.TradeAssetSelection
+	17, // 7: trade.TradeCommerceWorkflow.legs:type_name -> trade.TradeCommerceLeg
+	24, // 8: trade.TradeCommerceWorkflow.official_bundle:type_name -> AssetBundle
+	16, // 9: trade.TradeCommerceWorkflow.rmb:type_name -> trade.TradeRmbConsignmentWorkflow
+	15, // 10: trade.TradeCommerceWorkflow.seller_identity:type_name -> trade.TradeRoleIdentity
+	15, // 11: trade.TradeCommerceWorkflow.buyer_identity:type_name -> trade.TradeRoleIdentity
+	12, // 12: trade.TradeCommerceWorkflow.quarantine:type_name -> trade.TradeCommerceQuarantine
+	13, // 13: trade.TradeCommerceWorkflow.manual_actions:type_name -> trade.TradeCommerceManualAction
+	11, // 14: trade.TradeCommerceWorkflow.wanted_skill_book:type_name -> trade.TradeWantedSkillBookTerms
+	12, // 15: trade.TradeCommerceManualAction.quarantine:type_name -> trade.TradeCommerceQuarantine
+	15, // 16: trade.TradeCommerceManualAction.identity_before:type_name -> trade.TradeRoleIdentity
+	15, // 17: trade.TradeCommerceManualAction.identity_after:type_name -> trade.TradeRoleIdentity
+	14, // 18: trade.TradeCommerceManualAction.partial_parts:type_name -> trade.TradeCommercePartialPart
+	24, // 19: trade.TradeCommercePartialPart.missing:type_name -> AssetBundle
+	25, // 20: trade.TradeRmbConsignmentWorkflow.registered_listing:type_name -> trade.RmbConsignmentView
+	24, // 21: trade.TradeCommerceLeg.bundle:type_name -> AssetBundle
+	26, // 22: trade.TradeCommerceLeg.snapshot:type_name -> AssetSnapshot
+	23, // [23:23] is the sub-list for method output_type
+	23, // [23:23] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_proto_trade_trade_table_proto_init() }
@@ -2953,7 +3059,7 @@ func file_proto_trade_trade_table_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_trade_trade_table_proto_rawDesc), len(file_proto_trade_trade_table_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   17,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -32,6 +32,7 @@
 #include "google/protobuf/unknown_field_set.h"
 #include "proto/common/base/tip.pb.h"
 #include "proto/common/base/service_call_auth.pb.h"
+#include "proto/common/base/admin_approval.pb.h"
 #include "proto/mail/mail.pb.h"
 // @@protoc_insertion_point(includes)
 
@@ -1246,6 +1247,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SendMailRequest final : public ::go
     kManifestHashFieldNumber = 14,
     kAttachmentsFieldNumber = 7,
     kAuthFieldNumber = 9,
+    kApprovalFieldNumber = 15,
     kRequestIdFieldNumber = 2,
     kRecipientPlayerIdFieldNumber = 3,
     kGuildIdFieldNumber = 4,
@@ -1331,6 +1333,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SendMailRequest final : public ::go
   private:
   const ::common::base::ServiceCallAuth& _internal_auth() const;
   ::common::base::ServiceCallAuth* PROTOBUF_NONNULL _internal_mutable_auth();
+
+  public:
+  // .common.base.AdminApproval approval = 15;
+  [[nodiscard]] bool has_approval()
+      const;
+  void clear_approval() ;
+  [[nodiscard]] const ::common::base::AdminApproval& approval() const;
+  [[nodiscard]] ::common::base::AdminApproval* PROTOBUF_NULLABLE release_approval();
+  ::common::base::AdminApproval* PROTOBUF_NONNULL mutable_approval();
+  void set_allocated_approval(::common::base::AdminApproval* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_approval(::common::base::AdminApproval* PROTOBUF_NULLABLE value);
+  ::common::base::AdminApproval* PROTOBUF_NULLABLE unsafe_arena_release_approval();
+
+  private:
+  const ::common::base::AdminApproval& _internal_approval() const;
+  ::common::base::AdminApproval* PROTOBUF_NONNULL _internal_mutable_approval();
 
   public:
   // uint64 request_id = 2;
@@ -1427,8 +1445,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SendMailRequest final : public ::go
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 14,
-                          2, 61,
+      ::google::protobuf::internal::TcParseTable<4, 15,
+                          3, 61,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1461,6 +1479,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SendMailRequest final : public ::go
     ::google::protobuf::internal::ArenaStringPtr manifest_hash_;
     ::mailpb::MailAttachments* PROTOBUF_NULLABLE attachments_;
     ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE auth_;
+    ::common::base::AdminApproval* PROTOBUF_NULLABLE approval_;
     ::uint64_t request_id_;
     ::uint64_t recipient_player_id_;
     ::uint64_t guild_id_;
@@ -1496,7 +1515,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SendMailRequest final : public ::go
 inline void SendMailRequest::clear_sender_kind() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.sender_kind_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t SendMailRequest::sender_kind() const {
   // @@protoc_insertion_point(field_get:mailpb.SendMailRequest.sender_kind)
@@ -1504,7 +1523,7 @@ inline ::uint32_t SendMailRequest::sender_kind() const {
 }
 inline void SendMailRequest::set_sender_kind(::uint32_t value) {
   _internal_set_sender_kind(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:mailpb.SendMailRequest.sender_kind)
 }
 inline ::uint32_t SendMailRequest::_internal_sender_kind() const {
@@ -1520,7 +1539,7 @@ inline void SendMailRequest::_internal_set_sender_kind(::uint32_t value) {
 inline void SendMailRequest::clear_request_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.request_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint64_t SendMailRequest::request_id() const {
   // @@protoc_insertion_point(field_get:mailpb.SendMailRequest.request_id)
@@ -1528,7 +1547,7 @@ inline ::uint64_t SendMailRequest::request_id() const {
 }
 inline void SendMailRequest::set_request_id(::uint64_t value) {
   _internal_set_request_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:mailpb.SendMailRequest.request_id)
 }
 inline ::uint64_t SendMailRequest::_internal_request_id() const {
@@ -1544,7 +1563,7 @@ inline void SendMailRequest::_internal_set_request_id(::uint64_t value) {
 inline void SendMailRequest::clear_recipient_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.recipient_player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t SendMailRequest::recipient_player_id() const {
   // @@protoc_insertion_point(field_get:mailpb.SendMailRequest.recipient_player_id)
@@ -1552,7 +1571,7 @@ inline ::uint64_t SendMailRequest::recipient_player_id() const {
 }
 inline void SendMailRequest::set_recipient_player_id(::uint64_t value) {
   _internal_set_recipient_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:mailpb.SendMailRequest.recipient_player_id)
 }
 inline ::uint64_t SendMailRequest::_internal_recipient_player_id() const {
@@ -1568,7 +1587,7 @@ inline void SendMailRequest::_internal_set_recipient_player_id(::uint64_t value)
 inline void SendMailRequest::clear_guild_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.guild_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t SendMailRequest::guild_id() const {
   // @@protoc_insertion_point(field_get:mailpb.SendMailRequest.guild_id)
@@ -1576,7 +1595,7 @@ inline ::uint64_t SendMailRequest::guild_id() const {
 }
 inline void SendMailRequest::set_guild_id(::uint64_t value) {
   _internal_set_guild_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:mailpb.SendMailRequest.guild_id)
 }
 inline ::uint64_t SendMailRequest::_internal_guild_id() const {
@@ -1813,7 +1832,7 @@ inline void SendMailRequest::set_allocated_attachments(::mailpb::MailAttachments
 inline void SendMailRequest::clear_expire_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.expire_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint64_t SendMailRequest::expire_ms() const {
   // @@protoc_insertion_point(field_get:mailpb.SendMailRequest.expire_ms)
@@ -1821,7 +1840,7 @@ inline ::uint64_t SendMailRequest::expire_ms() const {
 }
 inline void SendMailRequest::set_expire_ms(::uint64_t value) {
   _internal_set_expire_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:mailpb.SendMailRequest.expire_ms)
 }
 inline ::uint64_t SendMailRequest::_internal_expire_ms() const {
@@ -1930,7 +1949,7 @@ inline void SendMailRequest::set_allocated_auth(::common::base::ServiceCallAuth*
 inline void SendMailRequest::clear_campaign_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.campaign_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint64_t SendMailRequest::campaign_id() const {
   // @@protoc_insertion_point(field_get:mailpb.SendMailRequest.campaign_id)
@@ -1938,7 +1957,7 @@ inline ::uint64_t SendMailRequest::campaign_id() const {
 }
 inline void SendMailRequest::set_campaign_id(::uint64_t value) {
   _internal_set_campaign_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:mailpb.SendMailRequest.campaign_id)
 }
 inline ::uint64_t SendMailRequest::_internal_campaign_id() const {
@@ -1954,7 +1973,7 @@ inline void SendMailRequest::_internal_set_campaign_id(::uint64_t value) {
 inline void SendMailRequest::clear_manifest_generation() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.manifest_generation_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint64_t SendMailRequest::manifest_generation() const {
   // @@protoc_insertion_point(field_get:mailpb.SendMailRequest.manifest_generation)
@@ -1962,7 +1981,7 @@ inline ::uint64_t SendMailRequest::manifest_generation() const {
 }
 inline void SendMailRequest::set_manifest_generation(::uint64_t value) {
   _internal_set_manifest_generation(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:mailpb.SendMailRequest.manifest_generation)
 }
 inline ::uint64_t SendMailRequest::_internal_manifest_generation() const {
@@ -1978,7 +1997,7 @@ inline void SendMailRequest::_internal_set_manifest_generation(::uint64_t value)
 inline void SendMailRequest::clear_expected_recipient_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.expected_recipient_count_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint64_t SendMailRequest::expected_recipient_count() const {
   // @@protoc_insertion_point(field_get:mailpb.SendMailRequest.expected_recipient_count)
@@ -1986,7 +2005,7 @@ inline ::uint64_t SendMailRequest::expected_recipient_count() const {
 }
 inline void SendMailRequest::set_expected_recipient_count(::uint64_t value) {
   _internal_set_expected_recipient_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:mailpb.SendMailRequest.expected_recipient_count)
 }
 inline ::uint64_t SendMailRequest::_internal_expected_recipient_count() const {
@@ -2002,7 +2021,7 @@ inline void SendMailRequest::_internal_set_expected_recipient_count(::uint64_t v
 inline void SendMailRequest::clear_expected_shard_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.expected_shard_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t SendMailRequest::expected_shard_count() const {
   // @@protoc_insertion_point(field_get:mailpb.SendMailRequest.expected_shard_count)
@@ -2010,7 +2029,7 @@ inline ::uint32_t SendMailRequest::expected_shard_count() const {
 }
 inline void SendMailRequest::set_expected_shard_count(::uint32_t value) {
   _internal_set_expected_shard_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:mailpb.SendMailRequest.expected_shard_count)
 }
 inline ::uint32_t SendMailRequest::_internal_expected_shard_count() const {
@@ -2084,6 +2103,99 @@ inline void SendMailRequest::set_allocated_manifest_hash(::std::string* PROTOBUF
     _impl_.manifest_hash_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:mailpb.SendMailRequest.manifest_hash)
+}
+
+// .common.base.AdminApproval approval = 15;
+inline bool SendMailRequest::has_approval() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000020U);
+  PROTOBUF_ASSUME(!value || _impl_.approval_ != nullptr);
+  return value;
+}
+inline const ::common::base::AdminApproval& SendMailRequest::_internal_approval() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::common::base::AdminApproval* p = _impl_.approval_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::common::base::AdminApproval>(&::common::base::AdminApproval_globals_);
+}
+inline const ::common::base::AdminApproval& SendMailRequest::approval() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:mailpb.SendMailRequest.approval)
+  return _internal_approval();
+}
+inline void SendMailRequest::unsafe_arena_set_allocated_approval(
+    ::common::base::AdminApproval* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.approval_);
+  }
+  _impl_.approval_ = reinterpret_cast<::common::base::AdminApproval*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:mailpb.SendMailRequest.approval)
+}
+inline ::common::base::AdminApproval* PROTOBUF_NULLABLE SendMailRequest::release_approval() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::common::base::AdminApproval* released = _impl_.approval_;
+  _impl_.approval_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::common::base::AdminApproval* PROTOBUF_NULLABLE SendMailRequest::unsafe_arena_release_approval() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:mailpb.SendMailRequest.approval)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::common::base::AdminApproval* temp = _impl_.approval_;
+  _impl_.approval_ = nullptr;
+  return temp;
+}
+inline ::common::base::AdminApproval* PROTOBUF_NONNULL SendMailRequest::_internal_mutable_approval() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.approval_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::common::base::AdminApproval>(GetArena());
+    _impl_.approval_ = reinterpret_cast<::common::base::AdminApproval*>(p);
+  }
+  return _impl_.approval_;
+}
+inline ::common::base::AdminApproval* PROTOBUF_NONNULL SendMailRequest::mutable_approval()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::common::base::AdminApproval* _msg = _internal_mutable_approval();
+  // @@protoc_insertion_point(field_mutable:mailpb.SendMailRequest.approval)
+  return _msg;
+}
+inline void SendMailRequest::set_allocated_approval(::common::base::AdminApproval* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.approval_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+
+  _impl_.approval_ = reinterpret_cast<::common::base::AdminApproval*>(value);
+  // @@protoc_insertion_point(field_set_allocated:mailpb.SendMailRequest.approval)
 }
 
 // -------------------------------------------------------------------

@@ -82,14 +82,14 @@
   - `BattleStateS2C` 追加 `TacticalPuzzleBattleContext tactical_puzzle_context = 43;`
   - `BattleSettlementData` 追加 `TacticalPuzzleBattleContext tactical_puzzle_context = 57;`
 
-#### B. 客户端 RPC（`proto/match/match_service.proto`，消息号 `574..580`）
-1. `ListTacticalPuzzles`（`574`）：按分类（`1=精选热门, 2=最新奇局, 3=烧脑难关, 4=我的创作, 5=我已破局`）与可选 `tag_mask` 筛选返回最多 30 条 `TacticalPuzzleSummary` + 个人荣誉统计 `TacticalPuzzleProfileView`（累计破局数、创作数、累计获赞数、荣誉档位）。
-2. `GetTacticalPuzzle`（`575`）：按 `puzzle_id` 返回单题完整详情 `TacticalPuzzleDetail`（含 `spec`、作者、统计、个人通关/点赞状态；草稿仅作者本人可见）。
-3. `SaveTacticalPuzzleDraft`（`576`）：新建（`puzzle_id=0`）或编辑（`puzzle_id>0`）草稿；执行全量白名单范围校验、`ContentGuard` 标题/提示审校、每玩家上限 10 题校验；编辑已发布题时 `spec_revision++`、状态回落 `DRAFT` 并释放旧标准解录像引用。
-4. `DeleteTacticalPuzzle`（`577`）：作者软删/物理删本人残局，同事务清理相关通关记录并递减 `verified_battle_id` 对应 `match_battle_report.ref_count`。
-5. `StartTacticalPuzzleBattle`（`578`）：入参 `(puzzle_id, is_author_verify)`；校验身份与状态（验题限作者本人；攻关限 `PUBLISHED`），生成固定 `puzzle_seed` 驱动的单人 `PVE_SOLO` 战斗，走既有 `gather` 管线开战。
-6. `LikeTacticalPuzzle`（`579`）：入参 `(puzzle_id, liked)`；强验题目为 `PUBLISHED`、调用者非作者本人、且本人已有通关记录；幂等更新 `liked` 与 `like_count`。
-7. `GetTacticalPuzzleSolutionReplay`（`580`）：入参 `(puzzle_id)`；强验题目为 `PUBLISHED` 且 `verified_battle_id != 0`（或作者查本人已验题草稿），返回 `BattleReplayEnvelope`（与 `GetSharedTrialReplay` 同构）。
+#### B. 客户端 RPC（`proto/match/match_service.proto`，消息号 `575..581`）
+1. `ListTacticalPuzzles`（`575`）：按分类（`1=精选热门, 2=最新奇局, 3=烧脑难关, 4=我的创作, 5=我已破局`）与可选 `tag_mask` 筛选返回最多 30 条 `TacticalPuzzleSummaryView` + 个人荣誉统计 `TacticalPuzzleProfileView`（累计破局数、创作数、累计获赞数、荣誉档位）。
+2. `GetTacticalPuzzle`（`576`）：按 `puzzle_id` 返回单题完整详情 `TacticalPuzzleSummaryView`（含 `spec`、作者、统计、个人通关/点赞状态；草稿仅作者本人可见）。
+3. `SaveTacticalPuzzleDraft`（`577`）：新建（`puzzle_id=0`）或编辑（`puzzle_id>0`）草稿；执行全量白名单范围校验、`ContentGuard` 标题/提示审校、每玩家上限 10 题校验；编辑已发布题时 `spec_revision++`、状态回落 `DRAFT` 并释放旧标准解录像引用。
+4. `DeleteTacticalPuzzle`（`578`）：作者物理删本人残局，同事务清理相关通关记录并递减 `verified_battle_id` 对应 `match_battle_report.ref_count`。
+5. `StartTacticalPuzzleBattle`（`579`）：入参 `(puzzle_id, is_author_verify)`；校验身份与状态（验题限作者本人；攻关限 `PUBLISHED`），生成固定 `puzzle_seed` 驱动的单人 `PVE_SOLO` 战斗，走既有 `gather` 管线开战。
+6. `LikeTacticalPuzzle`（`580`）：入参 `(puzzle_id)`；强验题目为 `PUBLISHED`、调用者非作者本人、且本人已有通关记录；幂等更新 `liked` 与 `like_count`。
+7. `GetTacticalPuzzleSolutionReplay`（`581`）：入参 `(puzzle_id)`；强验题目为 `PUBLISHED` 且 `verified_battle_id != 0`（或作者查本人已验题草稿），返回 `BattleReplayEnvelope`（与 `GetSharedTrialReplay` 同构）。
 
 #### C. 权威存储表（`proto/match/match_authority.proto`，2 张表）
 - `MatchTacticalPuzzleRecord`（表名 `match_tactical_puzzle`，主键 `puzzle_id`）：存储题面序列化、版本、状态、固定 `puzzle_seed`、作者信息、标准解 `verified_battle_id` 及统计字段。

@@ -1,0 +1,85 @@
+syntax = "proto3";
+
+option go_package = "proto/login";
+
+import "proto/common/base/tip.proto";
+import "proto/common/base/admin_approval.proto";
+import "proto/login/login.proto";
+
+package loginpb;
+
+// ── Admin-only RPCs (internal, not client-facing) ──────────────
+// 2026-11-26 从 login.proto 原样搬来(同包、字段号不变;消息号按服务名 + 方法名取,也不变),
+// docs/design/admin-identity-and-dual-control.md §11.2。为什么分文件:login.proto 有客户端可见服务,客户端按 import 闭包生成,
+// 往它里面 import admin_approval.proto 会把批准记录带进客户端包。login.proto 不能 import 本文件;本文件可以 import 它(AccountDeletionResponse)。
+
+// 孤儿 = 目录里有归属、路由还在、player_store 里没有写权行的角色:进不了场,白占账号的角色名额。
+// 墓碑不可逆,所以证明不了是孤儿的回 NOT_ORPHAN,什么都不改。
+enum RemovePlayerOutcome {
+  REMOVE_PLAYER_UNSPECIFIED = 0;
+  REMOVE_PLAYER_REMOVED = 1;     // 已写墓碑,或 dry_run 时确认可以摘
+  REMOVE_PLAYER_NOT_FOUND = 2;   // 目录里没有,或已经删过了
+  REMOVE_PLAYER_NOT_ORPHAN = 3;  // 有存档,或者路由缺失证明不了
+  REMOVE_PLAYER_CONFLICT = 4;    // 有未结束的业务(资产指令、帮会、组队),或归属变了,或还在线。令牌已清,处理掉再重跑
+  REMOVE_PLAYER_RETRY = 5;       // 这次没做完(读失败、参与者不可达、本次预算用完),同参数重跑。重跑幂等
+}
+
+message RemovePlayerResult {
+  uint64 player_id = 1;
+  RemovePlayerOutcome outcome = 2;
+}
+
+message RemovePlayersFromAccountsRequest {
+  repeated uint64 player_ids = 1; // 候选孤儿,一次最多 100 个
+  string operator = 2;            // 必填,≤ 64 字节
+  string reason = 3;              // 必填,≤ 256 字节
+  bool dry_run = 4;               // true = 只核对,不写墓碑
+  // 后台双人复核的批准记录(admin-identity-and-dual-control.md §5.4),proposer 必须等于 operator。dry_run 不要求,带了照样核;
+  // 只有部署显式打开 AdminAllowUnapproved(本机开发)时才接受不带它的写墓碑。
+  common.base.AdminApproval approval = 5;
+}
+
+message RemovePlayersFromAccountsResponse {
+  uint32 removed_count = 1;    // 已写墓碑(dry_run 时是可以摘的个数)
+  uint32 not_found_count = 2;  // 目录里没有,或已经删过了
+  uint32 failed_count = 3;     // CONFLICT + RETRY,看 results
+  uint32 not_orphan_count = 4;
+  repeated RemovePlayerResult results = 5; // 按请求去重后的顺序
+}
+
+// 客服代办注销(Google Play 要求的网页入口,docs/design/account-deletion.md §4.6):按角色找到账号,走与本人申请同一套预检与冷静期。
+// 客服先在系统外核实身份;操作人、理由、对端地址只进日志,data_service 的回执记 source=2。
+message ScheduleAccountDeletionRequest {
+  uint64 player_id = 1;   // 账号下任一角色
+  string operator = 2;    // 必填,≤ 64 字节
+  string reason = 3;      // 必填,≤ 256 字节
+  // 必带:后台双人复核的批准记录,proposer 必须等于 operator(只有 AdminAllowUnapproved 打开时才接受不带)。
+  common.base.AdminApproval approval = 4;
+}
+
+// 客服重置实名(docs/design/real-name-anti-addiction.md §5.2 末):玩家填错了身份信息、客服在系统外核实之后,清掉账号上的实名,
+// 玩家下次登录重新提交。player_id 与 account 恰好填一个:填错身份证号的账号可能一个角色都建不了,所以也能按账号找。
+message ResetAccountRealNameRequest {
+  uint64 player_id = 1;   // 账号下任一角色
+  string account = 2;     // 或者直接给账号
+  string operator = 3;    // 必填,≤ 64 字节
+  string reason = 4;      // 必填,≤ 256 字节
+  // 必带:后台双人复核的批准记录,proposer 必须等于 operator(只有 AdminAllowUnapproved 打开时才接受不带)。
+  common.base.AdminApproval approval = 5;
+}
+
+message ResetAccountRealNameResponse {
+  TipInfoMessage error_message = 1; // 角色或账号不存在:kLoginAccountNotFound
+  bool had_real_name = 2;           // 重置之前有没有实名;false = 本来就没有(重放也落在这里)
+}
+
+// 三个方法都是甲级(admin-identity-and-dual-control.md §3):请求要带后台的双人复核批准记录,由 login 的拦截器
+// (go/login/internal/server/loginadmin/admin_approval.go)在执行之前核对。三个方法都没有请求号,重放天然收敛,不核批准号。
+service LoginAdmin {
+  // 摘孤儿角色:走目录的删角流程(data_service.RemoveAccountRoles,全部参与者通过才写墓碑)。
+  // 只给运维工具用,要 x-admin-token;login 没配 AdminToken 就停用。名字由 data_service 在墓碑提交之后释放
+  // (删角收尾,docs/design/guild-phase2/03-names.md §3.4a),这里不用另外调 ReleasePlayerName。
+  rpc RemovePlayersFromAccounts (RemovePlayersFromAccountsRequest) returns (RemovePlayersFromAccountsResponse);
+  rpc ScheduleAccountDeletion (ScheduleAccountDeletionRequest) returns (AccountDeletionResponse);
+  rpc ResetAccountRealName (ResetAccountRealNameRequest) returns (ResetAccountRealNameResponse);
+}

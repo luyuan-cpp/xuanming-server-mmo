@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -28,6 +29,7 @@ import (
 	"shared/drainproof"
 	"shared/idsegment"
 	"shared/placement"
+	"shared/safego"
 	"shared/serviceauth"
 	"shared/sqlpoolstats"
 
@@ -225,6 +227,51 @@ type ServiceContext struct {
 	MissingWriterGrants []string
 	// serving 在 RPC 端口能接受连接、节点注册完成之后置上(MarkServing)。
 	serving atomic.Bool
+	// lazyPools 是按需核对的池的名单:启动时连不上的池后台重核(StartLazyPoolRetry),还关着时不就绪(Ready)。
+	lazyPools     *store.LazyPools
+	stopLazyRetry func()
+}
+
+// lazyPoolRetryPoint 是后台重核的 goroutine 点位名(safego)。
+const lazyPoolRetryPoint = "data_service.lazy_pool_retry"
+
+// StartLazyPoolRetry 起后台重核:启动时连不上的目录片、流水库,不等第一次用到,每隔 store.LazyPoolRetryInterval 核一次,
+// 集群恢复之后自己打开,进程自己变回就绪(docs/design/data-service-startup-isolation.md §6.1)。只读核对,不写库。
+// main 通过启动自检之后调一次;CloseAndReport 在关池之前停它。
+func (s *ServiceContext) StartLazyPoolRetry() {
+	if s.lazyPools == nil || s.stopLazyRetry != nil {
+		return
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	s.stopLazyRetry = func() {
+		cancel()
+		<-done
+	}
+	safego.Go(lazyPoolRetryPoint, func() {
+		defer close(done)
+		ticker := time.NewTicker(store.LazyPoolRetryInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				s.lazyPools.RetryClosed()
+			}
+		}
+	})
+}
+
+// MissingDirectoryShardGrants 报告这一代缺不缺目录片的写资格。目录片是启动时必须读的(合服映射在第 0 片,空环境判据读全部片),
+// 缺了启动自检就过不了;写资格在 init 里定了,原地重启拿到的还是这一份,所以要重建 Pod(data_service.go 的 errRebuildPod)。
+func (s *ServiceContext) MissingDirectoryShardGrants() bool {
+	for _, schema := range dirshard.DirectoryDBNames(s.Config.SnapshotMySQL.DBName, s.Config.Directory.Shards()) {
+		if slices.Contains(s.MissingWriterGrants, schema) {
+			return true
+		}
+	}
+	return false
 }
 
 // autoMigrateTimeout 启动路径建表/补列的总时限。CreateOrUpdateTable 对存量大表的
@@ -333,6 +380,11 @@ func (s *ServiceContext) Ready() error {
 		return fmt.Errorf("this boot has no writer grant for %d logical database(s) %v; rebuild the pod after the cluster recovers",
 			len(s.MissingWriterGrants), s.MissingWriterGrants)
 	}
+	// 启动时连不上、还没核对通过的库:后台每 store.LazyPoolRetryInterval 重核一次,恢复之后自己就绪。
+	if closed := s.lazyPools.Closed(); len(closed) > 0 {
+		return fmt.Errorf("logical database(s) %v have been unreachable since startup and stay closed; they are verified again every %v",
+			closed, store.LazyPoolRetryInterval)
+	}
 	if !s.serving.Load() {
 		return errors.New("the RPC server is not serving yet")
 	}
@@ -369,6 +421,8 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 	// 常驻进程:目录各片和流水库启动时连不上不算失败,那个库先关着,第一次用到时再核对,通过才给连接;
 	// 连上了而核对不过照旧拒启(docs/design/data-service-startup-isolation.md)。-migrate 与工具走自己的装配,不置它。
 	mysqlCfg.Lazy = true
+	lazyPools := &store.LazyPools{}
+	mysqlCfg.LazyPools = lazyPools
 	var writerConfigs map[string]authoritysql.WriterConfig
 	var writerConfig authoritysql.WriterConfig
 	// missingGrants 是这一代缺写资格的逻辑库(checkWriterSchemas),非空时进程不就绪(Ready)。
@@ -563,6 +617,7 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 		PlayerRouteStore:     playerRouteStore,
 		MergedZones:          newMergedZoneCache(c, routeStore),
 		MissingWriterGrants:  missingGrants,
+		lazyPools:            lazyPools,
 	}
 	if auth, err := serviceauth.New(map[string]string{accountdirectory.RouteCaller: os.Getenv(accountdirectory.RouteSecretEnv)}); err != nil {
 		logx.Errorf("[player-route] %s is unavailable; GetPlayerRoute disabled", accountdirectory.RouteSecretEnv)
@@ -956,6 +1011,10 @@ func (s *ServiceContext) CloseAndReport() error {
 	s.closeOnce.Do(func() {
 		// 先停合服映射的定时重读:它读 route store 的池,池关了之后的那一拍只会报假故障。
 		s.MergedZones.Stop()
+		// 同理先停关着的池的后台重核:它用写资格建连核对,要在封写资格、关池之前停下。
+		if s.stopLazyRetry != nil {
+			s.stopLazyRetry()
+		}
 		for _, writer := range s.Writers {
 			writer.Seal()
 		}

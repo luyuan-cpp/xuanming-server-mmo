@@ -42,7 +42,11 @@ type SendMailRequest struct {
 	ExpectedShardCount     uint32 `protobuf:"varint,13,opt,name=expected_shard_count,json=expectedShardCount,proto3" json:"expected_shard_count,omitempty"`
 	// SHA256("v1\n" + 按shard_index升序拼接 "index:lowercase_sha256:count\n")。
 	// shard摘要是去重并按uint64升序的player_id十进制字符串，每个后接\n的SHA256。
-	ManifestHash  string `protobuf:"bytes,14,opt,name=manifest_hash,json=manifestHash,proto3" json:"manifest_hash,omitempty"`
+	ManifestHash string `protobuf:"bytes,14,opt,name=manifest_hash,json=manifestHash,proto3" json:"manifest_hash,omitempty"`
+	// 双人复核批准记录(docs/design/admin-identity-and-dual-control.md §5.4):后台在第二个人批准之后带上,approval_id 就是 request_id。
+	// mail 对配置 ApprovalRequiredCallers 里的调用方(admin 恒在其中)要求它;带了就必须合格,不论调用方。它进请求摘要,
+	// 重试原样复用。系统发件方(rank / guild / battle / match)不带。活动邮件带在建活动的这一份请求里,import / seal 不带。
+	Approval      *base.AdminApproval `protobuf:"bytes,15,opt,name=approval,proto3" json:"approval,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -173,6 +177,13 @@ func (x *SendMailRequest) GetManifestHash() string {
 		return x.ManifestHash
 	}
 	return ""
+}
+
+func (x *SendMailRequest) GetApproval() *base.AdminApproval {
+	if x != nil {
+		return x.Approval
+	}
+	return nil
 }
 
 type SendMailResponse struct {
@@ -451,7 +462,7 @@ var File_proto_mail_mail_admin_proto protoreflect.FileDescriptor
 
 const file_proto_mail_mail_admin_proto_rawDesc = "" +
 	"\n" +
-	"\x1bproto/mail/mail_admin.proto\x12\x06mailpb\x1a\x1bproto/common/base/tip.proto\x1a)proto/common/base/service_call_auth.proto\x1a\x15proto/mail/mail.proto\"\xb3\x04\n" +
+	"\x1bproto/mail/mail_admin.proto\x12\x06mailpb\x1a\x1bproto/common/base/tip.proto\x1a)proto/common/base/service_call_auth.proto\x1a&proto/common/base/admin_approval.proto\x1a\x15proto/mail/mail.proto\"\xeb\x04\n" +
 	"\x0fSendMailRequest\x12\x1f\n" +
 	"\vsender_kind\x18\x01 \x01(\rR\n" +
 	"senderKind\x12\x1d\n" +
@@ -470,7 +481,8 @@ const file_proto_mail_mail_admin_proto_rawDesc = "" +
 	"\x13manifest_generation\x18\v \x01(\x04R\x12manifestGeneration\x128\n" +
 	"\x18expected_recipient_count\x18\f \x01(\x04R\x16expectedRecipientCount\x120\n" +
 	"\x14expected_shard_count\x18\r \x01(\rR\x12expectedShardCount\x12#\n" +
-	"\rmanifest_hash\x18\x0e \x01(\tR\fmanifestHash\"\x81\x01\n" +
+	"\rmanifest_hash\x18\x0e \x01(\tR\fmanifestHash\x126\n" +
+	"\bapproval\x18\x0f \x01(\v2\x1a.common.base.AdminApprovalR\bapproval\"\x81\x01\n" +
 	"\x10SendMailResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x17\n" +
 	"\amail_id\x18\x02 \x01(\x04R\x06mailId\x12\x1e\n" +
@@ -530,30 +542,32 @@ var file_proto_mail_mail_admin_proto_goTypes = []any{
 	(*SealMailCampaignRequest)(nil),      // 4: mailpb.SealMailCampaignRequest
 	(*MailAttachments)(nil),              // 5: mailpb.MailAttachments
 	(*base.ServiceCallAuth)(nil),         // 6: common.base.ServiceCallAuth
-	(*base.TipInfoMessage)(nil),          // 7: TipInfoMessage
+	(*base.AdminApproval)(nil),           // 7: common.base.AdminApproval
+	(*base.TipInfoMessage)(nil),          // 8: TipInfoMessage
 }
 var file_proto_mail_mail_admin_proto_depIdxs = []int32{
 	5,  // 0: mailpb.SendMailRequest.attachments:type_name -> mailpb.MailAttachments
 	6,  // 1: mailpb.SendMailRequest.auth:type_name -> common.base.ServiceCallAuth
-	7,  // 2: mailpb.SendMailResponse.error_message:type_name -> TipInfoMessage
-	6,  // 3: mailpb.ImportMailRecipientsRequest.auth:type_name -> common.base.ServiceCallAuth
-	7,  // 4: mailpb.ImportMailRecipientsResponse.error_message:type_name -> TipInfoMessage
-	6,  // 5: mailpb.SealMailCampaignRequest.auth:type_name -> common.base.ServiceCallAuth
-	0,  // 6: mailpb.MailAdmin.SendPersonalMail:input_type -> mailpb.SendMailRequest
-	0,  // 7: mailpb.MailAdmin.SendSystemMail:input_type -> mailpb.SendMailRequest
-	0,  // 8: mailpb.MailAdmin.SendGuildMail:input_type -> mailpb.SendMailRequest
-	2,  // 9: mailpb.MailAdmin.ImportMailRecipients:input_type -> mailpb.ImportMailRecipientsRequest
-	4,  // 10: mailpb.MailAdmin.SealMailCampaign:input_type -> mailpb.SealMailCampaignRequest
-	1,  // 11: mailpb.MailAdmin.SendPersonalMail:output_type -> mailpb.SendMailResponse
-	1,  // 12: mailpb.MailAdmin.SendSystemMail:output_type -> mailpb.SendMailResponse
-	1,  // 13: mailpb.MailAdmin.SendGuildMail:output_type -> mailpb.SendMailResponse
-	3,  // 14: mailpb.MailAdmin.ImportMailRecipients:output_type -> mailpb.ImportMailRecipientsResponse
-	1,  // 15: mailpb.MailAdmin.SealMailCampaign:output_type -> mailpb.SendMailResponse
-	11, // [11:16] is the sub-list for method output_type
-	6,  // [6:11] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	7,  // 2: mailpb.SendMailRequest.approval:type_name -> common.base.AdminApproval
+	8,  // 3: mailpb.SendMailResponse.error_message:type_name -> TipInfoMessage
+	6,  // 4: mailpb.ImportMailRecipientsRequest.auth:type_name -> common.base.ServiceCallAuth
+	8,  // 5: mailpb.ImportMailRecipientsResponse.error_message:type_name -> TipInfoMessage
+	6,  // 6: mailpb.SealMailCampaignRequest.auth:type_name -> common.base.ServiceCallAuth
+	0,  // 7: mailpb.MailAdmin.SendPersonalMail:input_type -> mailpb.SendMailRequest
+	0,  // 8: mailpb.MailAdmin.SendSystemMail:input_type -> mailpb.SendMailRequest
+	0,  // 9: mailpb.MailAdmin.SendGuildMail:input_type -> mailpb.SendMailRequest
+	2,  // 10: mailpb.MailAdmin.ImportMailRecipients:input_type -> mailpb.ImportMailRecipientsRequest
+	4,  // 11: mailpb.MailAdmin.SealMailCampaign:input_type -> mailpb.SealMailCampaignRequest
+	1,  // 12: mailpb.MailAdmin.SendPersonalMail:output_type -> mailpb.SendMailResponse
+	1,  // 13: mailpb.MailAdmin.SendSystemMail:output_type -> mailpb.SendMailResponse
+	1,  // 14: mailpb.MailAdmin.SendGuildMail:output_type -> mailpb.SendMailResponse
+	3,  // 15: mailpb.MailAdmin.ImportMailRecipients:output_type -> mailpb.ImportMailRecipientsResponse
+	1,  // 16: mailpb.MailAdmin.SealMailCampaign:output_type -> mailpb.SendMailResponse
+	12, // [12:17] is the sub-list for method output_type
+	7,  // [7:12] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_proto_mail_mail_admin_proto_init() }

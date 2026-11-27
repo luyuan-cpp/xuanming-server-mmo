@@ -63,3 +63,33 @@ func TestRequireComparesPeopleByteForByte(t *testing.T) {
 		t.Fatalf("Require() = %v, want nil", err)
 	}
 }
+
+func TestRequireForRequestBindsTheRequestIDToTheApprovalID(t *testing.T) {
+	if err := RequireForRequest(approval(), "alice.w", 9007199254740993); err != nil {
+		t.Fatalf("RequireForRequest() = %v, want nil", err)
+	}
+	// 请求里没有操作人字段的下游(mail、rank)显式传发起人,只核记录本身与请求号。
+	a := approval()
+	if err := RequireForRequest(a, a.GetProposer(), 9007199254740993); err != nil {
+		t.Fatalf("RequireForRequest(no operator field) = %v, want nil", err)
+	}
+	if err := RequireForRequest(approval(), "alice.w", 9007199254740994); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("RequireForRequest(other request id) = %v, want ErrInvalid", err)
+	}
+	// 有操作人字段的请求带空操作人:空串不当成「没有操作人字段」,直接拒。
+	if err := RequireForRequest(approval(), "", 9007199254740993); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("RequireForRequest(empty operator) = %v, want ErrInvalid", err)
+	}
+	if err := RequireForRequest(approval(), "mallory", 9007199254740993); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("RequireForRequest(other operator) = %v, want ErrInvalid", err)
+	}
+	var missing *base.AdminApproval
+	if err := RequireForRequest(missing, missing.GetProposer(), 9007199254740993); !errors.Is(err, ErrMissing) {
+		t.Fatalf("RequireForRequest(nil) = %v, want ErrMissing", err)
+	}
+	self := approval()
+	self.Approver = self.Proposer
+	if err := RequireForRequest(self, self.GetProposer(), 9007199254740993); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("RequireForRequest(self-approved) = %v, want ErrInvalid", err)
+	}
+}

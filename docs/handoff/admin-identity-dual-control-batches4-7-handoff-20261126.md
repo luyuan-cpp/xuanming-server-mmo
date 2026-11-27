@@ -5,6 +5,8 @@
 
 批 1~3 已落码,全部未编译,待 Gemini 验证;命令见 `docs/PROGRESS.md` 里标题带「后台管理员身份与双人复核·批」的三条。
 
+**2026-11-26 晚进度**:批 4、5、6 已落码(未生成、未编译),批 7 的告警与契约测试已落码;做法与取舍见设计稿 §11,命令见 PROGRESS 标题带「后台管理员身份与双人复核·批 4」「批 5」「批 6」「批 7」的各条。**还没做的只有 §5 末尾「批 7 剩余」**,由新会话接着做。
+
 ## 1. 已有的公共件(批 4~7 直接用,别另写一套)
 
 | 件 | 位置 | 怎么用 |
@@ -59,6 +61,22 @@
 - **告警**:`trade_manual_resolution_unapproved_execute_total` 在 5 分钟内有增长就告警(告警名 `TradeManualResolutionUnapprovedExecute`,与 trade 配置注释一致)。批 5 各服务的「不带批准记录被接受」计数也同样接上。
 - **本机转发**:`deploy/gm-admin/rpc-bridge.py` 现在只转 data_service(2356)与 player_locator(2357)。加一路到 trade,做法照现有两路(就绪凭据、容器身份核对),并让 `run_local.py` 在验收通过后放行 `GM_TRADE_TARGET` / `GM_TRADE_ADMIN_SECRET`;批 3 已经让它在没有验收时一律不放行。
 - 支付人工面(`payment_admin.proto`,设计在 `payment-recharge.md` §5.4)不在这 7 批里。落码时直接按本设计接入后台流水。
+
+### 批 7 剩余(2026-11-26 晚登记,交新会话)
+
+已做:`deploy/k8s/dual-control-alerts.yaml`(8 条「不带批准记录被接受」告警,trade 的叫 `TradeManualResolutionUnapprovedExecute`)与 `tools/scripts/tests/dual_control_alerts_contract.tests.ps1`。
+
+没做的(按这个顺序):
+
+1. **后台上 K8s**。现在 `tools/scripts/java_svc_image.ps1` 的镜像目录只有 gateway 与 mall,`k8s_deploy.ps1` 里没有 gm_admin;后台的构建靠 `java/gm_admin/prepare.py` 先拉起 JeecgBoot 上游再打包(见 `docs/design/jeecg-gm-administration.md`)。要补:
+   - 镜像构建与 Deployment / Service(只在集群内可达,不建 Ingress);`gm.identity.mode=oidc`;OIDC 客户端密钥走 Secret。
+   - 后台要的密钥都走工作负载密钥目录(照 `$WorkloadSecretSpecs` 与 `Resolve-InjectedSecret`):`GM_TRADE_ADMIN_SECRET`(与 trade 的 `Commerce.ManualResolutionSecretEnv` 指名的同值)、`GM_MAIL_ADMIN_SECRET`(= mail 的 `MAIL_PRODUCER_SECRET_ADMIN`)、`GM_MALL_ADMIN_SECRET`(= 商城 `COMMERCE_ADMIN_SECRET`)、`GM_LOGIN_ADMIN_TOKEN`(= `MMORPG_LOGIN_ADMIN_TOKEN`)、`GM_DATA_ADMIN_TOKEN`(= data_service `AdminToken`,**它在 K8s 配置模板里现在没有渲染,回收入口在集群里是关的,要一起接上**)、`GM_INBOX_ADMIN_TOKEN`(= `MMORPG_PLAYER_INBOX_ADMIN_TOKEN`)、`GM_RANK_ADMIN_SECRET`(= rank 的 `RANK_PRODUCER_SECRET_ADMIN`)、`GM_MATCH_FORMATION_SECRET`(match 的 `GlobalMatch.ManualResolutionSecretEnv` 现在也没进清单,要一起接)、`GM_GATEWAY_ADMIN_KEY`(= 网关 `admin.api-key`)。各把互不相同;这些管理口令只挂给后台(设计 §6 第 3 条),契约测试守住「消费者只有 gm_admin 与资源服务本身」。
+   - 网关的机器口令 `admin.machine-key`(批 6 新增,环境变量 `ADMIN_MACHINEKEY`)走同样的 Secret 注入,与 `admin.api-key` 不同值;`table-bundle` 那一侧拿机器口令、带 `-operator table-bundle`。
+   - NetworkPolicy:只许后台访问各服务的管理端口(照 `$script:GrpcAllowLists` / `New-GrpcAllowListNetworkPolicyYaml`)。
+   - 部署守卫:mail / rank 的 ConfigMap 是整份复制 `etc/*.yaml` 再替换,match 的 `GlobalMatch` 段也是照抄;有人把应急开关(`AdminAllowUnapproved`、`ManualResolutionAllowUnapproved`、商城的 `COMMERCE_ADMIN_ALLOW_UNAPPROVED`)提交成 true 就会上集群。非 dev 档在任何写操作之前拒绝渲染出来的开关为 true,契约测试守住。
+   - 契约测试照 `tools/scripts/tests/k8s_deploy_contract.tests.ps1` 与 `k8s_mall_payment_deploy_contract.tests.ps1` 的写法。
+2. **本机后台到 trade 的转发**。`deploy/gm-admin/rpc-bridge.py` 与 `rpc-bridge/main.go`、`rpc-bridge.compose.yml`、`rpc_bridge_test.py` 加第三路(照现有两路:就绪回执、容器身份与 etcd 注册核对、端口只绑回环);`tools/scripts/gm_scene_promotion.py` 的 `READ_TARGETS` 要求回执与它逐字相等,要一起改。本机 trade 的 `go/trade/etc/trade.yaml` 现在 `ManualResolutionSecretEnv` 为空(入口关着),本机调试栈要能打开它才有意义。三处一起验收后,`java/gm_admin/run_local.py` 才从回执放行 `GM_TRADE_TARGET` / `GM_TRADE_ADMIN_SECRET`(现在一律不放行)。商城与运营处置各下游的本机转发同理,先不做。
+3. 做完在 PROGRESS 追加一条,设计稿 §8 批 7 的状态格与 §11.4 改到最新。
 
 ## 6. 规矩(与批 1~3 相同)
 

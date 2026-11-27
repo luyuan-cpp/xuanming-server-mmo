@@ -40,7 +40,7 @@ function Get-FixtureTableRows {
     $business = [ordered]@{
         mmorpg = @('zone_config', 'zone_whitelist', 'announcement')
         mmorpg_global_ledger = @('transaction_log', 'player_snapshot', 'rollback_audit_log')
-        mmorpg_chat = @('chat_send_authority', 'chat_policy', 'chat_world_retraction', 'chat_report', 'chat_repeat_event', 'chat_private_daily_target')
+        mmorpg_chat = @('chat_send_authority', 'chat_policy', 'chat_world_retraction', 'chat_report', 'chat_repeat_event', 'chat_private_daily_target', 'chat_platform_recheck', 'chat_platform_recheck_claim', 'chat_platform_recheck_done')
         mmorpg_friend = @('friend', 'friend_request', 'role_fence', 'schema_migrations')
         mmorpg_guild = @('guild', 'guild_member', 'guild_name_hold', 'guild_asset_op', 'guild_trial_launch', 'guild_trial_launch_role', 'guild_trial_lobby', 'guild_trial_lobby_slot', 'schema_migrations')
         mmorpg_mail = @('mail_message', 'mail_asset_op', 'schema_migrations')

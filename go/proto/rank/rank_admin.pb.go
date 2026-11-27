@@ -690,12 +690,16 @@ func (x *FreezeRankGenerationResponse) GetDuplicated() bool {
 }
 
 type RemoveRankEntryRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	BoardId       uint64                 `protobuf:"varint,1,opt,name=board_id,json=boardId,proto3" json:"board_id,omitempty"`
-	Generation    uint64                 `protobuf:"varint,2,opt,name=generation,proto3" json:"generation,omitempty"`
-	EntityId      uint64                 `protobuf:"varint,3,opt,name=entity_id,json=entityId,proto3" json:"entity_id,omitempty"`
-	RequestId     uint64                 `protobuf:"varint,4,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	Auth          *base.ServiceCallAuth  `protobuf:"bytes,5,opt,name=auth,proto3" json:"auth,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	BoardId    uint64                 `protobuf:"varint,1,opt,name=board_id,json=boardId,proto3" json:"board_id,omitempty"`
+	Generation uint64                 `protobuf:"varint,2,opt,name=generation,proto3" json:"generation,omitempty"`
+	EntityId   uint64                 `protobuf:"varint,3,opt,name=entity_id,json=entityId,proto3" json:"entity_id,omitempty"`
+	RequestId  uint64                 `protobuf:"varint,4,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Auth       *base.ServiceCallAuth  `protobuf:"bytes,5,opt,name=auth,proto3" json:"auth,omitempty"`
+	// 后台双人复核的批准记录(docs/design/admin-identity-and-dual-control.md §5.4)。调用方 admin 必带,且 request_id 就是批准号
+	// (按 (board, generation, request_id) 判重,一次批准只执行一次);match 摘已删角色是自动路径,不带,带了照样核。
+	// 只有部署显式打开 AdminAllowUnapproved(本机开发)时才接受 admin 不带它。
+	Approval      *base.AdminApproval `protobuf:"bytes,6,opt,name=approval,proto3" json:"approval,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -765,6 +769,13 @@ func (x *RemoveRankEntryRequest) GetAuth() *base.ServiceCallAuth {
 	return nil
 }
 
+func (x *RemoveRankEntryRequest) GetApproval() *base.AdminApproval {
+	if x != nil {
+		return x.Approval
+	}
+	return nil
+}
+
 type RankAdminResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
@@ -813,7 +824,7 @@ var File_proto_rank_rank_admin_proto protoreflect.FileDescriptor
 
 const file_proto_rank_rank_admin_proto_rawDesc = "" +
 	"\n" +
-	"\x1bproto/rank/rank_admin.proto\x12\x06rankpb\x1a\x1bproto/common/base/tip.proto\x1a)proto/common/base/service_call_auth.proto\x1a\x15proto/mail/mail.proto\x1a\x15proto/rank/rank.proto\"\xf5\x01\n" +
+	"\x1bproto/rank/rank_admin.proto\x12\x06rankpb\x1a\x1bproto/common/base/tip.proto\x1a)proto/common/base/service_call_auth.proto\x1a&proto/common/base/admin_approval.proto\x1a\x15proto/mail/mail.proto\x1a\x15proto/rank/rank.proto\"\xf5\x01\n" +
 	"\x19OpenRankGenerationRequest\x12*\n" +
 	"\x05board\x18\x01 \x01(\v2\x14.rankpb.RankBoardKeyR\x05board\x12\x1a\n" +
 	"\bproducer\x18\x02 \x01(\tR\bproducer\x12!\n" +
@@ -876,7 +887,7 @@ const file_proto_rank_rank_admin_proto_rawDesc = "" +
 	"\fwinner_count\x18\x03 \x01(\x04R\vwinnerCount\x12\x1e\n" +
 	"\n" +
 	"duplicated\x18\x04 \x01(\bR\n" +
-	"duplicated\"\xc1\x01\n" +
+	"duplicated\"\xf9\x01\n" +
 	"\x16RemoveRankEntryRequest\x12\x19\n" +
 	"\bboard_id\x18\x01 \x01(\x04R\aboardId\x12\x1e\n" +
 	"\n" +
@@ -885,7 +896,8 @@ const file_proto_rank_rank_admin_proto_rawDesc = "" +
 	"\tentity_id\x18\x03 \x01(\x04R\bentityId\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x04 \x01(\x04R\trequestId\x120\n" +
-	"\x04auth\x18\x05 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"I\n" +
+	"\x04auth\x18\x05 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\x126\n" +
+	"\bapproval\x18\x06 \x01(\v2\x1a.common.base.AdminApprovalR\bapproval\"I\n" +
 	"\x11RankAdminResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage*|\n" +
 	"\x0eRankSubmitMode\x12\x1b\n" +
@@ -931,6 +943,7 @@ var file_proto_rank_rank_admin_proto_goTypes = []any{
 	(*base.ServiceCallAuth)(nil),         // 12: common.base.ServiceCallAuth
 	(*base.TipInfoMessage)(nil),          // 13: TipInfoMessage
 	(*mail.MailAttachments)(nil),         // 14: mailpb.MailAttachments
+	(*base.AdminApproval)(nil),           // 15: common.base.AdminApproval
 }
 var file_proto_rank_rank_admin_proto_depIdxs = []int32{
 	11, // 0: rankpb.OpenRankGenerationRequest.board:type_name -> rankpb.RankBoardKey
@@ -945,22 +958,23 @@ var file_proto_rank_rank_admin_proto_depIdxs = []int32{
 	12, // 9: rankpb.FreezeRankGenerationRequest.auth:type_name -> common.base.ServiceCallAuth
 	13, // 10: rankpb.FreezeRankGenerationResponse.error_message:type_name -> TipInfoMessage
 	12, // 11: rankpb.RemoveRankEntryRequest.auth:type_name -> common.base.ServiceCallAuth
-	13, // 12: rankpb.RankAdminResponse.error_message:type_name -> TipInfoMessage
-	1,  // 13: rankpb.RankAdmin.OpenRankGeneration:input_type -> rankpb.OpenRankGenerationRequest
-	4,  // 14: rankpb.RankAdmin.SubmitRankScores:input_type -> rankpb.SubmitRankScoresRequest
-	7,  // 15: rankpb.RankAdmin.FreezeRankGeneration:input_type -> rankpb.FreezeRankGenerationRequest
-	9,  // 16: rankpb.RankAdmin.RemoveRankEntry:input_type -> rankpb.RemoveRankEntryRequest
-	9,  // 17: rankpb.RankAdmin.DeleteRankGeneration:input_type -> rankpb.RemoveRankEntryRequest
-	2,  // 18: rankpb.RankAdmin.OpenRankGeneration:output_type -> rankpb.OpenRankGenerationResponse
-	5,  // 19: rankpb.RankAdmin.SubmitRankScores:output_type -> rankpb.SubmitRankScoresResponse
-	8,  // 20: rankpb.RankAdmin.FreezeRankGeneration:output_type -> rankpb.FreezeRankGenerationResponse
-	10, // 21: rankpb.RankAdmin.RemoveRankEntry:output_type -> rankpb.RankAdminResponse
-	10, // 22: rankpb.RankAdmin.DeleteRankGeneration:output_type -> rankpb.RankAdminResponse
-	18, // [18:23] is the sub-list for method output_type
-	13, // [13:18] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	15, // 12: rankpb.RemoveRankEntryRequest.approval:type_name -> common.base.AdminApproval
+	13, // 13: rankpb.RankAdminResponse.error_message:type_name -> TipInfoMessage
+	1,  // 14: rankpb.RankAdmin.OpenRankGeneration:input_type -> rankpb.OpenRankGenerationRequest
+	4,  // 15: rankpb.RankAdmin.SubmitRankScores:input_type -> rankpb.SubmitRankScoresRequest
+	7,  // 16: rankpb.RankAdmin.FreezeRankGeneration:input_type -> rankpb.FreezeRankGenerationRequest
+	9,  // 17: rankpb.RankAdmin.RemoveRankEntry:input_type -> rankpb.RemoveRankEntryRequest
+	9,  // 18: rankpb.RankAdmin.DeleteRankGeneration:input_type -> rankpb.RemoveRankEntryRequest
+	2,  // 19: rankpb.RankAdmin.OpenRankGeneration:output_type -> rankpb.OpenRankGenerationResponse
+	5,  // 20: rankpb.RankAdmin.SubmitRankScores:output_type -> rankpb.SubmitRankScoresResponse
+	8,  // 21: rankpb.RankAdmin.FreezeRankGeneration:output_type -> rankpb.FreezeRankGenerationResponse
+	10, // 22: rankpb.RankAdmin.RemoveRankEntry:output_type -> rankpb.RankAdminResponse
+	10, // 23: rankpb.RankAdmin.DeleteRankGeneration:output_type -> rankpb.RankAdminResponse
+	19, // [19:24] is the sub-list for method output_type
+	14, // [14:19] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_proto_rank_rank_admin_proto_init() }

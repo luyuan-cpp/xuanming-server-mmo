@@ -351,42 +351,46 @@ type BattleStateS2C struct {
 	// 收信人本人的剩余战斗道具(item_table_id → 剩余个数,按 id 升序)。
 	// 只在发给本人的那一份里填,观众与其他参战者收到的恒为空 —— 道具余量是私有信息。
 	// 有了它,客户端重连补拉后不再对"已经用掉几个"一无所知(原先只能靠累计回合事件推算)。
-	SelfItems                    []*BattleItemEntry        `protobuf:"bytes,7,rep,name=self_items,json=selfItems,proto3" json:"self_items,omitempty"`
-	Telegraphs                   []*BattleTelegraphEntry   `protobuf:"bytes,8,rep,name=telegraphs,proto3" json:"telegraphs,omitempty"`                                                                                 // 首领/护卫公开预告
-	ActivePolarity               uint32                    `protobuf:"varint,9,opt,name=active_polarity,json=activePolarity,proto3" json:"active_polarity,omitempty"`                                                  // 物法易势当前强势类型：0=无，1=物势(物理直伤×1.15)，2=法势(法术直伤×1.15)
-	NextPolaritySwitchRound      uint32                    `protobuf:"varint,10,opt,name=next_polarity_switch_round,json=nextPolaritySwitchRound,proto3" json:"next_polarity_switch_round,omitempty"`                  // 物法易势下次换势回合号（非易势为 0）
-	ProtectedGuardActorId        uint64                    `protobuf:"varint,11,opt,name=protected_guard_actor_id,json=protectedGuardActorId,proto3" json:"protected_guard_actor_id,omitempty"`                        // 护卫救援模式须保全的护卫局内 actor_id（非救援为 0）
-	LastResolvedTelegraphs       []*BattleTelegraphEntry   `protobuf:"bytes,12,rep,name=last_resolved_telegraphs,json=lastResolvedTelegraphs,proto3" json:"last_resolved_telegraphs,omitempty"`                        // 最近一回合已兑现或已取消的预告终态（供重连还原）
-	BossPhase                    uint32                    `protobuf:"varint,13,opt,name=boss_phase,json=bossPhase,proto3" json:"boss_phase,omitempty"`                                                                // 首领试炼当前阶段：0=非首领试炼，1=一阶段，2=二阶段决战姿态(破釜)
-	BossMomentumStacks           uint32                    `protobuf:"varint,14,opt,name=boss_momentum_stacks,json=bossMomentumStacks,proto3" json:"boss_momentum_stacks,omitempty"`                                   // 首领当前「蓄势」层数(0..3，可驱散，重劈消耗，每层+12%)
-	BossStanceType               uint32                    `protobuf:"varint,15,opt,name=boss_stance_type,json=bossStanceType,proto3" json:"boss_stance_type,omitempty"`                                               // 敌方护势联防阵类型：0=无，1=物防阵，2=法防阵
-	BossStanceRemainRounds       uint32                    `protobuf:"varint,16,opt,name=boss_stance_remain_rounds,json=bossStanceRemainRounds,proto3" json:"boss_stance_remain_rounds,omitempty"`                     // 当前护势联防剩余回合数(含当轮)
-	BossExposedPct               uint32                    `protobuf:"varint,17,opt,name=boss_exposed_pct,json=bossExposedPct,proto3" json:"boss_exposed_pct,omitempty"`                                               // 首领当前「破绽」易伤百分点(0/20/35)
-	BossExposedUntilRound        uint32                    `protobuf:"varint,18,opt,name=boss_exposed_until_round,json=bossExposedUntilRound,proto3" json:"boss_exposed_until_round,omitempty"`                        // 首领「破绽」持续到期回合号(含该回合末)
-	BossTrialKind                uint32                    `protobuf:"varint,19,opt,name=boss_trial_kind,json=bossTrialKind,proto3" json:"boss_trial_kind,omitempty"`                                                  // 本局首领试炼类型(镜像 DungeonTable.boss_trial_kind)
-	BattleDifficulty             uint32                    `protobuf:"varint,20,opt,name=battle_difficulty,json=battleDifficulty,proto3" json:"battle_difficulty,omitempty"`                                           // 本局试炼难度档(0常规/1普通/2困难)
-	RoundLimit                   uint32                    `protobuf:"varint,21,opt,name=round_limit,json=roundLimit,proto3" json:"round_limit,omitempty"`                                                             // 本局权威逻辑回合上限（供 HUD 展示与决胜倒计时）
-	EscalationStacks             uint32                    `protobuf:"varint,22,opt,name=escalation_stacks,json=escalationStacks,proto3" json:"escalation_stacks,omitempty"`                                           // 竞技 PVP 后期「战意渐盛」当前层数（0=未开启；每层伤+10%、疗盾-10%）
-	EscalationStartRound         uint32                    `protobuf:"varint,23,opt,name=escalation_start_round,json=escalationStartRound,proto3" json:"escalation_start_round,omitempty"`                             // 「战意渐盛」起算回合号（0=本模式不启用）
-	SurrenderUnlockRound         uint32                    `protobuf:"varint,24,opt,name=surrender_unlock_round,json=surrenderUnlockRound,proto3" json:"surrender_unlock_round,omitempty"`                             // PVP 投降解锁回合号（0=不可投降，PVP 为 5）
-	SurrenderVote                *BattleSurrenderVoteState `protobuf:"bytes,25,opt,name=surrender_vote,json=surrenderVote,proto3" json:"surrender_vote,omitempty"`                                                     // 本队当前投降投票或冷却状态（对手与观众视角由节点清空）
-	PrepState                    *BattlePrepState          `protobuf:"bytes,26,opt,name=prep_state,json=prepState,proto3" json:"prep_state,omitempty"`                                                                 // 论剑 V3 战前 15 秒明牌变阵状态（非变阵期留空；对手与观众按视角脱敏）
-	TournamentContext            *TournamentBattleContext  `protobuf:"bytes,27,opt,name=tournament_context,json=tournamentContext,proto3" json:"tournament_context,omitempty"`                                         // 全服赛季战队锦标赛 V2：BO3 局分与五行灵脉阵眼上下文（供参战与观众展示）
-	TeamAFormationId             uint32                    `protobuf:"varint,28,opt,name=team_a_formation_id,json=teamAFormationId,proto3" json:"team_a_formation_id,omitempty"`                                       // A 方生效五行阵法（0=无，1..5）
-	TeamBFormationId             uint32                    `protobuf:"varint,29,opt,name=team_b_formation_id,json=teamBFormationId,proto3" json:"team_b_formation_id,omitempty"`                                       // B 方生效五行阵法（0=无，1..5）
-	TowerContext                 *WuxingTowerBattleContext `protobuf:"bytes,30,opt,name=tower_context,json=towerContext,proto3" json:"tower_context,omitempty"`                                                        // 五行幻境周常爬塔上下文（层数/灵脉/本轮已选符印）
-	CustomDuelRules              *CustomDuelRules          `protobuf:"bytes,31,opt,name=custom_duel_rules,json=customDuelRules,proto3" json:"custom_duel_rules,omitempty"`                                             // 道友切磋坊生效自定义规则（供参战与观众展示）
-	WuxingSynergyActiveThisRound bool                      `protobuf:"varint,32,opt,name=wuxing_synergy_active_this_round,json=wuxingSynergyActiveThisRound,proto3" json:"wuxing_synergy_active_this_round,omitempty"` // 本回合是否激活人宠五行相生合击（每 3 回合）
-	SeasonWeeklyAffixId          uint32                    `protobuf:"varint,33,opt,name=season_weekly_affix_id,json=seasonWeeklyAffixId,proto3" json:"season_weekly_affix_id,omitempty"`                              // 本局生效的赛季全员对称周环境词缀（0=无，1..4）
-	BossWeeklyAffixId            uint32                    `protobuf:"varint,34,opt,name=boss_weekly_affix_id,json=bossWeeklyAffixId,proto3" json:"boss_weekly_affix_id,omitempty"`                                    // 首领试炼本周冻结五行词缀（0=无/非首领试炼，1金/2木/3水/4火/5土）
-	TeamPings                    []*BattleTacticalPing     `protobuf:"bytes,35,rep,name=team_pings,json=teamPings,proto3" json:"team_pings,omitempty"`                                                                 // 论剑 V4 队内一键战术标点（仅同队可见；敌方与观众视图由节点清空）
-	SelfStandbyPets              []*BattlePrepPetOption    `protobuf:"bytes,36,rep,name=self_standby_pets,json=selfStandbyPets,proto3" json:"self_standby_pets,omitempty"`                                             // 论剑 V5 临阵唤灵本人剩余备选灵宠（仅本人可见，对手与观众清空）
-	SelfSummonPetRemaining       uint32                    `protobuf:"varint,37,opt,name=self_summon_pet_remaining,json=selfSummonPetRemaining,proto3" json:"self_summon_pet_remaining,omitempty"`                     // 论剑 V5 临阵唤灵本人剩余可用次数（0/1，仅本人可见，对手与观众清空）
-	SummonPetUnlockRound         uint32                    `protobuf:"varint,38,opt,name=summon_pet_unlock_round,json=summonPetUnlockRound,proto3" json:"summon_pet_unlock_round,omitempty"`                           // 论剑 V5 临阵唤灵解锁回合号（正式自养竞技为 2，其余模式为 0）
-	BannedSkillIds               []uint32                  `protobuf:"varint,39,rep,packed,name=banned_skill_ids,json=bannedSkillIds,proto3" json:"banned_skill_ids,omitempty"`                                        // 本局最终生效的全场双边共同禁用技能（升序去重，0..6 个；观战/重连/回放全可见）
-	TeamABannedSkillIds          []uint32                  `protobuf:"varint,40,rep,packed,name=team_a_banned_skill_ids,json=teamABannedSkillIds,proto3" json:"team_a_banned_skill_ids,omitempty"`                     // A 队（team_index=0）最终生效的禁用技能（0..3 个）
-	TeamBBannedSkillIds          []uint32                  `protobuf:"varint,41,rep,packed,name=team_b_banned_skill_ids,json=teamBBannedSkillIds,proto3" json:"team_b_banned_skill_ids,omitempty"`                     // B 队（team_index=1）最终生效的禁用技能（0..3 个）
-	TrialVowMask                 uint32                    `protobuf:"varint,42,opt,name=trial_vow_mask,json=trialVowMask,proto3" json:"trial_vow_mask,omitempty"`                                                     // 五行试炼志 V3：本局生效的自选限制誓约位掩码（0=无，1..15）
+	SelfItems                    []*BattleItemEntry           `protobuf:"bytes,7,rep,name=self_items,json=selfItems,proto3" json:"self_items,omitempty"`
+	Telegraphs                   []*BattleTelegraphEntry      `protobuf:"bytes,8,rep,name=telegraphs,proto3" json:"telegraphs,omitempty"`                                                                                 // 首领/护卫公开预告
+	ActivePolarity               uint32                       `protobuf:"varint,9,opt,name=active_polarity,json=activePolarity,proto3" json:"active_polarity,omitempty"`                                                  // 物法易势当前强势类型：0=无，1=物势(物理直伤×1.15)，2=法势(法术直伤×1.15)
+	NextPolaritySwitchRound      uint32                       `protobuf:"varint,10,opt,name=next_polarity_switch_round,json=nextPolaritySwitchRound,proto3" json:"next_polarity_switch_round,omitempty"`                  // 物法易势下次换势回合号（非易势为 0）
+	ProtectedGuardActorId        uint64                       `protobuf:"varint,11,opt,name=protected_guard_actor_id,json=protectedGuardActorId,proto3" json:"protected_guard_actor_id,omitempty"`                        // 护卫救援模式须保全的护卫局内 actor_id（非救援为 0）
+	LastResolvedTelegraphs       []*BattleTelegraphEntry      `protobuf:"bytes,12,rep,name=last_resolved_telegraphs,json=lastResolvedTelegraphs,proto3" json:"last_resolved_telegraphs,omitempty"`                        // 最近一回合已兑现或已取消的预告终态（供重连还原）
+	BossPhase                    uint32                       `protobuf:"varint,13,opt,name=boss_phase,json=bossPhase,proto3" json:"boss_phase,omitempty"`                                                                // 首领试炼当前阶段：0=非首领试炼，1=一阶段，2=二阶段决战姿态(破釜)
+	BossMomentumStacks           uint32                       `protobuf:"varint,14,opt,name=boss_momentum_stacks,json=bossMomentumStacks,proto3" json:"boss_momentum_stacks,omitempty"`                                   // 首领当前「蓄势」层数(0..3，可驱散，重劈消耗，每层+12%)
+	BossStanceType               uint32                       `protobuf:"varint,15,opt,name=boss_stance_type,json=bossStanceType,proto3" json:"boss_stance_type,omitempty"`                                               // 敌方护势联防阵类型：0=无，1=物防阵，2=法防阵
+	BossStanceRemainRounds       uint32                       `protobuf:"varint,16,opt,name=boss_stance_remain_rounds,json=bossStanceRemainRounds,proto3" json:"boss_stance_remain_rounds,omitempty"`                     // 当前护势联防剩余回合数(含当轮)
+	BossExposedPct               uint32                       `protobuf:"varint,17,opt,name=boss_exposed_pct,json=bossExposedPct,proto3" json:"boss_exposed_pct,omitempty"`                                               // 首领当前「破绽」易伤百分点(0/20/35)
+	BossExposedUntilRound        uint32                       `protobuf:"varint,18,opt,name=boss_exposed_until_round,json=bossExposedUntilRound,proto3" json:"boss_exposed_until_round,omitempty"`                        // 首领「破绽」持续到期回合号(含该回合末)
+	BossTrialKind                uint32                       `protobuf:"varint,19,opt,name=boss_trial_kind,json=bossTrialKind,proto3" json:"boss_trial_kind,omitempty"`                                                  // 本局首领试炼类型(镜像 DungeonTable.boss_trial_kind)
+	BattleDifficulty             uint32                       `protobuf:"varint,20,opt,name=battle_difficulty,json=battleDifficulty,proto3" json:"battle_difficulty,omitempty"`                                           // 本局试炼难度档(0常规/1普通/2困难)
+	RoundLimit                   uint32                       `protobuf:"varint,21,opt,name=round_limit,json=roundLimit,proto3" json:"round_limit,omitempty"`                                                             // 本局权威逻辑回合上限（供 HUD 展示与决胜倒计时）
+	EscalationStacks             uint32                       `protobuf:"varint,22,opt,name=escalation_stacks,json=escalationStacks,proto3" json:"escalation_stacks,omitempty"`                                           // 竞技 PVP 后期「战意渐盛」当前层数（0=未开启；每层伤+10%、疗盾-10%）
+	EscalationStartRound         uint32                       `protobuf:"varint,23,opt,name=escalation_start_round,json=escalationStartRound,proto3" json:"escalation_start_round,omitempty"`                             // 「战意渐盛」起算回合号（0=本模式不启用）
+	SurrenderUnlockRound         uint32                       `protobuf:"varint,24,opt,name=surrender_unlock_round,json=surrenderUnlockRound,proto3" json:"surrender_unlock_round,omitempty"`                             // PVP 投降解锁回合号（0=不可投降，PVP 为 5）
+	SurrenderVote                *BattleSurrenderVoteState    `protobuf:"bytes,25,opt,name=surrender_vote,json=surrenderVote,proto3" json:"surrender_vote,omitempty"`                                                     // 本队当前投降投票或冷却状态（对手与观众视角由节点清空）
+	PrepState                    *BattlePrepState             `protobuf:"bytes,26,opt,name=prep_state,json=prepState,proto3" json:"prep_state,omitempty"`                                                                 // 论剑 V3 战前 15 秒明牌变阵状态（非变阵期留空；对手与观众按视角脱敏）
+	TournamentContext            *TournamentBattleContext     `protobuf:"bytes,27,opt,name=tournament_context,json=tournamentContext,proto3" json:"tournament_context,omitempty"`                                         // 全服赛季战队锦标赛 V2：BO3 局分与五行灵脉阵眼上下文（供参战与观众展示）
+	TeamAFormationId             uint32                       `protobuf:"varint,28,opt,name=team_a_formation_id,json=teamAFormationId,proto3" json:"team_a_formation_id,omitempty"`                                       // A 方生效五行阵法（0=无，1..5）
+	TeamBFormationId             uint32                       `protobuf:"varint,29,opt,name=team_b_formation_id,json=teamBFormationId,proto3" json:"team_b_formation_id,omitempty"`                                       // B 方生效五行阵法（0=无，1..5）
+	TowerContext                 *WuxingTowerBattleContext    `protobuf:"bytes,30,opt,name=tower_context,json=towerContext,proto3" json:"tower_context,omitempty"`                                                        // 五行幻境周常爬塔上下文（层数/灵脉/本轮已选符印）
+	CustomDuelRules              *CustomDuelRules             `protobuf:"bytes,31,opt,name=custom_duel_rules,json=customDuelRules,proto3" json:"custom_duel_rules,omitempty"`                                             // 道友切磋坊生效自定义规则（供参战与观众展示）
+	WuxingSynergyActiveThisRound bool                         `protobuf:"varint,32,opt,name=wuxing_synergy_active_this_round,json=wuxingSynergyActiveThisRound,proto3" json:"wuxing_synergy_active_this_round,omitempty"` // 本回合是否激活人宠五行相生合击（每 3 回合）
+	SeasonWeeklyAffixId          uint32                       `protobuf:"varint,33,opt,name=season_weekly_affix_id,json=seasonWeeklyAffixId,proto3" json:"season_weekly_affix_id,omitempty"`                              // 本局生效的赛季全员对称周环境词缀（0=无，1..4）
+	BossWeeklyAffixId            uint32                       `protobuf:"varint,34,opt,name=boss_weekly_affix_id,json=bossWeeklyAffixId,proto3" json:"boss_weekly_affix_id,omitempty"`                                    // 首领试炼本周冻结五行词缀（0=无/非首领试炼，1金/2木/3水/4火/5土）
+	TeamPings                    []*BattleTacticalPing        `protobuf:"bytes,35,rep,name=team_pings,json=teamPings,proto3" json:"team_pings,omitempty"`                                                                 // 论剑 V4 队内一键战术标点（仅同队可见；敌方与观众视图由节点清空）
+	SelfStandbyPets              []*BattlePrepPetOption       `protobuf:"bytes,36,rep,name=self_standby_pets,json=selfStandbyPets,proto3" json:"self_standby_pets,omitempty"`                                             // 论剑 V5 临阵唤灵本人剩余备选灵宠（仅本人可见，对手与观众清空）
+	SelfSummonPetRemaining       uint32                       `protobuf:"varint,37,opt,name=self_summon_pet_remaining,json=selfSummonPetRemaining,proto3" json:"self_summon_pet_remaining,omitempty"`                     // 论剑 V5 临阵唤灵本人剩余可用次数（0/1，仅本人可见，对手与观众清空）
+	SummonPetUnlockRound         uint32                       `protobuf:"varint,38,opt,name=summon_pet_unlock_round,json=summonPetUnlockRound,proto3" json:"summon_pet_unlock_round,omitempty"`                           // 论剑 V5 临阵唤灵解锁回合号（正式自养竞技为 2，其余模式为 0）
+	BannedSkillIds               []uint32                     `protobuf:"varint,39,rep,packed,name=banned_skill_ids,json=bannedSkillIds,proto3" json:"banned_skill_ids,omitempty"`                                        // 本局最终生效的全场双边共同禁用技能（升序去重，0..6 个；观战/重连/回放全可见）
+	TeamABannedSkillIds          []uint32                     `protobuf:"varint,40,rep,packed,name=team_a_banned_skill_ids,json=teamABannedSkillIds,proto3" json:"team_a_banned_skill_ids,omitempty"`                     // A 队（team_index=0）最终生效的禁用技能（0..3 个）
+	TeamBBannedSkillIds          []uint32                     `protobuf:"varint,41,rep,packed,name=team_b_banned_skill_ids,json=teamBBannedSkillIds,proto3" json:"team_b_banned_skill_ids,omitempty"`                     // B 队（team_index=1）最终生效的禁用技能（0..3 个）
+	TrialVowMask                 uint32                       `protobuf:"varint,42,opt,name=trial_vow_mask,json=trialVowMask,proto3" json:"trial_vow_mask,omitempty"`                                                     // 五行试炼志 V3：本局生效的自选限制誓约位掩码（0=无，1..15）
+	TacticalPuzzleContext        *TacticalPuzzleBattleContext `protobuf:"bytes,43,opt,name=tactical_puzzle_context,json=tacticalPuzzleContext,proto3" json:"tactical_puzzle_context,omitempty"`                           // 万象残局坊冻结上下文（供局内残局抬头、剩余回合倒计时与自证标识展示）
+	TeamAProtectedSkillId        uint32                       `protobuf:"varint,44,opt,name=team_a_protected_skill_id,json=teamAProtectedSkillId,proto3" json:"team_a_protected_skill_id,omitempty"`                      // 战前禁选 V2：A 队（team_index=0）最终生效的护招技能 ID（0=未选；观战/重连/回放全可见）
+	TeamBProtectedSkillId        uint32                       `protobuf:"varint,45,opt,name=team_b_protected_skill_id,json=teamBProtectedSkillId,proto3" json:"team_b_protected_skill_id,omitempty"`                      // 战前禁选 V2：B 队（team_index=1）最终生效的护招技能 ID（0=未选；观战/重连/回放全可见）
+	CounteredBanSkillIds         []uint32                     `protobuf:"varint,46,rep,packed,name=countered_ban_skill_ids,json=counteredBanSkillIds,proto3" json:"countered_ban_skill_ids,omitempty"`                    // 战前禁选 V2：被对方护招「破禁化解」而恢复可用的技能 ID（升序去重，与 banned_skill_ids 互斥）
 	unknownFields                protoimpl.UnknownFields
 	sizeCache                    protoimpl.SizeCache
 }
@@ -713,6 +717,34 @@ func (x *BattleStateS2C) GetTrialVowMask() uint32 {
 		return x.TrialVowMask
 	}
 	return 0
+}
+
+func (x *BattleStateS2C) GetTacticalPuzzleContext() *TacticalPuzzleBattleContext {
+	if x != nil {
+		return x.TacticalPuzzleContext
+	}
+	return nil
+}
+
+func (x *BattleStateS2C) GetTeamAProtectedSkillId() uint32 {
+	if x != nil {
+		return x.TeamAProtectedSkillId
+	}
+	return 0
+}
+
+func (x *BattleStateS2C) GetTeamBProtectedSkillId() uint32 {
+	if x != nil {
+		return x.TeamBProtectedSkillId
+	}
+	return 0
+}
+
+func (x *BattleStateS2C) GetCounteredBanSkillIds() []uint32 {
+	if x != nil {
+		return x.CounteredBanSkillIds
+	}
+	return nil
 }
 
 type BattleStartS2C struct {
@@ -1877,15 +1909,17 @@ func (x *SurrenderVoteS2C) GetVoteState() *BattleSurrenderVoteState {
 
 // 论剑 V3 战前明牌变阵提交（参战者；经战斗直连发往 battle 节点，仅战前变阵期有效）。
 type UpdateBattlePrepRequest struct {
-	state              protoimpl.MessageState `protogen:"open.v1"`
-	BattleId           uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
-	SelectedSealId     uint32                 `protobuf:"varint,2,opt,name=selected_seal_id,json=selectedSealId,proto3" json:"selected_seal_id,omitempty"`             // 0 = 保持当前赛季印不变
-	SelectedPetId      uint64                 `protobuf:"varint,3,opt,name=selected_pet_id,json=selectedPetId,proto3" json:"selected_pet_id,omitempty"`                // 0 = 保持当前首发灵宠不变
-	Ready              bool                   `protobuf:"varint,4,opt,name=ready,proto3" json:"ready,omitempty"`                                                       // true = 锁定本场出战方案（锁定后不可再改；全员锁定立即开打）
-	UpdateBannedSkills bool                   `protobuf:"varint,5,opt,name=update_banned_skills,json=updateBannedSkills,proto3" json:"update_banned_skills,omitempty"` // true = 用下方 banned_skill_ids 原子替换本人禁用提名（允许空列表=清空）；false = 保持不变
-	BannedSkillIds     []uint32               `protobuf:"varint,6,rep,packed,name=banned_skill_ids,json=bannedSkillIds,proto3" json:"banned_skill_ids,omitempty"`      // 本人有序禁招提名列表（0..3，去重，须全部在白名单内）
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	BattleId             uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	SelectedSealId       uint32                 `protobuf:"varint,2,opt,name=selected_seal_id,json=selectedSealId,proto3" json:"selected_seal_id,omitempty"`                   // 0 = 保持当前赛季印不变
+	SelectedPetId        uint64                 `protobuf:"varint,3,opt,name=selected_pet_id,json=selectedPetId,proto3" json:"selected_pet_id,omitempty"`                      // 0 = 保持当前首发灵宠不变
+	Ready                bool                   `protobuf:"varint,4,opt,name=ready,proto3" json:"ready,omitempty"`                                                             // true = 锁定本场出战方案（锁定后不可再改；全员锁定立即开打）
+	UpdateBannedSkills   bool                   `protobuf:"varint,5,opt,name=update_banned_skills,json=updateBannedSkills,proto3" json:"update_banned_skills,omitempty"`       // true = 用下方 banned_skill_ids 原子替换本人禁用提名（允许空列表=清空）；false = 保持不变
+	BannedSkillIds       []uint32               `protobuf:"varint,6,rep,packed,name=banned_skill_ids,json=bannedSkillIds,proto3" json:"banned_skill_ids,omitempty"`            // 本人有序禁招提名列表（0..3，去重，须全部在白名单内）
+	UpdateProtectedSkill bool                   `protobuf:"varint,7,opt,name=update_protected_skill,json=updateProtectedSkill,proto3" json:"update_protected_skill,omitempty"` // 战前禁选 V2：true = 用下方 protected_skill_id 原子替换本人护招提名（0=清空）；false = 保持不变
+	ProtectedSkillId     uint32                 `protobuf:"varint,8,opt,name=protected_skill_id,json=protectedSkillId,proto3" json:"protected_skill_id,omitempty"`             // 战前禁选 V2：本人提名的本局护招技能 ID（0=清空；非 0 须在白名单内且不得与本人最终禁招列表冲突）
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *UpdateBattlePrepRequest) Reset() {
@@ -1958,6 +1992,20 @@ func (x *UpdateBattlePrepRequest) GetBannedSkillIds() []uint32 {
 		return x.BannedSkillIds
 	}
 	return nil
+}
+
+func (x *UpdateBattlePrepRequest) GetUpdateProtectedSkill() bool {
+	if x != nil {
+		return x.UpdateProtectedSkill
+	}
+	return false
+}
+
+func (x *UpdateBattlePrepRequest) GetProtectedSkillId() uint32 {
+	if x != nil {
+		return x.ProtectedSkillId
+	}
+	return 0
 }
 
 type UpdateBattlePrepResponse struct {
@@ -2902,7 +2950,7 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\x05label\x18\x06 \x01(\tR\x05label\x12'\n" +
 	"\x0ftelegraph_round\x18\a \x01(\rR\x0etelegraphRound\x12#\n" +
 	"\rstate_version\x18\b \x01(\x04R\fstateVersion\x12(\n" +
-	"\x10target_actor_ids\x18\t \x03(\x04R\x0etargetActorIds\"\xe8\x10\n" +
+	"\x10target_actor_ids\x18\t \x03(\x04R\x0etargetActorIds\"\xe9\x12\n" +
 	"\x0eBattleStateS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1f\n" +
 	"\vround_index\x18\x02 \x01(\rR\n" +
@@ -2954,7 +3002,11 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\x10banned_skill_ids\x18' \x03(\rR\x0ebannedSkillIds\x124\n" +
 	"\x17team_a_banned_skill_ids\x18( \x03(\rR\x13teamABannedSkillIds\x124\n" +
 	"\x17team_b_banned_skill_ids\x18) \x03(\rR\x13teamBBannedSkillIds\x12$\n" +
-	"\x0etrial_vow_mask\x18* \x01(\rR\ftrialVowMask\"T\n" +
+	"\x0etrial_vow_mask\x18* \x01(\rR\ftrialVowMask\x12T\n" +
+	"\x17tactical_puzzle_context\x18+ \x01(\v2\x1c.TacticalPuzzleBattleContextR\x15tacticalPuzzleContext\x128\n" +
+	"\x19team_a_protected_skill_id\x18, \x01(\rR\x15teamAProtectedSkillId\x128\n" +
+	"\x19team_b_protected_skill_id\x18- \x01(\rR\x15teamBProtectedSkillId\x125\n" +
+	"\x17countered_ban_skill_ids\x18. \x03(\rR\x14counteredBanSkillIds\"T\n" +
 	"\x0eBattleStartS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12%\n" +
 	"\x05state\x18\x02 \x01(\v2\x0f.BattleStateS2CR\x05state\"\x89\x02\n" +
@@ -3050,14 +3102,16 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\x10SurrenderVoteS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x128\n" +
 	"\n" +
-	"vote_state\x18\x02 \x01(\v2\x19.BattleSurrenderVoteStateR\tvoteState\"\xfa\x01\n" +
+	"vote_state\x18\x02 \x01(\v2\x19.BattleSurrenderVoteStateR\tvoteState\"\xde\x02\n" +
 	"\x17UpdateBattlePrepRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12(\n" +
 	"\x10selected_seal_id\x18\x02 \x01(\rR\x0eselectedSealId\x12&\n" +
 	"\x0fselected_pet_id\x18\x03 \x01(\x04R\rselectedPetId\x12\x14\n" +
 	"\x05ready\x18\x04 \x01(\bR\x05ready\x120\n" +
 	"\x14update_banned_skills\x18\x05 \x01(\bR\x12updateBannedSkills\x12(\n" +
-	"\x10banned_skill_ids\x18\x06 \x03(\rR\x0ebannedSkillIds\"\x81\x01\n" +
+	"\x10banned_skill_ids\x18\x06 \x03(\rR\x0ebannedSkillIds\x124\n" +
+	"\x16update_protected_skill\x18\a \x01(\bR\x14updateProtectedSkill\x12,\n" +
+	"\x12protected_skill_id\x18\b \x01(\rR\x10protectedSkillId\"\x81\x01\n" +
 	"\x18UpdateBattlePrepResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12/\n" +
 	"\n" +
@@ -3235,13 +3289,14 @@ var file_proto_battle_player_battle_proto_goTypes = []any{
 	(*CustomDuelRules)(nil),                // 44: CustomDuelRules
 	(*BattleTacticalPing)(nil),             // 45: BattleTacticalPing
 	(*BattlePrepPetOption)(nil),            // 46: BattlePrepPetOption
-	(*BattleEventItem)(nil),                // 47: BattleEventItem
-	(*BattleSettlementData)(nil),           // 48: BattleSettlementData
-	(*BattleAction)(nil),                   // 49: BattleAction
-	(*base.TipInfoMessage)(nil),            // 50: TipInfoMessage
-	(BattlePingKind)(0),                    // 51: BattlePingKind
-	(*BattleActorBuildSummary)(nil),        // 52: BattleActorBuildSummary
-	(*base.Empty)(nil),                     // 53: Empty
+	(*TacticalPuzzleBattleContext)(nil),    // 47: TacticalPuzzleBattleContext
+	(*BattleEventItem)(nil),                // 48: BattleEventItem
+	(*BattleSettlementData)(nil),           // 49: BattleSettlementData
+	(*BattleAction)(nil),                   // 50: BattleAction
+	(*base.TipInfoMessage)(nil),            // 51: TipInfoMessage
+	(BattlePingKind)(0),                    // 52: BattlePingKind
+	(*BattleActorBuildSummary)(nil),        // 53: BattleActorBuildSummary
+	(*base.Empty)(nil),                     // 54: Empty
 }
 var file_proto_battle_player_battle_proto_depIdxs = []int32{
 	37, // 0: BattleStateS2C.actors:type_name -> BattleActorState
@@ -3256,82 +3311,83 @@ var file_proto_battle_player_battle_proto_depIdxs = []int32{
 	44, // 9: BattleStateS2C.custom_duel_rules:type_name -> CustomDuelRules
 	45, // 10: BattleStateS2C.team_pings:type_name -> BattleTacticalPing
 	46, // 11: BattleStateS2C.self_standby_pets:type_name -> BattlePrepPetOption
-	5,  // 12: BattleStartS2C.state:type_name -> BattleStateS2C
-	47, // 13: TurnResultS2C.events:type_name -> BattleEventItem
-	5,  // 14: TurnResultS2C.state:type_name -> BattleStateS2C
-	4,  // 15: TurnResultS2C.resolved_telegraphs:type_name -> BattleTelegraphEntry
-	38, // 16: BattleEndS2C.outcome:type_name -> eBattleOutcome
-	48, // 17: BattleEndS2C.settlement:type_name -> BattleSettlementData
-	8,  // 18: BattleEndS2C.festival_beast_settlement:type_name -> FestivalBeastSettlementSummary
-	5,  // 19: SpectateStateS2C.state:type_name -> BattleStateS2C
-	38, // 20: SpectateEndS2C.outcome:type_name -> eBattleOutcome
-	0,  // 21: SpectateEndS2C.reason:type_name -> eSpectateEndReason
-	49, // 22: SubmitBattleActionRequest.action:type_name -> BattleAction
-	50, // 23: SubmitBattleActionResponse.error_message:type_name -> TipInfoMessage
-	50, // 24: StopWatchBattleResponse.error_message:type_name -> TipInfoMessage
-	50, // 25: SetAutoBattleResponse.error_message:type_name -> TipInfoMessage
-	50, // 26: SurrenderBattleResponse.error_message:type_name -> TipInfoMessage
-	40, // 27: SurrenderBattleResponse.vote_state:type_name -> BattleSurrenderVoteState
-	40, // 28: SurrenderVoteS2C.vote_state:type_name -> BattleSurrenderVoteState
-	50, // 29: UpdateBattlePrepResponse.error_message:type_name -> TipInfoMessage
-	41, // 30: UpdateBattlePrepResponse.prep_state:type_name -> BattlePrepState
-	41, // 31: BattlePrepUpdateS2C.prep_state:type_name -> BattlePrepState
-	51, // 32: SendBattlePingRequest.kind:type_name -> BattlePingKind
-	50, // 33: SendBattlePingResponse.error_message:type_name -> TipInfoMessage
-	45, // 34: SendBattlePingResponse.ping:type_name -> BattleTacticalPing
-	45, // 35: BattlePingS2C.ping:type_name -> BattleTacticalPing
-	1,  // 36: BattleTicketPayload.role:type_name -> eBattleTicketRole
-	1,  // 37: BattleAssignedS2C.role:type_name -> eBattleTicketRole
-	50, // 38: RequestBattleTicketResponse.error_message:type_name -> TipInfoMessage
-	32, // 39: RequestBattleTicketResponse.assignment:type_name -> BattleAssignedS2C
-	38, // 40: BattleReplay.outcome:type_name -> eBattleOutcome
-	3,  // 41: BattleReplay.end_reason:type_name -> eBattleReplayEndReason
-	5,  // 42: BattleReplay.start_state:type_name -> BattleStateS2C
-	7,  // 43: BattleReplay.rounds:type_name -> TurnResultS2C
-	5,  // 44: BattleReplay.final_state:type_name -> BattleStateS2C
-	52, // 45: BattleReplay.actor_builds:type_name -> BattleActorBuildSummary
-	2,  // 46: BattleReplayEnvelope.codec:type_name -> eBattleReplayCodec
-	13, // 47: BattleClientPlayer.SubmitBattleAction:input_type -> SubmitBattleActionRequest
-	15, // 48: BattleClientPlayer.GetBattleState:input_type -> GetBattleStateRequest
-	6,  // 49: BattleClientPlayer.NotifyBattleStart:input_type -> BattleStartS2C
-	7,  // 50: BattleClientPlayer.NotifyTurnResult:input_type -> TurnResultS2C
-	9,  // 51: BattleClientPlayer.NotifyBattleEnd:input_type -> BattleEndS2C
-	10, // 52: BattleClientPlayer.NotifyBattleReconnect:input_type -> BattleReconnectS2C
-	16, // 53: BattleClientPlayer.StopWatchBattle:input_type -> StopWatchBattleRequest
-	18, // 54: BattleClientPlayer.SetAutoBattle:input_type -> SetAutoBattleRequest
-	11, // 55: BattleClientPlayer.NotifySpectateState:input_type -> SpectateStateS2C
-	7,  // 56: BattleClientPlayer.NotifySpectateTurnResult:input_type -> TurnResultS2C
-	12, // 57: BattleClientPlayer.NotifySpectateEnd:input_type -> SpectateEndS2C
-	32, // 58: BattleClientPlayer.NotifyBattleAssigned:input_type -> BattleAssignedS2C
-	20, // 59: BattleClientPlayer.SurrenderBattle:input_type -> SurrenderBattleRequest
-	22, // 60: BattleClientPlayer.NotifySurrenderVote:input_type -> SurrenderVoteS2C
-	23, // 61: BattleClientPlayer.UpdateBattlePrep:input_type -> UpdateBattlePrepRequest
-	25, // 62: BattleClientPlayer.NotifyBattlePrepUpdate:input_type -> BattlePrepUpdateS2C
-	26, // 63: BattleClientPlayer.SendBattlePing:input_type -> SendBattlePingRequest
-	28, // 64: BattleClientPlayer.NotifyBattlePing:input_type -> BattlePingS2C
-	14, // 65: BattleClientPlayer.SubmitBattleAction:output_type -> SubmitBattleActionResponse
-	5,  // 66: BattleClientPlayer.GetBattleState:output_type -> BattleStateS2C
-	53, // 67: BattleClientPlayer.NotifyBattleStart:output_type -> Empty
-	53, // 68: BattleClientPlayer.NotifyTurnResult:output_type -> Empty
-	53, // 69: BattleClientPlayer.NotifyBattleEnd:output_type -> Empty
-	53, // 70: BattleClientPlayer.NotifyBattleReconnect:output_type -> Empty
-	17, // 71: BattleClientPlayer.StopWatchBattle:output_type -> StopWatchBattleResponse
-	19, // 72: BattleClientPlayer.SetAutoBattle:output_type -> SetAutoBattleResponse
-	53, // 73: BattleClientPlayer.NotifySpectateState:output_type -> Empty
-	53, // 74: BattleClientPlayer.NotifySpectateTurnResult:output_type -> Empty
-	53, // 75: BattleClientPlayer.NotifySpectateEnd:output_type -> Empty
-	53, // 76: BattleClientPlayer.NotifyBattleAssigned:output_type -> Empty
-	21, // 77: BattleClientPlayer.SurrenderBattle:output_type -> SurrenderBattleResponse
-	53, // 78: BattleClientPlayer.NotifySurrenderVote:output_type -> Empty
-	24, // 79: BattleClientPlayer.UpdateBattlePrep:output_type -> UpdateBattlePrepResponse
-	53, // 80: BattleClientPlayer.NotifyBattlePrepUpdate:output_type -> Empty
-	27, // 81: BattleClientPlayer.SendBattlePing:output_type -> SendBattlePingResponse
-	53, // 82: BattleClientPlayer.NotifyBattlePing:output_type -> Empty
-	65, // [65:83] is the sub-list for method output_type
-	47, // [47:65] is the sub-list for method input_type
-	47, // [47:47] is the sub-list for extension type_name
-	47, // [47:47] is the sub-list for extension extendee
-	0,  // [0:47] is the sub-list for field type_name
+	47, // 12: BattleStateS2C.tactical_puzzle_context:type_name -> TacticalPuzzleBattleContext
+	5,  // 13: BattleStartS2C.state:type_name -> BattleStateS2C
+	48, // 14: TurnResultS2C.events:type_name -> BattleEventItem
+	5,  // 15: TurnResultS2C.state:type_name -> BattleStateS2C
+	4,  // 16: TurnResultS2C.resolved_telegraphs:type_name -> BattleTelegraphEntry
+	38, // 17: BattleEndS2C.outcome:type_name -> eBattleOutcome
+	49, // 18: BattleEndS2C.settlement:type_name -> BattleSettlementData
+	8,  // 19: BattleEndS2C.festival_beast_settlement:type_name -> FestivalBeastSettlementSummary
+	5,  // 20: SpectateStateS2C.state:type_name -> BattleStateS2C
+	38, // 21: SpectateEndS2C.outcome:type_name -> eBattleOutcome
+	0,  // 22: SpectateEndS2C.reason:type_name -> eSpectateEndReason
+	50, // 23: SubmitBattleActionRequest.action:type_name -> BattleAction
+	51, // 24: SubmitBattleActionResponse.error_message:type_name -> TipInfoMessage
+	51, // 25: StopWatchBattleResponse.error_message:type_name -> TipInfoMessage
+	51, // 26: SetAutoBattleResponse.error_message:type_name -> TipInfoMessage
+	51, // 27: SurrenderBattleResponse.error_message:type_name -> TipInfoMessage
+	40, // 28: SurrenderBattleResponse.vote_state:type_name -> BattleSurrenderVoteState
+	40, // 29: SurrenderVoteS2C.vote_state:type_name -> BattleSurrenderVoteState
+	51, // 30: UpdateBattlePrepResponse.error_message:type_name -> TipInfoMessage
+	41, // 31: UpdateBattlePrepResponse.prep_state:type_name -> BattlePrepState
+	41, // 32: BattlePrepUpdateS2C.prep_state:type_name -> BattlePrepState
+	52, // 33: SendBattlePingRequest.kind:type_name -> BattlePingKind
+	51, // 34: SendBattlePingResponse.error_message:type_name -> TipInfoMessage
+	45, // 35: SendBattlePingResponse.ping:type_name -> BattleTacticalPing
+	45, // 36: BattlePingS2C.ping:type_name -> BattleTacticalPing
+	1,  // 37: BattleTicketPayload.role:type_name -> eBattleTicketRole
+	1,  // 38: BattleAssignedS2C.role:type_name -> eBattleTicketRole
+	51, // 39: RequestBattleTicketResponse.error_message:type_name -> TipInfoMessage
+	32, // 40: RequestBattleTicketResponse.assignment:type_name -> BattleAssignedS2C
+	38, // 41: BattleReplay.outcome:type_name -> eBattleOutcome
+	3,  // 42: BattleReplay.end_reason:type_name -> eBattleReplayEndReason
+	5,  // 43: BattleReplay.start_state:type_name -> BattleStateS2C
+	7,  // 44: BattleReplay.rounds:type_name -> TurnResultS2C
+	5,  // 45: BattleReplay.final_state:type_name -> BattleStateS2C
+	53, // 46: BattleReplay.actor_builds:type_name -> BattleActorBuildSummary
+	2,  // 47: BattleReplayEnvelope.codec:type_name -> eBattleReplayCodec
+	13, // 48: BattleClientPlayer.SubmitBattleAction:input_type -> SubmitBattleActionRequest
+	15, // 49: BattleClientPlayer.GetBattleState:input_type -> GetBattleStateRequest
+	6,  // 50: BattleClientPlayer.NotifyBattleStart:input_type -> BattleStartS2C
+	7,  // 51: BattleClientPlayer.NotifyTurnResult:input_type -> TurnResultS2C
+	9,  // 52: BattleClientPlayer.NotifyBattleEnd:input_type -> BattleEndS2C
+	10, // 53: BattleClientPlayer.NotifyBattleReconnect:input_type -> BattleReconnectS2C
+	16, // 54: BattleClientPlayer.StopWatchBattle:input_type -> StopWatchBattleRequest
+	18, // 55: BattleClientPlayer.SetAutoBattle:input_type -> SetAutoBattleRequest
+	11, // 56: BattleClientPlayer.NotifySpectateState:input_type -> SpectateStateS2C
+	7,  // 57: BattleClientPlayer.NotifySpectateTurnResult:input_type -> TurnResultS2C
+	12, // 58: BattleClientPlayer.NotifySpectateEnd:input_type -> SpectateEndS2C
+	32, // 59: BattleClientPlayer.NotifyBattleAssigned:input_type -> BattleAssignedS2C
+	20, // 60: BattleClientPlayer.SurrenderBattle:input_type -> SurrenderBattleRequest
+	22, // 61: BattleClientPlayer.NotifySurrenderVote:input_type -> SurrenderVoteS2C
+	23, // 62: BattleClientPlayer.UpdateBattlePrep:input_type -> UpdateBattlePrepRequest
+	25, // 63: BattleClientPlayer.NotifyBattlePrepUpdate:input_type -> BattlePrepUpdateS2C
+	26, // 64: BattleClientPlayer.SendBattlePing:input_type -> SendBattlePingRequest
+	28, // 65: BattleClientPlayer.NotifyBattlePing:input_type -> BattlePingS2C
+	14, // 66: BattleClientPlayer.SubmitBattleAction:output_type -> SubmitBattleActionResponse
+	5,  // 67: BattleClientPlayer.GetBattleState:output_type -> BattleStateS2C
+	54, // 68: BattleClientPlayer.NotifyBattleStart:output_type -> Empty
+	54, // 69: BattleClientPlayer.NotifyTurnResult:output_type -> Empty
+	54, // 70: BattleClientPlayer.NotifyBattleEnd:output_type -> Empty
+	54, // 71: BattleClientPlayer.NotifyBattleReconnect:output_type -> Empty
+	17, // 72: BattleClientPlayer.StopWatchBattle:output_type -> StopWatchBattleResponse
+	19, // 73: BattleClientPlayer.SetAutoBattle:output_type -> SetAutoBattleResponse
+	54, // 74: BattleClientPlayer.NotifySpectateState:output_type -> Empty
+	54, // 75: BattleClientPlayer.NotifySpectateTurnResult:output_type -> Empty
+	54, // 76: BattleClientPlayer.NotifySpectateEnd:output_type -> Empty
+	54, // 77: BattleClientPlayer.NotifyBattleAssigned:output_type -> Empty
+	21, // 78: BattleClientPlayer.SurrenderBattle:output_type -> SurrenderBattleResponse
+	54, // 79: BattleClientPlayer.NotifySurrenderVote:output_type -> Empty
+	24, // 80: BattleClientPlayer.UpdateBattlePrep:output_type -> UpdateBattlePrepResponse
+	54, // 81: BattleClientPlayer.NotifyBattlePrepUpdate:output_type -> Empty
+	27, // 82: BattleClientPlayer.SendBattlePing:output_type -> SendBattlePingResponse
+	54, // 83: BattleClientPlayer.NotifyBattlePing:output_type -> Empty
+	66, // [66:84] is the sub-list for method output_type
+	48, // [48:66] is the sub-list for method input_type
+	48, // [48:48] is the sub-list for extension type_name
+	48, // [48:48] is the sub-list for extension extendee
+	0,  // [0:48] is the sub-list for field type_name
 }
 
 func init() { file_proto_battle_player_battle_proto_init() }

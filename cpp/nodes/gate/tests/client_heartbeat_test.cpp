@@ -2,7 +2,8 @@
 // 握手期限、验签回包通告与开始跟踪、心跳应答、空闲超时。
 //
 // 不进 gate.vcxproj,登记在 cpp/tests/routing_identity_test/routing_identity_test.vcxproj,被测源码直接编进测试
-// (同 gate_push_delivery_test.cpp)。向 tlsSessionManager 放会话,会话的连接是真实的回环 TCP:被测函数要 lock()
+// (同 gate_push_delivery_test.cpp)。向 tlsSessionManager 放会话或未验签记录(票据先行,准入设计 P2-4:验签之前
+// 只有未验签记录、没有会话),连接是真实的回环 TCP:被测函数要 lock()
 // 真实的 TcpConnection 回包或 forceClose,结果在客户端侧收字节比对、看两端是否断开。
 // 「没有写」不靠等待判定:核对时先往这条连接直接写一帧哨兵,TCP 保序,收到哨兵时它前面的字节就是全部结果。
 //
@@ -14,8 +15,10 @@
 // 合成时刻与真实的 steady_clock 不可比,所以用例不调读真实时钟的 NoteInboundFrame / OnHeartbeatRequest,
 // 「收到一帧」直接写 ClientLiveness::NoteInbound(两者只差读不读时钟)。
 //
-// 生产上 HandleConnectionEstablished 调 ExpectHandshake、DispatchTokenVerify 的成功回包调 OnTokenVerified;用例按同一顺序直接调它们。
-// 没覆盖的一层:GateClientSessionHandler 注册回调、两个收包入口调 NoteInboundFrame、上面两处调用点、main.cpp 装扫描定时器。
+// 生产上 HandleConnectionEstablished 调 OpenPreAuthConnection 登记未验签记录,DispatchTokenVerify 验过票之后调 OpenVerifiedSession
+// 建会话、成功回包调 OnTokenVerified;用例按同一顺序直接调它们(connection_admission.cpp 同样编进本工程)。
+// 已验签会话的用例直接往会话表放一条已验签、已登录的会话(登录期限因此作废,只量空闲超时)。
+// 没覆盖的一层:GateClientSessionHandler 注册回调、两个收包入口调 NoteInboundFrame、上面几处调用点、main.cpp 装扫描定时器。
 // client_session_handler.cpp 与 main.cpp 拖着节点注册表、登录与场景入口,进不了这个工程,靠核对调用点与 robot 的 heartbeat-idle-smoke。
 
 #include <gtest/gtest.h>
@@ -25,12 +28,14 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "gate_codec.h"
 #include "handler/rpc/client_heartbeat.h"
+#include "handler/rpc/connection_admission.h"
 #include "muduo/net/Buffer.h"
 #include "muduo/net/EventLoop.h"
 #include "muduo/net/InetAddress.h"
@@ -301,6 +306,7 @@ namespace
 			loop = std::make_unique<muduo::net::EventLoop>();
 			InitGateCodec(SharedCodec());
 			tlsSessionManager.sessions().clear();
+			tlsSessionManager.preAuthConnections().clear();
 			static int caseIndex = 0;
 			base = SteadyTime{} + std::chrono::hours(24) * (++caseIndex);
 			// 丢弃前面用例留下的检查点(会话都已清掉),并让本用例之后的 1 秒节拍不算迟到。
@@ -311,28 +317,69 @@ namespace
 		void TearDown() override
 		{
 			tlsSessionManager.sessions().clear();
+			tlsSessionManager.preAuthConnections().clear();
 			connections.clear(); // 拆连接要驱动 loop,必须先于 loop_ 析构
 			loop.reset();
 		}
 
-		// 建一条回环连接并放进会话表。连不上时这里报失败,之后的核对也会失败,不会误过。
-		LoopbackConnection &AddSession(const SessionId sessionId, const bool verified)
+		// 建一条回环连接,并放进会话表一条已验签、已登录的会话(验签成功之后才有会话;登录成功过,登录期限作废)。
+		// 连不上时这里报失败,之后的核对也会失败,不会误过。
+		LoopbackConnection &AddSession(const SessionId sessionId)
 		{
-			auto connection = std::make_unique<LoopbackConnection>(*loop);
-			EXPECT_TRUE(connection->Open("gate_heartbeat_" + std::to_string(sessionId)));
-			const auto serverSide = connection->ServerSide();
+			LoopbackConnection &connection = OpenConnection("gate_heartbeat_" + std::to_string(sessionId));
+			const auto serverSide = connection.ServerSide();
 			if (serverSide)
 			{
-				serverSide->setContext(sessionId); // 同 HandleConnectionEstablished:连接上下文里是 session_id
+				serverSide->setContext(sessionId); // 同 OpenVerifiedSession:有会话的连接上下文里是 session_id
 			}
 			tlsSessionManager.sessions().erase(sessionId); // 同号重放时从一个全新的会话开始
 			SessionInfo &session = tlsSessionManager.sessions()[sessionId];
 			session.conn = serverSide;
-			session.verified = verified;
+			session.verified = true;
+			session.loginSucceeded = true;
 			session.playerId = kPlayer;
 			session.incarnation = NextTestIncarnation();
-			connections.push_back(std::move(connection));
-			return *connections.back();
+			return connection;
+		}
+
+		// 建一条回环连接,按生产的建连路径登记成未验签连接(OpenPreAuthConnection):只有一条未验签记录,没有会话。
+		LoopbackConnection &AddPreAuthConnection(const SteadyTime connectedAt)
+		{
+			LoopbackConnection &connection = OpenConnection("gate_heartbeat_preauth");
+			const auto serverSide = connection.ServerSide();
+			EXPECT_NE(serverSide, nullptr);
+			if (serverSide)
+			{
+				gate_connection_admission::OpenPreAuthConnection(serverSide, connectedAt);
+			}
+			return connection;
+		}
+
+		// 同 DispatchTokenVerify 验过票之后:发号、建会话(OpenVerifiedSession),再回成功包(VerifySucceeded)。返回新会话号。
+		SessionId PromoteAfterVerify(const LoopbackConnection &connection, const SteadyTime verifiedAt)
+		{
+			const auto serverSide = connection.ServerSide();
+			EXPECT_NE(serverSide, nullptr);
+			if (!serverSide)
+			{
+				return kInvalidSessionId;
+			}
+			const std::optional<SessionId> sessionId =
+				gate_connection_admission::OpenVerifiedSession(serverSide, std::string{}, verifiedAt);
+			EXPECT_TRUE(sessionId.has_value());
+			if (!sessionId)
+			{
+				return kInvalidSessionId;
+			}
+			VerifySucceeded(*sessionId, verifiedAt);
+			return *sessionId;
+		}
+
+		static bool HasPreAuthRecord(const LoopbackConnection &connection)
+		{
+			const auto serverSide = connection.ServerSide();
+			const std::optional<uint64_t> key = serverSide ? PreAuthIncarnationOf(serverSide) : std::nullopt;
+			return key && tlsSessionManager.preAuthConnections().contains(*key);
 		}
 
 		SessionInfo &Session(const SessionId sessionId) { return tlsSessionManager.sessions().at(sessionId); }
@@ -346,11 +393,10 @@ namespace
 			gate_client_heartbeat::HandleHeartbeat(serverSide, request, now);
 		}
 
-		// 验签成功的回包(生产上是 DispatchTokenVerify 的 sendReply(true, …)):通告心跳参数,开始跟踪。返回回包。
+		// 验签成功的回包(生产上是 DispatchTokenVerify 的 sendSuccess):通告心跳参数,开始跟踪。返回回包。
 		ClientTokenVerifyResponse VerifySucceeded(const SessionId sessionId, const SteadyTime now)
 		{
 			SessionInfo &session = Session(sessionId);
-			session.verified = true;
 			ClientTokenVerifyResponse response;
 			response.set_success(true);
 			gate_client_heartbeat::OnTokenVerified(sessionId, session, response, now);
@@ -406,6 +452,7 @@ namespace
 			delta.tracked = now.tracked - baseline.tracked;
 			delta.idleClosed = now.idleClosed - baseline.idleClosed;
 			delta.handshakeTimeouts = now.handshakeTimeouts - baseline.handshakeTimeouts;
+			delta.loginTimeouts = now.loginTimeouts - baseline.loginTimeouts;
 			delta.deferred = now.deferred - baseline.deferred;
 			return delta;
 		}
@@ -413,6 +460,14 @@ namespace
 		SteadyTime base{};
 
 	private:
+		LoopbackConnection &OpenConnection(const std::string &name)
+		{
+			auto connection = std::make_unique<LoopbackConnection>(*loop);
+			EXPECT_TRUE(connection->Open(name));
+			connections.push_back(std::move(connection));
+			return *connections.back();
+		}
+
 		std::unique_ptr<muduo::net::EventLoop> loop;
 		std::vector<std::unique_ptr<LoopbackConnection>> connections;
 		Counters baseline{};
@@ -423,7 +478,7 @@ namespace
 
 TEST_F(GateClientHeartbeat, TokenVerifiedAdvertisesHeartbeatAndStartsTrackingOnce)
 {
-	const auto &connection = AddSession(kSession, /*verified=*/false);
+	const auto &connection = AddSession(kSession);
 	const ClientTokenVerifyResponse response = VerifySucceeded(kSession, base + seconds(1));
 	EXPECT_TRUE(response.success());
 	EXPECT_EQ(response.heartbeat_interval_ms(), 10000u);
@@ -441,7 +496,7 @@ TEST_F(GateClientHeartbeat, TokenVerifiedAdvertisesHeartbeatAndStartsTrackingOnc
 
 TEST_F(GateClientHeartbeat, HeartbeatIsEchoedWithItsSeq)
 {
-	const auto &connection = AddSession(kSession, /*verified=*/false);
+	const auto &connection = AddSession(kSession);
 	VerifySucceeded(kSession, base + seconds(1));
 	Heartbeat(connection, 7, base + seconds(1));
 	Heartbeat(connection, 8, base + seconds(11));
@@ -454,7 +509,7 @@ TEST_F(GateClientHeartbeat, HeartbeatIsEchoedWithItsSeq)
 // dev 免验签:会话建连即已验证,客户端没发验签请求就来了心跳。从这一条起跟踪。
 TEST_F(GateClientHeartbeat, HeartbeatWithoutAVerifyReplyStartsTracking)
 {
-	const auto &connection = AddSession(kSession, /*verified=*/true);
+	const auto &connection = AddSession(kSession);
 	Heartbeat(connection, 1, base + seconds(1));
 
 	EXPECT_TRUE(Session(kSession).liveness.tracked);
@@ -462,22 +517,22 @@ TEST_F(GateClientHeartbeat, HeartbeatWithoutAVerifyReplyStartsTracking)
 	EXPECT_EQ(Delta(), (Counters{.answered = 1, .tracked = 1}));
 }
 
-// 与验签前发 ClientRequest 同一处置:不回包,直接断开。
+// 还没验签的连接(只有一条未验签记录,没有会话)发心跳:与验签前发 ClientRequest 同一处置,不回包,直接断开,也不因此建会话。
 TEST_F(GateClientHeartbeat, HeartbeatBeforeTokenVerifyClosesTheConnection)
 {
-	const auto &connection = AddSession(kSession, /*verified=*/false);
+	const auto &connection = AddPreAuthConnection(base + seconds(1));
 	Heartbeat(connection, 1, base + seconds(1));
 
 	ExpectClosed(connection);
 	EXPECT_TRUE(connection.ClientReceived().empty());
-	EXPECT_FALSE(Session(kSession).liveness.tracked);
+	EXPECT_TRUE(tlsSessionManager.sessions().empty()) << "验签之前不建会话";
 	EXPECT_EQ(Delta(), (Counters{.beforeVerify = 1}));
 }
 
 // 一个窗口里第 4 条不回,计一次非法包;连接不断(阈值缺省 50)。
 TEST_F(GateClientHeartbeat, FourthHeartbeatInOneWindowIsNotAnsweredAndCountsAsIllegal)
 {
-	const auto &connection = AddSession(kSession, /*verified=*/false);
+	const auto &connection = AddSession(kSession);
 	const SteadyTime burst = base + seconds(1);
 	VerifySucceeded(kSession, burst);
 	for (uint64_t seq = 1; seq <= 4; ++seq)
@@ -496,7 +551,7 @@ TEST_F(GateClientHeartbeat, FourthHeartbeatInOneWindowIsNotAnsweredAndCountsAsIl
 // 验签之后一帧都不发(没实现心跳的客户端):从验签回包那一刻起满 30s 关,只关一次。
 TEST_F(GateClientHeartbeat, VerifiedClientThatNeverHeartbeatsIsClosedOnceAfterTheIdleTimeout)
 {
-	const auto &connection = AddSession(kSession, /*verified=*/false);
+	const auto &connection = AddSession(kSession);
 	const SteadyTime start = base + seconds(1);
 	VerifySucceeded(kSession, start);
 
@@ -515,7 +570,7 @@ TEST_F(GateClientHeartbeat, VerifiedClientThatNeverHeartbeatsIsClosedOnceAfterTh
 
 TEST_F(GateClientHeartbeat, InboundFramePostponesTheIdleClose)
 {
-	const auto &connection = AddSession(kSession, /*verified=*/false);
+	const auto &connection = AddSession(kSession);
 	const SteadyTime start = base + seconds(1);
 	VerifySucceeded(kSession, start);
 
@@ -533,7 +588,7 @@ TEST_F(GateClientHeartbeat, InboundFramePostponesTheIdleClose)
 
 TEST_F(GateClientHeartbeat, RegularHeartbeatsKeepTheConnectionOpen)
 {
-	const auto &connection = AddSession(kSession, /*verified=*/false);
+	const auto &connection = AddSession(kSession);
 	const SteadyTime start = base + seconds(1);
 	VerifySucceeded(kSession, start);
 	std::string expected;
@@ -556,7 +611,7 @@ TEST_F(GateClientHeartbeat, RegularHeartbeatsKeepTheConnectionOpen)
 // dev 免验签、客户端既没发验签请求也没发心跳:gate 从没通告过心跳参数,不跟踪,静默再久也不关。
 TEST_F(GateClientHeartbeat, DevBypassSessionThatNeverAskedToVerifyIsNotTracked)
 {
-	const auto &connection = AddSession(kSession, /*verified=*/true);
+	const auto &connection = AddSession(kSession);
 	SweepEachSecond(base + seconds(1), base + 3 * kClientLiveness.idleTimeout);
 
 	EXPECT_FALSE(Session(kSession).liveness.tracked);
@@ -567,12 +622,12 @@ TEST_F(GateClientHeartbeat, DevBypassSessionThatNeverAskedToVerifyIsNotTracked)
 // 会话关闭后 session_id 被一条新连接复用:旧连接留下的检查点按代次丢弃,不会关掉新连接。
 TEST_F(GateClientHeartbeat, StaleCheckpointDoesNotCloseANewConnectionWithTheSameSessionId)
 {
-	const auto &oldConnection = AddSession(kSession, /*verified=*/false);
+	const auto &oldConnection = AddSession(kSession);
 	const SteadyTime start = base + seconds(1);
 	VerifySucceeded(kSession, start);
 	tlsSessionManager.sessions().erase(kSession); // 断开回调删了会话
 
-	const auto &newConnection = AddSession(kSession, /*verified=*/true); // 新代次,没验签请求、没心跳,不跟踪
+	const auto &newConnection = AddSession(kSession); // 新代次,没验签请求、没心跳,不跟踪
 	SweepEachSecond(start, start + kClientLiveness.idleTimeout + seconds(2));
 
 	EXPECT_EQ(Delta().idleClosed, 0u);
@@ -583,7 +638,7 @@ TEST_F(GateClientHeartbeat, StaleCheckpointDoesNotCloseANewConnectionWithTheSame
 // gate 的 loop 卡过(距上次扫描超过两个节拍):这一轮只推迟并计数,下一次准时的扫描才关。
 TEST_F(GateClientHeartbeat, StalledLoopDefersTheVerdictToTheNextOnTimeSweep)
 {
-	const auto &connection = AddSession(kSession, /*verified=*/false);
+	const auto &connection = AddSession(kSession);
 	const SteadyTime start = base + seconds(1);
 	VerifySucceeded(kSession, start);
 	SweepEachSecond(start, start + kClientLiveness.idleTimeout - seconds(1));
@@ -599,36 +654,89 @@ TEST_F(GateClientHeartbeat, StalledLoopDefersTheVerdictToTheNextOnTimeSweep)
 	ExpectClosed(connection);
 }
 
-// ---- 握手期限 ----
+// ---- 握手期限(扫未验签表,准入设计 P2-4) ----
 
-// 建连 10s 仍未验签:关。没验签的会话没有角色,断开回调只删会话。
+// 建连 10s 仍未验签:关,判据是距建连的时长。关的时候就摘掉未验签记录,从头到尾没有会话;断开回调随后找不到记录,什么都不做。
 TEST_F(GateClientHeartbeat, UnverifiedConnectionIsClosedAtTheHandshakeDeadline)
 {
-	const auto &connection = AddSession(kSession, /*verified=*/false);
 	const SteadyTime connectedAt = base + seconds(1);
-	gate_client_heartbeat::ExpectHandshake(kSession, Session(kSession), connectedAt);
+	const std::size_t pendingBefore = gate_client_heartbeat::PendingChecks();
+	const auto &connection = AddPreAuthConnection(connectedAt);
+	ASSERT_TRUE(HasPreAuthRecord(connection));
+	EXPECT_EQ(gate_client_heartbeat::PendingChecks(), pendingBefore) << "未验签连接不进检查点堆";
 
 	SweepEachSecond(connectedAt, connectedAt + kClientLiveness.handshakeTimeout - seconds(1));
 	EXPECT_EQ(Delta().handshakeTimeouts, 0u);
+	EXPECT_TRUE(HasPreAuthRecord(connection));
 	ExpectStillOpen(connection);
 
 	gate_client_heartbeat::SweepLiveness(connectedAt + kClientLiveness.handshakeTimeout);
 	EXPECT_EQ(Delta(), (Counters{.handshakeTimeouts = 1}));
+	EXPECT_FALSE(HasPreAuthRecord(connection)) << "关的时候就摘记录:这一刻起不再占未验签名额";
+	EXPECT_TRUE(tlsSessionManager.sessions().empty());
 	ExpectClosed(connection);
+
+	// 之后的扫描不会再关一次。
+	SweepEachSecond(connectedAt + kClientLiveness.handshakeTimeout + seconds(1),
+					connectedAt + 2 * kClientLiveness.handshakeTimeout);
+	EXPECT_EQ(Delta(), (Counters{.handshakeTimeouts = 1}));
 }
 
-// 期限之内验签:期限作废,之后靠心跳保活。
+// 表按建连先后有序,扫描只关到期的那一段:晚建连的那条照常等它自己的期限。
+TEST_F(GateClientHeartbeat, HandshakeDeadlineClosesOnlyTheExpiredHeadOfTheTable)
+{
+	const SteadyTime firstAt = base + seconds(1);
+	const auto &first = AddPreAuthConnection(firstAt);
+	const auto &second = AddPreAuthConnection(firstAt + seconds(5));
+
+	SweepEachSecond(firstAt, firstAt + kClientLiveness.handshakeTimeout);
+	EXPECT_EQ(Delta().handshakeTimeouts, 1u);
+	ExpectClosed(first);
+	EXPECT_TRUE(HasPreAuthRecord(second));
+	ExpectStillOpen(second);
+
+	SweepEachSecond(firstAt + kClientLiveness.handshakeTimeout + seconds(1),
+					firstAt + seconds(5) + kClientLiveness.handshakeTimeout);
+	EXPECT_EQ(Delta().handshakeTimeouts, 2u);
+	ExpectClosed(second);
+	EXPECT_TRUE(tlsSessionManager.preAuthConnections().empty());
+}
+
+// 期限之内验签:这时才建会话,未验签记录随之摘掉,期限作废;之后靠心跳保活。
 TEST_F(GateClientHeartbeat, VerifyingBeforeTheHandshakeDeadlineKeepsTheConnection)
 {
-	const auto &connection = AddSession(kSession, /*verified=*/false);
 	const SteadyTime connectedAt = base + seconds(1);
-	gate_client_heartbeat::ExpectHandshake(kSession, Session(kSession), connectedAt);
+	const auto &connection = AddPreAuthConnection(connectedAt);
+	EXPECT_TRUE(tlsSessionManager.sessions().empty()) << "验签之前不建会话";
 	const SteadyTime verifiedAt = connectedAt + seconds(2);
-	VerifySucceeded(kSession, verifiedAt);
+	const SessionId sessionId = PromoteAfterVerify(connection, verifiedAt);
+	EXPECT_FALSE(HasPreAuthRecord(connection));
+	EXPECT_TRUE(Session(sessionId).liveness.tracked);
+	Session(sessionId).loginSucceeded = true; // 登录期限不在本用例里量
 	Heartbeat(connection, 1, verifiedAt);
 	Heartbeat(connection, 2, verifiedAt + kClientLiveness.interval);
 
 	SweepEachSecond(connectedAt, connectedAt + 2 * kClientLiveness.handshakeTimeout);
 	EXPECT_EQ(Delta(), (Counters{.answered = 2, .tracked = 1}));
+	ExpectStillOpen(connection);
+}
+
+// 本端 loop 卡过:到期的未验签连接这一轮只计推迟、不关(验签请求可能还在接收缓冲里);恢复后读到了验签请求,建会话,不再关。
+TEST_F(GateClientHeartbeat, StalledLoopDefersTheHandshakeDeadline)
+{
+	const SteadyTime connectedAt = base + seconds(1);
+	const auto &connection = AddPreAuthConnection(connectedAt);
+	SweepEachSecond(connectedAt, connectedAt + kClientLiveness.handshakeTimeout - seconds(1));
+
+	const SteadyTime stalledUntil = connectedAt + kClientLiveness.handshakeTimeout + seconds(3);
+	gate_client_heartbeat::SweepLiveness(stalledUntil);
+	EXPECT_EQ(Delta(), (Counters{.deferred = 1}));
+	EXPECT_TRUE(HasPreAuthRecord(connection));
+	ExpectStillOpen(connection);
+
+	const SessionId sessionId = PromoteAfterVerify(connection, stalledUntil + std::chrono::milliseconds(10));
+	Session(sessionId).loginSucceeded = true;
+	gate_client_heartbeat::SweepLiveness(stalledUntil + seconds(1));
+	EXPECT_EQ(Delta().handshakeTimeouts, 0u);
 	ExpectStillOpen(connection);
 }

@@ -227,7 +227,7 @@ message ApplyRoleFenceResponse    { bool retry = 1; }
 
 | 参与者 | 挂起条件 |
 |---|---|
-| guild | 只对过户:`guild_player_state`、`guild_member` 还在帮(`requireGuildExit`,旧的删角就不要求离帮)。过户和删角都判:`guild_asset_op` 未终态;`guild_trial_reward_owed`;`guild_trial_launch_role`;`guild_trial_lobby_slot` |
+| guild | 只对过户:`guild_player_state`、`guild_member` 还在帮(`requireGuildExit`,旧的删角就不要求离帮)。过户和删角都判:`guild_asset_op` 未终态;`guild_trial_reward_owed`;`guild_trial_launch_role`;`guild_trial_lobby_slot`;`guild_war_credit_owed`(帮战待入账行,2026-11-26 加,[帮战入账分流](../planning/guild-play-v2-implementation-plan.md)) |
 | trade | `trade_commerce` 未终态(含 `official_refund` 和本 listing 的 `rmb_freezing` 例外);`trade_asset_op` 未终态 |
 | mail | `mail_asset_op` 未终态 |
 | match | `match_authority_ticket` 占用;`team_membership`;`team_invite_index`、`team_application_index` 未过期;`team_launch_role`;`match_spectator`;`match_challenge_invitation`;`match_role_occupancy` 未到期(§4) |
@@ -767,7 +767,7 @@ data_service 按 `storage_id` 持有存档库连接池(`Directory.StoragePools`,
 | FX3 | 一轮独立评审的修复:复制流身份、目标账号锁定、REGISTER 不绑 epoch、`IsWriterFrozen` 和后台循环不打 HOLD、账号授权和目标集群预检、`admission_recover` 守闸门、启动路径扛冻结、`writer_frozen_seconds`、audit 复用目标位置、翻转标记、默认集群持久化、admin 连接串核对 | 已写完,未编译,待 Gemini 验证。serverbase 的排空判定不在这批 |
 | R1 | 评审,文档,验证清单 | 已完成。三路评审 26 条全部修复,排空判定的最后一处(闸门冻结确定没写不 Hold、`ResourceExhausted`)在主会话改完。修复本身没有再评审 |
 | B1 | `data_service` 按逻辑库建连熔断(`shared/authoritysql.WithConnectGate`)、关服务端与 14 个调用方 zrpc 按方法熔断(`shared/dsclient.Conf`),防止单分片失联连坐健康库([设计稿](./data-service-breaker-per-logical-db.md)) | 已写完,未编译,待 Gemini 验证 |
-| S1 | `data_service` 启动期故障隔离:目录各片与流水库按需核对,一个集群连不上时照样启动、服务健康库;批 2 写者注册跳过连不上的库,data_service、go/db 接受写资格子集,缺的库关着、Pod 不就绪([设计稿](./data-service-startup-isolation.md)) | 两批都已写完,未编译,待 Gemini 验证 |
+| S1 | `data_service` 启动期故障隔离:目录各片与流水库按需核对,一个集群连不上时照样启动、服务健康库;批 2 写者注册跳过连不上的库,data_service、go/db 接受写资格子集,缺的库关着、Pod 不就绪;第二轮:关着的池后台每 15 秒重核并计入就绪,缺目录片写资格时以 78 退出、由 reaper 重建([设计稿](./data-service-startup-isolation.md)) | 三部分都已写完,未编译,待 Gemini 验证;目录第 0 片仍是启动硬依赖,另开会话做 |
 
 G1 落地后、F1~D1 落地前的过渡状态(D1 已写完,这段结束):闸门已按库拆开,但跨库 SQL 还在。data_service 的建角初始行和判死还在目录事务里写存档库,这些写只受目录库闸门保护,不受落点库闸门保护;go/db 选库还跨库读 `player_route`,库名来自配置 `Placement.RouteSchema`。这些都要求全部库还在一个集群,所以 F1~D1 落地之前不能真的搬库。
 

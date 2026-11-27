@@ -1174,7 +1174,7 @@ func auditRecord(t *testing.T, db *sql.DB, playerID, seq uint64, action inboxpb.
 		" WHERE `shard` = ? AND `player_id` = ? AND `domain` = ? AND `seq` = ? AND `action` = ?",
 		RowShard(playerID), playerID, uint32(gmDomain), seq, uint32(action)).Scan(
 		&a.Shard, &a.PlayerId, &a.Domain, &a.Seq, &a.Action, &a.Operator, &a.PeerAddr, &a.Reason, &a.CreatedMs,
-		&a.MsgType, &a.RequestId, &a.IssuedAtMs, &a.ContentSha256, &a.Payload, &a.VoidReason)
+		&a.MsgType, &a.RequestId, &a.IssuedAtMs, &a.ContentSha256, &a.Payload, &a.VoidReason, &a.ApprovalId, &a.Approver)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}
@@ -1239,6 +1239,7 @@ func TestIntegrationAuditRecordsWhatWasDone(t *testing.T) {
 		t.Helper()
 		if resp, err := e.store.Void(ctx, VoidParams{
 			PlayerID: pid, Domain: gmDomain, Seq: seq, Reason: reason, Operator: "ops_audit", Note: "工单 #9", PeerAddr: "127.0.0.1:4",
+			ApprovalID: "5001", Approver: "ops_reviewer",
 		}, nil); err != nil || resp.GetErrorMessage() != nil {
 			t.Fatalf("作废 seq=%d: %+v %v", seq, resp, err)
 		}
@@ -1248,8 +1249,8 @@ func TestIntegrationAuditRecordsWhatWasDone(t *testing.T) {
 	check("b 直接作废", auditRecord(t, e.db, pid, b, voidAudit), b, ridB, issuedB, payloadB, cancelled)
 	check("a 挂指令", auditRecord(t, e.db, pid, a, voidAudit), a, ridA, issuedA, payloadA, quarantined)
 	if v := auditRecord(t, e.db, pid, a, voidAudit); v.GetOperator() != "ops_audit" || v.GetPeerAddr() != "127.0.0.1:4" ||
-		v.GetReason() != "工单 #9" {
-		t.Fatalf("「谁、为什么」仍取调用方: %+v", v)
+		v.GetReason() != "工单 #9" || v.GetApprovalId() != "5001" || v.GetApprover() != "ops_reviewer" {
+		t.Fatalf("「谁、为什么」与双人复核批准记录仍取调用方: %+v", v)
 	}
 
 	// a 由消费方 SKIPPED 终结;a、b 两条终态行是永久收据(没有清理,设计 §9.1),审计行照样答得出「做了什么」。

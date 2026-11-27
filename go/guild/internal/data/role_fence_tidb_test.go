@@ -187,6 +187,7 @@ func TestTiDBPendingGuildBlocksFreezeAndRemoval(t *testing.T) {
 		{"guild-unspecified", "guild_asset_op", &pb.GuildAssetOpRecord{OpId: 51, PlayerId: 11, Status: 0}},
 		{"guild-unknown", "guild_asset_op", &pb.GuildAssetOpRecord{OpId: 51, PlayerId: 11, Status: 99}},
 		{"guild-owed-after-leave", "guild_trial_reward_owed", &pb.GuildTrialRewardOwedRecord{PlayerId: 11, BattleId: 51}},
+		{"guild-war-credit-owed", "guild_war_credit_owed", &pb.GuildWarCreditOwedRecord{PlayerId: 11, OpId: 51}},
 		{"guild-prepared-launch", "guild_trial_launch_role", &pb.GuildTrialLaunchRoleRecord{PlayerId: 11, RequestId: 51, Account: "seller", OwnerRevision: 1, State: 1}},
 		{"guild-unknown-launch", "guild_trial_launch_role", &pb.GuildTrialLaunchRoleRecord{PlayerId: 11, RequestId: 51, Account: "seller", OwnerRevision: 1, State: 99}},
 		{"guild-terminal-role-missing-original", "guild_trial_launch_role", &pb.GuildTrialLaunchRoleRecord{PlayerId: 11, RequestId: 51, State: 2}},

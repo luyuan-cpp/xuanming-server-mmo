@@ -2,7 +2,7 @@
 #
 # 指标由 gate 的 Prometheus 出口导出(环境变量 MMORPG_METRICS_PORT,k8s_deploy.ps1 -CppMetricsPort 缺省 9400),
 # 定义在 cpp/nodes/gate/handler/rpc/connection_admission.cpp 的 CollectMetrics:
-#   - gate_connections_current / gate_connections_max:会话数与生效上限;
+#   - gate_connections_current / gate_connections_max:连接数(会话 + 还没验签的连接,总量上限按它判)与生效上限;
 #   - gate_unauthenticated_connections:还没验签的连接数。握手期限是 10 秒,正常客户端毫秒级验签,
 #     这个数「高且不周转」就是有连接占着位置不验签;「低但 gate_accepted_total 涨得快」是正常洪峰;
 #   - gate_accepted_total:接纳的连接,rate() 就是新建连接速率;
@@ -39,7 +39,7 @@ spec:
     - name: gate.connections
       interval: 30s
       rules:
-        # 会话数逼近上限。login 挑 gate 时在 90% 就剔除这台(gate-load-balancing-design.md),持续高于 90% 说明
+        # 连接数(会话 + 未验签)逼近上限。login 挑 gate 时在会话数到 90% 就剔除这台(gate-load-balancing-design.md),持续高于 90% 说明
         # 这个 zone 的 gate 台数不够,或者有流量绕过了 login 的分配。
         - alert: GateConnectionsNearCapacity
           expr: |
@@ -48,7 +48,7 @@ spec:
           labels:
             severity: warning
           annotations:
-            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 会话数已超过连接上限的 90%({{ $value | printf \"%.2f\" }})"
+            summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 连接数(会话 + 未验签)已超过连接上限的 90%({{ $value | printf \"%.2f\" }})"
             description: >-
               先看同 zone 其余 gate 的 gate_connections_current:都高就加 gate 台数或调大 GateMaxConnections
               (同时核对 fd 上限与内存限额);只有这一台高,对照 gate_unauthenticated_connections 看是不是被未验签连接占住。
@@ -64,7 +64,7 @@ spec:
           annotations:
             summary: "{{ $labels.namespace }} 的 {{ $labels.instance }} 因满员拒绝了新连接({{ $value | printf \"%.0f\" }} 条 / 5 分钟)"
             description: >-
-              这台 gate 的会话数到了上限。未验签连接最多占到 gate_preauth_budget(上限的 10%),所以满员时至少九成
+              这台 gate 的连接数(会话 + 未验签)到了上限。未验签连接最多占到 gate_preauth_budget(上限的 10%),所以满员时至少九成
               是验签过的会话:多半是真实玩家满了,加台数;同时 gate_unauthenticated_connections 贴着预算,
               说明还有一批只建连不验签的流量,按 GateUnauthenticatedConnectionsHigh 处置。
             runbook_url: docs/ops/gate-kernel-tuning-runbook.md

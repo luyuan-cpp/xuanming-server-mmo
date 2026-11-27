@@ -164,8 +164,27 @@ var (
 			"Unavailable. Set once per replica at startup; 0 is expected where global match is disabled (the key is only injected there).",
 	})
 
+	// adminUnapprovedCommandTotal 是不带双人复核批准记录而被受理的甲级运维命令(docs/design/admin-identity-and-dual-control.md §5.7):
+	// 只在 PlayerInbox.AdminAllowUnapproved 打开时增长,集群里应当恒为 0(告警 deploy/k8s/dual-control-alerts.yaml)。
+	adminUnapprovedCommandTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace, Name: "admin_unapproved_command_total",
+		Help: "PlayerInboxAdmin GmSanctionPlayer / VoidItem calls accepted without a dual-control approval record " +
+			"(only while PlayerInbox.AdminAllowUnapproved is on), by method.",
+	}, []string{"method"})
+
 	registerOnce sync.Once
 )
+
+// AdminMethodGmSanctionPlayer、AdminMethodVoidItem 是 admin_unapproved_command_total 的 method 取值:要求双人复核的两个运维方法。
+const (
+	AdminMethodGmSanctionPlayer = "GmSanctionPlayer"
+	AdminMethodVoidItem         = "VoidItem"
+)
+
+// ObserveAdminUnapprovedCommand 记一次不带双人复核批准记录而被受理的运维命令。
+func ObserveAdminUnapprovedCommand(method string) {
+	adminUnapprovedCommandTotal.WithLabelValues(method).Inc()
+}
 
 // ObserveEnqueue 记一次入箱结局。
 func ObserveEnqueue(typeLabel, result string) { enqueueTotal.WithLabelValues(typeLabel, result).Inc() }
@@ -266,7 +285,7 @@ func Register(db *sql.DB) {
 			reconcileInconsistentRows, reconcileOwnedShards, reconcileTruncatedTotal, reconcileRoundsTotal, reconcileReadTotal,
 			fetchScannedRows,
 			deliveredUnacked, deliveredUnackedStale, deliveredUnackedOldestSeconds, openItems, oldestOpenAgeSeconds,
-			maxDeliveryCount, notifyBacklog, battleProducerReady,
+			maxDeliveryCount, notifyBacklog, battleProducerReady, adminUnapprovedCommandTotal,
 		)
 		if db != nil {
 			// 连接池单独出池指标(设计 §9.4):go_sql_* 带 db_name="player_inbox"。
@@ -281,6 +300,10 @@ func Register(db *sql.DB) {
 		}
 		for _, r := range reconcileRoundResults {
 			reconcileRoundsTotal.WithLabelValues(r)
+		}
+		// 第一次受理就从 1 起的序列,increase() 看不到这一次;零值序列让告警从第一条起就响。
+		for _, m := range []string{AdminMethodGmSanctionPlayer, AdminMethodVoidItem} {
+			adminUnapprovedCommandTotal.WithLabelValues(m)
 		}
 	})
 }

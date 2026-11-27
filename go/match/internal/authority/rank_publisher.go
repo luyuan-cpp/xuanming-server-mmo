@@ -63,6 +63,7 @@ func RunRankPublisher(ctx context.Context, s *Store, endpoint, secret string, ad
 		}
 	}()
 	client := rankpb.NewRankAdminClient(conn)
+	rankReader := grpcRankBoardReader{client: rankpb.NewClientPlayerRankClient(conn)}
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -94,7 +95,10 @@ func RunRankPublisher(ctx context.Context, s *Store, endpoint, secret string, ad
 					return err
 				}
 				if s.ownsWork("ranked-rollover:0") {
-					return s.AdvanceRankedSeasonRollover(call, client, nil, secret, nil)
+					// 换季状态机给予独立 20 秒单步预算（不与 5 秒投榜预算争抢），并接入真实封榜核对与榜首查名。
+					rolloverCall, rolloverCancel := context.WithTimeout(context.WithoutCancel(ctx), rankRolloverStepTimeout)
+					defer rolloverCancel()
+					return s.AdvanceRankedSeasonRollover(rolloverCall, client, rankReader, secret, s.rankedNameLookup)
 				}
 				return nil
 			}()
@@ -119,7 +123,16 @@ const (
 	rankPublishPerShard     = 4
 	rankPublishRoundTimeout = 5 * time.Second
 	rankPublishBatchReserve = time.Second
+	rankRolloverStepTimeout = 20 * time.Second
 )
+
+type grpcRankBoardReader struct {
+	client rankpb.ClientPlayerRankClient
+}
+
+func (r grpcRankBoardReader) GetRankPage(ctx context.Context, in *rankpb.GetRankPageRequest) (*rankpb.GetRankPageResponse, error) {
+	return r.client.GetRankPage(ctx, in)
+}
 
 func rankPublishBudgetLeft(ctx context.Context) bool {
 	deadline, limited := ctx.Deadline()

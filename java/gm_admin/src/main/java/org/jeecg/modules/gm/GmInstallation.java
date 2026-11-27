@@ -175,6 +175,20 @@ public class GmInstallation implements ApplicationRunner, WebMvcConfigurer {
             db.update("UPDATE sys_permission SET is_leaf=0 WHERE id='gm_console'");
         });
         runMigration(9, () -> opsPermissions(List.of("mall"), "商城"));
+        runMigration(10, () -> {
+            // 双人复核批 5:账号类、回收、收件箱、榜单、滞留阵容接入运营处置。
+            opsPermissions(List.of("account"), "账号");
+            opsPermissions(List.of("recall"), "回收");
+            opsPermissions(List.of("inbox"), "收件箱");
+            opsPermissions(List.of("rank"), "榜单");
+            opsPermissions(List.of("match"), "滞留阵容");
+            // 批 6:网关管理面写操作(乙级,单人可做,要个人身份与留痕),给发起人与批准人两个标准角色,审计只读不给。
+            String roleId = db.queryForObject("SELECT id FROM sys_role WHERE role_code='admin'", String.class);
+            addMenu("gm_gateway_permission_0", "gm_console", "网关管理面写操作", null, null, 2, GmController.GATEWAY_WRITE);
+            db.update("INSERT INTO sys_role_permission(id,role_id,permission_id) VALUES(?,?,?)", "gm_admin_gateway_0", roleId, "gm_gateway_permission_0");
+            grant("gm_role_operator", "gateway", List.of("gm_gateway_permission_0"));
+            grant("gm_role_approver", "gateway", List.of("gm_gateway_permission_0"));
+        });
         ready = true;
     }
 

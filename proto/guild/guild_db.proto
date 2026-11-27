@@ -613,11 +613,13 @@ message GuildWarPlayerStateRecord {
 
 // 锁序位置 17:江湖追杀令托管与生命周期。
 // 第 4 个索引 (status,expires_at_ms) 给到期收尾按到期时刻翻页扫 ACTIVE 行(war_repo.go ListDueBounties;
-// 前三个索引都不以 status 开头,跨区扫不动)。schemamigrate 不给已存在的表补建索引,本地库要重建这张表。
+// 前三个索引都不以 status 开头,跨区扫不动),也给终态旧行的保留期清理按到期时刻取候选(PurgeTerminalBounties,r2-gw#7)。
+// 第 5 个索引 (escrow_op_id) 给预扣指令终结按指令号找追杀令(asset_store.go 的 BOUNTY_ESCROW 分支),否则每次终结都全表扫(r2-gw#7)。
+// schemamigrate 不给已存在的表补建索引,本地库要重建这张表。
 message GuildWarBountyRecord {
   option(OptionTableName) = "guild_war_bounty";
   option(OptionPrimaryKey) = "bounty_id";
-  option(OptionIndex) = "target_player_id,status;issuer_guild_id,status;zone_id,status,expires_at_ms;status,expires_at_ms";
+  option(OptionIndex) = "target_player_id,status;issuer_guild_id,status;zone_id,status,expires_at_ms;status,expires_at_ms;escrow_op_id";
   option(OptionTiDBNonclusteredPK) = true;
   option(OptionTiDBShardRowIDBits) = 4;
   option(OptionTiDBPreSplitRegions) = 4;
@@ -776,4 +778,34 @@ message GuildJianghuGrudgeAppliedRecord {
 
   uint64 battle_id = 1;
   uint64 applied_ms = 2;            // 入账时刻(库时钟),只供排查与日后按保留期清理
+}
+
+// 锁序位置 24(全序末尾):帮战入账的待入账行(数据覆写审计 r2 第 4 轮 r2-gw#5 / #6;设计见
+// docs/planning/guild-play-v2-implementation-plan.md 末节)。帮战结算(war_repo.go SettleWarBattle)与追杀令到期收尾(ExpireBounty)
+// 给某人插 GUILD_CREDIT 指令时,两种情况不插指令、改在同一事务里记本表一行,不挡同局其他人:
+//   - 他本流未决指令已满(assetop.ErrTooManyPending:16 条或跨度 512);
+//   - 他的角色护栏副本冻结中(过户投票、寄售中、删角投票):冻结期间不给他插任何资产指令。
+// 已删除(墓碑)的角色不记本表,这一笔直接放弃。
+// 转换(war_credit_owed.go ConvertWarCreditOwed,挂在待入队物品循环上):锁他的护栏副本 → 墓碑就删本行放弃 → 仍冻结就留着 →
+// 分 seq(仍满就留着)→ 插 guild_asset_op(op_id 就是本行的 op_id,不另发号,同一笔不会入账两次)→ 点删本行,同一事务。
+// 有本行就挡他的过户与删角冻结(role_fence_pending.go),与 guild_trial_reward_owed 同一口径。
+// idx_guild_war_credit_owed_0 (created_ms):循环按先来后到翻页。
+message GuildWarCreditOwedRecord {          // 锁序位置 24
+  option(OptionTableName) = "guild_war_credit_owed";
+  option(OptionPrimaryKey) = "player_id,op_id";
+  option(OptionIndex) = "created_ms";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 player_id = 1;
+  uint64 op_id = 2;                  // 事务前预发的指令号;转换时原样用作 guild_asset_op.op_id(幂等键)
+  uint64 guild_id = 3;               // 转入指令行的 guild_id(审计)
+  uint32 kind = 4;                   // 转入指令行的 GuildAssetOpKind:WAR_REWARD / BOUNTY_PAYOUT
+  uint32 tx_type = 5;                // 转入指令行的 rollback TransactionType:TX_GUILD_WAR_REWARD / TX_GUILD_BOUNTY_PAYOUT
+  uint32 ref_id = 6;                 // 转入指令行的 ref_id(灵脉号 / 追杀令档位)
+  uint32 period_key = 7;             // 转入指令行的 period_key
+  bytes payload = 8;                 // AssetBundle 序列化字节,原样转入指令行
+  uint64 source_id = 9;              // 来源:帮战结算记 battle_id,到期收尾记 bounty_id(审计)
+  uint64 created_ms = 10;
 }

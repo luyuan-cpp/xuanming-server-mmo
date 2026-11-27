@@ -325,6 +325,7 @@ void TurnBattleEngine::ExecuteConfiguredSkill(BattleActorState& actor, const Bat
     if (targets.empty()) return;
     if (normal && actor.actor_type() == BATTLE_ACTOR_TYPE_PLAYER && row.season_id() > 0) {
         antiControlOrSeasonSkillPlayers.insert(actor.actor_id());
+        castSeasonSkillPlayers.insert(actor.actor_id());
     }
     EffectContext context;
     context.skillId = row.id();

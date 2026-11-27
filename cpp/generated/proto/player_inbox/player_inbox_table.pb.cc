@@ -586,11 +586,11 @@ constexpr player_inbox_audit::ParseTableT_ player_inbox_audit::InternalGenerateP
     {
       PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_._has_bits_),
       0, // no _extensions_
-      15, 120,  // max_field_number, fast_idx_mask
+      17, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294934528,  // skipmap
+      4294836224,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      15,  // num_field_entries
+      17,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -602,24 +602,24 @@ constexpr player_inbox_audit::ParseTableT_ player_inbox_audit::InternalGenerateP
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint32 shard = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(player_inbox_audit, _impl_.shard_), 6>(),
-       {8, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(player_inbox_audit, _impl_.shard_), 8>(),
+       {8, 8, 0,
         PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.shard_)}},
       // uint64 player_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(player_inbox_audit, _impl_.player_id_), 5>(),
-       {16, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(player_inbox_audit, _impl_.player_id_), 7>(),
+       {16, 7, 0,
         PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.player_id_)}},
       // uint32 domain = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(player_inbox_audit, _impl_.domain_), 7>(),
-       {24, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(player_inbox_audit, _impl_.domain_), 9>(),
+       {24, 9, 0,
         PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.domain_)}},
       // uint64 seq = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(player_inbox_audit, _impl_.seq_), 8>(),
-       {32, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(player_inbox_audit, _impl_.seq_), 10>(),
+       {32, 10, 0,
         PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.seq_)}},
       // uint32 action = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(player_inbox_audit, _impl_.action_), 9>(),
-       {40, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(player_inbox_audit, _impl_.action_), 11>(),
+       {40, 11, 0,
         PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.action_)}},
       // string operator = 6;
       {::_pbi::TcParser::FastUS1,
@@ -634,20 +634,20 @@ constexpr player_inbox_audit::ParseTableT_ player_inbox_audit::InternalGenerateP
        {66, 2, 0,
         PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.reason_)}},
       // uint64 created_ms = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(player_inbox_audit, _impl_.created_ms_), 11>(),
-       {72, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(player_inbox_audit, _impl_.created_ms_), 13>(),
+       {72, 13, 0,
         PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.created_ms_)}},
       // uint32 msg_type = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(player_inbox_audit, _impl_.msg_type_), 10>(),
-       {80, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(player_inbox_audit, _impl_.msg_type_), 12>(),
+       {80, 12, 0,
         PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.msg_type_)}},
       // uint64 request_id = 11;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(player_inbox_audit, _impl_.request_id_), 12>(),
-       {88, 12, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(player_inbox_audit, _impl_.request_id_), 14>(),
+       {88, 14, 0,
         PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.request_id_)}},
       // uint64 issued_at_ms = 12;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(player_inbox_audit, _impl_.issued_at_ms_), 13>(),
-       {96, 13, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(player_inbox_audit, _impl_.issued_at_ms_), 15>(),
+       {96, 15, 0,
         PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.issued_at_ms_)}},
       // bytes content_sha256 = 13;
       {::_pbi::TcParser::FastBS1,
@@ -658,22 +658,44 @@ constexpr player_inbox_audit::ParseTableT_ player_inbox_audit::InternalGenerateP
        {114, 4, 0,
         PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.payload_)}},
       // uint32 void_reason = 15;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(player_inbox_audit, _impl_.void_reason_), 14>(),
-       {120, 14, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(player_inbox_audit, _impl_.void_reason_), 16>(),
+       {120, 16, 0,
         PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.void_reason_)}},
+      // string approval_id = 16;
+      {::_pbi::TcParser::FastUS2,
+       {386, 5, 0,
+        PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.approval_id_)}},
+      // string approver = 17;
+      {::_pbi::TcParser::FastUS2,
+       {394, 6, 0,
+        PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.approver_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 shard = 1;
-      {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.shard_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.shard_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 player_id = 2;
-      {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.player_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.player_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 domain = 3;
-      {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.domain_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.domain_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 seq = 4;
-      {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.seq_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.seq_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 action = 5;
-      {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.action_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.action_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string operator = 6;
       {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.operator__), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string peer_addr = 7;
@@ -681,27 +703,33 @@ constexpr player_inbox_audit::ParseTableT_ player_inbox_audit::InternalGenerateP
       // string reason = 8;
       {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.reason_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 created_ms = 9;
-      {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.created_ms_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.created_ms_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 msg_type = 10;
-      {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.msg_type_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.msg_type_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 request_id = 11;
-      {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.request_id_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.request_id_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 issued_at_ms = 12;
-      {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.issued_at_ms_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.issued_at_ms_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // bytes content_sha256 = 13;
       {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.content_sha256_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
       // bytes payload = 14;
       {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.payload_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
       // uint32 void_reason = 15;
-      {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.void_reason_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.void_reason_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string approval_id = 16;
+      {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.approval_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string approver = 17;
+      {PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.approver_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
-      "\37\0\0\0\0\0\10\11\6\0\0\0\0\0\0\0"
+      "\37\0\0\0\0\0\10\11\6\0\0\0\0\0\0\0\13\10\0\0\0\0\0\0"
       "player_inbox.player_inbox_audit"
       "operator"
       "peer_addr"
       "reason"
+      "approval_id"
+      "approver"
     }},
   };
 }
@@ -724,6 +752,12 @@ inline constexpr player_inbox_audit::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         payload_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        approval_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        approver_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         player_id_{::uint64_t{0u}},
@@ -913,7 +947,7 @@ const ::uint32_t
         24,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::player_inbox::player_inbox_audit, _impl_._has_bits_),
-        18, // hasbit index offset
+        20, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::player_inbox::player_inbox_audit, _impl_.shard_),
         PROTOBUF_FIELD_OFFSET(::player_inbox::player_inbox_audit, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::player_inbox::player_inbox_audit, _impl_.domain_),
@@ -929,21 +963,25 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::player_inbox::player_inbox_audit, _impl_.content_sha256_),
         PROTOBUF_FIELD_OFFSET(::player_inbox::player_inbox_audit, _impl_.payload_),
         PROTOBUF_FIELD_OFFSET(::player_inbox::player_inbox_audit, _impl_.void_reason_),
-        6,
-        5,
-        7,
+        PROTOBUF_FIELD_OFFSET(::player_inbox::player_inbox_audit, _impl_.approval_id_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::player_inbox_audit, _impl_.approver_),
         8,
+        7,
         9,
+        10,
+        11,
         0,
         1,
         2,
-        11,
-        10,
-        12,
         13,
+        12,
+        14,
+        15,
         3,
         4,
-        14,
+        16,
+        5,
+        6,
 };
 
 static const ::_pbi::MigrationSchema
@@ -987,21 +1025,22 @@ const char descriptor_table_protodef_proto_2fplayer_5finbox_2fplayer_5finbox_5ft
     "_id,domain,seq\332\222\364\001,shard,state,updated_m"
     "s;shard,player_id,state\342\222\364\001(shard,player"
     "_id,producer_kind,request_id\250\223\364\001\001\260\223\364\001\004\270\223"
-    "\364\001\004\"\357\002\n\022player_inbox_audit\022\r\n\005shard\030\001 \001("
+    "\364\001\004\"\226\003\n\022player_inbox_audit\022\r\n\005shard\030\001 \001("
     "\r\022\021\n\tplayer_id\030\002 \001(\004\022\016\n\006domain\030\003 \001(\r\022\013\n\003"
     "seq\030\004 \001(\004\022\016\n\006action\030\005 \001(\r\022\020\n\010operator\030\006 "
     "\001(\t\022\021\n\tpeer_addr\030\007 \001(\t\022\016\n\006reason\030\010 \001(\t\022\022"
     "\n\ncreated_ms\030\t \001(\004\022\020\n\010msg_type\030\n \001(\r\022\022\n\n"
     "request_id\030\013 \001(\004\022\024\n\014issued_at_ms\030\014 \001(\004\022\026"
     "\n\016content_sha256\030\r \001(\014\022\017\n\007payload\030\016 \001(\014\022"
-    "\023\n\013void_reason\030\017 \001(\r:G\212\222\364\001\022player_inbox_"
-    "audit\222\222\364\001!shard,player_id,domain,seq,act"
-    "ion\250\223\364\001\001\260\223\364\001\004*\235\001\n\026PlayerInboxAuditAction"
-    "\022\"\n\036PLAYER_INBOX_AUDIT_UNSPECIFIED\020\000\022\037\n\033"
-    "PLAYER_INBOX_AUDIT_SANCTION\020\001\022\033\n\027PLAYER_"
-    "INBOX_AUDIT_VOID\020\002\022!\n\035PLAYER_INBOX_AUDIT"
-    "_FORCE_VOID\020\003B\033Z\031player_inbox/player_inb"
-    "oxb\006proto3"
+    "\023\n\013void_reason\030\017 \001(\r\022\023\n\013approval_id\030\020 \001("
+    "\t\022\020\n\010approver\030\021 \001(\t:G\212\222\364\001\022player_inbox_a"
+    "udit\222\222\364\001!shard,player_id,domain,seq,acti"
+    "on\250\223\364\001\001\260\223\364\001\004*\235\001\n\026PlayerInboxAuditAction\022"
+    "\"\n\036PLAYER_INBOX_AUDIT_UNSPECIFIED\020\000\022\037\n\033P"
+    "LAYER_INBOX_AUDIT_SANCTION\020\001\022\033\n\027PLAYER_I"
+    "NBOX_AUDIT_VOID\020\002\022!\n\035PLAYER_INBOX_AUDIT_"
+    "FORCE_VOID\020\003B\033Z\031player_inbox/player_inbo"
+    "xb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_5ftable_2eproto_deps[1] = {
@@ -1011,7 +1050,7 @@ static ::absl::once_flag descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbo
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_5ftable_2eproto = {
     false,
     false,
-    1650,
+    1689,
     descriptor_table_protodef_proto_2fplayer_5finbox_2fplayer_5finbox_5ftable_2eproto,
     "proto/player_inbox/player_inbox_table.proto",
     &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_5ftable_2eproto_once,
@@ -2243,7 +2282,9 @@ PROTOBUF_NDEBUG_INLINE player_inbox_audit::Impl_::Impl_(
         peer_addr_(arena, from.peer_addr_),
         reason_(arena, from.reason_),
         content_sha256_(arena, from.content_sha256_),
-        payload_(arena, from.payload_) {}
+        payload_(arena, from.payload_),
+        approval_id_(arena, from.approval_id_),
+        approver_(arena, from.approver_) {}
 
 player_inbox_audit::player_inbox_audit(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -2277,7 +2318,9 @@ PROTOBUF_NDEBUG_INLINE player_inbox_audit::Impl_::Impl_(
         peer_addr_(arena),
         reason_(arena),
         content_sha256_(arena),
-        payload_(arena) {}
+        payload_(arena),
+        approval_id_(arena),
+        approver_(arena) {}
 
 inline void player_inbox_audit::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -2304,6 +2347,8 @@ inline void player_inbox_audit::SharedDtor(MessageLite& self) {
   this_._impl_.reason_.Destroy();
   this_._impl_.content_sha256_.Destroy();
   this_._impl_.payload_.Destroy();
+  this_._impl_.approval_id_.Destroy();
+  this_._impl_.approver_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -2341,7 +2386,7 @@ PROTOBUF_NOINLINE void player_inbox_audit::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.operator__.ClearNonDefaultToEmpty();
     }
@@ -2357,17 +2402,20 @@ PROTOBUF_NOINLINE void player_inbox_audit::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       _impl_.payload_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      _impl_.approval_id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      _impl_.approver_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000e0U)) {
-    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.domain_) -
-        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.domain_));
+  _impl_.player_id_ = ::uint64_t{0u};
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    ::memset(&_impl_.shard_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.issued_at_ms_) -
+        reinterpret_cast<char*>(&_impl_.shard_)) + sizeof(_impl_.issued_at_ms_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
-    ::memset(&_impl_.seq_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.void_reason_) -
-        reinterpret_cast<char*>(&_impl_.seq_)) + sizeof(_impl_.void_reason_));
-  }
+  _impl_.void_reason_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -2392,7 +2440,7 @@ PROTOBUF_NOINLINE void player_inbox_audit::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 shard = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_shard() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2401,7 +2449,7 @@ PROTOBUF_NOINLINE void player_inbox_audit::Clear() {
   }
 
   // uint64 player_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2410,7 +2458,7 @@ PROTOBUF_NOINLINE void player_inbox_audit::Clear() {
   }
 
   // uint32 domain = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_domain() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2419,7 +2467,7 @@ PROTOBUF_NOINLINE void player_inbox_audit::Clear() {
   }
 
   // uint64 seq = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_seq() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2428,7 +2476,7 @@ PROTOBUF_NOINLINE void player_inbox_audit::Clear() {
   }
 
   // uint32 action = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_action() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2467,7 +2515,7 @@ PROTOBUF_NOINLINE void player_inbox_audit::Clear() {
   }
 
   // uint64 created_ms = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_created_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2476,7 +2524,7 @@ PROTOBUF_NOINLINE void player_inbox_audit::Clear() {
   }
 
   // uint32 msg_type = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_msg_type() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2485,7 +2533,7 @@ PROTOBUF_NOINLINE void player_inbox_audit::Clear() {
   }
 
   // uint64 request_id = 11;
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_request_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2494,7 +2542,7 @@ PROTOBUF_NOINLINE void player_inbox_audit::Clear() {
   }
 
   // uint64 issued_at_ms = 12;
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
     if (this_._internal_issued_at_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2519,11 +2567,31 @@ PROTOBUF_NOINLINE void player_inbox_audit::Clear() {
   }
 
   // uint32 void_reason = 15;
-  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
     if (this_._internal_void_reason() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           15, this_._internal_void_reason(), target);
+    }
+  }
+
+  // string approval_id = 16;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (!this_._internal_approval_id().empty()) {
+      const ::std::string& _s = this_._internal_approval_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "player_inbox.player_inbox_audit.approval_id");
+      target = stream->WriteStringMaybeAliased(16, _s, target);
+    }
+  }
+
+  // string approver = 17;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (!this_._internal_approver().empty()) {
+      const ::std::string& _s = this_._internal_approver();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "player_inbox.player_inbox_audit.approver");
+      target = stream->WriteStringMaybeAliased(17, _s, target);
     }
   }
 
@@ -2588,73 +2656,89 @@ PROTOBUF_NOINLINE void player_inbox_audit::Clear() {
                                         this_._internal_payload());
       }
     }
-    // uint64 player_id = 2;
+    // string approval_id = 16;
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!this_._internal_approval_id().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_approval_id());
+      }
+    }
+    // string approver = 17;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (!this_._internal_approver().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_approver());
+      }
+    }
+    // uint64 player_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint32 shard = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_shard() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_shard());
       }
     }
     // uint32 domain = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_domain() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_domain());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
     // uint64 seq = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_seq() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_seq());
       }
     }
     // uint32 action = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_action() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_action());
       }
     }
     // uint32 msg_type = 10;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_msg_type() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_msg_type());
       }
     }
     // uint64 created_ms = 9;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_created_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_created_ms());
       }
     }
     // uint64 request_id = 11;
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_request_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_request_id());
       }
     }
     // uint64 issued_at_ms = 12;
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (this_._internal_issued_at_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_issued_at_ms());
       }
     }
+  }
+   {
     // uint32 void_reason = 15;
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_void_reason() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_void_reason());
@@ -2725,56 +2809,74 @@ void player_inbox_audit::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!from._internal_approval_id().empty()) {
+        _this->_internal_set_approval_id(from._internal_approval_id());
+      } else {
+        if (_this->_impl_.approval_id_.IsDefault()) {
+          _this->_internal_set_approval_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (!from._internal_approver().empty()) {
+        _this->_internal_set_approver(from._internal_approver());
+      } else {
+        if (_this->_impl_.approver_.IsDefault()) {
+          _this->_internal_set_approver("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_shard() != 0) {
         _this->_impl_.shard_ = from._impl_.shard_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_domain() != 0) {
         _this->_impl_.domain_ = from._impl_.domain_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_seq() != 0) {
         _this->_impl_.seq_ = from._impl_.seq_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_action() != 0) {
         _this->_impl_.action_ = from._impl_.action_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_msg_type() != 0) {
         _this->_impl_.msg_type_ = from._impl_.msg_type_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (from._internal_created_ms() != 0) {
         _this->_impl_.created_ms_ = from._impl_.created_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_request_id() != 0) {
         _this->_impl_.request_id_ = from._impl_.request_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       if (from._internal_issued_at_ms() != 0) {
         _this->_impl_.issued_at_ms_ = from._impl_.issued_at_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
-      if (from._internal_void_reason() != 0) {
-        _this->_impl_.void_reason_ = from._impl_.void_reason_;
-      }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (from._internal_void_reason() != 0) {
+      _this->_impl_.void_reason_ = from._impl_.void_reason_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -2801,6 +2903,8 @@ void player_inbox_audit::InternalSwap(player_inbox_audit* PROTOBUF_RESTRICT PROT
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.reason_, &other->_impl_.reason_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.content_sha256_, &other->_impl_.content_sha256_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.payload_, &other->_impl_.payload_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.approval_id_, &other->_impl_.approval_id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.approver_, &other->_impl_.approver_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(player_inbox_audit, _impl_.void_reason_)
       + sizeof(player_inbox_audit::_impl_.void_reason_)

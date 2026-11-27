@@ -1,0 +1,250 @@
+# 官方通行证的两个入口(docs/design/official-passport-registration.md §3.10),都由一个 nginx 代理到集群内的 casdoor:8000。
+#
+#   - 公网入口(8080,Ingress passport-public):默认全拒,只放行玩家要用的页面与接口,按来源地址限速。
+#     Casdoor 的权限模型允许任何登录用户对「自己」调 /api/delete-user、/api/update-user(object/init.go 的自匹配条款),
+#     这些接口一律不放行,否则玩家能绕过 7 天冷静期删掉自己的通行证用户(§8.4 第 1 条)。管理后台的页面只是前端外壳,
+#     它要调的接口都不在名单里,公网上打开也什么都做不了。
+#   - 集群内入口(8081,Ingress passport-internal,内部负载均衡):只给 login 用,验签公钥与管理接口查 / 删用户
+#     (AuthProviders.Passport.Endpoint 指向它;login 生产模式只收 https,所以走带证书的内部 Ingress)。
+#
+# 名单是按 Casdoor v4.27.1 源码与前端推的,未实测:预发环境装好后按 README 第 7 步把登录、注册、找回密码各走一遍,
+# 页面缺哪个接口再加(缺了页面直接报错,方向是安全的),并同步 tools/scripts/tests/passport_k8s_contract.tests.ps1 的名单。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: passport-entry
+  namespace: passport
+  labels:
+    app: passport-entry
+data:
+  nginx.conf: |
+    worker_processes auto;
+    pid /tmp/nginx.pid;
+    events { worker_connections 4096; }
+    http {
+      client_body_temp_path /tmp/client_temp;
+      proxy_temp_path /tmp/proxy_temp;
+      fastcgi_temp_path /tmp/fastcgi_temp;
+      uwsgi_temp_path /tmp/uwsgi_temp;
+      scgi_temp_path /tmp/scgi_temp;
+      server_tokens off;
+      access_log /dev/stdout;
+      error_log /dev/stderr warn;
+
+      # 来源地址:请求经 Ingress 控制器进来,信它补的 X-Forwarded-For(网段按集群改成控制器 Pod 所在的)。
+      set_real_ip_from 10.0.0.0/8;
+      set_real_ip_from 172.16.0.0/12;
+      set_real_ip_from 192.168.0.0/16;
+      real_ip_header X-Forwarded-For;
+      real_ip_recursive on;
+
+      # 按来源地址限速:登录、注册、发验证码、核验证码、改密 / 找回密码、换票按每分钟计(口令哈希是 argon2id,
+      # 每次校验约 64 MiB 内存,不限速就是现成的内存放大器);其余接口与页面按每秒计。超了回 429。
+      limit_req_zone $binary_remote_addr zone=passport_auth:10m rate=20r/m;
+      limit_req_zone $binary_remote_addr zone=passport_api:10m rate=10r/s;
+      limit_req_status 429;
+
+      upstream casdoor {
+        server casdoor.passport.svc.cluster.local:8000;
+        keepalive 32;
+      }
+
+      proxy_http_version 1.1;
+      proxy_set_header Connection "";
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto https;
+
+      # ── 公网入口 ──
+      server {
+        listen 8080;
+        client_max_body_size 64k;
+
+        # 安卓 App Links(§3.8):归属声明与回调兜底页。系统核对通过时回调直接交给游戏,不会真的打开这一页。
+        location = /.well-known/assetlinks.json { default_type application/json; alias /etc/nginx/passport/assetlinks.json; }
+        location = /passport/app-callback { default_type text/html; alias /etc/nginx/passport/app-callback.html; }
+
+        # OIDC 发现文档与验签公钥。
+        location = /.well-known/openid-configuration { limit_except GET { deny all; } proxy_pass http://casdoor; }
+        location = /.well-known/jwks { limit_except GET { deny all; } proxy_pass http://casdoor; }
+
+        # 玩家用得到的接口(登录、注册、找回密码页面与游戏客户端换票)。
+        location = /api/login { limit_except POST { deny all; } limit_req zone=passport_auth burst=10 nodelay; proxy_pass http://casdoor; }
+        location = /api/signup { limit_except POST { deny all; } limit_req zone=passport_auth burst=5 nodelay; proxy_pass http://casdoor; }
+        location = /api/send-verification-code { limit_except POST { deny all; } limit_req zone=passport_auth burst=5 nodelay; proxy_pass http://casdoor; }
+        location = /api/verify-code { limit_except POST { deny all; } limit_req zone=passport_auth burst=5 nodelay; proxy_pass http://casdoor; }
+        location = /api/set-password { limit_except POST { deny all; } limit_req zone=passport_auth burst=5 nodelay; proxy_pass http://casdoor; }
+        location = /api/get-email-and-phone { limit_except GET { deny all; } limit_req zone=passport_auth burst=5 nodelay; proxy_pass http://casdoor; }
+        location = /api/login/oauth/access_token { limit_except POST { deny all; } limit_req zone=passport_auth burst=10 nodelay; proxy_pass http://casdoor; }
+        location = /api/get-app-login { limit_except GET { deny all; } limit_req zone=passport_api burst=20 nodelay; proxy_pass http://casdoor; }
+        location = /api/get-application { limit_except GET { deny all; } limit_req zone=passport_api burst=20 nodelay; proxy_pass http://casdoor; }
+        location = /api/get-account { limit_except GET { deny all; } limit_req zone=passport_api burst=20 nodelay; proxy_pass http://casdoor; }
+        location = /api/get-captcha { limit_except GET { deny all; } limit_req zone=passport_api burst=20 nodelay; proxy_pass http://casdoor; }
+        location = /api/get-captcha-status { limit_except GET { deny all; } limit_req zone=passport_api burst=20 nodelay; proxy_pass http://casdoor; }
+        location = /api/verify-captcha { limit_except POST { deny all; } limit_req zone=passport_api burst=20 nodelay; proxy_pass http://casdoor; }
+        location = /api/logout { limit_except GET POST { deny all; } limit_req zone=passport_api burst=20 nodelay; proxy_pass http://casdoor; }
+
+        # 其余接口一律不放行:自助的 delete-user / update-user、管理接口、注册应用、初始化管理员口令、指标等。
+        location /api/ { return 404; }
+        # 后端的其它入口:CAS、SCIM、接口文档、按组织 / 按应用的发现文档。
+        location /cas { return 404; }
+        location /scim { return 404; }
+        location /swagger { return 404; }
+        location /orgs/ { return 404; }
+        location /.well-known/ { return 404; }
+
+        # 前端页面与静态资源:只读。
+        location / { limit_except GET { deny all; } limit_req zone=passport_api burst=40 nodelay; proxy_pass http://casdoor; }
+      }
+
+      # ── 集群内入口:只给 login(验签公钥、注销时查 / 删用户、登录与刷新前查用户) ──
+      server {
+        listen 8081;
+        client_max_body_size 64k;
+        location = /.well-known/jwks { limit_except GET { deny all; } proxy_pass http://casdoor; }
+        location = /api/get-user { limit_except GET { deny all; } proxy_pass http://casdoor; }
+        location = /api/delete-user { limit_except POST { deny all; } proxy_pass http://casdoor; }
+        location / { return 404; }
+      }
+    }
+  # 安卓 App Links 的归属声明:包名与签名证书的 SHA-256 指纹(Play 应用签名的那把,在 Play 管理中心「应用完整性」里)由运维填。
+  assetlinks.json: |
+    [
+      {
+        "relation": ["delegate_permission/common.handle_all_urls"],
+        "target": {
+          "namespace": "android_app",
+          "package_name": "REPLACE_WITH_ANDROID_PACKAGE_NAME",
+          "sha256_cert_fingerprints": ["REPLACE_WITH_RELEASE_SIGNING_CERT_SHA256"]
+        }
+      }
+    ]
+  app-callback.html: |
+    <!DOCTYPE html>
+    <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>官方通行证</title></head>
+    <body style="font-family:sans-serif;text-align:center;padding-top:20vh">
+    <h1>请返回游戏</h1><p>授权已完成。如果游戏没有自动打开，请切回游戏，按游戏内提示重新登录。</p>
+    </body></html>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: passport-entry
+  namespace: passport
+  labels:
+    app: passport-entry
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: passport-entry
+  template:
+    metadata:
+      labels:
+        app: passport-entry
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: nginx
+          image: nginx:1.30.8-alpine@sha256:8eb04fe3b385090e9aa02961f77398ad09b6bf33ab07f6669a5bb7acce22c0d3
+          ports:
+            - name: public
+              containerPort: 8080
+              protocol: TCP
+            - name: internal
+              containerPort: 8081
+              protocol: TCP
+          volumeMounts:
+            - name: conf
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+              readOnly: true
+            - name: conf
+              mountPath: /etc/nginx/passport/assetlinks.json
+              subPath: assetlinks.json
+              readOnly: true
+            - name: conf
+              mountPath: /etc/nginx/passport/app-callback.html
+              subPath: app-callback.html
+              readOnly: true
+          readinessProbe:
+            tcpSocket:
+              port: public
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+      volumes:
+        - name: conf
+          configMap:
+            name: passport-entry
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: passport-entry
+  namespace: passport
+  labels:
+    app: passport-entry
+spec:
+  selector:
+    app: passport-entry
+  ports:
+    - name: public
+      port: 8080
+      targetPort: public
+    - name: internal
+      port: 8081
+      targetPort: internal
+---
+# 公网 Ingress:域名就是通行证的 origin(PASSPORT_PUBLIC_ORIGIN)。ingressClassName 与证书 Secret 按集群填。
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: passport-public
+  namespace: passport
+spec:
+  ingressClassName: REPLACE_WITH_PUBLIC_INGRESS_CLASS
+  tls:
+    - hosts: [passport.example.com]
+      secretName: passport-public-tls
+  rules:
+    - host: passport.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: passport-entry
+                port:
+                  name: public
+---
+# 集群内 Ingress(内部负载均衡,公网不可达):login 的 AuthProviders.Passport.Endpoint = https://passport-internal.example.com。
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: passport-internal
+  namespace: passport
+spec:
+  ingressClassName: REPLACE_WITH_INTERNAL_INGRESS_CLASS
+  tls:
+    - hosts: [passport-internal.example.com]
+      secretName: passport-internal-tls
+  rules:
+    - host: passport-internal.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: passport-entry
+                port:
+                  name: internal

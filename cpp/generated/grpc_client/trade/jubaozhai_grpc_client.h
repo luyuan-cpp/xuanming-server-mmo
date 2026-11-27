@@ -319,6 +319,30 @@ void SendClientPlayerJubaozhaiGetPlayerTradeQuota(entt::registry& registry, entt
 // 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
 void SendClientPlayerJubaozhaiGetPlayerTradeQuotaErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
 #pragma endregion
+#pragma region ClientPlayerJubaozhaiCreateWantedSkillBookOrder
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kClientPlayerJubaozhaiCreateWantedSkillBookOrderGrpcPath = "/trade.ClientPlayerJubaozhai/CreateWantedSkillBookOrder";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendClientPlayerJubaozhaiCreateWantedSkillBookOrder(entt::registry& registry, entt::entity nodeEntity, const ::trade::CreateWantedSkillBookOrderRequest& request, GrpcDone<::trade::WantedSkillBookOrderResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendClientPlayerJubaozhaiCreateWantedSkillBookOrderErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region ClientPlayerJubaozhaiFulfillWantedSkillBookOrder
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kClientPlayerJubaozhaiFulfillWantedSkillBookOrderGrpcPath = "/trade.ClientPlayerJubaozhai/FulfillWantedSkillBookOrder";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendClientPlayerJubaozhaiFulfillWantedSkillBookOrder(entt::registry& registry, entt::entity nodeEntity, const ::trade::FulfillWantedSkillBookOrderRequest& request, GrpcDone<::trade::WantedSkillBookOrderResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendClientPlayerJubaozhaiFulfillWantedSkillBookOrderErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
+#pragma region ClientPlayerJubaozhaiListWantedSkillBookOrders
+// gRPC :path(线上契约,与 Go 侧一致)。
+inline constexpr std::string_view kClientPlayerJubaozhaiListWantedSkillBookOrdersGrpcPath = "/trade.ClientPlayerJubaozhai/ListWantedSkillBookOrders";
+// done 必填且恰好调用一次,从不在 Send 栈内同步调用;为空 LOG_FATAL。响应只在回调期间有效。
+void SendClientPlayerJubaozhaiListWantedSkillBookOrders(entt::registry& registry, entt::entity nodeEntity, const ::trade::ListWantedSkillBookOrdersRequest& request, GrpcDone<::trade::ListWantedSkillBookOrdersResponse> done, const GrpcCallOptions& options = {});
+// 类型擦除版只供元数据 sender 使用;动态类型不匹配时异步回 INTERNAL,不发出请求。
+void SendClientPlayerJubaozhaiListWantedSkillBookOrdersErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, GrpcMessageDone done, const GrpcCallOptions& options);
+#pragma endregion
 // 本文件所有 unary 调用此后使用的 deadline;启动时按目标节点类型设置。
 void SetJubaozhaiCallDeadline(std::chrono::milliseconds deadline);
 

@@ -4667,6 +4667,643 @@ void SendMatchServiceGetSharedTrialReplayErased(entt::registry& registry, entt::
         [done = std::move(done)](const GrpcCallOutcome& outcome, const ::match::GetSharedTrialReplayResponse* reply) { done(outcome, reply); });
 }
 #pragma endregion
+#pragma region MatchServiceListTacticalPuzzles
+namespace {
+void QueueLocalMatchServiceListTacticalPuzzlesFailure(GrpcDone<::match::ListTacticalPuzzlesResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kMatchServiceListTacticalPuzzlesGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartMatchServiceListTacticalPuzzlesCall(entt::registry& registry, entt::entity nodeEntity, const ::match::ListTacticalPuzzlesRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::match::ListTacticalPuzzlesResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.ListTacticalPuzzles requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kMatchServiceListTacticalPuzzlesGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalMatchServiceListTacticalPuzzlesFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalMatchServiceListTacticalPuzzlesFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::match::ListTacticalPuzzlesResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the MatchService.ListTacticalPuzzles response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendMatchServiceListTacticalPuzzles(entt::registry& registry, entt::entity nodeEntity, const ::match::ListTacticalPuzzlesRequest& request,
+                                            GrpcDone<::match::ListTacticalPuzzlesResponse> done, const GrpcCallOptions& options) {
+    StartMatchServiceListTacticalPuzzlesCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendMatchServiceListTacticalPuzzlesErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.ListTacticalPuzzles requires a done callback";
+    }
+    if (message.GetDescriptor() != ::match::ListTacticalPuzzlesRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC MatchService.ListTacticalPuzzles: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceListTacticalPuzzlesGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::match::ListTacticalPuzzlesRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC MatchService.ListTacticalPuzzles: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceListTacticalPuzzlesGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartMatchServiceListTacticalPuzzlesCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::match::ListTacticalPuzzlesResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region MatchServiceGetTacticalPuzzle
+namespace {
+void QueueLocalMatchServiceGetTacticalPuzzleFailure(GrpcDone<::match::GetTacticalPuzzleResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kMatchServiceGetTacticalPuzzleGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartMatchServiceGetTacticalPuzzleCall(entt::registry& registry, entt::entity nodeEntity, const ::match::GetTacticalPuzzleRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::match::GetTacticalPuzzleResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.GetTacticalPuzzle requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kMatchServiceGetTacticalPuzzleGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalMatchServiceGetTacticalPuzzleFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalMatchServiceGetTacticalPuzzleFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::match::GetTacticalPuzzleResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the MatchService.GetTacticalPuzzle response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendMatchServiceGetTacticalPuzzle(entt::registry& registry, entt::entity nodeEntity, const ::match::GetTacticalPuzzleRequest& request,
+                                            GrpcDone<::match::GetTacticalPuzzleResponse> done, const GrpcCallOptions& options) {
+    StartMatchServiceGetTacticalPuzzleCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendMatchServiceGetTacticalPuzzleErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.GetTacticalPuzzle requires a done callback";
+    }
+    if (message.GetDescriptor() != ::match::GetTacticalPuzzleRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC MatchService.GetTacticalPuzzle: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceGetTacticalPuzzleGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::match::GetTacticalPuzzleRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC MatchService.GetTacticalPuzzle: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceGetTacticalPuzzleGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartMatchServiceGetTacticalPuzzleCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::match::GetTacticalPuzzleResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region MatchServiceSaveTacticalPuzzleDraft
+namespace {
+void QueueLocalMatchServiceSaveTacticalPuzzleDraftFailure(GrpcDone<::match::SaveTacticalPuzzleDraftResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kMatchServiceSaveTacticalPuzzleDraftGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartMatchServiceSaveTacticalPuzzleDraftCall(entt::registry& registry, entt::entity nodeEntity, const ::match::SaveTacticalPuzzleDraftRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::match::SaveTacticalPuzzleDraftResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.SaveTacticalPuzzleDraft requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kMatchServiceSaveTacticalPuzzleDraftGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalMatchServiceSaveTacticalPuzzleDraftFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalMatchServiceSaveTacticalPuzzleDraftFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::match::SaveTacticalPuzzleDraftResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the MatchService.SaveTacticalPuzzleDraft response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendMatchServiceSaveTacticalPuzzleDraft(entt::registry& registry, entt::entity nodeEntity, const ::match::SaveTacticalPuzzleDraftRequest& request,
+                                            GrpcDone<::match::SaveTacticalPuzzleDraftResponse> done, const GrpcCallOptions& options) {
+    StartMatchServiceSaveTacticalPuzzleDraftCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendMatchServiceSaveTacticalPuzzleDraftErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.SaveTacticalPuzzleDraft requires a done callback";
+    }
+    if (message.GetDescriptor() != ::match::SaveTacticalPuzzleDraftRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC MatchService.SaveTacticalPuzzleDraft: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceSaveTacticalPuzzleDraftGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::match::SaveTacticalPuzzleDraftRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC MatchService.SaveTacticalPuzzleDraft: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceSaveTacticalPuzzleDraftGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartMatchServiceSaveTacticalPuzzleDraftCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::match::SaveTacticalPuzzleDraftResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region MatchServiceDeleteTacticalPuzzle
+namespace {
+void QueueLocalMatchServiceDeleteTacticalPuzzleFailure(GrpcDone<::match::DeleteTacticalPuzzleResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kMatchServiceDeleteTacticalPuzzleGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartMatchServiceDeleteTacticalPuzzleCall(entt::registry& registry, entt::entity nodeEntity, const ::match::DeleteTacticalPuzzleRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::match::DeleteTacticalPuzzleResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.DeleteTacticalPuzzle requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kMatchServiceDeleteTacticalPuzzleGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalMatchServiceDeleteTacticalPuzzleFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalMatchServiceDeleteTacticalPuzzleFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::match::DeleteTacticalPuzzleResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the MatchService.DeleteTacticalPuzzle response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendMatchServiceDeleteTacticalPuzzle(entt::registry& registry, entt::entity nodeEntity, const ::match::DeleteTacticalPuzzleRequest& request,
+                                            GrpcDone<::match::DeleteTacticalPuzzleResponse> done, const GrpcCallOptions& options) {
+    StartMatchServiceDeleteTacticalPuzzleCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendMatchServiceDeleteTacticalPuzzleErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.DeleteTacticalPuzzle requires a done callback";
+    }
+    if (message.GetDescriptor() != ::match::DeleteTacticalPuzzleRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC MatchService.DeleteTacticalPuzzle: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceDeleteTacticalPuzzleGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::match::DeleteTacticalPuzzleRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC MatchService.DeleteTacticalPuzzle: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceDeleteTacticalPuzzleGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartMatchServiceDeleteTacticalPuzzleCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::match::DeleteTacticalPuzzleResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region MatchServiceStartTacticalPuzzleBattle
+namespace {
+void QueueLocalMatchServiceStartTacticalPuzzleBattleFailure(GrpcDone<::match::StartTacticalPuzzleBattleResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kMatchServiceStartTacticalPuzzleBattleGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartMatchServiceStartTacticalPuzzleBattleCall(entt::registry& registry, entt::entity nodeEntity, const ::match::StartTacticalPuzzleBattleRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::match::StartTacticalPuzzleBattleResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.StartTacticalPuzzleBattle requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kMatchServiceStartTacticalPuzzleBattleGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalMatchServiceStartTacticalPuzzleBattleFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalMatchServiceStartTacticalPuzzleBattleFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::match::StartTacticalPuzzleBattleResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the MatchService.StartTacticalPuzzleBattle response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendMatchServiceStartTacticalPuzzleBattle(entt::registry& registry, entt::entity nodeEntity, const ::match::StartTacticalPuzzleBattleRequest& request,
+                                            GrpcDone<::match::StartTacticalPuzzleBattleResponse> done, const GrpcCallOptions& options) {
+    StartMatchServiceStartTacticalPuzzleBattleCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendMatchServiceStartTacticalPuzzleBattleErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.StartTacticalPuzzleBattle requires a done callback";
+    }
+    if (message.GetDescriptor() != ::match::StartTacticalPuzzleBattleRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC MatchService.StartTacticalPuzzleBattle: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceStartTacticalPuzzleBattleGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::match::StartTacticalPuzzleBattleRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC MatchService.StartTacticalPuzzleBattle: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceStartTacticalPuzzleBattleGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartMatchServiceStartTacticalPuzzleBattleCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::match::StartTacticalPuzzleBattleResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region MatchServiceLikeTacticalPuzzle
+namespace {
+void QueueLocalMatchServiceLikeTacticalPuzzleFailure(GrpcDone<::match::LikeTacticalPuzzleResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kMatchServiceLikeTacticalPuzzleGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartMatchServiceLikeTacticalPuzzleCall(entt::registry& registry, entt::entity nodeEntity, const ::match::LikeTacticalPuzzleRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::match::LikeTacticalPuzzleResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.LikeTacticalPuzzle requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kMatchServiceLikeTacticalPuzzleGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalMatchServiceLikeTacticalPuzzleFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalMatchServiceLikeTacticalPuzzleFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::match::LikeTacticalPuzzleResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the MatchService.LikeTacticalPuzzle response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendMatchServiceLikeTacticalPuzzle(entt::registry& registry, entt::entity nodeEntity, const ::match::LikeTacticalPuzzleRequest& request,
+                                            GrpcDone<::match::LikeTacticalPuzzleResponse> done, const GrpcCallOptions& options) {
+    StartMatchServiceLikeTacticalPuzzleCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendMatchServiceLikeTacticalPuzzleErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.LikeTacticalPuzzle requires a done callback";
+    }
+    if (message.GetDescriptor() != ::match::LikeTacticalPuzzleRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC MatchService.LikeTacticalPuzzle: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceLikeTacticalPuzzleGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::match::LikeTacticalPuzzleRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC MatchService.LikeTacticalPuzzle: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceLikeTacticalPuzzleGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartMatchServiceLikeTacticalPuzzleCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::match::LikeTacticalPuzzleResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
+#pragma region MatchServiceGetTacticalPuzzleSolutionReplay
+namespace {
+void QueueLocalMatchServiceGetTacticalPuzzleSolutionReplayFailure(GrpcDone<::match::GetTacticalPuzzleSolutionReplayResponse> done, uint32_t code, std::string message) {
+    RecordGrpcLocalFailureSpan(kMatchServiceGetTacticalPuzzleSolutionReplayGrpcPath, code, message);
+    QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(code, std::move(message))] {
+        done(outcome, nullptr);
+    });
+}
+}
+
+// 请求必须在这里同步序列化:gate 的共享原型在下次调用会被覆盖。
+// 若将来改成异步序列化,必须先恢复请求的独立副本。
+void StartMatchServiceGetTacticalPuzzleSolutionReplayCall(entt::registry& registry, entt::entity nodeEntity, const ::match::GetTacticalPuzzleSolutionReplayRequest& request,
+                                             GrpcSentMetadata metadata, std::chrono::milliseconds deadline,
+                                             GrpcDone<::match::GetTacticalPuzzleSolutionReplayResponse> done) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.GetTacticalPuzzleSolutionReplay requires a done callback";
+    }
+    muduo_grpc::UnaryCallRequest unaryRequest;
+    unaryRequest.method = std::string(kMatchServiceGetTacticalPuzzleSolutionReplayGrpcPath);
+    if (!request.SerializeToString(&unaryRequest.message)) {
+        QueueLocalMatchServiceGetTacticalPuzzleSolutionReplayFailure(std::move(done), kGrpcStatusInternal, "failed to serialize the request");
+        return;
+    }
+    const auto channel = FindGrpcChannel(registry, nodeEntity);
+    if (!channel) {
+        QueueLocalMatchServiceGetTacticalPuzzleSolutionReplayFailure(std::move(done), kGrpcStatusUnavailable, "node transport missing or closing");
+        return;
+    }
+    unaryRequest.metadata.reserve(metadata.size());
+    for (const auto& [key, value] : metadata) {
+        // 仅 SessionMD 的 Go 解码器依赖额外应用编码;ASCII 认证头必须保留原值。
+        // 所有 -bin 的线上编码另由传输层负责。
+        unaryRequest.metadata.emplace_back(key, key == kSessionBinMetaKey ? Base64Encode(value) : value);
+    }
+    unaryRequest.deadline = std::chrono::steady_clock::now() + (deadline.count() > 0 ? deadline : DefaultCallDeadline());
+    channel->StartUnaryCall(std::move(unaryRequest), [done = std::move(done)](muduo_grpc::UnaryCallResult&& result) {
+        GrpcCallOutcome outcome;
+        outcome.code = result.status.code_value();
+        outcome.message = result.status.message();
+        outcome.initialMetadata = std::move(result.initialMetadata);
+        outcome.trailingMetadata = std::move(result.trailingMetadata);
+        if (!outcome.ok()) {
+            done(outcome, nullptr);
+            return;
+        }
+        ::match::GetTacticalPuzzleSolutionReplayResponse reply;
+        if (!reply.ParseFromString(result.response)) {
+            outcome.code = kGrpcStatusInternal;
+            outcome.message = "failed to parse the MatchService.GetTacticalPuzzleSolutionReplay response";
+            done(outcome, nullptr);
+            return;
+        }
+        done(outcome, &reply);
+    });
+}
+
+void SendMatchServiceGetTacticalPuzzleSolutionReplay(entt::registry& registry, entt::entity nodeEntity, const ::match::GetTacticalPuzzleSolutionReplayRequest& request,
+                                            GrpcDone<::match::GetTacticalPuzzleSolutionReplayResponse> done, const GrpcCallOptions& options) {
+    StartMatchServiceGetTacticalPuzzleSolutionReplayCall(registry, nodeEntity, request, options.metadata, options.deadline, std::move(done));
+}
+
+void SendMatchServiceGetTacticalPuzzleSolutionReplayErased(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message,
+                                                  GrpcMessageDone done, const GrpcCallOptions& options) {
+    if (!done) {
+        LOG_FATAL << "gRPC MatchService.GetTacticalPuzzleSolutionReplay requires a done callback";
+    }
+    if (message.GetDescriptor() != ::match::GetTacticalPuzzleSolutionReplayRequest::descriptor()) {
+        const auto requestTypeName = message.GetDescriptor()->full_name();
+        LOG_ERROR << "gRPC MatchService.GetTacticalPuzzleSolutionReplay: request type " << std::string(requestTypeName.data(), requestTypeName.size())
+                  << " does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceGetTacticalPuzzleSolutionReplayGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    // descriptor 相同仍可能是 DynamicMessage;进入 typed 路径前必须核对真实 C++ 类型。
+    const auto* typedRequest = dynamic_cast<const ::match::GetTacticalPuzzleSolutionReplayRequest*>(&message);
+    if (typedRequest == nullptr) {
+        LOG_ERROR << "gRPC MatchService.GetTacticalPuzzleSolutionReplay: request C++ type does not match; not sent";
+        RecordGrpcLocalFailureSpan(kMatchServiceGetTacticalPuzzleSolutionReplayGrpcPath, kGrpcStatusInternal, "request type mismatch");
+        QueueGrpcLocalCompletion([done = std::move(done), outcome = MakeLocalFailureOutcome(kGrpcStatusInternal, "request type mismatch")] {
+            done(outcome, nullptr);
+        });
+        return;
+    }
+    StartMatchServiceGetTacticalPuzzleSolutionReplayCall(registry, nodeEntity, *typedRequest, options.metadata, options.deadline,
+        [done = std::move(done)](const GrpcCallOutcome& outcome, const ::match::GetTacticalPuzzleSolutionReplayResponse* reply) { done(outcome, reply); });
+}
+#pragma endregion
 
 void SetMatchServiceCallDeadline(std::chrono::milliseconds deadline) {
     callDeadlineMs.store(static_cast<uint32_t>(deadline.count()), std::memory_order_relaxed);

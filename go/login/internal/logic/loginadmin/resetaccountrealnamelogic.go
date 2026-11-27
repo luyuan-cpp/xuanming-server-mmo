@@ -31,7 +31,8 @@ func NewResetAccountRealNameLogic(ctx context.Context, svcCtx *svc.ServiceContex
 	}
 }
 
-// ResetAccountRealName 客服重置实名(docs/design/real-name-anti-addiction.md §5.2 末)。鉴权在拦截器(x-admin-token)。
+// ResetAccountRealName 客服重置实名(docs/design/real-name-anti-addiction.md §5.2 末)。
+// 鉴权与双人复核在拦截器(x-admin-token、admin_approval.go)。
 // 客服先在系统外核实身份;这里清掉账号上的 pi 和认证中的提交,玩家下次登录重新实名。幂等。
 // 已经在线的会话不动:截止时刻与上报记录在绑定时就定了,下一次登录按新的实名判定。
 func (l *ResetAccountRealNameLogic) ResetAccountRealName(in *login.ResetAccountRealNameRequest) (*login.ResetAccountRealNameResponse, error) {
@@ -66,7 +67,8 @@ func (l *ResetAccountRealNameLogic) ResetAccountRealName(in *login.ResetAccountR
 	if err := l.svcCtx.LoginRedis.Del(l.ctx, redisslot.RealNamePendingKey(account)).Err(); err != nil {
 		l.Errorf("[real-name] admin reset could not drop the pending submission: account=%s err=%v", accountdeletion.MaskAccount(account), err)
 	}
-	l.Infof("[real-name] admin reset: account=%s had_real_name=%v operator=%s reason=%q peer=%s",
-		accountdeletion.MaskAccount(account), had, in.GetOperator(), in.GetReason(), peerAddrOf(l.ctx))
+	l.Infof("[real-name] admin reset: account=%s had_real_name=%v operator=%s approval_id=%q approver=%q reason=%q peer=%s",
+		accountdeletion.MaskAccount(account), had, in.GetOperator(), in.GetApproval().GetApprovalId(), in.GetApproval().GetApprover(),
+		in.GetReason(), peerAddrOf(l.ctx))
 	return &login.ResetAccountRealNameResponse{HadRealName: had}, nil
 }

@@ -186,9 +186,10 @@ spec:
             # 多副本之后要能按 Pod 看 kafka_consumer_up:哪个实例的消费者停了,只看总量是看不出来的。
             - containerPort: 9260
               name: metrics
-          # 就绪看 /readyz(指标端口):RPC 已对外服务,而且这一代每个库都有写资格。写者注册时连不上的库这一代不注册、一直关着,
-          # 这种副本照常经 etcd 被发现、服务健康库,但不算就绪:滚动发布停在它这里,集群恢复之后重建它
-          # (docs/design/data-service-startup-isolation.md §7.3)。存活仍看 gRPC,不就绪的副本不能被当成坏了重启。
+          # 就绪看 /readyz(指标端口):RPC 已对外服务,这一代每个库都有写资格,启动时连不上的库也都已重核打开。
+          # 写者注册时连不上的库这一代不注册、一直关着,这种副本照常经 etcd 被发现、服务健康库,但不算就绪:滚动发布停在它这里,
+          # 集群恢复之后重建它(docs/design/data-service-startup-isolation.md §7.3);只是池关着的,后台每 15 秒重核,恢复之后自己就绪(§6.1)。
+          # 存活仍看 gRPC,不就绪的副本不能被当成坏了重启。
           readinessProbe:
             httpGet:
               path: /readyz

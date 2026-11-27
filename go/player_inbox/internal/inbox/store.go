@@ -414,7 +414,7 @@ func InsertAudit(ctx context.Context, tx *sql.Tx, a *inboxpb.PlayerInboxAudit) e
 
 // auditColumns 是审计表的全部列,顺序与 insertAuditForItem 的实参一一对应。
 const auditColumns = "`shard`,`player_id`,`domain`,`seq`,`action`,`operator`,`peer_addr`,`reason`,`created_ms`," +
-	"`msg_type`,`request_id`,`issued_at_ms`,`content_sha256`,`payload`,`void_reason`"
+	"`msg_type`,`request_id`,`issued_at_ms`,`content_sha256`,`payload`,`void_reason`,`approval_id`,`approver`"
 
 // insertAuditForItem 按 auditRowFor 组出整行后 INSERT IGNORE。item 必须是调用方在同一事务里读到的条目行
 // (内容列入箱后不再改,早于本事务内其它条件写读到的快照也可以用)。
@@ -423,10 +423,11 @@ func insertAuditForItem(ctx context.Context, tx *sql.Tx, item *inboxpb.PlayerInb
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, "INSERT IGNORE INTO "+auditTable+" ("+auditColumns+") VALUES ("+placeholders(15)+")",
+	_, err = tx.ExecContext(ctx, "INSERT IGNORE INTO "+auditTable+" ("+auditColumns+") VALUES ("+placeholders(17)+")",
 		row.GetShard(), row.GetPlayerId(), row.GetDomain(), row.GetSeq(), row.GetAction(),
 		row.GetOperator(), row.GetPeerAddr(), row.GetReason(), row.GetCreatedMs(),
-		row.GetMsgType(), row.GetRequestId(), row.GetIssuedAtMs(), row.ContentSha256, row.Payload, row.GetVoidReason())
+		row.GetMsgType(), row.GetRequestId(), row.GetIssuedAtMs(), row.ContentSha256, row.Payload, row.GetVoidReason(),
+		row.GetApprovalId(), row.GetApprover())
 	if err != nil {
 		return fmt.Errorf("inbox: insert audit player=%d seq=%d action=%d: %w", row.GetPlayerId(), row.GetSeq(), row.GetAction(), err)
 	}

@@ -98,6 +98,7 @@
 | 重复点击/网络重试导致给宗师多发一笔 95% 分红 | 客户端重放同一 `client_request_id` | `ClientRequestLedgerComp` 先行幂等拦截重放，重放路径不进入提交段、不追加出箱条目。 |
 | 宗师关摊后缓存尚未刷新（最多 5 秒窗口）被下单 | 跨节点定时拉取延迟 | 宗师本节点关摊立刻 `HDEL` + 清本地缓存；同节点下单实时复核实体状态；跨节点最多 5 秒窗口内按买家预览确认的旧合法报价成交，宗师照常按该报价收取 95% 净分成，无资产损失。 |
 | 离线宗师删角后买家出箱永远卡死重试 | `go/mail` 返回 `kMailRecipientDeleted` | `mail_outbox_rules::ClassifySend` 将 `kMailRecipientDeleted` 判为终态放弃（`kTerminalDrop`），打 WARN 审计日志并摘除条目，不阻塞买家后续战斗溢出/代打邮件。 |
+| 分红邮件已建、买家出箱条目的删除没落盘，买家 37 天后才上线重寄，宗师再领一次（数据覆写审计 r2-craft#3） | 收件人是另一名在线玩家；邮件清理开删除模式时判重行在有效期 + 保留期后被删 | `go/mail` 的判重依据改放不随清理删除的收据表 `mail_request_receipt`，同一 `request_id` 隔多久重寄都只回原邮件（[mail-system.md](mail-system.md) §2.4.1，2026-11-26 已落码未编译）。 |
 | 绑定银两借代打洗成宗师流通银两 | `proxyFeeGold` 若允许扣绑定银两则洗白 | `proxyFeeGold` 仍 100% 走 `strictGold`（仅扣流通银两 `kCurrencyGold`），5% 销毁，95% 经邮件发放流通银两，T/B 防洗白红线零松动。 |
 | 4 件套纯奶/纯控冲 +11 被旧 `3200/1600` 上限截成 0 收益 | 旧 `source_cap` 恰好等于 `4 * 800` / `4 * 400` | 有效上限随强化共享系数放宽至 `3584` / `1696`，战斗 `MaximumEffectiveSourceBps` 同步放宽，且 `ValidEquipmentSources` 保持严格恒等。 |
 | V1 鞋子速度在 Java/Python 被强化误放大 | Java/Python 此前漏判 `EnhancesBaseAttribute` | 三服同步收口 `EnhancesBaseAttribute` 并新增 V1 鞋子 +10/+11 速度恒定回归单测。 |

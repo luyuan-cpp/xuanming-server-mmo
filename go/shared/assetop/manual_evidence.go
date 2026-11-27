@@ -116,8 +116,9 @@ type ManualRow struct {
 // 为什么要比 attempts(2026-11-26):last_send_ms 按写入它的副本自己的钟推进(GREATEST(last_send_ms, 它的 now)),
 // 钟慢的副本发了请求也推不动;结局不明的重排又把 lease_until_ms 清回 0,行上这两列与读证据时一模一样,只比它们就漏掉了
 // 这一次发送。attempts 每次重排必加一,与时钟无关。
-// 代价:只领没发的重排(玩家不在线,本地 NOT_HERE)也会加 attempts,读证据之后碰上一次,终结就落空、要重跑。这是有意的:
-// 宁可让操作员重跑,也不放过一次发送。设计记录见 docs/design/data-consistency-guarantee-map-20261020.md §6.2 第 2 条。
+// 代价:只领没发的重排(玩家不在线,本地 NOT_HERE)也会加 attempts,条件写之前碰上一次就落空、要重跑。条件写紧跟着最后一次读,
+// 这个窗口以毫秒计,碰上的概率可以忽略;跨观察窗口(分钟级)的两次读不比 attempts,见 LeaseAndSendUnchanged。
+// 设计记录见 docs/design/data-consistency-guarantee-map-20261020.md §6.2 第 2 条。
 type QuietWitness struct {
 	LeaseUntilMs uint64
 	LastSendMs   uint64
@@ -129,11 +130,24 @@ func (r ManualRow) Witness() QuietWitness {
 	return QuietWitness{LeaseUntilMs: r.LeaseUntilMs, LastSendMs: r.LastSendMs, Attempts: r.Attempts}
 }
 
-// Matches 报告重读的行是否还是读证据时的样子:租约、发送时刻、attempts 都没变。两个 assetopfix 观察窗口之后的复核、
-// data_service 回收 settle 在行锁下的比对都用它;trade 的条件写按同样三列写 SQL(guild 的那条 2026-11-26 还只比前两列,待补)。
-// 比对口径只此一份。
+// Matches 报告行是否还是取见证时的样子:租约、发送时刻、attempts 都没变。终结的条件写用它的口径:data_service 回收 settle
+// 在行锁下比、trade 的条件写按同样三列写 SQL(guild 的那条 2026-11-26 还只比前两列,待补)。条件写紧跟着最后一次读。
 func (w QuietWitness) Matches(r ManualRow) bool {
 	return w == r.Witness()
+}
+
+// LeaseAndSendUnchanged 是两个 assetopfix 跨观察窗口的复核口径:两次读之间租约与发送时刻都没变,attempts 可以变。
+//
+// 为什么跨窗口不比 attempts:离线玩家的行会被定期领走、本地 NOT_HERE 重排(不发请求),每次 attempts 加一;停放档关掉时
+// 大约每分钟一次,比 attempts 的话一个窗口几乎必然碰上,「从未应用」的行用工具永远终结不了。不比它也不放过发送:
+//   - 第二次读时还在途的投递,它的领取必改 lease_until_ms(新租约与第一次读到的值不同),这里就拒绝;
+//   - 窗口里已经结束的投递,哪怕是钟慢的副本发的(last_send_ms 推不动)、结局不明又重排(租约清回 0):scene 若已应用,
+//     第二次读账本时要么还持有玩家(Released=false),要么已存盘(账本见过这个 seq),重判都不再是「从未应用」,照样拒绝;
+//   - 第二次读之后的领取与重排,由条件写带第二次读到的整份见证(Matches,含 attempts)挡住。
+//
+// 所以两个工具复核通过之后,条件写用第二次读到的见证,不用第一次的。
+func (w QuietWitness) LeaseAndSendUnchanged(r ManualRow) bool {
+	return w.LeaseUntilMs == r.LeaseUntilMs && w.LastSendMs == r.LastSendMs
 }
 
 // ManualObserveFloor 是观察窗口的下限,见 ManualObserveWindow。

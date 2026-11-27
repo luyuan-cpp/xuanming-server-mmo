@@ -1,6 +1,6 @@
 # 官方通行证与账号注册接入设计（Casdoor OIDC）
 
-状态：2026-11-24 已完成服务端 OIDC 接缝、独立 Casdoor 部署栈、Unity 道家 Q 版客户端 UI/PKCE 与移动端深度链接构建后处理，并通过真实 Casdoor v4.27.1 容器 → `go/login` `PassportProvider` 端到端实测验证。2026-11-26 Claude Code 对照 Casdoor v4.27.1 源码审核，结论与定案见 §5.4；同日落码（未编译、未运行，验证命令见 `docs/PROGRESS.md` 同日「官方通行证审核」条目）：只收身份令牌（§4 第 11 项）、账号注销时删除通行证用户（§3.5）、初始化数据改为注册必须验证邮箱并新增服务端专用应用、K8s 部署参数、iOS 改用系统认证会话（§4 第 14 项）。同日第二轮独立审查（不沿用现有做法、按行业标准重看）的结论见 §8：初始化数据缺省开人机验证、审计记录保留 180 天（已改，未起容器）；玩家可自删通行证用户、注册缺协议勾选等待办见 §8.3、§8.4。同日负责人确认后落码 §3.6：通行证改密 / 封禁 / 删除之后，此前登录的游戏令牌刷新时整号吊销（未编译、未运行）。
+状态：2026-11-24 已完成服务端 OIDC 接缝、独立 Casdoor 部署栈、Unity 道家 Q 版客户端 UI/PKCE 与移动端深度链接构建后处理，并通过真实 Casdoor v4.27.1 容器 → `go/login` `PassportProvider` 端到端实测验证。2026-11-26 Claude Code 对照 Casdoor v4.27.1 源码审核，结论与定案见 §5.4；同日落码（未编译、未运行，验证命令见 `docs/PROGRESS.md` 同日「官方通行证审核」条目）：只收身份令牌（§4 第 11 项）、账号注销时删除通行证用户（§3.5）、初始化数据改为注册必须验证邮箱并新增服务端专用应用、K8s 部署参数、iOS 改用系统认证会话（§4 第 14 项）。同日第二轮独立审查（不沿用现有做法、按行业标准重看）的结论见 §8：初始化数据缺省开人机验证、审计记录保留 180 天（已改，未起容器）；玩家可自删通行证用户、注册缺协议勾选等待办见 §8.3、§8.4。同日负责人批准全做之后落码（未编译、未运行，验证交 Gemini，交接单 `docs/handoff/passport-hardening-handoff-20261126.md`）：§3.6 改密 / 封禁 / 删除之后登录与刷新时吊销改密之前的会话并踢下线；§3.7 通行证回调实时推送；§3.8 客户端正式包锁地址、桌面多端口回调、安卓 App Links；§3.9 首启隐私弹窗与注册协议勾选；§3.10 生产部署清单（白名单入口、网络隔离、验证码记录清理、按环境渲染初始化数据）。
 
 关联：[认证提供者框架](./auth-provider-framework.md)、[第三方登录端到端设计](./third-party-login-end-to-end-design.md)、[双 Token 体系](./dual-token-authentication.md)、[账号注销](./account-deletion.md)、[账号角色目录](./account-role-authority.md)。
 
@@ -135,42 +135,83 @@ AuthProviders:
 
 注销完成后同一个人用同一邮箱重新注册，Casdoor 给的是新 `sub`，游戏里是全新账号；`/api/login` 的「你之前的账号已于 X 注销」提示按账号串摘要匹配，对通行证账号不会出现（旧 `sub` 已不存在）。
 
-### 3.6 通行证改密 / 封禁 / 删除之后吊销游戏登录（2026-11-26）
+### 3.6 通行证改密 / 封禁 / 删除之后吊销游戏登录并踢下线（2026-11-26）
 
-**为什么要做**：Casdoor 改密只作废它自己签的令牌和会话（`controllers/user.go` 的 `SetPassword` 末尾），不通知游戏。游戏的 refresh token 有效 30 天，每次续期再续 30 天。账号被盗以后玩家去通行证改了密码，盗号者手里的游戏令牌照样能一直续下去。各家通行证的通行做法是改密即全端下线；封禁、删除同理。
+**为什么要做**：Casdoor 改密只作废它自己签的令牌和会话（`controllers/user.go` 的 `SetPassword` 末尾），不通知游戏。游戏的 refresh token 有效 30 天，每次续期再续 30 天。账号被盗以后玩家去通行证改了密码，盗号者手里的游戏令牌照样能一直续下去，已经在游戏里的连接也不会断。各家通行证的通行做法是改密即全端下线；封禁、删除同理。
 
 **判定：按会话的认证时刻比，不按账号记水位。**
 
 1. 登录时把身份令牌的 `iat`（通行证的时钟）写进游戏令牌载荷 `TokenData.IdentityIssuedAt`（`AuthResult.IdentityIssuedAt` → `LoginLogic.issueTokens` → `token.Manager.Issue`），同一家族轮换时原样带下去（`token.go` 的 `rotate`）。
-2. 刷新时，在轮换之前对 `auth_type = passport` 的令牌做一次核对（`refreshtokenlogic.go` 的 `passportSessionRevoked`）：`token.Manager.ReadRefreshPayload` 读出载荷，再用管理凭据查一次 `GET /api/get-user?userId=<sub>`（`PassportAdmin.CheckSession`）。
-   - 用户不在或被标记删除，记 `user_gone`；`isForbidden` 为真，记 `user_forbidden`；`lastChangePasswordTime`（RFC 3339）不早于 `IdentityIssuedAt`，记 `password_changed`。其余照常续期。
-   - 不续期时 `RevokeAll` 吊销整个账号的令牌家族：每台设备的 access 立即失效，refresh 续不了。回的码与令牌失效相同（`kLoginAccountNotFound`），客户端照常走完整重登。
-3. 这和 Firebase 的 `tokensValidAfterTime`、Microsoft Graph 的 `signInSessionsValidFromDateTime` 是同一个思路：会话带着自己的认证时刻，拿它和用户的「此后才有效」时刻比。
+2. 查通行证：`PassportAdmin.LookupUser`（`GET /api/get-user?userId=<sub>`）回这名用户此刻的状态（被删 / 被标记删除、被封、最近一次改密时刻）；`PassportUserStatus.SessionVerdict(iat)` 是纯判定：被删记 `user_gone`，被封记 `user_forbidden`，改密时刻不早于这次登录的 `iat` 记 `password_changed`，其余照常。
+3. 落到令牌上（`pkg/passportsession` 的 `settle`，三个入口共用）：被删、被封吊销账号的全部令牌（`RevokeAll`）；改过密码只吊销身份令牌签发时刻不晚于改密时刻的家族（`token.Manager.RevokeIssuedBefore`，一段 Lua 按载荷筛、一次原子提交），改密之后重新登录的设备不受影响。吊销了东西就把账号名下在线的角色踢下线（`svc.KickAccountPlayers`：读角色目录、按会话踢 gate 并按正常登出收尾，同注销申请时的踢线），客户端收到新提示码 `kLoginPassportCredentialChanged`「账号在官方通行证修改了密码或已被停用，请重新登录」，不自动重连。每次吊销都在 `settle` 里记一行 INFO `[passport] sessions revoked: phase=… account=…`（安全审计：登录时顺带吊销旧会话的那一种，别处没有日志）。
+4. 三个入口：
+   - **登录时**（`passportsession.CheckLogin`，`loginlogic.go` 认证之后、签发令牌之前）：身份令牌签发在改密之前（被截获、还没用过的旧令牌）、用户被封被删，拒绝这次登录（回新提示码，网关回 401，客户端说清原因）。不论放不放行，改密之前的旧登录都在这里吊销：玩家改完密码回来登录，盗号者的会话当场失效、在线的被踢下线。
+   - **刷新时**（`passportsession.CheckRefresh`，轮换之前）：这一家族的登录早于改密、用户被封被删，不续期，吊销并踢线；回与令牌失效相同的 `kLoginAccountNotFound`，客户端照常重登。
+   - **通行证回调时**（§3.7）：改密、改资料、删用户的那一刻就处理，不用等玩家登录或刷新。
+5. 这和 Firebase 的 `tokensValidAfterTime`、Microsoft Graph 的 `signInSessionsValidFromDateTime` 是同一个思路：会话带着自己的认证时刻，拿它和用户的「此后才有效」时刻比。
 
 **为什么这样定：**
 
 - 两个时刻都取自通行证自己的时钟，不受 login 与通行证之间的时钟偏差影响。`TokenData.CreatedAt` 不能拿来比：它每次轮换都更新，用的又是 login 的时钟。
-- 按会话的认证时刻判，改密之后重新登录的会话不会被误吊销。另一种做法是按账号记一个「上次看到的改密时刻」水位，它要多一个 Redis 键，而且发现改密的那一刻会把改密后新登录的会话一起吊销。
+- 按会话的认证时刻判，改密之后重新登录的会话不会被误吊销。另一种做法是按账号记一个「上次看到的改密时刻」水位：要多一个 Redis 键，发现改密的那一刻还会把改密后新登录的会话一起吊销（审查稿原先建议的是它，没采用）。
 - 签发时刻跨轮换不变。通行证故障期间核对不了、照常续期，续出来的令牌在下一次核对时照样判得出来，没法借一次续期把改密之前的登录变成改密之后的。
-- 身份令牌如果在改密之前签发、改密之后才拿来登录（比如被截获、还没用过的令牌，1 小时内有效），它的 iat 早于改密，第一次刷新就会被判出来。
-- 核对放在轮换之前。吊销失败就不续期（计 `revoke_failed`），旧令牌还在，下一次刷新再核对、再吊销。如果放在轮换之后，新的一对已经写下，客户端重试走宽限窗口的重放会原样拿到它，绕过核对。
+- 刷新时的核对放在轮换之前。吊销失败就不续期（计 `revoke_failed`），旧令牌还在，下一次刷新再核对、再吊销。如果放在轮换之后，新的一对已经写下，客户端重试走宽限窗口的重放会原样拿到它，绕过核对。
+- 只在确实吊销了东西时踢线：登录时如果改密之前的会话早就清掉了，不再踢，免得把玩家改密之后在别的设备上的会话也踢掉。被封、被删一律踢。
 - 同一秒里改密与签发分不出先后，按改密在后处理。注册不写改密时刻；改完密码再回游戏登录，不会和改密落在同一秒。
+- 吊销「改密之前的家族」用 Lua 扫账号索引（每账号最多 32 个家族），按载荷的 `identity_issued_at` 筛，与整账号吊销同一套归属核对，数据不对整个报错、一个都不删。
 
 **故障与代价：**
 
-- 通行证或网络出故障、应答认不出：照常续期，计 `login_passport_session_check_total{result="error"}` 并记 ERROR，不让通行证故障把在线玩家都踢下线。error 持续出现，说明改密已经踢不掉人：`deploy/k8s/login-alerts.yaml` 的 `LoginPassportSessionCheckFailing`（10 分钟内一半以上的核对失败，持续 10 分钟）报 warning，`tools/scripts/tests/gate_pick_alerts_contract.tests.ps1` 钉住指标名与取值。
-- 通行证账号每次刷新（约 2 小时一次）多一次内网调用，时限 1 秒（`passportSessionCheckTimeout`，login 的 RPC 超时缺省 4 秒）。每次刷新多一次 Redis 读（先读载荷再轮换）。
+- 通行证或网络出故障、应答认不出：登录、刷新照常放行，计 `login_passport_session_check_total{phase,result="error"}` 并记 ERROR，不让通行证故障把在线玩家都踢下线。持续出错说明改密已经踢不掉人：`deploy/k8s/login-alerts.yaml` 的 `LoginPassportSessionCheckFailing`（10 分钟内一半以上的核对失败，持续 10 分钟）报 warning，`tools/scripts/tests/gate_pick_alerts_contract.tests.ps1` 钉住指标名与取值。
+- 通行证账号每次登录、每次刷新（约 2 小时一次）多一次内网调用，时限 1 秒（`lookupTimeout`，login 的 RPC 超时缺省 4 秒）；登录时还多一次 Lua（扫旧家族）。踢线最多 5 秒，与请求的取消脱钩。
 - 没配管理凭据（只有 dev/test 允许）时不核对，启动时记 ERROR。生产模式配了通行证就必须配管理凭据（§3.2）。
-- 管理接口走 `Endpoint`，生产必须指向内网入口（§8.4 第 2 条）。指错了，每次核对都按故障放行，改密就再也踢不掉人，只在指标里看得到。
-- 这个字段加上之前签的通行证令牌，`IdentityIssuedAt` 为 0，按最早算：玩家改过密码的话要重新登录一次。项目未上线，不受影响。
+- 管理接口走 `Endpoint`，生产必须指向集群内入口（§3.10）。指错了，每次核对都按故障放行，只在上面的告警里看得到。
+- 这个字段加上之前签的通行证令牌 `IdentityIssuedAt` 为 0，按最早算：玩家改过密码的话要重新登录一次。项目未上线，不受影响。
 
-**做不到的（明确接受）：**
+**仍然做不到的：**
 
-- 已经连在 gate 上的会话不踢。这与 `dual-token-authentication.md`「已进游戏的连接」的既有口径一致：吊销只让令牌失效，断线之后重连时才失效。要立刻踢下线需要两样东西：一个新的下线原因提示（改 `Tip.xlsx`、三端重编），以及实时触发（Casdoor 的 webhook，要在 Java 网关新开入口转给 login）。这两样列为后续。
-- 从改密到被发现，最长是一个 access token 的寿命（2 小时）：盗号者手里的 access token 过期之前还能拿去连 gate。这个账号任何一个改密之前的会话下一次刷新时，就整号吊销。
-- Casdoor 后台的「强制下线」（`/api/logout-user`）不改 `lastChangePasswordTime`，判不出来。要踢盗号者，请玩家或客服改密。
+- Casdoor 后台的「强制下线」（`/api/logout-user`）不改 `lastChangePasswordTime`，判不出来；要踢盗号者，请玩家或客服改密（会触发回调与上面的核对）。
+- 回调没开（§3.7）时，从改密到被发现，最长是盗号者下一次刷新或玩家下一次登录之间的时间（access token 最长 2 小时）。
 
-**验证：** 单测钉住判定、跨轮换与刷新逻辑（`passport_admin_test.go` 的 `TestPassportAdminCheckSession`、`token/identity_issued_at_test.go`、`clientplayerlogin/refresh_passport_session_test.go`）。沙箱 mock 加了 `POST /mock/passport/change_password?user=<种子>` 与 `POST /mock/passport/forbid_user?user=<种子>`，冒烟时先登录，再调其中一个，再刷新，应当被拒。都未编译、未运行，命令见 `docs/PROGRESS.md` 同日「官方通行证改密后吊销游戏登录」条目。
+### 3.7 通行证回调：改密、封禁的那一刻就吊销并踢线（2026-11-26）
+
+**链路**：Casdoor 回调（webhook）→ 网关 `POST /internal/passport/events`（`PassportEventController`）→ login `LoginPreGate.HandlePassportEvent` → `passportsession.HandleEvent` → 同 §3.6 的 `settle`。
+
+1. **回调只用来找人，不信内容。** 回调体是 Casdoor 的一条操作记录（`object/record.go` 的 `Record`，`isUserExtended` 时多一个 `extendedUser`）。login 从里面取出用户 id 或「组织/用户名」：改密（`set-password`）时记录的组织与用户就是目标用户；后台改资料（`update-user`）时记录的是操作人，目标在请求体原文 `object` 里；管理组织 `built-in` 的人一律不核对，一次最多 4 个。然后逐个现查通行证（`LookupUser` / `LookupUserByName`），按查到的状态处理。回调是伪造、重复、乱序的都无所谓：只会多查几次通行证，改不了任何人的状态。所以不需要签名，固定请求头密钥只是挡掉随手的请求。
+2. **网关**：请求头 `X-Passport-Webhook-Secret` 按 SHA-256 摘要常量时间比较 `passport.webhook-secret`（至少 32 字节；没配就回 404，入口关着）；请求体限 64 KiB；原样转给 login。状态码给 Casdoor 的重投用：200 处理完；400 请求体不对，不必重投；401 密钥不对；503 login 暂时处理不了。网关的 Ingress 只路由 `/api`，这个入口公网够不着。
+3. **login**：令牌存在全地域共用的登录域，任一 login 都能处理，网关不按区选路、可以重试。核对不了或吊销失败回 `Unavailable`（网关 503，Casdoor 按 `maxRetries: 10`、指数退避重投）；格式不对回 `InvalidArgument`。请求体带玩家邮箱、手机号，`HandlePassportEvent` 进了请求体日志屏蔽名单（`internal/rpclogging`）。
+4. **Casdoor 侧**（`deploy/passport/init_data.json` 的 `webhooks`）：回调挂在 `built-in` 组织下、`singleOrgOnly: false`。原因是 v4.27.1 只让 `built-in` 的回调连内网地址（`object/webhook_util.go` 的 `sendWebhook`：别的组织的回调走「只许公网」的 HTTP 客户端，防组织管理员拿回调探内网）。事件是 `set-password`、`update-user`、`delete-user`。仓库里缺省关着（`isEnabled: false`、地址与密钥是占位）；生产由 `deploy/k8s/passport/render-init-data.ps1` 填地址与密钥并打开。
+5. **部署**：网关的密钥经 `k8s_deploy.ps1` 工作负载密钥目录 `gateway-passport-webhook` 注入（部署机设 `MMORPG_GATEWAY_PASSPORT_WEBHOOK_SECRET` 才注入，没设就不注入、入口关着），与 Casdoor 回调请求头是同一个值。
+6. **删用户**：通行证里删掉用户之后，回调只剩组织与用户名，已经查不到这是谁（`sub` 随用户一起没了），这一条按 `ignored` 计；这个人的游戏令牌在下一次刷新或登录时按 `user_gone` 吊销（§3.6）。
+
+### 3.8 客户端加固：正式包锁地址、桌面多端口回调、安卓 App Links（2026-11-26）
+
+1. **正式包只认构建时写进包里的地址。** 原来网关和通行证地址都能被启动参数（`-gateway`、`-passport-origin` 等）和本机设置（PlayerPrefs，Windows 上是当前用户可写的注册表）覆盖：一个带参数的快捷方式（「登录器」「加速器」常见的分发形式，杀毒软件不报）就能让正版客户端把玩家带到钓鱼页去输通行证口令，或把口令登录发给假网关。现在：
+   - 地址放在 `Assets/Resources/ClientEndpoints.json`（`ClientEndpoints`），仓库里是本机联调的值；`tools/build_client.ps1 -GatewayUrl … -PassportOrigin … -TermsUrl … -PrivacyUrl …` 出正式包时写进去、构建完还原。
+   - 启动参数与本机设置只在编辑器与开发包里生效（`ClientSettings.EndpointOverridesAllowed`，按 `UNITY_EDITOR || DEVELOPMENT_BUILD` 条件编译）。
+   - `ClientEndpointsBuildGuard`（构建前检查，所有平台、所有出包入口都经过）不让正式包带着回环地址、明文 http 或缺协议地址出去；开发包不查。
+2. **桌面回调登记五个端口。** 原来只有 `127.0.0.1:18765`：多开的第二个客户端起不了监听，本机任何程序占住这个端口，通行证登录就用不了。RFC 8252 §7.3 建议每次随机端口，但 Casdoor 对回调地址精确匹配，做不到。现在通行证登记 18765~18769 五个，客户端先占端口再拼授权地址（`PassportOAuthProtocol.LoopbackRedirectCandidates`），授权与换票都用实际监听的那一个；开发时改过回调地址就只试它自己。
+3. **安卓正式包改用 App Links。** 自定义协议头 `xuanming://` 别的 App 也能注册：PKCE 只保证谁发起谁换票，拦不住恶意 App 自己发起一次授权、让玩家在真的通行证页面登录、再截走回调（RFC 8252 §8.6）。现在通行证是 https 时，安卓的回调是 `https://<通行证域名>/passport/app-callback`（`PassportOAuthProtocol.AppLinkRedirectUri`），构建后处理给主 Activity 登记带 `autoVerify` 的 intent-filter，系统按通行证域名下的 `/.well-known/assetlinks.json` 核对这个链接归本 App；自定义协议头只在开发包里登记（本机联调的 http 通行证用它）。`assetlinks.json` 与回调兜底页由通行证的公网入口发布（§3.10），通行证里登记这条回调由 `render-init-data.ps1` 加。iOS 仍是系统认证会话（回调只交给发起会话的 App），不受影响。没改成 Custom Tabs：系统浏览器同样符合 RFC 8252，Custom Tabs 只是体验更好，要加安卓依赖，留到看注册转化再定。
+
+### 3.9 《用户协议》《隐私政策》：首启弹窗与注册勾选（2026-11-26）
+
+国内应用商店与 App Store 都查：首次运行先弹出协议与隐私政策、由玩家主动点同意，同意之前不收集个人信息；注册时明示同意（个人信息保护法第十三、十四、十七条）。属于 `AGENTS.md` §9「可能导致不过审」的一票否决项。
+
+1. **客户端首启弹窗**（`QdaoServerSelectView.Privacy.cs`、`PrivacyConsent`）：没同意当前版本就盖在登录界面最上层，选服、登录、注册都点不了，Esc 关不掉；「阅读《用户协议》」「阅读《隐私政策》」用系统浏览器打开构建时写进包里的地址；「不同意」第一次只说明后果，再点才退出游戏，不反复弹窗；同意的版本号记在本机（不是个人信息），协议改版把 `PrivacyConsent.CurrentVersion` 加一，所有玩家下次启动重新同意。复用登录界面现有的面板与按钮美术、运行期挂载，不需要新图，不改烘焙的 Prefab。区服列表与公告照常加载（匿名，不涉及个人信息）。
+2. **通行证注册页**：注册项加必填的 `Agreement`（勾选框缺省不勾）；应用的 `termsOfUse`、`privacyPolicy` 由 `render-init-data.ps1` 按本环境填。
+3. **正式包必须有协议地址**：`ClientEndpointsBuildGuard` 拦缺地址的正式包，`render-init-data.ps1` 也是必填参数。协议正文要法务出，仓库里没有。
+
+### 3.10 生产部署清单（`deploy/k8s/passport/`，2026-11-26）
+
+审查时查出的几条生产问题（§8.4）原本只写在清单里靠人办，现在落成清单与脚本：
+
+1. **公网入口按白名单放行**（`public-entry.yaml`，nginx）。Casdoor 的权限模型允许任何登录用户对自己调 `/api/delete-user`、`/api/update-user`（`object/init.go` 的自匹配条款）：不挡的话，玩家用自己的通行证令牌就能删掉自己的通行证用户，绕过 7 天冷静期、游戏账号变成谁也登不上的孤儿。默认全拒，只放行玩家要用的十几个接口与只读页面；登录、注册、发验证码、找回密码、换票按来源地址每分钟限速（口令哈希是 argon2id，每次校验约 64 MiB，不限速就是现成的内存放大器）。用独立的 nginx 而不是 Ingress 控制器的注解：名单在一处、与控制器无关、契约测试能钉住（`tools/scripts/tests/passport_k8s_contract.tests.ps1`）。
+2. **集群内入口给 login**（同一个 nginx 的 8081，内部 Ingress）：只有验签公钥与 `get-user`、`delete-user`。login 生产模式只收 https 的 `Endpoint`，所以走带证书的内部 Ingress，不直连 `casdoor:8000`。
+3. **网络隔离**（`networkpolicy.yaml`）：Casdoor 只收代理的 8000（它在容器里起的 RADIUS UDP 监听也就够不着了）；代理只收 Ingress 控制器的流量。
+4. **初始化数据按环境渲染**（`render-init-data.ps1`）：以仓库里的 `init_data.json` 为底，只填 App Links 回调、协议地址与回调地址 / 密钥，别的安全配置原样不动；输出 Secret（密钥不进 ConfigMap），用 JSON 解析改字段而不是文本替换。
+5. **验证码记录定时清理**（`verification-record-cleanup.yaml`）：Casdoor 没有任何清理 `verification_record` 的代码、删用户也带不走它；每天删 180 天以前的，用只有这张表删除权限的库账号。
+6. **镜像按摘要固定**：Casdoor、MySQL、nginx 都写 `@sha256:`（2026-11-26 向 registry-1.docker.io 查的），本机 compose 与生产清单是同一个摘要（契约测试核对）。
+7. **初始化数据的安全缺省**（`deploy/passport/init_data.json`，契约测试钉住）：口令哈希 `argon2id`（OWASP 对新系统的首选，项目没有存量用户、可以清库，趁现在换；名字写错会被当成不哈希）；人机验证 `Always`；撞库拦截（同一来源 10 分钟内 30 个不同账号登录失败封 15 分钟，按运营商大出口共用地址留了余量）；短信每号每小时 5 条、每天 10 条、同号段每小时 100 条、只发国内号码、每天 1 万条告警（现在只开了邮箱注册，开手机号时直接生效）；`countryCodes` 只有 `CN`。
 
 ---
 
@@ -192,7 +233,11 @@ AuthProviders:
 | **12. 注销后个人信息留在通行证** | 只删游戏账号，Casdoor 里的邮箱、手机号、口令哈希还在：不满足 App Store 5.1.1(v)、Google Play 账号删除要求与个人信息保护法，属于 `AGENTS.md` §9 的「账号真注销」红线。 | 执行者在删账号行之前调 Casdoor 管理接口删用户（§3.5）；生产模式配了通行证却没配管理凭据，login 拒绝启动。 |
 | **13. 删用户「看起来成功」其实没删** | 组织开了软删除时 `delete-user` 只打标记仍回 `Affected`；用户名在查与删之间被改时删不到任何行；管理凭据写错时 Casdoor 不报错而是当匿名处理。 | 删除以「删完再按 id 查不到」为准；回 `Unaffected`、删完还查得到、`status=error`、应答里的 id 对不上都回错误并重试，不当成删完（§3.5）。 |
 | **14. iOS 跳到 Safari 登录被审核拒** | 用 `Application.OpenURL` 把玩家带到 Safari 去登录 / 注册，App Store 审核指南 4.0（设计）下是常见拒审原因；登记到 `Info.plist` 的 URL scheme 还能被别的 App 或网页用来把游戏拉起来。属于 `AGENTS.md` §9「可能导致不过审」的一票否决项。 | iOS 改用系统认证会话 `ASWebAuthenticationSession`（App 内弹出、回调只交给本 App），去掉 URL scheme 登记（2026-11-26，§7.3）；Android 不受这条审核规则约束，仍用系统浏览器。 |
-| **15. 改密之后盗号者照样续期** | Casdoor 改密只作废它自己签的令牌，不通知游戏；游戏的 refresh token 30 天，续一次再续 30 天。账号被盗后玩家改了密码，盗号者的游戏登录还能一直续。 | 刷新前按会话的认证时刻（身份令牌的 iat，跨轮换不变）与通行证里的改密时刻比，改密 / 封禁 / 删除之后整号吊销；吊销失败不续期，通行证故障才放行并计数（§3.6）。已连着 gate 的会话不踢。 |
+| **15. 改密之后盗号者照样续期、照样在线** | Casdoor 改密只作废它自己签的令牌，不通知游戏；游戏的 refresh token 30 天，续一次再续 30 天，已在游戏里的连接也不断。 | 登录、刷新、通行证回调三处按会话的认证时刻（身份令牌 iat，跨轮换不变）与通行证里的改密时刻比：只吊销改密之前的会话，被封被删吊销全部，吊销了就踢下线（§3.6、§3.7）。 |
+| **16. 玩家自删通行证用户绕过冷静期** | Casdoor 允许登录用户对自己调 `/api/delete-user`（`object/init.go` 的自匹配条款）：冷静期被绕过，游戏账号变成谁也登不上的孤儿。 | 公网入口按白名单放行，`delete-user`、`update-user` 与全部管理接口不放行；login 的管理调用走集群内入口（§3.10）。 |
+| **17. 带参数的快捷方式把正版客户端带到钓鱼站** | 启动参数与本机设置能覆盖网关和通行证地址。 | 正式包只认构建时写进包里的地址，覆盖只在编辑器与开发包里生效；构建检查不让正式包带着回环地址或明文 http 出去（§3.8）。 |
+| **18. 别的 App 抢注 `xuanming://` 截走安卓的授权回调** | 自定义协议头谁都能注册（RFC 8252 §8.6）。 | 安卓正式包用 App Links（`assetlinks.json` 核对归属），自定义协议头只在开发包里登记（§3.8）。 |
+| **19. 没有首启隐私弹窗与注册协议勾选** | 国内应用商店与 App Store 都查，属 `AGENTS.md` §9 一票否决项。 | 首启弹窗 + 注册页必填勾选；正式包缺协议地址出不了包（§3.9）。 |
 
 ---
 
@@ -293,17 +338,18 @@ Claude Code 对照 Casdoor v4.27.1 源码（`object/token_jwt.go`、`token_stand
 9. **真机回归。** iOS / Android 各走一遍登录、注册、注销重新认证，含应用被系统回收后从回调冷启动的情况（冷启动时内存里的 `code_verifier` 已丢，本次授权作废，玩家重新点登录）。
 10. **升级 Casdoor 之前**重跑：回调地址探针（§4 第 10 项）、三种令牌的 `tokenType` 取值、`get-user` / `delete-user` 的应答形状（§3.5 依赖这些，都是 v4.27.1 的行为）。
 
-第二轮审查对这份清单的补充与修正见 §8.4：第 1 条要落成公网入口的接口白名单（不放行 `/api/delete-user` 等，否则玩家能自删通行证用户），login 的 `Endpoint` 因此必须指向内网入口；第 3 条的人机验证、第 5 条的 `record` 清理已在初始化数据里缺省配好（§8.2），`verification_record` 仍要部署侧定时清。
+第二轮审查对这份清单的补充已落成 `deploy/k8s/passport/` 的部署清单与初始化数据缺省（§3.10）：第 1 条落成公网入口的接口白名单与集群内入口，第 3 条的人机验证、撞库与短信限额、第 5 条的 `record` 保留期与 `verification_record` 定时清理、第 7 条的网络隔离都有了；仍要人办的见 `deploy/k8s/passport/README.md`「上线前还要人办的」。
 
 ---
 
 ## 6. 不在仓库里做的事
 
-账号注销联动已做（§3.5），login 的 K8s 部署参数已做（§5.4）。剩下的都是生产环境的事，按 §5.4 的清单办：
+代码与部署清单都在仓库里（§3.5~§3.10）。剩下的要真实域名、外部凭据、法务或真机，按 `deploy/k8s/passport/README.md` 办：
 
-1. **邮件 / 短信发码通道与人机验证**：在 Casdoor 后台配，供应商密钥不进仓库。
-2. **Casdoor 自身的生产部署**：`deploy/passport/` 是本机沙盒（端口缺省只绑回环）。生产把 Casdoor 放进受管的 K8s Deployment + 独立库 + HTTPS Ingress，初始化数据以本目录的 `init_data.json` 为底、换掉回调域名之外不改安全相关的项。
-3. **Java 版服务端**：`passport` 渠道、令牌类型校验、注销删通行证用户与刷新前的改密核对（§3.6）都只在本仓（Go）实现，Java 仓 `PARITY.md` 登记待做。
+1. **邮件 / 短信发码通道、行为验证码**：在 Casdoor 后台配，供应商密钥不进仓库。
+2. **《用户协议》《隐私政策》正文与页面**：法务出，地址填进客户端正式包与 `render-init-data.ps1`。
+3. **域名、证书、安卓签名指纹**：填 `public-entry.yaml` 的两个 Ingress 与 `assetlinks.json`。
+4. **Java 版服务端**：`passport` 渠道、令牌类型校验、注销删通行证用户、登录与刷新前的核对与踢线、回调入口（§3.6、§3.7）都只在本仓实现，Java 仓 `PARITY.md` 登记待做；客户端（§3.8、§3.9）两版共用。
 
 ---
 
@@ -386,7 +432,7 @@ Claude Code 对照 Casdoor v4.27.1 源码（`object/token_jwt.go`、`token_stand
 
 整体架构不用改：通行证只管「你是谁」，游戏账号库管「你有什么」，两边只凭标准 OIDC 令牌衔接，是各家官方通行证的通行做法；公开客户端 + PKCE、服务端验签 + 一次性消费、iOS 用系统认证会话也都是标准做法。`go/login` 的验签、配置门禁、删通行证用户三段代码逐行核过，没有发现缺陷。
 
-与行业标准的差距：2 处本轮已改（§8.2）；「改密 / 封禁之后游戏登录不失效」负责人确认后已落码（§3.6）；4 处要负责人拍板或等上线资料（§8.3）；另有 7 条生产清单补充（§8.4，其中第 1 条不做就有实际漏洞）。
+与行业标准的差距：2 处本轮已改（§8.2）；§8.3 的 5 处与 §8.4 的 7 条，负责人 2026-11-26 批准全做，已落码（§3.6~§3.10，未编译、未运行），各条的去向见下。
 
 ### 8.2 本轮已改（只动 `deploy/passport/init_data.json`，未起容器验证）
 
@@ -397,49 +443,23 @@ Claude Code 对照 Casdoor v4.27.1 源码（`object/token_jwt.go`、`token_stand
 
 两项都只在全新初始化时生效（`initDataNewOnly = true`）：已经初始化过的库不会跟着变，要在后台手动改，或重建卷。
 
-### 8.3 待负责人拍板
+### 8.3 拍板项的去向（2026-11-26 负责人批准全做）
 
-**1. 通行证改密 / 找回密码 / 封禁之后，游戏里的登录不失效。** 2026-11-26 负责人确认后已落码，做法与取舍见 §3.6（未编译、未运行）。原先建议的「按账号记改密时刻水位」没有采用：它要多一个 Redis 键，发现改密时还会把改密后新登录的会话一起吊销；改为按会话的认证时刻比。仍没做的两样（已连着 gate 的会话立刻踢下线、改密实时推送），见 §3.6「做不到的」。
+1. **改密 / 找回密码 / 封禁之后游戏里的登录不失效** → §3.6（登录、刷新时核对，只吊销改密之前的会话，吊销了就踢下线）与 §3.7（通行证回调实时推送）。原先建议的「按账号记改密时刻水位」没有采用，理由在 §3.6。
+2. **注册没有协议勾选、客户端没有首启隐私弹窗** → §3.9。弹窗复用登录界面现有美术，不需要新图；协议正文与地址仍要法务出。
+3. **正式包也能用启动参数改网关和通行证地址** → §3.8 第 1 条（构建时写进包里、正式包不认覆盖、构建检查拦回环与明文）。
+4. **安卓回调用自定义协议头** → §3.8 第 3 条（App Links，自定义协议头只在开发包登记）。Custom Tabs 没做，理由在 §3.8。
+5. **桌面回调固定端口** → §3.8 第 2 条（登记五个端口，依次占）。
 
-**2. 注册没有《用户协议》《隐私政策》的展示与勾选（提审前必须有）。**
+### 8.4 生产清单补充的去向（接 §5.4）
 
-- 现状：通行证注册项没有 `Agreement`；`mmorpg-client` 全仓搜不到协议 / 隐私相关界面，首次启动也没有隐私同意弹窗。
-- 属于 `AGENTS.md` §9「可能导致不过审」的一票否决项：国内安卓商店与 App Store 都查首启隐私弹窗与注册时的明示同意（个人信息保护法第十三、十四、十七条）。
-- 要先有两份正式文本和可访问的地址（法务 / 负责人）。有了之后：应用填 `termsOfUse`、`privacyPolicy`，注册项加必填的 `Agreement`；客户端首启弹窗是另一项界面工作（要给 Codex 出图）。原 §5.4 第 3 条把它当成「上线前配一下」，这里提升为**开放注册的前置条件**：两个地址没填之前，不要给应用挂邮件 / 短信通道。
-
-**3. 发布包也能用启动参数改登录网关和通行证地址。**
-
-- 现状：`ClientLaunchArguments` 的 `-gateway`、`-passport-origin`、`-passport-client-id`、`-passport-redirect-uri` 不区分开发包与发布包；`ClientSettings` 还会读 PlayerPrefs（Windows 上是当前用户可写的注册表）。
-- 后果：一个带参数的快捷方式（「登录器」「加速器」常见的分发形式，杀毒软件不报）就能让正版客户端把玩家带到钓鱼站去输通行证口令，或把口令登录发给假网关。
-- 通行做法：生产地址编进发布包，覆盖只在编辑器与开发包生效。改动很小（几行 `#if UNITY_EDITOR || DEVELOPMENT_BUILD`），但现有冒烟脚本可能正用这些参数启动非开发包，所以放到「定发布构建配置」时一起改。发布包的缺省网关现在还是 `http://127.0.0.1:8081`、通行证地址缺省为空，说明发布构建配置本来就还没做。
-
-**4. Android 回调用自定义协议头 `xuanming://`，别的 App 可以注册同名协议头。**
-
-- PKCE 只保证「谁发起、谁换票」，拦不住恶意 App 自己发起一次授权（客户端 ID 是公开的）、让玩家在真的通行证页面登录、再截走回调并以玩家身份登录（RFC 8252 §8.6）。标准做法是 Android App Links：回调改成 `https://<通行证域名>/...`，由系统按 `assetlinks.json` 核对归属，别的 App 接不到（RFC 8252 §7.2）。
-- 需要正式域名和签名证书指纹，上线前做；同时把「跳系统浏览器」换成应用内的 Custom Tabs（不离开游戏，不会因为被系统回收而丢掉本次授权）。iOS 已经是系统认证会话，没有这个问题。
-
-**5. 桌面回调固定端口 18765（小问题，有反馈再做）。**
-
-- 两个客户端同时停在「等待授权」时，后一个起不了监听（多开玩家会遇到）；本机任何程序占住这个端口，通行证登录就用不了。RFC 8252 §7.3 的做法是每次随机端口，但 Casdoor 对回调地址是精确匹配，做不到。折中：登记 3～5 个固定端口，客户端依次尝试。
-
-### 8.4 生产清单补充（接 §5.4）
-
-1. **公网入口按白名单放行，白名单里不能有 `/api/delete-user`、`/api/update-user`（必须做）。** §5.4 第 1 条只说了「管理后台不对公网开放」，没说清楚的是：Casdoor 的权限模型允许任何登录用户对**自己**调用一批接口（`object/init.go:534` 的自匹配条款，`authz/authz.go:281` 的名单里有 `/api/delete-user`），`controllers/user.go:568` 对「删自己」没有别的检查。玩家用自己的通行证令牌（客户端换票时就拿得到，客户端 ID 是公开的）调一次 `POST /api/delete-user`，通行证用户立刻被删：
-   - 绕过游戏的 7 天冷静期；
-   - 游戏账号 `passport_<sub>` 变成孤儿：`sub` 没了，谁也登不上，角色、充值、实名记录都留在游戏库里，玩家没法再从游戏内发起注销；
-   - 盗号者拿到口令或一小时内的访问令牌就能永久毁号，冷静期本来是给找回留的。
-
-   Casdoor 对「任何人」放行的接口有 131 条（`authz/authz.go`，含 `/scim`、`/cas`、`/api/oauth/register`、`/api/init-admin-password`、`/api/metrics` 等），玩家用得到的只有十几条。公网入口（Ingress / 反向代理）只放行下面这些，其余一律拒绝。**这份名单是按 v4.27.1 源码推的草案，未实测**：预发环境挂上名单后，把登录、注册、找回密码三条流程各走一遍，页面缺哪个接口再加（缺了页面会直接报错，方向是安全的）。
-   - 页面与静态资源：`GET` 非 `/api/`、非 `/scim`、非 `/cas` 的路径（登录 / 注册 / 找回密码页面与管理后台是同一套前端文件，没有接口就拿不到任何数据）。
-   - `GET /.well-known/openid-configuration`、`GET /.well-known/jwks`。
-   - 页面用：`GET /api/get-app-login`、`GET /api/get-application`、`GET /api/get-account`、`POST /api/login`、`POST /api/signup`、`POST /api/send-verification-code`、`POST /api/verify-code`、`POST /api/set-password`、`GET /api/get-email-and-phone`、`GET /api/get-captcha`、`GET /api/get-captcha-status`、`POST /api/verify-captcha`。
-   - 游戏客户端用：`POST /api/login/oauth/access_token`。
-2. **`AuthProviders.Passport.Endpoint` 必须配成内网入口。** 公网入口不放行管理接口之后，login 删通行证用户与刷新前核对（§3.6）调的 `/api/get-user`、`/api/delete-user` 就不能再走公网的 `Issuer`：`Endpoint` 留空时所有通行证账号的注销都卡在「执行中」直到 24 小时告警，刷新前的核对也全部按故障放行（改密再也踢不掉人，只在 `login_passport_session_check_total{result="error"}` 上看得到）。生产模式 `Endpoint` 只收 `https://`，所以内网入口要有证书（内部 Ingress 或服务网格）。
-3. **`verification_record` 定时清理。** 发过的验证码（含收件邮箱 / 手机号、来源 IP）v4.27.1 里没有任何清理代码。部署侧加定时任务按保留期删；表结构以实际库为准，未实测。
-4. **撞库拦截按数据开。** 组织的 `securityPolicy.stuffingFailureThreshold` / `stuffingBlockMinutes`：同一 IP 10 分钟内有 N 个不同账号登录失败就封这个 IP（`object/password_security.go:98`），缺省关。没有直接开：运营商大量用户共用出口 IP，阈值定低了会误封一片；有了登录失败的真实数据再定。人机验证加单账号连错 5 次冻结 15 分钟已经在挡。
-5. **口令哈希保持 bcrypt 可以；想更稳就趁没有存量用户换 `argon2id`。** Casdoor 的 bcrypt 写死 cost 10（`cred/bcrypt.go:13`），正好是 OWASP 对 bcrypt 的下限；OWASP 对新系统的首选是 Argon2id，v4.27.1 支持（`passwordType: "argon2id"`）。名字写错会被当成不哈希、口令明文入库（`cred/manager.go:42` 回空，`object/user_cred.go:59` 跳过），改的时候逐字核对。Argon2id 每次校验约占 64 MiB 内存，要给容器留够。上线后再换只能等用户下次登录时重算。本轮没换：没有容器实测，不为它动一条已经实测通过的链路。
-6. **镜像按摘要固定。** 生产清单里 `casbin/casdoor:v4.27.1` 写成 `@sha256:…`；通行证是全链路最敏感的第三方组件。
-7. **签名私钥在库里是明文**（`cert` 表）。通行证库的备份等同于「能冒充任何玩家登录」的钥匙：备份加密、限制读库权限。
+1. **公网入口按白名单放行，不能放 `/api/delete-user`、`/api/update-user`** → `deploy/k8s/passport/public-entry.yaml`（§3.10 第 1 条），名单由 `passport_k8s_contract.tests.ps1` 钉住。原因：Casdoor 的权限模型允许任何登录用户对自己调这两个接口（`object/init.go:534` 的自匹配条款，`authz/authz.go:281` 的名单），`controllers/user.go:568` 对「删自己」没有别的检查；Casdoor 对「任何人」放行的接口有 131 条（含 `/scim`、`/cas`、`/api/oauth/register`、`/api/init-admin-password`、`/api/metrics`），玩家用得到的只有十几条。名单是按源码推的，预发环境要按 README 第 7 步走一遍。
+2. **`AuthProviders.Passport.Endpoint` 必须指向集群内入口** → 同一个 nginx 的 8081 + 内部 Ingress（§3.10 第 2 条）。指错了，注销卡在「执行中」直到 24 小时告警，登录与刷新前的核对全部按故障放行（`LoginPassportSessionCheckFailing` 会响）。
+3. **`verification_record` 定时清理** → `verification-record-cleanup.yaml`（每天删 180 天以前的，最小权限库账号）。
+4. **撞库拦截** → 初始化数据 `securityPolicy`：同一来源 10 分钟内 30 个不同账号登录失败封 15 分钟（按运营商大出口共用地址留了余量，有了真实失败率再调）。
+5. **口令哈希** → 换成 `argon2id`（OWASP 对新系统的首选；项目没有存量用户、可以清库）。代价是每次校验约 64 MiB：Casdoor 的内存上限按同时校验 20 次留量，公网入口对登录类接口限速。
+6. **镜像按摘要固定** → Casdoor、MySQL、nginx 都已固定，本机 compose 与生产清单一致。
+7. **签名私钥在库里是明文** → 写进 README「上线前还要人办的」：备份加密、限制读库权限。
 
 ### 8.5 核对过、没有问题的（v4.27.1 源码）
 
@@ -454,4 +474,4 @@ Claude Code 对照 Casdoor v4.27.1 源码（`object/token_jwt.go`、`token_stand
 ### 8.6 体验上与大厂做法不同、但不建议现在改的
 
 - 大厂的自有通行证多数在游戏里直接出登录 / 注册界面，不跳浏览器。跳浏览器是 OAuth 对原生应用的安全建议（RFC 8252），实现最省、风险最低；代价是全屏游戏里要切出去，Android 上游戏可能被系统回收。等上线后看注册转化数据，再决定要不要做游戏内界面（那时人机验证要嵌网页，界面要给 Codex 出图）。
-- 国内大厂的主注册方式是手机号 + 短信验证码。现在只开了邮箱；要开手机号时，同批把组织的 `countryCodes` 限到上线地区、配上 `securityPolicy` 的每号每小时 / 每天条数上限（`object/sms_security.go`），防国际短信盗刷。
+- 国内大厂的主注册方式是手机号 + 短信验证码。现在只开了邮箱；要开手机

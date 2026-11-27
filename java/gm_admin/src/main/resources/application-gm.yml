@@ -98,3 +98,16 @@ gm:
     mall-url: ${GM_MALL_URL:}
     mall-admin-secret: ${GM_MALL_ADMIN_SECRET:}
     mall-admin-subject: ${GM_MALL_ADMIN_SUBJECT:mall-admin}
+    # 运营处置的 gRPC 下游(双人复核批 5):地址 host:port;口令 / 密钥与各服务的管理入口同值,只挂给后台工作负载,任一项为空则该下游不可用。
+    # login LoginAdmin 与 player_inbox PlayerInboxAdmin、data_service 回收认 metadata x-admin-token;
+    # rank RankAdmin 认调用方 admin 的 ServiceCallAuth(与 rank 的 RANK_PRODUCER_SECRET_ADMIN 同值),
+    # match 滞留阵容认调用方 ops-formation(与 match 的 GlobalMatch.ManualResolutionSecretEnv 指名的那把同值)。
+    login-target: ${GM_LOGIN_TARGET:}
+    login-admin-token: ${GM_LOGIN_ADMIN_TOKEN:}
+    data-admin-token: ${GM_DATA_ADMIN_TOKEN:}
+    inbox-target: ${GM_INBOX_TARGET:}
+    inbox-admin-token: ${GM_INBOX_ADMIN_TOKEN:}
+    rank-target: ${GM_RANK_TARGET:}
+    rank-admin-secret: ${GM_RANK_ADMIN_SECRET:}
+    match-target: ${GM_MATCH_TARGET:}
+    match-formation-secret: ${GM_MATCH_FORMATION_SECRET:}

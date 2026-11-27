@@ -3,6 +3,7 @@ package rankpb;
 option go_package = "robot/proto/rank";
 import "proto/common/base/tip.proto";
 import "proto/common/base/service_call_auth.proto";
+import "proto/common/base/admin_approval.proto";
 import "proto/mail/mail.proto";
 import "proto/rank/rank.proto";
 
@@ -52,7 +53,17 @@ message FreezeRankGenerationRequest {
   uint32 top_n = 8; // 0默认100，上限1000；奖励档位不得超过它。
 }
 message FreezeRankGenerationResponse { TipInfoMessage error_message = 1; uint64 settlement_id = 2; uint64 winner_count = 3; bool duplicated = 4; }
-message RemoveRankEntryRequest { uint64 board_id = 1; uint64 generation = 2; uint64 entity_id = 3; uint64 request_id = 4; common.base.ServiceCallAuth auth = 5; }
+message RemoveRankEntryRequest {
+  uint64 board_id = 1;
+  uint64 generation = 2;
+  uint64 entity_id = 3;
+  uint64 request_id = 4;
+  common.base.ServiceCallAuth auth = 5;
+  // 后台双人复核的批准记录(docs/design/admin-identity-and-dual-control.md §5.4)。调用方 admin 必带,且 request_id 就是批准号
+  // (按 (board, generation, request_id) 判重,一次批准只执行一次);match 摘已删角色是自动路径,不带,带了照样核。
+  // 只有部署显式打开 AdminAllowUnapproved(本机开发)时才接受 admin 不带它。
+  common.base.AdminApproval approval = 6;
+}
 message RankAdminResponse { TipInfoMessage error_message = 1; }
 service RankAdmin {
   rpc OpenRankGeneration(OpenRankGenerationRequest) returns (OpenRankGenerationResponse);

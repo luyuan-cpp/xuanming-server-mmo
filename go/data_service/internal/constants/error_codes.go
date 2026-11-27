@@ -75,7 +75,8 @@ const (
 	// 别名合服之后登记不再看围栏(docs/design/player-data-tidb-scaling-plan.md §7.1),旧日志里还可能出现这个号。
 
 	// ErrCodeAdminAuthRequired:运维 RPC 缺少 / 带错 x-admin-token,或服务端根本没配 AdminToken
-	// (= 该 RPC 整体停用)。
+	// (= 该 RPC 整体停用);甲级回收入口缺少或带了不合格的双人复核批准记录也回它(PermissionDenied,
+	// docs/design/admin-identity-and-dual-control.md §5.5)。
 	//
 	// 现在守的是 ReleasePlayerName 的运维路径(不限登记时间的释放)。
 	//

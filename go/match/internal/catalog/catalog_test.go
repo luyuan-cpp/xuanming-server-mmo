@@ -417,3 +417,62 @@ func TestTrialContextRejectsDuplicateEnabledVariant(t *testing.T) {
 		t.Fatal("重复启用的同难度同机制 TrialJournalEntry 必须拒绝")
 	}
 }
+
+func TestTrialContextMultiSeasonCycleResolution(t *testing.T) {
+	// 验证 S1–S10 卷三多季同开时，按 SeasonRule 无限自动循环准确映射到当季 Entry (301..303 / 3021..3103)。
+	c, err := Load("../../../../generated/tables")
+	if err != nil {
+		t.Fatalf("Load 真实表失败: %v", err)
+	}
+	if len(c.seasonalTrialContexts) != 10 || len(c.rankedTrialBySeason) != 10 {
+		t.Fatalf("真实表应包含 S1..S10 共 10 季卷三映射，got seasonal=%d ranked=%d",
+			len(c.seasonalTrialContexts), len(c.rankedTrialBySeason))
+	}
+
+	// 克隆真实表并在内存中切到 28 天 10 季无限循环模式，校验 S1 / S2 / S10 / 第 2 轮 S1（届号 11）映射。
+	const anchorMs uint64 = 1_800_000_000_000
+	const periodMs uint64 = 28 * 24 * 3600 * 1000
+	cycleRules := make([]SeasonRuleRow, 10)
+	for i := uint32(1); i <= 10; i++ {
+		cycleRules[i-1] = SeasonRuleRow{
+			Id:                i,
+			StartsAtMs:        anchorMs,
+			Enabled:           true,
+			CycleOrder:        i,
+			CycleDurationDays: 28,
+		}
+	}
+	c.seasonRules = cycleRules
+
+	cases := []struct {
+		name        string
+		nowMs       uint64
+		wantSeason  uint32
+		wantRescue  uint32
+		wantPol     uint32
+		wantRanked  uint32
+		rankedArgId uint32
+	}{
+		{"S1", anchorMs + 1000, 1, 301, 302, 303, 1},
+		{"S2", anchorMs + periodMs + 1000, 2, 3021, 3022, 3023, 2},
+		{"S10", anchorMs + 9*periodMs + 1000, 10, 3101, 3102, 3103, 10},
+		{"Cycle2_S1_Term11", anchorMs + 10*periodMs + 1000, 1, 301, 302, 303, 11},
+	}
+	for _, tc := range cases {
+		if got := c.ActiveSeasonIdAt(tc.nowMs); got != tc.wantSeason {
+			t.Fatalf("%s ActiveSeasonIdAt=%d want=%d", tc.name, got, tc.wantSeason)
+		}
+		rescue := c.TrialContextForAt(matchpb.MatchMode_MATCH_MODE_PVE_SOLO, 109, nil, &battlepb.RankedMatchContext{UseFreePreset: true}, tc.nowMs)
+		if rescue == nil || rescue.GetJournalEntryId() != tc.wantRescue || rescue.GetSeasonId() != tc.wantSeason {
+			t.Fatalf("%s 护卫救援上下文=%+v want entry=%d season=%d", tc.name, rescue, tc.wantRescue, tc.wantSeason)
+		}
+		pol := c.TrialContextForAt(matchpb.MatchMode_MATCH_MODE_POLARITY_5V5, 110, nil, &battlepb.RankedMatchContext{UseFreePreset: true}, tc.nowMs)
+		if pol == nil || pol.GetJournalEntryId() != tc.wantPol || pol.GetSeasonId() != tc.wantSeason {
+			t.Fatalf("%s 物法易势上下文=%+v want entry=%d season=%d", tc.name, pol, tc.wantPol, tc.wantSeason)
+		}
+		ranked := c.TrialContextForAt(matchpb.MatchMode_MATCH_MODE_PVP_TEAM, 5, nil, &battlepb.RankedMatchContext{SeasonId: tc.rankedArgId}, tc.nowMs)
+		if ranked == nil || ranked.GetJournalEntryId() != tc.wantRanked || ranked.GetSeasonId() != tc.wantSeason {
+			t.Fatalf("%s 人宠会武上下文=%+v want entry=%d season=%d", tc.name, ranked, tc.wantRanked, tc.wantSeason)
+		}
+	}
+}

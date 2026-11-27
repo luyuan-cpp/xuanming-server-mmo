@@ -39,6 +39,9 @@ Producers:
   battle: MAIL_PRODUCER_SECRET_BATTLE
   # go/match 投递群仙问道赛赛季奖励的附件(docs/planning/season-team-tournament-v1.md 第七节),sender_kind = 6。
   match: MAIL_PRODUCER_SECRET_MATCH
+# 双人复核(docs/design/admin-identity-and-dual-control.md §5.5):ApprovalRequiredCallers 里的调用方发件必须带后台的批准记录,
+# 缺了回 PermissionDenied;不写 = 只有 admin(admin 恒在其中)。本机开发要用 mailadmin 不带记录发信时,临时加一行
+# AdminAllowUnapproved: true。本文件整份进 K8s ConfigMap,不能提交成 true。
 Log:
   ServiceName: mail
   Mode: console

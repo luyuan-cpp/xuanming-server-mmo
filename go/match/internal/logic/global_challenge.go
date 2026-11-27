@@ -18,7 +18,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const rankedRematchMaxTTLSeconds = 15
+const (
+	rankedRematchMaxTTLSeconds = 15
+	// rankedRematchMaxWindowMs 限制「不服再战」只能在原 1V1 论剑终局后 10 分钟内发起，防止重放陈年旧局骚扰对手。
+	rankedRematchMaxWindowMs uint64 = 10 * 60 * 1000
+)
 
 func challengeTTLSecondsFor(baseSeconds int, rules *battlepb.CustomDuelRules) int {
 	if rules != nil && rules.GetRematchSourceBattleId() != 0 && (baseSeconds <= 0 || baseSeconds > rankedRematchMaxTTLSeconds) {
@@ -28,6 +32,17 @@ func challengeTTLSecondsFor(baseSeconds int, rules *battlepb.CustomDuelRules) in
 }
 
 func (l *ChallengeLogic) createGlobalChallenge(in *pb.ChallengePlayerRequest, challenger uint64) (*pb.ChallengePlayerResponse, error) {
+	if rules := in.GetCustomRules(); rules != nil && rules.GetRematchSourceBattleId() != 0 {
+		if err := l.svcCtx.Authority.ValidateRankedRematchSource(l.ctx, rules.GetRematchSourceBattleId(), challenger, in.TargetPlayerId, rankedRematchMaxWindowMs); err != nil {
+			if errors.Is(err, authority.ErrRankedRematchInvalid) {
+				metrics.ObserveChallenge("invite", "rematch_invalid")
+				return &pb.ChallengePlayerResponse{ErrorMessage: tipErr(constants.ErrChallengeExpired, "原论剑对局记录无效或已超过再战时效")}, nil
+			}
+			l.Errorf("[challenge] Failed to verify ranked rematch source battle=%d challenger=%d target=%d: %v",
+				rules.GetRematchSourceBattleId(), challenger, in.TargetPlayerId, err)
+			return &pb.ChallengePlayerResponse{ErrorMessage: tipErr(constants.ErrInternal, "再战对局校验暂不可用")}, nil
+		}
+	}
 	for _, player := range []uint64{challenger, in.TargetPlayerId} {
 		locked, err := isPlayerBattleLocked(l.svcCtx, player)
 		if err != nil {

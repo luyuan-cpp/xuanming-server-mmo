@@ -1,14 +1,17 @@
 #pragma once
 
-// gate 客户端连接准入(docs/design/gate-connection-admission-control.md §6 的 P0-2 后一半与 P1-1 ~ P1-4)。
+// gate 客户端连接准入(docs/design/gate-connection-admission-control.md §6 的 P0-2 后一半、P1-1 ~ P1-4 与 P2-4)。
 //
 // 判定发生在 muduo Acceptor 的准入回调里:accept 成功之后、TcpConnection 建出来之前。被拒的连接当场以 RST 关闭,
 // gate 不为它建任何对象,内核也不留 TIME_WAIT。判据都不需要知道对端是谁,按顺序:
 //   1. 关源:停机 / 维护关源之后不再接新连接;
-//   2. 总量:会话数到上限(GateMaxConnections;dev / test 的 0 = 只剩 session id 空间的硬上限);
+//   2. 总量:连接数(会话 + 未验签)到上限(GateMaxConnections;dev / test 的 0 = 只剩 session id 空间的硬上限);
 //   3. 未验签预算:还没验签的连接单独一个池,承压时最老的先让位,腾不出位置时按概率早拒、到预算全拒(见 PreAuthBudget);
 //   4. 速率:新建连接的全局令牌桶,挡住「不停建连又立刻关」这种总量闸永远碰不到的流量。
 // 需要知道对端是谁的判据(每来源限制)不在这里,见设计稿 P2-2。
+//
+// 放进来的连接先只有一条未验签记录(票据先行,设计稿 P2-4):验签成功才发 session_id、建 SessionInfo。
+// 两步的入口在本文件(OpenPreAuthConnection / OpenVerifiedSession),记录存在 SessionManager::preAuthConnections()。
 //
 // 本文件分两层:
 //   - 纯逻辑(拒绝原因、环境变量名、未验签预算、判定函数):不碰 muduo、会话表与时钟,
@@ -30,10 +33,10 @@
 #include <unordered_map>
 
 #include "metrics/prometheus_text.h"
+#include "muduo/net/TcpConnection.h"
 #include "network/accept_admission.h"
 #include "network/client_liveness.h"
 #include "network/network_utils.h"
-#include "session/comp/session_info_comp.h"
 
 namespace muduo::net
 {
@@ -117,7 +120,7 @@ inline std::optional<RateLimit> ResolveRateLimit(const char *rawRate, const char
 // ---------------------------------------------------------------------------
 //
 // 规则、缺省值的推导与判定函数在 core 的 network/accept_admission.h(与 battle 直连同一份),这里引进来。
-// gate 的池大小 n 就是 UnauthenticatedConnections()(RAII 占位,pre_auth_slot.h)。gate 特有的一条依据:
+// gate 的池大小 n 就是 UnauthenticatedConnections(),即未验签表的大小(设计稿 P2-4)。gate 特有的一条依据:
 // login 在会话数到上限的 90% 时就不再往这台派人(gate-load-balancing-design.md),缺省预算(上限的 10%)正好是剩下的那一成,
 // 未验签连接再多也挤不掉已验签会话的那 90%。
 // 本端 loop 刚卡过(client_heartbeat.h LoopRecentlyStalled)时不淘汰:那时验签请求可能还在接收缓冲里没读。
@@ -184,10 +187,10 @@ inline bool ResolveSourceRateLimit(const char *rawRate, const char *rawBurst, st
 // 判定所需的当前状态。
 struct AdmissionState
 {
-	bool sourceClosed{false};   // 已关源
-	size_t currentSessions{0};  // 会话表大小。与连接一一对应:建连回调插入,断开回调删除,都在 loop 线程上同步完成
-	uint32_t maxConnections{0}; // 生效上限(EffectiveMaxConnections)
-	uint64_t unauthenticated{0}; // 持有未验签占位的连接数
+	bool sourceClosed{false};      // 已关源
+	size_t currentConnections{0};  // 连接数 = 会话数 + 未验签连接数(SessionManager::ClientConnectionCount),都在 loop 线程上同步增删
+	uint32_t maxConnections{0};    // 生效上限(EffectiveMaxConnections)
+	uint64_t unauthenticated{0};   // 未验签连接数(未验签表的大小)
 	// 其中最老一条已建连多久。没有未验签连接、或此刻不允许淘汰(本端 loop 刚卡过)时为空。
 	std::optional<SteadyTime::duration> oldestUnauthenticatedAge;
 	PreAuthBudget preAuthBudget{DefaultPreAuthBudget(EffectiveMaxConnections(0))};
@@ -212,7 +215,7 @@ inline Admission Decide(const AdmissionState &state, AcceptRateGate &rateGate, S
 	{
 		return Admission{.rejected = RejectReason::kShuttingDown};
 	}
-	if (state.currentSessions >= state.maxConnections)
+	if (state.currentConnections >= state.maxConnections)
 	{
 		return Admission{.rejected = RejectReason::kCapacity};
 	}
@@ -254,28 +257,51 @@ void CloseSource();
 
 // Acceptor 准入回调的函数体(main.cpp 经 TcpServer::setAdmissionCallback 装上)。放行返回 true;拒绝返回 false,
 // 并按原因计数、采样打日志(被拒的量就是攻击流量的量级,不能逐条写盘)。
-// 判定要求先淘汰时,放行之前收回最老那条未验签连接的占位,再经会话里的 weak 连接 forceClose 它:
-// 会话不在这里删,留给随后的断开回调(没验签的会话没有角色,断开回调只删会话)。本端 loop 刚卡过时不淘汰。
+// 判定要求先淘汰时,放行之前摘掉最老那条未验签记录(这一刻起它不再占池),再经记录里的 weak 连接 forceClose 它;
+// 随后的断开回调找不到记录,什么都不做。本端 loop 刚卡过时不淘汰。
 // 按来源限速开启且承压时,从 peer 取来源前缀(只认公网地址,RateLimitedSourceOf)问它的桶;放行之后才给这个前缀记一笔。
 bool AdmitConnection(const muduo::net::InetAddress &peer, SteadyTime now);
 
 // 连接已经建出来之后才发现不能要(HandleConnectionEstablished 里的纵深防御分支):只计数,连接由调用方 forceClose。
 void NoteRejectedAfterAccept(RejectReason reason);
 
-// 会话刚插入会话表:计一次接纳;还没验签的会话领一个未验签占位(SessionInfo::preAuthSlot),并按建连先后进淘汰索引。
-void OnSessionOpened(SessionId sessionId, SessionInfo &session, SteadyTime now);
+// ---------------------------------------------------------------------------
+// 票据先行(设计稿 P2-4):会话表与 session_id 发号器挡在票据之后
+// ---------------------------------------------------------------------------
+//
+// 建连到验签成功之前,一条连接只有一条未验签记录(session/comp/pre_auth_connection.h:weak 连接、建连时刻,键是代次),
+// 连接上下文是 PreAuthConnectionKey;不发 session_id、不建 SessionInfo。未验签预算的池大小与承压淘汰的最老一条、
+// 握手期限(gate_client_heartbeat 从表头扫)、验签前单帧上限的判据、两个连接数指标都按这张表。
 
-// 验签成功:归还占位,握手耗时进直方图。没有占位(dev 免验签)时什么也不做,可重复调用。
-void OnSessionVerified(SessionInfo &session, SteadyTime now);
+// 建连(HandleConnectionEstablished 过了纵深防御之后):登记一条未验签记录,代次现分配(gate_lane::NextIncarnation),
+// 连接上下文换成它的键,计一次接纳。dev 免验签不走这里,建连即 OpenVerifiedSession。
+void OpenPreAuthConnection(const muduo::net::TcpConnectionPtr &conn, SteadyTime now);
 
-// 这条连接是否已验签:有会话且 verified。给编解码器的验签前单帧上限用(ProtobufCodec::setPreAuthMessageLimit,
+// 发号、建会话。两处调用:DispatchTokenVerify 的票据校验全部通过之后;dev 免验签建连时(ticketKey 为空)。
+//   1. 发 session_id:跳过保留哨兵 kInvalidSessionId 与仍在用的号(发号器回绕之后的碰撞检查)。总量闸保证会话数小于上限、
+//      上限不超过号空间,所以空号一定找得到;
+//   2. ticketKey 不为空时按票据签名占位(SessionManager::ClaimTicket,一张票同一时刻只开一条连接)。这张票已被另一条活着的连接
+//      占着就到此为止、返回空:号只是跳过一个,没建任何状态,未验签记录原样留着,调用方按 token_in_use 拒绝并关连接,
+//      断开回调再摘记录;
+//   3. 建 SessionInfo(verified、weak 连接、ticketKey、代次:沿用未验签记录的键,dev 免验签现分配),连接上下文换成 session_id;
+//      有未验签记录的摘掉记录、握手耗时进直方图,没有的(dev 免验签)计一次接纳。
+// 返回新会话的 session_id。心跳参数、票据带来的其余字段由调用方随后填(OnTokenVerified 等)。
+std::optional<SessionId> OpenVerifiedSession(const muduo::net::TcpConnectionPtr &conn, const std::string &ticketKey,
+											 SteadyTime now);
+
+// 断开回调的第一步(HandleConnectionDisconnection):这条连接还没验签,就摘掉它的未验签记录(被淘汰、握手超时关掉的已经摘过)
+// 并返回 true,调用方随即返回:没有会话、没有角色、没向 login 发过登录,不通知 login / scene。已有会话的连接返回 false。
+bool ForgetPreAuthConnection(const muduo::net::TcpConnectionPtr &conn);
+
+// 这条连接是否已验签:上下文是 session_id、且会话在表里(会话只在验签成功后建)。还没验签的连接上下文是未验签记录的键,
+// 准入时被拒的是 kInvalidSessionId,都返回 false。给编解码器的验签前单帧上限用(ProtobufCodec::setPreAuthMessageLimit,
 // accept_admission::kPreAuthMaxMessageBytes,准入设计 G10)。只读、不打日志:调用频率由公网流量决定。
 bool IsVerifiedConnection(const muduo::net::TcpConnectionPtr &conn);
 
 // 进程级累计计数(gate loop 线程,单调不减)。供指标与单测读。
 struct Counters
 {
-	uint64_t accepted{0};                                // 接纳并建了会话的连接
+	uint64_t accepted{0}; // 接纳的连接:登记了未验签记录,或 dev 免验签建连即建了会话
 	std::array<uint64_t, kRejectReasonCount> rejected{}; // 被拒的连接,按原因
 	uint64_t handshakes{0};                              // 验签成功、握手耗时进了直方图的连接
 	uint64_t preAuthEvicted{0};                          // 承压时被淘汰、给新连接让位的未验签连接
@@ -284,7 +310,7 @@ struct Counters
 	bool operator==(const Counters &) const = default;
 };
 const Counters &GetCounters();
-// 当前持有未验签占位的连接数(gate_unauthenticated_connections)。
+// 当前未验签连接数(gate_unauthenticated_connections),即未验签表的大小。
 uint64_t UnauthenticatedConnections();
 // 生效的速率闸参数。
 RateLimit CurrentRateLimit();
@@ -294,8 +320,8 @@ PreAuthBudget CurrentPreAuthBudget();
 std::optional<RateLimit> CurrentSourceRateLimit();
 
 // 把连接类指标写进一次抓取(登记在进程的指标注册表里,由 /metrics 出口调用):
-//   gate_connections_current / gate_connections_max      会话数与生效上限;
-//   gate_unauthenticated_connections                     还没验签的连接数(未验签池占用,区分洪峰与攻击的判据);
+//   gate_connections_current / gate_connections_max      连接数(会话 + 未验签,总量上限按它判)与生效上限;
+//   gate_unauthenticated_connections                     还没验签的连接数(未验签表的大小,区分洪峰与攻击的判据);
 //   gate_accepted_total                                  接纳的连接;rate() 就是新建连接速率;
 //   gate_rejected_total{reason}                          被拒的连接,reason 是 RejectReason 的名字;
 //   gate_accept_rate_limit_per_second / gate_accept_burst 生效的速率闸参数;
@@ -311,8 +337,8 @@ void CollectMetrics(prometheus_text::Writer &writer);
 // gate 启动时调一次,把 CollectMetrics 登记进进程的指标注册表;重复登记只记一行 ERROR。
 void RegisterMetrics();
 
-// 清空本线程的计数、直方图、关源标记、配置、淘汰索引与注入的随机源(回到未 Configure 的缺省),
-// 不动仍被会话持有的未验签占位(它们之后不会再被淘汰选中)。只给单测用。
+// 清空本线程的计数、直方图、关源标记、配置与注入的随机源(回到未 Configure 的缺省)。会话表与未验签表在 tlsSessionManager 里,
+// 不归这里清,用例自己清。只给单测用。
 void ResetForTesting();
 // 换掉按概率早拒用的随机源(传 nullptr 换回缺省的伪随机数)。只给单测用,ResetForTesting 也会换回缺省。
 void SetEarlyDropRandomForTesting(UniformBelow uniformBelow);

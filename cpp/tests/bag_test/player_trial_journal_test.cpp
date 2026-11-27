@@ -976,3 +976,102 @@ TEST_F(PlayerTrialJournalSystemTest, Vol4WildRealmsSealsMilestonesAndVowBestReco
     EXPECT_EQ(m401->badge_key(), "badge_trial_three_realms");
     EXPECT_EQ(m402->commentary_key(), "commentary_tingyu_realms_v3");
 }
+
+TEST_F(PlayerTrialJournalSystemTest, SeasonalChapterS2ToS10RotatesIsolatesAndEvaluatesResonanceSeals) {
+    // 1) 在默认 S1 首测窗下，验证 S2..S10 配表全部存在但不可见，永久卷维持 36 印且 M901 维持 18 印
+    ASSERT_TRUE(PlayerTrialJournalSystem::ValidateTables());
+    auto prevSeasonSnap = SeasonRuleTableManager::Instance().CurrentSnapshot();
+
+    // 切换内存 SeasonRule 快照至 10 季 28 天无限循环模式，校验 S2..S10 每一季都能正确暴露 3 格 6 印 + 2 里程碑
+    constexpr uint64_t kAnchorMs = 1800000000000ULL;
+    constexpr uint64_t kPeriodMs = 28ULL * 24ULL * 3600ULL * 1000ULL;
+    auto cycleSnap = std::make_shared<SeasonRuleTableSnapshot>(*prevSeasonSnap);
+    for (auto& row : *cycleSnap->data.mutable_data()) {
+        row.set_enabled(true);
+        row.set_starts_at_ms(kAnchorMs);
+        row.set_ends_at_ms(0);
+        row.set_cycle_duration_days(28);
+    }
+    cycleSnap->idMap.clear();
+    for (const auto& row : cycleSnap->data.data()) {
+        cycleSnap->idMap.emplace(row.id(), &row);
+    }
+    SeasonRuleTableManager::Instance().InstallSnapshot(cycleSnap);
+
+    for (uint32_t sid = 2u; sid <= 10u; ++sid) {
+        const uint64_t nowMs = kAnchorMs + static_cast<uint64_t>(sid - 1u) * kPeriodMs + 1000ULL;
+        ASSERT_EQ(PlayerSeasonSystem::ActiveSeasonId(nowMs), sid);
+        GetTrialJournalResponse resp;
+        ASSERT_EQ(PlayerTrialJournalSystem::GetJournal(player, nowMs, resp), kSuccess);
+        EXPECT_EQ(resp.snapshot().total_permanent_seals(), 36u);
+        ASSERT_EQ(resp.snapshot().chapters_size(), 4);
+        const auto& ch3 = resp.snapshot().chapters(2);
+        EXPECT_EQ(ch3.chapter_id(), trialjournal::kChapterSeasonal);
+        EXPECT_EQ(ch3.season_id(), sid);
+        EXPECT_EQ(ch3.entries_size(), 3);
+        EXPECT_EQ(ch3.total_seal_count(), 6u);
+        const uint32_t base = 3000u + sid * 10u;
+        EXPECT_NE(FindEntryView(resp.snapshot(), base + 1u), nullptr);
+        EXPECT_NE(FindEntryView(resp.snapshot(), base + 2u), nullptr);
+        EXPECT_NE(FindEntryView(resp.snapshot(), base + 3u), nullptr);
+        const auto* m1 = FindMilestoneView(resp.snapshot(), base + 1u);
+        const auto* m2 = FindMilestoneView(resp.snapshot(), base + 2u);
+        ASSERT_NE(m1, nullptr);
+        ASSERT_NE(m2, nullptr);
+        EXPECT_EQ(m2->badge_key(), "badge_season_s" + std::to_string(sid) + "_trial");
+        EXPECT_EQ(m2->commentary_key(), "commentary_season_s" + std::to_string(sid) + "_trial");
+    }
+
+    // 2) 在 S2 窗口点亮 3021(护卫救援 2 印) + 3023(人宠会武 赛季技 15 + 技印共鸣 16, mask=51)，验证共鸣掩码过滤与独立归档
+    const uint64_t s2NowMs = kAnchorMs + kPeriodMs + 5000ULL;
+    auto& comp = tlsEcs.actorRegistry.get<PlayerTrialJournalComp>(player);
+    PlayerTrialJournalComp candidate;
+    PlayerTrialJournalSystem::SettlementDelta delta;
+
+    // 错配共鸣（仅触发 R4=bit3，不在 S2 并集掩码 51=R1|R2|R5|R6 内）不应点亮 30232
+    auto s3023WrongRes = MakeTrialSettlement(99401, 3023, 1, 5, 1, BATTLE_OUTCOME_SIDE_B_WIN);
+    s3023WrongRes.set_participated(true);
+    s3023WrongRes.mutable_trial_facts()->set_season_id(2);
+    s3023WrongRes.mutable_trial_facts()->set_self_cast_season_skill(true);
+    s3023WrongRes.mutable_trial_facts()->set_self_triggered_season_resonance(true);
+    s3023WrongRes.mutable_trial_facts()->set_self_season_resonance_mask(1u << 3);
+    ASSERT_EQ(PlayerTrialJournalSystem::PrepareBattleCredit(comp, s3023WrongRes, s2NowMs, candidate, delta), kSuccess);
+    EXPECT_EQ(delta.newlyLitSealIds, (std::vector<uint32_t>{30231u}));
+    comp.Swap(&candidate);
+
+    // 触发 S2 合法共鸣 R6=bit5 -> 点亮 30232
+    auto s3023Hit = MakeTrialSettlement(99402, 3023, 1, 5, 1, BATTLE_OUTCOME_SIDE_B_WIN);
+    s3023Hit.set_participated(true);
+    s3023Hit.mutable_trial_facts()->set_season_id(2);
+    s3023Hit.mutable_trial_facts()->set_self_triggered_season_resonance(true);
+    s3023Hit.mutable_trial_facts()->set_self_season_resonance_mask(1u << 5);
+    ASSERT_EQ(PlayerTrialJournalSystem::PrepareBattleCredit(comp, s3023Hit, s2NowMs, candidate, delta), kSuccess);
+    EXPECT_EQ(delta.newlyLitSealIds, (std::vector<uint32_t>{30232u}));
+    comp.Swap(&candidate);
+
+    // 再点亮 S2 护卫救援 3021（2 印）凑齐 4 印，领取 M3022（仅自用重铸砂 x1 + 印戳 + 评语）
+    auto s3021 = MakeTrialSettlement(99403, 3021, 1, 5);
+    s3021.mutable_trial_facts()->set_season_id(2);
+    s3021.mutable_trial_facts()->set_guard_survived(true);
+    ASSERT_EQ(PlayerTrialJournalSystem::PrepareBattleCredit(comp, s3021, s2NowMs, candidate, delta), kSuccess);
+    EXPECT_EQ(delta.newlyLitSealIds, (std::vector<uint32_t>{30211u, 30212u}));
+    comp.Swap(&candidate);
+
+    ClaimTrialJournalMilestoneRequest claim3022;
+    claim3022.set_client_request_id(99410);
+    claim3022.set_milestone_id(3022);
+    ClaimTrialJournalMilestoneResponse resp3022;
+    PlayerTrialJournalSystem::ClaimMilestone(player, s2NowMs, claim3022, resp3022);
+    EXPECT_EQ(resp3022.error_message().id(), 0u);
+    EXPECT_EQ(resp3022.granted_sand_count(), 1u);
+    EXPECT_EQ(resp3022.snapshot().total_permanent_lit_seals(), 0u) << "S2 卷三 4 印绝不污染永久道印";
+
+    // 切入 S3 时 S2 进度互不串味，S3 从 0/6 起算
+    const uint64_t s3NowMs = kAnchorMs + 2ULL * kPeriodMs + 5000ULL;
+    GetTrialJournalResponse s3Resp;
+    ASSERT_EQ(PlayerTrialJournalSystem::GetJournal(player, s3NowMs, s3Resp), kSuccess);
+    EXPECT_EQ(s3Resp.snapshot().chapters(2).season_id(), 3u);
+    EXPECT_EQ(s3Resp.snapshot().chapters(2).lit_seal_count(), 0u);
+
+    SeasonRuleTableManager::Instance().InstallSnapshot(prevSeasonSnap);
+}

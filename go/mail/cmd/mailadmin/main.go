@@ -2,6 +2,12 @@
 // 邮件按(sender_kind, request_id)判重并核全文摘要：带附件的发件必须显式给 -request-id 与 -expire-ms
 // （或写进 -file），否则拒绝执行；结果未知（传输失败，或邮件回故障码、码表外的码）时打印钉死这两项的完整重试命令，
 // 原样重跑只会拿回原邮件，不会再发一份附件。系统附件先用原冻结名单执行import/seal。
+//
+// 生产上写库要双人复核(docs/design/admin-identity-and-dual-control.md §5.7):admin 的发件必带后台签发的批准记录,本工具不带,
+// 所以 personal / system 在 mail 的缺省配置下被拒(PermissionDenied,退出码 3,什么都没写)。生产写库走后台 java/gm_admin,
+// 由一人发起、另一人批准;只有本机开发的 mail 打开了 AdminAllowUnapproved 才接受本工具的发件。不给命令行加批准人参数
+// (一个人在命令行里敲两个名字没有意义),-file 里带了 approval 同样拒绝。import / seal 不要求批准记录:
+// 它们只往带批准记录建好的活动里按冻结的名单摘要导入与封存。
 package main
 
 import (
@@ -12,6 +18,7 @@ import (
 	"flag"
 	"fmt"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -34,6 +41,20 @@ const (
 	exitRejected = 3
 )
 
+const usageText = `Usage: mailadmin personal|system|import|seal [flags]
+
+personal and system sends from caller admin need a dual-control approval record. Production writes go through
+the GM console (java/gm_admin): one administrator proposes, another approves. This tool sends no approval record,
+so mail refuses its sends with PermissionDenied (exit 3, nothing written) unless it is a local development mail
+with AdminAllowUnapproved: true. import and seal need no approval record: they only fill and publish a campaign
+created by an approved system send, against the recipient manifest frozen at creation.
+`
+
+// dualControlRefusal 是 mail 以 PermissionDenied 拒绝时的提示:确定的拒绝,什么都没写,不打印重试命令。
+const dualControlRefusal = "mail refused the request (PermissionDenied: %s); nothing was written. Production writes go through the GM console " +
+	"(java/gm_admin), proposed by one administrator and approved by another; this tool sends no approval record, so only a local " +
+	"development mail with AdminAllowUnapproved: true accepts it.\n"
+
 type multiFlag []string
 
 func (f *multiFlag) String() string         { return strings.Join(*f, ",") }
@@ -41,17 +62,22 @@ func (f *multiFlag) Set(value string) error { *f = append(*f, value); return nil
 func main()                                 { os.Exit(run(os.Args[1:], os.Getenv, os.Stdout, os.Stderr)) }
 func run(args []string, getenv func(string) string, out, errOut io.Writer) int {
 	if len(args) == 0 {
+		fmt.Fprint(errOut, usageText)
 		return exitUsage
 	}
 	kind := args[0]
 	methods := map[string]string{"personal": mailpb.MailAdmin_SendPersonalMail_FullMethodName, "system": mailpb.MailAdmin_SendSystemMail_FullMethodName, "import": mailpb.MailAdmin_ImportMailRecipients_FullMethodName, "seal": mailpb.MailAdmin_SealMailCampaign_FullMethodName}
 	method, ok := methods[kind]
 	if !ok {
-		fmt.Fprintln(errOut, "Usage: mailadmin personal|system|import|seal [flags]")
+		fmt.Fprint(errOut, usageText)
 		return exitUsage
 	}
 	fs := flag.NewFlagSet("mailadmin "+kind, flag.ContinueOnError)
 	fs.SetOutput(errOut)
+	fs.Usage = func() {
+		fmt.Fprint(errOut, usageText)
+		fs.PrintDefaults()
+	}
 	target := fs.String("target", "127.0.0.1:50900", "直连MailAdmin地址")
 	secretEnv := fs.String("secret-env", "MAIL_PRODUCER_SECRET_ADMIN", "admin签名密钥的环境变量名，禁止传密钥值")
 	file := fs.String("file", "", "现役请求proto JSON文件；冻结名单操作必须提供")
@@ -112,6 +138,10 @@ func run(args []string, getenv func(string) string, out, errOut io.Writer) int {
 	switch in := request.(type) {
 	case *mailpb.SendMailRequest:
 		if in.SenderKind != 0 && in.SenderKind != 1 {
+			return exitUsage
+		}
+		if in.GetApproval() != nil {
+			fmt.Fprintln(errOut, "-file must not carry an approval record: approvals are issued only by the GM console (java/gm_admin)")
 			return exitUsage
 		}
 		in.SenderKind = 1
@@ -192,6 +222,11 @@ func run(args []string, getenv func(string) string, out, errOut io.Writer) int {
 		response, err = client.SealMailCampaign(ctx, request.(*mailpb.SealMailCampaignRequest))
 	}
 	if err != nil {
+		// PermissionDenied 是确定的拒绝(双人复核批准记录缺失或不合格,拒绝在 mail 读写库之前):不是结果未知,不给重试命令。
+		if status.Code(err) == codes.PermissionDenied {
+			fmt.Fprintf(errOut, dualControlRefusal, status.Convert(err).Message())
+			return exitRejected
+		}
 		fmt.Fprintf(errOut, "call failed, outcome unknown (code=%s); retry with exactly this command, changing nothing (including the -file content):\n%s\n", status.Code(err), retryCommand(kind, fs, request))
 		return exitError
 	}

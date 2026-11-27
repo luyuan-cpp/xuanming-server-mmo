@@ -653,6 +653,10 @@ func (s *Store) commitBattleOutcomeLocked(ctx context.Context, req *pb.CommitBat
 	if err != nil {
 		return 0, err
 	}
+	// 万象残局坊 V1: 与终局/战报同一事务提交作者自证发布(钉住标准解 ref_count+1)与挑战者破局统计。
+	if err = s.recordTacticalPuzzleBattleCompletionTx(ctx, tx, f, event, stamp); err != nil {
+		return 0, err
+	}
 	// Create回执可能丢失；COMPLETE本身是采用新协议的持久证据，但不伪造adopted回执字段。
 	if _, err = tx.ExecContext(ctx, "UPDATE match_formation SET state=4,retry_at_ms=? WHERE battle_id=?", terminalOutcomeNoRetryMs, f.BattleId); err != nil {
 		return 0, err
@@ -697,7 +701,7 @@ func (s *Store) abortTerminalTx(ctx context.Context, tx *sql.Tx, f *pb.MatchForm
 		return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_UNKNOWN, verdict, nil
 	}
 	// 截止裁决的 ABORT 没有 Battle 原字节：format_version=0、来源记为 MATCH_DEADLINE_ABORT，不冒充 BATTLE_RPC。
-	if err = commitAbortTx(ctx, tx, f, stamp, pb.MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT); err != nil {
+	if err = s.commitAbortTx(ctx, tx, f, stamp, pb.MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT); err != nil {
 		return 0, deadlineAbortVerdict{}, err
 	}
 	return pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT, verdict, nil

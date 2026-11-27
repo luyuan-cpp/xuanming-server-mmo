@@ -71,6 +71,15 @@ func tipCodes() map[string]uint32 {
 		"ErrTournamentPredictionClosed":        ErrTournamentPredictionClosed,
 		"ErrTournamentPredictionTargetInvalid": ErrTournamentPredictionTargetInvalid,
 		"ErrTournamentWarmupUnavailable":       ErrTournamentWarmupUnavailable,
+		"ErrPuzzleNotFound":                    ErrPuzzleNotFound,
+		"ErrPuzzleNotOwner":                    ErrPuzzleNotOwner,
+		"ErrPuzzleLimitReached":                ErrPuzzleLimitReached,
+		"ErrPuzzleSpecInvalid":                 ErrPuzzleSpecInvalid,
+		"ErrPuzzleTextRejected":                ErrPuzzleTextRejected,
+		"ErrPuzzleNotPublished":                ErrPuzzleNotPublished,
+		"ErrPuzzleCannotLikeOwn":               ErrPuzzleCannotLikeOwn,
+		"ErrPuzzleClearRequiredToLike":         ErrPuzzleClearRequiredToLike,
+		"ErrPuzzleSolutionReplayNotFound":      ErrPuzzleSolutionReplayNotFound,
 	}
 }
 

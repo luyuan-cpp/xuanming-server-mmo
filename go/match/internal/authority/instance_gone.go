@@ -65,7 +65,7 @@ func (s *Store) AbortInstanceGone(ctx context.Context, work *pb.MatchFormationRe
 	if err != nil {
 		return 0, err
 	}
-	if err = commitAbortTx(ctx, tx, f, stamp, pb.MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MATCH_INSTANCE_GONE_ABORT); err != nil {
+	if err = s.commitAbortTx(ctx, tx, f, stamp, pb.MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MATCH_INSTANCE_GONE_ABORT); err != nil {
 		return 0, err
 	}
 	if err = tx.Commit(); err != nil {

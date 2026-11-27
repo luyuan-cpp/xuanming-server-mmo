@@ -2,6 +2,7 @@ package authority
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"sort"
@@ -312,16 +313,27 @@ func (s *Store) rolloverSealBoard(ctx context.Context, cur *pb.MatchRankedSeason
 	return err
 }
 
+const (
+	// honorsSnapshotBatchSize 控制换季荣誉快照单事务批量大小：
+	// 封榜后本季 qualified 名单已冻结不变，按 200 人/事务分批落库可突破 TiDB 单事务体积与 5s 超时上限，崩溃后幂等续跑。
+	honorsSnapshotBatchSize = 200
+)
+
 type rankedStandingRow struct {
 	playerID    uint64
 	ratingCenti int64
 	achievedMs  uint64
 	peakTier    pb.RankedTier
 	honorBits   uint32
+	finalRank   uint64
 }
 
 func (s *Store) rolloverSnapshotHonors(ctx context.Context, cur *pb.MatchRankedSeasonRecord, rankReader RankedBoardReader, lookupName RankedNameLookup) error {
-	// 可选从已封榜 rank 读第 1 名核对;核心同分排序口径与 rank_score(score DESC, achieved_ms ASC, entity_id ASC) 完全一致。
+	if lookupName == nil {
+		lookupName = s.rankedNameLookup
+	}
+	// Stage 6(BOARD_SEALED) 之后旧季接纳、成局、评分与封榜均已收口，本季 qualified 名单完全冻结不变。
+	// 所有外部 RPC（rank 榜首核对、data_service 昵称查询）严格放在 SQL 写事务之外，遵守「事务内不调 RPC」红线。
 	var boardTopPlayer uint64
 	var boardTopScore int64
 	if rankReader != nil {
@@ -330,14 +342,54 @@ func (s *Store) rolloverSnapshotHonors(ctx context.Context, cur *pb.MatchRankedS
 		if gen == 0 {
 			gen = uint64(cur.SeasonId)
 		}
-		pageResp, err := rankReader.GetRankPage(ctx, &rankpb.GetRankPageRequest{
+		rpcCtx, rpcCancel := context.WithTimeout(ctx, 3*time.Second)
+		pageResp, err := rankReader.GetRankPage(rpcCtx, &rankpb.GetRankPageRequest{
 			Board:    &rankpb.RankBoardKey{BoardType: boardType, Scope: rankpb.RankScope_RANK_SCOPE_GLOBAL, Period: cur.SeasonKey, Generation: gen},
 			Page:     1,
 			PageSize: 1,
 		})
+		rpcCancel()
 		if err == nil && pageResp != nil && len(pageResp.GetEntries()) > 0 {
 			boardTopPlayer = pageResp.GetEntries()[0].GetEntityId()
 			boardTopScore = pageResp.GetEntries()[0].GetScore()
+		}
+	}
+
+	standings, err := s.loadFrozenSeasonStandings(ctx, cur.SeasonId)
+	if err != nil {
+		return err
+	}
+
+	cat := s.RankedCatalog()
+	wushuangMin := int64(cat.Rule().GetTierWushuangCenti())
+
+	var champPlayer uint64
+	var champScore int64
+	if boardTopPlayer != 0 {
+		if boardTopScore >= wushuangMin {
+			champPlayer = boardTopPlayer
+			champScore = boardTopScore
+		}
+	} else if len(standings) > 0 && standings[0].ratingCenti >= wushuangMin {
+		champPlayer = standings[0].playerID
+		champScore = standings[0].ratingCenti
+	}
+	champName := ""
+	if champPlayer != 0 && lookupName != nil {
+		nameCtx, nameCancel := context.WithTimeout(ctx, 2*time.Second)
+		champName = lookupName(nameCtx, champPlayer)
+		nameCancel()
+	}
+
+	// 按 honorsSnapshotBatchSize 分批幂等落库（grantRankedRewardTx 使用 INSERT IGNORE，已落账玩家直接跳过），
+	// 任意批次中途崩溃或副本切换后，下一轮可无损续跑至 Stage 7 提交点。
+	for start := 0; start < len(standings); start += honorsSnapshotBatchSize {
+		end := start + honorsSnapshotBatchSize
+		if end > len(standings) {
+			end = len(standings)
+		}
+		if err = s.commitHonorsBatch(ctx, cur, standings[start:end], uint64(start+1), champPlayer); err != nil {
+			return err
 		}
 	}
 
@@ -357,83 +409,6 @@ func (s *Store) rolloverSnapshotHonors(ctx context.Context, cur *pb.MatchRankedS
 	if err != nil {
 		return err
 	}
-	rows, err := tx.QueryContext(ctx,
-		"SELECT ps.player_id,ps.rating_centi,COALESCE(NULLIF(r.score_changed_ms,0),ps.qualified_at_ms),ps.peak_tier,ps.honor_bits "+
-			"FROM match_ranked_player_season ps LEFT JOIN match_rating r ON r.player_id=ps.player_id AND r.mode=? "+
-			"WHERE ps.season_id=? AND ps.qualified=1",
-		uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM), cur.SeasonId)
-	if err != nil {
-		return err
-	}
-	var standings []rankedStandingRow
-	for rows.Next() {
-		var row rankedStandingRow
-		var peakTier uint32
-		if err = rows.Scan(&row.playerID, &row.ratingCenti, &row.achievedMs, &peakTier, &row.honorBits); err != nil {
-			rows.Close()
-			return err
-		}
-		row.peakTier = pb.RankedTier(peakTier)
-		standings = append(standings, row)
-	}
-	if err = errors.Join(rows.Err(), rows.Close()); err != nil {
-		return err
-	}
-
-	sort.Slice(standings, func(i, j int) bool {
-		if standings[i].ratingCenti != standings[j].ratingCenti {
-			return standings[i].ratingCenti > standings[j].ratingCenti
-		}
-		if standings[i].achievedMs != standings[j].achievedMs {
-			return standings[i].achievedMs < standings[j].achievedMs
-		}
-		return standings[i].playerID < standings[j].playerID
-	})
-
-	cat := s.RankedCatalog()
-	wushuangMin := int64(cat.Rule().GetTierWushuangCenti())
-
-	var champPlayer uint64
-	var champScore int64
-	if boardTopPlayer != 0 {
-		if boardTopScore >= wushuangMin {
-			champPlayer = boardTopPlayer
-			champScore = boardTopScore
-		}
-	} else if len(standings) > 0 && standings[0].ratingCenti >= wushuangMin {
-		champPlayer = standings[0].playerID
-		champScore = standings[0].ratingCenti
-	}
-	champName := ""
-	if champPlayer != 0 && lookupName != nil {
-		champName = lookupName(ctx, champPlayer)
-	}
-
-	for idx, st := range standings {
-		rankPos := uint64(idx + 1)
-		honorBits := st.honorBits
-		if tierCode, eligible := rankedHonorTierCode(st.peakTier); eligible {
-			if _, err = grantRankedRewardTx(ctx, tx, st.playerID, cur.SeasonId, pb.RankedRewardKind_RANKED_REWARD_TIER_BADGE, uint32(st.peakTier), cur.SeasonKey+"_tier_badge_"+tierCode, stamp); err != nil {
-				return err
-			}
-			if _, err = grantRankedRewardTx(ctx, tx, st.playerID, cur.SeasonId, pb.RankedRewardKind_RANKED_REWARD_TIER_TITLE, uint32(st.peakTier), cur.SeasonKey+"_tier_title_"+tierCode, stamp); err != nil {
-				return err
-			}
-			honorBits |= 1 | 2
-		}
-		if champPlayer != 0 && st.playerID == champPlayer {
-			if _, err = grantRankedRewardTx(ctx, tx, st.playerID, cur.SeasonId, pb.RankedRewardKind_RANKED_REWARD_CHAMPION_INSCRIPTION, uint32(pb.RankedTier_RANKED_TIER_WUSHUANG), cur.SeasonKey+"_champion_inscription", stamp); err != nil {
-				return err
-			}
-			honorBits |= 4
-		}
-		if _, err = tx.ExecContext(ctx,
-			"UPDATE match_ranked_player_season SET final_rank=?,honor_bits=?,updated_ms=? WHERE season_id=? AND player_id=?",
-			rankPos, honorBits, stamp, cur.SeasonId, st.playerID); err != nil {
-			return err
-		}
-	}
-
 	if _, err = tx.ExecContext(ctx,
 		"UPDATE match_ranked_season SET champion_player_id=?,champion_name=?,champion_rating_centi=?,rollover_stage=?,updated_ms=? WHERE season_id=?",
 		champPlayer, champName, champScore, RolloverStageHonorsSnapshot, stamp, cur.SeasonId); err != nil {
@@ -444,6 +419,90 @@ func (s *Store) rolloverSnapshotHonors(ctx context.Context, cur *pb.MatchRankedS
 	}
 	logx.Infof("[ranked] Season rollover stage 7 (HONORS_SNAPSHOT) committed season=%d qualified=%d champion=%d score=%d", cur.SeasonId, len(standings), champPlayer, champScore)
 	return nil
+}
+
+func (s *Store) loadFrozenSeasonStandings(ctx context.Context, seasonID uint32) ([]rankedStandingRow, error) {
+	rows, err := s.DB.QueryContext(ctx,
+		"SELECT ps.player_id,ps.rating_centi,COALESCE(NULLIF(r.score_changed_ms,0),ps.qualified_at_ms),ps.peak_tier,ps.honor_bits,ps.final_rank "+
+			"FROM match_ranked_player_season ps LEFT JOIN match_rating r ON r.player_id=ps.player_id AND r.mode=? "+
+			"WHERE ps.season_id=? AND ps.qualified=1",
+		uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM), seasonID)
+	if err != nil {
+		return nil, err
+	}
+	var standings []rankedStandingRow
+	for rows.Next() {
+		var row rankedStandingRow
+		var peakTier uint32
+		if err = rows.Scan(&row.playerID, &row.ratingCenti, &row.achievedMs, &peakTier, &row.honorBits, &row.finalRank); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		row.peakTier = pb.RankedTier(peakTier)
+		standings = append(standings, row)
+	}
+	if err = errors.Join(rows.Err(), rows.Close()); err != nil {
+		return nil, err
+	}
+	sort.Slice(standings, func(i, j int) bool {
+		if standings[i].ratingCenti != standings[j].ratingCenti {
+			return standings[i].ratingCenti > standings[j].ratingCenti
+		}
+		if standings[i].achievedMs != standings[j].achievedMs {
+			return standings[i].achievedMs < standings[j].achievedMs
+		}
+		return standings[i].playerID < standings[j].playerID
+	})
+	return standings, nil
+}
+
+func (s *Store) commitHonorsBatch(ctx context.Context, cur *pb.MatchRankedSeasonRecord, batch []rankedStandingRow, firstRank uint64, champPlayer uint64) error {
+	if len(batch) == 0 {
+		return nil
+	}
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	stamp, err := now(ctx, tx)
+	if err != nil {
+		return err
+	}
+	for offset, st := range batch {
+		rankPos := firstRank + uint64(offset)
+		wantHonorBits := st.honorBits
+		tierCode, eligible := rankedHonorTierCode(st.peakTier)
+		if eligible {
+			wantHonorBits |= 1 | 2
+		}
+		isChamp := champPlayer != 0 && st.playerID == champPlayer
+		if isChamp {
+			wantHonorBits |= 4
+		}
+		if st.finalRank == rankPos && st.honorBits == wantHonorBits {
+			continue
+		}
+		if eligible {
+			if _, err = grantRankedRewardTx(ctx, tx, st.playerID, cur.SeasonId, pb.RankedRewardKind_RANKED_REWARD_TIER_BADGE, uint32(st.peakTier), cur.SeasonKey+"_tier_badge_"+tierCode, stamp); err != nil {
+				return err
+			}
+			if _, err = grantRankedRewardTx(ctx, tx, st.playerID, cur.SeasonId, pb.RankedRewardKind_RANKED_REWARD_TIER_TITLE, uint32(st.peakTier), cur.SeasonKey+"_tier_title_"+tierCode, stamp); err != nil {
+				return err
+			}
+		}
+		if isChamp {
+			if _, err = grantRankedRewardTx(ctx, tx, st.playerID, cur.SeasonId, pb.RankedRewardKind_RANKED_REWARD_CHAMPION_INSCRIPTION, uint32(pb.RankedTier_RANKED_TIER_WUSHUANG), cur.SeasonKey+"_champion_inscription", stamp); err != nil {
+				return err
+			}
+		}
+		if _, err = tx.ExecContext(ctx,
+			"UPDATE match_ranked_player_season SET final_rank=?,honor_bits=?,updated_ms=? WHERE season_id=? AND player_id=?",
+			rankPos, wantHonorBits, stamp, cur.SeasonId, st.playerID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (s *Store) rolloverOpenNextSeason(ctx context.Context, cur *pb.MatchRankedSeasonRecord) error {
@@ -466,6 +525,10 @@ func (s *Store) rolloverOpenNextSeason(ctx context.Context, cur *pb.MatchRankedS
 	if _, err = tx.ExecContext(ctx,
 		"UPDATE match_ranked_season SET state=?,rollover_stage=?,updated_ms=? WHERE season_id=?",
 		uint32(pb.RankedSeasonState_RANKED_SEASON_STATE_CLOSED), RolloverStageDone, stamp, locked.SeasonId); err != nil {
+		return err
+	}
+	// 关闭旧季时同步释放本季「问道名局」为代表战报加上的 ref_count 护航引用，防止往季战报大对象永久堆积。
+	if err = releaseSeasonFeaturedReplaysTx(ctx, tx, locked.SeasonId); err != nil {
 		return err
 	}
 	cat := s.RankedCatalog()
@@ -496,8 +559,41 @@ func (s *Store) rolloverOpenNextSeason(ctx context.Context, cur *pb.MatchRankedS
 	if err = tx.Commit(); err != nil {
 		return err
 	}
+	s.featuredCache.Invalidate()
 	logx.Infof("[ranked] Season rollover stage 8 (DONE) closed season=%d and opened season=%d key=%s", locked.SeasonId, next.SeasonId, next.SeasonKey)
 	return nil
+}
+
+func releaseSeasonFeaturedReplaysTx(ctx context.Context, tx *sql.Tx, seasonID uint32) error {
+	rows, err := tx.QueryContext(ctx,
+		"SELECT featured_battle_id FROM match_ranked_featured_build WHERE season_id=? AND featured_battle_id>0",
+		seasonID)
+	if err != nil {
+		return err
+	}
+	released := make(map[uint64]uint32)
+	for rows.Next() {
+		var battleID uint64
+		if scanErr := rows.Scan(&battleID); scanErr != nil {
+			rows.Close()
+			return scanErr
+		}
+		if battleID != 0 {
+			released[battleID]++
+		}
+	}
+	if err = errors.Join(rows.Err(), rows.Close()); err != nil {
+		return err
+	}
+	if len(released) == 0 {
+		return nil
+	}
+	if _, err = tx.ExecContext(ctx,
+		"UPDATE match_ranked_featured_build SET featured_battle_id=0 WHERE season_id=? AND featured_battle_id>0",
+		seasonID); err != nil {
+		return err
+	}
+	return releaseBattleReportsTx(ctx, tx, released)
 }
 
 // rankedHonorTierCode 返回赛季封榜起发永久段位徽章与赛季称号的段位码（V2：云章起发）。

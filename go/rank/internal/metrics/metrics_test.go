@@ -74,7 +74,8 @@ func TestMetricLabelsRejectUnboundedValues(t *testing.T) {
 	c := newCollectors()
 	registry := prometheus.NewRegistry()
 	c.register(registry)
-	if c.observeWrite("player-123", WriteOK) || c.observeWrite(OperationFreeze, "request-456") || c.observeDispatch("battle-789") {
+	if c.observeWrite("player-123", WriteOK) || c.observeWrite(OperationFreeze, "request-456") || c.observeDispatch("battle-789") ||
+		c.observeAdminUnapproved("/rankpb.RankAdmin/OpenRankGeneration") {
 		t.Fatal("动态身份不得成为指标label")
 	}
 	for _, outcome := range []string{WriteOK, WriteReplay, WriteRejected, WriteError} {
@@ -98,6 +99,8 @@ func TestMetricLabelsRejectUnboundedValues(t *testing.T) {
 			want = 7
 		case "rank_reward_scan_total":
 			want = 2
+		case "rank_admin_unapproved_command_total":
+			want = 2
 		}
 		if len(family.Metric) != want {
 			t.Fatalf("%s出现意外series: %d want%d", family.GetName(), len(family.Metric), want)
@@ -119,5 +122,24 @@ func TestDispatchAbandonedIsPreRegisteredClosedOutcome(t *testing.T) {
 	}
 	if value, _ := gatheredValue(t, registry, "rank_reward_dispatch_total", labels); value != 1 {
 		t.Fatalf("abandoned 应计 1 次: %v", value)
+	}
+}
+
+// 不带双人复核批准记录被接受的删除:两个方法注册即有 0 值序列,告警的 increase 才看得到进程启动后的第一次。
+func TestAdminUnapprovedIsPreRegisteredPerMethod(t *testing.T) {
+	c := newCollectors()
+	registry := prometheus.NewRegistry()
+	c.register(registry)
+	for _, method := range []string{AdminMethodRemoveEntry, AdminMethodDeleteGeneration} {
+		labels := map[string]string{"method": method}
+		if value, exists := gatheredValue(t, registry, "rank_admin_unapproved_command_total", labels); !exists || value != 0 {
+			t.Fatalf("%s 应预建 0 值序列: %v/%v", method, value, exists)
+		}
+		if !c.observeAdminUnapproved(method) {
+			t.Fatalf("%s 是封闭方法名, 不得被拒", method)
+		}
+		if value, _ := gatheredValue(t, registry, "rank_admin_unapproved_command_total", labels); value != 1 {
+			t.Fatalf("%s 应计 1 次: %v", method, value)
+		}
 	}
 }

@@ -133,6 +133,9 @@ type Engine struct {
 	Now              func() time.Time
 	Roles            RoleLocker
 	Rmb              *RmbConsignments
+	// WantedSkills 查悬赏求书能求哪些技能(wanted_skill_book.go)。nil = 本部署没开求购单(Commerce.WantedSkillBook.Enabled=false):
+	// 发榜、揭榜回「功能未开放」;已有的求购单照常推进、照常可撤。
+	WantedSkills WantedSkillCatalog
 	// Owns 判本副本是否负责一片后台工作(合同推进、收据 ACK,见 schedule.go)。装配层启动时写一次(生产是
 	// svc 的 workshard.Membership.Owns),之后只读;nil(单测、单副本)= 全部片归本副本,行为与分工前相同。
 	Owns func(key string) bool
@@ -234,6 +237,12 @@ func (e *Engine) priorRequest(ctx context.Context, player uint64, id string, inp
 	return nil, nil
 }
 func (e *Engine) Create(ctx context.Context, player uint64, id string, input proto.Message, r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow) (*tradepb.TradeCommerceRecord, error) {
+	return e.createLocked(ctx, player, id, input, r, w, nil)
+}
+
+// createLocked 是 Create 的实现。inRoleLock 不为 nil 时,在建单事务里拿到参与者的角色锁之后、插入之前调用它,
+// 给必须和插入在同一把锁下核对的建单条件用(求购单的每人生效单数上限);它回错误就整笔不插入。
+func (e *Engine) createLocked(ctx context.Context, player uint64, id string, input proto.Message, r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow, inRoleLock func(context.Context, *sql.Tx) error) (*tradepb.TradeCommerceRecord, error) {
 	if old, err := e.priorRequest(ctx, player, id, input); err != nil || old != nil {
 		return old, err
 	}
@@ -254,6 +263,11 @@ func (e *Engine) Create(ctx context.Context, player uint64, id string, input pro
 	err = e.roleTx(ctx, func(tx *sql.Tx) error {
 		if err := e.lockRoles(ctx, tx, 0, r.SellerPlayerId, r.BuyerPlayerId); err != nil {
 			return err
+		}
+		if inRoleLock != nil {
+			if err := inRoleLock(ctx, tx); err != nil {
+				return err
+			}
 		}
 		if r.Kind == 6 {
 			if w.Rmb == nil {
@@ -361,6 +375,11 @@ func (e *Engine) PlaceMarket(ctx context.Context, me uint64, in *tradepb.PlaceMa
 	return e.Create(ctx, me, in.ClientRequestId, in, &tradepb.TradeCommerceRecord{Kind: 4, Status: Escrowing, SellerPlayerId: me, MarketId: in.MarketId, ItemConfigId: in.ItemConfigId, Side: uint32(in.Side), UnitPrice: in.UnitPrice, Quantity: in.Quantity, CurrencyType: in.CurrencyType}, &tradepb.TradeCommerceWorkflow{SellerAssets: sel, Stage: "escrow"})
 }
 func (e *Engine) Mutate(ctx context.Context, me, id uint64, action string, requestID ...string) (*tradepb.TradeCommerceRecord, error) {
+	return e.mutate(ctx, me, id, action, 0, requestID...)
+}
+
+// mutate 是 Mutate 的实现。sealedItemID 只给揭榜(fulfill,FulfillWantedSkillBookOrder)用,其余动作传 0。
+func (e *Engine) mutate(ctx context.Context, me, id uint64, action string, sealedItemID uint64, requestID ...string) (*tradepb.TradeCommerceRecord, error) {
 	var result *tradepb.TradeCommerceRecord
 	before, err := e.clientContract(ctx, id)
 	if err != nil {
@@ -461,6 +480,18 @@ func (e *Engine) Mutate(ctx context.Context, me, id uint64, action string, reque
 			addLeg(w, "buyer_debit_"+strconv.FormatUint(w.QuantityReserved, 10)+"_"+key, me, 3, Bundle(w.BuyerAssets))
 			w.Stage = "pay"
 			r.Status = Escrowing
+		case "fulfill":
+			if len(requestID) != 1 {
+				return ErrInvalid
+			}
+			replayed, err := e.fulfillWantedLocked(ctx, tx, me, r, w, requestID[0], sealedItemID)
+			if err != nil {
+				return err
+			}
+			if replayed {
+				result = r
+				return nil
+			}
 		case "cancel":
 			if me != r.SellerPlayerId && me != r.BuyerPlayerId {
 				return ErrMissing
@@ -470,6 +501,11 @@ func (e *Engine) Mutate(ctx context.Context, me, id uint64, action string, reque
 				return nil
 			}
 			if r.Kind == 2 && (w.Stage == "confirm" || w.Stage == "offer_escrow" || w.Stage == "buyer_escrow") {
+				w.CancelRequested = true
+				r.Status = CancelPending
+			} else if r.Kind == KindWantedSkillBook && me == r.BuyerPlayerId && (w.Stage == stageWantedEscrow || w.Stage == stageWantedOpen) {
+				// 求购单只有发榜人能撤,托管与挂榜阶段可撤;有人正在交书(wanted_fill)或交付中不可撤,
+				// 等那一步有结局(退书回到挂榜,或成交)之后再撤(skill-book-wanted-order-trade-escrow.md §3.7)。
 				w.CancelRequested = true
 				r.Status = CancelPending
 			} else if me == r.SellerPlayerId && (w.Stage == "open" || w.Stage == "market_open" || w.Stage == "lot_open" && w.HighestBidder == 0 ||
@@ -522,10 +558,12 @@ func (e *Engine) Get(ctx context.Context, me, id uint64) (*tradepb.TradeCommerce
 	if err != nil {
 		return nil, err
 	}
-	if r.SellerPlayerId != me && r.BuyerPlayerId != me && r.Kind != 3 && r.Kind != 5 {
+	// 寄售、拍品、求购单是公开挂出来的,谁都能查;揭榜人的一次揭榜作废之后已不是参与方,仍要查得到单子回到了挂榜。
+	public := r.Kind == 3 || r.Kind == 5 || r.Kind == KindWantedSkillBook
+	if r.SellerPlayerId != me && r.BuyerPlayerId != me && !public {
 		return nil, ErrMissing
 	}
-	if _, client := roleidentity.Original(ctx); client && r.Kind != 3 && r.Kind != 5 {
+	if _, client := roleidentity.Original(ctx); client && !public {
 		w, err := data.Workflow(r)
 		if err != nil {
 			return nil, err
@@ -636,6 +674,12 @@ const maxNewLegsPerStep = 8
 func (e *Engine) plan(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow, now uint64) error {
 	if r.Kind == 6 {
 		return e.planRmb(r, w, now)
+	}
+	if r.Kind == KindWantedSkillBook {
+		// 求购单自己的阶段在这里推进(wanted_skill_book.go);走到交付或退回之后照常落到下面的通用收尾。
+		if err := planWantedSkillBook(r, w, now); err != nil {
+			return err
+		}
 	}
 	if w.Stage == stageOfficialDeliver {
 		planOfficial(r, w, now) // 发放跟着付款的最新结论走:首次发放、撤销后扣回、撤回后补发(official_reversal.go)

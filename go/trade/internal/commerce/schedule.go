@@ -85,7 +85,8 @@ func waitsForOtherRows(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceW
 // 挂着的单不用每轮重撮。
 func waitsForTimeOrPlayers(r *tradepb.TradeCommerceRecord, w *tradepb.TradeCommerceWorkflow) bool {
 	switch w.Stage {
-	case "open", "lot_open", "official_refund":
+	case "open", "lot_open", "official_refund", stageWantedOpen:
+		// 挂榜中的求购单不过期,只等揭榜或撤单(都会 Save 这一行、立即到期),排到 idleRecheck 兜底。
 		return true
 	case "confirm":
 		return r.Kind == 2

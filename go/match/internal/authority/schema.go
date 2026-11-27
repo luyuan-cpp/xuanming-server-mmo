@@ -33,7 +33,8 @@ func Tables() []proto.Message {
 		&pb.MatchBattleCompletionRecord{}, &pb.MatchBattleSettlementSourceRecord{}, &pb.MatchRoleOccupancyRecord{},
 		&pb.MatchManualResolutionRecord{},                                  // 人工处置审计(2026-11-05,manual_abort.go)
 		&pb.MatchBattleReportRecord{}, &pb.MatchPlayerBattleReportRecord{}, // 战报回放(battle_report.go)
-		&pb.MatchTrialChallengeCardRecord{},                                                                      // 试炼志 V3 好友约战帖(trial_challenge_card.go)
+		&pb.MatchTrialChallengeCardRecord{},                                // 试炼志 V3 好友约战帖(trial_challenge_card.go)
+		&pb.MatchTacticalPuzzleRecord{}, &pb.MatchTacticalPuzzleClearRecord{}, // 万象残局坊 V1(tactical_puzzle.go)
 		&pb.MatchBattleScriptRecord{}, &pb.MatchBattleScriptReviewRecord{}, &pb.MatchBattleScriptLoadoutRecord{}, // 战斗剧本(battle_script.go)
 		&pb.MatchRankedSeasonRecord{}, &pb.MatchRankedPlayerPrefsRecord{}, &pb.MatchRankedPlayerSeasonRecord{}, &pb.MatchRankedRewardRecord{}, &pb.MatchRankedBattleRecord{}, &pb.MatchRankedRivalryRecord{}, &pb.MatchRankedFeaturedBuildRecord{}, // 论剑排位(ranked.go)
 		&pb.MatchTournamentSeasonRecord{}, &pb.MatchTournamentSquadRecord{}, &pb.MatchTournamentMemberRecord{}, &pb.MatchTournamentInviteRecord{}, &pb.MatchTournamentMatchRecord{}, &pb.MatchTournamentMatchGameRecord{}, &pb.MatchTournamentCheerRecord{}, &pb.MatchTournamentRewardRecord{}, &pb.MatchTournamentPredictionRecord{}, // 全服赛季战队锦标赛(tournament.go)
@@ -55,7 +56,7 @@ func Tables() []proto.Message {
 // match_battle_script_review 的索引同理,给审核流水的保留期清理用(PurgeExpiredBattleScriptReviews 按 (reviewed_ms, 主键) 翻页)。
 func (s *Store) CheckCandidateIndexes(ctx context.Context) error {
 	rows, err := s.DB.QueryContext(ctx, `SELECT table_name,index_name,column_name FROM information_schema.statistics
-		WHERE table_schema=DATABASE() AND table_name IN ('match_authority_ticket','match_challenge_invitation','match_direct_intent','match_join_intent','team_authority','team_invite_index','team_application_index','team_launch','team_launch_role','match_spectator','match_spectator_intent','match_battle_script_review')
+		WHERE table_schema=DATABASE() AND table_name IN ('match_authority_ticket','match_challenge_invitation','match_direct_intent','match_formation','match_join_intent','match_ranked_battle','match_ranked_featured_build','match_ranked_rivalry','team_authority','team_invite_index','team_application_index','team_launch','team_launch_role','match_spectator','match_spectator_intent','match_battle_script_review')
 		ORDER BY table_name,index_name,seq_in_index`)
 	if err != nil {
 		return err
@@ -81,18 +82,22 @@ func (s *Store) CheckCandidateIndexes(ctx context.Context) error {
 	for table, required := range map[string][]string{
 		// 带 pool_region 的是按首选机房读页的(机房段、子池段,docs/design/global-match-hierarchical-pools.md §5.2.1);team_launch 同理。
 		// 票表的 formation_id 与 (state,mode,team_id,…) 两条没有读者,2026-11-12 已从 proto 删掉(§6),这里不再要求。
-		"match_authority_ticket":     {"state,enqueued_ms,player_id", "state,mode,config_id,team_size,team_id,enqueued_ms,player_id", "state,mode,config_id,team_size,team_id,pool_region,enqueued_ms,player_id"},
-		"match_challenge_invitation": {"target_player_id,state,expires_ms,challenge_id", "challenger_player_id,state,expires_ms,challenge_id"},
-		"match_direct_intent":        {"exit_prepared,cancelled,battle_id,kind,owner_id,request_high,request_low"},
-		"match_join_intent":          {"state,player_id,request_high,request_low"},
-		"match_spectator":            {"state,player_id", "updated_ms,player_id"},
-		"match_spectator_intent":     {"state,created_ms,player_id,request_high,request_low"},
-		"match_battle_script_review": {"reviewed_ms,script_id,revision"},
-		"team_authority":             {"state,idle_expires_ms,team_id"},
-		"team_invite_index":          {"invitee_id,expires_ms,team_id"},
-		"team_application_index":     {"applicant_id,expires_ms,team_id"},
-		"team_launch":                {"state,enqueued_ms,actor_id,request_high,request_low", "team_id,state,enqueued_ms,actor_id,request_high,request_low", "state,mode,config_id,target_size,enqueued_ms,actor_id,request_high,request_low", "state,mode,config_id,target_size,pool_region,enqueued_ms,actor_id,request_high,request_low"},
-		"team_launch_role":           {"player_id,state,actor_id,request_high,request_low"},
+		"match_authority_ticket":      {"state,enqueued_ms,player_id", "state,mode,config_id,team_size,team_id,enqueued_ms,player_id", "state,mode,config_id,team_size,team_id,pool_region,enqueued_ms,player_id"},
+		"match_challenge_invitation":  {"target_player_id,state,expires_ms,challenge_id", "challenger_player_id,state,expires_ms,challenge_id"},
+		"match_direct_intent":         {"exit_prepared,cancelled,battle_id,kind,owner_id,request_high,request_low"},
+		"match_formation":             {"state,retry_at_ms", "ranked_season_id,state,battle_id"},
+		"match_join_intent":           {"state,player_id,request_high,request_low"},
+		"match_ranked_battle":         {"player_id,settled_at_ms,battle_id"},
+		"match_ranked_featured_build": {"season_id,high_tier_wins,wins,featured_rating_centi", "featured_battle_id"},
+		"match_ranked_rivalry":        {"season_id,player_id,updated_ms"},
+		"match_spectator":             {"state,player_id", "updated_ms,player_id"},
+		"match_spectator_intent":      {"state,created_ms,player_id,request_high,request_low"},
+		"match_battle_script_review":  {"reviewed_ms,script_id,revision"},
+		"team_authority":              {"state,idle_expires_ms,team_id"},
+		"team_invite_index":           {"invitee_id,expires_ms,team_id"},
+		"team_application_index":      {"applicant_id,expires_ms,team_id"},
+		"team_launch":                 {"state,enqueued_ms,actor_id,request_high,request_low", "team_id,state,enqueued_ms,actor_id,request_high,request_low", "state,mode,config_id,target_size,enqueued_ms,actor_id,request_high,request_low", "state,mode,config_id,target_size,pool_region,enqueued_ms,actor_id,request_high,request_low"},
+		"team_launch_role":            {"player_id,state,actor_id,request_high,request_low"},
 	} {
 		for _, columns := range required {
 			found := false

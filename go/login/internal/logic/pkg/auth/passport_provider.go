@@ -80,10 +80,15 @@ func (p *PassportProvider) Validate(ctx context.Context, identityToken string) (
 	if err := p.consume(ctx, identityToken, p.verifier.usedFor(claims)); err != nil {
 		return nil, err
 	}
-	account := passportAccountPrefix + claims.Sub
+	account := PassportAccount(claims.Sub)
 	iat, _ := claims.Iat.Int64() // verifyClaims 已核过
 	logx.Infof("%s auth ok: account=%s", PassportAuthType, maskAccount(account, len(passportAccountPrefix)))
 	return &AuthResult{Account: account, IdentityIssuedAt: iat}, nil
+}
+
+// PassportAccount 是通行证用户 sub 对应的游戏账号串(PassportSubject 的反向)。
+func PassportAccount(sub string) string {
+	return passportAccountPrefix + sub
 }
 
 // PassportSubject 从账号名取回通行证的 sub;不是通行证账号回 false。账号注销与刷新前的核对按它找到通行证里的用户(passport_admin.go)。

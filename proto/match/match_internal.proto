@@ -6,6 +6,7 @@ import "proto/battle/battle_data.proto";
 import "proto/battle/battle_script.proto";
 import "proto/battle/player_battle.proto";
 import "proto/common/base/service_call_auth.proto";
+import "proto/common/base/admin_approval.proto";
 
 option go_package = "match/match";
 option cc_generic_services = false;
@@ -200,7 +201,8 @@ message GetBattleTerminalDecisionResponse {
 // ---- 永久 UNKNOWN 全球成局的人工处置(2026-11-05,cross-zone-matchmaking.md §13.3,手册 docs/ops/match-formation-manual-abort-runbook.md)----
 // 事故出口,替代不了自动路径:只处置「TiDB 时刻已过截止加终局宽限、没有任何终局行、持久 Create 原件过不了终局核对、
 // 工作租约已到期」的成局;原件合格的局归到期恢复 / 帮会取消自动裁决,这里一律拒绝。
-// 调用方只有运维工具 go/match/cmd/formationfix:serviceauth 调用方 "ops-formation",密钥来自 GlobalMatch.ManualResolutionSecretEnv
+// 调用方是后台 java/gm_admin(ABORT 经双人复核,2026-11-26)与运维工具 go/match/cmd/formationfix(列表、SHOW、DRY_RUN),
+// 同一个 serviceauth 调用方 "ops-formation",密钥来自 GlobalMatch.ManualResolutionSecretEnv
 // 指名的环境变量,不与观战运营的 "ops" 共用;没配(缺省)就关闭,一律 PermissionDenied。带会话调用一律 PermissionDenied。
 // ABORT 与截止裁决走同一个事务入口(authority.commitAbortTx),同一事务写审计行 match_manual_resolution;
 // 帮会历练局之后由 guild 恢复器重放取消读到这份 ABORT,按 formation=5 / ABORT 释放。
@@ -302,6 +304,10 @@ message ResolveStrandedFormationRequest {
   string operator_name = 5;      // ≤64 字节,不含控制字符
   string reason = 6;             // ≤191 字节,不含控制字符:工单号与核对结论
   common.base.ServiceCallAuth auth = 7;
+  // ABORT 必带(docs/design/admin-identity-and-dual-control.md §5.4):后台双人复核的批准记录,proposer 必须等于 operator_name;
+  // 批准号与批准人随 ABORT 写进 match_manual_resolution。SHOW / DRY_RUN 不要求,带了照样核。
+  // 只有部署显式打开 GlobalMatch.ManualResolutionAllowUnapproved(本机开发)时才接受不带它的 ABORT。不合格回 REFUSED,不碰库。
+  common.base.AdminApproval approval = 8;
 }
 message ResolveStrandedFormationResponse {
   StrandedFormationVerdict verdict = 1;
@@ -322,7 +328,7 @@ service MatchInternal {
   rpc ReleaseTrialOccupancy(ReleaseTrialOccupancyRequest) returns (ReleaseTrialOccupancyResponse);
   rpc GetBattleCompletion(GetBattleCompletionRequest) returns (GetBattleCompletionResponse);
   rpc GetBattleTerminalDecision(GetBattleTerminalDecisionRequest) returns (GetBattleTerminalDecisionResponse);
-  // 人工处置永久 UNKNOWN 的全球成局(2026-11-05,调用方只有运维工具 formationfix,见上文消息定义处)。
+  // 人工处置永久 UNKNOWN 的全球成局(2026-11-05,调用方是后台与运维工具 formationfix,见上文消息定义处)。
   rpc ListStrandedFormations(ListStrandedFormationsRequest) returns (ListStrandedFormationsResponse);
   rpc ResolveStrandedFormation(ResolveStrandedFormationRequest) returns (ResolveStrandedFormationResponse);
   // 运营审核玩家上传的战斗剧本(docs/design/battle-script.md §6.3;调用方只有运营工具 battlescriptreview,

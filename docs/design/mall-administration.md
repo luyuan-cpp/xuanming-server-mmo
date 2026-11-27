@@ -24,23 +24,28 @@ SKU 的新价格、标题及发物映射只影响未来订单。已有订单继�
 
 ## 运维入口与页面
 
-两版内部提供 `POST /internal/admin/skus/{list,create,update,stock}` 与 `/internal/admin/order-view`；后者复用原订单只读视图，admin不具有payment权限。主仓gateway_node代理 `POST /admin/mall/` 下同五条固定路径，复用X-Admin-Key；新商城代理额外要求配置令牌至少32字节，方法内再次鉴权，context/servlet前缀或forward不能绕过。Java版管理面在game-data，复用其X-Game-Admin-Token、X-Game-Operator与既有审计，方法内核认证标记，不把运维入口挪到game-gateway。
+两版内部提供 `POST /internal/admin/skus/{list,create,update,stock}`、`/internal/admin/order-view` 与人工单处置(`manual/list`、`manual/{orders,refunds,consignments}/resolve`、`manual/incomes/dispute`,见 `ManualAdminApi`);order-view 复用原订单只读视图,admin 不具有 payment 权限。Java 版管理面在 game-data,复用其 X-Game-Admin-Token、X-Game-Operator 与既有审计,方法内核认证标记,不把运维入口挪到 game-gateway。
 
-`GET /mall-admin` 及同级JS/CSS仅提供公开页面壳。令牌只在当前密码输入框内，清除或离开页面时移除，不写浏览器存储；商城管理HMAC密钥不渲染。页面支持有界目录查询、原订单查询、条款与库存差额命令。64位ID／修订号用十进制字符串提交，响应按原文本呈现，避免JavaScript浮点数改写数值；标题和返回数据只写文本节点。页面未做分类运营、促销或任意订单状态编辑。
+**主仓的人用入口是后台(`java/gm_admin`)的「运营处置」页**(2026-11-26 起,`docs/design/admin-identity-and-dual-control.md` §8 批 4):
 
-代理地址来自受信服务端配置，只允许五条固定命令，保留原JSON字节与客户端requestId。请求体最多16KiB、响应体最多256KiB；严格解析整个JSON文档，尾随垃圾或第二个根对象拒绝。HMAC绑定完整上游部署前缀，每次使用新nonce；连接预算3秒、完整响应future预算8秒，超时取消并保留未知提交语义，不自动重试写命令、不跟随重定向。页面超时保留原请求号，提示查询／原请求重放。
+- 只读查询(人工待办、SKU 目录、原订单)直接调,要 `gm:mall:read`。
+- 七条写命令(SKU 新建 / 改条款含改价 / 调库存,与四条人工处置)先在后台流水冻结成申请(`gm:mall:prepare`),由另一名管理员批准后才发出(`gm:mall:approve`)。请求号就是流水号,也就是批准号;正文带批准记录 `approval{approvalId, proposer, approver, approvedAtMs}`,被 HMAC 签名覆盖。人工处置的原因由后台填成申请上的原因,发起人不能另填。
+- 商城核对批准记录(`AdminApproval.refusal`,与 `go/shared/dualcontrol.Require` 同一口径,另加「请求号就是批准号」:一次批准只能执行一次),缺省必须带。`commerce.admin-allow-unapproved` 只给本机开发:打开时启动和每次放行都打 ERROR,并计入 `mall_admin_unapproved_command_total`;带了记录就必须合格,打开时也一样。
+- 发起人、批准人写进 `commerce_admin_command` 的 `proposer` / `approver` 两列,与处置同一事务;请求摘要覆盖整份请求(含批准记录),后台重试原样复用批准记录,摘要不变。
+- 后台的客户端 `GameMallAdmin`:只收 HTTPS 或本机回环 HTTP;连接 3 秒、请求 8 秒、响应最多 256 KiB,不跟随重定向。确定的拒绝(400 / 401 / 403 / 404 / 409 / 413)记 REJECTED;其余(503、5xx、超时、断连)都可能已经提交,记结果未知,用原申请重试由商城按 (主体, 请求号) 判重。
+- 原网关代理 `POST /admin/mall/*` 与 `/mall-admin` 页随批 4 删除。它只认一把共享的 X-Admin-Key,分不出是谁在操作,也漏了收入争议接口。
 
-主仓配置 `GATEWAY_MALL_ADMIN_URL`、`COMMERCE_ADMIN_SECRET`、`COMMERCE_ADMIN_SUBJECT`（缺省mall-admin），并通过既有admin.api-key配置足够强的运维令牌。Java配置 `GAME_DATA_MALL_ADMIN_URL`、`GAME_MALL_ADMIN_SECRET`、`GAME_MALL_ADMIN_SUBJECT`，使用原GAME_ADMIN_TOKEN；未配置代理地址时只关闭代理。所有配置只写环境变量名，不把实际秘密写入跟踪文件。
+主仓配置:后台 `GM_MALL_URL`、`GM_MALL_ADMIN_SECRET`、`GM_MALL_ADMIN_SUBJECT`(缺省 mall-admin),与商城 `COMMERCE_ADMIN_SECRET`、`COMMERCE_ADMIN_SUBJECT` 同值;商城管理密钥只挂给后台工作负载。Java 配置 `GAME_DATA_MALL_ADMIN_URL`、`GAME_MALL_ADMIN_SECRET`、`GAME_MALL_ADMIN_SUBJECT`,使用原 GAME_ADMIN_TOKEN(双人复核待做,见 Java 仓 PARITY.md)。所有配置只写环境变量名,不把实际秘密写入跟踪文件。
 
 ## 验收
 
 必须验证同请求并发和提交后重放只改一次、换载荷拒绝、两个修订竞争者仅一个提交、当前预占不能被价格或库存命令抹掉、已有订单金额与映射不变、库存下界与整数溢出、越权及未知路由拒绝。H2 与 HTTP 用例只验证相应接缝，另跑真实 TiDB，不能冒充完整后台或真实渠道验收。
 
-本批另覆盖缺发物映射的历史SKU可查询／修复、修复前库存命令409且不留journal；新响应与重放都核合法完整条款，坏响应日志（包括null、空对象、尾随垃圾与第二根JSON）503，不接管重做。V2→V3回归执行同一升级SQL并核旧订单／预占保留。代理测试使用本例随机loopback服务，不连接他人服务。页面已执行JS语法检查与本轮自有静态预览的浏览器视觉检查：三列中文控件、请求号和响应区可读；静态预览明确返回503未连接后端，没有输入凭据或发起实际经济命令，结束后已关闭预览进程与监听。证据见`build/verification/mall-admin-visual-20261021T050444326Z/preview-result.json`；真实鉴权代理、商城写入和联机页面仍待执行验收。
+本批另覆盖缺发物映射的历史SKU可查询／修复、修复前库存命令409且不留journal；新响应与重放都核合法完整条款，坏响应日志（包括null、空对象、尾随垃圾与第二根JSON）503，不接管重做。V2→V3回归执行同一升级SQL并核旧订单／预占保留。后台到商城的客户端测试(`GameMallAdminTest`)使用本例随机 loopback 服务,不连接他人服务;批准记录的拒绝路径由商城 `CatalogAdminHttpTest` 覆盖。真实鉴权、商城写入和联机页面仍待执行验收。
 
 ### 当前本机验收接线（2026-10-21）
 
-主仓网关使用JDK23，商城使用JDK21；页面是classpath静态资源，没有npm工程。网关的管理代理仍只有上述五条命令，不能代替payment角色发付款或交付回执。`start_game.ps1`当前没有自动拉起商城，验收由root单独批准当前商城JAR与子进程环境；不为冒烟打开全局默认开关。
+主仓网关使用JDK23，商城使用JDK21；页面是classpath静态资源，没有npm工程。后台运营处置只发上述管理命令,不能代替 payment 角色发付款或交付回执。`start_game.ps1`当前没有自动拉起商城，验收由root单独批准当前商城JAR与子进程环境；不为冒烟打开全局默认开关。
 
 商城真TiDB夹具显式接受数字loopback合法非零端口，且不得带库名、凭据或查询参数；本任务root只使用已核归属的`127.0.0.1:24000`。建随机库前先核TiDB及强读会话；四物理连接和弱读／历史快照拒绝断言保留。普通H2与loopback HTTP测试仍不等同真库或游戏到账证据。
 

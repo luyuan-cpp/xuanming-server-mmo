@@ -4,6 +4,7 @@ package data
 // 的 SQL 层回归:纯函数钉住条件的位置与占位符;TiDB 用例(门控同 repo_integration_test.go 的 MAIL_RANK_TEST_TIDB)钉住真库效果。
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -124,5 +125,35 @@ func TestTiDBSweepDeletesOnlyOwnedShards(t *testing.T) {
 	var states int
 	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM mail_state").Scan(&states); err != nil || states != 0 {
 		t.Fatalf("state 行应随邮件一起删掉: %d %v", states, err)
+	}
+}
+
+// r2-craft#3:过期清理把邮件行连同 state 删掉之后,同一 (sender_kind, request_id) 重寄仍回原 mail_id、不再建第二封;
+// 同键换了内容按冲突回。判重依据是收据表,清理不碰它(docs/design/mail-system.md §2.4)。
+func TestTiDBResendAfterSweepReturnsOriginalMail(t *testing.T) {
+	ctx, db, repo := mailFixture(t)
+	first, err := repo.Send(ctx, "rank", mailpb.MailKind_MAIL_KIND_PERSONAL, personal(1201, 7))
+	if err != nil || first.Duplicated {
+		t.Fatalf("首发应建新信: %+v %v", first, err)
+	}
+	if _, err := db.ExecContext(ctx, "UPDATE mail_message SET expire_ms=1 WHERE mail_id=?", first.MailId); err != nil {
+		t.Fatal(err)
+	}
+	report, err := repo.Sweep(ctx, uint64(time.Now().UnixMilli()), 100, true, workshard.Filter{})
+	if err != nil || report.Personal.Deleted != 1 {
+		t.Fatalf("过期清理应删掉这封: %+v %v", report, err)
+	}
+	again, err := repo.Send(ctx, "rank", mailpb.MailKind_MAIL_KIND_PERSONAL, personal(1201, 7))
+	if err != nil || !again.Duplicated || again.MailId != first.MailId {
+		t.Fatalf("清理之后重寄应回原 mail_id %d、不再建信: %+v %v", first.MailId, again, err)
+	}
+	var messages int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM mail_message WHERE sender_kind=3 AND request_id=1201").Scan(&messages); err != nil || messages != 0 {
+		t.Fatalf("重寄不应新建邮件行: %d %v", messages, err)
+	}
+	changed := personal(1201, 7)
+	changed.Body = "换了正文"
+	if _, err := repo.Send(ctx, "rank", mailpb.MailKind_MAIL_KIND_PERSONAL, changed); !errors.Is(err, ErrConflict) {
+		t.Fatalf("同键换了内容应按冲突回: %v", err)
 	}
 }

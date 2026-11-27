@@ -241,6 +241,26 @@ var mergedZoneRefreshTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Help:      "Periodic reads of the merged zone mapping from data_service by result (ok|error). On error the previous mapping stays in use.",
 }, []string{"result"})
 
+// adminUnapprovedCommandTotal:不带双人复核批准记录却被接受的滞留阵容 ABORT(docs/design/admin-identity-and-dual-control.md §5.7)。
+// 只在 GlobalMatch.ManualResolutionAllowUnapproved 打开时增长,集群里应当恒为 0;告警 MatchAdminCommandUnapproved 数它。
+var adminUnapprovedCommandTotal = prometheus.NewCounter(prometheus.CounterOpts{
+	Subsystem: subsystem,
+	Name:      "admin_unapproved_command_total",
+	Help:      "MatchInternal.ResolveStrandedFormation ABORT calls accepted without a dual-control approval record (only while GlobalMatch.ManualResolutionAllowUnapproved is on).",
+})
+
+// ObserveAdminUnapprovedCommand 记一次不带批准记录却被接受的 ABORT。
+func ObserveAdminUnapprovedCommand() { adminUnapprovedCommandTotal.Inc() }
+
+// AdminUnapprovedCommandValue 读回不带批准记录被接受的 ABORT 计数(单测断言用)。
+func AdminUnapprovedCommandValue() float64 {
+	var m dto.Metric
+	if err := adminUnapprovedCommandTotal.Write(&m); err != nil {
+		return 0
+	}
+	return m.GetCounter().GetValue()
+}
+
 var registerOnce sync.Once
 
 func register() {
@@ -248,6 +268,7 @@ func register() {
 		prometheus.MustRegister(
 			globalFlowTotal, probeRTT,
 			mergedZoneRefreshTotal,
+			adminUnapprovedCommandTotal,
 			joinQueueTotal,
 			gatherTotal,
 			gatherDuration,

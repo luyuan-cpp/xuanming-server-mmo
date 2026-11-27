@@ -81,6 +81,13 @@ type config struct {
 	KafkaBrokers   []string           `json:"KafkaBrokers"`
 	// GuildRpc:读玩家所在的帮,给帮会文本邮件判可见。帮会表归 guild 服务,邮件库不跨库读。
 	GuildRpc zrpc.RpcClientConf `json:"GuildRpc"`
+	// ApprovalRequiredCallers:发件必须带后台双人复核批准记录的调用方(docs/design/admin-identity-and-dual-control.md §3 甲级、§5.5)。
+	// 不写 = 只有 admin;admin 恒在其中,写了别的只是追加。rank / guild / battle / match 是系统发件方,不经后台,不在表里。
+	ApprovalRequiredCallers []string `json:",optional"`
+	// AdminAllowUnapproved:为 true 时接受表内调用方不带批准记录的发件(go/mail/cmd/mailadmin 的写命令就不带),只给本机开发。
+	// 缺省 false。打开时启动打一行 ERROR,每一次不带记录的发件都打 ERROR 并计入 mail_admin_unapproved_command_total;
+	// 带了批准记录就必须合格,与它无关。etc/mail.yaml 整份进 K8s ConfigMap(k8s_deploy.ps1),不能在那里提交成 true。
+	AdminAllowUnapproved bool `json:",optional"`
 }
 
 // playerRedisConfig 返回生效的玩家域配置。没写 PlayerRedis.Addrs 时指向 SharedRedisAddr 那一个实例,池与超时沿用这条路径原来的口径。
@@ -338,6 +345,7 @@ func run(c config, migrate bool) (runErr error) {
 	}()
 	// 在线域原账号只认 gate 签名原件(domainhost 装配的验签拦截器),不读 login Redis,所以这里不装配登录态连接。
 	handler := server.New(repo, auth, &notify.Notifier{Redis: playerRedis, Publisher: &relayPublisher{gate: relay, writer: writer}})
+	handler.ConfigureDualControl(c.ApprovalRequiredCallers, c.AdminAllowUnapproved)
 	etcd, err := clientv3.New(clientv3.Config{Endpoints: c.Etcd.Hosts, DialTimeout: 3 * time.Second})
 	if err != nil {
 		return err

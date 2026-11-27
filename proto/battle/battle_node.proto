@@ -76,6 +76,8 @@ message CreateBattleRequest {
   uint32 boss_weekly_affix_id = 22;
   // 天墉生死状开局冻结上下文（仅 MATCH_MODE_JIANGHU_DUEL 携带，随建房原件冻结）。
   JianghuDuelBattleContext jianghu_duel_context = 23;
+  // 万象残局坊开局冻结上下文（仅 Dungeon 314 携带，随建房原件冻结）。
+  TacticalPuzzleBattleContext tactical_puzzle_context = 24;
 }
 
 // error_message 非零 = 未建房。签不出参战票据时回 kServiceUnavailable(turn-based §22 D70 fail-closed):

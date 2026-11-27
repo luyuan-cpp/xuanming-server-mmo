@@ -69,6 +69,8 @@ enum MarketOrderSide : int;
 extern const uint32_t MarketOrderSide_internal_data_[];
 enum SellerReviewRating : int;
 extern const uint32_t SellerReviewRating_internal_data_[];
+enum WantedSkillBookOrderPhase : int;
+extern const uint32_t WantedSkillBookOrderPhase_internal_data_[];
 class AuctionLotResponse;
 struct AuctionLotResponseGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -229,6 +231,14 @@ extern const ::google::protobuf::internal::ClassDataFull CreateRmbConsignmentReq
 #else
 extern const CreateRmbConsignmentRequestGlobalsTypeInternal CreateRmbConsignmentRequest_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class CreateWantedSkillBookOrderRequest;
+struct CreateWantedSkillBookOrderRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern CreateWantedSkillBookOrderRequestGlobalsTypeInternal CreateWantedSkillBookOrderRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull CreateWantedSkillBookOrderRequest_class_data_;
+#else
+extern const CreateWantedSkillBookOrderRequestGlobalsTypeInternal CreateWantedSkillBookOrderRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class CreateWithdrawalRequest;
 struct CreateWithdrawalRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -236,6 +246,14 @@ extern CreateWithdrawalRequestGlobalsTypeInternal CreateWithdrawalRequest_global
 extern const ::google::protobuf::internal::ClassDataFull CreateWithdrawalRequest_class_data_;
 #else
 extern const CreateWithdrawalRequestGlobalsTypeInternal CreateWithdrawalRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class FulfillWantedSkillBookOrderRequest;
+struct FulfillWantedSkillBookOrderRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern FulfillWantedSkillBookOrderRequestGlobalsTypeInternal FulfillWantedSkillBookOrderRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull FulfillWantedSkillBookOrderRequest_class_data_;
+#else
+extern const FulfillWantedSkillBookOrderRequestGlobalsTypeInternal FulfillWantedSkillBookOrderRequest_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class GetAuctionLotRequest;
 struct GetAuctionLotRequestGlobalsTypeInternal;
@@ -421,6 +439,22 @@ extern const ::google::protobuf::internal::ClassDataFull ListTradeMarketsRespons
 #else
 extern const ListTradeMarketsResponseGlobalsTypeInternal ListTradeMarketsResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class ListWantedSkillBookOrdersRequest;
+struct ListWantedSkillBookOrdersRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ListWantedSkillBookOrdersRequestGlobalsTypeInternal ListWantedSkillBookOrdersRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ListWantedSkillBookOrdersRequest_class_data_;
+#else
+extern const ListWantedSkillBookOrdersRequestGlobalsTypeInternal ListWantedSkillBookOrdersRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ListWantedSkillBookOrdersResponse;
+struct ListWantedSkillBookOrdersResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ListWantedSkillBookOrdersResponseGlobalsTypeInternal ListWantedSkillBookOrdersResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ListWantedSkillBookOrdersResponse_class_data_;
+#else
+extern const ListWantedSkillBookOrdersResponseGlobalsTypeInternal ListWantedSkillBookOrdersResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class MarketDepthLevel;
 struct MarketDepthLevelGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -565,6 +599,22 @@ extern const ::google::protobuf::internal::ClassDataFull TradeOfferInstance_clas
 #else
 extern const TradeOfferInstanceGlobalsTypeInternal TradeOfferInstance_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class WantedSkillBookOrderResponse;
+struct WantedSkillBookOrderResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern WantedSkillBookOrderResponseGlobalsTypeInternal WantedSkillBookOrderResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull WantedSkillBookOrderResponse_class_data_;
+#else
+extern const WantedSkillBookOrderResponseGlobalsTypeInternal WantedSkillBookOrderResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class WantedSkillBookOrderView;
+struct WantedSkillBookOrderViewGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern WantedSkillBookOrderViewGlobalsTypeInternal WantedSkillBookOrderView_globals_;
+extern const ::google::protobuf::internal::ClassDataFull WantedSkillBookOrderView_class_data_;
+#else
+extern const WantedSkillBookOrderViewGlobalsTypeInternal WantedSkillBookOrderView_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class WithdrawalResponse;
 struct WithdrawalResponseGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -588,6 +638,9 @@ internal::EnumTraitsT<::trade::MarketOrderSide_internal_data_>
 template <>
 internal::EnumTraitsT<::trade::SellerReviewRating_internal_data_>
     internal::EnumTraitsImpl::value<::trade::SellerReviewRating>;
+template <>
+internal::EnumTraitsT<::trade::WantedSkillBookOrderPhase_internal_data_>
+    internal::EnumTraitsImpl::value<::trade::WantedSkillBookOrderPhase>;
 }  // namespace protobuf
 }  // namespace google
 
@@ -600,6 +653,7 @@ enum CommerceOrderKind : int {
   COMMERCE_ORDER_KIND_MARKET_MATCH = 4,
   COMMERCE_ORDER_KIND_AUCTION_LOT = 5,
   COMMERCE_ORDER_KIND_RMB_CONSIGNMENT = 6,
+  COMMERCE_ORDER_KIND_SKILL_BOOK_WANTED = 7,
   CommerceOrderKind_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   CommerceOrderKind_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -610,11 +664,11 @@ extern const uint32_t CommerceOrderKind_internal_data_[];
 inline constexpr CommerceOrderKind CommerceOrderKind_MIN =
     static_cast<CommerceOrderKind>(0);
 inline constexpr CommerceOrderKind CommerceOrderKind_MAX =
-    static_cast<CommerceOrderKind>(6);
+    static_cast<CommerceOrderKind>(7);
 [[nodiscard]] inline bool CommerceOrderKind_IsValid(int value) {
-  return 0 <= value && value <= 6;
+  return 0 <= value && value <= 7;
 }
-inline constexpr int CommerceOrderKind_ARRAYSIZE = 6 + 1;
+inline constexpr int CommerceOrderKind_ARRAYSIZE = 7 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 CommerceOrderKind_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(CommerceOrderKind) {
@@ -629,7 +683,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& CommerceOrderKind_Name(CommerceOrderKind value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<CommerceOrderKind_descriptor, 0, 6>(
+  return ::google::protobuf::internal::NameOfDenseEnum<CommerceOrderKind_descriptor, 0, 7>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool CommerceOrderKind_Parse(
@@ -730,6 +784,53 @@ template <>
   return ::google::protobuf::internal::ParseNamedEnum<MarketOrderSide>(MarketOrderSide_descriptor(), name,
                                            value);
 }
+enum WantedSkillBookOrderPhase : int {
+  WANTED_SKILL_BOOK_ORDER_PHASE_UNSPECIFIED = 0,
+  WANTED_SKILL_BOOK_ORDER_PHASE_ESCROWING = 1,
+  WANTED_SKILL_BOOK_ORDER_PHASE_OPEN = 2,
+  WANTED_SKILL_BOOK_ORDER_PHASE_FULFILLING = 3,
+  WANTED_SKILL_BOOK_ORDER_PHASE_DELIVERING = 4,
+  WANTED_SKILL_BOOK_ORDER_PHASE_SETTLED = 5,
+  WANTED_SKILL_BOOK_ORDER_PHASE_CANCELLING = 6,
+  WANTED_SKILL_BOOK_ORDER_PHASE_CANCELLED = 7,
+  WANTED_SKILL_BOOK_ORDER_PHASE_MANUAL = 8,
+  WantedSkillBookOrderPhase_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  WantedSkillBookOrderPhase_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t WantedSkillBookOrderPhase_internal_data_[];
+inline constexpr WantedSkillBookOrderPhase WantedSkillBookOrderPhase_MIN =
+    static_cast<WantedSkillBookOrderPhase>(0);
+inline constexpr WantedSkillBookOrderPhase WantedSkillBookOrderPhase_MAX =
+    static_cast<WantedSkillBookOrderPhase>(8);
+[[nodiscard]] inline bool WantedSkillBookOrderPhase_IsValid(int value) {
+  return 0 <= value && value <= 8;
+}
+inline constexpr int WantedSkillBookOrderPhase_ARRAYSIZE = 8 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+WantedSkillBookOrderPhase_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(WantedSkillBookOrderPhase) {
+  return WantedSkillBookOrderPhase_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& WantedSkillBookOrderPhase_Name(T value) {
+  static_assert(::std::is_same<T, WantedSkillBookOrderPhase>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to WantedSkillBookOrderPhase_Name().");
+  return WantedSkillBookOrderPhase_Name(static_cast<WantedSkillBookOrderPhase>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& WantedSkillBookOrderPhase_Name(WantedSkillBookOrderPhase value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<WantedSkillBookOrderPhase_descriptor, 0, 8>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool WantedSkillBookOrderPhase_Parse(
+    ::absl::string_view name, WantedSkillBookOrderPhase* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<WantedSkillBookOrderPhase>(WantedSkillBookOrderPhase_descriptor(), name,
+                                           value);
+}
 enum SellerReviewRating : int {
   SELLER_REVIEW_RATING_UNSPECIFIED = 0,
   SELLER_REVIEW_RATING_POSITIVE = 1,
@@ -778,6 +879,395 @@ using ::google::protobuf::internal::generated_enum::AbslUnparseFlag;
 // ===================================================================
 
 
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WantedSkillBookOrderView final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:trade.WantedSkillBookOrderView) */ {
+ public:
+  inline WantedSkillBookOrderView() : WantedSkillBookOrderView(nullptr) {}
+  ~WantedSkillBookOrderView() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(WantedSkillBookOrderView* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(WantedSkillBookOrderView));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr WantedSkillBookOrderView(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline WantedSkillBookOrderView(const WantedSkillBookOrderView& from) : WantedSkillBookOrderView(nullptr, from) {}
+  inline WantedSkillBookOrderView(WantedSkillBookOrderView&& from) noexcept : WantedSkillBookOrderView(nullptr, ::std::move(from)) {}
+  inline WantedSkillBookOrderView& operator=(const WantedSkillBookOrderView& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline WantedSkillBookOrderView& operator=(WantedSkillBookOrderView&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const WantedSkillBookOrderView& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<WantedSkillBookOrderView>(&WantedSkillBookOrderView_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 54;
+  friend void swap(WantedSkillBookOrderView& a, WantedSkillBookOrderView& b) { a.Swap(&b); }
+  inline void Swap(WantedSkillBookOrderView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(WantedSkillBookOrderView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] WantedSkillBookOrderView* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<WantedSkillBookOrderView>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const WantedSkillBookOrderView& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const WantedSkillBookOrderView& from) { WantedSkillBookOrderView::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(WantedSkillBookOrderView* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "trade.WantedSkillBookOrderView"; }
+
+  explicit WantedSkillBookOrderView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  WantedSkillBookOrderView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const WantedSkillBookOrderView& from);
+  WantedSkillBookOrderView(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, WantedSkillBookOrderView&& from) noexcept
+      : WantedSkillBookOrderView(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kOrderIdFieldNumber = 1,
+    kPosterNameFieldNumber = 3,
+    kSkillNameFieldNumber = 5,
+    kScrollNameFieldNumber = 7,
+    kPosterPlayerIdFieldNumber = 2,
+    kSkillTableIdFieldNumber = 4,
+    kScrollIdFieldNumber = 6,
+    kRewardGoldFieldNumber = 9,
+    kSellerNetGoldFieldNumber = 10,
+    kPhaseFieldNumber = 11,
+    kRequireMasterSignatureFieldNumber = 8,
+    kIsMineFieldNumber = 15,
+    kFulfillerPlayerIdFieldNumber = 12,
+    kCreatedMsFieldNumber = 13,
+    kVersionFieldNumber = 14,
+  };
+  // string order_id = 1;
+  void clear_order_id() ;
+  [[nodiscard]] const ::std::string& order_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_order_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_order_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_order_id();
+  void set_allocated_order_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_order_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_order_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_order_id();
+
+  public:
+  // string poster_name = 3;
+  void clear_poster_name() ;
+  [[nodiscard]] const ::std::string& poster_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_poster_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_poster_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_poster_name();
+  void set_allocated_poster_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_poster_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_poster_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_poster_name();
+
+  public:
+  // string skill_name = 5;
+  void clear_skill_name() ;
+  [[nodiscard]] const ::std::string& skill_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_skill_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_skill_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_skill_name();
+  void set_allocated_skill_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_skill_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_skill_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_skill_name();
+
+  public:
+  // string scroll_name = 7;
+  void clear_scroll_name() ;
+  [[nodiscard]] const ::std::string& scroll_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_scroll_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_scroll_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_scroll_name();
+  void set_allocated_scroll_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_scroll_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_scroll_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_scroll_name();
+
+  public:
+  // uint64 poster_player_id = 2;
+  void clear_poster_player_id() ;
+  [[nodiscard]] ::uint64_t poster_player_id() const;
+  void set_poster_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_poster_player_id() const;
+  void _internal_set_poster_player_id(::uint64_t value);
+
+  public:
+  // uint32 skill_table_id = 4;
+  void clear_skill_table_id() ;
+  [[nodiscard]] ::uint32_t skill_table_id() const;
+  void set_skill_table_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_skill_table_id() const;
+  void _internal_set_skill_table_id(::uint32_t value);
+
+  public:
+  // uint32 scroll_id = 6;
+  void clear_scroll_id() ;
+  [[nodiscard]] ::uint32_t scroll_id() const;
+  void set_scroll_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_scroll_id() const;
+  void _internal_set_scroll_id(::uint32_t value);
+
+  public:
+  // uint64 reward_gold = 9;
+  void clear_reward_gold() ;
+  [[nodiscard]] ::uint64_t reward_gold() const;
+  void set_reward_gold(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_reward_gold() const;
+  void _internal_set_reward_gold(::uint64_t value);
+
+  public:
+  // uint64 seller_net_gold = 10;
+  void clear_seller_net_gold() ;
+  [[nodiscard]] ::uint64_t seller_net_gold() const;
+  void set_seller_net_gold(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_seller_net_gold() const;
+  void _internal_set_seller_net_gold(::uint64_t value);
+
+  public:
+  // .trade.WantedSkillBookOrderPhase phase = 11;
+  void clear_phase() ;
+  [[nodiscard]] ::trade::WantedSkillBookOrderPhase phase() const;
+  void set_phase(::trade::WantedSkillBookOrderPhase value);
+
+  private:
+  ::trade::WantedSkillBookOrderPhase _internal_phase() const;
+  void _internal_set_phase(::trade::WantedSkillBookOrderPhase value);
+
+  public:
+  // bool require_master_signature = 8;
+  void clear_require_master_signature() ;
+  [[nodiscard]] bool require_master_signature() const;
+  void set_require_master_signature(bool value);
+
+  private:
+  bool _internal_require_master_signature() const;
+  void _internal_set_require_master_signature(bool value);
+
+  public:
+  // bool is_mine = 15;
+  void clear_is_mine() ;
+  [[nodiscard]] bool is_mine() const;
+  void set_is_mine(bool value);
+
+  private:
+  bool _internal_is_mine() const;
+  void _internal_set_is_mine(bool value);
+
+  public:
+  // uint64 fulfiller_player_id = 12;
+  void clear_fulfiller_player_id() ;
+  [[nodiscard]] ::uint64_t fulfiller_player_id() const;
+  void set_fulfiller_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_fulfiller_player_id() const;
+  void _internal_set_fulfiller_player_id(::uint64_t value);
+
+  public:
+  // uint64 created_ms = 13;
+  void clear_created_ms() ;
+  [[nodiscard]] ::uint64_t created_ms() const;
+  void set_created_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_created_ms() const;
+  void _internal_set_created_ms(::uint64_t value);
+
+  public:
+  // uint64 version = 14;
+  void clear_version() ;
+  [[nodiscard]] ::uint64_t version() const;
+  void set_version(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_version() const;
+  void _internal_set_version(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:trade.WantedSkillBookOrderView)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 15,
+                          0, 87,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const WantedSkillBookOrderView& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr order_id_;
+    ::google::protobuf::internal::ArenaStringPtr poster_name_;
+    ::google::protobuf::internal::ArenaStringPtr skill_name_;
+    ::google::protobuf::internal::ArenaStringPtr scroll_name_;
+    ::uint64_t poster_player_id_;
+    ::uint32_t skill_table_id_;
+    ::uint32_t scroll_id_;
+    ::uint64_t reward_gold_;
+    ::uint64_t seller_net_gold_;
+    int phase_;
+    bool require_master_signature_;
+    bool is_mine_;
+    ::uint64_t fulfiller_player_id_;
+    ::uint64_t created_ms_;
+    ::uint64_t version_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2ftrade_2fcommerce_2eproto;
+};
 // -------------------------------------------------------------------
 
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TradeOfferInstance final : public ::google::protobuf::Message
@@ -1381,7 +1871,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SubmitSellerReviewRequest final : p
   [[nodiscard]] static const SubmitSellerReviewRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SubmitSellerReviewRequest>(&SubmitSellerReviewRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 57;
+  static constexpr int kIndexInFileMessages = 63;
   friend void swap(SubmitSellerReviewRequest& a, SubmitSellerReviewRequest& b) { a.Swap(&b); }
   inline void Swap(SubmitSellerReviewRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1616,7 +2106,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SellerCreditView final : public ::g
   [[nodiscard]] static const SellerCreditView& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SellerCreditView>(&SellerCreditView_globals_);
   }
-  static constexpr int kIndexInFileMessages = 54;
+  static constexpr int kIndexInFileMessages = 60;
   friend void swap(SellerCreditView& a, SellerCreditView& b) { a.Swap(&b); }
   inline void Swap(SellerCreditView* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4220,6 +4710,248 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MarketDepthLevel final : public ::g
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListWantedSkillBookOrdersRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:trade.ListWantedSkillBookOrdersRequest) */ {
+ public:
+  inline ListWantedSkillBookOrdersRequest() : ListWantedSkillBookOrdersRequest(nullptr) {}
+  ~ListWantedSkillBookOrdersRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ListWantedSkillBookOrdersRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ListWantedSkillBookOrdersRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ListWantedSkillBookOrdersRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ListWantedSkillBookOrdersRequest(const ListWantedSkillBookOrdersRequest& from) : ListWantedSkillBookOrdersRequest(nullptr, from) {}
+  inline ListWantedSkillBookOrdersRequest(ListWantedSkillBookOrdersRequest&& from) noexcept : ListWantedSkillBookOrdersRequest(nullptr, ::std::move(from)) {}
+  inline ListWantedSkillBookOrdersRequest& operator=(const ListWantedSkillBookOrdersRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ListWantedSkillBookOrdersRequest& operator=(ListWantedSkillBookOrdersRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ListWantedSkillBookOrdersRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListWantedSkillBookOrdersRequest>(&ListWantedSkillBookOrdersRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 58;
+  friend void swap(ListWantedSkillBookOrdersRequest& a, ListWantedSkillBookOrdersRequest& b) { a.Swap(&b); }
+  inline void Swap(ListWantedSkillBookOrdersRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ListWantedSkillBookOrdersRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ListWantedSkillBookOrdersRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ListWantedSkillBookOrdersRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ListWantedSkillBookOrdersRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ListWantedSkillBookOrdersRequest& from) { ListWantedSkillBookOrdersRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ListWantedSkillBookOrdersRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "trade.ListWantedSkillBookOrdersRequest"; }
+
+  explicit ListWantedSkillBookOrdersRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ListWantedSkillBookOrdersRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ListWantedSkillBookOrdersRequest& from);
+  ListWantedSkillBookOrdersRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ListWantedSkillBookOrdersRequest&& from) noexcept
+      : ListWantedSkillBookOrdersRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kCursorFieldNumber = 3,
+    kFilterSkillTableIdFieldNumber = 1,
+    kOnlyMineFieldNumber = 2,
+    kLimitFieldNumber = 4,
+  };
+  // string cursor = 3;
+  void clear_cursor() ;
+  [[nodiscard]] const ::std::string& cursor() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_cursor(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_cursor();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_cursor();
+  void set_allocated_cursor(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_cursor() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_cursor(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_cursor();
+
+  public:
+  // uint32 filter_skill_table_id = 1;
+  void clear_filter_skill_table_id() ;
+  [[nodiscard]] ::uint32_t filter_skill_table_id() const;
+  void set_filter_skill_table_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_filter_skill_table_id() const;
+  void _internal_set_filter_skill_table_id(::uint32_t value);
+
+  public:
+  // bool only_mine = 2;
+  void clear_only_mine() ;
+  [[nodiscard]] bool only_mine() const;
+  void set_only_mine(bool value);
+
+  private:
+  bool _internal_only_mine() const;
+  void _internal_set_only_mine(bool value);
+
+  public:
+  // uint32 limit = 4;
+  void clear_limit() ;
+  [[nodiscard]] ::uint32_t limit() const;
+  void set_limit(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_limit() const;
+  void _internal_set_limit(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:trade.ListWantedSkillBookOrdersRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          0, 53,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ListWantedSkillBookOrdersRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr cursor_;
+    ::uint32_t filter_skill_table_id_;
+    bool only_mine_;
+    ::uint32_t limit_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2ftrade_2fcommerce_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListTradeMarketsRequest final : public ::google::protobuf::internal::ZeroFieldsBase
 /* @@protoc_insertion_point(class_definition:trade.ListTradeMarketsRequest) */ {
  public:
@@ -5705,7 +6437,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSellerCreditRequest final : publ
   [[nodiscard]] static const GetSellerCreditRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetSellerCreditRequest>(&GetSellerCreditRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 55;
+  static constexpr int kIndexInFileMessages = 61;
   friend void swap(GetSellerCreditRequest& a, GetSellerCreditRequest& b) { a.Swap(&b); }
   inline void Swap(GetSellerCreditRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6107,7 +6839,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerTradeQuotaRequest final : 
   [[nodiscard]] static const GetPlayerTradeQuotaRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetPlayerTradeQuotaRequest>(&GetPlayerTradeQuotaRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 61;
+  static constexpr int kIndexInFileMessages = 67;
   friend void swap(GetPlayerTradeQuotaRequest& a, GetPlayerTradeQuotaRequest& b) { a.Swap(&b); }
   inline void Swap(GetPlayerTradeQuotaRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6308,7 +7040,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetMarketReferencePriceRequest fina
   [[nodiscard]] static const GetMarketReferencePriceRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetMarketReferencePriceRequest>(&GetMarketReferencePriceRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 59;
+  static constexpr int kIndexInFileMessages = 65;
   friend void swap(GetMarketReferencePriceRequest& a, GetMarketReferencePriceRequest& b) { a.Swap(&b); }
   inline void Swap(GetMarketReferencePriceRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7102,6 +7834,241 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetAuctionLotRequest final : public
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FulfillWantedSkillBookOrderRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:trade.FulfillWantedSkillBookOrderRequest) */ {
+ public:
+  inline FulfillWantedSkillBookOrderRequest() : FulfillWantedSkillBookOrderRequest(nullptr) {}
+  ~FulfillWantedSkillBookOrderRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(FulfillWantedSkillBookOrderRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(FulfillWantedSkillBookOrderRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr FulfillWantedSkillBookOrderRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline FulfillWantedSkillBookOrderRequest(const FulfillWantedSkillBookOrderRequest& from) : FulfillWantedSkillBookOrderRequest(nullptr, from) {}
+  inline FulfillWantedSkillBookOrderRequest(FulfillWantedSkillBookOrderRequest&& from) noexcept : FulfillWantedSkillBookOrderRequest(nullptr, ::std::move(from)) {}
+  inline FulfillWantedSkillBookOrderRequest& operator=(const FulfillWantedSkillBookOrderRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline FulfillWantedSkillBookOrderRequest& operator=(FulfillWantedSkillBookOrderRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const FulfillWantedSkillBookOrderRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<FulfillWantedSkillBookOrderRequest>(&FulfillWantedSkillBookOrderRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 56;
+  friend void swap(FulfillWantedSkillBookOrderRequest& a, FulfillWantedSkillBookOrderRequest& b) { a.Swap(&b); }
+  inline void Swap(FulfillWantedSkillBookOrderRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(FulfillWantedSkillBookOrderRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] FulfillWantedSkillBookOrderRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<FulfillWantedSkillBookOrderRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const FulfillWantedSkillBookOrderRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const FulfillWantedSkillBookOrderRequest& from) { FulfillWantedSkillBookOrderRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(FulfillWantedSkillBookOrderRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "trade.FulfillWantedSkillBookOrderRequest"; }
+
+  explicit FulfillWantedSkillBookOrderRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  FulfillWantedSkillBookOrderRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const FulfillWantedSkillBookOrderRequest& from);
+  FulfillWantedSkillBookOrderRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, FulfillWantedSkillBookOrderRequest&& from) noexcept
+      : FulfillWantedSkillBookOrderRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kOrderIdFieldNumber = 1,
+    kClientRequestIdFieldNumber = 2,
+    kSealedItemIdFieldNumber = 3,
+  };
+  // string order_id = 1;
+  void clear_order_id() ;
+  [[nodiscard]] const ::std::string& order_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_order_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_order_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_order_id();
+  void set_allocated_order_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_order_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_order_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_order_id();
+
+  public:
+  // string client_request_id = 2;
+  void clear_client_request_id() ;
+  [[nodiscard]] const ::std::string& client_request_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_client_request_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_client_request_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_client_request_id();
+  void set_allocated_client_request_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_client_request_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_client_request_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_client_request_id();
+
+  public:
+  // uint64 sealed_item_id = 3;
+  void clear_sealed_item_id() ;
+  [[nodiscard]] ::uint64_t sealed_item_id() const;
+  void set_sealed_item_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_sealed_item_id() const;
+  void _internal_set_sealed_item_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:trade.FulfillWantedSkillBookOrderRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 74,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const FulfillWantedSkillBookOrderRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr order_id_;
+    ::google::protobuf::internal::ArenaStringPtr client_request_id_;
+    ::uint64_t sealed_item_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2ftrade_2fcommerce_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateWithdrawalRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:trade.CreateWithdrawalRequest) */ {
  public:
@@ -7313,6 +8280,248 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateWithdrawalRequest final : pub
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr client_request_id_;
     ::uint64_t amount_fen_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2ftrade_2fcommerce_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreateWantedSkillBookOrderRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:trade.CreateWantedSkillBookOrderRequest) */ {
+ public:
+  inline CreateWantedSkillBookOrderRequest() : CreateWantedSkillBookOrderRequest(nullptr) {}
+  ~CreateWantedSkillBookOrderRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(CreateWantedSkillBookOrderRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(CreateWantedSkillBookOrderRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr CreateWantedSkillBookOrderRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline CreateWantedSkillBookOrderRequest(const CreateWantedSkillBookOrderRequest& from) : CreateWantedSkillBookOrderRequest(nullptr, from) {}
+  inline CreateWantedSkillBookOrderRequest(CreateWantedSkillBookOrderRequest&& from) noexcept : CreateWantedSkillBookOrderRequest(nullptr, ::std::move(from)) {}
+  inline CreateWantedSkillBookOrderRequest& operator=(const CreateWantedSkillBookOrderRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CreateWantedSkillBookOrderRequest& operator=(CreateWantedSkillBookOrderRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const CreateWantedSkillBookOrderRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CreateWantedSkillBookOrderRequest>(&CreateWantedSkillBookOrderRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 55;
+  friend void swap(CreateWantedSkillBookOrderRequest& a, CreateWantedSkillBookOrderRequest& b) { a.Swap(&b); }
+  inline void Swap(CreateWantedSkillBookOrderRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CreateWantedSkillBookOrderRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] CreateWantedSkillBookOrderRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<CreateWantedSkillBookOrderRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const CreateWantedSkillBookOrderRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const CreateWantedSkillBookOrderRequest& from) { CreateWantedSkillBookOrderRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(CreateWantedSkillBookOrderRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "trade.CreateWantedSkillBookOrderRequest"; }
+
+  explicit CreateWantedSkillBookOrderRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  CreateWantedSkillBookOrderRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CreateWantedSkillBookOrderRequest& from);
+  CreateWantedSkillBookOrderRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CreateWantedSkillBookOrderRequest&& from) noexcept
+      : CreateWantedSkillBookOrderRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kClientRequestIdFieldNumber = 1,
+    kSkillTableIdFieldNumber = 2,
+    kRequireMasterSignatureFieldNumber = 3,
+    kRewardGoldFieldNumber = 4,
+  };
+  // string client_request_id = 1;
+  void clear_client_request_id() ;
+  [[nodiscard]] const ::std::string& client_request_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_client_request_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_client_request_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_client_request_id();
+  void set_allocated_client_request_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_client_request_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_client_request_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_client_request_id();
+
+  public:
+  // uint32 skill_table_id = 2;
+  void clear_skill_table_id() ;
+  [[nodiscard]] ::uint32_t skill_table_id() const;
+  void set_skill_table_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_skill_table_id() const;
+  void _internal_set_skill_table_id(::uint32_t value);
+
+  public:
+  // bool require_master_signature = 3;
+  void clear_require_master_signature() ;
+  [[nodiscard]] bool require_master_signature() const;
+  void set_require_master_signature(bool value);
+
+  private:
+  bool _internal_require_master_signature() const;
+  void _internal_set_require_master_signature(bool value);
+
+  public:
+  // uint64 reward_gold = 4;
+  void clear_reward_gold() ;
+  [[nodiscard]] ::uint64_t reward_gold() const;
+  void set_reward_gold(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_reward_gold() const;
+  void _internal_set_reward_gold(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:trade.CreateWantedSkillBookOrderRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          0, 65,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const CreateWantedSkillBookOrderRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr client_request_id_;
+    ::uint32_t skill_table_id_;
+    bool require_master_signature_;
+    ::uint64_t reward_gold_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -10373,6 +11582,243 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WithdrawalResponse final : public :
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WantedSkillBookOrderResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:trade.WantedSkillBookOrderResponse) */ {
+ public:
+  inline WantedSkillBookOrderResponse() : WantedSkillBookOrderResponse(nullptr) {}
+  ~WantedSkillBookOrderResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(WantedSkillBookOrderResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(WantedSkillBookOrderResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr WantedSkillBookOrderResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline WantedSkillBookOrderResponse(const WantedSkillBookOrderResponse& from) : WantedSkillBookOrderResponse(nullptr, from) {}
+  inline WantedSkillBookOrderResponse(WantedSkillBookOrderResponse&& from) noexcept : WantedSkillBookOrderResponse(nullptr, ::std::move(from)) {}
+  inline WantedSkillBookOrderResponse& operator=(const WantedSkillBookOrderResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline WantedSkillBookOrderResponse& operator=(WantedSkillBookOrderResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const WantedSkillBookOrderResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<WantedSkillBookOrderResponse>(&WantedSkillBookOrderResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 57;
+  friend void swap(WantedSkillBookOrderResponse& a, WantedSkillBookOrderResponse& b) { a.Swap(&b); }
+  inline void Swap(WantedSkillBookOrderResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(WantedSkillBookOrderResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] WantedSkillBookOrderResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<WantedSkillBookOrderResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const WantedSkillBookOrderResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const WantedSkillBookOrderResponse& from) { WantedSkillBookOrderResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(WantedSkillBookOrderResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "trade.WantedSkillBookOrderResponse"; }
+
+  explicit WantedSkillBookOrderResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  WantedSkillBookOrderResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const WantedSkillBookOrderResponse& from);
+  WantedSkillBookOrderResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, WantedSkillBookOrderResponse&& from) noexcept
+      : WantedSkillBookOrderResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kOrderFieldNumber = 2,
+    kServerNowMsFieldNumber = 3,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .trade.WantedSkillBookOrderView order = 2;
+  [[nodiscard]] bool has_order()
+      const;
+  void clear_order() ;
+  [[nodiscard]] const ::trade::WantedSkillBookOrderView& order() const;
+  [[nodiscard]] ::trade::WantedSkillBookOrderView* PROTOBUF_NULLABLE release_order();
+  ::trade::WantedSkillBookOrderView* PROTOBUF_NONNULL mutable_order();
+  void set_allocated_order(::trade::WantedSkillBookOrderView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_order(::trade::WantedSkillBookOrderView* PROTOBUF_NULLABLE value);
+  ::trade::WantedSkillBookOrderView* PROTOBUF_NULLABLE unsafe_arena_release_order();
+
+  private:
+  const ::trade::WantedSkillBookOrderView& _internal_order() const;
+  ::trade::WantedSkillBookOrderView* PROTOBUF_NONNULL _internal_mutable_order();
+
+  public:
+  // uint64 server_now_ms = 3;
+  void clear_server_now_ms() ;
+  [[nodiscard]] ::uint64_t server_now_ms() const;
+  void set_server_now_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_server_now_ms() const;
+  void _internal_set_server_now_ms(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:trade.WantedSkillBookOrderResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const WantedSkillBookOrderResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::trade::WantedSkillBookOrderView* PROTOBUF_NULLABLE order_;
+    ::uint64_t server_now_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2ftrade_2fcommerce_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TradeAssetSelection final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:trade.TradeAssetSelection) */ {
  public:
@@ -10695,7 +12141,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SubmitSellerReviewResponse final : 
   [[nodiscard]] static const SubmitSellerReviewResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SubmitSellerReviewResponse>(&SubmitSellerReviewResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 58;
+  static constexpr int kIndexInFileMessages = 64;
   friend void swap(SubmitSellerReviewResponse& a, SubmitSellerReviewResponse& b) { a.Swap(&b); }
   inline void Swap(SubmitSellerReviewResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -10956,7 +12402,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SellerCreditResponse final : public
   [[nodiscard]] static const SellerCreditResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SellerCreditResponse>(&SellerCreditResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 56;
+  static constexpr int kIndexInFileMessages = 62;
   friend void swap(SellerCreditResponse& a, SellerCreditResponse& b) { a.Swap(&b); }
   inline void Swap(SellerCreditResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -11592,6 +13038,265 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MarketOrderResponse final : public 
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
     ::trade::MarketOrderView* PROTOBUF_NULLABLE order_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2ftrade_2fcommerce_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListWantedSkillBookOrdersResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:trade.ListWantedSkillBookOrdersResponse) */ {
+ public:
+  inline ListWantedSkillBookOrdersResponse() : ListWantedSkillBookOrdersResponse(nullptr) {}
+  ~ListWantedSkillBookOrdersResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ListWantedSkillBookOrdersResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ListWantedSkillBookOrdersResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ListWantedSkillBookOrdersResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ListWantedSkillBookOrdersResponse(const ListWantedSkillBookOrdersResponse& from) : ListWantedSkillBookOrdersResponse(nullptr, from) {}
+  inline ListWantedSkillBookOrdersResponse(ListWantedSkillBookOrdersResponse&& from) noexcept : ListWantedSkillBookOrdersResponse(nullptr, ::std::move(from)) {}
+  inline ListWantedSkillBookOrdersResponse& operator=(const ListWantedSkillBookOrdersResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ListWantedSkillBookOrdersResponse& operator=(ListWantedSkillBookOrdersResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ListWantedSkillBookOrdersResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListWantedSkillBookOrdersResponse>(&ListWantedSkillBookOrdersResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 59;
+  friend void swap(ListWantedSkillBookOrdersResponse& a, ListWantedSkillBookOrdersResponse& b) { a.Swap(&b); }
+  inline void Swap(ListWantedSkillBookOrdersResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ListWantedSkillBookOrdersResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ListWantedSkillBookOrdersResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ListWantedSkillBookOrdersResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ListWantedSkillBookOrdersResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ListWantedSkillBookOrdersResponse& from) { ListWantedSkillBookOrdersResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ListWantedSkillBookOrdersResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "trade.ListWantedSkillBookOrdersResponse"; }
+
+  explicit ListWantedSkillBookOrdersResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ListWantedSkillBookOrdersResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ListWantedSkillBookOrdersResponse& from);
+  ListWantedSkillBookOrdersResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ListWantedSkillBookOrdersResponse&& from) noexcept
+      : ListWantedSkillBookOrdersResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kOrdersFieldNumber = 2,
+    kNextCursorFieldNumber = 3,
+    kErrorMessageFieldNumber = 1,
+    kServerNowMsFieldNumber = 4,
+  };
+  // repeated .trade.WantedSkillBookOrderView orders = 2;
+  [[nodiscard]] int orders_size()
+      const;
+  private:
+  int _internal_orders_size() const;
+
+  public:
+  void clear_orders() ;
+  [[nodiscard]] const ::trade::WantedSkillBookOrderView& orders(int index) const;
+  [[nodiscard]] ::trade::WantedSkillBookOrderView* PROTOBUF_NONNULL mutable_orders(int index);
+  ::trade::WantedSkillBookOrderView* PROTOBUF_NONNULL add_orders();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::trade::WantedSkillBookOrderView>&
+  orders() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::trade::WantedSkillBookOrderView>* PROTOBUF_NONNULL
+  mutable_orders();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::trade::WantedSkillBookOrderView>& _internal_orders() const;
+  ::google::protobuf::RepeatedPtrField<::trade::WantedSkillBookOrderView>* PROTOBUF_NONNULL _internal_mutable_orders();
+
+  public:
+  // string next_cursor = 3;
+  void clear_next_cursor() ;
+  [[nodiscard]] const ::std::string& next_cursor() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_next_cursor(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_next_cursor();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_next_cursor();
+  void set_allocated_next_cursor(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_next_cursor() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_next_cursor(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_next_cursor();
+
+  public:
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // uint64 server_now_ms = 4;
+  void clear_server_now_ms() ;
+  [[nodiscard]] ::uint64_t server_now_ms() const;
+  void set_server_now_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_server_now_ms() const;
+  void _internal_set_server_now_ms(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:trade.ListWantedSkillBookOrdersResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          2, 59,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ListWantedSkillBookOrdersResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::trade::WantedSkillBookOrderView > orders_;
+    ::google::protobuf::internal::ArenaStringPtr next_cursor_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::uint64_t server_now_ms_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -13151,7 +14856,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerTradeQuotaResponse final :
   [[nodiscard]] static const GetPlayerTradeQuotaResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetPlayerTradeQuotaResponse>(&GetPlayerTradeQuotaResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 62;
+  static constexpr int kIndexInFileMessages = 68;
   friend void swap(GetPlayerTradeQuotaResponse& a, GetPlayerTradeQuotaResponse& b) { a.Swap(&b); }
   inline void Swap(GetPlayerTradeQuotaResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -13494,7 +15199,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetMarketReferencePriceResponse fin
   [[nodiscard]] static const GetMarketReferencePriceResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetMarketReferencePriceResponse>(&GetMarketReferencePriceResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 60;
+  static constexpr int kIndexInFileMessages = 66;
   friend void swap(GetMarketReferencePriceResponse& a, GetMarketReferencePriceResponse& b) { a.Swap(&b); }
   inline void Swap(GetMarketReferencePriceResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -26074,6 +27779,1425 @@ inline void WithdrawalResponse::set_allocated_withdrawal(::trade::RmbWithdrawalV
 
 // -------------------------------------------------------------------
 
+// WantedSkillBookOrderView
+
+// string order_id = 1;
+inline void WantedSkillBookOrderView::clear_order_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.order_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& WantedSkillBookOrderView::order_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.WantedSkillBookOrderView.order_id)
+  return _internal_order_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void WantedSkillBookOrderView::set_order_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.order_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:trade.WantedSkillBookOrderView.order_id)
+}
+inline ::std::string* PROTOBUF_NONNULL WantedSkillBookOrderView::mutable_order_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_order_id();
+  // @@protoc_insertion_point(field_mutable:trade.WantedSkillBookOrderView.order_id)
+  return _s;
+}
+inline const ::std::string& WantedSkillBookOrderView::_internal_order_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.order_id_.Get();
+}
+inline void WantedSkillBookOrderView::_internal_set_order_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.order_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL WantedSkillBookOrderView::_internal_mutable_order_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.order_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE WantedSkillBookOrderView::release_order_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.WantedSkillBookOrderView.order_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.order_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.order_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void WantedSkillBookOrderView::set_allocated_order_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.order_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.order_id_.IsDefault()) {
+    _impl_.order_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:trade.WantedSkillBookOrderView.order_id)
+}
+
+// uint64 poster_player_id = 2;
+inline void WantedSkillBookOrderView::clear_poster_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.poster_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t WantedSkillBookOrderView::poster_player_id() const {
+  // @@protoc_insertion_point(field_get:trade.WantedSkillBookOrderView.poster_player_id)
+  return _internal_poster_player_id();
+}
+inline void WantedSkillBookOrderView::set_poster_player_id(::uint64_t value) {
+  _internal_set_poster_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:trade.WantedSkillBookOrderView.poster_player_id)
+}
+inline ::uint64_t WantedSkillBookOrderView::_internal_poster_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.poster_player_id_;
+}
+inline void WantedSkillBookOrderView::_internal_set_poster_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.poster_player_id_ = value;
+}
+
+// string poster_name = 3;
+inline void WantedSkillBookOrderView::clear_poster_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.poster_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& WantedSkillBookOrderView::poster_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.WantedSkillBookOrderView.poster_name)
+  return _internal_poster_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void WantedSkillBookOrderView::set_poster_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.poster_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:trade.WantedSkillBookOrderView.poster_name)
+}
+inline ::std::string* PROTOBUF_NONNULL WantedSkillBookOrderView::mutable_poster_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_poster_name();
+  // @@protoc_insertion_point(field_mutable:trade.WantedSkillBookOrderView.poster_name)
+  return _s;
+}
+inline const ::std::string& WantedSkillBookOrderView::_internal_poster_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.poster_name_.Get();
+}
+inline void WantedSkillBookOrderView::_internal_set_poster_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.poster_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL WantedSkillBookOrderView::_internal_mutable_poster_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.poster_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE WantedSkillBookOrderView::release_poster_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.WantedSkillBookOrderView.poster_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.poster_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.poster_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void WantedSkillBookOrderView::set_allocated_poster_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.poster_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.poster_name_.IsDefault()) {
+    _impl_.poster_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:trade.WantedSkillBookOrderView.poster_name)
+}
+
+// uint32 skill_table_id = 4;
+inline void WantedSkillBookOrderView::clear_skill_table_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skill_table_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t WantedSkillBookOrderView::skill_table_id() const {
+  // @@protoc_insertion_point(field_get:trade.WantedSkillBookOrderView.skill_table_id)
+  return _internal_skill_table_id();
+}
+inline void WantedSkillBookOrderView::set_skill_table_id(::uint32_t value) {
+  _internal_set_skill_table_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:trade.WantedSkillBookOrderView.skill_table_id)
+}
+inline ::uint32_t WantedSkillBookOrderView::_internal_skill_table_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.skill_table_id_;
+}
+inline void WantedSkillBookOrderView::_internal_set_skill_table_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skill_table_id_ = value;
+}
+
+// string skill_name = 5;
+inline void WantedSkillBookOrderView::clear_skill_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skill_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& WantedSkillBookOrderView::skill_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.WantedSkillBookOrderView.skill_name)
+  return _internal_skill_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void WantedSkillBookOrderView::set_skill_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.skill_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:trade.WantedSkillBookOrderView.skill_name)
+}
+inline ::std::string* PROTOBUF_NONNULL WantedSkillBookOrderView::mutable_skill_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_skill_name();
+  // @@protoc_insertion_point(field_mutable:trade.WantedSkillBookOrderView.skill_name)
+  return _s;
+}
+inline const ::std::string& WantedSkillBookOrderView::_internal_skill_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.skill_name_.Get();
+}
+inline void WantedSkillBookOrderView::_internal_set_skill_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skill_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL WantedSkillBookOrderView::_internal_mutable_skill_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.skill_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE WantedSkillBookOrderView::release_skill_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.WantedSkillBookOrderView.skill_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.skill_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.skill_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void WantedSkillBookOrderView::set_allocated_skill_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.skill_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.skill_name_.IsDefault()) {
+    _impl_.skill_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:trade.WantedSkillBookOrderView.skill_name)
+}
+
+// uint32 scroll_id = 6;
+inline void WantedSkillBookOrderView::clear_scroll_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scroll_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t WantedSkillBookOrderView::scroll_id() const {
+  // @@protoc_insertion_point(field_get:trade.WantedSkillBookOrderView.scroll_id)
+  return _internal_scroll_id();
+}
+inline void WantedSkillBookOrderView::set_scroll_id(::uint32_t value) {
+  _internal_set_scroll_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:trade.WantedSkillBookOrderView.scroll_id)
+}
+inline ::uint32_t WantedSkillBookOrderView::_internal_scroll_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.scroll_id_;
+}
+inline void WantedSkillBookOrderView::_internal_set_scroll_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scroll_id_ = value;
+}
+
+// string scroll_name = 7;
+inline void WantedSkillBookOrderView::clear_scroll_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scroll_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& WantedSkillBookOrderView::scroll_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.WantedSkillBookOrderView.scroll_name)
+  return _internal_scroll_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void WantedSkillBookOrderView::set_scroll_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.scroll_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:trade.WantedSkillBookOrderView.scroll_name)
+}
+inline ::std::string* PROTOBUF_NONNULL WantedSkillBookOrderView::mutable_scroll_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_scroll_name();
+  // @@protoc_insertion_point(field_mutable:trade.WantedSkillBookOrderView.scroll_name)
+  return _s;
+}
+inline const ::std::string& WantedSkillBookOrderView::_internal_scroll_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.scroll_name_.Get();
+}
+inline void WantedSkillBookOrderView::_internal_set_scroll_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scroll_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL WantedSkillBookOrderView::_internal_mutable_scroll_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.scroll_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE WantedSkillBookOrderView::release_scroll_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.WantedSkillBookOrderView.scroll_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.scroll_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.scroll_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void WantedSkillBookOrderView::set_allocated_scroll_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.scroll_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.scroll_name_.IsDefault()) {
+    _impl_.scroll_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:trade.WantedSkillBookOrderView.scroll_name)
+}
+
+// bool require_master_signature = 8;
+inline void WantedSkillBookOrderView::clear_require_master_signature() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.require_master_signature_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline bool WantedSkillBookOrderView::require_master_signature() const {
+  // @@protoc_insertion_point(field_get:trade.WantedSkillBookOrderView.require_master_signature)
+  return _internal_require_master_signature();
+}
+inline void WantedSkillBookOrderView::set_require_master_signature(bool value) {
+  _internal_set_require_master_signature(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:trade.WantedSkillBookOrderView.require_master_signature)
+}
+inline bool WantedSkillBookOrderView::_internal_require_master_signature() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.require_master_signature_;
+}
+inline void WantedSkillBookOrderView::_internal_set_require_master_signature(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.require_master_signature_ = value;
+}
+
+// uint64 reward_gold = 9;
+inline void WantedSkillBookOrderView::clear_reward_gold() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_gold_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t WantedSkillBookOrderView::reward_gold() const {
+  // @@protoc_insertion_point(field_get:trade.WantedSkillBookOrderView.reward_gold)
+  return _internal_reward_gold();
+}
+inline void WantedSkillBookOrderView::set_reward_gold(::uint64_t value) {
+  _internal_set_reward_gold(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:trade.WantedSkillBookOrderView.reward_gold)
+}
+inline ::uint64_t WantedSkillBookOrderView::_internal_reward_gold() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reward_gold_;
+}
+inline void WantedSkillBookOrderView::_internal_set_reward_gold(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_gold_ = value;
+}
+
+// uint64 seller_net_gold = 10;
+inline void WantedSkillBookOrderView::clear_seller_net_gold() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seller_net_gold_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint64_t WantedSkillBookOrderView::seller_net_gold() const {
+  // @@protoc_insertion_point(field_get:trade.WantedSkillBookOrderView.seller_net_gold)
+  return _internal_seller_net_gold();
+}
+inline void WantedSkillBookOrderView::set_seller_net_gold(::uint64_t value) {
+  _internal_set_seller_net_gold(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:trade.WantedSkillBookOrderView.seller_net_gold)
+}
+inline ::uint64_t WantedSkillBookOrderView::_internal_seller_net_gold() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.seller_net_gold_;
+}
+inline void WantedSkillBookOrderView::_internal_set_seller_net_gold(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.seller_net_gold_ = value;
+}
+
+// .trade.WantedSkillBookOrderPhase phase = 11;
+inline void WantedSkillBookOrderView::clear_phase() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.phase_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::trade::WantedSkillBookOrderPhase WantedSkillBookOrderView::phase() const {
+  // @@protoc_insertion_point(field_get:trade.WantedSkillBookOrderView.phase)
+  return _internal_phase();
+}
+inline void WantedSkillBookOrderView::set_phase(::trade::WantedSkillBookOrderPhase value) {
+  _internal_set_phase(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:trade.WantedSkillBookOrderView.phase)
+}
+inline ::trade::WantedSkillBookOrderPhase WantedSkillBookOrderView::_internal_phase() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::trade::WantedSkillBookOrderPhase>(_impl_.phase_);
+}
+inline void WantedSkillBookOrderView::_internal_set_phase(::trade::WantedSkillBookOrderPhase value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.phase_ = value;
+}
+
+// uint64 fulfiller_player_id = 12;
+inline void WantedSkillBookOrderView::clear_fulfiller_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.fulfiller_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::uint64_t WantedSkillBookOrderView::fulfiller_player_id() const {
+  // @@protoc_insertion_point(field_get:trade.WantedSkillBookOrderView.fulfiller_player_id)
+  return _internal_fulfiller_player_id();
+}
+inline void WantedSkillBookOrderView::set_fulfiller_player_id(::uint64_t value) {
+  _internal_set_fulfiller_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:trade.WantedSkillBookOrderView.fulfiller_player_id)
+}
+inline ::uint64_t WantedSkillBookOrderView::_internal_fulfiller_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.fulfiller_player_id_;
+}
+inline void WantedSkillBookOrderView::_internal_set_fulfiller_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.fulfiller_player_id_ = value;
+}
+
+// uint64 created_ms = 13;
+inline void WantedSkillBookOrderView::clear_created_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.created_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint64_t WantedSkillBookOrderView::created_ms() const {
+  // @@protoc_insertion_point(field_get:trade.WantedSkillBookOrderView.created_ms)
+  return _internal_created_ms();
+}
+inline void WantedSkillBookOrderView::set_created_ms(::uint64_t value) {
+  _internal_set_created_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:trade.WantedSkillBookOrderView.created_ms)
+}
+inline ::uint64_t WantedSkillBookOrderView::_internal_created_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.created_ms_;
+}
+inline void WantedSkillBookOrderView::_internal_set_created_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.created_ms_ = value;
+}
+
+// uint64 version = 14;
+inline void WantedSkillBookOrderView::clear_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.version_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint64_t WantedSkillBookOrderView::version() const {
+  // @@protoc_insertion_point(field_get:trade.WantedSkillBookOrderView.version)
+  return _internal_version();
+}
+inline void WantedSkillBookOrderView::set_version(::uint64_t value) {
+  _internal_set_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:trade.WantedSkillBookOrderView.version)
+}
+inline ::uint64_t WantedSkillBookOrderView::_internal_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.version_;
+}
+inline void WantedSkillBookOrderView::_internal_set_version(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.version_ = value;
+}
+
+// bool is_mine = 15;
+inline void WantedSkillBookOrderView::clear_is_mine() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_mine_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline bool WantedSkillBookOrderView::is_mine() const {
+  // @@protoc_insertion_point(field_get:trade.WantedSkillBookOrderView.is_mine)
+  return _internal_is_mine();
+}
+inline void WantedSkillBookOrderView::set_is_mine(bool value) {
+  _internal_set_is_mine(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:trade.WantedSkillBookOrderView.is_mine)
+}
+inline bool WantedSkillBookOrderView::_internal_is_mine() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.is_mine_;
+}
+inline void WantedSkillBookOrderView::_internal_set_is_mine(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_mine_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// CreateWantedSkillBookOrderRequest
+
+// string client_request_id = 1;
+inline void CreateWantedSkillBookOrderRequest::clear_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& CreateWantedSkillBookOrderRequest::client_request_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.CreateWantedSkillBookOrderRequest.client_request_id)
+  return _internal_client_request_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CreateWantedSkillBookOrderRequest::set_client_request_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.client_request_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:trade.CreateWantedSkillBookOrderRequest.client_request_id)
+}
+inline ::std::string* PROTOBUF_NONNULL CreateWantedSkillBookOrderRequest::mutable_client_request_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_client_request_id();
+  // @@protoc_insertion_point(field_mutable:trade.CreateWantedSkillBookOrderRequest.client_request_id)
+  return _s;
+}
+inline const ::std::string& CreateWantedSkillBookOrderRequest::_internal_client_request_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.client_request_id_.Get();
+}
+inline void CreateWantedSkillBookOrderRequest::_internal_set_client_request_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CreateWantedSkillBookOrderRequest::_internal_mutable_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.client_request_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CreateWantedSkillBookOrderRequest::release_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.CreateWantedSkillBookOrderRequest.client_request_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.client_request_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.client_request_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CreateWantedSkillBookOrderRequest::set_allocated_client_request_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.client_request_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.client_request_id_.IsDefault()) {
+    _impl_.client_request_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:trade.CreateWantedSkillBookOrderRequest.client_request_id)
+}
+
+// uint32 skill_table_id = 2;
+inline void CreateWantedSkillBookOrderRequest::clear_skill_table_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skill_table_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t CreateWantedSkillBookOrderRequest::skill_table_id() const {
+  // @@protoc_insertion_point(field_get:trade.CreateWantedSkillBookOrderRequest.skill_table_id)
+  return _internal_skill_table_id();
+}
+inline void CreateWantedSkillBookOrderRequest::set_skill_table_id(::uint32_t value) {
+  _internal_set_skill_table_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:trade.CreateWantedSkillBookOrderRequest.skill_table_id)
+}
+inline ::uint32_t CreateWantedSkillBookOrderRequest::_internal_skill_table_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.skill_table_id_;
+}
+inline void CreateWantedSkillBookOrderRequest::_internal_set_skill_table_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.skill_table_id_ = value;
+}
+
+// bool require_master_signature = 3;
+inline void CreateWantedSkillBookOrderRequest::clear_require_master_signature() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.require_master_signature_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool CreateWantedSkillBookOrderRequest::require_master_signature() const {
+  // @@protoc_insertion_point(field_get:trade.CreateWantedSkillBookOrderRequest.require_master_signature)
+  return _internal_require_master_signature();
+}
+inline void CreateWantedSkillBookOrderRequest::set_require_master_signature(bool value) {
+  _internal_set_require_master_signature(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:trade.CreateWantedSkillBookOrderRequest.require_master_signature)
+}
+inline bool CreateWantedSkillBookOrderRequest::_internal_require_master_signature() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.require_master_signature_;
+}
+inline void CreateWantedSkillBookOrderRequest::_internal_set_require_master_signature(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.require_master_signature_ = value;
+}
+
+// uint64 reward_gold = 4;
+inline void CreateWantedSkillBookOrderRequest::clear_reward_gold() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_gold_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t CreateWantedSkillBookOrderRequest::reward_gold() const {
+  // @@protoc_insertion_point(field_get:trade.CreateWantedSkillBookOrderRequest.reward_gold)
+  return _internal_reward_gold();
+}
+inline void CreateWantedSkillBookOrderRequest::set_reward_gold(::uint64_t value) {
+  _internal_set_reward_gold(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:trade.CreateWantedSkillBookOrderRequest.reward_gold)
+}
+inline ::uint64_t CreateWantedSkillBookOrderRequest::_internal_reward_gold() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reward_gold_;
+}
+inline void CreateWantedSkillBookOrderRequest::_internal_set_reward_gold(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_gold_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// FulfillWantedSkillBookOrderRequest
+
+// string order_id = 1;
+inline void FulfillWantedSkillBookOrderRequest::clear_order_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.order_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& FulfillWantedSkillBookOrderRequest::order_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.FulfillWantedSkillBookOrderRequest.order_id)
+  return _internal_order_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void FulfillWantedSkillBookOrderRequest::set_order_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.order_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:trade.FulfillWantedSkillBookOrderRequest.order_id)
+}
+inline ::std::string* PROTOBUF_NONNULL FulfillWantedSkillBookOrderRequest::mutable_order_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_order_id();
+  // @@protoc_insertion_point(field_mutable:trade.FulfillWantedSkillBookOrderRequest.order_id)
+  return _s;
+}
+inline const ::std::string& FulfillWantedSkillBookOrderRequest::_internal_order_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.order_id_.Get();
+}
+inline void FulfillWantedSkillBookOrderRequest::_internal_set_order_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.order_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL FulfillWantedSkillBookOrderRequest::_internal_mutable_order_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.order_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE FulfillWantedSkillBookOrderRequest::release_order_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.FulfillWantedSkillBookOrderRequest.order_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.order_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.order_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void FulfillWantedSkillBookOrderRequest::set_allocated_order_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.order_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.order_id_.IsDefault()) {
+    _impl_.order_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:trade.FulfillWantedSkillBookOrderRequest.order_id)
+}
+
+// string client_request_id = 2;
+inline void FulfillWantedSkillBookOrderRequest::clear_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& FulfillWantedSkillBookOrderRequest::client_request_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.FulfillWantedSkillBookOrderRequest.client_request_id)
+  return _internal_client_request_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void FulfillWantedSkillBookOrderRequest::set_client_request_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.client_request_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:trade.FulfillWantedSkillBookOrderRequest.client_request_id)
+}
+inline ::std::string* PROTOBUF_NONNULL FulfillWantedSkillBookOrderRequest::mutable_client_request_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_client_request_id();
+  // @@protoc_insertion_point(field_mutable:trade.FulfillWantedSkillBookOrderRequest.client_request_id)
+  return _s;
+}
+inline const ::std::string& FulfillWantedSkillBookOrderRequest::_internal_client_request_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.client_request_id_.Get();
+}
+inline void FulfillWantedSkillBookOrderRequest::_internal_set_client_request_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL FulfillWantedSkillBookOrderRequest::_internal_mutable_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.client_request_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE FulfillWantedSkillBookOrderRequest::release_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.FulfillWantedSkillBookOrderRequest.client_request_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.client_request_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.client_request_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void FulfillWantedSkillBookOrderRequest::set_allocated_client_request_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.client_request_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.client_request_id_.IsDefault()) {
+    _impl_.client_request_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:trade.FulfillWantedSkillBookOrderRequest.client_request_id)
+}
+
+// uint64 sealed_item_id = 3;
+inline void FulfillWantedSkillBookOrderRequest::clear_sealed_item_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sealed_item_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t FulfillWantedSkillBookOrderRequest::sealed_item_id() const {
+  // @@protoc_insertion_point(field_get:trade.FulfillWantedSkillBookOrderRequest.sealed_item_id)
+  return _internal_sealed_item_id();
+}
+inline void FulfillWantedSkillBookOrderRequest::set_sealed_item_id(::uint64_t value) {
+  _internal_set_sealed_item_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:trade.FulfillWantedSkillBookOrderRequest.sealed_item_id)
+}
+inline ::uint64_t FulfillWantedSkillBookOrderRequest::_internal_sealed_item_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.sealed_item_id_;
+}
+inline void FulfillWantedSkillBookOrderRequest::_internal_set_sealed_item_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sealed_item_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// WantedSkillBookOrderResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool WantedSkillBookOrderResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& WantedSkillBookOrderResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& WantedSkillBookOrderResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.WantedSkillBookOrderResponse.error_message)
+  return _internal_error_message();
+}
+inline void WantedSkillBookOrderResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:trade.WantedSkillBookOrderResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE WantedSkillBookOrderResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE WantedSkillBookOrderResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.WantedSkillBookOrderResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL WantedSkillBookOrderResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL WantedSkillBookOrderResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:trade.WantedSkillBookOrderResponse.error_message)
+  return _msg;
+}
+inline void WantedSkillBookOrderResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:trade.WantedSkillBookOrderResponse.error_message)
+}
+
+// .trade.WantedSkillBookOrderView order = 2;
+inline bool WantedSkillBookOrderResponse::has_order() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.order_ != nullptr);
+  return value;
+}
+inline void WantedSkillBookOrderResponse::clear_order() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.order_ != nullptr) _impl_.order_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::trade::WantedSkillBookOrderView& WantedSkillBookOrderResponse::_internal_order() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::trade::WantedSkillBookOrderView* p = _impl_.order_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::trade::WantedSkillBookOrderView>(&::trade::WantedSkillBookOrderView_globals_);
+}
+inline const ::trade::WantedSkillBookOrderView& WantedSkillBookOrderResponse::order() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.WantedSkillBookOrderResponse.order)
+  return _internal_order();
+}
+inline void WantedSkillBookOrderResponse::unsafe_arena_set_allocated_order(
+    ::trade::WantedSkillBookOrderView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.order_);
+  }
+  _impl_.order_ = reinterpret_cast<::trade::WantedSkillBookOrderView*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:trade.WantedSkillBookOrderResponse.order)
+}
+inline ::trade::WantedSkillBookOrderView* PROTOBUF_NULLABLE WantedSkillBookOrderResponse::release_order() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::trade::WantedSkillBookOrderView* released = _impl_.order_;
+  _impl_.order_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::trade::WantedSkillBookOrderView* PROTOBUF_NULLABLE WantedSkillBookOrderResponse::unsafe_arena_release_order() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.WantedSkillBookOrderResponse.order)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::trade::WantedSkillBookOrderView* temp = _impl_.order_;
+  _impl_.order_ = nullptr;
+  return temp;
+}
+inline ::trade::WantedSkillBookOrderView* PROTOBUF_NONNULL WantedSkillBookOrderResponse::_internal_mutable_order() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.order_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::trade::WantedSkillBookOrderView>(GetArena());
+    _impl_.order_ = reinterpret_cast<::trade::WantedSkillBookOrderView*>(p);
+  }
+  return _impl_.order_;
+}
+inline ::trade::WantedSkillBookOrderView* PROTOBUF_NONNULL WantedSkillBookOrderResponse::mutable_order()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::trade::WantedSkillBookOrderView* _msg = _internal_mutable_order();
+  // @@protoc_insertion_point(field_mutable:trade.WantedSkillBookOrderResponse.order)
+  return _msg;
+}
+inline void WantedSkillBookOrderResponse::set_allocated_order(::trade::WantedSkillBookOrderView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.order_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.order_ = reinterpret_cast<::trade::WantedSkillBookOrderView*>(value);
+  // @@protoc_insertion_point(field_set_allocated:trade.WantedSkillBookOrderResponse.order)
+}
+
+// uint64 server_now_ms = 3;
+inline void WantedSkillBookOrderResponse::clear_server_now_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.server_now_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t WantedSkillBookOrderResponse::server_now_ms() const {
+  // @@protoc_insertion_point(field_get:trade.WantedSkillBookOrderResponse.server_now_ms)
+  return _internal_server_now_ms();
+}
+inline void WantedSkillBookOrderResponse::set_server_now_ms(::uint64_t value) {
+  _internal_set_server_now_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:trade.WantedSkillBookOrderResponse.server_now_ms)
+}
+inline ::uint64_t WantedSkillBookOrderResponse::_internal_server_now_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.server_now_ms_;
+}
+inline void WantedSkillBookOrderResponse::_internal_set_server_now_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.server_now_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ListWantedSkillBookOrdersRequest
+
+// uint32 filter_skill_table_id = 1;
+inline void ListWantedSkillBookOrdersRequest::clear_filter_skill_table_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.filter_skill_table_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t ListWantedSkillBookOrdersRequest::filter_skill_table_id() const {
+  // @@protoc_insertion_point(field_get:trade.ListWantedSkillBookOrdersRequest.filter_skill_table_id)
+  return _internal_filter_skill_table_id();
+}
+inline void ListWantedSkillBookOrdersRequest::set_filter_skill_table_id(::uint32_t value) {
+  _internal_set_filter_skill_table_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:trade.ListWantedSkillBookOrdersRequest.filter_skill_table_id)
+}
+inline ::uint32_t ListWantedSkillBookOrdersRequest::_internal_filter_skill_table_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.filter_skill_table_id_;
+}
+inline void ListWantedSkillBookOrdersRequest::_internal_set_filter_skill_table_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.filter_skill_table_id_ = value;
+}
+
+// bool only_mine = 2;
+inline void ListWantedSkillBookOrdersRequest::clear_only_mine() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.only_mine_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool ListWantedSkillBookOrdersRequest::only_mine() const {
+  // @@protoc_insertion_point(field_get:trade.ListWantedSkillBookOrdersRequest.only_mine)
+  return _internal_only_mine();
+}
+inline void ListWantedSkillBookOrdersRequest::set_only_mine(bool value) {
+  _internal_set_only_mine(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:trade.ListWantedSkillBookOrdersRequest.only_mine)
+}
+inline bool ListWantedSkillBookOrdersRequest::_internal_only_mine() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.only_mine_;
+}
+inline void ListWantedSkillBookOrdersRequest::_internal_set_only_mine(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.only_mine_ = value;
+}
+
+// string cursor = 3;
+inline void ListWantedSkillBookOrdersRequest::clear_cursor() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cursor_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& ListWantedSkillBookOrdersRequest::cursor() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.ListWantedSkillBookOrdersRequest.cursor)
+  return _internal_cursor();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ListWantedSkillBookOrdersRequest::set_cursor(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.cursor_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:trade.ListWantedSkillBookOrdersRequest.cursor)
+}
+inline ::std::string* PROTOBUF_NONNULL ListWantedSkillBookOrdersRequest::mutable_cursor()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_cursor();
+  // @@protoc_insertion_point(field_mutable:trade.ListWantedSkillBookOrdersRequest.cursor)
+  return _s;
+}
+inline const ::std::string& ListWantedSkillBookOrdersRequest::_internal_cursor() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cursor_.Get();
+}
+inline void ListWantedSkillBookOrdersRequest::_internal_set_cursor(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cursor_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ListWantedSkillBookOrdersRequest::_internal_mutable_cursor() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.cursor_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ListWantedSkillBookOrdersRequest::release_cursor() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.ListWantedSkillBookOrdersRequest.cursor)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.cursor_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.cursor_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ListWantedSkillBookOrdersRequest::set_allocated_cursor(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.cursor_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.cursor_.IsDefault()) {
+    _impl_.cursor_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:trade.ListWantedSkillBookOrdersRequest.cursor)
+}
+
+// uint32 limit = 4;
+inline void ListWantedSkillBookOrdersRequest::clear_limit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.limit_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t ListWantedSkillBookOrdersRequest::limit() const {
+  // @@protoc_insertion_point(field_get:trade.ListWantedSkillBookOrdersRequest.limit)
+  return _internal_limit();
+}
+inline void ListWantedSkillBookOrdersRequest::set_limit(::uint32_t value) {
+  _internal_set_limit(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:trade.ListWantedSkillBookOrdersRequest.limit)
+}
+inline ::uint32_t ListWantedSkillBookOrdersRequest::_internal_limit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.limit_;
+}
+inline void ListWantedSkillBookOrdersRequest::_internal_set_limit(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.limit_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ListWantedSkillBookOrdersResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool ListWantedSkillBookOrdersResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& ListWantedSkillBookOrdersResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& ListWantedSkillBookOrdersResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.ListWantedSkillBookOrdersResponse.error_message)
+  return _internal_error_message();
+}
+inline void ListWantedSkillBookOrdersResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:trade.ListWantedSkillBookOrdersResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE ListWantedSkillBookOrdersResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE ListWantedSkillBookOrdersResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.ListWantedSkillBookOrdersResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL ListWantedSkillBookOrdersResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL ListWantedSkillBookOrdersResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:trade.ListWantedSkillBookOrdersResponse.error_message)
+  return _msg;
+}
+inline void ListWantedSkillBookOrdersResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:trade.ListWantedSkillBookOrdersResponse.error_message)
+}
+
+// repeated .trade.WantedSkillBookOrderView orders = 2;
+inline int ListWantedSkillBookOrdersResponse::_internal_orders_size() const {
+  return _internal_orders().size();
+}
+inline int ListWantedSkillBookOrdersResponse::orders_size() const {
+  return _internal_orders_size();
+}
+inline void ListWantedSkillBookOrdersResponse::clear_orders() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.orders_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::trade::WantedSkillBookOrderView& ListWantedSkillBookOrdersResponse::orders(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.ListWantedSkillBookOrdersResponse.orders)
+  return _internal_orders().Get(index);
+}
+inline ::trade::WantedSkillBookOrderView* PROTOBUF_NONNULL ListWantedSkillBookOrdersResponse::mutable_orders(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:trade.ListWantedSkillBookOrdersResponse.orders)
+  return _internal_mutable_orders()->Mutable(index);
+}
+inline ::trade::WantedSkillBookOrderView* PROTOBUF_NONNULL ListWantedSkillBookOrdersResponse::add_orders()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::trade::WantedSkillBookOrderView* _add =
+      _internal_mutable_orders()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:trade.ListWantedSkillBookOrdersResponse.orders)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::trade::WantedSkillBookOrderView>& ListWantedSkillBookOrdersResponse::orders() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:trade.ListWantedSkillBookOrdersResponse.orders)
+  return _internal_orders();
+}
+inline ::google::protobuf::RepeatedPtrField<::trade::WantedSkillBookOrderView>* PROTOBUF_NONNULL
+ListWantedSkillBookOrdersResponse::mutable_orders() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:trade.ListWantedSkillBookOrdersResponse.orders)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_orders();
+}
+inline const ::google::protobuf::RepeatedPtrField<::trade::WantedSkillBookOrderView>&
+ListWantedSkillBookOrdersResponse::_internal_orders() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.orders_;
+}
+inline ::google::protobuf::RepeatedPtrField<::trade::WantedSkillBookOrderView>* PROTOBUF_NONNULL
+ListWantedSkillBookOrdersResponse::_internal_mutable_orders() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.orders_;
+}
+
+// string next_cursor = 3;
+inline void ListWantedSkillBookOrdersResponse::clear_next_cursor() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_cursor_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& ListWantedSkillBookOrdersResponse::next_cursor() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.ListWantedSkillBookOrdersResponse.next_cursor)
+  return _internal_next_cursor();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ListWantedSkillBookOrdersResponse::set_next_cursor(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.next_cursor_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:trade.ListWantedSkillBookOrdersResponse.next_cursor)
+}
+inline ::std::string* PROTOBUF_NONNULL ListWantedSkillBookOrdersResponse::mutable_next_cursor()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_next_cursor();
+  // @@protoc_insertion_point(field_mutable:trade.ListWantedSkillBookOrdersResponse.next_cursor)
+  return _s;
+}
+inline const ::std::string& ListWantedSkillBookOrdersResponse::_internal_next_cursor() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.next_cursor_.Get();
+}
+inline void ListWantedSkillBookOrdersResponse::_internal_set_next_cursor(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_cursor_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ListWantedSkillBookOrdersResponse::_internal_mutable_next_cursor() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.next_cursor_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ListWantedSkillBookOrdersResponse::release_next_cursor() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.ListWantedSkillBookOrdersResponse.next_cursor)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.next_cursor_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.next_cursor_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ListWantedSkillBookOrdersResponse::set_allocated_next_cursor(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.next_cursor_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.next_cursor_.IsDefault()) {
+    _impl_.next_cursor_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:trade.ListWantedSkillBookOrdersResponse.next_cursor)
+}
+
+// uint64 server_now_ms = 4;
+inline void ListWantedSkillBookOrdersResponse::clear_server_now_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.server_now_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t ListWantedSkillBookOrdersResponse::server_now_ms() const {
+  // @@protoc_insertion_point(field_get:trade.ListWantedSkillBookOrdersResponse.server_now_ms)
+  return _internal_server_now_ms();
+}
+inline void ListWantedSkillBookOrdersResponse::set_server_now_ms(::uint64_t value) {
+  _internal_set_server_now_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:trade.ListWantedSkillBookOrdersResponse.server_now_ms)
+}
+inline ::uint64_t ListWantedSkillBookOrdersResponse::_internal_server_now_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.server_now_ms_;
+}
+inline void ListWantedSkillBookOrdersResponse::_internal_set_server_now_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.server_now_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
 // SellerCreditView
 
 // uint64 seller_player_id = 1;
@@ -27971,6 +31095,12 @@ struct is_proto_enum<::trade::MarketOrderSide> : std::true_type {};
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::trade::MarketOrderSide>() {
   return ::trade::MarketOrderSide_descriptor();
+}
+template <>
+struct is_proto_enum<::trade::WantedSkillBookOrderPhase> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::trade::WantedSkillBookOrderPhase>() {
+  return ::trade::WantedSkillBookOrderPhase_descriptor();
 }
 template <>
 struct is_proto_enum<::trade::SellerReviewRating> : std::true_type {};

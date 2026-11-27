@@ -71,3 +71,44 @@ func RecallDispatchLive() *looplive.Gauge {
 	registerRecallDispatch()
 	return recallDispatchLive
 }
+
+// AdminMethod* 是 admin_unapproved_command_total 的 method 取值:要求双人复核批准记录的四个回收入口
+// (docs/design/admin-identity-and-dual-control.md §3 甲级)。也是这三个入口日志与拒绝文本里的方法名。
+const (
+	AdminMethodBatchRecallItems  = "BatchRecallItems"
+	AdminMethodCancelRecallBatch = "CancelRecallBatch"
+	AdminMethodResolveRecallOp   = "ResolveRecallOp"
+	// RegisterRecallReviewHandled 把流水永久登记成已人工处置,以后的回收都跳过它们,做完撤不回,同样是甲级。
+	AdminMethodRegisterRecallReviewHandled = "RegisterRecallReviewHandled"
+)
+
+var (
+	adminUnapprovedOnce sync.Once
+	// adminUnapprovedCommandTotal 是不带批准记录而被受理的回收命令,只在 AdminAllowUnapproved 打开时增长,集群里应当恒为 0
+	// (告警 DataServiceAdminCommandUnapproved,deploy/k8s/dual-control-alerts.yaml)。
+	adminUnapprovedCommandTotal *prometheus.CounterVec
+)
+
+func registerAdminUnapproved() {
+	adminUnapprovedOnce.Do(func() {
+		adminUnapprovedCommandTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+			Subsystem: subsystem,
+			Name:      "admin_unapproved_command_total",
+			Help: "Admin recall commands (BatchRecallItems execute, CancelRecallBatch, ResolveRecallOp, RegisterRecallReviewHandled) accepted without a " +
+				"dual-control approval record (only while AdminAllowUnapproved is on), by method.",
+		}, []string{"method"})
+		for _, method := range []string{AdminMethodBatchRecallItems, AdminMethodCancelRecallBatch, AdminMethodResolveRecallOp,
+			AdminMethodRegisterRecallReviewHandled} {
+			adminUnapprovedCommandTotal.WithLabelValues(method)
+		}
+	})
+}
+
+// PrimeAdminUnapprovedCommand 预建四个 method 的零值序列:第一次受理就从 1 起的序列,increase() 看不到这一次。启动时调,可重复调用。
+func PrimeAdminUnapprovedCommand() { registerAdminUnapproved() }
+
+// ObserveAdminUnapprovedCommand 记一次不带双人复核批准记录而被受理的回收命令。
+func ObserveAdminUnapprovedCommand(method string) {
+	registerAdminUnapproved()
+	adminUnapprovedCommandTotal.WithLabelValues(method).Inc()
+}

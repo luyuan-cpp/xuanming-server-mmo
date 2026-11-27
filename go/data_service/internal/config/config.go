@@ -55,6 +55,12 @@ type Config struct {
 	// 不放进 yaml 明文的话可以用 k8s Secret 挂成环境变量再由 ConfigMap 引用。
 	AdminToken string `json:",optional"`
 
+	// AdminAllowUnapproved:为 true 时三个甲级回收入口(BatchRecallItems 执行、CancelRecallBatch、ResolveRecallOp)接受不带
+	// 双人复核批准记录的请求,只给本机开发(docs/design/admin-identity-and-dual-control.md §5.5、§5.7)。缺省 false。
+	// 打开时启动打一行 ERROR,每一次不带记录的受理都打 ERROR 并计入 data_service_admin_unapproved_command_total;
+	// 带了记录就必须合格,开关开着也一样。口令(AdminToken)照旧先核。
+	AdminAllowUnapproved bool `json:",optional"`
+
 	// Prometheus /metrics HTTP listen address (host:port). Empty = disabled.
 	// Scraped by Prometheus alongside scene_manager.
 	// See go/data_service/internal/metrics/metrics.go for the metric list.

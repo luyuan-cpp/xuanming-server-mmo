@@ -22,8 +22,10 @@ inline constexpr uint64_t kBossTrialActionTimeoutMs = 18000;
 // 论剑 V3 战前 15 秒明牌变阵窗口（仅正式自养论剑与赛季锦标赛开启，全员锁定或到期立即进第 1 回合）。
 inline constexpr uint64_t kTacticalPrepTimeoutMs = 15000;
 inline constexpr uint32_t kTacticalPrepDurationSeconds = 15;
-// 战前技能禁选（每方 3 Ban · 方案 A）：开启禁选的对局变阵窗延长至 25 秒（全员锁定仍立即开打）。
+// 战前技能禁选（每方 3 Ban · 方案 A + V2 每方 1 护招破禁）：开启禁选的对局变阵窗延长至 25 秒（全员锁定仍立即开打）。
 inline constexpr uint32_t kPrepSkillBanSlotsPerTeam = 3;
+inline constexpr uint32_t kPrepSkillProtectSlotsPerTeam = 1;
+inline constexpr uint64_t kPrepProtectHashSalt = 0x50524F54454354ULL;
 inline constexpr uint64_t kTacticalPrepWithBanTimeoutMs = 25000;
 inline constexpr uint32_t kTacticalPrepWithBanDurationSeconds = 25;
 

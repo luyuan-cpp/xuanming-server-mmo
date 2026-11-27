@@ -1001,10 +1001,12 @@ func TestBatchGetPlayerName_SqlErrorReturnsNoPartialResult(t *testing.T) {
 }
 
 // 五个回收入口全部要 x-admin-token:回收会真改玩家资产,而 data_service 在集群内是无鉴权可达的。
+// 四个甲级入口另要双人复核批准记录(recall_dual_control_test.go),这里带上合格的记录,只看口令这一道。
 func TestRecallRPCsRequireAdminToken(t *testing.T) {
+	approval := recallApproval(recallApprovalID, recallProposer)
 	calls := map[string]func(*DataServiceServer, context.Context) error{
 		"BatchRecallItems": func(s *DataServiceServer, ctx context.Context) error {
-			_, err := s.BatchRecallItems(ctx, &data_service.BatchRecallItemsRequest{})
+			_, err := s.BatchRecallItems(ctx, &data_service.BatchRecallItemsRequest{RequestId: 7001, Operator: recallProposer, Approval: approval})
 			return err
 		},
 		"GetRecallBatch": func(s *DataServiceServer, ctx context.Context) error {
@@ -1012,15 +1014,15 @@ func TestRecallRPCsRequireAdminToken(t *testing.T) {
 			return err
 		},
 		"CancelRecallBatch": func(s *DataServiceServer, ctx context.Context) error {
-			_, err := s.CancelRecallBatch(ctx, &data_service.CancelRecallBatchRequest{})
+			_, err := s.CancelRecallBatch(ctx, &data_service.CancelRecallBatchRequest{Operator: recallProposer, Approval: approval})
 			return err
 		},
 		"ResolveRecallOp": func(s *DataServiceServer, ctx context.Context) error {
-			_, err := s.ResolveRecallOp(ctx, &data_service.ResolveRecallOpRequest{})
+			_, err := s.ResolveRecallOp(ctx, &data_service.ResolveRecallOpRequest{Operator: recallProposer, Approval: approval})
 			return err
 		},
 		"RegisterRecallReviewHandled": func(s *DataServiceServer, ctx context.Context) error {
-			_, err := s.RegisterRecallReviewHandled(ctx, &data_service.RegisterRecallReviewHandledRequest{})
+			_, err := s.RegisterRecallReviewHandled(ctx, &data_service.RegisterRecallReviewHandledRequest{Operator: recallProposer, Approval: approval})
 			return err
 		},
 	}

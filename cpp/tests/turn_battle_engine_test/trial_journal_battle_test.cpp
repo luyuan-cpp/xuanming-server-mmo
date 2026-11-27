@@ -914,3 +914,278 @@ TEST_F(TrialJournalBattleTest, Vol4WildBossMechanicsAndTrialVows) {
         EXPECT_TRUE(settle.trial_facts().finished_in_ebb_tide());
     }
 }
+
+TEST_F(TrialJournalBattleTest, TracksSeasonSkillCastAndResonanceMaskForTrialV4) {
+    // 构造 S2 玄脉之季：赛季技 15103（护盾）+ 玄脉护印（effect=5 首盾增容，resonance_kind=6 首盾回蓝）
+    auto& s15103 = data->AddSkill(15103);
+    s15103.Clear();
+    s15103.set_id(15103);
+    s15103.set_season_id(2);
+    s15103.set_battle_model(1);
+    s15103.set_ability_kind(1);
+    s15103.set_caster_mask(1);
+    s15103.set_unlock_level(1);
+    s15103.set_max_rank(10);
+    s15103.set_target_team(2);
+    s15103.set_max_targets(1);
+    s15103.set_pet_max_targets(1);
+    s15103.set_mana_percent(0.05);
+    s15103.add_effect(151030);
+    auto& b151030 = data->AddBuff(151030);
+    b151030.Clear();
+    b151030.set_id(151030);
+    b151030.set_battle_op(static_cast<uint32_t>(BattleEffectOp::Shield));
+    b151030.set_flat_value(300);
+    b151030.set_duration_rounds(2);
+    b151030.set_max_layer(1);
+    b151030.set_infinite_duration(1);
+
+    CreateBattleRequest req;
+    req.set_battle_id(94001);
+    req.set_match_mode(3); // PVP
+    req.set_seed(29);
+    req.mutable_trial_context()->set_journal_entry_id(3023);
+    req.mutable_trial_context()->set_trial_rule_version(1);
+    req.mutable_trial_context()->set_season_id(2);
+
+    auto* pA = req.add_players();
+    pA->set_player_id(kHeroA);
+    pA->set_player_name("玄脉试剑");
+    pA->set_team_index(0);
+    pA->set_active_season_id(2);
+    pA->set_level(30);
+    pA->set_max_health(5000);
+    pA->set_max_mana(2000);
+    pA->mutable_base_attributes()->set_health(5000);
+    pA->mutable_base_attributes()->set_mana(1000); // 留出法力缺口以触发 R6 首盾回蓝共鸣
+    pA->mutable_base_attributes()->set_speed(300);
+    pA->set_physical_attack(500);
+    pA->add_skill_table_ids(15103);
+    (*pA->mutable_skill_ranks())[15103] = 1;
+    auto* seal = pA->mutable_equipment_effects()->mutable_season_seal();
+    seal->set_season_id(2);
+    seal->set_seal_id(203);
+    seal->set_effect_id(5);
+    seal->set_bonus_bps(1200);
+    seal->set_per_round_limit(1);
+    seal->set_battle_limit(3);
+    seal->set_resonance_skill_id(15103);
+    seal->set_resonance_kind(6);
+    seal->set_resonance_param(250);
+
+    auto* pB = req.add_players();
+    pB->set_player_id(kHeroB);
+    pB->set_player_name("对手");
+    pB->set_team_index(1);
+    pB->set_level(30);
+    pB->set_max_health(5000);
+    pB->set_max_mana(2000);
+    pB->mutable_base_attributes()->set_health(5000);
+    pB->mutable_base_attributes()->set_mana(2000);
+    pB->mutable_base_attributes()->set_speed(100);
+    pB->set_physical_attack(100);
+
+    TurnBattleEngine engine(data);
+    ASSERT_TRUE(engine.Initialize(req));
+    engine.SubmitAction(kHeroA, Command(BATTLE_ACTION_SKILL, kHeroA, 15103));
+    engine.SubmitAction(kHeroB, Command(BATTLE_ACTION_DEFEND));
+    engine.ResolveCurrentRound();
+
+    auto settle = engine.BuildSettlement(kHeroA);
+    settle.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN);
+    ASSERT_TRUE(settle.has_trial_facts());
+    EXPECT_TRUE(settle.trial_facts().self_cast_season_skill());
+    EXPECT_TRUE(settle.trial_facts().self_triggered_season_resonance());
+    EXPECT_EQ(settle.trial_facts().self_season_resonance_mask(), (1u << 5));
+    EXPECT_TRUE(trialjournal::EvaluateSealCondition(15, 0, settle));
+    EXPECT_TRUE(trialjournal::EvaluateSealCondition(16, 0, settle));
+    EXPECT_TRUE(trialjournal::EvaluateSealCondition(16, 51, settle)) << "S2 并集掩码 51(R1|R2|R5|R6) 应命中 R6";
+    EXPECT_FALSE(trialjournal::EvaluateSealCondition(16, 21, settle)) << "S3 掩码 21(R1|R3|R5) 不含 R6 不应命中";
+}
+
+TEST_F(TrialJournalBattleTest, TacticalPuzzleWorkshopSetupScalingBuffsAndRoundLimit) {
+    auto& d314 = data->AddDungeon(314);
+    d314.Clear();
+    d314.set_id(314);
+    d314.set_boss_trial_kind(turnbattle::kBossTrialKindTacticalPuzzle);
+    d314.set_difficulty(1);
+    d314.set_round_limit(6);
+    data->SetDungeonMonsters(314, {311});
+    data->AddBattleReward(314, "");
+
+    auto& m311 = data->AddMonster(311);
+    m311.Clear();
+    m311.set_id(311);
+    m311.set_health(1000);
+    m311.set_speed(100);
+    m311.set_physical_attack(10);
+
+    auto& m312 = data->AddMonster(312);
+    m312.Clear();
+    m312.set_id(312);
+    m312.set_health(1000);
+    m312.set_speed(100);
+    m312.set_physical_attack(10);
+
+    auto& bShield = data->AddBuff(turnbattle::kTacticalPuzzleShieldBuffId);
+    bShield.Clear();
+    bShield.set_id(turnbattle::kTacticalPuzzleShieldBuffId);
+    bShield.set_battle_op(static_cast<uint32_t>(BattleEffectOp::Shield));
+    bShield.set_duration_rounds(2);
+
+    auto& bPoison = data->AddBuff(turnbattle::kTacticalPuzzleDebuffPoisonBuffId);
+    bPoison.Clear();
+    bPoison.set_id(turnbattle::kTacticalPuzzleDebuffPoisonBuffId);
+    bPoison.set_battle_op(static_cast<uint32_t>(BattleEffectOp::PeriodicDamage));
+    bPoison.set_duration_rounds(3);
+    bPoison.set_tick_count(3);
+    bPoison.set_tick_on_apply(1);
+
+    auto& bDefUp = data->AddBuff(turnbattle::kTacticalPuzzleBuffDefUpBuffId);
+    bDefUp.Clear();
+    bDefUp.set_id(turnbattle::kTacticalPuzzleBuffDefUpBuffId);
+    bDefUp.set_battle_op(static_cast<uint32_t>(BattleEffectOp::Modifier));
+    bDefUp.set_modifier_stat(static_cast<uint32_t>(BattleModifier::Defense));
+    bDefUp.set_ratio(0.25);
+    bDefUp.set_duration_rounds(5);
+
+    auto& bReflect = data->AddBuff(turnbattle::kTacticalPuzzleBuffReflectBuffId);
+    bReflect.Clear();
+    bReflect.set_id(turnbattle::kTacticalPuzzleBuffReflectBuffId);
+    bReflect.set_battle_op(static_cast<uint32_t>(BattleEffectOp::ReflectDamage));
+    bReflect.set_damage_filter(1);
+    bReflect.set_secondary_ratio(0.25);
+    bReflect.set_duration_rounds(3);
+
+    CreateBattleRequest req;
+    req.set_battle_id(95001);
+    req.set_match_mode(turnbattle::kMatchModePveSolo);
+    req.set_battle_config_id(314);
+    req.set_seed(777);
+    req.mutable_ranked_context()->set_use_free_preset(true);
+    req.mutable_ranked_context()->set_team_size(1);
+
+    auto* p = req.add_players();
+    p->set_player_id(kHeroA);
+    p->set_player_name("破局者");
+    p->set_team_index(0);
+    p->set_level(40);
+    p->set_max_health(2000);
+    p->set_max_mana(1000);
+    p->mutable_base_attributes()->set_health(2000);
+    p->mutable_base_attributes()->set_mana(1000);
+    p->mutable_base_attributes()->set_speed(200);
+    p->set_physical_attack(100);
+
+    auto* ctx = req.mutable_tactical_puzzle_context();
+    ctx->set_puzzle_id(88001);
+    ctx->set_spec_revision(2);
+    ctx->set_is_author_verify(true);
+    ctx->set_puzzle_title("二回合破盾反杀");
+    ctx->set_author_player_id(kHeroA);
+    ctx->set_author_name("破局者");
+    auto* spec = ctx->mutable_spec();
+    spec->set_round_limit(2);
+    spec->set_character_preset_id(101);
+    spec->set_pet_preset_id(0);
+    spec->set_formation_id(3);
+    spec->set_player_initial_hp_pct(50);
+    spec->set_player_initial_mp_pct(60);
+    spec->set_player_initial_shield_pct(20);
+    spec->set_player_initial_debuff_kind(3);
+
+    auto* e1 = spec->add_enemies();
+    e1->set_monster_table_id(311);
+    e1->set_initial_hp_pct(40);
+    e1->set_initial_shield_pct(30);
+    e1->set_speed_delta_pct(-20);
+    e1->set_initial_buff_kind(1);
+
+    auto* e2 = spec->add_enemies();
+    e2->set_monster_table_id(312);
+    e2->set_initial_hp_pct(120);
+    e2->set_initial_shield_pct(0);
+    e2->set_speed_delta_pct(20);
+    e2->set_initial_buff_kind(4);
+
+    TurnBattleEngine engine(data);
+    ASSERT_TRUE(engine.Initialize(req));
+    EXPECT_TRUE(engine.IsTacticalPuzzleWorkshopBattle());
+    EXPECT_EQ(engine.MaxRounds(), 2u);
+    const auto state = engine.BuildStateSnapshot();
+    EXPECT_EQ(state.round_limit(), 2u);
+    EXPECT_EQ(state.team_a_formation_id(), 3u);
+    ASSERT_TRUE(state.has_tactical_puzzle_context());
+    EXPECT_EQ(state.tactical_puzzle_context().puzzle_id(), 88001u);
+    EXPECT_TRUE(state.tactical_puzzle_context().is_author_verify());
+    ASSERT_EQ(state.actors_size(), 3);
+
+    const BattleActorState* hero = nullptr;
+    const BattleActorState* mon1 = nullptr;
+    const BattleActorState* mon2 = nullptr;
+    for (const auto& a : state.actors()) {
+        if (a.actor_id() == kHeroA) hero = &a;
+        else if (a.monster_table_id() == 311u) mon1 = &a;
+        else if (a.monster_table_id() == 312u) mon2 = &a;
+    }
+    ASSERT_NE(hero, nullptr);
+    ASSERT_NE(mon1, nullptr);
+    ASSERT_NE(mon2, nullptr);
+    EXPECT_EQ(hero->attributes().health(), 1000u);
+    EXPECT_EQ(hero->attributes().mana(), 600u);
+    EXPECT_EQ(mon1->max_health(), 1000u);
+    EXPECT_EQ(mon1->attributes().health(), 400u);
+    EXPECT_EQ(mon1->attributes().speed(), 80u);
+    EXPECT_EQ(mon2->max_health(), 1200u);
+    EXPECT_EQ(mon2->attributes().health(), 1200u);
+    EXPECT_EQ(mon2->attributes().speed(), 120u);
+
+    bool heroHasShield = false, heroHasPoison = false;
+    for (const auto& b : hero->buffs()) {
+        if (b.buff_table_id() == turnbattle::kTacticalPuzzleShieldBuffId && b.remaining_capacity() == 400u) heroHasShield = true;
+        if (b.buff_table_id() == turnbattle::kTacticalPuzzleDebuffPoisonBuffId) heroHasPoison = true;
+    }
+    EXPECT_TRUE(heroHasShield);
+    EXPECT_TRUE(heroHasPoison);
+
+    bool mon1HasShield = false, mon1HasDefUp = false;
+    for (const auto& b : mon1->buffs()) {
+        if (b.buff_table_id() == turnbattle::kTacticalPuzzleShieldBuffId && b.remaining_capacity() == 300u) mon1HasShield = true;
+        if (b.buff_table_id() == turnbattle::kTacticalPuzzleBuffDefUpBuffId) mon1HasDefUp = true;
+    }
+    EXPECT_TRUE(mon1HasShield);
+    EXPECT_TRUE(mon1HasDefUp);
+
+    bool mon2HasReflect = false;
+    for (const auto& b : mon2->buffs()) {
+        if (b.buff_table_id() == turnbattle::kTacticalPuzzleBuffReflectBuffId) mon2HasReflect = true;
+    }
+    EXPECT_TRUE(mon2HasReflect);
+
+    engine.SubmitAction(kHeroA, Command(BATTLE_ACTION_DEFEND));
+    engine.ResolveCurrentRound();
+    EXPECT_EQ(engine.Outcome(), BATTLE_OUTCOME_ONGOING);
+    engine.SubmitAction(kHeroA, Command(BATTLE_ACTION_DEFEND));
+    engine.ResolveCurrentRound();
+    EXPECT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_B_WIN);
+    const auto settle = engine.BuildSettlement(kHeroA);
+    ASSERT_TRUE(settle.has_tactical_puzzle_context());
+    EXPECT_EQ(settle.tactical_puzzle_context().puzzle_id(), 88001u);
+    EXPECT_EQ(settle.exp_gain(), 0u);
+    EXPECT_EQ(settle.gold_gain(), 0u);
+
+    CreateBattleRequest badRound = req;
+    badRound.mutable_tactical_puzzle_context()->mutable_spec()->set_round_limit(7);
+    TurnBattleEngine badEngine1(data);
+    EXPECT_FALSE(badEngine1.Initialize(badRound));
+
+    CreateBattleRequest badMonster = req;
+    badMonster.mutable_tactical_puzzle_context()->mutable_spec()->mutable_enemies(0)->set_monster_table_id(101);
+    TurnBattleEngine badEngine2(data);
+    EXPECT_FALSE(badEngine2.Initialize(badMonster));
+
+    CreateBattleRequest noPreset = req;
+    noPreset.mutable_ranked_context()->set_use_free_preset(false);
+    TurnBattleEngine badEngine3(data);
+    EXPECT_FALSE(badEngine3.Initialize(noPreset));
+}

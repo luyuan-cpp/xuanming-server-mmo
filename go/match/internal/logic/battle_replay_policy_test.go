@@ -68,4 +68,15 @@ func TestRecordReplayForBattleAllowsTrialJournalPveOnly(t *testing.T) {
 	if recordReplayForBattle(false, matchpb.MatchMode_MATCH_MODE_PVE_SOLO, trialCtx) {
 		t.Error("全局战报总开关关闭时试炼志 PVE 也不应录制")
 	}
+	verifyPuzzle := &battlepb.TacticalPuzzleBattleContext{PuzzleId: 9001, SpecRevision: 1, IsAuthorVerify: true}
+	challengePuzzle := &battlepb.TacticalPuzzleBattleContext{PuzzleId: 9001, SpecRevision: 1, IsAuthorVerify: false}
+	if !recordReplayForBattle(true, matchpb.MatchMode_MATCH_MODE_PVE_SOLO, nil, verifyPuzzle) {
+		t.Error("万象残局坊作者自证验题局应开启回放录制")
+	}
+	if recordReplayForBattle(true, matchpb.MatchMode_MATCH_MODE_PVE_SOLO, nil, challengePuzzle) {
+		t.Error("万象残局坊普通挑战者局不应录制回放")
+	}
+	if recordReplayForBattle(false, matchpb.MatchMode_MATCH_MODE_PVE_SOLO, nil, verifyPuzzle) {
+		t.Error("全局战报总开关关闭时作者验题局也不应录制")
+	}
 }

@@ -91,7 +91,9 @@ enum class SealConditionType : uint32_t {
     kArtifactShieldBreak = 11,     // 卷三破障锋芒：合格完赛且触发破盾产生 >0 削盾
     kAntiControlOrSeasonSkill = 12,// 卷三明心应劫：合格完赛且触发清心符/净化/当季免费赛季技能
     kDualGuardBreak = 13,          // 卷一困难·双卫同阵连环双破：驱散护势(或双系击伤)且零有效回春(或断疗反噬)并胜出
-    kPerfectCleaveParry = 14       // 首领试炼 V2 化劲宗师：本人及宝宝被重劈点名>=1次且100%合法化解并胜出
+    kPerfectCleaveParry = 14,      // 首领试炼 V2 化劲宗师：本人及宝宝被重劈点名>=1次且100%合法化解并胜出
+    kSeasonSkillCast = 15,         // 卷三 V4 赛季技法：合格完赛且本人直接施放当季免费赛季技能
+    kSeasonResonance = 16          // 卷三 V4 技印共鸣：合格完赛且本人触发当季 R1..R8 技印共鸣（param=0 任意，非 0 按位掩码过滤）
 };
 
 inline bool IsPlayerVictory(eBattleOutcome outcome, uint32_t playerTeamIndex) {
@@ -181,6 +183,13 @@ inline bool EvaluateSealCondition(uint32_t conditionType,
                (facts.boss_guard_heal_total() == 0 || facts.heal_interrupt_backlash_count() > 0);
     case SealConditionType::kPerfectCleaveParry:
         return won && facts.all_self_cleaves_parried();
+    case SealConditionType::kSeasonSkillCast:
+        return (won || settlement.participated()) && facts.self_cast_season_skill();
+    case SealConditionType::kSeasonResonance:
+        return (won || settlement.participated()) &&
+               (conditionParam == 0u
+                    ? facts.self_triggered_season_resonance()
+                    : ((facts.self_season_resonance_mask() & conditionParam) != 0u));
     default:
         return false;
     }
@@ -188,7 +197,7 @@ inline bool EvaluateSealCondition(uint32_t conditionType,
 
 inline bool IsValidConditionType(uint32_t conditionType) {
     return conditionType >= static_cast<uint32_t>(SealConditionType::kClear) &&
-           conditionType <= static_cast<uint32_t>(SealConditionType::kPerfectCleaveParry);
+           conditionType <= static_cast<uint32_t>(SealConditionType::kSeasonResonance);
 }
 
 inline bool IsValidSealSlotKind(uint32_t slotKind) {

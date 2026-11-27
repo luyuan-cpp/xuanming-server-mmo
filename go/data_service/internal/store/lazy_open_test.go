@@ -131,6 +131,8 @@ func (c gatedConnector) Driver() driver.Driver { return c.inner.Driver() }
 // 连得上时核对在一个一次性的替身小池上跑,通过之后真正的池才给连接。时钟由用例推进。
 type lazyShardFake struct {
 	conns func(schema string) driver.Connector
+	// registry 是登记这些池的名单,和常驻进程一样;nil 时不登记。
+	registry *LazyPools
 
 	mu       sync.Mutex
 	now      time.Time
@@ -194,8 +196,49 @@ func (f *lazyShardFake) opener() shardOpener {
 					defer f.mu.Unlock()
 					f.connects[schema]++
 				}}), nil
-			})
+			}, f.registry)
 	}
+}
+
+// 启动时连不上的池记在名单里:就绪判定据它不就绪;后台重核(RetryClosed)在恢复、冷却过后把它打开,不用等第一次用到,之后名单里不再有它。
+func TestLazyPoolsRetryClosedPoolsInTheBackground(t *testing.T) {
+	const k = 2
+	const bad = "mmorpg_global_01"
+	f := newLazyShardFake(func(schema string) driver.Connector {
+		return fakeShardConnector{logicalShards: k, slot: testShardSlot(schema)}
+	}, bad)
+	f.registry = &LazyPools{}
+	shards, err := openShardPoolsWith(shardCfgForTest(k), noShapeCheck, f.opener())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = shards.Close() })
+	require.Equal(t, []string{bad}, f.registry.Closed())
+
+	f.registry.RetryClosed()
+	verifies, _ := f.counts(bad)
+	require.Equal(t, 1, verifies, "冷却期内后台重核不拨号")
+
+	// 失败的时刻记在核对做完时,比那一拍晚。这里让核对做了 1 秒:下一拍离失败不到一个间隔,也要已经出了冷却、照样重核。
+	f.advance(lazyOpenBackoff)
+	f.registry.RetryClosed()
+	f.advance(LazyPoolRetryInterval - time.Second)
+	f.registry.RetryClosed()
+	verifies, _ = f.counts(bad)
+	require.Equal(t, 3, verifies, "每一拍都重核,不会两拍才核一次")
+
+	f.setDown(bad, false)
+	f.advance(LazyPoolRetryInterval)
+	f.registry.RetryClosed()
+	verifies, connects := f.counts(bad)
+	require.Equal(t, 4, verifies)
+	require.Zero(t, connects, "重核用一次性的小池,不占业务池的连接")
+	require.Empty(t, f.registry.Closed(), "核对通过之后不再算关着")
+	require.NoError(t, shards.pools[1].PingContext(context.Background()))
+	verifies, _ = f.counts(bad)
+	require.Equal(t, 4, verifies, "打开之后用到时不再核对")
+
+	var none *LazyPools
+	require.Empty(t, none.Closed())
+	none.RetryClosed()
 }
 
 // 一片连不上:其余片照常装配、照常给连接;这一片的池关着,借连接回不可用。

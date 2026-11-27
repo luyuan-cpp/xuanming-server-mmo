@@ -15,6 +15,7 @@ import (
 	"data_service/internal/svc"
 	"proto/data_service"
 	"shared/accountdirectory"
+	"shared/dualcontrol"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc/codes"
@@ -32,6 +33,10 @@ type DataServiceServer struct {
 func NewDataServiceServer(svcCtx *svc.ServiceContext) *DataServiceServer {
 	// 归属读与账号目录的直方图在第一次 scrape 之前就要有全部序列(见 metrics.PrimeLoginReads);可重复调用。
 	metrics.PrimeLoginReads()
+	metrics.PrimeAdminUnapprovedCommand()
+	if svcCtx.Config.AdminAllowUnapproved {
+		logx.Errorf("[admin] AdminAllowUnapproved is on: recall commands without a dual-control approval record are accepted; keep it off outside local development")
+	}
 	return &DataServiceServer{svcCtx: svcCtx}
 }
 
@@ -331,9 +336,40 @@ func (s *DataServiceServer) ListPlayerSnapshots(ctx context.Context, req *data_s
 // ── Batch Recall / Transaction Log Query ──────
 
 // 五个回收入口全部要 x-admin-token。回收会真改玩家资产,而 data_service 在集群内是无鉴权可达的。
+// 其中 BatchRecallItems 执行、CancelRecallBatch、ResolveRecallOp、RegisterRecallReviewHandled 是甲级(docs/design/admin-identity-and-dual-control.md §3、§11.2),
+// 口令之后还要核双人复核批准记录(admitApproval)。
+
+// admitApproval 把 shared/dualcontrol 的核对结论落成准入(设计 §5.5、§5.7),排在口令之后、任何读库写库与判重重放之前:
+// verdict 为 nil 放行;不带记录(ErrMissing)只在 AdminAllowUnapproved 打开时放行,每一次都打 ERROR 并计数;
+// 其余不合格一律 PermissionDenied,开关开着也一样。文本只点出哪一项不合格(dualcontrol 的错误文本),不回显请求内容。
+func (s *DataServiceServer) admitApproval(ctx context.Context, method, operator string, verdict error) error {
+	if verdict == nil {
+		return nil
+	}
+	if errors.Is(verdict, dualcontrol.ErrMissing) && s.svcCtx.Config.AdminAllowUnapproved {
+		metrics.ObserveAdminUnapprovedCommand(method)
+		// callerIdentity 里的 operator 是 metadata 自报的 x-operator,请求字段另记成 request_operator。
+		logx.Errorf("[admin] %s accepted without a dual-control approval record request_operator=%q (AdminAllowUnapproved is on) %s",
+			method, operator, callerIdentity(ctx))
+		return nil
+	}
+	logx.Errorf("[admin] Rejecting %s: %v %s", method, verdict, callerIdentity(ctx))
+	return status.Errorf(codes.PermissionDenied, "error_code=%d: %s: %v", constants.ErrCodeAdminAuthRequired, method, verdict)
+}
 
 func (s *DataServiceServer) BatchRecallItems(ctx context.Context, req *data_service.BatchRecallItemsRequest) (*data_service.BatchRecallItemsResponse, error) {
-	if err := s.authorizeAdmin(ctx, "BatchRecallItems"); err != nil {
+	if err := s.authorizeAdmin(ctx, metrics.AdminMethodBatchRecallItems); err != nil {
+		return nil, err
+	}
+	// 执行:批准号必须就是 request_id(批次的幂等键),一次批准只冻结一批。演练不要求;带了照样核两人与发起人。
+	var verdict error
+	switch {
+	case !req.GetDryRun():
+		verdict = dualcontrol.RequireForRequest(req.GetApproval(), req.GetOperator(), req.GetRequestId())
+	case req.GetApproval() != nil:
+		verdict = dualcontrol.Require(req.GetApproval(), req.GetOperator())
+	}
+	if err := s.admitApproval(ctx, metrics.AdminMethodBatchRecallItems, req.GetOperator(), verdict); err != nil {
 		return nil, err
 	}
 	resp, err := logic.BatchRecallItems(ctx, s.svcCtx, &logic.BatchRecallReq{
@@ -350,8 +386,9 @@ func (s *DataServiceServer) BatchRecallItems(ctx context.Context, req *data_serv
 		RequestID:          req.RequestId,
 		ExpectedPlanDigest: req.ExpectedPlanDigest,
 		PeerAddr:           peerAddrOf(ctx),
+		Approval:           req.GetApproval(),
 	})
-	return batchRecallResponse(ctx, "BatchRecallItems", resp, err), nil
+	return batchRecallResponse(ctx, metrics.AdminMethodBatchRecallItems, resp, err), nil
 }
 
 func (s *DataServiceServer) GetRecallBatch(ctx context.Context, req *data_service.GetRecallBatchRequest) (*data_service.BatchRecallItemsResponse, error) {
@@ -363,18 +400,27 @@ func (s *DataServiceServer) GetRecallBatch(ctx context.Context, req *data_servic
 }
 
 func (s *DataServiceServer) CancelRecallBatch(ctx context.Context, req *data_service.CancelRecallBatchRequest) (*data_service.BatchRecallItemsResponse, error) {
-	if err := s.authorizeAdmin(ctx, "CancelRecallBatch"); err != nil {
+	if err := s.authorizeAdmin(ctx, metrics.AdminMethodCancelRecallBatch); err != nil {
 		return nil, err
 	}
-	resp, err := logic.CancelRecallBatch(ctx, s.svcCtx, req.GetRequestId(), req.GetOperator(), req.GetReason(), peerAddrOf(ctx))
-	return batchRecallResponse(ctx, "CancelRecallBatch", resp, err), nil
+	// request_id 是被撤的批次号,不是这次撤回的批准号,所以只核两人与发起人。
+	verdict := dualcontrol.Require(req.GetApproval(), req.GetOperator())
+	if err := s.admitApproval(ctx, metrics.AdminMethodCancelRecallBatch, req.GetOperator(), verdict); err != nil {
+		return nil, err
+	}
+	resp, err := logic.CancelRecallBatch(ctx, s.svcCtx, req.GetRequestId(), req.GetOperator(), req.GetReason(), peerAddrOf(ctx), req.GetApproval())
+	return batchRecallResponse(ctx, metrics.AdminMethodCancelRecallBatch, resp, err), nil
 }
 
 func (s *DataServiceServer) ResolveRecallOp(ctx context.Context, req *data_service.ResolveRecallOpRequest) (*data_service.ResolveRecallOpResponse, error) {
-	if err := s.authorizeAdmin(ctx, "ResolveRecallOp"); err != nil {
+	if err := s.authorizeAdmin(ctx, metrics.AdminMethodResolveRecallOp); err != nil {
 		return nil, err
 	}
-	result, err := logic.ResolveRecallOp(ctx, s.svcCtx, req.GetOpId(), req.GetFinalStatus(), req.GetOperator(), req.GetReason())
+	verdict := dualcontrol.Require(req.GetApproval(), req.GetOperator())
+	if err := s.admitApproval(ctx, metrics.AdminMethodResolveRecallOp, req.GetOperator(), verdict); err != nil {
+		return nil, err
+	}
+	result, err := logic.ResolveRecallOp(ctx, s.svcCtx, req.GetOpId(), req.GetFinalStatus(), req.GetOperator(), req.GetReason(), req.GetApproval())
 	if err != nil {
 		logx.Errorf("[BatchRecall] ResolveRecallOp failed: op_id=%d caller=%s: %v", req.GetOpId(), callerIdentity(ctx), err)
 	}
@@ -383,8 +429,17 @@ func (s *DataServiceServer) ResolveRecallOp(ctx context.Context, req *data_servi
 }
 
 func (s *DataServiceServer) RegisterRecallReviewHandled(ctx context.Context, req *data_service.RegisterRecallReviewHandledRequest) (*data_service.RegisterRecallReviewHandledResponse, error) {
-	if err := s.authorizeAdmin(ctx, "RegisterRecallReviewHandled"); err != nil {
+	if err := s.authorizeAdmin(ctx, metrics.AdminMethodRegisterRecallReviewHandled); err != nil {
 		return nil, err
+	}
+	// 登记之后这些流水永久按已消费处理(以后的回收都跳过),做完撤不回:按甲级核两人与发起人。
+	verdict := dualcontrol.Require(req.GetApproval(), req.GetOperator())
+	if err := s.admitApproval(ctx, metrics.AdminMethodRegisterRecallReviewHandled, req.GetOperator(), verdict); err != nil {
+		return nil, err
+	}
+	if approval := req.GetApproval(); approval != nil {
+		logx.Infof("[BatchRecall] RegisterRecallReviewHandled approved player_id=%d correlation_id=%d approval_id=%q approver=%q",
+			req.GetPlayerId(), req.GetCorrelationId(), approval.GetApprovalId(), approval.GetApprover())
 	}
 	result, err := logic.RegisterRecallReviewHandled(ctx, s.svcCtx, &logic.RecallReviewHandledReq{
 		Kind:          req.GetRecallKind(),

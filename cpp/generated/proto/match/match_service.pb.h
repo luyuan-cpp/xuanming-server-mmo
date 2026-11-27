@@ -81,6 +81,10 @@ enum RankedSeasonState : int;
 extern const uint32_t RankedSeasonState_internal_data_[];
 enum RankedTier : int;
 extern const uint32_t RankedTier_internal_data_[];
+enum TacticalPuzzleListTab : int;
+extern const uint32_t TacticalPuzzleListTab_internal_data_[];
+enum TacticalPuzzleState : int;
+extern const uint32_t TacticalPuzzleState_internal_data_[];
 enum TournamentHighlightTag : int;
 extern const uint32_t TournamentHighlightTag_internal_data_[];
 enum TournamentMatchPhase : int;
@@ -301,6 +305,22 @@ extern const ::google::protobuf::internal::ClassDataFull DeleteBattleScriptRespo
 #else
 extern const DeleteBattleScriptResponseGlobalsTypeInternal DeleteBattleScriptResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class DeleteTacticalPuzzleRequest;
+struct DeleteTacticalPuzzleRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern DeleteTacticalPuzzleRequestGlobalsTypeInternal DeleteTacticalPuzzleRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull DeleteTacticalPuzzleRequest_class_data_;
+#else
+extern const DeleteTacticalPuzzleRequestGlobalsTypeInternal DeleteTacticalPuzzleRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class DeleteTacticalPuzzleResponse;
+struct DeleteTacticalPuzzleResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern DeleteTacticalPuzzleResponseGlobalsTypeInternal DeleteTacticalPuzzleResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull DeleteTacticalPuzzleResponse_class_data_;
+#else
+extern const DeleteTacticalPuzzleResponseGlobalsTypeInternal DeleteTacticalPuzzleResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class DismissJianghuGrudgeRequest;
 struct DismissJianghuGrudgeRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -396,6 +416,38 @@ extern GetSharedTrialReplayResponseGlobalsTypeInternal GetSharedTrialReplayRespo
 extern const ::google::protobuf::internal::ClassDataFull GetSharedTrialReplayResponse_class_data_;
 #else
 extern const GetSharedTrialReplayResponseGlobalsTypeInternal GetSharedTrialReplayResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetTacticalPuzzleRequest;
+struct GetTacticalPuzzleRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetTacticalPuzzleRequestGlobalsTypeInternal GetTacticalPuzzleRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetTacticalPuzzleRequest_class_data_;
+#else
+extern const GetTacticalPuzzleRequestGlobalsTypeInternal GetTacticalPuzzleRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetTacticalPuzzleResponse;
+struct GetTacticalPuzzleResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetTacticalPuzzleResponseGlobalsTypeInternal GetTacticalPuzzleResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetTacticalPuzzleResponse_class_data_;
+#else
+extern const GetTacticalPuzzleResponseGlobalsTypeInternal GetTacticalPuzzleResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetTacticalPuzzleSolutionReplayRequest;
+struct GetTacticalPuzzleSolutionReplayRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetTacticalPuzzleSolutionReplayRequestGlobalsTypeInternal GetTacticalPuzzleSolutionReplayRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetTacticalPuzzleSolutionReplayRequest_class_data_;
+#else
+extern const GetTacticalPuzzleSolutionReplayRequestGlobalsTypeInternal GetTacticalPuzzleSolutionReplayRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetTacticalPuzzleSolutionReplayResponse;
+struct GetTacticalPuzzleSolutionReplayResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetTacticalPuzzleSolutionReplayResponseGlobalsTypeInternal GetTacticalPuzzleSolutionReplayResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetTacticalPuzzleSolutionReplayResponse_class_data_;
+#else
+extern const GetTacticalPuzzleSolutionReplayResponseGlobalsTypeInternal GetTacticalPuzzleSolutionReplayResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class GetTournamentHighlightsRequest;
 struct GetTournamentHighlightsRequestGlobalsTypeInternal;
@@ -573,6 +625,22 @@ extern const ::google::protobuf::internal::ClassDataFull LeaveTournamentSquadRes
 #else
 extern const LeaveTournamentSquadResponseGlobalsTypeInternal LeaveTournamentSquadResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class LikeTacticalPuzzleRequest;
+struct LikeTacticalPuzzleRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern LikeTacticalPuzzleRequestGlobalsTypeInternal LikeTacticalPuzzleRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull LikeTacticalPuzzleRequest_class_data_;
+#else
+extern const LikeTacticalPuzzleRequestGlobalsTypeInternal LikeTacticalPuzzleRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class LikeTacticalPuzzleResponse;
+struct LikeTacticalPuzzleResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern LikeTacticalPuzzleResponseGlobalsTypeInternal LikeTacticalPuzzleResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull LikeTacticalPuzzleResponse_class_data_;
+#else
+extern const LikeTacticalPuzzleResponseGlobalsTypeInternal LikeTacticalPuzzleResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class ListBattleReportsRequest;
 struct ListBattleReportsRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -620,6 +688,22 @@ extern ListJianghuGrudgesResponseGlobalsTypeInternal ListJianghuGrudgesResponse_
 extern const ::google::protobuf::internal::ClassDataFull ListJianghuGrudgesResponse_class_data_;
 #else
 extern const ListJianghuGrudgesResponseGlobalsTypeInternal ListJianghuGrudgesResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ListTacticalPuzzlesRequest;
+struct ListTacticalPuzzlesRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ListTacticalPuzzlesRequestGlobalsTypeInternal ListTacticalPuzzlesRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ListTacticalPuzzlesRequest_class_data_;
+#else
+extern const ListTacticalPuzzlesRequestGlobalsTypeInternal ListTacticalPuzzlesRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ListTacticalPuzzlesResponse;
+struct ListTacticalPuzzlesResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ListTacticalPuzzlesResponseGlobalsTypeInternal ListTacticalPuzzlesResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ListTacticalPuzzlesResponse_class_data_;
+#else
+extern const ListTacticalPuzzlesResponseGlobalsTypeInternal ListTacticalPuzzlesResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class ListTournamentStandingsRequest;
 struct ListTournamentStandingsRequestGlobalsTypeInternal;
@@ -837,6 +921,22 @@ extern const ::google::protobuf::internal::ClassDataFull SaveRankedPresetRespons
 #else
 extern const SaveRankedPresetResponseGlobalsTypeInternal SaveRankedPresetResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class SaveTacticalPuzzleDraftRequest;
+struct SaveTacticalPuzzleDraftRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SaveTacticalPuzzleDraftRequestGlobalsTypeInternal SaveTacticalPuzzleDraftRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SaveTacticalPuzzleDraftRequest_class_data_;
+#else
+extern const SaveTacticalPuzzleDraftRequestGlobalsTypeInternal SaveTacticalPuzzleDraftRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class SaveTacticalPuzzleDraftResponse;
+struct SaveTacticalPuzzleDraftResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SaveTacticalPuzzleDraftResponseGlobalsTypeInternal SaveTacticalPuzzleDraftResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SaveTacticalPuzzleDraftResponse_class_data_;
+#else
+extern const SaveTacticalPuzzleDraftResponseGlobalsTypeInternal SaveTacticalPuzzleDraftResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class SendTournamentSpectateCheerRequest;
 struct SendTournamentSpectateCheerRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -876,6 +976,22 @@ extern SpectateBattleRecordGlobalsTypeInternal SpectateBattleRecord_globals_;
 extern const ::google::protobuf::internal::ClassDataFull SpectateBattleRecord_class_data_;
 #else
 extern const SpectateBattleRecordGlobalsTypeInternal SpectateBattleRecord_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class StartTacticalPuzzleBattleRequest;
+struct StartTacticalPuzzleBattleRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern StartTacticalPuzzleBattleRequestGlobalsTypeInternal StartTacticalPuzzleBattleRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull StartTacticalPuzzleBattleRequest_class_data_;
+#else
+extern const StartTacticalPuzzleBattleRequestGlobalsTypeInternal StartTacticalPuzzleBattleRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class StartTacticalPuzzleBattleResponse;
+struct StartTacticalPuzzleBattleResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern StartTacticalPuzzleBattleResponseGlobalsTypeInternal StartTacticalPuzzleBattleResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull StartTacticalPuzzleBattleResponse_class_data_;
+#else
+extern const StartTacticalPuzzleBattleResponseGlobalsTypeInternal StartTacticalPuzzleBattleResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class StartTournamentMatchRequest;
 struct StartTournamentMatchRequestGlobalsTypeInternal;
@@ -924,6 +1040,22 @@ extern SubmitBattleScriptResponseGlobalsTypeInternal SubmitBattleScriptResponse_
 extern const ::google::protobuf::internal::ClassDataFull SubmitBattleScriptResponse_class_data_;
 #else
 extern const SubmitBattleScriptResponseGlobalsTypeInternal SubmitBattleScriptResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class TacticalPuzzleProfileView;
+struct TacticalPuzzleProfileViewGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern TacticalPuzzleProfileViewGlobalsTypeInternal TacticalPuzzleProfileView_globals_;
+extern const ::google::protobuf::internal::ClassDataFull TacticalPuzzleProfileView_class_data_;
+#else
+extern const TacticalPuzzleProfileViewGlobalsTypeInternal TacticalPuzzleProfileView_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class TacticalPuzzleSummaryView;
+struct TacticalPuzzleSummaryViewGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern TacticalPuzzleSummaryViewGlobalsTypeInternal TacticalPuzzleSummaryView_globals_;
+extern const ::google::protobuf::internal::ClassDataFull TacticalPuzzleSummaryView_class_data_;
+#else
+extern const TacticalPuzzleSummaryViewGlobalsTypeInternal TacticalPuzzleSummaryView_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class TournamentHighlightEntry;
 struct TournamentHighlightEntryGlobalsTypeInternal;
@@ -1123,6 +1255,12 @@ internal::EnumTraitsT<::match::RankedSeasonState_internal_data_>
 template <>
 internal::EnumTraitsT<::match::RankedTier_internal_data_>
     internal::EnumTraitsImpl::value<::match::RankedTier>;
+template <>
+internal::EnumTraitsT<::match::TacticalPuzzleListTab_internal_data_>
+    internal::EnumTraitsImpl::value<::match::TacticalPuzzleListTab>;
+template <>
+internal::EnumTraitsT<::match::TacticalPuzzleState_internal_data_>
+    internal::EnumTraitsImpl::value<::match::TacticalPuzzleState>;
 template <>
 internal::EnumTraitsT<::match::TournamentHighlightTag_internal_data_>
     internal::EnumTraitsImpl::value<::match::TournamentHighlightTag>;
@@ -1991,6 +2129,91 @@ template <>
 [[nodiscard]] inline bool JianghuDuelInviteState_Parse(
     ::absl::string_view name, JianghuDuelInviteState* PROTOBUF_NONNULL value) {
   return ::google::protobuf::internal::ParseNamedEnum<JianghuDuelInviteState>(JianghuDuelInviteState_descriptor(), name,
+                                           value);
+}
+enum TacticalPuzzleState : int {
+  TACTICAL_PUZZLE_STATE_UNSPECIFIED = 0,
+  TACTICAL_PUZZLE_STATE_DRAFT = 1,
+  TACTICAL_PUZZLE_STATE_PUBLISHED = 2,
+  TacticalPuzzleState_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  TacticalPuzzleState_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t TacticalPuzzleState_internal_data_[];
+inline constexpr TacticalPuzzleState TacticalPuzzleState_MIN =
+    static_cast<TacticalPuzzleState>(0);
+inline constexpr TacticalPuzzleState TacticalPuzzleState_MAX =
+    static_cast<TacticalPuzzleState>(2);
+[[nodiscard]] inline bool TacticalPuzzleState_IsValid(int value) {
+  return 0 <= value && value <= 2;
+}
+inline constexpr int TacticalPuzzleState_ARRAYSIZE = 2 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+TacticalPuzzleState_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(TacticalPuzzleState) {
+  return TacticalPuzzleState_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& TacticalPuzzleState_Name(T value) {
+  static_assert(::std::is_same<T, TacticalPuzzleState>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to TacticalPuzzleState_Name().");
+  return TacticalPuzzleState_Name(static_cast<TacticalPuzzleState>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& TacticalPuzzleState_Name(TacticalPuzzleState value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<TacticalPuzzleState_descriptor, 0, 2>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool TacticalPuzzleState_Parse(
+    ::absl::string_view name, TacticalPuzzleState* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<TacticalPuzzleState>(TacticalPuzzleState_descriptor(), name,
+                                           value);
+}
+enum TacticalPuzzleListTab : int {
+  TACTICAL_PUZZLE_LIST_TAB_UNSPECIFIED = 0,
+  TACTICAL_PUZZLE_LIST_TAB_HOT = 1,
+  TACTICAL_PUZZLE_LIST_TAB_NEWEST = 2,
+  TACTICAL_PUZZLE_LIST_TAB_HARDEST = 3,
+  TACTICAL_PUZZLE_LIST_TAB_MY_CREATED = 4,
+  TACTICAL_PUZZLE_LIST_TAB_MY_CLEARED = 5,
+  TacticalPuzzleListTab_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  TacticalPuzzleListTab_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t TacticalPuzzleListTab_internal_data_[];
+inline constexpr TacticalPuzzleListTab TacticalPuzzleListTab_MIN =
+    static_cast<TacticalPuzzleListTab>(0);
+inline constexpr TacticalPuzzleListTab TacticalPuzzleListTab_MAX =
+    static_cast<TacticalPuzzleListTab>(5);
+[[nodiscard]] inline bool TacticalPuzzleListTab_IsValid(int value) {
+  return 0 <= value && value <= 5;
+}
+inline constexpr int TacticalPuzzleListTab_ARRAYSIZE = 5 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+TacticalPuzzleListTab_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(TacticalPuzzleListTab) {
+  return TacticalPuzzleListTab_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& TacticalPuzzleListTab_Name(T value) {
+  static_assert(::std::is_same<T, TacticalPuzzleListTab>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to TacticalPuzzleListTab_Name().");
+  return TacticalPuzzleListTab_Name(static_cast<TacticalPuzzleListTab>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& TacticalPuzzleListTab_Name(TacticalPuzzleListTab value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<TacticalPuzzleListTab_descriptor, 0, 5>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool TacticalPuzzleListTab_Parse(
+    ::absl::string_view name, TacticalPuzzleListTab* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<TacticalPuzzleListTab>(TacticalPuzzleListTab_descriptor(), name,
                                            value);
 }
 using ::google::protobuf::internal::generated_enum::AbslParseFlag;
@@ -5498,6 +5721,272 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TournamentInviteView final : public
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TacticalPuzzleProfileView final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.TacticalPuzzleProfileView) */ {
+ public:
+  inline TacticalPuzzleProfileView() : TacticalPuzzleProfileView(nullptr) {}
+  ~TacticalPuzzleProfileView() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(TacticalPuzzleProfileView* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(TacticalPuzzleProfileView));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr TacticalPuzzleProfileView(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline TacticalPuzzleProfileView(const TacticalPuzzleProfileView& from) : TacticalPuzzleProfileView(nullptr, from) {}
+  inline TacticalPuzzleProfileView(TacticalPuzzleProfileView&& from) noexcept : TacticalPuzzleProfileView(nullptr, ::std::move(from)) {}
+  inline TacticalPuzzleProfileView& operator=(const TacticalPuzzleProfileView& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline TacticalPuzzleProfileView& operator=(TacticalPuzzleProfileView&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const TacticalPuzzleProfileView& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TacticalPuzzleProfileView>(&TacticalPuzzleProfileView_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 125;
+  friend void swap(TacticalPuzzleProfileView& a, TacticalPuzzleProfileView& b) { a.Swap(&b); }
+  inline void Swap(TacticalPuzzleProfileView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(TacticalPuzzleProfileView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] TacticalPuzzleProfileView* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<TacticalPuzzleProfileView>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const TacticalPuzzleProfileView& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const TacticalPuzzleProfileView& from) { TacticalPuzzleProfileView::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(TacticalPuzzleProfileView* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.TacticalPuzzleProfileView"; }
+
+  explicit TacticalPuzzleProfileView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  TacticalPuzzleProfileView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TacticalPuzzleProfileView& from);
+  TacticalPuzzleProfileView(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, TacticalPuzzleProfileView&& from) noexcept
+      : TacticalPuzzleProfileView(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kHonorTitleFieldNumber = 6,
+    kPublishedCountFieldNumber = 1,
+    kDraftCountFieldNumber = 2,
+    kTotalClearedCountFieldNumber = 3,
+    kTotalLikesReceivedFieldNumber = 4,
+    kHonorTierFieldNumber = 5,
+  };
+  // string honor_title = 6;
+  void clear_honor_title() ;
+  [[nodiscard]] const ::std::string& honor_title() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_honor_title(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_honor_title();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_honor_title();
+  void set_allocated_honor_title(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_honor_title() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_honor_title(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_honor_title();
+
+  public:
+  // uint32 published_count = 1;
+  void clear_published_count() ;
+  [[nodiscard]] ::uint32_t published_count() const;
+  void set_published_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_published_count() const;
+  void _internal_set_published_count(::uint32_t value);
+
+  public:
+  // uint32 draft_count = 2;
+  void clear_draft_count() ;
+  [[nodiscard]] ::uint32_t draft_count() const;
+  void set_draft_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_draft_count() const;
+  void _internal_set_draft_count(::uint32_t value);
+
+  public:
+  // uint32 total_cleared_count = 3;
+  void clear_total_cleared_count() ;
+  [[nodiscard]] ::uint32_t total_cleared_count() const;
+  void set_total_cleared_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_total_cleared_count() const;
+  void _internal_set_total_cleared_count(::uint32_t value);
+
+  public:
+  // uint32 total_likes_received = 4;
+  void clear_total_likes_received() ;
+  [[nodiscard]] ::uint32_t total_likes_received() const;
+  void set_total_likes_received(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_total_likes_received() const;
+  void _internal_set_total_likes_received(::uint32_t value);
+
+  public:
+  // uint32 honor_tier = 5;
+  void clear_honor_tier() ;
+  [[nodiscard]] ::uint32_t honor_tier() const;
+  void set_honor_tier(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_honor_tier() const;
+  void _internal_set_honor_tier(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.TacticalPuzzleProfileView)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 6,
+                          0, 51,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const TacticalPuzzleProfileView& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr honor_title_;
+    ::uint32_t published_count_;
+    ::uint32_t draft_count_;
+    ::uint32_t total_cleared_count_;
+    ::uint32_t total_likes_received_;
+    ::uint32_t honor_tier_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartTournamentWarmupRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:match.StartTournamentWarmupRequest) */ {
  public:
@@ -5951,6 +6440,236 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartTournamentMatchRequest final :
     ::google::protobuf::RepeatedField<::uint64_t> lineup_player_ids_;
     ::google::protobuf::internal::CachedSize _lineup_player_ids_cached_byte_size_;
     ::uint64_t match_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartTacticalPuzzleBattleRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.StartTacticalPuzzleBattleRequest) */ {
+ public:
+  inline StartTacticalPuzzleBattleRequest() : StartTacticalPuzzleBattleRequest(nullptr) {}
+  ~StartTacticalPuzzleBattleRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(StartTacticalPuzzleBattleRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(StartTacticalPuzzleBattleRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr StartTacticalPuzzleBattleRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline StartTacticalPuzzleBattleRequest(const StartTacticalPuzzleBattleRequest& from) : StartTacticalPuzzleBattleRequest(nullptr, from) {}
+  inline StartTacticalPuzzleBattleRequest(StartTacticalPuzzleBattleRequest&& from) noexcept : StartTacticalPuzzleBattleRequest(nullptr, ::std::move(from)) {}
+  inline StartTacticalPuzzleBattleRequest& operator=(const StartTacticalPuzzleBattleRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline StartTacticalPuzzleBattleRequest& operator=(StartTacticalPuzzleBattleRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const StartTacticalPuzzleBattleRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<StartTacticalPuzzleBattleRequest>(&StartTacticalPuzzleBattleRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 134;
+  friend void swap(StartTacticalPuzzleBattleRequest& a, StartTacticalPuzzleBattleRequest& b) { a.Swap(&b); }
+  inline void Swap(StartTacticalPuzzleBattleRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(StartTacticalPuzzleBattleRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] StartTacticalPuzzleBattleRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<StartTacticalPuzzleBattleRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const StartTacticalPuzzleBattleRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const StartTacticalPuzzleBattleRequest& from) { StartTacticalPuzzleBattleRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(StartTacticalPuzzleBattleRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.StartTacticalPuzzleBattleRequest"; }
+
+  explicit StartTacticalPuzzleBattleRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  StartTacticalPuzzleBattleRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const StartTacticalPuzzleBattleRequest& from);
+  StartTacticalPuzzleBattleRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, StartTacticalPuzzleBattleRequest&& from) noexcept
+      : StartTacticalPuzzleBattleRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kRequestIdFieldNumber = 3,
+    kPuzzleIdFieldNumber = 1,
+    kIsAuthorVerifyFieldNumber = 2,
+  };
+  // string request_id = 3;
+  void clear_request_id() ;
+  [[nodiscard]] const ::std::string& request_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_request_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_request_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_request_id();
+  void set_allocated_request_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_request_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_request_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_request_id();
+
+  public:
+  // uint64 puzzle_id = 1;
+  void clear_puzzle_id() ;
+  [[nodiscard]] ::uint64_t puzzle_id() const;
+  void set_puzzle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_puzzle_id() const;
+  void _internal_set_puzzle_id(::uint64_t value);
+
+  public:
+  // bool is_author_verify = 2;
+  void clear_is_author_verify() ;
+  [[nodiscard]] bool is_author_verify() const;
+  void set_is_author_verify(bool value);
+
+  private:
+  bool _internal_is_author_verify() const;
+  void _internal_set_is_author_verify(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.StartTacticalPuzzleBattleRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 57,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const StartTacticalPuzzleBattleRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr request_id_;
+    ::uint64_t puzzle_id_;
+    bool is_author_verify_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -10655,6 +11374,243 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListTournamentStandingsRequest fina
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListTacticalPuzzlesRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.ListTacticalPuzzlesRequest) */ {
+ public:
+  inline ListTacticalPuzzlesRequest() : ListTacticalPuzzlesRequest(nullptr) {}
+  ~ListTacticalPuzzlesRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ListTacticalPuzzlesRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ListTacticalPuzzlesRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ListTacticalPuzzlesRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ListTacticalPuzzlesRequest(const ListTacticalPuzzlesRequest& from) : ListTacticalPuzzlesRequest(nullptr, from) {}
+  inline ListTacticalPuzzlesRequest(ListTacticalPuzzlesRequest&& from) noexcept : ListTacticalPuzzlesRequest(nullptr, ::std::move(from)) {}
+  inline ListTacticalPuzzlesRequest& operator=(const ListTacticalPuzzlesRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ListTacticalPuzzlesRequest& operator=(ListTacticalPuzzlesRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ListTacticalPuzzlesRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListTacticalPuzzlesRequest>(&ListTacticalPuzzlesRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 126;
+  friend void swap(ListTacticalPuzzlesRequest& a, ListTacticalPuzzlesRequest& b) { a.Swap(&b); }
+  inline void Swap(ListTacticalPuzzlesRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ListTacticalPuzzlesRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ListTacticalPuzzlesRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ListTacticalPuzzlesRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ListTacticalPuzzlesRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ListTacticalPuzzlesRequest& from) { ListTacticalPuzzlesRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ListTacticalPuzzlesRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.ListTacticalPuzzlesRequest"; }
+
+  explicit ListTacticalPuzzlesRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ListTacticalPuzzlesRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ListTacticalPuzzlesRequest& from);
+  ListTacticalPuzzlesRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ListTacticalPuzzlesRequest&& from) noexcept
+      : ListTacticalPuzzlesRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kTabFieldNumber = 1,
+    kTagFilterMaskFieldNumber = 2,
+    kOffsetFieldNumber = 3,
+    kLimitFieldNumber = 4,
+  };
+  // .match.TacticalPuzzleListTab tab = 1;
+  void clear_tab() ;
+  [[nodiscard]] ::match::TacticalPuzzleListTab tab() const;
+  void set_tab(::match::TacticalPuzzleListTab value);
+
+  private:
+  ::match::TacticalPuzzleListTab _internal_tab() const;
+  void _internal_set_tab(::match::TacticalPuzzleListTab value);
+
+  public:
+  // uint32 tag_filter_mask = 2;
+  void clear_tag_filter_mask() ;
+  [[nodiscard]] ::uint32_t tag_filter_mask() const;
+  void set_tag_filter_mask(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_tag_filter_mask() const;
+  void _internal_set_tag_filter_mask(::uint32_t value);
+
+  public:
+  // uint32 offset = 3;
+  void clear_offset() ;
+  [[nodiscard]] ::uint32_t offset() const;
+  void set_offset(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_offset() const;
+  void _internal_set_offset(::uint32_t value);
+
+  public:
+  // uint32 limit = 4;
+  void clear_limit() ;
+  [[nodiscard]] ::uint32_t limit() const;
+  void set_limit(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_limit() const;
+  void _internal_set_limit(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.ListTacticalPuzzlesRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ListTacticalPuzzlesRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    int tab_;
+    ::uint32_t tag_filter_mask_;
+    ::uint32_t offset_;
+    ::uint32_t limit_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListJianghuGrudgesRequest final : public ::google::protobuf::internal::ZeroFieldsBase
 /* @@protoc_insertion_point(class_definition:match.ListJianghuGrudgesRequest) */ {
  public:
@@ -11065,6 +12021,207 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListBattleReportsRequest final : pu
   friend class ::google::protobuf::Arena::InternalHelper;
   using InternalArenaConstructable_ = void;
   using DestructorSkippable_ = void;
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LikeTacticalPuzzleRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.LikeTacticalPuzzleRequest) */ {
+ public:
+  inline LikeTacticalPuzzleRequest() : LikeTacticalPuzzleRequest(nullptr) {}
+  ~LikeTacticalPuzzleRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(LikeTacticalPuzzleRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(LikeTacticalPuzzleRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr LikeTacticalPuzzleRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline LikeTacticalPuzzleRequest(const LikeTacticalPuzzleRequest& from) : LikeTacticalPuzzleRequest(nullptr, from) {}
+  inline LikeTacticalPuzzleRequest(LikeTacticalPuzzleRequest&& from) noexcept : LikeTacticalPuzzleRequest(nullptr, ::std::move(from)) {}
+  inline LikeTacticalPuzzleRequest& operator=(const LikeTacticalPuzzleRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline LikeTacticalPuzzleRequest& operator=(LikeTacticalPuzzleRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const LikeTacticalPuzzleRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<LikeTacticalPuzzleRequest>(&LikeTacticalPuzzleRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 136;
+  friend void swap(LikeTacticalPuzzleRequest& a, LikeTacticalPuzzleRequest& b) { a.Swap(&b); }
+  inline void Swap(LikeTacticalPuzzleRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(LikeTacticalPuzzleRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] LikeTacticalPuzzleRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<LikeTacticalPuzzleRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const LikeTacticalPuzzleRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const LikeTacticalPuzzleRequest& from) { LikeTacticalPuzzleRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(LikeTacticalPuzzleRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.LikeTacticalPuzzleRequest"; }
+
+  explicit LikeTacticalPuzzleRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  LikeTacticalPuzzleRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const LikeTacticalPuzzleRequest& from);
+  LikeTacticalPuzzleRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, LikeTacticalPuzzleRequest&& from) noexcept
+      : LikeTacticalPuzzleRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPuzzleIdFieldNumber = 1,
+  };
+  // uint64 puzzle_id = 1;
+  void clear_puzzle_id() ;
+  [[nodiscard]] ::uint64_t puzzle_id() const;
+  void set_puzzle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_puzzle_id() const;
+  void _internal_set_puzzle_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.LikeTacticalPuzzleRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const LikeTacticalPuzzleRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t puzzle_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
   friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
 };
 // -------------------------------------------------------------------
@@ -13357,6 +14514,408 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetTournamentHighlightsRequest fina
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetTacticalPuzzleSolutionReplayRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.GetTacticalPuzzleSolutionReplayRequest) */ {
+ public:
+  inline GetTacticalPuzzleSolutionReplayRequest() : GetTacticalPuzzleSolutionReplayRequest(nullptr) {}
+  ~GetTacticalPuzzleSolutionReplayRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetTacticalPuzzleSolutionReplayRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetTacticalPuzzleSolutionReplayRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetTacticalPuzzleSolutionReplayRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetTacticalPuzzleSolutionReplayRequest(const GetTacticalPuzzleSolutionReplayRequest& from) : GetTacticalPuzzleSolutionReplayRequest(nullptr, from) {}
+  inline GetTacticalPuzzleSolutionReplayRequest(GetTacticalPuzzleSolutionReplayRequest&& from) noexcept : GetTacticalPuzzleSolutionReplayRequest(nullptr, ::std::move(from)) {}
+  inline GetTacticalPuzzleSolutionReplayRequest& operator=(const GetTacticalPuzzleSolutionReplayRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetTacticalPuzzleSolutionReplayRequest& operator=(GetTacticalPuzzleSolutionReplayRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetTacticalPuzzleSolutionReplayRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetTacticalPuzzleSolutionReplayRequest>(&GetTacticalPuzzleSolutionReplayRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 138;
+  friend void swap(GetTacticalPuzzleSolutionReplayRequest& a, GetTacticalPuzzleSolutionReplayRequest& b) { a.Swap(&b); }
+  inline void Swap(GetTacticalPuzzleSolutionReplayRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetTacticalPuzzleSolutionReplayRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetTacticalPuzzleSolutionReplayRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetTacticalPuzzleSolutionReplayRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetTacticalPuzzleSolutionReplayRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetTacticalPuzzleSolutionReplayRequest& from) { GetTacticalPuzzleSolutionReplayRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetTacticalPuzzleSolutionReplayRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.GetTacticalPuzzleSolutionReplayRequest"; }
+
+  explicit GetTacticalPuzzleSolutionReplayRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetTacticalPuzzleSolutionReplayRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetTacticalPuzzleSolutionReplayRequest& from);
+  GetTacticalPuzzleSolutionReplayRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetTacticalPuzzleSolutionReplayRequest&& from) noexcept
+      : GetTacticalPuzzleSolutionReplayRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPuzzleIdFieldNumber = 1,
+  };
+  // uint64 puzzle_id = 1;
+  void clear_puzzle_id() ;
+  [[nodiscard]] ::uint64_t puzzle_id() const;
+  void set_puzzle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_puzzle_id() const;
+  void _internal_set_puzzle_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.GetTacticalPuzzleSolutionReplayRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetTacticalPuzzleSolutionReplayRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t puzzle_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetTacticalPuzzleRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.GetTacticalPuzzleRequest) */ {
+ public:
+  inline GetTacticalPuzzleRequest() : GetTacticalPuzzleRequest(nullptr) {}
+  ~GetTacticalPuzzleRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetTacticalPuzzleRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetTacticalPuzzleRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetTacticalPuzzleRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetTacticalPuzzleRequest(const GetTacticalPuzzleRequest& from) : GetTacticalPuzzleRequest(nullptr, from) {}
+  inline GetTacticalPuzzleRequest(GetTacticalPuzzleRequest&& from) noexcept : GetTacticalPuzzleRequest(nullptr, ::std::move(from)) {}
+  inline GetTacticalPuzzleRequest& operator=(const GetTacticalPuzzleRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetTacticalPuzzleRequest& operator=(GetTacticalPuzzleRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetTacticalPuzzleRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetTacticalPuzzleRequest>(&GetTacticalPuzzleRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 128;
+  friend void swap(GetTacticalPuzzleRequest& a, GetTacticalPuzzleRequest& b) { a.Swap(&b); }
+  inline void Swap(GetTacticalPuzzleRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetTacticalPuzzleRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetTacticalPuzzleRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetTacticalPuzzleRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetTacticalPuzzleRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetTacticalPuzzleRequest& from) { GetTacticalPuzzleRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetTacticalPuzzleRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.GetTacticalPuzzleRequest"; }
+
+  explicit GetTacticalPuzzleRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetTacticalPuzzleRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetTacticalPuzzleRequest& from);
+  GetTacticalPuzzleRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetTacticalPuzzleRequest&& from) noexcept
+      : GetTacticalPuzzleRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPuzzleIdFieldNumber = 1,
+  };
+  // uint64 puzzle_id = 1;
+  void clear_puzzle_id() ;
+  [[nodiscard]] ::uint64_t puzzle_id() const;
+  void set_puzzle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_puzzle_id() const;
+  void _internal_set_puzzle_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.GetTacticalPuzzleRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetTacticalPuzzleRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t puzzle_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSharedTrialReplayRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:match.GetSharedTrialReplayRequest) */ {
  public:
@@ -14911,6 +16470,207 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DismissJianghuGrudgeRequest final :
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint64_t peer_player_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeleteTacticalPuzzleRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.DeleteTacticalPuzzleRequest) */ {
+ public:
+  inline DeleteTacticalPuzzleRequest() : DeleteTacticalPuzzleRequest(nullptr) {}
+  ~DeleteTacticalPuzzleRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(DeleteTacticalPuzzleRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(DeleteTacticalPuzzleRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr DeleteTacticalPuzzleRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline DeleteTacticalPuzzleRequest(const DeleteTacticalPuzzleRequest& from) : DeleteTacticalPuzzleRequest(nullptr, from) {}
+  inline DeleteTacticalPuzzleRequest(DeleteTacticalPuzzleRequest&& from) noexcept : DeleteTacticalPuzzleRequest(nullptr, ::std::move(from)) {}
+  inline DeleteTacticalPuzzleRequest& operator=(const DeleteTacticalPuzzleRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline DeleteTacticalPuzzleRequest& operator=(DeleteTacticalPuzzleRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const DeleteTacticalPuzzleRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DeleteTacticalPuzzleRequest>(&DeleteTacticalPuzzleRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 132;
+  friend void swap(DeleteTacticalPuzzleRequest& a, DeleteTacticalPuzzleRequest& b) { a.Swap(&b); }
+  inline void Swap(DeleteTacticalPuzzleRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(DeleteTacticalPuzzleRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] DeleteTacticalPuzzleRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<DeleteTacticalPuzzleRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const DeleteTacticalPuzzleRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const DeleteTacticalPuzzleRequest& from) { DeleteTacticalPuzzleRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(DeleteTacticalPuzzleRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.DeleteTacticalPuzzleRequest"; }
+
+  explicit DeleteTacticalPuzzleRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  DeleteTacticalPuzzleRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const DeleteTacticalPuzzleRequest& from);
+  DeleteTacticalPuzzleRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, DeleteTacticalPuzzleRequest&& from) noexcept
+      : DeleteTacticalPuzzleRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPuzzleIdFieldNumber = 1,
+  };
+  // uint64 puzzle_id = 1;
+  void clear_puzzle_id() ;
+  [[nodiscard]] ::uint64_t puzzle_id() const;
+  void set_puzzle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_puzzle_id() const;
+  void _internal_set_puzzle_id(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.DeleteTacticalPuzzleRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const DeleteTacticalPuzzleRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t puzzle_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -21009,6 +22769,237 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartTournamentMatchResponse final 
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartTacticalPuzzleBattleResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.StartTacticalPuzzleBattleResponse) */ {
+ public:
+  inline StartTacticalPuzzleBattleResponse() : StartTacticalPuzzleBattleResponse(nullptr) {}
+  ~StartTacticalPuzzleBattleResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(StartTacticalPuzzleBattleResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(StartTacticalPuzzleBattleResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr StartTacticalPuzzleBattleResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline StartTacticalPuzzleBattleResponse(const StartTacticalPuzzleBattleResponse& from) : StartTacticalPuzzleBattleResponse(nullptr, from) {}
+  inline StartTacticalPuzzleBattleResponse(StartTacticalPuzzleBattleResponse&& from) noexcept : StartTacticalPuzzleBattleResponse(nullptr, ::std::move(from)) {}
+  inline StartTacticalPuzzleBattleResponse& operator=(const StartTacticalPuzzleBattleResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline StartTacticalPuzzleBattleResponse& operator=(StartTacticalPuzzleBattleResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const StartTacticalPuzzleBattleResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<StartTacticalPuzzleBattleResponse>(&StartTacticalPuzzleBattleResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 135;
+  friend void swap(StartTacticalPuzzleBattleResponse& a, StartTacticalPuzzleBattleResponse& b) { a.Swap(&b); }
+  inline void Swap(StartTacticalPuzzleBattleResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(StartTacticalPuzzleBattleResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] StartTacticalPuzzleBattleResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<StartTacticalPuzzleBattleResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const StartTacticalPuzzleBattleResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const StartTacticalPuzzleBattleResponse& from) { StartTacticalPuzzleBattleResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(StartTacticalPuzzleBattleResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.StartTacticalPuzzleBattleResponse"; }
+
+  explicit StartTacticalPuzzleBattleResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  StartTacticalPuzzleBattleResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const StartTacticalPuzzleBattleResponse& from);
+  StartTacticalPuzzleBattleResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, StartTacticalPuzzleBattleResponse&& from) noexcept
+      : StartTacticalPuzzleBattleResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kBattleIdFieldNumber = 2,
+    kSpecRevisionFieldNumber = 3,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // uint64 battle_id = 2;
+  void clear_battle_id() ;
+  [[nodiscard]] ::uint64_t battle_id() const;
+  void set_battle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_battle_id() const;
+  void _internal_set_battle_id(::uint64_t value);
+
+  public:
+  // uint32 spec_revision = 3;
+  void clear_spec_revision() ;
+  [[nodiscard]] ::uint32_t spec_revision() const;
+  void set_spec_revision(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_spec_revision() const;
+  void _internal_set_spec_revision(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.StartTacticalPuzzleBattleResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const StartTacticalPuzzleBattleResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::uint64_t battle_id_;
+    ::uint32_t spec_revision_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SpectateBattleRecord final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:match.SpectateBattleRecord) */ {
  public:
@@ -23730,6 +25721,237 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListWatchableBattlesResponse final 
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LikeTacticalPuzzleResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.LikeTacticalPuzzleResponse) */ {
+ public:
+  inline LikeTacticalPuzzleResponse() : LikeTacticalPuzzleResponse(nullptr) {}
+  ~LikeTacticalPuzzleResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(LikeTacticalPuzzleResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(LikeTacticalPuzzleResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr LikeTacticalPuzzleResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline LikeTacticalPuzzleResponse(const LikeTacticalPuzzleResponse& from) : LikeTacticalPuzzleResponse(nullptr, from) {}
+  inline LikeTacticalPuzzleResponse(LikeTacticalPuzzleResponse&& from) noexcept : LikeTacticalPuzzleResponse(nullptr, ::std::move(from)) {}
+  inline LikeTacticalPuzzleResponse& operator=(const LikeTacticalPuzzleResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline LikeTacticalPuzzleResponse& operator=(LikeTacticalPuzzleResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const LikeTacticalPuzzleResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<LikeTacticalPuzzleResponse>(&LikeTacticalPuzzleResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 137;
+  friend void swap(LikeTacticalPuzzleResponse& a, LikeTacticalPuzzleResponse& b) { a.Swap(&b); }
+  inline void Swap(LikeTacticalPuzzleResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(LikeTacticalPuzzleResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] LikeTacticalPuzzleResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<LikeTacticalPuzzleResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const LikeTacticalPuzzleResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const LikeTacticalPuzzleResponse& from) { LikeTacticalPuzzleResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(LikeTacticalPuzzleResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.LikeTacticalPuzzleResponse"; }
+
+  explicit LikeTacticalPuzzleResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  LikeTacticalPuzzleResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const LikeTacticalPuzzleResponse& from);
+  LikeTacticalPuzzleResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, LikeTacticalPuzzleResponse&& from) noexcept
+      : LikeTacticalPuzzleResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kLikeCountFieldNumber = 2,
+    kSelfLikedFieldNumber = 3,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // uint32 like_count = 2;
+  void clear_like_count() ;
+  [[nodiscard]] ::uint32_t like_count() const;
+  void set_like_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_like_count() const;
+  void _internal_set_like_count(::uint32_t value);
+
+  public:
+  // bool self_liked = 3;
+  void clear_self_liked() ;
+  [[nodiscard]] bool self_liked() const;
+  void set_self_liked(bool value);
+
+  private:
+  bool _internal_self_liked() const;
+  void _internal_set_self_liked(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.LikeTacticalPuzzleResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const LikeTacticalPuzzleResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::uint32_t like_count_;
+    bool self_liked_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED JoinQueueResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:match.JoinQueueResponse) */ {
  public:
@@ -25815,6 +28037,231 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetTournamentPredictionBoardRespons
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetTacticalPuzzleSolutionReplayResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.GetTacticalPuzzleSolutionReplayResponse) */ {
+ public:
+  inline GetTacticalPuzzleSolutionReplayResponse() : GetTacticalPuzzleSolutionReplayResponse(nullptr) {}
+  ~GetTacticalPuzzleSolutionReplayResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetTacticalPuzzleSolutionReplayResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetTacticalPuzzleSolutionReplayResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetTacticalPuzzleSolutionReplayResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetTacticalPuzzleSolutionReplayResponse(const GetTacticalPuzzleSolutionReplayResponse& from) : GetTacticalPuzzleSolutionReplayResponse(nullptr, from) {}
+  inline GetTacticalPuzzleSolutionReplayResponse(GetTacticalPuzzleSolutionReplayResponse&& from) noexcept : GetTacticalPuzzleSolutionReplayResponse(nullptr, ::std::move(from)) {}
+  inline GetTacticalPuzzleSolutionReplayResponse& operator=(const GetTacticalPuzzleSolutionReplayResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetTacticalPuzzleSolutionReplayResponse& operator=(GetTacticalPuzzleSolutionReplayResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetTacticalPuzzleSolutionReplayResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetTacticalPuzzleSolutionReplayResponse>(&GetTacticalPuzzleSolutionReplayResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 139;
+  friend void swap(GetTacticalPuzzleSolutionReplayResponse& a, GetTacticalPuzzleSolutionReplayResponse& b) { a.Swap(&b); }
+  inline void Swap(GetTacticalPuzzleSolutionReplayResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetTacticalPuzzleSolutionReplayResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetTacticalPuzzleSolutionReplayResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetTacticalPuzzleSolutionReplayResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetTacticalPuzzleSolutionReplayResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetTacticalPuzzleSolutionReplayResponse& from) { GetTacticalPuzzleSolutionReplayResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetTacticalPuzzleSolutionReplayResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.GetTacticalPuzzleSolutionReplayResponse"; }
+
+  explicit GetTacticalPuzzleSolutionReplayResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetTacticalPuzzleSolutionReplayResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetTacticalPuzzleSolutionReplayResponse& from);
+  GetTacticalPuzzleSolutionReplayResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetTacticalPuzzleSolutionReplayResponse&& from) noexcept
+      : GetTacticalPuzzleSolutionReplayResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kReplayFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .BattleReplayEnvelope replay = 2;
+  [[nodiscard]] bool has_replay()
+      const;
+  void clear_replay() ;
+  [[nodiscard]] const ::BattleReplayEnvelope& replay() const;
+  [[nodiscard]] ::BattleReplayEnvelope* PROTOBUF_NULLABLE release_replay();
+  ::BattleReplayEnvelope* PROTOBUF_NONNULL mutable_replay();
+  void set_allocated_replay(::BattleReplayEnvelope* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_replay(::BattleReplayEnvelope* PROTOBUF_NULLABLE value);
+  ::BattleReplayEnvelope* PROTOBUF_NULLABLE unsafe_arena_release_replay();
+
+  private:
+  const ::BattleReplayEnvelope& _internal_replay() const;
+  ::BattleReplayEnvelope* PROTOBUF_NONNULL _internal_mutable_replay();
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.GetTacticalPuzzleSolutionReplayResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetTacticalPuzzleSolutionReplayResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::BattleReplayEnvelope* PROTOBUF_NULLABLE replay_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSharedTrialReplayResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:match.GetSharedTrialReplayResponse) */ {
  public:
@@ -26891,6 +29338,213 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DismissJianghuGrudgeResponse final 
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
         const DismissJianghuGrudgeResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeleteTacticalPuzzleResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.DeleteTacticalPuzzleResponse) */ {
+ public:
+  inline DeleteTacticalPuzzleResponse() : DeleteTacticalPuzzleResponse(nullptr) {}
+  ~DeleteTacticalPuzzleResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(DeleteTacticalPuzzleResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(DeleteTacticalPuzzleResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr DeleteTacticalPuzzleResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline DeleteTacticalPuzzleResponse(const DeleteTacticalPuzzleResponse& from) : DeleteTacticalPuzzleResponse(nullptr, from) {}
+  inline DeleteTacticalPuzzleResponse(DeleteTacticalPuzzleResponse&& from) noexcept : DeleteTacticalPuzzleResponse(nullptr, ::std::move(from)) {}
+  inline DeleteTacticalPuzzleResponse& operator=(const DeleteTacticalPuzzleResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline DeleteTacticalPuzzleResponse& operator=(DeleteTacticalPuzzleResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const DeleteTacticalPuzzleResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DeleteTacticalPuzzleResponse>(&DeleteTacticalPuzzleResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 133;
+  friend void swap(DeleteTacticalPuzzleResponse& a, DeleteTacticalPuzzleResponse& b) { a.Swap(&b); }
+  inline void Swap(DeleteTacticalPuzzleResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(DeleteTacticalPuzzleResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] DeleteTacticalPuzzleResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<DeleteTacticalPuzzleResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const DeleteTacticalPuzzleResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const DeleteTacticalPuzzleResponse& from) { DeleteTacticalPuzzleResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(DeleteTacticalPuzzleResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.DeleteTacticalPuzzleResponse"; }
+
+  explicit DeleteTacticalPuzzleResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  DeleteTacticalPuzzleResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const DeleteTacticalPuzzleResponse& from);
+  DeleteTacticalPuzzleResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, DeleteTacticalPuzzleResponse&& from) noexcept
+      : DeleteTacticalPuzzleResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.DeleteTacticalPuzzleResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const DeleteTacticalPuzzleResponse& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
@@ -29262,6 +31916,721 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpdateTournamentLineupResponse fina
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
     ::match::TournamentSquadView* PROTOBUF_NULLABLE squad_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TacticalPuzzleSummaryView final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.TacticalPuzzleSummaryView) */ {
+ public:
+  inline TacticalPuzzleSummaryView() : TacticalPuzzleSummaryView(nullptr) {}
+  ~TacticalPuzzleSummaryView() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(TacticalPuzzleSummaryView* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(TacticalPuzzleSummaryView));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr TacticalPuzzleSummaryView(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline TacticalPuzzleSummaryView(const TacticalPuzzleSummaryView& from) : TacticalPuzzleSummaryView(nullptr, from) {}
+  inline TacticalPuzzleSummaryView(TacticalPuzzleSummaryView&& from) noexcept : TacticalPuzzleSummaryView(nullptr, ::std::move(from)) {}
+  inline TacticalPuzzleSummaryView& operator=(const TacticalPuzzleSummaryView& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline TacticalPuzzleSummaryView& operator=(TacticalPuzzleSummaryView&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const TacticalPuzzleSummaryView& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TacticalPuzzleSummaryView>(&TacticalPuzzleSummaryView_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 124;
+  friend void swap(TacticalPuzzleSummaryView& a, TacticalPuzzleSummaryView& b) { a.Swap(&b); }
+  inline void Swap(TacticalPuzzleSummaryView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(TacticalPuzzleSummaryView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] TacticalPuzzleSummaryView* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<TacticalPuzzleSummaryView>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const TacticalPuzzleSummaryView& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const TacticalPuzzleSummaryView& from) { TacticalPuzzleSummaryView::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(TacticalPuzzleSummaryView* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.TacticalPuzzleSummaryView"; }
+
+  explicit TacticalPuzzleSummaryView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  TacticalPuzzleSummaryView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TacticalPuzzleSummaryView& from);
+  TacticalPuzzleSummaryView(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, TacticalPuzzleSummaryView&& from) noexcept
+      : TacticalPuzzleSummaryView(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kAuthorNameFieldNumber = 3,
+    kTitleFieldNumber = 6,
+    kHintTextFieldNumber = 7,
+    kSpecFieldNumber = 9,
+    kPuzzleIdFieldNumber = 1,
+    kAuthorPlayerIdFieldNumber = 2,
+    kStateFieldNumber = 4,
+    kSpecRevisionFieldNumber = 5,
+    kTagMaskFieldNumber = 8,
+    kAuthorBestRoundsFieldNumber = 10,
+    kAttemptCountFieldNumber = 11,
+    kClearCountFieldNumber = 12,
+    kGlobalBestRoundsFieldNumber = 13,
+    kLikeCountFieldNumber = 14,
+    kSelfBestRoundsFieldNumber = 16,
+    kSelfClearedFieldNumber = 15,
+    kSelfLikedFieldNumber = 17,
+    kHasSolutionReplayFieldNumber = 18,
+    kPublishedMsFieldNumber = 19,
+    kUpdatedMsFieldNumber = 20,
+  };
+  // string author_name = 3;
+  void clear_author_name() ;
+  [[nodiscard]] const ::std::string& author_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_author_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_author_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_author_name();
+  void set_allocated_author_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_author_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_author_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_author_name();
+
+  public:
+  // string title = 6;
+  void clear_title() ;
+  [[nodiscard]] const ::std::string& title() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_title(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_title();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_title();
+  void set_allocated_title(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_title() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_title(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_title();
+
+  public:
+  // string hint_text = 7;
+  void clear_hint_text() ;
+  [[nodiscard]] const ::std::string& hint_text() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_hint_text(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_hint_text();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_hint_text();
+  void set_allocated_hint_text(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_hint_text() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_hint_text(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_hint_text();
+
+  public:
+  // .TacticalPuzzleSpec spec = 9;
+  [[nodiscard]] bool has_spec()
+      const;
+  void clear_spec() ;
+  [[nodiscard]] const ::TacticalPuzzleSpec& spec() const;
+  [[nodiscard]] ::TacticalPuzzleSpec* PROTOBUF_NULLABLE release_spec();
+  ::TacticalPuzzleSpec* PROTOBUF_NONNULL mutable_spec();
+  void set_allocated_spec(::TacticalPuzzleSpec* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_spec(::TacticalPuzzleSpec* PROTOBUF_NULLABLE value);
+  ::TacticalPuzzleSpec* PROTOBUF_NULLABLE unsafe_arena_release_spec();
+
+  private:
+  const ::TacticalPuzzleSpec& _internal_spec() const;
+  ::TacticalPuzzleSpec* PROTOBUF_NONNULL _internal_mutable_spec();
+
+  public:
+  // uint64 puzzle_id = 1;
+  void clear_puzzle_id() ;
+  [[nodiscard]] ::uint64_t puzzle_id() const;
+  void set_puzzle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_puzzle_id() const;
+  void _internal_set_puzzle_id(::uint64_t value);
+
+  public:
+  // uint64 author_player_id = 2;
+  void clear_author_player_id() ;
+  [[nodiscard]] ::uint64_t author_player_id() const;
+  void set_author_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_author_player_id() const;
+  void _internal_set_author_player_id(::uint64_t value);
+
+  public:
+  // .match.TacticalPuzzleState state = 4;
+  void clear_state() ;
+  [[nodiscard]] ::match::TacticalPuzzleState state() const;
+  void set_state(::match::TacticalPuzzleState value);
+
+  private:
+  ::match::TacticalPuzzleState _internal_state() const;
+  void _internal_set_state(::match::TacticalPuzzleState value);
+
+  public:
+  // uint32 spec_revision = 5;
+  void clear_spec_revision() ;
+  [[nodiscard]] ::uint32_t spec_revision() const;
+  void set_spec_revision(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_spec_revision() const;
+  void _internal_set_spec_revision(::uint32_t value);
+
+  public:
+  // uint32 tag_mask = 8;
+  void clear_tag_mask() ;
+  [[nodiscard]] ::uint32_t tag_mask() const;
+  void set_tag_mask(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_tag_mask() const;
+  void _internal_set_tag_mask(::uint32_t value);
+
+  public:
+  // uint32 author_best_rounds = 10;
+  void clear_author_best_rounds() ;
+  [[nodiscard]] ::uint32_t author_best_rounds() const;
+  void set_author_best_rounds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_author_best_rounds() const;
+  void _internal_set_author_best_rounds(::uint32_t value);
+
+  public:
+  // uint32 attempt_count = 11;
+  void clear_attempt_count() ;
+  [[nodiscard]] ::uint32_t attempt_count() const;
+  void set_attempt_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_attempt_count() const;
+  void _internal_set_attempt_count(::uint32_t value);
+
+  public:
+  // uint32 clear_count = 12;
+  void clear_clear_count() ;
+  [[nodiscard]] ::uint32_t clear_count() const;
+  void set_clear_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_clear_count() const;
+  void _internal_set_clear_count(::uint32_t value);
+
+  public:
+  // uint32 global_best_rounds = 13;
+  void clear_global_best_rounds() ;
+  [[nodiscard]] ::uint32_t global_best_rounds() const;
+  void set_global_best_rounds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_global_best_rounds() const;
+  void _internal_set_global_best_rounds(::uint32_t value);
+
+  public:
+  // uint32 like_count = 14;
+  void clear_like_count() ;
+  [[nodiscard]] ::uint32_t like_count() const;
+  void set_like_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_like_count() const;
+  void _internal_set_like_count(::uint32_t value);
+
+  public:
+  // uint32 self_best_rounds = 16;
+  void clear_self_best_rounds() ;
+  [[nodiscard]] ::uint32_t self_best_rounds() const;
+  void set_self_best_rounds(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_self_best_rounds() const;
+  void _internal_set_self_best_rounds(::uint32_t value);
+
+  public:
+  // bool self_cleared = 15;
+  void clear_self_cleared() ;
+  [[nodiscard]] bool self_cleared() const;
+  void set_self_cleared(bool value);
+
+  private:
+  bool _internal_self_cleared() const;
+  void _internal_set_self_cleared(bool value);
+
+  public:
+  // bool self_liked = 17;
+  void clear_self_liked() ;
+  [[nodiscard]] bool self_liked() const;
+  void set_self_liked(bool value);
+
+  private:
+  bool _internal_self_liked() const;
+  void _internal_set_self_liked(bool value);
+
+  public:
+  // bool has_solution_replay = 18;
+  void clear_has_solution_replay() ;
+  [[nodiscard]] bool has_solution_replay() const;
+  void set_has_solution_replay(bool value);
+
+  private:
+  bool _internal_has_solution_replay() const;
+  void _internal_set_has_solution_replay(bool value);
+
+  public:
+  // uint64 published_ms = 19;
+  void clear_published_ms() ;
+  [[nodiscard]] ::uint64_t published_ms() const;
+  void set_published_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_published_ms() const;
+  void _internal_set_published_ms(::uint64_t value);
+
+  public:
+  // uint64 updated_ms = 20;
+  void clear_updated_ms() ;
+  [[nodiscard]] ::uint64_t updated_ms() const;
+  void set_updated_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_updated_ms() const;
+  void _internal_set_updated_ms(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.TacticalPuzzleSummaryView)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<5, 20,
+                          1, 81,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const TacticalPuzzleSummaryView& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr author_name_;
+    ::google::protobuf::internal::ArenaStringPtr title_;
+    ::google::protobuf::internal::ArenaStringPtr hint_text_;
+    ::TacticalPuzzleSpec* PROTOBUF_NULLABLE spec_;
+    ::uint64_t puzzle_id_;
+    ::uint64_t author_player_id_;
+    int state_;
+    ::uint32_t spec_revision_;
+    ::uint32_t tag_mask_;
+    ::uint32_t author_best_rounds_;
+    ::uint32_t attempt_count_;
+    ::uint32_t clear_count_;
+    ::uint32_t global_best_rounds_;
+    ::uint32_t like_count_;
+    ::uint32_t self_best_rounds_;
+    bool self_cleared_;
+    bool self_liked_;
+    bool has_solution_replay_;
+    ::uint64_t published_ms_;
+    ::uint64_t updated_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveTacticalPuzzleDraftRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.SaveTacticalPuzzleDraftRequest) */ {
+ public:
+  inline SaveTacticalPuzzleDraftRequest() : SaveTacticalPuzzleDraftRequest(nullptr) {}
+  ~SaveTacticalPuzzleDraftRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SaveTacticalPuzzleDraftRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SaveTacticalPuzzleDraftRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SaveTacticalPuzzleDraftRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SaveTacticalPuzzleDraftRequest(const SaveTacticalPuzzleDraftRequest& from) : SaveTacticalPuzzleDraftRequest(nullptr, from) {}
+  inline SaveTacticalPuzzleDraftRequest(SaveTacticalPuzzleDraftRequest&& from) noexcept : SaveTacticalPuzzleDraftRequest(nullptr, ::std::move(from)) {}
+  inline SaveTacticalPuzzleDraftRequest& operator=(const SaveTacticalPuzzleDraftRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SaveTacticalPuzzleDraftRequest& operator=(SaveTacticalPuzzleDraftRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SaveTacticalPuzzleDraftRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SaveTacticalPuzzleDraftRequest>(&SaveTacticalPuzzleDraftRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 130;
+  friend void swap(SaveTacticalPuzzleDraftRequest& a, SaveTacticalPuzzleDraftRequest& b) { a.Swap(&b); }
+  inline void Swap(SaveTacticalPuzzleDraftRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SaveTacticalPuzzleDraftRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SaveTacticalPuzzleDraftRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SaveTacticalPuzzleDraftRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SaveTacticalPuzzleDraftRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SaveTacticalPuzzleDraftRequest& from) { SaveTacticalPuzzleDraftRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SaveTacticalPuzzleDraftRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.SaveTacticalPuzzleDraftRequest"; }
+
+  explicit SaveTacticalPuzzleDraftRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SaveTacticalPuzzleDraftRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SaveTacticalPuzzleDraftRequest& from);
+  SaveTacticalPuzzleDraftRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SaveTacticalPuzzleDraftRequest&& from) noexcept
+      : SaveTacticalPuzzleDraftRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kTitleFieldNumber = 2,
+    kHintTextFieldNumber = 3,
+    kSpecFieldNumber = 5,
+    kPuzzleIdFieldNumber = 1,
+    kTagMaskFieldNumber = 4,
+  };
+  // string title = 2;
+  void clear_title() ;
+  [[nodiscard]] const ::std::string& title() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_title(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_title();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_title();
+  void set_allocated_title(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_title() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_title(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_title();
+
+  public:
+  // string hint_text = 3;
+  void clear_hint_text() ;
+  [[nodiscard]] const ::std::string& hint_text() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_hint_text(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_hint_text();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_hint_text();
+  void set_allocated_hint_text(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_hint_text() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_hint_text(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_hint_text();
+
+  public:
+  // .TacticalPuzzleSpec spec = 5;
+  [[nodiscard]] bool has_spec()
+      const;
+  void clear_spec() ;
+  [[nodiscard]] const ::TacticalPuzzleSpec& spec() const;
+  [[nodiscard]] ::TacticalPuzzleSpec* PROTOBUF_NULLABLE release_spec();
+  ::TacticalPuzzleSpec* PROTOBUF_NONNULL mutable_spec();
+  void set_allocated_spec(::TacticalPuzzleSpec* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_spec(::TacticalPuzzleSpec* PROTOBUF_NULLABLE value);
+  ::TacticalPuzzleSpec* PROTOBUF_NULLABLE unsafe_arena_release_spec();
+
+  private:
+  const ::TacticalPuzzleSpec& _internal_spec() const;
+  ::TacticalPuzzleSpec* PROTOBUF_NONNULL _internal_mutable_spec();
+
+  public:
+  // uint64 puzzle_id = 1;
+  void clear_puzzle_id() ;
+  [[nodiscard]] ::uint64_t puzzle_id() const;
+  void set_puzzle_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_puzzle_id() const;
+  void _internal_set_puzzle_id(::uint64_t value);
+
+  public:
+  // uint32 tag_mask = 4;
+  void clear_tag_mask() ;
+  [[nodiscard]] ::uint32_t tag_mask() const;
+  void set_tag_mask(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_tag_mask() const;
+  void _internal_set_tag_mask(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.SaveTacticalPuzzleDraftRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          1, 59,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SaveTacticalPuzzleDraftRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr title_;
+    ::google::protobuf::internal::ArenaStringPtr hint_text_;
+    ::TacticalPuzzleSpec* PROTOBUF_NULLABLE spec_;
+    ::uint64_t puzzle_id_;
+    ::uint32_t tag_mask_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -33214,6 +36583,716 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimTournamentRewardResponse final
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::match::TournamentPlayerRewardView > claimed_rewards_;
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SaveTacticalPuzzleDraftResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.SaveTacticalPuzzleDraftResponse) */ {
+ public:
+  inline SaveTacticalPuzzleDraftResponse() : SaveTacticalPuzzleDraftResponse(nullptr) {}
+  ~SaveTacticalPuzzleDraftResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SaveTacticalPuzzleDraftResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SaveTacticalPuzzleDraftResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SaveTacticalPuzzleDraftResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SaveTacticalPuzzleDraftResponse(const SaveTacticalPuzzleDraftResponse& from) : SaveTacticalPuzzleDraftResponse(nullptr, from) {}
+  inline SaveTacticalPuzzleDraftResponse(SaveTacticalPuzzleDraftResponse&& from) noexcept : SaveTacticalPuzzleDraftResponse(nullptr, ::std::move(from)) {}
+  inline SaveTacticalPuzzleDraftResponse& operator=(const SaveTacticalPuzzleDraftResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SaveTacticalPuzzleDraftResponse& operator=(SaveTacticalPuzzleDraftResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SaveTacticalPuzzleDraftResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SaveTacticalPuzzleDraftResponse>(&SaveTacticalPuzzleDraftResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 131;
+  friend void swap(SaveTacticalPuzzleDraftResponse& a, SaveTacticalPuzzleDraftResponse& b) { a.Swap(&b); }
+  inline void Swap(SaveTacticalPuzzleDraftResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SaveTacticalPuzzleDraftResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SaveTacticalPuzzleDraftResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SaveTacticalPuzzleDraftResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SaveTacticalPuzzleDraftResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SaveTacticalPuzzleDraftResponse& from) { SaveTacticalPuzzleDraftResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SaveTacticalPuzzleDraftResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.SaveTacticalPuzzleDraftResponse"; }
+
+  explicit SaveTacticalPuzzleDraftResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SaveTacticalPuzzleDraftResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SaveTacticalPuzzleDraftResponse& from);
+  SaveTacticalPuzzleDraftResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SaveTacticalPuzzleDraftResponse&& from) noexcept
+      : SaveTacticalPuzzleDraftResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kPuzzleFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .match.TacticalPuzzleSummaryView puzzle = 2;
+  [[nodiscard]] bool has_puzzle()
+      const;
+  void clear_puzzle() ;
+  [[nodiscard]] const ::match::TacticalPuzzleSummaryView& puzzle() const;
+  [[nodiscard]] ::match::TacticalPuzzleSummaryView* PROTOBUF_NULLABLE release_puzzle();
+  ::match::TacticalPuzzleSummaryView* PROTOBUF_NONNULL mutable_puzzle();
+  void set_allocated_puzzle(::match::TacticalPuzzleSummaryView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_puzzle(::match::TacticalPuzzleSummaryView* PROTOBUF_NULLABLE value);
+  ::match::TacticalPuzzleSummaryView* PROTOBUF_NULLABLE unsafe_arena_release_puzzle();
+
+  private:
+  const ::match::TacticalPuzzleSummaryView& _internal_puzzle() const;
+  ::match::TacticalPuzzleSummaryView* PROTOBUF_NONNULL _internal_mutable_puzzle();
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.SaveTacticalPuzzleDraftResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SaveTacticalPuzzleDraftResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::match::TacticalPuzzleSummaryView* PROTOBUF_NULLABLE puzzle_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ListTacticalPuzzlesResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.ListTacticalPuzzlesResponse) */ {
+ public:
+  inline ListTacticalPuzzlesResponse() : ListTacticalPuzzlesResponse(nullptr) {}
+  ~ListTacticalPuzzlesResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ListTacticalPuzzlesResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ListTacticalPuzzlesResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ListTacticalPuzzlesResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ListTacticalPuzzlesResponse(const ListTacticalPuzzlesResponse& from) : ListTacticalPuzzlesResponse(nullptr, from) {}
+  inline ListTacticalPuzzlesResponse(ListTacticalPuzzlesResponse&& from) noexcept : ListTacticalPuzzlesResponse(nullptr, ::std::move(from)) {}
+  inline ListTacticalPuzzlesResponse& operator=(const ListTacticalPuzzlesResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ListTacticalPuzzlesResponse& operator=(ListTacticalPuzzlesResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ListTacticalPuzzlesResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ListTacticalPuzzlesResponse>(&ListTacticalPuzzlesResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 127;
+  friend void swap(ListTacticalPuzzlesResponse& a, ListTacticalPuzzlesResponse& b) { a.Swap(&b); }
+  inline void Swap(ListTacticalPuzzlesResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ListTacticalPuzzlesResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ListTacticalPuzzlesResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ListTacticalPuzzlesResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ListTacticalPuzzlesResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ListTacticalPuzzlesResponse& from) { ListTacticalPuzzlesResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ListTacticalPuzzlesResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.ListTacticalPuzzlesResponse"; }
+
+  explicit ListTacticalPuzzlesResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ListTacticalPuzzlesResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ListTacticalPuzzlesResponse& from);
+  ListTacticalPuzzlesResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ListTacticalPuzzlesResponse&& from) noexcept
+      : ListTacticalPuzzlesResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPuzzlesFieldNumber = 2,
+    kErrorMessageFieldNumber = 1,
+    kProfileFieldNumber = 4,
+    kTotalCountFieldNumber = 3,
+  };
+  // repeated .match.TacticalPuzzleSummaryView puzzles = 2;
+  [[nodiscard]] int puzzles_size()
+      const;
+  private:
+  int _internal_puzzles_size() const;
+
+  public:
+  void clear_puzzles() ;
+  [[nodiscard]] const ::match::TacticalPuzzleSummaryView& puzzles(int index) const;
+  [[nodiscard]] ::match::TacticalPuzzleSummaryView* PROTOBUF_NONNULL mutable_puzzles(int index);
+  ::match::TacticalPuzzleSummaryView* PROTOBUF_NONNULL add_puzzles();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::match::TacticalPuzzleSummaryView>&
+  puzzles() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::match::TacticalPuzzleSummaryView>* PROTOBUF_NONNULL
+  mutable_puzzles();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::match::TacticalPuzzleSummaryView>& _internal_puzzles() const;
+  ::google::protobuf::RepeatedPtrField<::match::TacticalPuzzleSummaryView>* PROTOBUF_NONNULL _internal_mutable_puzzles();
+
+  public:
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .match.TacticalPuzzleProfileView profile = 4;
+  [[nodiscard]] bool has_profile()
+      const;
+  void clear_profile() ;
+  [[nodiscard]] const ::match::TacticalPuzzleProfileView& profile() const;
+  [[nodiscard]] ::match::TacticalPuzzleProfileView* PROTOBUF_NULLABLE release_profile();
+  ::match::TacticalPuzzleProfileView* PROTOBUF_NONNULL mutable_profile();
+  void set_allocated_profile(::match::TacticalPuzzleProfileView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_profile(::match::TacticalPuzzleProfileView* PROTOBUF_NULLABLE value);
+  ::match::TacticalPuzzleProfileView* PROTOBUF_NULLABLE unsafe_arena_release_profile();
+
+  private:
+  const ::match::TacticalPuzzleProfileView& _internal_profile() const;
+  ::match::TacticalPuzzleProfileView* PROTOBUF_NONNULL _internal_mutable_profile();
+
+  public:
+  // uint32 total_count = 3;
+  void clear_total_count() ;
+  [[nodiscard]] ::uint32_t total_count() const;
+  void set_total_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_total_count() const;
+  void _internal_set_total_count(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.ListTacticalPuzzlesResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          3, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ListTacticalPuzzlesResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::match::TacticalPuzzleSummaryView > puzzles_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::match::TacticalPuzzleProfileView* PROTOBUF_NULLABLE profile_;
+    ::uint32_t total_count_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetTacticalPuzzleResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:match.GetTacticalPuzzleResponse) */ {
+ public:
+  inline GetTacticalPuzzleResponse() : GetTacticalPuzzleResponse(nullptr) {}
+  ~GetTacticalPuzzleResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetTacticalPuzzleResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetTacticalPuzzleResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetTacticalPuzzleResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetTacticalPuzzleResponse(const GetTacticalPuzzleResponse& from) : GetTacticalPuzzleResponse(nullptr, from) {}
+  inline GetTacticalPuzzleResponse(GetTacticalPuzzleResponse&& from) noexcept : GetTacticalPuzzleResponse(nullptr, ::std::move(from)) {}
+  inline GetTacticalPuzzleResponse& operator=(const GetTacticalPuzzleResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetTacticalPuzzleResponse& operator=(GetTacticalPuzzleResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetTacticalPuzzleResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetTacticalPuzzleResponse>(&GetTacticalPuzzleResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 129;
+  friend void swap(GetTacticalPuzzleResponse& a, GetTacticalPuzzleResponse& b) { a.Swap(&b); }
+  inline void Swap(GetTacticalPuzzleResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetTacticalPuzzleResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetTacticalPuzzleResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetTacticalPuzzleResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetTacticalPuzzleResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetTacticalPuzzleResponse& from) { GetTacticalPuzzleResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetTacticalPuzzleResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "match.GetTacticalPuzzleResponse"; }
+
+  explicit GetTacticalPuzzleResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetTacticalPuzzleResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetTacticalPuzzleResponse& from);
+  GetTacticalPuzzleResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetTacticalPuzzleResponse&& from) noexcept
+      : GetTacticalPuzzleResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kPuzzleFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .match.TacticalPuzzleSummaryView puzzle = 2;
+  [[nodiscard]] bool has_puzzle()
+      const;
+  void clear_puzzle() ;
+  [[nodiscard]] const ::match::TacticalPuzzleSummaryView& puzzle() const;
+  [[nodiscard]] ::match::TacticalPuzzleSummaryView* PROTOBUF_NULLABLE release_puzzle();
+  ::match::TacticalPuzzleSummaryView* PROTOBUF_NONNULL mutable_puzzle();
+  void set_allocated_puzzle(::match::TacticalPuzzleSummaryView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_puzzle(::match::TacticalPuzzleSummaryView* PROTOBUF_NULLABLE value);
+  ::match::TacticalPuzzleSummaryView* PROTOBUF_NULLABLE unsafe_arena_release_puzzle();
+
+  private:
+  const ::match::TacticalPuzzleSummaryView& _internal_puzzle() const;
+  ::match::TacticalPuzzleSummaryView* PROTOBUF_NONNULL _internal_mutable_puzzle();
+
+  public:
+  // @@protoc_insertion_point(class_scope:match.GetTacticalPuzzleResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetTacticalPuzzleResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::match::TacticalPuzzleSummaryView* PROTOBUF_NULLABLE puzzle_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -60122,6 +64201,2709 @@ inline void GetSharedTrialReplayResponse::set_allocated_replay(::BattleReplayEnv
   // @@protoc_insertion_point(field_set_allocated:match.GetSharedTrialReplayResponse.replay)
 }
 
+// -------------------------------------------------------------------
+
+// TacticalPuzzleSummaryView
+
+// uint64 puzzle_id = 1;
+inline void TacticalPuzzleSummaryView::clear_puzzle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.puzzle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t TacticalPuzzleSummaryView::puzzle_id() const {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleSummaryView.puzzle_id)
+  return _internal_puzzle_id();
+}
+inline void TacticalPuzzleSummaryView::set_puzzle_id(::uint64_t value) {
+  _internal_set_puzzle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleSummaryView.puzzle_id)
+}
+inline ::uint64_t TacticalPuzzleSummaryView::_internal_puzzle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.puzzle_id_;
+}
+inline void TacticalPuzzleSummaryView::_internal_set_puzzle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.puzzle_id_ = value;
+}
+
+// uint64 author_player_id = 2;
+inline void TacticalPuzzleSummaryView::clear_author_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.author_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t TacticalPuzzleSummaryView::author_player_id() const {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleSummaryView.author_player_id)
+  return _internal_author_player_id();
+}
+inline void TacticalPuzzleSummaryView::set_author_player_id(::uint64_t value) {
+  _internal_set_author_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleSummaryView.author_player_id)
+}
+inline ::uint64_t TacticalPuzzleSummaryView::_internal_author_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.author_player_id_;
+}
+inline void TacticalPuzzleSummaryView::_internal_set_author_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.author_player_id_ = value;
+}
+
+// string author_name = 3;
+inline void TacticalPuzzleSummaryView::clear_author_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.author_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& TacticalPuzzleSummaryView::author_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleSummaryView.author_name)
+  return _internal_author_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TacticalPuzzleSummaryView::set_author_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.author_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleSummaryView.author_name)
+}
+inline ::std::string* PROTOBUF_NONNULL TacticalPuzzleSummaryView::mutable_author_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_author_name();
+  // @@protoc_insertion_point(field_mutable:match.TacticalPuzzleSummaryView.author_name)
+  return _s;
+}
+inline const ::std::string& TacticalPuzzleSummaryView::_internal_author_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.author_name_.Get();
+}
+inline void TacticalPuzzleSummaryView::_internal_set_author_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.author_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TacticalPuzzleSummaryView::_internal_mutable_author_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.author_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TacticalPuzzleSummaryView::release_author_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.TacticalPuzzleSummaryView.author_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.author_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.author_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TacticalPuzzleSummaryView::set_allocated_author_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.author_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.author_name_.IsDefault()) {
+    _impl_.author_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.TacticalPuzzleSummaryView.author_name)
+}
+
+// .match.TacticalPuzzleState state = 4;
+inline void TacticalPuzzleSummaryView::clear_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::match::TacticalPuzzleState TacticalPuzzleSummaryView::state() const {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleSummaryView.state)
+  return _internal_state();
+}
+inline void TacticalPuzzleSummaryView::set_state(::match::TacticalPuzzleState value) {
+  _internal_set_state(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleSummaryView.state)
+}
+inline ::match::TacticalPuzzleState TacticalPuzzleSummaryView::_internal_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::match::TacticalPuzzleState>(_impl_.state_);
+}
+inline void TacticalPuzzleSummaryView::_internal_set_state(::match::TacticalPuzzleState value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_ = value;
+}
+
+// uint32 spec_revision = 5;
+inline void TacticalPuzzleSummaryView::clear_spec_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spec_revision_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t TacticalPuzzleSummaryView::spec_revision() const {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleSummaryView.spec_revision)
+  return _internal_spec_revision();
+}
+inline void TacticalPuzzleSummaryView::set_spec_revision(::uint32_t value) {
+  _internal_set_spec_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleSummaryView.spec_revision)
+}
+inline ::uint32_t TacticalPuzzleSummaryView::_internal_spec_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.spec_revision_;
+}
+inline void TacticalPuzzleSummaryView::_internal_set_spec_revision(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spec_revision_ = value;
+}
+
+// string title = 6;
+inline void TacticalPuzzleSummaryView::clear_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.title_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& TacticalPuzzleSummaryView::title() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleSummaryView.title)
+  return _internal_title();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TacticalPuzzleSummaryView::set_title(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.title_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleSummaryView.title)
+}
+inline ::std::string* PROTOBUF_NONNULL TacticalPuzzleSummaryView::mutable_title()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_title();
+  // @@protoc_insertion_point(field_mutable:match.TacticalPuzzleSummaryView.title)
+  return _s;
+}
+inline const ::std::string& TacticalPuzzleSummaryView::_internal_title() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.title_.Get();
+}
+inline void TacticalPuzzleSummaryView::_internal_set_title(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.title_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TacticalPuzzleSummaryView::_internal_mutable_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.title_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TacticalPuzzleSummaryView::release_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.TacticalPuzzleSummaryView.title)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.title_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.title_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TacticalPuzzleSummaryView::set_allocated_title(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.title_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.title_.IsDefault()) {
+    _impl_.title_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.TacticalPuzzleSummaryView.title)
+}
+
+// string hint_text = 7;
+inline void TacticalPuzzleSummaryView::clear_hint_text() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hint_text_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& TacticalPuzzleSummaryView::hint_text() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleSummaryView.hint_text)
+  return _internal_hint_text();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TacticalPuzzleSummaryView::set_hint_text(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.hint_text_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleSummaryView.hint_text)
+}
+inline ::std::string* PROTOBUF_NONNULL TacticalPuzzleSummaryView::mutable_hint_text()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_hint_text();
+  // @@protoc_insertion_point(field_mutable:match.TacticalPuzzleSummaryView.hint_text)
+  return _s;
+}
+inline const ::std::string& TacticalPuzzleSummaryView::_internal_hint_text() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hint_text_.Get();
+}
+inline void TacticalPuzzleSummaryView::_internal_set_hint_text(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hint_text_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TacticalPuzzleSummaryView::_internal_mutable_hint_text() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.hint_text_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TacticalPuzzleSummaryView::release_hint_text() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.TacticalPuzzleSummaryView.hint_text)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.hint_text_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.hint_text_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TacticalPuzzleSummaryView::set_allocated_hint_text(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.hint_text_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.hint_text_.IsDefault()) {
+    _impl_.hint_text_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.TacticalPuzzleSummaryView.hint_text)
+}
+
+// uint32 tag_mask = 8;
+inline void TacticalPuzzleSummaryView::clear_tag_mask() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tag_mask_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t TacticalPuzzleSummaryView::tag_mask() const {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleSummaryView.tag_mask)
+  return _internal_tag_mask();
+}
+inline void TacticalPuzzleSummaryView::set_tag_mask(::uint32_t value) {
+  _internal_set_tag_mask(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleSummaryView.tag_mask)
+}
+inline ::uint32_t TacticalPuzzleSummaryView::_internal_tag_mask() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.tag_mask_;
+}
+inline void TacticalPuzzleSummaryView::_internal_set_tag_mask(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tag_mask_ = value;
+}
+
+// .TacticalPuzzleSpec spec = 9;
+inline bool TacticalPuzzleSummaryView::has_spec() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  PROTOBUF_ASSUME(!value || _impl_.spec_ != nullptr);
+  return value;
+}
+inline const ::TacticalPuzzleSpec& TacticalPuzzleSummaryView::_internal_spec() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TacticalPuzzleSpec* p = _impl_.spec_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TacticalPuzzleSpec>(&::TacticalPuzzleSpec_globals_);
+}
+inline const ::TacticalPuzzleSpec& TacticalPuzzleSummaryView::spec() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleSummaryView.spec)
+  return _internal_spec();
+}
+inline void TacticalPuzzleSummaryView::unsafe_arena_set_allocated_spec(
+    ::TacticalPuzzleSpec* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.spec_);
+  }
+  _impl_.spec_ = reinterpret_cast<::TacticalPuzzleSpec*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.TacticalPuzzleSummaryView.spec)
+}
+inline ::TacticalPuzzleSpec* PROTOBUF_NULLABLE TacticalPuzzleSummaryView::release_spec() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::TacticalPuzzleSpec* released = _impl_.spec_;
+  _impl_.spec_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TacticalPuzzleSpec* PROTOBUF_NULLABLE TacticalPuzzleSummaryView::unsafe_arena_release_spec() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.TacticalPuzzleSummaryView.spec)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::TacticalPuzzleSpec* temp = _impl_.spec_;
+  _impl_.spec_ = nullptr;
+  return temp;
+}
+inline ::TacticalPuzzleSpec* PROTOBUF_NONNULL TacticalPuzzleSummaryView::_internal_mutable_spec() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.spec_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TacticalPuzzleSpec>(GetArena());
+    _impl_.spec_ = reinterpret_cast<::TacticalPuzzleSpec*>(p);
+  }
+  return _impl_.spec_;
+}
+inline ::TacticalPuzzleSpec* PROTOBUF_NONNULL TacticalPuzzleSummaryView::mutable_spec()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::TacticalPuzzleSpec* _msg = _internal_mutable_spec();
+  // @@protoc_insertion_point(field_mutable:match.TacticalPuzzleSummaryView.spec)
+  return _msg;
+}
+inline void TacticalPuzzleSummaryView::set_allocated_spec(::TacticalPuzzleSpec* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.spec_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+
+  _impl_.spec_ = reinterpret_cast<::TacticalPuzzleSpec*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.TacticalPuzzleSummaryView.spec)
+}
+
+// uint32 author_best_rounds = 10;
+inline void TacticalPuzzleSummaryView::clear_author_best_rounds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.author_best_rounds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t TacticalPuzzleSummaryView::author_best_rounds() const {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleSummaryView.author_best_rounds)
+  return _internal_author_best_rounds();
+}
+inline void TacticalPuzzleSummaryView::set_author_best_rounds(::uint32_t value) {
+  _internal_set_author_best_rounds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleSummaryView.author_best_rounds)
+}
+inline ::uint32_t TacticalPuzzleSummaryView::_internal_author_best_rounds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.author_best_rounds_;
+}
+inline void TacticalPuzzleSummaryView::_internal_set_author_best_rounds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.author_best_rounds_ = value;
+}
+
+// uint32 attempt_count = 11;
+inline void TacticalPuzzleSummaryView::clear_attempt_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attempt_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t TacticalPuzzleSummaryView::attempt_count() const {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleSummaryView.attempt_count)
+  return _internal_attempt_count();
+}
+inline void TacticalPuzzleSummaryView::set_attempt_count(::uint32_t value) {
+  _internal_set_attempt_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleSummaryView.attempt_count)
+}
+inline ::uint32_t TacticalPuzzleSummaryView::_internal_attempt_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.attempt_count_;
+}
+inline void TacticalPuzzleSummaryView::_internal_set_attempt_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attempt_count_ = value;
+}
+
+// uint32 clear_count = 12;
+inline void TacticalPuzzleSummaryView::clear_clear_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.clear_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t TacticalPuzzleSummaryView::clear_count() const {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleSummaryView.clear_count)
+  return _internal_clear_count();
+}
+inline void TacticalPuzzleSummaryView::set_clear_count(::uint32_t value) {
+  _internal_set_clear_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleSummaryView.clear_count)
+}
+inline ::uint32_t TacticalPuzzleSummaryView::_internal_clear_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.clear_count_;
+}
+inline void TacticalPuzzleSummaryView::_internal_set_clear_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.clear_count_ = value;
+}
+
+// uint32 global_best_rounds = 13;
+inline void TacticalPuzzleSummaryView::clear_global_best_rounds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.global_best_rounds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline ::uint32_t TacticalPuzzleSummaryView::global_best_rounds() const {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleSummaryView.global_best_rounds)
+  return _internal_global_best_rounds();
+}
+inline void TacticalPuzzleSummaryView::set_global_best_rounds(::uint32_t value) {
+  _internal_set_global_best_rounds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleSummaryView.global_best_rounds)
+}
+inline ::uint32_t TacticalPuzzleSummaryView::_internal_global_best_rounds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.global_best_rounds_;
+}
+inline void TacticalPuzzleSummaryView::_internal_set_global_best_rounds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.global_best_rounds_ = value;
+}
+
+// uint32 like_count = 14;
+inline void TacticalPuzzleSummaryView::clear_like_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.like_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline ::uint32_t TacticalPuzzleSummaryView::like_count() const {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleSummaryView.like_count)
+  return _internal_like_count();
+}
+inline void TacticalPuzzleSummaryView::set_like_count(::uint32_t value) {
+  _internal_set_like_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleSummaryView.like_count)
+}
+inline ::uint32_t TacticalPuzzleSummaryView::_internal_like_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.like_count_;
+}
+inline void TacticalPuzzleSummaryView::_internal_set_like_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.like_count_ = value;
+}
+
+// bool self_cleared = 15;
+inline void TacticalPuzzleSummaryView::clear_self_cleared() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.self_cleared_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline bool TacticalPuzzleSummaryView::self_cleared() const {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleSummaryView.self_cleared)
+  return _internal_self_cleared();
+}
+inline void TacticalPuzzleSummaryView::set_self_cleared(bool value) {
+  _internal_set_self_cleared(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleSummaryView.self_cleared)
+}
+inline bool TacticalPuzzleSummaryView::_internal_self_cleared() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.self_cleared_;
+}
+inline void TacticalPuzzleSummaryView::_internal_set_self_cleared(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.self_cleared_ = value;
+}
+
+// uint32 self_best_rounds = 16;
+inline void TacticalPuzzleSummaryView::clear_self_best_rounds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.self_best_rounds_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint32_t TacticalPuzzleSummaryView::self_best_rounds() const {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleSummaryView.self_best_rounds)
+  return _internal_self_best_rounds();
+}
+inline void TacticalPuzzleSummaryView::set_self_best_rounds(::uint32_t value) {
+  _internal_set_self_best_rounds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleSummaryView.self_best_rounds)
+}
+inline ::uint32_t TacticalPuzzleSummaryView::_internal_self_best_rounds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.self_best_rounds_;
+}
+inline void TacticalPuzzleSummaryView::_internal_set_self_best_rounds(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.self_best_rounds_ = value;
+}
+
+// bool self_liked = 17;
+inline void TacticalPuzzleSummaryView::clear_self_liked() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.self_liked_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline bool TacticalPuzzleSummaryView::self_liked() const {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleSummaryView.self_liked)
+  return _internal_self_liked();
+}
+inline void TacticalPuzzleSummaryView::set_self_liked(bool value) {
+  _internal_set_self_liked(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleSummaryView.self_liked)
+}
+inline bool TacticalPuzzleSummaryView::_internal_self_liked() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.self_liked_;
+}
+inline void TacticalPuzzleSummaryView::_internal_set_self_liked(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.self_liked_ = value;
+}
+
+// bool has_solution_replay = 18;
+inline void TacticalPuzzleSummaryView::clear_has_solution_replay() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.has_solution_replay_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline bool TacticalPuzzleSummaryView::has_solution_replay() const {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleSummaryView.has_solution_replay)
+  return _internal_has_solution_replay();
+}
+inline void TacticalPuzzleSummaryView::set_has_solution_replay(bool value) {
+  _internal_set_has_solution_replay(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleSummaryView.has_solution_replay)
+}
+inline bool TacticalPuzzleSummaryView::_internal_has_solution_replay() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.has_solution_replay_;
+}
+inline void TacticalPuzzleSummaryView::_internal_set_has_solution_replay(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.has_solution_replay_ = value;
+}
+
+// uint64 published_ms = 19;
+inline void TacticalPuzzleSummaryView::clear_published_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.published_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+}
+inline ::uint64_t TacticalPuzzleSummaryView::published_ms() const {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleSummaryView.published_ms)
+  return _internal_published_ms();
+}
+inline void TacticalPuzzleSummaryView::set_published_ms(::uint64_t value) {
+  _internal_set_published_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleSummaryView.published_ms)
+}
+inline ::uint64_t TacticalPuzzleSummaryView::_internal_published_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.published_ms_;
+}
+inline void TacticalPuzzleSummaryView::_internal_set_published_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.published_ms_ = value;
+}
+
+// uint64 updated_ms = 20;
+inline void TacticalPuzzleSummaryView::clear_updated_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+}
+inline ::uint64_t TacticalPuzzleSummaryView::updated_ms() const {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleSummaryView.updated_ms)
+  return _internal_updated_ms();
+}
+inline void TacticalPuzzleSummaryView::set_updated_ms(::uint64_t value) {
+  _internal_set_updated_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleSummaryView.updated_ms)
+}
+inline ::uint64_t TacticalPuzzleSummaryView::_internal_updated_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.updated_ms_;
+}
+inline void TacticalPuzzleSummaryView::_internal_set_updated_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.updated_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// TacticalPuzzleProfileView
+
+// uint32 published_count = 1;
+inline void TacticalPuzzleProfileView::clear_published_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.published_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t TacticalPuzzleProfileView::published_count() const {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleProfileView.published_count)
+  return _internal_published_count();
+}
+inline void TacticalPuzzleProfileView::set_published_count(::uint32_t value) {
+  _internal_set_published_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleProfileView.published_count)
+}
+inline ::uint32_t TacticalPuzzleProfileView::_internal_published_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.published_count_;
+}
+inline void TacticalPuzzleProfileView::_internal_set_published_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.published_count_ = value;
+}
+
+// uint32 draft_count = 2;
+inline void TacticalPuzzleProfileView::clear_draft_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.draft_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t TacticalPuzzleProfileView::draft_count() const {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleProfileView.draft_count)
+  return _internal_draft_count();
+}
+inline void TacticalPuzzleProfileView::set_draft_count(::uint32_t value) {
+  _internal_set_draft_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleProfileView.draft_count)
+}
+inline ::uint32_t TacticalPuzzleProfileView::_internal_draft_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.draft_count_;
+}
+inline void TacticalPuzzleProfileView::_internal_set_draft_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.draft_count_ = value;
+}
+
+// uint32 total_cleared_count = 3;
+inline void TacticalPuzzleProfileView::clear_total_cleared_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_cleared_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t TacticalPuzzleProfileView::total_cleared_count() const {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleProfileView.total_cleared_count)
+  return _internal_total_cleared_count();
+}
+inline void TacticalPuzzleProfileView::set_total_cleared_count(::uint32_t value) {
+  _internal_set_total_cleared_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleProfileView.total_cleared_count)
+}
+inline ::uint32_t TacticalPuzzleProfileView::_internal_total_cleared_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.total_cleared_count_;
+}
+inline void TacticalPuzzleProfileView::_internal_set_total_cleared_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_cleared_count_ = value;
+}
+
+// uint32 total_likes_received = 4;
+inline void TacticalPuzzleProfileView::clear_total_likes_received() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_likes_received_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t TacticalPuzzleProfileView::total_likes_received() const {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleProfileView.total_likes_received)
+  return _internal_total_likes_received();
+}
+inline void TacticalPuzzleProfileView::set_total_likes_received(::uint32_t value) {
+  _internal_set_total_likes_received(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleProfileView.total_likes_received)
+}
+inline ::uint32_t TacticalPuzzleProfileView::_internal_total_likes_received() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.total_likes_received_;
+}
+inline void TacticalPuzzleProfileView::_internal_set_total_likes_received(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_likes_received_ = value;
+}
+
+// uint32 honor_tier = 5;
+inline void TacticalPuzzleProfileView::clear_honor_tier() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.honor_tier_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t TacticalPuzzleProfileView::honor_tier() const {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleProfileView.honor_tier)
+  return _internal_honor_tier();
+}
+inline void TacticalPuzzleProfileView::set_honor_tier(::uint32_t value) {
+  _internal_set_honor_tier(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleProfileView.honor_tier)
+}
+inline ::uint32_t TacticalPuzzleProfileView::_internal_honor_tier() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.honor_tier_;
+}
+inline void TacticalPuzzleProfileView::_internal_set_honor_tier(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.honor_tier_ = value;
+}
+
+// string honor_title = 6;
+inline void TacticalPuzzleProfileView::clear_honor_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.honor_title_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& TacticalPuzzleProfileView::honor_title() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.TacticalPuzzleProfileView.honor_title)
+  return _internal_honor_title();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TacticalPuzzleProfileView::set_honor_title(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.honor_title_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.TacticalPuzzleProfileView.honor_title)
+}
+inline ::std::string* PROTOBUF_NONNULL TacticalPuzzleProfileView::mutable_honor_title()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_honor_title();
+  // @@protoc_insertion_point(field_mutable:match.TacticalPuzzleProfileView.honor_title)
+  return _s;
+}
+inline const ::std::string& TacticalPuzzleProfileView::_internal_honor_title() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.honor_title_.Get();
+}
+inline void TacticalPuzzleProfileView::_internal_set_honor_title(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.honor_title_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TacticalPuzzleProfileView::_internal_mutable_honor_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.honor_title_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TacticalPuzzleProfileView::release_honor_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.TacticalPuzzleProfileView.honor_title)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.honor_title_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.honor_title_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TacticalPuzzleProfileView::set_allocated_honor_title(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.honor_title_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.honor_title_.IsDefault()) {
+    _impl_.honor_title_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.TacticalPuzzleProfileView.honor_title)
+}
+
+// -------------------------------------------------------------------
+
+// ListTacticalPuzzlesRequest
+
+// .match.TacticalPuzzleListTab tab = 1;
+inline void ListTacticalPuzzlesRequest::clear_tab() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tab_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::match::TacticalPuzzleListTab ListTacticalPuzzlesRequest::tab() const {
+  // @@protoc_insertion_point(field_get:match.ListTacticalPuzzlesRequest.tab)
+  return _internal_tab();
+}
+inline void ListTacticalPuzzlesRequest::set_tab(::match::TacticalPuzzleListTab value) {
+  _internal_set_tab(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:match.ListTacticalPuzzlesRequest.tab)
+}
+inline ::match::TacticalPuzzleListTab ListTacticalPuzzlesRequest::_internal_tab() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::match::TacticalPuzzleListTab>(_impl_.tab_);
+}
+inline void ListTacticalPuzzlesRequest::_internal_set_tab(::match::TacticalPuzzleListTab value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tab_ = value;
+}
+
+// uint32 tag_filter_mask = 2;
+inline void ListTacticalPuzzlesRequest::clear_tag_filter_mask() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tag_filter_mask_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t ListTacticalPuzzlesRequest::tag_filter_mask() const {
+  // @@protoc_insertion_point(field_get:match.ListTacticalPuzzlesRequest.tag_filter_mask)
+  return _internal_tag_filter_mask();
+}
+inline void ListTacticalPuzzlesRequest::set_tag_filter_mask(::uint32_t value) {
+  _internal_set_tag_filter_mask(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:match.ListTacticalPuzzlesRequest.tag_filter_mask)
+}
+inline ::uint32_t ListTacticalPuzzlesRequest::_internal_tag_filter_mask() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.tag_filter_mask_;
+}
+inline void ListTacticalPuzzlesRequest::_internal_set_tag_filter_mask(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tag_filter_mask_ = value;
+}
+
+// uint32 offset = 3;
+inline void ListTacticalPuzzlesRequest::clear_offset() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.offset_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t ListTacticalPuzzlesRequest::offset() const {
+  // @@protoc_insertion_point(field_get:match.ListTacticalPuzzlesRequest.offset)
+  return _internal_offset();
+}
+inline void ListTacticalPuzzlesRequest::set_offset(::uint32_t value) {
+  _internal_set_offset(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.ListTacticalPuzzlesRequest.offset)
+}
+inline ::uint32_t ListTacticalPuzzlesRequest::_internal_offset() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.offset_;
+}
+inline void ListTacticalPuzzlesRequest::_internal_set_offset(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.offset_ = value;
+}
+
+// uint32 limit = 4;
+inline void ListTacticalPuzzlesRequest::clear_limit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.limit_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t ListTacticalPuzzlesRequest::limit() const {
+  // @@protoc_insertion_point(field_get:match.ListTacticalPuzzlesRequest.limit)
+  return _internal_limit();
+}
+inline void ListTacticalPuzzlesRequest::set_limit(::uint32_t value) {
+  _internal_set_limit(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:match.ListTacticalPuzzlesRequest.limit)
+}
+inline ::uint32_t ListTacticalPuzzlesRequest::_internal_limit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.limit_;
+}
+inline void ListTacticalPuzzlesRequest::_internal_set_limit(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.limit_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ListTacticalPuzzlesResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool ListTacticalPuzzlesResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& ListTacticalPuzzlesResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& ListTacticalPuzzlesResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.ListTacticalPuzzlesResponse.error_message)
+  return _internal_error_message();
+}
+inline void ListTacticalPuzzlesResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.ListTacticalPuzzlesResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE ListTacticalPuzzlesResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE ListTacticalPuzzlesResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.ListTacticalPuzzlesResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL ListTacticalPuzzlesResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL ListTacticalPuzzlesResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:match.ListTacticalPuzzlesResponse.error_message)
+  return _msg;
+}
+inline void ListTacticalPuzzlesResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.ListTacticalPuzzlesResponse.error_message)
+}
+
+// repeated .match.TacticalPuzzleSummaryView puzzles = 2;
+inline int ListTacticalPuzzlesResponse::_internal_puzzles_size() const {
+  return _internal_puzzles().size();
+}
+inline int ListTacticalPuzzlesResponse::puzzles_size() const {
+  return _internal_puzzles_size();
+}
+inline void ListTacticalPuzzlesResponse::clear_puzzles() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.puzzles_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::match::TacticalPuzzleSummaryView& ListTacticalPuzzlesResponse::puzzles(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.ListTacticalPuzzlesResponse.puzzles)
+  return _internal_puzzles().Get(index);
+}
+inline ::match::TacticalPuzzleSummaryView* PROTOBUF_NONNULL ListTacticalPuzzlesResponse::mutable_puzzles(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:match.ListTacticalPuzzlesResponse.puzzles)
+  return _internal_mutable_puzzles()->Mutable(index);
+}
+inline ::match::TacticalPuzzleSummaryView* PROTOBUF_NONNULL ListTacticalPuzzlesResponse::add_puzzles()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::match::TacticalPuzzleSummaryView* _add =
+      _internal_mutable_puzzles()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:match.ListTacticalPuzzlesResponse.puzzles)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::TacticalPuzzleSummaryView>& ListTacticalPuzzlesResponse::puzzles() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:match.ListTacticalPuzzlesResponse.puzzles)
+  return _internal_puzzles();
+}
+inline ::google::protobuf::RepeatedPtrField<::match::TacticalPuzzleSummaryView>* PROTOBUF_NONNULL
+ListTacticalPuzzlesResponse::mutable_puzzles() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:match.ListTacticalPuzzlesResponse.puzzles)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_puzzles();
+}
+inline const ::google::protobuf::RepeatedPtrField<::match::TacticalPuzzleSummaryView>&
+ListTacticalPuzzlesResponse::_internal_puzzles() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.puzzles_;
+}
+inline ::google::protobuf::RepeatedPtrField<::match::TacticalPuzzleSummaryView>* PROTOBUF_NONNULL
+ListTacticalPuzzlesResponse::_internal_mutable_puzzles() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.puzzles_;
+}
+
+// uint32 total_count = 3;
+inline void ListTacticalPuzzlesResponse::clear_total_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t ListTacticalPuzzlesResponse::total_count() const {
+  // @@protoc_insertion_point(field_get:match.ListTacticalPuzzlesResponse.total_count)
+  return _internal_total_count();
+}
+inline void ListTacticalPuzzlesResponse::set_total_count(::uint32_t value) {
+  _internal_set_total_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:match.ListTacticalPuzzlesResponse.total_count)
+}
+inline ::uint32_t ListTacticalPuzzlesResponse::_internal_total_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.total_count_;
+}
+inline void ListTacticalPuzzlesResponse::_internal_set_total_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.total_count_ = value;
+}
+
+// .match.TacticalPuzzleProfileView profile = 4;
+inline bool ListTacticalPuzzlesResponse::has_profile() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  PROTOBUF_ASSUME(!value || _impl_.profile_ != nullptr);
+  return value;
+}
+inline void ListTacticalPuzzlesResponse::clear_profile() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.profile_ != nullptr) _impl_.profile_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::match::TacticalPuzzleProfileView& ListTacticalPuzzlesResponse::_internal_profile() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::match::TacticalPuzzleProfileView* p = _impl_.profile_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::match::TacticalPuzzleProfileView>(&::match::TacticalPuzzleProfileView_globals_);
+}
+inline const ::match::TacticalPuzzleProfileView& ListTacticalPuzzlesResponse::profile() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.ListTacticalPuzzlesResponse.profile)
+  return _internal_profile();
+}
+inline void ListTacticalPuzzlesResponse::unsafe_arena_set_allocated_profile(
+    ::match::TacticalPuzzleProfileView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.profile_);
+  }
+  _impl_.profile_ = reinterpret_cast<::match::TacticalPuzzleProfileView*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.ListTacticalPuzzlesResponse.profile)
+}
+inline ::match::TacticalPuzzleProfileView* PROTOBUF_NULLABLE ListTacticalPuzzlesResponse::release_profile() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::match::TacticalPuzzleProfileView* released = _impl_.profile_;
+  _impl_.profile_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::match::TacticalPuzzleProfileView* PROTOBUF_NULLABLE ListTacticalPuzzlesResponse::unsafe_arena_release_profile() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.ListTacticalPuzzlesResponse.profile)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::match::TacticalPuzzleProfileView* temp = _impl_.profile_;
+  _impl_.profile_ = nullptr;
+  return temp;
+}
+inline ::match::TacticalPuzzleProfileView* PROTOBUF_NONNULL ListTacticalPuzzlesResponse::_internal_mutable_profile() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.profile_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::match::TacticalPuzzleProfileView>(GetArena());
+    _impl_.profile_ = reinterpret_cast<::match::TacticalPuzzleProfileView*>(p);
+  }
+  return _impl_.profile_;
+}
+inline ::match::TacticalPuzzleProfileView* PROTOBUF_NONNULL ListTacticalPuzzlesResponse::mutable_profile()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::match::TacticalPuzzleProfileView* _msg = _internal_mutable_profile();
+  // @@protoc_insertion_point(field_mutable:match.ListTacticalPuzzlesResponse.profile)
+  return _msg;
+}
+inline void ListTacticalPuzzlesResponse::set_allocated_profile(::match::TacticalPuzzleProfileView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.profile_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+
+  _impl_.profile_ = reinterpret_cast<::match::TacticalPuzzleProfileView*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.ListTacticalPuzzlesResponse.profile)
+}
+
+// -------------------------------------------------------------------
+
+// GetTacticalPuzzleRequest
+
+// uint64 puzzle_id = 1;
+inline void GetTacticalPuzzleRequest::clear_puzzle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.puzzle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t GetTacticalPuzzleRequest::puzzle_id() const {
+  // @@protoc_insertion_point(field_get:match.GetTacticalPuzzleRequest.puzzle_id)
+  return _internal_puzzle_id();
+}
+inline void GetTacticalPuzzleRequest::set_puzzle_id(::uint64_t value) {
+  _internal_set_puzzle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:match.GetTacticalPuzzleRequest.puzzle_id)
+}
+inline ::uint64_t GetTacticalPuzzleRequest::_internal_puzzle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.puzzle_id_;
+}
+inline void GetTacticalPuzzleRequest::_internal_set_puzzle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.puzzle_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// GetTacticalPuzzleResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool GetTacticalPuzzleResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& GetTacticalPuzzleResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& GetTacticalPuzzleResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.GetTacticalPuzzleResponse.error_message)
+  return _internal_error_message();
+}
+inline void GetTacticalPuzzleResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.GetTacticalPuzzleResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE GetTacticalPuzzleResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE GetTacticalPuzzleResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.GetTacticalPuzzleResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL GetTacticalPuzzleResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL GetTacticalPuzzleResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:match.GetTacticalPuzzleResponse.error_message)
+  return _msg;
+}
+inline void GetTacticalPuzzleResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.GetTacticalPuzzleResponse.error_message)
+}
+
+// .match.TacticalPuzzleSummaryView puzzle = 2;
+inline bool GetTacticalPuzzleResponse::has_puzzle() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.puzzle_ != nullptr);
+  return value;
+}
+inline void GetTacticalPuzzleResponse::clear_puzzle() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.puzzle_ != nullptr) _impl_.puzzle_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::match::TacticalPuzzleSummaryView& GetTacticalPuzzleResponse::_internal_puzzle() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::match::TacticalPuzzleSummaryView* p = _impl_.puzzle_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::match::TacticalPuzzleSummaryView>(&::match::TacticalPuzzleSummaryView_globals_);
+}
+inline const ::match::TacticalPuzzleSummaryView& GetTacticalPuzzleResponse::puzzle() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.GetTacticalPuzzleResponse.puzzle)
+  return _internal_puzzle();
+}
+inline void GetTacticalPuzzleResponse::unsafe_arena_set_allocated_puzzle(
+    ::match::TacticalPuzzleSummaryView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.puzzle_);
+  }
+  _impl_.puzzle_ = reinterpret_cast<::match::TacticalPuzzleSummaryView*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.GetTacticalPuzzleResponse.puzzle)
+}
+inline ::match::TacticalPuzzleSummaryView* PROTOBUF_NULLABLE GetTacticalPuzzleResponse::release_puzzle() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TacticalPuzzleSummaryView* released = _impl_.puzzle_;
+  _impl_.puzzle_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::match::TacticalPuzzleSummaryView* PROTOBUF_NULLABLE GetTacticalPuzzleResponse::unsafe_arena_release_puzzle() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.GetTacticalPuzzleResponse.puzzle)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TacticalPuzzleSummaryView* temp = _impl_.puzzle_;
+  _impl_.puzzle_ = nullptr;
+  return temp;
+}
+inline ::match::TacticalPuzzleSummaryView* PROTOBUF_NONNULL GetTacticalPuzzleResponse::_internal_mutable_puzzle() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.puzzle_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::match::TacticalPuzzleSummaryView>(GetArena());
+    _impl_.puzzle_ = reinterpret_cast<::match::TacticalPuzzleSummaryView*>(p);
+  }
+  return _impl_.puzzle_;
+}
+inline ::match::TacticalPuzzleSummaryView* PROTOBUF_NONNULL GetTacticalPuzzleResponse::mutable_puzzle()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TacticalPuzzleSummaryView* _msg = _internal_mutable_puzzle();
+  // @@protoc_insertion_point(field_mutable:match.GetTacticalPuzzleResponse.puzzle)
+  return _msg;
+}
+inline void GetTacticalPuzzleResponse::set_allocated_puzzle(::match::TacticalPuzzleSummaryView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.puzzle_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.puzzle_ = reinterpret_cast<::match::TacticalPuzzleSummaryView*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.GetTacticalPuzzleResponse.puzzle)
+}
+
+// -------------------------------------------------------------------
+
+// SaveTacticalPuzzleDraftRequest
+
+// uint64 puzzle_id = 1;
+inline void SaveTacticalPuzzleDraftRequest::clear_puzzle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.puzzle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t SaveTacticalPuzzleDraftRequest::puzzle_id() const {
+  // @@protoc_insertion_point(field_get:match.SaveTacticalPuzzleDraftRequest.puzzle_id)
+  return _internal_puzzle_id();
+}
+inline void SaveTacticalPuzzleDraftRequest::set_puzzle_id(::uint64_t value) {
+  _internal_set_puzzle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:match.SaveTacticalPuzzleDraftRequest.puzzle_id)
+}
+inline ::uint64_t SaveTacticalPuzzleDraftRequest::_internal_puzzle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.puzzle_id_;
+}
+inline void SaveTacticalPuzzleDraftRequest::_internal_set_puzzle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.puzzle_id_ = value;
+}
+
+// string title = 2;
+inline void SaveTacticalPuzzleDraftRequest::clear_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.title_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& SaveTacticalPuzzleDraftRequest::title() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.SaveTacticalPuzzleDraftRequest.title)
+  return _internal_title();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SaveTacticalPuzzleDraftRequest::set_title(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.title_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.SaveTacticalPuzzleDraftRequest.title)
+}
+inline ::std::string* PROTOBUF_NONNULL SaveTacticalPuzzleDraftRequest::mutable_title()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_title();
+  // @@protoc_insertion_point(field_mutable:match.SaveTacticalPuzzleDraftRequest.title)
+  return _s;
+}
+inline const ::std::string& SaveTacticalPuzzleDraftRequest::_internal_title() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.title_.Get();
+}
+inline void SaveTacticalPuzzleDraftRequest::_internal_set_title(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.title_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SaveTacticalPuzzleDraftRequest::_internal_mutable_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.title_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SaveTacticalPuzzleDraftRequest::release_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.SaveTacticalPuzzleDraftRequest.title)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.title_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.title_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SaveTacticalPuzzleDraftRequest::set_allocated_title(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.title_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.title_.IsDefault()) {
+    _impl_.title_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.SaveTacticalPuzzleDraftRequest.title)
+}
+
+// string hint_text = 3;
+inline void SaveTacticalPuzzleDraftRequest::clear_hint_text() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hint_text_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& SaveTacticalPuzzleDraftRequest::hint_text() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.SaveTacticalPuzzleDraftRequest.hint_text)
+  return _internal_hint_text();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void SaveTacticalPuzzleDraftRequest::set_hint_text(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.hint_text_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.SaveTacticalPuzzleDraftRequest.hint_text)
+}
+inline ::std::string* PROTOBUF_NONNULL SaveTacticalPuzzleDraftRequest::mutable_hint_text()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_hint_text();
+  // @@protoc_insertion_point(field_mutable:match.SaveTacticalPuzzleDraftRequest.hint_text)
+  return _s;
+}
+inline const ::std::string& SaveTacticalPuzzleDraftRequest::_internal_hint_text() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hint_text_.Get();
+}
+inline void SaveTacticalPuzzleDraftRequest::_internal_set_hint_text(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hint_text_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL SaveTacticalPuzzleDraftRequest::_internal_mutable_hint_text() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.hint_text_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE SaveTacticalPuzzleDraftRequest::release_hint_text() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.SaveTacticalPuzzleDraftRequest.hint_text)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.hint_text_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.hint_text_.Set("", GetArena());
+  }
+  return released;
+}
+inline void SaveTacticalPuzzleDraftRequest::set_allocated_hint_text(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.hint_text_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.hint_text_.IsDefault()) {
+    _impl_.hint_text_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.SaveTacticalPuzzleDraftRequest.hint_text)
+}
+
+// uint32 tag_mask = 4;
+inline void SaveTacticalPuzzleDraftRequest::clear_tag_mask() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tag_mask_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t SaveTacticalPuzzleDraftRequest::tag_mask() const {
+  // @@protoc_insertion_point(field_get:match.SaveTacticalPuzzleDraftRequest.tag_mask)
+  return _internal_tag_mask();
+}
+inline void SaveTacticalPuzzleDraftRequest::set_tag_mask(::uint32_t value) {
+  _internal_set_tag_mask(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:match.SaveTacticalPuzzleDraftRequest.tag_mask)
+}
+inline ::uint32_t SaveTacticalPuzzleDraftRequest::_internal_tag_mask() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.tag_mask_;
+}
+inline void SaveTacticalPuzzleDraftRequest::_internal_set_tag_mask(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.tag_mask_ = value;
+}
+
+// .TacticalPuzzleSpec spec = 5;
+inline bool SaveTacticalPuzzleDraftRequest::has_spec() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  PROTOBUF_ASSUME(!value || _impl_.spec_ != nullptr);
+  return value;
+}
+inline const ::TacticalPuzzleSpec& SaveTacticalPuzzleDraftRequest::_internal_spec() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TacticalPuzzleSpec* p = _impl_.spec_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TacticalPuzzleSpec>(&::TacticalPuzzleSpec_globals_);
+}
+inline const ::TacticalPuzzleSpec& SaveTacticalPuzzleDraftRequest::spec() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.SaveTacticalPuzzleDraftRequest.spec)
+  return _internal_spec();
+}
+inline void SaveTacticalPuzzleDraftRequest::unsafe_arena_set_allocated_spec(
+    ::TacticalPuzzleSpec* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.spec_);
+  }
+  _impl_.spec_ = reinterpret_cast<::TacticalPuzzleSpec*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.SaveTacticalPuzzleDraftRequest.spec)
+}
+inline ::TacticalPuzzleSpec* PROTOBUF_NULLABLE SaveTacticalPuzzleDraftRequest::release_spec() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::TacticalPuzzleSpec* released = _impl_.spec_;
+  _impl_.spec_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TacticalPuzzleSpec* PROTOBUF_NULLABLE SaveTacticalPuzzleDraftRequest::unsafe_arena_release_spec() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.SaveTacticalPuzzleDraftRequest.spec)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::TacticalPuzzleSpec* temp = _impl_.spec_;
+  _impl_.spec_ = nullptr;
+  return temp;
+}
+inline ::TacticalPuzzleSpec* PROTOBUF_NONNULL SaveTacticalPuzzleDraftRequest::_internal_mutable_spec() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.spec_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TacticalPuzzleSpec>(GetArena());
+    _impl_.spec_ = reinterpret_cast<::TacticalPuzzleSpec*>(p);
+  }
+  return _impl_.spec_;
+}
+inline ::TacticalPuzzleSpec* PROTOBUF_NONNULL SaveTacticalPuzzleDraftRequest::mutable_spec()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::TacticalPuzzleSpec* _msg = _internal_mutable_spec();
+  // @@protoc_insertion_point(field_mutable:match.SaveTacticalPuzzleDraftRequest.spec)
+  return _msg;
+}
+inline void SaveTacticalPuzzleDraftRequest::set_allocated_spec(::TacticalPuzzleSpec* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.spec_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+
+  _impl_.spec_ = reinterpret_cast<::TacticalPuzzleSpec*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.SaveTacticalPuzzleDraftRequest.spec)
+}
+
+// -------------------------------------------------------------------
+
+// SaveTacticalPuzzleDraftResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool SaveTacticalPuzzleDraftResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& SaveTacticalPuzzleDraftResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& SaveTacticalPuzzleDraftResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.SaveTacticalPuzzleDraftResponse.error_message)
+  return _internal_error_message();
+}
+inline void SaveTacticalPuzzleDraftResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.SaveTacticalPuzzleDraftResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE SaveTacticalPuzzleDraftResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE SaveTacticalPuzzleDraftResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.SaveTacticalPuzzleDraftResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL SaveTacticalPuzzleDraftResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL SaveTacticalPuzzleDraftResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:match.SaveTacticalPuzzleDraftResponse.error_message)
+  return _msg;
+}
+inline void SaveTacticalPuzzleDraftResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.SaveTacticalPuzzleDraftResponse.error_message)
+}
+
+// .match.TacticalPuzzleSummaryView puzzle = 2;
+inline bool SaveTacticalPuzzleDraftResponse::has_puzzle() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.puzzle_ != nullptr);
+  return value;
+}
+inline void SaveTacticalPuzzleDraftResponse::clear_puzzle() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.puzzle_ != nullptr) _impl_.puzzle_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::match::TacticalPuzzleSummaryView& SaveTacticalPuzzleDraftResponse::_internal_puzzle() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::match::TacticalPuzzleSummaryView* p = _impl_.puzzle_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::match::TacticalPuzzleSummaryView>(&::match::TacticalPuzzleSummaryView_globals_);
+}
+inline const ::match::TacticalPuzzleSummaryView& SaveTacticalPuzzleDraftResponse::puzzle() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.SaveTacticalPuzzleDraftResponse.puzzle)
+  return _internal_puzzle();
+}
+inline void SaveTacticalPuzzleDraftResponse::unsafe_arena_set_allocated_puzzle(
+    ::match::TacticalPuzzleSummaryView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.puzzle_);
+  }
+  _impl_.puzzle_ = reinterpret_cast<::match::TacticalPuzzleSummaryView*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.SaveTacticalPuzzleDraftResponse.puzzle)
+}
+inline ::match::TacticalPuzzleSummaryView* PROTOBUF_NULLABLE SaveTacticalPuzzleDraftResponse::release_puzzle() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TacticalPuzzleSummaryView* released = _impl_.puzzle_;
+  _impl_.puzzle_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::match::TacticalPuzzleSummaryView* PROTOBUF_NULLABLE SaveTacticalPuzzleDraftResponse::unsafe_arena_release_puzzle() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.SaveTacticalPuzzleDraftResponse.puzzle)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TacticalPuzzleSummaryView* temp = _impl_.puzzle_;
+  _impl_.puzzle_ = nullptr;
+  return temp;
+}
+inline ::match::TacticalPuzzleSummaryView* PROTOBUF_NONNULL SaveTacticalPuzzleDraftResponse::_internal_mutable_puzzle() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.puzzle_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::match::TacticalPuzzleSummaryView>(GetArena());
+    _impl_.puzzle_ = reinterpret_cast<::match::TacticalPuzzleSummaryView*>(p);
+  }
+  return _impl_.puzzle_;
+}
+inline ::match::TacticalPuzzleSummaryView* PROTOBUF_NONNULL SaveTacticalPuzzleDraftResponse::mutable_puzzle()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::match::TacticalPuzzleSummaryView* _msg = _internal_mutable_puzzle();
+  // @@protoc_insertion_point(field_mutable:match.SaveTacticalPuzzleDraftResponse.puzzle)
+  return _msg;
+}
+inline void SaveTacticalPuzzleDraftResponse::set_allocated_puzzle(::match::TacticalPuzzleSummaryView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.puzzle_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.puzzle_ = reinterpret_cast<::match::TacticalPuzzleSummaryView*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.SaveTacticalPuzzleDraftResponse.puzzle)
+}
+
+// -------------------------------------------------------------------
+
+// DeleteTacticalPuzzleRequest
+
+// uint64 puzzle_id = 1;
+inline void DeleteTacticalPuzzleRequest::clear_puzzle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.puzzle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t DeleteTacticalPuzzleRequest::puzzle_id() const {
+  // @@protoc_insertion_point(field_get:match.DeleteTacticalPuzzleRequest.puzzle_id)
+  return _internal_puzzle_id();
+}
+inline void DeleteTacticalPuzzleRequest::set_puzzle_id(::uint64_t value) {
+  _internal_set_puzzle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:match.DeleteTacticalPuzzleRequest.puzzle_id)
+}
+inline ::uint64_t DeleteTacticalPuzzleRequest::_internal_puzzle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.puzzle_id_;
+}
+inline void DeleteTacticalPuzzleRequest::_internal_set_puzzle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.puzzle_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// DeleteTacticalPuzzleResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool DeleteTacticalPuzzleResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& DeleteTacticalPuzzleResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& DeleteTacticalPuzzleResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.DeleteTacticalPuzzleResponse.error_message)
+  return _internal_error_message();
+}
+inline void DeleteTacticalPuzzleResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.DeleteTacticalPuzzleResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE DeleteTacticalPuzzleResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE DeleteTacticalPuzzleResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.DeleteTacticalPuzzleResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL DeleteTacticalPuzzleResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL DeleteTacticalPuzzleResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:match.DeleteTacticalPuzzleResponse.error_message)
+  return _msg;
+}
+inline void DeleteTacticalPuzzleResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.DeleteTacticalPuzzleResponse.error_message)
+}
+
+// -------------------------------------------------------------------
+
+// StartTacticalPuzzleBattleRequest
+
+// uint64 puzzle_id = 1;
+inline void StartTacticalPuzzleBattleRequest::clear_puzzle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.puzzle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t StartTacticalPuzzleBattleRequest::puzzle_id() const {
+  // @@protoc_insertion_point(field_get:match.StartTacticalPuzzleBattleRequest.puzzle_id)
+  return _internal_puzzle_id();
+}
+inline void StartTacticalPuzzleBattleRequest::set_puzzle_id(::uint64_t value) {
+  _internal_set_puzzle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:match.StartTacticalPuzzleBattleRequest.puzzle_id)
+}
+inline ::uint64_t StartTacticalPuzzleBattleRequest::_internal_puzzle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.puzzle_id_;
+}
+inline void StartTacticalPuzzleBattleRequest::_internal_set_puzzle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.puzzle_id_ = value;
+}
+
+// bool is_author_verify = 2;
+inline void StartTacticalPuzzleBattleRequest::clear_is_author_verify() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_author_verify_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool StartTacticalPuzzleBattleRequest::is_author_verify() const {
+  // @@protoc_insertion_point(field_get:match.StartTacticalPuzzleBattleRequest.is_author_verify)
+  return _internal_is_author_verify();
+}
+inline void StartTacticalPuzzleBattleRequest::set_is_author_verify(bool value) {
+  _internal_set_is_author_verify(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.StartTacticalPuzzleBattleRequest.is_author_verify)
+}
+inline bool StartTacticalPuzzleBattleRequest::_internal_is_author_verify() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.is_author_verify_;
+}
+inline void StartTacticalPuzzleBattleRequest::_internal_set_is_author_verify(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_author_verify_ = value;
+}
+
+// string request_id = 3;
+inline void StartTacticalPuzzleBattleRequest::clear_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.request_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& StartTacticalPuzzleBattleRequest::request_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.StartTacticalPuzzleBattleRequest.request_id)
+  return _internal_request_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void StartTacticalPuzzleBattleRequest::set_request_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.request_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.StartTacticalPuzzleBattleRequest.request_id)
+}
+inline ::std::string* PROTOBUF_NONNULL StartTacticalPuzzleBattleRequest::mutable_request_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_request_id();
+  // @@protoc_insertion_point(field_mutable:match.StartTacticalPuzzleBattleRequest.request_id)
+  return _s;
+}
+inline const ::std::string& StartTacticalPuzzleBattleRequest::_internal_request_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.request_id_.Get();
+}
+inline void StartTacticalPuzzleBattleRequest::_internal_set_request_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.request_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL StartTacticalPuzzleBattleRequest::_internal_mutable_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.request_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE StartTacticalPuzzleBattleRequest::release_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.StartTacticalPuzzleBattleRequest.request_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.request_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.request_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void StartTacticalPuzzleBattleRequest::set_allocated_request_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.request_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.request_id_.IsDefault()) {
+    _impl_.request_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.StartTacticalPuzzleBattleRequest.request_id)
+}
+
+// -------------------------------------------------------------------
+
+// StartTacticalPuzzleBattleResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool StartTacticalPuzzleBattleResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& StartTacticalPuzzleBattleResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& StartTacticalPuzzleBattleResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.StartTacticalPuzzleBattleResponse.error_message)
+  return _internal_error_message();
+}
+inline void StartTacticalPuzzleBattleResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.StartTacticalPuzzleBattleResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE StartTacticalPuzzleBattleResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE StartTacticalPuzzleBattleResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.StartTacticalPuzzleBattleResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL StartTacticalPuzzleBattleResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL StartTacticalPuzzleBattleResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:match.StartTacticalPuzzleBattleResponse.error_message)
+  return _msg;
+}
+inline void StartTacticalPuzzleBattleResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.StartTacticalPuzzleBattleResponse.error_message)
+}
+
+// uint64 battle_id = 2;
+inline void StartTacticalPuzzleBattleResponse::clear_battle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t StartTacticalPuzzleBattleResponse::battle_id() const {
+  // @@protoc_insertion_point(field_get:match.StartTacticalPuzzleBattleResponse.battle_id)
+  return _internal_battle_id();
+}
+inline void StartTacticalPuzzleBattleResponse::set_battle_id(::uint64_t value) {
+  _internal_set_battle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:match.StartTacticalPuzzleBattleResponse.battle_id)
+}
+inline ::uint64_t StartTacticalPuzzleBattleResponse::_internal_battle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_id_;
+}
+inline void StartTacticalPuzzleBattleResponse::_internal_set_battle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_id_ = value;
+}
+
+// uint32 spec_revision = 3;
+inline void StartTacticalPuzzleBattleResponse::clear_spec_revision() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spec_revision_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t StartTacticalPuzzleBattleResponse::spec_revision() const {
+  // @@protoc_insertion_point(field_get:match.StartTacticalPuzzleBattleResponse.spec_revision)
+  return _internal_spec_revision();
+}
+inline void StartTacticalPuzzleBattleResponse::set_spec_revision(::uint32_t value) {
+  _internal_set_spec_revision(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.StartTacticalPuzzleBattleResponse.spec_revision)
+}
+inline ::uint32_t StartTacticalPuzzleBattleResponse::_internal_spec_revision() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.spec_revision_;
+}
+inline void StartTacticalPuzzleBattleResponse::_internal_set_spec_revision(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spec_revision_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// LikeTacticalPuzzleRequest
+
+// uint64 puzzle_id = 1;
+inline void LikeTacticalPuzzleRequest::clear_puzzle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.puzzle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t LikeTacticalPuzzleRequest::puzzle_id() const {
+  // @@protoc_insertion_point(field_get:match.LikeTacticalPuzzleRequest.puzzle_id)
+  return _internal_puzzle_id();
+}
+inline void LikeTacticalPuzzleRequest::set_puzzle_id(::uint64_t value) {
+  _internal_set_puzzle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:match.LikeTacticalPuzzleRequest.puzzle_id)
+}
+inline ::uint64_t LikeTacticalPuzzleRequest::_internal_puzzle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.puzzle_id_;
+}
+inline void LikeTacticalPuzzleRequest::_internal_set_puzzle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.puzzle_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// LikeTacticalPuzzleResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool LikeTacticalPuzzleResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& LikeTacticalPuzzleResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& LikeTacticalPuzzleResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.LikeTacticalPuzzleResponse.error_message)
+  return _internal_error_message();
+}
+inline void LikeTacticalPuzzleResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.LikeTacticalPuzzleResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE LikeTacticalPuzzleResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE LikeTacticalPuzzleResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.LikeTacticalPuzzleResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL LikeTacticalPuzzleResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL LikeTacticalPuzzleResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:match.LikeTacticalPuzzleResponse.error_message)
+  return _msg;
+}
+inline void LikeTacticalPuzzleResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.LikeTacticalPuzzleResponse.error_message)
+}
+
+// uint32 like_count = 2;
+inline void LikeTacticalPuzzleResponse::clear_like_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.like_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t LikeTacticalPuzzleResponse::like_count() const {
+  // @@protoc_insertion_point(field_get:match.LikeTacticalPuzzleResponse.like_count)
+  return _internal_like_count();
+}
+inline void LikeTacticalPuzzleResponse::set_like_count(::uint32_t value) {
+  _internal_set_like_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:match.LikeTacticalPuzzleResponse.like_count)
+}
+inline ::uint32_t LikeTacticalPuzzleResponse::_internal_like_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.like_count_;
+}
+inline void LikeTacticalPuzzleResponse::_internal_set_like_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.like_count_ = value;
+}
+
+// bool self_liked = 3;
+inline void LikeTacticalPuzzleResponse::clear_self_liked() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.self_liked_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool LikeTacticalPuzzleResponse::self_liked() const {
+  // @@protoc_insertion_point(field_get:match.LikeTacticalPuzzleResponse.self_liked)
+  return _internal_self_liked();
+}
+inline void LikeTacticalPuzzleResponse::set_self_liked(bool value) {
+  _internal_set_self_liked(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:match.LikeTacticalPuzzleResponse.self_liked)
+}
+inline bool LikeTacticalPuzzleResponse::_internal_self_liked() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.self_liked_;
+}
+inline void LikeTacticalPuzzleResponse::_internal_set_self_liked(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.self_liked_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// GetTacticalPuzzleSolutionReplayRequest
+
+// uint64 puzzle_id = 1;
+inline void GetTacticalPuzzleSolutionReplayRequest::clear_puzzle_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.puzzle_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t GetTacticalPuzzleSolutionReplayRequest::puzzle_id() const {
+  // @@protoc_insertion_point(field_get:match.GetTacticalPuzzleSolutionReplayRequest.puzzle_id)
+  return _internal_puzzle_id();
+}
+inline void GetTacticalPuzzleSolutionReplayRequest::set_puzzle_id(::uint64_t value) {
+  _internal_set_puzzle_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:match.GetTacticalPuzzleSolutionReplayRequest.puzzle_id)
+}
+inline ::uint64_t GetTacticalPuzzleSolutionReplayRequest::_internal_puzzle_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.puzzle_id_;
+}
+inline void GetTacticalPuzzleSolutionReplayRequest::_internal_set_puzzle_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.puzzle_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// GetTacticalPuzzleSolutionReplayResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool GetTacticalPuzzleSolutionReplayResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& GetTacticalPuzzleSolutionReplayResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& GetTacticalPuzzleSolutionReplayResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.GetTacticalPuzzleSolutionReplayResponse.error_message)
+  return _internal_error_message();
+}
+inline void GetTacticalPuzzleSolutionReplayResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.GetTacticalPuzzleSolutionReplayResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE GetTacticalPuzzleSolutionReplayResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE GetTacticalPuzzleSolutionReplayResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.GetTacticalPuzzleSolutionReplayResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL GetTacticalPuzzleSolutionReplayResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL GetTacticalPuzzleSolutionReplayResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:match.GetTacticalPuzzleSolutionReplayResponse.error_message)
+  return _msg;
+}
+inline void GetTacticalPuzzleSolutionReplayResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.GetTacticalPuzzleSolutionReplayResponse.error_message)
+}
+
+// .BattleReplayEnvelope replay = 2;
+inline bool GetTacticalPuzzleSolutionReplayResponse::has_replay() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.replay_ != nullptr);
+  return value;
+}
+inline const ::BattleReplayEnvelope& GetTacticalPuzzleSolutionReplayResponse::_internal_replay() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::BattleReplayEnvelope* p = _impl_.replay_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::BattleReplayEnvelope>(&::BattleReplayEnvelope_globals_);
+}
+inline const ::BattleReplayEnvelope& GetTacticalPuzzleSolutionReplayResponse::replay() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.GetTacticalPuzzleSolutionReplayResponse.replay)
+  return _internal_replay();
+}
+inline void GetTacticalPuzzleSolutionReplayResponse::unsafe_arena_set_allocated_replay(
+    ::BattleReplayEnvelope* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.replay_);
+  }
+  _impl_.replay_ = reinterpret_cast<::BattleReplayEnvelope*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:match.GetTacticalPuzzleSolutionReplayResponse.replay)
+}
+inline ::BattleReplayEnvelope* PROTOBUF_NULLABLE GetTacticalPuzzleSolutionReplayResponse::release_replay() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::BattleReplayEnvelope* released = _impl_.replay_;
+  _impl_.replay_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::BattleReplayEnvelope* PROTOBUF_NULLABLE GetTacticalPuzzleSolutionReplayResponse::unsafe_arena_release_replay() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.GetTacticalPuzzleSolutionReplayResponse.replay)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::BattleReplayEnvelope* temp = _impl_.replay_;
+  _impl_.replay_ = nullptr;
+  return temp;
+}
+inline ::BattleReplayEnvelope* PROTOBUF_NONNULL GetTacticalPuzzleSolutionReplayResponse::_internal_mutable_replay() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.replay_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::BattleReplayEnvelope>(GetArena());
+    _impl_.replay_ = reinterpret_cast<::BattleReplayEnvelope*>(p);
+  }
+  return _impl_.replay_;
+}
+inline ::BattleReplayEnvelope* PROTOBUF_NONNULL GetTacticalPuzzleSolutionReplayResponse::mutable_replay()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::BattleReplayEnvelope* _msg = _internal_mutable_replay();
+  // @@protoc_insertion_point(field_mutable:match.GetTacticalPuzzleSolutionReplayResponse.replay)
+  return _msg;
+}
+inline void GetTacticalPuzzleSolutionReplayResponse::set_allocated_replay(::BattleReplayEnvelope* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.replay_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.replay_ = reinterpret_cast<::BattleReplayEnvelope*>(value);
+  // @@protoc_insertion_point(field_set_allocated:match.GetTacticalPuzzleSolutionReplayResponse.replay)
+}
+
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif  // __GNUC__
@@ -60246,6 +67028,18 @@ struct is_proto_enum<::match::JianghuDuelInviteState> : std::true_type {};
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::match::JianghuDuelInviteState>() {
   return ::match::JianghuDuelInviteState_descriptor();
+}
+template <>
+struct is_proto_enum<::match::TacticalPuzzleState> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::match::TacticalPuzzleState>() {
+  return ::match::TacticalPuzzleState_descriptor();
+}
+template <>
+struct is_proto_enum<::match::TacticalPuzzleListTab> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::match::TacticalPuzzleListTab>() {
+  return ::match::TacticalPuzzleListTab_descriptor();
 }
 
 }  // namespace protobuf

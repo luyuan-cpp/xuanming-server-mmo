@@ -928,3 +928,72 @@ func (clientPlayerJubaozhaiRpc) decodeGetPlayerTradeQuota(reply *base.MessageCon
 	}
 	return resp, nil
 }
+
+// CreateWantedSkillBookOrder 异步调用 ClientPlayerJubaozhai.CreateWantedSkillBookOrder(REQUEST),done 的契约见 ClientPlayerJubaozhai。
+func (r clientPlayerJubaozhaiRpc) CreateWantedSkillBookOrder(c *pkg.GameClient, req *trade.CreateWantedSkillBookOrderRequest, timeout time.Duration, done func(*trade.WantedSkillBookOrderResponse, error)) {
+	c.Call(game.ClientPlayerJubaozhaiCreateWantedSkillBookOrderMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeCreateWantedSkillBookOrder(reply, err))
+	})
+}
+
+// CreateWantedSkillBookOrderSync 同步调用 ClientPlayerJubaozhai.CreateWantedSkillBookOrder(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r clientPlayerJubaozhaiRpc) CreateWantedSkillBookOrderSync(ctx context.Context, c *pkg.GameClient, req *trade.CreateWantedSkillBookOrderRequest, timeout time.Duration) (*trade.WantedSkillBookOrderResponse, error) {
+	return r.decodeCreateWantedSkillBookOrder(c.CallSync(ctx, game.ClientPlayerJubaozhaiCreateWantedSkillBookOrderMessageId, req, timeout))
+}
+
+func (clientPlayerJubaozhaiRpc) decodeCreateWantedSkillBookOrder(reply *base.MessageContent, err error) (*trade.WantedSkillBookOrderResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &trade.WantedSkillBookOrderResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode ClientPlayerJubaozhai.CreateWantedSkillBookOrder reply: %w", err)
+	}
+	return resp, nil
+}
+
+// FulfillWantedSkillBookOrder 异步调用 ClientPlayerJubaozhai.FulfillWantedSkillBookOrder(REQUEST),done 的契约见 ClientPlayerJubaozhai。
+func (r clientPlayerJubaozhaiRpc) FulfillWantedSkillBookOrder(c *pkg.GameClient, req *trade.FulfillWantedSkillBookOrderRequest, timeout time.Duration, done func(*trade.WantedSkillBookOrderResponse, error)) {
+	c.Call(game.ClientPlayerJubaozhaiFulfillWantedSkillBookOrderMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeFulfillWantedSkillBookOrder(reply, err))
+	})
+}
+
+// FulfillWantedSkillBookOrderSync 同步调用 ClientPlayerJubaozhai.FulfillWantedSkillBookOrder(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r clientPlayerJubaozhaiRpc) FulfillWantedSkillBookOrderSync(ctx context.Context, c *pkg.GameClient, req *trade.FulfillWantedSkillBookOrderRequest, timeout time.Duration) (*trade.WantedSkillBookOrderResponse, error) {
+	return r.decodeFulfillWantedSkillBookOrder(c.CallSync(ctx, game.ClientPlayerJubaozhaiFulfillWantedSkillBookOrderMessageId, req, timeout))
+}
+
+func (clientPlayerJubaozhaiRpc) decodeFulfillWantedSkillBookOrder(reply *base.MessageContent, err error) (*trade.WantedSkillBookOrderResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &trade.WantedSkillBookOrderResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode ClientPlayerJubaozhai.FulfillWantedSkillBookOrder reply: %w", err)
+	}
+	return resp, nil
+}
+
+// ListWantedSkillBookOrders 异步调用 ClientPlayerJubaozhai.ListWantedSkillBookOrders(REQUEST),done 的契约见 ClientPlayerJubaozhai。
+func (r clientPlayerJubaozhaiRpc) ListWantedSkillBookOrders(c *pkg.GameClient, req *trade.ListWantedSkillBookOrdersRequest, timeout time.Duration, done func(*trade.ListWantedSkillBookOrdersResponse, error)) {
+	c.Call(game.ClientPlayerJubaozhaiListWantedSkillBookOrdersMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeListWantedSkillBookOrders(reply, err))
+	})
+}
+
+// ListWantedSkillBookOrdersSync 同步调用 ClientPlayerJubaozhai.ListWantedSkillBookOrders(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r clientPlayerJubaozhaiRpc) ListWantedSkillBookOrdersSync(ctx context.Context, c *pkg.GameClient, req *trade.ListWantedSkillBookOrdersRequest, timeout time.Duration) (*trade.ListWantedSkillBookOrdersResponse, error) {
+	return r.decodeListWantedSkillBookOrders(c.CallSync(ctx, game.ClientPlayerJubaozhaiListWantedSkillBookOrdersMessageId, req, timeout))
+}
+
+func (clientPlayerJubaozhaiRpc) decodeListWantedSkillBookOrders(reply *base.MessageContent, err error) (*trade.ListWantedSkillBookOrdersResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &trade.ListWantedSkillBookOrdersResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode ClientPlayerJubaozhai.ListWantedSkillBookOrders reply: %w", err)
+	}
+	return resp, nil
+}

@@ -222,8 +222,8 @@
 
 | 域能力 | 权威服务与逻辑库 | 最小增量契约与存储要点 |
 |---|---|---|
-| **生死状邀请、开局、观战与个人恩怨录** | `go/match`（`mmorpg_match`） | 1. `proto/match/match_service.proto` `MatchMode` 新增 `MATCH_MODE_JIANGHU_DUEL`（一期）与 `MATCH_MODE_JIANGHU_BRAWL`（二期）；<br>2. `spectateVisibilityOfMode` 为两模式显式登记 `SPECTATE_VISIBILITY_PUBLIC`（通过 `TestSpectateVisibilityDecidesEveryMatchMode` 守卫），两模式回合/时限打满均权威判平；<br>3. 新增表 `match_jianghu_duel_invitation`（同 `match_challenge_invitation` 含 `owner_account/owner_revision` 与双队成员确认快照）、`match_grudge_relation`（按 `(player_id, owner_revision, peer_player_id)` 聚合胜负平，1V1 互记、多对多记双方队长，每角色上限 50）、`match_grudge_log`（每对保留近 20 场）；<br>4. 邀请前经 RPC 校验 `go/friend` 全体成员两两 `friend_block` 双向拉黑与好友关系；发起方队长资费在 `scene.PrepareBattle` 复用 `PlayerItemHoldComp`（`BagService::PlaceHold`）按 `duel_invite_id` 冻结，开打后实扣，建房失败或 `BATTLE_OUTCOME_VOID`/零回合中止自动释放，普通战书银两由 `scene` 一条通道退还（`match` 不发退费邮件，2026-11-26 定案见实施计划末节）。 |
-| **帮派恩怨墙与 24h 双向宣战** | `go/guild`（`mmorpg_guild`） | 1. 复用 [guild-play-v1.md](guild-play-v1.md) 的 `match → guild` 终局可靠投递（排期上晚于或共建该投递骨架），新增 `guild_grudge_record`（近 20 场）与 `guild_rival_summary`（对各敌帮胜负统计）；<br>2. 二期新增 `guild_war_declaration`（24h 邀约、24h 宣战期、按 `(min_guild, max_guild)` 唯一键与 72h 配对冷却、单帮最多同时宣战 3 帮）。 |
+| **生死状邀请、开局、观战与个人恩怨录** | `go/match`（`mmorpg_match`） | 1. `proto/match/match_service.proto` `MatchMode` 新增 `MATCH_MODE_JIANGHU_DUEL`（一期）与 `MATCH_MODE_JIANGHU_BRAWL`（二期）；<br>2. `spectateVisibilityOfMode` 为两模式显式登记 `SPECTATE_VISIBILITY_PUBLIC`（通过 `TestSpectateVisibilityDecidesEveryMatchMode` 守卫），两模式回合/时限打满均权威判平；<br>3. 新增表 `match_jianghu_duel_invitation`（同 `match_challenge_invitation` 含 `owner_account/owner_revision` 与双队成员确认快照）、`match_grudge_relation`（按 `(player_id, owner_revision, peer_player_id)` 聚合胜负平，1V1 互记、多对多记双方队长，每角色上限 50）、`match_grudge_log`（每对保留近 20 场）、`match_grudge_applied`（一局一行的入账闸门、不裁剪，是恩怨录唯一的去重键，§9）；<br>4. 邀请前经 RPC 校验 `go/friend` 全体成员两两 `friend_block` 双向拉黑与好友关系；发起方队长资费在 `scene.PrepareBattle` 复用 `PlayerItemHoldComp`（`BagService::PlaceHold`）按 `duel_invite_id` 冻结，开打后实扣，建房失败或 `BATTLE_OUTCOME_VOID`/零回合中止自动释放，普通战书银两由 `scene` 一条通道退还（`match` 不发退费邮件，2026-11-26 定案见实施计划末节）。 |
+| **帮派恩怨墙与 24h 双向宣战** | `go/guild`（`mmorpg_guild`） | 1. 复用 [guild-play-v1.md](guild-play-v1.md) 的 `match → guild` 终局可靠投递（排期上晚于或共建该投递骨架），新增 `guild_grudge_record`（近 20 场）与 `guild_rival_summary`（对各敌帮胜负统计），落码表名为 `guild_jianghu_grudge_record` / `guild_jianghu_rival_summary`，另有一局一行的入账闸门 `guild_jianghu_grudge_applied`（不裁剪，是恩怨墙唯一的去重键，§9）；<br>2. 二期新增 `guild_war_declaration`（24h 邀约、24h 宣战期、按 `(min_guild, max_guild)` 唯一键与 72h 配对冷却、单帮最多同时宣战 3 帮）。 |
 | **好友拉黑与 7 天删友留痕（二期）** | `go/friend`（`mmorpg_friend`） | 一期提供内部批量查询 RPC（两两拉黑与好友关系）；二期新增 7 天删友留痕表（绑定 `owner_revision`，过户隔离）供悬赏五重防刷核验。 |
 | **全服固定模板系统播报** | `go/chat` | 由 `match` 终局/开局调用内部模板播报接口发送 `CHAT_CHANNEL_TYPE_SYSTEM`（仅拼装服务端权威角色名/帮名/回合数/`battle_id` 与固定白名单模板，**绝不接受客户端自定义文本**，零涉黄涉政/广告引流口子）。 |
 | **玩家印记、煞气、思过崖态与防 660 泄漏** | C++ `scene` + `proto/common/component/` | 1. 新增轻量持久组件 `PlayerJianghuComp`（字段全 `uint64`/`uint32`：`duel_refuse_strangers`、`defeat_mark_expires_at_ms`、`defeat_mark_winner_id`、`defeat_mark_style_id`、`owner_revision`；二期追加 `shaqi_value`、`shaqi_updated_at_ms`、`penitence_pending_sec`、`penitence_until_ms`、`penitence_reduce_count`、`brawl_shield_until_ms`、`justice_points`）；<br>2. `player_equipment_material_reward.cpp` 的 `IsEligibleBattle` 与正式评分入口**显式排除** `MATCH_MODE_JIANGHU_DUEL` 与 `MATCH_MODE_JIANGHU_BRAWL`；<br>3. 永久外观/称号解锁位走 `(cfg_bit_index) = true` 位图与 `unknownBits_` 透传规范（[bit-storage-and-table-ids.md](../rules/bit-storage-and-table-ids.md)）；二期劫火灵砂周软上限按 `account_id` 存账号级账本；C++ 严格遵守无裸指针成员与零新增线程红线。 |
@@ -337,3 +337,30 @@
    - `xuanming-server-mmo`：`ContractSync --check` 零漂移，Java `game-battle-engine` / `game-battle` / `game-friend` / `game-chat` / `game-match` / `game-scene` / `game-guild` 全量对账并更新 `PARITY.md`。
    - `mmorpg-client`：`gen.bat client` 全量同步，纯 C# `JianghuModels` / `JianghuClient` 挂载 `GameClient.Jianghu`，完整可玩 uGUI（`JianghuDuelWindow` / `JianghuUiRoot` + `WorldHudNavigation`「历练 → 生死擂」入口 + 非阻塞来信/小队确认弹窗 + 百宝阁直达 + 战报回放）全部接入并过编译与 NUnit 单测，专属切片路径预埋 `UI/Ugui/JianghuDuelV1/*` 供后续美术替换。
    - 二期（M4–M6 灵潮劫火线/煞气红名/思过崖/悬赏）按既定节奏保留待一期线上活跃达标后决策，不做硬扩展。
+
+---
+
+## 9. 恩怨录与恩怨墙的入账去重（2026-11-26，数据覆写审计 r2 第 4 轮 r2-jh#3，未编译）
+
+**问题**：两边都拿会被裁剪的展示行当去重锚点。
+- 帮派恩怨墙（`go/guild/internal/data/jianghu_grudge_repo.go`）：幂等预检查 `guild_jianghu_grudge_record` 的 `(guild_id, battle_id)`，可这张表每帮只留最近 20 场。一局入账之后两帮又打了 20 场以上，这局的战绩行被裁掉；它的结果再被重投（消费位点回拨、`kafka_offset_reset`、换消费组从头读，`match-results` 保留 7 天），预检查不到行，两帮胜负再加一次，新插的旧战绩又立刻被裁掉，每重投一次多算一次。
+- 个人恩怨录（`go/match/internal/authority/jianghu_grudge.go`）：拿 `match_grudge_log` 的主键插入当锚点，这张表每对宿敌只留最近 20 条、每人只留最近 50 位宿敌，被裁掉之后同样重复计数；主键还带 `owner_revision`，而它取的是处理时刻的值，角色过户之后重投（或处理时查角色档案失败、按 0 算）就落进另一个桶，同样绕过去重，并再发一遍全服战果与连胜播报。
+- 只影响恩怨统计与播报，不涉及资产；要有旧消息重投才触发。
+
+**方案**：去重键挪到不裁剪的一局一行表里，各在自己的库。
+- match：新表 `match_grudge_applied`（主键 `battle_id`，`applied_ms` 记库时钟），`ApplyJianghuDuelBattleResult` 的第一步就插它，撞主键 = 这局入过账，整笔不做、不播报。它是事务的第一把锁，同一局并发的两笔在这一行上排队，后到的等前一笔提交后撞 1062；与按 `player_id` 升序取的后续锁不成环。战报行仍照旧插入与裁剪，只当展示用。
+- guild：新表 `guild_jianghu_grudge_applied`（同形），锁序位置 23（单调追加在全序末尾）。事务开头对它普通读预检（不取锁、不占全序位置，重复事件不必先锁两帮的行），写完位置 20（汇总）、21（战绩与裁剪）之后最后插它，撞 1062 整笔回滚。预检之后同一局另一笔先提交、或这局战绩行早被裁掉的情形都在这一步拦下。
+- 两张表都不裁剪，删角、解散帮会也不删（[账号注销](../design/account-deletion.md) §6.2 的保留列已登记）：删了重放会给对手再算一次，与 `match_rating_applied` 同一口径。
+- 单测（要真库，缺环境变量时跳过）：`go/match/internal/authority/jianghu_grudge_test.go` 的 `TestGrudgeLedger_RedeliveryAfterTrimOrTransferStaysDuplicate`（`MATCH_IT_TIDB`），`go/guild/internal/data/jianghu_grudge_repo_test.go` 的 `TestRecordJianghuDuelResultStaysIdempotentAfterRecordTrimmed`（`GUILD_TEST_MYSQL_DSN`）。
+
+**为什么这样选**：「这一局只入账一次」是按对局的事实，就该按对局记一行，和展示用的有界列表分开——裁记录前先看它是不是去重键，是就不能裁。本仓评分入账的 `match_rating_applied` 早就是这个形状，Java 版两处也都是独立的已入账集合（`game-match` 的 `appliedBattleIds`、`game-guild` 的 `seenBattles`），这里与它们对齐，不另造机制。键只用 `battle_id`，不带玩家、不带 `owner_revision`，所以过户、档案查询失败、宿敌被挤出 50 人名单都绕不过去。
+
+**被否决的做法**：
+- 在汇总行上记已入账的最大完成时刻、拒收更早的事件：不同对局的结果可能乱序到达（不在同一分区），会把迟到的合法结果丢掉；`battle_id` 是打散的永久 ID，不能拿大小判先后（AGENTS §7），完成时刻相同时没法排；
+- 只把裁剪改成「保留期内的行不裁」：依赖事件里的完成时刻与 topic 保留期对齐，迟到很久才处理的结果照样会被裁；也解决不了个人恩怨录主键带 `owner_revision` 的问题；
+- 去重表按保留期（长于 topic 的 7 天）定期清理：要新加 match 与 guild 两个后台循环（连带循环活性登记、告警与指标），而一行只有十几字节、每局一行，增长与对局数同阶，`match_rating_applied` 也是不清理的，现在不值得。
+
+**代价与边界**：
+- 每局多写一行、多一次主键插入；表随对局数增长、不回收。真到需要回收时按保留期清理，保留期要长于 `match-results` 的保留期与任何重放窗口（从头重读、位点回拨）。
+- 只修了「重投重复计数」。`owner_revision` 仍取处理时刻的值：结果第一次处理就晚于过户时，这局记在新号主名下；处理时查角色档案失败按 0 记进看不见的桶。这两处在 `go/match/internal/logic/jianghu_duel_logic.go` 的 `applyJianghuDuelResult`，要根治得在开局时把双方 `owner_revision` 冻结进 `JianghuDuelBattleContext`、档案查询失败改为回错误让消费重试，本批未动。
+- 项目未上线，没有存量数据，不需要回填闸门表；旧库若已有战报行而闸门表为空，旧行被裁之前重投仍由战报行主键拦下（`ApplyJianghuDuelBattleResult` 的第 1 步、恩怨墙 Pass 2 都保留了撞 1062 按已入账处理）。

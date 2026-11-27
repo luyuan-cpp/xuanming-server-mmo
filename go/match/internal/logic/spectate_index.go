@@ -17,6 +17,7 @@ import (
 // 每个桶自带 hash tag,16 个桶落 16 个不同的 slot:
 //
 //	spectate:battles:active:{sba:<k>}    活跃集合:member=battle_id,score=created_at_ms(spectate.go)
+//	spectate:ranked:active:{srk:<k>}     高段论剑排位直播索引:member=battle_id,score=created_at_ms(防 PVE 稀释,spectate.go)
 //	spectate:bcast:active:{sbc:<k>}      全服 L2 配额:member=battle_id,score=战斗期限毫秒(spectate_tier.go)
 //	spectate:featured:active:{sft:<k>}   赛事局索引:member=battle_id,score=标记到期毫秒(spectate_tier.go)
 //
@@ -35,6 +36,7 @@ type spectateIndex struct {
 
 var (
 	spectateActiveIndex    = spectateIndex{prefix: "spectate:battles:active", tag: "sba"}
+	spectateRankedIndex    = spectateIndex{prefix: "spectate:ranked:active", tag: "srk"}
 	spectateBroadcastIndex = spectateIndex{prefix: "spectate:bcast:active", tag: "sbc"}
 	spectateFeaturedIndex  = spectateIndex{prefix: "spectate:featured:active", tag: "sft"}
 )

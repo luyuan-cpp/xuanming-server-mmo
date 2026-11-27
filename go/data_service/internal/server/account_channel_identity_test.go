@@ -111,7 +111,7 @@ func TestGetPlayerChannelIdentityRequiresContentGuardOrChatProof(t *testing.T) {
 		}
 	}
 	// 两把密钥都没配:接口停用,不是免验签。
-	closed := NewDataServiceServer(&svc.ServiceContext{ChannelIdentities: ci})
+	closed := NewDataServiceServer(&svc.ServiceContext{AccountDirectory: &serverDirectoryFake{}, AccountDirectoryAuth: directoryVerifier(t), ChannelIdentities: ci})
 	if _, err := closed.GetPlayerChannelIdentity(context.Background(), guardLookup(t, &dspb.GetPlayerChannelIdentityRequest{PlayerId: 42})); status.Code(err) != codes.Unavailable {
 		t.Fatalf("without a verifier the RPC must be unavailable, got %v", err)
 	}

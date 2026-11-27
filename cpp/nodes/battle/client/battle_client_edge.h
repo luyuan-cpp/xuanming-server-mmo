@@ -19,7 +19,9 @@
 //      关源 → 并发上限 BaseDeployConfig.battle_max_connections(0 仅 dev/test 允许)→ 新建连接速率,被拒的连接当场以
 //      RST 关闭、不建任何每连接对象;连接回调里的上限判定留作第二道。连接类指标经节点的 /metrics 导出;
 //   2. 空 battle_token_secret 的处置由 BATTLE_RUN_MODE 决定(prod 拒连);
-//   3. 未验证连接 kHandshakeTimeoutSec 内没完成握手即关闭(防占槽);
+//   3. 票据先行(与 gate 同一做法,准入设计 P2-4):握手成功之前一条直连只有一条未认证记录(weak 连接、建连时刻、半关闭时刻,
+//      键是 connId),不建 DirectSession;票据握手成功、或出示了验过签的探测授权,才建 DirectSession。
+//      未认证直连 kHandshakeTimeoutSec 内没完成握手即关闭(防占槽),由 1 秒节拍从池头扫,不按连接起定时器;
 //   4. 验证通过前丢弃并关闭一切非握手消息;
 //   5. ClientRequest 体 ≤ kMaxClientRequestBytes;每消息号限速(MessageLimiter,与 gate
 //      同一张表);消息号只放行 BattleClientPlayer 的四条客户端 RPC;非法包累计达阈值即关闭
@@ -34,9 +36,9 @@
 
 #include <cstdint>
 #include <chrono>
+#include <map>
 #include <memory>
 #include <optional>
-#include <set>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -116,13 +118,26 @@ public:
     //(终局包还在排空)不再动它,由其自身的延迟强关收尾,保证"终局包先于 FIN"。
     void DisconnectAll(const char *reason);
 
-    size_t ConnectionCount() const { return sessions.size(); }
+    // 直连数 = 会话数(握手成功或在探测中)+ 未认证直连数。总量闸与停机排空(归零才放行)都按它。
+    size_t ConnectionCount() const { return sessions.size() + unauthenticated.size(); }
 
     // 并发连接的有效上限(闸 1 的判据,现读部署配置):battle_max_connections,为 0(仅 dev/test 合法)时取
     // kHardMaxConnections。「0 = 硬上限」这条规则只写在这里,节点观众席配额由它派生(BattleRoomManager::SetClientEdge)。
     size_t EffectiveMaxConnections() const;
 
 private:
+    // 未认证直连的记录(闸 3,票据先行):既没完成票据握手、也没出示探测授权的直连只有这一条,不建 DirectSession。
+    struct UnauthenticatedConnection
+    {
+        // weak(AGENTS.md §11.7):连接由 TcpServer 拥有;HandleClosed 同步摘记录。
+        std::weak_ptr<muduo::net::TcpConnection> conn;
+        // 建连时刻(单调时钟):握手期限、承压淘汰的年龄、握手耗时都从它算。
+        std::chrono::steady_clock::time_point openedAt;
+        // 本端主动 shutdown() 进入半关闭的时刻(握手被拒、发来不认识的消息):超过宽限期仍未退出时允许承压淘汰强关。
+        std::optional<std::chrono::steady_clock::time_point> halfClosedAt;
+    };
+
+    // 握手成功(verified)或出示了验过签的探测授权(probeGrant)之后才有的每连接状态。
     struct DirectSession
     {
         uint64_t connId = 0;
@@ -133,15 +148,12 @@ private:
         std::string spectatorOperation;
         // gate 会话 id(来自房间路由快照),回填进合成的 SessionDetails 供日志对齐
         uint32_t gateSessionId = 0;
-        // 非法包累计(IllegalPacketCounter 管阈值);握手成功时清零
+        // 非法包累计(IllegalPacketCounter 管阈值);随会话从 0 开始
         uint32_t illegalPacketCount = 0;
         // 每消息号限速,与 gate SessionInfo 同款(表驱动,MessageLimiter.xlsx)
         MessageLimiter messageLimiter;
-        TimerTaskComp handshakeTimer;
-        // 建连时刻(单调时钟):握手耗时直方图从这里算。
-        std::chrono::steady_clock::time_point openedAt;
-        // 本端主动 shutdown() 进入半关闭的时刻(单调时钟):超过宽限期仍未退出时允许承压淘汰强关。
-        std::optional<std::chrono::steady_clock::time_point> halfClosedAt;
+        // 探测连接从不握手:建连满 kHandshakeTimeoutSec 还没探完就关(与未认证直连同一个时限)。只有探测连接武装它。
+        TimerTaskComp probeDeadlineTimer;
         // 应用层心跳的存活状态(闸 6)。握手成功的应答发出时开始跟踪,只在跟踪中刷新「上一帧」时刻。
         client_liveness::ClientLiveness liveness;
         // 空闲检查:每条跟踪中的连接恰好一个定时器。到期时距上一帧不足阈值就按「上一帧 + 阈值」重新武装,
@@ -159,15 +171,19 @@ private:
     // 已按原因计数并采样打日志(被拒的量就是攻击流量的量级,不能逐条写盘)。
     // 未验签预算要的池大小是 unauthenticated.size();最老一条只在池承压时才找(OldestConnectedUnauthenticated)。
     // 每次 accept 都是 O(1),不随直连数增长:准入回调排在速率闸之前,被拒的洪水也要走它,不能让它按直连数付代价。
-    // 判定要求淘汰时,经最老那条会话里的 weak 连接 forceClose,会话由断开回调删。本端 loop 刚卡过时不淘汰。
+    // 判定要求淘汰时,摘掉最老那条未认证记录,再经记录里的 weak 连接 forceClose。本端 loop 刚卡过时不淘汰。
     bool AdmitConnection(const muduo::net::InetAddress &peer, battle_connection_admission::SteadyTime now);
-    // 承压时淘汰一条未认证直连给新连接让位:先移出池(这一刻起不再算在池里),再 forceClose;会话或连接已不在时什么都不做。
+    // 承压时淘汰一条未认证直连给新连接让位:先摘记录(这一刻起不再算在池里),再 forceClose;记录或连接已不在时什么都不做。
     void EvictUnauthenticated(uint64_t connId, battle_connection_admission::SteadyTime now);
     // 池里最老的一条可淘汰直连;没有返回空。仍在短宽限期内的半关闭连接跳过,超时未关闭的半关闭连接允许强关腾位。
     // now 是本次准入判定的时刻(AdmitConnection 传进来的那个),不在里面另取时钟。
     std::optional<uint64_t> OldestConnectedUnauthenticated(battle_connection_admission::SteadyTime now) const;
     // 未认证的直连数(指标与判定同一个数):既没完成票据握手、也没出示有效的网络探测授权(授权由 match 签发,OnProbeStart 验过签)。
     size_t UnauthenticatedConnectionCount() const { return unauthenticated.size(); }
+    // 闸 3 的握手期限:1 秒节拍(Install 起的 loopStallTimer)调一次。池按 connId 有序即建连先后,从池头起摘掉建连满
+    // kHandshakeTimeoutSec 的记录并 forceClose,碰到第一条没满的就停。late(这一拍本身迟到,本端 loop 卡过)时这一轮不关:
+    // 握手包可能还在接收缓冲里没读,下一拍准时了再判(与 gate 的握手期限同一口径)。
+    void CloseExpiredHandshakes(client_liveness::SteadyTime now, bool late);
     // 把连接类指标的采集回调登记进进程的指标注册表(Install 时一次)。
     void RegisterMetrics();
 
@@ -225,15 +241,15 @@ private:
     ProtobufCodec codec;
     std::unordered_map<uint64_t, DirectSession> sessions;
     uint64_t nextConnId = 1;
-    // 未认证直连池:还没完成票据握手、也没出示探测授权的直连的 connId。connId 单调递增、从不复用,有序集合即建连先后,
-    // begin() 就是最老的。进池只在 HandleEstablished;出池在握手成功、探测授权验过、淘汰与 HandleClosed(会话表唯一的删除点),
-    // erase 幂等,所以计数不会漂。
-    std::set<uint64_t> unauthenticated;
+    // 未认证直连池(票据先行):还没完成票据握手、也没出示探测授权的直连,connId → 记录。这些直连不在 sessions 里。
+    // connId 单调递增、从不复用,有序即建连先后,begin() 就是最老的。进池只在 HandleEstablished;出池在握手成功、
+    // 探测授权验过(这两处随即建 DirectSession)、淘汰、握手超时与 HandleClosed,erase 幂等,所以计数不会漂。
+    std::map<uint64_t, UnauthenticatedConnection> unauthenticated;
     // 连接准入的状态与计数(battle_connection_admission.h)。起步按硬上限推导,main.cpp 启动时换成正式参数。
     battle_connection_admission::Admission admission{
         accept_admission::DefaultRateLimit(static_cast<uint32_t>(kHardMaxConnections))};
     // 本端 loop 刚卡过没有(client_liveness.h LoopStallWatch):Install 起一个 1 秒节拍的定时器给它打拍,
-    // 未验签淘汰在卡过之后不淘汰(验签请求可能还在接收缓冲里没读),与 gate 同一口径。
+    // 未验签淘汰在卡过之后不淘汰(验签请求可能还在接收缓冲里没读),与 gate 同一口径。同一拍也扫握手期限(CloseExpiredHandshakes)。
     client_liveness::LoopStallWatch loopStall{client_liveness::kClientLiveness.checkPeriod};
     TimerTaskComp loopStallTimer;
 };

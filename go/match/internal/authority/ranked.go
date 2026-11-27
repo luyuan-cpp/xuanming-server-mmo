@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"match/internal/metrics"
 	"match/internal/ranked"
@@ -18,6 +20,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/syncx"
 	"google.golang.org/protobuf/proto"
 	battlepb "proto/battle"
 	kafkapb "proto/contracts/kafka"
@@ -50,7 +53,109 @@ var (
 	ErrRankedSeasonSettling      = errors.New("ranked: current season is settling")
 	ErrRankedPresetInvalid       = errors.New("ranked: invalid preset or cosmetic loadout")
 	ErrRankedRuleVersionMismatch = errors.New("ranked: rule version mismatch")
+	ErrRankedRematchInvalid      = errors.New("ranked: rematch source battle invalid or expired")
 )
+
+const (
+	// featuredBuildsCacheTTL 控制全服「问道名局」Top 5 热门流派单副本进程内缓存时长：
+	// 配合 syncx.SingleFlight 把大厅并发读压成每副本每 5 秒最多 1 次 TiDB 查询，且按 season_id 自动失效。
+	featuredBuildsCacheTTL = 5 * time.Second
+)
+
+type rankedFeaturedCache struct {
+	flightOnce sync.Once
+	flight     syncx.SingleFlight
+	nowFn      func() time.Time
+
+	mu        sync.Mutex
+	seasonID  uint32
+	limit     int
+	fetchedAt time.Time
+	filled    bool
+	items     []*pb.RankedFeaturedBuildView
+}
+
+func (c *rankedFeaturedCache) now() time.Time {
+	if c.nowFn != nil {
+		return c.nowFn()
+	}
+	return time.Now()
+}
+
+func (c *rankedFeaturedCache) singleFlight() syncx.SingleFlight {
+	c.flightOnce.Do(func() { c.flight = syncx.NewSingleFlight() })
+	return c.flight
+}
+
+func (c *rankedFeaturedCache) fresh(seasonID uint32, limit int) ([]*pb.RankedFeaturedBuildView, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.filled || c.seasonID != seasonID || c.limit < limit || c.now().Sub(c.fetchedAt) >= featuredBuildsCacheTTL {
+		return nil, false
+	}
+	out := c.items
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return cloneFeaturedBuildViews(out), true
+}
+
+func (c *rankedFeaturedCache) Load(seasonID uint32, limit int, fetch func() ([]*pb.RankedFeaturedBuildView, error)) ([]*pb.RankedFeaturedBuildView, error) {
+	if seasonID == 0 || limit <= 0 {
+		return nil, nil
+	}
+	if cached, ok := c.fresh(seasonID, limit); ok {
+		return cached, nil
+	}
+	key := fmt.Sprintf("s%d:%d", seasonID, limit)
+	val, err := c.singleFlight().Do(key, func() (any, error) {
+		if cached, ok := c.fresh(seasonID, limit); ok {
+			return cached, nil
+		}
+		started := c.now()
+		loaded, fErr := fetch()
+		if fErr != nil {
+			return nil, fErr
+		}
+		stored := cloneFeaturedBuildViews(loaded)
+		c.mu.Lock()
+		c.seasonID = seasonID
+		c.limit = limit
+		c.fetchedAt = started
+		c.filled = true
+		c.items = stored
+		c.mu.Unlock()
+		return cloneFeaturedBuildViews(stored), nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	views, ok := val.([]*pb.RankedFeaturedBuildView)
+	if !ok {
+		return nil, nil
+	}
+	return cloneFeaturedBuildViews(views), nil
+}
+
+func (c *rankedFeaturedCache) Invalidate() {
+	c.mu.Lock()
+	c.filled = false
+	c.items = nil
+	c.mu.Unlock()
+}
+
+func cloneFeaturedBuildViews(src []*pb.RankedFeaturedBuildView) []*pb.RankedFeaturedBuildView {
+	if len(src) == 0 {
+		return nil
+	}
+	out := make([]*pb.RankedFeaturedBuildView, len(src))
+	for i, item := range src {
+		if item != nil {
+			out[i] = proto.Clone(item).(*pb.RankedFeaturedBuildView)
+		}
+	}
+	return out
+}
 
 // SwapRankedCatalog 在启动及表包两阶段热更提交时原子切换当前生效的论剑排位目录。
 func (s *Store) SwapRankedCatalog(cat *ranked.Catalog) {
@@ -121,6 +226,23 @@ func (s *Store) ensureActiveSeasonTx(ctx context.Context, tx *sql.Tx, stamp uint
 		return nil, err
 	}
 	return s1, nil
+}
+
+// EnsureActiveSeasonTx 在调用方已持有的事务 tx 内读取当前最新赛季（空表时惰性创建 S1），避免嵌套 BeginTx 引发连接池死锁。
+func (s *Store) EnsureActiveSeasonTx(ctx context.Context, tx *sql.Tx, stamp uint64) (*pb.MatchRankedSeasonRecord, error) {
+	return s.ensureActiveSeasonTx(ctx, tx, stamp)
+}
+
+// readCurrentSeasonFast 无写事务快速读取当前赛季；仅首次空表冷启时退回 EnsureActiveSeason 写入 S1。
+func (s *Store) readCurrentSeasonFast(ctx context.Context) (*pb.MatchRankedSeasonRecord, error) {
+	cur, err := scanSeason(s.DB.QueryRowContext(ctx, "SELECT "+seasonColumns+" FROM match_ranked_season ORDER BY season_id DESC LIMIT 1"))
+	if err == nil {
+		return cur, nil
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return s.EnsureActiveSeason(ctx)
+	}
+	return nil, err
 }
 
 // EnsureActiveSeason 读取当前最新赛季;空表时惰性创建第一赛季(S1)。
@@ -626,17 +748,22 @@ func toRewardEntitlement(r *pb.MatchRankedRewardRecord) *pb.RankedRewardEntitlem
 }
 
 // LoadRankedProfile 读取论剑排位大厅所需的全部权威状态(赛季、本季进度、预设偏好、权益、可选往季历史)。
+// 赛季元数据走无锁快读、全服热门流派 Top 5 走 5 秒 SingleFlight 缓存，玩家个人数据在只读事务中一次快照读完，避免高并发大厅读占用写事务与热点排序。
 func (s *Store) LoadRankedProfile(ctx context.Context, playerID uint64, includeHistory bool) (*pb.GetRankedProfileResponse, error) {
-	tx, err := s.DB.BeginTx(ctx, nil)
+	cur, err := s.readCurrentSeasonFast(ctx)
+	if err != nil {
+		return nil, err
+	}
+	featuredBuilds, err := s.loadTopFeaturedBuildsCached(ctx, cur.SeasonId, 5)
+	if err != nil {
+		return nil, err
+	}
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
 	stamp, err := now(ctx, tx)
-	if err != nil {
-		return nil, err
-	}
-	cur, err := s.ensureActiveSeasonTx(ctx, tx, stamp)
 	if err != nil {
 		return nil, err
 	}
@@ -697,10 +824,6 @@ func (s *Store) LoadRankedProfile(ctx context.Context, playerID uint64, includeH
 		if err = errors.Join(hRows.Err(), hRows.Close()); err != nil {
 			return nil, err
 		}
-	}
-	featuredBuilds, err := loadTopFeaturedBuildsTx(ctx, tx, cur.SeasonId, 5)
-	if err != nil {
-		return nil, err
 	}
 	topRivals, err := loadTopRivalsTx(ctx, tx, cur.SeasonId, playerID, 8)
 	if err != nil {
@@ -1114,6 +1237,10 @@ func (s *Store) ApplyRankedRating(ctx context.Context, event *kafkapb.BattleResu
 		}
 	}
 
+	// 论剑 V6：内存按 build_key 聚合本局全部有效自养流派贡献，玩家循环结束后统一按 build_key 升序加锁落库，
+	// 并按 battle_id 升序增减 match_battle_report.ref_count，从锁序上彻底杜绝多局并发 AB-BA 死锁与名局回放被 FIFO 误删。
+	var buildDeltas map[string]*featuredBuildMatchDelta
+
 	for _, pid := range members {
 		ps := playerSeasons[pid]
 		st := settlementByPlayer[pid]
@@ -1312,10 +1439,10 @@ func (s *Store) ApplyRankedRating(ctx context.Context, event *kafkapb.BattleResu
 			}
 
 			if !rctx.GetUseFreePreset() && participated && st != nil {
-				if err = upsertFeaturedBuildTx(ctx, tx, season.SeasonId, cat.Rule().GetTierQingfengCenti(),
-					event.BattleId, pid, st, afterRating, teamSize, event.GetTotalRounds(), playerWon, stamp); err != nil {
-					return false, err
+				if buildDeltas == nil {
+					buildDeltas = make(map[string]*featuredBuildMatchDelta, len(members))
 				}
+				collectFeaturedBuildDelta(buildDeltas, cat.Rule().GetTierQingfengCenti(), pid, st, afterRating, playerWon)
 			}
 		}
 
@@ -1348,6 +1475,12 @@ func (s *Store) ApplyRankedRating(ctx context.Context, event *kafkapb.BattleResu
 			RevengedLossesAfter:     revengedLossesAfter,
 		}
 		if err = writeRankedBattleRowTx(ctx, tx, view, pid); err != nil {
+			return false, err
+		}
+	}
+
+	if len(buildDeltas) > 0 {
+		if err = applyFeaturedBuildDeltasTx(ctx, tx, season.SeasonId, event.BattleId, teamSize, event.GetTotalRounds(), stamp, buildDeltas); err != nil {
 			return false, err
 		}
 	}
@@ -1415,7 +1548,7 @@ func writeRankedBattleRowTx(ctx context.Context, tx *sql.Tx, view *pb.RankedBatt
 
 // writeVoidRankedBattlesTx 在 commitAbortTx 同一事务内为作废的论剑排位成局写入 VOID 摘要,
 // 不改评分、不计季次数、不解锁权益,确保结算屏与重登查询立刻看到明确 VOID 状态。
-func writeVoidRankedBattlesTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRecord, stamp uint64) error {
+func (s *Store) writeVoidRankedBattlesTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormationRecord, stamp uint64) error {
 	if f == nil || f.RankedSeasonId == 0 || len(f.RankedContext) == 0 {
 		return nil
 	}
@@ -1429,7 +1562,7 @@ func writeVoidRankedBattlesTx(ctx context.Context, tx *sql.Tx, f *pb.MatchFormat
 			loadouts[m.GetPlayerId()] = m
 		}
 	}
-	cat := ranked.DefaultFallback()
+	cat := s.RankedCatalog()
 	teamSize := rctx.GetTeamSize()
 	if teamSize == 0 && len(f.Members) >= 2 {
 		teamSize = uint32(len(f.Members) / 2)
@@ -1649,57 +1782,134 @@ func parseCoreSkillIDs(csv string) []uint32 {
 	return out
 }
 
-func upsertFeaturedBuildTx(ctx context.Context, tx *sql.Tx, seasonID, tierQingfengCenti uint32, battleID, playerID uint64, st *battlepb.BattleSettlementData, afterRating int64, teamSize, totalRounds uint32, playerWon bool, stamp uint64) error {
+type featuredBuildMatchDelta struct {
+	buildKey           string
+	seasonSealID       uint32
+	starterPetTableID  uint32
+	coreSkillCSV       string
+	appearances        uint32
+	wins               uint32
+	highTierWins       uint32
+	hasWinner          bool
+	bestWinnerPlayerID uint64
+	bestWinnerName     string
+	bestWinnerRating   int64
+}
+
+func collectFeaturedBuildDelta(deltas map[string]*featuredBuildMatchDelta, tierQingfengCenti uint32, playerID uint64, st *battlepb.BattleSettlementData, afterRating int64, playerWon bool) {
 	buildKey, csv, _ := canonicalBuildKey(st.GetFinalSeasonSealId(), st.GetStarterPetTableId(), st.GetCoreSkillIds())
 	if buildKey == "" {
-		return nil
+		return
 	}
 	highTierMin := int64(tierQingfengCenti)
 	if highTierMin <= 0 {
 		highTierMin = 152000
 	}
-	highTierWin := playerWon && afterRating >= highTierMin
-	rec, err := scanFeaturedBuildRecord(tx.QueryRowContext(ctx,
-		"SELECT "+featuredBuildColumns+" FROM match_ranked_featured_build WHERE season_id=? AND build_key=? FOR UPDATE",
-		seasonID, buildKey))
-	if errors.Is(err, sql.ErrNoRows) {
-		rec = &pb.MatchRankedFeaturedBuildRecord{
-			SeasonId:          seasonID,
-			BuildKey:          buildKey,
-			SeasonSealId:      st.GetFinalSeasonSealId(),
-			StarterPetTableId: st.GetStarterPetTableId(),
-			CoreSkillIds:      csv,
+	d := deltas[buildKey]
+	if d == nil {
+		d = &featuredBuildMatchDelta{
+			buildKey:          buildKey,
+			seasonSealID:      st.GetFinalSeasonSealId(),
+			starterPetTableID: st.GetStarterPetTableId(),
+			coreSkillCSV:      csv,
 		}
-	} else if err != nil {
-		return err
+		deltas[buildKey] = d
 	}
-	rec.Appearances++
+	d.appearances++
 	if playerWon {
-		rec.Wins++
-		if highTierWin {
-			rec.HighTierWins++
+		d.wins++
+		if afterRating >= highTierMin {
+			d.highTierWins++
 		}
-		if rec.FeaturedBattleId == 0 || afterRating >= rec.FeaturedRatingCenti {
-			rec.FeaturedBattleId = battleID
-			rec.FeaturedPlayerId = playerID
-			rec.FeaturedPlayerName = st.GetPlayerDisplayName()
-			rec.FeaturedRatingCenti = afterRating
-			rec.FeaturedTeamSize = teamSize
-			rec.FeaturedTotalRounds = totalRounds
+		if !d.hasWinner ||
+			afterRating > d.bestWinnerRating ||
+			(afterRating == d.bestWinnerRating && playerID < d.bestWinnerPlayerID) {
+			d.hasWinner = true
+			d.bestWinnerPlayerID = playerID
+			d.bestWinnerName = st.GetPlayerDisplayName()
+			d.bestWinnerRating = afterRating
 		}
 	}
-	rec.UpdatedMs = stamp
-	_, err = tx.ExecContext(ctx,
-		"INSERT INTO match_ranked_featured_build("+featuredBuildColumns+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "+
-			"ON DUPLICATE KEY UPDATE appearances=VALUES(appearances),wins=VALUES(wins),high_tier_wins=VALUES(high_tier_wins),featured_battle_id=VALUES(featured_battle_id),featured_player_id=VALUES(featured_player_id),featured_player_name=VALUES(featured_player_name),featured_rating_centi=VALUES(featured_rating_centi),featured_team_size=VALUES(featured_team_size),featured_total_rounds=VALUES(featured_total_rounds),updated_ms=VALUES(updated_ms)",
-		rec.SeasonId, rec.BuildKey, rec.SeasonSealId, rec.StarterPetTableId, rec.CoreSkillIds,
-		rec.Appearances, rec.Wins, rec.HighTierWins, rec.FeaturedBattleId, rec.FeaturedPlayerId,
-		rec.FeaturedPlayerName, rec.FeaturedRatingCenti, rec.FeaturedTeamSize, rec.FeaturedTotalRounds, rec.UpdatedMs)
-	return err
 }
 
-func loadTopFeaturedBuildsTx(ctx context.Context, tx *sql.Tx, seasonID uint32, limit int) ([]*pb.RankedFeaturedBuildView, error) {
-	rows, err := tx.QueryContext(ctx,
+// applyFeaturedBuildDeltasTx 按 build_key 升序原子落库本局聚合流派计数，仅在本局确有战报正文时更新代表战报，
+// 并在事务末尾按 battle_id 升序统一增减 match_battle_report.ref_count（新代表局 +1 护航、被替换旧局 -1 释放）。
+func applyFeaturedBuildDeltasTx(ctx context.Context, tx *sql.Tx, seasonID uint32, battleID uint64, teamSize, totalRounds uint32, stamp uint64, deltas map[string]*featuredBuildMatchDelta) error {
+	if len(deltas) == 0 {
+		return nil
+	}
+	var one int
+	battleHasReplay := false
+	if err := tx.QueryRowContext(ctx, "SELECT 1 FROM match_battle_report WHERE battle_id=?", battleID).Scan(&one); err == nil {
+		battleHasReplay = true
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+
+	keys := make([]string, 0, len(deltas))
+	for k := range deltas {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	reportRefDelta := make(map[uint64]int64)
+	for _, key := range keys {
+		d := deltas[key]
+		rec, err := scanFeaturedBuildRecord(tx.QueryRowContext(ctx,
+			"SELECT "+featuredBuildColumns+" FROM match_ranked_featured_build WHERE season_id=? AND build_key=? FOR UPDATE",
+			seasonID, key))
+		if errors.Is(err, sql.ErrNoRows) {
+			rec = &pb.MatchRankedFeaturedBuildRecord{
+				SeasonId:          seasonID,
+				BuildKey:          d.buildKey,
+				SeasonSealId:      d.seasonSealID,
+				StarterPetTableId: d.starterPetTableID,
+				CoreSkillIds:      d.coreSkillCSV,
+			}
+		} else if err != nil {
+			return err
+		}
+		rec.Appearances += d.appearances
+		rec.Wins += d.wins
+		rec.HighTierWins += d.highTierWins
+		if battleHasReplay && d.hasWinner && (rec.FeaturedBattleId == 0 || d.bestWinnerRating >= rec.FeaturedRatingCenti) {
+			oldBattleID := rec.FeaturedBattleId
+			rec.FeaturedBattleId = battleID
+			rec.FeaturedPlayerId = d.bestWinnerPlayerID
+			rec.FeaturedPlayerName = d.bestWinnerName
+			rec.FeaturedRatingCenti = d.bestWinnerRating
+			rec.FeaturedTeamSize = teamSize
+			rec.FeaturedTotalRounds = totalRounds
+			if oldBattleID != battleID {
+				reportRefDelta[battleID]++
+				if oldBattleID != 0 {
+					reportRefDelta[oldBattleID]--
+				}
+			}
+		}
+		rec.UpdatedMs = stamp
+		if _, err = tx.ExecContext(ctx,
+			"INSERT INTO match_ranked_featured_build("+featuredBuildColumns+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "+
+				"ON DUPLICATE KEY UPDATE appearances=VALUES(appearances),wins=VALUES(wins),high_tier_wins=VALUES(high_tier_wins),featured_battle_id=VALUES(featured_battle_id),featured_player_id=VALUES(featured_player_id),featured_player_name=VALUES(featured_player_name),featured_rating_centi=VALUES(featured_rating_centi),featured_team_size=VALUES(featured_team_size),featured_total_rounds=VALUES(featured_total_rounds),updated_ms=VALUES(updated_ms)",
+			rec.SeasonId, rec.BuildKey, rec.SeasonSealId, rec.StarterPetTableId, rec.CoreSkillIds,
+			rec.Appearances, rec.Wins, rec.HighTierWins, rec.FeaturedBattleId, rec.FeaturedPlayerId,
+			rec.FeaturedPlayerName, rec.FeaturedRatingCenti, rec.FeaturedTeamSize, rec.FeaturedTotalRounds, rec.UpdatedMs); err != nil {
+			return err
+		}
+	}
+	return adjustBattleReportRefCountsTx(ctx, tx, reportRefDelta)
+}
+
+func (s *Store) loadTopFeaturedBuildsCached(ctx context.Context, seasonID uint32, limit int) ([]*pb.RankedFeaturedBuildView, error) {
+	return s.featuredCache.Load(seasonID, limit, func() ([]*pb.RankedFeaturedBuildView, error) {
+		return loadTopFeaturedBuildsQuery(ctx, s.DB, seasonID, limit)
+	})
+}
+
+func loadTopFeaturedBuildsQuery(ctx context.Context, q interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}, seasonID uint32, limit int) ([]*pb.RankedFeaturedBuildView, error) {
+	rows, err := q.QueryContext(ctx,
 		"SELECT "+featuredBuildColumns+" FROM match_ranked_featured_build WHERE season_id=? AND wins>0 ORDER BY high_tier_wins DESC,wins DESC,featured_rating_centi DESC,updated_ms DESC LIMIT ?",
 		seasonID, limit)
 	if err != nil {
@@ -1733,6 +1943,75 @@ func loadTopFeaturedBuildsTx(ctx context.Context, tx *sql.Tx, seasonID uint32, l
 		return nil, err
 	}
 	return out, nil
+}
+
+// ValidateRankedRematchSource 在发起 V7「不服再战」切磋邀请前做 O(1) 权威防伪校验：
+// 1. sourceBattleID 必须是正式自养 1V1 论剑排位成局（PVP_TEAM、ranked_season_id>0、非作废、恰好 2 名敌对成员匹配 challenger/target）；
+// 2. 必须已在 match_battle_completion 落定 COMPLETE 终局，且距离终局归档不超过 maxAgeMs（防客户端伪造任意 battle_id 骚扰陌生人或重放陈年旧局）。
+func (s *Store) ValidateRankedRematchSource(ctx context.Context, sourceBattleID, challengerID, targetID, maxAgeMs uint64) error {
+	if s == nil || s.DB == nil || sourceBattleID == 0 || challengerID == 0 || targetID == 0 || challengerID == targetID {
+		return ErrRankedRematchInvalid
+	}
+	f, err := s.Formation(ctx, sourceBattleID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrRankedRematchInvalid
+	}
+	if err != nil {
+		return err
+	}
+	if !isEligibleRankedRematchFormation(f, challengerID, targetID) {
+		return ErrRankedRematchInvalid
+	}
+	var decision uint32
+	var archivedMs uint64
+	err = s.DB.QueryRowContext(ctx,
+		"SELECT decision,archived_ms FROM match_battle_completion WHERE battle_id=?", sourceBattleID).
+		Scan(&decision, &archivedMs)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrRankedRematchInvalid
+	}
+	if err != nil {
+		return err
+	}
+	if decision != uint32(pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_COMPLETE) {
+		return ErrRankedRematchInvalid
+	}
+	if maxAgeMs > 0 {
+		stamp, nErr := s.Now(ctx)
+		if nErr != nil {
+			return nErr
+		}
+		if stamp > archivedMs && stamp-archivedMs > maxAgeMs {
+			return ErrRankedRematchInvalid
+		}
+	}
+	return nil
+}
+
+func isEligibleRankedRematchFormation(f *pb.MatchFormationRecord, challengerID, targetID uint64) bool {
+	if f == nil ||
+		f.Mode != uint32(pb.MatchMode_MATCH_MODE_PVP_TEAM) ||
+		f.RankedSeasonId == 0 ||
+		f.State == 5 ||
+		len(f.Members) != 2 {
+		return false
+	}
+	var challengerSide, targetSide uint32
+	var sawChallenger, sawTarget bool
+	for _, m := range f.Members {
+		if m == nil {
+			continue
+		}
+		switch m.PlayerId {
+		case challengerID:
+			sawChallenger = true
+			challengerSide = m.TeamIndex
+		case targetID:
+			sawTarget = true
+			targetSide = m.TeamIndex
+		}
+	}
+	return sawChallenger && sawTarget && challengerSide != targetSide
 }
 
 // isFeaturedRankedReplayAllowed 允许全服玩家观摩「问道名局」高段热门流派代表战报（fail-closed：仅查 featured_battle_id 索引）。

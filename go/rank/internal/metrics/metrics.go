@@ -27,6 +27,9 @@ const (
 	RewardError     = "error"
 	// RewardAbandoned 本次明确拒收后奖励转放弃终态(已过期或尝试次数到顶),工作器不再投,需要人工核对重投。
 	RewardAbandoned = "abandoned"
+	// 要双人复核批准记录的两个管理方法(调用方 admin),admin_unapproved_command_total 的 method 取值。
+	AdminMethodRemoveEntry      = "RemoveRankEntry"
+	AdminMethodDeleteGeneration = "DeleteRankGeneration"
 )
 
 type collectors struct {
@@ -34,6 +37,8 @@ type collectors struct {
 	dispatch *prometheus.CounterVec
 	scan     *prometheus.CounterVec
 	dueDelay *prometheus.GaugeVec
+	// unapproved 计调用方 admin 不带双人复核批准记录却被接受的删除;只在 AdminAllowUnapproved 打开时增长,集群里应当恒为 0。
+	unapproved *prometheus.CounterVec
 }
 
 func newCollectors() *collectors {
@@ -59,6 +64,11 @@ func newCollectors() *collectors {
 			Name:      "reward_due_delay_seconds",
 			Help:      "最近成功SQL扫描中最早可领取奖励距其next_attempt_ms的延迟；真实空结果为0，失败保旧。",
 		}, nil),
+		unapproved: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Subsystem: subsystem,
+			Name:      "admin_unapproved_command_total",
+			Help:      "RankAdmin removals by caller admin accepted without a dual-control approval record (only while AdminAllowUnapproved is on).",
+		}, []string{"method"}),
 	}
 }
 
@@ -71,7 +81,11 @@ func Register() {
 }
 
 func (c *collectors) register(reg prometheus.Registerer) {
-	reg.MustRegister(c.write, c.dispatch, c.scan, c.dueDelay)
+	reg.MustRegister(c.write, c.dispatch, c.scan, c.dueDelay, c.unapproved)
+	// 先建出两条序列(值 0):计数第一次出现就是 1 时,告警的 increase 看不到这一次。
+	for _, method := range []string{AdminMethodRemoveEntry, AdminMethodDeleteGeneration} {
+		c.unapproved.WithLabelValues(method)
+	}
 	for _, op := range []string{OperationOpen, OperationSubmit, OperationFreeze, OperationRemove, OperationDelete} {
 		for _, outcome := range []string{WriteOK, WriteReplay, WriteRejected, WriteError} {
 			c.write.WithLabelValues(op, outcome)
@@ -100,6 +114,19 @@ func (c *collectors) observeWrite(operation, outcome string) bool {
 }
 
 func ObserveWrite(operation, outcome string) bool { return current.observeWrite(operation, outcome) }
+
+func (c *collectors) observeAdminUnapproved(method string) bool {
+	switch method {
+	case AdminMethodRemoveEntry, AdminMethodDeleteGeneration:
+		c.unapproved.WithLabelValues(method).Inc()
+		return true
+	default:
+		return false
+	}
+}
+
+// ObserveAdminUnapproved 记一次调用方 admin 不带批准记录却被接受的删除;method 只认两个管理方法名。
+func ObserveAdminUnapproved(method string) bool { return current.observeAdminUnapproved(method) }
 
 func (c *collectors) observeDispatch(outcome string) bool {
 	switch outcome {

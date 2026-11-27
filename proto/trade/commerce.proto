@@ -22,6 +22,9 @@ enum CommerceOrderKind {
   COMMERCE_ORDER_KIND_MARKET_MATCH = 4;
   COMMERCE_ORDER_KIND_AUCTION_LOT = 5;
   COMMERCE_ORDER_KIND_RMB_CONSIGNMENT = 6;
+  // 悬赏求书求购单:发榜人先托管悬赏银两,揭榜人交一枚封卷道籍,书先到发榜人、税后银两再到揭榜人
+  // (docs/design/skill-book-wanted-order-trade-escrow.md)。
+  COMMERCE_ORDER_KIND_SKILL_BOOK_WANTED = 7;
 }
 
 enum CommerceOrderState {
@@ -275,6 +278,81 @@ message RmbWithdrawalView {
   string transaction_id = 5;
 }
 message WithdrawalResponse { TipInfoMessage error_message = 1; RmbWithdrawalView withdrawal = 2; }
+
+// ---------------------------------------------------------------------------
+// 悬赏求书求购单(kind 7,docs/design/skill-book-wanted-order-trade-escrow.md)。
+// 消息名用 WantedSkillBook 打头,刻意与 scene 旧协议的 SkillBookWantedOrder* 区分:迁移期两套并存,客户端也同时编译两套。
+// 撤单走 CancelCommerceOrder,查单走 GetCommerceOrder;揭榜的结果按同一请求号重发揭榜查询(§3.3)。
+// ---------------------------------------------------------------------------
+
+// 求购单在客户端显示的阶段,由服务端按合同状态推导,不落库。
+enum WantedSkillBookOrderPhase {
+  WANTED_SKILL_BOOK_ORDER_PHASE_UNSPECIFIED = 0;
+  WANTED_SKILL_BOOK_ORDER_PHASE_ESCROWING = 1;   // 正在托管悬赏银两(发榜刚提交)
+  WANTED_SKILL_BOOK_ORDER_PHASE_OPEN = 2;        // 挂榜中,可以揭榜
+  WANTED_SKILL_BOOK_ORDER_PHASE_FULFILLING = 3;  // 有人正在交书,别人暂时揭不了、发榜人暂时撤不了
+  WANTED_SKILL_BOOK_ORDER_PHASE_DELIVERING = 4;  // 书正交给发榜人,之后税后银两交给揭榜人
+  WANTED_SKILL_BOOK_ORDER_PHASE_SETTLED = 5;     // 已成交
+  WANTED_SKILL_BOOK_ORDER_PHASE_CANCELLING = 6;  // 撤单或整单退回中
+  WANTED_SKILL_BOOK_ORDER_PHASE_CANCELLED = 7;   // 已撤单,或悬赏银两没托管成
+  WANTED_SKILL_BOOK_ORDER_PHASE_MANUAL = 8;      // 转人工核对
+}
+
+message WantedSkillBookOrderView {
+  string order_id = 1;                // 不透明稳定订单号,与 CommerceOrderView.order_id 同一个
+  uint64 poster_player_id = 2;        // 发榜人
+  string poster_name = 3;             // 发榜时的角色名快照
+  uint32 skill_table_id = 4;
+  string skill_name = 5;              // 服务端按当前配表填;查不到为空
+  uint32 scroll_id = 6;
+  string scroll_name = 7;
+  bool require_master_signature = 8;
+  uint64 reward_gold = 9;             // 托管的悬赏银两(流通银两)
+  uint64 seller_net_gold = 10;        // 扣 5% 集市税后揭榜人实得
+  WantedSkillBookOrderPhase phase = 11;
+  uint64 fulfiller_player_id = 12;    // 正在交书或已成交的揭榜人;挂榜中为 0
+  uint64 created_ms = 13;
+  uint64 version = 14;
+  bool is_mine = 15;                  // 调用者是不是发榜人
+}
+
+// 发榜。悬赏银两在建单之后由 trade 从发榜人身上托管,银两不足时单子直接结案为已撤单(phase CANCELLED)。
+message CreateWantedSkillBookOrderRequest {
+  string client_request_id = 1;       // 8..80 字符;同一请求号同一内容重放回同一张单
+  uint32 skill_table_id = 2;          // 求购的常规永久技能
+  bool require_master_signature = 3;  // 只收带宗师署名的封卷道籍
+  uint64 reward_gold = 4;             // 100..50000 流通银两
+}
+
+// 揭榜:交出背包里一枚未绑定的封卷道籍(3414)。书架里的书先在 scene 免费封卷(SealSkillBook),拿到道具号再揭榜。
+// 同一请求号重发是查这一次揭榜的结果:交易中、交付中、已成交回订单;书没扣到回 TradeAssetNotTradable;
+// 书不符合要求、已原样退回回 TradeWantedBookMismatch。
+message FulfillWantedSkillBookOrderRequest {
+  string order_id = 1;
+  string client_request_id = 2;
+  uint64 sealed_item_id = 3;
+}
+
+message WantedSkillBookOrderResponse {
+  TipInfoMessage error_message = 1;
+  WantedSkillBookOrderView order = 2;
+  uint64 server_now_ms = 3;
+}
+
+// 悬赏榜。公开榜全服可见,只列挂榜中的单,按悬赏额从高到低;only_mine 列本人还没结案的单(含托管中、交易中、交付中)。
+message ListWantedSkillBookOrdersRequest {
+  uint32 filter_skill_table_id = 1;   // 0 = 全部;非 0 只看这门技能(页内过滤,一页可能不满,按 next_cursor 继续取)
+  bool only_mine = 2;
+  string cursor = 3;                  // 不透明游标,首页留空
+  uint32 limit = 4;                   // 1..50,0 按 20
+}
+
+message ListWantedSkillBookOrdersResponse {
+  TipInfoMessage error_message = 1;
+  repeated WantedSkillBookOrderView orders = 2;
+  string next_cursor = 3;             // 空 = 没有下一页
+  uint64 server_now_ms = 4;
+}
 
 // ---------------------------------------------------------------------------
 // 卖家店铺信用评分、近 7 日中位参考价与当面交易限额查询协议

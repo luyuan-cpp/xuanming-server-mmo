@@ -231,3 +231,19 @@ func TestFormationfixListAndShow(t *testing.T) {
 	require.Contains(t, h.stderr.String(), "formation_unreadable")
 	require.NotContains(t, h.stdout.String(), "actionable:")
 }
+
+// 工具不带双人复核批准记录:生产上 -execute 被拒时回 2,并指向后台;别的拒绝不加这段提示。
+func TestFormationfixAbortRefusedByDualControlPointsToTheConsole(t *testing.T) {
+	h := newHarness()
+	h.client.resolve = &pb.ResolveStrandedFormationResponse{Verdict: pb.StrandedFormationVerdict_STRANDED_FORMATION_VERDICT_REFUSED, Refusal: "dual_control_approval_required"}
+	require.Equal(t, exitRejected, h.run(abortArgs("-execute")...))
+	require.Nil(t, h.client.resolves[0].GetApproval(), "工具不带批准记录")
+	require.Contains(t, h.stderr.String(), "dual_control_approval_required")
+	require.Contains(t, h.stderr.String(), "java/gm_admin")
+	require.Contains(t, h.stderr.String(), "GlobalMatch.ManualResolutionAllowUnapproved")
+
+	h = newHarness()
+	h.client.resolve = &pb.ResolveStrandedFormationResponse{Verdict: pb.StrandedFormationVerdict_STRANDED_FORMATION_VERDICT_REFUSED, Refusal: "deadline_not_due"}
+	require.Equal(t, exitRejected, h.run(abortArgs("-execute")...))
+	require.NotContains(t, h.stderr.String(), "java/gm_admin")
+}

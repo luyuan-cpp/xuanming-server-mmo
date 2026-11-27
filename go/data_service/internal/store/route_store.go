@@ -31,7 +31,7 @@ import (
 //   - zone_merged_into:合服映射(源区 → 目标区)的永久记录,由 merge_zone 的合服 / 撤销写入与删除;
 //     别名合服之后它就是合服的全部写入:玩家行和路由行都不动(docs/design/player-data-tidb-scaling-plan.md §7.1);
 //   - zone_merge_history:合服 / 撤销的历史,只增不改,merge_zone 在写映射的同一个事务里追加(提案 §16);
-//     data_service 只建表(迁移),不读不写;
+//     data_service 建表(迁移),运行中只数它的行数,当作映射的版本号(R14,docs/design/merged-zone-etcd-copy.md §4.1);
 //   - route_meta:开关表,单行(id=1),writable=0 = 全体映射写者拒写;很少写,冻结与解冻走 shared/authoritysql 的 Catalog。
 //
 // 写入方:data_service 进程内只有本文件(route_store_test.go 的 TestNoPlayerRouteWritesOutsideRouteStore /
@@ -198,8 +198,14 @@ const (
 	routeSelectRowsHeadSQL = "SELECT route_shard, player_id, " + routeRowColumnsSQL +
 		" FROM player_route WHERE (route_shard, player_id) IN ("
 
-	// R14 列 merged_into(一致读,不取锁)。
-	routeListMergedIntoSQL = "SELECT src_zone, dst_zone, run_id, merged_at_ms FROM zone_merged_into ORDER BY src_zone"
+	// R14 合服映射的一次一致读(不取锁):库世代、版本(合服历史的行数)和全部映射行,一条语句读完。
+	// 一条语句在 MySQL 上共用一个读视图(RC 下按语句取),在 TiDB 上共用语句的时间戳,所以三样是同一个快照;
+	// merge_zone 的映射与历史同一个事务提交,要么都看到,要么都看不到。没有映射时 LEFT JOIN 回一行,src_zone、dst_zone 为 NULL。
+	routeReadMergedZonesSQL = "SELECT m.generation, h.version, z.src_zone, z.dst_zone" +
+		" FROM (SELECT generation FROM route_meta WHERE id = 1) AS m" +
+		" CROSS JOIN (SELECT COUNT(*) AS version FROM zone_merge_history) AS h" +
+		" LEFT JOIN zone_merged_into AS z ON 1 = 1" +
+		" ORDER BY z.src_zone"
 
 	// R16 按区数路由行的头部,由 routeCountHomeZonesSQL 拼(一致读,不取锁)。home_zone 是 idx_route_home 的首列:
 	// IN 里每个区一段索引范围,COUNT(*) 只读索引、不回表。
@@ -326,7 +332,7 @@ func NewRouteStore(cfg MySQLConfig, opts RouteStoreOptions) (*RouteStore, error)
 
 // verifyRouteShard 是常驻/工具对一片的只读启动核验。
 // CHECK 的行为探针留给独立 schema/真库验收，normal 不为启动探针取得 metaX。
-// zone_merged_into 只在第 0 片,这里只核每片都有的路由表;第 0 片由迁移守形状,读它的 ListMergedInto 在启动时就会读一次。
+// zone_merged_into 只在第 0 片,这里只核每片都有的路由表;第 0 片由迁移守形状,读它的 ReadMergedZoneMapping 在启动时就会读一次。
 func verifyRouteShard(ctx context.Context, db *sql.DB, schema string) error {
 	if err := probeRouteSession(ctx, db); err != nil {
 		return err
@@ -1165,12 +1171,16 @@ func retryRouteTx(ctx context.Context, op string, lockRetries *atomic.Uint64, at
 
 // ── 只读接口(都是一致读,不取锁)──────────────────────────────────────────────
 
-// MergedIntoRow 是 zone_merged_into 的一行。
-type MergedIntoRow struct {
-	SrcZone    uint32
-	DstZone    uint32
-	RunID      string
-	MergedAtMs uint64
+// MergedZoneMapping 是目录第 0 片上合服映射的一次一致读(R14)。data_service 把它发布成 etcd 里的副本,
+// 第 0 片读不到时按副本回答(docs/design/merged-zone-etcd-copy.md)。
+type MergedZoneMapping struct {
+	// Generation 是第 0 片的 route_meta.generation:迁移种行时随机生成,之后不改;PITR、搬库都带着它走,只有库重建才会变。
+	Generation string
+	// Version 是 zone_merge_history 的行数。merge_zone 每改一次映射都在同一个事务里追加恰好一行历史,历史只增不改,
+	// 所以映射每变一次它加 1,同一个值只对应一份映射。
+	Version uint64
+	// Merges 是源区 → 目标区(没有沿链解析)。没有合服时是空表,不是 nil。
+	Merges map[uint32]uint32
 }
 
 // GetRoutes 按 id 批量点查。缺席的 id 不出现在结果里(不是错误);id 为 0 的项被跳过。
@@ -1295,24 +1305,40 @@ func loadRoutes(ctx context.Context, q routeQueryer, ids []uint64) (map[uint64]R
 	return out, nil
 }
 
-// ListMergedInto 列出全部合走标记,按 src_zone 升序(行数 = 合过的区数,不分页)。zone_merged_into 只在第 0 片。
-func (s *RouteStore) ListMergedInto(ctx context.Context) ([]MergedIntoRow, error) {
-	rows, err := s.pools.first().QueryContext(ctx, routeListMergedIntoSQL)
+// ReadMergedZoneMapping 读第 0 片的合服映射、它的版本和库世代(R14,一条语句,同一个快照;行数 = 合过的区数,不分页)。
+// zone_merged_into、zone_merge_history 只在第 0 片。route_meta 缺行回 ErrRouteMetaMissing。
+func (s *RouteStore) ReadMergedZoneMapping(ctx context.Context) (MergedZoneMapping, error) {
+	rows, err := s.pools.first().QueryContext(ctx, routeReadMergedZonesSQL)
 	if err != nil {
-		return nil, fmt.Errorf("list zone_merged_into: %w", err)
+		return MergedZoneMapping{}, fmt.Errorf("read zone_merged_into: %w", err)
 	}
 	defer rows.Close()
 
-	var out []MergedIntoRow
+	out := MergedZoneMapping{Merges: map[uint32]uint32{}}
+	found := false
 	for rows.Next() {
-		var r MergedIntoRow
-		if err := rows.Scan(&r.SrcZone, &r.DstZone, &r.RunID, &r.MergedAtMs); err != nil {
-			return nil, fmt.Errorf("scan zone_merged_into row: %w", err)
+		var (
+			generation string
+			version    uint64
+			src, dst   sql.Null[uint32]
+		)
+		if err := rows.Scan(&generation, &version, &src, &dst); err != nil {
+			return MergedZoneMapping{}, fmt.Errorf("scan zone_merged_into row: %w", err)
 		}
-		out = append(out, r)
+		out.Generation, out.Version, found = generation, version, true
+		if src.Valid != dst.Valid {
+			// 两列都是 NOT NULL;只有 LEFT JOIN 没匹配上时一起为 NULL。
+			return MergedZoneMapping{}, fmt.Errorf("read zone_merged_into: src_zone null=%t but dst_zone null=%t", !src.Valid, !dst.Valid)
+		}
+		if src.Valid {
+			out.Merges[src.V] = dst.V
+		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate zone_merged_into: %w", err)
+		return MergedZoneMapping{}, fmt.Errorf("iterate zone_merged_into: %w", err)
+	}
+	if !found {
+		return MergedZoneMapping{}, ErrRouteMetaMissing
 	}
 	return out, nil
 }

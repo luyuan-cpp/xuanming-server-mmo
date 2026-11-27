@@ -45,6 +45,8 @@ func RoleFencePending(ctx context.Context, tx *sql.Tx, state *rfpb.RoleFenceStat
 		{"guild_trial_reward_owed", "SELECT battle_id FROM guild_trial_reward_owed WHERE player_id=? LIMIT 1 FOR UPDATE"},
 		{"guild_trial_launch_role", "SELECT r.request_id FROM guild_trial_launch_role r LEFT JOIN guild_trial_launch l ON l.request_id=r.request_id WHERE r.player_id=? AND (r.state IS NULL OR r.state<>2 OR l.request_id IS NULL OR l.state IS NULL OR l.state<>3) LIMIT 1 FOR UPDATE"},
 		{"guild_trial_lobby_slot", "SELECT s.player_id FROM guild_trial_lobby_slot s LEFT JOIN guild_trial_lobby l ON l.lobby_id=s.lobby_id WHERE s.player_id=? AND (s.lobby_id IS NULL OR (s.lobby_id<>0 AND (l.lobby_id IS NULL OR l.state IS NULL OR l.state<>4))) LIMIT 1 FOR UPDATE"},
+		// 帮战待入账行(r2-gw#5 / #6):转换后就是他的一条 GUILD_CREDIT 指令,与历练待入队物品同一口径。
+		{"guild_war_credit_owed", "SELECT op_id FROM guild_war_credit_owed WHERE player_id=? LIMIT 1 FOR UPDATE"},
 	} {
 		var found uint64
 		err := tx.QueryRowContext(ctx, pending.query, player).Scan(&found)

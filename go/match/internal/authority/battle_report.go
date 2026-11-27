@@ -216,14 +216,42 @@ func evictBattleReportsTx(ctx context.Context, tx *sql.Tx, player uint64, releas
 // releaseBattleReportsTx 给被挤出的正文减引用数,减到 0 就删掉正文。按 battle_id 升序加锁:并发的终局事务都按同一
 // 顺序锁正文行,不会互相死锁。正文不存在(那一局没存回放)时两条语句都影响 0 行。
 func releaseBattleReportsTx(ctx context.Context, tx *sql.Tx, released map[uint64]uint32) error {
-	ids := make([]uint64, 0, len(released))
-	for id := range released {
-		ids = append(ids, id)
+	if len(released) == 0 {
+		return nil
+	}
+	deltas := make(map[uint64]int64, len(released))
+	for id, n := range released {
+		if n > 0 {
+			deltas[id] = -int64(n)
+		}
+	}
+	return adjustBattleReportRefCountsTx(ctx, tx, deltas)
+}
+
+// adjustBattleReportRefCountsTx 按 battle_id 升序对共享战报正文增减引用数（正数护航 pin，负数释放并在归零时删正文）。
+// 所有触碰 match_battle_report 的事务（终局挤出、删角清理、论剑名局代表局换绑、换季清理）都在事务末尾按同一
+// battle_id 升序调用本函数，从 lock-order 上杜绝死锁。
+func adjustBattleReportRefCountsTx(ctx context.Context, tx *sql.Tx, deltas map[uint64]int64) error {
+	if len(deltas) == 0 {
+		return nil
+	}
+	ids := make([]uint64, 0, len(deltas))
+	for id, delta := range deltas {
+		if id != 0 && delta != 0 {
+			ids = append(ids, id)
+		}
 	}
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	for _, id := range ids {
-		n := released[id]
-		if _, err := tx.ExecContext(ctx, "UPDATE match_battle_report SET ref_count=IF(ref_count>?,ref_count-?,0) WHERE battle_id=?", n, n, id); err != nil {
+		delta := deltas[id]
+		if delta > 0 {
+			if _, err := tx.ExecContext(ctx, "UPDATE match_battle_report SET ref_count=ref_count+? WHERE battle_id=?", uint64(delta), id); err != nil {
+				return err
+			}
+			continue
+		}
+		dec := uint64(-delta)
+		if _, err := tx.ExecContext(ctx, "UPDATE match_battle_report SET ref_count=IF(ref_count>?,ref_count-?,0) WHERE battle_id=?", dec, dec, id); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, "DELETE FROM match_battle_report WHERE battle_id=? AND ref_count=0", id); err != nil {

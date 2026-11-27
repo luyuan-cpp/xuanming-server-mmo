@@ -90,7 +90,7 @@
 
 ### 1a.3 人工终结与核账
 
-- **人工终结只有一份共享判据**（`go/shared/assetop` 的 `JudgeManual`）：行必须静默够久才能人工终结，静默间隔取 max(30 分钟, 租约)，见证看租约和最后一次发送时刻（`last_send_ms`）。guild、GM 回收都改调它，不各写一套。详见 [exploit_loss_prevention_zh.md](exploit_loss_prevention_zh.md)、[guild-phase2/05-economy.md](guild-phase2/05-economy.md)。
+- **人工终结只有一份共享判据**（`go/shared/assetop` 的 `JudgeManual`）：行必须静默够久才能人工终结，静默间隔取 max(30 分钟, 租约)，见证看租约、最后一次发送时刻（`last_send_ms`）与 `attempts`；两个 `assetopfix` 判「从未应用」时先在本机单调时钟上等观察窗口 max(1 分钟, 2×租约)、再读行与账本，跨窗口只比租约与发送时刻，条件写用第二次读到的见证（2026-11-26，未编译；设计记录 [data-consistency-guarantee-map-20261020.md](data-consistency-guarantee-map-20261020.md) §6.2 第 2 条补记）。guild、GM 回收都改调它，不各写一套。详见 [exploit_loss_prevention_zh.md](exploit_loss_prevention_zh.md)、[guild-phase2/05-economy.md](guild-phase2/05-economy.md)。
 - **GM 回收的人工终结按账本判，且先登记后处置**：玩家侧明确拒绝的记 REJECTED 或 ABORTED，从没应用过的记 ABORTED，已应用或部分应用的拒绝人工终结，查不到的记 PARTIAL；`needs_review` 里的指令要人工处置时，先用 `RegisterRecallReviewHandled` 登记，再动手。详见 [exploit_loss_prevention_zh.md](exploit_loss_prevention_zh.md)。
 - **角色名两阶段：先预留，建角提交后再绑定**。在役角色的名字不能被放掉；登记超过 30 分钟、没有活角色的预留名字由 `create_residual -target names` 收；判不了陈旧的建角 ref 标成保留，不占每轮扫描名额。详见 [guild-phase2/03-names.md](guild-phase2/03-names.md)、[horizontal-scale-logical-db.md](horizontal-scale-logical-db.md)。
 - **修复工具用单独的修复身份，按工具实际执行的语句逐表授权**（负责人 11-19 定）：闸门行只读，墓碑只许插入，不给 DDL 和 GRANT。不选给维护身份开业务表写权限：能改闸门行就能解冻被冻结的库。详见 [mysql-backup-pitr-runbook.md](../ops/mysql-backup-pitr-runbook.md) §4.1a。
@@ -575,7 +575,7 @@
 - `session_ended` 的 proto 注释。
 
 还开着的 4 条：
-1. **人工终结的见证只比租约与发送时刻，不比 attempts**：副本间时钟偏差超过 30 分钟时，可能把仍在投的行判成已静默（`go/shared/assetop/manual_evidence.go`）。出处：PROGRESS 2026-11-06「资产人工终结收口」的残余；11-12「账号目录、角色名与 GM 回收残余收口」里仍记着没做。
+1. **（2026-11-26 晚已改，未编译；guild 的条件写 SQL 待补，位置见第 4 轮交接单 §6.1）人工终结的见证只比租约与发送时刻，不比 attempts**：副本间时钟偏差超过 30 分钟时，可能把仍在投的行判成已静默（`go/shared/assetop/manual_evidence.go`）。出处：PROGRESS 2026-11-06「资产人工终结收口」的残余；11-12「账号目录、角色名与 GM 回收残余收口」里仍记着没做。
 2. **data_service 的 Kafka 坏消息跳过并提交，原件不进死信**：有日志和告警，但原件丢了。排空框架已有 `<group>-dlq`，data_service 两个 worker 的解码分支还没接上。出处：PROGRESS 2026-11-12「排空框架与消费组残余收口」的残余。**状态（11-26 晚）**：已修，未编译。两个 worker 进批时给坏消息留原件，flush 第一步先写本组死信再落库、提交，写不进就整批不提交、消费者停下；快照的死信按 16MiB 原件定上限，重放工具同步放宽。设计记录 `kafka-bound-consumer-group.md` §15.6。
 3. **建角核账判陈旧时，分不出「角色建成了、从没进过场、名字绑定也没做完」**：这种角色仍会被写墓碑。出处：PROGRESS 2026-11-06「评审修正·建角残留核账…」的残余。11-12 以后判陈旧加了「标保留」，还加了 `TestTiDBStaleCreateRefOfACommittedRoleIsNotTombstoned`，所以先复核是否仍成立，成立再修。**状态（11-26 晚）**：复核后不改代码。整体回档到 T 时玩家片没有提交点就是「T 之后才提交」，写墓碑是对的；只剩单库回档里「回档点落在路由行与提交点之间、激活与绑定都失败、从未进场」三件同时发生的交集，单库回档本来就要人工核账。分析与被否决的做法见 `horizontal-scale-logical-db.md`「标了保留的建角 ref」一段末尾。
 4. **同一角色挂在别的账号上的建角 ref，只扫本账号片查不到**。出处同第 3 条。**状态（11-26 晚复核）**：11-12 已收，判陈旧找证据时按 `idx_account_role_ref_player` 逐片读这名角色在各账号片上的 ref，有 ACTIVE 即保留（`committedEvidence`）。

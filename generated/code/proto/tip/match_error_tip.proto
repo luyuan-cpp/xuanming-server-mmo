@@ -133,4 +133,22 @@ enum match_error {
 
   kMatchTournamentWarmupUnavailable = 16063;
 
+  kMatchPuzzleNotFound = 16064;
+
+  kMatchPuzzleNotOwner = 16065;
+
+  kMatchPuzzleLimitReached = 16066;
+
+  kMatchPuzzleSpecInvalid = 16067;
+
+  kMatchPuzzleTextRejected = 16068;
+
+  kMatchPuzzleNotPublished = 16069;
+
+  kMatchPuzzleCannotLikeOwn = 16070;
+
+  kMatchPuzzleClearRequiredToLike = 16071;
+
+  kMatchPuzzleSolutionReplayNotFound = 16072;
+
 };

@@ -46,7 +46,7 @@ type MatchInternalClient interface {
 	ReleaseTrialOccupancy(ctx context.Context, in *ReleaseTrialOccupancyRequest, opts ...grpc.CallOption) (*ReleaseTrialOccupancyResponse, error)
 	GetBattleCompletion(ctx context.Context, in *GetBattleCompletionRequest, opts ...grpc.CallOption) (*GetBattleCompletionResponse, error)
 	GetBattleTerminalDecision(ctx context.Context, in *GetBattleTerminalDecisionRequest, opts ...grpc.CallOption) (*GetBattleTerminalDecisionResponse, error)
-	// 人工处置永久 UNKNOWN 的全球成局(2026-11-05,调用方只有运维工具 formationfix,见上文消息定义处)。
+	// 人工处置永久 UNKNOWN 的全球成局(2026-11-05,调用方是后台与运维工具 formationfix,见上文消息定义处)。
 	ListStrandedFormations(ctx context.Context, in *ListStrandedFormationsRequest, opts ...grpc.CallOption) (*ListStrandedFormationsResponse, error)
 	ResolveStrandedFormation(ctx context.Context, in *ResolveStrandedFormationRequest, opts ...grpc.CallOption) (*ResolveStrandedFormationResponse, error)
 	// 运营审核玩家上传的战斗剧本(docs/design/battle-script.md §6.3;调用方只有运营工具 battlescriptreview,
@@ -207,7 +207,7 @@ type MatchInternalServer interface {
 	ReleaseTrialOccupancy(context.Context, *ReleaseTrialOccupancyRequest) (*ReleaseTrialOccupancyResponse, error)
 	GetBattleCompletion(context.Context, *GetBattleCompletionRequest) (*GetBattleCompletionResponse, error)
 	GetBattleTerminalDecision(context.Context, *GetBattleTerminalDecisionRequest) (*GetBattleTerminalDecisionResponse, error)
-	// 人工处置永久 UNKNOWN 的全球成局(2026-11-05,调用方只有运维工具 formationfix,见上文消息定义处)。
+	// 人工处置永久 UNKNOWN 的全球成局(2026-11-05,调用方是后台与运维工具 formationfix,见上文消息定义处)。
 	ListStrandedFormations(context.Context, *ListStrandedFormationsRequest) (*ListStrandedFormationsResponse, error)
 	ResolveStrandedFormation(context.Context, *ResolveStrandedFormationRequest) (*ResolveStrandedFormationResponse, error)
 	// 运营审核玩家上传的战斗剧本(docs/design/battle-script.md §6.3;调用方只有运营工具 battlescriptreview,

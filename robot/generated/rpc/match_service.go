@@ -1113,3 +1113,164 @@ func (matchServiceRpc) decodeGetSharedTrialReplay(reply *base.MessageContent, er
 	}
 	return resp, nil
 }
+
+// ListTacticalPuzzles 异步调用 MatchService.ListTacticalPuzzles(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) ListTacticalPuzzles(c *pkg.GameClient, req *match.ListTacticalPuzzlesRequest, timeout time.Duration, done func(*match.ListTacticalPuzzlesResponse, error)) {
+	c.Call(game.MatchServiceListTacticalPuzzlesMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeListTacticalPuzzles(reply, err))
+	})
+}
+
+// ListTacticalPuzzlesSync 同步调用 MatchService.ListTacticalPuzzles(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) ListTacticalPuzzlesSync(ctx context.Context, c *pkg.GameClient, req *match.ListTacticalPuzzlesRequest, timeout time.Duration) (*match.ListTacticalPuzzlesResponse, error) {
+	return r.decodeListTacticalPuzzles(c.CallSync(ctx, game.MatchServiceListTacticalPuzzlesMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeListTacticalPuzzles(reply *base.MessageContent, err error) (*match.ListTacticalPuzzlesResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.ListTacticalPuzzlesResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.ListTacticalPuzzles reply: %w", err)
+	}
+	return resp, nil
+}
+
+// GetTacticalPuzzle 异步调用 MatchService.GetTacticalPuzzle(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) GetTacticalPuzzle(c *pkg.GameClient, req *match.GetTacticalPuzzleRequest, timeout time.Duration, done func(*match.GetTacticalPuzzleResponse, error)) {
+	c.Call(game.MatchServiceGetTacticalPuzzleMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeGetTacticalPuzzle(reply, err))
+	})
+}
+
+// GetTacticalPuzzleSync 同步调用 MatchService.GetTacticalPuzzle(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) GetTacticalPuzzleSync(ctx context.Context, c *pkg.GameClient, req *match.GetTacticalPuzzleRequest, timeout time.Duration) (*match.GetTacticalPuzzleResponse, error) {
+	return r.decodeGetTacticalPuzzle(c.CallSync(ctx, game.MatchServiceGetTacticalPuzzleMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeGetTacticalPuzzle(reply *base.MessageContent, err error) (*match.GetTacticalPuzzleResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.GetTacticalPuzzleResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.GetTacticalPuzzle reply: %w", err)
+	}
+	return resp, nil
+}
+
+// SaveTacticalPuzzleDraft 异步调用 MatchService.SaveTacticalPuzzleDraft(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) SaveTacticalPuzzleDraft(c *pkg.GameClient, req *match.SaveTacticalPuzzleDraftRequest, timeout time.Duration, done func(*match.SaveTacticalPuzzleDraftResponse, error)) {
+	c.Call(game.MatchServiceSaveTacticalPuzzleDraftMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeSaveTacticalPuzzleDraft(reply, err))
+	})
+}
+
+// SaveTacticalPuzzleDraftSync 同步调用 MatchService.SaveTacticalPuzzleDraft(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) SaveTacticalPuzzleDraftSync(ctx context.Context, c *pkg.GameClient, req *match.SaveTacticalPuzzleDraftRequest, timeout time.Duration) (*match.SaveTacticalPuzzleDraftResponse, error) {
+	return r.decodeSaveTacticalPuzzleDraft(c.CallSync(ctx, game.MatchServiceSaveTacticalPuzzleDraftMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeSaveTacticalPuzzleDraft(reply *base.MessageContent, err error) (*match.SaveTacticalPuzzleDraftResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.SaveTacticalPuzzleDraftResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.SaveTacticalPuzzleDraft reply: %w", err)
+	}
+	return resp, nil
+}
+
+// DeleteTacticalPuzzle 异步调用 MatchService.DeleteTacticalPuzzle(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) DeleteTacticalPuzzle(c *pkg.GameClient, req *match.DeleteTacticalPuzzleRequest, timeout time.Duration, done func(*match.DeleteTacticalPuzzleResponse, error)) {
+	c.Call(game.MatchServiceDeleteTacticalPuzzleMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeDeleteTacticalPuzzle(reply, err))
+	})
+}
+
+// DeleteTacticalPuzzleSync 同步调用 MatchService.DeleteTacticalPuzzle(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) DeleteTacticalPuzzleSync(ctx context.Context, c *pkg.GameClient, req *match.DeleteTacticalPuzzleRequest, timeout time.Duration) (*match.DeleteTacticalPuzzleResponse, error) {
+	return r.decodeDeleteTacticalPuzzle(c.CallSync(ctx, game.MatchServiceDeleteTacticalPuzzleMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeDeleteTacticalPuzzle(reply *base.MessageContent, err error) (*match.DeleteTacticalPuzzleResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.DeleteTacticalPuzzleResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.DeleteTacticalPuzzle reply: %w", err)
+	}
+	return resp, nil
+}
+
+// StartTacticalPuzzleBattle 异步调用 MatchService.StartTacticalPuzzleBattle(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) StartTacticalPuzzleBattle(c *pkg.GameClient, req *match.StartTacticalPuzzleBattleRequest, timeout time.Duration, done func(*match.StartTacticalPuzzleBattleResponse, error)) {
+	c.Call(game.MatchServiceStartTacticalPuzzleBattleMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeStartTacticalPuzzleBattle(reply, err))
+	})
+}
+
+// StartTacticalPuzzleBattleSync 同步调用 MatchService.StartTacticalPuzzleBattle(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) StartTacticalPuzzleBattleSync(ctx context.Context, c *pkg.GameClient, req *match.StartTacticalPuzzleBattleRequest, timeout time.Duration) (*match.StartTacticalPuzzleBattleResponse, error) {
+	return r.decodeStartTacticalPuzzleBattle(c.CallSync(ctx, game.MatchServiceStartTacticalPuzzleBattleMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeStartTacticalPuzzleBattle(reply *base.MessageContent, err error) (*match.StartTacticalPuzzleBattleResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.StartTacticalPuzzleBattleResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.StartTacticalPuzzleBattle reply: %w", err)
+	}
+	return resp, nil
+}
+
+// LikeTacticalPuzzle 异步调用 MatchService.LikeTacticalPuzzle(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) LikeTacticalPuzzle(c *pkg.GameClient, req *match.LikeTacticalPuzzleRequest, timeout time.Duration, done func(*match.LikeTacticalPuzzleResponse, error)) {
+	c.Call(game.MatchServiceLikeTacticalPuzzleMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeLikeTacticalPuzzle(reply, err))
+	})
+}
+
+// LikeTacticalPuzzleSync 同步调用 MatchService.LikeTacticalPuzzle(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) LikeTacticalPuzzleSync(ctx context.Context, c *pkg.GameClient, req *match.LikeTacticalPuzzleRequest, timeout time.Duration) (*match.LikeTacticalPuzzleResponse, error) {
+	return r.decodeLikeTacticalPuzzle(c.CallSync(ctx, game.MatchServiceLikeTacticalPuzzleMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeLikeTacticalPuzzle(reply *base.MessageContent, err error) (*match.LikeTacticalPuzzleResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.LikeTacticalPuzzleResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.LikeTacticalPuzzle reply: %w", err)
+	}
+	return resp, nil
+}
+
+// GetTacticalPuzzleSolutionReplay 异步调用 MatchService.GetTacticalPuzzleSolutionReplay(REQUEST),done 的契约见 MatchService。
+func (r matchServiceRpc) GetTacticalPuzzleSolutionReplay(c *pkg.GameClient, req *match.GetTacticalPuzzleSolutionReplayRequest, timeout time.Duration, done func(*match.GetTacticalPuzzleSolutionReplayResponse, error)) {
+	c.Call(game.MatchServiceGetTacticalPuzzleSolutionReplayMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeGetTacticalPuzzleSolutionReplay(reply, err))
+	})
+}
+
+// GetTacticalPuzzleSolutionReplaySync 同步调用 MatchService.GetTacticalPuzzleSolutionReplay(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r matchServiceRpc) GetTacticalPuzzleSolutionReplaySync(ctx context.Context, c *pkg.GameClient, req *match.GetTacticalPuzzleSolutionReplayRequest, timeout time.Duration) (*match.GetTacticalPuzzleSolutionReplayResponse, error) {
+	return r.decodeGetTacticalPuzzleSolutionReplay(c.CallSync(ctx, game.MatchServiceGetTacticalPuzzleSolutionReplayMessageId, req, timeout))
+}
+
+func (matchServiceRpc) decodeGetTacticalPuzzleSolutionReplay(reply *base.MessageContent, err error) (*match.GetTacticalPuzzleSolutionReplayResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &match.GetTacticalPuzzleSolutionReplayResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode MatchService.GetTacticalPuzzleSolutionReplay reply: %w", err)
+	}
+	return resp, nil
+}

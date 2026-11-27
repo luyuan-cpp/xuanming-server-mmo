@@ -37,7 +37,8 @@ type GmSanctionDeps struct {
 	Now func() time.Time
 }
 
-// GmSanctionPlayer 处理一次 GM 处置入箱(设计 §6.1)。鉴权(x-admin-token)已由拦截器完成。
+// GmSanctionPlayer 处理一次 GM 处置入箱(设计 §6.1)。鉴权(x-admin-token)已由拦截器完成,
+// 双人复核批准记录已由 server.AdminServer 核过;这里只把批准号与批准人写进审计行。
 //
 // 顺序:
 //  1. 字段校验:player_id / request_id / issued_at_ms 非 0,action 必选,operator(≤ 64B)与 reason(≤ 256B)必填;
@@ -97,6 +98,9 @@ func GmSanctionPlayer(ctx context.Context, deps GmSanctionDeps, in *inboxpb.GmSa
 			PeerAddr:  peerAddr,
 			Reason:    in.GetReason(),
 			CreatedMs: uint64(createdMs),
+			// 入口已用 shared/dualcontrol 核过(批准号就是 request_id);没带记录时两项为空串。
+			ApprovalId: in.GetApproval().GetApprovalId(),
+			Approver:   in.GetApproval().GetApprover(),
 		})
 	}
 

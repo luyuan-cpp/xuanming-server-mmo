@@ -662,11 +662,11 @@ constexpr PlayerLeaseExpiredEvent::ParseTableT_ PlayerLeaseExpiredEvent::Interna
     {
       PROTOBUF_FIELD_OFFSET(PlayerLeaseExpiredEvent, _impl_._has_bits_),
       0, // no _extensions_
-      6, 56,  // max_field_number, fast_idx_mask
+      7, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967232,  // skipmap
+      4294967168,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      6,  // num_field_entries
+      7,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -682,8 +682,8 @@ constexpr PlayerLeaseExpiredEvent::ParseTableT_ PlayerLeaseExpiredEvent::Interna
        {8, 3, 0,
         PROTOBUF_FIELD_OFFSET(PlayerLeaseExpiredEvent, _impl_.player_id_)}},
       // uint32 session_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerLeaseExpiredEvent, _impl_.session_id_), 5>(),
-       {16, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerLeaseExpiredEvent, _impl_.session_id_), 6>(),
+       {16, 6, 0,
         PROTOBUF_FIELD_OFFSET(PlayerLeaseExpiredEvent, _impl_.session_id_)}},
       // string scene_node_id = 3;
       {::_pbi::TcParser::FastUS1,
@@ -701,14 +701,17 @@ constexpr PlayerLeaseExpiredEvent::ParseTableT_ PlayerLeaseExpiredEvent::Interna
       {::_pbi::TcParser::FastUS1,
        {50, 2, 0,
         PROTOBUF_FIELD_OFFSET(PlayerLeaseExpiredEvent, _impl_.gate_instance_id_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 session_incarnation = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerLeaseExpiredEvent, _impl_.session_incarnation_), 5>(),
+       {56, 5, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerLeaseExpiredEvent, _impl_.session_incarnation_)}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 player_id = 1;
       {PROTOBUF_FIELD_OFFSET(PlayerLeaseExpiredEvent, _impl_.player_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 session_id = 2;
-      {PROTOBUF_FIELD_OFFSET(PlayerLeaseExpiredEvent, _impl_.session_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PlayerLeaseExpiredEvent, _impl_.session_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string scene_node_id = 3;
       {PROTOBUF_FIELD_OFFSET(PlayerLeaseExpiredEvent, _impl_.scene_node_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 scene_id = 4;
@@ -717,6 +720,8 @@ constexpr PlayerLeaseExpiredEvent::ParseTableT_ PlayerLeaseExpiredEvent::Interna
       {PROTOBUF_FIELD_OFFSET(PlayerLeaseExpiredEvent, _impl_.gate_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string gate_instance_id = 6;
       {PROTOBUF_FIELD_OFFSET(PlayerLeaseExpiredEvent, _impl_.gate_instance_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 session_incarnation = 7;
+      {PROTOBUF_FIELD_OFFSET(PlayerLeaseExpiredEvent, _impl_.session_incarnation_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -745,6 +750,7 @@ inline constexpr PlayerLeaseExpiredEvent::Impl_::Impl_(
             ::_pbi::ConstantInitialized()),
         player_id_{::uint64_t{0u}},
         scene_id_{::uint64_t{0u}},
+        session_incarnation_{::uint64_t{0u}},
         session_id_{0u} {}
 
 template <typename>
@@ -2227,19 +2233,21 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::PlayerLeaseExpiredEvent, _impl_._has_bits_),
-        9, // hasbit index offset
+        10, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::PlayerLeaseExpiredEvent, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::PlayerLeaseExpiredEvent, _impl_.session_id_),
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::PlayerLeaseExpiredEvent, _impl_.scene_node_id_),
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::PlayerLeaseExpiredEvent, _impl_.scene_id_),
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::PlayerLeaseExpiredEvent, _impl_.gate_id_),
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::PlayerLeaseExpiredEvent, _impl_.gate_instance_id_),
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::PlayerLeaseExpiredEvent, _impl_.session_incarnation_),
         3,
-        5,
+        6,
         0,
         4,
         1,
         2,
+        5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::BindSessionEvent, _impl_._has_bits_),
         11, // hasbit index offset
@@ -2348,14 +2356,14 @@ static const ::_pbi::MigrationSchema
         {19, sizeof(::contracts::kafka::KickPlayerEvent)},
         {30, sizeof(::contracts::kafka::PlayerDisconnectedEvent)},
         {41, sizeof(::contracts::kafka::PlayerLeaseExpiredEvent)},
-        {56, sizeof(::contracts::kafka::BindSessionEvent)},
-        {75, sizeof(::contracts::kafka::RedirectToGateEvent)},
-        {94, sizeof(::contracts::kafka::GateDrainMigrationEvent)},
-        {103, sizeof(::contracts::kafka::PushToPlayerEvent)},
-        {112, sizeof(::contracts::kafka::BroadcastToPlayersEvent)},
-        {125, sizeof(::contracts::kafka::BroadcastToSceneEvent)},
-        {132, sizeof(::contracts::kafka::BroadcastToAllEvent)},
-        {137, sizeof(::contracts::kafka::SpectateFrameEvent)},
+        {58, sizeof(::contracts::kafka::BindSessionEvent)},
+        {77, sizeof(::contracts::kafka::RedirectToGateEvent)},
+        {96, sizeof(::contracts::kafka::GateDrainMigrationEvent)},
+        {105, sizeof(::contracts::kafka::PushToPlayerEvent)},
+        {114, sizeof(::contracts::kafka::BroadcastToPlayersEvent)},
+        {127, sizeof(::contracts::kafka::BroadcastToSceneEvent)},
+        {134, sizeof(::contracts::kafka::BroadcastToAllEvent)},
+        {139, sizeof(::contracts::kafka::SpectateFrameEvent)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2388,45 +2396,46 @@ const char descriptor_table_protodef_proto_2fcontracts_2fkafka_2fgate_5fevent_2e
     "\004 \001(\r:\005\210\346\325\002\001\"k\n\027PlayerDisconnectedEvent\022"
     "\022\n\nsession_id\030\001 \001(\r\022\021\n\tplayer_id\030\002 \001(\004\022\017"
     "\n\007gate_id\030\003 \001(\t\022\030\n\020gate_instance_id\030\004 \001("
-    "\t\"\233\001\n\027PlayerLeaseExpiredEvent\022\021\n\tplayer_"
+    "\t\"\270\001\n\027PlayerLeaseExpiredEvent\022\021\n\tplayer_"
     "id\030\001 \001(\004\022\022\n\nsession_id\030\002 \001(\r\022\025\n\rscene_no"
     "de_id\030\003 \001(\t\022\020\n\010scene_id\030\004 \001(\004\022\017\n\007gate_id"
-    "\030\005 \001(\t\022\030\n\020gate_instance_id\030\006 \001(\t:\005\210\346\325\002\001\""
-    "\336\001\n\020BindSessionEvent\022\022\n\nsession_id\030\001 \001(\r"
-    "\022\021\n\tplayer_id\030\002 \001(\004\022\027\n\017session_version\030\003"
-    " \001(\r\022\025\n\renter_gs_type\030\004 \001(\r\022\030\n\020login_gen"
-    "eration\030\005 \001(\004\022\035\n\025authenticated_account\030\006"
-    " \001(\t\022\033\n\023session_incarnation\030\007 \001(\004\022\026\n\016own"
-    "er_revision\030\010 \001(\004:\005\210\346\325\002\001\"\331\001\n\023RedirectToG"
-    "ateEvent\022\021\n\tplayer_id\030\001 \001(\004\022\022\n\nsession_i"
-    "d\030\002 \001(\r\022\026\n\016target_gate_ip\030\003 \001(\t\022\030\n\020targe"
-    "t_gate_port\030\004 \001(\r\022\025\n\rtoken_payload\030\005 \001(\014"
-    "\022\027\n\017token_signature\030\006 \001(\014\022\026\n\016token_deadl"
-    "ine\030\007 \001(\003\022\032\n\022target_gate_ws_url\030\010 \001(\t:\005\210"
-    "\346\325\002\001\"d\n\027GateDrainMigrationEvent\022\027\n\017drain"
-    "_marked_at\030\001 \001(\003\022\027\n\017rate_per_second\030\002 \001("
-    "\r\022\020\n\010lease_ms\030\003 \001(\r:\005\210\346\325\002\001\"k\n\021PushToPlay"
-    "erEvent\022\022\n\nsession_id\030\001 \001(\r\022(\n\017message_c"
-    "ontent\030\002 \001(\0132\017.MessageContent\022\021\n\tplayer_"
-    "id\030\003 \001(\004:\005\210\346\325\002\001\"\252\001\n\027BroadcastToPlayersEv"
-    "ent\022\024\n\014session_list\030\001 \003(\r\022(\n\017message_con"
-    "tent\030\002 \001(\0132\017.MessageContent\022\033\n\023session_b"
-    "itmap_base\030\003 \001(\r\022\026\n\016session_bitmap\030\004 \001(\014"
-    "\022\023\n\013player_list\030\005 \003(\004:\005\210\346\325\002\001\"Z\n\025Broadcas"
-    "tToSceneEvent\022\020\n\010scene_id\030\001 \001(\004\022(\n\017messa"
-    "ge_content\030\002 \001(\0132\017.MessageContent:\005\210\346\325\002\001"
-    "\"F\n\023BroadcastToAllEvent\022(\n\017message_conte"
-    "nt\030\001 \001(\0132\017.MessageContent:\005\210\346\325\002\001\"\352\001\n\022Spe"
-    "ctateFrameEvent\022\021\n\tbattle_id\030\001 \001(\004\022\032\n\022ba"
-    "ttle_instance_id\030\002 \001(\t\022\023\n\013round_index\030\003 "
-    "\001(\r\0221\n\004kind\030\004 \001(\0162#.contracts.kafka.eSpe"
-    "ctateFrameKind\022\024\n\014client_frame\030\005 \001(\014\022\023\n\013"
-    "deadline_ms\030\006 \001(\004\022\026\n\016target_gate_id\030\007 \001("
-    "\r\022\032\n\022target_instance_id\030\010 \001(\t*x\n\022eSpecta"
-    "teFrameKind\022\027\n\023SPECTATE_FRAME_NONE\020\000\022\030\n\024"
-    "SPECTATE_FRAME_STATE\020\001\022\027\n\023SPECTATE_FRAME"
-    "_TURN\020\002\022\026\n\022SPECTATE_FRAME_END\020\003B\021Z\017contr"
-    "acts/kafkab\006proto3"
+    "\030\005 \001(\t\022\030\n\020gate_instance_id\030\006 \001(\t\022\033\n\023sess"
+    "ion_incarnation\030\007 \001(\004:\005\210\346\325\002\001\"\336\001\n\020BindSes"
+    "sionEvent\022\022\n\nsession_id\030\001 \001(\r\022\021\n\tplayer_"
+    "id\030\002 \001(\004\022\027\n\017session_version\030\003 \001(\r\022\025\n\rent"
+    "er_gs_type\030\004 \001(\r\022\030\n\020login_generation\030\005 \001"
+    "(\004\022\035\n\025authenticated_account\030\006 \001(\t\022\033\n\023ses"
+    "sion_incarnation\030\007 \001(\004\022\026\n\016owner_revision"
+    "\030\010 \001(\004:\005\210\346\325\002\001\"\331\001\n\023RedirectToGateEvent\022\021\n"
+    "\tplayer_id\030\001 \001(\004\022\022\n\nsession_id\030\002 \001(\r\022\026\n\016"
+    "target_gate_ip\030\003 \001(\t\022\030\n\020target_gate_port"
+    "\030\004 \001(\r\022\025\n\rtoken_payload\030\005 \001(\014\022\027\n\017token_s"
+    "ignature\030\006 \001(\014\022\026\n\016token_deadline\030\007 \001(\003\022\032"
+    "\n\022target_gate_ws_url\030\010 \001(\t:\005\210\346\325\002\001\"d\n\027Gat"
+    "eDrainMigrationEvent\022\027\n\017drain_marked_at\030"
+    "\001 \001(\003\022\027\n\017rate_per_second\030\002 \001(\r\022\020\n\010lease_"
+    "ms\030\003 \001(\r:\005\210\346\325\002\001\"k\n\021PushToPlayerEvent\022\022\n\n"
+    "session_id\030\001 \001(\r\022(\n\017message_content\030\002 \001("
+    "\0132\017.MessageContent\022\021\n\tplayer_id\030\003 \001(\004:\005\210"
+    "\346\325\002\001\"\252\001\n\027BroadcastToPlayersEvent\022\024\n\014sess"
+    "ion_list\030\001 \003(\r\022(\n\017message_content\030\002 \001(\0132"
+    "\017.MessageContent\022\033\n\023session_bitmap_base\030"
+    "\003 \001(\r\022\026\n\016session_bitmap\030\004 \001(\014\022\023\n\013player_"
+    "list\030\005 \003(\004:\005\210\346\325\002\001\"Z\n\025BroadcastToSceneEve"
+    "nt\022\020\n\010scene_id\030\001 \001(\004\022(\n\017message_content\030"
+    "\002 \001(\0132\017.MessageContent:\005\210\346\325\002\001\"F\n\023Broadca"
+    "stToAllEvent\022(\n\017message_content\030\001 \001(\0132\017."
+    "MessageContent:\005\210\346\325\002\001\"\352\001\n\022SpectateFrameE"
+    "vent\022\021\n\tbattle_id\030\001 \001(\004\022\032\n\022battle_instan"
+    "ce_id\030\002 \001(\t\022\023\n\013round_index\030\003 \001(\r\0221\n\004kind"
+    "\030\004 \001(\0162#.contracts.kafka.eSpectateFrameK"
+    "ind\022\024\n\014client_frame\030\005 \001(\014\022\023\n\013deadline_ms"
+    "\030\006 \001(\004\022\026\n\016target_gate_id\030\007 \001(\r\022\032\n\022target"
+    "_instance_id\030\010 \001(\t*x\n\022eSpectateFrameKind"
+    "\022\027\n\023SPECTATE_FRAME_NONE\020\000\022\030\n\024SPECTATE_FR"
+    "AME_STATE\020\001\022\027\n\023SPECTATE_FRAME_TURN\020\002\022\026\n\022"
+    "SPECTATE_FRAME_END\020\003B\021Z\017contracts/kafkab"
+    "\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto_deps[2] = {
@@ -2437,7 +2446,7 @@ static ::absl::once_flag descriptor_table_proto_2fcontracts_2fkafka_2fgate_5feve
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto = {
     false,
     false,
-    2098,
+    2127,
     descriptor_table_protodef_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto,
     "proto/contracts/kafka/gate_event.proto",
     &descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto_once,
@@ -3525,7 +3534,7 @@ PROTOBUF_NOINLINE void PlayerLeaseExpiredEvent::Clear() {
       _impl_.gate_instance_id_.ClearNonDefaultToEmpty();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000038U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000078U)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.session_id_) -
         reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.session_id_));
@@ -3563,7 +3572,7 @@ PROTOBUF_NOINLINE void PlayerLeaseExpiredEvent::Clear() {
   }
 
   // uint32 session_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_session_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -3610,6 +3619,15 @@ PROTOBUF_NOINLINE void PlayerLeaseExpiredEvent::Clear() {
     }
   }
 
+  // uint64 session_incarnation = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_session_incarnation() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          7, this_._internal_session_incarnation(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -3635,7 +3653,7 @@ PROTOBUF_NOINLINE void PlayerLeaseExpiredEvent::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     // string scene_node_id = 3;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_scene_node_id().empty()) {
@@ -3671,8 +3689,15 @@ PROTOBUF_NOINLINE void PlayerLeaseExpiredEvent::Clear() {
             this_._internal_scene_id());
       }
     }
-    // uint32 session_id = 2;
+    // uint64 session_incarnation = 7;
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_session_incarnation() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_session_incarnation());
+      }
+    }
+    // uint32 session_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_session_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_session_id());
@@ -3696,7 +3721,7 @@ void PlayerLeaseExpiredEvent::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_scene_node_id().empty()) {
         _this->_internal_set_scene_node_id(from._internal_scene_node_id());
@@ -3735,6 +3760,11 @@ void PlayerLeaseExpiredEvent::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_session_incarnation() != 0) {
+        _this->_impl_.session_incarnation_ = from._impl_.session_incarnation_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_session_id() != 0) {
         _this->_impl_.session_id_ = from._impl_.session_id_;
       }

@@ -171,6 +171,12 @@ admin:
   api-key: "change-me-in-production"
   machine-key: ""
 
+# 官方通行证(Casdoor)回调入口 POST /internal/passport/events 的共享密钥(docs/design/official-passport-registration.md §3.7):
+# 至少 32 字节,与通行证回调的 X-Passport-Webhook-Secret 请求头同一个值;K8s 由 k8s_deploy.ps1 的工作负载密钥目录
+# (gateway-passport-webhook)经 Secret 注入同名环境变量。留空 = 入口关着(回 404),改密 / 封禁只在登录与刷新时生效。
+passport:
+  webhook-secret: ${MMORPG_GATEWAY_PASSPORT_WEBHOOK_SECRET:}
+
 # Actuator
 management:
   endpoints:

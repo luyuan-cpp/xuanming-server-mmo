@@ -139,6 +139,24 @@ class GameServicesTest {
     }
 
     @Test
+    void theApprovalRecordInTheFrozenRequestReachesMailUnderTheSignature() throws Exception {
+        // 双人复核批 5:流水在放行时把批准记录放进冻结请求,mail 对调用方 admin 要求它;它在请求体里,被调用证明的摘要覆盖。
+        String target = start((request, observer) -> reply(GameServices.SEND_MAIL, "{\"mailId\":\"9007199254740999\"}", observer));
+        connect(target, 5000);
+        ObjectNode frozen = frozen();
+        frozen.putObject("approval").put("approvalId", "9007199254740993").put("proposer", "alice").put("approver", "bob")
+                .put("approvedAtMs", "1800000000000");
+        services.sendMail(frozen);
+        ObjectNode wire = PROTO.json(received.get(), MAPPER);
+        assertEquals("9007199254740993", wire.path("approval").path("approvalId").asText());
+        assertEquals("bob", wire.path("approval").path("approver").asText());
+        assertEquals("1800000000000", wire.path("approval").path("approvedAtMs").asText());
+        DynamicMessage unsigned = PROTO.request(GameServices.SEND_MAIL, frozen);
+        assertEquals(PROTO.json(PROTO.sign(GameServices.SEND_MAIL, unsigned, "admin", SECRET, wire.path("auth").path("timestampMs").asLong()), MAPPER)
+                .path("auth").path("signatureHex").asText(), wire.path("auth").path("signatureHex").asText(), "签名覆盖批准记录");
+    }
+
+    @Test
     void refusesInvalidIdsAndUnfrozenOrInjectedMailBeforeNetwork() throws Exception {
         String target = start((request, observer) -> observer.onError(Status.INTERNAL.asRuntimeException()));
         connect(target, 5000);

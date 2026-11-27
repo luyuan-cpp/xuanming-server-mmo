@@ -394,11 +394,13 @@ func promoteSpectateBroadcast(ctx context.Context, s *svc.ServiceContext, record
 	}
 	writeCtx, cancel := spectateBookkeepingContext(ctx)
 	defer cancel()
-	recordBroadcastQuota(writeCtx, s, battleId, source.deadlineMs)
+	// 先升档再记配额:失败方并发 releaseBroadcastQuotaUnlessPromoted 复读档位见 BROADCAST 就会跳过 ZREM;
+	// 即便极窄窗口里 ZREM 先发生,这里的 ZADD 也会把配额补回,不会漏记一场。
 	if _, err := raiseSpectateTier(writeCtx, s, battleId, battlepb.ESpectateTier_SPECTATE_TIER_BROADCAST); err != nil {
 		// battle 已是广播档:下一名观众的 Attach 回 broadcast=true,或重试升档时同步过来。
 		logx.Errorf("[spectate] Battle promoted but tier not recorded; next viewer syncs it battle=%d: %v", battleId, err)
 	}
+	recordBroadcastQuota(writeCtx, s, battleId, source.deadlineMs)
 	logx.Infof("[spectate] Battle promoted to global broadcast battle=%d", battleId)
 	metrics.ObserveSpectatePromote(metrics.SpectatePromoteOK)
 	return source, true, 0

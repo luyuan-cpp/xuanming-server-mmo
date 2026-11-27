@@ -1263,11 +1263,11 @@ content-guard 是全局池服务(`$GoSvcCatalogue['content-guard']`,`Global = $t
 | 被保护 | gRPC 口 | 放行(`app` 标签) | 调用点(2026-10-16 按代码整理) |
 |---|---|---|---|
 | scene / scene-world / scene-instance(zone ns) | 50000(RPC_PORT 20000 + 30000) | scene-manager、match、player-inbox、guild、trade、mail、data-service | `go/scene_manager` scene_node_client;`go/match` node_watcher;`go/player_inbox` notify;guild / trade / mail / data-service 经 `go/shared/assetop` |
-| guild(infra ns) | 50300 | client-rpc-router、data-service、mail | 路由表 `GuildNodeService`;角色围栏参与者接口;mail 的 `GuildRpc`(帮会邮件可见性) |
+| guild(infra ns) | 50300 | client-rpc-router、data-service、mail、match | 路由表 `GuildNodeService`;角色围栏参与者接口;mail 的 `GuildRpc`(帮会邮件可见性);match 的 `GuildRpc`(江湖生死状查纯帮会对阵的帮派归属,2026-11-26 补) |
 | match(infra ns) | 50500 | client-rpc-router、guild、gate、data-service、scene、scene-world、scene-instance、battle | 客户端路由、历练开战、Gate 直连回退、角色围栏参与者接口、Scene 的 `TeamAuthority` 成员读取与 `MatchInternal.GetBattleTerminalDecision`、battle 的 `MatchInternal.CommitBattleOutcome`(2026-11-12 补,原先漏了) |
 | login(zone ns) | 50000 | gate、client-rpc-router、gateway | Gate 直连模式的客户端请求与 gate 合成的断线通知 / 迁移要票 / 登录态续租;路由表 `LoginNodeService`;Java 网关的 `LoginRpcClient`(分配 gate、查排队、运维接口) |
-| chat(infra ns) | 50700 | client-rpc-router | 客户端路由。世界频道的广播走 Kafka |
-| friend(infra ns) | 50400 | client-rpc-router、data-service | 客户端路由;角色围栏参与者接口 |
+| chat(infra ns) | 50700 | client-rpc-router、match | 客户端路由;match 的 `ChatRpc`(江湖生死状的全服系统播报 `PublishSystemWorldNotice`,2026-11-26 补:这个服务端方法靠这张名单只让 match 拨进来)。世界频道的广播走 Kafka |
+| friend(infra ns) | 50400 | client-rpc-router、data-service、match | 客户端路由;角色围栏参与者接口;match 的 `FriendRpc`(下战书前查拉黑与好友关系,2026-11-26 补) |
 | trade(infra ns) | 50800 | client-rpc-router、data-service | 客户端路由;角色围栏参与者接口。trade → scene 的资产通道是 trade 往外拨 |
 | mail(infra ns) | 50900 | client-rpc-router、data-service、rank、scene、scene-world、scene-instance | 客户端路由;角色围栏参与者接口;rank 的 `MailRpc`(榜单奖励);Scene 在战斗掉落放不下时改投邮件(`MailAdmin.SendPersonalMail`) |
 | rank(infra ns) | 51100 | client-rpc-router、match | 客户端路由;match 结算后上报评分 |
@@ -1346,8 +1346,9 @@ mail 与 trade / friend 同形:全局池服务(`$GoSvcCatalogue.mail`,`Global = 
 
 - **可达性**:客户端协议 `ClientPlayerMail` 只经 gate → `client-rpc-router` 可达(路由服按 `MailNodeService.rpc/` 前缀发现,mail 的 go-zero `Etcd.Key` 留空,D-13);
   `-GateRouterMode 0` 时部署得起来、探针绿,但玩家够不着(与 chat / friend / trade 同口径)。发件入口 `MailAdmin`(`SendPersonalMail` / `SendSystemMail`)
-  **不经 gate**:运维直连 Service `mail:50900`(例如 `kubectl -n mmorpg-infra port-forward svc/mail 50900:50900` 后用 `go/mail/cmd/mailadmin -target 127.0.0.1:50900`),
-  gRPC metadata 带 `x-mail-admin-token`。
+  **不经 gate**,调用方证明是 ServiceCallAuth。人发管理邮件一律经后台(`java/gm_admin`)发起、另一名管理员批准后才发出:调用方 `admin` 的请求必须带
+  双人复核批准记录(`docs/design/admin-identity-and-dual-control.md` §11.2),`go/mail/cmd/mailadmin` 在生产会被拒(只有本机开发打开 `AdminAllowUnapproved` 才收)。
+  rank 奖励、battle 掉落、match 赛事这些系统调用方不要求批准记录。
 - **工作负载**:`manifests/go-svc/mail.yaml` = Service `mail`(50900)+ Deployment(`replicas: 2`、RollingUpdate maxSurge 1 / maxUnavailable 0、podAntiAffinity、
   grpc 探针、`preStop sleep 5` 配进程 24s 硬截止、`POD_IP`、metrics 9240)+ 同文件 PDB `mail-pdb`。不挂 snowflake 卷(`mail_id` / `sys_mail_id` 只由 data_service 号段发)。
   过期 sweep 在**每个副本**都跑(不选主,`DELETE … LIMIT` 天然可并发),默认 `report_only` 不删任何行。
@@ -1370,8 +1371,9 @@ mail 与 trade / friend 同形:全局池服务(`$GoSvcCatalogue.mail`,`Global = 
 - **建库**:`mmorpg_mail` 只登记在 `deploy/mysql-init/00_init_zone_dbs.sql`。**存量 PVC 要手工执行**
   (`kubectl exec -n mmorpg-infra deploy/mysql -- sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS mmorpg_mail DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON mmorpg_mail.* TO '"'"'appuser'"'"'@'"'"'%'"'"'; FLUSH PRIVILEGES;"'`),
   否则 `mail-migrate` 以退出码 1 失败,发布在 Deployment 之前中断。
-- **建表**:`manifests/go-svc/mail-migrate.yaml`,`args: ["-f", "/app/etc/mail.yaml", "-migrate"]`,按 `proto/mail/mail_table.proto` 建八张表
-  (`mail_message` / `mail_campaign` / `mail_campaign_shard` / `mail_campaign_recipient` / `mail_box` / `mail_state` / `mail_player_op_seq` / `mail_asset_op`)。
+- **建表**:`manifests/go-svc/mail-migrate.yaml`,`args: ["-f", "/app/etc/mail.yaml", "-migrate"]`,按 `proto/mail/mail_table.proto` 建九张表
+  (`mail_message` / `mail_campaign` / `mail_campaign_shard` / `mail_campaign_recipient` / `mail_box` / `mail_state` / `mail_player_op_seq` / `mail_asset_op` /
+  `mail_request_receipt`;最后一张是发件判重收据,过期清理不删,见 `docs/design/mail-system.md` §2.4)。
   mail 把「缺普通索引」也升级成退出码 4(需人工),错误里列出缺的是哪张表的哪条索引:否则 Job 绿着结束、随后 Pod 被只读 plan 拦下。
   不带 `-allow-modify`。
 - **号段**:`biz_tag = mail` 已在 data-service ConfigMap 的 `IdSegment.Tags` 里(见上面 data-service 号段一节);领不到号时发件回 `kServiceUnavailable`(不静默走回退)。

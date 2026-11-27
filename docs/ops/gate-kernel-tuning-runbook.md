@@ -292,7 +292,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up `
 
 **指标**(gate 的 Prometheus 出口,`-CppMetricsPort`,缺省 9400):
 
-- `gate_connections_current` / `gate_connections_max`:会话数与生效上限。
+- `gate_connections_current` / `gate_connections_max`:连接数与生效上限。连接数 = 会话数 + 还没验签的连接数(2026-11-26 票据先行之后,验签之前没有会话),总量上限按它判;etcd 上报的 `player_count` 只数会话。
 - `gate_unauthenticated_connections`:还没验签的连接数。握手期限 10 秒,正常客户端毫秒级验签,这个数平时接近 0。
 - `gate_accepted_total`:接纳的连接;`rate(gate_accepted_total[1m])` 就是新建连接速率。
 - `gate_rejected_total{reason}`:被拒的连接。`not_ready` / `no_token_secret` 只在启动配置有问题时出现。
@@ -325,7 +325,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up `
 
 | 告警 | 含义 | 先看什么 |
 | --- | --- | --- |
-| `GateConnectionsNearCapacity` | 会话数超过上限的 90% 持续 5 分钟 | 同 zone 其余 gate 是否也高;login 本应在 90% 停止往这台派人 |
+| `GateConnectionsNearCapacity` | 连接数(会话 + 未验签)超过上限的 90% 持续 5 分钟 | 同 zone 其余 gate 是否也高;login 本应在会话数到 90% 停止往这台派人;连接数高、会话数(`player_count`)不高,就是未验签连接占着,按 `GateUnauthenticatedConnectionsHigh` 处置 |
 | `GateRejectingAtCapacity` | 因满员拒绝了新连接 | 未验签连接最多占预算(上限的 10%),满员时至少九成是验签过的会话:多半是真实玩家满了,加台数 |
 | `GateAcceptRateLimited` | 新建连接超过速率上限 | 按上表区分洪峰与攻击 |
 | `GateUnauthenticatedConnectionsHigh` | 未验签连接到早拒起点的八成以上,持续 2 分钟 | `gate_preauth_evicted_total` 是否在涨;采样日志 `Evicting the oldest unauthenticated connection ...` 与其余采样行里的 `latest_peer` |

@@ -869,6 +869,12 @@ $script:GatewayAdminApiKeyEnv = "ADMIN_APIKEY"
 $script:GatewayAdminApiKeyHashAnnotation = "mmorpg.io/gateway-admin-api-key-hash"
 # 由 Initialize-InjectedSecrets 解析(只在本次部署 gateway 时)。
 $script:GatewayAdminApiKey = ""
+# 官方通行证回调入口(gateway POST /internal/passport/events)的共享密钥,即 Spring 属性 passport.webhook-secret
+# (jar 内 application.yaml 写 ${MMORPG_GATEWAY_PASSPORT_WEBHOOK_SECRET:};docs/design/official-passport-registration.md §3.7)。
+# 可选:部署 gateway 时设了环境变量 MMORPG_GATEWAY_PASSPORT_WEBHOOK_SECRET 才经工作负载密钥目录(gateway-passport-webhook)注入;
+# 没设就不注入,入口回 404,改密 / 封禁照样在登录与刷新时生效。值与通行证回调的请求头 X-Passport-Webhook-Secret 相同,至少 32 字节。
+# gateway 的 Ingress 只路由 /api,这个入口只有集群内的通行证够得着。由 Initialize-InjectedSecrets 解析。
+$script:GatewayPassportWebhookSecret = ""
 # 玩家收件箱运维口令(PlayerInbox.AdminToken,docs/design/player-inbox-service.md §1.6):守 PlayerInboxAdmin 全部方法
 # (GmSanctionPlayer / VoidItem / 查询 / ReconcilePlayer),调用方放在 gRPC metadata 的 x-admin-token。GM 处置是常态业务,
 # 所以口令常驻。
@@ -956,14 +962,16 @@ $script:AssetOpSecrets = @{}
 #   scene:scene_manager(go/scene_manager scene_node_client)、match(go/match node_watcher)、player_inbox(go/player_inbox notify)、
 #          guild / trade / mail / data-service(go/shared/assetop 资产通道)。gate ↔ scene 走 muduo 节点口(RPC_PORT),battle → scene 走 Kafka 命令,
 #          client-rpc-router 的路由表里没有 SceneNodeService,都不经 scene 的 gRPC 口。
-#   guild:client-rpc-router(路由表 GuildNodeService)、data-service(RoleFence 参与者接口)、mail(GuildRpc,帮会邮件可见性);match 的历练结果走 Kafka。
+#   guild:client-rpc-router(路由表 GuildNodeService)、data-service(RoleFence 参与者接口)、mail(GuildRpc,帮会邮件可见性)、
+#          match(GuildRpc,江湖生死状查纯帮会对阵的帮派归属;2026-11-26 补);match 的历练结果走 Kafka。
 #   match:client-rpc-router(路由表 MatchNodeService)、guild(MatchRpc,历练开战与占用)、gate(只在 -GateRouterMode 0 时直连)、data-service(RoleFence 参与者接口)、
 #          Scene(TeamAuthority 成员读取、MatchInternal.GetBattleTerminalDecision)、battle(MatchInternal.CommitBattleOutcome;2026-11-12 补,原先漏了)。
 # 2026-11-12 补齐其余收玩家会话身份的服务(docs/design/gate-online-identity.md §10.2),调用方按当天的代码整理:
 #   login(zone namespace):gate(直连模式的客户端请求;断线通知、迁移要票、登录态续租在直连模式下也直发)、client-rpc-router(路由表 LoginNodeService)、
 #          gateway(Java 网关的 LoginRpcClient:LoginPreGate 分配 gate / 查排队,以及运维接口)。
-#   chat:client-rpc-router。世界频道的广播走 Kafka,不经这个口。
-#   friend:client-rpc-router、data-service(RoleFence 参与者接口)。
+#   chat:client-rpc-router、match(ChatRpc,江湖生死状的全服系统播报 PublishSystemWorldNotice;2026-11-26 补)。世界频道的广播走 Kafka,不经这个口。
+#          chat 的两个服务端方法:系统播报 PublishSystemWorldNotice 靠这张名单只让 match 拨进来;运维撤回 RetractWorldChat 另要运维口令。
+#   friend:client-rpc-router、data-service(RoleFence 参与者接口)、match(FriendRpc,下战书前查拉黑与好友关系;2026-11-26 补)。
 #   trade:client-rpc-router、data-service(RoleFence 参与者接口)。trade → scene 的资产通道是 trade 往外拨,不经这个口。
 #   mail:client-rpc-router、data-service(RoleFence 参与者接口)、rank(MailRpc,榜单奖励)、match(MailRpc,群仙问道赛领奖邮件;2026-11-26 补)、
 #          Scene(战斗掉落放不下时改投邮件,MailAdmin.SendPersonalMail)。
@@ -977,11 +985,11 @@ $script:AssetOpSecrets = @{}
 # 表里只写真实清单的标签(契约测试逐个核对)。金丝雀副本用 app: <名字>-canary(全局 Go 服务与 battle),生成策略时由 Get-ReleaseTrackAppLabels 补进两侧名单。
 $script:GrpcAllowLists = [ordered]@{
 	scene  = [pscustomobject]@{ PolicyName = 'scene-grpc-allowlist'; TargetApps = @('scene', 'scene-world', 'scene-instance'); AllowedApps = @('scene-manager', 'match', 'player-inbox', 'guild', 'trade', 'mail', 'data-service') }
-	guild  = [pscustomobject]@{ PolicyName = 'guild-grpc-allowlist'; TargetApps = @('guild'); AllowedApps = @('client-rpc-router', 'data-service', 'mail') }
+	guild  = [pscustomobject]@{ PolicyName = 'guild-grpc-allowlist'; TargetApps = @('guild'); AllowedApps = @('client-rpc-router', 'data-service', 'mail', 'match') }
 	match  = [pscustomobject]@{ PolicyName = 'match-grpc-allowlist'; TargetApps = @('match'); AllowedApps = @('client-rpc-router', 'guild', 'gate', 'data-service', 'scene', 'scene-world', 'scene-instance', 'battle') }
 	login  = [pscustomobject]@{ PolicyName = 'login-grpc-allowlist'; TargetApps = @('login'); AllowedApps = @('gate', 'client-rpc-router', 'gateway') }
-	chat   = [pscustomobject]@{ PolicyName = 'chat-grpc-allowlist'; TargetApps = @('chat'); AllowedApps = @('client-rpc-router') }
-	friend = [pscustomobject]@{ PolicyName = 'friend-grpc-allowlist'; TargetApps = @('friend'); AllowedApps = @('client-rpc-router', 'data-service') }
+	chat   = [pscustomobject]@{ PolicyName = 'chat-grpc-allowlist'; TargetApps = @('chat'); AllowedApps = @('client-rpc-router', 'match') }
+	friend = [pscustomobject]@{ PolicyName = 'friend-grpc-allowlist'; TargetApps = @('friend'); AllowedApps = @('client-rpc-router', 'data-service', 'match') }
 	trade  = [pscustomobject]@{ PolicyName = 'trade-grpc-allowlist'; TargetApps = @('trade'); AllowedApps = @('client-rpc-router', 'data-service') }
 	mail   = [pscustomobject]@{ PolicyName = 'mail-grpc-allowlist'; TargetApps = @('mail'); AllowedApps = @('client-rpc-router', 'data-service', 'rank', 'match', 'scene', 'scene-world', 'scene-instance') }
 	rank   = [pscustomobject]@{ PolicyName = 'rank-grpc-allowlist'; TargetApps = @('rank'); AllowedApps = @('client-rpc-router', 'match') }
@@ -1079,6 +1087,9 @@ $script:WorkloadSecretCatalog = [ordered]@{
 	# New-LoginAntiAddictionYaml 里的字面量与这里的 Env 一致由契约测试核对)。
 	'login-nppa' = @{ Env = 'MMORPG_LOGIN_NPPA_SECRET_KEY'; SecretKey = 'secret'; Consumers = @('login')
 		Value = { [string]$script:LoginNppaSecretKey } }
+	# 官方通行证回调入口的共享密钥(见 $script:GatewayPassportWebhookSecret 处的说明);gateway 的 application.yaml 读同名环境变量。
+	'gateway-passport-webhook' = @{ Env = 'MMORPG_GATEWAY_PASSPORT_WEBHOOK_SECRET'; SecretKey = 'secret'; Consumers = @('gateway')
+		Value = { [string]$script:GatewayPassportWebhookSecret } }
 	# content-guard 外部平台审核的 AppSecret(-ContentGuardWeChatAppId / -ContentGuardDouyinAppId 才有值)。content-guard 的配置只写变量名
 	# (Platform.<段>.AppSecretEnv,New-ContentGuardPlatformYaml 里的字面量与这里的 Env 一致由契约测试核对)。
 	'content-guard-wechat' = @{ Env = 'MMORPG_CONTENT_GUARD_WECHAT_APP_SECRET'; SecretKey = 'secret'; Consumers = @('content-guard')
@@ -1858,6 +1869,16 @@ function Initialize-InjectedSecrets {
 		}
 	}
 
+	# 官方通行证回调入口的共享密钥(见 $script:GatewayPassportWebhookSecret 处的说明):可选,只在本次部署 gateway 且设了环境变量时解析。
+	# 值经 Spring 占位读入,含 "${" 会被当成嵌套占位,与 gateway 其它几把密钥同样在写操作之前拒绝。
+	$script:GatewayPassportWebhookSecret = ""
+	if ((Test-ZoneGatewayDeployed) -and -not [string]::IsNullOrEmpty([System.Environment]::GetEnvironmentVariable('MMORPG_GATEWAY_PASSPORT_WEBHOOK_SECRET'))) {
+		$script:GatewayPassportWebhookSecret = Resolve-InjectedSecret -EnvName "MMORPG_GATEWAY_PASSPORT_WEBHOOK_SECRET" -DevFallback "" `
+			-ReleaseProfile $ReleaseProfile -Purpose "gateway 官方通行证回调入口的共享密钥(passport.webhook-secret)" -MinLength 32
+		if ($script:GatewayPassportWebhookSecret.Contains('${') -or $script:GatewayPassportWebhookSecret -cne $script:GatewayPassportWebhookSecret.Trim()) {
+			throw "环境变量 MMORPG_GATEWAY_PASSPORT_WEBHOOK_SECRET 的值含首尾空白或未展开的 `${...}:gateway 读不对这把密钥。"
+		}
+	}
 	# gateway 管理面口令(见 $script:GatewayAdminApiKeyEnv 处的说明)。只在本次部署 gateway 时解析:infra-up 与不带 Java 服务的
 	# zone-up 不因它被阻断。非 dev 档缺失 / 占位 / 过短由 Resolve-InjectedSecret throw;dev 档回落占位值,照样经 Secret 注入
 	# (注入路径各档一致),但打警告 —— 管理面只在集群内可达(Ingress 只路由 /api),占位口令仍等于对集群内任何 Pod 开放。
@@ -12552,6 +12573,10 @@ function New-GoSvcConfigMapYaml {
 	# 群仙问道赛领奖邮件的 MailAdmin 客户端:超时与发件密钥的变量名从服务 yaml 镜像(变量名与 Add-MatchAuthoritySecretEnv 注入的同一个)。
 	$matchMailRpcTimeout         = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'MailRpc.Timeout'
 	$matchMailSecretEnv          = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'MailSecretEnv'
+	# 江湖恩怨与天墉生死状一期的三个跨服务客户端(friend / chat / guild):超时从服务 yaml 镜像。
+	$matchFriendRpcTimeout       = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'FriendRpc.Timeout'
+	$matchChatRpcTimeout         = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'ChatRpc.Timeout'
+	$matchGuildRpcTimeout        = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'GuildRpc.Timeout'
 	# MatchedTicketTTLSeconds 是本轮新增项(cross-zone-matchmaking.md D5,Go 侧缺省 30)。
 	# 和上面不同,它允许缺席:yaml 里没有就整行不写,交给 Go 的 default 标签,
 	# 这样 go/match 与部署脚本可以分开落地,不会让 infra-up 卡在别人的提交上。
@@ -13716,6 +13741,21 @@ MailRpc:
   Timeout: ${matchMailRpcTimeout}
   NonBlock: true
 MailSecretEnv: ${matchMailSecretEnv}
+# 江湖恩怨与天墉生死状一期(docs/planning/battle-jianghu-grudge-duel-phase1-implementation-plan.md):下战书前查双方的拉黑与好友关系
+# (friend;没有这个客户端时一律拒绝下战书)、战书与战果的全服系统播报(chat)、纯帮会对阵的帮派归属(guild)。
+# 三个服务都不写 Etcd.Key(D-13),直连同 namespace 的 Service;都是 NonBlock,依赖没起不挡 match 启动。
+FriendRpc:
+  Endpoints: [friend.${InfraNamespace}:50400]
+  Timeout: ${matchFriendRpcTimeout}
+  NonBlock: true
+ChatRpc:
+  Endpoints: [chat.${InfraNamespace}:50700]
+  Timeout: ${matchChatRpcTimeout}
+  NonBlock: true
+GuildRpc:
+  Endpoints: [guild.${InfraNamespace}:50300]
+  Timeout: ${matchGuildRpcTimeout}
+  NonBlock: true
 ${matchSpectateBlock}
 # 战报回放录制开关(battle-report-replay.md §7.1、§11),从 go/match/etc/match_service.yaml 镜像。
 BattleReport:

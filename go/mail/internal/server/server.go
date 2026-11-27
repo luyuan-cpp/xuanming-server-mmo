@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"errors"
+	"maps"
+	"slices"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc/codes"
@@ -13,11 +15,16 @@ import (
 	base "proto/common/base"
 	mailpb "proto/mail"
 	"shared/assetop"
+	"shared/dualcontrol"
 	table "shared/generated/pb/table"
 	"shared/rolefence"
 	"shared/roleidentity"
 	"shared/serviceauth"
 )
+
+// adminCaller 是后台(java/gm_admin)与运维工具签发件请求用的调用方。它的发件全是甲级动作
+// (docs/design/admin-identity-and-dual-control.md §3),恒在要求批准记录的调用方里。
+const adminCaller = "admin"
 
 type Server struct {
 	mailpb.UnimplementedClientPlayerMailServer
@@ -25,17 +32,39 @@ type Server struct {
 	repo     *data.Repo
 	auth     *serviceauth.Verifier
 	reminder Notifier
+	// approvalRequired 是发件必须带双人复核批准记录的调用方,allowUnapproved 是 AdminAllowUnapproved。
+	// New 给的缺省是只有 admin、不放行;ConfigureDualControl 在启动时按配置装配一次,之后只读。
+	approvalRequired map[string]bool
+	allowUnapproved  bool
 }
 type Notifier interface {
 	Personal(context.Context, uint64, uint64)
 }
 
 func New(repo *data.Repo, auth *serviceauth.Verifier, reminders ...Notifier) *Server {
-	s := &Server{repo: repo, auth: auth}
+	s := &Server{repo: repo, auth: auth, approvalRequired: map[string]bool{adminCaller: true}}
 	if len(reminders) > 0 {
 		s.reminder = reminders[0]
 	}
 	return s
+}
+
+// ConfigureDualControl 按配置装配发件的双人复核要求(docs/design/admin-identity-and-dual-control.md §5.5、§5.7),启动时调一次。
+// callers 是 ApprovalRequiredCallers;admin 恒在其中:后台的发件全是甲级,把它从表里拿掉等于绕开 AdminAllowUnapproved 的逐条告警。
+// allowUnapproved 为 true 时接受表内调用方不带记录的发件,只给本机开发:启动打一行 ERROR,之后每一次都打 ERROR 并计数。
+func (s *Server) ConfigureDualControl(callers []string, allowUnapproved bool) {
+	s.approvalRequired = map[string]bool{adminCaller: true}
+	for _, caller := range callers {
+		s.approvalRequired[caller] = true
+	}
+	for caller := range s.approvalRequired {
+		metrics.PrebuildAdminUnapprovedCommandSeries(caller)
+	}
+	s.allowUnapproved = allowUnapproved
+	if allowUnapproved {
+		logx.Errorf("[mail] AdminAllowUnapproved is on: sends from callers %v without a dual-control approval record are accepted; keep it off outside local development",
+			slices.Sorted(maps.Keys(s.approvalRequired)))
+	}
 }
 
 // actor 取客户端请求的原角色。在线域原账号只认 gate 签名原件,不读 login Redis:入口准入(domainhost.Guard)
@@ -175,6 +204,10 @@ func (s *Server) send(ctx context.Context, method string, kind mailpb.MailKind, 
 	case "match":
 		sender = metrics.SenderMatch
 	}
+	if err := s.admitApproval(ctx, caller, method, methodLabel, in); err != nil {
+		metrics.ObserveAdminSend(methodLabel, sender, metrics.OutcomeDenied)
+		return nil, err
+	}
 	result, err := s.repo.Send(ctx, caller, kind, in)
 	if err != nil {
 		tip := rejection(err)
@@ -196,6 +229,34 @@ func (s *Server) send(ctx context.Context, method string, kind mailpb.MailKind, 
 	}
 	return result, nil
 }
+
+// admitApproval 核对发件带的双人复核批准记录,在验过调用证明之后、任何读库写库(含判重)之前做。
+// 拒绝回 PermissionDenied,后台把它当确定的拒绝;错误文本只点出哪一项不合格,不回显请求内容。
+//   - 带了记录就必须合格,不论调用方、不论 AdminAllowUnapproved:批准号就是请求号(后台流水号同时是这里的判重键,
+//     一次批准只发一次信);发件请求没有操作人字段,不比发起人;
+//   - 不带记录:表外调用方(rank / guild / battle / match 这些系统发件方,不经后台)照常;表内调用方只有
+//     AdminAllowUnapproved 打开才接受,每一次都打 ERROR 并计入 mail_admin_unapproved_command_total。
+func (s *Server) admitApproval(ctx context.Context, caller, method, methodLabel string, in *mailpb.SendMailRequest) error {
+	if approval := in.GetApproval(); approval != nil {
+		// 发件请求没有操作人字段:显式传发起人,两人记在批准记录里。
+		if err := dualcontrol.RequireForRequest(approval, approval.GetProposer(), in.GetRequestId()); err != nil {
+			logx.WithContext(ctx).Errorf("[mail] Rejecting %s from caller %s request_id=%d: %v", method, caller, in.GetRequestId(), err)
+			return status.Error(codes.PermissionDenied, err.Error())
+		}
+		return nil
+	}
+	if !s.approvalRequired[caller] {
+		return nil
+	}
+	if !s.allowUnapproved {
+		logx.WithContext(ctx).Errorf("[mail] Rejecting %s from caller %s request_id=%d: %v", method, caller, in.GetRequestId(), dualcontrol.ErrMissing)
+		return status.Error(codes.PermissionDenied, dualcontrol.ErrMissing.Error())
+	}
+	metrics.ObserveAdminUnapprovedCommand(caller, methodLabel)
+	logx.WithContext(ctx).Errorf("[mail] %s accepted without a dual-control approval record caller=%s request_id=%d (AdminAllowUnapproved is on)",
+		method, caller, in.GetRequestId())
+	return nil
+}
 func (s *Server) SendPersonalMail(ctx context.Context, in *mailpb.SendMailRequest) (*mailpb.SendMailResponse, error) {
 	return s.send(ctx, mailpb.MailAdmin_SendPersonalMail_FullMethodName, mailpb.MailKind_MAIL_KIND_PERSONAL, in)
 }
@@ -205,6 +266,11 @@ func (s *Server) SendSystemMail(ctx context.Context, in *mailpb.SendMailRequest)
 func (s *Server) SendGuildMail(ctx context.Context, in *mailpb.SendMailRequest) (*mailpb.SendMailResponse, error) {
 	return s.send(ctx, mailpb.MailAdmin_SendGuildMail_FullMethodName, mailpb.MailKind_MAIL_KIND_GUILD, in)
 }
+
+// ImportMailRecipients 与 SealMailCampaign 不要求双人复核批准记录:它们只能作用在一个已经建好的活动上(Repo.Import / Seal
+// 要求活动存在、producer 就是本调用方),而建活动的那份发件请求已经过 admitApproval(admin 建的必带合格的批准记录)。
+// 标题、正文、附件、过期时刻、人数、片数与名单摘要都在建活动时冻结;导入只往这个活动里填人,封存时按片摘要重算的名单摘要、
+// 片数与人数必须与冻结值逐一相等才发布。导入了别的名单只会让这个活动封存不了,发不出批准之外的东西。
 func (s *Server) ImportMailRecipients(ctx context.Context, in *mailpb.ImportMailRecipientsRequest) (*mailpb.ImportMailRecipientsResponse, error) {
 	caller, err := s.caller(ctx, mailpb.MailAdmin_ImportMailRecipients_FullMethodName, in)
 	if err != nil {

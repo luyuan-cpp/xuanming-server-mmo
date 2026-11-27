@@ -4,6 +4,8 @@ import (
 	"errors"
 	"testing"
 
+	"data_service/internal/config"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,4 +28,16 @@ func TestRequirePlacementsRefusesAnUnresolvableDatabase(t *testing.T) {
 	err := requirePlacements(fakePlacements{bad: map[string]error{"mmorpg_global_01": unknown}}, schemas)
 	require.ErrorIs(t, err, unknown)
 	require.ErrorContains(t, err, "mmorpg_global_01")
+}
+
+// 缺目录片的写资格时启动自检过不了,原地重启也永远过不了(写资格在 init 里定了):要重建 Pod,data_service.go 以 78 退出。
+// 缺流水库、存档库的写资格不挡启动,不算(docs/design/data-service-startup-isolation.md §7.5)。
+func TestMissingDirectoryShardGrants(t *testing.T) {
+	var c config.Config
+	c.SnapshotMySQL.DBName = "mmorpg_global"
+	c.Directory.LogicalShards = 2
+	s := &ServiceContext{Config: c, MissingWriterGrants: []string{"mmorpg_global_ledger", "player_store_1000000_db"}}
+	require.False(t, s.MissingDirectoryShardGrants())
+	s.MissingWriterGrants = append(s.MissingWriterGrants, "mmorpg_global_01")
+	require.True(t, s.MissingDirectoryShardGrants())
 }

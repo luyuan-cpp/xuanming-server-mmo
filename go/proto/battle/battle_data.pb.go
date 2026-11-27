@@ -2704,8 +2704,10 @@ type BattlePrepPlayerState struct {
 	Ready              bool                   `protobuf:"varint,7,opt,name=ready,proto3" json:"ready,omitempty"`
 	// 本人当前提名的本局禁用技能有序列表（0..3，下标 0 为最高优先级；仅向同队下发）。
 	NominatedBanSkillIds []uint32 `protobuf:"varint,8,rep,packed,name=nominated_ban_skill_ids,json=nominatedBanSkillIds,proto3" json:"nominated_ban_skill_ids,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// 本人当前提名的本局护招技能 ID（0=未提名；须在候选池内且不与本人禁招列表冲突；仅向同队下发）。
+	NominatedProtectSkillId uint32 `protobuf:"varint,9,opt,name=nominated_protect_skill_id,json=nominatedProtectSkillId,proto3" json:"nominated_protect_skill_id,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *BattlePrepPlayerState) Reset() {
@@ -2792,6 +2794,13 @@ func (x *BattlePrepPlayerState) GetNominatedBanSkillIds() []uint32 {
 		return x.NominatedBanSkillIds
 	}
 	return nil
+}
+
+func (x *BattlePrepPlayerState) GetNominatedProtectSkillId() uint32 {
+	if x != nil {
+		return x.NominatedProtectSkillId
+	}
+	return 0
 }
 
 // 论剑 V6 宿敌交手上下文（开局由 match 权威冻结，战前 15 秒仅向本人脱敏展示，纯荣誉零数值加成）。
@@ -2881,19 +2890,22 @@ func (x *RankedRivalryEncounter) GetRevengeTarget() bool {
 
 // 论剑 V3 战前明牌变阵状态快照（按收信视角脱敏：本人看全部可选+同队状态，观众仅看倒计时）。
 type BattlePrepState struct {
-	state                    protoimpl.MessageState    `protogen:"open.v1"`
-	Active                   bool                      `protobuf:"varint,1,opt,name=active,proto3" json:"active,omitempty"`                                          // true = 当前处于战前明牌变阵期，尚未进入第 1 回合
-	DeadlineMs               uint64                    `protobuf:"varint,2,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`                // 战前变阵截止时刻（Unix 毫秒，由房间定时器回填）
-	DurationSeconds          uint32                    `protobuf:"varint,3,opt,name=duration_seconds,json=durationSeconds,proto3" json:"duration_seconds,omitempty"` // 战前变阵总时长（秒，默认 15；开启技能禁选为 25）
-	SelfAvailableSeals       []*BattlePrepSealOption   `protobuf:"bytes,4,rep,name=self_available_seals,json=selfAvailableSeals,proto3" json:"self_available_seals,omitempty"`
-	SelfAvailablePets        []*BattlePrepPetOption    `protobuf:"bytes,5,rep,name=self_available_pets,json=selfAvailablePets,proto3" json:"self_available_pets,omitempty"`
-	TeamStates               []*BattlePrepPlayerState  `protobuf:"bytes,6,rep,name=team_states,json=teamStates,proto3" json:"team_states,omitempty"`
-	SkillBanSlotsPerTeam     uint32                    `protobuf:"varint,7,opt,name=skill_ban_slots_per_team,json=skillBanSlotsPerTeam,proto3" json:"skill_ban_slots_per_team,omitempty"`                    // 本局每队可用技能禁用槽数（0=未启用，3=每队禁3招）
-	BanCandidateSkillIds     []uint32                  `protobuf:"varint,8,rep,packed,name=ban_candidate_skill_ids,json=banCandidateSkillIds,proto3" json:"ban_candidate_skill_ids,omitempty"`               // 本局白名单可禁技能 ID 列表（升序；仅参战者可见）
-	TeamEffectiveBanSkillIds []uint32                  `protobuf:"varint,9,rep,packed,name=team_effective_ban_skill_ids,json=teamEffectiveBanSkillIds,proto3" json:"team_effective_ban_skill_ids,omitempty"` // 按当前同队提名确定性聚合的本队生效禁招（仅同队可见，对手与观众清空）
-	SelfRivalries            []*RankedRivalryEncounter `protobuf:"bytes,10,rep,name=self_rivalries,json=selfRivalries,proto3" json:"self_rivalries,omitempty"`                                               // 论剑 V6 本人本局面对的宿敌列表（仅本人可见，对手与观众清空）
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	state                         protoimpl.MessageState    `protogen:"open.v1"`
+	Active                        bool                      `protobuf:"varint,1,opt,name=active,proto3" json:"active,omitempty"`                                          // true = 当前处于战前明牌变阵期，尚未进入第 1 回合
+	DeadlineMs                    uint64                    `protobuf:"varint,2,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`                // 战前变阵截止时刻（Unix 毫秒，由房间定时器回填）
+	DurationSeconds               uint32                    `protobuf:"varint,3,opt,name=duration_seconds,json=durationSeconds,proto3" json:"duration_seconds,omitempty"` // 战前变阵总时长（秒，默认 15；开启技能禁选为 25）
+	SelfAvailableSeals            []*BattlePrepSealOption   `protobuf:"bytes,4,rep,name=self_available_seals,json=selfAvailableSeals,proto3" json:"self_available_seals,omitempty"`
+	SelfAvailablePets             []*BattlePrepPetOption    `protobuf:"bytes,5,rep,name=self_available_pets,json=selfAvailablePets,proto3" json:"self_available_pets,omitempty"`
+	TeamStates                    []*BattlePrepPlayerState  `protobuf:"bytes,6,rep,name=team_states,json=teamStates,proto3" json:"team_states,omitempty"`
+	SkillBanSlotsPerTeam          uint32                    `protobuf:"varint,7,opt,name=skill_ban_slots_per_team,json=skillBanSlotsPerTeam,proto3" json:"skill_ban_slots_per_team,omitempty"`                             // 本局每队可用技能禁用槽数（0=未启用，3=每队禁3招）
+	BanCandidateSkillIds          []uint32                  `protobuf:"varint,8,rep,packed,name=ban_candidate_skill_ids,json=banCandidateSkillIds,proto3" json:"ban_candidate_skill_ids,omitempty"`                        // 本局白名单可禁技能 ID 列表（升序；仅参战者可见）
+	TeamEffectiveBanSkillIds      []uint32                  `protobuf:"varint,9,rep,packed,name=team_effective_ban_skill_ids,json=teamEffectiveBanSkillIds,proto3" json:"team_effective_ban_skill_ids,omitempty"`          // 按当前同队提名确定性聚合的本队生效禁招（仅同队可见，对手与观众清空）
+	SelfRivalries                 []*RankedRivalryEncounter `protobuf:"bytes,10,rep,name=self_rivalries,json=selfRivalries,proto3" json:"self_rivalries,omitempty"`                                                        // 论剑 V6 本人本局面对的宿敌列表（仅本人可见，对手与观众清空）
+	SkillProtectSlotsPerTeam      uint32                    `protobuf:"varint,11,opt,name=skill_protect_slots_per_team,json=skillProtectSlotsPerTeam,proto3" json:"skill_protect_slots_per_team,omitempty"`                // 战前禁选 V2：本局每队可用护招槽数（0=未启用，1=每队保 1 招）
+	TeamEffectiveProtectedSkillId uint32                    `protobuf:"varint,12,opt,name=team_effective_protected_skill_id,json=teamEffectiveProtectedSkillId,proto3" json:"team_effective_protected_skill_id,omitempty"` // 战前禁选 V2：按当前同队提名确定性聚合的本队生效护招 ID（0=未提名；仅同队可见）
+	TeammateEquippedSkillIds      []uint32                  `protobuf:"varint,13,rep,packed,name=teammate_equipped_skill_ids,json=teammateEquippedSkillIds,proto3" json:"teammate_equipped_skill_ids,omitempty"`           // 战前禁选 V2：本队其他队友已携带且在候选池内的技能 ID（升序去重；仅同队可见，防误禁）
+	unknownFields                 protoimpl.UnknownFields
+	sizeCache                     protoimpl.SizeCache
 }
 
 func (x *BattlePrepState) Reset() {
@@ -2992,6 +3004,27 @@ func (x *BattlePrepState) GetTeamEffectiveBanSkillIds() []uint32 {
 func (x *BattlePrepState) GetSelfRivalries() []*RankedRivalryEncounter {
 	if x != nil {
 		return x.SelfRivalries
+	}
+	return nil
+}
+
+func (x *BattlePrepState) GetSkillProtectSlotsPerTeam() uint32 {
+	if x != nil {
+		return x.SkillProtectSlotsPerTeam
+	}
+	return 0
+}
+
+func (x *BattlePrepState) GetTeamEffectiveProtectedSkillId() uint32 {
+	if x != nil {
+		return x.TeamEffectiveProtectedSkillId
+	}
+	return 0
+}
+
+func (x *BattlePrepState) GetTeammateEquippedSkillIds() []uint32 {
+	if x != nil {
+		return x.TeammateEquippedSkillIds
 	}
 	return nil
 }
@@ -3443,8 +3476,10 @@ type BattleSettlementData struct {
 	// 论剑 V7：正式 1V1 排位终局对阵对手身份（仅双方各 1 名真人且非无效局填充，用于战后 15 秒切磋「不服再战」，零排位分）。
 	RematchOpponentId   uint64 `protobuf:"varint,55,opt,name=rematch_opponent_id,json=rematchOpponentId,proto3" json:"rematch_opponent_id,omitempty"`
 	RematchOpponentName string `protobuf:"bytes,56,opt,name=rematch_opponent_name,json=rematchOpponentName,proto3" json:"rematch_opponent_name,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// 万象残局坊冻结上下文回传（用于战后结算面板快速重开 / 看作者标准解 / 点赞 / 分享，非残局坊留空）。
+	TacticalPuzzleContext *TacticalPuzzleBattleContext `protobuf:"bytes,57,opt,name=tactical_puzzle_context,json=tacticalPuzzleContext,proto3" json:"tactical_puzzle_context,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *BattleSettlementData) Reset() {
@@ -3867,6 +3902,13 @@ func (x *BattleSettlementData) GetRematchOpponentName() string {
 		return x.RematchOpponentName
 	}
 	return ""
+}
+
+func (x *BattleSettlementData) GetTacticalPuzzleContext() *TacticalPuzzleBattleContext {
+	if x != nil {
+		return x.TacticalPuzzleContext
+	}
+	return nil
 }
 
 // ---- 出战宝宝的结算数据(随主人的 BattleSettlementData 一起回 scene)----
@@ -4843,6 +4885,9 @@ type BattleTrialJournalFacts struct {
 	AllSelfCleavesParried                 bool                   `protobuf:"varint,24,opt,name=all_self_cleaves_parried,json=allSelfCleavesParried,proto3" json:"all_self_cleaves_parried,omitempty"`                                                       // 首领试炼 V2：本人及本人宝宝被重劈点名>=1次且100%合法化解(不含倒地/退出取消)
 	SelfParriedCleaveAtLeastOnce          bool                   `protobuf:"varint,25,opt,name=self_parried_cleave_at_least_once,json=selfParriedCleaveAtLeastOnce,proto3" json:"self_parried_cleave_at_least_once,omitempty"`                              // 首领试炼 V2：本人或本人宝宝至少合法化解过 1 次重劈
 	ChallengeVowMask                      uint32                 `protobuf:"varint,26,opt,name=challenge_vow_mask,json=challengeVowMask,proto3" json:"challenge_vow_mask,omitempty"`                                                                        // 五行试炼志 V3：本局生效的自选试炼誓约位掩码（0..15）
+	SelfCastSeasonSkill                   bool                   `protobuf:"varint,27,opt,name=self_cast_season_skill,json=selfCastSeasonSkill,proto3" json:"self_cast_season_skill,omitempty"`                                                             // 五行试炼志 V4：本人本场直接施放过当季免费赛季技能
+	SelfTriggeredSeasonResonance          bool                   `protobuf:"varint,28,opt,name=self_triggered_season_resonance,json=selfTriggeredSeasonResonance,proto3" json:"self_triggered_season_resonance,omitempty"`                                  // 五行试炼志 V4：本人本场触发过任意当季 R1..R8 技印共鸣
+	SelfSeasonResonanceMask               uint32                 `protobuf:"varint,29,opt,name=self_season_resonance_mask,json=selfSeasonResonanceMask,proto3" json:"self_season_resonance_mask,omitempty"`                                                 // 五行试炼志 V4：本人本场触发过的技印共鸣位掩码（bit = resonance_kind - 1）
 	unknownFields                         protoimpl.UnknownFields
 	sizeCache                             protoimpl.SizeCache
 }
@@ -5055,6 +5100,27 @@ func (x *BattleTrialJournalFacts) GetSelfParriedCleaveAtLeastOnce() bool {
 func (x *BattleTrialJournalFacts) GetChallengeVowMask() uint32 {
 	if x != nil {
 		return x.ChallengeVowMask
+	}
+	return 0
+}
+
+func (x *BattleTrialJournalFacts) GetSelfCastSeasonSkill() bool {
+	if x != nil {
+		return x.SelfCastSeasonSkill
+	}
+	return false
+}
+
+func (x *BattleTrialJournalFacts) GetSelfTriggeredSeasonResonance() bool {
+	if x != nil {
+		return x.SelfTriggeredSeasonResonance
+	}
+	return false
+}
+
+func (x *BattleTrialJournalFacts) GetSelfSeasonResonanceMask() uint32 {
+	if x != nil {
+		return x.SelfSeasonResonanceMask
 	}
 	return 0
 }
@@ -5760,6 +5826,284 @@ func (x *JianghuDuelBattleContext) GetTeamSize() uint32 {
 	return 0
 }
 
+// ---- 万象残局坊（UGC 回合解谜工坊 V1，docs/planning/tactical-puzzle-workshop-v1.md）----
+// 仅用公平模板 + 白名单预设 + 有限微调参数；出题者必须自证通关并存标准解回放后方可发布。
+type TacticalPuzzleEnemySpec struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	MonsterTableId   uint32                 `protobuf:"varint,1,opt,name=monster_table_id,json=monsterTableId,proto3" json:"monster_table_id,omitempty"`       // 白名单 311..316（0经验/0银两/不可捕捉残局专用怪）
+	InitialHpPct     uint32                 `protobuf:"varint,2,opt,name=initial_hp_pct,json=initialHpPct,proto3" json:"initial_hp_pct,omitempty"`             // 开局气血百分比（10..150，100=标准满血）
+	InitialShieldPct uint32                 `protobuf:"varint,3,opt,name=initial_shield_pct,json=initialShieldPct,proto3" json:"initial_shield_pct,omitempty"` // 开局护盾百分比（0..60，对应 Buff 100400）
+	SpeedDeltaPct    int32                  `protobuf:"varint,4,opt,name=speed_delta_pct,json=speedDeltaPct,proto3" json:"speed_delta_pct,omitempty"`          // 开局速度微调百分比（-30..+30）
+	InitialBuffKind  uint32                 `protobuf:"varint,5,opt,name=initial_buff_kind,json=initialBuffKind,proto3" json:"initial_buff_kind,omitempty"`    // 0=无 1=固守(100140) 2=疾风(100160) 3=狂怒(100250) 4=回春(110070)
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *TacticalPuzzleEnemySpec) Reset() {
+	*x = TacticalPuzzleEnemySpec{}
+	mi := &file_proto_battle_battle_data_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TacticalPuzzleEnemySpec) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TacticalPuzzleEnemySpec) ProtoMessage() {}
+
+func (x *TacticalPuzzleEnemySpec) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_battle_data_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TacticalPuzzleEnemySpec.ProtoReflect.Descriptor instead.
+func (*TacticalPuzzleEnemySpec) Descriptor() ([]byte, []int) {
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *TacticalPuzzleEnemySpec) GetMonsterTableId() uint32 {
+	if x != nil {
+		return x.MonsterTableId
+	}
+	return 0
+}
+
+func (x *TacticalPuzzleEnemySpec) GetInitialHpPct() uint32 {
+	if x != nil {
+		return x.InitialHpPct
+	}
+	return 0
+}
+
+func (x *TacticalPuzzleEnemySpec) GetInitialShieldPct() uint32 {
+	if x != nil {
+		return x.InitialShieldPct
+	}
+	return 0
+}
+
+func (x *TacticalPuzzleEnemySpec) GetSpeedDeltaPct() int32 {
+	if x != nil {
+		return x.SpeedDeltaPct
+	}
+	return 0
+}
+
+func (x *TacticalPuzzleEnemySpec) GetInitialBuffKind() uint32 {
+	if x != nil {
+		return x.InitialBuffKind
+	}
+	return 0
+}
+
+type TacticalPuzzleSpec struct {
+	state                   protoimpl.MessageState     `protogen:"open.v1"`
+	RoundLimit              uint32                     `protobuf:"varint,1,opt,name=round_limit,json=roundLimit,proto3" json:"round_limit,omitempty"`                                            // 破局回合上限（1..6，超时未清场权威判负）
+	CharacterPresetId       uint32                     `protobuf:"varint,2,opt,name=character_preset_id,json=characterPresetId,proto3" json:"character_preset_id,omitempty"`                     // 我方人物公平预设（白名单 101..103）
+	PetPresetId             uint32                     `protobuf:"varint,3,opt,name=pet_preset_id,json=petPresetId,proto3" json:"pet_preset_id,omitempty"`                                       // 我方灵宠公平预设（0=无宠，或白名单 201..203）
+	FormationId             uint32                     `protobuf:"varint,4,opt,name=formation_id,json=formationId,proto3" json:"formation_id,omitempty"`                                         // 我方阵法（0=无，或 1..5）
+	PlayerInitialHpPct      uint32                     `protobuf:"varint,5,opt,name=player_initial_hp_pct,json=playerInitialHpPct,proto3" json:"player_initial_hp_pct,omitempty"`                // 我方开局气血百分比（15..100）
+	PlayerInitialMpPct      uint32                     `protobuf:"varint,6,opt,name=player_initial_mp_pct,json=playerInitialMpPct,proto3" json:"player_initial_mp_pct,omitempty"`                // 我方开局法力百分比（20..100）
+	PlayerInitialShieldPct  uint32                     `protobuf:"varint,7,opt,name=player_initial_shield_pct,json=playerInitialShieldPct,proto3" json:"player_initial_shield_pct,omitempty"`    // 我方开局护盾百分比（0..50，对应 Buff 100400）
+	PlayerInitialDebuffKind uint32                     `protobuf:"varint,8,opt,name=player_initial_debuff_kind,json=playerInitialDebuffKind,proto3" json:"player_initial_debuff_kind,omitempty"` // 0=无 1=卸力(100031) 2=破甲(130051) 3=玄毒(100190)
+	Enemies                 []*TacticalPuzzleEnemySpec `protobuf:"bytes,9,rep,name=enemies,proto3" json:"enemies,omitempty"`                                                                     // 1..3 名敌方单位
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *TacticalPuzzleSpec) Reset() {
+	*x = TacticalPuzzleSpec{}
+	mi := &file_proto_battle_battle_data_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TacticalPuzzleSpec) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TacticalPuzzleSpec) ProtoMessage() {}
+
+func (x *TacticalPuzzleSpec) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_battle_data_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TacticalPuzzleSpec.ProtoReflect.Descriptor instead.
+func (*TacticalPuzzleSpec) Descriptor() ([]byte, []int) {
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *TacticalPuzzleSpec) GetRoundLimit() uint32 {
+	if x != nil {
+		return x.RoundLimit
+	}
+	return 0
+}
+
+func (x *TacticalPuzzleSpec) GetCharacterPresetId() uint32 {
+	if x != nil {
+		return x.CharacterPresetId
+	}
+	return 0
+}
+
+func (x *TacticalPuzzleSpec) GetPetPresetId() uint32 {
+	if x != nil {
+		return x.PetPresetId
+	}
+	return 0
+}
+
+func (x *TacticalPuzzleSpec) GetFormationId() uint32 {
+	if x != nil {
+		return x.FormationId
+	}
+	return 0
+}
+
+func (x *TacticalPuzzleSpec) GetPlayerInitialHpPct() uint32 {
+	if x != nil {
+		return x.PlayerInitialHpPct
+	}
+	return 0
+}
+
+func (x *TacticalPuzzleSpec) GetPlayerInitialMpPct() uint32 {
+	if x != nil {
+		return x.PlayerInitialMpPct
+	}
+	return 0
+}
+
+func (x *TacticalPuzzleSpec) GetPlayerInitialShieldPct() uint32 {
+	if x != nil {
+		return x.PlayerInitialShieldPct
+	}
+	return 0
+}
+
+func (x *TacticalPuzzleSpec) GetPlayerInitialDebuffKind() uint32 {
+	if x != nil {
+		return x.PlayerInitialDebuffKind
+	}
+	return 0
+}
+
+func (x *TacticalPuzzleSpec) GetEnemies() []*TacticalPuzzleEnemySpec {
+	if x != nil {
+		return x.Enemies
+	}
+	return nil
+}
+
+type TacticalPuzzleBattleContext struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	PuzzleId       uint64                 `protobuf:"varint,1,opt,name=puzzle_id,json=puzzleId,proto3" json:"puzzle_id,omitempty"`                     // 残局永久 ID（发号器 biz_tag=battle）
+	SpecRevision   uint32                 `protobuf:"varint,2,opt,name=spec_revision,json=specRevision,proto3" json:"spec_revision,omitempty"`         // 开战时刻冻结的题面修订号（防改题后旧自证胜局误发布）
+	IsAuthorVerify bool                   `protobuf:"varint,3,opt,name=is_author_verify,json=isAuthorVerify,proto3" json:"is_author_verify,omitempty"` // true=作者自证验题局（开局开启录回放，胜则原子发布并钉住标准解）
+	PuzzleTitle    string                 `protobuf:"bytes,4,opt,name=puzzle_title,json=puzzleTitle,proto3" json:"puzzle_title,omitempty"`             // 冻结题名（用于局内抬头与结算屏展示）
+	AuthorPlayerId uint64                 `protobuf:"varint,5,opt,name=author_player_id,json=authorPlayerId,proto3" json:"author_player_id,omitempty"` // 作者 player_id
+	AuthorName     string                 `protobuf:"bytes,6,opt,name=author_name,json=authorName,proto3" json:"author_name,omitempty"`                // 作者展示名
+	Spec           *TacticalPuzzleSpec    `protobuf:"bytes,7,opt,name=spec,proto3" json:"spec,omitempty"`                                              // 开战冻结题面配置（引擎按此生成敌我盘面，不依赖外部回调）
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *TacticalPuzzleBattleContext) Reset() {
+	*x = TacticalPuzzleBattleContext{}
+	mi := &file_proto_battle_battle_data_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TacticalPuzzleBattleContext) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TacticalPuzzleBattleContext) ProtoMessage() {}
+
+func (x *TacticalPuzzleBattleContext) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_battle_data_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TacticalPuzzleBattleContext.ProtoReflect.Descriptor instead.
+func (*TacticalPuzzleBattleContext) Descriptor() ([]byte, []int) {
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *TacticalPuzzleBattleContext) GetPuzzleId() uint64 {
+	if x != nil {
+		return x.PuzzleId
+	}
+	return 0
+}
+
+func (x *TacticalPuzzleBattleContext) GetSpecRevision() uint32 {
+	if x != nil {
+		return x.SpecRevision
+	}
+	return 0
+}
+
+func (x *TacticalPuzzleBattleContext) GetIsAuthorVerify() bool {
+	if x != nil {
+		return x.IsAuthorVerify
+	}
+	return false
+}
+
+func (x *TacticalPuzzleBattleContext) GetPuzzleTitle() string {
+	if x != nil {
+		return x.PuzzleTitle
+	}
+	return ""
+}
+
+func (x *TacticalPuzzleBattleContext) GetAuthorPlayerId() uint64 {
+	if x != nil {
+		return x.AuthorPlayerId
+	}
+	return 0
+}
+
+func (x *TacticalPuzzleBattleContext) GetAuthorName() string {
+	if x != nil {
+		return x.AuthorName
+	}
+	return ""
+}
+
+func (x *TacticalPuzzleBattleContext) GetSpec() *TacticalPuzzleSpec {
+	if x != nil {
+		return x.Spec
+	}
+	return nil
+}
+
 var File_proto_battle_battle_data_proto protoreflect.FileDescriptor
 
 const file_proto_battle_battle_data_proto_rawDesc = "" +
@@ -6023,7 +6367,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\fmagic_attack\x18\b \x01(\x04R\vmagicAttack\x12\x18\n" +
 	"\adefense\x18\t \x01(\x04R\adefense\x12&\n" +
 	"\x0fskill_table_ids\x18\n" +
-	" \x03(\rR\rskillTableIds\"\xd1\x02\n" +
+	" \x03(\rR\rskillTableIds\"\x8e\x03\n" +
 	"\x15BattlePrepPlayerState\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1d\n" +
 	"\n" +
@@ -6033,7 +6377,8 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x15selected_pet_table_id\x18\x05 \x01(\rR\x12selectedPetTableId\x12*\n" +
 	"\x11selected_pet_name\x18\x06 \x01(\tR\x0fselectedPetName\x12\x14\n" +
 	"\x05ready\x18\a \x01(\bR\x05ready\x125\n" +
-	"\x17nominated_ban_skill_ids\x18\b \x03(\rR\x14nominatedBanSkillIds\"\xce\x01\n" +
+	"\x17nominated_ban_skill_ids\x18\b \x03(\rR\x14nominatedBanSkillIds\x12;\n" +
+	"\x1anominated_protect_skill_id\x18\t \x01(\rR\x17nominatedProtectSkillId\"\xce\x01\n" +
 	"\x16RankedRivalryEncounter\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1f\n" +
 	"\vopponent_id\x18\x02 \x01(\x04R\n" +
@@ -6041,7 +6386,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\ropponent_name\x18\x03 \x01(\tR\fopponentName\x12\x12\n" +
 	"\x04wins\x18\x04 \x01(\rR\x04wins\x12\x16\n" +
 	"\x06losses\x18\x05 \x01(\rR\x06losses\x12%\n" +
-	"\x0erevenge_target\x18\x06 \x01(\bR\rrevengeTarget\"\xac\x04\n" +
+	"\x0erevenge_target\x18\x06 \x01(\bR\rrevengeTarget\"\xf5\x05\n" +
 	"\x0fBattlePrepState\x12\x16\n" +
 	"\x06active\x18\x01 \x01(\bR\x06active\x12\x1f\n" +
 	"\vdeadline_ms\x18\x02 \x01(\x04R\n" +
@@ -6055,7 +6400,10 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x17ban_candidate_skill_ids\x18\b \x03(\rR\x14banCandidateSkillIds\x12>\n" +
 	"\x1cteam_effective_ban_skill_ids\x18\t \x03(\rR\x18teamEffectiveBanSkillIds\x12>\n" +
 	"\x0eself_rivalries\x18\n" +
-	" \x03(\v2\x17.RankedRivalryEncounterR\rselfRivalries\"\xac\x01\n" +
+	" \x03(\v2\x17.RankedRivalryEncounterR\rselfRivalries\x12>\n" +
+	"\x1cskill_protect_slots_per_team\x18\v \x01(\rR\x18skillProtectSlotsPerTeam\x12H\n" +
+	"!team_effective_protected_skill_id\x18\f \x01(\rR\x1dteamEffectiveProtectedSkillId\x12=\n" +
+	"\x1bteammate_equipped_skill_ids\x18\r \x03(\rR\x18teammateEquippedSkillIds\"\xac\x01\n" +
 	"\x12BattleTacticalPing\x12(\n" +
 	"\x10sender_player_id\x18\x01 \x01(\x04R\x0esenderPlayerId\x12&\n" +
 	"\x0ftarget_actor_id\x18\x02 \x01(\x04R\rtargetActorId\x12#\n" +
@@ -6083,7 +6431,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"item_draws\x18\x05 \x01(\rR\titemDraws\x12:\n" +
 	"\frandom_items\x18\x06 \x03(\v2\x17.BattleRandomItemRewardR\vrandomItems\"F\n" +
 	"\x12BattleRewardConfig\x120\n" +
-	"\bprofiles\x18\x01 \x03(\v2\x14.BattleRewardProfileR\bprofiles\"\xb4\x14\n" +
+	"\bprofiles\x18\x01 \x03(\v2\x14.BattleRewardProfileR\bprofiles\"\x8a\x15\n" +
 	"\x14BattleSettlementData\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12)\n" +
@@ -6143,7 +6491,8 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x19season_seal_trigger_count\x185 \x01(\rR\x16seasonSealTriggerCount\x12=\n" +
 	"\x1bseason_seal_resonance_count\x186 \x01(\rR\x18seasonSealResonanceCount\x12.\n" +
 	"\x13rematch_opponent_id\x187 \x01(\x04R\x11rematchOpponentId\x122\n" +
-	"\x15rematch_opponent_name\x188 \x01(\tR\x13rematchOpponentName\"u\n" +
+	"\x15rematch_opponent_name\x188 \x01(\tR\x13rematchOpponentName\x12T\n" +
+	"\x17tactical_puzzle_context\x189 \x01(\v2\x1c.TacticalPuzzleBattleContextR\x15tacticalPuzzleContext\"u\n" +
 	"\x17BattlePetSettlementData\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12\x16\n" +
 	"\x06health\x18\x02 \x01(\x04R\x06health\x12\x12\n" +
@@ -6241,7 +6590,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\tseason_id\x18\x03 \x01(\rR\bseasonId\x123\n" +
 	"\x16guard_monster_table_id\x18\x04 \x01(\rR\x13guardMonsterTableId\x12/\n" +
 	"\x14guard_stance_buff_id\x18\x05 \x01(\rR\x11guardStanceBuffId\x12,\n" +
-	"\x12challenge_vow_mask\x18\x06 \x01(\rR\x10challengeVowMask\"\xad\v\n" +
+	"\x12challenge_vow_mask\x18\x06 \x01(\rR\x10challengeVowMask\"\xe6\f\n" +
 	"\x17BattleTrialJournalFacts\x12(\n" +
 	"\x10journal_entry_id\x18\x01 \x01(\rR\x0ejournalEntryId\x12,\n" +
 	"\x12trial_rule_version\x18\x02 \x01(\rR\x10trialRuleVersion\x12.\n" +
@@ -6269,7 +6618,10 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x12stance_break_count\x18\x17 \x01(\rR\x10stanceBreakCount\x127\n" +
 	"\x18all_self_cleaves_parried\x18\x18 \x01(\bR\x15allSelfCleavesParried\x12G\n" +
 	"!self_parried_cleave_at_least_once\x18\x19 \x01(\bR\x1cselfParriedCleaveAtLeastOnce\x12,\n" +
-	"\x12challenge_vow_mask\x18\x1a \x01(\rR\x10challengeVowMask\"\xcc\x04\n" +
+	"\x12challenge_vow_mask\x18\x1a \x01(\rR\x10challengeVowMask\x123\n" +
+	"\x16self_cast_season_skill\x18\x1b \x01(\bR\x13selfCastSeasonSkill\x12E\n" +
+	"\x1fself_triggered_season_resonance\x18\x1c \x01(\bR\x1cselfTriggeredSeasonResonance\x12;\n" +
+	"\x1aself_season_resonance_mask\x18\x1d \x01(\rR\x17selfSeasonResonanceMask\"\xcc\x04\n" +
 	"\x17TournamentBattleContext\x12\x1b\n" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x19\n" +
 	"\bmatch_id\x18\x02 \x01(\x04R\amatchId\x12\x17\n" +
@@ -6344,7 +6696,33 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x11side_b_guild_name\x18\n" +
 	" \x01(\tR\x0esideBGuildName\x120\n" +
 	"\x14round_limit_override\x18\v \x01(\rR\x12roundLimitOverride\x12\x1b\n" +
-	"\tteam_size\x18\f \x01(\rR\bteamSize*\x86\x01\n" +
+	"\tteam_size\x18\f \x01(\rR\bteamSize\"\xeb\x01\n" +
+	"\x17TacticalPuzzleEnemySpec\x12(\n" +
+	"\x10monster_table_id\x18\x01 \x01(\rR\x0emonsterTableId\x12$\n" +
+	"\x0einitial_hp_pct\x18\x02 \x01(\rR\finitialHpPct\x12,\n" +
+	"\x12initial_shield_pct\x18\x03 \x01(\rR\x10initialShieldPct\x12&\n" +
+	"\x0fspeed_delta_pct\x18\x04 \x01(\x05R\rspeedDeltaPct\x12*\n" +
+	"\x11initial_buff_kind\x18\x05 \x01(\rR\x0finitialBuffKind\"\xbe\x03\n" +
+	"\x12TacticalPuzzleSpec\x12\x1f\n" +
+	"\vround_limit\x18\x01 \x01(\rR\n" +
+	"roundLimit\x12.\n" +
+	"\x13character_preset_id\x18\x02 \x01(\rR\x11characterPresetId\x12\"\n" +
+	"\rpet_preset_id\x18\x03 \x01(\rR\vpetPresetId\x12!\n" +
+	"\fformation_id\x18\x04 \x01(\rR\vformationId\x121\n" +
+	"\x15player_initial_hp_pct\x18\x05 \x01(\rR\x12playerInitialHpPct\x121\n" +
+	"\x15player_initial_mp_pct\x18\x06 \x01(\rR\x12playerInitialMpPct\x129\n" +
+	"\x19player_initial_shield_pct\x18\a \x01(\rR\x16playerInitialShieldPct\x12;\n" +
+	"\x1aplayer_initial_debuff_kind\x18\b \x01(\rR\x17playerInitialDebuffKind\x122\n" +
+	"\aenemies\x18\t \x03(\v2\x18.TacticalPuzzleEnemySpecR\aenemies\"\xa0\x02\n" +
+	"\x1bTacticalPuzzleBattleContext\x12\x1b\n" +
+	"\tpuzzle_id\x18\x01 \x01(\x04R\bpuzzleId\x12#\n" +
+	"\rspec_revision\x18\x02 \x01(\rR\fspecRevision\x12(\n" +
+	"\x10is_author_verify\x18\x03 \x01(\bR\x0eisAuthorVerify\x12!\n" +
+	"\fpuzzle_title\x18\x04 \x01(\tR\vpuzzleTitle\x12(\n" +
+	"\x10author_player_id\x18\x05 \x01(\x04R\x0eauthorPlayerId\x12\x1f\n" +
+	"\vauthor_name\x18\x06 \x01(\tR\n" +
+	"authorName\x12'\n" +
+	"\x04spec\x18\a \x01(\v2\x13.TacticalPuzzleSpecR\x04spec*\x86\x01\n" +
 	"\x10eBattleActorType\x12\x1a\n" +
 	"\x16BATTLE_ACTOR_TYPE_NONE\x10\x00\x12\x1c\n" +
 	"\x18BATTLE_ACTOR_TYPE_PLAYER\x10\x01\x12\x1d\n" +
@@ -6447,7 +6825,7 @@ func file_proto_battle_battle_data_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_battle_battle_data_proto_enumTypes = make([]protoimpl.EnumInfo, 11)
-var file_proto_battle_battle_data_proto_msgTypes = make([]protoimpl.MessageInfo, 47)
+var file_proto_battle_battle_data_proto_msgTypes = make([]protoimpl.MessageInfo, 50)
 var file_proto_battle_battle_data_proto_goTypes = []any{
 	(EBattleActorType)(0),                   // 0: eBattleActorType
 	(EBattleActionType)(0),                  // 1: eBattleActionType
@@ -6498,52 +6876,55 @@ var file_proto_battle_battle_data_proto_goTypes = []any{
 	(*CustomDuelRules)(nil),                 // 46: CustomDuelRules
 	(*BattleActorBuildSummary)(nil),         // 47: BattleActorBuildSummary
 	(*JianghuDuelBattleContext)(nil),        // 48: JianghuDuelBattleContext
-	nil,                                     // 49: BattlePlayerSnapshot.SkillRanksEntry
-	nil,                                     // 50: BattlePlayerSnapshot.EquippedSkillVfxEntry
-	nil,                                     // 51: BattlePetSnapshot.SkillRanksEntry
-	nil,                                     // 52: BattleActorState.SkillCooldownRoundsEntry
-	nil,                                     // 53: BattleActorState.SkillRanksEntry
-	nil,                                     // 54: BattleActorState.AbilityUseCountsEntry
-	nil,                                     // 55: BattleActorState.RoundEffectUsageEntry
-	nil,                                     // 56: BattleActorState.EquippedSkillVfxEntry
-	nil,                                     // 57: RankedMatchContext.MemberWinStreaksEntry
-	(*component.BaseAttributesComp)(nil),    // 58: BaseAttributesComp
-	(*component.CombatAttributes)(nil),      // 59: CombatAttributes
-	(*component.EquipmentEffects)(nil),      // 60: EquipmentEffects
-	(*component.SeasonSealEffect)(nil),      // 61: SeasonSealEffect
-	(*component.PetCultivationEffects)(nil), // 62: PetCultivationEffects
-	(*component.SupportEffectSummary)(nil),  // 63: SupportEffectSummary
+	(*TacticalPuzzleEnemySpec)(nil),         // 49: TacticalPuzzleEnemySpec
+	(*TacticalPuzzleSpec)(nil),              // 50: TacticalPuzzleSpec
+	(*TacticalPuzzleBattleContext)(nil),     // 51: TacticalPuzzleBattleContext
+	nil,                                     // 52: BattlePlayerSnapshot.SkillRanksEntry
+	nil,                                     // 53: BattlePlayerSnapshot.EquippedSkillVfxEntry
+	nil,                                     // 54: BattlePetSnapshot.SkillRanksEntry
+	nil,                                     // 55: BattleActorState.SkillCooldownRoundsEntry
+	nil,                                     // 56: BattleActorState.SkillRanksEntry
+	nil,                                     // 57: BattleActorState.AbilityUseCountsEntry
+	nil,                                     // 58: BattleActorState.RoundEffectUsageEntry
+	nil,                                     // 59: BattleActorState.EquippedSkillVfxEntry
+	nil,                                     // 60: RankedMatchContext.MemberWinStreaksEntry
+	(*component.BaseAttributesComp)(nil),    // 61: BaseAttributesComp
+	(*component.CombatAttributes)(nil),      // 62: CombatAttributes
+	(*component.EquipmentEffects)(nil),      // 63: EquipmentEffects
+	(*component.SeasonSealEffect)(nil),      // 64: SeasonSealEffect
+	(*component.PetCultivationEffects)(nil), // 65: PetCultivationEffects
+	(*component.SupportEffectSummary)(nil),  // 66: SupportEffectSummary
 }
 var file_proto_battle_battle_data_proto_depIdxs = []int32{
-	58, // 0: BattlePlayerSnapshot.base_attributes:type_name -> BaseAttributesComp
+	61, // 0: BattlePlayerSnapshot.base_attributes:type_name -> BaseAttributesComp
 	12, // 1: BattlePlayerSnapshot.buffs:type_name -> BattleBuffEntry
 	13, // 2: BattlePlayerSnapshot.items:type_name -> BattleItemEntry
 	11, // 3: BattlePlayerSnapshot.routing:type_name -> BattleRouting
 	15, // 4: BattlePlayerSnapshot.pets:type_name -> BattlePetSnapshot
-	59, // 5: BattlePlayerSnapshot.combat:type_name -> CombatAttributes
-	49, // 6: BattlePlayerSnapshot.skill_ranks:type_name -> BattlePlayerSnapshot.SkillRanksEntry
-	60, // 7: BattlePlayerSnapshot.equipment_effects:type_name -> EquipmentEffects
+	62, // 5: BattlePlayerSnapshot.combat:type_name -> CombatAttributes
+	52, // 6: BattlePlayerSnapshot.skill_ranks:type_name -> BattlePlayerSnapshot.SkillRanksEntry
+	63, // 7: BattlePlayerSnapshot.equipment_effects:type_name -> EquipmentEffects
 	15, // 8: BattlePlayerSnapshot.standby_pets:type_name -> BattlePetSnapshot
-	61, // 9: BattlePlayerSnapshot.available_season_seals:type_name -> SeasonSealEffect
+	64, // 9: BattlePlayerSnapshot.available_season_seals:type_name -> SeasonSealEffect
 	44, // 10: BattlePlayerSnapshot.tower_context:type_name -> WuxingTowerBattleContext
-	50, // 11: BattlePlayerSnapshot.equipped_skill_vfx:type_name -> BattlePlayerSnapshot.EquippedSkillVfxEntry
-	58, // 12: BattlePetSnapshot.base_attributes:type_name -> BaseAttributesComp
-	51, // 13: BattlePetSnapshot.skill_ranks:type_name -> BattlePetSnapshot.SkillRanksEntry
-	62, // 14: BattlePetSnapshot.pet_cultivation:type_name -> PetCultivationEffects
+	53, // 11: BattlePlayerSnapshot.equipped_skill_vfx:type_name -> BattlePlayerSnapshot.EquippedSkillVfxEntry
+	61, // 12: BattlePetSnapshot.base_attributes:type_name -> BaseAttributesComp
+	54, // 13: BattlePetSnapshot.skill_ranks:type_name -> BattlePetSnapshot.SkillRanksEntry
+	65, // 14: BattlePetSnapshot.pet_cultivation:type_name -> PetCultivationEffects
 	0,  // 15: BattleActorState.actor_type:type_name -> eBattleActorType
-	58, // 16: BattleActorState.attributes:type_name -> BaseAttributesComp
+	61, // 16: BattleActorState.attributes:type_name -> BaseAttributesComp
 	12, // 17: BattleActorState.buffs:type_name -> BattleBuffEntry
-	52, // 18: BattleActorState.skill_cooldown_rounds:type_name -> BattleActorState.SkillCooldownRoundsEntry
-	59, // 19: BattleActorState.combat:type_name -> CombatAttributes
-	53, // 20: BattleActorState.skill_ranks:type_name -> BattleActorState.SkillRanksEntry
-	54, // 21: BattleActorState.ability_use_counts:type_name -> BattleActorState.AbilityUseCountsEntry
-	55, // 22: BattleActorState.round_effect_usage:type_name -> BattleActorState.RoundEffectUsageEntry
-	60, // 23: BattleActorState.equipment_effects:type_name -> EquipmentEffects
+	55, // 18: BattleActorState.skill_cooldown_rounds:type_name -> BattleActorState.SkillCooldownRoundsEntry
+	62, // 19: BattleActorState.combat:type_name -> CombatAttributes
+	56, // 20: BattleActorState.skill_ranks:type_name -> BattleActorState.SkillRanksEntry
+	57, // 21: BattleActorState.ability_use_counts:type_name -> BattleActorState.AbilityUseCountsEntry
+	58, // 22: BattleActorState.round_effect_usage:type_name -> BattleActorState.RoundEffectUsageEntry
+	63, // 23: BattleActorState.equipment_effects:type_name -> EquipmentEffects
 	17, // 24: BattleActorState.artifact_states:type_name -> BattleArtifactState
-	62, // 25: BattleActorState.pet_cultivation:type_name -> PetCultivationEffects
-	63, // 26: BattleActorState.support_effects:type_name -> SupportEffectSummary
+	65, // 25: BattleActorState.pet_cultivation:type_name -> PetCultivationEffects
+	66, // 26: BattleActorState.support_effects:type_name -> SupportEffectSummary
 	17, // 27: BattleActorState.season_seal_state:type_name -> BattleArtifactState
-	56, // 28: BattleActorState.equipped_skill_vfx:type_name -> BattleActorState.EquippedSkillVfxEntry
+	59, // 28: BattleActorState.equipped_skill_vfx:type_name -> BattleActorState.EquippedSkillVfxEntry
 	1,  // 29: BattleAction.action_type:type_name -> eBattleActionType
 	2,  // 30: BattleEventItem.event_type:type_name -> eBattleEventType
 	3,  // 31: BattleEventItem.hit_kind:type_name -> eBattleHitKind
@@ -6566,20 +6947,23 @@ var file_proto_battle_battle_data_proto_depIdxs = []int32{
 	45, // 48: BattleSettlementData.tower_settlement:type_name -> WuxingTowerSettlementEcho
 	5,  // 49: BattleSettlementData.highlight_kind:type_name -> BattleHighlightKind
 	48, // 50: BattleSettlementData.jianghu_duel:type_name -> JianghuDuelBattleContext
-	7,  // 51: BattleActivityContext.kind:type_name -> eBattleActivityKind
-	35, // 52: BattleActivityContext.festival_beast:type_name -> FestivalBeastBattleContext
-	34, // 53: BattleActivityContext.guild_war:type_name -> GuildWarBattleContext
-	37, // 54: RankedMemberLoadout.presets:type_name -> RankedPresetSelection
-	38, // 55: RankedMatchContext.members:type_name -> RankedMemberLoadout
-	57, // 56: RankedMatchContext.member_win_streaks:type_name -> RankedMatchContext.MemberWinStreaksEntry
-	24, // 57: RankedMatchContext.rivalry_encounters:type_name -> RankedRivalryEncounter
-	10, // 58: TournamentBattleContext.leyline_element:type_name -> TournamentLeylineElement
-	10, // 59: WuxingTowerBattleContext.leyline_element:type_name -> TournamentLeylineElement
-	60, // [60:60] is the sub-list for method output_type
-	60, // [60:60] is the sub-list for method input_type
-	60, // [60:60] is the sub-list for extension type_name
-	60, // [60:60] is the sub-list for extension extendee
-	0,  // [0:60] is the sub-list for field type_name
+	51, // 51: BattleSettlementData.tactical_puzzle_context:type_name -> TacticalPuzzleBattleContext
+	7,  // 52: BattleActivityContext.kind:type_name -> eBattleActivityKind
+	35, // 53: BattleActivityContext.festival_beast:type_name -> FestivalBeastBattleContext
+	34, // 54: BattleActivityContext.guild_war:type_name -> GuildWarBattleContext
+	37, // 55: RankedMemberLoadout.presets:type_name -> RankedPresetSelection
+	38, // 56: RankedMatchContext.members:type_name -> RankedMemberLoadout
+	60, // 57: RankedMatchContext.member_win_streaks:type_name -> RankedMatchContext.MemberWinStreaksEntry
+	24, // 58: RankedMatchContext.rivalry_encounters:type_name -> RankedRivalryEncounter
+	10, // 59: TournamentBattleContext.leyline_element:type_name -> TournamentLeylineElement
+	10, // 60: WuxingTowerBattleContext.leyline_element:type_name -> TournamentLeylineElement
+	49, // 61: TacticalPuzzleSpec.enemies:type_name -> TacticalPuzzleEnemySpec
+	50, // 62: TacticalPuzzleBattleContext.spec:type_name -> TacticalPuzzleSpec
+	63, // [63:63] is the sub-list for method output_type
+	63, // [63:63] is the sub-list for method input_type
+	63, // [63:63] is the sub-list for extension type_name
+	63, // [63:63] is the sub-list for extension extendee
+	0,  // [0:63] is the sub-list for field type_name
 }
 
 func init() { file_proto_battle_battle_data_proto_init() }
@@ -6595,7 +6979,7 @@ func file_proto_battle_battle_data_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_battle_battle_data_proto_rawDesc), len(file_proto_battle_battle_data_proto_rawDesc)),
 			NumEnums:      11,
-			NumMessages:   47,
+			NumMessages:   50,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

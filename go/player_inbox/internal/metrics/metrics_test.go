@@ -102,6 +102,7 @@ func TestRegisterExposesEveryMetric(t *testing.T) {
 		"player_inbox_delivered_unacked", "player_inbox_delivered_unacked_oldest_seconds", "player_inbox_open_items",
 		"player_inbox_oldest_open_age_seconds", "player_inbox_max_delivery_count", "player_inbox_notify_backlog",
 		"player_inbox_delivered_unacked_stale", "player_inbox_battle_producer_ready",
+		"player_inbox_admin_unapproved_command_total",
 	} {
 		if _, ok := families[name]; !ok {
 			t.Errorf("默认注册表里没有 %s", name)
@@ -125,6 +126,10 @@ func TestRegisterExposesEveryMetric(t *testing.T) {
 	// 对账存活告警按 rounds_total{result="ok"} 的增量取:从未跑过一轮也必须有 0 值序列(评审 L4)。
 	if got := labelValues(families["player_inbox_reconcile_rounds_total"], "result"); !hasAll(got, "ok", "error", "timeout") {
 		t.Errorf("reconcile_rounds_total 的预建序列 = %v", got)
+	}
+	// 不带双人复核批准记录的受理是 critical 告警(deploy/k8s/dual-control-alerts.yaml),两个方法都要有 0 值序列。
+	if got := labelValues(families["player_inbox_admin_unapproved_command_total"], "method"); !hasAll(got, "GmSanctionPlayer", "VoidItem") {
+		t.Errorf("admin_unapproved_command_total 的预建序列 = %v", got)
 	}
 	if _, ok := families["player_inbox_reconcile_mismatch_total"]; ok {
 		t.Error("reconcile_mismatch_total 已由 reconcile_inconsistent_rows gauge 取代(评审 L11),不应再注册")

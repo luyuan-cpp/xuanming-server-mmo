@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"chat/internal/authority"
@@ -14,9 +13,6 @@ import (
 	"chat/internal/svc"
 	chatpb "proto/chat"
 	base "proto/common/base"
-	cgpb "proto/content_guard"
-	"shared/contentguard"
-	"shared/safego"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
@@ -26,9 +22,6 @@ const (
 	maxRequestIdBytes    = 64
 	maxRetractReasonSize = 128
 	maxReportDetailSize  = 200
-	asyncRecheckTimeout  = 4 * time.Second
-	asyncRetractTimeout  = 3 * time.Second
-	platformRejectReason = "platform_async_reject"
 )
 
 type rejection struct {
@@ -120,51 +113,9 @@ func (l *ChatLogic) SendChat(in *chatpb.SendChatRequest) (*chatpb.SendChatRespon
 	}
 	svc.ObserveSend(label, outcome)
 	// 世界频道首次提交:推给全部在线玩家(docs/design/chat-world-channel-fanout.md §4)。
+	// 平台没在先行时限里答复的,补审待办已经和消息同一个事务落了库,由后台循环做(svc/platform_recheck.go)。
 	l.svcCtx.PublishWorld(l.ctx, result.Message)
-	if result.PendingPlatformReview && result.Message != nil {
-		l.scheduleAsyncWorldPlatformRecheck(result.Message, result.PlatformReviewContent)
-	}
 	return &chatpb.SendChatResponse{}, nil
-}
-
-func (l *ChatLogic) scheduleAsyncWorldPlatformRecheck(msg *chatpb.ChatMessage, rawContent string) {
-	checker := l.svcCtx.PlatformCheck
-	if checker == nil && l.svcCtx.ContentGuard != nil && l.svcCtx.ContentGuard.Enabled() {
-		checker = l.svcCtx.ContentGuard.CheckPlatform
-	}
-	if checker == nil || l.svcCtx.Authority == nil || msg == nil || rawContent == "" {
-		return
-	}
-	sc := l.svcCtx
-	senderID := msg.SenderPlayerId
-	sendTimeMs := msg.SendTimeMs
-	safego.Go("chat.world_platform_recheck", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), asyncRecheckTimeout)
-		defer cancel()
-		res := checker(ctx, cgpb.TextScene_TEXT_SCENE_CHAT_WORLD, senderID, rawContent)
-		if res.Verdict != contentguard.Reject {
-			if res.Verdict == contentguard.Unavailable {
-				logx.Errorf("[chat] Async platform moderation unavailable, sender=%d send_time_ms=%d", senderID, sendTimeMs)
-			}
-			return
-		}
-		// 撤回另起一个时限:送检可能已经把上面那个时限耗得差不多了,平台判了违规却因为没时间落库而留着这条消息是最坏的结局。
-		retractCtx, cancelRetract := context.WithTimeout(context.Background(), asyncRetractTimeout)
-		defer cancelRetract()
-		retracted, _, err := sc.Authority.RetractWorld(retractCtx, senderID, sendTimeMs, platformRejectReason)
-		if err != nil {
-			logx.Errorf("[chat] metric=chat_world_platform_reject_not_retracted sender=%d send_time_ms=%d: %v", senderID, sendTimeMs, err)
-			return
-		}
-		if retracted {
-			sc.PublishWorldRetract(retractCtx, &chatpb.ChatRetractedNotify{
-				Channel:        chatpb.ChatChannelType_CHAT_CHANNEL_TYPE_WORLD,
-				SenderPlayerId: senderID,
-				SendTimeMs:     sendTimeMs,
-				Reason:         platformRejectReason,
-			})
-		}
-	})
 }
 
 func (l *ChatLogic) ReportChat(in *chatpb.ReportChatRequest) (*chatpb.ReportChatResponse, error) {

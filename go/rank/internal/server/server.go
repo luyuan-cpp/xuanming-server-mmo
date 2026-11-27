@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -13,10 +14,16 @@ import (
 	dspb "proto/data_service"
 	rankpb "proto/rank"
 	"rank/internal/data"
+	"rank/internal/metrics"
 	"shared/domainhost"
+	"shared/dualcontrol"
 	table "shared/generated/pb/table"
 	"shared/serviceauth"
 )
+
+// adminCaller 是后台(java/gm_admin)的调用方名(rank.yaml 的 Producers.admin)。只有它的删除要双人复核批准记录;
+// match 摘已删角色是自动路径,以 match 调 RemoveRankEntry,不带批准记录,一刀切会让清理停摆。
+const adminCaller = data.AdminCaller
 
 type Server struct {
 	rankpb.UnimplementedClientPlayerRankServer
@@ -24,14 +31,20 @@ type Server struct {
 	repo  *data.Repo
 	auth  *serviceauth.Verifier
 	names NameReader
+	// allowUnapproved:配置 AdminAllowUnapproved。缺省 false,调用方 admin 的删除必须带双人复核批准记录。
+	allowUnapproved bool
 }
 
 type NameReader interface {
 	BatchGetPlayerName(context.Context, *dspb.BatchGetPlayerNameRequest, ...grpc.CallOption) (*dspb.BatchGetPlayerNameResponse, error)
 }
 
-func New(repo *data.Repo, auth *serviceauth.Verifier, names NameReader) *Server {
-	return &Server{repo: repo, auth: auth, names: names}
+// New 装配服务端;allowUnapproved 是配置 AdminAllowUnapproved,打开时启动打一行 ERROR。
+func New(repo *data.Repo, auth *serviceauth.Verifier, names NameReader, allowUnapproved bool) *Server {
+	if allowUnapproved {
+		logx.Errorf("[RankAdmin] AdminAllowUnapproved is on: removals by caller %s without a dual-control approval record are accepted; keep it off outside local development", adminCaller)
+	}
+	return &Server{repo: repo, auth: auth, names: names, allowUnapproved: allowUnapproved}
 }
 func (s *Server) enrich(ctx context.Context, entries []*rankpb.RankEntry, self *rankpb.RankEntry) error {
 	if s.names == nil {
@@ -156,16 +169,55 @@ func (s *Server) FreezeRankGeneration(ctx context.Context, in *rankpb.FreezeRank
 	return result, nil
 }
 func (s *Server) RemoveRankEntry(ctx context.Context, in *rankpb.RemoveRankEntryRequest) (*rankpb.RankAdminResponse, error) {
-	caller, err := s.caller(ctx, rankpb.RankAdmin_RemoveRankEntry_FullMethodName, in)
-	if err != nil {
-		return nil, err
-	}
-	return &rankpb.RankAdminResponse{ErrorMessage: rejection(s.repo.Remove(ctx, caller, in, false))}, nil
+	return s.remove(ctx, rankpb.RankAdmin_RemoveRankEntry_FullMethodName, metrics.AdminMethodRemoveEntry, in, false)
 }
 func (s *Server) DeleteRankGeneration(ctx context.Context, in *rankpb.RemoveRankEntryRequest) (*rankpb.RankAdminResponse, error) {
-	caller, err := s.caller(ctx, rankpb.RankAdmin_DeleteRankGeneration_FullMethodName, in)
+	return s.remove(ctx, rankpb.RankAdmin_DeleteRankGeneration_FullMethodName, metrics.AdminMethodDeleteGeneration, in, true)
+}
+
+// remove 是移除成员与隐藏整代共用的入口:验调用方 → 核双人复核批准记录 → 交给 repo 判重与写入 → 写一行审计日志。
+// 批准记录的核对在判重之前:不合格的请求不碰库,也就占不了 (board, generation, request_id) 这个判重键。
+func (s *Server) remove(ctx context.Context, fullMethod, method string, in *rankpb.RemoveRankEntryRequest, hide bool) (*rankpb.RankAdminResponse, error) {
+	caller, err := s.caller(ctx, fullMethod, in)
 	if err != nil {
 		return nil, err
 	}
-	return &rankpb.RankAdminResponse{ErrorMessage: rejection(s.repo.Remove(ctx, caller, in, true))}, nil
+	if err = s.admitApproval(ctx, method, caller, in); err != nil {
+		return nil, err
+	}
+	tip := rejection(s.repo.Remove(ctx, caller, in, hide))
+	// tip 为 0 是写成或同一请求的重放;数据层的错误文本不进日志,只记 tip。
+	logx.WithContext(ctx).Infof("[RankAdmin] %s caller=%s board_id=%d generation=%d entity_id=%d request_id=%d approval_id=%q proposer=%q approver=%q tip=%d",
+		method, caller, in.GetBoardId(), in.GetGeneration(), in.GetEntityId(), in.GetRequestId(),
+		in.GetApproval().GetApprovalId(), in.GetApproval().GetProposer(), in.GetApproval().GetApprover(), tip.GetId())
+	return &rankpb.RankAdminResponse{ErrorMessage: tip}, nil
+}
+
+// admitApproval 核对后台双人复核的批准记录(docs/design/admin-identity-and-dual-control.md §3 甲级、§5.5):
+// 调用方 admin 必须带,而且 request_id 就是批准号(按 (board, generation, request_id) 判重,一次批准只执行一次);请求里没有操作人字段,
+// 不比发起人。其它调用方(match 摘已删角色)不要求,带了照样核。不带记录的 admin 删除只在部署显式打开 AdminAllowUnapproved
+// (本机开发)时接受,每次打 ERROR 并计数。拒绝回 PermissionDenied(确定的拒绝),文本与 trade 的带内原因码相同。
+func (s *Server) admitApproval(ctx context.Context, method, caller string, in *rankpb.RemoveRankEntryRequest) error {
+	approval := in.GetApproval()
+	if approval == nil {
+		if caller != adminCaller {
+			return nil
+		}
+		if !s.allowUnapproved {
+			logx.WithContext(ctx).Errorf("[RankAdmin] %s refused: dual-control approval record is missing caller=%s board_id=%d generation=%d request_id=%d",
+				method, caller, in.GetBoardId(), in.GetGeneration(), in.GetRequestId())
+			return status.Error(codes.PermissionDenied, "dual_control_approval_required")
+		}
+		metrics.ObserveAdminUnapproved(method)
+		logx.WithContext(ctx).Errorf("[RankAdmin] %s accepted without a dual-control approval record caller=%s board_id=%d generation=%d request_id=%d (AdminAllowUnapproved is on)",
+			method, caller, in.GetBoardId(), in.GetGeneration(), in.GetRequestId())
+		return nil
+	}
+	// 删除请求没有操作人字段:显式传发起人,两人记在批准记录里。
+	if err := dualcontrol.RequireForRequest(approval, approval.GetProposer(), in.GetRequestId()); err != nil {
+		logx.WithContext(ctx).Errorf("[RankAdmin] %s refused: %v caller=%s board_id=%d generation=%d request_id=%d",
+			method, err, caller, in.GetBoardId(), in.GetGeneration(), in.GetRequestId())
+		return status.Error(codes.PermissionDenied, "dual_control_approval_invalid: "+err.Error())
+	}
+	return nil
 }

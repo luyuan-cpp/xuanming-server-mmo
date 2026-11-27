@@ -1334,7 +1334,8 @@ namespace
 	// 论剑首发 V1 竞技快照:完全脱离玩家真实装备/等级/血蓝/技能/宝宝战力与场外 Buff/消耗品,
 	// 仅保留身份、外观(含 10 元形象卡/试用)与合法出战宝宝的展示名称/外观;零宠物账号使用预设默认宝宝外观并置 pet_id=0。
 	bool BuildCompetitiveBattleSnapshot(entt::entity player, const ::RankedMatchContext& rankedCtx,
-										::BattlePlayerSnapshot& snapshot, uint32_t& errorTipId)
+										::BattlePlayerSnapshot& snapshot, uint32_t& errorTipId,
+										bool allowEmptyPet = false)
 	{
 		const uint64_t playerId = tlsEcs.GetPlayerId(player);
 		const auto& registry = tlsEcs.actorRegistry;
@@ -1385,9 +1386,10 @@ namespace
 			}
 		}
 		const auto* charPreset = RankedPresetTableManager::Instance().FindByIdSilent(charPresetId).first;
-		const auto* petPreset = RankedPresetTableManager::Instance().FindByIdSilent(petPresetId).first;
+		const bool skipPet = allowEmptyPet && petPresetId == 0u;
+		const auto* petPreset = skipPet ? nullptr : RankedPresetTableManager::Instance().FindByIdSilent(petPresetId).first;
 		if (charPreset == nullptr || charPreset->role_kind() != rankedpreset::kRoleKindCharacter ||
-			petPreset == nullptr || petPreset->role_kind() != rankedpreset::kRoleKindPet)
+			(!skipPet && (petPreset == nullptr || petPreset->role_kind() != rankedpreset::kRoleKindPet)))
 		{
 			LOG_WARN << "[PlayerBattle] Competitive snapshot rejected: invalid preset selection player_id=" << playerId
 					 << " char_preset=" << charPresetId << " pet_preset=" << petPresetId;
@@ -1435,26 +1437,29 @@ namespace
 			}
 		}
 
-		uint32_t cosmeticPetTableId = 0;
-		std::string cosmeticPetName;
-		const auto& petComp = registry.get<PlayerPetComp>(player);
-		if (petComp.active_pet_id() != 0)
+		if (!skipPet)
 		{
-			for (const auto& pet : petComp.pets())
+			uint32_t cosmeticPetTableId = 0;
+			std::string cosmeticPetName;
+			const auto& petComp = registry.get<PlayerPetComp>(player);
+			if (petComp.active_pet_id() != 0)
 			{
-				if (pet.pet_id() == petComp.active_pet_id())
+				for (const auto& pet : petComp.pets())
 				{
-					cosmeticPetTableId = pet.pet_table_id();
-					cosmeticPetName = pet.name();
-					break;
+					if (pet.pet_id() == petComp.active_pet_id())
+					{
+						cosmeticPetTableId = pet.pet_table_id();
+						cosmeticPetName = pet.name();
+						break;
+					}
 				}
 			}
-		}
-		if (!rankedpreset::BuildCompetitivePetSnapshot(*rule, *petPreset, playerId, cosmeticPetTableId,
-													   cosmeticPetName, *snapshot.add_pets()))
-		{
-			errorTipId = kInvalidTableData;
-			return false;
+			if (!rankedpreset::BuildCompetitivePetSnapshot(*rule, *petPreset, playerId, cosmeticPetTableId,
+														   cosmeticPetName, *snapshot.add_pets()))
+			{
+				errorTipId = kInvalidTableData;
+				return false;
+			}
 		}
 
 		auto* routing = snapshot.mutable_routing();
@@ -1594,7 +1599,7 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 	//   2) 演武木桩强制使用本人真实养成，禁止挂载免费 3×3 预设（残局与奇谈允许选用预设）。
 	if (isNpcIsolatedEncounter && dungeonRow != nullptr)
 	{
-		if (dungeonRow->scene_id() != 0)
+		if (dungeonRow->scene_id() != 0 && request.battle_config_id() != 314u)
 		{
 			uint32_t currentSceneConfigId = 0;
 			if (const auto* sceneEntityComp = tlsEcs.actorRegistry.try_get<SceneEntityComp>(player);
@@ -1728,8 +1733,9 @@ void PlayerBattleSystem::PrepareBattle(const ::PrepareBattleRequest& request, ::
 	// 先组快照,失败不留任何冻结痕迹：仅免费预设娱乐场(use_free_preset=true)构建免费 3×3 预设快照；
 	// 正式人宠会武(season_id != 0 && !use_free_preset)与首领试炼均使用本人真实装备/词条/法宝/技能/宝宝快照。
 	uint32_t errorTipId = kSuccess;
+	const bool allowEmptyPuzzlePet = bossTrialKind == turnbattle::kBossTrialKindTacticalPuzzle;
 	const bool built = useFreePreset
-		? BuildCompetitiveBattleSnapshot(player, request.ranked_context(), *response.mutable_snapshot(), errorTipId)
+		? BuildCompetitiveBattleSnapshot(player, request.ranked_context(), *response.mutable_snapshot(), errorTipId, allowEmptyPuzzlePet)
 		: BuildBattleSnapshot(player, *response.mutable_snapshot(), errorTipId);
 	if (!built)
 	{

@@ -88,6 +88,8 @@ public class LoginRpcClient {
     private static final String METHOD_CANCEL_ACCOUNT_DELETION  = PREGATE_SERVICE + "/CancelAccountDeletion";
     /** 实名提交(2026-11-19,docs/design/real-name-anti-addiction.md §5.2)。 */
     private static final String METHOD_SUBMIT_REAL_NAME = PREGATE_SERVICE + "/SubmitRealName";
+    /** 官方通行证回调转发(2026-11-26,docs/design/official-passport-registration.md §3.7)。 */
+    private static final String METHOD_HANDLE_PASSPORT_EVENT = PREGATE_SERVICE + "/HandlePassportEvent";
 
     private final LoginGrpcProperties props;
     /** 每个通道都挂的出站追踪拦截器(见类注释);注册表是 NOOP 时它原样放行,不做任何事。 */
@@ -133,6 +135,7 @@ public class LoginRpcClient {
     private final MethodDescriptor<AccountDeletionRequestProto, AccountDeletionResponseProto> requestAccountDeletionMethod;
     private final MethodDescriptor<CancelAccountDeletionRequestProto, AccountDeletionResponseProto> cancelAccountDeletionMethod;
     private final MethodDescriptor<SubmitRealNameRequestProto, SubmitRealNameResponseProto> submitRealNameMethod;
+    private final MethodDescriptor<PassportEventRequestProto, PassportEventResponseProto> handlePassportEventMethod;
 
     public LoginRpcClient(LoginGrpcProperties props, ObservationRegistry observationRegistry) {
         this.props = props;
@@ -184,6 +187,12 @@ public class LoginRpcClient {
                 .setFullMethodName(METHOD_SUBMIT_REAL_NAME)
                 .setRequestMarshaller(new SubmitRealNameRequestMarshaller())
                 .setResponseMarshaller(new SubmitRealNameResponseMarshaller())
+                .build();
+        this.handlePassportEventMethod = MethodDescriptor.<PassportEventRequestProto, PassportEventResponseProto>newBuilder()
+                .setType(MethodDescriptor.MethodType.UNARY)
+                .setFullMethodName(METHOD_HANDLE_PASSPORT_EVENT)
+                .setRequestMarshaller(new PassportEventRequestMarshaller())
+                .setResponseMarshaller(new PassportEventResponseMarshaller())
                 .build();
     }
 
@@ -418,6 +427,14 @@ public class LoginRpcClient {
      */
     public SubmitRealNameResponseProto submitRealName(SubmitRealNameRequestProto req, int zoneId) {
         return unaryCall(submitRealNameMethod, req, zoneId, true, false);
+    }
+
+    /**
+     * 官方通行证回调({@code LoginPreGate.HandlePassportEvent},docs/design/official-passport-registration.md §3.7):
+     * 令牌存在全地域共用的登录域,任一 login 都能处理,不按区选路。服务端只拿回调找人、按通行证此刻的状态处理,幂等,可以重试。
+     */
+    public PassportEventResponseProto handlePassportEvent(byte[] payload) {
+        return unaryCall(handlePassportEventMethod, new PassportEventRequestProto(payload), 0, false, true);
     }
 
     private <Q, R> R unaryCall(
@@ -1201,6 +1218,82 @@ public class LoginRpcClient {
             int tag = in.readTag();
             if (tag >>> 3 == 1) {
                 resp.roles = in.readUInt64();
+            } else {
+                in.skipField(tag);
+            }
+        }
+        return resp;
+    }
+
+    // ── 官方通行证回调 wire codecs(docs/design/official-passport-registration.md §3.7)──────
+
+    /**
+     * proto/login/login.proto PassportEventRequest:
+     *   bytes payload = 1;
+     */
+    public static final class PassportEventRequestProto {
+        public final byte[] payload;
+
+        public PassportEventRequestProto(byte[] payload) {
+            this.payload = payload == null ? new byte[0] : payload;
+        }
+
+        byte[] toBytes() throws IOException {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream(payload.length + 8);
+            CodedOutputStream out = CodedOutputStream.newInstance(baos);
+            if (payload.length != 0) out.writeByteArray(1, payload);
+            out.flush();
+            return baos.toByteArray();
+        }
+    }
+
+    /**
+     * proto/login/login.proto PassportEventResponse:
+     *   uint32 checked_users = 1;
+     */
+    public static final class PassportEventResponseProto {
+        public int checkedUsers;
+    }
+
+    private static final class PassportEventRequestMarshaller implements MethodDescriptor.Marshaller<PassportEventRequestProto> {
+        @Override
+        public InputStream stream(PassportEventRequestProto value) {
+            try {
+                return new java.io.ByteArrayInputStream(value.toBytes());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        @Override
+        public PassportEventRequestProto parse(InputStream stream) {
+            throw new UnsupportedOperationException();
+        }
+    }
+
+    private static final class PassportEventResponseMarshaller implements MethodDescriptor.Marshaller<PassportEventResponseProto> {
+        @Override
+        public InputStream stream(PassportEventResponseProto value) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public PassportEventResponseProto parse(InputStream stream) {
+            try {
+                return parsePassportEventResponse(stream.readAllBytes());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    static PassportEventResponseProto parsePassportEventResponse(byte[] bytes) throws IOException {
+        PassportEventResponseProto resp = new PassportEventResponseProto();
+        CodedInputStream in = CodedInputStream.newInstance(bytes);
+        while (!in.isAtEnd()) {
+            int tag = in.readTag();
+            if (tag >>> 3 == 1) {
+                resp.checkedUsers = in.readUInt32();
             } else {
                 in.skipField(tag);
             }

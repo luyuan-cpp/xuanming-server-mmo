@@ -37,9 +37,10 @@ func spectateVisibilityFor(mode matchpb.MatchMode, activity *battlepb.BattleActi
 }
 
 // spectateVisibilityForBattle 扩展道友切磋坊的公开观战开关：仅在非活动切磋局且双方显式约定 allow_public_spectate=true 时公开。
+// 活动局统一交回 spectateVisibilityFor(帮战 PUBLIC、其余活动 fail-closed PRIVATE),切磋规则不得越过活动闸。
 func spectateVisibilityForBattle(mode matchpb.MatchMode, activity *battlepb.BattleActivityContext, customDuelRules *battlepb.CustomDuelRules) battlepb.ESpectateVisibility {
 	if activity != nil && activity.GetKind() != battlepb.EBattleActivityKind_BATTLE_ACTIVITY_KIND_NONE {
-		return battlepb.ESpectateVisibility_SPECTATE_VISIBILITY_PRIVATE
+		return spectateVisibilityFor(mode, activity)
 	}
 	if mode == matchpb.MatchMode_MATCH_MODE_PVP_CHALLENGE && customDuelRules != nil && customDuelRules.GetAllowPublicSpectate() {
 		return battlepb.ESpectateVisibility_SPECTATE_VISIBILITY_PUBLIC

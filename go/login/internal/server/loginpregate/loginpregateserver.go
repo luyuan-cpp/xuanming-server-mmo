@@ -54,3 +54,9 @@ func (s *LoginPreGateServer) CancelAccountDeletion(ctx context.Context, in *logi
 	l := loginpregatelogic.NewCancelAccountDeletionLogic(ctx, s.svcCtx)
 	return l.CancelAccountDeletion(in)
 }
+
+// 官方通行证回调(docs/design/official-passport-registration.md §3.7),网关 POST /internal/passport/events 核过共享密钥后原样转来。
+func (s *LoginPreGateServer) HandlePassportEvent(ctx context.Context, in *login.PassportEventRequest) (*login.PassportEventResponse, error) {
+	l := loginpregatelogic.NewHandlePassportEventLogic(ctx, s.svcCtx)
+	return l.HandlePassportEvent(in)
+}

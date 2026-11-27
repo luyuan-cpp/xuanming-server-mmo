@@ -63,7 +63,7 @@ class GmInstallationTest {
         assertEquals("gm/console/index", db.queryForObject("SELECT component FROM sys_role_index WHERE id='gm_default_index'", String.class));
         assertEquals("DEFAULT", db.queryForObject("SELECT relation_type FROM sys_role_index WHERE id='gm_default_index'", String.class));
         assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM gm_install WHERE version=2", Integer.class));
-        assertEquals(15, db.queryForObject("SELECT COUNT(*) FROM sys_role_permission WHERE role_id='role_admin'", Integer.class));
+        assertEquals(31, db.queryForObject("SELECT COUNT(*) FROM sys_role_permission WHERE role_id='role_admin'", Integer.class));
         assertEquals(1, db.queryForObject("SELECT COUNT(*) FROM gm_install WHERE version=6", Integer.class));
         assertEquals(2, db.queryForObject("SELECT COUNT(*) FROM sys_permission WHERE perms IN ('gm:system-mail:prepare','gm:system-mail:send')", Integer.class));
         db.update("UPDATE sys_role_index SET priority=5 WHERE id='gm_default_index'");
@@ -95,7 +95,7 @@ class GmInstallationTest {
             assertEquals(1, db.queryForObject("SELECT hidden FROM sys_permission WHERE id=?", Integer.class, route));
         }
         assertEquals("system:user:add", db.queryForObject("SELECT perms FROM sys_permission WHERE id='native_button'", String.class));
-        assertEquals(15, db.queryForObject("SELECT COUNT(*) FROM sys_role_permission WHERE role_id='role_admin'", Integer.class));
+        assertEquals(31, db.queryForObject("SELECT COUNT(*) FROM sys_role_permission WHERE role_id='role_admin'", Integer.class));
         db.update("UPDATE sys_permission SET hidden=0 WHERE id='/ai'");
         start();
         assertEquals(0, db.queryForObject("SELECT hidden FROM sys_permission WHERE id='/ai'", Integer.class));
@@ -138,18 +138,27 @@ class GmInstallationTest {
         assertEquals(List.of("gm_approver", "gm_auditor", "gm_operator"),
                 db.queryForList("SELECT role_code FROM sys_role WHERE id LIKE 'gm_role_%' ORDER BY role_code", String.class));
         // 发起人有两个发起权限、没有放行权限；批准人相反；审计只有只读四项。七项玩家 GM 的权限串发起与放行共用，两边都有。
-        assertEquals(List.of("gm_console", "gm_ops_mall_permission_0", "gm_ops_mall_permission_1",
+        assertEquals(List.of("gm_console", "gm_gateway_permission_0",
+                "gm_ops_account_permission_0", "gm_ops_account_permission_1", "gm_ops_inbox_permission_0", "gm_ops_inbox_permission_1",
+                "gm_ops_mall_permission_0", "gm_ops_mall_permission_1", "gm_ops_match_permission_0", "gm_ops_match_permission_1",
+                "gm_ops_rank_permission_0", "gm_ops_rank_permission_1", "gm_ops_recall_permission_0", "gm_ops_recall_permission_1",
                 "gm_permission_0", "gm_permission_1", "gm_permission_2", "gm_permission_4",
                 "gm_player_permission_0", "gm_player_permission_1", "gm_player_permission_2", "gm_player_permission_3",
                 "gm_player_permission_4", "gm_player_permission_5", "gm_player_permission_6", "gm_sys_mail_permission_0",
                 "gm_trade_permission_0", "gm_trade_permission_1"), granted("gm_role_operator"));
-        assertEquals(List.of("gm_console", "gm_ops_mall_permission_0", "gm_ops_mall_permission_2",
+        assertEquals(List.of("gm_console", "gm_gateway_permission_0",
+                "gm_ops_account_permission_0", "gm_ops_account_permission_2", "gm_ops_inbox_permission_0", "gm_ops_inbox_permission_2",
+                "gm_ops_mall_permission_0", "gm_ops_mall_permission_2", "gm_ops_match_permission_0", "gm_ops_match_permission_2",
+                "gm_ops_rank_permission_0", "gm_ops_rank_permission_2", "gm_ops_recall_permission_0", "gm_ops_recall_permission_2",
                 "gm_permission_0", "gm_permission_1", "gm_permission_3", "gm_permission_4",
                 "gm_player_permission_0", "gm_player_permission_1", "gm_player_permission_2", "gm_player_permission_3",
                 "gm_player_permission_4", "gm_player_permission_5", "gm_player_permission_6", "gm_sys_mail_permission_1",
                 "gm_trade_permission_0", "gm_trade_permission_2"), granted("gm_role_approver"));
-        assertEquals(List.of("gm_console", "gm_ops_mall_permission_0", "gm_permission_0", "gm_permission_1", "gm_permission_4",
-                "gm_trade_permission_0"), granted("gm_role_auditor"));
+        assertEquals(List.of("gm_console", "gm_ops_account_permission_0", "gm_ops_inbox_permission_0", "gm_ops_mall_permission_0",
+                "gm_ops_match_permission_0", "gm_ops_rank_permission_0", "gm_ops_recall_permission_0",
+                "gm_permission_0", "gm_permission_1", "gm_permission_4", "gm_trade_permission_0"), granted("gm_role_auditor"));
+        assertEquals(List.of("gm:gateway:write"),
+                db.queryForList("SELECT perms FROM sys_permission WHERE id='gm_gateway_permission_0'", String.class));
         // 运营处置按下游分权限(迁移 9 起):gm:<target>:read / prepare / approve。
         assertEquals(List.of("gm:mall:approve", "gm:mall:prepare", "gm:mall:read"),
                 db.queryForList("SELECT perms FROM sys_permission WHERE id LIKE 'gm_ops_mall_permission_%' ORDER BY perms", String.class));
@@ -158,7 +167,7 @@ class GmInstallationTest {
         // 重启不重复建角色，也不动管理员已有的授权。
         start();
         assertEquals(3, db.queryForObject("SELECT COUNT(*) FROM sys_role WHERE id LIKE 'gm_role_%'", Integer.class));
-        assertEquals(15, db.queryForObject("SELECT COUNT(*) FROM sys_role_permission WHERE role_id='role_admin'", Integer.class));
+        assertEquals(31, db.queryForObject("SELECT COUNT(*) FROM sys_role_permission WHERE role_id='role_admin'", Integer.class));
     }
 
     private List<String> granted(String roleId) {

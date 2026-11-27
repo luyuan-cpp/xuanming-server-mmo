@@ -67,6 +67,11 @@ type Config struct {
 	Secrets SecretsConf `json:"Secrets,optional"`
 	// InternalAuth 是内部调用方身份声明(x-session-detail-bin)的验签策略。
 	InternalAuth InternalAuthConf `json:"InternalAuth,optional"`
+	// AdminAllowUnapproved:为 true 时 LoginAdmin 接受不带双人复核批准记录的写命令(docs/design/admin-identity-and-dual-control.md §5.7)。
+	// 与运维口令 MMORPG_LOGIN_ADMIN_TOKEN(x-admin-token,login.go 读)同属 LoginAdmin 的准入,两道都在 handler 之前。
+	// 只给本机开发:缺省 false,注销、摘孤儿角色(dry_run 除外)、重置实名都必须带后台签发的批准记录(两人不同、发起人就是 operator)。
+	// 打开时启动打一行 ERROR,之后每一条不带记录的命令都打 ERROR 并计入 login_admin_unapproved_command_total(告警 LoginAdminCommandUnapproved)。
+	AdminAllowUnapproved bool `json:",optional"`
 	// KillSwitch 是 RPC 级热关停闸门(shared/killswitch)的配置。
 	KillSwitch    KillSwitchConf `json:"KillSwitch,optional"`
 	TableDir      string         `json:",default=../../generated/tables"`

@@ -123,8 +123,26 @@
   - 同键 + 同摘要 → 返回首次结果(同一个 `mail_id`,`duplicated = true`),**不再推送**;
   - 同键 + 不同摘要 → 业务拒绝 `MailRequestConflict`(调用方 bug:复用了键却改了内容)。
 - **判重先于一切依赖"现在"的校验**(评审第 2 条):已经成功的请求重放时,收件箱可能已满、`expire_ms` 可能已落到 now 之前、有效系统邮件可能已到上限 —— 若先做这些校验,重放会拿到 `BoxFull` / `kInvalidParameter` / `SystemMailLimit`,调用方把"已发出"误判成"没发出"而补发。所以顺序固定为:纯形状校验 → Mode 闸门 → **按唯一键查已有行**(命中即比摘要返回)→ 依赖当前时间 / 状态的校验 → 插入(§4.2 逐方法写明)。
-- 兜底:插入仍可能撞唯一键(MySQL 1062,系统邮件无守卫行,两个并发首发会走到这里),按唯一键读回原行比摘要。读回为空只可能是该行已被 sweep 物理删掉(见下条)→ 回 `kServiceUnavailable`,调用方重试(重试时会被当新请求,见下条的保留期约束)。
-- **幂等键的寿命**(评审第 1 / 18 条):唯一键所在的行**只有 sweep 会物理删**,条件是 `expire_ms < now − RetentionDays`;玩家删除、清理已读都是软删(§3.3),不影响唯一键。所以唯一键行的最短寿命 = `expire_ms + RetentionDays`,**与玩家操作无关**。这是"调用方在重试窗口内重放必得同一结果"的前提,§4.6 第 3 条把它写成契约。
+- 兜底:两个并发首发同一请求时(系统邮件无守卫行,会走到这里),建信事务里先写的判重收据主键撞键(MySQL 1062),按收据读回赢家比摘要;读不到说明撞的是别的键,回 `MailRequestConflict`(2026-11-26 起,§2.4.1;此前按邮件行的唯一键裁决)。
+- **幂等键的寿命**(评审第 1 / 18 条;2026-11-26 起由收据表兜住,见下一小节):邮件行**只有 sweep 会物理删**,条件是 `expire_ms < now − RetentionDays`;玩家删除、清理已读都是软删(§3.3)。邮件行删掉之后,判重依据留在 `mail_request_receipt`(非活动邮件首次建信时同事务写,sweep 不删),同一 `(sender_kind, request_id)` 再来仍回原 `mail_id`。所以**重放必得同一结果不再受保留期限制**,调用方重试多久都行;活动邮件的判重在 `mail_campaign`,本来就不清理。
+
+### 2.4.1 发件判重收据(2026-11-26,数据覆写审计 r2-craft#3,已落码未编译)
+
+**问题**:原先判重依据只在邮件行上(`mail_message` 的唯一键),sweep 开了删除模式(`Sweep.Mode: delete`)时,邮件过期 `RetentionDays` 天后连行带键删掉。scene 的待寄邮件(`player_mail_outbox.cpp`)没有放弃、按条目原样重寄直到拿到 `mail_id`:邮件已建、条目的删除没落盘(回包丢失、玩家此刻不可改、删了没存盘就崩),之后这名玩家 37 天以上(有效期 30 天 + 保留 7 天)没再上线,判重行已被清掉,重寄就新建一封。战斗溢出邮件的收件人是本人,玩家一直不在线时第一封早已过期未领,不算多得,所以 [battle-overflow-mail.md](battle-overflow-mail.md) §10 当初接受了;名匠代打分成(2026-11-26 新增)的收件人是**另一名**在线玩家(宗师),他能领第一封、37 天后再领第二封,是真实的银两复制,买家还能自己挑下线时机反复尝试。缺省 `Sweep.Mode: report_only`,现在不可达;打开删除模式之前必须先修。rank、trade、match 这类同样按请求号重试的发件方有同一个隐患。
+
+**方案**:新表 `mail_request_receipt`(`proto/mail/mail_table.proto` 的 `MailRequestReceiptRecord`,主键 `(sender_kind, request_id)`,列 `mail_id / request_hash / kind / created_ms`)。`Repo.Send`(`go/mail/internal/data/repo.go`):
+1. 判重先查收据,再查邮件行(活动邮件的占位行、收据上线之前建的邮件);命中按原规则比摘要与种类,回原 `mail_id` 或 `ErrConflict`。
+2. 建信事务里**收据先于邮件行写**,它的主键是同一请求并发首发的裁决点:撞键就转读赢家已提交的收据,这时本事务还什么都没写。收据写下之后邮件行再撞唯一键,只可能是没有收据的旧邮件被并发写入,整笔回滚、按故障回,调用方下一次重试读到那封旧邮件。
+3. sweep 不碰收据。用例 `TestTiDBResendAfterSweepReturnsOriginalMail`(`sweep_test.go`):删除模式清掉邮件行之后同键重寄回原 `mail_id`、不新建行,同键换内容回冲突。
+
+**为什么这样选**:幂等记录的寿命必须盖住调用方的重试窗口。待寄邮件为了「物品不能因为寄不出去而消失」刻意不设放弃时限,窗口是无界的,所以只能让判重依据不随清理消失。放在 mail 一处改,所有发件方一起受保护,发件方的契约也从「重试窗口必须远小于有效期 + 保留期」简化成「同一请求号永远回同一封」。收据只有六个整数 / 短串列,不存标题正文附件,也不含收件人。
+
+**被否决的做法**:
+- 待寄条目记首次寄出时刻,超过邮件有效期就不再重寄、转人工核对(审计原文的第一种):有效期与保留期是 mail 的配置(`MaxPersonalMailTtlDays` 1~365、`RetentionDays` ≥ 1),scene 看不到,只能按最坏配置把窗口压到 2 天,邮件短暂故障就会把大量条目推进人工;超窗的条目到底寄没寄到,人工也只能去 mail 查,而行已经删了。
+- 让 sweep 不删发件方产生的个人邮件行:整行(标题、正文、附件)永久留着,比收据大一个量级,而且收件箱的计数与列表都要再加条件。
+- 维持现状、文档里写「禁止打开删除模式」:删除模式是运维已有的开关(大表要清),拦文档拦不住配置。
+
+**代价与边界**:收据表只增不删,一封非活动邮件一行(约 100 字节含索引开销);以后量大要清,只能按 `created_ms` 做比任何发件方最长重试窗口都长的保留期清理,本批不做。删角清理(`role_fence_purge.go`)不碰收据:收据里没有收件人,也不含玩家内容;删角之后同一请求再来回「已发」(原邮件在删角前确实建过),发件方据此删掉条目,与改动前回「收件人已删」的终局效果相同。收据上线之前建的邮件仍只靠邮件行判重(项目未上线,首次上线即带收据,不会有这种行)。建信事务多一条主键插入。
 
 ### 2.5 失败语义
 
@@ -400,7 +418,7 @@ ON DUPLICATE KEY UPDATE read_ms = IF(read_ms = 0, VALUES(read_ms), read_ms), …
    - 为什么这个顺序:反过来会留下无主的 state 行,而它们唯一的清理索引就是 `sys_mail_id`,系统行没了之后再也没人会按这个 id 去扫 —— 孤儿永久残留。按本顺序,中途崩溃只会留下"系统行还在、state 行删了一半",下一轮继续删。
    - 与 `ReadMail` / `DeleteMails` 的 upsert 交错不会生出孤儿:state 行只能经 §4.2 的条件 upsert 建出,它要求系统行存在且 `expire_ms > now`,与 sweep 的候选集不相交(`RetentionDays ≥ 1`)。
    - M2 起系统邮件的 state 行若有 `claim_state IN (2,4)`,**整封系统邮件本轮跳过**。
-3. **幂等键的保留期约束**:唯一键行只有本节会物理删,最短寿命 = `expire_ms + RetentionDays`(与玩家删除无关,§2.4)。行被 sweep 删掉后,同一 `(sender_kind, request_id)` 再来会被当成新请求。所以**调用方重试窗口必须远小于 `expire + RetentionDays`**;`SendSystemMail` / `SendPersonalMail` 的契约注释写明这一点。
+3. **判重收据不清理**(2026-11-26 起,§2.4.1):本节只删邮件行与 state 行,不碰 `mail_request_receipt`。邮件行被删掉之后,同一 `(sender_kind, request_id)` 再来仍按收据回原 `mail_id`,不会被当成新请求;原先「调用方重试窗口必须远小于 `expire + RetentionDays`」的约束随之取消(scene 待寄邮件没有放弃时限,守不住那条约束,r2-craft#3)。
 
 **sweep 指标**(全部低基数,不带 player_id;每轮都写,`report_only` 也写):
 
@@ -1388,3 +1406,14 @@ Java `DomainClientDispatch.withSession` 将完整不可变 `SessionContext` 送�
 - **身份常量两边各写一份**:发件角色号、调用方名、密钥环境变量名在 go/match 与 go/mail 各有一份,`go/mail/internal/data/match_sender_identity_test.go` 的 `TestMatchSenderIdentityMatchesTournamentClaim` 逐字比对。
 - **残余**:判重记录随邮件一起被过期清理删除。清理开了删除模式之后,邮件已建而 match 的已领取一直没落定、玩家又 37 天以上没重领,再领会新建一封(与 battle 溢出邮件同一类,现行缺省只报告不删,不会发生)。
 - **Java 版**:只登记待做(Java 仓 `PARITY.md`)。
+
+### 2026-11-26 管理发件要双人复核批准记录(后台管理员身份与双人复核批 5;未生成、未编译、未运行)
+
+- **规则**:调用方在 `ApprovalRequiredCallers`(缺省 `[admin]`,配置只能往上加,`admin` 拿不掉)里的发件请求必须带 `SendMailRequest.approval`(第 15 号字段,`common.base.AdminApproval`),并通过 `dualcontrol.RequireForRequest(approval, "", request_id)`:四项合规、两人不同、请求号就是批准号。核对在验签之后、判重与任何读写库之前,不合格回 `PermissionDenied`。rank 奖励、battle 掉落、match 赛事等系统调用方不要求;带了就必须合格。设计见 `docs/design/admin-identity-and-dual-control.md` §11.2。
+- **为什么请求号就是批准号**:后台流水号同时是邮件的幂等键,一次批准只发一封;批准记录进请求摘要(`serviceauth.Digest` 只清 auth),后台重试原样复用批准记录,摘要不变,判重照旧。
+- **导入名单与封存活动不要求**:它们只能往已经批准创建的活动里按冻结的名单摘要导入与封存,建活动那一份请求带批准记录。
+- **落库**:`mail_message`(`MailRecord` 15~17)与 `mail_campaign`(`MailCampaignRecord` 20~22)加 `approval_id`、`proposer`、`approver`,只写不读;不带批准记录时为空串。列由 `mail -migrate` 按 proto2mysql 的 DDL 补齐。
+- **应急开关** `AdminAllowUnapproved`(缺省 false,只给本机开发):打开时启动打一行 ERROR,之后每一封不带记录的管理邮件都打 ERROR 并计入 `mail_admin_unapproved_command_total{caller, method}`,告警 `MailAdminCommandUnapproved`(`deploy/k8s/dual-control-alerts.yaml`)。本机 GM 栈 `deploy/gm-admin/mail-config.yaml` 打开了它,因为那里的后台多半跑原生模式、双人复核关着。
+- **mailadmin**:写命令在生产会被拒(退出码 3,不再打印重试命令);`-file` 里带 `approval` 拒绝(命令行不该能填批准人)。补发改由后台发起。
+- **部署顺序**:`validateContent` 拒绝未知字段,mail 要先于后台升级。
+- **残余**:个人邮件行到期会被清理、注销清角色时也会删,行上的批准记录跟着没了,长期留痕只剩后台流水与审计日志;要在 mail 侧长期留痕,可以把这三列挪到发件判重收据 `mail_request_receipt` 上(没做)。`etc/mail.yaml` 整份进 ConfigMap,有人把 `AdminAllowUnapproved: true` 提交进去就会上集群,部署守卫随批 7 剩余项一起加。

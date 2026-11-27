@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 
 	assetpb "proto/common/asset"
@@ -826,6 +827,76 @@ func (r *WarRepo) ListDueBounties(ctx context.Context, dueBeforeMs uint64, after
 	return scanBounties(rows)
 }
 
+// 终态追杀令的保留期清理(r2-gw#7)。终态 = 3 COMPLETED / 4 TORN_BY_TARGET / 5 EXPIRED / 6 ESCROW_FAILED,它们不会再变:
+// 扣款终结只改 status = 1 的行,结算第 7 步与到期收尾在行锁内只认 ACTIVE。1 ESCROW_PENDING 与 2 ACTIVE 永远不删。
+// 候选走索引 (status, expires_at_ms) 普通读;删按清理短事务的写法(asset_store.go execCleanupDelete 同一纪律):
+// 一行一个事务,主键点锁 → 锁内复核仍是终态且过了保留期 → 完整主键点删(TiDB 走点写快路径,不与同一行的悲观写者各持一半)。
+const sqlSelectPurgeableBounties = "SELECT `bounty_id` FROM `" + guildWarBountyTable + "` WHERE `status` IN (?,?,?,?) AND `expires_at_ms` < ? LIMIT ?"
+
+// terminalBountyStatuses 是可被保留期清理删除的四个终态,顺序与 sqlSelectPurgeableBounties 的 IN (?,?,?,?) 一一对应。
+var terminalBountyStatuses = []uint32{
+	uint32(pb.GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_COMPLETED),
+	uint32(pb.GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_TORN_BY_TARGET),
+	uint32(pb.GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_EXPIRED),
+	uint32(pb.GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_ESCROW_FAILED),
+}
+
+// PurgeTerminalBounties 删至多 limit 张「终态且 expires_at_ms < expiredBeforeMs」的追杀令,返回删掉的行数(r2-gw#7)。
+// 按到期时刻判龄:终态时刻不晚于到期后约 16 分钟(到期收尾的宽限 + 一轮),保留期远长于这点差。
+// 删掉的行谁都不再需要:扣款终结只找 status = 1 的行;结算按 bounty_id 读到终态行与读不到行是同一结论(都不动追杀令,ResolveBounty);
+// 战报的追杀结果存在对局行自己的列里;bounty_id 是发号器永久 ID,不会被新单复用。单行失败就停在这一行,剩下的下一轮再删。
+func (r *WarRepo) PurgeTerminalBounties(ctx context.Context, expiredBeforeMs uint64, limit int) (int, error) {
+	if limit <= 0 || expiredBeforeMs == 0 {
+		return 0, nil
+	}
+	args := make([]any, 0, len(terminalBountyStatuses)+2)
+	for _, status := range terminalBountyStatuses {
+		args = append(args, status)
+	}
+	rows, err := r.db.QueryContext(ctx, sqlSelectPurgeableBounties, append(args, expiredBeforeMs, limit)...)
+	if err != nil {
+		return 0, fmt.Errorf("list purgeable bounties: %w", err)
+	}
+	var ids []uint64
+	for rows.Next() {
+		var id uint64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return 0, fmt.Errorf("scan purgeable bounty: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return 0, fmt.Errorf("iterate purgeable bounties: %w", err)
+	}
+	deleted := 0
+	for _, id := range ids {
+		var removed bool
+		err := r.guilds.inTx(ctx, "war_purge_bounty", func(ctx context.Context, tx *sql.Tx) error {
+			removed = false
+			b, err := loadBountyTx(ctx, tx, id, true)
+			if err != nil {
+				return err
+			}
+			if b == nil || !slices.Contains(terminalBountyStatuses, b.GetStatus()) || b.GetExpiresAtMs() >= expiredBeforeMs {
+				return nil // 已被别的副本删掉;不再符合条件的(不该出现)不删
+			}
+			if _, err := tx.ExecContext(ctx, "DELETE FROM `"+guildWarBountyTable+"` WHERE `bounty_id` = ?", id); err != nil {
+				return err
+			}
+			removed = true
+			return nil
+		})
+		if err != nil {
+			return deleted, fmt.Errorf("purge terminal bounty %d: %w", id, err)
+		}
+		if removed {
+			deleted++
+		}
+	}
+	return deleted, nil
+}
+
 func (r *WarRepo) MarkTrackCooldown(ctx context.Context, playerID uint64, zoneID, weekKey uint32, nowMs uint64, cooldownSec uint32) (uint64, error) {
 	var nextAt uint64
 	err := r.guilds.inTx(ctx, "war_track_bounty", func(ctx context.Context, tx *sql.Tx) error {
@@ -966,11 +1037,29 @@ type SettleWarBattleOutput struct {
 	CreatedOps       []AssetOpRow
 	BountyTag        uint32
 	FirstWinRecorded bool
-	// BountyHeldRecipientID 非 0:追杀令本局本该结单,但这名领赏人当日领赏已满,整笔不转移、追杀令原样保留(调用方打日志)。
+	// BountyHeldRecipientID 非 0:追杀令本局本该结单,但这名领赏人收不了,整笔不转移、追杀令原样保留(调用方打日志)。
+	// 原因见 BountyHeldReason。
 	BountyHeldRecipientID uint64
+	BountyHeldReason      BountyHeldReason
 	// BountyIssuerGuildGone:公费档撕单要退给发单帮的那一半资金,因为帮会已解散而没退(调用方打日志)。
 	BountyIssuerGuildGone bool
+	// OwedCredits:没能当场插指令、在同一事务里记进待入账表的入账(本流未决已满,或护栏冻结中),由待入队物品循环补插(r2-gw#5 / #6)。
+	OwedCredits []WarCreditOwed
+	// FencedPlayers / RemovedPlayers:护栏副本冻结中(资产入账改记待入账)/ 已删除(这一局给他的什么都不写)的目标,升序(调用方打日志)。
+	FencedPlayers, RemovedPlayers []uint64
 }
+
+// BountyHeldReason 是追杀令本局整笔不转移的原因(日志用)。
+type BountyHeldReason uint8
+
+const (
+	// BountyHeldNone:没有扣下。
+	BountyHeldNone BountyHeldReason = iota
+	// BountyHeldDailyLimit:领赏人当日领赏已满。
+	BountyHeldDailyLimit
+	// BountyHeldRecipientRemoved:领赏人角色已删除。赏金转给谁都不对,托管留着,没人结单就到期原路退回发布者(r2-gw#6)。
+	BountyHeldRecipientRemoved
+)
 
 // warSettleOp 是结算事务第 3 步要插的一条 GUILD_CREDIT 指令:战后奖励与追杀令转账并成一个按 player_id 升序的序列。
 type warSettleOp struct {
@@ -1021,7 +1110,8 @@ func bountyTransferOps(plan war.BountyResolution, b *pb.GuildWarBountyRecord, in
 	return ops, nil
 }
 
-// SettleWarBattle 在一个事务里落一局帮战的全部结算(锁序 G → M → Q → O → C → 灵脉 → 周进度 → 个人态 → 追杀令 → 对局 → 宿敌)。
+// SettleWarBattle 在一个事务里落一局帮战的全部结算(锁序 护栏副本 → G → M → Q → O → C → 灵脉 → 周进度 → 个人态 → 追杀令 → 对局
+// → 宿敌 → 待入账)。
 //
 // 两类基准来自锁序靠后、却要在靠前步骤里用到的数据,一律「先普通读定计划、到它的锁序位置再锁住复核」,不符回 ErrWarSettleStale
 // (整笔回滚,调用方重读重算):
@@ -1029,12 +1119,17 @@ func bountyTransferOps(plan war.BountyResolution, b *pb.GuildWarBountyRecord, in
 //   - 追杀令(r2-gw#1 / #2):第 0 步普通读追杀令与领赏人当日计数定出去向,第 1 / 2 / 3 步据此加退款资金、锁成员行、插转账指令,
 //     第 3b 步占领赏计数(被并发占满即冲突),第 7 步点锁追杀令重算一遍,与计划不同即冲突。转账与状态变更因此同事务提交,
 //     不会出现「追杀令已结、赏金没发」或「赏金发了、追杀令没结」。
+//
+// 入账按人分流(r2-gw#5 / #6,war_credit_owed.go):第 F 步锁全部入账目标的护栏副本;某人收不了(护栏冻结中、本流未决已满)
+// 只把他那一笔记进待入账表,已删除的人这一局什么都不写 —— 一个人的状态挡不住同局其他人的结算。
 func (r *WarRepo) SettleWarBattle(ctx context.Context, in SettleWarBattleInput) (SettleWarBattleOutput, error) {
 	var out SettleWarBattleOutput
 	rec := in.Record
 	// 第 7 步会改 rec 的两列;inTx 遇 1213 会整段重跑闭包,每次都从这份原值开始,不会重复累加。
 	baseOutcomeTag, baseJackpotSilver := rec.BountyOutcomeTag, rec.JackpotSilver
 	var refundedIssuerGuild uint64
+	// fenceHealed:第 F 步已经让 Guard.RunTx 自愈过一次护栏副本(跨闭包的重跑保留),之后还冻结的才按真冻结分流。
+	var fenceHealed bool
 	err := r.guilds.inTx(ctx, "war_settle_battle", func(ctx context.Context, tx *sql.Tx) error {
 		out = SettleWarBattleOutput{}
 		refundedIssuerGuild = 0
@@ -1064,10 +1159,34 @@ func (r *WarRepo) SettleWarBattle(ctx context.Context, in SettleWarBattleInput) 
 					return err
 				}
 				if used >= in.DailyPayoutLimit {
-					out.BountyHeldRecipientID = plan.RewardRecipientID
+					out.BountyHeldRecipientID, out.BountyHeldReason = plan.RewardRecipientID, BountyHeldDailyLimit
 					plan = war.BountyResolution{}
 				}
 			}
+		}
+
+		// F. 护栏副本(r2-gw#6;事务里第一把锁,先于 guild 行):本局每个可能被写到的玩家 —— 参战者、追杀令领赏人、撕单退款的发布者 ——
+		//    按 player_id 升序锁副本逐个判。冻结中:资产入账改记待入账行(帮贡、个人态照写,它们不是挂起项);已删除:他的行一律不写,
+		//    领赏人已删除则追杀令整笔不转移(托管不销毁,到期原路退回)。
+		targets := make([]uint64, 0, len(in.PlayerCredits)+2)
+		for _, c := range in.PlayerCredits {
+			targets = append(targets, c.PlayerID)
+		}
+		if plan.Touch {
+			targets = append(targets, plan.RewardRecipientID)
+			if plan.IssuerRefundSilver > 0 {
+				targets = append(targets, bounty.GetIssuerPlayerId())
+			}
+		}
+		verdicts, err := r.guilds.lockCreditFences(ctx, tx, targets, &fenceHealed)
+		if err != nil {
+			return err
+		}
+		out.FencedPlayers = playersWithVerdict(verdicts, creditFenceFrozen)
+		out.RemovedPlayers = playersWithVerdict(verdicts, creditFenceRemoved)
+		if plan.RewardSilver > 0 && verdicts[plan.RewardRecipientID] == creditFenceRemoved {
+			out.BountyHeldRecipientID, out.BountyHeldReason = plan.RewardRecipientID, BountyHeldRecipientRemoved
+			plan = war.BountyResolution{}
 		}
 
 		// 1. 按 guild_id 升序锁涉及帮会（锁序位置 1: guild）并加帮会资金(含公费档撕单退给发单帮的那一半)。
@@ -1115,7 +1234,7 @@ func (r *WarRepo) SettleWarBattle(ctx context.Context, in SettleWarBattleInput) 
 			return memberLocks[i].PlayerID < memberLocks[j].PlayerID
 		})
 		for _, c := range memberLocks {
-			if c.GuildID == 0 || c.PlayerID == 0 {
+			if c.GuildID == 0 || c.PlayerID == 0 || verdicts[c.PlayerID] == creditFenceRemoved {
 				continue
 			}
 			if ok, err := lockRowExists(ctx, tx, sqlLockMemberRole, c.GuildID, c.PlayerID); err != nil {
@@ -1155,42 +1274,29 @@ func (r *WarRepo) SettleWarBattle(ctx context.Context, in SettleWarBattleInput) 
 			ops = append(ops, transfers...)
 		}
 		sort.SliceStable(ops, func(i, j int) bool { return ops[i].playerID < ops[j].playerID })
-		stream := assetpb.AssetOpStream_ASSET_OP_STREAM_GUILD_CREDIT
+		// 收不了的人(护栏冻结中、本流未决已满)只把他那一笔记进待入账行,在全序末尾(第 10 步)插入;已删除的人这一笔放弃(r2-gw#5 / #6)。
+		var owed []WarCreditOwed
+		lease := warOpLease{nextAttemptMs: in.LeaseUntilMs, untilMs: in.LeaseUntilMs, token: in.LeaseToken}
 		for _, o := range ops {
-			if err := ensureSeqRowTx(ctx, tx, o.playerID, stream, in.NowMs); err != nil {
-				return err
+			verdict := verdicts[o.playerID]
+			if verdict == creditFenceRemoved {
+				continue
 			}
-			alloc, err := assetop.AllocateSeq(ctx, tx, r.seq, o.playerID, stream, assetop.DefaultLimits, in.NowMs)
+			credit := WarCreditOwed{PlayerID: o.playerID, OpID: o.opID, GuildID: o.guildID, Kind: o.kind, TxType: o.txType,
+				RefID: o.refID, PeriodKey: o.periodKey, Payload: o.payload, SourceID: rec.BattleId}
+			created, owe, err := r.creditOrOweTx(ctx, tx, credit, verdict == creditFenceFrozen, lease, in.NowMs)
 			if err != nil {
 				return err
 			}
-			opRec := &pb.GuildAssetOpRecord{
-				OpId:          o.opID,
-				PlayerId:      o.playerID,
-				Stream:        uint32(stream),
-				Seq:           alloc.Seq,
-				GuildId:       o.guildID,
-				Kind:          o.kind,
-				Status:        pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_PENDING,
-				NextAttemptMs: in.LeaseUntilMs,
-				Payload:       o.payload,
-				RefId:         o.refID,
-				RefCount:      1,
-				PeriodKey:     o.periodKey,
-				CreatedMs:     in.NowMs,
-				UpdatedMs:     in.NowMs,
-				LeaseUntilMs:  in.LeaseUntilMs,
-				LeaseToken:    in.LeaseToken,
-				TxType:        uint32(o.txType),
-				StreamEpoch:   alloc.Epoch,
+			if owe != nil {
+				owed = append(owed, *owe)
+				continue
 			}
-			if err := insertAssetOp(ctx, tx, opRec); err != nil {
-				return err
-			}
-			out.CreatedOps = append(out.CreatedOps, assetOpRowFrom(opRec))
+			out.CreatedOps = append(out.CreatedOps, *created)
 		}
 
-		// 3b. 占领赏人当日领赏次数(锁序 C;上一步的领赏指令已经锁住他的 GUILD_CREDIT seq 行,满足计数写者的守卫前提)。
+		// 3b. 占领赏人当日领赏次数(锁序 C;上一步已经锁住他的 GUILD_CREDIT seq 行 —— 领赏记进待入账行时也照锁 ——
+		//     满足计数写者的守卫前提)。领赏记进待入账行也占次数:钱只是晚到,不是没领。
 		//     第 0 步普通读时还没满、此刻被并发领赏占满:整笔重读重算,下一次会走「整笔不转移」。
 		if plan.RewardSilver > 0 && in.DailyPayoutLimit > 0 {
 			limited, err := upsertCounterWithLimit(ctx, tx, plan.RewardRecipientID,
@@ -1274,8 +1380,12 @@ func (r *WarRepo) SettleWarBattle(ctx context.Context, in SettleWarBattleInput) 
 			}
 		}
 
-		// 6. 更新个人帮战状态（战后 10s 保护、脱战 60s 冷却、连胜、周战功、MVP 榜更新；锁序 16）。
+		// 6. 更新个人帮战状态（战后 10s 保护、脱战 60s 冷却、连胜、周战功、MVP 榜更新；锁序 16）。已删除的人不建、不写(墓碑之后
+		//    本库不许再有他的业务写入,删角收尾才不用两阶段)。
 		for _, c := range credits {
+			if verdicts[c.PlayerID] == creditFenceRemoved {
+				continue
+			}
 			st, err := lockPlayerWarStateTx(ctx, tx, c.PlayerID, rec.ZoneId, in.WeekKey, in.NowMs)
 			if err != nil {
 				return err
@@ -1352,6 +1462,13 @@ func (r *WarRepo) SettleWarBattle(ctx context.Context, in SettleWarBattleInput) 
 				return err
 			}
 		}
+
+		// 10. 待入账行(锁序位置 24,全序末尾;r2-gw#5 / #6):第 3 步没能当场插指令的那几笔,与本局其余结算同一事务提交。
+		//     第 8 步的对局幂等闸门已保证这是本局首次落定;转换时原样用这里的 op_id,同一笔不会入账两次。
+		if err := insertWarCreditOwedTx(ctx, tx, owed); err != nil {
+			return err
+		}
+		out.OwedCredits = owed
 		return nil
 	})
 	if err == nil {
@@ -1382,13 +1499,19 @@ type ExpireBountyResult struct {
 	Op              AssetOpRow // 银两档退给发布者的 GUILD_CREDIT 指令
 	HasOp           bool
 	IssuerGuildGone bool // 公费档:发单帮已解散,资金不退(调用方打日志)
+	// RefundOwed:银两档退款没能当场插指令(发布者本流未决已满,或护栏冻结中),已在同一事务记进待入账行,由待入队物品循环补插。
+	RefundOwed bool
+	// RefundAbandoned:发布者角色已删除,银两退款放弃(追杀令照样置 EXPIRED,调用方打日志)。
+	RefundAbandoned bool
 }
 
 // ExpireBounty 收尾一张到期的 ACTIVE 追杀令(r2-gw#2):同一事务置 EXPIRED 并原路退回托管 —— 银两档给发布者插 GUILD_CREDIT
 // (TX_GUILD_BOUNTY_PAYOUT,不持租约、立刻可被重投循环领走),公费档把实扣的帮会资金加回发单帮。
+// 发布者收不了(本流未决已满、护栏冻结中)时退款记进待入账行,追杀令照样到期;角色已删除时银两退款放弃(r2-gw#5 / #6)。
 //
-// 锁序:G(公费档退资金)→ M(发布者成员行,seq 建行守卫)→ Q → O(银两档退款指令)→ guild_war_bounty(位置 17,主键点锁 + 状态复核)。
-// 多副本同时收尾同一张:后到者在 G / Q 或追杀令行上排在先到者后面,锁到时状态已不是 ACTIVE → 回滚,只退一次;
+// 锁序:发布者护栏副本(银两档)→ G(公费档退资金)→ M(发布者成员行,seq 建行守卫)→ Q → O(银两档退款指令)
+// → guild_war_bounty(位置 17,主键点锁 + 状态复核)→ 待入账行(位置 24)。
+// 多副本同时收尾同一张:后到者在护栏副本、G / Q 或追杀令行上排在先到者后面,锁到时状态已不是 ACTIVE → 回滚,只退一次;
 // 与结算第 7 步之间同理(谁先提交谁算数,另一方锁内复核失败)。
 func (r *WarRepo) ExpireBounty(ctx context.Context, in ExpireBountyInput) (ExpireBountyResult, error) {
 	b := in.Bounty
@@ -1400,8 +1523,18 @@ func (r *WarRepo) ExpireBounty(ctx context.Context, in ExpireBountyInput) (Expir
 		return ExpireBountyResult{}, fmt.Errorf("war expire bounty %d: silver refund %d needs a pre-minted op id and bundle", b.GetBountyId(), silver)
 	}
 	var res ExpireBountyResult
+	var fenceHealed bool
 	err := r.guilds.inTx(ctx, "war_expire_bounty", func(ctx context.Context, tx *sql.Tx) error {
 		res = ExpireBountyResult{}
+		// 银两档退给发布者本人:先锁他的护栏副本(事务第一把锁,r2-gw#6)。公费档退的是帮会资金,不涉及任何角色。
+		issuerVerdict := creditFenceOpen
+		if silver > 0 {
+			verdicts, err := r.guilds.lockCreditFences(ctx, tx, []uint64{b.GetIssuerPlayerId()}, &fenceHealed)
+			if err != nil {
+				return err
+			}
+			issuerVerdict = verdicts[b.GetIssuerPlayerId()]
+		}
 		if funds > 0 {
 			ok, err := lockRowExists(ctx, tx, sqlLockGuildFunds, b.GetIssuerGuildId())
 			if err != nil {
@@ -1415,41 +1548,29 @@ func (r *WarRepo) ExpireBounty(ctx context.Context, in ExpireBountyInput) (Expir
 				res.IssuerGuildGone = true
 			}
 		}
-		if silver > 0 {
+		var owed []WarCreditOwed
+		switch {
+		case silver > 0 && issuerVerdict == creditFenceRemoved:
+			// 角色已删除:退给谁都不对,也不能再写他的行(删角收尾删过他的 seq 行)。追杀令照样到期,托管随角色一起作废。
+			res.RefundAbandoned = true
+		case silver > 0:
 			// 发布者此刻不在原帮也照退(钱是他本人的),成员行只作 seq 建行守卫。
 			if _, err := lockRowExists(ctx, tx, sqlLockMemberRole, b.GetIssuerGuildId(), b.GetIssuerPlayerId()); err != nil {
 				return err
 			}
-			stream := assetpb.AssetOpStream_ASSET_OP_STREAM_GUILD_CREDIT
-			if err := ensureSeqRowTx(ctx, tx, b.GetIssuerPlayerId(), stream, in.NowMs); err != nil {
-				return err
-			}
-			alloc, err := assetop.AllocateSeq(ctx, tx, r.seq, b.GetIssuerPlayerId(), stream, assetop.DefaultLimits, in.NowMs)
+			refund := WarCreditOwed{PlayerID: b.GetIssuerPlayerId(), OpID: in.RefundOpID, GuildID: b.GetIssuerGuildId(),
+				Kind: pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_BOUNTY_PAYOUT, TxType: rollbackpb.TransactionType_TX_GUILD_BOUNTY_PAYOUT,
+				RefID: b.GetTier(), Payload: in.RefundBundle, SourceID: b.GetBountyId()}
+			created, owe, err := r.creditOrOweTx(ctx, tx, refund, issuerVerdict == creditFenceFrozen, warOpLease{nextAttemptMs: in.NowMs}, in.NowMs)
 			if err != nil {
 				return err
 			}
-			opRec := &pb.GuildAssetOpRecord{
-				OpId:          in.RefundOpID,
-				PlayerId:      b.GetIssuerPlayerId(),
-				Stream:        uint32(stream),
-				Seq:           alloc.Seq,
-				GuildId:       b.GetIssuerGuildId(),
-				Kind:          pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_BOUNTY_PAYOUT,
-				Status:        pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_PENDING,
-				NextAttemptMs: in.NowMs,
-				Payload:       in.RefundBundle,
-				RefId:         b.GetTier(),
-				RefCount:      1,
-				CreatedMs:     in.NowMs,
-				UpdatedMs:     in.NowMs,
-				TxType:        uint32(rollbackpb.TransactionType_TX_GUILD_BOUNTY_PAYOUT),
-				StreamEpoch:   alloc.Epoch,
+			if owe != nil {
+				owed = append(owed, *owe)
+				res.RefundOwed = true
+			} else {
+				res.Op, res.HasOp = *created, true
 			}
-			if err := insertAssetOp(ctx, tx, opRec); err != nil {
-				return err
-			}
-			res.Op = assetOpRowFrom(opRec)
-			res.HasOp = true
 		}
 		locked, err := loadBountyTx(ctx, tx, b.GetBountyId(), true)
 		if err != nil {
@@ -1465,6 +1586,9 @@ func (r *WarRepo) ExpireBounty(ctx context.Context, in ExpireBountyInput) (Expir
 		if _, err := tx.ExecContext(ctx,
 			"UPDATE `"+guildWarBountyTable+"` SET `status` = ?, `resolved_at_ms` = ? WHERE `bounty_id` = ?",
 			uint32(pb.GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_EXPIRED), in.NowMs, b.GetBountyId()); err != nil {
+			return err
+		}
+		if err := insertWarCreditOwedTx(ctx, tx, owed); err != nil {
 			return err
 		}
 		res.Expired = true

@@ -173,6 +173,13 @@ void TurnBattleEngine::EmitSeasonResonanceEvent(BattleActorState& actor, uint64_
     const auto& seal = actor.equipment_effects().season_seal();
     auto& runtime = seasonSealRuntimeByActor[actor.actor_id()];
     runtime.resonanceCount += 1u;
+    if (actor.actor_type() == BATTLE_ACTOR_TYPE_PLAYER &&
+        resonanceEffectId > seasonrules::kResonanceEventBase) {
+        const uint32_t kind = resonanceEffectId - seasonrules::kResonanceEventBase;
+        if (kind >= 1u && kind <= 31u) {
+            seasonResonanceMaskByPlayer[actor.actor_id()] |= (1u << (kind - 1u));
+        }
+    }
     auto* event = AppendEvent(result, BATTLE_EVENT_ARTIFACT, actor.actor_id(), targetId);
     event->set_artifact_item_id(0);
     event->set_artifact_effect_id(resonanceEffectId);

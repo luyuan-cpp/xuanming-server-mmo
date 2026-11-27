@@ -257,7 +257,7 @@ func TestVoidOutcomeOf(t *testing.T) {
 
 // TestAuditRowFor 钉住审计行的组装(评审 L9 回归):条目终态行 30 天后物理删除、审计行永不删除,
 // 审计必须独自回答「做了什么」。msg_type / request_id / issued_at_ms / 内容摘要 / 载荷一律取自条目行
-// (调用方传入的同名值被忽略,shard 按 player_id 重算);「谁、为什么」与 void_reason 取调用方;
+// (调用方传入的同名值被忽略,shard 按 player_id 重算);「谁、为什么」、双人复核批准记录与 void_reason 取调用方;
 // 与条目对不上的审计 fail-closed(不写出一行张冠李戴的记录)。
 func TestAuditRowFor(t *testing.T) {
 	const pid, seq, requestID = uint64(42), uint64(77), uint64(9001)
@@ -276,6 +276,7 @@ func TestAuditRowFor(t *testing.T) {
 		// 调用方给的内容列一律忽略:内容只认条目这一个来源。
 		MsgType: uint32(gmDebt), RequestId: 1, IssuedAtMs: 1, ContentSha256: []byte("forged"), Payload: []byte("forged"),
 		VoidReason: uint32(inboxpb.PlayerInboxVoidReason_PLAYER_INBOX_VOID_CANCELLED),
+		ApprovalId: "5001", Approver: "ops_reviewer",
 	}
 	got, err := auditRowFor(item, in)
 	if err != nil {
@@ -288,6 +289,7 @@ func TestAuditRowFor(t *testing.T) {
 		MsgType: uint32(gmBlock), RequestId: requestID, IssuedAtMs: issued,
 		ContentSha256: item.GetContentSha256(), Payload: payload,
 		VoidReason: uint32(inboxpb.PlayerInboxVoidReason_PLAYER_INBOX_VOID_CANCELLED),
+		ApprovalId: "5001", Approver: "ops_reviewer",
 	}
 	if !proto.Equal(got, want) {
 		t.Fatalf("auditRowFor = %+v\nwant %+v", got, want)

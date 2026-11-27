@@ -20,7 +20,7 @@ function New-JavaBootFixture([string]$Root) {
         $module = if ($service -ceq 'mall') { 'mall_game' } else { 'gateway_node' }
         $jar = if ($service -ceq 'mall') { 'mall-game-0.1.0-SNAPSHOT.jar' } else { 'gateway-node-0.0.1-SNAPSHOT.jar' }
         $row = [ordered]@{ instanceKey = $key; service = $service; port = $(if ($service -ceq 'mall') { 18120 } else { 18121 }) + $(if ($replica) { 100 } else { 0 }); database = $(if ($service -ceq 'mall') { 'mall_test' } else { 'gateway_test' }); jarSha256 = (Get-MaintenanceSha256 (Join-Path $Root "java/$module/target/$jar")) }
-        if ($service -ceq 'gateway') { $row.loginGrpcEndpoints = '990017=127.0.0.1:53000,990018=127.0.0.1:54000'; $row.redisEndpoint = '127.0.0.1:26379'; $row.etcdEndpoint = 'http://127.0.0.1:32379'; $row.mallAdminUrl = 'http://127.0.0.1:18120' }
+        if ($service -ceq 'gateway') { $row.loginGrpcEndpoints = '990017=127.0.0.1:53000,990018=127.0.0.1:54000'; $row.redisEndpoint = '127.0.0.1:26379'; $row.etcdEndpoint = 'http://127.0.0.1:32379' }
         $row
     })
     $plan = [ordered]@{ format = 'LOCAL_R_JAVA_FOUR_INSTANCES_V1'; javaExecutable = $java; javaSha256 = (Get-MaintenanceSha256 $java); instances = $instances }
@@ -52,6 +52,7 @@ try {
             { param($p) $p.instances[1].port = $p.instances[0].port },
             { param($p) $p.instances[2].loginGrpcEndpoints = '990017=127.0.0.1:53000' },
             { param($p) $p.instances[2].loginGrpcEndpoints = '990017=remote.invalid:53000,990018=127.0.0.1:54000' },
+            # 商城地址已随商城管理迁进后台(双人复核批 4)删掉:旧字段现在是未知字段,计划照样要被拒。
             { param($p) $p.instances[2].mallAdminUrl = 'http://127.0.0.1:9999' }
         )) {
             $f = New-JavaBootFixture (Join-Path $fixtureRoot "bad-$index"); & $change $f.plan; Save-JavaBootFixturePlan $f

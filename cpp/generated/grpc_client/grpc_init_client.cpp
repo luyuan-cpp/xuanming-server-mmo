@@ -45,6 +45,10 @@ namespace loginpb {
     void SetLoginCallDeadline(std::chrono::milliseconds deadline);
 }
 
+namespace loginpb {
+    void SetLoginAdminCallDeadline(std::chrono::milliseconds deadline);
+}
+
 namespace mailpb {
     void SetMailCallDeadline(std::chrono::milliseconds deadline);
 }
@@ -146,6 +150,9 @@ void SetGrpcCallDeadline(uint32_t nodeType, std::chrono::milliseconds deadline){
     }
     if (static_cast<uint32_t>(common::base::eNodeType::LoginNodeService) == nodeType) {
         loginpb::SetLoginCallDeadline(deadline);
+    }
+    if (static_cast<uint32_t>(common::base::eNodeType::LoginNodeService) == nodeType) {
+        loginpb::SetLoginAdminCallDeadline(deadline);
     }
     if (static_cast<uint32_t>(common::base::eNodeType::MailNodeService) == nodeType) {
         mailpb::SetMailCallDeadline(deadline);

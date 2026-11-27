@@ -59,6 +59,7 @@ public final class TipFaults {
             new Fault(2036, "login_error", "LoginTokenIssueFailed"),
             new Fault(2047, "login_error", "LoginRealNameServiceUnavailable"),
             new Fault(2050, "login_error", "RoleNameCheckUnavailable"),
+            new Fault(2058, "login_error", "LoginEnterGameBusy"),
             new Fault(3003, "scene_error", "EnterNodeUnavailable"),
             new Fault(3010, "scene_error", "EnterSceneGsInfoNull"),
             new Fault(3012, "scene_error", "EnterSceneYourSceneIsNull"),

@@ -126,7 +126,8 @@ namespace
 			ASSERT_TRUE(connection->Open("gate_entry_wiring"));
 			const auto serverSide = connection->ServerSide();
 			ASSERT_NE(serverSide, nullptr);
-			serverSide->setContext(kSession); // 同 HandleConnectionEstablished:连接上下文里是 session_id
+			// 同 OpenVerifiedSession:验签成功建了会话的连接,上下文里是 session_id(验签之前是未验签记录的键,准入设计 P2-4)。
+			serverSide->setContext(kSession);
 
 			// 已进游戏:验过票、本连接 Login 成功、经认证绑定了角色(字段同 client_request_lane_test.cpp 的夹具)。
 			SessionInfo &session = tlsSessionManager.sessions()[kSession];

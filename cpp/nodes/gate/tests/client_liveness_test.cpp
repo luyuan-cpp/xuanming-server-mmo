@@ -32,7 +32,6 @@ namespace
 	using std::chrono::nanoseconds;
 	using std::chrono::seconds;
 
-	constexpr milliseconds kHandshake = kClientLiveness.handshakeTimeout;
 	constexpr milliseconds kInterval = kClientLiveness.interval;
 	constexpr milliseconds kTimeout = kClientLiveness.idleTimeout;
 	constexpr milliseconds kPeriod = kClientLiveness.checkPeriod;
@@ -48,26 +47,25 @@ namespace
 		return AdmitHeartbeat(liveness, /*verified=*/true, now, kClientLiveness);
 	}
 
+	// 检查点堆只管已验签的会话(验签之前 gate 没有会话,握手期限扫的是未验签表,见 client_heartbeat_test.cpp)。
 	struct FakeSession
 	{
 		uint64_t incarnation{0};
-		bool verified{false};
 		bool loggedIn{false};
 		ClientLiveness liveness;
 	};
 
-	// 假会话表与三种关连接的记录。
+	// 假会话表与两种关连接的记录。
 	struct FakeSessions
 	{
 		std::map<uint32_t, FakeSession> sessions;
-		std::vector<uint32_t> handshakeTimedOut;
 		std::vector<std::pair<uint32_t, LivenessSweeper::Duration>> idleClosed;
 		std::vector<uint32_t> loginTimedOut;
 
-		FakeSession &Add(const uint32_t sessionId, const uint64_t incarnation, const bool verified)
+		FakeSession &Add(const uint32_t sessionId, const uint64_t incarnation)
 		{
 			auto &session = sessions[sessionId];
-			session = FakeSession{.incarnation = incarnation, .verified = verified};
+			session = FakeSession{.incarnation = incarnation};
 			return session;
 		}
 
@@ -82,16 +80,14 @@ namespace
 					{
 						return std::nullopt;
 					}
-					return LivenessSweeper::SessionView{
-						.verified = it->second.verified, .loggedIn = it->second.loggedIn, .liveness = it->second.liveness};
+					return LivenessSweeper::SessionView{.loggedIn = it->second.loggedIn, .liveness = it->second.liveness};
 				},
-				[this](const uint32_t sessionId, uint64_t) { handshakeTimedOut.push_back(sessionId); },
 				[this](const uint32_t sessionId, uint64_t, const LivenessSweeper::Duration silentFor)
 				{ idleClosed.emplace_back(sessionId, silentFor); },
 				[this](const uint32_t sessionId, uint64_t) { loginTimedOut.push_back(sessionId); });
 		}
 
-		// 按 1 秒节拍从 from 扫到 to(两端都含),模拟准时的定时器。返回期间三种关连接的总条数。
+		// 按 1 秒节拍从 from 扫到 to(两端都含),模拟准时的定时器。返回期间两种关连接的总条数。
 		uint64_t SweepEachSecond(LivenessSweeper &sweeper, const SteadyTime from, const SteadyTime to)
 		{
 			uint64_t closed = 0;
@@ -99,7 +95,7 @@ namespace
 			{
 				const auto result = Sweep(sweeper, t);
 				EXPECT_FALSE(result.late) << "a one-second cadence must never count as late";
-				closed += result.handshakeTimeouts + result.idleClosed + result.loginTimeouts;
+				closed += result.idleClosed + result.loginTimeouts;
 			}
 			return closed;
 		}
@@ -109,7 +105,6 @@ namespace
 	// gate 同时还登记登录期限;这里不登记,只有登录期限的用例另调 ExpectLoginBy,其余用例只量空闲超时。
 	void VerifyAndTrack(LivenessSweeper &sweeper, FakeSession &session, const uint32_t sessionId, const SteadyTime now)
 	{
-		session.verified = true;
 		ASSERT_TRUE(session.liveness.StartTracking(now));
 		sweeper.Track(sessionId, session.incarnation, now);
 	}
@@ -348,8 +343,10 @@ TEST(ClientLivenessIdleCheck, HeartbeatsEveryIntervalKeepTheConnectionAlive)
 	}
 }
 
-// ---- 握手期限 ----
+// ---- 扫描节拍 ----
 
+// 握手期限不在检查点堆里:验签之前 gate 没有会话,只有按建连先后有序的未验签记录,扫描从表头关掉到期的
+// (准入设计 P2-4)。那一侧的用例在 client_heartbeat_test.cpp 的 GateClientHeartbeat.*Handshake*。
 TEST(ClientLivenessSweeper, FirstSweepIsNeverLate)
 {
 	LivenessSweeper sweeper(kClientLiveness);
@@ -357,71 +354,6 @@ TEST(ClientLivenessSweeper, FirstSweepIsNeverLate)
 	const auto result = fake.Sweep(sweeper, At(seconds(500)));
 	EXPECT_FALSE(result.late);
 	EXPECT_EQ(result.checkGap, LivenessSweeper::Duration::zero());
-}
-
-// 判据是距建连的时长:期间收到过字节也不续期,只有验签能让它作废。
-TEST(ClientLivenessSweeper, UnverifiedConnectionIsClosedExactlyAtTheHandshakeDeadline)
-{
-	LivenessSweeper sweeper(kClientLiveness);
-	FakeSessions fake;
-	const SteadyTime connectedAt = At(seconds(0));
-	fake.Add(4, 40, /*verified=*/false);
-	sweeper.ExpectHandshake(4, 40, connectedAt);
-
-	EXPECT_EQ(fake.SweepEachSecond(sweeper, connectedAt + kPeriod, connectedAt + kHandshake - kPeriod), 0u);
-	EXPECT_TRUE(fake.handshakeTimedOut.empty());
-
-	const auto result = fake.Sweep(sweeper, connectedAt + kHandshake);
-	EXPECT_EQ(result.handshakeTimeouts, 1u);
-	EXPECT_EQ(fake.handshakeTimedOut, (std::vector<uint32_t>{4}));
-	EXPECT_EQ(sweeper.PendingChecks(), 0u) << "a timed-out handshake is not re-scheduled";
-
-	EXPECT_EQ(fake.SweepEachSecond(sweeper, connectedAt + kHandshake + kPeriod, connectedAt + 3 * kHandshake), 0u);
-	EXPECT_EQ(fake.handshakeTimedOut.size(), 1u);
-}
-
-TEST(ClientLivenessSweeper, VerifyingBeforeTheDeadlineVoidsItAndStartsTheIdleCheck)
-{
-	LivenessSweeper sweeper(kClientLiveness);
-	FakeSessions fake;
-	const SteadyTime connectedAt = At(seconds(0));
-	FakeSession &session = fake.Add(4, 40, /*verified=*/false);
-	sweeper.ExpectHandshake(4, 40, connectedAt);
-	const SteadyTime verifiedAt = connectedAt + seconds(2);
-	VerifyAndTrack(sweeper, session, 4, verifiedAt);
-
-	// 握手检查点在建连 + 10s 到期时已验签:丢弃,不关。
-	EXPECT_EQ(fake.SweepEachSecond(sweeper, connectedAt + kPeriod, connectedAt + kHandshake), 0u);
-	EXPECT_TRUE(fake.handshakeTimedOut.empty());
-	EXPECT_EQ(sweeper.PendingChecks(), 1u) << "only the idle checkpoint is left";
-
-	// 验签之后一帧都没来(没发心跳):从验签时刻起满 30s 关。
-	EXPECT_EQ(fake.SweepEachSecond(sweeper, connectedAt + kHandshake + kPeriod, verifiedAt + kTimeout - kPeriod), 0u);
-	EXPECT_EQ(fake.SweepEachSecond(sweeper, verifiedAt + kTimeout, verifiedAt + kTimeout), 1u);
-	ASSERT_EQ(fake.idleClosed.size(), 1u);
-	EXPECT_EQ(fake.idleClosed[0].second, LivenessSweeper::Duration(kTimeout));
-}
-
-TEST(ClientLivenessSweeper, LateSweepDefersTheHandshakeDeadline)
-{
-	LivenessSweeper sweeper(kClientLiveness);
-	FakeSessions fake;
-	const SteadyTime connectedAt = At(seconds(0));
-	FakeSession &session = fake.Add(4, 40, /*verified=*/false);
-	sweeper.ExpectHandshake(4, 40, connectedAt);
-	EXPECT_EQ(fake.SweepEachSecond(sweeper, connectedAt + kPeriod, connectedAt + kHandshake - kPeriod), 0u);
-
-	// 本端卡了 4s:积压的验签请求可能还在接收缓冲里,这一轮不关。
-	const SteadyTime stalledUntil = connectedAt + kHandshake + seconds(3);
-	const auto late = fake.Sweep(sweeper, stalledUntil);
-	EXPECT_TRUE(late.late);
-	EXPECT_EQ(late.deferred, 1u);
-	EXPECT_EQ(late.handshakeTimeouts, 0u);
-
-	// 卡顿恢复后读到了验签请求:期限作废。
-	session.verified = true;
-	EXPECT_EQ(fake.Sweep(sweeper, stalledUntil + kPeriod).handshakeTimeouts, 0u);
-	EXPECT_TRUE(fake.handshakeTimedOut.empty());
 }
 
 // ---- 登录期限(只有 gate) ----
@@ -433,7 +365,7 @@ TEST(ClientLivenessSweeper, VerifiedButNeverLoggedInIsClosedAtTheLoginDeadline)
 	LivenessSweeper sweeper(kClientLiveness);
 	FakeSessions fake;
 	const SteadyTime verifiedAt = At(seconds(0));
-	FakeSession &session = fake.Add(6, 60, /*verified=*/false);
+	FakeSession &session = fake.Add(6, 60);
 	VerifyAndTrack(sweeper, session, 6, verifiedAt);
 	sweeper.ExpectLoginBy(6, 60, verifiedAt + kLoginDeadline);
 
@@ -462,7 +394,7 @@ TEST(ClientLivenessSweeper, LoggingInBeforeTheDeadlineVoidsIt)
 	LivenessSweeper sweeper(kClientLiveness);
 	FakeSessions fake;
 	const SteadyTime verifiedAt = At(seconds(0));
-	FakeSession &session = fake.Add(6, 60, /*verified=*/false);
+	FakeSession &session = fake.Add(6, 60);
 	VerifyAndTrack(sweeper, session, 6, verifiedAt);
 	sweeper.ExpectLoginBy(6, 60, verifiedAt + kLoginDeadline);
 	session.loggedIn = true;
@@ -482,7 +414,7 @@ TEST(ClientLivenessSweeper, LateSweepDefersTheLoginDeadline)
 	LivenessSweeper sweeper(kClientLiveness);
 	FakeSessions fake;
 	const SteadyTime verifiedAt = At(seconds(0));
-	FakeSession &session = fake.Add(6, 60, /*verified=*/true);
+	FakeSession &session = fake.Add(6, 60);
 	sweeper.ExpectLoginBy(6, 60, verifiedAt + kLoginDeadline);
 	EXPECT_EQ(fake.Sweep(sweeper, verifiedAt + kLoginDeadline - kPeriod).loginTimeouts, 0u);
 
@@ -504,7 +436,7 @@ TEST(ClientLivenessSweeper, SilentTrackedConnectionIsClosedOnceAtTheTimeout)
 	LivenessSweeper sweeper(kClientLiveness);
 	FakeSessions fake;
 	const SteadyTime start = At(seconds(0));
-	VerifyAndTrack(sweeper, fake.Add(7, 70, /*verified=*/true), 7, start);
+	VerifyAndTrack(sweeper, fake.Add(7, 70), 7, start);
 	EXPECT_EQ(sweeper.PendingChecks(), 1u);
 
 	EXPECT_EQ(fake.SweepEachSecond(sweeper, start + kPeriod, start + kTimeout - kPeriod), 0u);
@@ -527,7 +459,7 @@ TEST(ClientLivenessSweeper, AnyInboundFramePostponesTheVerdict)
 	LivenessSweeper sweeper(kClientLiveness);
 	FakeSessions fake;
 	const SteadyTime start = At(seconds(0));
-	FakeSession &session = fake.Add(7, 70, /*verified=*/true);
+	FakeSession &session = fake.Add(7, 70);
 	VerifyAndTrack(sweeper, session, 7, start);
 
 	EXPECT_EQ(fake.SweepEachSecond(sweeper, start + kPeriod, start + seconds(20)), 0u);
@@ -546,7 +478,7 @@ TEST(ClientLivenessSweeper, HeartbeatsEveryIntervalKeepTheConnectionAlive)
 	LivenessSweeper sweeper(kClientLiveness);
 	FakeSessions fake;
 	const SteadyTime start = At(seconds(0));
-	FakeSession &session = fake.Add(7, 70, /*verified=*/true);
+	FakeSession &session = fake.Add(7, 70);
 	VerifyAndTrack(sweeper, session, 7, start);
 
 	for (SteadyTime t = start + kPeriod; t <= start + 10 * kTimeout; t += kPeriod)
@@ -569,20 +501,19 @@ TEST(ClientLivenessSweeper, ClosedReusedOrUntrackedSessionsAreDroppedNotClosed)
 	FakeSessions fake;
 	const SteadyTime start = At(seconds(0));
 
-	VerifyAndTrack(sweeper, fake.Add(1, 10, /*verified=*/true), 1, start);
+	VerifyAndTrack(sweeper, fake.Add(1, 10), 1, start);
 	fake.sessions.erase(1); // 断开回调删了会话
 
-	VerifyAndTrack(sweeper, fake.Add(2, 20, /*verified=*/true), 2, start);
-	fake.Add(2, 21, /*verified=*/false); // 同号给了一条新连接
+	VerifyAndTrack(sweeper, fake.Add(2, 20), 2, start);
+	fake.Add(2, 21); // 同号给了一条新连接
 
 	sweeper.Track(3, 30, start); // 检查点对应的会话没在跟踪
-	fake.Add(3, 30, /*verified=*/true);
+	fake.Add(3, 30);
 
 	EXPECT_EQ(fake.SweepEachSecond(sweeper, start + kPeriod, start + kTimeout - kPeriod), 0u);
 	const auto result = fake.Sweep(sweeper, start + kTimeout);
 	EXPECT_EQ(result.stale, 3u);
 	EXPECT_EQ(result.idleClosed, 0u);
-	EXPECT_EQ(result.handshakeTimeouts, 0u);
 	EXPECT_TRUE(fake.idleClosed.empty());
 	EXPECT_EQ(sweeper.PendingChecks(), 0u);
 }
@@ -593,9 +524,9 @@ TEST(ClientLivenessSweeper, ReusedSessionIdIsJudgedOnItsOwnSchedule)
 	LivenessSweeper sweeper(kClientLiveness);
 	FakeSessions fake;
 	const SteadyTime start = At(seconds(0));
-	VerifyAndTrack(sweeper, fake.Add(5, 50, /*verified=*/true), 5, start);
+	VerifyAndTrack(sweeper, fake.Add(5, 50), 5, start);
 	const SteadyTime reconnectAt = start + seconds(10);
-	VerifyAndTrack(sweeper, fake.Add(5, 51, /*verified=*/false), 5, reconnectAt);
+	VerifyAndTrack(sweeper, fake.Add(5, 51), 5, reconnectAt);
 
 	EXPECT_EQ(fake.SweepEachSecond(sweeper, start + kPeriod, reconnectAt + kTimeout - kPeriod), 0u);
 	EXPECT_EQ(fake.SweepEachSecond(sweeper, reconnectAt + kTimeout, reconnectAt + kTimeout), 1u);
@@ -610,7 +541,7 @@ TEST(ClientLivenessSweeper, LateSweepDefersAndTheNextOnTimeSweepCloses)
 	LivenessSweeper sweeper(kClientLiveness);
 	FakeSessions fake;
 	const SteadyTime start = At(seconds(0));
-	VerifyAndTrack(sweeper, fake.Add(7, 70, /*verified=*/true), 7, start);
+	VerifyAndTrack(sweeper, fake.Add(7, 70), 7, start);
 	EXPECT_EQ(fake.SweepEachSecond(sweeper, start + kPeriod, start + kTimeout - kPeriod), 0u);
 
 	const SteadyTime stalledUntil = start + kTimeout + seconds(3);
@@ -633,7 +564,7 @@ TEST(ClientLivenessSweeper, FrameReadAfterAStallSavesTheConnection)
 	LivenessSweeper sweeper(kClientLiveness);
 	FakeSessions fake;
 	const SteadyTime start = At(seconds(0));
-	FakeSession &session = fake.Add(7, 70, /*verified=*/true);
+	FakeSession &session = fake.Add(7, 70);
 	VerifyAndTrack(sweeper, session, 7, start);
 	EXPECT_EQ(fake.SweepEachSecond(sweeper, start + kPeriod, start + kTimeout - kPeriod), 0u);
 
@@ -652,8 +583,8 @@ TEST(ClientLivenessSweeper, OnlyDueCheckpointsAreExamined)
 	LivenessSweeper sweeper(kClientLiveness);
 	FakeSessions fake;
 	const SteadyTime start = At(seconds(0));
-	VerifyAndTrack(sweeper, fake.Add(1, 10, /*verified=*/true), 1, start);
-	VerifyAndTrack(sweeper, fake.Add(2, 20, /*verified=*/true), 2, start + seconds(5));
+	VerifyAndTrack(sweeper, fake.Add(1, 10), 1, start);
+	VerifyAndTrack(sweeper, fake.Add(2, 20), 2, start + seconds(5));
 
 	EXPECT_EQ(fake.SweepEachSecond(sweeper, start + kPeriod, start + kTimeout), 1u);
 	ASSERT_EQ(fake.idleClosed.size(), 1u);

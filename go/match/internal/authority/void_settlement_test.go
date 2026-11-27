@@ -105,7 +105,7 @@ func TestAbortTiDBWritesVoidSettlementPerMember(t *testing.T) {
 	defer tx.Rollback()
 	stamp, err := now(ctx, tx)
 	require.NoError(t, err)
-	require.NoError(t, commitAbortTx(ctx, tx, f, stamp, pb.MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT))
+	require.NoError(t, s.commitAbortTx(ctx, tx, f, stamp, pb.MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT))
 	require.NoError(t, tx.Commit())
 
 	requireVoidSettlementSources(t, s, f, "original-owner", 1)
@@ -129,7 +129,7 @@ func TestAbortTiDBSkipsVoidSettlementWithoutOriginalTicket(t *testing.T) {
 	defer tx.Rollback()
 	stamp, err := now(ctx, tx)
 	require.NoError(t, err)
-	require.NoError(t, commitAbortTx(ctx, tx, f, stamp, pb.MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT))
+	require.NoError(t, s.commitAbortTx(ctx, tx, f, stamp, pb.MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT))
 	require.NoError(t, tx.Commit())
 
 	var players []uint64
@@ -161,7 +161,7 @@ func TestAbortTiDBVoidSettlementFlowsThroughThePersonalOutbox(t *testing.T) {
 	defer tx.Rollback()
 	stamp, err := now(ctx, tx)
 	require.NoError(t, err)
-	require.NoError(t, commitAbortTx(ctx, tx, f, stamp, pb.MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT))
+	require.NoError(t, s.commitAbortTx(ctx, tx, f, stamp, pb.MatchBattleCompletionSourceKind_MATCH_BATTLE_COMPLETION_SOURCE_MATCH_DEADLINE_ABORT))
 	require.NoError(t, tx.Commit())
 	backlog, err := s.ReadOutcomeOutboxBacklog(ctx)
 	require.NoError(t, err)

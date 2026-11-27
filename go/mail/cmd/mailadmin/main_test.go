@@ -359,6 +359,25 @@ func TestSuccessTipCodeIsDelivered(t *testing.T) {
 	}
 }
 
+// 双人复核:mail 以 PermissionDenied 拒绝不带批准记录的发件,拒绝在读写库之前,是确定结果:退出码 3,提示生产写库走后台、
+// 只有本机开发打开 AdminAllowUnapproved 才接受,不提示结果未知、不打印重试命令。-file 里带批准记录在发出之前就拒绝。
+func TestDualControlRefusalIsDefiniteAndFileCannotCarryApproval(t *testing.T) {
+	fake, target := startFakeMailAdmin(t, func(int) (*mailpb.SendMailResponse, error) {
+		return nil, status.Error(codes.PermissionDenied, "dual-control approval record is missing")
+	})
+	code, _, stderr := runCLI("personal", "-target", target, "-to", "7", "-title", "补偿", "-currency", "1:10", "-request-id", "42", "-expire-ms", "1893456000000")
+	if code != exitRejected || strings.Contains(stderr, "outcome unknown") || !strings.Contains(stderr, "java/gm_admin") || !strings.Contains(stderr, "AdminAllowUnapproved") {
+		t.Fatalf("双人复核拒绝应按确定结果返回 %d: exit=%d stderr=%s", exitRejected, code, stderr)
+	}
+	file := writeRequestFile(t, `{"recipientPlayerId":"7","title":"补偿","approval":{"approvalId":"42","proposer":"a","approver":"b","approvedAtMs":"1"}}`)
+	if code, _, stderr := runCLI("personal", "-target", target, "-file", file); code != exitUsage {
+		t.Fatalf("-file 带批准记录必须在发出之前拒绝: exit=%d stderr=%s", code, stderr)
+	}
+	if n := len(fake.received()); n != 1 {
+		t.Fatalf("只有第一条发件到达邮件服务, 实收 %d 次", n)
+	}
+}
+
 // 名单导入的幂等键在文件里:重试命令原样带上 -file,不附加发件才有的请求号。
 func TestImportRetryCommandKeepsFileOnly(t *testing.T) {
 	_, target := startFakeMailAdmin(t, delivered)

@@ -596,6 +596,11 @@ void GateClientSessionHandler::SendMessageToClient(const muduo::net::TcpConnecti
 
 SessionId GateClientSessionHandler::GetSessionId(const muduo::net::TcpConnectionPtr &conn)
 {
+	// 还没验签的连接上下文是未验签记录的键(pre_auth_connection.h),没有会话号:不打日志,它们的数量由公网流量决定。
+	if (PreAuthIncarnationOf(conn))
+	{
+		return kInvalidSessionId;
+	}
 	try
 	{
 		return boost::any_cast<SessionId>(conn->getContext());
@@ -772,6 +777,13 @@ static Guid PlayerForLogContext(const Guid playerId)
 
 void GateClientSessionHandler::HandleConnectionDisconnection(const muduo::net::TcpConnectionPtr &conn)
 {
+	// 还没验签就断开(票据先行,docs/design/gate-connection-admission-control.md P2-4):这条连接只有一条未验签记录,
+	// 摘掉就完了 —— 没有会话、没有角色、没向 login 发过登录,不通知 login / scene,也不开 trace 根(数量由公网流量决定)。
+	// 被承压淘汰、握手超时关掉的连接,记录在关之前已经摘过。
+	if (gate_connection_admission::ForgetPreAuthConnection(conn))
+	{
+		return;
+	}
 	// 断线事件是一条链路的起点:开新根(docs/design/distributed-tracing.md §3.3)。通知 scene 的 RPC0 请求经信封带上它;
 	// 通知 login 走 gRPC,在该设计 §10.1 第 4 批接上。这个根也是一个 server span(§10.3)。
 	tracing::ScopedRoot disconnectTrace(tracing::SpanSystem::kGateClient, tracing::SpanName{"gate.disconnect"});
@@ -926,14 +938,15 @@ void GateClientSessionHandler::HandleConnectionEstablished(const muduo::net::Tcp
 	// main.cpp 经 TcpServer::setAdmissionCallback 装上):关源、总量、未验签预算、新建速率都在 accept 之后、TcpConnection 建出来
 	// 之前判,被拒的连接当场以 RST 关闭,走不到这里(docs/design/gate-connection-admission-control.md P0-2、P1-1 ~ P1-3)。
 	// 这里留着同一条总量判据,是为了准入回调没装上时(单测直接调本函数,或以后有人改了装配顺序)上限仍然成立:
-	// 在发 session_id、建 SessionInfo 之前拒掉。未验签预算不在这里重判:它要淘汰别的连接,只在准入回调里做一处。
+	// 在登记未验签记录之前拒掉。未验签预算不在这里重判:它要淘汰别的连接,只在准入回调里做一处。
 	//
 	// gate 是唯一对公网开放的端口,而 muduo 的 TcpServer 无条件 accept:没有这两道闸,不需要任何凭证,
-	// 只要一直建连就能把 gate 的 fd、SessionMap 和每连接读写缓冲吃光;token 校验发生在这之后,
+	// 只要一直建连就能把 gate 的 fd、未验签表和每连接读写缓冲吃光;token 校验发生在这之后,
 	// IllegalPacketCounter 只按**已建立的会话**计数,都拦不住。
 	//
-	// 用当前会话数而不是另立计数器:sessions() 与连接是严格一一对应的
-	// (本函数插入、HandleConnectionDisconnection 删除),不会漂移。
+	// 用 会话数 + 未验签连接数(ClientConnectionCount)而不是另立计数器:两张表合起来与连接一一对应
+	// (本函数插进未验签表或会话表,验签成功时从前者挪到后者,HandleConnectionDisconnection 删),不会漂移。
+	// 被淘汰、握手超时的连接在关闭前就摘了记录,只差同一轮 loop 里还没关完的那几条。
 	// 拒绝时直接 forceClose,不回任何应答 —— 已经在容量边界上了,
 	// 再为每条被拒连接序列化一条 tip 正好是攻击者想要的放大。
 	//
@@ -947,7 +960,7 @@ void GateClientSessionHandler::HandleConnectionEstablished(const muduo::net::Tcp
 	// dev/test 的 0 只关闭“运维配置阈值”,不能关闭 session-id 空间的硬上限。
 	// 否则 131071 个安全 ID 全占满后,下面的碰撞循环会永远找不到空号。
 	const auto effectiveMaxConnections = gate_connection_admission::EffectiveMaxConnections(configuredMaxConnections);
-	if (tlsSessionManager.sessions().size() >= effectiveMaxConnections)
+	if (tlsSessionManager.ClientConnectionCount() >= effectiveMaxConnections)
 	{
 		gate_connection_admission::NoteRejectedAfterAccept(gate_connection_admission::RejectReason::kCapacity);
 		// 打日志必须限流:被拒的连接量正是攻击流量的量级,每条一行 ERROR
@@ -960,7 +973,7 @@ void GateClientSessionHandler::HandleConnectionEstablished(const muduo::net::Tcp
 					  << " (the acceptor admission gate did not stop it)."
 					  << " configured_limit=" << configuredMaxConnections
 					  << " effective_limit=" << effectiveMaxConnections
-					  << " current=" << tlsSessionManager.sessions().size()
+					  << " current=" << tlsSessionManager.ClientConnectionCount()
 					  << " rejected_total=" << rejectedCount
 					  << " peer=" << conn->peerAddress().toIpPort();
 		}
@@ -975,6 +988,7 @@ void GateClientSessionHandler::HandleConnectionEstablished(const muduo::net::Tcp
 	// fail-closed:node 段没种好就绝不发号。带 node 段 0 的 session_id 是"坏号" ——
 	// scene 侧 GetGateNodeId() 得到 0、永远解析不出归属 gate,玩家整局静默不可用,
 	// 且无任何自愈路径。宁可当场拒连让客户端重连,也不要放一个坏号进系统。
+	// 号在验签成功时才发(OpenVerifiedSession),但 node 段只在启动时种一次,在这里拒掉就不会有连接走到发号那一步。
 	// 正常路径下 main.cpp 已在装 connection 回调之前 set_node_id,这里是纵深防御。
 	if (tlsSessionManager.session_id_gen().node_id_prefix() == 0)
 	{
@@ -1015,30 +1029,12 @@ void GateClientSessionHandler::HandleConnectionEstablished(const muduo::net::Tcp
 		return;
 	}
 
-	auto sessionId = tlsSessionManager.session_id_gen().Generate();
-	// kInvalidSessionId(UINT32_MAX) 是“连接从未建立会话”的保留哨兵。
-	// 复合发号器在 node_id=32767 且 seq=131071 时确实能生成这个值;
-	// 不显式跳过的话,真实会话断开时会命中顶部早退,漏掉 SessionMap、Scene
-	// 与 Login 清理,也会让连接计数永久漂移。
-	while (sessionId == kInvalidSessionId ||
-		   tlsSessionManager.sessions().find(sessionId) != tlsSessionManager.sessions().end())
-	{
-		sessionId = tlsSessionManager.session_id_gen().Generate();
-	}
-
-	// Session ID prevents packet tampering / message misdirection
-
-	conn->setContext(sessionId);
 	conn->setHighWaterMarkCallback(OnClientHighWaterMark, kClientHighWaterMark);
-
-	SessionInfo session;
-	session.conn = conn;
-	// 会话代次:进程内单调,随 SessionDetails 发出,路由 lane 认领回包与 login 会话栅栏都用它(client_request_lane.h)。
-	session.incarnation = gate_lane::NextIncarnation();
+	const auto establishedAt = std::chrono::steady_clock::now();
 
 	if (secretVerdict == gate_security::TokenSecretVerdict::kDevBypass)
 	{
-		// 明确授权的降级路径:非生产环境且没配密钥,自动标记已验证。
+		// 明确授权的降级路径:非生产环境且没配密钥,建连即建会话并标成已验证(发号、建会话与验签成功同一个入口)。
 		// WARN 只打一次 —— 每条连接都打会在压测/开服洪峰里把日志刷爆,
 		// 而这条信息是进程级常量,一次就够定性。
 		static bool sBypassWarned = false;
@@ -1050,19 +1046,15 @@ void GateClientSessionHandler::HandleConnectionEstablished(const muduo::net::Tcp
 					 << " — every client connection is auto-verified without a token."
 					 << " NEVER run this configuration in production.";
 		}
-		session.verified = true;
+		gate_connection_admission::OpenVerifiedSession(conn, std::string{}, establishedAt);
 	}
-
-	const auto sessionEntry = tlsSessionManager.sessions().emplace(sessionId, std::move(session)).first;
-	const auto establishedAt = std::chrono::steady_clock::now();
-	// 连接类指标(connection_admission.h):计一次接纳;还没验签的会话领一个未验签占位,验签成功或会话销毁时归还,
-	// 并按建连先后进未验签预算的淘汰索引(承压时最老的先让位,索引按 session_id 与会话代次核对)。
-	gate_connection_admission::OnSessionOpened(sessionEntry->first, sessionEntry->second, establishedAt);
-	// 握手期限(docs/design/gate-client-heartbeat.md §5.1):建连 10s 内必须验签,判据是距建连的时长,不看期间有没有发字节。
-	// dev 免验签的会话上面已置 verified,不用登记。
-	if (!sessionEntry->second.verified)
+	else
 	{
-		gate_client_heartbeat::ExpectHandshake(sessionId, sessionEntry->second, establishedAt);
+		// 票据先行(docs/design/gate-connection-admission-control.md P2-4):验签之前只登记一条未验签记录(连接 weak、建连时刻、
+		// 代次),连接上下文换成它的键;不发 session_id、不建 SessionInfo,验签成功时才发号建会话(DispatchTokenVerify)。
+		// 未验签预算按这张表的大小判,承压时淘汰表头(最老)的那条;握手期限(建连 10s 内必须验签,判据是距建连的时长)
+		// 由存活扫描从表头扫(docs/design/gate-client-heartbeat.md §5.1)。
+		gate_connection_admission::OpenPreAuthConnection(conn, establishedAt);
 	}
 
 	// 所有新连接此刻都还没绑定玩家,数量完全由公网流量决定;逐连接 INFO 会让
@@ -1071,10 +1063,10 @@ void GateClientSessionHandler::HandleConnectionEstablished(const muduo::net::Tcp
 	if ((acceptedConnectionCount++ & 0x3FF) == 0)
 	{
 		const std::string peer = conn ? conn->peerAddress().toIpPort() : std::string{"<null>"};
-		LOG_INFO << "Client connections accepted (sampled), latest_session_id=" << sessionId
-				 << ", latest_peer=" << peer
+		LOG_INFO << "Client connections accepted (sampled), latest_peer=" << peer
 				 << ", accepted_total=" << acceptedConnectionCount
-				 << ", current_sessions=" << tlsSessionManager.sessions().size();
+				 << ", current_sessions=" << tlsSessionManager.sessions().size()
+				 << ", unauthenticated=" << tlsSessionManager.preAuthConnections().size();
 	}
 }
 
@@ -1334,6 +1326,17 @@ void GateClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpCon
 	// 走 gRPC 的转发在该设计 §10.1 第 4 批接上。客户端帧里没有 trace 字段,客户端指定不了 trace_id。
 	// 这个根也是一个 server span(§10.3),按客户端调的方法命名。
 	tracing::ScopedRoot requestTrace(tracing::SpanSystem::kGateClient, ClientRequestSpanName(request->message_id()));
+	// Reject all game messages until the client passes token verification.
+	// 还没验签的连接只有一条未验签记录、没有会话(票据先行,准入设计 P2-4):除了验签请求什么都不收,不回包,直接断开。
+	// 唯一会跳过令牌校验的情形:gate_token_secret 为空**且** GATE_RUN_MODE 是
+	// dev/test —— 那种情况下 HandleConnectionEstablished 会在建连时就建好已验证的会话
+	// 并打一条 SECURITY WARNING。生产模式下空密钥根本连不进来。
+	if (PreAuthIncarnationOf(conn))
+	{
+		LogClientSecurityRejectionSampled("client_request_before_token_verify", kInvalidSessionId);
+		conn->forceClose();
+		return;
+	}
 	auto sessionId = GetSessionId(conn);
 	const auto sessionIt = tlsSessionManager.sessions().find(sessionId);
 	if (sessionIt == tlsSessionManager.sessions().end())
@@ -1348,10 +1351,7 @@ void GateClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpCon
 	// 任何一帧都说明客户端还活着,随后被拒的也算(docs/design/gate-client-heartbeat.md §5.3)。尚未开始跟踪的连接不读时钟。
 	gate_client_heartbeat::NoteInboundFrame(session);
 
-	// Reject all game messages until the client passes token verification.
-	// 唯一会跳过令牌校验的情形:gate_token_secret 为空**且** GATE_RUN_MODE 是
-	// dev/test —— 那种情况下 HandleConnectionEstablished 会在建连时就标记
-	// verified 并打一条 SECURITY WARNING。生产模式下空密钥根本连不进来。
+	// 会话只在验签成功之后才建,这里恒为已验签;留作纵深防御,处置与上面还没验签的连接相同。
 	if (!session.verified)
 	{
 		LogClientSecurityRejectionSampled("client_request_before_token_verify", sessionId);
@@ -1516,45 +1516,6 @@ void GateClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnecti
 {
 	// 验签消息同样是请求的起点:开新根(docs/design/distributed-tracing.md §3.3),也是一个 server span(§10.3)。
 	tracing::ScopedRoot requestTrace(tracing::SpanSystem::kGateClient, tracing::SpanName{"gate.token_verify"});
-	auto sessionId = GetSessionId(conn);
-	const auto sessionIt = tlsSessionManager.sessions().find(sessionId);
-	if (sessionIt == tlsSessionManager.sessions().end())
-	{
-		LogClientSecurityRejectionSampled("token_verify_missing_session", sessionId);
-		conn->forceClose();
-		return;
-	}
-
-	auto &session = sessionIt->second;
-	tracing::ScopedPlayerId playerContext(PlayerForLogContext(session.playerId));
-	gate_client_heartbeat::NoteInboundFrame(session);
-
-	auto sendReply = [&](bool success, const std::string &error)
-	{
-		ClientTokenVerifyResponse resp;
-		resp.set_success(success);
-		if (!error.empty())
-			resp.set_error(error);
-		// 验签成功:回包通告心跳参数,并从这一刻起按空闲超时判死这条连接(含 dev 免验签:那里每条验签请求都答,
-		// 重复调用不重复登记)。docs/design/gate-client-heartbeat.md §5.1。
-		// 同一时刻归还未验签占位、把握手耗时记进直方图(connection_admission.h;没有占位时什么也不做,同样可重复调用)。
-		if (success)
-		{
-			const auto verifiedAt = std::chrono::steady_clock::now();
-			gate_client_heartbeat::OnTokenVerified(sessionId, session, resp, verifiedAt);
-			gate_connection_admission::OnSessionVerified(session, verifiedAt);
-		}
-		protobufCodec.send(conn, resp);
-	};
-	auto rejectAndClose = [&](const char *reason, const std::string &clientError)
-	{
-		LogClientSecurityRejectionSampled(reason, sessionId);
-		sendReply(false, clientError);
-		// shutdown 立刻把状态切到 kDisconnecting,codec 会停止分发 pipeline;
-		// 短延迟给错误应答一个 flush 窗口,随后强关,不让恶意端长期占槽。
-		conn->shutdown();
-		conn->forceCloseWithDelay(0.1);
-	};
 
 	// 与 HandleConnectionEstablished 同一条判据:空密钥的处置由显式运行模式
 	// 决定,不能只看"密钥是不是空字符串"。这条路径尤其致命 —— 旧写法下客户端
@@ -1563,18 +1524,40 @@ void GateClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnecti
 	const auto runMode = gate_security::CurrentRunMode();
 	const auto &secret = gNodeConfigManager.GetBaseDeployConfig().gate_token_secret();
 	const auto secretVerdict = gate_security::ClassifyTokenSecret(secret, runMode);
-	if (secretVerdict == gate_security::TokenSecretVerdict::kDevBypass)
-	{
-		// 明确授权的免验签(dev / test 且没配密钥):会话建连时已标成已验证,每条验签请求都答成功、不看票据。
-		session.verified = true;
-		sendReply(true, "");
-		return;
-	}
 
-	// 已经验过签的连接又发验签请求。客户端每条连接只发一次(mmorpg-client 的 GameClient.ConnectAndEnter),重发是协议违例:
-	// 不回包(回包等于白送一次序列化与下行),计一次非法包,到阈值断开(docs/design/gate-connection-admission-control.md §5 第 5 条)。
-	if (session.verified)
+	// 验签成功的应答:回包通告心跳参数,并从这一刻起按空闲超时判死这条连接、登记登录期限(含 dev 免验签:那里每条验签请求都答,
+	// 重复调用不重复登记)。docs/design/gate-client-heartbeat.md §5.1。
+	auto sendSuccess = [&](const SessionId sessionId, SessionInfo &session, const client_liveness::SteadyTime verifiedAt)
 	{
+		ClientTokenVerifyResponse resp;
+		resp.set_success(true);
+		gate_client_heartbeat::OnTokenVerified(sessionId, session, resp, verifiedAt);
+		protobufCodec.send(conn, resp);
+	};
+
+	// 已经有会话的连接:验签成功过,或 dev 免验签建连即建了会话。
+	const std::optional<uint64_t> preAuthKey = PreAuthIncarnationOf(conn);
+	if (!preAuthKey)
+	{
+		const SessionId sessionId = GetSessionId(conn);
+		const auto sessionIt = tlsSessionManager.sessions().find(sessionId);
+		if (sessionIt == tlsSessionManager.sessions().end())
+		{
+			LogClientSecurityRejectionSampled("token_verify_missing_session", sessionId);
+			conn->forceClose();
+			return;
+		}
+		SessionInfo &session = sessionIt->second;
+		tracing::ScopedPlayerId playerContext(PlayerForLogContext(session.playerId));
+		gate_client_heartbeat::NoteInboundFrame(session);
+		if (secretVerdict == gate_security::TokenSecretVerdict::kDevBypass)
+		{
+			// 明确授权的免验签(dev / test 且没配密钥):会话建连时已建好、已标成已验证,每条验签请求都答成功、不看票据。
+			sendSuccess(sessionId, session, std::chrono::steady_clock::now());
+			return;
+		}
+		// 已经验过签的连接又发验签请求。客户端每条连接只发一次(mmorpg-client 的 GameClient.ConnectAndEnter),重发是协议违例:
+		// 不回包(回包等于白送一次序列化与下行),计一次非法包,到阈值断开(docs/design/gate-connection-admission-control.md §5 第 5 条)。
 		LogClientSecurityRejectionSampled("token_verify_repeated", sessionId);
 		if (IllegalPacketCounter::RegisterAndShouldKill(session.illegalPacketCount))
 		{
@@ -1582,6 +1565,37 @@ void GateClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnecti
 					 << " count=" << session.illegalPacketCount << " session_id=" << sessionId;
 			conn->forceClose();
 		}
+		return;
+	}
+
+	// 还没验签的连接(票据先行,准入设计 P2-4):它只有一条未验签记录,没有会话,下面校验票据时一个业务对象都不建。
+	// 记录已被承压淘汰、握手超时摘掉的连接正在关,codec 不再分发它的帧;万一走到这里也只关、不答。
+	if (!tlsSessionManager.preAuthConnections().contains(*preAuthKey))
+	{
+		LogClientSecurityRejectionSampled("token_verify_missing_preauth", kInvalidSessionId);
+		conn->forceClose();
+		return;
+	}
+	auto rejectAndClose = [&](const char *reason, const std::string &clientError)
+	{
+		LogClientSecurityRejectionSampled(reason, kInvalidSessionId);
+		ClientTokenVerifyResponse resp;
+		resp.set_success(false);
+		resp.set_error(clientError);
+		protobufCodec.send(conn, resp);
+		// shutdown 立刻把状态切到 kDisconnecting,codec 会停止分发 pipeline;
+		// 短延迟给错误应答一个 flush 窗口,随后强关,不让恶意端长期占槽。未验签记录由断开回调摘。
+		conn->shutdown();
+		conn->forceCloseWithDelay(0.1);
+	};
+
+	if (secretVerdict == gate_security::TokenSecretVerdict::kDevBypass)
+	{
+		// dev 免验签的连接建连时就建了会话,走不到这里;万一走到,照免验签处理:建会话、答成功、不看票据。
+		const auto verifiedAt = std::chrono::steady_clock::now();
+		const std::optional<SessionId> sessionId =
+			gate_connection_admission::OpenVerifiedSession(conn, std::string{}, verifiedAt);
+		sendSuccess(*sessionId, tlsSessionManager.sessions().at(*sessionId), verifiedAt);
 		return;
 	}
 
@@ -1643,14 +1657,19 @@ void GateClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnecti
 		return;
 	}
 
-	// 一张票同一时刻只开一条连接:这张票已有一条活着的连接就拒绝这一条(docs/design/login-queue-2026-05.md §5)。
+	// 票据全部验过,这时才发 session_id、建会话(票据先行,准入设计 P2-4:会话表与发号器都挡在票据之后),
+	// 未验签记录随之摘掉,握手耗时进直方图。
+	// 一张票同一时刻只开一条连接:这张票已有一条活着的连接就拒绝这一条(docs/design/login-queue-2026-05.md §5),这时不建会话。
 	// 合法客户端每次连接都现领一张新票(重连、重定向失败都不复用旧票),碰不到这一条。
-	if (!tlsSessionManager.ClaimTicket(clientSigStr, sessionId, session.incarnation))
+	const auto verifiedAt = std::chrono::steady_clock::now();
+	const std::optional<SessionId> sessionId =
+		gate_connection_admission::OpenVerifiedSession(conn, clientSigStr, verifiedAt);
+	if (!sessionId)
 	{
 		rejectAndClose("token_in_use", "token already in use");
 		return;
 	}
-	session.ticketKey = clientSigStr;
+	SessionInfo &session = tlsSessionManager.sessions().at(*sessionId);
 
 	// todo.md #76 slice A — install the per-session HMAC key carried in
 	// the verified token payload. Empty bytes mean "client/server pair
@@ -1660,15 +1679,8 @@ void GateClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnecti
 	// (slice B), absent key here flags the connection as "unsigned-
 	// allowed" so the gate's per-message verifier knows whether to
 	// require a tag.
-	//
-	// Resetting the illegal-packet counter on a verified handshake is
-	// intentional: a fresh ClientTokenVerify means the client has just
-	// completed AssignGate, so any pre-handshake packet noise is
-	// behind us. If illegal packets resume after this point, that's a
-	// real attack signal and the threshold counter starts again from
-	// zero.
+	// 非法包计数随新会话从 0 开始:验签之前没有会话,违规的包直接断开,不计数。
 	session.hmacSessionKey.assign(payload.hmac_session_key());
-	IllegalPacketCounter::Reset(session.illegalPacketCount);
 
 	// 重定向票据的绑定信息(CZ-8):只存不判,随 SessionDetails 交给 login EnterGame 校验。
 	session.ticketPlayerId = payload.player_id();
@@ -1676,9 +1688,8 @@ void GateClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnecti
 	// 票据绑定的账号摘要:同样只存不判,随 SessionDetails 交给 login 的 Login 比对(借来的票登不上别的账号)。
 	session.ticketAccountDigest.assign(payload.account_digest());
 
-	session.verified = true;
-	sendReply(true, "");
-	LOG_DEBUG << "[Token] Session verified, session_id: " << sessionId
+	sendSuccess(*sessionId, session, verifiedAt);
+	LOG_DEBUG << "[Token] Session verified, session_id: " << *sessionId
 			  << " hmac_key_len=" << session.hmacSessionKey.size();
 }
 

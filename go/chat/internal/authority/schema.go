@@ -92,11 +92,39 @@ accepted_at DATETIME(3) NOT NULL,
 PRIMARY KEY(sender_player_id,day_ymd,target_player_id)
 ) ENGINE=InnoDB ` + retentionAttributes
 
-const chatTablesInClause = "('chat_send_authority','chat_policy','chat_world_retraction','chat_report','chat_repeat_event','chat_private_daily_target')"
+// 世界频道平台补审的三张表(platform_recheck.go):待补审、认领、结局,都只追加,保留期同原件。
+var platformRecheckDDL = `CREATE TABLE IF NOT EXISTS chat_platform_recheck (
+sender_player_id BIGINT UNSIGNED NOT NULL,
+accepted_ms BIGINT UNSIGNED NOT NULL,
+accepted_at DATETIME(3) NOT NULL,
+PRIMARY KEY(sender_player_id,accepted_ms),
+KEY idx_chat_recheck_ms(accepted_ms,sender_player_id)
+) ENGINE=InnoDB ` + retentionAttributes
+
+var platformRecheckClaimDDL = `CREATE TABLE IF NOT EXISTS chat_platform_recheck_claim (
+sender_player_id BIGINT UNSIGNED NOT NULL,
+accepted_ms BIGINT UNSIGNED NOT NULL,
+attempt INT UNSIGNED NOT NULL,
+claimed_ms BIGINT UNSIGNED NOT NULL,
+accepted_at DATETIME(3) NOT NULL,
+PRIMARY KEY(sender_player_id,accepted_ms,attempt)
+) ENGINE=InnoDB ` + retentionAttributes
+
+var platformRecheckDoneDDL = `CREATE TABLE IF NOT EXISTS chat_platform_recheck_done (
+sender_player_id BIGINT UNSIGNED NOT NULL,
+accepted_ms BIGINT UNSIGNED NOT NULL,
+outcome TINYINT UNSIGNED NOT NULL,
+done_ms BIGINT UNSIGNED NOT NULL,
+accepted_at DATETIME(3) NOT NULL,
+PRIMARY KEY(sender_player_id,accepted_ms)
+) ENGINE=InnoDB ` + retentionAttributes
+
+const chatTablesInClause = "('chat_send_authority','chat_policy','chat_world_retraction','chat_report','chat_repeat_event','chat_private_daily_target','chat_platform_recheck','chat_platform_recheck_claim','chat_platform_recheck_done')"
 
 // Migrate只供显式-migrate入口；普通启动不修表，不把历史结构不明降级成Redis。
 func Migrate(ctx context.Context, db *sql.DB) error {
-	for _, ddl := range []string{sendDDL, policyDDL, worldRetractionDDL, reportDDL, repeatEventDDL, privateDailyTargetDDL} {
+	for _, ddl := range []string{sendDDL, policyDDL, worldRetractionDDL, reportDDL, repeatEventDDL, privateDailyTargetDDL,
+		platformRecheckDDL, platformRecheckClaimDDL, platformRecheckDoneDDL} {
 		if _, err := db.ExecContext(ctx, ddl); err != nil {
 			return err
 		}
@@ -123,6 +151,9 @@ func CheckSchema(ctx context.Context, db *sql.DB) error {
 		"SELECT reporter_player_id,channel,target_sender_player_id,send_time_ms,reason,detail,reported_ms,accepted_at FROM chat_report LIMIT 0",
 		"SELECT content_hash,accepted_ms,sender_player_id,accepted_at FROM chat_repeat_event LIMIT 0",
 		"SELECT sender_player_id,day_ymd,target_player_id,accepted_at FROM chat_private_daily_target LIMIT 0",
+		"SELECT sender_player_id,accepted_ms,accepted_at FROM chat_platform_recheck LIMIT 0",
+		"SELECT sender_player_id,accepted_ms,attempt,claimed_ms,accepted_at FROM chat_platform_recheck_claim LIMIT 0",
+		"SELECT sender_player_id,accepted_ms,outcome,done_ms,accepted_at FROM chat_platform_recheck_done LIMIT 0",
 	} {
 		rows, err := db.QueryContext(ctx, query)
 		if err != nil {
@@ -164,6 +195,10 @@ func CheckSchema(ctx context.Context, db *sql.DB) error {
 		"chat_report/idx_chat_report_target":        "target_sender_player_id,send_time_ms",
 		"chat_repeat_event/PRIMARY":                 "content_hash,accepted_ms,sender_player_id",
 		"chat_private_daily_target/PRIMARY":         "sender_player_id,day_ymd,target_player_id",
+		"chat_platform_recheck/PRIMARY":             "sender_player_id,accepted_ms",
+		"chat_platform_recheck/idx_chat_recheck_ms": "accepted_ms,sender_player_id",
+		"chat_platform_recheck_claim/PRIMARY":       "sender_player_id,accepted_ms,attempt",
+		"chat_platform_recheck_done/PRIMARY":        "sender_player_id,accepted_ms",
 	} {
 		if strings.Join(indexes[name], ",") != expected {
 			return errors.New("聊天权威SQL必要索引不符，须显式迁移")
@@ -211,6 +246,9 @@ func CheckSchema(ctx context.Context, db *sql.DB) error {
 		"chat_report/reporter_player_id": "bigint unsigned", "chat_report/channel": "tinyint unsigned", "chat_report/target_sender_player_id": "bigint unsigned", "chat_report/send_time_ms": "bigint unsigned", "chat_report/reason": "int unsigned", "chat_report/detail": "varbinary/255", "chat_report/reported_ms": "bigint unsigned", "chat_report/accepted_at": "datetime(3)",
 		"chat_repeat_event/content_hash": "binary/32", "chat_repeat_event/accepted_ms": "bigint unsigned", "chat_repeat_event/sender_player_id": "bigint unsigned", "chat_repeat_event/accepted_at": "datetime(3)",
 		"chat_private_daily_target/sender_player_id": "bigint unsigned", "chat_private_daily_target/day_ymd": "int unsigned", "chat_private_daily_target/target_player_id": "bigint unsigned", "chat_private_daily_target/accepted_at": "datetime(3)",
+		"chat_platform_recheck/sender_player_id": "bigint unsigned", "chat_platform_recheck/accepted_ms": "bigint unsigned", "chat_platform_recheck/accepted_at": "datetime(3)",
+		"chat_platform_recheck_claim/sender_player_id": "bigint unsigned", "chat_platform_recheck_claim/accepted_ms": "bigint unsigned", "chat_platform_recheck_claim/attempt": "int unsigned", "chat_platform_recheck_claim/claimed_ms": "bigint unsigned", "chat_platform_recheck_claim/accepted_at": "datetime(3)",
+		"chat_platform_recheck_done/sender_player_id": "bigint unsigned", "chat_platform_recheck_done/accepted_ms": "bigint unsigned", "chat_platform_recheck_done/outcome": "tinyint unsigned", "chat_platform_recheck_done/done_ms": "bigint unsigned", "chat_platform_recheck_done/accepted_at": "datetime(3)",
 	} {
 		if shapes[name] != expected {
 			return errors.New("聊天权威SQL字段类型不符，须显式审阅迁移")

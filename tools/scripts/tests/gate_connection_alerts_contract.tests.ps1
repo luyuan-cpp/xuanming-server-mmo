@@ -9,9 +9,11 @@
     或「少接一行就整个不生效」的东西:
       - 规则引用的每个指标名都由 CollectMetrics 的 BeginFamily 导出(直方图按 _bucket / _sum / _count 认);
       - reason 取值都在 connection_admission.h 的 kRejectReasonNames 里;
-      - gate 的 main.cpp 确实把准入回调装到了 TcpServer 上、登记了指标、启动时配了参数、关源时同步关了准入闸;
-      - 建连 / 验签路径确实调了未验签占位的两个钩子;
-      - 未验签预算(设计稿 P0-2):淘汰只经会话里的 weak 连接 forceClose、不在准入回调里删会话,按会话代次核对,
+      - gate 的 main.cpp 确实把准入回调装到了 TcpServer 上、登记了指标、启动时配了参数、关源时同步关了准入闸,
+        关源时未验签连接一起关;
+      - 票据先行(设计稿 P2-4):建连只登记未验签记录、不发号不建会话;票据全部校验通过之后才发号建会话;
+        断开回调第一步摘掉未验签记录就返回;握手期限扫未验签表;
+      - 未验签预算(设计稿 P0-2):淘汰未验签表的表头(按代次有序,最老),先摘记录再经 weak 连接 forceClose、不删会话,
         预算排在速率闸之前判;
       - 收包路径确实接上了登录过渡闸与未授权消息号闸(2026-11-26):这三处少接一行编译照过,闸直接失效;
       - 指标标签只有 reason 与 result 两个封闭集合:对端地址、会话号、账号、玩家号不进指标(AGENTS.md §9);
@@ -60,6 +62,8 @@ $script:AdmissionHeader = Read-RepoText -RelativePath 'cpp/nodes/gate/handler/rp
 $script:AdmissionSource = Read-RepoText -RelativePath 'cpp/nodes/gate/handler/rpc/connection_admission.cpp'
 $script:GateMain = Read-RepoText -RelativePath 'cpp/nodes/gate/main.cpp'
 $script:SessionHandler = Read-RepoText -RelativePath 'cpp/nodes/gate/handler/rpc/client_session_handler.cpp'
+$script:HeartbeatSource = Read-RepoText -RelativePath 'cpp/nodes/gate/handler/rpc/client_heartbeat.cpp'
+$script:SessionManagerHeader = Read-RepoText -RelativePath 'cpp/libs/services/gate/session/manager/session_manager.h'
 # 与 battle 直连共用的纯逻辑(速率闸、未验签预算、按来源前缀限速)。
 $script:SharedAdmissionHeader = Read-RepoText -RelativePath 'cpp/libs/engine/core/network/accept_admission.h'
 
@@ -134,26 +138,52 @@ Test-Case 'gate main.cpp:准入回调装在 TcpServer 上,指标已登记,启动
     $nodeIdAt = $script:GateMain.IndexOf('tlsSessionManager.session_id_gen().set_node_id(n.GetNodeId());')
     Assert-True -Condition ($nodeIdAt -ge 0 -and $admissionAt -gt $nodeIdAt -and $connectionAt -gt $admissionAt) -Because '顺序:先种 session_id 的 node 段,再装准入回调,再装连接回调'
     Assert-Match -Text $script:GateMain -Pattern '(?s)context\.sourceClosed = true;.{0,400}?gate_connection_admission::CloseSource\(\);' -Because '关源时 accept 处的准入闸要一起关,否则停机期间新连接照样建出来再被关'
+    Assert-Match -Text $script:GateMain -Pattern '(?s)context\.sourceClosed = true;.{0,2000}?for \(auto &\[incarnation, preAuth\] : preAuthConnections\)\s*\{\s*if \(const auto conn = preAuth\.conn\.lock\(\)\)\s*\{\s*conn->forceClose\(\);' `
+        -Because '还没验签的连接不在会话表里(票据先行),停机 / 维护关源时要单独一起关,只经记录里的 weak 连接'
 }
 
-Test-Case '建连与验签路径:未验签占位的两个钩子都接上了,纵深防御分支计入拒绝原因' {
-    Assert-Match -Text $script:SessionHandler -Pattern '(?s)sessions\(\)\.emplace\(sessionId, std::move\(session\)\)\.first;.{0,500}?gate_connection_admission::OnSessionOpened\(sessionEntry->first, sessionEntry->second, establishedAt\);' `
-        -Because '会话插入之后立刻计接纳、发未验签占位,并带上会话号进淘汰索引'
-    Assert-Match -Text $script:SessionHandler -Pattern 'gate_connection_admission::OnSessionVerified\(session, verifiedAt\);' -Because '验签成功时归还占位、记握手耗时'
+Test-Case '票据先行:建连只登记未验签记录,票据校验全部通过之后才发号建会话,未验签断开只摘记录' {
+    $established = [regex]::Match($script:SessionHandler, '(?ms)^void GateClientSessionHandler::HandleConnectionEstablished\(.*?^\}')
+    Assert-True -Condition $established.Success -Because '找得到 HandleConnectionEstablished 的函数体'
+    Assert-NotMatch -Text $established.Value -Pattern 'session_id_gen\(\)\.Generate\(\)|sessions\(\)\.emplace|sessions\(\)\[' -Because '建连时不发 session_id、不建 SessionInfo(会话表与发号器挡在票据之后)'
+    Assert-Match -Text $established.Value -Pattern 'gate_connection_admission::OpenPreAuthConnection\(conn, establishedAt\);' -Because '还没验签的连接只登记一条未验签记录'
+    Assert-Match -Text $established.Value -Pattern '(?s)TokenSecretVerdict::kDevBypass\).{0,1200}?gate_connection_admission::OpenVerifiedSession\(conn, std::string\{\}, establishedAt\);' `
+        -Because 'dev 免验签仍然建连即建会话(与验签成功同一个入口)'
+    Assert-Match -Text $established.Value -Pattern 'tlsSessionManager\.ClientConnectionCount\(\) >= effectiveMaxConnections' -Because '第二道总量闸按 会话数 + 未验签连接数 判'
     foreach ($reason in @('kCapacity', 'kNotReady', 'kNoTokenSecret')) {
         Assert-Match -Text $script:SessionHandler -Pattern ('gate_connection_admission::NoteRejectedAfterAccept\(gate_connection_admission::RejectReason::{0}\);' -f $reason) `
             -Because "连接回调里的 $reason 分支要计进 gate_rejected_total"
     }
-    Assert-Match -Text $script:AdmissionSource -Pattern 'std::make_shared<PreAuthSlot>\(tlsUnauthenticated, now\)' -Because '占位是 RAII:会话从任何路径销毁都归还,不靠各出口手写减一'
+    $verify = [regex]::Match($script:SessionHandler, '(?ms)^void GateClientSessionHandler::DispatchTokenVerify\(.*?^\}')
+    Assert-True -Condition $verify.Success -Because '找得到 DispatchTokenVerify 的函数体'
+    $hmacAt = $verify.Value.IndexOf('rejectAndClose("token_hmac_mismatch"')
+    $expiryAt = $verify.Value.IndexOf('rejectAndClose("token_expired"')
+    $openAt = $verify.Value.IndexOf('gate_connection_admission::OpenVerifiedSession(conn, clientSigStr, verifiedAt);')
+    Assert-True -Condition ($hmacAt -ge 0 -and $expiryAt -gt $hmacAt -and $openAt -gt $expiryAt) -Because '签名、载荷、节点、区、期限全部校验通过之后才发号建会话'
+    Assert-Match -Text $verify.Value -Pattern '(?s)OpenVerifiedSession\(conn, clientSigStr, verifiedAt\);\s*if \(!sessionId\)\s*\{\s*rejectAndClose\("token_in_use"' -Because '票据被另一条活着的连接占着时不建会话,按 token_in_use 拒绝'
+    $disconnect = [regex]::Match($script:SessionHandler, '(?ms)^void GateClientSessionHandler::HandleConnectionDisconnection\(.*?^\}')
+    Assert-True -Condition $disconnect.Success -Because '找得到 HandleConnectionDisconnection 的函数体'
+    $forgetAt = $disconnect.Value.IndexOf('if (gate_connection_admission::ForgetPreAuthConnection(conn))')
+    $sceneAt = $disconnect.Value.IndexOf('NotifySceneExitGame(')
+    $loginAt = $disconnect.Value.IndexOf('gate_login_renewal::NoteConnectionClosed(')
+    Assert-True -Condition ($forgetAt -ge 0 -and $sceneAt -gt $forgetAt -and $loginAt -gt $forgetAt) -Because '未验签断开在第一步摘记录就返回,不通知 scene / login'
+    Assert-Match -Text $script:AdmissionSource -Pattern '(?s)void OpenPreAuthConnection\(.*?preAuthConnections\(\)\.emplace\(incarnation, PreAuthConnection\{\.conn = conn, \.connectedAt = now\}\);\s*conn->setContext\(PreAuthConnectionKey\{incarnation\}\);' `
+        -Because '未验签记录只有 weak 连接、建连时刻与代次(键),连接上下文换成它的键'
+    Assert-Match -Text $script:AdmissionSource -Pattern '(?s)std::optional<SessionId> OpenVerifiedSession\(.*?IssueSessionId\(\);.*?ClaimTicket\(ticketKey, sessionId, incarnation\).*?return std::nullopt;.*?preAuthConnections\.erase\(it\);.*?conn->setContext\(sessionId\);' `
+        -Because '发号 → 占票据(被占就不建会话)→ 摘未验签记录 → 换上下文、建会话'
+    Assert-Match -Text $script:AdmissionSource -Pattern '(?s)SessionId IssueSessionId\(\).*?while \(sessionId == kInvalidSessionId \|\| sessions\.contains\(sessionId\)\)' -Because '发号的保留哨兵与回绕碰撞检查照旧,只是挪到验签成功时'
+    Assert-Match -Text $script:HeartbeatSource -Pattern 'const uint64_t deferred = result\.deferred \+ CloseExpiredHandshakes\(now, result\.late\);' -Because '握手期限扫未验签表,本端 loop 卡过的那一轮只推迟'
+    Assert-Match -Text $script:HeartbeatSource -Pattern '(?s)uint64_t CloseExpiredHandshakes\(.*?it = preAuthConnections\.erase\(it\);.*?conn->forceClose\(\);' -Because '握手超时先摘记录再关连接,不等断开回调'
     Assert-Match -Text $script:AdmissionSource -Pattern 'gate_client_heartbeat::GetCounters\(\)\.handshakeTimeouts' -Because 'gate_preauth_reaped_total 与握手超时的汇总日志读同一份计数'
 }
 
-Test-Case '未验签预算:淘汰只经 weak 连接 forceClose、不删会话,按会话代次核对,预算排在速率闸之前' {
-    Assert-NotMatch -Text $script:AdmissionSource -Pattern 'sessions\(\)\.erase|sessions\.erase' -Because '淘汰不在 muduo 的回调栈上同步摘会话,会话留给断开回调删'
-    Assert-Match -Text $script:AdmissionSource -Pattern '(?s)void EvictUnauthenticated\(.*?victim\.preAuthSlot\.reset\(\);.*?victim\.conn\.lock\(\);.*?conn->forceClose\(\);' `
-        -Because '先收回占位(这一刻起不再占未验签池),再经会话里的 weak 连接 forceClose(AGENTS.md §11.7)'
-    Assert-Match -Text $script:AdmissionSource -Pattern 'it->second\.incarnation == entry\.incarnation && !it->second\.verified' `
-        -Because '淘汰对象按 (session_id, 会话代次) 核对:会话号被新连接复用、已验签的会话都不会被选中'
+Test-Case '未验签预算:淘汰未验签表的表头,先摘记录再经 weak 连接 forceClose、不删会话,预算排在速率闸之前' {
+    Assert-NotMatch -Text $script:AdmissionSource -Pattern 'sessions\(\)\.erase|sessions\.erase' -Because '淘汰不在 muduo 的回调栈上同步摘会话;未验签连接本来就没有会话'
+    Assert-Match -Text $script:AdmissionSource -Pattern '(?s)void EvictOldestUnauthenticated\(.*?preAuthConnections\.begin\(\);.*?oldest->second\.conn\.lock\(\);.*?preAuthConnections\.erase\(oldest\);.*?conn->forceClose\(\);' `
+        -Because '先摘记录(这一刻起不再占未验签池),再经记录里的 weak 连接 forceClose(AGENTS.md §11.7)'
+    Assert-Match -Text $script:SessionManagerHeader -Pattern 'using PreAuthConnectionMap = std::map<uint64_t, PreAuthConnection>;' `
+        -Because '未验签表按代次有序:代次建连时单调分配,begin() 就是最老的一条;表里只有还没验签的连接'
+    Assert-Match -Text $script:AdmissionSource -Pattern '\.currentConnections = tlsSessionManager\.ClientConnectionCount\(\),' -Because '准入回调的总量按 会话数 + 未验签连接数 判'
     $decide = [regex]::Match($script:AdmissionHeader, '(?ms)^inline Admission Decide\(.*?^\}')
     Assert-True -Condition $decide.Success -Because '找得到 Decide 的函数体'
     $preAuthAt = $decide.Value.IndexOf('DecidePreAuth(')

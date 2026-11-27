@@ -13,6 +13,7 @@ import (
 	"data_service/internal/svc"
 
 	assetpb "proto/common/asset"
+	base "proto/common/base"
 	componentpb "proto/common/component"
 	dbpb "proto/common/database"
 	dspb "proto/data_service"
@@ -389,6 +390,26 @@ func TestBatchRecallItems_AcceptedAnswersPendingNotSuccess(t *testing.T) {
 	assert.Equal(t, uint64(150), bundle.GetCurrencies()[0].GetAmount())
 }
 
+// 双人复核的批准号与批准人接在批次理由后面:批次行与受理、结束两条审计行都由它写出;
+// 不带记录受理(AdminAllowUnapproved)时两项是空串。
+func TestBatchRecallItems_FrozenBatchRecordsTheApproval(t *testing.T) {
+	svcCtx, recall, _ := newRecallSvcCtx(t, recallGoldRows())
+	req := goldRecallReq(false)
+	req.ExpectedPlanDigest = previewDigest(t, svcCtx)
+	req.Approval = &base.AdminApproval{ApprovalId: "55", Proposer: "tester", Approver: "reviewer", ApprovedAtMs: 1}
+	resp, err := BatchRecallItems(context.Background(), svcCtx, req)
+	require.NoError(t, err)
+	require.Equal(t, constants.ErrCodeRecallPending, resp.ErrorCode)
+	assert.Equal(t, `工单 123 [approval_id="55" approver="reviewer"]`, recall.batches[55].Reason)
+
+	svcCtx, recall, _ = newRecallSvcCtx(t, recallGoldRows())
+	req = goldRecallReq(false)
+	req.ExpectedPlanDigest = previewDigest(t, svcCtx)
+	_, err = BatchRecallItems(context.Background(), svcCtx, req)
+	require.NoError(t, err)
+	assert.Equal(t, `工单 123 [approval_id="" approver=""]`, recall.batches[55].Reason)
+}
+
 // 人审过的不是这份计划就不能执行:流水晚到、别的批次消费过都会走到这里。
 func TestBatchRecallItems_PlanChangedSinceReviewWritesNothing(t *testing.T) {
 	svcCtx, recall, snapshots := newRecallSvcCtx(t, recallGoldRows())
@@ -762,13 +783,13 @@ func TestRecallResultOf_PartialPointsAtTheCommittedLedger(t *testing.T) {
 
 func TestCancelRecallBatch_RequiresOperatorAndKnownBatch(t *testing.T) {
 	svcCtx, recall, _ := newRecallSvcCtx(t, nil)
-	resp, err := CancelRecallBatch(context.Background(), svcCtx, 55, "", "理由", "peer")
+	resp, err := CancelRecallBatch(context.Background(), svcCtx, 55, "", "理由", "peer", nil)
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrCodeInvalidRequest, resp.ErrorCode)
 	assert.Empty(t, recall.cancelled)
 
 	recall.cancelErr = store.ErrRecallBatchNotFound
-	resp, err = CancelRecallBatch(context.Background(), svcCtx, 55, "tester", "理由", "peer")
+	resp, err = CancelRecallBatch(context.Background(), svcCtx, 55, "tester", "理由", "peer", nil)
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrCodeRecallNotFound, resp.ErrorCode)
 }
@@ -776,7 +797,7 @@ func TestCancelRecallBatch_RequiresOperatorAndKnownBatch(t *testing.T) {
 func TestResolveRecallOp_FullAppliedIsNotAcceptable(t *testing.T) {
 	svcCtx, _, _ := newRecallSvcCtx(t, nil)
 	const applied = 2
-	result, err := ResolveRecallOp(context.Background(), svcCtx, 1, applied, "tester", "理由")
+	result, err := ResolveRecallOp(context.Background(), svcCtx, 1, applied, "tester", "理由", nil)
 	require.NoError(t, err)
 	assert.False(t, result.Resolved)
 	assert.Equal(t, constants.ErrCodeInvalidRequest, result.ErrorCode, "全额结果只能来自 scene 的明细")
@@ -926,7 +947,7 @@ func TestResolveRecallOp_EvidenceDecidesWhichFinalIsAccepted(t *testing.T) {
 			t.Run(c.name+"/"+store.RecallStatusLabel(final), func(t *testing.T) {
 				r := c.row()
 				recall := &manualRecallStore{row: r, resolved: true}
-				got, err := resolveRecallOp(context.Background(), manualRecallSvcCtx(recall, c.ledgers(t, r.Op)), manualOpID, final, "tester", "工单 123", manualClock)
+				got, err := resolveRecallOp(context.Background(), manualRecallSvcCtx(recall, c.ledgers(t, r.Op)), manualOpID, final, "tester", "工单 123", nil, manualClock)
 				require.NoError(t, err)
 				assert.Contains(t, got.Evidence, "evidence="+c.verdict.String()+" ")
 				assert.Contains(t, got.Evidence, "source: committed asset ledger")
@@ -985,7 +1006,7 @@ func TestResolveRecallOp_NotPendingReturnsTheCurrentStatus(t *testing.T) {
 			r.Status = status
 			recall := &manualRecallStore{row: r, resolved: true}
 			ledgers := &fakeRecallLedgers{}
-			got, err := resolveRecallOp(context.Background(), manualRecallSvcCtx(recall, ledgers), manualOpID, manualStatusAborted, "tester", "工单 123", manualClock)
+			got, err := resolveRecallOp(context.Background(), manualRecallSvcCtx(recall, ledgers), manualOpID, manualStatusAborted, "tester", "工单 123", nil, manualClock)
 			require.NoError(t, err)
 			assert.Equal(t, constants.ErrCodeOK, got.ErrorCode)
 			assert.False(t, got.Resolved)
@@ -1001,7 +1022,7 @@ func TestResolveRecallOp_NotPendingReturnsTheCurrentStatus(t *testing.T) {
 func TestResolveRecallOp_LedgerReadFailureFailsClosed(t *testing.T) {
 	recall := &manualRecallStore{row: manualRecallRow(), resolved: true}
 	ledgers := &fakeRecallLedgers{err: errors.New("tikv down")}
-	got, err := resolveRecallOp(context.Background(), manualRecallSvcCtx(recall, ledgers), manualOpID, manualStatusPartial, "tester", "工单 123", manualClock)
+	got, err := resolveRecallOp(context.Background(), manualRecallSvcCtx(recall, ledgers), manualOpID, manualStatusPartial, "tester", "工单 123", nil, manualClock)
 	require.Error(t, err)
 	assert.Equal(t, constants.ErrCodeSnapshotDBError, got.ErrorCode)
 	assert.False(t, got.Resolved)
@@ -1014,7 +1035,7 @@ func TestResolveRecallOp_ChangedAfterEvidenceIsNotResolved(t *testing.T) {
 	r := manualRecallRow()
 	recall := &manualRecallStore{row: r, resolved: false}
 	got, err := resolveRecallOp(context.Background(), manualRecallSvcCtx(recall, manualLedgers(true, committedRecall(t, r.Op, nil))),
-		manualOpID, manualStatusAborted, "tester", "工单 123", manualClock)
+		manualOpID, manualStatusAborted, "tester", "工单 123", nil, manualClock)
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrCodeRecallOpChanged, got.ErrorCode)
 	assert.False(t, got.Resolved)
@@ -1027,12 +1048,12 @@ func TestResolveRecallOp_ChangedAfterEvidenceIsNotResolved(t *testing.T) {
 func TestResolveRecallOp_RowReadErrors(t *testing.T) {
 	recall := &manualRecallStore{readErr: store.ErrRecallOpNotFound}
 	ledgers := &fakeRecallLedgers{}
-	got, err := resolveRecallOp(context.Background(), manualRecallSvcCtx(recall, ledgers), manualOpID, manualStatusAborted, "tester", "工单 123", manualClock)
+	got, err := resolveRecallOp(context.Background(), manualRecallSvcCtx(recall, ledgers), manualOpID, manualStatusAborted, "tester", "工单 123", nil, manualClock)
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrCodeRecallNotFound, got.ErrorCode)
 
 	recall.readErr = errors.New("connection reset")
-	got, err = resolveRecallOp(context.Background(), manualRecallSvcCtx(recall, ledgers), manualOpID, manualStatusAborted, "tester", "工单 123", manualClock)
+	got, err = resolveRecallOp(context.Background(), manualRecallSvcCtx(recall, ledgers), manualOpID, manualStatusAborted, "tester", "工单 123", nil, manualClock)
 	require.Error(t, err)
 	assert.Equal(t, constants.ErrCodeSnapshotDBError, got.ErrorCode)
 	assert.Empty(t, recall.calls)

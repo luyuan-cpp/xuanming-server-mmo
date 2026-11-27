@@ -1261,6 +1261,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerLeaseExpiredEvent final : pub
     kGateInstanceIdFieldNumber = 6,
     kPlayerIdFieldNumber = 1,
     kSceneIdFieldNumber = 4,
+    kSessionIncarnationFieldNumber = 7,
     kSessionIdFieldNumber = 2,
   };
   // string scene_node_id = 3;
@@ -1328,6 +1329,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerLeaseExpiredEvent final : pub
   void _internal_set_scene_id(::uint64_t value);
 
   public:
+  // uint64 session_incarnation = 7;
+  void clear_session_incarnation() ;
+  [[nodiscard]] ::uint64_t session_incarnation() const;
+  void set_session_incarnation(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_session_incarnation() const;
+  void _internal_set_session_incarnation(::uint64_t value);
+
+  public:
   // uint32 session_id = 2;
   void clear_session_id() ;
   [[nodiscard]] ::uint32_t session_id() const;
@@ -1342,7 +1353,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerLeaseExpiredEvent final : pub
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
+      ::google::protobuf::internal::TcParseTable<3, 7,
                           0, 84,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1376,6 +1387,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerLeaseExpiredEvent final : pub
     ::google::protobuf::internal::ArenaStringPtr gate_instance_id_;
     ::uint64_t player_id_;
     ::uint64_t scene_id_;
+    ::uint64_t session_incarnation_;
     ::uint32_t session_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -3841,7 +3853,7 @@ inline void PlayerLeaseExpiredEvent::_internal_set_player_id(::uint64_t value) {
 inline void PlayerLeaseExpiredEvent::clear_session_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.session_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t PlayerLeaseExpiredEvent::session_id() const {
   // @@protoc_insertion_point(field_get:contracts.kafka.PlayerLeaseExpiredEvent.session_id)
@@ -3849,7 +3861,7 @@ inline ::uint32_t PlayerLeaseExpiredEvent::session_id() const {
 }
 inline void PlayerLeaseExpiredEvent::set_session_id(::uint32_t value) {
   _internal_set_session_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:contracts.kafka.PlayerLeaseExpiredEvent.session_id)
 }
 inline ::uint32_t PlayerLeaseExpiredEvent::_internal_session_id() const {
@@ -4075,6 +4087,30 @@ inline void PlayerLeaseExpiredEvent::set_allocated_gate_instance_id(::std::strin
     _impl_.gate_instance_id_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:contracts.kafka.PlayerLeaseExpiredEvent.gate_instance_id)
+}
+
+// uint64 session_incarnation = 7;
+inline void PlayerLeaseExpiredEvent::clear_session_incarnation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.session_incarnation_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t PlayerLeaseExpiredEvent::session_incarnation() const {
+  // @@protoc_insertion_point(field_get:contracts.kafka.PlayerLeaseExpiredEvent.session_incarnation)
+  return _internal_session_incarnation();
+}
+inline void PlayerLeaseExpiredEvent::set_session_incarnation(::uint64_t value) {
+  _internal_set_session_incarnation(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:contracts.kafka.PlayerLeaseExpiredEvent.session_incarnation)
+}
+inline ::uint64_t PlayerLeaseExpiredEvent::_internal_session_incarnation() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.session_incarnation_;
+}
+inline void PlayerLeaseExpiredEvent::_internal_set_session_incarnation(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.session_incarnation_ = value;
 }
 
 // -------------------------------------------------------------------

@@ -98,6 +98,7 @@ func TestEconomyFlowReplayCannotChangeExpectedGuild(t *testing.T) {
 // economyFlowDropTables:本服务全部表 + schemamigrate 台账,逆锁序。新增表时同步追加
 // (resetEconomyFlowSchema 按 len(data.Tables())+1 守数量,漏加即红)。
 var economyFlowDropTables = []string{
+	"guild_war_credit_owed",                                      // 帮战入账的待入账行(位置 24)
 	"guild_jianghu_grudge_applied",                               // 帮派恩怨墙入账闸门(位置 23)
 	"guild_war_feud",                                             // 帮战 V2.5 宿敌约战战书(位置 22)
 	"guild_jianghu_grudge_record", "guild_jianghu_rival_summary", // 江湖生死状帮派恩怨墙两表(20..21 逆序)

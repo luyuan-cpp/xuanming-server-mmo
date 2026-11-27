@@ -2,13 +2,15 @@
 // /metrics 端口是 :9240(etc/mail.yaml 的 MetricsListenAddr)。
 //
 // 两条硬约束(AGENTS.md §9):
-//  1. label 全是**有限枚举**,取值集合就是本文件的常量。player_id / mail_id / request_id 一律只进日志。
+//  1. label 全是**有限枚举**,取值集合就是本文件的常量;唯一例外是 admin_unapproved_command_total 的 caller,
+//     取值限于配置的调用方名。player_id / mail_id / request_id 一律只进日志。
 //  2. 指标**懒注册**:Vec 在包级变量就建好,MustRegister 只在 Register 的 sync.Once 里做(Start 会调它)。没调的
 //     `-migrate` 进程照样可以安全 Inc,不会重复注册 panic;单测要读数时先调 Register,再从 prometheus.DefaultGatherer 读。
 //
 // 所有 label 组合都在 register 里**预建 0 值序列**:Prometheus 里"从未发生过"的序列根本不存在,
 // `increase(...[1h]) > 0` 一类告警在序列缺失时既不报警也不报错,与"一切正常"长得一样(设计 §4.7)。
-// 唯一的例外是活性 gauge sweep_last_run_unixtime(SweepLive):它不是事件计数,只在清理循环运行时有序列。
+// 例外有两个:活性 gauge sweep_last_run_unixtime(SweepLive)不是事件计数,只在清理循环运行时有序列;
+// admin_unapproved_command_total 的 caller 取值来自配置,由 PrebuildAdminUnapprovedCommandSeries 在装配时按配置预建。
 package metrics
 
 import (
@@ -43,7 +45,8 @@ const (
 
 // MailAdmin 发件的 outcome label(设计 §2.5):
 //   - ok:首次发出;duplicated:同键同摘要的重放,回首次结果;rejected:业务拒绝(满箱、冲突、附件不合法……);
-//   - fault:存储 / 号段故障(kServiceUnavailable);denied:令牌缺失或错误(gRPC PermissionDenied)。
+//   - fault:存储 / 号段故障(kServiceUnavailable);denied:调用证明无效(gRPC Unauthenticated),
+//     或双人复核批准记录缺失 / 不合格(gRPC PermissionDenied,docs/design/admin-identity-and-dual-control.md §5.5)。
 const (
 	OutcomeOK         = "ok"
 	OutcomeDuplicated = "duplicated"
@@ -93,6 +96,15 @@ var (
 		Help:      "Reads of a player's guild from the guild service that failed; guild text mails stay hidden for that request.",
 	})
 
+	// 要求双人复核批准记录的调用方不带记录、因 AdminAllowUnapproved 打开而被接受的发件
+	// (docs/design/admin-identity-and-dual-control.md §5.7)。只在本机开发打开开关时才会增长。caller 是验过签的调用方名,
+	// 取值限于配置 ApprovalRequiredCallers(有限集),所以不在 Register 里预建,由 PrebuildAdminUnapprovedCommandSeries 按配置预建。
+	adminUnapprovedCommandTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "admin_unapproved_command_total",
+		Help:      "MailAdmin sends accepted without a dual-control approval record from callers that require one (only while AdminAllowUnapproved is on), by caller and method (send_personal|send_system|send_guild).",
+	}, []string{"caller", "method"})
+
 	sweepCandidateRows = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: subsystem,
 		Name:      "sweep_candidate_rows",
@@ -130,6 +142,18 @@ func ObserveAdminSend(method, senderKind, outcome string) {
 	adminSendTotal.WithLabelValues(method, senderKind, outcome).Inc()
 }
 
+// ObserveAdminUnapprovedCommand 记一次不带批准记录却被接受的发件。caller 是验过签的调用方名,method 取 Method* 之一。
+func ObserveAdminUnapprovedCommand(caller, method string) {
+	adminUnapprovedCommandTotal.WithLabelValues(caller, method).Inc()
+}
+
+// PrebuildAdminUnapprovedCommandSeries 给一个要求批准记录的调用方预建三种发件方法的 0 值序列,装配时调(理由见包注释)。
+func PrebuildAdminUnapprovedCommandSeries(caller string) {
+	for _, method := range []string{MethodSendPersonal, MethodSendSystem, MethodSendGuild} {
+		adminUnapprovedCommandTotal.WithLabelValues(caller, method)
+	}
+}
+
 // ObservePush 记一次推送的终态,outcome 取 Push* 之一。
 func ObservePush(outcome string) {
 	pushTotal.WithLabelValues(outcome).Inc()
@@ -160,6 +184,7 @@ func Register() {
 	registerOnce.Do(func() {
 		prometheus.MustRegister(
 			adminSendTotal,
+			adminUnapprovedCommandTotal,
 			pushTotal,
 			guildLookupFailuresTotal,
 			sweepCandidateRows,

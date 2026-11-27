@@ -391,3 +391,12 @@ PrepareBattle（发起方队长，普通战书）
 ### 7. Java 版
 
 Java 版（`xuanming-server-mmo`）的普通战书退费走 `match_jianghu_refund` + 个人邮件（`PARITY.md` 2026-11-26 江湖恩怨一期条目），是另一套实现，同类问题（两条通道、取消丢失）是否存在待按 Java 的模型核对。本批没有改 Java 代码，也没有登记 `PARITY.md`，由主会话决定是否登记。
+
+## K8s 上的跨服务接线(2026-11-26 补,改名与内容安全第三轮复核时发现)
+
+match 调 friend(下战书前查拉黑与好友关系,`BatchCheckSocialRelations`)、chat(战书与战果的全服系统播报,`PublishSystemWorldNotice`)、guild(纯帮会对阵的帮派归属,`GetPlayerGuild`)三个服务。本机 yaml 里有这三个客户端,K8s 上原来没有:
+
+- `tools/scripts/k8s_deploy.ps1` 给 match 生成的 ConfigMap 没有 `FriendRpc` / `ChatRpc` / `GuildRpc`,三个客户端都是空的。friend 缺失按 fail-closed 处理,集群上**下战书一律回「社交关系校验服务未就绪」**;系统播报与帮派归属静默跳过。
+- friend、chat、guild 的 gRPC 准入名单里也没有 match,开了 `-NetworkPolicies` 时即使配上也拨不进去。
+
+已补(未运行):三个客户端直连同 namespace 的 Service(三个服务都不写 `Etcd.Key`,D-13),超时镜像服务 yaml;三份准入名单加 match(金丝雀副本自动补上);契约测试「match 的江湖生死状接线」与准入名单用例的期望;`deploy/k8s/README.md` 的准入名单表。chat 的系统播报是服务端方法,在集群上靠这张准入名单只让 match 拨进来,不另加签名(理由见 `docs/design/rename-and-content-safety.md` §7.3)。验证命令在 `docs/PROGRESS.md` 2026-11-26「改名与内容安全第三轮」。

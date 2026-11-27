@@ -243,7 +243,11 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
     teamDealtMagicDirectDamage = {false, false};
     shieldBreakPlayers.clear();
     antiControlOrSeasonSkillPlayers.clear();
+    castSeasonSkillPlayers.clear();
+    seasonResonanceMaskByPlayer.clear();
     trialVowMask = 0;
+    hasTacticalPuzzleContext = false;
+    tacticalPuzzleContext.Clear();
     bossWindHitUnprotectedDeath = false;
     dealtYangBellPhysicalDamage = false;
     dealtYinDrumMagicDamage = false;
@@ -436,6 +440,29 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
         maxRounds = customDuelRules.round_limit_override();
     }
 
+    // 万象残局坊（Dungeon 314）开局门禁：必须携带合法 TacticalPuzzleBattleContext 且为单人免费公平预设局。
+    const bool isWorkshopDungeon = request.battle_config_id() == kTacticalPuzzleWorkshopDungeonId;
+    if (request.has_tactical_puzzle_context() || isWorkshopDungeon) {
+        if (!request.has_tactical_puzzle_context() ||
+            !isWorkshopDungeon ||
+            request.match_mode() != kMatchModePveSolo ||
+            request.players_size() != 1 ||
+            bossTrialKind != kBossTrialKindTacticalPuzzle ||
+            !UsesFreePreset() ||
+            hasTowerContext ||
+            hasCustomDuelRules ||
+            !IsValidTacticalPuzzleContext(request.tactical_puzzle_context())) {
+            LOG_ERROR << "CreateBattle rejected invalid tactical puzzle context: battle_id=" << request.battle_id()
+                      << " config_id=" << request.battle_config_id()
+                      << " mode=" << request.match_mode()
+                      << " boss_trial_kind=" << bossTrialKind;
+            return false;
+        }
+        hasTacticalPuzzleContext = true;
+        tacticalPuzzleContext = request.tactical_puzzle_context();
+        maxRounds = tacticalPuzzleContext.spec().round_limit();
+    }
+
     // 五行试炼志 V3 自选试炼誓约校验与冻结（bit0 禁控 / bit1 单宝 / bit2 无宠 / bit3 紧缩回合）。
     const uint32_t requestedVowMask =
         request.has_trial_context() ? request.trial_context().challenge_vow_mask() : 0u;
@@ -460,9 +487,9 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
         }
     }
 
-    // 赛季全员对称周环境词缀：仅当未启用锦标赛五行地脉、五行幻境爬塔、自定义切磋及瑞兽迎春活动时生效，
+    // 赛季全员对称周环境词缀：仅当未启用锦标赛五行地脉、五行幻境爬塔、自定义切磋、残局坊及瑞兽迎春活动时生效，
     // 且须全部玩家快照一致携带合法词缀 1..4，分歧或越界 fail-closed 退回 0，杜绝单边优势。
-    if (!hasTowerContext && !hasCustomDuelRules &&
+    if (!hasTowerContext && !hasCustomDuelRules && !hasTacticalPuzzleContext &&
         ActiveTournamentLeyline() == TOURNAMENT_LEYLINE_UNSPECIFIED &&
         bossTrialKind != kBossTrialKindFestivalBeast &&
         !(request.has_activity_context() &&
@@ -574,6 +601,9 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
         InitializeConfiguredAbilities();
     }
     InitSpecialEncounterState();
+    if (hasTacticalPuzzleContext) {
+        ApplyTacticalPuzzleSetup();
+    }
 
     // 锦标赛 V2 土厚灵脉 + 地载阵 + 五行幻境土系符印：开场第 1 回合叠加最大气血护盾。
     leylineEarthShieldByActor.clear();
@@ -872,6 +902,27 @@ bool TurnBattleEngine::InitMonsters(const CreateBattleRequest& request) {
     }
 
     initialAttackerHumanCount = attackerCount;
+
+    if (hasTacticalPuzzleContext) {
+        const auto& spec = tacticalPuzzleContext.spec();
+        uint32_t monsterIndex = 0u;
+        for (const auto& enemy : spec.enemies()) {
+            AppendMonsterActor(enemy.monster_table_id(), monsterIndex, referenceLevel);
+            auto& spawned = actors.back();
+            const uint64_t baseMaxHp = spawned.max_health();
+            const uint64_t initHp = TacticalPuzzleScalePct(baseMaxHp, enemy.initial_hp_pct());
+            if (initHp > baseMaxHp) {
+                spawned.set_max_health(initHp);
+            }
+            spawned.mutable_attributes()->set_health(initHp);
+            const uint64_t baseSpeed = spawned.attributes().speed();
+            spawned.mutable_attributes()->set_speed(
+                TacticalPuzzleApplySpeedDelta(baseSpeed, enemy.speed_delta_pct()));
+            spawned.set_capture_pet_table_id(0);
+            ++monsterIndex;
+        }
+        return monsterIndex > 0u;
+    }
 
     const bool isBossTrialOrRescue = IsBossTrialOrRescueKind(bossTrialKind);
     auto monsterIds = dataProvider->GetDungeonMonsterIds(request.battle_config_id());
@@ -3793,10 +3844,12 @@ void TurnBattleEngine::UpdateOutcome() {
     } else if (sideBWiped) {
         outcome = BATTLE_OUTCOME_SIDE_A_WIN;
     } else if (roundIndex >= maxRounds) {
-        // 论剑排位、物法易势 5V5、帮会帮战、自定义规则切磋与天墉生死状打满逻辑回合上限双方均存活判平局；其余对局按既有规则进攻方（A 方）判负。
-        if (IsRankedBattle() || bossTrialKind == kBossTrialKindPolarity5v5 ||
-            createRequest.match_mode() == kMatchModePolarity5v5 || IsGuildWarBattle() ||
-            hasCustomDuelRules || IsJianghuDuelBattle()) {
+        // 万象残局坊回合耗尽仍有存活敌方单位时权威判负（SIDE_B_WIN），绝不判平。
+        if (hasTacticalPuzzleContext) {
+            outcome = BATTLE_OUTCOME_SIDE_B_WIN;
+        } else if (IsRankedBattle() || bossTrialKind == kBossTrialKindPolarity5v5 ||
+                   createRequest.match_mode() == kMatchModePolarity5v5 || IsGuildWarBattle() ||
+                   hasCustomDuelRules || IsJianghuDuelBattle()) {
             outcome = BATTLE_OUTCOME_DRAW;
         } else {
             outcome = BATTLE_OUTCOME_SIDE_B_WIN;
@@ -3811,7 +3864,7 @@ std::string TurnBattleEngine::SelectRewardStrategy(uint64_t playerId) const {
 }
 
 void TurnBattleEngine::RollRewards() {
-    if (!IsPveMatch() || outcome != BATTLE_OUTCOME_SIDE_A_WIN || IsFestivalBeastBattle() || hasTowerContext) {
+    if (!IsPveMatch() || outcome != BATTLE_OUTCOME_SIDE_A_WIN || IsFestivalBeastBattle() || hasTowerContext || hasTacticalPuzzleContext) {
         return;
     }
     for (auto& [playerId, settlement] : settlements) {
@@ -6355,6 +6408,11 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
                                         outcome == BATTLE_OUTCOME_SIDE_A_WIN &&
                                         IsWildTideEbbRound(roundIndex));
         facts->set_challenge_vow_mask(trialVowMask);
+        facts->set_self_cast_season_skill(castSeasonSkillPlayers.contains(playerId));
+        const auto resMaskIt = seasonResonanceMaskByPlayer.find(playerId);
+        const uint32_t resMask = resMaskIt != seasonResonanceMaskByPlayer.end() ? resMaskIt->second : 0u;
+        facts->set_self_triggered_season_resonance(resMask != 0u);
+        facts->set_self_season_resonance_mask(resMask);
 
         std::vector<uint32_t> artifactEffects;
         for (const auto& artifact : actor->equipment_effects().artifacts()) {
@@ -6373,6 +6431,9 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
         if (actor->equipment_effects().has_season_seal()) {
             facts->set_used_season_seal_id(actor->equipment_effects().season_seal().seal_id());
         }
+    }
+    if (hasTacticalPuzzleContext) {
+        *settlement.mutable_tactical_puzzle_context() = tacticalPuzzleContext;
     }
     return settlement;
 }
@@ -6459,6 +6520,9 @@ BattleStateS2C TurnBattleEngine::BuildStateSnapshot() const {
     if (trialVowMask != 0u) {
         state.set_trial_vow_mask(trialVowMask);
     }
+    if (hasTacticalPuzzleContext) {
+        *state.mutable_tactical_puzzle_context() = tacticalPuzzleContext;
+    }
     for (const auto skillId : bannedSkillIds) {
         state.add_banned_skill_ids(skillId);
     }
@@ -6467,6 +6531,15 @@ BattleStateS2C TurnBattleEngine::BuildStateSnapshot() const {
     }
     for (const auto skillId : teamBBannedSkillIds) {
         state.add_team_b_banned_skill_ids(skillId);
+    }
+    if (teamAProtectedSkillId != 0u) {
+        state.set_team_a_protected_skill_id(teamAProtectedSkillId);
+    }
+    if (teamBProtectedSkillId != 0u) {
+        state.set_team_b_protected_skill_id(teamBProtectedSkillId);
+    }
+    for (const auto skillId : counteredBanSkillIds) {
+        state.add_countered_ban_skill_ids(skillId);
     }
 
     for (const auto& resolved : lastResolvedTelegraphs) {
@@ -6481,6 +6554,7 @@ BattleStateS2C TurnBattleEngine::BuildStateSnapshot() const {
             state.mutable_prep_state()->set_active(true);
             state.mutable_prep_state()->set_duration_seconds(PrepDurationSeconds());
             state.mutable_prep_state()->set_skill_ban_slots_per_team(prepSkillBanSlotsPerTeam);
+            state.mutable_prep_state()->set_skill_protect_slots_per_team(prepSkillProtectSlotsPerTeam);
         } else {
             for (const auto& actor : actors) {
                 if ((actor.actor_type() != BATTLE_ACTOR_TYPE_PLAYER && actor.actor_type() != BATTLE_ACTOR_TYPE_PET) || !IsActorActive(actor)) {
@@ -6757,10 +6831,14 @@ void TurnBattleEngine::FillSurrenderVoteForViewer(BattleStateS2C& state, uint64_
 bool TurnBattleEngine::InitTacticalPrep(const CreateBattleRequest& request) {
     prepActive = false;
     prepSkillBanSlotsPerTeam = 0;
+    prepSkillProtectSlotsPerTeam = 0;
     banCandidateSkillIds.clear();
     banCandidateSkillSet.clear();
     teamABannedSkillIds.clear();
     teamBBannedSkillIds.clear();
+    teamAProtectedSkillId = 0;
+    teamBProtectedSkillId = 0;
+    counteredBanSkillIds.clear();
     bannedSkillIds.clear();
     bannedSkillSet.clear();
     prepOptionsByPlayer.clear();
@@ -6822,6 +6900,7 @@ bool TurnBattleEngine::InitTacticalPrep(const CreateBattleRequest& request) {
         std::sort(banCandidateSkillIds.begin(), banCandidateSkillIds.end());
         if (!banCandidateSkillIds.empty()) {
             prepSkillBanSlotsPerTeam = requestedBanSlots;
+            prepSkillProtectSlotsPerTeam = kPrepSkillProtectSlotsPerTeam;
         }
     }
 
@@ -6925,6 +7004,7 @@ bool TurnBattleEngine::InitTacticalPrep(const CreateBattleRequest& request) {
         prepActive = true;
     } else {
         prepSkillBanSlotsPerTeam = 0;
+        prepSkillProtectSlotsPerTeam = 0;
         banCandidateSkillIds.clear();
         banCandidateSkillSet.clear();
         prepOptionsByPlayer.clear();
@@ -6990,6 +7070,49 @@ std::vector<uint32_t> TurnBattleEngine::AggregateTeamBans(uint32_t teamIndex) co
     return result;
 }
 
+uint32_t TurnBattleEngine::AggregateTeamProtect(uint32_t teamIndex) const {
+    if (prepSkillProtectSlotsPerTeam == 0u) {
+        return 0u;
+    }
+    struct ProtectVoteEntry {
+        uint32_t skillId = 0;
+        uint32_t votes = 0;
+        bool nominatedByCaptain = false;
+    };
+    std::map<uint32_t, ProtectVoteEntry> tally;
+    for (const auto& [playerId, opt] : prepOptionsByPlayer) {
+        (void)playerId;
+        if (opt.aiControlled || opt.teamIndex != teamIndex || opt.nominatedProtectSkillId == 0u) {
+            continue;
+        }
+        auto& entry = tally[opt.nominatedProtectSkillId];
+        entry.skillId = opt.nominatedProtectSkillId;
+        ++entry.votes;
+        if (opt.isTeamCaptain) {
+            entry.nominatedByCaptain = true;
+        }
+    }
+    if (tally.empty()) {
+        return 0u;
+    }
+    std::vector<ProtectVoteEntry> ordered;
+    ordered.reserve(tally.size());
+    for (const auto& [sid, entry] : tally) {
+        (void)sid;
+        ordered.push_back(entry);
+    }
+    const uint64_t seed = createRequest.seed();
+    std::sort(ordered.begin(), ordered.end(), [seed](const ProtectVoteEntry& lhs, const ProtectVoteEntry& rhs) {
+        if (lhs.votes != rhs.votes) return lhs.votes > rhs.votes;
+        if (lhs.nominatedByCaptain != rhs.nominatedByCaptain) return lhs.nominatedByCaptain;
+        const uint64_t lh = SplitMix64(seed ^ kPrepProtectHashSalt ^ static_cast<uint64_t>(lhs.skillId));
+        const uint64_t rh = SplitMix64(seed ^ kPrepProtectHashSalt ^ static_cast<uint64_t>(rhs.skillId));
+        if (lh != rh) return lh < rh;
+        return lhs.skillId < rhs.skillId;
+    });
+    return ordered.front().skillId;
+}
+
 bool TurnBattleEngine::AllPrepPlayersReady() const {
     if (!prepActive) {
         return true;
@@ -7007,7 +7130,9 @@ uint32_t TurnBattleEngine::UpdateBattlePrep(uint64_t playerId, uint32_t selected
                                             uint64_t selectedPetId, bool ready,
                                             BattlePrepState* outPrepState,
                                             bool updateBannedSkills,
-                                            const std::vector<uint32_t>& bannedSkillIdsInput) {
+                                            const std::vector<uint32_t>& bannedSkillIdsInput,
+                                            bool updateProtectedSkill,
+                                            uint32_t protectedSkillIdInput) {
     if (!initialized || outcome != BATTLE_OUTCOME_ONGOING || !prepActive) {
         return kFeatureUnavailable;
     }
@@ -7021,7 +7146,8 @@ uint32_t TurnBattleEngine::UpdateBattlePrep(uint64_t playerId, uint32_t selected
         const bool sealChanged = selectedSealId != 0 && selectedSealId != opt.selectedSealId;
         const bool petChanged = selectedPetId != 0 && selectedPetId != opt.selectedPetId;
         const bool banChanged = updateBannedSkills && bannedSkillIdsInput != opt.nominatedBanSkillIds;
-        if (sealChanged || petChanged || banChanged) {
+        const bool protectChanged = updateProtectedSkill && protectedSkillIdInput != opt.nominatedProtectSkillId;
+        if (sealChanged || petChanged || banChanged || protectChanged) {
             return kFeatureUnavailable;
         }
         if (outPrepState != nullptr) {
@@ -7065,6 +7191,21 @@ uint32_t TurnBattleEngine::UpdateBattlePrep(uint64_t playerId, uint32_t selected
             }
         }
     }
+    if (updateProtectedSkill) {
+        if (prepSkillProtectSlotsPerTeam == 0u) {
+            if (protectedSkillIdInput != 0u) {
+                return kFeatureUnavailable;
+            }
+        } else if (protectedSkillIdInput != 0u && !banCandidateSkillSet.contains(protectedSkillIdInput)) {
+            return kInvalidParameter;
+        }
+    }
+    const auto& resultingBans = updateBannedSkills ? bannedSkillIdsInput : opt.nominatedBanSkillIds;
+    const uint32_t resultingProtect = updateProtectedSkill ? protectedSkillIdInput : opt.nominatedProtectSkillId;
+    if (resultingProtect != 0u &&
+        std::find(resultingBans.begin(), resultingBans.end(), resultingProtect) != resultingBans.end()) {
+        return kInvalidParameter;
+    }
 
     if (selectedSealId != 0) {
         opt.selectedSealId = selectedSealId;
@@ -7074,6 +7215,9 @@ uint32_t TurnBattleEngine::UpdateBattlePrep(uint64_t playerId, uint32_t selected
     }
     if (updateBannedSkills) {
         opt.nominatedBanSkillIds = bannedSkillIdsInput;
+    }
+    if (updateProtectedSkill) {
+        opt.nominatedProtectSkillId = protectedSkillIdInput;
     }
     if (ready) {
         opt.ready = true;
@@ -7093,15 +7237,32 @@ bool TurnBattleEngine::FinalizePrepPhase() {
     if (prepSkillBanSlotsPerTeam > 0u) {
         teamABannedSkillIds = AggregateTeamBans(0u);
         teamBBannedSkillIds = AggregateTeamBans(1u);
+        teamAProtectedSkillId = prepSkillProtectSlotsPerTeam > 0u ? AggregateTeamProtect(0u) : 0u;
+        teamBProtectedSkillId = prepSkillProtectSlotsPerTeam > 0u ? AggregateTeamProtect(1u) : 0u;
         bannedSkillSet.clear();
         bannedSkillIds.clear();
+        counteredBanSkillIds.clear();
+        std::set<uint32_t> counteredSet;
         for (const auto sid : teamABannedSkillIds) {
-            bannedSkillSet.insert(sid);
+            if (teamBProtectedSkillId != 0u && sid == teamBProtectedSkillId) {
+                counteredSet.insert(sid);
+            } else {
+                bannedSkillSet.insert(sid);
+            }
         }
         for (const auto sid : teamBBannedSkillIds) {
-            bannedSkillSet.insert(sid);
+            if (teamAProtectedSkillId != 0u && sid == teamAProtectedSkillId) {
+                counteredSet.insert(sid);
+            } else {
+                bannedSkillSet.insert(sid);
+            }
+        }
+        // 双边同禁仅单边护招时，另一方未受反制的禁招仍然生效，确保 countered 与 banned 严格互斥。
+        for (const auto sid : bannedSkillSet) {
+            counteredSet.erase(sid);
         }
         bannedSkillIds.assign(bannedSkillSet.begin(), bannedSkillSet.end());
+        counteredBanSkillIds.assign(counteredSet.begin(), counteredSet.end());
     }
 
     for (const auto& [playerId, opt] : prepOptionsByPlayer) {
@@ -7367,6 +7528,7 @@ void TurnBattleEngine::PopulatePrepStateForViewer(BattlePrepState& out, uint64_t
     out.set_deadline_ms(deadlineMs);
     out.set_duration_seconds(PrepDurationSeconds());
     out.set_skill_ban_slots_per_team(prepSkillBanSlotsPerTeam);
+    out.set_skill_protect_slots_per_team(prepSkillProtectSlotsPerTeam);
     if (viewerPlayerId == 0) {
         return;
     }
@@ -7404,6 +7566,9 @@ void TurnBattleEngine::PopulatePrepStateForViewer(BattlePrepState& out, uint64_t
         for (const auto sid : opt.nominatedBanSkillIds) {
             ps->add_nominated_ban_skill_ids(sid);
         }
+        if (opt.nominatedProtectSkillId != 0u) {
+            ps->set_nominated_protect_skill_id(opt.nominatedProtectSkillId);
+        }
         if (opt.selectedPetId != 0) {
             for (const auto& pet : opt.availablePets) {
                 if (pet.pet_id() == opt.selectedPetId) {
@@ -7416,6 +7581,55 @@ void TurnBattleEngine::PopulatePrepStateForViewer(BattlePrepState& out, uint64_t
     }
     for (const auto sid : AggregateTeamBans(selfOpt.teamIndex)) {
         out.add_team_effective_ban_skill_ids(sid);
+    }
+    if (prepSkillProtectSlotsPerTeam > 0u) {
+        const uint32_t effectiveProtect = AggregateTeamProtect(selfOpt.teamIndex);
+        if (effectiveProtect != 0u) {
+            out.set_team_effective_protected_skill_id(effectiveProtect);
+        }
+    }
+    if (!banCandidateSkillSet.empty()) {
+        std::set<uint32_t> teammateEquipped;
+        for (const auto& [memberId, opt] : prepOptionsByPlayer) {
+            if (opt.teamIndex != selfOpt.teamIndex || memberId == viewerPlayerId) {
+                continue;
+            }
+            if (const auto* memberActor = FindActor(memberId); memberActor != nullptr) {
+                for (const auto sid : memberActor->skill_table_ids()) {
+                    if (banCandidateSkillSet.contains(sid)) {
+                        teammateEquipped.insert(sid);
+                    }
+                }
+            }
+            bool petHandled = false;
+            if (opt.selectedPetId != 0u) {
+                for (const auto& pet : opt.availablePets) {
+                    if (pet.pet_id() == opt.selectedPetId) {
+                        for (const auto sid : pet.skill_table_ids()) {
+                            if (banCandidateSkillSet.contains(sid)) {
+                                teammateEquipped.insert(sid);
+                            }
+                        }
+                        petHandled = true;
+                        break;
+                    }
+                }
+            }
+            if (!petHandled) {
+                for (const auto& actor : actors) {
+                    if (actor.actor_type() == BATTLE_ACTOR_TYPE_PET && actor.owner_player_id() == memberId) {
+                        for (const auto sid : actor.skill_table_ids()) {
+                            if (banCandidateSkillSet.contains(sid)) {
+                                teammateEquipped.insert(sid);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        for (const auto sid : teammateEquipped) {
+            out.add_teammate_equipped_skill_ids(sid);
+        }
     }
     // 论剑 V6 宿敌交手提示：仅投影本人视角的敌方宿敌，观众与第三方清空。
     for (const auto& enc : createRequest.ranked_context().rivalry_encounters()) {
@@ -7572,6 +7786,91 @@ bool TurnBattleEngine::RollPercent(uint64_t percent) {
         return true;
     }
     return Rand01() * 100.0 < static_cast<double>(percent);
+}
+
+void TurnBattleEngine::AttachTacticalPuzzleInitialBuff(BattleActorState& target, uint32_t buffTableId,
+                                                       uint64_t casterId, uint64_t shieldCapacity,
+                                                       uint64_t periodicDamage) {
+    if (buffTableId == 0u) {
+        return;
+    }
+    const auto* row = dataProvider->FindBuff(buffTableId);
+    if (row == nullptr) {
+        return;
+    }
+    auto* added = target.add_buffs();
+    added->set_buff_id(nextBuffInstanceId++);
+    added->set_buff_table_id(row->id());
+    added->set_caster_id(casterId);
+    added->set_layer(1);
+    const auto op = static_cast<BattleEffectOp>(row->battle_op());
+    if (op == BattleEffectOp::Shield) {
+        added->set_remaining_capacity(shieldCapacity);
+        added->set_remain_rounds(maxRounds);
+    } else if (op == BattleEffectOp::PeriodicDamage) {
+        added->set_snapshot_value(periodicDamage);
+        const uint32_t ticks = row->tick_count() > 0u ? row->tick_count() : maxRounds;
+        added->set_remaining_ticks(ticks);
+        added->set_remain_rounds(ticks);
+    } else {
+        const uint32_t dur = row->duration_rounds() > 0u ? row->duration_rounds() : maxRounds;
+        added->set_remain_rounds(dur);
+    }
+    added->set_remaining_hits(row->hit_limit());
+    added->set_applied_round(1);
+    added->set_tick_round(row->tick_on_apply() ? 1u : 2u);
+}
+
+void TurnBattleEngine::ApplyTacticalPuzzleSetup() {
+    const auto& spec = tacticalPuzzleContext.spec();
+    teamAFormationId = spec.formation_id();
+    teamBFormationId = 0u;
+
+    uint64_t firstEnemyId = 0u;
+    for (const auto& actor : actors) {
+        if (actor.team_index() == 1u && actor.actor_type() == BATTLE_ACTOR_TYPE_MONSTER) {
+            firstEnemyId = actor.actor_id();
+            break;
+        }
+    }
+
+    uint32_t enemyIdx = 0u;
+    for (auto& actor : actors) {
+        if (actor.team_index() == 0u &&
+            (actor.actor_type() == BATTLE_ACTOR_TYPE_PLAYER || actor.actor_type() == BATTLE_ACTOR_TYPE_PET)) {
+            actor.mutable_attributes()->set_health(
+                TacticalPuzzleScalePct(actor.max_health(), spec.player_initial_hp_pct()));
+            if (actor.max_mana() > 0u) {
+                actor.mutable_attributes()->set_mana(
+                    TacticalPuzzleScalePct(actor.max_mana(), spec.player_initial_mp_pct()));
+            }
+            if (actor.actor_type() == BATTLE_ACTOR_TYPE_PLAYER) {
+                if (spec.player_initial_shield_pct() > 0u) {
+                    const uint64_t cap = TacticalPuzzleScalePct(actor.max_health(), spec.player_initial_shield_pct());
+                    AttachTacticalPuzzleInitialBuff(actor, kTacticalPuzzleShieldBuffId, actor.actor_id(), cap, 0u);
+                }
+                if (const uint32_t debuffId = TacticalPuzzlePlayerDebuffTableId(spec.player_initial_debuff_kind());
+                    debuffId != 0u) {
+                    const uint64_t dot = TacticalPuzzleScalePct(actor.max_health(), kTacticalPuzzlePoisonMaxHpPct);
+                    AttachTacticalPuzzleInitialBuff(actor, debuffId, firstEnemyId != 0u ? firstEnemyId : actor.actor_id(),
+                                                    0u, dot);
+                }
+            }
+        } else if (actor.team_index() == 1u && actor.actor_type() == BATTLE_ACTOR_TYPE_MONSTER) {
+            if (enemyIdx < static_cast<uint32_t>(spec.enemies_size())) {
+                const auto& enemySpec = spec.enemies(static_cast<int>(enemyIdx));
+                if (enemySpec.initial_shield_pct() > 0u) {
+                    const uint64_t cap = TacticalPuzzleScalePct(actor.max_health(), enemySpec.initial_shield_pct());
+                    AttachTacticalPuzzleInitialBuff(actor, kTacticalPuzzleShieldBuffId, actor.actor_id(), cap, 0u);
+                }
+                if (const uint32_t buffId = TacticalPuzzleEnemyBuffTableId(enemySpec.initial_buff_kind());
+                    buffId != 0u) {
+                    AttachTacticalPuzzleInitialBuff(actor, buffId, actor.actor_id(), 0u, 0u);
+                }
+            }
+            ++enemyIdx;
+        }
+    }
 }
 
 bool TurnBattleEngine::HasAnyActiveShield(const BattleActorState& target) const {

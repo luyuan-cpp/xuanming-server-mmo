@@ -471,6 +471,19 @@
    "round_limit": 12,
    "scene_id": 3,
    "time_limit": 720
+  },
+  {
+   "allow_pet_capture": 0,
+   "boss_trial_kind": 10,
+   "difficulty": 1,
+   "id": 314,
+   "max_team_size": 1,
+   "monster": [
+    311
+   ],
+   "round_limit": 6,
+   "scene_id": 17,
+   "time_limit": 600
   }
  ]
 }

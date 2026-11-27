@@ -73,6 +73,7 @@ set(SOURCE_FILES
     role_fence/role_fence_grpc_client.cpp
     payment/payment_grpc_client.cpp
     content_guard/content_guard_grpc_client.cpp
+    login/login_admin_grpc_client.cpp
 )
 
 add_library(grpc_client STATIC ${SOURCE_FILES})

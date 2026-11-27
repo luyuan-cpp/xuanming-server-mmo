@@ -399,6 +399,7 @@ const (
 	LoginPreGate_SubmitRealName_FullMethodName         = "/loginpb.LoginPreGate/SubmitRealName"
 	LoginPreGate_RequestAccountDeletion_FullMethodName = "/loginpb.LoginPreGate/RequestAccountDeletion"
 	LoginPreGate_CancelAccountDeletion_FullMethodName  = "/loginpb.LoginPreGate/CancelAccountDeletion"
+	LoginPreGate_HandlePassportEvent_FullMethodName    = "/loginpb.LoginPreGate/HandlePassportEvent"
 )
 
 // LoginPreGateClient is the client API for LoginPreGate service.
@@ -425,6 +426,10 @@ type LoginPreGateClient interface {
 	// 账号注销(docs/design/account-deletion.md §4.2、§4.4),网关 POST /api/account/delete 与 /api/account/delete/cancel 调。
 	RequestAccountDeletion(ctx context.Context, in *AccountDeletionRequest, opts ...grpc.CallOption) (*AccountDeletionResponse, error)
 	CancelAccountDeletion(ctx context.Context, in *CancelAccountDeletionRequest, opts ...grpc.CallOption) (*AccountDeletionResponse, error)
+	// 官方通行证回调(docs/design/official-passport-registration.md §3.7):网关 POST /internal/passport/events 收到 Casdoor 的回调、
+	// 核过共享密钥之后原样转来。login 只拿回调找人(哪名通行证用户变了),按通行证此刻的状态吊销游戏令牌并踢线,不信回调里写的内容;
+	// 幂等,可以重投。核对不了或吊销失败回 Unavailable,网关回 503,Casdoor 按回调的重投设置再来。
+	HandlePassportEvent(ctx context.Context, in *PassportEventRequest, opts ...grpc.CallOption) (*PassportEventResponse, error)
 }
 
 type loginPreGateClient struct {
@@ -495,6 +500,16 @@ func (c *loginPreGateClient) CancelAccountDeletion(ctx context.Context, in *Canc
 	return out, nil
 }
 
+func (c *loginPreGateClient) HandlePassportEvent(ctx context.Context, in *PassportEventRequest, opts ...grpc.CallOption) (*PassportEventResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PassportEventResponse)
+	err := c.cc.Invoke(ctx, LoginPreGate_HandlePassportEvent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // LoginPreGateServer is the server API for LoginPreGate service.
 // All implementations must embed UnimplementedLoginPreGateServer
 // for forward compatibility.
@@ -519,6 +534,10 @@ type LoginPreGateServer interface {
 	// 账号注销(docs/design/account-deletion.md §4.2、§4.4),网关 POST /api/account/delete 与 /api/account/delete/cancel 调。
 	RequestAccountDeletion(context.Context, *AccountDeletionRequest) (*AccountDeletionResponse, error)
 	CancelAccountDeletion(context.Context, *CancelAccountDeletionRequest) (*AccountDeletionResponse, error)
+	// 官方通行证回调(docs/design/official-passport-registration.md §3.7):网关 POST /internal/passport/events 收到 Casdoor 的回调、
+	// 核过共享密钥之后原样转来。login 只拿回调找人(哪名通行证用户变了),按通行证此刻的状态吊销游戏令牌并踢线,不信回调里写的内容;
+	// 幂等,可以重投。核对不了或吊销失败回 Unavailable,网关回 503,Casdoor 按回调的重投设置再来。
+	HandlePassportEvent(context.Context, *PassportEventRequest) (*PassportEventResponse, error)
 	mustEmbedUnimplementedLoginPreGateServer()
 }
 
@@ -546,6 +565,9 @@ func (UnimplementedLoginPreGateServer) RequestAccountDeletion(context.Context, *
 }
 func (UnimplementedLoginPreGateServer) CancelAccountDeletion(context.Context, *CancelAccountDeletionRequest) (*AccountDeletionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CancelAccountDeletion not implemented")
+}
+func (UnimplementedLoginPreGateServer) HandlePassportEvent(context.Context, *PassportEventRequest) (*PassportEventResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method HandlePassportEvent not implemented")
 }
 func (UnimplementedLoginPreGateServer) mustEmbedUnimplementedLoginPreGateServer() {}
 func (UnimplementedLoginPreGateServer) testEmbeddedByValue()                      {}
@@ -676,6 +698,24 @@ func _LoginPreGate_CancelAccountDeletion_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LoginPreGate_HandlePassportEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PassportEventRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LoginPreGateServer).HandlePassportEvent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LoginPreGate_HandlePassportEvent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LoginPreGateServer).HandlePassportEvent(ctx, req.(*PassportEventRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // LoginPreGate_ServiceDesc is the grpc.ServiceDesc for LoginPreGate service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -707,189 +747,9 @@ var LoginPreGate_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "CancelAccountDeletion",
 			Handler:    _LoginPreGate_CancelAccountDeletion_Handler,
 		},
-	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/login/login.proto",
-}
-
-const (
-	LoginAdmin_RemovePlayersFromAccounts_FullMethodName = "/loginpb.LoginAdmin/RemovePlayersFromAccounts"
-	LoginAdmin_ScheduleAccountDeletion_FullMethodName   = "/loginpb.LoginAdmin/ScheduleAccountDeletion"
-	LoginAdmin_ResetAccountRealName_FullMethodName      = "/loginpb.LoginAdmin/ResetAccountRealName"
-)
-
-// LoginAdminClient is the client API for LoginAdmin service.
-//
-// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type LoginAdminClient interface {
-	// 摘孤儿角色:走目录的删角流程(data_service.RemoveAccountRoles,全部参与者通过才写墓碑)。
-	// 只给运维工具用,要 x-admin-token;login 没配 AdminToken 就停用。名字由 data_service 在墓碑提交之后释放
-	// (删角收尾,docs/design/guild-phase2/03-names.md §3.4a),这里不用另外调 ReleasePlayerName。
-	RemovePlayersFromAccounts(ctx context.Context, in *RemovePlayersFromAccountsRequest, opts ...grpc.CallOption) (*RemovePlayersFromAccountsResponse, error)
-	ScheduleAccountDeletion(ctx context.Context, in *ScheduleAccountDeletionRequest, opts ...grpc.CallOption) (*AccountDeletionResponse, error)
-	ResetAccountRealName(ctx context.Context, in *ResetAccountRealNameRequest, opts ...grpc.CallOption) (*ResetAccountRealNameResponse, error)
-}
-
-type loginAdminClient struct {
-	cc grpc.ClientConnInterface
-}
-
-func NewLoginAdminClient(cc grpc.ClientConnInterface) LoginAdminClient {
-	return &loginAdminClient{cc}
-}
-
-func (c *loginAdminClient) RemovePlayersFromAccounts(ctx context.Context, in *RemovePlayersFromAccountsRequest, opts ...grpc.CallOption) (*RemovePlayersFromAccountsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RemovePlayersFromAccountsResponse)
-	err := c.cc.Invoke(ctx, LoginAdmin_RemovePlayersFromAccounts_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *loginAdminClient) ScheduleAccountDeletion(ctx context.Context, in *ScheduleAccountDeletionRequest, opts ...grpc.CallOption) (*AccountDeletionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AccountDeletionResponse)
-	err := c.cc.Invoke(ctx, LoginAdmin_ScheduleAccountDeletion_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *loginAdminClient) ResetAccountRealName(ctx context.Context, in *ResetAccountRealNameRequest, opts ...grpc.CallOption) (*ResetAccountRealNameResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ResetAccountRealNameResponse)
-	err := c.cc.Invoke(ctx, LoginAdmin_ResetAccountRealName_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// LoginAdminServer is the server API for LoginAdmin service.
-// All implementations must embed UnimplementedLoginAdminServer
-// for forward compatibility.
-type LoginAdminServer interface {
-	// 摘孤儿角色:走目录的删角流程(data_service.RemoveAccountRoles,全部参与者通过才写墓碑)。
-	// 只给运维工具用,要 x-admin-token;login 没配 AdminToken 就停用。名字由 data_service 在墓碑提交之后释放
-	// (删角收尾,docs/design/guild-phase2/03-names.md §3.4a),这里不用另外调 ReleasePlayerName。
-	RemovePlayersFromAccounts(context.Context, *RemovePlayersFromAccountsRequest) (*RemovePlayersFromAccountsResponse, error)
-	ScheduleAccountDeletion(context.Context, *ScheduleAccountDeletionRequest) (*AccountDeletionResponse, error)
-	ResetAccountRealName(context.Context, *ResetAccountRealNameRequest) (*ResetAccountRealNameResponse, error)
-	mustEmbedUnimplementedLoginAdminServer()
-}
-
-// UnimplementedLoginAdminServer must be embedded to have
-// forward compatible implementations.
-//
-// NOTE: this should be embedded by value instead of pointer to avoid a nil
-// pointer dereference when methods are called.
-type UnimplementedLoginAdminServer struct{}
-
-func (UnimplementedLoginAdminServer) RemovePlayersFromAccounts(context.Context, *RemovePlayersFromAccountsRequest) (*RemovePlayersFromAccountsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method RemovePlayersFromAccounts not implemented")
-}
-func (UnimplementedLoginAdminServer) ScheduleAccountDeletion(context.Context, *ScheduleAccountDeletionRequest) (*AccountDeletionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ScheduleAccountDeletion not implemented")
-}
-func (UnimplementedLoginAdminServer) ResetAccountRealName(context.Context, *ResetAccountRealNameRequest) (*ResetAccountRealNameResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ResetAccountRealName not implemented")
-}
-func (UnimplementedLoginAdminServer) mustEmbedUnimplementedLoginAdminServer() {}
-func (UnimplementedLoginAdminServer) testEmbeddedByValue()                    {}
-
-// UnsafeLoginAdminServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to LoginAdminServer will
-// result in compilation errors.
-type UnsafeLoginAdminServer interface {
-	mustEmbedUnimplementedLoginAdminServer()
-}
-
-func RegisterLoginAdminServer(s grpc.ServiceRegistrar, srv LoginAdminServer) {
-	// If the following call panics, it indicates UnimplementedLoginAdminServer was
-	// embedded by pointer and is nil.  This will cause panics if an
-	// unimplemented method is ever invoked, so we test this at initialization
-	// time to prevent it from happening at runtime later due to I/O.
-	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
-		t.testEmbeddedByValue()
-	}
-	s.RegisterService(&LoginAdmin_ServiceDesc, srv)
-}
-
-func _LoginAdmin_RemovePlayersFromAccounts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RemovePlayersFromAccountsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(LoginAdminServer).RemovePlayersFromAccounts(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: LoginAdmin_RemovePlayersFromAccounts_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LoginAdminServer).RemovePlayersFromAccounts(ctx, req.(*RemovePlayersFromAccountsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _LoginAdmin_ScheduleAccountDeletion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ScheduleAccountDeletionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(LoginAdminServer).ScheduleAccountDeletion(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: LoginAdmin_ScheduleAccountDeletion_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LoginAdminServer).ScheduleAccountDeletion(ctx, req.(*ScheduleAccountDeletionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _LoginAdmin_ResetAccountRealName_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ResetAccountRealNameRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(LoginAdminServer).ResetAccountRealName(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: LoginAdmin_ResetAccountRealName_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LoginAdminServer).ResetAccountRealName(ctx, req.(*ResetAccountRealNameRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-// LoginAdmin_ServiceDesc is the grpc.ServiceDesc for LoginAdmin service.
-// It's only intended for direct use with grpc.RegisterService,
-// and not to be introspected or modified (even as a copy)
-var LoginAdmin_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "loginpb.LoginAdmin",
-	HandlerType: (*LoginAdminServer)(nil),
-	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "RemovePlayersFromAccounts",
-			Handler:    _LoginAdmin_RemovePlayersFromAccounts_Handler,
-		},
-		{
-			MethodName: "ScheduleAccountDeletion",
-			Handler:    _LoginAdmin_ScheduleAccountDeletion_Handler,
-		},
-		{
-			MethodName: "ResetAccountRealName",
-			Handler:    _LoginAdmin_ResetAccountRealName_Handler,
+			MethodName: "HandlePassportEvent",
+			Handler:    _LoginPreGate_HandlePassportEvent_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

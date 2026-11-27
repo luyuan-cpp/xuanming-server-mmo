@@ -4065,8 +4065,11 @@ type BatchRecallItemsRequest struct {
 	RecallKind         RecallKind             `protobuf:"varint,10,opt,name=recall_kind,json=recallKind,proto3,enum=data_service.RecallKind" json:"recall_kind,omitempty"` // 必填
 	RequestId          uint64                 `protobuf:"varint,11,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`                                 // dry_run=false 必填。运维工具按工单生成一次,重试原样带回
 	ExpectedPlanDigest string                 `protobuf:"bytes,12,opt,name=expected_plan_digest,json=expectedPlanDigest,proto3" json:"expected_plan_digest,omitempty"`     // dry_run=false 必填。预览回的 plan_digest,重算不相等就拒绝
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// dry_run=false 必填:后台的双人复核批准记录,发起人 = operator,批准号 = request_id 的十进制文本(批准号即幂等键)。
+	// dry_run=true 不要求;带了就照样核两人不同、发起人 = operator。只有 data_service 打开 AdminAllowUnapproved(本机开发)才接受不带。
+	Approval      *base.AdminApproval `protobuf:"bytes,13,opt,name=approval,proto3" json:"approval,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BatchRecallItemsRequest) Reset() {
@@ -4181,6 +4184,13 @@ func (x *BatchRecallItemsRequest) GetExpectedPlanDigest() string {
 		return x.ExpectedPlanDigest
 	}
 	return ""
+}
+
+func (x *BatchRecallItemsRequest) GetApproval() *base.AdminApproval {
+	if x != nil {
+		return x.Approval
+	}
+	return nil
 }
 
 // 一行回收指令的现状。预览时只有 player_id、资产、amount。
@@ -4615,6 +4625,7 @@ type CancelRecallBatchRequest struct {
 	RequestId     uint64                 `protobuf:"varint,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
 	Operator      string                 `protobuf:"bytes,2,opt,name=operator,proto3" json:"operator,omitempty"` // 必填,≤ 64 字
 	Reason        string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`     // 必填,≤ 191 字
+	Approval      *base.AdminApproval    `protobuf:"bytes,4,opt,name=approval,proto3" json:"approval,omitempty"` // 必填:双人复核批准记录,发起人 = operator;批准号与批准人进取消审计行
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4670,6 +4681,13 @@ func (x *CancelRecallBatchRequest) GetReason() string {
 	return ""
 }
 
+func (x *CancelRecallBatchRequest) GetApproval() *base.AdminApproval {
+	if x != nil {
+		return x.Approval
+	}
+	return nil
+}
+
 // 人工终结一行卡死的指令(scene 反复回 UNKNOWN,或一直投不出去)。证据只认这名玩家已提交的资产账本(player_store),
 // 判据与 trade、guild 的 assetopfix 同一份;transaction_log 只是线索。放行对表见 exploit_loss_prevention_zh.md「人工终结」。
 type ResolveRecallOpRequest struct {
@@ -4678,6 +4696,7 @@ type ResolveRecallOpRequest struct {
 	FinalStatus   uint32                 `protobuf:"varint,2,opt,name=final_status,json=finalStatus,proto3" json:"final_status,omitempty"` // GmRecallOpStatus:只收 REJECTED、ABORTED、PARTIAL;收不收看证据(error_code 39)
 	Operator      string                 `protobuf:"bytes,3,opt,name=operator,proto3" json:"operator,omitempty"`                           // 必填,≤ 64 字
 	Reason        string                 `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`                               // 必填,≤ 191 字
+	Approval      *base.AdminApproval    `protobuf:"bytes,5,opt,name=approval,proto3" json:"approval,omitempty"`                           // 必填:双人复核批准记录,发起人 = operator;批准号与批准人进 [RecallOpManual] 审计行
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4738,6 +4757,13 @@ func (x *ResolveRecallOpRequest) GetReason() string {
 		return x.Reason
 	}
 	return ""
+}
+
+func (x *ResolveRecallOpRequest) GetApproval() *base.AdminApproval {
+	if x != nil {
+		return x.Approval
+	}
+	return nil
 }
 
 // error_code:0 且 resolved = 终结了;0 且未 resolved = 这一行已不是 PENDING,现状见 status;39 = 证据不支持所选结局;
@@ -6407,7 +6433,9 @@ type GetPlayerChannelIdentityRequest struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	// player_id 为 0 时按账号查(建角送检时角色还没发号),这时不回角色等级;两个都填以 player_id 为准。
-	Account       string `protobuf:"bytes,2,opt,name=account,proto3" json:"account,omitempty"`
+	Account string `protobuf:"bytes,2,opt,name=account,proto3" json:"account,omitempty"`
+	// 调用方证明:只认 content_guard 与 chat(go/shared/accountdirectory/channel_identity.go)。应答里有账号与平台 openid。
+	Auth          *base.ServiceCallAuth `protobuf:"bytes,3,opt,name=auth,proto3" json:"auth,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -6454,6 +6482,13 @@ func (x *GetPlayerChannelIdentityRequest) GetAccount() string {
 		return x.Account
 	}
 	return ""
+}
+
+func (x *GetPlayerChannelIdentityRequest) GetAuth() *base.ServiceCallAuth {
+	if x != nil {
+		return x.Auth
+	}
+	return nil
 }
 
 type GetPlayerChannelIdentityResponse struct {
@@ -6778,7 +6813,7 @@ var File_proto_data_service_data_service_proto protoreflect.FileDescriptor
 
 const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\n" +
-	"%proto/data_service/data_service.proto\x12\fdata_service\x1a\x1bgoogle/protobuf/empty.proto\x1a1proto/common/component/asset_op_ledger_comp.proto\x1a5proto/common/component/player_inbox_ledger_comp.proto\x1a8proto/common/component/player_item_gain_block_comp.proto\x1a%proto/common/base/user_accounts.proto\x1a)proto/common/base/service_call_auth.proto\x1a&proto/common/base/role_admission.proto\x1a!proto/role_fence/role_fence.proto\"\xae\x01\n" +
+	"%proto/data_service/data_service.proto\x12\fdata_service\x1a\x1bgoogle/protobuf/empty.proto\x1a1proto/common/component/asset_op_ledger_comp.proto\x1a5proto/common/component/player_inbox_ledger_comp.proto\x1a8proto/common/component/player_item_gain_block_comp.proto\x1a%proto/common/base/user_accounts.proto\x1a)proto/common/base/service_call_auth.proto\x1a&proto/common/base/admin_approval.proto\x1a&proto/common/base/role_admission.proto\x1a!proto/role_fence/role_fence.proto\"\xae\x01\n" +
 	"\x18AccountDirectoryResponse\x122\n" +
 	"\aplayers\x18\x01 \x01(\v2\x18.AccountSimplePlayerListR\aplayers\x12<\n" +
 	"\tlifecycle\x18\x02 \x01(\v2\x1e.data_service.AccountLifecycleR\tlifecycle\x12 \n" +
@@ -7044,7 +7079,7 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\x1bListPlayerSnapshotsResponse\x12\x1d\n" +
 	"\n" +
 	"error_code\x18\x01 \x01(\rR\terrorCode\x128\n" +
-	"\tsnapshots\x18\x02 \x03(\v2\x1a.data_service.SnapshotInfoR\tsnapshots\"\xb1\x03\n" +
+	"\tsnapshots\x18\x02 \x03(\v2\x1a.data_service.SnapshotInfoR\tsnapshots\"\xe9\x03\n" +
 	"\x17BatchRecallItemsRequest\x12\x1d\n" +
 	"\n" +
 	"player_ids\x18\x01 \x03(\x04R\tplayerIds\x12$\n" +
@@ -7062,7 +7097,8 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"recallKind\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\v \x01(\x04R\trequestId\x120\n" +
-	"\x14expected_plan_digest\x18\f \x01(\tR\x12expectedPlanDigest\"\xc6\x02\n" +
+	"\x14expected_plan_digest\x18\f \x01(\tR\x12expectedPlanDigest\x126\n" +
+	"\bapproval\x18\r \x01(\v2\x1a.common.base.AdminApprovalR\bapproval\"\xc6\x02\n" +
 	"\fRecallResult\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12$\n" +
 	"\x0eitem_config_id\x18\x03 \x01(\rR\fitemConfigId\x12\x16\n" +
@@ -7109,17 +7145,19 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\x06reason\x18\b \x01(\x0e2 .data_service.RecallReviewReasonR\x06reason\"6\n" +
 	"\x15GetRecallBatchRequest\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x01 \x01(\x04R\trequestId\"m\n" +
+	"request_id\x18\x01 \x01(\x04R\trequestId\"\xa5\x01\n" +
 	"\x18CancelRecallBatchRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\x04R\trequestId\x12\x1a\n" +
 	"\boperator\x18\x02 \x01(\tR\boperator\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason\"\x84\x01\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\x126\n" +
+	"\bapproval\x18\x04 \x01(\v2\x1a.common.base.AdminApprovalR\bapproval\"\xbc\x01\n" +
 	"\x16ResolveRecallOpRequest\x12\x13\n" +
 	"\x05op_id\x18\x01 \x01(\x04R\x04opId\x12!\n" +
 	"\ffinal_status\x18\x02 \x01(\rR\vfinalStatus\x12\x1a\n" +
 	"\boperator\x18\x03 \x01(\tR\boperator\x12\x16\n" +
-	"\x06reason\x18\x04 \x01(\tR\x06reason\"\x88\x01\n" +
+	"\x06reason\x18\x04 \x01(\tR\x06reason\x126\n" +
+	"\bapproval\x18\x05 \x01(\v2\x1a.common.base.AdminApprovalR\bapproval\"\x88\x01\n" +
 	"\x17ResolveRecallOpResponse\x12\x1d\n" +
 	"\n" +
 	"error_code\x18\x01 \x01(\rR\terrorCode\x12\x1a\n" +
@@ -7257,10 +7295,11 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\x04auth\x18\x01 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\x12\x18\n" +
 	"\aaccount\x18\x02 \x01(\tR\aaccount\x12\x18\n" +
 	"\achannel\x18\x03 \x01(\tR\achannel\x12\x17\n" +
-	"\aopen_id\x18\x04 \x01(\tR\x06openId\"X\n" +
+	"\aopen_id\x18\x04 \x01(\tR\x06openId\"\x8a\x01\n" +
 	"\x1fGetPlayerChannelIdentityRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x18\n" +
-	"\aaccount\x18\x02 \x01(\tR\aaccount\"\xec\x01\n" +
+	"\aaccount\x18\x02 \x01(\tR\aaccount\x120\n" +
+	"\x04auth\x18\x03 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\xec\x01\n" +
 	" GetPlayerChannelIdentityResponse\x12\x14\n" +
 	"\x05found\x18\x01 \x01(\bR\x05found\x12\x18\n" +
 	"\aaccount\x18\x02 \x01(\tR\aaccount\x12\x18\n" +
@@ -7524,10 +7563,11 @@ var file_proto_data_service_data_service_proto_goTypes = []any{
 	(*base.RoleTradeSeal)(nil),           // 112: common.base.RoleTradeSeal
 	(*role_fence.RoleFenceState)(nil),    // 113: rolefence.RoleFenceState
 	(*base.RoleAdmissionIdentity)(nil),   // 114: common.base.RoleAdmissionIdentity
-	(*component.PlayerAssetOpLedgerComp)(nil), // 115: PlayerAssetOpLedgerComp
-	(*component.PlayerInboxLedgerComp)(nil),   // 116: PlayerInboxLedgerComp
-	(*component.PlayerItemGainBlockComp)(nil), // 117: PlayerItemGainBlockComp
-	(*emptypb.Empty)(nil),                     // 118: google.protobuf.Empty
+	(*base.AdminApproval)(nil),           // 115: common.base.AdminApproval
+	(*component.PlayerAssetOpLedgerComp)(nil), // 116: PlayerAssetOpLedgerComp
+	(*component.PlayerInboxLedgerComp)(nil),   // 117: PlayerInboxLedgerComp
+	(*component.PlayerItemGainBlockComp)(nil), // 118: PlayerItemGainBlockComp
+	(*emptypb.Empty)(nil),                     // 119: google.protobuf.Empty
 }
 var file_proto_data_service_data_service_proto_depIdxs = []int32{
 	109, // 0: data_service.AccountDirectoryResponse.players:type_name -> AccountSimplePlayerList
@@ -7584,130 +7624,134 @@ var file_proto_data_service_data_service_proto_depIdxs = []int32{
 	4,   // 51: data_service.SnapshotInfo.type:type_name -> data_service.SnapshotType
 	65,  // 52: data_service.ListPlayerSnapshotsResponse.snapshots:type_name -> data_service.SnapshotInfo
 	5,   // 53: data_service.BatchRecallItemsRequest.recall_kind:type_name -> data_service.RecallKind
-	68,  // 54: data_service.BatchRecallItemsResponse.results:type_name -> data_service.RecallResult
-	70,  // 55: data_service.BatchRecallItemsResponse.needs_review:type_name -> data_service.RecallReviewRow
-	6,   // 56: data_service.RecallReviewRow.reason:type_name -> data_service.RecallReviewReason
-	5,   // 57: data_service.RegisterRecallReviewHandledRequest.recall_kind:type_name -> data_service.RecallKind
-	6,   // 58: data_service.RegisterRecallReviewHandledRequest.review_reason:type_name -> data_service.RecallReviewReason
-	6,   // 59: data_service.RegisterRecallReviewHandledResponse.review_reason:type_name -> data_service.RecallReviewReason
-	78,  // 60: data_service.QueryTransactionLogResponse.rows:type_name -> data_service.TransactionLogRow
-	110, // 61: data_service.ReleasePlayerNameRequest.auth:type_name -> common.base.ServiceCallAuth
-	110, // 62: data_service.RenameRoleRequest.auth:type_name -> common.base.ServiceCallAuth
-	7,   // 63: data_service.RenameRoleResponse.result:type_name -> data_service.RenameRoleResult
-	107, // 64: data_service.BatchGetPlayerNameResponse.names:type_name -> data_service.BatchGetPlayerNameResponse.NamesEntry
-	108, // 65: data_service.BatchGetPlayerDisplayResponse.players:type_name -> data_service.BatchGetPlayerDisplayResponse.PlayersEntry
-	115, // 66: data_service.GetPlayerAssetOpLedgerResponse.ledger:type_name -> PlayerAssetOpLedgerComp
-	116, // 67: data_service.GetPlayerInboxLedgerResponse.ledger:type_name -> PlayerInboxLedgerComp
-	117, // 68: data_service.GetPlayerItemGainBlockResponse.block:type_name -> PlayerItemGainBlockComp
-	110, // 69: data_service.UpsertAccountChannelIdentityRequest.auth:type_name -> common.base.ServiceCallAuth
-	110, // 70: data_service.UpdateRoleAppearanceRequest.auth:type_name -> common.base.ServiceCallAuth
-	110, // 71: data_service.SyncAccountStage1TradableRequest.auth:type_name -> common.base.ServiceCallAuth
-	90,  // 72: data_service.BatchGetPlayerDisplayResponse.PlayersEntry.value:type_name -> data_service.PlayerDisplay
-	26,  // 73: data_service.DataService.ReadAccountDirectory:input_type -> data_service.ReadAccountDirectoryRequest
-	27,  // 74: data_service.DataService.CreateAccountRole:input_type -> data_service.CreateAccountRoleRequest
-	28,  // 75: data_service.DataService.LookupAccountRole:input_type -> data_service.LookupAccountRoleRequest
-	33,  // 76: data_service.DataService.RepairAccountRole:input_type -> data_service.RepairAccountRoleRequest
-	34,  // 77: data_service.DataService.RemoveAccountRoles:input_type -> data_service.RemoveAccountRolesRequest
-	9,   // 78: data_service.DataService.SetAccountRealName:input_type -> data_service.SetAccountRealNameRequest
-	11,  // 79: data_service.DataService.GetAccountRealName:input_type -> data_service.GetAccountRealNameRequest
-	13,  // 80: data_service.DataService.ResetAccountRealName:input_type -> data_service.ResetAccountRealNameRequest
-	98,  // 81: data_service.DataService.UpsertAccountChannelIdentity:input_type -> data_service.UpsertAccountChannelIdentityRequest
-	99,  // 82: data_service.DataService.GetPlayerChannelIdentity:input_type -> data_service.GetPlayerChannelIdentityRequest
-	39,  // 83: data_service.DataService.BeginAccountRoleTrade:input_type -> data_service.BeginAccountRoleTradeRequest
-	40,  // 84: data_service.DataService.ConfirmAccountRoleTradeFreeze:input_type -> data_service.ConfirmAccountRoleTradeFreezeRequest
-	41,  // 85: data_service.DataService.CancelAccountRoleTrade:input_type -> data_service.CancelAccountRoleTradeRequest
-	42,  // 86: data_service.DataService.TransferAccountRole:input_type -> data_service.TransferAccountRoleRequest
-	43,  // 87: data_service.DataService.CheckAccountRoleSlot:input_type -> data_service.CheckAccountRoleSlotRequest
-	45,  // 88: data_service.DataService.GetRoleFenceState:input_type -> data_service.GetRoleFenceStateRequest
-	47,  // 89: data_service.DataService.VerifyRoleAdmission:input_type -> data_service.VerifyRoleAdmissionRequest
-	49,  // 90: data_service.DataService.RegisterRoleAdmission:input_type -> data_service.RegisterRoleAdmissionRequest
-	51,  // 91: data_service.DataService.CloseRoleAdmissions:input_type -> data_service.CloseRoleAdmissionsRequest
-	53,  // 92: data_service.DataService.AckRoleTradeDrain:input_type -> data_service.AckRoleTradeDrainRequest
-	18,  // 93: data_service.DataService.RequestAccountDeletion:input_type -> data_service.RequestAccountDeletionRequest
-	19,  // 94: data_service.DataService.CancelAccountDeletion:input_type -> data_service.CancelAccountDeletionRequest
-	20,  // 95: data_service.DataService.ClaimAccountDeletions:input_type -> data_service.ClaimAccountDeletionsRequest
-	22,  // 96: data_service.DataService.FinishAccountDeletion:input_type -> data_service.FinishAccountDeletionRequest
-	29,  // 97: data_service.DataService.ReleaseDeadPlayerStoreHolder:input_type -> data_service.ReleaseDeadPlayerStoreHolderRequest
-	31,  // 98: data_service.DataService.ReadPlayerStoreHolder:input_type -> data_service.ReadPlayerStoreHolderRequest
-	54,  // 99: data_service.DataService.RegisterPlayerZone:input_type -> data_service.RegisterPlayerZoneRequest
-	55,  // 100: data_service.DataService.GetPlayerHomeZone:input_type -> data_service.GetPlayerHomeZoneRequest
-	57,  // 101: data_service.DataService.BatchGetPlayerHomeZone:input_type -> data_service.BatchGetPlayerHomeZoneRequest
-	118, // 102: data_service.DataService.GetMergedZones:input_type -> google.protobuf.Empty
-	60,  // 103: data_service.DataService.CountZoneRoles:input_type -> data_service.CountZoneRolesRequest
-	62,  // 104: data_service.DataService.GetPlayerRoute:input_type -> data_service.GetPlayerRouteRequest
-	64,  // 105: data_service.DataService.ListPlayerSnapshots:input_type -> data_service.ListPlayerSnapshotsRequest
-	67,  // 106: data_service.DataService.BatchRecallItems:input_type -> data_service.BatchRecallItemsRequest
-	71,  // 107: data_service.DataService.GetRecallBatch:input_type -> data_service.GetRecallBatchRequest
-	72,  // 108: data_service.DataService.CancelRecallBatch:input_type -> data_service.CancelRecallBatchRequest
-	73,  // 109: data_service.DataService.ResolveRecallOp:input_type -> data_service.ResolveRecallOpRequest
-	75,  // 110: data_service.DataService.RegisterRecallReviewHandled:input_type -> data_service.RegisterRecallReviewHandledRequest
-	77,  // 111: data_service.DataService.QueryTransactionLog:input_type -> data_service.QueryTransactionLogRequest
-	80,  // 112: data_service.DataService.AllocateIdSegment:input_type -> data_service.AllocateIdSegmentRequest
-	82,  // 113: data_service.DataService.ReservePlayerName:input_type -> data_service.ReservePlayerNameRequest
-	84,  // 114: data_service.DataService.ReleasePlayerName:input_type -> data_service.ReleasePlayerNameRequest
-	87,  // 115: data_service.DataService.BatchGetPlayerName:input_type -> data_service.BatchGetPlayerNameRequest
-	85,  // 116: data_service.DataService.RenameRole:input_type -> data_service.RenameRoleRequest
-	89,  // 117: data_service.DataService.BatchGetPlayerDisplay:input_type -> data_service.BatchGetPlayerDisplayRequest
-	92,  // 118: data_service.DataService.GetPlayerAssetOpLedger:input_type -> data_service.GetPlayerAssetOpLedgerRequest
-	94,  // 119: data_service.DataService.GetPlayerInboxLedger:input_type -> data_service.GetPlayerInboxLedgerRequest
-	96,  // 120: data_service.DataService.GetPlayerItemGainBlock:input_type -> data_service.GetPlayerItemGainBlockRequest
-	101, // 121: data_service.DataService.UpdateRoleAppearance:input_type -> data_service.UpdateRoleAppearanceRequest
-	103, // 122: data_service.DataService.SyncAccountStage1Tradable:input_type -> data_service.SyncAccountStage1TradableRequest
-	8,   // 123: data_service.DataService.ReadAccountDirectory:output_type -> data_service.AccountDirectoryResponse
-	8,   // 124: data_service.DataService.CreateAccountRole:output_type -> data_service.AccountDirectoryResponse
-	24,  // 125: data_service.DataService.LookupAccountRole:output_type -> data_service.AccountRoleOwnership
-	8,   // 126: data_service.DataService.RepairAccountRole:output_type -> data_service.AccountDirectoryResponse
-	118, // 127: data_service.DataService.RemoveAccountRoles:output_type -> google.protobuf.Empty
-	10,  // 128: data_service.DataService.SetAccountRealName:output_type -> data_service.SetAccountRealNameResponse
-	12,  // 129: data_service.DataService.GetAccountRealName:output_type -> data_service.GetAccountRealNameResponse
-	14,  // 130: data_service.DataService.ResetAccountRealName:output_type -> data_service.ResetAccountRealNameResponse
-	118, // 131: data_service.DataService.UpsertAccountChannelIdentity:output_type -> google.protobuf.Empty
-	100, // 132: data_service.DataService.GetPlayerChannelIdentity:output_type -> data_service.GetPlayerChannelIdentityResponse
-	37,  // 133: data_service.DataService.BeginAccountRoleTrade:output_type -> data_service.AccountRoleTradeReceipt
-	37,  // 134: data_service.DataService.ConfirmAccountRoleTradeFreeze:output_type -> data_service.AccountRoleTradeReceipt
-	37,  // 135: data_service.DataService.CancelAccountRoleTrade:output_type -> data_service.AccountRoleTradeReceipt
-	38,  // 136: data_service.DataService.TransferAccountRole:output_type -> data_service.AccountRoleTransferReceipt
-	44,  // 137: data_service.DataService.CheckAccountRoleSlot:output_type -> data_service.CheckAccountRoleSlotResponse
-	46,  // 138: data_service.DataService.GetRoleFenceState:output_type -> data_service.GetRoleFenceStateResponse
-	48,  // 139: data_service.DataService.VerifyRoleAdmission:output_type -> data_service.VerifyRoleAdmissionResponse
-	50,  // 140: data_service.DataService.RegisterRoleAdmission:output_type -> data_service.RegisterRoleAdmissionResponse
-	52,  // 141: data_service.DataService.CloseRoleAdmissions:output_type -> data_service.CloseRoleAdmissionsResponse
-	118, // 142: data_service.DataService.AckRoleTradeDrain:output_type -> google.protobuf.Empty
-	17,  // 143: data_service.DataService.RequestAccountDeletion:output_type -> data_service.AccountDeletionResponse
-	17,  // 144: data_service.DataService.CancelAccountDeletion:output_type -> data_service.AccountDeletionResponse
-	21,  // 145: data_service.DataService.ClaimAccountDeletions:output_type -> data_service.ClaimAccountDeletionsResponse
-	23,  // 146: data_service.DataService.FinishAccountDeletion:output_type -> data_service.FinishAccountDeletionResponse
-	118, // 147: data_service.DataService.ReleaseDeadPlayerStoreHolder:output_type -> google.protobuf.Empty
-	32,  // 148: data_service.DataService.ReadPlayerStoreHolder:output_type -> data_service.ReadPlayerStoreHolderResponse
-	118, // 149: data_service.DataService.RegisterPlayerZone:output_type -> google.protobuf.Empty
-	56,  // 150: data_service.DataService.GetPlayerHomeZone:output_type -> data_service.GetPlayerHomeZoneResponse
-	58,  // 151: data_service.DataService.BatchGetPlayerHomeZone:output_type -> data_service.BatchGetPlayerHomeZoneResponse
-	59,  // 152: data_service.DataService.GetMergedZones:output_type -> data_service.GetMergedZonesResponse
-	61,  // 153: data_service.DataService.CountZoneRoles:output_type -> data_service.CountZoneRolesResponse
-	63,  // 154: data_service.DataService.GetPlayerRoute:output_type -> data_service.GetPlayerRouteResponse
-	66,  // 155: data_service.DataService.ListPlayerSnapshots:output_type -> data_service.ListPlayerSnapshotsResponse
-	69,  // 156: data_service.DataService.BatchRecallItems:output_type -> data_service.BatchRecallItemsResponse
-	69,  // 157: data_service.DataService.GetRecallBatch:output_type -> data_service.BatchRecallItemsResponse
-	69,  // 158: data_service.DataService.CancelRecallBatch:output_type -> data_service.BatchRecallItemsResponse
-	74,  // 159: data_service.DataService.ResolveRecallOp:output_type -> data_service.ResolveRecallOpResponse
-	76,  // 160: data_service.DataService.RegisterRecallReviewHandled:output_type -> data_service.RegisterRecallReviewHandledResponse
-	79,  // 161: data_service.DataService.QueryTransactionLog:output_type -> data_service.QueryTransactionLogResponse
-	81,  // 162: data_service.DataService.AllocateIdSegment:output_type -> data_service.AllocateIdSegmentResponse
-	83,  // 163: data_service.DataService.ReservePlayerName:output_type -> data_service.ReservePlayerNameResponse
-	118, // 164: data_service.DataService.ReleasePlayerName:output_type -> google.protobuf.Empty
-	88,  // 165: data_service.DataService.BatchGetPlayerName:output_type -> data_service.BatchGetPlayerNameResponse
-	86,  // 166: data_service.DataService.RenameRole:output_type -> data_service.RenameRoleResponse
-	91,  // 167: data_service.DataService.BatchGetPlayerDisplay:output_type -> data_service.BatchGetPlayerDisplayResponse
-	93,  // 168: data_service.DataService.GetPlayerAssetOpLedger:output_type -> data_service.GetPlayerAssetOpLedgerResponse
-	95,  // 169: data_service.DataService.GetPlayerInboxLedger:output_type -> data_service.GetPlayerInboxLedgerResponse
-	97,  // 170: data_service.DataService.GetPlayerItemGainBlock:output_type -> data_service.GetPlayerItemGainBlockResponse
-	102, // 171: data_service.DataService.UpdateRoleAppearance:output_type -> data_service.UpdateRoleAppearanceResponse
-	104, // 172: data_service.DataService.SyncAccountStage1Tradable:output_type -> data_service.SyncAccountStage1TradableResponse
-	123, // [123:173] is the sub-list for method output_type
-	73,  // [73:123] is the sub-list for method input_type
-	73,  // [73:73] is the sub-list for extension type_name
-	73,  // [73:73] is the sub-list for extension extendee
-	0,   // [0:73] is the sub-list for field type_name
+	115, // 54: data_service.BatchRecallItemsRequest.approval:type_name -> common.base.AdminApproval
+	68,  // 55: data_service.BatchRecallItemsResponse.results:type_name -> data_service.RecallResult
+	70,  // 56: data_service.BatchRecallItemsResponse.needs_review:type_name -> data_service.RecallReviewRow
+	6,   // 57: data_service.RecallReviewRow.reason:type_name -> data_service.RecallReviewReason
+	115, // 58: data_service.CancelRecallBatchRequest.approval:type_name -> common.base.AdminApproval
+	115, // 59: data_service.ResolveRecallOpRequest.approval:type_name -> common.base.AdminApproval
+	5,   // 60: data_service.RegisterRecallReviewHandledRequest.recall_kind:type_name -> data_service.RecallKind
+	6,   // 61: data_service.RegisterRecallReviewHandledRequest.review_reason:type_name -> data_service.RecallReviewReason
+	6,   // 62: data_service.RegisterRecallReviewHandledResponse.review_reason:type_name -> data_service.RecallReviewReason
+	78,  // 63: data_service.QueryTransactionLogResponse.rows:type_name -> data_service.TransactionLogRow
+	110, // 64: data_service.ReleasePlayerNameRequest.auth:type_name -> common.base.ServiceCallAuth
+	110, // 65: data_service.RenameRoleRequest.auth:type_name -> common.base.ServiceCallAuth
+	7,   // 66: data_service.RenameRoleResponse.result:type_name -> data_service.RenameRoleResult
+	107, // 67: data_service.BatchGetPlayerNameResponse.names:type_name -> data_service.BatchGetPlayerNameResponse.NamesEntry
+	108, // 68: data_service.BatchGetPlayerDisplayResponse.players:type_name -> data_service.BatchGetPlayerDisplayResponse.PlayersEntry
+	116, // 69: data_service.GetPlayerAssetOpLedgerResponse.ledger:type_name -> PlayerAssetOpLedgerComp
+	117, // 70: data_service.GetPlayerInboxLedgerResponse.ledger:type_name -> PlayerInboxLedgerComp
+	118, // 71: data_service.GetPlayerItemGainBlockResponse.block:type_name -> PlayerItemGainBlockComp
+	110, // 72: data_service.UpsertAccountChannelIdentityRequest.auth:type_name -> common.base.ServiceCallAuth
+	110, // 73: data_service.GetPlayerChannelIdentityRequest.auth:type_name -> common.base.ServiceCallAuth
+	110, // 74: data_service.UpdateRoleAppearanceRequest.auth:type_name -> common.base.ServiceCallAuth
+	110, // 75: data_service.SyncAccountStage1TradableRequest.auth:type_name -> common.base.ServiceCallAuth
+	90,  // 76: data_service.BatchGetPlayerDisplayResponse.PlayersEntry.value:type_name -> data_service.PlayerDisplay
+	26,  // 77: data_service.DataService.ReadAccountDirectory:input_type -> data_service.ReadAccountDirectoryRequest
+	27,  // 78: data_service.DataService.CreateAccountRole:input_type -> data_service.CreateAccountRoleRequest
+	28,  // 79: data_service.DataService.LookupAccountRole:input_type -> data_service.LookupAccountRoleRequest
+	33,  // 80: data_service.DataService.RepairAccountRole:input_type -> data_service.RepairAccountRoleRequest
+	34,  // 81: data_service.DataService.RemoveAccountRoles:input_type -> data_service.RemoveAccountRolesRequest
+	9,   // 82: data_service.DataService.SetAccountRealName:input_type -> data_service.SetAccountRealNameRequest
+	11,  // 83: data_service.DataService.GetAccountRealName:input_type -> data_service.GetAccountRealNameRequest
+	13,  // 84: data_service.DataService.ResetAccountRealName:input_type -> data_service.ResetAccountRealNameRequest
+	98,  // 85: data_service.DataService.UpsertAccountChannelIdentity:input_type -> data_service.UpsertAccountChannelIdentityRequest
+	99,  // 86: data_service.DataService.GetPlayerChannelIdentity:input_type -> data_service.GetPlayerChannelIdentityRequest
+	39,  // 87: data_service.DataService.BeginAccountRoleTrade:input_type -> data_service.BeginAccountRoleTradeRequest
+	40,  // 88: data_service.DataService.ConfirmAccountRoleTradeFreeze:input_type -> data_service.ConfirmAccountRoleTradeFreezeRequest
+	41,  // 89: data_service.DataService.CancelAccountRoleTrade:input_type -> data_service.CancelAccountRoleTradeRequest
+	42,  // 90: data_service.DataService.TransferAccountRole:input_type -> data_service.TransferAccountRoleRequest
+	43,  // 91: data_service.DataService.CheckAccountRoleSlot:input_type -> data_service.CheckAccountRoleSlotRequest
+	45,  // 92: data_service.DataService.GetRoleFenceState:input_type -> data_service.GetRoleFenceStateRequest
+	47,  // 93: data_service.DataService.VerifyRoleAdmission:input_type -> data_service.VerifyRoleAdmissionRequest
+	49,  // 94: data_service.DataService.RegisterRoleAdmission:input_type -> data_service.RegisterRoleAdmissionRequest
+	51,  // 95: data_service.DataService.CloseRoleAdmissions:input_type -> data_service.CloseRoleAdmissionsRequest
+	53,  // 96: data_service.DataService.AckRoleTradeDrain:input_type -> data_service.AckRoleTradeDrainRequest
+	18,  // 97: data_service.DataService.RequestAccountDeletion:input_type -> data_service.RequestAccountDeletionRequest
+	19,  // 98: data_service.DataService.CancelAccountDeletion:input_type -> data_service.CancelAccountDeletionRequest
+	20,  // 99: data_service.DataService.ClaimAccountDeletions:input_type -> data_service.ClaimAccountDeletionsRequest
+	22,  // 100: data_service.DataService.FinishAccountDeletion:input_type -> data_service.FinishAccountDeletionRequest
+	29,  // 101: data_service.DataService.ReleaseDeadPlayerStoreHolder:input_type -> data_service.ReleaseDeadPlayerStoreHolderRequest
+	31,  // 102: data_service.DataService.ReadPlayerStoreHolder:input_type -> data_service.ReadPlayerStoreHolderRequest
+	54,  // 103: data_service.DataService.RegisterPlayerZone:input_type -> data_service.RegisterPlayerZoneRequest
+	55,  // 104: data_service.DataService.GetPlayerHomeZone:input_type -> data_service.GetPlayerHomeZoneRequest
+	57,  // 105: data_service.DataService.BatchGetPlayerHomeZone:input_type -> data_service.BatchGetPlayerHomeZoneRequest
+	119, // 106: data_service.DataService.GetMergedZones:input_type -> google.protobuf.Empty
+	60,  // 107: data_service.DataService.CountZoneRoles:input_type -> data_service.CountZoneRolesRequest
+	62,  // 108: data_service.DataService.GetPlayerRoute:input_type -> data_service.GetPlayerRouteRequest
+	64,  // 109: data_service.DataService.ListPlayerSnapshots:input_type -> data_service.ListPlayerSnapshotsRequest
+	67,  // 110: data_service.DataService.BatchRecallItems:input_type -> data_service.BatchRecallItemsRequest
+	71,  // 111: data_service.DataService.GetRecallBatch:input_type -> data_service.GetRecallBatchRequest
+	72,  // 112: data_service.DataService.CancelRecallBatch:input_type -> data_service.CancelRecallBatchRequest
+	73,  // 113: data_service.DataService.ResolveRecallOp:input_type -> data_service.ResolveRecallOpRequest
+	75,  // 114: data_service.DataService.RegisterRecallReviewHandled:input_type -> data_service.RegisterRecallReviewHandledRequest
+	77,  // 115: data_service.DataService.QueryTransactionLog:input_type -> data_service.QueryTransactionLogRequest
+	80,  // 116: data_service.DataService.AllocateIdSegment:input_type -> data_service.AllocateIdSegmentRequest
+	82,  // 117: data_service.DataService.ReservePlayerName:input_type -> data_service.ReservePlayerNameRequest
+	84,  // 118: data_service.DataService.ReleasePlayerName:input_type -> data_service.ReleasePlayerNameRequest
+	87,  // 119: data_service.DataService.BatchGetPlayerName:input_type -> data_service.BatchGetPlayerNameRequest
+	85,  // 120: data_service.DataService.RenameRole:input_type -> data_service.RenameRoleRequest
+	89,  // 121: data_service.DataService.BatchGetPlayerDisplay:input_type -> data_service.BatchGetPlayerDisplayRequest
+	92,  // 122: data_service.DataService.GetPlayerAssetOpLedger:input_type -> data_service.GetPlayerAssetOpLedgerRequest
+	94,  // 123: data_service.DataService.GetPlayerInboxLedger:input_type -> data_service.GetPlayerInboxLedgerRequest
+	96,  // 124: data_service.DataService.GetPlayerItemGainBlock:input_type -> data_service.GetPlayerItemGainBlockRequest
+	101, // 125: data_service.DataService.UpdateRoleAppearance:input_type -> data_service.UpdateRoleAppearanceRequest
+	103, // 126: data_service.DataService.SyncAccountStage1Tradable:input_type -> data_service.SyncAccountStage1TradableRequest
+	8,   // 127: data_service.DataService.ReadAccountDirectory:output_type -> data_service.AccountDirectoryResponse
+	8,   // 128: data_service.DataService.CreateAccountRole:output_type -> data_service.AccountDirectoryResponse
+	24,  // 129: data_service.DataService.LookupAccountRole:output_type -> data_service.AccountRoleOwnership
+	8,   // 130: data_service.DataService.RepairAccountRole:output_type -> data_service.AccountDirectoryResponse
+	119, // 131: data_service.DataService.RemoveAccountRoles:output_type -> google.protobuf.Empty
+	10,  // 132: data_service.DataService.SetAccountRealName:output_type -> data_service.SetAccountRealNameResponse
+	12,  // 133: data_service.DataService.GetAccountRealName:output_type -> data_service.GetAccountRealNameResponse
+	14,  // 134: data_service.DataService.ResetAccountRealName:output_type -> data_service.ResetAccountRealNameResponse
+	119, // 135: data_service.DataService.UpsertAccountChannelIdentity:output_type -> google.protobuf.Empty
+	100, // 136: data_service.DataService.GetPlayerChannelIdentity:output_type -> data_service.GetPlayerChannelIdentityResponse
+	37,  // 137: data_service.DataService.BeginAccountRoleTrade:output_type -> data_service.AccountRoleTradeReceipt
+	37,  // 138: data_service.DataService.ConfirmAccountRoleTradeFreeze:output_type -> data_service.AccountRoleTradeReceipt
+	37,  // 139: data_service.DataService.CancelAccountRoleTrade:output_type -> data_service.AccountRoleTradeReceipt
+	38,  // 140: data_service.DataService.TransferAccountRole:output_type -> data_service.AccountRoleTransferReceipt
+	44,  // 141: data_service.DataService.CheckAccountRoleSlot:output_type -> data_service.CheckAccountRoleSlotResponse
+	46,  // 142: data_service.DataService.GetRoleFenceState:output_type -> data_service.GetRoleFenceStateResponse
+	48,  // 143: data_service.DataService.VerifyRoleAdmission:output_type -> data_service.VerifyRoleAdmissionResponse
+	50,  // 144: data_service.DataService.RegisterRoleAdmission:output_type -> data_service.RegisterRoleAdmissionResponse
+	52,  // 145: data_service.DataService.CloseRoleAdmissions:output_type -> data_service.CloseRoleAdmissionsResponse
+	119, // 146: data_service.DataService.AckRoleTradeDrain:output_type -> google.protobuf.Empty
+	17,  // 147: data_service.DataService.RequestAccountDeletion:output_type -> data_service.AccountDeletionResponse
+	17,  // 148: data_service.DataService.CancelAccountDeletion:output_type -> data_service.AccountDeletionResponse
+	21,  // 149: data_service.DataService.ClaimAccountDeletions:output_type -> data_service.ClaimAccountDeletionsResponse
+	23,  // 150: data_service.DataService.FinishAccountDeletion:output_type -> data_service.FinishAccountDeletionResponse
+	119, // 151: data_service.DataService.ReleaseDeadPlayerStoreHolder:output_type -> google.protobuf.Empty
+	32,  // 152: data_service.DataService.ReadPlayerStoreHolder:output_type -> data_service.ReadPlayerStoreHolderResponse
+	119, // 153: data_service.DataService.RegisterPlayerZone:output_type -> google.protobuf.Empty
+	56,  // 154: data_service.DataService.GetPlayerHomeZone:output_type -> data_service.GetPlayerHomeZoneResponse
+	58,  // 155: data_service.DataService.BatchGetPlayerHomeZone:output_type -> data_service.BatchGetPlayerHomeZoneResponse
+	59,  // 156: data_service.DataService.GetMergedZones:output_type -> data_service.GetMergedZonesResponse
+	61,  // 157: data_service.DataService.CountZoneRoles:output_type -> data_service.CountZoneRolesResponse
+	63,  // 158: data_service.DataService.GetPlayerRoute:output_type -> data_service.GetPlayerRouteResponse
+	66,  // 159: data_service.DataService.ListPlayerSnapshots:output_type -> data_service.ListPlayerSnapshotsResponse
+	69,  // 160: data_service.DataService.BatchRecallItems:output_type -> data_service.BatchRecallItemsResponse
+	69,  // 161: data_service.DataService.GetRecallBatch:output_type -> data_service.BatchRecallItemsResponse
+	69,  // 162: data_service.DataService.CancelRecallBatch:output_type -> data_service.BatchRecallItemsResponse
+	74,  // 163: data_service.DataService.ResolveRecallOp:output_type -> data_service.ResolveRecallOpResponse
+	76,  // 164: data_service.DataService.RegisterRecallReviewHandled:output_type -> data_service.RegisterRecallReviewHandledResponse
+	79,  // 165: data_service.DataService.QueryTransactionLog:output_type -> data_service.QueryTransactionLogResponse
+	81,  // 166: data_service.DataService.AllocateIdSegment:output_type -> data_service.AllocateIdSegmentResponse
+	83,  // 167: data_service.DataService.ReservePlayerName:output_type -> data_service.ReservePlayerNameResponse
+	119, // 168: data_service.DataService.ReleasePlayerName:output_type -> google.protobuf.Empty
+	88,  // 169: data_service.DataService.BatchGetPlayerName:output_type -> data_service.BatchGetPlayerNameResponse
+	86,  // 170: data_service.DataService.RenameRole:output_type -> data_service.RenameRoleResponse
+	91,  // 171: data_service.DataService.BatchGetPlayerDisplay:output_type -> data_service.BatchGetPlayerDisplayResponse
+	93,  // 172: data_service.DataService.GetPlayerAssetOpLedger:output_type -> data_service.GetPlayerAssetOpLedgerResponse
+	95,  // 173: data_service.DataService.GetPlayerInboxLedger:output_type -> data_service.GetPlayerInboxLedgerResponse
+	97,  // 174: data_service.DataService.GetPlayerItemGainBlock:output_type -> data_service.GetPlayerItemGainBlockResponse
+	102, // 175: data_service.DataService.UpdateRoleAppearance:output_type -> data_service.UpdateRoleAppearanceResponse
+	104, // 176: data_service.DataService.SyncAccountStage1Tradable:output_type -> data_service.SyncAccountStage1TradableResponse
+	127, // [127:177] is the sub-list for method output_type
+	77,  // [77:127] is the sub-list for method input_type
+	77,  // [77:77] is the sub-list for extension type_name
+	77,  // [77:77] is the sub-list for extension extendee
+	0,   // [0:77] is the sub-list for field type_name
 }
 
 func init() { file_proto_data_service_data_service_proto_init() }

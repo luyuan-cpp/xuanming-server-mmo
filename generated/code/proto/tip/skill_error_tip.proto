@@ -81,4 +81,8 @@ enum skill_error {
 
   kSkillLoadoutAttributeResetRequired = 7035;
 
+  kSkillBookshelfFull = 7036;
+
+  kSkillWantedPosterBookshelfFull = 7037;
+
 };
