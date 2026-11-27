@@ -77,6 +77,7 @@ enum jianghu_error : int {
   kJianghuNoActiveDefeatMark = 40011,
   kJianghuGrudgeNotFound = 40012,
   kJianghuServiceBusy = 40013,
+  kJianghuDuelSilverFeePending = 40014,
   jianghu_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   jianghu_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -87,11 +88,11 @@ extern const uint32_t jianghu_error_internal_data_[];
 inline constexpr jianghu_error jianghu_error_MIN =
     static_cast<jianghu_error>(0);
 inline constexpr jianghu_error jianghu_error_MAX =
-    static_cast<jianghu_error>(40013);
+    static_cast<jianghu_error>(40014);
 [[nodiscard]] inline bool jianghu_error_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, jianghu_error_internal_data_);
 }
-inline constexpr int jianghu_error_ARRAYSIZE = 40013 + 1;
+inline constexpr int jianghu_error_ARRAYSIZE = 40014 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 jianghu_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(jianghu_error) {

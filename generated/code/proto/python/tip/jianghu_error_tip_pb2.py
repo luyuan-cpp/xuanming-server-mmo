@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1btip/jianghu_error_tip.proto*\x80\x04\n\rjianghu_error\x12\x14\n\x10kJianghu_errorOK\x10\x00\x12\x1a\n\x14kJianghuDuelDisabled\x10\xc0\xb8\x02\x12\x1b\n\x15kJianghuBlockedByPeer\x10\xc1\xb8\x02\x12$\n\x1ekJianghuTargetRefusesStrangers\x10\xc2\xb8\x02\x12\"\n\x1ckJianghuSelfRefusesStrangers\x10\xc3\xb8\x02\x12 \n\x1akJianghuSameTargetCooldown\x10\xc4\xb8\x02\x12%\n\x1fkJianghuDailyInviteLimitReached\x10\xc5\xb8\x02\x12\x1e\n\x18kJianghuTeamSizeMismatch\x10\xc6\xb8\x02\x12 \n\x1akJianghuTeamChangedAborted\x10\xc7\xb8\x02\x12&\n kJianghuInsufficientWritOrSilver\x10\xc8\xb8\x02\x12$\n\x1ekJianghuInvitePendingOrExpired\x10\xc9\xb8\x02\x12\"\n\x1ckJianghuNotInviteParticipant\x10\xca\xb8\x02\x12 \n\x1akJianghuNoActiveDefeatMark\x10\xcb\xb8\x02\x12\x1c\n\x16kJianghuGrudgeNotFound\x10\xcc\xb8\x02\x12\x19\n\x13kJianghuServiceBusy\x10\xcd\xb8\x02\x42$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1btip/jianghu_error_tip.proto*\xa4\x04\n\rjianghu_error\x12\x14\n\x10kJianghu_errorOK\x10\x00\x12\x1a\n\x14kJianghuDuelDisabled\x10\xc0\xb8\x02\x12\x1b\n\x15kJianghuBlockedByPeer\x10\xc1\xb8\x02\x12$\n\x1ekJianghuTargetRefusesStrangers\x10\xc2\xb8\x02\x12\"\n\x1ckJianghuSelfRefusesStrangers\x10\xc3\xb8\x02\x12 \n\x1akJianghuSameTargetCooldown\x10\xc4\xb8\x02\x12%\n\x1fkJianghuDailyInviteLimitReached\x10\xc5\xb8\x02\x12\x1e\n\x18kJianghuTeamSizeMismatch\x10\xc6\xb8\x02\x12 \n\x1akJianghuTeamChangedAborted\x10\xc7\xb8\x02\x12&\n kJianghuInsufficientWritOrSilver\x10\xc8\xb8\x02\x12$\n\x1ekJianghuInvitePendingOrExpired\x10\xc9\xb8\x02\x12\"\n\x1ckJianghuNotInviteParticipant\x10\xca\xb8\x02\x12 \n\x1akJianghuNoActiveDefeatMark\x10\xcb\xb8\x02\x12\x1c\n\x16kJianghuGrudgeNotFound\x10\xcc\xb8\x02\x12\x19\n\x13kJianghuServiceBusy\x10\xcd\xb8\x02\x12\"\n\x1ckJianghuDuelSilverFeePending\x10\xce\xb8\x02\x42$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,5 +33,5 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableZ\022generated/pb/table'
   _globals['_JIANGHU_ERROR']._serialized_start=32
-  _globals['_JIANGHU_ERROR']._serialized_end=544
+  _globals['_JIANGHU_ERROR']._serialized_end=580
 # @@protoc_insertion_point(module_scope)

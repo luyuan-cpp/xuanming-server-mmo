@@ -77,10 +77,15 @@
   go-redis v9 在读超时或 EOF 后，会把**已经写出的命令**原样重发（见模块缓存 `go-redis/v9@v9.17.3/redis.go` 的 `_process` 和 `error.go` 的 `shouldRetry`）。所以非幂等命令所在的句柄有两种做法：设 `MaxRetries: -1`（`shared/playerredis` 已这样做）；或者让脚本自己识别重放（`scene_manager/internal/logic/owner_epoch.go` 的「重放识别」）。
 - **预算按截止时间算**，不按「次数 × sleep」。退避要指数增长、封顶、带抖动，避免依赖恢复的那一刻所有实例同时打过去。
 - **只重试可重试的错误**：一是确定没执行的失败；二是服务端明确表示可以整笔重试的码，例如 MySQL 1213（死锁）、1205（锁等待超时），TiDB 9007（写冲突）。
+- **整笔重跑的判定全仓只有一份**：`authoritysql.IsRetryableTxError`（`go/shared/authoritysql/tx_outcome.go`）。它认四类：守卫判定的提交前中止、1213、1205、9007。错误树里只要有结局未知就回假，COMMIT 自身的错误一律不重跑。
+  - 重试循环只用 `assetop.WithTxRetry` / `WithTxRetryConfig`：READ COMMITTED、次数有界、10ms 起指数退避带 ±20% 抖动、退避可被 ctx 打断、最后一次失败后不再睡。
+  - 服务只在判定外面并上自己独有的可重跑错误（rank 的 `errScoreInsertRace`、guild 后台的 `errRetryTx`），不再自己列错误号。
+  - 原因：判定原来在 trade、player_inbox、data_service 召回、guild 后台各抄一份，mail、rank 各有自写的循环。口径一漂移，就会漏判 9007（迁 TiDB 后最常见的一类），或者不认守卫的提交前中止（R6 残余，2026-11-19 收成一处）。
 - **不阻塞事件循环**：
   - C++ loop 线程上不等重连：未就绪就当场失败，或用定时器排下一次；
   - Go 用 ctx 截止；
   - Java 每一层都要有超时：建连、取连接、socket 读、命令。
+- **节拍发出的异步请求要有自己的在途上限和代次**：超时按失败计、允许另起一次，迟到的应答按代次丢弃。否则一次没回的请求可能让节拍一直停在「在途」上、不再刷新。例：C++ 集群客户端的 `CLUSTER SLOTS` 刷新（`RedisClusterOptions::topologyRefreshTimeout`，缺省 5s，R19）。
 
 ### 1.4 持有类状态：租约、锁、选主、注册身份
 
@@ -96,6 +101,8 @@
   - 重新注册用 CAS 判定身份归属，发现被别人占了就排空退出。
 
   为什么不自停：etcd 整体不可用时，所有节点一起自停就是全服停机，而那时根本没有人能接管。代价是被接管时丢一小段进度，用「身份不确认就加密存盘」来缩短（C++ 已做，见 §3.1 etcd）。
+
+注册身份的实现全仓只有 `go/shared/noderegistry` 一份（R3、R4，2026-11-19 收口）。各服务只写薄适配，只选一件事：原号被别人占了以后，是换新号继续服务（`ReallocateNewID`，缺省），还是退出、交给编排重启（`ExitProcess`，login 用它）。停机撤注册也要按身份条件删：键的值仍是本实例的 uuid 才删。否则失租后原号已被别的实例接管时，停机会删掉接管者的发现键；接管者不 watch 自己的键，会一直不可见。
 
 Redis 里的锁和占位只能当协调提示：异步复制的主从切换会丢掉已确认的写。凭 Redis 锁做的变更，要么本身幂等，要么带 fencing token 到权威库做条件写。被保护的数据就在这把锁所在的 Redis 槽里时，还有一种更直接的围栏：写脚本在同一段里核对锁键的值仍是本任期写进去的那个（`leader.Elector.Token`），不等就一个键都不写。由存锁的那台 Redis 在写的那一刻判属主，不靠任何一方的时钟，也没有会倒退的计数；主从切换留下的是同一条复制流的前缀，新属主的写留下来了，它的加锁也一定留下来了。scene_manager 负载分刷新里会加成员的写走这一条（2026-11-12，`load_refresh.go` 的 `luaFencedLeaderZadd`）。
 
@@ -117,6 +124,11 @@ Redis 里的锁和占位只能当协调提示：异步复制的主从切换会�
   - Ping 失败只打一行日志就照常接单，到第一笔业务才出错；
   - 对端服务没起就退出：服务之间互相等，就成了冷启动时的连锁 CrashLoop（§4 R5）。
 - **地址要能重新解析**：重连时重新解析主机名或重新查发现，不要只在启动时解析一次（§4 R9）。
+- **先监听、后注册**：发现键一出现，别的服务就会按它连过来。Go 的 gRPC 服务先起 `Serve`，用 `noderegistry.WaitForListening` 确认端口能连上再注册；等不到就启动失败，不带着连不上的地址注册（scene_manager、client_rpc_router，R19）。
+- **配置契约在加载时校验，多填、漏填都拒启**：C++ 的 `Etcd.Hosts` 必须恰好一个地址，填负载均衡入口（K8s 上是 etcd 的 Service）。原来多填的静默不用，不填会解引用空列表（R19）。
+  - 客户端不自己轮换多个成员地址：成员健康由 Service 判断和摘除。客户端再轮换，就要自己判健康、重建 watch 与租约，复杂而且与 Service 重复。
+  - 读配置的函数开头先 `Clear()` 目标对象，同一进程重复加载（单测里常见）时 repeated 字段才不会累加。这条校验落地后，正是靠累加出来的「2 个地址」发现了 `readBaseDeployConfig`、`readGameConfig` 的这个问题。
+- **启动期核对给总预算，不给「次数 × 超时」**：C++ Kafka 消费者在 loop 线程上核对分区数，阻塞期间 etcd 续约、Redis 存活探测、节点链路心跳都停着。现在每个消费者 3s 预算、单次查询 1s，前一个消费者没查到时后面的只查一次。原来每个最多 30s，gate 四个消费者就是两分钟，远超节点链路 15s 的判死时长（R19）。
 
 ### 1.7 探针
 
@@ -128,6 +140,15 @@ Redis 里的锁和占位只能当协调提示：异步复制的主从切换会�
 - 每种依赖至少有三项：连接状态、重连次数、按原因分的失败次数。
 - 日志按状态变化打（断开、重连成功、握手失败附连续失败次数），不按每次失败的调用打；高频失败要采样。
 - 指标 label 不含 `player_id` 等高基数值（AGENTS §9）。
+- **C++ 依赖链路指标**（R17，2026-11-19）：`core/metrics/dependency_link_metrics.h`，仅头文件，进程级计数用 relaxed 原子、不加锁。每类依赖（redis_player / redis_control / redis_other / etcd / grpc / node_link）三项：此刻可用的连接数、意外断开次数、按原因（connect / auth / handshake）分的建连失败次数。label 只有依赖类别与原因。
+  - **上下线成对、各计一次**：可用数只在「握手完成、交给业务」那一处加一，第一次断线或存活探测摘下时减一。每条连接有一个「已计入」标记防重复减（RedisManager 的 `connectionCounted`，RpcClient 的唯一写入点 `SetReady`）。本端主动拆（停机、换连接、销毁）和对端优雅退役（gRPC GOAWAY）算预期断开，不计入意外断开。
+  - **传输层不认指标**：muduo_grpc 只经 `ChannelOptions::linkObserver` 报链路事件（READY、断开、GOAWAY 退役、建连失败、本端关闭），由 core 的 `network/grpc_link_metrics.h` 接到计数上。传输库保持通用，换指标实现不用碰网络代码。
+  - **告警看计数增长，不看可用数**：可用数为 0 在冷启动、对端缩容和排空时都正常。两条告警在 `deploy/k8s/cpp-node-dependency-alerts.yaml`：
+    - 建连失败连续 5 分钟、每个窗口都在涨；
+    - 意外断开 15 分钟内 ≥ 3 次，节点链路除外（缩容、排空时它本来就会断）。
+
+    Go 注册层的 `noderegistry_registered` 不同：它是本进程自己的注册状态，可以直接看，< 1 持续 3 分钟就告警（`deploy/k8s/noderegistry-alerts.yaml`）。
+  - **没有指标的写明原因**：Kafka 由 librdkafka 自管连接，生产者刻意不挂 event_cb（`kafka_producer.h`）；节点链路的 TCP 建连失败由 muduo 的 Connector 自己重试，不回调。
 
 ### 1.9 断线不等于数据回退
 

@@ -878,6 +878,9 @@ func (l *JianghuLogic) checkSceneEligibility(
 			l.Errorf("[jianghu] CheckJianghuDuelEligibility failed ep=%s err=%v tip=%d", ep, err, resp.GetErrorMessage().GetId())
 			return constants.ErrJianghuServiceBusy, "参战资格校验暂不可用"
 		}
+		if req.PayerPlayerId != 0 && resp.GetPayerSilverFeePending() {
+			return constants.ErrJianghuDuelSilverFeePending, "上一场普通战书的银两还没结清"
+		}
 		if req.PayerPlayerId != 0 && !resp.GetPayerHasSufficientFee() {
 			return constants.ErrJianghuInsufficientWritOrSilver, "银两或金帖生死状不足"
 		}

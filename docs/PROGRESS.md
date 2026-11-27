@@ -8270,3 +8270,21 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
 - 做法:`go/trade/internal/commerce/engine.go` 新增 `attemptAllowed`(按扣款腿的 PlayerId 数这个人对这张单试过几次,满 3 次拒绝;整单 `QuantityReserved` 满 256 拒绝),寄售 `buy` 与求购单 `fulfillWantedLocked` 共用;`wanted_skill_book.go` 删掉原 32 次常量。用例:`wanted_skill_book_test.go` 的 `TestWantedFulfillGuards` 两条子用例与 `TestAttemptAllowedCapsEachActorAndTheListing`。为什么这样选、被否决的做法与剩下的边界写在 `docs/design/skill-book-wanted-order-trade-escrow.md` §11.1 第 7 条与「代价与边界」第 1 条;`docs/design/jubaozhai-market.md` 寄售购买一句同步。
 - 验证(Gemini,未跑):随批 A 一起,`go test ./internal/commerce/ -run 'TestWanted|TestAttemptAllowed|TestTiDBConsignment|TestTiDBRejectedBuyRetry'`(真库那两条要 `COMMERCE_TEST_DSN`);其余命令同设计稿 §11.1 末。
 - 仍未做:批 C(部署)与批 B(scene 退役旧揭榜 + 客户端),按负责人 11-27 改定换电脑由 Claude Code 写,入口是第 4 轮交接单 §0a 与设计稿 §11.2;本机 Claude 全部模型周额度 88%,不够写完这两批。
+
+## 2026-11-27 Claude:数据覆写审计 r2 第 4 轮批 V / 批 W / §7.4 复核,guild 人工终结见证补比 attempts(未编译、未测试,待 Gemini 验证;Java 不涉及)
+
+- **复核**:批 V(帮战追杀令与灵脉)、批 W(锦标赛领奖与 match 发件)、§7.4 五条都通过,写的人与复核的人分开;结论逐条写在 `docs/handoff/data-overwrite-audit-r2-round4-handoff-20261126.md` §7.1、§7.2、§7.4 末条。重点核了锁序、行锁内复核、幂等闸门、指令号事务前预发、发号失败不落墙钟、协议字段号不复用。
+- **guild 见证 SQL**:`go/guild/internal/data/asset_store.go` 的 `sqlResolveAssetOpQuiet` 加 `AND attempts = ?`,`ResolveManuallyIfQuiet` 实参加 `witness.Attempts`,两处注释写明「行上只有 attempts 变了」的两种情形;`economy_repo_test.go` 三处见证字面量补 attempts,新增真库用例 `TestResolveManuallyIfQuiet_MissesWhenOnlyAttemptsMoved`。`go/shared/assetop/manual_evidence.go`、guild `cmd/assetopfix/main_test.go` 的注释,以及 `docs/design/guild-phase2/05-economy.md` §5.23、保证图 §6.2、r2 审计文档里的「guild 待补」字样同步改掉。
+- **顺手修**:锦标赛领奖遇 mail 回 `kMailRecipientBoxFull` 时原样回给玩家(原来报内部错误),行保持可领取;新增 `TestClaimTournamentRewardsPassesThroughRecipientBoxFull`。五项写在 `docs/planning/season-team-tournament-v1.md` §7.7。
+- **给 Gemini 的验证**(各模块目录):
+  - `go/guild`:设 `GUILD_TEST_MYSQL_DSN`(库名 `guild_test`),`go test ./internal/data -run 'TestResolveManuallyIfQuiet_' -count=1 -v`,三条全 PASS、不得 SKIP;再跑 `go test ./cmd/assetopfix/... -count=1`。
+  - `go/match`:`go test ./internal/logic/ -count=1 -run 'TestClaimTournamentRewards' -v` 全 PASS。
+  - 批 V、W、§7.4 的整套命令不变,见交接单 §7.1~§7.4 的「验证」。
+- **交接**:`docs/handoff/data-overwrite-audit-r2-remaining-handoff-20261127.md` §0、§2、§3.2、§3.3 第 5 条,第 4 轮单 §6.1 两条,`review-suggestions-remaining-handoff-20261126.md` §4 第 1 条都已标成已做。
+- **提交情况**:main 工作区,未提交。
+
+## 2026-11-27 Claude:断线重连本线的设计要点写进设计稿原则节(只改文档;代码无待写项,验证仍交 Gemini;Java 不涉及)
+
+- **改了什么**:`docs/design/infra-reconnect-overview.md` 第 1 节只加不删 21 行,把 R3 / R4 / R6 / R17 / R19 定下的做法从 §4.1 的状态行提成通用规则:§1.3 整笔重跑判定全仓一份(`authoritysql.IsRetryableTxError` + `assetop.WithTxRetry`)、节拍发出的异步请求要有在途上限与代次;§1.4 注册实现全仓一份、撤注册按 uuid 条件删;§1.6 先监听后注册、`Etcd.Hosts` 恰好一个负载均衡地址与读配置先 `Clear()`、启动期核对给总预算;§1.8 C++ 依赖链路指标的成对计数、传输层只报事件、告警看增长不看可用数、没有指标的写明原因。
+- **核对**:本线所有改动都在 `D:\luyuan\xuanming-server-mmo-cpp` 的 main;只有 main 一个分支,登记的另外三个 worktree 是游离的构建 / 验证快照,提交都是 main 的祖先。已删会话的残留按 2026-11-26「已删 / 已归档会话留在 git 里的残留逐项核对」处理,没有要并回的。
+- **验证**:代码部分的命令不变,见本文件 2026-11-19「断线重连 R3 收尾」「R6 残余」「R19」「R17」与 2026-11-26「断线重连 R3 / R6 / R17 / R19 复核收口」五条。

@@ -167,6 +167,9 @@ message CheckJianghuDuelEligibilityResponse
   TipInfoMessage error_message = 1;
   repeated JianghuPlayerEligibilityEntry players = 2;
   bool payer_has_sufficient_fee = 3;
+  // 发起方另一局普通战书预扣的银两还没退还或被结算消耗(PlayerJianghuComp 的待退标记还在)。为 true 时备战一定被拒,
+  // match 直接回「上一场银两未结清」,不发出这张战书;此时 payer_has_sufficient_fee 恒为 false。
+  bool payer_silver_fee_pending = 4;
 }
 
 message PrepareBattleResponse

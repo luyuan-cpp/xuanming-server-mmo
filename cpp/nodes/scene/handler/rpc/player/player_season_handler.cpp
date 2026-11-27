@@ -122,6 +122,7 @@ void SceneSeasonClientPlayerHandler::ChooseWuxingRealmBranch(entt::entity player
 ///<<< BEGIN WRITING YOUR CODE
 	PlayerSeasonSystem::ChooseWuxingRealmBranch(player, TimeSystem::NowMillisecondsUTC(), *request, *response);
 ///<<< END WRITING YOUR CODE
+
 }
 
 void SceneSeasonClientPlayerHandler::ResolveWuxingRealmEvent(entt::entity player,const ::ResolveWuxingRealmEventRequest* request,
@@ -130,4 +131,5 @@ void SceneSeasonClientPlayerHandler::ResolveWuxingRealmEvent(entt::entity player
 ///<<< BEGIN WRITING YOUR CODE
 	PlayerSeasonSystem::ResolveWuxingRealmEvent(player, TimeSystem::NowMillisecondsUTC(), *request, *response);
 ///<<< END WRITING YOUR CODE
+
 }

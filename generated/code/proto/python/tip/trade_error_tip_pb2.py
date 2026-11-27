@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x19tip/trade_error_tip.proto*\xb0\x04\n\x0btrade_error\x12\x12\n\x0ekTrade_errorOK\x10\x00\x12\x1b\n\x15kTradeListingNotFound\x10\xa0\x9c\x01\x12\x1b\n\x15kTradeHomeZoneUnknown\x10\xa1\x9c\x01\x12 \n\x1akTradeFavoriteLimitReached\x10\xa2\x9c\x01\x12\x1b\n\x15kTradeFeatureDisabled\x10\xa3\x9c\x01\x12\x19\n\x13kTradeOrderNotFound\x10\xa4\x9c\x01\x12\x1e\n\x18kTradeOrderStateConflict\x10\xa5\x9c\x01\x12\x1b\n\x15kTradeRequestConflict\x10\xa6\x9c\x01\x12\x16\n\x10kTradeOrderLimit\x10\xa7\x9c\x01\x12\x1b\n\x15kTradeCannotTradeSelf\x10\xa8\x9c\x01\x12\x1f\n\x19kTradeCounterpartyUnknown\x10\xa9\x9c\x01\x12\x1d\n\x17kTradeInsufficientAsset\x10\xaa\x9c\x01\x12\x15\n\x0fkTradeBidTooLow\x10\xab\x9c\x01\x12\x18\n\x12kTradeAuctionEnded\x10\xac\x9c\x01\x12 \n\x1akTradeAssetDeliveryPending\x10\xad\x9c\x01\x12\x18\n\x12kTradeManualReview\x10\xae\x9c\x01\x12\x1c\n\x16kTradeAssetNotTradable\x10\xaf\x9c\x01\x12\x1a\n\x14kTradeTitleSensitive\x10\xb0\x9c\x01\x12 \n\x1akTradeTextCheckUnavailable\x10\xb1\x9c\x01\x42$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x19tip/trade_error_tip.proto*\xf5\x04\n\x0btrade_error\x12\x12\n\x0ekTrade_errorOK\x10\x00\x12\x1b\n\x15kTradeListingNotFound\x10\xa0\x9c\x01\x12\x1b\n\x15kTradeHomeZoneUnknown\x10\xa1\x9c\x01\x12 \n\x1akTradeFavoriteLimitReached\x10\xa2\x9c\x01\x12\x1b\n\x15kTradeFeatureDisabled\x10\xa3\x9c\x01\x12\x19\n\x13kTradeOrderNotFound\x10\xa4\x9c\x01\x12\x1e\n\x18kTradeOrderStateConflict\x10\xa5\x9c\x01\x12\x1b\n\x15kTradeRequestConflict\x10\xa6\x9c\x01\x12\x16\n\x10kTradeOrderLimit\x10\xa7\x9c\x01\x12\x1b\n\x15kTradeCannotTradeSelf\x10\xa8\x9c\x01\x12\x1f\n\x19kTradeCounterpartyUnknown\x10\xa9\x9c\x01\x12\x1d\n\x17kTradeInsufficientAsset\x10\xaa\x9c\x01\x12\x15\n\x0fkTradeBidTooLow\x10\xab\x9c\x01\x12\x18\n\x12kTradeAuctionEnded\x10\xac\x9c\x01\x12 \n\x1akTradeAssetDeliveryPending\x10\xad\x9c\x01\x12\x18\n\x12kTradeManualReview\x10\xae\x9c\x01\x12\x1c\n\x16kTradeAssetNotTradable\x10\xaf\x9c\x01\x12\x1a\n\x14kTradeTitleSensitive\x10\xb0\x9c\x01\x12 \n\x1akTradeTextCheckUnavailable\x10\xb1\x9c\x01\x12#\n\x1dkTradeWantedOrderLimitReached\x10\xb2\x9c\x01\x12\x1e\n\x18kTradeWantedBookMismatch\x10\xb3\x9c\x01\x42$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,5 +33,5 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableZ\022generated/pb/table'
   _globals['_TRADE_ERROR']._serialized_start=30
-  _globals['_TRADE_ERROR']._serialized_end=590
+  _globals['_TRADE_ERROR']._serialized_end=659
 # @@protoc_insertion_point(module_scope)

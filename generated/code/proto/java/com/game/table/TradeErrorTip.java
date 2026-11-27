@@ -107,6 +107,14 @@ public final class TradeErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kTradeTextCheckUnavailable = 20017;</code>
      */
     kTradeTextCheckUnavailable(20017),
+    /**
+     * <code>kTradeWantedOrderLimitReached = 20018;</code>
+     */
+    kTradeWantedOrderLimitReached(20018),
+    /**
+     * <code>kTradeWantedBookMismatch = 20019;</code>
+     */
+    kTradeWantedBookMismatch(20019),
     UNRECOGNIZED(-1),
     ;
 
@@ -195,6 +203,14 @@ public final class TradeErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kTradeTextCheckUnavailable = 20017;</code>
      */
     public static final int kTradeTextCheckUnavailable_VALUE = 20017;
+    /**
+     * <code>kTradeWantedOrderLimitReached = 20018;</code>
+     */
+    public static final int kTradeWantedOrderLimitReached_VALUE = 20018;
+    /**
+     * <code>kTradeWantedBookMismatch = 20019;</code>
+     */
+    public static final int kTradeWantedBookMismatch_VALUE = 20019;
 
 
     public final int getNumber() {
@@ -240,6 +256,8 @@ public final class TradeErrorTip extends com.google.protobuf.GeneratedFile {
         case 20015: return kTradeAssetNotTradable;
         case 20016: return kTradeTitleSensitive;
         case 20017: return kTradeTextCheckUnavailable;
+        case 20018: return kTradeWantedOrderLimitReached;
+        case 20019: return kTradeWantedBookMismatch;
         default: return null;
       }
     }
@@ -305,7 +323,7 @@ public final class TradeErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025trade_error_tip.proto*\260\004\n\013trade_error\022" +
+      "\n\025trade_error_tip.proto*\365\004\n\013trade_error\022" +
       "\022\n\016kTrade_errorOK\020\000\022\033\n\025kTradeListingNotF" +
       "ound\020\240\234\001\022\033\n\025kTradeHomeZoneUnknown\020\241\234\001\022 \n" +
       "\032kTradeFavoriteLimitReached\020\242\234\001\022\033\n\025kTrad" +
@@ -319,8 +337,10 @@ public final class TradeErrorTip extends com.google.protobuf.GeneratedFile {
       "radeAssetDeliveryPending\020\255\234\001\022\030\n\022kTradeMa" +
       "nualReview\020\256\234\001\022\034\n\026kTradeAssetNotTradable" +
       "\020\257\234\001\022\032\n\024kTradeTitleSensitive\020\260\234\001\022 \n\032kTra" +
-      "deTextCheckUnavailable\020\261\234\001B$\n\016com.game.t" +
-      "ableZ\022generated/pb/tableb\006proto3"
+      "deTextCheckUnavailable\020\261\234\001\022#\n\035kTradeWant" +
+      "edOrderLimitReached\020\262\234\001\022\036\n\030kTradeWantedB" +
+      "ookMismatch\020\263\234\001B$\n\016com.game.tableZ\022gener" +
+      "ated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

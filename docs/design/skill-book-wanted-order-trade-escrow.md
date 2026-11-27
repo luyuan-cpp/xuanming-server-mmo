@@ -290,6 +290,8 @@ message TradeWantedSkillBookTerms {
 
 ### 11.2 批 C、批 B 换电脑由 Claude Code 写(2026-11-27 负责人改定)
 
+> 剩余工作(批 A 验证、批 C、批 B、文档收尾)的执行入口是 [skill-book-wanted-order-remaining-handoff-20261127.md](../handoff/skill-book-wanted-order-remaining-handoff-20261127.md),逐文件改法、要先问负责人的事与完成判据都在那里;本节保留设计层面的要点。
+
 Claude 全部模型周额度过 80%(81%),按负责人 11-26 口径停在批 A 边界。原定批 C、B 交 Gemini 4 Neon Extra 写;**负责人 11-27 改定:换一台电脑,由那边的 Claude Code 写**(按 AGENTS §10.3 用最高档模型 Fable 5.2 Max),**Gemini 不写这两批的代码**,只做写完之后 §9 的生成、编译、测试、冒烟。写的人在本节补五项记录;写完再按 §9 跑。顺序照旧 C → B(或上线前清档时三批一起上)。那台电脑要先拿到本机 main 的最新内容(含批 A 与还在工作区的文档改动),由负责人同步。
 
 **批 C(部署开通)**,前提②不满足就停下问负责人:①已满足——第 4 轮会话 §7.4 的子代理没有改 `tools/scripts/k8s_deploy.ps1`(r2-tn#3 的 match 接线已由「改名与内容安全第三轮」会话修完,见第 4 轮交接单 §7.4),改这个文件前照常先 `git diff` 看别的会话的未提交改动;②负责人拍板 K8s 各档位是否打开 trade `AssetOp.Enabled`(本文没有定这个取值,不自己定)。

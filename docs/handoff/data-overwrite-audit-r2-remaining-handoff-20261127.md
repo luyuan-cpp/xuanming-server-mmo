@@ -11,11 +11,11 @@
   - 第 4 轮批 V（帮战追杀令与灵脉）、批 W（锦标赛领奖与 match 发件）、批 X（生死状银两）；
   - 第 4 轮单 §7.4 的五条，§6.1 的九条（其中悬赏求书只写了批 A）。
   - 全部在 main。本单第一版随 `3d715db97` 推上 origin/main，之后的改动由负责人在旧电脑回收前一起提交推送。
-- **已复核**：批 X（第 4 轮单 §7.3 末条）；§6.1 除悬赏求书以外的 8 条（该节表头记着「子代理写、本会话复核」）。
+- **已复核**：批 X（第 4 轮单 §7.3 末条）；§6.1 除悬赏求书以外的 8 条（该节表头记着「子代理写、本会话复核」）；批 V、批 W、§7.4 五条（2026-11-27，旧电脑会话「复核第 4 轮批 V/W 并补 guild 见证 SQL」，结论在第 4 轮单 §7.1、§7.2、§7.4 末条：都通过，批 W 顺手补了邮箱满提示透传）。
+- **11-27 旧电脑又做完的**：§3.2 guild 见证 SQL；§3.3 第 5 条邮箱满提示透传。都未编译，验证命令在各自小节。
 - **还没做**：
-  - 复核批 V、批 W、§7.4、悬赏求书批 A；
+  - 复核悬赏求书批 A（批 V、批 W、§7.4 已复核，见上）；
   - 写悬赏求书批 C、批 B；
-  - guild 人工终结的条件写补比 `attempts`；
   - 各批记下的顺带发现；
   - 选角页回选上限的用例；
   - 文档收口、Gemini 验证、第 5 轮查找。
@@ -37,6 +37,8 @@
 | 批 V | `git diff 8a6697af0 a0b3d195e -- <§7.1 改动文件>`。排除别的会话的两个文件：`go/guild/internal/kafka/trial_result_consumer.go`、`go/guild/cmd/assetopfix/main.go` | 第 4 轮单 §3 批 V、§7.1 |
 | 批 W | `git diff 8a6697af0 HEAD -- <§7.2 改动文件与测试>`。`tools/scripts/k8s_deploy.ps1` 里还有别的会话修的 r2-tn#3（match 的 FriendRpc / ChatRpc / GuildRpc 与准入名单），要分开看；`go/match/internal/logic/gather.go` 在 `bcea63be6` 改的一处，先核是谁的 | 第 4 轮单 §3 批 W、§7.2 |
 | §7.4 五条 | `git diff a0b3d195e HEAD -- <§7.4 改动文件>` | 第 4 轮单 §7.4 |
+
+> 批 V、批 W、§7.4 三行 2026-11-27 已复核完（第 4 轮单 §7.1、§7.2、§7.4 末条），只剩悬赏求书批 A 一行。
 | 悬赏求书批 A | 求书设计稿 §11.1 列的文件（`go/trade/internal/commerce/wanted_skill_book.go` 等），对照该稿 §3 的设计 | 求书设计稿 §3、§11.1 |
 
 diff 的终点一律用 HEAD：当时没提交的测试和设计稿，是后来的快照提交带进来的。
@@ -89,14 +91,19 @@ diff 的终点一律用 HEAD：当时没提交的测试和设计稿，是后来�
 
 逐条判断：是缺陷就修；确是有意的取舍，就在所属设计稿写明不改的理由。至少包括：
 
-1. 删角收尾不删 `guild_war_player_state` 与 `guild_war_garrison`，后者还含玩家名与快照。要补进账号注销清单，并在 `docs/design/account-deletion.md` 登记新挂起项 `guild_war_credit_owed`（第 4 轮单 §7.4「顺带发现」）。
+1. 删角收尾不删 `guild_war_player_state` 与 `guild_war_garrison`，后者还含玩家名与快照。要补进账号注销清单，并在 `docs/design/account-deletion.md` 登记新挂起项 `guild_war_credit_owed`（第 4 轮单 §7.4「顺带发现」）。**2026-11-27 已做（未编译）**：`data/role_fence_purge.go` 新增 `purgeWarRowsOfPlayer`，在清理事务里按锁序删他的守旗快照、个人帮战状态与待入账行；`logic/role_fence_purge.go` 在删角触发解散时提交后调 `CleanupGuildWarOnDisband` 释放灵脉；`role_fence_purge_tidb_test.go` 补三张表的断言；注销设计稿 §6.2 guild 行、挂起原因清单与五项已写。验证：`cd go/guild`，设 `GUILD_ROLE_TEST_DSN`，跑 `go test ./internal/data -run 'TestTiDBRoleFencePurge' -count=1 -v`，全 PASS、不得 SKIP。
 2. 两处客户端可见的文字：
    - `guild.proto` 里 EXPIRED 的注释仍写「已原路退回」，实际还包括「退款排在待入账里」和「发布者已删除、退款放弃」（§7.4）；
    - 客户端 `BountyStatusLabel` 没有状态 6（ESCROW_FAILED）的文案（§7.1）。
    - 改之前先查 Java 仓 `PARITY.md` 与 `docs/reference/mmorpg-client-contract-*.md`，两版共享的契约同批改。
-3. 两处缺告警：待入账积压 `guild_war_credit_owed` 没有指标也没有告警（§7.4）；生死状待退银两超期打的 `metric=jianghu_duel_fee_overdue` 没有告警规则（§7.3）。
-4. `CheckJianghuDuelEligibility` 不判「旧局的待退银两还没结清」，要到备战时才拒（§7.3）。
-5. 锦标赛领奖遇到邮箱满，玩家看到的是内部错误，mail 的满箱提示没透传。响应里同时带着错误和已领取的部分，客户端怎么显示还没核（§7.2）。
+   - **2026-11-27 已做（未生成、未编译）**：`proto/guild/guild.proto` 的 EXPIRED 注释改成实际含义；客户端 `Assets/Scripts/Game/Guild/GuildWarModels.cs` 的 `BountyStatusLabel` 补 `EscrowFailed`「扣款未成，已作废」（客户端生成代码里已有这个枚举值）；帮战设计稿 `guild-play-v2-implementation-plan.md` 代价与边界一条改写；Java `PARITY.md` 批 X 那条补一句。验证：`proto-gen-run` 之后在客户端仓依次跑 `tools/gen_proto.ps1`、`tools/gen_messageids.ps1`、`tools/client_compile_check.ps1`，0 错误。
+3. 两处缺告警：待入账积压 `guild_war_credit_owed` 没有指标也没有告警（§7.4）；生死状待退银两超期打的 `metric=jianghu_duel_fee_overdue` 没有告警规则（§7.3）。**2026-11-27 已做（未编译）**：guild 加 gauge `guild_war_credit_owed_rows`（`WarRepo.CountWarCreditOwed`、`reportWarCreditOwedBacklog`，与历练待入队同一循环、同一封顶）与告警 `GuildWarCreditOwedBacklog`；`jianghu_duel_fee_overdue` 登记进 `asset-channel-alerts.yaml` 的 LogQL 值班查询段（与同段 scene 信号一样，Loki ruler 接线前不会自己响）。两份设计稿的对应句已改写。验证：`cd go/guild; go build ./...; go vet ./internal/logic/ ./internal/data/`；部署契约 `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1` 全 `[PASS]`（含 LogQL 契约对 `asset-channel-alerts.yaml` 的选择器核对）。
+4. `CheckJianghuDuelEligibility` 不判「旧局的待退银两还没结清」，要到备战时才拒（§7.3）。**2026-11-27 已做（导表、生成、编译都没跑）**：
+   - Tip 表 `//jianghu_error` 段末加 `JianghuDuelSilverFeePending`（`tools/scripts/jianghu_fee_pending_tip_xlsx_patch.py`，已写入表，幂等）；`proto/scene/scene.proto` 的 `CheckJianghuDuelEligibilityResponse` 加 `payer_silver_fee_pending = 4`。
+   - scene `player_jianghu.cpp` 的 `CheckDuelEligibility`：普通战书发起方的待退标记还在时回 pending、不放行；match `jianghu_duel_logic.go` 先认 pending 回新码；`constants/jianghu_errors.go` 与其测试加一行。
+   - 用例：`PlayerJianghuTest.SilverWritPendingForAnotherBattleRejectsTheNewPreparationWithoutTouchingTheMarker` 补三段。五项在 `battle-jianghu-grudge-duel-phase1-implementation-plan.md`「问题 4」。
+   - 验证（顺序）：`dev.bat gen`（开跑前 `git status --short data/` 核别人的表改动），`proto-gen-run`；Tip 表客户端可见，客户端仓跑 `gen_messageids.ps1` 与 `client_compile_check.ps1`；`msbuild` 串行 `/m:1` 依次 `cpp/generated/table/table.vcxproj`、`cpp/generated/proto/proto.vcxproj`、`cpp/libs/services/scene/scene.vcxproj`、`cpp/tests/bag_test/bag_test.vcxproj`，跑 `bag_test.exe --gtest_filter=PlayerJianghuTest.*`；`cd go/match; go build ./...; go test ./internal/constants/ ./internal/logic/ -count=1`。
+5. 锦标赛领奖遇到邮箱满，玩家看到的是内部错误，mail 的满箱提示没透传。响应里同时带着错误和已领取的部分，客户端怎么显示还没核（§7.2）。**2026-11-27 透传已做（未编译）**：只透传 `kMailRecipientBoxFull`，五项在 `season-team-tournament-v1.md` §7.7；客户端同时显示错误与已领取部分这一半没核，仍待做。
 6. 寄售交付腿部分发放后，trade 侧没有出口。这是 mall#1 的残余，补法在 `docs/design/jubaozhai-market.md` §16.1。
    - 要改的是 `go/trade/internal/commerce/manual_plan.go`。当时它和双人复核会话的改动冲突，所以没做；11-27 核对，该文件已没有在途改动。
    - 双人复核的定案不改：规则只在后台流水里，批准号就是幂等键，OPS 只有一张目录。

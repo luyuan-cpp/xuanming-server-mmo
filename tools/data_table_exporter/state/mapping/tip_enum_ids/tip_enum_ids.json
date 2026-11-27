@@ -543,7 +543,9 @@
         "TradeManualReview": 20014,
         "TradeAssetNotTradable": 20015,
         "TradeTitleSensitive": 20016,
-        "TradeTextCheckUnavailable": 20017
+        "TradeTextCheckUnavailable": 20017,
+        "TradeWantedOrderLimitReached": 20018,
+        "TradeWantedBookMismatch": 20019
       }
     },
     "asset_error": {
@@ -862,7 +864,8 @@
         "JianghuNotInviteParticipant": 40010,
         "JianghuNoActiveDefeatMark": 40011,
         "JianghuGrudgeNotFound": 40012,
-        "JianghuServiceBusy": 40013
+        "JianghuServiceBusy": 40013,
+        "JianghuDuelSilverFeePending": 40014
       }
     }
   },

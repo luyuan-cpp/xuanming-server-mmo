@@ -515,7 +515,7 @@ const (
 	GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_ACTIVE         GuildWarBountyStatus = 2 // 追杀中
 	GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_COMPLETED      GuildWarBountyStatus = 3 // 追杀成功已销单
 	GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_TORN_BY_TARGET GuildWarBountyStatus = 4 // 目标反杀 2 人撕单
-	GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_EXPIRED        GuildWarBountyStatus = 5 // 24h 过期退本(只表示到期且托管已原路退回)
+	GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_EXPIRED        GuildWarBountyStatus = 5 // 24h 到期,托管原路退回:银两档退发布者、公费档退发单帮;发布者暂时收不了时退款排队晚到,发布者角色已注销时银两退款作废
 	GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_ESCROW_FAILED  GuildWarBountyStatus = 6 // 预扣银两没扣成(被拒 / 中止 / 放弃),追杀令作废,没有托管可退
 )
 

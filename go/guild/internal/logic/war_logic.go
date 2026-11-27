@@ -2621,6 +2621,21 @@ func (l *GuildLogic) convertWarCreditOwed(ctx context.Context, after data.WarCre
 	return next, stats
 }
 
+// reportWarCreditOwedBacklog 上报帮战待入账表的积压行数(数到 trialOwedRowsGaugeCap 为止)。读失败只记日志,gauge 保持上一轮的值。
+func (l *GuildLogic) reportWarCreditOwedBacklog(ctx context.Context) {
+	if l.war == nil || l.war.Repo == nil || ctx.Err() != nil {
+		return
+	}
+	n, err := l.war.Repo.CountWarCreditOwed(ctx, trialOwedRowsGaugeCap)
+	if err != nil {
+		if ctx.Err() == nil {
+			logx.Errorf("[GuildWar] count owed war credits failed, backlog gauge not updated: %v", err)
+		}
+		return
+	}
+	guildWarCreditOwedRows.Set(float64(n))
+}
+
 // fieldTargetBounty 是野外点选面板上能给这名查看者看的追杀令(r2-gw#8):与追杀榜(ListActiveBounties)、开战挂钩、追踪同一口径
 // (war.BountyHuntable:同区、ACTIVE 未过期、全区江湖榜或本帮发的单)。仅发单帮可见的单对别帮一律当没有,号、赏金、档位都不露。
 func fieldTargetBounty(b *pb.GuildWarBountyRecord, zoneID uint32, viewerGuildID, nowMs uint64) (bountyID, rewardSilver uint64, tier pb.GuildWarBountyTier) {

@@ -24,25 +24,27 @@ const (
 type TradeError int32
 
 const (
-	TradeError_kTrade_errorOK             TradeError = 0
-	TradeError_kTradeListingNotFound      TradeError = 20000
-	TradeError_kTradeHomeZoneUnknown      TradeError = 20001
-	TradeError_kTradeFavoriteLimitReached TradeError = 20002
-	TradeError_kTradeFeatureDisabled      TradeError = 20003
-	TradeError_kTradeOrderNotFound        TradeError = 20004
-	TradeError_kTradeOrderStateConflict   TradeError = 20005
-	TradeError_kTradeRequestConflict      TradeError = 20006
-	TradeError_kTradeOrderLimit           TradeError = 20007
-	TradeError_kTradeCannotTradeSelf      TradeError = 20008
-	TradeError_kTradeCounterpartyUnknown  TradeError = 20009
-	TradeError_kTradeInsufficientAsset    TradeError = 20010
-	TradeError_kTradeBidTooLow            TradeError = 20011
-	TradeError_kTradeAuctionEnded         TradeError = 20012
-	TradeError_kTradeAssetDeliveryPending TradeError = 20013
-	TradeError_kTradeManualReview         TradeError = 20014
-	TradeError_kTradeAssetNotTradable     TradeError = 20015
-	TradeError_kTradeTitleSensitive       TradeError = 20016
-	TradeError_kTradeTextCheckUnavailable TradeError = 20017
+	TradeError_kTrade_errorOK                TradeError = 0
+	TradeError_kTradeListingNotFound         TradeError = 20000
+	TradeError_kTradeHomeZoneUnknown         TradeError = 20001
+	TradeError_kTradeFavoriteLimitReached    TradeError = 20002
+	TradeError_kTradeFeatureDisabled         TradeError = 20003
+	TradeError_kTradeOrderNotFound           TradeError = 20004
+	TradeError_kTradeOrderStateConflict      TradeError = 20005
+	TradeError_kTradeRequestConflict         TradeError = 20006
+	TradeError_kTradeOrderLimit              TradeError = 20007
+	TradeError_kTradeCannotTradeSelf         TradeError = 20008
+	TradeError_kTradeCounterpartyUnknown     TradeError = 20009
+	TradeError_kTradeInsufficientAsset       TradeError = 20010
+	TradeError_kTradeBidTooLow               TradeError = 20011
+	TradeError_kTradeAuctionEnded            TradeError = 20012
+	TradeError_kTradeAssetDeliveryPending    TradeError = 20013
+	TradeError_kTradeManualReview            TradeError = 20014
+	TradeError_kTradeAssetNotTradable        TradeError = 20015
+	TradeError_kTradeTitleSensitive          TradeError = 20016
+	TradeError_kTradeTextCheckUnavailable    TradeError = 20017
+	TradeError_kTradeWantedOrderLimitReached TradeError = 20018
+	TradeError_kTradeWantedBookMismatch      TradeError = 20019
 )
 
 // Enum value maps for TradeError.
@@ -67,27 +69,31 @@ var (
 		20015: "kTradeAssetNotTradable",
 		20016: "kTradeTitleSensitive",
 		20017: "kTradeTextCheckUnavailable",
+		20018: "kTradeWantedOrderLimitReached",
+		20019: "kTradeWantedBookMismatch",
 	}
 	TradeError_value = map[string]int32{
-		"kTrade_errorOK":             0,
-		"kTradeListingNotFound":      20000,
-		"kTradeHomeZoneUnknown":      20001,
-		"kTradeFavoriteLimitReached": 20002,
-		"kTradeFeatureDisabled":      20003,
-		"kTradeOrderNotFound":        20004,
-		"kTradeOrderStateConflict":   20005,
-		"kTradeRequestConflict":      20006,
-		"kTradeOrderLimit":           20007,
-		"kTradeCannotTradeSelf":      20008,
-		"kTradeCounterpartyUnknown":  20009,
-		"kTradeInsufficientAsset":    20010,
-		"kTradeBidTooLow":            20011,
-		"kTradeAuctionEnded":         20012,
-		"kTradeAssetDeliveryPending": 20013,
-		"kTradeManualReview":         20014,
-		"kTradeAssetNotTradable":     20015,
-		"kTradeTitleSensitive":       20016,
-		"kTradeTextCheckUnavailable": 20017,
+		"kTrade_errorOK":                0,
+		"kTradeListingNotFound":         20000,
+		"kTradeHomeZoneUnknown":         20001,
+		"kTradeFavoriteLimitReached":    20002,
+		"kTradeFeatureDisabled":         20003,
+		"kTradeOrderNotFound":           20004,
+		"kTradeOrderStateConflict":      20005,
+		"kTradeRequestConflict":         20006,
+		"kTradeOrderLimit":              20007,
+		"kTradeCannotTradeSelf":         20008,
+		"kTradeCounterpartyUnknown":     20009,
+		"kTradeInsufficientAsset":       20010,
+		"kTradeBidTooLow":               20011,
+		"kTradeAuctionEnded":            20012,
+		"kTradeAssetDeliveryPending":    20013,
+		"kTradeManualReview":            20014,
+		"kTradeAssetNotTradable":        20015,
+		"kTradeTitleSensitive":          20016,
+		"kTradeTextCheckUnavailable":    20017,
+		"kTradeWantedOrderLimitReached": 20018,
+		"kTradeWantedBookMismatch":      20019,
 	}
 )
 
@@ -122,7 +128,7 @@ var File_trade_error_tip_proto protoreflect.FileDescriptor
 
 const file_trade_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15trade_error_tip.proto*\xb0\x04\n" +
+	"\x15trade_error_tip.proto*\xf5\x04\n" +
 	"\vtrade_error\x12\x12\n" +
 	"\x0ekTrade_errorOK\x10\x00\x12\x1b\n" +
 	"\x15kTradeListingNotFound\x10\xa0\x9c\x01\x12\x1b\n" +
@@ -142,7 +148,9 @@ const file_trade_error_tip_proto_rawDesc = "" +
 	"\x12kTradeManualReview\x10\xae\x9c\x01\x12\x1c\n" +
 	"\x16kTradeAssetNotTradable\x10\xaf\x9c\x01\x12\x1a\n" +
 	"\x14kTradeTitleSensitive\x10\xb0\x9c\x01\x12 \n" +
-	"\x1akTradeTextCheckUnavailable\x10\xb1\x9c\x01B$\n" +
+	"\x1akTradeTextCheckUnavailable\x10\xb1\x9c\x01\x12#\n" +
+	"\x1dkTradeWantedOrderLimitReached\x10\xb2\x9c\x01\x12\x1e\n" +
+	"\x18kTradeWantedBookMismatch\x10\xb3\x9c\x01B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

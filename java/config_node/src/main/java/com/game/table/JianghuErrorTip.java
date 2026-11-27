@@ -91,6 +91,10 @@ public final class JianghuErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kJianghuServiceBusy = 40013;</code>
      */
     kJianghuServiceBusy(40013),
+    /**
+     * <code>kJianghuDuelSilverFeePending = 40014;</code>
+     */
+    kJianghuDuelSilverFeePending(40014),
     UNRECOGNIZED(-1),
     ;
 
@@ -163,6 +167,10 @@ public final class JianghuErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kJianghuServiceBusy = 40013;</code>
      */
     public static final int kJianghuServiceBusy_VALUE = 40013;
+    /**
+     * <code>kJianghuDuelSilverFeePending = 40014;</code>
+     */
+    public static final int kJianghuDuelSilverFeePending_VALUE = 40014;
 
 
     public final int getNumber() {
@@ -204,6 +212,7 @@ public final class JianghuErrorTip extends com.google.protobuf.GeneratedFile {
         case 40011: return kJianghuNoActiveDefeatMark;
         case 40012: return kJianghuGrudgeNotFound;
         case 40013: return kJianghuServiceBusy;
+        case 40014: return kJianghuDuelSilverFeePending;
         default: return null;
       }
     }
@@ -269,7 +278,7 @@ public final class JianghuErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\027jianghu_error_tip.proto*\200\004\n\rjianghu_er" +
+      "\n\027jianghu_error_tip.proto*\244\004\n\rjianghu_er" +
       "ror\022\024\n\020kJianghu_errorOK\020\000\022\032\n\024kJianghuDue" +
       "lDisabled\020\300\270\002\022\033\n\025kJianghuBlockedByPeer\020\301" +
       "\270\002\022$\n\036kJianghuTargetRefusesStrangers\020\302\270\002" +
@@ -282,8 +291,9 @@ public final class JianghuErrorTip extends com.google.protobuf.GeneratedFile {
       "OrExpired\020\311\270\002\022\"\n\034kJianghuNotInvitePartic" +
       "ipant\020\312\270\002\022 \n\032kJianghuNoActiveDefeatMark\020" +
       "\313\270\002\022\034\n\026kJianghuGrudgeNotFound\020\314\270\002\022\031\n\023kJi" +
-      "anghuServiceBusy\020\315\270\002B$\n\016com.game.tableZ\022" +
-      "generated/pb/tableb\006proto3"
+      "anghuServiceBusy\020\315\270\002\022\"\n\034kJianghuDuelSilv" +
+      "erFeePending\020\316\270\002B$\n\016com.game.tableZ\022gene" +
+      "rated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

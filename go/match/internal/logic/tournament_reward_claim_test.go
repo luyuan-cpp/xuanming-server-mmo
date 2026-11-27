@@ -72,13 +72,14 @@ type fakeTournamentMailEntry struct {
 
 type fakeTournamentMail struct {
 	mailpb.MailAdminClient
-	sent     []*mailpb.SendMailRequest
-	written  map[uint64]fakeTournamentMailEntry // request_id → 首次落库的摘要与 mail_id
-	lostNext map[uint64]error                   // request_id → 下一次「邮件已建、应答丢了」(超时 / 断连),用一次即清
+	sent       []*mailpb.SendMailRequest
+	written    map[uint64]fakeTournamentMailEntry // request_id → 首次落库的摘要与 mail_id
+	lostNext   map[uint64]error                   // request_id → 下一次「邮件已建、应答丢了」(超时 / 断连),用一次即清
+	rejectNext map[uint64]uint32                  // request_id → 下一次拒收、不建邮件时回的 tip(如收件箱满),用一次即清
 }
 
 func newFakeTournamentMail() *fakeTournamentMail {
-	return &fakeTournamentMail{written: map[uint64]fakeTournamentMailEntry{}, lostNext: map[uint64]error{}}
+	return &fakeTournamentMail{written: map[uint64]fakeTournamentMailEntry{}, lostNext: map[uint64]error{}, rejectNext: map[uint64]uint32{}}
 }
 
 func (m *fakeTournamentMail) SendPersonalMail(_ context.Context, in *mailpb.SendMailRequest, _ ...grpc.CallOption) (*mailpb.SendMailResponse, error) {
@@ -86,6 +87,10 @@ func (m *fakeTournamentMail) SendPersonalMail(_ context.Context, in *mailpb.Send
 	digest, err := serviceauth.Digest(in)
 	if err != nil {
 		return nil, err
+	}
+	if tip := m.rejectNext[in.RequestId]; tip != 0 {
+		delete(m.rejectNext, in.RequestId)
+		return &mailpb.SendMailResponse{ErrorMessage: &base.TipInfoMessage{Id: tip}}, nil
 	}
 	entry, seen := m.written[in.RequestId]
 	if !seen {
@@ -221,4 +226,23 @@ func TestClaimTournamentRewardsOneFailureDoesNotBlockTheRest(t *testing.T) {
 	require.Equal(t, []uint64{31}, claimedRewardIDs(retry), "只剩第一条可领")
 	require.Equal(t, mail.written[31].mailID, store.claimed[31], "补落的是当初已建的那封,没有第二封")
 	require.Len(t, mail.written, 3, "三条奖励各一封邮件")
+}
+
+// 收件箱满:玩家看到的是 mail 的满箱提示而不是内部错误,行保持可领取;清出空位后重领照常领到,只建一封。
+func TestClaimTournamentRewardsPassesThroughRecipientBoxFull(t *testing.T) {
+	ctx := context.Background()
+	store := newFakeTournamentRewardStore(tournamentClaimRow(t, 41, matchpb.TournamentRewardTierKind_TOURNAMENT_REWARD_TIER_CHAMPION, 120000))
+	mail := newFakeTournamentMail()
+	mail.rejectNext[41] = uint32(pbtable.MailError_kMailRecipientBoxFull)
+
+	full := claimTournamentRewards(ctx, store, mail, tournamentClaimTestSecret, 1001, 0)
+	require.Equal(t, uint32(pbtable.MailError_kMailRecipientBoxFull), full.GetErrorMessage().GetId(), "满箱要让玩家知道去清邮箱")
+	require.Empty(t, full.GetClaimedRewards())
+	_, claimed := store.claimed[41]
+	require.False(t, claimed, "邮件没建成就不落已领取")
+
+	retry := claimTournamentRewards(ctx, store, mail, tournamentClaimTestSecret, 1001, 0)
+	require.Zero(t, retry.GetErrorMessage().GetId())
+	require.Equal(t, []uint64{41}, claimedRewardIDs(retry))
+	require.Len(t, mail.written, 1, "满箱那次没建邮件,重领只建一封")
 }

@@ -77,23 +77,46 @@
 - **3 土 · 不动如山**：己方护盾吸收伤害时同样触发反震效果，且开局护盾持续全场不随回合自然衰减。
 
 ### 2.2 复用既有架构与最小协议增量（零新库表）
-1. **玩家状态继续挂在 `PlayerSeasonComp.wuxing_tower`（`proto/common/component/player_season_comp.proto` 追加字段）**：
-   - `uint32 mode_version`（`1=旧10层兼容, 2=V2 6关肉鸽秘境`）
-   - `bool use_free_preset` + `uint32 character_preset_id` + `uint32 pet_preset_id`（支持公平 3×3 模式）
-   - `uint32 current_node_index`（`1..6`）与 `uint32 pending_branch_choice_mask`（第 2/4 关二选一分岔节点状态）
-   - `uint32 pending_event_kind`（奇遇/休整非战斗事件待抉择选项，抉择后直接推进到下一关）
-   - `repeated uint32 active_boon_ids`（至多 6 枚已选奇策 `601..643`）与 `repeated uint32 pending_offer_boon_ids`（当前 3 选 1 候选）
-   - `uint32 v2_weekly_cleared_mask`（6 位位图：`bit (node - 1)`，严格遵循 bit 位图规范）
-   - `uint32 v2_best_rounds_self` / `uint32 v2_best_rounds_preset`（双模式个人最快通关回合）
-2. **战斗上下文继续复用 `WuxingTowerBattleContext`（`proto/battle/battle_data.proto` 追加字段）**：
-   - 追加 `uint32 realm_version = 6`、`uint32 node_kind = 7`（`1普通/2精英/3首领`）、`repeated uint32 active_boon_ids = 8`、`uint32 active_resonance_element = 9`。
-   - **零客户端信任**：客户端只能传 `is_wuxing_tower = true` 与选择分支/奇策的 RPC，实际进战的 `node_index`、`node_kind`、`active_boon_ids` 与 `active_resonance_element` 100% 由 `Scene.PrepareBattle` 从玩家权威存档组装并冻结进快照。
-3. **Scene RPC 最小新增（仅在 `proto/scene/player_season.proto` 追加 2 条，复用已有 `GetWuxingTowerState` / `StartWuxingTowerRun` / `AbandonWuxingTowerRun`）**：
-   - `ChooseWuxingRealmBranch`：在第 2/4 关选择左路（精英战）或右路（奇遇/休整）；
-   - `ResolveWuxingRealmEvent`：在奇遇/休整节点执行 2 选 1（领奇策 / 升品重铸 / 刷新候选），全服务端确定性随机种子结算，防 SL 刷牌。
+1. **玩家状态继续挂在 `PlayerSeasonComp.wuxing_tower`（`proto/common/component/player_season_comp.proto` 尾插字段 `#12..24`，并自动登记 `proto/persist_schema_gen.txt`）**：
+   - `uint32 run_week_key = 12`（开局周键，与 `week_key` 物理分离，跨周一 05:00 不清在途局）
+   - `uint32 realm_version = 13`（`2 = V2 6 关分岔奇策秘境`）
+   - `bool use_free_preset = 14`、`uint32 character_preset_id = 15`、`uint32 pet_preset_id = 16`（公平 3×3 免费预设白名单 `101..103` / `201..203`）
+   - `uint32 current_node_kind = 17`（`0=待选分岔, 1=普通, 2=精英, 3=首领, 4=奇遇, 5=休整`）
+   - `uint32 pending_event_kind = 18`（`0=无, 1=第2关奇遇, 2=第4关休整`）与 `uint32 event_reroll_count = 19`（防 SL 刷牌确定性盐值）
+   - `uint32 best_rounds_self = 20`、`uint32 best_rounds_preset = 21`（双模式个人历史最速全通回合）
+   - `uint32 weekly_best_floor_preset = 22`、`uint32 weekly_best_rounds_preset = 23`（公平试炼本周最佳）
+   - `uint32 route_choice_mask = 24`（2 位分岔轨迹位图：`bit0=第2关右路, bit1=第4关右路`；配合 `weekly_cleared_mask` 6 位首通位图严格遵循 bit 位图规范）
+2. **战斗上下文继续复用 `WuxingTowerBattleContext`（`proto/battle/battle_data.proto` 尾插字段）**：
+   - `WuxingTowerBattleContext` 尾插 `realm_version = 6`、`node_kind = 7`、`use_free_preset = 8`、`active_resonance_element = 9`；`WuxingTowerSettlementEcho` 尾插 `realm_version = 5`、`node_kind = 6`、`use_free_preset = 7`。
+   - **零客户端信任**：客户端只能传 `is_wuxing_tower = true` 与选择分支/奇策的 RPC，实际进战的 `floor`、`node_kind`、`active_sigil_ids`、`active_resonance_element` 与公平 3×3 面板 100% 由 `Scene.PrepareBattle` 从玩家权威存档组装并冻结进快照；Go `match` 透明透传 `is_wuxing_tower`，零侵入。
+3. **Scene RPC 最小新增（仅在 `proto/scene/player_season.proto` 尾插 2 条，复用已有 `516..519`）**：
+   - `585 = SceneSeasonClientPlayerChooseWuxingRealmBranch`：在第 2/4 关选择左路（精英战）或右路（奇遇/休整）；
+   - `586 = SceneSeasonClientPlayerResolveWuxingRealmEvent`：在奇遇/休整节点执行 2 选 1（道缘寻策 / 五行悟道 / 奇策淬炼升品 / 同源寻策），全服务端确定性随机种子结算。
 4. **设计模式与工程约束**：
-   - **策略表 + 触发钩子（Strategy / Hook Table）**：在 `TurnBattleEngine` 中将 15 枚奇策与 5 项共鸣收敛到独立模块 `wuxing_boon_rules`（C++ / Java / Python 同源纯表驱动），统一挂接在「开局 / 扣蓝前 / 暴击后 / 破盾后 / 受击反震 / 持续伤害跳字 / 回合末」7 个现役管线钩子，严禁在主战斗循环中散落硬编码 `if (boonId == ...)`。
-   - **确定性种子（SplitMix64）**：所有分岔选项、3 选 1 奇策池与奇遇选项均由 `(player_id, run_id, node_index, reroll_count)` 确定性派生，重连与重复请求 100% 幂等且防客户端 SL 刷奇策。
+   - **纯规则表驱动（`wuxing_expansion_rules.h`）+ 独立运行时子结构（`WuxingBoonRuntime`）**：15 枚奇策与 5 项共鸣参数、路线映射、确定性 SplitMix64 抽牌全部集中在共享头文件；引擎内以值语义 `WuxingBoonRuntime`（零裸指针）承接回合级/场次级计数与 `procDepth <= 1` 防递归守卫，严禁污染常规 PVE/PVP 主循环。
+
+### 2.3 工程架构、水平扩展与强一致性方案（同步根治 V1 既有缺陷）
+
+本次落地直接排查并当场根治了 V1 的两处结构性隐患（不等压测再补），确立标准生产级实现：
+
+1. **无状态 Scene 水平扩展 + Redis Cluster 同槽 Hash-Tag 原子 Lua 双榜（根治 V1 进程内静态内存榜）**：
+   - **原 V1 问题**：V1 将周榜保存在进程内 `gTowerWeeklyLeaderboard` 静态容器中，多副本 Scene 扩容后各实例榜单分裂、重启即丢，无法水平扩展。
+   - **V2 标准方案**：
+     - Scene 节点彻底无状态，可按 CPU 任意水平加减副本；每个工作线程仅保留一份轻量 `thread_local` 读穿缓存（按 `week_key` 切分，写入即本地热更新、读取按 **15 秒拉取冷却** 从 Redis Cluster 同步，避免高频 `GetWuxingTowerState` 打爆 Redis）。
+     - **同槽 Hash-Tag 键设计**：本人流派榜与公平 3×3 试炼榜物理隔离，键名统一使用 `{weekKey}` 作为 Redis Cluster Hash Tag，保证 ZSET 与元数据 HASH 必然落在同一哈希槽，单条 Lua `EVAL` 原生兼容 Redis Cluster 零 `CROSSSLOT` 报错：
+       - 本人流派：`wuxing:realm:lb:{<weekKey>}:self`（ZSET） + `wuxing:realm:lb_meta:{<weekKey>}:self`（HASH）
+       - 公平试炼：`wuxing:realm:lb:{<weekKey>}:preset`（ZSET） + `wuxing:realm:lb_meta:{<weekKey>}:preset`（HASH）
+     - **复合排序分值**：`score = bestFloor * 1,000,000 + (bestFloor >= 6 && bestRounds > 0 ? max(0, 999,999 - bestRounds) : 0)`，单次 `ZREVRANGE` 即可严格按「通关关数降序 → 全通回合数升序」稳定排位。
+     - **原子 Top-200 裁剪与 14 天 TTL**：单条 Lua 脚本在服务端原子执行「查旧分单调不倒退 → `ZADD` + `HSET` → 超 200 名原子 `ZREMRANGEBYRANK` 并同步 `HDEL` 淘汰者元数据 → 双方续期 `EXPIRE 1209600`（14 天）」，杜绝内存无限膨胀与僵尸元数据泄漏；客户端展示按 `Top 20` 投影返回。
+     - **强降级安全**：单测或无 `tlsControlRedis` 环境自动安全退化到 `thread_local` 读穿缓存，不崩溃不阻塞。
+2. **跨周保局强一致性（根治 V1 周一 05:00 清空在途局挫败感）**：
+   - **原 V1 问题**：V1 换周 `EnsureWeeklyReset` 直接清空 `run_active` 与 `active_sigil_ids`，周一清晨中断未打完的对局。
+   - **V2 标准方案**：将「本周榜单周期 `week_key`」与「本轮开局周期 `run_week_key`」彻底拆分为两个字段。换周时仅重置本周首通位图 `weekly_cleared_mask` 与本周最佳，**100% 完整保留在途轮次、已选奇策、当前分岔/事件与候选池**；结算时严格核对 `run_week_key == current_week_key`，旧周开局跨越周一完成后仍正常享受完整 6 关通关并更新个人永久历史最速（`best_rounds_self` / `best_rounds_preset`），但**绝不写入新周首通位图与新周榜**，兼顾反打卡体验与榜单公平性。
+3. **公平 3×3 试炼服务端绝对权威合成（零客户端信任）**：
+   - 客户端开轮时仅提交 `use_free_preset` + 白名单 ID（`101..103` / `201..203`，非法 ID 当场拒收）；开战时客户端仅发 `is_wuxing_tower = true`。
+   - `Scene.PlayerBattleSystem` 校验在途局且无未处理三选一/分岔/事件后，若 `towerCtx.use_free_preset() == true`，由服务端直接合成受控 `RankedMatchContext{ season_id = 0, use_free_preset = true }` 走 `BuildCompetitiveBattleSnapshot` 生成标准公平 3×3 战斗快照，同时在 `TurnBattleEngine::UsesFreePreset()` 中认领 `towerContext.use_free_preset()`，并原样回传 `WuxingTowerSettlementEcho.use_free_preset`，全链路防篡改、防本人与公平混榜。
+4. **连招防无限递归硬不变量与定点数封顶**：
+   - 所有奇策派生追击、溅射、传染、爆盾均通过 `WuxingBoonRuntime::procDepth` 受控递增，**硬门禁 `procDepth <= 1`（`kBoonMaxProcDepth = 1`）**，从数学上消灭任何循环递归与栈溢出可能；同时全部派生真伤/护盾附伤/回合末灼伤统一采用整数定点数并带硬上限（`1800` / `1200` / `1500`），保证跨语言确定性与回放一致。
 
 ---
 
@@ -136,7 +159,9 @@
    - 升级 `WuxingTowerPanel.cs` 为 6 关分岔路线 + 三选一奇策弹层 + 五行共鸣横幅 + 双模式切换；
    - 验收并导入 Codex 交付的 8 张新切片至 `Assets/Resources/UI/Ugui/WuxingRealmV2/`，跑通编译与 EditMode 单测。
 
-- [x] 完成「五行幻境 V2 · 五行奇策轻肉鸽秘境」策划与工程设计方案落盘
+- [x] 完成「五行幻境 V2 · 五行奇策轻肉鸽秘境」策划与工程设计方案落盘（含水平扩展、强一致与防递归架构定案）
 - [x] 完成 8 张全新透明 PNG-32 切片与 2 张预览图的纯功能 Codex 交接单落盘
-- [ ] 待 Codex 交付并目视验收 8 张切片
-- [ ] 执行协议扩展、三端服务端（C++/Go + Java + Python）与 Unity 客户端全链路落码验收
+- [x] 完成协议扩展（`player_season_comp#12..24`、`battle_data`、`player_season` RPC `585/586`）与服务端/Unity 全量协议生成
+- [x] 完成 C++/Go 权威版（15 奇策 + 5 共鸣 + 6 关分岔/奇遇/休整 + 公平 3×3 合成 + 跨周保局 + Redis Cluster 同槽 Lua 双榜）与 Unity 客户端全链路落码验收
+- [ ] 待 Java / Python 侧按 `PARITY.md` TODO 清单对账移植
+- [ ] 待 Codex 交付并目视验收 8 张切片后导入 `Assets/Resources/UI/Ugui/WuxingRealmV2/`

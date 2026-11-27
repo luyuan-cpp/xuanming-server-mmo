@@ -35,7 +35,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_jianghu_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\027jianghu_error_tip.proto*\200\004\n\rjianghu_er"
+    "\n\027jianghu_error_tip.proto*\244\004\n\rjianghu_er"
     "ror\022\024\n\020kJianghu_errorOK\020\000\022\032\n\024kJianghuDue"
     "lDisabled\020\300\270\002\022\033\n\025kJianghuBlockedByPeer\020\301"
     "\270\002\022$\n\036kJianghuTargetRefusesStrangers\020\302\270\002"
@@ -48,14 +48,15 @@ const char descriptor_table_protodef_jianghu_5ferror_5ftip_2eproto[] ABSL_ATTRIB
     "OrExpired\020\311\270\002\022\"\n\034kJianghuNotInvitePartic"
     "ipant\020\312\270\002\022 \n\032kJianghuNoActiveDefeatMark\020"
     "\313\270\002\022\034\n\026kJianghuGrudgeNotFound\020\314\270\002\022\031\n\023kJi"
-    "anghuServiceBusy\020\315\270\002B$\n\016com.game.tableZ\022"
-    "generated/pb/tableb\006proto3"
+    "anghuServiceBusy\020\315\270\002\022\"\n\034kJianghuDuelSilv"
+    "erFeePending\020\316\270\002B$\n\016com.game.tableZ\022gene"
+    "rated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_jianghu_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_jianghu_5ferror_5ftip_2eproto = {
     false,
     false,
-    586,
+    622,
     descriptor_table_protodef_jianghu_5ferror_5ftip_2eproto,
     "jianghu_error_tip.proto",
     &descriptor_table_jianghu_5ferror_5ftip_2eproto_once,
@@ -74,7 +75,7 @@ jianghu_error_descriptor() {
   return file_level_enum_descriptors_jianghu_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t jianghu_error_internal_data_[] = {
-    65536u, 917504u, 40007u, 40003u, 40011u, 40001u, 40005u, 40009u, 40013u, 40000u, 40002u, 40004u, 40006u, 40008u, 40010u, 40012u, };
+    65536u, 983040u, 40007u, 40003u, 40011u, 40001u, 40005u, 40009u, 40013u, 40000u, 40002u, 40004u, 40006u, 40008u, 40010u, 40012u, 40014u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

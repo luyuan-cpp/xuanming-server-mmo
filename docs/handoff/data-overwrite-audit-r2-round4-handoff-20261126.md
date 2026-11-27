@@ -28,7 +28,7 @@
 0. **开工核对**：`git log` 里要有 `6b4ae7852`（11-27 旧电脑的 main 与 origin/main 都停在这里）；三批与 §7.4 的代码 `3eb57a09a`、`d77a458ee`、`76e2b59bb`、`24c13a311` 都在它之前。§6.1、§7 各节标「未提交」的测试与设计稿，11-27 核对已全部随后来的快照提交进了 main（最晚 `bcea63be6`），按已提交读。缺了就停下问负责人。`git status` 看清别的会话的在途改动，只动本单范围的行。各节末尾已写了复核结论或「已完成」的，不重做。
 1. **复核**（写的人与复核的人分开；新电脑上的会话没写过这些代码，可以复核）：按 §2「先复核，再改」逐批复核 §7.1 批 V、§7.2 批 W、§7.3 批 X、§7.4 五条、§6.1 九条里还没有复核结论的。批 X 已复核通过（§7.3 末条），不重做。diff 基线：批 V 用 `git diff 8a6697af0 a0b3d195e -- <§7.1 文件>`，批 W 用 `git diff 8a6697af0 HEAD -- <§7.2 文件与测试>`，§7.4 用 `git diff a0b3d195e HEAD -- <§7.4 文件>`。终点必须到 HEAD：当时没提交的测试与设计稿，是后来的快照提交带进来的；只看 `76e2b59bb`，或止于 `24c13a311`，都会漏。区间里混着别的会话对同一文件的改动，按 §6.1「还没做的」里复核那条的说明分开看。复核出问题当场改，在对应小节末尾写复核结论。
 2. **写代码**（按顺序）：
-   1. r2-craft#1 批 C（部署开通）、批 B（scene 与客户端接入）：做法与前提在 `docs/design/skill-book-wanted-order-trade-escrow.md` §11.2；批 C 前提②（K8s 各档位是否打开 trade `AssetOp.Enabled`）开工前先问负责人，不自己定。
+   1. r2-craft#1 批 C（部署开通）、批 B（scene 与客户端接入）：**入口改为单独的交接文件 `docs/handoff/skill-book-wanted-order-remaining-handoff-20261127.md`**（自成一体，含批 A 的 Gemini 验证、两批的逐文件改法与完成判据，做完删掉它）；做法与前提在 `docs/design/skill-book-wanted-order-trade-escrow.md` §11.2；批 C 前提②（K8s 各档位是否打开 trade `AssetOp.Enabled`）开工前先问负责人，不自己定。
    2. guild 人工终结见证的条件写补比 `attempts`：逐行步骤在 §6「还没做的」第 2 条。
    3. 各批「剩余与取舍」「顺带发现」里记下的点，按「查出的问题现在修」逐条判断：是缺陷就修；确是有意取舍的，在所属设计稿写明不改的理由。至少包括：
       - 删角收尾不删 `guild_war_player_state` 与 `guild_war_garrison`（后者含玩家名与快照），补进账号注销清单；`docs/design/account-deletion.md` 登记新挂起项 `guild_war_credit_owed`（§7.4）。
@@ -151,6 +151,15 @@
   6. schemamigrate 不给已存在的表补新索引：本地已有的 `guild_war_bounty` 要重建（未上线，可清）。
   7. 复核 diff 时排除两份别人的未提交改动：`go/guild/internal/kafka/trial_result_consumer.go`、`go/guild/cmd/assetopfix/main.go`。
 - **剩余与取舍**：开战入口没有完整请求路径的集成用例（只靠纯函数）；客户端 `BountyStatusLabel` 没有状态 6 的文案（列表只显示 1、2，影响小）；灵脉主人帮的成员主动点外帮，打赢打输都不动旗势（旧代码会削自己的旗）；到期退款最晚到期后约 16 分钟才发。
+- **复核（2026-11-27，会话「复核第 4 轮批 V/W 并补 guild 见证 SQL」，Opus 5.5，只读代码，未编译）：通过，没有要改的。**
+  - 读的是 `git diff 8a6697af0 HEAD` 下 §7.1 的源文件与两份 proto；HEAD 上的 `SettleWarBattle`、`ExpireBounty`、`PurgeTerminalBounties` 整段按锁序逐步读。§7.4 叠在同一批函数上的改动一并读，结论见 §7.4 末条。
+  - r2-gw#1：`clientWarTargetHints` 只在守旗阵采信灵脉号、只在追杀榜直打采信追杀令号；野外直打按目标场景推灵脉，直打活人只由服务端挂钩。`BountyFacts` 全部取自开战冻结的上下文与结算消息（攻方帮、区服、双方首名真人、对局结束时刻）。`ResolveBounty` 要求追杀局、同区、有接单资格、ACTIVE、按对局结束时刻未过期、防守方首人就是目标。旗势只在防守帮就是灵脉此刻主人时才变。
+  - r2-gw#2：领赏、撕单退款与结单在同一事务里；指令号事务前预发，发号失败整局交给重投。领赏人当日满上限或已删除时整笔不转移，追杀令保持 ACTIVE，托管不销毁。到期收尾在行锁内复核 ACTIVE、到期、发布者与退款额，多副本之间、与结算第 7 步之间都是先提交者算数，只退一次。扣款作废改置 6，状态 5 只表示到期已退。发单时已挡「同一目标同时只有一张未结追杀令」。
+  - r2-gw#3：第 4 步按 leyline_id 升序点锁本区全部灵脉，比对主人、旗势、护盾与「攻方是否已占别脉」四项快照，不符回 `ErrWarSettleStale`，逻辑层整笔重读最多 3 次再交给重投。灵脉的另外两个写者不会被覆盖：解散释放按 `owner_guild_id` 条件写，分红只写分红三列。
+  - r2-gw#4：开战请求号、追杀令号、约战号三处发号失败都回 `ErrIDGenUnavailable`，不落墙钟。
+  - 重投与重跑：对局行 INSERT 是幂等闸门，两个副本并发结算同一局时后者撞主键、整笔回滚；`inTx` 遇 1213 重跑闭包时，输出与 `rec` 的两列都从原值开始。
+  - 协议：`escrow_guild_funds = 18`、状态 6、两个新索引都是新号，没有复用；新表都不进客户端。
+  - 剩余与取舍照上一条，不另加。
 
 ### 7.2 批 W：锦标赛领奖与 match 发件接线（r2-tn#1、r2-tn#2、r2-jh#2 match 侧都成立）
 
@@ -175,6 +184,15 @@
   - 邮箱满时玩家看到的是内部错误，mail 的满箱提示没透传；响应同时带错误与已领取部分，客户端怎么显示没核。
   - mail 的 Sweep 开删除模式（缺省不删）后，「邮件已建、已领取没落定」而玩家 37 天以上没重领的，再领会补发第二封。
   - 退费标记表在旧库里会留成孤表（未上线，可清库）。
+- **复核（2026-11-27，会话「复核第 4 轮批 V/W 并补 guild 见证 SQL」，Opus 5.5，只读代码，未编译）：通过；顺手补了「邮箱满提示透传」一处（上一条第 3 小点）。**
+  - 读的是 `git diff 8a6697af0 HEAD` 下 §7.2 的源文件。同一区间里 `gather.go`、`global_match.go`、`servicecontext.go` 与 mail `server.go` 还有别的会话的改动（万象残局、防沉迷截止、榜名查询、双人复核），不算本批。`gather.go` 现已没有未提交改动。
+  - r2-tn#1：带附件而发件没装配回内部错误、行保持可领取；只有拿到 `mail_id` 才落已领取。`MarkTournamentRewardClaimed` 行锁内只把 CLAIMABLE 改成 CLAIMED，双击并发领取只落一次，两次邮件请求被 mail 按 (sender_kind, request_id) 判成同一封。非 dev / test 档开着锦标赛而没装配发件，启动即拒。
+  - r2-tn#2：请求只由奖励行构造（标题正文结算时冻结进行里、`ExpireMs` 不填、收件人取行上的 player_id），重领逐字节相同。`catalog.Build` 按 mail 的长度上限拒绝超长文案，冻结进行里的原件不会被 mail 永远拒收。
+  - r2-jh#2 match 侧：`refundJianghuSilverOnce`、退费标记表与 skip 参数都删干净，grep 不到残留；只剩 scene 一条退费通道，与 §7.3 批 X 对上。
+  - 协议：`mail_title = 16`、`mail_body = 17` 是新号；删掉的 `MatchJianghuRefundRecord` 是整条内部表消息，不涉及字段号复用。
+  - 发件接线：mail `Producers` 加 `match`，sender_kind 6 与 match 的 `tournamentMailSenderKind` 一致；mail 清单经 `secretKeyRef` 注入 `mail-producer-match`。
+  - 上一条「剩余与取舍」第 4 小点（Sweep 删除模式下补发第二封）已被 r2-craft#3 的 `mail_request_receipt` 关掉：收据按 (sender_kind, request_id) 存、清理不删，对 match 同样生效。
+  - 改了什么：`claimOneTournamentReward` 遇到 mail 回 `kMailRecipientBoxFull` 时原样回这个 tip，其余失败照旧回内部错误；`tournament_reward_claim_test.go` 的邮件替身加 `rejectNext`，新增 `TestClaimTournamentRewardsPassesThroughRecipientBoxFull`。五项写在 `docs/planning/season-team-tournament-v1.md` §7.7。验证：`cd go/match; go test ./internal/logic/ -count=1 -run 'TestClaimTournamentRewards' -v` 全 PASS。
 
 ### 7.3 批 X：生死状普通战书银两（r2-jh#1、r2-jh#2 scene 侧都成立）
 
@@ -227,6 +245,14 @@
   8. 本地已有的 `guild_war_bounty` 要重建（schemamigrate 不给已存在的表补索引）；新表会自动建。
 - **剩余与取舍**：待入账积压没有 gauge 与告警（只有每轮汇总日志与每笔 Info 日志）；冻结中的玩家每轮多一次 `GetRoleFenceState`（寄售可能持续几天）；过户完成后冻结期间记下的这一笔照常补给这名角色（与历练按「目标」的口径一致）；保留期是常量 30 天，不跟 `AssetOp.TerminalRetentionDays`；客户端可见的 EXPIRED 状态注释仍写「已原路退回」，实际还含「退款排在待入账里」与「发布者已删除、退款放弃」，只在设计稿写明。
 - **顺带发现、没改**：删角收尾不删 `guild_war_player_state` 与 `guild_war_garrison`（后者含玩家名与快照），是账号注销清单原有的缺口；`docs/design/account-deletion.md` 正被别的会话改，新增挂起项 `guild_war_credit_owed` 没登记进去（客户端按通用文案显示）。
+- **复核（2026-11-27，会话「复核第 4 轮批 V/W 并补 guild 见证 SQL」，Opus 5.5，只读代码，未编译）：通过，没有要改的。**
+  - 读的是 HEAD 上 `war_credit_owed.go` 全文，`SettleWarBattle` 的第 F、3、3b、10 步，`ExpireBounty`、`PurgeTerminalBounties`，logic 层三个循环与 `fieldTargetBounty`，以及 `role_fence_pending.go`、`tables.go` 的登记。
+  - r2-gw#5：本流未决已满只让这一笔记进待入账表，seq 不前进，seq 行锁照持（它是领赏计数的守卫）。转换用行里预发的 op_id，先判行还在再插；点删影响 0 行就整笔回滚，`guild_asset_op` 主键再兜一层。同一笔至多变成一条指令。
+  - r2-gw#6：护栏副本是事务第一把锁，按 player_id 升序。副本缺行或冻结先自愈一次（`inTx` 经 `fence.RunTx` 自愈后重跑），仍冻结才记待入账。已删除的人不建 seq 行、不写帮贡与个人态；领赏人已删除时整笔不转移，等到期退回发布者。
+  - r2-gw#7：`escrow_op_id` 索引补上。保留期清理一行一个短事务，主键点锁后复核仍是终态才删，状态 1、2 永远不删。
+  - r2-gw#8：野外点选面板与追杀榜、开战挂钩共用 `BountyHuntable`。同一目标同时只有一张未结追杀令，`LIMIT 1` 不会挑错单。
+  - 锁序：结算是护栏副本 → G → M → Q → O → C → 灵脉 → … → 追杀令 → 对局 → 宿敌 → 待入账，到期收尾是护栏副本 → G → M → Q → O → 追杀令 → 待入账。两边同序，只会排队，不会成环。
+  - 剩余与取舍、顺带发现照上两条，归 r2 剩余单 §3.3。
 
 ### 7.5 Java 版
 
@@ -283,7 +309,7 @@
   - 口径以 `data-consistency-guarantee-map-20261020.md` §6.2 第 2 条补记为准；补完核对 `docs/design/guild-phase2/05-economy.md` §5.23 的说法与代码一致。
   - 验证：`cd go/guild`，设 `GUILD_TEST_MYSQL_DSN`（库名 `guild_test`），跑 `go test ./internal/data -run 'TestResolveManuallyIfQuiet_' -count=1 -v`，全 PASS、不得 SKIP；再跑 `go test ./cmd/assetopfix/... -count=1`。
   - 补之前，第二次读到条件写之间（毫秒级）少一道兜底。
-- 批 V、W 与 §7.4 五条的独立复核：**2026-11-27 交 Gemini 4 Neon Extra**（负责人随后改定：换电脑由 Claude Code 复核，见 §0a 第 1 步）。§7.4 已落完（第 4 轮会话 11-27 通知），复核条件已具备。接手的会话「复核第 4 轮批 V/W 并补 guild 见证 SQL」开工时全部模型周额度 81%，按口径停在第一批之前：没读代码、没下结论、没改代码。
+- 批 V、W 与 §7.4 五条的独立复核：**2026-11-27 已由会话「复核第 4 轮批 V/W 并补 guild 见证 SQL」做完（负责人在该会话说「开始做吧」）：三块都通过，批 W 顺手补了邮箱满提示透传，结论在 §7.1、§7.2、§7.4 末条。** 以下为当时的交接原文：**2026-11-27 交 Gemini 4 Neon Extra**（负责人随后改定：换电脑由 Claude Code 复核，见 §0a 第 1 步）。§7.4 已落完（第 4 轮会话 11-27 通知），复核条件已具备。接手的会话「复核第 4 轮批 V/W 并补 guild 见证 SQL」开工时全部模型周额度 81%，按口径停在第一批之前：没读代码、没下结论、没改代码。
   - 范围：按 §7.1 / §7.2 / §7.4 复核，只改错，不扩范围。
   - 口径：§2（每条按 `data-overwrite-audit-r2-round4-20261126/*.json` 查找原文的触发步骤走一遍）与 §3。
   - 重点：行锁、CAS、事务内外的读写；幂等与重投；发号失败不用墙钟；指令号在事务前发好；tip / 日志规范；协议字段号不复用。

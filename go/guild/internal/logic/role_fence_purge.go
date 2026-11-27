@@ -24,6 +24,10 @@ func (l *GuildLogic) RoleFencePurge(ctx context.Context, tx *sql.Tx, player uint
 	}
 	return rolefence.OnCommit(ctx, func(ctx context.Context) {
 		l.repo.FinishRolePurge(ctx, res)
+		// 解散了就与 DisbandGuild 一样释放它占领的灵脉,否则已解散的帮会一直占着旗。
+		if res.Disbanded && l.war != nil && l.war.Repo != nil {
+			_ = l.war.Repo.CleanupGuildWarOnDisband(ctx, res.GuildID, uint64(l.warNow().UnixMilli()))
+		}
 		l.afterRolePurge(ctx, res)
 	})
 }

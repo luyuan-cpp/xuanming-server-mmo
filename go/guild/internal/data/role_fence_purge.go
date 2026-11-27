@@ -39,7 +39,7 @@ const sqlSelectSuccessorCandidates = `SELECT player_id, role, contribution_total
 // PurgeRemovedRole 是 guild 的删角收尾清理(docs/design/account-deletion.md §6.2、§6.3),只做数据库,在角色护栏参与者的
 // PurgeRemovedRole 事务里跑:调用方已持这名玩家的护栏副本行锁、核过是墓碑。now 是服务进程时钟毫秒(解散时提前截止捐献用)。
 //
-// 删他的成员行、状态行、申请、每日计数、seq 行与客户端幂等键;终态 guild_asset_op 是资产审计,历练各表(含 guild_trial_lobby_slot、
+// 删他的成员行、状态行、申请、每日计数、seq 行、客户端幂等键与帮战个人数据(purgeWarRowsOfPlayer);终态 guild_asset_op 是资产审计,历练各表(含 guild_trial_lobby_slot、
 // guild_trial_launch_role)是其他成员的活动历史,按 §6.2 保留。帮会没有成员数列,人数一律锁内 COUNT。他是帮主时不让帮会无主:
 // 帮里还有人就把帮主交给职位最高、帮贡最多、入帮最早的那一位(handOverGuild),只剩他就整帮解散(disbandLockedGuild,
 // 与 DisbandGuild 同一段)。不在申请注销时自动转让:那时让玩家自己选(挂起判定在试探时回 guild_leader);执行时他已经无法操作,
@@ -66,7 +66,22 @@ func PurgeRemovedRole(ctx context.Context, tx *sql.Tx, player, now uint64) (Role
 			return RolePurgeResult{}, fmt.Errorf("purge %s of removed player %d: %w", t.table, player, err)
 		}
 	}
+	if err := purgeWarRowsOfPlayer(ctx, tx, player); err != nil {
+		return RolePurgeResult{}, fmt.Errorf("purge guild war rows of removed player %d: %w", player, err)
+	}
 	return res, nil
+}
+
+// purgeWarRowsOfPlayer 删他的帮战个人数据,按锁序 14 → 16 → 24 排在上面几张表之后:守旗快照(含他的名字与战斗快照,
+// uk player_id 至多一行)、个人帮战状态(主键)、待入账行(给他的入账,钱随角色作废,与转换循环见到墓碑时放弃同一结论)。
+// 三张表都只按他自己的键删;写它们的入口要么先锁他的副本(墓碑之后被拒),要么先锁成员行(他已不在帮)。
+func purgeWarRowsOfPlayer(ctx context.Context, tx *sql.Tx, player uint64) error {
+	for _, table := range []string{guildWarGarrisonTable, guildWarPlayerStateTable} {
+		if _, err := tx.ExecContext(ctx, "DELETE FROM `"+table+"` WHERE `player_id` = ?", player); err != nil {
+			return fmt.Errorf("purge %s: %w", table, err)
+		}
+	}
+	return purgePlayerRows(ctx, tx, guildWarCreditOwedTable, "op_id", player)
 }
 
 // purgeGuildMembership 按退帮的锁序处理成员行与状态行:guild → guild_player_state → guild_member。

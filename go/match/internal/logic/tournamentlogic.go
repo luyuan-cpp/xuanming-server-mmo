@@ -21,6 +21,7 @@ import (
 	mailpb "proto/mail"
 	matchpb "proto/match"
 	"shared/contentguard"
+	"shared/generated/pb/table"
 	"shared/serviceauth"
 )
 
@@ -460,6 +461,11 @@ func claimOneTournamentReward(ctx context.Context, store tournamentRewardStore, 
 		callCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		mailResp, callErr := mail.SendPersonalMail(callCtx, mailReq)
 		cancel()
+		// 收件箱满是玩家自己能处理的:原样回 mail 的满箱提示(tip 全仓单轴),行保持可领取,清出空位再领即补。
+		if fullTip := uint32(table.MailError_kMailRecipientBoxFull); callErr == nil && mailResp.GetErrorMessage().GetId() == fullTip {
+			logger.Infof("[tournament] Recipient mailbox is full for reward=%d; reward stays claimable", r.RewardId)
+			return nil, fullTip
+		}
 		if callErr != nil || mailResp.GetErrorMessage().GetId() != 0 || mailResp.GetMailId() == 0 {
 			logger.Errorf("[tournament] SendPersonalMail failed reward=%d tip=%d err=%v; reward stays claimable", r.RewardId, mailResp.GetErrorMessage().GetId(), callErr)
 			return nil, constants.ErrInternal

@@ -82,6 +82,8 @@
    - `payment-integration-handoff-20261120.md`「还剩」：Go `-race` 要在 Linux 或 Docker 里跑；整链路冒烟；kind 冒烟要先经负责人同意装工具
    - `data-overwrite-audit-r2-handoff-20261126.md`：r2 全线的总验证。等 §3 第 1、2 行做完、审计文档 §1「仍开着」清空，再整体跑一遍最省事
    - PROGRESS 文末 11-26、11-27 标「未编译」「待 Gemini」的各条（data_service 启动期故障隔离三条、gate 准入 P2-4、官方通行证加固复查等），命令在各条里
+   - data_service 与 go/db 的熔断按后端隔离：PROGRESS 2026-11-26 三条——「go/db 与 data_service 两处『熔断按后端隔离』复核」「data_service 逻辑库熔断：调用方取消不再记成成功」「go/db 按存档库熔断：调用方取消不再记成成功」，命令与通过标准在各条里。代码都已写完、在 main，只剩跑
+   - 顺序：data_service 启动期故障隔离的批 1、批 2、第二轮三条，要先于「合服映射的 etcd 副本第二批」跑（都改了 `go/data_service/internal/svc/servicecontext.go`），细节在 `merged-zone-etcd-copy-handoff-20261127.md` §3。这几条都不是改代码：红了保留首错原文交回 Claude Code
 
 ## 5. 等负责人定的
 

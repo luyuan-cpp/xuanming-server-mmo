@@ -81,6 +81,8 @@ enum trade_error : int {
   kTradeAssetNotTradable = 20015,
   kTradeTitleSensitive = 20016,
   kTradeTextCheckUnavailable = 20017,
+  kTradeWantedOrderLimitReached = 20018,
+  kTradeWantedBookMismatch = 20019,
   trade_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   trade_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -91,11 +93,11 @@ extern const uint32_t trade_error_internal_data_[];
 inline constexpr trade_error trade_error_MIN =
     static_cast<trade_error>(0);
 inline constexpr trade_error trade_error_MAX =
-    static_cast<trade_error>(20017);
+    static_cast<trade_error>(20019);
 [[nodiscard]] inline bool trade_error_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, trade_error_internal_data_);
 }
-inline constexpr int trade_error_ARRAYSIZE = 20017 + 1;
+inline constexpr int trade_error_ARRAYSIZE = 20019 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 trade_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(trade_error) {

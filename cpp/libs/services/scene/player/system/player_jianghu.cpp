@@ -454,6 +454,15 @@ void PlayerJianghuSystem::CheckDuelEligibility(const ::CheckJianghuDuelEligibili
 	}
 	if (request.writ_tier() == static_cast<uint32_t>(match::JIANGHU_WRIT_TIER_SILVER))
 	{
+		// 另一局预扣的银两还没结清时,备战(ValidateAndCollectPrepareFee)一定拒绝:在发战书之前就告诉发起方,
+		// 免得对方应战之后才在备战时作废。新局还没有 battle_id,任何未结清的标记都算。
+		if (const auto *payerComp = tlsEcs.actorRegistry.try_get<PlayerJianghuComp>(payer);
+			payerComp != nullptr && payerComp->pending_silver_fee_battle_id() != 0)
+		{
+			response.set_payer_silver_fee_pending(true);
+			response.set_payer_has_sufficient_fee(false);
+			return;
+		}
 		const uint64_t silverCost = request.silver_cost() > 0 ? request.silver_cost() : rule.silverWritCost;
 		const bool affordable =
 			silverCost > 0 && silverCost <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) &&

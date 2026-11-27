@@ -8137,7 +8137,7 @@ void TurnBattleEngine::ApplyWuxingRoundStartBoonEffects(TurnResultS2C& result) {
                 continue;
             }
             if (row->buff_type() == kBuffTypePoison || row->buff_type() == kBuffTypeBurn ||
-                row->battle_op() == static_cast<uint32_t>(BattleEffectOp::Periodic)) {
+                row->battle_op() == static_cast<uint32_t>(BattleEffectOp::PeriodicDamage)) {
                 const uint64_t tickVal = b.snapshot_value() > 0u
                     ? b.snapshot_value()
                     : (row->interval_effect_size() > 0 ? static_cast<uint64_t>(std::max(1.0, row->interval_effect(0))) : 0ULL);

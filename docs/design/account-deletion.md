@@ -143,7 +143,7 @@ ACTIVE(0) ──申请:重新认证 + 预检通过──▶ PENDING(1) ──冷
 - `zone_id` 只用来选路:网关按区找 login(与 `/api/login` 同一个选路器);各区 login 共用同一地域的目录,任一区都能办,客户端填最近登录或当前选中的区。
 - `code` 沿用网关现有业务码与映射(成功、认证拒绝、故障按 tip 的 `fault` 列、限流),限流沿用登录那一桶。
 - `tip` 是 login 回的 tip 码(0 = 没有),客户端按它分支,不解析 `message`:2000 凭证无效(重新拉起渠道)、2035 渠道不可用(稍后再试)、2038 冷静期中、2039 预检没过(看 `blockers`)、2040 已在执行无法撤销、2041 需要重新授权(Apple 授权码无效)。
-- `blockers[].reason` 是低基数枚举串:`guild_leader`(帮主,只在申请时拦,§6.3)、`role_listed`(角色寄售中)、`team_membership` / `team_invite_index` / `team_application_index` / `team_launch_role`(组队)、`match_authority_ticket` / `match_role_occupancy` / `match_spectator` / `match_challenge_invitation`(匹配、观战、切磋)、`trade_commerce`(交易行订单)、`trade_asset_op` / `mail_asset_op` / `guild_asset_op` / `player_inbox_item` / `guild_trial_*`(物品或奖励还在处理);客户端认不出的按「有未完成的游戏内事务」显示。
+- `blockers[].reason` 是低基数枚举串:`guild_leader`(帮主,只在申请时拦,§6.3)、`role_listed`(角色寄售中)、`team_membership` / `team_invite_index` / `team_application_index` / `team_launch_role`(组队)、`match_authority_ticket` / `match_role_occupancy` / `match_spectator` / `match_challenge_invitation`(匹配、观战、切磋)、`trade_commerce`(交易行订单)、`trade_asset_op` / `mail_asset_op` / `guild_asset_op` / `player_inbox_item` / `guild_trial_*` / `guild_war_credit_owed`(物品或奖励还在处理;最后一个是帮战入账排在待入账表里,2026-11-27 登记);客户端认不出的按「有未完成的游戏内事务」显示。
 - 时刻一律 Unix 秒。
 
 ## 6. 删除范围
@@ -164,7 +164,7 @@ ACTIVE(0) ──申请:重新认证 + 预检通过──▶ PENDING(1) ──冷
 | data_service 存档库 | 这名玩家的全部 `player_store` 行(含写权行) | — |
 | data_service 流水库 | — | `player_snapshot`(存档快照,审计保留期缺省 30 天)、`transaction_log`(缺省 180 天)由现有的 `RunAuditRetention` 按期删;`gm_recall_*`、`rollback_audit*`、`player_debt`:回收审计。都是防欺诈、回档举证用,只有 `player_id`,账号已无法还原;隐私政策写明保留期 |
 | friend | `friend`、`friend_request`、`friend_block` 里这名玩家在任一侧的行;`friend_capacity` | — |
-| guild | `guild_member`、`guild_player_state`、`guild_application`、`guild_daily_counter`、`guild_player_op_seq`、`guild_client_request` 里这名玩家的行;他还是帮主时自动让位,帮里只剩他就解散帮会(§6.3) | 终态的 `guild_asset_op` 与历练记录:资产审计,也是其他成员的活动历史;`guild_jianghu_grudge_applied`:按对局记「这一局恩怨墙只入账一次」,只有对局 id 与时刻,删了重放会给对手帮再算一次(2026-11-26) |
+| guild | `guild_member`、`guild_player_state`、`guild_application`、`guild_daily_counter`、`guild_player_op_seq`、`guild_client_request` 里这名玩家的行;他还是帮主时自动让位,帮里只剩他就解散帮会(§6.3)。帮战个人数据同一事务删(2026-11-27 补):`guild_war_garrison` 他那一格守旗快照(含名字与战斗快照)、`guild_war_player_state`、`guild_war_credit_owed`(给他的帮战待入账,钱随角色作废,与转换循环见到墓碑时放弃同一结论);删角触发的解散与 `DisbandGuild` 一样,提交之后释放该帮占领的灵脉 | 终态的 `guild_asset_op` 与历练记录:资产审计,也是其他成员的活动历史;`guild_jianghu_grudge_applied`:按对局记「这一局恩怨墙只入账一次」,只有对局 id 与时刻,删了重放会给对手帮再算一次(2026-11-26);`guild_war_battle` 对局记录(双方多名玩家共有)与 `guild_war_bounty` 追杀令(只有 player_id,终态行到期 30 天后由保留期清理删掉,`PurgeTerminalBounties`) |
 | mail | `mail_box`、收件人是他的 `mail_message`、`mail_state`、`mail_player_op_seq`、已封存活动(state=2)里的 `mail_campaign_recipient`;清理之后再寄给他的个人邮件在发件事务里锁他的副本复核,拒收(`kMailRecipientDeleted`,发件方按终态处理,理由见 §6.4) | 终态的 `mail_asset_op`:资产审计;**还在导入的活动名单里他那一行**:封存要核收件人行数等于导入人数,删了整份名单封不上,别人的奖励也发不出去 |
 | player_inbox | `player_inbox_item`、`player_inbox_stream` | `player_inbox_audit` |
 | trade | `trade_favorite` | 终态的 `trade_listing`、`trade_commerce`、`trade_asset_op`:与交易对手共有的成交记录,防欺诈与对账;合同里原身份的账号串一并保留,隐私政策写明;**`trade_player_op_seq`**:模块以「seq 行永不删除」做锁分析,`TestSeqTableRowsAreNeverDeleted` 守着,只是按玩家的计数 |
@@ -176,6 +176,13 @@ ACTIVE(0) ──申请:重新认证 + 预检通过──▶ PENDING(1) ──冷
 | Kafka、日志 | — | 按 topic 保留期与日志保留期滚动删除;日志里账号只记掩码(`MaskAccount`) |
 
 表名取自 `proto/*/` 下的现有表声明,落码时逐表核对过主键与按玩家的列(2026-11-19,各服务的 `role_fence_purge.go`)。friend 删关系时同一事务给对端的 `friend_count` 减数;guild 的人数是锁内 COUNT,没有计数列;guild、mail 里「状态行 / seq 行建出后永不删除」的前提只对在役角色成立也够用:用到它们的事务都先锁这名玩家的护栏副本,墓碑之后一律被拒,`player_id` 又不复用。
+
+**帮战个人数据补进 guild 清单(2026-11-27,数据覆写审计 r2 第 4 轮顺带发现,未编译)**:
+- 问题:guild 的删角收尾只删帮会六张表。帮战的守旗快照 `guild_war_garrison`(他的名字、等级、外观、宠物名与战斗快照)、个人帮战状态 `guild_war_player_state`、帮战待入账 `guild_war_credit_owed` 都留着;删角触发的解散也不释放该帮占领的灵脉,已解散的帮会一直占着旗。
+- 方案:`PurgeRemovedRole` 在删完幂等键之后按锁序 14 → 16 → 24 删这三张表里他的行(`purgeWarRowsOfPlayer`,只按他自己的键);logic 的提交后动作在解散时调 `CleanupGuildWarOnDisband`,与 `DisbandGuild` 同一处理。用例:`TestTiDBRoleFencePurgeDeletesPlayerRowsAndKeepsHistory` 补三张表(他的删光、别人的不动)。
+- 为什么这样选:三张表都只属于他,写它们的入口要么先锁他的护栏副本(墓碑之后被拒),要么先锁成员行(他已离帮),按锁序排在帮会表之后点删不会成环;待入账行本来就会被转换循环按墓碑放弃,收尾里直接删只是不留到下一轮。
+- 被否决的做法:离帮时那样在提交之后另调 `RemovePlayerGarrison`。那是尽力而为,失败了快照里的名字就留下,不满足注销「真删」。释放灵脉仍放在提交之后,是与正常解散一致、不在清理事务里按非索引列扫灵脉表。
+- 代价与边界:释放灵脉失败只丢日志,与 `DisbandGuild` 相同,灵脉要等下一次被打下才换主;有人恰在收尾同时给他发追杀令,`PostBounty` 会给他重建一行空的个人帮战状态(只有计数,没有名字),不影响注销。
 
 提交之后才能做的副作用(缓存失效、摘榜、推送)由清理函数用 `rolefence.OnCommit` 登记,`PurgeRemovedRole` 在清理事务提交成功之后按登记顺序跑(回滚不跑,与调用方的取消脱钩,3 秒预算)。它们可丢:失败只记日志,缓存按 TTL 过期、帮会榜启动时重建、客户端打开界面时重新拉取。guild 用它在提交后失效帮会快照与成员映射、解散时摘帮会榜、给留下的成员推送变化。
 

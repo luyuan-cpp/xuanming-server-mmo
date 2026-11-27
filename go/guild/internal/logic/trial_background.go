@@ -140,6 +140,7 @@ func (l *GuildLogic) StartTrialBackground(c TrialBackgroundConf) (stop func(), e
 			if warOwed.failed != 0 && c.RelayAdmission != nil {
 				c.RelayAdmission.Hold()
 			}
+			l.reportWarCreditOwedBacklog(ctx)
 			if d.Lobby != nil {
 				budget, cancel := context.WithTimeout(ctx, 2*time.Second)
 				next, err := d.Lobby.ExpirePendingSQL(budget, lobbyCursor)

@@ -61,6 +61,12 @@
 #             预留只在结算应用、或 SQL 终局是 ABORT / 没有可裁决原件时释放;COMPLETE、终局未定、查不到都留着,没有上限,
 #             这段时间玩家转不走、用不掉押着的那几样道具(人照常能玩)。前因与上一条相同:收件箱迟迟没投到,或 match 不可用。
 #             正文有 player_id 与 battle_id,按 battle_id 核对 match_battle_completion 与收件箱;处置见 docs/ops/player-inbox-runbook.md §6.1。
+#   warning : count_over_time({job="cpp_nodes", service="scene"} |= "metric=jianghu_duel_fee_overdue" [10m]) > 0
+#             (2026-11-27,r2-jh#1 的告警)生死状普通战书预扣的银两越过「复核时刻 + 15 分钟」仍没退还、也没被结算消耗,每人每 10 分钟一行。
+#             退还只在 SQL 终局是 ABORT / 没有可裁决原件时发生,COMPLETE 由结算消耗;终局未定、match 不可用时一直留着(钱不丢,只是晚退),
+#             这段时间这名玩家开不了新的普通战书(金帖档不受影响)。前因与上两条相同:match 不可用,或收件箱迟迟没投到。
+#             正文有 player_id 与 battle_id,按 battle_id 核对 match_battle_completion;设计见
+#             docs/planning/battle-jianghu-grudge-duel-phase1-implementation-plan.md「普通战书银两预扣与退还的数据一致性定案」。
 #   warning : count_over_time({job="cpp_nodes", service="scene"} |= "metric=mail_outbox_stuck" [10m]) > 0
 #             (2026-11-12)人物背包与临时格都放不下的战斗掉落改投邮件(docs/design/battle-overflow-mail.md):这批物品记在玩家存档的
 #             待寄队列里,由 scene 以 battle 身份寄出。这一行是重试不会变的失败:没配发件密钥、本地签名失败、条目形状不合法、验签被拒（两边密钥不同或时钟相差超过 5 分钟，`reason=signature_rejected`）,
@@ -441,3 +447,17 @@ spec:
             description: >-
               guild_trial_reward_owed 积压 {{ $value | printf "%.0f" }} 行(计到 10000 封顶)。
               说明得奖者的资产指令窗口(MaxPending=16)长期占满,检查这些玩家的 PENDING 行是否卡在离线停放档。
+
+        - alert: GuildWarCreditOwedBacklog
+          expr: |
+            max(guild_war_credit_owed_rows) > 1000
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "帮战入账待入账积压超过 1000 行"
+            description: >-
+              guild_war_credit_owed 积压 {{ $value | printf "%.0f" }} 行(计到 10000 封顶,2026-11-27 补,r2-gw#5 / #6)。
+              行里是帮战结算、追杀令到期退款当场插不进的 GUILD_CREDIT:领赏人本流未决已满(16 条),或角色护栏冻结中(过户、寄售、删角投票)。
+              冻结的那部分可能合法地留几天(寄售),所以只看总量;长期不降先查 guild 日志里 owed war credit round 的 still_full / frozen,
+              再查这些玩家的 PENDING 行是否卡在离线停放档。设计见 docs/planning/guild-play-v2-implementation-plan.md §7、§8。

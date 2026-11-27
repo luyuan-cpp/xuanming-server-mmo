@@ -261,3 +261,11 @@
    - `go/match`：`go build ./...`；`go vet ./internal/logic/ ./internal/authority/ ./internal/tournament/ ./internal/svc/`；`go test ./internal/logic/ -count=1 -run 'TestClaimTournamentRewards|TestTournamentRewardMailRequest|TestJianghuSilverRefundHasOnlyTheSceneChannel|TestJianghuDuel_' -v`；`go test ./internal/tournament/ ./internal/svc/ ./internal/authority/ -count=1`。新增与改名的用例全部 PASS，整包不新增失败。
    - `go/mail`：`go test ./internal/data/ -count=1 -run 'TestMatchSenderIdentityMatchesTournamentClaim|TestBattleSenderIdentityMatchesSceneOutbox' -v`；`go test ./internal/metrics/ ./internal/server/ -count=1`。
 3. 部署契约（仓库根，PowerShell 7）：`k8s_deploy_contract.tests.ps1`、`k8s_migrate_gate.tests.ps1`、`lobby_authority_render.tests.ps1`、`logical_db_deploy_contract.tests.ps1`、`go_services_local_mysql.tests.ps1` 全部 `[PASS]`，重点是 mail 生产者五把、mail 准入名单含 `match` 与 `match-canary`、「match 发件接线」一条。
+
+### 7.7 收件箱满时回满箱提示（2026-11-27 补，未编译）
+
+- **问题**：mail 收件箱满时拒收并回 `kMailRecipientBoxFull`（不建邮件），领取把它和超时、断连一起报成 `kMatchInternal`。玩家只看到「内部错误」，不知道清出空位就能领，会一直重试或找客服。
+- **方案**：`claimOneTournamentReward` 拿到 mail 的满箱提示时，原样回这个 tip（tip 码全仓单轴，客户端按 id 查文案），行保持可领取；其余失败照旧回内部错误。用例 `TestClaimTournamentRewardsPassesThroughRecipientBoxFull`：满箱那次不落已领取、不建邮件，清出空位后重领照常领到，只有一封。
+- **为什么这样选**：满箱是唯一一个玩家自己能处理的拒收原因，透传只改一个分支，不碰判重、不碰「拿到 `mail_id` 才落已领取」。
+- **被否决的做法**：把 mail 回的 tip 一律透传。请求冲突、参数非法这类是服务端问题，原样给玩家看只会误导，所以只透传满箱。另一种做法是 match 自己新增「领奖时收件箱满」的 tip，但那是同一件事的第二个码，违反单轴。
+- **代价与边界**：响应里同时带满箱提示和其余已领取的条目时，客户端怎么显示没核（与 7.1 的「一条失败不挡其余」同一处）；mail 若以后新增别的玩家可处理的拒收原因，要在这里逐个加，不会自动透传。

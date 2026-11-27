@@ -65,6 +65,10 @@ func TestTiDBRoleFencePurgeDeletesPlayerRowsAndKeepsHistory(t *testing.T) {
 		insertPendingFixture(t, ctx, db, guildPlayerOpSeqTable, &pb.GuildPlayerOpSeqRecord{PlayerId: player, Stream: 1, NextSeq: 2, UpdatedMs: 1, Epoch: 1})
 		insertPendingFixture(t, ctx, db, "guild_daily_counter", &pb.GuildDailyCounterRecord{PlayerId: player, CounterKind: pb.GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_DONATE, RefId: 7, PeriodKey: 20261119, UsedCount: 1, UpdatedMs: 1})
 		insertPendingFixture(t, ctx, db, guildClientRequestTable, &pb.GuildClientRequestRecord{PlayerId: player, ClientRequestId: 9, OpId: 300 + player, CreatedMs: 1})
+		// 帮战个人数据:守旗快照带名字,个人帮战状态,待入账行(r2 第 4 轮补进注销清单)。
+		insertPendingFixture(t, ctx, db, guildWarGarrisonTable, &pb.GuildWarGarrisonRecord{GuildId: 44, SlotIndex: uint32(player), PlayerId: player, PlayerName: "fixture", UpdatedMs: 1})
+		insertPendingFixture(t, ctx, db, guildWarPlayerStateTable, &pb.GuildWarPlayerStateRecord{PlayerId: player, ZoneId: 1, UpdatedMs: 1})
+		insertPendingFixture(t, ctx, db, guildWarCreditOwedTable, &pb.GuildWarCreditOwedRecord{PlayerId: player, OpId: 700 + player, GuildId: 44, Payload: []byte{1}, CreatedMs: 1})
 	}
 	// 同一玩家多行:逐行点删要把每一行都删掉。
 	insertPendingFixture(t, ctx, db, guildPlayerOpSeqTable, &pb.GuildPlayerOpSeqRecord{PlayerId: removed, Stream: 2, NextSeq: 1, UpdatedMs: 1, Epoch: 1})
@@ -86,7 +90,8 @@ func TestTiDBRoleFencePurgeDeletesPlayerRowsAndKeepsHistory(t *testing.T) {
 		} else {
 			require.Equal(t, RolePurgeResult{Player: removed}, last, "第二次已不在帮,提交之后无事可做")
 		}
-		for _, table := range []string{"guild_member", "guild_player_state", "guild_application", guildPlayerOpSeqTable, "guild_daily_counter", guildClientRequestTable} {
+		for _, table := range []string{"guild_member", "guild_player_state", "guild_application", guildPlayerOpSeqTable, "guild_daily_counter", guildClientRequestTable,
+			guildWarGarrisonTable, guildWarPlayerStateTable, guildWarCreditOwedTable} {
 			require.Zero(t, guildPlayerRows(t, ctx, db, table, removed), table)
 			require.Equal(t, 1, guildPlayerRows(t, ctx, db, table, officer), "别人的 %s 不动", table)
 		}

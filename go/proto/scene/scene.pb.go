@@ -1008,6 +1008,9 @@ type CheckJianghuDuelEligibilityResponse struct {
 	ErrorMessage          *base.TipInfoMessage             `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
 	Players               []*JianghuPlayerEligibilityEntry `protobuf:"bytes,2,rep,name=players,proto3" json:"players,omitempty"`
 	PayerHasSufficientFee bool                             `protobuf:"varint,3,opt,name=payer_has_sufficient_fee,json=payerHasSufficientFee,proto3" json:"payer_has_sufficient_fee,omitempty"`
+	// 发起方另一局普通战书预扣的银两还没退还或被结算消耗(PlayerJianghuComp 的待退标记还在)。为 true 时备战一定被拒,
+	// match 直接回「上一场银两未结清」,不发出这张战书;此时 payer_has_sufficient_fee 恒为 false。
+	PayerSilverFeePending bool `protobuf:"varint,4,opt,name=payer_silver_fee_pending,json=payerSilverFeePending,proto3" json:"payer_silver_fee_pending,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -1059,6 +1062,13 @@ func (x *CheckJianghuDuelEligibilityResponse) GetPlayers() []*JianghuPlayerEligi
 func (x *CheckJianghuDuelEligibilityResponse) GetPayerHasSufficientFee() bool {
 	if x != nil {
 		return x.PayerHasSufficientFee
+	}
+	return false
+}
+
+func (x *CheckJianghuDuelEligibilityResponse) GetPayerSilverFeePending() bool {
+	if x != nil {
+		return x.PayerSilverFeePending
 	}
 	return false
 }
@@ -1333,11 +1343,12 @@ const file_proto_scene_scene_proto_rawDesc = "" +
 	"\x1dJianghuPlayerEligibilityEntry\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12$\n" +
 	"\x0eonline_on_node\x18\x02 \x01(\bR\fonlineOnNode\x122\n" +
-	"\x15duel_refuse_strangers\x18\x03 \x01(\bR\x13duelRefuseStrangers\"\xce\x01\n" +
+	"\x15duel_refuse_strangers\x18\x03 \x01(\bR\x13duelRefuseStrangers\"\x87\x02\n" +
 	"#CheckJianghuDuelEligibilityResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x128\n" +
 	"\aplayers\x18\x02 \x03(\v2\x1e.JianghuPlayerEligibilityEntryR\aplayers\x127\n" +
-	"\x18payer_has_sufficient_fee\x18\x03 \x01(\bR\x15payerHasSufficientFee\"\xea\x01\n" +
+	"\x18payer_has_sufficient_fee\x18\x03 \x01(\bR\x15payerHasSufficientFee\x127\n" +
+	"\x18payer_silver_fee_pending\x18\x04 \x01(\bR\x15payerSilverFeePending\"\xea\x01\n" +
 	"\x15PrepareBattleResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x121\n" +
 	"\bsnapshot\x18\x02 \x01(\v2\x15.BattlePlayerSnapshotR\bsnapshot\x12+\n" +

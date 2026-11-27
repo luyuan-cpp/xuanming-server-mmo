@@ -51,7 +51,22 @@ const (
 
 	// sqlSelectWarCreditOwedExists:转换在持着他的护栏副本与 seq 行之后普通读本行还在不在(本行的删除者都先持这两把锁)。
 	sqlSelectWarCreditOwedExists = "SELECT 1 FROM `" + guildWarCreditOwedTable + "` WHERE `player_id` = ? AND `op_id` = ?"
+
+	// sqlCountWarCreditOwedCapped:积压 gauge 用,数到上限为止(同 sqlCountOwedRewardsCapped,不为一个指标做全表扫描)。
+	sqlCountWarCreditOwedCapped = "SELECT COUNT(*) FROM (SELECT 1 FROM `" + guildWarCreditOwedTable + "` LIMIT ?) AS capped"
 )
+
+// CountWarCreditOwed 普通读待入账行数,至多数到 limit(积压 gauge guild_war_credit_owed_rows)。
+func (r *WarRepo) CountWarCreditOwed(ctx context.Context, limit int) (int, error) {
+	if limit <= 0 {
+		return 0, nil
+	}
+	var n int
+	if err := r.db.QueryRowContext(ctx, sqlCountWarCreditOwedCapped, limit).Scan(&n); err != nil {
+		return 0, fmt.Errorf("count %s: %w", guildWarCreditOwedTable, err)
+	}
+	return n, nil
+}
 
 // WarCreditOwed 是一笔帮战入账:结算 / 到期收尾要插的 GUILD_CREDIT 指令参数,收不了时原样记进 guild_war_credit_owed。
 type WarCreditOwed struct {

@@ -2996,6 +2996,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheckJianghuDuelEligibilityResponse
     kPlayersFieldNumber = 2,
     kErrorMessageFieldNumber = 1,
     kPayerHasSufficientFeeFieldNumber = 3,
+    kPayerSilverFeePendingFieldNumber = 4,
   };
   // repeated .JianghuPlayerEligibilityEntry players = 2;
   [[nodiscard]] int players_size()
@@ -3044,11 +3045,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheckJianghuDuelEligibilityResponse
   void _internal_set_payer_has_sufficient_fee(bool value);
 
   public:
+  // bool payer_silver_fee_pending = 4;
+  void clear_payer_silver_fee_pending() ;
+  [[nodiscard]] bool payer_silver_fee_pending() const;
+  void set_payer_silver_fee_pending(bool value);
+
+  private:
+  bool _internal_payer_silver_fee_pending() const;
+  void _internal_set_payer_silver_fee_pending(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:CheckJianghuDuelEligibilityResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<2, 4,
                           2, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -3080,6 +3091,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CheckJianghuDuelEligibilityResponse
     ::google::protobuf::RepeatedPtrField< ::JianghuPlayerEligibilityEntry > players_;
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
     bool payer_has_sufficient_fee_;
+    bool payer_silver_fee_pending_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -6650,6 +6662,30 @@ inline bool CheckJianghuDuelEligibilityResponse::_internal_payer_has_sufficient_
 inline void CheckJianghuDuelEligibilityResponse::_internal_set_payer_has_sufficient_fee(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.payer_has_sufficient_fee_ = value;
+}
+
+// bool payer_silver_fee_pending = 4;
+inline void CheckJianghuDuelEligibilityResponse::clear_payer_silver_fee_pending() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.payer_silver_fee_pending_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline bool CheckJianghuDuelEligibilityResponse::payer_silver_fee_pending() const {
+  // @@protoc_insertion_point(field_get:CheckJianghuDuelEligibilityResponse.payer_silver_fee_pending)
+  return _internal_payer_silver_fee_pending();
+}
+inline void CheckJianghuDuelEligibilityResponse::set_payer_silver_fee_pending(bool value) {
+  _internal_set_payer_silver_fee_pending(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:CheckJianghuDuelEligibilityResponse.payer_silver_fee_pending)
+}
+inline bool CheckJianghuDuelEligibilityResponse::_internal_payer_silver_fee_pending() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.payer_silver_fee_pending_;
+}
+inline void CheckJianghuDuelEligibilityResponse::_internal_set_payer_silver_fee_pending(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.payer_silver_fee_pending_ = value;
 }
 
 // -------------------------------------------------------------------

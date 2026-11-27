@@ -37,4 +37,6 @@ enum jianghu_error {
 
   kJianghuServiceBusy = 40013;
 
+  kJianghuDuelSilverFeePending = 40014;
+
 };

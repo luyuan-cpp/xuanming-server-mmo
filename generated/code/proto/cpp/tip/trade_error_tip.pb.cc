@@ -35,7 +35,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_trade_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\025trade_error_tip.proto*\260\004\n\013trade_error\022"
+    "\n\025trade_error_tip.proto*\365\004\n\013trade_error\022"
     "\022\n\016kTrade_errorOK\020\000\022\033\n\025kTradeListingNotF"
     "ound\020\240\234\001\022\033\n\025kTradeHomeZoneUnknown\020\241\234\001\022 \n"
     "\032kTradeFavoriteLimitReached\020\242\234\001\022\033\n\025kTrad"
@@ -49,14 +49,16 @@ const char descriptor_table_protodef_trade_5ferror_5ftip_2eproto[] ABSL_ATTRIBUT
     "radeAssetDeliveryPending\020\255\234\001\022\030\n\022kTradeMa"
     "nualReview\020\256\234\001\022\034\n\026kTradeAssetNotTradable"
     "\020\257\234\001\022\032\n\024kTradeTitleSensitive\020\260\234\001\022 \n\032kTra"
-    "deTextCheckUnavailable\020\261\234\001B$\n\016com.game.t"
-    "ableZ\022generated/pb/tableb\006proto3"
+    "deTextCheckUnavailable\020\261\234\001\022#\n\035kTradeWant"
+    "edOrderLimitReached\020\262\234\001\022\036\n\030kTradeWantedB"
+    "ookMismatch\020\263\234\001B$\n\016com.game.tableZ\022gener"
+    "ated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_trade_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_trade_5ferror_5ftip_2eproto = {
     false,
     false,
-    632,
+    701,
     descriptor_table_protodef_trade_5ferror_5ftip_2eproto,
     "trade_error_tip.proto",
     &descriptor_table_trade_5ferror_5ftip_2eproto_once,
@@ -75,7 +77,7 @@ trade_error_descriptor() {
   return file_level_enum_descriptors_trade_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t trade_error_internal_data_[] = {
-    65536u, 1179648u, 20010u, 20006u, 20014u, 20003u, 20008u, 20012u, 20016u, 20001u, 20005u, 20007u, 20009u, 20011u, 20013u, 20015u, 20017u, 20000u, 20002u, 20004u, };
+    65536u, 1310720u, 20012u, 20007u, 20016u, 20003u, 20010u, 20014u, 20018u, 20001u, 20005u, 20009u, 20011u, 20013u, 20015u, 20017u, 20019u, 20000u, 20002u, 20004u, 20006u, 20008u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

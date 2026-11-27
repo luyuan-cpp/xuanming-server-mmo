@@ -197,6 +197,14 @@ var (
 		Help:      "待入队物品表的积压行数(数到 10000 为止)。长期不降说明有玩家的背包一直满着,或资产通道关着。",
 	})
 
+	// 帮战待入账积压(r2-gw#5 / #6)与历练待入队同一写法,跟着同一个循环刷新;告警 GuildWarCreditOwedBacklog。
+	guildWarCreditOwedRows = metric.NewGaugeVec(&metric.GaugeVecOpts{
+		Namespace: "guild",
+		Subsystem: "war",
+		Name:      "credit_owed_rows",
+		Help:      "帮战待入账表的积压行数(数到 10000 为止)。长期不降说明有领赏人的未决指令一直满着,或角色长期冻结(寄售)。",
+	})
+
 	guildTrialRegisterFailTotal = metric.NewCounterVec(&metric.CounterVecOpts{
 		Namespace: "guild",
 		Subsystem: "trial",

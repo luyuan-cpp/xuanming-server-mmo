@@ -321,7 +321,7 @@ PrepareBattle（发起方队长，普通战书）
   - 为银两单起一条查询：见上，与预留复核互相顶掉在途登记。
 - **代价与边界**：
   - 旧局的取消丢失时，这名玩家要等旧局复核退款（约在旧局 `deadline_ms` + 120 秒之后的第一拍，match 可用时）才能再开普通生死状，期间发起会在备战时被拒（金帖档、应战、其他玩法不受影响）。match 不可用时复核一直按「未知」留着，钱不丢，只是晚退；越过「复核时刻 + 15 分钟」每 10 分钟一行 ERROR `metric=jianghu_duel_fee_overdue`。
-  - 资格预检 `CheckJianghuDuelEligibility` 没有改：它仍只看余额，「旧局未结清」要到成局备战时才被拒（邀请与确认环节白走一遍）。这种情形只在故障后出现，没有为它新增 tip 码或字段。
+  - 资格预检 `CheckJianghuDuelEligibility` 2026-11-27 起同样判「旧局未结清」：发起方的待退标记还在时回 `payer_silver_fee_pending = true`，match 直接回 `kJianghuDuelSilverFeePending`，不再让对方应战之后才在备战时作废（本节「问题 4」）。
   - 玩家不在本节点、或此刻不可改（交接 / 退出中 / 没有归属围栏）时不复核，下次加载后接着；reaper 每拍多扫一遍 `PlayerJianghuComp`（每个在线玩家都有），只比一个字段，30 秒一次。
   - 两样的复核时刻按构造相同，合并之后回答同时收尾两样；若以后有路径单独改其中一个时刻，要同步改合并逻辑。
 
@@ -346,6 +346,14 @@ PrepareBattle（发起方队长，普通战书）
   - 只留邮件、scene 不退：邮件附件要玩家去领，过期作废就是丢；而且 match 拿不到「scene 是否已退过」的事实，作废结算那条路照样会双退。
 - **代价与边界**：取消送到在线实体时当场退；没送到时要等终局复核（问题 1 的代价）。match 侧只剩取消 RPC 与作废结算两条「通知」，都不直接动钱。
 
+#### 问题 4：资格预检不判旧局未结清（2026-11-27 补，数据覆写审计 r2 剩余单 §3.3 第 4 条，未编译）
+
+- **问题**：别的局的待退银两还没结清时，备战一定拒绝（问题 1 的定案），但资格预检只看余额。发起方照样能下战书，对方应战、双方确认之后，成局备战才被拒、整局作废，邀请与确认环节白走一遍，对方还看到一次莫名其妙的作废。
+- **方案**：`CheckJianghuDuelEligibility` 的普通战书分支先看发起方 `PlayerJianghuComp.pending_silver_fee_battle_id`：不为 0 就回 `payer_silver_fee_pending = true`（`scene.proto` 字段 4），`payer_has_sufficient_fee` 同时为 false；match 的 `checkSceneEligibility` 先认它，回新码 `kJianghuDuelSilverFeePending`（Tip 表 `//jianghu_error` 段末，文案「上一场普通战书的银两还在退还或结算中，请稍候再下战书」，补丁脚本 `tools/scripts/jianghu_fee_pending_tip_xlsx_patch.py`，已写入表、导表未跑）。金帖档不看这个标记。用例：`PlayerJianghuTest.SilverWritPendingForAnotherBattleRejectsTheNewPreparationWithoutTouchingTheMarker` 补三段（未结清时普通战书报未结清、金帖档照常、旧局退还之后普通战书照常）。
+- **为什么这样选**：预检和备战用同一个标记判，结论不会分叉；新字段把「暂时不能开」和「钱不够」分开，玩家看到的是该等一会儿，而不是去凑银两。
+- **被否决的做法**：复用 `payer_has_sufficient_fee = false`，玩家会看到「银两不足」，与事实不符；让 scene 回整体 `error_message`，match 会把它当成「资格校验暂不可用」并打 ERROR 日志，也是错的原因。
+- **代价与边界**：多一个协议字段与一条客户端可见的 tip（Tip 表改了要同步客户端）；预检到备战之间旧局恰好结清的，备战照常通过，只是这一次预检多拒了一次，玩家稍后重下即可；预检本来就不是提交点，备战与提交两处的拒绝照旧兜底。
+
 ### 3. 持久字段与兼容
 
 - `PlayerJianghuComp.pending_silver_fee_review_after_ms = 13`（`uint64`，Unix 毫秒），PROFILE 组随 `player_database.jianghu_component`（字段 37）落库；加载 `emplace` 整份拷贝、存盘 `CopyFrom`，不用改加载器。按 [mixed-version-persist-field-protection.md](../design/mixed-version-persist-field-protection.md) §3.1：台账 `proto/persist_schema_gen.txt` 由生成器维护，当前是 `state=bootstrap`、没有封存，生成时追加一行 `1=PlayerJianghuComp#13 optional uint64 pending_silver_fee_review_after_ms`（引导期并入世代 1），不手改台账；`PlayerJianghuComp` 是可携带类型，往返一致性测试（`PersistRoundTripTest`）按描述符自动覆盖新字段，不用改夹具。
@@ -364,7 +372,7 @@ PrepareBattle（发起方队长，普通战书）
 | `metric=jianghu_duel_fee_consumed_after_applied_settlement` | ERROR | COMPLETE 已应用而标记还在（缺陷兜底），清掉不退 |
 | `metric=jianghu_duel_fee_marker_invalid` | ERROR | 标记金额不合法（坏数据），清掉不退 |
 
-值班固定查询（写法同 `battle_item_hold_overdue`）：`count_over_time({job="cpp_nodes", service="scene"} |= "metric=jianghu_duel_fee_overdue" [10m]) > 0`。本批没有往告警清单里加规则。
+值班固定查询（写法同 `battle_item_hold_overdue`）：`count_over_time({job="cpp_nodes", service="scene"} |= "metric=jianghu_duel_fee_overdue" [10m]) > 0`。2026-11-27 已登记进告警清单 `deploy/k8s/asset-channel-alerts.yaml` 的 LogQL 值班查询段（warning，含处置说明）。与同段其他 scene 信号一样，Loki ruler 接线之前只是值班查询、不会自己响；scene 把这个信号导出成指标之后改成 PromQL 规则。
 
 ### 5. 改动清单
 

@@ -1866,11 +1866,11 @@ constexpr CheckJianghuDuelEligibilityResponse::ParseTableT_ CheckJianghuDuelElig
     {
       PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityResponse, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      4, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967280,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      4,  // num_field_entries
       2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -1880,7 +1880,10 @@ constexpr CheckJianghuDuelEligibilityResponse::ParseTableT_ CheckJianghuDuelElig
       ::_pbi::TcParser::GetTable<::CheckJianghuDuelEligibilityResponse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // bool payer_silver_fee_pending = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(CheckJianghuDuelEligibilityResponse, _impl_.payer_silver_fee_pending_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityResponse, _impl_.payer_silver_fee_pending_)}},
       // .TipInfoMessage error_message = 1;
       {::_pbi::TcParser::FastMtS1,
        {10, 1, 0,
@@ -1902,6 +1905,8 @@ constexpr CheckJianghuDuelEligibilityResponse::ParseTableT_ CheckJianghuDuelElig
       {PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityResponse, _impl_.players_), _Internal::kHasBitsOffset + 0, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // bool payer_has_sufficient_fee = 3;
       {PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityResponse, _impl_.payer_has_sufficient_fee_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // bool payer_silver_fee_pending = 4;
+      {PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityResponse, _impl_.payer_silver_fee_pending_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1931,7 +1936,8 @@ inline constexpr CheckJianghuDuelEligibilityResponse::Impl_::Impl_(
          }
         ,
         error_message_{nullptr},
-        payer_has_sufficient_fee_{false} {}
+        payer_has_sufficient_fee_{false},
+        payer_silver_fee_pending_{false} {}
 
 template <typename>
 constexpr CheckJianghuDuelEligibilityResponse::CheckJianghuDuelEligibilityResponse(::_pbi::ConstantInitialized,
@@ -3079,13 +3085,15 @@ const ::uint32_t
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::CheckJianghuDuelEligibilityResponse, _impl_._has_bits_),
-        6, // hasbit index offset
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::CheckJianghuDuelEligibilityResponse, _impl_.error_message_),
         PROTOBUF_FIELD_OFFSET(::CheckJianghuDuelEligibilityResponse, _impl_.players_),
         PROTOBUF_FIELD_OFFSET(::CheckJianghuDuelEligibilityResponse, _impl_.payer_has_sufficient_fee_),
+        PROTOBUF_FIELD_OFFSET(::CheckJianghuDuelEligibilityResponse, _impl_.payer_silver_fee_pending_),
         1,
         0,
         2,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PrepareBattleResponse, _impl_._has_bits_),
         7, // hasbit index offset
@@ -3131,9 +3139,9 @@ static const ::_pbi::MigrationSchema
         {125, sizeof(::CheckJianghuDuelEligibilityRequest)},
         {138, sizeof(::JianghuPlayerEligibilityEntry)},
         {147, sizeof(::CheckJianghuDuelEligibilityResponse)},
-        {156, sizeof(::PrepareBattleResponse)},
-        {167, sizeof(::CancelBattlePrepareRequest)},
-        {176, sizeof(::SealAccountRoleTradeRequest)},
+        {158, sizeof(::PrepareBattleResponse)},
+        {169, sizeof(::CancelBattlePrepareRequest)},
+        {178, sizeof(::SealAccountRoleTradeRequest)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -3210,40 +3218,41 @@ const char descriptor_table_protodef_proto_2fscene_2fscene_2eproto[] ABSL_ATTRIB
     "\023\n\013silver_cost\030\005 \001(\004\"i\n\035JianghuPlayerEli"
     "gibilityEntry\022\021\n\tplayer_id\030\001 \001(\004\022\026\n\016onli"
     "ne_on_node\030\002 \001(\010\022\035\n\025duel_refuse_stranger"
-    "s\030\003 \001(\010\"\240\001\n#CheckJianghuDuelEligibilityR"
+    "s\030\003 \001(\010\"\302\001\n#CheckJianghuDuelEligibilityR"
     "esponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfo"
     "Message\022/\n\007players\030\002 \003(\0132\036.JianghuPlayer"
     "EligibilityEntry\022 \n\030payer_has_sufficient"
-    "_fee\030\003 \001(\010\"\247\001\n\025PrepareBattleResponse\022&\n\r"
-    "error_message\030\001 \001(\0132\017.TipInfoMessage\022\'\n\010"
-    "snapshot\030\002 \001(\0132\025.BattlePlayerSnapshot\022\031\n"
-    "\021table_fingerprint\030\003 \001(\t\022\"\n\032jianghu_silv"
-    "er_fee_charged\030\004 \001(\010\"f\n\032CancelBattlePrep"
-    "areRequest\022\021\n\tplayer_id\030\001 \001(\004\022\021\n\tbattle_"
-    "id\030\002 \001(\004\022\"\n\032skip_jianghu_silver_refund\030\003"
-    " \001(\010\"s\n\033SealAccountRoleTradeRequest\022(\n\004s"
-    "eal\030\001 \001(\0132\032.common.base.RoleTradeSeal\022*\n"
-    "\004auth\030\002 \001(\0132\034.common.base.ServiceCallAut"
-    "h*\200\001\n\034ClientMessageDispatchVerdict\022/\n+CL"
-    "IENT_MESSAGE_DISPATCH_VERDICT_UNSPECIFIE"
-    "D\020\000\022/\n+CLIENT_MESSAGE_DISPATCH_VERDICT_R"
-    "ETRY_LATER\020\0012\366\004\n\005Scene\022:\n\023PlayerEnterGam"
-    "eNode\022\033.PlayerEnterGameNodeRequest\032\006.Emp"
-    "ty\022e\n\032ProcessClientPlayerMessage\022\".Proce"
-    "ssClientPlayerMessageRequest\032#.ProcessCl"
-    "ientPlayerMessageResponse\022<\n\023UpdateSessi"
-    "onDetail\022\035.RegisterPlayerSessionRequest\032"
-    "\006.Empty\0228\n\013CreateScene\022\023.CreateSceneRequ"
-    "est\032\024.CreateSceneResponse\022,\n\014DestroyScen"
-    "e\022\024.DestroySceneRequest\032\006.Empty\022>\n\rPrepa"
-    "reBattle\022\025.PrepareBattleRequest\032\026.Prepar"
-    "eBattleResponse\022:\n\023CancelBattlePrepare\022\033"
-    ".CancelBattlePrepareRequest\032\006.Empty\022>\n\rN"
-    "odeHandshake\022\025.NodeHandshakeRequest\032\026.No"
-    "deHandshakeResponse\022h\n\033CheckJianghuDuelE"
-    "ligibility\022#.CheckJianghuDuelEligibility"
-    "Request\032$.CheckJianghuDuelEligibilityRes"
-    "ponseB\016Z\005scene\200\001\001\230\324a\003b\006proto3"
+    "_fee\030\003 \001(\010\022 \n\030payer_silver_fee_pending\030\004"
+    " \001(\010\"\247\001\n\025PrepareBattleResponse\022&\n\rerror_"
+    "message\030\001 \001(\0132\017.TipInfoMessage\022\'\n\010snapsh"
+    "ot\030\002 \001(\0132\025.BattlePlayerSnapshot\022\031\n\021table"
+    "_fingerprint\030\003 \001(\t\022\"\n\032jianghu_silver_fee"
+    "_charged\030\004 \001(\010\"f\n\032CancelBattlePrepareReq"
+    "uest\022\021\n\tplayer_id\030\001 \001(\004\022\021\n\tbattle_id\030\002 \001"
+    "(\004\022\"\n\032skip_jianghu_silver_refund\030\003 \001(\010\"s"
+    "\n\033SealAccountRoleTradeRequest\022(\n\004seal\030\001 "
+    "\001(\0132\032.common.base.RoleTradeSeal\022*\n\004auth\030"
+    "\002 \001(\0132\034.common.base.ServiceCallAuth*\200\001\n\034"
+    "ClientMessageDispatchVerdict\022/\n+CLIENT_M"
+    "ESSAGE_DISPATCH_VERDICT_UNSPECIFIED\020\000\022/\n"
+    "+CLIENT_MESSAGE_DISPATCH_VERDICT_RETRY_L"
+    "ATER\020\0012\366\004\n\005Scene\022:\n\023PlayerEnterGameNode\022"
+    "\033.PlayerEnterGameNodeRequest\032\006.Empty\022e\n\032"
+    "ProcessClientPlayerMessage\022\".ProcessClie"
+    "ntPlayerMessageRequest\032#.ProcessClientPl"
+    "ayerMessageResponse\022<\n\023UpdateSessionDeta"
+    "il\022\035.RegisterPlayerSessionRequest\032\006.Empt"
+    "y\0228\n\013CreateScene\022\023.CreateSceneRequest\032\024."
+    "CreateSceneResponse\022,\n\014DestroyScene\022\024.De"
+    "stroySceneRequest\032\006.Empty\022>\n\rPrepareBatt"
+    "le\022\025.PrepareBattleRequest\032\026.PrepareBattl"
+    "eResponse\022:\n\023CancelBattlePrepare\022\033.Cance"
+    "lBattlePrepareRequest\032\006.Empty\022>\n\rNodeHan"
+    "dshake\022\025.NodeHandshakeRequest\032\026.NodeHand"
+    "shakeResponse\022h\n\033CheckJianghuDuelEligibi"
+    "lity\022#.CheckJianghuDuelEligibilityReques"
+    "t\032$.CheckJianghuDuelEligibilityResponseB"
+    "\016Z\005scene\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fscene_2eproto_deps[9] = {
@@ -3261,7 +3270,7 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fscene_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fscene_2eproto = {
     false,
     false,
-    3469,
+    3503,
     descriptor_table_protodef_proto_2fscene_2fscene_2eproto,
     "proto/scene/scene.proto",
     &descriptor_table_proto_2fscene_2fscene_2eproto_once,
@@ -7112,7 +7121,13 @@ CheckJianghuDuelEligibilityResponse::CheckJianghuDuelEligibilityResponse(
   _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000002U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
                 : nullptr;
-  _impl_.payer_has_sufficient_fee_ = from._impl_.payer_has_sufficient_fee_;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, payer_has_sufficient_fee_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, payer_has_sufficient_fee_),
+           offsetof(Impl_, payer_silver_fee_pending_) -
+               offsetof(Impl_, payer_has_sufficient_fee_) +
+               sizeof(Impl_::payer_silver_fee_pending_));
 
   // @@protoc_insertion_point(copy_constructor:CheckJianghuDuelEligibilityResponse)
 }
@@ -7131,9 +7146,9 @@ inline void CheckJianghuDuelEligibilityResponse::SharedCtor(::_pb::Arena* PROTOB
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, error_message_),
            0,
-           offsetof(Impl_, payer_has_sufficient_fee_) -
+           offsetof(Impl_, payer_silver_fee_pending_) -
                offsetof(Impl_, error_message_) +
-               sizeof(Impl_::payer_has_sufficient_fee_));
+               sizeof(Impl_::payer_silver_fee_pending_));
 }
 CheckJianghuDuelEligibilityResponse::~CheckJianghuDuelEligibilityResponse() {
   // @@protoc_insertion_point(destructor:CheckJianghuDuelEligibilityResponse)
@@ -7193,7 +7208,9 @@ PROTOBUF_NOINLINE void CheckJianghuDuelEligibilityResponse::Clear() {
       _impl_.error_message_->Clear();
     }
   }
-  _impl_.payer_has_sufficient_fee_ = false;
+  ::memset(&_impl_.payer_has_sufficient_fee_, 0, static_cast<::size_t>(
+      reinterpret_cast<char*>(&_impl_.payer_silver_fee_pending_) -
+      reinterpret_cast<char*>(&_impl_.payer_has_sufficient_fee_)) + sizeof(_impl_.payer_silver_fee_pending_));
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -7246,6 +7263,15 @@ PROTOBUF_NOINLINE void CheckJianghuDuelEligibilityResponse::Clear() {
     }
   }
 
+  // bool payer_silver_fee_pending = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_payer_silver_fee_pending() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          4, this_._internal_payer_silver_fee_pending(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -7271,7 +7297,7 @@ PROTOBUF_NOINLINE void CheckJianghuDuelEligibilityResponse::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // repeated .JianghuPlayerEligibilityEntry players = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_players_size();
@@ -7287,6 +7313,12 @@ PROTOBUF_NOINLINE void CheckJianghuDuelEligibilityResponse::Clear() {
     // bool payer_has_sufficient_fee = 3;
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_payer_has_sufficient_fee() != 0) {
+        total_size += 2;
+      }
+    }
+    // bool payer_silver_fee_pending = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_payer_silver_fee_pending() != 0) {
         total_size += 2;
       }
     }
@@ -7309,7 +7341,7 @@ void CheckJianghuDuelEligibilityResponse::MergeImpl(::google::protobuf::MessageL
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_players()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
@@ -7326,6 +7358,11 @@ void CheckJianghuDuelEligibilityResponse::MergeImpl(::google::protobuf::MessageL
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_payer_has_sufficient_fee() != 0) {
         _this->_impl_.payer_has_sufficient_fee_ = from._impl_.payer_has_sufficient_fee_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_payer_silver_fee_pending() != 0) {
+        _this->_impl_.payer_silver_fee_pending_ = from._impl_.payer_silver_fee_pending_;
       }
     }
   }
@@ -7348,8 +7385,8 @@ void CheckJianghuDuelEligibilityResponse::InternalSwap(CheckJianghuDuelEligibili
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.players_.InternalSwap(&other->_impl_.players_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityResponse, _impl_.payer_has_sufficient_fee_)
-      + sizeof(CheckJianghuDuelEligibilityResponse::_impl_.payer_has_sufficient_fee_)
+      PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityResponse, _impl_.payer_silver_fee_pending_)
+      + sizeof(CheckJianghuDuelEligibilityResponse::_impl_.payer_silver_fee_pending_)
       - PROTOBUF_FIELD_OFFSET(CheckJianghuDuelEligibilityResponse, _impl_.error_message_)>(
           reinterpret_cast<char*>(&_impl_.error_message_),
           reinterpret_cast<char*>(&other->_impl_.error_message_));

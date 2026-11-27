@@ -35,6 +35,7 @@ func TestJianghuTipCodesStayInJianghuSegmentAndAreRecognized(t *testing.T) {
 		"ErrJianghuNoActiveDefeatMark":       ErrJianghuNoActiveDefeatMark,
 		"ErrJianghuGrudgeNotFound":           ErrJianghuGrudgeNotFound,
 		"ErrJianghuServiceBusy":              ErrJianghuServiceBusy,
+		"ErrJianghuDuelSilverFeePending":     ErrJianghuDuelSilverFeePending,
 	}
 	for name, code := range codes {
 		if code < seg.Base || code >= seg.Base+seg.Width {

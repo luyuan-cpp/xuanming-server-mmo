@@ -320,6 +320,17 @@ TEST_F(PlayerJianghuTest, SilverWritPendingForAnotherBattleRejectsTheNewPreparat
 	EXPECT_EQ(kNowMs + 60000, comp.pending_silver_fee_review_after_ms());
 	EXPECT_EQ(1000u, CurrencySystem::GetBalance(player, kCurrencyGold)) << "一分没多扣";
 
+	// 资格预检在发战书之前就报同一结论:普通战书回「上一场银两未结清」,余额够也不放行(备战一定会拒)。
+	CheckJianghuDuelEligibilityRequest eligibility;
+	eligibility.add_player_ids(kPlayerId);
+	eligibility.set_payer_player_id(kPlayerId);
+	eligibility.set_writ_tier(static_cast<uint32_t>(match::JIANGHU_WRIT_TIER_SILVER));
+	eligibility.set_silver_cost(500);
+	CheckJianghuDuelEligibilityResponse eligibilityResp;
+	PlayerJianghuSystem::CheckDuelEligibility(eligibility, eligibilityResp);
+	EXPECT_TRUE(eligibilityResp.payer_silver_fee_pending());
+	EXPECT_FALSE(eligibilityResp.payer_has_sufficient_fee());
+
 	// 金帖档只走道具预留,不碰待退标记。
 	GrantBoundItem(kGoldWritItemId, 1);
 	JianghuDuelPrepareFee goldFee;
@@ -329,10 +340,19 @@ TEST_F(PlayerJianghuTest, SilverWritPendingForAnotherBattleRejectsTheNewPreparat
 	item_hold::HoldLines goldLines;
 	EXPECT_EQ(kSuccess, PlayerJianghuSystem::ValidateAndCollectPrepareFee(player, 56103, goldFee, goldLines, silverToDeduct));
 	EXPECT_EQ(1u, goldLines[kGoldWritItemId]);
+	eligibility.set_writ_tier(static_cast<uint32_t>(match::JIANGHU_WRIT_TIER_GOLD_ITEM));
+	eligibility.set_item_config_id(kGoldWritItemId);
+	PlayerJianghuSystem::CheckDuelEligibility(eligibility, eligibilityResp);
+	EXPECT_FALSE(eligibilityResp.payer_silver_fee_pending()) << "金帖档不看待退标记";
+	EXPECT_TRUE(eligibilityResp.payer_has_sufficient_fee());
 
 	// 旧局退还之后照常能开。
 	ASSERT_TRUE(PlayerJianghuSystem::RefundPendingSilverFee(player, 56101, "ABORT"));
 	EXPECT_EQ(1500u, CurrencySystem::GetBalance(player, kCurrencyGold));
+	eligibility.set_writ_tier(static_cast<uint32_t>(match::JIANGHU_WRIT_TIER_SILVER));
+	PlayerJianghuSystem::CheckDuelEligibility(eligibility, eligibilityResp);
+	EXPECT_FALSE(eligibilityResp.payer_silver_fee_pending());
+	EXPECT_TRUE(eligibilityResp.payer_has_sufficient_fee());
 	EXPECT_EQ(kSuccess, PlayerJianghuSystem::ValidateAndCollectPrepareFee(player, 56102, silverFee, heldLines, silverToDeduct));
 	EXPECT_EQ(500u, silverToDeduct);
 }

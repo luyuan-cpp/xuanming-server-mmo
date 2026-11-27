@@ -18,4 +18,6 @@ const (
 	ErrJianghuNoActiveDefeatMark      = uint32(table.JianghuError_kJianghuNoActiveDefeatMark)
 	ErrJianghuGrudgeNotFound          = uint32(table.JianghuError_kJianghuGrudgeNotFound)
 	ErrJianghuServiceBusy             = uint32(table.JianghuError_kJianghuServiceBusy)
+	// 发起方上一局普通战书的银两还没退还或结算(scene 资格预检 payer_silver_fee_pending,数据覆写审计 r2 第 4 轮)。
+	ErrJianghuDuelSilverFeePending = uint32(table.JianghuError_kJianghuDuelSilverFeePending)
 )

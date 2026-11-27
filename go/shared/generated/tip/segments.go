@@ -45,7 +45,7 @@ var Segments = []Segment{
 	{Domain: "match", Group: "match_error", Base: 16000, Width: 1000, Lo: 16000, Hi: 16072, Count: 73},
 	{Domain: "mail", Group: "mail_error", Base: 17000, Width: 1000, Lo: 17000, Hi: 17011, Count: 12},
 	{Domain: "chat", Group: "chat_error", Base: 18000, Width: 1000, Lo: 18000, Hi: 18006, Count: 7},
-	{Domain: "trade", Group: "trade_error", Base: 20000, Width: 1000, Lo: 20000, Hi: 20017, Count: 18},
+	{Domain: "trade", Group: "trade_error", Base: 20000, Width: 1000, Lo: 20000, Hi: 20019, Count: 20},
 	{Domain: "rank", Group: "rank_error", Base: 21000, Width: 1000, Lo: 21000, Hi: 21003, Count: 4},
 	{Domain: "attribute", Group: "attribute_error", Base: 25000, Width: 1000, Lo: 25000, Hi: 25014, Count: 15},
 	{Domain: "pet", Group: "pet_error", Base: 26000, Width: 1000, Lo: 26000, Hi: 26023, Count: 24},
@@ -62,7 +62,7 @@ var Segments = []Segment{
 	{Domain: "spirit_shop", Group: "spirit_shop_error", Base: 37000, Width: 1000, Lo: 37000, Hi: 37013, Count: 14},
 	{Domain: "travel_pass", Group: "travel_pass_error", Base: 38000, Width: 1000, Lo: 38000, Hi: 38012, Count: 13},
 	{Domain: "rewarded_ad", Group: "rewarded_ad_error", Base: 39000, Width: 1000, Lo: 39000, Hi: 39012, Count: 13},
-	{Domain: "jianghu", Group: "jianghu_error", Base: 40000, Width: 1000, Lo: 40000, Hi: 40013, Count: 14},
+	{Domain: "jianghu", Group: "jianghu_error", Base: 40000, Width: 1000, Lo: 40000, Hi: 40014, Count: 15},
 }
 
 // DomainOf 返回码所属的域名。不属于任何已声明段时返回空串。

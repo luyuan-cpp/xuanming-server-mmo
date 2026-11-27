@@ -39,6 +39,7 @@ const (
 	JianghuError_kJianghuNoActiveDefeatMark       JianghuError = 40011
 	JianghuError_kJianghuGrudgeNotFound           JianghuError = 40012
 	JianghuError_kJianghuServiceBusy              JianghuError = 40013
+	JianghuError_kJianghuDuelSilverFeePending     JianghuError = 40014
 )
 
 // Enum value maps for JianghuError.
@@ -59,6 +60,7 @@ var (
 		40011: "kJianghuNoActiveDefeatMark",
 		40012: "kJianghuGrudgeNotFound",
 		40013: "kJianghuServiceBusy",
+		40014: "kJianghuDuelSilverFeePending",
 	}
 	JianghuError_value = map[string]int32{
 		"kJianghu_errorOK":                 0,
@@ -76,6 +78,7 @@ var (
 		"kJianghuNoActiveDefeatMark":       40011,
 		"kJianghuGrudgeNotFound":           40012,
 		"kJianghuServiceBusy":              40013,
+		"kJianghuDuelSilverFeePending":     40014,
 	}
 )
 
@@ -110,7 +113,7 @@ var File_jianghu_error_tip_proto protoreflect.FileDescriptor
 
 const file_jianghu_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x17jianghu_error_tip.proto*\x80\x04\n" +
+	"\x17jianghu_error_tip.proto*\xa4\x04\n" +
 	"\rjianghu_error\x12\x14\n" +
 	"\x10kJianghu_errorOK\x10\x00\x12\x1a\n" +
 	"\x14kJianghuDuelDisabled\x10\xc0\xb8\x02\x12\x1b\n" +
@@ -126,7 +129,8 @@ const file_jianghu_error_tip_proto_rawDesc = "" +
 	"\x1ckJianghuNotInviteParticipant\x10ʸ\x02\x12 \n" +
 	"\x1akJianghuNoActiveDefeatMark\x10˸\x02\x12\x1c\n" +
 	"\x16kJianghuGrudgeNotFound\x10̸\x02\x12\x19\n" +
-	"\x13kJianghuServiceBusy\x10\u0378\x02B$\n" +
+	"\x13kJianghuServiceBusy\x10\u0378\x02\x12\"\n" +
+	"\x1ckJianghuDuelSilverFeePending\x10θ\x02B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

@@ -45,4 +45,8 @@ enum trade_error {
 
   kTradeTextCheckUnavailable = 20017;
 
+  kTradeWantedOrderLimitReached = 20018;
+
+  kTradeWantedBookMismatch = 20019;
+
 };

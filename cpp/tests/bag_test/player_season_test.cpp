@@ -28,6 +28,7 @@
 #include "proto/match/match_service.pb.h"
 #include "proto/scene/player_season.pb.h"
 #include "proto/scene/player_skill.pb.h"
+#include "services/battle/constants/wuxing_expansion_rules.h"
 #include "services/battle/system/season_rules.h"
 #include "services/scene/player/comp/player_frozen_comp.h"
 #include "services/scene/player/comp/player_ownership_comp.h"
@@ -938,7 +939,6 @@ TEST_F(PlayerSeasonSystemTest, InfiniteCycleTermResetRetroHonorCatchupAndRpc) {
 TEST_F(PlayerSeasonSystemTest, WuxingRealmV2SixNodeBranchingEventsFairPresetCrossWeekAndRedisKeys) {
     const uint64_t nowMs = TimeSystem::NowMillisecondsUTC();
     constexpr uint64_t kOneWeekMs = 7ULL * 24ULL * 3600ULL * 1000ULL;
-    const entt::entity player = CreatePlayer(99008, 35);
 
     // 验证水平扩展周榜 Redis Cluster 键带同一 {weekKey} hash-tag 且本人/公平双榜隔离
     EXPECT_EQ(PlayerSeasonSystem::RealmLeaderboardZsetKey(202648u, false), "wuxing:realm:lb:{202648}:self");
@@ -985,7 +985,7 @@ TEST_F(PlayerSeasonSystemTest, WuxingRealmV2SixNodeBranchingEventsFairPresetCros
 
         BattleSettlementData settle;
         settle.set_battle_id(92000u + expectedFloor);
-        settle.set_player_id(99008u);
+        settle.set_player_id(99001u);
         settle.set_player_team_index(0u);
         settle.set_match_mode(match::MATCH_MODE_PVE_SOLO);
         settle.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN);
