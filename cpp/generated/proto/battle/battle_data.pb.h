@@ -13336,6 +13336,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
     kFormationIdFieldNumber = 28,
     kSeasonWeeklyAffixIdFieldNumber = 30,
     kIsTeamCaptainFieldNumber = 32,
+    kMinorPlayDeadlineMsFieldNumber = 33,
     kSkillRanksFieldNumber = 21,
     kEquippedSkillVfxFieldNumber = 31,
   };
@@ -13749,6 +13750,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
   void _internal_set_is_team_captain(bool value);
 
   public:
+  // uint64 minor_play_deadline_ms = 33;
+  void clear_minor_play_deadline_ms() ;
+  [[nodiscard]] ::uint64_t minor_play_deadline_ms() const;
+  void set_minor_play_deadline_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_minor_play_deadline_ms() const;
+  void _internal_set_minor_play_deadline_ms(::uint64_t value);
+
+  public:
   // map<uint32, uint32> skill_ranks = 21;
   [[nodiscard]] int skill_ranks_size()
       const;
@@ -13785,9 +13796,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 32,
+      ::google::protobuf::internal::TcParseTable<5, 33,
                           12, 102,
-                          2>;
+                          7>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
   friend class ::google::protobuf::internal::TcParser;
@@ -13812,7 +13823,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
         const BattlePlayerSnapshot& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::HasBits<2> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedField<::uint32_t> skill_table_ids_;
     ::google::protobuf::internal::CachedSize _skill_table_ids_cached_byte_size_;
@@ -13845,6 +13856,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
     ::uint32_t formation_id_;
     ::uint32_t season_weekly_affix_id_;
     bool is_team_captain_;
+    ::uint64_t minor_play_deadline_ms_;
     ::google::protobuf::internal::MapField<BattlePlayerSnapshot_SkillRanksEntry_DoNotUse, ::uint32_t, ::uint32_t> skill_ranks_;
     ::google::protobuf::internal::MapField<BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse, ::uint32_t, ::uint32_t> equipped_skill_vfx_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -16473,7 +16485,7 @@ inline int BattlePlayerSnapshot::skill_ranks_size() const {
 inline void BattlePlayerSnapshot::clear_skill_ranks() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.skill_ranks_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x40000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& BattlePlayerSnapshot::_internal_skill_ranks() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -16489,7 +16501,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattleP
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattlePlayerSnapshot::mutable_skill_ranks()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x40000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
   // @@protoc_insertion_point(field_mutable_map:BattlePlayerSnapshot.skill_ranks)
   return _internal_mutable_skill_ranks();
 }
@@ -16920,7 +16932,7 @@ inline int BattlePlayerSnapshot::equipped_skill_vfx_size() const {
 inline void BattlePlayerSnapshot::clear_equipped_skill_vfx() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equipped_skill_vfx_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& BattlePlayerSnapshot::_internal_equipped_skill_vfx() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -16936,7 +16948,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattleP
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattlePlayerSnapshot::mutable_equipped_skill_vfx()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000001U);
   // @@protoc_insertion_point(field_mutable_map:BattlePlayerSnapshot.equipped_skill_vfx)
   return _internal_mutable_equipped_skill_vfx();
 }
@@ -16963,6 +16975,30 @@ inline bool BattlePlayerSnapshot::_internal_is_team_captain() const {
 inline void BattlePlayerSnapshot::_internal_set_is_team_captain(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.is_team_captain_ = value;
+}
+
+// uint64 minor_play_deadline_ms = 33;
+inline void BattlePlayerSnapshot::clear_minor_play_deadline_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.minor_play_deadline_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x40000000U);
+}
+inline ::uint64_t BattlePlayerSnapshot::minor_play_deadline_ms() const {
+  // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.minor_play_deadline_ms)
+  return _internal_minor_play_deadline_ms();
+}
+inline void BattlePlayerSnapshot::set_minor_play_deadline_ms(::uint64_t value) {
+  _internal_set_minor_play_deadline_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x40000000U);
+  // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.minor_play_deadline_ms)
+}
+inline ::uint64_t BattlePlayerSnapshot::_internal_minor_play_deadline_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.minor_play_deadline_ms_;
+}
+inline void BattlePlayerSnapshot::_internal_set_minor_play_deadline_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.minor_play_deadline_ms_ = value;
 }
 
 // -------------------------------------------------------------------

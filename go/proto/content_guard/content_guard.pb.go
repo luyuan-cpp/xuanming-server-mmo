@@ -212,7 +212,9 @@ type CheckTextRequest struct {
 	Scene    TextScene              `protobuf:"varint,1,opt,name=scene,proto3,enum=content_guard.TextScene" json:"scene,omitempty"`
 	Text     string                 `protobuf:"bytes,2,opt,name=text,proto3" json:"text,omitempty"`                          // 原文;超过服务配置的 MaxTextBytes 回 InvalidArgument
 	PlayerId uint64                 `protobuf:"varint,3,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"` // 填写者。本地词库不用它;平台接口按它查渠道身份。没有填写者(系统文本)填 0
-	Account  string                 `protobuf:"bytes,4,opt,name=account,proto3" json:"account,omitempty"`                    // 可选:填写者的渠道账号(如 wx_<openid> / dy_<openid>),调用方已有时直传以省一次目录回查
+	// 填写者的账号名,只在没有 player_id 时用(建角时角色还没发号):平台接口按它到目录查渠道身份。
+	// 账号名的后缀是 unionid,不是 openid,不能拿它直接调平台接口。
+	Account string `protobuf:"bytes,4,opt,name=account,proto3" json:"account,omitempty"`
 	// async_platform: 为真时(如世界频道),本地词库通过后平台接口只在短超时内等待;
 	// 超时未返回则先放行并置 pending_platform_review=true,调用方在后台调 CheckPlatformText 复检,违规再撤回。
 	AsyncPlatform bool `protobuf:"varint,5,opt,name=async_platform,json=asyncPlatform,proto3" json:"async_platform,omitempty"`

@@ -134,6 +134,7 @@ CREATE TABLE IF NOT EXISTS commerce_refund_receipt (
   PRIMARY KEY (channel, payment_transaction_id), UNIQUE (channel, transaction_id)
 );
 -- 管理幂等日志与SKU修改同事务，pending标记不应出现在已提交的成功命令中。
+-- 后台下发的命令 request_id 就是双人复核批准号;proposer / approver 是身份提供方主体,不带批准记录(系统补齐、本机放开)时为 NULL。
 CREATE TABLE IF NOT EXISTS commerce_admin_command (
   actor VARBINARY(64) NOT NULL,
   request_id VARBINARY(128) NOT NULL,
@@ -141,6 +142,8 @@ CREATE TABLE IF NOT EXISTS commerce_admin_command (
   request_digest VARCHAR(64) NOT NULL,
   result_json MEDIUMTEXT NOT NULL,
   created_ms BIGINT NOT NULL,
+  proposer VARBINARY(64) NULL,
+  approver VARBINARY(64) NULL,
   PRIMARY KEY(actor,request_id)
 );
 -- 本地mock提供方的不可变交易原件；applied仅为可恢复投递标记，不代表真实外部资金。
@@ -282,7 +285,8 @@ CREATE TABLE IF NOT EXISTS commerce_reversal_receipt (
   PRIMARY KEY (order_sn, revision)
 );
 
--- 合同戳须与 SchemaVerifier.STORAGE_CONTRACT 一致；2026-11-24 起换新(G-1 托管引用 VARCHAR(32)、G-2 逐单争议冻结 dispute_frozen_fen/dispute_case_id、定向买家 designated_buyer_account)，之前装的库须重装。
+-- 合同戳须与 SchemaVerifier.STORAGE_CONTRACT 一致；2026-11-24 起换新(G-1 托管引用 VARCHAR(32)、G-2 逐单争议冻结 dispute_frozen_fen/dispute_case_id、定向买家 designated_buyer_account)，
+-- 2026-11-26 再换新(commerce_admin_command 加 proposer / approver 两列,双人复核批 4)，之前装的库须重装(项目未上线,清库重装)。
 -- INSERT IGNORE:整份文件可重跑。K8s 的 mall-schema Job 每次部署都执行它(writer_authority -ddl-file 只收幂等语句)。
 -- 重跑不升级已有的库:表已存在就跳过,戳也不改;结构对不对由 SchemaVerifier 在商城启动时核,对不上拒启,要清库重装。
-INSERT IGNORE INTO commerce_schema_version(version,storage_contract) VALUES (1,'mall-game-official-sku-v4-dispute-and-tiered-notice');
+INSERT IGNORE INTO commerce_schema_version(version,storage_contract) VALUES (1,'mall-game-official-sku-v5-admin-approval');

@@ -106,18 +106,11 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 	}
 
 	var jianghuCtx *battlepb.JianghuDuelBattleContext
-	jianghuSilverCharged := false
 
 	fail := func(outcome string, failedPlayer uint64) bool {
 		if globalDestroy(svcCtx.Authority, f) {
-			skipSilverRefund := false
-			if jianghuCtx != nil && jianghuSilverCharged && jianghuCtx.GetWritTier() == uint32(matchpb.JianghuWritTier_JIANGHU_WRIT_TIER_SILVER) {
-				rule := loadJianghuRule()
-				refundCtx, refundCancel := context.WithTimeout(context.Background(), 3*time.Second)
-				skipSilverRefund = refundJianghuSilverOnce(refundCtx, svcCtx, jianghuCtx.GetDuelInviteId(), battleId, jianghuCtx.GetChallengerCaptainId(), jianghuCtx.GetWritTier(), rule.silverWritCost, "gather_"+outcome)
-				refundCancel()
-			}
-			globalAbortPrepared(svcCtx, f, skipSilverRefund, failedPlayer)
+			// 生死状普通战书银两只由 scene 退:解冻一律不要求跳过,scene 按存档里的待退标记退一次(r2 第 4 轮,不再发退费邮件)。
+			globalAbortPrepared(svcCtx, f, failedPlayer)
 		} else {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			_ = svcCtx.Authority.Unknown(ctx, f)
@@ -230,9 +223,6 @@ func runFormationGather(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRec
 				culprit = playerId
 			}
 			return fail(outcome, culprit)
-		}
-		if resp.GetJianghuSilverFeeCharged() {
-			jianghuSilverCharged = true
 		}
 		snapshot := resp.GetSnapshot()
 		snapshot.TeamIndex = teams[i]
@@ -666,16 +656,12 @@ func observeZoneMix(modeName string, battleId uint64, prepared []preparedMember)
 
 // cancelPrepared 对已冻结者逐个解冻(尽力而为;彻底失败由 scene 侧
 // InBattleComp.deadline_ms 的 reaper 兜底,见补偿矩阵)。
+// 不置 skip_jianghu_silver_refund:生死状普通战书银两只由 scene 退(r2 第 4 轮),match 没有别的退费通道可以让 scene 跳过。
 func cancelPrepared(svcCtx *svc.ServiceContext, prepared []preparedMember, battleId uint64) {
-	cancelPreparedWithOptions(svcCtx, prepared, battleId, false)
-}
-
-func cancelPreparedWithOptions(svcCtx *svc.ServiceContext, prepared []preparedMember, battleId uint64, skipJianghuSilverRefund bool) {
 	for _, p := range prepared {
 		err := cancelBattlePrepareFn(p.sceneEndpoint, &scenepb.CancelBattlePrepareRequest{
-			PlayerId:                p.playerId,
-			BattleId:                battleId,
-			SkipJianghuSilverRefund: skipJianghuSilverRefund,
+			PlayerId: p.playerId,
+			BattleId: battleId,
 		})
 		if err != nil {
 			logx.Errorf("[gather] CancelBattlePrepare failed (scene reaper will unfreeze at deadline) battle=%d player=%d endpoint=%s: %v",

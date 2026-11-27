@@ -196,14 +196,6 @@ extern const ::google::protobuf::internal::ClassDataFull MatchJianghuDuelInvitat
 #else
 extern const MatchJianghuDuelInvitationRecordGlobalsTypeInternal MatchJianghuDuelInvitationRecord_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
-class MatchJianghuRefundRecord;
-struct MatchJianghuRefundRecordGlobalsTypeInternal;
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-extern MatchJianghuRefundRecordGlobalsTypeInternal MatchJianghuRefundRecord_globals_;
-extern const ::google::protobuf::internal::ClassDataFull MatchJianghuRefundRecord_class_data_;
-#else
-extern const MatchJianghuRefundRecordGlobalsTypeInternal MatchJianghuRefundRecord_globals_;
-#endif  // PROTOBUF_MESSAGE_GLOBALS
 class MatchJoinIntentRecord;
 struct MatchJoinIntentRecordGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -588,7 +580,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchTrialChallengeCardRecord final
   [[nodiscard]] static const MatchTrialChallengeCardRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchTrialChallengeCardRecord>(&MatchTrialChallengeCardRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 50;
+  static constexpr int kIndexInFileMessages = 49;
   friend void swap(MatchTrialChallengeCardRecord& a, MatchTrialChallengeCardRecord& b) { a.Swap(&b); }
   inline void Swap(MatchTrialChallengeCardRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1960,6 +1952,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchTournamentRewardRecord final :
     kAttachmentsFieldNumber = 9,
     kTitleCodeFieldNumber = 10,
     kBadgeCodeFieldNumber = 11,
+    kMailTitleFieldNumber = 16,
+    kMailBodyFieldNumber = 17,
     kPlayerIdFieldNumber = 2,
     kSeasonIdFieldNumber = 1,
     kTierKindFieldNumber = 3,
@@ -2016,6 +2010,36 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchTournamentRewardRecord final :
   const ::std::string& _internal_badge_code() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_badge_code(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_badge_code();
+
+  public:
+  // string mail_title = 16;
+  void clear_mail_title() ;
+  [[nodiscard]] const ::std::string& mail_title() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_mail_title(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_mail_title();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_mail_title();
+  void set_allocated_mail_title(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_mail_title() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_mail_title(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_mail_title();
+
+  public:
+  // string mail_body = 17;
+  void clear_mail_body() ;
+  [[nodiscard]] const ::std::string& mail_body() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_mail_body(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_mail_body();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_mail_body();
+  void set_allocated_mail_body(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_mail_body() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_mail_body(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_mail_body();
 
   public:
   // uint64 player_id = 2;
@@ -2142,8 +2166,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchTournamentRewardRecord final :
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 15,
-                          0, 70,
+      ::google::protobuf::internal::TcParseTable<5, 17,
+                          0, 97,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2174,6 +2198,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchTournamentRewardRecord final :
     ::google::protobuf::internal::ArenaStringPtr attachments_;
     ::google::protobuf::internal::ArenaStringPtr title_code_;
     ::google::protobuf::internal::ArenaStringPtr badge_code_;
+    ::google::protobuf::internal::ArenaStringPtr mail_title_;
+    ::google::protobuf::internal::ArenaStringPtr mail_body_;
     ::uint64_t player_id_;
     ::uint32_t season_id_;
     ::uint32_t tier_kind_;
@@ -10086,284 +10112,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchJoinIntentRecord final : publi
     bool cancelled_;
     bool exit_prepared_;
     ::uint32_t state_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_proto_2fmatch_2fmatch_5fauthority_2eproto;
-};
-// -------------------------------------------------------------------
-
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MatchJianghuRefundRecord final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:match.MatchJianghuRefundRecord) */ {
- public:
-  inline MatchJianghuRefundRecord() : MatchJianghuRefundRecord(nullptr) {}
-  ~MatchJianghuRefundRecord() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(MatchJianghuRefundRecord* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(MatchJianghuRefundRecord));
-  }
-#endif
-
-  template <typename = void>
-  explicit constexpr MatchJianghuRefundRecord(::google::protobuf::internal::ConstantInitialized,
-                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-                               class_data);
-
-  inline MatchJianghuRefundRecord(const MatchJianghuRefundRecord& from) : MatchJianghuRefundRecord(nullptr, from) {}
-  inline MatchJianghuRefundRecord(MatchJianghuRefundRecord&& from) noexcept : MatchJianghuRefundRecord(nullptr, ::std::move(from)) {}
-  inline MatchJianghuRefundRecord& operator=(const MatchJianghuRefundRecord& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline MatchJianghuRefundRecord& operator=(MatchJianghuRefundRecord&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
-  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
-
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
-  GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  [[nodiscard]] static const MatchJianghuRefundRecord& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MatchJianghuRefundRecord>(&MatchJianghuRefundRecord_globals_);
-  }
-  static constexpr int kIndexInFileMessages = 49;
-  friend void swap(MatchJianghuRefundRecord& a, MatchJianghuRefundRecord& b) { a.Swap(&b); }
-  inline void Swap(MatchJianghuRefundRecord* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(MatchJianghuRefundRecord* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  [[nodiscard]] MatchJianghuRefundRecord* PROTOBUF_NONNULL
-  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return ::google::protobuf::Message::DefaultConstruct<MatchJianghuRefundRecord>(arena);
-  }
-  using ::google::protobuf::Message::CopyFrom;
-  void CopyFrom(const MatchJianghuRefundRecord& from);
-  using ::google::protobuf::Message::MergeFrom;
-  void MergeFrom(const MatchJianghuRefundRecord& from) { MatchJianghuRefundRecord::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  [[nodiscard]] bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(MatchJianghuRefundRecord* PROTOBUF_NONNULL other);
- private:
-  template <typename T>
-  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
-  static ::absl::string_view FullMessageName() { return "match.MatchJianghuRefundRecord"; }
-
-  explicit MatchJianghuRefundRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  MatchJianghuRefundRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MatchJianghuRefundRecord& from);
-  MatchJianghuRefundRecord(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, MatchJianghuRefundRecord&& from) noexcept
-      : MatchJianghuRefundRecord(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
-  static constexpr auto InternalGenerateClassData_(
-      const MessageLite& prototype,
-      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
-
-  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kReasonFieldNumber = 6,
-    kDuelInviteIdFieldNumber = 1,
-    kBattleIdFieldNumber = 2,
-    kPayerPlayerIdFieldNumber = 3,
-    kRefundMailIdFieldNumber = 5,
-    kCreatedMsFieldNumber = 7,
-    kWritTierFieldNumber = 4,
-  };
-  // string reason = 6;
-  void clear_reason() ;
-  [[nodiscard]] const ::std::string& reason() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_reason(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_reason();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_reason();
-  void set_allocated_reason(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_reason() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_reason(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_reason();
-
-  public:
-  // uint64 duel_invite_id = 1;
-  void clear_duel_invite_id() ;
-  [[nodiscard]] ::uint64_t duel_invite_id() const;
-  void set_duel_invite_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_duel_invite_id() const;
-  void _internal_set_duel_invite_id(::uint64_t value);
-
-  public:
-  // uint64 battle_id = 2;
-  void clear_battle_id() ;
-  [[nodiscard]] ::uint64_t battle_id() const;
-  void set_battle_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_battle_id() const;
-  void _internal_set_battle_id(::uint64_t value);
-
-  public:
-  // uint64 payer_player_id = 3;
-  void clear_payer_player_id() ;
-  [[nodiscard]] ::uint64_t payer_player_id() const;
-  void set_payer_player_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_payer_player_id() const;
-  void _internal_set_payer_player_id(::uint64_t value);
-
-  public:
-  // uint64 refund_mail_id = 5;
-  void clear_refund_mail_id() ;
-  [[nodiscard]] ::uint64_t refund_mail_id() const;
-  void set_refund_mail_id(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_refund_mail_id() const;
-  void _internal_set_refund_mail_id(::uint64_t value);
-
-  public:
-  // uint64 created_ms = 7;
-  void clear_created_ms() ;
-  [[nodiscard]] ::uint64_t created_ms() const;
-  void set_created_ms(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_created_ms() const;
-  void _internal_set_created_ms(::uint64_t value);
-
-  public:
-  // uint32 writ_tier = 4;
-  void clear_writ_tier() ;
-  [[nodiscard]] ::uint32_t writ_tier() const;
-  void set_writ_tier(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_writ_tier() const;
-  void _internal_set_writ_tier(::uint32_t value);
-
-  public:
-  // @@protoc_insertion_point(class_scope:match.MatchJianghuRefundRecord)
- private:
-  class _Internal;
-  using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
-                          0, 45,
-                          2>;
-  static constexpr ParseTableT_ InternalGenerateParseTable_(
-      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
-  friend class ::google::protobuf::internal::TcParser;
-  #ifndef PROTOBUF_MESSAGE_GLOBALS
-  static const ParseTableT_ _table_;
-  #endif
-
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  friend ::google::protobuf::internal::PrivateAccess;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const MatchJianghuRefundRecord& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::internal::ArenaStringPtr reason_;
-    ::uint64_t duel_invite_id_;
-    ::uint64_t battle_id_;
-    ::uint64_t payer_player_id_;
-    ::uint64_t refund_mail_id_;
-    ::uint64_t created_ms_;
-    ::uint32_t writ_tier_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -31623,7 +31371,7 @@ inline void MatchTournamentCheerRecord::_internal_set_created_ms(::uint64_t valu
 inline void MatchTournamentRewardRecord::clear_season_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.season_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t MatchTournamentRewardRecord::season_id() const {
   // @@protoc_insertion_point(field_get:match.MatchTournamentRewardRecord.season_id)
@@ -31631,7 +31379,7 @@ inline ::uint32_t MatchTournamentRewardRecord::season_id() const {
 }
 inline void MatchTournamentRewardRecord::set_season_id(::uint32_t value) {
   _internal_set_season_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:match.MatchTournamentRewardRecord.season_id)
 }
 inline ::uint32_t MatchTournamentRewardRecord::_internal_season_id() const {
@@ -31647,7 +31395,7 @@ inline void MatchTournamentRewardRecord::_internal_set_season_id(::uint32_t valu
 inline void MatchTournamentRewardRecord::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t MatchTournamentRewardRecord::player_id() const {
   // @@protoc_insertion_point(field_get:match.MatchTournamentRewardRecord.player_id)
@@ -31655,7 +31403,7 @@ inline ::uint64_t MatchTournamentRewardRecord::player_id() const {
 }
 inline void MatchTournamentRewardRecord::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:match.MatchTournamentRewardRecord.player_id)
 }
 inline ::uint64_t MatchTournamentRewardRecord::_internal_player_id() const {
@@ -31671,7 +31419,7 @@ inline void MatchTournamentRewardRecord::_internal_set_player_id(::uint64_t valu
 inline void MatchTournamentRewardRecord::clear_tier_kind() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.tier_kind_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t MatchTournamentRewardRecord::tier_kind() const {
   // @@protoc_insertion_point(field_get:match.MatchTournamentRewardRecord.tier_kind)
@@ -31679,7 +31427,7 @@ inline ::uint32_t MatchTournamentRewardRecord::tier_kind() const {
 }
 inline void MatchTournamentRewardRecord::set_tier_kind(::uint32_t value) {
   _internal_set_tier_kind(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:match.MatchTournamentRewardRecord.tier_kind)
 }
 inline ::uint32_t MatchTournamentRewardRecord::_internal_tier_kind() const {
@@ -31695,7 +31443,7 @@ inline void MatchTournamentRewardRecord::_internal_set_tier_kind(::uint32_t valu
 inline void MatchTournamentRewardRecord::clear_reward_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.reward_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t MatchTournamentRewardRecord::reward_id() const {
   // @@protoc_insertion_point(field_get:match.MatchTournamentRewardRecord.reward_id)
@@ -31703,7 +31451,7 @@ inline ::uint64_t MatchTournamentRewardRecord::reward_id() const {
 }
 inline void MatchTournamentRewardRecord::set_reward_id(::uint64_t value) {
   _internal_set_reward_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:match.MatchTournamentRewardRecord.reward_id)
 }
 inline ::uint64_t MatchTournamentRewardRecord::_internal_reward_id() const {
@@ -31719,7 +31467,7 @@ inline void MatchTournamentRewardRecord::_internal_set_reward_id(::uint64_t valu
 inline void MatchTournamentRewardRecord::clear_squad_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.squad_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint64_t MatchTournamentRewardRecord::squad_id() const {
   // @@protoc_insertion_point(field_get:match.MatchTournamentRewardRecord.squad_id)
@@ -31727,7 +31475,7 @@ inline ::uint64_t MatchTournamentRewardRecord::squad_id() const {
 }
 inline void MatchTournamentRewardRecord::set_squad_id(::uint64_t value) {
   _internal_set_squad_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:match.MatchTournamentRewardRecord.squad_id)
 }
 inline ::uint64_t MatchTournamentRewardRecord::_internal_squad_id() const {
@@ -31743,7 +31491,7 @@ inline void MatchTournamentRewardRecord::_internal_set_squad_id(::uint64_t value
 inline void MatchTournamentRewardRecord::clear_final_rank() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.final_rank_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t MatchTournamentRewardRecord::final_rank() const {
   // @@protoc_insertion_point(field_get:match.MatchTournamentRewardRecord.final_rank)
@@ -31751,7 +31499,7 @@ inline ::uint32_t MatchTournamentRewardRecord::final_rank() const {
 }
 inline void MatchTournamentRewardRecord::set_final_rank(::uint32_t value) {
   _internal_set_final_rank(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:match.MatchTournamentRewardRecord.final_rank)
 }
 inline ::uint32_t MatchTournamentRewardRecord::_internal_final_rank() const {
@@ -31767,7 +31515,7 @@ inline void MatchTournamentRewardRecord::_internal_set_final_rank(::uint32_t val
 inline void MatchTournamentRewardRecord::clear_tier_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.tier_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t MatchTournamentRewardRecord::tier_id() const {
   // @@protoc_insertion_point(field_get:match.MatchTournamentRewardRecord.tier_id)
@@ -31775,7 +31523,7 @@ inline ::uint32_t MatchTournamentRewardRecord::tier_id() const {
 }
 inline void MatchTournamentRewardRecord::set_tier_id(::uint32_t value) {
   _internal_set_tier_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:match.MatchTournamentRewardRecord.tier_id)
 }
 inline ::uint32_t MatchTournamentRewardRecord::_internal_tier_id() const {
@@ -31791,7 +31539,7 @@ inline void MatchTournamentRewardRecord::_internal_set_tier_id(::uint32_t value)
 inline void MatchTournamentRewardRecord::clear_gold_amount() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gold_amount_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint64_t MatchTournamentRewardRecord::gold_amount() const {
   // @@protoc_insertion_point(field_get:match.MatchTournamentRewardRecord.gold_amount)
@@ -31799,7 +31547,7 @@ inline ::uint64_t MatchTournamentRewardRecord::gold_amount() const {
 }
 inline void MatchTournamentRewardRecord::set_gold_amount(::uint64_t value) {
   _internal_set_gold_amount(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:match.MatchTournamentRewardRecord.gold_amount)
 }
 inline ::uint64_t MatchTournamentRewardRecord::_internal_gold_amount() const {
@@ -32007,7 +31755,7 @@ inline void MatchTournamentRewardRecord::set_allocated_badge_code(::std::string*
 inline void MatchTournamentRewardRecord::clear_delivery_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.delivery_state_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint32_t MatchTournamentRewardRecord::delivery_state() const {
   // @@protoc_insertion_point(field_get:match.MatchTournamentRewardRecord.delivery_state)
@@ -32015,7 +31763,7 @@ inline ::uint32_t MatchTournamentRewardRecord::delivery_state() const {
 }
 inline void MatchTournamentRewardRecord::set_delivery_state(::uint32_t value) {
   _internal_set_delivery_state(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:match.MatchTournamentRewardRecord.delivery_state)
 }
 inline ::uint32_t MatchTournamentRewardRecord::_internal_delivery_state() const {
@@ -32031,7 +31779,7 @@ inline void MatchTournamentRewardRecord::_internal_set_delivery_state(::uint32_t
 inline void MatchTournamentRewardRecord::clear_mail_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.mail_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint64_t MatchTournamentRewardRecord::mail_id() const {
   // @@protoc_insertion_point(field_get:match.MatchTournamentRewardRecord.mail_id)
@@ -32039,7 +31787,7 @@ inline ::uint64_t MatchTournamentRewardRecord::mail_id() const {
 }
 inline void MatchTournamentRewardRecord::set_mail_id(::uint64_t value) {
   _internal_set_mail_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:match.MatchTournamentRewardRecord.mail_id)
 }
 inline ::uint64_t MatchTournamentRewardRecord::_internal_mail_id() const {
@@ -32055,7 +31803,7 @@ inline void MatchTournamentRewardRecord::_internal_set_mail_id(::uint64_t value)
 inline void MatchTournamentRewardRecord::clear_claimed_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.claimed_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint64_t MatchTournamentRewardRecord::claimed_ms() const {
   // @@protoc_insertion_point(field_get:match.MatchTournamentRewardRecord.claimed_ms)
@@ -32063,7 +31811,7 @@ inline ::uint64_t MatchTournamentRewardRecord::claimed_ms() const {
 }
 inline void MatchTournamentRewardRecord::set_claimed_ms(::uint64_t value) {
   _internal_set_claimed_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:match.MatchTournamentRewardRecord.claimed_ms)
 }
 inline ::uint64_t MatchTournamentRewardRecord::_internal_claimed_ms() const {
@@ -32079,7 +31827,7 @@ inline void MatchTournamentRewardRecord::_internal_set_claimed_ms(::uint64_t val
 inline void MatchTournamentRewardRecord::clear_updated_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.updated_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint64_t MatchTournamentRewardRecord::updated_ms() const {
   // @@protoc_insertion_point(field_get:match.MatchTournamentRewardRecord.updated_ms)
@@ -32087,7 +31835,7 @@ inline ::uint64_t MatchTournamentRewardRecord::updated_ms() const {
 }
 inline void MatchTournamentRewardRecord::set_updated_ms(::uint64_t value) {
   _internal_set_updated_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:match.MatchTournamentRewardRecord.updated_ms)
 }
 inline ::uint64_t MatchTournamentRewardRecord::_internal_updated_ms() const {
@@ -32097,6 +31845,134 @@ inline ::uint64_t MatchTournamentRewardRecord::_internal_updated_ms() const {
 inline void MatchTournamentRewardRecord::_internal_set_updated_ms(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.updated_ms_ = value;
+}
+
+// string mail_title = 16;
+inline void MatchTournamentRewardRecord::clear_mail_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.mail_title_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& MatchTournamentRewardRecord::mail_title() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.MatchTournamentRewardRecord.mail_title)
+  return _internal_mail_title();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void MatchTournamentRewardRecord::set_mail_title(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.mail_title_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.MatchTournamentRewardRecord.mail_title)
+}
+inline ::std::string* PROTOBUF_NONNULL MatchTournamentRewardRecord::mutable_mail_title()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_mail_title();
+  // @@protoc_insertion_point(field_mutable:match.MatchTournamentRewardRecord.mail_title)
+  return _s;
+}
+inline const ::std::string& MatchTournamentRewardRecord::_internal_mail_title() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.mail_title_.Get();
+}
+inline void MatchTournamentRewardRecord::_internal_set_mail_title(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.mail_title_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL MatchTournamentRewardRecord::_internal_mutable_mail_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.mail_title_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE MatchTournamentRewardRecord::release_mail_title() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.MatchTournamentRewardRecord.mail_title)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.mail_title_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.mail_title_.Set("", GetArena());
+  }
+  return released;
+}
+inline void MatchTournamentRewardRecord::set_allocated_mail_title(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.mail_title_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.mail_title_.IsDefault()) {
+    _impl_.mail_title_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.MatchTournamentRewardRecord.mail_title)
+}
+
+// string mail_body = 17;
+inline void MatchTournamentRewardRecord::clear_mail_body() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.mail_body_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline const ::std::string& MatchTournamentRewardRecord::mail_body() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:match.MatchTournamentRewardRecord.mail_body)
+  return _internal_mail_body();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void MatchTournamentRewardRecord::set_mail_body(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  _impl_.mail_body_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:match.MatchTournamentRewardRecord.mail_body)
+}
+inline ::std::string* PROTOBUF_NONNULL MatchTournamentRewardRecord::mutable_mail_body()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::std::string* _s = _internal_mutable_mail_body();
+  // @@protoc_insertion_point(field_mutable:match.MatchTournamentRewardRecord.mail_body)
+  return _s;
+}
+inline const ::std::string& MatchTournamentRewardRecord::_internal_mail_body() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.mail_body_.Get();
+}
+inline void MatchTournamentRewardRecord::_internal_set_mail_body(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.mail_body_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL MatchTournamentRewardRecord::_internal_mutable_mail_body() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.mail_body_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE MatchTournamentRewardRecord::release_mail_body() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:match.MatchTournamentRewardRecord.mail_body)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  auto* released = _impl_.mail_body_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.mail_body_.Set("", GetArena());
+  }
+  return released;
+}
+inline void MatchTournamentRewardRecord::set_allocated_mail_body(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  _impl_.mail_body_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.mail_body_.IsDefault()) {
+    _impl_.mail_body_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:match.MatchTournamentRewardRecord.mail_body)
 }
 
 // -------------------------------------------------------------------
@@ -33789,218 +33665,6 @@ inline ::uint64_t MatchGrudgeLogRecord::_internal_finished_ms() const {
 inline void MatchGrudgeLogRecord::_internal_set_finished_ms(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.finished_ms_ = value;
-}
-
-// -------------------------------------------------------------------
-
-// MatchJianghuRefundRecord
-
-// uint64 duel_invite_id = 1;
-inline void MatchJianghuRefundRecord::clear_duel_invite_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.duel_invite_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-}
-inline ::uint64_t MatchJianghuRefundRecord::duel_invite_id() const {
-  // @@protoc_insertion_point(field_get:match.MatchJianghuRefundRecord.duel_invite_id)
-  return _internal_duel_invite_id();
-}
-inline void MatchJianghuRefundRecord::set_duel_invite_id(::uint64_t value) {
-  _internal_set_duel_invite_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  // @@protoc_insertion_point(field_set:match.MatchJianghuRefundRecord.duel_invite_id)
-}
-inline ::uint64_t MatchJianghuRefundRecord::_internal_duel_invite_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.duel_invite_id_;
-}
-inline void MatchJianghuRefundRecord::_internal_set_duel_invite_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.duel_invite_id_ = value;
-}
-
-// uint64 battle_id = 2;
-inline void MatchJianghuRefundRecord::clear_battle_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.battle_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
-}
-inline ::uint64_t MatchJianghuRefundRecord::battle_id() const {
-  // @@protoc_insertion_point(field_get:match.MatchJianghuRefundRecord.battle_id)
-  return _internal_battle_id();
-}
-inline void MatchJianghuRefundRecord::set_battle_id(::uint64_t value) {
-  _internal_set_battle_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
-  // @@protoc_insertion_point(field_set:match.MatchJianghuRefundRecord.battle_id)
-}
-inline ::uint64_t MatchJianghuRefundRecord::_internal_battle_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.battle_id_;
-}
-inline void MatchJianghuRefundRecord::_internal_set_battle_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.battle_id_ = value;
-}
-
-// uint64 payer_player_id = 3;
-inline void MatchJianghuRefundRecord::clear_payer_player_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.payer_player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
-}
-inline ::uint64_t MatchJianghuRefundRecord::payer_player_id() const {
-  // @@protoc_insertion_point(field_get:match.MatchJianghuRefundRecord.payer_player_id)
-  return _internal_payer_player_id();
-}
-inline void MatchJianghuRefundRecord::set_payer_player_id(::uint64_t value) {
-  _internal_set_payer_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
-  // @@protoc_insertion_point(field_set:match.MatchJianghuRefundRecord.payer_player_id)
-}
-inline ::uint64_t MatchJianghuRefundRecord::_internal_payer_player_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.payer_player_id_;
-}
-inline void MatchJianghuRefundRecord::_internal_set_payer_player_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.payer_player_id_ = value;
-}
-
-// uint32 writ_tier = 4;
-inline void MatchJianghuRefundRecord::clear_writ_tier() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.writ_tier_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
-}
-inline ::uint32_t MatchJianghuRefundRecord::writ_tier() const {
-  // @@protoc_insertion_point(field_get:match.MatchJianghuRefundRecord.writ_tier)
-  return _internal_writ_tier();
-}
-inline void MatchJianghuRefundRecord::set_writ_tier(::uint32_t value) {
-  _internal_set_writ_tier(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
-  // @@protoc_insertion_point(field_set:match.MatchJianghuRefundRecord.writ_tier)
-}
-inline ::uint32_t MatchJianghuRefundRecord::_internal_writ_tier() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.writ_tier_;
-}
-inline void MatchJianghuRefundRecord::_internal_set_writ_tier(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.writ_tier_ = value;
-}
-
-// uint64 refund_mail_id = 5;
-inline void MatchJianghuRefundRecord::clear_refund_mail_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.refund_mail_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
-}
-inline ::uint64_t MatchJianghuRefundRecord::refund_mail_id() const {
-  // @@protoc_insertion_point(field_get:match.MatchJianghuRefundRecord.refund_mail_id)
-  return _internal_refund_mail_id();
-}
-inline void MatchJianghuRefundRecord::set_refund_mail_id(::uint64_t value) {
-  _internal_set_refund_mail_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
-  // @@protoc_insertion_point(field_set:match.MatchJianghuRefundRecord.refund_mail_id)
-}
-inline ::uint64_t MatchJianghuRefundRecord::_internal_refund_mail_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.refund_mail_id_;
-}
-inline void MatchJianghuRefundRecord::_internal_set_refund_mail_id(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.refund_mail_id_ = value;
-}
-
-// string reason = 6;
-inline void MatchJianghuRefundRecord::clear_reason() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.reason_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline const ::std::string& MatchJianghuRefundRecord::reason() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:match.MatchJianghuRefundRecord.reason)
-  return _internal_reason();
-}
-template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void MatchJianghuRefundRecord::set_reason(Arg_&& arg, Args_... args) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  _impl_.reason_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:match.MatchJianghuRefundRecord.reason)
-}
-inline ::std::string* PROTOBUF_NONNULL MatchJianghuRefundRecord::mutable_reason()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  ::std::string* _s = _internal_mutable_reason();
-  // @@protoc_insertion_point(field_mutable:match.MatchJianghuRefundRecord.reason)
-  return _s;
-}
-inline const ::std::string& MatchJianghuRefundRecord::_internal_reason() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.reason_.Get();
-}
-inline void MatchJianghuRefundRecord::_internal_set_reason(const ::std::string& value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.reason_.Set(value, GetArena());
-}
-inline ::std::string* PROTOBUF_NONNULL MatchJianghuRefundRecord::_internal_mutable_reason() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _impl_.reason_.Mutable( GetArena());
-}
-inline ::std::string* PROTOBUF_NULLABLE MatchJianghuRefundRecord::release_reason() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:match.MatchJianghuRefundRecord.reason)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
-    return nullptr;
-  }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-  auto* released = _impl_.reason_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.reason_.Set("", GetArena());
-  }
-  return released;
-}
-inline void MatchJianghuRefundRecord::set_allocated_reason(::std::string* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-  }
-  _impl_.reason_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.reason_.IsDefault()) {
-    _impl_.reason_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:match.MatchJianghuRefundRecord.reason)
-}
-
-// uint64 created_ms = 7;
-inline void MatchJianghuRefundRecord::clear_created_ms() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.created_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
-}
-inline ::uint64_t MatchJianghuRefundRecord::created_ms() const {
-  // @@protoc_insertion_point(field_get:match.MatchJianghuRefundRecord.created_ms)
-  return _internal_created_ms();
-}
-inline void MatchJianghuRefundRecord::set_created_ms(::uint64_t value) {
-  _internal_set_created_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
-  // @@protoc_insertion_point(field_set:match.MatchJianghuRefundRecord.created_ms)
-}
-inline ::uint64_t MatchJianghuRefundRecord::_internal_created_ms() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.created_ms_;
-}
-inline void MatchJianghuRefundRecord::_internal_set_created_ms(::uint64_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.created_ms_ = value;
 }
 
 // -------------------------------------------------------------------

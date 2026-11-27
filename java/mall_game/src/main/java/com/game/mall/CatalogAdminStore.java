@@ -106,7 +106,7 @@ public class CatalogAdminStore {
         });
     }
 
-    private CatalogAdminApi.Sku command(String actor, String requestId, String kind, Object input, long skuId,
+    private CatalogAdminApi.Sku command(String actor, String requestId, String kind, AdminApproval.Command input, long skuId,
         Supplier<CatalogAdminApi.Sku> mutation) {
         if (actor == null || !actor.matches("[a-z][a-z0-9-]{2,63}") || requestId == null
             || !requestId.matches("[A-Za-z0-9_-]{8,128}")) {
@@ -116,12 +116,15 @@ public class CatalogAdminStore {
         byte[] actorKey = actor.getBytes(StandardCharsets.US_ASCII);
         byte[] requestKey = requestId.getBytes(StandardCharsets.US_ASCII);
         String pending = "pending:" + UUID.randomUUID();
+        AdminApproval approval = input.approval();
         try {
             return Objects.requireNonNull(tx.execute(status -> {
-                // 同主键ODKU先串行化；失败事务不会留下独立的半完成请求行。
-                jdbc.update("INSERT INTO commerce_admin_command(actor,request_id,command_type,request_digest,result_json,created_ms)"
-                    + " VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE request_id=request_id",
-                    actorKey, requestKey, kind, digest, pending, clock.millis());
+                // 同主键ODKU先串行化；失败事务不会留下独立的半完成请求行。发起人、批准人随命令行落库(控制器已核过批准记录)。
+                jdbc.update("INSERT INTO commerce_admin_command(actor,request_id,command_type,request_digest,result_json,created_ms,proposer,approver)"
+                    + " VALUES(?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE request_id=request_id",
+                    actorKey, requestKey, kind, digest, pending, clock.millis(),
+                    approval == null ? null : approval.proposer().getBytes(StandardCharsets.US_ASCII),
+                    approval == null ? null : approval.approver().getBytes(StandardCharsets.US_ASCII));
                 var rows = jdbc.queryForList("SELECT command_type,request_digest,result_json FROM commerce_admin_command"
                     + " WHERE actor=? AND request_id=? FOR UPDATE", actorKey, requestKey);
                 if (rows.size() != 1) { throw new CommerceException(503, "管理请求原件缺失"); }

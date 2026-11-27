@@ -5564,6 +5564,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TradeCommerceManualAction final : p
     kOperatorFieldNumber = 2,
     kReasonFieldNumber = 3,
     kPartyFieldNumber = 9,
+    kApprovalIdFieldNumber = 17,
+    kApproverFieldNumber = 18,
     kQuarantineFieldNumber = 6,
     kIdentityBeforeFieldNumber = 12,
     kIdentityAfterFieldNumber = 13,
@@ -5735,6 +5737,36 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TradeCommerceManualAction final : p
   ::std::string* PROTOBUF_NONNULL _internal_mutable_party();
 
   public:
+  // string approval_id = 17;
+  void clear_approval_id() ;
+  [[nodiscard]] const ::std::string& approval_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_approval_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_approval_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_approval_id();
+  void set_allocated_approval_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_approval_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_approval_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_approval_id();
+
+  public:
+  // string approver = 18;
+  void clear_approver() ;
+  [[nodiscard]] const ::std::string& approver() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_approver(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_approver();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_approver();
+  void set_allocated_approver(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_approver() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_approver(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_approver();
+
+  public:
   // .trade.TradeCommerceQuarantine quarantine = 6;
   [[nodiscard]] bool has_quarantine()
       const;
@@ -5837,8 +5869,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TradeCommerceManualAction final : p
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 16,
-                          4, 119,
+      ::google::protobuf::internal::TcParseTable<5, 18,
+                          4, 138,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -5874,6 +5906,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TradeCommerceManualAction final : p
     ::google::protobuf::internal::ArenaStringPtr operator__;
     ::google::protobuf::internal::ArenaStringPtr reason_;
     ::google::protobuf::internal::ArenaStringPtr party_;
+    ::google::protobuf::internal::ArenaStringPtr approval_id_;
+    ::google::protobuf::internal::ArenaStringPtr approver_;
     ::trade::TradeCommerceQuarantine* PROTOBUF_NULLABLE quarantine_;
     ::trade::TradeRoleIdentity* PROTOBUF_NULLABLE identity_before_;
     ::trade::TradeRoleIdentity* PROTOBUF_NULLABLE identity_after_;
@@ -10625,7 +10659,7 @@ inline void TradeCommerceManualAction::set_allocated_reason(::std::string* PROTO
 inline void TradeCommerceManualAction::clear_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.at_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint64_t TradeCommerceManualAction::at_ms() const {
   // @@protoc_insertion_point(field_get:trade.TradeCommerceManualAction.at_ms)
@@ -10633,7 +10667,7 @@ inline ::uint64_t TradeCommerceManualAction::at_ms() const {
 }
 inline void TradeCommerceManualAction::set_at_ms(::uint64_t value) {
   _internal_set_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:trade.TradeCommerceManualAction.at_ms)
 }
 inline ::uint64_t TradeCommerceManualAction::_internal_at_ms() const {
@@ -10649,7 +10683,7 @@ inline void TradeCommerceManualAction::_internal_set_at_ms(::uint64_t value) {
 inline void TradeCommerceManualAction::clear_version_before() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.version_before_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint64_t TradeCommerceManualAction::version_before() const {
   // @@protoc_insertion_point(field_get:trade.TradeCommerceManualAction.version_before)
@@ -10657,7 +10691,7 @@ inline ::uint64_t TradeCommerceManualAction::version_before() const {
 }
 inline void TradeCommerceManualAction::set_version_before(::uint64_t value) {
   _internal_set_version_before(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:trade.TradeCommerceManualAction.version_before)
 }
 inline ::uint64_t TradeCommerceManualAction::_internal_version_before() const {
@@ -10671,14 +10705,14 @@ inline void TradeCommerceManualAction::_internal_set_version_before(::uint64_t v
 
 // .trade.TradeCommerceQuarantine quarantine = 6;
 inline bool TradeCommerceManualAction::has_quarantine() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000100U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000400U);
   PROTOBUF_ASSUME(!value || _impl_.quarantine_ != nullptr);
   return value;
 }
 inline void TradeCommerceManualAction::clear_quarantine() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.quarantine_ != nullptr) _impl_.quarantine_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline const ::trade::TradeCommerceQuarantine& TradeCommerceManualAction::_internal_quarantine() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -10697,16 +10731,16 @@ inline void TradeCommerceManualAction::unsafe_arena_set_allocated_quarantine(
   }
   _impl_.quarantine_ = reinterpret_cast<::trade::TradeCommerceQuarantine*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:trade.TradeCommerceManualAction.quarantine)
 }
 inline ::trade::TradeCommerceQuarantine* PROTOBUF_NULLABLE TradeCommerceManualAction::release_quarantine() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
   ::trade::TradeCommerceQuarantine* released = _impl_.quarantine_;
   _impl_.quarantine_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -10726,7 +10760,7 @@ inline ::trade::TradeCommerceQuarantine* PROTOBUF_NULLABLE TradeCommerceManualAc
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:trade.TradeCommerceManualAction.quarantine)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
   ::trade::TradeCommerceQuarantine* temp = _impl_.quarantine_;
   _impl_.quarantine_ = nullptr;
   return temp;
@@ -10741,7 +10775,7 @@ inline ::trade::TradeCommerceQuarantine* PROTOBUF_NONNULL TradeCommerceManualAct
 }
 inline ::trade::TradeCommerceQuarantine* PROTOBUF_NONNULL TradeCommerceManualAction::mutable_quarantine()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   ::trade::TradeCommerceQuarantine* _msg = _internal_mutable_quarantine();
   // @@protoc_insertion_point(field_mutable:trade.TradeCommerceManualAction.quarantine)
   return _msg;
@@ -10758,9 +10792,9 @@ inline void TradeCommerceManualAction::set_allocated_quarantine(::trade::TradeCo
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
   }
 
   _impl_.quarantine_ = reinterpret_cast<::trade::TradeCommerceQuarantine*>(value);
@@ -10979,7 +11013,7 @@ inline void TradeCommerceManualAction::set_allocated_party(::std::string* PROTOB
 inline void TradeCommerceManualAction::clear_from_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.from_player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint64_t TradeCommerceManualAction::from_player_id() const {
   // @@protoc_insertion_point(field_get:trade.TradeCommerceManualAction.from_player_id)
@@ -10987,7 +11021,7 @@ inline ::uint64_t TradeCommerceManualAction::from_player_id() const {
 }
 inline void TradeCommerceManualAction::set_from_player_id(::uint64_t value) {
   _internal_set_from_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:trade.TradeCommerceManualAction.from_player_id)
 }
 inline ::uint64_t TradeCommerceManualAction::_internal_from_player_id() const {
@@ -11003,7 +11037,7 @@ inline void TradeCommerceManualAction::_internal_set_from_player_id(::uint64_t v
 inline void TradeCommerceManualAction::clear_to_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.to_player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint64_t TradeCommerceManualAction::to_player_id() const {
   // @@protoc_insertion_point(field_get:trade.TradeCommerceManualAction.to_player_id)
@@ -11011,7 +11045,7 @@ inline ::uint64_t TradeCommerceManualAction::to_player_id() const {
 }
 inline void TradeCommerceManualAction::set_to_player_id(::uint64_t value) {
   _internal_set_to_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:trade.TradeCommerceManualAction.to_player_id)
 }
 inline ::uint64_t TradeCommerceManualAction::_internal_to_player_id() const {
@@ -11025,14 +11059,14 @@ inline void TradeCommerceManualAction::_internal_set_to_player_id(::uint64_t val
 
 // .trade.TradeRoleIdentity identity_before = 12;
 inline bool TradeCommerceManualAction::has_identity_before() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000200U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000800U);
   PROTOBUF_ASSUME(!value || _impl_.identity_before_ != nullptr);
   return value;
 }
 inline void TradeCommerceManualAction::clear_identity_before() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.identity_before_ != nullptr) _impl_.identity_before_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline const ::trade::TradeRoleIdentity& TradeCommerceManualAction::_internal_identity_before() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -11051,16 +11085,16 @@ inline void TradeCommerceManualAction::unsafe_arena_set_allocated_identity_befor
   }
   _impl_.identity_before_ = reinterpret_cast<::trade::TradeRoleIdentity*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:trade.TradeCommerceManualAction.identity_before)
 }
 inline ::trade::TradeRoleIdentity* PROTOBUF_NULLABLE TradeCommerceManualAction::release_identity_before() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
   ::trade::TradeRoleIdentity* released = _impl_.identity_before_;
   _impl_.identity_before_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -11080,7 +11114,7 @@ inline ::trade::TradeRoleIdentity* PROTOBUF_NULLABLE TradeCommerceManualAction::
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:trade.TradeCommerceManualAction.identity_before)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
   ::trade::TradeRoleIdentity* temp = _impl_.identity_before_;
   _impl_.identity_before_ = nullptr;
   return temp;
@@ -11095,7 +11129,7 @@ inline ::trade::TradeRoleIdentity* PROTOBUF_NONNULL TradeCommerceManualAction::_
 }
 inline ::trade::TradeRoleIdentity* PROTOBUF_NONNULL TradeCommerceManualAction::mutable_identity_before()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   ::trade::TradeRoleIdentity* _msg = _internal_mutable_identity_before();
   // @@protoc_insertion_point(field_mutable:trade.TradeCommerceManualAction.identity_before)
   return _msg;
@@ -11112,9 +11146,9 @@ inline void TradeCommerceManualAction::set_allocated_identity_before(::trade::Tr
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
   }
 
   _impl_.identity_before_ = reinterpret_cast<::trade::TradeRoleIdentity*>(value);
@@ -11123,14 +11157,14 @@ inline void TradeCommerceManualAction::set_allocated_identity_before(::trade::Tr
 
 // .trade.TradeRoleIdentity identity_after = 13;
 inline bool TradeCommerceManualAction::has_identity_after() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000400U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00001000U);
   PROTOBUF_ASSUME(!value || _impl_.identity_after_ != nullptr);
   return value;
 }
 inline void TradeCommerceManualAction::clear_identity_after() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.identity_after_ != nullptr) _impl_.identity_after_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline const ::trade::TradeRoleIdentity& TradeCommerceManualAction::_internal_identity_after() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -11149,16 +11183,16 @@ inline void TradeCommerceManualAction::unsafe_arena_set_allocated_identity_after
   }
   _impl_.identity_after_ = reinterpret_cast<::trade::TradeRoleIdentity*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+    SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:trade.TradeCommerceManualAction.identity_after)
 }
 inline ::trade::TradeRoleIdentity* PROTOBUF_NULLABLE TradeCommerceManualAction::release_identity_after() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
   ::trade::TradeRoleIdentity* released = _impl_.identity_after_;
   _impl_.identity_after_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -11178,7 +11212,7 @@ inline ::trade::TradeRoleIdentity* PROTOBUF_NULLABLE TradeCommerceManualAction::
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:trade.TradeCommerceManualAction.identity_after)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
   ::trade::TradeRoleIdentity* temp = _impl_.identity_after_;
   _impl_.identity_after_ = nullptr;
   return temp;
@@ -11193,7 +11227,7 @@ inline ::trade::TradeRoleIdentity* PROTOBUF_NONNULL TradeCommerceManualAction::_
 }
 inline ::trade::TradeRoleIdentity* PROTOBUF_NONNULL TradeCommerceManualAction::mutable_identity_after()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   ::trade::TradeRoleIdentity* _msg = _internal_mutable_identity_after();
   // @@protoc_insertion_point(field_mutable:trade.TradeCommerceManualAction.identity_after)
   return _msg;
@@ -11210,9 +11244,9 @@ inline void TradeCommerceManualAction::set_allocated_identity_after(::trade::Tra
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+    SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
   }
 
   _impl_.identity_after_ = reinterpret_cast<::trade::TradeRoleIdentity*>(value);
@@ -11295,7 +11329,7 @@ TradeCommerceManualAction::_internal_mutable_retargeted_legs() {
 inline void TradeCommerceManualAction::clear_linked_commerce_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.linked_commerce_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint64_t TradeCommerceManualAction::linked_commerce_id() const {
   // @@protoc_insertion_point(field_get:trade.TradeCommerceManualAction.linked_commerce_id)
@@ -11303,7 +11337,7 @@ inline ::uint64_t TradeCommerceManualAction::linked_commerce_id() const {
 }
 inline void TradeCommerceManualAction::set_linked_commerce_id(::uint64_t value) {
   _internal_set_linked_commerce_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:trade.TradeCommerceManualAction.linked_commerce_id)
 }
 inline ::uint64_t TradeCommerceManualAction::_internal_linked_commerce_id() const {
@@ -11368,6 +11402,134 @@ inline ::google::protobuf::RepeatedPtrField<::trade::TradeCommercePartialPart>* 
 TradeCommerceManualAction::_internal_mutable_partial_parts() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.partial_parts_;
+}
+
+// string approval_id = 17;
+inline void TradeCommerceManualAction::clear_approval_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.approval_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline const ::std::string& TradeCommerceManualAction::approval_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.TradeCommerceManualAction.approval_id)
+  return _internal_approval_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TradeCommerceManualAction::set_approval_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  _impl_.approval_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:trade.TradeCommerceManualAction.approval_id)
+}
+inline ::std::string* PROTOBUF_NONNULL TradeCommerceManualAction::mutable_approval_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ::std::string* _s = _internal_mutable_approval_id();
+  // @@protoc_insertion_point(field_mutable:trade.TradeCommerceManualAction.approval_id)
+  return _s;
+}
+inline const ::std::string& TradeCommerceManualAction::_internal_approval_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.approval_id_.Get();
+}
+inline void TradeCommerceManualAction::_internal_set_approval_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.approval_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TradeCommerceManualAction::_internal_mutable_approval_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.approval_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TradeCommerceManualAction::release_approval_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.TradeCommerceManualAction.approval_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000100U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  auto* released = _impl_.approval_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.approval_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TradeCommerceManualAction::set_allocated_approval_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  }
+  _impl_.approval_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.approval_id_.IsDefault()) {
+    _impl_.approval_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:trade.TradeCommerceManualAction.approval_id)
+}
+
+// string approver = 18;
+inline void TradeCommerceManualAction::clear_approver() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.approver_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline const ::std::string& TradeCommerceManualAction::approver() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.TradeCommerceManualAction.approver)
+  return _internal_approver();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TradeCommerceManualAction::set_approver(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  _impl_.approver_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:trade.TradeCommerceManualAction.approver)
+}
+inline ::std::string* PROTOBUF_NONNULL TradeCommerceManualAction::mutable_approver()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ::std::string* _s = _internal_mutable_approver();
+  // @@protoc_insertion_point(field_mutable:trade.TradeCommerceManualAction.approver)
+  return _s;
+}
+inline const ::std::string& TradeCommerceManualAction::_internal_approver() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.approver_.Get();
+}
+inline void TradeCommerceManualAction::_internal_set_approver(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.approver_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TradeCommerceManualAction::_internal_mutable_approver() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.approver_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TradeCommerceManualAction::release_approver() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.TradeCommerceManualAction.approver)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000200U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  auto* released = _impl_.approver_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.approver_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TradeCommerceManualAction::set_allocated_approver(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  }
+  _impl_.approver_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.approver_.IsDefault()) {
+    _impl_.approver_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:trade.TradeCommerceManualAction.approver)
 }
 
 // -------------------------------------------------------------------

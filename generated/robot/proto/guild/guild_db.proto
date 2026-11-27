@@ -612,10 +612,12 @@ message GuildWarPlayerStateRecord {
 }
 
 // 锁序位置 17:江湖追杀令托管与生命周期。
+// 第 4 个索引 (status,expires_at_ms) 给到期收尾按到期时刻翻页扫 ACTIVE 行(war_repo.go ListDueBounties;
+// 前三个索引都不以 status 开头,跨区扫不动)。schemamigrate 不给已存在的表补建索引,本地库要重建这张表。
 message GuildWarBountyRecord {
   option(OptionTableName) = "guild_war_bounty";
   option(OptionPrimaryKey) = "bounty_id";
-  option(OptionIndex) = "target_player_id,status;issuer_guild_id,status;zone_id,status,expires_at_ms";
+  option(OptionIndex) = "target_player_id,status;issuer_guild_id,status;zone_id,status,expires_at_ms;status,expires_at_ms";
   option(OptionTiDBNonclusteredPK) = true;
   option(OptionTiDBShardRowIDBits) = 4;
   option(OptionTiDBPreSplitRegions) = 4;
@@ -627,9 +629,9 @@ message GuildWarBountyRecord {
   uint64 target_player_id = 5;
   uint64 target_guild_id = 6;
   uint32 tier = 7;                   // 1=普通5000银两 / 2=重金15000银两 / 3=帮会公费2000资金
-  uint64 escrow_silver = 8;          // 扣 10% 销毁税后入池赏金银两
+  uint64 escrow_silver = 8;          // 赏金池银两:银两档 = 发布者扣 10% 销毁税后托管的本金(到期原路退回);公费档 = 系统配给的赏金(不是谁出的,不退)
   uint32 public_board = 9;           // 0=仅本帮 / 1=全区江湖榜
-  uint32 status = 10;                // 1=ESCROW_PENDING / 2=ACTIVE / 3=COMPLETED / 4=TORN_BY_TARGET / 5=EXPIRED
+  uint32 status = 10;                // 1=ESCROW_PENDING / 2=ACTIVE / 3=COMPLETED / 4=TORN_BY_TARGET / 5=EXPIRED(到期且已原路退回) / 6=ESCROW_FAILED(预扣没扣成,无托管)
   uint64 escrow_op_id = 11;          // 对应 guild_asset_op.op_id(公费档为 0)
   uint32 counter_kills = 12;         // 目标已成功反杀不同追兵次数(达 2 撕单)
   uint64 last_counter_attacker_id = 13;// 防止同一追兵刷反杀次数
@@ -637,6 +639,7 @@ message GuildWarBountyRecord {
   uint64 created_at_ms = 15;
   uint64 expires_at_ms = 16;
   uint64 resolved_at_ms = 17;
+  uint64 escrow_guild_funds = 18;    // 公费档发单时实扣的帮会资金(银两档为 0):到期全退、撕单退一半给发单帮;按实扣额退,不按退款时的配表
 }
 
 // 锁序位置 18:帮战终局幂等闸门、大事记与本人结算回查。

@@ -3,7 +3,8 @@
 //   * 百宝阁 305/306 灵石直购绑定 Item 3415「金帖生死状」与 Item 3416「清风洗尘符」
 //   * 闭关免战切换与 match -> scene 资格/资费预检(CheckDuelEligibility)
 //   * 金帖预留(PlaceHold)→ 备战取消/作废释放 vs 正常结算从预留精准扣除
-//   * 普通 500 银两战书预扣、备战取消防双退开关与余额不足拒绝
+//   * 普通 500 银两战书预扣、取消 / 作废退还只退一次、余额不足拒绝;别的局未结清时拒绝新备战、入账失败保留标记、
+//     获取封禁不挡退费(2026-11-26,数据覆写审计 r2 第 4 轮;终局复核的用例在 battle_freeze_hold_test.cpp)
 //   * 30 分钟战败社交印记挂起/覆盖/复仇清除/过户 owner_revision 自动清零
 //   * 1000 银两普通清除与清风洗尘符(Item 3416)+洒脱徽记幂等清除(重放防双扣、参数错位拒绝)
 
@@ -11,6 +12,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -21,6 +23,7 @@
 #include "modules/currency/comp/player_currency_comp.h"
 #include "modules/currency/constants/currency.h"
 #include "modules/currency/system/currency_system.h"
+#include "modules/gain_block/gain_block_service.h" // 退费不算新增获得(CountsAsGain)
 #include "modules/id_segment/guid_segment_registry.h"
 #include "proto/battle/battle_data.pb.h"
 #include "proto/common/component/actor_comp.pb.h"
@@ -42,6 +45,7 @@
 #include "table/code/jianghurule_table.h"
 #include "table/code/spiritshopgoods_table.h"
 #include "table/code/spiritshoplimitgroup_table.h"
+#include "table/proto/tip/asset_error_tip.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/jianghu_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
@@ -267,20 +271,115 @@ TEST_F(PlayerJianghuTest, SilverWritDebitAndCancelRefund)
 	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 1200));
 	ASSERT_EQ(kSuccess, PlayerJianghuSystem::ValidateAndCollectPrepareFee(player, 56001, fee, heldLines, silverToDeduct));
 	EXPECT_EQ(500u, silverToDeduct);
-	ASSERT_EQ(kSuccess, PlayerJianghuSystem::CommitPrepareSilverFee(player, 56001, silverToDeduct));
+	ASSERT_EQ(kSuccess, PlayerJianghuSystem::CommitPrepareSilverFee(player, 56001, silverToDeduct, kNowMs + 60000));
+	EXPECT_EQ(700u, CurrencySystem::GetBalance(player, kCurrencyGold));
+	const auto &comp = tlsEcs.actorRegistry.get<PlayerJianghuComp>(player);
+	EXPECT_EQ(56001u, comp.pending_silver_fee_battle_id());
+	EXPECT_EQ(500u, comp.pending_silver_fee_amount());
+	EXPECT_EQ(kNowMs + 60000, comp.pending_silver_fee_review_after_ms()) << "复核时刻与同一局的道具预留相同";
+
+	// 同一局重入备战不重扣。
+	ASSERT_EQ(kSuccess, PlayerJianghuSystem::ValidateAndCollectPrepareFee(player, 56001, fee, heldLines, silverToDeduct));
+	EXPECT_EQ(0u, silverToDeduct);
+	ASSERT_EQ(kSuccess, PlayerJianghuSystem::CommitPrepareSilverFee(player, 56001, 500, kNowMs + 60000));
 	EXPECT_EQ(700u, CurrencySystem::GetBalance(player, kCurrencyGold));
 
-	// 取消备战且未由 match 接管退款：精准退还 500 银两，重调幂等不双退。
-	PlayerJianghuSystem::OnBattlePrepareCancelled(player, 56001, /*skipSilverRefund=*/false);
+	// 取消备战：精准退还 500 银两并清掉三个标记字段，重调幂等不双退。
+	EXPECT_TRUE(PlayerJianghuSystem::RefundPendingSilverFee(player, 56001, "prepare_cancelled"));
 	EXPECT_EQ(1200u, CurrencySystem::GetBalance(player, kCurrencyGold));
-	PlayerJianghuSystem::OnBattlePrepareCancelled(player, 56001, /*skipSilverRefund=*/false);
+	EXPECT_EQ(0u, comp.pending_silver_fee_battle_id());
+	EXPECT_EQ(0u, comp.pending_silver_fee_amount());
+	EXPECT_EQ(0u, comp.pending_silver_fee_review_after_ms());
+	EXPECT_FALSE(PlayerJianghuSystem::RefundPendingSilverFee(player, 56001, "prepare_cancelled"));
 	EXPECT_EQ(1200u, CurrencySystem::GetBalance(player, kCurrencyGold));
+}
 
-	// match 已接管邮件退款时 skipSilverRefund=true：scene 只清记录不重退银两。
-	ASSERT_EQ(kSuccess, PlayerJianghuSystem::CommitPrepareSilverFee(player, 56002, 500));
-	EXPECT_EQ(700u, CurrencySystem::GetBalance(player, kCurrencyGold));
-	PlayerJianghuSystem::OnBattlePrepareCancelled(player, 56002, /*skipSilverRefund=*/true);
-	EXPECT_EQ(700u, CurrencySystem::GetBalance(player, kCurrencyGold));
+// 别的局还有未结清的预扣(取消没送到、终局还没落定)时,新的普通战书备战一律拒绝、标记不动:
+// 覆盖标记就把旧局那 500 永久弄丢(2026-11-26,数据覆写审计 r2 第 4 轮)。金帖档不写标记,不受影响。
+TEST_F(PlayerJianghuTest, SilverWritPendingForAnotherBattleRejectsTheNewPreparationWithoutTouchingTheMarker)
+{
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 1500));
+	JianghuDuelPrepareFee silverFee;
+	silverFee.set_duel_invite_id(1101);
+	silverFee.set_writ_tier(static_cast<uint32_t>(match::JIANGHU_WRIT_TIER_SILVER));
+	silverFee.set_silver_cost(500);
+	item_hold::HoldLines heldLines;
+	uint64_t silverToDeduct = 0;
+	ASSERT_EQ(kSuccess, PlayerJianghuSystem::ValidateAndCollectPrepareFee(player, 56101, silverFee, heldLines, silverToDeduct));
+	ASSERT_EQ(kSuccess, PlayerJianghuSystem::CommitPrepareSilverFee(player, 56101, silverToDeduct, kNowMs + 60000));
+	ASSERT_EQ(1000u, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+	EXPECT_EQ(kFeatureUnavailable,
+			  PlayerJianghuSystem::ValidateAndCollectPrepareFee(player, 56102, silverFee, heldLines, silverToDeduct));
+	EXPECT_EQ(0u, silverToDeduct);
+	EXPECT_EQ(kFeatureUnavailable, PlayerJianghuSystem::CommitPrepareSilverFee(player, 56102, 500, kNowMs + 90000))
+		<< "提交点复核同一条规则";
+	const auto &comp = tlsEcs.actorRegistry.get<PlayerJianghuComp>(player);
+	EXPECT_EQ(56101u, comp.pending_silver_fee_battle_id()) << "旧局的标记没被覆盖";
+	EXPECT_EQ(500u, comp.pending_silver_fee_amount());
+	EXPECT_EQ(kNowMs + 60000, comp.pending_silver_fee_review_after_ms());
+	EXPECT_EQ(1000u, CurrencySystem::GetBalance(player, kCurrencyGold)) << "一分没多扣";
+
+	// 金帖档只走道具预留,不碰待退标记。
+	GrantBoundItem(kGoldWritItemId, 1);
+	JianghuDuelPrepareFee goldFee;
+	goldFee.set_duel_invite_id(1102);
+	goldFee.set_writ_tier(static_cast<uint32_t>(match::JIANGHU_WRIT_TIER_GOLD_ITEM));
+	goldFee.set_item_config_id(kGoldWritItemId);
+	item_hold::HoldLines goldLines;
+	EXPECT_EQ(kSuccess, PlayerJianghuSystem::ValidateAndCollectPrepareFee(player, 56103, goldFee, goldLines, silverToDeduct));
+	EXPECT_EQ(1u, goldLines[kGoldWritItemId]);
+
+	// 旧局退还之后照常能开。
+	ASSERT_TRUE(PlayerJianghuSystem::RefundPendingSilverFee(player, 56101, "ABORT"));
+	EXPECT_EQ(1500u, CurrencySystem::GetBalance(player, kCurrencyGold));
+	EXPECT_EQ(kSuccess, PlayerJianghuSystem::ValidateAndCollectPrepareFee(player, 56102, silverFee, heldLines, silverToDeduct));
+	EXPECT_EQ(500u, silverToDeduct);
+}
+
+// 先入账成功、再清标记:入账失败(这里用余额溢出)保留标记,之后照常退一次;玩家不可改时什么都不动。
+TEST_F(PlayerJianghuTest, SilverRefundKeepsTheMarkerWhenTheCreditFailsOrThePlayerIsNotMutable)
+{
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 1000));
+	ASSERT_EQ(kSuccess, PlayerJianghuSystem::CommitPrepareSilverFee(player, 56201, 500, kNowMs + 60000));
+	const auto &comp = tlsEcs.actorRegistry.get<PlayerJianghuComp>(player);
+
+	auto &epoch = tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player);
+	epoch.epoch = 0; // 没有归属围栏:本节点此刻不改这名玩家的存档
+	EXPECT_FALSE(PlayerJianghuSystem::RefundPendingSilverFee(player, 56201, "prepare_cancelled"));
+	EXPECT_EQ(56201u, comp.pending_silver_fee_battle_id());
+	EXPECT_EQ(500u, CurrencySystem::GetBalance(player, kCurrencyGold));
+	epoch.epoch = 12;
+
+	constexpr uint64_t kNearlyFull = std::numeric_limits<uint64_t>::max() - 100;
+	tlsEcs.actorRegistry.get<CurrencyComp>(player).set_values(static_cast<int>(kCurrencyGold), kNearlyFull);
+	EXPECT_FALSE(PlayerJianghuSystem::RefundPendingSilverFee(player, 56201, "void_settlement"));
+	EXPECT_EQ(56201u, comp.pending_silver_fee_battle_id()) << "入账失败:标记留着,复核下一拍重试";
+	EXPECT_EQ(500u, comp.pending_silver_fee_amount());
+	EXPECT_EQ(kNearlyFull, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+	tlsEcs.actorRegistry.get<CurrencyComp>(player).set_values(static_cast<int>(kCurrencyGold), 500);
+	EXPECT_TRUE(PlayerJianghuSystem::RefundPendingSilverFee(player, 56201, "ABORT"));
+	EXPECT_EQ(1000u, CurrencySystem::GetBalance(player, kCurrencyGold));
+	EXPECT_EQ(0u, comp.pending_silver_fee_battle_id());
+	EXPECT_FALSE(PlayerJianghuSystem::RefundPendingSilverFee(player, 56201, "ABORT"));
+	EXPECT_EQ(1000u, CurrencySystem::GetBalance(player, kCurrencyGold)) << "只退一次";
+}
+
+// 退还的是玩家自己预扣的钱:获取封禁(这里是本人 GM 封禁流通银两)挡新增获得,不挡退费。
+TEST_F(PlayerJianghuTest, GainBlockDoesNotStopTheSilverRefund)
+{
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 1000));
+	ASSERT_EQ(kSuccess, PlayerJianghuSystem::CommitPrepareSilverFee(player, 56301, 500, kNowMs + 60000));
+	EXPECT_FALSE(GainBlockService::CountsAsGain(TX_JIANGHU_DUEL_REFUND));
+	EXPECT_TRUE(GainBlockService::CountsAsGain(TX_JIANGHU_DUEL_FEE));
+
+	ASSERT_EQ(kSuccess, CurrencySystem::BlockCurrency(player, kCurrencyGold));
+	EXPECT_EQ(static_cast<uint32_t>(kAssetBlocked), CurrencySystem::AddCurrency(player, kCurrencyGold, 1))
+		<< "新增获得仍被挡";
+	EXPECT_TRUE(PlayerJianghuSystem::RefundPendingSilverFee(player, 56301, "prepare_cancelled"));
+	EXPECT_EQ(1000u, CurrencySystem::GetBalance(player, kCurrencyGold));
+	EXPECT_EQ(0u, tlsEcs.actorRegistry.get<PlayerJianghuComp>(player).pending_silver_fee_battle_id());
 }
 
 TEST_F(PlayerJianghuTest, DefeatMarkOverwriteRevengeClearAndOwnerRevisionFence)
@@ -407,16 +506,16 @@ TEST_F(PlayerJianghuTest, ClearDefeatMarkSilverAndCharmIdempotent)
 TEST_F(PlayerJianghuTest, VoidAndZeroRoundRefundPendingSilverFeeOnce)
 {
 	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 1000));
-	// 1. 备战预扣 500 银两后遇到 BATTLE_OUTCOME_VOID (含节点崩溃/超时作废收件箱)，OnBattleVoid 退还一次，重复调用不双退。
-	ASSERT_EQ(kSuccess, PlayerJianghuSystem::CommitPrepareSilverFee(player, 81001, 500));
+	// 1. 备战预扣 500 银两后遇到 BATTLE_OUTCOME_VOID (含节点崩溃/超时作废收件箱)，作废结算退还一次，重复调用不双退。
+	ASSERT_EQ(kSuccess, PlayerJianghuSystem::CommitPrepareSilverFee(player, 81001, 500, kNowMs + 60000));
 	EXPECT_EQ(500u, CurrencySystem::GetBalance(player, kCurrencyGold));
-	PlayerJianghuSystem::OnBattleVoid(player, 81001);
+	EXPECT_TRUE(PlayerJianghuSystem::RefundPendingSilverFee(player, 81001, "void_settlement"));
 	EXPECT_EQ(1000u, CurrencySystem::GetBalance(player, kCurrencyGold));
-	PlayerJianghuSystem::OnBattleVoid(player, 81001);
+	EXPECT_FALSE(PlayerJianghuSystem::RefundPendingSilverFee(player, 81001, "void_settlement"));
 	EXPECT_EQ(1000u, CurrencySystem::GetBalance(player, kCurrencyGold));
 
 	// 2. 0 回合流局：PrepareBattleSettlement 返回 500 待退银两并清零 pending_silver_fee。
-	ASSERT_EQ(kSuccess, PlayerJianghuSystem::CommitPrepareSilverFee(player, 81002, 500));
+	ASSERT_EQ(kSuccess, PlayerJianghuSystem::CommitPrepareSilverFee(player, 81002, 500, kNowMs + 60000));
 	EXPECT_EQ(500u, CurrencySystem::GetBalance(player, kCurrencyGold));
 	const auto &comp = tlsEcs.actorRegistry.get<PlayerJianghuComp>(player);
 	BattleSettlementData zeroRound;
@@ -436,6 +535,7 @@ TEST_F(PlayerJianghuTest, VoidAndZeroRoundRefundPendingSilverFeeOnce)
 	EXPECT_EQ(500u, silverRefund);
 	EXPECT_EQ(0u, cand.pending_silver_fee_battle_id());
 	EXPECT_EQ(0u, cand.pending_silver_fee_amount());
+	EXPECT_EQ(0u, cand.pending_silver_fee_review_after_ms());
 }
 
 } // namespace

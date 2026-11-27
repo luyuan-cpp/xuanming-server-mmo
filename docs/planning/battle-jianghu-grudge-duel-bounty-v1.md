@@ -87,7 +87,7 @@
    - 发起后写入 `go/match` 权威表 `match_jianghu_duel_invitation`（TTL **60 秒**，同一目标同一时刻至多挂 1 条待应答生死状，复用 `match_challenge_invitation` 的 `owner_account / owner_revision` 围栏）。
    - **邀请阶段绝不发全服公告**！仅通过点对点推送弹窗通知目标。
    - **目标拒绝或 60 秒超时**：不扣发起方任何道具/银两，不发任何全服“认怂”公告（仅私密反馈发起方“对方暂未应战”），杜绝借战书公开网暴或吞玩家灵石道具。
-   - **双方确认应战 → `ItemHold` 冻结与实扣（零吞货/零刷货）**：`match` 锁定双方全员占用后，在发起方队长所在 `scene` 的 `PrepareBattle` 阶段沿用现役 `PlayerItemHoldComp`（`BagService::PlaceHold` / 银两预留）按 `duel_invite_id` 幂等冻结 1 张金帖或 500 银两；**仅在战斗正式进入第 1 回合确认开打时提交实扣**；若备战失败、`CreateBattle` 失败、或对局因节点故障裁决为 `BATTLE_OUTCOME_VOID`（作废）/ 零回合异常中止，一律**释放冻结（若已实扣则经 `go/mail` `SenderKind("match") = 6` 按 `duel_invite_id` 幂等原样退还）**。
+   - **双方确认应战 → `ItemHold` 冻结与实扣（零吞货/零刷货）**：`match` 锁定双方全员占用后，在发起方队长所在 `scene` 的 `PrepareBattle` 阶段沿用现役 `PlayerItemHoldComp`（`BagService::PlaceHold` / 银两预留）按 `duel_invite_id` 幂等冻结 1 张金帖或 500 银两；**仅在战斗正式进入第 1 回合确认开打时提交实扣**；若备战失败、`CreateBattle` 失败、或对局因节点故障裁决为 `BATTLE_OUTCOME_VOID`（作废）/ 零回合异常中止，一律**释放冻结（普通战书已预扣的 500 银两由 `scene` 随玩家存档原子退还：取消、作废结算、SQL 终局复核三条出口共用一个待退标记，只退一次；取消没送到时由终局复核兜底）**。2026-11-26 改：原定「经 `go/mail` 幂等退还」已取消——邮件与 `scene` 在线退费两条通道在结果不明时必然双退或丢，定案见 [实施计划](battle-jianghu-grudge-duel-phase1-implementation-plan.md) 末节。
 4. **战斗规则、回合上限与全服围观**：
    - 独立模式枚举 **`MATCH_MODE_JIANGHU_DUEL`**（不混用 `MATCH_MODE_PVP_CHALLENGE`）：
      - **使用双方本人真实养成**（装备、词条品相、法宝、自由技能、宝宝、赛季技/印，局内满血蓝隔离、禁背包药、不回写血蓝），每侧人数按约定 `1V1 / 2V2 / 3V3 / 5V5`（等额人数）；
@@ -222,7 +222,7 @@
 
 | 域能力 | 权威服务与逻辑库 | 最小增量契约与存储要点 |
 |---|---|---|
-| **生死状邀请、开局、观战与个人恩怨录** | `go/match`（`mmorpg_match`） | 1. `proto/match/match_service.proto` `MatchMode` 新增 `MATCH_MODE_JIANGHU_DUEL`（一期）与 `MATCH_MODE_JIANGHU_BRAWL`（二期）；<br>2. `spectateVisibilityOfMode` 为两模式显式登记 `SPECTATE_VISIBILITY_PUBLIC`（通过 `TestSpectateVisibilityDecidesEveryMatchMode` 守卫），两模式回合/时限打满均权威判平；<br>3. 新增表 `match_jianghu_duel_invitation`（同 `match_challenge_invitation` 含 `owner_account/owner_revision` 与双队成员确认快照）、`match_grudge_relation`（按 `(player_id, owner_revision, peer_player_id)` 聚合胜负平，1V1 互记、多对多记双方队长，每角色上限 50）、`match_grudge_log`（每对保留近 20 场）；<br>4. 邀请前经 RPC 校验 `go/friend` 全体成员两两 `friend_block` 双向拉黑与好友关系；发起方队长资费在 `scene.PrepareBattle` 复用 `PlayerItemHoldComp`（`BagService::PlaceHold`）按 `duel_invite_id` 冻结，开打后实扣，建房失败或 `BATTLE_OUTCOME_VOID`/零回合中止自动释放或经 `go/mail`（`SenderKind("match") = 6`）幂等退还。 |
+| **生死状邀请、开局、观战与个人恩怨录** | `go/match`（`mmorpg_match`） | 1. `proto/match/match_service.proto` `MatchMode` 新增 `MATCH_MODE_JIANGHU_DUEL`（一期）与 `MATCH_MODE_JIANGHU_BRAWL`（二期）；<br>2. `spectateVisibilityOfMode` 为两模式显式登记 `SPECTATE_VISIBILITY_PUBLIC`（通过 `TestSpectateVisibilityDecidesEveryMatchMode` 守卫），两模式回合/时限打满均权威判平；<br>3. 新增表 `match_jianghu_duel_invitation`（同 `match_challenge_invitation` 含 `owner_account/owner_revision` 与双队成员确认快照）、`match_grudge_relation`（按 `(player_id, owner_revision, peer_player_id)` 聚合胜负平，1V1 互记、多对多记双方队长，每角色上限 50）、`match_grudge_log`（每对保留近 20 场）；<br>4. 邀请前经 RPC 校验 `go/friend` 全体成员两两 `friend_block` 双向拉黑与好友关系；发起方队长资费在 `scene.PrepareBattle` 复用 `PlayerItemHoldComp`（`BagService::PlaceHold`）按 `duel_invite_id` 冻结，开打后实扣，建房失败或 `BATTLE_OUTCOME_VOID`/零回合中止自动释放，普通战书银两由 `scene` 一条通道退还（`match` 不发退费邮件，2026-11-26 定案见实施计划末节）。 |
 | **帮派恩怨墙与 24h 双向宣战** | `go/guild`（`mmorpg_guild`） | 1. 复用 [guild-play-v1.md](guild-play-v1.md) 的 `match → guild` 终局可靠投递（排期上晚于或共建该投递骨架），新增 `guild_grudge_record`（近 20 场）与 `guild_rival_summary`（对各敌帮胜负统计）；<br>2. 二期新增 `guild_war_declaration`（24h 邀约、24h 宣战期、按 `(min_guild, max_guild)` 唯一键与 72h 配对冷却、单帮最多同时宣战 3 帮）。 |
 | **好友拉黑与 7 天删友留痕（二期）** | `go/friend`（`mmorpg_friend`） | 一期提供内部批量查询 RPC（两两拉黑与好友关系）；二期新增 7 天删友留痕表（绑定 `owner_revision`，过户隔离）供悬赏五重防刷核验。 |
 | **全服固定模板系统播报** | `go/chat` | 由 `match` 终局/开局调用内部模板播报接口发送 `CHAT_CHANNEL_TYPE_SYSTEM`（仅拼装服务端权威角色名/帮名/回合数/`battle_id` 与固定白名单模板，**绝不接受客户端自定义文本**，零涉黄涉政/广告引流口子）。 |
@@ -254,7 +254,7 @@
 |---|---|---|---|
 | **V-1** | **借生死状/悬赏故意打输转移银两或 5 人刷赏印钞（RMT 洗钱）** | 绕过当面交易限制与集市 5% 税，或 5 人全额领赏使产出大于销毁 | 生死状**0 银两对赌**；悬赏采用固定低档且发布银两 **100% 系统销毁**，**单张悬赏总奖池按胜方合法人数均分（永不超发）**，胜方任一成员命中同账号/同设备/同 IP/同帮/7 天好友即**整队 0 赏金** |
 | **V-2** | **双开互刷生死状/劫火战刷 660 首套材料或论剑 Elo** | 零成本秒刷首套材料与高段位排名 | `MATCH_MODE_JIANGHU_DUEL` 与 `MATCH_MODE_JIANGHU_BRAWL` 在 C++/Java `IsEligibleBattle`、论剑 `RatingStore`、赛季任务中全部显式排除 |
-| **V-3** | **用 1 张战书不断发邀骚扰和平玩家，或建房失败/`VOID` 吞掉付费金帖** | 散人被弹窗逼退；或对方拒绝/节点故障导致发起方花钱买的战书白白吞掉 | ① 校验全员两两 `friend_block` 拉黑 + 目标全员「闭关免战」（开免战者同时禁主动发帖）+ 同目标 5 分钟冷却 + 日限 20 次；② 邀请期不公告、不扣道具；③ 采用 `PlayerItemHoldComp` 备战冻结、开打实扣，建房失败或 `BATTLE_OUTCOME_VOID`/零回合中止自动释放或经 `mail` 幂等退还 |
+| **V-3** | **用 1 张战书不断发邀骚扰和平玩家，或建房失败/`VOID` 吞掉付费金帖** | 散人被弹窗逼退；或对方拒绝/节点故障导致发起方花钱买的战书白白吞掉 | ① 校验全员两两 `friend_block` 拉黑 + 目标全员「闭关免战」（开免战者同时禁主动发帖）+ 同目标 5 分钟冷却 + 日限 20 次；② 邀请期不公告、不扣道具；③ 采用 `PlayerItemHoldComp` 备战冻结、开打实扣，建房失败或 `BATTLE_OUTCOME_VOID`/零回合中止自动释放；普通战书银两由 `scene` 随存档退还并有 SQL 终局复核兜底（2026-11-26 起不经 `mail`） |
 | **V-4** | **观战可见性错配把普通私密切磋公开或挤爆 Battle 节点** | 私密切磋隐私泄漏；热门全服生死战几百人直连把单个 `battle` 节点打挂 | 新增独立 `MatchMode`，绝不修改 `MATCH_MODE_PVP_CHALLENGE` 的 `PRIVATE` 策略；生死状与劫火战走既有的 L0/L1/L2 分级观战，热门房间自动升 L2 经 gate 广播扇出 |
 | **V-5** | **买高信誉/老角色后一上线被原主仇人追杀、挂悬赏或关思过崖** | 损害官方过户角色交易体验，制造无辜受害者 | 恩怨录、败者印记、煞气、思过崖、7 天删友留痕与待结悬赏全部绑定 `owner_revision`；角色过户换人（`owner_revision` 递增）时自动失效/清空 |
 | **V-6** | **大户连买「清心保释文书」无限清人，或带 1 个持盾小号护航无敌抢点** | 变相花钱霸凌或利用 15 分钟保护盾卡无敌抢砂 | ① 「清心保释文书」24h 内第 1 次立清、第 2 次仅减半且上限 2 次；② 敌方对队内无盾成员发起劫战时，**安全区外整队拉入且持盾成员自动破盾** |
@@ -273,7 +273,7 @@
 | 里程碑 | 范围与核心交付 | 验收通过标准 |
 |---|---|---|
 | **M1 · 协议、配表与经济底座** | ① `MatchMode` 新增 `MATCH_MODE_JIANGHU_DUEL`；<br>② `Tip.xlsx` 新增 `jianghu_error` 域错误码；<br>③ `Item.xlsx` 新增绑定道具「金帖生死状」「清风洗尘符」与规则表 `JianghuRule`；<br>④ 玩家持久组件追加 `PlayerJianghuComp`（免战开关、败者印记、`owner_revision`）；<br>⑤ 同步 C++/Go/Java/Unity 生成物 | `dev.bat gen`、`gen.bat client`、`ContractSync --check` 全绿；`TestSpectateVisibilityDecidesEveryMatchMode` 通过；`IsEligibleBattle` 明确拦截新模式 |
-| **M2 · 生死状约战、零吞货扣费与全服围观** | ① `go/match` 落地 `CreateJianghuDuelInvite` / `RespondJianghuDuel`（支持 1V1 及 2–5 人小队约战、拉黑/免战/冷却校验、单目标唯一待应答）；<br>② `scene.PrepareBattle` 幂等扣费与建房失败 `mail` 退还闭环；<br>③ 成局触发 `go/chat` 模板全服播报＋一键观战入口（L0/L1/L2） | 单测覆盖：拒绝/超时 0 扣费 0 公告；拉黑/免战拦截；扣费后建房失败幂等退还；成局可被第三人 `WatchBattle` 围观；不涨 Elo 不涨 660 材料 |
+| **M2 · 生死状约战、零吞货扣费与全服围观** | ① `go/match` 落地 `CreateJianghuDuelInvite` / `RespondJianghuDuel`（支持 1V1 及 2–5 人小队约战、拉黑/免战/冷却校验、单目标唯一待应答）；<br>② `scene.PrepareBattle` 幂等扣费与建房失败退还闭环（`scene` 一条通道，2026-11-26 起不经 `mail`）；<br>③ 成局触发 `go/chat` 模板全服播报＋一键观战入口（L0/L1/L2） | 单测覆盖：拒绝/超时 0 扣费 0 公告；拉黑/免战拦截；扣费后建房失败幂等退还；成局可被第三人 `WatchBattle` 围观；不涨 Elo 不涨 660 材料 |
 | **M3 · 恩怨录、帮派恩怨墙、败者印记与 UI 联调** | ① `go/match` 落地 `match_grudge_relation` / `match_grudge_log`（上限 50 对 / 20 场、过户 `owner_revision` 清空）；<br>② `match → guild` 投递帮派同帮小队约战至帮派恩怨墙；<br>③ C++/Java `scene` 落地 30 分钟败者印记与「洗尘符」消除；<br>④ 交付客户端非 UI C# 绑定并交接异机 Codex 完成 UI 联调 | 端到端冒烟：个人 1V1 与两帮 3V3 签金帖生死状 → 全服围观 → 战果播报 → 恩怨录与帮派墙可查并回放战报 → 败者挂印记并验证 3 种消除路径 → 过户换人后旧仇清空；Java 仓 `PARITY.md` 核销一期 |
 
 ### 阶段二：二期「灵潮·劫火争夺线 ＋ 煞气红名 ＋ 悬赏缉拿 ＋ 思过崖」（在线达标后按开关启用）
@@ -317,7 +317,7 @@
 4. **二期劫火灵匣/灵砂泉机制**：复用无状态 `WorldPoi`，采用**共享触点＋10 秒采集读条可被劫战打断**，核心争夺发生在打断采集与回城路上截杀抢 30% 灵砂。
 
 ### 7.2 结合仓库架构替你先收口的工程默认项（审阅时可随时微调）
-- **零吞货扣费**：小队生死状由发起方队长单人出资，采用现役 `PlayerItemHoldComp` 备战冻结、开打实扣；建房失败或中途 `BATTLE_OUTCOME_VOID`/零回合异常中止一律释放或经 `mail` 幂等退还。
+- **零吞货扣费**：小队生死状由发起方队长单人出资，采用现役 `PlayerItemHoldComp` 备战冻结、开打实扣；建房失败或中途 `BATTLE_OUTCOME_VOID`/零回合异常中止一律释放，普通战书银两由 `scene` 随存档原子退还、只退一次（2026-11-26 起不经 `mail`，见实施计划末节）。
 - **区服、确认与防骚扰**：同归属区（含合服组）远程随时约战；小队约战须双方全员本人确认；全员两两拉黑拦截＋目标全员免战拦截（开免战者同时禁止主动发帖，好友可绕过免战）。
 - **个人恩怨录防冲爆**：`1V1` 双方互记，多对多小队局个人恩怨录仅记双方队长（1 对 1），防止打几场 5V5 冲爆 50 人上限。
 - **缉拿唯一场景与奖池防印钞**：绝不在和平主城/和平野外强开缉拿、也不在生死状 `DUEL` 中触发领赏入崖；仅劫火线 `BRAWL` 击败在榜目标自动结案（零额外捕快接单状态机），单张悬赏总奖池按胜方合法人数均分（永不超发），胜方任一成员命中五重防刷即整队 0 赏金（允许发布者叫自己同帮/好友替其复仇领赏）。

@@ -965,7 +965,8 @@ $script:AssetOpSecrets = @{}
 #   chat:client-rpc-router。世界频道的广播走 Kafka,不经这个口。
 #   friend:client-rpc-router、data-service(RoleFence 参与者接口)。
 #   trade:client-rpc-router、data-service(RoleFence 参与者接口)。trade → scene 的资产通道是 trade 往外拨,不经这个口。
-#   mail:client-rpc-router、data-service(RoleFence 参与者接口)、rank(MailRpc,榜单奖励)、Scene(战斗掉落放不下时改投邮件,MailAdmin.SendPersonalMail)。
+#   mail:client-rpc-router、data-service(RoleFence 参与者接口)、rank(MailRpc,榜单奖励)、match(MailRpc,群仙问道赛领奖邮件;2026-11-26 补)、
+#          Scene(战斗掉落放不下时改投邮件,MailAdmin.SendPersonalMail)。
 #   rank:client-rpc-router、match(结算后上报评分)。
 # 2026-11-19 补支付与官方商城(docs/design/payment-recharge.md §22):
 #   payment:client-rpc-router(路由表 PaymentNodeService)。渠道回调口 18130 是清单里声明的其它端口,对任何来源开放:回调来自集群外,靠渠道签名验真。
@@ -982,7 +983,7 @@ $script:GrpcAllowLists = [ordered]@{
 	chat   = [pscustomobject]@{ PolicyName = 'chat-grpc-allowlist'; TargetApps = @('chat'); AllowedApps = @('client-rpc-router') }
 	friend = [pscustomobject]@{ PolicyName = 'friend-grpc-allowlist'; TargetApps = @('friend'); AllowedApps = @('client-rpc-router', 'data-service') }
 	trade  = [pscustomobject]@{ PolicyName = 'trade-grpc-allowlist'; TargetApps = @('trade'); AllowedApps = @('client-rpc-router', 'data-service') }
-	mail   = [pscustomobject]@{ PolicyName = 'mail-grpc-allowlist'; TargetApps = @('mail'); AllowedApps = @('client-rpc-router', 'data-service', 'rank', 'scene', 'scene-world', 'scene-instance') }
+	mail   = [pscustomobject]@{ PolicyName = 'mail-grpc-allowlist'; TargetApps = @('mail'); AllowedApps = @('client-rpc-router', 'data-service', 'rank', 'match', 'scene', 'scene-world', 'scene-instance') }
 	rank   = [pscustomobject]@{ PolicyName = 'rank-grpc-allowlist'; TargetApps = @('rank'); AllowedApps = @('client-rpc-router', 'match') }
 	payment = [pscustomobject]@{ PolicyName = 'payment-grpc-allowlist'; TargetApps = @('payment'); AllowedApps = @('client-rpc-router') }
 	mall   = [pscustomobject]@{ PolicyName = 'mall-grpc-allowlist'; TargetApps = @('mall'); AllowedApps = @('trade', 'payment') }
@@ -12543,6 +12544,9 @@ function New-GoSvcConfigMapYaml {
 	$matchBattleReportEnabled    = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'BattleReport.Enabled'
 	$matchDataServiceRpcTimeout  = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'DataServiceRpc.Timeout'
 	$matchDataServiceRpcNonBlock = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'DataServiceRpc.NonBlock'
+	# 群仙问道赛领奖邮件的 MailAdmin 客户端:超时与发件密钥的变量名从服务 yaml 镜像(变量名与 Add-MatchAuthoritySecretEnv 注入的同一个)。
+	$matchMailRpcTimeout         = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'MailRpc.Timeout'
+	$matchMailSecretEnv          = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'MailSecretEnv'
 	# MatchedTicketTTLSeconds 是本轮新增项(cross-zone-matchmaking.md D5,Go 侧缺省 30)。
 	# 和上面不同,它允许缺席:yaml 里没有就整行不写,交给 Go 的 default 标签,
 	# 这样 go/match 与部署脚本可以分开落地,不会让 infra-up 卡在别人的提交上。
@@ -13699,6 +13703,14 @@ DataServiceRpc:
   NonBlock: ${matchDataServiceRpcNonBlock}
   Middlewares:
     Breaker: false
+# 群仙问道赛领奖邮件(MailAdmin.SendPersonalMail,sender_kind 6;docs/planning/season-team-tournament-v1.md 第七节)。
+# mail 不写 Etcd.Key(D-13),直连同 namespace 的 Service。发件密钥只写变量名,值经 domain-service-secrets 的 mail-producer-match 注入;
+# 非 dev 档开着锦标赛而这一段或密钥缺了,match 拒启(带附件的奖励不会被落成已领取)。
+MailRpc:
+  Endpoints: [mail.${InfraNamespace}:50900]
+  Timeout: ${matchMailRpcTimeout}
+  NonBlock: true
+MailSecretEnv: ${matchMailSecretEnv}
 ${matchSpectateBlock}
 # 战报回放录制开关(battle-report-replay.md §7.1、§11),从 go/match/etc/match_service.yaml 镜像。
 BattleReport:
@@ -14746,6 +14758,12 @@ function Add-MatchAuthoritySecretEnv {
 		$ManifestContent = Add-GoSvcSecretEnv -SvcName 'match' -ManifestContent $ManifestContent `
 			-EnvName $entry.Env -SecretName 'domain-service-secrets' -SecretKey $entry.Key
 	}
+	# 群仙问道赛领奖邮件的发件签名(match 签、mail 验,与 mail Pod 的同名变量同值;docs/planning/season-team-tournament-v1.md 第七节)。
+	# 变量名取服务 yaml 顶层的 MailSecretEnv,match ConfigMap 写的是同一个名字;key mail-producer-match 同样由运维在 infra 预置。
+	$mailEnvName = Get-AuthoritativeScalar -RelativePath 'go/match/etc/match_service.yaml' -KeyPath 'MailSecretEnv'
+	if ($mailEnvName -cnotmatch '^[A-Z][A-Z0-9_]*$') { throw '匹配密钥环境变量名无效。' }
+	$ManifestContent = Add-GoSvcSecretEnv -SvcName 'match' -ManifestContent $ManifestContent `
+		-EnvName $mailEnvName -SecretName 'domain-service-secrets' -SecretKey 'mail-producer-match'
 	return $ManifestContent
 }
 

@@ -2768,6 +2768,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildWarBountyRecord final : public
     kCreatedAtMsFieldNumber = 15,
     kExpiresAtMsFieldNumber = 16,
     kResolvedAtMsFieldNumber = 17,
+    kEscrowGuildFundsFieldNumber = 18,
     kCounterKillsFieldNumber = 12,
   };
   // uint64 bounty_id = 1;
@@ -2930,6 +2931,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildWarBountyRecord final : public
   void _internal_set_resolved_at_ms(::uint64_t value);
 
   public:
+  // uint64 escrow_guild_funds = 18;
+  void clear_escrow_guild_funds() ;
+  [[nodiscard]] ::uint64_t escrow_guild_funds() const;
+  void set_escrow_guild_funds(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_escrow_guild_funds() const;
+  void _internal_set_escrow_guild_funds(::uint64_t value);
+
+  public:
   // uint32 counter_kills = 12;
   void clear_counter_kills() ;
   [[nodiscard]] ::uint32_t counter_kills() const;
@@ -2944,7 +2955,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildWarBountyRecord final : public
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 17,
+      ::google::protobuf::internal::TcParseTable<5, 18,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2989,6 +3000,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildWarBountyRecord final : public
     ::uint64_t created_at_ms_;
     ::uint64_t expires_at_ms_;
     ::uint64_t resolved_at_ms_;
+    ::uint64_t escrow_guild_funds_;
     ::uint32_t counter_kills_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -16380,7 +16392,7 @@ inline void GuildWarBountyRecord::_internal_set_escrow_op_id(::uint64_t value) {
 inline void GuildWarBountyRecord::clear_counter_kills() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.counter_kills_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint32_t GuildWarBountyRecord::counter_kills() const {
   // @@protoc_insertion_point(field_get:guildpb.GuildWarBountyRecord.counter_kills)
@@ -16388,7 +16400,7 @@ inline ::uint32_t GuildWarBountyRecord::counter_kills() const {
 }
 inline void GuildWarBountyRecord::set_counter_kills(::uint32_t value) {
   _internal_set_counter_kills(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:guildpb.GuildWarBountyRecord.counter_kills)
 }
 inline ::uint32_t GuildWarBountyRecord::_internal_counter_kills() const {
@@ -16518,6 +16530,30 @@ inline ::uint64_t GuildWarBountyRecord::_internal_resolved_at_ms() const {
 inline void GuildWarBountyRecord::_internal_set_resolved_at_ms(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.resolved_at_ms_ = value;
+}
+
+// uint64 escrow_guild_funds = 18;
+inline void GuildWarBountyRecord::clear_escrow_guild_funds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.escrow_guild_funds_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint64_t GuildWarBountyRecord::escrow_guild_funds() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildWarBountyRecord.escrow_guild_funds)
+  return _internal_escrow_guild_funds();
+}
+inline void GuildWarBountyRecord::set_escrow_guild_funds(::uint64_t value) {
+  _internal_set_escrow_guild_funds(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildWarBountyRecord.escrow_guild_funds)
+}
+inline ::uint64_t GuildWarBountyRecord::_internal_escrow_guild_funds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.escrow_guild_funds_;
+}
+inline void GuildWarBountyRecord::_internal_set_escrow_guild_funds(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.escrow_guild_funds_ = value;
 }
 
 // -------------------------------------------------------------------

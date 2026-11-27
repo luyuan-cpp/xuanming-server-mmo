@@ -231,6 +231,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerJianghuComp final : public ::
     kClearBadgeExpiresAtMsFieldNumber = 9,
     kPendingSilverFeeBattleIdFieldNumber = 11,
     kPendingSilverFeeAmountFieldNumber = 12,
+    kPendingSilverFeeReviewAfterMsFieldNumber = 13,
     kClearBadgeStyleIdFieldNumber = 10,
   };
   // string defeat_mark_winner_name = 5;
@@ -348,6 +349,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerJianghuComp final : public ::
   void _internal_set_pending_silver_fee_amount(::uint64_t value);
 
   public:
+  // uint64 pending_silver_fee_review_after_ms = 13;
+  void clear_pending_silver_fee_review_after_ms() ;
+  [[nodiscard]] ::uint64_t pending_silver_fee_review_after_ms() const;
+  void set_pending_silver_fee_review_after_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_pending_silver_fee_review_after_ms() const;
+  void _internal_set_pending_silver_fee_review_after_ms(::uint64_t value);
+
+  public:
   // uint32 clear_badge_style_id = 10;
   void clear_clear_badge_style_id() ;
   [[nodiscard]] ::uint32_t clear_badge_style_id() const;
@@ -362,7 +373,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerJianghuComp final : public ::
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 12,
+      ::google::protobuf::internal::TcParseTable<4, 13,
                           0, 57,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -402,6 +413,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerJianghuComp final : public ::
     ::uint64_t clear_badge_expires_at_ms_;
     ::uint64_t pending_silver_fee_battle_id_;
     ::uint64_t pending_silver_fee_amount_;
+    ::uint64_t pending_silver_fee_review_after_ms_;
     ::uint32_t clear_badge_style_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -685,7 +697,7 @@ inline void PlayerJianghuComp::_internal_set_clear_badge_expires_at_ms(::uint64_
 inline void PlayerJianghuComp::clear_clear_badge_style_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.clear_badge_style_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t PlayerJianghuComp::clear_badge_style_id() const {
   // @@protoc_insertion_point(field_get:PlayerJianghuComp.clear_badge_style_id)
@@ -693,7 +705,7 @@ inline ::uint32_t PlayerJianghuComp::clear_badge_style_id() const {
 }
 inline void PlayerJianghuComp::set_clear_badge_style_id(::uint32_t value) {
   _internal_set_clear_badge_style_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:PlayerJianghuComp.clear_badge_style_id)
 }
 inline ::uint32_t PlayerJianghuComp::_internal_clear_badge_style_id() const {
@@ -751,6 +763,30 @@ inline ::uint64_t PlayerJianghuComp::_internal_pending_silver_fee_amount() const
 inline void PlayerJianghuComp::_internal_set_pending_silver_fee_amount(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pending_silver_fee_amount_ = value;
+}
+
+// uint64 pending_silver_fee_review_after_ms = 13;
+inline void PlayerJianghuComp::clear_pending_silver_fee_review_after_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pending_silver_fee_review_after_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint64_t PlayerJianghuComp::pending_silver_fee_review_after_ms() const {
+  // @@protoc_insertion_point(field_get:PlayerJianghuComp.pending_silver_fee_review_after_ms)
+  return _internal_pending_silver_fee_review_after_ms();
+}
+inline void PlayerJianghuComp::set_pending_silver_fee_review_after_ms(::uint64_t value) {
+  _internal_set_pending_silver_fee_review_after_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:PlayerJianghuComp.pending_silver_fee_review_after_ms)
+}
+inline ::uint64_t PlayerJianghuComp::_internal_pending_silver_fee_review_after_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pending_silver_fee_review_after_ms_;
+}
+inline void PlayerJianghuComp::_internal_set_pending_silver_fee_review_after_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pending_silver_fee_review_after_ms_ = value;
 }
 
 #ifdef __GNUC__

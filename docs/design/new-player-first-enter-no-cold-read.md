@@ -37,7 +37,7 @@
   - 建角时多一次 Redis 往返,落在账号锁内。
   - 未进场角色的种子各占约百字节 Redis,24h 后自动过期。
   - **少了一个早期信号**。`player-storage-placement.md` §13 第 3 条禁止的两种违规配置:go/db 开了 `Placement.Required=true` 而 login 没钉落点;`NewPlayerStorageId` 指向 go/db 打不开的库。今天两者都表现为「新号预加载失败、进不了游戏」;打开种子后变成「能进场,但存盘进死信或无限重试,进度只在 Redis、不进 MySQL」,更隐蔽。打开种子之前两类告警必须先就位(§9、§10)。
-  - **新号的入场链改在 PreloadPool 的 worker 上跑完**。快路径在池 worker 里同步跑完整段 apply;冷读路径发完 Kafka 就把 worker 还回去。开种子后,每个新号占用池 worker 的时间变长,池满回 `kLoginInProgress`(§6 第 21 行)。老玩家命中缓存时今天就是这样。
+  - **新号的入场链改在 PreloadPool 的 worker 上跑完**。快路径在池 worker 里同步跑完整段 apply;冷读路径发完 Kafka 就把 worker 还回去。开种子后,每个新号占用池 worker 的时间变长,池满回 `kLoginEnterGameBusy`(§6 第 21 行)。老玩家命中缓存时今天就是这样。
 - **Java 版不适用**:Java 建角时同步插入玩家行,进场按主键读本库,没有这条冷读链(§11)。
 
 ## 2. 现状链路(逐步核对)
@@ -68,7 +68,7 @@
 - **入口**:拿玩家锁(:97-114),校验归属(账号 blob,或反查索引 + self-heal,:139-219)。
 - **RPC 立即回「已受理」**,真正进场走异步链(:221-244)。
 - **预加载**:放进 PreloadPool 执行 `EnsurePlayerAllDataInRedisAsync`(:381-391)。
-  - 池容量 256,池满直接回 `kLoginInProgress`(:393-400;`login.yaml:332-334`)。
+  - 池容量 256,池满直接回 `kLoginEnterGameBusy`(2026-11-26 起;之前回 `kLoginInProgress`)(:393-400;`login.yaml:332-334`)。
   - 每个读任务等结果的上限是 `dispatcherTaskTTL = 8s`(:356-380)。
   - **回调在哪个 goroutine 上跑**:
     - 快路径命中时,`onComplete` 在池 worker 里同步执行(`ensure_player_all_data_async.go:65-67`)。于是整段 `applyLoadedPlayerSession`(GetSession、身份补齐、SetSession、BindSession、EnterScene,:333、:685 起)都占着这个 worker。
@@ -262,7 +262,7 @@
 | 18 | 滚动升级 / 新旧混跑 | 新旧 login 的读路径相同,旧 login 只是不写种子。开关随时可关;已写的种子 ≡ 冷读结果,24h 自然过期 | 无需清理 |
 | 19 | 展示类读者 | 种子不含身份,首次进场照旧由身份补齐写入。好友资料、外观回填读到种子时,按「缺字段」处理(`go/friend/internal/data/friend_profiles.go:44-62`;`role_appearance_backfill.go:50-52`),展示结果和读不到 blob 时一样 | 不变 |
 | 20 | 资产账本 | 对未进场的新号,data_service `GetPlayerAssetOpLedger` 的结果从 absent 变成 found + 空账本(`asset_op_ledger_logic.go:36-44`、:117-123)。guild / trade 两种情况都判 UNKNOWN,继续等(`go/shared/assetop/classify.go:144-162`) | 语义不变,只是计数 label 变了 |
-| 21 | 入场链占用哪个池(§2.2) | 开种子后,新号也走快路径:`applyLoadedPlayerSession` 整段在 PreloadPool 的 worker 里同步跑完,不再在 dispatcher worker 上跑。每个新号占用池 worker 的时间,从「发完 Kafka」变成「整段 apply」,其中含 player_locator、scene_manager 两次 gRPC 和一次 Kafka 同步发送。池是非阻塞提交,Size 256(`login.yaml:332-334`),池满回 `kLoginInProgress`,客户端重试。另一面,dispatcher 不再替新号跑 apply,`cb_wait` 的排队压力变小。老玩家命中缓存今天就是这条路 | 背压形态变了,不是正确性问题。L-14 开、关两轮都要看池掉单指标 `entergame_total{result="pool_saturated"}`(`stress_summarize.ps1` 的 pool_saturated 列;`[preload-pool] dropped_delta` 日志作辅证)和 `entergame_apply_*` 各阶段;出现掉单就调大 `PreloadPool.Size`(只改配置) |
+| 21 | 入场链占用哪个池(§2.2) | 开种子后,新号也走快路径:`applyLoadedPlayerSession` 整段在 PreloadPool 的 worker 里同步跑完,不再在 dispatcher worker 上跑。每个新号占用池 worker 的时间,从「发完 Kafka」变成「整段 apply」,其中含 player_locator、scene_manager 两次 gRPC 和一次 Kafka 同步发送。池是非阻塞提交,Size 256(`login.yaml:332-334`),池满回 `kLoginEnterGameBusy`,客户端重试。另一面,dispatcher 不再替新号跑 apply,`cb_wait` 的排队压力变小。老玩家命中缓存今天就是这条路 | 背压形态变了,不是正确性问题。L-14 开、关两轮都要看池掉单指标 `entergame_total{result="pool_saturated"}`(`stress_summarize.ps1` 的 pool_saturated 列;`[preload-pool] dropped_delta` 日志作辅证)和 `entergame_apply_*` 各阶段;出现掉单就调大 `PreloadPool.Size`(只改配置) |
 
 ## 7. 上线与回退
 
@@ -274,7 +274,7 @@
    - go/db `db_placement_guard_total{op="write",outcome="missing_required"}`(违规配置一:Required 开着而新号没落点);
    - go/db `db_placement_store_open_total{result=~"error|rejected"}`,以及 go/db 的 ERROR 日志 `retry task rescheduled`,其 cause 含 `placement store is unavailable`(违规配置二:`NewPlayerStorageId` 指向打不开的库。写任务按 `errPlacementStoreUnavailable` 延后、不耗重试预算,会一直在重试队列里转,`placement_route.go:36-37`、`key_ordered_consumer.go:2072-2107`);
    - `login_create_player_seed_total{result=~"parent_exists|owner_epoch_exists"}`。
-4. 开服尖峰压测(L-14)里开、关各跑一轮,按 AGENTS §6 出对比表:首次进场 p99、db_task 读量、Redis ops,以及 PreloadPool 掉单、`kLoginInProgress` 次数、`entergame_apply_*` 各阶段(§6 第 21 行)。
+4. 开服尖峰压测(L-14)里开、关各跑一轮,按 AGENTS §6 出对比表:首次进场 p99、db_task 读量、Redis ops,以及 PreloadPool 掉单、`kLoginInProgress` 与 `kLoginEnterGameBusy` 次数(池满 2026-11-26 起回后者)、`entergame_apply_*` 各阶段(§6 第 21 行)。
    - PreloadPool 掉单看指标 `entergame_total{result="pool_saturated"}`,即 `stress_summarize.ps1` EnterGame 表的 pool_saturated 列。AGENTS §6.1 规定复盘只读这个脚本的输出,日志进不了对比表。
    - login 日志 `[preload-pool] dropped_delta` 只作辅证。
    - 建角锁内新增的那一步看同一脚本 CreatePlayer stages 表的 seed 列;开关关着时这一列是 n/a,可以用来核对本轮的开关状态。
@@ -296,7 +296,7 @@
 |---|---|---|
 | dataloader | 种子内容与 TTL;重发幂等;不覆盖已有父键;owner_epoch 存在就拒写;零 id / nil 客户端;Redis 不可用;**种子 ≡ 冷读骨架**(子表缓存给出「无行」时,`EnsurePlayerAllDataInRedisAsync` 写出的父键和种子 `proto.Equal`);种子命中后快路径不碰 Kafka 和 dispatcher | 无(miniredis) |
 | CreatePlayer | 开关关 → 不写;开关开 → 写骨架并带 TTL;归属登记失败 → 不写;账号 blob 围栏失败 → 只留会过期的种子;已有父键 → 不覆盖并计数;owner_epoch 已存在 → 不写并计数;种子脚本报错 → 建角照常成功并计 `error`;请求 ctx 在持锁之后被取消 → 建角失败,但建角锁已释放(§13.1) | 无(miniredis + 假 data_service) |
-| EnterGame | 种子 → EnterGame:走快路径,身份补齐写进种子,TTL 保留,没有子表缓存键;PreloadPool 满 → 回 `kLoginInProgress`、释放玩家锁、计 `pool_saturated` 且不进耗时直方图;起服预置后 `pool_saturated` 序列存在(§13.1) | 无(miniredis + ants 池 + 假 player_locator) |
+| EnterGame | 种子 → EnterGame:走快路径,身份补齐写进种子,TTL 保留,没有子表缓存键;PreloadPool 满 → 回 `kLoginEnterGameBusy`、释放玩家锁、计 `pool_saturated` 且不进耗时直方图;起服预置后 `pool_saturated` 序列存在(§13.1) | 无(miniredis + ants 池 + 假 player_locator) |
 | 配置 | 整块缺失 = 关;两份样例 yaml 显式写出且为关;探针拒绝拼写错误 | 无 |
 | C++ | 不改代码,不新增用例。scene 的新号初始化分支今天也被冷读路径走着,没有单测是既有缺口(§10 R7) | — |
 | 端到端 | 本地全栈冒烟(可选),开服尖峰压测(L-14) | 本地 MySQL / Redis / Kafka / etcd / C++ 节点 |
@@ -334,7 +334,7 @@
 6. **和 L-05 原文一致**。L-05 写的是「建角时写一个空的 PlayerAllData」,本方案就是这个,不是「新号标记」。
 7. **新号入场链的背压形态变了**(§6 第 21 行)。
    - 今天新号的 apply 跑在 dispatcher worker 上,开种子后跑在 PreloadPool worker 上。
-   - 后者容量有上限,而且是非阻塞提交,池满回 `kLoginInProgress`。
+   - 后者容量有上限,而且是非阻塞提交,池满回 `kLoginEnterGameBusy`。
    - 这条路老玩家命中缓存时今天就在走,不是新机制;但开服首日新号占大头,池的占用时长会明显变长。
    - L-14 压测必须观察池掉单(指标 `entergame_total{result="pool_saturated"}`,§7 第 4 步);出现掉单就调大 `PreloadPool.Size`。
 
@@ -351,7 +351,7 @@
 | R5 | 账号锁内多一次 Redis;Redis 卡顿时最坏多 3s | 正确性靠围栏,不受影响;观察 `stage="seed"` |
 | R6 | 收益没有实测 | 走 L-14 对比表;拿不出表不下性能结论 |
 | R7 | C++ 新号初始化分支没有单测 | 既有缺口,种子没新增风险;可在后续 C++ 批次补 |
-| R8 | 新号入场链改占 PreloadPool,池满回 `kLoginInProgress`(§6 第 21 行、§9 第 7 条) | L-14 看池掉单(`entergame_total{result="pool_saturated"}`);按需调大 `PreloadPool.Size` |
+| R8 | 新号入场链改占 PreloadPool,池满回 `kLoginEnterGameBusy`(§6 第 21 行、§9 第 7 条) | L-14 看池掉单(`entergame_total{result="pool_saturated"}`);按需调大 `PreloadPool.Size` |
 
 ### 待拍板
 
@@ -447,7 +447,7 @@ go test ./... -count=1
 **新增用例**(3 个 Go 用例,1 个新文件):
 
 - `createplayer_name_test.go` 的 `TestCreatePlayer_ReleasesLockAfterRequestCancelledMidCreate`:请求 ctx 在持锁之后才取消,建角返回后锁必须已删。**修复前应红**。
-- `entergame_pool_saturated_test.go`(新文件)的 `TestEnterGame_PoolSaturatedCountsWithoutLatencySample`:池满回 `kLoginInProgress`、玩家锁已释放、`pool_saturated` 计数 +1、耗时直方图里没有这个取值。
+- `entergame_pool_saturated_test.go`(新文件)的 `TestEnterGame_PoolSaturatedCountsWithoutLatencySample`:池满回 `kLoginEnterGameBusy`、玩家锁已释放、`pool_saturated` 计数 +1、耗时直方图里没有这个取值。
 - 同一文件的 `TestPrimeEnterGameMetrics_ExposesPoolSaturatedSeries`:预置之后序列存在。
 - `test_stress_summarize.ps1` 新造两份 login 快照(有序列 / 缺序列),断言两张表的表头与四行数据。
 

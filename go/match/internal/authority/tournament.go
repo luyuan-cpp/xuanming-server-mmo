@@ -25,7 +25,7 @@ const (
 	tournamentInviteCols     = "squad_id,invitee_player_id,season_id,inviter_player_id,state,created_ms,expires_ms"
 	tournamentMatchCols      = "match_id,season_id,phase,round_index,slot_index,squad_a_id,squad_b_id,lineup_a,lineup_b,ready_a,ready_b,state,battle_id,winner_squad_id,outcome,featured_spectate,scheduled_start_ms,deadline_ms,finished_ms,updated_ms,best_of,current_game_index,wins_a,wins_b,current_leyline_element,leyline_sequence,intermission_deadline_ms,is_third_place,mvp_player_id,mvp_player_name,mvp_squad_id,mvp_score,mvp_damage,mvp_healing,mvp_controls,banned_leyline_a,banned_leyline_b"
 	tournamentMatchGameCols  = "match_id,game_index,season_id,phase,battle_id,leyline_element,winner_squad_id,outcome,finished_ms"
-	tournamentRewardCols     = "season_id,player_id,tier_kind,reward_id,squad_id,final_rank,tier_id,gold_amount,attachments,title_code,badge_code,delivery_state,mail_id,claimed_ms,updated_ms"
+	tournamentRewardCols     = "season_id,player_id,tier_kind,reward_id,squad_id,final_rank,tier_id,gold_amount,attachments,title_code,badge_code,delivery_state,mail_id,claimed_ms,updated_ms,mail_title,mail_body"
 	tournamentPredictionCols = "season_id,player_id,match_id,predicted_squad_id,round_index,is_third_place,player_name,result_state,earned_points,created_ms,updated_ms"
 )
 
@@ -262,6 +262,7 @@ func scanTournamentReward(row scanner) (*pb.MatchTournamentRewardRecord, error) 
 		&r.SeasonId, &r.PlayerId, &r.TierKind, &r.RewardId, &r.SquadId, &r.FinalRank,
 		&r.TierId, &r.GoldAmount, &r.Attachments, &r.TitleCode, &r.BadgeCode,
 		&r.DeliveryState, &r.MailId, &r.ClaimedMs, &r.UpdatedMs,
+		&r.MailTitle, &r.MailBody,
 	)
 	return r, err
 }
@@ -2780,6 +2781,8 @@ func (s *Store) settleTournamentSeason(ctx context.Context, seasonID uint32, sta
 			if err != nil {
 				return err
 			}
+			// 邮件文案与附件一起在结算时冻结进行里:领奖重发只读行,同一条奖励的邮件请求恒为同一原件(设计 V1 第七节)。
+			mailTitle, mailBody := tournament.RewardMailText(tier)
 			members, err := loadSquadMembersTx(ctx, tx, sq.SquadId)
 			if err != nil {
 				return err
@@ -2790,10 +2793,10 @@ func (s *Store) settleTournamentSeason(ctx context.Context, seasonID uint32, sta
 					return err
 				}
 				_, err = tx.ExecContext(ctx,
-					"INSERT IGNORE INTO match_tournament_reward("+tournamentRewardCols+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,0,0,?)",
+					"INSERT IGNORE INTO match_tournament_reward("+tournamentRewardCols+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,0,0,?,?,?)",
 					seasonID, mem.PlayerId, tier.GetTierKind(), rid, sq.SquadId, sq.FinalRank,
 					tier.GetId(), tier.GetGoldAmount(), nonNilBytes(rawAtt), tier.GetTitleCode(), tier.GetBadgeCode(),
-					uint32(pb.TournamentRewardDeliveryState_TOURNAMENT_REWARD_DELIVERY_CLAIMABLE), stamp,
+					uint32(pb.TournamentRewardDeliveryState_TOURNAMENT_REWARD_DELIVERY_CLAIMABLE), stamp, mailTitle, mailBody,
 				)
 				if err != nil {
 					return err
@@ -2807,6 +2810,7 @@ func (s *Store) settleTournamentSeason(ctx context.Context, seasonID uint32, sta
 			if err != nil {
 				return err
 			}
+			cheerMailTitle, cheerMailBody := tournament.RewardMailText(cheerTier)
 			cRows, err := tx.QueryContext(ctx, "SELECT player_id,squad_id FROM match_tournament_cheer WHERE season_id=? AND rewarded=0", seasonID)
 			if err != nil {
 				return err
@@ -2830,10 +2834,10 @@ func (s *Store) settleTournamentSeason(ctx context.Context, seasonID uint32, sta
 					return err
 				}
 				if _, err = tx.ExecContext(ctx,
-					"INSERT IGNORE INTO match_tournament_reward("+tournamentRewardCols+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,0,0,?)",
+					"INSERT IGNORE INTO match_tournament_reward("+tournamentRewardCols+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,0,0,?,?,?)",
 					seasonID, h.pid, cheerTier.GetTierKind(), rid, h.sid, uint32(0),
 					cheerTier.GetId(), cheerTier.GetGoldAmount(), nonNilBytes(rawCheerAtt), cheerTier.GetTitleCode(), cheerTier.GetBadgeCode(),
-					uint32(pb.TournamentRewardDeliveryState_TOURNAMENT_REWARD_DELIVERY_CLAIMABLE), stamp,
+					uint32(pb.TournamentRewardDeliveryState_TOURNAMENT_REWARD_DELIVERY_CLAIMABLE), stamp, cheerMailTitle, cheerMailBody,
 				); err != nil {
 					return err
 				}
@@ -2853,6 +2857,7 @@ func (s *Store) settleTournamentSeason(ctx context.Context, seasonID uint32, sta
 			if err != nil {
 				return err
 			}
+			predMailTitle, predMailBody := tournament.RewardMailText(predTier)
 			pRows, err := tx.QueryContext(ctx, "SELECT player_id FROM match_tournament_prediction WHERE season_id=? AND result_state=1 GROUP BY player_id HAVING COUNT(*)>=?", seasonID, minHits)
 			if err != nil {
 				return err
@@ -2873,10 +2878,10 @@ func (s *Store) settleTournamentSeason(ctx context.Context, seasonID uint32, sta
 					return err
 				}
 				if _, err = tx.ExecContext(ctx,
-					"INSERT IGNORE INTO match_tournament_reward("+tournamentRewardCols+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,0,0,?)",
+					"INSERT IGNORE INTO match_tournament_reward("+tournamentRewardCols+") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,0,0,?,?,?)",
 					seasonID, pid, predTier.GetTierKind(), rid, uint64(0), uint32(0),
 					predTier.GetId(), predTier.GetGoldAmount(), nonNilBytes(rawPredAtt), predTier.GetTitleCode(), predTier.GetBadgeCode(),
-					uint32(pb.TournamentRewardDeliveryState_TOURNAMENT_REWARD_DELIVERY_CLAIMABLE), stamp,
+					uint32(pb.TournamentRewardDeliveryState_TOURNAMENT_REWARD_DELIVERY_CLAIMABLE), stamp, predMailTitle, predMailBody,
 				); err != nil {
 					return err
 				}

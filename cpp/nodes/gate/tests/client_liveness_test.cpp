@@ -52,15 +52,17 @@ namespace
 	{
 		uint64_t incarnation{0};
 		bool verified{false};
+		bool loggedIn{false};
 		ClientLiveness liveness;
 	};
 
-	// 假会话表与两种关连接的记录。
+	// 假会话表与三种关连接的记录。
 	struct FakeSessions
 	{
 		std::map<uint32_t, FakeSession> sessions;
 		std::vector<uint32_t> handshakeTimedOut;
 		std::vector<std::pair<uint32_t, LivenessSweeper::Duration>> idleClosed;
+		std::vector<uint32_t> loginTimedOut;
 
 		FakeSession &Add(const uint32_t sessionId, const uint64_t incarnation, const bool verified)
 		{
@@ -80,14 +82,16 @@ namespace
 					{
 						return std::nullopt;
 					}
-					return LivenessSweeper::SessionView{.verified = it->second.verified, .liveness = it->second.liveness};
+					return LivenessSweeper::SessionView{
+						.verified = it->second.verified, .loggedIn = it->second.loggedIn, .liveness = it->second.liveness};
 				},
 				[this](const uint32_t sessionId, uint64_t) { handshakeTimedOut.push_back(sessionId); },
 				[this](const uint32_t sessionId, uint64_t, const LivenessSweeper::Duration silentFor)
-				{ idleClosed.emplace_back(sessionId, silentFor); });
+				{ idleClosed.emplace_back(sessionId, silentFor); },
+				[this](const uint32_t sessionId, uint64_t) { loginTimedOut.push_back(sessionId); });
 		}
 
-		// 按 1 秒节拍从 from 扫到 to(两端都含),模拟准时的定时器。返回期间两种关连接的总条数。
+		// 按 1 秒节拍从 from 扫到 to(两端都含),模拟准时的定时器。返回期间三种关连接的总条数。
 		uint64_t SweepEachSecond(LivenessSweeper &sweeper, const SteadyTime from, const SteadyTime to)
 		{
 			uint64_t closed = 0;
@@ -95,19 +99,23 @@ namespace
 			{
 				const auto result = Sweep(sweeper, t);
 				EXPECT_FALSE(result.late) << "a one-second cadence must never count as late";
-				closed += result.handshakeTimeouts + result.idleClosed;
+				closed += result.handshakeTimeouts + result.idleClosed + result.loginTimeouts;
 			}
 			return closed;
 		}
 	};
 
 	// 与 gate 装配层同一顺序:验签成功的回包发出时开始跟踪,并登记第一个空闲检查点(OnTokenVerified)。
+	// gate 同时还登记登录期限;这里不登记,只有登录期限的用例另调 ExpectLoginBy,其余用例只量空闲超时。
 	void VerifyAndTrack(LivenessSweeper &sweeper, FakeSession &session, const uint32_t sessionId, const SteadyTime now)
 	{
 		session.verified = true;
 		ASSERT_TRUE(session.liveness.StartTracking(now));
 		sweeper.Track(sessionId, session.incarnation, now);
 	}
+
+	// gate 的登录期限(client_heartbeat.h kLoginDeadlineAfterVerify,60s)。被测头文件不认识 gate,期限由调用方给。
+	constexpr seconds kLoginDeadline{60};
 } // namespace
 
 // ---- 参数 ----
@@ -414,6 +422,79 @@ TEST(ClientLivenessSweeper, LateSweepDefersTheHandshakeDeadline)
 	session.verified = true;
 	EXPECT_EQ(fake.Sweep(sweeper, stalledUntil + kPeriod).handshakeTimeouts, 0u);
 	EXPECT_TRUE(fake.handshakeTimedOut.empty());
+}
+
+// ---- 登录期限(只有 gate) ----
+
+// 验签之后不登录、只发心跳:心跳让空闲超时一直不到,登录期限照样在验签 + 60s 关它,且只关一次。
+// 去掉 Sweep 里的 kLogin 分支(或 gate 不登记 ExpectLoginBy),这条连接永远关不掉,本用例红。
+TEST(ClientLivenessSweeper, VerifiedButNeverLoggedInIsClosedAtTheLoginDeadline)
+{
+	LivenessSweeper sweeper(kClientLiveness);
+	FakeSessions fake;
+	const SteadyTime verifiedAt = At(seconds(0));
+	FakeSession &session = fake.Add(6, 60, /*verified=*/false);
+	VerifyAndTrack(sweeper, session, 6, verifiedAt);
+	sweeper.ExpectLoginBy(6, 60, verifiedAt + kLoginDeadline);
+
+	for (SteadyTime t = verifiedAt + kPeriod; t < verifiedAt + kLoginDeadline; t += kPeriod)
+	{
+		session.liveness.NoteInbound(t); // 每秒都有帧:空闲超时永远不到
+		EXPECT_EQ(fake.Sweep(sweeper, t).loginTimeouts, 0u);
+	}
+	EXPECT_TRUE(fake.loginTimedOut.empty());
+
+	session.liveness.NoteInbound(verifiedAt + kLoginDeadline);
+	EXPECT_EQ(fake.Sweep(sweeper, verifiedAt + kLoginDeadline).loginTimeouts, 1u);
+	EXPECT_EQ(fake.loginTimedOut, (std::vector<uint32_t>{6}));
+	EXPECT_TRUE(fake.idleClosed.empty());
+
+	for (SteadyTime t = verifiedAt + kLoginDeadline + kPeriod; t <= verifiedAt + 3 * kLoginDeadline; t += kPeriod)
+	{
+		session.liveness.NoteInbound(t);
+		EXPECT_EQ(fake.Sweep(sweeper, t).loginTimeouts, 0u) << "the login deadline fires at most once";
+	}
+}
+
+// 期限之前登录成功过:期限作废,之后只按空闲超时判。
+TEST(ClientLivenessSweeper, LoggingInBeforeTheDeadlineVoidsIt)
+{
+	LivenessSweeper sweeper(kClientLiveness);
+	FakeSessions fake;
+	const SteadyTime verifiedAt = At(seconds(0));
+	FakeSession &session = fake.Add(6, 60, /*verified=*/false);
+	VerifyAndTrack(sweeper, session, 6, verifiedAt);
+	sweeper.ExpectLoginBy(6, 60, verifiedAt + kLoginDeadline);
+	session.loggedIn = true;
+
+	for (SteadyTime t = verifiedAt + kPeriod; t <= verifiedAt + 2 * kLoginDeadline; t += kPeriod)
+	{
+		session.liveness.NoteInbound(t);
+		EXPECT_EQ(fake.Sweep(sweeper, t).loginTimeouts, 0u);
+	}
+	EXPECT_TRUE(fake.loginTimedOut.empty());
+	EXPECT_TRUE(fake.idleClosed.empty());
+}
+
+// 本端 loop 卡过:登录期限与另外两道一样只推迟、不关;恢复后已登录成功就作废。
+TEST(ClientLivenessSweeper, LateSweepDefersTheLoginDeadline)
+{
+	LivenessSweeper sweeper(kClientLiveness);
+	FakeSessions fake;
+	const SteadyTime verifiedAt = At(seconds(0));
+	FakeSession &session = fake.Add(6, 60, /*verified=*/true);
+	sweeper.ExpectLoginBy(6, 60, verifiedAt + kLoginDeadline);
+	EXPECT_EQ(fake.Sweep(sweeper, verifiedAt + kLoginDeadline - kPeriod).loginTimeouts, 0u);
+
+	const SteadyTime stalledUntil = verifiedAt + kLoginDeadline + seconds(3);
+	const auto late = fake.Sweep(sweeper, stalledUntil);
+	EXPECT_TRUE(late.late);
+	EXPECT_EQ(late.deferred, 1u);
+	EXPECT_EQ(late.loginTimeouts, 0u);
+
+	session.loggedIn = true; // 卡顿期间积压的 Login 回包处理完了
+	EXPECT_EQ(fake.Sweep(sweeper, stalledUntil + kPeriod).loginTimeouts, 0u);
+	EXPECT_TRUE(fake.loginTimedOut.empty());
 }
 
 // ---- 空闲超时 ----

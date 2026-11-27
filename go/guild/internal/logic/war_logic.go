@@ -29,6 +29,7 @@ import (
 	scenepb "proto/scene"
 	smpb "proto/scene_manager"
 	"shared/assetop"
+	"shared/authoritysql"
 	"shared/currencytype"
 	"shared/gameday"
 	tablepb "shared/generated/pb/table"
@@ -960,6 +961,21 @@ func buildGarrisonSnapshot(playerID uint64, name string, level, classID uint32) 
 
 // ── 4. StartGuildWarBattle ───────────────────────────────────────────────────
 
+// clientWarTargetHints 返回该目标种类允许采信的客户端字段(r2-gw#1):只有打守旗阵(LEYLINE_GARRISON,一键开战回落到守旗阵时
+// 按它再取一次)采信 leyline_id,只有追杀榜直打(BOUNTY)采信 bounty_id。其余分支一律从 0 起:野外直打按目标所在场景推灵脉,
+// 直打活人只由服务端按目标自动挂钩追杀令。这两个号会原样冻结进开战上下文、决定结算时动哪座灵脉的旗、结哪张追杀令,
+// 采信客户端值就等于让任意一局帮战去削第三方的旗、领别人的赏金。
+func clientWarTargetHints(kind pb.GuildWarTargetKind, req *pb.StartGuildWarBattleRequest) (leylineID uint32, bountyID uint64) {
+	switch kind {
+	case pb.GuildWarTargetKind_GUILD_WAR_TARGET_KIND_LEYLINE_GARRISON:
+		return req.GetLeylineId(), 0
+	case pb.GuildWarTargetKind_GUILD_WAR_TARGET_KIND_BOUNTY:
+		return 0, req.GetBountyId()
+	default:
+		return 0, 0
+	}
+}
+
 func (l *GuildLogic) StartGuildWarBattle(ctx context.Context, req *pb.StartGuildWarBattleRequest) (*pb.StartGuildWarBattleResponse, error) {
 	playerID, guildID, guild, zoneID, tipID, err := l.requireWarMember(ctx)
 	if err != nil {
@@ -1000,9 +1016,9 @@ func (l *GuildLogic) StartGuildWarBattle(ctx context.Context, req *pb.StartGuild
 	}
 
 	kind := req.GetTargetKind()
-	leylineID := req.GetLeylineId()
 	targetPID := req.GetTargetPlayerId()
-	bountyID := req.GetBountyId()
+	// 只信服务端推出来的目标信息(r2-gw#1):客户端的 leyline_id / bounty_id 只在各自的分支采信,其余一律从 0 起由服务端按目标推。
+	leylineID, bountyID := clientWarTargetHints(kind, req)
 
 	var matchMode matchpb.MatchMode
 	var warKind pb.GuildWarBattleKind
@@ -1014,11 +1030,16 @@ func (l *GuildLogic) StartGuildWarBattle(ctx context.Context, req *pb.StartGuild
 	switch kind {
 	case pb.GuildWarTargetKind_GUILD_WAR_TARGET_KIND_BOUNTY:
 		b, bErr := l.war.Repo.GetBounty(ctx, bountyID)
-		if bErr != nil || b == nil || b.GetStatus() != 2 || b.GetExpiresAtMs() <= nowMs {
+		if bErr != nil || !war.BountyHuntable(b, zoneID, guildID, nowMs) {
 			return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrWarBountyNotFound, "")}, nil
 		}
 		targetPID = b.GetTargetPlayerId()
-		defenderGuildID = b.GetTargetGuildId()
+		// 防守帮按目标此刻所在的帮记(发单之后目标可能换过帮),不按单上的旧帮。
+		tgid, gErr := l.resolveWarPlayerGuildID(ctx, targetPID)
+		if gErr != nil || tgid == 0 {
+			return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrWarBountyInvalidTarget, "")}, nil
+		}
+		defenderGuildID = tgid
 		if defenderGuildID == guildID || targetPID == playerID {
 			return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrWarSameGuild, "")}, nil
 		}
@@ -1082,12 +1103,10 @@ func (l *GuildLogic) StartGuildWarBattle(ctx context.Context, req *pb.StartGuild
 		} else {
 			warKind = pb.GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_PANEL_PVP
 		}
-		// 若目标身上挂有进行中的追杀令，自动顺带挂钩结单！
-		if bountyID == 0 {
-			if activeB, _ := l.war.Repo.ActiveBountyByTarget(ctx, targetPID, nowMs); activeB != nil {
-				bountyID = activeB.GetBountyId()
-				warKind = pb.GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_BOUNTY_HUNT
-			}
+		// 目标身上挂着本帮可接的追杀令(同区、全区榜或本帮发的单)时自动挂钩结单;客户端给的 bounty_id 在这里从不采信。
+		if activeB, _ := l.war.Repo.ActiveBountyByTarget(ctx, targetPID, nowMs); war.BountyHuntable(activeB, zoneID, guildID, nowMs) {
+			bountyID = activeB.GetBountyId()
+			warKind = pb.GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_BOUNTY_HUNT
 		}
 		matchMode = matchpb.MatchMode_MATCH_MODE_GUILD_WAR_PVP
 		defenderPIDs = []uint64{targetPID}
@@ -1113,12 +1132,9 @@ func (l *GuildLogic) StartGuildWarBattle(ctx context.Context, req *pb.StartGuild
 			}
 		}
 		if len(defenderPIDs) == 0 {
-			// 无在线活人 → 自动瞄准当期 1.5x 金脉（或第一座非本帮灵脉）0 秒踢馆！
-			if leylineID == 0 {
-				goldID, _ := war.GoldLeylineForHour(nowMs)
-				leylineID = goldID
-			}
+			// 无在线活人 → 回落到守旗阵:与 LEYLINE_GARRISON 同样采信客户端指定的灵脉(没指定就打当期 1.5x 金脉),下面照常校验。
 			kind = pb.GuildWarTargetKind_GUILD_WAR_TARGET_KIND_LEYLINE_GARRISON
+			leylineID, bountyID = clientWarTargetHints(kind, req)
 		}
 	}
 
@@ -1187,9 +1203,17 @@ func (l *GuildLogic) StartGuildWarBattle(ctx context.Context, req *pb.StartGuild
 		}
 	}
 
+	// 开战请求号是 match 判重的持久键:客户端没带就用帮战发号器(与 op_id 同一个)现发,发不出号整体失败,不落墙钟值(r2-gw#4)。
 	reqID := req.GetClientRequestId()
 	if reqID == 0 {
-		reqID = uint64(now.UnixNano())
+		if l.war.OpIDs == nil {
+			return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrIDGenUnavailable, "")}, nil
+		}
+		minted, idErr := l.war.OpIDs.Mint(ctx)
+		if idErr != nil || minted == 0 {
+			return &pb.StartGuildWarBattleResponse{ErrorMessage: tipErr(constants.ErrIDGenUnavailable, "")}, nil
+		}
+		reqID = minted
 	}
 	matchReq := &matchpb.StartGuildWarBattleRequest{
 		BattleConfigId:      battleConfigID,
@@ -1477,11 +1501,13 @@ func (l *GuildLogic) PostGuildWarBounty(ctx context.Context, req *pb.PostGuildWa
 		}
 	}
 
-	bountyID := uint64(now.UnixNano())
-	if l.war.BountyIDs != nil {
-		if id, idErr := l.war.BountyIDs.Mint(ctx); idErr == nil && id != 0 {
-			bountyID = id
-		}
+	// bounty_id 是发号器永久 ID:发不出号整体失败,不落墙钟值(AGENTS §7 第 1 条,r2-gw#4)。
+	if l.war.BountyIDs == nil {
+		return &pb.PostGuildWarBountyResponse{ErrorMessage: tipErr(constants.ErrIDGenUnavailable, "")}, nil
+	}
+	bountyID, idErr := l.war.BountyIDs.Mint(ctx)
+	if idErr != nil || bountyID == 0 {
+		return &pb.PostGuildWarBountyResponse{ErrorMessage: tipErr(constants.ErrIDGenUnavailable, "")}, nil
 	}
 	var opID uint64
 	var debitBundle []byte
@@ -1570,7 +1596,7 @@ func (l *GuildLogic) TrackGuildWarBounty(ctx context.Context, req *pb.TrackGuild
 	}
 	now := l.warNow()
 	nowMs := uint64(now.UnixMilli())
-	if b == nil || b.GetStatus() != 2 || b.GetExpiresAtMs() <= nowMs || (b.GetPublicBoard() == 0 && b.GetIssuerGuildId() != guildID) {
+	if !war.BountyHuntable(b, zoneID, guildID, nowMs) {
 		return &pb.TrackGuildWarBountyResponse{ErrorMessage: tipErr(constants.ErrWarBountyNotFound, "")}, nil
 	}
 	cd := war.DefaultTrackCooldownSec
@@ -1839,12 +1865,13 @@ func (l *GuildLogic) IssueGuildWarFeud(ctx context.Context, req *pb.IssueGuildWa
 		return &pb.IssueGuildWarFeudResponse{ErrorMessage: tipErr(constants.ErrWarFeudInvalidTarget, "")}, nil
 	}
 	nowMs := uint64(l.warNow().UnixMilli())
-	var feudID uint64
-	if l.war.BountyIDs != nil {
-		feudID, err = l.war.BountyIDs.Mint(ctx)
+	// feud_id 是发号器永久 ID:发不出号整体失败,不拿毫秒时间戳顶替(r2-gw#4)。
+	if l.war.BountyIDs == nil {
+		return &pb.IssueGuildWarFeudResponse{ErrorMessage: tipErr(constants.ErrIDGenUnavailable, "")}, nil
 	}
-	if err != nil || feudID == 0 {
-		feudID = nowMs
+	feudID, idErr := l.war.BountyIDs.Mint(ctx)
+	if idErr != nil || feudID == 0 {
+		return &pb.IssueGuildWarFeudResponse{ErrorMessage: tipErr(constants.ErrIDGenUnavailable, "")}, nil
 	}
 	rec := &pb.GuildWarFeudRecord{
 		FeudId:           feudID,
@@ -1915,7 +1942,26 @@ func isGuildOfficerOrLeader(g *data.GuildData, playerID uint64) bool {
 
 // ── Kafka 帮战终局结算入口（SettleGuildWarResult） ────────────────────────────
 
+// warSettleStaleAttempts:结算基准(灵脉快照、追杀令普通读、领赏计数)被并发结算改掉时进程内整笔重读重算的次数上限。
+// 同一座灵脉上同时收官的局数有限,3 次之内基本都能落定;仍冲突就把错误交给 Kafka 重投(带退避),不在这里无限转。
+const warSettleStaleAttempts = 3
+
+// SettleGuildWarResult 结算一局帮战(match-results 的 GUILD_WAR 对局,至少一次投递,由 guild_war_battle 幂等闸门兜住重复)。
+// key 是 battle_id,同一座灵脉的几局会落在不同分区、被不同副本并发结算:事务在行锁内发现基准已变就回 ErrWarSettleStale,
+// 这里从头重读重算(r2-gw#3)。返回 error = 什么都没提交,消费者退避重投。
 func (l *GuildLogic) SettleGuildWarResult(ctx context.Context, ev *kafkapb.BattleResultEvent) error {
+	var err error
+	for attempt := 1; attempt <= warSettleStaleAttempts; attempt++ {
+		if err = l.settleGuildWarResultOnce(ctx, ev); !errors.Is(err, data.ErrWarSettleStale) {
+			return err
+		}
+		logx.WithContext(ctx).Infof("[GuildWar] settlement basis of battle %d changed concurrently, re-reading and recomputing (attempt %d/%d)",
+			ev.GetBattleId(), attempt, warSettleStaleAttempts)
+	}
+	return err
+}
+
+func (l *GuildLogic) settleGuildWarResultOnce(ctx context.Context, ev *kafkapb.BattleResultEvent) error {
 	if l.war == nil || l.war.Repo == nil || ev == nil {
 		return nil
 	}
@@ -2042,33 +2088,29 @@ func (l *GuildLogic) SettleGuildWarResult(ctx context.Context, ev *kafkapb.Battl
 		}
 	}
 
-	// 灵脉旗势变化与每帮限占 1 座判定。
+	// 灵脉旗势变化与每帮限占 1 座判定。事务外读快照照旧,算出的 BannerDelta 自带这份快照,结算事务在行锁内逐项比对(r2-gw#3)。
+	// 旗势只在本局防守帮就是灵脉此刻的主人时才变(无主灵脉 = 打灵脉守卫,防守帮为 0):两个外帮在别人的灵脉上打架、
+	// 或灵脉在开战之后已易主,都不动第三方的旗(r2-gw#1)。
 	var bannerDelta *war.BannerDelta
 	if gw.GetLeylineId() > 0 {
 		_ = l.war.Repo.EnsureZoneLeylines(ctx, gw.GetZoneId(), nowMs)
-		if leylines, lErr := l.war.Repo.ListLeylines(ctx, gw.GetZoneId()); lErr == nil {
-			var cur *pb.GuildWarLeylineRecord
-			ownsOther := false
-			for _, lr := range leylines {
-				if lr.GetLeylineId() == gw.GetLeylineId() {
-					cur = lr
-				} else if lr.GetOwnerGuildId() == gw.GetAttackerGuildId() {
-					ownsOther = true
-				}
-			}
-			if cur != nil {
-				d := war.ApplyBannerImpact(
-					rule, nowMs,
-					cur.GetOwnerGuildId(), cur.GetBannerHp(), cur.GetShieldUntilMs(),
-					gw.GetAttackerGuildId(), ownsOther,
-					attackerWon, warKind != pb.GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_GARRISON_SIEGE,
-					gw.GetGoldLeylineBonus(),
-				)
-				bannerDelta = &d
-				if d.BrokeBanner {
-					outcomeTag = 5 // 破旗首功
-					jackpotSilver += d.BreakBonusSilver
-				}
+		leylines, lErr := l.war.Repo.ListLeylines(ctx, gw.GetZoneId())
+		if lErr != nil {
+			return lErr // 读不到快照就算不了旗势:不提交,交给重投,不能悄悄跳过这一局的旗势变化
+		}
+		cur, ownsOther := war.FindLeylineBasis(leylines, gw.GetLeylineId(), gw.GetAttackerGuildId())
+		if cur != nil && cur.GetOwnerGuildId() == gw.GetDefenderGuildId() {
+			d := war.ApplyBannerImpact(
+				rule, nowMs,
+				cur.GetOwnerGuildId(), cur.GetBannerHp(), cur.GetShieldUntilMs(),
+				gw.GetAttackerGuildId(), ownsOther,
+				attackerWon, warKind != pb.GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_GARRISON_SIEGE,
+				gw.GetGoldLeylineBonus(),
+			)
+			bannerDelta = &d
+			if d.BrokeBanner {
+				outcomeTag = 5 // 破旗首功
+				jackpotSilver += d.BreakBonusSilver
 			}
 		}
 	}
@@ -2229,7 +2271,7 @@ func (l *GuildLogic) SettleGuildWarResult(ctx context.Context, ev *kafkapb.Battl
 		FinishedAtMs:         nowMs,
 	}
 
-	settleOut, err := l.war.Repo.SettleWarBattle(ctx, data.SettleWarBattleInput{
+	settleIn := data.SettleWarBattleInput{
 		Record:             rec,
 		WeekKey:            weekKey,
 		DayKey:             dayKey,
@@ -2237,7 +2279,6 @@ func (l *GuildLogic) SettleGuildWarResult(ctx context.Context, ev *kafkapb.Battl
 		ProtectSec:         protectSec,
 		PeaceCooldownSec:   peaceCD,
 		BountyProtectSec:   bountyProtect,
-		CounterKillTear:    counterTear,
 		DailyPayoutLimit:   dailyPayLimit,
 		AttackerGuildFunds: atkFunds,
 		DefenderGuildFunds: defReward.GuildFunds,
@@ -2245,34 +2286,56 @@ func (l *GuildLogic) SettleGuildWarResult(ctx context.Context, ev *kafkapb.Battl
 		DefenderMeritAdd:   defReward.Merit * uint64(len(defenderIDs)),
 		BannerDelta:        bannerDelta,
 		PlayerCredits:      credits,
-		ActiveBountyID:     gw.GetBountyId(),
-		BountyHunterWon:    attackerWon,
-		BountyTargetWon:    defenderWon,
-		BountyHunterID:     firstAtk,
-		BountyTargetID:     firstDef,
 		LeaseUntilMs:       nowMs + uint64(l.war.Lease.Milliseconds()),
 		LeaseToken:         battleID,
-	})
+	}
+	// 追杀令(r2-gw#1 / #2):只有开战时服务端挂钩的追杀局才交给第 7 步;去向在事务里按锁内的行判定,赏金与退款指令同事务插入。
+	// 指令号事务前预发两枚(领赏 / 撕单退发布者),用不上的丢弃;发号失败整笔返回错误交给重投,不能先结单后补发。
+	if warKind == pb.GuildWarBattleKind_GUILD_WAR_BATTLE_KIND_BOUNTY_HUNT && gw.GetBountyId() != 0 {
+		if l.war.OpIDs == nil {
+			// 资产通道没装配:发不出赏金也退不了款,追杀令原样保留(到期收尾同样等通道恢复),本局其余结算照常。
+			logx.WithContext(ctx).Errorf("[GuildWar] battle %d hooks bounty %d but the asset op id minter is not wired; bounty left untouched",
+				battleID, gw.GetBountyId())
+		} else {
+			rewardOpID, mErr := l.war.OpIDs.Mint(ctx)
+			if mErr != nil {
+				return mErr
+			}
+			refundOpID, mErr := l.war.OpIDs.Mint(ctx)
+			if mErr != nil {
+				return mErr
+			}
+			settleIn.BountyID = gw.GetBountyId()
+			settleIn.BountyFacts = war.BountyFacts{
+				WarBattleKind:   warKind,
+				ZoneID:          gw.GetZoneId(),
+				HunterGuildID:   gw.GetAttackerGuildId(),
+				HunterID:        firstAtk,
+				TargetID:        firstDef,
+				HunterWon:       attackerWon,
+				TargetWon:       defenderWon,
+				CounterKillTear: counterTear,
+				NowMs:           nowMs,
+			}
+			settleIn.BountyRewardOpID = rewardOpID
+			settleIn.BountyRefundOpID = refundOpID
+			settleIn.BuildSilverBundle = func(silver uint64) ([]byte, error) { return buildSilverItemBundle(silver) }
+		}
+	}
+	settleOut, err := l.war.Repo.SettleWarBattle(ctx, settleIn)
 	if errors.Is(err, data.ErrWarBattleAlreadyDone) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-
-	// 追杀成功 / 反杀撕单独立入账（受每日 5 次赏金上限防洗钱约束）。
-	if settleOut.BountyPayoutSilver > 0 && settleOut.BountyRecipientID != 0 && l.war.OpIDs != nil {
-		recGid := gw.GetAttackerGuildId()
-		if settleOut.BountyRecipientID == firstDef {
-			recGid = gw.GetDefenderGuildId()
-		}
-		if bopID, mErr := l.war.OpIDs.Mint(ctx); mErr == nil && bopID != 0 {
-			if bBytes, bErr := buildSilverItemBundle(settleOut.BountyPayoutSilver); bErr == nil && len(bBytes) > 0 {
-				if row, ok, eErr := l.war.Repo.EnqueueBountyPayout(ctx, settleOut.BountyRecipientID, recGid, dayKey, dailyPayLimit, bopID, bBytes, nowMs+uint64(l.war.Lease.Milliseconds()), bopID, nowMs); eErr == nil && ok {
-					settleOut.CreatedOps = append(settleOut.CreatedOps, row)
-				}
-			}
-		}
+	if settleOut.BountyHeldRecipientID != 0 {
+		logx.WithContext(ctx).Infof("[GuildWar] bounty %d kept active: reward recipient %d reached the daily bounty payout limit, battle %d settled without moving the escrow",
+			gw.GetBountyId(), settleOut.BountyHeldRecipientID, battleID)
+	}
+	if settleOut.BountyIssuerGuildGone {
+		logx.WithContext(ctx).Errorf("[GuildWar] bounty %d torn but its issuer guild no longer exists; the issuer half of the public-funds stake is not refunded (battle %d)",
+			gw.GetBountyId(), battleID)
 	}
 
 	for _, op := range settleOut.CreatedOps {
@@ -2327,6 +2390,107 @@ func (l *GuildLogic) SettleGuildWarResult(ctx context.Context, ev *kafkapb.Battl
 	}, recipients)
 
 	return nil
+}
+
+// ── 追杀令到期收尾(r2-gw#2) ────────────────────────────────────────────────
+
+const (
+	// warBountyExpiryInterval:到期收尾的节拍。它挂在待入队物品循环上(每个 stable 副本都跑、默认 10 秒一轮),按轮数折成约 1 分钟一次。
+	warBountyExpiryInterval = time.Minute
+	// warBountyExpiryBatch:一轮最多看多少张;没看完的下一轮从游标处接着看。
+	warBountyExpiryBatch = 100
+	// warBountyExpirySettleGrace:过期多久之后才收尾。结算按对局结束时刻判到期:结束在到期之前、结算消息晚到的那一局
+	// (消费者退避重投到转死信约 7.5 分钟)要先落定,否则猎手赢了却被到期退款抢先。多等的这一刻钟只推迟退款,不改金额。
+	warBountyExpirySettleGrace = 15 * time.Minute
+)
+
+// warBountyExpiryEveryRounds 把收尾节拍折成宿主循环的轮数(至少每轮一次)。
+func warBountyExpiryEveryRounds(hostInterval time.Duration) int {
+	if hostInterval <= 0 || hostInterval >= warBountyExpiryInterval {
+		return 1
+	}
+	return int(warBountyExpiryInterval / hostInterval)
+}
+
+// warBountyExpiryStats 是一轮到期收尾的小结(日志与单测用)。failed 不含「写闸门冻结」(确定没写,下一轮再来)。
+type warBountyExpiryStats struct {
+	scanned, expired, skipped, failed int
+}
+
+// expireDueGuildWarBounties 跑一轮追杀令到期收尾:从游标处普通读一页「ACTIVE 且过期已超宽限」的追杀令,每张一个事务置 EXPIRED
+// 并原路退回托管(data.WarRepo.ExpireBounty:行锁 + 状态复核,多副本同时跑也只退一次)。status=1(扣款还没终结)的不在候选里,
+// 扣款终结成 ACTIVE 之后的下一轮再处理。返回下一轮的游标:读到表尾回到表头;某张这一轮退不成(发布者未决指令已满、库抖动)
+// 就跳过,等游标转回来再试,不挡后面的。发号失败本轮到此为止(号段故障换一张也好不了),游标停在这一张之前。
+func (l *GuildLogic) expireDueGuildWarBounties(ctx context.Context, after data.BountyExpiryCursor) (data.BountyExpiryCursor, warBountyExpiryStats) {
+	next := after
+	var stats warBountyExpiryStats
+	if l.war == nil || l.war.Repo == nil {
+		return next, stats
+	}
+	nowMs := uint64(l.warNow().UnixMilli())
+	graceMs := uint64(warBountyExpirySettleGrace.Milliseconds())
+	if nowMs <= graceMs {
+		return next, stats
+	}
+	page, err := l.war.Repo.ListDueBounties(ctx, nowMs-graceMs, after, warBountyExpiryBatch)
+	if err != nil {
+		if ctx.Err() == nil {
+			stats.failed++
+			logx.Errorf("[GuildWar] list due bounties failed, expiry round ends: %v", err)
+		}
+		return next, stats
+	}
+	for _, b := range page {
+		if ctx.Err() != nil {
+			return next, stats
+		}
+		stats.scanned++
+		in := data.ExpireBountyInput{Bounty: b, NowMs: nowMs}
+		if silver, _ := war.BountyExpiryRefund(b); silver > 0 {
+			if l.war.OpIDs == nil {
+				stats.skipped++
+				logx.Errorf("[GuildWar] bounty %d expired but the asset op id minter is not wired; silver refund deferred", b.GetBountyId())
+				next = data.BountyExpiryCursor{ExpiresAtMs: b.GetExpiresAtMs(), BountyID: b.GetBountyId()}
+				continue
+			}
+			opID, mErr := l.war.OpIDs.Mint(ctx)
+			if mErr != nil || opID == 0 {
+				stats.failed++
+				logx.Errorf("[GuildWar] mint refund op id for expired bounty %d failed, expiry round ends: id=%d err=%v", b.GetBountyId(), opID, mErr)
+				return next, stats
+			}
+			bundle, bErr := buildSilverItemBundle(silver)
+			if bErr != nil {
+				stats.failed++
+				logx.Errorf("[GuildWar] build refund bundle for expired bounty %d failed: %v", b.GetBountyId(), bErr)
+				next = data.BountyExpiryCursor{ExpiresAtMs: b.GetExpiresAtMs(), BountyID: b.GetBountyId()}
+				continue
+			}
+			in.RefundOpID, in.RefundBundle = opID, bundle
+		}
+		res, err := l.war.Repo.ExpireBounty(ctx, in)
+		switch {
+		case err != nil:
+			if ctx.Err() == nil && !authoritysql.IsWriterFrozen(err) {
+				stats.failed++
+			}
+			logx.Errorf("[GuildWar] expire bounty %d failed, will retry when the cursor comes back: %v", b.GetBountyId(), err)
+		case res.Expired:
+			stats.expired++
+			if res.IssuerGuildGone {
+				logx.Errorf("[GuildWar] bounty %d expired but its issuer guild %d no longer exists; the public-funds stake is not refunded",
+					b.GetBountyId(), b.GetIssuerGuildId())
+			}
+		}
+		next = data.BountyExpiryCursor{ExpiresAtMs: b.GetExpiresAtMs(), BountyID: b.GetBountyId()}
+	}
+	if len(page) < warBountyExpiryBatch {
+		next = data.BountyExpiryCursor{}
+	}
+	if stats.expired > 0 || stats.skipped > 0 || stats.failed > 0 {
+		logx.Infof("[GuildWar] bounty expiry round: scanned=%d expired=%d skipped=%d failed=%d", stats.scanned, stats.expired, stats.skipped, stats.failed)
+	}
+	return next, stats
 }
 
 func containsU64(slice []uint64, target uint64) bool {

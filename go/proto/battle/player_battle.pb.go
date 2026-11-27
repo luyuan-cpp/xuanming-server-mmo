@@ -2235,13 +2235,14 @@ func (x *BattlePingS2C) GetPing() *BattleTacticalPing {
 // 密钥 BaseDeployConfig.battle_token_secret,全部 battle 实例共享,与 gate 令牌密钥分域)。
 // 签名 = hex(HMAC-SHA256(secret, 序列化后的本消息字节)),形态与 GateTokenPayload 一致。
 // 寿命 = 房间作废期限(D25):同一票可重复用于战斗中重连;房间销毁即失效。
+// 未成年人的票另按他当天的截止时刻封顶(提前 5 秒,与 gate 关大厅连接同一时点),到点后同一张票不能再握手。
 type BattleTicketPayload struct {
 	state                protoimpl.MessageState `protogen:"open.v1"`
 	BattleId             uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
 	PlayerId             uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	BattleNodeId         uint32                 `protobuf:"varint,3,opt,name=battle_node_id,json=battleNodeId,proto3" json:"battle_node_id,omitempty"`            // 签发节点 node_id,验签侧必须等于自身
 	BattleInstanceId     string                 `protobuf:"bytes,4,opt,name=battle_instance_id,json=battleInstanceId,proto3" json:"battle_instance_id,omitempty"` // 签发节点实例 UUID(node_uuid),防节点重启后 node_id 复用
-	ExpireAtMs           uint64                 `protobuf:"varint,5,opt,name=expire_at_ms,json=expireAtMs,proto3" json:"expire_at_ms,omitempty"`                  // Unix 毫秒;与房间 deadline_ms 同值
+	ExpireAtMs           uint64                 `protobuf:"varint,5,opt,name=expire_at_ms,json=expireAtMs,proto3" json:"expire_at_ms,omitempty"`                  // Unix 毫秒;房间 deadline_ms 与持票人截止时刻(未成年人,提前 5 秒)里较早的一个
 	Role                 EBattleTicketRole      `protobuf:"varint,6,opt,name=role,proto3,enum=EBattleTicketRole" json:"role,omitempty"`
 	SpectatorOperationId string                 `protobuf:"bytes,7,opt,name=spectator_operation_id,json=spectatorOperationId,proto3" json:"spectator_operation_id,omitempty"` // 观众原准入UUID，验签后仍须与房内当前operation相同。
 	unknownFields        protoimpl.UnknownFields
@@ -2473,7 +2474,7 @@ type BattleAssignedS2C struct {
 	Port           uint32            `protobuf:"varint,3,opt,name=port,proto3" json:"port,omitempty"`
 	TokenPayload   []byte            `protobuf:"bytes,4,opt,name=token_payload,json=tokenPayload,proto3" json:"token_payload,omitempty"`       // 序列化的 BattleTicketPayload,原样放进 BattleTokenVerifyRequest.payload
 	TokenSignature []byte            `protobuf:"bytes,5,opt,name=token_signature,json=tokenSignature,proto3" json:"token_signature,omitempty"` // 原样放进 BattleTokenVerifyRequest.signature
-	ExpireAtMs     uint64            `protobuf:"varint,6,opt,name=expire_at_ms,json=expireAtMs,proto3" json:"expire_at_ms,omitempty"`          // 票据 / 房间作废期限(Unix 毫秒)
+	ExpireAtMs     uint64            `protobuf:"varint,6,opt,name=expire_at_ms,json=expireAtMs,proto3" json:"expire_at_ms,omitempty"`          // 票据期限(Unix 毫秒),与票据载荷里的 expire_at_ms 同值:通常就是房间作废期限
 	Role           EBattleTicketRole `protobuf:"varint,7,opt,name=role,proto3,enum=EBattleTicketRole" json:"role,omitempty"`
 	// 同一台 battle 给小游戏客户端的 WebSocket 地址(NodeInfo.client_ws_url):小游戏客户端连它,原生客户端仍连 host / port;
 	// 空串 = 这台 battle 不接小游戏(docs/design/minigame-websocket-gate.md W7、W9)。

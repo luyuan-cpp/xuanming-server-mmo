@@ -31,8 +31,7 @@ type fakeJianghuStore struct {
 		day   uint32
 		count uint32
 	}
-	refunds map[uint64]*matchpb.MatchJianghuRefundRecord
-	teams   map[uint64]struct {
+	teams map[uint64]struct {
 		teamID   uint64
 		leaderID uint64
 		members  []uint64
@@ -50,7 +49,6 @@ func newFakeJianghuStore() *fakeJianghuStore {
 			day   uint32
 			count uint32
 		}),
-		refunds: make(map[uint64]*matchpb.MatchJianghuRefundRecord),
 		teams: make(map[uint64]struct {
 			teamID   uint64
 			leaderID uint64
@@ -203,34 +201,6 @@ func (f *fakeJianghuStore) ListActiveJianghuDuelInvitesForPlayer(_ context.Conte
 		}
 	}
 	return out, nil
-}
-
-func (f *fakeJianghuStore) RecordJianghuRefundOnce(_ context.Context, rec *matchpb.MatchJianghuRefundRecord) (bool, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if _, exists := f.refunds[rec.DuelInviteId]; exists {
-		return false, nil
-	}
-	f.refunds[rec.DuelInviteId] = proto.Clone(rec).(*matchpb.MatchJianghuRefundRecord)
-	return true, nil
-}
-
-func (f *fakeJianghuStore) UpdateJianghuRefundMailID(_ context.Context, duelInviteID, mailID uint64) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if r, ok := f.refunds[duelInviteID]; ok {
-		r.RefundMailId = mailID
-	}
-	return nil
-}
-
-func (f *fakeJianghuStore) DeleteJianghuRefundMarker(_ context.Context, duelInviteID uint64) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if r, ok := f.refunds[duelInviteID]; ok && r.RefundMailId == 0 {
-		delete(f.refunds, duelInviteID)
-	}
-	return nil
 }
 
 func (f *fakeJianghuStore) ApplyJianghuDuelBattleResult(_ context.Context, event *kafkapb.BattleResultEvent, ownerRevs map[uint64]uint64) (authority.JianghuBattleGrudgeSummary, bool, error) {
@@ -530,7 +500,7 @@ func TestJianghuDuel_3v3TwoStageTeamConfirmAndDeclineAbort(t *testing.T) {
 	}
 }
 
-func TestJianghuDuel_BlockRejectedAndStreakNoticesAndVoidSingleRefund(t *testing.T) {
+func TestJianghuDuel_BlockRejectedStreakNoticesAndNoMatchRefundMail(t *testing.T) {
 	origNow := jianghuNowMsFn
 	origAvail := checkJianghuPlayersAvailableFn
 	defer func() {
@@ -626,24 +596,10 @@ func TestJianghuDuel_BlockRejectedAndStreakNoticesAndVoidSingleRefund(t *testing
 		t.Fatalf("expected streak broken notice, got %+v", chat.notices)
 	}
 
-	// 3. 离线备战中止单次幂等邮件退 500 银两（CURRENCY_TYPE_GOLD=0）：发信失败清 marker 返回 false，重试成功仅发 1 封且不双退
-	mail.failErr = context.DeadlineExceeded
-	if ok := refundJianghuSilverOnce(context.Background(), svcCtx, 599, 99, 1001, uint32(matchpb.JianghuWritTier_JIANGHU_WRIT_TIER_SILVER), 500, "gather_failed"); ok {
-		t.Fatalf("failed mail send must return false and not block retry or scene online refund")
-	}
-	mail.failErr = nil
-	if ok := refundJianghuSilverOnce(context.Background(), svcCtx, 599, 99, 1001, uint32(matchpb.JianghuWritTier_JIANGHU_WRIT_TIER_SILVER), 500, "gather_failed"); !ok {
-		t.Fatalf("expected retry refund mail to succeed")
-	}
-	if ok := refundJianghuSilverOnce(context.Background(), svcCtx, 599, 99, 1001, uint32(matchpb.JianghuWritTier_JIANGHU_WRIT_TIER_SILVER), 500, "gather_failed"); !ok {
-		t.Fatalf("duplicate refund should return true (already handled)")
-	}
-	if len(mail.sent) != 1 {
-		t.Fatalf("expected exactly 1 refund mail, got %d", len(mail.sent))
-	}
-	cur := mail.sent[0].GetAttachments().GetCurrencies()
-	if len(cur) != 1 || cur[0].GetCurrencyType() != uint32(base.CurrencyType_CURRENCY_TYPE_GOLD) || cur[0].GetAmount() != 500 {
-		t.Fatalf("unexpected refund mail currency: %+v", cur)
+	// 3. 普通战书银两只由 scene 退(数据覆写审计 r2 第 4 轮):发件装配齐全时,match 处理生死状的战果也一封邮件都不发。
+	// 原来这里断言「邮件超时返回 false、允许 scene 在线退」,那正是双退的路径:邮件可能已建,scene 又退一次。
+	if len(mail.sent) != 0 {
+		t.Fatalf("match must not send jianghu refund mail any more, got %d", len(mail.sent))
 	}
 }
 

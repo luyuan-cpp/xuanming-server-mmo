@@ -836,7 +836,7 @@ if ($snapshots.Count -eq 0) {
         $total = $success + $applyFail + $lockLost
         $failPct = if ($total -gt 0) { [math]::Round(($applyFail + $lockLost) / $total * 100, 1) } else { 0.0 }
 
-        # pool_saturated = PreloadPool 满、入场链根本没启动(EnterGame 当场回 kLoginInProgress)的次数。
+        # pool_saturated = PreloadPool 满、入场链根本没启动(EnterGame 当场回 kLoginEnterGameBusy,2026-11-26 之前回 kLoginInProgress)的次数。
         # 它**不是**链的终态:只在 entergame_total 里计数,不进任何耗时直方图,所以不计入上面的
         # $total 与 fail%,单列一列放在最后。入场链整段跑在 PreloadPool 的 worker 上(配置键名是预加载时代留下的),
         # 这一列有数就该调大 login 的 PreloadPool.Size。
@@ -1318,7 +1318,7 @@ if ($rpcChannelLatest.Count -gt 0) {
 # 每条验签成功的连接计一次 tracked;robot 自 2026-11-06 起验签成功后就发心跳(robot/pkg/heartbeat.go),压测时 answered / tracked
 # 应随机器人数增长。
 
-$clientHeartbeatFields = @('answered', 'excess', 'before_verify', 'tracked', 'idle_closed', 'handshake_timeouts', 'deferred', 'pending_checks')
+$clientHeartbeatFields = @('answered', 'excess', 'before_verify', 'tracked', 'idle_closed', 'handshake_timeouts', 'login_timeouts', 'deferred', 'pending_checks')
 $clientHeartbeatLatest = [ordered]@{}
 foreach ($dir in @((Join-Path $RepoRoot "bin\logs\cpp_nodes"), $cppLogDir)) {
     if (-not (Test-Path $dir)) { continue }
@@ -1366,7 +1366,8 @@ if ($clientHeartbeatLatest.Count -gt 0) {
         Write-Host ("    {0}" -f ($cells -join ' '))
     }
     Write-Host "  (excess / before_verify / deferred stay 0 for well-behaved clients and a healthy gate loop;"
-    Write-Host "   idle_closed counts verified clients that went silent for 30s, handshake_timeouts connections not verified within 10s;"
+    Write-Host "   idle_closed counts verified clients that went silent for 30s, handshake_timeouts connections not verified within 10s,"
+    Write-Host "   login_timeouts verified connections that did not log in within 60s (0 for real clients; older gates print n/a);"
     Write-Host "   pending_checks is a gauge)"
 }
 

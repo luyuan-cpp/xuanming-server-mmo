@@ -272,6 +272,14 @@
 **权限边界：**
 - 应用账号不给 `CREATE DATABASE`。`player_store_*_db` 由 `go/db/cmd/migrate -storage-id … -create-database` 用运维账号建（player-storage-placement.md §11.1）。
 - 应用账号不得有 `SUPER` / `CONNECTION_ADMIN`。这一条在 R1 窗口里对 MySQL 侧同样关键（§3.2 第 10 步）。
+- **修复身份的列级收紧（2026-11-26 定案）**：
+  - 问题：修复身份（`MMORPG_SQL_REPAIR_PRINCIPAL`，data_service 的 `create_residual`、`admission_recover` 用）现在按表授权（`maintenance_drain.ps1 render-repair-role`）。`player_store` 给的是表级 `SELECT,INSERT,UPDATE`，它其实只需要改 `owner_epoch` / `holder_instance` / `released` 并补初始行，表级授权让它也能改存档内容列。原来的记录是「TiDB 上列级权限的行为没在真库核过，先按表级授」。
+  - 依据：TiDB 官方文档（`pingcap/docs` release-8.5 分支的 `privilege-management.md`、`column-privilege-management.md`、`sql-statement-grant-privileges.md`，2026-11-26 读）写明，**列级权限从 v8.5.6 起才支持**（`SELECT`、`INSERT`、`UPDATE`、`REFERENCES`，与 MySQL 兼容，缺列权限时报错）。本项目钉的是 v8.5.x 且 ≥ v8.5.5（§2.2），dev compose 是 v8.5.5，列级授权在现钉版本上不能用。
+  - 定案：**现在保持表级授权，不在渲染器里写列级 `GRANT`**。v8.5.5 上列级语法的实际表现（报错，还是收下但不生效）没实测；渲染器不产出列级授权，所以无论哪种都不会让人误以为已经收紧。
+  - 要收紧时的步骤：先由负责人批准把 TiDB 钉到 ≥ v8.5.6（dev compose 同步，升级依赖要授权，AGENTS §10.2）；再按两个工具实际执行的语句逐列列出 `INSERT` / `UPDATE` 要碰的列（`INSERT … ON DUPLICATE KEY UPDATE` 两种权限都要）；改 `ConvertTo-AuthorityRepairRoleSql` 与它的契约测试；MySQL 档同一份渲染（MySQL 一直支持列级权限）。
+  - 给 Gemini 的核对（升级之前跑一次，记下现钉版本的真实行为；升级之后再跑一次作为收紧的前提）：一次性 TiDB 里建表 `t(a INT PRIMARY KEY, b INT, c INT)`，`CREATE USER u`；`GRANT SELECT, UPDATE(b) ON db.t TO u`；以 `u` 登录执行 `UPDATE db.t SET b = 1`（期望成功）与 `UPDATE db.t SET c = 1`（期望 1143 拒绝）。v8.5.5 上 `GRANT` 本身报错，或者第二条没有被拒，都说明这个版本不能用列级授权。结果写进 PROGRESS，不改代码。
+  - 被否决的做法：现在就写列级授权（现钉版本不支持，可能静默失效，比不写更糟）；只在 MySQL 档收紧（两档渲染分叉，TiDB 是生产后端，收益落不到生产）。
+  - 代价：升级之前修复身份能改 `player_store` 的全部列。它平时 `ACCOUNT LOCK`、只在修复窗口解锁，两个工具的语句是固定的，风险由操作流程兜着。
 - 数据库凭证不经 `k8s_deploy.ps1` 注入（2026-11-12 起，[workload-secrets-via-k8s-secret.md](./workload-secrets-via-k8s-secret.md) §1、§4.2）：写者用运维预置 Secret 里每个槽位的专用账号，迁移 Job 用 schema 身份，route-tool 等一次性工具用控制身份；`MMORPG_MYSQL_USER` / `MMORPG_GATEWAY_DB_USER` 只是 ConfigMap 模板里的用户名，起草时沿用的 `MMORPG_MYSQL_PASSWORD` / `MMORPG_GATEWAY_DB_PASSWORD` 已不再是部署输入。`mysql.yaml` 与备份 CronJob 的明文口令问题，不要带进 TiDB 清单（runbook §7）。
 
 ### 2.7 各服务 DSN 怎么切

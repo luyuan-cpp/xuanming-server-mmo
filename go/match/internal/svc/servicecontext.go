@@ -121,7 +121,8 @@ type ServiceContext struct {
 	cheerHubOnce     sync.Once
 	// ContentGuard 用于战队名称等 UGC 文本审核。生产由 match_service.go 装配(没配目标拒启);nil 只出现在单测里,那时不送检。
 	ContentGuard contentguard.Checker
-	// MailAdmin / MailSecret 用于向玩家邮箱幂等投递锦标赛赛季奖励与生死状普通战书退费附件(可选装配)。
+	// MailAdmin / MailSecret 只用于投递锦标赛赛季奖励的附件邮件(生死状退费 2026-11-26 起只由 scene 退,match 不发信)。
+	// 没装配时带附件的奖励保持可领取;非 dev / test 档开着锦标赛却没装配,启动即拒(requireTournamentMail)。
 	MailAdmin  mailpb.MailAdminClient
 	MailSecret string
 	// FriendClient / ChatClient / GuildClient 用于江湖恩怨·天墉生死状一期跨服务只读校验与系统播报(可选装配)。
@@ -425,6 +426,10 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 	} else {
 		sc.MailSecret = strings.TrimSpace(os.Getenv("MAIL_PRODUCER_SECRET_MATCH"))
 	}
+	if err := requireTournamentMail(c.Mode, sc.Tournament.Rule().GetEnabled(), sc.MailAdmin != nil, sc.MailSecret); err != nil {
+		sc.Stop()
+		panic(err)
+	}
 	battleIDSegment, err := NewBattleIDSegment(c.IdSegment, sc.DataServiceClient)
 	if err != nil {
 		sc.Stop()
@@ -626,6 +631,19 @@ func newOptionalMailAdminClient(c zrpc.RpcClientConf) mailpb.MailAdminClient {
 	}
 	c.NonBlock = true
 	return mailpb.NewMailAdminClient(zrpc.MustNewClient(c).Conn())
+}
+
+// requireTournamentMail:锦标赛奖励的附件只经邮件发(群仙问道赛设计 V1 第七节,数据覆写审计 r2 第 4 轮)。
+// dev / test 以外的档位开着锦标赛却没配 MailRpc 或发件密钥(MAIL_PRODUCER_SECRET_MATCH,不足 32 字节同样算没配),
+// 领奖只会一直回内部错误,启动即拒;dev / test 放行,领奖照样不把带附件的奖励落成已领取。
+func requireTournamentMail(mode string, tournamentEnabled, mailRpcConfigured bool, mailSecret string) error {
+	if mode == "dev" || mode == "test" || !tournamentEnabled {
+		return nil
+	}
+	if !mailRpcConfigured || len(mailSecret) < 32 {
+		return errors.New("tournament rewards need MailRpc and a mail producer secret (MailSecretEnv, default MAIL_PRODUCER_SECRET_MATCH, at least 32 bytes); refusing to start")
+	}
+	return nil
 }
 
 // NewMatchRedis 按配置建立 match 私有集群的句柄。没写 MatchRedis.Addrs 时私有 key 落到 Redis 段那一个实例

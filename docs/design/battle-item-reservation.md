@@ -4,6 +4,7 @@
 > Java 版(0.1.0-SNAPSHOT)待做,登记在 Java 仓 `PARITY.md`(§10)。
 > 2026-11-12:原先记在 §7 的两条残余已做,同样未编译 —— 两个背包都放不下的掉落改投邮件([battle-overflow-mail.md](battle-overflow-mail.md)),
 > 客户端看得到被押住的数量(§4.1)。
+> 2026-11-26:普通生死状预扣的银两并入同一次终局复核(§2.1 末段),复核函数改名为 `ReviewBattleHoldsAndFees`,同样未编译。
 > 前文:[turn-battle-gap-closure.md](turn-battle-gap-closure.md) §11.2「FIGHTING 冻结到期先查 SQL 终局」与其中「2026-11-10 复核」一段。
 
 ## 1. 要解决的问题
@@ -50,17 +51,26 @@ scene 再按结算从背包里扣(`ApplySettlementToEntity`)。从开局到结�
 | 冻结到期,本地已应用过这一局 | 解冻 + 释放预留(兜底,正常已在结算时释放) | `ResolveExpiredFightingFreeze` |
 | **续冻到上限** | **只解冻,不放预留** | 同上 |
 | 备战到期(PREPARING 期限过) | 只摘冻结,预留留着(迟到的确认还可能让这一局开打) | `ReapExpiredFreezes` |
-| 冻结已不在的预留 | reaper 每拍复核:到了 `review_after_ms`、玩家此刻可改,就查 SQL 终局;ABORT / 没有可裁决原件放,其余留着 | `ReviewBattleItemHolds` |
+| 冻结已不在的预留 | reaper 每拍复核:到了 `review_after_ms`、玩家此刻可改,就查 SQL 终局;ABORT / 没有可裁决原件放,其余留着 | `ReviewBattleHoldsAndFees` |
 
 冻结已不在而预留还在的情形:续冻到上限解冻、备战到期、玩家离线时被取消(离线取消只删锁,预留在存档里)、重登时锁已过期。
 
+**普通生死状预扣的银两与道具预留共用同一次终局复核**(2026-11-26,数据覆写审计 r2 第 4 轮):发起方队长的 500 银两待退标记
+(`PlayerJianghuComp.pending_silver_fee_*`,复核时刻与同一局预留的 `review_after_ms` 同值)和预留一起收集,同一 (玩家, 局)
+只发一次查询,ABORT / 没有可裁决原件时预留释放、银两退还;冻结到期查到 ABORT / 没有可裁决原件时也一并退。货币不是物品,
+没有并进预留本身。完整流程、问题与被否决的做法见
+[天墉生死状一期实施计划](../planning/battle-jianghu-grudge-duel-phase1-implementation-plan.md)末节;退费原先计划「经 mail 幂等退还」,
+已改为只走 scene 一条通道(两条通道在结果不明时必然双退或丢),match 不发退费邮件。
+
 ### 2.2 冻结已不在的预留怎么收尾
 
-`ReviewBattleItemHolds`(`ReapExpiredFreezes` 的最后一步)只看「种类是战斗、复核时刻已过、这一局的冻结不在本实体上」的预留:
+`ReviewBattleHoldsAndFees`(`ReapExpiredFreezes` 的最后一步;2026-11-26 前叫 `ReviewBattleItemHolds`)只看「种类是战斗、复核时刻已过、这一局的冻结不在本实体上」的预留,
+同一局的普通生死状待退银两合并进同一项(`ReviewBattleHoldAndFee` → `OnBattleHoldAndFeeTerminalAnswer`):
 
 - 玩家没登记在本节点、或此刻不可改(交接 / 退出中 / 没有归属围栏,`player_mutability`)→ 下一拍再看。释放预留是存档改动,
   交接完成后在目的地复核,退出后下次加载再复核。
-- 这一局的结算已在本实体应用过(收件箱最近结局环)→ 释放(异常兜底)。
+- 这一局的结算已在本实体应用过(收件箱最近结局环)→ 释放(异常兜底)。待退银两不按这一条收尾:作废结算应用时退款可能没入成账,
+  照样去问,ABORT 就退;回答 COMPLETE 而结算已应用、标记还在(缺陷)才按已消耗清掉。
 - 否则发一次 SQL 终局查询(`MatchInternal.GetBattleTerminalDecision`,与冻结到期**共用**在途登记与判丢失 `SendTrackedTerminalQuery`):
 
 | 回答 | 处置 |
@@ -192,6 +202,7 @@ count_over_time({job="cpp_nodes", service="scene"} |= "metric=battle_item_hold_o
 | 测试 | `cpp/tests/bag_test/item_hold_test.cpp`(新)、`battle_freeze_hold_test.cpp`、`player_battle_settlement_test.cpp`、`persist_round_trip_test.cpp`、`player_feature_persistence_test.cpp`、`player_equip_attribute_test.cpp`、`player_equip_test.cpp`、`bag_test.cpp`、`bag_test.vcxproj(.filters)`;`cpp/tests/cross_zone_test/cross_zone_test.cpp` |
 | 文档 | 本文、`turn-battle-gap-closure.md` §11.2、`bag-rule-policy-layering.md` §(7)、`player-inbox-runbook.md` §6.1、`ecs-component-access-rules.md`(持久数据表与读缺失例外)、`player-save-direct-commit.md` §1.1(资料行字段)、`deploy/k8s/match-outcome-outbox-alerts.yaml`(只改描述)、`deploy/k8s/asset-channel-alerts.yaml`(头注释固定查询:改上限那条的描述,加 `battle_item_hold_overdue`)、`docs/README.md` |
 | 2026-11-12 显示占用数量 | `proto/scene/player_bag.proto`(`BagHeldItemInfo`、`BagInfo.held_items = 4`)、`cpp/libs/services/scene/player/system/player_feature_snapshot.cpp`(`FillHeldItems`)、`cpp/tests/bag_test/item_hold_test.cpp`;客户端 `Assets/Scripts/UI/Ugui/Gameplay/{EquipBagModel.cs, GameplayWindow.Fidelity.cs}`、`Assets/Scripts/UI/Ugui/Jubaozhai/CommerceWindow.cs`、`Assets/Tests/EditMode/Battle/EquipForgeModelTests.cs`。两包都放不下改投邮件的改动清单在 [battle-overflow-mail.md](battle-overflow-mail.md) §11 |
+| 2026-11-26 银两并入复核 | 改动清单与验证在[天墉生死状一期实施计划](../planning/battle-jianghu-grudge-duel-phase1-implementation-plan.md)末节 §5、§6 |
 | 别的会话已改 | `go/match/internal/authority/terminal_abort.go` 里 `deadlineAbortHardCapMs` 的注释(「数据覆盖审计交接文档」会话 11-10 改,纯注释、未编译):scene 按上限解冻只放开人,道具仍由预留押着;晚到的 COMPLETE 从预留里扣,晚到的 ABORT / 没有可裁决原件只释放预留;等待上限决定的是「人被冻多久」。`kFreezeHoldCapMs` 没变,`TestDeadlineAbortBoundsFitSceneFreezeHold` 的不等式照旧成立 |
 
 ## 9. 验证(全部未执行,交 Gemini)

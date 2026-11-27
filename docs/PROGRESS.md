@@ -6752,3 +6752,160 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
   4. Java 后台:`python java/gm_admin/prepare.py`、`mvn -f java/gm_admin/pom.xml -DskipTests=false test`(期望 `GmDualControlJournalTest` 12 条、`GmInstallationTest` 全过),再按批 1 第 3、4 步打包上游与前端。
   5. C++:本批没有 C++ 源码改动;proto 改动只新增生成物,`cpp/generated/proto/proto.vcxproj` 生成后重编 `proto` 工程即可。
 - **没验证的**:全部。交易页面没有在浏览器里看过;本机后台到 trade 的转发要到批 7 才有,在那之前交易页只能在配好 `GM_TRADE_TARGET` 的环境里冒烟。
+
+## 2026-11-26 Claude:content-guard 平台审核的 K8s 部署接线——部署参数、Secret 与指纹、防误关闸、平台调用计数与告警(未编译、未运行,交 Gemini;Java 随批 5 待做)
+
+- **起因**:同日「改名与内容安全第二轮复核」留的待做:`tools/scripts/k8s_deploy.ps1` 给 content-guard 生成的 ConfigMap 没有 `Platform` 段,也不注入 AppSecret,集群上开不了微信 / 抖音的平台审核。照 login 小游戏登录的接线补上。流程、设计取舍与残余都写在 `docs/design/rename-and-content-safety.md` §6.9(新增)。
+- **怎么用**:部署机设环境变量 `MMORPG_CONTENT_GUARD_WECHAT_APP_SECRET` / `MMORPG_CONTENT_GUARD_DOUYIN_APP_SECRET`,`infra-up`(或不带 `-SkipInfra` 的 `all-up`)带 `-ContentGuardWeChatAppId` / `-ContentGuardDouyinAppId`。两个 AppID 都填玩家登录用的那个小游戏的。之后每次部署都要照传;确要关掉或换应用时加 `-ConfirmContentGuardPlatformChange`。
+- **改了什么**:
+  1. `tools/scripts/k8s_deploy.ps1`:
+     - 三个参数 `-ContentGuardWeChatAppId`、`-ContentGuardDouyinAppId`、`-ConfirmContentGuardPlatformChange`。
+     - 工作负载密钥目录加 `content-guard-wechat` / `content-guard-douyin`(键 `secret`,消费者 content-guard,只在 infra namespace)。
+     - `Resolve-ContentGuardPlatformAppSecret`:任何档位缺失即拒;首尾空白与 `${` 拒;staging / prod 的占位串与短于 16 位由 `Resolve-InjectedSecret` 拒。只在部署全局 Go 服务且给了 AppID 时由 `Initialize-InjectedSecrets` 调。
+     - `Get-ContentGuardPlatformParamErrors` / `New-ContentGuardPlatformYaml`:content-guard 模板在 `DataServiceRpc` 之后渲染 `Platform` 段,只写 `AppID` 与 `AppSecretEnv`(变量名),不写时限与地址。
+     - 防误关闸:`Assert-ContentGuardPlatformPreflight`(写路径入口,排在密钥解析之前)→ `Assert-ContentGuardPlatformClusterState`(真跑才读集群)。判据是纯函数 `ConvertFrom-ContentGuardPlatformYaml` 与 `Get-ContentGuardPlatformDrift`,读集群的是 `Get-ContentGuardPlatformLiveState`。
+     - `Apply-OneGoSvc`:本次没接的平台,在 content-guard 部署之后删它的 Secret。
+     - content-guard 模板 `Timeout` 上面的注释改成与服务 yaml 一致。旧注释「判定是纯内存计算,超时只是兜底」接了平台就不对了。
+  2. 微信的 AppID 与 `-LoginWeChatMiniGameAppId` 同时给了却不同即拒绝:openid 只在那个小游戏的 AppID 下有效。抖音不比:它的内容检测不带玩家标识。
+  3. `deploy/k8s/manifests/go-svc/content-guard.yaml`:只加注释。清单不手写这两个变量,没接平台时不要求 Secret 存在;接了平台要能出集群到两个平台的 443。
+  4. `tools/scripts/dev_tools.ps1`:三个参数非空或被指定才透传给 `k8s-infra-up` / `k8s-all-up`;`k8s-image-*` / `k8s-release-*` 给了即拒绝。
+  5. 本次查出的问题当场修(负责人要求「以后修的现在修」):
+     - **漏传会悄悄关掉平台审核**:参数不粘滞,漏传时名字与聊天只剩本地词库,哪里都不报错,对内容安全是 fail-open。加了上面的防误关闸,口径同 login 的第三方登录。
+     - **平台挂了没有任何指标看得见**:世界频道的平台不可用会改成先放行、后台补审,补审再不可用只打日志。
+       - `go/content_guard/internal/metrics/metrics.go` 加 `content_guard_platform_reviews_total{provider, outcome}`。
+       - `go/content_guard/internal/platform/reviewer.go` 在三处平台调用之后记最终结局。世界频道先行的 250 毫秒没等到记 `deferred`(交给后台补审,不算失败)。
+       - `deploy/k8s/content-guard-alerts.yaml` 加 `ContentGuardPlatformFailing`(warning):某个平台 10 分钟内 `unavailable` 占非 `deferred` 调用超过 5%,持续 10 分钟。阈值是起步值。
+     - **告警说明过时**:`ContentGuardRefusingChecks` 原说明写「正常不会出现、只因没有词库」。接了平台后,名字类等不到平台答复也会触发它,说明改成两种原因怎么区分、怎么处理。
+  6. 文档:
+     - 设计稿:新增 §6.9;改了文首状态、第 9 节批 5 的状态、第 10 节待确认第 3 条与残余第一条。
+     - `docs/design/workload-secrets-via-k8s-secret.md` 两处密钥清单补上这两把,顺手补上漏列的 `login-nppa`。
+     - `deploy/k8s/README.md` 内容安全一节加「外部平台审核」,并更新告警清单。
+- **两个参数都不给时**:
+  - 不写 `Platform`,Deployment 与改动之前一样。
+  - ConfigMap 只有 `Timeout` 上面那句注释换了。
+  - 另外多两条带 `--ignore-not-found` 的删 Secret(集群里没有就是空操作)和一行开关摘要。
+- **新增与改动的用例**(都没运行):
+  - `tools/scripts/tests/k8s_deploy_contract.tests.ps1`:
+    - 契约表 `$WorkloadSecretSpecs` 加两项,「工作负载密钥:k8s_deploy.ps1 的目录表与契约表逐项一致」随之覆盖。
+    - 文件末尾新增「content-guard 外部平台审核」一节 12 条,另起 3 个 DryRun 子进程。标题开头分别是:
+      「纯函数 New-ContentGuardPlatformYaml」「服务端超时盖得住平台调用」「纯函数 Get-ContentGuardPlatformParamErrors」
+      「纯函数 Resolve-ContentGuardPlatformAppSecret」「content-guard 外部平台审核不配(基线」「端到端 dev 档接微信 + 抖音」
+      「端到端负向:dev 档给了 -ContentGuardWeChatAppId」「zone-up 不部署全局服务」「纯函数 ConvertFrom-ContentGuardPlatformYaml」
+      「纯函数 Get-ContentGuardPlatformDrift」「防误关闸 Assert-ContentGuardPlatformClusterState」「content-guard 平台审核源码形状」。
+  - `tools/scripts/tests/k8s_client_entry_contract.tests.ps1`:包装入口的透传清单与参数类型加这三个参数。
+  - `tools/scripts/tests/content_guard_alerts_contract.tests.ps1`:规则名单改成六条;分组 label 放行 `provider`;新增「外部平台调用的 outcome 取值来自代码」。
+  - `go/content_guard/internal/platform/reviewer_test.go`:`TestRouterCountsPlatformOutcomes`。
+- **本会话跑过的**(都是只读检查,不是测试证据):
+  - 五份改过的 ps1 用 `[System.Management.Automation.Language.Parser]::ParseFile` 解析,0 错误。
+  - 三份改过的 Go 文件 `gofmt -l -e` 无输出。
+  - `python tools/scripts/check_log_text_english.py --root .` 通过。
+  - `python tools/scripts/gen_docs_index.py --check`:索引不用更新。
+  - **没有编译,没有跑任何测试,没有部署。**
+- **交 Gemini**:
+  - 仓库根,在工作区跑;`$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`。
+  - 前一步红就停下,留首错与失败用例的完整输出,交回 Claude,不改逻辑。
+  1. 若同日「改名与内容安全第二轮复核」第 1 步的生成还没跑,先跑 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`。不生成的话 go/content_guard 编不过,原因与本条无关。
+  2. `pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`:整套 `fail=0`;上面 12 条新用例与「目录表与契约表逐项一致」都 PASS。
+  3. `pwsh -NoProfile -File tools/scripts/tests/k8s_client_entry_contract.tests.ps1`:`fail=0`。重点看「AST 契约:dev_tools.ps1::Invoke-K8sDeploy → k8s_deploy.ps1」与「k8s_deploy.ps1 的集群外入口参数名与类型」。
+  4. `pwsh -NoProfile -File tools/scripts/tests/content_guard_alerts_contract.tests.ps1`:`fail=0`。
+  5. `go/content_guard` 目录:`go build ./...`、`go vet ./...`、`go test ./internal/platform ./internal/metrics ./internal/config ./internal/server -count=1`,全过,`TestRouterCountsPlatformOutcomes` PASS。
+  6. 可选,kind 集群。防误关闸只在真跑时读集群,DryRun 覆盖不到,这一步才是它的运行证据:
+     - a. 两个环境变量设成任意 ≥16 位的测试值,`infra-up` 带两个测试 AppID。应当:`kubectl -n <infra namespace> get secret content-guard-wechat content-guard-douyin` 都在;content-guard 的 Pod 有这两个 env 与两条 `mmorpg.io/content-guard-*-hash` 注解;ConfigMap 里有 `Platform`;Pod 照常就绪(启动只核配置与变量存在,不调平台)。
+     - b. 不带这两个参数重跑 `infra-up`:在任何写操作之前拒绝,报错含 `To keep the live setup pass -ContentGuardWeChatAppId`。
+     - c. 加 `-ConfirmContentGuardPlatformChange` 再跑:放行并告警 `[content-guard]PlatformChange=confirmed`。部署后两个 Secret 被删,ConfigMap 没有 `Platform`,Pod 没有那两个 env。
+     - 没有 kind 集群就如实报「未运行」。
+- **没覆盖的与风险**:
+  - 读集群那一步(`Get-ContentGuardPlatformLiveState`)在契约测试里换成了夹具,运行证据只有第 6 步。
+  - 全局服务两步部署之间的窗口;微信 AppID 只在同一次运行里对得上。两条都写在设计稿 §6.9「没做的与残余」。
+  - 告警阈值 5% / 10 分钟是起步值,没有实网数据。
+- **模型档位**:前半段(参数、密钥目录、解析函数、渲染)在 Fable 5.2 上写;防误关闸、计数与告警、用例、文档在负责人切换后的 Opus 5.5 上写。AGENTS §10.3 要求写代码用最高档模型,复核时可切回 Fable 5.2 再看一遍。
+- **Java 版(AGENTS §12)**:平台审核(批 5)在 Java 仓 `PARITY.md` 已有待做行,部署接线随它一起做。本次没改 Java 仓,也不另加行。
+- **提交情况**:本会话没有提交。上面的代码、用例、清单、告警与 README 已被别的会话的整仓提交 `3eb57a09a` 带进 main,两份设计稿被 `d77a458ee` 带进;本条写完时未提交。
+
+## 2026-11-26 Claude:官方通行证改密后吊销游戏登录——通行证里改密 / 封禁 / 删除之后,此前登录的游戏令牌刷新时整号吊销(未编译、未运行,验证交 Gemini;Java 待做;按负责人指示用 Opus 5.5 写)
+
+负责人看完第二轮独立审查后要求「现在做」(审查 §8.3 第 1 条)。设计与取舍写在 `docs/design/official-passport-registration.md` §3.6。
+
+- **做法**:登录时把身份令牌的 `iat` 写进游戏令牌载荷(`TokenData.IdentityIssuedAt`),轮换时原样带下去。刷新 `auth_type=passport` 的令牌之前,`go/login` 用已有的管理凭据查一次 `GET /api/get-user?userId=<sub>`:查不到或被标记删除、被封、`lastChangePasswordTime` 不早于 `iat`,就 `RevokeAll` 整个账号、回 `kLoginAccountNotFound`(客户端照常重登)。核对在轮换之前,吊销失败也不续期;通行证故障照常续期,计 `login_passport_session_check_total{result="error"}`。
+- **没采用的**:审查稿原先建议按账号在 Redis 记改密时刻水位。它要多一个键,而且发现改密的那一刻会把改密后新登录的会话一起吊销,所以改成按会话的认证时刻比,两个时刻都取自通行证的时钟。
+- **没做的**:已连着 gate 的会话不踢(与令牌吊销的既有口径一致),要立刻踢需要新提示码与 Casdoor webhook,列为后续;改密到被发现最长一个 access 寿命(2 小时)。
+- **改名**:`auth.PassportUserDeleter` / `NewPassportUserDeleter` → `PassportAdmin` / `NewPassportAdmin`(删用户之外多了核对);`svc` 的 `initPassportUserDeletion` → `initPassportAdmin`,`ServiceContext.PassportAdmin` 与注销共用一个客户端。这些是同日「官方通行证审核」会话写的代码。
+- **签名变化**:`token.Manager.Issue` 多一个参数 `identityIssuedAt int64`(token 包单测 18 处调用补 `0`);`LoginLogic.resolveAccount` 改回 `*auth.AuthResult`。`loginlogic.go` 里另有别的会话未提交的「gate 票据绑定账号」改动,我只改了 `resolveAccount` 调用、两处 `issueTokens` 与两个函数本身。
+- **给 Gemini 的验证步骤**(都在 `go/login` 目录):
+  1. `go build ./...`,`go vet ./internal/logic/pkg/token ./internal/logic/pkg/auth ./internal/logic/clientplayerlogin ./internal/svc ./internal/config ./cmd/sandbox_mock`。
+  2. `go test ./internal/logic/pkg/token ./internal/logic/pkg/auth ./internal/logic/pkg/accountdeletion ./internal/config ./internal/svc ./cmd/sandbox_mock -count=1`。新增用例:`TestIdentityIssuedAtSurvivesRotation`、`TestPassportAdminCheckSession`、`TestPassportAdminCheckSessionAgainstSandboxMock`;改名用例:`TestPassportAdminDeleteUser*`、`TestNewPassportAdminRequiresAllSettings`、`TestPassportAdminDeleteUserAgainstSandboxMock`;`TestPassportProviderValidatesTokenAndUsesWellKnownJWKS` 多核对 `IdentityIssuedAt`。
+  3. `go test ./internal/logic/clientplayerlogin -run 'TestRefresh|TestHTTPLogin|TestLogin' -count=1`,再跑整个包一遍(登录流程的返回值改了)。新增用例:`TestRefreshRevokesPassportSessionsLoggedInBeforePasswordChange`、`TestRefreshRenewsPassportSessionsLoggedInAfterPasswordChange`、`TestRefreshRenewsWhenPassportIsUnreachable`、`TestRefreshDoesNotAskPassportForOtherLogins`。
+  4. 冒烟(可选,沙箱栈):用 `/mock/passport/id_token?user=<种子>` 登录拿到 refresh,刷新一次应当成功;`POST /mock/passport/change_password?user=<种子>` 之后再刷新,应当回 2000,且同账号别的 access 也失效;`forbid_user` 同理。
+  5. 告警契约:`pwsh -NoProfile -File tools/scripts/tests/gate_pick_alerts_contract.tests.ps1`(新用例「login.passport-session 组只有 LoginPassportSessionCheckFailing…」)。
+  6. 要改代码时保留首错原文停下,交回 Claude。
+- **告警**:`deploy/k8s/login-alerts.yaml` 新组 `login.passport-session`,规则 `LoginPassportSessionCheckFailing`:10 分钟内一半以上的核对是 error、持续 10 分钟报 warning(失败放行要看得见)。
+- **文件**:`go/login/internal/logic/pkg/token/{token.go, identity_issued_at_test.go(新), family_test.go, token_format_test.go, token_test.go, token_cap_test.go}`、`go/login/internal/logic/pkg/auth/{provider.go, passport_provider.go, passport_provider_test.go, passport_admin.go, passport_admin_test.go}`、`go/login/internal/logic/clientplayerlogin/{loginlogic.go, resolve_account.go, refreshtokenlogic.go, refresh_passport_session_test.go(新)}`、`go/login/internal/logic/pkg/accountdeletion/service.go`(注释)、`go/login/internal/svc/{servicecontext.go, account_deletion.go}`、`go/login/internal/config/passport_auth.go`(注释与文案)、`go/login/cmd/sandbox_mock/{passport.go, passport_test.go, main.go}`、`docs/design/official-passport-registration.md`(新增 §3.6、§4 第 15 项,§3.2 / §3.4 / §6 / §8.1 / §8.3 第 1 条 / §8.4 第 2 条同步);`deploy/k8s/login-alerts.yaml`、`tools/scripts/tests/gate_pick_alerts_contract.tests.ps1`;Java 仓 `PARITY.md` 通行证条目加第 5 条。
+
+## 2026-11-26 Claude：核对主仓有没有没进 main 的工作（只核对，没改代码）
+
+- 主仓 `D:\luyuan\xuanming-server-mmo-cpp` 只有 main 一个本地分支，没有未合并分支、没有 stash，`.claude/worktrees` 下没有已删会话留下的目录。
+- 另挂着三个分离 HEAD 的快照 worktree（构建与验证用），HEAD 都在 main 里：
+  - `build/aps-1106-014851`：目录已不在（prunable）。
+  - `build/verification/team-peer-preflight-src-20261108`：本地改动是 11-08 的「组队邀请与入队申请的跨玩家预检」修复（`readPeerTeamID`）。main 已有同一修复的另一份实现 `peerTeamID`（`go/match/internal/team/sql_store.go`，还多核了对端队伍记录里确有此人），集成用例也在 `sql_store_integration_test.go`。三方合并在 `service.go` 冲突的四处正是两份同名不同的实现，不合并，免得重复。
+  - `run/verification/muduo-progress-publish-20261108T094138Z-98a13def`：本地改动是 11-25 文档目录拆分时路径替换脚本误改进快照的 20 行，不是工作成果，不合并。
+- 两个快照里的本地改动都不需要并进 main；快照本身留给构建与验证的人处理。
+
+## 2026-11-26 Claude:配置表热更第二轮审查——部署脚本与可观测性修 8 处、加 1 条告警,补水平扩展推演与两轮审查记录(未运行,验证交 Gemini;Java 独立仓只登记)
+
+第一轮(上一条)审的是进程侧与发布工具,交付时注明部署脚本没逐行审。负责人要求现在补完,并把分析与好方案写进文档,当次授权在 Opus 5.5 上做(「就用5.5 opsmax」)。逐行审了 `k8s_deploy.ps1` 的 table-sync 部分、`dev_tools.ps1` 的 `tables-reload-local`、告警规则与 sidecar 的状态上报 / 清理。查出的问题当场修,根因与改法写进设计稿 [config-table-hot-reload.md](design/config-table-hot-reload.md) §19 第 8~15 条。
+
+- **修掉的 8 处**:
+  1. **两个 zone 的同名 Pod 互相覆盖 etcd 状态键。** 键是 `<轨道>/<Pod 名>`,各 zone namespace 里的 StatefulSet 同名(`guild-0`、`gate-0`),又共用 infra 的 etcd。后果:管理接口少算实例,某个实例的「被拒绝」可能被另一个的「已加载」盖掉,发布工具不会自动撤回。改:sidecar 注入 `POD_NAMESPACE`,键改为 `<轨道>/<namespace>/<pod>`,值里的 `pod` 一律写 sidecar 的身份。gateway 把轨道之后的整段当实例名,解析不用改。
+  2. **外接对象存储时不核对凭据 Secret。** 凭据按 `optional: false` 引用,缺了这个 namespace 里所有带 sidecar 的 Pod 都卡在 `CreateContainerConfigError`,`kubectl apply` 却照样成功。改:新增 `Assert-TableSyncS3SecretProvisioned`,在 zone 与 infra 两处紧跟 `Apply-TableSyncDevSecret`、任何工作负载之前核对。只用 go-template 列键名与长度,不读值;dev 夹具与没开表包模式时不查。
+  3. **sidecar 指标没人抓。** Pod 注解只能指一个端口,指的是业务容器,`TableSyncStale` 因此永远没数据。改:新增 `deploy/k8s/table-sync-podmonitor.yaml`,按端口名 `table-sync-http` 选,选择器为空。
+  4. **收敛告警把 stable 与 canary 混着比。** `TableBundleNotConverged` 按 `release_track` 分组,但两种语言的 `table_bundle_info` 都没有这个标签,金丝雀期间必然误报。改:C++ 与 Go 都加 `release_track`,与节点注册同一来源(`release_track::FromEnv` / `releasetrack.FromEnv`)。
+  5. **「需要重启」告警写不出「还没重启」。** 原判据是 `increase(table_reload_total{result="needs_restart"}[24h]) > 0` 加 `for: 24h`,用事件计数凑状态。改:新增状态量 `table_bundle_needs_restart`(C++ 抓取时现算,Go 在 `writeStatusLocked` 里随每次状态变化更新),告警改为它等于 1 持续 24 小时。
+  6. **卷的上限与单包上限对不上,临时文件不清。** 单包 256 MiB、卷 `sizeLimit` 1Gi:两条线各一个大包时再下一包就会被驱逐,所有 Pod 拉的是同一包,等于整条轨道一起掉。清理时跳过所有 `.` 开头的名字,中途被杀留下的 `.download-*` / `.extract-*` 永不清。改:`MaxBundleBytes` 降到 64 MiB(现在全部表约 1.1 MiB);没过保留期的未引用包最多留 2 个;过期临时文件照清。算式写进设计 §7「磁盘预算」。
+  7. **解包目录是 0700(`MkdirTemp` 的默认值)。** 能不能读,取决于业务镜像与 sidecar 的用户号碰巧都是 10001。改:显式 `Chmod 0755`。
+  8. **sidecar 每 5 秒无条件写一次状态键。** etcd 写入量随 Pod 数线性涨:2000 个 Pod 就是每秒 400 次写键,共用的 infra etcd 按 revision 只留 100 万条历史,约 40 分钟就被冲掉。改:存活靠续租,键只在内容变了或换了租约时写。
+- **加的告警**:`TableSyncFetchFailing`(warning)。第一轮改成「表包没到位就拒绝启动」之后,取包失败会让新 Pod 起不来;所有 Pod 一起失败时谁都没切,收敛告警不会响,所以单独报。
+- **核对过、没改的**:
+  - 三处注入点的轨道来源都对:Deployment 模板、集群外入口模板、Go 服务(金丝雀池传自己的轨道)。
+  - sidecar 的环境变量名、端口、启动探针与 Go 程序一致。
+  - 读表 Go 服务的分布:guild、mail、rank、match 与 battle 池在 infra namespace,login、scene-manager、gate、scene 在各 zone namespace。所以两处凭据核对都需要。
+  - `tables-reload-local` 写出的形状与 sidecar 一致,换目录是原子的。
+  - sidecar 校验与解包都是流式的,128Mi 内存上限够用。整读文件的只有发布机上的 `pack` 与回滚 ID 比对。
+- **文档**:
+  - 设计稿 §0 加两条结论(加 Pod 不加中心负担、宁可不启动也不带旧表),§6.1 写键格式与原因,§7 写回报只在变化时写、清理规则、磁盘预算、凭据、目录权限,§8.1 写拒绝启动的代价与理由,§10 补 5 行,§11 改指标表与告警表、写 PodMonitor 的原因。
+  - 新增 §18「水平扩展」:按 2000 个 Pod 估算 etcd、对象存储、管理接口的负载,上限在哪,到时候怎么扩。
+  - 新增 §19「两轮审查记录」:15 个问题各写现象、根因、改法,加教训。
+  - 运维手册补凭据 Secret 的建法、PodMonitor 的安装、新告警的处置、键格式。
+  - 规范 `docs/rules/engineering-principles.md` §3 加两条、§4 加两条通用教训:共享存储里的实例身份要集群唯一;存活用租约不周期写键;有上限的资源与数据上限一起算;回退分清「本来没有」与「有但没拿到」;部署前置条件先只读核对;多方共用的格式用真实产物测;告警三核对。
+  - 交接单 §0、§3.3~§3.7、§3.10、§4 同步。§3.10 的 promtool 写法顺带改正:PrometheusRule 要先取 `spec`。
+- **改动文件**:
+  - Go:`go/table_sync/cmd/table-sync/main.go`、新增的 `main_test.go`;`go/table_sync/internal/bundle/bundle.go` 与 `_test.go`;`go/table_sync/internal/pointer/pointer.go` 与 `_test.go`;`go/shared/tablebundle/{manager,metrics}.go`、`manager_test.go`。
+  - C++:`cpp/libs/engine/core/table_bundle/table_bundle_manager.{h,cpp}`、`cpp/tests/configuration_table_test/table_bundle_manager_test.cpp`。
+  - Java(本仓 gateway):`AdminTableBundleControllerTest.java`。
+  - 部署:`tools/scripts/k8s_deploy.ps1`(只动 table-sync 的函数与两个调用点)、`deploy/k8s/table-bundle-alerts.yaml`、新增 `deploy/k8s/table-sync-podmonitor.yaml`、`tools/scripts/tests/k8s_table_bundle_contract.tests.ps1`。
+  - 文档:设计稿、运维手册、规范、交接单。
+- **我跑过的(只读静态检查)**:两份 ps1 用 `Parser::ParseFile` 解析,0 个语法错误;两份 YAML 用 PyYAML 解析通过,5 条告警齐。
+- **没验证的**:全部未编译、未运行。Gemini 按[交接单](handoff/config-table-hot-reload-handoff-20261126.md)跑:
+  - §3.3:`go/shared` 的 `tablebundle`(6 条,其中一条加了指标断言)、`go/table_sync`(9 条);
+  - §3.4:`AdminTableBundleControllerTest`(5 条);
+  - §3.5:`k8s_table_bundle_contract.tests.ps1`(4 个用例);
+  - §3.6、§3.7:C++ 整解与 17 条用例,其中两条加了指标断言;
+  - §3.10:kind 上新增的 4 项只读核对。
+  - `TestPackVerifyExtractAndPermanentIDRollback` 的权限断言在 Windows 上跳过,要在 Linux 上跑一次才算有证据。
+  - 红了留第一条错误原文交回 Claude。
+- **没做、没查的**:
+  - 对象存储的突发下载(所有 sidecar 同时被叫醒去取同一包),现在包小,只在设计 §18 写了触发条件与两种做法,没写代码。
+  - sidecar 的「只在变化时写」依赖真 etcd,没有单测,靠 §3.10 第 5 步。
+  - 有人绕过管理接口手工删状态键时,要等下一次状态变化或换租约才补回,已写进设计 §7。
+- **Java 独立仓**:只登记,不写代码。交接单 §3.11 要登记的约定加上:状态键带 namespace、`table_bundle_info` 带 `release_track`、`table_bundle_needs_restart`。
+- **提交状态**:两轮的代码、测试与部署文件已被负责人 22:13 / 22:16 的批量提交 `3eb57a09a`、`d77a458ee` 带进 main。上一条说的「HEAD 上的 `table_bundle_manager_test.cpp` 还是两参数」已经不成立:HEAD 上是三参数,与头文件一致。之后改的设计稿、运维手册、规范、交接单和本条在工作区。
+
+## 2026-11-26 Claude:gate:一张票只开一条连接、验签后限时登录(未编译、未测试,待 Gemini 验证;Java 待做)
+
+- **问题**(复查登录排队全链路时发现):票绑了账号以后还剩一个口子。一张 gate 票在有效期(10 分钟)里能验签任意多次,验签之后又没有「必须登录」的期限:未验签预算、握手死线只管验签之前,验签过的连接只受空闲超时约束,发心跳就不会到。一个账号领一张票,就能开出成百上千条已验签、不登录的连接一直挂着;它们都算进 gate 人数,排队按人数放人,直接挤掉别人的排队名额,直到 gate 满载。
+- **改法**(都在 gate,做法、取舍与限制写在 `docs/design/login-queue-2026-05.md` §5「一张票只开一条连接、验签后限时登录」,另见 `gate-client-heartbeat.md` §0 / §4 / §5.1 / §7、`gate-connection-admission-control.md` §5 第 6 条):
+  - 一张票同一时刻只开一条连接:验签通过时按票据签名占位(`SessionManager::ClaimTicket`),已有一条活着的连接就拒绝这一条(采样日志 `reason=token_in_use`),拒新不踢旧;会话删除前摘掉自己的占位。
+  - 验签之后 60 秒内必须登录成功一次(`kLoginDeadlineAfterVerify`):心跳扫描的同一个堆里加一种登录检查点(`LivenessSweeper::ExpectLoginBy`),到点没登录成功就 `forceClose`,计 `login_timeouts`(汇总行与 `stress_summarize.ps1` 都加了这个字段)。
+- **文件**:`cpp/libs/services/gate/session/manager/session_manager.h`、`session/comp/session_info_comp.h`(`ticketKey`)、`cpp/nodes/gate/handler/rpc/client_session_handler.cpp`;`cpp/libs/engine/core/network/client_liveness.h`(`Sweep` 多一个回调参数,调用方只有 gate 与它的单测)、`cpp/nodes/gate/handler/rpc/client_heartbeat.{h,cpp}`;测试 `cpp/tests/routing_identity_test/session_details_builder_test.cpp` 文末 `GateTicketHolder.*` 4 条、`cpp/nodes/gate/tests/client_liveness_test.cpp` 新增 3 条登录期限用例(夹具跟着改);`tools/scripts/stress_summarize.ps1`(静态解析通过)。文档:上面三份设计稿、手册模式 8、交接单。
+- **给 Gemini**:交接单 `docs/handoff/login-queue-verification-handoff-20261126.md` 第 1b 步(C++ 整解重编:`SessionInfo` 与 `SessionManager` 布局都变了,再跑 `routing_identity_test`)、第 5 步变异 S~U、第 3 节心跳冒烟判读(H3 仍由空闲超时关,`login_timeouts` 应为 0)。
+- **Java 版(AGENTS §12)**:待做,Java 仓 `PARITY.md` 同一节第 4 条补⑪⑫。
+- **提交情况**:main 工作区,未提交(负责人说不用管提交)。本会话没有编译,没有运行测试。

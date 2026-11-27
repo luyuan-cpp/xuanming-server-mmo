@@ -6404,8 +6404,10 @@ func (x *UpsertAccountChannelIdentityRequest) GetOpenId() string {
 }
 
 type GetPlayerChannelIdentityRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	// player_id 为 0 时按账号查(建角送检时角色还没发号),这时不回角色等级;两个都填以 player_id 为准。
+	Account       string `protobuf:"bytes,2,opt,name=account,proto3" json:"account,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -6445,6 +6447,13 @@ func (x *GetPlayerChannelIdentityRequest) GetPlayerId() uint64 {
 		return x.PlayerId
 	}
 	return 0
+}
+
+func (x *GetPlayerChannelIdentityRequest) GetAccount() string {
+	if x != nil {
+		return x.Account
+	}
+	return ""
 }
 
 type GetPlayerChannelIdentityResponse struct {
@@ -7248,9 +7257,10 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\x04auth\x18\x01 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\x12\x18\n" +
 	"\aaccount\x18\x02 \x01(\tR\aaccount\x12\x18\n" +
 	"\achannel\x18\x03 \x01(\tR\achannel\x12\x17\n" +
-	"\aopen_id\x18\x04 \x01(\tR\x06openId\">\n" +
+	"\aopen_id\x18\x04 \x01(\tR\x06openId\"X\n" +
 	"\x1fGetPlayerChannelIdentityRequest\x12\x1b\n" +
-	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\"\xec\x01\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x18\n" +
+	"\aaccount\x18\x02 \x01(\tR\aaccount\"\xec\x01\n" +
 	" GetPlayerChannelIdentityResponse\x12\x14\n" +
 	"\x05found\x18\x01 \x01(\bR\x05found\x12\x18\n" +
 	"\aaccount\x18\x02 \x01(\tR\aaccount\x12\x18\n" +

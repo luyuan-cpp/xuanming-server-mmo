@@ -27,13 +27,17 @@
 // 现在每个持有者只有上面这一把水位,闸也只在它的 Txn 成功(写入新值,或 etcd 里的存值不低于目标值、吃下存值当地板)
 // 时 Ack(advanceGuard)。etcd 里残留的旧键没有读者,清 etcd 时一并清掉。
 //
+// 改造前旧布局(/scene_manager/snowflake_ids、snowflake_nodes、snowflake_guard)的兼容读与滚动升级镜像写
+// 2026-11-26 删掉:项目未上线,没有要与之并存的旧二进制(docs/design/snowflake-id-allocation.md)。
+// 那些旧键同样没有读者,清 etcd 时一并清掉。
+//
 // worker id = (cluster << SlotBits) | slot(layout.go);发号器只认合成后的 worker id,
 // 对 cluster / slot 的切分一无所知。
 //
 // 用法(现在只有 scene_manager 申领槽位):
 //
 //	h, err := snowflakealloc.AllocateWithKeepAlive(ctx, cli, "scene-manager", nodeName,
-//	    snowflakealloc.Options{LeaseTTL: 60, ClusterID: cfg.ClusterId, LegacyPrefix: "/scene_manager"})
+//	    snowflakealloc.Options{LeaseTTL: 60, ClusterID: cfg.ClusterId})
 //	sf := h.NewNode()
 //	go func() { <-h.Lost(); sf.Fence(); os.Exit(1) }()
 //
@@ -91,12 +95,6 @@ type Options struct {
 	// 写盘策略是固定的(设计稿 §7.5-5,用户拍板):申领 / reclaim 后的第一次 Ack 写一次,
 	// Close() 写一次,etcd 水位写失败期间每拍写;稳态**一次都不写**,没有周期刷新可配。
 	CachePath string
-
-	// LegacyPrefix 是改造前的 etcd 前缀(现在只有 scene_manager 传 "/scene_manager")。
-	// 非空且 ClusterID==0 时,申领会额外读旧布局的水位(snowflake_guard)取 max,
-	// 并把旧布局仍活着的 worker id(snowflake_ids / snowflake_nodes)算作已占 —— 覆盖
-	// 滚动升级期新老版本并存的窗口。**发布一版之后可以删掉这条兼容读**。
-	LegacyPrefix string
 }
 
 // resolvedOptions 是校验并填好默认值后的 Options。
@@ -107,7 +105,6 @@ type resolvedOptions struct {
 	quarantine time.Duration
 	fenceAfter time.Duration
 	cachePath  string
-	legacy     string
 }
 
 const (
@@ -124,7 +121,6 @@ func (o Options) resolve() (resolvedOptions, error) {
 		quarantine: o.Quarantine,
 		fenceAfter: o.FenceAfter,
 		cachePath:  o.CachePath,
-		legacy:     o.LegacyPrefix,
 	}
 	if r.ttl <= 0 {
 		r.ttl = defaultLeaseTTL
@@ -155,15 +151,6 @@ func (o Options) resolve() (resolvedOptions, error) {
 	}
 	return r, nil
 }
-
-// legacyMirror 报告是否处于**滚动升级过渡期**:cluster 0 且配了改造前的 etcd 前缀。
-//
-// 过渡期里灰度的两半各说各话:新二进制读写 /snowflake/<kind>/c0/**,旧二进制只认
-// <legacy>/snowflake_ids/ 与 <legacy>/snowflake_guard/。只让新版本"避开旧版本"是
-// **单向**的 —— 旧二进制看不见新槽,照样能把同一个 worker id 分出去(见 allocate /
-// reclaim / tryReuse 里的镜像写)。所以过渡期两边都要留脚印。
-// **发布一版之后这个方法与它所有调用点一起删。**
-func (r resolvedOptions) legacyMirror() bool { return r.cluster == 0 && r.legacy != "" }
 
 // ---- key 布局 ---------------------------------------------------------------
 
@@ -196,26 +183,6 @@ func watermarkPrefix(kind string, cluster uint32) string {
 // 之上,申领者要靠它判断隔离期。量级是每槽一行,被 MaxSlot 封死,不会无界增长。
 func watermarkKey(kind string, cluster uint32, slot uint64) string {
 	return watermarkPrefix(kind, cluster) + strconv.FormatUint(slot, 10)
-}
-
-// 旧布局(改造前)的 key,只在 cluster 0 兼容读**与过渡期镜像写**。发布一版之后可删。
-func legacyGuardPrefix(prefix string) string { return prefix + "/snowflake_guard/" }
-func legacyIDPrefix(prefix string) string    { return prefix + "/snowflake_ids/" }
-func legacyNodePrefix(prefix string) string  { return prefix + "/snowflake_nodes/" }
-
-// legacyIDKey 是旧二进制的"槽位已占"占位键(<legacy>/snowflake_ids/<id> = <host>)。
-// 过渡期新二进制申领成功时把它一并挂到自己的 lease 上:旧二进制的双 key CAS 条件
-// 里有 CreateRevision(idKey)==0,这一把 Put 让它直接失败;它的 scanUsedWorkerIDs
-// 也会把这个槽算成已占。**过渡专用,发布一版之后删。**
-func legacyIDKey(prefix string, slot uint64) string {
-	return legacyIDPrefix(prefix) + strconv.FormatUint(slot, 10)
-}
-
-// legacyGuardKey 是旧二进制读地板用的水位键。过渡期把新水位镜像
-// 过去,旧二进制接手这个槽时才有地板可用(它只会去 readGuard 旧 key)。
-// **过渡专用,发布一版之后删。**
-func legacyGuardKey(prefix string, slot uint64) string {
-	return legacyGuardPrefix(prefix) + strconv.FormatUint(slot, 10)
 }
 
 // newHolderID 生成持有者 uuid(128 bit 随机,hex)。不引 uuid 库:shared 模块里它只是
@@ -309,20 +276,13 @@ func allocate(ctx context.Context, cli *clientv3.Client, kind, host string, r re
 
 		sKey := slotKey(kind, r.cluster, slot)
 		slotStr := strconv.FormatUint(slot, 10)
-		cmps := []clientv3.Cmp{clientv3.Compare(clientv3.CreateRevision(sKey), "=", 0)}
-		ops := []clientv3.Op{
-			clientv3.OpPut(sKey, uuid, clientv3.WithLease(lease)),
-			clientv3.OpPut(aKey, slotStr, clientv3.WithLease(lease)),
-		}
-		// 过渡期(见 legacyMirror):同一笔 Txn 里占住旧布局的 id 键。比较条件也一起加 ——
-		// scanUsedSlots 已经把旧 id 算成占用,这条 CreateRevision==0 只为堵住"扫描之后、
-		// 提交之前旧二进制抢先拿到同一个 id"的窗口,让互斥在两个方向上都是原子的。
-		if r.legacyMirror() {
-			lKey := legacyIDKey(r.legacy, slot)
-			cmps = append(cmps, clientv3.Compare(clientv3.CreateRevision(lKey), "=", 0))
-			ops = append(ops, clientv3.OpPut(lKey, host, clientv3.WithLease(lease)))
-		}
-		txn, err := cli.Txn(ctx).If(cmps...).Then(ops...).Commit()
+		txn, err := cli.Txn(ctx).
+			If(clientv3.Compare(clientv3.CreateRevision(sKey), "=", 0)).
+			Then(
+				clientv3.OpPut(sKey, uuid, clientv3.WithLease(lease)),
+				clientv3.OpPut(aKey, slotStr, clientv3.WithLease(lease)),
+			).
+			Commit()
 		if err != nil {
 			revoke()
 			return nil, fmt.Errorf("snowflakealloc: claim txn: %w", err)
@@ -376,18 +336,6 @@ func tryReuse(ctx context.Context, cli *clientv3.Client, kind, host, uuid string
 	}
 	predUUID := string(sResp.Kvs[0].Value)
 
-	ops := []clientv3.Op{
-		clientv3.OpPut(sKey, uuid, clientv3.WithLease(lease)),
-		clientv3.OpPut(aKey, slotStr, clientv3.WithLease(lease)),
-		// 2.0b:复用即消费掉 released,同主机的第三个进程不能再凭它接管活着的槽。
-		clientv3.OpDelete(rKey),
-	}
-	// 过渡期(见 legacyMirror):把旧布局的 id 键改挂到新 lease。这里用无条件 Put 而不是
-	// CreateRevision==0 —— 前任(同样是新二进制)大概率已经挂着它,而上面六条比较已经
-	// 证明整个三元组还是前任那一套,这个槽此刻没有第二个主人。
-	if r.legacyMirror() {
-		ops = append(ops, clientv3.OpPut(legacyIDKey(r.legacy, slot), host, clientv3.WithLease(lease)))
-	}
 	txn, err := cli.Txn(ctx).
 		If(
 			clientv3.Compare(clientv3.Value(aKey), "=", slotStr),
@@ -397,7 +345,12 @@ func tryReuse(ctx context.Context, cli *clientv3.Client, kind, host, uuid string
 			clientv3.Compare(clientv3.Value(sKey), "=", predUUID),
 			clientv3.Compare(clientv3.LeaseValue(sKey), "=", clientv3.LeaseID(predLease)),
 		).
-		Then(ops...).
+		Then(
+			clientv3.OpPut(sKey, uuid, clientv3.WithLease(lease)),
+			clientv3.OpPut(aKey, slotStr, clientv3.WithLease(lease)),
+			// 2.0b:复用即消费掉 released,同主机的第三个进程不能再凭它接管活着的槽。
+			clientv3.OpDelete(rKey),
+		).
 		Commit()
 	if err != nil {
 		return nil, fmt.Errorf("snowflakealloc: reuse txn: %w", err)
@@ -410,7 +363,7 @@ func tryReuse(ctx context.Context, cli *clientv3.Client, kind, host, uuid string
 	return &claim{lease: lease, slot: slot, uuid: uuid, incarnation: txn.Header.Revision, reused: true}, nil
 }
 
-// scanUsedSlots 返回 slots/ 下有 lease 的槽;cluster 0 兼容期还把旧布局的活 id 算进去。
+// scanUsedSlots 返回 slots/ 下有 lease 的槽。
 func scanUsedSlots(ctx context.Context, cli *clientv3.Client, kind string, r resolvedOptions) (map[uint64]bool, error) {
 	used := make(map[uint64]bool)
 	p := slotsPrefix(kind, r.cluster)
@@ -423,47 +376,12 @@ func scanUsedSlots(ctx context.Context, cli *clientv3.Client, kind string, r res
 			used[s] = true
 		}
 	}
-	if r.cluster != 0 || r.legacy == "" {
-		return used, nil
-	}
-	// 旧布局:snowflake_ids/<id> 与 snowflake_nodes/<host>=<id>。发布一版之后可删。
-	idP := legacyIDPrefix(r.legacy)
-	idResp, err := cli.Get(ctx, idP, clientv3.WithPrefix(), clientv3.WithKeysOnly())
-	if err != nil {
-		return nil, fmt.Errorf("snowflakealloc: scan legacy ids: %w", err)
-	}
-	for _, kv := range idResp.Kvs {
-		if s, perr := strconv.ParseUint(strings.TrimPrefix(string(kv.Key), idP), 10, 64); perr == nil {
-			used[s] = true
-		}
-	}
-	nodeResp, err := cli.Get(ctx, legacyNodePrefix(r.legacy), clientv3.WithPrefix())
-	if err != nil {
-		return nil, fmt.Errorf("snowflakealloc: scan legacy nodes: %w", err)
-	}
-	for _, kv := range nodeResp.Kvs {
-		if s, perr := strconv.ParseUint(string(kv.Value), 10, 64); perr == nil {
-			used[s] = true
-		}
-	}
 	return used, nil
 }
 
-// scanWatermarks 读 watermark/ 全表;cluster 0 兼容期与旧布局的 snowflake_guard 按槽取 max。
-// 发布一版之后可删兼容读。旧布局的毫秒水位 guard_ms 只有 login 写过,不再读(scene_manager 的旧前缀下从来没有)。
+// scanWatermarks 读 watermark/ 全表。
 func scanWatermarks(ctx context.Context, cli *clientv3.Client, kind string, r resolvedOptions) (map[uint64]uint64, error) {
-	wm, err := scanSecMap(ctx, cli, watermarkPrefix(kind, r.cluster))
-	if err != nil {
-		return nil, err
-	}
-	if r.cluster != 0 || r.legacy == "" {
-		return wm, nil
-	}
-	legacySec, err := scanSecMap(ctx, cli, legacyGuardPrefix(r.legacy))
-	if err != nil {
-		return nil, err
-	}
-	return mergeWatermarks(wm, legacySec), nil
+	return scanSecMap(ctx, cli, watermarkPrefix(kind, r.cluster))
 }
 
 // scanSecMap 把 <prefix><slot>=<秒> 读成 map[slot]=秒。
@@ -487,26 +405,15 @@ func scanSecMap(ctx context.Context, cli *clientv3.Client, prefix string) (map[u
 	return out, nil
 }
 
-// readWatermarkFloor 读某个槽的持久水位(新 key,cluster 0 兼容期与旧 key 取 max)。
-// key 不存在返回 (0, 0, nil)(此前没人用过)。第二个返回值是**新 key** 的 ModRevision,
+// readWatermarkFloor 读某个槽的持久水位 watermark/<slot>。
+// key 不存在返回 (0, 0, nil)(此前没人用过)。第二个返回值是水位 key 的 ModRevision,
 // 给水位写的 CAS 当起点(见 putWatermarkLocked),0 = key 不存在。
 //
 // 抽成变量只为让测试注入读失败(F4 的 fail-closed 分支);生产路径恒等于下面这个实现。
 var readWatermarkFloorFn = readWatermarkFloor
 
 func readWatermarkFloor(ctx context.Context, cli *clientv3.Client, kind string, r resolvedOptions, slot uint64) (uint64, int64, error) {
-	floor, rev, err := readUintRev(ctx, cli, watermarkKey(kind, r.cluster, slot))
-	if err != nil {
-		return 0, 0, err
-	}
-	if r.cluster == 0 && r.legacy != "" {
-		if legacy, err := readUint(ctx, cli, legacyGuardKey(r.legacy, slot)); err != nil {
-			return 0, 0, err
-		} else if legacy > floor {
-			floor = legacy
-		}
-	}
-	return floor, rev, nil
+	return readUintRev(ctx, cli, watermarkKey(kind, r.cluster, slot))
 }
 
 // watermarkFloorReadAttempts 是申领后读地板的重试次数。地板是复用路径**唯一**的防线
@@ -1082,11 +989,6 @@ func (h *Handle) reclaim(kaCtx context.Context, st *loopState, reason string) {
 		clientv3.OpPut(h.sKey(), h.UUID, clientv3.WithLease(lease.ID)),
 		clientv3.OpPut(h.aKey(), slotStr, clientv3.WithLease(lease.ID)),
 	}
-	// 过渡期(见 legacyMirror):旧布局的 id 键跟着换到新 lease,否则它随旧 lease 过期后
-	// 灰度中的旧二进制就看不见这个槽被占了。
-	if h.r.legacyMirror() {
-		puts = append(puts, clientv3.OpPut(legacyIDKey(h.r.legacy, h.Slot), h.host, clientv3.WithLease(lease.ID)))
-	}
 	wmKey := watermarkKey(h.Kind, h.Cluster, h.Slot)
 	// guardMu 跨 Txn 持有:拿来比较的 revision 与 Txn 之间不能夹进本进程自己的水位写
 	// (NewNode 的同步首写),否则刚写的那一笔会被误判成"别人写过"。key 不存在时 ModRevision 按 0 比较。
@@ -1182,10 +1084,9 @@ func (h *Handle) reclaim(kaCtx context.Context, st *loopState, reason string) {
 // 把 etcd 里当前的水位重新当地板吃回来(喂 SetGuardTime)。
 //
 // "失联期间别的持有者用过这个槽"不会走到这里:reclaim 的重建分支用水位 revision 比较把它
-// 拒掉并永久 fence(第一轮数据审计 §4 第 21 条)。这一步是纵深防御,兜两类不经过那条比较的
+// 拒掉并永久 fence(第一轮数据审计 §4 第 21 条)。这一步是纵深防御,兜不经过那条比较的
 // 地板:缓存启动后 key 仍挂在前任(同 uuid 的上一个本进程)lease 上、走内层分支重挂时,前任
-// 在缓存落盘之后又写过的水位;以及过渡期旧布局 snowflake_guard 上旧二进制写的值
-// (readWatermarkFloor 与它取 max)。
+// 在缓存落盘之后又写过的水位。
 //
 // 读失败时只告警不阻断:putWatermarkLocked 的 CAS 是最后一道保险 —— 它发现 etcd 里的
 // 存值更高时会把存值当地板吃下去,而**闸只在那条路径上 Ack**,所以在地板补齐之前
@@ -1315,11 +1216,7 @@ func (h *Handle) advanceGuard(ctx context.Context) bool {
 	// 这一拍失败被发现之前发出的号仍在上一拍已 Ack 水位的 lead 之内。
 	h.noteLocalHighWaterLocked(target)
 
-	legacyKey := ""
-	if h.r.legacyMirror() {
-		legacyKey = legacyGuardKey(h.r.legacy, h.Slot)
-	}
-	persisted, owned, err := h.putWatermarkLocked(ctx, watermarkKey(h.Kind, h.Cluster, h.Slot), legacyKey, &h.guardRev, target)
+	persisted, owned, err := h.putWatermarkLocked(ctx, watermarkKey(h.Kind, h.Cluster, h.Slot), &h.guardRev, target)
 	if err != nil {
 		logx.Errorf("[snowflakealloc] advance watermark failed (%s): %v", h.LogFields(), err)
 		h.noteWatermarkWriteFailedLocked("sec watermark txn failed: " + err.Error())
@@ -1349,33 +1246,27 @@ func (h *Handle) advanceGuard(ctx context.Context) bool {
 // putWatermarkLocked 写本槽的持久水位 key。调用方必须持 guardMu。
 // 返回 (etcd 里现在的值, 槽是否仍归我们, 错误)。
 //
-// 三件事一起做:
+// 两件事一起做:
 //  1. **归属**:外层 Txn 条件 Value(slots/<slot>)==uuid —— 提交成功即证明所有权,可以 Ack 闸。
 //  2. **相对 etcd 单调**:内层 Txn 用 ModRevision CAS。本进程自己的 guardWritten 只能挡住
 //     自己写的值倒退,挡不住"申领时地板没读到 / 失联期间别人写过更高的值"这两类;
 //     真正的存值必须由 etcd 说了算。CAS 落空时 Else 分支把当前值读回来:存值 ≥ target
 //     就干脆不写(它已经罩住我们),否则用新 revision 再试一次。
 //     ⚠️ 不能用 Compare(Value, "<") 代替 —— etcd 的值比较是**按字节**的,"9" > "10"。
-//  3. **过渡镜像**(见 legacyMirror):同一笔 Txn 里把值写进旧布局的 key,灰度期的旧二进制
-//     接手这个槽时才有地板可读。**发布一版之后把 legacyKey 参数与它的 Put 一起删。**
 //
 // 超时是 **一个** watermarkTxnTimeout 罩住整个调用(两次 CAS 尝试共用一个 deadline),
 // 不是每次尝试各一个:稳态零写盘的论证要求"从发起到发现失败"整体 < guardLeadSec,
 // 两次各 1.5s 就是 3s,又把窗口撑回去了。
-func (h *Handle) putWatermarkLocked(ctx context.Context, key, legacyKey string, rev *int64, target uint64) (uint64, bool, error) {
+func (h *Handle) putWatermarkLocked(ctx context.Context, key string, rev *int64, target uint64) (uint64, bool, error) {
 	value := strconv.FormatUint(target, 10)
 	putCtx, cancel := context.WithTimeout(ctx, watermarkTxnTimeout)
 	defer cancel()
 	for attempt := 0; attempt < 2; attempt++ {
-		ops := []clientv3.Op{clientv3.OpPut(key, value)}
-		if legacyKey != "" {
-			ops = append(ops, clientv3.OpPut(legacyKey, value))
-		}
 		txn, err := h.cli.Txn(putCtx).
 			If(clientv3.Compare(clientv3.Value(h.sKey()), "=", h.UUID)).
 			Then(clientv3.OpTxn(
 				[]clientv3.Cmp{clientv3.Compare(clientv3.ModRevision(key), "=", *rev)},
-				ops,
+				[]clientv3.Op{clientv3.OpPut(key, value)},
 				[]clientv3.Op{clientv3.OpGet(key)},
 			)).
 			Commit()

@@ -48,11 +48,16 @@ type PlayerJianghuComp struct {
 	ClearBadgeExpiresAtMs uint64 `protobuf:"varint,9,opt,name=clear_badge_expires_at_ms,json=clearBadgeExpiresAtMs,proto3" json:"clear_badge_expires_at_ms,omitempty"`
 	// 洒脱徽记白名单样式 ID（1 = 「清风拂尘 · 胜败常事」）
 	ClearBadgeStyleId uint32 `protobuf:"varint,10,opt,name=clear_badge_style_id,json=clearBadgeStyleId,proto3" json:"clear_badge_style_id,omitempty"`
-	// 普通银两生死状备战期已预扣但尚未结清的战斗 ID 与金额（供异常取消/幂等重入校验，开打结算或退款后清零）
+	// 普通银两生死状备战期已预扣但尚未结清的战斗 ID 与金额（供异常取消/幂等重入校验，开打结算或退款后清零）。
+	// 同一时刻至多一笔：别的局还有未结清的预扣时新的普通战书备战一律拒绝，不覆盖（2026-11-26，数据覆写审计 r2 第 4 轮）。
 	PendingSilverFeeBattleId uint64 `protobuf:"varint,11,opt,name=pending_silver_fee_battle_id,json=pendingSilverFeeBattleId,proto3" json:"pending_silver_fee_battle_id,omitempty"`
 	PendingSilverFeeAmount   uint64 `protobuf:"varint,12,opt,name=pending_silver_fee_amount,json=pendingSilverFeeAmount,proto3" json:"pending_silver_fee_amount,omitempty"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	// 这笔预扣的终局复核时刻（Unix 毫秒，与同一局战斗道具预留的 review_after_ms 同值 = 冻结到期时刻）。
+	// 这一局的冻结已不在本实体上且过了这个时刻，scene 的 reaper 向 match 查这一局的 SQL 终局：ABORT / 没有可裁决原件
+	// 才退还，其余留着下一拍再问（docs/planning/battle-jianghu-grudge-duel-phase1-implementation-plan.md 末节）。
+	PendingSilverFeeReviewAfterMs uint64 `protobuf:"varint,13,opt,name=pending_silver_fee_review_after_ms,json=pendingSilverFeeReviewAfterMs,proto3" json:"pending_silver_fee_review_after_ms,omitempty"`
+	unknownFields                 protoimpl.UnknownFields
+	sizeCache                     protoimpl.SizeCache
 }
 
 func (x *PlayerJianghuComp) Reset() {
@@ -169,11 +174,18 @@ func (x *PlayerJianghuComp) GetPendingSilverFeeAmount() uint64 {
 	return 0
 }
 
+func (x *PlayerJianghuComp) GetPendingSilverFeeReviewAfterMs() uint64 {
+	if x != nil {
+		return x.PendingSilverFeeReviewAfterMs
+	}
+	return 0
+}
+
 var File_proto_common_component_player_jianghu_comp_proto protoreflect.FileDescriptor
 
 const file_proto_common_component_player_jianghu_comp_proto_rawDesc = "" +
 	"\n" +
-	"0proto/common/component/player_jianghu_comp.proto\"\x96\x05\n" +
+	"0proto/common/component/player_jianghu_comp.proto\"\xe1\x05\n" +
 	"\x11PlayerJianghuComp\x122\n" +
 	"\x15duel_refuse_strangers\x18\x01 \x01(\bR\x13duelRefuseStrangers\x12%\n" +
 	"\x0eowner_revision\x18\x02 \x01(\x04R\rownerRevision\x128\n" +
@@ -187,7 +199,8 @@ const file_proto_common_component_player_jianghu_comp_proto_rawDesc = "" +
 	"\x14clear_badge_style_id\x18\n" +
 	" \x01(\rR\x11clearBadgeStyleId\x12>\n" +
 	"\x1cpending_silver_fee_battle_id\x18\v \x01(\x04R\x18pendingSilverFeeBattleId\x129\n" +
-	"\x19pending_silver_fee_amount\x18\f \x01(\x04R\x16pendingSilverFeeAmountB\x18Z\x16proto/common/componentb\x06proto3"
+	"\x19pending_silver_fee_amount\x18\f \x01(\x04R\x16pendingSilverFeeAmount\x12I\n" +
+	"\"pending_silver_fee_review_after_ms\x18\r \x01(\x04R\x1dpendingSilverFeeReviewAfterMsB\x18Z\x16proto/common/componentb\x06proto3"
 
 var (
 	file_proto_common_component_player_jianghu_comp_proto_rawDescOnce sync.Once

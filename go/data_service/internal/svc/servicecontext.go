@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"data_service/internal/clusteridentity"
@@ -215,6 +216,12 @@ type ServiceContext struct {
 	// 构造时读一次,定时重读由 main 调 Start 开始,CloseAndReport 里停。
 	// nil = 没有读到映射(main 据 MergedZonesUnassembled 拒启)。
 	MergedZones *placement.MergedZoneCache
+
+	// MissingWriterGrants 是这一代缺写资格的逻辑库(写者注册时连不上的,docs/design/data-service-startup-isolation.md §7),升序。
+	// 这些库这一代都关着;非空时 Ready 回错误。构造后只读。
+	MissingWriterGrants []string
+	// serving 在 RPC 端口能接受连接、节点注册完成之后置上(MarkServing)。
+	serving atomic.Bool
 }
 
 // autoMigrateTimeout 启动路径建表/补列的总时限。CreateOrUpdateTable 对存量大表的
@@ -240,17 +247,20 @@ func MySQLConfigOf(c config.Config) store.MySQLConfig {
 	}
 }
 
-// checkWriterSchemas 核写资格恰好覆盖要写的逻辑库。少一份那个库打不开,多一份说明名册和配置不是同一次部署。
-func checkWriterSchemas(writers map[string]authoritysql.WriterConfig, schemas []string) error {
+// checkWriterSchemas 核写资格和要写的逻辑库:多出一份说明名册和配置不是同一次部署,拒绝;少的按升序回 missing。
+// 少是因为写者注册跳过了当时连不上的库(docs/design/data-service-startup-isolation.md §7):缺的库这一代都关着、调用回不可用,
+// 进程照常起、服务别的库,但不就绪(Ready);集群恢复之后重建这个 Pod,下一代补齐。
+func checkWriterSchemas(writers map[string]authoritysql.WriterConfig, schemas []string) ([]string, error) {
+	expected := make(map[string]bool, len(schemas))
 	for _, schema := range schemas {
-		if _, ok := writers[schema]; !ok {
-			return fmt.Errorf("写者启动授权缺逻辑库 %s", schema)
+		expected[schema] = true
+	}
+	for schema := range writers {
+		if !expected[schema] {
+			return nil, fmt.Errorf("the writer boot grant covers logical database %s, which this config does not write: the roster and the config are not from the same deployment", schema)
 		}
 	}
-	if len(writers) != len(schemas) {
-		return fmt.Errorf("写者启动授权有 %d 份,配置要写 %d 个逻辑库", len(writers), len(schemas))
-	}
-	return nil
+	return authoritysql.MissingWriterGrants(writers, schemas), nil
 }
 
 // placementResolver 回答逻辑库当前的落点,*dbplacement.Watcher 满足它。单测换成替身。
@@ -309,6 +319,23 @@ func (s *ServiceContext) MergedZonesUnassembled() error {
 	return errors.New("the merged zone cache is not assembled: zone_merged_into could not be read at startup")
 }
 
+// MarkServing 在节点注册完成(RPC 端口已经能接受连接)之后调,之后 Ready 才可能为真。
+func (s *ServiceContext) MarkServing() { s.serving.Store(true) }
+
+// Ready 是 /readyz 的判定(docs/design/data-service-startup-isolation.md §7.3):这一代缺写资格,或者 RPC 还没对外服务,都不算就绪。
+// 不就绪的副本照常经 etcd 被发现、照常服务落在健康库上的请求;K8s 只是不把它算进就绪副本:滚动发布停在它这里,PDB 也把它当成不可用。
+// 缺写资格只能靠重建 Pod 补齐,所以它不会自己变回就绪,也就是「集群恢复之后要重建哪些 Pod」的标记。
+func (s *ServiceContext) Ready() error {
+	if len(s.MissingWriterGrants) > 0 {
+		return fmt.Errorf("this boot has no writer grant for %d logical database(s) %v; rebuild the pod after the cluster recovers",
+			len(s.MissingWriterGrants), s.MissingWriterGrants)
+	}
+	if !s.serving.Load() {
+		return errors.New("the RPC server is not serving yet")
+	}
+	return nil
+}
+
 func NewServiceContext(c config.Config) *ServiceContext {
 	return NewServiceContextWithAdmission(c, drainproof.New(), drainproof.New())
 }
@@ -341,6 +368,8 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 	mysqlCfg.Lazy = true
 	var writerConfigs map[string]authoritysql.WriterConfig
 	var writerConfig authoritysql.WriterConfig
+	// missingGrants 是这一代缺写资格的逻辑库(checkWriterSchemas),非空时进程不就绪(Ready)。
+	var missingGrants []string
 	// 常驻进程没有 schema 凭据。历史上缺省启动迁移的行为在这里收口，
 	// 显式要求自动迁移则拒启；未配置时仅使用部署阶段已准备的表。
 	if c.Schema.AutoMigrate != nil && *c.Schema.AutoMigrate {
@@ -365,9 +394,16 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 		if err != nil {
 			panic(fmt.Sprintf("data_service invalid logical database list: %v", err))
 		}
-		if err := checkWriterSchemas(writers, schemas); err != nil {
+		missing, err := checkWriterSchemas(writers, schemas)
+		if err != nil {
 			panic(fmt.Sprintf("data_service %v", err))
 		}
+		if len(missing) > 0 {
+			logx.Errorf("[startup] this boot has no writer grant for %d logical database(s) %v: the writer registration could not reach them; "+
+				"they stay closed for this boot and the pod reports not ready; rebuild the pod after the cluster recovers", len(missing), missing)
+		}
+		authoritysql.ObserveMissingWriterGrants(len(missing))
+		missingGrants = missing
 		// 按需打开之后,开池时解析不出落点会被当成「连不上」、那个库先关着。可它是配置错误(映射是坏值,
 		// 或指向本进程 SqlClusters 里没有的集群),所以在连任何库之前逐库问一次,当场拒启。没有映射时都连 DSN 里的地址,不用问。
 		if dbPlacement != nil {
@@ -376,13 +412,19 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 			}
 		}
 		writerConfigs = writers
-		// 一个 boot 的写者身份在每个库上相同,取哪一份都一样。
-		writerConfig = writers[schemas[0]]
+		// 一个 boot 的写者身份在每个库上相同,取哪一份都一样;按库名顺序取第一份有的(缺写资格的库跳过)。
+		for _, schema := range schemas {
+			if writer, ok := writers[schema]; ok {
+				writerConfig = writer
+				break
+			}
+		}
 		mysqlCfg.Permission = authoritysql.Writer(writerConfig)
 		mysqlCfg.PermissionFor = func(schema string) (authoritysql.Permission, error) {
 			writer, ok := writers[schema]
 			if !ok {
-				return authoritysql.Permission{}, fmt.Errorf("写者启动授权缺逻辑库 %s", schema)
+				// 常驻进程里这个库的池按关着装配(store.MySQLConfig.Closed),不算装配失败。
+				return authoritysql.Permission{}, fmt.Errorf("%w: %s", store.ErrNoWriterGrant, schema)
 			}
 			return authoritysql.Writer(writer), nil
 		}
@@ -517,6 +559,7 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 		PlayerNameStore:      playerNameStore,
 		PlayerRouteStore:     playerRouteStore,
 		MergedZones:          newMergedZoneCache(c, routeStore),
+		MissingWriterGrants:  missingGrants,
 	}
 	if auth, err := serviceauth.New(map[string]string{accountdirectory.RouteCaller: os.Getenv(accountdirectory.RouteSecretEnv)}); err != nil {
 		logx.Errorf("[player-route] %s is unavailable; GetPlayerRoute disabled", accountdirectory.RouteSecretEnv)

@@ -172,6 +172,8 @@ func (s *Server) send(ctx context.Context, method string, kind mailpb.MailKind, 
 		sender = metrics.SenderTrade
 	case "battle":
 		sender = metrics.SenderBattle
+	case "match":
+		sender = metrics.SenderMatch
 	}
 	result, err := s.repo.Send(ctx, caller, kind, in)
 	if err != nil {

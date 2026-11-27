@@ -275,3 +275,22 @@ TiCDC 这两条 11-26 对着 tiflow `release-8.5` 的源码核过,属实:owner �
 ### 6.7 2026-11-20 逻辑库故障隔离(data_service 熔断)
 
 `go/db` 与 `data_service` 在多逻辑库部署下原先共用 go-zero zrpc 按方法粒度的熔断,单个分片失联且流量占比超过 1/3 时会把同一方法上指向健康库的调用一并熔断。`data_service` 已改为服务端关 zrpc 按方法熔断、在 `shared/authoritysql` 建连处按逻辑库名熔断(闸门冻结与调用方取消不计失败),14 个 Go 调用方统一经 `shared/dsclient.Conf` 关掉客户端按方法熔断([data-service-breaker-per-logical-db.md](data-service-breaker-per-logical-db.md),已落码未编译)。被熔断挡回的调用未建连、未发 SQL,不改变既有数据一致性与排空语义。
+
+### 6.8 2026-11-26 修复身份的三处收口(未编译、未测试,待 Gemini 验证)
+
+出处:`docs/handoff/review-suggestions-remaining-handoff-20261126.md` §2(11-19 评审记下的建议)。修复身份是 data_service 的 `create_residual`、`admission_recover` 直连库用的第五个主体(`MMORPG_SQL_REPAIR_PRINCIPAL`,负责人 2026-11-19 定),授权由 `maintenance_drain.ps1 render-repair-role` 按表渲染。三处的共同点:修复账号平时 `ACCOUNT LOCK`,只在修复窗口解锁,缺账号或缺授权的后果是两个修复工具连不上(fail-closed),不碰业务写入。
+
+1. **搬库不核修复账号。**
+   - 问题:`dbmove` 核写者、注册、schema、维护四类账号,不核修复身份。搬目录片或存档库之后,目标集群上没建修复账号或没重跑授权,要等下一次真要修数据时才发现,那时正是最急的时候。
+   - 方案:设了 `MMORPG_SQL_REPAIR_PRINCIPAL` 时,`plan` 核它在目标上存在;`cutover` 冻结之前比它在这个库上的授权,口径同其它账号(`missingGrants`:源上有、目标没有的才算缺)。源上它对这个库没有授权(不是目录片或存档库)时不核;没设这个变量时打一行 `note`。代码 `tools/dbmove/mover.go` 的 `reportRepairPrincipal`。
+   - 为什么只报告、不拦:缺的后果是 fail-closed,不值得为它挡住一次搬库;反过来,把它做成拒绝,会让一个平时锁着、用不上的账号卡住整个切换窗口。`plan` 只核存在:那时目标上的表还没恢复,表级授权无从比。
+   - 为什么拿源库当基准、不重算渲染结果:源库上的授权就是当初按 `render-repair-role` 执行的那一份;在 Go 里再实现一遍渲染器,两份会漂移。
+   - 被否决的做法:拦在 `cutover`(理由同上);不核、只靠手册(本条要解决的就是手册步骤会漏)。
+   - 代价与边界:只在设了变量时核;源库自己就缺授权时比不出来(两边一样缺)。
+2. **新开目录片或存档库之后要重跑授权。**
+   - 问题:表级 `GRANT` 只落在执行时已存在的表上。开服手册把重跑授权写成人工步骤,新开片 / 库之后容易漏。
+   - 方案:两处迁移跑完打一行英文提醒 `Reminder: repair principal grants are table-level …`。go/db 的 `cmd/migrate -command up` 只在这次确实建了表时打(`report.Applied` 非空);data_service 的 `-migrate` 不回报建了哪些表,每次都打。
+   - 为什么不自动执行:`GRANT` 要管理员账号,而部署脚本与迁移 Job 都不经手数据库管理口令(无例外,见工作负载密钥设计)。为一个 fail-closed 的后果破这条规矩不值得。
+   - 被否决的做法:部署脚本自动 `GRANT`(理由同上);迁移 Job 用带 `GRANT OPTION` 的账号(给常驻部署链路一把授权钥匙,影响面比修复身份本身还大)。
+   - 代价与边界:提醒靠人看;data_service 每次迁移都会打这一行。
+3. **列级收紧**:TiDB 文档写明列级权限从 v8.5.6 起才支持,本项目钉的是 v8.5.5,所以现在保持表级授权。定案、核对步骤与以后收紧的前提见 [tidb-phase1-and-launch-readiness.md](tidb-phase1-and-launch-readiness.md) §2.6「修复身份的列级收紧」。

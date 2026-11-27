@@ -27,7 +27,7 @@
 | 2 | 门槛 ① ②:25 条点名用例、`-count=10` 稳定性 | 2026-11-20「登录排队清合入门槛的 Codex 验证单」第一部分。要在第 1 步之后跑:其中 7 条被改过账号字面量 |
 | 3 | 本仓网关:`AssignGateServiceAuthTest`、`AssignGateRateLimiterTest`、`RefreshTokenControllerTest` 等 | 「遗留项收口」第 3 步;Gemini 条目第 3 步 |
 | 4 | 契约测试:`gate_pick_alerts_contract.tests.ps1`、`k8s_deploy_contract.tests.ps1` | 2026-11-26「登录排队复核与两处补齐」 |
-| 5 | 变异取红 18 项(A~R),在 `%TEMP%` 的副本上做 | 「遗留项收口」第 4 步(A~K);2026-11-26「登录排队:快速通道一个账号只占一个在途名额」(L);2026-11-26「登录排队:票据绑定账号」(M~R) |
+| 5 | 变异取红 21 项(A~U),在 `%TEMP%` 的副本上做 | 「遗留项收口」第 4 步(A~K);2026-11-26「登录排队:快速通道一个账号只占一个在途名额」(L);2026-11-26「登录排队:票据绑定账号」(M~R);2026-11-26「gate:一张票只开一条连接、验签后限时登录」(S~U) |
 | 6 | Unity 编译与 EditMode | Gemini 条目第 5 步 |
 | 7 | 门槛 ③:真实 Redis 冒烟两轮(7.2 单实例、8.10.2 Cluster),各 11 个核对步骤加 4 个补充项 | 验证单第二部分;「遗留项收口」第 5 步 |
 
@@ -47,7 +47,8 @@
   - `go/login/internal/logic/loginpregate/assigngate_auth_test.go` 的 `TestAssignGateAuthEmptyAccountIsAnError`、`TestAnonymousAssignAllowedOnlyWithLegacyOnAndQueueOff`(新)。
   - `go/login/internal/logic/clientplayerlogin/gate_ticket_account_test.go`(新文件,复用同包 `legacy_gate_killswitch_login_test.go` 的环境)。
   - `robot/main.go`(`loginAndEnterWithAuth`、`loginAndEnterViaHttpGateway` 多一个参数,新增 `httpLoginTokens`)、`robot/authored_navmesh_e2e_test.go`。
-  - `cpp/tests/routing_identity_test/session_details_builder_test.cpp` 的 `CopiesGateAndSessionIdentityFields`(加断言)。
+  - `cpp/tests/routing_identity_test/session_details_builder_test.cpp` 的 `CopiesGateAndSessionIdentityFields`(加断言),文末新增 `GateTicketHolder.*` 4 条(一张票同一时刻只开一条连接)。
+  - 2026-11-26 深夜 gate 再补两道(做法见设计稿 §5「一张票只开一条连接、验签后限时登录」):`cpp/libs/services/gate/session/manager/session_manager.h`(`ClaimTicket` / `ReleaseTicket`)、`session_info_comp.h`(`ticketKey`)、`client_session_handler.cpp`(验签占位、断开时摘除);`cpp/libs/engine/core/network/client_liveness.h`(登录检查点 `kLogin`、`ExpectLoginBy`,`Sweep` 多一个回调参数)、`client_heartbeat.{h,cpp}`(`kLoginDeadlineAfterVerify` = 60s、`login_timeouts` 计数与汇总字段);`cpp/nodes/gate/tests/client_liveness_test.cpp` 新增 3 条 `ClientLivenessSweeper.*Login*`,夹具的 `Sweep` 跟着多传一个回调;`tools/scripts/stress_summarize.ps1` 读 `login_timeouts`。
 
 判读提示:
 
@@ -65,6 +66,10 @@
   - P:`anonymousAssignAllowed` 改成 `return legacyGateLoginEnabled` → `TestAnonymousAssignAllowedOnlyWithLegacyOnAndQueueOff` 红。
   - Q:`authenticateAssignGate` 删掉空账号判断 → `TestAssignGateAuthEmptyAccountIsAnError` 红。
   - R:C++ `session_details_builder.h` 删掉 `set_ticket_account_digest` 那个 `if` → `SessionDetailsBuilder.CopiesGateAndSessionIdentityFields` 红。
+  - S:`session_manager.h` 的 `ClaimTicket` 里「持有者还活着就回 false」改成回 true → `GateTicketHolder.SecondLiveConnectionWithTheSameTicketIsRejected` 红。
+  - T:`client_liveness.h` 的 `Sweep` 里 `kLogin` 分支的 `onLoginTimeout(...)` 删掉(只留计数)→ `ClientLivenessSweeper.VerifiedButNeverLoggedInIsClosedAtTheLoginDeadline` 红。
+  - U:`kLogin` 分支的 `if (view->loggedIn)` 改成 `if (false)` → `ClientLivenessSweeper.LoggingInBeforeTheDeadlineVoidsIt` 红。
+- 心跳冒烟(heartbeat-idle-smoke)照常跑:H3 的裸连接只验签、不登录、静默,仍应在 29.5–35 秒内被空闲超时关掉(登录期限 60 秒,晚于它);日志汇总行多了 `login_timeouts`,这一项在冒烟里应为 0。
 
 ## 4. 开闸(改常量)
 

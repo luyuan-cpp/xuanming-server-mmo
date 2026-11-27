@@ -390,7 +390,7 @@ func runGlobalFormation(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
 	}
 	if len(f.CreateRequest) == 0 {
 		if globalDestroy(s.Authority, f) {
-			globalAbortPrepared(s, f, false)
+			globalAbortPrepared(s, f)
 		}
 		return
 	}
@@ -430,7 +430,7 @@ func runGlobalFormation(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
 		return
 	}
 	if result.State == battlepb.BattleCreationState_BATTLE_CREATION_ABORTED {
-		globalAbortPrepared(s, f, false)
+		globalAbortPrepared(s, f)
 		return
 	}
 	request := &battlepb.CreateBattleRequest{}
@@ -473,7 +473,7 @@ func runGlobalFormation(s *svc.ServiceContext, f *pb.MatchFormationRecord) {
 		}
 	}
 	if globalDestroy(s.Authority, f) {
-		globalAbortPrepared(s, f, false)
+		globalAbortPrepared(s, f)
 	} else {
 		s.HoldRelay(errors.New("匹配外部结局 UNKNOWN"))
 		s.HoldRelay(s.Authority.Unknown(ctx, f))
@@ -629,7 +629,8 @@ func globalRequestBattleTicket(ctx context.Context, s *svc.ServiceContext, pid, 
 
 // globalAbortPrepared 收尾发房前失败的成局。culprits 是确定由自己导致失败的成员(0 忽略):
 // 没有 Create 原件时,单排肇事者的票终止、其余成员回队(authority.FinishFailed);有原件时等唯一 SQL 终局。
-func globalAbortPrepared(s *svc.ServiceContext, f *pb.MatchFormationRecord, skipSilverRefund bool, culprits ...uint64) {
+// 两条分支解冻时都不要求 scene 跳过生死状银两退还:退费只有 scene 一条通道(数据覆写审计 r2 第 4 轮)。
+func globalAbortPrepared(s *svc.ServiceContext, f *pb.MatchFormationRecord, culprits ...uint64) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	latest, e := s.Authority.Formation(ctx, f.BattleId)
 	cancel()
@@ -654,8 +655,8 @@ func globalAbortPrepared(s *svc.ServiceContext, f *pb.MatchFormationRecord, skip
 		s.HoldRelay(err)
 		if err == nil && decision == pb.BattleOutcomeDecision_BATTLE_OUTCOME_DECISION_ABORT {
 			// CreateRequest 已落库并提交唯一 SQL ABORT：终局发件箱会向 scene 投递 BATTLE_OUTCOME_VOID，
-			// 由 scene 侧 OnBattlePrepareCancelled / OnBattleVoid 原子单次退还普通战书银两并清零标记，绝不与邮件双退。
-			cancelPreparedWithOptions(s, prepared, f.BattleId, false)
+			// 由 scene 侧 OnBattlePrepareCancelled / OnBattleVoid 原子单次退还普通战书银两并清零标记(match 不发退费邮件)。
+			cancelPrepared(s, prepared, f.BattleId)
 		} else if err == nil {
 			// 这一次没能作废(准入还没关、原实例没应答等)。原实例若已经不在,不必等到截止:记成可疑,取证循环只做只读查询,
 			// 原实例应答就撤出,确认不在就提前作废(global_instance_loss.go)。备战中的成员由作废结算解冻。
@@ -669,8 +670,8 @@ func globalAbortPrepared(s *svc.ServiceContext, f *pb.MatchFormationRecord, skip
 	if e != nil {
 		return
 	}
-	// 无 CreateRequest 时仅当调用方确认已走邮件退还才跳过 scene 在线退银两；若 scene 尚未扣费，scene 侧本身为 0 不退。
-	cancelPreparedWithOptions(s, prepared, f.BattleId, skipSilverRefund)
+	// 无 CreateRequest:scene 按存档里的待退标记在线退普通战书银两;没扣过费的 scene 侧标记本身为 0,不退。
+	cancelPrepared(s, prepared, f.BattleId)
 	finishCtx, finishCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer finishCancel()
 	// 走到这里的成局都没有 Create 原件（上面有原件的已经返回）。计数只在提交之后打（2026-10-22 评审补）：

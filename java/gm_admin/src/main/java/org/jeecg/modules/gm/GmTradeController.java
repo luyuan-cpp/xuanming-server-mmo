@@ -112,7 +112,6 @@ public class GmTradeController {
         if (!"MANUAL_CONTRACT_VERDICT_OK".equals(plan.path("verdict").asText(""))) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "交易服务判定不可执行：" + refusalOf(plan));
         }
-        if (plan.path("alreadyExecuted").asBoolean(false)) throw new ResponseStatusException(HttpStatus.CONFLICT, "这条处置已经执行过");
         ObjectNode result = json.createObjectNode();
         result.set("command", journal.prepareTradeManual(actor, clientRequestId, reason, frozen));
         result.set("plan", plan);

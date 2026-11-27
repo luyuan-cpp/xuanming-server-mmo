@@ -359,7 +359,7 @@ func TestSetGuardTime_IsAFloorNotAnAssignment(t *testing.T) {
 }
 
 // 跨机接管 + 新持有者时钟落后:没有持久水位时会静默重发前任的号;
-// 注入前任高水位作地板后必须完全不重叠。这是 snowflakealloc 持久水位(<prefix>/snowflake_guard/<id>)
+// 注入前任高水位作地板后必须完全不重叠。这是 snowflakealloc 持久水位(/snowflake/<kind>/c<cluster>/watermark/<slot>)
 // 存在的唯一理由,也是 C++ SetGuardTime(max(now,lastTs)) 的等价保证。
 func TestSetGuardTime_PreventsReplayOnClockSkewedTakeover(t *testing.T) {
 	restore := nowEpoch

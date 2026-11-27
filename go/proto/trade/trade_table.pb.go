@@ -1483,7 +1483,11 @@ type TradeCommerceManualAction struct {
 	// void-auction(第 3 类):联动的另一张合同(拍品记出价号,出价记拍品号)。
 	LinkedCommerceId uint64 `protobuf:"varint,15,opt,name=linked_commerce_id,json=linkedCommerceId,proto3" json:"linked_commerce_id,omitempty"`
 	// partial(第 2 类):每条部分发放 / 部分扣出的腿与人工认定的缺口。
-	PartialParts  []*TradeCommercePartialPart `protobuf:"bytes,16,rep,name=partial_parts,json=partialParts,proto3" json:"partial_parts,omitempty"`
+	PartialParts []*TradeCommercePartialPart `protobuf:"bytes,16,rep,name=partial_parts,json=partialParts,proto3" json:"partial_parts,omitempty"`
+	// 双人复核(docs/design/admin-identity-and-dual-control.md §5.6):后台流水号与批准人;发起人就是上面的 operator。
+	// 同一合同上 approval_id 不重复,重放同一个批准号回原结果。没经双人复核的处置(本机开发)两项为空。
+	ApprovalId    string `protobuf:"bytes,17,opt,name=approval_id,json=approvalId,proto3" json:"approval_id,omitempty"`
+	Approver      string `protobuf:"bytes,18,opt,name=approver,proto3" json:"approver,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1628,6 +1632,20 @@ func (x *TradeCommerceManualAction) GetPartialParts() []*TradeCommercePartialPar
 		return x.PartialParts
 	}
 	return nil
+}
+
+func (x *TradeCommerceManualAction) GetApprovalId() string {
+	if x != nil {
+		return x.ApprovalId
+	}
+	return ""
+}
+
+func (x *TradeCommerceManualAction) GetApprover() string {
+	if x != nil {
+		return x.Approver
+	}
+	return ""
 }
 
 // partial 动作里人工认定的一条腿的缺口(commerce.ResolveManual)。缺口只含实例、宝宝和整条货币:
@@ -2703,7 +2721,7 @@ const file_proto_trade_trade_table_proto_rawDesc = "" +
 	"\x06status\x18\x02 \x01(\rR\x06status\x12\x16\n" +
 	"\x06reason\x18\x03 \x01(\tR\x06reason\x12\x16\n" +
 	"\x06detail\x18\x04 \x01(\tR\x06detail\x12\x13\n" +
-	"\x05at_ms\x18\x05 \x01(\x04R\x04atMs\"\xa6\x05\n" +
+	"\x05at_ms\x18\x05 \x01(\x04R\x04atMs\"\xe3\x05\n" +
 	"\x19TradeCommerceManualAction\x12\x16\n" +
 	"\x06action\x18\x01 \x01(\tR\x06action\x12\x1a\n" +
 	"\boperator\x18\x02 \x01(\tR\boperator\x12\x16\n" +
@@ -2724,7 +2742,10 @@ const file_proto_trade_trade_table_proto_rawDesc = "" +
 	"\x0eidentity_after\x18\r \x01(\v2\x18.trade.TradeRoleIdentityR\ridentityAfter\x12'\n" +
 	"\x0fretargeted_legs\x18\x0e \x03(\tR\x0eretargetedLegs\x12,\n" +
 	"\x12linked_commerce_id\x18\x0f \x01(\x04R\x10linkedCommerceId\x12D\n" +
-	"\rpartial_parts\x18\x10 \x03(\v2\x1f.trade.TradeCommercePartialPartR\fpartialParts\"T\n" +
+	"\rpartial_parts\x18\x10 \x03(\v2\x1f.trade.TradeCommercePartialPartR\fpartialParts\x12\x1f\n" +
+	"\vapproval_id\x18\x11 \x01(\tR\n" +
+	"approvalId\x12\x1a\n" +
+	"\bapprover\x18\x12 \x01(\tR\bapprover\"T\n" +
 	"\x18TradeCommercePartialPart\x12\x10\n" +
 	"\x03leg\x18\x01 \x01(\tR\x03leg\x12&\n" +
 	"\amissing\x18\x02 \x01(\v2\f.AssetBundleR\amissing\"T\n" +

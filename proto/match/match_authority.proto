@@ -796,6 +796,11 @@ message MatchTournamentRewardRecord {
   uint64 mail_id = 13;
   uint64 claimed_ms = 14;
   uint64 updated_ms = 15;
+  // 结算时冻结的领奖邮件标题与正文(取当时的 TournamentReward 配表,空则缺省文案)。领奖重发只用这两列,
+  // 同一条奖励每次的邮件请求逐字节相同,mail 按 (sender_kind, request_id) 判重回原 mail_id
+  // (群仙问道赛设计 V1 第七节,数据覆写审计 r2 第 4 轮)。
+  string mail_title = 16;
+  string mail_body = 17;
 }
 
 // V3: 淘汰赛免费神机竞猜表(主键 (season_id, player_id, match_id) 物理保证一人一场一票,零消费零押注)。
@@ -903,22 +908,6 @@ message MatchGrudgeLogRecord {
   uint32 writ_tier = 7;
   uint32 team_size = 8;
   uint64 finished_ms = 9;
-}
-
-message MatchJianghuRefundRecord {
-  option (OptionTableName) = "match_jianghu_refund";
-  option (OptionPrimaryKey) = "duel_invite_id";
-  option (OptionTiDBNonclusteredPK) = true;
-  option (OptionTiDBShardRowIDBits) = 4;
-  option (OptionTiDBPreSplitRegions) = 4;
-
-  uint64 duel_invite_id = 1;
-  uint64 battle_id = 2;
-  uint64 payer_player_id = 3;
-  uint32 writ_tier = 4;
-  uint64 refund_mail_id = 5;
-  string reason = 6;
-  uint64 created_ms = 7;
 }
 
 // 五行试炼志 V3：好友约战帖权威存储（最多每人 10 张，14 天有效，与 match_battle_report.ref_count 联动钉住录像）。

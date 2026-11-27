@@ -836,12 +836,12 @@ constexpr ResolveManualContractRequest::ParseTableT_ ResolveManualContractReques
     {
       PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_._has_bits_),
       0, // no _extensions_
-      13, 120,  // max_field_number, fast_idx_mask
+      14, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294959104,  // skipmap
+      4294950912,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      13,  // num_field_entries
-      1,  // num_aux_entries
+      14,  // num_field_entries
+      2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -852,20 +852,20 @@ constexpr ResolveManualContractRequest::ParseTableT_ ResolveManualContractReques
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint64 commerce_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ResolveManualContractRequest, _impl_.commerce_id_), 7>(),
-       {8, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ResolveManualContractRequest, _impl_.commerce_id_), 8>(),
+       {8, 8, 0,
         PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.commerce_id_)}},
       // .trade.ManualContractMode mode = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ResolveManualContractRequest, _impl_.mode_), 12>(),
-       {16, 12, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ResolveManualContractRequest, _impl_.mode_), 13>(),
+       {16, 13, 0,
         PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.mode_)}},
       // string action = 3;
       {::_pbi::TcParser::FastUS1,
        {26, 1, 0,
         PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.action_)}},
       // uint64 expect_version = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ResolveManualContractRequest, _impl_.expect_version_), 8>(),
-       {32, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ResolveManualContractRequest, _impl_.expect_version_), 9>(),
+       {32, 9, 0,
         PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.expect_version_)}},
       // string expect_target = 5;
       {::_pbi::TcParser::FastUS1,
@@ -888,34 +888,37 @@ constexpr ResolveManualContractRequest::ParseTableT_ ResolveManualContractReques
        {74, 5, 0,
         PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.party_)}},
       // uint64 to_player_id = 10;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ResolveManualContractRequest, _impl_.to_player_id_), 9>(),
-       {80, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ResolveManualContractRequest, _impl_.to_player_id_), 10>(),
+       {80, 10, 0,
         PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.to_player_id_)}},
       // uint64 linked_commerce_id = 11;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ResolveManualContractRequest, _impl_.linked_commerce_id_), 10>(),
-       {88, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ResolveManualContractRequest, _impl_.linked_commerce_id_), 11>(),
+       {88, 11, 0,
         PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.linked_commerce_id_)}},
       // uint64 linked_version = 12;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ResolveManualContractRequest, _impl_.linked_version_), 11>(),
-       {96, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ResolveManualContractRequest, _impl_.linked_version_), 12>(),
+       {96, 12, 0,
         PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.linked_version_)}},
       // .common.base.ServiceCallAuth auth = 13;
       {::_pbi::TcParser::FastMtS1,
        {106, 6, 0,
         PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.auth_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // .common.base.AdminApproval approval = 14;
+      {::_pbi::TcParser::FastMtS1,
+       {114, 7, 1,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.approval_)}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 commerce_id = 1;
-      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.commerce_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.commerce_id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .trade.ManualContractMode mode = 2;
-      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.mode_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.mode_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // string action = 3;
       {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.action_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 expect_version = 4;
-      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.expect_version_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.expect_version_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string expect_target = 5;
       {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.expect_target_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string operator = 6;
@@ -927,19 +930,26 @@ constexpr ResolveManualContractRequest::ParseTableT_ ResolveManualContractReques
       // string party = 9;
       {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.party_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 to_player_id = 10;
-      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.to_player_id_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.to_player_id_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 linked_commerce_id = 11;
-      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.linked_commerce_id_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.linked_commerce_id_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 linked_version = 12;
-      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.linked_version_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.linked_version_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .common.base.ServiceCallAuth auth = 13;
       {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.auth_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .common.base.AdminApproval approval = 14;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractRequest, _impl_.approval_), _Internal::kHasBitsOffset + 7, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
         {::_pbi::TcParser::GetTable<::common::base::ServiceCallAuth>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::common::base::ServiceCallAuth_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::common::base::AdminApproval>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::common::base::AdminApproval_globals_},
         #endif
     }},
     {{
@@ -981,6 +991,7 @@ inline constexpr ResolveManualContractRequest::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         auth_{nullptr},
+        approval_{nullptr},
         commerce_id_{::uint64_t{0u}},
         expect_version_{::uint64_t{0u}},
         to_player_id_{::uint64_t{0u}},
@@ -2352,11 +2363,11 @@ constexpr ResolveManualContractResponse::ParseTableT_ ResolveManualContractRespo
     {
       PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_._has_bits_),
       0, // no _extensions_
-      13, 120,  // max_field_number, fast_idx_mask
+      14, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294959104,  // skipmap
+      4294950912,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      13,  // num_field_entries
+      14,  // num_field_entries
       7,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -2419,7 +2430,10 @@ constexpr ResolveManualContractResponse::ParseTableT_ ResolveManualContractRespo
       {::_pbi::TcParser::FastUS1,
        {106, 6, 0,
         PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.audit_line_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // bool already_executed = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ResolveManualContractResponse, _impl_.already_executed_), 13>(),
+       {112, 13, 0,
+        PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.already_executed_)}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
@@ -2450,6 +2464,8 @@ constexpr ResolveManualContractResponse::ParseTableT_ ResolveManualContractRespo
       {PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.status_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string audit_line = 13;
       {PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.audit_line_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // bool already_executed = 14;
+      {PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.already_executed_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -2536,7 +2552,8 @@ inline constexpr ResolveManualContractResponse::Impl_::Impl_(
         plan_{nullptr},
         linked_plan_{nullptr},
         verdict_{static_cast< ::trade::ManualContractVerdict >(0)},
-        status_{0u} {}
+        status_{0u},
+        already_executed_{false} {}
 
 template <typename>
 constexpr ResolveManualContractResponse::ResolveManualContractResponse(::_pbi::ConstantInitialized,
@@ -2698,7 +2715,7 @@ const ::uint32_t
         4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_._has_bits_),
-        16, // hasbit index offset
+        17, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_.commerce_id_),
         PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_.mode_),
         PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_.action_),
@@ -2712,19 +2729,21 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_.linked_commerce_id_),
         PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_.linked_version_),
         PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_.auth_),
-        7,
-        12,
-        1,
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractRequest, _impl_.approval_),
         8,
+        13,
+        1,
+        9,
         2,
         3,
         4,
         0,
         5,
-        9,
         10,
         11,
+        12,
         6,
+        7,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::trade::ManualContractLeg, _impl_._has_bits_),
         7, // hasbit index offset
@@ -2768,7 +2787,7 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_._has_bits_),
-        16, // hasbit index offset
+        17, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.verdict_),
         PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.refusal_),
         PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.target_),
@@ -2782,6 +2801,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.stage_),
         PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.status_),
         PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.audit_line_),
+        PROTOBUF_FIELD_OFFSET(::trade::ResolveManualContractResponse, _impl_.already_executed_),
         11,
         3,
         4,
@@ -2795,6 +2815,7 @@ const ::uint32_t
         5,
         12,
         6,
+        13,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::trade::RecordSellerEnvironmentRequest, _impl_._has_bits_),
         10, // hasbit index offset
@@ -2856,14 +2877,14 @@ static const ::_pbi::MigrationSchema
         {34, sizeof(::trade::ListManualContractsRequest)},
         {45, sizeof(::trade::ListManualContractsResponse)},
         {58, sizeof(::trade::ResolveManualContractRequest)},
-        {87, sizeof(::trade::ManualContractLeg)},
-        {98, sizeof(::trade::ManualContractParty)},
-        {119, sizeof(::trade::ManualContractActionVerdict)},
-        {128, sizeof(::trade::ResolveManualContractResponse)},
-        {157, sizeof(::trade::RecordSellerEnvironmentRequest)},
-        {174, sizeof(::trade::RecordSellerEnvironmentResponse)},
-        {183, sizeof(::trade::RecordSellerViolationRequest)},
-        {202, sizeof(::trade::RecordSellerViolationResponse)},
+        {89, sizeof(::trade::ManualContractLeg)},
+        {100, sizeof(::trade::ManualContractParty)},
+        {121, sizeof(::trade::ManualContractActionVerdict)},
+        {130, sizeof(::trade::ResolveManualContractResponse)},
+        {161, sizeof(::trade::RecordSellerEnvironmentRequest)},
+        {178, sizeof(::trade::RecordSellerEnvironmentResponse)},
+        {187, sizeof(::trade::RecordSellerViolationRequest)},
+        {206, sizeof(::trade::RecordSellerViolationResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2886,7 +2907,8 @@ const char descriptor_table_protodef_proto_2ftrade_2ftrade_5fadmin_2eproto[] ABS
     "\n\035proto/trade/trade_admin.proto\022\005trade\032\033"
     "proto/db/proto_option.proto\032\033proto/commo"
     "n/base/tip.proto\032)proto/common/base/serv"
-    "ice_call_auth.proto\032\032proto/trade/commerc"
+    "ice_call_auth.proto\032&proto/common/base/a"
+    "dmin_approval.proto\032\032proto/trade/commerc"
     "e.proto\032\033proto/trade/jubaozhai.proto\032\035pr"
     "oto/trade/trade_table.proto\"\214\002\n\022SeedList"
     "ingRequest\022\030\n\020seller_player_id\030\001 \001(\004\022(\n\010"
@@ -2905,7 +2927,7 @@ const char descriptor_table_protodef_proto_2ftrade_2ftrade_5fadmin_2eproto[] ABS
     "ContractsResponse\022-\n\tcontracts\030\001 \003(\0132\032.t"
     "rade.TradeCommerceRecord\022\035\n\025next_after_u"
     "pdated_ms\030\002 \001(\004\022\036\n\026next_after_commerce_i"
-    "d\030\003 \001(\004\022\016\n\006target\030\004 \001(\t\022\r\n\005retry\030\005 \001(\010\"\321"
+    "d\030\003 \001(\004\022\016\n\006target\030\004 \001(\t\022\r\n\005retry\030\005 \001(\010\"\377"
     "\002\n\034ResolveManualContractRequest\022\023\n\013comme"
     "rce_id\030\001 \001(\004\022\'\n\004mode\030\002 \001(\0162\031.trade.Manua"
     "lContractMode\022\016\n\006action\030\003 \001(\t\022\026\n\016expect_"
@@ -2914,74 +2936,77 @@ const char descriptor_table_protodef_proto_2ftrade_2ftrade_5fadmin_2eproto[] ABS
     "\010 \003(\t\022\r\n\005party\030\t \001(\t\022\024\n\014to_player_id\030\n \001"
     "(\004\022\032\n\022linked_commerce_id\030\013 \001(\004\022\026\n\016linked"
     "_version\030\014 \001(\004\022*\n\004auth\030\r \001(\0132\034.common.ba"
-    "se.ServiceCallAuth\"\216\001\n\021ManualContractLeg"
-    "\022$\n\003leg\030\001 \001(\0132\027.trade.TradeCommerceLeg\022,"
-    "\n\top_status\030\002 \001(\0162\031.trade.TradeAssetOpSt"
-    "atus\022\020\n\010final_ms\030\003 \001(\004\022\023\n\013read_failed\030\004 "
-    "\001(\010\"\321\001\n\023ManualContractParty\022\r\n\005party\030\001 \001"
-    "(\t\022\021\n\tplayer_id\030\002 \001(\004\022\037\n\027contract_owner_"
-    "revision\030\003 \001(\004\022\036\n\026current_owner_revision"
-    "\030\004 \001(\004\022\024\n\014same_account\030\005 \001(\010\022\017\n\007deleted\030"
-    "\006 \001(\010\022\016\n\006frozen\030\007 \001(\010\022\017\n\007unknown\030\010 \001(\010\022\017"
-    "\n\007changed\030\t \001(\010\"N\n\033ManualContractActionV"
-    "erdict\022\016\n\006action\030\001 \001(\t\022\017\n\007allowed\030\002 \001(\010\022"
-    "\016\n\006detail\030\003 \001(\t\"\353\003\n\035ResolveManualContrac"
-    "tResponse\022-\n\007verdict\030\001 \001(\0162\034.trade.Manua"
-    "lContractVerdict\022\017\n\007refusal\030\002 \001(\t\022\016\n\006tar"
-    "get\030\003 \001(\t\022*\n\006record\030\004 \001(\0132\032.trade.TradeC"
-    "ommerceRecord\022*\n\006linked\030\005 \001(\0132\032.trade.Tr"
-    "adeCommerceRecord\022&\n\004legs\030\006 \003(\0132\030.trade."
-    "ManualContractLeg\022+\n\007parties\030\007 \003(\0132\032.tra"
-    "de.ManualContractParty\0223\n\007actions\030\010 \003(\0132"
-    "\".trade.ManualContractActionVerdict\022.\n\004p"
-    "lan\030\t \001(\0132 .trade.TradeCommerceManualAct"
-    "ion\0225\n\013linked_plan\030\n \001(\0132 .trade.TradeCo"
-    "mmerceManualAction\022\r\n\005stage\030\013 \001(\t\022\016\n\006sta"
-    "tus\030\014 \001(\r\022\022\n\naudit_line\030\r \001(\t\"\323\001\n\036Record"
-    "SellerEnvironmentRequest\022\030\n\020seller_playe"
-    "r_id\030\001 \001(\004\022\025\n\rowner_account\030\002 \001(\t\022\026\n\016own"
-    "er_revision\030\003 \001(\004\022\021\n\tclient_ip\030\004 \001(\t\022\021\n\t"
-    "device_id\030\005 \001(\t\022\026\n\016observed_at_ms\030\006 \001(\004\022"
-    "*\n\004auth\030\007 \001(\0132\034.common.base.ServiceCallA"
-    "uth\"\217\001\n\037RecordSellerEnvironmentResponse\022"
-    "&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022"
-    "\032\n\022env_credit_cleared\030\002 \001(\010\022(\n\007profile\030\003"
-    " \001(\0132\027.trade.SellerCreditView\"\346\001\n\034Record"
-    "SellerViolationRequest\022\017\n\007case_id\030\001 \001(\t\022"
-    "\020\n\010order_id\030\002 \001(\t\022\030\n\020seller_player_id\030\003 "
-    "\001(\004\022\026\n\016seller_account\030\004 \001(\t\022\035\n\025seller_ow"
-    "ner_revision\030\005 \001(\004\022\016\n\006reason\030\006 \001(\t\022\026\n\016re"
-    "corded_at_ms\030\007 \001(\004\022*\n\004auth\030\010 \001(\0132\034.commo"
-    "n.base.ServiceCallAuth\"q\n\035RecordSellerVi"
-    "olationResponse\022&\n\rerror_message\030\001 \001(\0132\017"
-    ".TipInfoMessage\022(\n\007profile\030\002 \001(\0132\027.trade"
-    ".SellerCreditView*\235\001\n\022ManualContractMode"
-    "\022$\n MANUAL_CONTRACT_MODE_UNSPECIFIED\020\000\022\035"
-    "\n\031MANUAL_CONTRACT_MODE_SHOW\020\001\022 \n\034MANUAL_"
-    "CONTRACT_MODE_DRY_RUN\020\002\022 \n\034MANUAL_CONTRA"
-    "CT_MODE_EXECUTE\020\003*\374\001\n\025ManualContractVerd"
-    "ict\022\'\n#MANUAL_CONTRACT_VERDICT_UNSPECIFI"
-    "ED\020\000\022\036\n\032MANUAL_CONTRACT_VERDICT_OK\020\001\022%\n!"
-    "MANUAL_CONTRACT_VERDICT_NOT_FOUND\020\002\022#\n\037M"
-    "ANUAL_CONTRACT_VERDICT_REFUSED\020\003\022+\n\'MANU"
-    "AL_CONTRACT_VERDICT_VERSION_CHANGED\020\004\022!\n"
-    "\035MANUAL_CONTRACT_VERDICT_RETRY\020\0052\342\003\n\nTra"
-    "deAdmin\022D\n\013SeedListing\022\031.trade.SeedListi"
-    "ngRequest\032\032.trade.SeedListingResponse\022\\\n"
-    "\023ListManualContracts\022!.trade.ListManualC"
-    "ontractsRequest\032\".trade.ListManualContra"
-    "ctsResponse\022b\n\025ResolveManualContract\022#.t"
-    "rade.ResolveManualContractRequest\032$.trad"
-    "e.ResolveManualContractResponse\022h\n\027Recor"
-    "dSellerEnvironment\022%.trade.RecordSellerE"
-    "nvironmentRequest\032&.trade.RecordSellerEn"
-    "vironmentResponse\022b\n\025RecordSellerViolati"
-    "on\022#.trade.RecordSellerViolationRequest\032"
-    "$.trade.RecordSellerViolationResponseB\016Z"
-    "\005trade\200\001\000\230\324a\021b\006proto3"
+    "se.ServiceCallAuth\022,\n\010approval\030\016 \001(\0132\032.c"
+    "ommon.base.AdminApproval\"\216\001\n\021ManualContr"
+    "actLeg\022$\n\003leg\030\001 \001(\0132\027.trade.TradeCommerc"
+    "eLeg\022,\n\top_status\030\002 \001(\0162\031.trade.TradeAss"
+    "etOpStatus\022\020\n\010final_ms\030\003 \001(\004\022\023\n\013read_fai"
+    "led\030\004 \001(\010\"\321\001\n\023ManualContractParty\022\r\n\005par"
+    "ty\030\001 \001(\t\022\021\n\tplayer_id\030\002 \001(\004\022\037\n\027contract_"
+    "owner_revision\030\003 \001(\004\022\036\n\026current_owner_re"
+    "vision\030\004 \001(\004\022\024\n\014same_account\030\005 \001(\010\022\017\n\007de"
+    "leted\030\006 \001(\010\022\016\n\006frozen\030\007 \001(\010\022\017\n\007unknown\030\010"
+    " \001(\010\022\017\n\007changed\030\t \001(\010\"N\n\033ManualContractA"
+    "ctionVerdict\022\016\n\006action\030\001 \001(\t\022\017\n\007allowed\030"
+    "\002 \001(\010\022\016\n\006detail\030\003 \001(\t\"\205\004\n\035ResolveManualC"
+    "ontractResponse\022-\n\007verdict\030\001 \001(\0162\034.trade"
+    ".ManualContractVerdict\022\017\n\007refusal\030\002 \001(\t\022"
+    "\016\n\006target\030\003 \001(\t\022*\n\006record\030\004 \001(\0132\032.trade."
+    "TradeCommerceRecord\022*\n\006linked\030\005 \001(\0132\032.tr"
+    "ade.TradeCommerceRecord\022&\n\004legs\030\006 \003(\0132\030."
+    "trade.ManualContractLeg\022+\n\007parties\030\007 \003(\013"
+    "2\032.trade.ManualContractParty\0223\n\007actions\030"
+    "\010 \003(\0132\".trade.ManualContractActionVerdic"
+    "t\022.\n\004plan\030\t \001(\0132 .trade.TradeCommerceMan"
+    "ualAction\0225\n\013linked_plan\030\n \001(\0132 .trade.T"
+    "radeCommerceManualAction\022\r\n\005stage\030\013 \001(\t\022"
+    "\016\n\006status\030\014 \001(\r\022\022\n\naudit_line\030\r \001(\t\022\030\n\020a"
+    "lready_executed\030\016 \001(\010\"\323\001\n\036RecordSellerEn"
+    "vironmentRequest\022\030\n\020seller_player_id\030\001 \001"
+    "(\004\022\025\n\rowner_account\030\002 \001(\t\022\026\n\016owner_revis"
+    "ion\030\003 \001(\004\022\021\n\tclient_ip\030\004 \001(\t\022\021\n\tdevice_i"
+    "d\030\005 \001(\t\022\026\n\016observed_at_ms\030\006 \001(\004\022*\n\004auth\030"
+    "\007 \001(\0132\034.common.base.ServiceCallAuth\"\217\001\n\037"
+    "RecordSellerEnvironmentResponse\022&\n\rerror"
+    "_message\030\001 \001(\0132\017.TipInfoMessage\022\032\n\022env_c"
+    "redit_cleared\030\002 \001(\010\022(\n\007profile\030\003 \001(\0132\027.t"
+    "rade.SellerCreditView\"\346\001\n\034RecordSellerVi"
+    "olationRequest\022\017\n\007case_id\030\001 \001(\t\022\020\n\010order"
+    "_id\030\002 \001(\t\022\030\n\020seller_player_id\030\003 \001(\004\022\026\n\016s"
+    "eller_account\030\004 \001(\t\022\035\n\025seller_owner_revi"
+    "sion\030\005 \001(\004\022\016\n\006reason\030\006 \001(\t\022\026\n\016recorded_a"
+    "t_ms\030\007 \001(\004\022*\n\004auth\030\010 \001(\0132\034.common.base.S"
+    "erviceCallAuth\"q\n\035RecordSellerViolationR"
+    "esponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfo"
+    "Message\022(\n\007profile\030\002 \001(\0132\027.trade.SellerC"
+    "reditView*\235\001\n\022ManualContractMode\022$\n MANU"
+    "AL_CONTRACT_MODE_UNSPECIFIED\020\000\022\035\n\031MANUAL"
+    "_CONTRACT_MODE_SHOW\020\001\022 \n\034MANUAL_CONTRACT"
+    "_MODE_DRY_RUN\020\002\022 \n\034MANUAL_CONTRACT_MODE_"
+    "EXECUTE\020\003*\374\001\n\025ManualContractVerdict\022\'\n#M"
+    "ANUAL_CONTRACT_VERDICT_UNSPECIFIED\020\000\022\036\n\032"
+    "MANUAL_CONTRACT_VERDICT_OK\020\001\022%\n!MANUAL_C"
+    "ONTRACT_VERDICT_NOT_FOUND\020\002\022#\n\037MANUAL_CO"
+    "NTRACT_VERDICT_REFUSED\020\003\022+\n\'MANUAL_CONTR"
+    "ACT_VERDICT_VERSION_CHANGED\020\004\022!\n\035MANUAL_"
+    "CONTRACT_VERDICT_RETRY\020\0052\342\003\n\nTradeAdmin\022"
+    "D\n\013SeedListing\022\031.trade.SeedListingReques"
+    "t\032\032.trade.SeedListingResponse\022\\\n\023ListMan"
+    "ualContracts\022!.trade.ListManualContracts"
+    "Request\032\".trade.ListManualContractsRespo"
+    "nse\022b\n\025ResolveManualContract\022#.trade.Res"
+    "olveManualContractRequest\032$.trade.Resolv"
+    "eManualContractResponse\022h\n\027RecordSellerE"
+    "nvironment\022%.trade.RecordSellerEnvironme"
+    "ntRequest\032&.trade.RecordSellerEnvironmen"
+    "tResponse\022b\n\025RecordSellerViolation\022#.tra"
+    "de.RecordSellerViolationRequest\032$.trade."
+    "RecordSellerViolationResponseB\016Z\005trade\200\001"
+    "\000\230\324a\021b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
-    descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto_deps[6] = {
+    descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto_deps[7] = {
+        &::descriptor_table_proto_2fcommon_2fbase_2fadmin_5fapproval_2eproto,
         &::descriptor_table_proto_2fcommon_2fbase_2fservice_5fcall_5fauth_2eproto,
         &::descriptor_table_proto_2fcommon_2fbase_2ftip_2eproto,
         &::descriptor_table_proto_2fdb_2fproto_5foption_2eproto,
@@ -2993,12 +3018,12 @@ static ::absl::once_flag descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto_
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto = {
     false,
     false,
-    3821,
+    3933,
     descriptor_table_protodef_proto_2ftrade_2ftrade_5fadmin_2eproto,
     "proto/trade/trade_admin.proto",
     &descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto_once,
     descriptor_table_proto_2ftrade_2ftrade_5fadmin_2eproto_deps,
-    6,
+    7,
     13,
     schemas,
     file_message_globals,
@@ -4465,6 +4490,11 @@ void ResolveManualContractRequest::clear_auth() {
   if (_impl_.auth_ != nullptr) _impl_.auth_->Clear();
   ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
+void ResolveManualContractRequest::clear_approval() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.approval_ != nullptr) _impl_.approval_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
 ResolveManualContractRequest::ResolveManualContractRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, ResolveManualContractRequest_get_class_data()) {
@@ -4510,6 +4540,9 @@ ResolveManualContractRequest::ResolveManualContractRequest(
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
   _impl_.auth_ = (CheckHasBit(cached_has_bits, 0x00000040U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.auth_)
+                : nullptr;
+  _impl_.approval_ = (CheckHasBit(cached_has_bits, 0x00000080U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.approval_)
                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, commerce_id_),
@@ -4562,6 +4595,7 @@ inline void ResolveManualContractRequest::SharedDtor(MessageLite& self) {
   this_._impl_.reason_.Destroy();
   this_._impl_.party_.Destroy();
   delete this_._impl_.auth_;
+  delete this_._impl_.approval_;
   this_._impl_.~Impl_();
 }
 
@@ -4599,7 +4633,7 @@ PROTOBUF_NOINLINE void ResolveManualContractRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.parts_.Clear();
     }
@@ -4622,12 +4656,15 @@ PROTOBUF_NOINLINE void ResolveManualContractRequest::Clear() {
       ABSL_DCHECK(_impl_.auth_ != nullptr);
       _impl_.auth_->Clear();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      ABSL_DCHECK(_impl_.approval_ != nullptr);
+      _impl_.approval_->Clear();
+    }
   }
-  _impl_.commerce_id_ = ::uint64_t{0u};
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
-    ::memset(&_impl_.expect_version_, 0, static_cast<::size_t>(
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+    ::memset(&_impl_.commerce_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.mode_) -
-        reinterpret_cast<char*>(&_impl_.expect_version_)) + sizeof(_impl_.mode_));
+        reinterpret_cast<char*>(&_impl_.commerce_id_)) + sizeof(_impl_.mode_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -4653,7 +4690,7 @@ PROTOBUF_NOINLINE void ResolveManualContractRequest::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 commerce_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_commerce_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -4662,7 +4699,7 @@ PROTOBUF_NOINLINE void ResolveManualContractRequest::Clear() {
   }
 
   // .trade.ManualContractMode mode = 2;
-  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
     if (this_._internal_mode() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -4681,7 +4718,7 @@ PROTOBUF_NOINLINE void ResolveManualContractRequest::Clear() {
   }
 
   // uint64 expect_version = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_expect_version() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -4740,7 +4777,7 @@ PROTOBUF_NOINLINE void ResolveManualContractRequest::Clear() {
   }
 
   // uint64 to_player_id = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_to_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -4749,7 +4786,7 @@ PROTOBUF_NOINLINE void ResolveManualContractRequest::Clear() {
   }
 
   // uint64 linked_commerce_id = 11;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_linked_commerce_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -4758,7 +4795,7 @@ PROTOBUF_NOINLINE void ResolveManualContractRequest::Clear() {
   }
 
   // uint64 linked_version = 12;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_linked_version() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -4770,6 +4807,13 @@ PROTOBUF_NOINLINE void ResolveManualContractRequest::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         13, *this_._impl_.auth_, this_._impl_.auth_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .common.base.AdminApproval approval = 14;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        14, *this_._impl_.approval_, this_._impl_.approval_->GetCachedSize(), target,
         stream);
   }
 
@@ -4848,45 +4892,50 @@ PROTOBUF_NOINLINE void ResolveManualContractRequest::Clear() {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.auth_);
     }
-    // uint64 commerce_id = 1;
+    // .common.base.AdminApproval approval = 14;
     if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.approval_);
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+    // uint64 commerce_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_commerce_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_commerce_id());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
     // uint64 expect_version = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_expect_version() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_expect_version());
       }
     }
     // uint64 to_player_id = 10;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_to_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_to_player_id());
       }
     }
     // uint64 linked_commerce_id = 11;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_linked_commerce_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_linked_commerce_id());
       }
     }
     // uint64 linked_version = 12;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_linked_version() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_linked_version());
       }
     }
     // .trade.ManualContractMode mode = 2;
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (this_._internal_mode() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_mode());
@@ -4971,33 +5020,41 @@ void ResolveManualContractRequest::MergeImpl(::google::protobuf::MessageLite& to
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      ABSL_DCHECK(from._impl_.approval_ != nullptr);
+      if (_this->_impl_.approval_ == nullptr) {
+        _this->_impl_.approval_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.approval_);
+      } else {
+        _this->_impl_.approval_->MergeFrom(*from._impl_.approval_);
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_commerce_id() != 0) {
         _this->_impl_.commerce_id_ = from._impl_.commerce_id_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_expect_version() != 0) {
         _this->_impl_.expect_version_ = from._impl_.expect_version_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_to_player_id() != 0) {
         _this->_impl_.to_player_id_ = from._impl_.to_player_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_linked_commerce_id() != 0) {
         _this->_impl_.linked_commerce_id_ = from._impl_.linked_commerce_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_linked_version() != 0) {
         _this->_impl_.linked_version_ = from._impl_.linked_version_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
       if (from._internal_mode() != 0) {
         _this->_impl_.mode_ = from._impl_.mode_;
       }
@@ -6119,9 +6176,9 @@ ResolveManualContractResponse::ResolveManualContractResponse(
                offsetof(Impl_, verdict_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, verdict_),
-           offsetof(Impl_, status_) -
+           offsetof(Impl_, already_executed_) -
                offsetof(Impl_, verdict_) +
-               sizeof(Impl_::status_));
+               sizeof(Impl_::already_executed_));
 
   // @@protoc_insertion_point(copy_constructor:trade.ResolveManualContractResponse)
 }
@@ -6154,9 +6211,9 @@ inline void ResolveManualContractResponse::SharedCtor(::_pb::Arena* PROTOBUF_NUL
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, record_),
            0,
-           offsetof(Impl_, status_) -
+           offsetof(Impl_, already_executed_) -
                offsetof(Impl_, record_) +
-               sizeof(Impl_::status_));
+               sizeof(Impl_::already_executed_));
 }
 ResolveManualContractResponse::~ResolveManualContractResponse() {
   // @@protoc_insertion_point(destructor:trade.ResolveManualContractResponse)
@@ -6255,10 +6312,10 @@ PROTOBUF_NOINLINE void ResolveManualContractResponse::Clear() {
       _impl_.linked_plan_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001800U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00003800U)) {
     ::memset(&_impl_.verdict_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.status_) -
-        reinterpret_cast<char*>(&_impl_.verdict_)) + sizeof(_impl_.status_));
+        reinterpret_cast<char*>(&_impl_.already_executed_) -
+        reinterpret_cast<char*>(&_impl_.verdict_)) + sizeof(_impl_.already_executed_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -6408,6 +6465,15 @@ PROTOBUF_NOINLINE void ResolveManualContractResponse::Clear() {
     }
   }
 
+  // bool already_executed = 14;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_already_executed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          14, this_._internal_already_executed(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -6489,7 +6555,7 @@ PROTOBUF_NOINLINE void ResolveManualContractResponse::Clear() {
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.record_);
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     // .trade.TradeCommerceRecord linked = 5;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       total_size += 1 +
@@ -6517,6 +6583,12 @@ PROTOBUF_NOINLINE void ResolveManualContractResponse::Clear() {
       if (this_._internal_status() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_status());
+      }
+    }
+    // bool already_executed = 14;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_already_executed() != 0) {
+        total_size += 2;
       }
     }
   }
@@ -6599,7 +6671,7 @@ void ResolveManualContractResponse::MergeImpl(::google::protobuf::MessageLite& t
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       ABSL_DCHECK(from._impl_.linked_ != nullptr);
       if (_this->_impl_.linked_ == nullptr) {
@@ -6634,6 +6706,11 @@ void ResolveManualContractResponse::MergeImpl(::google::protobuf::MessageLite& t
         _this->_impl_.status_ = from._impl_.status_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_already_executed() != 0) {
+        _this->_impl_.already_executed_ = from._impl_.already_executed_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -6662,8 +6739,8 @@ void ResolveManualContractResponse::InternalSwap(ResolveManualContractResponse* 
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.stage_, &other->_impl_.stage_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.audit_line_, &other->_impl_.audit_line_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.status_)
-      + sizeof(ResolveManualContractResponse::_impl_.status_)
+      PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.already_executed_)
+      + sizeof(ResolveManualContractResponse::_impl_.already_executed_)
       - PROTOBUF_FIELD_OFFSET(ResolveManualContractResponse, _impl_.record_)>(
           reinterpret_cast<char*>(&_impl_.record_),
           reinterpret_cast<char*>(&other->_impl_.record_));

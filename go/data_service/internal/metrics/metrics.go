@@ -593,14 +593,26 @@ func ObservePlayerItemGainBlockRead(result string) {
 // Start exposes /metrics over HTTP. Empty addr disables the endpoint.
 // Mirrors scene_manager/internal/metrics.Start so operators can wire the
 // same Prometheus scrape config against either service.
-func Start(addr string) {
+//
+// /readyz 是 K8s 的就绪探针(docs/design/data-service-startup-isolation.md §7.3):ready 回错误时回 503,正文是原因。
+// 存活探针照旧走 gRPC 健康检查:不就绪的副本照常服务落在健康库上的请求,不能被当成坏了重启。
+func Start(addr string, ready func() error) {
 	if addr == "" {
-		logx.Info("[metrics] MetricsListenAddr empty; Prometheus /metrics endpoint disabled")
+		logx.Info("[metrics] MetricsListenAddr empty; Prometheus /metrics and /readyz endpoints disabled")
 		return
 	}
 	register()
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) {
+		if ready != nil {
+			if err := ready(); err != nil {
+				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				return
+			}
+		}
+		w.WriteHeader(http.StatusOK)
+	})
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           mux,

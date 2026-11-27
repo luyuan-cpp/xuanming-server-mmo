@@ -143,6 +143,17 @@ func NewStoreRegistry(opts StoreRegistryOptions) (*StoreRegistry, error) {
 }
 
 // NewStoreRegistryFromConfig 按进程配置建注册表。必须在 InitDB 成功之后、存盘接口与审计转发启动之前调用。
+// MissingWriterGrants 返回白名单里这一代没有写资格的存档库,升序(docs/design/data-service-startup-isolation.md §7)。
+// 写者注册跳过当时连不上的库,这些库这一代都打不开(OpenPlacementStore 查不到写资格),落在上面的玩家存盘回不可用,进程不就绪。
+// 白名单之外由 Placement.AllowStoreFamilies 放行的库没有清单,不算。在 InitDB 之后调。
+func (r *StoreRegistry) MissingWriterGrants() []string {
+	var writers map[string]authoritysql.WriterConfig
+	if boot != nil {
+		writers = boot.writers
+	}
+	return authoritysql.MissingWriterGrants(writers, r.allow.Names)
+}
+
 func NewStoreRegistryFromConfig() (*StoreRegistry, error) {
 	allow, err := AllowlistSpec().Resolve()
 	if err != nil {

@@ -1,5 +1,5 @@
 {
-  "schema": "Slot selection vectors shared by the Go and C++ snowflake slot allocators (design doc docs/design/node-id-overhaul-plan-20260908.md section 3.2). used = slots holding a live lease; watermarks / legacy_watermarks = slot -> epoch seconds of the last persisted watermark (merged by max; legacy_watermarks is optional and models the pre-overhaul key layout that cluster 0 still reads); now = wall clock in the same epoch seconds; quarantine_sec = Q; max_slot = inclusive upper bound. Rule: candidates are slots not in used, slot <= max_slot, and (watermark == 0 or now - watermark >= Q, with a watermark in the future never eligible); pick the candidate with the smallest watermark (0 = never used wins), ties broken by the smallest slot; expect_slot null means fail-closed (no candidate).",
+  "schema": "Slot selection vectors shared by the Go and C++ snowflake slot allocators (design doc docs/design/node-id-overhaul-plan-20260908.md section 3.2). used = slots holding a live lease; watermarks = slot -> epoch seconds of the last persisted watermark; now = wall clock in the same epoch seconds; quarantine_sec = Q; max_slot = inclusive upper bound. Rule: candidates are slots not in used, slot <= max_slot, and (watermark == 0 or now - watermark >= Q, with a watermark in the future never eligible); pick the candidate with the smallest watermark (0 = never used wins), ties broken by the smallest slot; expect_slot null means fail-closed (no candidate).",
   "cases": [
     {
       "name": "empty_pool_picks_zero",
@@ -105,36 +105,6 @@
       "used": [0],
       "watermarks": {"0": 1, "1": 500},
       "now": 10000,
-      "quarantine_sec": 100,
-      "max_slot": 1,
-      "expect_slot": 1
-    },
-    {
-      "name": "legacy_only_watermark_quarantines_slot",
-      "used": [],
-      "watermarks": {},
-      "legacy_watermarks": {"0": 950},
-      "now": 1000,
-      "quarantine_sec": 100,
-      "max_slot": 1,
-      "expect_slot": 1
-    },
-    {
-      "name": "legacy_and_new_merge_by_max",
-      "used": [],
-      "watermarks": {"0": 100},
-      "legacy_watermarks": {"0": 950},
-      "now": 1000,
-      "quarantine_sec": 100,
-      "max_slot": 0,
-      "expect_slot": null
-    },
-    {
-      "name": "legacy_older_than_new_does_not_lower_watermark",
-      "used": [],
-      "watermarks": {"0": 950, "1": 300},
-      "legacy_watermarks": {"0": 100},
-      "now": 1000,
       "quarantine_sec": 100,
       "max_slot": 1,
       "expect_slot": 1

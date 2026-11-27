@@ -32,7 +32,17 @@
   - 管理接口把上一包的拒绝算到新包头上；
   - scene 的装备表、神秘商人、游历手册三项校验没接进热更的拒绝闸门；
   - C++ 启动时不核对清单摘要与指针是否一致。
-  - 其中 C++ 表包管理器、Go 与 sidecar 的改动已随负责人 21:24 的批量提交 `8a6697af0` 入库；C++ 单测、scene 钩子、神秘商人、gateway 的改动在工作区。
+  - 两轮的代码与测试都已在 main：`8a6697af0`、`3eb57a09a`、`d77a458ee`（负责人 11-26 21:24 / 22:13 / 22:16 的批量提交）。
+- **同晚第二轮审部署脚本与可观测性，又修了 8 处、加了 1 条告警**，未运行（明细看 PROGRESS「2026-11-26 Claude:配置表热更第二轮审查」，根因与改法在设计稿 §19 第 8~15 条）：
+  - 两个 zone 的同名 Pod 互相覆盖 etcd 状态键：键改成 `<轨道>/<namespace>/<pod>`，sidecar 多一个 `POD_NAMESPACE` 环境变量；
+  - 外接对象存储时，部署前核对凭据 Secret（`Assert-TableSyncS3SecretProvisioned`）；
+  - sidecar 的指标没人抓：新增 `deploy/k8s/table-sync-podmonitor.yaml`；
+  - 收敛告警把 stable 与 canary 混着比：两种语言的 `table_bundle_info` 加 `release_track` 标签；
+  - 「需要重启」告警改读新的状态量 `table_bundle_needs_restart`；
+  - 单包上限从 256 MiB 降到 64 MiB（与卷的 1Gi 一起算），清理时没人用的包最多留 2 个，过期的临时文件也清；
+  - 解包目录显式改成 0755；
+  - sidecar 只在状态变化时写 etcd 状态键，平时只续租；
+  - 新告警 `TableSyncFetchFailing`。
 - **缺登记**：Java 仓 `PARITY.md` 还没有本线这一行。
 - **分工**（负责人 11-26 定：「逻辑代码方面你去改，Gemini 只负责编译」）：
   - 本单由 Gemini 跑生成、编译、测试、冒烟，并登记结果。
@@ -127,7 +137,8 @@ foreach ($m in 'match','guild','login','scene_manager','mail','rank','player_loc
 
 - 0 失败。
 - `tablebundle` 的 6 条用例要全过：`TestVerifyTableDirManifest*` 三条、`TestManagerStartupFallsBackToImageAndHotReloadsScheduled`、`TestManagerNeedsRestartAndRejectedDoNotRetry`，以及 11-26 新增的 `TestStartupRefusesImageFallbackWhenOwnLineFailedToSync`（本线表包没同步下来时拒绝启动）。
-- `table_sync` 的 7 条也要全过：`TestPackVerifyExtractAndPermanentIDRollback`、`TestVerifyAndExtractRejectsTraversalAndSymlinks`、`TestKeysAndPruneUnusedBundles`、`TestSigV4PutHeadGetAndSizeLimit`，以及 11-26 新增的三条：
+- `tablebundle` 的 `TestManagerNeedsRestartAndRejectedDoNotRetry` 第二轮加了两处断言：停在 needs_restart 时 `table_bundle_needs_restart` 为 1，指针换走后为 0。
+- `table_sync` 的 9 条也要全过。第二轮新增两条：`TestPruneCapsRecentUnreferencedBundlesAndRemovesOrphanedTempFiles`（没人用的包最多留 2 个、过期临时文件要清）、`cmd/table-sync` 的 `TestStatusIdentityJoinsNamespaceSoSameNamedPodsInDifferentZonesStayApart`；`TestPackVerifyExtractAndPermanentIDRollback` 加了「解包目录是 0755」的断言，Windows 上跳过，Linux 证据要在 Linux 上跑一遍。其余是 `TestPackVerifyExtractAndPermanentIDRollback`、`TestVerifyAndExtractRejectsTraversalAndSymlinks`、`TestKeysAndPruneUnusedBundles`、`TestSigV4PutHeadGetAndSizeLimit`，以及第一轮新增的三条：
   - `TestManifestJSONUsesExporterArrayShape`：清单的 `tables` 是数组，缺名、重名被拒；
   - `TestVerifyDirManifestAcceptsRealExporterOutput`：仓里 `generated/tables` 能过 sidecar 的清单核对。这一条红了说明 sidecar 读不了真实的包，线上一个包都下不来；
   - `TestDocumentRoundTripCarriesSyncErrors`：`POINTER.json` 的 `sync_errors` 读写往返。
@@ -140,7 +151,7 @@ mvn -f java/gateway_node/pom.xml test -Dtest=AdminTableBundleControllerTest,Admi
 mvn -f java/gateway_node/pom.xml test
 ```
 
-通过标准：0 failures、0 errors。`AdminTableBundleControllerTest` 现在是 4 条，11-26 新增 `listDoesNotBlameTheNewBundleForWhatPodsSaidAboutAnOlderOne`（实例回报还停在上一包时，不把上一包的拒绝算到新包头上）。
+通过标准：0 failures、0 errors。`AdminTableBundleControllerTest` 现在是 5 条，11-26 新增两条：`listDoesNotBlameTheNewBundleForWhatPodsSaidAboutAnOlderOne`（实例回报还停在上一包时，不把上一包的拒绝算到新包头上）、`listCountsSameNamedPodsOfDifferentZonesSeparately`（两个 zone 的 `scene-0` 各算一个，一个的拒绝不被另一个盖掉）。
 
 ### 3.5 部署脚本契约测试
 
@@ -151,7 +162,7 @@ pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1
 pwsh -NoProfile -File tools/scripts/tests/loki_ha_deploy_contract.tests.ps1
 ```
 
-通过标准：fail=0。后三份别的线也在改，红了先看失败的断言属于哪条线。
+通过标准：fail=0。后三份别的线也在改，红了先看失败的断言属于哪条线。`k8s_table_bundle_contract.tests.ps1` 第二轮改成 4 个用例：5 条告警的指标、标签、失败结果名与代码核对，PodMonitor 端口名与 sidecar 一致；sidecar 带 `POD_NAMESPACE`；凭据 Secret 核对（kubectl 用替身，不连集群）；镜像登记与 Fleet 的 container 行。
 
 ### 3.6 C++ 整解与已有用例
 
@@ -207,7 +218,7 @@ pwsh -File tools/scripts/run_cpp_tests.ps1 -Filter bag_test -LogDir build/verifi
 |---|---|
 | `TableValidationFailsOnUnsellableShelvedGoodsAndOutOfRangeDistance` | 神秘商人表校验现在有返回值：导出的表过；上架却卖不了的商品、购买距离为 0 不过；下架（weight = 0）的行不算坏行 |
 
-通过标准：这 17 条全过，三个工程的老用例不回归。
+通过标准：这 17 条全过，三个工程的老用例不回归。第二轮在两条已有用例里加了指标断言：`StartupLoadsTheBundleThePointerNames` 核对 `table_bundle_info{release_track="stable",` 与 `table_bundle_needs_restart 0`，`StructuralTableChangeNeedsRestartAndIsNotRetried` 核对停住时为 1、整条线消失后为 0。跑测试的环境里要是设了 `MMORPG_RELEASE_TRACK=canary`，第一处会红，这是环境问题，去掉再跑。
 
 没覆盖的：battle 的 warn / enforce 判定模式每个进程只读一次配置，单测里切不了。
 
@@ -269,9 +280,16 @@ Go 的 6 个读表服务（match、guild、login、scene_manager、mail、rank�
 
 - `GET /admin/tables` 里全部实例都回报 loaded；
 - `kubectl logs <pod> -c table-sync` 没有 403 或摘要校验失败；
-- 两个摘要在各 Pod 的 `table_bundle_info` 上一致。
+- 两个摘要在各 Pod 的 `table_bundle_info` 上一致，而且都带 `release_track`（canary 的 Pod 是 `canary`）。
 
-S3 签名是自己写的 SigV4，**第一次连真的 S3 兼容存储就在这一步**；报 403 先查签名，不要先怀疑凭据。有 promtool 的话，再加跑 `promtool check rules deploy/k8s/table-bundle-alerts.yaml`。本机没有 kind 就跳过这一节并写明原因，前面几节照样算数。
+第二轮改动在这里一并核对（都只读，不改集群里任何东西）：
+
+4. **状态键带 namespace**：`etcdctl get --prefix --keys-only /mmorpg/tables/status/` 列出的键形如 `/mmorpg/tables/status/stable/mmorpg-zone-1/guild-0`。起两个 zone 时，两个 zone 的同名 Pod 各有一个键。
+5. **稳态不写键**：发布完成、各实例都回报 loaded 之后，`etcdctl watch --prefix /mmorpg/tables/status/` 看 1 分钟，应当没有事件（只续租）。再发一包，每个 Pod 应当有两三次写入，然后又安静下来。
+6. **sidecar 指标抓得到**：装上 `deploy/k8s/table-sync-podmonitor.yaml`（运维手册 §3），在 Prometheus 里查 `table_sync_etcd_last_read_timestamp_seconds`，每个带 sidecar 的 Pod 都要有一条。kind 上没装 Prometheus Operator 就跳过并写明。
+7. **凭据核对**：kind 上用的是 dev 夹具，凭据由部署脚本自己写入，这道核对不会触发。只用 `-DryRun`（不连集群、不写任何东西）带 `-TableSyncS3Endpoint https://s3.example.invalid` 跑一次 zone-up，确认输出里有 `would check that Secret table-sync-s3 in namespace … has non-empty keys access-key-id and secret-access-key`。缺 Secret 时真跑的行为由 §3.5 的契约测试覆盖，不要在集群上故意删 Secret 去试。
+
+S3 签名是自己写的 SigV4，**第一次连真的 S3 兼容存储就在这一步**；报 403 先查签名，不要先怀疑凭据。有 promtool 的话再校验一次规则语法。promtool 只认顶层是 `groups:` 的规则文件，而这份是 PrometheusRule，要先取出它的 `spec`（例如 `yq '.spec' deploy/k8s/table-bundle-alerts.yaml > $env:TEMP\table-bundle-rules.yaml`），再 `promtool check rules $env:TEMP\table-bundle-rules.yaml`，临时文件不进仓库。本机没有 kind 就跳过这一节并写明原因，前面几节照样算数。
 
 ### 3.11 收尾
 
@@ -280,7 +298,7 @@ S3 签名是自己写的 SigV4，**第一次连真的 S3 兼容存储就在这�
   - 逐节写出命令、通过数和失败原文摘要；没跑的写原因。
   - 不贴大段原始输出，日志留在 `build/verification/<运行名>/`。
 - 把设计稿第 3 行的状态改成实际的验证结果，直接改正文。
-- 在 Java 仓 `PARITY.md` 登记一行待做。本仓提交写 `f067d01fc`（五批）、`2d20f6b68`（表包管理器的可注入时钟）、`8a6697af0`（11-26 晚审查修复里已入库的那部分），外加其余修复与 §3.7 那批单测入库后的提交。只登记，不写 Java 代码。登记里写明 Java 版要对齐的三条约定：清单 `tables` 是数组、`STATUS.json` 的字段名、`POINTER.json` 的 `sync_errors` 与「表包没到位拒绝启动」。
+- 在 Java 仓 `PARITY.md` 登记一行待做。本仓提交写 `f067d01fc`（五批）、`2d20f6b68`（表包管理器的可注入时钟）、`8a6697af0` / `3eb57a09a` / `d77a458ee`（11-26 晚两轮审查的修复与单测）。只登记，不写 Java 代码。登记里写明 Java 版要对齐的约定：清单 `tables` 是数组；`STATUS.json` 的字段名；`POINTER.json` 的 `sync_errors` 与「表包没到位拒绝启动」；etcd 状态键是 `<轨道>/<namespace>/<pod>`；`table_bundle_info` 带 `release_track`；状态量 `table_bundle_needs_restart`。
 - 改了或新增了文档，跑 `python tools/scripts/gen_docs_index.py`。
 - 要提交就等负责人发话，只提交本线的文件。
 
@@ -290,6 +308,8 @@ S3 签名是自己写的 SigV4，**第一次连真的 S3 兼容存储就在这�
 |---|---|
 | 启动直接退出 | 开了表包模式却没有 `POINTER.json`（§3.9 第 1 步）；或者本地包的 `schema_digest` 和二进制里的不一样 |
 | 启动报 `Startup refused: table bundle for schema line` | sidecar 没把本线的表包同步下来。看 `POINTER.json` 的 `sync_errors` 和 sidecar 日志（对象存储不通、包不存在、摘要对不上）。这是有意的拒绝，不是代码问题；同步好之后进程自己能起来 |
+| zone-up / infra-up 停在 `Secret table-sync-s3 does not exist in namespace …` | 外接对象存储时要先在该 namespace 建只读凭据 Secret（运维手册 §3）。这是有意的前置核对，不是代码问题 |
+| Prometheus 里查不到 `table_sync_*` 指标 | 没装 `deploy/k8s/table-sync-podmonitor.yaml`，或 Prometheus 的 podMonitorSelector 选不到它。业务进程的指标查得到也不说明 sidecar 的抓到了：两者走的不是同一条抓取路径 |
 | 发布工具刚 `publish` 就报被拒绝 | 看 `GET /admin/tables` 里被拒绝实例的 `digest` 是不是这次发的包。不是的话是管理接口的汇总出了问题，记下响应原文交回 Claude |
 | 管理接口里看不到 C++ 节点、或它的 `loaded` 一直是 0 | 看那个 Pod 的 `STATUS.json` 字段名是不是 `loaded_digest` / `pending_digest` 这一套；旧二进制写的是 `content_digest` / `pending_content_digest`，要重编 |
 | 热更后某个功能拒绝了整包 | 后来接进 `Validate` 钩子的校验（挂机月卡、技能制书、灵石百宝阁、江湖恩怨、赛季等）有一个返回 false，整包就拒绝，这是预期行为。看 `STATUS.json` 里的原因是哪一个钩子给的 |

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -123,5 +124,17 @@ func TestWriterDriverDoesNotWriteWithoutMarker(t *testing.T) {
 	}
 	if len(w.events) != 0 {
 		t.Fatalf("不能有任何语句发出去: %v", w.events)
+	}
+}
+
+// 写者注册跳过当时连不上的库,一代的写资格可以只覆盖一部分(docs/design/data-service-startup-isolation.md §7):缺的按升序、去重列出来。
+func TestMissingWriterGrantsListsDatabasesWithoutAGrant(t *testing.T) {
+	writers := map[string]WriterConfig{"mmorpg_global_00": {}, "mmorpg_global_ledger": {}}
+	got := MissingWriterGrants(writers, []string{"player_store_1000000_db", "mmorpg_global_ledger", "mmorpg_global_01", "mmorpg_global_00", "mmorpg_global_01"})
+	if want := []string{"mmorpg_global_01", "player_store_1000000_db"}; !slices.Equal(got, want) {
+		t.Fatalf("MissingWriterGrants() = %v, want %v", got, want)
+	}
+	if got := MissingWriterGrants(writers, []string{"mmorpg_global_00", "mmorpg_global_ledger"}); len(got) != 0 {
+		t.Fatalf("complete grants reported missing %v", got)
 	}
 }

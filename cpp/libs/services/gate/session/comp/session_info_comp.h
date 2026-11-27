@@ -147,6 +147,9 @@ struct SessionInfo
 	// gate 只把它透传进 SessionDetails,不比对——gate 不认证账号,主判定在 login 的 Login(认证出的账号与摘要不符即拒)。
 	// 空 = 票没绑账号 / 免验签的开发环境。见 docs/design/login-queue-2026-05.md §5「票据绑定账号」。
 	std::string ticketAccountDigest;
+	// 这条连接验签用的票据签名。一张票同一时刻只开一条连接(SessionManager::ClaimTicket),会话删除时凭它摘掉占位。
+	// 空 = 没验过票(dev 免验签)。
+	std::string ticketKey;
 	bool verified{false};			// True after client passes Gate connection token verification
 	// 未验签占位(pre_auth_slot.h):建连时发给还没验签的会话,验签成功时归还;会话销毁时随之归还。
 	// 只由 nodes/gate/handler/rpc/connection_admission.cpp 读写。空 = 已验签,或建连即免验签(dev)。

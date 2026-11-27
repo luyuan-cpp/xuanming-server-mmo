@@ -4087,6 +4087,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AddObserverRequest final : public :
     kBattleIdFieldNumber = 1,
     kObserverPlayerIdFieldNumber = 2,
     kAdmitBeforeMsFieldNumber = 6,
+    kMinorPlayDeadlineMsFieldNumber = 8,
   };
   // string observer_name = 4;
   void clear_observer_name() ;
@@ -4179,12 +4180,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AddObserverRequest final : public :
   void _internal_set_admit_before_ms(::uint64_t value);
 
   public:
+  // uint64 minor_play_deadline_ms = 8;
+  void clear_minor_play_deadline_ms() ;
+  [[nodiscard]] ::uint64_t minor_play_deadline_ms() const;
+  void set_minor_play_deadline_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_minor_play_deadline_ms() const;
+  void _internal_set_minor_play_deadline_ms(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:AddObserverRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
-                          1, 80,
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          1, 88,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -4219,6 +4230,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AddObserverRequest final : public :
     ::uint64_t battle_id_;
     ::uint64_t observer_player_id_;
     ::uint64_t admit_before_ms_;
+    ::uint64_t minor_play_deadline_ms_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7907,6 +7919,30 @@ inline void AddObserverRequest::set_allocated_target_instance_id(::std::string* 
     _impl_.target_instance_id_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:AddObserverRequest.target_instance_id)
+}
+
+// uint64 minor_play_deadline_ms = 8;
+inline void AddObserverRequest::clear_minor_play_deadline_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.minor_play_deadline_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t AddObserverRequest::minor_play_deadline_ms() const {
+  // @@protoc_insertion_point(field_get:AddObserverRequest.minor_play_deadline_ms)
+  return _internal_minor_play_deadline_ms();
+}
+inline void AddObserverRequest::set_minor_play_deadline_ms(::uint64_t value) {
+  _internal_set_minor_play_deadline_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:AddObserverRequest.minor_play_deadline_ms)
+}
+inline ::uint64_t AddObserverRequest::_internal_minor_play_deadline_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.minor_play_deadline_ms_;
+}
+inline void AddObserverRequest::_internal_set_minor_play_deadline_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.minor_play_deadline_ms_ = value;
 }
 
 // -------------------------------------------------------------------

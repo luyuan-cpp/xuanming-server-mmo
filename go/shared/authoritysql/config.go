@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -223,6 +224,20 @@ func LoadWriterConfigs(getenv func(string) string) (map[string]WriterConfig, err
 		}}
 	}
 	return configs, nil
+}
+
+// MissingWriterGrants 返回 expected 里这一代没有写资格的逻辑库,升序、去重。
+// 写者注册跳过当时连不上的库(docs/design/data-service-startup-isolation.md §7),所以写多个逻辑库的进程(data_service、go/db)
+// 拿到的写资格可以只覆盖一部分。缺的库这一代都关着,调用回不可用;进程照常起、照常服务别的库,但不就绪,集群恢复之后重建 Pod 补齐。
+func MissingWriterGrants(writers map[string]WriterConfig, expected []string) []string {
+	var missing []string
+	for _, schema := range expected {
+		if _, ok := writers[schema]; !ok {
+			missing = append(missing, schema)
+		}
+	}
+	slices.Sort(missing)
+	return slices.Compact(missing)
 }
 
 // LoadWriterConfig 是只写一个逻辑库的进程的入口：多给或少给一份都是部署配错。

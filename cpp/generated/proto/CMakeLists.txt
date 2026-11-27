@@ -196,6 +196,7 @@ set(SOURCE_FILES
     scene/player_rewarded_ad.pb.cc
     common/component/player_jianghu_comp.pb.cc
     scene/player_jianghu.pb.cc
+    common/base/admin_approval.pb.cc
 )
 
 add_library(proto STATIC ${SOURCE_FILES})

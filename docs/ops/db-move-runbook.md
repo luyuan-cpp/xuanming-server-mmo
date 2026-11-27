@@ -52,7 +52,7 @@
 
    **搬的是目录库时,结束之后跑一次名字收尾**(2026-11-12)。冻结期间建角回滚的释放可能失败:释放之前要在玩家片证明角色永远不会提交,玩家片冻结时这一步写不了墓碑,名字留成孤儿(login 记 `[player-name] orphan reservation` 和 `login_create_player_name_orphan_total`)。`cutover` 或 `rollback` 结束、闸门打开之后跑 `create_residual -target names`(不带 `-shard`:名字行按 `name_norm` 分片,孤儿名字的名字行不在冻结的那一片上;plan,再 `-mode apply -repair name`,参数见 [PITR 手册](mysql-backup-pitr-runbook.md) §4.1a 第 2、3 步),它报 `orphan_name` 并按同带 token 的 `ReleasePlayerName` 收掉,有提交证据的只报告。不用再按日志逐条带 token 释放。
 
-3. **账号在目标集群提前建好,口令相同**:写者账号(`writer_registry` 里 ACTIVE 的 `sql_principal`,加上名册里的全部主体:滚动重启时新 Pod 用名册里下一个)、注册账号、schema 账号和维护账号;搬的是目录片或存档库时还有修复身份(`create_residual`、`admission_recover` 用,`plan` 不核它,要自己建好并在目标集群重跑 `render-repair-role` 的授权,否则搬完这两个工具连不上)。`plan` 逐个核账号存在,`cutover` 冻结之前再核一遍,再比一遍两侧的 `SHOW GRANTS`。连接串不换,换的只有地址。BR 和 `mysqldump` 都不带 `mysql.*`,账号和授权要自己建;授权是按表的,表要先存在,所以放在全量恢复之后(§4 第 3 步)。
+3. **账号在目标集群提前建好,口令相同**:写者账号(`writer_registry` 里 ACTIVE 的 `sql_principal`,加上名册里的全部主体:滚动重启时新 Pod 用名册里下一个)、注册账号、schema 账号和维护账号;搬的是目录片或存档库时还有修复身份(`create_residual`、`admission_recover` 用):要自己建好(口令相同、`ACCOUNT LOCK`),全量恢复之后在目标集群重跑 `render-repair-role` 的授权,否则搬完这两个工具连不上。2026-11-26 起设了 `MMORPG_SQL_REPAIR_PRINCIPAL` 时 `plan` 核它在目标上存在,`cutover` 冻结之前比它在这个库上的授权(源上有、目标没有的算缺);**两处都只在标准错误输出打 `WARNING`、不拦搬库**:修复账号平时锁着,漏建漏授权只会让两个修复工具翻转之后连不上(fail-closed),不碰业务写入。源上它对这个库没有授权(这个库不归修复身份管)时不核;没设这个变量时打一行 `note` 说明没核。`plan` 逐个核账号存在,`cutover` 冻结之前再核一遍,再比一遍两侧的 `SHOW GRANTS`。连接串不换,换的只有地址。BR 和 `mysqldump` 都不带 `mysql.*`,账号和授权要自己建;授权是按表的,表要先存在,所以放在全量恢复之后(§4 第 3 步)。
 
 4. **工具用的账号**:
 
@@ -493,6 +493,8 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/
 cd go/shared && go vet ./dbplacement/ ./authoritysql/ ./domainhost/ ./assetop/ && go test -count=1 ./dbplacement/ ./authoritysql/ ./assetop/
 cd go/schemamigrate && go test -count=1 ./...
 cd tools/dbmove && go mod tidy && go vet ./... && go test -count=1 ./...
+#   2026-11-26 新增的修复身份核对(只报告)要在列:TestPlanWarnsWhenRepairPrincipalIsMissingOnTargetButGoesOn、TestPlanSkipsRepairPrincipalWithoutGrantsOnThisDatabase、
+#   TestPlanNotesWhenRepairPrincipalIsUnset、TestCutoverWarnsOnMissingRepairGrantsButStillFlips、TestCutoverIsQuietWhenRepairGrantsMatch
 cd tools/merge_zone && go mod tidy && go build ./... && go test -count=1 ./...    # authoritysql 新依赖 prometheus,这个 module 之前没有
 cd go && for m in guild trade friend player_inbox mail rank chat match data_service db; do (cd $m && go build ./... && go vet ./...); done
 cd go/data_service && go test -count=1 ./internal/store/ ./internal/routetoolcli/ ./cmd/writer_authority/ ./cmd/admission_recover/

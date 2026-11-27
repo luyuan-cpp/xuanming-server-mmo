@@ -12,7 +12,9 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -440,11 +442,17 @@ type slotHarness struct {
 	identity      string
 	identityErr   error
 	identityCalls int
+
+	// unreachable 是这个库还要回几次「连不上」,负数是一直连不上;refused 数回了几次。注册器并发探测各库,所以带锁。
+	mu          sync.Mutex
+	unreachable map[string]int
+	refused     map[string]int
 }
 
 func newSlotHarness(t *testing.T, schemas ...string) *slotHarness {
 	t.Helper()
-	h := &slotHarness{catalogs: map[string]*fakeSlotCatalog{}, records: map[string]*dbpb.SqlWriterBootRoster_Entry{}, template: slotEntryForTest(schemas...), identity: workloadIdentityForTest}
+	h := &slotHarness{catalogs: map[string]*fakeSlotCatalog{}, records: map[string]*dbpb.SqlWriterBootRoster_Entry{}, template: slotEntryForTest(schemas...), identity: workloadIdentityForTest,
+		unreachable: map[string]int{}, refused: map[string]int{}}
 	for _, schema := range schemas {
 		h.catalogs[schema] = &fakeSlotCatalog{t: t, epoch: 9}
 	}
@@ -458,6 +466,15 @@ func (h *slotHarness) pod(pod string) slotRegistration {
 		deploymentID: pod,
 		physical:     physicalForTest,
 		open: func(request *dbpb.SqlWriterLifecycleReceipt_Request) (registrationCatalog, error) {
+			h.mu.Lock()
+			defer h.mu.Unlock()
+			if n := h.unreachable[request.AuthoritySchema]; n != 0 {
+				if n > 0 {
+					h.unreachable[request.AuthoritySchema] = n - 1
+				}
+				h.refused[request.AuthoritySchema]++
+				return nil, fmt.Errorf("%w: dial tcp: connection refused", authoritysql.ErrUnreachable)
+			}
 			return h.catalogs[request.AuthoritySchema], nil
 		},
 		identity: func(context.Context) (string, error) {
@@ -568,7 +585,7 @@ func TestSlotRosterRejectsSharedAccountsAndMixedShapes(t *testing.T) {
 // 槽位第一次启动:现场生成一代,各库同一个身份、同一个 boot_seq=1;第一份写下去之前先记下启动记录。
 func TestFirstBootOfSlotMintsIdentityAndRecordsIt(t *testing.T) {
 	h := newSlotHarness(t, "zone_1_db", "zone_2_db")
-	set, boot, err := h.pod("pod-a").register(context.Background(), h.template)
+	set, boot, _, err := h.pod("pod-a").register(context.Background(), h.template)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -597,7 +614,7 @@ func TestNextBootTakesHighestSeqAcrossDatabases(t *testing.T) {
 	h := newSlotHarness(t, "zone_1_db", "zone_2_db")
 	h.catalogs["zone_1_db"].latest = &dbpb.SqlWriterRegistry{WriterKey: bytes.Repeat([]byte{1}, 16), BootSeq: 3, State: dbpb.SqlWriterRegistry_REVOKED}
 	h.catalogs["zone_2_db"].latest = &dbpb.SqlWriterRegistry{WriterKey: bytes.Repeat([]byte{2}, 16), BootSeq: 5, State: dbpb.SqlWriterRegistry_ACTIVE}
-	_, boot, err := h.pod("pod-b").register(context.Background(), h.template)
+	_, boot, _, err := h.pod("pod-b").register(context.Background(), h.template)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -616,7 +633,7 @@ func TestNextBootTakesHighestSeqAcrossDatabases(t *testing.T) {
 // 各库相同,算进注册摘要(登记之后改不了);只在现场生成这一代时问一次,init 重跑读启动记录,不再问。
 func TestBootRecordsWhoRegisteredIt(t *testing.T) {
 	h := newSlotHarness(t, "zone_1_db", "zone_2_db")
-	_, boot, err := h.pod("pod-a").register(context.Background(), h.template)
+	_, boot, _, err := h.pod("pod-a").register(context.Background(), h.template)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -638,7 +655,7 @@ func TestBootRecordsWhoRegisteredIt(t *testing.T) {
 	if err = recordMatchesTemplate(h.record("pod-a"), h.template, "pod-a"); err != nil {
 		t.Fatalf("带身份的启动记录仍是这份模板生成的: %v", err)
 	}
-	if _, again, err := h.pod("pod-a").register(context.Background(), h.template); err != nil || !proto.Equal(again, boot) {
+	if _, again, _, err := h.pod("pod-a").register(context.Background(), h.template); err != nil || !proto.Equal(again, boot) {
 		t.Fatalf("重跑还是同一代: %v", err)
 	}
 	if h.identityCalls != 1 {
@@ -651,14 +668,14 @@ func TestBootRecordsWhoRegisteredIt(t *testing.T) {
 func TestIdentityFailureRegistersNothing(t *testing.T) {
 	h := newSlotHarness(t, "zone_1_db")
 	h.identityErr = errors.New("POST selfsubjectreviews returned HTTP 403")
-	if _, _, err := h.pod("pod-a").register(context.Background(), h.template); err == nil || !strings.Contains(err.Error(), "HTTP 403") {
+	if _, _, _, err := h.pod("pod-a").register(context.Background(), h.template); err == nil || !strings.Contains(err.Error(), "HTTP 403") {
 		t.Fatalf("读不到身份要原样报错: %v", err)
 	}
 	if h.record("pod-a") != nil || h.catalogs["zone_1_db"].registers != 0 || h.catalogs["zone_1_db"].latest != nil {
 		t.Fatal("读不到身份时什么都不能写")
 	}
 	h.identityErr = nil
-	if _, boot, err := h.pod("pod-a").register(context.Background(), h.template); err != nil || boot.Requests[0].RegisteredBy != workloadIdentityForTest {
+	if _, boot, _, err := h.pod("pod-a").register(context.Background(), h.template); err != nil || boot.Requests[0].RegisteredBy != workloadIdentityForTest {
 		t.Fatalf("修好之后照常登记: %v", err)
 	}
 }
@@ -667,7 +684,7 @@ func TestIdentityFailureRegistersNothing(t *testing.T) {
 func TestBootOutsideKubernetesHasNoIdentity(t *testing.T) {
 	h := newSlotHarness(t, "zone_1_db")
 	h.identity = ""
-	_, boot, err := h.pod("local-boot").register(context.Background(), h.template)
+	_, boot, _, err := h.pod("local-boot").register(context.Background(), h.template)
 	if err != nil || boot.Requests[0].RegisteredBy != "" {
 		t.Fatalf("集群外登记不带身份: %v", err)
 	}
@@ -679,7 +696,7 @@ func TestBootOutsideKubernetesHasNoIdentity(t *testing.T) {
 // 启动记录里各库的 registered_by 必须相同:一代是一个 Pod 登记的。
 func TestBootRecordWithMixedIdentityRefused(t *testing.T) {
 	h := newSlotHarness(t, "zone_1_db", "zone_2_db")
-	if _, _, err := h.pod("pod-a").register(context.Background(), h.template); err != nil {
+	if _, _, _, err := h.pod("pod-a").register(context.Background(), h.template); err != nil {
 		t.Fatal(err)
 	}
 	tampered := proto.Clone(h.record("pod-a")).(*dbpb.SqlWriterBootRoster_Entry)
@@ -700,14 +717,14 @@ func TestInitRestartReplaysRecordedBoot(t *testing.T) {
 	h := newSlotHarness(t, "zone_1_db", "zone_2_db")
 	first, second := h.catalogs["zone_1_db"], h.catalogs["zone_2_db"]
 	second.frozenAtWrite = true
-	if _, _, err := h.pod("pod-a").register(context.Background(), h.template); !authoritysql.IsWriterFrozen(err) {
+	if _, _, _, err := h.pod("pod-a").register(context.Background(), h.template); !authoritysql.IsWriterFrozen(err) {
 		t.Fatalf("提交时冻结要回可重试: %v", err)
 	}
 	recorded := h.record("pod-a")
 	if recorded == nil || first.latest == nil || second.latest != nil {
 		t.Fatal("第一份已注册,第二份没落地,启动记录留着")
 	}
-	set, boot, err := h.pod("pod-a").register(context.Background(), h.template)
+	set, boot, _, err := h.pod("pod-a").register(context.Background(), h.template)
 	if err != nil {
 		t.Fatalf("重跑: %v", err)
 	}
@@ -728,7 +745,7 @@ func TestFrozenPrecheckWritesNothing(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			h := newSlotHarness(t, "zone_1_db", "zone_2_db")
 			block(h.catalogs["zone_2_db"])
-			if _, _, err := h.pod("pod-a").register(context.Background(), h.template); err == nil {
+			if _, _, _, err := h.pod("pod-a").register(context.Background(), h.template); err == nil {
 				t.Fatal("要报错")
 			}
 			if h.catalogs["zone_1_db"].registers != 0 || h.catalogs["zone_2_db"].registers != 0 || h.record("pod-a") != nil {
@@ -743,10 +760,10 @@ func TestUnknownOutcomeReplaysSameRequest(t *testing.T) {
 	h := newSlotHarness(t, "zone_1_db")
 	catalog := h.catalogs["zone_1_db"]
 	catalog.unknownAfterCommit = true
-	if _, _, err := h.pod("pod-a").register(context.Background(), h.template); !errors.Is(err, authoritysql.ErrOutcomeUnknown) {
+	if _, _, _, err := h.pod("pod-a").register(context.Background(), h.template); !errors.Is(err, authoritysql.ErrOutcomeUnknown) {
 		t.Fatalf("结局未知: %v", err)
 	}
-	if _, _, err := h.pod("pod-a").register(context.Background(), h.template); err != nil {
+	if _, _, _, err := h.pod("pod-a").register(context.Background(), h.template); err != nil {
 		t.Fatalf("重发同一请求: %v", err)
 	}
 	if catalog.registers != 2 || len(catalog.receipts) != 1 || catalog.latest.BootSeq != 1 {
@@ -759,11 +776,11 @@ func TestGateFrozenAfterCommitIsRetryable(t *testing.T) {
 	h := newSlotHarness(t, "zone_1_db")
 	catalog := h.catalogs["zone_1_db"]
 	catalog.frozenAfterCommit = true
-	if _, _, err := h.pod("pod-a").register(context.Background(), h.template); !authoritysql.IsWriterFrozen(err) {
+	if _, _, _, err := h.pod("pod-a").register(context.Background(), h.template); !authoritysql.IsWriterFrozen(err) {
 		t.Fatalf("要回可重试的冻结: %v", err)
 	}
 	catalog.frozenAfterCommit = false
-	set, _, err := h.pod("pod-a").register(context.Background(), h.template)
+	set, _, _, err := h.pod("pod-a").register(context.Background(), h.template)
 	if err != nil {
 		t.Fatalf("解冻之后: %v", err)
 	}
@@ -776,7 +793,7 @@ func TestGateFrozenAfterCommitIsRetryable(t *testing.T) {
 func TestRegisterSucceedsAfterEpochChanged(t *testing.T) {
 	h := newSlotHarness(t, "zone_1_db")
 	h.catalogs["zone_1_db"].epoch = 41
-	_, boot, err := h.pod("pod-a").register(context.Background(), h.template)
+	_, boot, _, err := h.pod("pod-a").register(context.Background(), h.template)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -788,7 +805,7 @@ func TestRegisterSucceedsAfterEpochChanged(t *testing.T) {
 // 启动记录必须是本 Pod、本槽位模板生成的:换了 Pod 或换了模板都拒绝,不拿别人的身份写。
 func TestBootRecordOfOtherPodOrSlotRefused(t *testing.T) {
 	h := newSlotHarness(t, "zone_1_db")
-	if _, _, err := h.pod("pod-a").register(context.Background(), h.template); err != nil {
+	if _, _, _, err := h.pod("pod-a").register(context.Background(), h.template); err != nil {
 		t.Fatal(err)
 	}
 	record := h.record("pod-a")
@@ -812,14 +829,14 @@ func TestStaleBootRecordCannotSupersedeNewerBoot(t *testing.T) {
 	h := newSlotHarness(t, "zone_1_db")
 	catalog := h.catalogs["zone_1_db"]
 	catalog.frozenAtWrite = true
-	if _, _, err := h.pod("pod-old").register(context.Background(), h.template); !authoritysql.IsWriterFrozen(err) {
+	if _, _, _, err := h.pod("pod-old").register(context.Background(), h.template); !authoritysql.IsWriterFrozen(err) {
 		t.Fatalf("旧 Pod 第一次没注册成: %v", err)
 	}
-	if _, _, err := h.pod("pod-new").register(context.Background(), h.template); err != nil {
+	if _, _, _, err := h.pod("pod-new").register(context.Background(), h.template); err != nil {
 		t.Fatalf("新 Pod 注册: %v", err)
 	}
 	newest := proto.Clone(catalog.latest).(*dbpb.SqlWriterRegistry)
-	if _, _, err := h.pod("pod-old").register(context.Background(), h.template); !errors.Is(err, authoritysql.ErrWriterDenied) {
+	if _, _, _, err := h.pod("pod-old").register(context.Background(), h.template); !errors.Is(err, authoritysql.ErrWriterDenied) {
 		t.Fatalf("过期的启动记录要被拒绝: %v", err)
 	}
 	if !proto.Equal(catalog.latest, newest) {
@@ -834,7 +851,7 @@ func TestFrequentRestartsNeverExhaustRoster(t *testing.T) {
 	catalog := h.catalogs["zone_1_db"]
 	const boots = 1100
 	for boot := 1; boot <= boots; boot++ {
-		if _, _, err := h.pod(fmt.Sprintf("pod-uid-%d", boot)).register(context.Background(), h.template); err != nil {
+		if _, _, _, err := h.pod(fmt.Sprintf("pod-uid-%d", boot)).register(context.Background(), h.template); err != nil {
 			t.Fatalf("第 %d 次启动: %v", boot, err)
 		}
 		if catalog.latest.BootSeq != uint64(boot) {
@@ -935,7 +952,7 @@ func TestSlotRegistrationRetriesTransientContentionWithoutLosingIdentity(t *test
 		&mysql.MySQLError{Number: 9007, Message: "Write conflict"},
 		authoritysql.ErrTxAbortedBeforeCommit,
 	}
-	set, boot, err := h.pod("pod-a").register(context.Background(), h.template)
+	set, boot, _, err := h.pod("pod-a").register(context.Background(), h.template)
 	if err != nil {
 		t.Fatalf("expected transient contention to recover via retry: %v", err)
 	}
@@ -948,7 +965,7 @@ func TestSlotRegistrationRetriesTransientContentionWithoutLosingIdentity(t *test
 			h := newSlotHarness(t, "zone_1_db")
 			cat := h.catalogs["zone_1_db"]
 			cat.registerErrs = []error{fatalErr}
-			_, _, err := h.pod("pod-b").register(context.Background(), h.template)
+			_, _, _, err := h.pod("pod-b").register(context.Background(), h.template)
 			if !errors.Is(err, fatalErr) || cat.registers != 1 {
 				t.Fatalf("expected immediate failure %v on attempt 1, got err=%v attempts=%d", fatalErr, err, cat.registers)
 			}
@@ -968,9 +985,180 @@ func TestSlotRegistrationRetriesTransientContentionWithoutLosingIdentity(t *test
 			cancel()
 			return context.Canceled
 		}
-		_, _, err := reg.register(ctx, h.template)
+		_, _, _, err := reg.register(ctx, h.template)
 		if !errors.Is(err, context.Canceled) || cat.registers != 1 {
 			t.Fatalf("expected cancellation after first attempt, got err=%v attempts=%d", err, cat.registers)
 		}
 	})
+}
+
+// 一个集群失联时,落在它上面的库这一代不注册,别的库照常注册(docs/design/data-service-startup-isolation.md §7):
+// 写资格和启动记录都只有连得上的库;连不上的库的号不算进来,它上面的上一代原样留着,等下一代换代。
+func TestRegisterSkipsUnreachableDatabases(t *testing.T) {
+	h := newSlotHarness(t, "zone_1_db", "zone_2_db", "zone_3_db")
+	h.unreachable["zone_2_db"] = -1
+	previous := &dbpb.SqlWriterRegistry{WriterKey: bytes.Repeat([]byte{2}, 16), BootSeq: 9, State: dbpb.SqlWriterRegistry_ACTIVE}
+	h.catalogs["zone_2_db"].latest = previous
+	set, boot, skipped, err := h.pod("pod-a").register(context.Background(), h.template)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(skipped, []string{"zone_2_db"}) {
+		t.Fatalf("skipped = %v, want [zone_2_db]", skipped)
+	}
+	var granted []string
+	for _, grant := range set.Grants {
+		granted = append(granted, grant.AuthoritySchema)
+	}
+	if !slices.Equal(granted, []string{"zone_1_db", "zone_3_db"}) {
+		t.Fatalf("grants = %v, want the reachable databases only", granted)
+	}
+	if len(boot.Requests) != 2 || boot.Requests[0].Writer.BootSeq != 1 {
+		t.Fatalf("this boot must cover only the reachable databases and take its number from them: %v", boot.Requests)
+	}
+	if record := h.record("pod-a"); record == nil || len(record.Requests) != 2 {
+		t.Fatal("the boot record must hold only the databases of this boot")
+	}
+	if h.catalogs["zone_2_db"].registers != 0 || h.catalogs["zone_2_db"].latest != previous || len(h.catalogs["zone_2_db"].retired) != 0 {
+		t.Fatal("nothing may be written to the unreachable database")
+	}
+	if h.refused["zone_2_db"] != 2 {
+		t.Fatalf("an unreachable database is tried twice before it is skipped, got %d", h.refused["zone_2_db"])
+	}
+
+	// init 重跑(同一个 Pod,启动记录还在):刚恢复的库不在这一代里,照旧不注册;要补齐只有重建 Pod 换下一代。
+	h.unreachable["zone_2_db"] = 0
+	set, again, skipped, err := h.pod("pod-a").register(context.Background(), h.template)
+	if err != nil || len(skipped) != 0 || !proto.Equal(again, boot) || len(set.Grants) != 2 {
+		t.Fatalf("rerun: err=%v skipped=%v grants=%d", err, skipped, len(set.Grants))
+	}
+	if h.catalogs["zone_2_db"].registers != 0 {
+		t.Fatal("a database left out of this boot must not be registered on a rerun")
+	}
+
+	// 重建 Pod:新的一代按全部库取号,在恢复的库上换掉上一代。
+	set, next, skipped, err := h.pod("pod-b").register(context.Background(), h.template)
+	if err != nil || len(skipped) != 0 || len(set.Grants) != 3 {
+		t.Fatalf("rebuilt pod: err=%v skipped=%v grants=%d", err, skipped, len(set.Grants))
+	}
+	if next.Requests[0].Writer.BootSeq != 10 || len(h.catalogs["zone_2_db"].retired) != 1 {
+		t.Fatalf("the next boot must outnumber every database and retire the previous generation left on zone_2_db: boot_seq=%d", next.Requests[0].Writer.BootSeq)
+	}
+}
+
+// 抖一下的库第二轮连上了就照常注册,不跳过。
+func TestRegisterRetriesAnUnreachableDatabaseOnce(t *testing.T) {
+	h := newSlotHarness(t, "zone_1_db", "zone_2_db")
+	h.unreachable["zone_2_db"] = 1
+	set, _, skipped, err := h.pod("pod-a").register(context.Background(), h.template)
+	if err != nil || len(skipped) != 0 || len(set.Grants) != 2 {
+		t.Fatalf("err=%v skipped=%v grants=%d", err, skipped, len(set.Grants))
+	}
+	if h.refused["zone_2_db"] != 1 {
+		t.Fatalf("refused %d times, want 1", h.refused["zone_2_db"])
+	}
+}
+
+// 一个库都连不上:什么都不写,不留启动记录,也不去问工作负载身份;init 退出原地重试。只写一个库的服务就是这一种。
+func TestRegisterWithNothingReachableRegistersNothing(t *testing.T) {
+	h := newSlotHarness(t, "zone_1_db", "zone_2_db")
+	h.unreachable["zone_1_db"], h.unreachable["zone_2_db"] = -1, -1
+	_, _, skipped, err := h.pod("pod-a").register(context.Background(), h.template)
+	if !errors.Is(err, errNothingReachable) {
+		t.Fatalf("err = %v, want errNothingReachable", err)
+	}
+	if !slices.Equal(skipped, []string{"zone_1_db", "zone_2_db"}) {
+		t.Fatalf("skipped = %v", skipped)
+	}
+	if h.record("pod-a") != nil || h.catalogs["zone_1_db"].registers != 0 || h.catalogs["zone_2_db"].registers != 0 || h.identityCalls != 0 {
+		t.Fatal("nothing may be written when no database is reachable")
+	}
+}
+
+// 连上之后的失败不是「连不上」:照旧整体失败,一份都不注册。
+func TestRegisterFailsWholeOnOtherOpenErrors(t *testing.T) {
+	h := newSlotHarness(t, "zone_1_db", "zone_2_db")
+	reg := h.pod("pod-a")
+	broken := errors.New("db placement: the mapping of zone_2_db cannot be parsed")
+	open := reg.open
+	reg.open = func(request *dbpb.SqlWriterLifecycleReceipt_Request) (registrationCatalog, error) {
+		if request.AuthoritySchema == "zone_2_db" {
+			return nil, broken
+		}
+		return open(request)
+	}
+	if _, _, _, err := reg.register(context.Background(), h.template); !errors.Is(err, broken) {
+		t.Fatalf("err = %v, want the open error", err)
+	}
+	if h.record("pod-a") != nil || h.catalogs["zone_1_db"].registers != 0 {
+		t.Fatal("nothing may be written")
+	}
+}
+
+// 启动记录可以只有模板的一部分库,但要按模板的顺序一一对上:换序、重复、空的都不认。
+func TestBootRecordMayHoldOnlyPartOfTheTemplateInOrder(t *testing.T) {
+	h := newSlotHarness(t, "zone_1_db", "zone_2_db", "zone_3_db")
+	h.unreachable["zone_2_db"] = -1
+	_, boot, _, err := h.pod("pod-a").register(context.Background(), h.template)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = recordMatchesTemplate(boot, h.template, "pod-a"); err != nil {
+		t.Fatal(err)
+	}
+	reordered := proto.Clone(boot).(*dbpb.SqlWriterBootRoster_Entry)
+	reordered.Requests[0], reordered.Requests[1] = reordered.Requests[1], reordered.Requests[0]
+	duplicated := proto.Clone(boot).(*dbpb.SqlWriterBootRoster_Entry)
+	duplicated.Requests = append(duplicated.Requests, proto.Clone(duplicated.Requests[1]).(*dbpb.SqlWriterLifecycleReceipt_Request))
+	empty := proto.Clone(boot).(*dbpb.SqlWriterBootRoster_Entry)
+	empty.Requests = nil
+	for name, record := range map[string]*dbpb.SqlWriterBootRoster_Entry{"reordered": reordered, "duplicated": duplicated, "empty": empty} {
+		if recordMatchesTemplate(record, h.template, "pod-a") == nil {
+			t.Fatalf("%s boot record must be refused", name)
+		}
+	}
+}
+
+// 注册时并发探测各库;探测不改目录,替身的 open 带锁,-race 下不能报数据竞争。
+func TestSplitReachableProbesConcurrentlyAndKeepsOrder(t *testing.T) {
+	schemas := make([]string, 40)
+	for i := range schemas {
+		schemas[i] = fmt.Sprintf("zone_%d_db", i+1)
+	}
+	h := newSlotHarness(t, schemas...)
+	for i := 0; i < len(schemas); i += 3 {
+		h.unreachable[schemas[i]] = -1
+	}
+	var mu sync.Mutex
+	inFlight, peak := 0, 0
+	reg := h.pod("pod-a")
+	open := reg.open
+	reg.open = func(request *dbpb.SqlWriterLifecycleReceipt_Request) (registrationCatalog, error) {
+		mu.Lock()
+		inFlight++
+		peak = max(peak, inFlight)
+		mu.Unlock()
+		time.Sleep(time.Millisecond)
+		defer func() {
+			mu.Lock()
+			inFlight--
+			mu.Unlock()
+		}()
+		return open(request)
+	}
+	reached, unreachable, err := reg.splitReachable(context.Background(), h.template.Requests)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reached)+len(unreachable) != len(schemas) || len(unreachable) != 14 {
+		t.Fatalf("reached %d, unreachable %d", len(reached), len(unreachable))
+	}
+	for i := 1; i < len(reached); i++ {
+		if slices.Index(schemas, reached[i-1].AuthoritySchema) > slices.Index(schemas, reached[i].AuthoritySchema) {
+			t.Fatal("reachable databases must keep the template order")
+		}
+	}
+	if peak < 2 || peak > reachProbeFanOut {
+		t.Fatalf("peak concurrency %d, want 2..%d", peak, reachProbeFanOut)
+	}
 }

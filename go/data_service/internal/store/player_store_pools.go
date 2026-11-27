@@ -117,6 +117,10 @@ func (p *PlayerStorePools) openPool(schema string) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 这一代没有这个存档库的写资格(写者注册时它连不上):打不开,落在它上面的玩家这一代都回不可用。
+	if one.Closed != nil {
+		return nil, one.Closed
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), playerStoreOpenTimeout)
 	defer cancel()
 	db, err := authoritysql.Open(ctx, buildDSN(one), schema, p.backend, p.options.MaxOpenConn, one.Permission, one.PoolOptions...)

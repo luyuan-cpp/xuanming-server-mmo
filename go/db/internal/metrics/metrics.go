@@ -143,14 +143,25 @@ func SetPlacementOpenStores(n int) {
 // Start exposes /metrics over HTTP. Failures log but do not block service
 // startup — metrics are observability, not critical path. Empty addr
 // disables the endpoint (production default; opt-in via config).
-func Start(addr string) {
+//
+// /readyz 是 K8s 的就绪探针(docs/design/data-service-startup-isolation.md §7.3):ready 回错误时回 503,正文是原因。
+func Start(addr string, ready func() error) {
 	if addr == "" {
-		logx.Info("metrics endpoint disabled (MetricsListenAddr empty)")
+		logx.Info("metrics endpoint disabled (MetricsListenAddr empty); /readyz is disabled too")
 		return
 	}
 	register()
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) {
+		if ready != nil {
+			if err := ready(); err != nil {
+				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				return
+			}
+		}
+		w.WriteHeader(http.StatusOK)
+	})
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           mux,

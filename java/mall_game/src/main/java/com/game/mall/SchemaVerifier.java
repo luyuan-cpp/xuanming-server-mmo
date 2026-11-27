@@ -10,7 +10,7 @@ final class SchemaVerifier {
         Map.entry("commerce_schema_version", "version,storage_contract"),
         Map.entry("commerce_buyer_guard", "buyer_id"),
         Map.entry("pms_sku_stock", "id,product_id,sku_code,price_minor,currency,stock,lock_stock,published,catalog_revision"),
-        Map.entry("commerce_admin_command", "actor,request_id,command_type,request_digest,result_json,created_ms"),
+        Map.entry("commerce_admin_command", "actor,request_id,command_type,request_digest,result_json,created_ms,proposer,approver"),
         Map.entry("oms_order", "id,order_sn,buyer_id,request_id,sku_id,quantity,pay_amount,currency,status,create_time_ms,payment_deadline_ms,payment_time_ms"),
         Map.entry("oms_order_item", "order_sn,product_id,product_sku_id,product_sku_code,product_quantity,product_price_minor"),
         Map.entry("commerce_official_owner", "order_sn,buyer_account,buyer_owner_revision"),
@@ -37,8 +37,9 @@ final class SchemaVerifier {
     /**
      * 存储合同戳,与 schema.sql 末行一致。2026-11-24 起换新:托管引用放宽至 VARCHAR(32) 兼容 trade:<uint64>,
      * 寄售增加 designated_buyer_account,卖家收入增加 dispute_frozen_fen / dispute_case_id 及 CHECK 约束。
+     * 2026-11-26 再换新:管理命令行加发起人 / 批准人(proposer / approver),双人复核批 4。
      */
-    static final String STORAGE_CONTRACT = "mall-game-official-sku-v4-dispute-and-tiered-notice";
+    static final String STORAGE_CONTRACT = "mall-game-official-sku-v5-admin-approval";
     private SchemaVerifier() {}
     static void verify(JdbcTemplate jdbc, DataSource source) throws SQLException {
         List<Map<String, Object>> version = jdbc.queryForList("SELECT version,storage_contract FROM commerce_schema_version");
@@ -53,7 +54,7 @@ final class SchemaVerifier {
                     ResultSetMetaData metadata = rows.getMetaData();
                     for (int i = 1; i <= metadata.getColumnCount(); i++) {
                         String column = metadata.getColumnName(i).toLowerCase(Locale.ROOT);
-                        if (Set.of("actor", "account", "buyer_account", "buyer_owner_revision", "seller_account", "designated_buyer_account", "request_id", "channel", "transaction_id", "payment_transaction_id", "nonce").contains(column) && metadata.getColumnType(i) != Types.VARBINARY) {
+                        if (Set.of("actor", "proposer", "approver", "account", "buyer_account", "buyer_owner_revision", "seller_account", "designated_buyer_account", "request_id", "channel", "transaction_id", "payment_transaction_id", "nonce").contains(column) && metadata.getColumnType(i) != Types.VARBINARY) {
                             throw new IllegalStateException("商城不透明标识列必须使用 VARBINARY: " + table.getKey() + "." + column);
                         }
                         if (column.equals("escrow_reference") && metadata.getPrecision(i) < 32) {

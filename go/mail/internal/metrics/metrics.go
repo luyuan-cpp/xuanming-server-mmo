@@ -38,6 +38,7 @@ const (
 	SenderGuild   = "guild"
 	SenderTrade   = "trade"
 	SenderBattle  = "battle"
+	SenderMatch   = "match"
 )
 
 // MailAdmin 发件的 outcome label(设计 §2.5):
@@ -167,7 +168,7 @@ func Register() {
 			SweepLive.Collector(),
 		)
 		for _, method := range []string{MethodSendPersonal, MethodSendSystem, MethodSendGuild} {
-			for _, sender := range []string{SenderOpsTool, SenderRobot, SenderUnknown, SenderRank, SenderGuild, SenderTrade, SenderBattle} {
+			for _, sender := range []string{SenderOpsTool, SenderRobot, SenderUnknown, SenderRank, SenderGuild, SenderTrade, SenderBattle, SenderMatch} {
 				for _, outcome := range []string{OutcomeOK, OutcomeDuplicated, OutcomeRejected, OutcomeFault, OutcomeDenied} {
 					adminSendTotal.WithLabelValues(method, sender, outcome)
 				}

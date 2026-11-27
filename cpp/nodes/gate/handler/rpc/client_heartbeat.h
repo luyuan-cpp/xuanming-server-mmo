@@ -8,7 +8,8 @@
 //
 // 一条连接的生命周期:
 //   建连(未验签)──ExpectHandshake──▶ 10s 内要验签,否则关
-//   验签成功 ──OnTokenVerified──▶ 回包通告心跳参数,从此按空闲超时判死:30s 收不到任何一帧就关
+//   验签成功 ──OnTokenVerified──▶ 回包通告心跳参数,从此按空闲超时判死:30s 收不到任何一帧就关;
+//                                 并且 60s 内要登录成功一次(kLoginDeadlineAfterVerify),否则关
 //   客户端每 10s 一条心跳 ──HandleHeartbeat──▶ 回一条;任何一帧(NoteInboundFrame)都重新计时
 //
 // 状态是 gate loop 线程上的 thread_local(与路由 lane 同一做法);定时器与派发回调都不捕获任何对象,
@@ -31,6 +32,12 @@ namespace gate_client_heartbeat
 inline constexpr double kSweepIntervalSeconds =
 	std::chrono::duration<double>(client_liveness::kClientLiveness.checkPeriod).count();
 
+// 验签之后多久之内必须登录成功一次(docs/design/gate-client-heartbeat.md §4「登录期限」),按「距验签的时长」算,发心跳不续命。
+// 没有这一道时,验签之后不登录、只发心跳的连接能一直挂着;它们都算进 gate 人数,排队按人数放人,这些连接就挤掉了排队的名额。
+// 60s:合法客户端验签一回来就发 Login(mmorpg-client GameClient.ConnectAndEnter、robot),正常几百毫秒,login 繁忙或抢账号锁
+// 失败后重试也在十几秒内。比空闲超时(30s)长,验签之后静默的连接仍由空闲超时先关(heartbeat-idle-smoke 的 H3 量的是它)。
+inline constexpr std::chrono::seconds kLoginDeadlineAfterVerify{60};
+
 // 本连接收到了一帧(任何类型,含随后被拒绝的)。三个收包入口(验签、ClientRequest、心跳)找到会话之后各调一次。
 // 还没开始跟踪的连接(验签之前)不读时钟。
 inline void NoteInboundFrame(SessionInfo &session)
@@ -44,7 +51,8 @@ inline void NoteInboundFrame(SessionInfo &session)
 // 新连接还没验签:登记握手期限。HandleConnectionEstablished 插入会话之后调用;dev 免验签的会话建连即已验证,不调。
 void ExpectHandshake(SessionId sessionId, const SessionInfo &session, client_liveness::SteadyTime now);
 
-// 验签成功、即将回 ClientTokenVerifyResponse{success = true}:回包填心跳参数,并从这一刻起按空闲超时判死这条连接。
+// 验签成功、即将回 ClientTokenVerifyResponse{success = true}:回包填心跳参数,并从这一刻起按空闲超时判死这条连接,
+// 同时登记登录期限(kLoginDeadlineAfterVerify)。
 // 两条成功路径(正常验签、dev 免验签)都调;dev 下每条验签请求都答,重复调用只填参数,不重复登记。
 // 已验签的连接再发验签请求不回包、计非法包(client_session_handler.cpp DispatchTokenVerify),不走到这里。
 void OnTokenVerified(SessionId sessionId, SessionInfo &session, ClientTokenVerifyResponse &response,
@@ -60,7 +68,7 @@ void OnHeartbeatRequest(const muduo::net::TcpConnectionPtr &conn, const std::sha
 void HandleHeartbeat(const muduo::net::TcpConnectionPtr &conn, const ClientHeartbeatRequest &request,
 					 client_liveness::SteadyTime now);
 
-// 扫描:定时器每个节拍调一次;单测直接传时刻。握手超时与静默满阈值的连接 forceClose,之后照常走断开回调。
+// 扫描:定时器每个节拍调一次;单测直接传时刻。握手超时、静默满阈值、到了登录期限仍未登录成功的连接 forceClose,之后照常走断开回调。
 // 顺带每 30s 检查一次汇总行,累计计数有变化才打。
 void SweepLiveness(client_liveness::SteadyTime now);
 
@@ -73,7 +81,8 @@ struct Counters
 	uint64_t tracked{0};           // 开始按空闲超时判死的连接(每条连接一次)
 	uint64_t idleClosed{0};        // 静默满阈值、被关闭的连接
 	uint64_t handshakeTimeouts{0}; // 建连满握手期限仍未验签、被关闭的连接
-	uint64_t deferred{0};          // 本端 loop 迟到而推迟的判定(两道期限合计)
+	uint64_t loginTimeouts{0};     // 验签满登录期限仍未登录成功、被关闭的连接
+	uint64_t deferred{0};          // 本端 loop 迟到而推迟的判定(三道期限合计)
 
 	bool operator==(const Counters &) const = default;
 };

@@ -91,14 +91,36 @@ func TestPaymentCallerSecretIsOptionalButIndependent(t *testing.T) {
 	require.Error(t, validateGlobalCallerSecrets(get))
 }
 
-// 写资格要恰好覆盖要写的逻辑库:少一份那个库打不开,多一份说明名册和配置不是同一次部署。
+// 写资格多一份说明名册和配置不是同一次部署,拒绝;少的是写者注册时连不上的库(docs/design/data-service-startup-isolation.md §7),
+// 按升序列出来,那些库这一代都关着,进程不就绪。
 func TestCheckWriterSchemas(t *testing.T) {
 	schemas := []string{"g_00", "g_01", "g_ledger", "player_store_1000000_db"}
 	writers := map[string]authoritysql.WriterConfig{}
 	for _, schema := range schemas {
 		writers[schema] = authoritysql.WriterConfig{}
 	}
-	require.NoError(t, checkWriterSchemas(writers, schemas))
-	require.ErrorContains(t, checkWriterSchemas(writers, append([]string{"player_store_1000001_db"}, schemas...)), "player_store_1000001_db")
-	require.Error(t, checkWriterSchemas(writers, schemas[1:]), "多一份也拒绝")
+	missing, err := checkWriterSchemas(writers, schemas)
+	require.NoError(t, err)
+	require.Empty(t, missing)
+
+	missing, err = checkWriterSchemas(writers, append([]string{"player_store_1000001_db"}, schemas...))
+	require.NoError(t, err)
+	require.Equal(t, []string{"player_store_1000001_db"}, missing, "少一份:那个库这一代关着")
+
+	_, err = checkWriterSchemas(writers, schemas[1:])
+	require.ErrorContains(t, err, "g_00", "多一份拒绝")
+}
+
+// 缺写资格或者 RPC 还没对外服务,都不算就绪(docs/design/data-service-startup-isolation.md §7.3)。
+func TestReadyNeedsEveryWriterGrantAndServing(t *testing.T) {
+	s := &ServiceContext{}
+	require.ErrorContains(t, s.Ready(), "not serving yet")
+	s.MarkServing()
+	require.NoError(t, s.Ready())
+
+	degraded := &ServiceContext{MissingWriterGrants: []string{"g_01", "player_store_1000001_db"}}
+	degraded.MarkServing()
+	err := degraded.Ready()
+	require.ErrorContains(t, err, "g_01")
+	require.ErrorContains(t, err, "rebuild the pod")
 }

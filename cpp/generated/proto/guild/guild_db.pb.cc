@@ -1490,11 +1490,11 @@ constexpr GuildWarBountyRecord::ParseTableT_ GuildWarBountyRecord::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(GuildWarBountyRecord, _impl_._has_bits_),
       0, // no _extensions_
-      17, 248,  // max_field_number, fast_idx_mask
+      18, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294836224,  // skipmap
+      4294705152,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      17,  // num_field_entries
+      18,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -1550,8 +1550,8 @@ constexpr GuildWarBountyRecord::ParseTableT_ GuildWarBountyRecord::InternalGener
        {88, 10, 0,
         PROTOBUF_FIELD_OFFSET(GuildWarBountyRecord, _impl_.escrow_op_id_)}},
       // uint32 counter_kills = 12;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildWarBountyRecord, _impl_.counter_kills_), 16>(),
-       {96, 16, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GuildWarBountyRecord, _impl_.counter_kills_), 17>(),
+       {96, 17, 0,
         PROTOBUF_FIELD_OFFSET(GuildWarBountyRecord, _impl_.counter_kills_)}},
       // uint64 last_counter_attacker_id = 13;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GuildWarBountyRecord, _impl_.last_counter_attacker_id_), 11>(),
@@ -1573,7 +1573,10 @@ constexpr GuildWarBountyRecord::ParseTableT_ GuildWarBountyRecord::InternalGener
       {::_pbi::TcParser::FastV64S2,
        {392, 15, 0,
         PROTOBUF_FIELD_OFFSET(GuildWarBountyRecord, _impl_.resolved_at_ms_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 escrow_guild_funds = 18;
+      {::_pbi::TcParser::FastV64S2,
+       {400, 16, 0,
+        PROTOBUF_FIELD_OFFSET(GuildWarBountyRecord, _impl_.escrow_guild_funds_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -1613,7 +1616,7 @@ constexpr GuildWarBountyRecord::ParseTableT_ GuildWarBountyRecord::InternalGener
       // uint64 escrow_op_id = 11;
       {PROTOBUF_FIELD_OFFSET(GuildWarBountyRecord, _impl_.escrow_op_id_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 counter_kills = 12;
-      {PROTOBUF_FIELD_OFFSET(GuildWarBountyRecord, _impl_.counter_kills_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(GuildWarBountyRecord, _impl_.counter_kills_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 last_counter_attacker_id = 13;
       {PROTOBUF_FIELD_OFFSET(GuildWarBountyRecord, _impl_.last_counter_attacker_id_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 hunter_player_id = 14;
@@ -1624,6 +1627,8 @@ constexpr GuildWarBountyRecord::ParseTableT_ GuildWarBountyRecord::InternalGener
       {PROTOBUF_FIELD_OFFSET(GuildWarBountyRecord, _impl_.expires_at_ms_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 resolved_at_ms = 17;
       {PROTOBUF_FIELD_OFFSET(GuildWarBountyRecord, _impl_.resolved_at_ms_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 escrow_guild_funds = 18;
+      {PROTOBUF_FIELD_OFFSET(GuildWarBountyRecord, _impl_.escrow_guild_funds_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -1652,6 +1657,7 @@ inline constexpr GuildWarBountyRecord::Impl_::Impl_(
         created_at_ms_{::uint64_t{0u}},
         expires_at_ms_{::uint64_t{0u}},
         resolved_at_ms_{::uint64_t{0u}},
+        escrow_guild_funds_{::uint64_t{0u}},
         counter_kills_{0u} {}
 
 template <typename>
@@ -7006,7 +7012,7 @@ const ::uint32_t
         16,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::guildpb::GuildWarBountyRecord, _impl_._has_bits_),
-        20, // hasbit index offset
+        21, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::guildpb::GuildWarBountyRecord, _impl_.bounty_id_),
         PROTOBUF_FIELD_OFFSET(::guildpb::GuildWarBountyRecord, _impl_.zone_id_),
         PROTOBUF_FIELD_OFFSET(::guildpb::GuildWarBountyRecord, _impl_.issuer_player_id_),
@@ -7024,6 +7030,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::guildpb::GuildWarBountyRecord, _impl_.created_at_ms_),
         PROTOBUF_FIELD_OFFSET(::guildpb::GuildWarBountyRecord, _impl_.expires_at_ms_),
         PROTOBUF_FIELD_OFFSET(::guildpb::GuildWarBountyRecord, _impl_.resolved_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::guildpb::GuildWarBountyRecord, _impl_.escrow_guild_funds_),
         0,
         3,
         1,
@@ -7035,12 +7042,13 @@ const ::uint32_t
         8,
         9,
         10,
-        16,
+        17,
         11,
         12,
         13,
         14,
         15,
+        16,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::guildpb::GuildWarBattleRecord, _impl_._has_bits_),
         29, // hasbit index offset
@@ -7220,11 +7228,11 @@ static const ::_pbi::MigrationSchema
         {421, sizeof(::guildpb::GuildWarWeeklyProgressRecord)},
         {448, sizeof(::guildpb::GuildWarPlayerStateRecord)},
         {485, sizeof(::guildpb::GuildWarBountyRecord)},
-        {522, sizeof(::guildpb::GuildWarBattleRecord)},
-        {577, sizeof(::guildpb::GuildWarRivalryRecord)},
-        {592, sizeof(::guildpb::GuildJianghuRivalSummaryRecord)},
-        {609, sizeof(::guildpb::GuildJianghuGrudgeRecord)},
-        {634, sizeof(::guildpb::GuildWarFeudRecord)},
+        {524, sizeof(::guildpb::GuildWarBattleRecord)},
+        {579, sizeof(::guildpb::GuildWarRivalryRecord)},
+        {594, sizeof(::guildpb::GuildJianghuRivalSummaryRecord)},
+        {611, sizeof(::guildpb::GuildJianghuGrudgeRecord)},
+        {636, sizeof(::guildpb::GuildWarFeudRecord)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -7440,7 +7448,7 @@ const char descriptor_table_protodef_proto_2fguild_2fguild_5fdb_2eproto[] ABSL_A
     "\001(\004\022\025\n\rlast_track_ms\030\020 \001(\004\022\022\n\nupdated_ms"
     "\030\021 \001(\004:S\212\222\364\001\026guild_war_player_state\222\222\364\001\t"
     "player_id\332\222\364\001\026zone_id,open_challenge\250\223\364\001"
-    "\001\260\223\364\001\004\270\223\364\001\004\"\237\004\n\024GuildWarBountyRecord\022\021\n\t"
+    "\001\260\223\364\001\004\270\223\364\001\004\"\320\004\n\024GuildWarBountyRecord\022\021\n\t"
     "bounty_id\030\001 \001(\004\022\017\n\007zone_id\030\002 \001(\r\022\030\n\020issu"
     "er_player_id\030\003 \001(\004\022\027\n\017issuer_guild_id\030\004 "
     "\001(\004\022\030\n\020target_player_id\030\005 \001(\004\022\027\n\017target_"
@@ -7450,98 +7458,100 @@ const char descriptor_table_protodef_proto_2fguild_2fguild_5fdb_2eproto[] ABSL_A
     "er_kills\030\014 \001(\r\022 \n\030last_counter_attacker_"
     "id\030\r \001(\004\022\030\n\020hunter_player_id\030\016 \001(\004\022\025\n\rcr"
     "eated_at_ms\030\017 \001(\004\022\025\n\rexpires_at_ms\030\020 \001(\004"
-    "\022\026\n\016resolved_at_ms\030\021 \001(\004:\202\001\212\222\364\001\020guild_wa"
-    "r_bounty\222\222\364\001\tbounty_id\332\222\364\001Ktarget_player"
-    "_id,status;issuer_guild_id,status;zone_i"
-    "d,status,expires_at_ms\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\212\006"
-    "\n\024GuildWarBattleRecord\022\021\n\tbattle_id\030\001 \001("
-    "\004\022\017\n\007zone_id\030\002 \001(\r\022\027\n\017war_battle_kind\030\003 "
-    "\001(\r\022\022\n\nleyline_id\030\004 \001(\r\022\021\n\tbounty_id\030\005 \001"
-    "(\004\022\031\n\021attacker_guild_id\030\006 \001(\004\022\031\n\021defende"
-    "r_guild_id\030\007 \001(\004\022\017\n\007outcome\030\010 \001(\r\022\024\n\014tot"
-    "al_rounds\030\t \001(\r\022\030\n\020banner_hp_before\030\n \001("
-    "\r\022\027\n\017banner_hp_after\030\013 \001(\r\022\027\n\017banner_shi"
-    "elded\030\014 \001(\r\022\032\n\022bounty_outcome_tag\030\r \001(\r\022"
-    "\034\n\024jackpot_contribution\030\016 \001(\004\022\026\n\016jackpot"
-    "_silver\030\017 \001(\004\022\030\n\020diminish_percent\030\020 \001(\r\022"
-    "\035\n\025attacker_contribution\030\021 \001(\004\022\027\n\017attack"
-    "er_silver\030\022 \001(\004\022\026\n\016attacker_funds\030\023 \001(\004\022"
-    "\026\n\016attacker_merit\030\024 \001(\004\022\035\n\025defender_cont"
-    "ribution\030\025 \001(\004\022\027\n\017defender_silver\030\026 \001(\004\022"
-    "\026\n\016defender_funds\030\027 \001(\004\022\026\n\016defender_meri"
-    "t\030\030 \001(\004\022\027\n\017summary_payload\030\031 \001(\014\022\026\n\016fini"
-    "shed_at_ms\030\032 \001(\004:x\212\222\364\001\020guild_war_battle\222"
-    "\222\364\001\tbattle_id\332\222\364\001Aattacker_guild_id,fini"
-    "shed_at_ms;defender_guild_id,finished_at"
-    "_ms\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\345\001\n\025GuildWarRivalryRe"
-    "cord\022\024\n\014guild_id_low\030\001 \001(\004\022\025\n\rguild_id_h"
-    "igh\030\002 \001(\004\022\020\n\010week_key\030\003 \001(\r\022\023\n\013clash_cou"
-    "nt\030\004 \001(\r\022\025\n\rbounty_marked\030\005 \001(\r\022\022\n\nupdat"
-    "ed_ms\030\006 \001(\004:M\212\222\364\001\021guild_war_rivalry\222\222\364\001#"
-    "guild_id_low,guild_id_high,week_key\250\223\364\001\001"
-    "\260\223\364\001\004\270\223\364\001\004\"\222\002\n\036GuildJianghuRivalSummaryR"
-    "ecord\022\020\n\010guild_id\030\001 \001(\004\022\026\n\016rival_guild_i"
-    "d\030\002 \001(\004\022\030\n\020rival_guild_name\030\003 \001(\t\022\014\n\004win"
-    "s\030\004 \001(\r\022\016\n\006losses\030\005 \001(\r\022\r\n\005draws\030\006 \001(\r\022\026"
-    "\n\016last_battle_ms\030\007 \001(\004:g\212\222\364\001\033guild_jiang"
-    "hu_rival_summary\222\222\364\001\027guild_id,rival_guil"
-    "d_id\332\222\364\001\027guild_id,last_battle_ms\250\223\364\001\001\260\223\364"
-    "\001\004\270\223\364\001\004\"\364\002\n\030GuildJianghuGrudgeRecord\022\020\n\010"
-    "guild_id\030\001 \001(\004\022\021\n\tbattle_id\030\002 \001(\004\022\026\n\016riv"
-    "al_guild_id\030\003 \001(\004\022\030\n\020rival_guild_name\030\004 "
-    "\001(\t\022\031\n\021outcome_for_guild\030\005 \001(\r\022\021\n\twrit_t"
-    "ier\030\006 \001(\r\022\021\n\tteam_size\030\007 \001(\r\022\024\n\014total_ro"
-    "unds\030\010 \001(\r\022\030\n\020our_captain_name\030\t \001(\t\022\032\n\022"
-    "rival_captain_name\030\n \001(\t\022\023\n\013finished_ms\030"
-    "\013 \001(\004:_\212\222\364\001\033guild_jianghu_grudge_record\222"
-    "\222\364\001\022guild_id,battle_id\332\222\364\001\024guild_id,fini"
-    "shed_ms\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\232\004\n\022GuildWarFeudR"
-    "ecord\022\017\n\007feud_id\030\001 \001(\004\022\017\n\007zone_id\030\002 \001(\r\022"
-    "\027\n\017issuer_guild_id\030\003 \001(\004\022\031\n\021issuer_guild"
-    "_name\030\004 \001(\t\022\027\n\017target_guild_id\030\005 \001(\004\022\031\n\021"
-    "target_guild_name\030\006 \001(\t\022\016\n\006status\030\007 \001(\r\022"
-    "\023\n\013issuer_wins\030\010 \001(\r\022\023\n\013target_wins\030\t \001("
-    "\r\022\024\n\014issuer_merit\030\n \001(\004\022\024\n\014target_merit\030"
-    "\013 \001(\004\022\025\n\rcreated_at_ms\030\014 \001(\004\022\032\n\022accept_d"
-    "eadline_ms\030\r \001(\004\022\025\n\rstarted_at_ms\030\016 \001(\004\022"
-    "\022\n\nends_at_ms\030\017 \001(\004\022\027\n\017winner_guild_id\030\020"
-    " \001(\004\022\022\n\nupdated_ms\030\021 \001(\004:\210\001\212\222\364\001\016guild_wa"
-    "r_feud\222\222\364\001\007feud_id\332\222\364\001Uzone_id,status,en"
-    "ds_at_ms;issuer_guild_id,created_at_ms;t"
-    "arget_guild_id,created_at_ms\250\223\364\001\001\260\223\364\001\004\270\223"
-    "\364\001\004*\230\002\n\022GuildAssetOpStatus\022%\n!GUILD_ASSE"
-    "T_OP_STATUS_UNSPECIFIED\020\000\022!\n\035GUILD_ASSET"
-    "_OP_STATUS_PENDING\020\001\022!\n\035GUILD_ASSET_OP_S"
-    "TATUS_APPLIED\020\002\022\"\n\036GUILD_ASSET_OP_STATUS"
-    "_REJECTED\020\003\022!\n\035GUILD_ASSET_OP_STATUS_ABO"
-    "RTED\020\004\022)\n%GUILD_ASSET_OP_STATUS_APPLIED_"
-    "PARTIAL\020\005\022#\n\037GUILD_ASSET_OP_STATUS_ABAND"
-    "ONED\020\006*\220\002\n\020GuildAssetOpKind\022#\n\037GUILD_ASS"
-    "ET_OP_KIND_UNSPECIFIED\020\000\022\036\n\032GUILD_ASSET_"
-    "OP_KIND_DONATE\020\001\022\034\n\030GUILD_ASSET_OP_KIND_"
-    "SHOP\020\002\022\'\n#GUILD_ASSET_OP_KIND_ACTIVITY_R"
-    "EWARD\020\003\022\"\n\036GUILD_ASSET_OP_KIND_WAR_REWAR"
-    "D\020\005\022%\n!GUILD_ASSET_OP_KIND_BOUNTY_ESCROW"
-    "\020\006\022%\n!GUILD_ASSET_OP_KIND_BOUNTY_PAYOUT\020"
-    "\007*\220\002\n\025GuildDailyCounterKind\022(\n$GUILD_DAI"
-    "LY_COUNTER_KIND_UNSPECIFIED\020\000\022#\n\037GUILD_D"
-    "AILY_COUNTER_KIND_DONATE\020\001\022!\n\035GUILD_DAIL"
-    "Y_COUNTER_KIND_SHOP\020\002\022%\n!GUILD_DAILY_COU"
-    "NTER_KIND_ACTIVITY\020\003\022.\n*GUILD_DAILY_COUN"
-    "TER_KIND_WAR_BOUNTY_PAYOUT\020\004\022.\n*GUILD_DA"
-    "ILY_COUNTER_KIND_WAR_PUBLIC_BOUNTY\020\005*\263\001\n"
-    "\025GuildTrialBattleState\022(\n$GUILD_TRIAL_BA"
-    "TTLE_STATE_UNSPECIFIED\020\000\022$\n GUILD_TRIAL_"
-    "BATTLE_STATE_STARTED\020\001\022$\n GUILD_TRIAL_BA"
-    "TTLE_STATE_SETTLED\020\002\022$\n GUILD_TRIAL_BATT"
-    "LE_STATE_EXPIRED\020\003*\210\002\n\026GuildTrialSettleR"
-    "esult\022)\n%GUILD_TRIAL_SETTLE_RESULT_UNSPE"
-    "CIFIED\020\000\022!\n\035GUILD_TRIAL_SETTLE_RESULT_WI"
-    "N\020\001\022\"\n\036GUILD_TRIAL_SETTLE_RESULT_LOSS\020\002\022"
-    "(\n$GUILD_TRIAL_SETTLE_RESULT_GUILD_GONE\020"
-    "\003\022,\n(GUILD_TRIAL_SETTLE_RESULT_CONFIG_MI"
-    "SSING\020\004\022$\n GUILD_TRIAL_SETTLE_RESULT_POI"
-    "SON\020\005B\023Z\021guild/proto/guildb\006proto3"
+    "\022\026\n\016resolved_at_ms\030\021 \001(\004\022\032\n\022escrow_guild"
+    "_funds\030\022 \001(\004:\227\001\212\222\364\001\020guild_war_bounty\222\222\364\001"
+    "\tbounty_id\332\222\364\001`target_player_id,status;i"
+    "ssuer_guild_id,status;zone_id,status,exp"
+    "ires_at_ms;status,expires_at_ms\250\223\364\001\001\260\223\364\001"
+    "\004\270\223\364\001\004\"\212\006\n\024GuildWarBattleRecord\022\021\n\tbattl"
+    "e_id\030\001 \001(\004\022\017\n\007zone_id\030\002 \001(\r\022\027\n\017war_battl"
+    "e_kind\030\003 \001(\r\022\022\n\nleyline_id\030\004 \001(\r\022\021\n\tboun"
+    "ty_id\030\005 \001(\004\022\031\n\021attacker_guild_id\030\006 \001(\004\022\031"
+    "\n\021defender_guild_id\030\007 \001(\004\022\017\n\007outcome\030\010 \001"
+    "(\r\022\024\n\014total_rounds\030\t \001(\r\022\030\n\020banner_hp_be"
+    "fore\030\n \001(\r\022\027\n\017banner_hp_after\030\013 \001(\r\022\027\n\017b"
+    "anner_shielded\030\014 \001(\r\022\032\n\022bounty_outcome_t"
+    "ag\030\r \001(\r\022\034\n\024jackpot_contribution\030\016 \001(\004\022\026"
+    "\n\016jackpot_silver\030\017 \001(\004\022\030\n\020diminish_perce"
+    "nt\030\020 \001(\r\022\035\n\025attacker_contribution\030\021 \001(\004\022"
+    "\027\n\017attacker_silver\030\022 \001(\004\022\026\n\016attacker_fun"
+    "ds\030\023 \001(\004\022\026\n\016attacker_merit\030\024 \001(\004\022\035\n\025defe"
+    "nder_contribution\030\025 \001(\004\022\027\n\017defender_silv"
+    "er\030\026 \001(\004\022\026\n\016defender_funds\030\027 \001(\004\022\026\n\016defe"
+    "nder_merit\030\030 \001(\004\022\027\n\017summary_payload\030\031 \001("
+    "\014\022\026\n\016finished_at_ms\030\032 \001(\004:x\212\222\364\001\020guild_wa"
+    "r_battle\222\222\364\001\tbattle_id\332\222\364\001Aattacker_guil"
+    "d_id,finished_at_ms;defender_guild_id,fi"
+    "nished_at_ms\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\345\001\n\025GuildWar"
+    "RivalryRecord\022\024\n\014guild_id_low\030\001 \001(\004\022\025\n\rg"
+    "uild_id_high\030\002 \001(\004\022\020\n\010week_key\030\003 \001(\r\022\023\n\013"
+    "clash_count\030\004 \001(\r\022\025\n\rbounty_marked\030\005 \001(\r"
+    "\022\022\n\nupdated_ms\030\006 \001(\004:M\212\222\364\001\021guild_war_riv"
+    "alry\222\222\364\001#guild_id_low,guild_id_high,week"
+    "_key\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\222\002\n\036GuildJianghuRiva"
+    "lSummaryRecord\022\020\n\010guild_id\030\001 \001(\004\022\026\n\016riva"
+    "l_guild_id\030\002 \001(\004\022\030\n\020rival_guild_name\030\003 \001"
+    "(\t\022\014\n\004wins\030\004 \001(\r\022\016\n\006losses\030\005 \001(\r\022\r\n\005draw"
+    "s\030\006 \001(\r\022\026\n\016last_battle_ms\030\007 \001(\004:g\212\222\364\001\033gu"
+    "ild_jianghu_rival_summary\222\222\364\001\027guild_id,r"
+    "ival_guild_id\332\222\364\001\027guild_id,last_battle_m"
+    "s\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\364\002\n\030GuildJianghuGrudgeR"
+    "ecord\022\020\n\010guild_id\030\001 \001(\004\022\021\n\tbattle_id\030\002 \001"
+    "(\004\022\026\n\016rival_guild_id\030\003 \001(\004\022\030\n\020rival_guil"
+    "d_name\030\004 \001(\t\022\031\n\021outcome_for_guild\030\005 \001(\r\022"
+    "\021\n\twrit_tier\030\006 \001(\r\022\021\n\tteam_size\030\007 \001(\r\022\024\n"
+    "\014total_rounds\030\010 \001(\r\022\030\n\020our_captain_name\030"
+    "\t \001(\t\022\032\n\022rival_captain_name\030\n \001(\t\022\023\n\013fin"
+    "ished_ms\030\013 \001(\004:_\212\222\364\001\033guild_jianghu_grudg"
+    "e_record\222\222\364\001\022guild_id,battle_id\332\222\364\001\024guil"
+    "d_id,finished_ms\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\232\004\n\022Guil"
+    "dWarFeudRecord\022\017\n\007feud_id\030\001 \001(\004\022\017\n\007zone_"
+    "id\030\002 \001(\r\022\027\n\017issuer_guild_id\030\003 \001(\004\022\031\n\021iss"
+    "uer_guild_name\030\004 \001(\t\022\027\n\017target_guild_id\030"
+    "\005 \001(\004\022\031\n\021target_guild_name\030\006 \001(\t\022\016\n\006stat"
+    "us\030\007 \001(\r\022\023\n\013issuer_wins\030\010 \001(\r\022\023\n\013target_"
+    "wins\030\t \001(\r\022\024\n\014issuer_merit\030\n \001(\004\022\024\n\014targ"
+    "et_merit\030\013 \001(\004\022\025\n\rcreated_at_ms\030\014 \001(\004\022\032\n"
+    "\022accept_deadline_ms\030\r \001(\004\022\025\n\rstarted_at_"
+    "ms\030\016 \001(\004\022\022\n\nends_at_ms\030\017 \001(\004\022\027\n\017winner_g"
+    "uild_id\030\020 \001(\004\022\022\n\nupdated_ms\030\021 \001(\004:\210\001\212\222\364\001"
+    "\016guild_war_feud\222\222\364\001\007feud_id\332\222\364\001Uzone_id,"
+    "status,ends_at_ms;issuer_guild_id,create"
+    "d_at_ms;target_guild_id,created_at_ms\250\223\364"
+    "\001\001\260\223\364\001\004\270\223\364\001\004*\230\002\n\022GuildAssetOpStatus\022%\n!G"
+    "UILD_ASSET_OP_STATUS_UNSPECIFIED\020\000\022!\n\035GU"
+    "ILD_ASSET_OP_STATUS_PENDING\020\001\022!\n\035GUILD_A"
+    "SSET_OP_STATUS_APPLIED\020\002\022\"\n\036GUILD_ASSET_"
+    "OP_STATUS_REJECTED\020\003\022!\n\035GUILD_ASSET_OP_S"
+    "TATUS_ABORTED\020\004\022)\n%GUILD_ASSET_OP_STATUS"
+    "_APPLIED_PARTIAL\020\005\022#\n\037GUILD_ASSET_OP_STA"
+    "TUS_ABANDONED\020\006*\220\002\n\020GuildAssetOpKind\022#\n\037"
+    "GUILD_ASSET_OP_KIND_UNSPECIFIED\020\000\022\036\n\032GUI"
+    "LD_ASSET_OP_KIND_DONATE\020\001\022\034\n\030GUILD_ASSET"
+    "_OP_KIND_SHOP\020\002\022\'\n#GUILD_ASSET_OP_KIND_A"
+    "CTIVITY_REWARD\020\003\022\"\n\036GUILD_ASSET_OP_KIND_"
+    "WAR_REWARD\020\005\022%\n!GUILD_ASSET_OP_KIND_BOUN"
+    "TY_ESCROW\020\006\022%\n!GUILD_ASSET_OP_KIND_BOUNT"
+    "Y_PAYOUT\020\007*\220\002\n\025GuildDailyCounterKind\022(\n$"
+    "GUILD_DAILY_COUNTER_KIND_UNSPECIFIED\020\000\022#"
+    "\n\037GUILD_DAILY_COUNTER_KIND_DONATE\020\001\022!\n\035G"
+    "UILD_DAILY_COUNTER_KIND_SHOP\020\002\022%\n!GUILD_"
+    "DAILY_COUNTER_KIND_ACTIVITY\020\003\022.\n*GUILD_D"
+    "AILY_COUNTER_KIND_WAR_BOUNTY_PAYOUT\020\004\022.\n"
+    "*GUILD_DAILY_COUNTER_KIND_WAR_PUBLIC_BOU"
+    "NTY\020\005*\263\001\n\025GuildTrialBattleState\022(\n$GUILD"
+    "_TRIAL_BATTLE_STATE_UNSPECIFIED\020\000\022$\n GUI"
+    "LD_TRIAL_BATTLE_STATE_STARTED\020\001\022$\n GUILD"
+    "_TRIAL_BATTLE_STATE_SETTLED\020\002\022$\n GUILD_T"
+    "RIAL_BATTLE_STATE_EXPIRED\020\003*\210\002\n\026GuildTri"
+    "alSettleResult\022)\n%GUILD_TRIAL_SETTLE_RES"
+    "ULT_UNSPECIFIED\020\000\022!\n\035GUILD_TRIAL_SETTLE_"
+    "RESULT_WIN\020\001\022\"\n\036GUILD_TRIAL_SETTLE_RESUL"
+    "T_LOSS\020\002\022(\n$GUILD_TRIAL_SETTLE_RESULT_GU"
+    "ILD_GONE\020\003\022,\n(GUILD_TRIAL_SETTLE_RESULT_"
+    "CONFIG_MISSING\020\004\022$\n GUILD_TRIAL_SETTLE_R"
+    "ESULT_POISON\020\005B\023Z\021guild/proto/guildb\006pro"
+    "to3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fguild_2fguild_5fdb_2eproto_deps[1] = {
@@ -7551,7 +7561,7 @@ static ::absl::once_flag descriptor_table_proto_2fguild_2fguild_5fdb_2eproto_onc
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fguild_2fguild_5fdb_2eproto = {
     false,
     false,
-    11194,
+    11243,
     descriptor_table_protodef_proto_2fguild_2fguild_5fdb_2eproto,
     "proto/guild/guild_db.proto",
     &descriptor_table_proto_2fguild_2fguild_5fdb_2eproto_once,
@@ -17310,7 +17320,11 @@ PROTOBUF_NOINLINE void GuildWarBountyRecord::Clear() {
         reinterpret_cast<char*>(&_impl_.resolved_at_ms_) -
         reinterpret_cast<char*>(&_impl_.public_board_)) + sizeof(_impl_.resolved_at_ms_));
   }
-  _impl_.counter_kills_ = 0u;
+  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
+    ::memset(&_impl_.escrow_guild_funds_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.counter_kills_) -
+        reinterpret_cast<char*>(&_impl_.escrow_guild_funds_)) + sizeof(_impl_.counter_kills_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -17434,7 +17448,7 @@ PROTOBUF_NOINLINE void GuildWarBountyRecord::Clear() {
   }
 
   // uint32 counter_kills = 12;
-  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
     if (this_._internal_counter_kills() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -17484,6 +17498,15 @@ PROTOBUF_NOINLINE void GuildWarBountyRecord::Clear() {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           17, this_._internal_resolved_at_ms(), target);
+    }
+  }
+
+  // uint64 escrow_guild_funds = 18;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_escrow_guild_funds() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          18, this_._internal_escrow_guild_funds(), target);
     }
   }
 
@@ -17628,9 +17651,16 @@ PROTOBUF_NOINLINE void GuildWarBountyRecord::Clear() {
       }
     }
   }
-   {
-    // uint32 counter_kills = 12;
+  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
+    // uint64 escrow_guild_funds = 18;
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_escrow_guild_funds() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_escrow_guild_funds());
+      }
+    }
+    // uint32 counter_kills = 12;
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
       if (this_._internal_counter_kills() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_counter_kills());
@@ -17738,9 +17768,16 @@ void GuildWarBountyRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
-    if (from._internal_counter_kills() != 0) {
-      _this->_impl_.counter_kills_ = from._impl_.counter_kills_;
+  if (BatchCheckHasBit(cached_has_bits, 0x00030000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (from._internal_escrow_guild_funds() != 0) {
+        _this->_impl_.escrow_guild_funds_ = from._impl_.escrow_guild_funds_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (from._internal_counter_kills() != 0) {
+        _this->_impl_.counter_kills_ = from._impl_.counter_kills_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;

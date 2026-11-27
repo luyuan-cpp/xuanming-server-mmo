@@ -32,8 +32,8 @@ import (
 	"shared/dirshard"
 	"shared/drainproof"
 	"shared/etcdwatch"
-	"shared/grpcstats"
 	"shared/grpckeepalive"
+	"shared/grpcstats"
 	"shared/killswitch"
 	"shared/safego"
 	"shared/serverbase"
@@ -444,7 +444,7 @@ func runDataService(c config.Config) (runErr error) {
 
 	// HTTP 导出仅观察指标与并发安全的 DB.Stats，不派生业务写；不作为资产发行者 closure。
 	// 空地址保持禁用。
-	metrics.Start(c.MetricsListenAddr)
+	metrics.Start(c.MetricsListenAddr, svcCtx.Ready)
 	metrics.PrimeRoute()
 
 	// ── 热关停(killswitch)────────────────────────────────────────────
@@ -560,6 +560,7 @@ func runDataService(c config.Config) (runErr error) {
 	registrar := startNodeRegistration(c, regCli, func(nodeUUID string) {
 		svcCtx.BindRecallWorkMember(nodeUUID)
 		ks.AddInstance(nodeUUID) // 认 instance/<本进程 uuid>/ 下的热关停规则
+		svcCtx.MarkServing()     // 端口已经能接受连接、节点已注册:/readyz 才可能回就绪
 	})
 	stopAuxiliary = func(ctx context.Context) error {
 		ksCancel()
@@ -695,6 +696,10 @@ func runMigration(c config.Config) int {
 	}
 	fmt.Printf("schema migration OK: directory tables in place on %d shard(s), directory_shard and route_meta seeded; transaction_log, player_snapshot, rollback_audit_log synced from proto on %s\n",
 		cfg.LogicalShards, dirshard.LedgerDBName(cfg.DBName))
+	// 修复身份的授权是表级的,只落在执行时已存在的表上。迁移不回报建了哪些表,所以每次都提醒;只提醒、不执行:
+	// GRANT 要管理员账号,部署与迁移都不经手数据库管理口令(docs/ops/k8s-open-server-runbook.md 授权第 3 步)。
+	fmt.Printf("Reminder: repair principal grants are table-level and only cover tables that already exist. If this run opened a new directory shard, " +
+		"rerun maintenance_drain.ps1 -MaintenanceCommand render-repair-role with every directory shard in directorySchemas and apply its SQL on each cluster\n")
 	return 0
 }
 

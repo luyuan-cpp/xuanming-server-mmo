@@ -288,4 +288,28 @@ Test-Case 'login-alerts.yaml:login.role-list 组只有 LoginRoleListHomeZoneFall
     Assert-Equal -Expected 1 -Actual (@($all | Where-Object { $_ -ceq 'LoginRoleListHomeZoneFallbackSustained' })).Count -Because '告警名不重名'
 }
 
+Test-Case 'login-alerts.yaml:login.passport-session 组只有 LoginPassportSessionCheckFailing,引用的计数由刷新逻辑注册,result 取值是源码里的常量' {
+    $group = Get-AlertGroupText -Text $script:LoginAlerts -Group 'login.passport-session'
+    Assert-Match -Text $group -Pattern '(?m)^      interval:[ ]*30s[ ]*$' -Because '评估间隔'
+    $rules = @(Get-AlertRules -GroupText $group)
+    Assert-Equal -Expected 'LoginPassportSessionCheckFailing' -Actual ((@($rules | ForEach-Object { $_.Name }) | Sort-Object) -join ',') -Because '规则名单钉死'
+    $rule = $rules[0]
+    Assert-Match -Text $rule.Body -Pattern '(?m)^            severity:[ ]*warning[ ]*$' -Because '登录照常,只是改密 / 封禁踢不掉游戏登录'
+    foreach ($field in @('summary', 'description', 'runbook_url')) {
+        Assert-Match -Text $rule.Body -Pattern ('(?m)^            {0}:' -f $field) -Because "要有 $field"
+    }
+    Assert-Match -Text $rule.Body -Pattern '(?m)^          for:[ ]*10m[ ]*$' -Because '偶发超时不报,持续 10 分钟才报'
+    $expr = Get-RuleExpr -Body $rule.Body
+    Assert-Match -Text $expr -Pattern 'rate\(login_passport_session_check_total\{result="error"\}\[10m\]\)' -Because '分子是核对不了(照常续期)的那一档'
+    Assert-Match -Text $expr -Pattern '/ sum by \(namespace\) \(rate\(login_passport_session_check_total\[10m\]\)\) > 0\.5' -Because '按占比判,分母是全部核对'
+    $source = Read-RepoText -RelativePath 'go/login/internal/logic/clientplayerlogin/refreshtokenlogic.go'
+    Assert-Match -Text $source -Pattern 'Namespace:\s*"login",\s*Subsystem:\s*"passport",\s*Name:\s*"session_check_total",' -Because '计数由刷新逻辑注册(改名后告警静默失效)'
+    Assert-Match -Text $source -Pattern 'passportSessionCheckTotal\.Inc\("error"\)' -Because 'result="error" 是源码里核对不了时记的取值'
+
+    $all = @(Get-ChildItem -LiteralPath (Join-Path $script:RepoRoot 'deploy/k8s') -Filter '*-alerts.yaml' -File | ForEach-Object {
+            ([IO.File]::ReadAllText($_.FullName)) -replace "`r`n", "`n"
+        } | ForEach-Object { [regex]::Matches($_, '(?m)^\s+- alert:[ ]*(\S+)[ ]*$') } | ForEach-Object { $_.Groups[1].Value })
+    Assert-Equal -Expected 1 -Actual (@($all | Where-Object { $_ -ceq 'LoginPassportSessionCheckFailing' })).Count -Because '告警名不重名'
+}
+
 exit (Complete-TestRun -SuiteName 'gate_pick_alerts_contract')

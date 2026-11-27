@@ -55,7 +55,9 @@ message CheckTextRequest {
   TextScene scene = 1;
   string text = 2;       // 原文;超过服务配置的 MaxTextBytes 回 InvalidArgument
   uint64 player_id = 3;  // 填写者。本地词库不用它;平台接口按它查渠道身份。没有填写者(系统文本)填 0
-  string account = 4;    // 可选:填写者的渠道账号(如 wx_<openid> / dy_<openid>),调用方已有时直传以省一次目录回查
+  // 填写者的账号名,只在没有 player_id 时用(建角时角色还没发号):平台接口按它到目录查渠道身份。
+  // 账号名的后缀是 unionid,不是 openid,不能拿它直接调平台接口。
+  string account = 4;
   // async_platform: 为真时(如世界频道),本地词库通过后平台接口只在短超时内等待;
   // 超时未返回则先放行并置 pending_platform_review=true,调用方在后台调 CheckPlatformText 复检,违规再撤回。
   bool async_platform = 5;

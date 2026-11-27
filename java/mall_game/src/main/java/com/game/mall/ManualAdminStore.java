@@ -32,6 +32,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <p>锁序与交易、付款、交付、扣回路径保持完全一致，防止死锁成环：
  * commerce_admin_command(actor, request_id) → oms_order(order_sn) → 付款回执 / 交付待办 / 扣回待办 / 退款待办 / 寄售单 → commerce_seller_guard → commerce_seller_income。
  * 每次处置都在同一事务内写入 commerce_admin_command 幂等日志，失败自动回滚，同 requestId 重放返回原提交快照。
+ * 后台下发的处置带双人复核批准记录,请求号就是批准号,发起人与批准人写进同一行(docs/design/admin-identity-and-dual-control.md §5.8)。
  */
 @Repository
 @DependsOn("commerceSchemaReady")
@@ -655,7 +656,7 @@ public class ManualAdminStore {
         String actor,
         String requestId,
         String kind,
-        Object input,
+        AdminApproval.Command input,
         String targetType,
         String targetId,
         Supplier<ManualAdminApi.Resolution> mutation) {
@@ -667,12 +668,15 @@ public class ManualAdminStore {
         byte[] actorKey = ascii(actor);
         byte[] requestKey = ascii(requestId);
         String pending = "pending:" + UUID.randomUUID();
+        AdminApproval approval = input.approval();
         try {
             return Objects.requireNonNull(tx.execute(status -> {
+                // 发起人、批准人随命令行落库(批准记录已在控制器核过);摘要覆盖整份请求,同号重放时两列不会变。
                 jdbc.update(
-                    "INSERT INTO commerce_admin_command(actor,request_id,command_type,request_digest,result_json,created_ms) "
-                        + "VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE request_id=request_id",
-                    actorKey, requestKey, kind, digest, pending, clock.millis());
+                    "INSERT INTO commerce_admin_command(actor,request_id,command_type,request_digest,result_json,created_ms,proposer,approver) "
+                        + "VALUES(?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE request_id=request_id",
+                    actorKey, requestKey, kind, digest, pending, clock.millis(),
+                    approval == null ? null : ascii(approval.proposer()), approval == null ? null : ascii(approval.approver()));
                 var rows = jdbc.queryForList(
                     "SELECT command_type,request_digest,result_json FROM commerce_admin_command WHERE actor=? AND request_id=? FOR UPDATE",
                     actorKey, requestKey);

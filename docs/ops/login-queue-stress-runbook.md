@@ -223,6 +223,7 @@ login:Login rejected: the gate ticket of this connection was issued to another a
 - 第一行:看 `login_assign_gate_auth_total{result="rejected_anonymous"}` 在不在涨。压测 robot 没开 `use_http_login`,或跑的是冒烟场景(只能在排队关着的环境跑)。真实客户端不会走到这里(Unity 先登录再分配)。
 - 第二行:拿 A 账号的票、在 gate 上用 B 账号登录。正常客户端不会这样做;成批出现说明有人在转手票据或令牌。按 `account` 与 `session_id` 查是哪个账号、哪条连接,不用改配置,这一行本身就是防线生效。
 - 两者都不是故障:不要为了让它们消失去关 `Queue.Enabled` 或开匿名分配。
+- 同一类的 gate 侧信号:gate 日志采样行 `reason=token_in_use`(同一张票在已有一条活着的连接时又来验签,被拒)与 `[ClientHeartbeat] summary` 的 `login_timeouts`(验签满 60 秒仍未登录成功,被关)。真实客户端两者都是 0;压测里出现先查 robot 是否复用了旧票、验签后有没有立即登录,成批出现就是有人拿一张票开很多条连接占 gate 人数(设计稿 §5「一张票只开一条连接、验签后限时登录」)。`stress_summarize.ps1` 的「Gate client heartbeat」段会列出 `login_timeouts`。
 
 ---
 

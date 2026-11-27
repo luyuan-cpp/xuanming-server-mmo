@@ -5172,6 +5172,11 @@ type MatchTournamentRewardRecord struct {
 	MailId        uint64                 `protobuf:"varint,13,opt,name=mail_id,json=mailId,proto3" json:"mail_id,omitempty"`
 	ClaimedMs     uint64                 `protobuf:"varint,14,opt,name=claimed_ms,json=claimedMs,proto3" json:"claimed_ms,omitempty"`
 	UpdatedMs     uint64                 `protobuf:"varint,15,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	// 结算时冻结的领奖邮件标题与正文(取当时的 TournamentReward 配表,空则缺省文案)。领奖重发只用这两列,
+	// 同一条奖励每次的邮件请求逐字节相同,mail 按 (sender_kind, request_id) 判重回原 mail_id
+	// (群仙问道赛设计 V1 第七节,数据覆写审计 r2 第 4 轮)。
+	MailTitle     string `protobuf:"bytes,16,opt,name=mail_title,json=mailTitle,proto3" json:"mail_title,omitempty"`
+	MailBody      string `protobuf:"bytes,17,opt,name=mail_body,json=mailBody,proto3" json:"mail_body,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5309,6 +5314,20 @@ func (x *MatchTournamentRewardRecord) GetUpdatedMs() uint64 {
 		return x.UpdatedMs
 	}
 	return 0
+}
+
+func (x *MatchTournamentRewardRecord) GetMailTitle() string {
+	if x != nil {
+		return x.MailTitle
+	}
+	return ""
+}
+
+func (x *MatchTournamentRewardRecord) GetMailBody() string {
+	if x != nil {
+		return x.MailBody
+	}
+	return ""
 }
 
 // V3: 淘汰赛免费神机竞猜表(主键 (season_id, player_id, match_id) 物理保证一人一场一票,零消费零押注)。
@@ -5956,98 +5975,6 @@ func (x *MatchGrudgeLogRecord) GetFinishedMs() uint64 {
 	return 0
 }
 
-type MatchJianghuRefundRecord struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	DuelInviteId  uint64                 `protobuf:"varint,1,opt,name=duel_invite_id,json=duelInviteId,proto3" json:"duel_invite_id,omitempty"`
-	BattleId      uint64                 `protobuf:"varint,2,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
-	PayerPlayerId uint64                 `protobuf:"varint,3,opt,name=payer_player_id,json=payerPlayerId,proto3" json:"payer_player_id,omitempty"`
-	WritTier      uint32                 `protobuf:"varint,4,opt,name=writ_tier,json=writTier,proto3" json:"writ_tier,omitempty"`
-	RefundMailId  uint64                 `protobuf:"varint,5,opt,name=refund_mail_id,json=refundMailId,proto3" json:"refund_mail_id,omitempty"`
-	Reason        string                 `protobuf:"bytes,6,opt,name=reason,proto3" json:"reason,omitempty"`
-	CreatedMs     uint64                 `protobuf:"varint,7,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *MatchJianghuRefundRecord) Reset() {
-	*x = MatchJianghuRefundRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[49]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *MatchJianghuRefundRecord) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MatchJianghuRefundRecord) ProtoMessage() {}
-
-func (x *MatchJianghuRefundRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[49]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MatchJianghuRefundRecord.ProtoReflect.Descriptor instead.
-func (*MatchJianghuRefundRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{49}
-}
-
-func (x *MatchJianghuRefundRecord) GetDuelInviteId() uint64 {
-	if x != nil {
-		return x.DuelInviteId
-	}
-	return 0
-}
-
-func (x *MatchJianghuRefundRecord) GetBattleId() uint64 {
-	if x != nil {
-		return x.BattleId
-	}
-	return 0
-}
-
-func (x *MatchJianghuRefundRecord) GetPayerPlayerId() uint64 {
-	if x != nil {
-		return x.PayerPlayerId
-	}
-	return 0
-}
-
-func (x *MatchJianghuRefundRecord) GetWritTier() uint32 {
-	if x != nil {
-		return x.WritTier
-	}
-	return 0
-}
-
-func (x *MatchJianghuRefundRecord) GetRefundMailId() uint64 {
-	if x != nil {
-		return x.RefundMailId
-	}
-	return 0
-}
-
-func (x *MatchJianghuRefundRecord) GetReason() string {
-	if x != nil {
-		return x.Reason
-	}
-	return ""
-}
-
-func (x *MatchJianghuRefundRecord) GetCreatedMs() uint64 {
-	if x != nil {
-		return x.CreatedMs
-	}
-	return 0
-}
-
 // 五行试炼志 V3：好友约战帖权威存储（最多每人 10 张，14 天有效，与 match_battle_report.ref_count 联动钉住录像）。
 type MatchTrialChallengeCardRecord struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
@@ -6066,7 +5993,7 @@ type MatchTrialChallengeCardRecord struct {
 
 func (x *MatchTrialChallengeCardRecord) Reset() {
 	*x = MatchTrialChallengeCardRecord{}
-	mi := &file_proto_match_match_authority_proto_msgTypes[50]
+	mi := &file_proto_match_match_authority_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6078,7 +6005,7 @@ func (x *MatchTrialChallengeCardRecord) String() string {
 func (*MatchTrialChallengeCardRecord) ProtoMessage() {}
 
 func (x *MatchTrialChallengeCardRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_match_match_authority_proto_msgTypes[50]
+	mi := &file_proto_match_match_authority_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6091,7 +6018,7 @@ func (x *MatchTrialChallengeCardRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchTrialChallengeCardRecord.ProtoReflect.Descriptor instead.
 func (*MatchTrialChallengeCardRecord) Descriptor() ([]byte, []int) {
-	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{50}
+	return file_proto_match_match_authority_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *MatchTrialChallengeCardRecord) GetCardId() uint64 {
@@ -6728,7 +6655,7 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\bsquad_id\x18\x03 \x01(\x04R\asquadId\x12\x1a\n" +
 	"\brewarded\x18\x04 \x01(\bR\brewarded\x12\x1d\n" +
 	"\n" +
-	"created_ms\x18\x05 \x01(\x04R\tcreatedMs:T\x8a\x92\xf4\x01\x16match_tournament_cheer\x92\x92\xf4\x01\x13season_id,player_idڒ\xf4\x01\x1cseason_id,squad_id,player_id\"\xea\x04\n" +
+	"created_ms\x18\x05 \x01(\x04R\tcreatedMs:T\x8a\x92\xf4\x01\x16match_tournament_cheer\x92\x92\xf4\x01\x13season_id,player_idڒ\xf4\x01\x1cseason_id,squad_id,player_id\"\xa6\x05\n" +
 	"\x1bMatchTournamentRewardRecord\x12\x1b\n" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x1b\n" +
@@ -6751,7 +6678,10 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\n" +
 	"claimed_ms\x18\x0e \x01(\x04R\tclaimedMs\x12\x1d\n" +
 	"\n" +
-	"updated_ms\x18\x0f \x01(\x04R\tupdatedMs:\x84\x01\x8a\x92\xf4\x01\x17match_tournament_reward\x92\x92\xf4\x01\x1dseason_id,player_id,tier_kindڒ\xf4\x01Aplayer_id,season_id,tier_kind;delivery_state,updated_ms,reward_id\"\xa1\x04\n" +
+	"updated_ms\x18\x0f \x01(\x04R\tupdatedMs\x12\x1d\n" +
+	"\n" +
+	"mail_title\x18\x10 \x01(\tR\tmailTitle\x12\x1b\n" +
+	"\tmail_body\x18\x11 \x01(\tR\bmailBody:\x84\x01\x8a\x92\xf4\x01\x17match_tournament_reward\x92\x92\xf4\x01\x1dseason_id,player_id,tier_kindڒ\xf4\x01Aplayer_id,season_id,tier_kind;delivery_state,updated_ms,reward_id\"\xa1\x04\n" +
 	"\x1fMatchTournamentPredictionRecord\x12\x1b\n" +
 	"\tseason_id\x18\x01 \x01(\rR\bseasonId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x19\n" +
@@ -6828,16 +6758,7 @@ const file_proto_match_match_authority_proto_rawDesc = "" +
 	"\twrit_tier\x18\a \x01(\rR\bwritTier\x12\x1b\n" +
 	"\tteam_size\x18\b \x01(\rR\bteamSize\x12\x1f\n" +
 	"\vfinished_ms\x18\t \x01(\x04R\n" +
-	"finishedMs:\x92\x01\x8a\x92\xf4\x01\x10match_grudge_log\x92\x92\xf4\x011player_id,owner_revision,peer_player_id,battle_idڒ\xf4\x013player_id,owner_revision,peer_player_id,finished_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xbc\x02\n" +
-	"\x18MatchJianghuRefundRecord\x12$\n" +
-	"\x0eduel_invite_id\x18\x01 \x01(\x04R\fduelInviteId\x12\x1b\n" +
-	"\tbattle_id\x18\x02 \x01(\x04R\bbattleId\x12&\n" +
-	"\x0fpayer_player_id\x18\x03 \x01(\x04R\rpayerPlayerId\x12\x1b\n" +
-	"\twrit_tier\x18\x04 \x01(\rR\bwritTier\x12$\n" +
-	"\x0erefund_mail_id\x18\x05 \x01(\x04R\frefundMailId\x12\x16\n" +
-	"\x06reason\x18\x06 \x01(\tR\x06reason\x12\x1d\n" +
-	"\n" +
-	"created_ms\x18\a \x01(\x04R\tcreatedMs:;\x8a\x92\xf4\x01\x14match_jianghu_refund\x92\x92\xf4\x01\x0eduel_invite_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xb6\x03\n" +
+	"finishedMs:\x92\x01\x8a\x92\xf4\x01\x10match_grudge_log\x92\x92\xf4\x011player_id,owner_revision,peer_player_id,battle_idڒ\xf4\x013player_id,owner_revision,peer_player_id,finished_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xb6\x03\n" +
 	"\x1dMatchTrialChallengeCardRecord\x12\x17\n" +
 	"\acard_id\x18\x01 \x01(\x04R\x06cardId\x12&\n" +
 	"\x0fowner_player_id\x18\x02 \x01(\x04R\rownerPlayerId\x12\x1b\n" +
@@ -6873,7 +6794,7 @@ func file_proto_match_match_authority_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_match_match_authority_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_match_match_authority_proto_msgTypes = make([]protoimpl.MessageInfo, 51)
+var file_proto_match_match_authority_proto_msgTypes = make([]protoimpl.MessageInfo, 50)
 var file_proto_match_match_authority_proto_goTypes = []any{
 	(MatchBattleCompletionSourceKind)(0),       // 0: match.MatchBattleCompletionSourceKind
 	(*MatchNetworkProfile)(nil),                // 1: match.MatchNetworkProfile
@@ -6925,24 +6846,23 @@ var file_proto_match_match_authority_proto_goTypes = []any{
 	(*MatchJianghuDuelCooldownRecord)(nil),     // 47: match.MatchJianghuDuelCooldownRecord
 	(*MatchGrudgeRelationRecord)(nil),          // 48: match.MatchGrudgeRelationRecord
 	(*MatchGrudgeLogRecord)(nil),               // 49: match.MatchGrudgeLogRecord
-	(*MatchJianghuRefundRecord)(nil),           // 50: match.MatchJianghuRefundRecord
-	(*MatchTrialChallengeCardRecord)(nil),      // 51: match.MatchTrialChallengeCardRecord
-	(*NetworkProbeReceipt)(nil),                // 52: match.NetworkProbeReceipt
-	(BattleOutcomeDecision)(0),                 // 53: match.BattleOutcomeDecision
-	(StrandedFormationMode)(0),                 // 54: match.StrandedFormationMode
-	(StrandedFormationClass)(0),                // 55: match.StrandedFormationClass
+	(*MatchTrialChallengeCardRecord)(nil),      // 50: match.MatchTrialChallengeCardRecord
+	(*NetworkProbeReceipt)(nil),                // 51: match.NetworkProbeReceipt
+	(BattleOutcomeDecision)(0),                 // 52: match.BattleOutcomeDecision
+	(StrandedFormationMode)(0),                 // 53: match.StrandedFormationMode
+	(StrandedFormationClass)(0),                // 54: match.StrandedFormationClass
 }
 var file_proto_match_match_authority_proto_depIdxs = []int32{
-	52, // 0: match.MatchNetworkProfile.receipts:type_name -> match.NetworkProbeReceipt
+	51, // 0: match.MatchNetworkProfile.receipts:type_name -> match.NetworkProbeReceipt
 	2,  // 1: match.MatchDirectIntentRecord.spectator_exits:type_name -> match.MatchSpectatorRecord
 	14, // 2: match.MatchDirectStartOriginal.formation:type_name -> match.MatchFormationRecord
 	6,  // 3: match.MatchDirectStartOriginal.tickets:type_name -> match.MatchAuthorityTicketRecord
 	13, // 4: match.MatchFormationRecord.members:type_name -> match.MatchFormationMember
 	15, // 5: match.MatchFormationRecord.prepared:type_name -> match.MatchPreparedEndpoint
-	53, // 6: match.MatchBattleCompletionRecord.decision:type_name -> match.BattleOutcomeDecision
+	52, // 6: match.MatchBattleCompletionRecord.decision:type_name -> match.BattleOutcomeDecision
 	0,  // 7: match.MatchBattleCompletionRecord.source_kind:type_name -> match.MatchBattleCompletionSourceKind
-	54, // 8: match.MatchManualResolutionRecord.action:type_name -> match.StrandedFormationMode
-	55, // 9: match.MatchManualResolutionRecord.formation_class:type_name -> match.StrandedFormationClass
+	53, // 8: match.MatchManualResolutionRecord.action:type_name -> match.StrandedFormationMode
+	54, // 9: match.MatchManualResolutionRecord.formation_class:type_name -> match.StrandedFormationClass
 	6,  // 10: match.MatchManualResolutionRecord.tickets_before:type_name -> match.MatchAuthorityTicketRecord
 	39, // 11: match.MatchTournamentChampionMembersBlob.members:type_name -> match.MatchTournamentMemberRecord
 	12, // [12:12] is the sub-list for method output_type
@@ -6965,7 +6885,7 @@ func file_proto_match_match_authority_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_match_match_authority_proto_rawDesc), len(file_proto_match_match_authority_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   51,
+			NumMessages:   50,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

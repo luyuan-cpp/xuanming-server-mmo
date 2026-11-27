@@ -3,6 +3,7 @@ package logic
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -83,6 +84,36 @@ func TestGuildWarBundleAndGarrisonSnapshot(t *testing.T) {
 	require.Equal(t, uint32(1), snap.GetTeamIndex())
 	require.NotNil(t, snap.GetBaseAttributes())
 	require.Greater(t, snap.GetMaxHealth(), uint64(0))
+}
+
+// r2-gw#1:客户端的 leyline_id 只在打守旗阵时采信,bounty_id 只在追杀榜直打时采信;直打活人 / 野外直打 / 一键开战一律丢弃,
+// 由服务端按目标推(野外按目标所在场景推灵脉,直打活人按目标自动挂钩追杀令)。
+func TestClientWarTargetHintsTrustsOnlyTheFieldOfItsOwnKind(t *testing.T) {
+	req := &pb.StartGuildWarBattleRequest{LeylineId: 2, BountyId: 424242, TargetPlayerId: 7}
+	cases := []struct {
+		kind        pb.GuildWarTargetKind
+		wantLeyline uint32
+		wantBounty  uint64
+	}{
+		{pb.GuildWarTargetKind_GUILD_WAR_TARGET_KIND_LEYLINE_GARRISON, 2, 0},
+		{pb.GuildWarTargetKind_GUILD_WAR_TARGET_KIND_BOUNTY, 0, 424242},
+		{pb.GuildWarTargetKind_GUILD_WAR_TARGET_KIND_LIVE_PLAYER, 0, 0},
+		{pb.GuildWarTargetKind_GUILD_WAR_TARGET_KIND_FIELD_PLAYER, 0, 0},
+		{pb.GuildWarTargetKind_GUILD_WAR_TARGET_KIND_QUICK_AUTO, 0, 0},
+		{pb.GuildWarTargetKind_GUILD_WAR_TARGET_KIND_UNSPECIFIED, 0, 0},
+	}
+	for _, tc := range cases {
+		leyline, bounty := clientWarTargetHints(tc.kind, req)
+		require.Equal(t, tc.wantLeyline, leyline, tc.kind.String())
+		require.Equal(t, tc.wantBounty, bounty, tc.kind.String())
+	}
+}
+
+func TestWarBountyExpiryEveryRoundsFoldsToAboutOneMinute(t *testing.T) {
+	require.Equal(t, 6, warBountyExpiryEveryRounds(10*time.Second))
+	require.Equal(t, 60, warBountyExpiryEveryRounds(time.Second))
+	require.Equal(t, 1, warBountyExpiryEveryRounds(time.Minute))
+	require.Equal(t, 1, warBountyExpiryEveryRounds(0))
 }
 
 func TestGuildWarRPCsFailClosedWithoutSessionOrWarDeps(t *testing.T) {

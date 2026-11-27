@@ -515,7 +515,8 @@ const (
 	GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_ACTIVE         GuildWarBountyStatus = 2 // 追杀中
 	GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_COMPLETED      GuildWarBountyStatus = 3 // 追杀成功已销单
 	GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_TORN_BY_TARGET GuildWarBountyStatus = 4 // 目标反杀 2 人撕单
-	GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_EXPIRED        GuildWarBountyStatus = 5 // 24h 过期退本
+	GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_EXPIRED        GuildWarBountyStatus = 5 // 24h 过期退本(只表示到期且托管已原路退回)
+	GuildWarBountyStatus_GUILD_WAR_BOUNTY_STATUS_ESCROW_FAILED  GuildWarBountyStatus = 6 // 预扣银两没扣成(被拒 / 中止 / 放弃),追杀令作废,没有托管可退
 )
 
 // Enum value maps for GuildWarBountyStatus.
@@ -527,6 +528,7 @@ var (
 		3: "GUILD_WAR_BOUNTY_STATUS_COMPLETED",
 		4: "GUILD_WAR_BOUNTY_STATUS_TORN_BY_TARGET",
 		5: "GUILD_WAR_BOUNTY_STATUS_EXPIRED",
+		6: "GUILD_WAR_BOUNTY_STATUS_ESCROW_FAILED",
 	}
 	GuildWarBountyStatus_value = map[string]int32{
 		"GUILD_WAR_BOUNTY_STATUS_UNSPECIFIED":    0,
@@ -535,6 +537,7 @@ var (
 		"GUILD_WAR_BOUNTY_STATUS_COMPLETED":      3,
 		"GUILD_WAR_BOUNTY_STATUS_TORN_BY_TARGET": 4,
 		"GUILD_WAR_BOUNTY_STATUS_EXPIRED":        5,
+		"GUILD_WAR_BOUNTY_STATUS_ESCROW_FAILED":  6,
 	}
 )
 
@@ -9749,14 +9752,15 @@ const file_proto_guild_guild_proto_rawDesc = "" +
 	"!GUILD_WAR_BOUNTY_TIER_UNSPECIFIED\x10\x00\x12'\n" +
 	"#GUILD_WAR_BOUNTY_TIER_NORMAL_SILVER\x10\x01\x12&\n" +
 	"\"GUILD_WAR_BOUNTY_TIER_HEAVY_SILVER\x10\x02\x12&\n" +
-	"\"GUILD_WAR_BOUNTY_TIER_GUILD_PUBLIC\x10\x03*\x87\x02\n" +
+	"\"GUILD_WAR_BOUNTY_TIER_GUILD_PUBLIC\x10\x03*\xb2\x02\n" +
 	"\x14GuildWarBountyStatus\x12'\n" +
 	"#GUILD_WAR_BOUNTY_STATUS_UNSPECIFIED\x10\x00\x12*\n" +
 	"&GUILD_WAR_BOUNTY_STATUS_ESCROW_PENDING\x10\x01\x12\"\n" +
 	"\x1eGUILD_WAR_BOUNTY_STATUS_ACTIVE\x10\x02\x12%\n" +
 	"!GUILD_WAR_BOUNTY_STATUS_COMPLETED\x10\x03\x12*\n" +
 	"&GUILD_WAR_BOUNTY_STATUS_TORN_BY_TARGET\x10\x04\x12#\n" +
-	"\x1fGUILD_WAR_BOUNTY_STATUS_EXPIRED\x10\x05*\x87\x03\n" +
+	"\x1fGUILD_WAR_BOUNTY_STATUS_EXPIRED\x10\x05\x12)\n" +
+	"%GUILD_WAR_BOUNTY_STATUS_ESCROW_FAILED\x10\x06*\x87\x03\n" +
 	"\x11GuildWarAlertKind\x12$\n" +
 	" GUILD_WAR_ALERT_KIND_UNSPECIFIED\x10\x00\x12,\n" +
 	"(GUILD_WAR_ALERT_KIND_LEYLINE_UNDER_SIEGE\x10\x01\x12)\n" +

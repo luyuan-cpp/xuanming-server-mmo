@@ -27,7 +27,6 @@ import (
 const (
 	tournamentMailSenderKind uint32 = 6 // 对应 go/mail SenderKind("match") = 6
 	tournamentMailCaller            = "match"
-	tournamentMailTTLMs      uint64 = 30 * 24 * 3600 * 1000
 	tournamentLoopInterval          = 5 * time.Second
 )
 
@@ -400,72 +399,93 @@ func (l *TournamentLogic) ClaimTournamentReward(in *matchpb.ClaimTournamentRewar
 	if playerID == 0 || l.svcCtx == nil || l.svcCtx.Authority == nil {
 		return &matchpb.ClaimTournamentRewardResponse{ErrorMessage: tournamentTip(constants.ErrInternal)}, nil
 	}
-	pending, err := l.svcCtx.Authority.ClaimableTournamentRewards(l.ctx, playerID, in.GetSeasonId())
+	return claimTournamentRewards(l.ctx, l.svcCtx.Authority, l.svcCtx.MailAdmin, l.svcCtx.MailSecret, playerID, in.GetSeasonId()), nil
+}
+
+// tournamentRewardStore 是领奖用到的两条权威读写,生产由 *authority.Store 实现;抽出来只为单测换内存替身。
+type tournamentRewardStore interface {
+	ClaimableTournamentRewards(ctx context.Context, playerID uint64, seasonID uint32) ([]*matchpb.MatchTournamentRewardRecord, error)
+	MarkTournamentRewardClaimed(ctx context.Context, seasonID uint32, playerID uint64, tierKind uint32, mailID uint64) (*matchpb.TournamentPlayerRewardView, error)
+}
+
+// claimTournamentRewards 逐条领取玩家待领的锦标赛奖励(群仙问道赛设计 V1 第七节,数据覆写审计 r2 第 4 轮):
+//   - 带附件的奖励只经邮件发:发件没装配就回内部错误、行保持可领取,不把附件吞成「已领取」;不带附件的荣誉奖励直接落已领取;
+//   - 邮件请求只由奖励行决定(tournamentRewardMailRequest),重领逐字节同一请求,mail 判重回原 mail_id;
+//   - 一条失败不挡其余:成功的照常落已领取,响应带回已领取的部分与第一条失败的提示。
+func claimTournamentRewards(ctx context.Context, store tournamentRewardStore, mail mailpb.MailAdminClient, mailSecret string, playerID uint64, seasonID uint32) *matchpb.ClaimTournamentRewardResponse {
+	pending, err := store.ClaimableTournamentRewards(ctx, playerID, seasonID)
 	if err != nil {
-		l.Errorf("[tournament] ClaimableTournamentRewards failed player=%d: %v", playerID, err)
-		return &matchpb.ClaimTournamentRewardResponse{ErrorMessage: tournamentTip(constants.ErrInternal)}, nil
+		logx.WithContext(ctx).Errorf("[tournament] ClaimableTournamentRewards failed player=%d: %v", playerID, err)
+		return &matchpb.ClaimTournamentRewardResponse{ErrorMessage: tournamentTip(constants.ErrInternal)}
 	}
 	if len(pending) == 0 {
-		return &matchpb.ClaimTournamentRewardResponse{ErrorMessage: tournamentTip(constants.ErrTournamentRewardUnavailable)}, nil
+		return &matchpb.ClaimTournamentRewardResponse{ErrorMessage: tournamentTip(constants.ErrTournamentRewardUnavailable)}
 	}
-	cat := l.svcCtx.ActiveTournament()
 	claimed := make([]*matchpb.TournamentPlayerRewardView, 0, len(pending))
+	failedTip := uint32(0)
 	for _, r := range pending {
-		mailID := uint64(0)
-		// 若配置了 MailAdminClient,走既有幂等个人邮件投递附件(request_id = reward_id 绝不重发);
-		// 未配置时仍幂等落账已领取状态供本地/测试与荣誉展示。
-		if l.svcCtx.MailAdmin != nil && l.svcCtx.MailSecret != "" {
-			var atts mailpb.MailAttachments
-			if len(r.Attachments) > 0 {
-				if err := proto.Unmarshal(r.Attachments, &atts); err != nil {
-					l.Errorf("[tournament] Corrupt attachments for reward=%d: %v", r.RewardId, err)
-					return &matchpb.ClaimTournamentRewardResponse{ErrorMessage: tournamentTip(constants.ErrInternal)}, nil
-				}
+		view, tip := claimOneTournamentReward(ctx, store, mail, mailSecret, playerID, r)
+		if tip != 0 {
+			if failedTip == 0 {
+				failedTip = tip
 			}
-			title := "群仙问道赛赛季奖励"
-			body := "本赛季群仙问道赛奖励已结算，请查收附件。"
-			if tierRow, ok := cat.RewardByID(r.TierId); ok {
-				if tierRow.GetMailTitle() != "" {
-					title = tierRow.GetMailTitle()
-				}
-				if tierRow.GetMailBody() != "" {
-					body = tierRow.GetMailBody()
-				}
-			}
-			nowMs := uint64(time.Now().UnixMilli())
-			mailReq := &mailpb.SendMailRequest{
-				SenderKind:        tournamentMailSenderKind,
-				RequestId:         r.RewardId,
-				RecipientPlayerId: playerID,
-				Title:             title,
-				Body:              body,
-				Attachments:       &atts,
-				ExpireMs:          nowMs + tournamentMailTTLMs,
-			}
-			if err := serviceauth.Sign(mailpb.MailAdmin_SendPersonalMail_FullMethodName, mailReq, tournamentMailCaller, l.svcCtx.MailSecret, nowMs); err != nil {
-				l.Errorf("[tournament] Sign SendPersonalMail failed reward=%d: %v", r.RewardId, err)
-				return &matchpb.ClaimTournamentRewardResponse{ErrorMessage: tournamentTip(constants.ErrInternal)}, nil
-			}
-			callCtx, cancel := context.WithTimeout(l.ctx, 2*time.Second)
-			mailResp, callErr := l.svcCtx.MailAdmin.SendPersonalMail(callCtx, mailReq)
-			cancel()
-			if callErr != nil || mailResp.GetErrorMessage().GetId() != 0 || mailResp.GetMailId() == 0 {
-				l.Errorf("[tournament] SendPersonalMail failed reward=%d tip=%d err=%v", r.RewardId, mailResp.GetErrorMessage().GetId(), callErr)
-				return &matchpb.ClaimTournamentRewardResponse{ErrorMessage: tournamentTip(constants.ErrInternal)}, nil
-			}
-			mailID = mailResp.GetMailId()
+			continue
 		}
-		v, err := l.svcCtx.Authority.MarkTournamentRewardClaimed(l.ctx, r.SeasonId, playerID, r.TierKind, mailID)
-		if err != nil {
-			l.Errorf("[tournament] MarkTournamentRewardClaimed failed reward=%d: %v", r.RewardId, err)
-			return &matchpb.ClaimTournamentRewardResponse{ErrorMessage: tournamentTip(constants.ErrInternal)}, nil
-		}
-		claimed = append(claimed, v)
+		claimed = append(claimed, view)
 	}
-	return &matchpb.ClaimTournamentRewardResponse{
-		ErrorMessage:   tournamentTip(0),
-		ClaimedRewards: claimed,
-	}, nil
+	return &matchpb.ClaimTournamentRewardResponse{ErrorMessage: tournamentTip(failedTip), ClaimedRewards: claimed}
+}
+
+// claimOneTournamentReward 领一条奖励,失败回 tip(行保持可领取,玩家重领即补)。只有确认邮件已建(拿到 mail_id)才落已领取:
+// 超时、断连、被拒、请求冲突一律不落,不把「结果不明」当「已发送」。
+func claimOneTournamentReward(ctx context.Context, store tournamentRewardStore, mail mailpb.MailAdminClient, mailSecret string, playerID uint64, r *matchpb.MatchTournamentRewardRecord) (*matchpb.TournamentPlayerRewardView, uint32) {
+	logger := logx.WithContext(ctx)
+	var atts mailpb.MailAttachments
+	if err := proto.Unmarshal(r.Attachments, &atts); err != nil {
+		logger.Errorf("[tournament] Corrupt attachments for reward=%d: %v", r.RewardId, err)
+		return nil, constants.ErrInternal
+	}
+	mailID := uint64(0)
+	if len(atts.GetCurrencies())+len(atts.GetItems()) > 0 {
+		if mail == nil || mailSecret == "" {
+			logger.Errorf("[tournament] Mail delivery is not configured (MailRpc / MailSecretEnv); reward=%d stays claimable", r.RewardId)
+			return nil, constants.ErrInternal
+		}
+		mailReq := tournamentRewardMailRequest(r, &atts)
+		nowMs := uint64(time.Now().UnixMilli())
+		if err := serviceauth.Sign(mailpb.MailAdmin_SendPersonalMail_FullMethodName, mailReq, tournamentMailCaller, mailSecret, nowMs); err != nil {
+			logger.Errorf("[tournament] Sign SendPersonalMail failed reward=%d: %v", r.RewardId, err)
+			return nil, constants.ErrInternal
+		}
+		callCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		mailResp, callErr := mail.SendPersonalMail(callCtx, mailReq)
+		cancel()
+		if callErr != nil || mailResp.GetErrorMessage().GetId() != 0 || mailResp.GetMailId() == 0 {
+			logger.Errorf("[tournament] SendPersonalMail failed reward=%d tip=%d err=%v; reward stays claimable", r.RewardId, mailResp.GetErrorMessage().GetId(), callErr)
+			return nil, constants.ErrInternal
+		}
+		mailID = mailResp.GetMailId()
+	}
+	view, err := store.MarkTournamentRewardClaimed(ctx, r.SeasonId, playerID, r.TierKind, mailID)
+	if err != nil {
+		logger.Errorf("[tournament] MarkTournamentRewardClaimed failed reward=%d mail=%d: %v", r.RewardId, mailID, err)
+		return nil, constants.ErrInternal
+	}
+	return view, 0
+}
+
+// tournamentRewardMailRequest 只由奖励行构造领奖邮件请求:文案取结算时冻结在行里的值(不读当前配表),ExpireMs 不填
+// (mail 首次落库时按 MaxPersonalMailTtlDays 算)。同一条奖励每次重领逐字节相同,mail 的 (sender_kind, request_id) 判重
+// 先于一切依赖当前时间的校验,邮件已建而已领取没落定时重领回原 mail_id,不会撞成请求冲突。
+func tournamentRewardMailRequest(r *matchpb.MatchTournamentRewardRecord, atts *mailpb.MailAttachments) *mailpb.SendMailRequest {
+	return &mailpb.SendMailRequest{
+		SenderKind:        tournamentMailSenderKind,
+		RequestId:         r.RewardId,
+		RecipientPlayerId: r.PlayerId,
+		Title:             r.MailTitle,
+		Body:              r.MailBody,
+		Attachments:       atts,
+	}
 }
 
 // SendTournamentSpectateCheer V2 观战底部预设喝彩(严格白名单 1..6 + 5 秒冷却 + 全 L0/L1/L2 观众通用)。

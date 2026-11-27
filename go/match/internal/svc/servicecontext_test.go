@@ -126,3 +126,17 @@ func TestStopAndReportHoldsWhenResultLagProbeDoesNotExit(t *testing.T) {
 	sc.RelayAdmission.CloseAdmission()
 	require.ErrorIs(t, sc.RelayAdmission.Wait(context.Background()), drainproof.ErrHold)
 }
+
+// 锦标赛奖励的附件只经邮件发(数据覆写审计 r2 第 4 轮):非 dev / test 档开着锦标赛就必须装配 MailRpc 与发件密钥,
+// 否则领奖只会一直回内部错误;dev / test 与关着锦标赛时放行(领奖本身照样 fail-closed)。
+func TestRequireTournamentMailRefusesUnwiredProduction(t *testing.T) {
+	secret := strings.Repeat("s", 32)
+	require.NoError(t, requireTournamentMail("pro", true, true, secret), "装配齐全放行")
+	require.Error(t, requireTournamentMail("pro", true, false, secret), "没配 MailRpc 拒启")
+	require.Error(t, requireTournamentMail("pro", true, true, ""), "没注入发件密钥拒启")
+	require.Error(t, requireTournamentMail("pre", true, true, strings.Repeat("s", 31)), "不足 32 字节等于没配")
+	require.NoError(t, requireTournamentMail("pro", false, false, ""), "锦标赛关着不要求发件")
+	for _, mode := range []string{"dev", "test"} {
+		require.NoError(t, requireTournamentMail(mode, true, false, ""), "%s 档放行", mode)
+	}
+}

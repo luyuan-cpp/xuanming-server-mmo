@@ -37,7 +37,9 @@ func Tables() []proto.Message {
 		&pb.MatchBattleScriptRecord{}, &pb.MatchBattleScriptReviewRecord{}, &pb.MatchBattleScriptLoadoutRecord{}, // 战斗剧本(battle_script.go)
 		&pb.MatchRankedSeasonRecord{}, &pb.MatchRankedPlayerPrefsRecord{}, &pb.MatchRankedPlayerSeasonRecord{}, &pb.MatchRankedRewardRecord{}, &pb.MatchRankedBattleRecord{}, &pb.MatchRankedRivalryRecord{}, &pb.MatchRankedFeaturedBuildRecord{}, // 论剑排位(ranked.go)
 		&pb.MatchTournamentSeasonRecord{}, &pb.MatchTournamentSquadRecord{}, &pb.MatchTournamentMemberRecord{}, &pb.MatchTournamentInviteRecord{}, &pb.MatchTournamentMatchRecord{}, &pb.MatchTournamentMatchGameRecord{}, &pb.MatchTournamentCheerRecord{}, &pb.MatchTournamentRewardRecord{}, &pb.MatchTournamentPredictionRecord{}, // 全服赛季战队锦标赛(tournament.go)
-		&pb.MatchJianghuDuelInvitationRecord{}, &pb.MatchJianghuDuelCooldownRecord{}, &pb.MatchGrudgeRelationRecord{}, &pb.MatchGrudgeLogRecord{}, &pb.MatchJianghuRefundRecord{}, // 江湖恩怨与天墉生死状一期(jianghu_duel.go / jianghu_grudge.go)
+		// 江湖恩怨与天墉生死状一期(jianghu_duel.go / jianghu_grudge.go)。退费标记表 match_jianghu_refund 2026-11-26 删掉:
+		// 普通战书银两只由 scene 退(数据覆写审计 r2 第 4 轮),match 不再发退费邮件;旧库里若还在是孤表,迁移器不删也不再核对。
+		&pb.MatchJianghuDuelInvitationRecord{}, &pb.MatchJianghuDuelCooldownRecord{}, &pb.MatchGrudgeRelationRecord{}, &pb.MatchGrudgeLogRecord{},
 		&teampb.TeamAuthorityRecord{}, &teampb.TeamMembershipRecord{}, &teampb.TeamInviteIndexRecord{},
 		&teampb.TeamActionReceiptRecord{}, &teampb.TeamLaunchRecord{},
 		&teampb.TeamApplicationIndexRecord{}, &teampb.TeamLaunchRoleRecord{},

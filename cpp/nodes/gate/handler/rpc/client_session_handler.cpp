@@ -872,6 +872,8 @@ void GateClientSessionHandler::HandleConnectionDisconnection(const muduo::net::T
 		gate_lane::OnSessionClosing(sessionIt->second);
 		// 观战订阅只存 session_id:不摘除的话 session_id 复用后新连接会收到旧订阅的帧。
 		gate_spectate::OnSessionClosed(sessionId);
+		// 这条连接占着的票据随会话一起摘掉(一张票同一时刻只开一条连接,SessionManager::ClaimTicket)。
+		tlsSessionManager.ReleaseTicket(sessionIt->second.ticketKey, sessionId, sessionIt->second.incarnation);
 	}
 	sessions.erase(sessionId);
 
@@ -1640,6 +1642,15 @@ void GateClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnecti
 		rejectAndClose("token_expired", "token expired");
 		return;
 	}
+
+	// 一张票同一时刻只开一条连接:这张票已有一条活着的连接就拒绝这一条(docs/design/login-queue-2026-05.md §5)。
+	// 合法客户端每次连接都现领一张新票(重连、重定向失败都不复用旧票),碰不到这一条。
+	if (!tlsSessionManager.ClaimTicket(clientSigStr, sessionId, session.incarnation))
+	{
+		rejectAndClose("token_in_use", "token already in use");
+		return;
+	}
+	session.ticketKey = clientSigStr;
 
 	// todo.md #76 slice A — install the per-session HMAC key carried in
 	// the verified token payload. Empty bytes mean "client/server pair

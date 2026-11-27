@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"shared/authoritysql"
 	"strconv"
@@ -38,7 +39,14 @@ type MySQLConfig struct {
 	// Lazy 只有常驻的 data_service 置上:目录各片和流水库的池在启动时连不上不算失败,核对挪到第一条连接之前(openCheckedPool)。
 	// 工具、迁移和测试不置,开池当场连库核对,任何失败回错误。
 	Lazy bool
+	// Closed 非空:这一代没有这个库的写资格(写者注册时它连不上),池一条连接都不给,每次都回这个错误。
+	// 只由 ForSchema 在 Lazy 时置上(PermissionFor 回 ErrNoWriterGrant);工具、迁移照旧当场回错误。
+	Closed error
 }
+
+// ErrNoWriterGrant:这一代没有这个逻辑库的写资格。写者注册跳过当时连不上的库(docs/design/data-service-startup-isolation.md §7),
+// 这个库这一代都关着,调用回不可用;集群恢复之后重建 Pod,下一代补齐。PermissionFor 用它说明缺的是哪个库。
+var ErrNoWriterGrant = errors.New("this boot has no writer grant for the logical database")
 
 // ForSchema 给出连某个逻辑库的参数:库名、权限、拨号选项都换成这个库的。账号口令和连接池上限不变。
 func (c MySQLConfig) ForSchema(schema string) (MySQLConfig, error) {
@@ -49,6 +57,11 @@ func (c MySQLConfig) ForSchema(schema string) (MySQLConfig, error) {
 	out.PoolOptionsFor = nil
 	if c.PermissionFor != nil {
 		permission, err := c.PermissionFor(schema)
+		if c.Lazy && errors.Is(err, ErrNoWriterGrant) {
+			// 常驻进程:这个库这一代都关着,不算装配失败(openCheckedPool、PlayerStorePools 按 Closed 处理)。
+			out.Closed = err
+			return out, nil
+		}
 		if err != nil {
 			return MySQLConfig{}, err
 		}
@@ -147,6 +160,9 @@ const lazyProbeConns = 2
 // 按需模式的核对就是对同一个库再走一遍这里的当场分支,用一个一次性的小池,用完即关。
 // 核对一项没少,只换了时刻(docs/design/data-service-startup-isolation.md §3)。
 func openCheckedPool(cfg MySQLConfig, dsn string, check poolCheck) (*sql.DB, error) {
+	if cfg.Closed != nil {
+		return closedPool(cfg.DBName, cfg.Closed), nil
+	}
 	if cfg.Lazy {
 		probe := cfg
 		probe.Lazy = false

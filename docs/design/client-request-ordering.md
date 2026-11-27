@@ -455,6 +455,24 @@ go-zero 超时拦截器用 `context.WithTimeout` 派生 ctx 交给 handler,超�
 
 **这是本方案里最复杂的一块,需要 login 负责人评审。** 测试用 miniredis 覆盖「关闭在前 / 绑定在前」两种顺序、关闭之后的 Login 被拒、LeaveGame 推进 gen、同一会话的第二个角色被拒。
 
+**EnterGame 入口的回码各自只有一种含义(2026-11-26)**:
+
+| 码 | 什么时候回 | 客户端怎么处理 |
+|---|---|---|
+| `kLoginInProgress`(2005) | 本连接绑着别的角色(会话栅栏,gate 换角闸回信封也是它);这名角色的进场链还没结束(玩家锁被占) | 绑着别的角色:先 LeaveGame 再进;同一角色的重发:前一次多半已受理,接着等进场结果 |
+| `kLoginRoleTradeFrozen`(2057) | 角色挂着交易冻结(上架或过户中) | 按拒绝收尾 |
+| `kLoginEnterGameBusy`(2058) | 进场池满,链没启动,确定没受理 | 按拒绝收尾,玩家稍后再进 |
+
+- **问题**:2026-11-26 之前后两种也回 2005。客户端同一角色重发收到 2005 一律按「前一次的链还在跑」接着等,链其实根本没启动,
+  白等 60 秒再报「等待进入场景超时」;换角时收到它们,还会先 LeaveGame、再撞一次同样的拒绝。客户端只凭码分不出来。
+- **方案**:2005 保持契约文档里「进场还在进行中」的原意,交易冻结和池满各给一个新码(Tip.xlsx 登录段末尾追加,不动已有码号)。
+  客户端判定逻辑不用改:非 2005 的码本来就按拒绝收尾。
+- **为什么不反过来把「进行中」改成已有的 2007 `kLoginEnteringGame`**:那样改的是两版服务端共享的客户端契约里已写明的含义
+  (Java 仓 `docs/reference/mmorpg-client-contract-login.md`:「同一角色的进场还在进行中返回 2005」),2005 仍然一码三义;
+  而交易冻结、池满本来就不该叫「登录中」(命名第一原则:码名要与含义一致)。
+- **代价与边界**:Java 版要同样拆开(已登记待做),拆开之前 Java 服务端的这两种情况照旧回 2005;客户端对 2005 的处理不变,所以对 Java 服务端
+  的行为和改之前一样。机器人与压测汇总里按 2005 统计的口径同步改了注释。
+
 ### 6.3 match(O13)
 
 - JoinQueue 在 createTicket 之前用 `playercontract.LoadSession` 复核:`state == ONLINE`,且 `session_id`、`gate_instance_id` 与 SessionDetails 一致;不一致回既有码 `ErrNotInScene`。SharedRedis 与 MatchRedis 是两个库,这一步**不原子**,只能缩小跨会话窗口,剩下的由票据 TTL 和 GetQueueStatus 权威查询兜底。

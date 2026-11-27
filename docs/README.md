@@ -542,6 +542,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 ### 交接说明(`handoff/`)
 
 - [account-deletion-handoff-20261120.md](handoff/account-deletion-handoff-20261120.md) — 账号注销与 Apple / Google 登录:全部验证交接(2026-11-20,交 Gemini;代码已改完,Gemini 只验证)
+- [admin-identity-dual-control-batches4-7-handoff-20261126.md](handoff/admin-identity-dual-control-batches4-7-handoff-20261126.md) — 后台管理员身份与双人复核:批 4~7 交接(2026-11-26)
 - [battle-report-replay-client.md](handoff/battle-report-replay-client.md) — 交接:战报回放的客户端细节(2026-11-06)
 - [battle-script-review-retention-handoff-20261126.md](handoff/battle-script-review-retention-handoff-20261126.md) — 剧本审核流水保留期清理与 match 保留期告警:全部验证交接(2026-11-26,交 Gemini)
 - [config-table-hot-reload-handoff-20261126.md](handoff/config-table-hot-reload-handoff-20261126.md) — 配置表热更：验证与收尾交接（2026-11-26，交 Gemini）

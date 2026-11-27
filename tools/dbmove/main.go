@@ -29,6 +29,8 @@ package main
 //	                                        plan、prepare 也要源库这一个(查没有主键的表);mysql 档 cleanup 也要目标这一个(查复制通道撤掉了没有)
 //	DBMOVE_REGISTRAR_PRINCIPAL、MMORPG_SQL_SCHEMA_PRINCIPAL
 //	                                        注册和 schema 主体,cutover 必填:翻转之前核它们在目标上存在、授权齐全
+//	MMORPG_SQL_REPAIR_PRINCIPAL             修复身份(data_service 的 create_residual、admission_recover 用),选填:
+//	                                        plan 核它在目标上存在,cutover 冻结之前比它在这个库上的授权;只报告,不拦搬库
 //	DBMOVE_VERIFY_SOURCE_DSN                mysql 档 verify 用的源库副本
 //	DBMOVE_AUDIT_TARGET_DSN                 mysql 档 audit 用的目标库副本
 
@@ -76,6 +78,7 @@ const (
 	envOperator        = "MMORPG_SQL_OPERATOR_PRINCIPAL"
 	envRegistrar       = "DBMOVE_REGISTRAR_PRINCIPAL"
 	envSchema          = "MMORPG_SQL_SCHEMA_PRINCIPAL"
+	envRepair          = "MMORPG_SQL_REPAIR_PRINCIPAL"
 
 	etcdCallTimeout = 5 * time.Second
 	openTimeout     = 30 * time.Second
@@ -424,7 +427,8 @@ func wire(ctx context.Context, o options, getenv func(string) string, out, errOu
 			maxLag: o.maxLag, budget: o.budget, rollbackBudget: o.rollbackBudget, preflight: o.timeout,
 			verifyMaxAge: o.verifyMaxAge, retention: o.retention, pollInterval: 200 * time.Millisecond,
 			confirmDrop: o.confirmDrop, acknowledgeNoAudit: o.acknowledgeNoAudit, metricsTargets: o.metricsTargets,
-			rosterPrincipals: rosterPrincipals, controlPrincipals: controlPrincipals, allowSharedAccounts: o.allowSharedAccounts, targetLost: o.targetLost,
+			rosterPrincipals: rosterPrincipals, controlPrincipals: controlPrincipals, repairPrincipal: getenv(envRepair),
+			allowSharedAccounts: o.allowSharedAccounts, targetLost: o.targetLost,
 			feedEndpoint: o.syncSpec.api, compareBudget: o.compareBudget, skipFinalCompare: o.skipFinalCompare,
 		},
 		store:        timedStore{inner: dbplacement.NewStore(client)},

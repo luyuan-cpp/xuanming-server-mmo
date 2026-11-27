@@ -111,6 +111,9 @@ func (l *GuildLogic) StartTrialBackground(c TrialBackgroundConf) (stop func(), e
 	launches := newTrialLaunchRecovery(l)
 	var lobbyCursor uint64 // 仅本循环访问；失败也推进，防离线大厅占住队头。
 	var unpreparedCursor uint64
+	// 帮战追杀令到期收尾(r2-gw#2)的游标与轮数,仅本循环访问。
+	var bountyCursor data.BountyExpiryCursor
+	bountyEvery, bountyRound := warBountyExpiryEveryRounds(c.OwedInterval), 0
 	var wg sync.WaitGroup
 	wg.Add(2)
 	safego.Go(trialOwedLoopPoint, func() {
@@ -118,6 +121,16 @@ func (l *GuildLogic) StartTrialBackground(c TrialBackgroundConf) (stop func(), e
 		defer wg.Done()
 		runTrialLoop(ctx, trialOwedLoopPoint, c.OwedInterval, func(ctx context.Context) {
 			l.foldMergedZoneRanks(ctx)
+			// 追杀令到期收尾和历练无关,与合服榜折叠同理借本循环的节拍与排空接入(每个 stable 副本都跑),约每分钟一轮;
+			// 不另起循环,也就不新增循环活性点位。多副本同时收尾同一张靠事务内行锁 + 状态复核只退一次。
+			if bountyRound++; bountyRound >= bountyEvery {
+				bountyRound = 0
+				var stats warBountyExpiryStats
+				bountyCursor, stats = l.expireDueGuildWarBounties(ctx, bountyCursor)
+				if stats.failed != 0 && c.RelayAdmission != nil {
+					c.RelayAdmission.Hold()
+				}
+			}
 			if d.Lobby != nil {
 				budget, cancel := context.WithTimeout(ctx, 2*time.Second)
 				next, err := d.Lobby.ExpirePendingSQL(budget, lobbyCursor)

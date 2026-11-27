@@ -24,7 +24,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -73,7 +72,6 @@ func cleanupKind(t *testing.T, cli *clientv3.Client, kind string) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_, _ = cli.Delete(ctx, "/snowflake/"+kind+"/", clientv3.WithPrefix())
-		_, _ = cli.Delete(ctx, "/legacy-"+kind+"/", clientv3.WithPrefix())
 	})
 }
 
@@ -355,38 +353,6 @@ func TestQuarantine_FailsClosedThenReleasesLeastRecentlyUsed(t *testing.T) {
 	// 继任者的地板 = 前任水位。
 	if c.GuardEpochSec == 0 {
 		t.Fatal("继任者必须继承前任水位作地板")
-	}
-}
-
-// 旧布局兼容(cluster 0):旧 key 的水位与活 id 同样参与隔离期 / 已占判定。
-// 发布一版之后本用例随兼容读一起删。
-func TestLegacyKeysStillQuarantineAndOccupy(t *testing.T) {
-	cli := newTestClient(t)
-	kind := uniqueKind(t)
-	cleanupKind(t, cli, kind)
-	legacy := "/legacy-" + kind
-	ctx := context.Background()
-
-	now := snowflake.NowEpochSec()
-	// slot 0:旧秒级水位刚写过;slot 1:旧版本进程仍活着(snowflake_ids/1 存在)。
-	// 旧布局的毫秒水位 guard_ms 只有 login 写过,2026-11-12 起不再读,不在这里造。
-	mustPut := func(k, v string) {
-		if _, err := cli.Put(ctx, k, v); err != nil {
-			t.Fatal(err)
-		}
-	}
-	mustPut(legacy+"/snowflake_guard/0", strconv.FormatUint(now, 10))
-	mustPut(legacy+"/snowflake_ids/1", "old-host")
-
-	h := alloc(t, cli, kind, "h", Options{LegacyPrefix: legacy})
-	defer h.Close()
-	if h.Slot != 2 {
-		t.Fatalf("旧布局的水位 / 活 id 必须被算进去,期望 slot 2, got %d", h.Slot)
-	}
-	// 新 key 与旧 key 的地板取 max。
-	mustPut(legacy+"/snowflake_guard/2", strconv.FormatUint(now+100, 10))
-	if floor, _, err := readWatermarkFloor(ctx, cli, kind, h.r, 2); err != nil || floor < now+100 {
-		t.Fatalf("floor=%d err=%v, 期望 ≥ %d", floor, err, now+100)
 	}
 }
 
@@ -824,120 +790,6 @@ func TestLocalCache_OutageWritesEveryTickAndRecoveryStopsWriting(t *testing.T) {
 	final := mustReadCache(t, path)
 	if final.LastAckWall <= first.LastAckWall || final.LastWatermark < later.LastWatermark {
 		t.Fatalf("Close() 之后磁盘上必须是恢复后的最后一次 Ack: first=%+v final=%+v", first, final)
-	}
-}
-
-// ---- F1:滚动升级期的**双向**互斥 --------------------------------------------------
-//
-// legacyClaimHEAD 是**改造前那版分配器**(git show HEAD:go/shared/snowflakealloc/allocator.go)
-// 申领路径的最小复刻:只认 <prefix>/snowflake_ids/ 与 <prefix>/snowflake_nodes/,
-// 选"最小空闲",双 key CAS 都要求 CreateRevision==0。
-//
-// 灰度期它和新二进制在同一个 etcd 上并存,而新二进制的槽写在 /snowflake/<kind>/c0/slots/ ——
-// 旧代码根本看不见,于是会把同一个 worker id 再发一次。新代码这边的"避开旧布局"是单向的,
-// 挡不住这个方向。所以新代码申领时必须把旧布局的 id 键一起占上(过渡期专用)。
-func legacyClaimHEAD(t *testing.T, cli *clientv3.Client, prefix, host string, maxID uint64) (uint64, bool) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	used := make(map[uint64]bool)
-	idP := prefix + "/snowflake_ids/"
-	idResp, err := cli.Get(ctx, idP, clientv3.WithPrefix())
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, kv := range idResp.Kvs {
-		if id, perr := strconv.ParseUint(strings.TrimPrefix(string(kv.Key), idP), 10, 64); perr == nil {
-			used[id] = true
-		}
-	}
-	nodeResp, err := cli.Get(ctx, prefix+"/snowflake_nodes/", clientv3.WithPrefix())
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, kv := range nodeResp.Kvs {
-		if id, perr := strconv.ParseUint(string(kv.Value), 10, 64); perr == nil {
-			used[id] = true
-		}
-	}
-
-	target := maxID + 1
-	for i := uint64(0); i <= maxID; i++ {
-		if !used[i] {
-			target = i
-			break
-		}
-	}
-	if target > maxID {
-		return 0, false
-	}
-	lease, err := cli.Grant(ctx, 30)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { cli.Revoke(context.Background(), lease.ID) })
-	nKey := prefix + "/snowflake_nodes/" + host
-	iKey := idP + strconv.FormatUint(target, 10)
-	idStr := strconv.FormatUint(target, 10)
-	txn, err := cli.Txn(ctx).
-		If(
-			clientv3.Compare(clientv3.CreateRevision(nKey), "=", 0),
-			clientv3.Compare(clientv3.CreateRevision(iKey), "=", 0),
-		).
-		Then(
-			clientv3.OpPut(nKey, idStr, clientv3.WithLease(lease.ID)),
-			clientv3.OpPut(iKey, host, clientv3.WithLease(lease.ID)),
-		).
-		Commit()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return target, txn.Succeeded
-}
-
-// F1 回归:灰度期旧二进制**不得**拿到新二进制正持有的槽,并且必须能在旧 key 上读到地板。
-func TestRollingUpgrade_LegacyBinaryCannotTakeALiveSlot(t *testing.T) {
-	cli := newTestClient(t)
-	kind := uniqueKind(t)
-	cleanupKind(t, cli, kind)
-	legacy := "/legacy-" + kind
-
-	h := alloc(t, cli, kind, "host-new", Options{LegacyPrefix: legacy})
-	defer h.Close()
-	if h.Slot != 0 {
-		t.Fatalf("干净环境下新二进制应拿 slot 0, got %d", h.Slot)
-	}
-	h.NewNode()
-
-	// 旧二进制此刻申领:它只会扫旧 key。修复前那里什么都没有 ⇒ 它选中 0 并 CAS 成功,
-	// 两个进程用同一个 worker id 同时发号。
-	id, ok := legacyClaimHEAD(t, cli, legacy, "host-old", 15)
-	if !ok {
-		t.Fatal("旧二进制应该还能拿到**别的**号,而不是拿不到号")
-	}
-	if id == h.Slot {
-		t.Fatalf("旧二进制拿到了新二进制正持有的 worker id %d:过渡期占位没生效", id)
-	}
-
-	// 旧布局的占位键必须挂在新持有者的 lease 上(它一死,槽自然对旧二进制也开放)。
-	occ := getKV(t, cli, legacy+"/snowflake_ids/"+strconv.FormatUint(h.Slot, 10))
-	if len(occ.Kvs) != 1 || clientv3.LeaseID(occ.Kvs[0].Lease) != h.Lease() {
-		t.Fatalf("旧布局占位键必须存在且挂在我们的 lease 上: %+v", occ.Kvs)
-	}
-
-	// 水位必须镜像到旧 key:旧二进制接手这个槽时只会读 <prefix>/snowflake_guard/<id>,
-	// 读不到地板就会从自己的时钟重新开始发号。
-	newWm, err := readUint(context.Background(), cli, watermarkKey(kind, 0, h.Slot))
-	if err != nil || newWm == 0 {
-		t.Fatalf("new watermark=%d err=%v", newWm, err)
-	}
-	legacyWm, err := readUint(context.Background(), cli, legacy+"/snowflake_guard/"+strconv.FormatUint(h.Slot, 10))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if legacyWm < newWm {
-		t.Fatalf("旧布局水位 %d 落后于新水位 %d:灰度期的旧二进制拿不到地板", legacyWm, newWm)
 	}
 }
 

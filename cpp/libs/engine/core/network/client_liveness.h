@@ -8,6 +8,8 @@
 //      (按「距上一次活动」算的话,对端隔几秒发一个字节就能永远占着槽位)。
 //   2. 空闲超时:服务端在验签成功的回包里通告心跳参数,从这一刻起这条连接被「跟踪」:连续 idleTimeout 收不到它的
 //      任何一帧就判它已死。客户端按通告每 interval 发一条心跳,服务端每条都回。
+// gate 另有第三道:登录期限。验签之后一段时间内必须登录成功一次(期限由 gate 给,LivenessSweeper::ExpectLoginBy);
+// battle 直连没有登录这一步,不登记。
 //
 // 本文件只依赖 STL,不认识连接、会话表、protobuf,所以单测可以脱离服务进程编译
 // (cpp/nodes/gate/tests/client_liveness_test.cpp)。装配与副作用(回包、通告、关连接、计数、日志)在各自的服务里:
@@ -224,10 +226,12 @@ private:
 	bool lastTickLate{false};
 };
 
-// 检查点堆(gate 用):按到期时刻排序的 (到期时刻, session_id, 会话代次, 种类)。一条连接至多同时有两个检查点:
+// 检查点堆(gate 用):按到期时刻排序的 (到期时刻, session_id, 会话代次, 种类)。一条连接至多同时有三个检查点:
 //   - 握手检查点:建连时登记,在建连 + handshakeTimeout 到期;到期时已验签就作废;
 //   - 空闲检查点:开始跟踪时登记,之后每条跟踪中的连接恰好一个。到期时距上一帧不足 idleTimeout 就按
-//     「上一帧 + idleTimeout」重新登记,已满就判死且不再登记,所以同一条连接只会被判死一次。
+//     「上一帧 + idleTimeout」重新登记,已满就判死且不再登记,所以同一条连接只会被判死一次;
+//   - 登录检查点:验签成功时登记(ExpectLoginBy,期限由调用方给),到期时已登录成功就作废。按「距验签的时长 + 仍未登录成功」判,
+//     不看期间发没发心跳:否则验签之后不登录、只发心跳的连接能一直占着位置。
 // 收包路径只刷新 ClientLiveness::lastInboundAt,不碰堆;每条连接大约每 idleTimeout 被检查一次,不按节拍全量遍历会话表。
 // 会话关闭时不用摘检查点:到期时按 (session_id, 会话代次) 找不到就丢弃,session_id 被新连接复用也挡得住。
 class LivenessSweeper
@@ -239,13 +243,16 @@ public:
 	{
 		kHandshake,
 		kIdle,
+		kLogin,
 	};
 
-	// lookup 返回的会话视图。verified 取自会话的验签状态,liveness 借用会话上的存活状态,
+	// lookup 返回的会话视图。verified 取自会话的验签状态,loggedIn 取自「至少登录成功过一次」(gate 的
+	// SessionInfo::loginSucceeded;只有登录检查点读它),liveness 借用会话上的存活状态,
 	// 仅在本次同步扫描中有效。找不到会话由外层 optional 表示,存在的会话一定有存活状态。
 	struct SessionView
 	{
 		bool verified{false};
+		bool loggedIn{false};
 		const ClientLiveness &liveness;
 	};
 
@@ -253,10 +260,12 @@ public:
 	{
 		Duration checkGap{};           // 距上一次扫描的时长;首轮为 0
 		bool late{false};              // 本次扫描迟到(checkGap > 2 × checkPeriod):这一轮只推迟,不关
-		uint64_t stale{0};             // 丢弃的检查点:会话已关闭 / 代次不符 / 握手期限到时已验签 / 空闲检查点的会话没在跟踪
+		uint64_t stale{0};             // 丢弃的检查点:会话已关闭 / 代次不符 / 握手期限到时已验签 / 空闲检查点的会话没在跟踪 /
+		                               // 登录期限到时已登录成功
 		uint64_t deferred{0};          // 期限已到但本次扫描迟到,改在约一个节拍后再判
 		uint64_t handshakeTimeouts{0}; // 建连满 handshakeTimeout 仍未验签,已回调 onHandshakeTimeout
 		uint64_t idleClosed{0};        // 跟踪中、静默满 idleTimeout,已回调 onIdle
+		uint64_t loginTimeouts{0};     // 验签之后到了登录期限仍未登录成功,已回调 onLoginTimeout
 	};
 
 	explicit LivenessSweeper(const ClientLivenessPolicy &policy) : policy(policy), stall(policy.checkPeriod) {}
@@ -274,12 +283,19 @@ public:
 		Schedule(lastInboundAt + policy.idleTimeout, sessionId, incarnation, CheckKind::kIdle);
 	}
 
+	// 验签成功时调用(只有 gate):deadline 之前还没登录成功就关。每条连接登记一次。
+	void ExpectLoginBy(const uint32_t sessionId, const uint64_t incarnation, const SteadyTime deadline)
+	{
+		Schedule(deadline, sessionId, incarnation, CheckKind::kLogin);
+	}
+
 	// 取出全部到期(due <= now)的检查点逐个判定。
 	// lookup(sessionId, incarnation) 返回 std::optional<SessionView>:会话已关闭或代次不符时为空。
-	// onHandshakeTimeout(sessionId, incarnation)、onIdle(sessionId, incarnation, silentFor) 由调用方关连接。
-	// 它们不能同步删会话(forceClose 是排队关闭,满足这一条)。
-	template <typename Lookup, typename OnHandshakeTimeout, typename OnIdle>
-	SweepResult Sweep(const SteadyTime now, Lookup &&lookup, OnHandshakeTimeout &&onHandshakeTimeout, OnIdle &&onIdle)
+	// onHandshakeTimeout(sessionId, incarnation)、onIdle(sessionId, incarnation, silentFor)、onLoginTimeout(sessionId, incarnation)
+	// 由调用方关连接。它们不能同步删会话(forceClose 是排队关闭,满足这一条)。
+	template <typename Lookup, typename OnHandshakeTimeout, typename OnIdle, typename OnLoginTimeout>
+	SweepResult Sweep(const SteadyTime now, Lookup &&lookup, OnHandshakeTimeout &&onHandshakeTimeout, OnIdle &&onIdle,
+					  OnLoginTimeout &&onLoginTimeout)
 	{
 		SweepResult result;
 		// 距上一次扫描超过两个节拍,说明本端 loop 卡过:客户端的帧可能还在接收缓冲里没读
@@ -316,6 +332,23 @@ public:
 				}
 				++result.handshakeTimeouts;
 				onHandshakeTimeout(checkpoint.sessionId, checkpoint.incarnation);
+				continue;
+			}
+			if (checkpoint.kind == CheckKind::kLogin)
+			{
+				if (view->loggedIn)
+				{
+					++result.stale; // 已登录成功,期限作废
+					continue;
+				}
+				if (result.late)
+				{
+					++result.deferred;
+					Schedule(now + policy.checkPeriod, checkpoint.sessionId, checkpoint.incarnation, CheckKind::kLogin);
+					continue;
+				}
+				++result.loginTimeouts;
+				onLoginTimeout(checkpoint.sessionId, checkpoint.incarnation);
 				continue;
 			}
 			const ClientLiveness &liveness = view->liveness;

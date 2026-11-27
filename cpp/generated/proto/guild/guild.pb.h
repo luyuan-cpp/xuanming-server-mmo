@@ -1372,6 +1372,7 @@ enum GuildWarBountyStatus : int {
   GUILD_WAR_BOUNTY_STATUS_COMPLETED = 3,
   GUILD_WAR_BOUNTY_STATUS_TORN_BY_TARGET = 4,
   GUILD_WAR_BOUNTY_STATUS_EXPIRED = 5,
+  GUILD_WAR_BOUNTY_STATUS_ESCROW_FAILED = 6,
   GuildWarBountyStatus_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   GuildWarBountyStatus_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -1382,11 +1383,11 @@ extern const uint32_t GuildWarBountyStatus_internal_data_[];
 inline constexpr GuildWarBountyStatus GuildWarBountyStatus_MIN =
     static_cast<GuildWarBountyStatus>(0);
 inline constexpr GuildWarBountyStatus GuildWarBountyStatus_MAX =
-    static_cast<GuildWarBountyStatus>(5);
+    static_cast<GuildWarBountyStatus>(6);
 [[nodiscard]] inline bool GuildWarBountyStatus_IsValid(int value) {
-  return 0 <= value && value <= 5;
+  return 0 <= value && value <= 6;
 }
-inline constexpr int GuildWarBountyStatus_ARRAYSIZE = 5 + 1;
+inline constexpr int GuildWarBountyStatus_ARRAYSIZE = 6 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 GuildWarBountyStatus_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(GuildWarBountyStatus) {
@@ -1401,7 +1402,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& GuildWarBountyStatus_Name(GuildWarBountyStatus value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<GuildWarBountyStatus_descriptor, 0, 5>(
+  return ::google::protobuf::internal::NameOfDenseEnum<GuildWarBountyStatus_descriptor, 0, 6>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool GuildWarBountyStatus_Parse(

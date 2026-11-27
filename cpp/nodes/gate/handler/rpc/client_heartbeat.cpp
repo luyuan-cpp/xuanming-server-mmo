@@ -109,12 +109,27 @@ void CloseIdleSession(const uint32_t sessionId, const uint64_t incarnation, cons
 	ForceClose(*session);
 }
 
+// 验签之后到了登录期限还没登录成功:只关连接。断开回调照常处理(发过 Login 的照常通知 login 收尾)。
+// 合法客户端碰不到这一条,出现即说明有连接验签之后不登录、只靠心跳挂着,采样记一条。
+void CloseLoginTimeout(const uint32_t sessionId, const uint64_t incarnation)
+{
+	SessionInfo *session = FindSession(sessionId, incarnation);
+	if (session == nullptr)
+	{
+		return; // 同一次扫描里刚核对过,不会走到这里
+	}
+	++tlsCounters.loginTimeouts;
+	LogSampled("login_deadline_after_verify", sessionId, tlsCounters.loginTimeouts);
+	ForceClose(*session);
+}
+
 void StartTracking(const SessionId sessionId, SessionInfo &session, const SteadyTime now)
 {
 	if (session.liveness.StartTracking(now))
 	{
 		++tlsCounters.tracked;
 		tlsSweeper.Track(sessionId, session.incarnation, now);
+		tlsSweeper.ExpectLoginBy(sessionId, session.incarnation, now + kLoginDeadlineAfterVerify);
 	}
 }
 
@@ -134,8 +149,8 @@ void LogSummaryIfDue(const SteadyTime now)
 	// 字段名是与 tools/scripts/stress_summarize.ps1 之间的契约,改名要两边一起改。
 	LOG_INFO << "[ClientHeartbeat] summary answered=" << c.answered << " excess=" << c.excess
 			 << " before_verify=" << c.beforeVerify << " tracked=" << c.tracked << " idle_closed=" << c.idleClosed
-			 << " handshake_timeouts=" << c.handshakeTimeouts << " deferred=" << c.deferred
-			 << " pending_checks=" << tlsSweeper.PendingChecks();
+			 << " handshake_timeouts=" << c.handshakeTimeouts << " login_timeouts=" << c.loginTimeouts
+			 << " deferred=" << c.deferred << " pending_checks=" << tlsSweeper.PendingChecks();
 }
 
 } // namespace
@@ -223,11 +238,13 @@ void SweepLiveness(const SteadyTime now)
 			{
 				return std::nullopt;
 			}
-			return LivenessSweeper::SessionView{.verified = session->verified, .liveness = session->liveness};
+			return LivenessSweeper::SessionView{
+				.verified = session->verified, .loggedIn = session->loginSucceeded, .liveness = session->liveness};
 		},
 		[](const uint32_t sessionId, const uint64_t incarnation) { CloseHandshakeTimeout(sessionId, incarnation); },
 		[](const uint32_t sessionId, const uint64_t incarnation, const SteadyTime::duration silentFor)
-		{ CloseIdleSession(sessionId, incarnation, silentFor); });
+		{ CloseIdleSession(sessionId, incarnation, silentFor); },
+		[](const uint32_t sessionId, const uint64_t incarnation) { CloseLoginTimeout(sessionId, incarnation); });
 
 	if (result.deferred > 0)
 	{

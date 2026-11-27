@@ -784,8 +784,11 @@ type AddObserverRequest struct {
 	SpectatorOperationId string                 `protobuf:"bytes,5,opt,name=spectator_operation_id,json=spectatorOperationId,proto3" json:"spectator_operation_id,omitempty"` // 原SQL观战意图UUID；重试复用，不能只按player_id覆盖。
 	AdmitBeforeMs        uint64                 `protobuf:"varint,6,opt,name=admit_before_ms,json=admitBeforeMs,proto3" json:"admit_before_ms,omitempty"`                     // 原准入截止，至多未来30秒；取消墓碑至少保留到此时。
 	TargetInstanceId     string                 `protobuf:"bytes,7,opt,name=target_instance_id,json=targetInstanceId,proto3" json:"target_instance_id,omitempty"`             // 固定战斗实例；进程重启不能继承旧准入。
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// 观众当天能玩到的时刻(Unix 毫秒;0 = 不限),match 与 routing 一起从观众的会话记录取,随原件冻结。
+	// 口径同 BattlePlayerSnapshot.minor_play_deadline_ms:票据封顶、到点关直连、之后拒绝握手。
+	MinorPlayDeadlineMs uint64 `protobuf:"varint,8,opt,name=minor_play_deadline_ms,json=minorPlayDeadlineMs,proto3" json:"minor_play_deadline_ms,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *AddObserverRequest) Reset() {
@@ -865,6 +868,13 @@ func (x *AddObserverRequest) GetTargetInstanceId() string {
 		return x.TargetInstanceId
 	}
 	return ""
+}
+
+func (x *AddObserverRequest) GetMinorPlayDeadlineMs() uint64 {
+	if x != nil {
+		return x.MinorPlayDeadlineMs
+	}
+	return 0
 }
 
 // 房间不存在(kEntityIsNull)/直连席已满(单房间或节点配额,kMatchSpectateFull)/观众是参战者或非公开局(kInvalidParameter)/
@@ -1191,6 +1201,7 @@ func (x *QueryObserverResponse) GetTargetInstanceId() string {
 // 客户端丢票经大厅会话调 MatchService.RequestBattleTicket,match 定位房间所在 battle 节点后调本 RPC。
 // 仅当 player_id 仍是该房间的参战者或观众时才签;否则 error_message 非零且 assignment 为空。
 // 内部 RPC:player_id 由 match 从会话 metadata 取得后填入,battle 只核对名单不再鉴权。
+// 不带未成年人截止时刻:battle 在建房 / 观战登记时已按人记下,补签的票沿用同一个封顶。
 type IssueBattleTicketRequest struct {
 	state                protoimpl.MessageState `protogen:"open.v1"`
 	BattleId             uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
@@ -1633,7 +1644,7 @@ const file_proto_battle_battle_node_proto_rawDesc = "" +
 	"\x12target_instance_id\x18\x02 \x01(\tR\x10targetInstanceId\x12K\n" +
 	"\"supported_outcome_protocol_version\x18\x03 \x01(\rR\x1fsupportedOutcomeProtocolVersion\x12G\n" +
 	" adopted_outcome_protocol_version\x18\x04 \x01(\rR\x1dadoptedOutcomeProtocolVersion\x12.\n" +
-	"\x13rejects_new_battles\x18\x05 \x01(\bR\x11rejectsNewBattles\"\xba\x02\n" +
+	"\x13rejects_new_battles\x18\x05 \x01(\bR\x11rejectsNewBattles\"\xef\x02\n" +
 	"\x12AddObserverRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12,\n" +
 	"\x12observer_player_id\x18\x02 \x01(\x04R\x10observerPlayerId\x12(\n" +
@@ -1641,7 +1652,8 @@ const file_proto_battle_battle_node_proto_rawDesc = "" +
 	"\robserver_name\x18\x04 \x01(\tR\fobserverName\x124\n" +
 	"\x16spectator_operation_id\x18\x05 \x01(\tR\x14spectatorOperationId\x12&\n" +
 	"\x0fadmit_before_ms\x18\x06 \x01(\x04R\radmitBeforeMs\x12,\n" +
-	"\x12target_instance_id\x18\a \x01(\tR\x10targetInstanceId\"K\n" +
+	"\x12target_instance_id\x18\a \x01(\tR\x10targetInstanceId\x123\n" +
+	"\x16minor_play_deadline_ms\x18\b \x01(\x04R\x13minorPlayDeadlineMs\"K\n" +
 	"\x13AddObserverResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\"\x86\x02\n" +
 	"\x15RemoveObserverRequest\x12\x1b\n" +

@@ -4947,11 +4947,11 @@ constexpr GetPlayerChannelIdentityRequest::ParseTableT_ GetPlayerChannelIdentity
     {
       PROTOBUF_FIELD_OFFSET(GetPlayerChannelIdentityRequest, _impl_._has_bits_),
       0, // no _extensions_
-      1, 0,  // max_field_number, fast_idx_mask
+      2, 8,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967294,  // skipmap
+      4294967292,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      1,  // num_field_entries
+      2,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -4961,18 +4961,27 @@ constexpr GetPlayerChannelIdentityRequest::ParseTableT_ GetPlayerChannelIdentity
       ::_pbi::TcParser::GetTable<::data_service::GetPlayerChannelIdentityRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
+      // string account = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(GetPlayerChannelIdentityRequest, _impl_.account_)}},
       // uint64 player_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetPlayerChannelIdentityRequest, _impl_.player_id_), 0>(),
-       {8, 0, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GetPlayerChannelIdentityRequest, _impl_.player_id_), 1>(),
+       {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(GetPlayerChannelIdentityRequest, _impl_.player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 player_id = 1;
-      {PROTOBUF_FIELD_OFFSET(GetPlayerChannelIdentityRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(GetPlayerChannelIdentityRequest, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string account = 2;
+      {PROTOBUF_FIELD_OFFSET(GetPlayerChannelIdentityRequest, _impl_.account_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
+      "\54\0\7\0\0\0\0\0"
+      "data_service.GetPlayerChannelIdentityRequest"
+      "account"
     }},
   };
 }
@@ -4982,6 +4991,9 @@ inline constexpr GetPlayerChannelIdentityRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
+        account_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         player_id_{::uint64_t{0u}} {}
 
 template <typename>
@@ -5000,7 +5012,7 @@ inline void* PROTOBUF_NONNULL GetPlayerChannelIdentityRequest::PlacementNew_(
   return ::new (mem) GetPlayerChannelIdentityRequest(arena);
 }
 constexpr auto GetPlayerChannelIdentityRequest::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(GetPlayerChannelIdentityRequest), alignof(GetPlayerChannelIdentityRequest));
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(GetPlayerChannelIdentityRequest), alignof(GetPlayerChannelIdentityRequest));
 }
 constexpr auto GetPlayerChannelIdentityRequest::InternalGenerateClassData_(
     const MessageLite& prototype,
@@ -17836,8 +17848,10 @@ const ::uint32_t
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::data_service::GetPlayerChannelIdentityRequest, _impl_._has_bits_),
-        4, // hasbit index offset
+        5, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::data_service::GetPlayerChannelIdentityRequest, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::data_service::GetPlayerChannelIdentityRequest, _impl_.account_),
+        1,
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::data_service::GetPlayerChannelIdentityResponse, _impl_._has_bits_),
@@ -17988,11 +18002,11 @@ static const ::_pbi::MigrationSchema
         {923, sizeof(::data_service::GetPlayerItemGainBlockResponse)},
         {930, sizeof(::data_service::UpsertAccountChannelIdentityRequest)},
         {941, sizeof(::data_service::GetPlayerChannelIdentityRequest)},
-        {946, sizeof(::data_service::GetPlayerChannelIdentityResponse)},
-        {963, sizeof(::data_service::UpdateRoleAppearanceRequest)},
-        {972, sizeof(::data_service::UpdateRoleAppearanceResponse)},
-        {977, sizeof(::data_service::SyncAccountStage1TradableRequest)},
-        {986, sizeof(::data_service::SyncAccountStage1TradableResponse)},
+        {948, sizeof(::data_service::GetPlayerChannelIdentityResponse)},
+        {965, sizeof(::data_service::UpdateRoleAppearanceRequest)},
+        {974, sizeof(::data_service::UpdateRoleAppearanceResponse)},
+        {979, sizeof(::data_service::SyncAccountStage1TradableRequest)},
+        {988, sizeof(::data_service::SyncAccountStage1TradableResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -18394,203 +18408,203 @@ const char descriptor_table_protodef_proto_2fdata_5fservice_2fdata_5fservice_2ep
     "untChannelIdentityRequest\022*\n\004auth\030\001 \001(\0132"
     "\034.common.base.ServiceCallAuth\022\017\n\007account"
     "\030\002 \001(\t\022\017\n\007channel\030\003 \001(\t\022\017\n\007open_id\030\004 \001(\t"
-    "\"4\n\037GetPlayerChannelIdentityRequest\022\021\n\tp"
-    "layer_id\030\001 \001(\004\"\245\001\n GetPlayerChannelIdent"
-    "ityResponse\022\r\n\005found\030\001 \001(\010\022\017\n\007account\030\002 "
-    "\001(\t\022\017\n\007channel\030\003 \001(\t\022\017\n\007open_id\030\004 \001(\t\022\032\n"
-    "\022account_created_ms\030\005 \001(\004\022\024\n\014player_leve"
-    "l\030\006 \001(\r\022\r\n\005retry\030\007 \001(\010\"s\n\033UpdateRoleAppe"
-    "aranceRequest\022\021\n\tplayer_id\030\001 \001(\004\022\025\n\rappe"
-    "arance_id\030\002 \001(\t\022*\n\004auth\030\003 \001(\0132\034.common.b"
-    "ase.ServiceCallAuth\"/\n\034UpdateRoleAppeara"
-    "nceResponse\022\017\n\007updated\030\001 \001(\010\"}\n SyncAcco"
-    "untStage1TradableRequest\022\021\n\tplayer_id\030\001 "
-    "\001(\004\022\032\n\022desired_char_total\030\002 \001(\r\022*\n\004auth\030"
-    "\003 \001(\0132\034.common.base.ServiceCallAuth\"l\n!S"
-    "yncAccountStage1TradableResponse\022\r\n\005foun"
-    "d\030\001 \001(\010\022\034\n\024confirmed_char_total\030\002 \001(\r\022\032\n"
-    "\022account_used_total\030\003 \001(\r*\200\001\n\024AccountDel"
-    "etionState\022\037\n\033ACCOUNT_DELETION_STATE_NON"
-    "E\020\000\022\"\n\036ACCOUNT_DELETION_STATE_PENDING\020\001\022"
-    "#\n\037ACCOUNT_DELETION_STATE_DELETING\020\002*\374\001\n"
-    "\026AccountDeletionOutcome\022(\n$ACCOUNT_DELET"
-    "ION_OUTCOME_UNSPECIFIED\020\000\022\037\n\033ACCOUNT_DEL"
-    "ETION_OUTCOME_OK\020\001\022&\n\"ACCOUNT_DELETION_O"
-    "UTCOME_NOT_FOUND\020\002\022$\n ACCOUNT_DELETION_O"
-    "UTCOME_BLOCKED\020\003\022\"\n\036ACCOUNT_DELETION_OUT"
-    "COME_RETRY\020\004\022%\n!ACCOUNT_DELETION_OUTCOME"
-    "_TOO_LATE\020\005*\264\002\n\025AccountRoleTradeState\022(\n"
-    "$ACCOUNT_ROLE_TRADE_STATE_UNSPECIFIED\020\000\022"
-    "%\n!ACCOUNT_ROLE_TRADE_STATE_FREEZING\020\001\022#"
-    "\n\037ACCOUNT_ROLE_TRADE_STATE_FROZEN\020\002\022&\n\"A"
-    "CCOUNT_ROLE_TRADE_STATE_CANCELLED\020\003\022(\n$A"
-    "CCOUNT_ROLE_TRADE_STATE_TRANSFERRED\020\004\022+\n"
-    "\'ACCOUNT_ROLE_TRADE_STATE_CANCEL_PENDING"
-    "\020\005\022&\n\"ACCOUNT_ROLE_TRADE_STATE_PREPARING"
-    "\020\006*\351\001\n\035AccountRoleFreezeEvidenceKind\0221\n-"
-    "ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_UNSPEC"
-    "IFIED\020\000\0222\n.ACCOUNT_ROLE_FREEZE_EVIDENCE_"
-    "KIND_NO_ADMISSION\020\001\022+\n\'ACCOUNT_ROLE_FREE"
-    "ZE_EVIDENCE_KIND_SCENE\020\002\0224\n0ACCOUNT_ROLE"
-    "_FREEZE_EVIDENCE_KIND_INITIAL_COMMIT\020\003*\207"
-    "\001\n\014SnapshotType\022\023\n\017SNAPSHOT_MANUAL\020\000\022\025\n\021"
-    "SNAPSHOT_PERIODIC\020\001\022\034\n\030SNAPSHOT_PRE_MAIN"
-    "TENANCE\020\002\022\031\n\025SNAPSHOT_PRE_ROLLBACK\020\003\022\022\n\016"
-    "SNAPSHOT_LOGIN\020\004*Y\n\nRecallKind\022\033\n\027RECALL"
-    "_KIND_UNSPECIFIED\020\000\022\030\n\024RECALL_KIND_CURRE"
-    "NCY\020\001\022\024\n\020RECALL_KIND_ITEM\020\002*\320\002\n\022RecallRe"
-    "viewReason\022$\n RECALL_REVIEW_REASON_UNSPE"
-    "CIFIED\020\000\022 \n\034RECALL_REVIEW_NO_CORRELATION"
-    "\020\001\022!\n\035RECALL_REVIEW_NO_PLAYER_STORE\020\002\022\037\n"
-    "\033RECALL_REVIEW_NOT_IN_LEDGER\020\003\022\"\n\036RECALL"
-    "_REVIEW_LEDGER_AMBIGUOUS\020\004\022!\n\035RECALL_REV"
-    "IEW_LEDGER_REJECTED\020\005\022 \n\034RECALL_REVIEW_L"
-    "EDGER_PARTIAL\020\006\022$\n RECALL_REVIEW_LEDGER_"
-    "NOT_APPLIED\020\007\022\037\n\033RECALL_REVIEW_ROWS_DISA"
-    "GREE\020\010*\254\002\n\020RenameRoleResult\022\"\n\036RENAME_RO"
-    "LE_RESULT_UNSPECIFIED\020\000\022\022\n\016RENAME_ROLE_O"
-    "K\020\001\022\025\n\021RENAME_ROLE_TAKEN\020\002\022\027\n\023RENAME_ROL"
-    "E_INVALID\020\003\022\030\n\024RENAME_ROLE_COOLDOWN\020\004\022\026\n"
-    "\022RENAME_ROLE_FROZEN\020\005\022\031\n\025RENAME_ROLE_STA"
-    "LE_SEQ\020\006\022\031\n\025RENAME_ROLE_SAME_NAME\020\007\022\031\n\025R"
-    "ENAME_ROLE_NOT_FOUND\020\010\022\027\n\023RENAME_ROLE_EX"
-    "PIRED\020\t\022\024\n\020RENAME_ROLE_BUSY\020\n2\210*\n\013DataSe"
-    "rvice\022k\n\024ReadAccountDirectory\022).data_ser"
-    "vice.ReadAccountDirectoryRequest\032&.data_"
-    "service.AccountDirectoryResponse\"\000\022e\n\021Cr"
-    "eateAccountRole\022&.data_service.CreateAcc"
-    "ountRoleRequest\032&.data_service.AccountDi"
-    "rectoryResponse\"\000\022a\n\021LookupAccountRole\022&"
-    ".data_service.LookupAccountRoleRequest\032\""
-    ".data_service.AccountRoleOwnership\"\000\022e\n\021"
-    "RepairAccountRole\022&.data_service.RepairA"
-    "ccountRoleRequest\032&.data_service.Account"
-    "DirectoryResponse\"\000\022W\n\022RemoveAccountRole"
-    "s\022\'.data_service.RemoveAccountRolesReque"
-    "st\032\026.google.protobuf.Empty\"\000\022i\n\022SetAccou"
-    "ntRealName\022\'.data_service.SetAccountReal"
-    "NameRequest\032(.data_service.SetAccountRea"
-    "lNameResponse\"\000\022i\n\022GetAccountRealName\022\'."
-    "data_service.GetAccountRealNameRequest\032("
-    ".data_service.GetAccountRealNameResponse"
-    "\"\000\022o\n\024ResetAccountRealName\022).data_servic"
-    "e.ResetAccountRealNameRequest\032*.data_ser"
-    "vice.ResetAccountRealNameResponse\"\000\022k\n\034U"
-    "psertAccountChannelIdentity\0221.data_servi"
-    "ce.UpsertAccountChannelIdentityRequest\032\026"
-    ".google.protobuf.Empty\"\000\022{\n\030GetPlayerCha"
-    "nnelIdentity\022-.data_service.GetPlayerCha"
-    "nnelIdentityRequest\032..data_service.GetPl"
-    "ayerChannelIdentityResponse\"\000\022l\n\025BeginAc"
-    "countRoleTrade\022*.data_service.BeginAccou"
-    "ntRoleTradeRequest\032%.data_service.Accoun"
-    "tRoleTradeReceipt\"\000\022|\n\035ConfirmAccountRol"
-    "eTradeFreeze\0222.data_service.ConfirmAccou"
-    "ntRoleTradeFreezeRequest\032%.data_service."
-    "AccountRoleTradeReceipt\"\000\022n\n\026CancelAccou"
-    "ntRoleTrade\022+.data_service.CancelAccount"
-    "RoleTradeRequest\032%.data_service.AccountR"
-    "oleTradeReceipt\"\000\022k\n\023TransferAccountRole"
-    "\022(.data_service.TransferAccountRoleReque"
-    "st\032(.data_service.AccountRoleTransferRec"
-    "eipt\"\000\022o\n\024CheckAccountRoleSlot\022).data_se"
-    "rvice.CheckAccountRoleSlotRequest\032*.data"
-    "_service.CheckAccountRoleSlotResponse\"\000\022"
-    "f\n\021GetRoleFenceState\022&.data_service.GetR"
-    "oleFenceStateRequest\032\'.data_service.GetR"
-    "oleFenceStateResponse\"\000\022l\n\023VerifyRoleAdm"
-    "ission\022(.data_service.VerifyRoleAdmissio"
-    "nRequest\032).data_service.VerifyRoleAdmiss"
-    "ionResponse\"\000\022r\n\025RegisterRoleAdmission\022*"
-    ".data_service.RegisterRoleAdmissionReque"
-    "st\032+.data_service.RegisterRoleAdmissionR"
-    "esponse\"\000\022l\n\023CloseRoleAdmissions\022(.data_"
-    "service.CloseRoleAdmissionsRequest\032).dat"
-    "a_service.CloseRoleAdmissionsResponse\"\000\022"
-    "U\n\021AckRoleTradeDrain\022&.data_service.AckR"
-    "oleTradeDrainRequest\032\026.google.protobuf.E"
-    "mpty\"\000\022n\n\026RequestAccountDeletion\022+.data_"
-    "service.RequestAccountDeletionRequest\032%."
-    "data_service.AccountDeletionResponse\"\000\022l"
-    "\n\025CancelAccountDeletion\022*.data_service.C"
-    "ancelAccountDeletionRequest\032%.data_servi"
-    "ce.AccountDeletionResponse\"\000\022r\n\025ClaimAcc"
-    "ountDeletions\022*.data_service.ClaimAccoun"
-    "tDeletionsRequest\032+.data_service.ClaimAc"
-    "countDeletionsResponse\"\000\022r\n\025FinishAccoun"
-    "tDeletion\022*.data_service.FinishAccountDe"
-    "letionRequest\032+.data_service.FinishAccou"
-    "ntDeletionResponse\"\000\022k\n\034ReleaseDeadPlaye"
-    "rStoreHolder\0221.data_service.ReleaseDeadP"
-    "layerStoreHolderRequest\032\026.google.protobu"
-    "f.Empty\"\000\022r\n\025ReadPlayerStoreHolder\022*.dat"
-    "a_service.ReadPlayerStoreHolderRequest\032+"
-    ".data_service.ReadPlayerStoreHolderRespo"
-    "nse\"\000\022W\n\022RegisterPlayerZone\022\'.data_servi"
-    "ce.RegisterPlayerZoneRequest\032\026.google.pr"
-    "otobuf.Empty\"\000\022f\n\021GetPlayerHomeZone\022&.da"
-    "ta_service.GetPlayerHomeZoneRequest\032\'.da"
-    "ta_service.GetPlayerHomeZoneResponse\"\000\022u"
-    "\n\026BatchGetPlayerHomeZone\022+.data_service."
-    "BatchGetPlayerHomeZoneRequest\032,.data_ser"
-    "vice.BatchGetPlayerHomeZoneResponse\"\000\022P\n"
-    "\016GetMergedZones\022\026.google.protobuf.Empty\032"
-    "$.data_service.GetMergedZonesResponse\"\000\022"
-    "]\n\016CountZoneRoles\022#.data_service.CountZo"
-    "neRolesRequest\032$.data_service.CountZoneR"
-    "olesResponse\"\000\022]\n\016GetPlayerRoute\022#.data_"
-    "service.GetPlayerRouteRequest\032$.data_ser"
-    "vice.GetPlayerRouteResponse\"\000\022l\n\023ListPla"
-    "yerSnapshots\022(.data_service.ListPlayerSn"
-    "apshotsRequest\032).data_service.ListPlayer"
-    "SnapshotsResponse\"\000\022c\n\020BatchRecallItems\022"
-    "%.data_service.BatchRecallItemsRequest\032&"
-    ".data_service.BatchRecallItemsResponse\"\000"
-    "\022_\n\016GetRecallBatch\022#.data_service.GetRec"
+    "\"E\n\037GetPlayerChannelIdentityRequest\022\021\n\tp"
+    "layer_id\030\001 \001(\004\022\017\n\007account\030\002 \001(\t\"\245\001\n GetP"
+    "layerChannelIdentityResponse\022\r\n\005found\030\001 "
+    "\001(\010\022\017\n\007account\030\002 \001(\t\022\017\n\007channel\030\003 \001(\t\022\017\n"
+    "\007open_id\030\004 \001(\t\022\032\n\022account_created_ms\030\005 \001"
+    "(\004\022\024\n\014player_level\030\006 \001(\r\022\r\n\005retry\030\007 \001(\010\""
+    "s\n\033UpdateRoleAppearanceRequest\022\021\n\tplayer"
+    "_id\030\001 \001(\004\022\025\n\rappearance_id\030\002 \001(\t\022*\n\004auth"
+    "\030\003 \001(\0132\034.common.base.ServiceCallAuth\"/\n\034"
+    "UpdateRoleAppearanceResponse\022\017\n\007updated\030"
+    "\001 \001(\010\"}\n SyncAccountStage1TradableReques"
+    "t\022\021\n\tplayer_id\030\001 \001(\004\022\032\n\022desired_char_tot"
+    "al\030\002 \001(\r\022*\n\004auth\030\003 \001(\0132\034.common.base.Ser"
+    "viceCallAuth\"l\n!SyncAccountStage1Tradabl"
+    "eResponse\022\r\n\005found\030\001 \001(\010\022\034\n\024confirmed_ch"
+    "ar_total\030\002 \001(\r\022\032\n\022account_used_total\030\003 \001"
+    "(\r*\200\001\n\024AccountDeletionState\022\037\n\033ACCOUNT_D"
+    "ELETION_STATE_NONE\020\000\022\"\n\036ACCOUNT_DELETION"
+    "_STATE_PENDING\020\001\022#\n\037ACCOUNT_DELETION_STA"
+    "TE_DELETING\020\002*\374\001\n\026AccountDeletionOutcome"
+    "\022(\n$ACCOUNT_DELETION_OUTCOME_UNSPECIFIED"
+    "\020\000\022\037\n\033ACCOUNT_DELETION_OUTCOME_OK\020\001\022&\n\"A"
+    "CCOUNT_DELETION_OUTCOME_NOT_FOUND\020\002\022$\n A"
+    "CCOUNT_DELETION_OUTCOME_BLOCKED\020\003\022\"\n\036ACC"
+    "OUNT_DELETION_OUTCOME_RETRY\020\004\022%\n!ACCOUNT"
+    "_DELETION_OUTCOME_TOO_LATE\020\005*\264\002\n\025Account"
+    "RoleTradeState\022(\n$ACCOUNT_ROLE_TRADE_STA"
+    "TE_UNSPECIFIED\020\000\022%\n!ACCOUNT_ROLE_TRADE_S"
+    "TATE_FREEZING\020\001\022#\n\037ACCOUNT_ROLE_TRADE_ST"
+    "ATE_FROZEN\020\002\022&\n\"ACCOUNT_ROLE_TRADE_STATE"
+    "_CANCELLED\020\003\022(\n$ACCOUNT_ROLE_TRADE_STATE"
+    "_TRANSFERRED\020\004\022+\n\'ACCOUNT_ROLE_TRADE_STA"
+    "TE_CANCEL_PENDING\020\005\022&\n\"ACCOUNT_ROLE_TRAD"
+    "E_STATE_PREPARING\020\006*\351\001\n\035AccountRoleFreez"
+    "eEvidenceKind\0221\n-ACCOUNT_ROLE_FREEZE_EVI"
+    "DENCE_KIND_UNSPECIFIED\020\000\0222\n.ACCOUNT_ROLE"
+    "_FREEZE_EVIDENCE_KIND_NO_ADMISSION\020\001\022+\n\'"
+    "ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_SCENE\020"
+    "\002\0224\n0ACCOUNT_ROLE_FREEZE_EVIDENCE_KIND_I"
+    "NITIAL_COMMIT\020\003*\207\001\n\014SnapshotType\022\023\n\017SNAP"
+    "SHOT_MANUAL\020\000\022\025\n\021SNAPSHOT_PERIODIC\020\001\022\034\n\030"
+    "SNAPSHOT_PRE_MAINTENANCE\020\002\022\031\n\025SNAPSHOT_P"
+    "RE_ROLLBACK\020\003\022\022\n\016SNAPSHOT_LOGIN\020\004*Y\n\nRec"
+    "allKind\022\033\n\027RECALL_KIND_UNSPECIFIED\020\000\022\030\n\024"
+    "RECALL_KIND_CURRENCY\020\001\022\024\n\020RECALL_KIND_IT"
+    "EM\020\002*\320\002\n\022RecallReviewReason\022$\n RECALL_RE"
+    "VIEW_REASON_UNSPECIFIED\020\000\022 \n\034RECALL_REVI"
+    "EW_NO_CORRELATION\020\001\022!\n\035RECALL_REVIEW_NO_"
+    "PLAYER_STORE\020\002\022\037\n\033RECALL_REVIEW_NOT_IN_L"
+    "EDGER\020\003\022\"\n\036RECALL_REVIEW_LEDGER_AMBIGUOU"
+    "S\020\004\022!\n\035RECALL_REVIEW_LEDGER_REJECTED\020\005\022 "
+    "\n\034RECALL_REVIEW_LEDGER_PARTIAL\020\006\022$\n RECA"
+    "LL_REVIEW_LEDGER_NOT_APPLIED\020\007\022\037\n\033RECALL"
+    "_REVIEW_ROWS_DISAGREE\020\010*\254\002\n\020RenameRoleRe"
+    "sult\022\"\n\036RENAME_ROLE_RESULT_UNSPECIFIED\020\000"
+    "\022\022\n\016RENAME_ROLE_OK\020\001\022\025\n\021RENAME_ROLE_TAKE"
+    "N\020\002\022\027\n\023RENAME_ROLE_INVALID\020\003\022\030\n\024RENAME_R"
+    "OLE_COOLDOWN\020\004\022\026\n\022RENAME_ROLE_FROZEN\020\005\022\031"
+    "\n\025RENAME_ROLE_STALE_SEQ\020\006\022\031\n\025RENAME_ROLE"
+    "_SAME_NAME\020\007\022\031\n\025RENAME_ROLE_NOT_FOUND\020\010\022"
+    "\027\n\023RENAME_ROLE_EXPIRED\020\t\022\024\n\020RENAME_ROLE_"
+    "BUSY\020\n2\210*\n\013DataService\022k\n\024ReadAccountDir"
+    "ectory\022).data_service.ReadAccountDirecto"
+    "ryRequest\032&.data_service.AccountDirector"
+    "yResponse\"\000\022e\n\021CreateAccountRole\022&.data_"
+    "service.CreateAccountRoleRequest\032&.data_"
+    "service.AccountDirectoryResponse\"\000\022a\n\021Lo"
+    "okupAccountRole\022&.data_service.LookupAcc"
+    "ountRoleRequest\032\".data_service.AccountRo"
+    "leOwnership\"\000\022e\n\021RepairAccountRole\022&.dat"
+    "a_service.RepairAccountRoleRequest\032&.dat"
+    "a_service.AccountDirectoryResponse\"\000\022W\n\022"
+    "RemoveAccountRoles\022\'.data_service.Remove"
+    "AccountRolesRequest\032\026.google.protobuf.Em"
+    "pty\"\000\022i\n\022SetAccountRealName\022\'.data_servi"
+    "ce.SetAccountRealNameRequest\032(.data_serv"
+    "ice.SetAccountRealNameResponse\"\000\022i\n\022GetA"
+    "ccountRealName\022\'.data_service.GetAccount"
+    "RealNameRequest\032(.data_service.GetAccoun"
+    "tRealNameResponse\"\000\022o\n\024ResetAccountRealN"
+    "ame\022).data_service.ResetAccountRealNameR"
+    "equest\032*.data_service.ResetAccountRealNa"
+    "meResponse\"\000\022k\n\034UpsertAccountChannelIden"
+    "tity\0221.data_service.UpsertAccountChannel"
+    "IdentityRequest\032\026.google.protobuf.Empty\""
+    "\000\022{\n\030GetPlayerChannelIdentity\022-.data_ser"
+    "vice.GetPlayerChannelIdentityRequest\032..d"
+    "ata_service.GetPlayerChannelIdentityResp"
+    "onse\"\000\022l\n\025BeginAccountRoleTrade\022*.data_s"
+    "ervice.BeginAccountRoleTradeRequest\032%.da"
+    "ta_service.AccountRoleTradeReceipt\"\000\022|\n\035"
+    "ConfirmAccountRoleTradeFreeze\0222.data_ser"
+    "vice.ConfirmAccountRoleTradeFreezeReques"
+    "t\032%.data_service.AccountRoleTradeReceipt"
+    "\"\000\022n\n\026CancelAccountRoleTrade\022+.data_serv"
+    "ice.CancelAccountRoleTradeRequest\032%.data"
+    "_service.AccountRoleTradeReceipt\"\000\022k\n\023Tr"
+    "ansferAccountRole\022(.data_service.Transfe"
+    "rAccountRoleRequest\032(.data_service.Accou"
+    "ntRoleTransferReceipt\"\000\022o\n\024CheckAccountR"
+    "oleSlot\022).data_service.CheckAccountRoleS"
+    "lotRequest\032*.data_service.CheckAccountRo"
+    "leSlotResponse\"\000\022f\n\021GetRoleFenceState\022&."
+    "data_service.GetRoleFenceStateRequest\032\'."
+    "data_service.GetRoleFenceStateResponse\"\000"
+    "\022l\n\023VerifyRoleAdmission\022(.data_service.V"
+    "erifyRoleAdmissionRequest\032).data_service"
+    ".VerifyRoleAdmissionResponse\"\000\022r\n\025Regist"
+    "erRoleAdmission\022*.data_service.RegisterR"
+    "oleAdmissionRequest\032+.data_service.Regis"
+    "terRoleAdmissionResponse\"\000\022l\n\023CloseRoleA"
+    "dmissions\022(.data_service.CloseRoleAdmiss"
+    "ionsRequest\032).data_service.CloseRoleAdmi"
+    "ssionsResponse\"\000\022U\n\021AckRoleTradeDrain\022&."
+    "data_service.AckRoleTradeDrainRequest\032\026."
+    "google.protobuf.Empty\"\000\022n\n\026RequestAccoun"
+    "tDeletion\022+.data_service.RequestAccountD"
+    "eletionRequest\032%.data_service.AccountDel"
+    "etionResponse\"\000\022l\n\025CancelAccountDeletion"
+    "\022*.data_service.CancelAccountDeletionReq"
+    "uest\032%.data_service.AccountDeletionRespo"
+    "nse\"\000\022r\n\025ClaimAccountDeletions\022*.data_se"
+    "rvice.ClaimAccountDeletionsRequest\032+.dat"
+    "a_service.ClaimAccountDeletionsResponse\""
+    "\000\022r\n\025FinishAccountDeletion\022*.data_servic"
+    "e.FinishAccountDeletionRequest\032+.data_se"
+    "rvice.FinishAccountDeletionResponse\"\000\022k\n"
+    "\034ReleaseDeadPlayerStoreHolder\0221.data_ser"
+    "vice.ReleaseDeadPlayerStoreHolderRequest"
+    "\032\026.google.protobuf.Empty\"\000\022r\n\025ReadPlayer"
+    "StoreHolder\022*.data_service.ReadPlayerSto"
+    "reHolderRequest\032+.data_service.ReadPlaye"
+    "rStoreHolderResponse\"\000\022W\n\022RegisterPlayer"
+    "Zone\022\'.data_service.RegisterPlayerZoneRe"
+    "quest\032\026.google.protobuf.Empty\"\000\022f\n\021GetPl"
+    "ayerHomeZone\022&.data_service.GetPlayerHom"
+    "eZoneRequest\032\'.data_service.GetPlayerHom"
+    "eZoneResponse\"\000\022u\n\026BatchGetPlayerHomeZon"
+    "e\022+.data_service.BatchGetPlayerHomeZoneR"
+    "equest\032,.data_service.BatchGetPlayerHome"
+    "ZoneResponse\"\000\022P\n\016GetMergedZones\022\026.googl"
+    "e.protobuf.Empty\032$.data_service.GetMerge"
+    "dZonesResponse\"\000\022]\n\016CountZoneRoles\022#.dat"
+    "a_service.CountZoneRolesRequest\032$.data_s"
+    "ervice.CountZoneRolesResponse\"\000\022]\n\016GetPl"
+    "ayerRoute\022#.data_service.GetPlayerRouteR"
+    "equest\032$.data_service.GetPlayerRouteResp"
+    "onse\"\000\022l\n\023ListPlayerSnapshots\022(.data_ser"
+    "vice.ListPlayerSnapshotsRequest\032).data_s"
+    "ervice.ListPlayerSnapshotsResponse\"\000\022c\n\020"
+    "BatchRecallItems\022%.data_service.BatchRec"
+    "allItemsRequest\032&.data_service.BatchReca"
+    "llItemsResponse\"\000\022_\n\016GetRecallBatch\022#.da"
+    "ta_service.GetRecallBatchRequest\032&.data_"
+    "service.BatchRecallItemsResponse\"\000\022e\n\021Ca"
+    "ncelRecallBatch\022&.data_service.CancelRec"
     "allBatchRequest\032&.data_service.BatchReca"
-    "llItemsResponse\"\000\022e\n\021CancelRecallBatch\022&"
-    ".data_service.CancelRecallBatchRequest\032&"
-    ".data_service.BatchRecallItemsResponse\"\000"
-    "\022`\n\017ResolveRecallOp\022$.data_service.Resol"
-    "veRecallOpRequest\032%.data_service.Resolve"
-    "RecallOpResponse\"\000\022\204\001\n\033RegisterRecallRev"
-    "iewHandled\0220.data_service.RegisterRecall"
-    "ReviewHandledRequest\0321.data_service.Regi"
-    "sterRecallReviewHandledResponse\"\000\022l\n\023Que"
-    "ryTransactionLog\022(.data_service.QueryTra"
-    "nsactionLogRequest\032).data_service.QueryT"
-    "ransactionLogResponse\"\000\022f\n\021AllocateIdSeg"
-    "ment\022&.data_service.AllocateIdSegmentReq"
-    "uest\032\'.data_service.AllocateIdSegmentRes"
-    "ponse\"\000\022f\n\021ReservePlayerName\022&.data_serv"
-    "ice.ReservePlayerNameRequest\032\'.data_serv"
-    "ice.ReservePlayerNameResponse\"\000\022U\n\021Relea"
-    "sePlayerName\022&.data_service.ReleasePlaye"
-    "rNameRequest\032\026.google.protobuf.Empty\"\000\022i"
-    "\n\022BatchGetPlayerName\022\'.data_service.Batc"
-    "hGetPlayerNameRequest\032(.data_service.Bat"
-    "chGetPlayerNameResponse\"\000\022Q\n\nRenameRole\022"
-    "\037.data_service.RenameRoleRequest\032 .data_"
-    "service.RenameRoleResponse\"\000\022r\n\025BatchGet"
-    "PlayerDisplay\022*.data_service.BatchGetPla"
-    "yerDisplayRequest\032+.data_service.BatchGe"
-    "tPlayerDisplayResponse\"\000\022u\n\026GetPlayerAss"
-    "etOpLedger\022+.data_service.GetPlayerAsset"
-    "OpLedgerRequest\032,.data_service.GetPlayer"
-    "AssetOpLedgerResponse\"\000\022o\n\024GetPlayerInbo"
-    "xLedger\022).data_service.GetPlayerInboxLed"
-    "gerRequest\032*.data_service.GetPlayerInbox"
-    "LedgerResponse\"\000\022u\n\026GetPlayerItemGainBlo"
-    "ck\022+.data_service.GetPlayerItemGainBlock"
-    "Request\032,.data_service.GetPlayerItemGain"
-    "BlockResponse\"\000\022o\n\024UpdateRoleAppearance\022"
-    ").data_service.UpdateRoleAppearanceReque"
-    "st\032*.data_service.UpdateRoleAppearanceRe"
-    "sponse\"\000\022~\n\031SyncAccountStage1Tradable\022.."
-    "data_service.SyncAccountStage1TradableRe"
-    "quest\032/.data_service.SyncAccountStage1Tr"
-    "adableResponse\"\000B\033Z\031data_service/data_se"
-    "rviceb\006proto3"
+    "llItemsResponse\"\000\022`\n\017ResolveRecallOp\022$.d"
+    "ata_service.ResolveRecallOpRequest\032%.dat"
+    "a_service.ResolveRecallOpResponse\"\000\022\204\001\n\033"
+    "RegisterRecallReviewHandled\0220.data_servi"
+    "ce.RegisterRecallReviewHandledRequest\0321."
+    "data_service.RegisterRecallReviewHandled"
+    "Response\"\000\022l\n\023QueryTransactionLog\022(.data"
+    "_service.QueryTransactionLogRequest\032).da"
+    "ta_service.QueryTransactionLogResponse\"\000"
+    "\022f\n\021AllocateIdSegment\022&.data_service.All"
+    "ocateIdSegmentRequest\032\'.data_service.All"
+    "ocateIdSegmentResponse\"\000\022f\n\021ReservePlaye"
+    "rName\022&.data_service.ReservePlayerNameRe"
+    "quest\032\'.data_service.ReservePlayerNameRe"
+    "sponse\"\000\022U\n\021ReleasePlayerName\022&.data_ser"
+    "vice.ReleasePlayerNameRequest\032\026.google.p"
+    "rotobuf.Empty\"\000\022i\n\022BatchGetPlayerName\022\'."
+    "data_service.BatchGetPlayerNameRequest\032("
+    ".data_service.BatchGetPlayerNameResponse"
+    "\"\000\022Q\n\nRenameRole\022\037.data_service.RenameRo"
+    "leRequest\032 .data_service.RenameRoleRespo"
+    "nse\"\000\022r\n\025BatchGetPlayerDisplay\022*.data_se"
+    "rvice.BatchGetPlayerDisplayRequest\032+.dat"
+    "a_service.BatchGetPlayerDisplayResponse\""
+    "\000\022u\n\026GetPlayerAssetOpLedger\022+.data_servi"
+    "ce.GetPlayerAssetOpLedgerRequest\032,.data_"
+    "service.GetPlayerAssetOpLedgerResponse\"\000"
+    "\022o\n\024GetPlayerInboxLedger\022).data_service."
+    "GetPlayerInboxLedgerRequest\032*.data_servi"
+    "ce.GetPlayerInboxLedgerResponse\"\000\022u\n\026Get"
+    "PlayerItemGainBlock\022+.data_service.GetPl"
+    "ayerItemGainBlockRequest\032,.data_service."
+    "GetPlayerItemGainBlockResponse\"\000\022o\n\024Upda"
+    "teRoleAppearance\022).data_service.UpdateRo"
+    "leAppearanceRequest\032*.data_service.Updat"
+    "eRoleAppearanceResponse\"\000\022~\n\031SyncAccount"
+    "Stage1Tradable\022..data_service.SyncAccoun"
+    "tStage1TradableRequest\032/.data_service.Sy"
+    "ncAccountStage1TradableResponse\"\000B\033Z\031dat"
+    "a_service/data_serviceb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto_deps[8] = {
@@ -18607,7 +18621,7 @@ static ::absl::once_flag descriptor_table_proto_2fdata_5fservice_2fdata_5fservic
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto = {
     false,
     false,
-    19613,
+    19630,
     descriptor_table_protodef_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
     "proto/data_service/data_service.proto",
     &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto_once,
@@ -44816,21 +44830,37 @@ GetPlayerChannelIdentityRequest::GetPlayerChannelIdentityRequest(::google::proto
   SharedCtor(arena);
   // @@protoc_insertion_point(arena_constructor:data_service.GetPlayerChannelIdentityRequest)
 }
+PROTOBUF_NDEBUG_INLINE GetPlayerChannelIdentityRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::data_service::GetPlayerChannelIdentityRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        account_(arena, from.account_) {}
+
 GetPlayerChannelIdentityRequest::GetPlayerChannelIdentityRequest(
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetPlayerChannelIdentityRequest& from)
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const GetPlayerChannelIdentityRequest& from)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, GetPlayerChannelIdentityRequest_get_class_data()),
+    : ::google::protobuf::Message(arena, GetPlayerChannelIdentityRequest_get_class_data()) {
+
 #else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(arena),
+    : ::google::protobuf::Message(arena) {
 #endif  // PROTOBUF_CUSTOM_VTABLE
-      _impl_(from._impl_) {
+  GetPlayerChannelIdentityRequest* const _this = this;
+  (void)_this;
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.player_id_ = from._impl_.player_id_;
+
+  // @@protoc_insertion_point(copy_constructor:data_service.GetPlayerChannelIdentityRequest)
 }
 PROTOBUF_NDEBUG_INLINE GetPlayerChannelIdentityRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : _cached_size_{0} {}
+      : _cached_size_{0},
+        account_(arena) {}
 
 inline void GetPlayerChannelIdentityRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -44847,6 +44877,7 @@ inline void GetPlayerChannelIdentityRequest::SharedDtor(MessageLite& self) {
   }
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.account_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -44883,6 +44914,10 @@ PROTOBUF_NOINLINE void GetPlayerChannelIdentityRequest::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.account_.ClearNonDefaultToEmpty();
+  }
   _impl_.player_id_ = ::uint64_t{0u};
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -44908,11 +44943,21 @@ PROTOBUF_NOINLINE void GetPlayerChannelIdentityRequest::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 player_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           1, this_._internal_player_id(), target);
+    }
+  }
+
+  // string account = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_account().empty()) {
+      const ::std::string& _s = this_._internal_account();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "data_service.GetPlayerChannelIdentityRequest.account");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
     }
   }
 
@@ -44939,10 +44984,18 @@ PROTOBUF_NOINLINE void GetPlayerChannelIdentityRequest::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void)cached_has_bits;
 
-   {
-    // uint64 player_id = 1;
-    cached_has_bits = this_._impl_._has_bits_[0];
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // string account = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_account().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_account());
+      }
+    }
+    // uint64 player_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
@@ -44966,9 +45019,20 @@ void GetPlayerChannelIdentityRequest::MergeImpl(::google::protobuf::MessageLite&
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (from._internal_player_id() != 0) {
-      _this->_impl_.player_id_ = from._impl_.player_id_;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_account().empty()) {
+        _this->_internal_set_account(from._internal_account());
+      } else {
+        if (_this->_impl_.account_.IsDefault()) {
+          _this->_internal_set_account("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -44986,8 +45050,11 @@ void GetPlayerChannelIdentityRequest::CopyFrom(const GetPlayerChannelIdentityReq
 
 void GetPlayerChannelIdentityRequest::InternalSwap(GetPlayerChannelIdentityRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.account_, &other->_impl_.account_, arena);
   swap(_impl_.player_id_, other->_impl_.player_id_);
 }
 

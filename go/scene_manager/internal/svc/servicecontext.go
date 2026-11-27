@@ -133,8 +133,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	// 通过 shared/snowflakealloc 申领一个独立于 NodeInfo.NodeId 的 Snowflake 槽位。
 	// 关键点:
-	//   - kind="scene-manager",槽池按 kind / cluster 隔离;LegacyPrefix="/scene_manager"
-	//     让 cluster 0 在滚动升级期仍读旧布局的水位 / 活 id(发布一版后可删)。
+	//   - kind="scene-manager",槽池按 kind / cluster 隔离。
 	//   - 节点名 = hostname_监听端口,而不是裸 hostname:多副本部署后同一台机器
 	//     (本地 dev 双实例、k8s 同节点多 pod 用 hostNetwork 等)会跑多个实例,
 	//     端口是实例槽位的稳定标识,同槽位优雅重启仍复用同一个槽,本地缓存也各自一份;
@@ -153,10 +152,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	hd, err := snowflakealloc.AllocateWithKeepAlive(ctx, etcdCli, "scene-manager", nodeName, snowflakealloc.Options{
-		LeaseTTL:     60,
-		ClusterID:    c.ClusterId,
-		LegacyPrefix: "/scene_manager",
-		CachePath:    snowflakealloc.DefaultCachePath(c.SnowflakeCacheDir, "scene-manager", nodeName),
+		LeaseTTL:  60,
+		ClusterID: c.ClusterId,
+		CachePath: snowflakealloc.DefaultCachePath(c.SnowflakeCacheDir, "scene-manager", nodeName),
 	})
 	if err != nil {
 		panic(fmt.Sprintf("snowflake worker id alloc failed: %v", err))

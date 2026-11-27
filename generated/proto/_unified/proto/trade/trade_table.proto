@@ -280,6 +280,10 @@ message TradeCommerceManualAction {
   uint64 linked_commerce_id = 15;
   // partial(第 2 类):每条部分发放 / 部分扣出的腿与人工认定的缺口。
   repeated TradeCommercePartialPart partial_parts = 16;
+  // 双人复核(docs/design/admin-identity-and-dual-control.md §5.6):后台流水号与批准人;发起人就是上面的 operator。
+  // 同一合同上 approval_id 不重复,重放同一个批准号回原结果。没经双人复核的处置(本机开发)两项为空。
+  string approval_id = 17;
+  string approver = 18;
 }
 
 // partial 动作里人工认定的一条腿的缺口(commerce.ResolveManual)。缺口只含实例、宝宝和整条货币:

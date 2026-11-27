@@ -557,6 +557,17 @@ func otherSchemasOf(grants []string, db string) []string {
 	return out
 }
 
+// hasGrantsOn 报告账号在 db 这个库(库级或表级)上有没有授权。全局授权与 USAGE 不算:修复身份的授权是按表给的。
+func hasGrantsOn(grants []string, db string) bool {
+	for _, line := range grants {
+		grant := parseGrant(line)
+		if grant.schema == db && !(grant.privs["USAGE"] && len(grant.privs) == 1) {
+			return true
+		}
+	}
+	return false
+}
+
 // missingGrants 列源库有、目标没有的授权,只看这个库和全局。别的库的授权两边本来就不同。
 func missingGrants(source, target []string, db string) []string {
 	have := map[string]map[string]bool{}

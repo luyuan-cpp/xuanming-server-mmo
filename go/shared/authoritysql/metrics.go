@@ -100,6 +100,21 @@ var writerGateSeconds = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 
 var registerWriterGateSeconds sync.Once
 
+// writerGrantsMissing 是这一代缺几个逻辑库的写资格(MissingWriterGrants)。大于 0 时这个 Pod 不就绪,集群恢复之后要重建它。
+// 只有写多个逻辑库的服务(data_service、go/db)上报;告警 SqlWriterGrantsIncomplete 读它。
+var writerGrantsMissing = prometheus.NewGauge(prometheus.GaugeOpts{
+	Name: "writer_grants_missing",
+	Help: "这一代写者缺写资格的逻辑库个数:写者注册时连不上的库这一代不注册、一直关着。大于 0 时 Pod 不就绪,集群恢复之后重建这个 Pod。",
+})
+
+var registerWriterGrantsMissing sync.Once
+
+// ObserveMissingWriterGrants 上报这一代缺写资格的逻辑库个数。注册失败(同名序列已被占用)不影响业务,只是不上报。
+func ObserveMissingWriterGrants(n int) {
+	registerWriterGrantsMissing.Do(func() { _ = prometheus.Register(writerGrantsMissing) })
+	writerGrantsMissing.Set(float64(n))
+}
+
 // observeWriterGate 记一次闸门耗时,从 started 到现在。注册失败(同名序列已被别的收集器占用)不影响业务,只是不上报。
 func observeWriterGate(logicalDB, phase string, started time.Time) {
 	registerWriterGateSeconds.Do(func() { _ = prometheus.Register(writerGateSeconds) })

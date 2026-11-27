@@ -1,11 +1,11 @@
 # 配置表热更与表包分发运维手册
 
 > **设计依据**：[docs/design/config-table-hot-reload.md](../design/config-table-hot-reload.md)
-> **告警规则**：[deploy/k8s/table-bundle-alerts.yaml](../../deploy/k8s/table-bundle-alerts.yaml)
+> **告警规则**：[deploy/k8s/table-bundle-alerts.yaml](../../deploy/k8s/table-bundle-alerts.yaml)；sidecar 指标的抓取：[deploy/k8s/table-sync-podmonitor.yaml](../../deploy/k8s/table-sync-podmonitor.yaml)（两份一起装，见 §3）
 
 ## 1. 架构与日常发布流程
 
-表包按内容摘要不可变存放在对象存储（`tables/<schema_digest>/<content_digest>.tar.gz` + `.sha256`），etcd 只存轨道指针（`/mmorpg/tables/pointer/<track>/<schema_digest>`）和带 30 秒租约的 Pod 回报（`/mmorpg/tables/status/<track>/<pod>`）。
+表包按内容摘要不可变存放在对象存储（`tables/<schema_digest>/<content_digest>.tar.gz` + `.sha256`），etcd 只存轨道指针（`/mmorpg/tables/pointer/<track>/<schema_digest>`）和带 30 秒租约的 Pod 回报（`/mmorpg/tables/status/<track>/<namespace>/<pod>`；带 namespace 是因为各 zone 的 StatefulSet 同名，设计 §6.1）。回报只在状态变化时写，平时只续租。
 
 标准发布顺序：
 
@@ -55,6 +55,16 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command tables-reload-local
   - C++：`gate`、`scene`（Deployment 与 Agones Fleet）、`battle`（Deployment、HostPort、Agones Fleet 与金丝雀池）；
   - Go：`guild`、`login`、`mail`、`match`、`rank`、`scene-manager`。
 - 不挂 sidecar 的服务：`player-locator`、`trade`、`payment`、`chat`、`friend`、`data-service`、`db`、`client-rpc-router`、`player-inbox`、`content-guard`。
+- **外接对象存储时，先在每个跑 sidecar 的 namespace 里建只读凭据 Secret**：infra namespace（battle 池与全局的 guild、mail、rank、match 在这里），以及每个 zone 的 namespace（gate、scene、login、scene-manager）。Secret 名缺省 `table-sync-s3`（`-TableSyncS3SecretName` 可改），键 `access-key-id`、`secret-access-key`，都不能为空。部署脚本在该 namespace 的任何工作负载之前核对它，缺了就报 `Secret table-sync-s3 does not exist in namespace …` 并停下，什么都不写。只核对键名与长度，不读值。没有这道核对时，缺 Secret 的后果是该 namespace 里所有带 sidecar 的 Pod 卡在 `CreateContainerConfigError`。
+  ```powershell
+  kubectl -n <namespace> create secret generic table-sync-s3 --from-literal=access-key-id=<只读 key> --from-literal=secret-access-key=<只读 secret>
+  ```
+- **监控**：除了告警规则，还要装 `deploy/k8s/table-sync-podmonitor.yaml`。sidecar 的指标在它自己的 9099 端口上，Pod 注解只能指业务容器的端口，不装这份，`TableSyncStale` 和 `TableSyncFetchFailing` 永远没有数据。
+  ```powershell
+  kubectl apply -n observability -f deploy/k8s/table-bundle-alerts.yaml
+  kubectl apply -n observability -f deploy/k8s/table-sync-podmonitor.yaml
+  ```
+- **单包上限 64 MiB**（`pack` 时就拒绝）。它和 sidecar 卷的 `sizeLimit: 1Gi` 是一起算的（设计 §7「磁盘预算」），要放大必须两个一起改，否则一个大包会让 kubelet 驱逐整条轨道的 Pod。
 
 ## 4. 撤销、回滚与清理旧 schema 线
 
@@ -70,11 +80,12 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command tables-reload-local
 | `TableBundleRejected` | critical | 调 `GET /admin/tables` 看 `rejected_pods` 的原因。未到 `activate_at` 立即 `cancel`；已过生效点立即查明是数据问题还是个别 Pod 异常，按需 `rollback` 或向前发新包 |
 | `TableBundleNotConverged` | warning | 调 `GET /admin/tables` 找出滞后 Pod；查该 Pod `table-sync` 容器日志（是否 S3 拉取/校验失败）与业务日志（是否 `needs_restart`） |
 | `TableSyncStale` | warning | 检查 `table-sync` 到 `etcd.<infra>:2379` 的连通性与 etcd 集群健康；期间业务容器继续用本地旧表，不影响在线玩家 |
-| `TableBundleNeedsRestart` | info | 变更触及未标 `(cfg_hot_reload) = true` 的结构表，按常规发布手册滚动重启对应工作负载即可生效 |
+| `TableSyncFetchFailing` | warning | sidecar 连续 5 分钟以上取不到包。看 `kubectl logs <pod> -c table-sync`（403 先查签名与凭据，404 查包是否已上传、桶名是否对），再看卷里 `POINTER.json` 的 `sync_errors`。在跑的 Pod 继续用手上的表、收不到新包；这期间新起的 Pod 会拒绝启动（§6 第一行），所以要先修好存储再做扩容或滚动重启。到点前碰上，先 `cancel` 掉 `next` |
+| `TableBundleNeedsRestart` | info | 有实例停在 `needs_restart` 超过 24 小时：变更触及未标 `(cfg_hot_reload) = true` 的结构表，按常规发布手册滚动重启对应工作负载即可生效。重启后，或者指针改回不需要重启的包，告警自己消失 |
 
 ## 6. 不带告警的两种现象
 
 | 现象 | 原因与处置 |
 |---|---|
-| 新 Pod 的业务容器反复重启，日志里是 `Startup refused: table bundle for schema line …`（Go 是小写开头的同一句） | 这个 Pod 的 `table-sync` 没把本线的表包同步下来（对象存储不通、包不存在、摘要对不上），业务进程因此拒绝启动，不退回镜像里更旧的表。看 `kubectl logs <pod> -c table-sync`，以及卷里 `POINTER.json` 的 `sync_errors`。同步好之后业务容器自己会起来，不用人工干预；已经在跑的 Pod 不受影响 |
+| 新 Pod 的业务容器反复重启，日志里是 `Startup refused: table bundle for schema line …`（Go 是小写开头的同一句） | 这个 Pod 的 `table-sync` 没把本线的表包同步下来（对象存储不通、包不存在、摘要对不上），业务进程因此拒绝启动，不退回镜像里更旧的表。这是有意的取舍：起不来会马上被发现，带着旧表起来不会（设计 §8.1）。看 `kubectl logs <pod> -c table-sync`，以及卷里 `POINTER.json` 的 `sync_errors`。同步好之后业务容器自己会起来，不用人工干预；已经在跑的 Pod 不受影响 |
 | 被拒绝的包撤掉或回滚之后，`GET /admin/tables` 里的拒绝记录过几秒自己消失 | 正常。进程发现指针不再指向那一包，就清掉自己的拒绝 / 需要重启结论并重新回报。同一包再发一次会重新校验 |

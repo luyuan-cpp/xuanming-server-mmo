@@ -292,12 +292,13 @@ enum eBattleTicketRole {
 // 密钥 BaseDeployConfig.battle_token_secret,全部 battle 实例共享,与 gate 令牌密钥分域)。
 // 签名 = hex(HMAC-SHA256(secret, 序列化后的本消息字节)),形态与 GateTokenPayload 一致。
 // 寿命 = 房间作废期限(D25):同一票可重复用于战斗中重连;房间销毁即失效。
+// 未成年人的票另按他当天的截止时刻封顶(提前 5 秒,与 gate 关大厅连接同一时点),到点后同一张票不能再握手。
 message BattleTicketPayload {
   uint64 battle_id = 1;
   uint64 player_id = 2;
   uint32 battle_node_id = 3;        // 签发节点 node_id,验签侧必须等于自身
   string battle_instance_id = 4;    // 签发节点实例 UUID(node_uuid),防节点重启后 node_id 复用
-  uint64 expire_at_ms = 5;          // Unix 毫秒;与房间 deadline_ms 同值
+  uint64 expire_at_ms = 5;          // Unix 毫秒;房间 deadline_ms 与持票人截止时刻(未成年人,提前 5 秒)里较早的一个
   eBattleTicketRole role = 6;
   string spectator_operation_id = 7; // 观众原准入UUID，验签后仍须与房内当前operation相同。
 }
@@ -332,7 +333,7 @@ message BattleAssignedS2C {
   uint32 port = 3;
   bytes token_payload = 4;     // 序列化的 BattleTicketPayload,原样放进 BattleTokenVerifyRequest.payload
   bytes token_signature = 5;   // 原样放进 BattleTokenVerifyRequest.signature
-  uint64 expire_at_ms = 6;     // 票据 / 房间作废期限(Unix 毫秒)
+  uint64 expire_at_ms = 6;     // 票据期限(Unix 毫秒),与票据载荷里的 expire_at_ms 同值:通常就是房间作废期限
   eBattleTicketRole role = 7;
   // 同一台 battle 给小游戏客户端的 WebSocket 地址(NodeInfo.client_ws_url):小游戏客户端连它,原生客户端仍连 host / port;
   // 空串 = 这台 battle 不接小游戏(docs/design/minigame-websocket-gate.md W7、W9)。

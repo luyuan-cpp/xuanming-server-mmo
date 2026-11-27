@@ -1,0 +1,15 @@
+syntax = "proto3";
+package common.base;
+option go_package = "robot/proto/common/base";
+
+// 后台双人复核的批准记录(docs/design/admin-identity-and-dual-control.md §5.4)。
+// 后台(java/gm_admin)在第二个人批准一条高风险管理命令时生成,随请求下传;它在请求体里,
+// 所以请求自带的 ServiceCallAuth 签名(清空 auth 后的请求摘要)天然覆盖它,不需要另一套签名与密钥。
+// 资源服务用 go/shared/dualcontrol 核对:四项都在、两人不同、发起人就是请求里的操作人。
+// 只给服务端内部管理协议用,客户端协议不引用它。
+message AdminApproval {
+  string approval_id = 1;     // 后台流水号(十进制正整数文本);资源服务拿它做幂等键,并写进自己的留痕
+  string proposer = 2;        // 发起人:身份提供方的主体
+  string approver = 3;        // 批准人:必须与 proposer 不同
+  uint64 approved_at_ms = 4;  // 第一次批准的时刻;结果未知后的重试沿用它,请求摘要不变
+}

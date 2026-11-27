@@ -1135,7 +1135,8 @@ type CancelBattlePrepareRequest struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	BattleId uint64                 `protobuf:"varint,2,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"` // 不匹配 InBattleComp.battle_id 时忽略(防迟到取消)
-	// true = 调用方（match）已接管该 battle_id 的普通战书银两邮件退还，scene 取消备战时不得重复退银两。
+	// 已废弃,恒为 false(2026-11-26,数据覆写审计 r2 第 4 轮):match 不再发普通战书退费邮件,退还只走 scene 一条通道
+	// (待退标记随玩家存档原子提交),scene 不读这个字段,读到 true 也照退。字段号保留不复用。
 	SkipJianghuSilverRefund bool `protobuf:"varint,3,opt,name=skip_jianghu_silver_refund,json=skipJianghuSilverRefund,proto3" json:"skip_jianghu_silver_refund,omitempty"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache

@@ -1466,6 +1466,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GateTokenPayload final : public ::g
   // accessors -------------------------------------------------------
   enum : int {
     kHmacSessionKeyFieldNumber = 4,
+    kAccountDigestFieldNumber = 7,
     kGateNodeIdFieldNumber = 1,
     kZoneIdFieldNumber = 2,
     kExpireTimestampFieldNumber = 3,
@@ -1485,6 +1486,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GateTokenPayload final : public ::g
   const ::std::string& _internal_hmac_session_key() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_hmac_session_key(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_hmac_session_key();
+
+  public:
+  // bytes account_digest = 7;
+  void clear_account_digest() ;
+  [[nodiscard]] const ::std::string& account_digest() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_account_digest(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_account_digest();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_account_digest();
+  void set_allocated_account_digest(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_account_digest() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_account_digest(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_account_digest();
 
   public:
   // uint32 gate_node_id = 1;
@@ -1541,7 +1557,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GateTokenPayload final : public ::g
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
+      ::google::protobuf::internal::TcParseTable<3, 7,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1571,6 +1587,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GateTokenPayload final : public ::g
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr hmac_session_key_;
+    ::google::protobuf::internal::ArenaStringPtr account_digest_;
     ::uint32_t gate_node_id_;
     ::uint32_t zone_id_;
     ::int64_t expire_timestamp_;
@@ -8544,7 +8561,7 @@ inline void NodeHandshakeResponse::set_allocated_peer_node(::NodeInfo* PROTOBUF_
 inline void GateTokenPayload::clear_gate_node_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gate_node_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint32_t GateTokenPayload::gate_node_id() const {
   // @@protoc_insertion_point(field_get:GateTokenPayload.gate_node_id)
@@ -8552,7 +8569,7 @@ inline ::uint32_t GateTokenPayload::gate_node_id() const {
 }
 inline void GateTokenPayload::set_gate_node_id(::uint32_t value) {
   _internal_set_gate_node_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:GateTokenPayload.gate_node_id)
 }
 inline ::uint32_t GateTokenPayload::_internal_gate_node_id() const {
@@ -8568,7 +8585,7 @@ inline void GateTokenPayload::_internal_set_gate_node_id(::uint32_t value) {
 inline void GateTokenPayload::clear_zone_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.zone_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint32_t GateTokenPayload::zone_id() const {
   // @@protoc_insertion_point(field_get:GateTokenPayload.zone_id)
@@ -8576,7 +8593,7 @@ inline ::uint32_t GateTokenPayload::zone_id() const {
 }
 inline void GateTokenPayload::set_zone_id(::uint32_t value) {
   _internal_set_zone_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:GateTokenPayload.zone_id)
 }
 inline ::uint32_t GateTokenPayload::_internal_zone_id() const {
@@ -8592,7 +8609,7 @@ inline void GateTokenPayload::_internal_set_zone_id(::uint32_t value) {
 inline void GateTokenPayload::clear_expire_timestamp() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.expire_timestamp_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::int64_t GateTokenPayload::expire_timestamp() const {
   // @@protoc_insertion_point(field_get:GateTokenPayload.expire_timestamp)
@@ -8600,7 +8617,7 @@ inline ::int64_t GateTokenPayload::expire_timestamp() const {
 }
 inline void GateTokenPayload::set_expire_timestamp(::int64_t value) {
   _internal_set_expire_timestamp(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:GateTokenPayload.expire_timestamp)
 }
 inline ::int64_t GateTokenPayload::_internal_expire_timestamp() const {
@@ -8680,7 +8697,7 @@ inline void GateTokenPayload::set_allocated_hmac_session_key(::std::string* PROT
 inline void GateTokenPayload::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t GateTokenPayload::player_id() const {
   // @@protoc_insertion_point(field_get:GateTokenPayload.player_id)
@@ -8688,7 +8705,7 @@ inline ::uint64_t GateTokenPayload::player_id() const {
 }
 inline void GateTokenPayload::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:GateTokenPayload.player_id)
 }
 inline ::uint64_t GateTokenPayload::_internal_player_id() const {
@@ -8704,7 +8721,7 @@ inline void GateTokenPayload::_internal_set_player_id(::uint64_t value) {
 inline void GateTokenPayload::clear_target_zone_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.target_zone_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t GateTokenPayload::target_zone_id() const {
   // @@protoc_insertion_point(field_get:GateTokenPayload.target_zone_id)
@@ -8712,7 +8729,7 @@ inline ::uint32_t GateTokenPayload::target_zone_id() const {
 }
 inline void GateTokenPayload::set_target_zone_id(::uint32_t value) {
   _internal_set_target_zone_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:GateTokenPayload.target_zone_id)
 }
 inline ::uint32_t GateTokenPayload::_internal_target_zone_id() const {
@@ -8722,6 +8739,70 @@ inline ::uint32_t GateTokenPayload::_internal_target_zone_id() const {
 inline void GateTokenPayload::_internal_set_target_zone_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.target_zone_id_ = value;
+}
+
+// bytes account_digest = 7;
+inline void GateTokenPayload::clear_account_digest() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.account_digest_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& GateTokenPayload::account_digest() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:GateTokenPayload.account_digest)
+  return _internal_account_digest();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GateTokenPayload::set_account_digest(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.account_digest_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:GateTokenPayload.account_digest)
+}
+inline ::std::string* PROTOBUF_NONNULL GateTokenPayload::mutable_account_digest()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_account_digest();
+  // @@protoc_insertion_point(field_mutable:GateTokenPayload.account_digest)
+  return _s;
+}
+inline const ::std::string& GateTokenPayload::_internal_account_digest() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.account_digest_.Get();
+}
+inline void GateTokenPayload::_internal_set_account_digest(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.account_digest_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GateTokenPayload::_internal_mutable_account_digest() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.account_digest_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GateTokenPayload::release_account_digest() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:GateTokenPayload.account_digest)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.account_digest_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.account_digest_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GateTokenPayload::set_allocated_account_digest(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.account_digest_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.account_digest_.IsDefault()) {
+    _impl_.account_digest_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:GateTokenPayload.account_digest)
 }
 
 // -------------------------------------------------------------------

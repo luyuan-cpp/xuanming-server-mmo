@@ -4,7 +4,7 @@
 
 **Goal:** 在 `xuanming-server-mmo-cpp`（C++/Go 权威服）、`xuanming-server-mmo`（Java 独立服）与 `mmorpg-client`（Unity 纯 C# 非 UI 客户端绑定层）三仓中，交付一期「天墉生死状（1V1 / 2V2·3V3·5V5）＋ 全服模板播报与公开分级观战 ＋ 个人江湖恩怨录 ＋ 帮派恩怨墙 ＋ 30 分钟败者印记与洗尘符 ＋ 百宝阁金帖/洗尘符直售」闭环，严守不波及和平散人、0 战力突破、0 银两对赌与 0 660 料泄漏。
 
-**Architecture:** 在 `go/match` 新增独立模式 `MATCH_MODE_JIANGHU_DUEL = 12`、邀请表、个人恩怨录表与 `SPECTATE_VISIBILITY_PUBLIC` / PVP 回放白名单，复用于 `scene.PrepareBattle` 的 `PlayerItemHoldComp` 备战冻结并在建房失败或 `BATTLE_OUTCOME_VOID` 时自动释放或经 `mail` 幂等退还；帮派同帮小队生死状复用既有 `match → match-results → go/guild` 终局投递写入帮派恩怨墙；全服播报由 `go/chat` 新增白名单模板内部接口写入世界历史并扇出；官方直售「金帖生死状（20 灵石）」与「清风洗尘符（10 灵石）」直接挂载现役 `SpiritShopGoods.xlsx`（零改动 `java/mall_game`）。二期（M4–M6 灵潮劫火线、煞气红名、悬赏、思过崖）在单区活人达标后另起独立实施计划。
+**Architecture:** 在 `go/match` 新增独立模式 `MATCH_MODE_JIANGHU_DUEL = 12`、邀请表、个人恩怨录表与 `SPECTATE_VISIBILITY_PUBLIC` / PVP 回放白名单，复用于 `scene.PrepareBattle` 的 `PlayerItemHoldComp` 备战冻结并在建房失败或 `BATTLE_OUTCOME_VOID` 时自动释放，普通战书预扣的银两只由 `scene` 随玩家存档原子退还（取消 / 作废结算 / SQL 终局复核；2026-11-26 定案 match 不发退费邮件，见文末「普通战书银两预扣与退还的数据一致性定案」）；帮派同帮小队生死状复用既有 `match → match-results → go/guild` 终局投递写入帮派恩怨墙；全服播报由 `go/chat` 新增白名单模板内部接口写入世界历史并扇出；官方直售「金帖生死状（20 灵石）」与「清风洗尘符（10 灵石）」直接挂载现役 `SpiritShopGoods.xlsx`（零改动 `java/mall_game`）。二期（M4–M6 灵潮劫火线、煞气红名、悬赏、思过崖）在单区活人达标后另起独立实施计划。
 
 **Tech Stack:** Protobuf3 / Go (`go-zero`, MySQL/TiDB `schemamigrate`, Redis, Kafka) / C++20 (`entt`, `muduo_grpc`, GoogleTest, MSBuild `/m:1`) / Java 21 (Spring Boot, Dubbo Triple, Maven, `ContractSync`) / C# (Unity WebGL2 & IL2CPP 兼容纯 C# 模型与 `RpcGuard`)。
 
@@ -24,7 +24,7 @@
 ## Review Focus
 
 1. **小队中混入开启「闭关免战」或双向拉黑成员时的静默越权**：发起 2V2–5V5 生死状时，哪怕只有目标队 1 名非队长队员开启了免战（且与发起方非好友），或两队任意 1 对成员存在单向/双向 `friend_block`，必须整单拒绝；且开启免战者本人发起战书必须同样被拒。（验证绑定至 Task 3 & Task 4）
-2. **并发应战 / 扣费成功但 `CreateBattle` 失败或中途 `BATTLE_OUTCOME_VOID` 导致吞掉 ¥2 金帖**：发起方队长 `ItemHold` 冻结 1 张金帖（或 500 银两）后，若对手在最后一毫秒退队、备战超时、`CreateBattle` 失败、或已开打后节点崩溃裁决 `VOID`/零回合中止，必须保证冻结释放或经 `mail` 幂等退还且绝不重退两次。（验证绑定至 Task 2 & Task 4）
+2. **并发应战 / 扣费成功但 `CreateBattle` 失败或中途 `BATTLE_OUTCOME_VOID` 导致吞掉 ¥2 金帖**：发起方队长 `ItemHold` 冻结 1 张金帖（或 500 银两）后，若对手在最后一毫秒退队、备战超时、`CreateBattle` 失败、或已开打后节点崩溃裁决 `VOID`/零回合中止，必须保证冻结释放、银两由 `scene` 一条通道退还（取消、作废结算、SQL 终局复核）且绝不重退两次；取消没送到在线实体时也必须最终退还。（验证绑定至 Task 2 & Task 4；定案见文末）
 3. **5V5 多人局冲爆个人恩怨录 50 人上限 & 角色过户背前任旧仇**：5V5 生死状终局只能在双方队长的个人恩怨录记 1 对关系（而非 5×5 写入 25 对），50 人上限按最旧 `last_battle_ms` 精准淘汰；角色过户（`owner_revision` 递增）后，新主人查恩怨录必须为空且原败者印记立即失效。（验证绑定至 Task 2 & Task 5）
 4. **打满回合上限误落入默认 B 胜分支，或生死状误刷 660 首套材料 / 论剑 Elo / 误将普通私密切磋公开**：`MATCH_MODE_JIANGHU_DUEL` 满回合或 720s 到期必须判 `BATTLE_OUTCOME_DRAW`；`EvaluateBattle` / `RatingStore` 必须返回 0 材料与 0 分；`MATCH_MODE_PVP_CHALLENGE`（未勾自定义公开）必须维持 `PRIVATE`。（验证绑定至 Task 3 & Task 5）
 5. **同账号/重试重放触发重复全服刷屏或重复扣清风洗尘符**：`ClearJianghuDefeatMark` 必须过 `ClientRequestLedgerComp` 幂等账本，同 `client_request_id` 重放不重复扣符或扣 1,000 银两；同一 `battle_id` 的开局/终局播报与帮派恩怨墙投递必须幂等去重，绝不发两条系统公告或重复记两场帮派战绩。（验证绑定至 Task 2、Task 4 & Task 5）
@@ -105,7 +105,7 @@
 - Create: `cpp/nodes/scene/handler/rpc/player/player_jianghu_handler.h`
 - Create: `cpp/nodes/scene/handler/rpc/player/player_jianghu_handler.cpp`
 - Modify: `cpp/libs/services/scene/player/system/player_database_loader.cpp`（加载无条件挂 `PlayerJianghuComp`，存盘缺组件 fail-closed，过户 `owner_revision` 不符自动清空印记）
-- Modify: `cpp/libs/services/scene/battle/system/player_battle.cpp`（`PrepareBattle` 接入 `jianghu_duel_fee`：金帖 `3411` 走 `BagService::PlaceHold` 按 `battle_id` 冻结、`ConfirmBattle`/开打实扣、`CancelBattlePrepare`/作废释放；普通 500 银两在 `PrepareBattle` 按 `duel_invite_id` 幂等预扣并在 `CancelBattlePrepare` 原路返还或经 `mail` 对 `CreateBattle` 失败/`BATTLE_OUTCOME_VOID`/零回合中止幂等退还；`ApplyBattleSettlement` 调用 `PlayerJianghuSystem::ApplyDuelSettlement` 挂 30 分钟败者印记或复仇胜利清标）
+- Modify: `cpp/libs/services/scene/battle/system/player_battle.cpp`（`PrepareBattle` 接入 `jianghu_duel_fee`：金帖 `3411` 走 `BagService::PlaceHold` 按 `battle_id` 冻结、`ConfirmBattle`/开打实扣、`CancelBattlePrepare`/作废释放；普通 500 银两在 `PrepareBattle` 按 `battle_id` 幂等预扣并记待退标记，`CancelBattlePrepare` / 作废结算 / 零回合结算 / SQL 终局复核由 `scene` 一条通道退还（2026-11-26 起不经 `mail`，见文末定案）；`ApplyBattleSettlement` 调用 `PlayerJianghuSystem::ApplyDuelSettlement` 挂 30 分钟败者印记或复仇胜利清标）
 - Modify: `cpp/libs/services/scene/player/system/player_equipment_material_reward.cpp`（`EvaluateBattle` 显式 `case match::MATCH_MODE_JIANGHU_DUEL: return eval;` 返回 0 材料）
 - Test: `cpp/tests/bag_test/player_jianghu_test.cpp`（新建）与 `cpp/tests/bag_test/player_equipment_material_reward_test.cpp`（追加用例）
 
@@ -167,12 +167,12 @@
 - Modify: `go/match/internal/authority/schema.go`（`Tables()` 与 `CheckCandidateIndexes()` 注册 3 张新表及必要查询索引）
 - Modify: `go/match/internal/logic/spectate_visibility.go`（`spectateVisibilityOfMode` 新增 `MATCH_MODE_JIANGHU_DUEL -> PUBLIC`）
 - Modify: `go/match/internal/logic/battle_replay_policy.go`（`replayPolicyOfMode` 新增 `MATCH_MODE_JIANGHU_DUEL -> true`）
-- Modify: `go/match/internal/logic/gather.go`（`gatherTeamAssignment` 支持 `MATCH_MODE_JIANGHU_DUEL` 等额 `1V1–5V5` 分边；`preparePlayerFencedWithExtras` 仅对发起队长透传 `jianghu_duel_fee`；建房失败或 `VOID`/零回合终局时沿 `mail` `SenderKind("match") = 6` 按 `duel_invite_id` 幂等补退已实扣的战书/银两）
+- Modify: `go/match/internal/logic/gather.go`（`gatherTeamAssignment` 支持 `MATCH_MODE_JIANGHU_DUEL` 等额 `1V1–5V5` 分边；`preparePlayerFencedWithExtras` 仅对发起队长透传 `jianghu_duel_fee`；建房失败时只发 `CancelBattlePrepare`（`skip_jianghu_silver_refund` 恒为 false），不发退费邮件，退还归 `scene`，2026-11-26 定案见文末）
 - Modify: `go/match/internal/constants/errors.go` + `errors_test.go`（绑定 `jianghu_error` 生成枚举，保持 `TestNoHandWrittenTipCodes` 全绿）
 - Test: `go/match/internal/authority/jianghu_duel_test.go`、`go/match/internal/logic/jianghu_duel_logic_test.go`
 
 **Interfaces:**
-- Consumes: Task 1–3 的 `FriendInternal.BatchCheckSocialRelations`、`Scene.CheckJianghuDuelEligibility`、`Scene.PrepareBattle`、`ChatInternal.PublishSystemWorldNotice`、`mail` `SenderKind("match") = 6`。
+- Consumes: Task 1–3 的 `FriendInternal.BatchCheckSocialRelations`、`Scene.CheckJianghuDuelEligibility`、`Scene.PrepareBattle` / `Scene.CancelBattlePrepare`、`ChatInternal.PublishSystemWorldNotice`（2026-11-26 起退费不再经 `mail`）。
 - Produces: `MatchService` 3 个生死状操作 RPC + 2 个推送、`SPECTATE_VISIBILITY_PUBLIC` 登记、完整建房与 `VOID` 幂等退费链路。
 
 - [ ] **Step 1: 编写失败的 Go 单元测试（覆盖 Review Focus #1/#2/#4/#5）**
@@ -180,7 +180,7 @@
   - `TestJianghuDuel_RejectsBlockRefuseStrangersAndSelfRefuse`（目标队任一成员开免战、任意两两拉黑、或开免战者自己主动发帖均拒）；
   - `TestJianghuDuel_TwoSideTeamConfirmationAndAbortOnMemberChange`（发起队全员确认后才发 60s 邀请；目标队 30s 全员确认；途中退队/换人整单作废、0 扣费、0 公告）；
   - `TestJianghuDuel_DeclineTimeoutZeroFeeZeroBroadcast`（拒绝或 60s 超时 0 扣费 0 全服播报，触发 5 分钟同目标冷却）；
-  - `TestJianghuDuel_CreateBattleFailAndVoidRefundIdempotent`（建房失败或 `BATTLE_OUTCOME_VOID`/0 回合中止经 `mail` 按 `duel_invite_id` 仅退还 1 次，重放不重退）。
+  - `TestJianghuDuel_CreateBattleFailAndVoidRefundIdempotent`（2026-11-26 改：建房失败只发一次 `CancelBattlePrepare` 且 `skip_jianghu_silver_refund = false`、不发退费邮件；「只退一次」由 `scene` 侧单测覆盖，见文末定案）。
 - [ ] **Step 2: 运行测试确认失败**
   Run: `go test -count=1 ./internal/authority ./internal/logic ./internal/constants`（`go/match`）
   Expected: FAIL（新表/方法未实现）。
@@ -270,3 +270,124 @@
   Expected: `exit=0, errors=0`，`JianghuClientTests` 100% PASS，无重复 `.meta` GUID。
 - [ ] **Step 4: 更新 `docs/PROGRESS.md`（仅追加）并做全链路回归核对**
   核对全部手改文件 `git diff` 未波及他人并行改动；确认未执行未授权的 `git commit` / `git push`。
+
+---
+
+## 普通战书银两预扣与退还的数据一致性定案（2026-11-26，数据覆写审计 r2 第 4 轮）
+
+> 状态：scene 侧已落码，**未生成、未编译、未运行**，验证交 Gemini（本节「验证」）。match 侧（删掉退费邮件通道、`CancelBattlePrepare` 一律带 `skip_jianghu_silver_refund = false`）由另一个修复代理实现，本节只记决定。
+> 对应审计条目 r2-jh#1（medium，普通战书 500 银两没有终局兜底）、r2-jh#2（low，邮件与在线两条退费通道叠加成双退或丢）。金帖档不在本节范围：它走战斗道具预留，早已有 SQL 终局复核（[battle-item-reservation.md](../design/battle-item-reservation.md)）。
+
+### 1. 整条流程
+
+只有发起方队长、只有普通战书（`writ_tier = 1`）会写待退标记。标记是 `PlayerJianghuComp` 的三个字段：`pending_silver_fee_battle_id`、`pending_silver_fee_amount`、`pending_silver_fee_review_after_ms`（字段 13，本次新增），随玩家存档 PROFILE 行与货币余额同一次存档原子提交。
+
+```text
+PrepareBattle（发起方队长，普通战书）
+  ValidateAndCollectPrepareFee：标记是同一局 → 不重扣；标记是别的局 → kFeatureUnavailable，拒绝这次备战，标记不动
+  PlaceHold（只有金帖档会有：生死状快照不带道具）→ CommitPrepareSilverFee：提交点再判一次同一条规则 → 扣 500
+     → 写标记 (battle_id, 500, review_after_ms = FreezeExpiresAtMs(FIGHTING, deadline_ms) = 同一局道具预留的复核时刻)
+     → 关键进度存盘（1 秒内落盘）
+        │
+        ├─ 出口 1 取消：CancelBattlePrepare 送到在线实体（PREPARING，或 PREPARING 冻结已被 reaper 摘掉）→ 退还
+        ├─ 出口 2 作废：VOID 结算（ApplyVoidSettlement，随收件箱账本那一次存档）→ 退还
+        ├─ 出口 3 结算：COMPLETE 结算（PrepareBattleSettlement）→ 回合数 > 0 消耗标记（不退）；0 回合退还
+        └─ 出口 4 终局复核（reaper，30 秒一拍）：
+             · FIGHTING 冻结到期、终局 ABORT / 没有可裁决原件 → 解冻 + 释放预留 + 退还（OnExpiredFightingTerminalAnswer）
+             · 冻结已不在这一局（不存在或是别的局）、复核时刻已过、玩家可改 → 与同一局的道具预留合并成一项，
+               只发一次 GetBattleTerminalDecision（ReviewBattleHoldsAndFees → ReviewBattleHoldAndFee）：
+                 ABORT / NO_ORIGINAL → 释放预留 + 退还；COMPLETE 且结算已在本实体应用过 → 标记按已消耗清掉（缺陷兜底）；
+                 COMPLETE / PENDING / UNKNOWN → 都留着，下一拍再问（COMPLETE 的结算到了会经出口 3 消耗标记）
+
+退还（RefundPendingSilverFee，出口 1 / 2 / 4 共用）：
+  标记不是这一局 → 什么都不做（幂等）；玩家此刻不可改（player_mutability）→ 什么都不做，标记留给复核；
+  AddCurrency(TX_JIANGHU_DUEL_REFUND) 成功 → 同一帧清三个字段 + 关键进度存盘；失败 → 标记留着 + ERROR，复核下一拍重试
+另一个清标记的点：角色官方过户（NormalizeOwnerRevision，沿用原策略，不退）。
+```
+
+「最终一定退」：标记在存档里，跨重登、换节点不丢；只要 SQL 终局落定为 ABORT 或确认没有可裁决原件，复核就会在玩家可改的某一拍退掉。「最多退一次」：退还与清标记是同一帧的内存改动、随同一次存档提交；所有出口都只认「标记是这一局」，先到的出口退掉之后，后到的出口（重复的回答、迟到的取消、作废结算）都看不到标记。match 不再有第二条通道（§2 问题 3）。
+
+### 2. 问题与定案
+
+#### 问题 1：取消没送到在线实体，500 银两永久不退，下一局还会覆盖标记（r2-jh#1）
+
+- **问题（触发时序）**：① gather 最后一个备战发起方队长，scene 扣 500 并记 `pending_silver_fee_battle_id = X`；② gather 在落 Create 原件之前失败（battle 节点排空或启动中回 not_allocatable、能力查询失败、配表指纹不一致、`SaveSupportedIntent` 出错），或 match 在这一步崩溃；③ match 只发一次 `CancelBattlePrepare`，失败只打日志，租约变化或 `CheckWork` 失败时根本不发（`globalAbortPrepared`）；④ 这一次没落到在线实体上（RPC 失败、队长断线或换了节点）：离线分支只处理战斗锁，备战到期 reaper 只摘 `InBattleComp`，没有原件也就没有 VOID 结算，标记没有任何复核；⑤ 下一局普通战书的 `CommitPrepareSilverFee` 只判「同一 battle_id」，直接覆盖标记，X 那 500 永久丢失。
+- **方案**：待退银两并入道具预留那一套 SQL 终局复核。预扣时写 `pending_silver_fee_review_after_ms`，取值与同一局道具预留的 `review_after_ms` 相同（冻结到期时刻）；reaper 每拍收集「复核时刻已过、这一局的冻结不在本实体上」的预留与待退银两，同一 (玩家, 局) 合并成一项，只发一次终局查询，一个回答同时收尾两样，判据与 `battle_freeze_hold::IsBattleHoldReleasable` 相同。FIGHTING 冻结到期查到 ABORT / 没有可裁决原件时，与预留一起退掉。另外，别的局还有未结清的标记时，新的普通战书备战在 `ValidateAndCollectPrepareFee` 与 `CommitPrepareSilverFee` 两处都回 `kFeatureUnavailable`，不覆盖。
+- **为什么这样选**：「这一局不会再有结算」只有 SQL 终局能说；道具预留已经有一套现成、测过的兜底（在途登记、单调钟判丢失、不设上限、玩家不可改时不动），复用它就是一条业务知识一个来源。合并成一次查询：`SendTrackedTerminalQuery` 按 (player_id, battle_id) 去重，两条路分别查同一局时，后发的那次撞上前一次的在途登记，回答只交给先发的一方，另一样就得多等一拍甚至一直轮空。今天普通战书局没有道具预留（生死状快照不带道具，金帖档又不写待退标记），两样同局并存的情形还不会出现；照样合并，以后快照或档位一改也不会互相顶掉。复核时刻取冻结到期时刻（截止 + 60 秒终局宽限 + 60 秒投递余量），这时 match 不会再为这一局建房，NO_ORIGINAL 才是终局证据。拒绝码选 `kFeatureUnavailable` 而不是 `kServiceUnavailable`：这是玩家自身状态（旧局未结清）造成的拒绝，与「已有战斗在途」同一个码；`kServiceUnavailable` 在 Tip 表里是 fault，match 会把它记成 scene 内部故障、不定罪。生死状是点名成局（`RequeueOnFailure = false`），两种码都让这一局整体收尾、不自动重排，区别只在 match 的归因与告警口径。
+- **被否决的做法**：
+  - 到点不查终局直接退：COMPLETE 不受截止约束，发件箱积压时可能在退款之后才到；晚到的结算找不到标记就不消耗，等于白打一局，若同一局又被恢复重跑还会重扣。终局查询的成本只是每局一次只读 RPC。
+  - 把银两并进道具预留（`PlayerItemHoldComp`）：预留按物品配置号计数、只约束人物背包里可按配置号计数的单位，出包入口全按这个口径判；货币不是物品，硬塞要给预留加币种维度、改全部出包入口的语义，换来的只是少一个字段。
+  - 允许多笔待退（标记改成 repeated）：玩家同一时刻只在一局里，正常情况至多一笔，多笔只在「取消丢失」这类故障下出现；改集合要定上界（玩家存档里的集合必须有上界）、每笔独立复核与告警，复杂度高、收益小。代价换成「等旧局退完再开新的普通战书」。
+  - 为银两单起一条查询：见上，与预留复核互相顶掉在途登记。
+- **代价与边界**：
+  - 旧局的取消丢失时，这名玩家要等旧局复核退款（约在旧局 `deadline_ms` + 120 秒之后的第一拍，match 可用时）才能再开普通生死状，期间发起会在备战时被拒（金帖档、应战、其他玩法不受影响）。match 不可用时复核一直按「未知」留着，钱不丢，只是晚退；越过「复核时刻 + 15 分钟」每 10 分钟一行 ERROR `metric=jianghu_duel_fee_overdue`。
+  - 资格预检 `CheckJianghuDuelEligibility` 没有改：它仍只看余额，「旧局未结清」要到成局备战时才被拒（邀请与确认环节白走一遍）。这种情形只在故障后出现，没有为它新增 tip 码或字段。
+  - 玩家不在本节点、或此刻不可改（交接 / 退出中 / 没有归属围栏）时不复核，下次加载后接着；reaper 每拍多扫一遍 `PlayerJianghuComp`（每个在线玩家都有），只比一个字段，30 秒一次。
+  - 两样的复核时刻按构造相同，合并之后回答同时收尾两样；若以后有路径单独改其中一个时刻，要同步改合并逻辑。
+
+#### 问题 2：先清标记再入账，入账失败就丢钱；不判玩家可改；作废结算走同一函数而收件箱照记 APPLIED（r2-jh#1 附带）
+
+- **问题（触发时序）**：原 `OnBattlePrepareCancelled` 先把两个标记字段清零，再 `AddCurrency`；入账失败（本人或全服获取封禁回 `kAssetBlocked`、余额溢出）只打 ERROR，标记已经没了，这 500 再也找不回。它也不判 `player_mutability::IsPlayerMutable`：交接、退出存盘在途时照样改存档。作废结算（`ApplyVoidSettlement`）调同一个函数，退款失败时收件箱仍记 APPLIED，这一局再不会有第二份作废结算。
+- **方案**：`RefundPendingSilverFee` 取代 `OnBattlePrepareCancelled` / `OnBattleVoid`：玩家不可改时什么都不做；先 `AddCurrency`，成功之后同一帧清三个字段并请关键进度存盘；失败保留标记并打 ERROR `metric=jianghu_duel_fee_refund_failed`，由复核下一拍重试。`TX_JIANGHU_DUEL_REFUND` 加进 `GainBlockService::CountsAsGain` 的豁免（与 `TX_AUCTION_RETURN` 同一做法），获取封禁不挡退费。复核不按「本地已应用」收尾待退银两（道具预留照旧按它释放）：作废结算应用了而退款没入账时，复核照样去问，ABORT 就退。COMPLETE 的结算已在本实体应用过而标记还在（结算按生死状路径应用时本该同帧消耗，只可能是缺陷），回答 COMPLETE 时 `ConsumePendingSilverFee` 按已消耗清掉并打 ERROR，免得这名玩家永远开不了普通生死状。
+- **为什么这样选**：标记就是「还欠玩家多少」的唯一凭据，先清后入账等于先撕欠条再付钱；退的是玩家自己预扣的钱，不是新增获得，封禁挡住它只会让钱卡住（与审计 r2-trade#1 豁免交易退回同一理由）。`TX_JIANGHU_DUEL_REFUND` 只由 scene 内部调用，不在资产通道任何一条流的允许表里，外部服务借不到这个豁免。
+- **被否决的做法**：
+  - 退款入账失败时作废结算整笔 DEFER：收件箱的 DEFER 要求零副作用，得把退款预检挪到释放预留之前，而且 DEFER 期间 match 的 ready 票一直占着；有了终局复核兜底，不值得改作废结算的形状。
+  - 封禁时跳过退款并清标记（与结算「被封的币种这一局整笔不入账、解封不补」同口径）：那条口径针对新增获得；退款跳过就是没收玩家自己的钱。
+- **代价与边界**：封禁期间退款照常入账（玩家本来就有这笔钱）。入账失败只剩余额溢出（只可能是坏数据）与缺货币组件（加载不变量被破坏）两种，标记会一直留着、每拍重试、超期告警，需要人看。金额为 0 或超出 int64 的标记只可能是坏数据，退还时清掉不退并打 ERROR `metric=jianghu_duel_fee_marker_invalid`。
+
+#### 问题 3：两条退费通道在结果不明时必然双退或丢（r2-jh#2，match 侧决定）
+
+- **问题（触发时序）**：① 队长已扣 500，gather 失败且能确定不会建房；② match `refundJianghuSilverOnce` 插退费标记后调 `SendPersonalMail`，mail 已建信但回包超时；③ match 删标记、回 false，随后发 `CancelBattlePrepare(skip = false)`，scene 在线再退 500，邮件里还有 500，玩家净多 500 流通银两；重试也救不回来（`ExpireMs` 每次取当前时刻，摘要不同，mail 回请求冲突）。变体：邮件成功后 `FinishFailed` 没提交、成局恢复重跑，或 `SaveSupportedIntent` 回错但原件已提交、有原件分支固定 `skip = false`，都会再退一次；反向：邮件成功且 `skip = true` 送达后 `FinishFailed` 失败，重跑再扣，再失败时 scene 跳过退费，净丢 500。
+- **方案**：退费只留 scene 一条通道。match 删掉退费邮件通道，`CancelBattlePrepare` 一律带 `skip_jianghu_silver_refund = false`（另一个修复代理实现）；scene 删掉读这个字段的跳过分支（读到 true 也照退），proto 字段注释改为「已废弃，恒为 false」，字段号 3 保留不复用。
+- **为什么这样选**：两条通道之间没有共享的原子提交点：邮件建信落在 mail 库，待退标记落在玩家存档，「结果不明」时任何一方都无法确定另一方做没做，只能在双退与丢之间二选一。scene 的标记与余额随同一次存档原子提交，单通道下「退了就清标记、没退就留着」天然恰好一次；取消丢失的那一半由终局复核补上（问题 1）。
+- **被否决的做法**：
+  - 保留邮件通道：上面的双退 / 丢都来自它，接好 match 的发件密钥之后默认可达。
+  - 保留邮件、结果不明时保留标记并按同一原件重投到确定结局：要把 `ExpireMs` 冻结进标记行、加后台重投循环，还要让 match 的标记与 scene 的标记跨服务协调（scene 已在线退过时 match 怎么知道、邮件已建信时 scene 怎么知道），等于为 500 银两造一套跨库两阶段提交。
+  - 只留邮件、scene 不退：邮件附件要玩家去领，过期作废就是丢；而且 match 拿不到「scene 是否已退过」的事实，作废结算那条路照样会双退。
+- **代价与边界**：取消送到在线实体时当场退；没送到时要等终局复核（问题 1 的代价）。match 侧只剩取消 RPC 与作废结算两条「通知」，都不直接动钱。
+
+### 3. 持久字段与兼容
+
+- `PlayerJianghuComp.pending_silver_fee_review_after_ms = 13`（`uint64`，Unix 毫秒），PROFILE 组随 `player_database.jianghu_component`（字段 37）落库；加载 `emplace` 整份拷贝、存盘 `CopyFrom`，不用改加载器。按 [mixed-version-persist-field-protection.md](../design/mixed-version-persist-field-protection.md) §3.1：台账 `proto/persist_schema_gen.txt` 由生成器维护，当前是 `state=bootstrap`、没有封存，生成时追加一行 `1=PlayerJianghuComp#13 optional uint64 pending_silver_fee_review_after_ms`（引导期并入世代 1），不手改台账；`PlayerJianghuComp` 是可携带类型，往返一致性测试（`PersistRoundTripTest`）按描述符自动覆盖新字段，不用改夹具。
+- 语义耦合（§3.2 R5）：三个字段必须一起写、一起清（`ClearPendingSilverFee`）。不认识字段 13 的旧版本写新标记时会留下旧局的复核时刻，新版本可能提前复核那一局。项目尚未上线、玩家数据可清空，首个上线版本就带这个字段，没有混版本窗口；上线之后再改这组字段要按 R5 评审。
+- `CancelBattlePrepareRequest.skip_jianghu_silver_refund = 3` 只改注释；两个 proto 都不是客户端可见协议（客户端仓没有这两个类型的生成物），不用跑客户端生成。
+
+### 4. 可观测性（scene 结构化日志，英文）
+
+| 日志 | 级别 | 含义 |
+|---|---|---|
+| `metric=jianghu_duel_fee_refunded reason=…` | INFO | 退还成功；reason = prepare_cancelled / void_settlement / ABORT / NO_ORIGINAL |
+| `metric=jianghu_duel_fee_refund_deferred` | WARN | 玩家此刻不可改，标记留给复核 |
+| `metric=jianghu_duel_fee_refund_failed` | ERROR | 入账失败，标记留着，复核下一拍重试 |
+| `metric=jianghu_duel_fee_pending_other_battle` | WARN | 别的局未结清，新的普通战书备战被拒（`where=commit` 是提交点复核） |
+| `metric=jianghu_duel_fee_overdue` | ERROR | 越过「复核时刻 + 15 分钟」仍没收尾，每 10 分钟一行 |
+| `metric=jianghu_duel_fee_consumed_after_applied_settlement` | ERROR | COMPLETE 已应用而标记还在（缺陷兜底），清掉不退 |
+| `metric=jianghu_duel_fee_marker_invalid` | ERROR | 标记金额不合法（坏数据），清掉不退 |
+
+值班固定查询（写法同 `battle_item_hold_overdue`）：`count_over_time({job="cpp_nodes", service="scene"} |= "metric=jianghu_duel_fee_overdue" [10m]) > 0`。本批没有往告警清单里加规则。
+
+### 5. 改动清单
+
+| 类别 | 文件 |
+|---|---|
+| proto | `proto/common/component/player_jianghu_comp.proto`（字段 13）、`proto/scene/scene.proto`（`skip_jianghu_silver_refund` 注释） |
+| scene | `cpp/libs/services/scene/player/system/player_jianghu.{h,cpp}`（拒绝覆盖、`CommitPrepareSilverFee` 带复核时刻、`RefundPendingSilverFee` / `ConsumePendingSilverFee` 取代 `OnBattlePrepareCancelled` / `OnBattleVoid`）、`cpp/libs/services/scene/battle/system/player_battle.{h,cpp}`（备战写复核时刻、取消与作废改调退还、冻结到期 ABORT 一并退、`ReviewBattleItemHolds` / `ReviewBattleItemHold` / `OnBattleItemHoldTerminalAnswer` 改为合并复核的 `ReviewBattleHoldsAndFees` / `ReviewBattleHoldAndFee` / `OnBattleHoldAndFeeTerminalAnswer`） |
+| 获取封禁 | `cpp/libs/modules/gain_block/gain_block_service.h`（`CountsAsGain` 豁免 `TX_JIANGHU_DUEL_REFUND`） |
+| 测试 | `cpp/tests/bag_test/player_jianghu_test.cpp`（改 2 个、加 3 个用例）、`cpp/tests/bag_test/battle_freeze_hold_test.cpp`（新夹具 `BattleSilverFeeReviewTest`，6 个用例） |
+| 文档 | 本节与本文正文里「经 mail 退还」的几处、[battle-item-reservation.md](../design/battle-item-reservation.md)、[battle-jianghu-grudge-duel-bounty-v1.md](battle-jianghu-grudge-duel-bounty-v1.md)、[turn-battle-gap-closure.md](../design/turn-battle-gap-closure.md) §11 里的函数名 |
+| match（另一个代理） | `go/match/internal/logic/{gather.go, global_match.go, jianghu_duel_logic.go}`：删退费邮件，取消一律 `skip_jianghu_silver_refund = false` |
+
+### 6. 验证（全部未执行，交 Gemini）
+
+仓库根目录，串行，失败不重试，保留首个错误与失败用例输出：
+
+1. 协议生成：`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-build`，再 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`。通过标准：`cpp/generated/proto/common/component/player_jianghu_comp.pb.h` 出现 `pending_silver_fee_review_after_ms`；`proto/persist_schema_gen.txt` 因本批只多出 `1=PlayerJianghuComp#13 optional uint64 pending_silver_fee_review_after_ms` 一行（别的会话的新增行另算），`state=bootstrap` 不变；`cpp/generated/persist_schema/persist_schema_gen.h` 的 `kPersistSchemaGen` 仍为 1。
+2. 台账单测：`cd tools/proto_generator/protogen && go vet ./internal/persistschema/... && go test -count=1 ./internal/persistschema/...`（含 `TestRepositoryLedgerIsCanonical`）。
+3. 静态门禁：`python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`（2026-11-26 已在本机跑过一次：13/13 OK）、`python tools/scripts/tests/test_cpp_thread_sources.py`、`python tools/scripts/check_log_text_english.py`。
+4. 构建：`msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`，0 个 `error C` / `LNK`。改了 `modules`（`gain_block_service.h`）与 `scene` 两个库，测试工程链接预编好的库，必须先编库再跑测试；只编局部时顺序是 `cpp/generated/proto/proto.vcxproj` → `cpp/libs/modules/modules.vcxproj` → `cpp/libs/services/scene/scene.vcxproj` → `cpp/tests/bag_test/bag_test.vcxproj`（另编 scene 节点、`currency_test`、`cross_zone_test` 确认链接）。
+5. 单测：`build\cpp\tests\bag_test.exe --gtest_filter=PlayerJianghuTest.*:BattleSilverFeeReviewTest.*:BattleItemHoldTest.*:BattleItemHoldRules.*:BattleFreezeHold*:PlayerItemGainBlockTest.*:PersistRoundTripTest.*:PlayerFeaturePersistence*` 全绿（新用例：`PlayerJianghuTest.SilverWritPendingForAnotherBattleRejectsTheNewPreparationWithoutTouchingTheMarker`、`PlayerJianghuTest.SilverRefundKeepsTheMarkerWhenTheCreditFailsOrThePlayerIsNotMutable`、`PlayerJianghuTest.GainBlockDoesNotStopTheSilverRefund`、`BattleSilverFeeReviewTest.*` 六个；改过的：`PlayerJianghuTest.SilverWritDebitAndCancelRefund`、`PlayerJianghuTest.VoidAndZeroRoundRefundPendingSilverFeeOnce`），再跑一次完整 `bag_test.exe`；`currency_test.exe` 与 `cross_zone_test.exe` 完整套件不回归。
+6. match 侧另一个代理的改动按它自己的验证单跑；两边都合入后补一次 robot 生死状冒烟（普通战书成局、成局失败取消、`VOID`），核对每局 500 银两恰好扣一次、退一次或被结算消耗一次。
+
+### 7. Java 版
+
+Java 版（`xuanming-server-mmo`）的普通战书退费走 `match_jianghu_refund` + 个人邮件（`PARITY.md` 2026-11-26 江湖恩怨一期条目），是另一套实现，同类问题（两条通道、取消丢失）是否存在待按 Java 的模型核对。本批没有改 Java 代码，也没有登记 `PARITY.md`，由主会话决定是否登记。

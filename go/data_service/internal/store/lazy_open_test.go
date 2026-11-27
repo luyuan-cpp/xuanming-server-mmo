@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"shared/authoritysql"
+	"shared/placement"
 
 	"github.com/stretchr/testify/require"
 )
@@ -268,4 +269,41 @@ func TestOpenShardPoolsNeverAdmitsAShardWithTheWrongSlot(t *testing.T) {
 		require.Equal(t, 4, verifies, "每过一个冷却期重核一次")
 		require.Zero(t, connects, "核对不过一条连接都不给")
 	})
+}
+
+// 这一代没有写资格的库(写者注册时它连不上,docs/design/data-service-startup-isolation.md §7):
+// 常驻进程里照常装配,这个库的池一条连接都不给,存档库照样打不开;工具和迁移照旧当场回错误。
+func TestDatabaseWithoutAWriterGrantStaysClosed(t *testing.T) {
+	ctx := context.Background()
+	cfg := shardCfgForTest(2)
+	cfg.PermissionFor = func(schema string) (authoritysql.Permission, error) {
+		if schema == "mmorpg_global_00" {
+			return authoritysql.Reader(), nil
+		}
+		return authoritysql.Permission{}, fmt.Errorf("%w: %s", ErrNoWriterGrant, schema)
+	}
+	_, err := cfg.ForSchema("mmorpg_global_01")
+	require.ErrorIs(t, err, ErrNoWriterGrant, "工具和迁移照旧当场回错误")
+
+	cfg.Lazy = true
+	healthy, err := cfg.ForSchema("mmorpg_global_00")
+	require.NoError(t, err)
+	require.Nil(t, healthy.Closed)
+	one, err := cfg.ForSchema("mmorpg_global_01")
+	require.NoError(t, err, "常驻进程里缺写资格不算装配失败")
+	require.ErrorIs(t, one.Closed, ErrNoWriterGrant)
+	db, err := openCheckedPool(one, "", func(*sql.DB) error {
+		t.Fatal("a closed pool is never checked")
+		return nil
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	err = db.PingContext(ctx)
+	require.ErrorIs(t, err, ErrNoWriterGrant)
+	require.ErrorContains(t, err, "mmorpg_global_01")
+
+	stores, err := newPlayerStorePools(cfg, authoritysql.BackendMySQL, []uint32{placement.FirstStorageID}, PlayerStorePoolOptions{})
+	require.NoError(t, err)
+	_, _, err = stores.DB(ctx, placement.FirstStorageID)
+	require.ErrorIs(t, err, ErrNoWriterGrant, "没有写资格的存档库打不开")
 }

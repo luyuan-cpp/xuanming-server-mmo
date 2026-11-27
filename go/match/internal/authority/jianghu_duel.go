@@ -11,7 +11,6 @@ import (
 	pb "proto/match"
 	teampb "proto/team"
 
-	"github.com/go-sql-driver/mysql"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -42,9 +41,6 @@ type JianghuStore interface {
 	AbortMatchedJianghuDuelInvite(ctx context.Context, duelInviteID uint64) error
 	DecrementDailyUnmatchedOnMatch(ctx context.Context, challengerID uint64, nowMs uint64) error
 	ListActiveJianghuDuelInvitesForPlayer(ctx context.Context, playerID uint64, nowMs uint64) ([]*pb.MatchJianghuDuelInvitationRecord, error)
-	RecordJianghuRefundOnce(ctx context.Context, rec *pb.MatchJianghuRefundRecord) (inserted bool, err error)
-	UpdateJianghuRefundMailID(ctx context.Context, duelInviteID, mailID uint64) error
-	DeleteJianghuRefundMarker(ctx context.Context, duelInviteID uint64) error
 	ApplyJianghuDuelBattleResult(ctx context.Context, event *kafkapb.BattleResultEvent, ownerRevs map[uint64]uint64) (JianghuBattleGrudgeSummary, bool, error)
 	ListJianghuGrudges(ctx context.Context, playerID, ownerRevision uint64) ([]*pb.JianghuGrudgeEntry, error)
 	DismissJianghuGrudge(ctx context.Context, playerID, ownerRevision, peerPlayerID uint64) (bool, error)
@@ -375,44 +371,6 @@ func (s *Store) ListActiveJianghuDuelInvitesForPlayer(ctx context.Context, playe
 		out = append(out, rec)
 	}
 	return out, rows.Err()
-}
-
-func (s *Store) RecordJianghuRefundOnce(ctx context.Context, rec *pb.MatchJianghuRefundRecord) (bool, error) {
-	if s == nil || s.DB == nil || rec == nil || rec.DuelInviteId == 0 {
-		return false, errors.New("invalid jianghu refund record")
-	}
-	_, err := s.DB.ExecContext(ctx,
-		`INSERT INTO match_jianghu_refund(duel_invite_id,battle_id,payer_player_id,writ_tier,refund_mail_id,reason,created_ms)
-		 VALUES(?,?,?,?,?,?,?)`,
-		rec.DuelInviteId, rec.BattleId, rec.PayerPlayerId, rec.WritTier, rec.RefundMailId, rec.Reason, rec.CreatedMs)
-	if err != nil {
-		var dup *mysql.MySQLError
-		if errors.As(err, &dup) && dup.Number == 1062 {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
-}
-
-func (s *Store) UpdateJianghuRefundMailID(ctx context.Context, duelInviteID, mailID uint64) error {
-	if s == nil || s.DB == nil || duelInviteID == 0 {
-		return nil
-	}
-	_, err := s.DB.ExecContext(ctx,
-		"UPDATE match_jianghu_refund SET refund_mail_id=? WHERE duel_invite_id=?",
-		mailID, duelInviteID)
-	return err
-}
-
-func (s *Store) DeleteJianghuRefundMarker(ctx context.Context, duelInviteID uint64) error {
-	if s == nil || s.DB == nil || duelInviteID == 0 {
-		return nil
-	}
-	_, err := s.DB.ExecContext(ctx,
-		"DELETE FROM match_jianghu_refund WHERE duel_invite_id=? AND refund_mail_id=0",
-		duelInviteID)
-	return err
 }
 
 func (s *Store) LoadTeamMemberIDs(ctx context.Context, captainID uint64) (uint64, uint64, []uint64, error) {

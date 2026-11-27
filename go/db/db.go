@@ -23,11 +23,12 @@ import (
 	"shared/clockcheck"
 	"shared/drainproof"
 	"shared/etcdwatch"
-	"shared/grpcstats"
 	"shared/grpckeepalive"
+	"shared/grpcstats"
 	"shared/killswitch"
 	"shared/serverbase"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -134,8 +135,28 @@ func main() {
 		return
 	}
 
+	// 这一代缺写资格的存档库(写者注册时连不上的,docs/design/data-service-startup-isolation.md §7):这些库这一代都打不开,
+	// 落在上面的玩家存盘回不可用;副本照常注册、服务别的库,但不就绪,集群恢复之后重建这个 Pod 补齐。
+	missingGrants := stores.MissingWriterGrants()
+	if len(missingGrants) > 0 {
+		logx.Errorf("[startup] this boot has no writer grant for %d player store database(s) %v: the writer registration could not reach them; "+
+			"they stay closed for this boot and the pod reports not ready; rebuild the pod after the cluster recovers", len(missingGrants), missingGrants)
+	}
+	authoritysql.ObserveMissingWriterGrants(len(missingGrants))
+	// serving 在端口能接受连接、节点注册完成之后置上(registerPlayerStoreNode 的回调)。
+	var serving atomic.Bool
+
 	// Start Prometheus /metrics endpoint (no-op when MetricsListenAddr empty).
-	metrics.Start(config.AppConfig.MetricsListenAddr)
+	// /readyz 是 K8s 就绪探针:缺写资格或者还没对外服务都回 503;存活探针照旧走 gRPC 健康检查,不就绪的副本不会被重启。
+	metrics.Start(config.AppConfig.MetricsListenAddr, func() error {
+		if len(missingGrants) > 0 {
+			return fmt.Errorf("this boot has no writer grant for %d player store database(s) %v; rebuild the pod after the cluster recovers", len(missingGrants), missingGrants)
+		}
+		if !serving.Load() {
+			return fmt.Errorf("the RPC server is not serving yet")
+		}
+		return nil
+	})
 
 	// ── 热关停(killswitch)────────────────────────────────────────────
 	// db 是玩家权威数据的写入方,真出事时最缺的是"秒级止血阀":往 etcd 前缀
@@ -226,6 +247,7 @@ func main() {
 	unregister, err := registerPlayerStoreNode(&config.AppConfig, func(nodeUUID string) {
 		ks.AddInstance(nodeUUID) // 认 instance/<本进程 uuid>/ 下的热关停规则
 		playerStoreNodeUUID = nodeUUID
+		serving.Store(true) // 端口已经能接受连接、节点已注册:/readyz 才可能回就绪
 	})
 	if err != nil {
 		panic(fmt.Sprintf("player store node registration failed: %v", err))

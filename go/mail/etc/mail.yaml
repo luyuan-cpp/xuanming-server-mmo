@@ -37,6 +37,8 @@ Producers:
   guild: MAIL_PRODUCER_SECRET_GUILD
   # C++ scene 把两包都放不下的战斗掉落寄进邮箱(docs/design/battle-overflow-mail.md),sender_kind = 5。
   battle: MAIL_PRODUCER_SECRET_BATTLE
+  # go/match 投递群仙问道赛赛季奖励的附件(docs/planning/season-team-tournament-v1.md 第七节),sender_kind = 6。
+  match: MAIL_PRODUCER_SECRET_MATCH
 Log:
   ServiceName: mail
   Mode: console

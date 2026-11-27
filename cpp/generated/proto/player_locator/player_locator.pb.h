@@ -627,6 +627,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReconnectRequest final : public ::g
     kGateZoneIdFieldNumber = 11,
     kLoginGenerationFieldNumber = 9,
     kSessionIncarnationFieldNumber = 10,
+    kMinorPlayDeadlineMsFieldNumber = 12,
   };
   // string gate_id = 3;
   void clear_gate_id() ;
@@ -763,11 +764,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReconnectRequest final : public ::g
   void _internal_set_session_incarnation(::uint64_t value);
 
   public:
+  // uint64 minor_play_deadline_ms = 12;
+  void clear_minor_play_deadline_ms() ;
+  [[nodiscard]] ::uint64_t minor_play_deadline_ms() const;
+  void set_minor_play_deadline_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_minor_play_deadline_ms() const;
+  void _internal_set_minor_play_deadline_ms(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:playerlocator.ReconnectRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 11,
+      ::google::protobuf::internal::TcParseTable<4, 12,
                           0, 95,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -807,6 +818,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ReconnectRequest final : public ::g
     ::uint32_t gate_zone_id_;
     ::uint64_t login_generation_;
     ::uint64_t session_incarnation_;
+    ::uint64_t minor_play_deadline_ms_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -978,6 +990,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSession final : public ::goog
     kGateZoneIdFieldNumber = 16,
     kLoginGenerationFieldNumber = 14,
     kSessionIncarnationFieldNumber = 15,
+    kMinorPlayDeadlineMsFieldNumber = 17,
   };
   // string gate_id = 3;
   void clear_gate_id() ;
@@ -1169,11 +1182,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSession final : public ::goog
   void _internal_set_session_incarnation(::uint64_t value);
 
   public:
+  // uint64 minor_play_deadline_ms = 17;
+  void clear_minor_play_deadline_ms() ;
+  [[nodiscard]] ::uint64_t minor_play_deadline_ms() const;
+  void set_minor_play_deadline_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_minor_play_deadline_ms() const;
+  void _internal_set_minor_play_deadline_ms(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:playerlocator.PlayerSession)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 16,
+      ::google::protobuf::internal::TcParseTable<5, 17,
                           0, 113,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1218,6 +1241,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSession final : public ::goog
     ::uint32_t gate_zone_id_;
     ::uint64_t login_generation_;
     ::uint64_t session_incarnation_;
+    ::uint64_t minor_play_deadline_ms_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4329,6 +4353,30 @@ inline void PlayerSession::_internal_set_gate_zone_id(::uint32_t value) {
   _impl_.gate_zone_id_ = value;
 }
 
+// uint64 minor_play_deadline_ms = 17;
+inline void PlayerSession::clear_minor_play_deadline_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.minor_play_deadline_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint64_t PlayerSession::minor_play_deadline_ms() const {
+  // @@protoc_insertion_point(field_get:playerlocator.PlayerSession.minor_play_deadline_ms)
+  return _internal_minor_play_deadline_ms();
+}
+inline void PlayerSession::set_minor_play_deadline_ms(::uint64_t value) {
+  _internal_set_minor_play_deadline_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:playerlocator.PlayerSession.minor_play_deadline_ms)
+}
+inline ::uint64_t PlayerSession::_internal_minor_play_deadline_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.minor_play_deadline_ms_;
+}
+inline void PlayerSession::_internal_set_minor_play_deadline_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.minor_play_deadline_ms_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // SetSessionRequest
@@ -5713,6 +5761,30 @@ inline ::uint32_t ReconnectRequest::_internal_gate_zone_id() const {
 inline void ReconnectRequest::_internal_set_gate_zone_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gate_zone_id_ = value;
+}
+
+// uint64 minor_play_deadline_ms = 12;
+inline void ReconnectRequest::clear_minor_play_deadline_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.minor_play_deadline_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint64_t ReconnectRequest::minor_play_deadline_ms() const {
+  // @@protoc_insertion_point(field_get:playerlocator.ReconnectRequest.minor_play_deadline_ms)
+  return _internal_minor_play_deadline_ms();
+}
+inline void ReconnectRequest::set_minor_play_deadline_ms(::uint64_t value) {
+  _internal_set_minor_play_deadline_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:playerlocator.ReconnectRequest.minor_play_deadline_ms)
+}
+inline ::uint64_t ReconnectRequest::_internal_minor_play_deadline_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.minor_play_deadline_ms_;
+}
+inline void ReconnectRequest::_internal_set_minor_play_deadline_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.minor_play_deadline_ms_ = value;
 }
 
 // -------------------------------------------------------------------

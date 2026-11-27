@@ -14,6 +14,7 @@ public final class CommerceProperties {
     private String deliverySecret;
     private String adminSecret;
     private String adminSubject = "mall-admin";
+    private boolean adminAllowUnapproved;
     private boolean mockPaymentEnabled;
     private Set<String> allowedPaymentChannels = Set.of();
     public boolean isMockPaymentEnabled() { return mockPaymentEnabled; }
@@ -31,6 +32,9 @@ public final class CommerceProperties {
     }
     public String getAdminSecret(){return adminSecret;}
     public void setAdminSecret(String value){adminSecret=value;}
+    /** 为 true 时接受不带双人复核批准记录的管理写命令(只给本机开发用,见 application.yaml 的注释)。 */
+    public boolean isAdminAllowUnapproved() { return adminAllowUnapproved; }
+    public void setAdminAllowUnapproved(boolean value) { adminAllowUnapproved = value; }
     public String getAdminSubject(){return adminSubject;}
     public void setAdminSubject(String value){adminSubject=value;}
     public String getDeliverySecret(){return deliverySecret;}

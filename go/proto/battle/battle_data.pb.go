@@ -1105,8 +1105,13 @@ type BattlePlayerSnapshot struct {
 	EquippedSkillVfx map[uint32]uint32 `protobuf:"bytes,31,rep,name=equipped_skill_vfx,json=equippedSkillVfx,proto3" json:"equipped_skill_vfx,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	// 本局所属队伍的队长标记（由 match 在锦标赛/组排成局时填入，用于 3 Ban 同票决胜；单排/路人全 false）。
 	IsTeamCaptain bool `protobuf:"varint,32,opt,name=is_team_captain,json=isTeamCaptain,proto3" json:"is_team_captain,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// 未成年人当天能玩到的时刻(Unix 毫秒;0 = 不限:成年人、平台管的小游戏渠道、没开防沉迷的部署)。
+	// 由 match 在成局时从玩家会话记录 PlayerSession.minor_play_deadline_ms 填入,scene 不填、填了也被覆盖。
+	// battle 据此给这名参战者的票据封顶、到点关闭他的战斗直连并在本场剩余时间里拒绝他握手;战斗本身照常进行
+	// (docs/design/real-name-anti-addiction.md §5.4)。只用于直连准入,引擎不读。
+	MinorPlayDeadlineMs uint64 `protobuf:"varint,33,opt,name=minor_play_deadline_ms,json=minorPlayDeadlineMs,proto3" json:"minor_play_deadline_ms,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *BattlePlayerSnapshot) Reset() {
@@ -1361,6 +1366,13 @@ func (x *BattlePlayerSnapshot) GetIsTeamCaptain() bool {
 		return x.IsTeamCaptain
 	}
 	return false
+}
+
+func (x *BattlePlayerSnapshot) GetMinorPlayDeadlineMs() uint64 {
+	if x != nil {
+		return x.MinorPlayDeadlineMs
+	}
+	return 0
 }
 
 // ---- 宝宝战斗快照:与主人同队、独立行动的战斗单位(设计文档 player-pet.md §5)----
@@ -5789,7 +5801,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x17_outgoing_heal_snapshot\"K\n" +
 	"\x0fBattleItemEntry\x12\"\n" +
 	"\ritem_table_id\x18\x01 \x01(\rR\vitemTableId\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x04R\x05count\"\x83\f\n" +
+	"\x05count\x18\x02 \x01(\x04R\x05count\"\xb8\f\n" +
 	"\x14BattlePlayerSnapshot\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1f\n" +
 	"\vplayer_name\x18\x02 \x01(\tR\n" +
@@ -5827,7 +5839,8 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\rtower_context\x18\x1d \x01(\v2\x19.WuxingTowerBattleContextR\ftowerContext\x123\n" +
 	"\x16season_weekly_affix_id\x18\x1e \x01(\rR\x13seasonWeeklyAffixId\x12Y\n" +
 	"\x12equipped_skill_vfx\x18\x1f \x03(\v2+.BattlePlayerSnapshot.EquippedSkillVfxEntryR\x10equippedSkillVfx\x12&\n" +
-	"\x0fis_team_captain\x18  \x01(\bR\risTeamCaptain\x1a=\n" +
+	"\x0fis_team_captain\x18  \x01(\bR\risTeamCaptain\x123\n" +
+	"\x16minor_play_deadline_ms\x18! \x01(\x04R\x13minorPlayDeadlineMs\x1a=\n" +
 	"\x0fSkillRanksEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1aC\n" +

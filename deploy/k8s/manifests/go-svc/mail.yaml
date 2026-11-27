@@ -108,6 +108,11 @@ spec:
             - name: MAIL_PRODUCER_SECRET_BATTLE
               valueFrom:
                 secretKeyRef: {name: domain-service-secrets, key: mail-producer-battle, optional: false}
+            # match 投递群仙问道赛赛季奖励的附件(docs/planning/season-team-tournament-v1.md 第七节);与 match Pod 的同名变量同值,
+            # 只在 infra 用,由运维预置(docs/ops/k8s-open-server-runbook.md §1),部署不生成。
+            - name: MAIL_PRODUCER_SECRET_MATCH
+              valueFrom:
+                secretKeyRef: {name: domain-service-secrets, key: mail-producer-match, optional: false}
             - name: MMORPG_ASSET_OP_SECRET_MAIL
               valueFrom:
                 secretKeyRef: {name: domain-service-secrets, key: asset-mail, optional: false}

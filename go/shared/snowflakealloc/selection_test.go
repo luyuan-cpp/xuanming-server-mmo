@@ -10,14 +10,13 @@ import (
 // selectionVectors 是 testdata/selection_vectors.json 的结构(语言中立,C++ 侧同一份)。
 type selectionVectors struct {
 	Cases []struct {
-		Name             string            `json:"name"`
-		Used             []uint64          `json:"used"`
-		Watermarks       map[string]uint64 `json:"watermarks"`
-		LegacyWatermarks map[string]uint64 `json:"legacy_watermarks"`
-		Now              uint64            `json:"now"`
-		QuarantineSec    uint64            `json:"quarantine_sec"`
-		MaxSlot          uint64            `json:"max_slot"`
-		ExpectSlot       *uint64           `json:"expect_slot"`
+		Name          string            `json:"name"`
+		Used          []uint64          `json:"used"`
+		Watermarks    map[string]uint64 `json:"watermarks"`
+		Now           uint64            `json:"now"`
+		QuarantineSec uint64            `json:"quarantine_sec"`
+		MaxSlot       uint64            `json:"max_slot"`
+		ExpectSlot    *uint64           `json:"expect_slot"`
 	} `json:"cases"`
 }
 
@@ -49,10 +48,9 @@ func TestSelectSlot_Vectors(t *testing.T) {
 		t.Fatalf("向量太少: %d", len(v.Cases))
 	}
 	required := map[string]bool{
-		"all_quarantined_fail_closed":            false,
-		"never_used_wins_over_oldest_used":       false,
-		"tie_break_smallest_slot":                false,
-		"legacy_only_watermark_quarantines_slot": false,
+		"all_quarantined_fail_closed":      false,
+		"never_used_wins_over_oldest_used": false,
+		"tie_break_smallest_slot":          false,
 	}
 	for _, c := range v.Cases {
 		if _, ok := required[c.Name]; ok {
@@ -63,8 +61,7 @@ func TestSelectSlot_Vectors(t *testing.T) {
 			for _, s := range c.Used {
 				used[s] = true
 			}
-			wm := mergeWatermarks(slotMap(t, c.Watermarks), slotMap(t, c.LegacyWatermarks))
-			got, ok := selectSlot(used, wm, c.Now, c.QuarantineSec, c.MaxSlot)
+			got, ok := selectSlot(used, slotMap(t, c.Watermarks), c.Now, c.QuarantineSec, c.MaxSlot)
 			switch {
 			case c.ExpectSlot == nil && ok:
 				t.Fatalf("期望无候选(fail-closed),却选出了 slot %d", got)
@@ -79,14 +76,5 @@ func TestSelectSlot_Vectors(t *testing.T) {
 		if !seen {
 			t.Fatalf("向量文件缺少必备用例 %q", name)
 		}
-	}
-}
-
-// mergeWatermarks 按槽取 max,nil dst 可用。
-func TestMergeWatermarks_TakesMax(t *testing.T) {
-	got := mergeWatermarks(nil, map[uint64]uint64{1: 10, 2: 20})
-	got = mergeWatermarks(got, map[uint64]uint64{1: 5, 2: 30, 3: 1})
-	if got[1] != 10 || got[2] != 30 || got[3] != 1 {
-		t.Fatalf("merge=%v", got)
 	}
 }

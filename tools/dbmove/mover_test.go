@@ -1671,3 +1671,92 @@ func TestExitCodes(t *testing.T) {
 		}
 	}
 }
+
+// 修复身份只报告、不拦搬库(reportRepairPrincipal,review-suggestions 交接 §2)。
+const testRepair = "repair@%"
+
+func repairGrantOn(db string) string {
+	return "GRANT SELECT,INSERT ON `" + db + "`.`account_role` TO 'repair'@'%'"
+}
+
+func TestPlanWarnsWhenRepairPrincipalIsMissingOnTargetButGoesOn(t *testing.T) {
+	h := newHarness(t)
+	h.m.o.repairPrincipal = testRepair
+	h.sourceAdmin.accounts[testRepair] = true
+	h.sourceAdmin.grants = map[string][]string{testRepair: {repairGrantOn(testDB)}}
+	if err := h.m.plan(context.Background()); err != nil {
+		t.Fatalf("修复身份缺失只报告,plan 照常成功: %v", err)
+	}
+	if !strings.Contains(h.errOut.String(), "repair principal "+testRepair+" does not exist on the target") {
+		t.Fatalf("要在标准错误输出点名目标上缺的修复身份: %s", h.errOut)
+	}
+	if !strings.Contains(h.out.String(), "ok: "+testDB+" can move") {
+		t.Fatalf("plan 的结论照常打出: %s", h.out)
+	}
+	if len(h.log.events) != 0 || h.store.rev != 0 {
+		t.Fatalf("plan 仍然什么都不写: %v rev=%d", h.log.events, h.store.rev)
+	}
+}
+
+func TestPlanSkipsRepairPrincipalWithoutGrantsOnThisDatabase(t *testing.T) {
+	h := newHarness(t)
+	h.m.o.repairPrincipal = testRepair
+	h.sourceAdmin.accounts[testRepair] = true
+	h.sourceAdmin.grants = map[string][]string{testRepair: {repairGrantOn("mmorpg_other"), "GRANT USAGE ON *.* TO 'repair'@'%'"}}
+	if err := h.m.plan(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(h.errOut.String(), "repair principal") {
+		t.Fatalf("这个库不归修复身份管(源上它对本库没有授权),不该警告: %s", h.errOut)
+	}
+	if !strings.Contains(h.out.String(), "has no grants on "+testDB) {
+		t.Fatalf("要说明为什么没核: %s", h.out)
+	}
+}
+
+func TestPlanNotesWhenRepairPrincipalIsUnset(t *testing.T) {
+	h := newHarness(t)
+	if err := h.m.plan(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(h.out.String(), envRepair+" is not set") {
+		t.Fatalf("没设修复身份时要提示没核: %s", h.out)
+	}
+}
+
+func TestCutoverWarnsOnMissingRepairGrantsButStillFlips(t *testing.T) {
+	h := newHarness(t)
+	h.seedMoving()
+	h.m.o.repairPrincipal = testRepair
+	h.sourceAdmin.accounts[testRepair] = true
+	h.sourceAdmin.grants = map[string][]string{testRepair: {repairGrantOn(testDB)}}
+	h.targetAdmin.accounts[testRepair] = true
+	if err := h.m.cutover(context.Background()); err != nil {
+		t.Fatalf("修复身份缺授权只报告,cutover 照常翻转: %v", err)
+	}
+	if p := h.placement(); p.Cluster != testTarget || p.State != dbplacement.StateActive {
+		t.Fatalf("翻转结果: %+v", p)
+	}
+	if !strings.Contains(h.errOut.String(), "lacks grants on the target") || !strings.Contains(h.errOut.String(), "INSERT on "+testDB+".account_role") {
+		t.Fatalf("要点名缺的授权: %s", h.errOut)
+	}
+}
+
+func TestCutoverIsQuietWhenRepairGrantsMatch(t *testing.T) {
+	h := newHarness(t)
+	h.seedMoving()
+	h.m.o.repairPrincipal = testRepair
+	h.sourceAdmin.accounts[testRepair] = true
+	h.targetAdmin.accounts[testRepair] = true
+	h.sourceAdmin.grants = map[string][]string{testRepair: {repairGrantOn(testDB)}}
+	h.targetAdmin.grants = map[string][]string{testRepair: {repairGrantOn(testDB)}}
+	if err := h.m.cutover(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(h.errOut.String(), "repair principal") {
+		t.Fatalf("授权一致时不警告: %s", h.errOut)
+	}
+	if !strings.Contains(h.out.String(), "grants on "+testDB+" match the source") {
+		t.Fatalf("要写明核过: %s", h.out)
+	}
+}

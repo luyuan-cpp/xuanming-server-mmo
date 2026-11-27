@@ -480,8 +480,12 @@ type ResolveManualContractRequest struct {
 	LinkedCommerceId uint64                `protobuf:"varint,11,opt,name=linked_commerce_id,json=linkedCommerceId,proto3" json:"linked_commerce_id,omitempty"` // void-auction:拍品引用的出价
 	LinkedVersion    uint64                `protobuf:"varint,12,opt,name=linked_version,json=linkedVersion,proto3" json:"linked_version,omitempty"`            // void-auction:SHOW 看到的出价版本
 	Auth             *base.ServiceCallAuth `protobuf:"bytes,13,opt,name=auth,proto3" json:"auth,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// EXECUTE 必带(docs/design/admin-identity-and-dual-control.md §5.6):后台双人复核的批准记录,proposer 必须等于 operator。
+	// 同一个 approval_id 已经执行过时不再改动,回包 already_executed=true、plan 是当时写进留痕的那一条。
+	// 只有部署显式打开 Commerce.ManualResolutionAllowUnapproved(本机开发)时才接受不带它的 EXECUTE。DRY_RUN 可以带,用来查是否已执行。
+	Approval      *base.AdminApproval `protobuf:"bytes,14,opt,name=approval,proto3" json:"approval,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ResolveManualContractRequest) Reset() {
@@ -601,6 +605,13 @@ func (x *ResolveManualContractRequest) GetLinkedVersion() uint64 {
 func (x *ResolveManualContractRequest) GetAuth() *base.ServiceCallAuth {
 	if x != nil {
 		return x.Auth
+	}
+	return nil
+}
+
+func (x *ResolveManualContractRequest) GetApproval() *base.AdminApproval {
+	if x != nil {
+		return x.Approval
 	}
 	return nil
 }
@@ -845,22 +856,23 @@ func (x *ManualContractActionVerdict) GetDetail() string {
 }
 
 type ResolveManualContractResponse struct {
-	state         protoimpl.MessageState         `protogen:"open.v1"`
-	Verdict       ManualContractVerdict          `protobuf:"varint,1,opt,name=verdict,proto3,enum=trade.ManualContractVerdict" json:"verdict,omitempty"`
-	Refusal       string                         `protobuf:"bytes,2,opt,name=refusal,proto3" json:"refusal,omitempty"`                          // REFUSED / VERSION_CHANGED / RETRY 的原因
-	Target        string                         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`                            // 本部署的环境名
-	Record        *TradeCommerceRecord           `protobuf:"bytes,4,opt,name=record,proto3" json:"record,omitempty"`                            // SHOW:锁外读到的合同,workflow_proto 原样
-	Linked        *TradeCommerceRecord           `protobuf:"bytes,5,opt,name=linked,proto3" json:"linked,omitempty"`                            // SHOW:出价所属的拍品,或拍品引用的出价
-	Legs          []*ManualContractLeg           `protobuf:"bytes,6,rep,name=legs,proto3" json:"legs,omitempty"`                                // SHOW
-	Parties       []*ManualContractParty         `protobuf:"bytes,7,rep,name=parties,proto3" json:"parties,omitempty"`                          // SHOW
-	Actions       []*ManualContractActionVerdict `protobuf:"bytes,8,rep,name=actions,proto3" json:"actions,omitempty"`                          // SHOW
-	Plan          *TradeCommerceManualAction     `protobuf:"bytes,9,opt,name=plan,proto3" json:"plan,omitempty"`                                // DRY_RUN / EXECUTE:写进(或要写进)合同留痕的那一条
-	LinkedPlan    *TradeCommerceManualAction     `protobuf:"bytes,10,opt,name=linked_plan,json=linkedPlan,proto3" json:"linked_plan,omitempty"` // void-auction:写进出价留痕的那一条
-	Stage         string                         `protobuf:"bytes,11,opt,name=stage,proto3" json:"stage,omitempty"`                             // DRY_RUN / EXECUTE:处置后的阶段与状态
-	Status        uint32                         `protobuf:"varint,12,opt,name=status,proto3" json:"status,omitempty"`
-	AuditLine     string                         `protobuf:"bytes,13,opt,name=audit_line,json=auditLine,proto3" json:"audit_line,omitempty"` // DRY_RUN / EXECUTE:服务端打进日志的同一行 [CommerceManual],贴进工单
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState         `protogen:"open.v1"`
+	Verdict         ManualContractVerdict          `protobuf:"varint,1,opt,name=verdict,proto3,enum=trade.ManualContractVerdict" json:"verdict,omitempty"`
+	Refusal         string                         `protobuf:"bytes,2,opt,name=refusal,proto3" json:"refusal,omitempty"`                          // REFUSED / VERSION_CHANGED / RETRY 的原因
+	Target          string                         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`                            // 本部署的环境名
+	Record          *TradeCommerceRecord           `protobuf:"bytes,4,opt,name=record,proto3" json:"record,omitempty"`                            // SHOW:锁外读到的合同,workflow_proto 原样
+	Linked          *TradeCommerceRecord           `protobuf:"bytes,5,opt,name=linked,proto3" json:"linked,omitempty"`                            // SHOW:出价所属的拍品,或拍品引用的出价
+	Legs            []*ManualContractLeg           `protobuf:"bytes,6,rep,name=legs,proto3" json:"legs,omitempty"`                                // SHOW
+	Parties         []*ManualContractParty         `protobuf:"bytes,7,rep,name=parties,proto3" json:"parties,omitempty"`                          // SHOW
+	Actions         []*ManualContractActionVerdict `protobuf:"bytes,8,rep,name=actions,proto3" json:"actions,omitempty"`                          // SHOW
+	Plan            *TradeCommerceManualAction     `protobuf:"bytes,9,opt,name=plan,proto3" json:"plan,omitempty"`                                // DRY_RUN / EXECUTE:写进(或要写进)合同留痕的那一条
+	LinkedPlan      *TradeCommerceManualAction     `protobuf:"bytes,10,opt,name=linked_plan,json=linkedPlan,proto3" json:"linked_plan,omitempty"` // void-auction:写进出价留痕的那一条
+	Stage           string                         `protobuf:"bytes,11,opt,name=stage,proto3" json:"stage,omitempty"`                             // DRY_RUN / EXECUTE:处置后的阶段与状态
+	Status          uint32                         `protobuf:"varint,12,opt,name=status,proto3" json:"status,omitempty"`
+	AuditLine       string                         `protobuf:"bytes,13,opt,name=audit_line,json=auditLine,proto3" json:"audit_line,omitempty"`                    // DRY_RUN / EXECUTE:服务端打进日志的同一行 [CommerceManual],贴进工单
+	AlreadyExecuted bool                           `protobuf:"varint,14,opt,name=already_executed,json=alreadyExecuted,proto3" json:"already_executed,omitempty"` // 请求带的 approval_id 早已执行过:本次没有改动,plan 是当时那一条
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ResolveManualContractResponse) Reset() {
@@ -982,6 +994,13 @@ func (x *ResolveManualContractResponse) GetAuditLine() string {
 		return x.AuditLine
 	}
 	return ""
+}
+
+func (x *ResolveManualContractResponse) GetAlreadyExecuted() bool {
+	if x != nil {
+		return x.AlreadyExecuted
+	}
+	return false
 }
 
 // 内部调用：上报卖家登录/交易环境信号（IP + 设备标识仅用于服务端哈希比对，绝不落盘明文、绝不进客户端响应）。
@@ -1295,7 +1314,7 @@ var File_proto_trade_trade_admin_proto protoreflect.FileDescriptor
 
 const file_proto_trade_trade_admin_proto_rawDesc = "" +
 	"\n" +
-	"\x1dproto/trade/trade_admin.proto\x12\x05trade\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\x1a)proto/common/base/service_call_auth.proto\x1a\x1aproto/trade/commerce.proto\x1a\x1bproto/trade/jubaozhai.proto\x1a\x1dproto/trade/trade_table.proto\"\x8c\x03\n" +
+	"\x1dproto/trade/trade_admin.proto\x12\x05trade\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\x1a)proto/common/base/service_call_auth.proto\x1a&proto/common/base/admin_approval.proto\x1a\x1aproto/trade/commerce.proto\x1a\x1bproto/trade/jubaozhai.proto\x1a\x1dproto/trade/trade_table.proto\"\x8c\x03\n" +
 	"\x12SeedListingRequest\x12(\n" +
 	"\x10seller_player_id\x18\x01 \x01(\x04R\x0esellerPlayerId\x122\n" +
 	"\bcategory\x18\x02 \x01(\x0e2\x16.trade.ListingCategoryR\bcategory\x12 \n" +
@@ -1325,7 +1344,7 @@ const file_proto_trade_trade_admin_proto_rawDesc = "" +
 	"\x15next_after_updated_ms\x18\x02 \x01(\x04R\x12nextAfterUpdatedMs\x123\n" +
 	"\x16next_after_commerce_id\x18\x03 \x01(\x04R\x13nextAfterCommerceId\x12\x16\n" +
 	"\x06target\x18\x04 \x01(\tR\x06target\x12\x14\n" +
-	"\x05retry\x18\x05 \x01(\bR\x05retry\"\xdb\x03\n" +
+	"\x05retry\x18\x05 \x01(\bR\x05retry\"\x93\x04\n" +
 	"\x1cResolveManualContractRequest\x12\x1f\n" +
 	"\vcommerce_id\x18\x01 \x01(\x04R\n" +
 	"commerceId\x12-\n" +
@@ -1342,7 +1361,8 @@ const file_proto_trade_trade_admin_proto_rawDesc = "" +
 	"toPlayerId\x12,\n" +
 	"\x12linked_commerce_id\x18\v \x01(\x04R\x10linkedCommerceId\x12%\n" +
 	"\x0elinked_version\x18\f \x01(\x04R\rlinkedVersion\x120\n" +
-	"\x04auth\x18\r \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\xb2\x01\n" +
+	"\x04auth\x18\r \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\x126\n" +
+	"\bapproval\x18\x0e \x01(\v2\x1a.common.base.AdminApprovalR\bapproval\"\xb2\x01\n" +
 	"\x11ManualContractLeg\x12)\n" +
 	"\x03leg\x18\x01 \x01(\v2\x17.trade.TradeCommerceLegR\x03leg\x126\n" +
 	"\top_status\x18\x02 \x01(\x0e2\x19.trade.TradeAssetOpStatusR\bopStatus\x12\x19\n" +
@@ -1362,7 +1382,7 @@ const file_proto_trade_trade_admin_proto_rawDesc = "" +
 	"\x1bManualContractActionVerdict\x12\x16\n" +
 	"\x06action\x18\x01 \x01(\tR\x06action\x12\x18\n" +
 	"\aallowed\x18\x02 \x01(\bR\aallowed\x12\x16\n" +
-	"\x06detail\x18\x03 \x01(\tR\x06detail\"\xd9\x04\n" +
+	"\x06detail\x18\x03 \x01(\tR\x06detail\"\x84\x05\n" +
 	"\x1dResolveManualContractResponse\x126\n" +
 	"\averdict\x18\x01 \x01(\x0e2\x1c.trade.ManualContractVerdictR\averdict\x12\x18\n" +
 	"\arefusal\x18\x02 \x01(\tR\arefusal\x12\x16\n" +
@@ -1379,7 +1399,8 @@ const file_proto_trade_trade_admin_proto_rawDesc = "" +
 	"\x05stage\x18\v \x01(\tR\x05stage\x12\x16\n" +
 	"\x06status\x18\f \x01(\rR\x06status\x12\x1d\n" +
 	"\n" +
-	"audit_line\x18\r \x01(\tR\tauditLine\"\xa8\x02\n" +
+	"audit_line\x18\r \x01(\tR\tauditLine\x12)\n" +
+	"\x10already_executed\x18\x0e \x01(\bR\x0falreadyExecuted\"\xa8\x02\n" +
 	"\x1eRecordSellerEnvironmentRequest\x12(\n" +
 	"\x10seller_player_id\x18\x01 \x01(\x04R\x0esellerPlayerId\x12#\n" +
 	"\rowner_account\x18\x02 \x01(\tR\fownerAccount\x12%\n" +
@@ -1458,10 +1479,11 @@ var file_proto_trade_trade_admin_proto_goTypes = []any{
 	(*base.TipInfoMessage)(nil),             // 16: TipInfoMessage
 	(*base.ServiceCallAuth)(nil),            // 17: common.base.ServiceCallAuth
 	(*TradeCommerceRecord)(nil),             // 18: trade.TradeCommerceRecord
-	(*TradeCommerceLeg)(nil),                // 19: trade.TradeCommerceLeg
-	(TradeAssetOpStatus)(0),                 // 20: trade.TradeAssetOpStatus
-	(*TradeCommerceManualAction)(nil),       // 21: trade.TradeCommerceManualAction
-	(*SellerCreditView)(nil),                // 22: trade.SellerCreditView
+	(*base.AdminApproval)(nil),              // 19: common.base.AdminApproval
+	(*TradeCommerceLeg)(nil),                // 20: trade.TradeCommerceLeg
+	(TradeAssetOpStatus)(0),                 // 21: trade.TradeAssetOpStatus
+	(*TradeCommerceManualAction)(nil),       // 22: trade.TradeCommerceManualAction
+	(*SellerCreditView)(nil),                // 23: trade.SellerCreditView
 }
 var file_proto_trade_trade_admin_proto_depIdxs = []int32{
 	15, // 0: trade.SeedListingRequest.category:type_name -> trade.ListingCategory
@@ -1470,37 +1492,38 @@ var file_proto_trade_trade_admin_proto_depIdxs = []int32{
 	18, // 3: trade.ListManualContractsResponse.contracts:type_name -> trade.TradeCommerceRecord
 	0,  // 4: trade.ResolveManualContractRequest.mode:type_name -> trade.ManualContractMode
 	17, // 5: trade.ResolveManualContractRequest.auth:type_name -> common.base.ServiceCallAuth
-	19, // 6: trade.ManualContractLeg.leg:type_name -> trade.TradeCommerceLeg
-	20, // 7: trade.ManualContractLeg.op_status:type_name -> trade.TradeAssetOpStatus
-	1,  // 8: trade.ResolveManualContractResponse.verdict:type_name -> trade.ManualContractVerdict
-	18, // 9: trade.ResolveManualContractResponse.record:type_name -> trade.TradeCommerceRecord
-	18, // 10: trade.ResolveManualContractResponse.linked:type_name -> trade.TradeCommerceRecord
-	7,  // 11: trade.ResolveManualContractResponse.legs:type_name -> trade.ManualContractLeg
-	8,  // 12: trade.ResolveManualContractResponse.parties:type_name -> trade.ManualContractParty
-	9,  // 13: trade.ResolveManualContractResponse.actions:type_name -> trade.ManualContractActionVerdict
-	21, // 14: trade.ResolveManualContractResponse.plan:type_name -> trade.TradeCommerceManualAction
-	21, // 15: trade.ResolveManualContractResponse.linked_plan:type_name -> trade.TradeCommerceManualAction
-	17, // 16: trade.RecordSellerEnvironmentRequest.auth:type_name -> common.base.ServiceCallAuth
-	16, // 17: trade.RecordSellerEnvironmentResponse.error_message:type_name -> TipInfoMessage
-	22, // 18: trade.RecordSellerEnvironmentResponse.profile:type_name -> trade.SellerCreditView
-	17, // 19: trade.RecordSellerViolationRequest.auth:type_name -> common.base.ServiceCallAuth
-	16, // 20: trade.RecordSellerViolationResponse.error_message:type_name -> TipInfoMessage
-	22, // 21: trade.RecordSellerViolationResponse.profile:type_name -> trade.SellerCreditView
-	2,  // 22: trade.TradeAdmin.SeedListing:input_type -> trade.SeedListingRequest
-	4,  // 23: trade.TradeAdmin.ListManualContracts:input_type -> trade.ListManualContractsRequest
-	6,  // 24: trade.TradeAdmin.ResolveManualContract:input_type -> trade.ResolveManualContractRequest
-	11, // 25: trade.TradeAdmin.RecordSellerEnvironment:input_type -> trade.RecordSellerEnvironmentRequest
-	13, // 26: trade.TradeAdmin.RecordSellerViolation:input_type -> trade.RecordSellerViolationRequest
-	3,  // 27: trade.TradeAdmin.SeedListing:output_type -> trade.SeedListingResponse
-	5,  // 28: trade.TradeAdmin.ListManualContracts:output_type -> trade.ListManualContractsResponse
-	10, // 29: trade.TradeAdmin.ResolveManualContract:output_type -> trade.ResolveManualContractResponse
-	12, // 30: trade.TradeAdmin.RecordSellerEnvironment:output_type -> trade.RecordSellerEnvironmentResponse
-	14, // 31: trade.TradeAdmin.RecordSellerViolation:output_type -> trade.RecordSellerViolationResponse
-	27, // [27:32] is the sub-list for method output_type
-	22, // [22:27] is the sub-list for method input_type
-	22, // [22:22] is the sub-list for extension type_name
-	22, // [22:22] is the sub-list for extension extendee
-	0,  // [0:22] is the sub-list for field type_name
+	19, // 6: trade.ResolveManualContractRequest.approval:type_name -> common.base.AdminApproval
+	20, // 7: trade.ManualContractLeg.leg:type_name -> trade.TradeCommerceLeg
+	21, // 8: trade.ManualContractLeg.op_status:type_name -> trade.TradeAssetOpStatus
+	1,  // 9: trade.ResolveManualContractResponse.verdict:type_name -> trade.ManualContractVerdict
+	18, // 10: trade.ResolveManualContractResponse.record:type_name -> trade.TradeCommerceRecord
+	18, // 11: trade.ResolveManualContractResponse.linked:type_name -> trade.TradeCommerceRecord
+	7,  // 12: trade.ResolveManualContractResponse.legs:type_name -> trade.ManualContractLeg
+	8,  // 13: trade.ResolveManualContractResponse.parties:type_name -> trade.ManualContractParty
+	9,  // 14: trade.ResolveManualContractResponse.actions:type_name -> trade.ManualContractActionVerdict
+	22, // 15: trade.ResolveManualContractResponse.plan:type_name -> trade.TradeCommerceManualAction
+	22, // 16: trade.ResolveManualContractResponse.linked_plan:type_name -> trade.TradeCommerceManualAction
+	17, // 17: trade.RecordSellerEnvironmentRequest.auth:type_name -> common.base.ServiceCallAuth
+	16, // 18: trade.RecordSellerEnvironmentResponse.error_message:type_name -> TipInfoMessage
+	23, // 19: trade.RecordSellerEnvironmentResponse.profile:type_name -> trade.SellerCreditView
+	17, // 20: trade.RecordSellerViolationRequest.auth:type_name -> common.base.ServiceCallAuth
+	16, // 21: trade.RecordSellerViolationResponse.error_message:type_name -> TipInfoMessage
+	23, // 22: trade.RecordSellerViolationResponse.profile:type_name -> trade.SellerCreditView
+	2,  // 23: trade.TradeAdmin.SeedListing:input_type -> trade.SeedListingRequest
+	4,  // 24: trade.TradeAdmin.ListManualContracts:input_type -> trade.ListManualContractsRequest
+	6,  // 25: trade.TradeAdmin.ResolveManualContract:input_type -> trade.ResolveManualContractRequest
+	11, // 26: trade.TradeAdmin.RecordSellerEnvironment:input_type -> trade.RecordSellerEnvironmentRequest
+	13, // 27: trade.TradeAdmin.RecordSellerViolation:input_type -> trade.RecordSellerViolationRequest
+	3,  // 28: trade.TradeAdmin.SeedListing:output_type -> trade.SeedListingResponse
+	5,  // 29: trade.TradeAdmin.ListManualContracts:output_type -> trade.ListManualContractsResponse
+	10, // 30: trade.TradeAdmin.ResolveManualContract:output_type -> trade.ResolveManualContractResponse
+	12, // 31: trade.TradeAdmin.RecordSellerEnvironment:output_type -> trade.RecordSellerEnvironmentResponse
+	14, // 32: trade.TradeAdmin.RecordSellerViolation:output_type -> trade.RecordSellerViolationResponse
+	28, // [28:33] is the sub-list for method output_type
+	23, // [23:28] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_proto_trade_trade_admin_proto_init() }

@@ -158,7 +158,7 @@ AuthProviders:
 
 **故障与代价：**
 
-- 通行证或网络出故障、应答认不出：照常续期，计 `login_passport_session_check_total{result="error"}` 并记 ERROR，不让通行证故障把在线玩家都踢下线。error 持续出现，说明改密已经踢不掉人，要告警（告警规则未配）。
+- 通行证或网络出故障、应答认不出：照常续期，计 `login_passport_session_check_total{result="error"}` 并记 ERROR，不让通行证故障把在线玩家都踢下线。error 持续出现，说明改密已经踢不掉人：`deploy/k8s/login-alerts.yaml` 的 `LoginPassportSessionCheckFailing`（10 分钟内一半以上的核对失败，持续 10 分钟）报 warning，`tools/scripts/tests/gate_pick_alerts_contract.tests.ps1` 钉住指标名与取值。
 - 通行证账号每次刷新（约 2 小时一次）多一次内网调用，时限 1 秒（`passportSessionCheckTimeout`，login 的 RPC 超时缺省 4 秒）。每次刷新多一次 Redis 读（先读载荷再轮换）。
 - 没配管理凭据（只有 dev/test 允许）时不核对，启动时记 ERROR。生产模式配了通行证就必须配管理凭据（§3.2）。
 - 管理接口走 `Endpoint`，生产必须指向内网入口（§8.4 第 2 条）。指错了，每次核对都按故障放行，改密就再也踢不掉人，只在指标里看得到。

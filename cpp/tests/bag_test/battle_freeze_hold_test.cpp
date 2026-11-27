@@ -1,5 +1,6 @@
 // FIGHTING 冻结到期之后的有界续冻(2026-11-06,数据覆写审计 R2 r2-v1#1 残余窗口)与
 // 资产通道整批预检的号段续段(r2-battle#3)。设计见 docs/design/turn-battle-gap-closure.md §11。
+// 文件末尾:战斗道具预留与普通生死状待退银两的终局复核(battle-item-reservation.md;2026-11-26 银两并入同一次复核)。
 //
 // 不连 Redis、不连 match:SQL 终局查询、条件删锁、组队跟随唤醒、锁脚本都经 PlayerBattleSystem 的注入点替换,
 // reaper 的时刻由用例显式给(ReapExpiredFreezes(nowMs))。资产通道走真实的 Debit / Credit 入口与签名。
@@ -35,6 +36,7 @@
 #include "proto/common/component/currency_comp.pb.h"
 #include "proto/common/component/player_inbox_ledger_comp.pb.h"
 #include "proto/common/component/player_item_hold_comp.pb.h"
+#include "proto/common/component/player_jianghu_comp.pb.h" // 普通生死状待退银两与道具预留共用终局复核
 #include "proto/common/event/battle_event.pb.h" // BattleConfirmedEvent:开局确认写锁
 #include "proto/scene/scene.pb.h"               // CancelBattlePrepareRequest:取消备战释放预留
 #include "proto/match/match_internal.pb.h"
@@ -47,6 +49,7 @@
 #include "services/scene/player/comp/player_ownership_comp.h"
 #include "services/scene/player/system/asset_op_auth.h"
 #include "services/scene/player/system/asset_op_system.h"
+#include "services/scene/player/system/player_jianghu.h"
 #include "table/code/item_table.h"
 #include "table/proto/tip/asset_error_tip.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
@@ -1163,6 +1166,182 @@ TEST_F(BattleItemHoldTest, CancelledPreparationReleasesTheHold)
     EXPECT_FALSE(tlsEcs.actorRegistry.any_of<InBattleComp>(player));
     EXPECT_FALSE(Held()) << "match 取消备战 = 这一局不会开打:预留一并释放";
     EXPECT_EQ(5u, BagService::RemovableCount(player, Inventory(), kHoldPotion));
+}
+
+// ── 普通生死状预扣银两的终局复核(2026-11-26,数据覆写审计 r2 第 4 轮;
+//    docs/planning/battle-jianghu-grudge-duel-phase1-implementation-plan.md 末节)────────────────────
+// 预扣的 500 银两与道具预留共用同一次终局复核:冻结已不在、复核时刻已过,ABORT / 没有可裁决原件才退,
+// COMPLETE / PENDING / UNKNOWN 留着;同一 (玩家, 局) 只问一次;退只退一次;玩家不可改时不动。
+constexpr uint64_t kSilverFee = 500;
+
+class BattleSilverFeeReviewTest : public BattleItemHoldTest
+{
+protected:
+    void SetUp() override
+    {
+        BattleItemHoldTest::SetUp(); // 含货币组件与归属围栏(GiveAssetChannel)
+        tlsEcs.actorRegistry.emplace<PlayerJianghuComp>(player); // 持久数据,生产里由加载创建
+        ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 1000));
+    }
+
+    void ChargeFee(uint64_t reviewAfterMs)
+    {
+        ASSERT_EQ(kSuccess, PlayerJianghuSystem::CommitPrepareSilverFee(player, kBattleId, kSilverFee, reviewAfterMs));
+        ASSERT_EQ(1000u - kSilverFee, Silver());
+    }
+
+    uint64_t Silver() const { return CurrencySystem::GetBalance(player, kCurrencyGold); }
+    void SetSilver(uint64_t value) { tlsEcs.actorRegistry.get<CurrencyComp>(player).set_values(static_cast<int>(kCurrencyGold), value); }
+    bool FeePending() const
+    {
+        return tlsEcs.actorRegistry.get<PlayerJianghuComp>(player).pending_silver_fee_battle_id() == kBattleId;
+    }
+};
+
+// 核心回归:取消没送到在线实体(备战到期 / 玩家当时不在本节点),冻结没了、待退标记还在 —— 复核按终局退,且只退一次。
+// 同一局的道具预留与待退银两只发一次查询,一个回答同时收尾两样。
+TEST_F(BattleSilverFeeReviewTest, HoldAndFeeOfOneBattleShareOneQueryAndAbortRefundsOnce)
+{
+    constexpr uint64_t kReviewAfterMs = kSyntheticDeadlineMs;
+    ASSERT_NO_FATAL_FAILURE(HoldPotions(2, kReviewAfterMs));
+    ASSERT_NO_FATAL_FAILURE(ChargeFee(kReviewAfterMs));
+
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(kReviewAfterMs);
+    EXPECT_TRUE(gTerminalQueries.empty()) << "复核时刻之前(含当刻)不问";
+
+    uint64_t nowMs = kReviewAfterMs + 1;
+    for (const auto answer : {TerminalAnswer::kComplete, TerminalAnswer::kPending, TerminalAnswer::kUnknown})
+    {
+        PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(nowMs);
+        ASSERT_EQ(1u, gTerminalQueries.size()) << "预留与待退银两同一局只问一次: " << battle_freeze_hold::TerminalAnswerName(answer);
+        ASSERT_TRUE(AnswerOldestQuery(answer));
+        EXPECT_TRUE(Held()) << battle_freeze_hold::TerminalAnswerName(answer);
+        EXPECT_TRUE(FeePending()) << battle_freeze_hold::TerminalAnswerName(answer) << " 不退";
+        EXPECT_EQ(1000u - kSilverFee, Silver());
+        nowMs += kReaperTickMs;
+    }
+
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(nowMs);
+    ASSERT_EQ(1u, gTerminalQueries.size());
+    const auto repeatedAnswer = gTerminalQueries.front().done; // 留一份,模拟同一回答重复到达
+    ASSERT_TRUE(AnswerOldestQuery(TerminalAnswer::kAbort));
+    EXPECT_FALSE(Held());
+    EXPECT_FALSE(FeePending());
+    EXPECT_EQ(1000u, Silver()) << "ABORT:不会再有结算,退还";
+
+    repeatedAnswer(TerminalAnswer::kAbort);
+    EXPECT_EQ(1000u, Silver()) << "重复的回答不再退";
+    ::CancelBattlePrepareRequest cancel;
+    cancel.set_player_id(playerId);
+    cancel.set_battle_id(kBattleId);
+    PlayerBattleSystem::CancelBattlePrepare(cancel);
+    EXPECT_EQ(1000u, Silver()) << "迟到的取消不再退";
+
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(nowMs + kReaperTickMs);
+    EXPECT_TRUE(gTerminalQueries.empty()) << "收尾之后不再问";
+}
+
+// 金帖之外的普通战书没有道具预留:待退银两自己也会被复核;这一局的冻结还在时归冻结那条路。
+TEST_F(BattleSilverFeeReviewTest, FeeWithoutAnItemHoldIsReviewedOnlyAfterTheFreezeIsGone)
+{
+    ASSERT_NO_FATAL_FAILURE(ChargeFee(kSyntheticDeadlineMs));
+    Fight(kSyntheticDeadlineMs);
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(kSyntheticDeadlineMs + 1); // 冻结还没到期
+    EXPECT_TRUE(gTerminalQueries.empty()) << "这一局的冻结还在:复核不插手";
+
+    tlsEcs.actorRegistry.remove<InBattleComp>(player); // 备战到期 / 取消没送到:冻结没了,待退标记还在
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(kSyntheticDeadlineMs + 1);
+    ASSERT_EQ(1u, gTerminalQueries.size());
+    ASSERT_TRUE(AnswerOldestQuery(TerminalAnswer::kNoOriginal));
+    EXPECT_FALSE(FeePending()) << "没有可裁决原件:永远不会有结算";
+    EXPECT_EQ(1000u, Silver());
+}
+
+// 退款是存档改动:玩家不可改时不查、回答到了也不动;入账失败(余额溢出)保留标记,下一拍按同一个终局重试。
+TEST_F(BattleSilverFeeReviewTest, RefundWaitsForAMutablePlayerAndRetriesAfterACreditFailure)
+{
+    ASSERT_NO_FATAL_FAILURE(ChargeFee(kSyntheticDeadlineMs));
+    auto& ownerEpoch = tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player);
+    uint64_t nowMs = kSyntheticDeadlineMs + 1;
+
+    ownerEpoch.epoch = 0; // 没有归属围栏:本节点此刻不改这名玩家
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(nowMs);
+    EXPECT_TRUE(gTerminalQueries.empty()) << "不可改的玩家不复核";
+
+    ownerEpoch.epoch = 1;
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(nowMs);
+    ASSERT_EQ(1u, gTerminalQueries.size());
+    ownerEpoch.epoch = 0; // 回答在途期间变得不可改(交接 / 退出)
+    ASSERT_TRUE(AnswerOldestQuery(TerminalAnswer::kAbort));
+    EXPECT_TRUE(FeePending()) << "不可改时不动存档";
+    EXPECT_EQ(1000u - kSilverFee, Silver());
+    ownerEpoch.epoch = 1;
+
+    constexpr uint64_t kNearlyFull = std::numeric_limits<uint64_t>::max() - 100;
+    SetSilver(kNearlyFull);
+    nowMs += kReaperTickMs;
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(nowMs);
+    ASSERT_EQ(1u, gTerminalQueries.size());
+    ASSERT_TRUE(AnswerOldestQuery(TerminalAnswer::kAbort));
+    EXPECT_TRUE(FeePending()) << "入账失败:先入账再清标记,标记留着";
+    EXPECT_EQ(kNearlyFull, Silver());
+
+    SetSilver(1000u - kSilverFee);
+    nowMs += kReaperTickMs;
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(nowMs);
+    ASSERT_EQ(1u, gTerminalQueries.size()) << "下一拍重试";
+    ASSERT_TRUE(AnswerOldestQuery(TerminalAnswer::kAbort));
+    EXPECT_FALSE(FeePending());
+    EXPECT_EQ(1000u, Silver());
+}
+
+// 作废结算应用时退款没入成账:收件箱照记 APPLIED,待退银两不能按「本地已应用」收尾 —— 复核照问,ABORT 退。
+TEST_F(BattleSilverFeeReviewTest, VoidAppliedHereWithAFailedRefundIsRefundedByTheReview)
+{
+    ASSERT_NO_FATAL_FAILURE(ChargeFee(kSyntheticDeadlineMs));
+    ASSERT_NO_FATAL_FAILURE(RecordInboxDecision(1, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, kBattleId));
+
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(kSyntheticDeadlineMs + 1);
+    ASSERT_EQ(1u, gTerminalQueries.size()) << "本地已应用也要问:应用的可能是退款失败的作废结算";
+    ASSERT_TRUE(AnswerOldestQuery(TerminalAnswer::kAbort));
+    EXPECT_FALSE(FeePending());
+    EXPECT_EQ(1000u, Silver());
+}
+
+// COMPLETE 的结算已在本实体应用过、标记却还在(缺陷兜底):结算不会再来,按已消耗清掉,不退,也不再挡新的战书。
+TEST_F(BattleSilverFeeReviewTest, CompleteAppliedHereConsumesALeftoverFeeWithoutARefund)
+{
+    ASSERT_NO_FATAL_FAILURE(ChargeFee(kSyntheticDeadlineMs));
+    ASSERT_NO_FATAL_FAILURE(RecordInboxDecision(1, player_inbox::PLAYER_INBOX_OUTCOME_APPLIED, kBattleId));
+
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(kSyntheticDeadlineMs + 1);
+    ASSERT_EQ(1u, gTerminalQueries.size());
+    ASSERT_TRUE(AnswerOldestQuery(TerminalAnswer::kComplete));
+    EXPECT_FALSE(FeePending());
+    EXPECT_EQ(1000u - kSilverFee, Silver()) << "打过的这一局不退";
+
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(kSyntheticDeadlineMs + 1 + kReaperTickMs);
+    EXPECT_TRUE(gTerminalQueries.empty());
+}
+
+// FIGHTING 冻结到期、终局 ABORT:冻结、道具预留与待退银两在同一个回答里一起收尾。
+TEST_F(BattleSilverFeeReviewTest, AbortAtFreezeExpiryRefundsTheFeeTogetherWithTheHold)
+{
+    const uint64_t expiresAtMs = PlayerBattleSystem::FreezeExpiresAtMs(false, kSyntheticDeadlineMs, 0);
+    Fight(kSyntheticDeadlineMs);
+    ASSERT_NO_FATAL_FAILURE(HoldPotions(3, expiresAtMs));
+    ASSERT_NO_FATAL_FAILURE(ChargeFee(expiresAtMs));
+
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(expiresAtMs + 1);
+    ASSERT_EQ(1u, gTerminalQueries.size()) << "冻结还在时只有冻结那条路问";
+    ASSERT_TRUE(AnswerOldestQuery(TerminalAnswer::kAbort));
+    EXPECT_FALSE(tlsEcs.actorRegistry.any_of<InBattleComp>(player));
+    EXPECT_FALSE(Held());
+    EXPECT_FALSE(FeePending());
+    EXPECT_EQ(1000u, Silver());
+
+    PlayerBattleFreezeHoldTestAccess::ReapExpiredFreezes(expiresAtMs + 1 + kReaperTickMs);
+    EXPECT_TRUE(gTerminalQueries.empty());
 }
 
 } // namespace

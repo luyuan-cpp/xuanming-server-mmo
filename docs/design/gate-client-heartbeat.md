@@ -7,10 +7,11 @@
 
 ## 0. 一句话
 
-gate 对每条客户端连接设两道期限,到了都只调 `forceClose()`:
+gate 对每条客户端连接设三道期限,到了都只调 `forceClose()`:
 
 - 建连 10 秒内必须验签;
-- 验签成功的回包里通告心跳参数,从这一刻起连续 30 秒收不到这条连接的任何一帧就关。
+- 验签成功的回包里通告心跳参数,从这一刻起连续 30 秒收不到这条连接的任何一帧就关;
+- 验签之后 60 秒内必须登录成功一次(2026-11-26 加,§4「登录期限」),只发心跳不登录的连接到点就关。
 
 客户端每 10 秒发一条心跳,gate 每条都回。关掉之后由既有的断开回调代发 `ExitGame(DISCONNECTED)`,走断线保留(`player-connection-lost-hold.md`)。
 
@@ -72,7 +73,8 @@ message ClientHeartbeatResponse { uint64 seq = 1; }  // gate → 客户端,回�
 | `handshakeTimeout` | 10s | 合法客户端建连后立即发验签,毫秒级完成;移动网络上首个数据段丢一两次(初始重传 1s、再 2s)也在几秒内到。与 battle 直连的握手期限(`battle_client_edge.h` `kHandshakeTimeoutSec`)同值。准入控制文档 P0-2 建议的 1–3 秒对移动网络太紧;Java gate 现在是 30 秒,两版要对齐(§10) |
 | `interval` | 10s | 客户端发心跳的间隔。2 万连接的 gate 每秒约 2000 条心跳、2000 条回包,每条几十字节,相对玩家流量可以忽略。远短于运营商 NAT 的 TCP 空闲回收时间,也起到保活映射的作用 |
 | `idleTimeout` | 30s = 3 × interval | 从收到上一帧算起。正常节奏下,要连着丢两个心跳、第三个也没准时到才会判死。手机短暂断网时,TCP 重传按指数退避(1、2、4、8 秒…),网络恢复后最长再隔十几秒数据才到,30 秒能容下约 15 秒的断网而不误判 |
-| `checkPeriod` | 1s | 扫描节拍,精度 ±1s。两道期限都只会晚、不会早 |
+| `checkPeriod` | 1s | 扫描节拍,精度 ±1s。各道期限都只会晚、不会早 |
+| 登录期限 `kLoginDeadlineAfterVerify`(gate 自己的常量,`client_heartbeat.h`,不在共用的 `kClientLiveness` 里,battle 直连没有登录这一步) | 60s | 2026-11-26 加。验签之后这么久之内必须登录成功一次(`SessionInfo::loginSucceeded`),按「距验签的时长」判,发心跳不续命。没有这一道时,验签之后不登录、只发心跳的连接能一直挂着;它们都算进 gate 人数(`player_count` 数的是全部会话),排队按人数放人,这些连接就挤掉了排队的名额,一个账号领一张票就能开出很多条。60s:合法客户端验签一回来就发 Login,正常几百毫秒,login 繁忙或抢账号锁失败重试也在十几秒内;比 `idleTimeout` 长,验签之后静默的连接仍由空闲超时先关 |
 | `maxHeartbeatsPerInterval` | 3 | 一个 interval 窗口里最多回 3 条,窗口从窗口里第一条心跳算起。断网恢复后 TCP 会把积压的几条心跳一次送到,这个余量容得下;正常节奏与两倍速都碰不到。超出的不回(§5.2 第 4 步) |
 
 - **比节点链路(5s / 15s)宽**。节点链路在机房内部,抖动小;客户端在公网和移动网络上,15 秒会把一次电梯、隧道里的断网判成掉线,逼客户端重连。判死晚 15 秒的代价只是:真掉线时,角色在原地多停 15 秒。
@@ -82,7 +84,7 @@ message ClientHeartbeatResponse { uint64 seq = 1; }  // gate → 客户端,回�
 
 ## 5. gate 行为
 
-### 5.1 一条连接的两道期限
+### 5.1 一条连接的三道期限
 
 ```
 建连 ──ExpectHandshake──▶ 握手检查点:建连 + 10s
@@ -91,9 +93,13 @@ message ClientHeartbeatResponse { uint64 seq = 1; }  // gate → 客户端,回�
 验签成功的回包 ──OnTokenVerified──▶ 通告 10000 / 30000,开始跟踪;空闲检查点:回包时刻 + 30s
   │                                  到期时距上一帧不足 30s → 按「上一帧 + 30s」重新登记
   │                                  已满 30s → forceClose(idle_closed)
+  │                                  同时登记登录检查点:回包时刻 + 60s
+  │                                  到期时还没登录成功过 → forceClose(login_timeouts);登录成功过 → 作废
   ▼
-每一帧(验签、ClientRequest、心跳)──NoteInboundFrame──▶ 刷新「上一帧」
+每一帧(验签、ClientRequest、心跳)──NoteInboundFrame──▶ 刷新「上一帧」(不影响登录期限)
 ```
+
+- **登录期限按「距验签的时长 + 仍未登录成功」判**(2026-11-26 加),与握手期限同一个道理:按「距上一次活动」算,只发心跳的连接就能永远挂着。只看 `loginSucceeded`,不看 `loginStarted`:发一条注定失败的 Login 不能让它作废。同一张票同一时刻也只能开一条连接(`SessionManager::ClaimTicket`,见[登录排队](./login-queue-2026-05.md) §5「一张票只开一条连接」),两道合起来,一个账号占着的连接数受 login 的设备数上限约束。
 
 - **握手期限按「距建连的时长 + 仍未验签」判**,期间收到过字节也不续期。按「距上一次活动」算的话,对端每隔几秒发一个字节就能永远占着槽位,这是这道防线被静默绕过的头号方式(准入控制文档 P0-2)。登记点在 `HandleConnectionEstablished` 插入会话之后;dev 免验签的会话建连即已验证,不登记。
 - **空闲超时从验签成功的回包起算**。三条成功路径都调 `OnTokenVerified`:正常验签、已验证会话重发验签、dev 免验签。重复调用只填参数,不重复登记。
@@ -179,7 +185,8 @@ message ClientHeartbeatResponse { uint64 seq = 1; }  // gate → 客户端,回�
 - **推迟判定**:gate 的 loop 卡过 2 秒以上才会出现,本身是该看的服务端问题。一次卡顿一行 WARN,不按连接打:
   `[ClientHeartbeat] liveness verdicts deferred, local loop stalled: check_gap_ms=<n>, deferred=<n>, deferred_total=<n>`
 - **汇总行**:每 30 秒检查一次,累计计数有变化才打:
-  `[ClientHeartbeat] summary answered=<n> excess=<n> before_verify=<n> tracked=<n> idle_closed=<n> handshake_timeouts=<n> deferred=<n> pending_checks=<n>`
+  `[ClientHeartbeat] summary answered=<n> excess=<n> before_verify=<n> tracked=<n> idle_closed=<n> handshake_timeouts=<n> login_timeouts=<n> deferred=<n> pending_checks=<n>`
+  - `login_timeouts`(2026-11-26 加)是验签满 60s 仍未登录成功、被关掉的连接数,真实客户端碰不到,持续增长说明有连接验签之后不登录、只靠心跳挂着;
   - `tracked` 是开始按空闲超时判死的连接数,正常等于验签成功的连接数;
   - `pending_checks` 是检查点堆的大小,含已关闭会话、已验签连接还没到期的检查点,只作观测;
   - 指标只有进程级计数,没有按玩家或会话的维度。

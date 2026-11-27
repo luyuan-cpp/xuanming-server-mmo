@@ -642,7 +642,7 @@ func (q *Queue) Poll(ctx context.Context, token string, zoneID uint32, signFn Si
 // 不会签出一张没有名额兜着的票。同一令牌在窗口里能多拿几张票,不扩大危害面:gate 票本来就不是一次性的(C++ gate 只验签名、
 // gate 号与过期,不记用过没有),一张票在有效期里就能被重复使用。截止只在取走那次写,重取不推后它。
 // (2026-11-26 补注)「能被重复使用」只对持票账号成立:票绑了入队的账号,多拿的几张、被转给别人的票,别的账号都登不上
-// (TicketIssuedTo)。
+// (TicketIssuedTo);gate 也只让一张票同一时刻开一条连接(SessionManager::ClaimTicket)。
 // 写满:GETDEL 是写命令,它之后的 HSET 不再受 maxmemory 约束(见 admitEntryScript 注释 (c));GETDEL 删掉的放行槽与新写的
 // 两个字段大小相当,不会因此明显越线。
 //

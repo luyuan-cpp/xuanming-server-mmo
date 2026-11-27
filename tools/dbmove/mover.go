@@ -170,6 +170,7 @@ type moverOptions struct {
 
 	rosterPrincipals    []string // 名册里这个库的全部写者主体,包括还没注册的
 	controlPrincipals   []string // 注册和 schema 主体。不锁,只核存在和授权
+	repairPrincipal     string   // 修复身份 MMORPG_SQL_REPAIR_PRINCIPAL。不锁、不拦搬库,只报告(reportRepairPrincipal)
 	allowSharedAccounts bool     // -allow-shared-writer-accounts
 	targetLost          bool     // -target-lost
 
@@ -392,6 +393,7 @@ func (m *mover) plan(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	m.reportRepairPrincipal(ctx, "plan", false)
 	source := m.sourceCluster(rec)
 	m.logf("plan", "ok: %s can move from cluster %s to cluster %s (backend %s, %d writer account(s) checked: prepare locks %d on the target, %d stay open because they also write other databases there)", m.o.db, source, m.o.targetCluster, backend, len(writers), len(locked), len(shared))
 	if m.o.runID == "" {
@@ -847,6 +849,7 @@ func (m *mover) checkAccountsBeforeFlip(ctx context.Context, move *dbplacement.M
 	if len(problems) != 0 {
 		return refusedf("the target is missing grants the source has, these accounts would fail after the flip and there is no way back. Nothing was changed: %s", strings.Join(problems, "; "))
 	}
+	m.reportRepairPrincipal(ctx, "cutover", true)
 	// 共享账号不在窗口的解锁名单里。它其实锁着的话(上一次搬迁回滚留下的,或者先被锁、后来才补了别的库的授权),翻转之后这个库连不上,也回不去。
 	var stillLocked []string
 	for _, account := range move.SharedAccounts {
@@ -862,6 +865,62 @@ func (m *mover) checkAccountsBeforeFlip(ctx context.Context, move *dbplacement.M
 		return refusedf("these shared writer accounts are locked on the target and the window does not unlock them, this database would be unreachable after the flip. Nothing was changed: unlock them by hand with ALTER USER ... ACCOUNT UNLOCK, see docs/ops/db-move-runbook.md §6: %s", strings.Join(stillLocked, ", "))
 	}
 	return nil
+}
+
+// reportRepairPrincipal 核修复身份在目标上是否就绪,只报告、不拦搬库(review-suggestions 交接 §2,2026-11-26):
+// 修复账号平时 ACCOUNT LOCK,只在修复窗口解锁;目标上漏建账号或漏授权,只会让 create_residual、admission_recover
+// 在翻转之后连不上这个库(fail-closed),不影响业务写入,不值得为它挡住一次搬库。漏了要在下一次修复之前补上,所以缺什么都写到标准错误输出。
+//   - 只在源库上它对这个库有授权时才核:那是目录片或存档库(render-repair-role 只给这两类库授权);对这个库没有授权,说明不归修复身份管,不报。
+//   - compareGrants 为 false(plan)只核账号存在:那时目标上的表还没恢复,表级授权无从比。为 true(cutover 冻结之前)再比这个库与全局的授权,
+//     口径同写者与控制账号(missingGrants:源上有、目标没有的才算缺),源库的授权就是当初按 render-repair-role 执行的那一份。
+//   - 没设 MMORPG_SQL_REPAIR_PRINCIPAL 时打一行提示:工具不知道修复身份叫什么,搬目录片或存档库时要设上再跑,或者照手册手工核。
+func (m *mover) reportRepairPrincipal(ctx context.Context, step string, compareGrants bool) {
+	principal := m.o.repairPrincipal
+	if principal == "" {
+		m.logf(step, "note: %s is not set, so the repair principal was not checked; when moving a directory shard or a player store, set it and rerun this step, or check the account and its grants on the target by hand", envRepair)
+		return
+	}
+	onSource, err := m.sourceAdmin.AccountExists(ctx, principal)
+	if err != nil {
+		m.log.warn(step, fmt.Sprintf("cannot check the repair principal %s on the source, it was not checked: %v", principal, err))
+		return
+	}
+	if !onSource {
+		m.logf(step, "repair principal %s does not exist on the source, nothing to check for %s", principal, m.o.db)
+		return
+	}
+	source, err := m.sourceAdmin.AccountGrants(ctx, principal)
+	if err != nil {
+		m.log.warn(step, fmt.Sprintf("cannot read the grants of the repair principal %s on the source, it was not checked: %v", principal, err))
+		return
+	}
+	if !hasGrantsOn(source, m.o.db) {
+		m.logf(step, "repair principal %s has no grants on %s, nothing to check", principal, m.o.db)
+		return
+	}
+	onTarget, err := m.targetAdmin.AccountExists(ctx, principal)
+	if err != nil {
+		m.log.warn(step, fmt.Sprintf("cannot check the repair principal %s on the target, it was not checked: %v", principal, err))
+		return
+	}
+	if !onTarget {
+		m.log.warn(step, fmt.Sprintf("the repair principal %s does not exist on the target. The move goes on, but create_residual and admission_recover cannot connect to %s after the flip: create the account there (same password, ACCOUNT LOCK) and, after the full restore, apply the output of maintenance_drain.ps1 -MaintenanceCommand render-repair-role with %s in the plan", principal, m.o.db, m.o.db))
+		return
+	}
+	if !compareGrants {
+		m.logf(step, "repair principal %s exists on the target; its grants on %s are compared before cutover freezes the source", principal, m.o.db)
+		return
+	}
+	target, err := m.targetAdmin.AccountGrants(ctx, principal)
+	if err != nil {
+		m.log.warn(step, fmt.Sprintf("cannot read the grants of the repair principal %s on the target, it was not checked: %v", principal, err))
+		return
+	}
+	if missing := missingGrants(source, target, m.o.db); len(missing) != 0 {
+		m.log.warn(step, fmt.Sprintf("the repair principal %s lacks grants on the target that it has on the source: %s. The move goes on, but create_residual and admission_recover fail on %s after the flip until you apply the output of maintenance_drain.ps1 -MaintenanceCommand render-repair-role with %s in the plan on the target", principal, strings.Join(missing, ", "), m.o.db, m.o.db))
+		return
+	}
+	m.logf(step, "repair principal %s: its grants on %s match the source", principal, m.o.db)
 }
 
 // checkProcessesKnowCluster 核列出的进程都认识目标集群。配置改了但 Pod 用的还是旧 Secret 时,翻转之后这个库读写全停,还回不去。

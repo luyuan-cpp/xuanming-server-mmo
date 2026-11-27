@@ -23,8 +23,10 @@ import (
 	"runtime"
 	"shared/authoritysql"
 	"shared/dbplacement"
+	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 )
@@ -489,7 +491,12 @@ func runRegister(ctx context.Context, o registerOptions, getenv func(string) str
 		now:        time.Now,
 		random:     rand.Reader,
 	}
-	set, boot, err := registrar.register(ctx, template)
+	set, boot, skipped, err := registrar.register(ctx, template)
+	for _, schema := range skipped {
+		if _, printErr := fmt.Fprintf(out, "writer_authority command=register skipped=%s reason=unreachable\n", schema); printErr != nil {
+			return errors.Join(err, printErr)
+		}
+	}
 	if err != nil {
 		return err
 	}
@@ -512,8 +519,9 @@ func runRegister(ctx context.Context, o registerOptions, getenv func(string) str
 	if err = writeConfirmedGrantSet(o.bootOutput, set); err != nil {
 		return err
 	}
-	for _, request := range boot.Requests {
-		if _, err = fmt.Fprintf(out, "writer_authority command=register request_id=%s boot_seq=%d confirmed=true\n", hex.EncodeToString(request.RequestId), request.Writer.BootSeq); err != nil {
+	// 每份注册成功的写资格一行;跳过的库上面已经各打了一行 skipped。
+	for _, grant := range set.Grants {
+		if _, err = fmt.Fprintf(out, "writer_authority command=register request_id=%s boot_seq=%d confirmed=true\n", hex.EncodeToString(grant.GrantId), boot.Requests[0].Writer.BootSeq); err != nil {
 			return err
 		}
 	}
@@ -654,8 +662,10 @@ type catalogOpener struct {
 	backend   authoritysql.Backend
 	placement dbplacement.Config
 	perm      authoritysql.Permission
-	catalogs  map[string]*authoritysql.Catalog
-	pools     []*sql.DB
+	// mu 护住 catalogs 与 pools:注册时并发探测各库连不连得上(slotRegistration.splitReachable)。
+	mu       sync.Mutex
+	catalogs map[string]*authoritysql.Catalog
+	pools    []*sql.DB
 }
 
 func newCatalogOpener(ctx context.Context, dsnName string, physical []byte, getenv func(string) string) (*catalogOpener, error) {
@@ -681,7 +691,10 @@ func newCatalogOpener(ctx context.Context, dsnName string, physical []byte, gete
 
 func (o *catalogOpener) open(request *dbpb.SqlWriterLifecycleReceipt_Request) (*authoritysql.Catalog, error) {
 	schema := request.AuthoritySchema
-	if catalog, ok := o.catalogs[schema]; ok {
+	o.mu.Lock()
+	catalog, ok := o.catalogs[schema]
+	o.mu.Unlock()
+	if ok {
 		return catalog, nil
 	}
 	schemaDSN, err := authoritysql.DSNForSchema(o.dsn, schema)
@@ -696,10 +709,18 @@ func (o *catalogOpener) open(request *dbpb.SqlWriterLifecycleReceipt_Request) (*
 	if err != nil {
 		return nil, err
 	}
+	o.mu.Lock()
 	o.pools = append(o.pools, db)
-	catalog, err := authoritysql.NewCatalog(db, authoritysql.CatalogConfig{AuthoritySchema: schema, Generation: request.Writer.Generation, ProtectedSchemas: request.ProtectedSchemas, PhysicalAuthoritySHA256: o.physical, Principal: o.principal})
+	o.mu.Unlock()
+	catalog, err = authoritysql.NewCatalog(db, authoritysql.CatalogConfig{AuthoritySchema: schema, Generation: request.Writer.Generation, ProtectedSchemas: request.ProtectedSchemas, PhysicalAuthoritySHA256: o.physical, Principal: o.principal})
 	if err != nil {
 		return nil, err
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if existing, ok := o.catalogs[schema]; ok {
+		// 同一个库被并发打开时留先到的那份;这份池已记在 pools 里,随 close 一起关。
+		return existing, nil
 	}
 	o.catalogs[schema] = catalog
 	return catalog, nil
@@ -810,99 +831,194 @@ func (r slotRegistration) registerOne(ctx context.Context, catalog registrationC
 // bootRecordPath 是本 Pod 的启动记录:和 grant 在同一个私有 emptyDir,Pod 在它就在,Pod 换了它跟着没。
 func bootRecordPath(bootOutput string) string { return bootOutput + ".register.started.protojson" }
 
-// register 注册这一代的全部逻辑库,回写资格集合与这一代的完整请求。
-func (r slotRegistration) register(ctx context.Context, template *dbpb.SqlWriterBootRoster_Entry) (*dbpb.SqlWriterBootGrantSet, *dbpb.SqlWriterBootRoster_Entry, error) {
-	boot, fresh, err := r.boot(ctx, template)
-	if err != nil {
-		return nil, nil, err
+const (
+	// reachProbeFanOut 是探测各库连不连得上时同时打开的库数。一代要注册目录 K 片、流水库和全部存档库,上百个库;
+	// 一个集群失联时一半的库各要等一次拨号超时(1 秒),逐个打开会用完注册的时限。
+	reachProbeFanOut = 16
+	// reachRetryPause 是第一轮连不上之后、再试一轮之前的停顿,挡一下网络抖动。两轮都连不上的库这一代不在它上面注册。
+	reachRetryPause = 2 * time.Second
+)
+
+// errNothingReachable:这个槽位要写的库一个都连不上,什么都没注册。init 退出,原地重试。
+var errNothingReachable = errors.New("none of the logical databases of this roster slot is reachable; nothing was registered")
+
+// splitReachable 把 requests 分成连得上的(按原序)和连不上的库名(docs/design/data-service-startup-isolation.md §7)。
+// 连不上只认 authoritysql.ErrUnreachable:拨号、握手、会话初始化没过。连不上的停顿 reachRetryPause 之后再试一轮。
+// 别的打开错误(映射读不到、配置非法)原样回,整体失败,init 原地重试。打开成功的目录连接留在 open 的缓存里,之后接着用。
+func (r slotRegistration) splitReachable(ctx context.Context, requests []*dbpb.SqlWriterLifecycleReceipt_Request) ([]*dbpb.SqlWriterLifecycleReceipt_Request, []string, error) {
+	down := make([]bool, len(requests))
+	for i := range down {
+		down[i] = true
 	}
-	// 第一份写下去之前逐库预检,把注定失败的情况挡在写任何东西之前。
-	for _, request := range boot.Requests {
-		catalog, err := r.open(request)
-		if err != nil {
+	for round := 0; round < 2; round++ {
+		if round > 0 {
+			if !slices.Contains(down, true) {
+				break
+			}
+			sleep := r.sleep
+			if sleep == nil {
+				sleep = sleepRegisterCtx
+			}
+			if err := sleep(ctx, reachRetryPause); err != nil {
+				return nil, nil, err
+			}
+		}
+		errs := make([]error, len(requests))
+		sem := make(chan struct{}, reachProbeFanOut)
+		var wg sync.WaitGroup
+		for i := range requests {
+			if !down[i] {
+				continue
+			}
+			wg.Add(1)
+			sem <- struct{}{}
+			go func(i int) {
+				defer wg.Done()
+				defer func() { <-sem }()
+				_, err := r.open(requests[i])
+				switch {
+				case err == nil:
+					down[i] = false
+				case errors.Is(err, authoritysql.ErrUnreachable):
+				default:
+					errs[i] = fmt.Errorf("open logical database %s: %w", requests[i].AuthoritySchema, err)
+				}
+			}(i)
+		}
+		wg.Wait()
+		if err := errors.Join(errs...); err != nil {
 			return nil, nil, err
 		}
+	}
+	var reached []*dbpb.SqlWriterLifecycleReceipt_Request
+	var unreachable []string
+	for i, request := range requests {
+		if down[i] {
+			unreachable = append(unreachable, request.AuthoritySchema)
+		} else {
+			reached = append(reached, request)
+		}
+	}
+	return reached, unreachable, nil
+}
+
+// register 注册这一代,回写资格集合、这一代的请求,以及这次跳过的库(连不上的)。
+// 一个集群失联时,落在它上面的库这一代不注册,别的库照常注册,Pod 照常起来服务健康库(docs/design/data-service-startup-isolation.md §7):
+// 常驻进程拿到的写资格只覆盖一部分,缺的库这一代都关着,进程不就绪;集群恢复之后重建 Pod,新的一代在全部库注册。
+// 被跳过的库上,上一代仍在登记表里是 ACTIVE(它的进程已经不在了),下一代注册时在换代事务里退休它。
+func (r slotRegistration) register(ctx context.Context, template *dbpb.SqlWriterBootRoster_Entry) (*dbpb.SqlWriterBootGrantSet, *dbpb.SqlWriterBootRoster_Entry, []string, error) {
+	boot, fresh, skipped, err := r.boot(ctx, template)
+	if err != nil {
+		return nil, nil, skipped, err
+	}
+	// 第一份写下去之前逐库预检,把注定失败的情况挡在写任何东西之前。连不上的库跳过,这一代不在它上面注册。
+	reached, unreachable, err := r.splitReachable(ctx, boot.Requests)
+	skipped = append(skipped, unreachable...)
+	if err != nil {
+		return nil, nil, skipped, err
+	}
+	if len(reached) == 0 {
+		return nil, nil, skipped, errNothingReachable
+	}
+	for _, request := range reached {
+		catalog, err := r.open(request)
+		if err != nil {
+			return nil, nil, skipped, err
+		}
 		if err := catalog.RegistrationReady(ctx, request); err != nil {
-			return nil, nil, fmt.Errorf("logical database %s cannot register boot %d of this slot yet: %w", request.AuthoritySchema, request.Writer.BootSeq, err)
+			return nil, nil, skipped, fmt.Errorf("logical database %s cannot register boot %d of this slot yet: %w", request.AuthoritySchema, request.Writer.BootSeq, err)
 		}
 	}
 	// 先记下这一代再注册:之后 init 重跑都重发同样的请求,不再生成新身份。
 	if fresh {
 		if err := r.saveRecord(bootRecordPath(r.bootOutput), boot); err != nil {
-			return nil, nil, err
+			return nil, nil, skipped, err
 		}
 	}
 	set := &dbpb.SqlWriterBootGrantSet{Format: authoritysql.GrantSetFormat}
-	for _, request := range boot.Requests {
+	for _, request := range reached {
 		catalog, err := r.open(request)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, skipped, err
 		}
 		receipt, err := r.registerOne(ctx, catalog, request)
 		if authoritysql.IsWriterFrozen(err) {
-			return nil, nil, fmt.Errorf("the writer gate of %s froze during registration, nothing was written for it, retry: %w", request.AuthoritySchema, err)
+			return nil, nil, skipped, fmt.Errorf("the writer gate of %s froze during registration, nothing was written for it, retry: %w", request.AuthoritySchema, err)
 		}
 		if err != nil {
-			return nil, nil, fmt.Errorf("register boot %d of this slot in %s: %w", request.Writer.BootSeq, request.AuthoritySchema, err)
+			return nil, nil, skipped, fmt.Errorf("register boot %d of this slot in %s: %w", request.Writer.BootSeq, request.AuthoritySchema, err)
 		}
 		if err = confirmLifecycle(receipt, request); err != nil {
-			return nil, nil, err
+			return nil, nil, skipped, err
 		}
 		meta, err := catalog.CurrentMeta(ctx)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, skipped, err
 		}
 		if meta.Writable != 1 {
-			return nil, nil, fmt.Errorf("the writer gate of %s is frozen, retry: %w", request.AuthoritySchema, authoritysql.ErrWriterFrozen)
+			return nil, nil, skipped, fmt.Errorf("the writer gate of %s is frozen, retry: %w", request.AuthoritySchema, authoritysql.ErrWriterFrozen)
 		}
 		if meta.Generation != request.Writer.Generation || !bytes.Equal(meta.FreezeRunId, request.MaintenanceRunId) {
-			return nil, nil, fmt.Errorf("the registration in %s is confirmed but the gate generation or maintenance run changed since, no grant is written", request.AuthoritySchema)
+			return nil, nil, skipped, fmt.Errorf("the registration in %s is confirmed but the gate generation or maintenance run changed since, no grant is written", request.AuthoritySchema)
 		}
 		set.Grants = append(set.Grants, bootGrant(request, r.physical))
 	}
-	return set, boot, nil
+	return set, boot, skipped, nil
 }
 
 // boot 回本 Pod 的这一代:启动记录在就用它(必须是同一槽位模板、本 Pod 生成的),不在就现场生成,fresh=true。
 // 新一代的 boot_seq 取各库这个账号已有的最大号 + 1 里最大的那个,各库同一个号。
-func (r slotRegistration) boot(ctx context.Context, template *dbpb.SqlWriterBootRoster_Entry) (*dbpb.SqlWriterBootRoster_Entry, bool, error) {
+// 现场生成时连不上的库不进这一代(skipped):它的 boot_seq 没有算进来,之后 init 重跑也不能拿这一代去注册它;
+// 它在这一代整个生命期都关着,集群恢复之后重建 Pod,下一代按全部库重新取号。
+func (r slotRegistration) boot(ctx context.Context, template *dbpb.SqlWriterBootRoster_Entry) (*dbpb.SqlWriterBootRoster_Entry, bool, []string, error) {
 	record, err := r.loadRecord(bootRecordPath(r.bootOutput))
 	if err == nil {
 		if err = recordMatchesTemplate(record, template, r.deploymentID); err != nil {
-			return nil, false, err
+			return nil, false, nil, err
 		}
-		return record, false, nil
+		return record, false, nil, nil
 	}
 	if !errors.Is(err, os.ErrNotExist) {
-		return nil, false, err
+		return nil, false, nil, err
+	}
+	reached, skipped, err := r.splitReachable(ctx, template.Requests)
+	if err != nil {
+		return nil, false, skipped, err
+	}
+	if len(reached) == 0 {
+		return nil, false, skipped, errNothingReachable
 	}
 	bootSeq := uint64(1)
-	for _, request := range template.Requests {
+	for _, request := range reached {
 		catalog, err := r.open(request)
 		if err != nil {
-			return nil, false, err
+			return nil, false, skipped, err
 		}
 		latest, err := catalog.LatestBoot(ctx, request.Writer.SqlPrincipal)
 		if err != nil {
-			return nil, false, err
+			return nil, false, skipped, err
 		}
 		if latest == nil || latest.BootSeq < bootSeq {
 			continue
 		}
 		if latest.BootSeq == math.MaxUint64 {
-			return nil, false, errors.New("the boot sequence of this slot is exhausted")
+			return nil, false, skipped, errors.New("the boot sequence of this slot is exhausted")
 		}
 		bootSeq = latest.BootSeq + 1
 	}
 	registeredBy, err := r.identity(ctx)
 	if err != nil {
-		return nil, false, err
+		return nil, false, skipped, err
 	}
-	minted, err := mintBoot(template, r.deploymentID, registeredBy, bootSeq, r.now(), r.random)
+	subset := proto.Clone(template).(*dbpb.SqlWriterBootRoster_Entry)
+	subset.Requests = slices.DeleteFunc(subset.Requests, func(request *dbpb.SqlWriterLifecycleReceipt_Request) bool {
+		return slices.Contains(skipped, request.AuthoritySchema)
+	})
+	minted, err := mintBoot(subset, r.deploymentID, registeredBy, bootSeq, r.now(), r.random)
 	if err != nil {
-		return nil, false, err
+		return nil, false, skipped, err
 	}
-	return minted, true, nil
+	return minted, true, skipped, nil
 }
 
 // mintBoot 按槽位模板生成一代:writer_key、instance_id 每代新,各库同一个 boot_seq,request_id 每库一个,然后规范化出注册摘要。
@@ -965,9 +1081,10 @@ func stripIdentity(request *dbpb.SqlWriterLifecycleReceipt_Request) *dbpb.SqlWri
 
 // recordMatchesTemplate 核启动记录就是这份模板在本 Pod 上生成的一代:去掉身份字段之后逐字相同,部署是本 Pod,
 // 各库身份一致,每份请求都是规范化过的原件。名册换了就会换 Pod(名册 SHA 在 Pod 模板里),对不上说明记录不是这个 Pod 的。
+// 记录可以只有模板的一部分库(生成这一代时连不上的库不进这一代,boot),但要按模板的顺序一一对上:不多、不重、不换序。
 func recordMatchesTemplate(record, template *dbpb.SqlWriterBootRoster_Entry, deploymentID string) error {
 	refuse := errors.New("the boot record of this pod does not belong to this roster slot and pod")
-	if record == nil || len(record.Requests) != len(template.Requests) {
+	if record == nil || len(record.Requests) == 0 || len(record.Requests) > len(template.Requests) {
 		return refuse
 	}
 	outer, wanted := proto.Clone(record).(*dbpb.SqlWriterBootRoster_Entry), proto.Clone(template).(*dbpb.SqlWriterBootRoster_Entry)
@@ -976,17 +1093,25 @@ func recordMatchesTemplate(record, template *dbpb.SqlWriterBootRoster_Entry, dep
 		return refuse
 	}
 	first := record.Requests[0]
-	for index, request := range record.Requests {
+	next := 0
+	for _, request := range record.Requests {
 		if request == nil || request.Writer == nil || first.Writer == nil || request.DeploymentId != deploymentID {
 			return refuse
 		}
 		if !bytes.Equal(request.Writer.WriterKey, first.Writer.WriterKey) || !bytes.Equal(request.Writer.InstanceId, first.Writer.InstanceId) || request.Writer.BootSeq != first.Writer.BootSeq || request.RegisteredBy != first.RegisteredBy {
 			return refuse
 		}
-		canonical, err := authoritysql.CanonicalRegistrationRequest(request)
-		if err != nil || !proto.Equal(canonical, request) || !proto.Equal(stripIdentity(request), template.Requests[index]) {
+		for next < len(template.Requests) && template.Requests[next].AuthoritySchema != request.AuthoritySchema {
+			next++
+		}
+		if next == len(template.Requests) {
 			return refuse
 		}
+		canonical, err := authoritysql.CanonicalRegistrationRequest(request)
+		if err != nil || !proto.Equal(canonical, request) || !proto.Equal(stripIdentity(request), template.Requests[next]) {
+			return refuse
+		}
+		next++
 	}
 	return nil
 }

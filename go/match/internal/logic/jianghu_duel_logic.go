@@ -20,22 +20,17 @@ import (
 	dspb "proto/data_service"
 	friendpb "proto/friend"
 	guildpb "proto/guild"
-	mailpb "proto/mail"
 	matchpb "proto/match"
 	scenepb "proto/scene"
 	smpb "proto/scene_manager"
 	"shared/generated/table"
-	"shared/serviceauth"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
 )
 
 const (
-	jianghuMailSenderKind uint32 = 6 // 对应 go/mail SenderKind("match") = 6
-	jianghuMailCaller            = "match"
-	jianghuMailTTLMs      uint64 = 30 * 24 * 3600 * 1000
-	jianghuDirectKind     uint32 = 7 // 天墉生死状点名成局意图类型
+	jianghuDirectKind uint32 = 7 // 天墉生死状点名成局意图类型
 )
 
 type jianghuRuleConfig struct {
@@ -1105,96 +1100,10 @@ func inviteContainsPlayer(view *matchpb.JianghuDuelInviteView, playerID uint64) 
 	return false
 }
 
-// ---- 退费、开战播报与战果结算（供 gather.go / global_match.go / rating.go 复用）----
-
-// refundJianghuSilverOnce 幂等为普通战书(500 银两, CURRENCY_TYPE_GOLD=0)发单次退费邮件。
-// 返回 true 表示邮件退费已由 match 接管（或先前已退过），scene 侧应跳过在线退银两防双倍退款。
-func refundJianghuSilverOnce(
-	ctx context.Context,
-	svcCtx *svc.ServiceContext,
-	duelInviteID, battleID, payerID uint64,
-	writTier uint32,
-	silverCost uint64,
-	reason string,
-) bool {
-	if writTier != uint32(matchpb.JianghuWritTier_JIANGHU_WRIT_TIER_SILVER) || duelInviteID == 0 || payerID == 0 || silverCost == 0 {
-		return false
-	}
-	if svcCtx == nil || svcCtx.MailAdmin == nil || svcCtx.MailSecret == "" {
-		return false
-	}
-	store := jianghuStoreOf(svcCtx)
-	if store == nil {
-		return false
-	}
-	nowMs := jianghuNowMsFn()
-	inserted, err := store.RecordJianghuRefundOnce(ctx, &matchpb.MatchJianghuRefundRecord{
-		DuelInviteId:  duelInviteID,
-		BattleId:      battleID,
-		PayerPlayerId: payerID,
-		WritTier:      writTier,
-		Reason:        reason,
-		CreatedMs:     nowMs,
-	})
-	if err != nil {
-		logx.Errorf("[jianghu] RecordJianghuRefundOnce failed invite=%d battle=%d: %v", duelInviteID, battleID, err)
-		return false
-	}
-	if !inserted {
-		// 先前已记录过该战书的退费，不再重发，同时阻止 scene 重复退款。
-		return true
-	}
-
-	mailReq := &mailpb.SendMailRequest{
-		SenderKind:        jianghuMailSenderKind,
-		RequestId:         duelInviteID,
-		RecipientPlayerId: payerID,
-		Title:             "天墉生死状战书银两退还",
-		Body:              "您发起的天墉生死状未能正常开战或作废，已全额退还普通战书银两，请查收附件。",
-		Attachments: &mailpb.MailAttachments{
-			Currencies: []*mailpb.MailCurrency{{
-				CurrencyType: uint32(base.CurrencyType_CURRENCY_TYPE_GOLD),
-				Amount:       silverCost,
-			}},
-		},
-		ExpireMs: nowMs + jianghuMailTTLMs,
-	}
-	if signErr := serviceauth.Sign(mailpb.MailAdmin_SendPersonalMail_FullMethodName, mailReq, jianghuMailCaller, svcCtx.MailSecret, nowMs); signErr != nil {
-		logx.Errorf("[jianghu] Sign refund mail failed invite=%d payer=%d: %v", duelInviteID, payerID, signErr)
-		_ = store.DeleteJianghuRefundMarker(ctx, duelInviteID)
-		return false
-	}
-	callCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	mailResp, callErr := svcCtx.MailAdmin.SendPersonalMail(callCtx, mailReq)
-	cancel()
-	if callErr != nil || mailResp.GetErrorMessage().GetId() != 0 {
-		logx.Errorf("[jianghu] SendPersonalMail refund failed invite=%d payer=%d tip=%d err=%v",
-			duelInviteID, payerID, mailResp.GetErrorMessage().GetId(), callErr)
-		_ = store.DeleteJianghuRefundMarker(ctx, duelInviteID)
-		return false
-	}
-	if mailResp.GetMailId() != 0 {
-		_ = store.UpdateJianghuRefundMailID(ctx, duelInviteID, mailResp.GetMailId())
-	}
-	return true
-}
-
-func maybeRefundJianghuSilverForFormation(svcCtx *svc.ServiceContext, f *matchpb.MatchFormationRecord, reason string) bool {
-	if f == nil || len(f.JianghuDuelContext) == 0 {
-		return false
-	}
-	duelCtx := &battlepb.JianghuDuelBattleContext{}
-	if err := proto.Unmarshal(f.JianghuDuelContext, duelCtx); err != nil {
-		return false
-	}
-	if duelCtx.GetWritTier() != uint32(matchpb.JianghuWritTier_JIANGHU_WRIT_TIER_SILVER) {
-		return false
-	}
-	rule := loadJianghuRule()
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	return refundJianghuSilverOnce(ctx, svcCtx, duelCtx.GetDuelInviteId(), f.BattleId, duelCtx.GetChallengerCaptainId(), duelCtx.GetWritTier(), rule.silverWritCost, reason)
-}
+// ---- 开战播报与战果结算（供 gather.go / rating.go 复用）----
+// 普通战书银两的退还只有 scene 一条通道(2026-11-26,数据覆写审计 r2 第 4 轮,群仙问道赛设计 V1 第七节「生死状退费」):
+// scene 预扣时把待退标记随存档原子落盘,取消备战一律按标记在线退、作废由 scene 按 SQL 终局复核退;match 不发退费邮件,
+// 取消也从不要求 scene 跳过退还,两条通道叠加成双退的路径因此不存在。
 
 func publishJianghuWorldNotice(svcCtx *svc.ServiceContext, req *chatpb.PublishSystemWorldNoticeRequest) {
 	if svcCtx == nil || svcCtx.ChatClient == nil || req == nil {

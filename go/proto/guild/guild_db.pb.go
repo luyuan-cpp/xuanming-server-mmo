@@ -2957,6 +2957,8 @@ func (x *GuildWarPlayerStateRecord) GetUpdatedMs() uint64 {
 }
 
 // 锁序位置 17:江湖追杀令托管与生命周期。
+// 第 4 个索引 (status,expires_at_ms) 给到期收尾按到期时刻翻页扫 ACTIVE 行(war_repo.go ListDueBounties;
+// 前三个索引都不以 status 开头,跨区扫不动)。schemamigrate 不给已存在的表补建索引,本地库要重建这张表。
 type GuildWarBountyRecord struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
 	BountyId              uint64                 `protobuf:"varint,1,opt,name=bounty_id,json=bountyId,proto3" json:"bounty_id,omitempty"` // 发号器永久 ID
@@ -2966,9 +2968,9 @@ type GuildWarBountyRecord struct {
 	TargetPlayerId        uint64                 `protobuf:"varint,5,opt,name=target_player_id,json=targetPlayerId,proto3" json:"target_player_id,omitempty"`
 	TargetGuildId         uint64                 `protobuf:"varint,6,opt,name=target_guild_id,json=targetGuildId,proto3" json:"target_guild_id,omitempty"`
 	Tier                  uint32                 `protobuf:"varint,7,opt,name=tier,proto3" json:"tier,omitempty"`                                                                     // 1=普通5000银两 / 2=重金15000银两 / 3=帮会公费2000资金
-	EscrowSilver          uint64                 `protobuf:"varint,8,opt,name=escrow_silver,json=escrowSilver,proto3" json:"escrow_silver,omitempty"`                                 // 扣 10% 销毁税后入池赏金银两
+	EscrowSilver          uint64                 `protobuf:"varint,8,opt,name=escrow_silver,json=escrowSilver,proto3" json:"escrow_silver,omitempty"`                                 // 赏金池银两:银两档 = 发布者扣 10% 销毁税后托管的本金(到期原路退回);公费档 = 系统配给的赏金(不是谁出的,不退)
 	PublicBoard           uint32                 `protobuf:"varint,9,opt,name=public_board,json=publicBoard,proto3" json:"public_board,omitempty"`                                    // 0=仅本帮 / 1=全区江湖榜
-	Status                uint32                 `protobuf:"varint,10,opt,name=status,proto3" json:"status,omitempty"`                                                                // 1=ESCROW_PENDING / 2=ACTIVE / 3=COMPLETED / 4=TORN_BY_TARGET / 5=EXPIRED
+	Status                uint32                 `protobuf:"varint,10,opt,name=status,proto3" json:"status,omitempty"`                                                                // 1=ESCROW_PENDING / 2=ACTIVE / 3=COMPLETED / 4=TORN_BY_TARGET / 5=EXPIRED(到期且已原路退回) / 6=ESCROW_FAILED(预扣没扣成,无托管)
 	EscrowOpId            uint64                 `protobuf:"varint,11,opt,name=escrow_op_id,json=escrowOpId,proto3" json:"escrow_op_id,omitempty"`                                    // 对应 guild_asset_op.op_id(公费档为 0)
 	CounterKills          uint32                 `protobuf:"varint,12,opt,name=counter_kills,json=counterKills,proto3" json:"counter_kills,omitempty"`                                // 目标已成功反杀不同追兵次数(达 2 撕单)
 	LastCounterAttackerId uint64                 `protobuf:"varint,13,opt,name=last_counter_attacker_id,json=lastCounterAttackerId,proto3" json:"last_counter_attacker_id,omitempty"` // 防止同一追兵刷反杀次数
@@ -2976,6 +2978,7 @@ type GuildWarBountyRecord struct {
 	CreatedAtMs           uint64                 `protobuf:"varint,15,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
 	ExpiresAtMs           uint64                 `protobuf:"varint,16,opt,name=expires_at_ms,json=expiresAtMs,proto3" json:"expires_at_ms,omitempty"`
 	ResolvedAtMs          uint64                 `protobuf:"varint,17,opt,name=resolved_at_ms,json=resolvedAtMs,proto3" json:"resolved_at_ms,omitempty"`
+	EscrowGuildFunds      uint64                 `protobuf:"varint,18,opt,name=escrow_guild_funds,json=escrowGuildFunds,proto3" json:"escrow_guild_funds,omitempty"` // 公费档发单时实扣的帮会资金(银两档为 0):到期全退、撕单退一半给发单帮;按实扣额退,不按退款时的配表
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -3125,6 +3128,13 @@ func (x *GuildWarBountyRecord) GetExpiresAtMs() uint64 {
 func (x *GuildWarBountyRecord) GetResolvedAtMs() uint64 {
 	if x != nil {
 		return x.ResolvedAtMs
+	}
+	return 0
+}
+
+func (x *GuildWarBountyRecord) GetEscrowGuildFunds() uint64 {
+	if x != nil {
+		return x.EscrowGuildFunds
 	}
 	return 0
 }
@@ -4154,7 +4164,7 @@ const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"\x18last_garrison_refresh_ms\x18\x0f \x01(\x04R\x15lastGarrisonRefreshMs\x12\"\n" +
 	"\rlast_track_ms\x18\x10 \x01(\x04R\vlastTrackMs\x12\x1d\n" +
 	"\n" +
-	"updated_ms\x18\x11 \x01(\x04R\tupdatedMs:S\x8a\x92\xf4\x01\x16guild_war_player_state\x92\x92\xf4\x01\tplayer_idڒ\xf4\x01\x16zone_id,open_challenge\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x81\x06\n" +
+	"updated_ms\x18\x11 \x01(\x04R\tupdatedMs:S\x8a\x92\xf4\x01\x16guild_war_player_state\x92\x92\xf4\x01\tplayer_idڒ\xf4\x01\x16zone_id,open_challenge\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xc4\x06\n" +
 	"\x14GuildWarBountyRecord\x12\x1b\n" +
 	"\tbounty_id\x18\x01 \x01(\x04R\bbountyId\x12\x17\n" +
 	"\azone_id\x18\x02 \x01(\rR\x06zoneId\x12(\n" +
@@ -4174,7 +4184,8 @@ const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"\x10hunter_player_id\x18\x0e \x01(\x04R\x0ehunterPlayerId\x12\"\n" +
 	"\rcreated_at_ms\x18\x0f \x01(\x04R\vcreatedAtMs\x12\"\n" +
 	"\rexpires_at_ms\x18\x10 \x01(\x04R\vexpiresAtMs\x12$\n" +
-	"\x0eresolved_at_ms\x18\x11 \x01(\x04R\fresolvedAtMs:\x82\x01\x8a\x92\xf4\x01\x10guild_war_bounty\x92\x92\xf4\x01\tbounty_idڒ\xf4\x01Ktarget_player_id,status;issuer_guild_id,status;zone_id,status,expires_at_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x94\t\n" +
+	"\x0eresolved_at_ms\x18\x11 \x01(\x04R\fresolvedAtMs\x12,\n" +
+	"\x12escrow_guild_funds\x18\x12 \x01(\x04R\x10escrowGuildFunds:\x97\x01\x8a\x92\xf4\x01\x10guild_war_bounty\x92\x92\xf4\x01\tbounty_idڒ\xf4\x01`target_player_id,status;issuer_guild_id,status;zone_id,status,expires_at_ms;status,expires_at_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x94\t\n" +
 	"\x14GuildWarBattleRecord\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x17\n" +
 	"\azone_id\x18\x02 \x01(\rR\x06zoneId\x12&\n" +

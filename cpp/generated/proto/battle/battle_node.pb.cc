@@ -2603,11 +2603,11 @@ constexpr AddObserverRequest::ParseTableT_ AddObserverRequest::InternalGenerateP
     {
       PROTOBUF_FIELD_OFFSET(AddObserverRequest, _impl_._has_bits_),
       0, // no _extensions_
-      7, 56,  // max_field_number, fast_idx_mask
+      8, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967168,  // skipmap
+      4294967040,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      7,  // num_field_entries
+      8,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -2617,7 +2617,10 @@ constexpr AddObserverRequest::ParseTableT_ AddObserverRequest::InternalGenerateP
       ::_pbi::TcParser::GetTable<::AddObserverRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 minor_play_deadline_ms = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AddObserverRequest, _impl_.minor_play_deadline_ms_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(AddObserverRequest, _impl_.minor_play_deadline_ms_)}},
       // uint64 battle_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AddObserverRequest, _impl_.battle_id_), 4>(),
        {8, 4, 0,
@@ -2663,6 +2666,8 @@ constexpr AddObserverRequest::ParseTableT_ AddObserverRequest::InternalGenerateP
       {PROTOBUF_FIELD_OFFSET(AddObserverRequest, _impl_.admit_before_ms_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string target_instance_id = 7;
       {PROTOBUF_FIELD_OFFSET(AddObserverRequest, _impl_.target_instance_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 minor_play_deadline_ms = 8;
+      {PROTOBUF_FIELD_OFFSET(AddObserverRequest, _impl_.minor_play_deadline_ms_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -2672,7 +2677,7 @@ constexpr AddObserverRequest::ParseTableT_ AddObserverRequest::InternalGenerateP
         #endif
     }},
     {{
-      "\22\0\0\0\15\26\0\22"
+      "\22\0\0\0\15\26\0\22\0\0\0\0\0\0\0\0"
       "AddObserverRequest"
       "observer_name"
       "spectator_operation_id"
@@ -2698,7 +2703,8 @@ inline constexpr AddObserverRequest::Impl_::Impl_(
         routing_{nullptr},
         battle_id_{::uint64_t{0u}},
         observer_player_id_{::uint64_t{0u}},
-        admit_before_ms_{::uint64_t{0u}} {}
+        admit_before_ms_{::uint64_t{0u}},
+        minor_play_deadline_ms_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr AddObserverRequest::AddObserverRequest(::_pbi::ConstantInitialized,
@@ -3516,7 +3522,7 @@ const ::uint32_t
         4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::AddObserverRequest, _impl_._has_bits_),
-        10, // hasbit index offset
+        11, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::AddObserverRequest, _impl_.battle_id_),
         PROTOBUF_FIELD_OFFSET(::AddObserverRequest, _impl_.observer_player_id_),
         PROTOBUF_FIELD_OFFSET(::AddObserverRequest, _impl_.routing_),
@@ -3524,6 +3530,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::AddObserverRequest, _impl_.spectator_operation_id_),
         PROTOBUF_FIELD_OFFSET(::AddObserverRequest, _impl_.admit_before_ms_),
         PROTOBUF_FIELD_OFFSET(::AddObserverRequest, _impl_.target_instance_id_),
+        PROTOBUF_FIELD_OFFSET(::AddObserverRequest, _impl_.minor_play_deadline_ms_),
         4,
         5,
         3,
@@ -3531,6 +3538,7 @@ const ::uint32_t
         1,
         6,
         2,
+        7,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::AddObserverResponse, _impl_._has_bits_),
         4, // hasbit index offset
@@ -3647,17 +3655,17 @@ static const ::_pbi::MigrationSchema
         {96, sizeof(::QueryBattleCreationRequest)},
         {105, sizeof(::QueryBattleCreationResponse)},
         {118, sizeof(::AddObserverRequest)},
-        {135, sizeof(::AddObserverResponse)},
-        {140, sizeof(::RemoveObserverRequest)},
-        {155, sizeof(::RemoveObserverResponse)},
-        {164, sizeof(::QueryObserverRequest)},
-        {175, sizeof(::QueryObserverResponse)},
-        {184, sizeof(::IssueBattleTicketRequest)},
-        {195, sizeof(::IssueBattleTicketResponse)},
-        {202, sizeof(::AttachRelayGateRequest)},
-        {213, sizeof(::AttachRelayGateResponse)},
-        {224, sizeof(::PromoteSpectateBroadcastRequest)},
-        {231, sizeof(::PromoteSpectateBroadcastResponse)},
+        {137, sizeof(::AddObserverResponse)},
+        {142, sizeof(::RemoveObserverRequest)},
+        {157, sizeof(::RemoveObserverResponse)},
+        {166, sizeof(::QueryObserverRequest)},
+        {177, sizeof(::QueryObserverResponse)},
+        {186, sizeof(::IssueBattleTicketRequest)},
+        {197, sizeof(::IssueBattleTicketResponse)},
+        {204, sizeof(::AttachRelayGateRequest)},
+        {215, sizeof(::AttachRelayGateResponse)},
+        {226, sizeof(::PromoteSpectateBroadcastRequest)},
+        {233, sizeof(::PromoteSpectateBroadcastResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -3729,67 +3737,68 @@ const char descriptor_table_protodef_proto_2fbattle_2fbattle_5fnode_2eproto[] AB
     "ance_id\030\002 \001(\t\022*\n\"supported_outcome_proto"
     "col_version\030\003 \001(\r\022(\n adopted_outcome_pro"
     "tocol_version\030\004 \001(\r\022\033\n\023rejects_new_battl"
-    "es\030\005 \001(\010\"\320\001\n\022AddObserverRequest\022\021\n\tbattl"
+    "es\030\005 \001(\010\"\360\001\n\022AddObserverRequest\022\021\n\tbattl"
     "e_id\030\001 \001(\004\022\032\n\022observer_player_id\030\002 \001(\004\022\037"
     "\n\007routing\030\003 \001(\0132\016.BattleRouting\022\025\n\robser"
     "ver_name\030\004 \001(\t\022\036\n\026spectator_operation_id"
     "\030\005 \001(\t\022\027\n\017admit_before_ms\030\006 \001(\004\022\032\n\022targe"
-    "t_instance_id\030\007 \001(\t\"=\n\023AddObserverRespon"
-    "se\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessa"
-    "ge\"\253\001\n\025RemoveObserverRequest\022\021\n\tbattle_i"
-    "d\030\001 \001(\004\022\032\n\022observer_player_id\030\002 \001(\004\022\016\n\006r"
-    "eason\030\003 \001(\t\022\036\n\026spectator_operation_id\030\004 "
-    "\001(\t\022\027\n\017admit_before_ms\030\005 \001(\004\022\032\n\022target_i"
-    "nstance_id\030\006 \001(\t\"g\n\026RemoveObserverRespon"
-    "se\022\021\n\tcancelled\030\001 \001(\010\022\036\n\026spectator_opera"
-    "tion_id\030\002 \001(\t\022\032\n\022target_instance_id\030\003 \001("
-    "\t\"\201\001\n\024QueryObserverRequest\022\021\n\tbattle_id\030"
-    "\001 \001(\004\022\032\n\022observer_player_id\030\002 \001(\004\022\036\n\026spe"
-    "ctator_operation_id\030\003 \001(\t\022\032\n\022target_inst"
-    "ance_id\030\004 \001(\t\"{\n\025QueryObserverResponse\022&"
-    "\n\005state\030\001 \001(\0162\027.ObserverAdmissionState\022\036"
-    "\n\026spectator_operation_id\030\002 \001(\t\022\032\n\022target"
-    "_instance_id\030\003 \001(\t\"|\n\030IssueBattleTicketR"
-    "equest\022\021\n\tbattle_id\030\001 \001(\004\022\021\n\tplayer_id\030\002"
-    " \001(\004\022\036\n\026spectator_operation_id\030\003 \001(\t\022\032\n\022"
-    "target_instance_id\030\004 \001(\t\"k\n\031IssueBattleT"
-    "icketResponse\022&\n\rerror_message\030\001 \001(\0132\017.T"
-    "ipInfoMessage\022&\n\nassignment\030\002 \001(\0132\022.Batt"
-    "leAssignedS2C\"w\n\026AttachRelayGateRequest\022"
-    "\021\n\tbattle_id\030\001 \001(\004\022\024\n\014gate_node_id\030\002 \001(\r"
-    "\022\030\n\020gate_instance_id\030\003 \001(\t\022\032\n\022target_ins"
-    "tance_id\030\004 \001(\t\"\205\001\n\027AttachRelayGateRespon"
-    "se\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessa"
-    "ge\022\032\n\022battle_instance_id\030\002 \001(\t\022\023\n\013deadli"
-    "ne_ms\030\003 \001(\004\022\021\n\tbroadcast\030\004 \001(\010\"P\n\037Promot"
-    "eSpectateBroadcastRequest\022\021\n\tbattle_id\030\001"
-    " \001(\004\022\032\n\022target_instance_id\030\002 \001(\t\"{\n Prom"
-    "oteSpectateBroadcastResponse\022&\n\rerror_me"
-    "ssage\030\001 \001(\0132\017.TipInfoMessage\022\032\n\022battle_i"
-    "nstance_id\030\002 \001(\t\022\023\n\013deadline_ms\030\003 \001(\004*\210\001"
-    "\n\023BattleCreationState\022\033\n\027BATTLE_CREATION"
-    "_UNKNOWN\020\000\022\033\n\027BATTLE_CREATION_PRESENT\020\001\022"
-    "\032\n\026BATTLE_CREATION_ABSENT\020\002\022\033\n\027BATTLE_CR"
-    "EATION_ABORTED\020\003*v\n\026ObserverAdmissionSta"
-    "te\022\036\n\032OBSERVER_ADMISSION_UNKNOWN\020\000\022\035\n\031OB"
-    "SERVER_ADMISSION_ACTIVE\020\001\022\035\n\031OBSERVER_AD"
-    "MISSION_ABSENT\020\0022\373\004\n\nBattleNode\022>\n\rQuery"
-    "Observer\022\025.QueryObserverRequest\032\026.QueryO"
-    "bserverResponse\022P\n\023QueryBattleCreation\022\033"
-    ".QueryBattleCreationRequest\032\034.QueryBattl"
-    "eCreationResponse\022;\n\014CreateBattle\022\024.Crea"
-    "teBattleRequest\032\025.CreateBattleResponse\022."
-    "\n\rDestroyBattle\022\025.DestroyBattleRequest\032\006"
-    ".Empty\0228\n\013AddObserver\022\023.AddObserverReque"
-    "st\032\024.AddObserverResponse\022A\n\016RemoveObserv"
-    "er\022\026.RemoveObserverRequest\032\027.RemoveObser"
-    "verResponse\022J\n\021IssueBattleTicket\022\031.Issue"
-    "BattleTicketRequest\032\032.IssueBattleTicketR"
-    "esponse\022D\n\017AttachRelayGate\022\027.AttachRelay"
-    "GateRequest\032\030.AttachRelayGateResponse\022_\n"
-    "\030PromoteSpectateBroadcast\022 .PromoteSpect"
-    "ateBroadcastRequest\032!.PromoteSpectateBro"
-    "adcastResponseB\014Z\006battle\230\324a\036b\006proto3"
+    "t_instance_id\030\007 \001(\t\022\036\n\026minor_play_deadli"
+    "ne_ms\030\010 \001(\004\"=\n\023AddObserverResponse\022&\n\rer"
+    "ror_message\030\001 \001(\0132\017.TipInfoMessage\"\253\001\n\025R"
+    "emoveObserverRequest\022\021\n\tbattle_id\030\001 \001(\004\022"
+    "\032\n\022observer_player_id\030\002 \001(\004\022\016\n\006reason\030\003 "
+    "\001(\t\022\036\n\026spectator_operation_id\030\004 \001(\t\022\027\n\017a"
+    "dmit_before_ms\030\005 \001(\004\022\032\n\022target_instance_"
+    "id\030\006 \001(\t\"g\n\026RemoveObserverResponse\022\021\n\tca"
+    "ncelled\030\001 \001(\010\022\036\n\026spectator_operation_id\030"
+    "\002 \001(\t\022\032\n\022target_instance_id\030\003 \001(\t\"\201\001\n\024Qu"
+    "eryObserverRequest\022\021\n\tbattle_id\030\001 \001(\004\022\032\n"
+    "\022observer_player_id\030\002 \001(\004\022\036\n\026spectator_o"
+    "peration_id\030\003 \001(\t\022\032\n\022target_instance_id\030"
+    "\004 \001(\t\"{\n\025QueryObserverResponse\022&\n\005state\030"
+    "\001 \001(\0162\027.ObserverAdmissionState\022\036\n\026specta"
+    "tor_operation_id\030\002 \001(\t\022\032\n\022target_instanc"
+    "e_id\030\003 \001(\t\"|\n\030IssueBattleTicketRequest\022\021"
+    "\n\tbattle_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\036\n\026"
+    "spectator_operation_id\030\003 \001(\t\022\032\n\022target_i"
+    "nstance_id\030\004 \001(\t\"k\n\031IssueBattleTicketRes"
+    "ponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMe"
+    "ssage\022&\n\nassignment\030\002 \001(\0132\022.BattleAssign"
+    "edS2C\"w\n\026AttachRelayGateRequest\022\021\n\tbattl"
+    "e_id\030\001 \001(\004\022\024\n\014gate_node_id\030\002 \001(\r\022\030\n\020gate"
+    "_instance_id\030\003 \001(\t\022\032\n\022target_instance_id"
+    "\030\004 \001(\t\"\205\001\n\027AttachRelayGateResponse\022&\n\rer"
+    "ror_message\030\001 \001(\0132\017.TipInfoMessage\022\032\n\022ba"
+    "ttle_instance_id\030\002 \001(\t\022\023\n\013deadline_ms\030\003 "
+    "\001(\004\022\021\n\tbroadcast\030\004 \001(\010\"P\n\037PromoteSpectat"
+    "eBroadcastRequest\022\021\n\tbattle_id\030\001 \001(\004\022\032\n\022"
+    "target_instance_id\030\002 \001(\t\"{\n PromoteSpect"
+    "ateBroadcastResponse\022&\n\rerror_message\030\001 "
+    "\001(\0132\017.TipInfoMessage\022\032\n\022battle_instance_"
+    "id\030\002 \001(\t\022\023\n\013deadline_ms\030\003 \001(\004*\210\001\n\023Battle"
+    "CreationState\022\033\n\027BATTLE_CREATION_UNKNOWN"
+    "\020\000\022\033\n\027BATTLE_CREATION_PRESENT\020\001\022\032\n\026BATTL"
+    "E_CREATION_ABSENT\020\002\022\033\n\027BATTLE_CREATION_A"
+    "BORTED\020\003*v\n\026ObserverAdmissionState\022\036\n\032OB"
+    "SERVER_ADMISSION_UNKNOWN\020\000\022\035\n\031OBSERVER_A"
+    "DMISSION_ACTIVE\020\001\022\035\n\031OBSERVER_ADMISSION_"
+    "ABSENT\020\0022\373\004\n\nBattleNode\022>\n\rQueryObserver"
+    "\022\025.QueryObserverRequest\032\026.QueryObserverR"
+    "esponse\022P\n\023QueryBattleCreation\022\033.QueryBa"
+    "ttleCreationRequest\032\034.QueryBattleCreatio"
+    "nResponse\022;\n\014CreateBattle\022\024.CreateBattle"
+    "Request\032\025.CreateBattleResponse\022.\n\rDestro"
+    "yBattle\022\025.DestroyBattleRequest\032\006.Empty\0228"
+    "\n\013AddObserver\022\023.AddObserverRequest\032\024.Add"
+    "ObserverResponse\022A\n\016RemoveObserver\022\026.Rem"
+    "oveObserverRequest\032\027.RemoveObserverRespo"
+    "nse\022J\n\021IssueBattleTicket\022\031.IssueBattleTi"
+    "cketRequest\032\032.IssueBattleTicketResponse\022"
+    "D\n\017AttachRelayGate\022\027.AttachRelayGateRequ"
+    "est\032\030.AttachRelayGateResponse\022_\n\030Promote"
+    "SpectateBroadcast\022 .PromoteSpectateBroad"
+    "castRequest\032!.PromoteSpectateBroadcastRe"
+    "sponseB\014Z\006battle\230\324a\036b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fbattle_2fbattle_5fnode_2eproto_deps[6] = {
@@ -3804,7 +3813,7 @@ static ::absl::once_flag descriptor_table_proto_2fbattle_2fbattle_5fnode_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fbattle_2fbattle_5fnode_2eproto = {
     false,
     false,
-    4316,
+    4348,
     descriptor_table_protodef_proto_2fbattle_2fbattle_5fnode_2eproto,
     "proto/battle/battle_node.proto",
     &descriptor_table_proto_2fbattle_2fbattle_5fnode_2eproto_once,
@@ -6496,9 +6505,9 @@ AddObserverRequest::AddObserverRequest(
                offsetof(Impl_, battle_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, battle_id_),
-           offsetof(Impl_, admit_before_ms_) -
+           offsetof(Impl_, minor_play_deadline_ms_) -
                offsetof(Impl_, battle_id_) +
-               sizeof(Impl_::admit_before_ms_));
+               sizeof(Impl_::minor_play_deadline_ms_));
 
   // @@protoc_insertion_point(copy_constructor:AddObserverRequest)
 }
@@ -6515,9 +6524,9 @@ inline void AddObserverRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, routing_),
            0,
-           offsetof(Impl_, admit_before_ms_) -
+           offsetof(Impl_, minor_play_deadline_ms_) -
                offsetof(Impl_, routing_) +
-               sizeof(Impl_::admit_before_ms_));
+               sizeof(Impl_::minor_play_deadline_ms_));
 }
 AddObserverRequest::~AddObserverRequest() {
   // @@protoc_insertion_point(destructor:AddObserverRequest)
@@ -6586,10 +6595,10 @@ PROTOBUF_NOINLINE void AddObserverRequest::Clear() {
       _impl_.routing_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000070U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f0U)) {
     ::memset(&_impl_.battle_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.admit_before_ms_) -
-        reinterpret_cast<char*>(&_impl_.battle_id_)) + sizeof(_impl_.admit_before_ms_));
+        reinterpret_cast<char*>(&_impl_.minor_play_deadline_ms_) -
+        reinterpret_cast<char*>(&_impl_.battle_id_)) + sizeof(_impl_.minor_play_deadline_ms_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -6678,6 +6687,15 @@ PROTOBUF_NOINLINE void AddObserverRequest::Clear() {
     }
   }
 
+  // uint64 minor_play_deadline_ms = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_minor_play_deadline_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          8, this_._internal_minor_play_deadline_ms(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -6703,7 +6721,7 @@ PROTOBUF_NOINLINE void AddObserverRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // string observer_name = 4;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_observer_name().empty()) {
@@ -6751,6 +6769,13 @@ PROTOBUF_NOINLINE void AddObserverRequest::Clear() {
             this_._internal_admit_before_ms());
       }
     }
+    // uint64 minor_play_deadline_ms = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_minor_play_deadline_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_minor_play_deadline_ms());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -6770,7 +6795,7 @@ void AddObserverRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_observer_name().empty()) {
         _this->_internal_set_observer_name(from._internal_observer_name());
@@ -6821,6 +6846,11 @@ void AddObserverRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.admit_before_ms_ = from._impl_.admit_before_ms_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_minor_play_deadline_ms() != 0) {
+        _this->_impl_.minor_play_deadline_ms_ = from._impl_.minor_play_deadline_ms_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -6845,8 +6875,8 @@ void AddObserverRequest::InternalSwap(AddObserverRequest* PROTOBUF_RESTRICT PROT
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.spectator_operation_id_, &other->_impl_.spectator_operation_id_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.target_instance_id_, &other->_impl_.target_instance_id_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(AddObserverRequest, _impl_.admit_before_ms_)
-      + sizeof(AddObserverRequest::_impl_.admit_before_ms_)
+      PROTOBUF_FIELD_OFFSET(AddObserverRequest, _impl_.minor_play_deadline_ms_)
+      + sizeof(AddObserverRequest::_impl_.minor_play_deadline_ms_)
       - PROTOBUF_FIELD_OFFSET(AddObserverRequest, _impl_.routing_)>(
           reinterpret_cast<char*>(&_impl_.routing_),
           reinterpret_cast<char*>(&other->_impl_.routing_));

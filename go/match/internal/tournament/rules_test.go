@@ -1,11 +1,13 @@
 package tournament
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	battlepb "proto/battle"
 	matchpb "proto/match"
+	tablepb "shared/generated/pb/table"
 )
 
 func TestNormalizeSquadName(t *testing.T) {
@@ -286,4 +288,26 @@ func TestV4LeylineBansHonorBitsAndHighlightClassification(t *testing.T) {
 	tagMvp, _, prioMvp := ClassifyHighlightTag(false, 1, 2, 1, 1, 0)
 	require.Equal(t, uint32(4), tagMvp)
 	require.Equal(t, 3, prioMvp)
+}
+
+// 领奖邮件文案在结算时冻结进奖励行(群仙问道赛设计 V1 第七节,数据覆写审计 r2 第 4 轮):取配表,空则缺省;
+// 超出 go/mail 校验口径(标题 128 字、正文 4096 字)的配表在 Build 就拒绝,否则冻结下来的原件 mail 永远拒收。
+func TestRewardMailTextFreezesConfigOrDefaultAndBuildRejectsOverlongText(t *testing.T) {
+	champ := DefaultFallback().RewardForPlacement(1, 6)
+	title, body := RewardMailText(champ)
+	require.Equal(t, champ.GetMailTitle(), title)
+	require.Equal(t, champ.GetMailBody(), body)
+
+	blank := &tablepb.TournamentRewardTable{Id: 99}
+	title, body = RewardMailText(blank)
+	require.Equal(t, defaultRewardMailTitle, title)
+	require.Equal(t, defaultRewardMailBody, body)
+
+	rule := DefaultFallback().Rule()
+	_, err := Build(rule, []*tablepb.TournamentRewardTable{{Id: 1, MailTitle: strings.Repeat("奖", maxRewardMailTitleRune)}})
+	require.NoError(t, err, "128 字的标题在上限内")
+	_, err = Build(rule, []*tablepb.TournamentRewardTable{{Id: 1, MailTitle: strings.Repeat("奖", maxRewardMailTitleRune+1)}})
+	require.Error(t, err, "标题超长拒绝")
+	_, err = Build(rule, []*tablepb.TournamentRewardTable{{Id: 1, MailBody: strings.Repeat("奖", maxRewardMailBodyRune+1)}})
+	require.Error(t, err, "正文超长拒绝")
 }

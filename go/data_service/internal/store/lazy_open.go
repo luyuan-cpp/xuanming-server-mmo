@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"sync"
@@ -96,6 +97,22 @@ func (o *openOnce[V]) attempt(open func() (V, error)) (V, error) {
 
 // poolCheck 是一个连接池投入使用之前要过的只读核对。
 type poolCheck func(db *sql.DB) error
+
+// closedPool 是这一代没有写资格的逻辑库的池(MySQLConfig.Closed):一条连接都不给,每次借连接都回 err,
+// 调用方看到的是「拿不到连接」,和集群失联走同一条路。这一代不会再有这个库的写资格,所以不重试、不冷却。
+func closedPool(name string, err error) *sql.DB {
+	logx.Errorf("[lazy-open] logical database %s stays closed for this boot: %v", name, err)
+	return sql.OpenDB(closedConnector{err: fmt.Errorf("logical database %s: %w", name, err)})
+}
+
+type closedConnector struct{ err error }
+
+func (c closedConnector) Connect(context.Context) (driver.Conn, error) { return nil, c.err }
+func (c closedConnector) Driver() driver.Driver                        { return closedDriver(c) }
+
+type closedDriver closedConnector
+
+func (d closedDriver) Open(string) (driver.Conn, error) { return nil, d.err }
 
 // lazyPool 是 openCheckedPool 在常驻进程里的那一半。句柄先建出来;verify(对同一个库再做一遍完整的当场打开与核对,用完即关)
 // 挪到这个池第一条物理连接建立之前:handle 把传给它的钩子挂到新建的句柄上,没核对过的池一条连接都拿不到,

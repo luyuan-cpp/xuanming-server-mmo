@@ -72,7 +72,11 @@ public final class ManualAdminApi {
      * - MARK_DELIVERED: 偶数修订号扣回 MANUAL 或无扣回的交付 MANUAL，收敛为 DELIVERED(2)；
      * - CREATE_REFUND: 无扣回且绑定付款仍为 PAID 的交付 MANUAL，建 DELIVERY_REJECTED 退款待办并置订单 REFUND_PENDING(5)。
      */
-    public record ResolveOrder(String requestId, String orderId, String action, String reason) {}
+    public record ResolveOrder(String requestId, String orderId, String action, String reason, AdminApproval approval)
+        implements AdminApproval.Command {
+        /** 不带批准记录(系统内部与单测)。 */
+        public ResolveOrder(String requestId, String orderId, String action, String reason) { this(requestId, orderId, action, reason, null); }
+    }
 
     /**
      * 处置人工退款待办(commerce_refund_intent.status = MANUAL)。
@@ -88,7 +92,14 @@ public final class ManualAdminApi {
         String paymentTransactionId,
         String action,
         String externalRefundId,
-        String reason) {}
+        String reason,
+        AdminApproval approval) implements AdminApproval.Command {
+        /** 不带批准记录(系统内部与单测)。 */
+        public ResolveRefund(String requestId, String orderId, String channel, String paymentTransactionId, String action,
+            String externalRefundId, String reason) {
+            this(requestId, orderId, channel, paymentTransactionId, action, externalRefundId, reason, null);
+        }
+    }
 
     /**
      * 处置人工寄售单(commerce_consignment.state = MANUAL)及冻结卖家收入。
@@ -97,7 +108,11 @@ public final class ManualAdminApi {
      * - UNFREEZE_INCOME: 仅限已生成卖家收入且处于冻结(available_ms = Long.MAX_VALUE)且仍有未结余款，解冻为当前时刻可提现，寄售 MANUAL -> SOLD，关联订单 7 -> 2；
      * - FORFEIT_INCOME: 仅限已生成卖家收入且无在途提现预留(reserved_fen = 0)，将剩余未付净额计入 forfeited_fen 并永久冻结，寄售 MANUAL -> FORFEITED，关联订单 7 -> 9。
      */
-    public record ResolveConsignment(String requestId, String listingId, String action, String reason) {}
+    public record ResolveConsignment(String requestId, String listingId, String action, String reason, AdminApproval approval)
+        implements AdminApproval.Command {
+        /** 不带批准记录(系统内部与单测)。 */
+        public ResolveConsignment(String requestId, String listingId, String action, String reason) { this(requestId, listingId, action, reason, null); }
+    }
 
     /**
      * 逐单争议冻结 / 释放卖家收益(与 RmbConsignmentStore.withdraw 共用账号锁 commerce_seller_guard)。
@@ -111,9 +126,15 @@ public final class ManualAdminApi {
         String action,
         long amountFen,
         String caseId,
-        String reason) {}
+        String reason,
+        AdminApproval approval) implements AdminApproval.Command {
+        /** 不带批准记录(系统内部与单测)。 */
+        public ResolveIncomeDispute(String requestId, String orderId, String action, long amountFen, String caseId, String reason) {
+            this(requestId, orderId, action, amountFen, caseId, reason, null);
+        }
+    }
 
-    /** 人工单处置结果，按 (actor, requestId) 幂等持久化在 commerce_admin_command。 */
+    /** 人工单处置结果，按 (actor, requestId) 幂等持久化在 commerce_admin_command；后台下发时 requestId 就是批准号。 */
     public record Resolution(
         String targetType,
         String targetId,

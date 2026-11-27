@@ -45,17 +45,3 @@ func selectSlot(used map[uint64]bool, wm map[uint64]uint64, now, quarantineSec, 
 	}
 	return best, found
 }
-
-// mergeWatermarks 把多来源的水位按槽取 max(新布局 key 与旧布局 key 并存的迁移期)。
-// dst 为 nil 时新建。
-func mergeWatermarks(dst, src map[uint64]uint64) map[uint64]uint64 {
-	if dst == nil {
-		dst = make(map[uint64]uint64, len(src))
-	}
-	for slot, w := range src {
-		if w > dst[slot] {
-			dst[slot] = w
-		}
-	}
-	return dst
-}

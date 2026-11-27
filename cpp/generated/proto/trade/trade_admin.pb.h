@@ -34,6 +34,7 @@
 #include "proto/db/proto_option.pb.h"
 #include "proto/common/base/tip.pb.h"
 #include "proto/common/base/service_call_auth.pb.h"
+#include "proto/common/base/admin_approval.pb.h"
 #include "proto/trade/commerce.pb.h"
 #include "proto/trade/jubaozhai.pb.h"
 #include "proto/trade/trade_table.pb.h"
@@ -1540,6 +1541,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResolveManualContractRequest final 
     kReasonFieldNumber = 7,
     kPartyFieldNumber = 9,
     kAuthFieldNumber = 13,
+    kApprovalFieldNumber = 14,
     kCommerceIdFieldNumber = 1,
     kExpectVersionFieldNumber = 4,
     kToPlayerIdFieldNumber = 10,
@@ -1665,6 +1667,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResolveManualContractRequest final 
   ::common::base::ServiceCallAuth* PROTOBUF_NONNULL _internal_mutable_auth();
 
   public:
+  // .common.base.AdminApproval approval = 14;
+  [[nodiscard]] bool has_approval()
+      const;
+  void clear_approval() ;
+  [[nodiscard]] const ::common::base::AdminApproval& approval() const;
+  [[nodiscard]] ::common::base::AdminApproval* PROTOBUF_NULLABLE release_approval();
+  ::common::base::AdminApproval* PROTOBUF_NONNULL mutable_approval();
+  void set_allocated_approval(::common::base::AdminApproval* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_approval(::common::base::AdminApproval* PROTOBUF_NULLABLE value);
+  ::common::base::AdminApproval* PROTOBUF_NULLABLE unsafe_arena_release_approval();
+
+  private:
+  const ::common::base::AdminApproval& _internal_approval() const;
+  ::common::base::AdminApproval* PROTOBUF_NONNULL _internal_mutable_approval();
+
+  public:
   // uint64 commerce_id = 1;
   void clear_commerce_id() ;
   [[nodiscard]] ::uint64_t commerce_id() const;
@@ -1729,8 +1747,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResolveManualContractRequest final 
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 13,
-                          1, 94,
+      ::google::protobuf::internal::TcParseTable<4, 14,
+                          2, 94,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1765,6 +1783,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResolveManualContractRequest final 
     ::google::protobuf::internal::ArenaStringPtr reason_;
     ::google::protobuf::internal::ArenaStringPtr party_;
     ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE auth_;
+    ::common::base::AdminApproval* PROTOBUF_NULLABLE approval_;
     ::uint64_t commerce_id_;
     ::uint64_t expect_version_;
     ::uint64_t to_player_id_;
@@ -3757,6 +3776,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResolveManualContractResponse final
     kLinkedPlanFieldNumber = 10,
     kVerdictFieldNumber = 1,
     kStatusFieldNumber = 12,
+    kAlreadyExecutedFieldNumber = 14,
   };
   // repeated .trade.ManualContractLeg legs = 6;
   [[nodiscard]] int legs_size()
@@ -3965,11 +3985,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResolveManualContractResponse final
   void _internal_set_status(::uint32_t value);
 
   public:
+  // bool already_executed = 14;
+  void clear_already_executed() ;
+  [[nodiscard]] bool already_executed() const;
+  void set_already_executed(bool value);
+
+  private:
+  bool _internal_already_executed() const;
+  void _internal_set_already_executed(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:trade.ResolveManualContractResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 13,
+      ::google::protobuf::internal::TcParseTable<4, 14,
                           7, 80,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -4011,6 +4041,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ResolveManualContractResponse final
     ::trade::TradeCommerceManualAction* PROTOBUF_NULLABLE linked_plan_;
     int verdict_;
     ::uint32_t status_;
+    bool already_executed_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4969,7 +5000,7 @@ inline void ListManualContractsResponse::_internal_set_retry(bool value) {
 inline void ResolveManualContractRequest::clear_commerce_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.commerce_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t ResolveManualContractRequest::commerce_id() const {
   // @@protoc_insertion_point(field_get:trade.ResolveManualContractRequest.commerce_id)
@@ -4977,7 +5008,7 @@ inline ::uint64_t ResolveManualContractRequest::commerce_id() const {
 }
 inline void ResolveManualContractRequest::set_commerce_id(::uint64_t value) {
   _internal_set_commerce_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:trade.ResolveManualContractRequest.commerce_id)
 }
 inline ::uint64_t ResolveManualContractRequest::_internal_commerce_id() const {
@@ -4993,7 +5024,7 @@ inline void ResolveManualContractRequest::_internal_set_commerce_id(::uint64_t v
 inline void ResolveManualContractRequest::clear_mode() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.mode_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::trade::ManualContractMode ResolveManualContractRequest::mode() const {
   // @@protoc_insertion_point(field_get:trade.ResolveManualContractRequest.mode)
@@ -5001,7 +5032,7 @@ inline ::trade::ManualContractMode ResolveManualContractRequest::mode() const {
 }
 inline void ResolveManualContractRequest::set_mode(::trade::ManualContractMode value) {
   _internal_set_mode(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:trade.ResolveManualContractRequest.mode)
 }
 inline ::trade::ManualContractMode ResolveManualContractRequest::_internal_mode() const {
@@ -5081,7 +5112,7 @@ inline void ResolveManualContractRequest::set_allocated_action(::std::string* PR
 inline void ResolveManualContractRequest::clear_expect_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.expect_version_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint64_t ResolveManualContractRequest::expect_version() const {
   // @@protoc_insertion_point(field_get:trade.ResolveManualContractRequest.expect_version)
@@ -5089,7 +5120,7 @@ inline ::uint64_t ResolveManualContractRequest::expect_version() const {
 }
 inline void ResolveManualContractRequest::set_expect_version(::uint64_t value) {
   _internal_set_expect_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:trade.ResolveManualContractRequest.expect_version)
 }
 inline ::uint64_t ResolveManualContractRequest::_internal_expect_version() const {
@@ -5433,7 +5464,7 @@ inline void ResolveManualContractRequest::set_allocated_party(::std::string* PRO
 inline void ResolveManualContractRequest::clear_to_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.to_player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint64_t ResolveManualContractRequest::to_player_id() const {
   // @@protoc_insertion_point(field_get:trade.ResolveManualContractRequest.to_player_id)
@@ -5441,7 +5472,7 @@ inline ::uint64_t ResolveManualContractRequest::to_player_id() const {
 }
 inline void ResolveManualContractRequest::set_to_player_id(::uint64_t value) {
   _internal_set_to_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:trade.ResolveManualContractRequest.to_player_id)
 }
 inline ::uint64_t ResolveManualContractRequest::_internal_to_player_id() const {
@@ -5457,7 +5488,7 @@ inline void ResolveManualContractRequest::_internal_set_to_player_id(::uint64_t 
 inline void ResolveManualContractRequest::clear_linked_commerce_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.linked_commerce_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint64_t ResolveManualContractRequest::linked_commerce_id() const {
   // @@protoc_insertion_point(field_get:trade.ResolveManualContractRequest.linked_commerce_id)
@@ -5465,7 +5496,7 @@ inline ::uint64_t ResolveManualContractRequest::linked_commerce_id() const {
 }
 inline void ResolveManualContractRequest::set_linked_commerce_id(::uint64_t value) {
   _internal_set_linked_commerce_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:trade.ResolveManualContractRequest.linked_commerce_id)
 }
 inline ::uint64_t ResolveManualContractRequest::_internal_linked_commerce_id() const {
@@ -5481,7 +5512,7 @@ inline void ResolveManualContractRequest::_internal_set_linked_commerce_id(::uin
 inline void ResolveManualContractRequest::clear_linked_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.linked_version_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint64_t ResolveManualContractRequest::linked_version() const {
   // @@protoc_insertion_point(field_get:trade.ResolveManualContractRequest.linked_version)
@@ -5489,7 +5520,7 @@ inline ::uint64_t ResolveManualContractRequest::linked_version() const {
 }
 inline void ResolveManualContractRequest::set_linked_version(::uint64_t value) {
   _internal_set_linked_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:trade.ResolveManualContractRequest.linked_version)
 }
 inline ::uint64_t ResolveManualContractRequest::_internal_linked_version() const {
@@ -5592,6 +5623,99 @@ inline void ResolveManualContractRequest::set_allocated_auth(::common::base::Ser
 
   _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(value);
   // @@protoc_insertion_point(field_set_allocated:trade.ResolveManualContractRequest.auth)
+}
+
+// .common.base.AdminApproval approval = 14;
+inline bool ResolveManualContractRequest::has_approval() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000080U);
+  PROTOBUF_ASSUME(!value || _impl_.approval_ != nullptr);
+  return value;
+}
+inline const ::common::base::AdminApproval& ResolveManualContractRequest::_internal_approval() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::common::base::AdminApproval* p = _impl_.approval_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::common::base::AdminApproval>(&::common::base::AdminApproval_globals_);
+}
+inline const ::common::base::AdminApproval& ResolveManualContractRequest::approval() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.ResolveManualContractRequest.approval)
+  return _internal_approval();
+}
+inline void ResolveManualContractRequest::unsafe_arena_set_allocated_approval(
+    ::common::base::AdminApproval* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.approval_);
+  }
+  _impl_.approval_ = reinterpret_cast<::common::base::AdminApproval*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:trade.ResolveManualContractRequest.approval)
+}
+inline ::common::base::AdminApproval* PROTOBUF_NULLABLE ResolveManualContractRequest::release_approval() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ::common::base::AdminApproval* released = _impl_.approval_;
+  _impl_.approval_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::common::base::AdminApproval* PROTOBUF_NULLABLE ResolveManualContractRequest::unsafe_arena_release_approval() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.ResolveManualContractRequest.approval)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ::common::base::AdminApproval* temp = _impl_.approval_;
+  _impl_.approval_ = nullptr;
+  return temp;
+}
+inline ::common::base::AdminApproval* PROTOBUF_NONNULL ResolveManualContractRequest::_internal_mutable_approval() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.approval_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::common::base::AdminApproval>(GetArena());
+    _impl_.approval_ = reinterpret_cast<::common::base::AdminApproval*>(p);
+  }
+  return _impl_.approval_;
+}
+inline ::common::base::AdminApproval* PROTOBUF_NONNULL ResolveManualContractRequest::mutable_approval()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ::common::base::AdminApproval* _msg = _internal_mutable_approval();
+  // @@protoc_insertion_point(field_mutable:trade.ResolveManualContractRequest.approval)
+  return _msg;
+}
+inline void ResolveManualContractRequest::set_allocated_approval(::common::base::AdminApproval* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.approval_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  }
+
+  _impl_.approval_ = reinterpret_cast<::common::base::AdminApproval*>(value);
+  // @@protoc_insertion_point(field_set_allocated:trade.ResolveManualContractRequest.approval)
 }
 
 // -------------------------------------------------------------------
@@ -7022,6 +7146,30 @@ inline void ResolveManualContractResponse::set_allocated_audit_line(::std::strin
     _impl_.audit_line_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:trade.ResolveManualContractResponse.audit_line)
+}
+
+// bool already_executed = 14;
+inline void ResolveManualContractResponse::clear_already_executed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.already_executed_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline bool ResolveManualContractResponse::already_executed() const {
+  // @@protoc_insertion_point(field_get:trade.ResolveManualContractResponse.already_executed)
+  return _internal_already_executed();
+}
+inline void ResolveManualContractResponse::set_already_executed(bool value) {
+  _internal_set_already_executed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:trade.ResolveManualContractResponse.already_executed)
+}
+inline bool ResolveManualContractResponse::_internal_already_executed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.already_executed_;
+}
+inline void ResolveManualContractResponse::_internal_set_already_executed(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.already_executed_ = value;
 }
 
 // -------------------------------------------------------------------

@@ -18,9 +18,16 @@ public final class CatalogAdminApi {
             this(productId, skuCode, priceMinor, currency, published, itemConfigId, countPerUnit, title, 0, 0);
         }
     }
-    public record Create(String requestId, long skuId, Terms terms, int stock) {}
-    public record Update(String requestId, long skuId, long expectedRevision, Terms terms) {}
-    public record AdjustStock(String requestId, long skuId, long expectedRevision, int delta) {}
+    /** 三条写命令都带后台的双人复核批准记录(AdminApproval);不带的构造给系统补齐(DiamondRechargeCatalog)与单测用。 */
+    public record Create(String requestId, long skuId, Terms terms, int stock, AdminApproval approval) implements AdminApproval.Command {
+        public Create(String requestId, long skuId, Terms terms, int stock) { this(requestId, skuId, terms, stock, null); }
+    }
+    public record Update(String requestId, long skuId, long expectedRevision, Terms terms, AdminApproval approval) implements AdminApproval.Command {
+        public Update(String requestId, long skuId, long expectedRevision, Terms terms) { this(requestId, skuId, expectedRevision, terms, null); }
+    }
+    public record AdjustStock(String requestId, long skuId, long expectedRevision, int delta, AdminApproval approval) implements AdminApproval.Command {
+        public AdjustStock(String requestId, long skuId, long expectedRevision, int delta) { this(requestId, skuId, expectedRevision, delta, null); }
+    }
     public record Sku(long skuId, long revision, long productId, String skuCode, long priceMinor, String currency,
         int stock, int lockedStock, boolean published, int itemConfigId, int countPerUnit, String title,
         int currencyType, long currencyAmount) {

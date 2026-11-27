@@ -247,7 +247,7 @@ $MMORPG_TABLE_STATUS_ROOT/
 
 `POINTER.json` 的形状：`{"track": "...", "lines": {"<schema_digest>": {current, next, ...}}, "sync_errors": {"<schema_digest>": "<原因>"}}`。`lines` 里只有「引用到的包本地都齐了」的线；`sync_errors` 只在有线没同步下来时出现，按线记一句原因（最长 256 字符）。
 
-`STATUS.json` 的字段名是业务进程、sidecar、管理接口三方之间的约定，三种语言逐个一致（事实源是 Go 的 `tablebundle.StatusReport`）：`service`、`schema_digest`、`source`（`image` / `bundle`）、`loaded_digest`、`loaded_version`、`loaded_at_ms`、`load_seq`、`pending_state`（空、`preparing`、`prepared`、`rejected`、`needs_restart`）、`pending_digest`、`pending_version`、`pending_reason`、`updated_at_ms`。`pod` 与 `track` 进程可以不写，sidecar 转报时补上。sidecar 靠 `loaded_digest` / `pending_digest` 决定哪些包目录不能清，管理接口靠同一组字段汇总，写错一个名字对方就读成空。
+`STATUS.json` 的字段名是业务进程、sidecar、管理接口三方之间的约定，三种语言逐个一致（事实源是 Go 的 `tablebundle.StatusReport`）：`service`、`schema_digest`、`source`（`image` / `bundle`）、`loaded_digest`、`loaded_version`、`loaded_at_ms`、`load_seq`、`pending_state`（空、`preparing`、`prepared`、`rejected`、`needs_restart`）、`pending_digest`、`pending_version`、`pending_reason`、`updated_at_ms`。`pod` 由 sidecar 转报时写成自己的身份（`<namespace>/<Pod 名>`，进程写的值会被覆盖），`track` 进程可以不写，sidecar 补上。sidecar 靠 `loaded_digest` / `pending_digest` 决定哪些包目录不能清，管理接口靠同一组字段汇总，写错一个名字对方就读成空。
 
 **sidecar 做的事：**
 
@@ -516,3 +516,67 @@ sidecar：`table_sync_etcd_last_read_timestamp_seconds`、`table_sync_bundle_fet
 | `GuildWarRule`、`GuildWarMilestone` | go/guild `war` | 否 | `war.ValidateTablesIn`（在候选表上校验） |
 
 以后给一张表加 `(cfg_hot_reload) = true`，同一批补一行到这里；带 `ValidateTables` 的 scene 系统要同时登记 `TableLoadHandler::Validate` 与 `OnCommitted`。
+
+## 18. 水平扩展：加 Pod 不加中心负担，上限在哪
+
+**结论**：每加一个 Pod，增加的只有它自己 sidecar 的一条 etcd watch、一个租约和一次取包；没有中心分发服务，没有跨进程协调，业务进程之间互不通信。到点一起切靠的是各自的时钟（§6.3），不靠屏障或选主。
+
+**为什么能这样**：
+- **表包按内容寻址、写好不再改。** 同一个摘要永远是同一份内容，谁什么时候取、取几次都一样，不用加锁也不用协调。也因为不可变，前面挂缓存或 CDN 不会读到半新半旧的内容。
+- **指针的数量与 Pod 数、zone 数都无关。** 只按轨道和 schema 线分（§6.2），一条轨道上最多两三条线，etcd 里一共就几个指针键。加 zone 不加指针，zone 之间长期不同的部分写成表数据。
+- **各进程自己判断、自己切。** 进程只读本地文件，每 2 秒一次；准备在自己的主循环上分片做；到 `activate_at` 自己提交。
+- **回报只在变化时写。** 存活靠租约续期表达，状态键只在内容变了才写（§7 第 4 步）。
+
+**按 2000 个 Pod 估算**（一条轨道、两条 schema 线、现在的表约 1.1 MiB，压缩后几百 KiB）：
+
+| 资源 | 稳态 | 一次发布 |
+|---|---|---|
+| infra etcd 读 | 每个 sidecar 每 20 秒全量读一次指针前缀，共约 100 次/秒，每次几个小键 | watch 推送 2000 份事件 |
+| infra etcd 续租 | 每个 sidecar 每 5 秒续一次，共约 400 次/秒；续租不写键、不产生新 revision | — |
+| infra etcd 写键 | 接近 0（改成「变了才写」之前是 400 次/秒） | 每个 Pod 的状态变 2 到 3 次（准备中、已准备、已加载），sidecar 每 5 秒读一次，会合并掉一部分，合计不超过 6000 次，分散在提前量内 |
+| 对象存储 | 0 | 每个 Pod 取一次压缩包：2000 × 几百 KiB，约 0.5 GiB，在指针写入后的几秒内集中发生 |
+| gateway 管理接口 | — | 发布工具每 3 秒列一次全部回报，2000 条约 1 MB |
+| 业务进程 | 每 2 秒读一个本地小文件 | 主循环上分片解析，每片一张表（`table_reload_slice_max_seconds` 看得到） |
+
+**上限与到时候怎么扩**：
+- **先到顶的是对象存储的突发下载**：所有 sidecar 被 watch 同时叫醒，同一时刻去取同一个包。现在包小，一点问题没有；包大了以后，下载量等于「包大小 × Pod 数」。单包上限 64 MiB 时，2000 个 Pod 约 125 GiB。云上的 S3 扛得住，自建的单节点存储扛不住。触发条件是「一次发布的总下载量，存储在提前量里（`activate_at` 至少提前 60 秒）发不完」。到那时有两种做法：sidecar 在提前量里随机错开下载时刻（`immediate` 的回滚不错开）；或每个节点一份缓存，同一节点的 Pod 共用。表包不可变，两种都不会读到不一致的内容。现在不做：0.5 GiB 远不到瓶颈，提前做只多出一段要维护的代码。
+- **infra etcd**：watch、租约、读都随 Pod 数线性增长，但单位成本很低。上万个 Pod 以内不是瓶颈。它是全项目共用的，所以本线的原则是「不周期写键」，不挤占别人的写入和历史。
+- **管理接口**：每次列全部回报是 O(Pod 数)。上万个 Pod 时改成按 schema 线分页，或者由 gateway 缓存汇总。现在不需要。
+- **战斗服内存**：每次热更，在打的局要多留一套旧表，直到这一局结束（§8.4），套数等于提前量里发布的包数。按「每天几次发布」估算可以忽略。
+
+## 19. 2026-11-26 两轮逐行审查：问题、根因、改法与教训
+
+五批代码 11-20 落码以后，11-26 晚负责人要求「查出的问题现在修」，逐行审了两轮。下表是每个问题的现象、根因（也就是为什么之前没被发现）和改法，代码与测试的位置见 `docs/PROGRESS.md` 同日两条。全部未编译。
+
+**第一轮：进程侧与发布工具**
+
+| # | 现象 | 根因 | 改法 |
+|---|---|---|---|
+| 1 | sidecar 与发布工具读不了导表器写出的清单，线上一个包都同步不下来 | 导表器写的 `tables` 是数组，sidecar 按「表名 → 条目」的对象解析；单测用的是自己拼的对象形状，所以一直是绿的 | 按数组解析（缺名、重名拒绝）；单测直接读仓里的 `generated/tables` |
+| 2 | C++ 节点写的 `STATUS.json` 字段名和 sidecar、管理接口读的不是一套，C++ 节点在管理接口里永远不算「已加载」 | 三方约定没有单一事实源，C++ 手写 JSON 时照的是早期草案 | 以 Go 的 `StatusReport` 为事实源逐字段对齐（§7）；C++ 单测按字段名断言 |
+| 3 | 表包没同步下来时，重启的进程静默退回镜像里的旧表 | 「文件里没有本线」有两种含义（etcd 里没有、有但没拿到），代码当成一种 | sidecar 在 `sync_errors` 里记原因、重启时读回上一次的指针；进程启动时据此拒绝（§8.1） |
+| 4 | 指针撤走以后，C++ 还一直回报在拒绝那一包 | 只在手上有暂存表时才清状态 | 指针没有目标时一并清掉，与 Go 一致 |
+| 5 | 管理接口把上一包的拒绝算到新包头上，发布工具会因此误判失败并撤回 | 计数时不看回报说的是哪一包 | 只统计 `pending_digest` 等于当前目标的回报（§6.4） |
+| 6 | scene 的装备表、神秘商人、游历手册三项校验没接进热更的拒绝闸门，坏表照样能热更上线 | 后加的系统只登记了提交后的日志钩子，没登记 `Validate` | 三项接进 `Validate`；规则改成两处同时登记（§8.5、§17） |
+| 7 | C++ 启动时不核对清单自报的摘要与指针是否一致 | 启动路径与热更路径的核对不对称 | 补上，不一致拒绝启动 |
+
+**第二轮：部署脚本与可观测性**
+
+| # | 现象 | 根因 | 改法 |
+|---|---|---|---|
+| 8 | 两个 zone 的同名 Pod 在同一轨道上互相覆盖状态键，可能盖掉某个实例的「被拒绝」 | 键只用 Pod 名；各 zone namespace 里 StatefulSet 同名，etcd 共用 | 键带 namespace（§6.1） |
+| 9 | 外接对象存储时忘了建凭据 Secret，整个 zone 起不来，`kubectl apply` 却照样成功 | 部署前没有核对这个外部前置条件 | 在本 namespace 的工作负载之前只读核对（只看键名与长度），缺了就停（§7「凭据」） |
+| 10 | `TableSyncStale` 永远没有数据 | sidecar 的指标端口不在 Pod 注解里（注解只能指一个端口） | 按端口名抓的 PodMonitor；契约测试核对两处端口名一致（§11） |
+| 11 | 金丝雀期间 `TableBundleNotConverged` 必然误报 | 告警按 `release_track` 分组，可指标根本没有这个标签 | 两种语言的 `table_bundle_info` 都带 `release_track` |
+| 12 | `TableBundleNeedsRestart` 表达不出「还没重启」 | 拿事件计数表达状态 | 加状态量 `table_bundle_needs_restart` |
+| 13 | 单包上限 256 MiB、卷上限 1Gi，两条线各一个大包时再下一包就会让 kubelet 驱逐整条轨道的 Pod；sidecar 中途被杀留下的临时文件永不清理 | 两个上限分别定，没有放在一起算；清理时跳过了所有以 `.` 开头的名字 | 单包上限 64 MiB，没人用的包最多留 2 个，过期临时文件照清，算式写进 §7「磁盘预算」 |
+| 14 | 解包目录是 0700，业务进程能不能读，取决于两个镜像的用户号是否相同 | `MkdirTemp` 的默认权限 | 显式放开成 0755 |
+| 15 | 每个 sidecar 每 5 秒无条件写一次状态键 | 拿周期写键表达存活 | 存活靠租约续期，键只在变化时写（§7 第 4 步、§18） |
+
+另外加了告警 `TableSyncFetchFailing`：第 3 条改成「拒绝启动」以后，取包失败的影响变大了，要有直接的信号（§11）。
+
+**教训**（通用的几条已写进 `docs/rules/engineering-principles.md` §3、§4）：
+- 多方共用的格式（清单、状态文件、指标名与标签）要有单一事实源，测试读真实产物，不读自己拼的形状（第 1、2、11 条）。
+- 告警逐条核对三件事：引用的指标和标签在代码里真的写出；指标真有人抓；判据要的是状态还是事件（第 10、11、12 条）。
+- 放进跨 zone 共享存储的实例身份要在集群内唯一（第 8 条）。存活用租约续期表达，写入量与变化次数成正比，不与「实例数 × 时间」成正比（第 15 条）。
+- 回退要分清「本来没有」和「有但没拿到」，后者不能静默回退（第 3 条）。有上限的资源要和数据上限放在一起算（第 13 条）。部署依赖的外部前置条件，在写操作之前只读核对（第 9 条）。

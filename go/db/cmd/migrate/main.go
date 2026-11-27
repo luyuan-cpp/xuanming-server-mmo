@@ -274,6 +274,12 @@ func runUp(ctx context.Context, runner *migrate.Runner, db *sql.DB, allowModify 
 	for _, w := range presplitWarnings {
 		logf("  NEEDS-REVIEW %s", w)
 	}
+	// 修复身份(create_residual、admission_recover)的授权是表级的,只落在执行时已存在的表上:新建的存档库或新表要重跑一次授权。
+	// 只提醒、不执行:GRANT 要管理员账号,部署与迁移都不经手数据库管理口令(docs/ops/k8s-open-server-runbook.md 授权第 3 步)。
+	if !report.DryRun && len(report.Applied) > 0 {
+		logf("Reminder: repair principal grants are table-level and only cover tables that already exist. This run created tables in %s: "+
+			"rerun maintenance_drain.ps1 -MaintenanceCommand render-repair-role with %s in storeSchemas and apply its SQL on the cluster that hosts it", report.Database, report.Database)
+	}
 	if len(report.Warnings) > 0 || len(presplitWarnings) > 0 {
 		// 退 4 = 迁移本身成功,但有需要人工过目的漂移。部署脚本可以据此告警
 		// 而不中断发布。

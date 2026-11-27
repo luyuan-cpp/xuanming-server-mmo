@@ -826,11 +826,11 @@ constexpr GateTokenPayload::ParseTableT_ GateTokenPayload::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(GateTokenPayload, _impl_._has_bits_),
       0, // no _extensions_
-      6, 56,  // max_field_number, fast_idx_mask
+      7, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967232,  // skipmap
+      4294967168,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      6,  // num_field_entries
+      7,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -842,45 +842,50 @@ constexpr GateTokenPayload::ParseTableT_ GateTokenPayload::InternalGenerateParse
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint32 gate_node_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GateTokenPayload, _impl_.gate_node_id_), 1>(),
-       {8, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GateTokenPayload, _impl_.gate_node_id_), 2>(),
+       {8, 2, 0,
         PROTOBUF_FIELD_OFFSET(GateTokenPayload, _impl_.gate_node_id_)}},
       // uint32 zone_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GateTokenPayload, _impl_.zone_id_), 2>(),
-       {16, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GateTokenPayload, _impl_.zone_id_), 3>(),
+       {16, 3, 0,
         PROTOBUF_FIELD_OFFSET(GateTokenPayload, _impl_.zone_id_)}},
       // int64 expire_timestamp = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GateTokenPayload, _impl_.expire_timestamp_), 3>(),
-       {24, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GateTokenPayload, _impl_.expire_timestamp_), 4>(),
+       {24, 4, 0,
         PROTOBUF_FIELD_OFFSET(GateTokenPayload, _impl_.expire_timestamp_)}},
       // bytes hmac_session_key = 4;
       {::_pbi::TcParser::FastBS1,
        {34, 0, 0,
         PROTOBUF_FIELD_OFFSET(GateTokenPayload, _impl_.hmac_session_key_)}},
       // uint64 player_id = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GateTokenPayload, _impl_.player_id_), 4>(),
-       {40, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(GateTokenPayload, _impl_.player_id_), 5>(),
+       {40, 5, 0,
         PROTOBUF_FIELD_OFFSET(GateTokenPayload, _impl_.player_id_)}},
       // uint32 target_zone_id = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GateTokenPayload, _impl_.target_zone_id_), 5>(),
-       {48, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(GateTokenPayload, _impl_.target_zone_id_), 6>(),
+       {48, 6, 0,
         PROTOBUF_FIELD_OFFSET(GateTokenPayload, _impl_.target_zone_id_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // bytes account_digest = 7;
+      {::_pbi::TcParser::FastBS1,
+       {58, 1, 0,
+        PROTOBUF_FIELD_OFFSET(GateTokenPayload, _impl_.account_digest_)}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 gate_node_id = 1;
-      {PROTOBUF_FIELD_OFFSET(GateTokenPayload, _impl_.gate_node_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(GateTokenPayload, _impl_.gate_node_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 zone_id = 2;
-      {PROTOBUF_FIELD_OFFSET(GateTokenPayload, _impl_.zone_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(GateTokenPayload, _impl_.zone_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // int64 expire_timestamp = 3;
-      {PROTOBUF_FIELD_OFFSET(GateTokenPayload, _impl_.expire_timestamp_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      {PROTOBUF_FIELD_OFFSET(GateTokenPayload, _impl_.expire_timestamp_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
       // bytes hmac_session_key = 4;
       {PROTOBUF_FIELD_OFFSET(GateTokenPayload, _impl_.hmac_session_key_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
       // uint64 player_id = 5;
-      {PROTOBUF_FIELD_OFFSET(GateTokenPayload, _impl_.player_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(GateTokenPayload, _impl_.player_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 target_zone_id = 6;
-      {PROTOBUF_FIELD_OFFSET(GateTokenPayload, _impl_.target_zone_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(GateTokenPayload, _impl_.target_zone_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bytes account_digest = 7;
+      {PROTOBUF_FIELD_OFFSET(GateTokenPayload, _impl_.account_digest_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
@@ -894,6 +899,9 @@ inline constexpr GateTokenPayload::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
         hmac_session_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        account_digest_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         gate_node_id_{0u},
@@ -4031,19 +4039,21 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::GateTokenPayload, _impl_._has_bits_),
-        9, // hasbit index offset
+        10, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::GateTokenPayload, _impl_.gate_node_id_),
         PROTOBUF_FIELD_OFFSET(::GateTokenPayload, _impl_.zone_id_),
         PROTOBUF_FIELD_OFFSET(::GateTokenPayload, _impl_.expire_timestamp_),
         PROTOBUF_FIELD_OFFSET(::GateTokenPayload, _impl_.hmac_session_key_),
         PROTOBUF_FIELD_OFFSET(::GateTokenPayload, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::GateTokenPayload, _impl_.target_zone_id_),
-        1,
+        PROTOBUF_FIELD_OFFSET(::GateTokenPayload, _impl_.account_digest_),
         2,
         3,
-        0,
         4,
+        0,
         5,
+        6,
+        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ClientTokenVerifyRequest, _impl_._has_bits_),
         5, // hasbit index offset
@@ -4096,10 +4106,10 @@ static const ::_pbi::MigrationSchema
         {129, sizeof(::NodeHandshakeRequest)},
         {140, sizeof(::NodeHandshakeResponse)},
         {147, sizeof(::GateTokenPayload)},
-        {162, sizeof(::ClientTokenVerifyRequest)},
-        {169, sizeof(::ClientTokenVerifyResponse)},
-        {180, sizeof(::ClientHeartbeatRequest)},
-        {185, sizeof(::ClientHeartbeatResponse)},
+        {164, sizeof(::ClientTokenVerifyRequest)},
+        {171, sizeof(::ClientTokenVerifyResponse)},
+        {182, sizeof(::ClientHeartbeatRequest)},
+        {187, sizeof(::ClientHeartbeatResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -4176,18 +4186,19 @@ const char descriptor_table_protodef_proto_2fcommon_2fbase_2fmessage_2eproto[] A
     "(\t\022\034\n\tself_node\030\003 \001(\0132\t.NodeInfo\022\032\n\022expe"
     "cted_peer_uuid\030\004 \001(\t\"]\n\025NodeHandshakeRes"
     "ponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMe"
-    "ssage\022\034\n\tpeer_node\030\002 \001(\0132\t.NodeInfo\"\230\001\n\020"
+    "ssage\022\034\n\tpeer_node\030\002 \001(\0132\t.NodeInfo\"\260\001\n\020"
     "GateTokenPayload\022\024\n\014gate_node_id\030\001 \001(\r\022\017"
     "\n\007zone_id\030\002 \001(\r\022\030\n\020expire_timestamp\030\003 \001("
     "\003\022\030\n\020hmac_session_key\030\004 \001(\014\022\021\n\tplayer_id"
-    "\030\005 \001(\004\022\026\n\016target_zone_id\030\006 \001(\r\">\n\030Client"
-    "TokenVerifyRequest\022\017\n\007payload\030\001 \001(\014\022\021\n\ts"
-    "ignature\030\002 \001(\014\"x\n\031ClientTokenVerifyRespo"
-    "nse\022\017\n\007success\030\001 \001(\010\022\r\n\005error\030\002 \001(\t\022\035\n\025h"
-    "eartbeat_interval_ms\030\003 \001(\r\022\034\n\024heartbeat_"
-    "timeout_ms\030\004 \001(\r\"%\n\026ClientHeartbeatReque"
-    "st\022\013\n\003seq\030\001 \001(\004\"&\n\027ClientHeartbeatRespon"
-    "se\022\013\n\003seq\030\001 \001(\004B\rZ\013common/baseb\006proto3"
+    "\030\005 \001(\004\022\026\n\016target_zone_id\030\006 \001(\r\022\026\n\016accoun"
+    "t_digest\030\007 \001(\014\">\n\030ClientTokenVerifyReque"
+    "st\022\017\n\007payload\030\001 \001(\014\022\021\n\tsignature\030\002 \001(\014\"x"
+    "\n\031ClientTokenVerifyResponse\022\017\n\007success\030\001"
+    " \001(\010\022\r\n\005error\030\002 \001(\t\022\035\n\025heartbeat_interva"
+    "l_ms\030\003 \001(\r\022\034\n\024heartbeat_timeout_ms\030\004 \001(\r"
+    "\"%\n\026ClientHeartbeatRequest\022\013\n\003seq\030\001 \001(\004\""
+    "&\n\027ClientHeartbeatResponse\022\013\n\003seq\030\001 \001(\004B"
+    "\rZ\013common/baseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fcommon_2fbase_2fmessage_2eproto_deps[3] = {
@@ -4199,7 +4210,7 @@ static ::absl::once_flag descriptor_table_proto_2fcommon_2fbase_2fmessage_2eprot
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fbase_2fmessage_2eproto = {
     false,
     false,
-    2318,
+    2342,
     descriptor_table_protodef_proto_2fcommon_2fbase_2fmessage_2eproto,
     "proto/common/base/message.proto",
     &descriptor_table_proto_2fcommon_2fbase_2fmessage_2eproto_once,
@@ -9128,7 +9139,8 @@ PROTOBUF_NDEBUG_INLINE GateTokenPayload::Impl_::Impl_(
     [[maybe_unused]] const ::GateTokenPayload& from_msg)
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
-        hmac_session_key_(arena, from.hmac_session_key_) {}
+        hmac_session_key_(arena, from.hmac_session_key_),
+        account_digest_(arena, from.account_digest_) {}
 
 GateTokenPayload::GateTokenPayload(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -9158,7 +9170,8 @@ PROTOBUF_NDEBUG_INLINE GateTokenPayload::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
-        hmac_session_key_(arena) {}
+        hmac_session_key_(arena),
+        account_digest_(arena) {}
 
 inline void GateTokenPayload::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -9181,6 +9194,7 @@ inline void GateTokenPayload::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.hmac_session_key_.Destroy();
+  this_._impl_.account_digest_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -9218,10 +9232,15 @@ PROTOBUF_NOINLINE void GateTokenPayload::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    _impl_.hmac_session_key_.ClearNonDefaultToEmpty();
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.hmac_session_key_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.account_digest_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007cU)) {
     ::memset(&_impl_.gate_node_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.target_zone_id_) -
         reinterpret_cast<char*>(&_impl_.gate_node_id_)) + sizeof(_impl_.target_zone_id_));
@@ -9250,7 +9269,7 @@ PROTOBUF_NOINLINE void GateTokenPayload::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 gate_node_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_gate_node_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -9259,7 +9278,7 @@ PROTOBUF_NOINLINE void GateTokenPayload::Clear() {
   }
 
   // uint32 zone_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_zone_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -9268,7 +9287,7 @@ PROTOBUF_NOINLINE void GateTokenPayload::Clear() {
   }
 
   // int64 expire_timestamp = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_expire_timestamp() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<3>(
@@ -9285,7 +9304,7 @@ PROTOBUF_NOINLINE void GateTokenPayload::Clear() {
   }
 
   // uint64 player_id = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -9294,11 +9313,19 @@ PROTOBUF_NOINLINE void GateTokenPayload::Clear() {
   }
 
   // uint32 target_zone_id = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_target_zone_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           6, this_._internal_target_zone_id(), target);
+    }
+  }
+
+  // bytes account_digest = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_account_digest().empty()) {
+      const ::std::string& _s = this_._internal_account_digest();
+      target = stream->WriteBytesMaybeAliased(7, _s, target);
     }
   }
 
@@ -9327,7 +9354,7 @@ PROTOBUF_NOINLINE void GateTokenPayload::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     // bytes hmac_session_key = 4;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_hmac_session_key().empty()) {
@@ -9335,36 +9362,43 @@ PROTOBUF_NOINLINE void GateTokenPayload::Clear() {
                                         this_._internal_hmac_session_key());
       }
     }
-    // uint32 gate_node_id = 1;
+    // bytes account_digest = 7;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_account_digest().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
+                                        this_._internal_account_digest());
+      }
+    }
+    // uint32 gate_node_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_gate_node_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_gate_node_id());
       }
     }
     // uint32 zone_id = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_zone_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_zone_id());
       }
     }
     // int64 expire_timestamp = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_expire_timestamp() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_expire_timestamp());
       }
     }
     // uint64 player_id = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
     // uint32 target_zone_id = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_target_zone_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_target_zone_id());
@@ -9388,7 +9422,7 @@ void GateTokenPayload::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_hmac_session_key().empty()) {
         _this->_internal_set_hmac_session_key(from._internal_hmac_session_key());
@@ -9399,26 +9433,35 @@ void GateTokenPayload::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_account_digest().empty()) {
+        _this->_internal_set_account_digest(from._internal_account_digest());
+      } else {
+        if (_this->_impl_.account_digest_.IsDefault()) {
+          _this->_internal_set_account_digest("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_gate_node_id() != 0) {
         _this->_impl_.gate_node_id_ = from._impl_.gate_node_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_zone_id() != 0) {
         _this->_impl_.zone_id_ = from._impl_.zone_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_expire_timestamp() != 0) {
         _this->_impl_.expire_timestamp_ = from._impl_.expire_timestamp_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_target_zone_id() != 0) {
         _this->_impl_.target_zone_id_ = from._impl_.target_zone_id_;
       }
@@ -9444,6 +9487,7 @@ void GateTokenPayload::InternalSwap(GateTokenPayload* PROTOBUF_RESTRICT PROTOBUF
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.hmac_session_key_, &other->_impl_.hmac_session_key_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.account_digest_, &other->_impl_.account_digest_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(GateTokenPayload, _impl_.target_zone_id_)
       + sizeof(GateTokenPayload::_impl_.target_zone_id_)

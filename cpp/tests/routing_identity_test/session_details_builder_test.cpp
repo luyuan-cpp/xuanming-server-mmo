@@ -12,6 +12,7 @@
 #include "../../nodes/gate/handler/event/scene_route_helper.h"
 #include "core/security/caller_auth.h"
 #include "core/utils/encode/base64.h"
+#include "session/manager/session_manager.h"
 #include "session/system/session.h"
 
 TEST(GateAuthenticatedIdentity, MetadataDecoderPreservesAuthenticatedAccount)
@@ -318,4 +319,77 @@ TEST(SessionDetailsBuilder, WithoutSessionLeavesSessionScopedFieldsZero)
 	EXPECT_EQ(wire.ticket_player_id(), 0u);
 	EXPECT_EQ(wire.session_incarnation(), 0u);
 	EXPECT_EQ(wire.owner_revision(), 0u);
+}
+
+// ---- 一张票同一时刻只开一条连接(SessionManager::ClaimTicket / ReleaseTicket) ----
+// 票据在有效期里不是一次性的:不拦的话,一张票能开出任意多条已验签连接,每条都算进 gate 人数、挤掉排队的名额
+// (docs/design/login-queue-2026-05.md §5「一张票只开一条连接」)。
+
+namespace
+{
+SessionInfo &AddLiveSession(SessionManager &manager, const SessionId sessionId, const uint64_t incarnation)
+{
+	SessionInfo &session = manager.sessions()[sessionId];
+	session.incarnation = incarnation;
+	return session;
+}
+} // namespace
+
+// 第二条连接拿同一张票验签被拒,第一条不受影响;不同的票各开各的。
+// ClaimTicket 里「持有者还活着就回 false」改成恒回 true,本用例红在第二个断言上。
+TEST(GateTicketHolder, SecondLiveConnectionWithTheSameTicketIsRejected)
+{
+	SessionManager manager;
+	AddLiveSession(manager, 101, 1);
+	AddLiveSession(manager, 102, 2);
+	AddLiveSession(manager, 103, 3);
+
+	EXPECT_TRUE(manager.ClaimTicket("ticket-a", 101, 1));
+	EXPECT_FALSE(manager.ClaimTicket("ticket-a", 102, 2)) << "the first connection holding ticket-a is still alive";
+	EXPECT_TRUE(manager.ClaimTicket("ticket-a", 101, 1)) << "the holder itself may claim again";
+	EXPECT_TRUE(manager.ClaimTicket("ticket-b", 103, 3));
+	EXPECT_EQ(manager.TicketHolderCount(), 2u);
+}
+
+// 持有者断开(先摘占位、再删会话)之后,同一张票可以再开一条。
+TEST(GateTicketHolder, ReleasedTicketCanBeUsedAgain)
+{
+	SessionManager manager;
+	AddLiveSession(manager, 101, 1);
+	AddLiveSession(manager, 102, 2);
+	ASSERT_TRUE(manager.ClaimTicket("ticket-a", 101, 1));
+
+	manager.ReleaseTicket("ticket-a", 101, 1);
+	manager.sessions().erase(101);
+	EXPECT_EQ(manager.TicketHolderCount(), 0u);
+	EXPECT_TRUE(manager.ClaimTicket("ticket-a", 102, 2));
+}
+
+// 只摘自己持有的那一条:旧连接晚到的摘除不能把新持有者的占位摘掉;空票据什么都不做。
+TEST(GateTicketHolder, ReleaseOnlyDropsTheCallersOwnClaim)
+{
+	SessionManager manager;
+	AddLiveSession(manager, 102, 2);
+	ASSERT_TRUE(manager.ClaimTicket("ticket-a", 102, 2));
+
+	manager.ReleaseTicket("ticket-a", 101, 1);
+	manager.ReleaseTicket("", 102, 2);
+	EXPECT_EQ(manager.TicketHolderCount(), 1u);
+	AddLiveSession(manager, 103, 3);
+	EXPECT_FALSE(manager.ClaimTicket("ticket-a", 103, 3)) << "102 still holds ticket-a";
+}
+
+// 记着的持有者已经不在(会话已删但漏了摘除,或 session_id 被新连接复用、代次不同):新连接接手,不被一条死记录挡住。
+TEST(GateTicketHolder, StaleHolderIsTakenOver)
+{
+	SessionManager manager;
+	AddLiveSession(manager, 101, 1);
+	ASSERT_TRUE(manager.ClaimTicket("ticket-a", 101, 1));
+	manager.sessions().erase(101); // 漏了 ReleaseTicket
+	AddLiveSession(manager, 102, 2);
+	EXPECT_TRUE(manager.ClaimTicket("ticket-a", 102, 2));
+
+	AddLiveSession(manager, 102, 9); // 同号会话换了一条新连接,代次不同
+	AddLiveSession(manager, 104, 4);
+	EXPECT_TRUE(manager.ClaimTicket("ticket-a", 104, 4)) << "the recorded holder (102, incarnation 2) is gone";
 }

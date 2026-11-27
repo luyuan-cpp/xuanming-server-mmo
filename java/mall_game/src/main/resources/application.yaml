@@ -62,6 +62,9 @@ commerce:
   payment-subject: ${COMMERCE_PAYMENT_SUBJECT:payment-adapter}
   admin-secret: ${COMMERCE_ADMIN_SECRET:}
   admin-subject: ${COMMERCE_ADMIN_SUBJECT:mall-admin}
+  # 管理写命令缺省必须带后台的双人复核批准记录(docs/design/admin-identity-and-dual-control.md §5.5)。
+  # 只有本机开发显式打开才接受不带记录的命令;打开时启动和每次放行都打 ERROR,并计入 mall_admin_unapproved_command_total(告警据此触发)。
+  admin-allow-unapproved: ${COMMERCE_ADMIN_ALLOW_UNAPPROVED:false}
   mock-payment-enabled: ${COMMERCE_MOCK_PAYMENT_ENABLED:false}
   allowed-payment-channels: ${COMMERCE_ALLOWED_PAYMENT_CHANNELS:}
   consignment:

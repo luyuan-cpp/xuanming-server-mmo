@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"unicode/utf8"
 
 	"google.golang.org/protobuf/proto"
 	mailpb "proto/mail"
@@ -83,6 +84,10 @@ func Build(rule *tablepb.TournamentRuleTable, rewards []*tablepb.TournamentRewar
 		}
 		if _, dup := c.rewardsByID[row.GetId()]; dup {
 			return nil, fmt.Errorf("tournament: duplicate TournamentReward id=%d", row.GetId())
+		}
+		if title, body := row.GetMailTitle(), row.GetMailBody(); !utf8.ValidString(title) || !utf8.ValidString(body) ||
+			utf8.RuneCountInString(title) > maxRewardMailTitleRune || utf8.RuneCountInString(body) > maxRewardMailBodyRune {
+			return nil, fmt.Errorf("tournament: TournamentReward id=%d mail_title/mail_body is not valid UTF-8 or exceeds %d/%d runes", row.GetId(), maxRewardMailTitleRune, maxRewardMailBodyRune)
 		}
 		cloned := proto.Clone(row).(*tablepb.TournamentRewardTable)
 		c.rewardsByID[cloned.GetId()] = cloned
@@ -257,4 +262,26 @@ func BuildMailAttachments(r *tablepb.TournamentRewardTable) (*mailpb.MailAttachm
 	}
 	raw, err := (proto.MarshalOptions{Deterministic: true}).Marshal(att)
 	return att, raw, err
+}
+
+// 领奖邮件文案的缺省值与长度上限。上限与 go/mail 的 validateContent 同口径(标题 1..128 字、正文至多 4096 字),
+// 配表超出时 Build 拒绝:文案在结算时冻结进奖励行,超长的原件 mail 永远拒收,事后改配表也救不回已结算的行。
+const (
+	defaultRewardMailTitle = "群仙问道赛赛季奖励"
+	defaultRewardMailBody  = "本赛季群仙问道赛奖励已结算，请查收附件。"
+	maxRewardMailTitleRune = 128
+	maxRewardMailBodyRune  = 4096
+)
+
+// RewardMailText 返回结算时冻结进奖励行的领奖邮件标题与正文:取配表,空则缺省文案。
+// 只在写奖励行时调用;领奖重发读行里冻结的值,不再读配表(群仙问道赛设计 V1 第七节,数据覆写审计 r2 第 4 轮)。
+func RewardMailText(r *tablepb.TournamentRewardTable) (title, body string) {
+	title, body = r.GetMailTitle(), r.GetMailBody()
+	if title == "" {
+		title = defaultRewardMailTitle
+	}
+	if body == "" {
+		body = defaultRewardMailBody
+	}
+	return title, body
 }
