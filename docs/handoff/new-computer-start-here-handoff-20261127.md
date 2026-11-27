@@ -38,6 +38,7 @@
 | 3 | `admin-identity-dual-control-batches4-7-handoff-20261126.md` §5「批 7 剩余」 | 第 1 项（后台上 K8s）与第 3 项 11-27 已写完、未运行，交 Gemini，命令在 PROGRESS 标题带「双人复核·批 7 剩余」的条目。第 2 项（本机后台到 trade 的转发）原定前提不成立，等负责人定做法（§5），定了再写 |
 | 4 | `merged-zone-etcd-copy-handoff-20261127.md` §2 | 代码已写完。先交 Gemini 跑 §3；全绿后做 §4（第二批的独立复核等） |
 | 5 | `login-queue-verification-handoff-20261126.md` §4 | 开闸：Claude Code 改常量与契约用例。前提是第 2、5、7 步全绿并写进 PROGRESS，且负责人确认 |
+| 6 | `claude-session-leftovers-handoff-20261127.md` | 旧电脑一个会话的剩余：账号注销没清江湖恩怨数据（只有那份单记着，r2 剩余单没收）；其余只给指向。做完按它 §3 删 |
 
 ### 3.1 选角页回选上限的用例（11-27 从 review-suggestions 交接单 §8 移过来）
 

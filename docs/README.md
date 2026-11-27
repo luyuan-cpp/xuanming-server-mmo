@@ -561,6 +561,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [admin-identity-dual-control-batches4-7-handoff-20261126.md](handoff/admin-identity-dual-control-batches4-7-handoff-20261126.md) — 后台管理员身份与双人复核:批 4~7 交接(2026-11-26)
 - [battle-report-replay-client.md](handoff/battle-report-replay-client.md) — 交接:战报回放的客户端细节(2026-11-06)
 - [battle-script-review-retention-handoff-20261126.md](handoff/battle-script-review-retention-handoff-20261126.md) — 剧本审核流水保留期清理与 match 保留期告警:全部验证交接(2026-11-26,交 Gemini)
+- [claude-session-leftovers-handoff-20261127.md](handoff/claude-session-leftovers-handoff-20261127.md) — 旧电脑一个会话的剩余事项（2026-11-27，做完删除本单）
 - [config-table-hot-reload-handoff-20261126.md](handoff/config-table-hot-reload-handoff-20261126.md) — 配置表热更：验证与收尾交接（2026-11-26，交 Gemini）
 - [data-consistency-review-handoff-20261126.md](handoff/data-consistency-review-handoff-20261126.md) — 数据一致性复查线:交 Gemini 验证(2026-11-26)
 - [data-overwrite-audit-r2-handoff-20261126.md](handoff/data-overwrite-audit-r2-handoff-20261126.md) — 数据覆写审计第二轮（r2）验证交接（2026-11-26，交 Gemini）
@@ -573,6 +574,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [passport-hardening-handoff-20261126.md](handoff/passport-hardening-handoff-20261126.md) — 官方通行证加固：验证交接（2026-11-26，交 Gemini；代码已改完，Gemini 只验证）
 - [payment-integration-handoff-20261120.md](handoff/payment-integration-handoff-20261120.md) — 真钱支付接入:剩余事项(2026-11-26 更新,交 Gemini 与负责人)
 - [real-name-anti-addiction-handoff-20261126.md](handoff/real-name-anti-addiction-handoff-20261126.md) — 实名认证与防沉迷：代码已写完，全部验证交 Gemini（2026-11-26）
+- [reconnect-metrics-leftovers-handoff-20261127.md](handoff/reconnect-metrics-leftovers-handoff-20261127.md) — 断线重连与 C++ 指标导出：换电脑后要做完的事（2026-11-27）
 - [redis-cluster-all-domains-handoff-20261126.md](handoff/redis-cluster-all-domains-handoff-20261126.md) — 全部 Redis 上 Cluster(缺口第 34 条)验证交接(2026-11-26,交 Gemini)
 - [review-suggestions-remaining-handoff-20261126.md](handoff/review-suggestions-remaining-handoff-20261126.md) — 11-19 评审建议项的剩余部分（2026-11-26 交接）
 - [scene-gate-instance-session-handoff-20261126.md](handoff/scene-gate-instance-session-handoff-20261126.md) — scene 按 (gate 实例, session_id) 认会话(e 方案 C)全线:验证交接(2026-11-26,交 Gemini)

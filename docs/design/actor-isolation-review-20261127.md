@@ -70,7 +70,7 @@
 
 ## 6. 仍待办
 
-- **Python 版名匠代打摊位目录、口碑待回账与 24h 热榜改走 Redis**：按 C++ r2-craft#4（`cpp/libs/services/scene/player/system/player_craft.cpp` 的 `ProxyReputationLedgerKey`、`kTakeProxyReputationLua`、`GiveBackProxyReputation`、`ApplyTakenProxyReputation`）补齐，另开会话做（Python 场景目前没有控制 Redis 客户端，需新接）。
+- **Python 版名匠代打摊位目录、口碑待回账与 24h 热榜改走 Redis**：按 C++ r2-craft#4（`cpp/libs/services/scene/player/system/player_craft.cpp` 的 `ProxyReputationLedgerKey`、`kTakeProxyReputationLua`、`GiveBackProxyReputation`、`ApplyTakenProxyReputation`）补齐，另开会话做（Python 场景目前没有控制 Redis 客户端，需新接）。**状态（11-27）**：Python 仓代码与单测已写完，未运行。键、字段与取走脚本同 C++，买家只记台账，回账在宗师自己的锁内原子取走。另外核对时发现，Python scene 其实已有控制 Redis 客户端（`runtime.py` 的 `scene_control_redis`，世界频道目录与落地唤醒在用），已直接复用，不用新接。设计与 pytest 命令见 Python 仓 `docs/design/craft-proxy-shared-ledger-redis.md`。
 - **Java**：§3 两条，已登记 Java 仓 `PARITY.md`，本轮不写 Java 代码。
 
 ## 7. 验证（交 Gemini）

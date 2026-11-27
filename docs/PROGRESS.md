@@ -8502,3 +8502,9 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
   3. `pwsh -NoProfile -File tools/scripts/tests/player_inbox_alerts_contract.tests.ps1`、`k8s_deploy_contract.tests.ps1`;`cd go/player_inbox; go test ./internal/metrics/ -run TestAlertRulesReferenceRegisteredMetrics -count=1`;按 `player-inbox-runbook.md` §15 抽出 `spec` 后 `promtool check rules`;
   4. 冒烟(设 `MMORPG_METRICS_PORT`,`curl -s http://127.0.0.1:<端口>/metrics`):scene grep `scene_player_inbox_`(7 族:consumer_enabled 1、registry_broken 0、events 5 个 event、deferral_starts 13 个 reason、halted 8 个 reason、leave_ack 7 个 result、ledger_invalid 1 条)、`scene_team_follow_`、`scene_redis_cluster_events_total`、`cpp_node_grpc_server_method_handled_total`;battle grep `cpp_node_grpc_server_` 有;gate grep `cpp_node_grpc_server_` 应为 0 行;`[PlayerRedis]` / `[ControlRedis]` / `[GrpcServer] summary` 行与改动前同格式。
 - **残余**(写在 `player-inbox-service.md` §9.4.1):收件箱停用或判坏之后,实体活不到下一次抓取就销毁的,那两条规则看不到;这种条目留在收件箱 PENDING,下次落地会再停,收件箱侧告警兜住。
+
+## 2026-11-27 Claude:换电脑前把「交接单代码改动清零与七项方案入档」会话的剩余事项写成新交接单(只改文档)
+
+- 新建 `docs/handoff/claude-session-leftovers-handoff-20261127.md`,并登记进总入口单 `new-computer-start-here-handoff-20261127.md` §3 表第 6 行,以及 `docs/README.md` 索引(gen_docs_index 只加一行)。
+- 只有这份单记着的:账号注销没清江湖恩怨数据(match 的 `match_grudge_relation` / `match_grudge_log`、guild 恩怨墙存的队长名、`account-deletion.md` §6.2 没归类)。这条原在第 4 轮交接单 §6.1 末条,r2 剩余单没收进去。
+- 其余只给指向:guild 人工终结 SQL 带 attempts 在 r2 剩余单;本会话代码的 Gemini 命令在本文件 2026-11-26「两份新交接单的代码改由 Claude 写」一条。做完按那份单 §3 删除。
