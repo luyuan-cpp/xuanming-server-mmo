@@ -68,6 +68,8 @@ diff 的终点一律用 HEAD：当时没提交的测试和设计稿，是后来�
 
 ### 3.2 guild 人工终结见证的条件写补比 `attempts`
 
+> **2026-11-27 已做完（旧电脑会话「复核第 4 轮批 V/W 并补 guild 见证 SQL」，Opus 5.5；未编译，只剩下面「验证」交 Gemini）。** 按下列步骤改了 `asset_store.go` 的 SQL、实参与两处注释，`economy_repo_test.go` 三处见证字面量，并新增真库用例 `TestResolveManuallyIfQuiet_MissesWhenOnlyAttemptsMoved`；顺带删掉 `go/shared/assetop/manual_evidence.go`、`go/guild/cmd/assetopfix/main_test.go` 注释与 `05-economy.md` §5.23、保证图 §6.2、r2 文档 §3.x 第 1 条里的「guild 待补」字样。两处状态已同步。下面的步骤留作对照。
+
 这是早期遗留第 1 条的最后一处。行号按 HEAD 核过，`24c13a311` 之后这两个文件没再改过。
 
 - `go/guild/internal/data/asset_store.go:259`：`sqlResolveAssetOpQuiet` 末尾加 `` AND `attempts` = ? ``。

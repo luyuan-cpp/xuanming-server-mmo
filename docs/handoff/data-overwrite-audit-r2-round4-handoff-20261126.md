@@ -272,7 +272,7 @@
 
 **还没做的**（写回这里，按负责人口径额度过 80% 交 Gemini）：
 - r2-craft#1 落码：批 A 已写（未编译，验证命令见设计稿 §11.1 末）；**批 C、批 B 负责人 11-27 改定换电脑由 Claude Code（Fable 5.2 Max）写，Gemini 不写，只做写完后的生成、编译、测试**（设计稿 §11.2，写完同节补五项记录，再按设计稿 §9 跑）。Gemini 跑批 A 时把导表放在最前：两条新 tip 不导出来 go/trade 编不过。
-- guild 人工终结的条件写补比 `attempts`（r2 早期遗留第 1 条的最后一处）：**2026-11-27 交 Gemini 4 Neon Extra 写**（负责人随后改定：换电脑由 Claude Code 写，见 §0a）。会话「复核第 4 轮批 V/W 并补 guild 见证 SQL」开工时 Claude 全部模型周额度 81%，按 §6 口径没动手；§0 的「Gemini 不要改本单的代码」不适用于本条。
+- guild 人工终结的条件写补比 `attempts`（r2 早期遗留第 1 条的最后一处）：**2026-11-27 已由会话「复核第 4 轮批 V/W 并补 guild 见证 SQL」写完（负责人在该会话说「开始做吧」），未编译，验证见 r2 剩余单 §3.2。** 以下为当时的交接原文：**2026-11-27 交 Gemini 4 Neon Extra 写**（负责人随后改定：换电脑由 Claude Code 写，见 §0a）。会话「复核第 4 轮批 V/W 并补 guild 见证 SQL」开工时 Claude 全部模型周额度 81%，按 §6 口径没动手；§0 的「Gemini 不要改本单的代码」不适用于本条。
   - 文件已空出：§7.4 没改过 `asset_store.go`，现在没有会话占着。行号按 HEAD `24c13a311` 核过。
   - `go/guild/internal/data/asset_store.go:259`：`sqlResolveAssetOpQuiet` 末尾加 `` AND `attempts` = ? ``。
   - 同文件 :739：`ResolveManuallyIfQuiet` 的实参在 `witness.LastSendMs` 之后加 `witness.Attempts`。

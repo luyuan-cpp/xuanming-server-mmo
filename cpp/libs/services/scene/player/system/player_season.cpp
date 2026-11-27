@@ -1,14 +1,17 @@
 #include "player_season.h"
 
 #include <algorithm>
+#include <array>
 #include <limits>
 #include <string>
 #include <vector>
 
+#include <hiredis/hiredis.h>
 #include <muduo/base/Logging.h>
 
 #include "battle/system/player_battle.h"
 #include "engine/core/type_define/player_guid_comp.h"
+#include "infra/storage/redis_cluster/redis_cluster_client.h"
 #include "modules/currency/constants/currency.h"
 #include "modules/currency/system/currency_system.h"
 #include "player/system/client_request_ledger.h"
@@ -40,18 +43,277 @@ namespace {
 PlayerSeasonSystem::PersistFn gSeasonPersistFn = &PlayerLifecycleSystem::SavePlayerForAssetCommit;
 
 constexpr std::size_t kMaxTowerLeaderboardSize = 20u;
+constexpr uint32_t kRealmLeaderboardRedisCap = 200u;
+constexpr uint32_t kRealmLeaderboardTtlSec = 14u * 24u * 3600u;
+constexpr uint64_t kRealmLeaderboardRefreshIntervalMs = 15000ULL;
 constexpr std::size_t kMaxBookmarkTextBytes = 48u;
 constexpr int kMaxBookmarkSkills = 12;
 constexpr int kMaxBookmarkSigils = 10;
 
-uint32_t gTowerLeaderboardWeekKey = 0u;
-std::vector<WuxingTowerLeaderboardEntry> gTowerWeeklyLeaderboard;
+// 单线程 EventLoop 独占本地读穿缓存（水平扩展多 Scene 副本通过 tlsControlRedis 同 slot ZSET+HASH 原子同步）。
+struct RealmLeaderboardCache {
+    uint32_t weekKey = 0u;
+    uint64_t lastRedisPullMs = 0u;
+    std::vector<WuxingTowerLeaderboardEntry> entries;
+};
+thread_local std::array<RealmLeaderboardCache, 2> gRealmLeaderboards; // [0]=self, [1]=preset
+
+constexpr const char* kRealmLeaderboardWriteLua =
+    "redis.call('ZADD', KEYS[1], tonumber(ARGV[1]), ARGV[2]) "
+    "redis.call('HSET', KEYS[2], ARGV[2], ARGV[3]) "
+    "local total = redis.call('ZCARD', KEYS[1]) "
+    "local cap = tonumber(ARGV[4]) "
+    "if total > cap then "
+    "  local pruned = redis.call('ZRANGE', KEYS[1], 0, total - cap - 1) "
+    "  if #pruned > 0 then "
+    "    redis.call('ZREM', KEYS[1], unpack(pruned)) "
+    "    redis.call('HDEL', KEYS[2], unpack(pruned)) "
+    "  end "
+    "end "
+    "redis.call('EXPIRE', KEYS[1], tonumber(ARGV[5])) "
+    "redis.call('EXPIRE', KEYS[2], tonumber(ARGV[5])) "
+    "return 1";
+
+constexpr const char* kRealmLeaderboardReadLua =
+    "local ids = redis.call('ZREVRANGE', KEYS[1], 0, tonumber(ARGV[1]) - 1) "
+    "local out = {} "
+    "for i = 1, #ids do "
+    "  local raw = redis.call('HGET', KEYS[2], ids[i]) "
+    "  if raw then out[#out + 1] = raw end "
+    "end "
+    "return out";
 
 uint32_t ComputeWuxingTowerWeekKey(uint64_t nowMs) {
     // UTC+8 周一 05:00 换周：1970-01-01 00:00 UTC 为周四 08:00 UTC+8，偏移 +69h 对齐周一 05:00。
     constexpr uint64_t kMsPerWeek = 7ULL * 24ULL * 3600ULL * 1000ULL;
     constexpr uint64_t kMonday05CstOffsetMs = (3ULL * 24ULL - 3ULL) * 3600ULL * 1000ULL;
     return static_cast<uint32_t>((nowMs + kMonday05CstOffsetMs) / kMsPerWeek) + 1u;
+}
+
+double ComputeLeaderboardScore(uint32_t bestFloor, uint32_t bestRounds) {
+    const uint32_t effectiveRounds = bestRounds == 0u ? 999999u : std::min<uint32_t>(bestRounds, 999999u);
+    return static_cast<double>(bestFloor) * 1000000.0 - static_cast<double>(effectiveRounds);
+}
+
+void SortAndTrimLeaderboard(std::vector<WuxingTowerLeaderboardEntry>& entries) {
+    std::sort(entries.begin(), entries.end(),
+              [](const WuxingTowerLeaderboardEntry& lhs, const WuxingTowerLeaderboardEntry& rhs) {
+                  if (lhs.best_floor() != rhs.best_floor()) {
+                      return lhs.best_floor() > rhs.best_floor();
+                  }
+                  const uint32_t lr = lhs.best_rounds() == 0u ? std::numeric_limits<uint32_t>::max() : lhs.best_rounds();
+                  const uint32_t rr = rhs.best_rounds() == 0u ? std::numeric_limits<uint32_t>::max() : rhs.best_rounds();
+                  if (lr != rr) {
+                      return lr < rr;
+                  }
+                  return lhs.player_id() < rhs.player_id();
+              });
+    if (entries.size() > kMaxTowerLeaderboardSize) {
+        entries.resize(kMaxTowerLeaderboardSize);
+    }
+}
+
+void PublishTowerLeaderboardToRedis(uint32_t weekKey, bool useFreePreset, const WuxingTowerLeaderboardEntry& entry) {
+    if (!tlsControlRedis.connected() || entry.player_id() == 0u || entry.best_floor() == 0u) {
+        return;
+    }
+    const std::string zsetKey = PlayerSeasonSystem::RealmLeaderboardZsetKey(weekKey, useFreePreset);
+    const std::string metaKey = PlayerSeasonSystem::RealmLeaderboardMetaKey(weekKey, useFreePreset);
+    const std::string scoreStr = std::to_string(static_cast<int64_t>(ComputeLeaderboardScore(entry.best_floor(), entry.best_rounds())));
+    const std::string memberStr = std::to_string(entry.player_id());
+    const std::string bytes = entry.SerializeAsString();
+    const std::string capStr = std::to_string(kRealmLeaderboardRedisCap);
+    const std::string ttlStr = std::to_string(kRealmLeaderboardTtlSec);
+    const int ret = tlsControlRedis.command(
+        [](hiredis::Hiredis*, redisReply*) {},
+        "EVAL %s 2 %s %s %s %s %b %s %s",
+        kRealmLeaderboardWriteLua, zsetKey.c_str(), metaKey.c_str(),
+        scoreStr.c_str(), memberStr.c_str(), bytes.data(), bytes.size(), capStr.c_str(), ttlStr.c_str());
+    if (ret != REDIS_OK) {
+        LOG_WARN << "[WuxingRealmLB] Failed to publish leaderboard entry to control Redis: week=" << weekKey
+                 << " preset=" << useFreePreset << " player_id=" << entry.player_id() << " ret=" << ret;
+    }
+}
+
+void RefreshTowerLeaderboardFromRedisIfDue(uint32_t weekKey, bool useFreePreset, uint64_t nowMs) {
+    if (!tlsControlRedis.connected()) {
+        return;
+    }
+    auto& cache = gRealmLeaderboards[useFreePreset ? 1u : 0u];
+    if (cache.weekKey == weekKey && cache.lastRedisPullMs != 0u &&
+        nowMs >= cache.lastRedisPullMs && (nowMs - cache.lastRedisPullMs) < kRealmLeaderboardRefreshIntervalMs) {
+        return;
+    }
+    cache.lastRedisPullMs = nowMs;
+    const std::string zsetKey = PlayerSeasonSystem::RealmLeaderboardZsetKey(weekKey, useFreePreset);
+    const std::string metaKey = PlayerSeasonSystem::RealmLeaderboardMetaKey(weekKey, useFreePreset);
+    const std::string limitStr = std::to_string(kMaxTowerLeaderboardSize);
+    const int ret = tlsControlRedis.command(
+        [weekKey, useFreePreset](hiredis::Hiredis*, redisReply* reply) {
+            if (reply == nullptr || reply->type != REDIS_REPLY_ARRAY) {
+                return;
+            }
+            std::vector<WuxingTowerLeaderboardEntry> refreshed;
+            refreshed.reserve(reply->elements);
+            for (std::size_t i = 0; i < reply->elements; ++i) {
+                const redisReply* item = reply->element[i];
+                if (item == nullptr || item->type != REDIS_REPLY_STRING || item->str == nullptr ||
+                    item->len > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+                    continue;
+                }
+                WuxingTowerLeaderboardEntry parsed;
+                if (parsed.ParseFromArray(item->str, static_cast<int>(item->len)) && parsed.player_id() != 0u) {
+                    refreshed.emplace_back(std::move(parsed));
+                }
+            }
+            SortAndTrimLeaderboard(refreshed);
+            auto& target = gRealmLeaderboards[useFreePreset ? 1u : 0u];
+            target.weekKey = weekKey;
+            target.entries = std::move(refreshed);
+        },
+        "EVAL %s 2 %s %s %s",
+        kRealmLeaderboardReadLua, zsetKey.c_str(), metaKey.c_str(), limitStr.c_str());
+    if (ret != REDIS_OK) {
+        LOG_WARN << "[WuxingRealmLB] Failed to refresh leaderboard from control Redis: week=" << weekKey
+                 << " preset=" << useFreePreset << " ret=" << ret;
+    }
+}
+
+void UpsertTowerLeaderboard(uint32_t weekKey, uint64_t playerId, const std::string& playerName,
+                            uint32_t bestFloor, uint32_t bestRounds, uint32_t formationId,
+                            bool useFreePreset, uint32_t resonanceElement,
+                            const google::protobuf::RepeatedField<uint32_t>& sigils) {
+    if (playerId == 0u || bestFloor == 0u) {
+        return;
+    }
+    auto& cache = gRealmLeaderboards[useFreePreset ? 1u : 0u];
+    if (cache.weekKey != weekKey) {
+        cache.weekKey = weekKey;
+        cache.entries.clear();
+    }
+    WuxingTowerLeaderboardEntry updated;
+    updated.set_player_id(playerId);
+    updated.set_player_name(playerName);
+    updated.set_best_floor(bestFloor);
+    updated.set_best_rounds(bestRounds);
+    updated.set_formation_id(formationId);
+    updated.set_use_free_preset(useFreePreset);
+    updated.set_resonance_element(resonanceElement);
+    for (const uint32_t id : sigils) {
+        updated.add_sigil_ids(id);
+    }
+
+    auto it = std::find_if(cache.entries.begin(), cache.entries.end(),
+                           [playerId](const WuxingTowerLeaderboardEntry& e) { return e.player_id() == playerId; });
+    if (it != cache.entries.end()) {
+        *it = updated;
+    } else {
+        cache.entries.push_back(updated);
+    }
+    SortAndTrimLeaderboard(cache.entries);
+    PublishTowerLeaderboardToRedis(weekKey, useFreePreset, updated);
+}
+
+void RotateTowerWeeklyStatsIfNeeded(WuxingTowerCompState& tower, uint32_t currentWeekKey) {
+    if (tower.week_key() != currentWeekKey) {
+        tower.set_week_key(currentWeekKey);
+        tower.set_weekly_cleared_mask(0u);
+        tower.set_weekly_best_floor(0u);
+        tower.set_weekly_best_rounds(0u);
+        tower.set_weekly_best_floor_preset(0u);
+        tower.set_weekly_best_rounds_preset(0u);
+    }
+}
+
+uint32_t EffectiveRunWeekKey(const WuxingTowerCompState& tower) {
+    return tower.run_week_key() != 0u ? tower.run_week_key() : tower.week_key();
+}
+
+void FillTowerState(entt::entity player, uint64_t nowMs, WuxingTowerStateSnapshot& out) {
+    out.Clear();
+    const uint32_t weekKey = ComputeWuxingTowerWeekKey(nowMs);
+    out.set_week_key(weekKey);
+    out.set_realm_version(turnbattle::wuxing::kRealmV2Version);
+    out.set_max_floors(turnbattle::wuxing::kRealmV2MaxNodes);
+
+    RefreshTowerLeaderboardFromRedisIfDue(weekKey, false, nowMs);
+    RefreshTowerLeaderboardFromRedisIfDue(weekKey, true, nowMs);
+
+    uint32_t floor = 1u;
+    uint32_t nodeKind = turnbattle::wuxing::kRealmNodeNormal;
+    uint32_t effectiveVersion = turnbattle::wuxing::kRealmV2Version;
+    uint32_t runWeekKey = weekKey;
+    if (tlsEcs.actorRegistry.valid(player)) {
+        if (const auto* seasonComp = tlsEcs.actorRegistry.try_get<PlayerSeasonComp>(player);
+            seasonComp != nullptr && seasonComp->has_wuxing_tower()) {
+            const auto& tower = seasonComp->wuxing_tower();
+            out.set_best_rounds_self(tower.best_rounds_self());
+            out.set_best_rounds_preset(tower.best_rounds_preset());
+            out.set_revision(tower.revision());
+            // 本周首通位图与周最佳严格按当前周键过滤，但进行中的在途轮次跨周绝不清空！
+            if (tower.week_key() == weekKey) {
+                out.set_weekly_cleared_mask(tower.weekly_cleared_mask());
+                out.set_weekly_best_floor(tower.weekly_best_floor());
+                out.set_weekly_best_rounds(tower.weekly_best_rounds());
+                out.set_weekly_best_floor_preset(tower.weekly_best_floor_preset());
+                out.set_weekly_best_rounds_preset(tower.weekly_best_rounds_preset());
+            }
+            if (tower.run_active()) {
+                effectiveVersion = tower.realm_version() >= turnbattle::wuxing::kRealmV2Version
+                    ? tower.realm_version()
+                    : 1u;
+                const uint32_t maxFloors = effectiveVersion >= turnbattle::wuxing::kRealmV2Version
+                    ? turnbattle::wuxing::kRealmV2MaxNodes
+                    : turnbattle::wuxing::kTowerMaxFloors;
+                out.set_realm_version(effectiveVersion);
+                out.set_max_floors(maxFloors);
+                out.set_run_active(true);
+                out.set_run_id(tower.run_id());
+                runWeekKey = EffectiveRunWeekKey(tower);
+                out.set_run_week_key(runWeekKey);
+                floor = (tower.current_floor() >= 1u && tower.current_floor() <= maxFloors)
+                    ? tower.current_floor()
+                    : 1u;
+                nodeKind = effectiveVersion >= turnbattle::wuxing::kRealmV2Version
+                    ? tower.current_node_kind()
+                    : turnbattle::wuxing::kRealmNodeNormal;
+                out.set_use_free_preset(tower.use_free_preset());
+                out.set_character_preset_id(tower.character_preset_id());
+                out.set_pet_preset_id(tower.pet_preset_id());
+                out.set_current_node_kind(nodeKind);
+                out.set_pending_event_kind(tower.pending_event_kind());
+                out.set_route_choice_mask(tower.route_choice_mask());
+                out.set_run_total_rounds(tower.run_total_rounds());
+                for (const uint32_t id : tower.active_sigil_ids()) {
+                    out.add_active_sigil_ids(id);
+                }
+                for (const uint32_t id : tower.pending_offer_sigil_ids()) {
+                    out.add_pending_offer_sigil_ids(id);
+                }
+                if (effectiveVersion >= turnbattle::wuxing::kRealmV2Version) {
+                    out.set_active_resonance_element(
+                        turnbattle::wuxing::ComputeActiveResonanceElement(tower.active_sigil_ids()));
+                }
+            }
+        }
+    }
+    out.set_current_floor(floor);
+    out.set_current_floor_dungeon_id(effectiveVersion >= turnbattle::wuxing::kRealmV2Version
+        ? turnbattle::wuxing::RealmNodeDungeonId(floor, nodeKind)
+        : turnbattle::wuxing::TowerFloorDungeonId(floor));
+    out.set_current_floor_leyline_element(turnbattle::wuxing::TowerFloorLeylineElement(runWeekKey, floor));
+
+    for (uint32_t modeIdx = 0u; modeIdx < 2u; ++modeIdx) {
+        const auto& cache = gRealmLeaderboards[modeIdx];
+        if (cache.weekKey != weekKey) {
+            continue;
+        }
+        for (std::size_t i = 0; i < cache.entries.size(); ++i) {
+            auto* dst = modeIdx == 0u ? out.add_weekly_leaderboard() : out.add_weekly_leaderboard_preset();
+            *dst = cache.entries[i];
+            dst->set_rank(static_cast<uint32_t>(i + 1u));
+        }
+    }
 }
 
 std::string ClampUtf8Prefix(const std::string& raw, std::size_t maxBytes) {
@@ -85,94 +347,6 @@ void CopyBookmarkToView(const SavedBattleBuildBookmark& src, SavedBattleBuildBoo
         dst.add_wuxing_sigil_ids(id);
     }
     dst.set_saved_at_ms(src.saved_at_ms());
-}
-
-void FillTowerState(entt::entity player, uint64_t nowMs, WuxingTowerStateSnapshot& out) {
-    out.Clear();
-    const uint32_t weekKey = ComputeWuxingTowerWeekKey(nowMs);
-    out.set_week_key(weekKey);
-    out.set_max_floors(turnbattle::wuxing::kTowerMaxFloors);
-
-    uint32_t floor = 1u;
-    if (tlsEcs.actorRegistry.valid(player)) {
-        if (const auto* seasonComp = tlsEcs.actorRegistry.try_get<PlayerSeasonComp>(player);
-            seasonComp != nullptr && seasonComp->has_wuxing_tower() &&
-            seasonComp->wuxing_tower().week_key() == weekKey) {
-            const auto& tower = seasonComp->wuxing_tower();
-            out.set_run_active(tower.run_active());
-            out.set_run_id(tower.run_id());
-            floor = (tower.current_floor() >= 1u && tower.current_floor() <= turnbattle::wuxing::kTowerMaxFloors)
-                ? tower.current_floor()
-                : 1u;
-            out.set_run_total_rounds(tower.run_total_rounds());
-            for (const uint32_t id : tower.active_sigil_ids()) {
-                out.add_active_sigil_ids(id);
-            }
-            for (const uint32_t id : tower.pending_offer_sigil_ids()) {
-                out.add_pending_offer_sigil_ids(id);
-            }
-            out.set_weekly_cleared_mask(tower.weekly_cleared_mask());
-            out.set_weekly_best_floor(tower.weekly_best_floor());
-            out.set_weekly_best_rounds(tower.weekly_best_rounds());
-            out.set_revision(tower.revision());
-        }
-    }
-    out.set_current_floor(floor);
-    out.set_current_floor_dungeon_id(turnbattle::wuxing::TowerFloorDungeonId(floor));
-    out.set_current_floor_leyline_element(turnbattle::wuxing::TowerFloorLeylineElement(weekKey, floor));
-
-    if (gTowerLeaderboardWeekKey == weekKey) {
-        for (std::size_t i = 0; i < gTowerWeeklyLeaderboard.size(); ++i) {
-            auto* entry = out.add_weekly_leaderboard();
-            *entry = gTowerWeeklyLeaderboard[i];
-            entry->set_rank(static_cast<uint32_t>(i + 1u));
-        }
-    }
-}
-
-void UpsertTowerLeaderboard(uint32_t weekKey, uint64_t playerId, const std::string& playerName,
-                            uint32_t bestFloor, uint32_t bestRounds, uint32_t formationId,
-                            const google::protobuf::RepeatedField<uint32_t>& sigils) {
-    if (playerId == 0 || bestFloor == 0) {
-        return;
-    }
-    if (gTowerLeaderboardWeekKey != weekKey) {
-        gTowerLeaderboardWeekKey = weekKey;
-        gTowerWeeklyLeaderboard.clear();
-    }
-    WuxingTowerLeaderboardEntry updated;
-    updated.set_player_id(playerId);
-    updated.set_player_name(playerName);
-    updated.set_best_floor(bestFloor);
-    updated.set_best_rounds(bestRounds);
-    updated.set_formation_id(formationId);
-    for (const uint32_t id : sigils) {
-        updated.add_sigil_ids(id);
-    }
-
-    auto it = std::find_if(gTowerWeeklyLeaderboard.begin(), gTowerWeeklyLeaderboard.end(),
-                           [playerId](const WuxingTowerLeaderboardEntry& e) { return e.player_id() == playerId; });
-    if (it != gTowerWeeklyLeaderboard.end()) {
-        *it = std::move(updated);
-    } else {
-        gTowerWeeklyLeaderboard.emplace_back(std::move(updated));
-    }
-
-    std::sort(gTowerWeeklyLeaderboard.begin(), gTowerWeeklyLeaderboard.end(),
-              [](const WuxingTowerLeaderboardEntry& lhs, const WuxingTowerLeaderboardEntry& rhs) {
-                  if (lhs.best_floor() != rhs.best_floor()) {
-                      return lhs.best_floor() > rhs.best_floor();
-                  }
-                  const uint32_t lr = lhs.best_rounds() == 0u ? std::numeric_limits<uint32_t>::max() : lhs.best_rounds();
-                  const uint32_t rr = rhs.best_rounds() == 0u ? std::numeric_limits<uint32_t>::max() : rhs.best_rounds();
-                  if (lr != rr) {
-                      return lr < rr;
-                  }
-                  return lhs.player_id() < rhs.player_id();
-              });
-    if (gTowerWeeklyLeaderboard.size() > kMaxTowerLeaderboardSize) {
-        gTowerWeeklyLeaderboard.resize(kMaxTowerLeaderboardSize);
-    }
 }
 
 seasonrules::RuleParams ToParams(const SeasonRuleTable& row) {
@@ -771,7 +945,7 @@ uint32_t PlayerSeasonSystem::PrepareBattleCredit(const PlayerSeasonComp& current
     if (outDelta != nullptr) {
         *outDelta = seasonrules::BattleCreditDelta{};
     }
-    // 五行幻境周常爬塔结算：仅 A 方胜利且 (week_key, run_id, floor) 与进行中轮次一致时推进首通位图并抽取三选一符印。
+    // 五行幻境 V2 / V1 结算：支持跨周保留在途轮次完局；仅同周轮次写入本周首通位图与周榜，跨周完局仅记个人历史最速。
     if (settlement.has_tower_settlement() && settlement.tower_settlement().floor() != 0u) {
         const auto& ts = settlement.tower_settlement();
         const bool won = settlement.outcome() == BATTLE_OUTCOME_SIDE_A_WIN &&
@@ -780,30 +954,67 @@ uint32_t PlayerSeasonSystem::PrepareBattleCredit(const PlayerSeasonComp& current
             return kSuccess;
         }
         auto* tower = candidate.mutable_wuxing_tower();
-        if (!tower->run_active() || tower->week_key() != ts.week_key() || tower->run_id() != ts.run_id() ||
+        const bool isV2 = tower->realm_version() >= turnbattle::wuxing::kRealmV2Version;
+        const uint32_t maxFloors = isV2 ? turnbattle::wuxing::kRealmV2MaxNodes : turnbattle::wuxing::kTowerMaxFloors;
+        const uint32_t runWeek = EffectiveRunWeekKey(*tower);
+        if (!tower->run_active() || runWeek != ts.week_key() || tower->run_id() != ts.run_id() ||
             tower->current_floor() != ts.floor() || tower->pending_offer_sigil_ids_size() != 0 ||
-            ts.floor() < 1u || ts.floor() > turnbattle::wuxing::kTowerMaxFloors) {
+            tower->pending_event_kind() != turnbattle::wuxing::kRealmEventNone ||
+            ts.floor() < 1u || ts.floor() > maxFloors) {
             return kSuccess;
         }
-        tower->set_weekly_cleared_mask(tower->weekly_cleared_mask() | (1u << (ts.floor() - 1u)));
+
+        const uint32_t currentWeekKey = ComputeWuxingTowerWeekKey(nowMs);
+        const bool sameWeekRun = (runWeek == currentWeekKey);
         tower->set_run_total_rounds(tower->run_total_rounds() + std::max<uint32_t>(1u, ts.total_rounds()));
-        if (ts.floor() > tower->weekly_best_floor()) {
-            tower->set_weekly_best_floor(ts.floor());
-            if (ts.floor() == turnbattle::wuxing::kTowerMaxFloors) {
-                tower->set_weekly_best_rounds(tower->run_total_rounds());
+
+        if (sameWeekRun) {
+            RotateTowerWeeklyStatsIfNeeded(*tower, currentWeekKey);
+            tower->set_weekly_cleared_mask(tower->weekly_cleared_mask() | (1u << (ts.floor() - 1u)));
+            if (tower->use_free_preset()) {
+                if (ts.floor() > tower->weekly_best_floor_preset()) {
+                    tower->set_weekly_best_floor_preset(ts.floor());
+                    if (ts.floor() == maxFloors) {
+                        tower->set_weekly_best_rounds_preset(tower->run_total_rounds());
+                    }
+                } else if (ts.floor() == maxFloors &&
+                           (tower->weekly_best_rounds_preset() == 0u ||
+                            tower->run_total_rounds() < tower->weekly_best_rounds_preset())) {
+                    tower->set_weekly_best_rounds_preset(tower->run_total_rounds());
+                }
+            } else {
+                if (ts.floor() > tower->weekly_best_floor()) {
+                    tower->set_weekly_best_floor(ts.floor());
+                    if (ts.floor() == maxFloors) {
+                        tower->set_weekly_best_rounds(tower->run_total_rounds());
+                    }
+                } else if (ts.floor() == maxFloors &&
+                           (tower->weekly_best_rounds() == 0u ||
+                            tower->run_total_rounds() < tower->weekly_best_rounds())) {
+                    tower->set_weekly_best_rounds(tower->run_total_rounds());
+                }
             }
-        } else if (ts.floor() == turnbattle::wuxing::kTowerMaxFloors &&
-                   (tower->weekly_best_rounds() == 0u || tower->run_total_rounds() < tower->weekly_best_rounds())) {
-            tower->set_weekly_best_rounds(tower->run_total_rounds());
         }
 
-        if (ts.floor() >= turnbattle::wuxing::kTowerMaxFloors) {
+        if (ts.floor() >= maxFloors) {
             tower->set_run_active(false);
             tower->clear_pending_offer_sigil_ids();
+            tower->set_pending_event_kind(turnbattle::wuxing::kRealmEventNone);
+            if (tower->use_free_preset()) {
+                if (tower->best_rounds_preset() == 0u || tower->run_total_rounds() < tower->best_rounds_preset()) {
+                    tower->set_best_rounds_preset(tower->run_total_rounds());
+                }
+            } else {
+                if (tower->best_rounds_self() == 0u || tower->run_total_rounds() < tower->best_rounds_self()) {
+                    tower->set_best_rounds_self(tower->run_total_rounds());
+                }
+            }
         } else {
             std::vector<uint32_t> owned(tower->active_sigil_ids().begin(), tower->active_sigil_ids().end());
-            const auto offer = turnbattle::wuxing::RollTowerSigilOffer(
-                ts.week_key(), ts.run_id(), ts.floor(), owned);
+            const auto offer = isV2
+                ? turnbattle::wuxing::RollRealmBoonOffer(
+                      runWeek, ts.run_id(), ts.floor(), tower->current_node_kind(), tower->event_reroll_count(), owned)
+                : turnbattle::wuxing::RollTowerSigilOffer(runWeek, ts.run_id(), ts.floor(), owned);
             tower->clear_pending_offer_sigil_ids();
             for (const uint32_t id : offer) {
                 tower->add_pending_offer_sigil_ids(id);
@@ -1260,6 +1471,14 @@ void PlayerSeasonSystem::SetRetroHonorTarget(entt::entity player, uint64_t nowMs
     finish(kSuccess);
 }
 
+std::string PlayerSeasonSystem::RealmLeaderboardZsetKey(uint32_t weekKey, bool useFreePreset) {
+    return "wuxing:realm:lb:{" + std::to_string(weekKey) + "}:" + (useFreePreset ? "preset" : "self");
+}
+
+std::string PlayerSeasonSystem::RealmLeaderboardMetaKey(uint32_t weekKey, bool useFreePreset) {
+    return "wuxing:realm:lb_meta:{" + std::to_string(weekKey) + "}:" + (useFreePreset ? "preset" : "self");
+}
+
 void PlayerSeasonSystem::OnTowerSettlementApplied(entt::entity player,
                                                   const PlayerSeasonComp& current,
                                                   uint64_t nowMs) {
@@ -1268,23 +1487,34 @@ void PlayerSeasonSystem::OnTowerSettlementApplied(entt::entity player,
     }
     const auto& tower = current.wuxing_tower();
     const uint32_t weekKey = ComputeWuxingTowerWeekKey(nowMs);
-    if (tower.week_key() != weekKey || tower.weekly_best_floor() == 0u) {
+    if (tower.week_key() != weekKey || EffectiveRunWeekKey(tower) != weekKey) {
+        return;
+    }
+    const bool preset = tower.use_free_preset();
+    const uint32_t bestFloor = preset ? tower.weekly_best_floor_preset() : tower.weekly_best_floor();
+    const uint32_t bestRounds = preset ? tower.weekly_best_rounds_preset() : tower.weekly_best_rounds();
+    if (bestFloor == 0u) {
         return;
     }
     const auto* guid = tlsEcs.actorRegistry.try_get<PlayerGuidComp>(player);
     const auto* profile = tlsEcs.actorRegistry.try_get<PlayerProfileComp>(player);
     const uint64_t playerId = guid != nullptr ? guid->value : 0ULL;
     const std::string playerName = profile != nullptr ? profile->name() : "";
-    UpsertTowerLeaderboard(weekKey, playerId, playerName, tower.weekly_best_floor(),
-                           tower.weekly_best_rounds(), current.equipped_formation_id(),
-                           tower.active_sigil_ids());
+    const uint32_t resonance = turnbattle::wuxing::ComputeActiveResonanceElement(tower.active_sigil_ids());
+    UpsertTowerLeaderboard(weekKey, playerId, playerName, bestFloor, bestRounds,
+                           current.equipped_formation_id(), preset, resonance, tower.active_sigil_ids());
 }
 
 uint32_t PlayerSeasonSystem::PrepareWuxingTowerContext(entt::entity player,
                                                        uint64_t nowMs,
                                                        uint32_t battleConfigId,
-                                                       WuxingTowerBattleContext& outContext) {
+                                                       WuxingTowerBattleContext& outContext,
+                                                       uint32_t* outCharPresetId,
+                                                       uint32_t* outPetPresetId) {
+    (void)nowMs;
     outContext.Clear();
+    if (outCharPresetId != nullptr) *outCharPresetId = 0u;
+    if (outPetPresetId != nullptr) *outPetPresetId = 0u;
     if (!tlsEcs.actorRegistry.valid(player)) {
         return kEntityIsNull;
     }
@@ -1292,25 +1522,52 @@ uint32_t PlayerSeasonSystem::PrepareWuxingTowerContext(entt::entity player,
     if (seasonComp == nullptr || !seasonComp->has_wuxing_tower()) {
         return kFeatureUnavailable;
     }
-    const uint32_t weekKey = ComputeWuxingTowerWeekKey(nowMs);
     const auto& tower = seasonComp->wuxing_tower();
-    if (tower.week_key() != weekKey || !tower.run_active() || tower.run_id() == 0u ||
-        tower.current_floor() < 1u || tower.current_floor() > turnbattle::wuxing::kTowerMaxFloors ||
-        tower.pending_offer_sigil_ids_size() != 0) {
+    const bool isV2 = tower.realm_version() >= turnbattle::wuxing::kRealmV2Version;
+    const uint32_t maxFloors = isV2 ? turnbattle::wuxing::kRealmV2MaxNodes : turnbattle::wuxing::kTowerMaxFloors;
+    if (!tower.run_active() || tower.run_id() == 0u ||
+        tower.current_floor() < 1u || tower.current_floor() > maxFloors ||
+        tower.pending_offer_sigil_ids_size() != 0 ||
+        tower.pending_event_kind() != turnbattle::wuxing::kRealmEventNone) {
         return kFeatureUnavailable;
     }
-    if (battleConfigId != turnbattle::wuxing::TowerFloorDungeonId(tower.current_floor())) {
+    const uint32_t nodeKind = isV2 ? tower.current_node_kind() : turnbattle::wuxing::kRealmNodeNormal;
+    if (isV2 && !turnbattle::wuxing::IsRealmCombatNodeKind(nodeKind)) {
+        return kFeatureUnavailable;
+    }
+    const uint32_t expectedDungeon = isV2
+        ? turnbattle::wuxing::RealmNodeDungeonId(tower.current_floor(), nodeKind)
+        : turnbattle::wuxing::TowerFloorDungeonId(tower.current_floor());
+    if (battleConfigId != expectedDungeon) {
         return kInvalidParameter;
     }
-    outContext.set_week_key(weekKey);
+    const uint32_t runWeekKey = EffectiveRunWeekKey(tower);
+    outContext.set_week_key(runWeekKey);
     outContext.set_run_id(tower.run_id());
     outContext.set_floor(tower.current_floor());
     outContext.set_leyline_element(static_cast<TournamentLeylineElement>(
-        turnbattle::wuxing::TowerFloorLeylineElement(weekKey, tower.current_floor())));
+        turnbattle::wuxing::TowerFloorLeylineElement(runWeekKey, tower.current_floor())));
+    outContext.set_realm_version(isV2 ? tower.realm_version() : 1u);
+    outContext.set_node_kind(nodeKind);
+    outContext.set_use_free_preset(tower.use_free_preset());
     for (const uint32_t sigilId : tower.active_sigil_ids()) {
-        if (turnbattle::wuxing::IsValidTowerSigilId(sigilId)) {
+        if (turnbattle::wuxing::IsValidTowerOrBoonId(sigilId)) {
             outContext.add_active_sigil_ids(sigilId);
         }
+    }
+    if (isV2) {
+        outContext.set_active_resonance_element(
+            turnbattle::wuxing::ComputeActiveResonanceElement(outContext.active_sigil_ids()));
+    }
+    if (tower.use_free_preset()) {
+        const uint32_t charId = turnbattle::wuxing::IsValidFairCharPresetId(tower.character_preset_id())
+            ? tower.character_preset_id()
+            : turnbattle::wuxing::kDefaultFairCharPresetId;
+        const uint32_t petId = turnbattle::wuxing::IsValidFairPetPresetId(tower.pet_preset_id())
+            ? tower.pet_preset_id()
+            : turnbattle::wuxing::kDefaultFairPetPresetId;
+        if (outCharPresetId != nullptr) *outCharPresetId = charId;
+        if (outPetPresetId != nullptr) *outPetPresetId = petId;
     }
     return kSuccess;
 }
@@ -1381,6 +1638,13 @@ uint32_t PlayerSeasonSystem::GetWuxingTowerState(entt::entity player, uint64_t n
 
 void PlayerSeasonSystem::StartWuxingTowerRun(entt::entity player, uint64_t nowMs,
                                              StartWuxingTowerRunResponse& response) {
+    StartWuxingTowerRunRequest defaultReq;
+    StartWuxingTowerRun(player, nowMs, defaultReq, response);
+}
+
+void PlayerSeasonSystem::StartWuxingTowerRun(entt::entity player, uint64_t nowMs,
+                                             const StartWuxingTowerRunRequest& request,
+                                             StartWuxingTowerRunResponse& response) {
     response.Clear();
     const auto finish = [&](uint32_t err) {
         if (err != kSuccess) {
@@ -1401,17 +1665,38 @@ void PlayerSeasonSystem::StartWuxingTowerRun(entt::entity player, uint64_t nowMs
         finish(writableErr);
         return;
     }
+
+    uint32_t charPresetId = 0u;
+    uint32_t petPresetId = 0u;
+    if (request.use_free_preset()) {
+        charPresetId = request.character_preset_id() == 0u
+            ? turnbattle::wuxing::kDefaultFairCharPresetId
+            : request.character_preset_id();
+        petPresetId = request.pet_preset_id() == 0u
+            ? turnbattle::wuxing::kDefaultFairPetPresetId
+            : request.pet_preset_id();
+        if (!turnbattle::wuxing::IsValidFairCharPresetId(charPresetId) ||
+            !turnbattle::wuxing::IsValidFairPetPresetId(petPresetId)) {
+            finish(kInvalidParameter);
+            return;
+        }
+    }
+
     const uint32_t weekKey = ComputeWuxingTowerWeekKey(nowMs);
     auto* tower = seasonComp->mutable_wuxing_tower();
-    if (tower->week_key() != weekKey) {
-        tower->set_week_key(weekKey);
-        tower->set_weekly_cleared_mask(0u);
-        tower->set_weekly_best_floor(0u);
-        tower->set_weekly_best_rounds(0u);
-    }
+    RotateTowerWeeklyStatsIfNeeded(*tower, weekKey);
+    tower->set_realm_version(turnbattle::wuxing::kRealmV2Version);
+    tower->set_run_week_key(weekKey);
     tower->set_run_active(true);
     tower->set_run_id(tower->run_id() + 1u);
     tower->set_current_floor(1u);
+    tower->set_current_node_kind(turnbattle::wuxing::kRealmNodeNormal);
+    tower->set_pending_event_kind(turnbattle::wuxing::kRealmEventNone);
+    tower->set_event_reroll_count(0u);
+    tower->set_route_choice_mask(0u);
+    tower->set_use_free_preset(request.use_free_preset());
+    tower->set_character_preset_id(charPresetId);
+    tower->set_pet_preset_id(petPresetId);
     tower->set_run_total_rounds(0u);
     tower->clear_active_sigil_ids();
     tower->clear_pending_offer_sigil_ids();
@@ -1445,12 +1730,13 @@ void PlayerSeasonSystem::PickWuxingTowerSigil(entt::entity player, uint64_t nowM
         finish(writableErr);
         return;
     }
-    const uint32_t weekKey = ComputeWuxingTowerWeekKey(nowMs);
     auto* tower = seasonComp->mutable_wuxing_tower();
-    if (tower->week_key() != weekKey || !tower->run_active() ||
+    const bool isV2 = tower->realm_version() >= turnbattle::wuxing::kRealmV2Version;
+    const uint32_t maxFloors = isV2 ? turnbattle::wuxing::kRealmV2MaxNodes : turnbattle::wuxing::kTowerMaxFloors;
+    if (!tower->run_active() ||
         request.expected_run_id() != tower->run_id() ||
         tower->pending_offer_sigil_ids_size() == 0 ||
-        !turnbattle::wuxing::IsValidTowerSigilId(request.sigil_id())) {
+        !turnbattle::wuxing::IsValidTowerOrBoonId(request.sigil_id())) {
         finish(kInvalidParameter);
         return;
     }
@@ -1461,8 +1747,12 @@ void PlayerSeasonSystem::PickWuxingTowerSigil(entt::entity player, uint64_t nowM
     }
     tower->add_active_sigil_ids(request.sigil_id());
     tower->clear_pending_offer_sigil_ids();
-    if (tower->current_floor() < turnbattle::wuxing::kTowerMaxFloors) {
-        tower->set_current_floor(tower->current_floor() + 1u);
+    if (tower->current_floor() < maxFloors) {
+        const uint32_t nextFloor = tower->current_floor() + 1u;
+        tower->set_current_floor(nextFloor);
+        if (isV2) {
+            tower->set_current_node_kind(turnbattle::wuxing::RealmNodeDefaultKind(nextFloor));
+        }
     }
     if (tower->revision() < std::numeric_limits<uint64_t>::max()) {
         tower->set_revision(tower->revision() + 1u);
@@ -1501,9 +1791,200 @@ void PlayerSeasonSystem::AbandonWuxingTowerRun(entt::entity player, uint64_t now
     }
     tower->set_run_active(false);
     tower->set_current_floor(1u);
+    tower->set_current_node_kind(turnbattle::wuxing::kRealmNodeNormal);
+    tower->set_pending_event_kind(turnbattle::wuxing::kRealmEventNone);
+    tower->set_route_choice_mask(0u);
+    tower->set_event_reroll_count(0u);
     tower->set_run_total_rounds(0u);
     tower->clear_active_sigil_ids();
     tower->clear_pending_offer_sigil_ids();
+    if (tower->revision() < std::numeric_limits<uint64_t>::max()) {
+        tower->set_revision(tower->revision() + 1u);
+    }
+    (void)gSeasonPersistFn(player);
+    finish(kSuccess);
+}
+
+void PlayerSeasonSystem::ChooseWuxingRealmBranch(entt::entity player, uint64_t nowMs,
+                                                 const ChooseWuxingRealmBranchRequest& request,
+                                                 ChooseWuxingRealmBranchResponse& response) {
+    response.Clear();
+    const auto finish = [&](uint32_t err) {
+        if (err != kSuccess) {
+            response.mutable_error_message()->set_id(err);
+        }
+        FillTowerState(player, nowMs, *response.mutable_state());
+    };
+    if (!tlsEcs.actorRegistry.valid(player)) {
+        response.mutable_error_message()->set_id(kEntityIsNull);
+        return;
+    }
+    auto* seasonComp = tlsEcs.actorRegistry.try_get<PlayerSeasonComp>(player);
+    if (seasonComp == nullptr) {
+        finish(kSeasonUnavailable);
+        return;
+    }
+    if (const uint32_t writableErr = CheckWritable(player); writableErr != kSuccess) {
+        finish(writableErr);
+        return;
+    }
+    auto* tower = seasonComp->mutable_wuxing_tower();
+    if (!tower->run_active() || tower->realm_version() < turnbattle::wuxing::kRealmV2Version ||
+        request.expected_run_id() != tower->run_id() ||
+        tower->current_node_kind() != turnbattle::wuxing::kRealmNodeNeedBranch ||
+        tower->pending_offer_sigil_ids_size() != 0 ||
+        tower->pending_event_kind() != turnbattle::wuxing::kRealmEventNone ||
+        (request.branch() != turnbattle::wuxing::kRealmBranchElite &&
+         request.branch() != turnbattle::wuxing::kRealmBranchSpecial)) {
+        finish(kInvalidParameter);
+        return;
+    }
+    if (request.branch() == turnbattle::wuxing::kRealmBranchElite) {
+        tower->set_current_node_kind(turnbattle::wuxing::kRealmNodeElite);
+    } else {
+        const bool isNode2 = tower->current_floor() <= 2u;
+        tower->set_route_choice_mask(tower->route_choice_mask() | (isNode2 ? 1u : 2u));
+        tower->set_current_node_kind(isNode2 ? turnbattle::wuxing::kRealmNodeEvent : turnbattle::wuxing::kRealmNodeRest);
+        tower->set_pending_event_kind(isNode2 ? turnbattle::wuxing::kRealmEventEncounter : turnbattle::wuxing::kRealmEventRest);
+    }
+    if (tower->revision() < std::numeric_limits<uint64_t>::max()) {
+        tower->set_revision(tower->revision() + 1u);
+    }
+    (void)gSeasonPersistFn(player);
+    finish(kSuccess);
+}
+
+void PlayerSeasonSystem::ResolveWuxingRealmEvent(entt::entity player, uint64_t nowMs,
+                                                 const ResolveWuxingRealmEventRequest& request,
+                                                 ResolveWuxingRealmEventResponse& response) {
+    response.Clear();
+    const auto finish = [&](uint32_t err) {
+        if (err != kSuccess) {
+            response.mutable_error_message()->set_id(err);
+        }
+        FillTowerState(player, nowMs, *response.mutable_state());
+    };
+    if (!tlsEcs.actorRegistry.valid(player)) {
+        response.mutable_error_message()->set_id(kEntityIsNull);
+        return;
+    }
+    auto* seasonComp = tlsEcs.actorRegistry.try_get<PlayerSeasonComp>(player);
+    if (seasonComp == nullptr) {
+        finish(kSeasonUnavailable);
+        return;
+    }
+    if (const uint32_t writableErr = CheckWritable(player); writableErr != kSuccess) {
+        finish(writableErr);
+        return;
+    }
+    auto* tower = seasonComp->mutable_wuxing_tower();
+    if (!tower->run_active() || tower->realm_version() < turnbattle::wuxing::kRealmV2Version ||
+        request.expected_run_id() != tower->run_id() ||
+        tower->pending_offer_sigil_ids_size() != 0 ||
+        (tower->pending_event_kind() != turnbattle::wuxing::kRealmEventEncounter &&
+         tower->pending_event_kind() != turnbattle::wuxing::kRealmEventRest) ||
+        (request.option_index() != 1u && request.option_index() != 2u)) {
+        finish(kInvalidParameter);
+        return;
+    }
+
+    const uint32_t currentWeekKey = ComputeWuxingTowerWeekKey(nowMs);
+    const uint32_t runWeekKey = EffectiveRunWeekKey(*tower);
+    const uint32_t floor = tower->current_floor();
+    std::vector<uint32_t> owned(tower->active_sigil_ids().begin(), tower->active_sigil_ids().end());
+
+    auto markNodeClearedIfSameWeek = [&]() {
+        if (runWeekKey == currentWeekKey && floor >= 1u && floor <= turnbattle::wuxing::kRealmV2MaxNodes) {
+            RotateTowerWeeklyStatsIfNeeded(*tower, currentWeekKey);
+            tower->set_weekly_cleared_mask(tower->weekly_cleared_mask() | (1u << (floor - 1u)));
+        }
+    };
+
+    const uint32_t eventKind = tower->pending_event_kind();
+    if (eventKind == turnbattle::wuxing::kRealmEventEncounter) {
+        if (request.option_index() == 1u) {
+            // 道缘寻策：免战确定性获赠 1 枚未持有灵品奇策，直接推进至下一关。
+            const uint32_t boonId = turnbattle::wuxing::RollRealmEncounterBoon(runWeekKey, tower->run_id(), owned);
+            if (boonId != 0u) {
+                tower->add_active_sigil_ids(boonId);
+                response.set_granted_boon_id(boonId);
+            }
+            markNodeClearedIfSameWeek();
+            tower->set_pending_event_kind(turnbattle::wuxing::kRealmEventNone);
+            const uint32_t nextFloor = std::min<uint32_t>(turnbattle::wuxing::kRealmV2MaxNodes, floor + 1u);
+            tower->set_current_floor(nextFloor);
+            tower->set_current_node_kind(turnbattle::wuxing::RealmNodeDefaultKind(nextFloor));
+        } else {
+            // 五行悟道：弹出 3 选 1 奇策候选（选完推进至下一关）。
+            markNodeClearedIfSameWeek();
+            tower->set_pending_event_kind(turnbattle::wuxing::kRealmEventNone);
+            const auto offers = turnbattle::wuxing::RollRealmBoonOffer(
+                runWeekKey, tower->run_id(), floor, turnbattle::wuxing::kRealmNodeNormal,
+                tower->event_reroll_count(), owned);
+            tower->clear_pending_offer_sigil_ids();
+            for (const uint32_t id : offers) {
+                tower->add_pending_offer_sigil_ids(id);
+            }
+        }
+    } else {
+        // 第 4 关右路：秘境休整
+        if (request.option_index() == 1u) {
+            // 奇策淬炼升品：将指定或首枚可升品奇策升级为同五行更高品质奇策（全仙品时兜底赠 1 枚未持有奇策）。
+            int targetIdx = -1;
+            uint32_t upgradedId = 0u;
+            if (request.target_boon_id() != 0u) {
+                for (int i = 0; i < tower->active_sigil_ids_size(); ++i) {
+                    if (tower->active_sigil_ids(i) == request.target_boon_id()) {
+                        const uint32_t cand = turnbattle::wuxing::NextUpgradeBoonId(request.target_boon_id(), owned);
+                        if (cand != 0u) {
+                            targetIdx = i;
+                            upgradedId = cand;
+                        }
+                        break;
+                    }
+                }
+            }
+            if (targetIdx < 0) {
+                for (int i = 0; i < tower->active_sigil_ids_size(); ++i) {
+                    const uint32_t cand = turnbattle::wuxing::NextUpgradeBoonId(tower->active_sigil_ids(i), owned);
+                    if (cand != 0u) {
+                        targetIdx = i;
+                        upgradedId = cand;
+                        break;
+                    }
+                }
+            }
+            if (targetIdx >= 0 && upgradedId != 0u) {
+                tower->set_active_sigil_ids(targetIdx, upgradedId);
+                response.set_granted_boon_id(upgradedId);
+            } else {
+                const uint32_t fallbackId = turnbattle::wuxing::RollRealmEncounterBoon(runWeekKey, tower->run_id(), owned);
+                if (fallbackId != 0u) {
+                    tower->add_active_sigil_ids(fallbackId);
+                    response.set_granted_boon_id(fallbackId);
+                }
+            }
+            markNodeClearedIfSameWeek();
+            tower->set_pending_event_kind(turnbattle::wuxing::kRealmEventNone);
+            const uint32_t nextFloor = std::min<uint32_t>(turnbattle::wuxing::kRealmV2MaxNodes, floor + 1u);
+            tower->set_current_floor(nextFloor);
+            tower->set_current_node_kind(turnbattle::wuxing::RealmNodeDefaultKind(nextFloor));
+        } else {
+            // 同源寻策：偏向当前持有最多同系五行的 3 选 1 奇策，冲刺 3 同系共鸣。
+            markNodeClearedIfSameWeek();
+            tower->set_pending_event_kind(turnbattle::wuxing::kRealmEventNone);
+            tower->set_event_reroll_count(tower->event_reroll_count() + 1u);
+            const uint32_t preferredElem = turnbattle::wuxing::DominantBoonElement(owned);
+            const auto offers = turnbattle::wuxing::RollRealmBoonOffer(
+                runWeekKey, tower->run_id(), floor, turnbattle::wuxing::kRealmNodeElite,
+                tower->event_reroll_count(), owned, preferredElem);
+            tower->clear_pending_offer_sigil_ids();
+            for (const uint32_t id : offers) {
+                tower->add_pending_offer_sigil_ids(id);
+            }
+        }
+    }
+
     if (tower->revision() < std::numeric_limits<uint64_t>::max()) {
         tower->set_revision(tower->revision() + 1u);
     }
@@ -1569,7 +2050,7 @@ void PlayerSeasonSystem::SaveBattleBuildBookmark(entt::entity player, uint64_t n
     }
     target->clear_wuxing_sigil_ids();
     for (int i = 0; i < src.wuxing_sigil_ids_size() && i < kMaxBookmarkSigils; ++i) {
-        if (turnbattle::wuxing::IsValidTowerSigilId(src.wuxing_sigil_ids(i))) {
+        if (turnbattle::wuxing::IsValidTowerOrBoonId(src.wuxing_sigil_ids(i))) {
             target->add_wuxing_sigil_ids(src.wuxing_sigil_ids(i));
         }
     }
@@ -1624,6 +2105,9 @@ void PlayerSeasonSystem::SetPersistForTest(PersistFn fn) {
 }
 
 void PlayerSeasonSystem::ResetTowerLeaderboardForTest() {
-    gTowerLeaderboardWeekKey = 0u;
-    gTowerWeeklyLeaderboard.clear();
+    for (auto& cache : gRealmLeaderboards) {
+        cache.weekKey = 0u;
+        cache.lastRedisPullMs = 0u;
+        cache.entries.clear();
+    }
 }

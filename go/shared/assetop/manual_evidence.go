@@ -131,7 +131,7 @@ func (r ManualRow) Witness() QuietWitness {
 }
 
 // Matches 报告行是否还是取见证时的样子:租约、发送时刻、attempts 都没变。终结的条件写用它的口径:data_service 回收 settle
-// 在行锁下比、trade 的条件写按同样三列写 SQL(guild 的那条 2026-11-26 还只比前两列,待补)。条件写紧跟着最后一次读。
+// 在行锁下比、trade 与 guild 的条件写按同样三列写 SQL。条件写紧跟着最后一次读。
 func (w QuietWitness) Matches(r ManualRow) bool {
 	return w == r.Witness()
 }

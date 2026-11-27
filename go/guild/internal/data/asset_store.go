@@ -254,9 +254,11 @@ const (
 		" SET `status` = ?, `resolved_by` = ?, `resolve_reason` = ?, `lease_until_ms` = 0," +
 		" `next_attempt_ms` = ?, `updated_ms` = ?" +
 		" WHERE `op_id` = ? AND `status` = ?"
-	// assetopfix 的人工终结(ResolveManuallyIfQuiet):在上一条之外,要求租约与发送时刻仍是读证据时的值。
+	// assetopfix 的人工终结(ResolveManuallyIfQuiet):在上一条之外,要求租约、发送时刻与 attempts 仍是读证据时的值。
 	// 任何领取都会改 lease_until_ms(sqlClaimAssetOp),发过请求的重排会推进 last_send_ms:读证据之后只要有人领过、发过,就落空。
-	sqlResolveAssetOpQuiet = sqlResolveAssetOp + " AND `lease_until_ms` = ? AND `last_send_ms` = ?"
+	// 领了又重排完的行租约回到 0:只领没发(本地 NOT_HERE)不推进 last_send_ms,钟慢的副本发过请求也推不动它,
+	// 这两种行上只有 attempts 变了,靠它落空。
+	sqlResolveAssetOpQuiet = sqlResolveAssetOp + " AND `lease_until_ms` = ? AND `last_send_ms` = ? AND `attempts` = ?"
 	// 自动放弃(assetop.Abandoner.Abandon,设计 §6.3 条件 6):以 (op_id, PENDING, lease_token) 为条件终结为 ABANDONED。
 	// 比 Finalize / 人工终结多带令牌:放弃只在"持租约期间没人能发请求"时才成立,租约中途被接管(令牌对不上)必须落空。
 	// 与人工终结一样不置 durable(不是 scene 确认的结局)、不改 last_outcome / last_reason(保留最后一次真实答复作证据)、
@@ -724,19 +726,20 @@ func (s *GuildAssetStore) ResolveManually(ctx context.Context, r assetop.ManualR
 		int32(final), r.Operator, r.Reason, nowMs, nowMs, r.OpID, PendingStatus())
 }
 
-// ResolveManuallyIfQuiet 同 ResolveManually(同一份对侧账),另要求行上的 lease_until_ms / last_send_ms 仍是 witness
-// (assetop.QuietWitness:assetopfix 读证据时这一行的租约与发送时刻,trade 工具用同一个类型)。读证据之后只要有人领过这一行
-// (领取必改 lease_until_ms)或发过请求(重排推进 last_send_ms),CAS 就落空,读到的证据作废,要重新核对。
+// ResolveManuallyIfQuiet 同 ResolveManually(同一份对侧账),另要求行上的 lease_until_ms / last_send_ms / attempts 仍是 witness
+// (assetop.QuietWitness:assetopfix 最后一次读行时的租约、发送时刻与 attempts,trade 工具用同一个类型)。读证据之后只要有人
+// 领过这一行(领取必改 lease_until_ms)、发过请求(重排推进 last_send_ms)或重排过(attempts 加一;只领没发、钟慢副本发过
+// 请求而 last_send_ms 推不动时,行上只有它变了),CAS 就落空,读到的证据作废,要重新核对。
 // 「写权行已释放、已提交账本没见过」只说明读的那一刻没应用;没有这一条,读完之后玩家恰好上线、唤醒投递,
 // scene 应用了而这边判了 aborted,就是一物两得。
-// 落空回 (false, nil):行已不是 PENDING,或读证据之后有人领过它。
+// 落空回 (false, nil):行已不是 PENDING,或读证据之后有人领过、排过它。
 func (s *GuildAssetStore) ResolveManuallyIfQuiet(ctx context.Context, r assetop.ManualResolution, witness assetop.QuietWitness, nowMs uint64) (bool, error) {
 	final, err := manualFinalRecord(r)
 	if err != nil {
 		return false, err
 	}
 	return s.terminate(ctx, r.OpID, r.Final, nowMs, "manual resolve", sqlResolveAssetOpQuiet,
-		int32(final), r.Operator, r.Reason, nowMs, nowMs, r.OpID, PendingStatus(), witness.LeaseUntilMs, witness.LastSendMs)
+		int32(final), r.Operator, r.Reason, nowMs, nowMs, r.OpID, PendingStatus(), witness.LeaseUntilMs, witness.LastSendMs, witness.Attempts)
 }
 
 // manualFinalRecord 是两种人工终结在碰库之前共同的校验:能映射成终态库值,审计两列不超列契约。

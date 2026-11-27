@@ -323,8 +323,8 @@ func TestRunResolve_ObservationWindowRefusesWhenTheRowChanged(t *testing.T) {
 }
 
 // 观察期间只有 attempts 变了(只领没发的本地重排,或钟慢的副本发过、结局不明又重排):跨窗口不比它,照样终结,
-// 条件写带第二次读到的见证(attempts 是新的)。guild 的条件写 SQL 还没比 attempts(asset_store.go 待补),
-// 第二次读到条件写之间只靠租约、发送时刻两列兜底;钟慢副本那次发送若被 scene 应用,由下一条用例的账本重判覆盖。
+// 条件写带第二次读到的见证(attempts 是新的),SQL 按三列比(asset_store.go 的 sqlResolveAssetOpQuiet),
+// 第二次读到条件写之间再有重排也落空;钟慢副本那次发送若被 scene 应用,由下一条用例的账本重判覆盖。
 func TestRunResolve_ObservationWindowToleratesAttemptsOnlyAndUsesTheSecondRead(t *testing.T) {
 	row := stuckRow(t)
 	store := &fakeStore{row: row, resolved: true}

@@ -1860,7 +1860,7 @@ func TestResolveManuallyIfQuiet_MissesAfterAClaim(t *testing.T) {
 	read, found, err := f.store.GetOp(f.ctx, 451)
 	require.NoError(t, err)
 	require.True(t, found)
-	witness := assetop.QuietWitness{LeaseUntilMs: read.LeaseUntilMs, LastSendMs: read.LastSendMs}
+	witness := assetop.QuietWitness{LeaseUntilMs: read.LeaseUntilMs, LastSendMs: read.LastSendMs, Attempts: read.Attempts}
 
 	_, claimed, err := f.store.Claim(f.ctx, 451, testNowMs, testNowMs+econLeaseMs, testNowMs+3_600_000, 0xbeef)
 	require.NoError(t, err)
@@ -1874,7 +1874,7 @@ func TestResolveManuallyIfQuiet_MissesAfterAClaim(t *testing.T) {
 
 	fresh, _, err := f.store.GetOp(f.ctx, 451)
 	require.NoError(t, err)
-	resolved, err = f.store.ResolveManuallyIfQuiet(f.ctx, manual, assetop.QuietWitness{LeaseUntilMs: fresh.LeaseUntilMs, LastSendMs: fresh.LastSendMs}, testNowMs+2)
+	resolved, err = f.store.ResolveManuallyIfQuiet(f.ctx, manual, assetop.QuietWitness{LeaseUntilMs: fresh.LeaseUntilMs, LastSendMs: fresh.LastSendMs, Attempts: fresh.Attempts}, testNowMs+2)
 	require.NoError(t, err)
 	assert.True(t, resolved, "witness 与库里一致才终结")
 	stored := econRecord(t, f, 451)
@@ -1898,7 +1898,7 @@ func TestResolveManuallyIfQuiet_KeepsTheLastSceneAnswer(t *testing.T) {
 	read, _, err := f.store.GetOp(f.ctx, 452)
 	require.NoError(t, err)
 	manual := assetop.ManualResolution{OpID: 452, Final: assetop.StatusAborted, Operator: "ops-carol", Reason: "账本证实从未应用"}
-	resolved, err := f.store.ResolveManuallyIfQuiet(f.ctx, manual, assetop.QuietWitness{LeaseUntilMs: read.LeaseUntilMs, LastSendMs: read.LastSendMs}, testNowMs+2)
+	resolved, err := f.store.ResolveManuallyIfQuiet(f.ctx, manual, assetop.QuietWitness{LeaseUntilMs: read.LeaseUntilMs, LastSendMs: read.LastSendMs, Attempts: read.Attempts}, testNowMs+2)
 	require.NoError(t, err)
 	require.True(t, resolved)
 
@@ -1908,6 +1908,46 @@ func TestResolveManuallyIfQuiet_KeepsTheLastSceneAnswer(t *testing.T) {
 	assert.Equal(t, assetop.ReasonBagFull, stored.GetLastReason(), "last_reason 是最后一次 scene 答复")
 	assert.Equal(t, uint32(1), stored.GetDurable(), "durable 描述的是那次答复,人工终结不改它")
 	assert.Equal(t, "ops-carol", stored.GetResolvedBy(), "谁终结的看 resolved_by")
+}
+
+// TestResolveManuallyIfQuiet_MissesWhenOnlyAttemptsMoved:读证据之后又领了一次、按本地 NOT_HERE 重排,租约回到 0、
+// last_send_ms 不动,行上只有 attempts 变了。钟慢的副本发过请求(last_send_ms 推不动)、结局不明重排之后也是这个形状,
+// 所以条件写要比 attempts,照样落空;按新读的值再来才终结。
+func TestResolveManuallyIfQuiet_MissesWhenOnlyAttemptsMoved(t *testing.T) {
+	f := openEconomyFixture(t)
+	const player uint64 = 8593
+	notHere := assetop.Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_NOT_HERE, Local: true}
+	econInsertOp(t, f, econShopRecord(t, 453, player, testNowMs-100_000, 9))
+	_, claimed, err := f.store.Claim(f.ctx, 453, testNowMs, testNowMs+econLeaseMs, testNowMs+3_600_000, 0xd00d)
+	require.NoError(t, err)
+	require.True(t, claimed)
+	require.NoError(t, f.store.Reschedule(f.ctx, assetop.Op{OpID: 453, PlayerID: player, LeaseToken: 0xd00d}, testNowMs+60_000, notHere, testNowMs+1))
+	read, _, err := f.store.GetOp(f.ctx, 453)
+	require.NoError(t, err)
+	witness := assetop.QuietWitness{LeaseUntilMs: read.LeaseUntilMs, LastSendMs: read.LastSendMs, Attempts: read.Attempts}
+
+	_, claimed, err = f.store.Claim(f.ctx, 453, testNowMs+10, testNowMs+10+econLeaseMs, testNowMs+3_600_000, 0xd00e)
+	require.NoError(t, err)
+	require.True(t, claimed)
+	require.NoError(t, f.store.Reschedule(f.ctx, assetop.Op{OpID: 453, PlayerID: player, LeaseToken: 0xd00e}, testNowMs+120_000, notHere, testNowMs+11))
+	after, _, err := f.store.GetOp(f.ctx, 453)
+	require.NoError(t, err)
+	require.Equal(t, witness.LeaseUntilMs, after.LeaseUntilMs, "租约又回到读证据时的值")
+	require.Equal(t, witness.LastSendMs, after.LastSendMs, "本地重排不推进 last_send_ms")
+	require.Equal(t, witness.Attempts+1, after.Attempts)
+
+	manual := assetop.ManualResolution{OpID: 453, Final: assetop.StatusAborted, Operator: "ops-dave", Reason: "账本证实从未应用"}
+	resolved, err := f.store.ResolveManuallyIfQuiet(f.ctx, manual, witness, testNowMs+12)
+	require.NoError(t, err)
+	assert.False(t, resolved, "读证据之后又排过一次,证据作废")
+	assert.Equal(t, pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_PENDING, econRecord(t, f, 453).GetStatus())
+	assert.Empty(t, econRecord(t, f, 453).GetResolvedBy())
+
+	resolved, err = f.store.ResolveManuallyIfQuiet(f.ctx, manual,
+		assetop.QuietWitness{LeaseUntilMs: after.LeaseUntilMs, LastSendMs: after.LastSendMs, Attempts: after.Attempts}, testNowMs+13)
+	require.NoError(t, err)
+	assert.True(t, resolved, "见证与库里一致才终结")
+	assert.Equal(t, pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_ABORTED, econRecord(t, f, 453).GetStatus())
 }
 
 // ── 离帮 / 被踢 / 解散提前截止 ───────────────────────────────

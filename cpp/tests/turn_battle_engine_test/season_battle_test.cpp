@@ -2236,3 +2236,95 @@ TEST_F(SeasonBattleTest, DataDrivenResonancePrimitivesR5ToR8AndEffect4And5AndRol
         EXPECT_EQ(settle.season_seal_resonance_count(), 1u);
     }
 }
+
+TEST_F(SeasonBattleTest, WuxingRealmV2BoonsResonanceRecursionGuardAndSettlementEcho) {
+    auto mem = std::make_shared<MemoryBattleDataProvider>();
+    SetupBossTrialData(*mem, 101, turnbattle::kBossTrialKindBreakRejuv, /*difficulty=*/1, /*roundLimit=*/12, 5000, 200);
+    // 挂一个耗蓝主动技能用于验证 621 润脉免耗（每回合首招 0 蓝）
+    auto& skill = mem->AddSkill(98001);
+    skill.Clear();
+    skill.set_id(98001);
+    skill.set_battle_model(0);
+    skill.add_skill_type(turnbattle::kSkillTypeBitGeneral);
+    skill.add_targeting_mode(1);
+    skill.set_damage_type(combatdamage::kMagicDamage);
+    skill.set_base_damage(400);
+    skill.set_attack_multiplier(1.0);
+    auto* cost = skill.add_cost_resource();
+    cost->set_cost_resource_id(turnbattle::kSkillCostResourceMana);
+    cost->set_cost_resource_cost(200);
+
+    auto req = MakeBossTrialRequest(6801, 101, 1, 200);
+    auto* p = req.mutable_players(0);
+    p->set_physical_attack(500);
+    p->set_magic_attack(500);
+    p->set_max_mana(1000);
+    p->mutable_base_attributes()->set_mana(1000);
+    p->add_skill_table_ids(98001);
+    auto* tc = p->mutable_tower_context();
+    tc->set_week_key(202648);
+    tc->set_run_id(19);
+    tc->set_floor(5);
+    tc->set_realm_version(turnbattle::wuxing::kRealmV2Version);
+    tc->set_node_kind(turnbattle::wuxing::kRealmNodeElite);
+    tc->set_use_free_preset(true);
+    tc->set_leyline_element(TOURNAMENT_LEYLINE_FIRE);
+    // 3 火奇策（631 焚盾爆炎 + 632 孤注焚天 + 633 离火燃魂 -> 触发 3 火共鸣）+ 621 润脉免耗 + 643 坤元借力
+    tc->add_active_sigil_ids(turnbattle::wuxing::kBoonFireShieldBlast);
+    tc->add_active_sigil_ids(turnbattle::wuxing::kBoonFireLowHpFury);
+    tc->add_active_sigil_ids(turnbattle::wuxing::kBoonFireRoundEndBurn);
+    tc->add_active_sigil_ids(turnbattle::wuxing::kBoonWaterFreeFirstCast);
+    tc->add_active_sigil_ids(turnbattle::wuxing::kBoonEarthShieldStrike);
+
+    TurnBattleEngine engine(mem);
+    ASSERT_TRUE(engine.Initialize(req));
+    EXPECT_TRUE(engine.UsesFreePreset());
+    // 643 坤元借力赋予 18% 最大气血护盾（20000 * 18% = 3600）
+    EXPECT_EQ(engine.TournamentEarthShieldOf(30001), 3600u);
+
+    const auto initState = engine.BuildStateSnapshot();
+    ASSERT_TRUE(initState.has_tower_context());
+    EXPECT_EQ(initState.tower_context().realm_version(), 2u);
+    EXPECT_EQ(initState.tower_context().node_kind(), turnbattle::wuxing::kRealmNodeElite);
+    EXPECT_EQ(initState.tower_context().active_resonance_element(), turnbattle::wuxing::kElementFire);
+
+    uint64_t bossId = 0;
+    for (const auto& a : initState.actors()) {
+        if (a.team_index() == 1 && a.is_boss()) {
+            bossId = a.actor_id();
+            // 5 层精英气血倍率：82 + 4*10 + 16 = 138%（5000 -> 6900）
+            EXPECT_EQ(a.max_health(), 6900u);
+        }
+    }
+    ASSERT_NE(bossId, 0u);
+
+    // 第 1 回合施放耗蓝 200 的技能 98001：621 润脉免耗必须免除蓝耗，且回合末 633 离火燃魂触发灼伤
+    ASSERT_EQ(engine.SubmitAction(30001, Command(BATTLE_ACTION_SKILL, bossId, 98001)), 0u);
+    const auto r1 = engine.ResolveCurrentRound();
+    uint64_t manaAfterR1 = 0;
+    uint64_t bossHpAfterR1 = 0;
+    for (const auto& a : r1.state().actors()) {
+        if (a.actor_id() == 30001) manaAfterR1 = a.attributes().mana();
+        if (a.actor_id() == bossId) bossHpAfterR1 = a.attributes().health();
+    }
+    EXPECT_EQ(manaAfterR1, 1000u) << "621 润脉免耗应使每回合首招法力消耗降至 0";
+    EXPECT_LT(bossHpAfterR1, 6900u);
+
+    // 校验结算回传携带 V2 realm_version / node_kind / use_free_preset
+    engine.SetActorAuto(30001, true);
+    for (int i = 0; i < 11 && engine.Outcome() == BATTLE_OUTCOME_ONGOING; ++i) {
+        engine.ResolveCurrentRound();
+    }
+    const auto settle = engine.BuildSettlement(30001);
+    ASSERT_TRUE(settle.has_tower_settlement());
+    EXPECT_EQ(settle.tower_settlement().realm_version(), 2u);
+    EXPECT_EQ(settle.tower_settlement().node_kind(), turnbattle::wuxing::kRealmNodeElite);
+    EXPECT_TRUE(settle.tower_settlement().use_free_preset());
+    EXPECT_TRUE(settle.use_free_preset());
+
+    // 非法 V2 节点类型（如 4=奇遇非战斗节点）必须被 BattleEngine 拒绝建房
+    auto badReq = req;
+    badReq.mutable_players(0)->mutable_tower_context()->set_node_kind(turnbattle::wuxing::kRealmNodeEvent);
+    TurnBattleEngine badEngine(mem);
+    EXPECT_FALSE(badEngine.Initialize(badReq));
+}

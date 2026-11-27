@@ -934,3 +934,182 @@ TEST_F(PlayerSeasonSystemTest, InfiniteCycleTermResetRetroHonorCatchupAndRpc) {
     EXPECT_EQ(catchResp.state().progress_points(), 12u);
     EXPECT_EQ(comp.retro_honor_progress().size(), 0u) << "灵石追赶绝不允许给往季追忆加点";
 }
+
+TEST_F(PlayerSeasonSystemTest, WuxingRealmV2SixNodeBranchingEventsFairPresetCrossWeekAndRedisKeys) {
+    const uint64_t nowMs = TimeSystem::NowMillisecondsUTC();
+    constexpr uint64_t kOneWeekMs = 7ULL * 24ULL * 3600ULL * 1000ULL;
+    const entt::entity player = CreatePlayer(99008, 35);
+
+    // 验证水平扩展周榜 Redis Cluster 键带同一 {weekKey} hash-tag 且本人/公平双榜隔离
+    EXPECT_EQ(PlayerSeasonSystem::RealmLeaderboardZsetKey(202648u, false), "wuxing:realm:lb:{202648}:self");
+    EXPECT_EQ(PlayerSeasonSystem::RealmLeaderboardMetaKey(202648u, false), "wuxing:realm:lb_meta:{202648}:self");
+    EXPECT_EQ(PlayerSeasonSystem::RealmLeaderboardZsetKey(202648u, true), "wuxing:realm:lb:{202648}:preset");
+    EXPECT_EQ(PlayerSeasonSystem::RealmLeaderboardMetaKey(202648u, true), "wuxing:realm:lb_meta:{202648}:preset");
+
+    // 1. 公平试炼模式非法预设必须拒收
+    {
+        StartWuxingTowerRunRequest badReq;
+        badReq.set_use_free_preset(true);
+        badReq.set_character_preset_id(999u);
+        StartWuxingTowerRunResponse badResp;
+        PlayerSeasonSystem::StartWuxingTowerRun(player, nowMs, badReq, badResp);
+        EXPECT_NE(badResp.error_message().id(), 0u);
+    }
+
+    // 2. 开启公平 3x3 试炼 6 关 V2 轮次（人物 102 + 灵宠 202）
+    StartWuxingTowerRunRequest startReq;
+    startReq.set_use_free_preset(true);
+    startReq.set_character_preset_id(102u);
+    startReq.set_pet_preset_id(202u);
+    StartWuxingTowerRunResponse startResp;
+    PlayerSeasonSystem::StartWuxingTowerRun(player, nowMs, startReq, startResp);
+    ASSERT_EQ(startResp.error_message().id(), 0u);
+    ASSERT_TRUE(startResp.state().run_active());
+    EXPECT_EQ(startResp.state().realm_version(), 2u);
+    EXPECT_EQ(startResp.state().max_floors(), 6u);
+    EXPECT_TRUE(startResp.state().use_free_preset());
+    EXPECT_EQ(startResp.state().character_preset_id(), 102u);
+    EXPECT_EQ(startResp.state().pet_preset_id(), 202u);
+    EXPECT_EQ(startResp.state().current_node_kind(), turnbattle::wuxing::kRealmNodeNormal);
+
+    auto& seasonComp = tlsEcs.actorRegistry.get<PlayerSeasonComp>(player);
+    auto winNode = [&](uint32_t expectedFloor, uint32_t expectedDungeon, uint64_t stampMs, uint32_t rounds) {
+        WuxingTowerBattleContext ctx;
+        uint32_t charId = 0u, petId = 0u;
+        ASSERT_EQ(PlayerSeasonSystem::PrepareWuxingTowerContext(player, stampMs, expectedDungeon, ctx, &charId, &petId), kSuccess);
+        EXPECT_EQ(ctx.floor(), expectedFloor);
+        EXPECT_EQ(ctx.realm_version(), 2u);
+        EXPECT_TRUE(ctx.use_free_preset());
+        EXPECT_EQ(charId, 102u);
+        EXPECT_EQ(petId, 202u);
+
+        BattleSettlementData settle;
+        settle.set_battle_id(92000u + expectedFloor);
+        settle.set_player_id(99008u);
+        settle.set_player_team_index(0u);
+        settle.set_match_mode(match::MATCH_MODE_PVE_SOLO);
+        settle.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN);
+        settle.set_total_rounds(rounds);
+        auto* ts = settle.mutable_tower_settlement();
+        ts->set_week_key(ctx.week_key());
+        ts->set_run_id(ctx.run_id());
+        ts->set_floor(expectedFloor);
+        ts->set_total_rounds(rounds);
+        ts->set_realm_version(2u);
+        ts->set_node_kind(ctx.node_kind());
+        ts->set_use_free_preset(true);
+
+        PlayerSeasonComp candidate;
+        bool pts = false;
+        bool towerChanged = false;
+        ASSERT_EQ(PlayerSeasonSystem::PrepareBattleCredit(seasonComp, settle, stampMs, candidate, pts, &towerChanged), kSuccess);
+        ASSERT_TRUE(towerChanged);
+        seasonComp.Swap(&candidate);
+        PlayerSeasonSystem::OnTowerSettlementApplied(player, seasonComp, stampMs);
+    };
+
+    // 第 1 关普通战胜利 -> 三选一奇策 -> 推进至第 2 关（待选分岔）
+    winNode(1u, 101u, nowMs, 3u);
+    GetWuxingTowerStateResponse st1;
+    ASSERT_EQ(PlayerSeasonSystem::GetWuxingTowerState(player, nowMs, st1), kSuccess);
+    ASSERT_EQ(st1.state().pending_offer_sigil_ids_size(), 3);
+    EXPECT_TRUE(turnbattle::wuxing::IsValidRealmBoonId(st1.state().pending_offer_sigil_ids(0)));
+    EXPECT_EQ(st1.state().weekly_leaderboard_size(), 0) << "公平模式严禁污染本人流派周榜";
+    EXPECT_EQ(st1.state().weekly_leaderboard_preset_size(), 1) << "公平模式写入独立公平周榜";
+
+    PickWuxingTowerSigilRequest pick1;
+    pick1.set_expected_run_id(st1.state().run_id());
+    pick1.set_sigil_id(st1.state().pending_offer_sigil_ids(0));
+    PickWuxingTowerSigilResponse pick1Resp;
+    PlayerSeasonSystem::PickWuxingTowerSigil(player, nowMs, pick1, pick1Resp);
+    ASSERT_EQ(pick1Resp.error_message().id(), 0u);
+    EXPECT_EQ(pick1Resp.state().current_floor(), 2u);
+    EXPECT_EQ(pick1Resp.state().current_node_kind(), turnbattle::wuxing::kRealmNodeNeedBranch);
+
+    // 未选分岔前禁止直接开战
+    WuxingTowerBattleContext blockedCtx;
+    EXPECT_NE(PlayerSeasonSystem::PrepareWuxingTowerContext(player, nowMs, 103u, blockedCtx), kSuccess);
+
+    // 第 2 关选右路「奇遇事件」-> 道缘寻策直接获 1 枚灵品奇策并推进至第 3 关
+    ChooseWuxingRealmBranchRequest br2;
+    br2.set_expected_run_id(st1.state().run_id());
+    br2.set_branch(turnbattle::wuxing::kRealmBranchSpecial);
+    ChooseWuxingRealmBranchResponse br2Resp;
+    PlayerSeasonSystem::ChooseWuxingRealmBranch(player, nowMs, br2, br2Resp);
+    ASSERT_EQ(br2Resp.error_message().id(), 0u);
+    EXPECT_EQ(br2Resp.state().current_node_kind(), turnbattle::wuxing::kRealmNodeEvent);
+    EXPECT_EQ(br2Resp.state().pending_event_kind(), turnbattle::wuxing::kRealmEventEncounter);
+    EXPECT_EQ(br2Resp.state().route_choice_mask(), 1u);
+
+    ResolveWuxingRealmEventRequest ev2;
+    ev2.set_expected_run_id(st1.state().run_id());
+    ev2.set_option_index(1u);
+    ResolveWuxingRealmEventResponse ev2Resp;
+    PlayerSeasonSystem::ResolveWuxingRealmEvent(player, nowMs, ev2, ev2Resp);
+    ASSERT_EQ(ev2Resp.error_message().id(), 0u);
+    EXPECT_TRUE(turnbattle::wuxing::IsValidRealmBoonId(ev2Resp.granted_boon_id()));
+    EXPECT_EQ(ev2Resp.state().current_floor(), 3u);
+    EXPECT_EQ(ev2Resp.state().current_node_kind(), turnbattle::wuxing::kRealmNodeNormal);
+    EXPECT_EQ(ev2Resp.state().active_sigil_ids_size(), 2);
+
+    // 第 3 关跨越周一 05:00 进入下一周：在途进度必须完整保留，不得清空！
+    const uint64_t nextWeekMs = nowMs + kOneWeekMs;
+    GetWuxingTowerStateResponse stNextWeek;
+    ASSERT_EQ(PlayerSeasonSystem::GetWuxingTowerState(player, nextWeekMs, stNextWeek), kSuccess);
+    ASSERT_TRUE(stNextWeek.state().run_active()) << "跨周不得清空尚未打完的在途局";
+    EXPECT_EQ(stNextWeek.state().current_floor(), 3u);
+    EXPECT_EQ(stNextWeek.state().active_sigil_ids_size(), 2);
+    EXPECT_EQ(stNextWeek.state().weekly_cleared_mask(), 0u) << "新周首通位图归零";
+
+    // 跨周继续打通第 3 关 -> 选第 3 枚奇策 -> 第 4 关右路休整「奇策淬炼升品」-> 第 5 关精英 -> 第 6 关首领通关
+    winNode(3u, 105u, nextWeekMs, 2u);
+    GetWuxingTowerStateResponse st3;
+    ASSERT_EQ(PlayerSeasonSystem::GetWuxingTowerState(player, nextWeekMs, st3), kSuccess);
+    ASSERT_EQ(st3.state().pending_offer_sigil_ids_size(), 3);
+    PickWuxingTowerSigilRequest pick3;
+    pick3.set_expected_run_id(st3.state().run_id());
+    pick3.set_sigil_id(st3.state().pending_offer_sigil_ids(0));
+    PickWuxingTowerSigilResponse pick3Resp;
+    PlayerSeasonSystem::PickWuxingTowerSigil(player, nextWeekMs, pick3, pick3Resp);
+    ASSERT_EQ(pick3Resp.error_message().id(), 0u);
+    EXPECT_EQ(pick3Resp.state().current_floor(), 4u);
+    EXPECT_EQ(pick3Resp.state().current_node_kind(), turnbattle::wuxing::kRealmNodeNeedBranch);
+
+    ChooseWuxingRealmBranchRequest br4;
+    br4.set_expected_run_id(st3.state().run_id());
+    br4.set_branch(turnbattle::wuxing::kRealmBranchSpecial);
+    ChooseWuxingRealmBranchResponse br4Resp;
+    PlayerSeasonSystem::ChooseWuxingRealmBranch(player, nextWeekMs, br4, br4Resp);
+    ASSERT_EQ(br4Resp.error_message().id(), 0u);
+    EXPECT_EQ(br4Resp.state().pending_event_kind(), turnbattle::wuxing::kRealmEventRest);
+
+    ResolveWuxingRealmEventRequest ev4;
+    ev4.set_expected_run_id(st3.state().run_id());
+    ev4.set_option_index(1u); // 淬炼升品
+    ResolveWuxingRealmEventResponse ev4Resp;
+    PlayerSeasonSystem::ResolveWuxingRealmEvent(player, nextWeekMs, ev4, ev4Resp);
+    ASSERT_EQ(ev4Resp.error_message().id(), 0u);
+    EXPECT_TRUE(turnbattle::wuxing::IsValidRealmBoonId(ev4Resp.granted_boon_id()));
+    EXPECT_EQ(ev4Resp.state().current_floor(), 5u);
+    EXPECT_EQ(ev4Resp.state().current_node_kind(), turnbattle::wuxing::kRealmNodeElite);
+
+    winNode(5u, 105u, nextWeekMs, 3u);
+    GetWuxingTowerStateResponse st5;
+    ASSERT_EQ(PlayerSeasonSystem::GetWuxingTowerState(player, nextWeekMs, st5), kSuccess);
+    ASSERT_EQ(st5.state().pending_offer_sigil_ids_size(), 3);
+    PickWuxingTowerSigilRequest pick5;
+    pick5.set_expected_run_id(st5.state().run_id());
+    pick5.set_sigil_id(st5.state().pending_offer_sigil_ids(0));
+    PickWuxingTowerSigilResponse pick5Resp;
+    PlayerSeasonSystem::PickWuxingTowerSigil(player, nextWeekMs, pick5, pick5Resp);
+    ASSERT_EQ(pick5Resp.error_message().id(), 0u);
+    EXPECT_EQ(pick5Resp.state().current_floor(), 6u);
+    EXPECT_EQ(pick5Resp.state().current_node_kind(), turnbattle::wuxing::kRealmNodeBoss);
+
+    winNode(6u, 107u, nextWeekMs, 4u);
+    GetWuxingTowerStateResponse stDone;
+    ASSERT_EQ(PlayerSeasonSystem::GetWuxingTowerState(player, nextWeekMs, stDone), kSuccess);
+    EXPECT_FALSE(stDone.state().run_active());
+    EXPECT_EQ(stDone.state().best_rounds_preset(), 12u) << "3+2+3+4 = 12 回合写入个人永久公平最速";
+    EXPECT_EQ(stDone.state().weekly_leaderboard_preset_size(), 0) << "上周旧局跨周完结绝不污染新周榜";
+}

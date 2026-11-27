@@ -8263,3 +8263,10 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
   - 通过标准是那一条原有的标准,另加一条:`TestPublishFailureAfterCommitIsNotARefusalAndARerunRepairs` PASS。
   - 可选的反向确认:把 `merge.go` 里这一处的 `%v` 临时改回 `%w`,这个用例应当变红(报 `a refusal read back after the commit must still be exit 2`);改回后恢复通过。
 - **提交情况**:main 工作区,未提交。
+
+## 2026-11-27 Claude:悬赏求书批 A 复查——揭榜与寄售购买的尝试次数改成每人 3 次、整单 256 次(未编译、未测试,待 Gemini 验证)
+
+- 起因:批 A 初稿把「32 次揭榜上限可被零成本耗尽」记成以后再防;负责人要求查到的问题现在修。寄售购买(kind 3)原先每单 32 次是同一个弱点,同批改。
+- 做法:`go/trade/internal/commerce/engine.go` 新增 `attemptAllowed`(按扣款腿的 PlayerId 数这个人对这张单试过几次,满 3 次拒绝;整单 `QuantityReserved` 满 256 拒绝),寄售 `buy` 与求购单 `fulfillWantedLocked` 共用;`wanted_skill_book.go` 删掉原 32 次常量。用例:`wanted_skill_book_test.go` 的 `TestWantedFulfillGuards` 两条子用例与 `TestAttemptAllowedCapsEachActorAndTheListing`。为什么这样选、被否决的做法与剩下的边界写在 `docs/design/skill-book-wanted-order-trade-escrow.md` §11.1 第 7 条与「代价与边界」第 1 条;`docs/design/jubaozhai-market.md` 寄售购买一句同步。
+- 验证(Gemini,未跑):随批 A 一起,`go test ./internal/commerce/ -run 'TestWanted|TestAttemptAllowed|TestTiDBConsignment|TestTiDBRejectedBuyRetry'`(真库那两条要 `COMMERCE_TEST_DSN`);其余命令同设计稿 §11.1 末。
+- 仍未做:批 C(部署)与批 B(scene 退役旧揭榜 + 客户端),按负责人 11-27 改定换电脑由 Claude Code 写,入口是第 4 轮交接单 §0a 与设计稿 §11.2;本机 Claude 全部模型周额度 88%,不够写完这两批。

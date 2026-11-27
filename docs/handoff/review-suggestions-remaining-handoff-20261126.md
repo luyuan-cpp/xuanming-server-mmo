@@ -87,7 +87,7 @@
 
 每条的出处、现象和已核过的代码位置，在 `docs/design/data-overwrite-rollback-audit-r2-20261019.md` §6「2026-11-26 清点」。先逐条复核，成立再改；修完在那一段每条后面标状态，在 §1「仍开着」里划掉，PROGRESS 写命令。
 
-1. **（2026-11-26 晚：代码已改完，Gemini 只验证；guild 的条件写 SQL 待补，见 r2 第 4 轮交接单 §6.1 与设计记录）** **人工终结的见证不比 attempts**（`go/shared/assetop/manual_evidence.go`）：只比租约与发送时刻。副本间时钟偏差超过 30 分钟时，可能把仍在投的行判成已静默。设计记录写进 `exploit_loss_prevention_zh.md` 或资产人工终结所在的设计稿。
+1. **（2026-11-26 晚：代码已改完，Gemini 只验证；guild 的条件写 SQL 11-27 已补，未编译，验证命令见 r2 剩余单 §3.2）** **人工终结的见证不比 attempts**（`go/shared/assetop/manual_evidence.go`）：只比租约与发送时刻。副本间时钟偏差超过 30 分钟时，可能把仍在投的行判成已静默。设计记录写进 `exploit_loss_prevention_zh.md` 或资产人工终结所在的设计稿。
 2. **data_service 两个 Kafka worker 的坏消息没进死信**：解码失败按旧口径跳过并提交，原件只在原 topic 保留期内可取。牵涉现行约束：reader 模式的 owner 不支持死信（`NewBoundMessageReader` 拒绝 `DeadLetter`），data_service 的取舍见 `kafka-bound-consumer-group.md` §5.5、§12，改了要同步这两节。
 3. **判陈旧分不出「角色建成了、从没进过场、名字绑定也没做完」**：这种角色仍会被写墓碑。11-12 加了标保留，也有 `TestTiDBStaleCreateRefOfACommittedRoleIsNotTombstoned`，先复核这条是否仍成立。
 4. **同一角色挂在别的账号上的建角 ref，只扫本账号片查不到**：出处同第 3 条。
