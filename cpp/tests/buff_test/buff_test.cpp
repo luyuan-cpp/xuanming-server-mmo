@@ -773,12 +773,12 @@ protected:
 	// 回血这一路不看时间;时间只喂脱战计时那一路(BuffImplSystem),对 buff_type 42 不起作用。
 	static constexpr uint64_t kAnyNowMs = 1000;
 
-	// 夹具行在给定等级下的表达式值,与回血实现同一个取值入口。
+	// 夹具行在给定等级下的表达式值,与回血实现同一个无状态只读求值入口。
 	static double ExpressionHealAt(uint32_t level)
 	{
-		BuffTableManager::Instance().SetHealthRegenerationParam(
+		return BuffTableManager::Instance().GetSnapshot().EvaluateHealthRegeneration(
+			kHealthRegenerationByLevel,
 			{static_cast<double>(level), static_cast<double>(kMaxHealth - kHealth)});
-		return BuffTableManager::Instance().GetHealthRegeneration(kHealthRegenerationByLevel);
 	}
 
 	// 只带气血组件、还没有等级组件的受伤实体;isPlayer 时挂上玩家标签。

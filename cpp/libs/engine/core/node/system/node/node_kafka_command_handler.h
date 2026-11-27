@@ -113,14 +113,18 @@ bool RegisterKafkaCommandHandler(Node& node,
     CommandConsumeCounters* const consumed = &detail::CommandConsumeCountersFor(
         NodeUtils::NodeTypeToShortName(node.GetNodeType()), options.commandTopicBase);
 
-    auto callback = [&node, dispatch, filter, consumed](const std::string& t, const std::string& payload) {
+    const std::string nodeUuid = node.GetNodeInfo().node_uuid();
+    const bool requireMaintenanceTarget = node.RequiresMaintenanceTargetIdentity();
+
+    auto callback = [nodeId, nodeUuid, requireMaintenanceTarget, dispatch = std::move(dispatch), filter, consumed](
+        const std::string& t, const std::string& payload) {
         auto command = DecodeKafkaProtoPayload<CommandT>(t, payload);
         if (!command) {
             return;
         }
 
-        const bool forThisNode = detail::IsCommandForThisNode(t, *command, node.GetNodeId(),
-            node.GetNodeInfo().node_uuid(), filter, node.RequiresMaintenanceTargetIdentity());
+        const bool forThisNode = detail::IsCommandForThisNode(t, *command, nodeId,
+            nodeUuid, filter, requireMaintenanceTarget);
         (forThisNode ? consumed->own : consumed->foreign).fetch_add(1, std::memory_order_relaxed);
         if (!forThisNode) {
             return;

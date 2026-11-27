@@ -974,13 +974,12 @@ bool CalculateSkillDamage(const entt::entity casterEntity, DamageEventComp& dama
 			<< " skill_id=" << damageEvent.skill_id();
 		return false;
 	}
-	// 伤害表达式的 level 参数按生效等级(超上限的存储等级按上限,player_level_rules.h)
-	SkillTableManager::Instance().SetDamageParam(
-		{static_cast<double>(playerlevel::CappedLevel(levelComponent->level()))});
-
+	// 伤害表达式的 level 参数按生效等级(超上限的存储等级按上限,player_level_rules.h),走不可变快照无状态求值
 	damageEvent.set_attacker_id(entt::to_integral(casterEntity));
 
-    double baseDamage = SkillTableManager::Instance().GetDamage(skillContext->skilltableid());
+    const double baseDamage = SkillTableManager::Instance().GetSnapshot().EvaluateDamage(
+		skillContext->skilltableid(),
+		{static_cast<double>(playerlevel::CappedLevel(levelComponent->level()))});
     double finalDamage = CalculateFinalDamage(casterEntity, targetEntity, baseDamage, *skillRow);
     damageEvent.set_damage(finalDamage);
 	return true;

@@ -343,6 +343,7 @@ Claude 全部模型周额度过 80%(81%),按负责人 11-26 口径停在批 A �
   - 书架书揭榜:先发 scene 的 `SealSkillBook`,封卷回包带回道具号就立刻发揭榜(这是同一次点击的第二步,不受 800 毫秒写间隔限制);「封卷后揭榜」只记在内存里,发送前先记(回包可能在发送调用里同步回来),封卷失败、未发出或客户端重启都只剩封卷,书以封卷道籍留在背包,不丢。
   - 过渡态:发榜回「托管中」、揭榜回「交易中 / 交付中」时,每 2 秒按同一请求号重发原请求查结论,最多 15 次(约 30 秒);只在内存里跟,不占待确认写槽。有了结论提示挂榜、银两没托管成、成交实得(服务端给的 `seller_net_gold`)、书不符已原样退回、书没扣下,揭榜结论触发背包重拉(`WantedFulfillConcluded`)。
   - 悬赏榜:公开榜一页 50、按游标续取(列表末行「加载更多悬赏」);「我的悬赏」读 `only_mine`,显示阶段(`WantedSkillBookOrderPhase`),只有托管中与挂榜中能撤;跟进期间悬赏页写按钮锁住。`SkillCraftModels`、`SkillCraftWindow`、`GameClient` 跟着改。
+  - 聚宝斋订单名称(复查补,2026-11-27):求购单会出现在发榜人与正在交书的揭榜人的「我的订单」里,`CommerceWindow` 的种类名原先把不认识的种类一律显示成「材料成交」,kind 7 会被错标。改成材料成交(kind 4)显式列出、kind 7 显示「悬赏求书」、其余不认识的新种类显示中性的「交易单」。撤单按钮沿用既有判断(状态 1 才显示,trade 只认发榜人),不另加。被否决:在聚宝斋里给求购单另做一套详情——悬赏页已有完整入口,这里只要名字不误导。
   - EditMode 用例(`SkillCraftClientTests`):V5 段改写为发榜跟到挂榜、撤单、翻页、揭榜跟到成交;新加 `WantedFulfillFromBookshelfSealsFirstAndUncertainReplyReplaysSameRequestIdAcrossRecreate`(书架书先封卷再揭榜、超时后重建客户端按同一请求号重发、书不符退回)。
 - 为什么这样选:
   1. 发榜与揭榜的结论都按同一请求号重发原请求查:trade 对同号重发回当前合同(`priorRequest` 读的是当前行),一次就拿到 `WantedSkillBookOrderPhase`。`GetCommerceOrder` 只给 `CommerceOrderState`,托管悬赏(`wanted_escrow`)与有人交书(`wanted_fill`)都是状态 3,分不清;揭榜那边书不符退回与书没扣下都让单子回到挂榜,订单状态一样,只有按请求号重发才分得清。交接单原写「发榜后按 `GetCommerceOrder` 轮询」,按此改。
@@ -362,5 +363,5 @@ Claude 全部模型周额度过 80%(81%),按负责人 11-26 口径停在批 A �
 2. 协议:`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`;`proto/message_id.txt` 相对 HEAD 只有 560~563 变成墓碑、582~584 不变;`proto/persist_schema_gen.txt` 相对 HEAD 只多四行 `retired=`;`cpp/nodes/scene/handler/rpc/player/player_skill_handler.h` 不再有四个悬赏方法;客户端生成的 `RentSkillLoadoutSlots` 不再带悬赏退役说明。
 3. 客户端 `mmorpg-client`:`tools/gen_proto.ps1`、`tools/gen_messageids.ps1`、`tools/client_compile_check.ps1`(含 EditMode 程序集),再跑 EditMode `SkillCraftClientTests`(两条悬赏用例)。
 4. C++:串行 MSBuild(`/m:1`)先编库再编 scene 与 `bag_test`;`bag_test.exe --gtest_filter=PlayerCraftQualityTest.*:EquipCraftQualityRulesTest.*`;`python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`(本机只读跑过,13 条通过)。
-5. Go:`go/trade` 下 `go build ./...`、`go vet ./...`、`go test ./internal/commerce/... ./internal/logic/...`,点名 `TestWantedRulesMatchTheCppConstants` 与批 A 的 `TestWanted*`。仓库里没有 `go/scene`,`go/scene_manager` 不涉及。
+5. Go:`go/trade` 下 `go build ./...`、`go vet ./...`、`go test ./internal/commerce/... ./internal/logic/...`,点名 `TestWantedRulesMatchTheCppConstants` 与批 A 的 `TestWanted*`。仓库里没有 `go/scene`,`go/scene_manager` 不涉及。robot 按 `robot/README.md` 在 `robot/` 下重跑 `go mod vendor`(`robot/vendor/proto/scene/player_skill.pb.go` 还是删四条之前的副本;robot 没用这四条,不刷新也编得过,但协议视图会与服务端不一致),再 `go build -mod=vendor ./...`。
 6. 冒烟(§9 第 3 条,环境以 `-AssetOps on` 部署):发榜(托管中 → 挂榜中)、揭榜(背包封卷与书架书两种)、撤单、书不符原样退回、发榜人背包满(书等腾出一格才到账,揭榜人银两随后到账)、发榜人被获取封禁时整单退回且退全额。

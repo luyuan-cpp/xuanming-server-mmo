@@ -8406,3 +8406,9 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
   3. `pwsh -NoProfile -File tools/scripts/tests/battle_settlement_alerts_contract.tests.ps1` 全过;`k8s_deploy_contract.tests.ps1`(「LogQL 契约」)、`assetop_work_shard_alerts_contract.tests.ps1`、`loop_liveness_alerts_contract.tests.ps1` 照旧全过;把 `spec` 抽成普通规则文件后 `promtool check rules`;
   4. 冒烟(调试栈,设 `MMORPG_METRICS_PORT`):gate、scene、battle 各起一个,`curl -s http://127.0.0.1:<端口>/metrics | grep -E 'scene_(battle_freeze|exit_|relocate_|enter_fence|release_fence|save_seq|persist_schema|connection_lost|hosted_placement|afk_)|battle_(rooms|sql_outcome_stuck|frames_dropped|table_fingerprint|observer_seats|spectate_frames)|gate_(router_lane|scene_lane|scene_entry)_'`:每族都在、以 0 起步;登录、断线重连走一遍后 `gate_router_lane_events_total{event="replied"}` 与 `scene_connection_lost_hold_events_total{event="held"}` 在涨;`[lane]` / `[scene_lane]` / `[SceneEntry]` / `[ExitPersist]` / `[ExitRelease]` / `[RelocateConfirm]` / `[EnterFence]` / `[ReleaseFence]` 汇总行与改动前逐字同格式。
 - **没做的**:`db_task_dispatch_stats`(只有设计稿 `db-task-delivery-and-retention.md` 写着「不接 Prometheus」)、`[PlayerRedis]` / `[ControlRedis]`、`[PlayerInbox] metric=` 一类信号仍只有日志,之后按 §1.11 接;`cross-zone-scene-travel.md` 里 `[TravelHandoff]`「不进 Prometheus」的两处旧状态(10-24 已导出)没改。
+
+## 2026-11-27 Claude:悬赏求书批 B 复查补一处——聚宝斋「我的订单」把求购单错标成「材料成交」(未编译;Java 不涉及)
+
+- **改了什么**:客户端 `Assets/Scripts/UI/Ugui/Jubaozhai/CommerceWindow.cs` 的订单种类名:材料成交(kind 4)显式列出,求购单(kind 7)显示「悬赏求书」,其余不认识的种类显示「交易单」(原先一律显示「材料成交」)。五项补在设计稿 §11.2「批 B 落码记录」。
+- **核对**:三个仓(服务端、客户端、Java)都只有 main、没有 stash;服务端三个分离头验证快照 11-26 已核过,改动都已在 main 或是被取代的旧方案,不合并。批 B 的服务端与客户端改动已随负责人快照提交 `3e9b92cd6` / `ed24a13e` 及之后两次提交进 main。
+- **给 Gemini 补一步**:`robot/` 下重跑 `go mod vendor` 再 `go build -mod=vendor ./...`(设计稿 §11.2 末第 5 条);其余顺序不变。

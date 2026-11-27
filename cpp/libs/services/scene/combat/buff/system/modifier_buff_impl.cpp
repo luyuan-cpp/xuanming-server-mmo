@@ -57,10 +57,8 @@ static bool OnHealthRegenerationBasedOnLostHealth(entt::entity parent, BuffEntry
     }
     const uint64_t lostHealth = maxHealth - healthBefore;
 
-    BuffTableManager::Instance().SetHealthRegenerationParam(
-        { static_cast<double>(level),  static_cast<double>(lostHealth) });
-
-    const auto healingAmount = BuffTableManager::Instance().GetHealthRegeneration(buffTable->id());
+    const auto healingAmount = BuffTableManager::Instance().GetSnapshot().EvaluateHealthRegeneration(
+        buffTable->id(), { static_cast<double>(level), static_cast<double>(lostHealth) });
     if (!std::isfinite(healingAmount) || healingAmount <= 0.0) {
         return false;
     }

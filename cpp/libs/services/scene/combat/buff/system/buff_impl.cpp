@@ -113,7 +113,7 @@ void BuffImplSystem::TickCombatIdleBuff(entt::entity parent, BuffEntry& buff, co
 void BuffImplSystem::ApplyNextBasicAttackBonus(entt::entity caster, entt::entity target, BuffEntry& buff,
                                                const BuffTable* buffTable, DamageEventComp& damageEvent,
                                                UInt64Set& buffsToRemove) {
-    const auto bonusDamage = BuffTableManager::Instance().GetBonusDamage(buffTable->id());
+    const auto bonusDamage = BuffTableManager::Instance().GetSnapshot().EvaluateBonusDamage(buffTable->id());
     damageEvent.set_damage(damageEvent.damage() + bonusDamage);
 
     buffsToRemove.emplace(buff.buffPb.buff_id());

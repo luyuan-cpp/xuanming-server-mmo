@@ -318,7 +318,7 @@ struct CraftDefinitionCache {
     GetEquipmentCraftRulesResponse rules{};
 };
 CraftDefinitionCache& DefinitionCache() {
-    static CraftDefinitionCache cache;
+    thread_local CraftDefinitionCache cache;
     return cache;
 }
 CraftDefinitionCacheKey CurrentDefinitionCacheKey() {

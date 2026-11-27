@@ -1407,10 +1407,10 @@ protected:
     // 1 级目标受伤比例 0.5,85 级目标 10560 / 11040,都不碰 60% 的常驻减伤封顶。
     static constexpr uint64_t kTargetArmor = 480;
 
-    // 真表 1 号技能在给定等级下的表达式值,与 CalculateSkillDamage 同一个取值入口。
+    // 真表 1 号技能在给定等级下的表达式值,与 CalculateSkillDamage 同一个无状态只读求值入口。
     static double ExpressionDamageAt(uint32_t level) {
-        SkillTableManager::Instance().SetDamageParam({static_cast<double>(level)});
-        return SkillTableManager::Instance().GetDamage(kSkillTableId);
+        return SkillTableManager::Instance().GetSnapshot().EvaluateDamage(
+            kSkillTableId, {static_cast<double>(level)});
     }
 
     // 施法者用 1 号技能打目标一次,返回目标掉了多少气血。施法上下文直接挂上,再调落点入口 HandleSkillSpell
