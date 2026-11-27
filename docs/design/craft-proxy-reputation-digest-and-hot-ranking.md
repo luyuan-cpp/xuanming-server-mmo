@@ -38,9 +38,8 @@
   - `<M>:s` — 待回账极品产出数
   - `<M>:r` — 待回账稀世制书数
   - `<M>:g` — 待回账税后 95% 净银两总额
-  - `<M>:24o` — 近期热度单数（随代打成交 `+1`，按 24 小时自然窗或热榜统计展示）
-  - `<M>:24s` — 近期极品热度数（随代打产出 5 档极品 `+1`）
   - `<M>:b` — 最近买家角色名（`HSET` 覆盖写最新一位）
+- 近 24 小时热榜不在这张表里，按 UTC 小时分桶放在同槽的 `craft_proxy_hot:{ctl:<zone>}:<UTC 秒 / 3600>`（`PlayerCraftSystem::ProxyHotBucketKey`），字段 `<M>:o` 单数、`<M>:s` 极品数，`recent_24h_*` = 当前小时与前 23 个小时的桶之和；细节与改动原因见 §2.6。原先的 `<M>:24o` / `<M>:24s` 只累加不归零，已停用。
 - **实时热榜评分与 Top 3 授予规则（三服共享纯函数）**：
   - 实时热度分：`hotScore = recent_24h_supreme * 3 + recent_24h_orders`
   - 仅在营业且满足 `recent_24h_orders > 0 || proxy_orders_completed > 0 || supreme_forged_count > 0` 的宗师参与评选；
@@ -88,6 +87,43 @@
 - Redis 断连期间不回账（取不了），断连期间本节点记下而没能写进 Redis 的增量，下一次整表刷新覆盖镜像时消失（改动前就如此）。
 - Java 版 `CraftProxyStallDirectory.drainPendingReputation` 仍是「镜像数额入账 + 事后 `HINCRBY` 负值」，同节点在途刷新有 `localReputationMutationSeq` 兜，跨节点陈旧镜像照样可能重复，登记 Java 仓 `PARITY.md` 待做。
 
+### 2.6 热榜改成真正的近 24 小时：按小时分桶(2026-11-27,C++ 与 Python 已落码未编译)
+
+**问题**：`recent_24h_orders` / `recent_24h_supreme` 原先来自待回账表里的 `<M>:24o` / `<M>:24s`。这两项只做 `HINCRBY +`，没有任何过期或扣减，所以「近 24 小时」实际是开摊以来的累计。几天之后，热榜就成了老宗师的累计榜，新宗师爬不上去，与字段名、客户端「近 24 小时单数与极品数」文案以及 §1 第 2 条「离线也能在热榜上爬升」都不符。Python 移植（r2-craft#4）核对时发现。
+
+**方案**：
+- 键：每个 UTC 小时一个哈希 `craft_proxy_hot:{ctl:<zone>}:<hour>`，`hour = UTC 秒 / 3600`，与摊位目录、待回账表同一个 hash tag（同槽）。
+- 写：买家成交时对当前小时的桶 `HINCRBY <M>:o 1`；产出极品时再 `HINCRBY <M>:s <n>`；随后 `EXPIRE <桶> 90000`，每写一次就续 25 小时。C++ 是 `RecordProxyOrderReputation` → 台账接缝 `addHot`（生产实现 `RedisHIncrByHotBucket`）。
+- 读：每 5 秒整表刷新时，读当前小时与前 23 个小时共 24 个桶，按宗师求和，覆盖本节点热榜镜像。
+  - 用一段只读 Lua `kSumProxyHotLua`：`KEYS` 为 `ProxyHotWindowBucketKeys(zone, 最新小时)` 的 24 个桶，同槽一次执行完，Redis 端按字段求和，应答形状同 `HGETALL`。
+  - C++ 走台账接缝 `readHot`：生产实现 `RedisReadHotTotals` 用 `commandArgv` 发出（`SideEffects::kNone`），`ParseProxyHotTotals` 解析；应答不明时保留旧镜像。`RefreshProxyHotRanking(最新小时)` 拿到桶和后整体覆盖镜像。
+  - Python 用逐字节相同的脚本（Python 单测钉文本），本地镜像的组织见 Python 仓 `docs/design/craft-proxy-shared-ledger-redis.md` §2.4。
+  - 两边读写同一批键与字段，混跑一致。
+- 本节点写穿：成交时本节点镜像先加上，供西市列表马上看到；下一次刷新以 Redis 上的 24 桶之和为准，出窗的单数在那时退出。
+- 待回账表停写 `:24o` / `:24s`。旧字段读到后按未知后缀跳过；项目未上线，不迁移旧数据。
+
+**为什么这样选**：带过期的时间分桶计数是滑动窗口计数的标准做法。
+- 过期由 Redis 自己回收，不需要任何节点承担清理。
+- 写只多一条 `EXPIRE`，读是同槽一次脚本执行。
+- 窗口语义是「当前小时 + 前 23 个整小时」，实际覆盖 23～24 小时，展示用计数足够精确。
+- 不改客户端协议，也不改存档结构。
+
+**被否决的做法**：
+- 在待回账表里按小时加字段（`<M>:24o:<hour>`），由刷新方 `HDEL` 出窗字段：多个节点会争着删同一批字段，清理还依赖有节点在跑刷新。Redis 7.4 的字段级过期 `HEXPIRE` 在 K8s 钉的 7.2 上没有。
+- 每笔成交记一条带时间戳的有序集合成员：精确，但成员数随成交量线性增长，读写都更重，而这只是展示计数。
+- 自然日清零（每天 0 点归零）：零点前后热榜骤降，而且仍不是「近 24 小时」。
+- 逐条或用 pipeline 发 24 个 `HGETALL` 再在本地聚合：C++ 要跨 24 个回调维护聚合状态，传回的数据也多（同一宗师在每个桶各一份）。同槽一次脚本在 Redis 端求和，两种语言用同一段文本。
+
+**代价与边界**：
+- 每个节点每 5 秒多一次读 24 个小键的只读脚本。
+- 时钟按各节点 UTC 取小时，节点间几秒误差只会让边界上的一单落到相邻小时，仍在窗口内。
+- Redis 断连期间热榜不衰减（镜像保留旧值）。断连期间本节点记下的增量没写进 Redis，恢复后的整表刷新会把它们覆盖掉（同 §2.5）。
+- C++ 单测（台账接缝的内存实现按同一窗口口径求和）：
+  - `ProxyHotRankingWritesCurrentHourBucketInsteadOfLedgerFields`：钉键名，并校验写的是当前小时桶、待回账表不再出现 `:24o` / `:24s`；
+  - `ProxyHotRankingRefreshCountsLast24HourBucketsAndKeepsMirrorWhenUnknown`：钉 24 个桶键的区间；一单在第 23 个小时后仍在窗口里、第 24 个小时出窗；读取结果未知时保留旧镜像。
+  - Lua 本身的求和由 Python 双生体用例与真实 Redis 验证覆盖。
+- Java 版热榜仍是累计，登记 Java 仓 `PARITY.md` 待做。
+
 ---
 
 ## 3. 思想分析
@@ -110,6 +146,7 @@
 | 重复进入界面或刷新导致重复弹出离线战报或重复扣除 pending | `AckCraftProxyDigest` 持久清零 `unread_proxy_digest_*` 且天然幂等；同一宗师的取走至多一次在途，入账期间不重入 |
 | Redis 重启/清空导致永久口碑丢失或负值下溢 | 永久累计值存于角色 DB `PlayerCraftComp`；pending 仅作增量中转，读取时钳制 `>= 0` 永不下溢 |
 | 极品数/单数整数溢出 | 全路径饱和加法（`uint32_max` / `uint64_max` 封顶） |
+| 热榜计数只累加不归零，「近 24 小时」成了累计榜 | 按 UTC 小时分桶、桶带 25 小时过期，读时只加近 24 个桶（§2.6） |
 | 客户端未导入 Codex 新切图时出现白块/报错 | 所有新切图路径均做 `null` 判空并优雅回退现有已过审通用卷轴/印章/按钮控件 |
 
 ---

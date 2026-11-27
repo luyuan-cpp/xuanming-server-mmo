@@ -67,10 +67,17 @@
 - **fire-and-forget 协程靠各自的超时保证数量有界**，不另加满即丢的在途上限；满即丢会把「下游慢」变成「静默丢续期」。已写进 Pandora `CLAUDE.md` 第 6 条。
 - **只读共享与防御拷贝的分界**：构造后不再写的值（如广播 payload 字节）可以跨 goroutine 共享，拷一次在 API 入口即可；逐接收方再拷是纯开销。已写进 Pandora `CLAUDE.md` 第 6 条。
 - **「合规改写」不当成修 bug**：单线程下按引用捕获长寿对象、共享从不修改的 protobuf，本来就安全；按规则改写可以保留，但交接里不应把它们记成已修的并发缺陷。
+- **跨玩家边界防的是交错执行**：Python 宗师代制出事，是因为两次 `await` 之间宗师的快照已过时；C++ 场景单 EventLoop 内，由组件所属 System 在同一同步步骤里改写本节点在线且可写的玩家并请求存盘（`PlayerCraftSystem::RecordProxyOrderReputation`），中间无异步等待，不会交错，允许。目标不在本节点、不可写，或实现里有异步等待时，一律走目标玩家的台账 / 邮箱 / 串行队列。已写进 [engineering-principles.md](../rules/engineering-principles.md#1-模块与职责111) 与 [ecs-component-access-rules.md](ecs-component-access-rules.md)。
 
 ## 6. 仍待办
 
 - **Python 版名匠代打摊位目录、口碑待回账与 24h 热榜改走 Redis**：按 C++ r2-craft#4（`cpp/libs/services/scene/player/system/player_craft.cpp` 的 `ProxyReputationLedgerKey`、`kTakeProxyReputationLua`、`GiveBackProxyReputation`、`ApplyTakenProxyReputation`）补齐，另开会话做（Python 场景目前没有控制 Redis 客户端，需新接）。**状态（11-27）**：Python 仓代码与单测已写完，未运行。键、字段与取走脚本同 C++，买家只记台账，回账在宗师自己的锁内原子取走。另外核对时发现，Python scene 其实已有控制 Redis 客户端（`runtime.py` 的 `scene_control_redis`，世界频道目录与落地唤醒在用），已直接复用，不用新接。设计与 pytest 命令见 Python 仓 `docs/design/craft-proxy-shared-ledger-redis.md`。
+- **西市热榜「近 24 小时」从不归零（C++ 原有缺陷，Python 照搬）**：C++ `RecordProxyOrderReputation` 只往台账哈希累加 `<id>:24o/24s`，全仓没有归零、过期或分桶，客户端显示的「近 24 小时单数」实际是开服以来的累计。定案按小时分桶：每小时一个哈希 `craft_proxy_hot:{ctl:<zone>}:<UTC 秒/3600>`（与台账同 hash tag），成交时对当前小时键 HINCRBY 并 EXPIRE 25 小时，刷新时一段同 slot 的 Lua 把最近 24 个小时桶按宗师求和；不再写 `:24o/24s`，游戏未上线不做迁移。C++、Python 两边同改，交给上一条的同一会话做；Java 登记待做。**状态（11-27）**：已落码，未编译未运行。
+  - C++：`player_craft.{h,cpp}` 台账接缝加 `addHot`（写桶）与 `readHot`（读 24 个桶之和，生产 = 只读脚本 `kSumProxyHotLua` 经 `commandArgv` 发出），新增 `ProxyHotWindowBucketKeys`、`RefreshProxyHotRanking(最新小时)`。`player_craft_quality_test.cpp` 加两条用例：写桶与停写 `:24o/24s`；窗口滚动与「结果未知保留旧镜像」。设计写进 `craft-proxy-reputation-digest-and-hot-ranking.md` §2.6。
+  - Python：键、字段与求和脚本同 C++ 逐字节一致（单测钉文本）。本地镜像 = 上次刷新的桶和 + 之后按小时记的本地增量，本地单进程模式只有后者，窗口照样滚动。窗口、写穿不重复计、应答畸形保留旧值都有用例。
+  - Java：已登记 Java 仓 `PARITY.md` 待做。
+  - Gemini 命令以 `docs/PROGRESS.md` 2026-11-27「热榜读取改走台账接缝」一条为准，它补充并取代前一条「名匠代打西市热榜改为真正的近 24 小时」里的命令。
+- **Python `refresh_loop` 遇到非 Redis 异常会让后台任务退出、此后不再刷新**：改为每轮记英文错误日志后继续（同 C++ 定时器），同一会话一并做。**状态（11-27）**：已落码未运行（`logger.exception` 后下一轮照刷，用例 `test_refresh_loop_survives_unexpected_errors`）。同时修了西市列表遍历在线玩家的平方级开销。
 - **Java**：§3 两条，已登记 Java 仓 `PARITY.md`，本轮不写 Java 代码。
 
 ## 7. 验证（交 Gemini）

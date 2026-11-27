@@ -2,8 +2,11 @@
 
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <optional>
 #include <string>
+#include <utility>
+#include <vector>
 #include <entt/src/entt/entity/entity.hpp>
 
 namespace muduo {
@@ -78,6 +81,12 @@ public:
     // 跨节点/离线名匠代打共享摊位目录与口碑/热榜异步台账（控制集群 Redis Hash + 本地写穿/定时刷新缓存）。
     static std::string ProxyStallDirectoryKey(uint32_t zoneId);
     static std::string ProxyReputationLedgerKey(uint32_t zoneId);
+    // 西市热榜的小时桶(设计稿 §2.6):hourIndex = UTC 秒 / 3600;近 24 小时 = 当前小时与前 23 个小时的桶之和。
+    static std::string ProxyHotBucketKey(uint32_t zoneId, uint64_t hourIndex);
+    // 窗口里的 24 个桶键,从 newestHour 往前排;读热榜时就是这些 KEYS。
+    static std::vector<std::string> ProxyHotWindowBucketKeys(uint32_t zoneId, uint64_t newestHour);
+    // 以 newestHour 为窗口最新一小时重读热榜,覆盖本节点镜像。5 秒刷新按当前小时调;单测直接调,验证窗口滚动。
+    static void RefreshProxyHotRanking(uint64_t newestHour);
     static void StartProxyStallDirectory(muduo::net::EventLoop* loop);
     static void StopProxyStallDirectory();
     static void SyncPlayerProxyStall(entt::entity player);
@@ -98,9 +107,16 @@ public:
     };
     // taken 为空 = 结果未知(断连、应答畸形):可能已取走也可能没有,不得据此入账。
     using ProxyReputationTakeDone = std::function<void(std::optional<TakenProxyReputation> taken)>;
+    // 近 24 小时热榜:宗师 -> (单数, 极品数)。totals 为空 = 结果未知,保留旧镜像。
+    using ProxyHotTotals = std::map<uint64_t, std::pair<uint32_t, uint32_t>>;
+    using ProxyHotReadDone = std::function<void(std::optional<ProxyHotTotals> totals)>;
     struct ProxyReputationLedger {
-        // 一名宗师的一项计数原子加 delta(HINCRBY);suffix 是 ":o" 这类字段后缀。
+        // 一名宗师的一项待回账计数原子加 delta(HINCRBY);suffix 是 ":o" 这类字段后缀。
         std::function<void(uint64_t masterId, const char* suffix, int64_t delta)> add;
+        // 给一名宗师 hourIndex 那个小时的热榜桶加单数与极品数(HINCRBY,并给桶续 25 小时过期)。
+        std::function<void(uint64_t masterId, uint64_t hourIndex, uint32_t orders, uint32_t supreme)> addHot;
+        // 读 newestHour 与之前 23 个小时的桶并按宗师求和(生产 = 一段同槽只读 Lua)。回 true 时 done 恰好调用一次;回 false = 没发出去。
+        std::function<bool(uint64_t newestHour, ProxyHotReadDone done)> readHot;
         // 覆盖写最近一位买家名(HSET)。
         std::function<void(uint64_t masterId, const std::string& buyerName)> setLastBuyer;
         // 原子取走一名宗师的待回账(同一段脚本里读出并删除 o/s/r/g/b 五项)。回 true 时 done 恰好调用一次;回 false = 没发出去。

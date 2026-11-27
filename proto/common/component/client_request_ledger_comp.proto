@@ -68,6 +68,8 @@ message ClientRequestRecord {
   uint32 skill_loadout_rented_slots = 42;       // 7 套流派方案槽位租用：首次操作后的租用额外套数（1..5）。
   uint64 skill_loadout_rent_expires_at_sec = 43;// 7 套流派方案槽位租用：首次操作后的统一到期 Unix 秒。
   uint64 skill_loadout_rent_spent_diamond = 44; // 7 套流派方案槽位租用：首次实际扣除的真实灵石数。
+  uint32 appearance_bundle_unlocked_count = 45; // 衣柜系列补齐包：首次实际解锁的缺失角色数。
+  uint64 appearance_bundle_spent_diamond = 46;  // 衣柜系列补齐包：首次实际扣除的真实灵石数。
 }
 
 // 与战斗结算、物品和请求回执同属完整玩家存档。未领取余额不随周期重置。

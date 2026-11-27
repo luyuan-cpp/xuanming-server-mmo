@@ -113,6 +113,10 @@ message PlayerProfileComp
 	map<uint32, uint32> equipped_skill_vfx = 14;
 	// 玩家个人「允许局外人观战交流」偏好(仅控制观战期间能否交流，不禁止观战)。
 	eSpectateChatPreference spectate_chat_pref = 15;
+	// 仙途轻享卡「衣柜随心试穿」当前自然周起点（UTC+8 周一 05:00 毫秒，抗时钟回拨）。
+	uint64 light_card_trial_week_start_ms = 16;
+	// 仙途轻享卡本周已消耗的随心试穿次数（每周至多 3 次，纯临时试穿不授永久权）。
+	uint32 light_card_trial_used = 17;
 }
 
 // 一次进行中的改名(scene 写,随存档落库)。落库之后 scene 才向 data_service 发 RenameRole,所以任何一步断掉都能从存档接着做:

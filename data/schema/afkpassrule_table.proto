@@ -21,7 +21,7 @@ message AfkPassRuleTable {
   option (cfg_source_file) = "AfkPassRule.xlsx";
   option (cfg_primary_key) = "id";
 
-  // 规则行 id(固定 1)
+  // 规则行 id（套餐 ID：1 = 30 天仙途轻享卡，2 = 90 天仙途季享卡）
   uint32 id = 1;
   // 开通一次加多少天(1..366)
   uint32 period_days = 2;
@@ -35,4 +35,14 @@ message AfkPassRuleTable {
   uint32 remind_before_hours = 6;
   // 说明
   string desc = 7;
+  // 开通/续费一次性直赠绑定道具 ID（0 = 无；如 3405 定星保底符，绝不拆成每日登录领）
+  uint32 bonus_item_id = 8;
+  // 开通/续费一次性直赠绑定道具数量（bonus_item_id > 0 时须 >= 1）
+  uint32 bonus_item_count = 9;
+  // 开通/续费一次性附赠的零战力纪念头像框键（空串 = 无；如 frame_lightcard_s1 / frame_lightcard_season_s1）
+  string bonus_frame_key = 10;
+  // 套餐中文展示名（如「仙途轻享月卡」「仙途季享卡」）
+  string plan_name = 11;
+  // 套餐令牌图标资源键（如 UI/Ugui/AfkPassV2/icon_season_pass_90d）
+  string icon_key = 12;
 }

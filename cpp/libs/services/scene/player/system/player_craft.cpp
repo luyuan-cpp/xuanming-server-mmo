@@ -55,6 +55,10 @@
 namespace {
 constexpr uint64_t kMaxPayableGold = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
 constexpr double kProxyDirectoryRefreshIntervalSec = 5.0;
+// 西市热榜按小时分桶(设计稿 §2.6):近 24 小时 = 当前小时与前 23 个小时的桶之和;桶每写一次续 25 小时过期,出窗后自然消失。
+constexpr uint64_t kSecondsPerHour = 3600;
+constexpr uint64_t kProxyHotWindowHours = 24;
+constexpr long long kProxyHotBucketTtlSec = 25 * 3600;
 
 struct PendingProxyReputation {
     uint32_t orders{0};
@@ -302,6 +306,29 @@ void RedisHSetReputationBuyer(uint64_t masterId, const std::string& buyerName) {
     }
 }
 
+// 热榜桶:<id>:o 单数、<id>:s 极品数。三条命令同键同槽,按发出顺序执行;过期每写一次就续,桶最后一次写入后 25 小时消失。
+void RedisHIncrByHotBucket(uint64_t masterId, uint64_t hourIndex, uint32_t orders, uint32_t supreme) {
+    if (!tlsControlRedis.connected() || masterId == 0 || orders == 0) return;
+    const std::string key = PlayerCraftSystem::ProxyHotBucketKey(GetZoneId(), hourIndex);
+    const std::string master = std::to_string(masterId);
+    int ret = tlsControlRedis.command(
+        [](hiredis::Hiredis*, redisReply*) {},
+        "HINCRBY %s %s:o %lld", key.c_str(), master.c_str(), static_cast<long long>(orders));
+    if (ret == REDIS_OK && supreme > 0) {
+        ret = tlsControlRedis.command(
+            [](hiredis::Hiredis*, redisReply*) {},
+            "HINCRBY %s %s:s %lld", key.c_str(), master.c_str(), static_cast<long long>(supreme));
+    }
+    if (ret == REDIS_OK) {
+        ret = tlsControlRedis.command(
+            [](hiredis::Hiredis*, redisReply*) {}, "EXPIRE %s %lld", key.c_str(), kProxyHotBucketTtlSec);
+    }
+    if (ret != REDIS_OK) {
+        LOG_WARN << "[CraftProxyRep] Failed to update hot ranking bucket in control Redis: master_id=" << masterId
+                 << " hour=" << hourIndex << " ret=" << ret;
+    }
+}
+
 void ApplyReputationToCraftComp(PlayerCraftComp& craft, uint32_t ordersDelta, uint32_t supremeDelta,
                                 uint32_t rareDelta, uint64_t netGoldDelta, const std::string& buyerName) {
     const uint32_t beforeMask = equipcraft::UnlockedCraftTitleMask(
@@ -366,7 +393,7 @@ int64_t ParseNonNegativeInt64(std::string_view text) {
 
 // ── 口碑待回账的取走与入账(r2-craft#4,设计见 craft-proxy-reputation-digest-and-hot-ranking.md §2.3)──
 // 取走 = 同一段脚本里先 HMGET 再 HDEL:两个节点同时取同一名宗师,只有先执行的一方拿到值。字段与
-// RecordProxyOrderReputation 写的一致(<id>:o/s/r/g/b);热榜的 :24o / :24s 不取。
+// RecordProxyOrderReputation 写的一致(<id>:o/s/r/g/b);热榜在另外的小时桶键里,不在这张表。
 constexpr char kTakeProxyReputationLua[] =
     "local k=KEYS[1] local p=ARGV[1] "
     "local v=redis.call('HMGET',k,p..':o',p..':s',p..':r',p..':g',p..':b') "
@@ -411,10 +438,82 @@ bool RedisTakeReputation(uint64_t masterId, PlayerCraftSystem::ProxyReputationTa
     return true;
 }
 
+// 近 24 小时热榜 = KEYS 里的小时桶按字段求和(只读;同一 tag 同槽,一次执行读完)。应答形状同 HGETALL:字段、值交替。
+// Python 版 SUM_PROXY_HOT_LUA 与这段逐字节相同(Python 单测钉文本)。
+constexpr char kEvalCommand[] = "EVAL";
+constexpr char kSumProxyHotLua[] =
+    "local acc={} "
+    "for i=1,#KEYS do "
+    "local kv=redis.call('HGETALL',KEYS[i]) "
+    "for j=1,#kv,2 do local n=tonumber(kv[j+1]) if n then acc[kv[j]]=(acc[kv[j]] or 0)+n end end "
+    "end "
+    "local out={} "
+    "for f,n in pairs(acc) do out[#out+1]=f out[#out+1]=string.format('%d',n) end "
+    "return out";
+
+// 求和脚本的应答:<id>:o / <id>:s 与和交替。形状不对 = 结果未知,返回空。
+std::optional<PlayerCraftSystem::ProxyHotTotals> ParseProxyHotTotals(const redisReply* reply) {
+    if (reply == nullptr) return std::nullopt;
+    if (reply->type == REDIS_REPLY_ERROR) {
+        LOG_WARN << "[CraftProxyRep] Redis rejected hot ranking refresh; keeping cached counters: err="
+                 << (reply->str != nullptr ? reply->str : "");
+        return std::nullopt;
+    }
+    if (reply->type != REDIS_REPLY_ARRAY || (reply->elements % 2) != 0) {
+        LOG_WARN << "[CraftProxyRep] Unexpected hot ranking reply shape; keeping cached counters: reply_type="
+                 << reply->type;
+        return std::nullopt;
+    }
+    PlayerCraftSystem::ProxyHotTotals totals;
+    for (std::size_t i = 0; i + 1 < reply->elements; i += 2) {
+        const redisReply* keyEl = reply->element[i];
+        const redisReply* valEl = reply->element[i + 1];
+        if (keyEl == nullptr || valEl == nullptr || keyEl->type != REDIS_REPLY_STRING ||
+            valEl->type != REDIS_REPLY_STRING || keyEl->str == nullptr || valEl->str == nullptr) {
+            continue;
+        }
+        uint64_t masterId = 0;
+        std::string_view suffix;
+        if (!ParseReputationField(std::string_view(keyEl->str, keyEl->len), masterId, suffix)) continue;
+        const int64_t n = ParseNonNegativeInt64(std::string_view(valEl->str, valEl->len));
+        if (n <= 0) continue;
+        const auto clamped = static_cast<uint32_t>(std::min<int64_t>(n, std::numeric_limits<uint32_t>::max()));
+        if (suffix == "o") {
+            totals[masterId].first = clamped;
+        } else if (suffix == "s") {
+            totals[masterId].second = clamped;
+        }
+    }
+    return totals;
+}
+
+// 读热榜窗口:键按参数数组传,不经格式串(commandArgv 的 C 接口要指针数组,只在本函数内用)。只读,SideEffects::kNone。
+bool RedisReadHotTotals(uint64_t newestHour, PlayerCraftSystem::ProxyHotReadDone done) {
+    if (!tlsControlRedis.connected()) return false;
+    const std::vector<std::string> hotKeys = PlayerCraftSystem::ProxyHotWindowBucketKeys(GetZoneId(), newestHour);
+    const std::string numKeys = std::to_string(hotKeys.size());
+    std::vector<const char*> argv{kEvalCommand, kSumProxyHotLua, numKeys.c_str()};
+    std::vector<std::size_t> argvLen{sizeof(kEvalCommand) - 1, sizeof(kSumProxyHotLua) - 1, numKeys.size()};
+    for (const auto& hotKey : hotKeys) {
+        argv.push_back(hotKey.c_str());
+        argvLen.push_back(hotKey.size());
+    }
+    const int ret = tlsControlRedis.commandArgv(
+        [done = std::move(done)](hiredis::Hiredis*, redisReply* reply) { done(ParseProxyHotTotals(reply)); },
+        static_cast<int>(argv.size()), argv.data(), argvLen.data(), RedisClusterClient::SideEffects::kNone);
+    if (ret != REDIS_OK) {
+        LOG_WARN << "[CraftProxyRep] Hot ranking refresh command was not sent; keeping cached counters: ret=" << ret;
+        return false;
+    }
+    return true;
+}
+
 PlayerCraftSystem::ProxyReputationLedger WithDefaultLedger(PlayerCraftSystem::ProxyReputationLedger ledger) {
     if (!ledger.add) ledger.add = &RedisHIncrByReputation;
+    if (!ledger.addHot) ledger.addHot = &RedisHIncrByHotBucket;
     if (!ledger.setLastBuyer) ledger.setLastBuyer = &RedisHSetReputationBuyer;
     if (!ledger.take) ledger.take = &RedisTakeReputation;
+    if (!ledger.readHot) ledger.readHot = &RedisReadHotTotals;
     return ledger;
 }
 
@@ -499,7 +598,6 @@ void OnProxyReputationReply(redisReply* reply) {
         return;
     }
     std::map<uint64_t, PendingProxyReputation> pending;
-    std::map<uint64_t, HotProxyCounters> hot;
     for (std::size_t i = 0; i + 1 < reply->elements; i += 2) {
         const redisReply* keyEl = reply->element[i];
         const redisReply* valEl = reply->element[i + 1];
@@ -525,12 +623,6 @@ void OnProxyReputationReply(redisReply* reply) {
             if (n > 0) pending[masterId].netGold = static_cast<uint64_t>(n);
         } else if (suffix == "b") {
             pending[masterId].lastBuyer.assign(valView.data(), valView.size());
-        } else if (suffix == "24o") {
-            const int64_t n = ParseNonNegativeInt64(valView);
-            if (n > 0) hot[masterId].orders24h = static_cast<uint32_t>(std::min<int64_t>(n, std::numeric_limits<uint32_t>::max()));
-        } else if (suffix == "24s") {
-            const int64_t n = ParseNonNegativeInt64(valView);
-            if (n > 0) hot[masterId].supreme24h = static_cast<uint32_t>(std::min<int64_t>(n, std::numeric_limits<uint32_t>::max()));
         }
     }
     for (auto it = pending.begin(); it != pending.end();) {
@@ -541,7 +633,6 @@ void OnProxyReputationReply(redisReply* reply) {
         }
     }
     tlsPendingProxyReputation = std::move(pending);
-    tlsHotProxyCounters = std::move(hot);
 
     // 同步完成后立即为本节点已在线且有待回账口碑的宗师执行回账。
     std::vector<entt::entity> toDrain;
@@ -570,6 +661,7 @@ void RequestProxyDirectoryRefresh() {
     if (repRet != REDIS_OK) {
         LOG_WARN << "[CraftProxyRep] Reputation refresh command was not sent; keeping cached counters: ret=" << repRet;
     }
+    PlayerCraftSystem::RefreshProxyHotRanking(TimeSystem::NowSecondsUTC() / kSecondsPerHour);
 }
 
 void FillStateSnapshot(entt::entity player, SkillCraftingStateSnapshot& out) {
@@ -1809,6 +1901,33 @@ std::string PlayerCraftSystem::ProxyReputationLedgerKey(uint32_t zoneId) {
     return "craft_proxy_reputation:" + redis_slot::ZoneControlTag(redis_slot::ControlFamily::kSceneControl, zoneId);
 }
 
+std::string PlayerCraftSystem::ProxyHotBucketKey(uint32_t zoneId, uint64_t hourIndex) {
+    return "craft_proxy_hot:" + redis_slot::ZoneControlTag(redis_slot::ControlFamily::kSceneControl, zoneId) + ":" +
+        std::to_string(hourIndex);
+}
+
+std::vector<std::string> PlayerCraftSystem::ProxyHotWindowBucketKeys(uint32_t zoneId, uint64_t newestHour) {
+    std::vector<std::string> keys;
+    keys.reserve(kProxyHotWindowHours);
+    for (uint64_t back = 0; back < kProxyHotWindowHours && back <= newestHour; ++back) {
+        keys.push_back(ProxyHotBucketKey(zoneId, newestHour - back));
+    }
+    return keys;
+}
+
+void PlayerCraftSystem::RefreshProxyHotRanking(uint64_t newestHour) {
+    // 应答回到 loop 后整体覆盖镜像(两次刷新之间写穿的增量由这次的桶和接替);结果未知保留旧镜像。
+    Ledger().readHot(newestHour, [](std::optional<ProxyHotTotals> totals) {
+        if (!totals.has_value()) return;
+        std::map<uint64_t, HotProxyCounters> hot;
+        for (const auto& [masterId, counts] : *totals) {
+            if (counts.first == 0 && counts.second == 0) continue;
+            hot[masterId] = HotProxyCounters{counts.first, counts.second};
+        }
+        tlsHotProxyCounters = std::move(hot);
+    });
+}
+
 void PlayerCraftSystem::StartProxyStallDirectory(muduo::net::EventLoop* loop) {
     if (loop == nullptr) {
         LOG_ERROR << "[CraftProxyDir] StartProxyStallDirectory: loop is null";
@@ -1836,13 +1955,11 @@ void PlayerCraftSystem::StopProxyStallDirectory() {
 void PlayerCraftSystem::RecordProxyOrderReputation(uint64_t masterPlayerId, uint32_t supremeDelta, uint32_t rareDelta,
                                                    uint64_t netGoldEarned, const std::string& buyerName) {
     if (masterPlayerId == 0) return;
+    // 本节点镜像先加上,下一次整表刷新以 Redis 上近 24 个小时桶的和为准(过窗的单数在那时退出)。
     auto& hot = tlsHotProxyCounters[masterPlayerId];
     hot.orders24h = SaturatingAddU32(hot.orders24h, 1u);
     hot.supreme24h = SaturatingAddU32(hot.supreme24h, supremeDelta);
-    Ledger().add(masterPlayerId, ":24o", 1);
-    if (supremeDelta > 0) {
-        Ledger().add(masterPlayerId, ":24s", static_cast<int64_t>(supremeDelta));
-    }
+    Ledger().addHot(masterPlayerId, TimeSystem::NowSecondsUTC() / kSecondsPerHour, 1u, supremeDelta);
 
     const entt::entity localMaster = tlsEcs.GetPlayer(masterPlayerId);
     if (tlsEcs.actorRegistry.valid(localMaster) && PlayerLifecycleSystem::IsPlayerMutable(localMaster)) {

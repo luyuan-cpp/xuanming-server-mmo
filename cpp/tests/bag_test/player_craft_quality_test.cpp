@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "core/type_define/player_guid_comp.h"
+#include "engine/core/time/system/time.h"
 #include "modules/bag/bag_service.h"
 #include "modules/bag/comp/player_bags_comp.h"
 #include "modules/currency/comp/player_currency_comp.h"
@@ -239,15 +240,42 @@ protected:
     std::map<uint64_t, std::string> reputationBuyers;
     bool deferReputationTakes{false};
     std::vector<std::function<void()>> deferredReputationTakes;
+    // 热榜小时桶的内存实现(设计稿 §2.6):键 (UTC 小时序号, 宗师) -> (单数, 极品数)。读取按 [最新小时 - 23, 最新小时] 求和,
+    // 与生产的求和脚本同口径;hotReadUnknown 为 true 时模拟应答不明。
+    std::map<std::pair<uint64_t, uint64_t>, std::pair<uint32_t, uint32_t>> hotBuckets;
+    bool hotReadUnknown{false};
 
     void InstallReputationLedger() {
         reputationCounters.clear();
         reputationBuyers.clear();
         deferReputationTakes = false;
         deferredReputationTakes.clear();
+        hotBuckets.clear();
+        hotReadUnknown = false;
         PlayerCraftSystem::ProxyReputationLedger ledger;
         ledger.add = [this](uint64_t masterId, const char* suffix, int64_t delta) {
             reputationCounters[std::to_string(masterId) + suffix] += delta;
+        };
+        ledger.addHot = [this](uint64_t masterId, uint64_t hourIndex, uint32_t orders, uint32_t supreme) {
+            auto& bucket = hotBuckets[{hourIndex, masterId}];
+            bucket.first += orders;
+            bucket.second += supreme;
+        };
+        ledger.readHot = [this](uint64_t newestHour, PlayerCraftSystem::ProxyHotReadDone done) {
+            if (hotReadUnknown) {
+                done(std::nullopt);
+                return true;
+            }
+            PlayerCraftSystem::ProxyHotTotals totals;
+            for (const auto& [bucket, counts] : hotBuckets) {
+                const uint64_t hourIndex = bucket.first;
+                if (hourIndex <= newestHour && hourIndex + 24u > newestHour) {
+                    totals[bucket.second].first += counts.first;
+                    totals[bucket.second].second += counts.second;
+                }
+            }
+            done(totals);
+            return true;
         };
         ledger.setLastBuyer = [this](uint64_t masterId, const std::string& buyerName) {
             if (!buyerName.empty()) reputationBuyers[masterId] = buyerName;
@@ -1790,6 +1818,76 @@ TEST_F(PlayerCraftQualityTest, ProxyReputationDrainTakesAtomicallyAndGivesBackWh
     EXPECT_EQ("侠客乙", again.unread_proxy_digest_last_buyer());
     EXPECT_FALSE(PlayerCraftSystem::DrainPendingProxyReputation(master));
     EXPECT_EQ(0, reputationCounters[orders]);
+}
+
+// 设计稿 §2.6:西市热榜按 UTC 小时分桶,近 24 小时 = 当前小时与前 23 个小时的桶之和。成交写进当前小时的桶,
+// 不再往待回账表写 :24o / :24s(那两项只累加不归零,几天后就成了累计单数);桶键与待回账表同一 tag。
+TEST_F(PlayerCraftQualityTest, ProxyHotRankingWritesCurrentHourBucketInsteadOfLedgerFields) {
+    EXPECT_EQ("craft_proxy_hot:{ctl:7}:491234", PlayerCraftSystem::ProxyHotBucketKey(7, 491234));
+    EXPECT_EQ("craft_proxy_reputation:{ctl:7}", PlayerCraftSystem::ProxyReputationLedgerKey(7));
+
+    constexpr uint64_t kOfflineMasterId = 930001;
+    const uint64_t hourBefore = TimeSystem::NowSecondsUTC() / 3600u;
+    PlayerCraftSystem::RecordProxyOrderReputation(kOfflineMasterId, 1u, 0u, 95u, "侠客甲");
+    PlayerCraftSystem::RecordProxyOrderReputation(kOfflineMasterId, 0u, 1u, 76u, "侠客乙");
+    const uint64_t hourAfter = TimeSystem::NowSecondsUTC() / 3600u;
+
+    uint32_t orders = 0;
+    uint32_t supreme = 0;
+    for (const auto& [bucket, counts] : hotBuckets) {
+        EXPECT_EQ(kOfflineMasterId, bucket.second);
+        EXPECT_GE(bucket.first, hourBefore);
+        EXPECT_LE(bucket.first, hourAfter);
+        orders += counts.first;
+        supreme += counts.second;
+    }
+    EXPECT_EQ(2u, orders);
+    EXPECT_EQ(1u, supreme);
+    const std::string id = std::to_string(kOfflineMasterId);
+    EXPECT_EQ(0u, reputationCounters.count(id + ":24o"));
+    EXPECT_EQ(0u, reputationCounters.count(id + ":24s"));
+    EXPECT_EQ(2, reputationCounters[id + ":o"]);
+}
+
+// 设计稿 §2.6:刷新读「最新小时 + 前 23 个小时」共 24 个桶,桶和整体覆盖本节点镜像(两次刷新之间写穿的增量由它接替);
+// 一单在第 23 个小时后仍在窗口里,第 24 个小时出窗;读取结果未知时保留旧镜像。
+TEST_F(PlayerCraftQualityTest, ProxyHotRankingRefreshCountsLast24HourBucketsAndKeepsMirrorWhenUnknown) {
+    const auto keys = PlayerCraftSystem::ProxyHotWindowBucketKeys(7, 1000);
+    ASSERT_EQ(24u, keys.size());
+    EXPECT_EQ("craft_proxy_hot:{ctl:7}:1000", keys.front());
+    EXPECT_EQ("craft_proxy_hot:{ctl:7}:977", keys.back());
+
+    constexpr uint64_t kRemoteMasterId = 930002;
+    CraftProxyStallInfo info;
+    info.set_master_player_id(kRemoteMasterId);
+    info.set_master_name("名匠930002");
+    info.set_forge_mastery_tier(equipcraft::kMasteryMaster);
+    info.set_proxy_forge_fee_gold(80);
+    PlayerCraftSystem::UpsertProxyStallForTest(info);
+    PlayerCraftSystem::RecordProxyOrderReputation(kRemoteMasterId, 1u, 0u, 76u, "路人");
+    ASSERT_EQ(1u, hotBuckets.size());
+    const uint64_t orderHour = hotBuckets.begin()->first.first;
+
+    const auto recent24h = [this, masterId = kRemoteMasterId]() -> std::pair<uint32_t, uint32_t> {
+        ListCraftProxyStallsResponse list;
+        PlayerCraftSystem::ListProxyStalls(buyer, list);
+        for (const auto& s : list.stalls()) {
+            if (s.master_player_id() == masterId) return {s.recent_24h_orders(), s.recent_24h_supreme()};
+        }
+        return {0u, 0u};
+    };
+    const std::pair<uint32_t, uint32_t> oneSupremeOrder{1u, 1u};
+    const std::pair<uint32_t, uint32_t> none{0u, 0u};
+    EXPECT_EQ(oneSupremeOrder, recent24h()); // 本节点写穿,刷新前就能看到
+
+    PlayerCraftSystem::RefreshProxyHotRanking(orderHour + 23);
+    EXPECT_EQ(oneSupremeOrder, recent24h());
+    hotReadUnknown = true;
+    PlayerCraftSystem::RefreshProxyHotRanking(orderHour + 24);
+    EXPECT_EQ(oneSupremeOrder, recent24h());
+    hotReadUnknown = false;
+    PlayerCraftSystem::RefreshProxyHotRanking(orderHour + 24);
+    EXPECT_EQ(none, recent24h());
 }
 
 // r2-craft#2:未学书架有上界。满了制书、开卷都拒绝且不动材料与银两(悬赏揭榜已迁 trade,不再往书架加书)。

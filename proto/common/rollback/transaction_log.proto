@@ -161,6 +161,10 @@ enum TransactionType
   TX_JIANGHU_DUEL_FEE = 49;
   TX_JIANGHU_DUEL_REFUND = 50;
   TX_JIANGHU_CLEAR_DEFEAT_MARK = 51;
+  // 衣柜收藏系列 Steam 式按缺口 8.5 折补齐扣真实灵石（correlation_id = client_request_id）。只追加,不复用旧编号。
+  TX_APPEARANCE_SERIES_BUNDLE = 52;
+  // 仙途轻享卡/季享卡开卡一次性直赠绑定配套礼（correlation_id = client_request_id）。只追加,不复用旧编号。
+  TX_AFK_PASS_BONUS_GRANT = 53;
 }
 
 // A single transaction log entry.  Written to Kafka → Go DB → MySQL.

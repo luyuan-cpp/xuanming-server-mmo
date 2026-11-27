@@ -8476,7 +8476,9 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
 - **Unity(`D:\luyuan\mmorpg-client` main,未提交)**:`RankedModels.cs` / `TournamentModels.cs` 的 `FreezeList` 一律拷贝。
 - **本仓文档**:`engineering-principles.md` 与 `ecs-component-access-rules.md` 补「写时复制两段式提交」唯一例外(现例 `player_battle.cpp` 战后结算);C++ 表达式无状态求值、配方缓存 `thread_local` 定案不改。
 - **Java**:逻辑线程断言补用例覆盖、迟到确认清锁分支恢复两条登记进 Java 仓 `PARITY.md`。
-- **另开会话**:Python 版代打摊位目录 / 口碑待回账 / 24h 热榜按 C++ r2-craft#4 改走 Redis。
+- **另开会话**:Python 版代打摊位目录 / 口碑待回账 / 24h 热榜按 C++ r2-craft#4 改走 Redis(同日已写完代码与单测,未运行;设计在 Python 仓 `docs/design/craft-proxy-shared-ledger-redis.md`)。
+- **核对该会话时新发现、已交同一会话续做**:C++ 西市热榜「近 24 小时」计数从不归零(只累加台账里的 `:24o/24s`),定案按小时分桶 `craft_proxy_hot:{ctl:<zone>}:<UTC 秒/3600>` + EXPIRE 25 小时 + 同 slot Lua 求最近 24 桶之和,C++ 与 Python 同改、Java 登记;Python `refresh_loop` 遇非 Redis 异常会退出,改为记日志继续。
+- **跨玩家判据定案**:C++ 单 EventLoop 内由所属 System 同步改写本节点在线且可写的玩家并请求存盘不算越界(现例 `PlayerCraftSystem::RecordProxyOrderReputation`),有异步等待或不在本节点时才必须走台账 / 邮箱;写进 `engineering-principles.md` 与 `ecs-component-access-rules.md`。
 - **给 Gemini**:审阅文档 §7 三步(Pandora 六个包 `go test`、Unity 编译与三套 EditMode、本仓 `gen_docs_index.py --check`)。
 
 ## 2026-11-27 Claude:C++ 指标导出第三批——收件箱 9 条 LogQL 改 PromQL、组队跟随 / Redis 集群 / gRPC 服务端计数导出(两批,未编译、未测试,待 Gemini 验证;Java 不涉及)
@@ -8508,3 +8510,46 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
 - 新建 `docs/handoff/claude-session-leftovers-handoff-20261127.md`,并登记进总入口单 `new-computer-start-here-handoff-20261127.md` §3 表第 6 行,以及 `docs/README.md` 索引(gen_docs_index 只加一行)。
 - 只有这份单记着的:账号注销没清江湖恩怨数据(match 的 `match_grudge_relation` / `match_grudge_log`、guild 恩怨墙存的队长名、`account-deletion.md` §6.2 没归类)。这条原在第 4 轮交接单 §6.1 末条,r2 剩余单没收进去。
 - 其余只给指向:guild 人工终结 SQL 带 attempts 在 r2 剩余单;本会话代码的 Gemini 命令在本文件 2026-11-26「两份新交接单的代码改由 Claude 写」一条。做完按那份单 §3 删除。
+
+## 2026-11-27 Claude:换电脑前把「服务器代码缺口清单」窗口的剩余验证写成新交接单(只改文档)
+
+- 新建 `docs/handoff/server-gap-window-leftovers-handoff-20261127.md`,登记进总入口单 §4 第 3 步与 `docs/README.md` 索引(gen_docs_index 只加一行)。本窗口没有要写的代码,单里只有三件事交 Gemini:网关限流的真 Redis 用例(7.2、8.x、集群,命令在本文件 2026-11-19「网关前置限流的排队提示加下限与随机量…」一条)、mail 活动导入与 rank 走索引读写的真 TiDB 用例(`MAIL_RANK_TEST_TIDB` + `MAIL_RANK_REQUIRE_TESTS=1`)、缺口第 10 条的压测基线(不阻塞)。这几类用例不设环境变量会被跳过,全量单测盖不住。
+- 总入口单顺带补了两处漏登:§1 第 1 步加 Python 仓,并记下 11-27 回收前 Java 仓、Python 仓、图仓还有没提交的改动,拉取后要核对都在;§4 第 3 步加 Python 仓 `craft-proxy-shared-ledger-redis.md` §6 的 pytest(r2-craft#4 的 Python 版)。
+
+## 2026-11-27 Claude:名匠代打西市热榜改为真正的近 24 小时(C++ + Python),Python 摊位目录与口碑台账改走按区 Redis
+
+- **Python 仓(r2-craft#4 的 Python 版)**:摊位目录、口碑待回账、西市热榜从进程内存改走按区控制 Redis,键、字段与取走 Lua 同 C++。买家只记账;回账在宗师自己的锁内原子取走,「没写进去」按这次的待存盘行还在不在判断(Python `flush_player_rows` 只在 `StoreRejected` 时清行,其余保留重试,按异常类型归还会记两次)。设计、六段分析与 pytest 命令在 Python 仓 `docs/design/craft-proxy-shared-ledger-redis.md`。顺带修了两处:西市列表遍历在线玩家原先是在线人数的平方,改为一人一次;`refresh_loop` 遇意外异常改为只记日志、不退出(runtime 把后台任务结束当节点故障停机)。
+- **C++(本仓)**:热榜 `recent_24h_*` 原先来自待回账表 `<M>:24o` / `:24s`,只累加不归零。改为:
+  - 按 UTC 小时分桶 `craft_proxy_hot:{ctl:<zone>}:<UTC 秒/3600>`,字段 `<M>:o` / `:s`,`HINCRBY` 后 `EXPIRE` 25 小时;
+  - 刷新时用只读脚本 `kSumProxyHotLua` 一次读完当前小时与前 23 个小时的桶并求和(`commandArgv`,`SideEffects::kNone`),由 `OnProxyHotReply` 解析;
+  - 台账接缝 `ProxyReputationLedger` 加 `addHot`;待回账表停写 `:24o` / `:24s`。
+  - 设计与被否决的做法见 `docs/design/craft-proxy-reputation-digest-and-hot-ranking.md` §2.6。
+  - 改动文件:`player_craft.{h,cpp}`、`cpp/tests/bag_test/player_craft_quality_test.cpp`(夹具加 `addHot` 内存实现,新用例 `ProxyHotRankingWritesCurrentHourBucketInsteadOfLedgerFields`)。
+- **Java**:热榜同样只累加,已登记 Java 仓 `PARITY.md` 待做,本轮不写 Java 代码。
+- **全部未编译、未运行**。交 Gemini,红了保留首错交回 Claude:
+  1. C++:`msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`(改了 scene 库,先编库再跑测试),再 `run_cpp_tests -Build -Filter bag_test`;`PlayerCraftQualityTest.*` 全部 PASS,重点是 `OfflineReputationTitleUnlockDigestAckAndWestMarketHotRankTop3`、`ProxyReputationDrainTakesAtomicallyAndGivesBackWhenMasterLeft` 与新用例。
+  2. Python(在 Python 仓根目录):`.venv\Scripts\python -m pytest -q tests/test_craft_proxy_reputation_ledger.py tests/test_actor_isolation.py`、`tests/test_cpp_60b0_skill_wanted_and_rent.py tests/test_latest_cpp_sync_systems.py`、`FakeRedis` 的其他使用方 `tests/test_login_flow.py tests/test_login_full.py tests/test_login_state.py tests/test_cellroute_and_owner_authority.py tests/test_cpp_6b4a_trade_login_dualcontrol.py`,最后全量 `pytest -q`。
+  3. 未做(不阻塞):真实 Redis 7.2 与 8.x 上各跑一次 `kSumProxyHotLua` 与取走脚本;C++ 与 Python 同区混跑冒烟。
+
+## 2026-11-27 Claude:代打热榜读取改走台账接缝、Python 改用同一段求和 Lua(补充上一条「名匠代打西市热榜改为真正的近 24 小时」)
+
+- **为什么补**:统筹会话要求「Python 的键、字段、Lua 与 C++ 逐字节一致」,并要求 C++ 台账接缝同时覆盖热榜桶的写与读,好用单测验证窗口滚动。上一条的 C++ 读取直接在刷新函数里发 EVAL,Python 用 pipeline 读 24 个桶,这一条把两处都收齐。键、字段、TTL 与上一条相同。
+- **C++(`player_craft.{h,cpp}`)**:
+  - `ProxyReputationLedger` 加 `readHot(最新小时, done)`。生产实现 `RedisReadHotTotals` 经 `commandArgv` 发只读脚本 `kSumProxyHotLua`(`SideEffects::kNone`),`ParseProxyHotTotals` 解析;应答不明时 done 收到空值,保留旧镜像。
+  - 新增 `ProxyHotWindowBucketKeys(zone, 最新小时)`(24 个桶键,从新往旧),以及 `RefreshProxyHotRanking(最新小时)`:5 秒刷新按当前小时调用,单测按指定小时调用。删掉 `OnProxyHotReply`。
+  - 单测 `player_craft_quality_test.cpp`:夹具加 `readHot` 内存实现(按 [最新小时-23, 最新小时] 求和,可切成结果未知);新用例 `ProxyHotRankingRefreshCountsLast24HourBucketsAndKeepsMirrorWhenUnknown`。
+- **Python 仓**:
+  - `SUM_PROXY_HOT_LUA` 与 C++ `kSumProxyHotLua` 同文(单测钉文本),刷新是一次 pipeline:两条 HGETALL 加一条 EVAL;
+  - 本地镜像 = 上次刷新的桶和 + 之后按小时记的本地增量,刷新成功后由桶和接替;
+  - 测试替身 `FakeRedis` 注册了求和脚本的双生体;
+  - 窗口用例补了「两次刷新之间写穿不重复计」与「应答畸形保留旧值」。
+- **文档**:设计稿 §2.6 的读法与单测两段、Python 仓设计稿 §2.2 第 3 步与 §2.4、`actor-isolation-review-20261127.md` §6 状态都已改。
+- **已跑**(只读预检,AGENTS.md §10.1):`python tools/scripts/tests/test_cpp_no_raw_pointer_member.py -v` 13 项 OK;`python tools/scripts/tests/test_cpp_async_callback_capture.py -v` 13 项 OK。**其余未编译、未运行**。
+- **交 Gemini(以本条为准;红了保留首错交回 Claude)**:
+  1. C++:`msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`(改了 scene 库,先编库再编测试),再 `pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter bag_test`。只看本组可直接跑 `build\cpp\tests\bag_test.exe --gtest_filter=PlayerCraftQualityTest.*`,其中新用例为 `PlayerCraftQualityTest.ProxyHotRankingWritesCurrentHourBucketInsteadOfLedgerFields` 与 `PlayerCraftQualityTest.ProxyHotRankingRefreshCountsLast24HourBucketsAndKeepsMirrorWhenUnknown`。
+  2. Python(在 Python 仓根目录):
+     - `.venv\Scripts\python -m pytest -q tests/test_craft_proxy_reputation_ledger.py tests/test_actor_isolation.py`
+     - `.venv\Scripts\python -m pytest -q tests/test_cpp_60b0_skill_wanted_and_rent.py tests/test_latest_cpp_sync_systems.py`
+     - `.venv\Scripts\python -m pytest -q tests/test_login_flow.py tests/test_login_full.py tests/test_login_state.py tests/test_cellroute_and_owner_authority.py tests/test_cpp_6b4a_trade_login_dualcontrol.py`(`FakeRedis` 的其他使用方)
+     - 最后全量 `.venv\Scripts\python -m pytest -q`
+  3. 未做(不阻塞):在真实 Redis 7.2 与 8.x 上,各跑一次 `kSumProxyHotLua` 与取走脚本 `kTakeProxyReputationLua`;C++ 与 Python 同区混跑冒烟。

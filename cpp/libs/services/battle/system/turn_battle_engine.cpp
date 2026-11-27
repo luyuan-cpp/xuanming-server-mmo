@@ -8320,7 +8320,7 @@ void TurnBattleEngine::ApplyWuxingPostDirectHitEffects(BattleActorState& attacke
                 std::min(attacker.max_mana(), SaturatingAdd(attacker.attributes().mana(), refund)));
         }
         if (IsActorActive(target)) {
-            const uint64_t atk = std::max({EffectivePhysicalAttack(attacker), attacker.magic_attack(), 1ULL});
+            const uint64_t atk = std::max<uint64_t>({EffectivePhysicalAttack(attacker), attacker.magic_attack(), uint64_t{1}});
             const uint64_t bonusStrike = std::max<uint64_t>(1ULL, (atk * 60ULL) / 100ULL);
             dealTrueProcDamage(attacker.actor_id(), target, bonusStrike);
         }
@@ -8373,7 +8373,7 @@ void TurnBattleEngine::ApplyWuxingPostDirectHitEffects(BattleActorState& attacke
             }
             if (assistTarget != nullptr) {
                 boonRuntime.petAssistUsedThisRound.insert(attacker.actor_id());
-                const uint64_t petAtk = std::max({EffectivePhysicalAttack(*pet), pet->magic_attack(), 1ULL});
+                const uint64_t petAtk = std::max<uint64_t>({EffectivePhysicalAttack(*pet), pet->magic_attack(), uint64_t{1}});
                 const uint64_t assistDmg = std::max<uint64_t>(1ULL, (petAtk * 70ULL) / 100ULL);
                 dealTrueProcDamage(pet->actor_id(), *assistTarget, assistDmg);
             }

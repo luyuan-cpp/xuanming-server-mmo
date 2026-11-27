@@ -21,7 +21,7 @@ message TravelPassSeasonTable {
 
   // 期次 ID（上线后只停用不复用旧 ID）
   uint32 id = 1;
-  // 启用开关：0 = 停用，1 = 启用（全表同一时段至多 1 条启用期次）
+  // 启用开关：0 = 停用，1 = 启用（永不绝版书架制：支持多期同时启用，玩家自由切换唯一在研期次）
   uint32 enabled = 2;
   // 期次展示名（如「青云游历手记 · 第一期」）
   string name = 3;
@@ -49,4 +49,8 @@ message TravelPassSeasonTable {
   uint64 premium_price = 14;
   // 配置修订号（改价或调整关键配置时递增，用于报价防呆）
   uint32 config_revision = 15;
+  // 书架展示排序（升序；0 回退按 id 排序）
+  uint32 sort_order = 16;
+  // 往期典藏角标标记：0 = 当期推荐，1 = 往期典藏（纯展示，不阻断积点与解锁）
+  uint32 is_archived = 17;
 }

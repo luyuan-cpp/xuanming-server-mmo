@@ -580,6 +580,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [scene-gate-instance-session-handoff-20261126.md](handoff/scene-gate-instance-session-handoff-20261126.md) — scene 按 (gate 实例, session_id) 认会话(e 方案 C)全线:验证交接(2026-11-26,交 Gemini)
 - [server-code-completion-20261120.md](handoff/server-code-completion-20261120.md) — 服务器代码完成度核对与决定(2026-11-20)
 - [server-gap-audit-20261101.md](handoff/server-gap-audit-20261101.md) — 服务器代码缺口清单(2026-11-01)
+- [server-gap-window-leftovers-handoff-20261127.md](handoff/server-gap-window-leftovers-handoff-20261127.md) — 缺口清单窗口的剩余验证（2026-11-27，做完删除本单）
 - [spectate-tiered-fanout-followup-20261121.md](handoff/spectate-tiered-fanout-followup-20261121.md) — 观战分级扩容（L0 / L1 / L2）：环境受限后续验证交接（2026-11-21）
 - [team-follow-afk-hosting-handoff-20261120.md](handoff/team-follow-afk-hosting-handoff-20261120.md) — 组队跟随 / 离线托管 / 挂机月卡 / 冷却与 Buff 跨重登:待验证项交接(2026-11-20,交 Gemini;2026-11-22 代码收口完,余编译/单测/冒烟交 Gemini)
 - [third-party-login-and-anti-addiction-handoff-20261126.md](handoff/third-party-login-and-anti-addiction-handoff-20261126.md) — 第三方登录与实名防沉迷：全部验证交接（2026-11-26，交 Gemini；代码已改完，Gemini 只验证）

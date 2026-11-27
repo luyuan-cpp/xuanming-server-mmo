@@ -13,7 +13,11 @@
 
 旧电脑回收后，没推送到 GitHub 的东西都没了。下面缺一条就停下问负责人，不要凭印象补写。
 
-1. 拉取 main：本仓、客户端仓 `mmorpg-client`、Java 仓 `xuanming-server-mmo`（按 AGENTS §9 的 GitHub 地址找，不写死盘符）。再跑 `git submodule update --init --recursive`：要不报错，`git submodule status` 每行开头是空格。
+1. 拉取 main：本仓、客户端仓 `mmorpg-client`、Java 仓 `xuanming-server-mmo`、Python 仓 `xuanming-server-mmo-python`（按 AGENTS §9 的 GitHub 地址找，不写死盘符）。再跑 `git submodule update --init --recursive`：要不报错，`git submodule status` 每行开头是空格。
+   - 11-27 回收前核对时，下面几个仓有过没提交或没推送的改动。拉取后确认都在，缺了就停下问负责人：
+     - Java 仓：`game-inbox`、`game-login`、`game-match`、`game-rank`、`game-scene` 的改动，新增的 `game-common` `asset` 包与 `game-player-store` 的 `SaveRowGuard`。核对时还有会话在改。
+     - Python 仓：`docs/design/craft-proxy-shared-ledger-redis.md` 与 `tests/test_craft_proxy_reputation_ledger.py`。
+     - 图仓：AGENTS §10.4 的 `designs` 所在那个仓。
    - 11-27 核对时，子模块 `third_party/ue5navmesh` 在旧电脑上检出的是 `4c6b821`（11-11「保存导航网格构建兼容性改动」）。它不在任何分支上，也没推到子模块仓；本仓 HEAD 记的还是 `aacf2f82`。这一步报错，多半是本仓提交了新指针，子模块那个提交却没推上去。
 2. `git log --oneline -1 -- docs/handoff/new-computer-start-here-handoff-20261127.md` 有输出（本单已入库）。
 3. 各单自己的开工核对也要过：r2 剩余单 §1、合服副本单 §2 第 1 步。
@@ -77,11 +81,13 @@
    - `real-name-anti-addiction-handoff-20261126.md`
    - `redis-cluster-all-domains-handoff-20261126.md`
    - `scene-gate-instance-session-handoff-20261126.md`
+   - `server-gap-window-leftovers-handoff-20261127.md`：缺口清单窗口要真 Redis、真 TiDB 的用例（网关限流、mail 活动导入、rank 索引读写），另有一轮压测基线
    - `third-party-login-and-anti-addiction-handoff-20261126.md`
    - `login-queue-verification-handoff-20261126.md` 第 2 节
    - `review-suggestions-remaining-handoff-20261126.md` 第 6 节；第 1~5 节的命令在 PROGRESS 2026-11-26「交接单第 1 节与第 4 节第 2~4 条」与「两份新交接单的代码改由 Claude 写」两条
    - `payment-integration-handoff-20261120.md`「还剩」：Go `-race` 要在 Linux 或 Docker 里跑；整链路冒烟；kind 冒烟要先经负责人同意装工具
    - `data-overwrite-audit-r2-handoff-20261126.md`：r2 全线的总验证。等 §3 第 1、2 行做完、审计文档 §1「仍开着」清空，再整体跑一遍最省事
+   - Python 仓 `docs/design/craft-proxy-shared-ledger-redis.md` §6：名匠代打的共享摊位目录、口碑待回账与西市热榜改走按区 Redis（Python 版 r2-craft#4），代码与用例已写，pytest 命令在那一节
    - PROGRESS 文末 11-26、11-27 标「未编译」「待 Gemini」的各条（data_service 启动期故障隔离三条、gate 准入 P2-4、官方通行证加固复查等），命令在各条里
    - data_service 与 go/db 的熔断按后端隔离：PROGRESS 2026-11-26 三条——「go/db 与 data_service 两处『熔断按后端隔离』复核」「data_service 逻辑库熔断：调用方取消不再记成成功」「go/db 按存档库熔断：调用方取消不再记成成功」，命令与通过标准在各条里。代码都已写完、在 main，只剩跑
    - 顺序：data_service 启动期故障隔离的批 1、批 2、第二轮三条，要先于「合服映射的 etcd 副本第二批」跑（都改了 `go/data_service/internal/svc/servicecontext.go`），细节在 `merged-zone-etcd-copy-handoff-20261127.md` §3。这几条都不是改代码：红了保留首错原文交回 Claude Code
